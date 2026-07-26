@@ -5,20 +5,22 @@ The package is designed for Windows 11 and Windows 12-class x64 desktop
 systems. It installs a user-launched desktop app with an embedded Python
 runtime; users do not need to install Python manually.
 
-## Download (v1.6.3)
+## Download (v1.7.0)
 
 | File | Size | MD5 |
 |------|------|-----|
-| `MRRC-FT710-Setup.exe` | 30.4 MB | `0bcec80dea8d33b4fc46ef3498dbeac2` |
+| `MRRC-FT710-Setup.exe` | _(fill after build)_ | _(fill after build)_ |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
 - GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>
 
-The v1.6.3 package was built on Windows 11 (Python 3.12.4, PyInstaller
-6.21.0, Inno Setup 6.x) with the full 271-test suite green on the build
-machine. It ships the v1.6.3 packaging fixes (see CHANGELOG): frozen
-`_internal` resource resolution, scope_pipe stdout heartbeat, hardened
-`build.ps1`, and the launcher self-spawn guard.
+The v1.7.0 package ships the optional ATR1000 tuner linkage, cookie-based
+frontend settings, and the device-side mic gain (see CHANGELOG), on top of
+the v1.6.3 packaging fixes: frozen `_internal` resource resolution,
+scope_pipe stdout heartbeat, hardened `build.ps1`, and the launcher
+self-spawn guard. Build it on Windows 11 (Python 3.12, PyInstaller 6.21.0,
+Inno Setup 6.x) with `packaging/windows/build.ps1`; afterwards fill in the
+size/MD5 table above (`md5sum dist/windows/MRRC-FT710-Setup.exe`).
 
 ## User Installation
 
@@ -70,6 +72,8 @@ FT710_SCOPE_BAUD=115200
 FT710_AUDIO_RX_DEVICE=
 FT710_AUDIO_TX_DEVICE=
 FT710_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
+#FT710_ATR1000_HOST=
+#FT710_ATR1000_PORT=60001
 ```
 
 Set `FT710_SERIAL_PORT` to the FT-710 Enhanced COM Port from Device Manager.

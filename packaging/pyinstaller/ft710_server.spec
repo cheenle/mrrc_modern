@@ -19,6 +19,8 @@ a = Analysis(
     hiddenimports=[
         "serial",
         "pyaudio",
+        "atr1000_client",
+        "atr1000_tuner",
         "uvicorn.logging",
         "uvicorn.loops",
         "uvicorn.loops.auto",

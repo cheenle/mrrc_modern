@@ -2,7 +2,7 @@
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 372 tests across 21 test modules.
+Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 373 tests across 21 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,8 +12,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 372 |
-| Passed | 372 |
+| Total tests | 373 |
+| Passed | 373 |
 | Skipped | 0 (with fastapi installed) |
 | Failed | 0 |
 | Execution time | ~4s (harness tests spawn CLI subprocesses) |
@@ -209,7 +209,7 @@ SDD coverage: §9.8, §11.1 (ATR1000Client)
 | `StateCallbackTests` | 3 | `on_change` callback |
 | `TuningHeuristicTests` | 5 | Tuning-clear heuristics |
 
-### 21. test_atr1000_server.py — Server Linkage + Tune Assist (12 tests)
+### 21. test_atr1000_server.py — Server Linkage + Tune Assist (13 tests)
 
 SDD coverage: §9.8, §15 (tune-assist carrier safety)
 
@@ -220,7 +220,7 @@ SDD coverage: §9.8, §15 (tune-assist carrier safety)
 | `TuneAssistRollbackTests` | 1 | No improvement → rollback relays |
 | `TuneAssistNoMeterTests` | 1 | Meter-wait timeout path |
 | `LinkageHookTests` | 3 | Freq-dirty → notify_freq, TX → notify_tx hooks |
-| `SourceGuardTests` | 5 | Disabled/default guard: hooks short-circuit, no client task |
+| `SourceGuardTests` | 6 | Disabled/default guard: hooks short-circuit, no client task, frozen-store env override |
 
 ## Test Coverage by SDD Requirement
 
@@ -244,7 +244,7 @@ SDD coverage: §9.8, §15 (tune-assist carrier safety)
 | NFR-060–065 Audio Quality | test_audio | 48 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests) | 4 tests |
 | NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 27 tests |
-| §9.8 ATR1000 Tuner Linkage | test_atr1000_tuner, test_atr1000_client, test_atr1000_server | 98 tests |
+| §9.8 ATR1000 Tuner Linkage | test_atr1000_tuner, test_atr1000_client, test_atr1000_server | 99 tests |
 
 ## Running Specific Tests
 

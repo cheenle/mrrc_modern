@@ -2,6 +2,44 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.7.0] — 2026-07-26 — ATR1000 Tuner Linkage & Frontend Settings in Cookies
+
+### Added
+- **Optional ATR1000 tuner linkage** (SDD V2.4; default disabled, enable
+  with `FT710_ATR1000_HOST`/`FT710_ATR1000_PORT`): asyncio-native client
+  for the networked ATR1000 (`atr1000_client.py`) with the LC-learning
+  store ported from the mrrc project (`atr1000_tuner.py`). Three linkage
+  behaviors: frequency change auto-applies learned relay LC; TX state sync
+  (device push mode + stability-window learning); server-side tune assist
+  (TX2 carrier → skip when SWR ≤ 1.6 → full tune → rollback when no
+  improvement, carrier always dropped). New token-gated `/WSatr1000`
+  channel; compact ATR meter row (power/SWR/relay/tuning) with an ATR TUNE
+  button appears in the web UI only when the feature is enabled and
+  connected. Radio-internal TUNE is unchanged. When disabled there is no
+  client, no task, no network — zero impact on installs without the tuner.
+- **Device-side mic gain (🎙 Vol)**: software GainNode on the browser mic
+  capture graph (0–200 slider → 0–2×, 100 = unity), persisted in a cookie;
+  independent of the radio's CAT mic gain.
+
+### Changed
+- **All frontend settings now persist in cookies** (SDD V2.3): unified the
+  previous localStorage/sessionStorage mix behind `settings_manager.js`
+  cookie helpers with a one-time legacy migration. Memory channels now
+  survive browser restarts; the radio-side mic gain slider persists and is
+  re-applied to the radio on every connect.
+- Frozen Windows app: the ATR1000 learned-data store honors
+  `FT710_ATR1000_STORE` (the launcher points it at the user data dir so
+  learned data stays writable and survives reinstalls); the PyInstaller
+  spec lists the new modules explicitly.
+
+### Fixes (previously uncommitted, SDD V2.1/V2.2)
+- TX uplink ownership promotion/claim + per-session TX observability.
+- Windows packaging chain: frozen `_internal` resource resolution,
+  scope_pipe stdout heartbeat, hardened `build.ps1`, launcher
+  self-spawn guard.
+
+Suite: 373 tests.
+
 ## [v1.6.3] — 2026-07-25 — Windows Installer Robustness Fixes
 
 Deep audit of the Windows packaging chain (`windows/`, `packaging/`); all

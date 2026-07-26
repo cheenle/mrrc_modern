@@ -104,6 +104,7 @@ def load_env(path: Path) -> dict[str, str]:
         key, value = line.split("=", 1)
         env[key.strip()] = value.strip()
     env.setdefault("FT710_MEM_FILE", str(user_data_dir() / "mem_channels.json"))
+    env.setdefault("FT710_ATR1000_STORE", str(user_data_dir() / "atr1000_tuner.json"))
     env.setdefault("FT710_FTDI_LIB_DIR", str(app_dir() / "vendor" / "ftdi" / "windows" / "bin" / "x64"))
     ftdi_dir = Path(env["FT710_FTDI_LIB_DIR"].replace("\\", os.sep))
     if not ftdi_dir.is_absolute():

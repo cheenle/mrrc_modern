@@ -5,20 +5,20 @@ The package is designed for Windows 11 and Windows 12-class x64 desktop
 systems. It installs a user-launched desktop app with an embedded Python
 runtime; users do not need to install Python manually.
 
-## Download (v1.6.0)
+## Download (v1.6.3)
 
 | File | Size | MD5 |
 |------|------|-----|
-| `MRRC-FT710-Setup.exe` | 28.3 MB | `2be2a654242f284f73104aea2e010c41` |
+| `MRRC-FT710-Setup.exe` | 30.4 MB | `0bcec80dea8d33b4fc46ef3498dbeac2` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
 - GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>
 
-The v1.6.0 package was built on Windows 11 (Python 3.12.4, PyInstaller
-6.21.0, Inno Setup 6.7.3) and verified end-to-end: silent install →
-launcher start → web login → `/api/health` OK. Two build fixes landed in
-this release: PyInstaller spec `ROOT` resolution (`parents[1]`) and
-`uvicorn.run(app)` object loading for the frozen server exe.
+The v1.6.3 package was built on Windows 11 (Python 3.12.4, PyInstaller
+6.21.0, Inno Setup 6.x) with the full 271-test suite green on the build
+machine. It ships the v1.6.3 packaging fixes (see CHANGELOG): frozen
+`_internal` resource resolution, scope_pipe stdout heartbeat, hardened
+`build.ps1`, and the launcher self-spawn guard.
 
 ## User Installation
 
@@ -138,7 +138,7 @@ python -m venv venv
 venv\Scripts\activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pip install pyinstaller
+python -m pip install -r packaging\windows\requirements-build.txt
 ```
 
 Build:

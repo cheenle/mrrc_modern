@@ -10,7 +10,7 @@
     <title>FT-710 Web Control</title>
     <link rel="apple-touch-icon" href="/favicon.png">
     <link rel="manifest" href="/manifest.json">
-    <link rel="stylesheet" href="/ft710.css?v=17">
+    <link rel="stylesheet" href="/ft710.css?v=18">
 </head>
 <body>
     <div class="safe-area-top"></div>
@@ -111,9 +111,25 @@
                         <span class="meter-unit">V</span>
                     </div>
                 </div>
+                <!-- ATR1000 external tuner (optional; hidden unless enabled+connected) -->
+                <div class="meter-row atr-row" id="atr-row" hidden>
+                    <div class="meter-item">
+                        <span class="meter-label">ATR</span>
+                        <div class="meter-bar-bg"><div class="meter-bar-fill pwr" id="atr-pwr-bar"></div></div>
+                        <span class="meter-val" id="atr-pwr-val">0</span>
+                        <span class="meter-unit">W</span>
+                    </div>
+                    <div class="meter-item">
+                        <span class="meter-label">SWR</span>
+                        <div class="meter-bar-bg"><div class="meter-bar-fill swr" id="atr-swr-bar"></div></div>
+                        <span class="meter-val" id="atr-swr-val">-</span>
+                    </div>
+                    <div class="meter-item atr-lc-item">
+                        <span class="meter-val atr-lc" id="atr-lc-val">—</span>
+                        <button class="atr-tune-btn" id="btn-atr-tune" disabled>TUNE</button>
+                    </div>
+                </div>
             </section>
-
-            <!-- Quick Controls -->
             <section class="quick-controls">
                 <div class="control-row">
                     <button class="quick-btn" id="btn-mode">USB</button>
@@ -269,6 +285,11 @@
                     <input type="range" id="slider-micgain" min="0" max="100" value="50" class="menu-slider">
                     <span class="menu-slider-val" id="val-micgain">50</span>
                 </div>
+                <div class="menu-slider-row">
+                    <span class="menu-slider-label">🎙 Vol</span>
+                    <input type="range" id="slider-micvol" min="0" max="200" value="100" class="menu-slider">
+                    <span class="menu-slider-val" id="val-micvol">100</span>
+                </div>
             </div>
             <div class="menu-footer">
                 <span class="version-text">FT-710 v1.0</span>
@@ -280,11 +301,12 @@
     <div class="safe-area-bottom"></div>
 
     <!-- Scripts -->
-    <script src="/modules/settings_manager.js?v=12"></script>
+    <script src="/modules/settings_manager.js?v=13"></script>
     <script src="/modules/opus_wasm.js"></script>
     <script src="/modules/opus_codec.js"></script>
-    <script src="/ft710_main.js?v=17"></script>
+    <script src="/ft710_main.js?v=21"></script>
     <script src="/modules/ptt_manager.js?v=13"></script>
-    <script src="/ft710_ui.js?v=17"></script>
+    <script src="/ft710_ui.js?v=20"></script>
+    <script src="/modules/atr1000.js?v=1"></script>
 </body>
 </html>

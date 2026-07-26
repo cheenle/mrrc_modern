@@ -328,7 +328,7 @@ function setDspBtn(id, active) {
 
 // ── Sliders ─────────────────────────────────────────────────────────
 function renderSliders() {
-    // NOTE: the AF slider is browser-side playback volume (localStorage),
+    // NOTE: the AF slider is browser-side playback volume (cookie),
     // NOT the radio's AF gain — it is intentionally not rendered from
     // radio state, or the CAT poll would fight the user's setting.
     setSlider('slider-rfpower', 'val-rfpower', radioState.rf_power);
@@ -383,6 +383,10 @@ function renderPTTState() {
     if (tuneBtn) {
         tuneBtn.classList.toggle('tune-active', radioState.tx_status === 2);
     }
+    // Re-apply RX gain: dim during TX/TUNE, restore on RX. This is the
+    // single chokepoint reached by both the optimistic PTT handlers and
+    // server-driven stateUpdate / the PTT watchdog's forced-RX path.
+    if (typeof _applyAfGainToAudioNode === 'function') _applyAfGainToAudioNode();
     renderRecordingState();
 }
 
@@ -496,18 +500,18 @@ const WF_HISTORY = 120; // rows of waterfall history
 let waterfallHistory = [];
 let waterfallInitialized = false;
 
-// ── Scope display settings (persisted in localStorage) ──────────
+// ── Scope display settings (persisted in cookies) ──────────
 let scopeFloor = parseInt(getStored('scopeFloor', '5'));
 let scopeCeil = parseInt(getStored('scopeCeil', '220'));
 let scopeTheme = getStored('scopeTheme', 'jet');
 let fftSmooth = null;  // EMA-smoothed FFT buffer for slow decay
 
 function getStored(key, fallback) {
-    try { const v = localStorage.getItem('ft710_' + key); if (v !== null) return v; } catch(e) {}
-    return fallback;
+    const v = FT710Settings.getCookie('ft710_' + key);
+    return v !== null ? v : fallback;
 }
 function setStored(key, val) {
-    try { localStorage.setItem('ft710_' + key, String(val)); } catch(e) {}
+    FT710Settings.setCookie('ft710_' + key, String(val));
 }
 
 // ── Color palettes (matching wfview QCustomPlot themes) ───────────
@@ -1138,7 +1142,7 @@ function initUI() {
     // Restore persisted browser volume before wiring
     (function() {
         var v = 128;
-        try { var s = localStorage.getItem('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
+        try { var s = FT710Settings.getCookie('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
         if (isNaN(v)) v = 128;
         var sl = document.getElementById('slider-afgain');
         if (sl) sl.value = v;
@@ -1146,16 +1150,10 @@ function initUI() {
     })();
     document.getElementById('slider-afgain').addEventListener('input', function() {
         setText('val-afgain', this.value);
-        // Browser-side playback volume only (persisted in localStorage).
-        // Deliberately NOT sent as CAT AF gain — see _applyAfGainToAudioNode.
-        var raw = parseInt(this.value) / 255.0;
-        var boost = typeof AUDIO_GAIN_BOOST !== 'undefined' ? AUDIO_GAIN_BOOST : 5.0;
-        var maxGain = typeof AUDIO_GAIN_MAX !== 'undefined' ? AUDIO_GAIN_MAX : 5.0;
-        var g = Math.min(maxGain, raw * boost);
-        if (typeof AudioRX_gain_node !== 'undefined' && AudioRX_gain_node) {
-            AudioRX_gain_node.gain.value = g;
-        }
-        try { localStorage.setItem('ft710_afVol', this.value); } catch(e) {}
+        FT710Settings.setCookie('ft710_afVol', this.value);
+        // Route through the shared helper so the TX dim factor is respected
+        // even if the operator nudges volume while keyed.
+        if (typeof _applyAfGainToAudioNode === 'function') _applyAfGainToAudioNode();
     });
     const micSlider = document.getElementById('slider-micgain');
     if (micSlider) {
@@ -1164,6 +1162,26 @@ function initUI() {
             const v = parseInt(this.value);
             sendCommand('mic_gain', v);
             radioState.mic_gain = v;
+            // Persist locally; re-applied to the radio on every fullState
+            FT710Settings.setCookie('ft710_micGain', String(v));
+        });
+    }
+    // 🎙 Vol: device-side software mic gain (browser-local, like 🔊 Vol).
+    // 0–200 → linear 0–2×, 100 = unity. Persisted in a cookie.
+    (function() {
+        var v = 100;
+        try { var s = FT710Settings.getCookie('ft710_micVol'); if (s !== null) v = parseInt(s); } catch(e) {}
+        if (isNaN(v)) v = 100;
+        v = Math.max(0, Math.min(200, v));
+        var sl = document.getElementById('slider-micvol');
+        if (sl) { sl.value = v; setText('val-micvol', v); }
+    })();
+    const micVolSlider = document.getElementById('slider-micvol');
+    if (micVolSlider) {
+        micVolSlider.addEventListener('input', function() {
+            setText('val-micvol', this.value);
+            FT710Settings.setCookie('ft710_micVol', this.value);
+            if (typeof _setDeviceMicGain === 'function') _setDeviceMicGain(parseInt(this.value) / 100);
         });
     }
 
@@ -1277,7 +1295,7 @@ function initUI() {
             };
             memChannels[idx] = ch;
             // Persist locally so channels survive page refresh
-            try { localStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
+            FT710Settings.setCookie('ft710_memChannels', JSON.stringify(memChannels));
             sendMsg({
                 type: 'memSave',
                 channels: memChannels,
@@ -1495,7 +1513,7 @@ function showMemoryManager() {
             const idx = parseInt(this.dataset.clear);
             memChannels[idx] = null;
             // Persist locally so channels survive page refresh
-            try { localStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
+            FT710Settings.setCookie('ft710_memChannels', JSON.stringify(memChannels));
             sendMsg({type: 'memSave', channels: memChannels});
             renderMemoryChannels();
             overlay.remove();

@@ -58,6 +58,12 @@ class AudioHandler:
     """Captures RX audio from sound card and encodes via Opus.
     Receives TX audio (decoded PCM) and plays to sound card."""
 
+    # Class-level defaults: test-built instances skip __init__ but the TX
+    # diagnostics counters must still exist for feed/write/tx_stats.
+    _tx_written = 0
+    _tx_write_err = 0
+    _tx_peak = 0
+
     def __init__(self,
                  rx_device_index: Optional[int] = None,
                  tx_device_index: Optional[int] = None):
@@ -78,6 +84,12 @@ class AudioHandler:
         self._tx_write_lock = threading.Lock()
         self._tx_queued_bytes = 0
         self._tx_primed = False
+        # TX session diagnostics — reset in start_tx, read via tx_stats()
+        # after stop_tx. Lets the server log exactly which link of the TX
+        # chain carried audio (fed → queued → written → peak).
+        self._tx_written = 0
+        self._tx_write_err = 0
+        self._tx_peak = 0
 
         # RX silence watchdog state: bit-exact zero chunks mean the radio's
         # USB audio is muted/wedged — a quiet band is never this silent.
@@ -437,10 +449,13 @@ class AudioHandler:
                 self._tx_queue.clear()
                 self._tx_queued_bytes = 0
                 self._tx_primed = False
+                self._tx_written = 0
+                self._tx_write_err = 0
+                self._tx_peak = 0
             # Reset diagnostic one-shot flags for this TX session.
             for _k in ('_dbg_no_pcm', '_dbg_no_resample', '_dbg_no_stream',
                         '_dbg_no_stream_w', '_dbg_not_primed',
-                        '_dbg_first_feed', '_dbg_first_write'):
+                        '_dbg_first_feed', '_dbg_first_write', '_dbg_write_err'):
                 setattr(self, _k, False)
 
             if old is not None:
@@ -536,6 +551,11 @@ class AudioHandler:
         with self._tx_lock:
             if self._tx_stream is None:
                 return
+            # Session peak (for the TX-session diagnostic log) — one cheap
+            # numpy pass over the resampled frame.
+            peak = int(np.abs(np.frombuffer(data, dtype=np.int16)).max())
+            if peak > self._tx_peak:
+                self._tx_peak = peak
             self._tx_queue.append(data)
             self._tx_queued_bytes += len(data)
             # Cap: drop oldest frames until under the limit (keep at least one
@@ -579,9 +599,27 @@ class AudioHandler:
                     return
                 try:
                     stream.write(data)
+                    with self._tx_lock:
+                        self._tx_written += 1
                 except Exception as e:
-                    logger.debug("[TX-AUDIO] write_tx_chunk: write error: %s", e)
+                    with self._tx_lock:
+                        self._tx_write_err += 1
+                    if not getattr(self, '_dbg_write_err', False):
+                        self._dbg_write_err = True
+                        logger.warning(
+                            "[TX-AUDIO] write error (counted, logged once per "
+                            "TX session): %s", e)
                     return
+
+    def tx_stats(self) -> dict:
+        """TX-session diagnostics for the server to log on PTT release."""
+        with self._tx_lock:
+            return {
+                "written": self._tx_written,
+                "write_err": self._tx_write_err,
+                "peak": self._tx_peak,
+                "queued": len(self._tx_queue),
+            }
 
     def has_pending_tx_audio(self) -> bool:
         """Return True when the TX drain loop has useful work to do."""

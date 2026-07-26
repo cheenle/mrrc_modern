@@ -108,8 +108,8 @@ class PollingOrderTests(unittest.TestCase):
         self.assertFalse(should_poll)
 
     def test_user_command_temporarily_pauses_background_polling(self):
-        scheduler_source = (REPO_ROOT / "poll_scheduler.py").read_text()
-        server_source = (REPO_ROOT / "server.py").read_text()
+        scheduler_source = (REPO_ROOT / "poll_scheduler.py").read_text(encoding="utf-8")
+        server_source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("def note_user_command", scheduler_source)
         self.assertIn("await self._polling_paused()", scheduler_source)
         self.assertIn("scheduler.note_user_command", server_source)
@@ -157,6 +157,140 @@ class TXMeterPollingPreemptionTests(unittest.IsolatedAsyncioTestCase):
             scheduler._running = False
 
         self.assertEqual(fake_cat.commands, ["RM3"])
+
+
+class WatchdogReconnectTests(unittest.IsolatedAsyncioTestCase):
+    """After a successful watchdog reconnect, scope init must be re-run —
+    a USB re-enumeration resets the radio's scope output (EX040101), and
+    without re-init the spectrum freezes (V1.8 incident, 2026-07-21)."""
+
+    async def test_on_reconnected_called_after_reconnect(self):
+        from poll_scheduler import PollScheduler
+        from radio_state import RadioState
+
+        class FakeCat:
+            def __init__(self):
+                self.connected = False
+
+            async def reconnect_loop(self):
+                self.connected = True
+                return True
+
+            async def initial_state_sync(self):
+                return {}
+
+        calls = []
+
+        async def on_reconnected():
+            calls.append(1)
+
+        fake_cat = FakeCat()
+        state = RadioState()
+        scheduler = PollScheduler(fake_cat, state, on_reconnected=on_reconnected)
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._connection_watchdog())
+        try:
+            await asyncio.sleep(0.1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            scheduler._running = False
+
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(state.serial_connected)
+
+    async def test_reconnect_hook_failure_is_non_fatal(self):
+        from poll_scheduler import PollScheduler
+        from radio_state import RadioState
+
+        class FakeCat:
+            def __init__(self):
+                self.connected = False
+
+            async def reconnect_loop(self):
+                self.connected = True
+                return True
+
+            async def initial_state_sync(self):
+                return {}
+
+        async def on_reconnected():
+            raise RuntimeError("scope-init boom")
+
+        fake_cat = FakeCat()
+        state = RadioState()
+        scheduler = PollScheduler(fake_cat, state, on_reconnected=on_reconnected)
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._connection_watchdog())
+        try:
+            await asyncio.sleep(0.1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            scheduler._running = False
+
+        # Watchdog survived the hook exception and state re-sync completed
+        self.assertTrue(state.serial_connected)
+
+
+class IFPollRecoveryTests(unittest.IsolatedAsyncioTestCase):
+    """Regression (2026-07-21): a transient poll-failure streak set
+    serial_connected=False, but nothing ever set it back — the UI stayed
+    at "电台未连接" until a full watchdog reconnect.  A successful poll
+    must now restore the flag.  Also guards the first-poll freq-logging
+    path (_last_logged_freq is None) which raised TypeError, making EVERY
+    poll count as a failure."""
+
+    async def test_serial_connected_recovers_after_failure_streak(self):
+        from poll_scheduler import PollScheduler
+        from radio_state import RadioState
+
+        class FakeCat:
+            connected = True
+            _cancel_polls = asyncio.Event()
+
+            def __init__(self):
+                self.freq_calls = 0
+
+            async def get_frequency(self, vfo, timeout=None):
+                self.freq_calls += 1
+                if self.freq_calls <= 6:
+                    return None  # simulate a timeout streak
+                return 7050000
+
+            async def get_mode(self, timeout=None):
+                return 1 if self.freq_calls > 6 else None
+
+            async def get_s_meter(self, timeout=None):
+                return 0 if self.freq_calls > 6 else None
+
+        fake_cat = FakeCat()
+        state = RadioState(serial_connected=True)
+        scheduler = PollScheduler(fake_cat, state)
+        scheduler._running = True
+
+        task = asyncio.create_task(scheduler._poll_if())
+        try:
+            # 6 failures at ~100 ms cadence → flag drops after 5
+            for _ in range(50):
+                await asyncio.sleep(0.05)
+                if not state.serial_connected:
+                    break
+            self.assertFalse(state.serial_connected)
+            # Subsequent successful polls must restore it (and apply freq —
+            # the first-poll logging path must not raise TypeError).
+            for _ in range(50):
+                await asyncio.sleep(0.05)
+                if state.serial_connected:
+                    break
+            self.assertTrue(state.serial_connected)
+            self.assertEqual(state.vfo_a_freq, 7050000)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            scheduler._running = False
 
 
 if __name__ == "__main__":

@@ -92,7 +92,7 @@ class MemoryRecallTests(unittest.IsolatedAsyncioTestCase):
 
 class MemoryButtonSourceTests(unittest.TestCase):
     def test_memory_recall_uses_active_vfo_and_suppresses_long_press_click(self):
-        ui_source = Path("static/ft710_ui.js").read_text()
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
         memory_section = ui_source.split("// Memory buttons", 1)[1]
         memory_section = memory_section.split("// Menu", 1)[0]
 

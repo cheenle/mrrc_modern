@@ -13,6 +13,7 @@
 | PollingService | Core | Implemented | 7-task adaptive background polling with priority-command yield |
 | ScopePipeService | Core | Implemented | Manage scope_pipe subprocess lifecycle; read stdout/stderr |
 | MemoryChannelService | Core | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
+| ATR1000Service | Optional | Implemented | `/WSatr1000` Browser↔Server: optional external-tuner state + tune assist, token-gated, closed when disabled |
 | AuthService | Support | Implemented | Password login, session tokens, cookie management, WS gating |
 | StatusService | Support | Implemented | `/api/status` full radio state JSON |
 | ProcessService | Support | Implemented | `start.sh` / `stop.sh` background service management, PID file |
@@ -58,6 +59,7 @@ AuthService
 | MemoryChannelService | JSON array | JSON array + broadcast | HTTP `/api/mem_channels` |
 | AuthService | Password + request | Cookie + token + redirect | HTTP `/api/auth/*` |
 | StatusService | GET request | Full radio state JSON (50+ fields) | HTTP `/api/status` |
+| ATR1000Service | JSON `atrTune` / `ping` | JSON `atrState` / `atrTuneResult` / `pong` | WS `/WSatr1000` |
 
 ## 10.4 Control Service Command Contract
 

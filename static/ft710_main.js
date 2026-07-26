@@ -294,13 +294,18 @@ function handleMessage(msg) {
             if (msg.memChannels) {
                 memChannels.length = 0;
                 memChannels.push(...msg.memChannels);
-                // Persist to sessionStorage
-                try { sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels)); } catch(e) {}
+                // Persist to cookie
+                FT710Settings.setCookie('ft710_memChannels', JSON.stringify(memChannels));
                 renderMemoryChannels();
             }
             radioState.ws_connected = true;
             renderAll();
             _applyAfGainToAudioNode();  // sync gain node from radio state
+            _applySavedMicGain();  // push persisted mic gain back to the radio
+            // Optional ATR1000 tuner module — inert unless server enables it
+            if (window.ATR1000 && typeof window.ATR1000.init === 'function') {
+                window.ATR1000.init(msg.atr1000Enabled === true);
+            }
             // Also request memChannels explicitly (belt-and-suspenders with server push)
             if (!msg.memChannels) {
                 sendMsg({type: 'memLoadAll'});
@@ -316,7 +321,7 @@ function handleMessage(msg) {
                 if (changedFields) {
                     renderUpdates(changedFields);
                     // NOTE: server af_gain no longer drives the playback gain
-                    // node — the volume slider is browser-local (localStorage).
+                    // node — the volume slider is browser-local (cookie).
                 }
             }
             break;
@@ -332,10 +337,8 @@ function handleMessage(msg) {
             if (msg.channels) {
                 memChannels.length = 0;
                 memChannels.push(...msg.channels);
-                // Persist to sessionStorage so channels survive page refresh
-                try {
-                    sessionStorage.setItem('ft710_memChannels', JSON.stringify(memChannels));
-                } catch(e) { /* ignore */ }
+                // Persist to cookie so channels survive page refresh
+                FT710Settings.setCookie('ft710_memChannels', JSON.stringify(memChannels));
                 renderMemoryChannels();
             }
             break;
@@ -374,9 +377,9 @@ var _isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && !/Chrome/.test(navigator.userAgent));
 
 function bodyload() {
-    // Restore memory channels from sessionStorage first (instant, before server responds)
+    // Restore memory channels from cookie first (instant, before server responds)
     try {
-        var savedMem = sessionStorage.getItem('ft710_memChannels');
+        var savedMem = FT710Settings.getCookie('ft710_memChannels');
         if (savedMem) {
             var parsed = JSON.parse(savedMem);
             memChannels.length = 0;
@@ -934,6 +937,33 @@ var _txMicSource = null;     // cached MediaStreamSource
 var _txMicSp = null;         // cached ScriptProcessor
 var _txMicAw = null;         // cached AudioWorkletNode
 var _txMicMute = null;       // zero-gain sink that keeps capture graph alive
+var _txMicGainNode = null;   // device-side software mic gain (browser-local)
+
+// Device-side mic gain: software GainNode on the capture graph, slider
+// 0–200 maps to linear 0–2× (100 = unity). Browser-local like the 🔊 Vol
+// slider — independent of the radio's CAT mic_gain. Persisted in a cookie.
+function _getDeviceMicGain() {
+    var v = 100;
+    try { var s = FT710Settings.getCookie('ft710_micVol'); if (s !== null) v = parseInt(s); } catch(e) {}
+    if (isNaN(v)) v = 100;
+    return Math.max(0, Math.min(200, v)) / 100;
+}
+
+function _ensureMicGainNode() {
+    if (!_txMicGainNode && _txMicCtx) {
+        _txMicGainNode = _txMicCtx.createGain();
+        _txMicGainNode.gain.value = _getDeviceMicGain();
+    }
+    return _txMicGainNode;
+}
+
+// Linear gain 0–2. setTargetAtTime avoids zipper noise on slider drags.
+function _setDeviceMicGain(linear) {
+    if (_txMicGainNode && _txMicCtx) {
+        try { _txMicGainNode.gain.setTargetAtTime(linear, _txMicCtx.currentTime, 0.02); }
+        catch(e) { _txMicGainNode.gain.value = linear; }
+    }
+}
 
 function flushTXCapture() {
     if (_txMicAw && _txMicAw.port) {
@@ -1026,7 +1056,8 @@ function startTXAudio() {
             _txMicMute = _txMicCtx.createGain();
             _txMicMute.gain.value = 0;
 
-            _txMicSource.connect(_txMicAw);
+            _txMicSource.connect(_ensureMicGainNode());
+            _txMicGainNode.connect(_txMicAw);
             _txMicAw.connect(_txMicMute);
             _txMicMute.connect(_txMicCtx.destination);
             flushTXCapture();
@@ -1054,7 +1085,8 @@ function startTXAudio() {
                 }
             };
 
-            _txMicSource.connect(_txMicSp);
+            _txMicSource.connect(_ensureMicGainNode());
+            _txMicGainNode.connect(_txMicSp);
             _txMicSp.connect(_txMicCtx.destination);
             console.log('TX audio capture initialized (ScriptProcessor fallback)');
         });
@@ -1106,7 +1138,8 @@ function startTXAudioFallback() {
             sendTXAudioFrame(tagged.buffer);
         };
 
-        _txMicSource.connect(_txMicSp);
+        _txMicSource.connect(_ensureMicGainNode());
+        _txMicGainNode.connect(_txMicSp);
         _txMicSp.connect(_txMicCtx.destination);
         console.log('TX audio capture started (PCM fallback)');
     }).catch(function(e) {
@@ -1396,24 +1429,68 @@ var FullscreenMgr = (function () {
 })();
 
 // ── Audio gain helper ────────────────────────────────────────────────
-// The 🔊 Vol slider is browser-side playback volume, persisted in
-// localStorage — it is deliberately NOT the radio's CAT AF gain, so the
+// The 🔊 Vol slider is browser-side playback volume, persisted in a
+// cookie — it is deliberately NOT the radio's CAT AF gain, so the
 // CAT poll can never fight the user's volume setting.
 // A 10× boost compensates for quiet FT-710 USB audio; clamped at 10× to
 // prevent runaway gain from blowing out speakers.
 var AUDIO_GAIN_BOOST = 10.0;
 var AUDIO_GAIN_MAX = 10.0;
+// During TX/TUNE the radio may pass sidetone / its own audio back over the
+// USB RX path, which the operator hears as a self-monitoring echo through the
+// speakers. Dim the RX playback gain to kill that echo. 0 = full mute; raise
+// it (e.g. 0.15) if you want to monitor your own transmitted audio instead.
+var AUDIO_TX_DIM_FACTOR = 0.0;
+
 function _getBrowserVolume() {
     var v = 128;
-    try { var s = localStorage.getItem('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
+    try { var s = FT710Settings.getCookie('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
     if (isNaN(v)) v = 128;
     return Math.max(0, Math.min(255, v));
 }
+
+// Mic gain is a radio-side CAT setting the radio itself does not restore
+// for the web UI; the user's last value lives in a cookie and is pushed
+// back to the radio on every (re)connect when it differs from the
+// fullState value. The settings poll then confirms it like any other set.
+function _applySavedMicGain() {
+    var s = FT710Settings.getCookie('ft710_micGain');
+    if (s === null) return;
+    var v = parseInt(s);
+    if (isNaN(v)) return;
+    v = Math.max(0, Math.min(100, v));
+    if (v !== radioState.mic_gain) sendCommand('mic_gain', v);
+}
+
+// True while the radio is keyed (PTT or TUNE). Drives RX playback dimming.
+function _rxTransmitting() {
+    return typeof radioState !== 'undefined' && (
+        radioState.is_transmitting ||
+        radioState.tx_status === 1 ||
+        radioState.tx_status === 2
+    );
+}
+
+// Smoothly set the RX GainNode target. setTargetAtTime gives click-free
+// transitions (important for PTT mute/unmute); falls back to a direct set.
+function _setRxGainTarget(target) {
+    if (typeof AudioRX_gain_node === 'undefined' || !AudioRX_gain_node) return;
+    try {
+        var ctx = AudioRX_context;
+        if (ctx && ctx.currentTime !== undefined) {
+            AudioRX_gain_node.gain.setTargetAtTime(target, ctx.currentTime, 0.015);
+            return;
+        }
+    } catch(e) {}
+    AudioRX_gain_node.gain.value = target;
+}
+
 function _applyAfGainToAudioNode() {
     if (typeof AudioRX_gain_node === 'undefined' || !AudioRX_gain_node) return;
     var raw = _getBrowserVolume() / 255.0;
     var boosted = Math.min(AUDIO_GAIN_MAX, raw * AUDIO_GAIN_BOOST);
-    AudioRX_gain_node.gain.value = boosted;
+    // Dim RX playback during transmit to prevent self-monitoring echo.
+    _setRxGainTarget(_rxTransmitting() ? boosted * AUDIO_TX_DIM_FACTOR : boosted);
 }
 
 document.addEventListener('DOMContentLoaded', function () {

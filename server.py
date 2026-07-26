@@ -33,6 +33,7 @@ from config import (
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT, PTT_SAFETY_TIMEOUT,
     MODE_NUM_TO_NAME, MODE_NAME_TO_NUM, BANDS, UI_MODES,
     FILTER_WIDTHS_VOICE, FILTER_WIDTHS_NARROW, NARROW_MODES,
+    ATR1000_HOST, ATR1000_PORT,
     get_band_for_frequency, get_filter_widths_for_mode, get_filter_hz,
 )
 from cat_controller import CatController
@@ -72,12 +73,62 @@ ctrl_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
 audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
+# ATR1000 external tuner (optional; None = feature disabled)
+atr = None                    # ATR1000Client, lazily imported in lifespan
+atr_clients: set[WebSocket] = set()
+_atr_storage = None           # TunerStorage shared with the client
+_atr_tune_task = None         # running tune-assist asyncio.Task, if any
 _last_meter_broadcast_log = 0.0
 # Single-owner guard for the TX uplink: only the first connected TX client's
 # audio is fed to the radio. Prevents two open tabs from interleaving mic
 # frames into the same playback queue (garbled TX). A later client takes over
 # only after the current owner disconnects.
 _tx_owner_ws: Optional[WebSocket] = None
+# Auth token per websocket — lets the PTT handler find the TX-audio socket
+# that belongs to the client keying the radio.
+_ws_tokens: dict = {}
+# TX-audio session diagnostics (reset on every PTT key-up, logged on release)
+_tx_session_frames = 0      # owner frames received over /WSaudioTX
+_tx_session_decoded = 0     # frames successfully decoded + fed to the device queue
+_tx_session_decode_fail = 0 # Opus frames that failed to decode
+_tx_non_owner_drops = 0     # mic frames ignored from non-owner clients
+
+
+def _promote_tx_owner():
+    """Promote a remaining TX-audio client to owner after the owner left.
+
+    Without this, all remaining clients stay muted forever once the owner
+    disconnects (ownership was only ever assigned at connect time) — the
+    radio keys via /WSradio but no mic frames reach the device: the
+    "PTT keys but no voice / no power" soft failure.
+    """
+    global _tx_owner_ws
+    _tx_owner_ws = None
+    for tx_ws in list(audio_tx_clients):
+        _tx_owner_ws = tx_ws
+        return tx_ws
+    return None
+
+
+def _claim_tx_owner_for_token(token: str):
+    """Make the TX-audio client authenticated with `token` the uplink owner.
+
+    Called on PTT key-up: the device that keys the radio is the one whose
+    voice must go out.  Fixes the multi-client case (browser tab + iOS app,
+    or a stale zombie owner) where an idle first-connected client owned the
+    uplink and the PTT-ing client's mic frames were silently dropped.
+    """
+    global _tx_owner_ws
+    if not token:
+        return None
+    for tx_ws in list(audio_tx_clients):
+        if _ws_tokens.get(tx_ws) == token:
+            if tx_ws is not _tx_owner_ws:
+                _tx_owner_ws = tx_ws
+                logger.info("TX audio ownership → PTT client")
+            return tx_ws
+    return None
+
 _state_broadcast_task: asyncio.Task | None = None
 _scope_read_task: asyncio.Task | None = None
 _scope_broadcast_task: asyncio.Task | None = None
@@ -109,6 +160,19 @@ def _runtime_dir() -> Path:
     return SCRIPT_DIR
 
 
+def _resource_dir() -> Path:
+    """Return the directory containing bundled read-only resources.
+
+    PyInstaller 6 onedir builds place datas (static/, mem_channels.json)
+    under sys._MEIPASS (the "_internal" directory next to the exe), not
+    next to the exe itself.
+    """
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass)
+    return _runtime_dir()
+
+
 def _scope_pipe_command() -> list[str] | None:
     """Return the command used to start the FT4222 scope pipe."""
     if getattr(sys, "frozen", False):
@@ -123,7 +187,7 @@ def _scope_pipe_command() -> list[str] | None:
     return None
 
 
-STATIC_DIR = _runtime_dir() / "static"
+STATIC_DIR = _resource_dir() / "static"
 MEM_FILE = Path(os.environ.get("FT710_MEM_FILE", str(_runtime_dir() / "mem_channels.json")))
 
 # ── Auth Helpers ────────────────────────────────────────────────────
@@ -230,6 +294,20 @@ async def _broadcast_state():
             dead.add(ws)
     ctrl_clients -= dead
 
+    # Optional ATR1000 tuner linkage — short-circuits to nothing when the
+    # feature is disabled (atr is None).  Covers both poll-driven and
+    # command-driven changes since both flow through radio.update().
+    # NOTE: `dirty` holds SOURCE fields only (derived fields are expanded
+    # later in to_dirty_dict), so check vfo_*/active_vfo and tx_status.
+    if atr is not None:
+        try:
+            if {"vfo_a_freq", "vfo_b_freq", "active_vfo"} & dirty:
+                atr.notify_freq(radio.active_freq)
+            if "tx_status" in dirty:
+                atr.notify_tx(bool(radio.is_transmitting))
+        except Exception as e:
+            logger.debug("ATR1000 linkage hook failed: %s", e)
+
 async def _broadcast_mem_channels():
     """Send memory channels to all connected clients."""
     global ctrl_clients
@@ -242,6 +320,162 @@ async def _broadcast_mem_channels():
         except Exception:
             dead.add(ws)
     ctrl_clients -= dead
+
+# ── ATR1000 External Tuner (optional) ─────────────────────────────
+# Enabled only when FT710_ATR1000_HOST is set.  When disabled, `atr`
+# stays None: no client task, no linkage hooks, and /WSatr1000 closes
+# immediately — zero impact on installations without the hardware.
+
+# Tune-assist timings (module constants so tests can shrink them).
+ATR_TUNE_CARRIER_SETTLE_S = 0.3   # TX2 carrier stabilisation before reading SWR
+ATR_TUNE_MIN_S = 5.0              # ignore "not tuning" before this (device lag)
+ATR_TUNE_DEADLINE_S = 45.0        # hard timeout for a full tune
+ATR_TUNE_COMPARE_SETTLE_S = 0.8   # post-tune settle before comparing SWR
+ATR_TUNE_METER_WAIT_S = 2.5       # wait for fresh meter data after carrier on
+ATR_TUNE_SWR_SKIP = 1.6           # at or below this, don't tune at all
+ATR_TUNE_SWR_IMPROVED = 0.02      # minimum improvement to keep the result
+
+async def _broadcast_atr(msg: dict):
+    """Send an ATR1000 message to all tuner-channel clients."""
+    if not atr_clients:
+        return
+    data = json.dumps(msg)
+    dead: set[WebSocket] = set()
+    for ws in atr_clients:
+        try:
+            await ws.send_text(data)
+        except Exception:
+            dead.add(ws)
+    atr_clients.difference_update(dead)
+
+
+def _on_atr_change(state: dict):
+    """Sync callback from ATR1000Client (runs in the event loop)."""
+    try:
+        asyncio.get_running_loop().create_task(
+            _broadcast_atr({"type": "atrState", **state}))
+    except Exception:
+        pass
+
+
+async def _atr_wait_swr(timeout: float) -> Optional[float]:
+    """Wait for a fresh SWR reading from the tuner (device pushes
+    METER frames at a high rate while a carrier is present)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        st = atr.read_state()
+        last = st.get("last_update") or 0
+        if st.get("connected") and (st.get("swr") or 0) > 0 \
+                and time.time() - last < timeout:
+            return st["swr"]
+        await asyncio.sleep(0.2)
+    return None
+
+
+async def _atr_wait_tune_complete(deadline_s: float, minimum_s: float) -> bool:
+    """Wait until the tuner clears its tuning flag (the client applies
+    the device's stability heuristics).  Returns False on deadline."""
+    start = time.monotonic()
+    while True:
+        elapsed = time.monotonic() - start
+        if elapsed >= minimum_s and not atr.read_state().get("tuning"):
+            return True
+        if elapsed >= deadline_s:
+            return False
+        await asyncio.sleep(0.25)
+
+
+async def _atr_tune_assist():
+    """Server-side ATR1000 tune assist (ported from the mrrc project's
+    browser-side autoFullTuneIfHighSWR, moved server-side so a busy or
+    disconnected browser cannot stall it):
+    TX2 carrier → skip if SWR ≤ 1.6 → snapshot relays → full tune →
+    keep + learn when SWR improved ≥0.02, otherwise roll the relays
+    back.  The carrier is always dropped in `finally`."""
+    phase = "error"
+    message = ""
+    swr_before: Optional[float] = None
+    swr_after: Optional[float] = None
+    try:
+        await _broadcast_atr({"type": "atrTuneResult", "phase": "start"})
+        scheduler and scheduler.note_user_command()
+        # Key the low-power tune carrier (TX2), same as the radio's own
+        # tune flow — but the radio's internal tuner is NOT triggered.
+        await cat.set_tune(True)
+        radio.update(tx_status=2)
+        await asyncio.sleep(ATR_TUNE_CARRIER_SETTLE_S)
+
+        swr_before = await _atr_wait_swr(timeout=2.5)
+        if swr_before is None:
+            message = "no meter data from tuner"
+        elif swr_before <= ATR_TUNE_SWR_SKIP:
+            phase = "skipped"
+        else:
+            snap = atr.read_state()
+            orig = (snap.get("sw", 0), snap.get("ind", 0), snap.get("cap", 0))
+            await atr.start_tune(mode=2)  # 2 = full tune
+            if not await _atr_wait_tune_complete(
+                    deadline_s=ATR_TUNE_DEADLINE_S, minimum_s=ATR_TUNE_MIN_S):
+                message = "tune timeout (45s)"
+            else:
+                await asyncio.sleep(ATR_TUNE_COMPARE_SETTLE_S)  # settle
+                final = atr.read_state()
+                swr_after = final.get("swr") or 0
+                if swr_after > 0 and swr_after < swr_before - 0.02:
+                    phase = "success"
+                    if _atr_storage is not None:
+                        try:
+                            _atr_storage.learn(
+                                radio.active_freq,
+                                final.get("sw", 0), final.get("ind", 0),
+                                final.get("cap", 0), swr_after,
+                                force_update=True,
+                            )
+                        except Exception as e:
+                            logger.warning("ATR1000 learn failed: %s", e)
+                else:
+                    phase = "rollback"
+                    await atr.set_relay(*orig)
+        logger.info("ATR1000 tune assist: %s (SWR %s → %s) %s",
+                    phase, swr_before, swr_after, message)
+    except Exception as e:
+        logger.warning("ATR1000 tune assist failed: %s", e)
+        message = str(e)
+    finally:
+        # Always drop the carrier.  The last-client-disconnect dead-man
+        # switch also forces RX independently if every client vanishes.
+        try:
+            await cat.set_tune(False)
+            radio.update(tx_status=0)
+        except Exception:
+            pass
+        scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+        await _broadcast_atr({
+            "type": "atrTuneResult", "phase": phase, "message": message,
+            "swr_before": round(swr_before, 2) if swr_before else None,
+            "swr_after": round(swr_after, 2) if swr_after else None,
+        })
+
+
+async def _start_atr_tune_assist(ws: WebSocket):
+    """Validate preconditions and launch the tune-assist task."""
+    global _atr_tune_task
+    if atr is None:
+        await ws.send_text(json.dumps({
+            "type": "error", "message": "ATR1000 not available"}))
+        return
+    if cat is None or not cat.connected:
+        await ws.send_text(json.dumps({
+            "type": "error", "message": "Radio not connected"}))
+        return
+    if radio.is_transmitting:
+        await ws.send_text(json.dumps({
+            "type": "error", "message": "Radio is transmitting"}))
+        return
+    if _atr_tune_task and not _atr_tune_task.done():
+        return  # already running — the button shows progress
+    _atr_tune_task = asyncio.create_task(_atr_tune_assist(), name="atr_tune")
+
 
 # ── Spectrum/Scope ───────────────────────────────────────────────────
 
@@ -701,6 +935,8 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
 
     Message format: JSON with 'type' and 'field'/'value'.
     """
+    global _tx_session_frames, _tx_session_decoded
+    global _tx_session_decode_fail, _tx_non_owner_drops
     try:
         msg = json.loads(msg_str)
     except json.JSONDecodeError:
@@ -813,6 +1049,7 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
 async def _execute_set_command(field: str, value, ws: WebSocket):
     """Execute a set command against the radio."""
     global cat, radio, scheduler
+    global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail, _tx_non_owner_drops
 
     if cat is None or not cat.connected:
         await ws.send_text(json.dumps({
@@ -867,6 +1104,16 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         elif field == "ptt":
             tx = value is True or str(value).lower() == "true"
             if tx:
+                # The client keying the radio owns the TX-audio uplink —
+                # otherwise an idle first-connected client (second tab,
+                # iOS app, zombie socket) keeps ownership and this
+                # client's mic frames are silently dropped: radio keys
+                # but there is no modulation / no RF power.
+                _claim_tx_owner_for_token(_ws_tokens.get(ws))
+                _tx_session_frames = 0
+                _tx_session_decoded = 0
+                _tx_session_decode_fail = 0
+                _tx_non_owner_drops = 0
                 # Key radio first so the TX light comes on immediately,
                 # THEN open the audio output stream synchronously —
                 # awaiting start_tx here avoids a race where the drain
@@ -900,6 +1147,13 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # event loop — the blocking drain can take up to TX_DRAIN_MS.
                 if audio:
                     await asyncio.to_thread(audio.stop_tx, True)
+                    st = audio.tx_stats()
+                    logger.info(
+                        "TX session: frames=%d fed=%d decode_fail=%d "
+                        "written=%d write_err=%d peak=%.0f%% non_owner_drops=%d",
+                        _tx_session_frames, _tx_session_decoded,
+                        _tx_session_decode_fail, st["written"], st["write_err"],
+                        st["peak"] / 327.68, _tx_non_owner_drops)
                 # Drop PTT immediately after the drain.  No verify loop:
                 # the radio obeys TX0 on the first write, and the TX-status
                 # poll (plus the client PTT watchdog) catches a stuck keyup.
@@ -1343,7 +1597,8 @@ async def lifespan(app: FastAPI):
     if connected:
         await _initial_state_sync()
         await _init_scope_cat()
-        scheduler = PollScheduler(cat, radio, on_state_changed=_broadcast_state)
+        scheduler = PollScheduler(cat, radio, on_state_changed=_broadcast_state,
+                                  on_reconnected=_init_scope_cat)
         await scheduler.start()
     else:
         logger.warning("Could not connect to radio. Server will serve UI only.")
@@ -1386,6 +1641,29 @@ async def lifespan(app: FastAPI):
     # Do this even if initial CAT probe failed — the serial port may still work
     await _init_scope_cat()
 
+    # ── ATR1000 external tuner (optional) ─────────────────────────
+    # Lazily imported so installs without the hardware never even load
+    # the module.  Any failure here just leaves the feature off.
+    global atr, _atr_storage
+    if ATR1000_HOST:
+        try:
+            from atr1000_client import ATR1000Client
+            from atr1000_tuner import get_storage
+            _atr_storage = get_storage()
+            atr = ATR1000Client(ATR1000_HOST, ATR1000_PORT, storage=_atr_storage)
+            atr.on_change = _on_atr_change
+            await atr.start()
+            # Prime the linkage with the current radio state — the startup
+            # freq sync ran BEFORE the client existed, so without this the
+            # first relay auto-apply would wait for the user's first QSY.
+            atr.notify_freq(radio.active_freq)
+            atr.notify_tx(bool(radio.is_transmitting))
+            logger.info("ATR1000 tuner client started (%s:%d)",
+                        ATR1000_HOST, ATR1000_PORT)
+        except Exception as e:
+            logger.warning("ATR1000 init failed (feature disabled): %s", e)
+            atr = None
+
     logger.info("Server ready!")
 
     yield
@@ -1425,6 +1703,12 @@ async def lifespan(app: FastAPI):
 
     if scheduler:
         await scheduler.stop()
+    if atr:
+        try:
+            await atr.stop()
+        except Exception:
+            pass
+        atr = None
     if cat:
         await cat.disconnect()
     logger.info("Server stopped.")
@@ -1630,6 +1914,7 @@ async def ws_radio(ws: WebSocket):
 
     await ws.accept()
     ctrl_clients.add(ws)
+    _ws_tokens[ws] = token
     logger.info("WS client connected (%d total)", len(ctrl_clients))
     if scheduler:
         scheduler.set_active(len(ctrl_clients) > 0)
@@ -1650,6 +1935,9 @@ async def ws_radio(ws: WebSocket):
                 "narrow": FILTER_WIDTHS_NARROW,
                 "narrowModes": sorted(NARROW_MODES),
             },
+            # Optional ATR1000 tuner — the frontend module stays fully
+            # inert unless this is true.
+            "atr1000Enabled": atr is not None,
         }))
     except Exception:
         ctrl_clients.discard(ws)
@@ -1665,6 +1953,7 @@ async def ws_radio(ws: WebSocket):
         logger.debug("WS error: %s", e)
     finally:
         ctrl_clients.discard(ws)
+        _ws_tokens.pop(ws, None)
         logger.info("WS client disconnected (%d remain)", len(ctrl_clients))
         if scheduler:
             scheduler.set_active(len(ctrl_clients) > 0)
@@ -1755,6 +2044,8 @@ async def ws_audio_tx(ws: WebSocket):
     the owner disconnects.
     """
     global audio, _opus_tx_decoder, _tx_owner_ws
+    global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail
+    global _tx_non_owner_drops
 
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
@@ -1763,6 +2054,7 @@ async def ws_audio_tx(ws: WebSocket):
 
     await ws.accept()
     audio_tx_clients.add(ws)
+    _ws_tokens[ws] = token
     is_owner = _tx_owner_ws is None
     if is_owner:
         _tx_owner_ws = ws
@@ -1778,6 +2070,12 @@ async def ws_audio_tx(ws: WebSocket):
             if "bytes" in msg and msg["bytes"] is not None:
                 # Only the owner's audio reaches the radio; ignore others.
                 if ws is not _tx_owner_ws:
+                    _tx_non_owner_drops += 1
+                    if _tx_non_owner_drops % 250 == 1:
+                        logger.warning(
+                            "TX audio from non-owner client ignored "
+                            "(drops=%d) — another client owns the uplink",
+                            _tx_non_owner_drops)
                     continue
                 data = msg["bytes"]
                 if len(data) < 2:
@@ -1786,18 +2084,24 @@ async def ws_audio_tx(ws: WebSocket):
                 # Decode codec-tagged mic frame → PCM → audio output
                 tag = data[0]
                 frame = data[1:]
+                _tx_session_frames += 1
 
                 if tag == AUDIO_TAG_OPUS and _opus_tx_decoder:
                     pcm = _opus_tx_decoder.decode(frame)
                     if pcm and audio:
                         audio.feed_tx_audio(pcm)
+                        _tx_session_decoded += 1
+                    elif not pcm:
+                        _tx_session_decode_fail += 1
                 elif tag == AUDIO_TAG_PCM:
                     if audio:
                         audio.feed_tx_audio(frame)
+                        _tx_session_decoded += 1
                 else:
                     # Legacy: untagged, assume PCM
                     if audio:
                         audio.feed_tx_audio(data)
+                        _tx_session_decoded += 1
 
             elif "text" in msg and msg["text"]:
                 text = msg["text"]
@@ -1819,6 +2123,7 @@ async def ws_audio_tx(ws: WebSocket):
         pass
     finally:
         audio_tx_clients.discard(ws)
+        _ws_tokens.pop(ws, None)
         if ws is _tx_owner_ws:
             _tx_owner_ws = None
             # Force RX if the TX-audio owner vanishes while keyed — otherwise
@@ -1833,8 +2138,54 @@ async def ws_audio_tx(ws: WebSocket):
                     pass
             if audio:
                 await asyncio.to_thread(audio.stop_tx)
+            # Hand the uplink to a remaining client — otherwise everyone
+            # stays muted until they reconnect (the "PTT keys but no
+            # voice" soft failure after the owner drops).
+            if _promote_tx_owner() is not None:
+                logger.info("TX audio ownership promoted to remaining client "
+                            "(%d total)", len(audio_tx_clients))
         logger.info("Audio TX client disconnected (%d remain, owner=%s)",
                     len(audio_tx_clients), _tx_owner_ws is not None)
+
+
+# ── ATR1000 Tuner WebSocket (optional) ──────────────────────────────
+
+@app.websocket("/WSatr1000")
+async def ws_atr1000(ws: WebSocket):
+    """External-tuner channel: state pushes (meter/relay/tuning) and the
+    server-side tune-assist command.  Closes immediately when the
+    feature is disabled (no FT710_ATR1000_HOST configured)."""
+    token = ws.query_params.get("token", "")
+    if not token or token not in _auth_tokens:
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+
+    await ws.accept()
+    if atr is None:
+        await ws.close(code=4000, reason="ATR1000 disabled")
+        return
+
+    atr_clients.add(ws)
+    atr.client_count = len(atr_clients)  # drives the client's SYNC poll policy
+    logger.info("ATR1000 WS client connected (%d total)", len(atr_clients))
+    try:
+        await ws.send_text(json.dumps({"type": "atrState", **atr.read_state()}))
+        while True:
+            msg = json.loads(await ws.receive_text())
+            msg_type = msg.get("type", "")
+            if msg_type == "ping":
+                await ws.send_text(json.dumps({"type": "pong"}))
+            elif msg_type == "atrTune":
+                await _start_atr_tune_assist(ws)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.debug("WSatr1000 error: %s", e)
+    finally:
+        atr_clients.discard(ws)
+        if atr is not None:
+            atr.client_count = len(atr_clients)
+        logger.info("ATR1000 WS client disconnected (%d remain)", len(atr_clients))
 
 
 # ── Static File Serving ─────────────────────────────────────────────

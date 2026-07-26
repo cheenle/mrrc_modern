@@ -7,6 +7,7 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
     private let ioQueue = DispatchQueue(label: "audio.playback", qos: .userInitiated)
+    private var isAttached = false
 
     private let sourceSampleRate: Double = 48000  // matches server RX_OUT_RATE
     private var playbackFormat: AVAudioFormat!
@@ -69,9 +70,16 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
 
     // MARK: - Start / Stop
 
+    /// Engine lifecycle is serialized on ioQueue (same queue as buffer
+    /// scheduling) so the two entry points that can fire concurrently —
+    /// powerOn() and the login-completion Task.detached — cannot race
+    /// into a double attach / double connect.
     func start() {
+        ioQueue.async { self._start() }
+    }
+
+    private func _start() {
         guard !isStarted else { return }
-        isStarted = true
         frameCount = 0; opusDropCount = 0; lastDiagTime = Date()
 
         playbackFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32,
@@ -80,22 +88,36 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
                                         interleaved: false)!
 
         configureSession()
-        engine.attach(playerNode)
+        // stop() keeps the node attached; re-attaching an attached node
+        // throws (reconnect / power-off-on path).
+        if !isAttached {
+            engine.attach(playerNode)
+            isAttached = true
+        }
         engine.connect(playerNode, to: engine.mainMixerNode, format: playbackFormat)
         applyVolume()
 
         do {
             try engine.start()
             playerNode.play()
-            print("🔊 Audio playback started @ \(sourceSampleRate) Hz")
+            isStarted = true
+            let outFmt = playerNode.outputFormat(forBus: 0)
+            print("🔊 Audio playback started @ \(sourceSampleRate) Hz, player output \(outFmt.channelCount)ch @ \(Int(outFmt.sampleRate)) Hz")
         } catch {
-            audioError = "Engine start: \(error.localizedDescription)"
-            print("⚠️ \(audioError!)")
-            NotificationCenter.default.post(name: .audioError, object: nil, userInfo: ["error": audioError ?? "Unknown"])
+            let msg = "Engine start: \(error.localizedDescription)"
+            print("⚠️ \(msg)")
+            DispatchQueue.main.async {
+                self.audioError = msg
+                NotificationCenter.default.post(name: .audioError, object: nil, userInfo: ["error": msg])
+            }
         }
     }
 
     func stop() {
+        ioQueue.async { self._stop() }
+    }
+
+    private func _stop() {
         guard isStarted else { return }
         isStarted = false
         playerNode.stop()
@@ -154,18 +176,51 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
         DispatchQueue.main.async { [weak self] in self?.rmsLevel = rms }
 
         // ── Schedule buffer directly ─────────────────────────
-        guard let fmt = playbackFormat else { return }
-        let frameLen = AVAudioFrameCount(sampleCount)
-
         // Copy samples to a heap buffer so we can move it into ioQueue safely
         let heapSamples = samples  // copies
 
         ioQueue.async { [weak self] in
             guard let self = self, self.isStarted else { return }
-            guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: frameLen) else { return }
-            buf.frameLength = frameLen
-            if let dst = buf.floatChannelData?.pointee {
-                dst.initialize(from: heapSamples, count: sampleCount)
+            // Build the buffer in the player's LIVE output format.  iOS can
+            // connect/renegotiate the player→mixer bus to the hardware
+            // format (e.g. stereo under .voiceChat), and scheduleBuffer
+            // raises a fatal NSException on any channel-count mismatch —
+            // this was the crash observed right after login
+            // (AVAEInternal ScheduleBuffer: channelCount mismatch).
+            let outFmt = self.playerNode.outputFormat(forBus: 0)
+            let channels = Int(outFmt.channelCount)
+            guard outFmt.commonFormat == .pcmFormatFloat32,
+                  channels >= 1, outFmt.sampleRate > 0 else { return }
+            if outFmt.channelCount != self.lastLoggedOutChannels {
+                self.lastLoggedOutChannels = outFmt.channelCount
+                print("ℹ️ Player output format: \(outFmt.channelCount)ch @ \(Int(outFmt.sampleRate)) Hz interleaved=\(outFmt.isInterleaved)")
+            }
+
+            // Resample if the bus rate differs from the 48 kHz source.
+            let outSamples: [Float]
+            if abs(outFmt.sampleRate - self.sourceSampleRate) > 1.0 {
+                outSamples = self.resample(heapSamples, from: self.sourceSampleRate, to: outFmt.sampleRate)
+            } else {
+                outSamples = heapSamples
+            }
+            let outFrames = AVAudioFrameCount(outSamples.count)
+
+            guard let buf = AVAudioPCMBuffer(pcmFormat: outFmt, frameCapacity: outFrames) else { return }
+            buf.frameLength = outFrames
+            if outFmt.isInterleaved {
+                if let base = buf.floatChannelData?.pointee {
+                    for i in 0..<outSamples.count {
+                        let s = outSamples[i]
+                        for ch in 0..<channels { base[i * channels + ch] = s }
+                    }
+                }
+            } else {
+                // Mono bus → single copy; multi-channel bus → duplicate mono.
+                if let channelData = buf.floatChannelData {
+                    for ch in 0..<channels {
+                        channelData[ch].initialize(from: outSamples, count: outSamples.count)
+                    }
+                }
             }
             self.playerNode.scheduleBuffer(buf)
         }
@@ -181,6 +236,26 @@ final class AudioPlaybackManager: NSObject, ObservableObject, @unchecked Sendabl
     }
 
     // MARK: - Private
+
+    private var lastLoggedOutChannels: UInt32 = 0
+
+    /// Lightweight linear resampler (same approach as AudioCaptureManager).
+    private func resample(_ input: [Float], from inRate: Double, to outRate: Double) -> [Float] {
+        guard !input.isEmpty, inRate != outRate else { return input }
+        let ratio = outRate / inRate
+        let outLen = max(1, Int(Double(input.count) * ratio))
+        var out = [Float](repeating: 0, count: outLen)
+        let step = 1.0 / ratio
+        for i in 0..<outLen {
+            let pos = Double(i) * step
+            let idx = Int(pos)
+            let frac = Float(pos - Double(idx))
+            let a = input[min(idx, input.count - 1)]
+            let b = input[min(idx + 1, input.count - 1)]
+            out[i] = a + (b - a) * frac
+        }
+        return out
+    }
 
     private func configureSession() {
         do {

@@ -209,14 +209,19 @@ WebSocketConnection.onBinary → RadioViewModel.swift:453-455
 processPCM(:131-181):
   vDSP_vflt16 + vDSP_vsmul(×1/32768)→ [Float]   :137-142
   vDSP RMS → 主线程 rmsLevel                     :151-154
-  ioQueue 上逐帧 AVAudioPCMBuffer → playerNode.scheduleBuffer  :163-171
+  ioQueue 上逐帧 AVAudioPCMBuffer → playerNode.scheduleBuffer
+  ※ 缓冲按 playerNode.outputFormat(forBus: 0) 的实时格式构造:
+    单声道源按需上混到总线声道数、总线采样率 ≠48kHz 时线性重采样。
+    iOS 可能把 player→mixer 总线协商成硬件格式(如 .voiceChat 下立体声),
+    按固定单声道格式构造缓冲会触发 ScheduleBuffer channelCount 断言崩溃
+    (2026-07-21 真机:登录后首帧即崩,已修复)。
 ```
 
 **与 web 端的关键差异:iOS 无 jitter buffer。** 每帧到达即 `scheduleBuffer`,无预缓冲、无重排、无丢弃——网络抖动后积压音频永久滞后、越积越多(音画/电平不同步),丢包即爆音。web 端 `static/rx_worklet_processor.js:33-35` 是 time-based 水位线(prebuffer 220ms、underrun 恢复 90ms、上限 800ms 丢最旧)。分析报告 §4.2。
 
 增益:本地 `appVolume`(0–1)× `audioGainBoost`(10×)封顶 10(`AudioPlaybackManager.swift:37-46`),对齐 web 端 `AUDIO_GAIN_BOOST` 补偿 FT-710 USB 音频偏小;与电台侧 `af_gain` 独立。
 
-已知崩溃隐患:`stop()` 不 detach `playerNode`(`:98-105`),`start()` 每次 `engine.attach`(`:83`)→ reconnect / powerOff-On 循环后重复 attach 抛 NSException(分析报告 §2.5)。
+~~已知崩溃隐患:`stop()` 不 detach `playerNode`,`start()` 每次 `engine.attach` → 重复 attach 抛 NSException~~ **已修复(2026-07-21)**:`start/stop` 序列化到 `ioQueue`(消除 powerOn 与登录回调 `Task.detached` 的双 start 竞态),`isAttached` 标志保证 attach 仅一次。
 
 ### 3.4 音频 TX(App → 服务端)
 
@@ -405,7 +410,7 @@ SDD 第 15 章七层对应(设计稿 §6):
 
 1. PTT 释放竞态 + 无看门狗/后台保护 + 瀑布误触 QSY —— §5,设计已批准待实施。
 2. 认证失败路径断裂:4001 死分支、reconnect 拿 token 当密码、密码输错即锁死 —— §3.1。
-3. 音频引擎两处确定性崩溃隐患:playerNode 重复 attach(`AudioPlaybackManager.swift:83,98-105`)、installTap 重试(`AudioCaptureManager.swift:77-91`)——静态分析结论,建议真机验证。
+3. 音频引擎崩溃隐患:playerNode 重复 attach 已修复(`isAttached` + start/stop 序列化到 ioQueue,2026-07-21);installTap 重试(`AudioCaptureManager.swift:77-91`)仍为静态分析结论,建议真机验证。另:登录后 ScheduleBuffer channelCount 断言崩溃已修复(按实时输出格式构造缓冲 + 单声道自动上混)。
 
 **P1(功能实际残废)**
 

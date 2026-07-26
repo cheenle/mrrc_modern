@@ -9,15 +9,17 @@ This repository contains a Python FastAPI server for Yaesu FT-710 web control pl
 | `server.py` | FastAPI app, auth, 4 WebSocket endpoints, REST APIs, lifespan management |
 | `cat_controller.py` | Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
-| `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command and post-query stale-read discard |
+| `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command and post-query stale-read discard; watchdog re-runs scope init (`on_reconnected`) after serial reconnect |
 | `audio_handler.py` | PyAudio sound card capture/playback (44.1kHz native device rate), Opus encode, FT-710 device auto-detection (name + mono-channel heuristic) |
 | `audio_resample.py` | 44.1kHz ↔ 48kHz frame-aligned SRC (numpy linear interp; 882↔960 = 20ms) |
 | `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz) |
 | `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback |
-| `scope_pipe.py` | Standalone subprocess for FT4222 SPI I/O (avoids asyncio/ctypes conflicts) |
+| `scope_pipe.py` | Standalone subprocess for FT4222 SPI I/O (avoids asyncio/ctypes conflicts); 1s len=0 stdout heartbeat for dead-parent EPIPE detection |
 | `scope_frame.py` | Shared frame parsing, pipe payload encode/decode, quality metrics |
 | `scope_libraries.py` | FTDI library discovery and SPI clock configuration |
 | `config.py` | Mode tables, bands, filter widths, S-meter calibration, all constants |
+| `atr1000_client.py` | Optional asyncio WS client for networked ATR1000 tuner: binary frame protocol, 5s reconnect, 55-min refresh, TX-no-SYNC watchdog, learning, throttled relay writes, `notify_freq`/`notify_tx` sync hooks |
+| `atr1000_tuner.py` | `TunerStorage` LC-learning JSON store (learn gate SWR 1.0–1.8, 1kHz keys ±5kHz nearest, atomic writes) |
 
 Frontend assets in `static/`:
 - `index.html` — SPA shell (mobile-first responsive layout)
@@ -29,7 +31,8 @@ Frontend assets in `static/`:
 - `tx_opus_worker.js` — Web Worker: Opus encode from mic samples (48kHz, 64kbps CBR)
 - `modules/opus_codec.js` + `opus_wasm.js` — Browser-side WASM Opus codec
 - `modules/ptt_manager.js` — PTT state machine + safety watchdog
-- `modules/settings_manager.js` — Cookie + localStorage persistence
+- `modules/settings_manager.js` — Cookie persistence for all preferences (settings, AF volume, scope options, memory channels)
+- `modules/atr1000.js` — ATR1000 tuner WS client + meter row + ATR TUNE button (inert unless `atr1000Enabled`)
 
 iOS app in `FT710Mobile/` (SwiftUI, iOS 17, real device only — bundled `libopus.a` is arm64-device-only so simulator builds fail to link). See `FT710Mobile/CLAUDE.md` for build/test commands and protocol facts, `FT710Mobile/docs/ARCHITECTURE.md` for layer design, and `docs/IOS_APP_ANALYSIS.md` for the 2026-07-20 audit with the P0–P2 known-issue list.
 
@@ -64,7 +67,7 @@ Run tests:
 python -m unittest discover -s tests -v
 ```
 
-Environment variables: `FT710_SERIAL_PORT`, `FT710_BAUD_RATE`, `FT710_WEB_PORT`, `FT710_WEB_PASSWORD`, `FT710_WEB_HOST`, `FT710_FTDI_LIB_DIR`, `FT710_FT4222_CLK_DIV`, `FT710_SCOPE_PORT`, `FT710_SCOPE_BAUD`.
+Environment variables: `FT710_SERIAL_PORT`, `FT710_BAUD_RATE`, `FT710_WEB_PORT`, `FT710_WEB_PASSWORD`, `FT710_WEB_HOST`, `FT710_FTDI_LIB_DIR`, `FT710_FT4222_CLK_DIV`, `FT710_SCOPE_PORT`, `FT710_SCOPE_BAUD`, `FT710_ATR1000_HOST`, `FT710_ATR1000_PORT`.
 
 ## Coding Style & Naming Conventions
 

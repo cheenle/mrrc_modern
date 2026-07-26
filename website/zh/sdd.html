@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V1.6 更新</a></li>
+            <li><a href="#updates">V2.1 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V1.6 · 2026-07-18</span>
+            <span>SDD V2.1 · 2026-07-22</span>
         </div>
         <h1 class="hero-title">MRRC FT-710<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>版本</td><td>V1.6</td></tr>
-            <tr><td>基线日期</td><td>2026-07-18</td></tr>
+            <tr><td>版本</td><td>V2.1</td></tr>
+            <tr><td>基线日期</td><td>2026-07-22</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
             <tr><td>核心接口</td><td>4 路 WebSocket + 串口 CAT + FT4222 SPI + USB 音频</td></tr>
@@ -88,28 +88,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">最新更新</span>
-            <h2 class="section-title">V1.6 变更重点</h2>
+            <h2 class="section-title">V2.1 变更重点</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-ear-listen"></i></div>
-                <h3>RX 零音频看门狗</h3>
-                <p>服务端检测到位精确全零的 RX 音频（静噪开启下持续 ≥20 秒）即在状态栏亮出"无声"警告并写日志——电台 USB 音频卡死再也无法躲在 CBR 码率指示后面装正常。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-right-to-bracket"></i></div>
-                <h3>鉴权失效自动跳登录</h3>
-                <p>过期 token 的 WebSocket 握手被 HTTP 403 拒绝（浏览器只收到 1006，永远不是 4001）。控制通道现在先查 /api/auth/check，确认失效后跳转登录页，不再拿着死 token 无限重试。</p>
-            </div>
-            <div class="feature-card">
                 <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
-                <h3>死载波修复</h3>
-                <p>TX 音频属主连接在发射中断开时，服务端现在强制 TX0——关闭了此前只能等控制通道断开的无调制载波窗口。</p>
+                <h3>PTT 无声故障修复</h3>
+                <p>"按下 PTT 有载波但无语音/无功率" 的长时间运行软故障——根因是 TX 上行链路归属权仅在连接时分配。多客户端（浏览器标签 + iOS App 或僵尸连接）场景下 PTT 客户端的麦克风帧被静默丢弃。现在：属主断连时自动晋升 + PTT 键起时主动索取 + 每次 PTT 释放记录完整 TX 会话日志。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-file-lines"></i></div>
-                <h3>TX 音频文档归真</h3>
-                <p>文档与运行时对齐：TX Opus 实为 64kbps CBR complexity=5；AD-011 重写——48kHz 编解码域经帧对齐桥接（960↔882）到 FT-710 原生 44.1kHz USB 音频。</p>
+                <div class="icon"><i class="fas fa-bug-slash"></i></div>
+                <h3>修复虚假"电台未连接"</h3>
+                <p>频率日志守卫中的 NoneType 崩溃导致每次轮询都失败，5 次连续失败后广播 "serial_connected=false"，但实际上电台完全正常在通联。已增加 None 守卫，且成功轮询后立即恢复连接状态标志。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-chart-area"></i></div>
+                <h3>USB 重连后频谱冻结修复</h3>
+                <p>USB 重新枚举导致电台停止发送 FFT 帧，但看门狗重连后未重新执行 scope-init CAT 指令（EX040101/EX040200），瀑布图停在旧数据上不动。PollScheduler 现在有 on_reconnected 钩子在每次成功重连后重新初始化 scope。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-shield-haltered"></i></div>
+                <h3>Web 前端安全重构</h3>
+                <p>PTT 按钮改经 PTTManager 路由（此前绕过导致看门狗 + pagehide 强制关 TX 均为死代码）。TUNE 改为长按触发（原为点击锁定无确认）。键盘事件忽略重复触发和输入框内事件。修复静默渲染崩溃。服务端错误以 toast 横幅显示。</p>
             </div>
         </div>
     </div>

@@ -1,5 +1,23 @@
 $ErrorActionPreference = "Stop"
 
+# $ErrorActionPreference does NOT apply to native commands (python, pyinstaller,
+# iscc) — check $LASTEXITCODE explicitly so a failing test or build aborts the
+# packaging instead of silently shipping a broken installer.
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory = $true, Position = 0)][string]$Command,
+        [Parameter(ValueFromRemainingArguments = $true)]$Remaining
+    )
+    # Flatten: an array argument would otherwise arrive as ONE nested element
+    # and be passed to the native command as a single space-joined string.
+    $flat = @()
+    foreach ($a in $Remaining) { $flat += $a }
+    & $Command @flat
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Command $($flat -join ' ') failed with exit code $LASTEXITCODE"
+    }
+}
+
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $DistRoot = Join-Path $RepoRoot "dist\windows"
 $AppRoot = Join-Path $DistRoot "MRRC-FT710"
@@ -7,8 +25,9 @@ $PyInstallerRoot = Join-Path $DistRoot "_pyinstaller"
 
 Set-Location $RepoRoot
 
-python -m py_compile *.py
-python -m unittest discover -s tests -v
+$pyFiles = Get-ChildItem -Name *.py
+Invoke-Checked python -m py_compile @pyFiles
+Invoke-Checked python -m unittest discover -s tests -v
 
 $ft4222 = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\FT4222.dll"
 $d2xx = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\ftd2xx.dll"
@@ -18,9 +37,9 @@ if (!(Test-Path $ft4222) -or !(Test-Path $d2xx)) {
     Write-Warning "  $d2xx"
 }
 
-pyinstaller packaging\pyinstaller\scope_pipe.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
-pyinstaller packaging\pyinstaller\ft710_server.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
-pyinstaller packaging\pyinstaller\ft710_launcher.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
+Invoke-Checked pyinstaller packaging\pyinstaller\scope_pipe.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
+Invoke-Checked pyinstaller packaging\pyinstaller\ft710_server.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
+Invoke-Checked pyinstaller packaging\pyinstaller\ft710_launcher.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
 
 if (Test-Path $AppRoot) {
     Remove-Item $AppRoot -Recurse -Force
@@ -31,6 +50,8 @@ Copy-Item (Join-Path $PyInstallerRoot "ft710-server\*") $AppRoot -Recurse -Force
 Copy-Item (Join-Path $PyInstallerRoot "scope_pipe.exe") $AppRoot -Force
 Copy-Item (Join-Path $PyInstallerRoot "MRRC-FT710.exe") $AppRoot -Force
 Copy-Item (Join-Path $RepoRoot "windows") $AppRoot -Recurse -Force
+# Do not ship stale bytecode caches in the installer.
+Remove-Item (Join-Path $AppRoot "windows\__pycache__") -Recurse -Force -ErrorAction SilentlyContinue
 
 $VendorSource = Join-Path $RepoRoot "vendor\ftdi\windows"
 if (Test-Path $VendorSource) {
@@ -40,7 +61,7 @@ if (Test-Path $VendorSource) {
 }
 
 if (Get-Command iscc -ErrorAction SilentlyContinue) {
-    iscc packaging\windows\MRRC-FT710.iss
+    Invoke-Checked iscc packaging\windows\MRRC-FT710.iss
 } else {
     Write-Warning "Inno Setup Compiler 'iscc' was not found. Install Inno Setup and rerun this script to create the setup EXE."
 }

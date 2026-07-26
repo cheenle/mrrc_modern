@@ -59,12 +59,18 @@ def seed_mem_channels() -> None:
     target = user_data_dir() / "mem_channels.json"
     if target.exists():
         return
-    bundled = app_dir() / "mem_channels.json"
-    if bundled.exists():
-        try:
-            target.write_text(bundled.read_text(encoding="utf-8"), encoding="utf-8")
-        except OSError:
-            pass
+    # PyInstaller 6 onedir keeps datas in "_internal" next to the exe.
+    candidates = (
+        app_dir() / "mem_channels.json",
+        app_dir() / "_internal" / "mem_channels.json",
+    )
+    for bundled in candidates:
+        if bundled.exists():
+            try:
+                target.write_text(bundled.read_text(encoding="utf-8"), encoding="utf-8")
+            except OSError:
+                pass
+            return
 
 
 def wait_for_server(url: str, proc: subprocess.Popen | None = None,
@@ -105,15 +111,24 @@ def load_env(path: Path) -> dict[str, str]:
     return env
 
 
-def server_executable() -> Path:
+def server_executable() -> Path | None:
     exe = app_dir() / "ft710-server.exe"
     if exe.exists():
         return exe
-    return app_dir() / "server.py"
+    # Source-mode fallback only. When frozen, sys.executable IS this
+    # launcher, so "fallback" to [sys.executable, server.py] would spawn
+    # another launcher (which spawns another…) — an unbounded process
+    # chain triggered e.g. by antivirus quarantining ft710-server.exe.
+    script = app_dir() / "server.py"
+    if not getattr(sys, "frozen", False) and script.exists():
+        return script
+    return None
 
 
-def build_command() -> list[str]:
+def build_command() -> list[str] | None:
     server = server_executable()
+    if server is None:
+        return None
     if server.suffix.lower() == ".exe":
         return [str(server), "--no-ssl"]
     return [sys.executable, str(server), "--no-ssl"]
@@ -146,11 +161,17 @@ def main() -> int:
     print(f"URL:    {url}")
     print("Close this window or press Ctrl-C to stop the server.")
 
+    command = build_command()
+    if command is None:
+        print("ERROR: ft710-server.exe not found next to the launcher.")
+        print("Reinstall the app, or restore the file if antivirus quarantined it.")
+        return 1
+
     creationflags = 0
     if os.name == "nt":
         creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     proc = subprocess.Popen(
-        build_command(),
+        command,
         cwd=str(app_dir()),
         env=env,
         creationflags=creationflags,

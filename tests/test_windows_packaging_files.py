@@ -13,7 +13,7 @@ class WindowsPackagingFilesTests(unittest.TestCase):
             ROOT / "packaging" / "pyinstaller" / "ft710_launcher.spec",
         ):
             text = spec.read_text(encoding="utf-8")
-            self.assertIn("ROOT = Path(SPECPATH).parents[2]", text)
+            self.assertIn("ROOT = Path(SPECPATH).parents[1]", text)
 
     def test_build_script_runs_all_packaging_steps(self):
         text = (ROOT / "packaging" / "windows" / "build.ps1").read_text(
@@ -23,6 +23,16 @@ class WindowsPackagingFilesTests(unittest.TestCase):
         self.assertIn("ft710_server.spec", text)
         self.assertIn("ft710_launcher.spec", text)
         self.assertIn("iscc packaging\\windows\\MRRC-FT710.iss", text)
+
+    def test_build_script_aborts_on_native_command_failure(self):
+        """$ErrorActionPreference does not cover native commands — the build
+        must check $LASTEXITCODE so failed tests/builds abort packaging."""
+        text = (ROOT / "packaging" / "windows" / "build.ps1").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("$LASTEXITCODE", text)
+        self.assertIn("Invoke-Checked python -m unittest", text)
+        self.assertIn("Invoke-Checked pyinstaller", text)
 
 
 if __name__ == "__main__":

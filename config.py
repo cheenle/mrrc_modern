@@ -34,6 +34,13 @@ AUDIO_TX_DEVICE = os.environ.get("FT710_AUDIO_TX_DEVICE", "")
 SCOPE_SERIAL_PORT = os.environ.get("FT710_SCOPE_PORT", "")
 SCOPE_BAUD_RATE = int(os.environ.get("FT710_SCOPE_BAUD", "115200"))
 
+# ── ATR1000 Antenna Tuner (optional) ───────────────────────────────
+# Networked automatic antenna tuner with a built-in WebSocket server.
+# Empty host (default) = feature fully disabled: no client, no tasks,
+# no linkage hooks — zero impact for users without the hardware.
+ATR1000_HOST = os.environ.get("FT710_ATR1000_HOST", "")
+ATR1000_PORT = int(os.environ.get("FT710_ATR1000_PORT", "60001"))
+
 # Span choices (from FT-710.rig Spans section)
 SCOPE_SPANS: dict[int, dict] = {
     0:  {"name": "1 kHz",   "freq": 1000},

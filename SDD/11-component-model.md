@@ -7,7 +7,7 @@
 | FastAPIApp | Backend core | `server.py` | Route registration, lifespan, auth middleware, static serving, all WebSockets |
 | CatController | Backend core | `cat_controller.py` | Serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers |
 | RadioState | Backend core | `radio_state.py` | Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz) |
-| PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority CAT writes |
+| PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority CAT writes; watchdog re-runs scope init (`on_reconnected` hook) after reconnect |
 | AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream (48kHz), TX playback stream (48kHz), Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection (name + mono heuristic + full-duplex) |
 | OpusCodec | Backend support | `opus_rx.py` | RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap |
 | ScopeHandler | Backend core | `scope_handler.py` | Spectrum data container; update_from_scope_frame (real) and update_from_radio_state (synthetic); get_spectrum_binary for WS broadcast |
@@ -15,6 +15,8 @@
 | ScopeFrame | Backend support | `scope_frame.py` | Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics |
 | ScopeLibraries | Backend support | `scope_libraries.py` | FTDI library discovery and SPI clock configuration |
 | Config | Backend support | `config.py` | Mode tables (MODE_NUM_TO_NAME, MODE_NAME_TO_NUM), band definitions (BANDS), filter widths, S-meter calibration, constants |
+| ATR1000Client | Backend support | `atr1000_client.py` | Optional asyncio client for networked ATR1000 tuner (frame protocol, reconnect/refresh, TX-no-SYNC, learning, throttled relay writes) |
+| TunerStorage | Backend support | `atr1000_tuner.py` | LC-learning persistence (SWR-gated, atomic JSON) |
 | COOPCOEPMiddleware | Backend support | `server.py` | Sets COOP:same-origin / COEP:credentialless for SharedArrayBuffer support |
 | AuthMiddleware | Backend support | `server.py` | Cookie + query-param token validation; public path whitelist; redirect to /login |
 | ControlWS | Backend core | `server.py` | `/WSradio` JSON message dispatch, state broadcast |
@@ -31,7 +33,8 @@
 | MainJS | Frontend core | `static/ft710_main.js` | WebSocket connect/reconnect, state management, message dispatch, audio RX/TX setup, spectrum receiver |
 | UIJS | Frontend core | `static/ft710_ui.js` | All rendering: waterfall, S-meter, meters, button labels, PTT state, menu modals, event wiring |
 | PTTManager | Frontend safety | `static/modules/ptt_manager.js` | PTT state machine, safety watchdog (500ms verify), beforeunload/pagehide beacons |
-| SettingsManager | Frontend support | `static/modules/settings_manager.js` | Cookie and localStorage persistence for auth token and preferences |
+| SettingsManager | Frontend support | `static/modules/settings_manager.js` | Cookie persistence for auth token reading and all preferences (legacy web-storage values migrated to cookies on first load) |
+| ATR1000Module | Frontend support | `static/modules/atr1000.js` | Tuner WS client + meter row rendering + ATR TUNE button (inert unless atr1000Enabled) |
 | OpusWASM | Frontend audio | `static/modules/opus_wasm.js` | Emscripten-compiled libopus WASM binary |
 | OpusCodecJS | Frontend audio | `static/modules/opus_codec.js` | JavaScript OpusEncoder/OpusDecoder classes wrapping WASM |
 | RxWorklet | Frontend audio | `static/rx_worklet_processor.js` | AudioWorklet: queue-based playback with time-based jitter buffer (prebuffer 220ms, recovery 90ms, max 800ms) |

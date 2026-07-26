@@ -166,8 +166,8 @@
 <tr>
 <td>4</td>
 <td>Server</td>
-<td>Dead-man switch: force <code>TX0;</code> when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX</td>
-<td>Browser crash, tab close, network loss, audio socket drop</td>
+<td>Dead-man switch: force <code>TX0;</code> when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up) and is promoted to a remaining client on owner disconnect — an idle/zombie owner can no longer silently mute the uplink</td>
+<td>Browser crash, tab close, network loss, audio socket drop, multi-client ownership</td>
 </tr>
 <tr>
 <td>5</td>
@@ -351,7 +351,7 @@ Emergency Paths:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.1 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

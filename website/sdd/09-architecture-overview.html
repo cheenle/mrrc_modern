@@ -233,9 +233,14 @@ Yaesu FT-710</code></pre>
   Tier 3  (2s):         SH0; AG0; RG0; PC; PA0; RA0; NB0; NR0; BC; AC; SS01; AN; GT; MS;
                         → filter/gains/preamp/att/NR/NB/AN/tuner/scope/antenna/agc/meter_display
   Tier 4  (5s):         RM7; RM8; PR; CO; AO; RI0;       → id, vd, compressor, contour, amc, radio-info telemetry
-  Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync
+  Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync + scope re-init
 
 User commands skip next poll for affected fields (`skip_next_poll`).
+Poll loops also re-check the skip AFTER each in-flight query returns and discard the response
+when a user command landed mid-flight (stale-read guard in the IF/VFO/settings loops — without
+it, a pre-command `SH0;` response overwrote a just-set filter width and snapped the UI back).
+The `filter` set handler additionally reads `SH0;` back ~150 ms after `SH00&lt;NN&gt;;` and
+broadcasts the radio&#39;s actual index (logged as `Filter read-back: index=N (requested M)`).
 PTT/TUNE commands use priority writes (`send_priority_set_command`) and set `_cancel_polls`,
 which poll loops and read threads observe to release the serial lock quickly.
 CAT I/O remains serialized through `CatController._lock`; blocking serial work is offloaded via `asyncio.to_thread()`.</code></pre>
@@ -253,7 +258,7 @@ CAT I/O remains serialized through `CatController._lock`; blocking serial work i
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.1 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

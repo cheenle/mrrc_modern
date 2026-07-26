@@ -393,7 +393,7 @@
 </table>
 <p><strong>Problem</strong>: Polling too fast floods the serial port; too slow makes the UI feel unresponsive. Some fields (S-meter) change rapidly; others (filter width) rarely.</p>
 <p><strong>Rationale</strong>: Fast path keeps only <code>FA/MD0/SM0</code> at 100ms. <code>VS/FB</code> run separately at 500ms, so active-VFO tracking does not bloat the IF loop. TX status and TX meters are independent 500ms tasks; TX meter polling includes <code>RM3/RM4/RM5/RM6</code> and is TX-only. Settings (2s) include <code>RG0</code>, <code>MS</code>, and tuner state; slow telemetry (5s) includes <code>RM7/RM8</code>, <code>PR</code>, <code>AO</code>, and <code>RI0</code>. Poll query timeout is 0.25s to cap lock occupancy.</p>
-<p><strong>Consequences</strong>: <code>PollScheduler</code> owns task-level cadence and backpressure controls (<code>skip_next_poll()</code>, short pause after user command, and <code>_cancel_polls</code> awareness). CAT errors remain per-command and non-fatal.</p>
+<p><strong>Consequences</strong>: <code>PollScheduler</code> owns task-level cadence and backpressure controls (<code>skip_next_poll()</code>, short pause after user command, and <code>_cancel_polls</code> awareness). CAT errors remain per-command and non-fatal. Since V1.7, poll loops re-check skip state AFTER each in-flight query response and discard stale reads (a mid-flight <code>SH0;</code> response previously overwrote a just-set filter width); the filter set path additionally verifies with a 150 ms <code>SH0;</code> read-back.</p>
 <h2 id="ad-010-memory-channels-as-server-side-json">AD-010: Memory Channels as Server-Side JSON</h2>
 <table>
 <colgroup>
@@ -672,7 +672,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.1 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

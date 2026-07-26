@@ -50,6 +50,7 @@ MAX_CONSECUTIVE_ERRORS = 50
 MAX_REINIT_CYCLES = 5       # consecutive full-device reinitialisations before giving up
 STALL_TIMEOUT = 2.0         # seconds without a successful frame before reinit
 TRANSFER_PROGRESS_SLEEP = 0.002  # sleep between TRANSFER_IN_PROGRESS polls
+STDOUT_HEARTBEAT_S = 1.0    # len=0 keepalive; also detects a dead parent (EPIPE)
 
 running = True
 
@@ -198,6 +199,7 @@ def main():
     frame_count = 0
     last_emit = time.time()
     last_heartbeat = time.time()
+    last_stdout_write = time.time()
     last_successful_frame = time.time()  # time-based stall detection
     consecutive_errors = 0
     consecutive_bad_frames = 0
@@ -209,6 +211,18 @@ def main():
     try:
         while running:
             now = time.time()
+
+            # ── Stdout heartbeat ──────────────────────────────────
+            # Keeps the pipe protocol alive while idle AND detects a
+            # dead parent: writing to a readerless pipe raises
+            # BrokenPipeError, which lands in the outer except and lets
+            # this process exit instead of orphaning and holding the
+            # FT4222 device (Windows: TerminateProcess on the onefile
+            # bootloader never reaches the real child process).
+            if now - last_stdout_write >= STDOUT_HEARTBEAT_S:
+                sys.stdout.buffer.write(struct.pack('>I', 0))
+                sys.stdout.buffer.flush()
+                last_stdout_write = now
 
             # ── Time-based stall detection ──────────────────────────
             # If no successful frame for STALL_TIMEOUT seconds (and we've
@@ -329,6 +343,7 @@ def main():
             sys.stdout.buffer.write(struct.pack('>I', len(payload)))
             sys.stdout.buffer.write(payload)
             sys.stdout.buffer.flush()
+            last_stdout_write = time.time()
 
             frame_count += 1
 

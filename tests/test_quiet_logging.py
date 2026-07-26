@@ -5,21 +5,21 @@ import unittest
 
 class QuietLoggingSourceTests(unittest.TestCase):
     def test_periodic_scope_diagnostics_are_debug_not_info(self):
-        source = Path("server.py").read_text()
+        source = Path("server.py").read_text(encoding="utf-8")
         branch = source.split('elif "heartbeat:" in payload or "diag:" in payload:', 1)[1]
         branch = branch.split("else:", 1)[0]
         self.assertIn('logger.debug("scope_pipe: %s", payload)', branch)
         self.assertNotIn("logger.info", branch)
 
     def test_periodic_audio_loop_health_is_debug_not_info(self):
-        source = Path("server.py").read_text()
+        source = Path("server.py").read_text(encoding="utf-8")
         branch = source.split("# Periodic health log", 1)[1]
         branch = branch.split("# RX silence watchdog", 1)[0]
         self.assertIn('logger.debug("Audio loop:', branch)
         self.assertNotIn("logger.info", branch)
 
     def test_meter_broadcast_uses_debug_logging(self):
-        source = Path("server.py").read_text()
+        source = Path("server.py").read_text(encoding="utf-8")
         branch = source.split('"Meter broadcast dirty=%s', 1)[0]
         last_logger_call = branch.rsplit("logger.", 1)[1]
         self.assertTrue(last_logger_call.startswith("debug("))

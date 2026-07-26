@@ -163,7 +163,7 @@
 <td>PollScheduler</td>
 <td>Backend core</td>
 <td><code>poll_scheduler.py</code></td>
-<td>7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority CAT writes</td>
+<td>7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority CAT writes; watchdog re-runs scope init (<code>on_reconnected</code> hook) after reconnect</td>
 </tr>
 <tr>
 <td>AudioHandler</td>
@@ -398,7 +398,7 @@ PTT button touchend/mouseup:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.1 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

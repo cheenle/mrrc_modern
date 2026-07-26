@@ -141,6 +141,42 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.1</td>
+<td>2026-07-22</td>
+<td>Kimi</td>
+<td><strong>“PTT keys but no voice / no RF power” soft failure fixed</strong> (long-uptime classic). Root cause: <code>/WSaudioTX</code> uplink ownership was assigned only at connect time — with multiple clients (browser tab + iOS app, or a zombie socket surviving a network flap), an idle first-connected client kept ownership while the PTT-ing client’s mic frames were silently dropped (<code>ws is not _tx_owner_ws → continue</code>); and once the owner disconnected, every remaining client stayed muted forever (no promotion). Log evidence: repeated <code>Audio TX client connected (2-3 total, owner=False)</code> clusters with frantic <code>TX audio started</code> retries, <code>RM5=0/1</code> during keyed sessions. Fixes in <code>server.py</code>: (1) <code>_promote_tx_owner()</code> hands the uplink to a remaining client on owner disconnect; (2) <code>_claim_tx_owner_for_token()</code> — on PTT key-up the keying client (matched by auth token, now tracked per socket) claims ownership; (3) non-owner drops are counted and logged rate-limited. <strong>TX-path observability</strong>: per-session counters (frames received / decoded / decode-fail / non-owner drops in server; written / write_err / PCM peak via <code>AudioHandler.tx_stats()</code>) logged at every PTT release as <code>TX session: …</code> — the next silent failure will identify its own broken link from the log alone; first write error per session is now WARNING-level (was debug). Also reviewed: iOS TUNE button now runs the real tune sequence (TX2+AC003, press-and-hold), iOS RX <code>AVAudioPlayerNode</code> ScheduleBuffer channel-mismatch crash fixed (live output format + mono upmix), iOS header S-value dedup, <code>_poll_if</code> TypeError + <code>serial_connected</code> recovery (V2.0, same day). 5 new tests (<code>TXUplinkOwnershipTests</code>); suite 262 tests. Docs: Ch15 Layer 4 ownership note, tests/README counts.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.0</td>
+<td>2026-07-21</td>
+<td>Kimi</td>
+<td><strong>Spurious “电台未连接” (radio disconnected) fixed</strong>. Live log (2026-07-21 22:48): every <code>_poll_if</code> cycle raised <code>TypeError: unsupported operand type(s) for -: 'int' and 'NoneType'</code> in the freq-change logging guard (<code>abs(freq - _last_logged_freq)</code> with <code>_last_logged_freq=None</code>, introduced 2026-07-17). The exception fired before <code>state.update()</code>, so every poll counted as a failure; after 5 consecutive failures <code>serial_connected=False</code> was broadcast and the waterfall showed “电台未连接 — 检查 USB / 电源” while the radio was in fact fully operational (user commands/band changes all OK). Two fixes in <code>poll_scheduler.py</code>: (1) None-guard the first-poll logging condition; (2) recovery path — a successful poll now flips <code>serial_connected</code> back to True (previously only the watchdog’s full reconnect did, so even a genuine transient timeout streak stuck the flag until reconnect). 1 new regression test (<code>IFPollRecoveryTests</code>); suite 257 tests. Docs: tests/README counts.</td>
+</tr>
+<tr>
+<td>SDD V1.9</td>
+<td>2026-07-21</td>
+<td>Kimi</td>
+<td><strong>Spectrum freeze after USB reconnect fixed</strong>. Live log (2026-07-21 22:18): the serial device briefly disappeared (USB re-enumeration), CAT auto-reconnected, but the spectrum never recovered — <code>scope_pipe</code> logged <code>spi_stalled:reinit_1/5</code> and then silence. Root cause: the connection watchdog’s reconnect path re-synced radio state but never re-ran the scope-init CAT sequence (<code>EX040101</code>/<code>EX040200</code>); a USB re-enumeration resets the FT-710’s scope output, so the radio simply stops sending FFT frames and the FT4222-side SPI re-init cannot help. The waterfall then sits frozen on stale data while <code>serial_connected=true</code>, so the V1.8 “radio disconnected” hint never shows. Fix: <code>PollScheduler</code> gains an <code>on_reconnected</code> async hook invoked by <code>_connection_watchdog</code> after a successful reconnect + state re-sync; <code>server.py</code> wires it to <code>_init_scope_cat</code>. Hook failures are logged and non-fatal. 2 new regression tests (<code>WatchdogReconnectTests</code>); suite 252 tests. Docs: §9.6 Tier-5 line, Ch11 PollScheduler row, tests/README counts.</td>
+</tr>
+<tr>
+<td>SDD V1.8</td>
+<td>2026-07-21</td>
+<td>Kimi</td>
+<td><strong>Web frontend safety &amp; UX overhaul</strong> (post-audit fixes). <strong>PTT wiring repaired</strong>: the PTT/TUNE buttons previously called <code>handlePTTStart/End</code> directly, bypassing <code>PTTManager</code> — <code>pttActive</code> never became true, so the browser watchdog, <code>pagehide</code> force-RX and unload beacon were dead code. Buttons (and Space-bar PTT) now route through <code>PTTManager.pttStart/pttEnd/tuneStart/tuneEnd</code>; the broken <code>sendBeacon('/WSradio')</code> (a WebSocket-only endpoint) was removed — tab-close force-RX is covered server-side by the last-client-disconnect dead-man switch. <strong>TUNE is now press-and-hold</strong> (was latch-on-click with no confirmation — an accidental-tap TX path). <strong>Keyboard guards</strong>: keydown handlers ignore <code>e.repeat</code> (held Space/arrow machine-gunned PTT/CAT) and ignore events from inputs (arrow keys in the frequency editor also tuned the radio). <strong>Silent render crash fixed</strong>: <code>renderScopeSettings()</code> called <code>renderFreqScale(width)</code> without the required <code>range</code> argument, throwing every update cycle (swallowed by the WS message catch, skipping VFO/PTT renders). <strong>Server errors surfaced</strong>: <code>error</code> WS messages now show a toast banner instead of console-only. <strong>AF slider semantics unified</strong>: 🔊 Vol is browser-side playback volume persisted in localStorage (<code>ft710_afVol</code>), decoupled from the CAT <code>af_gain</code> poll that used to fight the user’s setting; stale 2.5× comment corrected (actual 10× boost). <strong>Waterfall/FFT click-to-QSY</strong>: click maps x→frequency within the current span (8 px drag threshold guards scroll gestures). <strong>Desktop layout</strong>: ≥768 px gets a 720 px container, 120 px waterfall, 60 px FFT plot and larger controls (was a 480 px phone column everywhere); waterfall re-inits debounced on resize. <strong>Professionalism</strong>: S-meter label is now relative <code>dB</code> (S9=0) instead of misleading <code>dBm</code>; filter width tables are server-authoritative (<code>fullState.filterTables</code> from <code>config.py</code>) with the legacy hardcoded copies as fallback; <code>lame.js</code> (~500 KB) lazy-loads on first REC click instead of every page load. Asset cache bust to v17 (<code>sw.js</code>, <code>index.html</code>). Tests: lame eager-include test inverted to lazy-load assertion, cache-bust versions updated; 247 tests, failure count unchanged from baseline (1F+2E pre-existing).</td>
+</tr>
+<tr>
+<td>SDD V1.7</td>
+<td>2026-07-19</td>
+<td>Kimi</td>
+<td><strong>SSB filter switching race fixed</strong> (“works sometimes, ignores other clicks”). Root cause: <code>_poll_settings</code> checked <code>skip_next_poll</code> only BEFORE each Tier-3 query; a <code>SH0;</code> response already in flight when the user’s filter command arrived carried the pre-command width and was applied unconditionally at the end of the 13-query cycle (~0.5 s later), snapping the web UI back to the stale filter until the post-skip poll corrected it ~4 s on. Whether a click landed inside that in-flight window decided “works / doesn’t work” — the radio itself applied every <code>SH00&lt;NN&gt;;</code> correctly (live log: all sets <code>ok=True</code>, read-backs match). Fixes: (1) settings poll re-checks <code>_should_skip(field)</code> + <code>_polling_paused()</code> AFTER each query await and discards stale reads — same guard pattern <code>_poll_if</code>/<code>_poll_vfo</code> already had, now covering all 13 Tier-3 fields (filter, gains, preamp, att, NR, NB, AN, tuner, scope, antenna, AGC, meter display); (2) the <code>filter</code>/<code>filter_width</code> WS handler waits 150 ms after <code>SH00&lt;NN&gt;;</code>, reads <code>SH0;</code> back, and broadcasts the radio’s ACTUAL index (logged as <code>Filter read-back: index=N (requested M)</code>) so a silently-rejected index would self-correct in ~0.2 s instead of ~4 s — live verification showed N==M for all SSB indexes 9/13/17/20/23, confirming the width table. 3 new regression tests (<code>test_settings_poll_discards_stale_reads_after_query</code>, <code>test_filter_set_reads_back_actual_width</code>, plus the pre-existing skip-before-set ordering assertion); suite now 223 tests, all passing. Docs: §9.6, AD-009, §10.4 filter row, README polling note, AGENTS.md module table, tests/README counts.</td>
+</tr>
+<tr>
 <td>SDD V1.6</td>
 <td>2026-07-18</td>
 <td>Kimi</td>
@@ -191,8 +227,8 @@
 <li><strong>Scope</strong>: FTDI FT4222 SPI chip provides 850-point FFT data. Falls back to synthetic S-meter Gaussian spectrum when unavailable.</li>
 <li><strong>Audio</strong>: Bidirectional through FT-710’s built-in USB audio interface via PyAudio (44.1kHz native device rate). Opus codec (RX 64kbps, TX 64kbps CBR, both 48kHz) with Int16 PCM fallback. <code>audio_resample.py</code> bridges the 48kHz codec domain ↔︎ 44.1kHz device domain (960↔︎882 frame-aligned).</li>
 <li><strong>Auth</strong>: Shared-password session auth (<code>ft710_auth</code> cookie, 30-day, <code>?token=</code> on WebSocket).</li>
-<li><strong>PTT Safety</strong>: Client-side PTT watchdog (500ms) + dead-man switch (WS disconnect) + beforeunload beacon + pagehide handler + server-side TX status poll (0.5s). No TX0 verify loop on release (radio obeys TX0 fire-and-forget). TX audio drain=50ms.</li>
-<li><strong>Polling</strong>: 7-task adaptive scheduler: IF 0.1s (FA/MD0/SM0), VFO 0.5s (VS/FB), TX status 0.5s, TX meters 0.5s (RM3/4/5/6, TX only), settings 2s, slow 5s, connection watchdog 1s. Poll queries use 0.25s timeout and cooperate with priority-command preemption (<code>_cancel_polls</code>).</li>
+<li><strong>PTT Safety</strong>: Client-side PTT watchdog (500ms) + dead-man switch (WS disconnect) + pagehide handler + server-side TX status poll (0.5s). No TX0 verify loop on release (radio obeys TX0 fire-and-forget). TX audio drain=50ms. TUNE is press-and-hold.</li>
+<li><strong>Polling</strong>: 7-task adaptive scheduler: IF 0.1s (FA/MD0/SM0), VFO 0.5s (VS/FB), TX status 0.5s, TX meters 0.5s (RM3/4/5/6, TX only), settings 2s, slow 5s, connection watchdog 1s. Poll queries use 0.25s timeout and cooperate with priority-command preemption (<code>_cancel_polls</code>). Poll loops re-check skip state AFTER each in-flight query response and discard stale reads; filter sets are verified by a 150 ms <code>SH0;</code> read-back. After a successful watchdog reconnect the scheduler re-runs the scope-init CAT sequence (<code>EX040101</code>/<code>EX040200</code>) via its <code>on_reconnected</code> hook — a USB re-enumeration resets the radio’s scope output.</li>
 <li><strong>Meters</strong>: RM3-8 raw 0-255 values calibrated via piecewise-linear tables from FT-710.rig (Power/SWR/Vd/Id). Frontend displays watts, SWR ratio, volts, amps — not raw numbers.</li>
 </ul>
 <h2 id="key-architecture-decisions">Key Architecture Decisions</h2>
@@ -277,7 +313,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.1 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

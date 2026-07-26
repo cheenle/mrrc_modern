@@ -178,6 +178,22 @@ a { color: var(--accent); text-decoration: none; }
 .meter-val { font-family: var(--font-mono); font-weight: 700; min-width: 28px; text-align: right; }
 .meter-unit { color: var(--text-muted); font-size: 10px; min-width: 14px; }
 
+/* ── ATR1000 external tuner row (optional) ─────────────────────── */
+.atr-row .atr-lc-item { justify-content: space-between; }
+.atr-lc { font-size: 10px; color: var(--text-secondary); text-align: left; }
+.atr-tune-btn {
+    padding: 2px 8px; font-size: 10px; font-weight: 700;
+    background: var(--bg-card); color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    transition: all 0.15s;
+}
+.atr-tune-btn:active { transform: scale(0.96); }
+.atr-tune-btn:disabled { opacity: 0.4; }
+.atr-tune-btn.tuning {
+    background: var(--accent-dim); color: var(--accent);
+    border-color: var(--accent);
+}
+
 /* ── Quick Controls ────────────────────────────────────────────── */
 .quick-controls { margin-bottom: 4px; }
 .control-row { display: flex; gap: 4px; }

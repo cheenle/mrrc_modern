@@ -5,6 +5,7 @@ struct ContentView: View {
     @EnvironmentObject var viewModel: RadioViewModel
     @State private var selectedTab = 0
     @State private var tuneStep: Int = 1000  // Hz, matches web default
+    @State private var tuneHeld = false      // TUNE press-and-hold local state
 
     var body: some View {
         ZStack {
@@ -233,10 +234,32 @@ struct ContentView: View {
                                         if viewModel.state.txStatus > 0 { viewModel.setPTT(false) }
                                     }
                             )
-                        Button(action: { viewModel.toggleTuner() }) {
-                            Text("TUNE").font(.system(size: 18, weight: .bold)).foregroundColor(.black)
-                                .frame(width: 80, height: 96).background(Color.yellow).cornerRadius(8)
-                        }
+                        // TUNE: press-and-hold — touch down starts the tuning
+                        // sequence (server: TX2 carrier + AC003 tuning start),
+                        // release drops the carrier (AC000 + TX0).
+                        // 修复:此前误用 toggleTuner() 只会 AC001 打开天调,不执行调谐。
+                        // 按住状态用本地 tuneHeld 跟踪,不依赖轮询回来的 txStatus
+                        // (快速点按时 poll 尚未刷新会导致漏发停止、载波常开)。
+                        Text(viewModel.state.txStatus == 2 ? "TUNING" : "TUNE")
+                            .font(.system(size: 18, weight: .bold)).foregroundColor(.black)
+                            .frame(width: 80, height: 96)
+                            .background(viewModel.state.txStatus == 2 ? Color.orange : Color.yellow)
+                            .cornerRadius(8)
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in
+                                        if !tuneHeld {
+                                            tuneHeld = true
+                                            viewModel.setTune(true)
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        if tuneHeld {
+                                            tuneHeld = false
+                                            viewModel.setTune(false)
+                                        }
+                                    }
+                            )
                         Button(action: { viewModel.toggleRecording() }) {
                             Text("REC").font(.system(size: 18, weight: .bold))
                                 .foregroundColor(viewModel.audioCapture.isRecording ? .red : .radioText)

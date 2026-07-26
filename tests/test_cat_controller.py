@@ -206,7 +206,7 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_set_command_is_write_only_for_responsiveness(self):
         """Set commands must not wait for a CAT response timeout."""
-        source = (REPO_ROOT / "cat_controller.py").read_text()
+        source = (REPO_ROOT / "cat_controller.py").read_text(encoding="utf-8")
         self.assertIn("async def send_set_command", source)
         self.assertIn("return await self.send_set_command(cmd)", source)
 

@@ -65,34 +65,34 @@ class TxFrontendContractTests(unittest.TestCase):
     """TX browser path must preserve the 48 kHz / 20 ms Opus contract."""
 
     def test_tx_capture_worklet_does_not_downsample_microphone_audio(self):
-        source = (REPO_ROOT / "static" / "tx_capture_worklet.js").read_text()
+        source = (REPO_ROOT / "static" / "tx_capture_worklet.js").read_text(encoding="utf-8")
         self.assertIn("this._outRate = 48000", source)
         self.assertNotIn("this._outRate = 16000", source)
 
     def test_tx_capture_worklet_resamples_actual_context_rate_to_48khz(self):
-        source = (REPO_ROOT / "static" / "tx_capture_worklet.js").read_text()
+        source = (REPO_ROOT / "static" / "tx_capture_worklet.js").read_text(encoding="utf-8")
         self.assertIn("this._resampleStep = this._inRate / this._outRate", source)
         self.assertIn("_resampleTo48k", source)
 
     def test_tx_opus_worker_encodes_20ms_48khz_frames(self):
-        source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
+        source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text(encoding="utf-8")
         self.assertIn("var FRAME_SIZE = 960", source)
         self.assertIn("new OpusEncoder(48000, 1, 2048, 20)", source)
 
     def test_tx_opus_worker_updates_sab_read_pointer_with_atomic_index(self):
-        source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
+        source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text(encoding="utf-8")
         self.assertIn("Atomics.store(_readPtr, 0, rp + n)", source)
         self.assertNotIn("Atomics.store(_readPtr, rp + n)", source)
 
     def test_tx_main_prefers_audio_worklet_frame_capture(self):
-        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
         self.assertIn("audioWorklet.addModule('/tx_capture_worklet.js?v=tx-audio-4')", source)
         self.assertIn("new AudioWorkletNode", source)
         self.assertIn("type: 'float_frame'", source)
 
     def test_tx_start_creates_worker_before_start_command(self):
         """First PTT must not lose mic frames because the worker missed start."""
-        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
         start_fn = source[source.index("function startTXAudio()"):source.index("function startTXAudioFallback()")]
         ensure_idx = start_fn.index("ensureTXOpusWorker()")
         start_idx = start_fn.index("postMessage({type: 'start'}")
@@ -100,34 +100,34 @@ class TxFrontendContractTests(unittest.TestCase):
 
     def test_tx_audio_send_uses_websocket_backpressure_guard(self):
         """TX audio should drop frames under network stall instead of queuing latency."""
-        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
         self.assertIn("TX_AUDIO_MAX_BUFFERED_BYTES", source)
         self.assertIn("wsAudioTX.bufferedAmount", source)
         self.assertIn("window.__txAudioDroppedFrames", source)
 
     def test_tx_static_assets_are_cache_busted(self):
-        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
-        worker_source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
-        sw_source = (REPO_ROOT / "static" / "sw.js").read_text()
+        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
+        worker_source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text(encoding="utf-8")
+        sw_source = (REPO_ROOT / "static" / "sw.js").read_text(encoding="utf-8")
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("ft710-v16", sw_source)
+        self.assertIn("ft710-v21", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
-        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
-        worker_source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text()
+        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
+        worker_source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text(encoding="utf-8")
         self.assertIn("window.TXDebug", main_source)
         self.assertIn("type: 'tone_start'", main_source)
         self.assertIn("function startTone", worker_source)
         self.assertIn("Math.sin(_tonePhase)", worker_source)
 
     def test_tx_audio_drain_does_not_block_event_loop(self):
-        source = (REPO_ROOT / "server.py").read_text()
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("await asyncio.to_thread(audio.write_tx_chunk)", source)
 
     def test_tx_opus_encoder_uses_valid_high_quality_ctl_settings(self):
-        source = (REPO_ROOT / "static" / "modules" / "opus_codec.js").read_text()
+        source = (REPO_ROOT / "static" / "modules" / "opus_codec.js").read_text(encoding="utf-8")
         self.assertIn("setValue(bitrate_ptr, 64000", source)
         self.assertIn("_opus_encoder_ctl(this.handle, 4006, vbr_ptr)", source)
         self.assertNotIn("_opus_encoder_ctl(this.handle, 4004, vbr_ptr)", source)
@@ -138,14 +138,14 @@ class RxRecordingFrontendTests(unittest.TestCase):
     """RX recording must produce real MP3 via lamejs encoder."""
 
     def test_record_button_sits_next_to_tune(self):
-        source = (REPO_ROOT / "static" / "index.html").read_text()
+        source = (REPO_ROOT / "static" / "index.html").read_text(encoding="utf-8")
         ptt_footer = source[source.index('<footer class="ptt-footer">'):source.index("</footer>", source.index('<footer class="ptt-footer">'))]
         self.assertIn('id="btn-tune"', ptt_footer)
         self.assertIn('id="btn-record"', ptt_footer)
         self.assertLess(ptt_footer.index('id="btn-tune"'), ptt_footer.index('id="btn-record"'))
 
     def test_recorder_uses_lamejs_for_real_mp3_encoding(self):
-        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
         self.assertIn("window.RXRecorder", source)
         self.assertIn("lamejs.Mp3Encoder", source)
         self.assertIn("new lamejs.Mp3Encoder", source)
@@ -158,19 +158,19 @@ class RxRecordingFrontendTests(unittest.TestCase):
     def test_lamejs_is_lazy_loaded_not_in_html(self):
         # lame.js (~500 KB) is intentionally NOT in index.html — the REC
         # feature lazy-loads it on first click via _loadLame().
-        html_source = (REPO_ROOT / "static" / "index.html").read_text()
+        html_source = (REPO_ROOT / "static" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("lame.js", html_source)
-        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
         self.assertIn("function _loadLame()", main_source)
         self.assertIn("/modules/lame.js", main_source)
 
     def test_decoded_rx_frames_feed_recorder(self):
-        source = (REPO_ROOT / "static" / "ft710_main.js").read_text()
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
         self.assertIn("function feedRXRecorderFrame(f32)", source)
         self.assertGreaterEqual(source.count("feedRXRecorderFrame("), 3)
 
     def test_record_button_click_is_bound_in_ui(self):
-        source = (REPO_ROOT / "static" / "ft710_ui.js").read_text()
+        source = (REPO_ROOT / "static" / "ft710_ui.js").read_text(encoding="utf-8")
         self.assertIn("const recordBtn = document.getElementById('btn-record')", source)
         self.assertIn("window.RXRecorder.toggle()", source)
         self.assertIn("record-active", source)
@@ -316,7 +316,7 @@ class TXReleaseOrderTests(unittest.TestCase):
     """PTT release must drain queued audio before dropping RF."""
 
     def test_ptt_off_drains_before_rf_drop(self):
-        source = (REPO_ROOT / "server.py").read_text()
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         # Graceful stop_tx (drain) must precede set_ptt(False) *in the PTT-off
         # branch*.  There is also a set_ptt(False) in the start_tx error path
         # (PTT-on branch) — skip past it.
@@ -328,12 +328,12 @@ class TXReleaseOrderTests(unittest.TestCase):
         self.assertLess(drain_idx, ptoff_idx)
 
     def test_tx_has_single_owner_guard(self):
-        source = (REPO_ROOT / "server.py").read_text()
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("_tx_owner_ws", source)
 
     def test_stop_does_not_clear_queue_on_s_text(self):
         """'s:' must not clear the queue (would chop tail before drain)."""
-        source = (REPO_ROOT / "server.py").read_text()
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         # The 's:' branch should be a no-op pass, not a queue.clear()
         s_branch = source[source.index('"s:"'):]
         # No queue clear within the 's:'/'stop' text branch (first 400 chars)
@@ -344,16 +344,16 @@ class RXBackpressureTests(unittest.TestCase):
     """RX path should not let a slow audio client stall the whole broadcast loop."""
 
     def test_rx_loop_uses_timeout_guard_for_ws_send(self):
-        source = (REPO_ROOT / "server.py").read_text()
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("asyncio.wait_for(ws.send_bytes(frame)", source)
 
     def test_rx_loop_uses_shared_send_helper(self):
-        source = (REPO_ROOT / "server.py").read_text()
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("async def _send_audio_frames_to_clients(", source)
         self.assertIn("await _send_audio_frames_to_clients(", source)
 
     def test_rx_loop_skips_encode_when_no_clients(self):
-        source = (REPO_ROOT / "server.py").read_text()
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("if not audio_rx_clients:", source)
         self.assertIn("await asyncio.sleep(idle_interval)", source)
         self.assertIn("continue", source)

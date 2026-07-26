@@ -11,7 +11,7 @@ The MRRC FT-710 PTT safety architecture provides **7 independent layers of defen
 | 1 | Browser UX | Touch-and-hold: release on `mouseup`/`touchend`/`mouseleave`/`touchcancel` | User intentionally releasing PTT |
 | 2 | Browser → Server | `sendCommand('ptt', false)` over `/WSradio` | Normal network path |
 | 3 | Browser | PTT Watchdog: 500ms interval checks `radioState.tx_status`; up to 3 retries | TX0 command or state broadcast lost |
-| 4 | Server | Dead-man switch: force `TX0;` when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX | Browser crash, tab close, network loss, audio socket drop |
+| 4 | Server | Dead-man switch: force `TX0;` when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up) and is promoted to a remaining client on owner disconnect — an idle/zombie owner can no longer silently mute the uplink | Browser crash, tab close, network loss, audio socket drop, multi-client ownership |
 | 5 | Browser | `beforeunload` → `navigator.sendBeacon()` with TX0 | Tab/browser close during TX |
 | 6 | Browser | `pagehide` → `sendCommand('ptt', false)` | Mobile app switch / backgrounding |
 | 7 | Server + Browser | Stop TX audio stream; clear audio queue; `wsAudioTX.send('s:')` | Audio continuing to feed radio after release |
@@ -81,6 +81,8 @@ if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
     if audio:
         audio.stop_tx()
 ```
+
+**ATR1000 tune assist (server-side TX2 keying):** the optional ATR tune assist (`_atr_tune_assist()`, §9.8) keys a TX2 carrier server-side for up to 45 s (ATR_TUNE deadline). Safety: the carrier drop is guaranteed by a `finally` block on every exit path (skip/success/rollback/error); the Layer 4 last-client-disconnect dead-man switch still applies while the carrier is up; an SWR≤1.6 gate skips tuning entirely; relays roll back when SWR does not improve. All ATR I/O runs in its own asyncio task — never on the audio path.
 
 ### Layer 5: Beforeunload Beacon
 

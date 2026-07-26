@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#updates">V1.6</a></li>
+            <li><a href="#updates">V2.1</a></li>
             <li><a href="#chapters">Chapters</a></li>
             <li><a href="#decisions">AD Index</a></li>
             <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V1.6 · 2026-07-18</span>
+            <span>SDD V2.1 · 2026-07-22</span>
         </div>
         <h1 class="hero-title">MRRC FT-710<br><span class="gradient">Software Design Description</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>Document ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>Version</td><td>V1.6</td></tr>
-            <tr><td>Baseline Date</td><td>2026-07-18</td></tr>
+            <tr><td>Version</td><td>V2.1</td></tr>
+            <tr><td>Baseline Date</td><td>2026-07-22</td></tr>
             <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
             <tr><td>Core Interfaces</td><td>4 WebSockets + Serial CAT + FT4222 SPI + USB Audio</td></tr>
@@ -88,28 +88,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">Latest Update</span>
-            <h2 class="section-title">What Changed In V1.6</h2>
+            <h2 class="section-title">What Changed In V2.1</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-ear-listen"></i></div>
-                <h3>RX Zero-Audio Watchdog</h3>
-                <p>Server detects bit-exact-zero RX audio (≥20s with squelch open) and raises a "无声" status-bar warning plus a log entry — a wedged radio USB codec can no longer masquerade as healthy behind a CBR bitrate indicator.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-right-to-bracket"></i></div>
-                <h3>Auth-Failure Redirect</h3>
-                <p>Stale-token WebSocket handshakes fail with HTTP 403 (browsers report 1006, never 4001). The control socket now verifies via /api/auth/check and redirects to /login instead of retrying a dead token forever.</p>
-            </div>
-            <div class="feature-card">
                 <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
-                <h3>Dead-Carrier Fix</h3>
-                <p>If the TX-audio owner socket drops while the radio is keyed, the server now forces TX0 — closing the unmodulated-carrier window that previously waited for the control socket to die.</p>
+                <h3>PTT Silent-Failure Fixed</h3>
+                <p>"PTT keys but no RF" after long uptime — root cause was TX uplink ownership assigned only at connect time. Multi-client scenarios caused mic frames to be silently dropped. Now: promote on owner disconnect + claim on PTT key-up + per-session TX counters with session-end logging.</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-file-lines"></i></div>
-                <h3>TX Audio Truth Sync</h3>
-                <p>Docs aligned with runtime: TX Opus is 64kbps CBR complexity=5, and AD-011 now records the real topology — 48kHz codec domain bridged to the FT-710's native 44.1kHz USB audio (960↔882 frame-aligned).</p>
+                <div class="icon"><i class="fas fa-bug-slash"></i></div>
+                <h3>"Radio Disconnected" Spurious Fix</h3>
+                <p>A NoneType crash in the frequency-logging guard killed every poll cycle, triggering false "电台未连接" after 5 consecutive failures while the radio was fully operational. None-guarded + recovery path flips serial_connected back on poll success.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-chart-area"></i></div>
+                <h3>Spectrum Freeze After USB Reconnect</h3>
+                <p>USB re-enumeration reset the FT-710 scope output but the watchdog never re-ran the scope-init CAT sequence — waterfall sat frozen on stale data. PollScheduler now has an on_reconnected hook that re-inits scope CAT after every successful reconnect.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-shield-haltered"></i></div>
+                <h3>Web UX Safety Overhaul</h3>
+                <p>PTT buttons now route through PTTManager (watchdog + pagehide were dead code). TUNE is press-and-hold (was latch-on-click). Keyboard guards ignore repeats/inputs. Silent render crash fixed. Server errors surface as toast banners.</p>
             </div>
         </div>
     </div>

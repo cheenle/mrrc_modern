@@ -2,6 +2,48 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.6.3] — 2026-07-25 — Windows Installer Robustness Fixes
+
+Deep audit of the Windows packaging chain (`windows/`, `packaging/`); all
+fixes verified hardware-free, suite now 271 tests.
+
+### Fixes
+- **Packaged web UI 404 (P0)**: PyInstaller 6 onedir puts datas under
+  `_internal/`, but `STATIC_DIR` pointed next to the exe — the installed app
+  served only the inline fallback login page and "Static files not found".
+  `server.py` now resolves bundled resources via `_resource_dir()`
+  (`sys._MEIPASS`-aware); the launcher's starter-channel seeding also checks
+  `_internal/mem_channels.json`.
+- **scope_pipe orphan holding FT4222 (P1)**: on Windows, terminating the
+  onefile bootloader never reached the real child process, which kept the
+  FT4222 device open forever. `scope_pipe.py` now emits the documented len=0
+  stdout heartbeat every 1 s — a dead parent closes the pipe, the next write
+  raises EPIPE, and the pipe exits cleanly instead of orphaning.
+- **Silent build failures (P1)**: `build.ps1` relied on
+  `$ErrorActionPreference`, which does not cover native commands — failed
+  tests or PyInstaller runs no longer slip through into an installer
+  (`Invoke-Checked` wrapper checks `$LASTEXITCODE`).
+- **Launcher self-spawn chain (P2)**: with `ft710-server.exe` missing (e.g.
+  antivirus quarantine), the frozen launcher used to "fall back" to
+  `[sys.executable, server.py]` — i.e. spawn another launcher, recursively.
+  It now reports the missing exe and exits.
+- **Version drift (P2)**: installer `AppVersion` 1.6.0 → 1.6.3; new
+  `packaging/windows/requirements-build.txt` pins `pyinstaller==6.21.0`
+  (PyInstaller 6 already changed the onedir layout once).
+- Installer no longer ships `windows/__pycache__`; stale cache-bust test
+  assertions updated (v17 → v18).
+
+## [v1.6.2] — 2026-07-21 — Spectrum Freeze After USB Reconnect
+
+### Fixes
+- **Spectrum survives serial hiccups**: the connection watchdog's reconnect
+  path now re-runs the scope-init CAT sequence (`EX040101`/`EX040200`) via a
+  new `PollScheduler(on_reconnected=...)` hook wired to `_init_scope_cat`.
+  Previously a USB re-enumeration reset the radio's scope output, CAT
+  reconnected fine, but no FFT frames ever resumed — the waterfall sat frozen
+  on stale data (and, with `serial_connected=true`, without even the
+  "radio disconnected" hint). Hook failures are logged and non-fatal.
+
 ## [v1.6.1] — 2026-07-21 — Web Frontend Safety & UX Overhaul
 
 ### Safety

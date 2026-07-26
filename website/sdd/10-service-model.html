@@ -359,7 +359,7 @@ AuthService
 <td><code>filter</code> / <code>filter_width</code></td>
 <td>00–23</td>
 <td><code>SH00&lt;NN&gt;;</code></td>
-<td>Filter width index (P1=0, P2=0 fixed)</td>
+<td>Filter width index (P1=0, P2=0 fixed); post-set <code>SH0;</code> read-back (~150 ms) broadcasts the radio’s actual index</td>
 </tr>
 <tr>
 <td><code>af_gain</code></td>
@@ -516,7 +516,7 @@ AuthService
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V1.6 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.1 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

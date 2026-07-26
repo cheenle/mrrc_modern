@@ -100,7 +100,7 @@ FT-710 USB Audio Output
 ```text
 Browser Microphone
   → getUserMedia({sampleRate:48000, channelCount:1})
-    → AudioContext.createMediaStreamSource → AudioWorklet 'tx-capture' (ScriptProcessor fallback)
+    → AudioContext.createMediaStreamSource → GainNode (device-side mic gain, 🎙 Vol slider 0–200 → 0–2×, browser-local, cookie `ft710_micVol`) → AudioWorklet 'tx-capture' (ScriptProcessor fallback)
       → 48kHz float32 20ms frames → postMessage → main thread → Worker ('float_frame')
         → Opus Worker (tx_opus_worker.js, 48kHz):
           → OpusEncoder.encode_float(960-sample frames)
@@ -158,7 +158,7 @@ PollScheduler (asyncio, 7 cooperative tasks)
   Tier 3  (2s):         SH0; AG0; RG0; PC; PA0; RA0; NB0; NR0; BC; AC; SS01; AN; GT; MS;
                         → filter/gains/preamp/att/NR/NB/AN/tuner/scope/antenna/agc/meter_display
   Tier 4  (5s):         RM7; RM8; PR; CO; AO; RI0;       → id, vd, compressor, contour, amc, radio-info telemetry
-  Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync
+  Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync + scope re-init
 
 User commands skip next poll for affected fields (`skip_next_poll`).
 Poll loops also re-check the skip AFTER each in-flight query returns and discard the response
@@ -182,3 +182,30 @@ Command or Poll → RadioState.update(field=value)
           → json.dumps → send_text to all ctrl_clients
             → browser: handleMessage() → Object.assign(radioState, msg.fields) → renderUpdates(msg.dirty)
 ```
+
+## 9.8 ATR1000 Tuner Linkage (optional)
+
+```text
+Browser (static/modules/atr1000.js — inert unless fullState.atr1000Enabled)
+  | /WSatr1000?token=... (JSON: atrState / atrTuneResult / atrTune / ping)
+  v
+server.py
+  | _broadcast_state() freq-dirty hook → notify_freq (auto-apply learned LC relays)
+  | TX on/off hook → notify_tx (device push mode, learning window)
+  | _atr_tune_assist() → TX2 carrier → SWR gate → full tune → keep+learn / rollback
+  v
+atr1000_client.py (asyncio WS client: binary frames [0xFF,CMD,LEN,DATA],
+  5s reconnect, 55-min refresh, TX-no-SYNC watchdog, throttled relay writes,
+  LearningBuffer stability-window learning)
+  | ws://$FT710_ATR1000_HOST:$FT710_ATR1000_PORT (default port 60001)
+  v
+ATR1000 networked antenna tuner
+```
+
+Three linkage behaviors:
+
+1. **Freq change → relay apply** — `_broadcast_state` on vfo_a_freq/vfo_b_freq/active_vfo dirty calls `notify_freq`; learned LC values from `atr1000_tuner.json` (TunerStorage: learn gate SWR 1.0–1.8, 1kHz keys ±5kHz nearest, atomic writes) are pushed to the tuner (5s write throttle).
+2. **TX on/off → `notify_tx`** — switches the tuner to device push mode and opens the learning window (LearningBuffer, 4-sample stability).
+3. **Tune assist** — client `{"type":"atrTune"}` runs `_atr_tune_assist()` server-side: TX2 carrier → skip if SWR≤1.6 → snapshot relays → full tune (mode=2) → keep+learn if SWR improved ≥0.02 else rollback → carrier always dropped in `finally` (ATR_TUNE_* constants: 0.3s settle, 5s min, 45s deadline, 0.8s compare settle, 2.5s meter wait).
+
+**Default-disabled isolation**: `FT710_ATR1000_HOST` empty (default) means no client task, no network traffic, linkage hooks short-circuit, `/WSatr1000` closes with code 4000, and the frontend module is never initialized. ATR data is deliberately kept out of RadioState (separate channel, same precedent as spectrum); the audio path is untouched.

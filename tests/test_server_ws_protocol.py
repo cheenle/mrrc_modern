@@ -174,7 +174,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
     """SDD §9.7: State broadcasting via dirty-field tracking."""
 
     def test_meter_broadcast_log_interval_is_half_second(self):
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         self.assertIn("METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5", server_source)
         self.assertIn(
             "now - _last_meter_broadcast_log >= METER_BROADCAST_LOG_INTERVAL_SECONDS",
@@ -182,18 +182,18 @@ class StateBroadcastLogicTests(unittest.TestCase):
         )
 
     def test_band_command_is_single_backend_transaction(self):
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         self.assertIn('await cat.set_band_stack(band["bsr"])', server_source)
         self.assertIn('await cat.set_frequency(band["default_freq"], "A")', server_source)
 
-        ui_source = Path("static/ft710_ui.js").read_text()
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
         band_button_handler = ui_source.split("// Band button: cycles to next band", 1)[1]
         band_button_handler = band_button_handler.split("// Filter button", 1)[0]
         self.assertIn("sendCommand('band', nextBand.name)", band_button_handler)
         self.assertNotIn("sendCommand('freq'", band_button_handler)
 
     def test_band_cycle_uses_full_frontend_fallback_and_frequency_fallback(self):
-        ui_source = Path("static/ft710_ui.js").read_text()
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
         self.assertIn("const DEFAULT_BAND_CYCLE = [", ui_source)
         for band in ("160m", "80m", "60m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m", "4m"):
             self.assertIn(f"name: '{band}'", ui_source)
@@ -202,19 +202,54 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn("const nextIdx = (idx + 1) % bandList.length;", ui_source)
 
     def test_state_update_renders_from_actual_fields_not_dirty_only(self):
-        main_source = Path("static/ft710_main.js").read_text()
+        main_source = Path("static/ft710_main.js").read_text(encoding="utf-8")
         self.assertIn("const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;", main_source)
         self.assertIn("renderUpdates(changedFields);", main_source)
 
     def test_static_assets_are_cache_busted_after_ui_changes(self):
-        index_source = Path("static/index.html").read_text()
-        self.assertIn('/ft710.css?v=17', index_source)
-        self.assertIn('/ft710_main.js?v=17', index_source)
-        self.assertIn('/ft710_ui.js?v=17', index_source)
+        index_source = Path("static/index.html").read_text(encoding="utf-8")
+        self.assertIn('/ft710.css?v=18', index_source)
+        self.assertIn('/ft710_main.js?v=21', index_source)
+        self.assertIn('/ft710_ui.js?v=20', index_source)
 
-        sw_source = Path("static/sw.js").read_text()
-        self.assertIn("const CACHE = 'ft710-v17'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=17'", sw_source)
+        sw_source = Path("static/sw.js").read_text(encoding="utf-8")
+        self.assertIn("const CACHE = 'ft710-v21'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=20'", sw_source)
+
+
+class CookieSettingsPersistenceTests(unittest.TestCase):
+    """SDD V2.3: all frontend settings persist in cookies, not web storage."""
+
+    def test_settings_manager_exposes_cookie_helpers_and_migration(self):
+        src = Path("static/modules/settings_manager.js").read_text(encoding="utf-8")
+        self.assertIn("setCookie: setCookie", src)
+        self.assertIn("getCookie: getCookie", src)
+        self.assertIn("migrateLegacyStorage();", src)
+        for key in ("ft710_afVol", "ft710_scopeFloor", "ft710_scopeCeil",
+                    "ft710_scopeTheme", "ft710_memChannels"):
+            self.assertIn(f"'{key}'", src)
+
+    def test_no_web_storage_outside_settings_manager_migration(self):
+        for js in ("static/ft710_main.js", "static/ft710_ui.js"):
+            src = Path(js).read_text(encoding="utf-8")
+            self.assertNotIn("localStorage", src, js)
+            self.assertNotIn("sessionStorage", src, js)
+
+    def test_persisted_values_written_via_cookie_helpers(self):
+        main_src = Path("static/ft710_main.js").read_text(encoding="utf-8")
+        ui_src = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("FT710Settings.setCookie('ft710_memChannels'", main_src)
+        self.assertIn("FT710Settings.getCookie('ft710_memChannels')", main_src)
+        self.assertIn("FT710Settings.getCookie('ft710_afVol')", main_src)
+        self.assertIn("FT710Settings.setCookie('ft710_afVol'", ui_src)
+        self.assertIn("FT710Settings.getCookie('ft710_' + key)", ui_src)
+        self.assertIn("FT710Settings.setCookie('ft710_micGain'", ui_src)
+        self.assertIn("_applySavedMicGain();", main_src)
+        self.assertIn("FT710Settings.getCookie('ft710_micGain')", main_src)
+        self.assertIn("FT710Settings.setCookie('ft710_micVol'", ui_src)
+        self.assertIn("_setDeviceMicGain(parseInt(this.value) / 100)", ui_src)
+        self.assertIn("_ensureMicGainNode()", main_src)
+        self.assertIn("_txMicGainNode.connect(_txMicAw)", main_src)
 
     def test_empty_dirty_set_no_broadcast(self):
         dirty = set()
@@ -222,7 +257,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
         # Should not broadcast when nothing changed
 
     def test_scope_pipe_starts_lazily_for_spectrum_clients(self):
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         lifespan_block = server_source.split("@asynccontextmanager", 1)[1].split("app = FastAPI", 1)[0]
         spectrum_block = server_source.split('@app.websocket("/WSspectrum")', 1)[1].split("# ── Audio RX WebSocket", 1)[0]
         self.assertNotIn("asyncio.create_subprocess_exec", lifespan_block)
@@ -250,7 +285,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_skip_next_poll_before_cat_commands(self):
         """skip_next_poll must come BEFORE the CAT command to prevent
         in-flight poll results from overwriting the user's new setting."""
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         # Extract the band handler block
         band_block_start = server_source.index('elif field == "band":')
         band_block_end = server_source.index('elif field == "vfo_equal":')
@@ -288,7 +323,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_poll_guards_against_stale_frequency_after_skip(self):
         """The IF poll must check _should_skip AFTER reading frequency,
         not just at the start of the loop iteration."""
-        poll_source = Path("poll_scheduler.py").read_text()
+        poll_source = Path("poll_scheduler.py").read_text(encoding="utf-8")
         self.assertIn("not await self._should_skip", poll_source)
         # Verify the guard appears AFTER get_frequency and BEFORE
         # adding to changes
@@ -307,7 +342,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
         A user set command arriving while a settings query (e.g. SH0) is in
         flight makes the response stale (pre-command value); applying it
         snaps the UI back to the old setting for several seconds."""
-        poll_source = Path("poll_scheduler.py").read_text()
+        poll_source = Path("poll_scheduler.py").read_text(encoding="utf-8")
         start = poll_source.index("async def _poll_settings")
         end = poll_source.index("async def _poll_slow")
         body = poll_source[start:end]
@@ -322,7 +357,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
         """The filter handler must read back SH0 after setting, so the UI
         converges to the radio's actual width even if the radio silently
         rejects an index (instead of an optimistic value lingering ~4s)."""
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         start = server_source.index('elif field == "filter" or field == "filter_width":')
         end = server_source.index('elif field == "af_gain":')
         block = server_source[start:end]
@@ -340,8 +375,8 @@ class StateBroadcastLogicTests(unittest.TestCase):
         import ast
         import re as _re
 
-        config_source = Path("config.py").read_text()
-        ui_source = Path("static/ft710_ui.js").read_text()
+        config_source = Path("config.py").read_text(encoding="utf-8")
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
 
         # Parse server BANDS — handle both plain and type-annotated assignment
         tree = ast.parse(config_source)
@@ -414,7 +449,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
         """When CAT commands fail, server must log the failure and
         send an error message back to the client so it can revert
         its optimistic update."""
-        server_source = Path("server.py").read_text()
+        server_source = Path("server.py").read_text(encoding="utf-8")
         # Error message must be sent on failure
         self.assertIn(
             'Band change FAILED:',
@@ -431,6 +466,87 @@ class StateBroadcastLogicTests(unittest.TestCase):
             server_source,
             "Must send error message to client for unknown band",
         )
+
+
+class TXUplinkOwnershipTests(unittest.TestCase):
+    """TX-audio uplink ownership (2026-07-22 soft-failure fix).
+
+    Root cause of "server runs for a long time, then PTT keys but there is
+    no voice / no RF power": ownership of the /WSaudioTX uplink was only
+    ever assigned at connect time.  An idle first-connected client (second
+    tab, iOS app, or a zombie socket) kept ownership; the PTT-ing client's
+    mic frames were silently dropped.  And once the owner disconnected,
+    remaining clients were muted forever (no promotion).
+    """
+
+    def setUp(self):
+        import server
+        self.server = server
+        self._saved_clients = set(server.audio_tx_clients)
+        self._saved_tokens = dict(server._ws_tokens)
+        self._saved_owner = server._tx_owner_ws
+        server.audio_tx_clients.clear()
+        server._ws_tokens.clear()
+        server._tx_owner_ws = None
+
+    def tearDown(self):
+        s = self.server
+        s.audio_tx_clients.clear()
+        s.audio_tx_clients.update(self._saved_clients)
+        s._ws_tokens.clear()
+        s._ws_tokens.update(self._saved_tokens)
+        s._tx_owner_ws = self._saved_owner
+
+    def test_owner_disconnect_promotes_remaining_client(self):
+        """After the owner drops, a remaining client must become owner —
+        otherwise everyone stays muted until they reconnect."""
+        s = self.server
+        a, b = object(), object()
+        s.audio_tx_clients.update([a, b])
+        s._tx_owner_ws = a
+        s.audio_tx_clients.discard(a)  # endpoint discards before promoting
+        promoted = s._promote_tx_owner()
+        self.assertIs(promoted, b)
+        self.assertIs(s._tx_owner_ws, b)
+
+    def test_promote_with_no_clients_yields_none(self):
+        s = self.server
+        s._tx_owner_ws = object()
+        self.assertIsNone(s._promote_tx_owner())
+        self.assertIsNone(s._tx_owner_ws)
+
+    def test_ptt_client_claims_ownership_by_token(self):
+        """The client keying the radio owns the uplink, even if another
+        client connected first."""
+        s = self.server
+        ios, browser = object(), object()
+        s.audio_tx_clients.update([ios, browser])
+        s._ws_tokens[ios] = "ios-token"
+        s._ws_tokens[browser] = "browser-token"
+        s._tx_owner_ws = ios  # iOS app connected first
+        claimed = s._claim_tx_owner_for_token("browser-token")
+        self.assertIs(claimed, browser)
+        self.assertIs(s._tx_owner_ws, browser)
+
+    def test_claim_with_unknown_token_keeps_current_owner(self):
+        s = self.server
+        a = object()
+        s.audio_tx_clients.add(a)
+        s._tx_owner_ws = a
+        self.assertIsNone(s._claim_tx_owner_for_token("no-such-token"))
+        self.assertIs(s._tx_owner_ws, a)
+        self.assertIsNone(s._claim_tx_owner_for_token(None))
+        self.assertIs(s._tx_owner_ws, a)
+
+    def test_endpoints_track_tokens(self):
+        """Both endpoints must record the auth token per socket so the PTT
+        handler can find the TX-audio socket of the keying client."""
+        repo_root = Path(__file__).resolve().parents[1]
+        server_source = (repo_root / "server.py").read_text(encoding="utf-8")
+        self.assertIn("_ws_tokens[ws] = token", server_source)
+        self.assertIn("_ws_tokens.pop(ws, None)", server_source)
+        self.assertIn("_claim_tx_owner_for_token(_ws_tokens.get(ws))",
+                      server_source)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 250 tests across 18 test modules.
+Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 372 tests across 21 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,8 +12,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 250 |
-| Passed | 250 |
+| Total tests | 372 |
+| Passed | 372 |
 | Skipped | 0 (with fastapi installed) |
 | Failed | 0 |
 | Execution time | ~4s (harness tests spawn CLI subprocesses) |
@@ -69,7 +69,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `AudioFrameFormatTests` | 6 | Tagged PCM/Opus frame format, Int16 range, 768kbps PCM bandwidth, multi-frame tags |
 | `AudioDeviceDetectionTests` | 2 | FT-710 name pattern matching, non-FT-710 rejection |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (41 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (49 tests)
 
 SDD coverage: §9.2, §9.6, §10.4, §15
 
@@ -79,8 +79,10 @@ SDD coverage: §9.2, §9.6, §10.4, §15
 | `WSAuthTests` | 4 | Token format (64 hex chars), valid/invalid token check, WS close code 4001 |
 | `PTTSafetyLogicTests` | 10 | TX1/TX0 commands, dead-man switch (3 conditions), watchdog retry count, sendBeacon format, tx audio stop signal, m: settings format |
 | `StateBroadcastLogicTests` | 16 | Empty dirty set skip, partial update, dirty clear after broadcast, skip_next_poll-before-set ordering (band/freq/filter), post-query stale-read guards (IF + settings polls), filter post-set SH0 read-back, client/server band-list consistency |
+| `TXUplinkOwnershipTests` | 5 | Owner-disconnect promotion, empty promotion, PTT-client token claim, unknown-token keeps owner, per-socket token tracking |
+| `CookieSettingsPersistenceTests` | 3 | Cookie helpers + legacy web-storage migration in settings_manager, no localStorage/sessionStorage outside it, persisted values via cookie helpers |
 
-### 6. test_poll_scheduler.py — Poll Scheduler (14 tests)
+### 6. test_poll_scheduler.py — Poll Scheduler (17 tests)
 
 SDD coverage: AD-009, §9.6
 
@@ -90,6 +92,8 @@ SDD coverage: AD-009, §9.6
 | `PollSkipLogicTests` | 4 | Skip field accumulation, expiry, multi-field skip, duration types |
 | `PollingOrderTests` | 3 | User command priority over poll, polling pause after user command, resume after skip expiry |
 | `TXMeterPollingPreemptionTests` | 1 | TX-meter cycle yields between RM queries for priority commands |
+| `WatchdogReconnectTests` | 2 | `on_reconnected` hook fires after watchdog reconnect (scope re-init), hook failure is non-fatal |
+| `IFPollRecoveryTests` | 1 | `serial_connected` recovers to True on the next successful poll after a failure streak; first-poll freq logging must not raise (None-guard regression) |
 
 ### 7. test_scope_frame.py — Scope Frame Parsing (7 tests)
 
@@ -134,19 +138,28 @@ SDD coverage: §10.4 (memory recall applies stored frequency + mode)
 | `QuietLoggingSourceTests` | 3 | High-frequency polls stay at DEBUG, no per-frame INFO spam |
 | `TXOnlyMeterResetTests` | 1 | TX-only meters zeroed on TX→RX transition |
 
-### 14. test_scope_pipe_restart.py — Scope Pipe Restart (1 test)
+### 14. test_scope_pipe_restart.py — Scope Pipe Restart (3 tests)
 
 SDD coverage: AD-005 (pipe subprocess lifecycle)
 
-### 15. test_windows_launcher.py — Windows Launcher (1 test)
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `ScopePipeRestartTests` | 1 | Exited pipe can restart while the previous reader task finishes |
+| `ScopePipeHeartbeatTests` | 2 | len=0 stdout heartbeat accepted silently by the server reader; scope_pipe emits the heartbeat (dead-parent EPIPE detection) |
+
+### 15. test_windows_launcher.py — Windows Launcher (5 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
-### 16. test_windows_packaging_files.py — Windows Packaging Files (2 tests)
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `WindowsLauncherTests` | 5 | FTDI dir absolutized; mem_channels seeding incl. PyInstaller 6 `_internal` fallback; frozen launcher never falls back to re-spawning itself |
+
+### 16. test_windows_packaging_files.py — Windows Packaging Files (3 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
-### 17. test_windows_packaging_paths.py — Windows Packaging Paths (6 tests)
+### 17. test_windows_packaging_paths.py — Windows Packaging Paths (8 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
@@ -154,6 +167,7 @@ SDD coverage: §12.2 (Windows packaging)
 |-------|-------|--------|
 | `WindowsPackagingPathTests` | 4 | Frozen-runtime resource path resolution |
 | `ScopePipeCommandTests` | 2 | scope_pipe command construction under frozen runtime |
+| `ResourceDirTests` | 2 | `_resource_dir()` prefers `_MEIPASS` when frozen (PyInstaller 6 `_internal` layout), falls back to SCRIPT_DIR |
 
 ### 18. test_sdd_harness.py — SDD-Guardian Context Harness (27 tests)
 
@@ -166,6 +180,48 @@ SDD coverage: NFR-051 (explicit gaps documented), §14 (doc-sync discipline)
 | `KnowledgeIndexTests` | 4 | index.json: chapter files exist, every topic ref resolves to live SDD text, topics reachable + routed, core-area coverage |
 | `KnowledgeCliTests` | 8 | Live extraction of AD/NFR/UC/issue/section, brief includes decisions + requirements + risks, Chinese keyword routing |
 
+### 19. test_atr1000_tuner.py — TunerStorage LC-Learning (36 tests)
+
+SDD coverage: §9.8, §11.1 (TunerStorage)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `LearnGateTests` | 6 | Learn gate SWR 1.0–1.8 acceptance/rejection |
+| `NeedsVerifyTests` | 2 | Verify-needed detection for learned entries |
+| `OverwritePolicyTests` | 4 | When a new learn overwrites an existing entry |
+| `FindBestTests` | 7 | 1kHz keys, ±5kHz nearest-match lookup |
+| `TuneParamsTests` | 3 | LC parameter derivation/validation |
+| `PersistenceTests` | 5 | JSON save/load round-trip, atomic writes |
+| `DeleteClearStatsTests` | 7 | Entry delete, clear, statistics |
+| `SingletonTests` | 2 | Shared store instance behavior |
+
+### 20. test_atr1000_client.py — ATR1000 WS Client (50 tests)
+
+SDD coverage: §9.8, §11.1 (ATR1000Client)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `FrameEncodeTests` | 5 | Binary frame encoding [0xFF,CMD,LEN,DATA] |
+| `FrameParseTests` | 13 | Binary frame parsing |
+| `LearningBufferTests` | 13 | 4-sample stability-window learning |
+| `MeterLearningFlowTests` | 6 | Learning flow from meter pushes |
+| `RelayThrottleTests` | 5 | 5s relay-write throttle |
+| `StateCallbackTests` | 3 | `on_change` callback |
+| `TuningHeuristicTests` | 5 | Tuning-clear heuristics |
+
+### 21. test_atr1000_server.py — Server Linkage + Tune Assist (12 tests)
+
+SDD coverage: §9.8, §15 (tune-assist carrier safety)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `TuneAssistSkippedTests` | 1 | Tune skipped when SWR≤1.6 |
+| `TuneAssistSuccessTests` | 1 | SWR improved ≥0.02 → keep + learn |
+| `TuneAssistRollbackTests` | 1 | No improvement → rollback relays |
+| `TuneAssistNoMeterTests` | 1 | Meter-wait timeout path |
+| `LinkageHookTests` | 3 | Freq-dirty → notify_freq, TX → notify_tx hooks |
+| `SourceGuardTests` | 5 | Disabled/default guard: hooks short-circuit, no client task |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -174,20 +230,21 @@ SDD coverage: NFR-051 (explicit gaps documented), §14 (doc-sync discipline)
 | AD-002 Direct Serial CAT | test_cat_controller | 29 tests |
 | AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 33+ tests |
 | AD-004 Dual-Codec Audio | test_audio | 48 tests |
-| AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart | 12 tests |
+| AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart | 14 tests |
 | AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 8 tests |
 | AD-007 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | AD-008 PyAudio Detection | test_audio (AudioDeviceDetectionTests) | 2 tests |
-| AD-009 7-Task Polling | test_poll_scheduler | 14 tests |
+| AD-009 7-Task Polling | test_poll_scheduler | 17 tests |
 | AD-010 Memory Channels | test_server_ws_protocol (mem messages), test_memory_recall | 6 tests |
 | §7.2 RadioState Entity | test_radio_state | 33 tests |
 | §7.2 Config Tables | test_config | 28 tests |
 | §9.2 WS Protocol | test_server_ws_protocol (WSMessageFormatTests) | 11 tests |
-| §9.6 Polling (incl. stale-read guard) | test_poll_scheduler, test_server_ws_protocol | 14+ tests |
+| §9.6 Polling (incl. stale-read guard) | test_poll_scheduler, test_server_ws_protocol | 17+ tests |
 | §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | NFR-060–065 Audio Quality | test_audio | 48 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests) | 4 tests |
 | NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 27 tests |
+| §9.8 ATR1000 Tuner Linkage | test_atr1000_tuner, test_atr1000_client, test_atr1000_server | 98 tests |
 
 ## Running Specific Tests
 

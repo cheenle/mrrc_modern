@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Top header: status dots + VFO A/B + S-meter reading + power toggle.
+/// Top header: status dots + VFO A/B + power toggle.
+/// (S 值不在这里重复显示——频谱下方的 SMeterView 已有。)
 struct HeaderView: View {
     @EnvironmentObject var viewModel: RadioViewModel
 
@@ -8,9 +9,6 @@ struct HeaderView: View {
         VStack(spacing: 2) {
             // Row 1: Status + meters (1.5× size)
             HStack(spacing: 12) {
-                Text(viewModel.state.sUnit)
-                    .font(.system(size: 18, weight: .bold)).foregroundColor(.radioGreen)
-
                 wsDot(viewModel.state.ctrlConnected, "C")
                 wsDot(viewModel.state.spectrumConnected, "S")
                 wsDot(viewModel.state.audioRXConnected, "R")
@@ -36,12 +34,12 @@ struct HeaderView: View {
                 // VFO A/B toggle
                 HStack(spacing: 0) {
                     Button("A") { viewModel.setVFO("A") }
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(viewModel.state.activeVFO == "A" ? .black : .radioMuted)
                         .frame(width: 42, height: 36)
                         .background(viewModel.state.activeVFO == "A" ? Color.radioAccent : Color.radioSurface)
                     Button("B") { viewModel.setVFO("B") }
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(viewModel.state.activeVFO == "B" ? .black : .radioMuted)
                         .frame(width: 42, height: 36)
                         .background(viewModel.state.activeVFO == "B" ? Color.radioAccent : Color.radioSurface)

@@ -18,9 +18,15 @@ REGISTRY = HARNESS / "constraints.json"
 
 
 def run_cli(*args, stdin: str | None = None) -> subprocess.CompletedProcess:
+    import os
+    env = os.environ.copy()
+    # The CLI prints Chinese SDD text; force UTF-8 on both ends so the tests
+    # also pass on cp936/GBK-locale Windows (default encoding otherwise).
+    env["PYTHONIOENCODING"] = "utf-8"
     return subprocess.run(
         [sys.executable, str(CLI), *args],
         input=stdin, capture_output=True, text=True, cwd=REPO_ROOT,
+        encoding="utf-8", env=env,
     )
 
 

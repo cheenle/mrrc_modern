@@ -28,7 +28,10 @@ class WindowsPackagingPathTests(unittest.TestCase):
         with patch.object(scope_libraries.sys, "platform", "win32"):
             dirs = scope_libraries.get_candidate_library_dirs()
         self.assertTrue(
-            any(str(path).endswith("vendor/ftdi/windows/bin/x64") for path in dirs)
+            any(
+                path.as_posix().endswith("vendor/ftdi/windows/bin/x64")
+                for path in dirs
+            )
         )
 
     def test_configure_windows_dll_search_path_calls_add_dll_directory(self):
@@ -51,7 +54,7 @@ class WindowsPackagingPathTests(unittest.TestCase):
                 "get_candidate_library_dirs",
                 return_value=[Path("/tmp/missing"), Path("/tmp/exists")],
             ),
-            patch.object(Path, "is_dir", lambda self: str(self) == "/tmp/exists"),
+            patch.object(Path, "is_dir", lambda self: self.as_posix() == "/tmp/exists"),
         ):
             scope_libraries.configure_windows_dll_search_path()
 
@@ -76,6 +79,19 @@ class ScopePipeCommandTests(unittest.TestCase):
         self.assertIsNotNone(cmd)
         assert cmd is not None
         self.assertEqual(Path(cmd[0]).name, "scope_pipe.exe")
+
+
+class ResourceDirTests(unittest.TestCase):
+    def test_resource_dir_prefers_meipass_when_frozen(self):
+        fake_meipass = Path("/tmp/ft710_app/_internal")
+        with (
+            patch.object(server.sys, "frozen", True, create=True),
+            patch.object(server.sys, "_MEIPASS", str(fake_meipass), create=True),
+        ):
+            self.assertEqual(server._resource_dir(), fake_meipass)
+
+    def test_resource_dir_falls_back_to_script_dir_in_source_mode(self):
+        self.assertEqual(server._resource_dir(), server.SCRIPT_DIR)
 
 
 if __name__ == "__main__":

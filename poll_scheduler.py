@@ -30,10 +30,16 @@ class PollScheduler:
         cat: CatController,
         state: RadioState,
         on_state_changed: Optional[Callable[[], Awaitable[None]]] = None,
+        on_reconnected: Optional[Callable[[], Awaitable[None]]] = None,
     ):
         self.cat = cat
         self.state = state
         self._on_state_changed = on_state_changed  # async callback for broadcasts
+        # Called once after a successful watchdog reconnect + state re-sync.
+        # server.py wires this to _init_scope_cat: a USB re-enumeration resets
+        # the radio's scope output (EX040101), so without re-init the spectrum
+        # freezes after any serial hiccup.
+        self._on_reconnected = on_reconnected
         self._tasks: list[asyncio.Task] = []
         self._running = False
         self._user_command_lock = asyncio.Lock()
@@ -168,8 +174,9 @@ class PollScheduler:
                                 if not await self._should_skip("if") and not await self._polling_paused():
                                     changes["vfo_a_freq"] = freq
                                     # Only log significant frequency changes (>1kHz) or periodically
-                                    if (freq != _last_logged_freq 
-                                            and abs(freq - _last_logged_freq) > 1000
+                                    if (_last_logged_freq is None
+                                            or (freq != _last_logged_freq
+                                                and abs(freq - _last_logged_freq) > 1000)
                                             or _loop_count % 500 == 0):
                                         _delta = ""
                                         if _last_logged_freq is not None:
@@ -187,6 +194,12 @@ class PollScheduler:
                             if sm is not None:
                                 changes["s_meter"] = sm
                     if changes:
+                        if not self.state.serial_connected:
+                            # Poll recovered after a failure streak — flip the
+                            # flag back.  Previously only the watchdog's full
+                            # reconnect did this, so a transient timeout streak
+                            # stuck the UI at "radio disconnected" forever.
+                            changes["serial_connected"] = True
                         changed = self.state.update(**changes)
                         if changed and self._on_state_changed:
                             await self._on_state_changed()
@@ -543,6 +556,14 @@ class PollScheduler:
                         self.state.mark_dirty(*list(vars(new_state).keys()))
                         if self._on_state_changed:
                             await self._on_state_changed()
+                        # Re-run scope init (EX040101/EX040200) — the radio's
+                        # scope output does not survive a USB re-enumeration,
+                        # and scope_pipe cannot recover without it.
+                        if self._on_reconnected:
+                            try:
+                                await self._on_reconnected()
+                            except Exception as e:
+                                logger.warning("Post-reconnect hook failed: %s", e)
             except asyncio.CancelledError:
                 return
             except Exception as e:

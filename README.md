@@ -61,6 +61,8 @@ dist\windows\MRRC-FT710-Setup.exe
 | `FT710_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"FT-710"` or `"3"`) |
 | `FT710_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
 | `FT710_MEM_FILE` | `mem_channels.json` | Memory-channel JSON path; Windows launcher stores this under `%LOCALAPPDATA%` |
+| `FT710_ATR1000_HOST` | *(empty = disabled)* | ATR1000 networked tuner host; empty disables the linkage entirely |
+| `FT710_ATR1000_PORT` | `60001` | ATR1000 tuner WebSocket port |
 
 ### CLI Arguments
 
@@ -79,7 +81,8 @@ dist\windows\MRRC-FT710-Setup.exe
 
 ```
 Browser (iPhone / Desktop / Tablet)
-  ↕ HTTP + WebSocket (4 channels: control, audio RX, audio TX, spectrum)
+  ↕ HTTP + WebSocket (4 channels: control, audio RX, audio TX, spectrum;
+                     + optional /WSatr1000 when the ATR1000 tuner is enabled)
 FT-710 Server (Python FastAPI + Uvicorn)
   ├── ↕ Serial CAT (USB Enhanced COM Port, 38400 baud)
   ├── ↕ FT4222 SPI (scope_pipe subprocess → real spectrum data)
@@ -96,6 +99,7 @@ Yaesu FT-710 Radio
 | `/WSaudioRX` | Binary tagged | RX audio: 1-byte codec tag (0x00=PCM, 0x01=Opus 48kHz) + payload |
 | `/WSaudioTX` | Binary tagged + text | TX mic uplink: tagged audio frames + text control (`s:` stop, `m:` settings) |
 | `/WSspectrum` | Binary | Spectrum frames: v1=851B (1B ver + 850B wf1), v2=1701B (+850B wf2), ~30fps |
+| `/WSatr1000` | JSON text | Optional ATR1000 tuner state + tune assist (closed with code 4000 when disabled) |
 
 ### Dual-Mode Spectrum
 
@@ -138,7 +142,7 @@ Opus falls back to Int16 PCM when libopus is unavailable (server or browser).
 
 ```
 mrrc_ft710/
-├── server.py              # FastAPI app: lifespan, auth, 4 WebSockets, REST, CLI
+├── server.py              # FastAPI app: lifespan, auth, 4 WebSockets (+optional /WSatr1000), REST, CLI
 ├── cat_controller.py      # Serial CAT protocol (pyserial + asyncio thread pool)
 ├── radio_state.py         # RadioState dataclass with dirty-field change tracking
 ├── poll_scheduler.py      # 7-tier background polling (100ms → 5s, bounded lock)
@@ -301,7 +305,7 @@ python3 -m pytest tests/ -v
 python3 -m unittest discover -s tests -v
 ```
 
-**215 tests passing** in the current local test suite.
+**372 tests passing** in the current local test suite.
 
 ## Requirements
 

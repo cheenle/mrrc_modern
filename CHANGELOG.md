@@ -2,6 +2,41 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.7.1] — 2026-07-26 — Windows Audio Device Lock & Installer Diagnostics
+
+### Fixed
+- **Windows RX/TX audio broken after install** (SDD V2.6): the FT-710's
+  built-in USB sound card enumerates on Windows under generic names —
+  `USB Audio CODEC` or `USB Audio Device` depending on driver/OS build —
+  with no "FT-710"/"YAESU" substring, so auto-detection fell through to
+  the channel heuristics and grabbed the laptop microphone (RX) or PC
+  speakers (TX). `audio_handler.py` adds a generic USB-audio name tier
+  (`USB_AUDIO_NAME_HINTS`) to both RX and TX device selection, ranked
+  below the FT-710-specific names and above the mono/full-duplex
+  heuristics; multi-match (per-host-API duplicates) warns and points at
+  the env-var lock.
+- **CAT connect failure now logs the serial ports actually visible**
+  (SDD V2.5), so a wrong default `COM3` is diagnosable from the console.
+- **Launcher health probe**: `FT710_WEB_HOST=::` now maps to
+  `http://localhost:<port>` instead of a false 15 s startup warning.
+- **Frozen-app Opus**: `opus_rx.py` searches packaged `opus.dll`
+  locations (`opus.dll`, `_internal\opus.dll`,
+  `vendor\opus\windows\bin\x64\opus.dll`); `build.ps1` warns when
+  `vendor\opus\windows` is absent; PyInstaller specs ship the
+  platform-matched FTDI tree.
+
+### Changed
+- **`windows/default.env` pre-locks the audio devices**:
+  `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` = `USB Audio` (the
+  common substring of both Windows enumeration forms; name locking is
+  reboot-stable, indices are not).
+- **New "Audio (RX/TX) Setup" section** in the Windows installer guide:
+  device identification from the startup PortAudio list, env locking,
+  sound-panel guidance (never make the radio's USB audio the default
+  playback device), and the radio-side modulation routing
+  (`RADIO SETTING` → per-mode `MOD SOURCE` = `USB`) verified against the
+  FT-710 Operation Manual; four new troubleshooting rows.
+
 ## [v1.7.0] — 2026-07-26 — ATR1000 Tuner Linkage & Frontend Settings in Cookies
 
 ### Added

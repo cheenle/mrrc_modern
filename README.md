@@ -27,7 +27,7 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.7.0** (30.4 MB, MD5 `85021da8932f3441d1cb4c795e2c531e`):
+**Download v1.7.1** (size/MD5 to be filled after the Windows build):
 
 - Fast mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
 - GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>

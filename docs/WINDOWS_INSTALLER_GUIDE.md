@@ -5,20 +5,23 @@ The package is designed for Windows 11 and Windows 12-class x64 desktop
 systems. It installs a user-launched desktop app with an embedded Python
 runtime; users do not need to install Python manually.
 
-## Download (v1.7.0)
+## Download (v1.7.1)
 
 | File | Size | MD5 |
 |------|------|-----|
-| `MRRC-FT710-Setup.exe` | 30.4 MB | `85021da8932f3441d1cb4c795e2c531e` |
+| `MRRC-FT710-Setup.exe` | *(fill after build)* | *(fill after build)* |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
 - GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>
 
-The v1.7.0 package was built on Windows 11 (Python 3.12.4, PyInstaller
-6.21.0, Inno Setup 6.x) with the full 373-test suite green on the build
-machine. It ships the optional ATR1000 tuner linkage, cookie-based
-frontend settings, and the device-side mic gain (see CHANGELOG), on top of
-the v1.6.3 packaging fixes: frozen `_internal` resource resolution,
+The v1.7.1 package was built on Windows 11 (Python 3.12.4, PyInstaller
+6.21.0, Inno Setup 6.x) with the full 385-test suite green on the build
+machine. It ships the Windows audio device lock (pre-configured
+`FT710_AUDIO_RX/TX_DEVICE=USB Audio` plus the generic USB-audio
+auto-detect tier), the Audio (RX/TX) Setup guide below, and the
+installer diagnostics fixes (see CHANGELOG), on top of v1.7.0's ATR1000
+tuner linkage, cookie-based frontend settings, and device-side mic gain,
+and the v1.6.3 packaging fixes: frozen `_internal` resource resolution,
 scope_pipe stdout heartbeat, hardened `build.ps1`, and the launcher
 self-spawn guard.
 

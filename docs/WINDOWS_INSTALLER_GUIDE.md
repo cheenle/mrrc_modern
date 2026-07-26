@@ -9,7 +9,7 @@ runtime; users do not need to install Python manually.
 
 | File | Size | MD5 |
 |------|------|-----|
-| `MRRC-FT710-Setup.exe` | *(fill after build)* | *(fill after build)* |
+| `MRRC-FT710-Setup.exe` | 30.4 MB | `d9f8851c213af67f12931c3abd6a0469` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
 - GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>

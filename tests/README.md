@@ -2,7 +2,7 @@
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 373 tests across 21 test modules.
+Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 385 tests across 21 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,11 +12,11 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 373 |
-| Passed | 373 |
+| Total tests | 385 |
+| Passed | 385 |
 | Skipped | 0 (with fastapi installed) |
 | Failed | 0 |
-| Execution time | ~4s (harness tests spawn CLI subprocesses) |
+| Execution time | ~9s (harness tests spawn CLI subprocesses) |
 
 ## Test Modules
 
@@ -31,7 +31,7 @@ SDD coverage: §7.2, AD-003, §9.7
 | `RadioStateSerializationTests` | 6 | to_dict (core + derived), to_dirty_dict, value accuracy |
 | `RadioStateFromSyncResultTests` | 6 | CAT response parsing, empty data, malformed data, booleans, preamp/att, tuner |
 
-### 2. test_cat_controller.py — CAT Protocol (29 tests)
+### 2. test_cat_controller.py — CAT Protocol (30 tests)
 
 SDD coverage: AD-002, §9.6, §10.4
 
@@ -39,7 +39,7 @@ SDD coverage: AD-002, §9.6, §10.4
 |-------|-------|--------|
 | `CatCommandFormattingTests` | 15 | FA, FB, MD0, TX, SM0, SH00, AG, PC, PA0, RA0, NB0, NR0, BC, PR, PS, ST, VS, SS, AC, BS — all command formats |
 | `CatResponseParsingTests` | 7 | Frequency parse, S-meter parse, mode parse, PTT parse, IF response parse, filter width parse, error detection |
-| `CatControllerMockedTests` | 7 | Command terminator (;), query vs set, ASCII encoding, SH two-digit width format, write-only set, PTT verify sequence |
+| `CatControllerMockedTests` | 8 | Command terminator (;), query vs set, ASCII encoding, SH two-digit width format, write-only set, PTT verify sequence, available-port diagnostics on connect failure |
 
 ### 3. test_config.py — Configuration Tables (28 tests)
 
@@ -53,14 +53,14 @@ SDD coverage: §7.2, §10.4, NFRs
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (48 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (57 tests)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
 | Class | Tests | Covers |
 |-------|-------|--------|
 | `CodecTagTests` | 4 | AUDIO_TAG_PCM (0x00), AUDIO_TAG_OPUS (0x01), tag distinctness, 1-byte fit |
-| `OpusConstantsTests` | 6 | RX_RATE=48000, FRAME_SAMPLES=960, DEFAULT_BITRATE=64000, MIN=8000, MAX=128000 |
+| `OpusConstantsTests` | 7 | RX_RATE=48000, FRAME_SAMPLES=960, DEFAULT_BITRATE=64000, MIN=8000, MAX=128000, Windows packaged opus.dll search paths |
 | `TxFrontendContractTests` | 11 | TX worklet/worker contract: 48kHz, frame sizes, packet format |
 | `RxRecordingFrontendTests` | 5 | RX recording (MP3/lamejs) frontend contract |
 | `TXBufferTests` | 8 | TX jitter buffer pre-buffer/cap behavior |
@@ -68,6 +68,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `RXBackpressureTests` | 3 | RX broadcast backpressure handling |
 | `AudioFrameFormatTests` | 6 | Tagged PCM/Opus frame format, Int16 range, 768kbps PCM bandwidth, multi-frame tags |
 | `AudioDeviceDetectionTests` | 2 | FT-710 name pattern matching, non-FT-710 rejection |
+| `USBCodecDeviceSelectionTests` | 8 | Generic USB-audio tier ("USB Audio CODEC"/"USB Audio Device"): wins over mono/full-duplex heuristics (RX+TX), per-host-API duplicates, explicit name lock, "USB Audio" common-prefix lock |
 
 ### 5. test_server_ws_protocol.py — WebSocket Protocol (49 tests)
 
@@ -147,13 +148,13 @@ SDD coverage: AD-005 (pipe subprocess lifecycle)
 | `ScopePipeRestartTests` | 1 | Exited pipe can restart while the previous reader task finishes |
 | `ScopePipeHeartbeatTests` | 2 | len=0 stdout heartbeat accepted silently by the server reader; scope_pipe emits the heartbeat (dead-parent EPIPE detection) |
 
-### 15. test_windows_launcher.py — Windows Launcher (5 tests)
+### 15. test_windows_launcher.py — Windows Launcher (7 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `WindowsLauncherTests` | 5 | FTDI dir absolutized; mem_channels seeding incl. PyInstaller 6 `_internal` fallback; frozen launcher never falls back to re-spawning itself |
+| `WindowsLauncherTests` | 7 | Local browser URL selection for wildcard binds; FTDI dir absolutized; mem_channels seeding incl. PyInstaller 6 `_internal` fallback; frozen launcher never falls back to re-spawning itself |
 
 ### 16. test_windows_packaging_files.py — Windows Packaging Files (3 tests)
 

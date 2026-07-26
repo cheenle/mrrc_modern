@@ -208,6 +208,18 @@
 <td>Mode tables (MODE_NUM_TO_NAME, MODE_NAME_TO_NUM), band definitions (BANDS), filter widths, S-meter calibration, constants</td>
 </tr>
 <tr>
+<td>ATR1000Client</td>
+<td>Backend support</td>
+<td><code>atr1000_client.py</code></td>
+<td>Optional asyncio client for networked ATR1000 tuner (frame protocol, reconnect/refresh, TX-no-SYNC, learning, throttled relay writes)</td>
+</tr>
+<tr>
+<td>TunerStorage</td>
+<td>Backend support</td>
+<td><code>atr1000_tuner.py</code></td>
+<td>LC-learning persistence (SWR-gated, atomic JSON)</td>
+</tr>
+<tr>
 <td>COOPCOEPMiddleware</td>
 <td>Backend support</td>
 <td><code>server.py</code></td>
@@ -307,7 +319,13 @@
 <td>SettingsManager</td>
 <td>Frontend support</td>
 <td><code>static/modules/settings_manager.js</code></td>
-<td>Cookie and localStorage persistence for auth token and preferences</td>
+<td>Cookie persistence for auth token reading and all preferences (legacy web-storage values migrated to cookies on first load)</td>
+</tr>
+<tr>
+<td>ATR1000Module</td>
+<td>Frontend support</td>
+<td><code>static/modules/atr1000.js</code></td>
+<td>Tuner WS client + meter row rendering + ATR TUNE button (inert unless atr1000Enabled)</td>
 </tr>
 <tr>
 <td>OpusWASM</td>

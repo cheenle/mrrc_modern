@@ -29,7 +29,9 @@ WIRE FORMAT:
 
 import ctypes
 import logging
+import sys
 from ctypes.util import find_library
+from pathlib import Path, PureWindowsPath
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -76,21 +78,73 @@ class _OpusEncoder(ctypes.Structure):
 _EncoderPtr = ctypes.POINTER(_OpusEncoder)
 
 
+def _resource_roots() -> list[Path]:
+    roots: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        roots.append(Path(meipass))
+    if getattr(sys, "frozen", False):
+        roots.append(Path(sys.executable).resolve().parent)
+    roots.append(Path(__file__).resolve().parent)
+
+    unique: list[Path] = []
+    for root in roots:
+        if root not in unique:
+            unique.append(root)
+    return unique
+
+
+def _libopus_candidates(
+    platform: str | None = None,
+    resource_roots: list[Path] | None = None,
+    find_library_result: str | None = None,
+) -> list[object]:
+    platform = platform or sys.platform
+    name = find_library_result if find_library_result is not None else find_library("opus")
+    candidates: list[object] = [name] if name else []
+    roots = resource_roots if resource_roots is not None else _resource_roots()
+
+    if platform == "win32":
+        for root in roots:
+            win_root = PureWindowsPath(str(root))
+            candidates.extend([
+                win_root / "opus.dll",
+                win_root / "_internal" / "opus.dll",
+                win_root / "vendor" / "opus" / "windows" / "bin" / "x64" / "opus.dll",
+            ])
+        candidates.extend(["opus.dll", "libopus.dll"])
+    elif platform == "darwin":
+        for root in roots:
+            candidates.extend([
+                root / "libopus.dylib",
+                root / "_internal" / "libopus.dylib",
+                root / "vendor" / "opus" / "macos" / "libopus.dylib",
+            ])
+        candidates += [
+            "/opt/homebrew/lib/libopus.dylib",
+            "/usr/local/lib/libopus.dylib",
+        ]
+    else:
+        for root in roots:
+            candidates.extend([
+                root / "libopus.so.0",
+                root / "libopus.so",
+                root / "_internal" / "libopus.so.0",
+                root / "_internal" / "libopus.so",
+            ])
+        candidates += ["libopus.so.0", "libopus.so"]
+
+    return candidates
+
+
 def _load_libopus():
     """Locate and bind libopus, declaring argtypes so arm64 ctls work."""
-    name = find_library("opus")
-    candidates = [name] if name else []
-    candidates += [
-        "/opt/homebrew/lib/libopus.dylib",
-        "/usr/local/lib/libopus.dylib",
-        "libopus.so.0", "libopus.so",
-    ]
     lib = None
-    for c in candidates:
+    for c in _libopus_candidates():
         if not c:
             continue
         try:
-            lib = ctypes.CDLL(c)
+            lib = ctypes.CDLL(str(c))
             break
         except OSError:
             continue

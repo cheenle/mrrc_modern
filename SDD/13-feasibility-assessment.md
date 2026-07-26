@@ -41,7 +41,7 @@
 | ID | Issue | Priority | Status | Resolution Path |
 |----|-------|----------|--------|-----------------|
 | I1 | iOS Safari requires HTTPS for getUserMedia (mic access) | Medium | Open | Use TLS reverse proxy (nginx) or connect via HTTPS |
-| I2 | PyAudio device index not configurable via env var | Low | Open | Add `FT710_AUDIO_IN_DEVICE` / `FT710_AUDIO_OUT_DEVICE` env vars |
+| I2 | PyAudio device index not configurable via env var | Low | Resolved (V2.6) | Implemented as `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` (index or name substring); Windows package pre-locks `USB Audio` |
 | I3 | No per-band TX power control (FT-710 uses hardware power setting) | Low | N/A | FT-710 has hardware RF POWER knob; CAT `PC;` command sets power globally |
 | I4 | No ATR-1000 / external tuner support | Low | Future | Could add via second serial port |
 | I5 | No digital mode support (CW decoder, FT8, RTTY) | Low | Future | Specialized DSP/packet decode needed |

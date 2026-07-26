@@ -10,7 +10,7 @@ This repository contains a Python FastAPI server for Yaesu FT-710 web control pl
 | `cat_controller.py` | Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
 | `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command and post-query stale-read discard; watchdog re-runs scope init (`on_reconnected`) after serial reconnect |
-| `audio_handler.py` | PyAudio sound card capture/playback (44.1kHz native device rate), Opus encode, FT-710 device auto-detection (name + mono-channel heuristic) |
+| `audio_handler.py` | PyAudio sound card capture/playback (44.1kHz native device rate), Opus encode, FT-710 device auto-detection (FT-710/YAESU name, "USB Audio CODEC"/"USB Audio Device" Windows names, mono/full-duplex heuristics) |
 | `audio_resample.py` | 44.1kHz ↔ 48kHz frame-aligned SRC (numpy linear interp; 882↔960 = 20ms) |
 | `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz) |
 | `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback |

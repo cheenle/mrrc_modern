@@ -21,6 +21,23 @@ from config import SERIAL_TIMEOUT, RECONNECT_BASE_DELAY, RECONNECT_MAX_DELAY
 logger = logging.getLogger("ft710.cat")
 
 
+def _available_serial_ports_summary() -> str:
+    try:
+        ports = list(serial.tools.list_ports.comports())
+    except Exception as e:
+        return f"unable to list ports: {e}"
+    if not ports:
+        return "none"
+    entries = []
+    for port in ports:
+        device = getattr(port, "device", "") or "?"
+        description = getattr(port, "description", "") or ""
+        hwid = getattr(port, "hwid", "") or ""
+        details = " ".join(part for part in (description, hwid) if part)
+        entries.append(f"{device} ({details})" if details else device)
+    return "; ".join(entries)
+
+
 class CatController:
     """Asynchronous serial CAT protocol handler for Yaesu FT-710.
 
@@ -108,6 +125,7 @@ class CatController:
             return self._connected
         except Exception as e:
             logger.error("Failed to connect to %s: %s", self.port, e)
+            logger.error("Available serial ports: %s", _available_serial_ports_summary())
             await self._cleanup()
             return False
 

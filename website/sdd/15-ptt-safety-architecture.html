@@ -234,6 +234,7 @@ if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
     radio.update(tx_status=0)
     if audio:
         audio.stop_tx()</code></pre>
+<p><strong>ATR1000 tune assist (server-side TX2 keying):</strong> the optional ATR tune assist (<code>_atr_tune_assist()</code>, §9.8) keys a TX2 carrier server-side for up to 45 s (ATR_TUNE deadline). Safety: the carrier drop is guaranteed by a <code>finally</code> block on every exit path (skip/success/rollback/error); the Layer 4 last-client-disconnect dead-man switch still applies while the carrier is up; an SWR≤1.6 gate skips tuning entirely; relays roll back when SWR does not improve. All ATR I/O runs in its own asyncio task — never on the audio path.</p>
 <h3 id="layer-5-beforeunload-beacon">Layer 5: Beforeunload Beacon</h3>
 <pre class="javascript"><code>window.addEventListener(&#39;beforeunload&#39;, function() {
     if (pttActive || tuneActive) {

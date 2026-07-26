@@ -58,7 +58,7 @@ dist\windows\MRRC-FT710-Setup.exe
 | `FT710_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
 | `FT710_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |
 | `FT710_SCOPE_BAUD` | `115200` | Scope serial baud rate |
-| `FT710_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"FT-710"` or `"3"`) |
+| `FT710_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"USB Audio"` or `"3"`; Windows package pre-locks `USB Audio`) |
 | `FT710_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
 | `FT710_MEM_FILE` | `mem_channels.json` | Memory-channel JSON path; Windows launcher stores this under `%LOCALAPPDATA%` |
 | `FT710_ATR1000_HOST` | *(empty = disabled)* | ATR1000 networked tuner host; empty disables the linkage entirely |
@@ -137,6 +137,8 @@ TX chain resamples from Opus 48kHz to the FT-710's native 44.1kHz USB audio rate
 - **Single-owner TX**: Only the first connected `/WSaudioTX` client's audio reaches the radio; subsequent clients' frames are ignored until the owner disconnects.
 
 Opus falls back to Int16 PCM when libopus is unavailable (server or browser).
+Windows packages search `opus.dll`, `_internal\opus.dll`, and
+`vendor\opus\windows\bin\x64\opus.dll`.
 
 ## Project Structure
 
@@ -305,7 +307,7 @@ python3 -m pytest tests/ -v
 python3 -m unittest discover -s tests -v
 ```
 
-**372 tests passing** in the current local test suite.
+**385 tests passing** in the current local test suite.
 
 ## Requirements
 

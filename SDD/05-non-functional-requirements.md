@@ -66,4 +66,4 @@
 | NFR-062 | TX audio quality | Clean mic audio reaches radio without distortion | High | On-air listening test |
 | NFR-063 | AudioWorklet playback | Jitter buffer: 220ms prebuffer, 90ms recovery, 800ms max | High | Listening under network jitter |
 | NFR-064 | PCM fallback | Automatic when libopus unavailable (server or browser) | High | Start without libopus |
-| NFR-065 | PyAudio device selection | Auto-detect "FT-710"/"YAESU" in device name; fallback to system default | Medium | Device enumeration log |
+| NFR-065 | PyAudio device selection | Auto-detect "FT-710"/"YAESU", then "USB Audio CODEC"/"USB Audio Device" (Windows built-in sound card names), in device name; fallback to system default | Medium | Device enumeration log |

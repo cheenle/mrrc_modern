@@ -23,6 +23,8 @@ class WindowsPackagingFilesTests(unittest.TestCase):
         self.assertIn("ft710_server.spec", text)
         self.assertIn("ft710_launcher.spec", text)
         self.assertIn("iscc packaging\\windows\\MRRC-FT710.iss", text)
+        self.assertIn("vendor\\opus\\windows", text)
+        self.assertIn("opus.dll", text)
 
     def test_build_script_aborts_on_native_command_failure(self):
         """$ErrorActionPreference does not cover native commands — the build

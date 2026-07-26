@@ -79,13 +79,98 @@ FT710_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 Set `FT710_SERIAL_PORT` to the FT-710 Enhanced COM Port from Device Manager.
 Change `FT710_WEB_PASSWORD` before exposing the app beyond localhost.
 
+## Audio (RX/TX) Setup
+
+The server opens the FT-710's **built-in USB sound card** for both receive
+(RX) and transmit (TX) audio at 44.1 kHz. On Windows this card enumerates
+under a **generic name — `USB Audio CODEC` or `USB Audio Device`**, depending
+on the driver/OS build — it does *not* contain "FT-710" or "YAESU", which is
+why auto-detection can pick the wrong device (laptop mic for RX, PC speakers
+for TX). Lock the device explicitly as follows.
+
+### 1. Identify the device
+
+- Windows Settings → System → Sound (or Device Manager → Sound, video and
+  game controllers): the FT-710 appears as `USB Audio CODEC` or `USB Audio
+  Device` (recording: `Microphone (...)`, playback: `Speakers (...)`).
+  On localized Windows the name is wrapped, e.g. `麦克风 (USB Audio Device)`.
+- Every startup, the launcher console prints the full PortAudio device list
+  (`PyAudio initialized. Available devices:`) with indices, channel counts,
+  and sample rates. The same physical device usually appears once per host
+  API (MME / DirectSound / WASAPI); any entry opens the same hardware.
+
+### 2. Lock the device in `ft710.env`
+
+Edit `%LOCALAPPDATA%\MRRC-FT710\ft710.env` (Start Menu → `Edit
+Configuration`):
+
+```ini
+FT710_AUDIO_RX_DEVICE=USB Audio
+FT710_AUDIO_TX_DEVICE=USB Audio
+```
+
+- `USB Audio` is the common substring of both enumeration forms
+  (`USB Audio CODEC` / `USB Audio Device`), so one value covers every
+  driver variant.
+- A **name substring** is stable across reboots; a numeric **index** is not
+  (it can shift when devices are added/removed).
+- New packages ship these two lines pre-filled in `windows/default.env`.
+- If the PC has **more than one** matching USB audio device (e.g. an
+  external digimode interface), set the **index** from the startup device
+  list instead, e.g. `FT710_AUDIO_RX_DEVICE=4`.
+
+### 3. Windows sound settings
+
+- Do **not** set the radio's USB audio playback device as the Windows
+  **default playback device** — otherwise system and browser sounds would
+  modulate the transmitter whenever PTT is keyed. Keep the PC speakers as
+  default.
+- Optional, avoids OS resampling: Sound control panel → Recording and
+  Playback → the radio's USB audio device → Properties → Advanced → set
+  both to **16 bit, 44100 Hz (CD Quality)**, and disable audio enhancements.
+- RX loudness: Recording → the radio's USB audio device → Levels.
+
+### 4. FT-710 menu settings
+
+RX audio needs no menu change — the receiver AF is always present on the
+USB audio device.
+
+TX modulation source is configured **per mode** (FT-710 Operation Manual,
+`FUNC` → `RADIO SETTING`):
+
+| Menu | Setting | Value |
+|------|---------|-------|
+| `RADIO SETTING` → `MODE SSB` | `MOD SOURCE` | **`USB`** |
+| `RADIO SETTING` → `MODE AM` | `MOD SOURCE` | `USB` (if AM is used) |
+| `RADIO SETTING` → `MODE FM` | `MOD SOURCE` | `USB` (if FM is used) |
+| `RADIO SETTING` → `MODE PSK/DATA` | `MOD SOURCE` | `USB` (for DATA-U / DATA-L / PSK) |
+
+- `MOD SOURCE` choices: `MIC` (front-panel mic) / `USB` (rear USB jack) /
+  `REAR` (RTTY/DATA jack) / `AUTO`. The factory default `AUTO` selects the
+  modulation input "automatically according to the transmission method" —
+  if PTT keys the radio but there is **no modulation**, set `USB`
+  explicitly.
+- Leave `RPTT SELECT` = `OFF` everywhere: PTT is keyed by CAT command on the
+  Enhanced COM Port, not by RTS/DTR.
+- TX audio level: use the 🎙 Vol slider in the web UI; keep ALC out of the
+  red zone.
+
+### 5. Verify
+
+1. Launcher console shows
+   `RX audio started: [n] ... (USB Audio ...) @ 44100 Hz`.
+2. RX: the browser plays band noise that follows the radio's AF gain.
+3. TX: hold PTT and speak — the PO/ALC meter on the radio (and in the web
+   UI) moves; confirm on a monitoring receiver.
+
+
 ### 4. Launch
 
 Start `MRRC FT-710` from the Start Menu or desktop shortcut. The launcher:
 
 1. Reads `%LOCALAPPDATA%\MRRC-FT710\ft710.env`.
 2. Starts the bundled server and waits for it to answer HTTP before opening
-   `http://127.0.0.1:8888` in the default browser (up to ~15 seconds on the
+   `http://localhost:8888` in the default browser (up to ~15 seconds on the
    first run).
 3. Use Ctrl-C in the launcher window for a graceful stop (audio drains and
    PTT releases first).
@@ -107,6 +192,20 @@ vendor\ftdi\windows\bin\x64\ftd2xx.dll
 If either DLL is missing, the app still runs and uses the S-meter fallback
 spectrum. The fallback is useful for basic activity visualization but does not
 provide true FFT waterfall data.
+
+## Opus Runtime
+
+TX/RX compressed audio needs a Windows `opus.dll`. The package searches:
+
+```text
+opus.dll
+_internal\opus.dll
+vendor\opus\windows\bin\x64\opus.dll
+```
+
+If `TX Opus decoder unavailable: libopus not found` appears, browser TX audio
+may be silent or fall back depending on the client path. Put `opus.dll` in
+`vendor\opus\windows\bin\x64` before building a release package.
 
 Expected FTDI sources are documented in:
 
@@ -190,9 +289,15 @@ After installing on Windows:
 
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
+| `Failed to connect to COM3: could not open port 'COM3': FileNotFoundError` | Default `COM3` does not exist on this Windows machine, or the CP210x driver is not installed | Install the Silicon Labs CP210x driver, reconnect the radio, then set `FT710_SERIAL_PORT=COMx` to the Enhanced COM Port shown in Device Manager |
 | Browser opens but radio state does not update | Wrong COM port | Set `FT710_SERIAL_PORT` to the Enhanced COM Port |
+| `Server did not answer within 15s` while Uvicorn says `http://[::]:8888` | Older launcher probed IPv4 loopback while the server was listening on IPv6 wildcard | Open `http://localhost:8888`, or update to a package with the launcher fix |
+| `TX Opus decoder unavailable: libopus not found` | Missing Windows `opus.dll` | Add `vendor\opus\windows\bin\x64\opus.dll` before building, or install/copy `opus.dll` next to the app |
 | App starts but FT4222 spectrum is unavailable | Missing `FT4222.dll` or `ftd2xx.dll` | Place both DLLs in `vendor\ftdi\windows\bin\x64` before building |
 | Login fails | Wrong password | Check `%LOCALAPPDATA%\MRRC-FT710\ft710.env` |
-| Audio device not found | Windows selected another audio device | Set `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` by name or index |
+| Audio device not found | Windows selected another audio device | Set `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` by name or index (see *Audio (RX/TX) Setup*) |
+| No RX audio, or RX sounds like room noise | Auto-detect picked the laptop mic instead of the FT-710's USB sound card | Lock `FT710_AUDIO_RX_DEVICE=USB Audio` (or the index from the startup device list) |
+| PTT keys but TX audio plays through the PC speakers | Auto-detect picked the wrong output device | Lock `FT710_AUDIO_TX_DEVICE=USB Audio` (or the index) |
+| PTT keys, correct device, but no RF modulation | Radio menu `MOD SOURCE` is `MIC` | Set `FUNC` → `RADIO SETTING` → `MODE SSB` → `MOD SOURCE` = `USB` (see *Audio (RX/TX) Setup*) |
+| Windows/browser sounds are heard on the air during TX | The radio's USB audio device is the Windows default playback device | Set the PC speakers as the Windows default output |
 | Port 8888 already in use | Another local service is listening | Change `FT710_WEB_PORT` |
-

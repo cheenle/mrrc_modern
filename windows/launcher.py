@@ -112,6 +112,18 @@ def load_env(path: Path) -> dict[str, str]:
     return env
 
 
+def local_url(env: dict[str, str]) -> str:
+    port = env.get("FT710_WEB_PORT", DEFAULT_PORT)
+    host = env.get("FT710_WEB_HOST", "127.0.0.1")
+    if host == "::":
+        url_host = "localhost"
+    elif host in ("0.0.0.0", ""):
+        url_host = "127.0.0.1"
+    else:
+        url_host = host
+    return f"http://{url_host}:{port}"
+
+
 def server_executable() -> Path | None:
     exe = app_dir() / "ft710-server.exe"
     if exe.exists():
@@ -152,10 +164,7 @@ def main() -> int:
     cfg = ensure_config()
     seed_mem_channels()
     env = load_env(cfg)
-    port = env.get("FT710_WEB_PORT", DEFAULT_PORT)
-    host = env.get("FT710_WEB_HOST", "127.0.0.1")
-    url_host = "127.0.0.1" if host in ("::", "0.0.0.0", "") else host
-    url = f"http://{url_host}:{port}"
+    url = local_url(env)
 
     print(APP_NAME)
     print(f"Config: {cfg}")

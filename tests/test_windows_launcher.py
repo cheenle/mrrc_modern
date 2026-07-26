@@ -7,6 +7,18 @@ from windows import launcher
 
 
 class WindowsLauncherTests(unittest.TestCase):
+    def test_local_url_uses_localhost_for_ipv6_wildcard_bind(self):
+        self.assertEqual(
+            launcher.local_url({"FT710_WEB_HOST": "::", "FT710_WEB_PORT": "8888"}),
+            "http://localhost:8888",
+        )
+
+    def test_local_url_uses_loopback_for_ipv4_wildcard_bind(self):
+        self.assertEqual(
+            launcher.local_url({"FT710_WEB_HOST": "0.0.0.0", "FT710_WEB_PORT": "8888"}),
+            "http://127.0.0.1:8888",
+        )
+
     def test_load_env_makes_ftdi_dir_absolute(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

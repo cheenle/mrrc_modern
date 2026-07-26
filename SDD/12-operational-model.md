@@ -38,6 +38,8 @@ Yaesu FT-710
 | `FT710_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, SCU-LAN10) |
 | `FT710_SCOPE_BAUD` | `115200` | Scope serial baud rate |
 | `FT710_MEM_FILE` | `mem_channels.json` | Memory channel store (Windows launcher uses `%LOCALAPPDATA%`) |
+| `FT710_AUDIO_RX_DEVICE` | *(auto)* | Audio input device — index or name substring; Windows package pre-locks `USB Audio` (FT-710 built-in sound card) |
+| `FT710_AUDIO_TX_DEVICE` | *(auto)* | Audio output device — index or name substring; Windows package pre-locks `USB Audio` |
 | `.ft710-server.pid` | runtime | Process ID for start/stop scripts |
 
 ## 12.3 Startup Modes

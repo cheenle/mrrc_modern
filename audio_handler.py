@@ -38,6 +38,13 @@ RX_CHANNELS = 1
 TX_SAMPLE_RATE = 44100       # FT-710 native USB audio rate
 TX_CHANNELS = 1
 
+# Generic enumeration names of the FT-710's built-in USB sound card on
+# Windows — the exact string varies by driver/OS build ("USB Audio CODEC"
+# or "USB Audio Device") and may be localized ("麦克风 (USB Audio Device)")
+# or prefixed ("2- USB Audio CODEC"), so match case-insensitive substrings.
+# "USB Audio" is the common prefix of both forms.
+USB_AUDIO_NAME_HINTS = ('usb audio codec', 'usb audio device')
+
 # ── TX jitter-buffer config ────────────────────────────────────────────
 # The browser delivers one 20 ms Opus frame per ~20 ms over WebSocket, but
 # network jitter (especially mobile/Wi-Fi power-save) makes arrivals bursty.
@@ -134,9 +141,14 @@ class AudioHandler:
         Priority:
         1. Explicit device index/name from config (env FT710_AUDIO_RX_DEVICE)
         2. Name match: "FT-710", "FT710", "YAESU"
-        3. FT-710 heuristics: single input channel (in=1) — FT-710 USB audio
+        3. Name match: USB_AUDIO_NAME_HINTS — the FT-710's built-in USB
+           sound card enumerates under a generic name on Windows ("USB
+           Audio CODEC" or "USB Audio Device", no "FT-710" in it);
+           localized Windows wraps it ("麦克风 (USB Audio Device)") and
+           PortAudio may prefix it ("2- USB Audio CODEC")
+        4. FT-710 heuristics: single input channel (in=1) — FT-710 USB audio
            has one mono RX input, unlike stereo USB mics (in=2)
-        4. Fallback: first device with any input channels
+        5. Fallback: first device with any input channels
         """
         if self.rx_device is not None:
             return self.rx_device
@@ -173,6 +185,32 @@ class AudioHandler:
                 if 'FT-710' in name or 'FT710' in name or 'YAESU' in name.upper():
                     logger.info("Found FT-710 audio input: [%d] %s", i, name)
                     return i
+
+        # The FT-710's built-in USB sound card enumerates on Windows under a
+        # generic name (USB_AUDIO_NAME_HINTS). The same physical device
+        # usually appears once per host API (MME/DirectSound/WASAPI); every
+        # entry opens the same hardware, so the first match is safe. When
+        # several *distinct* codec devices exist (e.g. an external digimode
+        # interface), warn and let the operator lock the choice via
+        # FT710_AUDIO_RX_DEVICE.
+        codec_matches = []
+        for i in range(self._pa.get_device_count()):
+            info = self._pa.get_device_info_by_index(i)
+            if info.get('maxInputChannels', 0) > 0:
+                name = info.get('name', '')
+                if any(h in name.lower() for h in USB_AUDIO_NAME_HINTS):
+                    codec_matches.append((i, name))
+        if codec_matches:
+            idx, name = codec_matches[0]
+            logger.info("Using USB audio input (FT-710 built-in sound card): [%d] %s",
+                        idx, name)
+            if len(codec_matches) > 1:
+                logger.warning(
+                    "Multiple USB audio inputs: %s — using [%d]. If RX "
+                    "picks the wrong one, set FT710_AUDIO_RX_DEVICE to the index "
+                    "from the startup device list.",
+                    ', '.join(f"[{i}] {n}" for i, n in codec_matches), idx)
+            return idx
 
         # Heuristic: FT-710 USB audio has exactly 1 input channel (mono RX)
         # Most other "USB Audio CODEC" devices have 2 (stereo). Prefer mono.
@@ -318,8 +356,11 @@ class AudioHandler:
         Priority:
         1. Explicit device from config (env FT710_AUDIO_TX_DEVICE)
         2. Name match: "FT-710", "FT710", "YAESU"
-        3. Heuristic: device with both input AND output (full-duplex USB audio)
-        4. Fallback: system default output
+        3. Name match: USB_AUDIO_NAME_HINTS — the FT-710's built-in USB
+           sound card enumerates under a generic name on Windows ("USB
+           Audio CODEC" or "USB Audio Device")
+        4. Heuristic: device with both input AND output (full-duplex USB audio)
+        5. Fallback: system default output
         """
         if self.tx_device is not None:
             return self.tx_device
@@ -351,6 +392,29 @@ class AudioHandler:
                 if 'FT-710' in name or 'FT710' in name or 'YAESU' in name.upper():
                     logger.info("Found FT-710 audio output: [%d] %s", i, name)
                     return i
+
+        # The FT-710's built-in USB sound card enumerates on Windows under a
+        # generic name (USB_AUDIO_NAME_HINTS; see _find_rx_device). Prefer
+        # it over the full-duplex heuristic, which can grab a random sound
+        # card and pipe TX modulation to the PC speakers instead of the radio.
+        codec_matches = []
+        for i in range(self._pa.get_device_count()):
+            info = self._pa.get_device_info_by_index(i)
+            if info.get('maxOutputChannels', 0) > 0:
+                name = info.get('name', '')
+                if any(h in name.lower() for h in USB_AUDIO_NAME_HINTS):
+                    codec_matches.append((i, name))
+        if codec_matches:
+            idx, name = codec_matches[0]
+            logger.info("Using USB audio output (FT-710 built-in sound card): [%d] %s",
+                        idx, name)
+            if len(codec_matches) > 1:
+                logger.warning(
+                    "Multiple USB audio outputs: %s — using [%d]. If TX "
+                    "plays through the wrong device, set FT710_AUDIO_TX_DEVICE "
+                    "to the index from the startup device list.",
+                    ', '.join(f"[{i}] {n}" for i, n in codec_matches), idx)
+            return idx
 
         # Heuristic: prefer a device that has BOTH input and output
         # (full-duplex USB audio like FT-710)

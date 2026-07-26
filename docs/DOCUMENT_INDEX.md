@@ -1,7 +1,7 @@
 # FT-710 Web Control — 完整文档索引
 
-**最后更新**: 2026-07-20  
-**文档总数**: 17 份核心 + 10 份 iOS  
+**最后更新**: 2026-07-25  
+**文档总数**: 18 份核心 + 10 份 iOS  
 **版本**: v2.2.0
 
 ---
@@ -34,6 +34,7 @@
 | [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | 修复详细说明（含 TX 分析） | 开发者 |
 | [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | CAT 命令参考 | 开发者 |
 | [AGENTS.md](AGENTS.md) | Agnes 代理配置 | 开发者 |
+| [win_pack.md](win_pack.md) | Windows 安装包打包手册（ham.vlsc.net KVM 虚拟机全流程） | 开发者/发布 |
 
 ### 🔍 专项分析
 | 文档 | 说明 | 读者 |

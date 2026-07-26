@@ -196,6 +196,12 @@
 <td><code>/api/mem_channels</code> GET/POST with JSON persistence</td>
 </tr>
 <tr>
+<td>ATR1000Service</td>
+<td>Optional</td>
+<td>Implemented</td>
+<td><code>/WSatr1000</code> Browser↔︎Server: optional external-tuner state + tune assist, token-gated, closed when disabled</td>
+</tr>
+<tr>
 <td>AuthService</td>
 <td>Support</td>
 <td>Implemented</td>
@@ -304,6 +310,12 @@ AuthService
 <td>GET request</td>
 <td>Full radio state JSON (50+ fields)</td>
 <td>HTTP <code>/api/status</code></td>
+</tr>
+<tr>
+<td>ATR1000Service</td>
+<td>JSON <code>atrTune</code> / <code>ping</code></td>
+<td>JSON <code>atrState</code> / <code>atrTuneResult</code> / <code>pong</code></td>
+<td>WS <code>/WSatr1000</code></td>
 </tr>
 </tbody>
 </table>

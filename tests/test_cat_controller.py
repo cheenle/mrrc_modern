@@ -4,6 +4,7 @@ Verifies: command formatting, response parsing, protocol correctness.
 All tests run without hardware (mock the serial port).
 """
 import asyncio
+import serial
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -191,6 +192,26 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(ok)
         cat.set.assert_awaited_once_with("SH0013")
+
+    async def test_connect_failure_logs_available_serial_ports(self):
+        cat = CatController("COM3")
+        fake_port = MagicMock()
+        fake_port.device = "COM7"
+        fake_port.description = "Silicon Labs CP210x USB to UART Bridge"
+        fake_port.hwid = "USB VID:PID=10C4:EA60"
+
+        with (
+            patch("cat_controller.serial.Serial", side_effect=serial.SerialException("missing")),
+            patch("cat_controller.serial.tools.list_ports.comports", return_value=[fake_port]),
+            self.assertLogs("ft710.cat", level="ERROR") as logs,
+        ):
+            ok = await cat.connect()
+
+        self.assertFalse(ok)
+        joined = "\n".join(logs.output)
+        self.assertIn("Available serial ports", joined)
+        self.assertIn("COM7", joined)
+        self.assertIn("CP210x", joined)
 
     async def test_query_command_is_send_without_value(self):
         """Query commands send prefix only (no value)."""

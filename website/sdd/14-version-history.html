@@ -141,6 +141,66 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.6</td>
+<td>2026-07-26</td>
+<td>Kimi</td>
+<td><strong>Windows RX/TX audio device lock + setup guide</strong>. Field report: Windows install with working CAT/FT4222 spectrum had broken audio — the FT-710’s built-in USB sound card enumerates on Windows under a generic name (no “FT-710”/“YAESU” in it): <code>USB Audio CODEC</code> on some driver/OS builds, <code>USB Audio Device</code> on others (confirmed on the reporter’s machine), possibly localized like <code>麦克风 (USB Audio Device)</code> or prefixed <code>2- USB Audio CODEC</code>. AD-008 name matching missed it and the mono/full-duplex heuristics grabbed a laptop mic (RX) or PC speakers (TX). <code>audio_handler.py</code> adds a generic USB-audio name tier (<code>USB_AUDIO_NAME_HINTS</code>, case-insensitive substring) after the FT-710-specific names and before the channel heuristics, for both <code>_find_rx_device</code> and <code>_find_tx_device</code>; multiple matches (per-host-API duplicates open the same hardware) use the first and log a warning pointing at the env-var lock. <code>windows/default.env</code> now pre-locks <code>FT710_AUDIO_RX_DEVICE</code>/<code>FT710_AUDIO_TX_DEVICE=USB Audio</code> — the common substring of both enumeration forms (name is reboot-stable; index is not). <code>docs/WINDOWS_INSTALLER_GUIDE.md</code> gains an “Audio (RX/TX) Setup” section: device identification from the startup PortAudio device list, env-var locking, Windows sound-panel guidance (never make the radio’s USB audio the default playback device — system sounds would modulate the transmitter; optional 16-bit/44.1kHz formats), and the radio-side modulation routing verified against the FT-710 Operation Manual — <code>RADIO SETTING</code> → <code>MODE SSB</code> (and AM/FM/PSK-DATA) → <code>MOD SOURCE</code> = <code>USB</code> (default <code>AUTO</code> selects by transmission method), <code>RPTT SELECT</code> stays <code>OFF</code> since PTT is CAT-keyed. Troubleshooting table gains 4 audio rows. SDD: AD-008 decision/rationale, NFR-065, §12.2 config table, I2 marked Resolved (implemented under the <code>FT710_AUDIO_RX/TX_DEVICE</code> names). 8 new tests (<code>USBCodecDeviceSelectionTests</code>); suite 385 tests. Docs: tests/README counts, AGENTS.md module table, README env examples.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.5</td>
+<td>2026-07-26</td>
+<td>Codex</td>
+<td><strong>Windows installed-app diagnostics and runtime discovery fixes after field log review</strong>. Root cause visible in the Windows console: default <code>FT710_SERIAL_PORT=COM3</code> did not exist (<code>FileNotFoundError</code>), so CAT was offline and scope init could not run; CAT connect failure now logs the currently visible serial ports to satisfy R1 mitigation. Launcher local URL selection now maps IPv6 wildcard <code>FT710_WEB_HOST=::</code> to <code>http://localhost:&lt;port&gt;</code> instead of probing <code>127.0.0.1</code>, avoiding a false 15s startup warning when Uvicorn listens on <code>[::]</code>. <code>opus_rx.py</code> now searches packaged Windows <code>opus.dll</code> locations (<code>opus.dll</code>, <code>_internal\opus.dll</code>, <code>vendor\opus\windows\bin\x64\opus.dll</code>), and the Windows build script warns/copies <code>vendor\opus\windows</code> when present. Docs: Windows installer troubleshooting for COM3/CP210x, libopus, and localhost; README test count. Tests: 4 new regression tests; suite 377 tests.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.4</td>
+<td>2026-07-25</td>
+<td>Kimi</td>
+<td><strong>Optional ATR1000 networked antenna-tuner linkage, ported from the sibling mrrc project</strong>. Default disabled: <code>FT710_ATR1000_HOST</code> (empty = off) + <code>FT710_ATR1000_PORT</code> (default 60001); when off there is no client task, no network traffic, linkage hooks short-circuit, <code>/WSatr1000</code> closes with code 4000, and the frontend module stays inert — zero impact on existing installs. New backend modules: <code>atr1000_client.py</code> (asyncio-native WS client to the tuner hardware: binary frames [0xFF,CMD,LEN,DATA], 5s reconnect, 55-min proactive refresh, TX-no-SYNC policy with 15s watchdog, tuning-clear heuristics, 5s-throttled relay writes, LearningBuffer 4-sample stability-window learning, <code>notify_freq</code>/<code>notify_tx</code> sync hooks, <code>on_change</code> callback) and <code>atr1000_tuner.py</code> (<code>TunerStorage</code> LC-learning JSON store ported verbatim: learn gate SWR 1.0–1.8, 1kHz keys ±5kHz nearest, atomic writes; store file <code>atr1000_tuner.json</code>). <strong>3 linkage behaviors</strong>: (1) freq change → auto-apply learned LC relays (hooked in <code>_broadcast_state</code> on vfo_a_freq/vfo_b_freq/active_vfo dirty — dirty holds source fields only); (2) TX on/off → <code>notify_tx</code> (device push mode, learning window); (3) server-side tune assist <code>_atr_tune_assist()</code>: TX2 carrier → skip if SWR≤1.6 → snapshot relays → full tune (mode=2) → keep+learn if SWR improved ≥0.02 else rollback relays → carrier always dropped in <code>finally</code> (module constants ATR_TUNE_*: 0.3s settle, 5s min, 45s deadline, 0.8s compare settle, 2.5s meter wait). <strong>New 5th WS endpoint <code>/WSatr1000</code></strong> (<code>?token=</code> auth, JSON both ways): server→client <code>atrState</code> (connected/power/swr/sw/ind/cap/ind_uh/cap_pf/tuning/tx/freq/last_update), <code>atrTuneResult</code> (start/skipped/success/rollback/error), pong; client→server <code>atrTune</code>, <code>ping</code>. <code>fullState</code> gains <code>atr1000Enabled</code>. <strong>Frontend</strong>: new <code>static/modules/atr1000.js</code> (WS client, exponential-backoff reconnect, meter row, ATR TUNE button) activated only via <code>window.ATR1000.init(msg.atr1000Enabled===true)</code>; new hidden-by-default <code>#atr-row</code> in the meters section (power bar, SWR bar, <code>LC L=x C=y</code> relay text, tuning indicator, TUNE button with ··· progress + toast). Radio-internal TUNE (TX2+AC003) untouched. <strong>Architecture simplification vs mrrc</strong>: its 4-layer chain (browser→Tornado→unix socket→proxy→device) collapsed to a single-process direct async client; its browser-side tune assist moved server-side (avoids mrrc’s documented PTT-delay/main-thread-blocking incident); ATR data deliberately kept out of RadioState (separate channel, same precedent as spectrum); audio path untouched. Cache busting: sw.js <code>ft710-v21</code>, css v18, main v21, ui v20, settings_manager v13, atr1000.js v1. 98 new tests across 3 files (<code>test_atr1000_tuner.py</code> 36, <code>test_atr1000_client.py</code> 50, <code>test_atr1000_server.py</code> 12); suite 372 tests across 21 modules. Docs: AGENTS.md module table + env vars, Ch9 §9.8, Ch10 service row, Ch11 component rows, Ch15 tune-assist note, tests/README counts, README WS/env tables. <strong>Follow-up (2026-07-26)</strong>: lifespan primes the linkage with the current freq/TX at boot (startup state sync predates the client); frozen-app store path — <code>FT710_ATR1000_STORE</code> env overrides the TunerStorage file (Windows launcher points it at the user data dir so learned data stays writable and survives reinstalls), PyInstaller spec hiddenimports both ATR modules; startup log line for the enabled feature. Suite 373 tests.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.3</td>
+<td>2026-07-25</td>
+<td>Kimi</td>
+<td><strong>All frontend settings unified to cookie storage</strong>. Previously persistence was split: <code>ft710_user_settings</code>/<code>ft710_afVol</code>/scope display options (<code>ft710_scopeFloor/Ceil/Theme</code>) in localStorage, memory channels inconsistently in sessionStorage (<code>ft710_main.js</code>) and localStorage (<code>ft710_ui.js</code>). <code>settings_manager.js</code> now provides generic <code>setCookie</code>/<code>getCookie</code> helpers (1-year <code>max-age</code>, <code>path=/</code>, <code>SameSite=Lax</code>, URI-encoded) used by every call site; a one-time migration moves the six legacy localStorage keys plus the sessionStorage memory-channel copy into cookies on first load, then removes them. Side benefit: memory channels now survive browser restarts (sessionStorage did not). <strong>Mic gain now persists too</strong>: it was the one slider saved nowhere (radio-side CAT only, re-polled on every connect) — the slider’s change handler stores <code>ft710_micGain</code> in a cookie and <code>_applySavedMicGain()</code> pushes it back to the radio on every fullState when it differs from the polled value. <strong>New device-side mic gain (🎙 Vol)</strong>: a software <code>GainNode</code> on the browser mic capture graph (all three TX capture paths: AudioWorklet, ScriptProcessor fallback, PCM fallback), slider 0–200 → linear 0–2× (100 = unity), persisted as <code>ft710_micVol</code> — browser-local like 🔊 Vol and independent of the radio’s CAT <code>mic_gain</code>. <code>index.html</code> cache-bust query strings bumped (settings_manager v13, main/ui v20) and <code>sw.js</code> cache <code>ft710-v18</code>→<code>v20</code>. 3 new tests (<code>CookieSettingsPersistenceTests</code>), cache-bust assertions v18→v19; suite 274 tests. Docs: AGENTS.md module table, Ch11 SettingsManager row, tests/README counts.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.2</td>
+<td>2026-07-25</td>
+<td>Kimi</td>
+<td><strong>Windows installer deep-audit fixes</strong> (packaging chain reviewed end-to-end; PyInstaller 6.21.0 onedir layout reproduced locally for evidence). <strong>P0 — packaged web UI 404</strong>: PyInstaller 6 onedir places datas under <code>_internal/</code>, but <code>STATIC_DIR</code> resolved next to the exe, so the installed app served only the inline fallback login page and “Static files not found” (the V1.6.0 “web login OK” verification passed <em>because</em> the fallback page works). <code>server.py</code> gains <code>_resource_dir()</code> (<code>sys._MEIPASS</code>-aware, same pattern <code>scope_libraries.get_resource_roots()</code> already used) for <code>STATIC_DIR</code>; launcher’s starter-channel seeding also checks <code>_internal/mem_channels.json</code>. <strong>P1 — scope_pipe orphan</strong>: on Windows, <code>proc.terminate()</code> kills only the onefile bootloader; the real child inherited the stdout pipe, blocked forever on write, and held the FT4222 device. <code>scope_pipe.py</code> now emits the len=0 stdout heartbeat its docstring always promised (1 s) — a dead parent closes the pipe, the next write raises EPIPE, and the pipe exits through its normal cleanup. <strong>P1 — silent build failures</strong>: <code>build.ps1</code> wrapped all native commands (<code>python</code>, <code>pyinstaller</code>, <code>iscc</code>) in <code>Invoke-Checked</code> (<code>$LASTEXITCODE</code> — <code>$ErrorActionPreference</code> never covered native commands), and no longer ships <code>windows/__pycache__</code>. <strong>P2 — launcher self-spawn chain</strong>: frozen launcher with a missing <code>ft710-server.exe</code> (e.g. antivirus quarantine) used to “fall back” to <code>[sys.executable, server.py]</code> = spawning itself recursively; it now reports the missing exe and exits 1. <strong>P2 — version drift</strong>: installer <code>AppVersion</code> 1.6.0 → 1.6.3 (app CHANGELOG v1.6.3); new <code>packaging/windows/requirements-build.txt</code> pins <code>pyinstaller==6.21.0</code>; installer guide updated. Stale cache-bust test assertions corrected (v17→v18). 9 new tests (<code>ResourceDirTests</code>, launcher seed/self-spawn tests, <code>ScopePipeHeartbeatTests</code>, build-script abort assertion); suite 271 tests. Docs: tests/README counts, AGENTS.md scope_pipe row, README test count.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
 <td>SDD V2.1</td>
 <td>2026-07-22</td>
 <td>Kimi</td>

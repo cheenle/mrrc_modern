@@ -15,6 +15,7 @@ from opus_rx import (
     DEFAULT_BITRATE,
     MIN_BITRATE,
     MAX_BITRATE,
+    _libopus_candidates,
 )
 
 
@@ -59,6 +60,25 @@ class OpusConstantsTests(unittest.TestCase):
     def test_bitrate_range(self):
         self.assertLess(MIN_BITRATE, DEFAULT_BITRATE)
         self.assertLess(DEFAULT_BITRATE, MAX_BITRATE)
+
+    def test_windows_packaged_opus_dll_candidates_are_checked(self):
+        candidates = [
+            str(path)
+            for path in _libopus_candidates(
+                platform="win32",
+                resource_roots=[Path(r"C:\Program Files\MRRC FT-710")],
+                find_library_result=None,
+            )
+        ]
+        self.assertIn(r"C:\Program Files\MRRC FT-710\opus.dll", candidates)
+        self.assertIn(
+            r"C:\Program Files\MRRC FT-710\_internal\opus.dll",
+            candidates,
+        )
+        self.assertIn(
+            r"C:\Program Files\MRRC FT-710\vendor\opus\windows\bin\x64\opus.dll",
+            candidates,
+        )
 
 
 class TxFrontendContractTests(unittest.TestCase):
@@ -431,6 +451,128 @@ class AudioDeviceDetectionTests(unittest.TestCase):
             self.assertFalse(
                 "FT-710" in name or "FT710" in name or "YAESU" in name.upper()
             )
+
+
+class _FakePyAudio:
+    """Minimal PyAudio stand-in for device-selection tests."""
+
+    def __init__(self, devices):
+        self._devices = devices
+
+    def get_device_count(self):
+        return len(self._devices)
+
+    def get_device_info_by_index(self, i):
+        return self._devices[i]
+
+    def get_default_output_device_info(self):
+        for i, d in enumerate(self._devices):
+            if d.get("maxOutputChannels", 0) > 0:
+                return {**d, "index": i}
+        raise OSError("no default output")
+
+
+def _dev(name, inputs=0, outputs=0):
+    return {
+        "name": name,
+        "maxInputChannels": inputs,
+        "maxOutputChannels": outputs,
+        "defaultSampleRate": 44100,
+    }
+
+
+class USBCodecDeviceSelectionTests(unittest.TestCase):
+    """SDD AD-008: generic USB-audio name tier (FT-710 built-in sound card
+    on Windows — enumerates as "USB Audio CODEC" or "USB Audio Device"
+    depending on driver/OS) must win over the mono / full-duplex heuristics,
+    which otherwise grab a laptop mic or PC speakers and silently break RX/TX."""
+
+    def _make_handler(self, devices):
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h.rx_device = None
+        h.tx_device = None
+        h._pa = _FakePyAudio(devices)
+        return h
+
+    def test_rx_prefers_usb_codec_over_mono_heuristic(self):
+        # Mono webcam mic enumerates first; the codec must still win by name.
+        h = self._make_handler([
+            _dev("Mono Webcam Mic", inputs=1),
+            _dev("麦克风 (USB Audio CODEC)", inputs=1),
+        ])
+        self.assertEqual(h._find_rx_device(), 1)
+
+    def test_rx_uses_first_codec_match_when_duplicated_per_host_api(self):
+        # Same physical device under MME + WASAPI — first match is fine.
+        h = self._make_handler([
+            _dev("麦克风 (USB Audio CODEC)", inputs=1),
+            _dev("Microphone (USB Audio CODEC)", inputs=1),
+        ])
+        self.assertEqual(h._find_rx_device(), 0)
+
+    def test_tx_prefers_usb_codec_over_full_duplex_heuristic(self):
+        # A full-duplex laptop sound card must not steal TX modulation.
+        h = self._make_handler([
+            _dev("Realtek Full-Duplex Card", inputs=2, outputs=2),
+            _dev("扬声器 (USB Audio CODEC)", outputs=2),
+        ])
+        self.assertEqual(h._find_tx_device(), 1)
+
+    def test_tx_uses_first_codec_match_when_duplicated_per_host_api(self):
+        h = self._make_handler([
+            _dev("Speakers (2- USB Audio CODEC)", outputs=2),
+            _dev("扬声器 (USB Audio CODEC)", outputs=2),
+        ])
+        self.assertEqual(h._find_tx_device(), 0)
+
+    def test_rx_matches_usb_audio_device_variant(self):
+        # Field report: some Windows driver/OS builds enumerate the FT-710
+        # sound card as "USB Audio Device" instead of "USB Audio CODEC".
+        h = self._make_handler([
+            _dev("Built-in Microphone", inputs=2),
+            _dev("麦克风 (USB Audio Device)", inputs=1),
+        ])
+        self.assertEqual(h._find_rx_device(), 1)
+
+    def test_tx_matches_usb_audio_device_variant(self):
+        h = self._make_handler([
+            _dev("Built-in Speakers", outputs=2),
+            _dev("扬声器 (USB Audio Device)", outputs=2),
+        ])
+        self.assertEqual(h._find_tx_device(), 1)
+
+    def test_common_prefix_lock_matches_both_variants(self):
+        import config
+        old_rx, old_tx = config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE
+        config.AUDIO_RX_DEVICE = "USB Audio"
+        config.AUDIO_TX_DEVICE = "USB Audio"
+        try:
+            h = self._make_handler([
+                _dev("Built-in Microphone", inputs=2),
+                _dev("USB Audio Device", inputs=1, outputs=2),
+                _dev("Built-in Speakers", outputs=2),
+            ])
+            self.assertEqual(h._find_rx_device(), 1)
+            self.assertEqual(h._find_tx_device(), 1)
+        finally:
+            config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
+
+    def test_explicit_name_lock_still_wins(self):
+        import config
+        old_rx, old_tx = config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE
+        config.AUDIO_RX_DEVICE = "USB Audio CODEC"
+        config.AUDIO_TX_DEVICE = "USB Audio CODEC"
+        try:
+            h = self._make_handler([
+                _dev("Built-in Microphone", inputs=2),
+                _dev("USB Audio CODEC", inputs=1, outputs=2),
+                _dev("Built-in Speakers", outputs=2),
+            ])
+            self.assertEqual(h._find_rx_device(), 1)
+            self.assertEqual(h._find_tx_device(), 1)
+        finally:
+            config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
 
 
 if __name__ == "__main__":

@@ -1,10 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
+import sys
 
 
 ROOT = Path(SPECPATH).parents[1]
 DIST_ROOT = ROOT / "dist" / "windows" / "_pyinstaller"
+
+
+# The vendor/ftdi runtime tree is platform-specific. Ship the Windows DLLs
+# only on Windows; on macOS ship the .dylib tree if present (scope falls back
+# to the S-meter spectrum when it is absent, so omission is non-fatal).
+_ftdi_data = []
+if sys.platform == "win32":
+    _ftdi_root = ROOT / "vendor" / "ftdi" / "windows"
+    if _ftdi_root.exists():
+        _ftdi_data.append((str(_ftdi_root), "vendor/ftdi/windows"))
+elif sys.platform == "darwin":
+    _ftdi_root = ROOT / "vendor" / "ftdi" / "macos"
+    if _ftdi_root.exists():
+        _ftdi_data.append((str(_ftdi_root), "vendor/ftdi/macos"))
 
 
 a = Analysis(
@@ -14,7 +29,7 @@ a = Analysis(
     datas=[
         (str(ROOT / "static"), "static"),
         (str(ROOT / "mem_channels.json"), "."),
-        (str(ROOT / "vendor" / "ftdi" / "windows"), "vendor/ftdi/windows"),
+        *_ftdi_data,
     ],
     hiddenimports=[
         "serial",

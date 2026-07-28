@@ -10,11 +10,12 @@ This repository contains a Python FastAPI server for Yaesu FT-710 web control pl
 | `cat_controller.py` | Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
 | `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command and post-query stale-read discard; watchdog re-runs scope init (`on_reconnected`) after serial reconnect |
-| `audio_handler.py` | PyAudio sound card capture/playback (44.1kHz native device rate), Opus encode, FT-710 device auto-detection (FT-710/YAESU name, "USB Audio CODEC"/"USB Audio Device" Windows names, mono/full-duplex heuristics) |
+| `audio_handler.py` | PyAudio sound card capture/playback (44.1kHz native device rate; Windows TX prefers the same-codec WASAPI entry at its native 48kHz mix rate — MME 44.1k paces ~1.4x slow and crackles), Opus encode, FT-710 device auto-detection (FT-710/YAESU name, "USB Audio CODEC"/"USB Audio Device" Windows names, mono/full-duplex heuristics); `restart_rx()` reopens RX capture on every TX→RX transition (Windows-only full-duplex wedge workaround); on TX/RX stream-open failure re-initializes PortAudio once and retries with a name-resolved index (USB re-enumeration on radio power cycles invalidates cached device IDs — macOS -9999) |
 | `audio_resample.py` | 44.1kHz ↔ 48kHz frame-aligned SRC (numpy linear interp; 882↔960 = 20ms) |
 | `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz) |
 | `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback |
-| `scope_pipe.py` | Standalone subprocess for FT4222 SPI I/O (avoids asyncio/ctypes conflicts); 1s len=0 stdout heartbeat for dead-parent EPIPE detection |
+| `scope_pipe.py` | Standalone subprocess for FT4222 SPI I/O (avoids asyncio/ctypes conflicts); 1s len=0 stdout heartbeat + stdin-EOF for dead-parent detection; stdin `TX:1`/`TX:0` control — SPI reads pause while TX (radio garbles scope stream); resync = device close/settle/reopen (byte-by-byte resync impossible: per-byte SingleRead = separate SPI transaction); server kills it via process tree (`taskkill /T`) on Windows |
+| `ssl_bootstrap.py` | First-run self-signed TLS cert generation (ECDSA P-256, 10y, SANs localhost/hostname/LAN IPs) so the desktop launcher starts HTTPS by default; `FT710_SSL_CERT/KEY` override, `FT710_SSL=off` escape |
 | `scope_frame.py` | Shared frame parsing, pipe payload encode/decode, quality metrics |
 | `scope_libraries.py` | FTDI library discovery and SPI clock configuration |
 | `config.py` | Mode tables, bands, filter widths, S-meter calibration, all constants |

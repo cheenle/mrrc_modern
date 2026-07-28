@@ -33,6 +33,7 @@ pyaudio>=0.2.11
 #           S-meter-based synthetic spectrum fallback (Gaussian peaks).
 numpy>=1.24.0
 
-# ── Optional: TLS/SSL (for HTTPS) ─────────────────────────────────────────
-# Uncomment if you need SSL certificate support (HTTPS):
-# cryptography>=41.0.0
+# ── TLS/SSL (HTTPS) ─────────────────────────────────────────────────────────
+# Used by ssl_bootstrap.py: the desktop launcher generates a self-signed
+# certificate on first run so the app starts on HTTPS by default.
+cryptography>=41.0.0

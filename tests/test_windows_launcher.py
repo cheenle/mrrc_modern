@@ -109,5 +109,56 @@ class WindowsLauncherTests(unittest.TestCase):
             self.assertEqual(Path(cmd[1]).name, "server.py")
 
 
+class WindowsLauncherSslTests(unittest.TestCase):
+    """SDD V2.10: launcher starts the server on HTTPS by default."""
+
+    def test_build_command_without_ssl_pair_keeps_no_ssl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app_root = Path(tmp)
+            (app_root / "ft710-server.exe").write_text("x", encoding="utf-8")
+            with patch.object(launcher, "app_dir", return_value=app_root):
+                cmd = launcher.build_command(None)
+            self.assertIn("--no-ssl", cmd)
+
+    def test_build_command_with_ssl_pair_passes_cert_args(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app_root = Path(tmp)
+            (app_root / "ft710-server.exe").write_text("x", encoding="utf-8")
+            pair = (Path(tmp) / "server.crt", Path(tmp) / "server.key")
+            with patch.object(launcher, "app_dir", return_value=app_root):
+                cmd = launcher.build_command(pair)
+            self.assertNotIn("--no-ssl", cmd)
+            self.assertIn("--ssl-cert", cmd)
+            self.assertIn("--ssl-key", cmd)
+            self.assertIn(str(pair[0]), cmd)
+            self.assertIn(str(pair[1]), cmd)
+
+    def test_local_url_secure_uses_https(self):
+        self.assertEqual(
+            launcher.local_url({"FT710_WEB_PORT": "8888"}, secure=True),
+            "https://127.0.0.1:8888",
+        )
+
+    def test_local_url_default_stays_http(self):
+        self.assertEqual(
+            launcher.local_url({"FT710_WEB_PORT": "8888"}),
+            "http://127.0.0.1:8888",
+        )
+
+    def test_ssl_material_honours_ssl_off(self):
+        self.assertIsNone(launcher.ssl_material({"FT710_SSL": "off"}))
+
+    def test_ssl_material_uses_explicit_existing_cert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cert = Path(tmp) / "my.crt"
+            key = Path(tmp) / "my.key"
+            cert.write_text("c", encoding="utf-8")
+            key.write_text("k", encoding="utf-8")
+            pair = launcher.ssl_material(
+                {"FT710_SSL_CERT": str(cert), "FT710_SSL_KEY": str(key)}
+            )
+            self.assertEqual(pair, (cert, key))
+
+
 if __name__ == "__main__":
     unittest.main()

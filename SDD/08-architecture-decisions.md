@@ -70,6 +70,8 @@
 
 **Consequences**: scope_pipe is independently restartable. Server handles pipe exit gracefully (marks scope disconnected, switches to fallback). Two process lifecycle to manage.
 
+**Amended (V2.7)**: the pipe protocol gains a stdin control channel — the server pushes `TX:1`/`TX:0` on every `tx_status` transition (`_notify_scope_pipe_tx`). While TX is active the pipe pauses SPI reads and freezes all sync/stall recovery counters (the FT-710 garbles its scope stream during TX; reading it previously churned the pipe into `fatal:too_many_reinits` after every PTT), and runs one clean re-sync on TX→RX. stdin EOF (parent died) also stops the pipe. Windows teardown uses `taskkill /PID <pid> /T /F` because `terminate()` only reaches the onefile bootloader and orphans the real worker (which then holds the FT4222: FT_DEVICE_NOT_FOUND for the next pipe).
+
 ## AD-006: Dual-Mode Spectrum (FT4222 + S-Meter Fallback)
 
 | Attribute | Value |
@@ -112,6 +114,8 @@
 
 **Consequences**: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.
 
+**Amended (V2.8)**: Windows full-duplex wedge — on Windows (MME/DirectSound), opening the TX playback stream on the FT-710's C-Media codec silently wedges the RX capture stream (stays open, error-free, delivers silence; field symptom: RX audio perfect after server restart, gone after one PTT). `AudioHandler.restart_rx()` reopens the capture stream on every TX→RX transition (hooked in `_broadcast_state` on `tx_status`), Windows-only; macOS CoreAudio is unaffected and pays no reopen cost.
+
 ## AD-009: 7-Task Adaptive Polling with Bounded Lock Time
 
 | Attribute | Value |
@@ -153,6 +157,8 @@
 **Rationale**: Opus mandates 48 kHz; the FT-710 mandates 44.1 kHz. A stateless numpy linear-interp resampler bridges the two domains per 20 ms frame with exact integer alignment (960→882), costing ~µs per call with zero phase drift. Browser capture at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox).
 
 **Consequences**: Each direction has exactly one SRC step at the server boundary, owned by `audio_resample.py`. Browser and codec stay at 48 kHz; both PyAudio streams run at 44.1 kHz. The v1.0 underrun class of bug is impossible in both domains.
+
+**Amended (V2.9)**: the device-domain rate is host-API-dependent, not universally 44.1 kHz. On macOS CoreAudio the codec runs natively at 44.1 kHz (bridge required, unchanged). On Windows the same C-Media codec's native audio-engine mix rate is 48 kHz, and its MME 44.1 kHz playback path paces ~1.4× slow (measured on the Win11 KVM rig: 50×20 ms writes block 1.36–1.42 s) — the TX drain falls behind, the 400 ms cap drops 24–34 % of voice frames, TX audio crackles. Windows TX therefore opens the same-name WASAPI entry at its native rate (48 kHz) and `feed_tx_audio` passes 48 kHz PCM through unchanged; the 44.1 kHz bridge applies only when the stream rate is actually 44.1 kHz. RX capture stays at 44.1 kHz MME on Windows (paces correctly).
 
 ## AD-012: Active-VFO-Aware Frequency Model
 

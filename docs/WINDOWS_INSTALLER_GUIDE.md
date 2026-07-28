@@ -5,27 +5,35 @@ The package is designed for Windows 11 and Windows 12-class x64 desktop
 systems. It installs a user-launched desktop app with an embedded Python
 runtime; users do not need to install Python manually.
 
-## Download (v1.7.1)
+## Download (v1.7.6)
 
 | File | Size | MD5 |
 |------|------|-----|
-| `MRRC-FT710-Setup.exe` | 30.4 MB | `d9f8851c213af67f12931c3abd6a0469` |
+| `MRRC-FT710-Setup.exe` | 35.0 MB | `6968a10c9c073f2fb2123a9c97e977fb` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
 - GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>
 
-The v1.7.1 package was built on Windows 11 (Python 3.12.4, PyInstaller
-6.21.0, Inno Setup 6.x) with the full 385-test suite green on the build
-machine. It ships the Windows audio device lock (pre-configured
-`FT710_AUDIO_RX/TX_DEVICE=USB Audio` plus the generic USB-audio
-auto-detect tier), the Audio (RX/TX) Setup guide below, and the
-installer diagnostics fixes (see CHANGELOG), on top of v1.7.0's ATR1000
-tuner linkage, cookie-based frontend settings, and device-side mic gain,
-and the v1.6.3 packaging fixes: frozen `_internal` resource resolution,
-scope_pipe stdout heartbeat, hardened `build.ps1`, and the launcher
-self-spawn guard.
+The v1.7.6 package was built on Windows 11 (Python 3.12.4, PyInstaller
+6.21.0, Inno Setup 6.x) with the full 421-test suite green on the build
+machine. Headline feature: **HTTPS by default** — the launcher generates a
+throwaway self-signed certificate on first run and starts the server on
+HTTPS (required for browser audio from phones/other devices; set
+`FT710_SSL=off` for plain HTTP). Also included from v1.7.2–v1.7.5: TX-safe
+spectrum, the Windows full-duplex RX fix, the native WASAPI 48 kHz TX path,
+and bundled libopus (see CHANGELOG).
 
 ## User Installation
+
+> **HTTPS by default (v1.7.6+)**: on first launch the app generates a
+> throwaway self-signed certificate (`%LOCALAPPDATA%\MRRC-FT710\certs\`)
+> and starts on HTTPS — the browser warns "untrusted" once; accept it
+> (Chrome/Edge: Advanced → Proceed; Safari: Show Details → Visit). HTTPS
+> is required for audio when you open the UI from another device
+> (phone/tablet): plain HTTP on a LAN address disables AudioWorklet and
+> the microphone in the browser. To use your own certificate set
+> `FT710_SSL_CERT`/`FT710_SSL_KEY` in `ft710.env`; to go back to plain
+> HTTP set `FT710_SSL=off`.
 
 ### 1. Install required device drivers
 

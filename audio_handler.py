@@ -10,6 +10,7 @@ Uses PyAudio for sound card I/O and libopus for compression.
 
 import asyncio
 import logging
+import sys
 import threading
 import time
 from collections import deque
@@ -17,8 +18,8 @@ from typing import Optional
 
 import numpy as np
 
-from opus_rx import RxOpusEncoder, AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE
-from audio_resample import resample_441_to_48, resample_48_to_441
+from opus_rx import RxOpusEncoder, AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, RX_RATE
+from audio_resample import resample_441_to_48, resample_48_to_441, resample_pcm
 
 logger = logging.getLogger("ft710.audio")
 
@@ -133,6 +134,25 @@ class AudioHandler:
             logger.error("PyAudio init failed: %s", e)
             self._pa = None
 
+    def _reinit_pyaudio(self):
+        """Tear down and re-create the PortAudio context.
+
+        A USB re-enumeration — e.g. every radio power-off/on, where the
+        FT-710's whole USB hub (sound card included) drops and re-enumerates
+        — invalidates the CoreAudio device IDs cached inside PortAudio at
+        Pa_Initialize time.  Every subsequent stream open then fails with
+        -9999 (paUnanticipatedHostError) until PortAudio is re-initialized.
+        Device indices are NOT stable across re-enumeration, so callers
+        must re-run _find_*_device afterwards.
+        """
+        try:
+            if self._pa is not None:
+                self._pa.terminate()
+        except Exception:
+            pass
+        self._pa = None
+        self._init_pyaudio()
+
     # ── RX: Capture from sound card → Opus frames ──────────────────
 
     def _find_rx_device(self) -> Optional[int]:
@@ -193,15 +213,23 @@ class AudioHandler:
         # several *distinct* codec devices exist (e.g. an external digimode
         # interface), warn and let the operator lock the choice via
         # FT710_AUDIO_RX_DEVICE.
-        codec_matches = []
+        codec_matches = []  # (index, name, has_output)
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
                 name = info.get('name', '')
                 if any(h in name.lower() for h in USB_AUDIO_NAME_HINTS):
-                    codec_matches.append((i, name))
+                    codec_matches.append(
+                        (i, name, info.get('maxOutputChannels', 0) > 0))
         if codec_matches:
-            idx, name = codec_matches[0]
+            # When several distinct codec devices exist, prefer the
+            # full-duplex one: the FT-710 USB sound card exposes both input
+            # and output, while a codec-named interloper (headset/interface)
+            # is often input-only. First-index ordering would otherwise route
+            # RX to the wrong device. Same-hardware duplicates across host
+            # APIs share duplex-ness, so first match still wins among them.
+            full_duplex = [m for m in codec_matches if m[2]]
+            idx, name, _ = (full_duplex or codec_matches)[0]
             logger.info("Using USB audio input (FT-710 built-in sound card): [%d] %s",
                         idx, name)
             if len(codec_matches) > 1:
@@ -209,7 +237,7 @@ class AudioHandler:
                     "Multiple USB audio inputs: %s — using [%d]. If RX "
                     "picks the wrong one, set FT710_AUDIO_RX_DEVICE to the index "
                     "from the startup device list.",
-                    ', '.join(f"[{i}] {n}" for i, n in codec_matches), idx)
+                    ', '.join(f"[{i}] {n}" for i, n, _ in codec_matches), idx)
             return idx
 
         # Heuristic: FT-710 USB audio has exactly 1 input channel (mono RX)
@@ -249,24 +277,38 @@ class AudioHandler:
             logger.warning("No audio input device found")
             return False
 
-        try:
-            self._rx_stream = self._pa.open(
-                format=pyaudio.paInt16,
-                channels=RX_CHANNELS,
-                rate=RX_SAMPLE_RATE,
-                input=True,
-                input_device_index=dev,
-                frames_per_buffer=RX_CHUNK_SIZE,
-                stream_callback=None,  # We'll read in the asyncio loop
-            )
-            self._rx_running = True
-            dev_info = self._pa.get_device_info_by_index(dev)
-            logger.info("RX audio started: [%d] %s @ %d Hz (resampled to 48k for Opus)",
-                        dev, dev_info.get('name', ''), RX_SAMPLE_RATE)
-            return True
-        except Exception as e:
-            logger.error("Failed to start RX audio: %s", e)
-            return False
+        for reinit_round in range(2):
+            try:
+                self._rx_stream = self._pa.open(
+                    format=pyaudio.paInt16,
+                    channels=RX_CHANNELS,
+                    rate=RX_SAMPLE_RATE,
+                    input=True,
+                    input_device_index=dev,
+                    frames_per_buffer=RX_CHUNK_SIZE,
+                    stream_callback=None,  # We'll read in the asyncio loop
+                )
+                self._rx_running = True
+                dev_info = self._pa.get_device_info_by_index(dev)
+                logger.info("RX audio started: [%d] %s @ %d Hz (resampled to 48k for Opus)",
+                            dev, dev_info.get('name', ''), RX_SAMPLE_RATE)
+                return True
+            except Exception as e:
+                if reinit_round == 0:
+                    # A USB re-enumeration (radio power cycle) invalidates
+                    # the device IDs PortAudio cached at Pa_Initialize time;
+                    # every open then fails (macOS: -9999) until re-init.
+                    logger.warning("RX open failed (%s) — re-initializing PortAudio", e)
+                    self._reinit_pyaudio()
+                    if self._pa is None:
+                        break
+                    dev = self._find_rx_device()
+                    if dev is None:
+                        logger.error("No audio input device after PortAudio re-init")
+                        break
+                else:
+                    logger.error("Failed to start RX audio: %s", e)
+        return False
 
     def stop_rx(self):
         """Stop RX audio capture."""
@@ -278,6 +320,31 @@ class AudioHandler:
             except Exception:
                 pass
             self._rx_stream = None
+
+    def restart_rx(self):
+        """Close and reopen the RX capture stream (Windows full-duplex fix).
+
+        Windows MME/DirectSound quirk with the FT-710's C-Media USB codec:
+        opening a playback stream on the same device for TX (start_tx)
+        silently wedges the capture side — the RX stream stays open and
+        error-free but delivers silence.  macOS CoreAudio is unaffected
+        (and must not pay the reopen cost per PTT), so this is a no-op
+        off Windows.  Called after every TX→RX transition.  Blocks on
+        PyAudio calls — run via asyncio.to_thread.
+        """
+        import sys as _sys
+        if _sys.platform != "win32":
+            return
+        if self._pa is None or not self._rx_running:
+            return
+        logger.info("RX audio: reopening capture stream after TX (Windows full-duplex workaround)")
+        try:
+            self.stop_rx()
+        except Exception:
+            pass
+        time.sleep(0.05)
+        if not self.start_rx():
+            logger.warning("RX audio restart failed — capture stays down")
 
     def read_rx_chunk(self) -> Optional[bytes]:
         """Read one chunk of int16 PCM audio from the RX stream.
@@ -397,15 +464,24 @@ class AudioHandler:
         # generic name (USB_AUDIO_NAME_HINTS; see _find_rx_device). Prefer
         # it over the full-duplex heuristic, which can grab a random sound
         # card and pipe TX modulation to the PC speakers instead of the radio.
-        codec_matches = []
+        codec_matches = []  # (index, name, has_input)
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxOutputChannels', 0) > 0:
                 name = info.get('name', '')
                 if any(h in name.lower() for h in USB_AUDIO_NAME_HINTS):
-                    codec_matches.append((i, name))
+                    codec_matches.append(
+                        (i, name, info.get('maxInputChannels', 0) > 0))
         if codec_matches:
-            idx, name = codec_matches[0]
+            # When several distinct codec devices exist, prefer the
+            # full-duplex one: the FT-710 USB sound card exposes both input
+            # and output, while a codec-named interloper (headset/interface)
+            # is often output-only. First-index ordering would otherwise send
+            # TX modulation to the wrong device. Same-hardware duplicates
+            # across host APIs share duplex-ness, so first match still wins
+            # among them.
+            full_duplex = [m for m in codec_matches if m[2]]
+            idx, name, _ = (full_duplex or codec_matches)[0]
             logger.info("Using USB audio output (FT-710 built-in sound card): [%d] %s",
                         idx, name)
             if len(codec_matches) > 1:
@@ -413,7 +489,7 @@ class AudioHandler:
                     "Multiple USB audio outputs: %s — using [%d]. If TX "
                     "plays through the wrong device, set FT710_AUDIO_TX_DEVICE "
                     "to the index from the startup device list.",
-                    ', '.join(f"[{i}] {n}" for i, n in codec_matches), idx)
+                    ', '.join(f"[{i}] {n}" for i, n, _ in codec_matches), idx)
             return idx
 
         # Heuristic: prefer a device that has BOTH input and output
@@ -431,6 +507,33 @@ class AudioHandler:
                 logger.info("Using default audio output: [%d] %s",
                            default.get('index'), default.get('name', ''))
                 return default.get('index')
+        except Exception:
+            pass
+        return None
+
+    def _wasapi_tx_variant(self, dev: int):
+        """Windows: find the WASAPI entry of the same output device and its
+        native mix rate.  Returns (index, rate) or None.
+
+        Same-physical-codec entries share the device name across host
+        APIs (MME/DirectSound/WASAPI); the WASAPI entry's
+        defaultSampleRate is the audio engine's native mix rate for the
+        codec (48 kHz on the FT-710's C-Media).
+        """
+        try:
+            chosen_name = self._pa.get_device_info_by_index(dev).get('name', '')
+            for i in range(self._pa.get_device_count()):
+                info = self._pa.get_device_info_by_index(i)
+                if info.get('maxOutputChannels', 0) < 1:
+                    continue
+                if info.get('name', '') != chosen_name:
+                    continue
+                api = self._pa.get_host_api_info_by_index(info.get('hostApi', 0))
+                if 'WASAPI' not in api.get('name', '').upper():
+                    continue
+                rate = int(info.get('defaultSampleRate', 0))
+                if rate > 0:
+                    return (i, rate)
         except Exception:
             pass
         return None
@@ -464,6 +567,19 @@ class AudioHandler:
             logger.warning("No audio output device found for TX")
             return False
 
+        # Windows: prefer the WASAPI entry of the same codec at its native
+        # mix rate (48 kHz).  The C-Media MME 44.1 kHz path paces ~1.4x
+        # slow, starving the drain loop and crackling TX audio (V2.9
+        # field report); WASAPI@48k paces correctly and needs no resample.
+        rate = TX_SAMPLE_RATE
+        if sys.platform == "win32":
+            variant = self._wasapi_tx_variant(dev)
+            if variant is not None:
+                dev, rate = variant
+        self._tx_rate = rate
+        self._tx_prebuffer_bytes = rate * TX_CHANNELS * 2 * TX_PREBUFFER_MS // 1000
+        self._tx_max_buffer_bytes = rate * TX_CHANNELS * 2 * TX_MAX_BUFFER_MS // 1000
+
         # If a TX stream is already active, close it now so CoreAudio can
         # release the device before we try to open a new one.  This also
         # serializes rapid PTT toggles that otherwise race at the AUHAL level.
@@ -486,59 +602,79 @@ class AudioHandler:
         # Retry loop: PortAudio on macOS sometimes fails to open a second
         # half-duplex stream on a full-duplex device when the RX stream is
         # already running.  Staggered back-off (100/200/350 ms) gives the
-        # AUHAL time to settle between attempts.
+        # AUHAL time to settle between attempts.  If all attempts fail, the
+        # likely cause is a USB re-enumeration (radio power cycle) that
+        # invalidated the device IDs cached at Pa_Initialize time — every
+        # open then fails with -9999.  Re-initialize PortAudio once and
+        # retry with a freshly resolved device index.
         START_TX_RETRIES = 3
         _RETRY_DELAYS = (0.100, 0.200, 0.350)
         last_error = None
-        for attempt in range(START_TX_RETRIES):
-            try:
-                stream = self._pa.open(
-                    format=pyaudio.paInt16,
-                    channels=TX_CHANNELS,
-                    rate=TX_SAMPLE_RATE,
-                    output=True,
-                    output_device_index=dev,
-                    frames_per_buffer=RX_CHUNK_SIZE,
-                )
-            except Exception as e:
-                last_error = e
-                if attempt < START_TX_RETRIES - 1:
-                    time.sleep(_RETRY_DELAYS[attempt])
-                continue
+        for reinit_round in range(2):
+            for attempt in range(START_TX_RETRIES):
+                try:
+                    stream = self._pa.open(
+                        format=pyaudio.paInt16,
+                        channels=TX_CHANNELS,
+                        rate=rate,
+                        output=True,
+                        output_device_index=dev,
+                        frames_per_buffer=RX_CHUNK_SIZE,
+                    )
+                except Exception as e:
+                    last_error = e
+                    if attempt < START_TX_RETRIES - 1:
+                        time.sleep(_RETRY_DELAYS[attempt])
+                    continue
 
-            # Success — atomically install the new stream.
-            with self._tx_lock:
-                old = self._tx_stream
-                self._tx_stream = stream
-                self._tx_queue.clear()
-                self._tx_queued_bytes = 0
-                self._tx_primed = False
-                self._tx_written = 0
-                self._tx_write_err = 0
-                self._tx_peak = 0
-            # Reset diagnostic one-shot flags for this TX session.
-            for _k in ('_dbg_no_pcm', '_dbg_no_resample', '_dbg_no_stream',
-                        '_dbg_no_stream_w', '_dbg_not_primed',
-                        '_dbg_first_feed', '_dbg_first_write', '_dbg_write_err'):
-                setattr(self, _k, False)
+                # Success — atomically install the new stream.
+                with self._tx_lock:
+                    old = self._tx_stream
+                    self._tx_stream = stream
+                    self._tx_queue.clear()
+                    self._tx_queued_bytes = 0
+                    self._tx_primed = False
+                    self._tx_written = 0
+                    self._tx_write_err = 0
+                    self._tx_peak = 0
+                # Reset diagnostic one-shot flags for this TX session.
+                for _k in ('_dbg_no_pcm', '_dbg_no_resample', '_dbg_no_stream',
+                            '_dbg_no_stream_w', '_dbg_not_primed',
+                            '_dbg_first_feed', '_dbg_first_write', '_dbg_write_err'):
+                    setattr(self, _k, False)
 
-            if old is not None:
-                with self._tx_write_lock:
-                    try:
-                        old.stop_stream()
-                        old.close()
-                    except Exception:
-                        pass
+                if old is not None:
+                    with self._tx_write_lock:
+                        try:
+                            old.stop_stream()
+                            old.close()
+                        except Exception:
+                            pass
 
-            dev_info = self._pa.get_device_info_by_index(dev)
-            logger.info("TX audio started: [%d] %s @ %d Hz (pre-buffer %dms, cap %dms)%s",
-                        dev, dev_info.get('name', ''), TX_SAMPLE_RATE,
-                        TX_PREBUFFER_MS, TX_MAX_BUFFER_MS,
-                        f" (attempt {attempt + 1})" if attempt > 0 else "")
-            return True
+                dev_info = self._pa.get_device_info_by_index(dev)
+                logger.info("TX audio started: [%d] %s @ %d Hz (pre-buffer %dms, cap %dms)%s",
+                            dev, dev_info.get('name', ''), rate,
+                            TX_PREBUFFER_MS, TX_MAX_BUFFER_MS,
+                            f" (attempt {attempt + 1})" if attempt > 0 else "")
+                return True
+
+            if reinit_round == 0:
+                logger.warning("TX open failed x%d (%s) — re-initializing PortAudio "
+                               "(USB re-enumeration?)", START_TX_RETRIES, last_error)
+                self._reinit_pyaudio()
+                if self._pa is None:
+                    break
+                dev = self._find_tx_device()
+                if dev is None:
+                    logger.error("No audio output device after PortAudio re-init")
+                    break
+                if sys.platform == "win32":
+                    variant = self._wasapi_tx_variant(dev)
+                    if variant is not None:
+                        dev, rate = variant
 
         logger.error("Failed to start TX audio after %d attempts: %s",
-                     START_TX_RETRIES, last_error)
+                     START_TX_RETRIES * 2, last_error)
         return False
 
     def stop_tx(self, graceful: bool = False, drain_ms: int = TX_DRAIN_MS):
@@ -576,7 +712,8 @@ class AudioHandler:
 
         with self._tx_write_lock:  # wait for any in-flight drain-loop write
             if graceful and stream.is_active():
-                budget = TX_SAMPLE_RATE * TX_CHANNELS * 2 * drain_ms // 1000
+                rate = getattr(self, '_tx_rate', TX_SAMPLE_RATE)
+                budget = rate * TX_CHANNELS * 2 * drain_ms // 1000
                 flushed = 0
                 while queue and flushed < budget:
                     data = queue.popleft()
@@ -609,7 +746,11 @@ class AudioHandler:
         """
         if not pcm or len(pcm) < 2:
             return
-        data = resample_48_to_441(pcm)
+        rate = getattr(self, '_tx_rate', TX_SAMPLE_RATE)
+        if rate == RX_RATE:
+            data = pcm  # 48 kHz stream (e.g. Windows WASAPI) — no resample
+        else:
+            data = resample_pcm(pcm, RX_RATE, rate)
         if not data:
             return
         with self._tx_lock:
@@ -624,7 +765,8 @@ class AudioHandler:
             self._tx_queued_bytes += len(data)
             # Cap: drop oldest frames until under the limit (keep at least one
             # so a single oversized frame still plays).
-            while (self._tx_queued_bytes > TX_MAX_BUFFER_BYTES
+            max_bytes = getattr(self, '_tx_max_buffer_bytes', TX_MAX_BUFFER_BYTES)
+            while (self._tx_queued_bytes > max_bytes
                    and len(self._tx_queue) > 1):
                 self._tx_queued_bytes -= len(self._tx_queue.popleft())
 
@@ -647,7 +789,8 @@ class AudioHandler:
                 if stream is None or not stream.is_active():
                     return
                 if not self._tx_primed:
-                    if self._tx_queued_bytes < TX_PREBUFFER_BYTES:
+                    prebuffer = getattr(self, '_tx_prebuffer_bytes', TX_PREBUFFER_BYTES)
+                    if self._tx_queued_bytes < prebuffer:
                         return  # build cushion before first write
                     self._tx_primed = True
                 if not self._tx_queue:

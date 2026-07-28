@@ -15,11 +15,18 @@ Protocol:
   - Every frame: <4-byte BE length><payload>
   - Heartbeat every 1s when idle (len=0): <0x00 0x00 0x00 0x00>
   - Status lines on stderr prefixed with "STATUS:" for machine parsing
+  - Control channel on stdin: "TX:1\n" / "TX:0\n" from the server marks
+    radio transmit (PTT/TUNE) state.  The FT-710 garbles its scope
+    stream during TX, so while TX is active SPI reads pause and all
+    sync/stall recovery counters freeze; one clean re-sync runs when
+    RX resumes.  stdin EOF (parent died) also stops the pipe — a guard
+    against orphaned workers on Windows (see the heartbeat comment).
 """
 import ctypes
 import signal
 import struct
 import sys
+import threading
 import time
 from ctypes import (
     c_void_p, c_uint32, c_uint16, c_uint8, c_bool,
@@ -28,7 +35,6 @@ from ctypes import (
 
 from scope_frame import (
     SCOPE_FRAME_SIZE,
-    SYNC_FULL,
     encode_pipe_payload,
     parse_scope_frame,
 )
@@ -45,12 +51,12 @@ CLK_IDLE_HIGH = 1
 CLK_LEADING = 0
 SYS_CLK_24 = 1
 
-MAX_SYNC_ATTEMPTS = 3
 MAX_CONSECUTIVE_ERRORS = 50
 MAX_REINIT_CYCLES = 5       # consecutive full-device reinitialisations before giving up
 STALL_TIMEOUT = 2.0         # seconds without a successful frame before reinit
 TRANSFER_PROGRESS_SLEEP = 0.002  # sleep between TRANSFER_IN_PROGRESS polls
 STDOUT_HEARTBEAT_S = 1.0    # len=0 keepalive; also detects a dead parent (EPIPE)
+RESYNC_SETTLE_S = 1.0       # idle-bus settle between close and reopen in resync_device
 
 running = True
 
@@ -60,35 +66,63 @@ def stop_running(_signum, _frame):
     running = False
 
 
+# ── TX-aware pause (stdin control channel) ──────────────────────────
+
+def apply_control_line(line: str, state: dict) -> bool:
+    """Apply one stdin control line.  Returns True for known commands.
+
+    state keys: tx_active (bool), tx_resync (bool).  TX:1 marks the
+    radio transmitting (pause SPI reads); TX:0 marks RX again and arms
+    a one-shot clean re-sync.
+    """
+    cmd = line.strip().upper()
+    if cmd == "TX:1":
+        state["tx_active"] = True
+        return True
+    if cmd == "TX:0":
+        if state["tx_active"]:
+            state["tx_resync"] = True
+        state["tx_active"] = False
+        return True
+    return False
+
+
+def _stdin_reader(state: dict):
+    """Background thread: apply server control lines from stdin.
+
+    EOF means the parent closed the pipe (server exited) — stop the main
+    loop.  Extra guard against orphaned workers holding the FT4222 on
+    Windows, where TerminateProcess on the onefile bootloader never
+    reaches the real child process.
+    """
+    global running
+    try:
+        for line in sys.stdin:
+            apply_control_line(line, state)
+    except Exception:
+        pass
+    running = False
+
+
 def emit_status(msg: str):
     """Write a machine-parseable status line to stderr."""
     sys.stderr.write(f"STATUS:{msg}\n")
     sys.stderr.flush()
 
 
-def sync_stream(f4, ft_handle) -> bool:
-    """Read one byte at a time until the 16-byte sync pattern is found.
+def resync_device(d2xx, f4, ft_handle, clock_divider: int):
+    """Close the FT4222, let the bus idle, then reopen it fresh.
 
-    Returns True if sync was found, False if exhausted.
-    Matches wfview ft4222Handler::sync().
+    Replaces the old byte-by-byte re-sync (wfview ft4222Handler::sync):
+    every FT4222 SingleRead is its own SPI transaction (CS toggles per
+    call), so a contiguous multi-byte sync pattern can never be observed
+    one byte at a time — the byte resync only consumed the stream and
+    worsened alignment.  A close + ~1s settle + reopen is the pattern
+    that reliably realigns (same as a full pipe restart).
     """
-    one = (c_uint8 * 1)()
-    sz = c_uint16()
-    window = bytearray()
-    for _ in range(SCOPE_FRAME_SIZE * 2):
-        status = f4.FT4222_SPIMaster_SingleRead(ft_handle, one, 1, byref(sz), False)
-        if status == FT4222_TRANSFER_IN_PROGRESS:
-            time.sleep(0.001)
-            continue
-        if status != FT4222_OK or sz.value != 1:
-            time.sleep(0.001)
-            continue
-        window.append(one[0])
-        if len(window) > len(SYNC_FULL):
-            del window[0]
-        if bytes(window) == SYNC_FULL:
-            return True
-    return False
+    close_device(d2xx, f4, ft_handle)
+    time.sleep(RESYNC_SETTLE_S)
+    return open_device(d2xx, f4, clock_divider)
 
 
 def open_device(d2xx, f4, clock_divider: int):
@@ -154,6 +188,10 @@ def main():
     signal.signal(signal.SIGINT, stop_running)
     signal.signal(signal.SIGTERM, stop_running)
 
+    # stdin control channel (TX pause/resume, parent-death detection)
+    control = {"tx_active": False, "tx_resync": False}
+    threading.Thread(target=_stdin_reader, args=(control,), daemon=True).start()
+
     # ── Load libraries ──────────────────────────────────────────────
     configure_windows_dll_search_path()
     ft4222_path, ftd2xx_path = require_ftdi_libraries()
@@ -203,8 +241,8 @@ def main():
     last_successful_frame = time.time()  # time-based stall detection
     consecutive_errors = 0
     consecutive_bad_frames = 0
-    sync_attempts_this_device = 0
     reinit_count = 0
+    tx_pause_logged = False
 
     emit_status("pipe_running")
 
@@ -223,6 +261,35 @@ def main():
                 sys.stdout.buffer.write(struct.pack('>I', 0))
                 sys.stdout.buffer.flush()
                 last_stdout_write = now
+
+            # ── TX pause: radio is transmitting ─────────────────────
+            # The FT-710 garbles its scope stream during TX.  Reading
+            # it would just churn the sync/stall recovery machinery
+            # (and, historically, run it into fatal:too_many_reinits),
+            # so freeze everything until RX resumes.
+            if control["tx_active"]:
+                last_successful_frame = now
+                consecutive_errors = 0
+                consecutive_bad_frames = 0
+                reinit_count = 0
+                if not tx_pause_logged:
+                    emit_status("tx_pause")
+                    tx_pause_logged = True
+                time.sleep(0.05)
+                continue
+            if tx_pause_logged:
+                tx_pause_logged = False
+            if control["tx_resync"]:
+                # TX → RX transition: full device re-sync (close, settle,
+                # reopen) — the pattern that reliably realigns the stream.
+                control["tx_resync"] = False
+                emit_status("tx_resume:resync")
+                ft_handle = resync_device(d2xx, f4, ft_handle, clock_divider)
+                if ft_handle is None:
+                    emit_status("fatal:resync_failed_after_tx")
+                    break
+                emit_status("sync_recovered")
+                last_successful_frame = time.time()
 
             # ── Time-based stall detection ──────────────────────────
             # If no successful frame for STALL_TIMEOUT seconds (and we've
@@ -246,7 +313,6 @@ def main():
                 last_successful_frame = time.time()
                 consecutive_errors = 0
                 consecutive_bad_frames = 0
-                sync_attempts_this_device = 0
                 continue
 
             # ── Heartbeat ───────────────────────────────────────────
@@ -283,7 +349,6 @@ def main():
                     last_successful_frame = time.time()
                     consecutive_errors = 0
                     consecutive_bad_frames = 0
-                    sync_attempts_this_device = 0
                 else:
                     time.sleep(0.005)
                 continue
@@ -303,37 +368,26 @@ def main():
                 parsed = parse_scope_frame(frame)
                 last_successful_frame = time.time()
                 consecutive_bad_frames = 0
-                sync_attempts_this_device = 0
                 reinit_count = 0  # successful frame resets the reinit counter
             except ValueError:
+                # Frame doesn't parse — stream is misaligned/garbled.
+                # Re-sync at the device level (close/settle/reopen); the
+                # old byte-by-byte resync could never work on the FT4222
+                # (each 1-byte SingleRead is its own SPI transaction).
                 consecutive_bad_frames += 1
-                emit_status(f"sync_lost:bad_frame_{consecutive_bad_frames}")
-
-                # Try byte-by-byte re-sync first
-                if sync_stream(f4, ft_handle):
-                    emit_status("sync_recovered")
-                    last_successful_frame = time.time()
-                    consecutive_bad_frames = 0
-                    sync_attempts_this_device = 0
-                else:
-                    sync_attempts_this_device += 1
-                    emit_status(f"sync_failed:attempt_{sync_attempts_this_device}")
-
-                    if sync_attempts_this_device >= MAX_SYNC_ATTEMPTS:
-                        # Re-initialize the device (matches wfview approach)
-                        reinit_count += 1
-                        if reinit_count > MAX_REINIT_CYCLES:
-                            emit_status(f"fatal:too_many_reinits:{reinit_count}")
-                            break
-                        emit_status(f"reinitializing_device:{reinit_count}/{MAX_REINIT_CYCLES}")
-                        close_device(d2xx, f4, ft_handle)
-                        ft_handle = open_device(d2xx, f4, clock_divider)
-                        if ft_handle is None:
-                            emit_status("fatal:reinit_failed_after_sync_loss")
-                            break
-                        last_successful_frame = time.time()
-                        consecutive_bad_frames = 0
-                        sync_attempts_this_device = 0
+                reinit_count += 1
+                emit_status(f"sync_lost:bad_frame_{consecutive_bad_frames}:"
+                            f"resync_{reinit_count}/{MAX_REINIT_CYCLES}")
+                if reinit_count > MAX_REINIT_CYCLES:
+                    emit_status(f"fatal:too_many_resyncs:{reinit_count}")
+                    break
+                ft_handle = resync_device(d2xx, f4, ft_handle, clock_divider)
+                if ft_handle is None:
+                    emit_status("fatal:resync_failed")
+                    break
+                emit_status("sync_recovered")
+                last_successful_frame = time.time()
+                consecutive_bad_frames = 0
                 continue
 
             # Encode and write to stdout

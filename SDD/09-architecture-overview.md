@@ -133,6 +133,9 @@ FT-710 FT4222 SPI chip
             → metadata: s_meter, vfoa_freq, mode, span, preamp, att
             → _on_scope_frame() → update RadioState, broadcast
     → stderr: "STATUS:..." diagnostic lines → server logging
+    ← stdin: "TX:1"/"TX:0" control (server → pipe, V2.7) — SPI reads
+      pause while TX (radio garbles the scope stream during transmit),
+      one clean re-sync on TX→RX; stdin EOF also stops the pipe
 ```
 
 ### 9.5.2 S-Meter Fallback (Synthetic Spectrum)
@@ -155,7 +158,7 @@ PollScheduler (asyncio, 7 cooperative tasks)
   Tier 1b (500ms):      VS; FB;                           → active_vfo, vfo_b_freq
   Tier 2A (500ms, TX):  RM3; RM4; RM5; RM6;              → comp, alc, power, swr
   Tier 2B (500ms):      TX;                               → tx_status
-  Tier 3  (2s):         SH0; AG0; RG0; PC; PA0; RA0; NB0; NR0; BC; AC; SS01; AN; GT; MS;
+  Tier 3  (2s):         SH0; AG0; RG0; PC; PA0; RA0; NB0; NR0; BC; AC; SS01; AN; GT; MS; PS;
                         → filter/gains/preamp/att/NR/NB/AN/tuner/scope/antenna/agc/meter_display
   Tier 4  (5s):         RM7; RM8; PR; CO; AO; RI0;       → id, vd, compressor, contour, amc, radio-info telemetry
   Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync + scope re-init

@@ -34,7 +34,7 @@
 | [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | 修复详细说明（含 TX 分析） | 开发者 |
 | [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | CAT 命令参考 | 开发者 |
 | [AGENTS.md](AGENTS.md) | Agnes 代理配置 | 开发者 |
-| [win_pack.md](win_pack.md) | Windows 安装包打包手册（ham.vlsc.net KVM 虚拟机全流程） | 开发者/发布 |
+| [win_pack.md](win_pack.md) | Windows 安装包打包手册（ham.vlsc.net KVM 虚拟机全流程，兼真机测试环境；含 KVM USB 等时 OUT 不可用于 TX 音频验证的限制说明） | 开发者/发布 |
 
 ### 🔍 专项分析
 | 文档 | 说明 | 读者 |

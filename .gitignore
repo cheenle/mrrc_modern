@@ -33,3 +33,23 @@ Thumbs.db
 # No trailing slash: also ignores the `certs` symlink (-> external dir).
 certs
 certs/
+
+# Build / distribution artifacts
+build/
+dist/
+.pytest_cache/
+
+# Vendor binaries (fetch scripts stay tracked)
+vendor/ftdi/*.zip
+vendor/ftdi/windows/bin/
+vendor/opus/
+
+# Promo / media assets
+promo/
+website/videos/
+
+# Unreferenced local image assets
+yagi_*.jpg
+
+# Accidental IDE workspace with backtick in name
+FT710Mobile/`.xcodeproj/

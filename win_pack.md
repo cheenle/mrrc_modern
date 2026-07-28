@@ -1,6 +1,6 @@
 # Windows 安装包打包流程（ham.vlsc.net KVM 虚拟机）
 
-> 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建 `MRRC-FT710-Setup.exe`。
+> 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建 `MRRC-FT710-Setup.exe`，并兼作真机测试环境（FT-710 USB 已直通进 VM，见 §2.4）。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
@@ -65,6 +65,34 @@ FTDI 官网对脚本下载返回 403，需在浏览器手动下载两个包放�
   `tar -xf CDM2123620_Setup.exe amd64/FTD2XX64.dll`，把 `amd64/FTD2XX64.dll` **改名为 `ftd2xx.dll`**
 
 注意 LibFT4222 zip 内部用反斜杠当路径分隔符（Info-ZIP 解压报警告属正常），且解压后目录权限可能异常，`chmod -R u+rwX .` 修复。
+
+### 2.4 USB 设备直通（真机测试，2026-07-26 已配好）
+
+FT-710 的 USB 接在宿主机 ham.vlsc.net 上（经 Cypress TetraHub），三个设备已用
+`virsh attach-device win11 <xml> --live --config` 按 VID:PID 直通进 VM（持久化，重启 VM 不失效）：
+
+| 设备 | VID:PID | VM 内表现 |
+|------|---------|-----------|
+| CP2105 双串口（CAT + PTT） | `10c4:ea70` | COM3 = **Standard**（无 CAT），COM4 = **Enhanced**（CAT 用它） |
+| FTDI FT4222H（频谱 SPI） | `0403:601c` | FT4222H Interface A/B，FTDIBUS 驱动 2.12.36.20（Windows 自动装） |
+| C-Media USB Audio（FT-710 声卡） | `0d8c:0013` | "USB Audio Device"，自动检测可匹配 |
+
+两个一次性动作（已完成）：VM 内装 Silicon Labs `CP210x_Universal_Windows_Driver`（`pnputil /add-driver silabser.inf /subdirs /install`，装完 COM3/COM4 才从 Error 变 OK）；
+`%LOCALAPPDATA%\MRRC-FT710\ft710.env` 的 `FT710_SERIAL_PORT` 从默认 COM3 改为 **COM4**（Enhanced 口才有 CAT 响应，`FA;`→`FA007050000;` 验证过）。
+
+远程访问（2026-07-26 v2，HTTPS 终结在 VM；v1.7.6 起安装包已原生支持默认 HTTPS（launcher 首启自动生成自签证书），**但这台 VM 的常驻服务仍走隐藏任务 + `start_ft710_https.ps1`**——原生 launcher 是控制台应用，控制台被关/会话注销服务即死（当天实测踩过），隐藏 Start-Process 路径没有这个问题）：VM 的 `%LOCALAPPDATA%\MRRC-FT710\ft710.env` 设 `FT710_WEB_HOST=0.0.0.0`、
+`FT710_WEB_PORT=8443`，防火墙规则 "MRRC FT-710 Web 8443" 放行入站。启动不走安装包自带的 launcher（它写死
+`--no-ssl`），而是用 `C:\Users\cheenle\start_ft710_https.ps1`：读 ft710.env → 设 `FT710_SSL_CERT/KEY` 指向
+`C:\ProgramData\MRRC-FT710\certs\`（ham.vlsc.net 的 LE 证书）→ `Start-Process` 拉起 `ft710-server.exe`（日志在
+`%LOCALAPPDATA%\MRRC-FT710\server_console.log(.err)`）。开机自启：计划任务 `MRRC-FT710-HTTPS`（cheenle 登录时触发）。
+ham 侧是 systemd 服务 `ft710-proxy.service`（socat 纯 TCP 透传 8443→VM:8443，TLS 不过 nginx）。
+外网入口 `https://ham.vlsc.net:8443`——ham.vlsc.net 只有 AAAA 记录，客户端必须有 IPv6。
+**为什么必须 HTTPS**：HTTP + 公网域名不是 secure context，浏览器会禁用 AudioWorklet 和 `getUserMedia`
+（音频/PTT 全废）；另注意家庭宽带对境外方向封 80/443 入站，所以证书只能走 acme.sh DNS-01（Aliyun，凭据取
+自 `~/DNS/aliddns.py` 的活动 key——`~/aliddns.py` 里那把已停用），续期后 reloadcmd 自动 scp 证书到 VM 并跑
+`C:\Users\cheenle\restart_ft710.ps1` 重启应用。
+另：v1.7.2 起安装包自带 Windows libopus（仓库 `vendor/opus/windows/bin/x64/opus.dll`，取自 PyOgg wheel，
+已加入 `ft710_server.spec` datas）；此前的包没有它，服务端 Opus 全废（RX 退 PCM、TX 无声），需手动补 DLL。
 
 ## 3. 每次打包流程
 
@@ -187,6 +215,13 @@ ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-S
 | Step 3 删目录后 build_vm.ps1 报 `.\venv\Scripts\Activate.ps1` 找不到 | Step 3 的 `Remove-Item C:\mrrc_ft710` 把 venv 一起删了（zip 不含 venv） | 重跑 §2.2 完整四条（含 `python -m venv venv`）再构建 |
 | Step 3 删除时报 `server_console.log` 被占用 | VM 上 `start_ft710.ps1` 起的 `python server.py --no-ssl` 实例持有该文件 | 先 `Stop-Process` 掉对应 python/父 powershell 再解压；构建完成后按需重新拉起 |
 | ham.vlsc.net 突然不通 | DDNS（aliddns.py）A 记录消失/更新延迟 | `dig +short ham.vlsc.net @223.5.5.5` 确认；等服务器恢复后记录自动回来 |
+| 装了新包但 8888/COM 口行为异常，COM 口 PermissionError | 计划任务 `MRRC-FT710-Server`（`C:\start_ft710.ps1`，开发期残留）开机拉起旧 dev 服务，抢占 8888 和串口 | `Disable-ScheduledTask -TaskName "MRRC-FT710-Server"` + 停掉旧 `python server.py` 进程（2026-07-26 已禁用，勿再启用） |
+| 安装包 CAT 连不上、串口打开成功但无任何响应 | VM 上 COM3 是 CP2105 **Standard** 口，CAT 在 **Enhanced** 口（COM4） | `ft710.env` 设 `FT710_SERIAL_PORT=COM4`（见 §2.4） |
+| SSH 里 `Start-Process` 拉起的应用，SSH 一断进程就没了 | Windows OpenSSH 的 job object 在会话结束时杀整棵进程树 | 用交互式计划任务启动（见 §6），或直接在 VM 桌面启动 |
+| **TX 音频在这台 KVM VM 上必然咔咔杂音，无法用于 TX 验证**（2026-07-26 多轮实测定论） | KVM USB 直通对等时（isochronous）**OUT** 调度有硬伤：播放节奏混沌（1 秒尺度慢 1.4×、10 秒尺度驱动 1.3 秒吞掉 10 秒音频），MME/WASAPI 全一样；iso IN（RX 采集）和 bulk（FT4222）正常 | 软件层无法修复。TX 音频验证请到**实体 Windows 机**做；或整机 xHCI 控制器 PCIe 直通。别再在这台 VM 上排查 TX 音质 |
+| v1.7.4 PTT 报 `name 'sys' is not defined` | `start_tx` 用了 `sys.platform` 但模块没 import（v1.7.5 已修，补了 `start_tx` 端到端回归测试） | 装 ≥v1.7.5 |
+| VM 上串口/声卡突然全消失（COM 只剩 COM1、`'USB Audio' not found`、服务端 UI-only），外网 302 正常但无音频无 CAT | **电台 USB 物理断开**（关机/拔线/被接回 Mac）——宿主机 `lsusb` 里 CP2105/FT4222/C-Media 全没了（2026-07-26 实测） | 先 `ssh ham.vlsc.net lsusb` 确认；插回电台后**直通不会自动恢复**，需重新执行三个 `virsh attach-device --live --config`（或重启 VM），再重启 ft710-server |
+| 服务突然整个没了（8443 无监听、外网握手超时/000），socat 还在 | 原生 `MRRC-FT710.exe` launcher 是**控制台应用**：控制台窗口被关闭、或交互会话注销，服务随之被杀（2026-07-26 实测） | 常驻服务用隐藏任务路径：计划任务 `MRRC-FT710-HTTPS` → `start_ft710_https.ps1`（Start-Process 隐藏拉起）；提醒使用者不要随手关控制台窗口 |
 
 ## 6. 常用命令速查
 
@@ -202,4 +237,20 @@ ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'cd C:\mrrc_ft710; venv\Scripts\py
 
 # 构建
 ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_vm.ps1'"
+
+# 远程重启已安装的应用（SSH 里 Start-Process 会随会话被杀，走 VM 上的现成脚本）
+ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\restart_ft710.ps1'"
+
+# 电台 USB 重新插回后的直通恢复（在 ham 宿主机上执行；XML 按 VID:PID 匹配，设备重新枚举也不怕）
+for dev in '10c4:ea70' '0403:601c' '0d8c:0013'; do
+  vid="${dev%%:*}"; pid="${dev##*:}"
+  printf '<hostdev mode="subsystem" type="usb" managed="yes"><source><vendor id="0x%s"/><product id="0x%s"/></source></hostdev>' "$vid" "$pid" > /tmp/usb.xml
+  sudo virsh -c qemu:///system attach-device win11 /tmp/usb.xml --live --config
+done
+# 然后重启 VM 上的服务（见上一条 restart_ft710.ps1）
+
+# 健康检查（HTTPS，8443；radio/audio/scope 三项应全 true）
+#   $r = Invoke-RestMethod -Uri https://192.168.122.133:8443/api/auth/login -Method Post -ContentType "application/json" -Body (@{password="<pwd>"} | ConvertTo-Json) -SkipCertificateCheck
+#   Invoke-RestMethod -Uri "https://192.168.122.133:8443/api/health?token=$($r.token)" -SkipCertificateCheck
+# （VM 上是 PowerShell 5.1，无 -SkipCertificateCheck 参数时用 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}）
 ```

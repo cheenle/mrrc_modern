@@ -419,6 +419,10 @@ class PollScheduler:
             ("noise_blanker", "NB0", lambda r: r.endswith("1") if r else False),
             ("noise_reduction", "NR0", lambda r: r.endswith("1") if r else False),
             ("auto_notch", "BC", lambda r: r.endswith("1") if r else False),
+            # PS (radio power) — keeps power_on truthful when the radio is
+            # switched on/off at the front panel.  No response while the
+            # radio is off; the "if resp" guard skips that case.
+            ("power_on", "PS", lambda r: r.endswith("1") if r else False),
             # AC returns P1P2P3. Standard tuner: P2=0, P3=0=OFF, P3=1=ON, P3=3=Tuning
             ("tuner_status", "AC", lambda r: (
                 2 if len(r) > 4 and r[4] == '3' else  # P3==3 → tuning start
@@ -447,7 +451,7 @@ class PollScheduler:
                     changes = {}
                     for field, cmd, parser in fields_to_poll:
                         # Yield between queries if a user command (PTT, tune,
-                        # etc.) is pending — otherwise this 13-query cycle
+                        # etc.) is pending — otherwise this 14-query cycle
                         # holds the serial lock for ~500 ms and stalls PTT.
                         if await self._polling_paused():
                             break

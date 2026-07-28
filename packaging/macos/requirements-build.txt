@@ -1,0 +1,8 @@
+# Build-only dependencies for the macOS installer (packaging/macos/build.sh).
+# Pinned: PyInstaller 6 changed the onedir layout ("_internal/") and future
+# major versions may change packaging behavior again — do not float this.
+pyinstaller==6.21.0
+
+# rumps ( Ridiculously Uncomplicated macOS Python Statusbar apps ) drives the
+# menu-bar launcher; it pulls PyObjC, which PyInstaller bundles into the app.
+rumps

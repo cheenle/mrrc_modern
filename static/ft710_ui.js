@@ -671,6 +671,22 @@ function renderWaterfallRow(wf1) {
         return;
     }
 
+    // Transmitting: the FT-710 garbles its scope stream during TX (the
+    // server pauses SPI reads). Show a notice instead of stale data.
+    if (radioState.tx_status !== 0) {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('TX 发射中 — 频谱暂停', w / 2, h / 2 + 4);
+        const fftCanvas = document.getElementById('fft-canvas');
+        if (fftCanvas) {
+            const fctx = fftCanvas.getContext('2d');
+            fctx.clearRect(0, 0, fftCanvas.width, fftCanvas.height);
+        }
+        return;
+    }
+
     // Scroll canvas content up by 1px
     ctx.drawImage(canvas, 0, 1, w, h - 1, 0, 0, w, h - 1);
 

@@ -2,6 +2,155 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.7.7] — 2026-07-28 — Audio Survives Radio Power Cycles (Power Switch Withdrawn)
+
+### Fixed
+- **TX/RX audio survives radio power cycles** (SDD V2.12): every
+  power-off/on re-enumerates the FT-710's USB sound card, invalidating
+  the CoreAudio device IDs cached inside PortAudio at `Pa_Initialize`
+  time — every subsequent stream open failed with `-9999` until the
+  server was restarted (field report: "TX audio device unavailable" after
+  radio restarts). `audio_handler` now re-initializes PortAudio once and
+  retries with a freshly resolved device index when TX/RX stream opens
+  fail. Note: index-locked `FT710_AUDIO_RX/TX_DEVICE=<n>` configs are
+  inherently fragile across re-enumeration — lock by **name**
+  (e.g. `USB Audio Device`) instead.
+
+### Added
+- `PS;` is polled in the Tier-3 settings loop, so power changes made at
+  the radio's front panel are reflected in `power_on` state.
+
+### Withdrawn (after field reliability testing, SDD V2.13)
+- **The header power switch (CAT `PS0;`/`PS1;`) was removed before
+  release.** Two days of live testing proved the FT-710's CAT power
+  control too fragile for a remote UI button: (1) a `PS0;` landing
+  seconds after `PS1;` (mid-boot) wedged the radio's CAT MCU — serial/
+  audio/scope USB all enumerated but CAT permanently deaf until a
+  physical power cycle; (2) `PS1;` wake-up proved unreliable even with
+  retry+verify (3 attempts over 36 s failed to wake a healthy radio).
+  The `power` WS command remains for the maintenance scripts
+  (`_power_cycle*.py`), hardened with the lessons learned: 15 s boot
+  window rejecting `PS0` after `PS1`, `PS1` retry ≤3× with `FA;`
+  read-back verification, `PS0` double-send, power-off refused while TX.
+
+### Tests
+- New `tests/test_power_switch.py` (9 tests: boot-window rejection,
+  TX-while-off rejection, PS0 double-send, PS1 retry/verify/give-up,
+  error reporting) and `PortAudioReinitTests` in `tests/test_audio.py`
+  (3 tests: reinit-then-succeed for RX and TX, give-up path). Cache-bust
+  css v20 / main v23 / ui v22 / sw `ft710-v23`. Suite 435 tests.
+
+## [v1.7.6] — 2026-07-26 — HTTPS by Default on Windows (Self-Signed Bootstrap)
+
+### Changed
+- **The Windows app now starts on HTTPS by default** (SDD V2.10): the
+  launcher no longer hardcodes `--no-ssl`. On first run it generates a
+  throwaway self-signed certificate (ECDSA P-256, 10-year, SANs for
+  localhost / hostname / LAN IPs) into `%LOCALAPPDATA%\MRRC-FT710\certs\`
+  via the new `ssl_bootstrap.py`, and starts `ft710-server` with
+  `--ssl-cert/--ssl-key`. HTTPS matters off-localhost: plain HTTP on a
+  LAN address is not a browser secure context, which disables
+  AudioWorklet and `getUserMedia` (RX/TX audio). The browser shows an
+  "untrusted" warning once — accept it, or point
+  `FT710_SSL_CERT`/`FT710_SSL_KEY` at a real certificate. Escape hatch:
+  `FT710_SSL=off` restores the old HTTP behaviour. Launcher URL probe
+  skips TLS verification for the self-signed bootstrap cert.
+
+### Tests
+- New `tests/test_ssl_bootstrap.py` (6 tests) and launcher SSL tests
+  (6 tests); suite 421 tests. `cryptography>=41` is now a hard
+  dependency (was commented out).
+
+## [v1.7.5] — 2026-07-26 — Hotfix: NameError in start_tx (v1.7.4 Regression)
+
+### Fixed
+- **`name 'sys' is not defined` on PTT** (v1.7.4 regression): the
+  WASAPI selection branch in `start_tx()` referenced `sys.platform`
+  without importing `sys` at module level, so every PTT on the v1.7.4
+  build failed with NameError. Added the import plus two end-to-end
+  `start_tx` regression tests (`StartTxWindowsTests`: win32 opens the
+  WASAPI 48 kHz entry, darwin stays at 44.1 kHz) — the previous tests
+  only exercised `_wasapi_tx_variant` in isolation. Suite 409 tests.
+
+## [v1.7.4] — 2026-07-26 — Windows TX Crackle Fix (WASAPI 48 kHz Output)
+
+### Fixed
+- **TX audio crackles into noise on Windows** (SDD V2.9): the C-Media
+  codec's MME 44.1 kHz playback path paces ~1.4× slow (measured on the
+  Win11 KVM rig: 50×20 ms frames block 1.36–1.42 s instead of 1.00 s),
+  so the TX drain loop falls behind, the 400 ms queue cap drops 24–34 %
+  of voice frames, and the transmitted audio is chopped into crackle.
+  The codec's WASAPI entry at its native 48 kHz mix rate paces
+  correctly (ratio 0.96). `start_tx()` now prefers the same-name WASAPI
+  entry on Windows and opens the stream at that entry's native rate;
+  `feed_tx_audio()` passes 48 kHz PCM through unchanged at 48 kHz
+  (no 48→44.1 resample) and uses per-rate byte budgets for the
+  pre-buffer/cap/graceful-drain. macOS behavior is unchanged (CoreAudio
+  device domain stays at 44.1 kHz). AD-011 amended: the device-domain
+  rate is host-API-dependent, not universally 44.1 kHz.
+
+### Tests
+- New `WindowsWasapiTxTests` (5 tests: WASAPI variant selection,
+  other-device/WASAPI-absent guards, 48 k feed passthrough, 44.1 k feed
+  resample); suite 407 tests.
+
+## [v1.7.3] — 2026-07-26 — Windows RX Audio Dies After First PTT (Full-Duplex Wedge)
+
+### Fixed
+- **RX audio silent after the first PTT on Windows** (SDD V2.8): opening
+  the TX playback stream on the FT-710's C-Media USB codec silently
+  wedges the RX capture stream (MME/DirectSound full-duplex driver
+  quirk — the stream stays open and error-free but delivers silence;
+  macOS CoreAudio is unaffected). `AudioHandler.restart_rx()` now
+  reopens the capture stream on every TX→RX transition (hooked in
+  `_broadcast_state` on `tx_status`, covers PTT/TUNE/physical PTT),
+  Windows-only, no-op elsewhere. Field symptom: audio perfect after
+  server restart, gone after one PTT; hardware capture verified healthy
+  (max 43% FS) with the server stopped.
+- **Scope resync actually works now** (SDD V2.8): the byte-by-byte
+  `sync_stream` resync could never succeed on the FT4222 — every 1-byte
+  `SingleRead` is its own SPI transaction (CS toggles per call), so a
+  contiguous multi-byte sync pattern is unobservable. It only consumed
+  the stream and churned recovery into `fatal:too_many_reinits` after
+  every PTT (even with the V2.7 TX pause, whose resume used it).
+  Replaced with `resync_device()`: close → 1 s idle-bus settle → reopen
+  — the pattern that reliably realigns (same as a pipe restart).
+
+### Tests
+- New `RestartRxTests` (4 tests: Windows stop→start order, non-Windows
+  no-op, RX-not-running guard, failed-reopen path); suite 402 tests.
+
+## [v1.7.2] — 2026-07-26 — TX-Safe Spectrum (Scope Pipe TX Pause)
+
+### Fixed
+- **Spectrum wrecked for 30–45 s after every PTT** (SDD V2.7): the
+  FT-710 garbles its scope stream during TX, but `scope_pipe` kept
+  reading it — sync_lost → stall reinit → more sync failures →
+  `fatal:too_many_reinits`, then a full pipe restart before real FFT
+  data returned. The pipe is now TX-aware: the server pushes `TX:1` /
+  `TX:0` over the pipe's stdin on every `tx_status` transition
+  (PTT/TUNE, any source); while TX is active the pipe pauses SPI reads
+  and freezes all sync/stall recovery counters, and runs one clean
+  re-sync when RX resumes. Post-PTT recovery: ~40 s → ~1 frame.
+- **Zombie scope_pipe held the FT4222 on Windows**: killing the
+  PyInstaller onefile bootloader (`proc.terminate()`) never reached the
+  real worker, so the next pipe failed `FT_OpenEx` with
+  FT_DEVICE_NOT_FOUND for ~10–15 s. The server now kills the pipe via
+  `taskkill /PID <pid> /T /F` on Windows; the pipe additionally treats
+  stdin EOF (parent died) as a shutdown signal.
+- **Waterfall during TX**: now shows "TX 发射中 — 频谱暂停" instead of
+  stale/garbled fallback rows (`ft710_ui.js`).
+- **Windows package now ships libopus**: `vendor/opus/windows/bin/x64/opus.dll`
+  (x64, from the PyOgg wheel) added to the repo and to `ft710_server.spec`
+  datas. Previously the installer carried no libopus, killing server-side
+  Opus (RX fell back to raw PCM, TX audio dead) and requiring a manual
+  DLL drop into the install dir after every reinstall.
+
+### Tests
+- New `tests/test_scope_pipe_tx.py` (13 tests: control-line parsing,
+  server TX-notify transitions/force/dead-pipe guard, Windows taskkill
+  vs POSIX SIGTERM); suite 398 tests.
+
 ## [v1.7.1] — 2026-07-26 — Windows Audio Device Lock & Installer Diagnostics
 
 ### Fixed

@@ -11,11 +11,16 @@ DIST_ROOT = ROOT / "dist" / "windows" / "_pyinstaller"
 # The vendor/ftdi runtime tree is platform-specific. Ship the Windows DLLs
 # only on Windows; on macOS ship the .dylib tree if present (scope falls back
 # to the S-meter spectrum when it is absent, so omission is non-fatal).
+# vendor/opus/windows ships the x64 libopus (server-side Opus RX encoder /
+# TX decoder); without it RX falls back to raw PCM and TX audio dies.
 _ftdi_data = []
 if sys.platform == "win32":
     _ftdi_root = ROOT / "vendor" / "ftdi" / "windows"
     if _ftdi_root.exists():
         _ftdi_data.append((str(_ftdi_root), "vendor/ftdi/windows"))
+    _opus_root = ROOT / "vendor" / "opus" / "windows"
+    if _opus_root.exists():
+        _ftdi_data.append((str(_opus_root), "vendor/opus/windows"))
 elif sys.platform == "darwin":
     _ftdi_root = ROOT / "vendor" / "ftdi" / "macos"
     if _ftdi_root.exists():

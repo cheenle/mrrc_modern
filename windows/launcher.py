@@ -10,6 +10,10 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+# ssl_bootstrap lives at the repo root; PyInstaller bundles it via pathex.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import ssl_bootstrap
+
 
 APP_NAME = "MRRC FT-710"
 DEFAULT_PORT = "8888"
@@ -74,19 +78,28 @@ def seed_mem_channels() -> None:
 
 
 def wait_for_server(url: str, proc: subprocess.Popen | None = None,
-                    timeout_s: float = 15.0) -> bool:
+                    timeout_s: float = 15.0, secure: bool = False) -> bool:
     """Poll until the server answers HTTP (any status) or give up.
 
     Any HTTP response — even 401 from the auth middleware — proves the
     server is listening. Returns False on startup crash or timeout.
+    `secure` skips TLS verification (self-signed bootstrap certs are not
+    trusted by any store yet).
     """
+    ctx = None
+    if secure:
+        import ssl as _ssl
+
+        ctx = _ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
     deadline = time.monotonic() + timeout_s
     probe = url + "/api/health"
     while time.monotonic() < deadline:
         if proc is not None and proc.poll() is not None:
             return False  # server exited during startup
         try:
-            with urllib.request.urlopen(probe, timeout=2):
+            with urllib.request.urlopen(probe, timeout=2, context=ctx):
                 return True
         except urllib.error.HTTPError:
             return True
@@ -112,16 +125,17 @@ def load_env(path: Path) -> dict[str, str]:
     return env
 
 
-def local_url(env: dict[str, str]) -> str:
+def local_url(env: dict[str, str], secure: bool = False) -> str:
     port = env.get("FT710_WEB_PORT", DEFAULT_PORT)
     host = env.get("FT710_WEB_HOST", "127.0.0.1")
+    scheme = "https" if secure else "http"
     if host == "::":
         url_host = "localhost"
     elif host in ("0.0.0.0", ""):
         url_host = "127.0.0.1"
     else:
         url_host = host
-    return f"http://{url_host}:{port}"
+    return f"{scheme}://{url_host}:{port}"
 
 
 def server_executable() -> Path | None:
@@ -138,13 +152,36 @@ def server_executable() -> Path | None:
     return None
 
 
-def build_command() -> list[str] | None:
+def ssl_material(env: dict[str, str]):
+    """Resolve the TLS cert/key pair for the server.
+
+    Honours explicit FT710_SSL_CERT/FT710_SSL_KEY, then falls back to a
+    self-signed pair generated into the user data dir on first run.
+    Returns None to stay on plain HTTP (FT710_SSL=off, or the
+    cryptography package missing).
+    """
+    if env.get("FT710_SSL", "").strip().lower() == "off":
+        return None
+    cert = env.get("FT710_SSL_CERT", "").strip()
+    key = env.get("FT710_SSL_KEY", "").strip()
+    if cert and key and Path(cert).exists() and Path(key).exists():
+        return Path(cert), Path(key)
+    return ssl_bootstrap.ensure_self_signed(user_data_dir() / "certs")
+
+
+def build_command(ssl_pair=None) -> list[str] | None:
     server = server_executable()
     if server is None:
         return None
     if server.suffix.lower() == ".exe":
-        return [str(server), "--no-ssl"]
-    return [sys.executable, str(server), "--no-ssl"]
+        args = [str(server)]
+    else:
+        args = [sys.executable, str(server)]
+    if ssl_pair is None:
+        args.append("--no-ssl")
+    else:
+        args += ["--ssl-cert", str(ssl_pair[0]), "--ssl-key", str(ssl_pair[1])]
+    return args
 
 
 def stop_process(proc: subprocess.Popen) -> None:
@@ -164,14 +201,18 @@ def main() -> int:
     cfg = ensure_config()
     seed_mem_channels()
     env = load_env(cfg)
-    url = local_url(env)
+    ssl_pair = ssl_material(env)
+    secure = ssl_pair is not None
+    url = local_url(env, secure=secure)
 
     print(APP_NAME)
     print(f"Config: {cfg}")
     print(f"URL:    {url}")
+    if secure:
+        print("HTTPS:  self-signed certificate (browser will warn once — accept it)")
     print("Close this window or press Ctrl-C to stop the server.")
 
-    command = build_command()
+    command = build_command(ssl_pair)
     if command is None:
         print("ERROR: ft710-server.exe not found next to the launcher.")
         print("Reinstall the app, or restore the file if antivirus quarantined it.")
@@ -186,7 +227,7 @@ def main() -> int:
         env=env,
         creationflags=creationflags,
     )
-    if wait_for_server(url, proc):
+    if wait_for_server(url, proc, secure=secure):
         webbrowser.open(url)
     elif proc.poll() is not None:
         print("Server exited during startup — see messages above.")

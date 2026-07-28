@@ -235,7 +235,7 @@ mrrc_ft710/
 | 1 | 100ms | `FA;` `MD0;` `SM0;` | VFO freq, mode, S-meter |
 | 2A | 500ms (TX only) | `RM4;` `RM5;` `RM6;` | ALC, Power, SWR (zeroed on RX transition) |
 | 2B | 500ms | `TX;` | PTT status (also triggers TX-meter zero-reset on TX→RX transition) |
-| 3 | 2s | `SH0;` `AG;` `PC;` `PA0;` `RA0;` `NB0;` `NR0;` `BC;` `AC;` | Filter, gains, preamp, att, NR, NB, AN, tuner |
+| 3 | 2s | `SH0;` `AG;` `PC;` `PA0;` `RA0;` `NB0;` `NR0;` `BC;` `AC;` `PS;` | Filter, gains, preamp, att, NR, NB, AN, tuner, power |
 | 4 | 5s | `RM7;` `RM8;` `PR;` | Drain current, voltage, compressor |
 
 User set commands call `skip_next_poll()` for the affected field, and poll loops re-check that

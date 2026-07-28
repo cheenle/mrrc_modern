@@ -134,8 +134,10 @@ _scope_read_task: asyncio.Task | None = None
 _scope_broadcast_task: asyncio.Task | None = None
 _scope_proc: asyncio.subprocess.Process | None = None
 _scope_pipe_lock: asyncio.Lock | None = None
+_scope_pipe_last_tx: bool | None = None
 _audio_rx_task: asyncio.Task | None = None
 _audio_tx_task: asyncio.Task | None = None
+_rx_restart_task: asyncio.Task | None = None
 
 # TX Opus decoder (browser mic → server)
 _opus_tx_decoder: TxOpusDecoder | None = None
@@ -255,6 +257,17 @@ async def _broadcast_state():
     dirty = radio.get_and_clear_dirty()
     if not dirty:
         return
+    if "tx_status" in dirty:
+        # Radio entered/left TX — pause/resume the scope pipe's SPI reads.
+        await _notify_scope_pipe_tx()
+        if not radio.is_transmitting and audio:
+            # Windows full-duplex quirk: the TX playback stream silently
+            # wedges RX capture on the same USB codec — reopen it on every
+            # TX→RX transition (no-op on other platforms).
+            global _rx_restart_task
+            if _rx_restart_task is None or _rx_restart_task.done():
+                _rx_restart_task = asyncio.create_task(
+                    asyncio.to_thread(audio.restart_rx), name="rx_restart")
     fields = radio.to_dirty_dict(dirty)
     meter_dirty = {
         "s_meter", "power_meter", "alc_meter", "swr_meter", "id_meter", "vd_meter",
@@ -670,10 +683,7 @@ async def _read_scope_pipe(proc):
         if scope:
             scope._connected = False
         if proc.returncode is None:
-            try:
-                proc.terminate()
-            except Exception:
-                pass
+            await asyncio.to_thread(_terminate_process_tree_sync, proc.pid)
             try:
                 await asyncio.wait_for(proc.wait(), timeout=2.0)
             except asyncio.TimeoutError:
@@ -703,6 +713,53 @@ async def _read_scope_pipe(proc):
                 await _ensure_scope_pipe_running()
 
 
+async def _notify_scope_pipe_tx(force: bool = False):
+    """Tell scope_pipe when the radio enters/leaves TX (PTT/TUNE).
+
+    The FT-710 garbles its scope stream during TX; the pipe pauses SPI
+    reads while TX is active instead of churning through sync recovery
+    (which previously ran it into fatal:too_many_reinits on every PTT).
+    """
+    global _scope_pipe_last_tx
+    tx = bool(radio.is_transmitting) if radio else False
+    if not force and tx == _scope_pipe_last_tx:
+        return
+    _scope_pipe_last_tx = tx
+    proc = _scope_proc
+    if proc is None or proc.returncode is not None or proc.stdin is None:
+        return
+    try:
+        proc.stdin.write(b"TX:1\n" if tx else b"TX:0\n")
+        await proc.stdin.drain()
+    except Exception as e:
+        logger.debug("scope_pipe TX notify failed: %s", e)
+
+
+def _terminate_process_tree_sync(pid: int) -> None:
+    """Kill a process and (on Windows) its whole tree, best-effort.
+
+    scope_pipe.exe is a PyInstaller onefile bootloader: terminate() only
+    reaches the bootloader, orphaning the real worker which keeps the
+    FT4222 device open — the next pipe then fails FT_OpenEx with
+    FT_DEVICE_NOT_FOUND for seconds.  taskkill /T /F kills the tree
+    atomically.  POSIX terminate() signals the process directly.
+    """
+    if sys.platform == "win32":
+        try:
+            _subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                stdout=_subprocess.DEVNULL, stderr=_subprocess.DEVNULL,
+                timeout=5,
+            )
+            return
+        except Exception as e:
+            logger.debug("taskkill failed, falling back to terminate: %s", e)
+    try:
+        os.kill(pid, 15)  # SIGTERM
+    except Exception:
+        pass
+
+
 async def _ensure_scope_pipe_running():
     """Start the FT4222 scope subprocess only while spectrum clients exist."""
     global _scope_read_task, _scope_proc, _scope_pipe_lock
@@ -721,12 +778,16 @@ async def _ensure_scope_pipe_running():
         try:
             _scope_proc = await asyncio.create_subprocess_exec(
                 *scope_pipe_cmd,
+                stdin=_subprocess.PIPE,
                 stdout=_subprocess.PIPE, stderr=_subprocess.PIPE,
             )
             _scope_read_task = asyncio.create_task(
                 _read_scope_pipe(_scope_proc), name="scope_pipe_read"
             )
             logger.info("scope_pipe subprocess started (pid=%d)", _scope_proc.pid)
+            # Sync the pipe with the current TX state (e.g. pipe started
+            # while the radio is already transmitting).
+            await _notify_scope_pipe_tx(force=True)
         except Exception as e:
             _scope_proc = None
             _scope_read_task = None
@@ -751,7 +812,7 @@ async def _stop_scope_pipe():
     _scope_proc = None
     if proc and proc.returncode is None:
         try:
-            proc.terminate()
+            await asyncio.to_thread(_terminate_process_tree_sync, proc.pid)
             await asyncio.wait_for(proc.wait(), timeout=2.0)
         except asyncio.TimeoutError:
             try:
@@ -1046,6 +1107,47 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
             await _broadcast_mem_channels()
 
 
+# ── Radio power control (CAT PS) ───────────────────────────────────
+# NOTE: PS0 (off) is reliable, but PS1 (on) is NOT — field testing
+# (2026-07-27/28) showed the radio often ignores PS1 in standby, and a
+# PS0 landing mid-boot can wedge the CAT MCU until a physical power
+# cycle.  The web UI therefore has NO power switch; the "power" set
+# command remains only for the maintenance scripts (_power_cycle*.py).
+POWER_BOOT_WINDOW_S = 15.0   # PS0 rejected for this long after a PS1
+POWER_ON_ATTEMPTS = 3        # PS1 retries before declaring failure
+POWER_ON_VERIFY_S = 12.0     # per-attempt wait for the radio to answer FA
+                             # (a cold radio took ~25 s to answer in field
+                             # testing — 3x12 s covers that with margin)
+_power_boot_until: float = 0.0
+
+
+async def _power_on_radio(cat) -> bool:
+    """Send PS1 (with retries) and verify the radio actually boots.
+
+    Returns True once the radio answers an FA query, False after all
+    attempts.  Verification matters: PS1 is fire-and-forget and can be
+    lost — without a check the UI would show "on" while the radio is off.
+    """
+    global _power_boot_until
+    for attempt in range(1, POWER_ON_ATTEMPTS + 1):
+        await cat.set_power(True)
+        # Refresh the boot window at EVERY PS1: a PS0 landing while the
+        # radio might still be booting (even from a late-acting PS1 from
+        # a previous attempt) can wedge the CAT MCU (2026-07-27 incident).
+        _power_boot_until = time.monotonic() + POWER_BOOT_WINDOW_S
+        deadline = time.monotonic() + POWER_ON_VERIFY_S
+        while time.monotonic() < deadline:
+            await asyncio.sleep(1.0)
+            if await cat.query("FA", timeout=0.4):
+                logger.info("Power-on verified (PS1 attempt %d)", attempt)
+                # Re-arm from the actual boot moment — a slow boot must
+                # not eat the whole protection window.
+                _power_boot_until = time.monotonic() + POWER_BOOT_WINDOW_S
+                return True
+        logger.warning("PS1 attempt %d: radio not answering", attempt)
+    return False
+
+
 async def _execute_set_command(field: str, value, ws: WebSocket):
     """Execute a set command against the radio."""
     global cat, radio, scheduler
@@ -1273,8 +1375,37 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "power":
             on = value is True or str(value).lower() in ("true", "1")
-            await cat.set_power(on)
-            radio.update(power_on=on)
+            if on:
+                scheduler and scheduler.skip_next_poll("power_on", 25.0)
+                if await _power_on_radio(cat):
+                    radio.update(power_on=True)
+                else:
+                    radio.update(power_on=False)
+                    await ws.send_text(json.dumps({
+                        "type": "error",
+                        "message": "电台开机无响应——请检查电台并手动开机",
+                    }))
+            else:
+                if radio.is_transmitting:
+                    await ws.send_text(json.dumps({
+                        "type": "error",
+                        "message": "发射中不能关机",
+                    }))
+                elif time.monotonic() < _power_boot_until:
+                    # A PS0 landing mid-boot can wedge the radio's CAT MCU
+                    # (2026-07-27 incident) — make the user retry instead.
+                    remain = int(_power_boot_until - time.monotonic()) + 1
+                    await ws.send_text(json.dumps({
+                        "type": "error",
+                        "message": f"电台正在启动，请 {remain} 秒后再关机",
+                    }))
+                else:
+                    scheduler and scheduler.skip_next_poll("power_on", 10.0)
+                    await cat.set_power(False)
+                    await asyncio.sleep(0.5)
+                    # First PS0 write is occasionally lost — send it twice.
+                    await cat.set_power(False)
+                    radio.update(power_on=False)
 
         elif field == "squelch":
             v = max(0, min(100, int(value)))

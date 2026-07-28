@@ -45,13 +45,12 @@
           <span>MRRC FT<span style="color: var(--accent)">‑710</span></span>
         </a>
         <ul class="nav-links">
+          <li><a href="#video">Video</a></li>
           <li><a href="#features">Features</a></li>
-          <li><a href="#ios">iOS App</a></li>
-          <li><a href="#architecture">Architecture</a></li>
-          <li><a href="#spectrum">Spectrum</a></li>
-          <li><a href="#audio">Audio</a></li>
           <li><a href="#download">Download</a></li>
           <li><a href="#start">Quick Start</a></li>
+          <li><a href="#architecture">Architecture</a></li>
+          <li><a href="#ios">iOS App</a></li>
           <li><a href="sdd.html">SDD</a></li>
           <li><a href="fde.html">FDE</a></li>
           <li>
@@ -77,7 +76,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-check-circle"></i>
-          <span>v2.1 · Production Ready</span>
+          <span>v1.7.6 · Production Ready</span>
         </div>
         <h1 class="hero-title">
           One USB Cable<br />
@@ -94,7 +93,10 @@
             href="downloads/MRRC-FT710-Setup.exe"
             class="btn btn-primary btn-large"
           >
-            <i class="fab fa-windows"></i> Windows Installer v2.1
+            <i class="fab fa-windows"></i> Windows Installer v1.7.6
+          </a>
+          <a href="#features" class="btn btn-secondary btn-large">
+            <i class="fas fa-arrow-down"></i> Explore Features
           </a>
           <a
             href="https://github.com/cheenle/mrrc_ft710"
@@ -103,9 +105,6 @@
             rel="noopener"
           >
             <i class="fab fa-github"></i> GitHub
-          </a>
-          <a href="#features" class="btn btn-secondary btn-large">
-            <i class="fas fa-arrow-down"></i> Explore Features
           </a>
         </div>
       </div>
@@ -140,6 +139,38 @@
       </div>
     </section>
 
+    <!-- Promo Video -->
+    <section
+      class="section"
+      id="video"
+      style="background: var(--bg-primary)"
+    >
+      <div class="container" style="text-align: center">
+        <div class="section-header">
+          <span class="section-label">Video</span>
+          <h2 class="section-title">Watch the Intro</h2>
+          <p class="section-subtitle">
+            A two-minute product tour of FT-710 Web Control (Chinese narration
+            and subtitles).
+          </p>
+        </div>
+        <video
+          controls
+          preload="none"
+          poster="images/promo_poster.jpg"
+          style="
+            max-width: 960px;
+            width: 100%;
+            border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+          "
+        >
+          <source src="videos/ft710_promo.mp4" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      </div>
+    </section>
+
     <!-- Features -->
     <section
       class="section"
@@ -151,9 +182,9 @@
           <span class="section-label">Features</span>
           <h2 class="section-title">Complete FT-710 Remote Control</h2>
           <p class="section-subtitle">
-            From real FT4222 SPI spectrum waterfall to bidirectional Opus audio,
-            CAT control, and mobile-optimized PTT — every feature built
-            specifically for the FT-710.
+            Real FT4222 SPI spectrum, bidirectional Opus audio, full CAT control
+            and multi-layer PTT safety — everything built specifically for the
+            FT-710, no middleware anywhere.
           </p>
         </div>
 
@@ -162,31 +193,31 @@
             <div class="icon"><i class="fas fa-chart-bar"></i></div>
             <h3>Real FT4222 SPI Spectrum</h3>
             <p>
-              850-point FFT spectrum at ~21 fps from the FT-710 DSP chip via
-              FT4222 SPI. 120-line history waterfall with
-              black→blue→green→yellow→red colormap. Dual-mode: S-meter synthetic
-              fallback when FT4222 is unavailable.
+              850-point FFT spectrum at ~21 fps read straight from the FT-710
+              DSP chip over FT4222 SPI. The scope pipe is TX-aware: it pauses
+              cleanly while you transmit and re-syncs in about a second on
+              release. Automatic S-meter synthetic fallback when FT4222 is
+              unavailable.
             </p>
             <ul>
               <li>FT4222 SPI direct read (libft4222 + libftd2xx)</li>
               <li>4096-byte scope blocks with 0xFF01EE01 sync</li>
-              <li>~21 fps real spectrum, ~30 fps S-meter fallback</li>
+              <li>TX-aware pause — no more post-PTT spectrum churn</li>
             </ul>
           </div>
 
           <div class="feature-card animate">
             <div class="icon"><i class="fas fa-wave-square"></i></div>
-            <h3>FFT Spectrum Line Plot</h3>
+            <h3>FFT Plot + Waterfall</h3>
             <p>
-              Real-time spectrum amplitude vs frequency polyline above the
-              waterfall. Cyan (#06b6d4) line with EMA smoothing (α=0.30), 2×
-              amplitude boost for peak visibility, and horizontal + vertical
-              grid lines aligned with frequency scale.
+              EMA-smoothed spectrum polyline above a 120-row history waterfall.
+              Shared Floor/Ceil controls, six colormaps, and click-to-QSY
+              anywhere on the spectrum.
             </p>
             <ul>
-              <li>33px polyline with subtle glow + grid reference</li>
-              <li>EMA-smoothed (30% new data per frame) — stable peaks</li>
-              <li>Shared Floor/Ceil controls with waterfall</li>
+              <li>~30 fps S-meter fallback keeps the waterfall alive</li>
+              <li>Click-to-QSY with drag-guard for scroll gestures</li>
+              <li>Clear "TX — spectrum paused" indicator while transmitting</li>
             </ul>
           </div>
 
@@ -194,19 +225,15 @@
             <div class="icon"><i class="fas fa-headphones"></i></div>
             <h3>Bidirectional Opus Audio</h3>
             <p>
-              RX: FT-710 USB Audio → PyAudio capture (44.1kHz Int16) →
-              frame-aligned resample to 48kHz → Opus 64kbps encode → browser
-              AudioWorklet. TX: browser mic (48kHz) → Opus 64kbps CBR → server
-              resample 48→44.1kHz → PyAudio → radio.
+              One 48 kHz codec domain end to end: RX capture → Opus 64kbps →
+              browser AudioWorklet; browser mic → Opus CBR → server → radio.
+              The server always talks to the sound card at its native rate —
+              44.1 kHz on CoreAudio, 48 kHz WASAPI on Windows.
             </p>
             <ul>
-              <li>RX 48kHz high-fidelity via AudioWorklet</li>
-              <li>TX 64kbps CBR with 60ms jitter buffer</li>
+              <li>64kbps Opus — 12× smaller than raw PCM</li>
+              <li>Zero-audio watchdog flags wedged USB audio</li>
               <li>Graceful PTT release — word endings preserved</li>
-              <li>
-                Zero-audio watchdog flags wedged radio USB audio in the status
-                bar
-              </li>
             </ul>
           </div>
 
@@ -216,13 +243,71 @@
             <p>
               Direct serial CAT over the Enhanced COM Port at 38400 baud. 40+
               commands: frequency, 15 modes, 23 filter widths, VFO A/B, split,
-              preamp, attenuator, NR/NB/AN, compressor, tuner, AF/RF/Mic gains,
-              S-meter, multi-meter.
+              preamp, attenuator, NR/NB/AN, compressor, tuner, AF/RF/Mic gains.
             </p>
             <ul>
               <li>No Hamlib / wfview / middleware — direct serial</li>
-              <li>7-task polling (~296 bytes/sec)</li>
-              <li>Dirty-field change tracking minimises WebSocket traffic</li>
+              <li>Dirty-field tracking minimises WebSocket traffic</li>
+              <li>Read-back verification on filter width sets</li>
+            </ul>
+          </div>
+
+          <div class="feature-card animate">
+            <div class="icon"><i class="fas fa-code-branch"></i></div>
+            <h3>Adaptive 7-Task Polling</h3>
+            <p>
+              100ms→5s smart intervals at 38400 baud, 0.25s per-query timeout
+              ceiling, and priority preemption so PTT never waits for a poll
+              cycle. Stale in-flight reads are discarded after user commands.
+            </p>
+            <ul>
+              <li>~296 bytes/sec total serial utilisation</li>
+              <li>Auto-zero TX meters on RX transition</li>
+              <li>Scope re-init after every serial reconnect</li>
+            </ul>
+          </div>
+
+          <div class="feature-card animate">
+            <div class="icon"><i class="fas fa-gauge-high"></i></div>
+            <h3>Meters &amp; Memory Channels</h3>
+            <p>
+              Canvas S-meter (S1–S9+60dB) with dBm readout plus full TX
+              telemetry: PWR / ALC / SWR / Id / Vd / COMP. Memory channels with
+              one-tap recall; every UI preference persists in cookies.
+            </p>
+            <ul>
+              <li>Seeded starter channels, per-user storage</li>
+              <li>AF volume, scope options, mic gain — all remembered</li>
+            </ul>
+          </div>
+
+          <div class="feature-card animate">
+            <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+            <h3>ATR1000 Tuner Linkage</h3>
+            <p>
+              Optional networked ATR1000 antenna tuner: learned LC relay values
+              follow every frequency change, and a server-side tune assist runs
+              the full carrier-measure-keep-or-rollback sequence for you.
+            </p>
+            <ul>
+              <li>Off by default — zero impact without the hardware</li>
+              <li>Learning gated on SWR 1.0–1.8, ±5kHz nearest match</li>
+            </ul>
+          </div>
+
+          <div class="feature-card animate">
+            <div class="icon"><i class="fas fa-shield-halved"></i></div>
+            <h3>Multi-Layer PTT Safety</h3>
+            <p>
+              Touch-and-hold TX with instant release on touch-end. Fire-and-forget
+              TX0 with 500ms TX-status poll + browser watchdog. Server-side
+              forced RX when the last client — or the TX-audio owner —
+              disconnects.
+            </p>
+            <ul>
+              <li>7 independent release layers — no single point of failure</li>
+              <li>TX uplink ownership follows the keying client</li>
+              <li>Graceful TX audio drain before RF drop</li>
             </ul>
           </div>
 
@@ -231,140 +316,241 @@
             <h3>Mobile-First UI</h3>
             <p>
               Optimised for iPhone Safari: safe-area adaptation, PWA manifest
-              with Service Worker offline caching, Wake Lock, Fullscreen toggle.
-              Touch-and-hold PTT with dead-man release.
+              with Service Worker offline caching, Wake Lock, fullscreen
+              toggle, and a native SwiftUI companion app.
             </p>
             <ul>
               <li>PWA manifest + Service Worker offline cache</li>
               <li>Wake Lock API (screen stays on)</li>
-              <li>
-                Canvas S-meter S1–S9+60dB + multi-meter (PWR/ALC/SWR/Id/Vd)
-              </li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-code-branch"></i></div>
-            <h3>7-Task Background Polling</h3>
-            <p>
-              100ms→5s smart intervals at 38400 baud, 0.25s timeout ceiling,
-              active PTT yield. Poll tiers: 100ms (freq/mode/S-meter), 500ms (TX
-              meters zeroed on RX), 2s (filters/gains/NR/NB), 5s
-              (voltage/current/compressor).
-            </p>
-            <ul>
-              <li>~296 bytes/sec total serial utilisation</li>
-              <li>Auto-zero TX meters on RX transition</li>
-              <li>0.25s timeout per command — never blocks PTT</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-shield-halved"></i></div>
-            <h3>Multi-Layer PTT Safety</h3>
-            <p>
-              Touch-and-hold TX → instant release on touch-end. Fire-and-forget
-              TX0 with 500ms TX-status poll + browser watchdog. Server-side
-              forced RX when the last client — or the TX-audio owner —
-              disconnects. Browser unload beacon sends TX0 on tab close.
-            </p>
-            <ul>
-              <li>7 independent release layers — no single point of failure</li>
-              <li>Server force-RX on last-client or TX-owner disconnect</li>
-              <li>Graceful TX audio drain before RF drop</li>
+              <li>Native iOS 17+ app shares the same protocol</li>
             </ul>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- iOS App -->
-    <section class="section" id="ios" style="background: var(--bg-primary)">
+    <!-- Download -->
+    <section
+      class="section"
+      id="download"
+      style="background: var(--bg-primary)"
+    >
       <div class="container">
         <div class="section-header">
-          <span class="section-label">iOS App</span>
-          <h2 class="section-title">Native iPhone Client</h2>
+          <span class="section-label">Download</span>
+          <h2 class="section-title">Windows Desktop Installer</h2>
           <p class="section-subtitle">
-            SwiftUI companion app (iOS 17+) — same 4-channel WebSocket protocol
-            as the browser, tuned for one-handed mobile operation.
+            Windows 11/12 x64 — embedded Python 3.12 runtime, no manual Python
+            install. Start Menu launcher with per-user config in %LOCALAPPDATA%.
           </p>
-        </div>
-
-        <div class="features-grid">
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-broadcast-tower"></i></div>
-            <h3>Full Radio Control</h3>
-            <p>
-              Frequency (direct entry / step / band jump), VFO A/B, mode, filter
-              width, Preamp/ATT, AGC, NB/NR/ANotch, RF power, mic gain, squelch
-              — all from the iPhone.
-            </p>
-            <ul>
-              <li>4 encrypted WebSocket channels (wss)</li>
-              <li>Token auth, password in Keychain</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-water"></i></div>
-            <h3>Waterfall + Meters</h3>
-            <p>
-              850-bin real-time waterfall with FFT curve, colormap matched to
-              the web UI. S-meter plus TX meters (PWR / SWR / ALC / COMP) and
-              memory channel list.
-            </p>
-            <ul>
-              <li>Same binary spectrum frames as the browser</li>
-              <li>Dark amber theme, portrait + landscape</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-microphone"></i></div>
-            <h3>Opus Voice RX/TX</h3>
-            <p>
-              RX: Opus 48kHz decode and playback through the device speaker. TX:
-              mic capture at 48kHz in 20 ms PCM frames — hold PTT to talk.
-            </p>
-            <ul>
-              <li>libopus device build (arm64)</li>
-              <li>Settings: reconnect, gain, volume</li>
-            </ul>
-          </div>
         </div>
 
         <div
           style="
-            background: rgba(230, 126, 34, 0.08);
-            border: 1px solid rgba(230, 126, 34, 0.4);
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
-            margin-top: 2rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--accent);
+            border-radius: 14px;
+            padding: 1.75rem 2rem;
+            max-width: 720px;
+            margin: 0 auto;
           "
         >
-          <p style="color: var(--text-primary); margin: 0 0 0.5rem">
-            <i class="fas fa-triangle-exclamation" style="color: #e67e22"></i>
-            <strong>Early access — build from source</strong>
+          <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
+            <i class="fab fa-windows" style="color: var(--accent)"></i>
+            <strong> MRRC-FT710-Setup.exe — v1.7.6</strong>
           </p>
-          <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0">
-            Requires a physical iPhone (simulator unsupported — bundled libopus
-            is arm64-device-only), iOS 17+, Xcode 15 + XcodeGen, and a
-            TLS-enabled server. P0 PTT-safety issues identified in the
-            2026-07-20 audit are resolved in SDD V2.1 — the TX uplink ownership
-            fix covers silent-failure scenarios.
+          <p style="color: var(--text-muted); margin: 0 0 1rem">
+            35.0 MB · x64 · MD5
+            <code style="font-size: 0.8rem">6968a10c9c073f2fb2123a9c97e977fb</code>
+          </p>
+          <p style="color: var(--text-muted); margin: 0 0 1.25rem">
+            Highlights in v1.7.2–v1.7.6: <strong>HTTPS by default</strong>
+            (first run generates a self-signed certificate — accept the
+            browser warning once), TX-safe spectrum (pauses on transmit,
+            re-syncs in ~1s), RX audio no longer dies after the first PTT on
+            Windows, TX output on the native WASAPI 48 kHz path, and bundled
+            libopus — server-side Opus works out of the box.
+          </p>
+          <div
+            style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center"
+          >
+            <a
+              href="downloads/MRRC-FT710-Setup.exe"
+              class="btn btn-primary btn-large"
+            >
+              <i class="fab fa-windows"></i> Download for Windows
+            </a>
+            <a
+              href="https://github.com/cheenle/mrrc_ft710/releases"
+              class="btn btn-secondary btn-large"
+              target="_blank"
+              rel="noopener"
+            >
+              <i class="fab fa-github"></i> GitHub Releases
+            </a>
+          </div>
+        </div>
+        <p
+          style="
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 1.25rem;
+          "
+        >
+          Without the FTDI DLLs the app falls back to the S-meter synthetic
+          spectrum — CAT control and audio are unaffected. macOS / Linux /
+          Raspberry Pi: run from source (see Quick Start below).
+        </p>
+      </div>
+    </section>
+
+    <!-- Quick Start -->
+    <section class="section" id="start" style="background: var(--bg-secondary)">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-label">Quick Start</span>
+          <h2 class="section-title">Up and Running in 5 Minutes</h2>
+          <p class="section-subtitle">
+            Windows users take the installer track; macOS / Linux / Raspberry Pi
+            run from source. Both end at the same browser UI.
           </p>
         </div>
 
-        <div style="text-align: center; margin-top: 2rem">
-          <a
-            href="https://github.com/cheenle/mrrc_ft710/tree/main/FT710Mobile"
-            class="btn btn-secondary btn-large"
-            target="_blank"
-            rel="noopener"
-          >
-            <i class="fab fa-apple"></i> FT710Mobile on GitHub
-          </a>
+        <h3
+          style="
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            text-align: center;
+          "
+        >
+          <i class="fab fa-windows" style="color: var(--accent)"></i> Track A —
+          Windows Installer
+        </h3>
+        <div class="steps" style="margin-bottom: 2.5rem">
+          <div class="step">
+            <h4>1 · Install Drivers</h4>
+            <p>
+              Silicon Labs CP210x VCP driver for the FT-710 Enhanced COM Port.
+              FTDI D2XX only if you want FT4222 true spectrum.
+            </p>
+            <code
+              >Device Manager → Ports (COM &amp; LPT) → Enhanced COM Port</code
+            >
+          </div>
+          <div class="step">
+            <h4>2 · Run the Installer</h4>
+            <p>
+              MRRC-FT710-Setup.exe — v1.7.6, 35.0 MB, x64. Start Menu + optional
+              desktop shortcut.
+            </p>
+            <code>MD5 6968a10c9c073f2fb2123a9c97e977fb</code>
+          </div>
+          <div class="step">
+            <h4>3 · Edit Configuration</h4>
+            <p>
+              Start Menu → Edit Configuration — set the Enhanced COM Port and a
+              strong web password.
+            </p>
+            <code>%LOCALAPPDATA%\MRRC-FT710\ft710.env</code>
+          </div>
+          <div class="step">
+            <h4>4 · Launch</h4>
+            <p>
+              Start Menu → MRRC FT-710 — the launcher starts the server and
+              opens the browser automatically.
+            </p>
+            <code>http://127.0.0.1:8888 → login → full control</code>
+          </div>
         </div>
+
+        <h3
+          style="
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            text-align: center;
+          "
+        >
+          <i class="fas fa-terminal" style="color: var(--accent)"></i> Track B —
+          From Source (macOS / Linux / RPi)
+        </h3>
+        <div class="steps">
+          <div class="step">
+            <h4>1 · Clone the Repository</h4>
+            <p>Get the latest code from GitHub</p>
+            <code>git clone https://github.com/cheenle/mrrc_ft710.git</code>
+          </div>
+          <div class="step">
+            <h4>2 · Install Dependencies</h4>
+            <p>Python 3.12+ with FastAPI, Uvicorn, PySerial, PyAudio, NumPy</p>
+            <code>cd mrrc_ft710 && pip install -r requirements.txt</code>
+          </div>
+          <div class="step">
+            <h4>3 · Start the Server</h4>
+            <p>
+              Set the serial port and launch — auto-detects FT-710 USB devices
+            </p>
+            <code
+              >FT710_SERIAL_PORT=/dev/cu.usbserial-XXXX python server.py</code
+            >
+          </div>
+          <div class="step">
+            <h4>4 · Open Your Browser</h4>
+            <p>
+              Any device on your network — phone, tablet, desktop. Default
+              password: ft710
+            </p>
+            <code>https://server-ip:8888 → login → full control</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Requirements -->
+    <section
+      class="section"
+      id="requirements"
+      style="background: var(--bg-primary)"
+    >
+      <div class="container" style="text-align: center">
+        <div class="section-header">
+          <span class="section-label">Requirements</span>
+          <h2 class="section-title">What You Need</h2>
+        </div>
+        <div class="tech-stack" style="margin-bottom: 0">
+          <span class="tech-tag"
+            ><i class="fas fa-microchip"></i> Yaesu FT-710</span
+          >
+          <span class="tech-tag"
+            ><i class="fas fa-usb"></i> USB Cable (A→B or C→B)</span
+          >
+          <span class="tech-tag"
+            ><i class="fab fa-windows"></i> Windows Installer (bundled Python)</span
+          >
+          <span class="tech-tag"
+            ><i class="fab fa-python"></i> or Python 3.12+ from source</span
+          >
+          <span class="tech-tag"
+            ><i class="fas fa-server"></i> Windows / macOS / Linux / RPi</span
+          >
+          <span class="tech-tag"
+            ><i class="fas fa-globe"></i> Modern Browser</span
+          >
+          <span class="tech-tag"
+            ><i class="fas fa-microchip"></i> FTDI libs (for scope)</span
+          >
+        </div>
+        <p
+          style="
+            color: var(--text-muted);
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+          "
+        >
+          For real FT4222 SPI spectrum data, install libft4222 + libftd2xx from
+          the wfview app bundle or FTDI website. CAT control and audio work
+          without any FTDI libraries.
+        </p>
       </div>
     </section>
 
@@ -777,21 +963,13 @@
       </div>
     </section>
 
-    <!-- Spectrum -->
-    <section
-      class="section"
-      id="spectrum"
-      style="background: var(--bg-secondary)"
-    >
+
+    <!-- Key Numbers -->
+    <section class="section" id="numbers" style="background: var(--bg-secondary)">
       <div class="container">
         <div class="section-header">
-          <span class="section-label">Spectrum</span>
-          <h2 class="section-title">FFT Plot + Dual-Mode Waterfall</h2>
-          <p class="section-subtitle">
-            FT4222 SPI real spectrum from the FT-710 DSP chip — FFT amplitude
-            line chart above 120-line waterfall, with automatic S-meter
-            synthetic fallback.
-          </p>
+          <span class="section-label">Key Numbers</span>
+          <h2 class="section-title">Spectrum, Audio, Serial — by the Numbers</h2>
         </div>
 
         <div class="perf-grid">
@@ -804,13 +982,7 @@
           <div class="perf-card">
             <div class="metric">~21 fps</div>
             <div class="metric-label">
-              Real Spectrum Rate<br /><small>FT4222 CLK_DIV_16</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">~30 fps</div>
-            <div class="metric-label">
-              S-meter Fallback<br /><small>Synthetic multi-peak</small>
+              Real Spectrum Rate<br /><small>4096B blocks, 0xFF01EE01 sync</small>
             </div>
           </div>
           <div class="perf-card">
@@ -820,70 +992,21 @@
             </div>
           </div>
           <div class="perf-card">
-            <div class="metric">4096 B</div>
-            <div class="metric-label">
-              SPI Block Size<br /><small>0xFF01EE01 sync marker</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">v2</div>
-            <div class="metric-label">
-              Spectrum Protocol<br /><small
-                >1701B frame (1B ver + 2×850B)</small
-              >
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Audio Pipeline -->
-    <section class="section" id="audio" style="background: var(--bg-primary)">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-label">Audio</span>
-          <h2 class="section-title">Opus 48kHz Audio Pipeline</h2>
-          <p class="section-subtitle">
-            Tagged dual-codec transport (Opus 64kbps CBR + Int16 PCM fallback).
-            12× bandwidth reduction vs raw PCM.
-          </p>
-        </div>
-
-        <div class="perf-grid">
-          <div class="perf-card">
             <div class="metric">48kHz</div>
             <div class="metric-label">
-              RX Sample Rate<br /><small>Int16 → Opus 64kbps CBR</small>
+              Codec Domain<br /><small>Opus 64kbps CBR, 12× vs PCM</small>
             </div>
           </div>
           <div class="perf-card">
-            <div class="metric">44.1kHz</div>
+            <div class="metric">0.25s</div>
             <div class="metric-label">
-              TX Playback Rate<br /><small>160:147 resample from 48kHz</small>
+              Poll Timeout Ceiling<br /><small>PTT never waits on a query</small>
             </div>
           </div>
           <div class="perf-card">
-            <div class="metric">220ms</div>
+            <div class="metric">409</div>
             <div class="metric-label">
-              RX Jitter Buffer<br /><small>90ms recovery threshold</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">60ms</div>
-            <div class="metric-label">
-              TX Pre-buffer<br /><small>400ms hard cap</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">64kbps</div>
-            <div class="metric-label">
-              Opus Bitrate<br /><small>12× smaller than 768kbps PCM</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">160:147</div>
-            <div class="metric-label">
-              Resample Ratio<br /><small>Linear interp, phase-continuous</small>
+              Hardware-Free Tests<br /><small>Green on every build</small>
             </div>
           </div>
         </div>
@@ -896,114 +1019,121 @@
             margin-bottom: 1.5rem;
           "
         >
-          Audio Stack
+          Technology Stack
         </h3>
         <div class="tech-stack">
-          <span class="tech-tag">PyAudio</span>
-          <span class="tech-tag">PortAudio</span>
+          <span class="tech-tag">FastAPI + Uvicorn</span>
+          <span class="tech-tag">asyncio</span>
+          <span class="tech-tag">PySerial</span>
+          <span class="tech-tag">PyAudio / PortAudio</span>
           <span class="tech-tag">libopus ctypes</span>
+          <span class="tech-tag">FT4222 SPI</span>
           <span class="tech-tag">AudioWorklet</span>
-          <span class="tech-tag">WASM Opus Decoder</span>
-          <span class="tech-tag">ScriptProcessor</span>
+          <span class="tech-tag">WASM Opus</span>
           <span class="tech-tag">Web Audio API</span>
-          <span class="tech-tag">getUserMedia</span>
+          <span class="tech-tag">Service Worker PWA</span>
         </div>
       </div>
     </section>
 
-    <!-- Download -->
-    <section
-      class="section"
-      id="download"
-      style="background: var(--bg-primary)"
-    >
+    <!-- iOS App -->
+    <section class="section" id="ios" style="background: var(--bg-primary)">
       <div class="container">
         <div class="section-header">
-          <span class="section-label">Download</span>
-          <h2 class="section-title">Windows Desktop Installer</h2>
+          <span class="section-label">iOS App</span>
+          <h2 class="section-title">Native iPhone Client</h2>
           <p class="section-subtitle">
-            Windows 11/12 x64 — embedded Python 3.12 runtime, no manual Python
-            install. Start Menu launcher with per-user config in %LOCALAPPDATA%.
+            SwiftUI companion app (iOS 17+) — same 4-channel WebSocket protocol
+            as the browser, tuned for one-handed mobile operation.
           </p>
         </div>
 
-        <div class="steps">
-          <div class="step">
-            <h4>1 · Install Drivers</h4>
+        <div class="features-grid">
+          <div class="feature-card animate">
+            <div class="icon"><i class="fas fa-broadcast-tower"></i></div>
+            <h3>Full Radio Control</h3>
             <p>
-              Silicon Labs CP210x VCP driver for the FT-710 Enhanced COM Port.
-              FTDI D2XX only if you want FT4222 true spectrum.
+              Frequency (direct entry / step / band jump), VFO A/B, mode, filter
+              width, Preamp/ATT, AGC, NB/NR/ANotch, RF power, mic gain, squelch
+              — all from the iPhone.
             </p>
-            <code
-              >Device Manager → Ports (COM &amp; LPT) → Enhanced COM Port</code
-            >
+            <ul>
+              <li>4 encrypted WebSocket channels (wss)</li>
+              <li>Token auth, password in Keychain</li>
+            </ul>
           </div>
-          <div class="step">
-            <h4>2 · Run the Installer</h4>
+
+          <div class="feature-card animate">
+            <div class="icon"><i class="fas fa-water"></i></div>
+            <h3>Waterfall + Meters</h3>
             <p>
-              MRRC-FT710-Setup.exe — v1.7.1, 30.4 MB, x64. Start Menu + optional
-              desktop shortcut.
+              850-bin real-time waterfall with FFT curve, colormap matched to
+              the web UI. S-meter plus TX meters (PWR / SWR / ALC / COMP) and
+              memory channel list.
             </p>
-            <code>MD5 d9f8851c213af67f12931c3abd6a0469</code>
+            <ul>
+              <li>Same binary spectrum frames as the browser</li>
+              <li>Dark amber theme, portrait + landscape</li>
+            </ul>
           </div>
-          <div class="step">
-            <h4>3 · Edit Configuration</h4>
+
+          <div class="feature-card animate">
+            <div class="icon"><i class="fas fa-microphone"></i></div>
+            <h3>Opus Voice RX/TX</h3>
             <p>
-              Start Menu → Edit Configuration — set the Enhanced COM Port and a
-              strong web password.
+              RX: Opus 48kHz decode and playback through the device speaker. TX:
+              mic capture at 48kHz in 20 ms PCM frames — hold PTT to talk.
             </p>
-            <code>%LOCALAPPDATA%\MRRC-FT710\ft710.env</code>
-          </div>
-          <div class="step">
-            <h4>4 · Launch</h4>
-            <p>
-              Start Menu → MRRC FT-710 — the launcher starts the server and
-              opens the browser automatically.
-            </p>
-            <code>http://127.0.0.1:8888 → login → full control</code>
+            <ul>
+              <li>libopus device build (arm64)</li>
+              <li>Settings: reconnect, gain, volume</li>
+            </ul>
           </div>
         </div>
 
-        <div style="text-align: center; margin-top: 2.5rem">
+        <div
+          style="
+            background: rgba(230, 126, 34, 0.08);
+            border: 1px solid rgba(230, 126, 34, 0.4);
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-top: 2rem;
+          "
+        >
+          <p style="color: var(--text-primary); margin: 0 0 0.5rem">
+            <i class="fas fa-triangle-exclamation" style="color: #e67e22"></i>
+            <strong>Early access — build from source</strong>
+          </p>
+          <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0">
+            Requires a physical iPhone (simulator unsupported — bundled libopus
+            is arm64-device-only), iOS 17+, Xcode 15 + XcodeGen, and a
+            TLS-enabled server. The P0 PTT-safety issues from the 2026-07-20
+            audit are resolved — TX uplink ownership follows the keying client.
+          </p>
+        </div>
+
+        <div style="text-align: center; margin-top: 2rem">
           <a
-            href="downloads/MRRC-FT710-Setup.exe"
-            class="btn btn-primary btn-large"
-          >
-            <i class="fab fa-windows"></i> Download for Windows
-          </a>
-          <a
-            href="https://github.com/cheenle/mrrc_ft710/releases"
+            href="https://github.com/cheenle/mrrc_ft710/tree/main/FT710Mobile"
             class="btn btn-secondary btn-large"
             target="_blank"
             rel="noopener"
           >
-            <i class="fab fa-github"></i> GitHub Releases
+            <i class="fab fa-apple"></i> FT710Mobile on GitHub
           </a>
         </div>
-        <p
-          style="
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            margin-top: 1rem;
-          "
-        >
-          Without the FTDI DLLs the app falls back to the S-meter synthetic
-          spectrum — CAT control and audio are unaffected. macOS / Linux /
-          Raspberry Pi: run from source (steps below).
-        </p>
       </div>
     </section>
 
     <!-- SDD Docs -->
-    <section class="section" id="sdd" style="background: var(--bg-primary)">
+    <section class="section" id="sdd" style="background: var(--bg-secondary)">
       <div class="container" style="text-align: center">
         <div class="section-header">
           <span class="section-label">Documentation</span>
           <h2 class="section-title">Software Design Description</h2>
           <p class="section-subtitle">
             IBM TeamSD methodology &middot; 15 chapters &middot;
-            <strong>V2.1</strong> &middot; Architecture decisions, component
+            <strong>V2.9</strong> &middot; Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
         </div>
@@ -1047,146 +1177,6 @@
       </div>
     </section>
 
-    <!-- Quick Start -->
-    <section class="section" id="start" style="background: var(--bg-secondary)">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-label">Quick Start</span>
-          <h2 class="section-title">Up and Running in 5 Minutes</h2>
-          <p class="section-subtitle">
-            Clone, install dependencies, start the server, open your browser —
-            just four steps.
-          </p>
-        </div>
-
-        <div
-          style="
-            background: var(--bg-primary);
-            border: 1px solid var(--accent);
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
-            margin-bottom: 2rem;
-            text-align: center;
-          "
-        >
-          <i
-            class="fab fa-windows"
-            style="color: var(--accent); font-size: 1.3rem"
-          ></i>
-          <strong style="margin-left: 0.5rem">Windows 11/12?</strong>
-          <span style="color: var(--text-muted)">
-            Skip the steps below — the desktop installer bundles Python (30
-            MB):</span
-          >
-          <a
-            href="downloads/MRRC-FT710-Setup.exe"
-            style="color: var(--accent); font-weight: 600"
-            >MRRC-FT710-Setup.exe</a
-          >
-          <span style="color: var(--text-muted)"
-            >· MD5
-            <code style="font-size: 0.75rem"
-              >d9f8851c213af67f12931c3abd6a0469</code
-            >
-            · also on</span
-          >
-          <a
-            href="https://github.com/cheenle/mrrc_ft710/releases"
-            target="_blank"
-            rel="noopener"
-            style="color: var(--accent)"
-            >GitHub Releases</a
-          >
-        </div>
-
-        <div class="steps">
-          <div class="step">
-            <h4>Clone the Repository</h4>
-            <p>Get the latest code from GitHub</p>
-            <code>git clone https://github.com/cheenle/mrrc_ft710.git</code>
-          </div>
-          <div class="step">
-            <h4>Install Dependencies</h4>
-            <p>Python 3.12+ with FastAPI, Uvicorn, PySerial, PyAudio, NumPy</p>
-            <code>cd mrrc_ft710 && pip install -r requirements.txt</code>
-          </div>
-          <div class="step">
-            <h4>Start the Server</h4>
-            <p>
-              Set the serial port and launch — auto-detects FT-710 USB devices
-            </p>
-            <code
-              >FT710_SERIAL_PORT=/dev/cu.usbserial-XXXX python server.py</code
-            >
-          </div>
-          <div class="step">
-            <h4>Open Your Browser</h4>
-            <p>
-              Any device on your network — phone, tablet, desktop. Default
-              password: ft710
-            </p>
-            <code>https://server-ip:8888 → login → full control</code>
-          </div>
-        </div>
-
-        <div style="text-align: center; margin-top: 3rem">
-          <a
-            href="https://github.com/cheenle/mrrc_ft710"
-            class="btn btn-primary btn-large"
-            target="_blank"
-            rel="noopener"
-          >
-            <i class="fab fa-github"></i> View on GitHub
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Requirements -->
-    <section
-      class="section"
-      id="requirements"
-      style="background: var(--bg-primary)"
-    >
-      <div class="container" style="text-align: center">
-        <div class="section-header">
-          <span class="section-label">Requirements</span>
-          <h2 class="section-title">What You Need</h2>
-        </div>
-        <div class="tech-stack" style="margin-bottom: 0">
-          <span class="tech-tag"
-            ><i class="fas fa-microchip"></i> Yaesu FT-710</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-usb"></i> USB Cable (A→B or C→B)</span
-          >
-          <span class="tech-tag"
-            ><i class="fab fa-python"></i> Python 3.12+</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-server"></i> Windows / macOS / Linux / RPi</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-globe"></i> Modern Browser</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-microchip"></i> FTDI libs (for scope)</span
-          >
-        </div>
-        <p
-          style="
-            color: var(--text-muted);
-            margin-top: 1.5rem;
-            font-size: 0.85rem;
-          "
-        >
-          For real FT4222 SPI spectrum data, install libft4222 + libftd2xx from
-          the wfview app bundle or FTDI website. CAT control and audio work
-          without any FTDI libraries.
-        </p>
-      </div>
-    </section>
-
     <!-- Footer -->
     <footer class="footer">
       <div class="container">
@@ -1196,7 +1186,7 @@
             <p>
               Software SCU-LAN10 Replacement<br />
               One USB Cable, Any Device<br />
-              v2.1 · GPLv3 License
+              v1.7.6 · GPLv3 License
             </p>
           </div>
           <div class="footer-section">
@@ -1204,6 +1194,7 @@
             <ul>
               <li><a href="#">Home</a></li>
               <li><a href="#features">Features</a></li>
+              <li><a href="#download">Download</a></li>
               <li><a href="#architecture">Architecture</a></li>
               <li><a href="#start">Quick Start</a></li>
             </ul>
@@ -1213,7 +1204,7 @@
             <ul>
               <li>
                 <a href="downloads/MRRC-FT710-Setup.exe"
-                  ><i class="fab fa-windows"></i> Windows Installer v2.1</a
+                  ><i class="fab fa-windows"></i> Windows Installer v1.7.6</a
                 >
               </li>
               <li>

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 385 tests across 21 test modules.
+Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 435 tests across 24 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,8 +12,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 385 |
-| Passed | 385 |
+| Total tests | 435 |
+| Passed | 435 |
 | Skipped | 0 (with fastapi installed) |
 | Failed | 0 |
 | Execution time | ~9s (harness tests spawn CLI subprocesses) |
@@ -53,7 +53,7 @@ SDD coverage: §7.2, §10.4, NFRs
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (57 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (73 tests)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
@@ -69,6 +69,9 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `AudioFrameFormatTests` | 6 | Tagged PCM/Opus frame format, Int16 range, 768kbps PCM bandwidth, multi-frame tags |
 | `AudioDeviceDetectionTests` | 2 | FT-710 name pattern matching, non-FT-710 rejection |
 | `USBCodecDeviceSelectionTests` | 8 | Generic USB-audio tier ("USB Audio CODEC"/"USB Audio Device"): wins over mono/full-duplex heuristics (RX+TX), per-host-API duplicates, explicit name lock, "USB Audio" common-prefix lock |
+| `RestartRxTests` | 4 | Windows full-duplex wedge workaround: `restart_rx()` stop→start order, non-Windows no-op, RX-not-running guard, failed-reopen path |
+| `WindowsWasapiTxTests` | 5 | Windows TX WASAPI 48k selection: variant wins, other-device/no-WASAPI guards, 48k feed passthrough, 44.1k feed resample |
+| `StartTxWindowsTests` | 2 | `start_tx` end-to-end: win32 opens WASAPI 48k entry, darwin stays 44.1k (sys-import regression) |
 
 ### 5. test_server_ws_protocol.py — WebSocket Protocol (49 tests)
 
@@ -148,7 +151,7 @@ SDD coverage: AD-005 (pipe subprocess lifecycle)
 | `ScopePipeRestartTests` | 1 | Exited pipe can restart while the previous reader task finishes |
 | `ScopePipeHeartbeatTests` | 2 | len=0 stdout heartbeat accepted silently by the server reader; scope_pipe emits the heartbeat (dead-parent EPIPE detection) |
 
-### 15. test_windows_launcher.py — Windows Launcher (7 tests)
+### 15. test_windows_launcher.py — Windows Launcher (13 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
@@ -223,6 +226,35 @@ SDD coverage: §9.8, §15 (tune-assist carrier safety)
 | `LinkageHookTests` | 3 | Freq-dirty → notify_freq, TX → notify_tx hooks |
 | `SourceGuardTests` | 6 | Disabled/default guard: hooks short-circuit, no client task, frozen-store env override |
 
+### 22. test_scope_pipe_tx.py — Scope Pipe TX Pause (13 tests)
+
+SDD coverage: AD-005 (V2.7 amendment — stdin control channel + Windows tree kill), §9.5.1
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `ApplyControlLineTests` | 6 | `TX:1`/`TX:0` parsing: activate, one-shot resync arm, idempotence, unknown-line ignore, whitespace/case tolerance |
+| `NotifyScopePipeTxTests` | 5 | Server → pipe stdin notify: TX/RX transitions, no-write on unchanged state, force resend, dead-pipe guard |
+| `TerminateProcessTreeTests` | 2 | Windows `taskkill /PID /T /F` vs POSIX SIGTERM selection |
+
+### 23. test_ssl_bootstrap.py — Self-Signed TLS Bootstrap (6 tests)
+
+SDD coverage: V2.10 (HTTPS-by-default launcher bootstrap)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `SelfSignedCertTests` | 4 | First-run generation, PEM validity, SAN coverage (localhost/hostname/IPs), self-issued 10-year server cert, idempotent reuse |
+| `CryptoMissingTests` | 1 | Graceful None when cryptography is unavailable |
+| `LanIpTests` | 1 | LAN IP detection excludes loopback, IPv4-parseable |
+
+### 24. test_power_switch.py — Radio Power Command Guards (9 tests)
+
+SDD coverage: V2.11 (header power switch), V2.12 (boot-window guard + PS1 verify, 2026-07-27 CAT-MCU wedge incident)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `PowerOnRadioTests` | 4 | PS1 verify-first-attempt, retry-until-answer, give-up after N attempts, boot window armed |
+| `PowerSetCommandGuardTests` | 5 | PS0 rejected in boot window, PS0 refused while TX, PS0 double-send, PS1 failure error message, PS1 success state update |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -231,7 +263,7 @@ SDD coverage: §9.8, §15 (tune-assist carrier safety)
 | AD-002 Direct Serial CAT | test_cat_controller | 29 tests |
 | AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 33+ tests |
 | AD-004 Dual-Codec Audio | test_audio | 48 tests |
-| AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart | 14 tests |
+| AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart, test_scope_pipe_tx | 27 tests |
 | AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 8 tests |
 | AD-007 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | AD-008 PyAudio Detection | test_audio (AudioDeviceDetectionTests) | 2 tests |

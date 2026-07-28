@@ -132,7 +132,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("ft710-v21", sw_source)
+        self.assertIn("ft710-v23", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
@@ -456,14 +456,20 @@ class AudioDeviceDetectionTests(unittest.TestCase):
 class _FakePyAudio:
     """Minimal PyAudio stand-in for device-selection tests."""
 
-    def __init__(self, devices):
+    def __init__(self, devices, host_apis=None):
         self._devices = devices
+        self._host_apis = host_apis
 
     def get_device_count(self):
         return len(self._devices)
 
     def get_device_info_by_index(self, i):
         return self._devices[i]
+
+    def get_host_api_info_by_index(self, i):
+        if self._host_apis is not None:
+            return {"name": self._host_apis[i]}
+        return {"name": "MME"}
 
     def get_default_output_device_info(self):
         for i, d in enumerate(self._devices):
@@ -472,12 +478,13 @@ class _FakePyAudio:
         raise OSError("no default output")
 
 
-def _dev(name, inputs=0, outputs=0):
+def _dev(name, inputs=0, outputs=0, rate=44100, host_api=0):
     return {
         "name": name,
         "maxInputChannels": inputs,
         "maxOutputChannels": outputs,
-        "defaultSampleRate": 44100,
+        "defaultSampleRate": rate,
+        "hostApi": host_api,
     }
 
 
@@ -502,6 +509,28 @@ class USBCodecDeviceSelectionTests(unittest.TestCase):
             _dev("麦克风 (USB Audio CODEC)", inputs=1),
         ])
         self.assertEqual(h._find_rx_device(), 1)
+
+    def test_rx_prefers_full_duplex_codec_when_multiple_match(self):
+        # Field report (macOS): two codec-named devices enumerate at once —
+        # "USB Audio CODEC" (input-only interloper, e.g. a headset mic) ahead
+        # of "USB Audio Device" (the full-duplex FT-710). First-match would
+        # grab the interloper; the FT-710 sound card has both input + output,
+        # so prefer the codec match that is full-duplex.
+        h = self._make_handler([
+            _dev("USB Audio CODEC", inputs=1),
+            _dev("USB Audio Device", inputs=1, outputs=2),
+        ])
+        self.assertEqual(h._find_rx_device(), 1)
+
+    def test_tx_prefers_full_duplex_codec_when_multiple_match(self):
+        # Same collision on the TX side: output-only "USB Audio CODEC" lands
+        # first, full-duplex "USB Audio Device" (FT-710) second. TX modulation
+        # must route to the full-duplex codec, not the first hit.
+        h = self._make_handler([
+            _dev("USB Audio CODEC", outputs=2),
+            _dev("USB Audio Device", inputs=1, outputs=2),
+        ])
+        self.assertEqual(h._find_tx_device(), 1)
 
     def test_rx_uses_first_codec_match_when_duplicated_per_host_api(self):
         # Same physical device under MME + WASAPI — first match is fine.
@@ -573,6 +602,314 @@ class USBCodecDeviceSelectionTests(unittest.TestCase):
             self.assertEqual(h._find_tx_device(), 1)
         finally:
             config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
+
+
+class RestartRxTests(unittest.TestCase):
+    """Windows full-duplex workaround (SDD V2.8): the TX playback stream
+    silently wedges RX capture on the same C-Media USB codec, so the RX
+    stream is reopened on every TX→RX transition (Windows only)."""
+
+    def _make_handler(self):
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._rx_running = True
+        h._rx_stream = object()
+        h._pa = object()  # non-None sentinel; stop/start are stubbed below
+        return h
+
+    def test_windows_reopens_stop_then_start(self):
+        from unittest.mock import patch
+        h = self._make_handler()
+        calls = []
+        h.stop_rx = lambda: calls.append("stop")
+        h.start_rx = lambda: (calls.append("start"), True)[1]
+        with patch("sys.platform", "win32"):
+            h.restart_rx()
+        self.assertEqual(calls, ["stop", "start"])
+
+    def test_non_windows_is_noop(self):
+        from unittest.mock import patch
+        h = self._make_handler()
+
+        def _boom():
+            raise AssertionError("streams must not be touched off Windows")
+
+        h.stop_rx = _boom
+        h.start_rx = _boom
+        with patch("sys.platform", "darwin"):
+            h.restart_rx()
+
+    def test_skipped_when_rx_not_running(self):
+        from unittest.mock import patch
+        h = self._make_handler()
+        h._rx_running = False
+        called = []
+        h.stop_rx = lambda: called.append("stop")
+        with patch("sys.platform", "win32"):
+            h.restart_rx()
+        self.assertEqual(called, [])
+
+    def test_failed_reopen_logs_warning(self):
+        from unittest.mock import patch
+        h = self._make_handler()
+        calls = []
+        h.stop_rx = lambda: calls.append("stop")
+        h.start_rx = lambda: (calls.append("start"), False)[1]
+        with patch("sys.platform", "win32"):
+            h.restart_rx()
+        self.assertEqual(calls, ["stop", "start"])
+
+
+class WindowsWasapiTxTests(unittest.TestCase):
+    """SDD V2.9: on Windows the TX output switches to the WASAPI entry of
+    the same codec at its native 48 kHz mix rate — the MME 44.1 kHz path
+    paces ~1.4x slow (measured on the Win11 KVM rig), starving the drain
+    loop and crackling TX audio."""
+
+    def _make_handler(self, devices, host_apis):
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._pa = _FakePyAudio(devices, host_apis)
+        return h
+
+    def test_wasapi_entry_at_native_rate_wins(self):
+        h = self._make_handler(
+            [_dev("扬声器 (USB Audio Device)", outputs=2, rate=44100, host_api=0),
+             _dev("扬声器 (USB Audio Device)", outputs=2, rate=48000, host_api=1)],
+            ["MME", "Windows WASAPI"],
+        )
+        self.assertEqual(h._wasapi_tx_variant(0), (1, 48000))
+
+    def test_wasapi_entry_of_another_device_ignored(self):
+        h = self._make_handler(
+            [_dev("扬声器 (USB Audio Device)", outputs=2, rate=44100, host_api=0),
+             _dev("扬声器 (Realtek)", outputs=2, rate=48000, host_api=1)],
+            ["MME", "Windows WASAPI"],
+        )
+        self.assertIsNone(h._wasapi_tx_variant(0))
+
+    def test_no_wasapi_entry_returns_none(self):
+        h = self._make_handler(
+            [_dev("扬声器 (USB Audio Device)", outputs=2, rate=44100, host_api=0),
+             _dev("扬声器 (USB Audio Device)", outputs=2, rate=44100, host_api=1)],
+            ["MME", "Windows DirectSound"],
+        )
+        self.assertIsNone(h._wasapi_tx_variant(0))
+
+    def _feed_handler(self, rate):
+        import threading
+        from collections import deque
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._tx_stream = object()  # non-None sentinel
+        h._tx_queue = deque()
+        h._tx_queued_bytes = 0
+        h._tx_peak = 0
+        h._tx_lock = threading.Lock()
+        if rate is not None:
+            h._tx_rate = rate
+        return h
+
+    def test_feed_passthrough_at_48k(self):
+        h = self._feed_handler(48000)
+        frame = b"\x01\x02" * 960  # 20 ms @ 48 kHz
+        h.feed_tx_audio(frame)
+        self.assertEqual(h._tx_queue[0], frame)  # untouched, no resample
+
+    def test_feed_resamples_at_44100(self):
+        h = self._feed_handler(None)  # default = FT-710 native 44.1 kHz
+        h.feed_tx_audio(b"\x01\x02" * 960)
+        self.assertEqual(len(h._tx_queue[0]), 882 * 2)
+
+
+class _FakeTxStream:
+    def __init__(self):
+        self._active = True
+
+    def is_active(self):
+        return self._active
+
+    def write(self, _data):
+        return None
+
+    def stop_stream(self):
+        self._active = False
+
+    def close(self):
+        self._active = False
+
+
+class _FakePyAudioOpen(_FakePyAudio):
+    """_FakePyAudio extended with open() so start_tx can run end-to-end."""
+
+    def __init__(self, devices, host_apis=None):
+        super().__init__(devices, host_apis)
+        self.open_calls = []
+
+    def open(self, **kwargs):
+        self.open_calls.append(kwargs)
+        return _FakeTxStream()
+
+
+class StartTxWindowsTests(unittest.TestCase):
+    """start_tx end-to-end on win32: must not raise (v1.7.4 sys-import
+    regression), must open the WASAPI 48 kHz entry."""
+
+    def _make_handler(self, devices, host_apis):
+        import threading
+        from collections import deque
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._pa = _FakePyAudioOpen(devices, host_apis)
+        h.rx_device = None
+        h.tx_device = None
+        h._tx_stream = None
+        h._tx_queue = deque()
+        h._tx_queued_bytes = 0
+        h._tx_primed = False
+        h._tx_lock = threading.Lock()
+        h._tx_write_lock = threading.Lock()
+        return h
+
+    def test_start_tx_opens_wasapi_48k_on_win32(self):
+        import config
+        from unittest.mock import patch
+        old_rx, old_tx = config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE
+        config.AUDIO_RX_DEVICE = ""
+        config.AUDIO_TX_DEVICE = ""
+        try:
+            h = self._make_handler(
+                [_dev("扬声器 (USB Audio CODEC)", outputs=2, rate=44100, host_api=0),
+                 _dev("扬声器 (USB Audio CODEC)", outputs=2, rate=48000, host_api=1)],
+                ["MME", "Windows WASAPI"],
+            )
+            with patch("sys.platform", "win32"):
+                ok = h.start_tx()
+            self.assertTrue(ok)
+            self.assertEqual(h._tx_rate, 48000)
+            self.assertEqual(h._pa.open_calls[0]["output_device_index"], 1)
+            self.assertEqual(h._pa.open_calls[0]["rate"], 48000)
+        finally:
+            config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
+
+    def test_start_tx_stays_44100_on_macos(self):
+        import config
+        from unittest.mock import patch
+        old_rx, old_tx = config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE
+        config.AUDIO_RX_DEVICE = ""
+        config.AUDIO_TX_DEVICE = ""
+        try:
+            h = self._make_handler(
+                [_dev("扬声器 (USB Audio CODEC)", outputs=2, rate=44100, host_api=0)],
+                ["Core Audio"],
+            )
+            with patch("sys.platform", "darwin"):
+                ok = h.start_tx()
+            self.assertTrue(ok)
+            self.assertEqual(h._tx_rate, 44100)
+            self.assertEqual(h._pa.open_calls[0]["rate"], 44100)
+        finally:
+            config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
+
+
+class _FailingOpenPyAudio(_FakePyAudioOpen):
+    """Fake PyAudio whose open() always fails with the macOS USB
+    re-enumeration signature error (-9999)."""
+
+    def open(self, **kwargs):
+        self.open_calls.append(kwargs)
+        raise OSError("[Errno -9999] Unanticipated host error")
+
+
+class PortAudioReinitTests(unittest.TestCase):
+    """USB re-enumeration (every radio power cycle drops/re-adds the
+    FT-710's sound card) invalidates the device IDs PortAudio cached at
+    Pa_Initialize time — subsequent opens fail with -9999 (field report
+    2026-07-27: every PTT failed after CAT power cycles until the server
+    was restarted).  start_rx/start_tx must re-initialize PortAudio once
+    and retry with a freshly resolved device index."""
+
+    DEVICES = None  # set per test
+
+    def _patch_devices_empty(self):
+        import config
+        self._old_rx, self._old_tx = config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE
+        config.AUDIO_RX_DEVICE = ""
+        config.AUDIO_TX_DEVICE = ""
+
+    def _restore_devices(self):
+        import config
+        config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = self._old_rx, self._old_tx
+
+    def _make_handler(self, pa):
+        import threading
+        from collections import deque
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._pa = pa
+        h.rx_device = None
+        h.tx_device = None
+        h._tx_stream = None
+        h._tx_queue = deque()
+        h._tx_queued_bytes = 0
+        h._tx_primed = False
+        h._tx_lock = threading.Lock()
+        h._tx_write_lock = threading.Lock()
+        h._rx_stream = None
+        h._rx_running = False
+        return h
+
+    def test_start_tx_reinits_pyaudio_then_succeeds(self):
+        self._patch_devices_empty()
+        try:
+            bad = _FailingOpenPyAudio([_dev("USB Audio Device", inputs=1, outputs=2)])
+            good = _FakePyAudioOpen([_dev("USB Audio Device", inputs=1, outputs=2)])
+            h = self._make_handler(bad)
+            reinit_calls = []
+            def fake_reinit():
+                reinit_calls.append(1)
+                h._pa = good
+            h._reinit_pyaudio = fake_reinit
+            self.assertTrue(h.start_tx())
+            self.assertEqual(len(reinit_calls), 1)
+            self.assertEqual(len(bad.open_calls), 3)   # first round exhausted
+            self.assertEqual(len(good.open_calls), 1)  # retry after re-init
+        finally:
+            self._restore_devices()
+
+    def test_start_tx_gives_up_when_reinit_does_not_help(self):
+        self._patch_devices_empty()
+        try:
+            bad = _FailingOpenPyAudio([_dev("USB Audio Device", inputs=1, outputs=2)])
+            still_bad = _FailingOpenPyAudio([_dev("USB Audio Device", inputs=1, outputs=2)])
+            h = self._make_handler(bad)
+            def fake_reinit():
+                h._pa = still_bad
+            h._reinit_pyaudio = fake_reinit
+            self.assertFalse(h.start_tx())
+            self.assertEqual(len(bad.open_calls), 3)
+            self.assertEqual(len(still_bad.open_calls), 3)
+        finally:
+            self._restore_devices()
+
+    def test_start_rx_reinits_pyaudio_then_succeeds(self):
+        self._patch_devices_empty()
+        try:
+            bad = _FailingOpenPyAudio([_dev("USB Audio Device", inputs=1, outputs=2)])
+            good = _FakePyAudioOpen([_dev("USB Audio Device", inputs=1, outputs=2)])
+            h = self._make_handler(bad)
+            reinit_calls = []
+            def fake_reinit():
+                reinit_calls.append(1)
+                h._pa = good
+            h._reinit_pyaudio = fake_reinit
+            self.assertTrue(h.start_rx())
+            self.assertTrue(h._rx_running)
+            self.assertEqual(len(reinit_calls), 1)
+            self.assertEqual(len(bad.open_calls), 1)   # single try, then re-init
+            self.assertEqual(len(good.open_calls), 1)
+        finally:
+            self._restore_devices()
 
 
 if __name__ == "__main__":

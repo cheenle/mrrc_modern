@@ -87,6 +87,7 @@ Key commands (see `_execute_set_command` in `server.py` for complete list):
 | `tuner` | 0,1,2 | `AC000;` / `AC001;` / `AC003;` | ATU OFF/ON/TUNE start; mapping differs from Hamlib (`AC010`/`AC011`) — see gap-analysis §1.1 note |
 | `vfo` | "A","B" | `VS0;` / `VS1;` | Active VFO switch |
 | `split` | true/false | `ST<0/1>;` | Split operation |
+| `power` | true/false | `PS1;` / `PS0;` | Maintenance-script path only — NO web UI (V2.13: PS1 wake unreliable, mid-boot PS0 wedges the CAT MCU). Guards: 15 s boot window after `PS1` rejects `PS0`; `PS1` retried ≤3× and verified by `FA;` read-back; `PS0` sent twice; refused while TX. `PS;` polled in Tier 3 for `power_on` state |
 | `band` | "20m","40m",... | `BS<NN>;` | Band stacking register |
 | `scope_span` | 0–9 | `SS05<NN>;` | Scope span index |
 | `scope_speed` | 0–5 | `SS00<NN>;` | Scope sweep speed |

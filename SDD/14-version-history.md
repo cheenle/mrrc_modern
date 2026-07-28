@@ -67,7 +67,7 @@
 | AD-008 | PyAudio FT-710 auto-detection |
 | AD-009 | 7-tier adaptive polling with bounded lock occupancy |
 | AD-010 | Memory channels as server-side JSON |
-| AD-011 | Unified 48kHz TX audio pipeline |
+| AD-011 | 48 kHz codec / 44.1 kHz device bridge |
 | AD-012 | Active-VFO tracking (VS poll + FB poll — target active VFO on freq set) |
 | AD-013 | Meter calibration tables (piecewise-linear from FT-710.rig) |
 | AD-014 | AI mode disabled — active polling; DN=step-down not DNR |

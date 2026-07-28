@@ -232,7 +232,7 @@
 | AD-008 | PyAudio FT-710 auto-detection | Implemented |
 | AD-009 | 7-task adaptive polling with bounded lock time | Implemented |
 | AD-010 | Memory channels as server-side JSON | Implemented |
-| AD-011 | Unified 48kHz TX audio pipeline | Implemented |
+| AD-011 | 48 kHz codec / 44.1 kHz device bridge | Implemented |
 | AD-012 | Active-VFO-aware frequency model | Implemented |
 | AD-013 | FT-710 meter calibration tables | Implemented |
 | AD-014 | FT-710 CAT errata handling | Implemented |

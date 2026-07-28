@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-28
 **Target release:** v1.7.8 test build
-**Status:** Approved design; implementation pending
+**Status:** Implemented; Win11 build/install verified; RF acceptance pending
 
 ## 1. Problem
 
@@ -127,3 +127,25 @@ Hardware acceptance is intentionally separate:
 - Focused and full automated tests pass; SDD checks are clean.
 - v1.7.8 test installer builds and installs on the Win11 VM.
 - Public downloads remain unchanged until hardware acceptance.
+
+## 8. Verification Status
+
+Verified on 2026-07-28:
+
+- Local: `py_compile`, 435-test suite, and SDD Guardian passed; TDD red tests
+  reproduced the 48 kHz pass-through/rate-promotion behavior before the fix.
+- Win11 VM: Python 3.12.4 on Windows 11 build 26200 passed all 435 tests;
+  PyInstaller 6.21.0 built all three targets and Inno Setup 6.7.3 compiled
+  the installer successfully.
+- Installer: product/registry version 1.7.8; silent upgrade exited 0; installed
+  launcher, server, static assets, FTDI DLLs, and both packaged `opus.dll`
+  locations were present.
+- Installed-app smoke: `ft710-server.exe` reached application startup and
+  returned HTTP 200; log confirmed `TX Opus decoder ready: 48000 Hz mono`.
+  The VM exposed no FT-710 audio endpoint during this run, so the live
+  `TX audio started: [...] @ 44100 Hz` and RF speech/noise checks remain the
+  operator's hardware acceptance step.
+- Artifact: `dist/windows/MRRC-FT710-v1.7.8-TX-44k1-test.exe`, 36,677,095
+  bytes, SHA-256
+  `8bf9c7ae61e2fc78e02969f05b9f18bda256f39bd2a1975e345243ecf815c208`.
+- No `website/` file or public v1.7.6 download target was changed.

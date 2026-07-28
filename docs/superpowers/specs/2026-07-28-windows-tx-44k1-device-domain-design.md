@@ -1,7 +1,7 @@
 # Windows TX 44.1 kHz Device-Domain Design
 
-**Date:** 2026-07-28  
-**Target release:** v1.7.8 test build  
+**Date:** 2026-07-28
+**Target release:** v1.7.8 test build
 **Status:** Approved design; implementation pending
 
 ## 1. Problem

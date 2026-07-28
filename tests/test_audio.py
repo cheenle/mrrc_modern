@@ -660,48 +660,16 @@ class RestartRxTests(unittest.TestCase):
         self.assertEqual(calls, ["stop", "start"])
 
 
-class WindowsWasapiTxTests(unittest.TestCase):
-    """SDD V2.9: on Windows the TX output switches to the WASAPI entry of
-    the same codec at its native 48 kHz mix rate — the MME 44.1 kHz path
-    paces ~1.4x slow (measured on the Win11 KVM rig), starving the drain
-    loop and crackling TX audio."""
+class TxDeviceDomainTests(unittest.TestCase):
+    """SDD AD-011: Opus PCM is always converted from 48 kHz to the
+    FT-710's fixed 44.1 kHz device domain (960→882 samples per 20 ms)."""
 
-    def _make_handler(self, devices, host_apis):
-        from audio_handler import AudioHandler
-        h = AudioHandler.__new__(AudioHandler)
-        h._pa = _FakePyAudio(devices, host_apis)
-        return h
-
-    def test_wasapi_entry_at_native_rate_wins(self):
-        h = self._make_handler(
-            [_dev("扬声器 (USB Audio Device)", outputs=2, rate=44100, host_api=0),
-             _dev("扬声器 (USB Audio Device)", outputs=2, rate=48000, host_api=1)],
-            ["MME", "Windows WASAPI"],
-        )
-        self.assertEqual(h._wasapi_tx_variant(0), (1, 48000))
-
-    def test_wasapi_entry_of_another_device_ignored(self):
-        h = self._make_handler(
-            [_dev("扬声器 (USB Audio Device)", outputs=2, rate=44100, host_api=0),
-             _dev("扬声器 (Realtek)", outputs=2, rate=48000, host_api=1)],
-            ["MME", "Windows WASAPI"],
-        )
-        self.assertIsNone(h._wasapi_tx_variant(0))
-
-    def test_no_wasapi_entry_returns_none(self):
-        h = self._make_handler(
-            [_dev("扬声器 (USB Audio Device)", outputs=2, rate=44100, host_api=0),
-             _dev("扬声器 (USB Audio Device)", outputs=2, rate=44100, host_api=1)],
-            ["MME", "Windows DirectSound"],
-        )
-        self.assertIsNone(h._wasapi_tx_variant(0))
-
-    def _feed_handler(self, rate):
+    def _feed_handler(self, rate=None):
         import threading
         from collections import deque
         from audio_handler import AudioHandler
         h = AudioHandler.__new__(AudioHandler)
-        h._tx_stream = object()  # non-None sentinel
+        h._tx_stream = object()
         h._tx_queue = deque()
         h._tx_queued_bytes = 0
         h._tx_peak = 0
@@ -710,16 +678,26 @@ class WindowsWasapiTxTests(unittest.TestCase):
             h._tx_rate = rate
         return h
 
-    def test_feed_passthrough_at_48k(self):
-        h = self._feed_handler(48000)
-        frame = b"\x01\x02" * 960  # 20 ms @ 48 kHz
-        h.feed_tx_audio(frame)
-        self.assertEqual(h._tx_queue[0], frame)  # untouched, no resample
-
-    def test_feed_resamples_at_44100(self):
-        h = self._feed_handler(None)  # default = FT-710 native 44.1 kHz
+    def test_48k_frame_resamples_to_exact_44k1_frame(self):
+        h = self._feed_handler()
         h.feed_tx_audio(b"\x01\x02" * 960)
         self.assertEqual(len(h._tx_queue[0]), 882 * 2)
+        self.assertEqual(h._tx_queued_bytes, 1764)
+
+    def test_stale_48k_rate_cannot_bypass_resampling(self):
+        h = self._feed_handler(48000)
+        frame = b"\x01\x02" * 960
+        h.feed_tx_audio(frame)
+        self.assertEqual(len(h._tx_queue[0]), 882 * 2)
+        self.assertNotEqual(h._tx_queue[0], frame)
+
+    def test_prebuffer_budget_is_derived_from_44100(self):
+        from audio_handler import TX_PREBUFFER_BYTES, TX_PREBUFFER_MS
+        self.assertEqual(TX_PREBUFFER_BYTES, 44100 * 2 * TX_PREBUFFER_MS // 1000)
+
+    def test_max_buffer_budget_is_derived_from_44100(self):
+        from audio_handler import TX_MAX_BUFFER_BYTES, TX_MAX_BUFFER_MS
+        self.assertEqual(TX_MAX_BUFFER_BYTES, 44100 * 2 * TX_MAX_BUFFER_MS // 1000)
 
 
 class _FakeTxStream:
@@ -753,7 +731,7 @@ class _FakePyAudioOpen(_FakePyAudio):
 
 class StartTxWindowsTests(unittest.TestCase):
     """start_tx end-to-end on win32: must not raise (v1.7.4 sys-import
-    regression), must open the WASAPI 48 kHz entry."""
+    regression), and must keep the selected device at 44.1 kHz."""
 
     def _make_handler(self, devices, host_apis):
         import threading
@@ -771,7 +749,7 @@ class StartTxWindowsTests(unittest.TestCase):
         h._tx_write_lock = threading.Lock()
         return h
 
-    def test_start_tx_opens_wasapi_48k_on_win32(self):
+    def test_start_tx_keeps_selected_device_at_44100_on_win32(self):
         import config
         from unittest.mock import patch
         old_rx, old_tx = config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE
@@ -786,9 +764,12 @@ class StartTxWindowsTests(unittest.TestCase):
             with patch("sys.platform", "win32"):
                 ok = h.start_tx()
             self.assertTrue(ok)
-            self.assertEqual(h._tx_rate, 48000)
-            self.assertEqual(h._pa.open_calls[0]["output_device_index"], 1)
-            self.assertEqual(h._pa.open_calls[0]["rate"], 48000)
+            self.assertEqual(h._tx_rate, 44100)
+            self.assertEqual(h._pa.open_calls[0]["output_device_index"], 0)
+            self.assertEqual(h._pa.open_calls[0]["rate"], 44100)
+            self.assertEqual(h._pa.open_calls[0]["frames_per_buffer"], 882)
+            self.assertEqual(h._tx_prebuffer_bytes, 44100 * 2 * 60 // 1000)
+            self.assertEqual(h._tx_max_buffer_bytes, 44100 * 2 * 400 // 1000)
         finally:
             config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
 
@@ -874,6 +855,39 @@ class PortAudioReinitTests(unittest.TestCase):
             self.assertEqual(len(reinit_calls), 1)
             self.assertEqual(len(bad.open_calls), 3)   # first round exhausted
             self.assertEqual(len(good.open_calls), 1)  # retry after re-init
+        finally:
+            self._restore_devices()
+
+    def test_start_tx_reinit_preserves_44100_when_enumeration_changes(self):
+        from unittest.mock import patch
+        self._patch_devices_empty()
+        try:
+            bad = _FailingOpenPyAudio(
+                [_dev("USB Audio Device", inputs=1, outputs=2,
+                      rate=44100, host_api=0),
+                 _dev("USB Audio Device", inputs=1, outputs=2,
+                      rate=48000, host_api=1)],
+                ["MME", "Windows WASAPI"],
+            )
+            good = _FakePyAudioOpen(
+                [_dev("Built-in Speakers", outputs=2,
+                      rate=48000, host_api=0),
+                 _dev("USB Audio Device", inputs=1, outputs=2,
+                      rate=48000, host_api=1)],
+                ["MME", "Windows WASAPI"],
+            )
+            h = self._make_handler(bad)
+
+            def fake_reinit():
+                h._pa = good
+
+            h._reinit_pyaudio = fake_reinit
+            with patch("sys.platform", "win32"):
+                self.assertTrue(h.start_tx())
+            self.assertEqual(len(bad.open_calls), 3)
+            self.assertEqual(good.open_calls[0]["output_device_index"], 1)
+            self.assertEqual(good.open_calls[0]["rate"], 44100)
+            self.assertEqual(good.open_calls[0]["frames_per_buffer"], 882)
         finally:
             self._restore_devices()
 

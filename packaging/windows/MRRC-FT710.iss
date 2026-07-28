@@ -1,5 +1,5 @@
 #define MyAppName "MRRC FT-710"
-#define MyAppVersion "1.7.7"
+#define MyAppVersion "1.7.8"
 #define MyAppPublisher "MRRC"
 #define MyAppExeName "MRRC-FT710.exe"
 

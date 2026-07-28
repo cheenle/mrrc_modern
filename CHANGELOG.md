@@ -2,6 +2,29 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.7.8] — 2026-07-28 — Windows TX Restored to 44.1 kHz Device Audio
+
+### Fixed
+- **Windows TX now keeps the FT-710 USB device domain at 44.1 kHz**
+  (SDD V2.14). Browser capture and Opus remain correctly fixed at 48 kHz
+  with 960 samples per 20 ms; every decoded frame is now unconditionally
+  resampled to 882 samples before PyAudio opens/writes the radio at
+  44.1 kHz. The same rule applies after PortAudio reinitialization.
+- Removed the Windows policy that promoted a same-name WASAPI endpoint's
+  advertised 48 kHz `defaultSampleRate` into the FT-710 device rate and
+  bypassed SRC. That value is the Windows shared-mode mix rate, not proof
+  of the radio's USB hardware clock. The earlier KVM pacing result remains
+  useful incident evidence but is not a valid hardware-rate decision.
+- Preserved the Windows TX→RX capture reopen workaround and the v1.7.7
+  PortAudio terminate/reinitialize/device-name re-resolution recovery.
+
+### Tests
+- Replaced the obsolete WASAPI-selection contract with regressions for
+  fixed 44.1 kHz stream opening, exact 960→882 conversion, 44.1 kHz byte
+  budgets, and rate preservation after device re-enumeration. Suite stays
+  at 435 tests. RF speech/noise acceptance remains pending the operator's
+  evening FT-710 test; this build is not yet a public download.
+
 ## [v1.7.7] — 2026-07-28 — Audio Survives Radio Power Cycles (Power Switch Withdrawn)
 
 ### Fixed

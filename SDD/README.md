@@ -34,9 +34,9 @@ Runtime facts are derived from `server.py`, `cat_controller.py`, `audio_handler.
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-FT710-2026-001 |
-| SDD Version | V2.13 |
-| Baseline Date | 2026-07-26 |
-| Status | Production release (documentation synchronized with runtime) |
+| SDD Version | V2.14 |
+| Baseline Date | 2026-07-28 |
+| Status | v1.7.8 Windows test build; RF acceptance pending |
 | Project | MRRC FT-710 |
 | Primary Radio | Yaesu FT-710 (HF/50MHz Transceiver) |
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy, PyAudio |

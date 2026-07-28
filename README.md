@@ -127,7 +127,7 @@ Microphone → getUserMedia (48kHz) → ScriptProcessor (512buf, ~10.7ms)
             → PyAudio playback (44.1kHz, mono) → FT-710 USB Audio Input
 ```
 
-TX chain resamples from Opus 48kHz to the FT-710's native 44.1kHz USB audio rate using linear interpolation at an exact 160:147 ratio — frame boundaries stay phase-continuous so no periodic clicks.
+TX chain resamples from Opus 48kHz to the FT-710's native 44.1kHz USB audio rate on every platform, including Windows, using linear interpolation at an exact 160:147 ratio — frame boundaries stay phase-continuous so no periodic clicks. A Windows WASAPI shared-mode mix rate never replaces this device-domain boundary.
 
 **TX audio stability (v1.2):**
 - **Jitter buffer**: Pre-buffers 60ms before first DAC write to absorb WebSocket jitter; hard cap at 400ms with oldest-first drop bounds latency under Wi-Fi stalls.
@@ -222,7 +222,7 @@ mrrc_ft710/
 | Feature | Implementation |
 |---------|---------------|
 | RX Audio | PyAudio capture → Opus 64kbps → AudioWorklet playback |
-| TX Audio | Browser mic (48kHz) → Opus 64kbps CBR → server TxOpusDecoder → resample 48→44.1k → PyAudio 44.1kHz → radio. Jitter buffer (60ms pre-buffer / 400ms cap) + graceful PTT drain (Pa_StopStream blocks until DAC finishes) |
+| TX Audio | Browser mic (48kHz) → Opus 64kbps CBR → server TxOpusDecoder → always resample 960→882 (48→44.1k) → PyAudio 44.1kHz on all OSes → radio. Jitter buffer (60ms pre-buffer / 400ms cap) + graceful PTT drain (Pa_StopStream blocks until DAC finishes) |
 | Codec | Tagged dual-codec: Opus (64kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
 | Bandwidth | Opus ~64kbps (12× smaller than 768kbps PCM) |
 

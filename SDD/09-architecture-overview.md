@@ -116,7 +116,7 @@ Browser Microphone
                         → PyAudio output stream (44.1kHz, mono) → FT-710 USB Audio Input
 ```
 
-**TX runs at 48 kHz throughout the codec domain** — browser capture and Opus encode/decode — and the server bridges to the FT-710's native 44.1 kHz USB audio via frame-aligned resampling (960↔882 = exactly 20 ms, ratio 160:147). This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) that caused audible crackling on transmitted audio.
+**TX runs at 48 kHz throughout the codec domain** — browser capture and Opus encode/decode — and the server bridges to the FT-710's native 44.1 kHz USB audio via frame-aligned resampling (960↔882 = exactly 20 ms, ratio 160:147) on every platform, including Windows. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) and prevents a Windows shared-mode mix rate from bypassing the device-domain bridge.
 
 ## 9.5 Spectrum Signal Chain
 

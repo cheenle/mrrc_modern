@@ -5,6 +5,15 @@ The package is designed for Windows 11 and Windows 12-class x64 desktop
 systems. It installs a user-launched desktop app with an embedded Python
 runtime; users do not need to install Python manually.
 
+## Private v1.7.8 TX Test Build
+
+The v1.7.8 package is a private operator test build, not the public download.
+It keeps browser/Opus audio at 48 kHz but always converts each 960-sample TX
+frame to 882 samples and opens the selected FT-710 playback device at
+16-bit/44.1 kHz. A WASAPI endpoint advertising a 48 kHz shared-mode mix rate
+does not change the radio device rate. Public download links below remain on
+v1.7.6 until the FT-710 RF speech/noise test is accepted.
+
 ## Download (v1.7.6)
 
 | File | Size | MD5 |
@@ -21,7 +30,8 @@ throwaway self-signed certificate on first run and starts the server on
 HTTPS (required for browser audio from phones/other devices; set
 `FT710_SSL=off` for plain HTTP). Also included from v1.7.2–v1.7.5: TX-safe
 spectrum, the Windows full-duplex RX fix, the native WASAPI 48 kHz TX path,
-and bundled libopus (see CHANGELOG).
+and bundled libopus (see CHANGELOG). The private v1.7.8 test build supersedes
+that WASAPI TX policy with the fixed 44.1 kHz FT-710 device boundary.
 
 ## User Installation
 
@@ -99,6 +109,11 @@ on the driver/OS build — it does *not* contain "FT-710" or "YAESU", which is
 why auto-detection can pick the wrong device (laptop mic for RX, PC speakers
 for TX). Lock the device explicitly as follows.
 
+The codec/network side remains 48 kHz. For TX, the server always converts
+960 samples at 48 kHz to 882 samples at 44.1 kHz before queueing PyAudio;
+the selected Windows output entry is opened at 44.1 kHz even if its displayed
+WASAPI default rate is 48 kHz.
+
 ### 1. Identify the device
 
 - Windows Settings → System → Sound (or Device Manager → Sound, video and
@@ -171,7 +186,8 @@ TX modulation source is configured **per mode** (FT-710 Operation Manual,
 1. Launcher console shows
    `RX audio started: [n] ... (USB Audio ...) @ 44100 Hz`.
 2. RX: the browser plays band noise that follows the radio's AF gain.
-3. TX: hold PTT and speak — the PO/ALC meter on the radio (and in the web
+3. TX: the first PTT shows `TX audio started: [n] ... @ 44100 Hz`.
+4. TX: hold PTT and speak — the PO/ALC meter on the radio (and in the web
    UI) moves; confirm on a monitoring receiver.
 
 

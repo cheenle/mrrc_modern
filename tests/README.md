@@ -68,10 +68,11 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `RXBackpressureTests` | 3 | RX broadcast backpressure handling |
 | `AudioFrameFormatTests` | 6 | Tagged PCM/Opus frame format, Int16 range, 768kbps PCM bandwidth, multi-frame tags |
 | `AudioDeviceDetectionTests` | 2 | FT-710 name pattern matching, non-FT-710 rejection |
-| `USBCodecDeviceSelectionTests` | 8 | Generic USB-audio tier ("USB Audio CODEC"/"USB Audio Device"): wins over mono/full-duplex heuristics (RX+TX), per-host-API duplicates, explicit name lock, "USB Audio" common-prefix lock |
+| `USBCodecDeviceSelectionTests` | 10 | Generic USB-audio tier ("USB Audio CODEC"/"USB Audio Device"): wins over mono/full-duplex heuristics (RX+TX), per-host-API duplicates, explicit name lock, "USB Audio" common-prefix lock |
 | `RestartRxTests` | 4 | Windows full-duplex wedge workaround: `restart_rx()` stop→start order, non-Windows no-op, RX-not-running guard, failed-reopen path |
-| `WindowsWasapiTxTests` | 5 | Windows TX WASAPI 48k selection: variant wins, other-device/no-WASAPI guards, 48k feed passthrough, 44.1k feed resample |
-| `StartTxWindowsTests` | 2 | `start_tx` end-to-end: win32 opens WASAPI 48k entry, darwin stays 44.1k (sys-import regression) |
+| `TxDeviceDomainTests` | 4 | Fixed 44.1kHz TX device domain: exact 960→882/1764-byte conversion, stale 48k rate cannot bypass SRC, prebuffer/cap budgets use 44100 |
+| `StartTxWindowsTests` | 2 | `start_tx` end-to-end: Windows keeps the selected device at 44.1kHz/882 frames; macOS stays 44.1kHz |
+| `PortAudioReinitTests` | 4 | RX/TX PortAudio reinit recovery, bounded give-up, and Windows re-enumeration preserving 44.1kHz/882-frame TX |
 
 ### 5. test_server_ws_protocol.py — WebSocket Protocol (49 tests)
 

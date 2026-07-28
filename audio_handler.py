@@ -10,7 +10,6 @@ Uses PyAudio for sound card I/O and libopus for compression.
 
 import asyncio
 import logging
-import sys
 import threading
 import time
 from collections import deque
@@ -19,7 +18,7 @@ from typing import Optional
 import numpy as np
 
 from opus_rx import RxOpusEncoder, AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, RX_RATE
-from audio_resample import resample_441_to_48, resample_48_to_441, resample_pcm
+from audio_resample import resample_441_to_48, resample_48_to_441
 
 logger = logging.getLogger("ft710.audio")
 
@@ -511,33 +510,6 @@ class AudioHandler:
             pass
         return None
 
-    def _wasapi_tx_variant(self, dev: int):
-        """Windows: find the WASAPI entry of the same output device and its
-        native mix rate.  Returns (index, rate) or None.
-
-        Same-physical-codec entries share the device name across host
-        APIs (MME/DirectSound/WASAPI); the WASAPI entry's
-        defaultSampleRate is the audio engine's native mix rate for the
-        codec (48 kHz on the FT-710's C-Media).
-        """
-        try:
-            chosen_name = self._pa.get_device_info_by_index(dev).get('name', '')
-            for i in range(self._pa.get_device_count()):
-                info = self._pa.get_device_info_by_index(i)
-                if info.get('maxOutputChannels', 0) < 1:
-                    continue
-                if info.get('name', '') != chosen_name:
-                    continue
-                api = self._pa.get_host_api_info_by_index(info.get('hostApi', 0))
-                if 'WASAPI' not in api.get('name', '').upper():
-                    continue
-                rate = int(info.get('defaultSampleRate', 0))
-                if rate > 0:
-                    return (i, rate)
-        except Exception:
-            pass
-        return None
-
     def start_tx(self) -> bool:
         """Start TX audio playback stream.
 
@@ -567,18 +539,13 @@ class AudioHandler:
             logger.warning("No audio output device found for TX")
             return False
 
-        # Windows: prefer the WASAPI entry of the same codec at its native
-        # mix rate (48 kHz).  The C-Media MME 44.1 kHz path paces ~1.4x
-        # slow, starving the drain loop and crackling TX audio (V2.9
-        # field report); WASAPI@48k paces correctly and needs no resample.
-        rate = TX_SAMPLE_RATE
-        if sys.platform == "win32":
-            variant = self._wasapi_tx_variant(dev)
-            if variant is not None:
-                dev, rate = variant
-        self._tx_rate = rate
-        self._tx_prebuffer_bytes = rate * TX_CHANNELS * 2 * TX_PREBUFFER_MS // 1000
-        self._tx_max_buffer_bytes = rate * TX_CHANNELS * 2 * TX_MAX_BUFFER_MS // 1000
+        # The browser/Opus codec domain is 48 kHz, but the FT-710 USB audio
+        # device domain is always 44.1 kHz.  A Windows WASAPI shared-mode
+        # defaultSampleRate is not the radio's hardware clock and must not
+        # promote the output stream to 48 kHz.
+        self._tx_rate = TX_SAMPLE_RATE
+        self._tx_prebuffer_bytes = TX_PREBUFFER_BYTES
+        self._tx_max_buffer_bytes = TX_MAX_BUFFER_BYTES
 
         # If a TX stream is already active, close it now so CoreAudio can
         # release the device before we try to open a new one.  This also
@@ -616,7 +583,7 @@ class AudioHandler:
                     stream = self._pa.open(
                         format=pyaudio.paInt16,
                         channels=TX_CHANNELS,
-                        rate=rate,
+                        rate=TX_SAMPLE_RATE,
                         output=True,
                         output_device_index=dev,
                         frames_per_buffer=RX_CHUNK_SIZE,
@@ -653,7 +620,7 @@ class AudioHandler:
 
                 dev_info = self._pa.get_device_info_by_index(dev)
                 logger.info("TX audio started: [%d] %s @ %d Hz (pre-buffer %dms, cap %dms)%s",
-                            dev, dev_info.get('name', ''), rate,
+                            dev, dev_info.get('name', ''), TX_SAMPLE_RATE,
                             TX_PREBUFFER_MS, TX_MAX_BUFFER_MS,
                             f" (attempt {attempt + 1})" if attempt > 0 else "")
                 return True
@@ -668,10 +635,6 @@ class AudioHandler:
                 if dev is None:
                     logger.error("No audio output device after PortAudio re-init")
                     break
-                if sys.platform == "win32":
-                    variant = self._wasapi_tx_variant(dev)
-                    if variant is not None:
-                        dev, rate = variant
 
         logger.error("Failed to start TX audio after %d attempts: %s",
                      START_TX_RETRIES * 2, last_error)
@@ -746,11 +709,7 @@ class AudioHandler:
         """
         if not pcm or len(pcm) < 2:
             return
-        rate = getattr(self, '_tx_rate', TX_SAMPLE_RATE)
-        if rate == RX_RATE:
-            data = pcm  # 48 kHz stream (e.g. Windows WASAPI) — no resample
-        else:
-            data = resample_pcm(pcm, RX_RATE, rate)
+        data = resample_48_to_441(pcm)
         if not data:
             return
         with self._tx_lock:

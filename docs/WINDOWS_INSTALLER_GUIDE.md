@@ -5,33 +5,30 @@ The package is designed for Windows 11 and Windows 12-class x64 desktop
 systems. It installs a user-launched desktop app with an embedded Python
 runtime; users do not need to install Python manually.
 
-## Private v1.7.8 TX Test Build
+## Download (v1.7.8 Stable)
 
-The v1.7.8 package is a private operator test build, not the public download.
-It keeps browser/Opus audio at 48 kHz but always converts each 960-sample TX
-frame to 882 samples and opens the selected FT-710 playback device at
-16-bit/44.1 kHz. A WASAPI endpoint advertising a 48 kHz shared-mode mix rate
-does not change the radio device rate. Public download links below remain on
-v1.7.6 until the FT-710 RF speech/noise test is accepted.
-
-## Download (v1.7.6)
-
-| File | Size | MD5 |
-|------|------|-----|
-| `MRRC-FT710-Setup.exe` | 35.0 MB | `6968a10c9c073f2fb2123a9c97e977fb` |
+| File | Size | SHA-256 |
+|------|------|---------|
+| `MRRC-FT710-v1.7.8-Windows-x64-Setup.exe` | 35.1 MB | `c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
-- GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>
+- Versioned mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe>
+- GitHub repository: <https://github.com/cheenle/mrrc_ft710>
 
-The v1.7.6 package was built on Windows 11 (Python 3.12.4, PyInstaller
-6.21.0, Inno Setup 6.x) with the full 421-test suite green on the build
-machine. Headline feature: **HTTPS by default** — the launcher generates a
-throwaway self-signed certificate on first run and starts the server on
-HTTPS (required for browser audio from phones/other devices; set
-`FT710_SSL=off` for plain HTTP). Also included from v1.7.2–v1.7.5: TX-safe
-spectrum, the Windows full-duplex RX fix, the native WASAPI 48 kHz TX path,
-and bundled libopus (see CHANGELOG). The private v1.7.8 test build supersedes
-that WASAPI TX policy with the fixed 44.1 kHz FT-710 device boundary.
+The v1.7.8 package was built from commit `8629f0c` on Windows 11 with Python
+3.12.4, PyInstaller 6.21.0, and Inno Setup 6.7.3. All 439 Windows tests, three
+PyInstaller targets, and the installer build passed. Silent install, required
+bundled-file inspection, server listen, expected unauthenticated health HTTP
+401, and silent uninstall also passed.
+
+Browser capture and Opus remain at 48 kHz. Every decoded 960-sample TX frame is
+converted to 882 samples before the FT-710 playback device is opened/written at
+16-bit/44.1 kHz, including after PortAudio reinitialization. A WASAPI endpoint
+advertising a 48 kHz shared-mode mix rate does not change the radio device
+boundary. TX-session logs expose `queue_drops`; a healthy physical acceptance
+run requires `decode_fail=0`, `write_err=0`, `queue_drops=0`, and
+`non_owner_drops=0`. The release VM did not provide an authoritative physical
+RF speech/noise path, so over-the-air monitoring remains an operator check.
 
 ## User Installation
 

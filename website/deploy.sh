@@ -32,7 +32,20 @@ echo ""
 cd "$LOCAL_DIR"
 
 echo "Checking required files..."
-REQUIRED_FILES=("index.html" "zh/index.html" "css/octen.css" "css/ft710.css" "sdd.html" "zh/sdd.html" "sdd/index.html" "sdd/01-executive-summary.html" "sdd/15-ptt-safety-architecture.html" "images/IMG_8888.PNG")
+REQUIRED_FILES=(
+    "index.html"
+    "zh/index.html"
+    "css/octen.css"
+    "css/ft710.css"
+    "sdd.html"
+    "zh/sdd.html"
+    "sdd/index.html"
+    "sdd/01-executive-summary.html"
+    "sdd/15-ptt-safety-architecture.html"
+    "images/IMG_8888.PNG"
+    "downloads/MRRC-FT710-Setup.exe"
+    "downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe"
+)
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then
         echo -e "${RED}Error: Required file missing: $file${NC}"
@@ -82,6 +95,7 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
     find /var/www/vlsc.net/mrrc_ft710 -type f -name "*.html" -exec sudo chmod 644 {} \;
     find /var/www/vlsc.net/mrrc_ft710 -type f -name "*.css" -exec sudo chmod 644 {} \;
     find /var/www/vlsc.net/mrrc_ft710 -type f -name "*.js" -exec sudo chmod 644 {} \; 2>/dev/null || true
+    find /var/www/vlsc.net/mrrc_ft710/downloads -type f -name "*.exe" -exec sudo chmod 644 {} \;
     rm -f "/tmp/mrrc_ft710_website_"*.tar.gz
     sudo nginx -t
     sudo systemctl reload nginx

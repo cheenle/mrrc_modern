@@ -39,6 +39,9 @@ build/
 dist/
 .pytest_cache/
 
+# Website download payloads are deployed from verified dist artifacts, not Git.
+website/downloads/*.exe
+
 # Vendor binaries (fetch scripts stay tracked)
 vendor/ftdi/*.zip
 vendor/ftdi/windows/bin/

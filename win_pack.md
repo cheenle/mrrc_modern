@@ -1,6 +1,6 @@
 # Windows 安装包打包流程（ham.vlsc.net KVM 虚拟机）
 
-> 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建 `MRRC-FT710-Setup.exe`，并兼作真机测试环境（FT-710 USB 已直通进 VM，见 §2.4）。
+> 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-FT710-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
@@ -152,10 +152,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File packaging\windows\build.ps1
 Write-Host "BUILD_DONE"
 ```
 
-远程执行（约 3-5 分钟：271 个测试 → 3 个 PyInstaller spec → iscc）：
+远程执行（约 3-5 分钟：439 个测试 → 3 个 PyInstaller spec → iscc）：
 
 ```bash
-ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_vm.ps1'"
+ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_mrrc_v178_8629f0c.ps1'"
 ```
 
 build.ps1 有 `Invoke-Checked` 闸门：测试或任何一步非零退出都会中止，不会带病出包。
@@ -163,41 +163,48 @@ build.ps1 有 `Invoke-Checked` 闸门：测试或任何一步非零退出都会�
 ### Step 5 — 验证产物（在 VM 上）
 
 ```powershell
-dir C:\mrrc_ft710\dist\windows\MRRC-FT710-Setup.exe                                # ~30 MB
-dir C:\mrrc_ft710\dist\windows\MRRC-FT710\vendor\ftdi\windows\bin\x64              # 两个 DLL 都在
-dir C:\mrrc_ft710\dist\windows\MRRC-FT710\_internal\static\index.html              # P0 修复点：static 在 _internal
-dir C:\mrrc_ft710\dist\windows\MRRC-FT710\_internal\mem_channels.json              # 初始频道种子
+dir C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710-Setup.exe                   # 36,820,041 bytes
+dir C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710\vendor\ftdi\windows\bin\x64 # 两个 DLL 都在
+dir C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710\_internal\static\index.html # static 在 _internal
+dir C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710\_internal\mem_channels.json # 初始频道种子
+Get-FileHash C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710-Setup.exe -Algorithm SHA256
 ```
 
 ### Step 6 — 取回本机
 
 ```bash
-ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_ft710/dist/windows/MRRC-FT710-Setup.exe /tmp/"
-scp ham.vlsc.net:/tmp/MRRC-FT710-Setup.exe dist/
-md5 dist/MRRC-FT710-Setup.exe        # 记录，发布网页要用
+ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_ft710_release_8629f0c/dist/windows/MRRC-FT710-Setup.exe /tmp/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe"
+scp ham.vlsc.net:/tmp/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe dist/windows/
+shasum -a 256 dist/windows/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe
+# v1.7.8: c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb
 ```
 
 ## 4. 发布到网站（可选）
 
-下载镜像在 **www.vlsc.net**（另一台机器，非 ham），webroot `/var/www/vlsc.net/mrrc_ft710/`，文件属 `www-data:www-data`（cheenle 有 sudo 免密）：
+下载镜像在 **www.vlsc.net**（另一台机器，非 ham），webroot `/var/www/vlsc.net/mrrc_ft710/`。发布脚本会备份整个站点、上传中英文页面和两个安装包、设置权限并在 reload 前执行 `nginx -t`：
 
 ```bash
-scp dist/MRRC-FT710-Setup.exe www.vlsc.net:/tmp/MRRC-FT710-Setup.exe.new
-ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe /tmp/old.bak; \
-  sudo -n mv /tmp/MRRC-FT710-Setup.exe.new /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe; \
-  sudo -n chown www-data:www-data /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe; \
-  sudo -n chmod 644 /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe; \
-  md5sum /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe"
+mkdir -p website/downloads
+cp dist/windows/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe website/downloads/MRRC-FT710-Setup.exe
+cp dist/windows/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe website/downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe
+shasum -a 256 website/downloads/*.exe
+cd website
+./deploy.sh
 ```
 
-同步更新版本号/大小/MD5 的地方（共 4 个文件）：
+同步更新版本号/大小/SHA-256 的地方：
 
-- `website/index.html`（2 处 MD5 + 版本/大小文字）
+- `website/index.html`（版本、大小、SHA-256 和两个下载链接）
 - `website/zh/index.html`（同上）
 - `docs/WINDOWS_INSTALLER_GUIDE.md`（Download 表格 + 构建说明段）
-- 改完上传：`website/index.html` → webroot 根、`website/zh/index.html` → webroot `zh/`，同样 sudo + chown www-data
+- `README.md`、`CHANGELOG.md`、`SDD/README.md`、`SDD/14-version-history.md`
 
-验证：`curl -sI https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe`（200 + content-length 正确）。
+验证两个 URL 都返回 200、`content-length: 36820041`，下载后的 SHA-256 都等于 `c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb`：
+
+```bash
+curl -sI https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe
+curl -sI https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe
+```
 
 ## 5. 故障排查（本次踩过的坑）
 

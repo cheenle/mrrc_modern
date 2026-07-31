@@ -76,7 +76,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-check-circle"></i>
-          <span>v1.7.6 · Production Ready</span>
+          <span>v1.7.8 · Stable</span>
         </div>
         <h1 class="hero-title">
           One USB Cable<br />
@@ -93,7 +93,7 @@
             href="downloads/MRRC-FT710-Setup.exe"
             class="btn btn-primary btn-large"
           >
-            <i class="fab fa-windows"></i> Windows Installer v1.7.6
+            <i class="fab fa-windows"></i> Windows Installer v1.7.8
           </a>
           <a href="#features" class="btn btn-secondary btn-large">
             <i class="fas fa-arrow-down"></i> Explore Features
@@ -227,8 +227,9 @@
             <p>
               One 48 kHz codec domain end to end: RX capture → Opus 64kbps →
               browser AudioWorklet; browser mic → Opus CBR → server → radio.
-              The server always talks to the sound card at its native rate —
-              44.1 kHz on CoreAudio, 48 kHz WASAPI on Windows.
+              Every platform, including Windows, bridges the 48 kHz codec
+              domain to the FT-710's fixed 44.1 kHz USB-audio device boundary
+              (960→882 samples per 20 ms frame).
             </p>
             <ul>
               <li>64kbps Opus — 12× smaller than raw PCM</li>
@@ -357,19 +358,22 @@
         >
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
             <i class="fab fa-windows" style="color: var(--accent)"></i>
-            <strong> MRRC-FT710-Setup.exe — v1.7.6</strong>
+            <strong> MRRC-FT710-Setup.exe — v1.7.8 Stable</strong>
           </p>
           <p style="color: var(--text-muted); margin: 0 0 1rem">
-            35.0 MB · x64 · MD5
-            <code style="font-size: 0.8rem">6968a10c9c073f2fb2123a9c97e977fb</code>
+            35.1 MB · x64<br />
+            <code style="font-size: 0.76rem"
+              >SHA-256: c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb</code
+            >
           </p>
           <p style="color: var(--text-muted); margin: 0 0 1.25rem">
-            Highlights in v1.7.2–v1.7.6: <strong>HTTPS by default</strong>
-            (first run generates a self-signed certificate — accept the
-            browser warning once), TX-safe spectrum (pauses on transmit,
-            re-syncs in ~1s), RX audio no longer dies after the first PTT on
-            Windows, TX output on the native WASAPI 48 kHz path, and bundled
-            libopus — server-side Opus works out of the box.
+            v1.7.8 Stable keeps browser/Opus audio at 48 kHz and always converts
+            each 960-sample TX frame to 882 samples at the FT-710's fixed 44.1
+            kHz device boundary, including after PortAudio reinitialization.
+            TX-session logs now expose queue drops, and same-session reconnects
+            safely replace stale audio ownership. Windows build, 439 tests,
+            install/start/uninstall, and bundled-file checks passed; physical
+            RF monitoring remains an operator-side acceptance check.
           </p>
           <div
             style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center"
@@ -379,6 +383,12 @@
               class="btn btn-primary btn-large"
             >
               <i class="fab fa-windows"></i> Download for Windows
+            </a>
+            <a
+              href="downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe"
+              class="btn btn-secondary btn-large"
+            >
+              <i class="fas fa-fingerprint"></i> Versioned v1.7.8
             </a>
             <a
               href="https://github.com/cheenle/mrrc_ft710/releases"
@@ -441,10 +451,10 @@
           <div class="step">
             <h4>2 · Run the Installer</h4>
             <p>
-              MRRC-FT710-Setup.exe — v1.7.6, 35.0 MB, x64. Start Menu + optional
+              MRRC-FT710-Setup.exe — v1.7.8, 35.1 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-            <code>MD5 6968a10c9c073f2fb2123a9c97e977fb</code>
+            <code>SHA-256 c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb</code>
           </div>
           <div class="step">
             <h4>3 · Edit Configuration</h4>
@@ -1186,7 +1196,7 @@
             <p>
               Software SCU-LAN10 Replacement<br />
               One USB Cable, Any Device<br />
-              v1.7.6 · GPLv3 License
+              v1.7.8 Stable · GPLv3 License
             </p>
           </div>
           <div class="footer-section">
@@ -1204,7 +1214,7 @@
             <ul>
               <li>
                 <a href="downloads/MRRC-FT710-Setup.exe"
-                  ><i class="fab fa-windows"></i> Windows Installer v1.7.6</a
+                  ><i class="fab fa-windows"></i> Windows Installer v1.7.8</a
                 >
               </li>
               <li>

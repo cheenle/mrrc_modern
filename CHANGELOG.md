@@ -2,7 +2,7 @@
 
 All notable changes to the FT-710 Web Control project.
 
-## [v1.7.8] — 2026-07-28 — Windows TX Restored to 44.1 kHz Device Audio
+## [v1.7.8] — 2026-07-31 — Stable — Windows TX Restored to 44.1 kHz Device Audio
 
 ### Fixed
 - **Windows TX now keeps the FT-710 USB device domain at 44.1 kHz**
@@ -21,9 +21,7 @@ All notable changes to the FT-710 Web Control project.
 ### Tests
 - Replaced the obsolete WASAPI-selection contract with regressions for
   fixed 44.1 kHz stream opening, exact 960→882 conversion, 44.1 kHz byte
-  budgets, and rate preservation after device re-enumeration. Suite stays
-  at 435 tests. RF speech/noise acceptance remains pending the operator's
-  evening FT-710 test; this build is not yet a public download.
+  budgets, and rate preservation after device re-enumeration.
 
 ### Follow-up — 2026-07-31 TX Audit
 - Fixed the frontend intentional-disconnect flag (`const` → `let`), which
@@ -33,7 +31,22 @@ All notable changes to the FT-710 Web Control project.
 - TX jitter-buffer oldest-frame drops are now counted and logged as
   `queue_drops` on PTT release, exposing Windows output pacing regressions.
 - Added four regressions and made source-contract tests formatting-agnostic;
-  suite is 439 tests. Physical Win11 + FT-710 RF acceptance remains pending.
+  suite is 439 tests.
+
+### Stable Release Verification — 2026-07-31
+- Built from commit `8629f0c` on Windows 11 with Python 3.12.4,
+  PyInstaller 6.21.0, and Inno Setup 6.7.3. All 439 Windows tests passed and
+  all three PyInstaller targets plus the installer compiled successfully.
+- Silent install, required bundled-file inspection, server-listen check,
+  authenticated health-boundary check (expected HTTP 401), and silent
+  uninstall all passed.
+- Published artifact: `MRRC-FT710-v1.7.8-Windows-x64-Setup.exe`,
+  36,820,041 bytes, SHA-256
+  `c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb`.
+- Classified as Stable for public distribution. The release VM did not provide
+  an authoritative physical FT-710 RF speech/noise path, so over-the-air audio
+  monitoring remains an operator acceptance check rather than claimed build
+  evidence.
 
 ## [v1.7.7] — 2026-07-28 — Audio Survives Radio Power Cycles (Power Switch Withdrawn)
 

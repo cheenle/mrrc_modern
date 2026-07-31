@@ -7,7 +7,7 @@ LOCAL_DIR="/Users/cheenle/HAM/mrrc_ft710/website"
 REMOTE_HOST="www.vlsc.net"
 REMOTE_USER="cheenle"
 REMOTE_WEBROOT="/var/www/vlsc.net/mrrc_ft710"
-BACKUP_DIR="/tmp/mrrc_ft710_backup_$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR="/var/tmp/mrrc_ft710_backup_$(date +%Y%m%d_%H%M%S)"
 
 echo "=========================================="
 echo "MRRC FT-710 Website Deployment"
@@ -76,8 +76,8 @@ fi
 ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
     set -e
     if [ -d "/var/www/vlsc.net/mrrc_ft710" ] && [ "$(ls -A /var/www/vlsc.net/mrrc_ft710 2>/dev/null)" ]; then
-        sudo mkdir -p /tmp
-        sudo cp -r /var/www/vlsc.net/mrrc_ft710 /tmp/mrrc_ft710_backup_$(date +%Y%m%d_%H%M%S)
+        sudo mkdir -p /var/tmp
+        sudo cp -r /var/www/vlsc.net/mrrc_ft710 /var/tmp/mrrc_ft710_backup_$(date +%Y%m%d_%H%M%S)
         echo "Backup created."
     fi
     sudo mkdir -p /var/www/vlsc.net/mrrc_ft710
@@ -85,18 +85,18 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
     sudo chmod -R 755 /var/www/vlsc.net/mrrc_ft710
 EOF
 
-scp "$DEPLOY_PACKAGE" "$REMOTE_USER@$REMOTE_HOST:/tmp/"
+scp "$DEPLOY_PACKAGE" "$REMOTE_USER@$REMOTE_HOST:/var/tmp/"
 
 ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
     set -e
-    sudo tar -xzf "/tmp/mrrc_ft710_website_"*.tar.gz -C /var/www/vlsc.net/mrrc_ft710 --overwrite
+    sudo tar -xzf "/var/tmp/mrrc_ft710_website_"*.tar.gz -C /var/www/vlsc.net/mrrc_ft710 --overwrite
     sudo chown -R www-data:www-data /var/www/vlsc.net/mrrc_ft710
     sudo chmod -R 755 /var/www/vlsc.net/mrrc_ft710
     find /var/www/vlsc.net/mrrc_ft710 -type f -name "*.html" -exec sudo chmod 644 {} \;
     find /var/www/vlsc.net/mrrc_ft710 -type f -name "*.css" -exec sudo chmod 644 {} \;
     find /var/www/vlsc.net/mrrc_ft710 -type f -name "*.js" -exec sudo chmod 644 {} \; 2>/dev/null || true
     find /var/www/vlsc.net/mrrc_ft710/downloads -type f -name "*.exe" -exec sudo chmod 644 {} \;
-    rm -f "/tmp/mrrc_ft710_website_"*.tar.gz
+    rm -f "/var/tmp/mrrc_ft710_website_"*.tar.gz
     sudo nginx -t
     sudo systemctl reload nginx
     echo ""
@@ -111,4 +111,4 @@ echo -e "${GREEN}Deployment Complete!${NC}"
 echo "https://www.vlsc.net/mrrc_ft710/"
 echo ""
 echo "Rollback: ssh $REMOTE_USER@$REMOTE_HOST"
-echo "  sudo rm -rf $REMOTE_WEBROOT && sudo cp -r /tmp/mrrc_ft710_backup_* $REMOTE_WEBROOT"
+echo "  sudo rm -rf $REMOTE_WEBROOT && sudo cp -r /var/tmp/mrrc_ft710_backup_* $REMOTE_WEBROOT"

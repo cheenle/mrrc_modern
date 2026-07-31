@@ -125,29 +125,10 @@
     <main class="sdd-content">
 <h1 id="subject-area-model-app-408">7. Subject Area Model (APP 408)</h1>
 <h2 id="subject-areas">7.1 Subject Areas</h2>
-<pre class="text"><code>ClientSession
-  owns WebSocket memberships and UI state
-
-RadioControl
-  owns CAT serial command state: frequency, mode, PTT, gains, filter
-
-ScopeSystem
-  owns FT4222 SPI data intake + S-meter fallback generation
-
-AudioSystem
-  owns PyAudio capture/playback, Opus codec, WS audio fan-out
-
-SpectrumDisplay
-  owns FFT data, waterfall rendering, S-meter smoothing, frequency scale
-
-RadioState
-  owns all mirrored radio state with dirty-field change tracking
-
-PollingSystem
-  owns 7-task adaptive background polling cadence
-
-OperationalConfig
-  owns serial port, web port, auth, host/port config</code></pre>
+<figure>
+<img src="diagrams/subject-area-model.svg" alt="Subject Area Model" />
+<figcaption aria-hidden="true">Subject Area Model</figcaption>
+</figure>
 <h2 id="entity-definitions">7.2 Entity Definitions</h2>
 <table>
 <colgroup>

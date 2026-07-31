@@ -2,7 +2,7 @@
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 435 tests across 24 test modules.
+Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 439 tests across 24 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,9 +12,9 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 435 |
-| Passed | 435 |
-| Skipped | 0 (with fastapi installed) |
+| Total tests | 439 |
+| Passed | 439 (with all optional dependencies installed) |
+| Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~9s (harness tests spawn CLI subprocesses) |
 
@@ -53,7 +53,7 @@ SDD coverage: §7.2, §10.4, NFRs
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (73 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (75 tests)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
@@ -61,9 +61,9 @@ SDD coverage: AD-004, NFR-060–NFR-065
 |-------|-------|--------|
 | `CodecTagTests` | 4 | AUDIO_TAG_PCM (0x00), AUDIO_TAG_OPUS (0x01), tag distinctness, 1-byte fit |
 | `OpusConstantsTests` | 7 | RX_RATE=48000, FRAME_SAMPLES=960, DEFAULT_BITRATE=64000, MIN=8000, MAX=128000, Windows packaged opus.dll search paths |
-| `TxFrontendContractTests` | 11 | TX worklet/worker contract: 48kHz, frame sizes, packet format |
+| `TxFrontendContractTests` | 12 | TX worklet/worker contract: 48kHz, frame sizes, packet format, mutable intentional-close cleanup flag |
 | `RxRecordingFrontendTests` | 5 | RX recording (MP3/lamejs) frontend contract |
-| `TXBufferTests` | 8 | TX jitter buffer pre-buffer/cap behavior |
+| `TXBufferTests` | 9 | TX jitter buffer pre-buffer/cap behavior and oldest-frame drop diagnostics |
 | `TXReleaseOrderTests` | 3 | PTT release ordering: audio drain before TX0 |
 | `RXBackpressureTests` | 3 | RX broadcast backpressure handling |
 | `AudioFrameFormatTests` | 6 | Tagged PCM/Opus frame format, Int16 range, 768kbps PCM bandwidth, multi-frame tags |
@@ -74,7 +74,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `StartTxWindowsTests` | 2 | `start_tx` end-to-end: Windows keeps the selected device at 44.1kHz/882 frames; macOS stays 44.1kHz |
 | `PortAudioReinitTests` | 4 | RX/TX PortAudio reinit recovery, bounded give-up, and Windows re-enumeration preserving 44.1kHz/882-frame TX |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (49 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (51 tests)
 
 SDD coverage: §9.2, §9.6, §10.4, §15
 
@@ -83,9 +83,9 @@ SDD coverage: §9.2, §9.6, §10.4, §15
 | `WSMessageFormatTests` | 11 | fullState, stateUpdate, set, get, ping/pong, error, memChannels, memSave, value, legacy colon format |
 | `WSAuthTests` | 4 | Token format (64 hex chars), valid/invalid token check, WS close code 4001 |
 | `PTTSafetyLogicTests` | 10 | TX1/TX0 commands, dead-man switch (3 conditions), watchdog retry count, sendBeacon format, tx audio stop signal, m: settings format |
-| `StateBroadcastLogicTests` | 16 | Empty dirty set skip, partial update, dirty clear after broadcast, skip_next_poll-before-set ordering (band/freq/filter), post-query stale-read guards (IF + settings polls), filter post-set SH0 read-back, client/server band-list consistency |
-| `TXUplinkOwnershipTests` | 5 | Owner-disconnect promotion, empty promotion, PTT-client token claim, unknown-token keeps owner, per-socket token tracking |
-| `CookieSettingsPersistenceTests` | 3 | Cookie helpers + legacy web-storage migration in settings_manager, no localStorage/sessionStorage outside it, persisted values via cookie helpers |
+| `StateBroadcastLogicTests` | 5 | Meter logging, atomic band commands, frontend band fallback, partial-field rendering, cache-busted assets |
+| `TXUplinkOwnershipTests` | 7 | Owner-disconnect promotion, PTT-client token claim, same-token replacement takeover, cross-token isolation, per-socket token tracking |
+| `CookieSettingsPersistenceTests` | 14 | Cookie persistence plus dirty-state, stale-poll, band/filter, and lazy-scope source contracts |
 
 ### 6. test_poll_scheduler.py — Poll Scheduler (17 tests)
 

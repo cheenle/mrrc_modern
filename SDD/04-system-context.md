@@ -2,29 +2,12 @@
 
 ## 4.1 Context Diagram
 
-```text
-HAM Operator
-  |
-  | HTTP/WS from mobile or desktop browser
-  v
-MRRC FT-710 FastAPI Server
-  | serves static UI
-  | manages WebSocket clients
-  | serial CAT ↔ radio
-  | FT4222 SPI → scope data
-  | PyAudio ↔ USB audio
-  |
-  | Serial CAT (USB Enhanced COM Port, 38400 baud)
-  | FT4222 SPI (internal FTDI chip)
-  | USB Audio (sound card interface)
-  v
-Yaesu FT-710
-```
+![System Context](diagrams/system-context.svg)
 
 ## 4.2 Actors
 
 | Actor | Role |
-|-------|------|
+| ------- | ------ |
 | HAM Operator | Uses browser UI to listen, tune, adjust settings, key PTT, monitor meters |
 | System Maintainer | Starts/stops service, manages serial ports, checks logs |
 | Yaesu FT-710 | External radio device controlled via serial CAT; provides scope data via FT4222 SPI; provides audio via USB sound card |
@@ -33,7 +16,7 @@ Yaesu FT-710
 ## 4.3 External Interfaces
 
 | Interface | Protocol | Endpoint | Direction | Description |
-|-----------|----------|----------|-----------|-------------|
+| ----------- | ---------- | ---------- | ----------- | ------------- |
 | Static UI | HTTP | `/{path}` | Browser → Server | Serves `index.html`, CSS, JS, manifest, WASM |
 | Control WS | WS | `/WSradio` | Browser ↔ Server | JSON commands and state updates |
 | RX Audio WS | WS | `/WSaudioRX` | Server → Browser | Tagged dual-codec frames (Opus/PCM, 48kHz mono) |
@@ -50,7 +33,7 @@ Yaesu FT-710
 ## 4.4 Data Flows
 
 | Flow | Description |
-|------|-------------|
+| ------ | ------------- |
 | CAT control flow | UI action → `/WSradio` JSON → `CatController` serial command → radio response → `RadioState` update → broadcast |
 | RX audio flow | FT-710 USB Audio → PyAudio capture (44.1kHz Int16) → resample to 48kHz → Opus encode → `/WSaudioRX` tagged frames → browser AudioWorklet playback |
 | TX audio flow | Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → `/WSaudioTX` tagged frames → Opus decode → resample 48→44.1k → PyAudio → FT-710 USB Audio |
@@ -63,7 +46,7 @@ Yaesu FT-710
 ## 4.5 System Boundaries
 
 | Boundary | Inside | Outside |
-|----------|--------|---------|
+| ---------- | -------- | --------- |
 | Browser boundary | UI state, audio playback, mic capture, PTT safety UX | Browser permission model and autoplay policy |
 | Server boundary | WebSockets, static serving, CAT serial, FT4222 scope subprocess, PyAudio I/O, Opus codec, auth | Radio firmware, USB driver stack, OS audio subsystem |
 | scope_pipe boundary | FT4222 SPI read loop, frame sync, diagnostics | FTDI D2XX driver, kernel VCP driver detach |

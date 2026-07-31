@@ -11,7 +11,7 @@ The MRRC FT-710 PTT safety architecture provides **7 independent layers of defen
 | 1 | Browser UX | Touch-and-hold: release on `mouseup`/`touchend`/`mouseleave`/`touchcancel` | User intentionally releasing PTT |
 | 2 | Browser → Server | `sendCommand('ptt', false)` over `/WSradio` | Normal network path |
 | 3 | Browser | PTT Watchdog: 500ms interval checks `radioState.tx_status`; up to 3 retries | TX0 command or state broadcast lost |
-| 4 | Server | Dead-man switch: force `TX0;` when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up) and is promoted to a remaining client on owner disconnect — an idle/zombie owner can no longer silently mute the uplink | Browser crash, tab close, network loss, audio socket drop, multi-client ownership |
+| 4 | Server | Dead-man switch: force `TX0;` when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up), a same-session replacement audio socket supersedes a half-open page-reload socket, and a different session cannot steal merely by connecting; owner disconnect promotes a remaining client | Browser crash, tab close, network loss, audio socket drop, multi-client ownership |
 | 5 | Browser | `beforeunload` → `navigator.sendBeacon()` with TX0 | Tab/browser close during TX |
 | 6 | Browser | `pagehide` → `sendCommand('ptt', false)` | Mobile app switch / backgrounding |
 | 7 | Server + Browser | Stop TX audio stream; clear audio queue; `wsAudioTX.send('s:')` | Audio continuing to feed radio after release |

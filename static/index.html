@@ -1,300 +1,465 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="FT-710">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#1a1a1a">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="FT-710" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="theme-color" content="#1a1a1a" />
     <title>FT-710 Web Control</title>
-    <link rel="apple-touch-icon" href="/favicon.png">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="stylesheet" href="/ft710.css?v=20">
-</head>
-<body>
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="/ft710.css?v=20" />
+  </head>
+  <body>
     <div class="safe-area-top"></div>
 
     <div class="app-container">
-        <!-- Header -->
-        <header class="app-header">
-            <div class="header-main">
-                <button id="menu-toggle" class="header-btn menu-btn" aria-label="Menu">
-                    <span class="hamburger"></span>
-                </button>
-                <div class="frequency-display" id="freq-display">
-                    <span class="freq-digit" id="f10m">1</span>
-                    <span class="freq-digit" id="f1m">4</span>
-                    <span class="freq-sep">.</span>
-                    <span class="freq-digit" id="f100k">2</span>
-                    <span class="freq-digit" id="f10k">0</span>
-                    <span class="freq-digit" id="f1k">0</span>
-                    <span class="freq-sep-small">.</span>
-                    <span class="freq-digit freq-small" id="f100h">0</span>
-                    <span class="freq-digit freq-small" id="f10h">0</span>
-                    <input type="text" id="freq-input" class="freq-input" style="display:none;"
-                           inputmode="decimal" placeholder="MHz">
-                </div>
-                <div class="header-right">
-                    <button id="btn-wakelock" class="header-btn wakelock-btn" title="保持屏幕常亮" aria-pressed="false">☀</button>
-                    <button id="btn-fullscreen" class="header-btn fullscreen-btn" title="全屏切换" aria-pressed="false">⛶</button>
-                    <button id="btn-power" class="header-btn power-btn" title="Connect / Disconnect">⚡</button>
-                    <span class="vfo-indicator" id="vfo-indicator">VFO-A</span>
-                </div>
+      <!-- Header -->
+      <header class="app-header">
+        <div class="header-main">
+          <button
+            id="menu-toggle"
+            class="header-btn menu-btn"
+            aria-label="Menu"
+          >
+            <span class="hamburger"></span>
+          </button>
+          <div class="frequency-display" id="freq-display">
+            <span class="freq-digit" id="f10m">1</span>
+            <span class="freq-digit" id="f1m">4</span>
+            <span class="freq-sep">.</span>
+            <span class="freq-digit" id="f100k">2</span>
+            <span class="freq-digit" id="f10k">0</span>
+            <span class="freq-digit" id="f1k">0</span>
+            <span class="freq-sep-small">.</span>
+            <span class="freq-digit freq-small" id="f100h">0</span>
+            <span class="freq-digit freq-small" id="f10h">0</span>
+            <input
+              type="text"
+              id="freq-input"
+              class="freq-input"
+              style="display: none"
+              inputmode="decimal"
+              placeholder="MHz"
+            />
+          </div>
+          <div class="header-right">
+            <button
+              id="btn-wakelock"
+              class="header-btn wakelock-btn"
+              title="保持屏幕常亮"
+              aria-pressed="false"
+            >
+              ☀
+            </button>
+            <button
+              id="btn-fullscreen"
+              class="header-btn fullscreen-btn"
+              title="全屏切换"
+              aria-pressed="false"
+            >
+              ⛶
+            </button>
+            <button
+              id="btn-power"
+              class="header-btn power-btn"
+              title="启动 / 停止 Web 连接"
+            >
+              ⏻
+            </button>
+            <span class="vfo-indicator" id="vfo-indicator">VFO-A</span>
+          </div>
+        </div>
+        <div class="status-bar">
+          <span class="status-item" id="status-band">20m</span>
+          <span class="status-item mode-badge" id="status-mode">USB</span>
+          <span class="status-item" id="status-tx">RX</span>
+          <span class="status-item" id="status-serial">
+            <span class="status-dot"></span>Serial
+          </span>
+          <span
+            class="status-item"
+            id="status-audio-warn"
+            style="display: none; color: #ff6b6b; font-weight: bold"
+            title="RX 音频持续全零——电台 USB 音频可能卡死，请重启电台或重插 USB"
+            >无声</span
+          >
+          <span class="status-item" id="status-bitrate">↓0 ↑0</span>
+          <span class="status-item" id="status-latency">RTT -- J--</span>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- Waterfall / Spectrum -->
+        <section class="waterfall-section">
+          <canvas id="fft-canvas" class="fft-canvas"></canvas>
+          <canvas id="waterfall-canvas" class="waterfall-canvas"></canvas>
+          <canvas
+            id="freq-scale-canvas"
+            class="freq-scale-canvas"
+            height="20"
+          ></canvas>
+        </section>
+
+        <!-- S-Meter -->
+        <section class="smeter-section">
+          <div class="smeter-container">
+            <canvas id="smeter-canvas" width="320" height="40"></canvas>
+            <div class="smeter-value" id="smeter-value">S0</div>
+            <div
+              class="smeter-dbm"
+              id="smeter-dbm"
+              title="相对电平，S9 = 0 dB 参考"
+            >
+              -54 dB
             </div>
-            <div class="status-bar">
-                <span class="status-item" id="status-band">20m</span>
-                <span class="status-item mode-badge" id="status-mode">USB</span>
-                <span class="status-item" id="status-tx">RX</span>
-                <span class="status-item" id="status-serial">
-                    <span class="status-dot"></span>Serial
-                </span>
-                <span class="status-item" id="status-audio-warn" style="display:none;color:#ff6b6b;font-weight:bold" title="RX 音频持续全零——电台 USB 音频可能卡死，请重启电台或重插 USB">无声</span>
-                <span class="status-item" id="status-bitrate">↓0 ↑0</span>
-                <span class="status-item" id="status-latency">RTT -- J--</span>
+          </div>
+          <div class="smeter-labels">
+            <span>S1</span><span>S3</span><span>S5</span><span>S7</span
+            ><span>S9</span> <span>+20</span><span>+40</span><span>+60</span>
+          </div>
+        </section>
+
+        <!-- Multi-meter Display -->
+        <section class="meters-section" id="meters-section">
+          <div class="meter-row">
+            <div class="meter-item">
+              <span class="meter-label">PWR</span>
+              <div class="meter-bar-bg">
+                <div class="meter-bar-fill pwr" id="meter-pwr-bar"></div>
+              </div>
+              <span class="meter-val" id="meter-pwr-val">0</span>
+              <span class="meter-unit">W</span>
             </div>
-        </header>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Waterfall / Spectrum -->
-            <section class="waterfall-section">
-                <canvas id="fft-canvas" class="fft-canvas"></canvas>
-                <canvas id="waterfall-canvas" class="waterfall-canvas"></canvas>
-                <canvas id="freq-scale-canvas" class="freq-scale-canvas" height="20"></canvas>
-            </section>
-
-            <!-- S-Meter -->
-            <section class="smeter-section">
-                <div class="smeter-container">
-                    <canvas id="smeter-canvas" width="320" height="40"></canvas>
-                    <div class="smeter-value" id="smeter-value">S0</div>
-                    <div class="smeter-dbm" id="smeter-dbm" title="相对电平，S9 = 0 dB 参考">-54 dB</div>
-                </div>
-                <div class="smeter-labels">
-                    <span>S1</span><span>S3</span><span>S5</span><span>S7</span><span>S9</span>
-                    <span>+20</span><span>+40</span><span>+60</span>
-                </div>
-            </section>
-
-            <!-- Multi-meter Display -->
-            <section class="meters-section" id="meters-section">
-                <div class="meter-row">
-                    <div class="meter-item">
-                        <span class="meter-label">PWR</span>
-                        <div class="meter-bar-bg"><div class="meter-bar-fill pwr" id="meter-pwr-bar"></div></div>
-                        <span class="meter-val" id="meter-pwr-val">0</span>
-                        <span class="meter-unit">W</span>
-                    </div>
-                    <div class="meter-item">
-                        <span class="meter-label">ALC</span>
-                        <div class="meter-bar-bg"><div class="meter-bar-fill alc" id="meter-alc-bar"></div></div>
-                        <span class="meter-val" id="meter-alc-val">0</span>
-                    </div>
-                </div>
-                <div class="meter-row">
-                    <div class="meter-item">
-                        <span class="meter-label">SWR</span>
-                        <div class="meter-bar-bg"><div class="meter-bar-fill swr" id="meter-swr-bar"></div></div>
-                        <span class="meter-val" id="meter-swr-val">1.0</span>
-                    </div>
-                    <div class="meter-item">
-                        <span class="meter-label">Id</span>
-                        <div class="meter-bar-bg"><div class="meter-bar-fill id" id="meter-id-bar"></div></div>
-                        <span class="meter-val" id="meter-id-val">0</span>
-                        <span class="meter-unit">A</span>
-                    </div>
-                    <div class="meter-item">
-                        <span class="meter-label">Vd</span>
-                        <div class="meter-bar-bg"><div class="meter-bar-fill vd" id="meter-vd-bar"></div></div>
-                        <span class="meter-val" id="meter-vd-val">0</span>
-                        <span class="meter-unit">V</span>
-                    </div>
-                </div>
-                <!-- ATR1000 external tuner (optional; hidden unless enabled+connected) -->
-                <div class="meter-row atr-row" id="atr-row" hidden>
-                    <div class="meter-item">
-                        <span class="meter-label">ATR</span>
-                        <div class="meter-bar-bg"><div class="meter-bar-fill pwr" id="atr-pwr-bar"></div></div>
-                        <span class="meter-val" id="atr-pwr-val">0</span>
-                        <span class="meter-unit">W</span>
-                    </div>
-                    <div class="meter-item">
-                        <span class="meter-label">SWR</span>
-                        <div class="meter-bar-bg"><div class="meter-bar-fill swr" id="atr-swr-bar"></div></div>
-                        <span class="meter-val" id="atr-swr-val">-</span>
-                    </div>
-                    <div class="meter-item atr-lc-item">
-                        <span class="meter-val atr-lc" id="atr-lc-val">—</span>
-                        <button class="atr-tune-btn" id="btn-atr-tune" disabled>TUNE</button>
-                    </div>
-                </div>
-            </section>
-            <section class="quick-controls">
-                <div class="control-row">
-                    <button class="quick-btn" id="btn-mode">USB</button>
-                    <button class="quick-btn" id="btn-band">20m</button>
-                    <button class="quick-btn" id="btn-filter">2.4k</button>
-                    <button class="quick-btn" id="btn-att">ATT</button>
-                    <button class="quick-btn" id="btn-pre">PRE</button>
-                </div>
-            </section>
-
-            <!-- DSP Toggle Panel -->
-            <section class="dsp-panel">
-                <div class="dsp-row">
-                    <button class="dsp-btn" id="dsp-nr">NR</button>
-                    <button class="dsp-btn" id="dsp-nb">NB</button>
-                    <button class="dsp-btn" id="dsp-an">AN</button>
-                    <button class="dsp-btn" id="dsp-comp">COMP</button>
-                    <button class="dsp-btn" id="dsp-atu">ATU</button>
-                </div>
-            </section>
-
-            <!-- NR/NB Level Sliders (hidden - not enough space) -->
-            <section class="slider-section" id="dsp-sliders" style="display:none;">
-                <div class="slider-row">
-                    <span class="slider-label">NR Level</span>
-                    <input type="range" id="slider-nrlevel" min="1" max="15" value="8" class="ft-slider">
-                    <span class="slider-val" id="val-nrlevel">8</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label">NB Level</span>
-                    <input type="range" id="slider-nblevel" min="0" max="10" value="5" class="ft-slider">
-                    <span class="slider-val" id="val-nblevel">5</span>
-                </div>
-            </section>
-
-            <!-- AF Gain / Mic Gain Sliders -->
-            <section class="slider-section">
-                <div class="slider-row" id="slider-rfpower-row" style="display:none;">
-                    <span class="slider-label">RF PWR</span>
-                    <input type="range" id="slider-rfpower" min="5" max="100" value="100" class="ft-slider">
-                    <span class="slider-val" id="val-rfpower">100</span>
-                </div>
-                <div class="slider-row">
-                    <span class="slider-label">🔊 Vol</span>
-                    <input type="range" id="slider-afgain" min="0" max="255" value="128" class="ft-slider">
-                    <span class="slider-val" id="val-afgain">128</span>
-                </div>
-            </section>
-
-            <!-- Tuning Controls -->
-            <section class="tuning-section">
-                <div class="tuning-row">
-                    <button class="tune-btn" data-action="fast-left">&#x25C0;&#x25C0;</button>
-                    <button class="tune-btn" data-action="slow-left">&#x25C0;</button>
-                    <button class="tune-step-btn" id="btn-step">1kHz</button>
-                    <button class="tune-btn" data-action="slow-right">&#x25B6;</button>
-                    <button class="tune-btn" data-action="fast-right">&#x25B6;&#x25B6;</button>
-                </div>
-            </section>
-
-            <!-- VFO Controls -->
-            <section class="vfo-controls">
-                <div class="vfo-row">
-                    <button class="vfo-btn active" id="btn-vfoa">VFO-A</button>
-                    <button class="vfo-btn" id="btn-vfob">VFO-B</button>
-                    <button class="vfo-btn" id="btn-ab">A=B</button>
-                    <button class="vfo-btn" id="btn-split">SPLIT</button>
-                </div>
-            </section>
-
-            <!-- Memory Channels -->
-            <section class="memory-section">
-                <div class="mem-grid">
-                    <button class="mem-btn" data-mem="0"><span class="mem-name">M1</span><span class="mem-freq">---</span></button>
-                    <button class="mem-btn" data-mem="1"><span class="mem-name">M2</span><span class="mem-freq">---</span></button>
-                    <button class="mem-btn" data-mem="2"><span class="mem-name">M3</span><span class="mem-freq">---</span></button>
-                    <button class="mem-btn" data-mem="3"><span class="mem-name">M4</span><span class="mem-freq">---</span></button>
-                    <button class="mem-btn" data-mem="4"><span class="mem-name">M5</span><span class="mem-freq">---</span></button>
-                    <button class="mem-btn" data-mem="5"><span class="mem-name">M6</span><span class="mem-freq">---</span></button>
-                </div>
-            </section>
-        </main>
-
-        <!-- PTT Footer -->
-        <footer class="ptt-footer">
-            <div class="ptt-row">
-                <button id="btn-ptt" class="ptt-button">
-                    <span class="ptt-label">PTT</span>
-                </button>
-                <div class="ptt-side">
-                    <button id="btn-tune" class="tune-button">TUNE</button>
-                    <button id="btn-record" class="record-button">REC</button>
-                </div>
+            <div class="meter-item">
+              <span class="meter-label">ALC</span>
+              <div class="meter-bar-bg">
+                <div class="meter-bar-fill alc" id="meter-alc-bar"></div>
+              </div>
+              <span class="meter-val" id="meter-alc-val">0</span>
             </div>
-        </footer>
+          </div>
+          <div class="meter-row">
+            <div class="meter-item">
+              <span class="meter-label">SWR</span>
+              <div class="meter-bar-bg">
+                <div class="meter-bar-fill swr" id="meter-swr-bar"></div>
+              </div>
+              <span class="meter-val" id="meter-swr-val">1.0</span>
+            </div>
+            <div class="meter-item">
+              <span class="meter-label">Id</span>
+              <div class="meter-bar-bg">
+                <div class="meter-bar-fill id" id="meter-id-bar"></div>
+              </div>
+              <span class="meter-val" id="meter-id-val">0</span>
+              <span class="meter-unit">A</span>
+            </div>
+            <div class="meter-item">
+              <span class="meter-label">Vd</span>
+              <div class="meter-bar-bg">
+                <div class="meter-bar-fill vd" id="meter-vd-bar"></div>
+              </div>
+              <span class="meter-val" id="meter-vd-val">0</span>
+              <span class="meter-unit">V</span>
+            </div>
+          </div>
+          <!-- ATR1000 external tuner (optional; hidden unless enabled+connected) -->
+          <div class="meter-row atr-row" id="atr-row" hidden>
+            <div class="meter-item">
+              <span class="meter-label">ATR</span>
+              <div class="meter-bar-bg">
+                <div class="meter-bar-fill pwr" id="atr-pwr-bar"></div>
+              </div>
+              <span class="meter-val" id="atr-pwr-val">0</span>
+              <span class="meter-unit">W</span>
+            </div>
+            <div class="meter-item">
+              <span class="meter-label">SWR</span>
+              <div class="meter-bar-bg">
+                <div class="meter-bar-fill swr" id="atr-swr-bar"></div>
+              </div>
+              <span class="meter-val" id="atr-swr-val">-</span>
+            </div>
+            <div class="meter-item atr-lc-item">
+              <span class="meter-val atr-lc" id="atr-lc-val">—</span>
+              <button class="atr-tune-btn" id="btn-atr-tune" disabled>
+                TUNE
+              </button>
+            </div>
+          </div>
+        </section>
+        <section class="quick-controls">
+          <div class="control-row">
+            <button class="quick-btn" id="btn-mode">USB</button>
+            <button class="quick-btn" id="btn-band">20m</button>
+            <button class="quick-btn" id="btn-filter">2.4k</button>
+            <button class="quick-btn" id="btn-att">ATT</button>
+            <button class="quick-btn" id="btn-pre">PRE</button>
+          </div>
+        </section>
+
+        <!-- DSP Toggle Panel -->
+        <section class="dsp-panel">
+          <div class="dsp-row">
+            <button class="dsp-btn" id="dsp-nr">NR</button>
+            <button class="dsp-btn" id="dsp-nb">NB</button>
+            <button class="dsp-btn" id="dsp-an">AN</button>
+            <button class="dsp-btn" id="dsp-comp">COMP</button>
+            <button class="dsp-btn" id="dsp-atu">ATU</button>
+          </div>
+        </section>
+
+        <!-- NR/NB Level Sliders (hidden - not enough space) -->
+        <section class="slider-section" id="dsp-sliders" style="display: none">
+          <div class="slider-row">
+            <span class="slider-label">NR Level</span>
+            <input
+              type="range"
+              id="slider-nrlevel"
+              min="1"
+              max="15"
+              value="8"
+              class="ft-slider"
+            />
+            <span class="slider-val" id="val-nrlevel">8</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">NB Level</span>
+            <input
+              type="range"
+              id="slider-nblevel"
+              min="0"
+              max="10"
+              value="5"
+              class="ft-slider"
+            />
+            <span class="slider-val" id="val-nblevel">5</span>
+          </div>
+        </section>
+
+        <!-- AF Gain / Mic Gain Sliders -->
+        <section class="slider-section">
+          <div class="slider-row" id="slider-rfpower-row" style="display: none">
+            <span class="slider-label">RF PWR</span>
+            <input
+              type="range"
+              id="slider-rfpower"
+              min="5"
+              max="100"
+              value="100"
+              class="ft-slider"
+            />
+            <span class="slider-val" id="val-rfpower">100</span>
+          </div>
+          <div class="slider-row">
+            <span class="slider-label">🔊 Vol</span>
+            <input
+              type="range"
+              id="slider-afgain"
+              min="0"
+              max="255"
+              value="128"
+              class="ft-slider"
+            />
+            <span class="slider-val" id="val-afgain">128</span>
+          </div>
+        </section>
+
+        <!-- Tuning Controls -->
+        <section class="tuning-section">
+          <div class="tuning-row">
+            <button class="tune-btn" data-action="fast-left">
+              &#x25C0;&#x25C0;
+            </button>
+            <button class="tune-btn" data-action="slow-left">&#x25C0;</button>
+            <button class="tune-step-btn" id="btn-step">1kHz</button>
+            <button class="tune-btn" data-action="slow-right">&#x25B6;</button>
+            <button class="tune-btn" data-action="fast-right">
+              &#x25B6;&#x25B6;
+            </button>
+          </div>
+        </section>
+
+        <!-- VFO Controls -->
+        <section class="vfo-controls">
+          <div class="vfo-row">
+            <button class="vfo-btn active" id="btn-vfoa">VFO-A</button>
+            <button class="vfo-btn" id="btn-vfob">VFO-B</button>
+            <button class="vfo-btn" id="btn-ab">A=B</button>
+            <button class="vfo-btn" id="btn-split">SPLIT</button>
+          </div>
+        </section>
+
+        <!-- Memory Channels -->
+        <section class="memory-section">
+          <div class="mem-grid">
+            <button class="mem-btn" data-mem="0">
+              <span class="mem-name">M1</span><span class="mem-freq">---</span>
+            </button>
+            <button class="mem-btn" data-mem="1">
+              <span class="mem-name">M2</span><span class="mem-freq">---</span>
+            </button>
+            <button class="mem-btn" data-mem="2">
+              <span class="mem-name">M3</span><span class="mem-freq">---</span>
+            </button>
+            <button class="mem-btn" data-mem="3">
+              <span class="mem-name">M4</span><span class="mem-freq">---</span>
+            </button>
+            <button class="mem-btn" data-mem="4">
+              <span class="mem-name">M5</span><span class="mem-freq">---</span>
+            </button>
+            <button class="mem-btn" data-mem="5">
+              <span class="mem-name">M6</span><span class="mem-freq">---</span>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <!-- PTT Footer -->
+      <footer class="ptt-footer">
+        <div class="ptt-row">
+          <button id="btn-ptt" class="ptt-button">
+            <span class="ptt-label">PTT</span>
+          </button>
+          <div class="ptt-side">
+            <button id="btn-tune" class="tune-button">TUNE</button>
+            <button id="btn-record" class="record-button">REC</button>
+          </div>
+        </div>
+      </footer>
     </div>
 
     <!-- Off-canvas Menu -->
     <div class="off-canvas-menu" id="main-menu">
-        <div class="menu-header">
-            <h2>FT-710 Menu</h2>
-            <button id="menu-close" class="menu-close-btn">&times;</button>
+      <div class="menu-header">
+        <h2>FT-710 Menu</h2>
+        <button id="menu-close" class="menu-close-btn">&times;</button>
+      </div>
+      <div class="menu-content">
+        <ul class="menu-list">
+          <li>
+            <a href="#" class="menu-item" data-action="band-select"
+              >Band Selection</a
+            >
+          </li>
+          <li>
+            <a href="#" class="menu-item" data-action="mode-select"
+              >Mode Selection</a
+            >
+          </li>
+          <li>
+            <a href="#" class="menu-item" data-action="memory-manage"
+              >Memory Manager</a
+            >
+          </li>
+          <li>
+            <a href="#" class="menu-item" data-action="settings"
+              >Advanced Settings</a
+            >
+          </li>
+          <li><a href="#" class="menu-item" data-action="logout">Logout</a></li>
+        </ul>
+        <!-- Scope Display Settings -->
+        <div class="menu-scope-settings">
+          <h3 class="menu-section-title">Scope Display</h3>
+          <div class="menu-scope-row">
+            <span class="menu-scope-label">SPAN</span>
+            <select id="scope-span-select" class="scope-select">
+              <option value="3">10k</option>
+              <option value="4">20k</option>
+              <option value="5">50k</option>
+              <option value="6" selected>100k</option>
+              <option value="7">200k</option>
+              <option value="8">500k</option>
+              <option value="9">1M</option>
+            </select>
+            <span class="menu-scope-label">SPD</span>
+            <select id="scope-speed-select" class="scope-select">
+              <option value="0">1</option>
+              <option value="1">2</option>
+              <option value="2" selected>3</option>
+              <option value="3">4</option>
+              <option value="4">5</option>
+            </select>
+          </div>
+          <div class="menu-scope-row">
+            <span class="menu-scope-label">Color</span>
+            <select
+              id="scope-theme-select"
+              class="scope-select"
+              style="flex: 1"
+            >
+              <option value="jet" selected>Jet</option>
+              <option value="hot">Hot</option>
+              <option value="cold">Cold</option>
+              <option value="thermal">Thermal</option>
+              <option value="night">Night</option>
+              <option value="gray">Gray</option>
+            </select>
+          </div>
+          <div class="menu-slider-row">
+            <span class="menu-slider-label">Floor</span>
+            <input
+              type="range"
+              id="slider-floor"
+              min="0"
+              max="200"
+              value="5"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-floor">5</span>
+          </div>
+          <div class="menu-slider-row">
+            <span class="menu-slider-label">Ceil</span>
+            <input
+              type="range"
+              id="slider-ceil"
+              min="50"
+              max="255"
+              value="220"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-ceil">220</span>
+          </div>
+          <div class="menu-slider-row">
+            <span class="menu-slider-label">Mic</span>
+            <input
+              type="range"
+              id="slider-micgain"
+              min="0"
+              max="100"
+              value="50"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-micgain">50</span>
+          </div>
+          <div class="menu-slider-row">
+            <span class="menu-slider-label">🎙 Vol</span>
+            <input
+              type="range"
+              id="slider-micvol"
+              min="0"
+              max="200"
+              value="100"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-micvol">100</span>
+          </div>
         </div>
-        <div class="menu-content">
-            <ul class="menu-list">
-                <li><a href="#" class="menu-item" data-action="band-select">Band Selection</a></li>
-                <li><a href="#" class="menu-item" data-action="mode-select">Mode Selection</a></li>
-                <li><a href="#" class="menu-item" data-action="memory-manage">Memory Manager</a></li>
-                <li><a href="#" class="menu-item" data-action="settings">Advanced Settings</a></li>
-                <li><a href="#" class="menu-item" data-action="logout">Logout</a></li>
-            </ul>
-            <!-- Scope Display Settings -->
-            <div class="menu-scope-settings">
-                <h3 class="menu-section-title">Scope Display</h3>
-                <div class="menu-scope-row">
-                    <span class="menu-scope-label">SPAN</span>
-                    <select id="scope-span-select" class="scope-select">
-                        <option value="3">10k</option><option value="4">20k</option>
-                        <option value="5">50k</option><option value="6" selected>100k</option>
-                        <option value="7">200k</option><option value="8">500k</option>
-                        <option value="9">1M</option>
-                    </select>
-                    <span class="menu-scope-label">SPD</span>
-                    <select id="scope-speed-select" class="scope-select">
-                        <option value="0">1</option><option value="1">2</option>
-                        <option value="2" selected>3</option>
-                        <option value="3">4</option><option value="4">5</option>
-                    </select>
-                </div>
-                <div class="menu-scope-row">
-                    <span class="menu-scope-label">Color</span>
-                    <select id="scope-theme-select" class="scope-select" style="flex:1;">
-                        <option value="jet" selected>Jet</option>
-                        <option value="hot">Hot</option>
-                        <option value="cold">Cold</option>
-                        <option value="thermal">Thermal</option>
-                        <option value="night">Night</option>
-                        <option value="gray">Gray</option>
-                    </select>
-                </div>
-                <div class="menu-slider-row">
-                    <span class="menu-slider-label">Floor</span>
-                    <input type="range" id="slider-floor" min="0" max="200" value="5" class="menu-slider">
-                    <span class="menu-slider-val" id="val-floor">5</span>
-                </div>
-                <div class="menu-slider-row">
-                    <span class="menu-slider-label">Ceil</span>
-                    <input type="range" id="slider-ceil" min="50" max="255" value="220" class="menu-slider">
-                    <span class="menu-slider-val" id="val-ceil">220</span>
-                </div>
-                <div class="menu-slider-row">
-                    <span class="menu-slider-label">Mic</span>
-                    <input type="range" id="slider-micgain" min="0" max="100" value="50" class="menu-slider">
-                    <span class="menu-slider-val" id="val-micgain">50</span>
-                </div>
-                <div class="menu-slider-row">
-                    <span class="menu-slider-label">🎙 Vol</span>
-                    <input type="range" id="slider-micvol" min="0" max="200" value="100" class="menu-slider">
-                    <span class="menu-slider-val" id="val-micvol">100</span>
-                </div>
-            </div>
-            <div class="menu-footer">
-                <span class="version-text">FT-710 v1.0</span>
-            </div>
+        <div class="menu-footer">
+          <span class="version-text">FT-710 v1.0</span>
         </div>
+      </div>
     </div>
     <div class="menu-overlay" id="menu-overlay"></div>
 
@@ -308,5 +473,5 @@
     <script src="/modules/ptt_manager.js?v=13"></script>
     <script src="/ft710_ui.js?v=22"></script>
     <script src="/modules/atr1000.js?v=1"></script>
-</body>
+  </body>
 </html>

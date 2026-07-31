@@ -252,20 +252,10 @@
 </tbody>
 </table>
 <h2 id="architecture-layers">1.4 Architecture Layers</h2>
-<pre class="text"><code>Client Layer
-  Mobile browser UI, Web Audio API, WebSocket clients, service worker
-
-Application Layer
-  FastAPI app, static file serving, WebSocket endpoints, client fan-out, auth middleware
-
-Radio Layer
-  Serial CAT protocol (pyserial), FT4222 SPI scope (subprocess), PyAudio sound card I/O
-
-Codec Layer
-  Opus encoder/decoder (libopus via ctypes), Int16 PCM fallback
-
-Device Layer
-  Yaesu FT-710 via USB (Enhanced COM Port + FT4222 SPI + USB Audio)</code></pre>
+<figure>
+<img src="diagrams/layer-architecture.svg" alt="Layer Architecture" />
+<figcaption aria-hidden="true">Layer Architecture</figcaption>
+</figure>
 <h2 id="current-project-status">1.5 Current Project Status</h2>
 <p>As of 2026-07-06, the full control + spectrum + audio pipeline is implemented. RX audio is captured from the FT-710’s USB audio interface via PyAudio, encoded with Opus (48kHz mono), and streamed to the browser via <code>/WSaudioRX</code>. TX audio is captured from the browser microphone, encoded with Opus (or PCM fallback), decoded server-side, and played to the FT-710 via PyAudio output. PTT triggers TX audio stream start/stop. Spectrum comes from the FT4222 SPI chip (when available) with automatic S-meter fallback. All radio controls (frequency, mode, filter, gains, PTT, NR/NB/AN, compressor, ATU, scope settings) are available through the WebSocket JSON API.</p>
     </main>

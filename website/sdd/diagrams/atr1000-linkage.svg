@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 320">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#f0a030"/></marker></defs>
+  <style>text{font-family:Inter,-apple-system,sans-serif}.h{fill:#f0a030;font-size:11px;font-weight:600}.t{fill:#e0e0e0;font-size:9px}.m{fill:#888;font-size:8px}</style>
+  <text x="16" y="20" fill="#f0a030" font-size="14" font-weight="700">ATR1000 Tuner Linkage (Optional)</text>
+
+  <rect x="150" y="36" width="260" height="36" rx="6" fill="#f0a03010" stroke="#f0a03033"/>
+  <text x="280" y="54" text-anchor="middle" class="h">Browser (atr1000.js)</text>
+  <text x="280" y="66" text-anchor="middle" class="m">inert unless fullState.atr1000Enabled</text>
+  <line x1="280" y1="72" x2="280" y2="90" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="298" y="86" class="m">/WSatr1000</text>
+
+  <rect x="150" y="94" width="260" height="44" rx="6" fill="#5dade210" stroke="#5dade233"/>
+  <text x="280" y="112" text-anchor="middle" class="h">server.py</text>
+  <text x="280" y="128" text-anchor="middle" class="t">freq-dirty → notify_freq · TX hook → notify_tx</text>
+  <line x1="280" y1="138" x2="280" y2="156" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="298" y="152" class="m">WS binary frames</text>
+
+  <rect x="130" y="160" width="300" height="44" rx="6" fill="#a78bfa10" stroke="#a78bfa33"/>
+  <text x="280" y="178" text-anchor="middle" class="h">atr1000_client.py</text>
+  <text x="280" y="194" text-anchor="middle" class="t">5s reconnect · 55-min refresh · LearningBuffer</text>
+  <line x1="280" y1="204" x2="280" y2="222" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="298" y="218" class="m">TCP ws://</text>
+
+  <rect x="170" y="226" width="220" height="36" rx="6" fill="#22c55e10" stroke="#22c55e33"/>
+  <text x="280" y="244" text-anchor="middle" class="h">ATR1000 Tuner</text>
+  <text x="280" y="256" text-anchor="middle" class="m">Networked antenna tuner</text>
+
+  <rect x="16" y="278" width="528" height="32" rx="6" fill="#f0a03008" stroke="#f0a03022"/>
+  <text x="280" y="296" text-anchor="middle" class="t">Default-disabled: FT710_ATR1000_HOST empty → no client task, hooks short-circuit</text>
+  <text x="280" y="308" text-anchor="middle" class="m">ATR data separate from RadioState · audio path untouched</text>
+</svg>

@@ -129,6 +129,25 @@ def _claim_tx_owner_for_token(token: str):
             return tx_ws
     return None
 
+
+def _assign_tx_owner_on_connect(ws: WebSocket, token: str) -> bool:
+    """Assign the TX uplink when an audio WebSocket connects.
+
+    A replacement socket authenticated by the current owner's token wins.
+    This is the page-reload/network-recovery case: the old browser socket can
+    remain half-open long enough to mute every frame from its replacement.
+    A different authenticated session cannot steal an active uplink merely by
+    connecting; its control socket may claim ownership when it actually keys.
+    """
+    global _tx_owner_ws
+    if _tx_owner_ws is None or _ws_tokens.get(_tx_owner_ws) == token:
+        replaced = _tx_owner_ws is not None and _tx_owner_ws is not ws
+        _tx_owner_ws = ws
+        if replaced:
+            logger.info("TX audio ownership → replacement connection")
+        return True
+    return False
+
 _state_broadcast_task: asyncio.Task | None = None
 _scope_read_task: asyncio.Task | None = None
 _scope_broadcast_task: asyncio.Task | None = None
@@ -1252,10 +1271,12 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                     st = audio.tx_stats()
                     logger.info(
                         "TX session: frames=%d fed=%d decode_fail=%d "
-                        "written=%d write_err=%d peak=%.0f%% non_owner_drops=%d",
+                        "written=%d write_err=%d queue_drops=%d peak=%.0f%% "
+                        "non_owner_drops=%d",
                         _tx_session_frames, _tx_session_decoded,
                         _tx_session_decode_fail, st["written"], st["write_err"],
-                        st["peak"] / 327.68, _tx_non_owner_drops)
+                        st["queue_drops"], st["peak"] / 327.68,
+                        _tx_non_owner_drops)
                 # Drop PTT immediately after the drain.  No verify loop:
                 # the radio obeys TX0 on the first write, and the TX-status
                 # poll (plus the client PTT watchdog) catches a stuck keyup.
@@ -2170,9 +2191,9 @@ async def ws_audio_tx(ws: WebSocket):
     1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
     Text frames: 'm:rate,...' for settings, 's:' for stop.
 
-    Single-owner: only the first connected client's audio is fed to the
-    radio; subsequent clients connect but their frames are ignored until
-    the owner disconnects.
+    Single-owner: only the owner's audio is fed to the radio. A replacement
+    connection from the same authenticated browser session takes over; other
+    clients wait until they key the radio or the owner disconnects.
     """
     global audio, _opus_tx_decoder, _tx_owner_ws
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail
@@ -2186,9 +2207,9 @@ async def ws_audio_tx(ws: WebSocket):
     await ws.accept()
     audio_tx_clients.add(ws)
     _ws_tokens[ws] = token
-    is_owner = _tx_owner_ws is None
-    if is_owner:
-        _tx_owner_ws = ws
+    # Same-token replacement fixes the "PTT keys but non_owner_drops"
+    # pattern where a half-open socket hoards the uplink after page reload.
+    is_owner = _assign_tx_owner_on_connect(ws, token)
     logger.info("Audio TX client connected (%d total, owner=%s)",
                 len(audio_tx_clients), is_owner)
 

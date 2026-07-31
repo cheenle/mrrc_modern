@@ -125,22 +125,10 @@
     <main class="sdd-content">
 <h1 id="system-context-app-011">4. System Context (APP 011)</h1>
 <h2 id="context-diagram">4.1 Context Diagram</h2>
-<pre class="text"><code>HAM Operator
-  |
-  | HTTP/WS from mobile or desktop browser
-  v
-MRRC FT-710 FastAPI Server
-  | serves static UI
-  | manages WebSocket clients
-  | serial CAT ↔ radio
-  | FT4222 SPI → scope data
-  | PyAudio ↔ USB audio
-  |
-  | Serial CAT (USB Enhanced COM Port, 38400 baud)
-  | FT4222 SPI (internal FTDI chip)
-  | USB Audio (sound card interface)
-  v
-Yaesu FT-710</code></pre>
+<figure>
+<img src="diagrams/system-context.svg" alt="System Context" />
+<figcaption aria-hidden="true">System Context</figcaption>
+</figure>
 <h2 id="actors">4.2 Actors</h2>
 <table>
 <colgroup>

@@ -130,11 +130,11 @@ Microphone → getUserMedia (48kHz) → ScriptProcessor (512buf, ~10.7ms)
 TX chain resamples from Opus 48kHz to the FT-710's native 44.1kHz USB audio rate on every platform, including Windows, using linear interpolation at an exact 160:147 ratio — frame boundaries stay phase-continuous so no periodic clicks. A Windows WASAPI shared-mode mix rate never replaces this device-domain boundary.
 
 **TX audio stability (v1.2):**
-- **Jitter buffer**: Pre-buffers 60ms before first DAC write to absorb WebSocket jitter; hard cap at 400ms with oldest-first drop bounds latency under Wi-Fi stalls.
+- **Jitter buffer**: Pre-buffers 60ms before first DAC write to absorb WebSocket jitter; hard cap at 400ms with oldest-first drop bounds latency under Wi-Fi stalls. Every dropped frame is counted as `queue_drops` in the PTT-release session log so a slow Windows output path cannot hide behind otherwise healthy decode/write counters.
 - **Graceful PTT release**: On PTT off, queued audio is written to the device buffer and `Pa_StopStream` blocks until the DAC finishes playing — word-endings survive before RF drops (TX_DRAIN=50ms).
 - **`start_tx` is awaited** (not background): avoids a race where the drain loop queues mic frames before the PortAudio stream opens and `start_tx` clears the queue, which would cause SSB zero-power (no modulation).
 - **Dual write-lock**: `_tx_write_lock` serializes the periodic drain-loop and the graceful stop so only one thread writes the PortAudio stream at a time (PortAudio blocking I/O is not thread-safe per stream).
-- **Single-owner TX**: Only the first connected `/WSaudioTX` client's audio reaches the radio; subsequent clients' frames are ignored until the owner disconnects.
+- **Single-owner TX**: Only one `/WSaudioTX` client reaches the radio. The PTT-ing client claims ownership; a same-session replacement socket takes over a half-open page-reload socket, while a different session cannot steal merely by connecting.
 
 Opus falls back to Int16 PCM when libopus is unavailable (server or browser).
 Windows packages search `opus.dll`, `_internal\opus.dll`, and

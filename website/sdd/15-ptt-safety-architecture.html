@@ -166,7 +166,7 @@
 <tr>
 <td>4</td>
 <td>Server</td>
-<td>Dead-man switch: force <code>TX0;</code> when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up) and is promoted to a remaining client on owner disconnect — an idle/zombie owner can no longer silently mute the uplink</td>
+<td>Dead-man switch: force <code>TX0;</code> when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up), a same-session replacement audio socket supersedes a half-open page-reload socket, and a different session cannot steal merely by connecting; owner disconnect promotes a remaining client</td>
 <td>Browser crash, tab close, network loss, audio socket drop, multi-client ownership</td>
 </tr>
 <tr>

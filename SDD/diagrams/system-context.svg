@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 220">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
+  </defs>
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:13px;font-weight:600}.t{fill:#f0a030;font-size:11px}.m{fill:#888;font-size:10px}.l{fill:#5dade2;font-size:10px}</style>
+  <!-- HAM Operator -->
+  <rect x="180" y="16" width="200" height="44" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="280" y="36" text-anchor="middle" class="b">📡 HAM Operator</text>
+  <text x="280" y="52" text-anchor="middle" class="m">Mobile or desktop browser</text>
+  <!-- Arrow down -->
+  <line x1="280" y1="60" x2="280" y2="78" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="295" y="74" class="l">HTTP / WebSocket</text>
+  <!-- Server -->
+  <rect x="140" y="82" width="280" height="56" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="280" y="102" text-anchor="middle" class="b">MRRC FT-710 FastAPI Server</text>
+  <text x="280" y="120" text-anchor="middle" class="m">Static UI · 4× WS · CAT · SPI · Audio</text>
+  <!-- Arrow down -->
+  <line x1="280" y1="138" x2="280" y2="156" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="295" y="152" class="l">USB (CAT + SPI + Audio)</text>
+  <!-- FT-710 -->
+  <rect x="180" y="160" width="200" height="44" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="280" y="180" text-anchor="middle" class="b">Yaesu FT-710</text>
+  <text x="280" y="196" text-anchor="middle" class="m">CAT serial · FT4222 SPI · USB Audio</text>
+</svg>

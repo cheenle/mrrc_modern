@@ -274,6 +274,7 @@
 <p><strong>Problem</strong>: FT4222 ctypes calls are blocking and can hang. Running them in the asyncio event loop would stall the entire server. Threading is fragile with FTDI D2XX driver state.</p>
 <p><strong>Rationale</strong>: A subprocess isolates the FTDI driver. If scope_pipe crashes, the server continues (falls back to S-meter). Frame format: 4-byte BE uint32 length + payload. stderr carries machine-parseable <code>STATUS:</code> lines for diagnostics. Heartbeat frames (len=0) keep pipe alive when idle.</p>
 <p><strong>Consequences</strong>: scope_pipe is independently restartable. Server handles pipe exit gracefully (marks scope disconnected, switches to fallback). Two process lifecycle to manage.</p>
+<p><strong>Amended (V2.7)</strong>: the pipe protocol gains a stdin control channel — the server pushes <code>TX:1</code>/<code>TX:0</code> on every <code>tx_status</code> transition (<code>_notify_scope_pipe_tx</code>). While TX is active the pipe pauses SPI reads and freezes all sync/stall recovery counters (the FT-710 garbles its scope stream during TX; reading it previously churned the pipe into <code>fatal:too_many_reinits</code> after every PTT), and runs one clean re-sync on TX→RX. stdin EOF (parent died) also stops the pipe. Windows teardown uses <code>taskkill /PID &lt;pid&gt; /T /F</code> because <code>terminate()</code> only reaches the onefile bootloader and orphans the real worker (which then holds the FT4222: FT_DEVICE_NOT_FOUND for the next pipe).</p>
 <h2 id="ad-006-dual-mode-spectrum-ft4222-s-meter-fallback">AD-006: Dual-Mode Spectrum (FT4222 + S-Meter Fallback)</h2>
 <table>
 <colgroup>
@@ -364,6 +365,7 @@
 <p><strong>Problem</strong>: The FT-710 USB audio device name varies by OS and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of FT-710. On Windows the card carries no “FT-710”/“YAESU” string at all (“USB Audio CODEC” or “USB Audio Device”, possibly localized/prefixed), so without tier (3) the heuristics grabbed a laptop mic (RX) or PC speakers (TX) — V2.6 field report.</p>
 <p><strong>Rationale</strong>: Name-based matching is more robust than index-based. The mono-channel heuristic is reliable: FT-710 provides exactly 1 input channel (mono RX), while webcams and USB mics typically offer 2 (stereo). Full-duplex preference for TX ensures the same device is used for both RX and TX paths. Logs all available devices at startup for debugging. The generic USB-audio names rank below the FT-710-specific names but above the channel heuristics; duplicates from per-host-API enumeration (MME/DirectSound/WASAPI) open the same hardware, and a genuine multi-device setup is warned about with a pointer to the env-var lock (<code>USB Audio</code> is the common substring covering both enumeration forms).</p>
 <p><strong>Consequences</strong>: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.</p>
+<p><strong>Amended (V2.8)</strong>: Windows full-duplex wedge — on Windows (MME/DirectSound), opening the TX playback stream on the FT-710’s C-Media codec silently wedges the RX capture stream (stays open, error-free, delivers silence; field symptom: RX audio perfect after server restart, gone after one PTT). <code>AudioHandler.restart_rx()</code> reopens the capture stream on every TX→RX transition (hooked in <code>_broadcast_state</code> on <code>tx_status</code>), Windows-only; macOS CoreAudio is unaffected and pays no reopen cost.</p>
 <h2 id="ad-009-7-task-adaptive-polling-with-bounded-lock-time">AD-009: 7-Task Adaptive Polling with Bounded Lock Time</h2>
 <table>
 <colgroup>
@@ -454,6 +456,8 @@
 <p><strong>Problem</strong>: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling (“咔咔咔”) on transmitted audio. The first fix unified everything at 48 kHz — but later measurement showed the FT-710 USB audio interface natively runs at <strong>44.1 kHz</strong>, so 48 kHz PCM still could not be written straight to the device stream.</p>
 <p><strong>Rationale</strong>: Opus mandates 48 kHz; the FT-710 mandates 44.1 kHz. A stateless numpy linear-interp resampler bridges the two domains per 20 ms frame with exact integer alignment (960→882), costing ~µs per call with zero phase drift. Browser capture at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox).</p>
 <p><strong>Consequences</strong>: Each direction has exactly one SRC step at the server boundary, owned by <code>audio_resample.py</code>. Browser and codec stay at 48 kHz; both PyAudio streams run at 44.1 kHz. The v1.0 underrun class of bug is impossible in both domains.</p>
+<p><strong>Amended (V2.9)</strong>: the device-domain rate is host-API-dependent, not universally 44.1 kHz. On macOS CoreAudio the codec runs natively at 44.1 kHz (bridge required, unchanged). On Windows the same C-Media codec’s native audio-engine mix rate is 48 kHz, and its MME 44.1 kHz playback path paces ~1.4× slow (measured on the Win11 KVM rig: 50×20 ms writes block 1.36–1.42 s) — the TX drain falls behind, the 400 ms cap drops 24–34 % of voice frames, TX audio crackles. Windows TX therefore opens the same-name WASAPI entry at its native rate (48 kHz) and <code>feed_tx_audio</code> passes 48 kHz PCM through unchanged; the 44.1 kHz bridge applies only when the stream rate is actually 44.1 kHz. RX capture stays at 44.1 kHz MME on Windows (paces correctly).</p>
+<p><strong>Amended (V2.14, supersedes V2.9)</strong>: Windows follows the same fixed boundary as every other platform: browser/Opus remains 48 kHz and the FT-710 PyAudio device stream remains 44.1 kHz. The prior WASAPI <code>defaultSampleRate</code> was a Windows shared-mode mix rate, not evidence of the radio’s USB hardware clock; the KVM pacing result is retained as incident evidence but withdrawn as a device-rate policy. <code>feed_tx_audio()</code> therefore always performs 960→882 SRC. PortAudio reinitialization and the Windows TX→RX capture reopen workaround remain unchanged.</p>
 <h2 id="ad-012-active-vfo-aware-frequency-model">AD-012: Active-VFO-Aware Frequency Model</h2>
 <table>
 <colgroup>
@@ -641,7 +645,7 @@
 </tr>
 <tr>
 <td>AD-011</td>
-<td>Unified 48kHz TX audio pipeline</td>
+<td>48 kHz codec / 44.1 kHz device bridge</td>
 <td>Implemented</td>
 </tr>
 <tr>

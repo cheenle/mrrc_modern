@@ -125,42 +125,29 @@
     <main class="sdd-content">
 <h1 id="architecture-overview-art-0512">9. Architecture Overview (ART 0512)</h1>
 <h2 id="logical-architecture">9.1 Logical Architecture</h2>
-<pre class="text"><code>Mobile/Desktop Browser
-  index.html / ft710.css / ft710_main.js / ft710_ui.js
-  Web Audio playback, mic capture, PTT UI, waterfall canvas
-        |
-        | HTTP/WS
-        v
-FastAPI MRRC FT-710 Server (`server.py`)
-  static file serving
-  /WSradio — control (JSON)
-  /WSaudioRX — RX audio fan-out (binary tagged Opus/PCM)
-  /WSaudioTX — TX mic uplink (binary tagged → decode → PyAudio)
-  /WSspectrum — waterfall fan-out (binary)
-  /api/mem_channels — memory channel CRUD
-  /api/status — full radio state
-  /api/auth/* — session management
-        |
-        | in-process imports
-        v
-Backend Modules
-  cat_controller.py — serial CAT protocol (pyserial + asyncio threads)
-  radio_state.py — shared state with dirty-field tracking
-  poll_scheduler.py — 7-task adaptive polling with priority-command preemption
-  audio_handler.py — PyAudio capture/playback + Opus codec
-  opus_rx.py — libopus ctypes wrapper
-  scope_handler.py — spectrum data + S-meter fallback
-  scope_pipe.py — standalone FT4222 SPI subprocess
-  config.py — constants, mode/band tables, S-meter calibration
-        |
-        | Serial / SPI / USB Audio
-        v
-Yaesu FT-710</code></pre>
+<figure>
+<img src="diagrams/logical-architecture.svg" alt="Logical Architecture" />
+<figcaption aria-hidden="true">Logical Architecture</figcaption>
+</figure>
 <h2 id="websocket-endpoints">9.2 WebSocket Endpoints</h2>
 <h3 id="wsradio-json-text">9.2.1 /WSradio (JSON text)</h3>
 <p>Control channel. Carries all radio commands, state updates, and memory management.</p>
-<p><strong>Server → Client:</strong> - <code>{"type":"fullState","data":{...},"bands":[...],"modes":[...]}</code> — initial sync on connect - <code>{"type":"stateUpdate","fields":{...},"dirty":[...]}</code> — partial changed-field update - <code>{"type":"value","field":"...","value":...}</code> — single-value query response - <code>{"type":"memChannels","channels":[...]}</code> — memory channel broadcast - <code>{"type":"pong"}</code> — keepalive response</p>
-<p><strong>Client → Server:</strong> - <code>{"type":"set","field":"...","value":...}</code> — command (40+ supported fields) - <code>{"type":"get","field":"..."}</code> — query current value - <code>{"type":"memSave","channels":[...]}</code> — save memory channels - <code>{"type":"memDelete","index":N}</code> — delete memory slot - <code>{"type":"ping"}</code> — keepalive</p>
+<p><strong>Server → Client:</strong></p>
+<ul>
+<li><code>{"type":"fullState","data":{...},"bands":[...],"modes":[...]}</code> — initial sync on connect</li>
+<li><code>{"type":"stateUpdate","fields":{...},"dirty":[...]}</code> — partial changed-field update</li>
+<li><code>{"type":"value","field":"...","value":...}</code> — single-value query response</li>
+<li><code>{"type":"memChannels","channels":[...]}</code> — memory channel broadcast</li>
+<li><code>{"type":"pong"}</code> — keepalive response</li>
+</ul>
+<p><strong>Client → Server:</strong></p>
+<ul>
+<li><code>{"type":"set","field":"...","value":...}</code> — command (40+ supported fields)</li>
+<li><code>{"type":"get","field":"..."}</code> — query current value</li>
+<li><code>{"type":"memSave","channels":[...]}</code> — save memory channels</li>
+<li><code>{"type":"memDelete","index":N}</code> — delete memory slot</li>
+<li><code>{"type":"ping"}</code> — keepalive</li>
+</ul>
 <h3 id="wsaudiorx-binary">9.2.2 /WSaudioRX (binary)</h3>
 <p><strong>Format:</strong> 1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.</p>
 <p>Server captures 48kHz Int16 mono from FT-710 USB audio → Opus encodes (64kbps default) → broadcasts to all <code>audio_rx_clients</code> at 20ms intervals. Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.</p>
@@ -171,102 +158,46 @@ Yaesu FT-710</code></pre>
 <p><strong>v1 format:</strong> 1-byte version (0x01) + 850 bytes wf1 = 851 bytes. <strong>v2 format:</strong> 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.</p>
 <p>Broadcast at ~30 fps from FT4222 data or S-meter fallback.</p>
 <h2 id="rx-audio-signal-chain">9.3 RX Audio Signal Chain</h2>
-<pre class="text"><code>FT-710 USB Audio Output
-  → PyAudio capture (44.1kHz, Int16, mono, 882-sample chunks = 20ms)
-    → AudioHandler.read_rx_chunk() (non-blocking poll from asyncio loop)
-      → resample_441_to_48 (882→960 samples, frame-aligned)
-        → AudioHandler.encode_rx_audio()
-        → Opus encode (RxOpusEncoder, 64kbps, 20ms frames)
-          → 1-byte tag (0x01) + Opus packet
-        → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
-          → /WSaudioRX broadcast to all audio_rx_clients
-            → Browser: decodeRxAudioFrame()
-              → Opus: WASM OpusDecoder.decode_float() → Float32Array
-              → PCM: Int16Array → Float32Array (÷32767)
-                → AudioWorklet &#39;rx-player&#39;: port.postMessage({type:&#39;push&#39;, payload})
-                  → Jitter buffer (220ms prebuffer, 90ms recovery, 800ms max)
-                    → AudioContext.destination → speakers</code></pre>
+<figure>
+<img src="diagrams/audio-chains.svg" alt="RX Audio Chain" />
+<figcaption aria-hidden="true">RX Audio Chain</figcaption>
+</figure>
+<p><em>See upper half of diagram.</em></p>
 <h2 id="tx-audio-signal-chain">9.4 TX Audio Signal Chain</h2>
-<pre class="text"><code>Browser Microphone
-  → getUserMedia({sampleRate:48000, channelCount:1})
-    → AudioContext.createMediaStreamSource → GainNode (device-side mic gain, 🎙 Vol slider 0–200 → 0–2×, browser-local, cookie `ft710_micVol`) → AudioWorklet &#39;tx-capture&#39; (ScriptProcessor fallback)
-      → 48kHz float32 20ms frames → postMessage → main thread → Worker (&#39;float_frame&#39;)
-        → Opus Worker (tx_opus_worker.js, 48kHz):
-          → OpusEncoder.encode_float(960-sample frames)
-            → 1-byte tag (0x01) + Opus packet (64kbps CBR, complexity=5)
-          → OR PCM fallback: 1-byte tag (0x00) + Int16 bytes
-            → postMessage({type:&#39;tx_audio&#39;, data:tagged.buffer}, [tagged.buffer])
-              → main thread: wsAudioTX.send(tagged)
-                → /WSaudioTX → server
-                  → Opus: TxOpusDecoder.decode() → Int16 PCM (48kHz, 960 samples/frame)
-                  → PCM: pass-through
-                    → AudioHandler.feed_tx_audio() → resample_48_to_441 (960→882, frame-aligned) → _tx_queue
-                      → AudioHandler.write_tx_chunk() (10ms drain loop)
-                        → PyAudio output stream (44.1kHz, mono) → FT-710 USB Audio Input</code></pre>
-<p><strong>TX runs at 48 kHz throughout the codec domain</strong> — browser capture and Opus encode/decode — and the server bridges to the FT-710’s native 44.1 kHz USB audio via frame-aligned resampling (960↔︎882 = exactly 20 ms, ratio 160:147). This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) that caused audible crackling on transmitted audio.</p>
+<figure>
+<img src="diagrams/audio-chains.svg" alt="TX Audio Chain" />
+<figcaption aria-hidden="true">TX Audio Chain</figcaption>
+</figure>
+<p><em>See lower half of diagram.</em></p>
+<p><strong>TX runs at 48 kHz throughout the codec domain</strong> — browser capture and Opus encode/decode — and the server bridges to the FT-710’s native 44.1 kHz USB audio via frame-aligned resampling (960↔︎882 = exactly 20 ms, ratio 160:147) on every platform, including Windows. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) and prevents a Windows shared-mode mix rate from bypassing the device-domain bridge.</p>
+<p>The 44.1 kHz playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as <code>queue_drops</code> in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy Windows RF acceptance run therefore requires <code>decode_fail=0</code>, <code>write_err=0</code>, <code>queue_drops=0</code>, and <code>non_owner_drops=0</code>; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds.</p>
 <h2 id="spectrum-signal-chain">9.5 Spectrum Signal Chain</h2>
 <h3 id="ft4222-path-real-fft-data">9.5.1 FT4222 Path (Real FFT Data)</h3>
-<pre class="text"><code>FT-710 FT4222 SPI chip
-  → scope_pipe.py subprocess (ctypes → libft4222)
-    → 4096-byte SPI reads → frame sync → v2 payload
-      → stdout: [4-byte BE length][version(1B) + wf1(850B) + wf2(850B) + metadata]
-        → server.py _read_scope_pipe() (asyncio stdout reader)
-          → parse_pipe_payload() → ScopeFrame
-            → scope.spectrum_rx1 = wf1, scope.spectrum_rx2 = wf2
-            → metadata: s_meter, vfoa_freq, mode, span, preamp, att
-            → _on_scope_frame() → update RadioState, broadcast
-    → stderr: &quot;STATUS:...&quot; diagnostic lines → server logging</code></pre>
+<figure>
+<img src="diagrams/spectrum-paths.svg" alt="Spectrum Paths" />
+<figcaption aria-hidden="true">Spectrum Paths</figcaption>
+</figure>
 <h3 id="s-meter-fallback-synthetic-spectrum">9.5.2 S-Meter Fallback (Synthetic Spectrum)</h3>
-<pre class="text"><code>CAT SM0; poll (100ms)
-  → radio_state.s_meter (0–255)
-    → scope_handler.update_from_radio_state(radio)
-      → generate Gaussian peaks at band edges + center
-        → scale to 850-point wf1 array
-          → scope.get_spectrum_binary() → v1 (851B) or v2 (1701B) frame
-            → /WSspectrum broadcast (same format as FT4222 path)</code></pre>
+<figure>
+<img src="diagrams/spectrum-paths.svg" alt="S-Meter Fallback" />
+<figcaption aria-hidden="true">S-Meter Fallback</figcaption>
+</figure>
+<p><em>See lower half of spectrum diagram.</em></p>
 <h2 id="cat-polling-architecture">9.6 CAT Polling Architecture</h2>
-<pre class="text"><code>PollScheduler (asyncio, 7 cooperative tasks)
-  Tier 1  (100ms):      FA; MD0; SM0;                     → vfo_a_freq, mode, s_meter
-  Tier 1b (500ms):      VS; FB;                           → active_vfo, vfo_b_freq
-  Tier 2A (500ms, TX):  RM3; RM4; RM5; RM6;              → comp, alc, power, swr
-  Tier 2B (500ms):      TX;                               → tx_status
-  Tier 3  (2s):         SH0; AG0; RG0; PC; PA0; RA0; NB0; NR0; BC; AC; SS01; AN; GT; MS;
-                        → filter/gains/preamp/att/NR/NB/AN/tuner/scope/antenna/agc/meter_display
-  Tier 4  (5s):         RM7; RM8; PR; CO; AO; RI0;       → id, vd, compressor, contour, amc, radio-info telemetry
-  Tier 5  (1s):         connection watchdog               → reconnect + full-state re-sync + scope re-init
-
-User commands skip next poll for affected fields (`skip_next_poll`).
-Poll loops also re-check the skip AFTER each in-flight query returns and discard the response
-when a user command landed mid-flight (stale-read guard in the IF/VFO/settings loops — without
-it, a pre-command `SH0;` response overwrote a just-set filter width and snapped the UI back).
-The `filter` set handler additionally reads `SH0;` back ~150 ms after `SH00&lt;NN&gt;;` and
-broadcasts the radio&#39;s actual index (logged as `Filter read-back: index=N (requested M)`).
-PTT/TUNE commands use priority writes (`send_priority_set_command`) and set `_cancel_polls`,
-which poll loops and read threads observe to release the serial lock quickly.
-CAT I/O remains serialized through `CatController._lock`; blocking serial work is offloaded via `asyncio.to_thread()`.</code></pre>
+<figure>
+<img src="diagrams/polling-architecture.svg" alt="Polling Architecture" />
+<figcaption aria-hidden="true">Polling Architecture</figcaption>
+</figure>
 <h2 id="state-broadcasting">9.7 State Broadcasting</h2>
-<pre class="text"><code>Command or Poll → RadioState.update(field=value)
-  → _dirty_fields.add(field)
-    → _broadcast_state()
-      → dirty = radio.get_and_clear_dirty()
-        → update = {type:&quot;stateUpdate&quot;, fields:radio.to_dirty_dict(dirty), dirty:list(dirty)}
-          → json.dumps → send_text to all ctrl_clients
-            → browser: handleMessage() → Object.assign(radioState, msg.fields) → renderUpdates(msg.dirty)</code></pre>
+<figure>
+<img src="diagrams/state-broadcasting.svg" alt="State Broadcasting" />
+<figcaption aria-hidden="true">State Broadcasting</figcaption>
+</figure>
 <h2 id="atr1000-tuner-linkage-optional">9.8 ATR1000 Tuner Linkage (optional)</h2>
-<pre class="text"><code>Browser (static/modules/atr1000.js — inert unless fullState.atr1000Enabled)
-  | /WSatr1000?token=... (JSON: atrState / atrTuneResult / atrTune / ping)
-  v
-server.py
-  | _broadcast_state() freq-dirty hook → notify_freq (auto-apply learned LC relays)
-  | TX on/off hook → notify_tx (device push mode, learning window)
-  | _atr_tune_assist() → TX2 carrier → SWR gate → full tune → keep+learn / rollback
-  v
-atr1000_client.py (asyncio WS client: binary frames [0xFF,CMD,LEN,DATA],
-  5s reconnect, 55-min refresh, TX-no-SYNC watchdog, throttled relay writes,
-  LearningBuffer stability-window learning)
-  | ws://$FT710_ATR1000_HOST:$FT710_ATR1000_PORT (default port 60001)
-  v
-ATR1000 networked antenna tuner</code></pre>
+<figure>
+<img src="diagrams/atr1000-linkage.svg" alt="ATR1000 Linkage" />
+<figcaption aria-hidden="true">ATR1000 Linkage</figcaption>
+</figure>
 <p>Three linkage behaviors:</p>
 <ol type="1">
 <li><strong>Freq change → relay apply</strong> — <code>_broadcast_state</code> on vfo_a_freq/vfo_b_freq/active_vfo dirty calls <code>notify_freq</code>; learned LC values from <code>atr1000_tuner.json</code> (TunerStorage: learn gate SWR 1.0–1.8, 1kHz keys ±5kHz nearest, atomic writes) are pushed to the tuner (5s write throttle).</li>

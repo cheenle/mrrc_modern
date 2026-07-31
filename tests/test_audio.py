@@ -3,6 +3,7 @@ Tests for audio_handler.py and opus_rx.py — SDD AD-004 (tagged dual-codec audi
 Verifies: codec tag constants, encoder/decoder lifecycle, PCM framing,
 audio device name matching logic.
 """
+import re
 import struct
 import unittest
 from pathlib import Path
@@ -106,17 +107,32 @@ class TxFrontendContractTests(unittest.TestCase):
 
     def test_tx_main_prefers_audio_worklet_frame_capture(self):
         source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
-        self.assertIn("audioWorklet.addModule('/tx_capture_worklet.js?v=tx-audio-4')", source)
+        self.assertRegex(
+            source,
+            r"audioWorklet\.addModule\(\s*['\"]"
+            r"/tx_capture_worklet\.js\?v=tx-audio-4['\"]\s*,?\s*\)",
+        )
         self.assertIn("new AudioWorkletNode", source)
-        self.assertIn("type: 'float_frame'", source)
+        self.assertRegex(source, r"type:\s*['\"]float_frame['\"]")
 
     def test_tx_start_creates_worker_before_start_command(self):
         """First PTT must not lose mic frames because the worker missed start."""
         source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
         start_fn = source[source.index("function startTXAudio()"):source.index("function startTXAudioFallback()")]
         ensure_idx = start_fn.index("ensureTXOpusWorker()")
-        start_idx = start_fn.index("postMessage({type: 'start'}")
+        start_match = re.search(
+            r"postMessage\(\s*\{\s*type:\s*['\"]start['\"]\s*\}",
+            start_fn,
+        )
+        self.assertIsNotNone(start_match)
+        start_idx = start_match.start()
         self.assertLess(ensure_idx, start_idx)
+
+    def test_intentional_close_flag_is_mutable(self):
+        """Power-off must not throw before stale TX sockets are closed."""
+        source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
+        self.assertRegex(source, r"\blet\s+_intentionalClose\s*=\s*false\b")
+        self.assertNotRegex(source, r"\bconst\s+_intentionalClose\b")
 
     def test_tx_audio_send_uses_websocket_backpressure_guard(self):
         """TX audio should drop frames under network stall instead of queuing latency."""
@@ -138,7 +154,7 @@ class TxFrontendContractTests(unittest.TestCase):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
         worker_source = (REPO_ROOT / "static" / "tx_opus_worker.js").read_text(encoding="utf-8")
         self.assertIn("window.TXDebug", main_source)
-        self.assertIn("type: 'tone_start'", main_source)
+        self.assertRegex(main_source, r"type:\s*['\"]tone_start['\"]")
         self.assertIn("function startTone", worker_source)
         self.assertIn("Math.sin(_tonePhase)", worker_source)
 
@@ -229,6 +245,17 @@ class TXBufferTests(unittest.TestCase):
         # Queue must stay bounded by the cap (allow one frame of slack).
         self.assertLessEqual(h._tx_queued_bytes, TX_MAX_BUFFER_BYTES + self._FRAME44_BYTES)
         self.assertGreater(len(h._tx_queue), 0)
+
+    def test_feed_counts_oldest_frame_drops(self):
+        """A slow Windows output stream must be visible in session stats."""
+        from audio_handler import TX_MAX_BUFFER_BYTES
+        h = self._make_handler()
+        h._tx_stream = object()
+        h._tx_max_buffer_bytes = self._FRAME44_BYTES * 2
+        for _ in range(5):
+            h.feed_tx_audio(self._FRAME48)
+        self.assertEqual(h.tx_stats()["queue_drops"], 3)
+        self.assertLessEqual(h._tx_queued_bytes, TX_MAX_BUFFER_BYTES)
 
     def test_feed_drops_when_stream_closed(self):
         h = self._make_handler()

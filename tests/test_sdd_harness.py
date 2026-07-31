@@ -209,7 +209,7 @@ class KnowledgeCliTests(unittest.TestCase):
     def test_sdd_extracts_chapter_section(self):
         r = run_cli("sdd", "9.6")
         self.assertEqual(r.returncode, 0)
-        self.assertIn("PollScheduler", r.stdout)
+        self.assertIn("CAT Polling Architecture", r.stdout)
 
     def test_brief_includes_decisions_requirements_and_risks(self):
         r = run_cli("brief", "audio_handler.py")

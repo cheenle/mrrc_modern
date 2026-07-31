@@ -70,6 +70,7 @@ class AudioHandler:
     _tx_written = 0
     _tx_write_err = 0
     _tx_peak = 0
+    _tx_queue_drops = 0
 
     def __init__(self,
                  rx_device_index: Optional[int] = None,
@@ -97,6 +98,7 @@ class AudioHandler:
         self._tx_written = 0
         self._tx_write_err = 0
         self._tx_peak = 0
+        self._tx_queue_drops = 0
 
         # RX silence watchdog state: bit-exact zero chunks mean the radio's
         # USB audio is muted/wedged — a quiet band is never this silent.
@@ -604,6 +606,7 @@ class AudioHandler:
                     self._tx_written = 0
                     self._tx_write_err = 0
                     self._tx_peak = 0
+                    self._tx_queue_drops = 0
                 # Reset diagnostic one-shot flags for this TX session.
                 for _k in ('_dbg_no_pcm', '_dbg_no_resample', '_dbg_no_stream',
                             '_dbg_no_stream_w', '_dbg_not_primed',
@@ -728,6 +731,7 @@ class AudioHandler:
             while (self._tx_queued_bytes > max_bytes
                    and len(self._tx_queue) > 1):
                 self._tx_queued_bytes -= len(self._tx_queue.popleft())
+                self._tx_queue_drops += 1
 
     def write_tx_chunk(self):
         """Write queued TX audio to the output stream.
@@ -785,6 +789,7 @@ class AudioHandler:
                 "write_err": self._tx_write_err,
                 "peak": self._tx_peak,
                 "queued": len(self._tx_queue),
+                "queue_drops": self._tx_queue_drops,
             }
 
     def has_pending_tx_audio(self) -> bool:

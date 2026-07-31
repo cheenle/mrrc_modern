@@ -458,6 +458,12 @@ AuthService
 <td>Split operation</td>
 </tr>
 <tr>
+<td><code>power</code></td>
+<td>true/false</td>
+<td><code>PS1;</code> / <code>PS0;</code></td>
+<td>Maintenance-script path only — NO web UI (V2.13: PS1 wake unreliable, mid-boot PS0 wedges the CAT MCU). Guards: 15 s boot window after <code>PS1</code> rejects <code>PS0</code>; <code>PS1</code> retried ≤3× and verified by <code>FA;</code> read-back; <code>PS0</code> sent twice; refused while TX. <code>PS;</code> polled in Tier 3 for <code>power_on</code> state</td>
+</tr>
+<tr>
 <td><code>band</code></td>
 <td>“20m”,“40m”,…</td>
 <td><code>BS&lt;NN&gt;;</code></td>

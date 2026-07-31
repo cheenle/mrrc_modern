@@ -141,6 +141,108 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.15</td>
+<td>2026-07-31</td>
+<td>Codex</td>
+<td><strong>Windows TX end-to-end audit and diagnosability hardening.</strong> Runtime simulations reconfirmed the 48 kHz browser/Opus contract, exact 960→882/20 ms device conversion, 64 kbps CBR packet flow, and fixed 44.1 kHz Windows PortAudio stream/reinitialization behavior. Fixed a frontend reconnect defect where <code>_intentionalClose</code> was declared <code>const</code> but reassigned, which could abort socket cleanup and leave a stale TX owner. Same-session replacement <code>/WSaudioTX</code> sockets now explicitly supersede the old owner; different sessions cannot steal on connect. The 400 ms server queue now counts oldest-frame drops and emits <code>queue_drops</code> in every TX-session release log, exposing the Windows slow-output/crackle signature directly. Four regressions added; suite 439 tests. Software-chain verification is complete; final RF speech/noise acceptance still requires the physical Win11 + FT-710 path. Docs: §9.4, §15, README, AGENTS, tests/README, CHANGELOG.</td>
+</tr>
+<tr>
+<td>SDD V2.14</td>
+<td>2026-07-28</td>
+<td>Codex</td>
+<td><strong>Windows TX restored to the fixed 44.1 kHz FT-710 device domain; V2.9 exception withdrawn.</strong> Deep review showed that the same-name WASAPI endpoint’s <code>defaultSampleRate=48000</code> is the Windows shared-mode audio-engine mix rate, not proof that the FT-710 USB hardware accepts a 48 kHz device stream. The V2.9 KVM pacing experiment is retained as incident evidence but was not an authoritative RF/audio-quality test and must not override AD-011. <code>start_tx()</code> now keeps the selected output device at 44100 Hz with 882 frames per 20 ms on every platform; <code>feed_tx_audio()</code> always converts each decoded 48 kHz/960-sample frame to 44.1 kHz/882 samples (1764 bytes), including after PortAudio reinitialization and device re-enumeration. Removed <code>_wasapi_tx_variant</code> and 48 kHz pass-through. Preserved the Windows TX→RX capture reopen and v1.7.7 PortAudio recovery. Regression coverage locks the selected-device rate, byte budgets, exact SRC frame size, stale-rate immunity, and reinit behavior; suite remains 435 tests. Installer metadata moves to private v1.7.8 test build; actual RF speech/noise acceptance and public release remain pending the operator’s FT-710 test. Docs: AD-011, §9.4, AGENTS, README, Windows installer guide, tests/README, CHANGELOG.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.13</td>
+<td>2026-07-28</td>
+<td>Kimi</td>
+<td><strong>Header power switch WITHDRAWN before release — FT-710 CAT power control is too fragile for a remote UI</strong>. V2.11 added the button, V2.12 hardened it; day-2 guarded live testing delivered the verdict: with the radio warm, CAT healthy, and all guards active, a single PS0→PS1 cycle failed — 3 verified PS1 attempts over 36 s never woke the radio (<code>PS1 attempt 1/2/3: radio not answering</code> in the server log), and it again needed physical intervention. Combined with the V2.12 MCU-wedge incident, the feature cannot meet the reliability bar for remote operation, so per the user’s standing instruction the UI button is removed (header <code>vfo-indicator</code> restored). <strong>Kept</strong>: (1) the <code>power</code> WS command for the maintenance scripts (<code>_power_cycle*.py</code>), now with the V2.12 guards (15 s boot window, PS1 retry≤3× + FA read-back verify, PS0 double-send, TX-active refusal) so the script path cannot wedge the MCU either; (2) Tier-3 <code>PS;</code> poll for truthful <code>power_on</code> state; (3) the PortAudio re-init fix — that one is independently load-bearing (every power cycle re-enumerates the sound card). Also learned: the 36 s synchronous verify loop inside the WS handler starves that connection’s keepalive (server closed the client with 1011 ping-timeout) — acceptable on the maintenance path, would have needed a background task for UI use. <code>test_power_switch.py</code> stays as the guard’s regression coverage; suite 435 tests. Docs: §10.4 power row, CAT knowledge base PS warning, CHANGELOG v1.7.7 rewritten.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.12</td>
+<td>2026-07-27</td>
+<td>Kimi</td>
+<td><strong>Power-command hardening + PortAudio re-enumeration survival (live power-cycle test fallout)</strong>. Reliability testing of the V2.11 header power switch on the real radio produced two field failures. (1) <strong>Boot-interrupted PS0 wedges the CAT MCU</strong>: a rapid PS0→PS1→PS0 sequence (PS0 landing seconds after PS1, mid-boot) left the radio with serial/audio/scope USB all enumerated but CAT permanently deaf — direct serial probes (<code>FA;</code>/<code>ID;</code>/<code>PS;</code>, both CP2105 channels, all DTR/RTS combos) answered nothing; only a physical power cycle recovers. A timing probe showed the healthy envelope: <code>PS1</code> 20 s after <code>PS0</code> boots the radio in ~4 s. Guards added to the <code>power</code> set handler: 15 s boot window after PS1 during which PS0 is rejected with a UI error; PS1 retried ≤3× and verified by a real <code>FA;</code> query before <code>power_on</code> flips (a lost fire-and-forget PS1 previously left the radio silently off); PS0 sent twice; power-off refused while transmitting. (2) <strong>Audio dies after any radio power cycle</strong>: the FT-710’s whole USB hub (sound card included) re-enumerates on power-off/on, invalidating the CoreAudio device IDs cached inside PortAudio at <code>Pa_Initialize</code> time — every TX/RX stream open then failed <code>-9999 paUnanticipatedHostError</code> until a server restart (the “TX audio device unavailable” field report). <code>audio_handler._reinit_pyaudio()</code> (terminate + re-init) is now invoked once on TX/RX open failure, with device index re-resolved by name before retrying; index-locked <code>FT710_AUDIO_RX/TX_DEVICE=&lt;n&gt;</code> configs remain fragile across re-enumeration — name locking recommended. Diagnosis note: py-spy on the wedged server proved the poll loops were alive and querying (all timing out) — the “stall” was radio-side, not a scheduler deadlock. 12 new tests (<code>test_power_switch.py</code> 9 + <code>PortAudioReinitTests</code> 3); suite 435 tests. Docs: §10.4 power row, tests/README counts + module list, CHANGELOG v1.7.7.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.11</td>
+<td>2026-07-27</td>
+<td>Kimi</td>
+<td><strong>Radio power switch in the web UI header (CAT PS), replacing the VFO indicator</strong>. The <code>power</code> set-command path already existed end-to-end (<code>cat.set_power</code> → <code>PS0;</code>/<code>PS1;</code>, <code>power_on</code> in <code>RadioState</code> + initial sync, iOS app consuming it) but the web UI had no control. Frontend: the header <code>vfo-indicator</code> span is replaced by a <code>btn-radio-power</code> ⏻ button (amber = on, red = off) — VFO-A/B identity remains visible as the active button in the VFO control row; OFF is guarded by a confirm dialog, ON is instant (the radio’s soft-off keeps the CAT interface alive, so <code>PS1;</code> wakes it — same path as <code>_power_cycle.py</code>). Backend: the <code>power</code> set handler now calls <code>skip_next_poll("power_on")</code> before the CAT write (V1.7 stale-read guard), and <code>PS</code> joins the Tier-3 settings poll (14 queries) so front-panel power changes sync back — no response while off, skipped by the <code>if resp</code> guard. Poll behavior while powered off is unchanged: 5 failed IF cycles → <code>serial_connected=False</code>, first answered poll flips it back. Cache-bust css v19 / main v22 / ui v21 + sw.js <code>ft710-v22</code>; two pinned-version tests updated; suite 423 tests. Docs: §10.4 power row, §9.6 Tier-3 list, README polling table, tests/README counts, CHANGELOG v1.7.7.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.10</td>
+<td>2026-07-26</td>
+<td>Kimi</td>
+<td><strong>HTTPS by default on Windows — self-signed bootstrap (minimal approach)</strong>. Root cause of “HTTPS can’t be enabled on a fresh install”: <code>windows/launcher.py</code> hardcoded <code>--no-ssl</code> in <code>build_command()</code>, and <code>server.py</code> only enables SSL when cert+key already exist — a fresh install has neither (the Win11 KVM rig only got HTTPS via a bypass ps1 that ran <code>ft710-server.exe</code> directly with <code>FT710_SSL_CERT/KEY</code>). Per user direction this is the minimal fix, not a local-CA/trust-chain design: new <code>ssl_bootstrap.py</code> generates a throwaway self-signed cert on first run (ECDSA P-256, 10-year, SANs = localhost / hostname / hostname.local / 127.0.0.1 / ::1 / detected LAN IPs, idempotent reuse, graceful None when <code>cryptography</code> missing); launcher <code>ssl_material()</code> honours explicit <code>FT710_SSL_CERT</code>/<code>FT710_SSL_KEY</code> first, <code>FT710_SSL=off</code> restores HTTP; <code>build_command(ssl_pair)</code> passes <code>--ssl-cert/--ssl-key</code> instead of the hardcoded <code>--no-ssl</code>; <code>local_url(secure=)</code> picks the scheme; <code>wait_for_server</code> probes with an unverified context (self-signed isn’t trusted by any store). Why HTTPS matters off-localhost: plain HTTP on a LAN address is not a secure context — browsers disable AudioWorklet and getUserMedia (the exact failure seen during remote phone testing). <code>cryptography&gt;=41</code> uncommented in requirements.txt (PyInstaller bundles it via the launcher spec’s repo-root pathex). <code>server.py</code> unchanged (existing <code>--ssl-cert/--ssl-key</code> + file-exists logic). 12 new tests (<code>test_ssl_bootstrap.py</code> + launcher SSL tests); suite 421 tests. Docs: AGENTS.md module table, tests/README counts, CHANGELOG v1.7.6, WINDOWS_INSTALLER_GUIDE HTTPS note, win_pack.md §2.4 sidecar scripts marked superseded.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.9</td>
+<td>2026-07-26</td>
+<td>Kimi</td>
+<td><strong>Windows TX crackle fix — WASAPI 48 kHz output</strong> (Win11 KVM field report: transmitted audio “咔啦咔啦” noise instead of voice). Measured on the rig: the C-Media codec’s MME 44.1 kHz playback path paces ~1.4× slow (50×20 ms <code>stream.write()</code> block 1.36–1.42 s instead of 1.00 s at 44.1/48/32/16/8 kHz; only 22050 Hz paces 1.02), so the TX drain loop falls behind, the 400 ms queue cap drops 24–34 % of voice frames (TX session written/fed 330/432, 195/296 — macOS production shows 96–97 %), chopping transmitted audio into crackle. The codec’s WASAPI entry at its native 48 kHz mix rate paces correctly (0.96). Fix: <code>start_tx()</code> prefers the same-name WASAPI entry on Windows (<code>_wasapi_tx_variant</code>) and opens the stream at that entry’s native rate; <code>feed_tx_audio</code> passes 48 kHz PCM straight through at 48 kHz (no 48→44.1 resample) and pre-buffer/cap/graceful-drain budgets are computed from the actual stream rate (getattr fallbacks keep module constants for 44.1 kHz). macOS unchanged (CoreAudio device domain stays 44.1 kHz); RX capture stays MME 44.1 kHz on Windows (paces fine). v1.7.5 hotfix: the v1.7.4 branch referenced <code>sys.platform</code> without the module import (NameError on every PTT) — new end-to-end <code>StartTxWindowsTests</code> cover <code>start_tx</code> on both platforms. AD-011 amended: device-domain rate is host-API-dependent, not universally 44.1 kHz — this overrides the <code>audio-pyaudio-rate</code> warn rule with runtime evidence. 7 new tests (<code>WindowsWasapiTxTests</code> + <code>StartTxWindowsTests</code>); suite 409 tests. Docs: AD-011, AGENTS.md module table, tests/README counts, CHANGELOG v1.7.4/v1.7.5.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.8</td>
+<td>2026-07-26</td>
+<td>Kimi</td>
+<td><strong>Windows RX audio dies after first PTT (full-duplex wedge) + scope resync that actually works</strong> (Win11 KVM field report: audio perfect after server restart, gone after one PTT). RX root cause: on Windows (MME/DirectSound), opening the TX playback stream on the FT-710’s C-Media USB codec silently wedges the RX capture stream — it stays open and error-free but delivers silence; macOS CoreAudio is unaffected (hardware capture verified healthy, max 43% FS, with the server stopped). Fix: <code>AudioHandler.restart_rx()</code> reopens the capture stream on every TX→RX transition, hooked in <code>_broadcast_state</code> on <code>tx_status</code> dirty (covers PTT/TUNE/physical PTT/dead-man), Windows-only no-op elsewhere (macOS must not pay the reopen cost per PTT). Scope root cause: the byte-by-byte <code>sync_stream</code> resync (wfview port) could never succeed on the FT4222 — every 1-byte <code>SingleRead</code> is its own SPI transaction (CS toggles per call), making a contiguous multi-byte sync pattern unobservable; it only consumed the stream and churned recovery into <code>fatal:too_many_reinits</code> after every PTT (V2.7’s TX-pause resume path used it). Replaced with <code>resync_device()</code> (close → 1 s idle-bus settle → reopen — the pattern that empirically realigns, same as a pipe restart), used by both the TX→RX resume and the bad-frame path; <code>MAX_SYNC_ATTEMPTS</code>/<code>sync_attempts_this_device</code> removed. AD-008 amended (Windows full-duplex wedge + restart_rx). 4 new tests (<code>RestartRxTests</code>); suite 402 tests. Docs: AD-008, AGENTS.md module table, tests/README counts, CHANGELOG v1.7.3.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
+<td>SDD V2.7</td>
+<td>2026-07-26</td>
+<td>Kimi</td>
+<td><strong>TX-safe spectrum: scope_pipe TX pause + Windows process-tree kill</strong> (field log from the Win11 KVM test rig: after every PTT the waterfall showed fallback/garbage for 30–45 s). Root cause: the FT-710 garbles its scope stream during TX (normal radio behavior), but <code>scope_pipe</code> was TX-agnostic — it kept reading, tripped <code>sync_lost</code> → <code>spi_stalled</code> device re-init → more sync failures → <code>fatal:too_many_reinits</code>, then a server-side pipe restart before real FFT frames returned. Second defect surfaced by the same log: on Windows, killing the PyInstaller onefile bootloader (<code>proc.terminate()</code>) orphaned the real worker, which kept the FT4222 open, so the next pipe failed <code>FT_OpenEx</code> with FT_DEVICE_NOT_FOUND for ~10–15 s (matches the long-standing code comment). Fixes: (1) the pipe protocol gains a stdin control channel — the server pushes <code>TX:1</code>/<code>TX:0</code> on every <code>tx_status</code> dirty broadcast (<code>_notify_scope_pipe_tx</code>, covers PTT/TUNE from any source, re-synced with <code>force=True</code> on pipe start); while TX is active the pipe pauses SPI reads and freezes all sync/stall/reinit counters (<code>tx_pause</code> STATUS), and on TX→RX runs one clean <code>sync_stream</code> re-sync (<code>tx_resume:resync</code>); (2) Windows pipe teardown uses <code>taskkill /PID &lt;pid&gt; /T /F</code> (<code>_terminate_process_tree_sync</code>, POSIX keeps SIGTERM), and the pipe treats stdin EOF (parent died) as a shutdown signal — a second orphan guard alongside the stdout-heartbeat EPIPE path. Frontend: waterfall/FFT canvases show “TX 发射中 — 频谱暂停” while <code>tx_status != 0</code> instead of stale rows. AD-005 amended (stdin control channel + tree kill), §9.5.1 diagram updated, UC-004 flow unchanged from the client’s perspective. 13 new tests (<code>test_scope_pipe_tx.py</code>: control-line parsing, TX-notify transitions/force/dead-pipe guard, taskkill vs SIGTERM); suite 398 tests. Docs: AD-005, §9.5.1, AGENTS.md module table, tests/README counts, CHANGELOG v1.7.2.</td>
+</tr>
+<tr>
+<td>———</td>
+<td>——</td>
+<td>——–</td>
+<td>———</td>
+</tr>
+<tr>
 <td>SDD V2.6</td>
 <td>2026-07-26</td>
 <td>Kimi</td>
@@ -346,7 +448,7 @@
 </tr>
 <tr>
 <td>AD-011</td>
-<td>Unified 48kHz TX audio pipeline</td>
+<td>48 kHz codec / 44.1 kHz device bridge</td>
 </tr>
 <tr>
 <td>AD-012</td>

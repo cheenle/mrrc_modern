@@ -4,6 +4,7 @@ Verifies: message format, auth token flow, PTT safety logic, state broadcast.
 """
 import json
 from pathlib import Path
+import re
 import unittest
 
 
@@ -238,15 +239,21 @@ class CookieSettingsPersistenceTests(unittest.TestCase):
     def test_persisted_values_written_via_cookie_helpers(self):
         main_src = Path("static/ft710_main.js").read_text(encoding="utf-8")
         ui_src = Path("static/ft710_ui.js").read_text(encoding="utf-8")
-        self.assertIn("FT710Settings.setCookie('ft710_memChannels'", main_src)
-        self.assertIn("FT710Settings.getCookie('ft710_memChannels')", main_src)
-        self.assertIn("FT710Settings.getCookie('ft710_afVol')", main_src)
-        self.assertIn("FT710Settings.setCookie('ft710_afVol'", ui_src)
+        def cookie_call(src, method, key):
+            self.assertRegex(
+                src,
+                rf"FT710Settings\.{method}\(\s*['\"]{re.escape(key)}['\"]",
+            )
+
+        cookie_call(main_src, "setCookie", "ft710_memChannels")
+        cookie_call(main_src, "getCookie", "ft710_memChannels")
+        cookie_call(main_src, "getCookie", "ft710_afVol")
+        cookie_call(ui_src, "setCookie", "ft710_afVol")
         self.assertIn("FT710Settings.getCookie('ft710_' + key)", ui_src)
-        self.assertIn("FT710Settings.setCookie('ft710_micGain'", ui_src)
+        cookie_call(ui_src, "setCookie", "ft710_micGain")
         self.assertIn("_applySavedMicGain();", main_src)
-        self.assertIn("FT710Settings.getCookie('ft710_micGain')", main_src)
-        self.assertIn("FT710Settings.setCookie('ft710_micVol'", ui_src)
+        cookie_call(main_src, "getCookie", "ft710_micGain")
+        cookie_call(ui_src, "setCookie", "ft710_micVol")
         self.assertIn("_setDeviceMicGain(parseInt(this.value) / 100)", ui_src)
         self.assertIn("_ensureMicGainNode()", main_src)
         self.assertIn("_txMicGainNode.connect(_txMicAw)", main_src)
@@ -537,6 +544,28 @@ class TXUplinkOwnershipTests(unittest.TestCase):
         self.assertIs(s._tx_owner_ws, a)
         self.assertIsNone(s._claim_tx_owner_for_token(None))
         self.assertIs(s._tx_owner_ws, a)
+
+    def test_new_same_token_audio_connection_replaces_stale_owner(self):
+        """A page reload must not leave its new mic socket muted behind the
+        old socket authenticated by the same browser session."""
+        s = self.server
+        stale, current = object(), object()
+        s._ws_tokens[stale] = "same-browser-session"
+        s._ws_tokens[current] = "same-browser-session"
+        s._tx_owner_ws = stale
+        self.assertTrue(
+            s._assign_tx_owner_on_connect(current, "same-browser-session")
+        )
+        self.assertIs(s._tx_owner_ws, current)
+
+    def test_new_different_token_connection_cannot_steal_owner(self):
+        s = self.server
+        owner, newcomer = object(), object()
+        s._ws_tokens[owner] = "owner-session"
+        s._ws_tokens[newcomer] = "other-session"
+        s._tx_owner_ws = owner
+        self.assertFalse(s._assign_tx_owner_on_connect(newcomer, "other-session"))
+        self.assertIs(s._tx_owner_ws, owner)
 
     def test_endpoints_track_tokens(self):
         """Both endpoints must record the auth token per socket so the PTT

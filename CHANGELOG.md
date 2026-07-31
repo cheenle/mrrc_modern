@@ -25,6 +25,16 @@ All notable changes to the FT-710 Web Control project.
   at 435 tests. RF speech/noise acceptance remains pending the operator's
   evening FT-710 test; this build is not yet a public download.
 
+### Follow-up — 2026-07-31 TX Audit
+- Fixed the frontend intentional-disconnect flag (`const` → `let`), which
+  could throw before closing the audio sockets and leave a stale TX owner.
+- A replacement `/WSaudioTX` connection from the same authenticated session
+  now takes ownership; a different session still cannot steal on connect.
+- TX jitter-buffer oldest-frame drops are now counted and logged as
+  `queue_drops` on PTT release, exposing Windows output pacing regressions.
+- Added four regressions and made source-contract tests formatting-agnostic;
+  suite is 439 tests. Physical Win11 + FT-710 RF acceptance remains pending.
+
 ## [v1.7.7] — 2026-07-28 — Audio Survives Radio Power Cycles (Power Switch Withdrawn)
 
 ### Fixed

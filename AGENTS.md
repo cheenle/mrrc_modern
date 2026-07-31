@@ -6,11 +6,11 @@ This repository contains a Python FastAPI server for Yaesu FT-710 web control pl
 
 | Module | Responsibility |
 |--------|----------------|
-| `server.py` | FastAPI app, auth, 4 WebSocket endpoints, REST APIs, lifespan management |
+| `server.py` | FastAPI app, auth, 4 WebSocket endpoints, REST APIs, lifespan management; TX uplink ownership follows the PTT client and same-session replacement connections |
 | `cat_controller.py` | Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
 | `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command and post-query stale-read discard; watchdog re-runs scope init (`on_reconnected`) after serial reconnect |
-| `audio_handler.py` | PyAudio sound card capture/playback at the FT-710's fixed 44.1kHz device rate on every platform (decoded 48kHz Opus/PCM always resamples 960→882 before TX), Opus encode, FT-710 device auto-detection (FT-710/YAESU name, "USB Audio CODEC"/"USB Audio Device" Windows names, mono/full-duplex heuristics); `restart_rx()` reopens RX capture on every TX→RX transition (Windows-only full-duplex wedge workaround); on TX/RX stream-open failure re-initializes PortAudio once and retries with a name-resolved index (USB re-enumeration on radio power cycles invalidates cached device IDs — macOS -9999) |
+| `audio_handler.py` | PyAudio sound card capture/playback at the FT-710's fixed 44.1kHz device rate on every platform (decoded 48kHz Opus/PCM always resamples 960→882 before TX), Opus encode, FT-710 device auto-detection (FT-710/YAESU name, "USB Audio CODEC"/"USB Audio Device" Windows names, mono/full-duplex heuristics); TX session stats include oldest-frame `queue_drops`; `restart_rx()` reopens RX capture on every TX→RX transition (Windows-only full-duplex wedge workaround); on TX/RX stream-open failure re-initializes PortAudio once and retries with a name-resolved index (USB re-enumeration on radio power cycles invalidates cached device IDs — macOS -9999) |
 | `audio_resample.py` | 44.1kHz ↔ 48kHz frame-aligned SRC (numpy linear interp; 882↔960 = 20ms) |
 | `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz) |
 | `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback |

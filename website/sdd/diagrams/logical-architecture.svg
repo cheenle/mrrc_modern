@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker></defs>
+  <style>text{font-family:Inter,-apple-system,sans-serif}.h{fill:#f0a030;font-size:11px;font-weight:600}.t{fill:#e0e0e0;font-size:10px}.m{fill:#888;font-size:9px}.c{fill:#5dade2;font-size:10px}</style>
+  <!-- Browser -->
+  <rect x="150" y="8" width="300" height="46" rx="8" fill="#f0a03014" stroke="#f0a03044"/>
+  <text x="300" y="26" text-anchor="middle" class="h">Mobile / Desktop Browser</text>
+  <text x="300" y="42" text-anchor="middle" class="m">Web Audio · mic · PTT UI · waterfall canvas</text>
+  <line x1="300" y1="54" x2="300" y2="68" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="315" y="66" class="c">HTTP / WS</text>
+  <!-- Server -->
+  <rect x="100" y="72" width="400" height="68" rx="8" fill="#5dade214" stroke="#5dade244"/>
+  <text x="300" y="90" text-anchor="middle" class="h">FastAPI MRRC FT-710 Server (server.py)</text>
+  <text x="300" y="108" text-anchor="middle" class="t">static files · /WSradio · /WSaudioRX · /WSaudioTX · /WSspectrum</text>
+  <text x="300" y="126" text-anchor="middle" class="m">/api/mem_channels · /api/status · /api/auth/*</text>
+  <line x1="300" y1="140" x2="300" y2="156" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="315" y="154" class="c">in-process imports</text>
+  <!-- Modules -->
+  <rect x="16" y="160" width="176" height="36" rx="6" fill="#22c55e14" stroke="#22c55e44"/>
+  <text x="104" y="178" text-anchor="middle" class="h">cat_controller.py</text>
+  <text x="104" y="192" text-anchor="middle" class="m">pyserial + asyncio.to_thread</text>
+
+  <rect x="204" y="160" width="176" height="36" rx="6" fill="#a78bfa14" stroke="#a78bfa44"/>
+  <text x="292" y="178" text-anchor="middle" class="h">radio_state.py</text>
+  <text x="292" y="192" text-anchor="middle" class="m">dirty-field tracking</text>
+
+  <rect x="392" y="160" width="192" height="36" rx="6" fill="#e74c3c14" stroke="#e74c3c44"/>
+  <text x="488" y="178" text-anchor="middle" class="h">poll_scheduler.py</text>
+  <text x="488" y="192" text-anchor="middle" class="m">7-task adaptive polling</text>
+
+  <rect x="16" y="208" width="176" height="36" rx="6" fill="#f0a03014" stroke="#f0a03044"/>
+  <text x="104" y="226" text-anchor="middle" class="h">audio_handler.py</text>
+  <text x="104" y="240" text-anchor="middle" class="m">PyAudio + Opus codec</text>
+
+  <rect x="204" y="208" width="176" height="36" rx="6" fill="#5dade214" stroke="#5dade244"/>
+  <text x="292" y="226" text-anchor="middle" class="h">opus_rx.py</text>
+  <text x="292" y="240" text-anchor="middle" class="m">libopus ctypes wrapper</text>
+
+  <rect x="392" y="208" width="192" height="36" rx="6" fill="#22c55e14" stroke="#22c55e44"/>
+  <text x="488" y="226" text-anchor="middle" class="h">scope_handler.py</text>
+  <text x="488" y="240" text-anchor="middle" class="m">spectrum + S-meter fallback</text>
+
+  <rect x="140" y="256" width="140" height="28" rx="6" fill="#88888814" stroke="#88888844"/>
+  <text x="210" y="274" text-anchor="middle" class="h">scope_pipe.py</text>
+
+  <rect x="300" y="256" width="140" height="28" rx="6" fill="#88888814" stroke="#88888844"/>
+  <text x="370" y="274" text-anchor="middle" class="h">config.py</text>
+
+  <line x1="300" y1="284" x2="300" y2="302" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="315" y="300" class="c">USB (Serial · SPI · Audio)</text>
+  <!-- FT-710 -->
+  <rect x="180" y="306" width="240" height="40" rx="8" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="300" y="324" text-anchor="middle" class="h">Yaesu FT-710</text>
+  <text x="300" y="340" text-anchor="middle" class="m">CAT · FT4222 SPI · USB Audio</text>
+</svg>

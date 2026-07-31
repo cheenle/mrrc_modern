@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#f0a030"/></marker></defs>
+  <style>text{font-family:Inter,-apple-system,sans-serif}.s{fill:#f0a030;font-size:10px;font-weight:600}.t{fill:#e0e0e0;font-size:9px}.m{fill:#888;font-size:8px}</style>
+  <!-- RX chain -->
+  <text x="16" y="20" fill="#f0a030" font-size="13" font-weight="700">RX Audio Signal Chain</text>
+  <!-- Box 1 -->
+  <rect x="16" y="32" width="130" height="44" rx="6" fill="#f0a03010" stroke="#f0a03033"/>
+  <text x="81" y="50" text-anchor="middle" class="s">FT-710 USB Audio</text>
+  <text x="81" y="64" text-anchor="middle" class="m">44.1kHz Int16 mono</text>
+  <line x1="146" y1="54" x2="168" y2="54" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- Box 2 -->
+  <rect x="172" y="32" width="120" height="44" rx="6" fill="#5dade210" stroke="#5dade233"/>
+  <text x="232" y="50" text-anchor="middle" class="s">PyAudio Capture</text>
+  <text x="232" y="64" text-anchor="middle" class="m">882-sample chunks</text>
+  <line x1="292" y1="54" x2="314" y2="54" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- Box 3 -->
+  <rect x="318" y="32" width="110" height="44" rx="6" fill="#a78bfa10" stroke="#a78bfa33"/>
+  <text x="373" y="50" text-anchor="middle" class="s">Resample</text>
+  <text x="373" y="64" text-anchor="middle" class="m">882→960 (48kHz)</text>
+  <line x1="428" y1="54" x2="450" y2="54" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- Box 4 -->
+  <rect x="454" y="32" width="110" height="44" rx="6" fill="#22c55e10" stroke="#22c55e33"/>
+  <text x="509" y="50" text-anchor="middle" class="s">Opus Encode</text>
+  <text x="509" y="64" text-anchor="middle" class="m">64kbps 20ms</text>
+  <line x1="564" y1="54" x2="586" y2="54" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- Box 5 -->
+  <rect x="590" y="32" width="120" height="44" rx="6" fill="#e74c3c10" stroke="#e74c3c33"/>
+  <text x="650" y="50" text-anchor="middle" class="s">WSaudioRX</text>
+  <text x="650" y="64" text-anchor="middle" class="m">tagged Opus/PCM</text>
+
+  <!-- TX chain -->
+  <text x="16" y="140" fill="#f0a030" font-size="13" font-weight="700">TX Audio Signal Chain</text>
+  <!-- Box 1 -->
+  <rect x="16" y="152" width="130" height="44" rx="6" fill="#f0a03010" stroke="#f0a03033"/>
+  <text x="81" y="170" text-anchor="middle" class="s">Browser Mic</text>
+  <text x="81" y="184" text-anchor="middle" class="m">48kHz mono</text>
+  <line x1="146" y1="174" x2="168" y2="174" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- Box 2 -->
+  <rect x="172" y="152" width="120" height="44" rx="6" fill="#5dade210" stroke="#5dade233"/>
+  <text x="232" y="170" text-anchor="middle" class="s">AudioWorklet</text>
+  <text x="232" y="184" text-anchor="middle" class="m">20ms float32 frames</text>
+  <line x1="292" y1="174" x2="314" y2="174" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- Box 3 -->
+  <rect x="318" y="152" width="110" height="44" rx="6" fill="#a78bfa10" stroke="#a78bfa33"/>
+  <text x="373" y="170" text-anchor="middle" class="s">Opus Worker</text>
+  <text x="373" y="184" text-anchor="middle" class="m">64kbps CBR cpx=5</text>
+  <line x1="428" y1="174" x2="450" y2="174" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- Box 4 -->
+  <rect x="454" y="152" width="110" height="44" rx="6" fill="#22c55e10" stroke="#22c55e33"/>
+  <text x="509" y="170" text-anchor="middle" class="s">WSaudioTX → Server</text>
+  <text x="509" y="184" text-anchor="middle" class="m">tagged binary</text>
+  <line x1="564" y1="174" x2="586" y2="174" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- Box 5 -->
+  <rect x="590" y="152" width="120" height="44" rx="6" fill="#e74c3c10" stroke="#e74c3c33"/>
+  <text x="650" y="170" text-anchor="middle" class="s">PyAudio → FT-710</text>
+  <text x="650" y="184" text-anchor="middle" class="m">44.1kHz TX out</text>
+
+  <!-- Key difference -->
+  <rect x="16" y="220" width="694" height="40" rx="6" fill="#f0a03008" stroke="#f0a03022"/>
+  <text x="363" y="238" text-anchor="middle" class="s">48kHz codec domain throughout · bridging to FT-710 native 44.1kHz via frame-aligned resampling (960↔882)</text>
+  <text x="363" y="254" text-anchor="middle" class="m">Browser Opus 48kHz → server resample 48→44.1k → radio · Radio 44.1k → server resample 44.1→48k → browser Opus 48kHz</text>
+</svg>

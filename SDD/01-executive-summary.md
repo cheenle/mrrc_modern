@@ -9,7 +9,7 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 ## 1.2 Current Design Goals
 
 | Goal | Target | Current Evidence |
-|------|--------|------------------|
+| ------ | -------- | ------------------ |
 | Mobile-first operation | iPhone/mobile browser as primary UI | `static/index.html`, `ft710.css`, `ft710_main.js`, `ft710_ui.js` |
 | Full radio control | All essential CAT commands via WebSocket | `cat_controller.py` with 40+ command helpers |
 | Real-time spectrum | Waterfall from FT4222 SPI or S-meter fallback | `scope_pipe.py`, `scope_handler.py` |
@@ -20,7 +20,7 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 ## 1.3 Implemented Core Features
 
 | Feature | Status | Description |
-|---------|--------|-------------|
+| --------- | -------- | ------------- |
 | Mobile PWA-style UI | Implemented | Safe-area support, manifest, service worker, dark amber theme |
 | Control WebSocket | Implemented | `/WSradio` JSON: fullState, stateUpdate, set/get commands, auth |
 | RX audio WebSocket | Implemented | `/WSaudioRX` tagged dual-codec frames (0x00=PCM, 0x01=Opus 48kHz mono) |
@@ -36,22 +36,7 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 
 ## 1.4 Architecture Layers
 
-```text
-Client Layer
-  Mobile browser UI, Web Audio API, WebSocket clients, service worker
-
-Application Layer
-  FastAPI app, static file serving, WebSocket endpoints, client fan-out, auth middleware
-
-Radio Layer
-  Serial CAT protocol (pyserial), FT4222 SPI scope (subprocess), PyAudio sound card I/O
-
-Codec Layer
-  Opus encoder/decoder (libopus via ctypes), Int16 PCM fallback
-
-Device Layer
-  Yaesu FT-710 via USB (Enhanced COM Port + FT4222 SPI + USB Audio)
-```
+![Layer Architecture](diagrams/layer-architecture.svg)
 
 ## 1.5 Current Project Status
 

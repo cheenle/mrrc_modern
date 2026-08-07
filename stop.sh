@@ -99,9 +99,39 @@ fi
 # ═══════════════════════════════════════════════════════════════════════
 # 4. Final verification
 # ═══════════════════════════════════════════════════════════════════════
-remaining=$(pgrep -f "python.*server.py" 2>/dev/null || true)
+# 大小写不敏感：MacPorts 解释器命令行是 "Python server.py"（大写 P），
+# 小写正则 "python.*server.py" 匹配不到 → 残留进程漏检（现场 2026-08-07）。
+remaining=$(pgrep -if "server\.py" 2>/dev/null || true)
 if [ -n "$remaining" ]; then
   echo -e "${YELLOW}⚠ Lingering python processes: $remaining${NC}"
 else
   echo -e "${GREEN}✓ FT-710 server fully stopped${NC}"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════
+# 5. Serial port holders — AD-008 串口唯一 owner 兜底
+# ═══════════════════════════════════════════════════════════════════════
+# 手动/非 start.sh 启动的 server 进程可能不写 pid 文件、不监听 WEB 端口，
+# 但一定会持有 CAT 串口（.env 的 FT710_SERIAL_PORT）。任何非 rigctld 的
+# 持有者都是残留冲突进程，直接释放——避免切换后 ft8 侧 rigctld 与其争抢。
+SERIAL_DEV="${FT710_SERIAL_PORT:-/dev/cu.SLAB_USBtoUART}"
+rigctld_pid=$(pgrep -x rigctld 2>/dev/null || true)
+holders=$(lsof -t "$SERIAL_DEV" 2>/dev/null || true)
+for hpid in $holders; do
+  if [ -n "$rigctld_pid" ] && [ "$hpid" = "$rigctld_pid" ]; then
+    continue  # rigctld 归 ft8 侧管理，不在本脚本职责内
+  fi
+  echo -n "Releasing serial port holder (pid $hpid)... "
+  kill "$hpid" 2>/dev/null || true
+  sleep 0.3
+  if kill -0 "$hpid" 2>/dev/null; then
+    kill -9 "$hpid" 2>/dev/null || true
+    sleep 0.3
+    echo -e "${YELLOW}force-stopped${NC}"
+  else
+    echo -e "${GREEN}stopped${NC}"
+  fi
+done
+if [ -n "$holders" ]; then
+  echo -e "${GREEN}✓ Serial port released${NC}"
 fi

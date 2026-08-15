@@ -1,6 +1,7 @@
 package com.hamradio.ft710android.ViewModel
 
 import com.hamradio.ft710android.Network.ConnectionManager
+import com.hamradio.ft710android.Network.parseWsEvent
 import com.hamradio.ft710android.PTT.PTTManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,9 +23,9 @@ class MainViewModelTest {
             txCapture = null, spectrumProcessor = null, memoryChannelsStore = null,
             pttManager = null, scope = scope,
         )
-        vm.onWsEvent(
+        vm.onWsEvent(parseWsEvent(
             """{"type":"fullState","data":{"vfo_a_freq":7050000,"mode":1},"bands":["20m"],"modes":["USB"],"memChannels":[null,null,null,null,null,null]}"""
-        )
+        ))
         assertEquals(7050000L, vm.state.vfoAFreq)
         assertEquals(listOf("20m"), vm.bands.value)
         assertEquals(1L, vm.version.value) // apply 后版本递增，驱动 Compose 重组
@@ -41,7 +42,7 @@ class MainViewModelTest {
             override fun onStatusReceived(txStatus: Int) { fed = txStatus }
         }
         val vm = MainViewModel(null, cm(scope), null, null, null, null, spy, scope)
-        vm.onWsEvent("""{"type":"stateUpdate","fields":{"tx_status":1},"dirty":["tx_status"]}""")
+        vm.onWsEvent(parseWsEvent("""{"type":"stateUpdate","fields":{"tx_status":1},"dirty":["tx_status"]}"""))
         assertEquals(1, fed)
     }
 }

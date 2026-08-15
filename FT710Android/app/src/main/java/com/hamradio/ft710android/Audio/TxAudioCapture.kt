@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,14 +22,14 @@ import kotlinx.coroutines.launch
 class TxAudioCapture(
     private val context: Context,
     private val sendFrame: (ByteArray) -> Unit,
-) {
+) : MainViewModel.TxCaptureLike {
     private val encoder = OpusBridge.encoderCreate(OpusBridge.SAMPLE_RATE, OpusBridge.CHANNELS, OpusBridge.BITRATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
     private var record: AudioRecord? = null
     var onError: ((String) -> Unit)? = null
 
-    fun start() {
+    override fun start() {
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             onError?.invoke("Missing RECORD_AUDIO permission"); return
         }
@@ -52,7 +53,7 @@ class TxAudioCapture(
         }
     }
 
-    fun stop() {
+    override fun stop() {
         job?.cancel()
         runCatching { record?.stop() }
         record?.release()

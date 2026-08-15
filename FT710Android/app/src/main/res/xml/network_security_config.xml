@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <!-- 调试明文 HTTP/WS（no-ssl 服务端）仅限用户手动添加域；生产默认拒绝明文 -->
+</network-security-config>

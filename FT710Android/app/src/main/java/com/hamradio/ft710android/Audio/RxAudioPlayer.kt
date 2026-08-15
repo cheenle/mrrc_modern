@@ -3,6 +3,7 @@ package com.hamradio.ft710android.Audio
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import com.hamradio.ft710android.ViewModel.MainViewModel
 import java.util.ArrayDeque
 import kotlin.math.max
 import kotlin.math.min
@@ -12,7 +13,7 @@ import kotlin.math.sqrt
  * RX 播放：Opus/PCM 帧 → AudioTrack，带抖动缓冲与静音填充。
  * onFrame 由网络线程调用（解码入队）；播放循环在独立线程消费写 AudioTrack。
  */
-class RxAudioPlayer {
+class RxAudioPlayer : MainViewModel.RxPlayerLike {
     private val decoder = OpusBridge.decoderCreate(OpusBridge.SAMPLE_RATE, OpusBridge.CHANNELS)
     private val jitter = ArrayDeque<ShortArray>()
     private val framesPerTarget = max(1, TARGET_PREBUFFER_MS / FRAME_MS)
@@ -43,7 +44,7 @@ class RxAudioPlayer {
     }
 
     /** WS 帧入口：1B tag + payload。tag 0x01 Opus 解码，0x00 PCM 直通。 */
-    fun onFrame(frame: ByteArray) {
+    override fun onFrame(frame: ByteArray) {
         if (!running) return
         val tag = frame[0].toInt() and 0xFF
         val payload = frame.copyOfRange(1, frame.size)

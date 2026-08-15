@@ -46,6 +46,7 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.runtime)
+    implementation(libs.lifecycle.runtime.compose)
     implementation(libs.okhttp)
     implementation(libs.serialization.json)
     implementation(libs.coroutines.core)

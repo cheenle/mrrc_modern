@@ -7,7 +7,6 @@ import com.hamradio.ft710android.Network.AuthApi
 import com.hamradio.ft710android.Network.AuthResult
 import com.hamradio.ft710android.Network.ConnectionManager
 import com.hamradio.ft710android.Network.WsEvent
-import com.hamradio.ft710android.Network.parseWsEvent
 import com.hamradio.ft710android.PTT.PTTManager
 import com.hamradio.ft710android.Spectrum.SpectrumProcessor
 import kotlinx.coroutines.CoroutineScope
@@ -53,8 +52,8 @@ class MainViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
-    fun onWsEvent(text: String) {
-        when (val ev = parseWsEvent(text)) {
+    fun onWsEvent(ev: WsEvent) {
+        when (ev) {
             is WsEvent.FullState -> {
                 state.apply(ev.data)
                 _version.value++

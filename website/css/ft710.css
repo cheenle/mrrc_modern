@@ -1,32 +1,366 @@
-/* MRRC FT-710 — Amber brand colour overrides for octen.css */
+/* MRRC FT-710 — Amber brand colour overrides + mobile optimisations */
 
 :root {
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #0d1117;
-  --bg-tertiary: #10161e;
-  --bg-card: rgba(255,255,255,0.025);
-  --accent: #f0a030;
-  --accent-dim: #d48828;
-  --accent-glow: rgba(240,160,48,0.12);
-  --text-secondary: #8899aa;
-  --text-muted: #5c6370;
-  --border: rgba(255,255,255,0.06);
-  --border-hover: rgba(240,160,48,0.25);
-  --nav-h: 56px;
+	--bg-primary: #0a0a0a;
+	--bg-secondary: #0d1117;
+	--bg-tertiary: #10161e;
+	--bg-card: rgba(255, 255, 255, 0.025);
+	--accent: #f0a030;
+	--accent-dim: #d48828;
+	--accent-glow: rgba(240, 160, 48, 0.12);
+	--text-secondary: #8899aa;
+	--text-muted: #5c6370;
+	--border: rgba(255, 255, 255, 0.06);
+	--border-hover: rgba(240, 160, 48, 0.25);
+	--nav-h: 56px;
 }
 
-.logo span { color: var(--accent); }
+.logo span {
+	color: var(--accent);
+}
 
 .gradient {
-  background: linear-gradient(135deg, #f0a030, #d48828);
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+	background: linear-gradient(135deg, #f0a030, #d48828);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
 }
 
-.btn-primary { background: var(--accent); color: #0a0a0a; }
-.btn-primary:hover { background: #d48828; box-shadow: 0 8px 24px rgba(240,160,48,0.3); }
-.btn-secondary { color: var(--text-secondary); }
+.btn-primary {
+	background: var(--accent);
+	color: #0a0a0a;
+}
+.btn-primary:hover {
+	background: #d48828;
+	box-shadow: 0 8px 24px rgba(240, 160, 48, 0.3);
+}
+.btn-secondary {
+	color: var(--text-secondary);
+}
 
-.section-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.875rem; font-weight: 600; color: var(--accent); margin-bottom: 0.75rem; }
+.section-label {
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--accent);
+	margin-bottom: 0.75rem;
+}
 
-.feature-card:hover { border-color: rgba(240,160,48,0.25); }
-.tech-tag:hover { border-color: var(--accent); color: var(--accent); }
+.feature-card:hover {
+	border-color: rgba(240, 160, 48, 0.25);
+}
+.tech-tag:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Mobile Optimisations — comprehensive responsive fixes
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Base mobile tweaks (small phones) ── */
+@media (max-width: 480px) {
+	:root {
+		--nav-h: 48px;
+		font-size: 15px;
+	}
+	.hero {
+		padding: 5rem 1rem 3rem !important;
+	}
+	.hero-title {
+		font-size: 1.75rem !important;
+		line-height: 1.2;
+	}
+	.hero-subtitle {
+		font-size: 0.9rem !important;
+		padding: 0;
+	}
+	.hero-actions {
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+	.hero-actions .btn {
+		width: 100%;
+		text-align: center;
+		font-size: 0.9rem;
+		padding: 0.7rem 1.2rem;
+	}
+	.hero-badge {
+		font-size: 0.75rem;
+	}
+	.section {
+		padding: 3rem 0.75rem !important;
+	}
+	.section-title {
+		font-size: 1.4rem !important;
+	}
+	.section-subtitle {
+		font-size: 0.85rem !important;
+		padding: 0 0.25rem;
+	}
+	.section-label {
+		font-size: 0.7rem;
+	}
+	.container {
+		padding: 0 0.75rem;
+	}
+}
+
+/* ── Tablet + phone (≤768px) ── */
+@media (max-width: 768px) {
+	/* Nav */
+	.navbar-content {
+		padding: 0 1rem;
+	}
+	.nav-links {
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+	}
+	.nav-links a {
+		font-size: 0.9rem;
+		padding: 0.5rem 0;
+	}
+	.mobile-menu-toggle {
+		font-size: 1.4rem;
+		padding: 8px;
+	}
+	.lang-btn {
+		font-size: 0.8rem;
+		padding: 4px 10px;
+	}
+
+	/* Hero */
+	.hero {
+		padding: 6rem 1.25rem 3.5rem;
+		text-align: center;
+	}
+	.hero-title {
+		font-size: 2rem;
+	}
+	.hero-actions {
+		flex-wrap: wrap;
+		justify-content: center;
+	}
+	.hero-actions .btn {
+		font-size: 0.95rem;
+		padding: 0.7rem 1.4rem;
+	}
+
+	/* Sections */
+	.section {
+		padding: 3.5rem 1rem;
+	}
+	.section-title {
+		font-size: 1.6rem;
+	}
+	.section-header {
+		margin-bottom: 2rem;
+	}
+
+	/* Cards */
+	.features-grid {
+		grid-template-columns: 1fr;
+		gap: 1rem;
+	}
+	.feature-card {
+		padding: 1.25rem;
+	}
+	.feature-card h3 {
+		font-size: 1rem;
+	}
+	.feature-card p {
+		font-size: 0.85rem;
+	}
+
+	/* Architecture cards */
+	.arch-grid {
+		grid-template-columns: 1fr;
+		gap: 1rem;
+	}
+	.arch-card {
+		padding: 1.25rem;
+	}
+	.arch-diagram svg {
+		max-height: 180px;
+	}
+
+	/* Steps */
+	.steps {
+		grid-template-columns: 1fr;
+		gap: 0.75rem;
+	}
+	.step {
+		padding: 1rem 1.25rem;
+	}
+	.step h4 {
+		font-size: 0.95rem;
+	}
+	.step p {
+		font-size: 0.85rem;
+	}
+	.step code {
+		font-size: 0.75rem;
+		word-break: break-all;
+	}
+
+	/* Tables — horizontal scroll on mobile */
+	.table-wrap,
+	table {
+		display: block;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		white-space: nowrap;
+	}
+	table {
+		font-size: 0.8rem;
+	}
+	th,
+	td {
+		padding: 0.5rem 0.6rem;
+	}
+
+	/* Tech stack tags */
+	.tech-stack {
+		gap: 0.4rem;
+	}
+	.tech-tag {
+		font-size: 0.75rem;
+		padding: 0.3rem 0.6rem;
+	}
+
+	/* Buttons */
+	.btn-large {
+		font-size: 0.95rem;
+		padding: 0.7rem 1.5rem;
+	}
+
+	/* Footer */
+	.footer {
+		padding: 2rem 1rem;
+		text-align: center;
+	}
+	.footer-grid {
+		grid-template-columns: 1fr;
+		gap: 1.5rem;
+	}
+	.footer-section h4 {
+		font-size: 0.9rem;
+	}
+	.footer-section p,
+	.footer-section li {
+		font-size: 0.8rem;
+	}
+	.footer-bottom {
+		font-size: 0.75rem;
+	}
+
+	/* Images */
+	img:not(.logo-icon *) {
+		max-width: 100% !important;
+		height: auto;
+	}
+	video {
+		max-width: 100% !important;
+		height: auto;
+	}
+
+	/* SDD layout */
+	.sdd-layout {
+		flex-direction: column !important;
+		padding: 0 0.75rem !important;
+		gap: 1rem !important;
+	}
+	.sdd-sidebar {
+		width: 100% !important;
+		position: static !important;
+		max-height: none !important;
+		border-radius: 8px !important;
+	}
+	.sdd-content {
+		padding-bottom: 2rem !important;
+	}
+	.sdd-content h1 {
+		font-size: 1.5rem !important;
+	}
+	.sdd-content h2 {
+		font-size: 1.2rem !important;
+	}
+	.sdd-content pre {
+		font-size: 0.75rem;
+		padding: 0.75rem;
+	}
+
+	/* FDE page */
+	.phase-grid,
+	.harness-grid {
+		grid-template-columns: 1fr !important;
+		gap: 1rem;
+	}
+	.formula {
+		font-size: 1.3rem !important;
+	}
+	.stats-row {
+		gap: 0.75rem;
+	}
+	.stat {
+		padding: 1rem;
+		min-width: 80px;
+	}
+	.stat .val {
+		font-size: 1.3rem;
+	}
+
+	/* Pitfall/insight grids */
+	.insight-grid,
+	.pitfall-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ── Small phone landscape + very small screens ── */
+@media (max-width: 380px) {
+	.hero-title {
+		font-size: 1.5rem !important;
+	}
+	.hero-subtitle {
+		font-size: 0.8rem !important;
+	}
+	.section-title {
+		font-size: 1.25rem !important;
+	}
+	.logo {
+		font-size: 0.9rem;
+	}
+	.logo-icon {
+		font-size: 1rem;
+	}
+	.nav-links a {
+		font-size: 0.8rem;
+	}
+}
+
+/* ── Touch-friendly: larger tap targets everywhere ── */
+@media (pointer: coarse) {
+	a,
+	button,
+	.btn,
+	.nav-links a,
+	.sdd-sidebar a,
+	.session-item,
+	.lang-btn,
+	.mobile-menu-toggle {
+		min-height: 44px;
+		min-width: 44px;
+		display: inline-flex;
+		align-items: center;
+	}
+	input,
+	select,
+	textarea {
+		font-size: 16px !important;
+	}
+	.nav-links a {
+		padding: 0.6rem 0;
+	}
+}

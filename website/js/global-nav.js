@@ -35,7 +35,8 @@
     mrrc: '/mrrc/',
     mrrc_ft710: '/mrrc_ft710/',
     sunmrrc: '/sunmrrc/',
-    sunsdrmobile: '/sunsdrmobile/'
+    sunsdrmobile: '/sunsdrmobile/',
+    blog: '/blog/'
   };
 
   var L = isCN ? {
@@ -108,6 +109,7 @@
         siteLink('mrrc_ft710', 'FT-710') +
         siteLink('sunmrrc', 'SunMRRC') +
         siteLink('sunsdrmobile', 'SunsdrMobile') +
+        siteLink('blog', 'Blog') +
       '</nav>' +
       '<a class="vlsc-gn-gh" href="https://github.com/cheenle" target="_blank" rel="noopener" title="GitHub">' +
         '<i class="fab fa-github"></i>' +

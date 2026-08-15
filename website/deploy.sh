@@ -44,7 +44,7 @@ REQUIRED_FILES=(
     "sdd/15-ptt-safety-architecture.html"
     "images/IMG_8888.PNG"
     "downloads/MRRC-FT710-Setup.exe"
-    "downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe"
+    "downloads/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe"
 )
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then

@@ -61,6 +61,27 @@ class CatController:
 
     # ── Connection Management ──────────────────────────────────────
 
+    @staticmethod
+    def _is_device_fatal(exc: Exception) -> bool:
+        """True only for device-level failures; False for transient I/O.
+
+        A serial write/read error must not immediately mark the radio
+        disconnected: under command contention (tuning, channel switches)
+        a write can hit SerialTimeoutException or a short OSError burst
+        while the device is perfectly fine — marking disconnected then
+        flips radio.serial_connected=False and the UI flashes "电台未连接".
+        Only real device loss (unplug, port gone) should latch it.
+        (field finding 2026-08-15)
+        """
+        if isinstance(exc, serial.SerialTimeoutException):
+            return False                      # transient, retry instead
+        if isinstance(exc, serial.SerialException):
+            return True                       # port not open / device-level
+        if isinstance(exc, OSError):
+            # errno 6 = ENXIO "Device not configured", 19 = ENODEV: real loss
+            return exc.errno in (6, 19)
+        return True
+
     @property
     def connected(self) -> bool:
         return self._connected
@@ -259,7 +280,8 @@ class CatController:
                 await self._write(raw)
             except Exception as e:
                 logger.error("Serial write error for '%s': %s", cmd, e)
-                self._connected = False
+                if self._is_device_fatal(e):
+                    self._connected = False
                 return result
 
             # Read response — skip any AI frames that don't match the
@@ -276,7 +298,8 @@ class CatController:
                 result = response_bytes.decode("ascii", errors="replace").rstrip(";")
             except Exception as e:
                 logger.error("Serial read error for '%s': %s", cmd, e)
-                self._connected = False
+                if self._is_device_fatal(e):
+                    self._connected = False
             return result
         finally:
             self._lock.release()
@@ -302,7 +325,8 @@ class CatController:
                 return True
             except Exception as e:
                 logger.error("Serial write error for '%s': %s", cmd, e)
-                self._connected = False
+                if self._is_device_fatal(e):
+                    self._connected = False
                 return False
 
     async def send_priority_set_command(self, cmd: str) -> bool:
@@ -336,7 +360,8 @@ class CatController:
                     return True
                 except Exception as e:
                     logger.error("Serial write error for '%s': %s", cmd, e)
-                    self._connected = False
+                    if self._is_device_fatal(e):
+                        self._connected = False
                     return False
         finally:
             self._cancel_polls.clear()

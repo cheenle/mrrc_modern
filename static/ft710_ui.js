@@ -157,10 +157,13 @@ function renderMeters() {
     setText('meter-swr-val', swrVal.toFixed(1));
 
     // Id (drain current) — amps (calibrated from RM7 raw).
+    // FT-710 的 RM7 只在发射时响应; 接收时无电流遥测, 显示占位符 "—"
+    // （避免 0.0A 误导为故障）。
     const idA = radioState.id_amps || 0;
+    const hasId = radioState.id_amps > 0;
     const idPct = Math.min(100, idA / 26 * 100);
-    setMeterBar('meter-id-bar', idPct);
-    setText('meter-id-val', idA.toFixed(1));
+    setMeterBar('meter-id-bar', hasId ? idPct : 0);
+    setText('meter-id-val', hasId ? idA.toFixed(1) : '—');
 
     // Vd (drain/supply voltage) — volts (calibrated from RM8 raw).
     const vdV = radioState.vd_volts || 0;
@@ -657,7 +660,14 @@ function renderWaterfallRow(wf1) {
 
     // Radio disconnected: the fallback spectrum is a flat ~zero floor which
     // renders as a black void that looks like a UI failure. Say so instead.
-    if (!radioState.serial_connected) {
+    // Only show the red banner once the radio WS is up and confirms the
+    // radio is gone — during page load / WS reconnect the radio WS has not
+    // delivered fullState yet and serial_connected is still its initial
+    // false, which would otherwise flash a false "电台未连接" (2026-08-15
+    // field report: banner flashed on channel switch / tune while healthy).
+    if (radioState.ws_connected && !radioState.serial_connected) {
+        console.warn('[spectrum] radio WS up but serial_connected=false',
+            JSON.stringify({ ws: radioState.ws_connected, serial: radioState.serial_connected }));
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
         ctx.font = 'bold 13px monospace';
@@ -668,6 +678,16 @@ function renderWaterfallRow(wf1) {
             const fctx = fftCanvas.getContext('2d');
             fctx.clearRect(0, 0, fftCanvas.width, fftCanvas.height);
         }
+        return;
+    }
+    // wsRadio not up yet (page load / reconnect): neutral placeholder, not
+    // an error banner — the spectrum WS often connects before fullState.
+    if (!radioState.ws_connected) {
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.7)';
+        ctx.font = 'bold 13px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('频谱连接中…', w / 2, h / 2 + 4);
         return;
     }
 

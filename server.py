@@ -276,6 +276,13 @@ async def _broadcast_state():
     dirty = radio.get_and_clear_dirty()
     if not dirty:
         return
+    if "serial_connected" in dirty:
+        # Diagnostic (2026-08-15): frontend reported serial=false while the
+        # radio was healthy; log every broadcast that flips this flag.
+        logger.warning(
+            "state broadcast contains serial_connected=%s (dirty=%s)",
+            radio.serial_connected, sorted(dirty),
+        )
     if "tx_status" in dirty:
         # Radio entered/left TX — pause/resume the scope pipe's SPI reads.
         await _notify_scope_pipe_tx()
@@ -2074,9 +2081,22 @@ async def ws_radio(ws: WebSocket):
     # Push full initial state
     try:
         channels = _load_mem_channels()
+        _full_state_data = radio.to_dict()
+        # Diagnostic (2026-08-15): user reported spectrum "电台未连接" while
+        # radio was fine; log the serial flag at every fullState push so a
+        # repro produces the exact value the client received.
+        logger.info(
+            "WS fullState push: serial_connected=%s clients=%d",
+            _full_state_data.get("serial_connected"),
+            len(ctrl_clients),
+        )
+        logger.debug(
+            "WS fullState payload: %s",
+            json.dumps(_full_state_data)[:400],
+        )
         await ws.send_text(json.dumps({
             "type": "fullState",
-            "data": radio.to_dict(),
+            "data": _full_state_data,
             "bands": BANDS,
             "modes": UI_MODES,
             "memChannels": channels,

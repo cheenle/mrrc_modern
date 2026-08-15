@@ -84,7 +84,8 @@ function connectWebSocket() {
 			const msg = JSON.parse(event.data);
 			handleMessage(msg);
 		} catch (e) {
-			console.debug("WS message error:", e);
+			console.warn("[ws] message parse/handle error:", e,
+				"raw head:", String(event.data).slice(0, 80));
 		}
 		if (!window.__netBytes)
 			window.__netBytes = {
@@ -328,6 +329,10 @@ function handleMessage(msg) {
 			// Merge full state data
 			if (msg.data) {
 				Object.assign(radioState, msg.data);
+				console.log("[fullState] serial_connected =", msg.data.serial_connected,
+					"type =", typeof msg.data.serial_connected);
+			} else {
+				console.warn("[fullState] no msg.data");
 			}
 			if (msg.bands) {
 				bands.length = 0;

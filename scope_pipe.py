@@ -333,6 +333,10 @@ def main():
 
             if status != FT4222_OK:
                 consecutive_errors += 1
+                # ── Diagnostic: sample the raw FT4222 error codes ──
+                if consecutive_errors in (1, 5, 10, 20, 30, 40, 45, 48):
+                    emit_status(f"spi_read_error:status_{status}:"
+                                f"count_{consecutive_errors}")
                 if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
                     reinit_count += 1
                     if reinit_count > MAX_REINIT_CYCLES:

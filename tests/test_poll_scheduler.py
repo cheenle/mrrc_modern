@@ -273,17 +273,14 @@ class IFPollRecoveryTests(unittest.IsolatedAsyncioTestCase):
 
         task = asyncio.create_task(scheduler._poll_if())
         try:
-            # 6 failures at ~100 ms cadence → flag drops after 5
+            # Behaviour change (2026-08-15): an IF poll failure is a
+            # transient serial-contention timeout, NOT a radio disconnect —
+            # serial_connected stays True throughout the streak (disconnect
+            # is decided solely by the watchdog on cat.connected).  The
+            # first-poll logging path must still not raise TypeError.
             for _ in range(50):
                 await asyncio.sleep(0.05)
-                if not state.serial_connected:
-                    break
-            self.assertFalse(state.serial_connected)
-            # Subsequent successful polls must restore it (and apply freq —
-            # the first-poll logging path must not raise TypeError).
-            for _ in range(50):
-                await asyncio.sleep(0.05)
-                if state.serial_connected:
+                if fake_cat.freq_calls > 6:
                     break
             self.assertTrue(state.serial_connected)
             self.assertEqual(state.vfo_a_freq, 7050000)

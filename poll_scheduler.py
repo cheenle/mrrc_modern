@@ -200,6 +200,9 @@ class PollScheduler:
                             # reconnect did this, so a transient timeout streak
                             # stuck the UI at "radio disconnected" forever.
                             changes["serial_connected"] = True
+                            logger.info(
+                                "IF poll recovered — serial_connected=True "
+                                "(failures=%d)", failures)
                         changed = self.state.update(**changes)
                         if changed and self._on_state_changed:
                             await self._on_state_changed()
@@ -214,11 +217,13 @@ class PollScheduler:
                 logger.debug("IF poll error: %s", e)
                 failures += 1
 
-            if failures >= 5:
-                self.state.update(serial_connected=False)
-                if self._on_state_changed:
-                    await self._on_state_changed()
-
+            # NOTE (2026-08-15): a previous patch flipped serial_connected
+            # to False on failures>=5 here.  That was wrong: an IF poll
+            # failure is a transient serial-contention timeout (tuning /
+            # channel switches queue commands), NOT a radio disconnect — it
+            # made the UI flash "电台未连接" in a 2-6 s loop.  Disconnect is
+            # decided solely by the watchdog (cat.connected) below; IF poll
+            # success still flips the flag back True (recovery path above).
             _loop_count += 1
             await asyncio.sleep(POLL_IF_INTERVAL * self._idle_multiplier)
 

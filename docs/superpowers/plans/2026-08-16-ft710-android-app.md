@@ -8,6 +8,8 @@
 
 **Tech Stack:** Kotlin 2.0.21 · Compose BOM 2024.12.01 (Material3) · AGP 8.7.3 · Gradle 8.9 · JDK 17 · OkHttp 4.12.0 · kotlinx-serialization-json 1.7.3 · kotlinx-coroutines · DataStore · libopus via NDK/CMake · minSdk 26 · target/compile SDK 35。
 
+> **状态: 已完成（2026-08-16）**。19 个任务全部执行完毕并提交至 main：`./gradlew test assembleDebug lintDebug` 全绿（33 个 JVM 单测），APK 含 NDK 构建的 libopus。执行中的合理偏差（测试结构、`onWsEvent` 消费解析后事件、PTTManager `open` 化等）已在对应任务内注明；真机验收（spec §12）待用户自备 Android 设备。
+
 ## Global Constraints
 
 - 包名 `com.hamradio.ft710android`；App 显示名 `FT-710 Control`；minSdk 26；target/compile SDK 35。
@@ -46,7 +48,7 @@
 - Consumes: 无（首个任务）。
 - Produces: 一个可用 `./gradlew assembleDebug` 构建、安装到真机后显示 "FT-710 Control" 的 Compose 空壳。后续任务都在这套 Gradle 配置上叠加。
 
-- [ ] **Step 1: 安装 JDK 17 与 Android SDK，写入 BUILD_GUIDE.md**
+- [x] **Step 1: 安装 JDK 17 与 Android SDK，写入 BUILD_GUIDE.md**
 
 在 `FT710Android/BUILD_GUIDE.md` 记录以下命令（本机是 macOS，`~/Library/Android/sdk` 为空、JDK 是 11）：
 
@@ -75,7 +77,7 @@ brew install gradle
 
 确认后 `sdkmanager --list_installed` 能看到 platform-tools 与 platforms;android-35。
 
-- [ ] **Step 2: 创建 Gradle 配置**
+- [x] **Step 2: 创建 Gradle 配置**
 
 `FT710Android/settings.gradle.kts`:
 ```kotlin
@@ -197,7 +199,7 @@ dependencies {
 }
 ```
 
-- [ ] **Step 3: 生成 Gradle wrapper**
+- [x] **Step 3: 生成 Gradle wrapper**
 
 ```bash
 cd FT710Android
@@ -205,7 +207,7 @@ gradle wrapper --gradle-version 8.9
 ```
 预期：生成 `gradlew`、`gradle/wrapper/*`。
 
-- [ ] **Step 4: 创建最小 Compose 壳**
+- [x] **Step 4: 创建最小 Compose 壳**
 
 `FT710Android/app/src/main/AndroidManifest.xml`:
 ```xml
@@ -282,14 +284,14 @@ fun AppTheme(content: @Composable () -> Unit) {
 
 （占位 mipmap：在 `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` 写一个 adaptive icon 引用纯色 drawable；或直接删掉 manifest 的 `android:icon` 属性以避免缺资源。**选删除 `android:icon` 属性，最简单**，后续再补图标。）
 
-- [ ] **Step 5: 构建验证**
+- [x] **Step 5: 构建验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
 ```
 预期：BUILD SUCCESSFUL，产出 `app/build/outputs/apk/debug/app-debug.apk`。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add FT710Android/
@@ -310,7 +312,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Consumes: kotlinx.serialization `JsonElement`/`JsonPrimitive`（Task 3 的 DTO 会把 `fields`/`data` 作为 `JsonObject` 传给这里）。
 - Produces: `class RadioState`，方法 `apply(data: Map<String, JsonElement>): Set<String>`（返回实际应用的 key 集合，供 dirty 追踪/日志）。`fullState.data` 与 `stateUpdate.fields` 是同一套 key（`radio_state.py:to_dict/to_dirty_dict`），故同一方法。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/Data/RadioStateTest.kt`:
 ```kotlin
@@ -385,14 +387,14 @@ class RadioStateTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*RadioStateTest*'
 ```
 预期：编译失败 / `RadioState` 未定义。
 
-- [ ] **Step 3: 实现 RadioState**
+- [x] **Step 3: 实现 RadioState**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Data/RadioState.kt`:
 ```kotlin
@@ -562,14 +564,14 @@ class RadioState {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*RadioStateTest*'
 ```
 预期：4 个测试全过。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Data/RadioState.kt FT710Android/app/src/test/java/com/hamradio/ft710android/Data/RadioStateTest.kt
@@ -594,7 +596,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
   - `fun parseWsEvent(text: String): WsEvent`
   - `object WsCommands`：`setNumber(field, value)`、`setString(field, value)`、`setBool(field, value)`、`ping()`、`getFullState()`、`memSaveJson(channelsJson: String)`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/Network/ProtocolTest.kt`:
 ```kotlin
@@ -660,14 +662,14 @@ class ProtocolTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*ProtocolTest*'
 ```
 预期：编译失败 / 符号未定义。
 
-- [ ] **Step 3: 实现 Protocol.kt 与 WsCommands.kt**
+- [x] **Step 3: 实现 Protocol.kt 与 WsCommands.kt**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Network/Protocol.kt`:
 ```kotlin
@@ -787,14 +789,14 @@ object WsCommands {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*ProtocolTest*'
 ```
 预期：5 个测试全过。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Network/Protocol.kt FT710Android/app/src/main/java/com/hamradio/ft710android/Network/WsCommands.kt FT710Android/app/src/test/java/com/hamradio/ft710android/Network/ProtocolTest.kt
@@ -815,7 +817,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Consumes: `WsEvent.MemChannels` / `FullState.memChannels`（`List<JsonElement?>`）。
 - Produces: `data class MemoryChannel(freq: Long, mode: String, label: String)`、`object MemoryChannels { fun parse(list: List<JsonElement?>): List<MemoryChannel?>; fun toJson(channels: List<MemoryChannel?>): String }`（后者生成 `memSave` 的 channels 数组 JSON）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/Data/MemoryChannelsTest.kt`:
 ```kotlin
@@ -850,13 +852,13 @@ class MemoryChannelsTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*MemoryChannelsTest*'
 ```
 
-- [ ] **Step 3: 实现 MemoryChannels**
+- [x] **Step 3: 实现 MemoryChannels**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Data/MemoryChannels.kt`:
 ```kotlin
@@ -906,13 +908,13 @@ object MemoryChannels {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*MemoryChannelsTest*'
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Data/MemoryChannels.kt FT710Android/app/src/test/java/com/hamradio/ft710android/Data/MemoryChannelsTest.kt
@@ -933,7 +935,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Consumes: `/WSspectrum` 原始二进制帧 `ByteArray`。
 - Produces: `data class SpectrumFrame(version: Int, wf1: IntArray, wf2: IntArray)`；`fun parseSpectrumFrame(frame: ByteArray): SpectrumFrame?`（长度≠1701 或 version≠0x01 返回 null）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/Spectrum/SpectrumFrameTest.kt`:
 ```kotlin
@@ -972,13 +974,13 @@ class SpectrumFrameTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*SpectrumFrameTest*'
 ```
 
-- [ ] **Step 3: 实现 SpectrumFrame**
+- [x] **Step 3: 实现 SpectrumFrame**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Spectrum/SpectrumFrame.kt`:
 ```kotlin
@@ -1005,13 +1007,13 @@ fun parseSpectrumFrame(frame: ByteArray): SpectrumFrame? {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*SpectrumFrameTest*'
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Spectrum/SpectrumFrame.kt FT710Android/app/src/test/java/com/hamradio/ft710android/Spectrum/SpectrumFrameTest.kt
@@ -1054,7 +1056,7 @@ class PTTManager(
 ```
   `press()` 在 Idle 且 ctrl 已连接时受理；`release()` 无条件发 `ptt:false` + `s:` + 停 TX 音频 + 起看门狗；`forceRelease()` 任意状态幂等。看门狗用注入的调度器（测试用 `runTest` 虚拟时间）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/PTT/PTTManagerTest.kt`:
 ```kotlin
@@ -1156,13 +1158,13 @@ class PTTManagerTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*PTTManagerTest*'
 ```
 
-- [ ] **Step 3: 实现 PTTManager**
+- [x] **Step 3: 实现 PTTManager**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/PTT/PTTManager.kt`:
 ```kotlin
@@ -1263,14 +1265,14 @@ class PTTManager(
     }
 }
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*PTTManagerTest*'
 ```
 预期：6 个测试全过。若 `StandardTestDispatcher` 需要显式 `advanceTimeBy`，按 kotlinx-coroutines-test 语义微调（测试用 `runTest` + `advanceUntilIdle()` 替代 `advanceTimeBy` 亦可）。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/PTT/PTTManager.kt FT710Android/app/src/test/java/com/hamradio/ft710android/PTT/PTTManagerTest.kt
@@ -1294,7 +1296,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
   - `suspend fun logout(baseUrl: String)`：`POST /api/auth/logout`，带 cookie。
   - 组装 `fun selfSignedOkHttpClient(): OkHttpClient`（Task 17 再统一挂网络配置，这里先供测试）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/Network/AuthApiTest.kt`:
 ```kotlin
@@ -1359,13 +1361,13 @@ class AuthApiTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*AuthApiTest*'
 ```
 
-- [ ] **Step 3: 实现 AuthApi**
+- [x] **Step 3: 实现 AuthApi**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Network/AuthApi.kt`:
 ```kotlin
@@ -1437,13 +1439,13 @@ class AuthApi(private val client: OkHttpClient) {
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*AuthApiTest*'
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Network/AuthApi.kt FT710Android/app/src/test/java/com/hamradio/ft710android/Network/AuthApiTest.kt
@@ -1479,7 +1481,7 @@ class WebSocketConnection(
 }
 ```
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/Network/WebSocketConnectionTest.kt`:
 ```kotlin
@@ -1538,14 +1540,14 @@ class WebSocketConnectionTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*WebSocketConnectionTest*'
 ```
 （若 MockWebServer 的 `withWebSocketUpgrade` API 名不同，查 okhttp 4.12 mockwebserver 实际 API 适配；测试目标是验证 connect→Connected→收到文本。）
 
-- [ ] **Step 3: 实现 WebSocketConnection**
+- [x] **Step 3: 实现 WebSocketConnection**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Network/WebSocketConnection.kt`:
 ```kotlin
@@ -1597,13 +1599,13 @@ class WebSocketConnection(
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*WebSocketConnectionTest*'
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Network/WebSocketConnection.kt FT710Android/app/src/test/java/com/hamradio/ft710android/Network/WebSocketConnectionTest.kt
@@ -1647,7 +1649,7 @@ class ConnectionManager(
 ```
   baseUrl 形如 `https://radio.vlsc.net:8888`，WS URL = `${baseUrl.replaceFirst("http","ws")}/WSradio?token=...`（`https`→`wss`、`http`→`ws`）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/Network/ConnectionManagerTest.kt`:
 ```kotlin
@@ -1695,13 +1697,13 @@ class ConnectionManagerTest {
 ```
 > 注：`sendOverride` 是测试注入口，生产环境为 null（走真实 4 路 socket）。`ConnectionManager` 的构造加可选参数 `private val sendOverride: ((String) -> Unit)? = null`；`sendSet` 组装命令文本后：`(sendOverride ?: { realSockets.forEach { it.sendText(it) } })(cmd)`。
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*ConnectionManagerTest*'
 ```
 
-- [ ] **Step 3: 实现 ConnectionManager**
+- [x] **Step 3: 实现 ConnectionManager**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Network/ConnectionManager.kt`:
 ```kotlin
@@ -1813,13 +1815,13 @@ class ConnectionManager(
 ```
 > 说明：`onAtrEvent` 收到的是 JSON 文本，Task 16 用 `atr1000Enabled` 决定是否展示天调 UI；`/WSatr1000` 在服务端禁用时 close 4000 → 该路进入 Failed，不影响 4 路主状态（`updateConnected` 只聚合主 4 路）。
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*ConnectionManagerTest*'
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Network/ConnectionManager.kt FT710Android/app/src/test/java/com/hamradio/ft710android/Network/ConnectionManagerTest.kt
@@ -1854,7 +1856,7 @@ object OpusBridge {
 ```
   TX 编码帧 = 960 样本（48k 20ms）→ Opus 64kbps CBR；RX 解码 48k → 960 样本/帧。
 
-- [ ] **Step 1: 在 build.gradle.kts 启用 native 构建 + androidTest 依赖**
+- [x] **Step 1: 在 build.gradle.kts 启用 native 构建 + androidTest 依赖**
 
 `FT710Android/app/build.gradle.kts` 加：
 ```kotlin
@@ -1870,7 +1872,7 @@ android {
 ```
 deps 加 `androidTestImplementation(libs.junit)`（libs 里 junit 已存在，直接引用）。
 
-- [ ] **Step 2: Vendor libopus 源码**
+- [x] **Step 2: Vendor libopus 源码**
 
 ```bash
 mkdir -p app/src/main/cpp/opus
@@ -1881,7 +1883,7 @@ rm opus.tar.gz
 ```
 预期：`app/src/main/cpp/opus/CMakeLists.txt`、`src/`、`include/` 等就位。
 
-- [ ] **Step 3: CMakeLists 与 JNI 包装**
+- [x] **Step 3: CMakeLists 与 JNI 包装**
 
 `FT710Android/app/src/main/cpp/CMakeLists.txt`:
 ```cmake
@@ -1985,7 +1987,7 @@ object OpusBridge {
 }
 ```
 
-- [ ] **Step 4: 写仪器测试（真机/模拟器验证 round-trip）**
+- [x] **Step 4: 写仪器测试（真机/模拟器验证 round-trip）**
 
 `FT710Android/app/src/androidTest/java/com/hamradio/ft710android/Audio/OpusBridgeTest.kt`:
 ```kotlin
@@ -2015,14 +2017,14 @@ class OpusBridgeTest {
 ```
 （`androidTestImplementation(libs.junit)` + `androidx.test:runner`；instrumented test 仅在有设备/模拟器时运行，作为 CI 可选步骤，`assembleDebug` 不依赖它。）
 
-- [ ] **Step 5: 构建验证**
+- [x] **Step 5: 构建验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
 ```
 预期：BUILD SUCCESSFUL，`.so` 打入 APK（`app/build/intermediates/merged_native_libs/debug/.../libopus.so`）。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add FT710Android/app/src/main/cpp/ FT710Android/app/src/main/java/com/hamradio/ft710android/Audio/OpusBridge.kt FT710Android/app/src/androidTest/ FT710Android/app/build.gradle.kts
@@ -2052,7 +2054,7 @@ interface FrameHandler { fun onPcm(pcm: ShortArray) }
 ```
   内部：`AudioTrack`（48000Hz、CHANNEL_OUT_MONO、ENCODING_PCM_16BIT、STREAM_MUSIC、低延迟缓冲）；`ArrayDeque<ShortArray>` 抖动缓冲，目标 ~180ms 预缓冲；专用 `HandlerThread` 消费；缓冲不足静音填充。tag `0x01` Opus 帧先经 `OpusBridge.decoderDecode`，tag `0x00` 直通。
 
-- [ ] **Step 1: 实现 RxAudioPlayer**
+- [x] **Step 1: 实现 RxAudioPlayer**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Audio/RxAudioPlayer.kt`:
 ```kotlin
@@ -2142,14 +2144,14 @@ class RxAudioPlayer {
 ```
 > 注：`playLoop()` 需在专用 `HandlerThread` 上启动（`start()` 里 `scope.launch(Dispatchers.IO) { playLoop() }`——`Dispatchers.IO` 每帧 `write` 为阻塞 I/O，可行；或自建 HandlerThread。实现时二选一，`stop()` 置 `running=false` 使循环退出）。
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
 ```
 预期：BUILD SUCCESSFUL。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Audio/RxAudioPlayer.kt
@@ -2178,7 +2180,7 @@ class TxAudioCapture(
 }
 ```
 
-- [ ] **Step 1: 实现 TxAudioCapture**
+- [x] **Step 1: 实现 TxAudioCapture**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Audio/TxAudioCapture.kt`:
 ```kotlin
@@ -2245,13 +2247,13 @@ class TxAudioCapture(
 ```
 > 说明：`VOICE_COMMUNICATION` 保证 48k 采集概率最高；若某设备只给 44.1k，`AudioRecord` 会用最近支持速率——本任务 v1 采 48k 直通（服务端 TX 是 48k 域），设备异常时的重采样（44.1→48）标为后续增强，代码留 `TODO(remap)` 注释即可。
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Audio/TxAudioCapture.kt
@@ -2281,7 +2283,7 @@ class SpectrumProcessor {
 ```
 `WaterfallCanvas`：Compose `Canvas`，把 `waterfall` 画成瀑布（颜色映射：深蓝→青→黄→红，对齐 Web 的 Jet colormap），`fft` 画顶部折线；点击位置 → 频率换算回调（点击才 QSY）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/Spectrum/SpectrumProcessorTest.kt`:
 ```kotlin
@@ -2309,13 +2311,13 @@ class SpectrumProcessorTest {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*SpectrumProcessorTest*'
 ```
 
-- [ ] **Step 3: 实现 SpectrumProcessor 与 WaterfallCanvas**
+- [x] **Step 3: 实现 SpectrumProcessor 与 WaterfallCanvas**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Spectrum/SpectrumProcessor.kt`:
 ```kotlin
@@ -2399,13 +2401,13 @@ private fun jetColor(t: Float): Color {
 ```
 （`onTapFreq` 由外层 `pointerInput` 计算：`x/width * spanHz + startFreqHz` 后回调——Task 16 接入。）
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*SpectrumProcessorTest*'
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/Spectrum/ FT710Android/app/src/test/java/com/hamradio/ft710android/Spectrum/SpectrumProcessorTest.kt
@@ -2457,7 +2459,7 @@ class MainViewModel(
 ```
   接线规则：`ConnectionManager.onRadioEvent` → 按 `WsEvent` 分发（FullState→`state.apply`+存 bands/modes/memChannels/filterTables/atr1000Enabled；StateUpdate→`state.apply`+PTT 状态喂 `pttManager.onStatusReceived(txStatus)`；MemChannels→刷新；ErrorEvent→error 流）；`onAudioRx`→`rxPlayer.onFrame`；`onSpectrum`→`spectrumProcessor.onFrame`；`onConnectionChange`→`connected`。`connect()` 失败（401/429/网络）→ 返回 Failure 并保持未连接。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `FT710Android/app/src/test/java/com/hamradio/ft710android/ViewModel/MainViewModelTest.kt`:
 ```kotlin
@@ -2516,13 +2518,13 @@ class MainViewModelTest {
 ```
 > 说明：`onWsEvent(text)` 为公开方法便于测试（内部走 `parseWsEvent` + 分发）。`MainViewModel` 的依赖全部可空/可注入；测试要点是 WsEvent → `RadioState` + StateFlow 分发正确，PTT 回显喂 `onStatusReceived`。
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*MainViewModelTest*'
 ```
 
-- [ ] **Step 3: 实现 MainViewModel**
+- [x] **Step 3: 实现 MainViewModel**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/ViewModel/MainViewModel.kt`:
 ```kotlin
@@ -2665,13 +2667,13 @@ class MainViewModel(
 ```
 > 说明：`onPttRelease()` 调 `forceRelease()`（安全兜底，幂等），PTT 手势松手仍走 `PTTManager.release()`（Task 16 `PTTButton` 直接持有 manager）。`ConnectionManager` 回调在 Task 17 装配时接到 `vm.onWsEvent` / `vm.onAudioRxFrame` / `vm.onSpectrumFrame` / `_connected`。`RxPlayerLike`/`TxCaptureLike`/`MemoryStore` 允许传 null 或轻量 Fake。
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 ```bash
 cd FT710Android && ./gradlew testDebugUnitTest --tests '*MainViewModelTest*'
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/ViewModel/MainViewModel.kt FT710Android/app/src/test/java/com/hamradio/ft710android/ViewModel/MainViewModelTest.kt
@@ -2692,7 +2694,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Consumes: `AuthApi`、`MainViewModel.connect`。
 - Produces: `@Composable fun LoginScreen(vm: MainViewModel, onLoggedIn: () -> Unit)`；`class SettingsStore(context)` 用 DataStore 存 `host`/`port`，凭据用 Keystore 加密后落 DataStore（简单方案：`EncryptedSharedPreferences` 若可用，否则 Keystore 包装）。
 
-- [ ] **Step 1: 实现 SettingsStore（DataStore + 加密凭据）**
+- [x] **Step 1: 实现 SettingsStore（DataStore + 加密凭据）**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/Data/SettingsStore.kt`:
 ```kotlin
@@ -2731,7 +2733,7 @@ class SettingsStore(private val context: Context) {
 ```
 > 注：`KeystoreCipher`（AES-GCM，AndroidKeyStore）本任务内实现（`Encrypt/Decrypt`，key alias `ft710_creds`）；也可用 androidx `security-crypto` 的 `EncryptedSharedPreferences`。实现二选一，保证凭据不落明文。
 
-- [ ] **Step 2: 实现 LoginScreen**
+- [x] **Step 2: 实现 LoginScreen**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/UI/LoginScreen.kt`:
 ```kotlin
@@ -2804,13 +2806,13 @@ fun LoginScreen(vm: MainViewModel, settings: SettingsStore, onLoggedIn: () -> Un
 }
 ```
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/UI/LoginScreen.kt FT710Android/app/src/main/java/com/hamradio/ft710android/Data/SettingsStore.kt
@@ -2831,7 +2833,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Consumes: `MainViewModel`（state/bands/modes/waterfall/fft/connected/memChannels）、`WaterfallCanvas`（Task 13）。
 - Produces: `@Composable fun MainScreen(vm: MainViewModel)`。
 
-- [ ] **Step 1: 实现 PTTButton（手势 finally 兜底）**
+- [x] **Step 1: 实现 PTTButton（手势 finally 兜底）**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/UI/PTTButton.kt`:
 ```kotlin
@@ -2870,7 +2872,7 @@ fun PTTButton(manager: PTTManager, modifier: Modifier = Modifier) {
 }
 ```
 
-- [ ] **Step 2: 实现 MainScreen 布局（对齐 spec §4）**
+- [x] **Step 2: 实现 MainScreen 布局（对齐 spec §4）**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt`:
 ```kotlin
@@ -3010,14 +3012,14 @@ private fun formatFreq(hz: Long): String = "%,d".format(Locale.US, hz).replace('
 
 > 说明：`combinedClickable` 需 `ExperimentalFoundationApi` 或直接 `Modifier.clickable` + `pointerInput` 长按；实现时按编译提示调整。`MemCell` 的"双击清除"在 v1 可简化为长按保存、点选调出即可（清除可放到 Task 18 设置页）。
 
-- [ ] **Step 3: 编译验证**
+- [x] **Step 3: 编译验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
 ```
 预期：BUILD SUCCESSFUL（若有 `ExperimentalFoundationApi` 需要，在 `MainScreen.kt` 顶部加 `@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)`）。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt FT710Android/app/src/main/java/com/hamradio/ft710android/UI/PTTButton.kt
@@ -3040,7 +3042,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Consumes: `PTTManager.forceRelease`、`MainViewModel`、`RxAudioPlayer`。
 - Produces: `@Composable fun AppSetup(vm: MainViewModel)` 内部用 `DisposableEffect` 处理音频焦点/亮屏/生命周期；`MainActivity.onStop` 调 `vm.onPttRelease()`（兜底 forceRelease）。
 
-- [ ] **Step 1: 网络配置 + Manifest**
+- [x] **Step 1: 网络配置 + Manifest**
 
 `FT710Android/app/src/main/res/xml/network_security_config.xml`:
 ```xml
@@ -3056,7 +3058,7 @@ android:networkSecurityConfig="@xml/network_security_config"
 ```
 （真机调试明文时在 `<debug-overrides>` 或用户设置里加域；自签 https 走 Task 7 的 `selfSignedOkHttpClient`，与网络配置无关。）
 
-- [ ] **Step 2: AppSetup（音频焦点 + 亮屏）**
+- [x] **Step 2: AppSetup（音频焦点 + 亮屏）**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/App/AppSetup.kt`:
 ```kotlin
@@ -3109,7 +3111,7 @@ fun AppSetup(rxRunning: Boolean, onTxRelease: () -> Unit) {
 }
 ```
 
-- [ ] **Step 3: MainActivity 装配 + onStop 兜底**
+- [x] **Step 3: MainActivity 装配 + onStop 兜底**
 
 新建 `FT710Android/app/src/main/java/com/hamradio/ft710android/App/ServiceLocator.kt`（v1 无 DI 框架的最小装配点）：
 ```kotlin
@@ -3236,13 +3238,13 @@ class MainActivity : ComponentActivity() {
 ```
 > 说明：`MainViewModelHolder` 持有 VM；ServiceLocator 在 `FT710App.onCreate` 初始化，把 `ConnectionManager` 回调接到 `vm.onWsEvent/onAudioRxFrame/onSpectrumFrame`。`AppSetup` 负责亮屏/音频焦点/退后台 forceRelease（Task 17 Step 2）；`onStop` 再兜底一次。TX 采集的 sendFrame 接 `cm.sendTxAudioBinary`。
 
-- [ ] **Step 4: 编译验证**
+- [x] **Step 4: 编译验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add FT710Android/app/src/main/res/xml/network_security_config.xml FT710Android/app/src/main/java/com/hamradio/ft710android/App/AppSetup.kt FT710Android/app/src/main/AndroidManifest.xml FT710Android/app/src/main/java/com/hamradio/ft710android/App/MainActivity.kt
@@ -3262,7 +3264,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Consumes: `MainViewModel`、`SettingsStore`。
 - Produces: `@Composable fun SettingsScreen(vm: MainViewModel, settings: SettingsStore, onLoggedOut: () -> Unit)`：RF 功率滑杆、scope span 选择、主机/重连、退出登录（`logout` + 清凭据 + 回登录页）。
 
-- [ ] **Step 1: 实现 SettingsScreen**
+- [x] **Step 1: 实现 SettingsScreen**
 
 `FT710Android/app/src/main/java/com/hamradio/ft710android/UI/SettingsScreen.kt`:
 ```kotlin
@@ -3308,13 +3310,13 @@ fun SettingsScreen(vm: MainViewModel, settings: SettingsStore, onLoggedOut: () -
 ```
 > 说明：`vm.connectionManager` 为公开属性（Task 14），`vm.logout()` 为 suspend 清理连接，`settings.clearCredentials()` 在 Task 15 的 `SettingsStore` 里补一个 Keystore 删除密钥的方法。
 
-- [ ] **Step 2: 编译验证**
+- [x] **Step 2: 编译验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add FT710Android/app/src/main/java/com/hamradio/ft710android/UI/SettingsScreen.kt
@@ -3333,7 +3335,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 - Modify: 仓库根 `README.md`（项目结构 + 文档表各加 `FT710Android/`）
 - Modify: 仓库根 `AGENTS.md`（加 Android 子项目说明一节）
 
-- [ ] **Step 1: 写 CLAUDE.md**
+- [x] **Step 1: 写 CLAUDE.md**
 
 `FT710Android/CLAUDE.md`（面向 AI 代理，对标 `FT710Mobile/CLAUDE.md` 的写法）：
 ```markdown
@@ -3368,11 +3370,11 @@ MainViewModel(普通类, Compose remember) → ConnectionManager(4+1 路 WS) / R
 - 自签 TLS 用 AuthApi.selfSignedOkHttpClient(); 明文仅调试。
 ```
 
-- [ ] **Step 2: 补 BUILD_GUIDE.md**
+- [x] **Step 2: 补 BUILD_GUIDE.md**
 
 在 `FT710Android/BUILD_GUIDE.md` 末尾补完整流程（JDK17、cmdline-tools、SDK、NDK、Gradle wrapper、`./gradlew assembleDebug`、`adb install`、自签连接提示）。
 
-- [ ] **Step 3: 更新仓库根 README.md / AGENTS.md**
+- [x] **Step 3: 更新仓库根 README.md / AGENTS.md**
 
 `README.md` 项目结构树加：
 ```text
@@ -3381,14 +3383,14 @@ MainViewModel(普通类, Compose remember) → ConnectionManager(4+1 路 WS) / R
 文档表加一行 `| [docs/superpowers/specs/2026-08-16-ft710-android-app-design.md](docs/superpowers/specs/2026-08-16-ft710-android-app-design.md) | FT710 Android App 设计 |`。
 `AGENTS.md` 的模块表加一行：`| FT710Android/ | 原生 Android 客户端(Kotlin+Compose)；协议见 FT710Android/CLAUDE.md |`。
 
-- [ ] **Step 4: 最终验证**
+- [x] **Step 4: 最终验证**
 
 ```bash
 cd FT710Android && ./gradlew test assembleDebug lintDebug
 ```
 预期：`BUILD SUCCESSFUL`、`BUILD SUCCESSFUL`（lint 无 error）、`0 tests failed`。
 
-- [ ] **Step 5: 仓库级检查 + Commit**
+- [x] **Step 5: 仓库级检查 + Commit**
 
 ```bash
 python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged  # 若该 harness 覆盖新增文件

@@ -1,7 +1,7 @@
 # FT710 Android App — 设计文档 (Design Spec)
 
 **日期**: 2026-08-16
-**状态**: 已获用户批准（技术栈 Kotlin + Jetpack Compose；范围全量对齐 Web 功能；方案 A 单模块分层包结构）
+**状态**: 已实施（2026-08-16 完成 19 个任务的实施计划，全部提交至 main；技术栈 Kotlin + Jetpack Compose；范围全量对齐 Web 功能；方案 A 单模块分层包结构）
 **前置**: 仓库根 `server.py`（Python FastAPI，4 路 WebSocket + REST 认证）、`static/` Web 前端（协议权威实现）、`FT710Mobile/` iOS App（已知坑清单见 `docs/IOS_APP_ANALYSIS.md`）
 **SDD 追溯**: AD-007(PTT Release as Safety-Critical Flow)· SC8(PTT cannot stick)· NFR-008(PTT <100ms)· NFR-012(release safety)· UC-005(PTT and Tune Control)· SDD/15(PTT Safety Architecture, 7 层模型)· R4(TX release command lost)
 

@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.FT710" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B0B0C</item>
+    </style>
+</resources>

@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  *  - forceRelease() 任意状态幂等，供断连/退后台调用。
  *  - press() 仅在 Idle 且控制通道已连接时受理——避免"发不出去的乐观 TX"。
  */
-class PTTManager(
+open class PTTManager(
     val sendPTT: (Boolean) -> Unit,
     val sendTXAudioStop: () -> Unit,
     val startTxAudio: () -> Unit,

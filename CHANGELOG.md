@@ -2,6 +2,34 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.8.0] — 2026-08-15 — RF Gain 滑块 + 稳定性修复
+
+### Added
+- **RF Gain 滑块（UI）**：FT-710 射频增益（RG 0-255）映射为 0-100% 滑块，置于 RF PWR 旁。
+  拖动实时跟随、松开生效；外部改动经 `rf_gain` 脏集合回同步到滑块。
+
+### Fixed
+- **消除串口超时导致的"电台未连接"误报**：调谐/切频等指令争用下 IF 轮询超时
+  曾被每 2-6s 锁存为 `serial_connected=False`，频谱闪烁"电台未连接"横幅，实则电台健康。
+  现在 `serial_connected` 仅由看门狗（`cat.connected`）置 off，IF 轮询失败不再直接判离线，
+  轮询成功仍恢复。
+- **switch/stop 脚本大小写不敏感匹配 + 串口持有者兜底（AD-008）**：MacPorts 解释器命令行
+  大写 `'Python server.py'` 导致 `pgrep 'python.*server\.py'` 匹配不到 → 误判未运行 → 切换漏停、
+  与 ft8 侧 rigctld 抢同一 CAT 串口 4 小时。`pgrep` 改 `-if` 大小写不敏感；串口被非 rigctld
+  进程持有即视为残留运行（切换前必须清理）；`stop.sh` 增加串口持有者释放段。
+- **website 部署改为 tmpfs 外暂存**：stage 目录移出 tmpfs，避免重启丢文件。
+
+### Tests
+- 本机与 VM 上各 439 项全绿。
+
+### Release
+- 构建于 Windows 11（Python 3.12.4 / PyInstaller 6.21.0 / Inno Setup 6.7.3），提交 `4ce4d26`。
+- 产物 `MRRC-FT710-v1.8.0-Windows-x64-Setup.exe`，36,888,086 bytes，SHA-256
+  `36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea`。
+- 构建级验证完成：VM 上 439 测试、三个 PyInstaller 目标、Inno Setup 编译均通过，产物打包内容
+  （FTDI DLL / opus.dll / static / mem_channels.json）与哈希核对无误。未在 VM 上重跑静默安装冒烟
+  （避免干扰常驻 HTTPS 服务）；射频语音验收仍为操作员现场确认项。
+
 ## [v1.7.8] — 2026-07-31 — Stable — Windows TX Restored to 44.1 kHz Device Audio
 
 ### Fixed

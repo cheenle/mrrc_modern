@@ -5,21 +5,22 @@ The package is designed for Windows 11 and Windows 12-class x64 desktop
 systems. It installs a user-launched desktop app with an embedded Python
 runtime; users do not need to install Python manually.
 
-## Download (v1.7.8 Stable)
+## Download (v1.8.0 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-FT710-v1.7.8-Windows-x64-Setup.exe` | 35.1 MB | `c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb` |
+| `MRRC-FT710-v1.8.0-Windows-x64-Setup.exe` | 35.2 MB | `36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_ft710>
 
-The v1.7.8 package was built from commit `8629f0c` on Windows 11 with Python
+The v1.8.0 package was built from commit `4ce4d26` on Windows 11 with Python
 3.12.4, PyInstaller 6.21.0, and Inno Setup 6.7.3. All 439 Windows tests, three
-PyInstaller targets, and the installer build passed. Silent install, required
-bundled-file inspection, server listen, expected unauthenticated health HTTP
-401, and silent uninstall also passed.
+PyInstaller targets, and the installer build passed; required bundled-file
+inspection (FTDI DLLs, opus.dll, static, mem_channels.json) and the SHA-256
+check passed. v1.8.0 adds the RF Gain slider and fixes false
+'radio disconnected' alarms from transient serial timeouts.
 
 Browser capture and Opus remain at 48 kHz. Every decoded 960-sample TX frame is
 converted to 882 samples before the FT-710 playback device is opened/written at

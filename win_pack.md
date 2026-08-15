@@ -2,6 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-FT710-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
+> 最新构建：**v1.8.0**（2026-08-15，提交 `4ce4d26`，产物 36,888,086 bytes，SHA-256 `36a48a5f…cc170ea`）。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 ## 1. 环境拓扑
@@ -117,6 +118,8 @@ zip -qr dist/mrrc_ft710_src.zip . \
 
 **关键**：`./.agents/*` 不能排除——`tests/test_sdd_harness.py` 依赖其中的 harness 文件，缺了会导致 VM 上 24 个测试失败。`./certs/*` 必须排除（含 TLS 私钥）。
 
+**建议**：另加 `./promo/*` 排除——那是 gitignored 的市场宣传视频（约 630MB），与构建/测试无关；不排除也能构建，但上传极慢（v1.8.0 起已排除）。
+
 ### Step 2 — 上传到 VM（经 ham 跳板）
 
 ```bash
@@ -155,28 +158,33 @@ Write-Host "BUILD_DONE"
 远程执行（约 3-5 分钟：439 个测试 → 3 个 PyInstaller spec → iscc）：
 
 ```bash
-ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_mrrc_v178_8629f0c.ps1'"
+ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_mrrc_v180.ps1'"
 ```
+
+⚠️ **别用 `C:\Users\cheenle\build_vm.ps1`**——它当前 `Set-Location C:\mrrc_ft8`，指向的是**另一个项目**
+（MRRC_FT8 工作区），会构建出错的 `MRRC_FT8-Setup.exe`（2026-08-15 实测踩坑，产物路径和包名都不对）。
+每次发布自建一个 `build_mrrc_v<ver>.ps1`（内容同本文档 build_vm.ps1 的示例，但 `Set-Location C:\mrrc_ft710`），
+scp 到 VM 再执行。构建产物在 `C:\mrrc_ft710\dist\windows\`。
 
 build.ps1 有 `Invoke-Checked` 闸门：测试或任何一步非零退出都会中止，不会带病出包。
 
 ### Step 5 — 验证产物（在 VM 上）
 
 ```powershell
-dir C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710-Setup.exe                   # 36,820,041 bytes
-dir C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710\vendor\ftdi\windows\bin\x64 # 两个 DLL 都在
-dir C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710\_internal\static\index.html # static 在 _internal
-dir C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710\_internal\mem_channels.json # 初始频道种子
-Get-FileHash C:\mrrc_ft710_release_8629f0c\dist\windows\MRRC-FT710-Setup.exe -Algorithm SHA256
+dir C:\mrrc_ft710\dist\windows\MRRC-FT710-Setup.exe                    # v1.8.0: 36,888,086 bytes
+dir C:\mrrc_ft710\dist\windows\MRRC-FT710\vendor\ftdi\windows\bin\x64 # 两个 DLL 都在
+dir C:\mrrc_ft710\dist\windows\MRRC-FT710\_internal\static\index.html # static 在 _internal
+dir C:\mrrc_ft710\dist\windows\MRRC-FT710\_internal\mem_channels.json # 初始频道种子
+Get-FileHash C:\mrrc_ft710\dist\windows\MRRC-FT710-Setup.exe -Algorithm SHA256
 ```
 
 ### Step 6 — 取回本机
 
 ```bash
-ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_ft710_release_8629f0c/dist/windows/MRRC-FT710-Setup.exe /tmp/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe"
-scp ham.vlsc.net:/tmp/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe dist/windows/
-shasum -a 256 dist/windows/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe
-# v1.7.8: c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb
+ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_ft710/dist/windows/MRRC-FT710-Setup.exe /tmp/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe"
+scp ham.vlsc.net:/tmp/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe dist/windows/
+shasum -a 256 dist/windows/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe
+# v1.8.0: 36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea
 ```
 
 ## 4. 发布到网站（可选）
@@ -185,8 +193,8 @@ shasum -a 256 dist/windows/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe
 
 ```bash
 mkdir -p website/downloads
-cp dist/windows/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe website/downloads/MRRC-FT710-Setup.exe
-cp dist/windows/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe website/downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe
+cp dist/windows/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe website/downloads/MRRC-FT710-Setup.exe
+cp dist/windows/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe website/downloads/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe
 shasum -a 256 website/downloads/*.exe
 cd website
 ./deploy.sh
@@ -199,11 +207,11 @@ cd website
 - `docs/WINDOWS_INSTALLER_GUIDE.md`（Download 表格 + 构建说明段）
 - `README.md`、`CHANGELOG.md`、`SDD/README.md`、`SDD/14-version-history.md`
 
-验证两个 URL 都返回 200、`content-length: 36820041`，下载后的 SHA-256 都等于 `c1e474b58f9948206990efbc9f8bdb5b183d03e4f462828b56d2d3f8c0b493bb`：
+验证两个 URL 都返回 200、`content-length: 36888086`，下载后的 SHA-256 都等于 `36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea`：
 
 ```bash
 curl -sI https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe
-curl -sI https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.7.8-Windows-x64-Setup.exe
+curl -sI https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe
 ```
 
 ## 5. 故障排查（本次踩过的坑）
@@ -228,6 +236,8 @@ curl -sI https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.7.8-Windows-x64
 | **TX 音频在这台 KVM VM 上必然咔咔杂音，无法用于 TX 验证**（2026-07-26 多轮实测定论） | KVM USB 直通对等时（isochronous）**OUT** 调度有硬伤：播放节奏混沌（1 秒尺度慢 1.4×、10 秒尺度驱动 1.3 秒吞掉 10 秒音频），MME/WASAPI 全一样；iso IN（RX 采集）和 bulk（FT4222）正常 | 软件层无法修复。TX 音频验证请到**实体 Windows 机**做；或整机 xHCI 控制器 PCIe 直通。别再在这台 VM 上排查 TX 音质 |
 | v1.7.4 PTT 报 `name 'sys' is not defined` | `start_tx` 用了 `sys.platform` 但模块没 import（v1.7.5 已修，补了 `start_tx` 端到端回归测试） | 装 ≥v1.7.5 |
 | VM 上串口/声卡突然全消失（COM 只剩 COM1、`'USB Audio' not found`、服务端 UI-only），外网 302 正常但无音频无 CAT | **电台 USB 物理断开**（关机/拔线/被接回 Mac）——宿主机 `lsusb` 里 CP2105/FT4222/C-Media 全没了（2026-07-26 实测） | 先 `ssh ham.vlsc.net lsusb` 确认；插回电台后**直通不会自动恢复**，需重新执行三个 `virsh attach-device --live --config`（或重启 VM），再重启 ft710-server |
+| 跑了 build_vm.ps1 却构建出 `MRRC_FT8-Setup.exe`、`C:\mrrc_ft710\dist` 为空 | **`C:\Users\cheenle\build_vm.ps1` 已改成 `Set-Location C:\mrrc_ft8`**，指向另一项目（MRRC_FT8）工作区（2026-08-15 实测） | 用按版本自建的 `build_mrrc_v<ver>.ps1`（`Set-Location C:\mrrc_ft710`），别用 build_vm.ps1 |
+| 源码 zip 达 670MB、上传极慢 | 工作目录含 gitignored 的 `promo/` 宣传视频（约 630MB） | Step 1 zip 加 `./promo/*` 排除（v1.8.0 起已加） |
 | 服务突然整个没了（8443 无监听、外网握手超时/000），socat 还在 | 原生 `MRRC-FT710.exe` launcher 是**控制台应用**：控制台窗口被关闭、或交互会话注销，服务随之被杀（2026-07-26 实测） | 常驻服务用隐藏任务路径：计划任务 `MRRC-FT710-HTTPS` → `start_ft710_https.ps1`（Start-Process 隐藏拉起）；提醒使用者不要随手关控制台窗口 |
 
 ## 6. 常用命令速查

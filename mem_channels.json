@@ -6,14 +6,14 @@
       "label": "40m 7.050"
     },
     {
-      "freq": 7245000,
-      "mode": "LSB",
-      "label": "40m 7.245"
+      "freq": 21400000,
+      "mode": "USB",
+      "label": "15m 21.400"
     },
     {
-      "freq": 14023700,
-      "mode": "CW-U",
-      "label": "20m 14.024"
+      "freq": 7068000,
+      "mode": "LSB",
+      "label": "40m 7.068"
     },
     {
       "freq": 14270000,

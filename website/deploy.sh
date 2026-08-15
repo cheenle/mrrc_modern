@@ -80,6 +80,10 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
         sudo cp -r /var/www/vlsc.net/mrrc_ft710 /var/tmp/mrrc_ft710_backup_$(date +%Y%m%d_%H%M%S)
         echo "Backup created."
     fi
+    # Clear any stale/partial deploy packages before the fresh one is scp'd,
+    # so the extract glob below always matches exactly one archive (a leftover
+    # truncated package once made tar abort with "unexpected end of file").
+    sudo rm -f /var/tmp/mrrc_ft710_website_*.tar.gz
     sudo mkdir -p /var/www/vlsc.net/mrrc_ft710
     sudo chown -R www-data:www-data /var/www/vlsc.net/mrrc_ft710
     sudo chmod -R 755 /var/www/vlsc.net/mrrc_ft710

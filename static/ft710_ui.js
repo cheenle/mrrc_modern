@@ -335,6 +335,9 @@ function renderSliders() {
     // NOT the radio's AF gain — it is intentionally not rendered from
     // radio state, or the CAT poll would fight the user's setting.
     setSlider('slider-rfpower', 'val-rfpower', radioState.rf_power);
+    // RF Gain (RG 0-255) shown as 0-100% on the slider.
+    setSlider('slider-rfgain', 'val-rfgain',
+        Math.round((radioState.rf_gain ?? 255) / 255 * 100));
 }
 
 function setSlider(sliderId, valId, value) {
@@ -938,7 +941,7 @@ function renderUpdates(dirtyFields) {
             if (['tx_status','is_transmitting'].includes(f)) needStatus = needPTT = true;
             if (['filter_width','filter_hz','preamp','preamp_label','attenuator','attenuator_label'].includes(f)) needButtons = true;
             if (['noise_blanker','noise_reduction','auto_notch','compressor','tuner_status'].includes(f)) needToggles = true;
-            if (['rf_power'].includes(f)) needSliders = true;
+            if (['rf_power', 'rf_gain'].includes(f)) needSliders = true;
             if (['scope_span','scope_speed','scope_mode','scope_start_freq'].includes(f)) needScope = true;
             if (['split'].includes(f)) needVFO = true;
             if (['serial_connected'].includes(f)) needStatus = true;
@@ -1175,6 +1178,18 @@ function initUI() {
         sendCommand('rf_power', v);
         radioState.rf_power = v;
     });
+
+    // RF Gain slider (0-100% <-> RG 0-255)
+    const rgSlider = document.getElementById('slider-rfgain');
+    if (rgSlider) {
+        rgSlider.addEventListener('input', function() { setText('val-rfgain', this.value); });
+        rgSlider.addEventListener('change', function() {
+            const pct = parseInt(this.value);
+            const raw = Math.round(pct * 255 / 100);
+            sendCommand('rf_gain', raw);
+            radioState.rf_gain = raw;
+        });
+    }
     // Restore persisted browser volume before wiring
     (function() {
         var v = 128;

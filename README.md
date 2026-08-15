@@ -183,6 +183,7 @@ mrrc_ft710/
 ├── docs/                  # Additional documentation
 ├── tests/                 # Unit tests
 ├── mem_channels.json      # Persistent memory channels
+├── FT710Android/          # 原生 Android 遥控客户端（Kotlin + Compose）
 └── logs/                  # Server log output
 ```
 
@@ -346,6 +347,9 @@ python3 -m unittest discover -s tests -v
 | [docs/IOS_FIXES_PROGRESS.md](docs/IOS_FIXES_PROGRESS.md) | iOS fix verification log |
 | [docs/IOS_OPUS_INTEGRATION.md](docs/IOS_OPUS_INTEGRATION.md) | iOS Opus status & TX enablement |
 | [docs/IOS_TESTING_GUIDE.md](docs/IOS_TESTING_GUIDE.md) | iOS testing guide |
+| [docs/superpowers/specs/2026-08-16-ft710-android-app-design.md](docs/superpowers/specs/2026-08-16-ft710-android-app-design.md) | FT710 Android App 设计 |
+| [FT710Android/CLAUDE.md](FT710Android/CLAUDE.md) | Android 客户端开发参考 |
+| [FT710Android/BUILD_GUIDE.md](FT710Android/BUILD_GUIDE.md) | Android 构建指南 |
 | [SDD/](SDD/) | Software Design Description (15 chapters) |
 | [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | CAT command reference |
 

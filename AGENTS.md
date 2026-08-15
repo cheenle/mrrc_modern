@@ -37,6 +37,8 @@ Frontend assets in `static/`:
 
 iOS app in `FT710Mobile/` (SwiftUI, iOS 17, real device only — bundled `libopus.a` is arm64-device-only so simulator builds fail to link). See `FT710Mobile/CLAUDE.md` for build/test commands and protocol facts, `FT710Mobile/docs/ARCHITECTURE.md` for layer design, and `docs/IOS_APP_ANALYSIS.md` for the 2026-07-20 audit with the P0–P2 known-issue list.
 
+Android app in `FT710Android/` (Kotlin + Jetpack Compose, minSdk 26, NDK/libopus). Pure logic is JVM-testable; CI gate `./gradlew test assembleDebug lintDebug`. Protocol facts and PTT safety rules in `FT710Android/CLAUDE.md`, toolchain steps in `FT710Android/BUILD_GUIDE.md`, design in `docs/superpowers/specs/2026-08-16-ft710-android-app-design.md`.
+
 SDD (Software Design Description) in `SDD/` — 15-chapter IBM TeamSD documentation.
 
 ## SDD-Guardian Skill & Context Harness

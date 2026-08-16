@@ -35,7 +35,7 @@
 
 ## 3.3 Out of Scope
 
-- Native iOS/Android application **as a deliverable of this SDD**. A separate native iOS client (`FT710Mobile/`) and a marketing/documentation site (`website/`) live in this repository but are documented independently (`docs/IOS_*.md`, `FT710Mobile/CLAUDE.md`) — they are outside this SDD's scope.
+- Native iOS/Android application **as a deliverable of this SDD**. Separate native clients — iOS (`FT710Mobile/`) and Android (`FT710Android/`, Kotlin + Jetpack Compose, implemented 2026-08-16) — and a marketing/documentation site (`website/`) live in this repository but are documented independently (`docs/IOS_*.md`, `FT710Mobile/CLAUDE.md`, `FT710Android/CLAUDE.md`, `docs/superpowers/specs/2026-08-16-ft710-android-app-design.md`) — they are outside this SDD's scope.
 - Cloud-hosted multi-tenant service.
 - Multi-user / per-user authentication (current auth is single shared password).
 - Digital modes (CW decoder, FT8, RTTY decode).

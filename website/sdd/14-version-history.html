@@ -141,6 +141,18 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.18</td>
+<td>2026-08-16</td>
+<td>Kimi</td>
+<td><strong>FT710Android native client implemented + web UI compaction (compact canvases, page scroll, RF Gain into menu Settings).</strong> New peer subproject <code>FT710Android/</code> (Kotlin 2.0.21 + Jetpack Compose Material3, minSdk 26, AGP 8.7.3 / Gradle 8.9 / JDK 17, OkHttp 4.12, kotlinx-serialization, DataStore, NDK-built libopus) connects to the same FastAPI server over the 4+1 WS channels (<code>/WSradio</code> JSON control, <code>/WSaudioRX</code>/<code>/WSaudioTX</code> tagged audio, <code>/WSspectrum</code> 1701B frames, optional <code>/WSatr1000</code>) and is functionally aligned with the web frontend: frequency/mode/band/filter/gain/DSP/ATU control, RX Opus decode → AudioTrack with jitter buffer, TX AudioRecord → Opus CBR 64 kbps, waterfall+FFT spectrum, S-meter + 5 meters, 6-slot memory channels (server format, <code>label</code> key), DataStore settings + Keystore credentials, self-signed-TLS tolerant client. PTT safety is first-class from day one: pure-Kotlin <code>PTTManager</code> state machine (press only in Idle/Releasing + control channel connected), gesture-<code>finally</code> release, 500 ms watchdog ×3 with <code>onStuckTX</code>, lifecycle <code>onStop</code> <code>forceRelease()</code> — the iOS P0 race classes from <code>docs/IOS_APP_ANALYSIS.md</code> are designed out, not patched. Auth: <code>POST /api/auth/login</code> → token + <code>ft710_auth</code> cookie; 401/429 stops reconnect (login screen). Pure logic (protocol, PTT, spectrum frames, memory channels, RadioState mirror) is JVM-testable: 33 JVM tests green, <code>./gradlew test assembleDebug lintDebug</code> clean; instrumented Opus round-trip and RF acceptance pending the operator’s real Android device. Design spec + 19-task plan (<code>docs/superpowers/specs|plans/2026-08-16-ft710-android-app*.md</code>) marked implemented. <strong>Web UI</strong>: waterfall/FFT canvases compacted (mobile 67→45 px / 33→22 px, desktop 120→80 / 60→40 px), page scrolls instead of a fixed viewport (body <code>height:100%/overflow:hidden</code> removed; <code>.app-container</code> <code>height</code> → <code>min-height:100dvh</code>), RF Gain slider moved from the main controls row into the menu Settings (menu section renamed “Scope Display” → “Settings”). Cache bust css v20→v23 / ui v22→v24 (main v23 unchanged), sw.js CACHE <code>ft710-v23</code>→<code>ft710-v24</code> + ASSETS list synced; pinned cache-bust tests updated in the same commit. Suite 439 tests. Docs: §3.3 scope note, SDD README Quick Facts, website SDD pages (en/zh), CHANGELOG v1.8.1.</td>
+</tr>
+<tr>
+<td>SDD V2.17</td>
+<td>2026-08-15</td>
+<td>Codex</td>
+<td><strong>v1.8.0 Windows Stable publication.</strong> Published the commit <code>4ce4d26</code> Windows x64 installer after 439/439 Windows tests, three successful PyInstaller targets, and Inno Setup compilation; required bundled-file inspection (FTDI DLLs, opus.dll, static, mem_channels.json) and SHA-256 checks passed. Artifact: 36,888,086 bytes, SHA-256 <code>36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea</code>. Adds the RF Gain slider (RG 0-255 → 0-100%), stops false ‘radio disconnected’ alarms from transient serial timeouts (serial_connected now flips off only via the CAT watchdog), and hardens switch/stop scripts (case-insensitive pgrep + serial-holder fallback, AD-008). Stable classification is a publication decision; the Win11 KVM had no authoritative physical FT-710 RF speech/noise path, so over-the-air monitoring remains an operator acceptance check rather than claimed build evidence. Website and Windows operator/packager docs synchronized.</td>
+</tr>
+<tr>
 <td>SDD V2.16</td>
 <td>2026-07-31</td>
 <td>Codex</td>
@@ -481,7 +493,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.16 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.1 更新</a></li>
+            <li><a href="#updates">V2.18 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.1 · 2026-07-22</span>
+            <span>SDD V2.18 · 2026-08-16</span>
         </div>
         <h1 class="hero-title">MRRC FT-710<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.16</td></tr>
-            <tr><td>基线日期</td><td>2026-07-31</td></tr>
+            <tr><td>版本</td><td>V2.18</td></tr>
+            <tr><td>基线日期</td><td>2026-08-16</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
             <tr><td>核心接口</td><td>4 路 WebSocket + 串口 CAT + FT4222 SPI + USB 音频</td></tr>
@@ -88,28 +88,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">最新更新</span>
-            <h2 class="section-title">V2.1 变更重点</h2>
+            <h2 class="section-title">V2.18 变更重点</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
-                <h3>PTT 无声故障修复</h3>
-                <p>"按下 PTT 有载波但无语音/无功率" 的长时间运行软故障——根因是 TX 上行链路归属权仅在连接时分配。多客户端（浏览器标签 + iOS App 或僵尸连接）场景下 PTT 客户端的麦克风帧被静默丢弃。现在：属主断连时自动晋升 + PTT 键起时主动索取 + 每次 PTT 释放记录完整 TX 会话日志。</p>
+                <div class="icon"><i class="fas fa-mobile-screen-button"></i></div>
+                <h3>原生 Android 客户端</h3>
+                <p>新增 <code>FT710Android/</code> 子项目（Kotlin + Jetpack Compose，minSdk 26）：4+1 路 WebSocket，NDK 构建 libopus，DataStore + Keystore 凭据——功能全量对齐 Web 前端（控制、RX/TX 音频、频谱、仪表、记忆频道、可选 ATR1000）。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-bug-slash"></i></div>
-                <h3>修复虚假"电台未连接"</h3>
-                <p>频率日志守卫中的 NoneType 崩溃导致每次轮询都失败，5 次连续失败后广播 "serial_connected=false"，但实际上电台完全正常在通联。已增加 None 守卫，且成功轮询后立即恢复连接状态标志。</p>
+                <div class="icon"><i class="fas fa-shield-halved"></i></div>
+                <h3>PTT 安全原生设计</h3>
+                <p>纯 Kotlin PTTManager 状态机：仅连接就绪时按下，手势 <code>finally</code> 释放，500ms 看门狗 + <code>onStuckTX</code>，生命周期 <code>onStop</code> 强制释放——iOS P0 竞态在设计层规避而非事后修补。</p>
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-chart-area"></i></div>
-                <h3>USB 重连后频谱冻结修复</h3>
-                <p>USB 重新枚举导致电台停止发送 FFT 帧，但看门狗重连后未重新执行 scope-init CAT 指令（EX040101/EX040200），瀑布图停在旧数据上不动。PollScheduler 现在有 on_reconnected 钩子在每次成功重连后重新初始化 scope。</p>
+                <h3>Web 界面精简</h3>
+                <p>瀑布/FFT 画布紧凑化（移动端 45/22px，桌面 80/40px）；页面随内容滚动（移除固定视口）；RF Gain 滑杆从主控制区移入菜单「设置」。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-shield-haltered"></i></div>
-                <h3>Web 前端安全重构</h3>
-                <p>PTT 按钮改经 PTTManager 路由（此前绕过导致看门狗 + pagehide 强制关 TX 均为死代码）。TUNE 改为长按触发（原为点击锁定无确认）。键盘事件忽略重复触发和输入框内事件。修复静默渲染崩溃。服务端错误以 toast 横幅显示。</p>
+                <div class="icon"><i class="fas fa-circle-check"></i></div>
+                <h3>Android 验证</h3>
+                <p>33 个 JVM 单测全绿；<code>./gradlew test assembleDebug lintDebug</code> 通过；APK 内置 NDK libopus。设计文档与 19 任务计划标记完成；真机验收待用户设备。</p>
             </div>
         </div>
     </div>

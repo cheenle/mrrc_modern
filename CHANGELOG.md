@@ -2,6 +2,17 @@
 
 All notable changes to the FT-710 Web Control project.
 
+## [v1.8.1] — 2026-08-16 — 界面精简（紧凑瀑布 + 页面滚动 + RF Gain 移入菜单）
+
+### Changed
+- **瀑布/FFT 画布紧凑化**：移动端 67→45 px / 33→22 px，桌面 120→80 / 60→40 px。
+- **页面随内容滚动**：移除 `body {height:100%; overflow:hidden}` 固定视口，`.app-container` 由 `height` 改为 `min-height:100dvh`，内容超屏时可滚动。
+- **RF Gain 滑块移入菜单**：从主控制区（RF PWR 旁）移入菜单「设置」（原「Scope Display」更名「Settings」）。
+- **缓存版本同步**：css v23 / main v23 / ui v24，sw.js CACHE `ft710-v24` + ASSETS 列表同步；钉住缓存版本的测试同步更新。
+
+### Tests
+- 套件 439 项全绿。
+
 ## [v1.8.0] — 2026-08-15 — RF Gain 滑块 + 稳定性修复
 
 ### Added

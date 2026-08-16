@@ -27,7 +27,6 @@
 /* ── Reset ─────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
-    height: 100%; overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: var(--bg-primary); color: var(--text-primary);
     -webkit-tap-highlight-color: transparent;
@@ -45,8 +44,8 @@ a { color: var(--accent); text-decoration: none; }
 /* ── App Container ─────────────────────────────────────────────── */
 .app-container {
     display: flex; flex-direction: column;
-    height: 100dvh; /* dynamic viewport: respects Safari address bar */
-    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    min-height: 100dvh; /* dynamic viewport: fill visible area, grow with content */
+    min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     max-width: 480px; margin: 0 auto;
 }
 
@@ -114,8 +113,8 @@ a { color: var(--accent); text-decoration: none; }
 
 /* ── Main Content ──────────────────────────────────────────────── */
 .main-content {
-    flex: 1; overflow-y: auto; overflow-x: hidden;
-    padding: 8px 10px; -webkit-overflow-scrolling: touch;
+    flex: 1;
+    padding: 8px 10px;
 }
 
 /* ── Waterfall ────────────────────────────────────────────────── */
@@ -124,11 +123,11 @@ a { color: var(--accent); text-decoration: none; }
     padding: 4px; margin-bottom: 4px; overflow: hidden;
 }
 #fft-canvas {
-    width: 100%; height: 33px; display: block;
+    width: 100%; height: 22px; display: block;
     border-radius: 4px 4px 0 0;
 }
 #waterfall-canvas {
-    width: 100%; height: 67px; display: block;
+    width: 100%; height: 45px; display: block;
     border-radius: 0 0 4px 4px;
 }
 #freq-scale-canvas {
@@ -452,8 +451,8 @@ a { color: var(--accent); text-decoration: none; }
 /* ── Desktop / large screens ────────────────────────────────────── */
 @media (min-width: 768px) {
     .app-container { max-width: 720px; }
-    #fft-canvas { height: 60px; }
-    #waterfall-canvas { height: 120px; }
+    #fft-canvas { height: 40px; }
+    #waterfall-canvas { height: 80px; }
     #freq-scale-canvas { height: 24px; }
     #smeter-canvas { height: 24px; }
     .smeter-value { font-size: 14px; min-width: 36px; }

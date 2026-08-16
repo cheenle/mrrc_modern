@@ -16,7 +16,7 @@
     <title>FT-710 Web Control</title>
     <link rel="apple-touch-icon" href="/favicon.png" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="stylesheet" href="/ft710.css?v=20" />
+    <link rel="stylesheet" href="/ft710.css?v=23" />
   </head>
   <body>
     <div class="safe-area-top"></div>
@@ -262,18 +262,6 @@
             <span class="slider-val" id="val-rfpower">100</span>
           </div>
           <div class="slider-row">
-            <span class="slider-label">RF Gain</span>
-            <input
-              type="range"
-              id="slider-rfgain"
-              min="0"
-              max="100"
-              value="100"
-              class="ft-slider"
-            />
-            <span class="slider-val" id="val-rfgain">100</span>
-          </div>
-          <div class="slider-row">
             <span class="slider-label">🔊 Vol</span>
             <input
               type="range"
@@ -381,9 +369,9 @@
           </li>
           <li><a href="#" class="menu-item" data-action="logout">Logout</a></li>
         </ul>
-        <!-- Scope Display Settings -->
+        <!-- Menu Settings -->
         <div class="menu-scope-settings">
-          <h3 class="menu-section-title">Scope Display</h3>
+          <h3 class="menu-section-title">Settings</h3>
           <div class="menu-scope-row">
             <span class="menu-scope-label">SPAN</span>
             <select id="scope-span-select" class="scope-select">
@@ -444,6 +432,18 @@
             <span class="menu-slider-val" id="val-ceil">220</span>
           </div>
           <div class="menu-slider-row">
+            <span class="menu-slider-label">RF Gain</span>
+            <input
+              type="range"
+              id="slider-rfgain"
+              min="0"
+              max="100"
+              value="100"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-rfgain">100</span>
+          </div>
+          <div class="menu-slider-row">
             <span class="menu-slider-label">Mic</span>
             <input
               type="range"
@@ -483,7 +483,7 @@
     <script src="/modules/opus_codec.js"></script>
     <script src="/ft710_main.js?v=23"></script>
     <script src="/modules/ptt_manager.js?v=13"></script>
-    <script src="/ft710_ui.js?v=22"></script>
+    <script src="/ft710_ui.js?v=24"></script>
     <script src="/modules/atr1000.js?v=1"></script>
   </body>
 </html>

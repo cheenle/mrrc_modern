@@ -604,13 +604,13 @@ function initWaterfall() {
     const w = Math.max(100, rect.width - 8); // Minimum 100px wide
     const desktop = _isDesktopLayout();
     canvas.width = w;
-    canvas.height = desktop ? 120 : 67;
+    canvas.height = desktop ? 80 : 45;
 
     // Size FFT canvas to match width
     const fftCanvas = document.getElementById('fft-canvas');
     if (fftCanvas) {
         fftCanvas.width = w;
-        fftCanvas.height = desktop ? 60 : 33;
+        fftCanvas.height = desktop ? 40 : 22;
     }
 
     waterfallHistory = [];
@@ -640,7 +640,7 @@ window.addEventListener('resize', function() {
         if (!canvas || !waterfallInitialized) return;
         const rect = canvas.parentElement.getBoundingClientRect();
         const targetW = Math.max(100, rect.width - 8);
-        const targetH = _isDesktopLayout() ? 120 : 67;
+        const targetH = _isDesktopLayout() ? 80 : 45;
         if (Math.abs(canvas.width - targetW) > 4 || canvas.height !== targetH) {
             initWaterfall();
         }

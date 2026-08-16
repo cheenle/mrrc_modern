@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 840" width="470" height="840" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <style>
+      .phone { fill:#111418; stroke:#3a3f47; stroke-width:3; }
+      .screen { fill:#1a1a1a; }
+      .panel { fill:#22262c; }
+      .border { stroke:#33383f; stroke-width:1; }
+      .btn { fill:#2a2e35; stroke:#3d434c; stroke-width:1; rx:6; }
+      .btn-on { fill:#3b2f14; stroke:#f59e0b; stroke-width:1; rx:6; }
+      .accent { fill:#f59e0b; }
+      .green { fill:#22c55e; }
+      .red { fill:#ef4444; }
+      .txt { fill:#e6e6e6; font-size:13px; }
+      .txt-sm { fill:#9aa0a8; font-size:10.5px; }
+      .txt-big { fill:#f5f5f5; font-size:24px; font-weight:bold; }
+      .lbl { fill:#c9ced6; font-size:10px; }
+      .meter-fill { fill:#f59e0b; }
+      .dash { stroke:#4a5160; stroke-width:1; stroke-dasharray:4 3; fill:none; }
+      .badge { fill:#f59e0b; stroke:#fff; stroke-width:1.5; }
+      .badge-txt { fill:#111; font-size:11.5px; font-weight:bold; text-anchor:middle; dominant-baseline:central; }
+      .cap { fill:#777; font-size:11px; }
+    </style>
+  </defs>
+
+  <!-- Phone frame -->
+  <rect class="phone" x="30" y="20" width="410" height="800" rx="28"/>
+  <rect class="screen" x="42" y="32" width="386" height="776" rx="4"/>
+
+  <!-- ===== Header ===== -->
+  <g>
+    <rect class="btn" x="48" y="48" width="30" height="34"/>
+    <text x="63" y="68" class="txt" text-anchor="middle" font-size="15">☰</text>
+    <rect class="panel border" x="88" y="44" width="150" height="42" rx="4"/>
+    <text x="163" y="70" class="txt-big" text-anchor="middle" font-size="21">14.270.00</text>
+    <rect class="btn" x="252" y="52" width="26" height="26"/><text x="265" y="69" class="txt" text-anchor="middle">☀</text>
+    <rect class="btn" x="282" y="52" width="26" height="26"/><text x="295" y="69" class="txt" text-anchor="middle">⛶</text>
+    <rect class="btn" x="312" y="52" width="26" height="26"/><text x="325" y="69" class="txt" text-anchor="middle">⏻</text>
+    <text x="362" y="70" class="txt" text-anchor="middle" font-size="11">VFO-A</text>
+  </g>
+
+  <!-- ===== Status bar ===== -->
+  <rect x="42" y="92" width="386" height="22" fill="#17191c"/>
+  <text x="50" y="106" class="txt-sm" font-size="9.5">20m USB RX ●Serial ↓0↑0 RTT-- J--</text>
+
+  <!-- ===== Spectrum ===== -->
+  <rect class="panel" x="46" y="120" width="378" height="26" rx="3"/>
+  <text x="235" y="136" class="txt-sm" text-anchor="middle" font-size="9">FFT 频谱</text>
+  <rect class="panel" x="46" y="148" width="378" height="46" rx="3"/>
+  <text x="235" y="172" class="txt-sm" text-anchor="middle" font-size="9">瀑布图</text>
+  <rect class="panel" x="46" y="196" width="378" height="20" rx="3"/>
+  <text x="235" y="210" class="txt-sm" text-anchor="middle" font-size="8.5">— 频率刻度 —</text>
+
+  <!-- ===== S-meter ===== -->
+  <rect class="panel border" x="46" y="222" width="290" height="34" rx="3"/>
+  <rect x="54" y="230" width="274" height="18" rx="9" fill="#1c2026"/>
+  <rect x="54" y="230" width="170" height="18" rx="9" class="meter-fill" opacity="0.85"/>
+  <text x="346" y="242" class="txt" font-size="13">S0</text>
+  <text x="346" y="254" class="txt-sm" font-size="8.5">-54 dB</text>
+  <text x="52" y="266" class="txt-sm" font-size="7.5">S1 S3 S5 S7 S9 +20 +40 +60</text>
+
+  <!-- ===== Meters ===== -->
+  <g>
+    <rect class="panel border" x="46" y="272" width="182" height="34" rx="3"/>
+    <text x="54" y="288" class="lbl">PWR</text><rect x="84" y="280" width="110" height="8" fill="#1c2026"/>
+    <rect x="84" y="280" width="30" height="8" class="meter-fill"/><text x="200" y="288" class="txt-sm" font-size="9">0 W</text>
+    <rect class="panel border" x="236" y="272" width="188" height="34" rx="3"/>
+    <text x="244" y="288" class="lbl">ALC</text><rect x="276" y="280" width="110" height="8" fill="#1c2026"/>
+    <rect x="276" y="280" width="10" height="8" class="meter-fill" opacity="0.6"/><text x="396" y="288" class="txt-sm" font-size="9">0</text>
+    <rect class="panel border" x="46" y="312" width="120" height="34" rx="3"/>
+    <text x="54" y="328" class="lbl">SWR</text><rect x="84" y="320" width="60" height="8" fill="#1c2026"/>
+    <rect x="84" y="320" width="14" height="8" class="green"/><text x="146" y="328" class="txt-sm" font-size="9">1.0</text>
+    <rect class="panel border" x="174" y="312" width="120" height="34" rx="3"/>
+    <text x="182" y="328" class="lbl">Id</text><rect x="200" y="320" width="60" height="8" fill="#1c2026"/>
+    <rect x="200" y="320" width="6" height="8" class="meter-fill" opacity="0.5"/><text x="270" y="328" class="txt-sm" font-size="9">—</text>
+    <rect class="panel border" x="302" y="312" width="122" height="34" rx="3"/>
+    <text x="310" y="328" class="lbl">Vd</text><rect x="330" y="320" width="60" height="8" fill="#1c2026"/>
+    <rect x="330" y="320" width="40" height="8" class="meter-fill" opacity="0.8"/><text x="400" y="328" class="txt-sm" font-size="9">13.8 V</text>
+    <rect x="46" y="352" width="378" height="34" rx="3" class="dash"/>
+    <text x="54" y="372" class="txt-sm" font-size="9">ATR · SWR · LC L=x C=y · TUNE（可选外接天调，未启用时隐藏）</text>
+  </g>
+
+  <!-- ===== Quick controls ===== -->
+  <g>
+    <rect class="btn" x="46" y="396" width="68" height="34"/><text x="80" y="417" class="txt" text-anchor="middle" font-size="12">USB</text>
+    <rect class="btn" x="120" y="396" width="68" height="34"/><text x="154" y="417" class="txt" text-anchor="middle" font-size="12">20m</text>
+    <rect class="btn" x="194" y="396" width="68" height="34"/><text x="228" y="417" class="txt" text-anchor="middle" font-size="12">2.4k</text>
+    <rect class="btn" x="268" y="396" width="68" height="34"/><text x="302" y="417" class="txt" text-anchor="middle" font-size="12">ATT</text>
+    <rect class="btn" x="342" y="396" width="68" height="34"/><text x="376" y="417" class="txt" text-anchor="middle" font-size="12">PRE</text>
+  </g>
+
+  <!-- ===== DSP ===== -->
+  <g>
+    <rect class="btn" x="46" y="436" width="68" height="34"/><text x="80" y="457" class="txt" text-anchor="middle" font-size="12">NR</text>
+    <rect class="btn" x="120" y="436" width="68" height="34"/><text x="154" y="457" class="txt" text-anchor="middle" font-size="12">NB</text>
+    <rect class="btn" x="194" y="436" width="68" height="34"/><text x="228" y="457" class="txt" text-anchor="middle" font-size="12">AN</text>
+    <rect class="btn" x="268" y="436" width="68" height="34"/><text x="302" y="457" class="txt" text-anchor="middle" font-size="12">COMP</text>
+    <rect class="btn" x="342" y="436" width="68" height="34"/><text x="376" y="457" class="txt" text-anchor="middle" font-size="12">ATU</text>
+  </g>
+
+  <!-- ===== Slider ===== -->
+  <rect class="panel border" x="46" y="476" width="378" height="34" rx="3"/>
+  <text x="54" y="497" class="lbl" font-size="10.5">🔊 Vol</text>
+  <rect x="150" y="488" width="220" height="10" rx="5" fill="#1c2026"/>
+  <rect x="150" y="488" width="130" height="10" rx="5" class="meter-fill" opacity="0.7"/>
+  <text x="392" y="497" class="txt-sm" font-size="9.5">128</text>
+
+  <!-- ===== Tuning ===== -->
+  <g>
+    <rect class="btn" x="46" y="518" width="60" height="36"/><text x="76" y="539" class="txt" text-anchor="middle" font-size="12">◀◀</text>
+    <rect class="btn" x="112" y="518" width="60" height="36"/><text x="142" y="539" class="txt" text-anchor="middle" font-size="12">◀</text>
+    <rect class="btn-on" x="178" y="518" width="88" height="36"/><text x="222" y="539" class="txt" text-anchor="middle" font-size="12">1kHz</text>
+    <rect class="btn" x="272" y="518" width="60" height="36"/><text x="302" y="539" class="txt" text-anchor="middle" font-size="12">▶</text>
+    <rect class="btn" x="338" y="518" width="60" height="36"/><text x="368" y="539" class="txt" text-anchor="middle" font-size="12">▶▶</text>
+  </g>
+
+  <!-- ===== VFO ===== -->
+  <g>
+    <rect class="btn-on" x="46" y="562" width="88" height="34"/><text x="90" y="583" class="txt" text-anchor="middle" font-size="11.5">VFO-A</text>
+    <rect class="btn" x="140" y="562" width="88" height="34"/><text x="184" y="583" class="txt" text-anchor="middle" font-size="11.5">VFO-B</text>
+    <rect class="btn" x="234" y="562" width="88" height="34"/><text x="278" y="583" class="txt" text-anchor="middle" font-size="11.5">A=B</text>
+    <rect class="btn" x="328" y="562" width="82" height="34"/><text x="369" y="583" class="txt" text-anchor="middle" font-size="11.5">SPLIT</text>
+  </g>
+
+  <!-- ===== Memory ===== -->
+  <g>
+    <rect class="btn" x="46" y="606" width="118" height="42"/><text x="105" y="622" class="txt-sm" font-size="10">M1</text><text x="105" y="638" class="txt-sm" font-size="9">7.050</text>
+    <rect class="btn" x="172" y="606" width="118" height="42"/><text x="231" y="622" class="txt-sm" font-size="10">M2</text><text x="231" y="638" class="txt-sm" font-size="9">3.850</text>
+    <rect class="btn" x="298" y="606" width="118" height="42"/><text x="357" y="622" class="txt-sm" font-size="10">M3</text><text x="357" y="638" class="txt-sm" font-size="9">14.270</text>
+    <rect class="btn" x="46" y="654" width="118" height="42"/><text x="105" y="670" class="txt-sm" font-size="10">M4</text><text x="105" y="686" class="txt-sm" font-size="9">21.400</text>
+    <rect class="btn" x="172" y="654" width="118" height="42"/><text x="231" y="670" class="txt-sm" font-size="10">M5</text><text x="231" y="686" class="txt-sm" font-size="9">28.450</text>
+    <rect class="btn" x="298" y="654" width="118" height="42"/><text x="357" y="670" class="txt-sm" font-size="10">M6</text><text x="357" y="686" class="txt-sm" font-size="9">50.150</text>
+  </g>
+
+  <!-- ===== Footer ===== -->
+  <rect class="btn-on" x="46" y="708" width="196" height="84" rx="10"/>
+  <text x="144" y="752" class="txt-big" text-anchor="middle" font-size="26">PTT</text>
+  <rect class="btn" x="250" y="708" width="170" height="38" rx="6"/><text x="335" y="731" class="txt" text-anchor="middle" font-size="12">TUNE</text>
+  <rect class="btn" x="250" y="754" width="170" height="38" rx="6"/><text x="335" y="777" class="txt" text-anchor="middle" font-size="12">REC</text>
+
+  <!-- ===== Number badges ===== -->
+  <!-- Header -->
+  <g><circle class="badge" cx="80" cy="46" r="10"/><text class="badge-txt" x="80" y="46">1</text></g>
+  <g><circle class="badge" cx="240" cy="42" r="10"/><text class="badge-txt" x="240" y="42">2</text></g>
+  <g><circle class="badge" cx="280" cy="50" r="10"/><text class="badge-txt" x="280" y="50">3</text></g>
+  <g><circle class="badge" cx="310" cy="50" r="10"/><text class="badge-txt" x="310" y="50">4</text></g>
+  <g><circle class="badge" cx="340" cy="50" r="10"/><text class="badge-txt" x="340" y="50">5</text></g>
+  <g><circle class="badge" cx="396" cy="50" r="10"/><text class="badge-txt" x="396" y="50">6</text></g>
+  <g><circle class="badge" cx="424" cy="103" r="10"/><text class="badge-txt" x="424" y="103">7</text></g>
+  <!-- Spectrum -->
+  <g><circle class="badge" cx="420" cy="120" r="10"/><text class="badge-txt" x="420" y="120">8</text></g>
+  <g><circle class="badge" cx="420" cy="148" r="10"/><text class="badge-txt" x="420" y="148">9</text></g>
+  <g><circle class="badge" cx="420" cy="196" r="10"/><text class="badge-txt" x="420" y="196">10</text></g>
+  <!-- S-meter / meters -->
+  <g><circle class="badge" cx="338" cy="220" r="10"/><text class="badge-txt" x="338" y="220">11</text></g>
+  <g><circle class="badge" cx="426" cy="272" r="10"/><text class="badge-txt" x="426" y="272">12</text></g>
+  <g><circle class="badge" cx="426" cy="312" r="10"/><text class="badge-txt" x="426" y="312">13</text></g>
+  <g><circle class="badge" cx="44" cy="352" r="10"/><text class="badge-txt" x="44" y="352">14</text></g>
+  <!-- Quick -->
+  <g><circle class="badge" cx="116" cy="394" r="10"/><text class="badge-txt" x="116" y="394">15</text></g>
+  <g><circle class="badge" cx="190" cy="394" r="10"/><text class="badge-txt" x="190" y="394">16</text></g>
+  <g><circle class="badge" cx="264" cy="394" r="10"/><text class="badge-txt" x="264" y="394">17</text></g>
+  <g><circle class="badge" cx="338" cy="394" r="10"/><text class="badge-txt" x="338" y="394">18</text></g>
+  <g><circle class="badge" cx="412" cy="394" r="10"/><text class="badge-txt" x="412" y="394">19</text></g>
+  <!-- DSP -->
+  <g><circle class="badge" cx="116" cy="434" r="10"/><text class="badge-txt" x="116" y="434">20</text></g>
+  <g><circle class="badge" cx="190" cy="434" r="10"/><text class="badge-txt" x="190" y="434">21</text></g>
+  <g><circle class="badge" cx="264" cy="434" r="10"/><text class="badge-txt" x="264" y="434">22</text></g>
+  <g><circle class="badge" cx="338" cy="434" r="10"/><text class="badge-txt" x="338" y="434">23</text></g>
+  <g><circle class="badge" cx="412" cy="434" r="10"/><text class="badge-txt" x="412" y="434">24</text></g>
+  <!-- Slider -->
+  <g><circle class="badge" cx="44" cy="476" r="10"/><text class="badge-txt" x="44" y="476">25</text></g>
+  <!-- Tuning -->
+  <g><circle class="badge" cx="108" cy="516" r="10"/><text class="badge-txt" x="108" y="516">26</text></g>
+  <g><circle class="badge" cx="174" cy="516" r="10"/><text class="badge-txt" x="174" y="516">27</text></g>
+  <g><circle class="badge" cx="268" cy="516" r="10"/><text class="badge-txt" x="268" y="516">28</text></g>
+  <g><circle class="badge" cx="334" cy="516" r="10"/><text class="badge-txt" x="334" y="516">29</text></g>
+  <g><circle class="badge" cx="400" cy="516" r="10"/><text class="badge-txt" x="400" y="516">30</text></g>
+  <!-- VFO -->
+  <g><circle class="badge" cx="136" cy="560" r="10"/><text class="badge-txt" x="136" y="560">31</text></g>
+  <g><circle class="badge" cx="230" cy="560" r="10"/><text class="badge-txt" x="230" y="560">32</text></g>
+  <g><circle class="badge" cx="324" cy="560" r="10"/><text class="badge-txt" x="324" y="560">33</text></g>
+  <g><circle class="badge" cx="412" cy="560" r="10"/><text class="badge-txt" x="412" y="560">34</text></g>
+  <!-- Memory -->
+  <g><circle class="badge" cx="166" cy="604" r="10"/><text class="badge-txt" x="166" y="604">35</text></g>
+  <!-- Footer -->
+  <g><circle class="badge" cx="44" cy="706" r="10"/><text class="badge-txt" x="44" y="706">36</text></g>
+  <g><circle class="badge" cx="248" cy="706" r="10"/><text class="badge-txt" x="248" y="706">37</text></g>
+  <g><circle class="badge" cx="248" cy="752" r="10"/><text class="badge-txt" x="248" y="752">38</text></g>
+
+  <text x="235" y="826" class="cap" text-anchor="middle">图 1 · FT-710 Web 主界面控件编号图（序号与正文速查表对应）</text>
+</svg>

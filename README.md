@@ -332,6 +332,7 @@ python3 -m unittest discover -s tests -v
 | Document | Description |
 |----------|-------------|
 | [SECURITY_GUIDE.md](SECURITY_GUIDE.md) | Security configuration, password policies, rate limiting |
+| [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 操作指南：界面每个按钮/功能的编号图解与说明（含线上版 guide.html） |
 | [QUICKSTART.md](QUICKSTART.md) | Step-by-step setup guide |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | Cross-platform dependency and driver guide |
 | [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows desktop installer, FTDI DLLs, FT4222 packaging |

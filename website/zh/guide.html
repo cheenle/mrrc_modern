@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MRRC FT-710 Web Control 操作指南 — 界面每个按钮与功能的编号图解与说明">
+    <title>FT-710 操作指南 — MRRC FT-710</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css?v=4">
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .guide-layout { max-width: 900px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+        .guide-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
+        .guide-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
+        .guide-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
+        .guide-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .guide-content p, .guide-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+        .guide-content table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.875rem; }
+        .guide-content th, .guide-content td { padding: 0.625rem 0.875rem; text-align: left; border: 1px solid var(--border); vertical-align: top; }
+        .guide-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .guide-content td { color: var(--text-secondary); }
+        .guide-content code { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px; color: var(--accent); }
+        .guide-content pre { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin: 1rem 0; font-size: 0.8125rem; }
+        .guide-content blockquote { border-left: 3px solid var(--accent); padding: 0.5rem 1rem; margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem; background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0; }
+        .guide-content img { max-width: 100%; height: auto; border-radius: 0.75rem; margin: 1rem 0; background: #111; }
+        .guide-content a { color: var(--accent); }
+        .guide-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+        @media (max-width: 900px) { .guide-layout { padding: 0 1rem 3rem; } }
+    </style>
+</head>
+<body data-site="mrrc_ft710">
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC FT<span style="color: var(--accent)">‑710</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#download">Download</a></li>
+            <li><a href="../index.html#start">Quick Start</a></li>
+            <li><a href="guide.html" class="active">操作指南</a></li>
+            <li><a href="../sdd.html">SDD</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../guide.html" class="lang-btn">中文</a>
+            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        </div>
+    </div>
+</nav>
+<div class="guide-layout">
+    <main class="guide-content">
+<h1 id="ft-710-web-遥控-操作指南">FT-710 Web 遥控 — 操作指南</h1>
+<blockquote>
+<p>适用于 FT-710 Web Control（v1.8.x，2026-08 之后的界面）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
+</blockquote>
+<hr />
+<h2 id="开始之前连接与登录">0. 开始之前：连接与登录</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>步骤</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. 启动服务</td>
+<td>在电台电脑上运行 <code>python server.py</code>（或 Windows 安装版/桌面启动器），服务默认监听 <code>0.0.0.0:8888</code>，HTTPS 优先（首次运行自动生成自签名证书）。</td>
+</tr>
+<tr>
+<td>2. 打开页面</td>
+<td>手机/电脑浏览器访问 <code>https://&lt;服务器IP&gt;:8888</code>（局域网）或 <code>http://localhost:8888</code>（本机）。iPhone 上建议用 Safari 并「添加到主屏幕」以获得 PWA 全屏体验。</td>
+</tr>
+<tr>
+<td>3. 登录</td>
+<td>输入共享密码（服务启动时由 <code>FT710_WEB_PASSWORD</code> 或安装向导设置），点 <strong>Login</strong>。成功后在 <code>ft710_auth</code> Cookie（30 天有效）；密码错误返回 401，5 分钟内连续 5 次失败会触发 429 限流，需等待后再试。</td>
+</tr>
+<tr>
+<td>4. 建立连接</td>
+<td>手机端：点顶栏 <strong>⏻</strong> 开始连接（见控件 5）；桌面端打开页面后自动连接。状态栏 ●Serial 变绿表示与电台的 CAT 串口已连通。</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ 电台硬件电源开关<strong>不在</strong>本界面内——⏻ 只控制浏览器与服务器的 Web 连接，不控制电台电源（V2.13 已撤回电台电源软开关功能）。</p>
+</blockquote>
+<hr />
+<h2 id="主界面控件编号图">1. 主界面控件编号图</h2>
+<figure>
+<img src="../images/ui-guide-main.svg" alt="主界面控件编号图" />
+<figcaption aria-hidden="true">主界面控件编号图</figcaption>
+</figure>
+<p><strong>图 1</strong> 为主界面（手机竖屏布局，桌面端宽度放大但控件一致）。琥珀色圆点为控件序号，与第 3 节速查表对应。</p>
+<figure>
+<img src="../images/ui-guide-menu.svg" alt="菜单控件编号图" />
+<figcaption aria-hidden="true">菜单控件编号图</figcaption>
+</figure>
+<p><strong>图 2</strong> 为点顶栏 ☰ 后滑出的左侧抽屉菜单。</p>
+<hr />
+<h2 id="控件速查表编号-名称-功能-操作">2. 控件速查表（编号 → 名称 → 功能 → 操作）</h2>
+<h3 id="顶栏图-1-序号-17">2.1 顶栏（图 1 序号 1–7）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>☰ 菜单</td>
+<td>打开左侧抽屉菜单（波段/模式/记忆/设置/退出）</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>2</td>
+<td>频率显示</td>
+<td>显示当前 VFO 的频率（7 位：MHz.kHz.Hz 十位）</td>
+<td><strong>单击</strong>切换为输入框，直接键入 MHz（如 <code>14.270</code>）或 kHz（如 <code>14270</code>）后回车生效；<code>Esc</code> 取消</td>
+</tr>
+<tr>
+<td>3</td>
+<td>☀ 屏幕常亮</td>
+<td>屏幕唤醒锁（Wake Lock），防止操作中熄屏；浏览器不支持时自动降级为每 30 秒模拟点按的兜底方案</td>
+<td>单击开关；<strong>首次任意触摸页面会自动开启</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td>⛶ 全屏</td>
+<td>浏览器全屏/退出全屏（沉浸式操作）</td>
+<td>单击切换</td>
+</tr>
+<tr>
+<td>5</td>
+<td>⏻ 连接开关</td>
+<td>启动 / 停止 Web 客户端连接（4 路 WebSocket：控制/收音频/发音频/频谱）。<strong>不是电台电源开关</strong></td>
+<td>单击：断开时点击开始连接，连接中点击断开并停止自动重连</td>
+</tr>
+<tr>
+<td>6</td>
+<td>VFO-A / VFO-B</td>
+<td>当前活动 VFO 指示（琥珀色高亮 = 活动 VFO）</td>
+<td>只读指示；切换活动 VFO 用序号 31/32 按钮</td>
+</tr>
+<tr>
+<td>7</td>
+<td>状态栏</td>
+<td>一行显示：当前波段（如 <code>20m</code>）、模式（如 <code>USB</code>）、收/发状态（<code>RX</code>/<code>TX</code>/<code>TUNE</code>，发射时变红）、串口连接点（绿=已连接）、⚠<code>无声</code>告警（RX 音频持续 20 秒全零，电台 USB 音频可能卡死）、实时码率 <code>↓↑</code>（下行/上行 kbps）、<code>RTT</code> 往返延迟与 <code>J</code> 抖动（ms）</td>
+<td>只读；其中 <code>无声</code> 告警出现时应检查电台 USB 连接或重启电台</td>
+</tr>
+</tbody>
+</table>
+<h3 id="频谱区序号-810">2.2 频谱区（序号 8–10）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8</td>
+<td>FFT 频谱折线</td>
+<td>实时幅度-频率折线（青绿色），叠加频率刻度</td>
+<td><strong>单击</strong>：把当前 VFO 直接 QSY 到点击位置对应的频率（位移 ≤8px 才算点击，滑动不触发）</td>
+</tr>
+<tr>
+<td>9</td>
+<td>瀑布图</td>
+<td>频谱随时间滚动的热力图（颜色主题可在菜单调）</td>
+<td>同上，单击跳频；发射（TX/TUNE）期间瀑布暂停并显示「频谱暂停」</td>
+</tr>
+<tr>
+<td>10</td>
+<td>频率刻度</td>
+<td>以当前 VFO 为中心的频率标尺（跨度由菜单 SPAN 决定）</td>
+<td>只读</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>点击 8/9 实现「指哪打哪」跳频；按住拖动则是页面滚动，不会误触发。</p>
+</blockquote>
+<h3 id="仪表区序号-1114">2.3 仪表区（序号 11–14）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>11</td>
+<td>S 表</td>
+<td>信号强度表：S1–S9+60 渐变刻度 + 数值（<code>S0</code> 起）+ 相对电平（<code>S9 = 0 dB</code> 参考）</td>
+<td>只读（CAT <code>SM0</code> 或频谱帧数据）</td>
+</tr>
+<tr>
+<td>12</td>
+<td>PWR / ALC 表</td>
+<td>发射功率（W）与 ALC 电平横向条</td>
+<td>只读（CAT <code>RM</code>，0–255 原始值经分段线性标定）</td>
+</tr>
+<tr>
+<td>13</td>
+<td>SWR / Id / Vd 表</td>
+<td>驻波比（SWR）、末级电流（A）、供电电压（V）</td>
+<td>只读；Id/Vd 仅在 TX 时有效，TX→RX 会清零</td>
+</tr>
+<tr>
+<td>14</td>
+<td>ATR 行（可选）</td>
+<td>外接 ATR1000 网络天调的功率/SWR/LC 显示 + TUNE 调谐按钮</td>
+<td>仅当服务端启用了 <code>FT710_ATR1000_HOST</code> 且天调在线时显示；否则整行隐藏。TUNE 按钮点击触发服务端调谐辅助（SWR≤1.6 自动跳过，成功后记忆 LC 值）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="快捷控制区序号-1519">2.4 快捷控制区（序号 15–19）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>15</td>
+<td>模式按钮（如 <code>USB</code>）</td>
+<td>按顺序循环切换模式：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L</td>
+<td>单击循环；需要精确选择时用菜单 → Mode Selection（序号 40）</td>
+</tr>
+<tr>
+<td>16</td>
+<td>波段按钮（如 <code>20m</code>）</td>
+<td>循环切换业余波段：160m/80m/60m/40m/30m/20m/17m/15m/12m/10m/6m/4m；切换后频率跳到该波段默认频率并自动选 VFO-A</td>
+<td>单击循环；菜单 → Band Selection（序号 39）可精确选</td>
+</tr>
+<tr>
+<td>17</td>
+<td>滤波按钮（如 <code>2.4k</code>）</td>
+<td>循环切换当前模式的滤波宽度（SSB：9/13/17/20/23 档；其他模式各有对应表）。服务端设置后读回电台实际索引并回显</td>
+<td>单击循环</td>
+</tr>
+<tr>
+<td>18</td>
+<td>ATT 衰减</td>
+<td>射频衰减器 4 档循环：0 → 1 → 2 → 3（对应电台 <code>RA</code> 命令 0–3）</td>
+<td>单击循环</td>
+</tr>
+<tr>
+<td>19</td>
+<td>PRE 前置放大</td>
+<td>前置放大器 3 档循环：0（关）→ 1 → 2（对应 <code>PA</code> 命令）</td>
+<td>单击循环</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dsp-开关区序号-2024">2.5 DSP 开关区（序号 20–24）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>20</td>
+<td>NR</td>
+<td>数字降噪（DNR，电台硬件 DSP）开关</td>
+<td>单击开/关，开启时按钮琥珀色高亮</td>
+</tr>
+<tr>
+<td>21</td>
+<td>NB</td>
+<td>噪声抑制（DBF 类脉冲抑制）开关</td>
+<td>单击开/关</td>
+</tr>
+<tr>
+<td>22</td>
+<td>AN</td>
+<td>自动陷波（Auto Notch）开关</td>
+<td>单击开/关</td>
+</tr>
+<tr>
+<td>23</td>
+<td>COMP</td>
+<td>语音压缩器开关（CAT <code>PR00</code>/<code>PR01</code>）</td>
+<td>单击开/关</td>
+</tr>
+<tr>
+<td>24</td>
+<td>ATU</td>
+<td>内置天调开关（<code>AC000</code>/<code>AC001</code>）</td>
+<td>单击开/关</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>NR/NB 的<strong>强度</strong>滑杆（NR Level 1–15、NB Level 0–10）保留在 DOM 中但默认隐藏（移动端空间不足）；如需调节可在浏览器开发者工具中显示或留待后续版本。</p>
+</blockquote>
+<h3 id="音量滑杆序号-25">2.6 音量滑杆（序号 25）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>25</td>
+<td>🔊 Vol</td>
+<td><strong>浏览器端</strong> RX 播放音量（0–255，带 10 倍增益补偿电台 USB 音频偏小的问题）。注意它<strong>不是</strong>电台 CAT 的 AF 增益——两者刻意解耦，轮询不会覆盖你的设置</td>
+<td>拖动实时生效，松手保持；值存入 Cookie（<code>ft710_afVol</code>）。发射（TX/TUNE）期间接收增益自动静音（消自监听回音），松 PTT 后恢复</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>电台侧的 AF 增益（AF Gain）不受本滑杆控制；需要调电台面板音量时请用实体旋钮。</p>
+</blockquote>
+<h3 id="调谐区序号-2630">2.7 调谐区（序号 26–30）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>26</td>
+<td>◀◀</td>
+<td>频率下移 <strong>5×当前步进</strong>（快退）</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>27</td>
+<td>◀</td>
+<td>频率下移 <strong>1×当前步进</strong></td>
+<td>单击</td>
+</tr>
+<tr>
+<td>28</td>
+<td>步进按钮（<code>1kHz</code>）</td>
+<td>循环切换调谐步进：10Hz → 100Hz → 1kHz → 5kHz → 10kHz → 25kHz，按钮文本实时显示</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>29</td>
+<td>▶</td>
+<td>频率上移 <strong>1×当前步进</strong></td>
+<td>单击</td>
+</tr>
+<tr>
+<td>30</td>
+<td>▶▶</td>
+<td>频率上移 <strong>5×当前步进</strong>（快进）</td>
+<td>单击</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>调谐作用于<strong>活动 VFO</strong>（VFO-A 或 VFO-B，见序号 31/32）。</p>
+</blockquote>
+<h3 id="vfo-区序号-3134">2.8 VFO 区（序号 31–34）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>31</td>
+<td>VFO-A</td>
+<td>选 VFO-A 为活动 VFO（频率显示/调谐/PTT 均以它为准）</td>
+<td>单击（已是活动态时忽略）</td>
+</tr>
+<tr>
+<td>32</td>
+<td>VFO-B</td>
+<td>选 VFO-B 为活动 VFO</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>33</td>
+<td>A=B</td>
+<td>把 VFO-B 的频率复制到 VFO-A（电台 <code>A=B</code> 语义：A 变 B）</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>34</td>
+<td>SPLIT</td>
+<td>收发异频（Split）开关：发射用 VFO-A、接收用 VFO-B（或反之，依电台设定）</td>
+<td>单击开/关，开启时按钮高亮</td>
+</tr>
+</tbody>
+</table>
+<h3 id="记忆频道序号-35">2.9 记忆频道（序号 35）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>35</td>
+<td>M1–M6</td>
+<td>6 个记忆槽，每格显示编号 + 频率（MHz）</td>
+<td><strong>单击</strong>：调出该频道（频率+模式，写入当前活动 VFO）；<strong>长按 0.8 秒</strong>：把当前活动 VFO 的频率+模式保存到该槽（带震动反馈），同时写入服务端 <code>mem_channels.json</code> 与本机 Cookie</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>频道编辑/清空：菜单 → Memory Manager（序号 41）里对每个槽点 <strong>Clear</strong> 清空。频道数据由服务端持久化，换浏览器也能读到（Cookie 只做首屏快速回显）。</p>
+</blockquote>
+<h3 id="底部-ptt-区序号-3638">2.10 底部 PTT 区（序号 36–38）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>36</td>
+<td>PTT</td>
+<td>按下发射（载波 + 语音），松开停止</td>
+<td><strong>按住发射、松开停止</strong>（触摸按住/鼠标按住均可）；发射期间按钮变红。内置三重保险：①500ms 客户端看门狗（卡死自动松开发射）②页面关闭/断线的死手开关（服务端强制 <code>TX0</code>）③发射期间滑出页面也会自动释放</td>
+</tr>
+<tr>
+<td>37</td>
+<td>TUNE</td>
+<td>发射调谐载波（用于天调/驻波调整），仅按住期间发射</td>
+<td><strong>长按</strong>：按住出载波，松开即停（无自锁，防止误触长发射）。发射期间频谱暂停显示</td>
+</tr>
+<tr>
+<td>38</td>
+<td>REC</td>
+<td>把 <strong>RX 接收到的音频</strong>录成 MP3 文件（128 kbps，48 kHz 单声道）</td>
+<td>单击开始/再单击停止；停止时浏览器自动下载 <code>.mp3</code>。首次点击会现场加载约 500KB 的 MP3 编码器（<code>lame.js</code>），加载失败会提示「MP3 编码器加载失败」</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>PTT 键盘快捷键：桌面端按 <strong>空格键</strong> 等效于按住/松开 PTT（详见第 4 节）。</p>
+</blockquote>
+<h3 id="抽屉菜单图-2-序号-3951">2.11 抽屉菜单（图 2 序号 39–51）</h3>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+<col style="width: 28%" />
+</colgroup>
+<thead>
+<tr>
+<th>#</th>
+<th>控件</th>
+<th>功能</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>39</td>
+<td>Band Selection</td>
+<td>弹窗列出全部 12 个波段（含频率范围），精确选段</td>
+<td>单击波段项；选中后跳到该波段默认频率</td>
+</tr>
+<tr>
+<td>40</td>
+<td>Mode Selection</td>
+<td>弹窗列出 7 种模式精确选择</td>
+<td>单击模式项</td>
+</tr>
+<tr>
+<td>41</td>
+<td>Memory Manager</td>
+<td>弹窗列出 M1–M6 的当前内容，可逐个 <strong>Clear</strong> 清空</td>
+<td>单击 Clear / Close</td>
+</tr>
+<tr>
+<td>42</td>
+<td>Advanced Settings</td>
+<td>平滑滚动回 DSP 控制面板区（快捷定位）</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>43</td>
+<td>Logout</td>
+<td>退出登录：调 <code>/api/auth/logout</code> 作废会话并跳回登录页</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>44</td>
+<td>SPAN 下拉</td>
+<td>频谱显示跨度：10k/20k/50k/100k/200k/500k/1M（Hz），即瀑布图横轴宽度</td>
+<td>选择后立即下发电台（<code>scope_span</code>）并重绘频谱</td>
+</tr>
+<tr>
+<td>45</td>
+<td>SPD 下拉</td>
+<td>频谱刷新速度档 1–5（电台 <code>EX</code> scope speed）</td>
+<td>选择后立即下发</td>
+</tr>
+<tr>
+<td>46</td>
+<td>Color 下拉</td>
+<td>瀑布图配色主题：Jet / Hot / Cold / Thermal / Night / Gray</td>
+<td>选择后本地生效并存入 Cookie（<code>scopeTheme</code>）</td>
+</tr>
+<tr>
+<td>47</td>
+<td>Floor 滑杆</td>
+<td>瀑布图噪声底限（0–200）：低于该值显示为背景色，值越高背景越黑、弱信号越不可见</td>
+<td>拖动实时预览，松手存 Cookie</td>
+</tr>
+<tr>
+<td>48</td>
+<td>Ceil 滑杆</td>
+<td>瀑布图信号上限（50–255）：决定满刻度对应的信号强度，值越低强信号越早饱和变色</td>
+<td>拖动实时预览，松手存 Cookie</td>
+</tr>
+<tr>
+<td>49</td>
+<td>RF Gain 滑杆</td>
+<td>电台射频增益（CAT <code>RG</code> 0–255 映射为 0–100%）：调低可防强信号过载削波</td>
+<td>拖动实时显示，<strong>松手生效</strong>下发电台</td>
+</tr>
+<tr>
+<td>50</td>
+<td>Mic 滑杆</td>
+<td>电台侧麦克风增益（CAT <code>MIC</code>/<code>MG</code>，0–100）：控制 TX 语音进入电台的输入电平</td>
+<td>松手生效并写入 Cookie；每次重连后若与电台实际值不同会自动回推</td>
+</tr>
+<tr>
+<td>51</td>
+<td>🎙 Vol 滑杆</td>
+<td><strong>浏览器端</strong>麦克风软件增益（0–200 → 线性 0–2×，100 = 原声）：在采集后、编码前放大，与电台侧 Mic 相互独立</td>
+<td>拖动实时生效（作用于麦克风 GainNode），值存 Cookie</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>菜单底部显示版本号 <code>FT-710 v1.0</code>（前端资源版本，非电台固件版本）。</p>
+</blockquote>
+<hr />
+<h2 id="键盘快捷键桌面端">3. 键盘快捷键（桌面端）</h2>
+<table>
+<thead>
+<tr>
+<th>按键</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>空格（Space）</td>
+<td>按下 = 发射（PTT 开始），松开 = 停止发射</td>
+</tr>
+<tr>
+<td>← / →</td>
+<td>频率下移 / 上移 1×当前步进</td>
+</tr>
+<tr>
+<td>↑ / ↓</td>
+<td>频率上移 / 下移 5×当前步进（快调）</td>
+</tr>
+<tr>
+<td>回车（在频率输入框内）</td>
+<td>提交输入的频率</td>
+</tr>
+<tr>
+<td>Esc（在频率输入框内）</td>
+<td>取消编辑</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>安全细节：键盘事件忽略长按自动重复（<code>e.repeat</code>），也不在输入框内触发 PTT/调谐，避免打字时误发射。</p>
+</blockquote>
+<hr />
+<h2 id="安全须知请先阅读">4. 安全须知（请先阅读）</h2>
+<ol type="1">
+<li><strong>PTT 是「按住才发射」</strong>，没有任何自锁模式；松开即停。若页面或浏览器崩溃，服务端死手开关会在最后一个客户端断开时自动强制释放发射（<code>TX0</code>）。</li>
+<li><strong>TUNE 同理</strong>，长按出载波、松手即停——调谐时请确认天线已接好、SWR 正常，长时间发射前建议先用小功率。</li>
+<li>发射期间<strong>频谱暂停</strong>（电台会干扰频谱数据流），瀑布图显示「TX 发射中 — 频谱暂停」是正常现象。</li>
+<li><strong>无声（🔇）告警</strong>：状态栏出现红色「无声」表示 RX 音频流 20 秒全零——电台 USB 音频接口可能卡死，请重启电台或重插 USB 线。</li>
+<li>多人共用时，PTT 所有权按「最后按下者 + 同一登录令牌」仲裁（V2.1 修复）：别在别人发射时抢按。</li>
+<li>无线局域网内建议使用 HTTPS（自签名证书首次会有浏览器警告，属于预期行为）；<code>http://</code> 明文下浏览器会禁用麦克风与音频工作线程（AudioWorklet），iPhone 上尤其如此。</li>
+</ol>
+<hr />
+<h2 id="常见问题faq">5. 常见问题（FAQ）</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>问题</th>
+<th>解答</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>页面打开一直停在登录页</td>
+<td>检查密码；若提示 429，等 5 分钟限流窗口结束。</td>
+</tr>
+<tr>
+<td>状态栏 ●Serial 是红色/灰点</td>
+<td>CAT 串口未连通：检查 USB 线、串口号（<code>FT710_SERIAL_PORT</code>）、电台是否开机。</td>
+</tr>
+<tr>
+<td>点击 ⏻ 后没声音</td>
+<td>检查浏览器麦克风/扬声器权限（HTTPS 下才允许）；确认电脑选择了电台的 USB 音频设备。</td>
+</tr>
+<tr>
+<td>瀑布图不动</td>
+<td>发射期间属正常；接收时不动请检查 FT4222 驱动与 <code>FT710_FTDI_LIB_DIR</code> 配置，或查看是否触发「无声」告警。</td>
+</tr>
+<tr>
+<td>记忆频道丢了</td>
+<td>服务端文件是 <code>mem_channels.json</code>（随服务保存）；浏览器本地 Cookie 只作首屏回显。</td>
+</tr>
+<tr>
+<td>录音文件在哪</td>
+<td>点 REC 开始、再点 REC 停止后浏览器自动下载生成的 <code>.mp3</code>。</td>
+</tr>
+<tr>
+<td>发射时听到自己声音</td>
+<td>这是自监听回音，正常；接收音量在 TX 期间自动静音，松 PTT 后恢复。</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</h2>
+<table>
+<colgroup>
+<col style="width: 41%" />
+<col style="width: 58%" />
+</colgroup>
+<thead>
+<tr>
+<th>界面元素</th>
+<th>后台命令/通道</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模式按钮</td>
+<td><code>MD</code> / <code>MD0</code>（模式查询与设置）</td>
+</tr>
+<tr>
+<td>波段按钮</td>
+<td><code>BS</code>（波段选择，服务端 <code>band</code> 命令）</td>
+</tr>
+<tr>
+<td>滤波按钮</td>
+<td><code>SH</code> / <code>SH0</code>（滤波宽度，读回实际索引）</td>
+</tr>
+<tr>
+<td>ATT / PRE</td>
+<td><code>RA0</code>–<code>RA3</code> / <code>PA0</code>–<code>PA2</code></td>
+</tr>
+<tr>
+<td>NR / NB / AN / COMP</td>
+<td><code>NR1/0</code>、<code>NB1/0</code>、<code>AN1/0</code>、<code>PR01/PR00</code></td>
+</tr>
+<tr>
+<td>ATU</td>
+<td><code>AC001</code>（开）/ <code>AC000</code>（关）；调谐 <code>TX2</code>+<code>AC003</code></td>
+</tr>
+<tr>
+<td>RF Gain</td>
+<td><code>RG</code>（0–255）</td>
+</tr>
+<tr>
+<td>Mic</td>
+<td><code>MIC</code>/<code>MG</code>（0–100，电台侧）</td>
+</tr>
+<tr>
+<td>频率显示/调谐</td>
+<td><code>FA</code> / <code>FB</code> / <code>VS</code>（活动 VFO 跟踪）</td>
+</tr>
+<tr>
+<td>S 表</td>
+<td><code>SM0</code>（+ 频谱帧 S 值）</td>
+</tr>
+<tr>
+<td>多路仪表</td>
+<td><code>RM3</code>–<code>RM8</code>（PWR/ALC/SWR/Id/Vd）</td>
+</tr>
+<tr>
+<td>记忆频道</td>
+<td><code>/api/mem_channels</code>（GET/POST）+ <code>memRecall</code>/<code>memSave</code> WS 消息</td>
+</tr>
+<tr>
+<td>频谱</td>
+<td><code>/WSspectrum</code>（1701B 帧）+ 电台 <code>EX040101</code>/<code>EX040200</code>（scope 初始化）</td>
+</tr>
+<tr>
+<td>音频</td>
+<td><code>/WSaudioRX</code>（下行 Opus 48k/PCM）、<code>/WSaudioTX</code>（上行 Opus 48k CBR 64kbps）</td>
+</tr>
+<tr>
+<td>天调（可选）</td>
+<td><code>/WSatr1000</code>（JSON）+ <code>FT710_ATR1000_HOST</code> 环境变量</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>文档维护：与 <code>static/index.html</code>、<code>static/ft710_main.js</code>、<code>static/ft710_ui.js</code> 保持一致；界面改动后请同步本指南与编号图。</em></p>
+    </main>
+</div>
+
+<footer class="footer" style="margin-top: 0;">
+    <div class="container">
+        <div class="footer-bottom">
+            <p>&copy; 2026 MRRC FT-710 Project · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+        </div>
+    </div>
+</footer>
+
+<script>
+function toggleMobileMenu() {
+    document.querySelector('.nav-links').classList.toggle('active');
+}
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        const t = document.querySelector(this.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+const nav = document.querySelector('.navbar');
+window.addEventListener('scroll', () => {
+    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
+});
+</script>
+    <script src="../js/global-nav.js?v=2" defer data-gn="1"></script>
+</body>
+</html>

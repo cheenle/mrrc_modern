@@ -2,6 +2,15 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.10.1] — 2026-08-17 — Add MRRC_RADIO_MODEL to launcher config template
+
+### Fixed
+- The `windows/default.env` and `macos/default.env` launcher config templates
+  were missing the `MRRC_RADIO_MODEL` key that selects the radio backend
+  (`ft710` / `ic7300` / `ic7300mk2`). The installer copy and docs referenced
+  it, but the template generated on first run did not expose it. Now included
+  at the top with a comment; default remains `ft710`.
+
 ## [v1.10.0] — 2026-08-17 — MRRC Modern rebrand + MRRC_* env migration + macOS packaging fix
 
 ### Changed

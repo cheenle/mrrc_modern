@@ -1,6 +1,6 @@
 # MRRC Web 遥控 — 操作指南
 
-> 适用于 MRRC Web Control（v1.9.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。
+> 适用于 MRRC Web Control（v1.10.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。
 
 ---
 
@@ -34,6 +34,122 @@
 | 内置天调 | 无（可外接 ATR1000） | 有 |
 | 70 MHz | 无 | 视地区版本而定 |
 | 发射时频谱 | 暂停并显示「频谱暂停」 | 继续显示（CI-V 频谱不受发射影响） |
+
+---
+
+## 0.6 Windows 配置与运行
+
+本章说明 IC-7300 与 FT-710 在 **Windows 桌面版（MRRC-Modern-Setup.exe）** 下分别如何配置并使其工作：装驱动 → 确认串口 → 编辑配置 → 电台侧设置 → 启动验证。
+
+> 配置统一写在 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`（开始菜单里的 **Edit Configuration** 快捷键会打开它）。变量名用新的 `MRRC_*` 前缀；旧的 `FT710_*` 前缀仍被兼容接受（`MRRC_*` 优先），升级用户可保留原配置。修改后需重启 MRRC Modern 生效。
+
+### 0.6.1 通用步骤（两台都适用）
+
+1. 安装 **MRRC-Modern-Setup.exe**（开始菜单出现 `MRRC Modern` 与 `Edit Configuration` 两个快捷方式）。
+2. 用 USB 线连接电台到电脑，并**开机**。
+3. 打开 **设备管理器**，在「端口 (COM 和 LPT)」下确认电台的串口：
+   - **IC-7300**：一个 COM 口（USB CI-V）。
+   - **FT-710**：两个 Silicon Labs CP210x COM 口（较低编号通常是 CAT 用的 Enhanced COM Port）。
+4. 打开 `mrrc_modern.env`，设置 `MRRC_RADIO_MODEL`（`ic7300` / `ic7300mk2` / `ft710`，见 0.6.2 / 0.6.3 的完整示例），并确保 `MRRC_SERIAL_PORT` 指向第 3 步确认的串口。
+5. 启动 `MRRC Modern`，浏览器自动打开登录页。输入 `MRRC_WEB_PASSWORD` 后，状态栏 ●Serial 变绿即表示 CAT 已连通。
+
+> 换电台时**不需要重装**：改 `MRRC_RADIO_MODEL` 和串口/波特率即可，其余步骤照对应小节核对。
+
+### 0.6.2 IC-7300 / IC-7300MK2
+
+**驱动**：IC-7300 用标准 Windows USB-serial 驱动（通常自动安装），**不需要** FTDI 驱动。
+
+**设备管理器确认**：「端口 (COM 和 LPT)」显示一个 COM 口，即 USB CI-V。
+
+**`mrrc_modern.env` 完整示例**：
+
+```ini
+MRRC_RADIO_MODEL=ic7300        # 或 ic7300mk2
+MRRC_SERIAL_PORT=COM5          # 改成设备管理器里看到的 CI-V COM 口
+MRRC_BAUD_RATE=115200
+MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_PORT=8888
+MRRC_WEB_PASSWORD=change_this_password
+MRRC_AUDIO_RX_DEVICE=USB Audio
+MRRC_AUDIO_TX_DEVICE=USB Audio
+# 若电台的 CI-V 地址不是默认 0x94，用下面这行覆盖：
+#IC7300_CIV_ADDR=0x94
+# IC-7300 用 CI-V 0x27 频谱，无需 FTDI 库——删掉/注释 MRRC_FTDI_LIB_DIR
+```
+
+**电台侧设置**（面板菜单，开机时设置一次）：
+
+- `CI-V USB Baud Rate` = **115200**（`MRRC_BAUD_RATE` 必须一致）。
+- `CI-V USB Address` = **94h**（默认即可，与 `IC7300_CIV_ADDR` 一致）。
+- 建议开启 `CI-V Transceive`（连接时服务端会自动发送开启命令）。
+
+**音频**：IC-7300 的 USB 音频是 **48 kHz 原生**，服务端直接透传，**无需重采样**。Windows 下该声卡以 `USB Audio CODEC` / `USB Audio Device` 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。`MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` 填 `USB Audio` 即可同时匹配两种形式。
+
+**频谱**：来自 CI-V `0x27` 帧，走 CAT 串口，**不需要 FT4222**。默认跨度 ±100 kHz，可在菜单的 SPAN 下拉调整。
+
+**验证清单**：
+
+1. 状态栏 ●Serial 变绿。
+2. 频率、模式、S 表跟随电台面板变化（面板改动也会回传——Transceive）。
+3. 浏览器能听到接收声音（📶 音量滑杆、状态栏无「无声」告警）。
+4. 瀑布图有信号（频谱来自 CI-V `0x27`；发射期间**仍会刷新**，这是与 FT-710 不同之处）。
+5. 长按 PTT 说话，功率/ALC 表有反应（首次发射请用小功率确认）。
+
+### 0.6.3 FT-710
+
+**驱动**：
+
+- **必须**：Silicon Labs CP210x Universal Windows Driver（CAT 串口用）。
+- **可选**：FTDI D2XX 驱动 —— 仅当需要 **FT4222 真频谱**时。没装则自动回退到 S-meter 合成频谱（可用但不含真实 FFT 数据）。
+
+**设备管理器确认**：「端口 (COM 和 LPT)」显示**两个** Silicon Labs CP210x COM 口。**较低编号**的那个通常是 CAT 用的 **Enhanced COM Port**；另一个是 FT4222 频谱口（`MRRC_SCOPE_PORT`，留空即自动探测）。
+
+**`mrrc_modern.env` 完整示例**：
+
+```ini
+MRRC_RADIO_MODEL=ft710
+MRRC_SERIAL_PORT=COM3          # 改成 Enhanced COM Port（两个 CP210x 里较低编号）
+MRRC_BAUD_RATE=38400
+MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_PORT=8888
+MRRC_WEB_PASSWORD=change_this_password
+MRRC_AUDIO_RX_DEVICE=USB Audio
+MRRC_AUDIO_TX_DEVICE=USB Audio
+MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
+#MRRC_SCOPE_PORT=              # 留空自动探测 FT4222 频谱口
+```
+
+**电台侧设置**（FT-710 面板 `FUNC` → `RADIO SETTING`）：
+
+- 各模式的 `MOD SOURCE` 设为 **`USB`**（SSB 必设；AM / FM / PSK/DATA 若要用也设 USB），否则 PTT 按下没有调制。
+- `RPTT SELECT` 保持 **`OFF`**：PTT 由 CAT 命令控制，不走 RTS/DTR。
+
+**音频**：FT-710 的 USB 音频是 **44.1 kHz 原生**，服务端会把它重采样到 48 kHz 再走网络。Windows 下该声卡同样以 `USB Audio CODEC` / `USB Audio Device` 形式枚举，`MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` 填 `USB Audio` 即可。
+
+**频谱**：真频谱来自 **FT4222 SPI**（需要 `MRRC_FTDI_LIB_DIR` 指向含 `FT4222.dll` / `ftd2xx.dll` 的目录）；缺失时回退到 **S-meter 合成频谱**。发射期间频谱**暂停**并显示「频谱暂停」，属正常现象。
+
+**验证清单**：
+
+1. 状态栏 ●Serial 变绿。
+2. 频率、模式、S 表跟随电台。
+3. 浏览器能听到接收声音。
+4. 瀑布图有信号；若只有 S-meter 合成频谱，说明 FTDI 库缺失或未指向正确目录。
+5. 长按 PTT 说话，功率/ALC 表有反应（确保 `MOD SOURCE=USB`）。
+
+### 0.6.4 常见问题（FAQ）
+
+| 问题 | 解答 |
+|------|------|
+| 我该选 `ft710`、`ic7300` 还是 `ic7300mk2`？ | 看你手头的电台：Yaesu FT-710 用 `ft710`；Icom IC-7300 用 `ic7300`；IC-7300MK2 用 `ic7300mk2`（CI-V 指令面与 7300 相同）。 |
+| 换了一台电台，要重装软件吗？ | 不用。改 `MRRC_RADIO_MODEL` 和串口/波特率，重启即可。 |
+| Serial 一直是红点 / 灰点 | CAT 未连通。逐项检查：电台开机、USB 线、`MRRC_SERIAL_PORT` 是否指向设备管理器里的正确串口、波特率（IC-7300=115200、FT-710=38400）与电台菜单一致。 |
+| IC-7300：设备管理器里没有 COM 口 | 驱动未装或 USB 线是纯充电线。换数据线，检查「端口 (COM 和 LPT)」是否有 `USB Serial Port`。 |
+| FT-710：两个 COM 口，选哪个？ | 选**较低编号**的 CP210x（Enhanced COM Port，CAT）。`MRRC_SCOPE_PORT` 留空自动探测另一个。 |
+| 没声音 / 只听到电脑音箱声音 | 音频设备没锁对。把 `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` 设为 `USB Audio`；若有多台同类 USB 声卡，用启动日志里 `PyAudio initialized. Available devices:` 列出的**索引号**锁定。 |
+| FT-710：瀑布图有图形但不是真频谱 | 这是 S-meter 合成频谱。确认 `MRRC_FTDI_LIB_DIR` 指向含 `FT4222.dll` / `ftd2xx.dll` 的目录，并已装 FTDI D2XX 驱动。 |
+| IC-7300：瀑布图不动 | 检查频谱是否停用：菜单里确保 CI-V `0x27` scope 数据输出开启；`MRRC_SERIAL_PORT` 若是错误的 COM 口也会导致无频谱。 |
+| 状态栏出现红色「无声」 | RX 音频流 20 秒全零，电台 USB 音频接口可能卡死。重启电台或重插 USB 线。 |
+| 改了配置没生效 | 改完 `mrrc_modern.env` 必须**重启 MRRC Modern**（关掉窗口重新启动）。 |
 
 ---
 

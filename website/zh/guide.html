@@ -156,11 +156,12 @@
 <ul>
 <li><a href="#开始之前连接与登录" id="toc-开始之前连接与登录">0. 开始之前：连接与登录</a></li>
 <li><a href="#电台型号差异" id="toc-电台型号差异">0.5 电台型号差异</a></li>
+<li><a href="#windows-配置与运行" id="toc-windows-配置与运行">0.6 Windows 配置与运行</a></li>
 <li><a href="#主界面控件编号图" id="toc-主界面控件编号图">1. 主界面控件编号图</a></li>
 <li><a href="#控件速查表编号-名称-功能-操作" id="toc-控件速查表编号-名称-功能-操作">2. 控件速查表（编号 → 名称 → 功能 → 操作）</a></li>
 <li><a href="#键盘快捷键桌面端" id="toc-键盘快捷键桌面端">3. 键盘快捷键（桌面端）</a></li>
 <li><a href="#安全须知请先阅读" id="toc-安全须知请先阅读">4. 安全须知（请先阅读）</a></li>
-<li><a href="#常见问题faq" id="toc-常见问题faq">5. 常见问题（FAQ）</a></li>
+<li><a href="#常见问题faq-1" id="toc-常见问题faq-1">5. 常见问题（FAQ）</a></li>
 <li><a href="#附界面元素与后台命令对照供高级用户排障" id="toc-附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</a></li>
 </ul></li>
 </ul>
@@ -168,7 +169,7 @@
     </aside>
     <main class="guide-content">
 <blockquote class="callout-info">
-<p>适用于 MRRC Web Control（v1.9.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
+<p>适用于 MRRC Web Control（v1.10.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
 </blockquote>
 <hr />
 <h2 id="开始之前连接与登录">0. 开始之前：连接与登录</h2>
@@ -276,6 +277,146 @@
 <td>发射时频谱</td>
 <td>暂停并显示「频谱暂停」</td>
 <td>继续显示（CI-V 频谱不受发射影响）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="windows-配置与运行">0.6 Windows 配置与运行</h2>
+<p>本章说明 IC-7300 与 FT-710 在 <strong>Windows 桌面版（MRRC-Modern-Setup.exe）</strong> 下分别如何配置并使其工作：装驱动 → 确认串口 → 编辑配置 → 电台侧设置 → 启动验证。</p>
+<blockquote class="callout-info">
+<p>配置统一写在 <code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>（开始菜单里的 <strong>Edit Configuration</strong> 快捷键会打开它）。变量名用新的 <code>MRRC_*</code> 前缀；旧的 <code>FT710_*</code> 前缀仍被兼容接受（<code>MRRC_*</code> 优先），升级用户可保留原配置。修改后需重启 MRRC Modern 生效。</p>
+</blockquote>
+<h3 id="通用步骤两台都适用">0.6.1 通用步骤（两台都适用）</h3>
+<ol type="1">
+<li>安装 <strong>MRRC-Modern-Setup.exe</strong>（开始菜单出现 <code>MRRC Modern</code> 与 <code>Edit Configuration</code> 两个快捷方式）。</li>
+<li>用 USB 线连接电台到电脑，并<strong>开机</strong>。</li>
+<li>打开 <strong>设备管理器</strong>，在「端口 (COM 和 LPT)」下确认电台的串口：
+<ul>
+<li><strong>IC-7300</strong>：一个 COM 口（USB CI-V）。</li>
+<li><strong>FT-710</strong>：两个 Silicon Labs CP210x COM 口（较低编号通常是 CAT 用的 Enhanced COM Port）。</li>
+</ul></li>
+<li>打开 <code>mrrc_modern.env</code>，设置 <code>MRRC_RADIO_MODEL</code>（<code>ic7300</code> / <code>ic7300mk2</code> / <code>ft710</code>，见 0.6.2 / 0.6.3 的完整示例），并确保 <code>MRRC_SERIAL_PORT</code> 指向第 3 步确认的串口。</li>
+<li>启动 <code>MRRC Modern</code>，浏览器自动打开登录页。输入 <code>MRRC_WEB_PASSWORD</code> 后，状态栏 ●Serial 变绿即表示 CAT 已连通。</li>
+</ol>
+<blockquote class="callout-info">
+<p>换电台时<strong>不需要重装</strong>：改 <code>MRRC_RADIO_MODEL</code> 和串口/波特率即可，其余步骤照对应小节核对。</p>
+</blockquote>
+<h3 id="ic-7300-ic-7300mk2">0.6.2 IC-7300 / IC-7300MK2</h3>
+<p><strong>驱动</strong>：IC-7300 用标准 Windows USB-serial 驱动（通常自动安装），<strong>不需要</strong> FTDI 驱动。</p>
+<p><strong>设备管理器确认</strong>：「端口 (COM 和 LPT)」显示一个 COM 口，即 USB CI-V。</p>
+<p><strong><code>mrrc_modern.env</code> 完整示例</strong>：</p>
+<pre class="ini"><code>MRRC_RADIO_MODEL=ic7300        # 或 ic7300mk2
+MRRC_SERIAL_PORT=COM5          # 改成设备管理器里看到的 CI-V COM 口
+MRRC_BAUD_RATE=115200
+MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_PORT=8888
+MRRC_WEB_PASSWORD=change_this_password
+MRRC_AUDIO_RX_DEVICE=USB Audio
+MRRC_AUDIO_TX_DEVICE=USB Audio
+# 若电台的 CI-V 地址不是默认 0x94，用下面这行覆盖：
+#IC7300_CIV_ADDR=0x94
+# IC-7300 用 CI-V 0x27 频谱，无需 FTDI 库——删掉/注释 MRRC_FTDI_LIB_DIR</code></pre>
+<p><strong>电台侧设置</strong>（面板菜单，开机时设置一次）：</p>
+<ul>
+<li><code>CI-V USB Baud Rate</code> = <strong>115200</strong>（<code>MRRC_BAUD_RATE</code> 必须一致）。</li>
+<li><code>CI-V USB Address</code> = <strong>94h</strong>（默认即可，与 <code>IC7300_CIV_ADDR</code> 一致）。</li>
+<li>建议开启 <code>CI-V Transceive</code>（连接时服务端会自动发送开启命令）。</li>
+</ul>
+<p><strong>音频</strong>：IC-7300 的 USB 音频是 <strong>48 kHz 原生</strong>，服务端直接透传，<strong>无需重采样</strong>。Windows 下该声卡以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code> 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 填 <code>USB Audio</code> 即可同时匹配两种形式。</p>
+<p><strong>频谱</strong>：来自 CI-V <code>0x27</code> 帧，走 CAT 串口，<strong>不需要 FT4222</strong>。默认跨度 ±100 kHz，可在菜单的 SPAN 下拉调整。</p>
+<p><strong>验证清单</strong>：</p>
+<ol type="1">
+<li>状态栏 ●Serial 变绿。</li>
+<li>频率、模式、S 表跟随电台面板变化（面板改动也会回传——Transceive）。</li>
+<li>浏览器能听到接收声音（📶 音量滑杆、状态栏无「无声」告警）。</li>
+<li>瀑布图有信号（频谱来自 CI-V <code>0x27</code>；发射期间<strong>仍会刷新</strong>，这是与 FT-710 不同之处）。</li>
+<li>长按 PTT 说话，功率/ALC 表有反应（首次发射请用小功率确认）。</li>
+</ol>
+<h3 id="ft-710">0.6.3 FT-710</h3>
+<p><strong>驱动</strong>：</p>
+<ul>
+<li><strong>必须</strong>：Silicon Labs CP210x Universal Windows Driver（CAT 串口用）。</li>
+<li><strong>可选</strong>：FTDI D2XX 驱动 —— 仅当需要 <strong>FT4222 真频谱</strong>时。没装则自动回退到 S-meter 合成频谱（可用但不含真实 FFT 数据）。</li>
+</ul>
+<p><strong>设备管理器确认</strong>：「端口 (COM 和 LPT)」显示<strong>两个</strong> Silicon Labs CP210x COM 口。<strong>较低编号</strong>的那个通常是 CAT 用的 <strong>Enhanced COM Port</strong>；另一个是 FT4222 频谱口（<code>MRRC_SCOPE_PORT</code>，留空即自动探测）。</p>
+<p><strong><code>mrrc_modern.env</code> 完整示例</strong>：</p>
+<pre class="ini"><code>MRRC_RADIO_MODEL=ft710
+MRRC_SERIAL_PORT=COM3          # 改成 Enhanced COM Port（两个 CP210x 里较低编号）
+MRRC_BAUD_RATE=38400
+MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_PORT=8888
+MRRC_WEB_PASSWORD=change_this_password
+MRRC_AUDIO_RX_DEVICE=USB Audio
+MRRC_AUDIO_TX_DEVICE=USB Audio
+MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
+#MRRC_SCOPE_PORT=              # 留空自动探测 FT4222 频谱口</code></pre>
+<p><strong>电台侧设置</strong>（FT-710 面板 <code>FUNC</code> → <code>RADIO SETTING</code>）：</p>
+<ul>
+<li>各模式的 <code>MOD SOURCE</code> 设为 <strong><code>USB</code></strong>（SSB 必设；AM / FM / PSK/DATA 若要用也设 USB），否则 PTT 按下没有调制。</li>
+<li><code>RPTT SELECT</code> 保持 <strong><code>OFF</code></strong>：PTT 由 CAT 命令控制，不走 RTS/DTR。</li>
+</ul>
+<p><strong>音频</strong>：FT-710 的 USB 音频是 <strong>44.1 kHz 原生</strong>，服务端会把它重采样到 48 kHz 再走网络。Windows 下该声卡同样以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code> 形式枚举，<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 填 <code>USB Audio</code> 即可。</p>
+<p><strong>频谱</strong>：真频谱来自 <strong>FT4222 SPI</strong>（需要 <code>MRRC_FTDI_LIB_DIR</code> 指向含 <code>FT4222.dll</code> / <code>ftd2xx.dll</code> 的目录）；缺失时回退到 <strong>S-meter 合成频谱</strong>。发射期间频谱<strong>暂停</strong>并显示「频谱暂停」，属正常现象。</p>
+<p><strong>验证清单</strong>：</p>
+<ol type="1">
+<li>状态栏 ●Serial 变绿。</li>
+<li>频率、模式、S 表跟随电台。</li>
+<li>浏览器能听到接收声音。</li>
+<li>瀑布图有信号；若只有 S-meter 合成频谱，说明 FTDI 库缺失或未指向正确目录。</li>
+<li>长按 PTT 说话，功率/ALC 表有反应（确保 <code>MOD SOURCE=USB</code>）。</li>
+</ol>
+<h3 id="常见问题faq">0.6.4 常见问题（FAQ）</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>问题</th>
+<th>解答</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>我该选 <code>ft710</code>、<code>ic7300</code> 还是 <code>ic7300mk2</code>？</td>
+<td>看你手头的电台：Yaesu FT-710 用 <code>ft710</code>；Icom IC-7300 用 <code>ic7300</code>；IC-7300MK2 用 <code>ic7300mk2</code>（CI-V 指令面与 7300 相同）。</td>
+</tr>
+<tr>
+<td>换了一台电台，要重装软件吗？</td>
+<td>不用。改 <code>MRRC_RADIO_MODEL</code> 和串口/波特率，重启即可。</td>
+</tr>
+<tr>
+<td>Serial 一直是红点 / 灰点</td>
+<td>CAT 未连通。逐项检查：电台开机、USB 线、<code>MRRC_SERIAL_PORT</code> 是否指向设备管理器里的正确串口、波特率（IC-7300=115200、FT-710=38400）与电台菜单一致。</td>
+</tr>
+<tr>
+<td>IC-7300：设备管理器里没有 COM 口</td>
+<td>驱动未装或 USB 线是纯充电线。换数据线，检查「端口 (COM 和 LPT)」是否有 <code>USB Serial Port</code>。</td>
+</tr>
+<tr>
+<td>FT-710：两个 COM 口，选哪个？</td>
+<td>选<strong>较低编号</strong>的 CP210x（Enhanced COM Port，CAT）。<code>MRRC_SCOPE_PORT</code> 留空自动探测另一个。</td>
+</tr>
+<tr>
+<td>没声音 / 只听到电脑音箱声音</td>
+<td>音频设备没锁对。把 <code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 设为 <code>USB Audio</code>；若有多台同类 USB 声卡，用启动日志里 <code>PyAudio initialized. Available devices:</code> 列出的<strong>索引号</strong>锁定。</td>
+</tr>
+<tr>
+<td>FT-710：瀑布图有图形但不是真频谱</td>
+<td>这是 S-meter 合成频谱。确认 <code>MRRC_FTDI_LIB_DIR</code> 指向含 <code>FT4222.dll</code> / <code>ftd2xx.dll</code> 的目录，并已装 FTDI D2XX 驱动。</td>
+</tr>
+<tr>
+<td>IC-7300：瀑布图不动</td>
+<td>检查频谱是否停用：菜单里确保 CI-V <code>0x27</code> scope 数据输出开启；<code>MRRC_SERIAL_PORT</code> 若是错误的 COM 口也会导致无频谱。</td>
+</tr>
+<tr>
+<td>状态栏出现红色「无声」</td>
+<td>RX 音频流 20 秒全零，电台 USB 音频接口可能卡死。重启电台或重插 USB 线。</td>
+</tr>
+<tr>
+<td>改了配置没生效</td>
+<td>改完 <code>mrrc_modern.env</code> 必须<strong>重启 MRRC Modern</strong>（关掉窗口重新启动）。</td>
 </tr>
 </tbody>
 </table>
@@ -875,7 +1016,7 @@
 <li>无线局域网内建议使用 HTTPS（自签名证书首次会有浏览器警告，属于预期行为）；<code>http://</code> 明文下浏览器会禁用麦克风与音频工作线程（AudioWorklet），iPhone 上尤其如此。</li>
 </ol>
 <hr />
-<h2 id="常见问题faq">5. 常见问题（FAQ）</h2>
+<h2 id="常见问题faq-1">5. 常见问题（FAQ）</h2>
 <table>
 <colgroup>
 <col style="width: 50%" />

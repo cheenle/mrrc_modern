@@ -77,7 +77,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-check-circle"></i>
-          <span>v1.10.0 · Stable</span>
+          <span>v1.10.1 · Stable</span>
         </div>
         <h1 class="hero-title">
           One USB Cable<br />
@@ -95,7 +95,7 @@
             href="downloads/MRRC-Modern-Setup.exe"
             class="btn btn-primary btn-large"
           >
-            <i class="fab fa-windows"></i> Windows Installer v1.10.0
+            <i class="fab fa-windows"></i> Windows Installer v1.10.1
           </a>
           <a href="#features" class="btn btn-secondary btn-large">
             <i class="fas fa-arrow-down"></i> Explore Features
@@ -362,22 +362,23 @@
         >
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
             <i class="fab fa-windows" style="color: var(--accent)"></i>
-            <strong> MRRC-Modern-Setup.exe — v1.10.0 Stable</strong>
+            <strong> MRRC-Modern-Setup.exe — v1.10.1 Stable</strong>
           </p>
           <p style="color: var(--text-muted); margin: 0 0 1rem">
             45.3 MB · x64<br />
             <code style="font-size: 0.76rem"
-              >SHA-256: ecafb9376209fd1d91785657f2ff428576c2b660340d1d23e5f0b9d05e0080f3</code
+              >SHA-256: e69126ccb64387eb80eabdc38f046cb64a1a33094ef1e0771aba9553c1b17bc5</code
             >
           </p>
           <p style="color: var(--text-muted); margin: 0 0 1.25rem">
-            v1.10.0 introduces the pluggable multi-radio backend: select the
-            radio model with <code>MRRC_RADIO_MODEL</code> — <code>ft710</code>
-            (default), <code>ic7300</code>, or <code>ic7300mk2</code>. New Icom
-            IC-7300/MK2 support adds USB CI-V control, 0x27 spectrum, and native
-            48 kHz audio alongside the unchanged FT-710 path. Windows build,
-            592 tests, install/start/uninstall, and bundled-file checks passed;
-            physical RF monitoring remains an operator-side acceptance check.
+            v1.10.1 ships the pluggable multi-radio backend — the generated
+            launcher config now exposes <code>MRRC_RADIO_MODEL</code>:
+            <code>ft710</code> (default), <code>ic7300</code>, or
+            <code>ic7300mk2</code>. Icom IC-7300/MK2 support adds USB CI-V
+            control, 0x27 spectrum, and native 48 kHz audio alongside the
+            unchanged FT-710 path. Windows build, 596 tests,
+            install/start/uninstall, and bundled-file checks passed; physical
+            RF monitoring remains an operator-side acceptance check.
           </p>
           <div
             style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center"
@@ -389,10 +390,10 @@
               <i class="fab fa-windows"></i> Download for Windows
             </a>
             <a
-              href="downloads/MRRC-Modern-v1.10.0-Windows-x64-Setup.exe"
+              href="downloads/MRRC-Modern-v1.10.1-Windows-x64-Setup.exe"
               class="btn btn-secondary btn-large"
             >
-              <i class="fas fa-fingerprint"></i> Versioned v1.10.0
+              <i class="fas fa-fingerprint"></i> Versioned v1.10.1
             </a>
             <a
               href="https://github.com/cheenle/mrrc_modern/releases"
@@ -457,10 +458,10 @@
           <div class="step">
             <h4>2 · Run the Installer</h4>
             <p>
-              MRRC-Modern-Setup.exe — v1.10.0, 45.3 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.10.1, 45.3 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-            <code>SHA-256 ecafb9376209fd1d91785657f2ff428576c2b660340d1d23e5f0b9d05e0080f3</code>
+            <code>SHA-256 e69126ccb64387eb80eabdc38f046cb64a1a33094ef1e0771aba9553c1b17bc5</code>
           </div>
           <div class="step">
             <h4>3 · Edit Configuration</h4>
@@ -470,6 +471,13 @@
               password.
             </p>
             <code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>
+            <p style="margin-top: 0.5rem">
+              <a
+                href="guide.html#windows-配置与运行"
+                style="color: var(--accent)"
+                >IC-7300 vs FT-710 Windows setup walkthrough →</a
+              >
+            </p>
           </div>
           <div class="step">
             <h4>4 · Launch</h4>
@@ -1206,7 +1214,7 @@
             <p>
               Software SCU-LAN10 Replacement<br />
               One USB Cable, Any Device<br />
-              v1.10.0 Stable · GPLv3 License
+              v1.10.1 Stable · GPLv3 License
             </p>
           </div>
           <div class="footer-section">
@@ -1224,7 +1232,7 @@
             <ul>
               <li>
                 <a href="downloads/MRRC-Modern-Setup.exe"
-                  ><i class="fab fa-windows"></i> Windows Installer v1.10.0</a
+                  ><i class="fab fa-windows"></i> Windows Installer v1.10.1</a
                 >
               </li>
               <li>

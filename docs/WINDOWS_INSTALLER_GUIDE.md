@@ -42,8 +42,8 @@ RF speech/noise path, so over-the-air monitoring remains an operator check.
 > is required for audio when you open the UI from another device
 > (phone/tablet): plain HTTP on a LAN address disables AudioWorklet and
 > the microphone in the browser. To use your own certificate set
-> `FT710_SSL_CERT`/`FT710_SSL_KEY` in `mrrc_modern.env`; to go back to plain
-> HTTP set `FT710_SSL=off`.
+> `MRRC_SSL_CERT`/`MRRC_SSL_KEY` in `mrrc_modern.env`; to go back to plain
+> HTTP set `MRRC_SSL=off`.
 
 ### 1. Install required device drivers
 
@@ -83,29 +83,61 @@ Use the Start Menu `Edit Configuration` shortcut, or open:
 %LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env
 ```
 
-Typical configuration:
+The launcher copies `windows/default.env` to `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`
+on first run. This is the file you edit. Variable names use the `MRRC_*`
+prefix; the legacy `FT710_*` prefixes are still accepted for backward
+compatibility (`MRRC_*` wins when both are set), so existing configs keep
+working — but new configs should use `MRRC_*`.
+
+Set `MRRC_RADIO_MODEL` to `ft710`, `ic7300`, or `ic7300mk2`. The two radio
+families need different serial ports, baud rates, drivers, and (for FT-710
+true spectrum) FTDI libraries. The complete per-radio configurations are:
+
+**FT-710:**
 
 ```ini
 MRRC_RADIO_MODEL=ft710
-FT710_SERIAL_PORT=COM3
-FT710_BAUD_RATE=38400
-FT710_WEB_HOST=127.0.0.1
-FT710_WEB_PORT=8888
-FT710_WEB_PASSWORD=change_this_password
-FT710_SCOPE_PORT=
-FT710_SCOPE_BAUD=115200
-FT710_AUDIO_RX_DEVICE=
-FT710_AUDIO_TX_DEVICE=
-FT710_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
-#IC7300_CIV_ADDR=0x94
-#FT710_ATR1000_HOST=
-#FT710_ATR1000_PORT=60001
+MRRC_SERIAL_PORT=COM3          # Enhanced COM Port (lower of the two CP210x ports)
+MRRC_BAUD_RATE=38400
+MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_PORT=8888
+MRRC_WEB_PASSWORD=change_this_password
+MRRC_SCOPE_PORT=               # leave empty to auto-detect the FT4222 port
+MRRC_SCOPE_BAUD=115200
+MRRC_AUDIO_RX_DEVICE=USB Audio
+MRRC_AUDIO_TX_DEVICE=USB Audio
+MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
+#MRRC_ATR1000_HOST=
+#MRRC_ATR1000_PORT=60001
 ```
 
-Set `MRRC_RADIO_MODEL` to `ft710`, `ic7300`, or `ic7300mk2`. For IC-7300,
-set `FT710_SERIAL_PORT` to the USB CI-V COM port from Device Manager and
-comment out `FT710_FTDI_LIB_DIR` (FTDI libraries are not required). Change
-`FT710_WEB_PASSWORD` before exposing the app beyond localhost.
+**IC-7300 / IC-7300MK2:**
+
+```ini
+MRRC_RADIO_MODEL=ic7300        # or ic7300mk2
+MRRC_SERIAL_PORT=COM5          # USB CI-V COM port from Device Manager
+MRRC_BAUD_RATE=115200
+MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_PORT=8888
+MRRC_WEB_PASSWORD=change_this_password
+MRRC_AUDIO_RX_DEVICE=USB Audio
+MRRC_AUDIO_TX_DEVICE=USB Audio
+# No FTDI libraries required — comment out / omit MRRC_FTDI_LIB_DIR.
+# If the radio's CI-V address is not the default 0x94:
+#IC7300_CIV_ADDR=0x94
+```
+
+Key differences:
+
+- **IC-7300**: standard Windows USB-serial driver (auto-installed); **no FTDI
+  driver or DLLs**; CAT is CI-V over a single COM port at **115200** baud.
+  Make sure the radio's `CI-V USB Baud Rate` menu matches. Spectrum comes from
+  CI-V `0x27` frames over the CAT port.
+- **FT-710**: Silicon Labs CP210x driver required; FTDI D2XX only for FT4222
+  true spectrum. Two COM ports — use the **lower-numbered** one (Enhanced COM
+  Port) for CAT. Set `MOD SOURCE = USB` per mode in the radio menu for TX audio.
+
+Change `MRRC_WEB_PASSWORD` before exposing the app beyond localhost.
 
 ## Audio (RX/TX) Setup
 
@@ -140,8 +172,8 @@ Edit `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` (Start Menu → `Edit
 Configuration`):
 
 ```ini
-FT710_AUDIO_RX_DEVICE=USB Audio
-FT710_AUDIO_TX_DEVICE=USB Audio
+MRRC_AUDIO_RX_DEVICE=USB Audio
+MRRC_AUDIO_TX_DEVICE=USB Audio
 ```
 
 - `USB Audio` is the common substring of both enumeration forms
@@ -152,7 +184,7 @@ FT710_AUDIO_TX_DEVICE=USB Audio
 - New packages ship these two lines pre-filled in `windows/default.env`.
 - If the PC has **more than one** matching USB audio device (e.g. an
   external digimode interface), set the **index** from the startup device
-  list instead, e.g. `FT710_AUDIO_RX_DEVICE=4`.
+  list instead, e.g. `MRRC_AUDIO_RX_DEVICE=4`.
 
 ### 3. Windows sound settings
 
@@ -313,7 +345,7 @@ After installing on Windows:
 
 1. Launch `MRRC Modern`.
 2. Confirm the browser opens the login page.
-3. Log in with `FT710_WEB_PASSWORD`.
+3. Log in with `MRRC_WEB_PASSWORD`.
 4. Confirm frequency, mode, and S-meter update from the radio.
 5. Confirm RX audio works.
 6. Confirm TX audio reaches the radio only when PTT is active.
@@ -324,15 +356,15 @@ After installing on Windows:
 
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
-| `Failed to connect to COM3: could not open port 'COM3': FileNotFoundError` | Default `COM3` does not exist on this Windows machine, or the CP210x driver is not installed | Install the Silicon Labs CP210x driver, reconnect the radio, then set `FT710_SERIAL_PORT=COMx` to the Enhanced COM Port shown in Device Manager |
-| Browser opens but radio state does not update | Wrong COM port | Set `FT710_SERIAL_PORT` to the Enhanced COM Port |
+| `Failed to connect to COM3: could not open port 'COM3': FileNotFoundError` | Default `COM3` does not exist on this Windows machine, or the CP210x driver is not installed | Install the Silicon Labs CP210x driver, reconnect the radio, then set `MRRC_SERIAL_PORT=COMx` to the Enhanced COM Port shown in Device Manager |
+| Browser opens but radio state does not update | Wrong COM port | Set `MRRC_SERIAL_PORT` to the Enhanced COM Port |
 | `Server did not answer within 15s` while Uvicorn says `http://[::]:8888` | Older launcher probed IPv4 loopback while the server was listening on IPv6 wildcard | Open `http://localhost:8888`, or update to a package with the launcher fix |
 | `TX Opus decoder unavailable: libopus not found` | Missing Windows `opus.dll` | Add `vendor\opus\windows\bin\x64\opus.dll` before building, or install/copy `opus.dll` next to the app |
 | App starts but FT4222 spectrum is unavailable | Missing `FT4222.dll` or `ftd2xx.dll` (or not using FT-710) | Place both DLLs in `vendor\ftdi\windows\bin\x64` before building; IC-7300 uses CI-V `0x27` and does not need FTDI |
 | Login fails | Wrong password | Check `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` |
-| Audio device not found | Windows selected another audio device | Set `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` by name or index (see *Audio (RX/TX) Setup*) |
-| No RX audio, or RX sounds like room noise | Auto-detect picked the laptop mic instead of the FT-710's USB sound card | Lock `FT710_AUDIO_RX_DEVICE=USB Audio` (or the index from the startup device list) |
-| PTT keys but TX audio plays through the PC speakers | Auto-detect picked the wrong output device | Lock `FT710_AUDIO_TX_DEVICE=USB Audio` (or the index) |
+| Audio device not found | Windows selected another audio device | Set `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` by name or index (see *Audio (RX/TX) Setup*) |
+| No RX audio, or RX sounds like room noise | Auto-detect picked the laptop mic instead of the FT-710's USB sound card | Lock `MRRC_AUDIO_RX_DEVICE=USB Audio` (or the index from the startup device list) |
+| PTT keys but TX audio plays through the PC speakers | Auto-detect picked the wrong output device | Lock `MRRC_AUDIO_TX_DEVICE=USB Audio` (or the index) |
 | PTT keys, correct device, but no RF modulation | Radio menu `MOD SOURCE` is `MIC` | Set `FUNC` → `RADIO SETTING` → `MODE SSB` → `MOD SOURCE` = `USB` (see *Audio (RX/TX) Setup*) |
 | Windows/browser sounds are heard on the air during TX | The radio's USB audio device is the Windows default playback device | Set the PC speakers as the Windows default output |
-| Port 8888 already in use | Another local service is listening | Change `FT710_WEB_PORT` |
+| Port 8888 already in use | Another local service is listening | Change `MRRC_WEB_PORT` |

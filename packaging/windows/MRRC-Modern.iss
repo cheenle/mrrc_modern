@@ -29,7 +29,7 @@ Source: "..\..\dist\windows\MRRC-Modern\*"; DestDir: "{app}"; Flags: ignoreversi
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppLauncherName}"
 Name: "{group}\{#MyAppName} Server"; Filename: "{app}\{#MyAppServerName}"
-Name: "{group}\Edit Configuration"; Filename: "notepad.exe"; Parameters: """{localappdata}\MRRC-Modern\ft710.env"""
+Name: "{group}\Edit Configuration"; Filename: "notepad.exe"; Parameters: """{localappdata}\MRRC-Modern\mrrc_modern.env"""
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppLauncherName}"; Tasks: desktopicon
 
 [Tasks]
@@ -40,4 +40,4 @@ Filename: "{app}\{#MyAppLauncherName}"; Description: "Launch {#MyAppName}"; Flag
 
 [Messages]
 FinishedHeadingLabel=Completing {#MyAppName} Setup
-FinishedLabel=Setup has finished installing {#MyAppName} on your computer.%n%nLaunch "{#MyAppName}" from the Start Menu to start the server and open the web UI.%n%nSelect your radio model by setting MRRC_RADIO_MODEL in %LOCALAPPDATA%\MRRC-Modern\ft710.env (choices: ft710, ic7300, ic7300mk2; default: ft710).
+FinishedLabel=Setup has finished installing {#MyAppName} on your computer.%n%nLaunch "{#MyAppName}" from the Start Menu to start the server and open the web UI.%n%nSelect your radio model by setting MRRC_RADIO_MODEL in %LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env (choices: ft710, ic7300, ic7300mk2; default: ft710).

@@ -22,7 +22,7 @@ class WindowsLauncherTests(unittest.TestCase):
     def test_load_env_makes_ftdi_dir_absolute(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            config = tmp_path / "ft710.env"
+            config = tmp_path / "mrrc_modern.env"
             config.write_text(
                 "FT710_FTDI_LIB_DIR=vendor\\ftdi\\windows\\bin\\x64\n",
                 encoding="utf-8",

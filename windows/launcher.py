@@ -33,7 +33,7 @@ def user_data_dir() -> Path:
 
 
 def config_path() -> Path:
-    return user_data_dir() / "ft710.env"
+    return user_data_dir() / "mrrc_modern.env"
 
 
 def default_config_path() -> Path:
@@ -145,7 +145,7 @@ def server_executable() -> Path | None:
     # Source-mode fallback only. When frozen, sys.executable IS this
     # launcher, so "fallback" to [sys.executable, server.py] would spawn
     # another launcher (which spawns another…) — an unbounded process
-    # chain triggered e.g. by antivirus quarantining ft710-server.exe.
+    # chain triggered e.g. by antivirus quarantining MRRC-Modern-Server.exe.
     script = app_dir() / "server.py"
     if not getattr(sys, "frozen", False) and script.exists():
         return script
@@ -214,7 +214,7 @@ def main() -> int:
 
     command = build_command(ssl_pair)
     if command is None:
-        print("ERROR: ft710-server.exe not found next to the launcher.")
+        print("ERROR: MRRC-Modern-Server.exe not found next to the launcher.")
         print("Reinstall the app, or restore the file if antivirus quarantined it.")
         return 1
 

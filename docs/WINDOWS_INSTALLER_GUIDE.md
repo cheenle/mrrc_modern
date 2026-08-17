@@ -11,8 +11,8 @@ with an embedded Python runtime; users do not need to install Python manually.
 |------|------|---------|
 | `MRRC-Modern-v1.8.0-Windows-x64-Setup.exe` | 35.2 MB | `36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea` |
 
-- Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-Modern-v1.8.0-Windows-x64-Setup.exe>
+- Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.8.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 The v1.8.0 package was built from commit `4ce4d26` on Windows 11 with Python
@@ -40,7 +40,7 @@ RF speech/noise path, so over-the-air monitoring remains an operator check.
 > is required for audio when you open the UI from another device
 > (phone/tablet): plain HTTP on a LAN address disables AudioWorklet and
 > the microphone in the browser. To use your own certificate set
-> `FT710_SSL_CERT`/`FT710_SSL_KEY` in `ft710.env`; to go back to plain
+> `FT710_SSL_CERT`/`FT710_SSL_KEY` in `mrrc_modern.env`; to go back to plain
 > HTTP set `FT710_SSL=off`.
 
 ### 1. Install required device drivers
@@ -78,7 +78,7 @@ The installer creates:
 Use the Start Menu `Edit Configuration` shortcut, or open:
 
 ```text
-%LOCALAPPDATA%\MRRC-Modern\ft710.env
+%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env
 ```
 
 Typical configuration:
@@ -132,9 +132,9 @@ its displayed WASAPI default rate is 48 kHz.
   and sample rates. The same physical device usually appears once per host
   API (MME / DirectSound / WASAPI); any entry opens the same hardware.
 
-### 2. Lock the device in `ft710.env`
+### 2. Lock the device in `mrrc_modern.env`
 
-Edit `%LOCALAPPDATA%\MRRC-Modern\ft710.env` (Start Menu → `Edit
+Edit `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` (Start Menu → `Edit
 Configuration`):
 
 ```ini
@@ -202,7 +202,7 @@ TX modulation source is configured **per mode** (FT-710 Operation Manual,
 
 Start `MRRC Modern` from the Start Menu or desktop shortcut. The launcher:
 
-1. Reads `%LOCALAPPDATA%\MRRC-Modern\ft710.env`.
+1. Reads `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`.
 2. Starts the bundled server and waits for it to answer HTTP before opening
    `http://localhost:8888` in the default browser (up to ~15 seconds on the
    first run).
@@ -327,7 +327,7 @@ After installing on Windows:
 | `Server did not answer within 15s` while Uvicorn says `http://[::]:8888` | Older launcher probed IPv4 loopback while the server was listening on IPv6 wildcard | Open `http://localhost:8888`, or update to a package with the launcher fix |
 | `TX Opus decoder unavailable: libopus not found` | Missing Windows `opus.dll` | Add `vendor\opus\windows\bin\x64\opus.dll` before building, or install/copy `opus.dll` next to the app |
 | App starts but FT4222 spectrum is unavailable | Missing `FT4222.dll` or `ftd2xx.dll` (or not using FT-710) | Place both DLLs in `vendor\ftdi\windows\bin\x64` before building; IC-7300 uses CI-V `0x27` and does not need FTDI |
-| Login fails | Wrong password | Check `%LOCALAPPDATA%\MRRC-Modern\ft710.env` |
+| Login fails | Wrong password | Check `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` |
 | Audio device not found | Windows selected another audio device | Set `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` by name or index (see *Audio (RX/TX) Setup*) |
 | No RX audio, or RX sounds like room noise | Auto-detect picked the laptop mic instead of the FT-710's USB sound card | Lock `FT710_AUDIO_RX_DEVICE=USB Audio` (or the index from the startup device list) |
 | PTT keys but TX audio plays through the PC speakers | Auto-detect picked the wrong output device | Lock `FT710_AUDIO_TX_DEVICE=USB Audio` (or the index) |

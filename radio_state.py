@@ -255,7 +255,7 @@ class RadioState:
                 if field in ("vfo_a_freq", "vfo_b_freq", "mode"):
                     import traceback
                     import logging
-                    _log = logging.getLogger("ft710.state")
+                    _log = logging.getLogger("mrrc.state")
                     _stack = traceback.extract_stack(limit=8)
                     _caller = " <- ".join(
                         f"{f.filename.split('/')[-1]}:{f.lineno}/{f.name}"

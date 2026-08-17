@@ -1,10 +1,10 @@
-"""macOS menu-bar launcher for MRRC FT-710 Web Control.
+"""macOS menu-bar launcher for MRRC Modern Web Control.
 
 Mirror of windows/launcher.py, adapted for macOS:
 
-- User config lives in ~/Library/Application Support/MRRC-FT710/ft710.env.
-- The server binary is `ft710-server` (no .exe) next to this launcher inside
-  the .app bundle's Contents/MacOS/.
+- User config lives in ~/Library/Application Support/MRRC-Modern/mrrc_modern.env.
+- The server binary is `MRRC-Modern-Server` (no .exe) next to this launcher
+  inside the .app bundle's Contents/MacOS/.
 - The launcher is a background (LSUIElement) menu-bar app built on rumps:
   it spawns the server subprocess, opens the web UI, and offers menu items
   to reopen the UI, edit the config, restart, or quit cleanly.
@@ -30,8 +30,19 @@ from pathlib import Path
 import rumps
 
 
-APP_NAME = "MRRC FT-710"
+APP_NAME = "MRRC Modern"
 DEFAULT_PORT = "8888"
+
+
+def _env(env: dict[str, str], name: str, default: str = "") -> str:
+    """Read ``MRRC_*`` from an env dict, falling back to the legacy ``FT710_*`` key."""
+    if name in env and env[name] != "":
+        return env[name]
+    if name.startswith("MRRC_"):
+        legacy = "FT710_" + name[len("MRRC_"):]
+        if legacy in env and env[legacy] != "":
+            return env[legacy]
+    return default
 
 
 def app_dir() -> Path:
@@ -49,11 +60,11 @@ def user_data_dir() -> Path:
     # macOS convention for per-user app data. FALLBACK for source-mode runs
     # without HOME (CI) keeps the same shape as the Windows launcher.
     root = os.environ.get("HOME") or str(Path.home())
-    return Path(root) / "Library" / "Application Support" / "MRRC-FT710"
+    return Path(root) / "Library" / "Application Support" / "MRRC-Modern"
 
 
 def config_path() -> Path:
-    return user_data_dir() / "ft710.env"
+    return user_data_dir() / "mrrc_modern.env"
 
 
 def default_config_path() -> Path:
@@ -70,9 +81,9 @@ def ensure_config() -> Path:
             path.write_text(default.read_text(encoding="utf-8"), encoding="utf-8")
         else:
             path.write_text(
-                "FT710_WEB_HOST=127.0.0.1\n"
-                "FT710_WEB_PORT=8888\n"
-                "FT710_SERIAL_PORT=/dev/cu.SLAB_USBtoUART\n",
+                "MRRC_WEB_HOST=127.0.0.1\n"
+                "MRRC_WEB_PORT=8888\n"
+                "MRRC_SERIAL_PORT=/dev/cu.SLAB_USBtoUART\n",
                 encoding="utf-8",
             )
     return path
@@ -128,17 +139,17 @@ def load_env(path: Path) -> dict[str, str]:
             continue
         key, value = line.split("=", 1)
         env[key.strip()] = value.strip()
-    env.setdefault("FT710_MEM_FILE", str(user_data_dir() / "mem_channels.json"))
-    env.setdefault("FT710_ATR1000_STORE", str(user_data_dir() / "atr1000_tuner.json"))
-    env.setdefault("FT710_FTDI_LIB_DIR", str(app_dir() / "vendor" / "ftdi" / "macos"))
-    ftdi_dir = Path(env["FT710_FTDI_LIB_DIR"])
+    env.setdefault("MRRC_MEM_FILE", str(user_data_dir() / "mem_channels.json"))
+    env.setdefault("MRRC_ATR1000_STORE", str(user_data_dir() / "atr1000_tuner.json"))
+    env.setdefault("MRRC_FTDI_LIB_DIR", str(app_dir() / "vendor" / "ftdi" / "macos"))
+    ftdi_dir = Path(_env(env, "MRRC_FTDI_LIB_DIR"))
     if not ftdi_dir.is_absolute():
-        env["FT710_FTDI_LIB_DIR"] = str(app_dir() / ftdi_dir)
+        env["MRRC_FTDI_LIB_DIR"] = str(app_dir() / ftdi_dir)
     return env
 
 
 def server_executable() -> Path | None:
-    exe = app_dir() / "ft710-server"
+    exe = app_dir() / "MRRC-Modern-Server"
     if exe.exists():
         return exe
     # Source-mode fallback only. When frozen, sys.executable IS this launcher,
@@ -155,7 +166,7 @@ def build_command() -> list[str] | None:
     if server is None:
         return None
     # Both the frozen binary and `python server.py` take the same CLI args.
-    if getattr(sys, "frozen", False) and server == app_dir() / "ft710-server":
+    if getattr(sys, "frozen", False) and server == app_dir() / "MRRC-Modern-Server":
         return [str(server), "--no-ssl"]
     return [sys.executable, str(server), "--no-ssl"]
 
@@ -177,7 +188,7 @@ def open_in_textedit(path: Path) -> None:
     subprocess.Popen(["open", "-a", "TextEdit", str(path)])
 
 
-class MRRCFT710App(rumps.App):
+class MRRCModernApp(rumps.App):
     def __init__(self, url: str, host: str, port: str) -> None:
         super().__init__(
             f"{APP_NAME} :{port}",
@@ -193,7 +204,7 @@ class MRRCFT710App(rumps.App):
             "Edit Configuration…",
             "Restart Server",
             None,  # separator
-            "Quit MRRC FT-710",
+            "Quit MRRC Modern",
         ]
 
     # ---- lifecycle -------------------------------------------------------
@@ -203,8 +214,8 @@ class MRRCFT710App(rumps.App):
         command = build_command()
         if command is None:
             rumps.alert(
-                title="MRRC FT-710",
-                message="ft710-server was not found next to the launcher. "
+                title="MRRC Modern",
+                message="MRRC-Modern-Server was not found next to the launcher. "
                          "Reinstall the app.",
             )
             rumps.quit_application()
@@ -254,7 +265,7 @@ class MRRCFT710App(rumps.App):
             target=self.launch_and_open, name="wait-for-server", daemon=True
         ).start()
 
-    @rumps.clicked("Quit MRRC FT-710")
+    @rumps.clicked("Quit MRRC Modern")
     def on_quit(self, _):
         stop_process(self.proc)
         rumps.quit_application()
@@ -266,12 +277,12 @@ def main() -> int:
 
     # Determine the URL before starting the server (also seeds the env on disk).
     env = load_env(config_path())
-    port = env.get("FT710_WEB_PORT", DEFAULT_PORT)
-    host = env.get("FT710_WEB_HOST", "127.0.0.1")
+    port = _env(env, "MRRC_WEB_PORT", DEFAULT_PORT)
+    host = _env(env, "MRRC_WEB_HOST", "127.0.0.1")
     url_host = "127.0.0.1" if host in ("::", "0.0.0.0", "") else host
     url = f"http://{url_host}:{port}"
 
-    app = MRRCFT710App(url=url, host=host, port=port)
+    app = MRRCModernApp(url=url, host=host, port=port)
 
     # Reap the server child if the .app is killed by SIGTERM (e.g. logout,
     # `kill` from a terminal, or Activity Monitor's normal Quit). SIGKILL /

@@ -1,6 +1,6 @@
 """
-FT-710 Web Control — Configuration & Constants
-===============================================
+MRRC Modern — Configuration & Constants
+=======================================
 Protocol-neutral, environment-based configuration (serial, web, SSL,
 auth, polling, reconnect, PTT safety) plus genuinely shared UI tables.
 
@@ -15,6 +15,32 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+# ── Environment helpers ─────────────────────────────────────────────
+# Prefer the MRRC_* variable name, falling back to the legacy FT710_*
+# prefix so existing deployments keep working unchanged.
+_LEGACY_ENV_PREFIX = "FT710_"
+_NEW_ENV_PREFIX = "MRRC_"
+
+
+def _env(name: str, default: str | None = None) -> str | None:
+    """Read ``MRRC_*`` env var, falling back to the legacy ``FT710_*`` alias."""
+    val = os.environ.get(name)
+    if val is not None:
+        return val
+    if name.startswith(_NEW_ENV_PREFIX):
+        legacy = _LEGACY_ENV_PREFIX + name[len(_NEW_ENV_PREFIX):]
+        val = os.environ.get(legacy)
+    return default if val is None else val
+
+
+def _env_int(name: str, default: int) -> int:
+    return int(_env(name) or default)
+
+
+def _env_float(name: str, default: float) -> float:
+    return float(_env(name) or default)
+
+
 # ── Radio Model Selection ───────────────────────────────────────────
 # Backend key registered in backends/__init__.py ("ft710" is currently
 # the only backend).  Select with MRRC_RADIO_MODEL.
@@ -23,9 +49,9 @@ RADIO_MODEL = os.environ.get("MRRC_RADIO_MODEL", "ft710").strip().lower()
 # ── Serial Configuration ────────────────────────────────────────────
 # macOS default: /dev/cu.SLAB_USBtoUART  (FT-710 Enhanced COM Port)
 # Linux default: /dev/ttyUSB0
-SERIAL_PORT = os.environ.get("FT710_SERIAL_PORT", "/dev/cu.SLAB_USBtoUART")
-BAUD_RATE = int(os.environ.get("FT710_BAUD_RATE", "38400"))
-SERIAL_TIMEOUT = float(os.environ.get("FT710_SERIAL_TIMEOUT", "1.0"))
+SERIAL_PORT = _env("MRRC_SERIAL_PORT", "/dev/cu.SLAB_USBtoUART")
+BAUD_RATE = _env_int("MRRC_BAUD_RATE", 38400)
+SERIAL_TIMEOUT = _env_float("MRRC_SERIAL_TIMEOUT", 1.0)
 # Short per-query timeout for background pollers.  Bounds how long a
 # non-responding poll query can hold the serial lock (and thus block a
 # user command like PTT).  Normal responses arrive in <50 ms; 0.25 s is
@@ -35,30 +61,30 @@ POLL_TIMEOUT = 0.25
 # ── Audio Device ──────────────────────────────────────────────────────
 # Set a specific device index or substring to match in device name
 # (e.g., "4" for device index 4, or "FT-710" to match by name)
-AUDIO_RX_DEVICE = os.environ.get("FT710_AUDIO_RX_DEVICE", "")
-AUDIO_TX_DEVICE = os.environ.get("FT710_AUDIO_TX_DEVICE", "")
+AUDIO_RX_DEVICE = _env("MRRC_AUDIO_RX_DEVICE", "")
+AUDIO_TX_DEVICE = _env("MRRC_AUDIO_TX_DEVICE", "")
 
 # ── ATR1000 Antenna Tuner (optional) ───────────────────────────────
 # Networked automatic antenna tuner with a built-in WebSocket server.
 # Empty host (default) = feature fully disabled: no client, no tasks,
 # no linkage hooks — zero impact for users without the hardware.
-ATR1000_HOST = os.environ.get("FT710_ATR1000_HOST", "")
-ATR1000_PORT = int(os.environ.get("FT710_ATR1000_PORT", "60001"))
+ATR1000_HOST = _env("MRRC_ATR1000_HOST", "")
+ATR1000_PORT = _env_int("MRRC_ATR1000_PORT", 60001)
 
 # ── Web Server Configuration ────────────────────────────────────────
-WEB_PORT = int(os.environ.get("FT710_WEB_PORT", "8888"))
+WEB_PORT = _env_int("MRRC_WEB_PORT", 8888)
 # SECURITY: Change this password in production! Use a strong, unique password.
 # Recommended: 16+ characters with mixed case, numbers, and symbols
-WEB_PASSWORD = os.environ.get("FT710_WEB_PASSWORD", "changeme_please_use_strong_password!")
-WEB_HOST = os.environ.get("FT710_WEB_HOST", "::")  # IPv6 dual-stack
+WEB_PASSWORD = _env("MRRC_WEB_PASSWORD", "changeme_please_use_strong_password!")
+WEB_HOST = _env("MRRC_WEB_HOST", "::")  # IPv6 dual-stack
 
 # SSL (Let's Encrypt certs for radio.vlsc.net)
 CERT_DIR = SCRIPT_DIR / "certs"
-SSL_CERTFILE = os.environ.get("FT710_SSL_CERT", str(CERT_DIR / "fullchain.pem"))
-SSL_KEYFILE = os.environ.get("FT710_SSL_KEY", str(CERT_DIR / "radio.vlsc.net.key"))
+SSL_CERTFILE = _env("MRRC_SSL_CERT", str(CERT_DIR / "fullchain.pem"))
+SSL_KEYFILE = _env("MRRC_SSL_KEY", str(CERT_DIR / "radio.vlsc.net.key"))
 
 # ── Auth ────────────────────────────────────────────────────────────
-AUTH_COOKIE = "ft710_auth"
+AUTH_COOKIE = "mrrc_auth"
 AUTH_TOKEN_BYTES = 32
 
 # ── Shared Mode Display Tables ──────────────────────────────────────

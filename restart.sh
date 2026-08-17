@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════
-# MRRC FT-710 — Restart Server
+# MRRC Modern — Restart Server
 # ═══════════════════════════════════════════════════════════════════════
 # Thin wrapper: stop → start.  All logic lives in stop.sh / start.sh.
 set -euo pipefail

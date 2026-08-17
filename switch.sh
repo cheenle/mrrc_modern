@@ -1,46 +1,46 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════
-# switch.sh — mrrc_ft710 ⇄ mrrc_ft8 一键切换
+# switch.sh — mrrc_modern ⇄ mrrc_ft8 一键切换
 # ═══════════════════════════════════════════════════════════════════════
-# 两个程序共用 FT-710 的 USB 音频与 CAT 设备，同一时间只能运行一个。
+# 两个程序共用电台的 USB 音频与 CAT/CI-V 设备，同一时间只能运行一个。
 # 本脚本检测当前哪个在运行：停掉在跑的，启动没跑的。
 #
 # 用法:
 #   ./switch.sh           切换到当前没在运行的那个程序
-#   ./switch.sh ft710     强制切换到 mrrc_ft710（本目录 restart.sh）
+#   ./switch.sh mrrc      强制切换到 mrrc_modern（本目录 restart.sh）
 #   ./switch.sh ft8       强制切换到 mrrc_ft8（../ft8/restart.sh）
 #   ./switch.sh status    只显示当前运行状态，不做切换
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FT710_DIR="$HERE"
+MRRC_DIR="$HERE"
 FT8_DIR="$HERE/../ft8"
 
 FT8_PORT=8000
-FT710_PORT="${FT710_WEB_PORT:-8888}"
+MRRC_PORT="${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}"
 # rigctld 端口需与 ../ft8/restart.sh 的 MRRC_FT8_RIGCTLD_PORT 一致
 RIGCTLD_PORT="${MRRC_FT8_RIGCTLD_PORT:-4532}"
 # 停掉一个程序后，CoreAudio 需要时间释放 USB 音频设备，立刻启动另一个
 # 会拿到降级的音频流且无法恢复（测量说明见 ../ft8/restart.sh 注释）。
 AUDIO_SETTLE="${SWITCH_SETTLE:-8}"
 
-if [ -f "$FT710_DIR/.env" ]; then
-	p="$(grep -E '^FT710_WEB_PORT=' "$FT710_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
-	if [ -n "$p" ]; then FT710_PORT="$p"; fi
-	sp="$(grep -E '^FT710_SERIAL_PORT=' "$FT710_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
-	if [ -n "$sp" ]; then FT710_SERIAL="$sp"; fi
+if [ -f "$MRRC_DIR/.env" ]; then
+	p="$(grep -E '^(MRRC|FT710)_WEB_PORT=' "$MRRC_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
+	if [ -n "$p" ]; then MRRC_PORT="$p"; fi
+	sp="$(grep -E '^(MRRC|FT710)_SERIAL_PORT=' "$MRRC_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"
+	if [ -n "$sp" ]; then MRRC_SERIAL="$sp"; fi
 fi
 
-# FT-710 CAT 串口（与 ../ft8/restart.sh 的 RIG_DEVICE 必须一致；唯一 owner 是
-# 当前运行侧的程序。switch.sh 用它做"残留进程"检测的语义兜底——见 ft710_running）
-FT710_SERIAL="${FT710_SERIAL:-/dev/cu.SLAB_USBtoUART}"
+# 电台 CAT/CI-V 串口（与 ../ft8/restart.sh 的 RIG_DEVICE 必须一致；唯一 owner 是
+# 当前运行侧的程序。switch.sh 用它做"残留进程"检测的语义兜底——见 mrrc_running）
+MRRC_SERIAL="${MRRC_SERIAL:-${FT710_SERIAL:-/dev/cu.SLAB_USBtoUART}}"
 
 usage() {
 	cat <<'EOF'
-用法: ./switch.sh [ft710|ft8|status]
+用法: ./switch.sh [mrrc|ft8|status]
 
   (无参数)    切换到当前没在运行的那个程序
-  ft710      强制切换到 mrrc_ft710
+  mrrc       强制切换到 mrrc_modern
   ft8        强制切换到 mrrc_ft8
   status     只显示当前运行状态，不做切换
 
@@ -76,15 +76,15 @@ rigctld_running() {
 }
 
 # PID 文件存活、8888 端口监听、server.py 进程，三者任一成立即视为在运行
-ft710_running() {
-	local pid pid_file="$FT710_DIR/.ft710-server.pid" rigpid
+mrrc_running() {
+	local pid pid_file="$MRRC_DIR/.mrrc-server.pid" rigpid
 	if [ -f "$pid_file" ]; then
 		pid="$(cat "$pid_file" 2>/dev/null || true)"
 		if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
 			return 0
 		fi
 	fi
-	if [ -n "$(lsof -iTCP:"$FT710_PORT" -sTCP:LISTEN -t 2>/dev/null || true)" ]; then
+	if [ -n "$(lsof -iTCP:"$MRRC_PORT" -sTCP:LISTEN -t 2>/dev/null || true)" ]; then
 		return 0
 	fi
 	# 大小写不敏感：MacPorts 解释器命令行是 "Python server.py"（大写 P），
@@ -93,11 +93,11 @@ ft710_running() {
 	if [ -n "$(pgrep -if "server\.py" 2>/dev/null || true)" ]; then
 		return 0
 	fi
-	# 串口语义兜底：CAT 串口被非 rigctld 进程持有 = 有残留程序在占用电台。
+	# 串口语义兜底：CAT/CI-V 串口被非 rigctld 进程持有 = 有残留程序在占用电台。
 	# 切换前必须清理，否则 ft8 侧 rigctld 一启动就与之争抢（AD-008）。
 	if command -v lsof >/dev/null 2>&1; then
 		rigpid="$(pgrep -x rigctld 2>/dev/null || true)"
-		for hpid in $(lsof -t "$FT710_SERIAL" 2>/dev/null || true); do
+		for hpid in $(lsof -t "$MRRC_SERIAL" 2>/dev/null || true); do
 			if [ -z "$rigpid" ] || [ "$hpid" != "$rigpid" ]; then
 				return 0
 			fi
@@ -117,10 +117,10 @@ show_status() {
 	else
 		echo "rigctld     (port $RIGCTLD_PORT):  未运行"
 	fi
-	if ft710_running; then
-		echo "mrrc_ft710  (port $FT710_PORT):  运行中"
+	if mrrc_running; then
+		echo "mrrc_modern (port $MRRC_PORT):  运行中"
 	else
-		echo "mrrc_ft710  (port $FT710_PORT):  未运行"
+		echo "mrrc_modern (port $MRRC_PORT):  未运行"
 	fi
 }
 
@@ -184,25 +184,25 @@ stop_ft8() {
 	echo "✓ rigctld 已停止"
 }
 
-stop_ft710() {
-	"$FT710_DIR/stop.sh"
+stop_mrrc() {
+	"$MRRC_DIR/stop.sh"
 }
 
 # ─── 切换 ────────────────────────────────────────────────────────────
-switch_to_ft710() {
+switch_to_mrrc() {
 	stop_ft8
 	echo "等待 ${AUDIO_SETTLE}s 让 USB 音频设备释放..."
 	sleep "$AUDIO_SETTLE"
 	echo ""
-	echo "═══ 启动 mrrc_ft710（$FT710_DIR/restart.sh）═══"
-	"$FT710_DIR/restart.sh"
+	echo "═══ 启动 mrrc_modern（$MRRC_DIR/restart.sh）═══"
+	"$MRRC_DIR/restart.sh"
 }
 
 switch_to_ft8() {
-	if ft710_running; then
-		stop_ft710
+	if mrrc_running; then
+		stop_mrrc
 	else
-		echo "mrrc_ft710 未在运行"
+		echo "mrrc_modern 未在运行"
 	fi
 	echo ""
 	# ft8 的 restart.sh 自带 8s 音频设备释放等待，无需额外 sleep
@@ -224,9 +224,9 @@ status)
 	exit 0
 	;;
 -h | --help | help) usage 0 ;;
-mrrc_ft8) TARGET=ft8 ;;
-mrrc_ft710) TARGET=ft710 ;;
-"" | ft8 | ft710) ;;
+mrrc_ft8 | ft8) TARGET=ft8 ;;
+mrrc | mrrc_modern | ft710) TARGET=mrrc ;;
+"") ;;
 *)
 	echo "✗ 未知参数: $TARGET" >&2
 	usage 1
@@ -234,31 +234,31 @@ mrrc_ft710) TARGET=ft710 ;;
 esac
 
 F8_UP=false
-F710_UP=false
+MRRC_UP=false
 if ft8_running; then F8_UP=true; fi
-if ft710_running; then F710_UP=true; fi
+if mrrc_running; then MRRC_UP=true; fi
 
-echo "当前状态: mrrc_ft710=$F710_UP  mrrc_ft8=$F8_UP"
+echo "当前状态: mrrc_modern=$MRRC_UP  mrrc_ft8=$F8_UP"
 
-if $F8_UP && $F710_UP; then
+if $F8_UP && $MRRC_UP; then
 	echo "✗ 两个程序都在运行（异常状态），请手动停掉一个后重试：" >&2
-	echo "  停 ft710: $FT710_DIR/stop.sh" >&2
+	echo "  停 mrrc: $MRRC_DIR/stop.sh" >&2
 	echo "  停 ft8:   lsof -iTCP:$FT8_PORT -sTCP:LISTEN -t | xargs kill" >&2
 	exit 1
 fi
 
 if [ -z "$TARGET" ]; then
 	if $F8_UP; then
-		TARGET=ft710
-	elif $F710_UP; then
+		TARGET=mrrc
+	elif $MRRC_UP; then
 		TARGET=ft8
 	else
-		TARGET=ft710
-		echo "两个程序都未运行，默认启动 mrrc_ft710（如需 ft8: ./switch.sh ft8）"
+		TARGET=mrrc
+		echo "两个程序都未运行，默认启动 mrrc_modern（如需 ft8: ./switch.sh ft8）"
 	fi
 else
-	if [ "$TARGET" = ft710 ] && $F710_UP; then
-		echo "mrrc_ft710 已在运行，无需切换"
+	if [ "$TARGET" = mrrc ] && $MRRC_UP; then
+		echo "mrrc_modern 已在运行，无需切换"
 		exit 0
 	fi
 	if [ "$TARGET" = ft8 ] && $F8_UP; then
@@ -268,8 +268,8 @@ else
 fi
 
 echo "切换到: $TARGET"
-if [ "$TARGET" = ft710 ]; then
-	switch_to_ft710
+if [ "$TARGET" = mrrc ]; then
+	switch_to_mrrc
 else
 	switch_to_ft8
 fi

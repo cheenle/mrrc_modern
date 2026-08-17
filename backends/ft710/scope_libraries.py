@@ -11,6 +11,8 @@ from typing import Optional, List, Tuple
 import os
 import sys
 
+from config import _env
+
 
 # Repo root (this file lives in backends/ft710/): bundled resources such as
 # lib/ and vendor/ftdi/ are located relative to the project root, both in
@@ -138,7 +140,7 @@ def get_candidate_library_dirs() -> List[Path]:
     """Return FTDI library search directories in priority order."""
     candidate_dirs: List[Path] = []
 
-    ftdi_dir = os.environ.get("FT710_FTDI_LIB_DIR")
+    ftdi_dir = _env("MRRC_FTDI_LIB_DIR")
     if ftdi_dir:
         candidate_dirs.append(Path(ftdi_dir))
 
@@ -175,25 +177,25 @@ def find_ftdi_libraries() -> tuple[Optional[Path], Optional[Path]]:
     """Return FT4222 and FTD2XX library paths, or (None, None).
 
     Search order:
-      1. Explicit env vars: FT710_FT4222_DYLIB / FT710_FTD2XX_DYLIB
-         (also checked: FT710_FT4222_LIB / FT710_FTD2XX_LIB on non-macOS)
-      2. FT710_FTDI_LIB_DIR env var
+      1. Explicit env vars: MRRC_FT4222_DYLIB / MRRC_FTD2XX_DYLIB
+         (also checked: MRRC_FT4222_LIB / MRRC_FTD2XX_LIB on non-macOS)
+      2. MRRC_FTDI_LIB_DIR env var
       3. Project lib/ directory
       4. Project vendor/ftdi/ directory
       5. Platform-specific system directories
     """
     # ── Explicit per-library env vars (cross-platform) ────────────────
-    ft4222_key = "FT710_FT4222_DYLIB" if sys.platform == "darwin" else "FT710_FT4222_LIB"
-    ftd2xx_key = "FT710_FTD2XX_DYLIB" if sys.platform == "darwin" else "FT710_FTD2XX_LIB"
+    ft4222_key = "MRRC_FT4222_DYLIB" if sys.platform == "darwin" else "MRRC_FT4222_LIB"
+    ftd2xx_key = "MRRC_FTD2XX_DYLIB" if sys.platform == "darwin" else "MRRC_FTD2XX_LIB"
 
     # Also check the original macOS-style names on all platforms (backward compat)
     for ft4222_env, ftd2xx_env in [
-        ("FT710_FT4222_DYLIB", "FT710_FTD2XX_DYLIB"),
-        ("FT710_FT4222_LIB", "FT710_FTD2XX_LIB"),
-        ("FT710_FT4222_SO", "FT710_FTD2XX_SO"),
+        ("MRRC_FT4222_DYLIB", "MRRC_FTD2XX_DYLIB"),
+        ("MRRC_FT4222_LIB", "MRRC_FTD2XX_LIB"),
+        ("MRRC_FT4222_SO", "MRRC_FTD2XX_SO"),
     ]:
-        explicit_ft4222 = os.environ.get(ft4222_env)
-        explicit_ftd2xx = os.environ.get(ftd2xx_env)
+        explicit_ft4222 = _env(ft4222_env)
+        explicit_ftd2xx = _env(ftd2xx_env)
         if explicit_ft4222 and explicit_ftd2xx:
             ft4222 = Path(explicit_ft4222)
             ftd2xx = Path(explicit_ftd2xx)
@@ -217,7 +219,7 @@ def require_ftdi_libraries() -> tuple[Path, Path]:
         raise FileNotFoundError(
             f"FTDI libraries not found. Put libft4222{suffix} and "
             f"libftd2xx{suffix} in ./lib or ./vendor/ftdi, or set "
-            "FT710_FTDI_LIB_DIR."
+            "MRRC_FTDI_LIB_DIR."
         )
     return ft4222, ftd2xx
 
@@ -230,11 +232,11 @@ def get_ft4222_clock_divider() -> int:
     exactly for proven stability and frame rate.
 
     Hardware experiments can override this without code edits by
-    setting FT710_FT4222_CLK_DIV.
+    setting MRRC_FT4222_CLK_DIV.
 
     FT4222 enum: 0=NONE 1=/2 2=/4 3=/8 4=/16 5=/32 6=/64 7=/128 8=/256 9=/512
     """
-    raw = os.environ.get("FT710_FT4222_CLK_DIV", "6")  # CLK_DIV_64 (375 kHz, matches wfview default)
+    raw = _env("MRRC_FT4222_CLK_DIV", "6")  # CLK_DIV_64 (375 kHz, matches wfview default)
     try:
         value = int(raw)
     except ValueError:

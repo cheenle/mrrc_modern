@@ -26,7 +26,7 @@ import numpy as np
 from opus_rx import RxOpusEncoder, AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, RX_RATE
 from audio_resample import resample_pcm
 
-logger = logging.getLogger("ft710.audio")
+logger = logging.getLogger("mrrc.audio")
 
 # ── PyAudio ────────────────────────────────────────────────────────────
 try:

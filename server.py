@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-FT-710 Web Control Server
-=========================
-FastAPI-based web server that bridges a browser to a Yaesu FT-710
-radio via serial CAT protocol.  Provides a WebSocket endpoint for
-real-time control and state updates, plus REST APIs for memory
-channels and authentication.
+MRRC Modern Web Control Server
+==============================
+FastAPI-based web server that bridges a browser to Yaesu FT-710 and Icom
+IC-7300/IC-7300MK2 radios via serial CAT/CI-V protocol.  Provides a
+WebSocket endpoint for real-time control and state updates, plus REST
+APIs for memory channels and authentication.
 """
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ from config import (
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT, PTT_SAFETY_TIMEOUT,
     UI_MODES, NARROW_MODES,
     ATR1000_HOST, ATR1000_PORT,
+    _env,
 )
 from backends import create_backend
 from backends.base import RadioBackend
@@ -59,7 +60,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
-logger = logging.getLogger("ft710")
+logger = logging.getLogger("mrrc")
 
 # ── Global State ────────────────────────────────────────────────────
 radio = RadioState()
@@ -193,7 +194,7 @@ def _resource_dir() -> Path:
 
 
 STATIC_DIR = _resource_dir() / "static"
-MEM_FILE = Path(os.environ.get("FT710_MEM_FILE", str(_runtime_dir() / "mem_channels.json")))
+MEM_FILE = Path(_env("MRRC_MEM_FILE", str(_runtime_dir() / "mem_channels.json")))
 
 # ── Auth Helpers ────────────────────────────────────────────────────
 
@@ -362,7 +363,7 @@ async def _broadcast_mem_channels():
     ctrl_clients -= dead
 
 # ── ATR1000 External Tuner (optional) ─────────────────────────────
-# Enabled only when FT710_ATR1000_HOST is set.  When disabled, `atr`
+# Enabled only when MRRC_ATR1000_HOST is set.  When disabled, `atr`
 # stays None: no client task, no linkage hooks, and /WSatr1000 closes
 # immediately — zero impact on installations without the hardware.
 
@@ -1459,7 +1460,7 @@ async def lifespan(app: FastAPI):
 
     # ── Startup ──
     startup_time = time.time()
-    logger.info("FT-710 Web Control starting on port %d", WEB_PORT)
+    logger.info("MRRC Modern Web Control starting on port %d", WEB_PORT)
     logger.info("Radio model: %s, serial port: %s @ %d baud",
                 RADIO_MODEL, SERIAL_PORT, BAUD_RATE)
 
@@ -1609,7 +1610,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server stopped.")
 
 
-app = FastAPI(title="FT-710 Web Control", lifespan=lifespan)
+app = FastAPI(title="MRRC Modern Web Control", lifespan=lifespan)
 
 # COOP/COEP middleware for SharedArrayBuffer (future audio worklet support)
 @app.middleware("http")
@@ -1667,7 +1668,7 @@ async def login_page(request: Request):
         return HTMLResponse(login_html.read_text())
     return HTMLResponse("""
     <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport"
-    content="width=device-width,initial-scale=1"><title>FT-710 Login</title>
+    content="width=device-width,initial-scale=1"><title>MRRC Modern Login</title>
     <style>body{font-family:-apple-system,sans-serif;background:#1a1a1a;color:#eee;
     display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
     form{background:#2a2a2a;padding:2rem;border-radius:12px;width:300px}
@@ -1677,7 +1678,7 @@ async def login_page(request: Request):
     button{width:100%;padding:12px;margin-top:12px;background:#f59e0b;color:#000;
     border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer}
     .error{color:#ff4444;margin-top:8px;text-align:center}</style></head>
-    <body><form id="loginForm"><h1>FT-710</h1>
+    <body><form id="loginForm"><h1>MRRC Modern</h1>
     <input type="password" id="password" placeholder="Password" autofocus required>
     <button type="submit">Login</button><div class="error" id="error"></div></form>
     <script>
@@ -2076,7 +2077,7 @@ async def ws_audio_tx(ws: WebSocket):
 async def ws_atr1000(ws: WebSocket):
     """External-tuner channel: state pushes (meter/relay/tuning) and the
     server-side tune-assist command.  Closes immediately when the
-    feature is disabled (no FT710_ATR1000_HOST configured)."""
+    feature is disabled (no MRRC_ATR1000_HOST configured)."""
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
         await ws.close(code=4001, reason="Unauthorized")
@@ -2135,7 +2136,7 @@ async def serve_static(path: str, request: Request):
     index_path = STATIC_DIR / "index.html"
     if index_path.exists():
         return FileResponse(index_path, media_type="text/html")
-    return HTMLResponse("<h1>FT-710</h1><p>Static files not found.</p>", status_code=404)
+    return HTMLResponse("<h1>MRRC Modern</h1><p>Static files not found.</p>", status_code=404)
 
 
 # ── Entry Point ─────────────────────────────────────────────────────
@@ -2147,7 +2148,7 @@ def main():
     config.py picks up the correct values at module load time.
     """
     import argparse
-    parser = argparse.ArgumentParser(description="FT-710 Web Control Server")
+    parser = argparse.ArgumentParser(description="MRRC Modern Web Control Server")
     parser.add_argument("--port", type=int, default=WEB_PORT, help=f"Web server port (default: {WEB_PORT})")
     parser.add_argument("--serial-port", default=SERIAL_PORT, help=f"Serial port (default: {SERIAL_PORT})")
     parser.add_argument("--baud", type=int, default=BAUD_RATE, help=f"Baud rate (default: {BAUD_RATE})")
@@ -2159,11 +2160,11 @@ def main():
     args = parser.parse_args()
 
     # Set env vars BEFORE uvicorn imports the app module
-    os.environ["FT710_SERIAL_PORT"] = args.serial_port
-    os.environ["FT710_BAUD_RATE"] = str(args.baud)
-    os.environ["FT710_WEB_PORT"] = str(args.port)
-    os.environ["FT710_WEB_PASSWORD"] = args.password
-    os.environ["FT710_WEB_HOST"] = args.host
+    os.environ["MRRC_SERIAL_PORT"] = args.serial_port
+    os.environ["MRRC_BAUD_RATE"] = str(args.baud)
+    os.environ["MRRC_WEB_PORT"] = str(args.port)
+    os.environ["MRRC_WEB_PASSWORD"] = args.password
+    os.environ["MRRC_WEB_HOST"] = args.host
 
     # SSL configuration
     ssl_kwargs = {}

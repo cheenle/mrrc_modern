@@ -11,8 +11,12 @@ class ScopeRuntimeConfigTests(unittest.TestCase):
             self.assertEqual(get_ft4222_clock_divider(), 6)  # CLK_DIV_64 (wfview default)
 
     def test_spi_clock_divider_can_be_overridden_for_hardware_trials(self):
-        with patch.dict(os.environ, {"FT710_FT4222_CLK_DIV": "1"}, clear=True):
+        with patch.dict(os.environ, {"MRRC_FT4222_CLK_DIV": "1"}, clear=True):
             self.assertEqual(get_ft4222_clock_divider(), 1)
+
+    def test_spi_clock_divider_falls_back_to_legacy_ft710_prefix(self):
+        with patch.dict(os.environ, {"FT710_FT4222_CLK_DIV": "3"}, clear=True):
+            self.assertEqual(get_ft4222_clock_divider(), 3)
 
 
 if __name__ == "__main__":

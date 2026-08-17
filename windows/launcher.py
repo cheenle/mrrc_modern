@@ -50,9 +50,9 @@ def ensure_config() -> Path:
             path.write_text(default.read_text(encoding="utf-8"), encoding="utf-8")
         else:
             path.write_text(
-                "FT710_WEB_HOST=127.0.0.1\n"
-                "FT710_WEB_PORT=8888\n"
-                "FT710_SERIAL_PORT=COM3\n",
+                "MRRC_WEB_HOST=127.0.0.1\n"
+                "MRRC_WEB_PORT=8888\n"
+                "MRRC_SERIAL_PORT=COM3\n",
                 encoding="utf-8",
             )
     return path
@@ -108,6 +108,17 @@ def wait_for_server(url: str, proc: subprocess.Popen | None = None,
     return False
 
 
+def _env(env: dict[str, str], name: str, default: str = "") -> str:
+    """Read ``MRRC_*`` from an env dict, falling back to the legacy ``FT710_*`` key."""
+    if name in env and env[name] != "":
+        return env[name]
+    if name.startswith("MRRC_"):
+        legacy = "FT710_" + name[len("MRRC_"):]
+        if legacy in env and env[legacy] != "":
+            return env[legacy]
+    return default
+
+
 def load_env(path: Path) -> dict[str, str]:
     env = os.environ.copy()
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -116,18 +127,18 @@ def load_env(path: Path) -> dict[str, str]:
             continue
         key, value = line.split("=", 1)
         env[key.strip()] = value.strip()
-    env.setdefault("FT710_MEM_FILE", str(user_data_dir() / "mem_channels.json"))
-    env.setdefault("FT710_ATR1000_STORE", str(user_data_dir() / "atr1000_tuner.json"))
-    env.setdefault("FT710_FTDI_LIB_DIR", str(app_dir() / "vendor" / "ftdi" / "windows" / "bin" / "x64"))
-    ftdi_dir = Path(env["FT710_FTDI_LIB_DIR"].replace("\\", os.sep))
+    env.setdefault("MRRC_MEM_FILE", str(user_data_dir() / "mem_channels.json"))
+    env.setdefault("MRRC_ATR1000_STORE", str(user_data_dir() / "atr1000_tuner.json"))
+    env.setdefault("MRRC_FTDI_LIB_DIR", str(app_dir() / "vendor" / "ftdi" / "windows" / "bin" / "x64"))
+    ftdi_dir = Path(_env(env, "MRRC_FTDI_LIB_DIR").replace("\\", os.sep))
     if not ftdi_dir.is_absolute():
-        env["FT710_FTDI_LIB_DIR"] = str(app_dir() / ftdi_dir)
+        env["MRRC_FTDI_LIB_DIR"] = str(app_dir() / ftdi_dir)
     return env
 
 
 def local_url(env: dict[str, str], secure: bool = False) -> str:
-    port = env.get("FT710_WEB_PORT", DEFAULT_PORT)
-    host = env.get("FT710_WEB_HOST", "127.0.0.1")
+    port = _env(env, "MRRC_WEB_PORT", DEFAULT_PORT)
+    host = _env(env, "MRRC_WEB_HOST", "127.0.0.1")
     scheme = "https" if secure else "http"
     if host == "::":
         url_host = "localhost"
@@ -155,15 +166,15 @@ def server_executable() -> Path | None:
 def ssl_material(env: dict[str, str]):
     """Resolve the TLS cert/key pair for the server.
 
-    Honours explicit FT710_SSL_CERT/FT710_SSL_KEY, then falls back to a
+    Honours explicit MRRC_SSL_CERT/MRRC_SSL_KEY, then falls back to a
     self-signed pair generated into the user data dir on first run.
-    Returns None to stay on plain HTTP (FT710_SSL=off, or the
+    Returns None to stay on plain HTTP (MRRC_SSL=off, or the
     cryptography package missing).
     """
-    if env.get("FT710_SSL", "").strip().lower() == "off":
+    if _env(env, "MRRC_SSL", "").strip().lower() == "off":
         return None
-    cert = env.get("FT710_SSL_CERT", "").strip()
-    key = env.get("FT710_SSL_KEY", "").strip()
+    cert = _env(env, "MRRC_SSL_CERT", "").strip()
+    key = _env(env, "MRRC_SSL_KEY", "").strip()
     if cert and key and Path(cert).exists() and Path(key).exists():
         return Path(cert), Path(key)
     return ssl_bootstrap.ensure_self_signed(user_data_dir() / "certs")

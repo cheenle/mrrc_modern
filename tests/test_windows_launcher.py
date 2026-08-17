@@ -9,14 +9,20 @@ from windows import launcher
 class WindowsLauncherTests(unittest.TestCase):
     def test_local_url_uses_localhost_for_ipv6_wildcard_bind(self):
         self.assertEqual(
-            launcher.local_url({"FT710_WEB_HOST": "::", "FT710_WEB_PORT": "8888"}),
+            launcher.local_url({"MRRC_WEB_HOST": "::", "MRRC_WEB_PORT": "8888"}),
             "http://localhost:8888",
         )
 
     def test_local_url_uses_loopback_for_ipv4_wildcard_bind(self):
         self.assertEqual(
-            launcher.local_url({"FT710_WEB_HOST": "0.0.0.0", "FT710_WEB_PORT": "8888"}),
+            launcher.local_url({"MRRC_WEB_HOST": "0.0.0.0", "MRRC_WEB_PORT": "8888"}),
             "http://127.0.0.1:8888",
+        )
+
+    def test_local_url_falls_back_to_legacy_ft710_prefix(self):
+        self.assertEqual(
+            launcher.local_url({"FT710_WEB_HOST": "::", "FT710_WEB_PORT": "9999"}),
+            "http://localhost:9999",
         )
 
     def test_load_env_makes_ftdi_dir_absolute(self):
@@ -24,7 +30,7 @@ class WindowsLauncherTests(unittest.TestCase):
             tmp_path = Path(tmp)
             config = tmp_path / "mrrc_modern.env"
             config.write_text(
-                "FT710_FTDI_LIB_DIR=vendor\\ftdi\\windows\\bin\\x64\n",
+                "MRRC_FTDI_LIB_DIR=vendor\\ftdi\\windows\\bin\\x64\n",
                 encoding="utf-8",
             )
             app_root = tmp_path / "app"
@@ -32,7 +38,7 @@ class WindowsLauncherTests(unittest.TestCase):
                 env = launcher.load_env(config)
 
         self.assertEqual(
-            Path(env["FT710_FTDI_LIB_DIR"]),
+            Path(env["MRRC_FTDI_LIB_DIR"]),
             app_root / "vendor" / "ftdi" / "windows" / "bin" / "x64",
         )
 
@@ -135,18 +141,18 @@ class WindowsLauncherSslTests(unittest.TestCase):
 
     def test_local_url_secure_uses_https(self):
         self.assertEqual(
-            launcher.local_url({"FT710_WEB_PORT": "8888"}, secure=True),
+            launcher.local_url({"MRRC_WEB_PORT": "8888"}, secure=True),
             "https://127.0.0.1:8888",
         )
 
     def test_local_url_default_stays_http(self):
         self.assertEqual(
-            launcher.local_url({"FT710_WEB_PORT": "8888"}),
+            launcher.local_url({"MRRC_WEB_PORT": "8888"}),
             "http://127.0.0.1:8888",
         )
 
     def test_ssl_material_honours_ssl_off(self):
-        self.assertIsNone(launcher.ssl_material({"FT710_SSL": "off"}))
+        self.assertIsNone(launcher.ssl_material({"MRRC_SSL": "off"}))
 
     def test_ssl_material_uses_explicit_existing_cert(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -155,9 +161,12 @@ class WindowsLauncherSslTests(unittest.TestCase):
             cert.write_text("c", encoding="utf-8")
             key.write_text("k", encoding="utf-8")
             pair = launcher.ssl_material(
-                {"FT710_SSL_CERT": str(cert), "FT710_SSL_KEY": str(key)}
+                {"MRRC_SSL_CERT": str(cert), "MRRC_SSL_KEY": str(key)}
             )
             self.assertEqual(pair, (cert, key))
+
+    def test_ssl_material_falls_back_to_legacy_ft710_prefix(self):
+        self.assertIsNone(launcher.ssl_material({"FT710_SSL": "off"}))
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ from config import (
     POLL_SETTINGS_INTERVAL, POLL_SLOW_INTERVAL, POLL_TIMEOUT,
 )
 
-logger = logging.getLogger("ft710.poll")
+logger = logging.getLogger("mrrc.poll")
 
 
 class PollScheduler:

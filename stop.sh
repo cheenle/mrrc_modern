@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════
-# MRRC FT-710 — Stop Server
+# MRRC Modern — Stop Server
 # ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -16,12 +16,12 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # ── Source .env for port ─────────────────────────────────────────────
-PORT="${FT710_WEB_PORT:-8888}"
+PORT="${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}"
 if [ -f "$ROOT_DIR/.env" ]; then
 	set -a
 	source "$ROOT_DIR/.env"
 	set +a
-	PORT="${FT710_WEB_PORT:-$PORT}"
+	PORT="${MRRC_WEB_PORT:-${FT710_WEB_PORT:-$PORT}}"
 fi
 
 stopped_cleanly=false
@@ -117,9 +117,9 @@ fi
 # 5. Serial port holders — AD-008 串口唯一 owner 兜底
 # ═══════════════════════════════════════════════════════════════════════
 # 手动/非 start.sh 启动的 server 进程可能不写 pid 文件、不监听 WEB 端口，
-# 但一定会持有 CAT 串口（.env 的 FT710_SERIAL_PORT）。任何非 rigctld 的
+# 但一定会持有 CAT/CI-V 串口（.env 的 MRRC_SERIAL_PORT）。任何非 rigctld 的
 # 持有者都是残留冲突进程，直接释放——避免切换后 ft8 侧 rigctld 与其争抢。
-SERIAL_DEV="${FT710_SERIAL_PORT:-/dev/cu.SLAB_USBtoUART}"
+SERIAL_DEV="${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-/dev/cu.SLAB_USBtoUART}}"
 rigctld_pid=$(pgrep -x rigctld 2>/dev/null || true)
 holders=$(lsof -t "$SERIAL_DEV" 2>/dev/null || true)
 for hpid in $holders; do

@@ -36,7 +36,7 @@ from backends.ft710.scope_frame import (
 from backends.ft710.scope_libraries import find_ftdi_libraries
 from backends.ft710.scope_libraries import get_ft4222_clock_divider
 
-logger = logging.getLogger("ft710.scope")
+logger = logging.getLogger("mrrc.scope")
 
 # ── FTDI Constants ───────────────────────────────────────────────
 FT_OK = 0

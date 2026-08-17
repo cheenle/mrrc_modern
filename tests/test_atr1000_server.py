@@ -220,15 +220,15 @@ class SourceGuardTests(unittest.TestCase):
         self.assertIn("atr.notify_tx(bool(radio.is_transmitting))", lifespan)
 
     def test_config_default_disabled(self):
-        self.assertIn('os.environ.get("FT710_ATR1000_HOST", "")', CONFIG_SOURCE)
-        self.assertIn('os.environ.get("FT710_ATR1000_PORT", "60001")', CONFIG_SOURCE)
+        self.assertIn('_env("MRRC_ATR1000_HOST"', CONFIG_SOURCE)
+        self.assertIn('_env_int("MRRC_ATR1000_PORT"', CONFIG_SOURCE)
 
     def test_store_path_env_override_and_frozen_launcher(self):
         tuner_src = Path("atr1000_tuner.py").read_text(encoding="utf-8")
-        self.assertIn("os.environ.get(", tuner_src)
-        self.assertIn("'FT710_ATR1000_STORE'", tuner_src)
+        self.assertIn("_env(", tuner_src)
+        self.assertIn("'MRRC_ATR1000_STORE'", tuner_src)
         launcher_src = Path("windows/launcher.py").read_text(encoding="utf-8")
-        self.assertIn('env.setdefault("FT710_ATR1000_STORE"', launcher_src)
+        self.assertIn('env.setdefault("MRRC_ATR1000_STORE"', launcher_src)
         spec_src = Path("packaging/pyinstaller/mrrc_modern_server.spec").read_text(encoding="utf-8")
         self.assertIn('"atr1000_client"', spec_src)
         self.assertIn('"atr1000_tuner"', spec_src)

@@ -48,7 +48,7 @@ try:
 except ImportError:  # sibling module may not be importable yet
     get_storage = None
 
-logger = logging.getLogger("ft710.atr1000")
+logger = logging.getLogger("mrrc.atr1000")
 
 # ── ATR-1000 command constants ────────────────────────────────────
 SCMD_FLAG = 0xFF

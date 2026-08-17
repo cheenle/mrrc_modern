@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════
-# MRRC FT-710 — Start Server
+# MRRC Modern — Start Server
 # ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -22,8 +22,8 @@ Usage: $0 [OPTIONS]
 
 Options:
   -f, --foreground   Run in foreground (no nohup, logs to stdout)
-  -p, --port PORT    Override web port (env: FT710_WEB_PORT)
-  -s, --serial PATH  Override CAT serial port (env: FT710_SERIAL_PORT)
+  -p, --port PORT    Override web port (env: MRRC_WEB_PORT)
+  -s, --serial PATH  Override CAT/CI-V serial port (env: MRRC_SERIAL_PORT)
   -h, --help         Show this help
 EOF
   exit 0
@@ -34,8 +34,8 @@ FOREGROUND=false
 while [ $# -gt 0 ]; do
   case "$1" in
     -f|--foreground) FOREGROUND=true ;;
-    -p|--port) export FT710_WEB_PORT="$2"; shift ;;
-    -s|--serial) export FT710_SERIAL_PORT="$2"; shift ;;
+    -p|--port) export MRRC_WEB_PORT="$2"; shift ;;
+    -s|--serial) export MRRC_SERIAL_PORT="$2"; shift ;;
     -h|--help) usage ;;
     *) echo -e "${RED}Unknown: $1${NC}"; usage ;;
   esac
@@ -85,7 +85,7 @@ if [ -f "$PID_FILE" ]; then
 fi
 
 # 1e. Port check
-PORT="${FT710_WEB_PORT:-8888}"
+PORT="${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}"
 if command -v lsof &>/dev/null; then
   port_pid=$(lsof -ti ":$PORT" -sTCP:LISTEN 2>/dev/null || true)
   if [ -n "$port_pid" ]; then
@@ -106,15 +106,16 @@ if command -v lsof &>/dev/null; then
 fi
 
 # 1f. Serial port check
-if [ -n "${FT710_SERIAL_PORT:-}" ]; then
-  if [ ! -e "$FT710_SERIAL_PORT" ]; then
-    echo -e "${YELLOW}⚠ Serial port not found: $FT710_SERIAL_PORT${NC}"
+SERIAL_PORT="${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-}}"
+if [ -n "${SERIAL_PORT:-}" ]; then
+  if [ ! -e "$SERIAL_PORT" ]; then
+    echo -e "${YELLOW}⚠ Serial port not found: $SERIAL_PORT${NC}"
     echo "  Server will start but radio control won't work"
     echo "  Available serial ports:"
     ls /dev/cu.* 2>/dev/null | grep -i usb || ls /dev/ttyUSB* 2>/dev/null || echo "  (none found)"
     echo ""
-  elif [ ! -r "$FT710_SERIAL_PORT" ] || [ ! -w "$FT710_SERIAL_PORT" ]; then
-    echo -e "${YELLOW}⚠ Serial port exists but may not be accessible: $FT710_SERIAL_PORT${NC}"
+  elif [ ! -r "$SERIAL_PORT" ] || [ ! -w "$SERIAL_PORT" ]; then
+    echo -e "${YELLOW}⚠ Serial port exists but may not be accessible: $SERIAL_PORT${NC}"
   fi
 fi
 
@@ -132,8 +133,8 @@ fi
 # 2. Start
 # ═══════════════════════════════════════════════════════════════════════
 
-echo -e "${CYAN}Starting FT-710 server...${NC}"
-echo "  Serial: ${FT710_SERIAL_PORT:-auto}"
+echo -e "${CYAN}Starting MRRC Modern server...${NC}"
+echo "  Serial: ${SERIAL_PORT:-auto}"
 echo "  Port:   $PORT"
 echo "  Log:    $LOG_FILE"
 

@@ -29,15 +29,17 @@ import time
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+from config import _env
+
 logger = logging.getLogger('ATR1000-Tuner')
 
 # Default store file: atr1000_tuner.json at the repository root
-# (same level as mem_channels.json).  FT710_ATR1000_STORE overrides the
+# (same level as mem_channels.json).  MRRC_ATR1000_STORE overrides the
 # path — the frozen Windows launcher points it at the user data dir
-# (%LOCALAPPDATA%\MRRC-FT710) so learned data survives reinstalls and
+# (%LOCALAPPDATA%\MRRC-Modern) so learned data survives reinstalls and
 # stays writable; TunerStorage(storage_file=...) overrides both.
-STORAGE_FILE = os.environ.get(
-    'FT710_ATR1000_STORE',
+STORAGE_FILE = _env(
+    'MRRC_ATR1000_STORE',
     os.path.join(os.path.dirname(os.path.abspath(__file__)), 'atr1000_tuner.json'),
 )
 

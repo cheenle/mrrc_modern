@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════
-# MRRC FT-710 — One-Shot Install & Deploy Script
+# MRRC Modern — One-Shot Install & Deploy Script
 # ═══════════════════════════════════════════════════════════════════════
 #
 # Automatically detects hardware, installs all dependencies, configures
@@ -58,7 +58,7 @@ WARNINGS=(); ERRORS=()
 # ── Help ──────────────────────────────────────────────────────────────
 usage() {
   cat <<EOF
-${BOLD}MRRC FT-710 Install Script${NC}
+${BOLD}MRRC Modern Install Script${NC}
 
 Usage: $0 [OPTIONS]
 
@@ -72,9 +72,9 @@ Options:
   --help, -h       Show this help
 
 Environment overrides:
-  FT710_SERIAL_PORT   Force CAT serial port path
-  FT710_WEB_PORT      Web server port (default: 8888)
-  FT710_WEB_PASSWORD  Login password (default: auto-generated)
+  MRRC_SERIAL_PORT    Force CAT/CI-V serial port path
+  MRRC_WEB_PORT       Web server port (default: 8888)
+  MRRC_WEB_PASSWORD   Login password (default: auto-generated)
 EOF
   exit 0
 }
@@ -458,8 +458,8 @@ detect_hardware() {
   log_msg "Scanning serial ports..."
 
   # Check env override first
-  if [ -n "${FT710_SERIAL_PORT:-}" ]; then
-    DETECTED_CAT_PORT="$FT710_SERIAL_PORT"
+  if [ -n "${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-}}" ]; then
+    DETECTED_CAT_PORT="${MRRC_SERIAL_PORT:-$FT710_SERIAL_PORT}"
     log_ok "CAT serial port (from env): $DETECTED_CAT_PORT"
   else
     local candidates=()
@@ -733,17 +733,17 @@ generate_config() {
   local example_file="$SCRIPT_DIR/.env.example"
 
   # Generate random password if not set
-  local password="${FT710_WEB_PASSWORD:-}"
+  local password="${MRRC_WEB_PASSWORD:-${FT710_WEB_PASSWORD:-}}"
   if [ -z "$password" ]; then
-    password="$("$PYTHON" -c "import secrets; print(secrets.token_hex(8))" 2>/dev/null || echo "ft710")"
+    password="$("$PYTHON" -c "import secrets; print(secrets.token_hex(8))" 2>/dev/null || echo "mrrc")"
   fi
 
   # Determine serial port
-  local cat_port="${FT710_SERIAL_PORT:-$DETECTED_CAT_PORT}"
+  local cat_port="${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-$DETECTED_CAT_PORT}}"
   [ -z "$cat_port" ] && cat_port="/dev/cu.SLAB_USBtoUART"  # sensible default
 
   # Determine web port
-  local web_port="${FT710_WEB_PORT:-8888}"
+  local web_port="${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}"
 
   # Check port availability
   if command -v lsof &>/dev/null && lsof -i ":$web_port" -sTCP:LISTEN &>/dev/null 2>&1; then
@@ -761,29 +761,31 @@ generate_config() {
   # Write .env file
   if [ ! -f "$env_file" ] || confirm "Overwrite existing .env?"; then
     cat >"$env_file" <<ENVEOF
-# MRRC FT-710 Configuration
+# MRRC Modern Configuration
 # Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 # OS: $OS ($ARCH)
+# Legacy FT710_* prefixes are still accepted for backward compatibility;
+# MRRC_* takes precedence when both are set.
 
 # ── Serial ──────────────────────────────────────────────────────────
-FT710_SERIAL_PORT=$cat_port
-FT710_BAUD_RATE=38400
-$( [ -n "${DETECTED_SCOPE_PORT:-}" ] && echo "#FT710_SCOPE_PORT=$DETECTED_SCOPE_PORT" || echo "#FT710_SCOPE_PORT=")
-$( [ -n "${FT710_SCOPE_BAUD:-}" ] && echo "FT710_SCOPE_BAUD=$FT710_SCOPE_BAUD" || echo "#FT710_SCOPE_BAUD=115200")
+MRRC_SERIAL_PORT=$cat_port
+MRRC_BAUD_RATE=38400
+$( [ -n "${DETECTED_SCOPE_PORT:-}" ] && echo "#MRRC_SCOPE_PORT=$DETECTED_SCOPE_PORT" || echo "#MRRC_SCOPE_PORT=")
+$( [ -n "${MRRC_SCOPE_BAUD:-}" ] && echo "MRRC_SCOPE_BAUD=$MRRC_SCOPE_BAUD" || echo "#MRRC_SCOPE_BAUD=115200")
 
 # ── Web Server ──────────────────────────────────────────────────────
-FT710_WEB_PORT=$web_port
-FT710_WEB_HOST=0.0.0.0
-FT710_WEB_PASSWORD=$password
+MRRC_WEB_PORT=$web_port
+MRRC_WEB_HOST=0.0.0.0
+MRRC_WEB_PASSWORD=$password
 
 # ── Scope ───────────────────────────────────────────────────────────
-FT710_FT4222_CLK_DIV=6
-$( [ -d "$SCRIPT_DIR/lib" ] && echo "#FT710_FTDI_LIB_DIR=$SCRIPT_DIR/lib" || echo "#FT710_FTDI_LIB_DIR=")
+MRRC_FT4222_CLK_DIV=6
+$( [ -d "$SCRIPT_DIR/lib" ] && echo "#MRRC_FTDI_LIB_DIR=$SCRIPT_DIR/lib" || echo "#MRRC_FTDI_LIB_DIR=")
 
 # ── Audio ───────────────────────────────────────────────────────────
 # PyAudio device indices (auto-detected if unset)
-#FT710_AUDIO_IN_DEVICE=
-#FT710_AUDIO_OUT_DEVICE=
+#MRRC_AUDIO_IN_DEVICE=
+#MRRC_AUDIO_OUT_DEVICE=
 ENVEOF
     log_ok "Configuration written: $env_file"
   else
@@ -858,19 +860,20 @@ except Exception as e:
   fi
 
   # ── 8c. Serial port accessibility ────────────────────────────────
-  if [ -n "${FT710_SERIAL_PORT:-}" ]; then
-    if [ -e "$FT710_SERIAL_PORT" ]; then
-      if [ -r "$FT710_SERIAL_PORT" ] && [ -w "$FT710_SERIAL_PORT" ]; then
-        log_ok "Serial port accessible: $FT710_SERIAL_PORT"
+  local serial_port="${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-}}"
+  if [ -n "${serial_port:-}" ]; then
+    if [ -e "$serial_port" ]; then
+      if [ -r "$serial_port" ] && [ -w "$serial_port" ]; then
+        log_ok "Serial port accessible: $serial_port"
       else
-        log_warn "Serial port exists but may not be writable: $FT710_SERIAL_PORT"
+        log_warn "Serial port exists but may not be writable: $serial_port"
         case "$OS" in
           linux) log_msg "  Fix: sudo usermod -a -G dialout \$USER; newgrp dialout" ;;
           macos) log_msg "  Check: Is another app using this port? (wfview, ExpertSDR, etc.)" ;;
         esac
       fi
     else
-      log_warn "Serial port not found: $FT710_SERIAL_PORT"
+      log_warn "Serial port not found: $serial_port"
       log_msg "  Is the FT-710 connected and powered on?"
     fi
   else
@@ -913,7 +916,7 @@ install_service() {
   case "$OS" in
     linux)
       # ── systemd service ─────────────────────────────────────────
-      local svc_file="/etc/systemd/system/mrrc-ft710.service"
+      local svc_file="/etc/systemd/system/mrrc-modern.service"
       if [ -f "$svc_file" ]; then
         log_ok "systemd service already exists: $svc_file"
         return 0
@@ -922,7 +925,7 @@ install_service() {
       if confirm "Install systemd service (requires sudo)?"; then
         cat <<SVCEOF | run_cmd sudo tee "$svc_file" >/dev/null
 [Unit]
-Description=MRRC FT-710 Web Control Server
+Description=MRRC Modern Web Control Server
 After=network.target
 
 [Service]
@@ -940,16 +943,16 @@ StandardError=append:$SCRIPT_DIR/logs/server.log
 WantedBy=multi-user.target
 SVCEOF
         run_cmd sudo systemctl daemon-reload
-        run_cmd sudo systemctl enable mrrc-ft710
-        run_cmd sudo systemctl start mrrc-ft710
+        run_cmd sudo systemctl enable mrrc-modern
+        run_cmd sudo systemctl start mrrc-modern
         log_ok "systemd service installed and started"
-        log_msg "  Status: sudo systemctl status mrrc-ft710"
-        log_msg "  Logs:   journalctl -u mrrc-ft710 -f"
+        log_msg "  Status: sudo systemctl status mrrc-modern"
+        log_msg "  Logs:   journalctl -u mrrc-modern -f"
       fi
       ;;
     macos)
       # ── launchd plist ───────────────────────────────────────────
-      local plist_file="$HOME/Library/LaunchAgents/com.mrrc.ft710.plist"
+      local plist_file="$HOME/Library/LaunchAgents/com.mrrc.modern.plist"
       if [ -f "$plist_file" ]; then
         log_ok "launchd service already exists: $plist_file"
         return 0
@@ -962,7 +965,7 @@ SVCEOF
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.mrrc.ft710</string>
+    <string>com.mrrc.modern</string>
     <key>ProgramArguments</key>
     <array>
         <string>$VENV_DIR/bin/python</string>
@@ -972,13 +975,13 @@ SVCEOF
     <string>$SCRIPT_DIR</string>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>FT710_SERIAL_PORT</key>
-        <string>${FT710_SERIAL_PORT:-/dev/cu.SLAB_USBtoUART}</string>
-        <key>FT710_WEB_PORT</key>
-        <string>${FT710_WEB_PORT:-8888}</string>
-        <key>FT710_WEB_PASSWORD</key>
-        <string>${FT710_WEB_PASSWORD:-ft710}</string>
-        <key>FT710_WEB_HOST</key>
+        <key>MRRC_SERIAL_PORT</key>
+        <string>${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-/dev/cu.SLAB_USBtoUART}}</string>
+        <key>MRRC_WEB_PORT</key>
+        <string>${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}</string>
+        <key>MRRC_WEB_PASSWORD</key>
+        <string>${MRRC_WEB_PASSWORD:-${FT710_WEB_PASSWORD:-ft710}}</string>
+        <key>MRRC_WEB_HOST</key>
         <string>0.0.0.0</string>
     </dict>
     <key>RunAtLoad</key>
@@ -1007,7 +1010,7 @@ print_summary() {
   log_hdr "Installation Summary"
 
   echo ""
-  echo -e "${BOLD}       MRRC FT-710 — Ready to Run${NC}"
+  echo -e "${BOLD}       MRRC Modern — Ready to Run${NC}"
   echo -e "  ═══════════════════════════════════════"
   echo ""
 
@@ -1026,16 +1029,16 @@ print_summary() {
 
   # Configuration
   echo -e "  ${BOLD}Configuration:${NC}"
-  echo "    Server URL:    http://localhost:${FT710_WEB_PORT:-8888}"
-  echo "    Login password: ${FT710_WEB_PASSWORD:-ft710}"
-  echo "    Serial port:   ${FT710_SERIAL_PORT:-auto}"
+  echo "    Server URL:    http://localhost:${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}"
+  echo "    Login password: ${MRRC_WEB_PASSWORD:-${FT710_WEB_PASSWORD:-mrrc}}"
+  echo "    Serial port:   ${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-auto}}"
   echo "    Config file:   $SCRIPT_DIR/.env"
   echo ""
 
   # Features
   echo -e "  ${BOLD}Features:${NC}"
   echo -n "    Serial CAT:    "
-  [ -n "${FT710_SERIAL_PORT:-}" ] && [ -e "${FT710_SERIAL_PORT:-}" ] && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}will try on startup${NC}"
+  [ -n "${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-}}" ] && [ -e "${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-}}" ] && echo -e "${GREEN}✓${NC}" || echo -e "${YELLOW}will try on startup${NC}"
   echo -n "    RX/TX Audio:  "
   $AUDIO_OK && echo -e "${GREEN}✓${NC} (PyAudio + $( $OPUS_LIB_OK && echo 'Opus' || echo 'PCM' ))" || echo -e "${YELLOW}unavailable${NC}"
   echo -n "    Scope:        "
@@ -1047,7 +1050,7 @@ print_summary() {
   if [ -f "$SCRIPT_DIR/.env" ]; then
     echo "    source .env && venv/bin/python server.py"
   else
-    echo "    FT710_SERIAL_PORT=${FT710_SERIAL_PORT:-/dev/cu.SLAB_USBtoUART} venv/bin/python server.py"
+    echo "    MRRC_SERIAL_PORT=${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-/dev/cu.SLAB_USBtoUART}} venv/bin/python server.py"
   fi
   echo ""
 
@@ -1093,7 +1096,7 @@ main() {
 
   echo -e "${BOLD}${BLUE}"
   echo "  ╔══════════════════════════════════════════╗"
-  echo "  ║   MRRC FT-710 — Install & Deploy Script  ║"
+  echo "  ║   MRRC Modern — Install & Deploy Script  ║"
   echo "  ╚══════════════════════════════════════════╝"
   echo -e "${NC}"
   echo "  Script dir: $SCRIPT_DIR"

@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import os
 
-from config import NARROW_MODES, _interp
+from config import NARROW_MODES, _interp, _env
 
 # ── Scope/Spectrum Serial Port ─────────────────────────────────────
 # FT-710 Standard COM Port for scope data (second USB serial interface)
-SCOPE_SERIAL_PORT = os.environ.get("FT710_SCOPE_PORT", "")
-SCOPE_BAUD_RATE = int(os.environ.get("FT710_SCOPE_BAUD", "115200"))
+SCOPE_SERIAL_PORT = _env("MRRC_SCOPE_PORT", "")
+SCOPE_BAUD_RATE = int(_env("MRRC_SCOPE_BAUD", "115200"))
 
 # Span choices (from FT-710.rig Spans section)
 SCOPE_SPANS: dict[int, dict] = {

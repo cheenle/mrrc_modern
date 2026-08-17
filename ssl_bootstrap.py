@@ -6,7 +6,7 @@ self-signed certificate on first run (10-year validity, SANs covering
 localhost / hostname / LAN IPs) and reuses it afterwards.  This is a
 convenience certificate for LAN use: browsers will show an "untrusted"
 warning the user accepts once.  Real deployments can point
-FT710_SSL_CERT / FT710_SSL_KEY at proper certificates instead (the
+MRRC_SSL_CERT / MRRC_SSL_KEY at proper certificates instead (the
 launcher and server both honour those env vars first).
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import logging
 import socket
 from pathlib import Path
 
-logger = logging.getLogger("ft710.ssl")
+logger = logging.getLogger("mrrc.ssl")
 
 CERT_FILENAME = "server.crt"
 KEY_FILENAME = "server.key"

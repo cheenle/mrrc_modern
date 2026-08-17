@@ -20,7 +20,7 @@ function Invoke-Checked {
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $DistRoot = Join-Path $RepoRoot "dist\windows"
-$AppRoot = Join-Path $DistRoot "MRRC-FT710"
+$AppRoot = Join-Path $DistRoot "MRRC-Modern"
 $PyInstallerRoot = Join-Path $DistRoot "_pyinstaller"
 
 Set-Location $RepoRoot
@@ -33,7 +33,7 @@ $ft4222 = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\FT4222.dll"
 $d2xx = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\ftd2xx.dll"
 $opus = Join-Path $RepoRoot "vendor\opus\windows\bin\x64\opus.dll"
 if (!(Test-Path $ft4222) -or !(Test-Path $d2xx)) {
-    Write-Warning "FTDI DLLs are missing. The installer will build, but FT4222 true spectrum will fall back unless these files are added:"
+    Write-Warning "FTDI DLLs are missing. The installer will build, but FT4222 true spectrum (FT-710) will fall back unless these files are added:"
     Write-Warning "  $ft4222"
     Write-Warning "  $d2xx"
 }
@@ -43,17 +43,17 @@ if (!(Test-Path $opus)) {
 }
 
 Invoke-Checked pyinstaller packaging\pyinstaller\scope_pipe.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
-Invoke-Checked pyinstaller packaging\pyinstaller\ft710_server.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
-Invoke-Checked pyinstaller packaging\pyinstaller\ft710_launcher.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
+Invoke-Checked pyinstaller packaging\pyinstaller\mrrc_modern_server.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
+Invoke-Checked pyinstaller packaging\pyinstaller\mrrc_modern_launcher.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
 
 if (Test-Path $AppRoot) {
     Remove-Item $AppRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Path $AppRoot | Out-Null
 
-Copy-Item (Join-Path $PyInstallerRoot "ft710-server\*") $AppRoot -Recurse -Force
+Copy-Item (Join-Path $PyInstallerRoot "MRRC-Modern-Server\*") $AppRoot -Recurse -Force
 Copy-Item (Join-Path $PyInstallerRoot "scope_pipe.exe") $AppRoot -Force
-Copy-Item (Join-Path $PyInstallerRoot "MRRC-FT710.exe") $AppRoot -Force
+Copy-Item (Join-Path $PyInstallerRoot "MRRC-Modern-Launcher.exe") $AppRoot -Force
 Copy-Item (Join-Path $RepoRoot "windows") $AppRoot -Recurse -Force
 # Do not ship stale bytecode caches in the installer.
 Remove-Item (Join-Path $AppRoot "windows\__pycache__") -Recurse -Force -ErrorAction SilentlyContinue
@@ -73,10 +73,10 @@ if (Test-Path $OpusSource) {
 }
 
 if (Get-Command iscc -ErrorAction SilentlyContinue) {
-    Invoke-Checked iscc packaging\windows\MRRC-FT710.iss
+    Invoke-Checked iscc packaging\windows\MRRC-Modern.iss
 } else {
     Write-Warning "Inno Setup Compiler 'iscc' was not found. Install Inno Setup and rerun this script to create the setup EXE."
 }
 
 Write-Host "Assembled app: $AppRoot"
-Write-Host "Installer output: $(Join-Path $DistRoot 'MRRC-FT710-Setup.exe')"
+Write-Host "Installer output: $(Join-Path $DistRoot 'MRRC-Modern-Setup.exe')"

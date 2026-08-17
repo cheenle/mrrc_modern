@@ -17,13 +17,13 @@ class WindowsPackagingPathTests(unittest.TestCase):
         self.assertIn(fake_meipass, roots)
 
     def test_resource_roots_include_frozen_executable_dir(self):
-        fake_exe = "/tmp/ft710_app/ft710-server.exe"
+        fake_exe = "/tmp/mrrc_modern_app/MRRC-Modern-Server.exe"
         with (
             patch.object(sys, "frozen", True, create=True),
             patch.object(sys, "executable", fake_exe),
         ):
             roots = scope_libraries.get_resource_roots()
-        self.assertIn(Path("/tmp/ft710_app").resolve(), roots)
+        self.assertIn(Path("/tmp/mrrc_modern_app").resolve(), roots)
 
     def test_windows_vendor_dir_is_searched(self):
         with patch.object(scope_libraries.sys, "platform", "win32"):
@@ -75,7 +75,7 @@ class ScopePipeCommandTests(unittest.TestCase):
         with (
             patch.object(scope_producer.sys, "frozen", True, create=True),
             patch.object(scope_producer.sys, "platform", "win32"),
-            patch.object(scope_producer.sys, "executable", r"C:\MRRC-FT710\ft710-server.exe"),
+            patch.object(scope_producer.sys, "executable", r"C:\MRRC-Modern\MRRC-Modern-Server.exe"),
             patch.object(scope_producer.Path, "exists", lambda self: self.name == "scope_pipe.exe"),
         ):
             cmd = scope_producer.pipe_command(repo_root)
@@ -86,7 +86,7 @@ class ScopePipeCommandTests(unittest.TestCase):
 
 class ResourceDirTests(unittest.TestCase):
     def test_resource_dir_prefers_meipass_when_frozen(self):
-        fake_meipass = Path("/tmp/ft710_app/_internal")
+        fake_meipass = Path("/tmp/mrrc_modern_app/_internal")
         with (
             patch.object(server.sys, "frozen", True, create=True),
             patch.object(server.sys, "_MEIPASS", str(fake_meipass), create=True),

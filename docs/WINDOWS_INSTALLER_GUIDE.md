@@ -9,11 +9,11 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-FT710-v1.8.0-Windows-x64-Setup.exe` | 35.2 MB | `36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea` |
+| `MRRC-Modern-v1.8.0-Windows-x64-Setup.exe` | 35.2 MB | `36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea` |
 
-- Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe>
-- GitHub repository: <https://github.com/cheenle/mrrc_ft710>
+- Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-Modern-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-Modern-v1.8.0-Windows-x64-Setup.exe>
+- GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 The v1.8.0 package was built from commit `4ce4d26` on Windows 11 with Python
 3.12.4, PyInstaller 6.21.0, and Inno Setup 6.7.3. All 439 Windows tests, three
@@ -34,7 +34,7 @@ RF speech/noise path, so over-the-air monitoring remains an operator check.
 ## User Installation
 
 > **HTTPS by default (v1.7.6+)**: on first launch the app generates a
-> throwaway self-signed certificate (`%LOCALAPPDATA%\MRRC-FT710\certs\`)
+> throwaway self-signed certificate (`%LOCALAPPDATA%\MRRC-Modern\certs\`)
 > and starts on HTTPS — the browser warns "untrusted" once; accept it
 > (Chrome/Edge: Advanced → Proceed; Safari: Show Details → Visit). HTTPS
 > is required for audio when you open the UI from another device
@@ -59,17 +59,17 @@ After connecting the radio USB cable, open Device Manager and check:
 - **IC-7300**: Ports (COM & LPT) shows one COM port for USB CI-V.
 - USB audio devices include the radio audio input and output.
 
-### 2. Install MRRC FT-710
+### 2. Install MRRC Modern
 
 Run:
 
 ```text
-MRRC-FT710-Setup.exe
+MRRC-Modern-Setup.exe
 ```
 
 The installer creates:
 
-- Start Menu shortcut: `MRRC FT-710`
+- Start Menu shortcut: `MRRC Modern`
 - Optional desktop shortcut
 - Start Menu shortcut: `Edit Configuration`
 
@@ -78,7 +78,7 @@ The installer creates:
 Use the Start Menu `Edit Configuration` shortcut, or open:
 
 ```text
-%LOCALAPPDATA%\MRRC-FT710\ft710.env
+%LOCALAPPDATA%\MRRC-Modern\ft710.env
 ```
 
 Typical configuration:
@@ -134,7 +134,7 @@ its displayed WASAPI default rate is 48 kHz.
 
 ### 2. Lock the device in `ft710.env`
 
-Edit `%LOCALAPPDATA%\MRRC-FT710\ft710.env` (Start Menu → `Edit
+Edit `%LOCALAPPDATA%\MRRC-Modern\ft710.env` (Start Menu → `Edit
 Configuration`):
 
 ```ini
@@ -200,9 +200,9 @@ TX modulation source is configured **per mode** (FT-710 Operation Manual,
 
 ### 4. Launch
 
-Start `MRRC FT-710` from the Start Menu or desktop shortcut. The launcher:
+Start `MRRC Modern` from the Start Menu or desktop shortcut. The launcher:
 
-1. Reads `%LOCALAPPDATA%\MRRC-FT710\ft710.env`.
+1. Reads `%LOCALAPPDATA%\MRRC-Modern\ft710.env`.
 2. Starts the bundled server and waits for it to answer HTTP before opening
    `http://localhost:8888` in the default browser (up to ~15 seconds on the
    first run).
@@ -287,8 +287,8 @@ packaging\windows\build.ps1
 Expected outputs:
 
 ```text
-dist\windows\MRRC-FT710\
-dist\windows\MRRC-FT710-Setup.exe
+dist\windows\MRRC-Modern\
+dist\windows\MRRC-Modern-Setup.exe
 ```
 
 The build script runs syntax checks and the test suite before packaging.
@@ -299,17 +299,17 @@ The build script runs syntax checks and the test suite before packaging.
 |------|---------|
 | `windows\launcher.py` | Desktop launcher; starts/stops the server and opens the browser |
 | `windows\default.env` | Initial user configuration template |
-| `packaging\pyinstaller\ft710_server.spec` | Bundles the FastAPI server and static UI |
-| `packaging\pyinstaller\scope_pipe.spec` | Bundles the FT4222 scope worker |
-| `packaging\pyinstaller\ft710_launcher.spec` | Bundles the desktop launcher |
-| `packaging\windows\MRRC-FT710.iss` | Inno Setup installer definition |
+| `packaging\pyinstaller\mrrc_modern_server.spec` | Bundles the FastAPI server, both radio backends, and the static UI |
+| `packaging\pyinstaller\scope_pipe.spec` | Bundles the FT-710 FT4222 scope worker |
+| `packaging\pyinstaller\mrrc_modern_launcher.spec` | Bundles the desktop launcher |
+| `packaging\windows\MRRC-Modern.iss` | Inno Setup installer definition |
 | `packaging\windows\build.ps1` | End-to-end Windows build script |
 
 ## Verification Checklist
 
 After installing on Windows:
 
-1. Launch `MRRC FT-710`.
+1. Launch `MRRC Modern`.
 2. Confirm the browser opens the login page.
 3. Log in with `FT710_WEB_PASSWORD`.
 4. Confirm frequency, mode, and S-meter update from the radio.
@@ -327,7 +327,7 @@ After installing on Windows:
 | `Server did not answer within 15s` while Uvicorn says `http://[::]:8888` | Older launcher probed IPv4 loopback while the server was listening on IPv6 wildcard | Open `http://localhost:8888`, or update to a package with the launcher fix |
 | `TX Opus decoder unavailable: libopus not found` | Missing Windows `opus.dll` | Add `vendor\opus\windows\bin\x64\opus.dll` before building, or install/copy `opus.dll` next to the app |
 | App starts but FT4222 spectrum is unavailable | Missing `FT4222.dll` or `ftd2xx.dll` (or not using FT-710) | Place both DLLs in `vendor\ftdi\windows\bin\x64` before building; IC-7300 uses CI-V `0x27` and does not need FTDI |
-| Login fails | Wrong password | Check `%LOCALAPPDATA%\MRRC-FT710\ft710.env` |
+| Login fails | Wrong password | Check `%LOCALAPPDATA%\MRRC-Modern\ft710.env` |
 | Audio device not found | Windows selected another audio device | Set `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` by name or index (see *Audio (RX/TX) Setup*) |
 | No RX audio, or RX sounds like room noise | Auto-detect picked the laptop mic instead of the FT-710's USB sound card | Lock `FT710_AUDIO_RX_DEVICE=USB Audio` (or the index from the startup device list) |
 | PTT keys but TX audio plays through the PC speakers | Auto-detect picked the wrong output device | Lock `FT710_AUDIO_TX_DEVICE=USB Audio` (or the index) |

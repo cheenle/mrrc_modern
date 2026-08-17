@@ -81,7 +81,7 @@ class WindowsLauncherTests(unittest.TestCase):
             )
 
     def test_frozen_launcher_never_falls_back_to_itself(self):
-        """Frozen mode without ft710-server.exe must NOT spawn the launcher
+        """Frozen mode without MRRC-Modern-Server.exe must NOT spawn the launcher
         again (sys.executable is the launcher itself) — it must give up."""
         import sys
 
@@ -115,7 +115,7 @@ class WindowsLauncherSslTests(unittest.TestCase):
     def test_build_command_without_ssl_pair_keeps_no_ssl(self):
         with tempfile.TemporaryDirectory() as tmp:
             app_root = Path(tmp)
-            (app_root / "ft710-server.exe").write_text("x", encoding="utf-8")
+            (app_root / "MRRC-Modern-Server.exe").write_text("x", encoding="utf-8")
             with patch.object(launcher, "app_dir", return_value=app_root):
                 cmd = launcher.build_command(None)
             self.assertIn("--no-ssl", cmd)
@@ -123,7 +123,7 @@ class WindowsLauncherSslTests(unittest.TestCase):
     def test_build_command_with_ssl_pair_passes_cert_args(self):
         with tempfile.TemporaryDirectory() as tmp:
             app_root = Path(tmp)
-            (app_root / "ft710-server.exe").write_text("x", encoding="utf-8")
+            (app_root / "MRRC-Modern-Server.exe").write_text("x", encoding="utf-8")
             pair = (Path(tmp) / "server.crt", Path(tmp) / "server.key")
             with patch.object(launcher, "app_dir", return_value=app_root):
                 cmd = launcher.build_command(pair)

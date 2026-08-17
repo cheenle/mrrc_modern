@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+"""PyInstaller one-file spec for the MRRC Modern desktop launcher."""
 from pathlib import Path
 
 
@@ -13,7 +13,10 @@ a = Analysis(
     datas=[
         (str(ROOT / "windows" / "default.env"), "windows"),
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        "ssl_bootstrap",
+        "cryptography",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -28,7 +31,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="MRRC-FT710",
+    name="MRRC-Modern-Launcher",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

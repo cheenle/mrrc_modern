@@ -2,23 +2,31 @@
 
 ## Goal
 
-Build a Windows 11/12 desktop installer for the FT-710 server. The installed
-application runs as a user-launched desktop app, not a Windows service. It
-bundles the Python runtime and dependencies so users do not need to install
-Python manually.
+Build a Windows 11/12 desktop installer for the MRRC Modern server
+(FT-710 and IC-7300/IC-7300MK2). The installed application runs as a
+user-launched desktop app, not a Windows service. It bundles the Python runtime
+and dependencies so users do not need to install Python manually.
+
+> **Update (2026-08-17):** The installer now bundles both radio backends.  The
+> active backend is selected with `MRRC_RADIO_MODEL=ft710|ic7300|ic7300mk2`
+> (default `ft710`).  FTDI DLLs are still bundled for FT-710 FT4222 true
+> spectrum, but they are not required for IC-7300/MK2, which uses a single USB
+> CI-V port.
 
 ## Supported Behavior
 
-- Install a desktop/start-menu application named `MRRC FT-710`.
+- Install a desktop/start-menu application named `MRRC Modern`.
 - Launch a desktop window/console helper that starts the local FastAPI server.
 - Read configuration from an editable Windows-side file.
 - Open the browser to the local web UI after startup.
 - Stop the server when the desktop launcher exits.
-- Support CAT control through the FT-710 Enhanced COM Port.
+- Support CAT control through the FT-710 Enhanced COM Port or the IC-7300/MK2
+  USB CI-V port.
 - Support RX/TX USB audio through PyAudio.
 - Support FT4222 true spectrum capture on Windows when FTDI DLLs and drivers
-  are available.
-- Fall back to S-meter spectrum when FT4222 is unavailable.
+  are available (FT-710 only).
+- Fall back to S-meter spectrum when FT4222 is unavailable (or when using
+  IC-7300/MK2, which uses CI-V 0x27 spectrum instead).
 
 ## Packaging Approach
 
@@ -103,8 +111,8 @@ be changed before LAN exposure.
 
 Expected outputs:
 
-- `dist/windows/MRRC-FT710/` from PyInstaller.
-- `dist/windows/MRRC-FT710-Setup.exe` from Inno Setup.
+- `dist/windows/MRRC-Modern/` from PyInstaller.
+- `dist/windows/MRRC-Modern-Setup.exe` from Inno Setup.
 
 ## Verification
 

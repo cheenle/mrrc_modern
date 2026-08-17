@@ -2,11 +2,20 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a Windows desktop installer that bundles the FT-710 server, Python runtime, static UI, FTDI DLL support, and a desktop launcher.
+**Goal:** Build a Windows desktop installer that bundles the MRRC Modern server
+(FT-710 and IC-7300/IC-7300MK2 backends), Python runtime, static UI, optional
+FTDI DLL support, and a desktop launcher.
 
-**Architecture:** Package the existing FastAPI server with PyInstaller one-folder mode and wrap it with an Inno Setup installer. Add a small launcher that reads a Windows config file, starts the bundled server process, opens the browser, and stops the process on exit. Make FT4222 true spectrum work by bundling FTDI DLLs and making `scope_pipe.py` runnable from a frozen distribution.
+**Architecture:** Package the existing FastAPI server with PyInstaller
+one-folder mode and wrap it with an Inno Setup installer. Add a small launcher
+that reads a Windows config file, starts the bundled server process, opens the
+browser, and stops the process on exit. Make FT4222 true spectrum work for the
+FT-710 by bundling FTDI DLLs and making `backends.ft710.scope_pipe` runnable
+from a frozen distribution. IC-7300/MK2 uses the same bundle but does not need
+FTDI DLLs.
 
-**Tech Stack:** Python 3.11+, PyInstaller, Inno Setup, FastAPI/Uvicorn, PyAudio, pyserial, FTDI D2XX/LibFT4222 DLLs.
+**Tech Stack:** Python 3.11+, PyInstaller, Inno Setup, FastAPI/Uvicorn, PyAudio,
+pyserial, FTDI D2XX/LibFT4222 DLLs (FT-710 only).
 
 ---
 
@@ -22,6 +31,12 @@
 - Modify `scope_libraries.py`: PyInstaller-aware resource and Windows DLL discovery.
 - Modify `server.py`: PyInstaller-aware scope pipe subprocess command.
 - Add tests in `tests/test_windows_packaging_paths.py`.
+
+> **Update (2026-08-17):** The packaging targets were renamed to
+> `mrrc_modern_server.spec` / `mrrc_modern_launcher.spec` / `MRRC-Modern.iss`
+> and now bundle both `backends.ft710.*` and `backends.ic7300.*`.  The installed
+> app supports `MRRC_RADIO_MODEL=ft710|ic7300|ic7300mk2`; FTDI DLLs are only
+> required for FT-710 true spectrum.
 
 ## Task 1: PyInstaller Runtime Path Helpers
 

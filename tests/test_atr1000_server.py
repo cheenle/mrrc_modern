@@ -229,7 +229,7 @@ class SourceGuardTests(unittest.TestCase):
         self.assertIn("'FT710_ATR1000_STORE'", tuner_src)
         launcher_src = Path("windows/launcher.py").read_text(encoding="utf-8")
         self.assertIn('env.setdefault("FT710_ATR1000_STORE"', launcher_src)
-        spec_src = Path("packaging/pyinstaller/ft710_server.spec").read_text(encoding="utf-8")
+        spec_src = Path("packaging/pyinstaller/mrrc_modern_server.spec").read_text(encoding="utf-8")
         self.assertIn('"atr1000_client"', spec_src)
         self.assertIn('"atr1000_tuner"', spec_src)
 

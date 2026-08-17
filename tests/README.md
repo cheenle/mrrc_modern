@@ -1,8 +1,10 @@
-# MRRC FT-710 Test Suite
+# MRRC Modern Test Suite
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no radio, no serial port, no USB audio device needed. 592 tests across 29 test modules.
+Automated test suite covering the core backend modules for MRRC Web Control
+(FT-710 and IC-7300/IC-7300MK2). All tests run **without hardware** — no radio,
+no serial port, no USB audio device needed. 593 tests across 29 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,8 +14,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 592 |
-| Passed | 592 (with all optional dependencies installed) |
+| Total tests | 593 |
+| Passed | 593 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~13s (harness tests spawn CLI subprocesses) |
@@ -160,7 +162,7 @@ SDD coverage: §12.2 (Windows packaging)
 |-------|-------|--------|
 | `WindowsLauncherTests` | 7 | Local browser URL selection for wildcard binds; FTDI dir absolutized; mem_channels seeding incl. PyInstaller 6 `_internal` fallback; frozen launcher never falls back to re-spawning itself |
 
-### 16. test_windows_packaging_files.py — Windows Packaging Files (3 tests)
+### 16. test_windows_packaging_files.py — Windows Packaging Files (4 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
@@ -171,7 +173,7 @@ SDD coverage: §12.2 (Windows packaging)
 | Class | Tests | Covers |
 |-------|-------|--------|
 | `WindowsPackagingPathTests` | 4 | Frozen-runtime resource path resolution |
-| `ScopePipeCommandTests` | 2 | scope_pipe command construction under frozen runtime |
+| `ScopePipeCommandTests` | 2 | `backends.ft710.scope_pipe` command construction under frozen runtime |
 | `ResourceDirTests` | 2 | `_resource_dir()` prefers `_MEIPASS` when frozen (PyInstaller 6 `_internal` layout), falls back to SCRIPT_DIR |
 
 ### 18. test_sdd_harness.py — SDD-Guardian Context Harness (27 tests)

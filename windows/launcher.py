@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import ssl_bootstrap
 
 
-APP_NAME = "MRRC FT-710"
+APP_NAME = "MRRC Modern"
 DEFAULT_PORT = "8888"
 
 
@@ -28,8 +28,8 @@ def app_dir() -> Path:
 def user_data_dir() -> Path:
     root = os.environ.get("LOCALAPPDATA")
     if root:
-        return Path(root) / "MRRC-FT710"
-    return Path.home() / ".mrrc-ft710"
+        return Path(root) / "MRRC-Modern"
+    return Path.home() / ".mrrc-modern"
 
 
 def config_path() -> Path:
@@ -139,7 +139,7 @@ def local_url(env: dict[str, str], secure: bool = False) -> str:
 
 
 def server_executable() -> Path | None:
-    exe = app_dir() / "ft710-server.exe"
+    exe = app_dir() / "MRRC-Modern-Server.exe"
     if exe.exists():
         return exe
     # Source-mode fallback only. When frozen, sys.executable IS this

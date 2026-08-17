@@ -1,5 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
+"""PyInstaller one-file spec for the FT-710 FT4222 scope pipe worker.
 
+The worker lives in ``backends/ft710/scope_pipe.py`` and is launched either
+as a module (``python -m backends.ft710.scope_pipe``) in source mode or as
+the bundled ``scope_pipe.exe`` in a frozen distribution.
+"""
 from pathlib import Path
 import sys
 
@@ -7,25 +12,31 @@ import sys
 ROOT = Path(SPECPATH).parents[1]
 
 
-# The vendor/ftdi runtime tree is platform-specific (see ft710_server.spec).
-# When absent on macOS, scope_pipe falls back to the S-meter spectrum.
-_ftdi_data = []
+# The scope pipe only needs FTDI libraries; Opus is irrelevant here, but
+# keeping the same vendor-tree bundling pattern as the server avoids surprises.
+_vendor_data = []
 if sys.platform == "win32":
     _ftdi_root = ROOT / "vendor" / "ftdi" / "windows"
     if _ftdi_root.exists():
-        _ftdi_data.append((str(_ftdi_root), "vendor/ftdi/windows"))
+        _vendor_data.append((str(_ftdi_root), "vendor/ftdi/windows"))
+    _opus_root = ROOT / "vendor" / "opus" / "windows"
+    if _opus_root.exists():
+        _vendor_data.append((str(_opus_root), "vendor/opus/windows"))
 elif sys.platform == "darwin":
     _ftdi_root = ROOT / "vendor" / "ftdi" / "macos"
     if _ftdi_root.exists():
-        _ftdi_data.append((str(_ftdi_root), "vendor/ftdi/macos"))
+        _vendor_data.append((str(_ftdi_root), "vendor/ftdi/macos"))
 
 
 a = Analysis(
-    [str(ROOT / "scope_pipe.py")],
+    [str(ROOT / "backends" / "ft710" / "scope_pipe.py")],
     pathex=[str(ROOT)],
     binaries=[],
-    datas=_ftdi_data,
-    hiddenimports=[],
+    datas=_vendor_data,
+    hiddenimports=[
+        "backends.ft710.scope_frame",
+        "backends.ft710.scope_libraries",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

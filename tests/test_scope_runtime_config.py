@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from scope_libraries import get_ft4222_clock_divider
+from backends.ft710.scope_libraries import get_ft4222_clock_divider
 
 
 class ScopeRuntimeConfigTests(unittest.TestCase):

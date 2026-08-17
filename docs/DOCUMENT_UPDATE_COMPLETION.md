@@ -1,24 +1,72 @@
 # 文档更新完成报告
 
-**日期**: 2026-07-14  
-**任务**: 更新所有文档以反映 TX 链路深度分析结果  
+**日期**: 2026-08-17  
+**任务**: 更新所有项目文档以反映多电台后端（FT-710 + IC-7300/IC-7300MK2）变更  
 **状态**: ✅ 完成
 
 ---
 
 ## 任务概述
 
-根据 TX 链路深度分析的结果，需要更新项目文档体系，确保：
-1. 所有文档反映最新的项目状态
-2. TX 链路分析发现被正确记录和传达
+根据后端插件化改造的结果，需要更新项目文档体系，确保：
+1. 所有文档不再声称项目仅支持 FT-710
+2. `MRRC_RADIO_MODEL`、`IC7300_CIV_ADDR`、后端架构、CI-V 频谱、每后端音频等新事实被正确记录
 3. 文档之间保持一致性
-4. 提供清晰的行动指引
+4. 提供清晰的 FT-710 / IC-7300 操作与安装指引
 
 ---
 
-## 执行的工作
+## 执行的工作（2026-08-17 后端同步）
 
-### 1. 创建新文档 ✅
+### 1. 更新的文档 ✅
+
+#### `README.md`
+- 标题改为「MRRC Web Control」，简介同时包含 FT-710 与 IC-7300/MK2
+- 新增「Backend Selection」章节
+- 环境变量表增加 `MRRC_RADIO_MODEL`、`IC7300_CIV_ADDR`
+- 运行示例覆盖 FT-710 与 IC-7300
+- 架构图改为后端无关服务器 + 可插拔后端
+- 测试数更新为 592
+
+#### `QUICKSTART.md`
+- 标题泛化
+- 新增 IC-7300 快速上手指南（单 USB 线、115200 8N1、0x94、48kHz 音频）
+- 增加 `MRRC_RADIO_MODEL` 与 `IC7300_CIV_ADDR` 配置说明
+
+#### `CHANGELOG.md`
+- 新增 v1.9.0（2026-08-17）条目
+- 记录可插拔后端、IC-7300/MK2、CI-V、0x27 频谱、每后端音频、能力驱动前端
+
+#### `SECURITY_GUIDE.md`
+- 标题改为「MRRC Web Control」；内容保持无线电台无关
+
+#### `DEPENDENCIES.md`
+- 平台支持表区分 FT-710 与 IC-7300 的频谱需求
+- 新增 IC-7300 无 FTDI 依赖说明
+- 新增 IC-7300 USB CI-V / 48kHz 音频说明
+
+#### `docs/OPERATION_GUIDE.md`
+- 标题改为「MRRC Web 遥控」
+- 新增「电台型号差异」章节（AN/Vd-Id 隐藏、FIL1-3、ATT 开关、频谱发射继续等）
+
+#### `docs/MACOS_INSTALLER_GUIDE.md`
+- 配置步骤增加 `MRRC_RADIO_MODEL`
+- 说明 IC-7300 不需 FTDI 驱动
+
+#### `docs/WINDOWS_INSTALLER_GUIDE.md`
+- 配置步骤增加 `MRRC_RADIO_MODEL`
+- 说明 IC-7300 不需 FTDI 驱动
+
+#### `docs/FDE.md`
+- 标题改为「MRRC Web Control」
+- 新增「Multi-Radio Backend Plugin Model」与 IC-7300 支持说明
+
+#### `docs/DOCUMENT_INDEX.md`
+- 更新标题/日期/版本
+- 新增后端目录索引
+- 更新文档统计
+
+### 2. 历史创建新文档 ✅（2026-07-14）
 
 #### `docs/TX_LINK_ANALYSIS.md` (7.6KB)
 - TX 链路架构概览
@@ -45,7 +93,7 @@
 
 ---
 
-### 2. 更新现有文档 ✅
+### 3. 历史更新现有文档 ✅（2026-07-14）
 
 #### `FIXES_SUMMARY.md`
 **变化**: 14 → 130 行  
@@ -98,28 +146,33 @@
 ## 文档体系现状
 
 ### 核心文档（7 份）
-1. ✅ README.md — 项目主文档
-2. ✅ CHANGELOG.md — 版本变更历史
-3. ✅ SECURITY_GUIDE.md — 安全配置指南
-4. ✅ QUICKSTART.md — 快速启动指南
-5. ✅ DEPENDENCIES.md — 依赖安装指南
-6. ✅ FT-710_CAT_Knowledge_Base.md — CAT 命令参考
-7. ✅ AGENTS.md — Agnes 代理配置
+1. ✅ README.md — 项目主文档（已同步多电台后端）
+2. ✅ CHANGELOG.md — 版本变更历史（已新增 v1.9.0）
+3. ✅ SECURITY_GUIDE.md — 安全配置指南（已泛化）
+4. ✅ QUICKSTART.md — 快速启动指南（已新增 IC-7300）
+5. ✅ DEPENDENCIES.md — 依赖安装指南（已新增 IC-7300）
+6. ✅ FT-710_CAT_Knowledge_Base.md — FT-710 CAT 命令参考（保留）
+7. ✅ AGENTS.md — Agnes 代理配置（已同步后端结构）
 
-### 技术文档（5 份）
+### 技术文档（7 份）
 8. ✅ FIXES_SUMMARY.md — 修复详细说明（含 TX 分析）
 9. ✅ FINAL_VERIFICATION.md — 验证报告（含 TX 状态）
 10. ✅ EXECUTIVE_SUMMARY.md — 执行摘要（含 TX 分析）
 11. ✅ COMPLETION_REPORT.md — 完成报告（含 TX 状态）
 12. ✅ docs/TX_LINK_ANALYSIS.md — TX 音频链路深度分析
+13. ✅ docs/OPERATION_GUIDE.md — Web UI 操作指南（已新增型号差异）
+14. ✅ docs/MACOS_INSTALLER_GUIDE.md — macOS 安装指南（已同步后端选择）
+15. ✅ docs/WINDOWS_INSTALLER_GUIDE.md — Windows 安装指南（已同步后端选择）
 
-### 分析文档（3 份）
-13. ✅ docs/DOCUMENT_UPDATE_SUMMARY.md — 本次更新总结
-14. ✅ docs/DOCUMENT_INDEX.md — 完整文档索引
-15. ✅ docs/FT710_Web_Control_介绍文章.md — 介绍文章
+### 分析文档（4 份）
+16. ✅ docs/DOCUMENT_UPDATE_SUMMARY.md — 本次更新总结
+17. ✅ docs/DOCUMENT_UPDATE_COMPLETION.md — 本次更新完成报告
+18. ✅ docs/DOCUMENT_INDEX.md — 完整文档索引
+19. ✅ docs/FT710_Web_Control_介绍文章.md — 介绍文章
+20. ✅ docs/FDE.md — FDE 方法论记录（已新增多电台后端插件模型）
 
 ### SDD 文档（15 章）
-16. ✅ SDD/ — 软件设计说明
+21. ✅ SDD/ — 软件设计说明
 
 ---
 
@@ -182,12 +235,24 @@
 
 ## 交付物清单
 
-### 新增文档（3 份）
+### 本次同步更新文档（10 份，2026-08-17）
+1. `README.md` — 多电台项目概述
+2. `QUICKSTART.md` — 新增 IC-7300 快速上手
+3. `CHANGELOG.md` — 新增 v1.9.0
+4. `SECURITY_GUIDE.md` — 泛化标题
+5. `DEPENDENCIES.md` — IC-7300 依赖说明
+6. `docs/OPERATION_GUIDE.md` — 电台型号差异
+7. `docs/MACOS_INSTALLER_GUIDE.md` — 后端选择配置
+8. `docs/WINDOWS_INSTALLER_GUIDE.md` — 后端选择配置
+9. `docs/FDE.md` — 多电台后端插件模型
+10. `docs/DOCUMENT_INDEX.md` — 索引更新
+
+### 历史新增文档（3 份，2026-07-14）
 1. `docs/TX_LINK_ANALYSIS.md` — TX 链路深度分析
 2. `docs/DOCUMENT_UPDATE_SUMMARY.md` — 更新总结
 3. `docs/DOCUMENT_INDEX.md` — 文档索引
 
-### 更新文档（6 份）
+### 历史更新文档（6 份，2026-07-14）
 1. `FIXES_SUMMARY.md` — 新增 TX 分析章节
 2. `EXECUTIVE_SUMMARY.md` — 新增 TX 分析摘要
 3. `COMPLETION_REPORT.md` — 更新验证状态
@@ -196,9 +261,10 @@
 6. `README.md` — 更新文档列表
 
 ### 总工作量
-- **新增行数**: ~577 行
-- **更新行数**: ~150 行
-- **文档总数**: 17 份（核心 + 技术 + 分析 + SDD）
+- **本次同步更新文档数**: 10 份
+- **历史新增行数**: ~577 行
+- **历史更新行数**: ~150 行
+- **文档总数**: 21 份（核心 + 技术 + 分析 + SDD）
 
 ---
 
@@ -230,7 +296,8 @@ $ ls -lh *.md docs/*.md
 - COMPLETION_REPORT.md → docs/TX_LINK_ANALYSIS.md ✅
 - FINAL_VERIFICATION.md → docs/TX_LINK_ANALYSIS.md ✅
 - CHANGELOG.md → docs/TX_LINK_ANALYSIS.md ✅
-- README.md → 所有文档 ✅
+- README.md → 所有核心/安装/操作文档 ✅
+- QUICKSTART.md / 安装指南 → `MRRC_RADIO_MODEL`、`IC7300_CIV_ADDR` ✅
 
 ---
 
@@ -286,7 +353,8 @@ $ ls -lh *.md docs/*.md
 
 ---
 
-**报告生成时间**: 2026-07-14 08:27  
+**报告生成时间**: 2026-08-17  
 **执行人**: Agnes Code Review  
 **审核状态**: ✅ 完成  
-**下次更新**: TX 链路修复完成后
+**历史更新时间**: 2026-07-14  
+**下次更新**: SDD/架构决策随后端模型更新后

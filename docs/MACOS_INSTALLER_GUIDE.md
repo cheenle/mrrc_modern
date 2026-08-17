@@ -1,9 +1,9 @@
 # macOS Desktop Installer Guide
 
-This guide covers the macOS desktop package for MRRC FT-710 Web Control.
-The package targets **Apple Silicon (arm64)** Macs on macOS 11 (Big Sur) or
-later. It installs a user-launched menu-bar app with an embedded Python
-runtime; users do not need to install Python manually.
+This guide covers the macOS desktop package for MRRC Web Control
+(FT-710 and IC-7300/IC-7300MK2). The package targets **Apple Silicon (arm64)**
+Macs on macOS 11 (Big Sur) or later. It installs a user-launched menu-bar app
+with an embedded Python runtime; users do not need to install Python manually.
 
 ## Download (v1.7.0)
 
@@ -25,18 +25,23 @@ runtime; users do not need to install Python manually.
 
 ### 1. Connect the radio
 
-Plug the FT-710 USB cable into the Mac. macOS loads the Silicon Labs CP210x
-driver automatically (AppleUSBCDC) — no separate driver install is needed.
+Plug the radio USB cable into the Mac.
+
+- **FT-710**: macOS loads the Silicon Labs CP210x driver automatically
+  (AppleUSBCDC) — no separate driver install is needed. You should see a
+  `SLAB_USBtoUART` device, e.g. `/dev/cu.SLAB_USBtoUART`. The lower-numbered
+  of the two CP210x ports is the Enhanced COM Port for CAT.
+- **IC-7300 / IC-7300MK2**: macOS loads the standard USB-serial driver for the
+  CI-V port. You should see a device such as `/dev/cu.usbserial-*`. No FTDI
+  drivers are required.
+
+USB audio devices also appear automatically for both radios.
 
 Confirm the serial port:
 
 ```bash
 ls /dev/cu.*
 ```
-
-You should see a `SLAB_USBtoUART` device, e.g. `/dev/cu.SLAB_USBtoUART`. The
-lower-numbered of the two CP210x ports is typically the Enhanced COM Port for
-CAT. USB audio devices (the FT-710 input/output) also appear automatically.
 
 ### 2. Install MRRC FT-710
 
@@ -75,6 +80,7 @@ Edit it from the menu-bar item **Edit Configuration…** (opens TextEdit), or
 open it directly. Typical configuration:
 
 ```ini
+MRRC_RADIO_MODEL=ft710
 FT710_SERIAL_PORT=/dev/cu.SLAB_USBtoUART
 FT710_BAUD_RATE=38400
 FT710_WEB_HOST=127.0.0.1
@@ -85,11 +91,14 @@ FT710_SCOPE_BAUD=115200
 FT710_AUDIO_RX_DEVICE=
 FT710_AUDIO_TX_DEVICE=
 FT710_FTDI_LIB_DIR=vendor/ftdi/macos
+#IC7300_CIV_ADDR=0x94
 #FT710_ATR1000_HOST=
 #FT710_ATR1000_PORT=60001
 ```
 
-Set `FT710_SERIAL_PORT` to the device from `ls /dev/cu.*`. Change
+Set `MRRC_RADIO_MODEL` to `ft710`, `ic7300`, or `ic7300mk2`. For IC-7300,
+set `FT710_SERIAL_PORT` to the CI-V port from `ls /dev/cu.*` and leave
+`FT710_FTDI_LIB_DIR` empty (FTDI libraries are not required). Change
 `FT710_WEB_PASSWORD` before exposing the app beyond localhost.
 
 ### 5. Launch
@@ -115,10 +124,10 @@ drains and PTT releases first).
 > the radio keyed if it was transmitting. Always release PTT and use the
 > menu-bar **Quit** item.
 
-## FT4222 True Spectrum
+## FT4222 True Spectrum (FT-710 only)
 
-The macOS package supports FT4222 true spectrum when these runtime libraries
-are present in the app bundle:
+The macOS package supports FT4222 true spectrum for the FT-710 when these
+runtime libraries are present in the app bundle:
 
 ```text
 MRRC-FT710.app/Contents/MacOS/vendor/ftdi/macos/libft4222.dylib
@@ -206,8 +215,8 @@ After installing on macOS:
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
 | "MRRC FT-710 is damaged / can't be opened" | Gatekeeper blocking ad-hoc signature | Right-click → Open, or `xattr -dr com.apple.quarantine /Applications/MRRC-FT710.app` |
-| Browser opens but radio state does not update | Wrong serial port | Set `FT710_SERIAL_PORT` to the `SLAB_USBtoUART` device from `ls /dev/cu.*` |
-| App starts but FT4222 spectrum is unavailable | Missing `libft4222.dylib` / `libftd2xx.dylib` | Place both in the bundle's `Contents/MacOS/vendor/ftdi/macos/` |
+| Browser opens but radio state does not update | Wrong serial port | Set `FT710_SERIAL_PORT` to the correct device from `ls /dev/cu.*` |
+| App starts but FT4222 spectrum is unavailable | Missing `libft4222.dylib` / `libftd2xx.dylib` (or not using FT-710) | Place both in the bundle's `Contents/MacOS/vendor/ftdi/macos/`; IC-7300 uses CI-V `0x27` and does not need FTDI |
 | Login fails | Wrong password | Check `~/Library/Application Support/MRRC-FT710/ft710.env` |
 | Audio device not found | macOS selected another device | Set `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` by name or index |
 | Port 8888 already in use | Another local service is listening | Change `FT710_WEB_PORT` |

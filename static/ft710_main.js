@@ -322,6 +322,13 @@ const bands = [];
 const uiModes = [];
 const memChannels = new Array(6).fill(null);
 
+// Per-radio description from fullState (multi-model support).  null means
+// "legacy server / FT-710" — every consumer in ft710_ui.js must treat null
+// as "render exactly as before".
+let radioCapabilities = null;
+let radioModel = null;
+let radioDisplayName = null;
+
 // ── Message Handler ─────────────────────────────────────────────────
 function handleMessage(msg) {
 	switch (msg.type) {
@@ -345,6 +352,15 @@ function handleMessage(msg) {
 			if (msg.filterTables) {
 				window.filterTables = msg.filterTables;
 			}
+			// Per-radio capabilities/model drive the adaptive UI in
+			// ft710_ui.js (applyRadioCapabilities) and the audio boost below.
+			radioCapabilities = msg.capabilities || null;
+			radioModel = msg.radioModel || null;
+			radioDisplayName = msg.radioDisplayName || null;
+			_applyRadioBranding();
+			// IC-7300 USB audio is much hotter than the FT-710's — skip the
+			// 10x boost there. (Initial guess — tune after hardware test.)
+			AUDIO_GAIN_BOOST = radioModel === "ic7300" ? 1.0 : 10.0;
 			if (msg.memChannels) {
 				memChannels.length = 0;
 				memChannels.push(...msg.memChannels);
@@ -356,6 +372,11 @@ function handleMessage(msg) {
 				renderMemoryChannels();
 			}
 			radioState.ws_connected = true;
+			// Hide controls the radio lacks / rebuild model-specific selects
+			// BEFORE the first render pass so labels come up correct.
+			if (typeof applyRadioCapabilities === "function") {
+				applyRadioCapabilities();
+			}
 			renderAll();
 			_applyAfGainToAudioNode(); // sync gain node from radio state
 			_applySavedMicGain(); // push persisted mic gain back to the radio
@@ -417,6 +438,23 @@ function handleMessage(msg) {
 			}
 			break;
 	}
+}
+
+// ── Branding ────────────────────────────────────────────────────────
+// Retitle the page/menu from fullState.radioDisplayName ("Yaesu FT-710",
+// "Icom IC-7300", ...).  Fallback "FT-710" reproduces the legacy static
+// strings exactly when an old server sends no radioDisplayName.
+function _applyRadioBranding() {
+	const name = radioDisplayName || "FT-710";
+	document.title = name + " Web Control";
+	const menuTitle = document.getElementById("menu-title");
+	if (menuTitle) menuTitle.textContent = name + " Menu";
+	const version = document.getElementById("menu-version");
+	if (version) version.textContent = name + " v1.0";
+	const appleMeta = document.querySelector(
+		'meta[name="apple-mobile-web-app-title"]',
+	);
+	if (appleMeta) appleMeta.setAttribute("content", name);
 }
 
 // ── Connection Status ───────────────────────────────────────────────
@@ -1716,7 +1754,8 @@ var FullscreenMgr = (() => {
 // cookie — it is deliberately NOT the radio's CAT AF gain, so the
 // CAT poll can never fight the user's volume setting.
 // A 10× boost compensates for quiet FT-710 USB audio; clamped at 10× to
-// prevent runaway gain from blowing out speakers.
+// prevent runaway gain from blowing out speakers.  Re-set per radio model
+// on fullState (IC-7300 → 1.0).
 var AUDIO_GAIN_BOOST = 10.0;
 var AUDIO_GAIN_MAX = 10.0;
 // During TX/TUNE the radio may pass sidetone / its own audio back over the

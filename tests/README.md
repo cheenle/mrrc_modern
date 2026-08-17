@@ -2,7 +2,7 @@
 
 ## Overview
 
-Automated test suite covering the core backend modules. All tests run **without hardware** — no FT-710 radio, no serial port, no USB audio device needed. 439 tests across 24 test modules.
+Automated test suite covering the core backend modules. All tests run **without hardware** — no radio, no serial port, no USB audio device needed. 592 tests across 29 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -12,11 +12,11 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 439 |
-| Passed | 439 (with all optional dependencies installed) |
+| Total tests | 592 |
+| Passed | 592 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
-| Execution time | ~9s (harness tests spawn CLI subprocesses) |
+| Execution time | ~13s (harness tests spawn CLI subprocesses) |
 
 ## Test Modules
 
@@ -256,6 +256,72 @@ SDD coverage: V2.11 (header power switch), V2.12 (boot-window guard + PS1 verify
 | `PowerOnRadioTests` | 4 | PS1 verify-first-attempt, retry-until-answer, give-up after N attempts, boot window armed |
 | `PowerSetCommandGuardTests` | 5 | PS0 rejected in boot window, PS0 refused while TX, PS0 double-send, PS1 failure error message, PS1 success state update |
 
+### 25. test_config_ic7300.py — IC-7300 Config Tables (22 tests)
+
+SDD coverage: AD-016, §7.2
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `ConnectionTests` | 1 | CI-V defaults (115200 8N1, address 0x94) |
+| `ModeTableTests` | 3 | CI-V mode codes, inverse map consistency, UI mode names reused |
+| `BandTests` | 4 | Band shape (FT-710 minus `bsr`), radio coverage, expected bands, get_band_for_frequency |
+| `FilterTableTests` | 2 | FIL1-3 filter model, defaults cover all UI modes |
+| `MeterCalTests` | 7 | Monotonic tables, S-meter/power/SWR reference points, interpolation, meter sub-codes |
+| `ScopeTableTests` | 3 | Span codes, span Hz consistency, fixed-mode edges |
+| `PreampAttTests` | 2 | Preamp labels, attenuator steps |
+
+### 26. test_civ_codec.py — CI-V Codec (45 tests)
+
+SDD coverage: AD-016, §9.6
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `FramingTests` | 4 | CI-V frame build/parse (0xFE 0xFE … 0xFD) |
+| `ParserTests` | 11 | Stream parser: partial frames, garbage resync, multi-frame |
+| `EchoTests` | 3 | Echo frame detection/drop |
+| `FreqBcdTests` | 5 | Frequency BCD encode/decode round-trip |
+| `LevelBcdTests` | 5 | Level BCD encode/decode |
+| `ScopeSegmentTests` | 4 | 0x27 scope segment parsing |
+| `ScopeAssemblerTests` | 7 | Waveform assembly from segments |
+| `ScaleUpsampleTests` | 6 | 475 bins → scale 160→255 → upsample 850 |
+
+### 27. test_civ_controller.py — CI-V Controller (16 tests)
+
+SDD coverage: AD-016, §9.6
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `ConnectTests` | 1 | Connect enables CI-V transceive |
+| `FrequencyTests` | 3 | get_frequency with echo + broadcast interleaved, set frame format, VFO-B rejection |
+| `ModeTests` | 2 | Mode+FIL decode, set_mode resends current FIL |
+| `AckTests` | 2 | NG raises CivNak, OK resolves set |
+| `TimeoutTests` | 2 | Retry once then raise, send_command returns None on timeout |
+| `ScopeDemuxTests` | 1 | 0x27 segment demuxed between request and response |
+| `PendingFifoTests` | 1 | Same-key pending futures resolve in order |
+| `FatalErrorTests` | 2 | Fatal write/read error flips connected False |
+| `PriorityTests` | 2 | PTT uses priority path, send_command yields when polls cancelled |
+
+### 28. test_civ_scope.py — CI-V Scope Producer (12 tests)
+
+SDD coverage: AD-016, §9.5
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `CivScopeProducerTests` | 11 | Full waveform → ScopeHandler, amplitude scaling, center/fixed metadata, on_frame once per waveform, sequence gap drops waveform, stop drains + disconnects, notify_tx no-op, callback replacement, stall watchdog warns once, idempotent start |
+| `BackendFactoryScopeProducerTests` | 1 | create_scope_producer returns the CI-V producer |
+
+### 29. test_backend_factory.py — Backend Factory + Capabilities (20 tests)
+
+SDD coverage: AD-016
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `CreateBackendTests` | 6 | ft710/ic7300 keys, ic7300mk2 alias, key normalization, unknown model ValueError, MRRC_RADIO_MODEL env default |
+| `CapabilitiesTests` | 3 | Capability keys/values, to_dict JSON-serializable, dataclass round-trip |
+| `BackendUiTableTests` | 4 | FT-710 bands/ui_modes/filter tables match config, scope producer created |
+| `IC7300CapabilitiesTests` | 4 | IC-7300 capability values, scope producer, UI tables, CAT surface |
+| `FullStateCapabilitiesTests` | 3 | fullState includes radioModel/radioDisplayName/capabilities, tables come from backend, fallback without backend |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -279,6 +345,7 @@ SDD coverage: V2.11 (header power switch), V2.12 (boot-window guard + PS1 verify
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests) | 4 tests |
 | NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 27 tests |
 | §9.8 ATR1000 Tuner Linkage | test_atr1000_tuner, test_atr1000_client, test_atr1000_server | 99 tests |
+| AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope | 115 tests |
 
 ## Running Specific Tests
 

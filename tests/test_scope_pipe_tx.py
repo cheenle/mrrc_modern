@@ -1,18 +1,20 @@
 """Tests for the scope_pipe TX-pause control channel.
 
-The FT-710 garbles its scope stream during TX.  The server notifies
-scope_pipe over stdin (TX:1/TX:0); the pipe pauses SPI reads while TX
-is active and re-syncs once on the TX→RX transition.
+The FT-710 garbles its scope stream during TX.  The scope producer
+(backends/ft710/scope_producer.py) notifies scope_pipe over stdin
+(TX:1/TX:0); the pipe pauses SPI reads while TX is active and re-syncs
+once on the TX→RX transition.
 """
+import asyncio
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from scope_pipe import apply_control_line
-
-try:
-    import server
-except ImportError:
-    server = None
+from backends.ft710.scope_pipe import apply_control_line
+import backends.ft710.scope_producer as scope_producer
+from backends.ft710.scope_producer import (
+    FT710ScopeProducer, terminate_process_tree_sync,
+)
 
 
 class ApplyControlLineTests(unittest.TestCase):
@@ -70,61 +72,50 @@ class FakeProc:
         self.stdin = FakeStdin()
 
 
-@unittest.skipIf(server is None, "fastapi not available in test environment")
 class NotifyScopePipeTxTests(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self._old_proc = server._scope_proc
-        self._old_last = server._scope_pipe_last_tx
-        self._old_tx = server.radio.tx_status
-
-    async def asyncTearDown(self):
-        server._scope_proc = self._old_proc
-        server._scope_pipe_last_tx = self._old_last
-        server.radio.tx_status = self._old_tx
+    def _producer(self, proc=None, last_tx=None) -> FT710ScopeProducer:
+        p = FT710ScopeProducer(Path("."), scope=None)
+        p._proc = proc
+        p._last_tx = last_tx
+        return p
 
     async def test_writes_tx1_on_transition_to_tx(self):
         proc = FakeProc()
-        server._scope_proc = proc
-        server._scope_pipe_last_tx = False
-        server.radio.tx_status = 1
-        await server._notify_scope_pipe_tx()
+        p = self._producer(proc, last_tx=False)
+        p.notify_tx(True)
+        await asyncio.sleep(0)  # let the scheduled drain run
         self.assertEqual(bytes(proc.stdin.buf), b"TX:1\n")
 
     async def test_writes_tx0_on_transition_to_rx(self):
         proc = FakeProc()
-        server._scope_proc = proc
-        server._scope_pipe_last_tx = True
-        server.radio.tx_status = 0
-        await server._notify_scope_pipe_tx()
+        p = self._producer(proc, last_tx=True)
+        p.notify_tx(False)
+        await asyncio.sleep(0)
         self.assertEqual(bytes(proc.stdin.buf), b"TX:0\n")
 
     async def test_unchanged_state_writes_nothing(self):
         proc = FakeProc()
-        server._scope_proc = proc
-        server._scope_pipe_last_tx = False
-        server.radio.tx_status = 0
-        await server._notify_scope_pipe_tx()
+        p = self._producer(proc, last_tx=False)
+        p.notify_tx(False)
+        await asyncio.sleep(0)
         self.assertEqual(bytes(proc.stdin.buf), b"")
 
     async def test_force_resends_current_state(self):
         proc = FakeProc()
-        server._scope_proc = proc
-        server._scope_pipe_last_tx = True
-        server.radio.tx_status = 2  # TUNE also counts as transmitting
-        await server._notify_scope_pipe_tx(force=True)
+        p = self._producer(proc, last_tx=True)
+        p.notify_tx(True, force=True)
+        await asyncio.sleep(0)
         self.assertEqual(bytes(proc.stdin.buf), b"TX:1\n")
 
     async def test_dead_pipe_is_not_written(self):
         proc = FakeProc(returncode=1)
-        server._scope_proc = proc
-        server._scope_pipe_last_tx = False
-        server.radio.tx_status = 1
-        await server._notify_scope_pipe_tx()
+        p = self._producer(proc, last_tx=False)
+        p.notify_tx(True)
+        await asyncio.sleep(0)
         self.assertEqual(bytes(proc.stdin.buf), b"")
 
 
 class TerminateProcessTreeTests(unittest.TestCase):
-    @unittest.skipIf(server is None, "fastapi not available in test environment")
     def test_windows_uses_taskkill_tree(self):
         calls = []
 
@@ -137,13 +128,12 @@ class TerminateProcessTreeTests(unittest.TestCase):
             return Result()
 
         with (
-            patch.object(server.sys, "platform", "win32"),
-            patch.object(server._subprocess, "run", fake_run),
+            patch.object(scope_producer.sys, "platform", "win32"),
+            patch.object(scope_producer.subprocess, "run", fake_run),
         ):
-            server._terminate_process_tree_sync(4321)
+            terminate_process_tree_sync(4321)
         self.assertEqual(calls, [["taskkill", "/PID", "4321", "/T", "/F"]])
 
-    @unittest.skipIf(server is None, "fastapi not available in test environment")
     def test_posix_falls_back_to_sigterm(self):
         killed = []
 
@@ -151,10 +141,10 @@ class TerminateProcessTreeTests(unittest.TestCase):
             killed.append((pid, sig))
 
         with (
-            patch.object(server.sys, "platform", "darwin"),
-            patch.object(server.os, "kill", fake_kill),
+            patch.object(scope_producer.sys, "platform", "darwin"),
+            patch.object(scope_producer.os, "kill", fake_kill),
         ):
-            server._terminate_process_tree_sync(4321)
+            terminate_process_tree_sync(4321)
         self.assertEqual(killed, [(4321, 15)])
 
 

@@ -1,6 +1,8 @@
-# FT-710 Web Control
+# MRRC Web Control
 
-Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) HF/50MHz transceiver. Full browser-based control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry (PWR/ALC/SWR/Id/Vd), PTT management, and memory channels. Mobile-first responsive UI optimized for iPhone/iOS Safari.
+Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) and [Icom IC-7300](https://www.icomjapan.com/)/IC-7300MK2 HF/50MHz transceivers. Full browser-based control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry, PTT management, and memory channels. Mobile-first responsive UI optimized for iPhone/iOS Safari.
+
+The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, or `ic7300mk2`). The default is `ft710`.
 
 ![FT-710 Web Control Screenshot](IMG_8888.PNG)
 
@@ -12,14 +14,20 @@ Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) H
 cd mrrc_ft710
 pip install -r requirements.txt
 
-# macOS (FT-710 Enhanced COM Port):
-FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
-
+# FT-710 (Yaesu CAT, 38400 baud):
+# macOS (Enhanced COM Port):
+MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
 # Linux:
-FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+
+# IC-7300 (Icom CI-V, 115200 8N1, default address 0x94):
+# macOS:
+MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/cu.usbserial-A1234567 python3 server.py
+# Linux:
+MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
 ```
 
-Open `http://localhost:8888` in a browser. **Default password: change it immediately** — see [SECURITY_GUIDE.md](SECURITY_GUIDE.md).
+`MRRC_RADIO_MODEL` defaults to `ft710`, so it may be omitted for the FT-710. Open `http://localhost:8888` in a browser. **Default password: change it immediately** — see [SECURITY_GUIDE.md](SECURITY_GUIDE.md).
 
 ### Windows Desktop Installer
 
@@ -35,9 +43,9 @@ Python runtime; closing the launcher window stops the server.
 - GitHub repository: <https://github.com/cheenle/mrrc_ft710>
 
 After install, edit `%LOCALAPPDATA%\MRRC-FT710\ft710.env` (Start Menu →
-`Edit Configuration`) to set the Enhanced COM Port and web password, then
-launch `MRRC FT-710` from the Start Menu. Build and installation details
-are in [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md).
+`Edit Configuration`) to set `MRRC_RADIO_MODEL`, the serial port, and web
+password, then launch `MRRC FT-710` from the Start Menu. Build and
+installation details are in [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md).
 
 Key Windows package paths:
 
@@ -51,7 +59,9 @@ dist\windows\MRRC-FT710-Setup.exe
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FT710_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT serial port (Enhanced COM Port, 38400 baud) |
+| `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, or `ic7300mk2` |
+| `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address (only used with `ic7300`/`ic7300mk2`) |
+| `FT710_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710: Enhanced COM Port, 38400 baud; IC-7300: USB CI-V, 115200 baud) |
 | `FT710_BAUD_RATE` | `38400` | CAT serial baud rate |
 | `FT710_WEB_PORT` | `8888` | Web server port |
 | `FT710_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change**) |
@@ -85,12 +95,16 @@ dist\windows\MRRC-FT710-Setup.exe
 Browser (iPhone / Desktop / Tablet)
   ↕ HTTP + WebSocket (4 channels: control, audio RX, audio TX, spectrum;
                      + optional /WSatr1000 when the ATR1000 tuner is enabled)
-FT-710 Server (Python FastAPI + Uvicorn)
-  ├── ↕ Serial CAT (USB Enhanced COM Port, 38400 baud)
-  ├── ↕ FT4222 SPI (scope_pipe subprocess → real spectrum data)
-  ├── ↕ S-meter fallback (synthetic spectrum when FT4222 unavailable)
-  └── ↕ USB Audio (PyAudio capture/playback → Opus codec → browser)
-Yaesu FT-710 Radio
+MRRC Server (Python FastAPI + Uvicorn)
+  └── Pluggable Radio Backend (selected by MRRC_RADIO_MODEL)
+      ├── ft710: Serial CAT (USB Enhanced COM Port, 38400 baud)
+      │           + FT4222 SPI spectrum (scope_pipe subprocess)
+      │           + S-meter fallback
+      │           + 44.1 kHz USB audio (resampled to/from 48 kHz)
+      └── ic7300 / ic7300mk2: CI-V serial (USB CI-V, 115200 8N1)
+                              + CI-V 0x27 spectrum (same serial port)
+                              + 48 kHz USB audio (native)
+Yaesu FT-710 or Icom IC-7300 Radio
 ```
 
 ### WebSocket Endpoints
@@ -105,17 +119,21 @@ Yaesu FT-710 Radio
 
 ### Dual-Mode Spectrum
 
-- **FT4222 SPI mode**: Reads raw 4096-byte scope frames from the FTDI FT4222 chip via platform FTDI libraries (`libft4222.dylib` / `libft4222.so` / `FT4222.dll`). Provides true 850-point FFT spectrum waterfall.
-- **S-meter fallback**: When the FT4222 is unavailable, generates a synthetic multi-peak spectrum from CAT S-meter readings — still provides real-time band activity visualization.
+- **FT-710 FT4222 SPI mode**: Reads raw 4096-byte scope frames from the FTDI FT4222 chip via platform FTDI libraries (`libft4222.dylib` / `libft4222.so` / `FT4222.dll`). Provides true 850-point FFT spectrum waterfall.
+- **IC-7300 CI-V 0x27 mode**: Receives 475-bin scope frames on the same CI-V serial port, scales/upsamples to 850 points, and feeds the same waterfall.
+- **S-meter fallback**: Generates a synthetic multi-peak spectrum from CAT S-meter readings — still provides real-time band activity visualization when hardware scope data is unavailable.
 
 ### Audio Pipeline
 
+Opus runs at 48 kHz end-to-end. The backend-specific USB audio rate is handled just before capture/after playback.
+
 **RX Audio:**
 ```
-FT-710 USB Audio → PyAudio capture (44.1kHz Int16) → Resample 44.1k→48k
-  → Opus encode (64kbps) → /WSaudioRX tagged frames (parallel send via asyncio.gather)
-    → Browser WASM OpusDecoder → AudioWorklet 'rx-player'
-      (jitter buffer: 220ms prebuffer, 90ms recovery) → Speakers
+Radio USB Audio → PyAudio capture (per-backend rate)
+  → Resample if needed (FT-710: 44.1k→48k; IC-7300: already 48k)
+    → Opus encode (64kbps) → /WSaudioRX tagged frames
+      → Browser WASM OpusDecoder → AudioWorklet 'rx-player'
+        (jitter buffer: 220ms prebuffer, 90ms recovery) → Speakers
 ```
 
 **TX Audio:**
@@ -124,12 +142,14 @@ Microphone → getUserMedia (48kHz) → ScriptProcessor (512buf, ~10.7ms)
   → Float32→Int16 → Opus Worker encode (48kHz, 960-sample frames, 64kbps CBR)
     → /WSaudioTX tagged frames (1B tag 0x01 + Opus packet)
       → Server TxOpusDecoder (48kHz) → Int16 PCM (960 samples/20ms)
-        → Resample 48k→44.1k (linear interp, 160:147 exact ratio, phase-continuous)
+        → Resample if needed (FT-710: 48k→44.1k; IC-7300: pass-through)
           → _tx_queue (jitter buffer: 60ms pre-buffer, 400ms hard cap)
-            → PyAudio playback (44.1kHz, mono) → FT-710 USB Audio Input
+            → PyAudio playback (per-backend rate, mono) → Radio USB Audio Input
 ```
 
-TX chain resamples from Opus 48kHz to the FT-710's native 44.1kHz USB audio rate on every platform, including Windows, using linear interpolation at an exact 160:147 ratio — frame boundaries stay phase-continuous so no periodic clicks. A Windows WASAPI shared-mode mix rate never replaces this device-domain boundary.
+FT-710: the TX chain resamples from Opus 48kHz to the radio's native 44.1kHz USB audio rate using linear interpolation at an exact 160:147 ratio — frame boundaries stay phase-continuous so no periodic clicks.
+
+IC-7300: the radio's USB audio is already 48kHz, so no resampling is required.
 
 **TX audio stability (v1.2):**
 - **Jitter buffer**: Pre-buffers 60ms before first DAC write to absorb WebSocket jitter; hard cap at 400ms with oldest-first drop bounds latency under Wi-Fi stalls. Every dropped frame is counted as `queue_drops` in the PTT-release session log so a slow Windows output path cannot hide behind otherwise healthy decode/write counters.
@@ -145,21 +165,26 @@ Windows packages search `opus.dll`, `_internal\opus.dll`, and
 ## Project Structure
 
 ```
-mrrc_ft710/
+mrrc/
 ├── server.py              # FastAPI app: lifespan, auth, 4 WebSockets (+optional /WSatr1000), REST, CLI
-├── cat_controller.py      # Serial CAT protocol (pyserial + asyncio thread pool)
+├── cat_controller.py      # Compatibility shim — moved to backends/ft710/cat_controller.py
 ├── radio_state.py         # RadioState dataclass with dirty-field change tracking
-├── poll_scheduler.py      # 7-tier background polling (100ms → 5s, bounded lock)
-├── audio_handler.py       # PyAudio capture/playback + Opus encode + device detection
+├── poll_scheduler.py      # Backend-agnostic adaptive background polling
+├── audio_handler.py       # PyAudio capture/playback + Opus encode + per-backend device detection
 ├── opus_rx.py             # libopus ctypes wrapper (RxOpusEncoder + TxOpusDecoder)
-├── scope_handler.py       # FT4222 SPI scope reader + S-meter fallback generator
-├── scope_pipe.py          # Standalone FT4222 subprocess (avoids asyncio/ctypes issues)
-├── scope_frame.py         # Shared frame parsing, pipe payload encode/decode
-├── scope_libraries.py     # FTDI library discovery and SPI clock configuration
-├── config.py              # Mode tables, bands, filter widths, S-meter calibration
+├── scope_handler.py       # Spectrum data container: real FFT + S-meter Gaussian fallback
+├── scope_pipe.py          # Compatibility shim — moved to backends/ft710/scope_pipe.py
+├── scope_frame.py         # Compatibility shim — moved to backends/ft710/scope_frame.py
+├── scope_libraries.py     # Compatibility shim — moved to backends/ft710/scope_libraries.py
+├── config.py              # Protocol-neutral constants + shared UI helpers
 ├── requirements.txt       # fastapi, uvicorn, pyserial, websockets, pyaudio, numpy
 ├── start.sh               # Start server in background
 ├── stop.sh                # Stop background server
+├── backends/              # Pluggable radio backends
+│   ├── __init__.py        # create_backend(model) factory
+│   ├── base.py            # RadioBackend ABC + RadioCapabilities
+│   ├── ft710/             # Yaesu FT-710 backend (CAT, FT4222 SPI scope, 44.1kHz audio)
+│   └── ic7300/            # Icom IC-7300/MK2 backend (CI-V, 0x27 scope, 48kHz audio)
 ├── lib/
 │   ├── libft4222.dylib    # FTDI FT4222 library (must match wfview version)
 │   ├── libftd2xx.dylib    # FTDI D2XX library
@@ -191,24 +216,26 @@ mrrc_ft710/
 
 ### Radio Control
 
+Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
+
 | Feature | Implementation |
 |---------|---------------|
 | Frequency | 8-digit display, ±1k/±5k tuning, step cycling 10Hz–25kHz |
-| Mode | Cycle button: LSB→USB→CW→AM→FM→RTTY→DATA; modal picker for all 15 modes |
-| Band | Cycle button: 160m→80m→60m→40m→30m→20m→17m→15m→12m→10m→6m→4m |
-| VFO | A/B toggle, A=B copy, Split toggle |
-| Filter | Cycle through curated voice/narrow filter widths (backend supports full 23 voice / 21 narrow CAT indices) |
-| ATT / PRE | Cycle: OFF→6dB→12dB→18dB / OFF→AMP1→AMP2 |
+| Mode | Cycle button; modal picker. FT-710: LSB→USB→CW→AM→FM→RTTY→DATA. IC-7300: mode set appropriate to Icom UI modes |
+| Band | Cycle button through supported amateur bands (e.g., 160m→6m; IC-7300 may include 70 MHz where region permits) |
+| VFO | A/B toggle, A=B copy, Split toggle (FT-710 only for direct VFO-B select) |
+| Filter | Cycle through curated filter widths (FT-710: voice/narrow CAT indices; IC-7300: FIL1–FIL3) |
+| ATT / PRE | FT-710: OFF→6dB→12dB→18dB / OFF→AMP1→AMP2. IC-7300: ATT on/off |
 | PTT | Touch-and-hold TX, release RX; PTT watchdog; dead-man switch; graceful audio drain before RF drop |
-| TUNE | Toggle button for antenna tuner activation |
+| TUNE | Antenna tuner activation (FT-710 external/ATU; IC-7300 internal ATU) |
 | Wake Lock | ☀ toggle: screen stays on during operation (Wake Lock API + video/audio fallback for iOS) |
 | Fullscreen | ⛶ toggle: hides browser chrome for a dedicated control surface |
-| NR / NB / AN | Independent toggle switches |
+| NR / NB / AN | Independent toggle switches (AN not available on IC-7300) |
 | Compressor / ATU | Toggle switches |
-| RF Power | Slider 5–100W |
-| AF Gain | Slider 0–255 |
-| Mic Gain | Slider 0–100 |
-| NR / NB Level | Individual sliders (1–15 / 0–10) |
+| RF Power | Slider |
+| AF Gain | Slider |
+| Mic Gain | Slider |
+| NR / NB Level | Individual sliders |
 
 ### Visualizations
 
@@ -218,14 +245,14 @@ mrrc_ft710/
 | Waterfall | 850-point real-time spectrum, 120-row history, 6 colormaps (Jet/Hot/Cold/Thermal/Night/Gray) |
 | Frequency scale | Auto-scaled labels below waterfall + vertical grid lines on FFT plot |
 | S-Meter | Canvas horizontal bar, S1–S9+60 gradient, dBm digital readout |
-| Multi-meter | 5 real-time horizontal bar meters: PWR (W), ALC, SWR, Id (A), Vd (V) |
+| Multi-meter | Up to 5 real-time horizontal bar meters: PWR (W), ALC, SWR, Id (A), Vd (V). IC-7300 does not report Id/Vd |
 
 ### Audio
 
 | Feature | Implementation |
 |---------|---------------|
 | RX Audio | PyAudio capture → Opus 64kbps → AudioWorklet playback |
-| TX Audio | Browser mic (48kHz) → Opus 64kbps CBR → server TxOpusDecoder → always resample 960→882 (48→44.1k) → PyAudio 44.1kHz on all OSes → radio. Jitter buffer (60ms pre-buffer / 400ms cap) + graceful PTT drain (Pa_StopStream blocks until DAC finishes) |
+| TX Audio | Browser mic (48kHz) → Opus 64kbps CBR → server TxOpusDecoder → resample when required (FT-710: 48→44.1k; IC-7300: pass-through 48k) → PyAudio playback. Jitter buffer (60ms pre-buffer / 400ms cap) + graceful PTT drain |
 | Codec | Tagged dual-codec: Opus (64kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
 | Bandwidth | Opus ~64kbps (12× smaller than 768kbps PCM) |
 
@@ -310,20 +337,19 @@ python3 -m pytest tests/ -v
 python3 -m unittest discover -s tests -v
 ```
 
-**385 tests passing** in the current local test suite.
+**592 tests passing** in the current local test suite.
 
 ## Requirements
 
 - **Python 3.10+** (uses `from __future__ import annotations` for forward references)
 - Core: `fastapi`, `uvicorn[standard]`, `pyserial`, `websockets`, `pyaudio`, `numpy`
 - **libopus** (optional, for compressed audio): `brew install opus` (macOS) or `apt install libopus0` (Linux)
-- **FT-710** connected via USB
-  - Enhanced COM Port for CAT (38400 baud)
-  - FT4222 chip (internal) for real scope data
-  - USB Audio interface for RX/TX audio
-- **For real FT4222 scope data**:
-  - `libft4222.dylib` from wfview app bundle in `mrrc_ft710/lib/`
-  - `libftd2xx.dylib` in `mrrc_ft710/lib/`
+- **Radio** connected via USB
+  - FT-710: Enhanced COM Port for CAT (38400 baud) + optional FT4222 for real scope + 44.1kHz USB audio
+  - IC-7300: USB CI-V port (115200 8N1, default address 0x94) + 48kHz USB audio; no FTDI libraries required
+- **For real FT4222 scope data (FT-710 only)**:
+  - `libft4222.dylib` from wfview app bundle in `lib/`
+  - `libftd2xx.dylib` in `lib/`
   - `ftd2xx.cfg` installed to `/usr/local/lib/` with `DetachKernelDriver=1`
 - **Browser**: Safari 15+ (iOS), Chrome, Firefox (WebSocket + Web Audio + Canvas)
 
@@ -336,6 +362,8 @@ python3 -m unittest discover -s tests -v
 | [QUICKSTART.md](QUICKSTART.md) | Step-by-step setup guide |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | Cross-platform dependency and driver guide |
 | [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows desktop installer, FTDI DLLs, FT4222 packaging |
+| [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS desktop installer, dylibs, menu-bar launcher |
+| [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | Web UI operation guide (button-by-button, Chinese) |
 | [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | Detailed fix documentation (v2.0.0 + TX analysis) |
 | [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) | Verification report |
 | [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | Executive summary (中文) |
@@ -354,6 +382,18 @@ python3 -m unittest discover -s tests -v
 | [SDD/](SDD/) | Software Design Description (15 chapters) |
 | [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | CAT command reference |
 
+## Backend Selection
+
+Set `MRRC_RADIO_MODEL` before starting the server:
+
+| Model | Value | Serial protocol | Scope source | USB audio rate |
+|-------|-------|-----------------|--------------|----------------|
+| Yaesu FT-710 | `ft710` (default) | CAT at `FT710_SERIAL_PORT`, 38400 baud | FT4222 SPI or S-meter fallback | 44.1 kHz |
+| Icom IC-7300 | `ic7300` | CI-V at `FT710_SERIAL_PORT`, 115200 8N1 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
+| Icom IC-7300MK2 | `ic7300mk2` | CI-V, same as IC-7300 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
+
+The CI-V address can be changed with `IC7300_CIV_ADDR` (default `0x94`).
+
 ## SDD Documentation
 
 See [`SDD/`](SDD/) for the complete Software Design Description (15 chapters, IBM TeamSD v2.3.2 aligned):
@@ -365,4 +405,4 @@ See [`SDD/`](SDD/) for the complete Software Design Description (15 chapters, IB
 
 ## License
 
-Personal / hobby project. FT-710 is a trademark of Yaesu Musen Co., Ltd.
+Personal / hobby project. FT-710 is a trademark of Yaesu Musen Co., Ltd. IC-7300 is a trademark of Icom Inc.

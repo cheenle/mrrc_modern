@@ -1,6 +1,33 @@
 # Changelog
 
-All notable changes to the FT-710 Web Control project.
+All notable changes to the MRRC Web Control project.
+
+## [v1.9.0] — 2026-08-17 — Multi-Radio Backend: FT-710 + IC-7300/IC-7300MK2
+
+### Added
+- **Pluggable radio backends** (`backends/ft710/` and `backends/ic7300/`):
+  - `RadioBackend` ABC in `backends/base.py` with `RadioCapabilities` exposure.
+  - Backend factory in `backends/__init__.py` registered for `ft710`, `ic7300`, and `ic7300mk2`.
+- **Icom IC-7300 / IC-7300MK2 support**:
+  - New `civ_codec.py` CI-V framing/BCD/scope-segment codec.
+  - New `civ_controller.py` async CI-V demux with 3-tier priority and reconnect.
+  - New `civ_scope.py` CI-V `0x27` 475-bin scope producer scaled/upsampled to 850 points.
+  - New `config_ic7300.py` for Icom-specific mode/band/filter tables.
+- **New environment variables**:
+  - `MRRC_RADIO_MODEL` selects the backend (`ft710` default).
+  - `IC7300_CIV_ADDR` sets the IC-7300 CI-V address (`0x94` default).
+- **Per-backend audio rates**:
+  - FT-710: 44.1 kHz USB audio with 960→882 resample before TX.
+  - IC-7300: 48 kHz USB audio native, no resample.
+- **Capability-driven frontend**: full state message now includes `radioModel`, `radioDisplayName`, and `capabilities`; UI adapts controls (e.g., hides AN/Vd-Id on IC-7300, cycles FIL1–FIL3 filters).
+
+### Changed
+- `server.py`, `poll_scheduler.py`, and `radio_state.py` are now backend-agnostic.
+- Moved FT-710-specific modules into `backends/ft710/`: `cat_controller.py`, `scope_pipe.py`, `scope_frame.py`, `scope_libraries.py`, `config_ft710.py`.
+- Updated root compatibility shims to point to the new backend locations.
+
+### Tests
+- Suite expanded to **592 tests** covering backend factory, CI-V codec, controller, and existing FT-710 regressions.
 
 ## [v1.8.1] — 2026-08-16 — 界面精简（紧凑瀑布 + 页面滚动 + RF Gain 移入菜单）
 

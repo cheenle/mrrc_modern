@@ -1,7 +1,7 @@
 import struct
 import unittest
 
-from scope_frame import (
+from backends.ft710.scope_frame import (
     SCOPE_FRAME_SIZE,
     SYNC_TAIL,
     WF_SIZE,

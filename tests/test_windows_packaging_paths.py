@@ -4,7 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import scope_libraries
+import backends.ft710.scope_libraries as scope_libraries
+import backends.ft710.scope_producer as scope_producer
 import server
 
 
@@ -62,20 +63,22 @@ class WindowsPackagingPathTests(unittest.TestCase):
 
 
 class ScopePipeCommandTests(unittest.TestCase):
-    def test_unfrozen_scope_pipe_command_uses_python_script(self):
-        cmd = server._scope_pipe_command()
+    def test_unfrozen_scope_pipe_command_uses_module_invocation(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        cmd = scope_producer.pipe_command(repo_root)
         self.assertIsNotNone(cmd)
         assert cmd is not None
-        self.assertEqual(Path(cmd[1]).name, "scope_pipe.py")
+        self.assertEqual(cmd[1:], ["-m", "backends.ft710.scope_pipe"])
 
     def test_frozen_scope_pipe_command_uses_bundled_exe(self):
+        repo_root = Path(__file__).resolve().parents[1]
         with (
-            patch.object(server.sys, "frozen", True, create=True),
-            patch.object(server.sys, "platform", "win32"),
-            patch.object(server.sys, "executable", r"C:\MRRC-FT710\ft710-server.exe"),
-            patch.object(server.Path, "exists", lambda self: self.name == "scope_pipe.exe"),
+            patch.object(scope_producer.sys, "frozen", True, create=True),
+            patch.object(scope_producer.sys, "platform", "win32"),
+            patch.object(scope_producer.sys, "executable", r"C:\MRRC-FT710\ft710-server.exe"),
+            patch.object(scope_producer.Path, "exists", lambda self: self.name == "scope_pipe.exe"),
         ):
-            cmd = server._scope_pipe_command()
+            cmd = scope_producer.pipe_command(repo_root)
         self.assertIsNotNone(cmd)
         assert cmd is not None
         self.assertEqual(Path(cmd[0]).name, "scope_pipe.exe")

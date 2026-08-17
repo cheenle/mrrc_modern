@@ -5,12 +5,10 @@ CAT command field mappings.
 """
 import unittest
 
-from config import (
+from backends.ft710.config_ft710 import (
     MODE_NUM_TO_NAME,
     MODE_NAME_TO_NUM,
-    MODE_DISPLAY_NAMES,
     BANDS,
-    UI_MODES,
     get_band_for_frequency,
     get_filter_widths_for_mode,
     get_filter_hz,
@@ -19,6 +17,10 @@ from config import (
     PREAMP_LABELS,
     ATTENUATOR_LABELS,
     SCOPE_SPANS,
+)
+from config import (
+    MODE_DISPLAY_NAMES,
+    UI_MODES,
     MEM_CHANNEL_COUNT,
     AUTH_COOKIE,
     AUTH_TOKEN_BYTES,

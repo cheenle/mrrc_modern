@@ -1,9 +1,9 @@
 # Windows Desktop Installer Guide
 
-This guide covers the Windows desktop package for MRRC FT-710 Web Control.
-The package is designed for Windows 11 and Windows 12-class x64 desktop
-systems. It installs a user-launched desktop app with an embedded Python
-runtime; users do not need to install Python manually.
+This guide covers the Windows desktop package for MRRC Web Control
+(FT-710 and IC-7300/IC-7300MK2). The package is designed for Windows 11 and
+Windows 12-class x64 desktop systems. It installs a user-launched desktop app
+with an embedded Python runtime; users do not need to install Python manually.
 
 ## Download (v1.8.0 Stable)
 
@@ -47,14 +47,17 @@ RF speech/noise path, so over-the-air monitoring remains an operator check.
 
 Install these before launching the app:
 
-- Silicon Labs CP210x Universal Windows Driver for the FT-710 Enhanced COM Port.
-- FTDI D2XX driver if you want FT4222 true spectrum.
+- **FT-710**: Silicon Labs CP210x Universal Windows Driver for the Enhanced COM Port.
+  FTDI D2XX driver only if you want FT4222 true spectrum.
+- **IC-7300 / IC-7300MK2**: Standard Windows USB-serial driver for the CI-V port
+  (usually installed automatically). No FTDI drivers are required.
 
-After connecting the FT-710 USB cable, open Device Manager and check:
+After connecting the radio USB cable, open Device Manager and check:
 
-- Ports (COM & LPT) shows two Silicon Labs CP210x COM ports.
-- The lower-numbered CP210x COM port is typically the Enhanced COM Port for CAT.
-- USB audio devices include the FT-710 audio input and output.
+- **FT-710**: Ports (COM & LPT) shows two Silicon Labs CP210x COM ports.
+  The lower-numbered CP210x COM port is typically the Enhanced COM Port for CAT.
+- **IC-7300**: Ports (COM & LPT) shows one COM port for USB CI-V.
+- USB audio devices include the radio audio input and output.
 
 ### 2. Install MRRC FT-710
 
@@ -81,6 +84,7 @@ Use the Start Menu `Edit Configuration` shortcut, or open:
 Typical configuration:
 
 ```ini
+MRRC_RADIO_MODEL=ft710
 FT710_SERIAL_PORT=COM3
 FT710_BAUD_RATE=38400
 FT710_WEB_HOST=127.0.0.1
@@ -91,26 +95,31 @@ FT710_SCOPE_BAUD=115200
 FT710_AUDIO_RX_DEVICE=
 FT710_AUDIO_TX_DEVICE=
 FT710_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
+#IC7300_CIV_ADDR=0x94
 #FT710_ATR1000_HOST=
 #FT710_ATR1000_PORT=60001
 ```
 
-Set `FT710_SERIAL_PORT` to the FT-710 Enhanced COM Port from Device Manager.
-Change `FT710_WEB_PASSWORD` before exposing the app beyond localhost.
+Set `MRRC_RADIO_MODEL` to `ft710`, `ic7300`, or `ic7300mk2`. For IC-7300,
+set `FT710_SERIAL_PORT` to the USB CI-V COM port from Device Manager and
+comment out `FT710_FTDI_LIB_DIR` (FTDI libraries are not required). Change
+`FT710_WEB_PASSWORD` before exposing the app beyond localhost.
 
 ## Audio (RX/TX) Setup
 
-The server opens the FT-710's **built-in USB sound card** for both receive
-(RX) and transmit (TX) audio at 44.1 kHz. On Windows this card enumerates
-under a **generic name — `USB Audio CODEC` or `USB Audio Device`**, depending
-on the driver/OS build — it does *not* contain "FT-710" or "YAESU", which is
+The server opens the radio's **built-in USB sound card** for both receive
+(RX) and transmit (TX) audio. On Windows this card enumerates under a
+**generic name — `USB Audio CODEC` or `USB Audio Device`**, depending on the
+driver/OS build — it does *not* always contain "FT-710" or "YAESU", which is
 why auto-detection can pick the wrong device (laptop mic for RX, PC speakers
 for TX). Lock the device explicitly as follows.
 
-The codec/network side remains 48 kHz. For TX, the server always converts
-960 samples at 48 kHz to 882 samples at 44.1 kHz before queueing PyAudio;
-the selected Windows output entry is opened at 44.1 kHz even if its displayed
-WASAPI default rate is 48 kHz.
+- **FT-710**: native 44.1 kHz. The server converts 960 samples at 48 kHz to
+  882 samples at 44.1 kHz before queueing PyAudio.
+- **IC-7300**: native 48 kHz. No resampling is required.
+
+For FT-710, the selected Windows output entry is opened at 44.1 kHz even if
+its displayed WASAPI default rate is 48 kHz.
 
 ### 1. Identify the device
 
@@ -204,10 +213,10 @@ Start `MRRC FT-710` from the Start Menu or desktop shortcut. The launcher:
 *abruptly* — there is no graceful cleanup. If the radio is transmitting, it
 can stay keyed. Always release PTT before closing the window.
 
-## FT4222 True Spectrum
+## FT4222 True Spectrum (FT-710 only)
 
-The Windows package supports FT4222 true spectrum when these runtime files are
-present:
+The Windows package supports FT4222 true spectrum for the FT-710 when these
+runtime files are present:
 
 ```text
 vendor\ftdi\windows\bin\x64\FT4222.dll
@@ -257,7 +266,7 @@ Build on a Windows x64 machine.
 - Project dependencies from `requirements.txt`
 - PyInstaller
 - Inno Setup with `iscc` available in `PATH`
-- FTDI DLLs in `vendor\ftdi\windows\bin\x64` for FT4222 support
+- FTDI DLLs in `vendor\ftdi\windows\bin\x64` for FT-710 FT4222 support (not required for IC-7300)
 
 Install build tools:
 
@@ -306,9 +315,8 @@ After installing on Windows:
 4. Confirm frequency, mode, and S-meter update from the radio.
 5. Confirm RX audio works.
 6. Confirm TX audio reaches the radio only when PTT is active.
-7. Open a spectrum client and check logs for `scope_pipe: first frame received`.
-8. Temporarily remove one FTDI DLL and confirm the app falls back to S-meter
-   spectrum instead of crashing.
+7. Open a spectrum client and check logs for `scope_pipe: first frame received` (FT-710) or CI-V scope frame reception (IC-7300).
+8. Temporarily remove one FTDI DLL (FT-710 only) and confirm the app falls back to S-meter spectrum instead of crashing.
 
 ## Troubleshooting
 
@@ -318,7 +326,7 @@ After installing on Windows:
 | Browser opens but radio state does not update | Wrong COM port | Set `FT710_SERIAL_PORT` to the Enhanced COM Port |
 | `Server did not answer within 15s` while Uvicorn says `http://[::]:8888` | Older launcher probed IPv4 loopback while the server was listening on IPv6 wildcard | Open `http://localhost:8888`, or update to a package with the launcher fix |
 | `TX Opus decoder unavailable: libopus not found` | Missing Windows `opus.dll` | Add `vendor\opus\windows\bin\x64\opus.dll` before building, or install/copy `opus.dll` next to the app |
-| App starts but FT4222 spectrum is unavailable | Missing `FT4222.dll` or `ftd2xx.dll` | Place both DLLs in `vendor\ftdi\windows\bin\x64` before building |
+| App starts but FT4222 spectrum is unavailable | Missing `FT4222.dll` or `ftd2xx.dll` (or not using FT-710) | Place both DLLs in `vendor\ftdi\windows\bin\x64` before building; IC-7300 uses CI-V `0x27` and does not need FTDI |
 | Login fails | Wrong password | Check `%LOCALAPPDATA%\MRRC-FT710\ft710.env` |
 | Audio device not found | Windows selected another audio device | Set `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` by name or index (see *Audio (RX/TX) Setup*) |
 | No RX audio, or RX sounds like room noise | Auto-detect picked the laptop mic instead of the FT-710's USB sound card | Lock `FT710_AUDIO_RX_DEVICE=USB Audio` (or the index from the startup device list) |

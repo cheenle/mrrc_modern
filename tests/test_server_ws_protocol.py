@@ -2,10 +2,12 @@
 Tests for server.py WebSocket protocol — SDD §9.2, §10.4.
 Verifies: message format, auth token flow, PTT safety logic, state broadcast.
 """
+import asyncio
 import json
 from pathlib import Path
 import re
 import unittest
+from unittest.mock import patch
 
 
 class WSMessageFormatTests(unittest.TestCase):
@@ -210,12 +212,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=23', index_source)
-        self.assertIn('/ft710_main.js?v=23', index_source)
-        self.assertIn('/ft710_ui.js?v=24', index_source)
+        self.assertIn('/ft710_main.js?v=25', index_source)
+        self.assertIn('/ft710_ui.js?v=25', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'ft710-v24'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=24'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v25'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=25'", sw_source)
 
 
 class CookieSettingsPersistenceTests(unittest.TestCase):
@@ -265,11 +267,15 @@ class CookieSettingsPersistenceTests(unittest.TestCase):
 
     def test_scope_pipe_starts_lazily_for_spectrum_clients(self):
         server_source = Path("server.py").read_text(encoding="utf-8")
+        producer_source = Path("backends/ft710/scope_producer.py").read_text(encoding="utf-8")
         lifespan_block = server_source.split("@asynccontextmanager", 1)[1].split("app = FastAPI", 1)[0]
         spectrum_block = server_source.split('@app.websocket("/WSspectrum")', 1)[1].split("# ── Audio RX WebSocket", 1)[0]
+        # The subprocess spawn lives in the backend's scope producer and is
+        # only reached via start() when a spectrum client connects.
         self.assertNotIn("asyncio.create_subprocess_exec", lifespan_block)
-        self.assertIn("_ensure_scope_pipe_running", server_source)
-        self.assertIn("await _ensure_scope_pipe_running()", spectrum_block)
+        self.assertIn("asyncio.create_subprocess_exec", producer_source)
+        self.assertIn("await _scope_producer.start()", spectrum_block)
+        self.assertIn("await _scope_producer.stop()", spectrum_block)
 
     def test_non_empty_dirty_set_triggers_broadcast(self):
         dirty = {"vfo_a_freq", "s_meter"}
@@ -346,19 +352,25 @@ class CookieSettingsPersistenceTests(unittest.TestCase):
 
     def test_settings_poll_discards_stale_reads_after_query(self):
         """_poll_settings must re-check _should_skip AFTER each query await.
-        A user set command arriving while a settings query (e.g. SH0) is in
-        flight makes the response stale (pre-command value); applying it
-        snaps the UI back to the old setting for several seconds."""
+        A user set command arriving while a settings query is in flight
+        makes the response stale (pre-command value); applying it snaps
+        the UI back to the old setting for several seconds.  (Phase 2b:
+        the queries themselves moved into the backend's
+        settings_poll_items(); the scheduler awaits the item getter.)"""
         poll_source = Path("poll_scheduler.py").read_text(encoding="utf-8")
         start = poll_source.index("async def _poll_settings")
         end = poll_source.index("async def _poll_slow")
         body = poll_source[start:end]
-        query_idx = body.index("await self.cat.query(cmd")
+        query_idx = body.index("await getter(POLL_TIMEOUT)")
         guard_idx = body.index("await self._should_skip(field)", query_idx)
         self.assertGreater(
             guard_idx, query_idx,
             "skip re-check must appear AFTER the query to discard stale reads",
         )
+        # The radio-specific commands/parsers now live in the backend.
+        backend_source = Path("backends/ft710/backend.py").read_text(encoding="utf-8")
+        self.assertIn("def settings_poll_items", backend_source)
+        self.assertIn('"SH0"', backend_source)
 
     def test_filter_set_reads_back_actual_width(self):
         """The filter handler must read back SH0 after setting, so the UI
@@ -382,7 +394,7 @@ class CookieSettingsPersistenceTests(unittest.TestCase):
         import ast
         import re as _re
 
-        config_source = Path("config.py").read_text(encoding="utf-8")
+        config_source = Path("backends/ft710/config_ft710.py").read_text(encoding="utf-8")
         ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
 
         # Parse server BANDS — handle both plain and type-annotated assignment
@@ -401,7 +413,7 @@ class CookieSettingsPersistenceTests(unittest.TestCase):
             if target is not None:
                 server_bands = ast.literal_eval(node.value)
                 break
-        self.assertIsNotNone(server_bands, "Could not parse BANDS from config.py")
+        self.assertIsNotNone(server_bands, "Could not parse BANDS from backends/ft710/config_ft710.py")
         self.assertEqual(len(server_bands), 12,
                          f"Server expects 12 bands, got {len(server_bands)}")
 
@@ -578,5 +590,217 @@ class TXUplinkOwnershipTests(unittest.TestCase):
                       server_source)
 
 
+# ── Backend-aware set-command branches (functional) ─────────────────
+
+async def _no_sleep(_delay):
+    return None
+
+
+def server_radio_mode(server_mod):
+    return server_mod.radio.mode
+
+
+class _SetFakeCat:
+    """Records the CAT calls the set-command branches make."""
+
+    def __init__(self):
+        self.connected = True
+        self.mode_calls = []
+        self.tune_calls = []
+        self.priority_calls = []
+        self.band_stack_calls = []
+        self.frequency_calls = []
+
+    async def set_mode(self, mode_num):
+        self.mode_calls.append(mode_num)
+        return True
+
+    async def set_tune(self, tune):
+        self.tune_calls.append(tune)
+        return True
+
+    async def send_priority_set_command(self, cmd):
+        self.priority_calls.append(cmd)
+        return True
+
+    async def set_band_stack(self, bsr):
+        self.band_stack_calls.append(bsr)
+        return True
+
+    async def set_frequency(self, freq_hz, vfo="A"):
+        self.frequency_calls.append((freq_hz, vfo))
+        return True
+
+
+class _SetFakeWS:
+    def __init__(self):
+        self.messages = []
+
+    async def send_text(self, text):
+        self.messages.append(json.loads(text))
+
+    def errors(self):
+        return [m for m in self.messages if m.get("type") == "error"]
+
+
+class _SetFakeBackend:
+    """Minimal backend stand-in: capabilities + mode map + band table."""
+
+    def __init__(self, tune_via="tx2", mode_name_to_num=None, bands=None):
+        from backends.base import RadioCapabilities
+        self.capabilities = RadioCapabilities(
+            model_name="fake",
+            display_name="Fake",
+            default_baud=38400,
+            audio_rx_rate=44100,
+            audio_tx_rate=44100,
+            tune_via=tune_via,
+        )
+        self.mode_name_to_num = mode_name_to_num or {}
+        self.bands = bands if bands is not None else []
+
+
+class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
+    """_execute_set_command branches must source mode/band/tune tables
+    from the active backend, not the hardcoded FT-710 tables."""
+
+    def setUp(self):
+        import server
+        from radio_state import RadioState
+        self.server = server
+        self._old_cat = server.cat
+        self._old_backend = server.backend
+        self._old_radio = server.radio
+        self._old_scheduler = server.scheduler
+        server.radio = RadioState()
+        server.scheduler = None
+        self._sleep_patch = patch.object(server.asyncio, "sleep", _no_sleep)
+        self._sleep_patch.start()
+
+    def tearDown(self):
+        self._sleep_patch.stop()
+        self.server.cat = self._old_cat
+        self.server.backend = self._old_backend
+        self.server.radio = self._old_radio
+        self.server.scheduler = self._old_scheduler
+
+    def _install(self, backend=None):
+        cat = _SetFakeCat()
+        self.server.cat = cat
+        self.server.backend = backend
+        return cat
+
+    # ── mode ────────────────────────────────────────────────────────
+
+    async def test_mode_set_ic7300_maps_lsb_to_civ_zero(self):
+        from backends.ic7300.config_ic7300 import (
+            MODE_NAME_TO_NUM as CIV_MODE_NAME_TO_NUM)
+        cat = self._install(_SetFakeBackend(
+            tune_via="atu", mode_name_to_num=CIV_MODE_NAME_TO_NUM))
+        ws = _SetFakeWS()
+        await self.server._execute_set_command("mode", "LSB", ws)
+        self.assertEqual(cat.mode_calls, [0x00])
+        self.assertEqual(server_radio_mode(self.server), 0x00)
+
+    async def test_mode_set_without_backend_uses_ft710_table(self):
+        cat = self._install(None)
+        ws = _SetFakeWS()
+        await self.server._execute_set_command("mode", "LSB", ws)
+        self.assertEqual(cat.mode_calls, [0x01])  # Yaesu register number
+
+    async def test_mem_recall_uses_backend_mode_map(self):
+        from backends.ic7300.config_ic7300 import (
+            MODE_NAME_TO_NUM as CIV_MODE_NAME_TO_NUM)
+        cat = self._install(_SetFakeBackend(
+            tune_via="atu", mode_name_to_num=CIV_MODE_NAME_TO_NUM))
+        ws = _SetFakeWS()
+        await self.server._handle_ws_message(
+            ws, json.dumps({"type": "memRecall", "mode": "USB"}))
+        self.assertEqual(cat.mode_calls, [0x01])  # CI-V USB, not Yaesu 2
+
+    # ── tune ────────────────────────────────────────────────────────
+
+    async def test_tune_atu_never_touches_priority_command(self):
+        cat = self._install(_SetFakeBackend(tune_via="atu"))
+        ws = _SetFakeWS()
+        await self.server._execute_set_command("tune", True, ws)
+        await self.server._execute_set_command("tune", False, ws)
+        self.assertEqual(cat.tune_calls, [True, False])
+        self.assertEqual(cat.priority_calls, [])
+
+    async def test_tune_tx2_keeps_ac_sequence(self):
+        cat = self._install(_SetFakeBackend(tune_via="tx2"))
+        ws = _SetFakeWS()
+        await self.server._execute_set_command("tune", True, ws)
+        await self.server._execute_set_command("tune", False, ws)
+        self.assertEqual(cat.tune_calls, [True, False])
+        # AC003 after carrier-on, AC000 before carrier-off — unchanged.
+        self.assertEqual(cat.priority_calls, ["AC003", "AC000"])
+
+    async def test_tune_without_backend_keeps_legacy_ac_sequence(self):
+        cat = self._install(None)
+        ws = _SetFakeWS()
+        await self.server._execute_set_command("tune", True, ws)
+        await self.server._execute_set_command("tune", False, ws)
+        self.assertEqual(cat.priority_calls, ["AC003", "AC000"])
+
+    # ── band ────────────────────────────────────────────────────────
+
+    async def test_band_ic7300_skips_band_stack_and_sets_civ_mode(self):
+        from backends.ic7300.config_ic7300 import (
+            BANDS as CIV_BANDS, MODE_NAME_TO_NUM as CIV_MODE_NAME_TO_NUM)
+        backend = _SetFakeBackend(
+            tune_via="atu", mode_name_to_num=CIV_MODE_NAME_TO_NUM,
+            bands=CIV_BANDS)
+        cat = self._install(backend)
+        ws = _SetFakeWS()
+        await self.server._execute_set_command("band", "40m", ws)
+        self.assertEqual(cat.band_stack_calls, [])  # no BSR on Icom
+        self.assertEqual(cat.frequency_calls, [(7_050_000, "A")])
+        # 7.05 MHz < 10 MHz → LSB → CI-V 0x00 (not Yaesu 0x01)
+        self.assertEqual(cat.mode_calls, [0x00])
+        self.assertEqual(server_radio_mode(self.server), 0x00)
+        self.assertEqual(ws.errors(), [])
+
+    async def test_band_ft710_uses_bsr_and_yaesu_mode(self):
+        from backends.ft710.config_ft710 import (
+            BANDS as FT_BANDS, MODE_NAME_TO_NUM as FT_MODE_NAME_TO_NUM)
+        backend = _SetFakeBackend(
+            tune_via="tx2", mode_name_to_num=FT_MODE_NAME_TO_NUM,
+            bands=FT_BANDS)
+        cat = self._install(backend)
+        ws = _SetFakeWS()
+        await self.server._execute_set_command("band", "20m", ws)
+        self.assertEqual(cat.band_stack_calls, [5])
+        self.assertEqual(cat.frequency_calls, [(14_270_000, "A")])
+        self.assertEqual(cat.mode_calls, [0x02])  # Yaesu USB
+        self.assertEqual(ws.errors(), [])
+
+
+class BackendModeMapSurfaceTests(unittest.TestCase):
+    """The real backends expose their own mode-name→number maps."""
+
+    def test_ft710_backend_exposes_yaesu_map(self):
+        from backends.ft710.backend import FT710Backend
+        from backends.ft710.config_ft710 import MODE_NAME_TO_NUM
+        self.assertIs(FT710Backend("/dev/null").mode_name_to_num,
+                      MODE_NAME_TO_NUM)
+        self.assertEqual(MODE_NAME_TO_NUM["LSB"], 0x01)
+
+    def test_ic7300_backend_exposes_civ_map(self):
+        from backends.ic7300.backend import IC7300Backend
+        from backends.ic7300.config_ic7300 import MODE_NAME_TO_NUM
+        self.assertIs(IC7300Backend("/dev/null").mode_name_to_num,
+                      MODE_NAME_TO_NUM)
+        self.assertEqual(MODE_NAME_TO_NUM["LSB"], 0x00)
+        self.assertEqual(MODE_NAME_TO_NUM["USB"], 0x01)
+
+    def test_base_backend_default_map_is_empty(self):
+        from backends.base import RadioBackend
+        self.assertEqual(RadioBackend.mode_name_to_num.fget(object()), {})
+
+
 if __name__ == "__main__":
     unittest.main()
+
+

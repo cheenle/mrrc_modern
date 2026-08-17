@@ -218,6 +218,20 @@
 
 **Consequences**: Poll loops must be cancel-aware; UX is significantly more responsive during fast PTT/tune transitions.
 
+## AD-016: Pluggable Radio Backend Architecture (FT-710 + IC-7300 via RadioBackend/Capabilities)
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Structural |
+| Status | Implemented |
+| Decision | Introduce a `RadioBackend` ABC + `RadioCapabilities` dataclass + `ScopeProducer` protocol in `backends/base.py`, a lazy `create_backend(model)` factory (`backends/__init__.py`, keys `ft710`/`ic7300`/`ic7300mk2`, selected by `MRRC_RADIO_MODEL`), and per-model packages `backends/ft710/` (Yaesu ASCII CAT + FT4222 scope_pipe) and `backends/ic7300/` (CI-V codec/controller at 115200 8N1 addr 0x94, 0x27 scope demux on the same port); radio-specific tables move to per-backend config modules, `fullState` carries radioModel/radioDisplayName/capabilities, and server mode/band/tune branches become backend-aware |
+
+**Problem**: The server was hard-wired to the FT-710 — Yaesu ASCII CAT, FT4222 spectrum, 44.1 kHz USB audio — so supporting the Icom IC-7300 (CI-V protocol, in-band 0x27 spectrum, 48 kHz native audio) would have meant forking server logic.
+
+**Rationale**: A backend ABC mirroring the CAT surface plus defaulted hooks (bands/ui_modes/filter_tables/poll-item lists/init_scope/create_scope_producer) keeps `server.py`, polling, and state radio-neutral; capabilities pushed in `fullState` let the frontend adapt bands, modes, FIL1-3 filters, ATT/PRE steps, meter visibility, and scope banner without protocol changes.
+
+**Consequences**: New radios are added as a `backends/<model>/` package plus factory registration; FT-710 behavior is unchanged (compat shims keep root imports valid); IC-7300 hardware-verification items (S-meter top point, TUNE carrier behavior, MK2 transceive item) remain flagged in code comments.
+
 ## 8.16 Decision Summary
 
 | ID | Topic | Status |
@@ -237,3 +251,4 @@
 | AD-013 | FT-710 meter calibration tables | Implemented |
 | AD-014 | FT-710 CAT errata handling | Implemented |
 | AD-015 | Priority CAT command preemption | Implemented |
+| AD-016 | Pluggable radio backend architecture (FT-710 + IC-7300) | Implemented |

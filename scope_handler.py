@@ -29,12 +29,12 @@ from ctypes import (
 from pathlib import Path
 from typing import Optional
 
-from scope_frame import (
+from backends.ft710.scope_frame import (
     SCOPE_FRAME_SIZE, WF_SIZE, SYNC_TAIL, SYNC_FULL, parse_scope_frame,
     scope_mode_to_cat,
 )
-from scope_libraries import find_ftdi_libraries
-from scope_libraries import get_ft4222_clock_divider
+from backends.ft710.scope_libraries import find_ftdi_libraries
+from backends.ft710.scope_libraries import get_ft4222_clock_divider
 
 logger = logging.getLogger("ft710.scope")
 

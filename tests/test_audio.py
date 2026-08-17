@@ -148,7 +148,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("ft710-v24", sw_source)
+        self.assertIn("mrrc-v25", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
@@ -951,6 +951,232 @@ class PortAudioReinitTests(unittest.TestCase):
             self.assertEqual(len(good.open_calls), 1)
         finally:
             self._restore_devices()
+
+
+class ParameterizedRateTests(unittest.TestCase):
+    """Phase 4a: AudioHandler device rates come from backend capabilities.
+    48000/48000 (IC-7300) must skip resampling entirely; 44100 (FT-710
+    default) keeps the 960↔882 resample path byte-identical."""
+
+    def _rx_handler(self, dev_rate, chunk):
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._rx_dev_rate = dev_rate
+        h._rx_chunk = chunk
+        h._rx_running = True
+        return h
+
+    @staticmethod
+    def _rx_stream(pcm):
+        class FakeRxStream:
+            def get_read_available(self):
+                return len(pcm) // 2
+
+            def read(self, n, exception_on_overflow=False):
+                return pcm[: n * 2]
+        return FakeRxStream()
+
+    def test_rx_48k_passthrough_skips_resample(self):
+        from unittest.mock import patch
+        pcm = b"\x01\x02" * 960          # 960 samples @ 48 kHz = 20 ms
+        h = self._rx_handler(48000, 960)
+        h._rx_stream = self._rx_stream(pcm)
+        with patch("audio_handler.resample_pcm") as rs:
+            out = h.read_rx_chunk()
+        rs.assert_not_called()
+        self.assertEqual(out, pcm)
+
+    def test_rx_44k1_resamples_to_48k(self):
+        from unittest.mock import patch
+        pcm = b"\x01\x02" * 882          # 882 samples @ 44.1 kHz = 20 ms
+        h = self._rx_handler(44100, 882)
+        h._rx_stream = self._rx_stream(pcm)
+        with patch("audio_handler.resample_pcm",
+                   wraps=__import__("audio_resample").resample_pcm) as rs:
+            out = h.read_rx_chunk()
+        rs.assert_called_once_with(pcm, 44100, 48000)
+        self.assertEqual(len(out), 960 * 2)
+
+    def _tx_handler(self, dev_rate):
+        import threading
+        from collections import deque
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._tx_dev_rate = dev_rate
+        h._tx_stream = object()
+        h._tx_queue = deque()
+        h._tx_queued_bytes = 0
+        h._tx_peak = 0
+        h._tx_lock = threading.Lock()
+        return h
+
+    def test_tx_48k_passthrough_skips_resample(self):
+        from unittest.mock import patch
+        frame = b"\x01\x02" * 960
+        h = self._tx_handler(48000)
+        with patch("audio_handler.resample_pcm") as rs:
+            h.feed_tx_audio(frame)
+        rs.assert_not_called()
+        self.assertEqual(h._tx_queue[0], frame)
+        self.assertEqual(h._tx_queued_bytes, len(frame))
+
+    def test_tx_44k1_resamples_to_device_rate(self):
+        from unittest.mock import patch
+        frame = b"\x01\x02" * 960
+        h = self._tx_handler(44100)
+        with patch("audio_handler.resample_pcm",
+                   wraps=__import__("audio_resample").resample_pcm) as rs:
+            h.feed_tx_audio(frame)
+        rs.assert_called_once_with(frame, 48000, 44100)
+        self.assertEqual(len(h._tx_queue[0]), 882 * 2)
+
+    def test_start_tx_opens_stream_at_configured_48k(self):
+        import config
+        old_rx, old_tx = config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE
+        config.AUDIO_RX_DEVICE = ""
+        config.AUDIO_TX_DEVICE = ""
+        try:
+            import threading
+            from collections import deque
+            from audio_handler import AudioHandler
+            h = AudioHandler.__new__(AudioHandler)
+            h._pa = _FakePyAudioOpen(
+                [_dev("USB Audio Device", inputs=1, outputs=2, rate=48000)])
+            h.rx_device = None
+            h.tx_device = None
+            h._tx_stream = None
+            h._tx_queue = deque()
+            h._tx_queued_bytes = 0
+            h._tx_primed = False
+            h._tx_lock = threading.Lock()
+            h._tx_write_lock = threading.Lock()
+            h._tx_dev_rate = 48000
+            h._tx_chunk = 960
+            self.assertTrue(h.start_tx())
+            self.assertEqual(h._tx_rate, 48000)
+            self.assertEqual(h._pa.open_calls[0]["rate"], 48000)
+            self.assertEqual(h._pa.open_calls[0]["frames_per_buffer"], 960)
+            self.assertEqual(h._tx_prebuffer_bytes, 48000 * 2 * 60 // 1000)
+            self.assertEqual(h._tx_max_buffer_bytes, 48000 * 2 * 400 // 1000)
+        finally:
+            config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
+
+
+class CustomNameHintsTests(unittest.TestCase):
+    """Phase 4a: device auto-detect name tier honors backend-provided hints
+    (IC-7300) without requiring FT-710 substrings; the generic USB-codec
+    tier (with full-duplex preference) must still find "USB Audio CODEC"."""
+
+    IC7300_HINTS = ("ic-7300", "ic7300", "usb audio codec", "usb audio device")
+
+    def _make_handler(self, devices, hints):
+        """Build via the real __init__ (PyAudio/Opus patched out) so the
+        hint-filtering wiring is exercised, then attach a fake PyAudio."""
+        from unittest.mock import patch
+        import audio_handler
+        with patch.object(audio_handler, "HAS_PYAUDIO", False), \
+             patch.object(audio_handler, "RxOpusEncoder",
+                          side_effect=RuntimeError("no opus in test")):
+            h = audio_handler.AudioHandler(name_hints=hints)
+        h._pa = _FakePyAudio(devices)
+        return h
+
+    def test_generic_usb_hints_are_stripped_from_radio_tier(self):
+        from unittest.mock import patch
+        import audio_handler
+        with patch.object(audio_handler, "HAS_PYAUDIO", False), \
+             patch.object(audio_handler, "RxOpusEncoder",
+                          side_effect=RuntimeError("no opus in test")):
+            h = audio_handler.AudioHandler(name_hints=self.IC7300_HINTS)
+        self.assertEqual(h._radio_hints, ("ic-7300", "ic7300"))
+
+    def test_defaults_preserve_ft710_behavior(self):
+        from unittest.mock import patch
+        import audio_handler
+        with patch.object(audio_handler, "HAS_PYAUDIO", False), \
+             patch.object(audio_handler, "RxOpusEncoder",
+                          side_effect=RuntimeError("no opus in test")):
+            h = audio_handler.AudioHandler()
+        self.assertEqual(h._rx_dev_rate, 44100)
+        self.assertEqual(h._tx_dev_rate, 44100)
+        self.assertEqual(h._rx_chunk, 882)
+        self.assertEqual(h._tx_chunk, 882)
+        self.assertEqual(h._radio_hints, ("ft-710", "ft710", "yaesu"))
+
+    def test_ic7300_name_matches_radio_tier(self):
+        h = self._make_handler([
+            _dev("Built-in Microphone", inputs=2),
+            _dev("IC-7300", inputs=1, outputs=2),
+        ], self.IC7300_HINTS)
+        self.assertEqual(h._find_rx_device(), 1)
+
+    def test_usb_codec_found_without_radio_name_in_hints(self):
+        # Requirement: with IC-7300 hints a plain "USB Audio CODEC" device
+        # must still be found (generic USB tier, no "ft-710" required).
+        h = self._make_handler([
+            _dev("Built-in Microphone", inputs=2),
+            _dev("USB Audio CODEC", inputs=1, outputs=2),
+        ], self.IC7300_HINTS)
+        self.assertEqual(h._find_rx_device(), 1)
+        self.assertEqual(h._find_tx_device(), 1)
+
+    def test_ft710_name_does_not_match_ic7300_hints(self):
+        # A stray FT-710-named device must not win tier 2 under IC-7300
+        # hints; the codec tier takes over instead.
+        h = self._make_handler([
+            _dev("YAESU FT-710 USB Audio", inputs=1, outputs=2),
+            _dev("USB Audio CODEC", inputs=1, outputs=2),
+        ], self.IC7300_HINTS)
+        self.assertEqual(h._find_rx_device(), 1)
+
+    def test_full_duplex_preference_kept_with_custom_hints(self):
+        # Input-only codec interloper first, full-duplex codec (the radio)
+        # second — the full-duplex preference must survive custom hints.
+        h = self._make_handler([
+            _dev("USB Audio CODEC", inputs=1),
+            _dev("USB Audio Device", inputs=1, outputs=2),
+        ], self.IC7300_HINTS)
+        self.assertEqual(h._find_rx_device(), 1)
+
+    def test_default_hints_match_yaesu_name(self):
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)   # class-level FT-710 defaults
+        h.rx_device = None
+        h.tx_device = None
+        h._pa = _FakePyAudio([
+            _dev("Built-in Microphone", inputs=2),
+            _dev("YAESU FT-710 USB Audio", inputs=1, outputs=2),
+        ])
+        self.assertEqual(h._find_rx_device(), 1)
+        self.assertEqual(h._find_tx_device(), 1)
+
+
+class CapabilitiesAudioWiringTests(unittest.TestCase):
+    """Phase 4a: server.py builds AudioHandler from backend capabilities;
+    FT-710 capabilities equal the historical AudioHandler defaults."""
+
+    def test_ft710_capabilities_match_audio_defaults(self):
+        from backends import create_backend
+        import audio_handler
+        caps = create_backend("ft710", port="/dev/null").capabilities
+        self.assertEqual(caps.audio_rx_rate, audio_handler.RX_SAMPLE_RATE)
+        self.assertEqual(caps.audio_tx_rate, audio_handler.TX_SAMPLE_RATE)
+        for hint in audio_handler.RADIO_NAME_HINTS:
+            self.assertIn(hint, caps.audio_name_hints)
+        for hint in audio_handler.USB_AUDIO_NAME_HINTS:
+            self.assertIn(hint, caps.audio_name_hints)
+
+    def test_ic7300_capabilities_are_48k(self):
+        from backends import create_backend
+        caps = create_backend("ic7300", port="/dev/null").capabilities
+        self.assertEqual(caps.audio_rx_rate, 48000)
+        self.assertEqual(caps.audio_tx_rate, 48000)
+
+    def test_server_constructs_audio_from_capabilities(self):
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
+        self.assertIn("AudioHandler(rx_rate=_caps.audio_rx_rate", source)
+        self.assertIn("tx_rate=_caps.audio_tx_rate", source)
+        self.assertIn("name_hints=tuple(_caps.audio_name_hints)", source)
 
 
 if __name__ == "__main__":

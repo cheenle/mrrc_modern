@@ -1,11 +1,17 @@
 """
-FT-710 Audio Handler
-====================
-Captures RX audio from the FT-710's USB audio device and streams it
+Radio Audio Handler
+===================
+Captures RX audio from the radio's USB audio device and streams it
 via Opus to the browser. Receives TX audio from the browser and plays
-it to the FT-710's USB audio device.
+it to the radio's USB audio device.
 
 Uses PyAudio for sound card I/O and libopus for compression.
+
+Device sample rate and auto-detect name hints are per-radio parameters
+(backend capabilities → AudioHandler(rx_rate=..., tx_rate=...,
+name_hints=...)); defaults reproduce the FT-710 behavior exactly
+(44.1 kHz device rate with 960↔882 resampling against the 48 kHz Opus
+wire rate, FT-710/YAESU name matching).
 """
 
 import asyncio
@@ -18,7 +24,7 @@ from typing import Optional
 import numpy as np
 
 from opus_rx import RxOpusEncoder, AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, RX_RATE
-from audio_resample import resample_441_to_48, resample_48_to_441
+from audio_resample import resample_pcm
 
 logger = logging.getLogger("ft710.audio")
 
@@ -32,11 +38,21 @@ except ImportError:
     logger.warning("PyAudio not available — audio disabled. Install: pip install pyaudio")
 
 # ── Audio Config ───────────────────────────────────────────────────────
+# Module-level values are the FT-710 defaults; AudioHandler instances may
+# override them per radio backend (capabilities.audio_rx_rate/tx_rate —
+# e.g. the IC-7300's USB codec runs at 48 kHz end-to-end, needing no
+# resampling against the 48 kHz Opus wire rate).
 RX_SAMPLE_RATE = 44100       # FT-710 native USB audio rate
+RX_CHUNK_MS = 20             # one Opus frame worth of device samples
 RX_CHUNK_SIZE = 882          # 20 ms @ 44.1 kHz (= 960 samples after resampling to 48k)
 RX_CHANNELS = 1
 TX_SAMPLE_RATE = 44100       # FT-710 native USB audio rate
 TX_CHANNELS = 1
+
+# Radio-specific USB-audio enumeration names used by the auto-detect name
+# tier (FT-710 defaults; backends pass capabilities.audio_name_hints).
+# Case-insensitive substring matching.
+RADIO_NAME_HINTS = ('ft-710', 'ft710', 'yaesu')
 
 # Generic enumeration names of the FT-710's built-in USB sound card on
 # Windows — the exact string varies by driver/OS build ("USB Audio CODEC"
@@ -72,11 +88,38 @@ class AudioHandler:
     _tx_peak = 0
     _tx_queue_drops = 0
 
+    # Class-level FT-710 audio defaults: instances built via __new__
+    # (tests) without __init__ must behave exactly like a default FT-710
+    # handler. __init__ overwrites these per instance from the backend
+    # capabilities.
+    _rx_dev_rate = RX_SAMPLE_RATE    # device-side RX sample rate
+    _tx_dev_rate = TX_SAMPLE_RATE    # device-side TX sample rate
+    _rx_chunk = RX_CHUNK_SIZE        # 20 ms of device samples (RX)
+    _tx_chunk = RX_CHUNK_SIZE        # 20 ms of device samples (TX buffer)
+    _radio_hints = RADIO_NAME_HINTS  # tier-2 device-name substrings
+
     def __init__(self,
                  rx_device_index: Optional[int] = None,
-                 tx_device_index: Optional[int] = None):
+                 tx_device_index: Optional[int] = None,
+                 rx_rate: int = RX_SAMPLE_RATE,
+                 tx_rate: int = TX_SAMPLE_RATE,
+                 name_hints=RADIO_NAME_HINTS):
         self.rx_device = rx_device_index
         self.tx_device = tx_device_index
+        # Per-radio audio parameters (from backend capabilities). When the
+        # device rate equals the 48 kHz Opus wire rate (RX_RATE), the
+        # resample step is skipped entirely (e.g. IC-7300: 48k end-to-end).
+        self._rx_dev_rate = rx_rate
+        self._tx_dev_rate = tx_rate
+        self._rx_chunk = rx_rate * RX_CHUNK_MS // 1000
+        self._tx_chunk = tx_rate * RX_CHUNK_MS // 1000
+        # Radio-specific name hints form the tier-2 name match; the generic
+        # USB_AUDIO_NAME_HINTS stay a separate tier (with full-duplex
+        # preference), so strip them here if a backend included them.
+        self._radio_hints = tuple(
+            h.lower() for h in name_hints
+            if h.lower() not in USB_AUDIO_NAME_HINTS
+        )
         self._pa: Optional["pyaudio.PyAudio"] = None
         self._rx_stream: Optional["pyaudio.Stream"] = None
         self._tx_stream: Optional["pyaudio.Stream"] = None
@@ -161,8 +204,9 @@ class AudioHandler:
 
         Priority:
         1. Explicit device index/name from config (env FT710_AUDIO_RX_DEVICE)
-        2. Name match: "FT-710", "FT710", "YAESU"
-        3. Name match: USB_AUDIO_NAME_HINTS — the FT-710's built-in USB
+        2. Name match: radio-specific hints (self._radio_hints, from the
+           backend capabilities — FT-710 default: "FT-710"/"FT710"/"YAESU")
+        3. Name match: USB_AUDIO_NAME_HINTS — the radio's built-in USB
            sound card enumerates under a generic name on Windows ("USB
            Audio CODEC" or "USB Audio Device", no "FT-710" in it);
            localized Windows wraps it ("麦克风 (USB Audio Device)") and
@@ -198,13 +242,14 @@ class AudioHandler:
                         return i
             logger.warning("Configured audio device '%s' not found", AUDIO_RX_DEVICE)
 
-        # Try to find a device with "FT-710" or "YAESU" in the name
+        # Try to find a device by radio-specific name hints
+        # (case-insensitive substring; FT-710 default: FT-710/FT710/YAESU)
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
                 name = info.get('name', '')
-                if 'FT-710' in name or 'FT710' in name or 'YAESU' in name.upper():
-                    logger.info("Found FT-710 audio input: [%d] %s", i, name)
+                if any(h in name.lower() for h in self._radio_hints):
+                    logger.info("Found radio audio input: [%d] %s", i, name)
                     return i
 
         # The FT-710's built-in USB sound card enumerates on Windows under a
@@ -283,16 +328,18 @@ class AudioHandler:
                 self._rx_stream = self._pa.open(
                     format=pyaudio.paInt16,
                     channels=RX_CHANNELS,
-                    rate=RX_SAMPLE_RATE,
+                    rate=self._rx_dev_rate,
                     input=True,
                     input_device_index=dev,
-                    frames_per_buffer=RX_CHUNK_SIZE,
+                    frames_per_buffer=self._rx_chunk,
                     stream_callback=None,  # We'll read in the asyncio loop
                 )
                 self._rx_running = True
                 dev_info = self._pa.get_device_info_by_index(dev)
-                logger.info("RX audio started: [%d] %s @ %d Hz (resampled to 48k for Opus)",
-                            dev, dev_info.get('name', ''), RX_SAMPLE_RATE)
+                logger.info("RX audio started: [%d] %s @ %d Hz (%s)",
+                            dev, dev_info.get('name', ''), self._rx_dev_rate,
+                            "native 48k Opus rate" if self._rx_dev_rate == RX_RATE
+                            else "resampled to 48k for Opus")
                 return True
             except Exception as e:
                 if reinit_round == 0:
@@ -356,12 +403,16 @@ class AudioHandler:
         try:
             # Use get_read_available to check, then read what's there
             count = self._rx_stream.get_read_available()
-            if count >= RX_CHUNK_SIZE:
+            if count >= self._rx_chunk:
                 # Read one chunk's worth, or at most 4 chunks to prevent lag
-                to_read = min(count, RX_CHUNK_SIZE * 4)
+                to_read = min(count, self._rx_chunk * 4)
                 data = self._rx_stream.read(to_read, exception_on_overflow=False)
                 if data and len(data) >= 2:
-                    return resample_441_to_48(data)
+                    # Device already at the 48 kHz Opus wire rate (IC-7300):
+                    # passthrough, no resampling needed.
+                    if self._rx_dev_rate == RX_RATE:
+                        return data
+                    return resample_pcm(data, self._rx_dev_rate, RX_RATE)
         except OSError as e:
             if "Stream not open" in str(e) or "No such device" in str(e):
                 logger.warning("RX stream lost — attempting restart")
@@ -423,8 +474,9 @@ class AudioHandler:
 
         Priority:
         1. Explicit device from config (env FT710_AUDIO_TX_DEVICE)
-        2. Name match: "FT-710", "FT710", "YAESU"
-        3. Name match: USB_AUDIO_NAME_HINTS — the FT-710's built-in USB
+        2. Name match: radio-specific hints (self._radio_hints, from the
+           backend capabilities — FT-710 default: "FT-710"/"FT710"/"YAESU")
+        3. Name match: USB_AUDIO_NAME_HINTS — the radio's built-in USB
            sound card enumerates under a generic name on Windows ("USB
            Audio CODEC" or "USB Audio Device")
         4. Heuristic: device with both input AND output (full-duplex USB audio)
@@ -452,13 +504,13 @@ class AudioHandler:
                             logger.info("Found configured audio output: [%d] %s", i, info.get('name', ''))
                             return i
 
-        # Try FT-710 USB audio output by name
+        # Try radio USB audio output by radio-specific name hints
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxOutputChannels', 0) > 0:
                 name = info.get('name', '')
-                if 'FT-710' in name or 'FT710' in name or 'YAESU' in name.upper():
-                    logger.info("Found FT-710 audio output: [%d] %s", i, name)
+                if any(h in name.lower() for h in self._radio_hints):
+                    logger.info("Found radio audio output: [%d] %s", i, name)
                     return i
 
         # The FT-710's built-in USB sound card enumerates on Windows under a
@@ -541,13 +593,14 @@ class AudioHandler:
             logger.warning("No audio output device found for TX")
             return False
 
-        # The browser/Opus codec domain is 48 kHz, but the FT-710 USB audio
-        # device domain is always 44.1 kHz.  A Windows WASAPI shared-mode
-        # defaultSampleRate is not the radio's hardware clock and must not
-        # promote the output stream to 48 kHz.
-        self._tx_rate = TX_SAMPLE_RATE
-        self._tx_prebuffer_bytes = TX_PREBUFFER_BYTES
-        self._tx_max_buffer_bytes = TX_MAX_BUFFER_BYTES
+        # The browser/Opus codec domain is 48 kHz; the radio's USB audio
+        # device domain is backend-specific (FT-710: always 44.1 kHz,
+        # IC-7300: 48 kHz).  A Windows WASAPI shared-mode defaultSampleRate
+        # is not the radio's hardware clock and must not promote the output
+        # stream away from the configured device rate.
+        self._tx_rate = self._tx_dev_rate
+        self._tx_prebuffer_bytes = self._tx_rate * TX_CHANNELS * 2 * TX_PREBUFFER_MS // 1000
+        self._tx_max_buffer_bytes = self._tx_rate * TX_CHANNELS * 2 * TX_MAX_BUFFER_MS // 1000
 
         # If a TX stream is already active, close it now so CoreAudio can
         # release the device before we try to open a new one.  This also
@@ -585,10 +638,10 @@ class AudioHandler:
                     stream = self._pa.open(
                         format=pyaudio.paInt16,
                         channels=TX_CHANNELS,
-                        rate=TX_SAMPLE_RATE,
+                        rate=self._tx_rate,
                         output=True,
                         output_device_index=dev,
-                        frames_per_buffer=RX_CHUNK_SIZE,
+                        frames_per_buffer=self._tx_chunk,
                     )
                 except Exception as e:
                     last_error = e
@@ -623,7 +676,7 @@ class AudioHandler:
 
                 dev_info = self._pa.get_device_info_by_index(dev)
                 logger.info("TX audio started: [%d] %s @ %d Hz (pre-buffer %dms, cap %dms)%s",
-                            dev, dev_info.get('name', ''), TX_SAMPLE_RATE,
+                            dev, dev_info.get('name', ''), self._tx_rate,
                             TX_PREBUFFER_MS, TX_MAX_BUFFER_MS,
                             f" (attempt {attempt + 1})" if attempt > 0 else "")
                 return True
@@ -706,13 +759,17 @@ class AudioHandler:
 
     def feed_tx_audio(self, pcm: bytes):
         """Queue TX audio for playback. Input is 48 kHz Int16 PCM (from Opus
-        decoder or browser); resampled to 44.1 kHz for FT-710 native USB
-        audio. Enforces a hard queue-depth cap (drops oldest) to bound
+        decoder or browser); resampled to the radio's device rate (44.1 kHz
+        for FT-710 native USB audio, passthrough at 48 kHz for the IC-7300).
+        Enforces a hard queue-depth cap (drops oldest) to bound
         latency under network jitter bursts.
         """
         if not pcm or len(pcm) < 2:
             return
-        data = resample_48_to_441(pcm)
+        if self._tx_dev_rate == RX_RATE:
+            data = pcm
+        else:
+            data = resample_pcm(pcm, RX_RATE, self._tx_dev_rate)
         if not data:
             return
         with self._tx_lock:

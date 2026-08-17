@@ -1,20 +1,42 @@
 """
-FT-710 Radio State
-==================
-Thread-safe (asyncio-safe) container for all FT-710 state with
+Radio State
+===========
+Thread-safe (asyncio-safe) container for all radio state with
 change tracking.  Only dirty (changed) fields are broadcast to clients.
+
+Radio-specific tables (mode map, band edges, meter calibrations) are
+injected per backend via ``configure()``; the defaults are the FT-710
+tables so existing behavior is unchanged when no backend configures.
 """
 import asyncio
 import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from config import (
-    MODE_NUM_TO_NAME, MODE_DISPLAY_NAMES, PREAMP_LABELS, ATTENUATOR_LABELS,
-    get_band_for_frequency, get_filter_widths_for_mode, get_filter_hz,
+from config import MODE_DISPLAY_NAMES
+from backends.ft710.config_ft710 import (
+    MODE_NUM_TO_NAME, PREAMP_LABELS, ATTENUATOR_LABELS,
+    get_band_for_frequency, get_filter_hz,
     raw_to_dbm, raw_to_s_unit,
     raw_to_power, raw_to_swr, raw_to_voltage, raw_to_current,
 )
+
+
+def _default_tables() -> dict:
+    """Default (FT-710) radio tables for RadioState derived properties."""
+    return {
+        "mode_num_to_name": MODE_NUM_TO_NAME,
+        "preamp_labels": PREAMP_LABELS,
+        "attenuator_labels": ATTENUATOR_LABELS,
+        "get_band_for_frequency": get_band_for_frequency,
+        "get_filter_hz": get_filter_hz,
+        "raw_to_dbm": raw_to_dbm,
+        "raw_to_s_unit": raw_to_s_unit,
+        "raw_to_power": raw_to_power,
+        "raw_to_swr": raw_to_swr,
+        "raw_to_voltage": raw_to_voltage,
+        "raw_to_current": raw_to_current,
+    }
 
 _DEPENDENT_DERIVED_FIELDS = {
     "s_meter": {"s_meter_dbm", "s_unit"},
@@ -117,9 +139,27 @@ class RadioState:
     # Note: _lock is intentionally omitted. RadioState.update() is synchronous
     # and called from the asyncio event loop, so no locking is needed.
 
+    # ── Per-Radio Tables (injected by the active backend) ─────────
+    _tables: dict = field(default_factory=_default_tables, repr=False)
+
     def __post_init__(self):
         """Initialize any state that requires an event loop."""
         pass
+
+    def configure(self, **tables) -> None:
+        """Inject per-radio tables (called from server lifespan).
+
+        Recognized keys (see backends.base.RadioBackend.state_tables):
+        mode_num_to_name, preamp_labels, attenuator_labels,
+        get_band_for_frequency, get_filter_hz, raw_to_dbm, raw_to_s_unit,
+        raw_to_power, raw_to_swr, raw_to_voltage, raw_to_current.
+        Unknown keys are ignored; omitted keys keep the FT-710 defaults.
+        """
+        for key, value in tables.items():
+            if key in self._tables:
+                self._tables[key] = value
+            else:
+                raise KeyError(f"unknown RadioState table {key!r}")
 
     # ── Derived Properties ────────────────────────────────────────
 
@@ -131,7 +171,7 @@ class RadioState:
     @property
     def mode_name(self) -> str:
         """Human-readable mode name."""
-        return MODE_NUM_TO_NAME.get(self.mode, f"M{self.mode:X}")
+        return self._tables["mode_num_to_name"].get(self.mode, f"M{self.mode:X}")
 
     @property
     def mode_display(self) -> str:
@@ -142,38 +182,38 @@ class RadioState:
     @property
     def band_name(self) -> str:
         """Current band name (e.g. '20m')."""
-        band = get_band_for_frequency(self.active_freq)
+        band = self._tables["get_band_for_frequency"](self.active_freq)
         return band["name"] if band else "GEN"
 
     @property
     def s_meter_dbm(self) -> float:
         """S-meter reading in dBm."""
-        return raw_to_dbm(self.s_meter)
+        return self._tables["raw_to_dbm"](self.s_meter)
 
     @property
     def s_unit(self) -> str:
         """S-meter reading as S-unit string."""
-        return raw_to_s_unit(self.s_meter)
+        return self._tables["raw_to_s_unit"](self.s_meter)
 
     @property
     def power_watts(self) -> float:
-        """TX power in watts (RM5 raw 0-255 -> W via calibration)."""
-        return raw_to_power(self.power_meter)
+        """TX power in watts (power-meter raw 0-255 -> W via calibration)."""
+        return self._tables["raw_to_power"](self.power_meter)
 
     @property
     def swr_ratio(self) -> float:
-        """SWR ratio (RM6 raw 0-255 -> 1.0..9.9 via calibration)."""
-        return raw_to_swr(self.swr_meter)
+        """SWR ratio (SWR-meter raw 0-255 -> ratio via calibration)."""
+        return self._tables["raw_to_swr"](self.swr_meter)
 
     @property
     def vd_volts(self) -> float:
-        """Drain/supply voltage (RM8 raw 0-255 -> V via calibration)."""
-        return raw_to_voltage(self.vd_meter)
+        """Drain/supply voltage (Vd-meter raw 0-255 -> V via calibration)."""
+        return self._tables["raw_to_voltage"](self.vd_meter)
 
     @property
     def id_amps(self) -> float:
-        """Drain current (RM7 raw 0-255 -> A via calibration)."""
-        return raw_to_current(self.id_meter)
+        """Drain current (Id-meter raw 0-255 -> A via calibration)."""
+        return self._tables["raw_to_current"](self.id_meter)
 
     @property
     def alc_pct(self) -> float:
@@ -183,15 +223,15 @@ class RadioState:
     @property
     def filter_hz(self) -> Optional[int]:
         """Current filter width in Hz."""
-        return get_filter_hz(self.mode_name, self.filter_width)
+        return self._tables["get_filter_hz"](self.mode_name, self.filter_width)
 
     @property
     def preamp_label(self) -> str:
-        return PREAMP_LABELS.get(self.preamp, str(self.preamp))
+        return self._tables["preamp_labels"].get(self.preamp, str(self.preamp))
 
     @property
     def attenuator_label(self) -> str:
-        return ATTENUATOR_LABELS.get(self.attenuator, str(self.attenuator))
+        return self._tables["attenuator_labels"].get(self.attenuator, str(self.attenuator))
 
     @property
     def is_transmitting(self) -> bool:
@@ -346,70 +386,22 @@ class RadioState:
 
     @classmethod
     def from_sync_result(cls, sync_data: dict) -> "RadioState":
-        """Create a RadioState from the raw sync response dict
-        returned by CatController.initial_state_sync()."""
-        state = cls()
-        _parsers = {
-            "vfo_a_freq": lambda r: int(r[2:]) if len(r) > 2 else 0,
-            "vfo_b_freq": lambda r: int(r[2:]) if len(r) > 2 else 0,
-            "active_vfo": lambda r: "B" if (r and r.endswith("1")) else "A",
-            "mode": lambda r: int(r[3:], 16) if len(r) >= 4 else 1,
-            "tx_status": lambda r: int(r[2:]) if len(r) > 2 else 0,
-            "s_meter": lambda r: int(r[3:]) if len(r) > 3 else 0,
-            "filter_width": lambda r: int(r[-2:]) if len(r) >= 4 else 1,
-            "af_gain_raw": lambda r: int(r[2:]) if len(r) > 2 else 128,
-            "rf_power": lambda r: int(r[2:]) if len(r) > 2 else 100,
-            "preamp": lambda r: int(r[3:]) if len(r) > 3 else 0,
-            "attenuator": lambda r: int(r[3:]) if len(r) > 3 else 0,
-            "noise_blanker": lambda r: r.endswith("1"),
-            "noise_reduction": lambda r: r.endswith("1"),
-            "auto_notch": lambda r: r.endswith("1"),
-            # AC P1P2P3. Standard tuner: P2=0, P3=0=OFF, P3=1=ON, P3=3=Tuning
-            "tuner_status": lambda r: (
-                2 if len(r) > 4 and r[4] == '3' else  # P3==3 → tuning start
-                1 if len(r) > 4 and r[4] == '1' else  # P3==1 → on
-                0  # P3==0 → off
-            ) if r and len(r) > 4 else 0,
-            "power_on": lambda r: r.endswith("1"),
-            "scope_on": lambda r: int(r[4:]) == 1 if r and len(r) >= 5 else True,
-            "antenna": lambda r: int(r[2:]) if r and len(r) >= 3 else 1,
-            "agc": lambda r: int(r[2:]) if r and len(r) >= 4 else 1,
-            "dnr_level": lambda r: int(r[2:5]) if r and len(r) >= 5 else 0,
-            "contour_level": lambda r: int(r[2:5]) if r and len(r) >= 5 else 0,
-            "meter_display": lambda r: int(r[2]) if r and len(r) >= 3 else 0,
-            "amc_level": lambda r: int(r[2:5]) if r and len(r) >= 5 else 50,
-            "rf_gain": lambda r: int(r[2:]) if r and len(r) > 2 else 255,
-            "ri": lambda r: (  # RI0 + 7 single-char fields
-                # Parse into individual fields below
-                r
-            ),
-        }
+        """Create a RadioState from a backend's initial_state_sync() result.
 
-        for field, raw in sync_data.items():
-            if field == "ri":
-                # RI0 response: "RI0" + 7 single-char fields
-                # Parse into individual RI fields
-                try:
-                    tail = raw[3:] if raw.startswith("RI0") else raw
-                    if len(tail) >= 7:
-                        state.hi_swr = tail[0] == '1'
-                        state.recording_status = int(tail[1]) if tail[1].isdigit() else 0
-                        state.rx_tx_status = int(tail[2]) if tail[2].isdigit() else 0
-                        state.tuner_tuning = tail[4] == '1'
-                        state.scan_status = int(tail[5]) if tail[5].isdigit() else 0
-                        state.squelch_open = tail[6] == '1'
-                except (ValueError, IndexError):
-                    pass
+        Contract (Phase 2b): ``sync_data`` is ALREADY PARSED — plain
+        ``{RadioState field: value}`` pairs produced by the active
+        backend (the Yaesu string-slice parsers moved into
+        ``FT710Backend.initial_state_sync``).  None values, unknown
+        fields and non-field properties are skipped.
+        """
+        state = cls()
+        fields = cls.__dataclass_fields__
+        for field_name, value in (sync_data or {}).items():
+            if value is None or field_name.startswith("_"):
                 continue
-            if field in _parsers and raw:
-                try:
-                    value = _parsers[field](raw)
-                    # Map field names
-                    if field == "af_gain_raw":
-                        state.af_gain = value
-                    else:
-                        if hasattr(state, field):
-                            setattr(state, field, value)
-                except (ValueError, IndexError):
-                    pass
+            if field_name == "af_gain_raw":
+                # Legacy alias kept for the FT-710 raw sync keys.
+                field_name = "af_gain"
+            if field_name in fields:
+                setattr(state, field_name, value)
         return state

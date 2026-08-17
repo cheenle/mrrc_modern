@@ -1,8 +1,8 @@
-# FT-710 Web Control — 完整文档索引
+# MRRC Web Control — 完整文档索引
 
-**最后更新**: 2026-07-25  
+**最后更新**: 2026-08-17  
 **文档总数**: 18 份核心 + 10 份 iOS  
-**版本**: v2.2.0
+**版本**: v1.9.0（多电台后端：FT-710 + IC-7300/IC-7300MK2）
 
 ---
 
@@ -32,9 +32,11 @@
 | 文档 | 说明 | 读者 |
 |------|------|------|
 | [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | 修复详细说明（含 TX 分析） | 开发者 |
-| [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | CAT 命令参考 | 开发者 |
+| [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | FT-710 CAT 命令参考 | 开发者 |
 | [AGENTS.md](AGENTS.md) | Agnes 代理配置 | 开发者 |
 | [win_pack.md](win_pack.md) | Windows 安装包打包手册（ham.vlsc.net KVM 虚拟机全流程，兼真机测试环境；含 KVM USB 等时 OUT 不可用于 TX 音频验证的限制说明） | 开发者/发布 |
+| [backends/ft710/](backends/ft710/) | FT-710 后端（CAT、FT4222 频谱、44.1kHz 音频） | 开发者 |
+| [backends/ic7300/](backends/ic7300/) | IC-7300/MK2 后端（CI-V、0x27 频谱、48kHz 音频） | 开发者 |
 
 ### 🔍 专项分析
 | 文档 | 说明 | 读者 |
@@ -68,11 +70,11 @@
 ### README.md (16KB)
 **位置**: 根目录  
 **内容**:
-- 项目简介与功能特性
-- 系统要求（Python 3.10+, Node.js 20+）
-- 快速启动步骤
-- 架构概览（前端/后端/电台）
-- 配置选项与环境变量
+- 项目简介与功能特性（FT-710 / IC-7300 / IC-7300MK2 多电台）
+- 系统要求（Python 3.10+）
+- 快速启动步骤（含后端选择）
+- 架构概览（前端/后端/电台后端插件）
+- 配置选项与环境变量（含 `MRRC_RADIO_MODEL`、`IC7300_CIV_ADDR`）
 - 安全最佳实践
 - 故障排除
 - 完整文档链接
@@ -99,10 +101,10 @@
 **内容**:
 - Python 版本要求（3.10+）
 - 操作系统支持（Windows/macOS/Linux）
-- 串口驱动安装（FTDI/CP210x）
+- 串口驱动安装（FTDI/CP210x / Icom USB CI-V）
 - PyAudio 配置
 - libopus 安装
-- FT4222 驱动
+- FT4222 驱动（FT-710 可选）
 - 虚拟环境创建
 - 依赖安装命令
 
@@ -343,14 +345,14 @@
 
 | 类别 | 数量 | 总大小 |
 |------|------|--------|
-| 核心文档 | 7 | ~73KB |
-| 技术文档 | 4 | ~26KB |
+| 核心文档 | 7 | ~75KB |
+| 技术文档 | 6 | ~28KB |
 | 分析文档 | 4 | ~25KB |
 | SDD 文档 | 15+ | ~100KB+ |
-| **总计** | **30+** | **~225KB+** |
+| **总计** | **32+** | **~230KB+** |
 
 **中文文档**: 3 份（EXECUTIVE_SUMMARY.md, COMPLETION_REPORT.md, FT710_Web_Control_介绍文章.md）  
-**英文文档**: 25+ 份
+**英文文档**: 27+ 份
 
 ---
 
@@ -363,6 +365,9 @@ README.md
 ├──→ QUICKSTART.md
 ├──→ SECURITY_GUIDE.md
 ├──→ DEPENDENCIES.md
+├──→ docs/OPERATION_GUIDE.md
+├──→ docs/MACOS_INSTALLER_GUIDE.md
+├──→ docs/WINDOWS_INSTALLER_GUIDE.md
 ├──→ FIXES_SUMMARY.md
 │   └──→ docs/TX_LINK_ANALYSIS.md
 ├──→ FINAL_VERIFICATION.md
@@ -372,7 +377,8 @@ README.md
 ├──→ COMPLETION_REPORT.md
 │   └──→ docs/TX_LINK_ANALYSIS.md
 ├──→ CHANGELOG.md
-└──→ SDD/
+├──→ SDD/
+└──→ backends/ (ft710 / ic7300 / ic7300mk2)
 ```
 
 ---
@@ -408,6 +414,6 @@ README.md
 
 ---
 
-**索引生成时间**: 2026-07-14 08:26  
+**索引生成时间**: 2026-08-17  
 **维护者**: Agnes Code Review  
-**下次审查**: 2026-08-14
+**下次审查**: 2026-09-17

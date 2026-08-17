@@ -1,8 +1,9 @@
-# FDE: Forward Deployed Engineering — MRRC FT-710
+# FDE: Forward Deployed Engineering — MRRC Web Control
 
-> **Echo → Delta → Product** in the FT-710 software SCU-LAN10 replacement project.
+> **Echo → Delta → Product** in the multi-radio remote control project
+> (originally FT-710, now also Icom IC-7300/IC-7300MK2).
 >
-> 版本 1.0 · 2026-07-24 · 基于 SDD V2.1 + git 历史 + 日志分析
+> 版本 1.1 · 2026-08-17 · 基于 SDD V2.1 + git 历史 + 日志分析
 
 ---
 
@@ -115,9 +116,23 @@ SDD chapters were updated after each Delta phase, not at the end. The version hi
 | `scope_frame.py` | Scope data parsing | Shared frame format with sync pattern, quality metrics | Any FT-710 scope consumer |
 | TX session logging | Silent failures with no diagnostics | Per-PTT-release: frames fed/decoded/failed, device written/errors, PCM peak | Any TX audio pipeline |
 
-### 3.3 The SDD as Product Harness
+### 3.3 Multi-Radio Backend Plugin Model
 
-The FT-710 SDD follows the same three-level harness structure as MRRC and SunMRRC:
+A Product-phase abstraction extracted in 2026-08 is the **pluggable radio backend**.
+`server.py`, `poll_scheduler.py`, and `radio_state.py` are now radio-agnostic;
+radio-specific behavior is isolated in `backends/ft710/` and `backends/ic7300/`.
+The backend is selected at runtime by `MRRC_RADIO_MODEL` (`ft710`, `ic7300`,
+`ic7300mk2`). This turns the FT-710 field solution into a general MRRC remote-control
+platform and validates the WebSocket protocol as a stable contract across radios.
+
+The first additional target is the **Icom IC-7300/IC-7300MK2**, using CI-V for control
+and `0x27` scope frames for spectrum on the same USB serial port, with 48 kHz native
+USB audio. The IC-7300 backend reuses the same polling, audio, and WebSocket layers
+without FTDI dependencies.
+
+### 3.4 The SDD as Product Harness
+
+The MRRC Web Control SDD follows the same three-level harness structure as MRRC and SunMRRC:
 
 | Harness Level | SDD Chapters | FDE Phase |
 | --------------- | ------------- | ----------- |
@@ -127,7 +142,7 @@ The FT-710 SDD follows the same three-level harness structure as MRRC and SunMRR
 
 ---
 
-## Part 4: The FDE Blueprint — FT-710 Edition
+## Part 4: The FDE Blueprint — MRRC Web Control Edition
 
 ### 4.1 How This Project Follows the 6-Step Blueprint
 
@@ -137,8 +152,8 @@ The FT-710 SDD follows the same three-level harness structure as MRRC and SunMRR
 | **2. Define the Harness** | SDD V1.0: 15 chapters, 15 ADs, 65 NFRs, 8 use cases — written concurrently with first commit |
 | **3. Echo: Deploy** | Field deployment on macOS + Raspberry Pi + Windows. Real daily operation generated the signal for 11 Delta cycles |
 | **4. Delta: Ship** | Each SDD version shipped a validated fix within 24h of the Echo signal. V1.0 baseline in 1 day |
-| **5. Product: Abstract** | 6 reusable modules extracted. Dual-codec tagging. Adaptive polling as pattern. Scope-init hook as reusable API |
-| **6. Accelerate** | The next FT-710 client (iOS, desktop app) inherits all of this. WebSocket protocol is the stable contract |
+| **5. Product: Abstract** | 6 reusable modules extracted. Dual-codec tagging. Adaptive polling as pattern. Scope-init hook as reusable API. Pluggable backend model |
+| **6. Accelerate** | The next client (iOS, desktop app) inherits all of this. WebSocket protocol is the stable contract across FT-710 and IC-7300 |
 
 ### 4.2 FDE Metrics
 
@@ -175,7 +190,7 @@ The FT-710 SDD follows the same three-level harness structure as MRRC and SunMRR
 
 2. **Product phase could produce more standalone artifacts.** `scope_pipe.py` and `poll_scheduler.py` are excellent reusable modules, but they're embedded in a project-specific repo. Extracting them as independent packages would increase leverage for future projects.
 
-3. **No dedicated FT-710 iOS client yet** — unlike SunMRRC→SunsdrMobile, the FT-710's WebSocket protocol hasn't been validated by a second consumer. The protocol is the contract; building a native client would validate it.
+3. **No dedicated native iOS/Android client yet** — unlike SunMRRC→SunsdrMobile, the WebSocket protocol is currently validated only by the browser UI across FT-710 and IC-7300. A native client would further stress-test the protocol contract.
 
 ---
 
@@ -194,5 +209,5 @@ The FT-710 SDD follows the same three-level harness structure as MRRC and SunMRR
 
 ---
 
-*This document records the FT-710 project through the FDE lens defined at [vlsc.net/fde.html](https://www.vlsc.net/fde.html).*
-*Cross-reference: SDD 14-version-history.md, AGENTS.md, vlsc.net FDE methodology.*
+*This document records the MRRC Web Control project through the FDE lens defined at [vlsc.net/fde.html](https://www.vlsc.net/fde.html).*
+*Cross-reference: SDD 14-version-history.md, AGENTS.md, CHANGELOG.md, vlsc.net FDE methodology.*

@@ -16,8 +16,6 @@ import json
 import logging
 import os
 import secrets as _secrets
-import struct
-import subprocess as _subprocess
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -27,20 +25,22 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
-    SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,
+    RADIO_MODEL, SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,
     SSL_CERTFILE, SSL_KEYFILE,
-    SCOPE_SERIAL_PORT, SCOPE_BAUD_RATE, SCOPE_SPANS,
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT, PTT_SAFETY_TIMEOUT,
-    MODE_NUM_TO_NAME, MODE_NAME_TO_NUM, BANDS, UI_MODES,
-    FILTER_WIDTHS_VOICE, FILTER_WIDTHS_NARROW, NARROW_MODES,
+    UI_MODES, NARROW_MODES,
     ATR1000_HOST, ATR1000_PORT,
-    get_band_for_frequency, get_filter_widths_for_mode, get_filter_hz,
 )
-from cat_controller import CatController
+from backends import create_backend
+from backends.base import RadioBackend
+from backends.ft710.config_ft710 import (
+    MODE_NAME_TO_NUM, BANDS,
+    FILTER_WIDTHS_VOICE, FILTER_WIDTHS_NARROW,
+)
+from backends.ft710.cat_controller import CatController
 from radio_state import RadioState
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
-from scope_frame import parse_pipe_payload, WF_SIZE
 from audio_handler import AudioHandler
 from opus_rx import (
     RxOpusEncoder, TxOpusDecoder,
@@ -63,6 +63,7 @@ logger = logging.getLogger("ft710")
 
 # ── Global State ────────────────────────────────────────────────────
 radio = RadioState()
+backend: RadioBackend | None = None
 cat: CatController | None = None
 scheduler: PollScheduler | None = None
 scope: ScopeHandler | None = None
@@ -149,11 +150,8 @@ def _assign_tx_owner_on_connect(ws: WebSocket, token: str) -> bool:
     return False
 
 _state_broadcast_task: asyncio.Task | None = None
-_scope_read_task: asyncio.Task | None = None
+_scope_producer = None          # backends.base.ScopeProducer, created in lifespan
 _scope_broadcast_task: asyncio.Task | None = None
-_scope_proc: asyncio.subprocess.Process | None = None
-_scope_pipe_lock: asyncio.Lock | None = None
-_scope_pipe_last_tx: bool | None = None
 _audio_rx_task: asyncio.Task | None = None
 _audio_tx_task: asyncio.Task | None = None
 _rx_restart_task: asyncio.Task | None = None
@@ -192,20 +190,6 @@ def _resource_dir() -> Path:
     if meipass:
         return Path(meipass)
     return _runtime_dir()
-
-
-def _scope_pipe_command() -> list[str] | None:
-    """Return the command used to start the FT4222 scope pipe."""
-    if getattr(sys, "frozen", False):
-        exe_name = "scope_pipe.exe" if sys.platform == "win32" else "scope_pipe"
-        pipe_exe = _runtime_dir() / exe_name
-        if pipe_exe.exists():
-            return [str(pipe_exe)]
-
-    scope_pipe_path = SCRIPT_DIR / "scope_pipe.py"
-    if scope_pipe_path.exists():
-        return [sys.executable, str(scope_pipe_path)]
-    return None
 
 
 STATIC_DIR = _resource_dir() / "static"
@@ -270,6 +254,22 @@ def _save_mem_channels(channels: list):
 
 # ── Broadcast ───────────────────────────────────────────────────────
 
+def _on_cat_broadcast(field: str, value):
+    """Radio-originated state change (CI-V transceive broadcast).
+
+    Called by the active backend on the asyncio loop when the radio
+    itself reports a change (front-panel knob/mode).  Reuses the normal
+    dirty-broadcast path; runs on the event loop so ensure_future is safe.
+    """
+    if field in ("vfo_a_freq", "vfo_b_freq"):
+        # Same plausibility guard as the poll loop.
+        if not isinstance(value, int) or not 30000 <= value <= 75000000:
+            return
+    changed = radio.update(**{field: value})
+    if changed:
+        asyncio.ensure_future(_broadcast_state())
+
+
 async def _broadcast_state():
     """Send dirty state fields to all connected WebSocket clients."""
     global ctrl_clients, _last_meter_broadcast_log
@@ -285,7 +285,8 @@ async def _broadcast_state():
         )
     if "tx_status" in dirty:
         # Radio entered/left TX — pause/resume the scope pipe's SPI reads.
-        await _notify_scope_pipe_tx()
+        if _scope_producer is not None:
+            _scope_producer.notify_tx(bool(radio.is_transmitting))
         if not radio.is_transmitting and audio:
             # Windows full-duplex quirk: the TX playback stream silently
             # wedges RX capture on the same USB codec — reopen it on every
@@ -591,269 +592,6 @@ async def _broadcast_spectrum_loop():
         await asyncio.sleep(interval)
 
 
-async def _read_scope_pipe(proc):
-    """Read binary spectrum frames from scope_pipe subprocess stdout.
-
-    Frame format: 4-byte BE uint32 length + payload bytes.
-    Heartbeat (len=0) means pipe is alive but idle.
-
-    Updates global scope handler's spectrum data in-place.
-    Stderr lines starting with "STATUS:" are machine-parseable status
-    messages from the pipe process.
-    """
-    global scope, _scope_proc, _scope_read_task
-    logger.info("Reading from scope_pipe (pid=%d)...", proc.pid)
-    _first_frame = True
-    _stderr_task = None
-
-    async def _drain_stderr():
-        """Continuously read stderr and log STATUS lines at INFO level."""
-        try:
-            while True:
-                line = await proc.stderr.readline()
-                if not line:
-                    break
-                text = line.decode("utf-8", errors="replace").rstrip()
-                if text.startswith("STATUS:"):
-                    payload = text[7:]
-                    # Log important status messages at INFO level
-                    if any(kw in payload for kw in (
-                        "fatal:", "pipe_error:", "spi_init_failed",
-                        "too_many_errors", "reinitializing_device",
-                        "sync_lost", "sync_recovered",
-                    )):
-                        logger.warning("scope_pipe: %s", payload)
-                    elif "heartbeat:" in payload or "diag:" in payload:
-                        logger.debug("scope_pipe: %s", payload)
-                    else:
-                        logger.info("scope_pipe: %s", payload)
-                else:
-                    logger.debug("scope_pipe(stderr): %s", text)
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.debug("scope_pipe stderr drain: %s", e)
-
-    # Start stderr reader in background
-    _stderr_task = asyncio.create_task(_drain_stderr(), name="scope_stderr")
-
-    try:
-        while True:
-            # Read 4-byte length header
-            header = await proc.stdout.read(4)
-            if not header or len(header) < 4:
-                break
-
-            frame_len = struct.unpack('>I', header)[0]
-
-            # Heartbeat frame (len=0): pipe is alive but no data
-            if frame_len == 0:
-                continue
-
-            if frame_len < 1 or frame_len > 8192:
-                logger.warning("scope_pipe: bad frame length %d", frame_len)
-                continue
-
-            # Read payload
-            payload = await proc.stdout.read(frame_len)
-            if len(payload) < frame_len:
-                break
-
-            # Parse pipe payload
-            if scope and len(payload) >= 1 + WF_SIZE:
-                try:
-                    parsed = parse_pipe_payload(payload)
-                except ValueError as e:
-                    logger.warning("scope_pipe: bad payload: %s", e)
-                    continue
-
-                scope.spectrum_rx1 = parsed.wf1
-                scope.spectrum_rx2 = parsed.wf2
-                scope.scope_mode = parsed.scope_mode
-                scope.scope_span = parsed.scope_span
-                scope.preamp = parsed.preamp
-                scope.attenuator = parsed.attenuator
-                scope.mode = parsed.mode
-                scope.s_meter = parsed.s_meter
-                scope.vfoa_freq = parsed.vfoa_freq
-                scope.scope_start_freq = parsed.scope_start_freq
-                scope._frame_count += 1
-                scope.last_update = time.time()
-
-                # Mark scope as connected on first successful frame
-                if _first_frame:
-                    _first_frame = False
-                    scope._connected = True
-                    logger.info("scope_pipe: first frame received — spectrum active "
-                                "(span=%d, s_meter=%d, wf1_max=%d)",
-                                parsed.scope_span, parsed.s_meter, max(parsed.wf1))
-
-                await _on_scope_frame(scope)
-
-    except asyncio.CancelledError:
-        pass
-    except Exception as e:
-        logger.warning("scope_pipe read error: %s", e)
-    finally:
-        # Clean up stderr reader
-        if _stderr_task:
-            _stderr_task.cancel()
-            try:
-                await _stderr_task
-            except asyncio.CancelledError:
-                pass
-
-        logger.warning("scope_pipe exited (frames=%d, connected=%s)",
-                       scope._frame_count if scope else 0,
-                       scope._connected if scope else False)
-        if scope:
-            scope._connected = False
-        if proc.returncode is None:
-            await asyncio.to_thread(_terminate_process_tree_sync, proc.pid)
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
-                try:
-                    await proc.wait()
-                except Exception:
-                    pass
-        if _scope_proc is proc:
-            _scope_proc = None
-        if _scope_read_task is asyncio.current_task():
-            _scope_read_task = None
-
-        # ── Auto-restart ──────────────────────────────────────────
-        # If spectrum clients are still connected when the pipe exits,
-        # restart it after a short delay (1s) so transient USB glitches
-        # don't require a manual client reconnect.
-        if spectrum_clients and _scope_pipe_command():
-            logger.info("scope_pipe exited with %d spectrum client(s) — "
-                        "will restart in 1s", len(spectrum_clients))
-            await asyncio.sleep(1.0)
-            # Only restart if no other pipe has been started in the meantime
-            if _scope_proc is None:
-                await _ensure_scope_pipe_running()
-
-
-async def _notify_scope_pipe_tx(force: bool = False):
-    """Tell scope_pipe when the radio enters/leaves TX (PTT/TUNE).
-
-    The FT-710 garbles its scope stream during TX; the pipe pauses SPI
-    reads while TX is active instead of churning through sync recovery
-    (which previously ran it into fatal:too_many_reinits on every PTT).
-    """
-    global _scope_pipe_last_tx
-    tx = bool(radio.is_transmitting) if radio else False
-    if not force and tx == _scope_pipe_last_tx:
-        return
-    _scope_pipe_last_tx = tx
-    proc = _scope_proc
-    if proc is None or proc.returncode is not None or proc.stdin is None:
-        return
-    try:
-        proc.stdin.write(b"TX:1\n" if tx else b"TX:0\n")
-        await proc.stdin.drain()
-    except Exception as e:
-        logger.debug("scope_pipe TX notify failed: %s", e)
-
-
-def _terminate_process_tree_sync(pid: int) -> None:
-    """Kill a process and (on Windows) its whole tree, best-effort.
-
-    scope_pipe.exe is a PyInstaller onefile bootloader: terminate() only
-    reaches the bootloader, orphaning the real worker which keeps the
-    FT4222 device open — the next pipe then fails FT_OpenEx with
-    FT_DEVICE_NOT_FOUND for seconds.  taskkill /T /F kills the tree
-    atomically.  POSIX terminate() signals the process directly.
-    """
-    if sys.platform == "win32":
-        try:
-            _subprocess.run(
-                ["taskkill", "/PID", str(pid), "/T", "/F"],
-                stdout=_subprocess.DEVNULL, stderr=_subprocess.DEVNULL,
-                timeout=5,
-            )
-            return
-        except Exception as e:
-            logger.debug("taskkill failed, falling back to terminate: %s", e)
-    try:
-        os.kill(pid, 15)  # SIGTERM
-    except Exception:
-        pass
-
-
-async def _ensure_scope_pipe_running():
-    """Start the FT4222 scope subprocess only while spectrum clients exist."""
-    global _scope_read_task, _scope_proc, _scope_pipe_lock
-    if _scope_read_task and not _scope_read_task.done():
-        return
-    if _scope_pipe_lock is None:
-        _scope_pipe_lock = asyncio.Lock()
-    async with _scope_pipe_lock:
-        if _scope_read_task and not _scope_read_task.done():
-            return
-        scope_pipe_cmd = _scope_pipe_command()
-        if not scope_pipe_cmd:
-            logger.warning("scope_pipe worker not found — spectrum will use S-meter fallback only")
-            return
-        logger.info("Starting scope_pipe subprocess for spectrum client...")
-        try:
-            _scope_proc = await asyncio.create_subprocess_exec(
-                *scope_pipe_cmd,
-                stdin=_subprocess.PIPE,
-                stdout=_subprocess.PIPE, stderr=_subprocess.PIPE,
-            )
-            _scope_read_task = asyncio.create_task(
-                _read_scope_pipe(_scope_proc), name="scope_pipe_read"
-            )
-            logger.info("scope_pipe subprocess started (pid=%d)", _scope_proc.pid)
-            # Sync the pipe with the current TX state (e.g. pipe started
-            # while the radio is already transmitting).
-            await _notify_scope_pipe_tx(force=True)
-        except Exception as e:
-            _scope_proc = None
-            _scope_read_task = None
-            logger.warning("Failed to start scope_pipe: %s", e)
-            logger.warning("Spectrum will use S-meter fallback only")
-
-
-async def _stop_scope_pipe():
-    """Stop the FT4222 scope subprocess when no spectrum clients remain."""
-    global _scope_read_task, _scope_proc, scope
-    task = _scope_read_task
-    _scope_read_task = None
-    if task and not task.done():
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            pass
-    proc = _scope_proc
-    _scope_proc = None
-    if proc and proc.returncode is None:
-        try:
-            await asyncio.to_thread(_terminate_process_tree_sync, proc.pid)
-            await asyncio.wait_for(proc.wait(), timeout=2.0)
-        except asyncio.TimeoutError:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-            try:
-                await proc.wait()
-            except Exception:
-                pass
-        except Exception:
-            pass
-    if scope:
-        scope._connected = False
-
 # ── Audio Broadcast ────────────────────────────────────────────────────
 
 async def _send_audio_frames_to_clients(
@@ -1017,6 +755,20 @@ async def _audio_tx_drain_loop():
 
 # ── Command Handler ─────────────────────────────────────────────────
 
+def _mode_name_to_num() -> dict:
+    """Mode-name → register-number map of the active backend.
+
+    Mode numbers are protocol-native (Yaesu register values vs CI-V mode
+    bytes), so the map must come from the backend.  Falls back to the
+    FT-710 table when no backend is active (legacy/tests).
+    """
+    if backend is not None:
+        m = backend.mode_name_to_num
+        if m:
+            return m
+    return MODE_NAME_TO_NUM
+
+
 async def _handle_ws_message(ws: WebSocket, msg_str: str):
     """Process incoming WebSocket control messages.
 
@@ -1093,7 +845,7 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
             else:
                 radio.update(vfo_a_freq=int(freq), active_vfo="A")
         if mode_name is not None:
-            mode_num = MODE_NAME_TO_NUM.get(str(mode_name).upper())
+            mode_num = _mode_name_to_num().get(str(mode_name).upper())
             if mode_num is not None:
                 await cat.set_mode(mode_num)
                 radio.update(mode=mode_num)
@@ -1219,7 +971,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "mode":
             mode_name = str(value).upper()
-            mode_num = MODE_NAME_TO_NUM.get(mode_name)
+            mode_num = _mode_name_to_num().get(mode_name)
             if mode_num is not None:
                 await cat.set_mode(mode_num)
                 radio.update(mode=mode_num)
@@ -1295,18 +1047,24 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "tune":
             on = value is True or str(value).lower() == "true"
+            # "tx2": CAT tune carrier + AC003 tuner trigger (FT-710).
+            # "atu": set_tune() alone runs the radio's internal-ATU
+            # sequence (IC-7300 1C 01 02/00) — no AC command exists.
+            tune_via = backend.capabilities.tune_via if backend else "tx2"
             if on:
                 # Start low-power carrier for tuning (TX2)
                 await cat.set_tune(True)
                 radio.update(tx_status=2)
-                # After carrier stabilises, trigger the antenna tuner.
-                # AC003 = P1=0,P2=0,P3=3 → Tuning Start (standard tuner).
-                await asyncio.sleep(0.3)
-                await cat.send_priority_set_command("AC003")
-                radio.update(tuner_status=2)
+                if tune_via == "tx2":
+                    # After carrier stabilises, trigger the antenna tuner.
+                    # AC003 = P1=0,P2=0,P3=3 → Tuning Start (standard tuner).
+                    await asyncio.sleep(0.3)
+                    await cat.send_priority_set_command("AC003")
+                    radio.update(tuner_status=2)
             else:
                 # Drop carrier — stop tuner if still running, then end TX.
-                await cat.send_priority_set_command("AC000")
+                if tune_via == "tx2":
+                    await cat.send_priority_set_command("AC000")
                 await cat.set_tune(False)
                 radio.update(tx_status=0, tuner_status=0)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
@@ -1572,13 +1330,16 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             scheduler and scheduler.skip_next_poll("rf_power", 3.0)
 
         elif field == "band":
-            # Set band by name
+            # Set band by name — look up in the active backend's table
+            # (FT-710 BANDS carry "bsr"; IC-7300 bands don't — Icom
+            # selects bands purely by frequency, no band-stack register).
             band_name = str(value)
-            band = next((b for b in BANDS if b["name"] == band_name), None)
+            bands = backend.bands if backend else BANDS
+            band = next((b for b in bands if b["name"] == band_name), None)
             if band:
                 logger.info(
-                    "Band change request: name=%s bsr=%02d default_freq=%d active_vfo=%s",
-                    band["name"], band["bsr"], band["default_freq"], radio.active_vfo,
+                    "Band change request: name=%s bsr=%s default_freq=%d active_vfo=%s",
+                    band["name"], band.get("bsr"), band["default_freq"], radio.active_vfo,
                 )
                 # Skip the next IF poll BEFORE sending CAT commands so that
                 # any in-flight poll result (which may have already read the
@@ -1586,13 +1347,18 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # setting.  See poll_scheduler._poll_if for the counterpart.
                 scheduler and scheduler.skip_next_poll("if", 1.0)
                 scheduler and scheduler.skip_next_poll("vfo", 1.0)
-                bs_ok = await cat.set_band_stack(band["bsr"])
+                bs_ok = True
+                if "bsr" in band:
+                    bs_ok = await cat.set_band_stack(band["bsr"])
                 fa_ok = await cat.set_frequency(band["default_freq"], "A")
                 # FT-710 band stacking auto-recalls the last-used mode for
                 # the new band.  Explicitly set a sensible default so the
                 # web UI and saved memory channels see a predictable mode.
-                default_mode = 0x01 if band["default_freq"] < 10_000_000 \
-                    else 0x02  # LSB below 10 MHz, USB above
+                # Numbers are backend-native (via the backend mode map):
+                # LSB below 10 MHz, USB above.
+                mode_map = _mode_name_to_num()
+                default_mode = mode_map.get(
+                    "LSB" if band["default_freq"] < 10_000_000 else "USB")
                 md_ok = await cat.set_mode(default_mode)
                 if bs_ok and fa_ok:
                     radio.update(
@@ -1601,9 +1367,9 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         mode=default_mode,
                     )
                     logger.info(
-                        "Band change applied: name=%s BS%02d OK FA%09d OK "
+                        "Band change applied: name=%s BS%s OK FA%09d OK "
                         "MD0%X OK local_band=%s mode=%s",
-                        band["name"], band["bsr"], band["default_freq"],
+                        band["name"], band.get("bsr"), band["default_freq"],
                         default_mode, radio.band_name, radio.mode_name,
                     )
                 else:
@@ -1662,68 +1428,15 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
 # ── Initial State Sync ──────────────────────────────────────────────
 
-async def _init_scope_cat():
-    """Send scope-initialization CAT commands via the CAT serial port.
-
-    These extended commands configure the FT-710's scope display engine.
-    Adapted from wfview's yaesuUdpControl scope init sequence.
-
-    Commands are sent as extended CAT register writes. The FT-710 needs
-    these to enable scope data output on the FT4222 SPI bus.
-
-    Attempts scope init even when CAT reports as not-connected — the
-    serial port may be open but the radio didn't respond to ID;.
-    """
-    global cat
-    if cat is None:
-        logger.warning("No CAT controller — skipping scope-init commands")
-        return
-
-    # Try to connect if not already connected (scope may work even
-    # without full radio response to ID;)
-    if not cat.connected:
-        logger.info("CAT not connected — attempting scope-init anyway")
-        try:
-            await cat.connect()
-        except Exception as e:
-            logger.warning("CAT connect failed for scope-init: %s", e)
-
-    # Check if serial port is actually open (CatController uses _ser)
-    serial_port = getattr(cat, '_ser', None) or getattr(cat, 'serial', None)
-    if serial_port is None or not getattr(serial_port, 'is_open', False):
-        logger.warning("CAT serial port not open — scope-init unavailable")
-        return
-
-    logger.info("Sending scope-init CAT commands...")
-
-    # Extended CAT commands to initialize the scope display.
-    # These write to the FT-710's internal registers to enable
-    # the scope data stream on the FT4222 SPI interface.
-    scope_cmds = [
-        # Enable scope data output on FT4222 SPI
-        # EX = extended command prefix
-        "EX040101",
-        # Set scope to CENTER mode (not FIX mode)
-        "EX040200",
-    ]
-    for cmd in scope_cmds:
-        try:
-            await cat.send_command(cmd)
-            await asyncio.sleep(0.05)
-            logger.debug("Scope-init sent: %s", cmd)
-        except Exception as e:
-            logger.warning("Scope-init cmd %s error: %s", cmd, e)
-
-    logger.info("Scope-init CAT commands complete")
-
-
 async def _initial_state_sync():
     """Perform full state read from radio on initial connect."""
     global cat, radio
     if cat is None or not cat.connected:
         return
     logger.info("Performing initial state sync...")
-    sync_data = await cat.initial_state_sync()
+    # Backends return already-parsed RadioState field values (Phase 2b).
+    sync_data = await (backend.initial_state_sync() if backend is not None
+                       else cat.initial_state_sync())
     new_state = RadioState.from_sync_result(sync_data)
     new_state.serial_connected = True
     # Copy all fields to the global state
@@ -1739,32 +1452,51 @@ async def _initial_state_sync():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: connect to FT-710, start polling, scope, and audio.
+    """Startup: connect to the radio, start polling, scope, and audio.
        Shutdown: disconnect, force RX, cancel tasks."""
-    global cat, scheduler, scope, audio, _scope_read_task, _scope_broadcast_task
+    global backend, cat, scheduler, scope, audio, _scope_producer, _scope_broadcast_task
     global _audio_rx_task, _audio_tx_task, _opus_tx_decoder
 
     # ── Startup ──
     startup_time = time.time()
     logger.info("FT-710 Web Control starting on port %d", WEB_PORT)
-    logger.info("Serial port: %s @ %d baud", SERIAL_PORT, BAUD_RATE)
+    logger.info("Radio model: %s, serial port: %s @ %d baud",
+                RADIO_MODEL, SERIAL_PORT, BAUD_RATE)
 
-    cat = CatController(SERIAL_PORT, BAUD_RATE)
+    backend = create_backend(RADIO_MODEL, port=SERIAL_PORT, baud_rate=BAUD_RATE)
+    # The backend surface is CatController-compatible; keep the historical
+    # global name so handlers/poll scheduler stay unchanged.
+    cat = backend.cat
+    # Inject per-radio mode/calibration tables into the shared state.
+    radio.configure(**backend.state_tables())
+    # Radio-originated changes (IC-7300 CI-V transceive broadcasts) flow
+    # into the same dirty-broadcast path as poll-driven changes.
+    if hasattr(backend, "set_broadcast_callback"):
+        backend.set_broadcast_callback(_on_cat_broadcast)
     connected = await cat.connect()
     radio.update(serial_connected=connected)
 
     if connected:
         await _initial_state_sync()
-        await _init_scope_cat()
+        await backend.init_scope()
         scheduler = PollScheduler(cat, radio, on_state_changed=_broadcast_state,
-                                  on_reconnected=_init_scope_cat)
+                                  on_reconnected=backend.init_scope,
+                                  backend=backend)
         await scheduler.start()
     else:
         logger.warning("Could not connect to radio. Server will serve UI only.")
         logger.warning("Check serial port: %s", SERIAL_PORT)
 
     # ── Audio handler ──────────────────────────────────────────────
-    audio = AudioHandler()
+    # Device rate + auto-detect name hints come from the active backend's
+    # capabilities (FT-710 values reproduce the historical defaults).
+    if backend is not None:
+        _caps = backend.capabilities
+        audio = AudioHandler(rx_rate=_caps.audio_rx_rate,
+                             tx_rate=_caps.audio_tx_rate,
+                             name_hints=tuple(_caps.audio_name_hints))
+    else:
+        audio = AudioHandler()
     # Use a thread with timeout — FT-710 USB audio can hang on open
     _audio_ok = False
     _pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -1794,11 +1526,14 @@ async def lifespan(app: FastAPI):
     # Start scope handler — broadcasts S-meter fallback until real data arrives
     scope = ScopeHandler()
     scope.set_on_frame(_on_scope_frame)
+    # Backend-owned scope producer (FT-710: FT4222 scope_pipe subprocess).
+    # Radio-state merging stays here via the _on_scope_frame callback.
+    _scope_producer = backend.create_scope_producer(scope, _on_scope_frame)
     _scope_broadcast_task = asyncio.create_task(_broadcast_spectrum_loop(), name="scope_bcast")
 
     # Try to initialize scope via CAT (enables FT4222 SPI output on radio)
     # Do this even if initial CAT probe failed — the serial port may still work
-    await _init_scope_cat()
+    await backend.init_scope()
 
     # ── ATR1000 external tuner (optional) ─────────────────────────
     # Lazily imported so installs without the hardware never even load
@@ -1854,7 +1589,8 @@ async def lifespan(app: FastAPI):
         audio = None
 
     # Stop scope
-    await _stop_scope_pipe()
+    if _scope_producer is not None:
+        await _scope_producer.stop()
     if _scope_broadcast_task:
         _scope_broadcast_task.cancel()
     if scope:
@@ -2062,6 +1798,35 @@ async def api_post_mem_channels(request: Request):
 
 # ── WebSocket Endpoint ──────────────────────────────────────────────
 
+def _full_state_message(data: dict, channels: list) -> dict:
+    """Build the fullState payload pushed to every new /WSradio client.
+
+    Band/mode/filter tables and capabilities are sourced from the active
+    backend so a different radio model swaps them without server changes.
+    """
+    return {
+        "type": "fullState",
+        "data": data,
+        "bands": backend.bands if backend else BANDS,
+        "modes": backend.ui_modes if backend else UI_MODES,
+        "radioModel": backend.capabilities.model_name if backend else RADIO_MODEL,
+        "radioDisplayName": (backend.capabilities.display_name
+                             if backend else "Yaesu FT-710"),
+        "capabilities": backend.capabilities.to_dict() if backend else {},
+        "memChannels": channels,
+        # Server-authoritative filter tables so the frontend stops
+        # hardcoding its own (drifting) copies.
+        "filterTables": (backend.filter_tables() if backend else {
+            "voice": FILTER_WIDTHS_VOICE,
+            "narrow": FILTER_WIDTHS_NARROW,
+            "narrowModes": sorted(NARROW_MODES),
+        }),
+        # Optional ATR1000 tuner — the frontend module stays fully
+        # inert unless this is true.
+        "atr1000Enabled": atr is not None,
+    }
+
+
 @app.websocket("/WSradio")
 async def ws_radio(ws: WebSocket):
     """Main control WebSocket.  Handles all real-time radio state and commands."""
@@ -2094,23 +1859,7 @@ async def ws_radio(ws: WebSocket):
             "WS fullState payload: %s",
             json.dumps(_full_state_data)[:400],
         )
-        await ws.send_text(json.dumps({
-            "type": "fullState",
-            "data": _full_state_data,
-            "bands": BANDS,
-            "modes": UI_MODES,
-            "memChannels": channels,
-            # Server-authoritative filter tables so the frontend stops
-            # hardcoding its own (drifting) copies.
-            "filterTables": {
-                "voice": FILTER_WIDTHS_VOICE,
-                "narrow": FILTER_WIDTHS_NARROW,
-                "narrowModes": sorted(NARROW_MODES),
-            },
-            # Optional ATR1000 tuner — the frontend module stays fully
-            # inert unless this is true.
-            "atr1000Enabled": atr is not None,
-        }))
+        await ws.send_text(json.dumps(_full_state_message(_full_state_data, channels)))
     except Exception:
         ctrl_clients.discard(ws)
         return
@@ -2159,7 +1908,8 @@ async def ws_spectrum(ws: WebSocket):
     await ws.accept()
     spectrum_clients.add(ws)
     logger.info("Spectrum client connected (%d total)", len(spectrum_clients))
-    await _ensure_scope_pipe_running()
+    if _scope_producer is not None:
+        await _scope_producer.start()
     try:
         while True:
             # Keep connection alive, actual data sent by broadcast loop
@@ -2171,8 +1921,8 @@ async def ws_spectrum(ws: WebSocket):
     finally:
         spectrum_clients.discard(ws)
         logger.info("Spectrum client disconnected (%d remain)", len(spectrum_clients))
-        if not spectrum_clients:
-            await _stop_scope_pipe()
+        if not spectrum_clients and _scope_producer is not None:
+            await _scope_producer.stop()
 
 
 # ── Audio RX WebSocket ────────────────────────────────────────────────

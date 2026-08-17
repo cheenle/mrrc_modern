@@ -6,7 +6,9 @@ serialization, from_sync_result deserialization.
 import unittest
 
 from radio_state import RadioState
-from config import MODE_NUM_TO_NAME, MODE_DISPLAY_NAMES
+from backends.ft710.config_ft710 import MODE_NUM_TO_NAME
+from backends.ft710.backend import parse_ft710_sync
+from config import MODE_DISPLAY_NAMES
 
 
 class RadioStateFieldMutationTests(unittest.TestCase):
@@ -235,17 +237,23 @@ class RadioStateSerializationTests(unittest.TestCase):
 
 
 class RadioStateFromSyncResultTests(unittest.TestCase):
-    """SDD §9.6: CAT initial_state_sync → RadioState deserialization."""
+    """SDD §9.6: backend initial_state_sync → RadioState.
 
-    def test_from_sync_result_parses_known_fields(self):
+    Phase 2b contract: sync_data is ALREADY PARSED by the backend
+    ({RadioState field: value}); from_sync_result is a validated plain
+    update.  The Yaesu raw-string parsers live in
+    backends.ft710.backend.parse_ft710_sync (tested below).
+    """
+
+    def test_from_sync_result_applies_parsed_values(self):
         sync_data = {
-            "vfo_a_freq": "FA014200000",
-            "vfo_b_freq": "FB007050000",
-            "mode": "MD02",
-            "tx_status": "TX0",
-            "s_meter": "SM00120",
-            "filter_width": "SH005",
-            "power_on": "PS1",
+            "vfo_a_freq": 14_200_000,
+            "vfo_b_freq": 7_050_000,
+            "mode": 2,
+            "tx_status": 0,
+            "s_meter": 120,
+            "filter_width": 5,
+            "power_on": True,
         }
         state = RadioState.from_sync_result(sync_data)
         self.assertEqual(state.vfo_a_freq, 14_200_000)
@@ -262,55 +270,164 @@ class RadioStateFromSyncResultTests(unittest.TestCase):
         self.assertEqual(state.vfo_a_freq, 14_200_000)
         self.assertFalse(state.serial_connected)
 
-    def test_from_sync_result_handles_malformed_responses(self):
+    def test_from_sync_result_skips_none_and_unknown_fields(self):
         sync_data = {
-            "vfo_a_freq": "FA",    # Too short — len <= 2, parser returns 0
-            "mode": "MD",           # Too short
-            "s_meter": "SM",        # Too short
+            "vfo_a_freq": None,          # failed query — keep default
+            "mode": 1,
+            "not_a_field": 42,           # unknown — ignored
+            "active_freq": 1,            # derived property, not a field
         }
         state = RadioState.from_sync_result(sync_data)
-        # Should not crash; for short strings, parser returns 0 or default
         self.assertIsNotNone(state)
-        self.assertEqual(state.mode, 1)  # Default preserved
+        self.assertEqual(state.vfo_a_freq, 14_200_000)  # default preserved
+        self.assertEqual(state.mode, 1)
+        self.assertFalse(hasattr(state, "not_a_field"))
 
     def test_from_sync_result_parses_boolean_fields(self):
         sync_data = {
-            "noise_blanker": "NB01",
-            "noise_reduction": "NR00",
-            "auto_notch": "BC1",
+            "noise_blanker": True,
+            "noise_reduction": False,
+            "auto_notch": True,
         }
         state = RadioState.from_sync_result(sync_data)
         self.assertTrue(state.noise_blanker)
         self.assertFalse(state.noise_reduction)
-        # BC command is BC0/BC1; BC ends with "1" → True
         self.assertTrue(state.auto_notch)
 
-    def test_from_sync_result_parses_preamp_attenuator(self):
-        sync_data = {
-            "preamp": "PA02",
-            "attenuator": "RA03",
-        }
-        state = RadioState.from_sync_result(sync_data)
-        self.assertEqual(state.preamp, 2)
-        self.assertEqual(state.attenuator, 3)
+    def test_from_sync_result_applies_tuner_status(self):
+        self.assertEqual(
+            RadioState.from_sync_result({"tuner_status": 1}).tuner_status, 1)
+        self.assertEqual(
+            RadioState.from_sync_result({"tuner_status": 2}).tuner_status, 2)
+        self.assertEqual(
+            RadioState.from_sync_result({"tuner_status": 0}).tuner_status, 0)
 
-    def test_from_sync_result_parses_tuner(self):
+    def test_from_sync_result_maps_af_gain_raw_alias(self):
+        state = RadioState.from_sync_result({"af_gain_raw": 200})
+        self.assertEqual(state.af_gain, 200)
+
+
+class FT710SyncParsingTests(unittest.TestCase):
+    """The raw FT-710 CAT string parsers moved to parse_ft710_sync —
+    these are the pre-refactor from_sync_result fixtures, asserting the
+    FT-710 output is byte-identical after the move."""
+
+    def test_parses_known_fields(self):
+        raw = {
+            "vfo_a_freq": "FA014200000",
+            "vfo_b_freq": "FB007050000",
+            "mode": "MD02",
+            "tx_status": "TX0",
+            "s_meter": "SM00120",
+            "filter_width": "SH005",
+            "power_on": "PS1",
+        }
+        parsed = parse_ft710_sync(raw)
+        self.assertEqual(parsed["vfo_a_freq"], 14_200_000)
+        self.assertEqual(parsed["vfo_b_freq"], 7_050_000)
+        self.assertEqual(parsed["mode"], 2)
+        self.assertEqual(parsed["tx_status"], 0)
+        self.assertEqual(parsed["s_meter"], 120)
+        self.assertEqual(parsed["filter_width"], 5)
+        self.assertTrue(parsed["power_on"])
+        # And the parsed dict feeds the new from_sync_result directly.
+        state = RadioState.from_sync_result(parsed)
+        self.assertEqual(state.vfo_a_freq, 14_200_000)
+        self.assertEqual(state.mode, 2)
+        self.assertEqual(state.s_meter, 120)
+
+    def test_handles_malformed_responses(self):
+        raw = {
+            "vfo_a_freq": "FA",   # Too short — len <= 2, parser returns 0
+            "mode": "MD",          # Too short
+            "s_meter": "SM",       # Too short
+        }
+        parsed = parse_ft710_sync(raw)
+        self.assertEqual(parsed["vfo_a_freq"], 0)
+        state = RadioState.from_sync_result(parsed)
+        self.assertIsNotNone(state)
+
+    def test_parses_boolean_fields(self):
+        parsed = parse_ft710_sync({
+            "noise_blanker": "NB01",
+            "noise_reduction": "NR00",
+            "auto_notch": "BC1",
+        })
+        self.assertTrue(parsed["noise_blanker"])
+        self.assertFalse(parsed["noise_reduction"])
+        self.assertTrue(parsed["auto_notch"])
+
+    def test_parses_preamp_attenuator(self):
+        parsed = parse_ft710_sync({"preamp": "PA02", "attenuator": "RA03"})
+        self.assertEqual(parsed["preamp"], 2)
+        self.assertEqual(parsed["attenuator"], 3)
+
+    def test_parses_tuner(self):
         # AC P1P2P3 format per FT-710 CAT spec:
         # P1=0, P2=0 (standard tuner), P3=0=OFF, P3=1=ON, P3=3=Tuning
-        # "AC001" → P2=0, P3=1 → state=1 (on)
-        sync_data_on = {"tuner_status": "AC001"}
-        state_on = RadioState.from_sync_result(sync_data_on)
-        self.assertEqual(state_on.tuner_status, 1)
+        self.assertEqual(parse_ft710_sync({"tuner_status": "AC001"})["tuner_status"], 1)
+        self.assertEqual(parse_ft710_sync({"tuner_status": "AC003"})["tuner_status"], 2)
+        self.assertEqual(parse_ft710_sync({"tuner_status": "AC000"})["tuner_status"], 0)
 
-        # "AC003" → P2=0, P3=3 → state=2 (tuning)
-        sync_data_tuning = {"tuner_status": "AC003"}
-        state_tuning = RadioState.from_sync_result(sync_data_tuning)
-        self.assertEqual(state_tuning.tuner_status, 2)
+    def test_parses_ri_into_individual_fields(self):
+        # RI0 + 7 single-char fields: P2 hi-swr, P3 rec, P4 rx/tx, P5=0,
+        # P6 tuner-tuning, P7 scan, P8 squelch-open
+        parsed = parse_ft710_sync({"ri": "RI01010111"})
+        self.assertTrue(parsed["hi_swr"])
+        self.assertEqual(parsed["recording_status"], 0)
+        self.assertEqual(parsed["rx_tx_status"], 1)
+        self.assertTrue(parsed["tuner_tuning"])
+        self.assertEqual(parsed["scan_status"], 1)
+        self.assertTrue(parsed["squelch_open"])
 
-        # "AC000" → P2=0, P3=0 → state=0 (off)
-        sync_data_off = {"tuner_status": "AC000"}
-        state_off = RadioState.from_sync_result(sync_data_off)
-        self.assertEqual(state_off.tuner_status, 0)
+    def test_maps_af_gain_raw_to_af_gain(self):
+        parsed = parse_ft710_sync({"af_gain_raw": "AG128"})
+        self.assertEqual(parsed["af_gain"], 128)
+
+
+class RadioStateConfigureTests(unittest.TestCase):
+    """Phase 2b: per-backend table injection into RadioState."""
+
+    def test_defaults_are_ft710_tables(self):
+        state = RadioState()
+        state.mode = 2
+        self.assertEqual(state.mode_name, "USB")
+        state.vfo_a_freq = 14_200_000
+        self.assertEqual(state.band_name, "20m")
+
+    def test_configure_switches_mode_and_band_tables(self):
+        from backends.ic7300.config_ic7300 import (
+            MODE_NUM_TO_NAME as IC_MODE_NUM_TO_NAME,
+            get_band_for_frequency as ic_get_band,
+        )
+        state = RadioState()
+        state.configure(
+            mode_num_to_name=IC_MODE_NUM_TO_NAME,
+            get_band_for_frequency=ic_get_band,
+        )
+        state.mode = 0x01            # CI-V USB
+        self.assertEqual(state.mode_name, "USB")
+        state.mode = 0x00            # CI-V LSB
+        self.assertEqual(state.mode_name, "LSB")
+        state.vfo_a_freq = 14_200_000
+        self.assertEqual(state.band_name, "20m")
+
+    def test_configure_rejects_unknown_table(self):
+        state = RadioState()
+        with self.assertRaises(KeyError):
+            state.configure(bogus_table={})
+
+    def test_ic7300_backend_state_tables_are_complete(self):
+        """Every key IC7300Backend injects must be a known table."""
+        from backends.ic7300.backend import IC7300Backend
+        backend = IC7300Backend("/dev/null")
+        state = RadioState()
+        state.configure(**backend.state_tables())  # must not raise
+        state.mode = 0x01
+        self.assertEqual(state.mode_name, "USB")
+        # fil123 filter model: FIL1 on USB defaults to 3000 Hz
+        state.filter_width = 1
+        self.assertEqual(state.filter_hz, 3000)
 
 
 if __name__ == "__main__":

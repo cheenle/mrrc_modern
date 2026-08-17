@@ -5,7 +5,8 @@ import unittest
 
 class QuietLoggingSourceTests(unittest.TestCase):
     def test_periodic_scope_diagnostics_are_debug_not_info(self):
-        source = Path("server.py").read_text(encoding="utf-8")
+        # The scope_pipe stderr drain moved to the backend's scope producer.
+        source = Path("backends/ft710/scope_producer.py").read_text(encoding="utf-8")
         branch = source.split('elif "heartbeat:" in payload or "diag:" in payload:', 1)[1]
         branch = branch.split("else:", 1)[0]
         self.assertIn('logger.debug("scope_pipe: %s", payload)', branch)

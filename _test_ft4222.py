@@ -3,8 +3,8 @@ import sys, ctypes
 sys.path.insert(0, '.')
 from ctypes import c_void_p, c_uint32, c_uint8, POINTER, byref, CDLL, create_string_buffer
 
-from scope_libraries import require_ftdi_libraries
-from scope_libraries import get_ft4222_clock_divider
+from backends.ft710.scope_libraries import require_ftdi_libraries
+from backends.ft710.scope_libraries import get_ft4222_clock_divider
 
 ft4222_path, ftd2xx_path = require_ftdi_libraries()
 

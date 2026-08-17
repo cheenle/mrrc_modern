@@ -1,9 +1,8 @@
+"""Tests for the backend scope-init hook (moved from server._init_scope_cat
+to RadioBackend.init_scope / FT710Backend.init_scope in Phase 1)."""
 import unittest
 
-try:
-    import server
-except ImportError:
-    server = None  # fastapi not available in test environment
+from backends.ft710.backend import FT710Backend
 
 
 class FakeCat:
@@ -25,30 +24,27 @@ class FakeSerial:
     is_open = True
 
 
-@unittest.skipIf(server is None, "fastapi not available in test environment")
-class ServerScopeInitTests(unittest.IsolatedAsyncioTestCase):
+def _backend_with_fake_cat(fake) -> FT710Backend:
+    backend = FT710Backend(port="dummy")
+    backend._cat = fake
+    return backend
+
+
+class BackendScopeInitTests(unittest.IsolatedAsyncioTestCase):
     async def test_scope_init_sends_cat_commands(self):
-        old_cat = server.cat
         fake = FakeCat()
         fake.serial = FakeSerial()  # Simulate open serial port
-        server.cat = fake
-        try:
-            await server._init_scope_cat()
-        finally:
-            server.cat = old_cat
+        backend = _backend_with_fake_cat(fake)
+        await backend.init_scope()
 
         # Should send both scope init commands
         self.assertEqual(fake.commands, ["EX040101", "EX040200"])
 
     async def test_scope_init_skips_when_no_serial(self):
-        old_cat = server.cat
         fake = FakeCat()
         fake.serial = None  # No serial port
-        server.cat = fake
-        try:
-            await server._init_scope_cat()
-        finally:
-            server.cat = old_cat
+        backend = _backend_with_fake_cat(fake)
+        await backend.init_scope()
 
         # Should not send any commands when serial is absent
         self.assertEqual(fake.commands, [])

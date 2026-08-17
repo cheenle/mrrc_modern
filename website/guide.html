@@ -13,23 +13,103 @@
     <link rel="stylesheet" href="css/ft710.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .guide-layout { max-width: 900px; margin: 0 auto; padding: 0 1.5rem 4rem; }
-        .guide-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .guide-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .guide-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .guide-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .guide-content p, .guide-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+
+        .guide-layout { display: flex; max-width: 1200px; margin: 0 auto; padding: 0 2rem 4rem; gap: 2rem; align-items: flex-start; }
+        /* ── Sidebar TOC ── */
+        .guide-toc {
+            width: 270px; flex-shrink: 0; position: sticky; top: 88px;
+            max-height: calc(100vh - 110px); overflow-y: auto;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 0.75rem; padding: 1.25rem 1.25rem 1.5rem;
+        }
+        .guide-toc h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin: 0 0 0.9rem; }
+        .guide-toc ul { list-style: none; margin: 0; padding: 0; }
+        .guide-toc ul ul { padding-left: 1rem; margin-top: 0.25rem; }
+        .guide-toc a {
+            display: block; padding: 0.3rem 0; font-size: 0.8125rem; line-height: 1.45;
+            color: var(--text-secondary); text-decoration: none; border-left: 2px solid transparent; padding-left: 0.6rem;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .guide-toc ul ul a { font-size: 0.75rem; color: var(--text-muted); }
+        .guide-toc a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .guide-toc a.active { color: var(--accent); border-left-color: var(--accent); font-weight: 500; }
+
+        /* ── Hero ── */
+        .guide-hero {
+            max-width: 1200px; margin: 2rem auto 0; padding: 2.5rem 2rem 2.25rem;
+            background: linear-gradient(135deg, rgba(240,160,48,0.10), rgba(240,160,48,0.02) 45%, transparent 70%);
+            border-bottom: 1px solid var(--border);
+        }
+        .guide-hero .badge { display: inline-block; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--border-hover); background: var(--accent-glow); padding: 0.25rem 0.7rem; border-radius: 999px; margin-bottom: 1rem; }
+        .guide-hero h1 { font-size: 2.1rem; font-weight: 700; margin: 0 0 0.6rem; letter-spacing: -0.02em; }
+        .guide-hero p { color: var(--text-secondary); max-width: 640px; line-height: 1.7; margin: 0 0 1.25rem; }
+        .guide-hero .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+        .guide-hero .btn { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.875rem; font-weight: 600; padding: 0.55rem 1.05rem; border-radius: 0.5rem; text-decoration: none; border: 1px solid var(--border-hover); color: var(--accent); background: var(--bg-card); transition: all 0.15s; }
+        .guide-hero .btn:hover { background: var(--accent-glow); border-color: var(--accent); }
+
+        /* ── Content typography (site-wide tokens, matches SDD pages) ── */
+        .guide-content { flex: 1; min-width: 0; padding-top: 2rem; }
+        .guide-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2.5rem 0 0.9rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); color: var(--accent); scroll-margin-top: 90px; }
+        .guide-content h3 { font-size: 1.05rem; font-weight: 600; margin: 1.75rem 0 0.6rem; color: var(--text-primary); scroll-margin-top: 90px; }
+        .guide-content h4 { font-size: 0.95rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+        .guide-content p, .guide-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; font-size: 0.9375rem; }
+        .guide-content strong { color: var(--text-primary); }
+        .guide-content code { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px; color: var(--accent); }
+        .guide-content pre { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6; }
+        .guide-content pre code { background: none; padding: 0; color: var(--text-secondary); }
+
+        /* ── Tables ── */
         .guide-content table { width: 100%; border-collapse: collapse; margin: 1.25rem 0; font-size: 0.875rem; }
         .guide-content th, .guide-content td { padding: 0.625rem 0.875rem; text-align: left; border: 1px solid var(--border); vertical-align: top; }
-        .guide-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
+        .guide-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; white-space: nowrap; }
         .guide-content td { color: var(--text-secondary); }
-        .guide-content code { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px; color: var(--accent); }
-        .guide-content pre { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin: 1rem 0; font-size: 0.8125rem; }
-        .guide-content blockquote { border-left: 3px solid var(--accent); padding: 0.5rem 1rem; margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem; background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0; }
-        .guide-content img { max-width: 100%; height: auto; border-radius: 0.75rem; margin: 1rem 0; background: #111; }
-        .guide-content a { color: var(--accent); }
-        .guide-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        @media (max-width: 900px) { .guide-layout { padding: 0 1rem 3rem; } }
+        .guide-content tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
+        .guide-content tbody tr:hover { background: var(--accent-glow); }
+        .guide-content .table-scroll { overflow-x: auto; }
+        .guide-content .ref-table td:first-child {
+            font-family: var(--font-mono); font-weight: 700; text-align: center; white-space: nowrap;
+            color: #141414; background: var(--accent); border-radius: 999px;
+            width: 2.1em; min-width: 2.1em; line-height: 1;
+        }
+        .guide-content .ref-table th:first-child { text-align: center; }
+        .guide-content .ref-table th:nth-child(2) { white-space: nowrap; }
+
+        /* ── Callouts ── */
+        .guide-content blockquote {
+            border-left: 3px solid var(--accent); padding: 0.65rem 1rem; margin: 1rem 0;
+            color: var(--text-muted); font-size: 0.9rem; background: var(--bg-tertiary);
+            border-radius: 0 0.5rem 0.5rem 0; line-height: 1.7;
+        }
+        .guide-content blockquote p { margin-bottom: 0.3rem; }
+        .guide-content .callout-warn { border-left-color: #e5534b; background: rgba(229,83,75,0.07); color: #e8b3ae; }
+        .guide-content .callout-warn strong { color: #f4b8b3; }
+
+        /* ── Figures ── */
+        .guide-content figure { margin: 1.75rem auto; text-align: center; }
+        .guide-content figure img { max-width: 100%; height: auto; border-radius: 0.75rem; border: 1px solid var(--border); background: #0d0d0d; }
+        .guide-content figcaption { margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted); }
+
+        /* ── Back to top ── */
+        .back-top {
+            position: fixed; right: 1.5rem; bottom: 1.5rem; z-index: 50;
+            width: 2.6rem; height: 2.6rem; border-radius: 999px; border: 1px solid var(--border-hover);
+            background: var(--bg-card); color: var(--accent); font-size: 1rem; cursor: pointer;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .back-top.show { opacity: 1; pointer-events: auto; }
+        .back-top:hover { background: var(--accent-glow); }
+
+        /* ── Responsive ── */
+        @media (max-width: 960px) {
+            .guide-layout { flex-direction: column; padding: 0 1rem 3rem; gap: 1rem; }
+            .guide-toc { width: 100%; position: static; max-height: 300px; margin-top: 1rem; }
+            .guide-content { padding-top: 1rem; }
+            .guide-hero { padding: 2rem 1.25rem 1.75rem; margin-top: 1rem; }
+            .guide-hero h1 { font-size: 1.6rem; }
+            .guide-content table { font-size: 0.8125rem; }
+            .guide-content th, .guide-content td { padding: 0.5rem 0.6rem; }
+        }
+
     </style>
 </head>
 <body data-site="mrrc_ft710">
@@ -53,10 +133,27 @@
         </div>
     </div>
 </nav>
+
+<header class="guide-hero">
+    <div class="guide-hero-inner">
+        <span class="badge"><i class="fas fa-book"></i> 操作指南 · Operation Guide</span>
+        <h1>FT-710 Web 遥控 — 操作指南</h1>
+        <p>界面每一个按钮、滑杆、下拉框的编号图解与精确说明。琥珀色序号与正文速查表一一对应，点下方任一图直接跳转。</p>
+        <div class="actions">
+            <a class="btn" href="#fig1"><i class="fas fa-mobile-screen"></i> 图 1 · 主界面</a>
+            <a class="btn" href="#fig2"><i class="fas fa-bars"></i> 图 2 · 抽屉菜单</a>
+            <a class="btn" href="https://github.com/cheenle/mrrc_ft710/blob/main/docs/OPERATION_GUIDE.md" target="_blank"><i class="fab fa-github"></i> 源文档 (md)</a>
+        </div>
+    </div>
+</header>
+
 <div class="guide-layout">
+    <aside class="guide-toc">
+        <h4>目录 · Contents</h4>
+<nav id="TOC"><ul></ul></nav>
+    </aside>
     <main class="guide-content">
-<h1 id="ft-710-web-遥控-操作指南">FT-710 Web 遥控 — 操作指南</h1>
-<blockquote>
+<blockquote class="callout-info">
 <p>适用于 FT-710 Web Control（v1.8.x，2026-08 之后的界面）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
 </blockquote>
 <hr />
@@ -91,17 +188,17 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-warn">
 <p>⚠️ 电台硬件电源开关<strong>不在</strong>本界面内——⏻ 只控制浏览器与服务器的 Web 连接，不控制电台电源（V2.13 已撤回电台电源软开关功能）。</p>
 </blockquote>
 <hr />
 <h2 id="主界面控件编号图">1. 主界面控件编号图</h2>
-<figure>
+<figure id="fig1">
 <img src="images/ui-guide-main.svg" alt="主界面控件编号图" />
 <figcaption aria-hidden="true">主界面控件编号图</figcaption>
 </figure>
 <p><strong>图 1</strong> 为主界面（手机竖屏布局，桌面端宽度放大但控件一致）。琥珀色圆点为控件序号，与第 3 节速查表对应。</p>
-<figure>
+<figure id="fig2">
 <img src="images/ui-guide-menu.svg" alt="菜单控件编号图" />
 <figcaption aria-hidden="true">菜单控件编号图</figcaption>
 </figure>
@@ -109,7 +206,7 @@
 <hr />
 <h2 id="控件速查表编号-名称-功能-操作">2. 控件速查表（编号 → 名称 → 功能 → 操作）</h2>
 <h3 id="顶栏图-1-序号-17">2.1 顶栏（图 1 序号 1–7）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -170,7 +267,7 @@
 </tbody>
 </table>
 <h3 id="频谱区序号-810">2.2 频谱区（序号 8–10）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -206,11 +303,11 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-info">
 <p>点击 8/9 实现「指哪打哪」跳频；按住拖动则是页面滚动，不会误触发。</p>
 </blockquote>
 <h3 id="仪表区序号-1114">2.3 仪表区（序号 11–14）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -253,7 +350,7 @@
 </tbody>
 </table>
 <h3 id="快捷控制区序号-1519">2.4 快捷控制区（序号 15–19）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -302,7 +399,7 @@
 </tbody>
 </table>
 <h3 id="dsp-开关区序号-2024">2.5 DSP 开关区（序号 20–24）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -350,11 +447,11 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-info">
 <p>NR/NB 的<strong>强度</strong>滑杆（NR Level 1–15、NB Level 0–10）保留在 DOM 中但默认隐藏（移动端空间不足）；如需调节可在浏览器开发者工具中显示或留待后续版本。</p>
 </blockquote>
 <h3 id="音量滑杆序号-25">2.6 音量滑杆（序号 25）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -378,11 +475,11 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-info">
 <p>电台侧的 AF 增益（AF Gain）不受本滑杆控制；需要调电台面板音量时请用实体旋钮。</p>
 </blockquote>
 <h3 id="调谐区序号-2630">2.7 调谐区（序号 26–30）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -430,11 +527,11 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-info">
 <p>调谐作用于<strong>活动 VFO</strong>（VFO-A 或 VFO-B，见序号 31/32）。</p>
 </blockquote>
 <h3 id="vfo-区序号-3134">2.8 VFO 区（序号 31–34）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -477,7 +574,7 @@
 </tbody>
 </table>
 <h3 id="记忆频道序号-35">2.9 记忆频道（序号 35）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -501,11 +598,11 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-info">
 <p>频道编辑/清空：菜单 → Memory Manager（序号 41）里对每个槽点 <strong>Clear</strong> 清空。频道数据由服务端持久化，换浏览器也能读到（Cookie 只做首屏快速回显）。</p>
 </blockquote>
 <h3 id="底部-ptt-区序号-3638">2.10 底部 PTT 区（序号 36–38）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -541,11 +638,11 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-info">
 <p>PTT 键盘快捷键：桌面端按 <strong>空格键</strong> 等效于按住/松开 PTT（详见第 4 节）。</p>
 </blockquote>
 <h3 id="抽屉菜单图-2-序号-3951">2.11 抽屉菜单（图 2 序号 39–51）</h3>
-<table style="width:100%;">
+<table style="width:100%;"> class="ref-table"
 <colgroup>
 <col style="width: 14%" />
 <col style="width: 28%" />
@@ -641,7 +738,7 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-info">
 <p>菜单底部显示版本号 <code>FT-710 v1.0</code>（前端资源版本，非电台固件版本）。</p>
 </blockquote>
 <hr />
@@ -676,7 +773,7 @@
 </tr>
 </tbody>
 </table>
-<blockquote>
+<blockquote class="callout-info">
 <p>安全细节：键盘事件忽略长按自动重复（<code>e.repeat</code>），也不在输入框内触发 PTT/调谐，避免打字时误发射。</p>
 </blockquote>
 <hr />
@@ -814,6 +911,8 @@
     </main>
 </div>
 
+<button class="back-top" id="back-top" title="回到顶部"><i class="fas fa-arrow-up"></i></button>
+
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
@@ -826,13 +925,26 @@
 function toggleMobileMenu() {
     document.querySelector('.nav-links').classList.toggle('active');
 }
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+// Scrollspy for the sidebar TOC + back-to-top
+(function() {
+    var bt = document.getElementById('back-top');
+    var links = Array.prototype.slice.call(document.querySelectorAll('.guide-toc a'));
+    var headings = links.map(function(a) {
+        var id = (a.getAttribute('href') || '').replace('#', '');
+        return id ? document.getElementById(id) : null;
     });
-});
+    function onScroll() {
+        if (window.scrollY > 600) bt.classList.add('show'); else bt.classList.remove('show');
+        var pos = window.scrollY + 120, current = -1;
+        for (var i = 0; i < headings.length; i++) {
+            if (headings[i] && headings[i].offsetTop <= pos) current = i;
+        }
+        links.forEach(function(a, i) { a.classList.toggle('active', i === current); });
+    }
+    if (bt) bt.addEventListener('click', function() { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+})();
 const nav = document.querySelector('.navbar');
 window.addEventListener('scroll', () => {
     nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';

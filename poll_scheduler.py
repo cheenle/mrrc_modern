@@ -1,18 +1,24 @@
 """
-FT-710 Poll Scheduler
-=====================
+Poll Scheduler
+==============
 Background asyncio tasks that poll the radio at different rates.
 Tiered polling: high-frequency for freq/mode/S-meter, medium for
 TX status/meters, low for settings, very low for telemetry.
 
 Also handles serial connection monitoring and auto-reconnect.
+
+Radio-specifics live in the active backend: the settings/slow/meter
+poll tables come from ``backend.settings_poll_items()`` /
+``slow_poll_items()`` / ``tx_meter_items()`` / ``always_meter_items()``
+(see backends/base.py); this module only owns the polling mechanics
+(intervals, skip/stale-read guards, PTT preemption, watchdog).
 """
 import asyncio
 import logging
 import time  # Added missing import
 from typing import Optional, Callable, Awaitable
 
-from cat_controller import CatController
+from backends.ft710.cat_controller import CatController
 from radio_state import RadioState
 from config import (
     POLL_IF_INTERVAL, POLL_VFO_INTERVAL, POLL_TX_STATUS_INTERVAL, POLL_TX_METERS_INTERVAL,
@@ -23,7 +29,7 @@ logger = logging.getLogger("ft710.poll")
 
 
 class PollScheduler:
-    """Manages background polling tasks for the FT-710."""
+    """Manages background polling tasks for the radio."""
 
     def __init__(
         self,
@@ -31,14 +37,19 @@ class PollScheduler:
         state: RadioState,
         on_state_changed: Optional[Callable[[], Awaitable[None]]] = None,
         on_reconnected: Optional[Callable[[], Awaitable[None]]] = None,
+        backend=None,
     ):
         self.cat = cat
         self.state = state
+        # The active RadioBackend — source of the settings/slow/meter
+        # poll tables and the parsed initial_state_sync.  Optional so
+        # legacy tests can drive the scheduler with a bare fake CAT.
+        self._backend = backend
         self._on_state_changed = on_state_changed  # async callback for broadcasts
         # Called once after a successful watchdog reconnect + state re-sync.
-        # server.py wires this to _init_scope_cat: a USB re-enumeration resets
-        # the radio's scope output (EX040101), so without re-init the spectrum
-        # freezes after any serial hiccup.
+        # server.py wires this to backend.init_scope(): a USB re-enumeration
+        # resets the radio's scope output (FT-710: EX040101), so without
+        # re-init the spectrum freezes after any serial hiccup.
         self._on_reconnected = on_reconnected
         self._tasks: list[asyncio.Task] = []
         self._running = False
@@ -311,50 +322,71 @@ class PollScheduler:
 
     # ── Tier 2A: TX meters (COMP, ALC, Power, SWR) — TX only ─────
 
+    def _meter_lists(self) -> tuple[list, list]:
+        """(tx_only_items, always_items): [(label, field, async getter)].
+
+        Items come from the active backend; the capabilities gate drops
+        Vd/Id entries when the radio has no drain meters.  Without a
+        backend (legacy tests) the FT-710 RM3-RM8 table is used.
+        """
+        if self._backend is not None:
+            tx_items = list(self._backend.tx_meter_items())
+            always_items = list(self._backend.always_meter_items())
+            caps = getattr(self._backend, "capabilities", None)
+            if caps is not None and not caps.has_vd_id_meters:
+                tx_items = [i for i in tx_items
+                            if i[1] not in ("vd_meter", "id_meter")]
+                always_items = [i for i in always_items
+                                if i[1] not in ("vd_meter", "id_meter")]
+            return tx_items, always_items
+        cat = self.cat
+        return (
+            [("COMP", "comp_meter", lambda t: cat.get_meter("RM3", timeout=t)),
+             ("ALC", "alc_meter", lambda t: cat.get_meter("RM4", timeout=t)),
+             ("PWR", "power_meter", lambda t: cat.get_meter("RM5", timeout=t)),
+             ("SWR", "swr_meter", lambda t: cat.get_meter("RM6", timeout=t)),
+             ("ID", "id_meter", lambda t: cat.get_meter("RM7", timeout=t))],
+            [("VD", "vd_meter", lambda t: cat.get_meter("RM8", timeout=t))],
+        )
+
     async def _poll_tx_meters(self):
-        """Poll RM3/RM4/RM5/RM6 during transmit, and RM7/RM8 (voltage/current)
-        on every cycle so the meters update at 0.5 s instead of the 5 s slow tier."""
+        """Poll the backend's TX meter items during transmit, and the
+        always-on items on every cycle so those meters update at 0.5 s
+        instead of the 5 s slow tier."""
         failures = 0
+        tx_items, always_items = self._meter_lists()
         while self._running:
             try:
                 if await self._polling_paused():
                     await asyncio.sleep(0.05)
                     continue
                 # Yield immediately if a priority command (PTT/tune) is
-                # pending — don't start new RM queries that would block it.
+                # pending — don't start new meter queries that would block it.
                 if self.cat._cancel_polls.is_set():
                     await asyncio.sleep(0.01)
                     continue
                 if self.cat.connected:
                     results = {}
                     missed = []
-                    # TX-only meters (RM3-RM7): COMP, ALC, Power, SWR, drain current.
-                    # RM7 (drain current) only responds during TX.
+                    # TX-only meters (e.g. FT-710 RM3-RM7: COMP, ALC, Power,
+                    # SWR, drain current — the latter only responds in TX).
                     if self.state.is_transmitting:
-                        for label, cmd, field in [
-                            ("COMP", "RM3", "comp_meter"),
-                            ("ALC",  "RM4", "alc_meter"),
-                            ("PWR",  "RM5", "power_meter"),
-                            ("SWR",  "RM6", "swr_meter"),
-                            ("ID",   "RM7", "id_meter"),
-                        ]:
+                        for label, field, getter in tx_items:
                             if await self._polling_paused() or self.cat._cancel_polls.is_set():
                                 break
                             if not await self._should_skip(field):
-                                v = await self.cat.get_meter(cmd, timeout=POLL_TIMEOUT)
+                                v = await getter(POLL_TIMEOUT)
                                 if v is not None:
                                     results[field] = v
                                 else:
                                     missed.append(label)
-                    # Always-on meter: RM8 drain voltage.  Unlike RM7, this
-                    # responds during RX, giving a live power-supply reading.
-                    for label, cmd, field in [
-                        ("VD",  "RM8", "vd_meter"),
-                    ]:
+                    # Always-on meters (e.g. FT-710 RM8 drain voltage,
+                    # which responds during RX).
+                    for label, field, getter in always_items:
                         if await self._polling_paused() or self.cat._cancel_polls.is_set():
                             break
                         if not await self._should_skip(field):
-                            v = await self.cat.get_meter(cmd, timeout=POLL_TIMEOUT)
+                            v = await getter(POLL_TIMEOUT)
                             if v is not None:
                                 results[field] = v
                             else:
@@ -370,20 +402,19 @@ class PollScheduler:
                             logger.info(
                                 "TX meters active: RF_PWR=%dW | %s",
                                 self.state.rf_power,
-                                " ".join(f"{cmd}={results[f]}" for cmd, _, f in [
-                                    ("RM3","", "comp_meter"), ("RM4","", "alc_meter"),
-                                    ("RM5","", "power_meter"), ("RM6","", "swr_meter"),
-                                ] if f in results),
+                                " ".join(f"{label}={results[field]}"
+                                         for label, field, _ in tx_items
+                                         if field in results),
                             )
                             self._tx_meter_first_logged = True
                     else:
                         # Only warn if we expected results (TX mode) or if
                         # the always-on meter is consistently failing.
-                        # During RX, RM3-RM7 may legitimately return None.
+                        # During RX, TX-only meters may legitimately return None.
                         if self.state.is_transmitting:
                             failures += 1
                             logger.warning(
-                                "TX meter poll: all RM queries returned None "
+                                "TX meter poll: all queries returned None "
                                 "(missed=%s, is_transmitting=%s, connected=%s)",
                                 missed, self.state.is_transmitting, self.cat.connected,
                             )
@@ -413,36 +444,12 @@ class PollScheduler:
     # ── Tier 3: Settings (filter, gains, preamp, att, NR, NB, AN, tuner) ──
 
     async def _poll_settings(self):
-        """Poll slowly-changing radio settings."""
-        fields_to_poll = [
-            ("filter_width", "SH0", lambda r: int(r[-2:]) if len(r) >= 4 else None),
-            ("af_gain", "AG0", lambda r: int(r[2:]) if len(r) > 2 else None),
-            ("rf_gain", "RG0", lambda r: int(r[2:]) if len(r) > 2 else None),
-            ("rf_power", "PC", lambda r: int(r[2:]) if len(r) > 2 else None),
-            ("preamp", "PA0", lambda r: int(r[3:]) if len(r) > 3 else None),
-            ("attenuator", "RA0", lambda r: int(r[3:]) if len(r) > 3 else None),
-            ("noise_blanker", "NB0", lambda r: r.endswith("1") if r else False),
-            ("noise_reduction", "NR0", lambda r: r.endswith("1") if r else False),
-            ("auto_notch", "BC", lambda r: r.endswith("1") if r else False),
-            # PS (radio power) — keeps power_on truthful when the radio is
-            # switched on/off at the front panel.  No response while the
-            # radio is off; the "if resp" guard skips that case.
-            ("power_on", "PS", lambda r: r.endswith("1") if r else False),
-            # AC returns P1P2P3. Standard tuner: P2=0, P3=0=OFF, P3=1=ON, P3=3=Tuning
-            ("tuner_status", "AC", lambda r: (
-                2 if len(r) > 4 and r[4] == '3' else  # P3==3 → tuning start
-                1 if len(r) > 4 and r[4] == '1' else  # P3==1 → on
-                0  # P3==0 → off
-            ) if r and len(r) > 4 else None),
-            ("scope_on", "SS01", lambda r: int(r[4:]) == 1 if r and len(r) >= 5 else None),
-            ("antenna", "AN", lambda r: int(r[2:]) if r and len(r) >= 3 else None),
-            ("agc", "GT", lambda r: int(r[2:]) if r and len(r) >= 4 else None),
-            ("meter_display", "MS", lambda r: int(r[2]) if r and len(r) >= 4 else None),
-            # DO NOT poll "DN" — on the FT-710, "DN;" is NOT a DNR query;
-            # it is the "step active VFO DOWN one tuning step" command (~20 Hz).
-            # Polling it every 2 s was slowly walking the active VFO frequency
-            # downward.  DNR level is not polled (the DN command is unsafe).
-        ]
+        """Poll slowly-changing radio settings (backend-provided items).
+
+        Each item is (field, async getter(timeout) -> value|None); the
+        radio-specific query + parsing lives in the backend.
+        """
+        items = self._backend.settings_poll_items() if self._backend else []
 
         while self._running:
             try:
@@ -454,7 +461,7 @@ class PollScheduler:
                     continue
                 if self.cat.connected:
                     changes = {}
-                    for field, cmd, parser in fields_to_poll:
+                    for field, getter in items:
                         # Yield between queries if a user command (PTT, tune,
                         # etc.) is pending — otherwise this 14-query cycle
                         # holds the serial lock for ~500 ms and stalls PTT.
@@ -462,23 +469,19 @@ class PollScheduler:
                             break
                         if await self._should_skip(field):
                             continue
-                        resp = await self.cat.query(cmd, timeout=POLL_TIMEOUT)
-                        if resp:
-                            # Re-check AFTER the await: a user set command
-                            # may have arrived while this query was in
-                            # flight.  The response then carries the
-                            # pre-command (stale) value — applying it would
-                            # snap the UI back to the old setting.  Same
-                            # guard pattern as _poll_if / _poll_vfo.
-                            if await self._should_skip(field) \
-                                    or await self._polling_paused():
-                                continue
-                            try:
-                                value = parser(resp)
-                                if value is not None:
-                                    changes[field] = value
-                            except (ValueError, IndexError):
-                                pass
+                        value = await getter(POLL_TIMEOUT)
+                        if value is None:
+                            continue
+                        # Re-check AFTER the await: a user set command
+                        # may have arrived while this query was in
+                        # flight.  The response then carries the
+                        # pre-command (stale) value — applying it would
+                        # snap the UI back to the old setting.  Same
+                        # guard pattern as _poll_if / _poll_vfo.
+                        if await self._should_skip(field) \
+                                or await self._polling_paused():
+                            continue
+                        changes[field] = value
                     if changes:
                         changed = self.state.update(**changes)
                         if changed and self._on_state_changed:
@@ -490,11 +493,18 @@ class PollScheduler:
             await asyncio.sleep(POLL_SETTINGS_INTERVAL * self._idle_multiplier)
 
     # ── Tier 4: Slow telemetry (compressor, contour, AMC, RI) ────────
-    # NOTE: id_meter (RM7) and vd_meter (RM8) were moved to Tier 2A
-    # (_poll_tx_meters) for 10× faster refresh.
+    # NOTE: id_meter/vd_meter live in Tier 2A (_poll_tx_meters) for
+    # 10× faster refresh.
 
     async def _poll_slow(self):
-        """Slow poll for compressor state and misc telemetry."""
+        """Slow poll for misc telemetry (backend-provided items).
+
+        Each item is (skip_key, async getter(timeout) -> dict); the
+        getter returns RadioState field changes ({} on failure) — one
+        query may yield several fields (e.g. the FT-710 RI response).
+        """
+        items = self._backend.slow_poll_items() if self._backend else []
+
         while self._running:
             try:
                 if await self._polling_paused():
@@ -505,31 +515,11 @@ class PollScheduler:
                     continue
                 if self.cat.connected:
                     changes = {}
-                    if not await self._should_skip("compressor"):
-                        resp = await self.cat.query("PR", timeout=POLL_TIMEOUT)
-                        if resp and isinstance(resp, str):
-                            # PR P1P2: P2=0=OFF, P2=1=ON (matches all other
-                            # FT-710 binary commands despite Yaesu PDF errata)
-                            changes["compressor"] = resp.endswith("1")
-                    if not await self._should_skip("contour_level"):
-                        resp = await self.cat.query("CO", timeout=POLL_TIMEOUT)
-                        if resp and len(resp) >= 5:
-                            try:
-                                v = int(resp[2:5])
-                                if v is not None:
-                                    changes["contour_level"] = v
-                            except ValueError:
-                                pass
-                    if not await self._should_skip("amc_level"):
-                        v = await self.cat.get_amc_level(timeout=POLL_TIMEOUT)
-                        if v is not None:
-                            changes["amc_level"] = v
-                    # Radio Information (RI) — Hi-SWR, recording, RX/TX,
-                    # tuner tuning, scan, squelch status
-                    if not await self._should_skip("ri"):
-                        info = await self.cat.get_radio_info(timeout=POLL_TIMEOUT)
-                        if info:
-                            changes.update(info)
+                    for skip_key, getter in items:
+                        if not await self._should_skip(skip_key):
+                            result = await getter(POLL_TIMEOUT)
+                            if result:
+                                changes.update(result)
                     if changes:
                         changed = self.state.update(**changes)
                         if changed and self._on_state_changed:
@@ -555,7 +545,10 @@ class PollScheduler:
                     if reconnected:
                         # Perform full state sync after reconnect
                         logger.info("Reconnected! Performing state sync...")
-                        sync_data = await self.cat.initial_state_sync()
+                        if self._backend is not None:
+                            sync_data = await self._backend.initial_state_sync()
+                        else:
+                            sync_data = await self.cat.initial_state_sync()
                         new_state = RadioState.from_sync_result(sync_data)
                         new_state.serial_connected = True
                         # Copy all fields

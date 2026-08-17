@@ -1,7 +1,7 @@
 {
-  "name": "FT-710 Web Control",
-  "short_name": "FT-710",
-  "description": "Web-based remote control for Yaesu FT-710",
+  "name": "MRRC Web Control",
+  "short_name": "MRRC",
+  "description": "Web-based remote control for amateur radio (Yaesu FT-710, Icom IC-7300)",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

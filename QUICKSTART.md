@@ -1,11 +1,11 @@
-# FT-710 Web Control — Quick Start Guide
+# MRRC Web Control — Quick Start Guide
 
 ## 🚀 Immediate Setup (5 minutes)
 
 ### Prerequisites
 
 - **Python 3.10+** installed (`python3 --version`)
-- **FT-710** connected via USB to your computer
+- **FT-710 or IC-7300/IC-7300MK2** connected via USB to your computer
 - **Browser**: Safari 15+, Chrome, or Firefox
 
 ### Windows Installer Path
@@ -27,6 +27,7 @@ Configuration is stored at:
 %LOCALAPPDATA%\MRRC-FT710\ft710.env
 ```
 
+Set `MRRC_RADIO_MODEL` to `ft710`, `ic7300`, or `ic7300mk2` in this file.
 See [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md).
 
 ### 1. Install Dependencies
@@ -39,6 +40,9 @@ pip3 install -r requirements.txt
 ### 2. Configure Security (REQUIRED)
 
 ```bash
+# Select radio backend (ft710, ic7300, or ic7300mk2; default is ft710)
+export MRRC_RADIO_MODEL="ft710"
+
 # Set a strong password (16+ characters recommended)
 export FT710_WEB_PASSWORD="YourStrongPassword123!"
 
@@ -47,18 +51,42 @@ export FT710_WEB_PORT="8888"
 
 # Optional: Bind to localhost only (more secure)
 export FT710_WEB_HOST="127.0.0.1"
+
+# Optional: IC-7300 CI-V address if non-default (default 0x94)
+export IC7300_CIV_ADDR="0x94"
 ```
 
 ### 3. Start the Server
 
+#### FT-710
+
 ```bash
-# macOS (FT-710 Enhanced COM Port):
-FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
+# macOS (Enhanced COM Port):
+MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
 
 # Linux:
-FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+```
 
-# Or use the convenience script:
+#### IC-7300 / IC-7300MK2
+
+Use a single USB cable. The same cable carries CI-V control and 48kHz USB audio.
+Set `MENU` → `SET` → `Connectors` → `USB(CIV) Function` to `CI-V` and
+`USB(CIV) Baud Rate` to `115200`. Default CI-V address is `0x94`.
+
+```bash
+# macOS:
+MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/cu.usbserial-A1234567 python3 server.py
+
+# Linux:
+MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+```
+
+For IC-7300MK2, use `MRRC_RADIO_MODEL=ic7300mk2`.
+
+#### Convenience script
+
+```bash
 ./start.sh
 ```
 
@@ -86,14 +114,19 @@ Without FT4222, the app falls back to S-meter-based synthetic spectrum.
 
 The server uses PyAudio (PortAudio) for USB audio capture/playback:
 
-- **RX**: Captures from FT-710 USB Audio interface (44.1kHz)
-- **TX**: Sends to FT-710 USB Audio input (44.1kHz)
+- **FT-710 RX/TX**: 44.1kHz mono USB audio; the server resamples to/from 48kHz for Opus.
+- **IC-7300 RX/TX**: 48kHz mono USB audio; no resampling required.
 
 If you have multiple audio devices, specify them:
 
 ```bash
+# FT-710
 export FT710_AUDIO_RX_DEVICE="FT-710"   # Match by name
-export FT710_AUDIO_TX_DEVICE="3"         # Match by index
+export FT710_AUDIO_TX_DEVICE="3"        # Match by index
+
+# IC-7300 (often enumerates as "USB Audio CODEC" or similar)
+export FT710_AUDIO_RX_DEVICE="USB Audio CODEC"
+export FT710_AUDIO_TX_DEVICE="USB Audio CODEC"
 ```
 
 ---
@@ -134,7 +167,8 @@ Expected response:
 | "Permission denied" on serial | Add user to dialout group (Linux) or check USB permissions (macOS) |
 | Login rate limited | Wait 5 minutes or check your IP |
 | No audio | Ensure libopus is installed: `brew install opus` (macOS) |
-| Spectrum shows flat line | FT4222 not detected — check macOS/Linux `lib/` libraries or Windows `vendor\ftdi\windows\bin\x64` DLLs |
+| Spectrum shows flat line | FT-710: check FT4222 libraries/DLLs. IC-7300: spectrum is derived from CI-V `0x27` frames on the same serial port; confirm CI-V scope output is enabled in radio menus |
+| `MRRC_RADIO_MODEL` ignored | Make sure it is exported in the same shell before `python server.py` |
 
 ---
 

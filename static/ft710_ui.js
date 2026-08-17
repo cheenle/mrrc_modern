@@ -23,6 +23,27 @@ const DEFAULT_BAND_CYCLE = [
     {name: '4m', start: 70_000_000, end: 70_500_000, default_freq: 70_250_000},
 ];
 
+// ── Per-radio capabilities (fullState.capabilities via ft710_main.js) ──
+// null = legacy server / FT-710: every helper below then falls back to the
+// exact pre-capabilities behavior.
+function _caps() {
+    return (typeof radioCapabilities !== 'undefined' && radioCapabilities) || null;
+}
+
+// IC-7300 filter model: FIL1/FIL2/FIL3 selection per mode instead of a
+// width-index table.
+function _isFil123() {
+    const c = _caps();
+    return !!(c && c.filter_model === 'fil123');
+}
+
+// FT-710 (ft4222 scope) garbles its stream during TX — pause & banner.
+// CI-V 0x27 scopes (IC-7300) keep streaming through TX; render normally.
+function _scopePausesOnTx() {
+    const c = _caps();
+    return !c || c.scope_type !== 'civ27';
+}
+
 function tuneBy(delta) {
     const freq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
     const newFreq = Math.max(30000, Math.min(75000000, freq + delta));
@@ -221,16 +242,31 @@ function renderStatusBar() {
 // ── Button Labels ───────────────────────────────────────────────────
 const modeCycle = ['LSB', 'USB', 'CW-U', 'AM', 'FM', 'RTTY-L', 'DATA-L'];
 
+function getModeCycle() {
+    // Server ui_modes (fullState.modes) is authoritative; the hardcoded
+    // FT-710 list is the pre-fullState fallback.  The wire value sent on
+    // a mode change is the mode NAME string (server maps name -> number).
+    return (uiModes && uiModes.length) ? uiModes : modeCycle;
+}
+
 function getNextMode(currentMode) {
-    const idx = modeCycle.indexOf(currentMode);
-    return modeCycle[(idx + 1) % modeCycle.length];
+    const cycle = getModeCycle();
+    const idx = cycle.indexOf(currentMode);
+    return cycle[(idx + 1) % cycle.length];
 }
 
 function getBandCycle() {
-    const serverBandsByName = new Map((bands || []).map(b => [b.name, b]));
-    return DEFAULT_BAND_CYCLE.map(function(defaultBand) {
-        return Object.assign({}, defaultBand, serverBandsByName.get(defaultBand.name) || {});
-    });
+    // Server bands (fullState.bands) are authoritative — a radio without
+    // a band simply omits it from the list.  Missing fields (e.g. bsr on
+    // Icom) are filled from the FT-710 defaults by name; the hardcoded
+    // table is only the pre-fullState fallback.
+    if (bands && bands.length) {
+        const defaultsByName = new Map(DEFAULT_BAND_CYCLE.map(b => [b.name, b]));
+        return bands.map(function(serverBand) {
+            return Object.assign({}, defaultsByName.get(serverBand.name) || {}, serverBand);
+        });
+    }
+    return DEFAULT_BAND_CYCLE;
 }
 
 // Dead simple: find current band in the cycle, return the next one.
@@ -266,6 +302,11 @@ function _filterTablesFor(modeName) {
 }
 
 function getNextFilter(currentIdx, modeName) {
+    if (_isFil123()) {
+        // FIL1 -> FIL2 -> FIL3 -> FIL1.  The wire value is the 1-based
+        // FIL number — civ_controller.set_filter_width accepts 1-3 only.
+        return (currentIdx >= 1 && currentIdx < 3) ? currentIdx + 1 : 1;
+    }
     // Curated filter rotation for each mode group
     const isNarrow = _filterTablesFor(modeName).isNarrow;
     // Voice: 1.8k / 2.4k / 2.7k / 3k / 4k (WIDE/"无")
@@ -279,11 +320,55 @@ function getNextFilter(currentIdx, modeName) {
 }
 
 function getFilterLabel(idx, modeName) {
+    if (_isFil123()) {
+        // "FIL2" plus the per-mode default width from the server tables
+        // (filterTables.filDefaults[mode] = [fil1_hz, fil2_hz, fil3_hz]).
+        let label = 'FIL' + idx;
+        const t = window.filterTables;
+        const defaults = t && t.filDefaults && t.filDefaults[modeName];
+        const hz = defaults && defaults[idx - 1];
+        if (hz) label += ' ' + (hz >= 1000 ? (hz / 1000).toFixed(1) + 'k' : hz + 'Hz');
+        return label;
+    }
     const hz = _filterTablesFor(modeName).widths[idx];
     if (!hz) return '--';
     if (hz === 4000) return '无';
     if (hz >= 1000) return (hz/1000).toFixed(1) + 'k';
     return hz + 'Hz';
+}
+
+// ATT/PRE cycle lengths come from capabilities (att_steps/preamp_steps)
+// when present; the FT-710 4-step / 3-step cycles are the fallback.
+// Derived short labels reproduce the legacy FT-710 strings exactly.
+function _attStepCount() {
+    const c = _caps();
+    return (c && Array.isArray(c.att_steps) && c.att_steps.length) || 4;
+}
+
+function _attShortLabel(idx) {
+    const c = _caps();
+    if (c && Array.isArray(c.att_steps) && c.att_steps.length) {
+        const db = c.att_steps[idx];
+        if (!db) return 'OF';
+        return db < 10 ? db + 'd' : String(db);   // ≤3 chars, legacy style
+    }
+    return {0:'OF', 1:'6d', 2:'12', 3:'18'}[idx];
+}
+
+function _preStepCount() {
+    const c = _caps();
+    return (c && Array.isArray(c.preamp_steps) && c.preamp_steps.length) || 3;
+}
+
+function _preShortLabel(idx) {
+    const c = _caps();
+    if (c && Array.isArray(c.preamp_steps) && c.preamp_steps.length) {
+        const name = String(c.preamp_steps[idx] || 'OFF');
+        if (name === 'OFF') return 'OF';
+        const m = name.match(/(\d+)/);   // AMP1 -> A1, AMP2 -> A2
+        return m ? 'A' + m[1] : name.slice(0, 3);
+    }
+    return {0:'OF', 1:'A1', 2:'A2'}[idx];
 }
 
 function renderButtonLabels() {
@@ -304,15 +389,15 @@ function renderButtonLabels() {
     setText('btn-filter', getFilterLabel(nextIdx, modeName));
     document.getElementById('btn-filter').dataset.current = filterIdx;
 
-    // ATT cycle: OFF -> 6dB -> 12dB -> 18dB -> OFF (short labels ≤3 chars)
-    const attLabels = {0:'OF', 1:'6d', 2:'12', 3:'18'};
-    const nextAtt = (radioState.attenuator + 1) % 4;
-    setText('btn-att', attLabels[nextAtt]);
+    // ATT cycle: length/labels from capabilities.att_steps when present
+    // (FT-710: OFF -> 6dB -> 12dB -> 18dB; IC-7300: OFF -> 20dB).
+    const nextAtt = (radioState.attenuator + 1) % _attStepCount();
+    setText('btn-att', _attShortLabel(nextAtt));
 
-    // PRE cycle: OFF -> AMP1 -> AMP2 -> OFF (short labels ≤3 chars)
-    const preLabels = {0:'OF', 1:'A1', 2:'A2'};
-    const nextPre = (radioState.preamp + 1) % 3;
-    setText('btn-pre', preLabels[nextPre]);
+    // PRE cycle: length/labels from capabilities.preamp_steps when
+    // present (OFF -> AMP1 -> AMP2 on both supported radios).
+    const nextPre = (radioState.preamp + 1) % _preStepCount();
+    setText('btn-pre', _preShortLabel(nextPre));
 }
 
 // ── Toggle States ───────────────────────────────────────────────────
@@ -432,7 +517,7 @@ function renderFFTPlot(wf1) {
         ctx.stroke();
     }
     // Vertical lines at frequency tick positions
-    const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
+    const spanHz = _scopeSpanHz(radioState.scope_span);
     const vfoFreq = radioState.active_freq ||
         (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
         14200000;
@@ -593,6 +678,32 @@ const SCOPE_SPAN_HZ = {
     9: 1000000,
 };
 
+// Span table (idx -> FULL-width Hz) rebuilt from capabilities.scope_spans
+// on fullState; null = use the hardcoded FT-710 table above.  JSON keys
+// arrive as strings and are normalized to ints.  CI-V (0x27) scopes send
+// the HALF span ("±100 kHz" = 200 kHz total), so those entries double.
+let _capSpanTable = null;
+
+function _rebuildSpanTable(c) {
+    _capSpanTable = null;
+    if (!c || !c.scope_spans) return;
+    const half = c.scope_type === 'civ27';
+    const table = {};
+    for (const k of Object.keys(c.scope_spans)) {
+        const entry = c.scope_spans[k];
+        const hz = (entry && typeof entry === 'object') ? entry.freq : entry;
+        if (typeof hz === 'number' && hz > 0) {
+            table[parseInt(k)] = half ? hz * 2 : hz;
+        }
+    }
+    if (Object.keys(table).length) _capSpanTable = table;
+}
+
+function _scopeSpanHz(idx) {
+    const table = _capSpanTable || SCOPE_SPAN_HZ;
+    return table[idx] || 100000;
+}
+
 function _isDesktopLayout() {
     return !!(window.matchMedia && window.matchMedia('(min-width: 768px)').matches);
 }
@@ -696,7 +807,8 @@ function renderWaterfallRow(wf1) {
 
     // Transmitting: the FT-710 garbles its scope stream during TX (the
     // server pauses SPI reads). Show a notice instead of stale data.
-    if (radioState.tx_status !== 0) {
+    // CI-V 0x27 scopes (IC-7300) keep streaming through TX — no pause.
+    if (radioState.tx_status !== 0 && _scopePausesOnTx()) {
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
         ctx.font = 'bold 13px monospace';
@@ -744,7 +856,7 @@ function renderWaterfallRow(wf1) {
     // so the VFO frequency is the scope centre.  Compute everything
     // from the VFO and span alone — no dependency on the scope frame's
     // scope_start_freq (which lags behind CAT after tuning).
-    const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
+    const spanHz = _scopeSpanHz(radioState.scope_span);
     const vfoFreq = radioState.active_freq ||
         (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
         14200000;
@@ -889,12 +1001,57 @@ function renderScopeSettings() {
     if (canvas && canvas.width > 0) {
         // Rebuild the VFO-centred range — renderFreqScale requires it
         // (previously called without it, throwing on every update cycle).
-        const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
+        const spanHz = _scopeSpanHz(radioState.scope_span);
         const vfoFreq = radioState.active_freq ||
             (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
             14200000;
         renderFreqScale(canvas.width, _computeFreqRange(vfoFreq, spanHz));
     }
+}
+
+// ── Capability-driven layout ────────────────────────────────────────
+// Called from ft710_main.js on every fullState.  Hides controls the
+// connected radio lacks and swaps in model-specific scope span choices.
+// With capabilities null this is a deliberate no-op: legacy servers get
+// exactly the FT-710 layout.
+function applyRadioCapabilities() {
+    const c = _caps();
+    _rebuildSpanTable(c);
+    if (!c) return;
+
+    // DSP toggles: hide AN when the radio has no auto-notch, ATU when it
+    // has no internal tuner.  Symmetric so a model swap can re-show them.
+    const anBtn = document.getElementById('dsp-an');
+    if (anBtn) anBtn.style.display = c.has_auto_notch === false ? 'none' : '';
+    const atuBtn = document.getElementById('dsp-atu');
+    if (atuBtn) atuBtn.style.display = c.has_atu === false ? 'none' : '';
+
+    // Vd/Id meters exist only on radios with drain telemetry (FT-710).
+    ['meter-id-bar', 'meter-vd-bar'].forEach(function(id) {
+        const bar = document.getElementById(id);
+        const item = bar && bar.closest('.meter-item');
+        if (item) item.style.display = c.has_vd_id_meters === false ? 'none' : '';
+    });
+
+    _rebuildSpanSelect(c);
+}
+
+// The static span selector carries the FT-710 choices; CI-V (0x27) scope
+// radios get their own list (indices 0-7, "±100 kHz" style names).
+function _rebuildSpanSelect(c) {
+    if (c.scope_type !== 'civ27' || !c.scope_spans) return;
+    const sel = document.getElementById('scope-span-select');
+    if (!sel) return;
+    sel.innerHTML = '';
+    Object.keys(c.scope_spans).map(Number).sort(function(a, b) { return a - b; })
+        .forEach(function(idx) {
+            const entry = c.scope_spans[idx];
+            const opt = document.createElement('option');
+            opt.value = String(idx);
+            opt.textContent = (entry && entry.name) ? entry.name : String(idx);
+            sel.appendChild(opt);
+        });
+    sel.value = String(radioState.scope_span);
 }
 
 // ── Render All ──────────────────────────────────────────────────────
@@ -1043,7 +1200,7 @@ function initUI() {
 
     // ATT button: cycles attenuator
     document.getElementById('btn-att').addEventListener('click', function() {
-        const nextAtt = (radioState.attenuator + 1) % 4;
+        const nextAtt = (radioState.attenuator + 1) % _attStepCount();
         sendCommand('att', nextAtt);
         radioState.attenuator = nextAtt;
         renderButtonLabels();
@@ -1051,7 +1208,7 @@ function initUI() {
 
     // PRE button: cycles preamp
     document.getElementById('btn-pre').addEventListener('click', function() {
-        const nextPre = (radioState.preamp + 1) % 3;
+        const nextPre = (radioState.preamp + 1) % _preStepCount();
         sendCommand('preamp', nextPre);
         radioState.preamp = nextPre;
         renderButtonLabels();
@@ -1383,7 +1540,7 @@ function initUI() {
         function qsy(clientX) {
             const rect = cv.getBoundingClientRect();
             const x = clientX - rect.left;
-            const spanHz = SCOPE_SPAN_HZ[radioState.scope_span] || 100000;
+            const spanHz = _scopeSpanHz(radioState.scope_span);
             const vfoFreq = radioState.active_freq ||
                 (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) ||
                 14200000;
@@ -1526,7 +1683,7 @@ function showBandSelector() {
 }
 
 function showModeSelector() {
-    const items = uiModes.map(function(m) { return {name: m, label: m}; });
+    const items = getModeCycle().map(function(m) { return {name: m, label: m}; });
     showModal('Select Mode', items, function(mode) {
         sendCommand('mode', mode.name);
         radioState.mode_name = mode.name;

@@ -1,17 +1,19 @@
-# FT-710 Web Control — Cross-Platform Dependencies & Drivers
+# MRRC Web Control — Cross-Platform Dependencies & Drivers
 
 ## Platform Support Overview
 
-| Platform       | Architecture    | CAT Serial | Audio I/O | Scope/Spectrum | Auto-Install |
-|----------------|----------------|:----------:|:---------:|:--------------:|:------------:|
-| macOS 13+      | arm64 / x86_64 | ✅         | ✅        | ✅ (FT4222)    | `./install.sh` |
-| Debian/Ubuntu  | amd64 / arm64  | ✅         | ✅        | ⚠️ needs libs  | `./install.sh` |
-| Fedora/RHEL    | amd64 / arm64  | ✅         | ✅        | ⚠️ needs libs  | `./install.sh` |
-| Arch Linux     | amd64 / arm64  | ✅         | ✅        | ⚠️ needs libs  | `./install.sh` |
-| Raspberry Pi OS| armhf / arm64  | ✅         | ✅        | ⚠️ needs libs  | `./install.sh` |
-| Windows 11/12  | amd64          | ✅         | ✅        | ✅ with FTDI DLLs | desktop installer |
+| Platform       | Architecture    | CAT/CI-V Serial | Audio I/O | Scope/Spectrum | Auto-Install |
+|----------------|----------------|:---------------:|:---------:|:--------------:|:------------:|
+| macOS 13+      | arm64 / x86_64 | ✅              | ✅        | ✅ (FT4222 / CI-V) | `./install.sh` |
+| Debian/Ubuntu  | amd64 / arm64  | ✅              | ✅        | ⚠️ FT-710 needs libs / ✅ IC-7300 CI-V | `./install.sh` |
+| Fedora/RHEL    | amd64 / arm64  | ✅              | ✅        | ⚠️ FT-710 needs libs / ✅ IC-7300 CI-V | `./install.sh` |
+| Arch Linux     | amd64 / arm64  | ✅              | ✅        | ⚠️ FT-710 needs libs / ✅ IC-7300 CI-V | `./install.sh` |
+| Raspberry Pi OS| armhf / arm64  | ✅              | ✅        | ⚠️ FT-710 needs libs / ✅ IC-7300 CI-V | `./install.sh` |
+| Windows 11/12  | amd64          | ✅              | ✅        | ✅ with FTDI DLLs (FT-710) / ✅ CI-V (IC-7300) | desktop installer |
 
 **Legend**: ✅ = fully supported, ⚠️ = requires manual library setup, ❌ = not available
+
+FT-710 true spectrum requires FTDI FT4222 libraries. IC-7300/IC-7300MK2 use CI-V `0x27` scope frames on the same USB serial port and do **not** require FTDI libraries.
 
 
 ## Python Version
@@ -42,9 +44,9 @@ These are installed from `requirements.txt`:
 |---------|------------|---------|-------|
 | `fastapi` | ≥0.100.0 | Web framework (HTTP + WebSocket routing) | |
 | `uvicorn[standard]` | ≥0.23.0 | ASGI server (uvloop + httptools) | `[standard]` pulls in `websockets` (wsproto) and `watchfiles` |
-| `pyserial` | ≥3.5 | Serial CAT protocol (CP210x USB-UART) | Sync API; all blocking I/O offloaded to `asyncio.to_thread()` |
+| `pyserial` | ≥3.5 | Serial CAT/CI-V protocol (CP210x USB-UART) | Sync API; all blocking I/O offloaded to `asyncio.to_thread()` |
 | `websockets` | ≥12.0 | WebSocket protocol (4 channels) | Pulled in by `uvicorn[standard]` but listed explicitly |
-| `pyaudio` | ≥0.2.11 | Sound card I/O (PortAudio wrapper) | RX capture + TX playback at 44.1 kHz mono |
+| `pyaudio` | ≥0.2.11 | Sound card I/O (PortAudio wrapper) | RX capture + TX playback at per-backend rate (FT-710: 44.1 kHz; IC-7300: 48 kHz) |
 | `numpy` | ≥1.24.0 | Audio resampling (44.1k↔48k) + S-meter spectrum fallback | Stateless linear interpolation |
 
 ### Optional Python Packages
@@ -148,6 +150,8 @@ HTTPS, you also need `cryptography` (`pip install cryptography`).
 
 ## USB / Serial Device Drivers
 
+### FT-710
+
 The FT-710 connects to the computer via a single USB cable but exposes
 **four distinct USB interfaces**:
 
@@ -158,6 +162,21 @@ FT-710 USB (single cable)
 ├── FTDI FT4222             →  SPI bridge to internal scope/spectrum processor
 └── USB Audio Class 1.0     →  Mono audio input (RX) + Mono audio output (TX), 44.1 kHz
 ```
+
+### IC-7300 / IC-7300MK2
+
+The IC-7300 uses a **single USB cable** for both control and audio:
+
+```
+IC-7300 USB (single cable)
+├── USB Serial (CI-V)   →  CAT control (115200 8N1, default address 0x94)
+└── USB Audio Class     →  Stereo audio input (RX) + Mono audio output (TX), 48 kHz
+```
+
+**No FTDI libraries are required.** The only drivers needed are the OS built-in
+USB-serial and USB-audio drivers (or the standard Silicon Labs/Icom USB driver
+supplied by the OS). Spectrum data comes from CI-V `0x27` frames on the same
+serial port.
 
 ### 3.1 Silicon Labs CP210x (CAT Serial — REQUIRED)
 
@@ -427,20 +446,23 @@ up and the spectrum waterfall uses the S-meter fallback.
 
 ### 3.3 USB Audio Class (Audio I/O — REQUIRED for Audio)
 
-**No driver installation needed on any platform.** The FT-710's internal
-sound card is a standard USB Audio Class 1.0 device — plug and play on
-macOS, Linux, and Windows.
+**No driver installation needed on any platform.** Both radios present as
+standard USB Audio Class devices — plug and play on macOS, Linux, and Windows.
 
 ```
 FT-710 USB Audio Device:
   - Input  (capture): 1 channel, 44,100 Hz, 16-bit  (RX audio from radio to server)
   - Output (playback): 1 channel, 44,100 Hz, 16-bit  (TX audio from server to radio)
+
+IC-7300 USB Audio Device:
+  - Input  (capture): 2 channels, 48,000 Hz, 16-bit  (RX audio from radio to server)
+  - Output (playback): 1 channel, 48,000 Hz, 16-bit  (TX audio from server to radio)
 ```
 
-**Auto-detection:** The `AudioHandler` automatically finds the FT-710 audio
+**Auto-detection:** The `AudioHandler` automatically finds the radio audio
 device by scanning PyAudio devices for names containing "FT-710", "FT710",
-or "YAESU". It uses heuristics (mono input, full-duplex capability) as
-fallbacks.
+"YAESU", "USB Audio CODEC", or "USB Audio Device". It uses heuristics
+(mono input, full-duplex capability) as fallbacks.
 
 **Manual override:**
 ```bash
@@ -449,6 +471,9 @@ FT710_AUDIO_RX_DEVICE=3 FT710_AUDIO_TX_DEVICE=3 python server.py
 
 # By name substring:
 FT710_AUDIO_RX_DEVICE="FT-710" FT710_AUDIO_TX_DEVICE="FT-710" python server.py
+
+# IC-7300 commonly enumerates as:
+FT710_AUDIO_RX_DEVICE="USB Audio CODEC" FT710_AUDIO_TX_DEVICE="USB Audio CODEC" python server.py
 ```
 
 **Headless / no-audio server:**
@@ -697,16 +722,17 @@ python server.py
 
 ## Audio Device Configuration
 
-### Understanding FT-710 USB Audio
+### Understanding Radio USB Audio
 
-The FT-710 presents as a **single USB Audio device** with one input and one output:
+Both radios present as a **single USB Audio device** with one input and one output:
 - **Input (RX):** Audio FROM the radio (what you hear on the radio's speaker)
 - **Output (TX):** Audio TO the radio (microphone/modulation input)
 
-The native sample rate is **44,100 Hz, mono, 16-bit**.
-
-The server resamples to 48,000 Hz for Opus encoding (44.1k is not a supported
-Opus rate) and back to 44.1k for TX playback.
+The native sample rate depends on the backend:
+- **FT-710:** 44,100 Hz, mono, 16-bit. The server resamples to 48,000 Hz for Opus
+  encoding and back to 44.1k for TX playback.
+- **IC-7300:** 48,000 Hz (stereo input/mono output), 16-bit. No resampling is
+  required because Opus already operates at 48 kHz.
 
 ### Troubleshooting Audio
 
@@ -842,12 +868,15 @@ FT-710 Server
 │       ├── macOS: /opt/homebrew/lib/libopus.dylib
 │       ├── Linux: libopus.so.0
 │       └── Windows: opus.dll
-├── FTDI FT4222 Scope (optional)
+├── FTDI FT4222 Scope (optional, FT-710 only)
 │   ├── libftd2xx.dylib/.so/.dll (D2XX driver API)
 │   │   ├── macOS: ftd2xx.cfg at /usr/local/lib/ (DetachKernelDriver=1)
 │   │   ├── Linux: udev rules for 0403:601c
 │   │   └── Windows: FTDI D2XX driver + bundled ftd2xx.dll
 │   └── libft4222.dylib/.so/.dll (FT4222 SPI API)
-└── [OS] USB Audio Class 1.0 Driver (built-in all platforms)
-    └── FT-710 USB Audio (44.1 kHz, 1ch in, 1ch out)
+├── IC-7300 CI-V Scope (optional, IC-7300 only)
+│   └── Same USB CI-V serial port — no extra drivers
+└── [OS] USB Audio Class Driver (built-in all platforms)
+    ├── FT-710 USB Audio (44.1 kHz, 1ch in, 1ch out)
+    └── IC-7300 USB Audio (48 kHz, 2ch in, 1ch out)
 ```

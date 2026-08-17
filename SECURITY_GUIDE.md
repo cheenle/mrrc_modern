@@ -1,4 +1,4 @@
-# FT-710 Web Control — Security Configuration Guide
+# MRRC Web Control — Security Configuration Guide
 
 ## ⚠️ CRITICAL: Change Default Password Before Deployment
 

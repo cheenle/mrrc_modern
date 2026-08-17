@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from cat_controller import CatController
+from backends.ft710.cat_controller import CatController
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -201,8 +201,8 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
         fake_port.hwid = "USB VID:PID=10C4:EA60"
 
         with (
-            patch("cat_controller.serial.Serial", side_effect=serial.SerialException("missing")),
-            patch("cat_controller.serial.tools.list_ports.comports", return_value=[fake_port]),
+            patch("backends.ft710.cat_controller.serial.Serial", side_effect=serial.SerialException("missing")),
+            patch("backends.ft710.cat_controller.serial.tools.list_ports.comports", return_value=[fake_port]),
             self.assertLogs("ft710.cat", level="ERROR") as logs,
         ):
             ok = await cat.connect()
@@ -227,7 +227,7 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_set_command_is_write_only_for_responsiveness(self):
         """Set commands must not wait for a CAT response timeout."""
-        source = (REPO_ROOT / "cat_controller.py").read_text(encoding="utf-8")
+        source = (REPO_ROOT / "backends" / "ft710" / "cat_controller.py").read_text(encoding="utf-8")
         self.assertIn("async def send_set_command", source)
         self.assertIn("return await self.send_set_command(cmd)", source)
 

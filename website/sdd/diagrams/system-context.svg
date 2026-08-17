@@ -12,7 +12,7 @@
   <text x="295" y="74" class="l">HTTP / WebSocket</text>
   <!-- Server -->
   <rect x="140" y="82" width="280" height="56" rx="10" fill="#5dade218" stroke="#5dade255"/>
-  <text x="280" y="102" text-anchor="middle" class="b">MRRC FT-710 FastAPI Server</text>
+  <text x="280" y="102" text-anchor="middle" class="b">MRRC Modern FastAPI Server</text>
   <text x="280" y="120" text-anchor="middle" class="m">Static UI · 4× WS · CAT · SPI · Audio</text>
   <!-- Arrow down -->
   <line x1="280" y1="138" x2="280" y2="156" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>

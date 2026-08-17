@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Feasibility Assessment — MRRC FT-710 SDD</title>
+    <title>Feasibility Assessment — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -140,39 +140,39 @@
 </thead>
 <tbody>
 <tr>
-<td>CAT control feasibility</td>
+<td>CAT/CI-V control feasibility</td>
 <td>High</td>
-<td>Full FT-710 CAT command set implemented and tested via pyserial</td>
+<td>FT-710 CAT and IC-7300 CI-V command sets implemented and tested via pyserial</td>
 </tr>
 <tr>
 <td>Spectrum feasibility</td>
 <td>High</td>
-<td>Dual-mode: FT4222 real FFT + S-meter fallback both working</td>
+<td>Dual-mode real scope + S-meter fallback working for both FT-710 (FT4222) and IC-7300/MK2 (CI-V 0x27)</td>
 </tr>
 <tr>
 <td>RX audio feasibility</td>
 <td>High</td>
-<td>PyAudio capture → Opus encode → WS broadcast → browser playback</td>
+<td>PyAudio capture → Opus encode → WS broadcast → browser playback (per-backend sample rate)</td>
 </tr>
 <tr>
 <td>TX audio feasibility</td>
 <td>High</td>
-<td>Browser mic → Opus encode → WS → decode → PyAudio → radio</td>
+<td>Browser mic → Opus encode → WS → decode → PyAudio → radio (per-backend sample rate)</td>
 </tr>
 <tr>
 <td>Mobile feasibility</td>
 <td>Medium-High</td>
-<td>Responsive UI; iOS requires HTTPS for mic (reverse proxy)</td>
+<td>Responsive UI adapts to backend <code>capabilities</code>; iOS requires HTTPS for mic (reverse proxy)</td>
 </tr>
 <tr>
 <td>Operational feasibility</td>
 <td>High</td>
-<td>Single-process server, start/stop scripts, PID file management</td>
+<td>Single-process server, backend selection via env var, start/stop scripts, PID file management</td>
 </tr>
 <tr>
 <td>Product completeness</td>
 <td>High</td>
-<td>All core features (control, audio, spectrum, meters, memories) implemented</td>
+<td>All core features (control, audio, spectrum, meters, memories) implemented for both supported backends</td>
 </tr>
 </tbody>
 </table>
@@ -204,17 +204,17 @@
 </tr>
 <tr>
 <td>R2</td>
-<td>FT4222 scope not available</td>
+<td>Real scope not available</td>
 <td>Medium</td>
 <td>Medium</td>
-<td>Automatic S-meter fallback; scope_pipe exits gracefully</td>
+<td>Automatic S-meter fallback; scope_pipe/CI-V 0x27 exits gracefully</td>
 </tr>
 <tr>
 <td>R3</td>
-<td>PyAudio device not matching FT-710</td>
+<td>PyAudio device not matching selected radio</td>
 <td>Low-Medium</td>
 <td>Medium</td>
-<td>Name-based auto-detection; device list logging; fallback to system default</td>
+<td>Per-backend name-based auto-detection; device list logging; fallback to system default</td>
 </tr>
 <tr>
 <td>R4</td>
@@ -272,13 +272,13 @@
 <tbody>
 <tr>
 <td>A1</td>
-<td>FT-710 connected via USB with Enhanced COM Port at 38400 baud</td>
+<td>Selected radio connected via USB with correct serial parameters (FT-710 Enhanced COM Port at 38400 baud; IC-7300 CI-V at 115200 8N1)</td>
 <td>High</td>
-<td>CAT <code>ID;</code> response</td>
+<td>Backend ID response</td>
 </tr>
 <tr>
 <td>A2</td>
-<td>FT-710 USB audio device recognized by OS</td>
+<td>Selected radio USB audio device recognized by OS</td>
 <td>High</td>
 <td>PyAudio device enumeration</td>
 </tr>
@@ -290,7 +290,7 @@
 </tr>
 <tr>
 <td>A4</td>
-<td>FTDI libraries in <code>lib/</code> match OS architecture</td>
+<td>FTDI libraries in <code>lib/</code> match OS architecture (FT-710 backend only)</td>
 <td>Medium</td>
 <td>scope_pipe startup log</td>
 </tr>
@@ -302,7 +302,7 @@
 </tr>
 <tr>
 <td>A6</td>
-<td>libft4222.dylib from wfview app bundle for correct version</td>
+<td>libft4222.dylib from wfview app bundle for correct version (FT-710 backend only)</td>
 <td>Medium</td>
 <td>scope_pipe SPI read success</td>
 </tr>
@@ -339,7 +339,7 @@
 <td>PyAudio device index not configurable via env var</td>
 <td>Low</td>
 <td>Resolved (V2.6)</td>
-<td>Implemented as <code>FT710_AUDIO_RX_DEVICE</code> / <code>FT710_AUDIO_TX_DEVICE</code> (index or name substring); Windows package pre-locks <code>USB Audio</code></td>
+<td>Implemented as <code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> (index or name substring); Windows package pre-locks <code>USB Audio</code></td>
 </tr>
 <tr>
 <td>I3</td>
@@ -439,7 +439,7 @@
 </tr>
 <tr>
 <td>D8</td>
-<td>FT-710 + USB cable</td>
+<td>Supported radio + USB cable</td>
 <td>Hardware</td>
 <td>Required</td>
 </tr>
@@ -452,14 +452,14 @@
 </tbody>
 </table>
 <h2 id="feasibility-conclusion">13.6 Feasibility Conclusion</h2>
-<p>MRRC FT-710 is fully feasible and production-ready for remote FT-710 operation. All core capabilities — CAT control, bidirectional audio with Opus compression, real-time spectrum waterfall (dual-mode), multi-meter telemetry, memory channels, session authentication, and comprehensive PTT safety — are implemented and verified. The primary operational constraint is iOS requiring HTTPS for microphone access, solvable with a TLS reverse proxy. FT4222 scope requires specific library setup but degrades gracefully to S-meter fallback.</p>
+<p>MRRC Modern is fully feasible and production-ready for remote operation of supported radios. All core capabilities — backend-specific control (Yaesu CAT / Icom CI-V), bidirectional audio with Opus compression, real-time spectrum waterfall (dual-mode real scope + S-meter fallback), multi-meter telemetry, memory channels, session authentication, and comprehensive PTT safety — are implemented and verified for both the FT-710 and IC-7300/MK2 backends. The primary operational constraint is iOS requiring HTTPS for microphone access, solvable with a TLS reverse proxy. FT-710 FT4222 scope requires specific library setup but degrades gracefully to S-meter fallback; IC-7300/MK2 0x27 spectrum requires only the CI-V USB serial port.</p>
     </main>
 </div>
 
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

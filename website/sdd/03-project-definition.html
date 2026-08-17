@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project Definition — MRRC FT-710 SDD</title>
+    <title>Project Definition — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -139,23 +139,27 @@
 <tbody>
 <tr>
 <td>Project Name</td>
-<td>MRRC FT-710</td>
+<td>MRRC Modern / <code>mrrc_modern</code></td>
 </tr>
 <tr>
 <td>Project Type</td>
-<td>Web remote control for Yaesu FT-710 transceiver</td>
+<td>Web remote control for supported HF/50MHz transceivers</td>
 </tr>
 <tr>
 <td>Primary Users</td>
 <td>HAM operators using phone or desktop browsers</td>
 </tr>
 <tr>
-<td>Primary Radio</td>
-<td>Yaesu FT-710 (HF/50MHz superheterodyne transceiver)</td>
+<td>Primary Radios</td>
+<td>Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable at runtime)</td>
+</tr>
+<tr>
+<td>Backend Selection</td>
+<td><code>MRRC_RADIO_MODEL</code> env var: <code>ft710</code> (default), <code>ic7300</code>, <code>ic7300mk2</code></td>
 </tr>
 <tr>
 <td>Server Platform</td>
-<td>macOS/Linux with Python 3.12+</td>
+<td>macOS/Linux/Windows with Python 3.12+</td>
 </tr>
 <tr>
 <td>Client Platform</td>
@@ -171,15 +175,15 @@
 </tr>
 <tr>
 <td>Radio Interface</td>
-<td>Serial CAT (USB Enhanced COM Port, 38400 baud)</td>
+<td>Backend-specific: Yaesu ASCII CAT (USB Enhanced COM Port, 38400 baud) or Icom CI-V (USB serial, 115200 8N1, default addr <code>0x94</code>)</td>
 </tr>
 <tr>
 <td>Scope Interface</td>
-<td>FTDI FT4222 SPI via standalone Python subprocess</td>
+<td>FT-710: FTDI FT4222 SPI via standalone Python subprocess; IC-7300: CI-V 0x27 spectrum frames on the CI-V serial port</td>
 </tr>
 <tr>
 <td>Audio Interface</td>
-<td>PyAudio sound card capture/playback + libopus codec</td>
+<td>PyAudio sound card capture/playback + libopus codec (per-backend sample rate)</td>
 </tr>
 </tbody>
 </table>
@@ -190,15 +194,15 @@
 <li>Maintain RX audio channel <code>/WSaudioRX</code> using tagged dual-codec frames (Opus 48kHz default, Int16 PCM fallback).</li>
 <li>Maintain TX audio channel <code>/WSaudioTX</code> for browser microphone uplink.</li>
 <li>Maintain spectrum channel <code>/WSspectrum</code> with binary 850/1701-byte frames at ~30 fps.</li>
-<li>Implement dual-mode spectrum: FT4222 SPI (real FFT) + S-meter Gaussian fallback.</li>
-<li>Implement full FT-710 CAT command set via serial port with threaded I/O.</li>
+<li>Implement dual-mode spectrum: real FFT data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300) + S-meter Gaussian fallback.</li>
+<li>Implement full radio command set for the selected backend via serial port with threaded/asynchronous I/O.</li>
 <li>7-task background polling with adaptive skip-on-command.</li>
-<li>Multi-meter: PWR, ALC, SWR, Id, Vd from CAT RM3-RM8.</li>
-<li>S-meter from both CAT SM0 and scope frame metadata.</li>
+<li>Multi-meter: backend-specific meter values (e.g., FT-710 RM3-RM8).</li>
+<li>S-meter from both radio polling and scope frame metadata.</li>
 <li>Persist and serve memory channels via <code>/api/mem_channels</code>.</li>
 <li>Session authentication: shared-password login, cookie + token, all WS gated.</li>
 <li>PTT safety: touch-and-hold, browser watchdog, dead-man switch, unload beacon.</li>
-<li>Scope pipe protocol for FT4222 subprocess communication.</li>
+<li>Scope pipe protocol for FT-710 FT4222 subprocess communication (FT-710 backend).</li>
 </ul>
 <h2 id="out-of-scope">3.3 Out of Scope</h2>
 <ul>
@@ -208,9 +212,9 @@
 <li>Digital modes (CW decoder, FT8, RTTY decode).</li>
 <li>Logbook / QSO logging.</li>
 <li>Antenna tuner control (ATR-1000 or similar).</li>
-<li>Hamlib/rigctld integration; this codebase is FT-710 direct CAT.</li>
-<li>WDSP / advanced DSP processing (NR2, ANF, SNB — the FT-710 has its own hardware DSP).</li>
-<li>SDR IQ streaming (FT-710 is a superheterodyne, not an SDR).</li>
+<li>Hamlib/rigctld integration; this codebase uses direct CAT/CI-V protocols.</li>
+<li>WDSP / advanced DSP processing (radios have their own hardware DSP).</li>
+<li>SDR IQ streaming (supported radios are superheterodynes, not SDRs).</li>
 </ul>
 <h2 id="success-criteria">3.4 Success Criteria</h2>
 <table>
@@ -229,13 +233,13 @@
 <tbody>
 <tr>
 <td>SC1</td>
-<td>Serial CAT connection establishes</td>
-<td>Server log shows “Connected to FT-710 (ID=…)”</td>
+<td>Radio serial connection establishes</td>
+<td>Server log shows backend-specific connect message (e.g., “Connected to FT-710 (ID=…)” or IC-7300 CI-V ID)</td>
 </tr>
 <tr>
 <td>SC2</td>
 <td>All radio controls work via Web UI</td>
-<td>Frequency, mode, filter, PTT, gains, etc. respond correctly</td>
+<td>Frequency, mode, filter, PTT, gains, etc. respond correctly for the selected backend</td>
 </tr>
 <tr>
 <td>SC3</td>
@@ -254,13 +258,13 @@
 </tr>
 <tr>
 <td>SC6</td>
-<td>FT4222 scope works when available</td>
-<td>Real 850-point FFT data at ~21fps</td>
+<td>Real scope works when available</td>
+<td>FT-710: real 850-point FFT data from FT4222 at ~21fps; IC-7300: CI-V 0x27 spectrum demuxed at ~30fps</td>
 </tr>
 <tr>
 <td>SC7</td>
-<td>S-meter fallback works without FT4222</td>
-<td>Synthetic Gaussian spectrum from CAT SM0 readings</td>
+<td>S-meter fallback works without real scope</td>
+<td>Synthetic Gaussian spectrum from S-meter readings</td>
 </tr>
 <tr>
 <td>SC8</td>
@@ -329,6 +333,11 @@
 <td>2026-07</td>
 <td>SDD documentation baseline</td>
 </tr>
+<tr>
+<td>M9</td>
+<td>2026-08</td>
+<td>IC-7300 / IC-7300MK2 pluggable backend (CI-V, 0x27 spectrum, 48kHz native audio)</td>
+</tr>
 </tbody>
 </table>
     </main>
@@ -337,7 +346,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PTT Safety Architecture — MRRC FT-710 SDD</title>
+    <title>PTT Safety Architecture — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -128,7 +128,7 @@
 <p><strong>Principle</strong>: Release is more safety-critical than keying. A lost PTT release command can leave a radio transmitting indefinitely — causing harmful interference, overheating the radio, and violating spectrum regulations. Every layer must have an independent path to force RX.</p>
 </blockquote>
 <h2 id="safety-model-defense-in-depth">15.1 Safety Model — Defense in Depth</h2>
-<p>The MRRC FT-710 PTT safety architecture provides <strong>7 independent layers of defense</strong> against stuck-TX scenarios.</p>
+<p>The MRRC Modern PTT safety architecture provides <strong>7 independent layers of defense</strong> against stuck-TX scenarios for all supported radio backends.</p>
 <table>
 <colgroup>
 <col style="width: 14%" />
@@ -204,7 +204,7 @@ pttBtn.addEventListener(&#39;touchcancel&#39;, handlePTTEnd);</code></pre>
     sendCommand(&#39;ptt&#39;, false);
     // ...
 }</code></pre>
-<p>Server receives <code>{"type":"set","field":"ptt","value":false}</code> → sends CAT <code>TX0;</code> (fire-and-forget; see removal note in §15.1).</p>
+<p>Server receives <code>{"type":"set","field":"ptt","value":false}</code> → sends the backend-specific PTT unkey command (FT-710 CAT <code>TX0;</code>, IC-7300/MK2 CI-V 0x1C 0x00 unkey) fire-and-forget (see removal note in §15.1).</p>
 <h3 id="layer-3-ptt-watchdog-browser">Layer 3: PTT Watchdog (Browser)</h3>
 <pre class="javascript"><code>// ptt_manager.js
 pttVerifyTimer = setInterval(function() {
@@ -225,12 +225,12 @@ pttVerifyTimer = setInterval(function() {
         }
     }
 }, 500);</code></pre>
-<p>The watchdog’s input is the server-side TX-status poll (500ms), which keeps <code>radioState.tx_status</code> fresh even if the release command’s state update was lost.</p>
+<p>The watchdog’s input is the server-side TX-status poll (500ms), which keeps <code>radioState.tx_status</code> fresh even if the release command’s state update was lost. The same ownership/dead-man logic applies to the IC-7300/MK2 backend, where PTT key/unkey is sent as CI-V 0x1C 0x00 frames.</p>
 <h3 id="layer-4-dead-man-switch-server">Layer 4: Dead-Man Switch (Server)</h3>
 <pre class="python"><code># In /WSradio disconnect handler:
-if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
+if not ctrl_clients and radio.is_transmitting and backend and backend.connected:
     logger.warning(&quot;Last client disconnected during TX! Forcing RX.&quot;)
-    await cat.set_ptt(False)
+    await backend.set_ptt(False)
     radio.update(tx_status=0)
     if audio:
         audio.stop_tx()</code></pre>
@@ -270,21 +270,21 @@ if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
     → handlePTTEnd()
       → sendCommand(&#39;ptt&#39;, false)          [Layers 1+2]
       → stopTXAudio() + wsAudioTX.send(&#39;s:&#39;) [Layer 7]
-      → Server: CAT TX0; (fire-and-forget)
+      → Server: backend-specific PTT unkey command (fire-and-forget)
       → Server: TX-status poll (500ms) tracks RX
       → PTT Watchdog starts                 [Layer 3]
 
 Emergency Paths:
   Browser crash / tab close:
-    → beforeunload → sendBeacon TX0;        [Layer 5]
-    → pagehide → sendCommand TX0;           [Layer 6]
+    → beforeunload → sendBeacon PTT=false;  [Layer 5]
+    → pagehide → sendCommand PTT=false;     [Layer 6]
     → WS disconnect → server dead-man switch [Layer 4]
     → Server stops TX audio                 [Layer 7]
 
   Network loss during TX:
     → WS disconnect → server dead-man switch [Layer 4]
     → Server stops TX audio                 [Layer 7]
-    → Radio returns to RX (CAT timeout)</code></pre>
+    → Radio returns to RX (protocol timeout)</code></pre>
 <h2 id="testing-the-safety-layers">15.4 Testing the Safety Layers</h2>
 <table>
 <colgroup>
@@ -352,7 +352,7 @@ Emergency Paths:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -31,7 +31,7 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 | 7-task polling | Implemented | 100ms–5s adaptive polling (7 asyncio tasks) with skip-on-command |
 | S-meter + Multi-meter | Implemented | Canvas S-meter bar + PWR/ALC/SWR/Id/Vd horizontal bar meters |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with `mem_channels.json` persistence |
-| Session auth | Implemented | Password login, `ft710_auth` cookie (30-day), `?token=` on WebSocket |
+| Session auth | Implemented | Password login, `mrrc_auth` cookie (30-day), `?token=` on WebSocket |
 | PTT safety | Implemented | Touch-and-hold TX; PTT watchdog; dead-man switch; unload beacon |
 
 ## 1.4 Architecture Layers

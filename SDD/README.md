@@ -76,6 +76,6 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio
 | Radio telemetry (RI) | Implemented | Hi-SWR, recorder, RX/TX, tuner, scan, squelch-open status from `RI0;` |
 | Meter display + AMC | Implemented | `MS`/`AO` commands exposed in state and control path |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
-| Session authentication | Implemented | Shared-password login; `_auth_tokens` + `ft710_auth` cookie; all WS gated |
+| Session authentication | Implemented | Shared-password login; `_auth_tokens` + `mrrc_auth` cookie; all WS gated |
 | PTT safety | Implemented | Touch-and-hold, PTT watchdog, dead-man switch, unload beacon |
 | Scope visualization | Implemented | 850-point FFT waterfall, frequency scale, S-meter bar |

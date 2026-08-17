@@ -25,8 +25,8 @@
 
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
-| NFR-020 | Session authentication | All routes and WS endpoints require valid auth token (`ft710_auth` cookie + `?token=` query param) | High | Unauth curl test |
-| NFR-021 | Password configurable | `FT710_WEB_PASSWORD` env var; never hardcoded in repo | Critical | Config review |
+| NFR-020 | Session authentication | All routes and WS endpoints require valid auth token (`mrrc_auth` cookie + `?token=` query param) | High | Unauth curl test |
+| NFR-021 | Password configurable | `MRRC_WEB_PASSWORD` env var; never hardcoded in repo | Critical | Config review |
 | NFR-022 | Token lifetime | 30-day session tokens, cleared on server restart | Medium | Cookie inspection |
 | NFR-023 | Open redirect prevention | Login redirect validates same-origin target | High | Code review of `_auth_middleware` and `/login` |
 
@@ -45,7 +45,7 @@
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
 | NFR-040 | Logging | Startup, CAT connect, scope status, audio device selection logged | High | `logs/` directory output |
-| NFR-041 | Configuration | `MRRC_RADIO_MODEL`, `IC7300_CIV_ADDR`, `FT710_SERIAL_PORT`, `FT710_WEB_PORT`, `FT710_WEB_PASSWORD`, `FT710_WEB_HOST` env vars | Medium | Env var test |
+| NFR-041 | Configuration | `MRRC_RADIO_MODEL`, `IC7300_CIV_ADDR`, `MRRC_SERIAL_PORT`, `MRRC_WEB_PORT`, `MRRC_WEB_PASSWORD`, `MRRC_WEB_HOST` env vars | Medium | Env var test |
 | NFR-042 | PID file | `.ft710-server.pid` tracks running process | Medium | `start.sh` / `stop.sh` behavior |
 | NFR-043 | Static cache safety | Service worker bypasses JS/HTML cache | High | `sw.js` review |
 

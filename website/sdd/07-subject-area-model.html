@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subject Area Model — MRRC FT-710 SDD</title>
+    <title>Subject Area Model — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -152,7 +152,7 @@
 <tr>
 <td>RadioConnection</td>
 <td>serial_port, baudrate, connected, model_id</td>
-<td>CAT serial port state within <code>CatController</code></td>
+<td>Serial connection state within the active backend controller</td>
 </tr>
 <tr>
 <td>RadioState</td>
@@ -160,14 +160,14 @@
 <td>Dataclass with dirty-field tracking</td>
 </tr>
 <tr>
-<td>CatCommand</td>
+<td>RadioCommand</td>
 <td>prefix, value, response</td>
-<td>Serial CAT command: send <code>"FA014200000;"</code> → receive <code>"FA014200000;"</code></td>
+<td>Backend-specific command: e.g., FT-710 CAT <code>"FA014200000;"</code> → receive <code>"FA014200000;"</code>; IC-7300 CI-V framed command/response</td>
 </tr>
 <tr>
 <td>ScopeFrame</td>
 <td>wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq</td>
-<td>Parsed from scope_pipe stdout payload</td>
+<td>Parsed from real-scope source (FT-710 <code>scope_pipe</code> stdout or IC-7300 CI-V 0x27 demux)</td>
 </tr>
 <tr>
 <td>SpectrumFrame</td>
@@ -237,9 +237,9 @@
 <td>Multiple browsers see same state via broadcast</td>
 </tr>
 <tr>
-<td>CatCommand → RadioState</td>
+<td>RadioCommand → RadioState</td>
 <td>1:1</td>
-<td>Each CAT response updates one or more state fields</td>
+<td>Each backend response updates one or more state fields</td>
 </tr>
 <tr>
 <td>ScopeFrame → SpectrumFrame</td>
@@ -336,7 +336,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

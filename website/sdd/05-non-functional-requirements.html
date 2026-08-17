@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Non-Functional Requirements — MRRC FT-710 SDD</title>
+    <title>Non-Functional Requirements — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -160,7 +160,7 @@
 <tr>
 <td>NFR-003</td>
 <td>Spectrum bandwidth</td>
-<td>~1701 bytes/frame at ~30fps (~51KB/s) FT4222; ~851 bytes/frame fallback</td>
+<td>~1701 bytes/frame at ~30fps (~51KB/s) real scope; ~851 bytes/frame fallback</td>
 <td>Medium</td>
 <td>WS frame size inspection</td>
 </tr>
@@ -181,7 +181,7 @@
 <tr>
 <td>NFR-006</td>
 <td>Serial port throughput</td>
-<td>&lt; 300 bytes/sec polling at 38400 baud (well under limit)</td>
+<td>&lt; 300 bytes/sec polling at 38400 baud (FT-710) or 115200 baud (IC-7300), well under limit</td>
 <td>High</td>
 <td>Serial monitor</td>
 </tr>
@@ -265,14 +265,14 @@
 <tr>
 <td>NFR-020</td>
 <td>Session authentication</td>
-<td>All routes and WS endpoints require valid auth token (<code>ft710_auth</code> cookie + <code>?token=</code> query param)</td>
+<td>All routes and WS endpoints require valid auth token (<code>mrrc_auth</code> cookie + <code>?token=</code> query param)</td>
 <td>High</td>
 <td>Unauth curl test</td>
 </tr>
 <tr>
 <td>NFR-021</td>
 <td>Password configurable</td>
-<td><code>FT710_WEB_PASSWORD</code> env var; never hardcoded in repo</td>
+<td><code>MRRC_WEB_PASSWORD</code> env var; never hardcoded in repo</td>
 <td>Critical</td>
 <td>Config review</td>
 </tr>
@@ -327,8 +327,8 @@
 </tr>
 <tr>
 <td>NFR-032</td>
-<td>FT-710 firmware</td>
-<td>CAT protocol compatible with current FT-710 firmware</td>
+<td>Radio firmware</td>
+<td>Protocol compatible with current FT-710 or IC-7300/MK2 firmware for the selected backend</td>
 <td>Critical</td>
 <td>Radio connect and control test</td>
 </tr>
@@ -377,7 +377,7 @@
 <tr>
 <td>NFR-041</td>
 <td>Configuration</td>
-<td><code>FT710_SERIAL_PORT</code>, <code>FT710_WEB_PORT</code>, <code>FT710_WEB_PASSWORD</code>, <code>FT710_WEB_HOST</code> env vars</td>
+<td><code>MRRC_RADIO_MODEL</code>, <code>IC7300_CIV_ADDR</code>, <code>MRRC_SERIAL_PORT</code>, <code>MRRC_WEB_PORT</code>, <code>MRRC_WEB_PASSWORD</code>, <code>MRRC_WEB_HOST</code> env vars</td>
 <td>Medium</td>
 <td>Env var test</td>
 </tr>
@@ -461,7 +461,7 @@
 <tr>
 <td>NFR-060</td>
 <td>RX sample rate</td>
-<td>44.1kHz native capture from FT-710 USB audio, resampled to 48kHz for Opus</td>
+<td>FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2: 48kHz native capture, no resample</td>
 <td>Critical</td>
 <td>PyAudio stream config</td>
 </tr>
@@ -496,7 +496,7 @@
 <tr>
 <td>NFR-065</td>
 <td>PyAudio device selection</td>
-<td>Auto-detect “FT-710”/“YAESU”, then “USB Audio CODEC”/“USB Audio Device” (Windows built-in sound card names), in device name; fallback to system default</td>
+<td>Auto-detect per-backend device hints (e.g., “FT-710”/“YAESU” for FT-710; generic “USB Audio CODEC”/“USB Audio Device”), then mono/full-duplex heuristics; fallback to system default</td>
 <td>Medium</td>
 <td>Device enumeration log</td>
 </tr>
@@ -508,7 +508,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

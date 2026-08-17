@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the FT-710 Operation Guide website page from docs/OPERATION_GUIDE.md.
+"""Build the MRRC Modern Operation Guide website page from docs/OPERATION_GUIDE.md.
 
 Mirrors the site chrome of build_sdd.py (navbar + footer + amber theme).
 Output: website/guide.html and website/zh/guide.html (same Chinese content).
@@ -12,7 +12,7 @@ hero header and back-to-top.
 import re, subprocess, sys
 from pathlib import Path
 
-OUT = Path("/Users/cheenle/HAM/mrrc_ft710/website")
+OUT = Path("/Users/cheenle/HAM/mrrc_modern/website")
 
 def convert(md_path: Path):
     """pandoc → (toc_fragment, body_html). TOC extracted to sidebar."""
@@ -37,7 +37,7 @@ def convert(md_path: Path):
 
     # Tag control reference tables (first header cell is '#') with a class.
     body = re.sub(
-        r'(<table[^>]*>)(?=(?:.|\n){0,500}?<th[^>]*>#</th>)',
+        r'(<table[^>]*>)(?=.{0,500}?<th[^>]*>#</th>)',
         r'\1 class="ref-table"', body, flags=re.S)
 
     # Number the figures (fig1/fig2) so the hero can link to them.
@@ -158,8 +158,8 @@ def build_page(toc: str, body_html: str, lang: str) -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="MRRC FT-710 Web Control 操作指南 — 界面每个按钮与功能的编号图解与说明">
-    <title>FT-710 操作指南 — MRRC FT-710</title>
+    <meta name="description" content="MRRC Modern Web Control 操作指南 — 界面每个按钮与功能的编号图解与说明">
+    <title>MRRC Modern 操作指南</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -171,12 +171,12 @@ def build_page(toc: str, body_html: str, lang: str) -> str:
 {CSS}
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent)">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="index.html#features">Features</a></li>
@@ -184,7 +184,7 @@ def build_page(toc: str, body_html: str, lang: str) -> str:
             <li><a href="index.html#start">Quick Start</a></li>
             <li><a href="guide.html" class="active">操作指南</a></li>
             <li><a href="sdd.html">SDD</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/guide.html" class="lang-btn">中文</a>
@@ -196,12 +196,12 @@ def build_page(toc: str, body_html: str, lang: str) -> str:
 <header class="guide-hero">
     <div class="guide-hero-inner">
         <span class="badge"><i class="fas fa-book"></i> 操作指南 · Operation Guide</span>
-        <h1>FT-710 Web 遥控 — 操作指南</h1>
+        <h1>MRRC Modern Web 遥控 — 操作指南</h1>
         <p>界面每一个按钮、滑杆、下拉框的编号图解与精确说明。琥珀色序号与正文速查表一一对应，点下方任一图直接跳转。</p>
         <div class="actions">
             <a class="btn" href="#fig1"><i class="fas fa-mobile-screen"></i> 图 1 · 主界面</a>
             <a class="btn" href="#fig2"><i class="fas fa-bars"></i> 图 2 · 抽屉菜单</a>
-            <a class="btn" href="https://github.com/cheenle/mrrc_ft710/blob/main/docs/OPERATION_GUIDE.md" target="_blank"><i class="fab fa-github"></i> 源文档 (md)</a>
+            <a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/docs/OPERATION_GUIDE.md" target="_blank"><i class="fab fa-github"></i> 源文档 (md)</a>
         </div>
     </div>
 </header>
@@ -221,7 +221,7 @@ def build_page(toc: str, body_html: str, lang: str) -> str:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>
@@ -275,7 +275,7 @@ window.addEventListener('scroll', () => {{
     return page
 
 def main():
-    md_path = Path("/Users/cheenle/HAM/mrrc_ft710/docs/OPERATION_GUIDE.md")
+    md_path = Path("/Users/cheenle/HAM/mrrc_modern/docs/OPERATION_GUIDE.md")
     toc, body = convert(md_path)
     for lang, out in (("en", "guide.html"), ("zh", "zh/guide.html")):
         dest = OUT / out

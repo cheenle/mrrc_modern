@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Direction — MRRC FT-710 SDD</title>
+    <title>Business Direction — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -125,9 +125,9 @@
     <main class="sdd-content">
 <h1 id="business-direction-bus-411">2. Business Direction (BUS 411)</h1>
 <h2 id="vision">2.1 Vision</h2>
-<p>Make the Yaesu FT-710 usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.</p>
+<p>Make supported radios (Yaesu FT-710 and Icom IC-7300 / IC-7300MK2) usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.</p>
 <h2 id="mission">2.2 Mission</h2>
-<p>Deliver a pragmatic, browser-native remote control surface for FT-710 operation that favors direct serial CAT integration, mobile ergonomics, low latency audio, and field maintainability over heavyweight framework or native-app complexity.</p>
+<p>Deliver a pragmatic, browser-native remote control surface for supported radios that favors direct serial protocol integration (Yaesu ASCII CAT or Icom CI-V), mobile ergonomics, low latency audio, and field maintainability over heavyweight framework or native-app complexity.</p>
 <h2 id="business-goals">2.3 Business Goals</h2>
 <table>
 <colgroup>
@@ -146,12 +146,12 @@
 <tr>
 <td>G1</td>
 <td>Mobile RX confidence</td>
-<td>Operator can reliably listen to FT-710 and see spectrum from phone browser</td>
+<td>Operator can reliably listen to the selected radio and see spectrum from phone browser</td>
 </tr>
 <tr>
 <td>G2</td>
 <td>Safe remote control</td>
-<td>Frequency, mode, PTT, tune, gain, and DSP controls behave predictably</td>
+<td>Frequency, mode, PTT, tune, gain, and DSP controls behave predictably on supported radios</td>
 </tr>
 <tr>
 <td>G3</td>
@@ -264,8 +264,8 @@
 </tr>
 <tr>
 <td>S2</td>
-<td>Direct CAT protocol</td>
-<td>Use serial CAT directly; no Hamlib/rigctld dependency</td>
+<td>Direct radio protocol</td>
+<td>Use serial CAT or CI-V directly; no Hamlib/rigctld dependency</td>
 </tr>
 <tr>
 <td>S3</td>
@@ -275,12 +275,12 @@
 <tr>
 <td>S4</td>
 <td>Small service surface</td>
-<td>FastAPI owns static files, WebSockets, CAT, audio in one process</td>
+<td>FastAPI owns static files, WebSockets, backend, audio in one process</td>
 </tr>
 <tr>
 <td>S5</td>
 <td>Dual-mode spectrum</td>
-<td>FT4222 SPI when available, S-meter fallback always works</td>
+<td>Real scope data when available (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300), S-meter fallback always works</td>
 </tr>
 <tr>
 <td>S6</td>
@@ -326,13 +326,13 @@
 </tr>
 <tr>
 <td>T5</td>
-<td>PyAudio FT-710 detection</td>
-<td>Auto-detect FT-710 USB audio device by name</td>
+<td>PyAudio radio detection</td>
+<td>Auto-detect supported radio USB audio device by name (per-backend device hints)</td>
 </tr>
 <tr>
 <td>T6</td>
 <td>scope_pipe subprocess</td>
-<td>Isolate FT4222 SPI I/O from asyncio event loop</td>
+<td>Isolate FT-710 FT4222 SPI I/O from asyncio event loop (FT-710 backend)</td>
 </tr>
 </tbody>
 </table>
@@ -342,7 +342,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

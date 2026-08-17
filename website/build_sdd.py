@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Convert SDD markdown files to styled HTML pages (MRRC FT-710 dark theme)."""
+"""Convert SDD markdown files to styled HTML pages (MRRC Modern dark theme)."""
 import subprocess, sys, os, re
 from pathlib import Path
 
-SDD_DIR = Path("/Users/cheenle/HAM/mrrc_ft710/SDD")
-OUT_DIR = Path("/Users/cheenle/HAM/mrrc_ft710/website/sdd")
+SDD_DIR = Path("/Users/cheenle/HAM/mrrc_modern/SDD")
+OUT_DIR = Path("/Users/cheenle/HAM/mrrc_modern/website/sdd")
 CSS_PATH = "../css/octen.css?v=4"
 
 FILES = [
@@ -59,7 +59,7 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} — MRRC FT-710 SDD</title>
+    <title>{title} — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -135,19 +135,19 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
         }}
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -171,7 +171,7 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

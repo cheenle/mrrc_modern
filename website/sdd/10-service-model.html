@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Service Model — MRRC FT-710 SDD</title>
+    <title>Service Model — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -154,28 +154,40 @@
 <td><code>/WSradio</code> JSON command dispatch, state broadcast, memory management</td>
 </tr>
 <tr>
+<td>BackendFactoryService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td><code>create_backend(model)</code> selects <code>ft710</code>/<code>ic7300</code>/<code>ic7300mk2</code> based on <code>MRRC_RADIO_MODEL</code></td>
+</tr>
+<tr>
 <td>RXAudioService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Capture FT-710 USB audio → Opus encode → <code>/WSaudioRX</code> tagged frame broadcast</td>
+<td>Capture radio USB audio → Opus encode → <code>/WSaudioRX</code> tagged frame broadcast (per-backend sample rate)</td>
 </tr>
 <tr>
 <td>TXAudioService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Receive <code>/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k → PyAudio → radio</td>
+<td>Receive <code>/WSaudioTX</code> tagged frames → Opus decode → resample if needed → PyAudio → radio</td>
 </tr>
 <tr>
 <td>SpectrumService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>FT4222 scope data + S-meter fallback → <code>/WSspectrum</code> binary broadcast</td>
+<td>Real scope data (FT4222 SPI or CI-V 0x27) + S-meter fallback → <code>/WSspectrum</code> binary broadcast</td>
 </tr>
 <tr>
 <td>CATSerialService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>Serial CAT protocol over USB Enhanced COM Port (38400, 8N1)</td>
+<td>FT-710: Serial CAT protocol over USB Enhanced COM Port (38400, 8N1)</td>
+</tr>
+<tr>
+<td>CIVSerialService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr <code>0x94</code>)</td>
 </tr>
 <tr>
 <td>PollingService</td>
@@ -223,7 +235,7 @@
 </table>
 <h2 id="service-dependencies">10.2 Service Dependencies</h2>
 <pre class="text"><code>ControlService
-  → CATSerialService
+  → BackendFactoryService → CATSerialService / CIVSerialService
   → PollingService
 
 RXAudioService
@@ -233,11 +245,12 @@ TXAudioService
   → AudioHandler (Opus decode + PyAudio playback)
 
 SpectrumService
-  → ScopePipeService (FT4222 path)
+  → ScopePipeService (FT-710 FT4222 path)
+  → CIVScopeService (IC-7300 0x27 path)
   → PollingService (S-meter fallback path)
 
 PollingService
-  → CATSerialService
+  → backend serial service (CAT or CI-V)
   → RadioState
 
 StaticUIService
@@ -288,10 +301,22 @@ AuthService
 <td>WS <code>/WSspectrum</code></td>
 </tr>
 <tr>
+<td>BackendFactoryService</td>
+<td><code>MRRC_RADIO_MODEL</code> env var</td>
+<td><code>RadioBackend</code> instance + <code>RadioCapabilities</code></td>
+<td>Import-time factory</td>
+</tr>
+<tr>
 <td>CATSerialService</td>
 <td>Command strings</td>
 <td>Response strings</td>
-<td>Serial (38400,8N1)</td>
+<td>Serial (38400,8N1) Yaesu CAT</td>
+</tr>
+<tr>
+<td>CIVSerialService</td>
+<td>CI-V command frames</td>
+<td>CI-V response frames</td>
+<td>Serial (115200,8N1) Icom CI-V</td>
 </tr>
 <tr>
 <td>MemoryChannelService</td>
@@ -320,7 +345,7 @@ AuthService
 </tbody>
 </table>
 <h2 id="control-service-command-contract">10.4 Control Service Command Contract</h2>
-<p>Key commands (see <code>_execute_set_command</code> in <code>server.py</code> for complete list):</p>
+<p>Key commands (see <code>_execute_set_command</code> in <code>server.py</code> and the active backend for complete mapping):</p>
 <table>
 <colgroup>
 <col style="width: 34%" />
@@ -489,6 +514,7 @@ AuthService
 </tr>
 </tbody>
 </table>
+<p>The table above shows the FT-710 backend mapping. The IC-7300/MK2 backend exposes the same WebSocket fields but translates them inside <code>backends/ic7300/civ_controller.py</code> to CI-V framed commands (e.g., frequency set via 0x05 BCD, mode set via 0x06, PTT via 0x1C 0x00). The frontend discovers the available bands, modes, filters, and meter labels from <code>fullState.capabilities</code> rather than hardcoding them.</p>
 <h2 id="service-quality-targets">10.5 Service Quality Targets</h2>
 <table>
 <colgroup>
@@ -534,7 +560,7 @@ AuthService
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -2,6 +2,31 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.10.0] — 2026-08-17 — MRRC Modern rebrand + MRRC_* env migration + macOS packaging fix
+
+### Changed
+- **Environment variables `FT710_*` → `MRRC_*`** with automatic backward
+  compatibility: `config.py` now reads `MRRC_*` first and falls back to the
+  legacy `FT710_*` prefix, so existing deployments and config files keep
+  working unchanged. Affected vars: serial/baud, web host/port/password,
+  SSL cert/key, audio device, scope, FTDI lib dir, clock divider, ATR1000,
+  memory file. Launchers (`windows/`, `macos/`) write `MRRC_*` keys and read
+  both.
+- **Branding cleanup**: server title/login/argparse, `AUTH_COOKIE`
+  (`ft710_auth`→`mrrc_auth`, frontend synced), logger namespaces
+  (`ft710.*`→`mrrc.*`), static frontend fallback strings, `ft710-rx-`→`mrrc-rx-`
+  recording filenames, scripts/installer/README/website copy — all updated to
+  MRRC Modern. `static/ft710_main.js` etc. filenames kept for stability.
+- **macOS packaging fixed and rebranded**: `packaging/macos/build.sh` was
+  broken (referenced renamed specs); now builds `MRRC-Modern-Server` +
+  `MRRC-Modern-Launcher` + `MRRC-Modern.app`/dmg; launcher/config/Info.plist
+  rebranded to MRRC Modern.
+- **Web**: guide/fde/SDD pages + env references updated; website redeployed to
+  `https://www.vlsc.net/mrrc_modern/`.
+
+### Tests
+- Suite **596 tests** (592 + 4 new env-compat fallback tests).
+
 ## [v1.9.0] — 2026-08-17 — Multi-Radio Backend: FT-710 + IC-7300/IC-7300MK2
 
 ### Added

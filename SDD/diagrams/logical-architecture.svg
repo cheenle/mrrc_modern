@@ -9,7 +9,7 @@
   <text x="315" y="66" class="c">HTTP / WS</text>
   <!-- Server -->
   <rect x="100" y="72" width="400" height="68" rx="8" fill="#5dade214" stroke="#5dade244"/>
-  <text x="300" y="90" text-anchor="middle" class="h">FastAPI MRRC FT-710 Server (server.py)</text>
+  <text x="300" y="90" text-anchor="middle" class="h">FastAPI MRRC Modern Server (server.py)</text>
   <text x="300" y="108" text-anchor="middle" class="t">static files · /WSradio · /WSaudioRX · /WSaudioTX · /WSspectrum</text>
   <text x="300" y="126" text-anchor="middle" class="m">/api/mem_channels · /api/status · /api/auth/*</text>
   <line x1="300" y1="140" x2="300" y2="156" stroke="#888" stroke-width="1.5" marker-end="url(#a)"/>

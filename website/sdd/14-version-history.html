@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Version History — MRRC FT-710 SDD</title>
+    <title>Version History — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -140,6 +140,24 @@
 </tr>
 </thead>
 <tbody>
+<tr>
+<td>SDD V2.21</td>
+<td>2026-08-17</td>
+<td>Claude</td>
+<td><strong>MRRC Modern rebrand + env migration + macOS packaging fix.</strong> <code>FT710_*</code> environment variables renamed to <code>MRRC_*</code> with automatic legacy fallback in <code>config.py</code> (<code>_env</code>/<code>_env_int</code>/<code>_env_float</code>) so existing deployments keep working; launchers write <code>MRRC_*</code> and read both prefixes. <code>AUTH_COOKIE</code> → <code>mrrc_auth</code> (frontend synced); logger namespaces <code>ft710.*</code> → <code>mrrc.*</code>; server/UI/scripts/website branding cleaned to MRRC Modern (static asset filenames kept). macOS packaging repaired (<code>packaging/macos/build.sh</code> referenced renamed specs and failed) and rebranded to <code>MRRC-Modern-Server</code>/<code>MRRC-Modern-Launcher</code>/<code>MRRC-Modern.app</code>; <code>ft710_launcher.spec</code> → <code>mrrc_modern_launcher.spec</code>. Website redeployed with updated guide/fde/SDD pages. Suite 596 tests.</td>
+</tr>
+<tr>
+<td>SDD V2.20</td>
+<td>2026-08-17</td>
+<td>Kimi</td>
+<td><strong>SDD generalized for multi-radio backend architecture.</strong> Updated all core chapters (01–13, 15) and README to describe MRRC Modern / <code>mrrc_modern</code> scope, <code>MRRC_RADIO_MODEL</code>/<code>IC7300_CIV_ADDR</code> env vars, FT-710 vs IC-7300/MK2 operational differences, backend-specific spectrum paths, per-backend audio sample rates, and pluggable backend components. Historical <code>FT-710-Hamlib-Gap-Analysis.md</code> and FT-710-specific AD-014 retained unchanged. Quick Facts bumped to V2.20.</td>
+</tr>
+<tr>
+<td>SDD V2.19</td>
+<td>2026-08-17</td>
+<td>Kimi</td>
+<td><strong>Pluggable multi-radio architecture: Icom IC-7300/IC-7300MK2 backend alongside FT-710 (AD-016).</strong> <code>backends/base.py</code> defines <code>RadioBackend</code> ABC (CAT surface), <code>RadioCapabilities</code>, and <code>ScopeProducer</code> protocol with defaulted hooks (bands/ui_modes/filter_tables/poll-item lists/init_scope/create_scope_producer); <code>create_backend(model)</code> factory selected by <code>MRRC_RADIO_MODEL</code> (default <code>ft710</code>). New <code>backends/ic7300/</code>: <code>civ_codec</code> (pure CI-V framing/BCD/0x27 scope segments), <code>civ_controller</code> (async demux over USB CI-V 115200 8N1 addr 0x94, <code>IC7300_CIV_ADDR</code>), <code>civ_scope</code> (475 bins → scale 160→255 → upsample 850 → ScopeHandler), <code>config_ic7300</code>. FT-710 modules moved to <code>backends/ft710/</code> with root compat shims; <code>fullState</code> gains radioModel/radioDisplayName/capabilities; frontend adapts bands/modes/FIL1-3/ATT-PRE/meters/scope banner; audio device rate + name hints parameterized per backend (IC-7300 48 kHz native, no resample); server mode/band/tune branches backend-aware. 5 new test modules (test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope); suite 592 tests. IC-7300 hardware-verification TODOs (S-meter top point, TUNE carrier, MK2 transceive) flagged in code comments. Docs: AD-016, AGENTS.md module/env tables, tests/README.</td>
+</tr>
 <tr>
 <td>SDD V2.18</td>
 <td>2026-08-16</td>
@@ -402,10 +420,10 @@
 </table>
 <h2 id="design-baseline-notes">Design Baseline Notes</h2>
 <ul>
-<li><strong>Radio</strong>: Yaesu FT-710 superheterodyne transceiver (not an SDR).</li>
-<li><strong>CAT Protocol</strong>: Direct serial CAT via pyserial — no Hamlib, no rigctld, no TCI.</li>
-<li><strong>Scope</strong>: FTDI FT4222 SPI chip provides 850-point FFT data. Falls back to synthetic S-meter Gaussian spectrum when unavailable.</li>
-<li><strong>Audio</strong>: Bidirectional through FT-710’s built-in USB audio interface via PyAudio (44.1kHz native device rate). Opus codec (RX 64kbps, TX 64kbps CBR, both 48kHz) with Int16 PCM fallback. <code>audio_resample.py</code> bridges the 48kHz codec domain ↔︎ 44.1kHz device domain (960↔︎882 frame-aligned).</li>
+<li><strong>Radios</strong>: Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 superheterodyne transceivers (not SDRs). Backend selected by <code>MRRC_RADIO_MODEL</code>.</li>
+<li><strong>Radio Protocols</strong>: Direct serial CAT (FT-710) or CI-V (IC-7300/MK2) via pyserial — no Hamlib, no rigctld, no TCI.</li>
+<li><strong>Scope</strong>: FT-710 uses FTDI FT4222 SPI chip for 850-point FFT data; IC-7300/MK2 uses CI-V 0x27 frames on the same serial port. Both fall back to synthetic S-meter Gaussian spectrum when unavailable.</li>
+<li><strong>Audio</strong>: Bidirectional through the selected radio’s built-in USB audio interface via PyAudio. FT-710: 44.1kHz native device rate; IC-7300/MK2: 48kHz native. Opus codec (RX 64kbps, TX 64kbps CBR, both 48kHz) with Int16 PCM fallback. <code>audio_resample.py</code> bridges the 48kHz codec domain ↔︎ 44.1kHz device domain for the FT-710 only (960↔︎882 frame-aligned).</li>
 <li><strong>Auth</strong>: Shared-password session auth (<code>ft710_auth</code> cookie, 30-day, <code>?token=</code> on WebSocket).</li>
 <li><strong>PTT Safety</strong>: Client-side PTT watchdog (500ms) + dead-man switch (WS disconnect) + pagehide handler + server-side TX status poll (0.5s). No TX0 verify loop on release (radio obeys TX0 fire-and-forget). TX audio drain=50ms. TUNE is press-and-hold.</li>
 <li><strong>Polling</strong>: 7-task adaptive scheduler: IF 0.1s (FA/MD0/SM0), VFO 0.5s (VS/FB), TX status 0.5s, TX meters 0.5s (RM3/4/5/6, TX only), settings 2s, slow 5s, connection watchdog 1s. Poll queries use 0.25s timeout and cooperate with priority-command preemption (<code>_cancel_polls</code>). Poll loops re-check skip state AFTER each in-flight query response and discard stale reads; filter sets are verified by a 150 ms <code>SH0;</code> read-back. After a successful watchdog reconnect the scheduler re-runs the scope-init CAT sequence (<code>EX040101</code>/<code>EX040200</code>) via its <code>on_reconnected</code> hook — a USB re-enumeration resets the radio’s scope output.</li>
@@ -466,7 +484,7 @@
 </tr>
 <tr>
 <td>AD-011</td>
-<td>48 kHz codec / 44.1 kHz device bridge</td>
+<td>48 kHz codec / per-backend device-rate bridge</td>
 </tr>
 <tr>
 <td>AD-012</td>
@@ -484,16 +502,20 @@
 <td>AD-015</td>
 <td>Priority CAT command preemption (<code>_cancel_polls</code> + <code>send_priority_set_command</code>)</td>
 </tr>
+<tr>
+<td>AD-016</td>
+<td>Pluggable radio backend architecture (FT-710 + IC-7300 via RadioBackend/Capabilities)</td>
+</tr>
 </tbody>
 </table>
-<p><em>This document follows IBM Team Solution Design (TeamSD) methodology v2.3.2.</em> <em>Document ID: SDD-MRRC-FT710-2026-001</em></p>
+<p><em>This document follows IBM Team Solution Design (TeamSD) methodology v2.3.2.</em> <em>Document ID: SDD-MRRC-MODERN-2026-001</em></p>
     </main>
 </div>
 
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

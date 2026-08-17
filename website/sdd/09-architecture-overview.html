@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Architecture Overview — MRRC FT-710 SDD</title>
+    <title>Architecture Overview — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -134,7 +134,7 @@
 <p>Control channel. Carries all radio commands, state updates, and memory management.</p>
 <p><strong>Server → Client:</strong></p>
 <ul>
-<li><code>{"type":"fullState","data":{...},"bands":[...],"modes":[...]}</code> — initial sync on connect</li>
+<li><code>{"type":"fullState","data":{...},"radioModel":"...","radioDisplayName":"...","capabilities":{...},"bands":[...],"modes":[...]}</code> — initial sync on connect; <code>capabilities</code> is backend-specific (bands, modes, filters, ATT/PRE steps, meter visibility, scope banner, etc.)</li>
 <li><code>{"type":"stateUpdate","fields":{...},"dirty":[...]}</code> — partial changed-field update</li>
 <li><code>{"type":"value","field":"...","value":...}</code> — single-value query response</li>
 <li><code>{"type":"memChannels","channels":[...]}</code> — memory channel broadcast</li>
@@ -150,13 +150,13 @@
 </ul>
 <h3 id="wsaudiorx-binary">9.2.2 /WSaudioRX (binary)</h3>
 <p><strong>Format:</strong> 1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.</p>
-<p>Server captures 48kHz Int16 mono from FT-710 USB audio → Opus encodes (64kbps default) → broadcasts to all <code>audio_rx_clients</code> at 20ms intervals. Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.</p>
+<p>Server captures Int16 mono from the selected radio’s USB audio (44.1kHz for FT-710, 48kHz for IC-7300/MK2) → resamples to 48kHz if needed → Opus encodes (64kbps default) → broadcasts to all <code>audio_rx_clients</code> at 20ms intervals. Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.</p>
 <h3 id="wsaudiotx-binary-text">9.2.3 /WSaudioTX (binary + text)</h3>
-<p><strong>Binary:</strong> 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → queues to PyAudio output stream → played to FT-710 USB audio input.</p>
+<p><strong>Binary:</strong> 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → queues to PyAudio output stream → played to the selected radio’s USB audio input (44.1kHz for FT-710 with resample, 48kHz native for IC-7300/MK2).</p>
 <p><strong>Text:</strong> <code>"s:"</code> = stop TX; <code>"m:rate,encode,..."</code> = settings.</p>
 <h3 id="wsspectrum-binary">9.2.4 /WSspectrum (binary)</h3>
 <p><strong>v1 format:</strong> 1-byte version (0x01) + 850 bytes wf1 = 851 bytes. <strong>v2 format:</strong> 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.</p>
-<p>Broadcast at ~30 fps from FT4222 data or S-meter fallback.</p>
+<p>Broadcast at ~30 fps from real scope data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2) or S-meter fallback.</p>
 <h2 id="rx-audio-signal-chain">9.3 RX Audio Signal Chain</h2>
 <figure>
 <img src="diagrams/audio-chains.svg" alt="RX Audio Chain" />
@@ -169,10 +169,12 @@
 <figcaption aria-hidden="true">TX Audio Chain</figcaption>
 </figure>
 <p><em>See lower half of diagram.</em></p>
-<p><strong>TX runs at 48 kHz throughout the codec domain</strong> — browser capture and Opus encode/decode — and the server bridges to the FT-710’s native 44.1 kHz USB audio via frame-aligned resampling (960↔︎882 = exactly 20 ms, ratio 160:147) on every platform, including Windows. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) and prevents a Windows shared-mode mix rate from bypassing the device-domain bridge.</p>
-<p>The 44.1 kHz playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as <code>queue_drops</code> in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy Windows RF acceptance run therefore requires <code>decode_fail=0</code>, <code>write_err=0</code>, <code>queue_drops=0</code>, and <code>non_owner_drops=0</code>; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds.</p>
+<p><strong>TX runs at 48 kHz throughout the codec domain</strong> — browser capture and Opus encode/decode. The server bridges to the radio’s native USB audio rate: the FT-710 uses 44.1 kHz with frame-aligned resampling (960↔︎882 = exactly 20 ms, ratio 160:147); the IC-7300/MK2 uses 48 kHz native with no resample. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) and prevents a Windows shared-mode mix rate from bypassing the device-domain bridge.</p>
+<p>The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as <code>queue_drops</code> in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy RF acceptance run therefore requires <code>decode_fail=0</code>, <code>write_err=0</code>, <code>queue_drops=0</code>, and <code>non_owner_drops=0</code>; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds.</p>
 <h2 id="spectrum-signal-chain">9.5 Spectrum Signal Chain</h2>
-<h3 id="ft4222-path-real-fft-data">9.5.1 FT4222 Path (Real FFT Data)</h3>
+<h3 id="real-scope-path-ft4222-spi-for-ft-710-ci-v-0x27-for-ic-7300mk2">9.5.1 Real Scope Path (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2)</h3>
+<p>FT-710: FT4222 SPI → <code>scope_pipe.py</code> subprocess → 850-point wf1/wf2 → <code>ScopeHandler</code>.</p>
+<p>IC-7300/MK2: CI-V 0x27 frames → <code>civ_controller.py</code> demux → 475-bin scale/upsample to 850 → <code>ScopeHandler</code>.</p>
 <figure>
 <img src="diagrams/spectrum-paths.svg" alt="Spectrum Paths" />
 <figcaption aria-hidden="true">Spectrum Paths</figcaption>
@@ -183,7 +185,7 @@
 <figcaption aria-hidden="true">S-Meter Fallback</figcaption>
 </figure>
 <p><em>See lower half of spectrum diagram.</em></p>
-<h2 id="cat-polling-architecture">9.6 CAT Polling Architecture</h2>
+<h2 id="backend-polling-architecture">9.6 Backend Polling Architecture</h2>
 <figure>
 <img src="diagrams/polling-architecture.svg" alt="Polling Architecture" />
 <figcaption aria-hidden="true">Polling Architecture</figcaption>
@@ -204,14 +206,14 @@
 <li><strong>TX on/off → <code>notify_tx</code></strong> — switches the tuner to device push mode and opens the learning window (LearningBuffer, 4-sample stability).</li>
 <li><strong>Tune assist</strong> — client <code>{"type":"atrTune"}</code> runs <code>_atr_tune_assist()</code> server-side: TX2 carrier → skip if SWR≤1.6 → snapshot relays → full tune (mode=2) → keep+learn if SWR improved ≥0.02 else rollback → carrier always dropped in <code>finally</code> (ATR_TUNE_* constants: 0.3s settle, 5s min, 45s deadline, 0.8s compare settle, 2.5s meter wait).</li>
 </ol>
-<p><strong>Default-disabled isolation</strong>: <code>FT710_ATR1000_HOST</code> empty (default) means no client task, no network traffic, linkage hooks short-circuit, <code>/WSatr1000</code> closes with code 4000, and the frontend module is never initialized. ATR data is deliberately kept out of RadioState (separate channel, same precedent as spectrum); the audio path is untouched.</p>
+<p><strong>Default-disabled isolation</strong>: <code>MRRC_ATR1000_HOST</code> empty (default) means no client task, no network traffic, linkage hooks short-circuit, <code>/WSatr1000</code> closes with code 4000, and the frontend module is never initialized. ATR data is deliberately kept out of RadioState (separate channel, same precedent as spectrum); the audio path is untouched.</p>
     </main>
 </div>
 
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

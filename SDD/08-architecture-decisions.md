@@ -106,7 +106,7 @@
 |-----------|-------|
 | Type | Design |
 | Status | Implemented |
-| Decision | Multi-layer device selection parameterized by backend: (1) explicit `FT710_AUDIO_RX_DEVICE`/`FT710_AUDIO_TX_DEVICE` env var (index or name substring), (2) per-backend name hints (e.g., "FT-710"/"FT710"/"YAESU" for FT-710), (3) generic "USB Audio CODEC" / "USB Audio Device" fallback (common built-in sound card names on Windows; first match wins, multi-match warns), (4) mono-channel heuristic (radio USB audio is typically mono), (5) full-duplex heuristic for TX (device with both input + output), (6) system default fallback |
+| Decision | Multi-layer device selection parameterized by backend: (1) explicit `MRRC_AUDIO_RX_DEVICE`/`MRRC_AUDIO_TX_DEVICE` env var (index or name substring), (2) per-backend name hints (e.g., "FT-710"/"FT710"/"YAESU" for FT-710), (3) generic "USB Audio CODEC" / "USB Audio Device" fallback (common built-in sound card names on Windows; first match wins, multi-match warns), (4) mono-channel heuristic (radio USB audio is typically mono), (5) full-duplex heuristic for TX (device with both input + output), (6) system default fallback |
 
 **Problem**: USB audio device naming varies by radio, OS, and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of the radio. On Windows the FT-710's card carries no "FT-710"/"YAESU" string at all ("USB Audio CODEC" or "USB Audio Device", possibly localized/prefixed), so without tier (3) the heuristics grabbed a laptop mic (RX) or PC speakers (TX) — V2.6 field report.
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Context — MRRC FT-710 SDD</title>
+    <title>System Context — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -148,11 +148,15 @@
 </tr>
 <tr>
 <td>System Maintainer</td>
-<td>Starts/stops service, manages serial ports, checks logs</td>
+<td>Starts/stops service, manages serial ports/backend selection, checks logs</td>
 </tr>
 <tr>
 <td>Yaesu FT-710</td>
 <td>External radio device controlled via serial CAT; provides scope data via FT4222 SPI; provides audio via USB sound card</td>
+</tr>
+<tr>
+<td>Icom IC-7300 / IC-7300MK2</td>
+<td>External radio device controlled via USB CI-V serial; provides in-band 0x27 spectrum on the same port; provides 48kHz native USB audio</td>
 </tr>
 <tr>
 <td>Browser Runtime</td>
@@ -240,14 +244,28 @@
 <td>Serial</td>
 <td>USB Enhanced COM Port</td>
 <td>Server → Radio</td>
-<td>Yaesu CAT commands (38400, 8N1)</td>
+<td>Yaesu FT-710 CAT commands (38400, 8N1)</td>
+</tr>
+<tr>
+<td>CI-V Serial</td>
+<td>Serial</td>
+<td>USB CI-V port</td>
+<td>Server ↔︎ Radio</td>
+<td>Icom CI-V frames (115200, 8N1, default addr <code>0x94</code>)</td>
 </tr>
 <tr>
 <td>FT4222 SPI</td>
 <td>SPI</td>
 <td>Internal FTDI chip</td>
 <td>Radio → Server</td>
-<td>850-point FFT scope data via <code>scope_pipe.py</code> subprocess</td>
+<td>FT-710 850-point FFT scope data via <code>scope_pipe.py</code> subprocess</td>
+</tr>
+<tr>
+<td>CI-V 0x27 Spectrum</td>
+<td>Serial</td>
+<td>Same CI-V port</td>
+<td>Radio → Server</td>
+<td>IC-7300 0x27 spectrum frames on the CI-V bus</td>
 </tr>
 <tr>
 <td>USB Audio IN</td>
@@ -280,23 +298,27 @@
 <tbody>
 <tr>
 <td>CAT control flow</td>
-<td>UI action → <code>/WSradio</code> JSON → <code>CatController</code> serial command → radio response → <code>RadioState</code> update → broadcast</td>
+<td>UI action → <code>/WSradio</code> JSON → backend controller (FT-710 <code>CatController</code> / IC-7300 <code>CivController</code>) → radio response → <code>RadioState</code> update → broadcast</td>
 </tr>
 <tr>
 <td>RX audio flow</td>
-<td>FT-710 USB Audio → PyAudio capture (44.1kHz Int16) → resample to 48kHz → Opus encode → <code>/WSaudioRX</code> tagged frames → browser AudioWorklet playback</td>
+<td>Radio USB Audio → PyAudio capture (44.1kHz Int16 for FT-710; 48kHz Int16 for IC-7300) → resample to 48kHz if needed → Opus encode → <code>/WSaudioRX</code> tagged frames → browser AudioWorklet playback</td>
 </tr>
 <tr>
 <td>TX audio flow</td>
-<td>Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → <code>/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k → PyAudio → FT-710 USB Audio</td>
+<td>Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → <code>/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k if needed → PyAudio → Radio USB Audio</td>
 </tr>
 <tr>
-<td>Spectrum flow (FT4222)</td>
+<td>Spectrum flow (FT-710)</td>
 <td>FT-710 → FT4222 SPI → <code>scope_pipe.py</code> subprocess → stdout pipe → <code>_read_scope_pipe()</code> → parse → <code>/WSspectrum</code> binary → browser waterfall</td>
 </tr>
 <tr>
+<td>Spectrum flow (IC-7300)</td>
+<td>IC-7300 → CI-V 0x27 frames → <code>civ_controller.py</code> demux → <code>civ_scope.py</code> → 475-bin upsample to 850 → <code>/WSspectrum</code> binary → browser waterfall</td>
+</tr>
+<tr>
 <td>Spectrum flow (fallback)</td>
-<td>CAT SM0; poll → <code>radio_state.s_meter</code> → <code>ScopeHandler.update_from_radio_state()</code> → synthetic Gaussian spectrum → <code>/WSspectrum</code></td>
+<td>S-meter poll → <code>radio_state.s_meter</code> → <code>ScopeHandler.update_from_radio_state()</code> → synthetic Gaussian spectrum → <code>/WSspectrum</code></td>
 </tr>
 <tr>
 <td>State broadcast flow</td>
@@ -304,11 +326,11 @@
 </tr>
 <tr>
 <td>PTT safety flow</td>
-<td>UI touch → <code>sendCommand('ptt', true)</code> → CAT <code>TX1;</code> → radio TX; release → <code>TX0;</code> (fire-and-forget) → watchdog</td>
+<td>UI touch → <code>sendCommand('ptt', true)</code> → backend-specific PTT key command (FT-710 <code>TX1;</code>, IC-7300 CI-V 0x1C 0x00 key) → radio TX; release → backend-specific PTT unkey command (FT-710 <code>TX0;</code>, IC-7300 CI-V 0x1C 0x00 unkey) (fire-and-forget) → watchdog</td>
 </tr>
 <tr>
 <td>Polling flow</td>
-<td><code>PollScheduler</code> 7-task timer → CAT queries → response parse → <code>RadioState.update()</code> → broadcast if changed</td>
+<td><code>PollScheduler</code> 7-task timer → backend-specific queries → response parse → <code>RadioState.update()</code> → broadcast if changed</td>
 </tr>
 </tbody>
 </table>
@@ -334,17 +356,22 @@
 </tr>
 <tr>
 <td>Server boundary</td>
-<td>WebSockets, static serving, CAT serial, FT4222 scope subprocess, PyAudio I/O, Opus codec, auth</td>
+<td>WebSockets, static serving, backend serial protocol, FT4222 scope subprocess (FT-710), PyAudio I/O, Opus codec, auth</td>
 <td>Radio firmware, USB driver stack, OS audio subsystem</td>
 </tr>
 <tr>
 <td>scope_pipe boundary</td>
-<td>FT4222 SPI read loop, frame sync, diagnostics</td>
+<td>FT-710 FT4222 SPI read loop, frame sync, diagnostics</td>
 <td>FTDI D2XX driver, kernel VCP driver detach</td>
 </tr>
 <tr>
+<td>CI-V boundary</td>
+<td>IC-7300 CI-V frame I/O, 0x27 spectrum demux, echo dropping, transceive broadcast</td>
+<td>USB CI-V driver, controller address match</td>
+</tr>
+<tr>
 <td>Audio boundary</td>
-<td>PyAudio stream management, Opus encode/decode, WS fan-out</td>
+<td>PyAudio stream management, Opus encode/decode, WS fan-out, per-backend sample-rate bridge</td>
 <td>USB audio device enumeration, sample rate negotiation</td>
 </tr>
 </tbody>
@@ -352,11 +379,12 @@
 <h2 id="contextual-constraints">4.6 Contextual Constraints</h2>
 <ul>
 <li>FT-710 CAT requires the Enhanced COM Port (not Standard COM Port) at 38400 baud.</li>
-<li>FT4222 SPI requires D2XX driver with <code>DetachKernelDriver=1</code> to claim the device from macOS VCP.</li>
+<li>IC-7300 CI-V uses a single USB serial port at 115200 8N1; the controller address is configurable via <code>IC7300_CIV_ADDR</code> (default <code>0x94</code>).</li>
+<li>FT-710 FT4222 SPI requires D2XX driver with <code>DetachKernelDriver=1</code> to claim the device from macOS VCP.</li>
 <li>Only one process can access the FT4222 at a time — wfview or ExpertSDR must be closed.</li>
-<li>USB audio device naming varies by OS; PyAudio auto-detects “FT-710” or “YAESU” in device name.</li>
+<li>USB audio device naming varies by OS and radio; PyAudio auto-detects per-backend hints (e.g., “FT-710”/“YAESU” for FT-710; “USB Audio CODEC”/“USB Audio Device” generic names).</li>
 <li>iOS Safari requires HTTPS for reliable <code>getUserMedia</code>; HTTP is acceptable for LAN/localhost use.</li>
-<li>Serial port path varies by OS: <code>/dev/cu.usbserial-*</code> (macOS), <code>/dev/ttyUSB*</code> (Linux), <code>COM*</code> (Windows).</li>
+<li>Serial port path varies by OS: <code>/dev/cu.usbserial-*</code> or <code>/dev/cu.SLAB_USBtoUART</code> (macOS), <code>/dev/ttyUSB*</code> (Linux), <code>COM*</code> (Windows).</li>
 </ul>
     </main>
 </div>
@@ -364,7 +392,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

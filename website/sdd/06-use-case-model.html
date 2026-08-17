@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Use Case Model — MRRC FT-710 SDD</title>
+    <title>Use Case Model — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -139,11 +139,11 @@
 <tbody>
 <tr>
 <td>HAM Operator</td>
-<td>Primary user controlling FT-710 from browser</td>
+<td>Primary user controlling the selected radio from browser</td>
 </tr>
 <tr>
 <td>System Maintainer</td>
-<td>Starts service, manages serial ports, observes logs</td>
+<td>Starts service, manages serial ports/backend selection, observes logs</td>
 </tr>
 <tr>
 <td>Browser Runtime</td>
@@ -152,6 +152,10 @@
 <tr>
 <td>Yaesu FT-710</td>
 <td>Radio device controlled via serial CAT, scope via FT4222 SPI, audio via USB</td>
+</tr>
+<tr>
+<td>Icom IC-7300 / IC-7300MK2</td>
+<td>Radio device controlled via USB CI-V serial, 0x27 spectrum on same port, 48kHz native USB audio</td>
 </tr>
 </tbody>
 </table>
@@ -175,11 +179,11 @@
 </tr>
 <tr>
 <td>Preconditions</td>
-<td>Server running, FT-710 connected via USB, browser can reach host</td>
+<td>Server running, supported radio connected via USB, browser can reach host</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User opens <code>http://host:8888</code>; login page; enter password; server sets <code>ft710_auth</code> cookie; redirects to <code>/</code>; <code>index.html</code> loads; <code>bodyload()</code> connects <code>/WSradio</code>; on open receives <code>fullState</code> with bands/modes; connects <code>/WSspectrum</code>, <code>/WSaudioRX</code>, <code>/WSaudioTX</code></td>
+<td>User opens <code>http://host:8888</code>; login page; enter password; server sets <code>mrrc_auth</code> cookie; redirects to <code>/</code>; <code>index.html</code> loads; <code>bodyload()</code> connects <code>/WSradio</code>; on open receives <code>fullState</code> with <code>radioModel</code>, <code>radioDisplayName</code>, <code>capabilities</code>, bands/modes; connects <code>/WSspectrum</code>, <code>/WSaudioRX</code>, <code>/WSaudioTX</code></td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -206,15 +210,15 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Hear FT-710 RX audio in the browser</td>
+<td>Hear the selected radio’s RX audio in the browser</td>
 </tr>
 <tr>
 <td>Preconditions</td>
-<td>FT-710 connected via USB; USB audio input available; <code>/WSaudioRX</code> connected</td>
+<td>Supported radio connected via USB; USB audio input available; <code>/WSaudioRX</code> connected</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>Server captures 48kHz Int16 PCM from FT-710 USB audio via PyAudio; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer</td>
+<td>Server captures Int16 PCM from the radio’s USB audio via PyAudio (44.1kHz for FT-710, 48kHz for IC-7300); resamples to 48kHz if needed; Opus encodes; broadcasts tagged frames to audio_rx_clients; browser decodes (Opus WASM or Int16→Float32); AudioWorklet playback with jitter buffer</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -241,15 +245,15 @@
 <tbody>
 <tr>
 <td>Goal</td>
-<td>Change FT-710 frequency and operating mode</td>
+<td>Change the radio frequency and operating mode</td>
 </tr>
 <tr>
 <td>Preconditions</td>
-<td><code>/WSradio</code> connected; CAT serial connected</td>
+<td><code>/WSradio</code> connected; backend serial connected</td>
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User taps band button, tuning arrows, or mode cycle; frontend sends <code>{"type":"set","field":"freq","value":14200000}</code> or <code>{"type":"set","field":"mode","value":"USB"}</code>; server sends CAT <code>FA014200000;</code> or <code>MD02;</code>; radio responds; state updates; broadcast to all clients</td>
+<td>User taps band button, tuning arrows, or mode cycle; frontend sends <code>{"type":"set","field":"freq","value":14200000}</code> or <code>{"type":"set","field":"mode","value":"USB"}</code>; backend translates to radio-specific frames (e.g., FT-710 CAT <code>FA014200000;</code>/<code>MD02;</code>, IC-7300 CI-V frequency/mode commands); radio responds; state updates; broadcast to all clients</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -257,7 +261,7 @@
 </tr>
 <tr>
 <td>Notes</td>
-<td>Band select uses Band Stack Register (<code>BS</code> command); mode uses Yaesu mode register (0x01-0x0F)</td>
+<td>Band/mode mapping and command format are backend-specific; the frontend uses <code>capabilities</code> from <code>fullState</code> to render the correct bands and modes</td>
 </tr>
 </tbody>
 </table>
@@ -283,12 +287,12 @@
 <td>Server running; scope_pipe or S-meter polling active</td>
 </tr>
 <tr>
-<td>Basic Flow (FT4222)</td>
-<td>scope_pipe reads 4096-byte SPI frames → extracts 850-point wf1+wf2 → writes to stdout pipe → server parses → broadcasts via <code>/WSspectrum</code> binary → browser renders waterfall row</td>
+<td>Basic Flow (Real Scope)</td>
+<td>FT-710: <code>scope_pipe</code> reads 4096-byte SPI frames → extracts 850-point wf1+wf2 → writes to stdout pipe → server parses → broadcasts via <code>/WSspectrum</code> binary → browser renders waterfall row. IC-7300: <code>civ_controller</code> demuxes 0x27 spectrum frames → <code>civ_scope</code> scales/upsamples 475 bins to 850 → <code>/WSspectrum</code> binary → browser renders waterfall row</td>
 </tr>
 <tr>
 <td>Basic Flow (Fallback)</td>
-<td>CAT <code>SM0;</code> polls at 100ms → <code>RadioState.s_meter</code> → <code>ScopeHandler.update_from_radio_state()</code> → synthetic multi-peak Gaussian spectrum → <code>/WSspectrum</code> same binary format</td>
+<td>Backend S-meter poll → <code>RadioState.s_meter</code> → <code>ScopeHandler.update_from_radio_state()</code> → synthetic multi-peak Gaussian spectrum → <code>/WSspectrum</code> same binary format</td>
 </tr>
 <tr>
 <td>Waterfall</td>
@@ -327,11 +331,11 @@
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User touches-and-holds PTT button; <code>handlePTTStart()</code> → <code>sendCommand('ptt', true)</code>; server sends CAT <code>TX1;</code>; radio keys TX; server starts TX audio stream; user releases; <code>handlePTTEnd()</code> → <code>sendCommand('ptt', false)</code>; server sends CAT <code>TX0;</code> (fire-and-forget); stop TX audio stream; TX-status poll + PTT watchdog confirm RX</td>
+<td>User touches-and-holds PTT button; <code>handlePTTStart()</code> → <code>sendCommand('ptt', true)</code>; backend sends radio-specific PTT key command (FT-710 CAT <code>TX1;</code>, IC-7300 CI-V 0x1C 0x00 key); radio keys TX; server starts TX audio stream; user releases; <code>handlePTTEnd()</code> → <code>sendCommand('ptt', false)</code>; backend sends radio-specific PTT unkey command (FT-710 <code>TX0;</code>, IC-7300 CI-V 0x1C 0x00 unkey) (fire-and-forget); stop TX audio stream; TX-status poll + PTT watchdog confirm RX</td>
 </tr>
 <tr>
 <td>Tune Flow</td>
-<td>User taps TUNE; <code>sendCommand('tune', true)</code> → CAT <code>TX2;</code>; tap again → <code>TX0;</code> + verify</td>
+<td>User taps TUNE; backend starts radio-specific tune sequence (FT-710: <code>TX2</code> + <code>AC003</code>; IC-7300: backend-managed internal ATU tune); tap again or timeout ends tune and returns to RX</td>
 </tr>
 <tr>
 <td>Safety</td>
@@ -366,7 +370,7 @@
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>User toggles NR switch → <code>{"type":"set","field":"nr","value":true}</code> → server sends CAT <code>NR01;</code>; state updates; broadcast. Similar for NB, AN, COMP, ATU, ATT, PRE. Sliders for NR level, NB level, RF power, AF gain, mic gain</td>
+<td>User toggles NR switch → <code>{"type":"set","field":"nr","value":true}</code> → backend sends radio-specific command (e.g., FT-710 <code>NR01;</code>); state updates; broadcast. Similar for NB, AN, COMP, ATU, ATT, PRE. Sliders for NR level, NB level, RF power, AF gain, mic gain</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -428,7 +432,7 @@
 </tr>
 <tr>
 <td>Basic Flow</td>
-<td>Poll scheduler queries CAT <code>RM4;</code> (ALC), <code>RM5;</code> (PWR), <code>RM6;</code> (SWR), <code>RM7;</code> (Id), <code>RM8;</code> (Vd) at 500ms (TX) / 5s (RX) intervals; updates <code>RadioState</code>; broadcasts dirty fields; UI renders horizontal bar meters</td>
+<td>Poll scheduler queries backend-specific meter commands (e.g., FT-710 CAT <code>RM4;</code>–<code>RM8;</code>) at 500ms (TX) / 5s (RX) intervals; updates <code>RadioState</code>; broadcasts dirty fields; UI renders horizontal bar meters</td>
 </tr>
 <tr>
 <td>Postconditions</td>
@@ -442,7 +446,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

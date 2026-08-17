@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Architecture Decisions — MRRC FT-710 SDD</title>
+    <title>Architecture Decisions — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -124,7 +124,7 @@
     </aside>
     <main class="sdd-content">
 <h1 id="architecture-decisions-art-0513">8. Architecture Decisions (ART 0513)</h1>
-<h2 id="ad-001-use-fastapiuvicorn-for-mrrc-ft-710-server">AD-001: Use FastAPI/Uvicorn for MRRC FT-710 Server</h2>
+<h2 id="ad-001-use-fastapiuvicorn-for-mrrc-modern-server">AD-001: Use FastAPI/Uvicorn for MRRC Modern Server</h2>
 <table>
 <colgroup>
 <col style="width: 61%" />
@@ -183,7 +183,7 @@
 </table>
 <p><strong>Problem</strong>: Hamlib adds a large dependency and another process to manage. FT-710 CAT protocol is well-documented (Yaesu standard) and straightforward.</p>
 <p><strong>Rationale</strong>: A dedicated <code>CatController</code> class with an <code>asyncio.Lock</code> for serialized access and thread-pool offloading is simpler, more debuggable, and has fewer failure modes than Hamlib/rigctld.</p>
-<p><strong>Consequences</strong>: The codebase is FT-710 specific. Adding another radio model requires a new commander class.</p>
+<p><strong>Consequences</strong>: Radio protocol code lives inside pluggable <code>backends/&lt;model&gt;/</code> packages. Adding another radio model requires a new backend package plus factory registration, not changes to <code>server.py</code>.</p>
 <h2 id="ad-003-dirty-field-state-broadcasting">AD-003: Dirty-Field State Broadcasting</h2>
 <table>
 <colgroup>
@@ -274,7 +274,7 @@
 <p><strong>Problem</strong>: FT4222 ctypes calls are blocking and can hang. Running them in the asyncio event loop would stall the entire server. Threading is fragile with FTDI D2XX driver state.</p>
 <p><strong>Rationale</strong>: A subprocess isolates the FTDI driver. If scope_pipe crashes, the server continues (falls back to S-meter). Frame format: 4-byte BE uint32 length + payload. stderr carries machine-parseable <code>STATUS:</code> lines for diagnostics. Heartbeat frames (len=0) keep pipe alive when idle.</p>
 <p><strong>Consequences</strong>: scope_pipe is independently restartable. Server handles pipe exit gracefully (marks scope disconnected, switches to fallback). Two process lifecycle to manage.</p>
-<p><strong>Amended (V2.7)</strong>: the pipe protocol gains a stdin control channel — the server pushes <code>TX:1</code>/<code>TX:0</code> on every <code>tx_status</code> transition (<code>_notify_scope_pipe_tx</code>). While TX is active the pipe pauses SPI reads and freezes all sync/stall recovery counters (the FT-710 garbles its scope stream during TX; reading it previously churned the pipe into <code>fatal:too_many_reinits</code> after every PTT), and runs one clean re-sync on TX→RX. stdin EOF (parent died) also stops the pipe. Windows teardown uses <code>taskkill /PID &lt;pid&gt; /T /F</code> because <code>terminate()</code> only reaches the onefile bootloader and orphans the real worker (which then holds the FT4222: FT_DEVICE_NOT_FOUND for the next pipe).</p>
+<p><strong>Amended (V2.7)</strong>: the pipe protocol gains a stdin control channel — the server pushes <code>TX:1</code>/<code>TX:0</code> on every <code>tx_status</code> transition (<code>_notify_scope_pipe_tx</code>). While TX is active the pipe pauses SPI reads and freezes all sync/stall recovery counters (the FT-710 garbles its scope stream during TX; reading it previously churned the pipe into <code>fatal:too_many_reinits</code> after every PTT), and runs one clean re-sync on TX→RX. stdin EOF (parent died) also stops the pipe. Windows teardown uses <code>taskkill /PID &lt;pid&gt; /T /F</code> because <code>terminate()</code> only reaches the onefile bootloader and orphans the real worker (which then holds the FT4222: FT_DEVICE_NOT_FOUND for the next pipe). This subprocess is used only by the FT-710 backend; the IC-7300 backend receives 0x27 spectrum frames directly on the CI-V serial port.</p>
 <h2 id="ad-006-dual-mode-spectrum-ft4222-s-meter-fallback">AD-006: Dual-Mode Spectrum (FT4222 + S-Meter Fallback)</h2>
 <table>
 <colgroup>
@@ -335,7 +335,7 @@
 <p><strong>Problem</strong>: A lost or unprocessed PTT release command can leave the radio transmitting indefinitely — a serious safety and regulatory issue.</p>
 <p><strong>Rationale</strong>: Release is more safety-critical than keying. Each layer catches a different failure mode: lost WS message, half-open socket, browser crash, tab close, app switch. See Chapter 15 for detailed PTT Safety Architecture.</p>
 <p><strong>Consequences</strong>: Frontend PTT logic is more complex; polling skip-on-PTT ensures state consistency. (V1.2 removed the 3×200ms post-release verify loop — it added ~600ms to every release; stuck-keyup detection now relies on the 500ms TX-status poll plus the browser watchdog.)</p>
-<h2 id="ad-008-pyaudio-auto-detection-of-ft-710-usb-audio">AD-008: PyAudio Auto-Detection of FT-710 USB Audio</h2>
+<h2 id="ad-008-pyaudio-auto-detection-of-supported-radio-usb-audio">AD-008: PyAudio Auto-Detection of Supported Radio USB Audio</h2>
 <table>
 <colgroup>
 <col style="width: 61%" />
@@ -358,12 +358,12 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>Multi-layer device selection: (1) explicit <code>FT710_AUDIO_RX_DEVICE</code>/<code>FT710_AUDIO_TX_DEVICE</code> env var (index or name substring), (2) name match for “FT-710”/“FT710”/“YAESU”, (3) name match for “USB Audio CODEC” / “USB Audio Device” (the FT-710’s built-in sound card enumerates under one of these generic names on Windows; first match wins, multi-match warns), (4) mono-channel heuristic (FT-710 USB audio has 1 input channel vs typical stereo USB mics), (5) full-duplex heuristic for TX (device with both input + output), (6) system default fallback</td>
+<td>Multi-layer device selection parameterized by backend: (1) explicit <code>MRRC_AUDIO_RX_DEVICE</code>/<code>MRRC_AUDIO_TX_DEVICE</code> env var (index or name substring), (2) per-backend name hints (e.g., “FT-710”/“FT710”/“YAESU” for FT-710), (3) generic “USB Audio CODEC” / “USB Audio Device” fallback (common built-in sound card names on Windows; first match wins, multi-match warns), (4) mono-channel heuristic (radio USB audio is typically mono), (5) full-duplex heuristic for TX (device with both input + output), (6) system default fallback</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Problem</strong>: The FT-710 USB audio device name varies by OS and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of FT-710. On Windows the card carries no “FT-710”/“YAESU” string at all (“USB Audio CODEC” or “USB Audio Device”, possibly localized/prefixed), so without tier (3) the heuristics grabbed a laptop mic (RX) or PC speakers (TX) — V2.6 field report.</p>
-<p><strong>Rationale</strong>: Name-based matching is more robust than index-based. The mono-channel heuristic is reliable: FT-710 provides exactly 1 input channel (mono RX), while webcams and USB mics typically offer 2 (stereo). Full-duplex preference for TX ensures the same device is used for both RX and TX paths. Logs all available devices at startup for debugging. The generic USB-audio names rank below the FT-710-specific names but above the channel heuristics; duplicates from per-host-API enumeration (MME/DirectSound/WASAPI) open the same hardware, and a genuine multi-device setup is warned about with a pointer to the env-var lock (<code>USB Audio</code> is the common substring covering both enumeration forms).</p>
+<p><strong>Problem</strong>: USB audio device naming varies by radio, OS, and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of the radio. On Windows the FT-710’s card carries no “FT-710”/“YAESU” string at all (“USB Audio CODEC” or “USB Audio Device”, possibly localized/prefixed), so without tier (3) the heuristics grabbed a laptop mic (RX) or PC speakers (TX) — V2.6 field report.</p>
+<p><strong>Rationale</strong>: Name-based matching is more robust than index-based. The mono-channel heuristic is reliable: supported radio USB audio typically provides exactly 1 input channel (mono RX), while webcams and USB mics typically offer 2 (stereo). Full-duplex preference for TX ensures the same device is used for both RX and TX paths. Logs all available devices at startup for debugging. The generic USB-audio names rank below the radio-specific hints but above the channel heuristics; duplicates from per-host-API enumeration (MME/DirectSound/WASAPI) open the same hardware, and a genuine multi-device setup is warned about with a pointer to the env-var lock (<code>USB Audio</code> is the common substring covering both enumeration forms).</p>
 <p><strong>Consequences</strong>: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.</p>
 <p><strong>Amended (V2.8)</strong>: Windows full-duplex wedge — on Windows (MME/DirectSound), opening the TX playback stream on the FT-710’s C-Media codec silently wedges the RX capture stream (stays open, error-free, delivers silence; field symptom: RX audio perfect after server restart, gone after one PTT). <code>AudioHandler.restart_rx()</code> reopens the capture stream on every TX→RX transition (hooked in <code>_broadcast_state</code> on <code>tx_status</code>), Windows-only; macOS CoreAudio is unaffected and pays no reopen cost.</p>
 <h2 id="ad-009-7-task-adaptive-polling-with-bounded-lock-time">AD-009: 7-Task Adaptive Polling with Bounded Lock Time</h2>
@@ -426,7 +426,7 @@
 <p><strong>Problem</strong>: Client-side-only storage loses channels across devices/browsers. Server-side persistence ensures all clients see the same channels.</p>
 <p><strong>Rationale</strong>: Simple JSON file is adequate for 6-99 channel slots. No database needed. Auto-broadcast keeps all clients in sync.</p>
 <p><strong>Consequences</strong>: Channels survive server restarts. File is human-editable. No per-user channel isolation (single shared-password model).</p>
-<h2 id="ad-011-48khz-codec-domain-with-44.1khz-device-bridge">AD-011: 48kHz Codec Domain with 44.1kHz Device Bridge</h2>
+<h2 id="ad-011-48khz-codec-domain-with-per-backend-device-rate-bridge">AD-011: 48kHz Codec Domain with Per-Backend Device-Rate Bridge</h2>
 <table>
 <colgroup>
 <col style="width: 61%" />
@@ -449,13 +449,13 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>TX audio chain runs at 48 kHz in the codec domain (browser capture → Opus encode → server decode) and plays to the radio at 44.1 kHz — the FT-710 USB audio native rate — via a frame-aligned resample bridge (<code>audio_resample.py</code>, numpy linear interp; 960↔︎882 samples = exactly 20 ms, ratio 160:147). RX uses the inverse bridge (44.1k capture → 48k Opus encode).</td>
+<td>TX audio chain runs at 48 kHz in the codec domain (browser capture → Opus encode → server decode). The server bridges to the radio’s native USB audio rate via <code>audio_resample.py</code> when needed: FT-710 uses a 44.1 kHz device rate (960↔︎882 frame-aligned resample, ratio 160:147); IC-7300/MK2 uses 48 kHz native USB audio (no resample). RX uses the inverse bridge only when the capture rate differs from 48 kHz.</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Problem</strong>: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling (“咔咔咔”) on transmitted audio. The first fix unified everything at 48 kHz — but later measurement showed the FT-710 USB audio interface natively runs at <strong>44.1 kHz</strong>, so 48 kHz PCM still could not be written straight to the device stream.</p>
-<p><strong>Rationale</strong>: Opus mandates 48 kHz; the FT-710 mandates 44.1 kHz. A stateless numpy linear-interp resampler bridges the two domains per 20 ms frame with exact integer alignment (960→882), costing ~µs per call with zero phase drift. Browser capture at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox).</p>
-<p><strong>Consequences</strong>: Each direction has exactly one SRC step at the server boundary, owned by <code>audio_resample.py</code>. Browser and codec stay at 48 kHz; both PyAudio streams run at 44.1 kHz. The v1.0 underrun class of bug is impossible in both domains.</p>
+<p><strong>Problem</strong>: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling (“咔咔咔”) on transmitted audio. The first fix unified everything at 48 kHz — but later measurement showed the FT-710 USB audio interface natively runs at <strong>44.1 kHz</strong>, so 48 kHz PCM still could not be written straight to the device stream. The IC-7300/MK2 USB audio interface natively runs at 48 kHz, so no bridge is needed for that backend.</p>
+<p><strong>Rationale</strong>: Opus mandates 48 kHz; supported radios have different native USB audio rates. A stateless numpy linear-interp resampler bridges the two domains per 20 ms frame with exact integer alignment (960→882 for FT-710), costing ~µs per call with zero phase drift. Browser capture at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox).</p>
+<p><strong>Consequences</strong>: Each direction has at most one SRC step at the server boundary, owned by <code>audio_resample.py</code>. Browser and codec stay at 48 kHz. FT-710 PyAudio streams run at 44.1 kHz with the bridge; IC-7300/MK2 PyAudio streams run at 48 kHz with no bridge. The v1.0 underrun class of bug is impossible in both domains.</p>
 <p><strong>Amended (V2.9)</strong>: the device-domain rate is host-API-dependent, not universally 44.1 kHz. On macOS CoreAudio the codec runs natively at 44.1 kHz (bridge required, unchanged). On Windows the same C-Media codec’s native audio-engine mix rate is 48 kHz, and its MME 44.1 kHz playback path paces ~1.4× slow (measured on the Win11 KVM rig: 50×20 ms writes block 1.36–1.42 s) — the TX drain falls behind, the 400 ms cap drops 24–34 % of voice frames, TX audio crackles. Windows TX therefore opens the same-name WASAPI entry at its native rate (48 kHz) and <code>feed_tx_audio</code> passes 48 kHz PCM through unchanged; the 44.1 kHz bridge applies only when the stream rate is actually 44.1 kHz. RX capture stays at 44.1 kHz MME on Windows (paces correctly).</p>
 <p><strong>Amended (V2.14, supersedes V2.9)</strong>: Windows follows the same fixed boundary as every other platform: browser/Opus remains 48 kHz and the FT-710 PyAudio device stream remains 44.1 kHz. The prior WASAPI <code>defaultSampleRate</code> was a Windows shared-mode mix rate, not evidence of the radio’s USB hardware clock; the KVM pacing result is retained as incident evidence but withdrawn as a device-rate policy. <code>feed_tx_audio()</code> therefore always performs 960→882 SRC. PortAudio reinitialization and the Windows TX→RX capture reopen workaround remain unchanged.</p>
 <h2 id="ad-012-active-vfo-aware-frequency-model">AD-012: Active-VFO-Aware Frequency Model</h2>
@@ -578,6 +578,36 @@
 <p><strong>Problem</strong>: User TX/RX transitions can stall behind in-flight poll cycles if every query holds the serial lock to timeout.</p>
 <p><strong>Rationale</strong>: Priority commands set a cancel flag observed by poll loops, queued query waiters, and <code>_read_until()</code> threads, reducing worst-case handoff delay.</p>
 <p><strong>Consequences</strong>: Poll loops must be cancel-aware; UX is significantly more responsive during fast PTT/tune transitions.</p>
+<h2 id="ad-016-pluggable-radio-backend-architecture-ft-710-ic-7300-via-radiobackendcapabilities">AD-016: Pluggable Radio Backend Architecture (FT-710 + IC-7300 via RadioBackend/Capabilities)</h2>
+<table>
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Structural</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>Introduce a <code>RadioBackend</code> ABC + <code>RadioCapabilities</code> dataclass + <code>ScopeProducer</code> protocol in <code>backends/base.py</code>, a lazy <code>create_backend(model)</code> factory (<code>backends/__init__.py</code>, keys <code>ft710</code>/<code>ic7300</code>/<code>ic7300mk2</code>, selected by <code>MRRC_RADIO_MODEL</code>), and per-model packages <code>backends/ft710/</code> (Yaesu ASCII CAT + FT4222 scope_pipe) and <code>backends/ic7300/</code> (CI-V codec/controller at 115200 8N1 addr 0x94, 0x27 scope demux on the same port); radio-specific tables move to per-backend config modules, <code>fullState</code> carries radioModel/radioDisplayName/capabilities, and server mode/band/tune branches become backend-aware</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: The server was hard-wired to the FT-710 — Yaesu ASCII CAT, FT4222 spectrum, 44.1 kHz USB audio — so supporting the Icom IC-7300 (CI-V protocol, in-band 0x27 spectrum, 48 kHz native audio) would have meant forking server logic.</p>
+<p><strong>Rationale</strong>: A backend ABC mirroring the CAT surface plus defaulted hooks (bands/ui_modes/filter_tables/poll-item lists/init_scope/create_scope_producer) keeps <code>server.py</code>, polling, and state radio-neutral; capabilities pushed in <code>fullState</code> let the frontend adapt bands, modes, FIL1-3 filters, ATT/PRE steps, meter visibility, and scope banner without protocol changes.</p>
+<p><strong>Consequences</strong>: New radios are added as a <code>backends/&lt;model&gt;/</code> package plus factory registration; FT-710 behavior is unchanged (compat shims keep root imports valid); IC-7300 hardware-verification items (S-meter top point, TUNE carrier behavior, MK2 transceive item) remain flagged in code comments.</p>
 <h2 id="decision-summary">8.16 Decision Summary</h2>
 <table>
 <colgroup>
@@ -630,7 +660,7 @@
 </tr>
 <tr>
 <td>AD-008</td>
-<td>PyAudio FT-710 auto-detection</td>
+<td>PyAudio supported-radio auto-detection</td>
 <td>Implemented</td>
 </tr>
 <tr>
@@ -645,7 +675,7 @@
 </tr>
 <tr>
 <td>AD-011</td>
-<td>48 kHz codec / 44.1 kHz device bridge</td>
+<td>48 kHz codec / per-backend device-rate bridge</td>
 <td>Implemented</td>
 </tr>
 <tr>
@@ -668,6 +698,11 @@
 <td>Priority CAT command preemption</td>
 <td>Implemented</td>
 </tr>
+<tr>
+<td>AD-016</td>
+<td>Pluggable radio backend architecture (FT-710 + IC-7300)</td>
+<td>Implemented</td>
+</tr>
 </tbody>
 </table>
     </main>
@@ -676,7 +711,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

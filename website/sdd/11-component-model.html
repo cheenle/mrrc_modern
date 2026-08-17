@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Component Model — MRRC FT-710 SDD</title>
+    <title>Component Model — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -148,10 +148,40 @@
 <td>Route registration, lifespan, auth middleware, static serving, all WebSockets</td>
 </tr>
 <tr>
+<td>RadioBackendFactory</td>
+<td>Backend core</td>
+<td><code>backends/__init__.py</code></td>
+<td><code>create_backend(model)</code> lazy factory; registered keys <code>ft710</code>, <code>ic7300</code>, <code>ic7300mk2</code>; selected by <code>MRRC_RADIO_MODEL</code></td>
+</tr>
+<tr>
+<td>RadioBackend</td>
+<td>Backend core</td>
+<td><code>backends/base.py</code></td>
+<td><code>RadioBackend</code> ABC + <code>RadioCapabilities</code> dataclass + <code>ScopeProducer</code> protocol; CAT surface, defaulted hooks for bands/modes/filter tables/poll lists/scope init</td>
+</tr>
+<tr>
 <td>CatController</td>
 <td>Backend core</td>
-<td><code>cat_controller.py</code></td>
-<td>Serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers</td>
+<td><code>backends/ft710/cat_controller.py</code> (root shim: <code>cat_controller.py</code>)</td>
+<td>FT-710 serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers</td>
+</tr>
+<tr>
+<td>CivCodec</td>
+<td>Backend core</td>
+<td><code>backends/ic7300/civ_codec.py</code></td>
+<td>Pure CI-V framing/BCD encoding/scope-segment codec for IC-7300/MK2</td>
+</tr>
+<tr>
+<td>CivController</td>
+<td>Backend core</td>
+<td><code>backends/ic7300/civ_controller.py</code></td>
+<td>Async CI-V demux: reader thread → frame parser → echo drop / 0x27 scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect</td>
+</tr>
+<tr>
+<td>CivScopeProducer</td>
+<td>Backend core</td>
+<td><code>backends/ic7300/civ_scope.py</code></td>
+<td><code>ScopeProducer</code> implementation: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → <code>ScopeHandler</code></td>
 </tr>
 <tr>
 <td>RadioState</td>
@@ -163,13 +193,13 @@
 <td>PollScheduler</td>
 <td>Backend core</td>
 <td><code>poll_scheduler.py</code></td>
-<td>7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority CAT writes; watchdog re-runs scope init (<code>on_reconnected</code> hook) after reconnect</td>
+<td>7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority radio writes; watchdog re-runs scope init (<code>on_reconnected</code> hook) after reconnect</td>
 </tr>
 <tr>
 <td>AudioHandler</td>
 <td>Backend core</td>
 <td><code>audio_handler.py</code></td>
-<td>PyAudio device enumeration, RX capture stream (48kHz), TX playback stream (48kHz), Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection (name + mono heuristic + full-duplex)</td>
+<td>PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex)</td>
 </tr>
 <tr>
 <td>OpusCodec</td>
@@ -186,26 +216,32 @@
 <tr>
 <td>ScopePipe</td>
 <td>Backend core</td>
-<td><code>scope_pipe.py</code></td>
-<td>Standalone subprocess: FT4222 SPI init + read loop; frame sync; stdout binary frames + stderr STATUS diagnostics</td>
+<td><code>backends/ft710/scope_pipe.py</code> (root shim: <code>scope_pipe.py</code>)</td>
+<td>Standalone subprocess: FT4222 SPI init + read loop; frame sync; stdout binary frames + stderr STATUS diagnostics (FT-710 only)</td>
+</tr>
+<tr>
+<td>ScopePipeProducer</td>
+<td>Backend core</td>
+<td><code>backends/ft710/scope_producer.py</code></td>
+<td><code>ScopeProducer</code> implementation: owns <code>scope_pipe</code> subprocess spawn/read/auto-restart/TX-notify (FT-710 only)</td>
 </tr>
 <tr>
 <td>ScopeFrame</td>
 <td>Backend support</td>
-<td><code>scope_frame.py</code></td>
+<td><code>backends/ft710/scope_frame.py</code> (root shim: <code>scope_frame.py</code>)</td>
 <td>Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics</td>
 </tr>
 <tr>
 <td>ScopeLibraries</td>
 <td>Backend support</td>
-<td><code>scope_libraries.py</code></td>
+<td><code>backends/ft710/scope_libraries.py</code> (root shim: <code>scope_libraries.py</code>)</td>
 <td>FTDI library discovery and SPI clock configuration</td>
 </tr>
 <tr>
 <td>Config</td>
 <td>Backend support</td>
 <td><code>config.py</code></td>
-<td>Mode tables (MODE_NUM_TO_NAME, MODE_NAME_TO_NUM), band definitions (BANDS), filter widths, S-meter calibration, constants</td>
+<td>Protocol-neutral constants + shared UI mode tables; per-backend tables live in <code>backends/ft710/config_ft710.py</code> and <code>backends/ic7300/config_ic7300.py</code></td>
 </tr>
 <tr>
 <td>ATR1000Client</td>
@@ -367,17 +403,18 @@
 </table>
 <h2 id="backend-component-collaboration-startup">11.2 Backend Component Collaboration (Startup)</h2>
 <pre class="text"><code>FastAPIApp lifespan startup:
-  1. CatController.connect() → open serial port → send ID; → verify FT-710
-  2. If connected: initial_state_sync() → 24+ CAT queries (incl. VS/FB/RG0/MS/AO/RI0) → RadioState.from_sync_result()
-  3. _init_scope_cat() → send scope-init extended CAT commands
-  4. PollScheduler(cat, radio, on_state_changed=_broadcast_state).start()
-  5. AudioHandler() → init PyAudio → scan devices → start_rx() → open capture stream
-  6. TxOpusDecoder() → init libopus decoder for TX path
-  7. create_task(_audio_rx_loop()) → 20ms RX capture + encode + broadcast loop
-  8. create_task(_audio_tx_drain_loop()) → 10ms TX queue drain loop
-  9. ScopeHandler() → set up on_frame callback
- 10. create_task(_broadcast_spectrum_loop()) → 30fps spectrum broadcast
- 11. Launch scope_pipe subprocess → create_task(_read_scope_pipe())</code></pre>
+  1. create_backend(MRRC_RADIO_MODEL) → `RadioBackend` instance + `RadioCapabilities`
+  2. backend.connect() → open serial port → send ID; → verify radio (FT-710 ID or IC-7300 CI-V ID)
+  3. If connected: backend.initial_state_sync() → backend-specific queries → RadioState.from_sync_result()
+  4. backend.init_scope() → FT-710: send scope-init extended CAT commands; IC-7300: enable CI-V 0x27 scope
+  5. PollScheduler(backend, radio, on_state_changed=_broadcast_state).start()
+  6. AudioHandler() → init PyAudio → scan devices (per-backend hints/rate) → start_rx() → open capture stream
+  7. TxOpusDecoder() → init libopus decoder for TX path
+  8. create_task(_audio_rx_loop()) → 20ms RX capture + encode + broadcast loop
+  9. create_task(_audio_tx_drain_loop()) → 10ms TX queue drain loop
+ 10. ScopeHandler() → set up on_frame callback
+ 11. create_task(_broadcast_spectrum_loop()) → 30fps spectrum broadcast
+ 12. backend.create_scope_producer() → FT-710: launch scope_pipe subprocess + create_task(_read_scope_pipe()); IC-7300: wire CI-V 0x27 demux to ScopeHandler</code></pre>
 <h2 id="frontend-component-collaboration-page-load">11.3 Frontend Component Collaboration (Page Load)</h2>
 <pre class="text"><code>bodyload():
   1. connectWebSocket() → /WSradio?token=...
@@ -416,7 +453,7 @@ PTT button touchend/mouseup:
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

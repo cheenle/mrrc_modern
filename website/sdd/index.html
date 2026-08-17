@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SDD Overview — MRRC FT-710 SDD</title>
+    <title>SDD Overview — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -123,14 +123,14 @@
         </ul>
     </aside>
     <main class="sdd-content">
-<h1 id="mrrc-ft-710-sdd-software-design-description">MRRC FT-710 SDD — Software Design Description</h1>
+<h1 id="mrrc-modern-mrrc_modern-sdd-software-design-description">MRRC Modern / <code>mrrc_modern</code> SDD — Software Design Description</h1>
 <blockquote>
-<p>Yaesu FT-710 Web Remote Control<br />
+<p>Web Remote Control for supported radios (Yaesu FT-710, Icom IC-7300 / IC-7300MK2)<br />
 IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </blockquote>
 <h2 id="purpose">Purpose</h2>
-<p>This SDD is the canonical design record for the <code>mrrc_ft710</code> codebase — a Python FastAPI server that bridges a browser to a Yaesu FT-710 HF/50MHz transceiver via serial CAT protocol. It captures requirements, architecture, design decisions, component boundaries, operational model, capability inventory, known gaps, and evolution history.</p>
-<p>Runtime facts are derived from <code>server.py</code>, <code>cat_controller.py</code>, <code>audio_handler.py</code>, <code>radio_state.py</code>, <code>poll_scheduler.py</code>, <code>scope_handler.py</code>, <code>scope_pipe.py</code>, <code>config.py</code>, <code>opus_rx.py</code>, <code>static/index.html</code>, <code>static/ft710_main.js</code>, <code>static/ft710_ui.js</code>, and <code>static/modules/*</code>.</p>
+<p>This SDD is the canonical design record for the <code>mrrc_modern</code> codebase — a Python FastAPI server that bridges a browser to one or more supported HF/50MHz transceivers via pluggable radio backends. It captures requirements, architecture, design decisions, component boundaries, operational model, capability inventory, known gaps, and evolution history.</p>
+<p>Runtime facts are derived from <code>server.py</code>, <code>backends/*</code>, <code>audio_handler.py</code>, <code>radio_state.py</code>, <code>poll_scheduler.py</code>, <code>scope_handler.py</code>, <code>config.py</code>, <code>opus_rx.py</code>, <code>static/index.html</code>, <code>static/ft710_main.js</code>, <code>static/ft710_ui.js</code>, and <code>static/modules/*</code>.</p>
 <h2 id="document-index">Document Index</h2>
 <table>
 <colgroup>
@@ -255,27 +255,31 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 <tbody>
 <tr>
 <td>Document ID</td>
-<td>SDD-MRRC-FT710-2026-001</td>
+<td>SDD-MRRC-MODERN-2026-001</td>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.18</td>
+<td>V2.20</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
-<td>2026-08-16</td>
+<td>2026-08-17</td>
 </tr>
 <tr>
 <td>Status</td>
-<td>v1.8.0 Windows Stable; FT710Android native client implemented (JVM tests green, device acceptance pending)</td>
+<td>v1.8.0 Windows Stable; FT710Android native client implemented (JVM tests green, device acceptance pending); IC-7300/MK2 backend implemented</td>
 </tr>
 <tr>
 <td>Project</td>
-<td>MRRC FT-710</td>
+<td>MRRC Modern / <code>mrrc_modern</code></td>
 </tr>
 <tr>
-<td>Primary Radio</td>
-<td>Yaesu FT-710 (HF/50MHz Transceiver)</td>
+<td>Primary Radios</td>
+<td>Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend)</td>
+</tr>
+<tr>
+<td>Backend Selection</td>
+<td><code>MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2</code> (default <code>ft710</code>)</td>
 </tr>
 <tr>
 <td>Runtime</td>
@@ -287,7 +291,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Transport</td>
-<td>HTTP/WS for browser, Serial CAT for radio, FT4222 SPI for scope</td>
+<td>HTTP/WS for browser; Serial CAT (Yaesu) or USB CI-V (Icom) for radio; FT4222 SPI for FT-710 scope; CI-V 0x27 spectrum for IC-7300</td>
 </tr>
 <tr>
 <td>Default Entry</td>
@@ -299,13 +303,16 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 <pre class="text"><code>Browser (iPhone / Desktop / Tablet)
   | HTTP + WebSocket: /WSradio /WSaudioRX /WSaudioTX /WSspectrum
   v
-FastAPI/Uvicorn MRRC FT-710 Server (server.py)
-  | Serial CAT (USB Enhanced COM Port, 38400 baud) → Yaesu FT-710
-  | FT4222 SPI (scope_pipe subprocess) → real spectrum data
+FastAPI/Uvicorn MRRC Server (server.py)
+  | Pluggable backend selected by MRRC_RADIO_MODEL
+  |   ft710: Serial CAT (USB Enhanced COM Port, 38400 baud) → Yaesu FT-710
+  |          FT4222 SPI (scope_pipe subprocess) → real spectrum data
+  |   ic7300/ic7300mk2: USB CI-V serial (115200 8N1, addr 0x94) → Icom IC-7300/MK2
+  |                     CI-V 0x27 spectrum on the same port
   | PyAudio (USB Audio device) → RX/TX audio capture/playback
   | Opus codec (libopus) → compressed audio transport
   v
-Yaesu FT-710 Radio</code></pre>
+Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <h2 id="capability-summary">Capability Summary</h2>
 <table>
 <colgroup>
@@ -329,27 +336,27 @@ Yaesu FT-710 Radio</code></pre>
 <tr>
 <td>Radio control</td>
 <td>Implemented</td>
-<td>Full CAT command set: frequency, mode, filter, PTT, gains, etc.</td>
+<td>Backend-specific command set: frequency, mode, filter, PTT, gains, etc.</td>
 </tr>
 <tr>
 <td>Spectrum waterfall</td>
 <td>Implemented</td>
-<td>FT4222 SPI real + S-meter fallback dual-mode</td>
+<td>FT-710: FT4222 SPI real + S-meter fallback; IC-7300: CI-V 0x27 real + S-meter fallback</td>
 </tr>
 <tr>
 <td>RX audio</td>
 <td>Implemented</td>
-<td>PyAudio capture → Opus/PCM → /WSaudioRX → browser playback</td>
+<td>PyAudio capture → Opus/PCM → /WSaudioRX → browser playback (per-backend sample rate)</td>
 </tr>
 <tr>
 <td>TX audio</td>
 <td>Implemented</td>
-<td>Browser mic → /WSaudioTX → Opus decode → PyAudio → radio</td>
+<td>Browser mic → /WSaudioTX → Opus decode → PyAudio → radio (per-backend sample rate)</td>
 </tr>
 <tr>
 <td>S-meter + Multi-meter</td>
 <td>Implemented</td>
-<td>PWR, ALC, SWR, Id, Vd from CAT RM3-RM8 polling</td>
+<td>Backend-specific meter polling (e.g., FT-710 RM3-RM8)</td>
 </tr>
 <tr>
 <td>Radio telemetry (RI)</td>
@@ -369,7 +376,7 @@ Yaesu FT-710 Radio</code></pre>
 <tr>
 <td>Session authentication</td>
 <td>Implemented</td>
-<td>Shared-password login; <code>_auth_tokens</code> + <code>ft710_auth</code> cookie; all WS gated</td>
+<td>Shared-password login; <code>_auth_tokens</code> + <code>mrrc_auth</code> cookie; all WS gated</td>
 </tr>
 <tr>
 <td>PTT safety</td>
@@ -389,7 +396,7 @@ Yaesu FT-710 Radio</code></pre>
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

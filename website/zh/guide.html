@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="MRRC FT-710 Web Control 操作指南 — 界面每个按钮与功能的编号图解与说明">
-    <title>FT-710 操作指南 — MRRC FT-710</title>
+    <meta name="description" content="MRRC Modern Web Control 操作指南 — 界面每个按钮与功能的编号图解与说明">
+    <title>MRRC Modern 操作指南</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -112,12 +112,12 @@
 
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent)">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
@@ -125,7 +125,7 @@
             <li><a href="../index.html#start">Quick Start</a></li>
             <li><a href="../guide.html" class="active">操作指南</a></li>
             <li><a href="../sdd.html">SDD</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../guide.html" class="lang-btn">中文</a>
@@ -137,12 +137,12 @@
 <header class="guide-hero">
     <div class="guide-hero-inner">
         <span class="badge"><i class="fas fa-book"></i> 操作指南 · Operation Guide</span>
-        <h1>FT-710 Web 遥控 — 操作指南</h1>
+        <h1>MRRC Modern Web 遥控 — 操作指南</h1>
         <p>界面每一个按钮、滑杆、下拉框的编号图解与精确说明。琥珀色序号与正文速查表一一对应，点下方任一图直接跳转。</p>
         <div class="actions">
             <a class="btn" href="#fig1"><i class="fas fa-mobile-screen"></i> 图 1 · 主界面</a>
             <a class="btn" href="#fig2"><i class="fas fa-bars"></i> 图 2 · 抽屉菜单</a>
-            <a class="btn" href="https://github.com/cheenle/mrrc_ft710/blob/main/docs/OPERATION_GUIDE.md" target="_blank"><i class="fab fa-github"></i> 源文档 (md)</a>
+            <a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/docs/OPERATION_GUIDE.md" target="_blank"><i class="fab fa-github"></i> 源文档 (md)</a>
         </div>
     </div>
 </header>
@@ -150,11 +150,25 @@
 <div class="guide-layout">
     <aside class="guide-toc">
         <h4>目录 · Contents</h4>
-<nav id="TOC"><ul></ul></nav>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#mrrc-web-遥控-操作指南" id="toc-mrrc-web-遥控-操作指南">MRRC Web 遥控 — 操作指南</a>
+<ul>
+<li><a href="#开始之前连接与登录" id="toc-开始之前连接与登录">0. 开始之前：连接与登录</a></li>
+<li><a href="#电台型号差异" id="toc-电台型号差异">0.5 电台型号差异</a></li>
+<li><a href="#主界面控件编号图" id="toc-主界面控件编号图">1. 主界面控件编号图</a></li>
+<li><a href="#控件速查表编号-名称-功能-操作" id="toc-控件速查表编号-名称-功能-操作">2. 控件速查表（编号 → 名称 → 功能 → 操作）</a></li>
+<li><a href="#键盘快捷键桌面端" id="toc-键盘快捷键桌面端">3. 键盘快捷键（桌面端）</a></li>
+<li><a href="#安全须知请先阅读" id="toc-安全须知请先阅读">4. 安全须知（请先阅读）</a></li>
+<li><a href="#常见问题faq" id="toc-常见问题faq">5. 常见问题（FAQ）</a></li>
+<li><a href="#附界面元素与后台命令对照供高级用户排障" id="toc-附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</a></li>
+</ul></li>
+</ul>
+</nav>
     </aside>
     <main class="guide-content">
 <blockquote class="callout-info">
-<p>适用于 FT-710 Web Control（v1.8.x，2026-08 之后的界面）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
+<p>适用于 MRRC Web Control（v1.9.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
 </blockquote>
 <hr />
 <h2 id="开始之前连接与登录">0. 开始之前：连接与登录</h2>
@@ -180,7 +194,7 @@
 </tr>
 <tr>
 <td>3. 登录</td>
-<td>输入共享密码（服务启动时由 <code>FT710_WEB_PASSWORD</code> 或安装向导设置），点 <strong>Login</strong>。成功后在 <code>ft710_auth</code> Cookie（30 天有效）；密码错误返回 401，5 分钟内连续 5 次失败会触发 429 限流，需等待后再试。</td>
+<td>输入共享密码（服务启动时由 <code>MRRC_WEB_PASSWORD</code> 或安装向导设置），点 <strong>Login</strong>。成功后在 <code>mrrc_auth</code> Cookie（30 天有效）；密码错误返回 401，5 分钟内连续 5 次失败会触发 429 限流，需等待后再试。</td>
 </tr>
 <tr>
 <td>4. 建立连接</td>
@@ -191,6 +205,80 @@
 <blockquote class="callout-warn">
 <p>⚠️ 电台硬件电源开关<strong>不在</strong>本界面内——⏻ 只控制浏览器与服务器的 Web 连接，不控制电台电源（V2.13 已撤回电台电源软开关功能）。</p>
 </blockquote>
+<hr />
+<h2 id="电台型号差异">0.5 电台型号差异</h2>
+<p>服务器通过 <code>MRRC_RADIO_MODEL</code>（<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>）选择后端，前端会根据后端上报的 <code>capabilities</code> 自动调整可用控件。</p>
+<table>
+<colgroup>
+<col style="width: 17%" />
+<col style="width: 22%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr>
+<th>功能</th>
+<th>FT-710</th>
+<th>IC-7300 / IC-7300MK2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>串口协议</td>
+<td>Yaesu CAT，38400 baud</td>
+<td>Icom CI-V，115200 8N1，默认地址 <code>0x94</code></td>
+</tr>
+<tr>
+<td>频谱来源</td>
+<td>FT4222 SPI（或 S-meter 回退）</td>
+<td>CI-V <code>0x27</code> 帧（或 S-meter 回退）</td>
+</tr>
+<tr>
+<td>USB 音频</td>
+<td>44.1 kHz，需重采样到 48 kHz</td>
+<td>48 kHz，无需重采样</td>
+</tr>
+<tr>
+<td>AN（自动陷波）</td>
+<td>有</td>
+<td><strong>无</strong>，界面隐藏</td>
+</tr>
+<tr>
+<td>Vd / Id 仪表</td>
+<td>有</td>
+<td><strong>无</strong>，界面隐藏</td>
+</tr>
+<tr>
+<td>滤波器</td>
+<td>多档语音/窄带宽度</td>
+<td>FIL1–FIL3 循环</td>
+</tr>
+<tr>
+<td>ATT</td>
+<td>0 / 6 / 12 / 18 dB</td>
+<td>开/关</td>
+</tr>
+<tr>
+<td>VFO-B 直接选择</td>
+<td>有</td>
+<td>无</td>
+</tr>
+<tr>
+<td>内置天调</td>
+<td>无（可外接 ATR1000）</td>
+<td>有</td>
+</tr>
+<tr>
+<td>70 MHz</td>
+<td>无</td>
+<td>视地区版本而定</td>
+</tr>
+<tr>
+<td>发射时频谱</td>
+<td>暂停并显示「频谱暂停」</td>
+<td>继续显示（CI-V 频谱不受发射影响）</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="主界面控件编号图">1. 主界面控件编号图</h2>
 <figure id="fig1">
@@ -339,13 +427,13 @@
 <td>13</td>
 <td>SWR / Id / Vd 表</td>
 <td>驻波比（SWR）、末级电流（A）、供电电压（V）</td>
-<td>只读；Id/Vd 仅在 TX 时有效，TX→RX 会清零</td>
+<td>只读；Id/Vd 仅在 TX 时有效，TX→RX 会清零。<strong>IC-7300 不显示 Id/Vd</strong></td>
 </tr>
 <tr>
 <td>14</td>
 <td>ATR 行（可选）</td>
 <td>外接 ATR1000 网络天调的功率/SWR/LC 显示 + TUNE 调谐按钮</td>
-<td>仅当服务端启用了 <code>FT710_ATR1000_HOST</code> 且天调在线时显示；否则整行隐藏。TUNE 按钮点击触发服务端调谐辅助（SWR≤1.6 自动跳过，成功后记忆 LC 值）</td>
+<td>仅当服务端启用了 <code>MRRC_ATR1000_HOST</code> 且天调在线时显示；否则整行隐藏。TUNE 按钮点击触发服务端调谐辅助（SWR≤1.6 自动跳过，成功后记忆 LC 值）</td>
 </tr>
 </tbody>
 </table>
@@ -369,31 +457,31 @@
 <tr>
 <td>15</td>
 <td>模式按钮（如 <code>USB</code>）</td>
-<td>按顺序循环切换模式：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L</td>
+<td>循环切换模式。FT-710：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L；IC-7300：依后端模式表</td>
 <td>单击循环；需要精确选择时用菜单 → Mode Selection（序号 40）</td>
 </tr>
 <tr>
 <td>16</td>
 <td>波段按钮（如 <code>20m</code>）</td>
-<td>循环切换业余波段：160m/80m/60m/40m/30m/20m/17m/15m/12m/10m/6m/4m；切换后频率跳到该波段默认频率并自动选 VFO-A</td>
+<td>循环切换业余波段；切换后频率跳到该波段默认频率并自动选 VFO-A。FT-710 含 4m；IC-7300 可能含 70 MHz（视地区）</td>
 <td>单击循环；菜单 → Band Selection（序号 39）可精确选</td>
 </tr>
 <tr>
 <td>17</td>
 <td>滤波按钮（如 <code>2.4k</code>）</td>
-<td>循环切换当前模式的滤波宽度（SSB：9/13/17/20/23 档；其他模式各有对应表）。服务端设置后读回电台实际索引并回显</td>
+<td>循环切换滤波宽度。FT-710：多档语音/窄带宽度；IC-7300：FIL1 → FIL2 → FIL3</td>
 <td>单击循环</td>
 </tr>
 <tr>
 <td>18</td>
 <td>ATT 衰减</td>
-<td>射频衰减器 4 档循环：0 → 1 → 2 → 3（对应电台 <code>RA</code> 命令 0–3）</td>
+<td>射频衰减器。FT-710：0 / 6 / 12 / 18 dB；IC-7300：开/关</td>
 <td>单击循环</td>
 </tr>
 <tr>
 <td>19</td>
 <td>PRE 前置放大</td>
-<td>前置放大器 3 档循环：0（关）→ 1 → 2（对应 <code>PA</code> 命令）</td>
+<td>前置放大器。FT-710：3 档；IC-7300：依后端支持</td>
 <td>单击循环</td>
 </tr>
 </tbody>
@@ -430,7 +518,7 @@
 <tr>
 <td>22</td>
 <td>AN</td>
-<td>自动陷波（Auto Notch）开关</td>
+<td>自动陷波（Auto Notch）开关。<strong>IC-7300 无此功能，按钮隐藏</strong></td>
 <td>单击开/关</td>
 </tr>
 <tr>
@@ -781,7 +869,7 @@
 <ol type="1">
 <li><strong>PTT 是「按住才发射」</strong>，没有任何自锁模式；松开即停。若页面或浏览器崩溃，服务端死手开关会在最后一个客户端断开时自动强制释放发射（<code>TX0</code>）。</li>
 <li><strong>TUNE 同理</strong>，长按出载波、松手即停——调谐时请确认天线已接好、SWR 正常，长时间发射前建议先用小功率。</li>
-<li>发射期间<strong>频谱暂停</strong>（电台会干扰频谱数据流），瀑布图显示「TX 发射中 — 频谱暂停」是正常现象。</li>
+<li>发射期间<strong>频谱暂停</strong>（FT-710 电台会干扰频谱数据流），瀑布图显示「TX 发射中 — 频谱暂停」是正常现象。IC-7300 使用 CI-V <code>0x27</code> 频谱，发射期间通常继续刷新。</li>
 <li><strong>无声（🔇）告警</strong>：状态栏出现红色「无声」表示 RX 音频流 20 秒全零——电台 USB 音频接口可能卡死，请重启电台或重插 USB 线。</li>
 <li>多人共用时，PTT 所有权按「最后按下者 + 同一登录令牌」仲裁（V2.1 修复）：别在别人发射时抢按。</li>
 <li>无线局域网内建议使用 HTTPS（自签名证书首次会有浏览器警告，属于预期行为）；<code>http://</code> 明文下浏览器会禁用麦克风与音频工作线程（AudioWorklet），iPhone 上尤其如此。</li>
@@ -806,7 +894,7 @@
 </tr>
 <tr>
 <td>状态栏 ●Serial 是红色/灰点</td>
-<td>CAT 串口未连通：检查 USB 线、串口号（<code>FT710_SERIAL_PORT</code>）、电台是否开机。</td>
+<td>CAT 串口未连通：检查 USB 线、串口号（<code>MRRC_SERIAL_PORT</code>）、电台是否开机。</td>
 </tr>
 <tr>
 <td>点击 ⏻ 后没声音</td>
@@ -814,7 +902,7 @@
 </tr>
 <tr>
 <td>瀑布图不动</td>
-<td>发射期间属正常；接收时不动请检查 FT4222 驱动与 <code>FT710_FTDI_LIB_DIR</code> 配置，或查看是否触发「无声」告警。</td>
+<td>发射期间属正常；接收时不动请检查 FT4222 驱动与 <code>MRRC_FTDI_LIB_DIR</code> 配置，或查看是否触发「无声」告警。</td>
 </tr>
 <tr>
 <td>记忆频道丢了</td>
@@ -902,7 +990,7 @@
 </tr>
 <tr>
 <td>天调（可选）</td>
-<td><code>/WSatr1000</code>（JSON）+ <code>FT710_ATR1000_HOST</code> 环境变量</td>
+<td><code>/WSatr1000</code>（JSON）+ <code>MRRC_ATR1000_HOST</code> 环境变量</td>
 </tr>
 </tbody>
 </table>
@@ -916,7 +1004,7 @@
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

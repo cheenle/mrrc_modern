@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="MRRC FT-710 Software Design Description (SDD) overview: architecture decisions, service model, component model, and version history.">
+    <meta name="description" content="MRRC Modern Software Design Description (SDD) overview: architecture decisions, service model, component model, and version history.">
     <meta name="author" content="BG1SB">
     <meta name="theme-color" content="#0a0a0a">
-    <title>MRRC FT-710 SDD</title>
+    <title>MRRC Modern SDD</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,20 +17,20 @@
     <link rel="stylesheet" href="css/ft710.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-file-lines"></i></span>
-            <span>FT-710 <span style="color: var(--accent);">SDD</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span> <span style="color: var(--accent);">SDD</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#updates">V2.18</a></li>
+            <li><a href="#updates">V2.20</a></li>
             <li><a href="#chapters">Chapters</a></li>
             <li><a href="#decisions">AD Index</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="zh/sdd.html" class="lang-btn">中文</a>
@@ -43,12 +43,13 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.18 · 2026-08-16</span>
+            <span>SDD V2.20 · 2026-08-17</span>
         </div>
-        <h1 class="hero-title">MRRC FT-710<br><span class="gradient">Software Design Description</span></h1>
+        <h1 class="hero-title">MRRC Modern<br><span class="gradient">Software Design Description</span></h1>
         <p class="hero-subtitle">
             Canonical design record for architecture, interfaces, operational model,
-            and runtime evolution of the FT-710 web control system.
+            and runtime evolution of the multi-radio (FT-710 / IC-7300 / IC-7300MK2)
+            web control system.
         </p>
         <div class="hero-actions">
             <a href="sdd/index.html" class="btn btn-primary btn-large">
@@ -73,12 +74,12 @@
             <tr><th>Attribute</th><th>Value</th></tr>
             </thead>
             <tbody>
-            <tr><td>Document ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>Version</td><td>V2.18</td></tr>
-            <tr><td>Baseline Date</td><td>2026-08-16</td></tr>
+            <tr><td>Document ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
+            <tr><td>Version</td><td>V2.20</td></tr>
+            <tr><td>Baseline Date</td><td>2026-08-17</td></tr>
             <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
-            <tr><td>Core Interfaces</td><td>4 WebSockets + Serial CAT + FT4222 SPI + USB Audio</td></tr>
+            <tr><td>Core Interfaces</td><td>4 WebSockets + Serial CAT / CI-V + FT4222 SPI / CI-V 0x27 + USB Audio</td></tr>
             </tbody>
         </table>
     </div>
@@ -88,28 +89,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">Latest Update</span>
-            <h2 class="section-title">What Changed In V2.18</h2>
+            <h2 class="section-title">What Changed In V2.20</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-mobile-screen-button"></i></div>
-                <h3>Native Android Client</h3>
-                <p>New <code>FT710Android/</code> subproject (Kotlin + Jetpack Compose, minSdk 26): 4+1 WebSocket channels, NDK-built libopus, DataStore + Keystore credentials — functionally aligned with the web frontend (control, RX/TX audio, spectrum, meters, memory channels, optional ATR1000).</p>
+                <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
+                <h3>Pluggable Radio Backends</h3>
+                <p><code>backends/base.py</code> defines the <code>RadioBackend</code> ABC, <code>RadioCapabilities</code>, and a factory selected by <code>MRRC_RADIO_MODEL</code> (<code>ft710</code>, <code>ic7300</code>, <code>ic7300mk2</code>; default <code>ft710</code>) — AD-016.</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-shield-halved"></i></div>
-                <h3>PTT Safety by Design</h3>
-                <p>Pure-Kotlin PTTManager state machine: press only when connected, gesture-<code>finally</code> release, 500ms watchdog with <code>onStuckTX</code>, lifecycle <code>onStop</code> force-release — the iOS P0 race classes are designed out, not patched.</p>
+                <div class="icon"><i class="fas fa-wave-square"></i></div>
+                <h3>IC-7300 / IC-7300MK2</h3>
+                <p>New <code>backends/ic7300/</code>: CI-V codec/controller over USB 115200 8N1 (addr <code>0x94</code>, <code>IC7300_CIV_ADDR</code>), <code>0x27</code> 475-bin scope upsampled to 850 points, 48 kHz native USB audio with no resample.</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-chart-area"></i></div>
-                <h3>Web UI Compaction</h3>
-                <p>Waterfall/FFT canvases compacted (mobile 45/22px, desktop 80/40px); page scrolls instead of a fixed viewport; RF Gain slider moved from the controls row into the menu Settings.</p>
+                <div class="icon"><i class="fas fa-microchip"></i></div>
+                <h3>FT-710 Preserved</h3>
+                <p>FT-710 implementation moved into <code>backends/ft710/</code> with root compat shims — Yaesu ASCII CAT, FT4222 SPI spectrum, and the 44.1 kHz device-boundary audio bridge behave exactly as before.</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-circle-check"></i></div>
-                <h3>Android Verification</h3>
-                <p>33 JVM tests green; <code>./gradlew test assembleDebug lintDebug</code> clean; APK ships NDK libopus. Design spec + 19-task plan marked implemented; device acceptance pending.</p>
+                <div class="icon"><i class="fas fa-book-open"></i></div>
+                <h3>Multi-Radio SDD</h3>
+                <p>All core chapters (01–13, 15) generalized to the MRRC Modern / <code>mrrc_modern</code> scope: per-backend spectrum paths, per-backend audio sample rates, and operational differences between FT-710 and IC-7300/MK2.</p>
             </div>
         </div>
     </div>
@@ -145,7 +146,7 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">Architecture Decisions</span>
-            <h2 class="section-title">AD-001 ... AD-015</h2>
+            <h2 class="section-title">AD-001 ... AD-016</h2>
         </div>
         <div class="tech-stack">
             <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -163,6 +164,7 @@
             <span class="tech-tag">AD-013 Meter Calibration</span>
             <span class="tech-tag">AD-014 CAT Errata Handling</span>
             <span class="tech-tag">AD-015 Priority CAT Preemption</span>
+            <span class="tech-tag">AD-016 Pluggable Radio Backend</span>
         </div>
     </div>
 </section>
@@ -171,20 +173,20 @@
     <div class="container">
         <div class="footer-grid">
             <div class="footer-section">
-                <h4>MRRC FT-710 SDD</h4>
+                <h4>MRRC Modern SDD</h4>
                 <p>Design documentation aligned with implementation state.</p>
             </div>
             <div class="footer-section">
                 <h4>Links</h4>
                 <ul>
-                    <li><a href="index.html">FT-710 Website</a></li>
-                    <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">SDD Folder</a></li>
-                    <li><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/README.md" target="_blank" rel="noopener">SDD README</a></li>
+                    <li><a href="index.html">MRRC Modern Website</a></li>
+                    <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">SDD Folder</a></li>
+                    <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/SDD/README.md" target="_blank" rel="noopener">SDD README</a></li>
                 </ul>
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project. Open Source under GPLv3 License.</p>
+            <p>&copy; 2026 MRRC Modern Project. Open Source under GPLv3 License.</p>
         </div>
     </div>
 </footer>

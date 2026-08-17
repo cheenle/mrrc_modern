@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="MRRC FT-710 软件设计说明书（SDD）总览：架构决策、服务模型、组件模型与版本演进。">
+    <meta name="description" content="MRRC Modern 软件设计说明书（SDD）总览：架构决策、服务模型、组件模型与版本演进。">
     <meta name="author" content="BG1SB">
     <meta name="theme-color" content="#0a0a0a">
-    <title>MRRC FT-710 SDD</title>
+    <title>MRRC Modern SDD</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,20 +17,20 @@
     <link rel="stylesheet" href="../css/ft710.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-file-lines"></i></span>
-            <span>FT-710 <span style="color: var(--accent);">SDD</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span> <span style="color: var(--accent);">SDD</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.18 更新</a></li>
+            <li><a href="#updates">V2.20 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../sdd.html" class="lang-btn">English</a>
@@ -43,12 +43,12 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.18 · 2026-08-16</span>
+            <span>SDD V2.20 · 2026-08-17</span>
         </div>
-        <h1 class="hero-title">MRRC FT-710<br><span class="gradient">软件设计说明书</span></h1>
+        <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
-            用于记录 FT-710 网页控制系统的架构、接口、运行模型与版本演进，
-            作为实现与设计的一致性基线文档。
+            用于记录多电台（FT-710 / IC-7300 / IC-7300MK2）网页控制系统的架构、
+            接口、运行模型与版本演进，作为实现与设计的一致性基线文档。
         </p>
         <div class="hero-actions">
             <a href="../sdd/index.html" class="btn btn-primary btn-large">
@@ -73,12 +73,12 @@
             <tr><th>属性</th><th>值</th></tr>
             </thead>
             <tbody>
-            <tr><td>文档 ID</td><td>SDD-MRRC-FT710-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.18</td></tr>
-            <tr><td>基线日期</td><td>2026-08-16</td></tr>
+            <tr><td>文档 ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
+            <tr><td>版本</td><td>V2.20</td></tr>
+            <tr><td>基线日期</td><td>2026-08-17</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
-            <tr><td>核心接口</td><td>4 路 WebSocket + 串口 CAT + FT4222 SPI + USB 音频</td></tr>
+            <tr><td>核心接口</td><td>4 路 WebSocket + 串口 CAT / CI-V + FT4222 SPI / CI-V 0x27 + USB 音频</td></tr>
             </tbody>
         </table>
     </div>
@@ -88,28 +88,28 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">最新更新</span>
-            <h2 class="section-title">V2.18 变更重点</h2>
+            <h2 class="section-title">V2.20 变更重点</h2>
         </div>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-mobile-screen-button"></i></div>
-                <h3>原生 Android 客户端</h3>
-                <p>新增 <code>FT710Android/</code> 子项目（Kotlin + Jetpack Compose，minSdk 26）：4+1 路 WebSocket，NDK 构建 libopus，DataStore + Keystore 凭据——功能全量对齐 Web 前端（控制、RX/TX 音频、频谱、仪表、记忆频道、可选 ATR1000）。</p>
+                <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
+                <h3>可插拔电台后端</h3>
+                <p><code>backends/base.py</code> 定义 <code>RadioBackend</code> 抽象基类、<code>RadioCapabilities</code> 与工厂，由 <code>MRRC_RADIO_MODEL</code> 选择（<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>，默认 <code>ft710</code>）——AD-016。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-shield-halved"></i></div>
-                <h3>PTT 安全原生设计</h3>
-                <p>纯 Kotlin PTTManager 状态机：仅连接就绪时按下，手势 <code>finally</code> 释放，500ms 看门狗 + <code>onStuckTX</code>，生命周期 <code>onStop</code> 强制释放——iOS P0 竞态在设计层规避而非事后修补。</p>
+                <div class="icon"><i class="fas fa-wave-square"></i></div>
+                <h3>IC-7300 / IC-7300MK2</h3>
+                <p>新增 <code>backends/ic7300/</code>：USB CI-V 115200 8N1（地址 <code>0x94</code>，<code>IC7300_CIV_ADDR</code>）编解码/控制器，<code>0x27</code> 475 点频谱升采样到 850 点，48 kHz 原生 USB 音频免重采样。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-chart-area"></i></div>
-                <h3>Web 界面精简</h3>
-                <p>瀑布/FFT 画布紧凑化（移动端 45/22px，桌面 80/40px）；页面随内容滚动（移除固定视口）；RF Gain 滑杆从主控制区移入菜单「设置」。</p>
+                <div class="icon"><i class="fas fa-microchip"></i></div>
+                <h3>FT-710 完整保留</h3>
+                <p>FT-710 实现迁入 <code>backends/ft710/</code> 并保留根目录兼容垫片——八重洲 ASCII CAT、FT4222 SPI 频谱与 44.1 kHz 设备域音频桥接行为与之前完全一致。</p>
             </div>
             <div class="feature-card">
-                <div class="icon"><i class="fas fa-circle-check"></i></div>
-                <h3>Android 验证</h3>
-                <p>33 个 JVM 单测全绿；<code>./gradlew test assembleDebug lintDebug</code> 通过；APK 内置 NDK libopus。设计文档与 19 任务计划标记完成；真机验收待用户设备。</p>
+                <div class="icon"><i class="fas fa-book-open"></i></div>
+                <h3>多电台 SDD</h3>
+                <p>全部核心章节（01–13、15）泛化为 MRRC Modern / <code>mrrc_modern</code> 范围：各后端的频谱路径、各后端的音频采样率、FT-710 与 IC-7300/MK2 的运行差异。</p>
             </div>
         </div>
     </div>
@@ -145,7 +145,7 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">架构决策</span>
-            <h2 class="section-title">AD-001 ... AD-015</h2>
+            <h2 class="section-title">AD-001 ... AD-016</h2>
         </div>
         <div class="tech-stack">
             <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -163,6 +163,7 @@
             <span class="tech-tag">AD-013 表头校准</span>
             <span class="tech-tag">AD-014 CAT 勘误处理</span>
             <span class="tech-tag">AD-015 优先级 CAT 抢占</span>
+            <span class="tech-tag">AD-016 可插拔电台后端</span>
         </div>
     </div>
 </section>
@@ -171,20 +172,20 @@
     <div class="container">
         <div class="footer-grid">
             <div class="footer-section">
-                <h4>MRRC FT-710 SDD</h4>
+                <h4>MRRC Modern SDD</h4>
                 <p>与实际实现状态同步的设计文档入口页。</p>
             </div>
             <div class="footer-section">
                 <h4>链接</h4>
                 <ul>
-                    <li><a href="index.html">FT-710 网站</a></li>
-                    <li><a href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD" target="_blank" rel="noopener">SDD 目录</a></li>
-                    <li><a href="https://github.com/cheenle/mrrc_ft710/blob/main/SDD/README.md" target="_blank" rel="noopener">SDD README</a></li>
+                    <li><a href="index.html">MRRC Modern 网站</a></li>
+                    <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">SDD 目录</a></li>
+                    <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/SDD/README.md" target="_blank" rel="noopener">SDD README</a></li>
                 </ul>
             </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 项目 · 基于 GPLv3 开源协议。</p>
+            <p>&copy; 2026 MRRC Modern 项目 · 基于 GPLv3 开源协议。</p>
         </div>
     </div>
 </footer>

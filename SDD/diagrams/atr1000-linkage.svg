@@ -26,6 +26,6 @@
   <text x="280" y="256" text-anchor="middle" class="m">Networked antenna tuner</text>
 
   <rect x="16" y="278" width="528" height="32" rx="6" fill="#f0a03008" stroke="#f0a03022"/>
-  <text x="280" y="296" text-anchor="middle" class="t">Default-disabled: FT710_ATR1000_HOST empty → no client task, hooks short-circuit</text>
+  <text x="280" y="296" text-anchor="middle" class="t">Default-disabled: MRRC_ATR1000_HOST empty → no client task, hooks short-circuit</text>
   <text x="280" y="308" text-anchor="middle" class="m">ATR data separate from RadioState · audio path untouched</text>
 </svg>

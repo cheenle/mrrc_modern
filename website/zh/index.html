@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="MRRC FT-710 — 八重洲 FT-710 的软件化 SCU-LAN10 替代方案。浏览器远程控制、FT4222 SPI 实时瀑布频谱、双向 Opus 48kHz 音频、移动优先界面。"
+      content="MRRC Modern — 八重洲 FT-710 与 Icom IC-7300/IC-7300MK2 的软件化 SCU-LAN10 替代方案。浏览器远程控制、实时瀑布频谱、双向 Opus 48kHz 音频、移动优先界面。"
     />
     <meta
       name="keywords"
-      content="FT-710, 八重洲 FT-710, SCU-LAN10 替代, 远程电台控制, FT4222 SPI, 瀑布频谱, 业余无线电, Opus 音频, WebSocket CAT"
+      content="FT-710, IC-7300, 八重洲 FT-710, Icom IC-7300, SCU-LAN10 替代, 远程电台控制, FT4222 SPI, 瀑布频谱, 业余无线电, Opus 音频, WebSocket CAT"
     />
     <meta name="author" content="BG1SB" />
     <meta name="theme-color" content="#0a0a0a" />
 
-    <title>MRRC FT-710 — 软件化 SCU-LAN10 替代方案</title>
+    <title>MRRC Modern — 软件化 SCU-LAN10 替代方案</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -37,12 +37,12 @@
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23f0a030' width='100' height='100' rx='20'/><text y='.9em' x='50%' text-anchor='middle' font-size='60'>📻</text></svg>"
     />
   </head>
-  <body data-site="mrrc_ft710">
+  <body data-site="mrrc_modern">
     <nav class="navbar">
       <div class="container navbar-content">
         <a href="#" class="logo">
           <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-          <span>MRRC FT<span style="color: var(--accent)">‑710</span></span>
+          <span>MRRC <span style="color: var(--accent)">Modern</span></span>
         </a>
         <ul class="nav-links">
           <li><a href="#video">宣传片</a></li>
@@ -56,7 +56,7 @@
           <li><a href="../fde.html">FDE</a></li>
           <li>
             <a
-              href="https://github.com/cheenle/mrrc_ft710"
+              href="https://github.com/cheenle/mrrc_modern"
               target="_blank"
               rel="noopener"
             >
@@ -77,29 +77,30 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-check-circle"></i>
-          <span>v1.8.0 · 稳定版</span>
+          <span>v1.10.0 · 稳定版</span>
         </div>
         <h1 class="hero-title">
           一根 USB 线<br />
           <span class="gradient">任意设备操控</span>
         </h1>
         <p class="hero-subtitle">
-          八重洲 FT-710 HF/50MHz 电台的软件化 SCU-LAN10 替代方案。
-          FT4222 SPI 实时 FFT 频谱图 + 瀑布图、双向 Opus 48kHz 音频、
-          4 路 WebSocket 全功能 CAT 控制——无需 200 美元的硬件盒子。
+          八重洲 FT-710 与 Icom IC-7300/IC-7300MK2 HF/50MHz 电台的软件化
+          SCU-LAN10 替代方案。实时 FFT 频谱图 + 瀑布图（FT4222 SPI 或
+          CI-V）、双向 Opus 48kHz 音频、4 路 WebSocket 全功能 CAT/CI-V
+          控制——无需 200 美元的硬件盒子。
         </p>
         <div class="hero-actions">
           <a
-            href="../downloads/MRRC-FT710-Setup.exe"
+            href="../downloads/MRRC-Modern-Setup.exe"
             class="btn btn-primary btn-large"
           >
-            <i class="fab fa-windows"></i> Windows 安装包 v1.8.0
+            <i class="fab fa-windows"></i> Windows 安装包 v1.10.0
           </a>
           <a href="#features" class="btn btn-secondary btn-large">
             <i class="fas fa-arrow-down"></i> 了解功能
           </a>
           <a
-            href="https://github.com/cheenle/mrrc_ft710"
+            href="https://github.com/cheenle/mrrc_modern"
             class="btn btn-secondary btn-large"
             target="_blank"
             rel="noopener"
@@ -179,25 +180,27 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">功能特性</span>
-          <h2 class="section-title">完整的 FT-710 远程控制</h2>
+          <h2 class="section-title">完整的多电台远程控制</h2>
           <p class="section-subtitle">
-            FT4222 SPI 真实频谱、双向 Opus 音频、全功能 CAT 控制与多层 PTT
-            安全——一切专为 FT-710 打造，全链路零中间件。
+            真实频谱（FT4222 SPI 或 CI-V）、双向 Opus 音频、全功能 CAT/CI-V
+            控制与多层 PTT 安全——FT-710、IC-7300 与 IC-7300MK2 可插拔后端，
+            全链路零中间件。
           </p>
         </div>
 
         <div class="features-grid">
           <div class="feature-card animate">
             <div class="icon"><i class="fas fa-chart-bar"></i></div>
-            <h3>FT4222 SPI 真实频谱</h3>
+            <h3>真实频谱 — FT4222 SPI 与 CI-V</h3>
             <p>
-              850 点 FFT 频谱，约 21 fps，直接读自 FT-710 DSP 芯片的 FT4222
-              SPI 接口。频谱管道感知发射状态：PTT 期间干净暂停，松开后约 1
-              秒重新同步。FT4222 不可用时自动回退到 S 表合成频谱。
+              FT-710：约 21 fps 的 850 点 FFT 频谱，直接读自 DSP 芯片的
+              FT4222 SPI 接口。IC-7300/MK2：CI-V <code>0x27</code> 475 点
+              频谱升采样到 850 点。发射感知暂停保持频谱干净，无硬件路径时
+              自动回退到 S 表合成频谱。
             </p>
             <ul>
               <li>FT4222 SPI 直读（libft4222 + libftd2xx）</li>
-              <li>4096 字节频谱块，0xFF01EE01 同步头</li>
+              <li>CI-V 0x27 频谱复用同一 USB 串口</li>
               <li>发射感知暂停——告别 PTT 后频谱错乱</li>
             </ul>
           </div>
@@ -222,8 +225,9 @@
             <p>
               端到端统一 48 kHz 编解码域：RX 采集 → Opus 64kbps → 浏览器
               AudioWorklet；浏览器麦克风 → Opus CBR → 服务器 → 电台。
-              包括 Windows 在内的所有平台，都把 48 kHz 编解码域桥接到
-              FT-710 固定 44.1 kHz USB 音频设备域（每 20 ms 960→882 采样）。
+              FT-710 后端桥接到固定 44.1 kHz USB 音频设备域（每 20 ms
+              960→882 采样）；IC-7300 后端使用 48 kHz 原生 USB 音频，无需
+              重采样。
             </p>
             <ul>
               <li>64kbps Opus——比裸 PCM 小 12 倍</li>
@@ -234,11 +238,12 @@
 
           <div class="feature-card animate">
             <div class="icon"><i class="fas fa-sliders-h"></i></div>
-            <h3>全功能 CAT 控制</h3>
+            <h3>全功能 CAT / CI-V 控制</h3>
             <p>
-              Enhanced COM 口 38400 波特直连串口 CAT。40+ 命令：频率、15 种
-              模式、23 档滤波带宽、VFO A/B、分频、前置放大、衰减、NR/NB/AN、
-              压缩器、天调、AF/RF/麦克风增益。
+              FT-710：Enhanced COM 口 38400 波特直连串口 CAT（频率、模式、
+              滤波、VFO A/B、分频、前置放大、衰减、NR/NB/AN、压缩器、天调、
+              增益）。IC-7300/MK2：USB CI-V 115200 8N1（地址 0x94），按
+              Icom 模式/波段/滤波表并由能力驱动的前端自适应界面。
             </p>
             <ul>
               <li>无 Hamlib / wfview / 中间件——串口直连</li>
@@ -249,7 +254,7 @@
 
           <div class="feature-card animate">
             <div class="icon"><i class="fas fa-code-branch"></i></div>
-            <h3>自适应 7 任务轮询</h3>
+            <h3>自适应轮询</h3>
             <p>
               100ms→5s 智能间隔，0.25 秒单查询超时上限，优先级抢占保证 PTT
               绝不等待轮询周期。用户命令后的在途过期读取一律丢弃。
@@ -309,13 +314,13 @@
             <h3>移动优先界面</h3>
             <p>
               为 iPhone Safari 优化：安全区适配、PWA 清单与 Service Worker
-              离线缓存、Wake Lock 防息屏、全屏切换，另有原生 SwiftUI 配套
-              应用。
+              离线缓存、Wake Lock 防息屏、全屏切换，另有原生 iOS / Android
+              配套应用。
             </p>
             <ul>
               <li>PWA 清单 + Service Worker 离线缓存</li>
               <li>Wake Lock API（屏幕常亮）</li>
-              <li>iOS 17+ 原生应用共用同一协议</li>
+              <li>iOS 17+ 与 Android 原生应用共用同一协议</li>
             </ul>
           </div>
         </div>
@@ -350,38 +355,39 @@
         >
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
             <i class="fab fa-windows" style="color: var(--accent)"></i>
-            <strong> MRRC-FT710-Setup.exe — v1.8.0 稳定版</strong>
+            <strong> MRRC-Modern-Setup.exe — v1.10.0 稳定版</strong>
           </p>
           <p style="color: var(--text-muted); margin: 0 0 1rem">
-            35.2 MB · x64<br />
+            45.3 MB · x64<br />
             <code style="font-size: 0.76rem"
-              >SHA-256: 36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea</code
+              >SHA-256: ecafb9376209fd1d91785657f2ff428576c2b660340d1d23e5f0b9d05e0080f3</code
             >
           </p>
           <p style="color: var(--text-muted); margin: 0 0 1.25rem">
-            v1.8.0 稳定版保持浏览器/Opus 侧 48 kHz，并始终把每个 960 采样的
-            TX 帧转换为 FT-710 固定 44.1 kHz 设备域的 882 采样；PortAudio
-            重初始化后仍保持该边界。TX 会话日志新增队列丢帧计数，同一会话重连
-            可安全替换陈旧的音频所有权。Windows 构建、439 项测试、安装/启动/
-            卸载及内置文件检查均已通过；真实射频监听仍由操作员侧完成验收。
+            v1.10.0 引入可插拔多电台后端：用 <code>MRRC_RADIO_MODEL</code> 选择
+            电台型号——<code>ft710</code>（默认）、<code>ic7300</code> 或
+            <code>ic7300mk2</code>。新增 Icom IC-7300/MK2 支持：USB CI-V 控制、
+            <code>0x27</code> 频谱、48 kHz 原生音频；FT-710 路径保持不变。
+            Windows 构建、592 项测试、安装/启动/卸载及内置文件检查均已通过；
+            真实射频监听仍由操作员侧完成验收。
           </p>
           <div
             style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center"
           >
             <a
-              href="../downloads/MRRC-FT710-Setup.exe"
+              href="../downloads/MRRC-Modern-Setup.exe"
               class="btn btn-primary btn-large"
             >
               <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
             <a
-              href="../downloads/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe"
+              href="../downloads/MRRC-Modern-v1.10.0-Windows-x64-Setup.exe"
               class="btn btn-secondary btn-large"
             >
-              <i class="fas fa-fingerprint"></i> v1.8.0 版本化安装包
+              <i class="fas fa-fingerprint"></i> v1.10.0 版本化安装包
             </a>
             <a
-              href="https://github.com/cheenle/mrrc_ft710/releases"
+              href="https://github.com/cheenle/mrrc_modern/releases"
               class="btn btn-secondary btn-large"
               target="_blank"
               rel="noopener"
@@ -398,8 +404,9 @@
             margin-top: 1.25rem;
           "
         >
-          缺少 FTDI DLL 时自动回退到 S 表合成频谱——CAT 控制与音频不受影响。
-          macOS / Linux / 树莓派请从源码运行（见下方快速上手）。
+          缺少 FTDI DLL 时 FT-710 后端自动回退到 S 表合成频谱——CAT 控制与
+          音频不受影响（IC-7300 后端完全不需要 FTDI）。macOS / Linux /
+          树莓派请从源码运行（见下方快速上手）。
         </p>
       </div>
     </section>
@@ -430,30 +437,32 @@
           <div class="step">
             <h4>1 · 安装驱动</h4>
             <p>
-              为 FT-710 Enhanced COM 口安装 Silicon Labs CP210x VCP 驱动。
-              需要 FT4222 真频谱时再装 FTDI D2XX。
+              FT-710：为 Enhanced COM 口安装 Silicon Labs CP210x VCP 驱动；
+              需要 FT4222 真频谱时再装 FTDI D2XX。IC-7300：无需额外驱动——
+              单根 USB 线即带串口驱动。
             </p>
             <code>设备管理器 → 端口 (COM 和 LPT) → Enhanced COM Port</code>
           </div>
           <div class="step">
             <h4>2 · 运行安装包</h4>
             <p>
-              MRRC-FT710-Setup.exe — v1.8.0，35.2 MB，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.10.0，45.3 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-            <code>SHA-256 36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea</code>
+            <code>SHA-256 ecafb9376209fd1d91785657f2ff428576c2b660340d1d23e5f0b9d05e0080f3</code>
           </div>
           <div class="step">
             <h4>3 · 编辑配置</h4>
             <p>
-              开始菜单 → Edit Configuration——设置 Enhanced COM 口和强密码。
+              开始菜单 → Edit Configuration——设置电台型号
+              （<code>MRRC_RADIO_MODEL</code>）、串口和强密码。
             </p>
-            <code>%LOCALAPPDATA%\MRRC-FT710\ft710.env</code>
+            <code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>
           </div>
           <div class="step">
             <h4>4 · 启动</h4>
             <p>
-              开始菜单 → MRRC FT-710——启动器自动拉起服务并打开浏览器。
+              开始菜单 → MRRC Modern——启动器自动拉起服务并打开浏览器。
             </p>
             <code>http://127.0.0.1:8888 → 登录 → 完整控制</code>
           </div>
@@ -473,23 +482,23 @@
           <div class="step">
             <h4>1 · 克隆仓库</h4>
             <p>从 GitHub 获取最新代码</p>
-            <code>git clone https://github.com/cheenle/mrrc_ft710.git</code>
+            <code>git clone https://github.com/cheenle/mrrc_modern.git</code>
           </div>
           <div class="step">
             <h4>2 · 安装依赖</h4>
             <p>Python 3.12+，FastAPI、Uvicorn、PySerial、PyAudio、NumPy</p>
-            <code>cd mrrc_ft710 && pip install -r requirements.txt</code>
+            <code>cd mrrc_modern && pip install -r requirements.txt</code>
           </div>
           <div class="step">
             <h4>3 · 启动服务</h4>
-            <p>指定串口启动——自动探测 FT-710 USB 音频设备</p>
+            <p>选择电台型号并指定串口后启动</p>
             <code
-              >FT710_SERIAL_PORT=/dev/cu.usbserial-XXXX python server.py</code
+              >MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/cu.usbserial-XXXX python server.py</code
             >
           </div>
           <div class="step">
             <h4>4 · 打开浏览器</h4>
-            <p>网络内任意设备——手机、平板、电脑。默认密码：ft710</p>
+            <p>网络内任意设备——手机、平板、电脑。对外暴露前务必设置强密码。</p>
             <code>https://服务器IP:8888 → 登录 → 完整控制</code>
           </div>
         </div>
@@ -512,6 +521,9 @@
             ><i class="fas fa-microchip"></i> 八重洲 FT-710</span
           >
           <span class="tech-tag"
+            ><i class="fas fa-microchip"></i> Icom IC-7300 / IC-7300MK2</span
+          >
+          <span class="tech-tag"
             ><i class="fas fa-usb"></i> USB 线（A→B 或 C→B）</span
           >
           <span class="tech-tag"
@@ -527,7 +539,7 @@
             ><i class="fas fa-globe"></i> 现代浏览器</span
           >
           <span class="tech-tag"
-            ><i class="fas fa-microchip"></i> FTDI 库（真频谱需要）</span
+            ><i class="fas fa-microchip"></i> FTDI 库（仅 FT-710 频谱）</span
           >
         </div>
         <p
@@ -537,8 +549,9 @@
             font-size: 0.85rem;
           "
         >
-          获取 FT4222 SPI 真实频谱需安装 libft4222 + libftd2xx（可从 wfview
-          应用包或 FTDI 官网获取）。CAT 控制与音频无需任何 FTDI 库。
+          FT-710 需要 FT4222 SPI 真实频谱时安装 libft4222 + libftd2xx（可从
+          wfview 应用包或 FTDI 官网获取）；IC-7300 后端直接复用 USB 串口读
+          频谱，无需任何 FTDI 库。CAT/CI-V 控制与音频始终无需 FTDI。
         </p>
       </div>
     </section>
@@ -552,10 +565,10 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">架构</span>
-          <h2 class="section-title">一个进程，三路 USB 通道</h2>
+          <h2 class="section-title">一个进程，可插拔后端</h2>
           <p class="section-subtitle">
             4 条 WebSocket 连接，零外部中间件依赖，完全基于 Python
-            异步框架构建。
+            异步框架构建。用 MRRC_RADIO_MODEL 选择电台。
           </p>
         </div>
 
@@ -647,7 +660,7 @@
               font-weight="700"
               font-family="inherit"
             >
-              MRRC FT-710 Server
+              MRRC Modern Server
             </text>
             <text
               x="575"
@@ -699,7 +712,7 @@
               font-weight="700"
               font-family="inherit"
             >
-              八重洲 FT-710
+              FT-710 / IC-7300
             </text>
             <text
               x="790"
@@ -719,7 +732,7 @@
               font-size="10"
               font-family="inherit"
             >
-              38400 baud CAT
+              CAT / CI-V
             </text>
             <text
               x="790"
@@ -729,7 +742,7 @@
               font-size="10"
               font-family="inherit"
             >
-              FT4222 SPI
+              SPI / 0x27
             </text>
 
             <line
@@ -917,24 +930,24 @@
 
         <div class="arch-grid">
           <div class="arch-card">
-            <div class="label"><i class="fas fa-plug"></i> 串口 CAT</div>
-            <div class="endpoint">CP210x UART · 38400 bps</div>
-            <div class="dir">八重洲 ASCII CMD;</div>
+            <div class="label"><i class="fas fa-plug"></i> CAT / CI-V</div>
+            <div class="endpoint">FT-710 CAT · IC-7300 CI-V</div>
+            <div class="dir">八重洲 ASCII CMD; · Icom BCD CI-V</div>
             <div class="payload">频率、模式、VFO、滤波器、增益、PTT、表头</div>
           </div>
           <div class="arch-card">
             <div class="label">
-              <i class="fas fa-chart-line"></i> FT4222 SPI Scope
+              <i class="fas fa-chart-line"></i> 频谱 — SPI / CI-V
             </div>
-            <div class="endpoint">scope_pipe 子进程</div>
-            <div class="dir">ctypes → libft4222 + libftd2xx</div>
+            <div class="endpoint">FT4222 SPI · CI-V 0x27</div>
+            <div class="dir">ctypes → libft4222 / CI-V 频谱</div>
             <div class="payload">4096 字节数据块, 850 点 FFT 瀑布图</div>
           </div>
           <div class="arch-card">
             <div class="label"><i class="fas fa-volume-up"></i> USB 音频</div>
-            <div class="endpoint">C-Media USB Audio Class</div>
+            <div class="endpoint">USB Audio Class</div>
             <div class="dir">PyAudio 采集 / 播放</div>
-            <div class="payload">RX 48kHz Int16 · TX 44.1kHz mono</div>
+            <div class="payload">FT-710 44.1kHz · IC-7300 48kHz 原生</div>
           </div>
           <div class="arch-card">
             <div class="label">
@@ -1027,11 +1040,11 @@
     <section class="section" id="ios" style="background: var(--bg-primary)">
       <div class="container">
         <div class="section-header">
-          <span class="section-label">iOS 应用</span>
-          <h2 class="section-title">原生 iPhone 客户端</h2>
+          <span class="section-label">移动应用</span>
+          <h2 class="section-title">原生 iOS 与 Android 客户端</h2>
           <p class="section-subtitle">
-            SwiftUI 配套应用（iOS 17+）——与浏览器共用同一套 4 通道
-            WebSocket 协议，为单手移动操作优化。
+            SwiftUI（iOS 17+）与 Kotlin/Compose（Android）配套应用——与浏览器
+            共用同一套 4 通道 WebSocket 协议，为单手移动操作优化。
           </p>
         </div>
 
@@ -1100,12 +1113,12 @@
 
         <div style="text-align: center; margin-top: 2rem">
           <a
-            href="https://github.com/cheenle/mrrc_ft710/tree/main/FT710Mobile"
+            href="https://github.com/cheenle/mrrc_modern/tree/main/FT710Mobile"
             class="btn btn-secondary btn-large"
             target="_blank"
             rel="noopener"
           >
-            <i class="fab fa-apple"></i> FT710Mobile on GitHub
+            <i class="fab fa-apple"></i> iOS 应用 on GitHub
           </a>
         </div>
       </div>
@@ -1119,7 +1132,7 @@
           <h2 class="section-title">软件设计描述（SDD）</h2>
           <p class="section-subtitle">
             IBM TeamSD 方法论 &middot; 15 章 &middot;
-            <strong>V2.9</strong> &middot; 架构决策、组件模型、PTT 安全与
+            <strong>V2.20</strong> &middot; 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
         </div>
@@ -1141,7 +1154,7 @@
         <div class="tech-stack" style="margin-top: 1.5rem">
           <span class="tech-tag"
             ><i class="fas fa-check-circle" style="color: var(--accent)"></i>
-            AD-001&ndash;015</span
+            AD-001&ndash;016</span
           >
           <span class="tech-tag"
             ><i class="fas fa-check-circle" style="color: var(--accent)"></i> 65
@@ -1168,11 +1181,11 @@
       <div class="container">
         <div class="footer-grid">
           <div class="footer-section">
-            <h4>MRRC FT-710</h4>
+            <h4>MRRC Modern</h4>
             <p>
               软件化 SCU-LAN10 替代方案<br />
               一根 USB 线，任意设备操控<br />
-              v1.8.0 稳定版 · GPLv3 许可证
+              v1.10.0 稳定版 · GPLv3 许可证
             </p>
           </div>
           <div class="footer-section">
@@ -1189,13 +1202,13 @@
             <h4>资源</h4>
             <ul>
               <li>
-                <a href="../downloads/MRRC-FT710-Setup.exe"
-                  ><i class="fab fa-windows"></i> Windows 安装包 v1.8.0</a
+                <a href="../downloads/MRRC-Modern-Setup.exe"
+                  ><i class="fab fa-windows"></i> Windows 安装包 v1.10.0</a
                 >
               </li>
               <li>
                 <a
-                  href="https://github.com/cheenle/mrrc_ft710"
+                  href="https://github.com/cheenle/mrrc_modern"
                   target="_blank"
                   rel="noopener"
                   >GitHub</a
@@ -1203,7 +1216,7 @@
               </li>
               <li>
                 <a
-                  href="https://github.com/cheenle/mrrc_ft710/blob/main/README.md"
+                  href="https://github.com/cheenle/mrrc_modern/blob/main/README.md"
                   target="_blank"
                   rel="noopener"
                   >README</a
@@ -1212,7 +1225,7 @@
               <li><a href="../sdd.html">SDD 文档</a></li>
               <li>
                 <a
-                  href="https://github.com/cheenle/mrrc_ft710/tree/main/SDD"
+                  href="https://github.com/cheenle/mrrc_modern/tree/main/SDD"
                   target="_blank"
                   rel="noopener"
                   >SDD 源码</a
@@ -1220,7 +1233,7 @@
               </li>
               <li>
                 <a
-                  href="https://github.com/cheenle/mrrc_ft710/blob/main/LICENSE"
+                  href="https://github.com/cheenle/mrrc_modern/blob/main/LICENSE"
                   target="_blank"
                   rel="noopener"
                   >GPLv3 许可证</a
@@ -1231,11 +1244,11 @@
         </div>
         <div class="footer-bottom">
           <p>
-            &copy; 2026 MRRC FT-710 项目。基于 GPLv3 许可证开源。 ·
+            &copy; 2026 MRRC Modern 项目。基于 GPLv3 许可证开源。 ·
             FT-710 与 Yaesu 是
             <a href="https://www.yaesu.com/" style="color: var(--accent)"
               >八重洲株式会社</a
-            >的商标。
+            >的商标；IC-7300 与 Icom 是 Icom Inc. 的商标。
           </p>
         </div>
       </div>

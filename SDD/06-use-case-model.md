@@ -18,7 +18,7 @@
 |-------|-------------|
 | Goal | Open the web UI and establish control/audio/spectrum channels |
 | Preconditions | Server running, supported radio connected via USB, browser can reach host |
-| Basic Flow | User opens `http://host:8888`; login page; enter password; server sets `ft710_auth` cookie; redirects to `/`; `index.html` loads; `bodyload()` connects `/WSradio`; on open receives `fullState` with `radioModel`, `radioDisplayName`, `capabilities`, bands/modes; connects `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX` |
+| Basic Flow | User opens `http://host:8888`; login page; enter password; server sets `mrrc_auth` cookie; redirects to `/`; `index.html` loads; `bodyload()` connects `/WSradio`; on open receives `fullState` with `radioModel`, `radioDisplayName`, `capabilities`, bands/modes; connects `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX` |
 | Postconditions | UI fully rendered: frequency display, mode badge, band indicator, S-meter, waterfall, multi-meter, all controls active |
 | Exceptions | Serial not connected → UI still usable; auth expired → redirect to `/login`; stale service worker cache |
 

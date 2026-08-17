@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Operational Model — MRRC FT-710 SDD</title>
+    <title>Operational Model — MRRC Modern SDD</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -79,19 +79,19 @@
         }
     </style>
 </head>
-<body data-site="mrrc_ft710">
+<body data-site="mrrc_modern">
 
 <nav class="navbar">
     <div class="container navbar-content">
         <a href="../index.html" class="logo">
             <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC FT<span style="color: var(--accent);">‑710</span></span>
+            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
         </a>
         <ul class="nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_ft710" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
             <a href="../zh/index.html" class="lang-btn">中文</a>
@@ -129,12 +129,15 @@
   → http://host:8888 (or https:// with reverse proxy)
   → WS endpoints on same host/port
 
-MRRC FT-710 Host
+MRRC Host
   → python3 server.py
-  → Uvicorn on 0.0.0.0:8888 (configurable via FT710_WEB_HOST / FT710_WEB_PORT)
-  → Serial CAT: USB Enhanced COM Port (configurable via FT710_SERIAL_PORT)
-  → FT4222 SPI: internal FTDI chip (via scope_pipe subprocess)
-  → USB Audio: FT-710 USB audio device (auto-detected by PyAudio)
+  → Uvicorn on 0.0.0.0:8888 (configurable via MRRC_WEB_HOST / MRRC_WEB_PORT)
+  → Backend selected by MRRC_RADIO_MODEL (ft710 / ic7300 / ic7300mk2)
+  → FT-710: Serial CAT via USB Enhanced COM Port (configurable via MRRC_SERIAL_PORT)
+  → IC-7300/MK2: CI-V via USB serial port (configurable via MRRC_SERIAL_PORT, 115200 8N1)
+  → FT-710 FT4222 SPI: internal FTDI chip (via scope_pipe subprocess)
+  → IC-7300/MK2 CI-V 0x27 spectrum: on the same CI-V serial port
+  → USB Audio: supported radio USB audio device (auto-detected by PyAudio)
   → PID file: .ft710-server.pid
   → Logs: stdout/stderr (redirected to logs/ by start.sh)
 
@@ -143,7 +146,13 @@ Yaesu FT-710
   → Enhanced COM Port (38400 baud, 8N1)
   → Standard COM Port (115200 baud, for SCU-LAN10 scope models — optional)
   → FT4222 SPI chip (internal)
-  → USB Audio interface</code></pre>
+  → USB Audio interface
+
+Icom IC-7300 / IC-7300MK2
+  → USB connection to host
+  → USB CI-V serial port (115200 baud, 8N1, default address 0x94)
+  → 0x27 spectrum data on the same CI-V port
+  → 48kHz native USB Audio interface</code></pre>
 <h2 id="configuration">12.2 Configuration</h2>
 <table>
 <colgroup>
@@ -160,62 +169,72 @@ Yaesu FT-710
 </thead>
 <tbody>
 <tr>
-<td><code>FT710_SERIAL_PORT</code></td>
+<td><code>MRRC_RADIO_MODEL</code></td>
+<td><code>ft710</code></td>
+<td>Backend selection: <code>ft710</code>, <code>ic7300</code>, or <code>ic7300mk2</code></td>
+</tr>
+<tr>
+<td><code>IC7300_CIV_ADDR</code></td>
+<td><code>0x94</code></td>
+<td>IC-7300/MK2 CI-V controller address (hex)</td>
+</tr>
+<tr>
+<td><code>MRRC_SERIAL_PORT</code></td>
 <td><code>/dev/cu.SLAB_USBtoUART</code></td>
-<td>CAT serial port (Enhanced COM Port)</td>
+<td>Radio serial port (FT-710 Enhanced COM Port or IC-7300 CI-V port)</td>
 </tr>
 <tr>
-<td><code>FT710_BAUD_RATE</code></td>
+<td><code>MRRC_BAUD_RATE</code></td>
 <td><code>38400</code></td>
-<td>CAT serial baud rate</td>
+<td>CAT serial baud rate (FT-710 default; IC-7300 uses 115200 regardless)</td>
 </tr>
 <tr>
-<td><code>FT710_WEB_PORT</code></td>
+<td><code>MRRC_WEB_PORT</code></td>
 <td><code>8888</code></td>
 <td>Uvicorn listen port</td>
 </tr>
 <tr>
-<td><code>FT710_WEB_PASSWORD</code></td>
+<td><code>MRRC_WEB_PASSWORD</code></td>
 <td><code>changeme_please_use_strong_password!</code></td>
 <td>Web login password</td>
 </tr>
 <tr>
-<td><code>FT710_WEB_HOST</code></td>
+<td><code>MRRC_WEB_HOST</code></td>
 <td><code>::</code></td>
 <td>Bind address</td>
 </tr>
 <tr>
-<td><code>FT710_FTDI_LIB_DIR</code></td>
+<td><code>MRRC_FTDI_LIB_DIR</code></td>
 <td><em>(auto)</em></td>
 <td>Directory containing FTDI libraries</td>
 </tr>
 <tr>
-<td><code>FT710_FT4222_CLK_DIV</code></td>
+<td><code>MRRC_FT4222_CLK_DIV</code></td>
 <td><code>6</code></td>
 <td>SPI clock divider (1=fastest, 9=slowest; CLK_DIV_64 default)</td>
 </tr>
 <tr>
-<td><code>FT710_SCOPE_PORT</code></td>
+<td><code>MRRC_SCOPE_PORT</code></td>
 <td><em>(optional)</em></td>
 <td>Scope serial port (Standard COM Port, SCU-LAN10)</td>
 </tr>
 <tr>
-<td><code>FT710_SCOPE_BAUD</code></td>
+<td><code>MRRC_SCOPE_BAUD</code></td>
 <td><code>115200</code></td>
 <td>Scope serial baud rate</td>
 </tr>
 <tr>
-<td><code>FT710_MEM_FILE</code></td>
+<td><code>MRRC_MEM_FILE</code></td>
 <td><code>mem_channels.json</code></td>
 <td>Memory channel store (Windows launcher uses <code>%LOCALAPPDATA%</code>)</td>
 </tr>
 <tr>
-<td><code>FT710_AUDIO_RX_DEVICE</code></td>
+<td><code>MRRC_AUDIO_RX_DEVICE</code></td>
 <td><em>(auto)</em></td>
 <td>Audio input device — index or name substring; Windows package pre-locks <code>USB Audio</code> (FT-710 built-in sound card)</td>
 </tr>
 <tr>
-<td><code>FT710_AUDIO_TX_DEVICE</code></td>
+<td><code>MRRC_AUDIO_TX_DEVICE</code></td>
 <td><em>(auto)</em></td>
 <td>Audio output device — index or name substring; Windows package pre-locks <code>USB Audio</code></td>
 </tr>
@@ -257,18 +276,33 @@ Yaesu FT-710
 <td>Reads PID file, sends SIGTERM, cleans up PID</td>
 </tr>
 <tr>
+<td>FT-710 mode</td>
+<td><code>MRRC_RADIO_MODEL=ft710 python server.py</code></td>
+<td>Default Yaesu FT-710 backend</td>
+</tr>
+<tr>
+<td>IC-7300 mode</td>
+<td><code>MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py</code></td>
+<td>Icom IC-7300 backend (CI-V 115200 8N1)</td>
+</tr>
+<tr>
+<td>IC-7300MK2 mode</td>
+<td><code>MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py</code></td>
+<td>Icom IC-7300MK2 backend</td>
+</tr>
+<tr>
 <td>Custom port</td>
-<td><code>FT710_WEB_PORT=8889 python server.py</code></td>
+<td><code>MRRC_WEB_PORT=8889 python server.py</code></td>
 <td>Override listen port</td>
 </tr>
 <tr>
 <td>Custom serial</td>
-<td><code>FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py</code></td>
+<td><code>MRRC_SERIAL_PORT=/dev/ttyUSB0 python server.py</code></td>
 <td>Override serial port</td>
 </tr>
 <tr>
 <td>Custom password</td>
-<td><code>FT710_WEB_PASSWORD=mysecret python server.py</code></td>
+<td><code>MRRC_WEB_PASSWORD=mysecret python server.py</code></td>
 <td>Override login password</td>
 </tr>
 </tbody>
@@ -296,7 +330,7 @@ Yaesu FT-710
 <td>Browser</td>
 <td>Server</td>
 <td>HTTP</td>
-<td><code>$FT710_WEB_PORT</code></td>
+<td><code>$MRRC_WEB_PORT</code></td>
 <td>Static UI</td>
 </tr>
 <tr>
@@ -370,6 +404,20 @@ Yaesu FT-710
 <td>Scope data</td>
 </tr>
 <tr>
+<td>Server</td>
+<td>IC-7300/MK2</td>
+<td>Serial</td>
+<td>USB CI-V port</td>
+<td>CI-V commands (115200 8N1)</td>
+</tr>
+<tr>
+<td>Server</td>
+<td>IC-7300/MK2</td>
+<td>Serial</td>
+<td>Same CI-V port</td>
+<td>0x27 spectrum data</td>
+</tr>
+<tr>
 <td>FT-710</td>
 <td>Server</td>
 <td>USB Audio</td>
@@ -382,6 +430,20 @@ Yaesu FT-710
 <td>USB Audio</td>
 <td>USB Audio OUT</td>
 <td>TX audio</td>
+</tr>
+<tr>
+<td>IC-7300/MK2</td>
+<td>Server</td>
+<td>USB Audio</td>
+<td>USB Audio IN</td>
+<td>48kHz RX audio</td>
+</tr>
+<tr>
+<td>Server</td>
+<td>IC-7300/MK2</td>
+<td>USB Audio</td>
+<td>USB Audio OUT</td>
+<td>48kHz TX audio</td>
 </tr>
 </tbody>
 </table>
@@ -407,12 +469,12 @@ Yaesu FT-710
 <td><code>./stop.sh</code></td>
 </tr>
 <tr>
-<td>Verify CAT connection</td>
-<td>Server log: “Connected to FT-710 (ID=…)”</td>
+<td>Verify radio connection</td>
+<td>Server log shows backend-specific connect message (FT-710 ID or IC-7300 CI-V ID)</td>
 </tr>
 <tr>
 <td>Verify scope</td>
-<td>Server log: “scope_pipe: first frame received — spectrum active”</td>
+<td>FT-710: “scope_pipe: first frame received — spectrum active”; IC-7300: CI-V 0x27 frames demuxed</td>
 </tr>
 <tr>
 <td>Verify RX audio</td>
@@ -424,15 +486,23 @@ Yaesu FT-710
 </tr>
 <tr>
 <td>Verify PTT safety</td>
-<td>Release PTT; confirm radio returns to RX; check log for “TX0”</td>
+<td>Release PTT; confirm radio returns to RX; check log for backend-specific unkey command</td>
+</tr>
+<tr>
+<td>Change backend</td>
+<td><code>MRRC_RADIO_MODEL=ic7300 python server.py</code></td>
+</tr>
+<tr>
+<td>Change IC-7300 CI-V address</td>
+<td><code>IC7300_CIV_ADDR=0x94 python server.py</code></td>
 </tr>
 <tr>
 <td>Change password</td>
-<td><code>FT710_WEB_PASSWORD=newpass python server.py</code></td>
+<td><code>MRRC_WEB_PASSWORD=newpass python server.py</code></td>
 </tr>
 <tr>
 <td>Change serial port</td>
-<td><code>FT710_SERIAL_PORT=/dev/ttyUSB0 ./start.sh</code></td>
+<td><code>MRRC_SERIAL_PORT=/dev/ttyUSB0 ./start.sh</code></td>
 </tr>
 <tr>
 <td>View server status</td>
@@ -467,11 +537,19 @@ Yaesu FT-710
 </tr>
 <tr>
 <td><code>config.py</code></td>
-<td>All mode/band/filter/S-meter calibration tables</td>
+<td>Protocol-neutral constants + shared UI mode tables</td>
+</tr>
+<tr>
+<td><code>backends/ft710/config_ft710.py</code></td>
+<td>FT-710-specific mode/band/filter/S-meter calibration tables</td>
+</tr>
+<tr>
+<td><code>backends/ic7300/config_ic7300.py</code></td>
+<td>IC-7300/MK2-specific mode/band/filter/tables</td>
 </tr>
 <tr>
 <td><code>lib/</code></td>
-<td>FTDI libraries (libft4222.dylib, libftd2xx.dylib, ftd2xx.cfg)</td>
+<td>FTDI libraries (libft4222.dylib, libftd2xx.dylib, ftd2xx.cfg) — used only by FT-710 backend</td>
 </tr>
 </tbody>
 </table>
@@ -493,12 +571,16 @@ Yaesu FT-710
 <td>Server logs warning; check <code>ls /dev/cu.*</code> or <code>ls /dev/ttyUSB*</code></td>
 </tr>
 <tr>
-<td>FT4222 not working</td>
+<td>FT4222 not working (FT-710)</td>
 <td>Falls back to S-meter synthetic spectrum; check D2XX config</td>
 </tr>
 <tr>
+<td>CI-V 0x27 not arriving (IC-7300)</td>
+<td>Verify <code>IC7300_CIV_ADDR</code> matches radio; check CI-V port baud/8N1; falls back to S-meter</td>
+</tr>
+<tr>
 <td>Audio not working</td>
-<td>Check PyAudio device list in logs; verify FT-710 USB audio appears</td>
+<td>Check PyAudio device list in logs; verify the selected radio’s USB audio appears</td>
 </tr>
 <tr>
 <td>Port already in use</td>
@@ -520,7 +602,7 @@ Yaesu FT-710
 <footer class="footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC FT-710 Project · SDD V2.18 · <a href="https://github.com/cheenle/mrrc_ft710" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -4,21 +4,21 @@
 
 | Dimension | Assessment | Explanation |
 |-----------|------------|-------------|
-| CAT control feasibility | High | Full FT-710 CAT command set implemented and tested via pyserial |
-| Spectrum feasibility | High | Dual-mode: FT4222 real FFT + S-meter fallback both working |
-| RX audio feasibility | High | PyAudio capture → Opus encode → WS broadcast → browser playback |
-| TX audio feasibility | High | Browser mic → Opus encode → WS → decode → PyAudio → radio |
-| Mobile feasibility | Medium-High | Responsive UI; iOS requires HTTPS for mic (reverse proxy) |
-| Operational feasibility | High | Single-process server, start/stop scripts, PID file management |
-| Product completeness | High | All core features (control, audio, spectrum, meters, memories) implemented |
+| CAT/CI-V control feasibility | High | FT-710 CAT and IC-7300 CI-V command sets implemented and tested via pyserial |
+| Spectrum feasibility | High | Dual-mode real scope + S-meter fallback working for both FT-710 (FT4222) and IC-7300/MK2 (CI-V 0x27) |
+| RX audio feasibility | High | PyAudio capture → Opus encode → WS broadcast → browser playback (per-backend sample rate) |
+| TX audio feasibility | High | Browser mic → Opus encode → WS → decode → PyAudio → radio (per-backend sample rate) |
+| Mobile feasibility | Medium-High | Responsive UI adapts to backend `capabilities`; iOS requires HTTPS for mic (reverse proxy) |
+| Operational feasibility | High | Single-process server, backend selection via env var, start/stop scripts, PID file management |
+| Product completeness | High | All core features (control, audio, spectrum, meters, memories) implemented for both supported backends |
 
 ## 13.2 Risks
 
 | ID | Risk | Probability | Impact | Mitigation |
 |----|------|-------------|--------|------------|
 | R1 | Serial port not found or wrong port | Medium | High | Log available ports; env var configuration; clear error messages |
-| R2 | FT4222 scope not available | Medium | Medium | Automatic S-meter fallback; scope_pipe exits gracefully |
-| R3 | PyAudio device not matching FT-710 | Low-Medium | Medium | Name-based auto-detection; device list logging; fallback to system default |
+| R2 | Real scope not available | Medium | Medium | Automatic S-meter fallback; scope_pipe/CI-V 0x27 exits gracefully |
+| R3 | PyAudio device not matching selected radio | Low-Medium | Medium | Per-backend name-based auto-detection; device list logging; fallback to system default |
 | R4 | TX release command lost | Low | Critical | TX-status poll (500ms) + browser watchdog, dead-man switch, unload beacon |
 | R5 | Opus library not available | Low | Medium | Graceful PCM fallback on server and browser |
 | R6 | Audio device contention | Low | Medium | PyAudio opens/closes streams on demand; only one TX stream at a time |
@@ -29,12 +29,12 @@
 
 | ID | Assumption | Confidence | Validation |
 |----|------------|------------|------------|
-| A1 | FT-710 connected via USB with Enhanced COM Port at 38400 baud | High | CAT `ID;` response |
-| A2 | FT-710 USB audio device recognized by OS | High | PyAudio device enumeration |
+| A1 | Selected radio connected via USB with correct serial parameters (FT-710 Enhanced COM Port at 38400 baud; IC-7300 CI-V at 115200 8N1) | High | Backend ID response |
+| A2 | Selected radio USB audio device recognized by OS | High | PyAudio device enumeration |
 | A3 | libopus available on server (Homebrew `opus` package) | Medium-High | ctypes find_library("opus") |
-| A4 | FTDI libraries in `lib/` match OS architecture | Medium | scope_pipe startup log |
+| A4 | FTDI libraries in `lib/` match OS architecture (FT-710 backend only) | Medium | scope_pipe startup log |
 | A5 | Browser supports WebSocket, Web Audio, Canvas | High | Modern browsers |
-| A6 | libft4222.dylib from wfview app bundle for correct version | Medium | scope_pipe SPI read success |
+| A6 | libft4222.dylib from wfview app bundle for correct version (FT-710 backend only) | Medium | scope_pipe SPI read success |
 
 ## 13.4 Current Issues
 
@@ -59,9 +59,9 @@
 | D5 | NumPy | Runtime/DSP | Required (pip) |
 | D6 | libopus | Optional codec | Optional (brew install opus / apt install libopus0) |
 | D7 | libft4222 + libftd2xx | Optional scope | Required for real FT4222 spectrum |
-| D8 | FT-710 + USB cable | Hardware | Required |
+| D8 | Supported radio + USB cable | Hardware | Required |
 | D9 | Browser WebSocket/Web Audio/Canvas | Client | Required |
 
 ## 13.6 Feasibility Conclusion
 
-MRRC FT-710 is fully feasible and production-ready for remote FT-710 operation. All core capabilities — CAT control, bidirectional audio with Opus compression, real-time spectrum waterfall (dual-mode), multi-meter telemetry, memory channels, session authentication, and comprehensive PTT safety — are implemented and verified. The primary operational constraint is iOS requiring HTTPS for microphone access, solvable with a TLS reverse proxy. FT4222 scope requires specific library setup but degrades gracefully to S-meter fallback.
+MRRC Modern is fully feasible and production-ready for remote operation of supported radios. All core capabilities — backend-specific control (Yaesu CAT / Icom CI-V), bidirectional audio with Opus compression, real-time spectrum waterfall (dual-mode real scope + S-meter fallback), multi-meter telemetry, memory channels, session authentication, and comprehensive PTT safety — are implemented and verified for both the FT-710 and IC-7300/MK2 backends. The primary operational constraint is iOS requiring HTTPS for microphone access, solvable with a TLS reverse proxy. FT-710 FT4222 scope requires specific library setup but degrades gracefully to S-meter fallback; IC-7300/MK2 0x27 spectrum requires only the CI-V USB serial port.

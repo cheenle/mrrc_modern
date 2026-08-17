@@ -1,13 +1,13 @@
-# MRRC FT-710 SDD — Software Design Description
+# MRRC Modern / `mrrc_modern` SDD — Software Design Description
 
-> Yaesu FT-710 Web Remote Control  
+> Web Remote Control for supported radios (Yaesu FT-710, Icom IC-7300 / IC-7300MK2)  
 > IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set
 
 ## Purpose
 
-This SDD is the canonical design record for the `mrrc_ft710` codebase — a Python FastAPI server that bridges a browser to a Yaesu FT-710 HF/50MHz transceiver via serial CAT protocol. It captures requirements, architecture, design decisions, component boundaries, operational model, capability inventory, known gaps, and evolution history.
+This SDD is the canonical design record for the `mrrc_modern` codebase — a Python FastAPI server that bridges a browser to one or more supported HF/50MHz transceivers via pluggable radio backends. It captures requirements, architecture, design decisions, component boundaries, operational model, capability inventory, known gaps, and evolution history.
 
-Runtime facts are derived from `server.py`, `cat_controller.py`, `audio_handler.py`, `radio_state.py`, `poll_scheduler.py`, `scope_handler.py`, `scope_pipe.py`, `config.py`, `opus_rx.py`, `static/index.html`, `static/ft710_main.js`, `static/ft710_ui.js`, and `static/modules/*`.
+Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `radio_state.py`, `poll_scheduler.py`, `scope_handler.py`, `config.py`, `opus_rx.py`, `static/index.html`, `static/ft710_main.js`, `static/ft710_ui.js`, and `static/modules/*`.
 
 ## Document Index
 
@@ -33,15 +33,16 @@ Runtime facts are derived from `server.py`, `cat_controller.py`, `audio_handler.
 
 | Attribute | Value |
 |-----------|-------|
-| Document ID | SDD-MRRC-FT710-2026-001 |
-| SDD Version | V2.18 |
-| Baseline Date | 2026-08-16 |
-| Status | v1.8.0 Windows Stable; FT710Android native client implemented (JVM tests green, device acceptance pending) |
-| Project | MRRC FT-710 |
-| Primary Radio | Yaesu FT-710 (HF/50MHz Transceiver) |
+| Document ID | SDD-MRRC-MODERN-2026-001 |
+| SDD Version | V2.20 |
+| Baseline Date | 2026-08-17 |
+| Status | v1.8.0 Windows Stable; FT710Android native client implemented (JVM tests green, device acceptance pending); IC-7300/MK2 backend implemented |
+| Project | MRRC Modern / `mrrc_modern` |
+| Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend) |
+| Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2` (default `ft710`) |
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy, PyAudio |
 | Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API |
-| Transport | HTTP/WS for browser, Serial CAT for radio, FT4222 SPI for scope |
+| Transport | HTTP/WS for browser; Serial CAT (Yaesu) or USB CI-V (Icom) for radio; FT4222 SPI for FT-710 scope; CI-V 0x27 spectrum for IC-7300 |
 | Default Entry | `http://localhost:8888` |
 
 ## System at a Glance
@@ -50,13 +51,16 @@ Runtime facts are derived from `server.py`, `cat_controller.py`, `audio_handler.
 Browser (iPhone / Desktop / Tablet)
   | HTTP + WebSocket: /WSradio /WSaudioRX /WSaudioTX /WSspectrum
   v
-FastAPI/Uvicorn MRRC FT-710 Server (server.py)
-  | Serial CAT (USB Enhanced COM Port, 38400 baud) → Yaesu FT-710
-  | FT4222 SPI (scope_pipe subprocess) → real spectrum data
+FastAPI/Uvicorn MRRC Server (server.py)
+  | Pluggable backend selected by MRRC_RADIO_MODEL
+  |   ft710: Serial CAT (USB Enhanced COM Port, 38400 baud) → Yaesu FT-710
+  |          FT4222 SPI (scope_pipe subprocess) → real spectrum data
+  |   ic7300/ic7300mk2: USB CI-V serial (115200 8N1, addr 0x94) → Icom IC-7300/MK2
+  |                     CI-V 0x27 spectrum on the same port
   | PyAudio (USB Audio device) → RX/TX audio capture/playback
   | Opus codec (libopus) → compressed audio transport
   v
-Yaesu FT-710 Radio
+Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio
 ```
 
 ## Capability Summary
@@ -64,11 +68,11 @@ Yaesu FT-710 Radio
 | Area | Status | Notes |
 |------|--------|-------|
 | Mobile UI | Implemented | `static/index.html`, `ft710.css`, `ft710_main.js`, `ft710_ui.js` |
-| Radio control | Implemented | Full CAT command set: frequency, mode, filter, PTT, gains, etc. |
-| Spectrum waterfall | Implemented | FT4222 SPI real + S-meter fallback dual-mode |
-| RX audio | Implemented | PyAudio capture → Opus/PCM → /WSaudioRX → browser playback |
-| TX audio | Implemented | Browser mic → /WSaudioTX → Opus decode → PyAudio → radio |
-| S-meter + Multi-meter | Implemented | PWR, ALC, SWR, Id, Vd from CAT RM3-RM8 polling |
+| Radio control | Implemented | Backend-specific command set: frequency, mode, filter, PTT, gains, etc. |
+| Spectrum waterfall | Implemented | FT-710: FT4222 SPI real + S-meter fallback; IC-7300: CI-V 0x27 real + S-meter fallback |
+| RX audio | Implemented | PyAudio capture → Opus/PCM → /WSaudioRX → browser playback (per-backend sample rate) |
+| TX audio | Implemented | Browser mic → /WSaudioTX → Opus decode → PyAudio → radio (per-backend sample rate) |
+| S-meter + Multi-meter | Implemented | Backend-specific meter polling (e.g., FT-710 RM3-RM8) |
 | Radio telemetry (RI) | Implemented | Hi-SWR, recorder, RX/TX, tuner, scan, squelch-open status from `RI0;` |
 | Meter display + AMC | Implemented | `MS`/`AO` commands exposed in state and control path |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with JSON persistence |

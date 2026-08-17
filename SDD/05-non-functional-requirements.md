@@ -6,10 +6,10 @@
 |----|-------------|--------|----------|-------------|
 | NFR-001 | RX audio latency | < 500ms end-to-end (radio speaker → browser speaker) | Critical | Listening test |
 | NFR-002 | Control response | UI command ack within 200ms on LAN | High | WebSocket round-trip observation |
-| NFR-003 | Spectrum bandwidth | ~1701 bytes/frame at ~30fps (~51KB/s) FT4222; ~851 bytes/frame fallback | Medium | WS frame size inspection |
+| NFR-003 | Spectrum bandwidth | ~1701 bytes/frame at ~30fps (~51KB/s) real scope; ~851 bytes/frame fallback | Medium | WS frame size inspection |
 | NFR-004 | Audio transport bandwidth | Opus ~48–64kbps at 48kHz mono; PCM ~768kbps fallback | Medium | Network monitor |
 | NFR-005 | CPU stability | No sustained overload from serial polling + audio + scope | High | Activity Monitor/top observation |
-| NFR-006 | Serial port throughput | < 300 bytes/sec polling at 38400 baud (well under limit) | High | Serial monitor |
+| NFR-006 | Serial port throughput | < 300 bytes/sec polling at 38400 baud (FT-710) or 115200 baud (IC-7300), well under limit | High | Serial monitor |
 | NFR-007 | Waterfall render quality | 120-row history, adaptive colormap, frequency scale alignment | Medium | Visual inspection |
 | NFR-008 | PTT response | < 100ms from touch to TX command | Critical | Timing logs |
 
@@ -36,7 +36,7 @@
 |----|-------------|--------|----------|-------------|
 | NFR-030 | iOS Safari | RX audio, touch controls, PWA support | High | iPhone test |
 | NFR-031 | Desktop Chrome/Safari/Firefox | Full functionality | High | Desktop browser test |
-| NFR-032 | FT-710 firmware | CAT protocol compatible with current FT-710 firmware | Critical | Radio connect and control test |
+| NFR-032 | Radio firmware | Protocol compatible with current FT-710 or IC-7300/MK2 firmware for the selected backend | Critical | Radio connect and control test |
 | NFR-033 | macOS + Linux | Server runs on both platforms | High | Cross-platform build test |
 | NFR-034 | opus_rx.py | Works on arm64 (Apple Silicon) and x86_64 | High | ctypes libopus loading test |
 
@@ -45,7 +45,7 @@
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
 | NFR-040 | Logging | Startup, CAT connect, scope status, audio device selection logged | High | `logs/` directory output |
-| NFR-041 | Configuration | `FT710_SERIAL_PORT`, `FT710_WEB_PORT`, `FT710_WEB_PASSWORD`, `FT710_WEB_HOST` env vars | Medium | Env var test |
+| NFR-041 | Configuration | `MRRC_RADIO_MODEL`, `IC7300_CIV_ADDR`, `FT710_SERIAL_PORT`, `FT710_WEB_PORT`, `FT710_WEB_PASSWORD`, `FT710_WEB_HOST` env vars | Medium | Env var test |
 | NFR-042 | PID file | `.ft710-server.pid` tracks running process | Medium | `start.sh` / `stop.sh` behavior |
 | NFR-043 | Static cache safety | Service worker bypasses JS/HTML cache | High | `sw.js` review |
 
@@ -61,9 +61,9 @@
 
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
-| NFR-060 | RX sample rate | 44.1kHz native capture from FT-710 USB audio, resampled to 48kHz for Opus | Critical | PyAudio stream config |
+| NFR-060 | RX sample rate | FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2: 48kHz native capture, no resample | Critical | PyAudio stream config |
 | NFR-061 | Opus bitrate | 64kbps default, 16-128kbps adjustable | Medium | Codec config |
 | NFR-062 | TX audio quality | Clean mic audio reaches radio without distortion | High | On-air listening test |
 | NFR-063 | AudioWorklet playback | Jitter buffer: 220ms prebuffer, 90ms recovery, 800ms max | High | Listening under network jitter |
 | NFR-064 | PCM fallback | Automatic when libopus unavailable (server or browser) | High | Start without libopus |
-| NFR-065 | PyAudio device selection | Auto-detect "FT-710"/"YAESU", then "USB Audio CODEC"/"USB Audio Device" (Windows built-in sound card names), in device name; fallback to system default | Medium | Device enumeration log |
+| NFR-065 | PyAudio device selection | Auto-detect per-backend device hints (e.g., "FT-710"/"YAESU" for FT-710; generic "USB Audio CODEC"/"USB Audio Device"), then mono/full-duplex heuristics; fallback to system default | Medium | Device enumeration log |

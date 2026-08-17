@@ -1,6 +1,6 @@
 # 8. Architecture Decisions (ART 0513)
 
-## AD-001: Use FastAPI/Uvicorn for MRRC FT-710 Server
+## AD-001: Use FastAPI/Uvicorn for MRRC Modern Server
 
 | Attribute | Value |
 |-----------|-------|
@@ -26,7 +26,7 @@
 
 **Rationale**: A dedicated `CatController` class with an `asyncio.Lock` for serialized access and thread-pool offloading is simpler, more debuggable, and has fewer failure modes than Hamlib/rigctld.
 
-**Consequences**: The codebase is FT-710 specific. Adding another radio model requires a new commander class.
+**Consequences**: Radio protocol code lives inside pluggable `backends/<model>/` packages. Adding another radio model requires a new backend package plus factory registration, not changes to `server.py`.
 
 ## AD-003: Dirty-Field State Broadcasting
 
@@ -70,7 +70,7 @@
 
 **Consequences**: scope_pipe is independently restartable. Server handles pipe exit gracefully (marks scope disconnected, switches to fallback). Two process lifecycle to manage.
 
-**Amended (V2.7)**: the pipe protocol gains a stdin control channel — the server pushes `TX:1`/`TX:0` on every `tx_status` transition (`_notify_scope_pipe_tx`). While TX is active the pipe pauses SPI reads and freezes all sync/stall recovery counters (the FT-710 garbles its scope stream during TX; reading it previously churned the pipe into `fatal:too_many_reinits` after every PTT), and runs one clean re-sync on TX→RX. stdin EOF (parent died) also stops the pipe. Windows teardown uses `taskkill /PID <pid> /T /F` because `terminate()` only reaches the onefile bootloader and orphans the real worker (which then holds the FT4222: FT_DEVICE_NOT_FOUND for the next pipe).
+**Amended (V2.7)**: the pipe protocol gains a stdin control channel — the server pushes `TX:1`/`TX:0` on every `tx_status` transition (`_notify_scope_pipe_tx`). While TX is active the pipe pauses SPI reads and freezes all sync/stall recovery counters (the FT-710 garbles its scope stream during TX; reading it previously churned the pipe into `fatal:too_many_reinits` after every PTT), and runs one clean re-sync on TX→RX. stdin EOF (parent died) also stops the pipe. Windows teardown uses `taskkill /PID <pid> /T /F` because `terminate()` only reaches the onefile bootloader and orphans the real worker (which then holds the FT4222: FT_DEVICE_NOT_FOUND for the next pipe). This subprocess is used only by the FT-710 backend; the IC-7300 backend receives 0x27 spectrum frames directly on the CI-V serial port.
 
 ## AD-006: Dual-Mode Spectrum (FT4222 + S-Meter Fallback)
 
@@ -100,17 +100,17 @@
 
 **Consequences**: Frontend PTT logic is more complex; polling skip-on-PTT ensures state consistency. (V1.2 removed the 3×200ms post-release verify loop — it added ~600ms to every release; stuck-keyup detection now relies on the 500ms TX-status poll plus the browser watchdog.)
 
-## AD-008: PyAudio Auto-Detection of FT-710 USB Audio
+## AD-008: PyAudio Auto-Detection of Supported Radio USB Audio
 
 | Attribute | Value |
 |-----------|-------|
 | Type | Design |
 | Status | Implemented |
-| Decision | Multi-layer device selection: (1) explicit `FT710_AUDIO_RX_DEVICE`/`FT710_AUDIO_TX_DEVICE` env var (index or name substring), (2) name match for "FT-710"/"FT710"/"YAESU", (3) name match for "USB Audio CODEC" / "USB Audio Device" (the FT-710's built-in sound card enumerates under one of these generic names on Windows; first match wins, multi-match warns), (4) mono-channel heuristic (FT-710 USB audio has 1 input channel vs typical stereo USB mics), (5) full-duplex heuristic for TX (device with both input + output), (6) system default fallback |
+| Decision | Multi-layer device selection parameterized by backend: (1) explicit `FT710_AUDIO_RX_DEVICE`/`FT710_AUDIO_TX_DEVICE` env var (index or name substring), (2) per-backend name hints (e.g., "FT-710"/"FT710"/"YAESU" for FT-710), (3) generic "USB Audio CODEC" / "USB Audio Device" fallback (common built-in sound card names on Windows; first match wins, multi-match warns), (4) mono-channel heuristic (radio USB audio is typically mono), (5) full-duplex heuristic for TX (device with both input + output), (6) system default fallback |
 
-**Problem**: The FT-710 USB audio device name varies by OS and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of FT-710. On Windows the card carries no "FT-710"/"YAESU" string at all ("USB Audio CODEC" or "USB Audio Device", possibly localized/prefixed), so without tier (3) the heuristics grabbed a laptop mic (RX) or PC speakers (TX) — V2.6 field report.
+**Problem**: USB audio device naming varies by radio, OS, and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of the radio. On Windows the FT-710's card carries no "FT-710"/"YAESU" string at all ("USB Audio CODEC" or "USB Audio Device", possibly localized/prefixed), so without tier (3) the heuristics grabbed a laptop mic (RX) or PC speakers (TX) — V2.6 field report.
 
-**Rationale**: Name-based matching is more robust than index-based. The mono-channel heuristic is reliable: FT-710 provides exactly 1 input channel (mono RX), while webcams and USB mics typically offer 2 (stereo). Full-duplex preference for TX ensures the same device is used for both RX and TX paths. Logs all available devices at startup for debugging. The generic USB-audio names rank below the FT-710-specific names but above the channel heuristics; duplicates from per-host-API enumeration (MME/DirectSound/WASAPI) open the same hardware, and a genuine multi-device setup is warned about with a pointer to the env-var lock (`USB Audio` is the common substring covering both enumeration forms).
+**Rationale**: Name-based matching is more robust than index-based. The mono-channel heuristic is reliable: supported radio USB audio typically provides exactly 1 input channel (mono RX), while webcams and USB mics typically offer 2 (stereo). Full-duplex preference for TX ensures the same device is used for both RX and TX paths. Logs all available devices at startup for debugging. The generic USB-audio names rank below the radio-specific hints but above the channel heuristics; duplicates from per-host-API enumeration (MME/DirectSound/WASAPI) open the same hardware, and a genuine multi-device setup is warned about with a pointer to the env-var lock (`USB Audio` is the common substring covering both enumeration forms).
 
 **Consequences**: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.
 
@@ -144,19 +144,19 @@
 
 **Consequences**: Channels survive server restarts. File is human-editable. No per-user channel isolation (single shared-password model).
 
-## AD-011: 48kHz Codec Domain with 44.1kHz Device Bridge
+## AD-011: 48kHz Codec Domain with Per-Backend Device-Rate Bridge
 
 | Attribute | Value |
 |-----------|-------|
 | Type | Design |
 | Status | Implemented |
-| Decision | TX audio chain runs at 48 kHz in the codec domain (browser capture → Opus encode → server decode) and plays to the radio at 44.1 kHz — the FT-710 USB audio native rate — via a frame-aligned resample bridge (`audio_resample.py`, numpy linear interp; 960↔882 samples = exactly 20 ms, ratio 160:147). RX uses the inverse bridge (44.1k capture → 48k Opus encode). |
+| Decision | TX audio chain runs at 48 kHz in the codec domain (browser capture → Opus encode → server decode). The server bridges to the radio's native USB audio rate via `audio_resample.py` when needed: FT-710 uses a 44.1 kHz device rate (960↔882 frame-aligned resample, ratio 160:147); IC-7300/MK2 uses 48 kHz native USB audio (no resample). RX uses the inverse bridge only when the capture rate differs from 48 kHz. |
 
-**Problem**: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling ("咔咔咔") on transmitted audio. The first fix unified everything at 48 kHz — but later measurement showed the FT-710 USB audio interface natively runs at **44.1 kHz**, so 48 kHz PCM still could not be written straight to the device stream.
+**Problem**: V1.0 captured mic audio at 16 kHz (320 samples/20ms frame) but PyAudio played back at 48 kHz (expecting 960 samples/20ms). The 3:1 rate mismatch caused the output stream to underrun — every 20ms Opus frame produced 320 samples that filled only 1/3 of the 960-sample playback buffer. The remaining 2/3 was stale/residual buffer data, producing audible crackling ("咔咔咔") on transmitted audio. The first fix unified everything at 48 kHz — but later measurement showed the FT-710 USB audio interface natively runs at **44.1 kHz**, so 48 kHz PCM still could not be written straight to the device stream. The IC-7300/MK2 USB audio interface natively runs at 48 kHz, so no bridge is needed for that backend.
 
-**Rationale**: Opus mandates 48 kHz; the FT-710 mandates 44.1 kHz. A stateless numpy linear-interp resampler bridges the two domains per 20 ms frame with exact integer alignment (960→882), costing ~µs per call with zero phase drift. Browser capture at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox).
+**Rationale**: Opus mandates 48 kHz; supported radios have different native USB audio rates. A stateless numpy linear-interp resampler bridges the two domains per 20 ms frame with exact integer alignment (960→882 for FT-710), costing ~µs per call with zero phase drift. Browser capture at 48 kHz works on all modern platforms (iOS 15+, Chrome, Firefox).
 
-**Consequences**: Each direction has exactly one SRC step at the server boundary, owned by `audio_resample.py`. Browser and codec stay at 48 kHz; both PyAudio streams run at 44.1 kHz. The v1.0 underrun class of bug is impossible in both domains.
+**Consequences**: Each direction has at most one SRC step at the server boundary, owned by `audio_resample.py`. Browser and codec stay at 48 kHz. FT-710 PyAudio streams run at 44.1 kHz with the bridge; IC-7300/MK2 PyAudio streams run at 48 kHz with no bridge. The v1.0 underrun class of bug is impossible in both domains.
 
 **Amended (V2.9)**: the device-domain rate is host-API-dependent, not universally 44.1 kHz. On macOS CoreAudio the codec runs natively at 44.1 kHz (bridge required, unchanged). On Windows the same C-Media codec's native audio-engine mix rate is 48 kHz, and its MME 44.1 kHz playback path paces ~1.4× slow (measured on the Win11 KVM rig: 50×20 ms writes block 1.36–1.42 s) — the TX drain falls behind, the 400 ms cap drops 24–34 % of voice frames, TX audio crackles. Windows TX therefore opens the same-name WASAPI entry at its native rate (48 kHz) and `feed_tx_audio` passes 48 kHz PCM through unchanged; the 44.1 kHz bridge applies only when the stream rate is actually 44.1 kHz. RX capture stays at 44.1 kHz MME on Windows (paces correctly).
 
@@ -243,10 +243,10 @@
 | AD-005 | scope_pipe standalone subprocess | Implemented |
 | AD-006 | Dual-mode spectrum (FT4222 + fallback) | Implemented |
 | AD-007 | PTT release safety flow | Implemented |
-| AD-008 | PyAudio FT-710 auto-detection | Implemented |
+| AD-008 | PyAudio supported-radio auto-detection | Implemented |
 | AD-009 | 7-task adaptive polling with bounded lock time | Implemented |
 | AD-010 | Memory channels as server-side JSON | Implemented |
-| AD-011 | 48 kHz codec / 44.1 kHz device bridge | Implemented |
+| AD-011 | 48 kHz codec / per-backend device-rate bridge | Implemented |
 | AD-012 | Active-VFO-aware frequency model | Implemented |
 | AD-013 | FT-710 meter calibration tables | Implemented |
 | AD-014 | FT-710 CAT errata handling | Implemented |

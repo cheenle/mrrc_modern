@@ -4,17 +4,18 @@
 
 | Attribute | Value |
 |-----------|-------|
-| Project Name | MRRC FT-710 |
-| Project Type | Web remote control for Yaesu FT-710 transceiver |
+| Project Name | MRRC Modern / `mrrc_modern` |
+| Project Type | Web remote control for supported HF/50MHz transceivers |
 | Primary Users | HAM operators using phone or desktop browsers |
-| Primary Radio | Yaesu FT-710 (HF/50MHz superheterodyne transceiver) |
-| Server Platform | macOS/Linux with Python 3.12+ |
+| Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable at runtime) |
+| Backend Selection | `MRRC_RADIO_MODEL` env var: `ft710` (default), `ic7300`, `ic7300mk2` |
+| Server Platform | macOS/Linux/Windows with Python 3.12+ |
 | Client Platform | Modern browser (Safari 15+, Chrome, Firefox) |
 | Runtime Framework | FastAPI + Uvicorn |
 | Frontend Stack | HTML/CSS/vanilla JavaScript/Web Audio API/Canvas |
-| Radio Interface | Serial CAT (USB Enhanced COM Port, 38400 baud) |
-| Scope Interface | FTDI FT4222 SPI via standalone Python subprocess |
-| Audio Interface | PyAudio sound card capture/playback + libopus codec |
+| Radio Interface | Backend-specific: Yaesu ASCII CAT (USB Enhanced COM Port, 38400 baud) or Icom CI-V (USB serial, 115200 8N1, default addr `0x94`) |
+| Scope Interface | FT-710: FTDI FT4222 SPI via standalone Python subprocess; IC-7300: CI-V 0x27 spectrum frames on the CI-V serial port |
+| Audio Interface | PyAudio sound card capture/playback + libopus codec (per-backend sample rate) |
 
 ## 3.2 In Scope
 
@@ -23,15 +24,15 @@
 - Maintain RX audio channel `/WSaudioRX` using tagged dual-codec frames (Opus 48kHz default, Int16 PCM fallback).
 - Maintain TX audio channel `/WSaudioTX` for browser microphone uplink.
 - Maintain spectrum channel `/WSspectrum` with binary 850/1701-byte frames at ~30 fps.
-- Implement dual-mode spectrum: FT4222 SPI (real FFT) + S-meter Gaussian fallback.
-- Implement full FT-710 CAT command set via serial port with threaded I/O.
+- Implement dual-mode spectrum: real FFT data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300) + S-meter Gaussian fallback.
+- Implement full radio command set for the selected backend via serial port with threaded/asynchronous I/O.
 - 7-task background polling with adaptive skip-on-command.
-- Multi-meter: PWR, ALC, SWR, Id, Vd from CAT RM3-RM8.
-- S-meter from both CAT SM0 and scope frame metadata.
+- Multi-meter: backend-specific meter values (e.g., FT-710 RM3-RM8).
+- S-meter from both radio polling and scope frame metadata.
 - Persist and serve memory channels via `/api/mem_channels`.
 - Session authentication: shared-password login, cookie + token, all WS gated.
 - PTT safety: touch-and-hold, browser watchdog, dead-man switch, unload beacon.
-- Scope pipe protocol for FT4222 subprocess communication.
+- Scope pipe protocol for FT-710 FT4222 subprocess communication (FT-710 backend).
 
 ## 3.3 Out of Scope
 
@@ -41,21 +42,21 @@
 - Digital modes (CW decoder, FT8, RTTY decode).
 - Logbook / QSO logging.
 - Antenna tuner control (ATR-1000 or similar).
-- Hamlib/rigctld integration; this codebase is FT-710 direct CAT.
-- WDSP / advanced DSP processing (NR2, ANF, SNB — the FT-710 has its own hardware DSP).
-- SDR IQ streaming (FT-710 is a superheterodyne, not an SDR).
+- Hamlib/rigctld integration; this codebase uses direct CAT/CI-V protocols.
+- WDSP / advanced DSP processing (radios have their own hardware DSP).
+- SDR IQ streaming (supported radios are superheterodynes, not SDRs).
 
 ## 3.4 Success Criteria
 
 | ID | Criterion | Verification |
 |----|-----------|--------------|
-| SC1 | Serial CAT connection establishes | Server log shows "Connected to FT-710 (ID=...)" |
-| SC2 | All radio controls work via Web UI | Frequency, mode, filter, PTT, gains, etc. respond correctly |
+| SC1 | Radio serial connection establishes | Server log shows backend-specific connect message (e.g., "Connected to FT-710 (ID=...)" or IC-7300 CI-V ID) |
+| SC2 | All radio controls work via Web UI | Frequency, mode, filter, PTT, gains, etc. respond correctly for the selected backend |
 | SC3 | RX audio arrives at browser | `/WSaudioRX` receives tagged frames; audio plays through speakers |
 | SC4 | TX audio reaches radio | PTT + mic → audible RF output on monitoring receiver |
 | SC5 | Spectrum waterfall renders | Canvas shows 120-row history with frequency scale |
-| SC6 | FT4222 scope works when available | Real 850-point FFT data at ~21fps |
-| SC7 | S-meter fallback works without FT4222 | Synthetic Gaussian spectrum from CAT SM0 readings |
+| SC6 | Real scope works when available | FT-710: real 850-point FFT data from FT4222 at ~21fps; IC-7300: CI-V 0x27 spectrum demuxed at ~30fps |
+| SC7 | S-meter fallback works without real scope | Synthetic Gaussian spectrum from S-meter readings |
 | SC8 | PTT cannot stick | Touch release always returns radio to RX |
 | SC9 | Memory channels persist across restarts | Save channel, restart server, channel still present |
 
@@ -71,3 +72,4 @@
 | M6 | 2026-07 | Audio pipeline: PyAudio capture/playback + Opus codec + /WSaudioRX + /WSaudioTX |
 | M7 | 2026-07 | AudioWorklet RX playback + TX mic capture in browser |
 | M8 | 2026-07 | SDD documentation baseline |
+| M9 | 2026-08 | IC-7300 / IC-7300MK2 pluggable backend (CI-V, 0x27 spectrum, 48kHz native audio) |

@@ -5,16 +5,22 @@
 | Component | Type | File | Responsibility |
 |-----------|------|------|----------------|
 | FastAPIApp | Backend core | `server.py` | Route registration, lifespan, auth middleware, static serving, all WebSockets |
-| CatController | Backend core | `cat_controller.py` | Serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers |
+| RadioBackendFactory | Backend core | `backends/__init__.py` | `create_backend(model)` lazy factory; registered keys `ft710`, `ic7300`, `ic7300mk2`; selected by `MRRC_RADIO_MODEL` |
+| RadioBackend | Backend core | `backends/base.py` | `RadioBackend` ABC + `RadioCapabilities` dataclass + `ScopeProducer` protocol; CAT surface, defaulted hooks for bands/modes/filter tables/poll lists/scope init |
+| CatController | Backend core | `backends/ft710/cat_controller.py` (root shim: `cat_controller.py`) | FT-710 serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers |
+| CivCodec | Backend core | `backends/ic7300/civ_codec.py` | Pure CI-V framing/BCD encoding/scope-segment codec for IC-7300/MK2 |
+| CivController | Backend core | `backends/ic7300/civ_controller.py` | Async CI-V demux: reader thread → frame parser → echo drop / 0x27 scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect |
+| CivScopeProducer | Backend core | `backends/ic7300/civ_scope.py` | `ScopeProducer` implementation: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → `ScopeHandler` |
 | RadioState | Backend core | `radio_state.py` | Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz) |
-| PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority CAT writes; watchdog re-runs scope init (`on_reconnected` hook) after reconnect |
-| AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream (48kHz), TX playback stream (48kHz), Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection (name + mono heuristic + full-duplex) |
+| PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority radio writes; watchdog re-runs scope init (`on_reconnected` hook) after reconnect |
+| AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex) |
 | OpusCodec | Backend support | `opus_rx.py` | RxOpusEncoder (48kHz mono, 64kbps), TxOpusDecoder (48kHz mono); direct ctypes libopus bindings; bitrate via max_data_bytes cap |
 | ScopeHandler | Backend core | `scope_handler.py` | Spectrum data container; update_from_scope_frame (real) and update_from_radio_state (synthetic); get_spectrum_binary for WS broadcast |
-| ScopePipe | Backend core | `scope_pipe.py` | Standalone subprocess: FT4222 SPI init + read loop; frame sync; stdout binary frames + stderr STATUS diagnostics |
-| ScopeFrame | Backend support | `scope_frame.py` | Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics |
-| ScopeLibraries | Backend support | `scope_libraries.py` | FTDI library discovery and SPI clock configuration |
-| Config | Backend support | `config.py` | Mode tables (MODE_NUM_TO_NAME, MODE_NAME_TO_NUM), band definitions (BANDS), filter widths, S-meter calibration, constants |
+| ScopePipe | Backend core | `backends/ft710/scope_pipe.py` (root shim: `scope_pipe.py`) | Standalone subprocess: FT4222 SPI init + read loop; frame sync; stdout binary frames + stderr STATUS diagnostics (FT-710 only) |
+| ScopePipeProducer | Backend core | `backends/ft710/scope_producer.py` | `ScopeProducer` implementation: owns `scope_pipe` subprocess spawn/read/auto-restart/TX-notify (FT-710 only) |
+| ScopeFrame | Backend support | `backends/ft710/scope_frame.py` (root shim: `scope_frame.py`) | Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics |
+| ScopeLibraries | Backend support | `backends/ft710/scope_libraries.py` (root shim: `scope_libraries.py`) | FTDI library discovery and SPI clock configuration |
+| Config | Backend support | `config.py` | Protocol-neutral constants + shared UI mode tables; per-backend tables live in `backends/ft710/config_ft710.py` and `backends/ic7300/config_ic7300.py` |
 | ATR1000Client | Backend support | `atr1000_client.py` | Optional asyncio client for networked ATR1000 tuner (frame protocol, reconnect/refresh, TX-no-SYNC, learning, throttled relay writes) |
 | TunerStorage | Backend support | `atr1000_tuner.py` | LC-learning persistence (SWR-gated, atomic JSON) |
 | COOPCOEPMiddleware | Backend support | `server.py` | Sets COOP:same-origin / COEP:credentialless for SharedArrayBuffer support |
@@ -46,17 +52,18 @@
 
 ```text
 FastAPIApp lifespan startup:
-  1. CatController.connect() → open serial port → send ID; → verify FT-710
-  2. If connected: initial_state_sync() → 24+ CAT queries (incl. VS/FB/RG0/MS/AO/RI0) → RadioState.from_sync_result()
-  3. _init_scope_cat() → send scope-init extended CAT commands
-  4. PollScheduler(cat, radio, on_state_changed=_broadcast_state).start()
-  5. AudioHandler() → init PyAudio → scan devices → start_rx() → open capture stream
-  6. TxOpusDecoder() → init libopus decoder for TX path
-  7. create_task(_audio_rx_loop()) → 20ms RX capture + encode + broadcast loop
-  8. create_task(_audio_tx_drain_loop()) → 10ms TX queue drain loop
-  9. ScopeHandler() → set up on_frame callback
- 10. create_task(_broadcast_spectrum_loop()) → 30fps spectrum broadcast
- 11. Launch scope_pipe subprocess → create_task(_read_scope_pipe())
+  1. create_backend(MRRC_RADIO_MODEL) → `RadioBackend` instance + `RadioCapabilities`
+  2. backend.connect() → open serial port → send ID; → verify radio (FT-710 ID or IC-7300 CI-V ID)
+  3. If connected: backend.initial_state_sync() → backend-specific queries → RadioState.from_sync_result()
+  4. backend.init_scope() → FT-710: send scope-init extended CAT commands; IC-7300: enable CI-V 0x27 scope
+  5. PollScheduler(backend, radio, on_state_changed=_broadcast_state).start()
+  6. AudioHandler() → init PyAudio → scan devices (per-backend hints/rate) → start_rx() → open capture stream
+  7. TxOpusDecoder() → init libopus decoder for TX path
+  8. create_task(_audio_rx_loop()) → 20ms RX capture + encode + broadcast loop
+  9. create_task(_audio_tx_drain_loop()) → 10ms TX queue drain loop
+ 10. ScopeHandler() → set up on_frame callback
+ 11. create_task(_broadcast_spectrum_loop()) → 30fps spectrum broadcast
+ 12. backend.create_scope_producer() → FT-710: launch scope_pipe subprocess + create_task(_read_scope_pipe()); IC-7300: wire CI-V 0x27 demux to ScopeHandler
 ```
 
 ## 11.3 Frontend Component Collaboration (Page Load)

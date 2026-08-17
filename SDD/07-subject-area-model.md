@@ -9,10 +9,10 @@
 | Entity | Attributes | Description |
 | -------- | ------------ | ------------- |
 | ClientSession | websocket, channel_type, connected_at | Runtime connection in `ctrl_clients`, `spectrum_clients`, `audio_rx_clients`, `audio_tx_clients` |
-| RadioConnection | serial_port, baudrate, connected, model_id | CAT serial port state within `CatController` |
+| RadioConnection | serial_port, baudrate, connected, model_id | Serial connection state within the active backend controller |
 | RadioState | vfo_a_freq, vfo_b_freq, active_vfo, mode, tx_status, s_meter, af_gain, rf_gain, rf_power, filter_width, preamp, attenuator, noise_blanker, noise_reduction, auto_notch, compressor, compressor_level, nr_level, nb_level, tuner_status, power_on, squelch, mic_gain, split, vox, break_in, comp_meter, alc_meter, power_meter, swr_meter, id_meter, vd_meter, scope_span, scope_speed, scope_mode, scope_start_freq, serial_connected | Dataclass with dirty-field tracking |
-| CatCommand | prefix, value, response | Serial CAT command: send `"FA014200000;"` → receive `"FA014200000;"` |
-| ScopeFrame | wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq | Parsed from scope_pipe stdout payload |
+| RadioCommand | prefix, value, response | Backend-specific command: e.g., FT-710 CAT `"FA014200000;"` → receive `"FA014200000;"`; IC-7300 CI-V framed command/response |
+| ScopeFrame | wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq | Parsed from real-scope source (FT-710 `scope_pipe` stdout or IC-7300 CI-V 0x27 demux) |
 | SpectrumFrame | version_byte, wf1_bytes[850], wf2_bytes[850] | Binary frame broadcast via `/WSspectrum` |
 | AudioChunk | pcm_bytes, sample_count, timestamp | Raw Int16 PCM from PyAudio capture |
 | AudioFrame | tag_byte, payload_bytes | Tagged dual-codec frame (0x00=PCM, 0x01=Opus) broadcast via `/WSaudioRX` |
@@ -28,7 +28,7 @@
 | Relationship | Cardinality | Description |
 | -------------- | ------------- | ------------- |
 | ClientSession → RadioState | N:1 | Multiple browsers see same state via broadcast |
-| CatCommand → RadioState | 1:1 | Each CAT response updates one or more state fields |
+| RadioCommand → RadioState | 1:1 | Each backend response updates one or more state fields |
 | ScopeFrame → SpectrumFrame | 1:1 | Each parsed scope frame produces one spectrum frame |
 | AudioChunk → AudioFrame | 1:N | One PCM chunk may produce multiple Opus frames (20ms boundaries) |
 | RadioState → ClientSession | 1:N | Dirty-field state updates fan out to all ctrl_clients |

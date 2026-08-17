@@ -4,7 +4,7 @@
 
 ## 15.1 Safety Model — Defense in Depth
 
-The MRRC FT-710 PTT safety architecture provides **7 independent layers of defense** against stuck-TX scenarios.
+The MRRC Modern PTT safety architecture provides **7 independent layers of defense** against stuck-TX scenarios for all supported radio backends.
 
 | Layer | Location | Mechanism | Failure Mode Caught |
 |-------|----------|-----------|---------------------|
@@ -42,7 +42,7 @@ function handlePTTEnd() {
 }
 ```
 
-Server receives `{"type":"set","field":"ptt","value":false}` → sends CAT `TX0;` (fire-and-forget; see removal note in §15.1).
+Server receives `{"type":"set","field":"ptt","value":false}` → sends the backend-specific PTT unkey command (FT-710 CAT `TX0;`, IC-7300/MK2 CI-V 0x1C 0x00 unkey) fire-and-forget (see removal note in §15.1).
 
 ### Layer 3: PTT Watchdog (Browser)
 
@@ -68,15 +68,15 @@ pttVerifyTimer = setInterval(function() {
 }, 500);
 ```
 
-The watchdog's input is the server-side TX-status poll (500ms), which keeps `radioState.tx_status` fresh even if the release command's state update was lost.
+The watchdog's input is the server-side TX-status poll (500ms), which keeps `radioState.tx_status` fresh even if the release command's state update was lost. The same ownership/dead-man logic applies to the IC-7300/MK2 backend, where PTT key/unkey is sent as CI-V 0x1C 0x00 frames.
 
 ### Layer 4: Dead-Man Switch (Server)
 
 ```python
 # In /WSradio disconnect handler:
-if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
+if not ctrl_clients and radio.is_transmitting and backend and backend.connected:
     logger.warning("Last client disconnected during TX! Forcing RX.")
-    await cat.set_ptt(False)
+    await backend.set_ptt(False)
     radio.update(tx_status=0)
     if audio:
         audio.stop_tx()
@@ -136,21 +136,21 @@ Normal Release Path:
     → handlePTTEnd()
       → sendCommand('ptt', false)          [Layers 1+2]
       → stopTXAudio() + wsAudioTX.send('s:') [Layer 7]
-      → Server: CAT TX0; (fire-and-forget)
+      → Server: backend-specific PTT unkey command (fire-and-forget)
       → Server: TX-status poll (500ms) tracks RX
       → PTT Watchdog starts                 [Layer 3]
 
 Emergency Paths:
   Browser crash / tab close:
-    → beforeunload → sendBeacon TX0;        [Layer 5]
-    → pagehide → sendCommand TX0;           [Layer 6]
+    → beforeunload → sendBeacon PTT=false;  [Layer 5]
+    → pagehide → sendCommand PTT=false;     [Layer 6]
     → WS disconnect → server dead-man switch [Layer 4]
     → Server stops TX audio                 [Layer 7]
 
   Network loss during TX:
     → WS disconnect → server dead-man switch [Layer 4]
     → Server stops TX audio                 [Layer 7]
-    → Radio returns to RX (CAT timeout)
+    → Radio returns to RX (protocol timeout)
 ```
 
 ## 15.4 Testing the Safety Layers

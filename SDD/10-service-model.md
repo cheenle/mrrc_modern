@@ -6,10 +6,12 @@
 |---------|------|--------|----------------|
 | StaticUIService | Core | Implemented | Serve mobile UI assets from `static/` with MIME types |
 | ControlService | Core | Implemented | `/WSradio` JSON command dispatch, state broadcast, memory management |
-| RXAudioService | Core | Implemented | Capture FT-710 USB audio → Opus encode → `/WSaudioRX` tagged frame broadcast |
-| TXAudioService | Core | Implemented | Receive `/WSaudioTX` tagged frames → Opus decode → resample 48→44.1k → PyAudio → radio |
-| SpectrumService | Core | Implemented | FT4222 scope data + S-meter fallback → `/WSspectrum` binary broadcast |
-| CATSerialService | Core | Implemented | Serial CAT protocol over USB Enhanced COM Port (38400, 8N1) |
+| BackendFactoryService | Core | Implemented | `create_backend(model)` selects `ft710`/`ic7300`/`ic7300mk2` based on `MRRC_RADIO_MODEL` |
+| RXAudioService | Core | Implemented | Capture radio USB audio → Opus encode → `/WSaudioRX` tagged frame broadcast (per-backend sample rate) |
+| TXAudioService | Core | Implemented | Receive `/WSaudioTX` tagged frames → Opus decode → resample if needed → PyAudio → radio |
+| SpectrumService | Core | Implemented | Real scope data (FT4222 SPI or CI-V 0x27) + S-meter fallback → `/WSspectrum` binary broadcast |
+| CATSerialService | Core | Implemented | FT-710: Serial CAT protocol over USB Enhanced COM Port (38400, 8N1) |
+| CIVSerialService | Core | Implemented | IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr `0x94`) |
 | PollingService | Core | Implemented | 7-task adaptive background polling with priority-command yield |
 | ScopePipeService | Core | Implemented | Manage scope_pipe subprocess lifecycle; read stdout/stderr |
 | MemoryChannelService | Core | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
@@ -22,7 +24,7 @@
 
 ```text
 ControlService
-  → CATSerialService
+  → BackendFactoryService → CATSerialService / CIVSerialService
   → PollingService
 
 RXAudioService
@@ -32,11 +34,12 @@ TXAudioService
   → AudioHandler (Opus decode + PyAudio playback)
 
 SpectrumService
-  → ScopePipeService (FT4222 path)
+  → ScopePipeService (FT-710 FT4222 path)
+  → CIVScopeService (IC-7300 0x27 path)
   → PollingService (S-meter fallback path)
 
 PollingService
-  → CATSerialService
+  → backend serial service (CAT or CI-V)
   → RadioState
 
 StaticUIService
@@ -55,7 +58,9 @@ AuthService
 | RXAudioService | PyAudio PCM chunks | Tagged binary frames (Opus/PCM) | WS `/WSaudioRX` |
 | TXAudioService | Tagged binary frames + text control | PyAudio playback | WS `/WSaudioTX` |
 | SpectrumService | ScopeFrame or RadioState | Binary spectrum frames (v1/v2) | WS `/WSspectrum` |
-| CATSerialService | Command strings | Response strings | Serial (38400,8N1) |
+| BackendFactoryService | `MRRC_RADIO_MODEL` env var | `RadioBackend` instance + `RadioCapabilities` | Import-time factory |
+| CATSerialService | Command strings | Response strings | Serial (38400,8N1) Yaesu CAT |
+| CIVSerialService | CI-V command frames | CI-V response frames | Serial (115200,8N1) Icom CI-V |
 | MemoryChannelService | JSON array | JSON array + broadcast | HTTP `/api/mem_channels` |
 | AuthService | Password + request | Cookie + token + redirect | HTTP `/api/auth/*` |
 | StatusService | GET request | Full radio state JSON (50+ fields) | HTTP `/api/status` |
@@ -63,7 +68,7 @@ AuthService
 
 ## 10.4 Control Service Command Contract
 
-Key commands (see `_execute_set_command` in `server.py` for complete list):
+Key commands (see `_execute_set_command` in `server.py` and the active backend for complete mapping):
 
 | Command Field | Values | CAT Command | Notes |
 |---------------|--------|-------------|-------|
@@ -92,6 +97,8 @@ Key commands (see `_execute_set_command` in `server.py` for complete list):
 | `scope_span` | 0–9 | `SS05<NN>;` | Scope span index |
 | `scope_speed` | 0–5 | `SS00<NN>;` | Scope sweep speed |
 | `scope_mode` | 0–9 | `SS06<NN>;` | Scope display mode |
+
+The table above shows the FT-710 backend mapping. The IC-7300/MK2 backend exposes the same WebSocket fields but translates them inside `backends/ic7300/civ_controller.py` to CI-V framed commands (e.g., frequency set via 0x05 BCD, mode set via 0x06, PTT via 0x1C 0x00). The frontend discovers the available bands, modes, filters, and meter labels from `fullState.capabilities` rather than hardcoding them.
 
 ## 10.5 Service Quality Targets
 

@@ -12,7 +12,7 @@ Control channel. Carries all radio commands, state updates, and memory managemen
 
 **Server → Client:**
 
-- `{"type":"fullState","data":{...},"bands":[...],"modes":[...]}` — initial sync on connect
+- `{"type":"fullState","data":{...},"radioModel":"...","radioDisplayName":"...","capabilities":{...},"bands":[...],"modes":[...]}` — initial sync on connect; `capabilities` is backend-specific (bands, modes, filters, ATT/PRE steps, meter visibility, scope banner, etc.)
 - `{"type":"stateUpdate","fields":{...},"dirty":[...]}` — partial changed-field update
 - `{"type":"value","field":"...","value":...}` — single-value query response
 - `{"type":"memChannels","channels":[...]}` — memory channel broadcast
@@ -30,11 +30,11 @@ Control channel. Carries all radio commands, state updates, and memory managemen
 
 **Format:** 1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
 
-Server captures 48kHz Int16 mono from FT-710 USB audio → Opus encodes (64kbps default) → broadcasts to all `audio_rx_clients` at 20ms intervals. Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.
+Server captures Int16 mono from the selected radio's USB audio (44.1kHz for FT-710, 48kHz for IC-7300/MK2) → resamples to 48kHz if needed → Opus encodes (64kbps default) → broadcasts to all `audio_rx_clients` at 20ms intervals. Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.
 
 ### 9.2.3 /WSaudioTX (binary + text)
 
-**Binary:** 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → queues to PyAudio output stream → played to FT-710 USB audio input.
+**Binary:** 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → queues to PyAudio output stream → played to the selected radio's USB audio input (44.1kHz for FT-710 with resample, 48kHz native for IC-7300/MK2).
 
 **Text:** `"s:"` = stop TX; `"m:rate,encode,..."` = settings.
 
@@ -43,7 +43,7 @@ Server captures 48kHz Int16 mono from FT-710 USB audio → Opus encodes (64kbps 
 **v1 format:** 1-byte version (0x01) + 850 bytes wf1 = 851 bytes.
 **v2 format:** 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.
 
-Broadcast at ~30 fps from FT4222 data or S-meter fallback.
+Broadcast at ~30 fps from real scope data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2) or S-meter fallback.
 
 ## 9.3 RX Audio Signal Chain
 
@@ -57,13 +57,17 @@ Broadcast at ~30 fps from FT4222 data or S-meter fallback.
 
 *See lower half of diagram.*
 
-**TX runs at 48 kHz throughout the codec domain** — browser capture and Opus encode/decode — and the server bridges to the FT-710's native 44.1 kHz USB audio via frame-aligned resampling (960↔882 = exactly 20 ms, ratio 160:147) on every platform, including Windows. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) and prevents a Windows shared-mode mix rate from bypassing the device-domain bridge.
+**TX runs at 48 kHz throughout the codec domain** — browser capture and Opus encode/decode. The server bridges to the radio's native USB audio rate: the FT-710 uses 44.1 kHz with frame-aligned resampling (960↔882 = exactly 20 ms, ratio 160:147); the IC-7300/MK2 uses 48 kHz native with no resample. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) and prevents a Windows shared-mode mix rate from bypassing the device-domain bridge.
 
-The 44.1 kHz playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as `queue_drops` in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy Windows RF acceptance run therefore requires `decode_fail=0`, `write_err=0`, `queue_drops=0`, and `non_owner_drops=0`; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds.
+The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as `queue_drops` in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy RF acceptance run therefore requires `decode_fail=0`, `write_err=0`, `queue_drops=0`, and `non_owner_drops=0`; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds.
 
 ## 9.5 Spectrum Signal Chain
 
-### 9.5.1 FT4222 Path (Real FFT Data)
+### 9.5.1 Real Scope Path (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2)
+
+FT-710: FT4222 SPI → `scope_pipe.py` subprocess → 850-point wf1/wf2 → `ScopeHandler`.
+
+IC-7300/MK2: CI-V 0x27 frames → `civ_controller.py` demux → 475-bin scale/upsample to 850 → `ScopeHandler`.
 
 ![Spectrum Paths](diagrams/spectrum-paths.svg)
 
@@ -73,7 +77,7 @@ The 44.1 kHz playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest
 
 *See lower half of spectrum diagram.*
 
-## 9.6 CAT Polling Architecture
+## 9.6 Backend Polling Architecture
 
 ![Polling Architecture](diagrams/polling-architecture.svg)
 

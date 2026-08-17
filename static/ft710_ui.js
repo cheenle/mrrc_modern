@@ -1,6 +1,6 @@
 /**
- * FT-710 Web Control — UI Rendering & Event Handlers
- * ===================================================
+ * MRRC Modern Web Control — UI Rendering & Event Handlers
+ * ========================================================
  * All DOM manipulation, canvas drawing, button logic, and event wiring.
  * Depends on: ft710_main.js (radioState, bands, uiModes, sendCommand, etc.)
  */

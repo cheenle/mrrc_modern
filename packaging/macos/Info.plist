@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>MRRC FT-710</string>
+    <string>MRRC Modern</string>
     <key>CFBundleDisplayName</key>
-    <string>MRRC FT-710</string>
+    <string>MRRC Modern</string>
     <key>CFBundleIdentifier</key>
-    <string>net.vlsc.mrrc-ft710</string>
+    <string>net.vlsc.mrrc-modern</string>
     <key>CFBundleShortVersionString</key>
     <string>__VERSION__</string>
     <key>CFBundleVersion</key>
@@ -15,7 +15,7 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>MRRC-FT710</string>
+    <string>MRRC-Modern-Launcher</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>LSMinimumSystemVersion</key>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SDD context harness for the mrrc_ft710 codebase.
+"""SDD context harness for the mrrc_modern codebase.
 
 Two knowledge sources, both living in this directory:
   constraints.json — machine-readable enforcement rules (block/warn/info)
@@ -355,7 +355,7 @@ def cmd_trace(reg: dict, idx: dict, paths: list[str]) -> int:
 
 def cmd_prime(reg: dict) -> int:
     blocks = [r for r in reg["rules"] if r["severity"] == "block"]
-    print("═══ SDD-GUARDIAN — mrrc_ft710 design harness (SDD " + reg["sdd_version"] + ") ═══")
+    print("═══ SDD-GUARDIAN — mrrc_modern design harness (SDD " + reg["sdd_version"] + ") ═══")
     print("This repo is documented by SDD/ (IBM TeamSD, 15 chapters: requirements,")
     print("context, decisions, feasibility...). Before changing code, pull the full")
     print("engineering brief for the files you touch:")

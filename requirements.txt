@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# MRRC FT-710 Web Control — Core Python Dependencies
+# MRRC Modern Web Control — Core Python Dependencies
 # ═══════════════════════════════════════════════════════════════════════════
 #
 # Install: pip install -r requirements.txt

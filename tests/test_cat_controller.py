@@ -203,7 +203,7 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("backends.ft710.cat_controller.serial.Serial", side_effect=serial.SerialException("missing")),
             patch("backends.ft710.cat_controller.serial.tools.list_ports.comports", return_value=[fake_port]),
-            self.assertLogs("ft710.cat", level="ERROR") as logs,
+            self.assertLogs("mrrc.backend.ft710.cat", level="ERROR") as logs,
         ):
             ok = await cat.connect()
 

@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# MRRC FT-710 Web Control — Development & Test Dependencies
+# MRRC Modern Web Control — Development & Test Dependencies
 # ═══════════════════════════════════════════════════════════════════════════
 #
 # Install: pip install -r requirements-dev.txt

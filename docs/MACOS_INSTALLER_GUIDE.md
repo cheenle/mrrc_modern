@@ -9,10 +9,10 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | MD5 | SHA-256 |
 |------|------|-----|---------|
-| `MRRC-FT710-v1.7.0-arm64.dmg` | TBD | TBD | TBD |
+| `MRRC-Modern-v1.9.0-arm64.dmg` | TBD | TBD | TBD |
 
-- Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.7.0-arm64.dmg>
-- GitHub Releases: <https://github.com/cheenle/mrrc_ft710/releases>
+- Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.9.0-arm64.dmg>
+- GitHub Releases: <https://github.com/cheenle/mrrc_modern/releases>
 
 > Intel (x86_64) Macs are not supported by this build. The v1.7.0 package was
 > built on Apple Silicon (Python 3.12, PyInstaller 6.21.0, rumps 0.4) with the
@@ -43,16 +43,16 @@ Confirm the serial port:
 ls /dev/cu.*
 ```
 
-### 2. Install MRRC FT-710
+### 2. Install MRRC Modern
 
 Mount the disk image and drag the app to Applications:
 
 ```text
-MRRC-FT710-v1.7.0-arm64.dmg
+MRRC-Modern-v1.9.0-arm64.dmg
 ```
 
 1. Double-click the `.dmg` to mount it.
-2. Drag **MRRC FT-710** into the **Applications** folder.
+2. Drag **MRRC Modern** into the **Applications** folder.
 3. Eject the disk image.
 
 ### 3. Bypass Gatekeeper on first launch (ad-hoc signed)
@@ -60,12 +60,12 @@ MRRC-FT710-v1.7.0-arm64.dmg
 Because the app is ad-hoc signed (no Apple Developer ID), macOS blocks the
 first launch. Do **one** of the following:
 
-- In Finder, **right-click** `MRRC FT-710` → **Open** → confirm **Open** in
+- In Finder, **right-click** `MRRC Modern` → **Open** → confirm **Open** in
   the dialog. This one-time bypass sticks for subsequent launches.
 - Or remove the quarantine attribute from the Terminal:
 
   ```bash
-  xattr -dr com.apple.quarantine /Applications/MRRC-FT710.app
+  xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app
   ```
 
 ### 4. Edit configuration
@@ -73,7 +73,7 @@ first launch. Do **one** of the following:
 The config file is created on first launch:
 
 ```text
-~/Library/Application Support/MRRC-FT710/ft710.env
+~/Library/Application Support/MRRC-Modern/mrrc_modern.env
 ```
 
 Edit it from the menu-bar item **Edit Configuration…** (opens TextEdit), or
@@ -103,20 +103,20 @@ set `FT710_SERIAL_PORT` to the CI-V port from `ls /dev/cu.*` and leave
 
 ### 5. Launch
 
-Launch **MRRC FT-710** from Applications (or Spotlight). The menu-bar app:
+Launch **MRRC Modern** from Applications (or Spotlight). The menu-bar app:
 
-1. Reads `~/Library/Application Support/MRRC-FT710/ft710.env`.
+1. Reads `~/Library/Application Support/MRRC-Modern/mrrc_modern.env`.
 2. Starts the bundled server and waits for it to answer HTTP before opening
    `http://127.0.0.1:8888` in the default browser (up to ~15 seconds on the
    first run).
-3. Shows a **menu-bar item** labeled `MRRC FT-710 :8888` with:
+3. Shows a **menu-bar item** labeled `MRRC Modern :8888` with:
    - **Open Web UI** — reopen the browser at the control page.
-   - **Edit Configuration…** — open `ft710.env` in TextEdit.
+   - **Edit Configuration…** — open `mrrc_modern.env` in TextEdit.
    - **Restart Server** — stop and re-spawn the server.
-   - **Quit MRRC FT-710** — stop the server gracefully and exit.
+   - **Quit MRRC Modern** — stop the server gracefully and exit.
 
 The app is a background (menu-bar) app — it has no Dock icon and no main menu
-bar. Use **Quit MRRC FT-710** from its menu-bar item for a clean stop (audio
+bar. Use **Quit MRRC Modern** from its menu-bar item for a clean stop (audio
 drains and PTT releases first).
 
 > **Warning:** Force-quitting the app (Activity Monitor → Force Quit, or
@@ -130,8 +130,8 @@ The macOS package supports FT4222 true spectrum for the FT-710 when these
 runtime libraries are present in the app bundle:
 
 ```text
-MRRC-FT710.app/Contents/MacOS/vendor/ftdi/macos/libft4222.dylib
-MRRC-FT710.app/Contents/MacOS/vendor/ftdi/macos/libftd2xx.dylib
+MRRC-Modern.app/Contents/MacOS/vendor/ftdi/macos/libft4222.dylib
+MRRC-Modern.app/Contents/MacOS/vendor/ftdi/macos/libftd2xx.dylib
 ```
 
 If either is missing, the app still runs and uses the S-meter fallback
@@ -175,8 +175,8 @@ packaging/macos/build.sh
 Expected outputs:
 
 ```text
-dist/macos/MRRC-FT710.app
-dist/macos/MRRC-FT710-v1.7.0-arm64.dmg
+dist/macos/MRRC-Modern.app
+dist/macos/MRRC-Modern-v1.9.0-arm64.dmg
 ```
 
 The build script runs syntax checks and the test suite before packaging, and
@@ -199,7 +199,7 @@ prints MD5/SHA-256 of the `.dmg` for the website download table. See
 
 After installing on macOS:
 
-1. Launch `MRRC FT-710` (right-click → Open the first time).
+1. Launch `MRRC Modern` (right-click → Open the first time).
 2. Confirm the browser opens the login page.
 3. Log in with `FT710_WEB_PASSWORD`.
 4. Confirm frequency, mode, and S-meter update from the radio.
@@ -214,10 +214,10 @@ After installing on macOS:
 
 | Symptom | Likely Cause | Fix |
 |---------|--------------|-----|
-| "MRRC FT-710 is damaged / can't be opened" | Gatekeeper blocking ad-hoc signature | Right-click → Open, or `xattr -dr com.apple.quarantine /Applications/MRRC-FT710.app` |
+| "MRRC Modern is damaged / can't be opened" | Gatekeeper blocking ad-hoc signature | Right-click → Open, or `xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app` |
 | Browser opens but radio state does not update | Wrong serial port | Set `FT710_SERIAL_PORT` to the correct device from `ls /dev/cu.*` |
 | App starts but FT4222 spectrum is unavailable | Missing `libft4222.dylib` / `libftd2xx.dylib` (or not using FT-710) | Place both in the bundle's `Contents/MacOS/vendor/ftdi/macos/`; IC-7300 uses CI-V `0x27` and does not need FTDI |
-| Login fails | Wrong password | Check `~/Library/Application Support/MRRC-FT710/ft710.env` |
+| Login fails | Wrong password | Check `~/Library/Application Support/MRRC-Modern/mrrc_modern.env` |
 | Audio device not found | macOS selected another device | Set `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` by name or index |
 | Port 8888 already in use | Another local service is listening | Change `FT710_WEB_PORT` |
 | Server keeps running after quit | App was Force Quit, not menu-bar Quit | `pkill -f ft710-server`; use the menu-bar Quit item next time |

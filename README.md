@@ -11,7 +11,7 @@ The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `
 ### macOS / Linux
 
 ```bash
-cd mrrc_ft710
+cd mrrc_modern
 pip install -r requirements.txt
 
 # FT-710 (Yaesu CAT, 38400 baud):
@@ -35,24 +35,24 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.8.0 Stable** (35.2 MB, SHA-256
-`36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea`):
+**Download v1.9.0 Stable** (45.3 MB, SHA-256
+`f4d8e2a236f469d601cf7ef6122c9721d48c113a163b9c1c58f67fb990fd6734`):
 
-- Fast mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-v1.8.0-Windows-x64-Setup.exe>
-- GitHub repository: <https://github.com/cheenle/mrrc_ft710>
+- Fast mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.9.0-Windows-x64-Setup.exe>
+- GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-After install, edit `%LOCALAPPDATA%\MRRC-FT710\ft710.env` (Start Menu →
+After install, edit `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` (Start Menu →
 `Edit Configuration`) to set `MRRC_RADIO_MODEL`, the serial port, and web
-password, then launch `MRRC FT-710` from the Start Menu. Build and
+password, then launch `MRRC Modern` from the Start Menu. Build and
 installation details are in [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md).
 
 Key Windows package paths:
 
 ```text
 packaging\windows\build.ps1
-dist\windows\MRRC-FT710-Setup.exe
-%LOCALAPPDATA%\MRRC-FT710\ft710.env
+dist\windows\MRRC-Modern-Setup.exe
+%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env
 ```
 
 ### Environment Variables
@@ -331,7 +331,7 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 ## Tests
 
 ```bash
-cd mrrc_ft710
+cd mrrc_modern
 python3 -m pytest tests/ -v
 # Or with unittest:
 python3 -m unittest discover -s tests -v

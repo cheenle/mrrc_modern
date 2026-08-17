@@ -12,7 +12,7 @@ import sys
 
 SERVER = "http://localhost:8888"
 WS_URL = "ws://localhost:8888/WSradio"
-PASSWORD = "ft710"  # default — change if you set FT710_WEB_PASSWORD
+PASSWORD = "mrrc"  # default — change if you set MRRC_WEB_PASSWORD
 
 
 def get_token() -> str:

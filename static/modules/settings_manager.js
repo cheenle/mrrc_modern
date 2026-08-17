@@ -88,7 +88,7 @@
 
     // ── Auth Cookie Helper ────────────────────────────────────────
     function getAuthToken() {
-        return getCookie('ft710_auth') || '';
+        return getCookie('mrrc_auth') || '';
     }
 
     // ── Initialize ────────────────────────────────────────────────

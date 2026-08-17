@@ -1,6 +1,6 @@
 # macOS 安装包打包流程（本机 Mac 直接构建）
 
-> 用途：在开发者本机 Mac 上构建 `MRRC-FT710-<ver>-arm64.dmg`。
+> 用途：在开发者本机 Mac 上构建 `MRRC-Modern-<ver>-arm64.dmg`。
 > 本文按 v1.7.0 首次打包的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 > 与 Windows 不同，macOS 不需要 KVM 虚拟机——直接在本机用 `.venv` 打包。
@@ -26,7 +26,7 @@
 ### 2.1 venv 与依赖
 
 ```bash
-cd ~/HAM/mrrc_ft710
+cd ~/HAM/mrrc_modern
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -68,22 +68,22 @@ packaging/macos/build.sh
 ### Step 2 — 验证产物
 
 ```bash
-ls -lh dist/macos/MRRC-FT710-*.dmg
-codesign -dv dist/macos/MRRC-FT710.app                            # 显示 ad-hoc 签名
-ls dist/macos/MRRC-FT710.app/Contents/MacOS/ft710-server          # server 在位
-ls dist/macos/MRRC-FT710.app/Contents/MacOS/_internal/static/index.html   # static 在 _internal
-ls dist/macos/MRRC-FT710.app/Contents/MacOS/macos/default.env     # 配置模板
-ls dist/macos/MRRC-FT710.app/Contents/MacOS/mem_channels.json     # 初始频道种子
+ls -lh dist/macos/MRRC-Modern-*.dmg
+codesign -dv dist/macos/MRRC-Modern.app                            # 显示 ad-hoc 签名
+ls dist/macos/MRRC-Modern.app/Contents/MacOS/MRRC-Modern-Server          # server 在位
+ls dist/macos/MRRC-Modern.app/Contents/MacOS/_internal/static/index.html   # static 在 _internal
+ls dist/macos/MRRC-Modern.app/Contents/MacOS/macos/default.env     # 配置模板
+ls dist/macos/MRRC-Modern.app/Contents/MacOS/mem_channels.json     # 初始频道种子
 ```
 
 冒烟测试：
 
 ```bash
-hdiutil attach dist/macos/MRRC-FT710-*.dmg
-cp -R "/Volumes/MRRC FT-710/MRRC-FT710.app" /Applications/
-xattr -dr com.apple.quarantine /Applications/MRRC-FT710.app      # 跳过 Gatekeeper 首次拦截
-open /Applications/MRRC-FT710.app                                 # 应在菜单栏出现图标并开浏览器
-hdiutil detach "/Volumes/MRRC FT-710"
+hdiutil attach dist/macos/MRRC-Modern-*.dmg
+cp -R "/Volumes/MRRC Modern/MRRC-Modern.app" /Applications/
+xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app      # 跳过 Gatekeeper 首次拦截
+open /Applications/MRRC-Modern.app                                 # 应在菜单栏出现图标并开浏览器
+hdiutil detach "/Volumes/MRRC Modern"
 ```
 
 ### Step 3 — 记录校验和
@@ -91,36 +91,36 @@ hdiutil detach "/Volumes/MRRC FT-710"
 `build.sh` 末尾会打印 DMG 的 size / MD5 / SHA-256，发布网页要用。也可手算：
 
 ```bash
-du -h dist/macos/MRRC-FT710-*-arm64.dmg
-md5 -q dist/macos/MRRC-FT710-*-arm64.dmg
-shasum -a 256 dist/macos/MRRC-FT710-*-arm64.dmg
+du -h dist/macos/MRRC-Modern-*-arm64.dmg
+md5 -q dist/macos/MRRC-Modern-*-arm64.dmg
+shasum -a 256 dist/macos/MRRC-Modern-*-arm64.dmg
 ```
 
 ## 4. 发布到网站（可选）
 
-下载镜像在 **www.vlsc.net**（webroot `/var/www/vlsc.net/mrrc_ft710/`，属 `www-data:www-data`，cheenle 有 sudo 免密）：
+下载镜像在 **www.vlsc.net**（webroot `/var/www/vlsc.net/mrrc_modern/`，属 `www-data:www-data`，cheenle 有 sudo 免密）：
 
 ```bash
-scp dist/macos/MRRC-FT710-<ver>-arm64.dmg www.vlsc.net:/tmp/MRRC-FT710-<ver>-arm64.dmg.new
-ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-<ver>-arm64.dmg /tmp/old.bak; \
-  sudo -n mv /tmp/MRRC-FT710-<ver>-arm64.dmg.new /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-<ver>-arm64.dmg; \
-  sudo -n chown www-data:www-data /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-<ver>-arm64.dmg; \
-  sudo -n chmod 644 /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-<ver>-arm64.dmg; \
-  md5sum /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-<ver>-arm64.dmg"
+scp dist/macos/MRRC-Modern-<ver>-arm64.dmg www.vlsc.net:/tmp/MRRC-Modern-<ver>-arm64.dmg.new
+ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern-<ver>-arm64.dmg /tmp/old.bak; \
+  sudo -n mv /tmp/MRRC-Modern-<ver>-arm64.dmg.new /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern-<ver>-arm64.dmg; \
+  sudo -n chown www-data:www-data /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern-<ver>-arm64.dmg; \
+  sudo -n chmod 644 /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern-<ver>-arm64.dmg; \
+  md5sum /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern-<ver>-arm64.dmg"
 ```
 
 ### 版本号/大小/校验和同步清单（共 5 处，新版发布都要改）
 
 - `CHANGELOG.md` 最新条目（版本源头）
-- `packaging/windows/MRRC-FT710.iss` 的 `MyAppVersion`（Windows）
-- `packaging/macos/ft710_launcher.spec` 的 Info.plist（macOS，build.sh 自动从 CHANGELOG 注入，无需手改）
+- `packaging/windows/MRRC-Modern.iss` 的 `MyAppVersion`（Windows）
+- `packaging/macos/mrrc_modern_launcher.spec` 的 Info.plist（macOS，build.sh 自动从 CHANGELOG 注入，无需手改）
 - `website/index.html`（Windows + macOS 两处 MD5/SHA-256 + 版本/大小文字）
 - `website/zh/index.html`（同上）
 - `docs/WINDOWS_INSTALLER_GUIDE.md` + `docs/MACOS_INSTALLER_GUIDE.md`（Download 表格 + 构建说明段）
 
 改完上传 `website/index.html` → webroot 根、`website/zh/index.html` → webroot `zh/`（同样 sudo + chown www-data）。
 
-验证：`curl -sI https://www.vlsc.net/mrrc_ft710/downloads/MRRC-FT710-<ver>-arm64.dmg`（200 + content-length 正确）。
+验证：`curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-<ver>-arm64.dmg`（200 + content-length 正确）。
 
 ## 5. 故障排查
 
@@ -129,9 +129,9 @@ ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_ft710/downloads/MRRC-FT710-<
 | `pip install pyaudio` 失败 | 缺 PortAudio | `brew install portaudio` 后重装 |
 | rumps/PyObjC 装不上 | 用了非 arm64 或过旧的 Python | 用 Python 3.12，确保 `packaging/macos/requirements-build.txt` 已装 |
 | `codesign` 报 nested 内容未签名 | 用了 `--deep`（会误签 `_internal/*.dist-info`） | build.sh 已改用“先签 dylib/.so + 各主 exe + 根 bundle，不用 `--deep`”；若手动签也照此 |
-| 打出的 `.app` 首次打开“已损坏” | Gatekeeper 拦截 ad-hoc 签名 | 右键→打开，或 `xattr -dr com.apple.quarantine /Applications/MRRC-FT710.app` |
-| 退出菜单栏 app 后 server 仍在跑 | 用了 Force Quit（SIGKILL 不可捕获） | `pkill -f ft710-server`；正常退出请用菜单栏的 Quit 项 |
-| `MRRC-FT710.app` 体积异常大 | rumps 拉入了整个 PyObjC | 正常，PyObjC 约 40–50 MB；如需缩小可后续裁剪 frameworks |
+| 打出的 `.app` 首次打开“已损坏” | Gatekeeper 拦截 ad-hoc 签名 | 右键→打开，或 `xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app` |
+| 退出菜单栏 app 后 server 仍在跑 | 用了 Force Quit（SIGKILL 不可捕获） | `pkill -f MRRC-Modern-Server`；正常退出请用菜单栏的 Quit 项 |
+| `MRRC-Modern.app` 体积异常大 | rumps 拉入了整个 PyObjC | 正常，PyObjC 约 40–50 MB；如需缩小可后续裁剪 frameworks |
 
 ## 6. 常用命令速查
 
@@ -143,9 +143,9 @@ source .venv/bin/activate && packaging/macos/build.sh
 .venv/bin/python -m unittest discover -s tests
 
 # 验证签名
-codesign -dv dist/macos/MRRC-FT710.app
-spctl -a -vv dist/macos/MRRC-FT710.app      # 预期 “not a source of notarization”——ad-hoc 正常
+codesign -dv dist/macos/MRRC-Modern.app
+spctl -a -vv dist/macos/MRRC-Modern.app      # 预期 “not a source of notarization”——ad-hoc 正常
 
 # 挂载查看
-hdiutil attach dist/macos/MRRC-FT710-*.dmg
+hdiutil attach dist/macos/MRRC-Modern-*.dmg
 ```

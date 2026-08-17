@@ -28,7 +28,7 @@ from backends.ft710.config_ft710 import (
 from backends.ft710.scope_producer import FT710ScopeProducer
 from config import NARROW_MODES, UI_MODES
 
-logger = logging.getLogger("ft710.backend")
+logger = logging.getLogger("mrrc.backend.ft710")
 
 
 def parse_ft710_sync(raw: dict) -> dict:

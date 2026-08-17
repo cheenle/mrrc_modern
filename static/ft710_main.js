@@ -1,6 +1,6 @@
 /**
- * FT-710 Web Control — Main Controller
- * =====================================
+ * MRRC Modern Web Control — Main Controller
+ * ==========================================
  * WebSocket connection, state management, message dispatch.
  * Connects to /WSradio endpoint with auth token.
  *
@@ -9,7 +9,7 @@
 
 // ── Auth ────────────────────────────────────────────────────────────
 function getAuthToken() {
-	const m = document.cookie.match(/(?:^|;\s*)ft710_auth=([^;]*)/);
+	const m = document.cookie.match(/(?:^|;\s*)mrrc_auth=([^;]*)/);
 	return m ? m[1] : "";
 }
 
@@ -442,10 +442,10 @@ function handleMessage(msg) {
 
 // ── Branding ────────────────────────────────────────────────────────
 // Retitle the page/menu from fullState.radioDisplayName ("Yaesu FT-710",
-// "Icom IC-7300", ...).  Fallback "FT-710" reproduces the legacy static
-// strings exactly when an old server sends no radioDisplayName.
+// "Icom IC-7300", ...).  Fallback "MRRC Modern" is used only when an old
+// server sends no radioDisplayName.
 function _applyRadioBranding() {
-	const name = radioDisplayName || "FT-710";
+	const name = radioDisplayName || "MRRC Modern";
 	document.title = name + " Web Control";
 	const menuTitle = document.getElementById("menu-title");
 	if (menuTitle) menuTitle.textContent = name + " Menu";
@@ -684,7 +684,7 @@ function _downloadRecording(chunks) {
 	var url = URL.createObjectURL(blob);
 	var a = document.createElement("a");
 	a.href = url;
-	a.download = "ft710-rx-" + _formatRecordingTimestamp(new Date()) + ".mp3";
+	a.download = "mrrc-rx-" + _formatRecordingTimestamp(new Date()) + ".mp3";
 	document.body.appendChild(a);
 	a.click();
 	a.remove();

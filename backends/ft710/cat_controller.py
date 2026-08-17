@@ -18,7 +18,7 @@ import serial.tools.list_ports
 
 from config import SERIAL_TIMEOUT, RECONNECT_BASE_DELAY, RECONNECT_MAX_DELAY
 
-logger = logging.getLogger("ft710.cat")
+logger = logging.getLogger("mrrc.backend.ft710.cat")
 
 
 def _available_serial_ports_summary() -> str:

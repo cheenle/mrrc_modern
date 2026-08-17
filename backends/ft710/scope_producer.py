@@ -40,7 +40,7 @@ from backends.ft710.scope_frame import parse_pipe_payload, WF_SIZE
 if TYPE_CHECKING:
     from scope_handler import ScopeHandler
 
-logger = logging.getLogger("ft710.scope.pipe")
+logger = logging.getLogger("mrrc.backend.ft710.scope")
 
 OnFrameCallback = Callable[["ScopeHandler"], Awaitable[None]]
 

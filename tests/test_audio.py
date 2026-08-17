@@ -67,17 +67,17 @@ class OpusConstantsTests(unittest.TestCase):
             str(path)
             for path in _libopus_candidates(
                 platform="win32",
-                resource_roots=[Path(r"C:\Program Files\MRRC FT-710")],
+                resource_roots=[Path(r"C:\Program Files\MRRC Modern")],
                 find_library_result=None,
             )
         ]
-        self.assertIn(r"C:\Program Files\MRRC FT-710\opus.dll", candidates)
+        self.assertIn(r"C:\Program Files\MRRC Modern\opus.dll", candidates)
         self.assertIn(
-            r"C:\Program Files\MRRC FT-710\_internal\opus.dll",
+            r"C:\Program Files\MRRC Modern\_internal\opus.dll",
             candidates,
         )
         self.assertIn(
-            r"C:\Program Files\MRRC FT-710\vendor\opus\windows\bin\x64\opus.dll",
+            r"C:\Program Files\MRRC Modern\vendor\opus\windows\bin\x64\opus.dll",
             candidates,
         )
 

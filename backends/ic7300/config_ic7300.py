@@ -24,6 +24,9 @@ from config import _interp
 # ── CI-V Connection ──────────────────────────────────────────────────
 # IC-7300 default CI-V address is 0x94 (wfview rig: CIVAddress=148).
 CIV_ADDR = int(os.environ.get("IC7300_CIV_ADDR", "0x94"), 16)
+# IC-7300MK2 factory default CI-V address is 0xB6 (IC-7300MK2 CI-V
+# Reference frame diagram; hamlib ic7300.c).  The IC-7300 is 0x94.
+MK2_CIV_ADDR = int(os.environ.get("IC7300MK2_CIV_ADDR", "0xB6"), 16)
 # IC-7300 USB serial defaults to 115200 (menu: CI-V USB Baud Rate).
 CIV_BAUD_RATE = int(os.environ.get("IC7300_CIV_BAUD", "115200"))
 
@@ -160,10 +163,10 @@ ALC_CAL: list[tuple[int, float]] = [          # ALC meter -> zone (redline at 1)
     (0, 0.0), (120, 1.0), (255, 2.0),
 ]
 COMP_CAL: list[tuple[int, float]] = [         # COMP meter -> dB compression
-    (0, 0.0), (130, 15.0), (241, 30.0),
+    (0, 0.0), (130, 15.0), (210, 30.0),       # 30 dB = BCD 02 10 (per MK2 reference)
 ]
 VOLTAGE_CAL: list[tuple[int, float]] = [      # Vd meter -> volts
-    (0, 0.0), (13, 10.0), (185, 13.8), (241, 16.0),
+    (0, 0.0), (19, 10.0), (185, 13.8), (241, 16.0),   # 10 V = BCD 00 13 (per MK2 reference)
 ]
 CURRENT_CAL: list[tuple[int, float]] = [      # Id meter -> amps
     (0, 0.0), (97, 10.0), (146, 15.0), (241, 25.0),

@@ -86,6 +86,35 @@ class PowerOnRadioTests(unittest.TestCase):
         asyncio.run(server._power_on_radio(cat))
         self.assertGreater(server._power_boot_until, 0)
 
+    def test_uses_backend_boot_verify_when_provided(self):
+        # With a backend present the boot check goes through its
+        # boot_verify() — the IC-7300 must never be checked with the
+        # Yaesu "FA" query (0xFA is the CI-V NG reply code).
+        cat = _FakeCat(fa_answer=False)  # the FA path would fail
+        calls = []
+
+        class _Backend:
+            async def boot_verify(self, cat, timeout):
+                calls.append(timeout)
+                return True
+
+        ok = asyncio.run(server._power_on_radio(cat, backend=_Backend()))
+        self.assertTrue(ok)
+        self.assertEqual(calls, [0.4])
+
+    def test_icom_backend_boot_verify_queries_civ_read(self):
+        from backends.ic7300.backend import IC7300Backend
+        backend = IC7300Backend("/dev/fake")
+        queried = []
+
+        class _Cat:
+            async def query(self, cmd, timeout=None):
+                queried.append(cmd)
+                return b"freq-frame"
+
+        self.assertTrue(asyncio.run(backend.boot_verify(_Cat(), 0.1)))
+        self.assertEqual(queried, [0x03])
+
 
 class PowerSetCommandGuardTests(unittest.TestCase):
     def setUp(self):

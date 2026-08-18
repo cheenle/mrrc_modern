@@ -40,6 +40,23 @@ class CreateBackendTests(unittest.TestCase):
         self.assertIsInstance(backend, IC7300MK2Backend)
         self.assertEqual(backend.capabilities.display_name, "Icom IC-7300MK2")
 
+    def test_ic7300mk2_uses_mk2_civ_address(self):
+        # MK2 factory CI-V address is 0xB6 (IC-7300MK2 CI-V Reference),
+        # not the IC-7300's 0x94 — otherwise a stock MK2 never answers.
+        from backends.ic7300.backend import IC7300MK2Backend
+        from backends.ic7300.config_ic7300 import MK2_CIV_ADDR
+        backend = IC7300MK2Backend(port="/dev/null")
+        self.assertIsInstance(backend, IC7300MK2Backend)
+        self.assertEqual(backend._civ.civ_addr, MK2_CIV_ADDR)
+        self.assertEqual(MK2_CIV_ADDR, 0xB6)
+
+    def test_ic7300_uses_ic7300_civ_address(self):
+        from backends.ic7300.backend import IC7300Backend
+        from backends.ic7300.config_ic7300 import CIV_ADDR
+        backend = IC7300Backend(port="/dev/null")
+        self.assertEqual(backend._civ.civ_addr, CIV_ADDR)
+        self.assertEqual(CIV_ADDR, 0x94)
+
     def test_radio_model_default_from_env(self):
         # MRRC_RADIO_MODEL is unset in the test environment
         self.assertEqual(config.RADIO_MODEL, "ft710")

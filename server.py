@@ -900,12 +900,17 @@ POWER_ON_VERIFY_S = 12.0     # per-attempt wait for the radio to answer FA
 _power_boot_until: float = 0.0
 
 
-async def _power_on_radio(cat) -> bool:
+async def _power_on_radio(cat, backend=None) -> bool:
     """Send PS1 (with retries) and verify the radio actually boots.
 
-    Returns True once the radio answers an FA query, False after all
+    Returns True once the radio answers a boot check, False after all
     attempts.  Verification matters: PS1 is fire-and-forget and can be
     lost — without a check the UI would show "on" while the radio is off.
+
+    The boot check is backend-specific: the FT-710 answers a Yaesu "FA"
+    frequency query; an Icom radio answers a CI-V read (the Yaesu FA
+    command is invalid there — 0xFA is the CI-V NG reply code).  The
+    backend's ``boot_verify()`` supplies the right query.
     """
     global _power_boot_until
     for attempt in range(1, POWER_ON_ATTEMPTS + 1):
@@ -917,7 +922,11 @@ async def _power_on_radio(cat) -> bool:
         deadline = time.monotonic() + POWER_ON_VERIFY_S
         while time.monotonic() < deadline:
             await asyncio.sleep(1.0)
-            if await cat.query("FA", timeout=0.4):
+            if backend is not None:
+                verified = await backend.boot_verify(cat, 0.4)
+            else:
+                verified = bool(await cat.query("FA", timeout=0.4))
+            if verified:
                 logger.info("Power-on verified (PS1 attempt %d)", attempt)
                 # Re-arm from the actual boot moment — a slow boot must
                 # not eat the whole protection window.
@@ -1164,7 +1173,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             on = value is True or str(value).lower() in ("true", "1")
             if on:
                 scheduler and scheduler.skip_next_poll("power_on", 25.0)
-                if await _power_on_radio(cat):
+                if await _power_on_radio(cat, backend):
                     radio.update(power_on=True)
                 else:
                     radio.update(power_on=False)

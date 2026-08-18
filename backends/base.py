@@ -105,6 +105,16 @@ class RadioBackend(ABC):
         """
         return None
 
+    async def boot_verify(self, cat, timeout: float = 0.4) -> bool:
+        """After power-on, return True once the radio answers a boot check.
+
+        ``cat`` is this backend's CAT controller.  The default is the
+        Yaesu frequency read-back ("FA") used by the FT-710; Icom
+        backends override with a CI-V read (the Yaesu FA command is
+        invalid on CI-V, where 0xFA is the NG reply code).
+        """
+        return bool(await cat.query("FA", timeout=timeout))
+
     # ── UI Tables (per-radio, sent in the fullState push) ──────────
 
     @property

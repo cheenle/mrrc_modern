@@ -44,7 +44,7 @@ from backends.ic7300.civ_codec import (
     CONTROLLER_ADDR, SCOPE_CMD, SCOPE_SUB_DATA,
 )
 from backends.ic7300.config_ic7300 import (
-    CIV_ADDR, CIV_BAUD_RATE, SCOPE_SPAN_HZ,
+    CIV_ADDR, MK2_CIV_ADDR, CIV_BAUD_RATE, SCOPE_SPAN_HZ,
     METER_SUB_S, METER_SUB_PO, METER_SUB_SWR, METER_SUB_ALC,
     METER_SUB_COMP,
 )
@@ -102,13 +102,15 @@ SCOPE_SUB_SPAN = 0x15       # data: 5-byte BCD half-span in Hz
 SCOPE_SUB_SPEED = 0x1A      # data 0=fast 1=mid 2=slow
 
 # Set-mode item for "CI-V Transceive" ON at connect:
-# 1A 05 <item 00 71> <value 01>.  Item 0071 per hamlib ic7300.c
-# (RIG_FUNC_TRANSCEIVE extcmd {0x00, 0x71}) and wfview IC-7300.rig
-# Commands\95 — Phase 2a research said item 0048, which both sources
-# contradict.  (IC-7300MK2 uses item 0089; we alias the MK2 to this
-# backend, so its broadcast enable may need hardware verification.)
-# TODO(hw-verify)
+#   IC-7300:  1A 05 00 71 01 — item 0071 per hamlib ic7300.c
+#             (RIG_FUNC_TRANSCEIVE extcmd {0x00, 0x71}) and wfview
+#             IC-7300.rig Commands\95.
+#   IC-7300MK2: 1A 05 00 89 01 — item 0089 per the IC-7300MK2 CI-V
+#             Reference ("CI-V Transceive setting").  On the MK2,
+#             item 0071 is "AF Output Level", NOT transceive.
+# The controller picks per its CI-V address (0xB6 ⇒ MK2).  hw-verify.
 SETMODE_CIV_TRANSCEIVE_ON = bytes((CMD_SET_MODE_ITEM, 0x05, 0x00, 0x71, 0x01))
+SETMODE_CIV_TRANSCEIVE_MK2 = bytes((CMD_SET_MODE_ITEM, 0x05, 0x00, 0x89, 0x01))
 
 # Commands whose response is identified by cmd + first data byte.
 _SUBKEYED_CMDS = frozenset((
@@ -155,6 +157,11 @@ class CivController:
         self.baudrate = baudrate
         self.civ_addr = civ_addr
         self.query_timeout = query_timeout
+        # Transceive enable bytes: the MK2 (address 0xB6) uses set-mode
+        # item 0089, the IC-7300 item 0071 (see the constant comments).
+        self._transceive_cmd = (
+            SETMODE_CIV_TRANSCEIVE_MK2 if civ_addr == MK2_CIV_ADDR
+            else SETMODE_CIV_TRANSCEIVE_ON)
         self._ser: Optional[serial.Serial] = None
         self._lock = asyncio.Lock()
         self._connected = False
@@ -234,7 +241,7 @@ class CivController:
 
             # Enable CI-V transceive so front-panel knob/mode changes are
             # broadcast (cmd 0x00/0x01) without polling.
-            await self.send_set_command(SETMODE_CIV_TRANSCEIVE_ON)
+            await self.send_set_command(self._transceive_cmd)
             logger.info("Connected to IC-7300 (CI-V 0x%02X) on %s",
                         self.civ_addr, self.port)
             return True

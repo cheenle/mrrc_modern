@@ -12,12 +12,13 @@ import serial
 
 from backends.ic7300.civ_controller import (
     CivController, CivTimeoutError, CivNakError,
-    SETMODE_CIV_TRANSCEIVE_ON,
+    SETMODE_CIV_TRANSCEIVE_ON, SETMODE_CIV_TRANSCEIVE_MK2,
 )
 from backends.ic7300.civ_codec import (
     build_frame, encode_freq_bcd, encode_level_bcd,
     CONTROLLER_ADDR, RADIO_ADDR,
 )
+from backends.ic7300.config_ic7300 import MK2_CIV_ADDR
 
 
 class FakeSerial:
@@ -110,6 +111,27 @@ class ConnectTests(CivControllerTestBase):
         expected = build_frame(SETMODE_CIV_TRANSCEIVE_ON[0],
                                SETMODE_CIV_TRANSCEIVE_ON[1:])
         self.assertIn(expected, self.written_frames())
+
+    async def test_mk2_connect_uses_mk2_transceive_item(self):
+        # The MK2 (address 0xB6) enables CI-V Transceive via set-mode
+        # item 0089 — item 0071 is "AF Output Level" on the MK2.
+        self.fake.written.clear()
+        ctl = CivController("/dev/fake", civ_addr=MK2_CIV_ADDR,
+                            query_timeout=0.05)
+        with patch("backends.ic7300.civ_controller.serial.Serial",
+                   return_value=self.fake):
+            ok = await ctl.connect()
+        self.assertTrue(ok)
+        expected = build_frame(SETMODE_CIV_TRANSCEIVE_MK2[0],
+                               SETMODE_CIV_TRANSCEIVE_MK2[1:],
+                               to=MK2_CIV_ADDR)
+        frames = []
+        for part in bytes(self.fake.written).split(b"\xfe\xfe"):
+            if part:
+                frames.append(b"\xfe\xfe" + part)
+        self.assertIn(expected, frames)
+        self.assertNotIn(b"\x00\x71", bytes(self.fake.written))
+        await ctl.disconnect()
 
 
 class FrequencyTests(CivControllerTestBase):

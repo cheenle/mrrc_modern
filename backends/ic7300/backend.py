@@ -26,7 +26,8 @@ from backends.ic7300.civ_controller import (
 from backends.ic7300.civ_scope import CivScopeProducer
 from backends.ic7300.config_ic7300 import (
     BANDS, MODE_NUM_TO_NAME, MODE_NAME_TO_NUM, PREAMP_LABELS,
-    FIL_DEFAULT_WIDTHS_HZ, SCOPE_SPANS, get_band_for_frequency,
+    FIL_DEFAULT_WIDTHS_HZ, SCOPE_SPANS, MK2_CIV_ADDR,
+    get_band_for_frequency,
     raw_to_dbm, raw_to_s_unit, raw_to_power, raw_to_swr,
     raw_to_voltage, raw_to_current,
 )
@@ -323,6 +324,15 @@ class IC7300Backend(RadioBackend):
     async def get_mode(self, timeout: Optional[float] = None) -> Optional[int]:
         return await self._civ.get_mode(timeout=timeout)
 
+    async def boot_verify(self, cat, timeout: float = 0.4) -> bool:
+        """Boot check after power-on: the radio answers a CI-V read.
+
+        Icom has no Yaesu-style "FA" query; 0xFA is the CI-V NG reply
+        code.  A booted radio answers a frequency read (cmd 0x03), so
+        that is the boot check.
+        """
+        return bool(await cat.query(0x03, timeout=timeout))
+
     async def set_ptt(self, tx: bool) -> bool:
         return await self._civ.set_ptt(tx)
 
@@ -501,12 +511,16 @@ class IC7300Backend(RadioBackend):
 
 
 class IC7300MK2Backend(IC7300Backend):
-    """IC-7300MK2 — same CI-V surface as the IC-7300.
+    """IC-7300MK2 — same CI-V surface as the IC-7300, different address.
 
-    NOTE: the MK2's factory CI-V address is 0xB6 (hamlib ic7300.c) and
-    its "CI-V Transceive" set-mode item is 0089, not 0071.  Both are
-    hardware-verify items; override IC7300_CIV_ADDR via env if needed.
-    TODO(hw-verify)
+    The MK2's factory CI-V address is 0xB6 (IC-7300MK2 CI-V Reference
+    frame diagram; hamlib ic7300.c), not the IC-7300's 0x94, and its
+    "CI-V Transceive" set-mode item is 0089, not 0071.  The controller
+    picks the transceive item from the address; this subclass supplies
+    the MK2 default (override via IC7300MK2_CIV_ADDR).  hw-verify.
     """
 
     _display_name = "Icom IC-7300MK2"
+
+    def __init__(self, port: str, baud_rate: int = 115200):
+        self._civ = CivController(port, baud_rate, civ_addr=MK2_CIV_ADDR)

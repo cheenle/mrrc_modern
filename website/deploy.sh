@@ -35,8 +35,10 @@ echo "Checking required files..."
 REQUIRED_FILES=(
     "index.html"
     "zh/index.html"
-    "css/octen.css"
-    "css/ft710.css"
+    "css/scope.css"
+    "css/mrrc_modern.scope.css"
+    "js/scope.js"
+    "images/qr-wechat-group.jpg"
     "sdd.html"
     "zh/sdd.html"
     "sdd/index.html"
@@ -44,7 +46,7 @@ REQUIRED_FILES=(
     "sdd/15-ptt-safety-architecture.html"
     "images/IMG_8888.PNG"
     "downloads/MRRC-Modern-Setup.exe"
-    "downloads/MRRC-Modern-v1.10.1-Windows-x64-Setup.exe"
+    "downloads/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe"
 )
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then

@@ -7,95 +7,77 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css?v=4">
-    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
-    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
+    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
-        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-layout {
+            display: flex; max-width: 1400px; margin: 0 auto;
+            padding: calc(var(--scope-gn-h) + var(--scope-nav-h) + 2rem) 2rem 2rem;
+            gap: 2rem;
+        }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky;
+            top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem);
+            overflow-y: auto;
+            background: var(--scope-surface);
+            border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius);
+            padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
+            font-family: var(--scope-font-mono);
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary);
+            padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary-dim); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
+        .sdd-content h1 { font-family: var(--scope-font-mono); font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-family: var(--scope-font-mono); font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-family: var(--scope-font-mono); font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-family: var(--scope-font-mono); font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface-2); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
         }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
-        .sdd-content img { max-width: 100%; border-radius: 0.5rem; margin: 1rem 0; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content img { max-width: 100%; border-radius: var(--scope-radius); margin: 1rem 0; }
         @media (max-width: 900px) {
-            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-layout { flex-direction: column; padding: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem) 1rem 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body data-site="mrrc_modern">
+<body data-site="mrrc_modern" class="fx-grid">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
-        </a>
-        <ul class="nav-links">
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow">MRRC <span style="color: var(--scope-primary);">Modern</span></a>
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -125,10 +107,10 @@
     <main class="sdd-content">
 <h1 id="executive-summary">1. Executive Summary</h1>
 <h2 id="project-overview">1.1 Project Overview</h2>
-<p>MRRC Modern (<code>mrrc_modern</code>) is a mobile-first browser remote-control system for supported HF/50MHz transceivers — currently the Yaesu FT-710 and the Icom IC-7300 / IC-7300MK2. It provides a single web UI, WebSocket control/audio/spectrum channels, a pluggable radio-backend layer, spectrum data capture, PyAudio sound card audio streaming, Opus codec compression, and real-time waterfall/S-meter/multi-meter visualization.</p>
-<p>The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend on wfview, Hamlib, or any external radio middleware. The backend is selected at startup by <code>MRRC_RADIO_MODEL</code> (<code>ft710</code>, <code>ic7300</code>, or <code>ic7300mk2</code>; default <code>ft710</code>). Each backend talks directly to its radio: the FT-710 backend sends Yaesu ASCII CAT over a serial port and reads FT4222 SPI scope data via a subprocess; the IC-7300 backend sends Icom CI-V frames over USB serial and demuxes in-band 0x27 spectrum on the same port. RX/TX audio is captured/played through the radio’s built-in USB audio interface via PyAudio.</p>
+<p>MRRC Modern (<code class="scope-code">mrrc_modern</code>) is a mobile-first browser remote-control system for supported HF/50MHz transceivers — currently the Yaesu FT-710 and the Icom IC-7300 / IC-7300MK2. It provides a single web UI, WebSocket control/audio/spectrum channels, a pluggable radio-backend layer, spectrum data capture, PyAudio sound card audio streaming, Opus codec compression, and real-time waterfall/S-meter/multi-meter visualization.</p>
+<p>The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend on wfview, Hamlib, or any external radio middleware. The backend is selected at startup by <code class="scope-code">MRRC_RADIO_MODEL</code> (<code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, or <code class="scope-code">ic7300mk2</code>; default <code class="scope-code">ft710</code>). Each backend talks directly to its radio: the FT-710 backend sends Yaesu ASCII CAT over a serial port and reads FT4222 SPI scope data via a subprocess; the IC-7300 backend sends Icom CI-V frames over USB serial and demuxes in-band 0x27 spectrum on the same port. RX/TX audio is captured/played through the radio’s built-in USB audio interface via PyAudio.</p>
 <h2 id="current-design-goals">1.2 Current Design Goals</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 18%" />
 <col style="width: 25%" />
@@ -145,37 +127,37 @@
 <tr>
 <td>Mobile-first operation</td>
 <td>iPhone/mobile browser as primary UI</td>
-<td><code>static/index.html</code>, <code>ft710.css</code>, <code>ft710_main.js</code>, <code>ft710_ui.js</code></td>
+<td><code class="scope-code">static/index.html</code>, <code class="scope-code">ft710.css</code>, <code class="scope-code">ft710_main.js</code>, <code class="scope-code">ft710_ui.js</code></td>
 </tr>
 <tr>
 <td>Full radio control</td>
 <td>All essential radio commands via WebSocket</td>
-<td><code>backends/ft710/cat_controller.py</code>, <code>backends/ic7300/civ_controller.py</code></td>
+<td><code class="scope-code">backends/ft710/cat_controller.py</code>, <code class="scope-code">backends/ic7300/civ_controller.py</code></td>
 </tr>
 <tr>
 <td>Real-time spectrum</td>
 <td>Waterfall from real scope data or S-meter fallback</td>
-<td><code>backends/ft710/scope_pipe.py</code>, <code>backends/ic7300/civ_scope.py</code>, <code>scope_handler.py</code></td>
+<td><code class="scope-code">backends/ft710/scope_pipe.py</code>, <code class="scope-code">backends/ic7300/civ_scope.py</code>, <code class="scope-code">scope_handler.py</code></td>
 </tr>
 <tr>
 <td>Bidirectional audio</td>
 <td>RX audio from radio to browser; TX audio from browser to radio</td>
-<td><code>audio_handler.py</code>, <code>/WSaudioRX</code>, <code>/WSaudioTX</code></td>
+<td><code class="scope-code">audio_handler.py</code>, <code class="scope-code">/WSaudioRX</code>, <code class="scope-code">/WSaudioTX</code></td>
 </tr>
 <tr>
 <td>Safe PTT handling</td>
 <td>Multiple layered safeguards against stuck TX</td>
-<td><code>ptt_manager.js</code> watchdog, dead-man switch, unload beacon</td>
+<td><code class="scope-code">ptt_manager.js</code> watchdog, dead-man switch, unload beacon</td>
 </tr>
 <tr>
 <td>Minimal deployment</td>
 <td>Single Python process serves UI, WS, audio, scope, radio bridge</td>
-<td><code>server.py</code> FastAPI lifespan</td>
+<td><code class="scope-code">server.py</code> FastAPI lifespan</td>
 </tr>
 </tbody>
 </table>
 <h2 id="implemented-core-features">1.3 Implemented Core Features</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 30%" />
 <col style="width: 26%" />
@@ -197,22 +179,22 @@
 <tr>
 <td>Control WebSocket</td>
 <td>Implemented</td>
-<td><code>/WSradio</code> JSON: fullState, stateUpdate, set/get commands, auth</td>
+<td><code class="scope-code">/WSradio</code> JSON: fullState, stateUpdate, set/get commands, auth</td>
 </tr>
 <tr>
 <td>RX audio WebSocket</td>
 <td>Implemented</td>
-<td><code>/WSaudioRX</code> tagged dual-codec frames (0x00=PCM, 0x01=Opus 48kHz mono)</td>
+<td><code class="scope-code">/WSaudioRX</code> tagged dual-codec frames (0x00=PCM, 0x01=Opus 48kHz mono)</td>
 </tr>
 <tr>
 <td>TX audio WebSocket</td>
 <td>Implemented</td>
-<td><code>/WSaudioTX</code> tagged mic frames → Opus decode → PyAudio → radio</td>
+<td><code class="scope-code">/WSaudioTX</code> tagged mic frames → Opus decode → PyAudio → radio</td>
 </tr>
 <tr>
 <td>Spectrum WebSocket</td>
 <td>Implemented</td>
-<td><code>/WSspectrum</code> binary: v1=851B wf1, v2=1701B wf1+wf2, ~30fps</td>
+<td><code class="scope-code">/WSspectrum</code> binary: v1=851B wf1, v2=1701B wf1+wf2, ~30fps</td>
 </tr>
 <tr>
 <td>Spectrum dual-mode</td>
@@ -222,7 +204,7 @@
 <tr>
 <td>Serial radio protocol</td>
 <td>Implemented</td>
-<td>FT-710: Yaesu ASCII CAT via pyserial; IC-7300: CI-V framing via <code>civ_codec.py</code>/<code>civ_controller.py</code></td>
+<td>FT-710: Yaesu ASCII CAT via pyserial; IC-7300: CI-V framing via <code class="scope-code">civ_codec.py</code>/<code class="scope-code">civ_controller.py</code></td>
 </tr>
 <tr>
 <td>7-task polling</td>
@@ -237,12 +219,12 @@
 <tr>
 <td>Memory channels</td>
 <td>Implemented</td>
-<td><code>/api/mem_channels</code> GET/POST with <code>mem_channels.json</code> persistence</td>
+<td><code class="scope-code">/api/mem_channels</code> GET/POST with <code class="scope-code">mem_channels.json</code> persistence</td>
 </tr>
 <tr>
 <td>Session auth</td>
 <td>Implemented</td>
-<td>Password login, <code>mrrc_auth</code> cookie (30-day), <code>?token=</code> on WebSocket</td>
+<td>Password login, <code class="scope-code">mrrc_auth</code> cookie (30-day), <code class="scope-code">?token=</code> on WebSocket</td>
 </tr>
 <tr>
 <td>PTT safety</td>
@@ -257,34 +239,18 @@
 <figcaption aria-hidden="true">Layer Architecture</figcaption>
 </figure>
 <h2 id="current-project-status">1.5 Current Project Status</h2>
-<p>As of 2026-08-17, the full control + spectrum + audio pipeline is implemented for both the FT-710 and IC-7300/MK2 backends. RX audio is captured from the selected radio’s USB audio interface via PyAudio, encoded with Opus (48kHz mono), and streamed to the browser via <code>/WSaudioRX</code>. TX audio is captured from the browser microphone, encoded with Opus (or PCM fallback), decoded server-side, and played to the radio via PyAudio output; the FT-710 bridges the 48kHz codec domain to the radio’s native 44.1kHz USB audio, while the IC-7300 uses 48kHz native USB audio with no resample. PTT triggers TX audio stream start/stop. Spectrum comes from the FT4222 SPI chip (FT-710) or CI-V 0x27 frames (IC-7300) when available, with automatic S-meter fallback. All radio controls (frequency, mode, filter, gains, PTT, NR/NB/AN, compressor, ATU, scope settings) are available through the WebSocket JSON API, with the frontend adapting to the active backend’s <code>capabilities</code> in <code>fullState</code>.</p>
+<p>As of 2026-08-17, the full control + spectrum + audio pipeline is implemented for both the FT-710 and IC-7300/MK2 backends. RX audio is captured from the selected radio’s USB audio interface via PyAudio, encoded with Opus (48kHz mono), and streamed to the browser via <code class="scope-code">/WSaudioRX</code>. TX audio is captured from the browser microphone, encoded with Opus (or PCM fallback), decoded server-side, and played to the radio via PyAudio output; the FT-710 bridges the 48kHz codec domain to the radio’s native 44.1kHz USB audio, while the IC-7300 uses 48kHz native USB audio with no resample. PTT triggers TX audio stream start/stop. Spectrum comes from the FT4222 SPI chip (FT-710) or CI-V 0x27 frames (IC-7300) when available, with automatic S-meter fallback. All radio controls (frequency, mode, filter, gains, PTT, NR/NB/AN, compressor, ATU, scope settings) are available through the WebSocket JSON API, with the frontend adapting to the active backend’s <code class="scope-code">capabilities</code> in <code class="scope-code">fullState</code>.</p>
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
+<footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
-    <script src="../js/global-nav.js?v=2" defer data-gn="1"></script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

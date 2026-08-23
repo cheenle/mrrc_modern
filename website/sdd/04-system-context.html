@@ -7,95 +7,77 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/octen.css?v=4">
-    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
-    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
+    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7442510147240155" crossorigin="anonymous"></script>
     <style>
-        .sdd-layout { display: flex; max-width: 1400px; margin: 0 auto; padding: 0 2rem; gap: 2rem; }
+        .sdd-layout {
+            display: flex; max-width: 1400px; margin: 0 auto;
+            padding: calc(var(--scope-gn-h) + var(--scope-nav-h) + 2rem) 2rem 2rem;
+            gap: 2rem;
+        }
         .sdd-sidebar {
-            width: 260px; flex-shrink: 0; position: sticky; top: 80px;
-            max-height: calc(100vh - 100px); overflow-y: auto;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 0.75rem; padding: 1.25rem 0;
+            width: 260px; flex-shrink: 0; position: sticky;
+            top: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem);
+            max-height: calc(100vh - var(--scope-gn-h) - var(--scope-nav-h) - 2rem);
+            overflow-y: auto;
+            background: var(--scope-surface);
+            border: 1px solid var(--scope-border);
+            border-radius: var(--scope-radius);
+            padding: 1.25rem 0;
         }
         .sdd-sidebar h4 {
+            font-family: var(--scope-font-mono);
             font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
-            color: var(--accent); padding: 0 1.25rem; margin-bottom: 0.75rem;
+            color: var(--scope-primary);
+            padding: 0 1.25rem; margin-bottom: 0.75rem;
         }
-        .sdd-sidebar ul { list-style: none; }
+        .sdd-sidebar ul { list-style: none; margin: 0; padding: 0; }
         .sdd-sidebar a {
             display: block; padding: 0.375rem 1.25rem; font-size: 0.8125rem;
-            color: var(--text-secondary); transition: all 0.15s;
+            color: var(--scope-text-2); transition: all 0.15s;
             border-left: 2px solid transparent;
         }
-        .sdd-sidebar a:hover { color: var(--text-primary); border-left-color: var(--border-hover); }
+        .sdd-sidebar a:hover { color: var(--scope-text); border-left-color: var(--scope-primary-dim); text-decoration: none; }
         .sdd-sidebar a.active {
-            color: var(--accent); background: var(--accent-glow);
-            border-left-color: var(--accent); font-weight: 500;
+            color: var(--scope-primary); background: rgba(0, 255, 65, 0.08);
+            border-left-color: var(--scope-primary); font-weight: 500;
         }
         .sdd-content { flex: 1; min-width: 0; padding-bottom: 4rem; }
-        .sdd-content h1 { font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; }
-        .sdd-content h2 { font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--accent); }
-        .sdd-content h3 { font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; }
-        .sdd-content h4 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        .sdd-content p, .sdd-content li { color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-        .sdd-content table {
-            width: 100%; border-collapse: collapse; margin: 1.25rem 0;
-            font-size: 0.875rem;
-        }
-        .sdd-content th, .sdd-content td {
-            padding: 0.625rem 0.875rem; text-align: left;
-            border: 1px solid var(--border);
-        }
-        .sdd-content th { background: var(--bg-tertiary); color: var(--text-primary); font-weight: 600; }
-        .sdd-content td { color: var(--text-secondary); }
-        .sdd-content code {
-            font-family: var(--font-mono); font-size: 0.85em;
-            background: var(--bg-tertiary); padding: 1px 6px; border-radius: 3px;
-            color: var(--accent);
-        }
-        .sdd-content pre {
-            background: var(--bg-tertiary); border: 1px solid var(--border);
-            border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
-            margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
-        }
-        .sdd-content pre code {
-            background: none; padding: 0; color: var(--text-secondary);
-        }
+        .sdd-content h1 { font-family: var(--scope-font-mono); font-size: 2rem; font-weight: 700; margin: 2rem 0 0.5rem; letter-spacing: -0.02em; color: var(--scope-text); }
+        .sdd-content h2 { font-family: var(--scope-font-mono); font-size: 1.375rem; font-weight: 600; margin: 2rem 0 0.75rem; color: var(--scope-primary); }
+        .sdd-content h3 { font-family: var(--scope-font-mono); font-size: 1.125rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content h4 { font-family: var(--scope-font-mono); font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--scope-text); }
+        .sdd-content p, .sdd-content li { color: var(--scope-text-2); line-height: 1.7; margin-bottom: 0.75rem; }
         .sdd-content blockquote {
-            border-left: 3px solid var(--accent); padding: 0.5rem 1rem;
-            margin: 1rem 0; color: var(--text-muted); font-size: 0.9375rem;
-            background: var(--bg-tertiary); border-radius: 0 0.375rem 0.375rem 0;
+            border-left: 3px solid var(--scope-primary); padding: 0.5rem 1rem;
+            margin: 1rem 0; color: var(--scope-text-muted); font-size: 0.9375rem;
+            background: var(--scope-surface-2); border-radius: 0 var(--scope-radius) var(--scope-radius) 0;
         }
         .sdd-content ul, .sdd-content ol { margin-left: 1.5rem; margin-bottom: 1rem; }
-        .sdd-content hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
-        .sdd-content a { color: var(--accent); }
-        .sdd-content img { max-width: 100%; border-radius: 0.5rem; margin: 1rem 0; }
+        .sdd-content hr { border: none; border-top: 1px solid var(--scope-border); margin: 2rem 0; }
+        .sdd-content a { color: var(--scope-primary); }
+        .sdd-content img { max-width: 100%; border-radius: var(--scope-radius); margin: 1rem 0; }
         @media (max-width: 900px) {
-            .sdd-layout { flex-direction: column; padding: 0 1rem; }
+            .sdd-layout { flex-direction: column; padding: calc(var(--scope-gn-h) + var(--scope-nav-h) + 1rem) 1rem 1rem; }
             .sdd-sidebar { width: 100%; position: static; max-height: none; }
         }
     </style>
 </head>
-<body data-site="mrrc_modern">
+<body data-site="mrrc_modern" class="fx-grid">
 
-<nav class="navbar">
-    <div class="container navbar-content">
-        <a href="../index.html" class="logo">
-            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-            <span>MRRC <span style="color: var(--accent);">Modern</span></span>
-        </a>
-        <ul class="nav-links">
+<nav class="scope-site-nav">
+    <div class="container scope-site-nav-inner">
+        <a href="../index.html" class="scope-site-brand fx-glow">MRRC <span style="color: var(--scope-primary);">Modern</span></a>
+        <ul class="scope-site-nav-links">
             <li><a href="../index.html#features">Features</a></li>
             <li><a href="../index.html#architecture">Architecture</a></li>
             <li><a href="index.html">SDD Docs</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
-        <div class="nav-actions">
-            <a href="../zh/index.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="../zh/index.html" class="scope-btn" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+            <button class="scope-site-nav-toggle" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
         </div>
     </div>
 </nav>
@@ -130,7 +112,7 @@
 <figcaption aria-hidden="true">System Context</figcaption>
 </figure>
 <h2 id="actors">4.2 Actors</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 53%" />
 <col style="width: 46%" />
@@ -165,7 +147,7 @@
 </tbody>
 </table>
 <h2 id="external-interfaces">4.3 External Interfaces</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 20%" />
 <col style="width: 18%" />
@@ -186,56 +168,56 @@
 <tr>
 <td>Static UI</td>
 <td>HTTP</td>
-<td><code>/{path}</code></td>
+<td><code class="scope-code">/{path}</code></td>
 <td>Browser → Server</td>
-<td>Serves <code>index.html</code>, CSS, JS, manifest, WASM</td>
+<td>Serves <code class="scope-code">index.html</code>, CSS, JS, manifest, WASM</td>
 </tr>
 <tr>
 <td>Control WS</td>
 <td>WS</td>
-<td><code>/WSradio</code></td>
+<td><code class="scope-code">/WSradio</code></td>
 <td>Browser ↔︎ Server</td>
 <td>JSON commands and state updates</td>
 </tr>
 <tr>
 <td>RX Audio WS</td>
 <td>WS</td>
-<td><code>/WSaudioRX</code></td>
+<td><code class="scope-code">/WSaudioRX</code></td>
 <td>Server → Browser</td>
 <td>Tagged dual-codec frames (Opus/PCM, 48kHz mono)</td>
 </tr>
 <tr>
 <td>TX Audio WS</td>
 <td>WS</td>
-<td><code>/WSaudioTX</code></td>
+<td><code class="scope-code">/WSaudioTX</code></td>
 <td>Browser → Server</td>
 <td>Tagged mic frames (Opus/PCM) for radio TX</td>
 </tr>
 <tr>
 <td>Spectrum WS</td>
 <td>WS</td>
-<td><code>/WSspectrum</code></td>
+<td><code class="scope-code">/WSspectrum</code></td>
 <td>Server → Browser</td>
 <td>Binary spectrum frames (v1=851B, v2=1701B)</td>
 </tr>
 <tr>
 <td>Memory API</td>
 <td>HTTP</td>
-<td><code>/api/mem_channels</code></td>
+<td><code class="scope-code">/api/mem_channels</code></td>
 <td>Browser ↔︎ Server</td>
 <td>Get/set memory channels</td>
 </tr>
 <tr>
 <td>Status API</td>
 <td>HTTP</td>
-<td><code>/api/status</code></td>
+<td><code class="scope-code">/api/status</code></td>
 <td>Browser → Server</td>
 <td>Full radio state JSON</td>
 </tr>
 <tr>
 <td>Auth API</td>
 <td>HTTP</td>
-<td><code>/api/auth/login</code>, <code>/api/auth/logout</code>, <code>/api/auth/check</code></td>
+<td><code class="scope-code">/api/auth/login</code>, <code class="scope-code">/api/auth/logout</code>, <code class="scope-code">/api/auth/check</code></td>
 <td>Browser ↔︎ Server</td>
 <td>Session management</td>
 </tr>
@@ -251,14 +233,14 @@
 <td>Serial</td>
 <td>USB CI-V port</td>
 <td>Server ↔︎ Radio</td>
-<td>Icom CI-V frames (115200, 8N1, default addr <code>0x94</code>)</td>
+<td>Icom CI-V frames (115200, 8N1, default addr <code class="scope-code">0x94</code>)</td>
 </tr>
 <tr>
 <td>FT4222 SPI</td>
 <td>SPI</td>
 <td>Internal FTDI chip</td>
 <td>Radio → Server</td>
-<td>FT-710 850-point FFT scope data via <code>scope_pipe.py</code> subprocess</td>
+<td>FT-710 850-point FFT scope data via <code class="scope-code">scope_pipe.py</code> subprocess</td>
 </tr>
 <tr>
 <td>CI-V 0x27 Spectrum</td>
@@ -284,7 +266,7 @@
 </tbody>
 </table>
 <h2 id="data-flows">4.4 Data Flows</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 31%" />
 <col style="width: 68%" />
@@ -298,44 +280,44 @@
 <tbody>
 <tr>
 <td>CAT control flow</td>
-<td>UI action → <code>/WSradio</code> JSON → backend controller (FT-710 <code>CatController</code> / IC-7300 <code>CivController</code>) → radio response → <code>RadioState</code> update → broadcast</td>
+<td>UI action → <code class="scope-code">/WSradio</code> JSON → backend controller (FT-710 <code class="scope-code">CatController</code> / IC-7300 <code class="scope-code">CivController</code>) → radio response → <code class="scope-code">RadioState</code> update → broadcast</td>
 </tr>
 <tr>
 <td>RX audio flow</td>
-<td>Radio USB Audio → PyAudio capture (44.1kHz Int16 for FT-710; 48kHz Int16 for IC-7300) → resample to 48kHz if needed → Opus encode → <code>/WSaudioRX</code> tagged frames → browser AudioWorklet playback</td>
+<td>Radio USB Audio → PyAudio capture (44.1kHz Int16 for FT-710; 48kHz Int16 for IC-7300) → resample to 48kHz if needed → Opus encode → <code class="scope-code">/WSaudioRX</code> tagged frames → browser AudioWorklet playback</td>
 </tr>
 <tr>
 <td>TX audio flow</td>
-<td>Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → <code>/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k if needed → PyAudio → Radio USB Audio</td>
+<td>Browser mic → getUserMedia (48kHz) → AudioWorklet → Opus encode (Worker) → <code class="scope-code">/WSaudioTX</code> tagged frames → Opus decode → resample 48→44.1k if needed → PyAudio → Radio USB Audio</td>
 </tr>
 <tr>
 <td>Spectrum flow (FT-710)</td>
-<td>FT-710 → FT4222 SPI → <code>scope_pipe.py</code> subprocess → stdout pipe → <code>_read_scope_pipe()</code> → parse → <code>/WSspectrum</code> binary → browser waterfall</td>
+<td>FT-710 → FT4222 SPI → <code class="scope-code">scope_pipe.py</code> subprocess → stdout pipe → <code class="scope-code">_read_scope_pipe()</code> → parse → <code class="scope-code">/WSspectrum</code> binary → browser waterfall</td>
 </tr>
 <tr>
 <td>Spectrum flow (IC-7300)</td>
-<td>IC-7300 → CI-V 0x27 frames → <code>civ_controller.py</code> demux → <code>civ_scope.py</code> → 475-bin upsample to 850 → <code>/WSspectrum</code> binary → browser waterfall</td>
+<td>IC-7300 → CI-V 0x27 frames → <code class="scope-code">civ_controller.py</code> demux → <code class="scope-code">civ_scope.py</code> → 475-bin upsample to 850 → <code class="scope-code">/WSspectrum</code> binary → browser waterfall</td>
 </tr>
 <tr>
 <td>Spectrum flow (fallback)</td>
-<td>S-meter poll → <code>radio_state.s_meter</code> → <code>ScopeHandler.update_from_radio_state()</code> → synthetic Gaussian spectrum → <code>/WSspectrum</code></td>
+<td>S-meter poll → <code class="scope-code">radio_state.s_meter</code> → <code class="scope-code">ScopeHandler.update_from_radio_state()</code> → synthetic Gaussian spectrum → <code class="scope-code">/WSspectrum</code></td>
 </tr>
 <tr>
 <td>State broadcast flow</td>
-<td>Poll scheduler or user command → <code>RadioState.update()</code> → dirty-field tracking → <code>_broadcast_state()</code> → <code>/WSradio</code> stateUpdate</td>
+<td>Poll scheduler or user command → <code class="scope-code">RadioState.update()</code> → dirty-field tracking → <code class="scope-code">_broadcast_state()</code> → <code class="scope-code">/WSradio</code> stateUpdate</td>
 </tr>
 <tr>
 <td>PTT safety flow</td>
-<td>UI touch → <code>sendCommand('ptt', true)</code> → backend-specific PTT key command (FT-710 <code>TX1;</code>, IC-7300 CI-V 0x1C 0x00 key) → radio TX; release → backend-specific PTT unkey command (FT-710 <code>TX0;</code>, IC-7300 CI-V 0x1C 0x00 unkey) (fire-and-forget) → watchdog</td>
+<td>UI touch → <code class="scope-code">sendCommand('ptt', true)</code> → backend-specific PTT key command (FT-710 <code class="scope-code">TX1;</code>, IC-7300 CI-V 0x1C 0x00 key) → radio TX; release → backend-specific PTT unkey command (FT-710 <code class="scope-code">TX0;</code>, IC-7300 CI-V 0x1C 0x00 unkey) (fire-and-forget) → watchdog</td>
 </tr>
 <tr>
 <td>Polling flow</td>
-<td><code>PollScheduler</code> 7-task timer → backend-specific queries → response parse → <code>RadioState.update()</code> → broadcast if changed</td>
+<td><code class="scope-code">PollScheduler</code> 7-task timer → backend-specific queries → response parse → <code class="scope-code">RadioState.update()</code> → broadcast if changed</td>
 </tr>
 </tbody>
 </table>
 <h2 id="system-boundaries">4.5 System Boundaries</h2>
-<table>
+<table class="scope-table">
 <colgroup>
 <col style="width: 37%" />
 <col style="width: 29%" />
@@ -379,40 +361,24 @@
 <h2 id="contextual-constraints">4.6 Contextual Constraints</h2>
 <ul>
 <li>FT-710 CAT requires the Enhanced COM Port (not Standard COM Port) at 38400 baud.</li>
-<li>IC-7300 CI-V uses a single USB serial port at 115200 8N1; the controller address is configurable via <code>IC7300_CIV_ADDR</code> (default <code>0x94</code>).</li>
-<li>FT-710 FT4222 SPI requires D2XX driver with <code>DetachKernelDriver=1</code> to claim the device from macOS VCP.</li>
+<li>IC-7300 CI-V uses a single USB serial port at 115200 8N1; the controller address is configurable via <code class="scope-code">IC7300_CIV_ADDR</code> (default <code class="scope-code">0x94</code>).</li>
+<li>FT-710 FT4222 SPI requires D2XX driver with <code class="scope-code">DetachKernelDriver=1</code> to claim the device from macOS VCP.</li>
 <li>Only one process can access the FT4222 at a time — wfview or ExpertSDR must be closed.</li>
 <li>USB audio device naming varies by OS and radio; PyAudio auto-detects per-backend hints (e.g., “FT-710”/“YAESU” for FT-710; “USB Audio CODEC”/“USB Audio Device” generic names).</li>
-<li>iOS Safari requires HTTPS for reliable <code>getUserMedia</code>; HTTP is acceptable for LAN/localhost use.</li>
-<li>Serial port path varies by OS: <code>/dev/cu.usbserial-*</code> or <code>/dev/cu.SLAB_USBtoUART</code> (macOS), <code>/dev/ttyUSB*</code> (Linux), <code>COM*</code> (Windows).</li>
+<li>iOS Safari requires HTTPS for reliable <code class="scope-code">getUserMedia</code>; HTTP is acceptable for LAN/localhost use.</li>
+<li>Serial port path varies by OS: <code class="scope-code">/dev/cu.usbserial-*</code> or <code class="scope-code">/dev/cu.SLAB_USBtoUART</code> (macOS), <code class="scope-code">/dev/ttyUSB*</code> (Linux), <code class="scope-code">COM*</code> (Windows).</li>
 </ul>
     </main>
 </div>
 
-<footer class="footer" style="margin-top: 0;">
+<footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach(a => {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-const nav = document.querySelector('.navbar');
-window.addEventListener('scroll', () => {
-    nav.style.background = window.scrollY > 50 ? 'rgba(0,0,0,0.95)' : 'rgba(0,0,0,0.8)';
-});
-</script>
-    <script src="../js/global-nav.js?v=2" defer data-gn="1"></script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

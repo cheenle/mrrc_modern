@@ -8,6 +8,8 @@ from backends.ic7300.civ_codec import (
     OK,
     PREAMBLE,
     RADIO_ADDR,
+    SCOPE_MODE_CENTER,
+    SCOPE_MODE_SCROLL_C,
     CivFrame,
     CivFrameParser,
     ScopeAssembler,
@@ -257,6 +259,32 @@ class ScopeSegmentTests(unittest.TestCase):
         self.assertEqual(seg.high_edge_hz, 14_350_000)
         self.assertFalse(seg.out_of_range)
         self.assertEqual(seg.bins, b"")
+
+    def test_center_info_uses_center_and_half_span(self):
+        data = (
+            bytes((0x00, 0x00, 0x01, 0x11, SCOPE_MODE_CENTER))
+            + encode_freq_bcd(14_200_000)
+            + encode_freq_bcd(100_000)
+            + b"\x00"
+        )
+        seg = self._parse(data)
+        self.assertEqual(seg.center_freq_hz, 14_200_000)
+        self.assertEqual(seg.span_hz, 100_000)
+        self.assertIsNone(seg.low_edge_hz)
+        self.assertIsNone(seg.high_edge_hz)
+
+    def test_scroll_c_info_uses_low_and_high_edges(self):
+        data = (
+            bytes((0x00, 0x00, 0x01, 0x11, SCOPE_MODE_SCROLL_C))
+            + encode_freq_bcd(14_100_000)
+            + encode_freq_bcd(14_300_000)
+            + b"\x00"
+        )
+        seg = self._parse(data)
+        self.assertEqual(seg.low_edge_hz, 14_100_000)
+        self.assertEqual(seg.high_edge_hz, 14_300_000)
+        self.assertIsNone(seg.center_freq_hz)
+        self.assertIsNone(seg.span_hz)
 
     def test_data_chunk(self):
         seg = self._parse(bytes((0x00, 0x00, 0x07, 0x11)) + CHUNK7_BINS)

@@ -2,8 +2,9 @@
 # MRRC Modern Website — Deploy to www.vlsc.net/mrrc_modern/
 set -e
 
-# Configuration
-LOCAL_DIR="/Users/cheenle/HAM/mrrc_modern/website"
+# Configuration — LOCAL_DIR follows this script so the deploy works from any
+# machine (the old hardcoded /Users/cheenle path broke on other hosts).
+LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"
 REMOTE_HOST="www.vlsc.net"
 REMOTE_USER="cheenle"
 REMOTE_WEBROOT="/var/www/vlsc.net/mrrc_modern"
@@ -43,9 +44,10 @@ REQUIRED_FILES=(
     "sdd/01-executive-summary.html"
     "sdd/15-ptt-safety-architecture.html"
     "images/IMG_8888.PNG"
-    "downloads/MRRC-Modern-Setup.exe"
-    "downloads/MRRC-Modern-v1.10.1-Windows-x64-Setup.exe"
 )
+# Note: downloads/*.exe and videos/ are NOT shipped from the repo (gitignored,
+# ~45 MB each). They are managed on the server directly; the tar below also
+# excludes them so deploys stay small.
 for file in "${REQUIRED_FILES[@]}"; do
     if [ ! -f "$file" ]; then
         echo -e "${RED}Error: Required file missing: $file${NC}"
@@ -56,7 +58,10 @@ done
 echo ""
 
 DEPLOY_PACKAGE="/tmp/mrrc_modern_website_$(date +%Y%m%d_%H%M%S).tar.gz"
-tar -czf "$DEPLOY_PACKAGE" --exclude='deploy.sh' --exclude='.DS_Store' -C "$LOCAL_DIR" .
+tar -czf "$DEPLOY_PACKAGE" \
+    --exclude='deploy.sh' --exclude='.DS_Store' --exclude='.__*' \
+    --exclude='downloads' --exclude='videos' --exclude='__pycache__' \
+    -C "$LOCAL_DIR" .
 echo -e "${GREEN}✓${NC} Package created: $DEPLOY_PACKAGE"
 echo ""
 
@@ -138,7 +143,7 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
     find /var/www/vlsc.net/mrrc_modern -type f -name "*.html" -exec sudo chmod 644 {} \;
     find /var/www/vlsc.net/mrrc_modern -type f -name "*.css" -exec sudo chmod 644 {} \;
     find /var/www/vlsc.net/mrrc_modern -type f -name "*.js" -exec sudo chmod 644 {} \; 2>/dev/null || true
-    find /var/www/vlsc.net/mrrc_modern/downloads -type f -name "*.exe" -exec sudo chmod 644 {} \;
+    find /var/www/vlsc.net/mrrc_modern/downloads -type f -name "*.exe" -exec sudo chmod 644 {} \; 2>/dev/null || true
     rm -f "/var/tmp/mrrc_modern_website_"*.tar.gz
     sudo nginx -t
     sudo systemctl reload nginx

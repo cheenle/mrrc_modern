@@ -1,1305 +1,851 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="MRRC Modern — software SCU-LAN10 replacement for the Yaesu FT-710 and Icom IC-7300/IC-7300MK2. Browser-based remote control, real-time waterfall spectrum, bidirectional Opus 48kHz audio, mobile-first UI."
-    />
-    <meta
-      name="keywords"
-      content="FT-710, IC-7300, Yaesu FT-710, Icom IC-7300, SCU-LAN10 replacement, remote radio control, FT4222 SPI, waterfall spectrum, HAM radio, Opus audio, WebSocket CAT"
-    />
-    <meta name="author" content="BG1SB" />
-    <meta name="theme-color" content="#0a0a0a" />
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="MRRC Modern — software SCU-LAN10 replacement for the Yaesu FT-710 and Icom IC-7300/IC-7300MK2. Browser-based remote control, real-time waterfall spectrum, bidirectional Opus 48kHz audio, mobile-first UI." name="description"/>
+<meta content="FT-710, IC-7300, Yaesu FT-710, Icom IC-7300, SCU-LAN10 replacement, remote radio control, FT4222 SPI, waterfall spectrum, HAM radio, Opus audio, WebSocket CAT" name="keywords"/>
+<meta content="BG1SB" name="author"/>
+<meta content="#0a0a0a" name="theme-color"/>
+<title>MRRC Modern — Software SCU-LAN10 Replacement</title><link href="css/scope.css?v=2" rel="stylesheet"/><link href="css/mrrc_modern.scope.css?v=2" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
 
-    <title>MRRC Modern — Software SCU-LAN10 Replacement</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
 
-    <link rel="stylesheet" href="css/octen.css?v=4" />
-    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1" />
-    <link rel="stylesheet" href="css/ft710.css" />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<link href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;rect fill='%23f0a030' width='100' height='100' rx='20'/&gt;&lt;text y='.9em' x='50%' text-anchor='middle' font-size='60'&gt;📻&lt;/text&gt;&lt;/svg&gt;" rel="icon" type="image/svg+xml"/>
+</head>
+<body class="fx-grid" data-site="mrrc_modern"><nav class="scope-site-nav">
+<div class="container scope-site-nav-inner">
+<a class="scope-site-brand fx-glow" href="#">MRRC <span style="color:var(--scope-primary)">Modern</span></a>
+<ul class="scope-site-nav-links">
+<li><a href="#features">Features</a></li>
+<li><a href="#download">Download</a></li>
+<li><a href="#start">Quick Start</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="/">VLSC Portal</a></li>
+<li><a href="/mrrc/">MRRC</a></li>
+<li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank"><i class="fab fa-github"></i></a></li>
+</ul>
+<div style="display:flex;align-items:center;gap:0.75rem;">
+<a class="scope-btn" href="zh/index.html" style="padding:0.4rem 0.8rem;font-size:0.75rem;">中文</a>
+<button aria-label="Toggle menu" class="scope-site-nav-toggle"><i class="fas fa-bars"></i></button>
+</div>
+</div>
+</nav>
 
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23f0a030' width='100' height='100' rx='20'/><text y='.9em' x='50%' text-anchor='middle' font-size='60'>📻</text></svg>"
-    />
-  </head>
-  <body data-site="mrrc_modern">
-    <nav class="navbar">
-      <div class="container navbar-content">
-        <a href="#" class="logo">
-          <span class="logo-icon"><i class="fas fa-microchip"></i></span>
-          <span>MRRC <span style="color: var(--accent)">Modern</span></span>
-        </a>
-        <ul class="nav-links">
-          <li><a href="#video">Video</a></li>
-          <li><a href="#features">Features</a></li>
-          <li><a href="#download">Download</a></li>
-          <li><a href="#start">Quick Start</a></li>
-          <li><a href="#architecture">Architecture</a></li>
-          <li><a href="#ios">iOS App</a></li>
-          <li><a href="guide.html">操作指南</a></li>
-          <li><a href="sdd.html">SDD</a></li>
-          <li><a href="fde.html">FDE</a></li>
-          <li>
-            <a
-              href="https://github.com/cheenle/mrrc_modern"
-              target="_blank"
-              rel="noopener"
-            >
-              <i class="fab fa-github"></i> GitHub
-            </a>
-          </li>
-        </ul>
-        <div class="nav-actions">
-          <a href="zh/index.html" class="lang-btn">中文</a>
-          <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
-            <i class="fas fa-bars"></i>
-          </button>
-        </div>
-      </div>
-    </nav>
-
-    <section class="hero">
-      <div class="hero-content">
-        <div class="hero-badge">
-          <i class="fas fa-check-circle"></i>
-          <span>v1.10.1 · Stable</span>
-        </div>
-        <h1 class="hero-title">
-          One USB Cable<br />
-          <span class="gradient">Any Device</span>
-        </h1>
-        <p class="hero-subtitle">
+<section class="hero">
+<div class="hero-content">
+<div class="hero-badge">
+<i class="fas fa-check-circle"></i>
+<span>v1.12.0 · Stable</span>
+</div>
+<h1 class="hero-title">
+          One USB Cable<br/>
+<span class="gradient">Any Device</span>
+</h1>
+<p class="hero-subtitle">
           Software SCU-LAN10 replacement for the Yaesu FT-710 and Icom
           IC-7300/IC-7300MK2 HF/50MHz transceivers. Real-time FFT spectrum
           plot + waterfall (FT4222 SPI or CI-V), bidirectional Opus 48kHz
-          audio, full CAT control over 4 WebSocket channels — no $200 dongle
+          audio, full CAT control over 4+1 WebSocket channels — no $200 dongle
           required.
         </p>
-        <div class="hero-actions">
-          <a
-            href="downloads/MRRC-Modern-Setup.exe"
-            class="btn btn-primary btn-large"
-          >
-            <i class="fab fa-windows"></i> Windows Installer v1.10.1
+<div class="hero-actions">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
+<i class="fab fa-windows"></i> Windows Installer v1.12.0
           </a>
-          <a href="#features" class="btn btn-secondary btn-large">
-            <i class="fas fa-arrow-down"></i> Explore Features
+<a class="btn btn-secondary btn-large" href="#features">
+<i class="fas fa-arrow-down"></i> Explore Features
           </a>
-          <a
-            href="https://github.com/cheenle/mrrc_modern"
-            class="btn btn-secondary btn-large"
-            target="_blank"
-            rel="noopener"
-          >
-            <i class="fab fa-github"></i> GitHub
+<a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">
+<i class="fab fa-github"></i> GitHub
           </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- Screenshot -->
-    <section
-      class="section"
-      style="background: var(--bg-primary); padding: 2rem 0"
-    >
-      <div class="container" style="text-align: center">
-        <img
-          src="images/IMG_8888.PNG"
-          alt="FT-710 Web Control Screenshot"
-          style="
+</div>
+</div>
+</section>
+<!-- Screenshot -->
+<section class="scope-section" style="background: var(--scope-bg); padding: 2rem 0">
+<div class="container" style="text-align: center">
+<img alt="FT-710 Web Control Screenshot" loading="lazy" src="images/IMG_8888.PNG" style="
             max-width: 360px;
             width: 100%;
             border-radius: 14px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-          "
-          loading="lazy"
-        />
-        <p
-          style="
-            color: var(--text-muted);
+          "/>
+<p style="
+            color: var(--scope-text-muted);
             font-size: 0.8rem;
             margin-top: 0.75rem;
-          "
-        >
+          ">
           FT-710 Web Control — FFT spectrum plot + waterfall on iPhone
         </p>
-      </div>
-    </section>
-
-    <!-- Promo Video -->
-    <section
-      class="section"
-      id="video"
-      style="background: var(--bg-primary)"
-    >
-      <div class="container" style="text-align: center">
-        <div class="section-header">
-          <span class="section-label">Video</span>
-          <h2 class="section-title">Watch the Intro</h2>
-          <p class="section-subtitle">
+</div>
+</section>
+<!-- Promo Video -->
+<section class="scope-section" id="video" style="background: var(--scope-bg)">
+<div class="container" style="text-align: center">
+<div class="section-header">
+<span class="section-label">Video</span>
+<h2 class="section-title">Watch the Intro</h2>
+<p class="section-subtitle">
             A two-minute product tour of FT-710 Web Control (Chinese narration
             and subtitles).
           </p>
-        </div>
-        <video
-          controls
-          preload="none"
-          poster="images/promo_poster.jpg"
-          style="
+</div>
+<video controls="" poster="images/promo_poster.jpg" preload="none" style="
             max-width: 960px;
             width: 100%;
             border-radius: 14px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-          "
-        >
-          <source src="videos/ft710_promo.mp4" type="video/mp4" />
+          ">
+<source src="videos/ft710_promo.mp4" type="video/mp4"/>
           Your browser does not support the video tag.
         </video>
-      </div>
-    </section>
-
-    <!-- Features -->
-    <section
-      class="section"
-      id="features"
-      style="background: var(--bg-secondary)"
-    >
-      <div class="container">
-        <div class="section-header">
-          <span class="section-label">Features</span>
-          <h2 class="section-title">Complete Multi-Radio Remote Control</h2>
-          <p class="section-subtitle">
+</div>
+</section>
+<!-- Features -->
+<section class="scope-section" id="features" style="background: var(--scope-surface)">
+<div class="container">
+<div class="section-header">
+<span class="section-label">Features</span>
+<h2 class="section-title">Complete Multi-Radio Remote Control</h2>
+<p class="section-subtitle">
             Real spectrum (FT4222 SPI or CI-V), bidirectional Opus audio, full
             CAT/CI-V control and multi-layer PTT safety — pluggable backends
             for FT-710, IC-7300 and IC-7300MK2, no middleware anywhere.
           </p>
-        </div>
-
-        <div class="features-grid">
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-chart-bar"></i></div>
-            <h3>Real Spectrum — FT4222 SPI &amp; CI-V</h3>
-            <p>
+</div>
+<div class="features-grid">
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-chart-bar"></i></div>
+<h3>Real Spectrum — FT4222 SPI &amp; CI-V</h3>
+<p>
               FT-710: 850-point FFT spectrum at ~21 fps read straight from the
               DSP chip over FT4222 SPI. IC-7300/MK2: CI-V <code>0x27</code>
               475-bin scope upsampled to 850 points. TX-aware pause keeps the
               scope clean while transmitting; automatic S-meter fallback when
               no hardware path is available.
             </p>
-            <ul>
-              <li>FT4222 SPI direct read (libft4222 + libftd2xx)</li>
-              <li>CI-V 0x27 scope via the same USB serial link</li>
-              <li>TX-aware pause — no more post-PTT spectrum churn</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-wave-square"></i></div>
-            <h3>FFT Plot + Waterfall</h3>
-            <p>
+<ul>
+<li>FT4222 SPI direct read (libft4222 + libftd2xx)</li>
+<li>CI-V 0x27 scope via the same USB serial link</li>
+<li>TX-aware pause — no more post-PTT spectrum churn</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-wave-square"></i></div>
+<h3>FFT Plot + Waterfall</h3>
+<p>
               EMA-smoothed spectrum polyline above a 120-row history waterfall.
               Shared Floor/Ceil controls, six colormaps, and click-to-QSY
               anywhere on the spectrum.
             </p>
-            <ul>
-              <li>~30 fps S-meter fallback keeps the waterfall alive</li>
-              <li>Click-to-QSY with drag-guard for scroll gestures</li>
-              <li>Clear "TX — spectrum paused" indicator while transmitting</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-headphones"></i></div>
-            <h3>Bidirectional Opus Audio</h3>
-            <p>
+<ul>
+<li>~30 fps S-meter fallback keeps the waterfall alive</li>
+<li>Click-to-QSY with drag-guard for scroll gestures</li>
+<li>Clear "TX — spectrum paused" indicator while transmitting</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-headphones"></i></div>
+<h3>Bidirectional Opus Audio</h3>
+<p>
               One 48 kHz codec domain end to end: RX capture → Opus 64kbps →
               browser AudioWorklet; browser mic → Opus CBR → server → radio.
               The FT-710 backend bridges to its fixed 44.1 kHz USB-audio
               device boundary (960→882 per 20 ms); the IC-7300 backend uses
               native 48 kHz USB audio with no resample.
             </p>
-            <ul>
-              <li>64kbps Opus — 12× smaller than raw PCM</li>
-              <li>Zero-audio watchdog flags wedged USB audio</li>
-              <li>Graceful PTT release — word endings preserved</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-sliders-h"></i></div>
-            <h3>Full CAT / CI-V Control</h3>
-            <p>
+<ul>
+<li>64kbps Opus — 12× smaller than raw PCM</li>
+<li>Zero-audio watchdog flags wedged USB audio</li>
+<li>Graceful PTT release — word endings preserved</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-sliders-h"></i></div>
+<h3>Full CAT / CI-V Control</h3>
+<p>
               FT-710: direct serial CAT over the Enhanced COM Port at 38400
               baud (frequency, modes, filters, VFO A/B, split, preamp, ATT,
               NR/NB/AN, compressor, tuner, gains). IC-7300/MK2: USB CI-V at
               115200 8N1 (addr 0x94), with Icom mode/band/filter tables and
               capability-driven UI adaptation.
             </p>
-            <ul>
-              <li>No Hamlib / wfview / middleware — direct serial</li>
-              <li>Dirty-field tracking minimises WebSocket traffic</li>
-              <li>Read-back verification on filter width sets</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-code-branch"></i></div>
-            <h3>Adaptive Polling</h3>
-            <p>
+<ul>
+<li>No Hamlib / wfview / middleware — direct serial</li>
+<li>Dirty-field tracking minimises WebSocket traffic</li>
+<li>Read-back verification on filter width sets</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-code-branch"></i></div>
+<h3>Adaptive Polling</h3>
+<p>
               100ms→5s smart intervals, 0.25s per-query timeout ceiling, and
               priority preemption so PTT never waits for a poll cycle. Stale
               in-flight reads are discarded after user commands.
             </p>
-            <ul>
-              <li>~296 bytes/sec total serial utilisation</li>
-              <li>Auto-zero TX meters on RX transition</li>
-              <li>Scope re-init after every serial reconnect</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-gauge-high"></i></div>
-            <h3>Meters &amp; Memory Channels</h3>
-            <p>
+<ul>
+<li>~296 bytes/sec total serial utilisation</li>
+<li>Auto-zero TX meters on RX transition</li>
+<li>Scope re-init after every serial reconnect</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-gauge-high"></i></div>
+<h3>Meters &amp; Memory Channels</h3>
+<p>
               Canvas S-meter (S1–S9+60dB) with dBm readout plus full TX
               telemetry: PWR / ALC / SWR / Id / Vd / COMP. Memory channels with
               one-tap recall; every UI preference persists in cookies.
             </p>
-            <ul>
-              <li>Seeded starter channels, per-user storage</li>
-              <li>AF volume, scope options, mic gain — all remembered</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
-            <h3>ATR1000 Tuner Linkage</h3>
-            <p>
+<ul>
+<li>Seeded starter channels, per-user storage</li>
+<li>AF volume, scope options, mic gain — all remembered</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+<h3>ATR1000 Tuner Linkage</h3>
+<p>
               Optional networked ATR1000 antenna tuner: learned LC relay values
               follow every frequency change, and a server-side tune assist runs
               the full carrier-measure-keep-or-rollback sequence for you.
             </p>
-            <ul>
-              <li>Off by default — zero impact without the hardware</li>
-              <li>Learning gated on SWR 1.0–1.8, ±5kHz nearest match</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-shield-halved"></i></div>
-            <h3>Multi-Layer PTT Safety</h3>
-            <p>
+<ul>
+<li>Off by default — zero impact without the hardware</li>
+<li>Learning gated on SWR 1.0–1.8, ±5kHz nearest match</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-shield-halved"></i></div>
+<h3>Multi-Layer PTT Safety</h3>
+<p>
               Touch-and-hold TX with instant release on touch-end. Fire-and-forget
               TX0 with 500ms TX-status poll + browser watchdog. Server-side
               forced RX when the last client — or the TX-audio owner —
               disconnects.
             </p>
-            <ul>
-              <li>7 independent release layers — no single point of failure</li>
-              <li>TX uplink ownership follows the keying client</li>
-              <li>Graceful TX audio drain before RF drop</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-mobile-alt"></i></div>
-            <h3>Mobile-First UI</h3>
-            <p>
+<ul>
+<li>7 independent release layers — no single point of failure</li>
+<li>TX uplink ownership follows the keying client</li>
+<li>Graceful TX audio drain before RF drop</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-mobile-alt"></i></div>
+<h3>Mobile-First UI</h3>
+<p>
               Optimised for iPhone Safari: safe-area adaptation, PWA manifest
               with Service Worker offline caching, Wake Lock, fullscreen
               toggle, and native iOS / Android companion apps.
             </p>
-            <ul>
-              <li>PWA manifest + Service Worker offline cache</li>
-              <li>Wake Lock API (screen stays on)</li>
-              <li>Native iOS 17+ and Android apps share the same protocol</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Download -->
-    <section
-      class="section"
-      id="download"
-      style="background: var(--bg-primary)"
-    >
-      <div class="container">
-        <div class="section-header">
-          <span class="section-label">Download</span>
-          <h2 class="section-title">Windows Desktop Installer</h2>
-          <p class="section-subtitle">
+<ul>
+<li>PWA manifest + Service Worker offline cache</li>
+<li>Wake Lock API (screen stays on)</li>
+<li>Native iOS 17+ and Android apps share the same protocol</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+<!-- Download -->
+<section class="scope-section" id="download" style="background: var(--scope-bg)">
+<div class="container">
+<div class="section-header">
+<span class="section-label">Download</span>
+<h2 class="section-title">Windows Desktop Installer</h2>
+<p class="section-subtitle">
             Windows 11/12 x64 — embedded Python 3.12 runtime, no manual Python
             install. Start Menu launcher with per-user config in %LOCALAPPDATA%.
           </p>
-        </div>
-
-        <div
-          style="
-            background: var(--bg-secondary);
-            border: 1px solid var(--accent);
+</div>
+<div style="
+            background: var(--scope-surface);
+            border: 1px solid var(--scope-primary);
             border-radius: 14px;
             padding: 1.75rem 2rem;
             max-width: 720px;
             margin: 0 auto;
-          "
-        >
-          <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
-            <i class="fab fa-windows" style="color: var(--accent)"></i>
-            <strong> MRRC-Modern-Setup.exe — v1.10.1 Stable</strong>
+          ">
+<p style="margin: 0 0 0.25rem; font-size: 1.15rem">
+<i class="fab fa-windows" style="color: var(--scope-primary)"></i>
+<strong> MRRC-Modern-Setup.exe — v1.12.0 Stable</strong>
+</p>
+<p style="color: var(--scope-text-muted); margin: 0 0 1rem">
+            45.3 MB · x64 · 45,339,501 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: e7d1e460c408a6da2c0f66f23002d48429fa0b46bfd933305b4f150cbcefade2</code>
+</p>
+<p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
+            v1.12.0 hardens IC-7300/MK2 runtime reliability and official CI-V
+            conformance: backend-aware 115200 baud defaults, newest-data scope
+            delivery, correct display/data-output activation, SCROLL-C edge
+            metadata, model-specific Transceive settings, documented power
+            framing, raw-120 ALC calibration, and FAST/MID/SLOW scope speeds.
+            The Windows build passed all 633 tests, three PyInstaller targets,
+            Inno Setup compilation, and bundled-file/hash checks. FT-710 behavior
+            is unchanged. Physical USB, RF, power-cycle, and audio-quality
+            acceptance still requires a connected radio.
           </p>
-          <p style="color: var(--text-muted); margin: 0 0 1rem">
-            45.3 MB · x64<br />
-            <code style="font-size: 0.76rem"
-              >SHA-256: e69126ccb64387eb80eabdc38f046cb64a1a33094ef1e0771aba9553c1b17bc5</code
-            >
-          </p>
-          <p style="color: var(--text-muted); margin: 0 0 1.25rem">
-            v1.10.1 ships the pluggable multi-radio backend — the generated
-            launcher config now exposes <code>MRRC_RADIO_MODEL</code>:
-            <code>ft710</code> (default), <code>ic7300</code>, or
-            <code>ic7300mk2</code>. Icom IC-7300/MK2 support adds USB CI-V
-            control, 0x27 spectrum, and native 48 kHz audio alongside the
-            unchanged FT-710 path. Windows build, 596 tests,
-            install/start/uninstall, and bundled-file checks passed; physical
-            RF monitoring remains an operator-side acceptance check.
-          </p>
-          <div
-            style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center"
-          >
-            <a
-              href="downloads/MRRC-Modern-Setup.exe"
-              class="btn btn-primary btn-large"
-            >
-              <i class="fab fa-windows"></i> Download for Windows
+<div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
+<i class="fab fa-windows"></i> Download for Windows
             </a>
-            <a
-              href="downloads/MRRC-Modern-v1.10.1-Windows-x64-Setup.exe"
-              class="btn btn-secondary btn-large"
-            >
-              <i class="fas fa-fingerprint"></i> Versioned v1.10.1
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.12.0
             </a>
-            <a
-              href="https://github.com/cheenle/mrrc_modern/releases"
-              class="btn btn-secondary btn-large"
-              target="_blank"
-              rel="noopener"
-            >
-              <i class="fab fa-github"></i> GitHub Releases
+<a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
+<i class="fab fa-github"></i> GitHub Releases
             </a>
-          </div>
-        </div>
-        <p
-          style="
+</div>
+</div>
+<p style="
             text-align: center;
-            color: var(--text-muted);
+            color: var(--scope-text-muted);
             font-size: 0.85rem;
             margin-top: 1.25rem;
-          "
-        >
+          ">
           Without the FTDI DLLs the FT-710 backend falls back to the S-meter
           synthetic spectrum — CAT control and audio are unaffected (the IC-7300
           backend needs no FTDI at all). macOS / Linux / Raspberry Pi: run from
           source (see Quick Start below).
         </p>
-      </div>
-    </section>
-
-    <!-- Quick Start -->
-    <section class="section" id="start" style="background: var(--bg-secondary)">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-label">Quick Start</span>
-          <h2 class="section-title">Up and Running in 5 Minutes</h2>
-          <p class="section-subtitle">
+</div>
+</section>
+<!-- Quick Start -->
+<section class="scope-section" id="start" style="background: var(--scope-surface)">
+<div class="container">
+<div class="section-header">
+<span class="section-label">Quick Start</span>
+<h2 class="section-title">Up and Running in 5 Minutes</h2>
+<p class="section-subtitle">
             Windows users take the installer track; macOS / Linux / Raspberry Pi
             run from source. Both end at the same browser UI.
           </p>
-        </div>
-
-        <h3
-          style="
-            color: var(--text-primary);
+</div>
+<h3 style="
+            color: var(--scope-text);
             margin-bottom: 1rem;
             text-align: center;
-          "
-        >
-          <i class="fab fa-windows" style="color: var(--accent)"></i> Track A —
+          ">
+<i class="fab fa-windows" style="color: var(--scope-primary)"></i> Track A —
           Windows Installer
         </h3>
-        <div class="steps" style="margin-bottom: 2.5rem">
-          <div class="step">
-            <h4>1 · Install Drivers</h4>
-            <p>
+<div class="steps" style="margin-bottom: 2.5rem">
+<div class="step">
+<h4>1 · Install Drivers</h4>
+<p>
               FT-710: Silicon Labs CP210x VCP driver for the Enhanced COM Port;
               FTDI D2XX only if you want FT4222 true spectrum. IC-7300: none —
               single USB cable with built-in serial driver.
             </p>
-            <code
-              >Device Manager → Ports (COM &amp; LPT) → Enhanced COM Port</code
-            >
-          </div>
-          <div class="step">
-            <h4>2 · Run the Installer</h4>
-            <p>
-              MRRC-Modern-Setup.exe — v1.10.1, 45.3 MB, x64. Start Menu + optional
+<code>Device Manager → Ports (COM &amp; LPT) → Enhanced COM Port</code>
+</div>
+<div class="step">
+<h4>2 · Run the Installer</h4>
+<p>
+              MRRC-Modern-Setup.exe — v1.12.0, 45.3 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-            <code>SHA-256 e69126ccb64387eb80eabdc38f046cb64a1a33094ef1e0771aba9553c1b17bc5</code>
-          </div>
-          <div class="step">
-            <h4>3 · Edit Configuration</h4>
-            <p>
+<code>SHA-256 e7d1e460c408a6da2c0f66f23002d48429fa0b46bfd933305b4f150cbcefade2</code>
+</div>
+<div class="step">
+<h4>3 · Edit Configuration</h4>
+<p>
               Start Menu → Edit Configuration — set the radio model
               (<code>MRRC_RADIO_MODEL</code>), serial port, and a strong web
               password.
             </p>
-            <code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>
-            <p style="margin-top: 0.5rem">
-              <a
-                href="guide.html#windows-配置与运行"
-                style="color: var(--accent)"
-                >IC-7300 vs FT-710 Windows setup walkthrough →</a
-              >
-            </p>
-          </div>
-          <div class="step">
-            <h4>4 · Launch</h4>
-            <p>
+<code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>
+<p style="margin-top: 0.5rem">
+<a href="guide.html#windows-配置与运行" style="color: var(--scope-primary)">IC-7300 vs FT-710 Windows setup walkthrough →</a>
+</p>
+</div>
+<div class="step">
+<h4>4 · Launch</h4>
+<p>
               Start Menu → MRRC Modern — the launcher starts the server and
               opens the browser automatically.
             </p>
-            <code>http://127.0.0.1:8888 → login → full control</code>
-          </div>
-        </div>
-
-        <h3
-          style="
-            color: var(--text-primary);
+<code>http://127.0.0.1:8888 → login → full control</code>
+</div>
+</div>
+<h3 style="
+            color: var(--scope-text);
             margin-bottom: 1rem;
             text-align: center;
-          "
-        >
-          <i class="fas fa-terminal" style="color: var(--accent)"></i> Track B —
+          ">
+<i class="fas fa-terminal" style="color: var(--scope-primary)"></i> Track B —
           From Source (macOS / Linux / RPi)
         </h3>
-        <div class="steps">
-          <div class="step">
-            <h4>1 · Clone the Repository</h4>
-            <p>Get the latest code from GitHub</p>
-            <code>git clone https://github.com/cheenle/mrrc_modern.git</code>
-          </div>
-          <div class="step">
-            <h4>2 · Install Dependencies</h4>
-            <p>Python 3.12+ with FastAPI, Uvicorn, PySerial, PyAudio, NumPy</p>
-            <code>cd mrrc_modern && pip install -r requirements.txt</code>
-          </div>
-          <div class="step">
-            <h4>3 · Start the Server</h4>
-            <p>Choose the radio model and serial port, then launch</p>
-            <code
-              >MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/cu.usbserial-XXXX python server.py</code
-            >
-          </div>
-          <div class="step">
-            <h4>4 · Open Your Browser</h4>
-            <p>
+<div class="steps">
+<div class="step">
+<h4>1 · Clone the Repository</h4>
+<p>Get the latest code from GitHub</p>
+<code>git clone https://github.com/cheenle/mrrc_modern.git</code>
+</div>
+<div class="step">
+<h4>2 · Install Dependencies</h4>
+<p>Python 3.12+ with FastAPI, Uvicorn, PySerial, PyAudio, NumPy</p>
+<code>cd mrrc_modern &amp;&amp; pip install -r requirements.txt</code>
+</div>
+<div class="step">
+<h4>3 · Start the Server</h4>
+<p>Choose the radio model and serial port, then launch</p>
+<code>MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/cu.usbserial-XXXX python server.py</code>
+</div>
+<div class="step">
+<h4>4 · Open Your Browser</h4>
+<p>
               Any device on your network — phone, tablet, desktop. Set a strong
               password before exposing the server.
             </p>
-            <code>https://server-ip:8888 → login → full control</code>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Requirements -->
-    <section
-      class="section"
-      id="requirements"
-      style="background: var(--bg-primary)"
-    >
-      <div class="container" style="text-align: center">
-        <div class="section-header">
-          <span class="section-label">Requirements</span>
-          <h2 class="section-title">What You Need</h2>
-        </div>
-        <div class="tech-stack" style="margin-bottom: 0">
-          <span class="tech-tag"
-            ><i class="fas fa-microchip"></i> Yaesu FT-710</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-microchip"></i> Icom IC-7300 / IC-7300MK2</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-usb"></i> USB Cable (A→B or C→B)</span
-          >
-          <span class="tech-tag"
-            ><i class="fab fa-windows"></i> Windows Installer (bundled Python)</span
-          >
-          <span class="tech-tag"
-            ><i class="fab fa-python"></i> or Python 3.12+ from source</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-server"></i> Windows / macOS / Linux / RPi</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-globe"></i> Modern Browser</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-microchip"></i> FTDI libs (FT-710 scope only)</span
-          >
-        </div>
-        <p
-          style="
-            color: var(--text-muted);
+<code>https://server-ip:8888 → login → full control</code>
+</div>
+</div>
+</div>
+</section>
+<!-- Requirements -->
+<section class="scope-section" id="requirements" style="background: var(--scope-bg)">
+<div class="container" style="text-align: center">
+<div class="section-header">
+<span class="section-label">Requirements</span>
+<h2 class="section-title">What You Need</h2>
+</div>
+<div class="tech-stack" style="margin-bottom: 0">
+<span class="tech-tag"><i class="fas fa-microchip"></i> Yaesu FT-710</span>
+<span class="tech-tag"><i class="fas fa-microchip"></i> Icom IC-7300 / IC-7300MK2</span>
+<span class="tech-tag"><i class="fas fa-usb"></i> USB Cable (A→B or C→B)</span>
+<span class="tech-tag"><i class="fab fa-windows"></i> Windows Installer (bundled Python)</span>
+<span class="tech-tag"><i class="fab fa-python"></i> or Python 3.12+ from source</span>
+<span class="tech-tag"><i class="fas fa-server"></i> Windows / macOS / Linux / RPi</span>
+<span class="tech-tag"><i class="fas fa-globe"></i> Modern Browser</span>
+<span class="tech-tag"><i class="fas fa-microchip"></i> FTDI libs (FT-710 scope only)</span>
+</div>
+<p style="
+            color: var(--scope-text-muted);
             margin-top: 1.5rem;
             font-size: 0.85rem;
-          "
-        >
+          ">
           For real FT4222 SPI spectrum data on the FT-710, install libft4222 +
           libftd2xx from the wfview app bundle or FTDI website; the IC-7300
           backend reads spectrum over the same USB serial cable and needs no
           FTDI libraries. CAT/CI-V control and audio always work without them.
         </p>
-      </div>
-    </section>
-
-    <!-- Architecture -->
-    <section
-      class="section"
-      id="architecture"
-      style="background: var(--bg-primary)"
-    >
-      <div class="container">
-        <div class="section-header">
-          <span class="section-label">Architecture</span>
-          <h2 class="section-title">One Process, Pluggable Backends</h2>
-          <p class="section-subtitle">
-            4 WebSocket connections, zero external middleware, built entirely on
+</div>
+</section>
+<!-- Architecture -->
+<section class="scope-section" id="architecture" style="background: var(--scope-bg)">
+<div class="container">
+<div class="section-header">
+<span class="section-label">Architecture</span>
+<h2 class="section-title">One Process, Pluggable Backends</h2>
+<p class="section-subtitle">
+            4+1 WebSocket connections (optional ATR1000 tuner link), zero
+            external middleware, built entirely on
             Python async frameworks. Pick the radio with MRRC_RADIO_MODEL.
           </p>
-        </div>
-
-        <div class="arch-diagram">
-          <svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="gBoxApp" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="rgba(240,160,48,0.08)" />
-                <stop offset="100%" stop-color="rgba(240,160,48,0.02)" />
-              </linearGradient>
-              <linearGradient id="gBoxSrv" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="rgba(93,173,226,0.08)" />
-                <stop offset="100%" stop-color="rgba(93,173,226,0.02)" />
-              </linearGradient>
-              <linearGradient id="gBoxHw" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="rgba(46,204,113,0.08)" />
-                <stop offset="100%" stop-color="rgba(46,204,113,0.02)" />
-              </linearGradient>
-            </defs>
-
-            <rect
-              x="10"
-              y="15"
-              width="230"
-              height="110"
-              rx="14"
-              fill="url(#gBoxApp)"
-              stroke="rgba(240,160,48,0.35)"
-              stroke-width="1.5"
-            />
-            <text
-              x="125"
-              y="44"
-              text-anchor="middle"
-              fill="#f0a030"
-              font-size="15"
-              font-weight="700"
-              font-family="inherit"
-            >
+</div>
+<div class="arch-diagram">
+<svg viewbox="0 0 880 200" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<lineargradient id="gBoxApp" x1="0" x2="1" y1="0" y2="1">
+<stop offset="0%" stop-color="rgba(240,160,48,0.08)"></stop>
+<stop offset="100%" stop-color="rgba(240,160,48,0.02)"></stop>
+</lineargradient>
+<lineargradient id="gBoxSrv" x1="0" x2="1" y1="0" y2="1">
+<stop offset="0%" stop-color="rgba(93,173,226,0.08)"></stop>
+<stop offset="100%" stop-color="rgba(93,173,226,0.02)"></stop>
+</lineargradient>
+<lineargradient id="gBoxHw" x1="0" x2="1" y1="0" y2="1">
+<stop offset="0%" stop-color="rgba(46,204,113,0.08)"></stop>
+<stop offset="100%" stop-color="rgba(46,204,113,0.02)"></stop>
+</lineargradient>
+</defs>
+<rect fill="url(#gBoxApp)" height="110" rx="14" stroke="rgba(240,160,48,0.35)" stroke-width="1.5" width="230" x="10" y="15"></rect>
+<text fill="#f0a030" font-family="inherit" font-size="15" font-weight="700" text-anchor="middle" x="125" y="44">
               Browser
             </text>
-            <text
-              x="125"
-              y="66"
-              text-anchor="middle"
-              fill="#8899aa"
-              font-size="12"
-              font-family="inherit"
-            >
+<text fill="#8899aa" font-family="inherit" font-size="12" text-anchor="middle" x="125" y="66">
               Phone / Tablet / Desktop
             </text>
-            <text
-              x="125"
-              y="88"
-              text-anchor="middle"
-              fill="#5c6370"
-              font-size="11"
-              font-family="inherit"
-            >
+<text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="125" y="88">
               AudioWorklet · Canvas
             </text>
-            <text
-              x="125"
-              y="107"
-              text-anchor="middle"
-              fill="#5c6370"
-              font-size="11"
-              font-family="inherit"
-            >
+<text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="125" y="107">
               WASM Opus · PWA
             </text>
-
-            <rect
-              x="460"
-              y="15"
-              width="230"
-              height="110"
-              rx="14"
-              fill="url(#gBoxSrv)"
-              stroke="rgba(93,173,226,0.35)"
-              stroke-width="1.5"
-            />
-            <text
-              x="575"
-              y="44"
-              text-anchor="middle"
-              fill="#5dade2"
-              font-size="15"
-              font-weight="700"
-              font-family="inherit"
-            >
+<rect fill="url(#gBoxSrv)" height="110" rx="14" stroke="rgba(93,173,226,0.35)" stroke-width="1.5" width="230" x="460" y="15"></rect>
+<text fill="#5dade2" font-family="inherit" font-size="15" font-weight="700" text-anchor="middle" x="575" y="44">
               MRRC Modern Server
             </text>
-            <text
-              x="575"
-              y="66"
-              text-anchor="middle"
-              fill="#8899aa"
-              font-size="12"
-              font-family="inherit"
-            >
+<text fill="#8899aa" font-family="inherit" font-size="12" text-anchor="middle" x="575" y="66">
               FastAPI + Uvicorn
             </text>
-            <text
-              x="575"
-              y="88"
-              text-anchor="middle"
-              fill="#5c6370"
-              font-size="11"
-              font-family="inherit"
-            >
+<text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="575" y="88">
               Single Python process
             </text>
-            <text
-              x="575"
-              y="107"
-              text-anchor="middle"
-              fill="#5c6370"
-              font-size="11"
-              font-family="inherit"
-            >
+<text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="575" y="107">
               Windows / macOS / Linux / RPi
             </text>
-
-            <rect
-              x="710"
-              y="30"
-              width="160"
-              height="95"
-              rx="14"
-              fill="url(#gBoxHw)"
-              stroke="rgba(46,204,113,0.35)"
-              stroke-width="1.5"
-            />
-            <text
-              x="790"
-              y="58"
-              text-anchor="middle"
-              fill="#2ecc71"
-              font-size="14"
-              font-weight="700"
-              font-family="inherit"
-            >
+<rect fill="url(#gBoxHw)" height="95" rx="14" stroke="rgba(46,204,113,0.35)" stroke-width="1.5" width="160" x="710" y="30"></rect>
+<text fill="#2ecc71" font-family="inherit" font-size="14" font-weight="700" text-anchor="middle" x="790" y="58">
               FT-710 / IC-7300
             </text>
-            <text
-              x="790"
-              y="78"
-              text-anchor="middle"
-              fill="#8899aa"
-              font-size="11"
-              font-family="inherit"
-            >
+<text fill="#8899aa" font-family="inherit" font-size="11" text-anchor="middle" x="790" y="78">
               HF/50MHz SDR
             </text>
-            <text
-              x="790"
-              y="96"
-              text-anchor="middle"
-              fill="#5c6370"
-              font-size="10"
-              font-family="inherit"
-            >
+<text fill="#5c6370" font-family="inherit" font-size="10" text-anchor="middle" x="790" y="96">
               CAT / CI-V
             </text>
-            <text
-              x="790"
-              y="112"
-              text-anchor="middle"
-              fill="#5c6370"
-              font-size="10"
-              font-family="inherit"
-            >
+<text fill="#5c6370" font-family="inherit" font-size="10" text-anchor="middle" x="790" y="112">
               SPI / 0x27
             </text>
-
-            <line
-              x1="240"
-              y1="70"
-              x2="460"
-              y2="70"
-              stroke="rgba(240,160,48,0.4)"
-              stroke-width="1.5"
-            />
-            <polygon
-              points="452,64 466,70 452,76"
-              fill="rgba(240,160,48,0.5)"
-            />
-            <polygon
-              points="248,64 234,70 248,76"
-              fill="rgba(240,160,48,0.5)"
-            />
-            <text
-              x="350"
-              y="62"
-              text-anchor="middle"
-              fill="#f0a030"
-              font-size="11"
-              font-weight="600"
-              font-family="inherit"
-            >
+<line stroke="rgba(240,160,48,0.4)" stroke-width="1.5" x1="240" x2="460" y1="70" y2="70"></line>
+<polygon fill="rgba(240,160,48,0.5)" points="452,64 466,70 452,76"></polygon>
+<polygon fill="rgba(240,160,48,0.5)" points="248,64 234,70 248,76"></polygon>
+<text fill="#f0a030" font-family="inherit" font-size="11" font-weight="600" text-anchor="middle" x="350" y="62">
               HTTPS / WSS
             </text>
-            <text
-              x="350"
-              y="82"
-              text-anchor="middle"
-              fill="#8899aa"
-              font-size="10"
-              font-family="inherit"
-            >
-              4 WebSocket links
+<text fill="#8899aa" font-family="inherit" font-size="10" text-anchor="middle" x="350" y="82">
+              4+1 WS links
             </text>
-
-            <path
-              d="M 690 70 L 690 77 L 710 77"
-              stroke="rgba(46,204,113,0.35)"
-              stroke-width="1.5"
-              fill="none"
-            />
-            <polygon
-              points="718,73 710,77 718,81"
-              fill="rgba(46,204,113,0.45)"
-            />
-            <text
-              x="700"
-              y="135"
-              text-anchor="middle"
-              fill="#2ecc71"
-              font-size="10"
-              font-weight="600"
-              font-family="inherit"
-            >
+<path d="M 690 70 L 690 77 L 710 77" fill="none" stroke="rgba(46,204,113,0.35)" stroke-width="1.5"></path>
+<polygon fill="rgba(46,204,113,0.45)" points="718,73 710,77 718,81"></polygon>
+<text fill="#2ecc71" font-family="inherit" font-size="10" font-weight="600" text-anchor="middle" x="700" y="135">
               USB
             </text>
-
-            <g transform="translate(10,145)">
-              <rect
-                x="0"
-                y="0"
-                width="195"
-                height="36"
-                rx="6"
-                fill="rgba(255,255,255,0.03)"
-                stroke="rgba(255,255,255,0.05)"
-                stroke-width="1"
-              />
-              <text
-                x="8"
-                y="15"
-                fill="#f0a030"
-                font-size="9"
-                font-family="monospace"
-              >
+<g transform="translate(10,145)">
+<rect fill="rgba(255,255,255,0.03)" height="36" rx="6" stroke="rgba(255,255,255,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<text fill="#f0a030" font-family="monospace" font-size="9" x="8" y="15">
                 /WSradio
               </text>
-              <text
-                x="8"
-                y="29"
-                fill="#8899aa"
-                font-size="9"
-                font-family="inherit"
-              >
+<text fill="#8899aa" font-family="inherit" font-size="9" x="8" y="29">
                 JSON · fullState + partial
               </text>
-            </g>
-            <g transform="translate(215,145)">
-              <rect
-                x="0"
-                y="0"
-                width="195"
-                height="36"
-                rx="6"
-                fill="rgba(255,255,255,0.03)"
-                stroke="rgba(255,255,255,0.05)"
-                stroke-width="1"
-              />
-              <text
-                x="8"
-                y="15"
-                fill="#2ecc71"
-                font-size="9"
-                font-family="monospace"
-              >
+</g>
+<g transform="translate(215,145)">
+<rect fill="rgba(255,255,255,0.03)" height="36" rx="6" stroke="rgba(255,255,255,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<text fill="#2ecc71" font-family="monospace" font-size="9" x="8" y="15">
                 /WSaudioRX
               </text>
-              <text
-                x="8"
-                y="29"
-                fill="#8899aa"
-                font-size="9"
-                font-family="inherit"
-              >
+<text fill="#8899aa" font-family="inherit" font-size="9" x="8" y="29">
                 1B tag + Opus / PCM
               </text>
-            </g>
-            <g transform="translate(430,145)">
-              <rect
-                x="0"
-                y="0"
-                width="195"
-                height="36"
-                rx="6"
-                fill="rgba(255,255,255,0.03)"
-                stroke="rgba(255,255,255,0.05)"
-                stroke-width="1"
-              />
-              <text
-                x="8"
-                y="15"
-                fill="#e67e22"
-                font-size="9"
-                font-family="monospace"
-              >
+</g>
+<g transform="translate(430,145)">
+<rect fill="rgba(255,255,255,0.03)" height="36" rx="6" stroke="rgba(255,255,255,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<text fill="#e67e22" font-family="monospace" font-size="9" x="8" y="15">
                 /WSaudioTX
               </text>
-              <text
-                x="8"
-                y="29"
-                fill="#8899aa"
-                font-size="9"
-                font-family="inherit"
-              >
+<text fill="#8899aa" font-family="inherit" font-size="9" x="8" y="29">
                 Mic uplink · Opus 64kbps CBR
               </text>
-            </g>
-            <g transform="translate(645,145)">
-              <rect
-                x="0"
-                y="0"
-                width="195"
-                height="36"
-                rx="6"
-                fill="rgba(255,255,255,0.03)"
-                stroke="rgba(255,255,255,0.05)"
-                stroke-width="1"
-              />
-              <text
-                x="8"
-                y="15"
-                fill="#9b59b6"
-                font-size="9"
-                font-family="monospace"
-              >
+</g>
+<g transform="translate(645,145)">
+<rect fill="rgba(255,255,255,0.03)" height="36" rx="6" stroke="rgba(255,255,255,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<text fill="#9b59b6" font-family="monospace" font-size="9" x="8" y="15">
                 /WSspectrum
               </text>
-              <text
-                x="8"
-                y="29"
-                fill="#8899aa"
-                font-size="9"
-                font-family="inherit"
-              >
+<text fill="#8899aa" font-family="inherit" font-size="9" x="8" y="29">
                 850 uint8 · ~21 fps
               </text>
-            </g>
-          </svg>
-        </div>
-
-        <div class="arch-grid">
-          <div class="arch-card">
-            <div class="label"><i class="fas fa-plug"></i> CAT / CI-V</div>
-            <div class="endpoint">FT-710 CAT · IC-7300 CI-V</div>
-            <div class="dir">Yaesu ASCII CMD; · Icom BCD CI-V</div>
-            <div class="payload">
+</g>
+</svg>
+</div>
+<div class="arch-grid">
+<div class="arch-card">
+<div class="label"><i class="fas fa-plug"></i> CAT / CI-V</div>
+<div class="endpoint">FT-710 CAT · IC-7300 CI-V</div>
+<div class="dir">Yaesu ASCII CMD; · Icom BCD CI-V</div>
+<div class="payload">
               Frequency, mode, VFO, filters, gains, PTT, meters
             </div>
-          </div>
-          <div class="arch-card">
-            <div class="label">
-              <i class="fas fa-chart-line"></i> Scope — SPI / CI-V
+</div>
+<div class="arch-card">
+<div class="label">
+<i class="fas fa-chart-line"></i> Scope — SPI / CI-V
             </div>
-            <div class="endpoint">FT4222 SPI · CI-V 0x27</div>
-            <div class="dir">ctypes → libft4222 / CI-V scope</div>
-            <div class="payload">4096-byte blocks, 850-point FFT waterfall</div>
-          </div>
-          <div class="arch-card">
-            <div class="label"><i class="fas fa-volume-up"></i> USB Audio</div>
-            <div class="endpoint">USB Audio Class</div>
-            <div class="dir">PyAudio capture / playback</div>
-            <div class="payload">FT-710 44.1kHz · IC-7300 48kHz native</div>
-          </div>
-          <div class="arch-card">
-            <div class="label">
-              <i class="fas fa-network-wired"></i> WebSocket API
+<div class="endpoint">FT4222 SPI · CI-V 0x27</div>
+<div class="dir">ctypes → libft4222 / CI-V scope</div>
+<div class="payload">4096-byte blocks, 850-point FFT waterfall</div>
+</div>
+<div class="arch-card">
+<div class="label"><i class="fas fa-volume-up"></i> USB Audio</div>
+<div class="endpoint">USB Audio Class</div>
+<div class="dir">PyAudio capture / playback</div>
+<div class="payload">FT-710 44.1kHz · IC-7300 48kHz native</div>
+</div>
+<div class="arch-card">
+<div class="label">
+<i class="fas fa-network-wired"></i> WebSocket API
             </div>
-            <div class="endpoint">4 endpoints · Token auth</div>
-            <div class="dir">JSON control + Binary audio/spectrum</div>
-            <div class="payload">
+<div class="endpoint">4+1 endpoints · Token auth</div>
+<div class="dir">JSON control + Binary audio/spectrum</div>
+<div class="payload">
               REST: /api/status, /api/auth, /api/mem_channels
             </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-
-    <!-- Key Numbers -->
-    <section class="section" id="numbers" style="background: var(--bg-secondary)">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-label">Key Numbers</span>
-          <h2 class="section-title">Spectrum, Audio, Serial — by the Numbers</h2>
-        </div>
-
-        <div class="perf-grid">
-          <div class="perf-card">
-            <div class="metric">850-pt</div>
-            <div class="metric-label">
-              FFT Spectrum<br /><small>Per frame from FT4222 SPI</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">~21 fps</div>
-            <div class="metric-label">
-              Real Spectrum Rate<br /><small>4096B blocks, 0xFF01EE01 sync</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">120</div>
-            <div class="metric-label">
-              Waterfall Lines<br /><small>History depth</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">48kHz</div>
-            <div class="metric-label">
-              Codec Domain<br /><small>Opus 64kbps CBR, 12× vs PCM</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">0.25s</div>
-            <div class="metric-label">
-              Poll Timeout Ceiling<br /><small>PTT never waits on a query</small>
-            </div>
-          </div>
-          <div class="perf-card">
-            <div class="metric">409</div>
-            <div class="metric-label">
-              Hardware-Free Tests<br /><small>Green on every build</small>
-            </div>
-          </div>
-        </div>
-
-        <h3
-          style="
+</div>
+</div>
+</div>
+</section>
+<!-- Key Numbers -->
+<section class="scope-section" id="numbers" style="background: var(--scope-surface)">
+<div class="container">
+<div class="section-header">
+<span class="section-label">Key Numbers</span>
+<h2 class="section-title">Spectrum, Audio, Serial — by the Numbers</h2>
+</div>
+<div class="perf-grid">
+<div class="perf-card">
+<div class="metric">850-pt</div>
+<div class="metric-label">
+              FFT Spectrum<br/><small>Per frame from FT4222 SPI</small>
+</div>
+</div>
+<div class="perf-card">
+<div class="metric">~21 fps</div>
+<div class="metric-label">
+              Real Spectrum Rate<br/><small>4096B blocks, 0xFF01EE01 sync</small>
+</div>
+</div>
+<div class="perf-card">
+<div class="metric">120</div>
+<div class="metric-label">
+              Waterfall Lines<br/><small>History depth</small>
+</div>
+</div>
+<div class="perf-card">
+<div class="metric">48kHz</div>
+<div class="metric-label">
+              Codec Domain<br/><small>Opus 64kbps CBR, 12× vs PCM</small>
+</div>
+</div>
+<div class="perf-card">
+<div class="metric">0.25s</div>
+<div class="metric-label">
+              Poll Timeout Ceiling<br/><small>PTT never waits on a query</small>
+</div>
+</div>
+<div class="perf-card">
+<div class="metric">633</div>
+<div class="metric-label">
+              Hardware-Free Tests<br/><small>v1.12.0 release, macOS + Windows</small>
+</div>
+</div>
+</div>
+<h3 style="
             text-align: center;
-            color: var(--text-primary);
+            color: var(--scope-text);
             margin-top: 3rem;
             margin-bottom: 1.5rem;
-          "
-        >
+          ">
           Technology Stack
         </h3>
-        <div class="tech-stack">
-          <span class="tech-tag">FastAPI + Uvicorn</span>
-          <span class="tech-tag">asyncio</span>
-          <span class="tech-tag">PySerial</span>
-          <span class="tech-tag">PyAudio / PortAudio</span>
-          <span class="tech-tag">libopus ctypes</span>
-          <span class="tech-tag">FT4222 SPI</span>
-          <span class="tech-tag">AudioWorklet</span>
-          <span class="tech-tag">WASM Opus</span>
-          <span class="tech-tag">Web Audio API</span>
-          <span class="tech-tag">Service Worker PWA</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- iOS App -->
-    <section class="section" id="ios" style="background: var(--bg-primary)">
-      <div class="container">
-        <div class="section-header">
-          <span class="section-label">Mobile Apps</span>
-          <h2 class="section-title">Native iOS &amp; Android Clients</h2>
-          <p class="section-subtitle">
+<div class="tech-stack">
+<span class="tech-tag">FastAPI + Uvicorn</span>
+<span class="tech-tag">asyncio</span>
+<span class="tech-tag">PySerial</span>
+<span class="tech-tag">PyAudio / PortAudio</span>
+<span class="tech-tag">libopus ctypes</span>
+<span class="tech-tag">FT4222 SPI</span>
+<span class="tech-tag">AudioWorklet</span>
+<span class="tech-tag">WASM Opus</span>
+<span class="tech-tag">Web Audio API</span>
+<span class="tech-tag">Service Worker PWA</span>
+</div>
+</div>
+</section>
+<!-- iOS App -->
+<section class="scope-section" id="ios" style="background: var(--scope-bg)">
+<div class="container">
+<div class="section-header">
+<span class="section-label">Mobile Apps</span>
+<h2 class="section-title">Native iOS &amp; Android Clients</h2>
+<p class="section-subtitle">
             SwiftUI (iOS 17+) and Kotlin/Compose (Android) companion apps —
-            same 4-channel WebSocket protocol as the browser, tuned for
+            same 4+1-channel WebSocket protocol as the browser, tuned for
             one-handed mobile operation.
           </p>
-        </div>
-
-        <div class="features-grid">
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-broadcast-tower"></i></div>
-            <h3>Full Radio Control</h3>
-            <p>
+</div>
+<div class="features-grid">
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-broadcast-tower"></i></div>
+<h3>Full Radio Control</h3>
+<p>
               Frequency (direct entry / step / band jump), VFO A/B, mode, filter
               width, Preamp/ATT, AGC, NB/NR/ANotch, RF power, mic gain, squelch
               — all from the iPhone.
             </p>
-            <ul>
-              <li>4 encrypted WebSocket channels (wss)</li>
-              <li>Token auth, password in Keychain</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-water"></i></div>
-            <h3>Waterfall + Meters</h3>
-            <p>
+<ul>
+<li>4 encrypted WebSocket channels (wss)</li>
+<li>Token auth, password in Keychain</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-water"></i></div>
+<h3>Waterfall + Meters</h3>
+<p>
               850-bin real-time waterfall with FFT curve, colormap matched to
               the web UI. S-meter plus TX meters (PWR / SWR / ALC / COMP) and
               memory channel list.
             </p>
-            <ul>
-              <li>Same binary spectrum frames as the browser</li>
-              <li>Dark amber theme, portrait + landscape</li>
-            </ul>
-          </div>
-
-          <div class="feature-card animate">
-            <div class="icon"><i class="fas fa-microphone"></i></div>
-            <h3>Opus Voice RX/TX</h3>
-            <p>
+<ul>
+<li>Same binary spectrum frames as the browser</li>
+<li>Dark amber theme, portrait + landscape</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-microphone"></i></div>
+<h3>Opus Voice RX/TX</h3>
+<p>
               RX: Opus 48kHz decode and playback through the device speaker. TX:
               mic capture at 48kHz in 20 ms PCM frames — hold PTT to talk.
             </p>
-            <ul>
-              <li>libopus device build (arm64)</li>
-              <li>Settings: reconnect, gain, volume</li>
-            </ul>
-          </div>
-        </div>
-
-        <div
-          style="
+<ul>
+<li>libopus device build (arm64)</li>
+<li>Settings: reconnect, gain, volume</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fab fa-android"></i></div>
+<h3>Android Client — FT710Android</h3>
+<p>
+              Kotlin + Jetpack Compose (Material3, minSdk 26) app speaking the
+              same protocol: full control, waterfall + meters, Opus RX/TX,
+              memory channels, and DataStore settings.
+            </p>
+<ul>
+<li>PTT state machine designed-in from day one</li>
+<li>JVM-tested protocol &amp; PTT logic — device RF acceptance pending</li>
+</ul>
+</div>
+</div>
+<div style="
             background: rgba(230, 126, 34, 0.08);
             border: 1px solid rgba(230, 126, 34, 0.4);
             border-radius: 12px;
             padding: 1.25rem 1.5rem;
             margin-top: 2rem;
-          "
-        >
-          <p style="color: var(--text-primary); margin: 0 0 0.5rem">
-            <i class="fas fa-triangle-exclamation" style="color: #e67e22"></i>
-            <strong>Early access — build from source</strong>
+          ">
+<p style="color: var(--scope-text); margin: 0 0 0.5rem">
+<i class="fas fa-triangle-exclamation" style="color: #e67e22"></i>
+<strong>Early access — build from source</strong>
+</p>
+<p style="color: var(--scope-text-muted); font-size: 0.9rem; margin: 0">
+            iOS build requires a physical iPhone (simulator unsupported —
+            bundled libopus is arm64-device-only), iOS 17+, Xcode 15 +
+            XcodeGen, and a TLS-enabled server. The P0 PTT-safety issues from
+            the 2026-07-20 audit are resolved — TX uplink ownership follows
+            the keying client. Android: pure logic (protocol, PTT, spectrum,
+            memory channels) is covered by JVM tests via
+            <code>./gradlew test assembleDebug lintDebug</code>; on-device RF
+            acceptance is pending.
           </p>
-          <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0">
-            Requires a physical iPhone (simulator unsupported — bundled libopus
-            is arm64-device-only), iOS 17+, Xcode 15 + XcodeGen, and a
-            TLS-enabled server. The P0 PTT-safety issues from the 2026-07-20
-            audit are resolved — TX uplink ownership follows the keying client.
-          </p>
-        </div>
-
-        <div style="text-align: center; margin-top: 2rem">
-          <a
-            href="https://github.com/cheenle/mrrc_modern/tree/main/FT710Mobile"
-            class="btn btn-secondary btn-large"
-            target="_blank"
-            rel="noopener"
-          >
-            <i class="fab fa-apple"></i> iOS App on GitHub
+</div>
+<div style="text-align: center; margin-top: 2rem">
+<a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/tree/main/FT710Mobile" rel="noopener" target="_blank">
+<i class="fab fa-apple"></i> iOS App on GitHub
           </a>
-        </div>
-      </div>
-    </section>
-
-    <!-- SDD Docs -->
-    <section class="section" id="sdd" style="background: var(--bg-secondary)">
-      <div class="container" style="text-align: center">
-        <div class="section-header">
-          <span class="section-label">Documentation</span>
-          <h2 class="section-title">Software Design Description</h2>
-          <p class="section-subtitle">
-            IBM TeamSD methodology &middot; 15 chapters &middot;
-            <strong>V2.20</strong> &middot; Architecture decisions, component
+<a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/tree/main/FT710Android" rel="noopener" target="_blank">
+<i class="fab fa-android"></i> Android App on GitHub
+          </a>
+</div>
+</div>
+</section>
+<!-- SDD Docs -->
+<section class="scope-section" id="community">
+<div class="container" style="text-align:center;">
+<div class="section-label">Community</div>
+<h2 class="section-title">Join the MRRC-HAM WeChat Group</h2>
+<p class="section-subtitle" style="margin-left:auto;margin-right:auto;">Scan the QR code with WeChat to join the MRRC-HAM group.</p>
+<div class="scope-card" style="display:inline-block;padding:1.25rem;max-width:280px;">
+<img alt="WeChat QR code for MRRC-HAM group" src="images/qr-wechat-group.jpg" style="border-radius:var(--scope-radius);"/>
+</div>
+<p style="color:var(--scope-text-muted);font-size:0.85rem;margin-top:1rem;">QR code valid until Aug 29, 2026. Will be updated when refreshed.</p>
+</div>
+</section><section class="scope-section" id="sdd" style="background: var(--scope-surface)">
+<div class="container" style="text-align: center">
+<div class="section-header">
+<span class="section-label">Documentation</span>
+<h2 class="section-title">Software Design Description</h2>
+<p class="section-subtitle">
+            IBM TeamSD methodology · 15 chapters ·
+            <strong>V2.27</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
-        </div>
-        <div
-          style="
+</div>
+<div style="
             display: flex;
             gap: 1rem;
             justify-content: center;
             flex-wrap: wrap;
-          "
-        >
-          <a href="sdd.html" class="btn btn-primary btn-large">
-            <i class="fas fa-book"></i> Browse SDD
+          ">
+<a class="btn btn-primary btn-large" href="sdd.html">
+<i class="fas fa-book"></i> Browse SDD
           </a>
-          <a href="sdd/index.html" class="btn btn-secondary btn-large">
-            <i class="fas fa-list"></i> All Chapters
+<a class="btn btn-secondary btn-large" href="sdd/index.html">
+<i class="fas fa-list"></i> All Chapters
           </a>
-        </div>
-        <div class="tech-stack" style="margin-top: 1.5rem">
-          <span class="tech-tag"
-            ><i class="fas fa-check-circle" style="color: var(--accent)"></i>
-            AD-001&ndash;016</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-check-circle" style="color: var(--accent)"></i> 65
-            NFRs</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-check-circle" style="color: var(--accent)"></i> 8
-            Use Cases</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-check-circle" style="color: var(--accent)"></i>
-            7-Layer PTT Safety</span
-          >
-          <span class="tech-tag"
-            ><i class="fas fa-check-circle" style="color: var(--accent)"></i>
-            Feasibility Assessment</span
-          >
-        </div>
-      </div>
-    </section>
+</div>
+<div class="tech-stack" style="margin-top: 1.5rem">
+<span class="tech-tag"><i class="fas fa-check-circle" style="color: var(--scope-primary)"></i>
+            AD-001–016</span>
+<span class="tech-tag"><i class="fas fa-check-circle" style="color: var(--scope-primary)"></i> 65
+            NFRs</span>
+<span class="tech-tag"><i class="fas fa-check-circle" style="color: var(--scope-primary)"></i> 8
+            Use Cases</span>
+<span class="tech-tag"><i class="fas fa-check-circle" style="color: var(--scope-primary)"></i>
+            7-Layer PTT Safety</span>
+<span class="tech-tag"><i class="fas fa-check-circle" style="color: var(--scope-primary)"></i>
+            Feasibility Assessment</span>
+</div>
+</div>
+</section>
+<!-- Footer -->
 
-    <!-- Footer -->
-    <footer class="footer">
-      <div class="container">
-        <div class="footer-grid">
-          <div class="footer-section">
-            <h4>MRRC Modern</h4>
-            <p>
-              Software SCU-LAN10 Replacement<br />
-              One USB Cable, Any Device<br />
-              v1.10.1 Stable · GPLv3 License
-            </p>
-          </div>
-          <div class="footer-section">
-            <h4>Links</h4>
-            <ul>
-              <li><a href="#">Home</a></li>
-              <li><a href="#features">Features</a></li>
-              <li><a href="#download">Download</a></li>
-              <li><a href="#architecture">Architecture</a></li>
-              <li><a href="#start">Quick Start</a></li>
-            </ul>
-          </div>
-          <div class="footer-section">
-            <h4>Resources</h4>
-            <ul>
-              <li>
-                <a href="downloads/MRRC-Modern-Setup.exe"
-                  ><i class="fab fa-windows"></i> Windows Installer v1.10.1</a
-                >
-              </li>
-              <li>
-                <a
-                  href="https://github.com/cheenle/mrrc_modern"
-                  target="_blank"
-                  rel="noopener"
-                  >GitHub</a
-                >
-              </li>
-              <li>
-                <a
-                  href="https://github.com/cheenle/mrrc_modern/blob/main/README.md"
-                  target="_blank"
-                  rel="noopener"
-                  >README</a
-                >
-              </li>
-              <li><a href="sdd.html">SDD Docs</a></li>
-              <li>
-                <a
-                  href="https://github.com/cheenle/mrrc_modern/tree/main/SDD"
-                  target="_blank"
-                  rel="noopener"
-                  >SDD Source</a
-                >
-              </li>
-              <li>
-                <a
-                  href="https://github.com/cheenle/mrrc_modern/blob/main/LICENSE"
-                  target="_blank"
-                  rel="noopener"
-                  >GPLv3 License</a
-                >
-              </li>
-            </ul>
-          </div>
-        </div>
-        <div class="footer-bottom">
-          <p>
-            &copy; 2026 MRRC Modern Project. Open Source under GPLv3 License. ·
-            FT-710 and Yaesu are trademarks of
-            <a href="https://www.yaesu.com/" style="color: var(--accent)"
-              >Yaesu Musen Co., Ltd.</a
-            >; IC-7300 and Icom are trademarks of Icom Inc.
-          </p>
-        </div>
-      </div>
-    </footer>
 
-    <script>
-      function toggleMobileMenu() {
-        document.querySelector(".nav-links").classList.toggle("active");
-      }
-      document.querySelectorAll('a[href^="#"]').forEach((a) => {
-        a.addEventListener("click", function (e) {
-          e.preventDefault();
-          const t = document.querySelector(this.getAttribute("href"));
-          if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-      });
-      const nav = document.querySelector(".navbar");
-      window.addEventListener("scroll", () => {
-        nav.style.background =
-          window.scrollY > 50 ? "rgba(10,10,10,0.98)" : "rgba(10,10,10,0.92)";
-      });
-    </script>
-    <script src="js/global-nav.js?v=2" defer data-gn="1"></script>
-  </body>
+
+<footer class="scope-footer">
+<div class="container">
+<div class="footer-grid">
+<div class="footer-section">
+<h4>MRRC Modern</h4>
+<p>Software SCU-LAN10 Replacement<br/>One USB Cable, Any Device<br/>v1.12.0 Stable · GPLv3 License</p>
+</div>
+<div class="footer-section">
+<h4>Links</h4>
+<ul>
+<li><a href="#">Home</a></li>
+<li><a href="#features">Features</a></li>
+<li><a href="#download">Download</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#start">Quick Start</a></li>
+<li><a href="zh/index.html">中文</a></li>
+</ul>
+</div>
+<div class="footer-section">
+<h4>Resources</h4>
+<ul>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.12.0</a></li>
+<li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
+<li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>
+<li><a href="sdd.html">SDD Docs</a></li>
+<li><a href="guide.html">操作指南 (Guide)</a></li>
+<li><a href="fde.html">FDE</a></li>
+<li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" rel="noopener" target="_blank">SDD Source</a></li>
+<li><a href="https://github.com/cheenle/mrrc_modern/blob/main/LICENSE" rel="noopener" target="_blank">GPLv3 License</a></li>
+</ul>
+</div>
+</div>
+<div class="footer-bottom">
+<p>© 2026 MRRC Modern Project. Open Source under GPLv3 License. · FT-710 and Yaesu are trademarks of <a href="https://www.yaesu.com/">Yaesu Musen Co., Ltd.</a>; IC-7300 and Icom are trademarks of Icom Inc.</p>
+</div>
+</div>
+</footer><script defer="" src="js/scope.js?v=2"></script></body>
 </html>

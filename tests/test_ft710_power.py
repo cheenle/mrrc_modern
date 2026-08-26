@@ -14,6 +14,7 @@ So the correct criterion is:
 
 Runs without hardware; `open_port` is mocked with a scripted serial.
 """
+import time
 import unittest
 from unittest.mock import patch
 
@@ -103,7 +104,9 @@ class PowerOffTests(unittest.TestCase):
 
     def test_off_rejected_during_boot_window(self):
         # PS0 must not be sent inside the post-PS1 protection window.
-        ft710_power._boot_until = 1_000_000.0
+        # Relative to monotonic() — a fixed epoch value silently expires
+        # on hosts with longer uptimes than that constant (seen at 14d).
+        ft710_power._boot_until = time.monotonic() + 3600.0
         factory = _PortFactory([])
         with patch.object(ft710_power, "open_port", factory):
             self.assertFalse(ft710_power.power_off())

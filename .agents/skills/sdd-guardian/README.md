@@ -34,15 +34,15 @@ python3 $H prime                 # 黄金规则摘要(hook 每次会话自动跑
 ## 规则分层
 
 - **阻断(8 条)**:DN; 禁发、PR00/01 映射、AC000/001/003、SH00NN 格式、串口 I/O 只在 CatController、禁 16kHz 音频、index.html 禁内联 JS、禁硬编码密钥
-- **警告(4 条)**:状态必须 `radio.update()`、新 WS 端点要 token 鉴权、PyAudio 用 44100、部署值走环境变量
-- **指导(5 条)**:TX0 不加验证循环、轮询查后复查 skip、PTT 走优先级通道、文档同步、测试约定
+- **警告(6 条)**:状态必须 `radio.update()`、新 WS 端点要 token 鉴权、PyAudio 设备采样率来自后端能力表(AD-011 修订)、部署值走环境变量、静态文件路径必须包含在 STATIC_DIR 内(I8)、密码比较用 hmac.compare_digest(I9)
+- **指导(7 条)**:TX0 不加验证循环、轮询查后复查 skip、PTT 走优先级通道、音频/频谱子通道需独立重连(I10)、iOS PTT 必须无条件释放+看门狗(I11)、文档同步、测试约定
 
 ## 怎么扩展(规则是活文档)
 
 - 新教训/新事故 → 在 `harness/constraints.json` 加一条规则(id、severity、scope、patterns、sdd_ref),hook/check/brief 三处自动生效
 - 新工程领域 → 在 `harness/index.json` 加一个 topic(globs + 关键词 + SDD refs)
 - SDD 正文更新 → 什么都不用做,`brief`/`sdd` 实时切片自动呈现新内容
-- 改完跑 `venv/bin/python -m unittest tests.test_sdd_harness`(27 个测试守护 harness 本身)
+- 改完跑 `venv/bin/python -m unittest tests.test_sdd_harness`(31 个测试守护 harness 本身)
 
 ## 与 superpowers 的关系(两层融合)
 

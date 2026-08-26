@@ -9,12 +9,12 @@
     "5":  {"file": "SDD/05-non-functional-requirements.md", "title": "Non-Functional Requirements (NFR-001…065)"},
     "6":  {"file": "SDD/06-use-case-model.md", "title": "Use Case Model (UC-001…008)"},
     "7":  {"file": "SDD/07-subject-area-model.md", "title": "Subject Area Model (entities, state ownership)"},
-    "8":  {"file": "SDD/08-architecture-decisions.md", "title": "Architecture Decisions (AD-001…015)"},
+    "8": {"file": "SDD/08-architecture-decisions.md", "title": "Architecture Decisions (AD-001…016)"},
     "9":  {"file": "SDD/09-architecture-overview.md", "title": "Architecture Overview (pipelines, polling, broadcasting)"},
     "10": {"file": "SDD/10-service-model.md", "title": "Service Model (WS/REST command contract)"},
     "11": {"file": "SDD/11-component-model.md", "title": "Component Model"},
     "12": {"file": "SDD/12-operational-model.md", "title": "Operational Model (deploy, config, troubleshooting)"},
-    "13": {"file": "SDD/13-feasibility-assessment.md", "title": "Feasibility Assessment (risks R1-R8, assumptions A1-A6, issues I1-I7)"},
+    "13": {"file": "SDD/13-feasibility-assessment.md", "title": "Feasibility Assessment (risks R1-R8, assumptions A1-A6, issues I1-I11)"},
     "14": {"file": "SDD/14-version-history.md", "title": "Version History"},
     "15": {"file": "SDD/15-ptt-safety-architecture.md", "title": "PTT Safety Architecture"}
   },
@@ -53,7 +53,7 @@
       "id": "frontend-ui",
       "globs": ["static/**/*.js", "static/index.html", "static/**/*.css", "static/sw.js", "static/manifest.json"],
       "keywords": ["ui", "frontend", "button", "css", "canvas", "mobile", "ios", "界面", "前端"],
-      "refs": ["sec:9.7", "risk:R8", "nfr:NFR-011", "nfr:NFR-030", "nfr:NFR-031", "nfr:NFR-043", "uc:UC-001", "issue:I1"]
+      "refs": ["sec:9.7", "risk:R8", "nfr:NFR-011", "nfr:NFR-030", "nfr:NFR-031", "nfr:NFR-043", "uc:UC-001", "issue:I1", "issue:I10"]
     },
     {
       "id": "server-ws-protocol",
@@ -63,9 +63,15 @@
     },
     {
       "id": "auth-security",
-      "globs": [],
-      "keywords": ["auth", "token", "password", "login", "security", "认证", "密码", "安全"],
-      "refs": ["sec:5.3", "nfr:NFR-020", "nfr:NFR-021", "nfr:NFR-022", "nfr:NFR-023"]
+      "globs": ["server.py"],
+      "keywords": ["auth", "token", "password", "login", "security", "static", "traversal", "认证", "密码", "安全", "路径"],
+      "refs": ["sec:5.3", "nfr:NFR-020", "nfr:NFR-021", "nfr:NFR-022", "nfr:NFR-023", "issue:I8", "issue:I9"]
+    },
+    {
+      "id": "mobile-clients",
+      "globs": ["FT710Mobile/**", "FT710Android/**"],
+      "keywords": ["ios", "android", "swift", "kotlin", "app", "mobile", "移动", "苹果", "安卓"],
+      "refs": ["issue:I11", "nfr:NFR-008", "nfr:NFR-012", "sec:15", "uc:UC-005"]
     },
     {
       "id": "memory-channels",

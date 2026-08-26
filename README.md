@@ -16,15 +16,15 @@ pip install -r requirements.txt
 
 # FT-710 (Yaesu CAT, 38400 baud):
 # macOS (Enhanced COM Port):
-MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
+MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
 # Linux:
-MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
 
 # IC-7300 (Icom CI-V, 115200 8N1, default address 0x94):
 # macOS:
-MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/cu.usbserial-A1234567 python3 server.py
+MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-A1234567 python3 server.py
 # Linux:
-MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
 ```
 
 `MRRC_RADIO_MODEL` defaults to `ft710`, so it may be omitted for the FT-710. Open `http://localhost:8888` in a browser. **Default password: change it immediately** — see [SECURITY_GUIDE.md](SECURITY_GUIDE.md).
@@ -61,20 +61,23 @@ dist\windows\MRRC-Modern-Setup.exe
 |----------|---------|-------------|
 | `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, or `ic7300mk2` |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address (only used with `ic7300`/`ic7300mk2`) |
-| `FT710_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710: Enhanced COM Port, 38400 baud; IC-7300: USB CI-V, 115200 baud) |
-| `FT710_BAUD_RATE` | `38400` | CAT serial baud rate |
-| `FT710_WEB_PORT` | `8888` | Web server port |
-| `FT710_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change**) |
-| `FT710_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
-| `FT710_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
-| `FT710_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
-| `FT710_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |
-| `FT710_SCOPE_BAUD` | `115200` | Scope serial baud rate |
-| `FT710_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"USB Audio"` or `"3"`; Windows package pre-locks `USB Audio`) |
-| `FT710_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
-| `FT710_MEM_FILE` | `mem_channels.json` | Memory-channel JSON path; Windows launcher stores this under `%LOCALAPPDATA%` |
-| `FT710_ATR1000_HOST` | *(empty = disabled)* | ATR1000 networked tuner host; empty disables the linkage entirely |
-| `FT710_ATR1000_PORT` | `60001` | ATR1000 tuner WebSocket port |
+| `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710: Enhanced COM Port, 38400 baud; IC-7300: USB CI-V, 115200 baud) |
+| `MRRC_BAUD_RATE` | `38400` | CAT serial baud rate |
+| `MRRC_WEB_PORT` | `8888` | Web server port |
+| `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change**) |
+| `MRRC_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
+| `MRRC_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
+| `MRRC_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
+| `MRRC_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |
+| `MRRC_SCOPE_BAUD` | `115200` | Scope serial baud rate |
+| `MRRC_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"USB Audio"` or `"3"`; Windows package pre-locks `USB Audio`) |
+| `MRRC_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
+| `MRRC_MEM_FILE` | `mem_channels.json` | Memory-channel JSON path; Windows launcher stores this under `%LOCALAPPDATA%` |
+| `MRRC_ATR1000_HOST` | *(empty = disabled)* | ATR1000 networked tuner host; empty disables the linkage entirely |
+| `MRRC_ATR1000_PORT` | `60001` | ATR1000 tuner WebSocket port |
+
+All variables also accept the legacy `FT710_*` prefix (e.g. `FT710_SERIAL_PORT`) —
+`config.py` reads `MRRC_*` first and falls back automatically.
 
 ### CLI Arguments
 
@@ -388,8 +391,8 @@ Set `MRRC_RADIO_MODEL` before starting the server:
 
 | Model | Value | Serial protocol | Scope source | USB audio rate |
 |-------|-------|-----------------|--------------|----------------|
-| Yaesu FT-710 | `ft710` (default) | CAT at `FT710_SERIAL_PORT`, 38400 baud | FT4222 SPI or S-meter fallback | 44.1 kHz |
-| Icom IC-7300 | `ic7300` | CI-V at `FT710_SERIAL_PORT`, 115200 8N1 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
+| Yaesu FT-710 | `ft710` (default) | CAT at `MRRC_SERIAL_PORT`, 38400 baud | FT4222 SPI or S-meter fallback | 44.1 kHz |
+| Icom IC-7300 | `ic7300` | CI-V at `MRRC_SERIAL_PORT`, 115200 8N1 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
 | Icom IC-7300MK2 | `ic7300mk2` | CI-V, same as IC-7300 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
 
 The CI-V address can be changed with `IC7300_CIV_ADDR` (default `0x94`).

@@ -6,16 +6,16 @@ This repository contains a Python FastAPI server for remote radio control (Yaesu
 
 | Module | Responsibility |
 |--------|----------------|
-| `server.py` | FastAPI app, auth, 4 WebSocket endpoints, REST APIs, lifespan management; TX uplink ownership follows the PTT client and same-session replacement connections |
+| `server.py` | FastAPI app, auth, 5 WebSocket endpoints (`/WSradio`, `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX`, optional `/WSatr1000`), REST APIs, lifespan management; TX uplink ownership follows the PTT client and same-session replacement connections |
 | `cat_controller.py` | Compatibility shim — real module moved to `backends/ft710/cat_controller.py`: Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
 | `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command and post-query stale-read discard; watchdog re-runs scope init (`on_reconnected`) after serial reconnect |
 | `audio_handler.py` | PyAudio sound card capture/playback with per-backend device rate and name hints (FT-710: fixed 44.1kHz with 960→882 resample before TX; IC-7300: 48kHz native, no resample), Opus encode, radio USB-audio auto-detection (FT-710/YAESU name, "USB Audio CODEC"/"USB Audio Device" Windows names, mono/full-duplex heuristics); TX session stats include oldest-frame `queue_drops`; `restart_rx()` reopens RX capture on every TX→RX transition (Windows-only full-duplex wedge workaround); on TX/RX stream-open failure re-initializes PortAudio once and retries with a name-resolved index (USB re-enumeration on radio power cycles invalidates cached device IDs — macOS -9999) |
 | `audio_resample.py` | 44.1kHz ↔ 48kHz frame-aligned SRC (numpy linear interp; 882↔960 = 20ms) |
 | `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz) |
-| `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback |
+| `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback. Note: the in-process `connect`/`read_loop`/`_resync` SPI code is legacy — production reads go through the `scope_pipe` subprocess (byte-by-byte resync was proven impossible on FT4222; see SDD V2.8), kept only as historical reference |
 | `scope_pipe.py` | Compatibility shim (still the PyInstaller entry) — real module moved to `backends/ft710/scope_pipe.py`: standalone subprocess for FT4222 SPI I/O (avoids asyncio/ctypes conflicts); 1s len=0 stdout heartbeat + stdin-EOF for dead-parent detection; stdin `TX:1`/`TX:0` control — SPI reads pause while TX (radio garbles scope stream); resync = device close/settle/reopen (byte-by-byte resync impossible: per-byte SingleRead = separate SPI transaction); server kills it via process tree (`taskkill /T`) on Windows; launched unfrozen as `python -m backends.ft710.scope_pipe` with cwd=repo root |
-| `ssl_bootstrap.py` | First-run self-signed TLS cert generation (ECDSA P-256, 10y, SANs localhost/hostname/LAN IPs) so the desktop launcher starts HTTPS by default; `FT710_SSL_CERT/KEY` override, `FT710_SSL=off` escape |
+| `ssl_bootstrap.py` | First-run self-signed TLS cert generation (ECDSA P-256, 10y, SANs localhost/hostname/LAN IPs) so the desktop launcher starts HTTPS by default; `MRRC_SSL_CERT/KEY` override (legacy `FT710_SSL_CERT/KEY` honored), `MRRC_SSL=off` escape |
 | `scope_frame.py` | Compatibility shim — real module moved to `backends/ft710/scope_frame.py`: shared frame parsing, pipe payload encode/decode, quality metrics |
 | `scope_libraries.py` | Compatibility shim — real module moved to `backends/ft710/scope_libraries.py`: FTDI library discovery and SPI clock configuration |
 | `config.py` | Protocol-neutral constants (serial/web/SSL/auth/poll/reconnect/PTT) + shared UI mode tables and the `_interp` calibration helper; FT-710-specific tables (modes, bands, filter widths, meter calibrations, scope spans/port) moved to `backends/ft710/config_ft710.py` |
@@ -34,7 +34,7 @@ Pluggable radio backends live in `backends/` (selected via `MRRC_RADIO_MODEL`, d
 Frontend assets in `static/`:
 - `index.html` — SPA shell (mobile-first responsive layout)
 - `ft710.css` — Dark amber theme, iPhone safe-area support
-- `ft710_main.js` — WebSocket client (4 channels), state management, audio RX/TX, spectrum
+- `ft710_main.js` — WebSocket client (4+1 channels: control/audio RX/TX/spectrum + optional ATR1000), state management, audio RX/TX, spectrum
 - `ft710_ui.js` — All UI rendering: waterfall, S-meter, meters, controls, PTT
 - `rx_worklet_processor.js` — AudioWorklet: time-based jitter buffer RX playback
 - `tx_capture_worklet.js` — AudioWorklet: mic capture (48kHz)
@@ -55,8 +55,8 @@ SDD (Software Design Description) in `SDD/` — 15-chapter IBM TeamSD documentat
 `.agents/skills/sdd-guardian/` turns the SDD into enforceable engineering guardrails for any agent working in this repo (auto-discovered as a project-level skill):
 
 - `SKILL.md` — 6-phase lifecycle (brief → design → implement → test → verify → doc-sync/commit) plus the golden-rule constraint table.
-- `harness/constraints.json` — machine-readable constraint registry distilled from SDD AD-001…AD-015, incident history (DN freq-drift, PR errata, SH format, 16kHz crackling, V1.7 stale-read race), and open issues I6/I7.
-- `harness/index.json` — knowledge routing index: maps files/topics to SDD refs across all 15 chapters (ADs, NFR-001…065, UC-001…008, risks R1–R8, assumptions A1–A6, issues I1–I7, success criteria SC1–SC9). Holds no content — refs are sliced live from `SDD/*.md`, so it never goes stale.
+- `harness/constraints.json` — machine-readable constraint registry distilled from SDD AD-001…AD-016, incident history (DN freq-drift, PR errata, SH format, 16kHz crackling, V1.7 stale-read race), and open issues I6–I11 (multi-client arbitration, mem POST validation, static path traversal, password compare, audio-subchannel reconnect, iOS PTT race).
+- `harness/index.json` — knowledge routing index: maps files/topics to SDD refs across all 15 chapters (ADs, NFR-001…065, UC-001…008, risks R1–R8, assumptions A1–A6, issues I1–I11, success criteria SC1–SC9). Holds no content — refs are sliced live from `SDD/*.md`, so it never goes stale.
 - `harness/sdd_context.py` — stdlib-only CLI: `prime` (session digest), `brief <paths>|--task` (full engineering brief: constraints + live-extracted SDD sections), `sdd <id|keyword>` (one item: AD-011, NFR-060, UC-005, R4, I6, 9.6…), `context` (fast constraints view), `check <paths>|--staged` (exit 2 on block violations), `hook` (PreToolUse mode).
 - `references/` — full constraint catalog with rationale + phase checklists.
 
@@ -72,10 +72,10 @@ pip install -r requirements.txt
 Run the server:
 ```bash
 # FT-710
-MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python server.py
+MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python server.py
 
 # IC-7300
-MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/cu.usbserial-A1234567 python server.py
+MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-A1234567 python server.py
 ```
 
 Run tests:
@@ -83,7 +83,7 @@ Run tests:
 python -m unittest discover -s tests -v
 ```
 
-Environment variables: `MRRC_RADIO_MODEL` (backend key, default `ft710`), `IC7300_CIV_ADDR` (IC-7300 CI-V address, default `0x94`), `FT710_SERIAL_PORT`, `FT710_BAUD_RATE`, `FT710_WEB_PORT`, `FT710_WEB_PASSWORD`, `FT710_WEB_HOST`, `FT710_FTDI_LIB_DIR`, `FT710_FT4222_CLK_DIV`, `FT710_SCOPE_PORT`, `FT710_SCOPE_BAUD`, `FT710_ATR1000_HOST`, `FT710_ATR1000_PORT`.
+Environment variables: `MRRC_RADIO_MODEL` (backend key, default `ft710`), `IC7300_CIV_ADDR` (IC-7300 CI-V address, default `0x94`), `MRRC_SERIAL_PORT`, `MRRC_BAUD_RATE`, `MRRC_WEB_PORT`, `MRRC_WEB_PASSWORD`, `MRRC_WEB_HOST`, `MRRC_FTDI_LIB_DIR`, `MRRC_FT4222_CLK_DIV`, `MRRC_SCOPE_PORT`, `MRRC_SCOPE_BAUD`, `MRRC_ATR1000_HOST`, `MRRC_ATR1000_PORT`. All variables also honor the legacy `FT710_*` prefix via automatic fallback in `config.py` (`_env*` helpers read `MRRC_*` first).
 
 ## Coding Style & Naming Conventions
 
@@ -91,7 +91,7 @@ Python: 4-space indentation, type hints for shared state, `UPPER_CASE` for modul
 
 ## Testing Guidelines
 
-Run the full suite with `python -m unittest discover -s tests -v` (currently 593 tests). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connected radio model, serial port, FT4222 availability (FT-710), audio device. Name tests `test_*.py`. Keep hardware-independent logic testable without a radio.
+Run the full suite with `python -m unittest discover -s tests -v` (currently 605 tests across 30 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connected radio model, serial port, FT4222 availability (FT-710), audio device. Name tests `test_*.py`. Keep hardware-independent logic testable without a radio.
 
 ## Commit & Pull Request Guidelines
 

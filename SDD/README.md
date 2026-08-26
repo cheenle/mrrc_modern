@@ -34,9 +34,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.20 |
-| Baseline Date | 2026-08-17 |
-| Status | v1.8.0 Windows Stable; FT710Android native client implemented (JVM tests green, device acceptance pending); IC-7300/MK2 backend implemented |
+| SDD Version | V2.23 |
+| Baseline Date | 2026-08-26 |
+| Status | v1.10.1 installer published; IC-7300/MK2 backend implemented (MK2 CI-V conformance verified); FT710Android implemented (JVM tests green, device acceptance pending); iOS P0 fixes designed but pending; open issues I8–I11 tracked in §13.4 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend) |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2` (default `ft710`) |
@@ -49,7 +49,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 
 ```text
 Browser (iPhone / Desktop / Tablet)
-  | HTTP + WebSocket: /WSradio /WSaudioRX /WSaudioTX /WSspectrum
+  | HTTP + WebSocket: /WSradio /WSaudioRX /WSaudioTX /WSspectrum (+optional /WSatr1000)
   v
 FastAPI/Uvicorn MRRC Server (server.py)
   | Pluggable backend selected by MRRC_RADIO_MODEL

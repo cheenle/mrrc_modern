@@ -1,15 +1,15 @@
 ---
 name: sdd-guardian
-description: SDD-driven engineering lifecycle for mrrc_ft710 — full design context (requirements/NFRs, use cases, architecture decisions, feasibility risks) plus enforcement of CAT/audio/polling/PTT constraints, testing and documentation sync on every code change
+description: SDD-driven engineering lifecycle for mrrc_modern — full design context (requirements/NFRs, use cases, architecture decisions, feasibility risks) plus enforcement of CAT/audio/polling/PTT/security constraints, testing and documentation sync on every code change
 type: prompt
 whenToUse: When creating, modifying, reviewing, or debugging code in this repository; when planning features or refactors; when the change touches CAT commands, audio, polling, PTT, state, WebSocket protocol, frontend UI, deployment, or documentation
 arguments:
   - task
 ---
 
-# SDD Guardian — engineering lifecycle for mrrc_ft710
+# SDD Guardian — engineering lifecycle for mrrc_modern
 
-This repository is governed by `SDD/` (IBM TeamSD, 15 chapters, currently **V1.7**)
+This repository is governed by `SDD/` (IBM TeamSD, 15 chapters, currently **V2.23**)
 — requirements, system context, architecture decisions, service/component models,
 feasibility analysis, and version history. The SDD is the canonical design record:
 your job on every change is to keep the runtime AND the design record consistent.
@@ -27,10 +27,10 @@ python3 ${KIMI_SKILL_DIR}/harness/sdd_context.py brief --task "<one-line task de
 
 `brief` extracts, live from the SDD, everything relevant to those files/topics:
 
-- **Architecture decisions** (AD-001…AD-015) with problem/decision/consequences
+- **Architecture decisions** (AD-001…AD-016) with problem/decision/consequences
 - **Requirements** (NFR-001…065 with targets + verification; success criteria SC1–SC9)
 - **Use cases** (UC-001…008) your change must keep working
-- **Feasibility**: risks R1–R8 + mitigations, assumptions A1–A6, open issues I1–I7
+- **Feasibility**: risks R1–R8 + mitigations, assumptions A1–A6, open issues I1–I11
 - **Constraints** (block/warn/info rules for those files)
 
 Need one specific item later? `sdd AD-011` · `sdd NFR-060` · `sdd UC-005` ·
@@ -47,7 +47,10 @@ fix, also read the referenced SDD chapter in full.
 - **Feasibility**: does the change rely on something ch13 lists as a risk or
   assumption (R1–R8, A1–A6)? Does it conflict with open issues — **I6** no
   multi-client control arbitration (last-writer-wins), **I7** `mem_channels.json`
-  POST has no schema validation/backup? Don't design as if those were solved.
+  POST has no schema validation/backup, **I8** static path traversal,
+  **I9** non-constant-time password check + weak default, **I10** audio/spectrum
+  subchannels lack independent reconnect, **I11** iOS PTT release race?
+  Don't design as if those were solved.
 - **Use cases**: walk the affected UC main flow + exceptions end-to-end mentally.
 - **Safety**: anything touching PTT/TX — Chapter 15's layered release model is
   load-bearing. TX0 is fire-and-forget; never re-add blocking post-release
@@ -71,7 +74,10 @@ Golden rules (block-level; the PreToolUse hook rejects these edits):
 Warn-level: mutate state via `radio.update(...)` (dirty-field broadcast, AD-003);
 new WS endpoints need `?token=` auth; poll loops re-check `_should_skip` /
 `_polling_paused()` AFTER every query await (V1.7 stale-read race), and set
-handlers call `skip_next_poll` BEFORE the CAT write.
+handlers call `skip_next_poll` BEFORE the CAT write. Security ratchets: static
+serving must resolve + contain paths inside `STATIC_DIR` (I8) and password
+checks belong in `hmac.compare_digest` (I9) — the hook surfaces these patterns
+wherever they are touched until the open issues close.
 
 Minimal diffs. Match the module's existing conventions (AGENTS.md style section).
 

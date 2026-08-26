@@ -25,7 +25,7 @@ PreToolUse hook 的阻断不因任何工作流豁免。
 
 | 生命周期 | Superpowers 技能 | SDD-Guardian 动作 |
 |----------|------------------|-------------------|
-| 创意/需求 | `brainstorming` | `brief --task`;产出 spec 必须引用触及区域的 SDD refs(AD/NFR/§),用 `trace` 验证;先查 §3.2/3.3 范围与 I6/I7 开放问题 |
+| 创意/需求 | `brainstorming` | `brief --task`;产出 spec 必须引用触及区域的 SDD refs(AD/NFR/§),用 `trace` 验证;先查 §3.2/3.3 范围与 I6–I11 开放问题 |
 | 计划 | `writing-plans` / `create-plan` | `brief <files>`;计划任务清单必须包含受影响 SDD 章节 + 一条 doc-sync 任务;`trace` 验证引用覆盖 |
 | 隔离 | `using-git-worktrees` | 基线验证 = `unittest` + `check`(替代裸跑测试) |
 | 执行 | `executing-plans` / `subagent-driven-development` | PreToolUse hook 自动阻断违规;子代理任务简报里粘贴相关约束(`context <files>` 输出) |

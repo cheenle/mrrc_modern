@@ -568,13 +568,14 @@ async def _on_scope_frame(_scope: ScopeHandler):
 async def _broadcast_spectrum_loop():
     """Periodically send spectrum data to all spectrum WebSocket clients.
 
-    Runs at ~30 fps (33ms interval), matching typical scope update rate.
+    Runs at 5 fps (200ms interval) — a bandwidth/latency tradeoff for the
+    1701-byte frames over WAN links.
     Sends binary frames: 1-byte version + 850 bytes wf1 + 850 bytes wf2.
 
     When scope_pipe is not connected (no FT4222 data), falls back to
     S-meter-based synthetic spectrum from the CAT polling data.
 
-    Idle (0 clients): sleeps 500ms instead of 33ms, cutting ~93% of
+    Idle (0 clients): sleeps 500ms instead of 200ms, cutting ~60% of
     idle wakeups.  Synthetic Gaussian generation is also skipped.
     """
     global scope, spectrum_clients

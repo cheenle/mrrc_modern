@@ -1,4 +1,4 @@
-# Lifecycle Checklists — mrrc_ft710
+# Lifecycle Checklists — mrrc_modern
 
 Phase-by-phase checklists referenced from `SKILL.md`. Tick every item or
 consciously justify skipping it.
@@ -15,9 +15,9 @@ consciously justify skipping it.
 
 - [ ] Requirements traceability: named the SC/NFR this change serves or affects;
       flagged any NFR-target risk (latency/bandwidth/safety) to the user up front
-- [ ] Identified affected ADs (AD-001…AD-015); contradictions get an AD amendment in the same change
+- [ ] Identified affected ADs (AD-001…AD-016); contradictions get an AD amendment in the same change
 - [ ] Checked feasibility (§13): risks R1–R8 / assumptions A1–A6 this change depends on
-- [ ] Checked open issues I6/I7 don't undermine the design
+- [ ] Checked open issues I6–I11 don't undermine the design
 - [ ] Walked affected use cases (UC-001…008) main flow + exceptions
 - [ ] PTT/TX-adjacent work reviewed against Chapter 15 layered release model
 - [ ] Non-trivial work went through plan mode with concrete file/step lists

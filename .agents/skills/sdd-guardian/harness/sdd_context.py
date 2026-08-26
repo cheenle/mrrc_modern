@@ -367,7 +367,7 @@ def cmd_prime(reg: dict) -> int:
     for r in blocks:
         print(f"  ✗ {r['id']}: {r['title']}  [{r['sdd_ref']}]")
     print("")
-    print("Lifecycle: brief → design (ADs, NFRs, risks, open issues I6/I7) → implement")
+    print("Lifecycle: brief → design (ADs, NFRs, risks, open issues §13.4) → implement")
     print("(minimal diffs, module conventions) → test (unittest, no hardware, sync")
     print("tests/README) → doc-sync (SDD chapters + 14-version-history + AGENTS.md")
     print("+ README) → commit (imperative, scoped, ask before git mutations).")

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "sdd_version": "V1.7",
-  "description": "Machine-readable constraint registry distilled from SDD/ (IBM TeamSD) and AGENTS.md for the mrrc_ft710 codebase. Consumed by sdd_context.py (context | check | hook). severity: block = reject the edit, warn = allow but surface, info = guidance shown in context output only.",
+  "sdd_version": "V2.26",
+  "description": "Machine-readable constraint registry distilled from SDD/ (IBM TeamSD) and AGENTS.md for the mrrc_modern codebase. Consumed by sdd_context.py (context | check | hook). severity: block = reject the edit, warn = allow but surface, info = guidance shown in context output only.",
   "rules": [
     {
       "id": "cat-no-dn",
@@ -61,7 +61,7 @@
       "scope": ["**/*.py", "**/*.js", "**/*.html", "**/*.toml"],
       "exclude_scope": ["**/test_*.py", ".agents/**", "venv/**", "**/venv/**", "windows/default.env"],
       "patterns": ["FT710_WEB_PASSWORD\\s*=\\s*[\"']\\S", "\\bpassword\\s*=\\s*[\"'][^\"'\\s]{6,}[\"']"],
-      "message": "Secrets come from environment variables (FT710_WEB_PASSWORD etc.), never literals. Do not commit passwords, serial-device paths, or local driver assumptions."
+      "message": "Secrets come from environment variables (MRRC_WEB_PASSWORD etc.; legacy FT710_* names still honored via config fallback), never literals. Do not commit passwords, serial-device paths, or local driver assumptions."
     },
     {
       "id": "index-html-no-logic",
@@ -85,13 +85,13 @@
     },
     {
       "id": "audio-pyaudio-rate",
-      "title": "PyAudio streams open at 44100",
+      "title": "PyAudio device rate comes from backend capabilities",
       "severity": "warn",
-      "sdd_ref": "AD-011",
+      "sdd_ref": "AD-011 (amended V2.9/V2.14); §9.4",
       "scope": ["audio_handler.py"],
       "exclude_scope": [],
       "patterns": ["rate\\s*=\\s*48000"],
-      "message": "PyAudio device streams run at 44100 (FT-710 USB native rate). 48000 belongs to the Opus/codec domain only; resample at the server boundary via audio_resample.py."
+      "message": "The device-domain sample rate is a per-backend capability, not a constant: FT-710 USB is 44100 (882 frames/20 ms), IC-7300 is 48000 natively (no SRC). Open device streams from capabilities.audio_rx_rate/audio_tx_rate; hardcoding either rate bypasses the backend contract and the audio_resample.py bridge (960↔882)."
     },
     {
       "id": "state-direct-assign",
@@ -111,7 +111,7 @@
       "scope": ["server.py"],
       "exclude_scope": [],
       "patterns": ["@app\\.websocket\\("],
-      "message": "Any new WebSocket endpoint must validate the ?token= query param against _auth_tokens before accept, like the existing four. Tokens are cleared on server restart."
+      "message": "Any new WebSocket endpoint must validate the ?token= query param against _auth_tokens before accept, like the existing five (/WSradio, /WSspectrum, /WSaudioRX, /WSaudioTX, /WSatr1000). Tokens are cleared on server restart."
     },
     {
       "id": "env-hardcoded-device",
@@ -121,7 +121,27 @@
       "scope": ["**/*.py"],
       "exclude_scope": ["_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "**/test_*.py", ".agents/**", "venv/**", "**/venv/**"],
       "patterns": ["/dev/cu\\.", "/dev/ttyUSB", "COM\\d+"],
-      "message": "Serial ports and other deployment-specific values belong in environment variables (FT710_SERIAL_PORT, FT710_BAUD_RATE, ...), not source literals."
+      "message": "Serial ports and other deployment-specific values belong in environment variables (MRRC_SERIAL_PORT, MRRC_BAUD_RATE, ...; legacy FT710_* names still honored), not source literals."
+    },
+    {
+      "id": "static-path-traversal",
+      "title": "Static file paths must stay inside STATIC_DIR",
+      "severity": "warn",
+      "sdd_ref": "§13.4 I8; §5.3",
+      "scope": ["server.py", "**/server.py"],
+      "exclude_scope": ["**/test_*.py"],
+      "patterns": ["STATIC_DIR\\s*/\\s*\\(?\\s*(?:path\\b|raw|user|route)"],
+      "message": "Joining the request path into STATIC_DIR without containment is the I8 path-traversal hole: GET /../server.py reads arbitrary files. Resolve the joined path and reject unless file_path.is_relative_to(STATIC_DIR) (or match against an explicit allowlist) before FileResponse. Fix exists? Then this warning should no longer be reachable — do not reintroduce raw joins."
+    },
+    {
+      "id": "password-constant-time",
+      "title": "Password checks use hmac.compare_digest",
+      "severity": "warn",
+      "sdd_ref": "§13.4 I9; §5.3",
+      "scope": ["server.py", "**/server.py"],
+      "exclude_scope": ["**/test_*.py"],
+      "patterns": ["!=\\s*[A-Z_]*PASSWORD", "[A-Z_]*PASSWORD\\s*==", "\\bpassword\\s*=="],
+      "message": "Plain ==/!= on passwords leaks a timing side channel (I9). Compare with hmac.compare_digest, and remember the default password only warns today — keep any change moving toward forced first-login change, not away from it."
     },
     {
       "id": "ptt-release-no-verify",
@@ -152,6 +172,26 @@
       "exclude_scope": [],
       "patterns": [],
       "message": "PTT/TUNE-class commands go through send_priority_set_command() (_cancel_polls cooperative abort). Poll loops and _read_until must stay cancel-aware; keep poll query timeouts at 0.25 s to bound lock occupancy."
+    },
+    {
+      "id": "web-audio-subchannel-reconnect",
+      "title": "Audio/spectrum WS subchannels need their own reconnect",
+      "severity": "info",
+      "sdd_ref": "§13.4 I10",
+      "scope": ["static/**/*.js"],
+      "exclude_scope": [],
+      "patterns": [],
+      "message": "Only /WSradio auto-reconnects today; /WSaudioRX, /WSaudioTX and /WSspectrum just null out on close, so a transient drop leaves controls alive but audio dead (I10). When touching client WS lifecycle, give each subchannel its own exponential-backoff reconnect — the pattern already exists in static/modules/atr1000.js."
+    },
+    {
+      "id": "ios-ptt-unconditional-release",
+      "title": "iOS PTT release must be unconditional + watchdogged",
+      "severity": "info",
+      "sdd_ref": "§13.4 I11; Ch15",
+      "scope": ["FT710Mobile/**/*.swift"],
+      "exclude_scope": [],
+      "patterns": [],
+      "message": "The iOS app's DragGesture.onEnded only sends ptt:false when the server echo already shows tx_status>0, with no watchdog or scenePhase guard — fast WAN taps can leave the radio keyed up (documented P0, I11). Any iOS PTT work must implement unconditional release on gesture end + 500 ms×3 retry watchdog + scenePhase forceRelease, mirroring FT710Android's PTTManager; do not regress toward echo-gated release."
     },
     {
       "id": "docs-sync",
@@ -212,8 +252,13 @@
     },
     {
       "globs": ["static/**/*.js", "static/index.html", "static/**/*.css"],
-      "sdd_refs": ["§9.7 state broadcasting", "AGENTS.md style", "R8 stale assets"],
-      "notes": "Vanilla JS, camelCase; UI rendering in ft710_ui.js or static/modules/ — never inline in index.html. Client merges partial stateUpdate into local radioState mirror. Bump ?v= cache-busters on edited assets (service worker bypasses JS/HTML but version strings guard the rest)."
+      "sdd_refs": ["§9.7 state broadcasting", "AGENTS.md style", "R8 stale assets", "§13.4 I10"],
+      "notes": "Vanilla JS, camelCase; UI rendering in ft710_ui.js or static/modules/ — never inline in index.html. Client merges partial stateUpdate into local radioState mirror. Bump ?v= cache-busters on edited assets — they are the ACTIVE cache-control mechanism: sw.js exists but no serviceWorker.register() call ships anywhere, so the Service Worker is dormant (I10-adjacent cleanup candidate). Only /WSradio auto-reconnects; audio/spectrum subchannels need their own backoff reconnect."
+    },
+    {
+      "globs": ["FT710Mobile/**/*.swift", "FT710Android/**/*.kt"],
+      "sdd_refs": ["§13.4 I11", "Ch15 PTT safety", "§9.2 WS protocol"],
+      "notes": "Native clients share the server's 4+1 WS protocol (JSON control, tagged audio frames, 1701B spectrum). PTT safety is load-bearing on every client: unconditional release on gesture end, 500 ms×3 watchdog, lifecycle force-release (Android PTTManager is the reference implementation; iOS still owes the documented P0 fix, I11)."
     },
     {
       "globs": ["tests/**/*.py"],

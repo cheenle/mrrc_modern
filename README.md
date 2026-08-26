@@ -64,18 +64,21 @@ dist\windows\MRRC-Modern-Setup.exe
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V address |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
 | `MRRC_BAUD_RATE` | backend default | Serial baud: FT-710 `38400`; IC-7300/MK2 `115200`; explicit value overrides the default |
-| `FT710_WEB_PORT` | `8888` | Web server port |
-| `FT710_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change**) |
-| `FT710_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
-| `FT710_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
-| `FT710_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
-| `FT710_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |
-| `FT710_SCOPE_BAUD` | `115200` | Scope serial baud rate |
+| `MRRC_WEB_PORT` | `8888` | Web server port |
+| `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change**) |
+| `MRRC_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
+| `MRRC_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
+| `MRRC_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
+| `MRRC_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |
+| `MRRC_SCOPE_BAUD` | `115200` | Scope serial baud rate |
 | `MRRC_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"USB Audio"` or `"3"`; Windows package pre-locks `USB Audio`) |
 | `MRRC_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
-| `FT710_MEM_FILE` | `mem_channels.json` | Memory-channel JSON path; Windows launcher stores this under `%LOCALAPPDATA%` |
-| `FT710_ATR1000_HOST` | *(empty = disabled)* | ATR1000 networked tuner host; empty disables the linkage entirely |
-| `FT710_ATR1000_PORT` | `60001` | ATR1000 tuner WebSocket port |
+| `MRRC_MEM_FILE` | `mem_channels.json` | Memory-channel JSON path; Windows launcher stores this under `%LOCALAPPDATA%` |
+| `MRRC_ATR1000_HOST` | *(empty = disabled)* | ATR1000 networked tuner host; empty disables the linkage entirely |
+| `MRRC_ATR1000_PORT` | `60001` | ATR1000 tuner WebSocket port |
+
+All applicable variables also accept legacy `FT710_*` aliases (for example,
+`FT710_SERIAL_PORT`); `config.py` reads `MRRC_*` first and falls back automatically.
 
 ### CLI Arguments
 

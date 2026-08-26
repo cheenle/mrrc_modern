@@ -265,6 +265,14 @@ class ScopeHandler:
             except Exception: pass
 
     # ── Connection ──────────────────────────────────────────────
+    # LEGACY / DEAD CODE: the in-process FT4222 path below (connect /
+    # read_loop / _resync) is superseded by the scope_pipe subprocess
+    # (backends/ft710/scope_pipe.py).  Byte-by-byte resync is provably
+    # impossible on the FT4222 — every SingleRead is its own SPI
+    # transaction (CS toggles per call), so a contiguous multi-byte sync
+    # pattern can never be observed (SDD V2.8).  Production spectrum reads
+    # go through the pipe only; this code is kept purely as historical
+    # reference.  Do not call it, do not "fix" it.
 
     async def connect(self) -> bool:
         if not self._load_library():
@@ -291,7 +299,7 @@ class ScopeHandler:
     # ── SPI Read Loop (mirrors wfview ft4222Handler::run) ──────
 
     async def read_loop(self):
-        """Read scope frames via FT4222 SPI at ~30 fps.
+        """Read scope frames via FT4222 SPI at ~30 fps.  (LEGACY, unused.)
 
         Matches wfview ft4222Handler::run():
           1. SPI read 4096 bytes (isEndTransaction=false)

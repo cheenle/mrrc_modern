@@ -67,7 +67,7 @@ The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame dr
 
 FT-710: FT4222 SPI → `scope_pipe.py` subprocess → 850-point wf1/wf2 → `ScopeHandler`.
 
-IC-7300/MK2: CI-V 0x27 frames → `civ_controller.py` demux → bounded 44-segment queue (four complete 11-segment USB waveforms, drop oldest on overflow) → 475-bin scale/upsample to 850 → `ScopeHandler`.
+IC-7300/MK2: startup/reconnect sends scope display ON (`27 10 01`), Center mode, span, then waveform-data output ON (`27 11 01`). CI-V `27 00` frames → `civ_controller.py` demux → bounded 44-segment queue (four complete 11-segment USB waveforms, drop oldest on overflow) → 475-bin scale/upsample to 850 → `ScopeHandler`. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.
 
 ![Spectrum Paths](diagrams/spectrum-paths.svg)
 

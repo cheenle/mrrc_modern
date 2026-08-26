@@ -4,8 +4,8 @@
 
 | Dimension | Assessment | Explanation |
 |-----------|------------|-------------|
-| CAT/CI-V control feasibility | High | FT-710 CAT and IC-7300 CI-V command sets implemented and tested via pyserial |
-| Spectrum feasibility | High | Dual-mode real scope + S-meter fallback working for both FT-710 (FT4222) and IC-7300/MK2 (CI-V 0x27) |
+| CAT/CI-V control feasibility | High | FT-710 CAT is field-tested; IC-7300/MK2 CI-V frame construction/parsing is conformance-tested against Icom manuals, with physical-radio ACK/timing acceptance pending |
+| Spectrum feasibility | High | FT-710 FT4222 is field-tested; IC-7300/MK2 CI-V 0x27 activation, parsing, and queue behavior are software-tested, with physical waveform cadence pending |
 | RX audio feasibility | High | PyAudio capture → Opus encode → WS broadcast → browser playback (per-backend sample rate) |
 | TX audio feasibility | High | Browser mic → Opus encode → WS → decode → PyAudio → radio (per-backend sample rate) |
 | Mobile feasibility | Medium-High | Responsive UI adapts to backend `capabilities`; iOS requires HTTPS for mic (reverse proxy) |
@@ -29,7 +29,7 @@
 
 | ID | Assumption | Confidence | Validation |
 |----|------------|------------|------------|
-| A1 | Selected radio connected via USB with correct serial parameters (FT-710 Enhanced COM Port at 38400 baud; IC-7300 CI-V at 115200 8N1) | High | Backend ID response |
+| A1 | Selected radio connected via USB with correct serial parameters (FT-710 Enhanced COM Port at 38400 baud; IC-7300 CI-V at explicit 115200 8N1 with USB port unlinked from [REMOTE]) | High | Backend ID response; physical-radio acceptance checklist |
 | A2 | Selected radio USB audio device recognized by OS | High | PyAudio device enumeration |
 | A3 | libopus available on server (Homebrew `opus` package) | Medium-High | ctypes find_library("opus") |
 | A4 | FTDI libraries in `lib/` match OS architecture (FT-710 backend only) | Medium | scope_pipe startup log |
@@ -64,4 +64,4 @@
 
 ## 13.6 Feasibility Conclusion
 
-MRRC Modern is fully feasible and production-ready for remote operation of supported radios. All core capabilities — backend-specific control (Yaesu CAT / Icom CI-V), bidirectional audio with Opus compression, real-time spectrum waterfall (dual-mode real scope + S-meter fallback), multi-meter telemetry, memory channels, session authentication, and comprehensive PTT safety — are implemented and verified for both the FT-710 and IC-7300/MK2 backends. The primary operational constraint is iOS requiring HTTPS for microphone access, solvable with a TLS reverse proxy. FT-710 FT4222 scope requires specific library setup but degrades gracefully to S-meter fallback; IC-7300/MK2 0x27 spectrum requires only the CI-V USB serial port.
+MRRC Modern is fully feasible for remote operation of supported radios. Core software paths — backend-specific control, bidirectional Opus audio, spectrum waterfall, meter telemetry, memories, authentication, and PTT safety — are implemented. FT-710 has field-test history; the IC-7300/MK2 CI-V byte formats and asynchronous behavior are conformance-tested without hardware, so physical USB enumeration, command ACK timing, scope cadence, RF/tuner/power behavior, and RX/TX audio quality remain acceptance items rather than verified claims. iOS still requires HTTPS for microphone access. FT-710 FT4222 scope requires its libraries and degrades to S-meter fallback; IC-7300/MK2 scope requires the CI-V USB port unlinked from [REMOTE] at an explicitly selected 115200 baud.

@@ -8,7 +8,7 @@
 
 **Tech stack:** Python 3.13, `unittest`/`IsolatedAsyncioTestCase`, `unittest.mock`, asyncio, pyserial abstraction, FastAPI backend interfaces, vanilla JavaScript, SDD Guardian.
 
-**Execution status:** Tasks 1–5 complete; Tasks 6–7 pending. Batches 1–2 focused tests pass.
+**Execution status:** Tasks 1–6 complete; Task 7 pending. Full suite passes: 633 tests across 31 modules.
 
 ---
 
@@ -27,7 +27,7 @@
 - Modify `tests/test_civ_controller.py`: model/address separation and power-frame vectors.
 - Modify `tests/test_ic7300_runtime_reliability.py`: scope-init, diagnostic, liveness, ALC, and capabilities regressions.
 - Modify `tests/test_server_ws_protocol.py`: frontend speed-selector and cache-version contracts.
-- Modify `IC-7300MK2_CI-V_Knowledge_Base.md`, `IC-7300_硬件验收清单.md`, `README.md`, `docs/OPERATION_GUIDE.md`, `AGENTS.md`, `tests/README.md`, `SDD/09-architecture-overview.md`, `SDD/12-operational-model.md`, `SDD/14-version-history.md`, and `SDD/README.md`: synchronize protocol facts, operator prerequisites, verification limits, and exact test totals.
+- Modify `IC-7300MK2_CI-V_Knowledge_Base.md`, `IC-7300_硬件验收清单.md`, `README.md`, `docs/OPERATION_GUIDE.md`, `AGENTS.md`, `tests/README.md`, `SDD/09-architecture-overview.md`, `SDD/12-operational-model.md`, `SDD/13-feasibility-assessment.md`, `SDD/14-version-history.md`, and `SDD/README.md`: synchronize protocol facts, operator prerequisites, verification limits, and exact test totals.
 
 ### Task 1: Correct scope metadata parsing
 
@@ -470,6 +470,7 @@ git commit -m "fix: constrain IC-7300 scope speeds"
 - Modify: `tests/README.md`
 - Modify: `SDD/09-architecture-overview.md`
 - Modify: `SDD/12-operational-model.md`
+- Modify: `SDD/13-feasibility-assessment.md`
 - Modify: `SDD/14-version-history.md`
 - Modify: `SDD/README.md`
 

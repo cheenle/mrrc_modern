@@ -27,7 +27,7 @@ MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-A1234567 MRRC_BAUD_RA
 MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/ttyUSB0 MRRC_BAUD_RATE=115200 python3 server.py
 ```
 
-`MRRC_RADIO_MODEL` defaults to `ft710`, so it may be omitted for the FT-710. Open `http://localhost:8888` in a browser. **Default password: change it immediately** — see [SECURITY_GUIDE.md](SECURITY_GUIDE.md).
+`MRRC_RADIO_MODEL` defaults to `ft710`, so it may be omitted for the FT-710. For IC-7300/MK2 scope data, set the radio menu to `CI-V USB Port = Unlink from [REMOTE]` and explicitly select `CI-V USB Baud Rate = 115200` (not Auto). Open `http://localhost:8888` in a browser. **Default password: change it immediately** — see [SECURITY_GUIDE.md](SECURITY_GUIDE.md).
 
 ### Windows Desktop Installer
 
@@ -121,7 +121,7 @@ Yaesu FT-710 or Icom IC-7300 Radio
 ### Dual-Mode Spectrum
 
 - **FT-710 FT4222 SPI mode**: Reads raw 4096-byte scope frames from the FTDI FT4222 chip via platform FTDI libraries (`libft4222.dylib` / `libft4222.so` / `FT4222.dll`). Provides true 850-point FFT spectrum waterfall.
-- **IC-7300 CI-V 0x27 mode**: Receives 475-bin scope frames on the same CI-V serial port through a bounded 44-segment newest-data queue, scales/upsamples to 850 points, and feeds the same waterfall. The WebSocket loop runs at 30 Hz and sends real data only when a new complete frame arrives.
+- **IC-7300 CI-V 0x27 mode**: Enables both scope display (`27 10 01`) and waveform-data output (`27 11 01`), receives 475-bin scope frames on the same CI-V serial port through a bounded 44-segment newest-data queue, scales/upsamples to 850 points, and feeds the same waterfall. Center metadata uses center/half-span; Fixed and SCROLL modes use lower/upper edges. The WebSocket loop runs at 30 Hz and sends real data only when a new complete frame arrives.
 - **S-meter fallback**: Generates a synthetic multi-peak spectrum from CAT S-meter readings — still provides real-time band activity visualization when hardware scope data is unavailable.
 
 ### Audio Pipeline
@@ -338,7 +338,7 @@ python3 -m pytest tests/ -v
 python3 -m unittest discover -s tests -v
 ```
 
-**617 tests passing** in the current local test suite.
+**633 tests passing** across 31 test modules in the current local test suite. The CI-V tests prove documented frame construction/parsing, command order, and asynchronous state behavior without hardware; USB driver enumeration, radio ACK timing, real scope cadence, RF/tuner/power behavior, and RX/TX audio quality still require the physical-radio checklist in [`IC-7300_硬件验收清单.md`](IC-7300_硬件验收清单.md).
 
 ## Requirements
 
@@ -393,7 +393,7 @@ Set `MRRC_RADIO_MODEL` before starting the server:
 | Icom IC-7300 | `ic7300` | CI-V at `MRRC_SERIAL_PORT`, 115200 8N1 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
 | Icom IC-7300MK2 | `ic7300mk2` | CI-V, same as IC-7300 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
 
-The IC-7300 address can be changed with `IC7300_CIV_ADDR` (default `0x94`); the IC-7300MK2 uses `IC7300MK2_CIV_ADDR` (default `0xB6`). Legacy `FT710_*` configuration aliases remain accepted, but new deployments should use `MRRC_*`.
+The IC-7300 address can be changed with `IC7300_CIV_ADDR` (default `0x94`); the IC-7300MK2 uses `IC7300MK2_CIV_ADDR` (default `0xB6`). The backend selects the model-specific CI-V Transceive item independently of this configurable address. Legacy `FT710_*` configuration aliases remain accepted, but new deployments should use `MRRC_*`.
 
 ## SDD Documentation
 

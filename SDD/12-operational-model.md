@@ -28,8 +28,9 @@ Yaesu FT-710
 
 Icom IC-7300 / IC-7300MK2
   → USB connection to host
-  → USB CI-V serial port (115200 baud, 8N1; IC-7300 default 0x94, MK2 default 0xB6)
-  → 0x27 spectrum data on the same CI-V port
+  → Radio menu: CI-V USB Port = Unlink from [REMOTE]
+  → USB CI-V serial port (explicit 115200 baud, not Auto; IC-7300 default 0x94, MK2 default 0xB6)
+  → 0x27 spectrum data on the same CI-V port (display + data-output switches ON)
   → 48kHz native USB Audio interface
 ```
 
@@ -97,7 +98,7 @@ Icom IC-7300 / IC-7300MK2
 | Start service | `./start.sh`; check `logs/` for startup messages |
 | Stop service | `./stop.sh` |
 | Verify radio connection | Server log shows backend-specific connect message (FT-710 ID or IC-7300 CI-V ID) |
-| Verify scope | FT-710: "scope_pipe: first frame received — spectrum active"; IC-7300: "CI-V scope: first complete waveform — spectrum active"; real frames broadcast at up to 30 Hz without duplicates |
+| Verify scope | FT-710: "scope_pipe: first frame received — spectrum active"; IC-7300: first confirm Unlink from [REMOTE] + explicit 115200, then check "CI-V scope: first complete waveform — spectrum active"; real frames broadcast at up to 30 Hz without duplicates |
 | Verify RX audio | Open browser; listen for radio audio; check "RX ...K" and startup log fields `host`, `default`, `actual`, `channels` (IC-7300/MK2: `actual=48000Hz`) |
 | Verify TX audio | Key PTT; speak; confirm on monitoring receiver and check TX open log (`actual=48000Hz` on IC-7300/MK2) |
 | Verify PTT safety | Release PTT; confirm radio returns to RX; check log for backend-specific unkey command |
@@ -125,7 +126,7 @@ Icom IC-7300 / IC-7300MK2
 |------|------------|
 | Wrong serial port | Server logs warning; check `ls /dev/cu.*` or `ls /dev/ttyUSB*` |
 | FT4222 not working (FT-710) | Falls back to S-meter synthetic spectrum; check D2XX config |
-| CI-V 0x27 not arriving (IC-7300) | Verify the model-specific CI-V address and 115200 baud; run `_diag_ic7300_scope.py`; the bounded 44-segment queue drops oldest data rather than replaying stale frames; unavailable real scope falls back to S-meter |
+| CI-V 0x27 not arriving (IC-7300) | Verify `CI-V USB Port = Unlink from [REMOTE]`, explicit 115200 (not Auto), and the model-specific CI-V address; run `_diag_ic7300_scope.py`; initialization enables both `27 10` display and `27 11` data output; the bounded queue drops oldest data rather than replaying stale frames |
 | Audio not working | Check PyAudio device list in logs; verify the selected radio's USB audio appears |
 | Port already in use | `./stop.sh` first; check for stale processes |
 | Stale JS cached | Service worker bypasses JS/HTML; version query strings |

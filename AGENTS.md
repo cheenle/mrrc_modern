@@ -19,7 +19,7 @@ This repository contains a Python FastAPI server for remote radio control (Yaesu
 | `scope_frame.py` | Compatibility shim — real module moved to `backends/ft710/scope_frame.py`: shared frame parsing, pipe payload encode/decode, quality metrics |
 | `scope_libraries.py` | Compatibility shim — real module moved to `backends/ft710/scope_libraries.py`: FTDI library discovery and SPI clock configuration |
 | `config.py` | Protocol-neutral constants (serial/web/SSL/auth/poll/reconnect/PTT) + backend-aware serial defaults (FT-710 38400; IC-7300/MK2 115200) + shared UI mode tables and the `_interp` calibration helper; FT-710-specific tables moved to `backends/ft710/config_ft710.py` |
-| `_diag_ic7300_scope.py` | One-shot IC-7300/MK2 CI-V field diagnostic using the production checksum-free codec/parser; probes frequency/PTT/scope data and disables scope output on exit |
+| `_diag_ic7300_scope.py` | One-shot IC-7300/MK2 CI-V field diagnostic using the production checksum-free codec/parser; probes frequency/PTT, enables both scope display (`27 10`) and data output (`27 11`), and disables data output on exit |
 | `atr1000_client.py` | Optional asyncio WS client for networked ATR1000 tuner: binary frame protocol, 5s reconnect, 55-min refresh, TX-no-SYNC watchdog, learning, throttled relay writes, `notify_freq`/`notify_tx` sync hooks |
 | `atr1000_tuner.py` | `TunerStorage` LC-learning JSON store (learn gate SWR 1.0–1.8, 1kHz keys ±5kHz nearest, atomic writes) |
 
@@ -30,7 +30,7 @@ Pluggable radio backends live in `backends/` (selected via `MRRC_RADIO_MODEL`, d
 | `backends/__init__.py` | `create_backend(model, ...)` lazy factory — registered keys `"ft710"`, `"ic7300"`, `"ic7300mk2"` |
 | `backends/base.py` | `RadioBackend` ABC (CAT surface mirroring `CatController`), `RadioCapabilities` dataclass (`to_dict()` for JSON), `ScopeProducer` protocol, defaulted hooks: `bands`/`ui_modes`/`mode_name_to_num`/`filter_tables()`/`state_tables()`/poll-item lists/`init_scope()`/`create_scope_producer()` |
 | `backends/ft710/` | FT-710 backend: `backend.py` (`FT710Backend` thin delegate + `init_scope()` EX040101/EX040200 + UI tables), `cat_controller.py`, `scope_pipe.py`, `scope_producer.py` (ScopeProducer: owns the scope_pipe subprocess — spawn/read/auto-restart/TX-notify, moved from `server.py` in Phase 1), `scope_frame.py`, `scope_libraries.py`, `config_ft710.py` (FT-710-only tables) |
-| `backends/ic7300/` | IC-7300/MK2 backend: `backend.py` (`IC7300Backend`/`IC7300MK2Backend`), `civ_codec.py` (pure checksum-free CI-V framing/BCD/scope-segment codec), `civ_controller.py` (async CI-V demux: reader thread → frame parser → echo drop / bounded 44-segment newest-data scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect), `civ_scope.py` (`CivScopeProducer`: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → `ScopeHandler`), `config_ic7300.py` (Icom-only tables; USB CI-V 115200 8N1, IC-7300 addr 0x94 via `IC7300_CIV_ADDR`, MK2 addr 0xB6 via `IC7300MK2_CIV_ADDR`) |
+| `backends/ic7300/` | IC-7300/MK2 backend: `backend.py` (`IC7300Backend`/`IC7300MK2Backend`, model-specific Transceive item 0071/0089, display+data scope init), `civ_codec.py` (pure checksum-free CI-V framing/BCD/scope-segment codec; Center versus edge metadata), `civ_controller.py` (async CI-V demux: reader thread → frame parser → echo drop / bounded 44-segment newest-data scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect; documented power-on preamble), `civ_scope.py` (`CivScopeProducer`: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → `ScopeHandler`), `config_ic7300.py` (Icom-only tables; USB CI-V 115200 8N1, IC-7300 addr 0x94 via `IC7300_CIV_ADDR`, MK2 addr 0xB6 via `IC7300MK2_CIV_ADDR`, ALC raw 120 full scale) |
 
 Frontend assets in `static/`:
 - `index.html` — SPA shell (mobile-first responsive layout)
@@ -92,7 +92,7 @@ Python: 4-space indentation, type hints for shared state, `UPPER_CASE` for modul
 
 ## Testing Guidelines
 
-Run the full suite with `python -m unittest discover -s tests -v` (currently 617 tests). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connected radio model, serial port, FT4222 availability (FT-710), audio device. Name tests `test_*.py`. Keep hardware-independent logic testable without a radio.
+Run the full suite with `python -m unittest discover -s tests -v` (currently 633 tests across 31 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connected radio model, serial port, FT4222 availability (FT-710), audio device. Name tests `test_*.py`. Keep hardware-independent logic testable without a radio.
 
 ## Commit & Pull Request Guidelines
 

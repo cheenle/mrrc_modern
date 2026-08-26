@@ -34,7 +34,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.20 |
+| SDD Version | V2.23 |
 | Baseline Date | 2026-08-17 |
 | Status | v1.8.0 Windows Stable; FT710Android native client implemented (JVM tests green, device acceptance pending); IC-7300/MK2 backend implemented |
 | Project | MRRC Modern / `mrrc_modern` |

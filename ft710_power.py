@@ -108,7 +108,7 @@ def power_off() -> bool:
     global _boot_until
     if time.monotonic() < _boot_until:
         remain = int(_boot_until - time.monotonic()) + 1
-        print(f"✗ 电台刚开过机, 保护窗口未过, 请 {remain}s 后再关机 (防止打挂 CAT MCU)")
+        print(f"[-] 电台刚开过机, 保护窗口未过, 请 {remain}s 后再关机 (防止打挂 CAT MCU)")
         return False
     with open_port() as s:
         # 首包偶发丢失, 连发两次 (与 server.py 一致)
@@ -124,12 +124,12 @@ def power_off() -> bool:
     time.sleep(1.0)
     st = power_status()
     if st == "on":
-        print("  ✗ 电台仍回答 PS1, 关机未生效")
+        print("  [-] 电台仍回答 PS1, 关机未生效")
         return False
     if st == "off":
-        print("  ✓ 关机确认 (PS 回读: OFF)")
+        print("  [+] 关机确认 (PS 回读: OFF)")
         return True
-    print("  ✓ 电台已静默 (符合断电后的表现), 视为关机成功")
+    print("  [+] 电台已静默 (符合断电后的表现), 视为关机成功")
     return True
 
 
@@ -155,7 +155,7 @@ def power_on() -> bool:
             except Exception:
                 fa = None
             if fa and "?" not in fa:
-                print(f"  ✓ 开机已验证 (FA 应答: {fa}), 第 {attempt} 次尝试")
+                print(f"  [+] 开机已验证 (FA 应答: {fa}), 第 {attempt} 次尝试")
                 _boot_until = time.monotonic() + BOOT_WINDOW_S
                 return True
         print(f"  第 {attempt} 次: 电台未应答")
@@ -174,11 +174,11 @@ def main() -> int:
     if action == "status":
         st = power_status()
         if st == "on":
-            print("  ✓ 电台电源: ON")
+            print("  [+] 电台电源: ON")
         elif st == "off":
-            print("  ✓ 电台电源: OFF")
+            print("  [+] 电台电源: OFF")
         else:
-            print("  ✗ 电台无应答(未连接/处于深度断电, 或串口被占用)")
+            print("  [-] 电台无应答(未连接/处于深度断电, 或串口被占用)")
             return 1
         return 0
 
@@ -195,12 +195,12 @@ def main() -> int:
     # cycle: off -> 等待 -> on
     if action == "cycle":
         if not power_off():
-            print("  ✗ 关机阶段失败, 中止")
+            print("  [-] 关机阶段失败, 中止")
             return 1
         print("  等待 8 秒让电台断电...")
         time.sleep(8)
         if not power_on():
-            print("  ✗ 开机阶段失败, 请手动按电源键")
+            print("  [-] 开机阶段失败, 请手动按电源键")
             return 1
         print("  → 重启完成")
         return 0

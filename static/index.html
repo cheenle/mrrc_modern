@@ -16,7 +16,7 @@
     <title>MRRC Modern Web Control</title>
     <link rel="apple-touch-icon" href="/favicon.png" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="stylesheet" href="/ft710.css?v=23" />
+    <link rel="stylesheet" href="/ft710.css?v=24" />
   </head>
   <body>
     <div class="safe-area-top"></div>
@@ -432,6 +432,30 @@
             <span class="menu-slider-val" id="val-ceil">220</span>
           </div>
           <div class="menu-slider-row">
+            <span class="menu-slider-label">Spec H</span>
+            <input
+              type="range"
+              id="slider-fftheight"
+              min="20"
+              max="120"
+              value="22"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-fftheight">22</span>
+          </div>
+          <div class="menu-slider-row">
+            <span class="menu-slider-label">WF H</span>
+            <input
+              type="range"
+              id="slider-wfheight"
+              min="30"
+              max="200"
+              value="45"
+              class="menu-slider"
+            />
+            <span class="menu-slider-val" id="val-wfheight">45</span>
+          </div>
+          <div class="menu-slider-row">
             <span class="menu-slider-label">RF Gain</span>
             <input
               type="range"
@@ -483,7 +507,7 @@
     <script src="/modules/opus_codec.js"></script>
     <script src="/ft710_main.js?v=25"></script>
     <script src="/modules/ptt_manager.js?v=13"></script>
-    <script src="/ft710_ui.js?v=25"></script>
+    <script src="/ft710_ui.js?v=26"></script>
     <script src="/modules/atr1000.js?v=1"></script>
   </body>
 </html>

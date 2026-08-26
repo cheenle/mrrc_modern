@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.10.1**（2026-08-17，补 `MRRC_RADIO_MODEL` 到 launcher 配置模板）。
+> 最新构建：**v1.11.0**（2026-08-23，菜单设置新增频谱/瀑布图高度调节，Windows 安装包版本同步至 1.11.0；构建产物 45,330,264 bytes，SHA-256 `10deb527a164e901a1331147340116f7d3bdea67421b6ffd72afc15f786def84`）。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 ## 1. 环境拓扑
@@ -195,8 +195,8 @@ shasum -a 256 dist/windows/MRRC-Modern-v1.8.0-Windows-x64-Setup.exe
 
 ```bash
 mkdir -p website/downloads
-cp dist/windows/MRRC-Modern-v1.10.1-Windows-x64-Setup.exe website/downloads/MRRC-Modern-Setup.exe
-cp dist/windows/MRRC-Modern-v1.10.1-Windows-x64-Setup.exe website/downloads/MRRC-Modern-v1.10.1-Windows-x64-Setup.exe
+cp dist/windows/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe website/downloads/MRRC-Modern-Setup.exe
+cp dist/windows/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe website/downloads/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe
 shasum -a 256 website/downloads/*.exe
 cd website
 ./deploy.sh
@@ -213,7 +213,7 @@ cd website
 
 ```bash
 curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe
-curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.10.1-Windows-x64-Setup.exe
+curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe
 ```
 
 ## 5. 故障排查（本次踩过的坑）

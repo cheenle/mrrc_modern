@@ -2,6 +2,33 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.11.0] — 2026-08-23 — User-configurable spectrum and waterfall heights + v1.11.0 Windows installer
+
+### Added
+- Off-canvas menu Settings now has `Spec H` and `WF H` sliders to adjust the
+  FFT spectrum plot and waterfall canvas heights independently. Values are
+  persisted in cookies (`ft710_fftHeight`, `ft710_wfHeight`) and applied to
+  both the CSS display height and the canvas drawing buffer. Responsive
+  defaults remain: mobile 22 px FFT / 45 px waterfall, desktop 40 px / 80 px.
+- Drawing buffers are cleared when the height changes to avoid waterfall scroll
+  artifacts.
+
+### Frontend
+- `static/index.html`: added slider rows and bumped cache-busters
+  (`ft710.css?v=24`, `ft710_ui.js?v=26`).
+- `static/ft710_ui.js`: `_getFftHeight()`, `_getWfHeight()`,
+  `applyScopeHeights()` helpers; resize handler respects user settings.
+
+### Fixed
+- `tests/test_ft710_power.py`: `test_off_rejected_during_boot_window` was
+  flaky/host-dependent because it compared `time.monotonic()` against a
+  hardcoded 1_000_000 s boot window. Now `time.monotonic()` is mocked in
+  `PowerOffTests.setUp` and the window is set relative to the mocked value,
+  so the test passes regardless of host uptime.
+
+### Packaging
+- Windows installer version bumped to **1.11.0** (`packaging/windows/MRRC-Modern.iss`).
+
 ## [v1.10.1] — 2026-08-17 — Add MRRC_RADIO_MODEL to launcher config template
 
 ### Fixed

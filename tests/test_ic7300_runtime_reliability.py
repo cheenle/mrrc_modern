@@ -187,6 +187,15 @@ class IC7300ModelAndPowerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await backend._get_power_on(timeout=0.4))
 
 
+class IC7300CapabilityTests(unittest.TestCase):
+    def test_scope_speeds_are_only_fast_mid_slow(self) -> None:
+        capabilities = IC7300Backend("/dev/null").capabilities.to_dict()
+        self.assertEqual(
+            capabilities["scope_speeds"],
+            ["FAST", "MID", "SLOW"],
+        )
+
+
 class ScopeActivationTests(unittest.IsolatedAsyncioTestCase):
     async def test_backend_enables_display_before_data_output(self) -> None:
         backend = IC7300Backend("/dev/null")

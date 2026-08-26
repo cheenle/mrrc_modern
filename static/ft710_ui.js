@@ -1105,6 +1105,20 @@ function _rebuildSpanSelect(c) {
             sel.appendChild(opt);
         });
     sel.value = String(radioState.scope_span);
+
+    // Icom CI-V defines exactly FAST/MID/SLOW (00/01/02). Replace the
+    // five FT-710 fallback choices so invalid values cannot be sent.
+    const speedSel = document.getElementById('scope-speed-select');
+    if (speedSel && Array.isArray(c.scope_speeds) && c.scope_speeds.length) {
+        speedSel.innerHTML = '';
+        c.scope_speeds.forEach(function(name, idx) {
+            const opt = document.createElement('option');
+            opt.value = String(idx);
+            opt.textContent = name;
+            speedSel.appendChild(opt);
+        });
+        speedSel.value = String(radioState.scope_speed);
+    }
 }
 
 // ── Render All ──────────────────────────────────────────────────────

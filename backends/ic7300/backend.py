@@ -88,6 +88,7 @@ class IC7300Backend(RadioBackend):
             preamp_steps=("OFF", "AMP1", "AMP2"),
             scope_type="civ27",
             scope_spans=SCOPE_SPANS,
+            scope_speeds=("FAST", "MID", "SLOW"),
             tune_via="atu",
         )
 

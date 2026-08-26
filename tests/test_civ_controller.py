@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import serial
 
+import backends.ic7300.civ_controller as civ_module
 from backends.ic7300.civ_controller import (
     CivController, CivTimeoutError, CivNakError,
     SETMODE_CIV_TRANSCEIVE_ON, SETMODE_CIV_TRANSCEIVE_MK2,
@@ -112,25 +113,48 @@ class ConnectTests(CivControllerTestBase):
                                SETMODE_CIV_TRANSCEIVE_ON[1:])
         self.assertIn(expected, self.written_frames())
 
-    async def test_mk2_connect_uses_mk2_transceive_item(self):
-        # The MK2 (address 0xB6) enables CI-V Transceive via set-mode
-        # item 0089 — item 0071 is "AF Output Level" on the MK2.
+    async def test_custom_mk2_address_keeps_mk2_transceive_item(self):
+        # Model identity chooses item 0089 even when the operator changes
+        # the MK2 from its factory 0xB6 CI-V address.
         self.fake.written.clear()
-        ctl = CivController("/dev/fake", civ_addr=MK2_CIV_ADDR,
-                            query_timeout=0.05)
+        ctl = CivController(
+            "/dev/fake",
+            civ_addr=0xA2,
+            transceive_cmd=SETMODE_CIV_TRANSCEIVE_MK2,
+            query_timeout=0.05,
+        )
         with patch("backends.ic7300.civ_controller.serial.Serial",
                    return_value=self.fake):
             ok = await ctl.connect()
         self.assertTrue(ok)
-        expected = build_frame(SETMODE_CIV_TRANSCEIVE_MK2[0],
-                               SETMODE_CIV_TRANSCEIVE_MK2[1:],
-                               to=MK2_CIV_ADDR)
-        frames = []
-        for part in bytes(self.fake.written).split(b"\xfe\xfe"):
-            if part:
-                frames.append(b"\xfe\xfe" + part)
-        self.assertIn(expected, frames)
+        expected = build_frame(
+            SETMODE_CIV_TRANSCEIVE_MK2[0],
+            SETMODE_CIV_TRANSCEIVE_MK2[1:],
+            to=0xA2,
+        )
+        self.assertIn(expected, bytes(self.fake.written))
         self.assertNotIn(b"\x00\x71", bytes(self.fake.written))
+        await ctl.disconnect()
+
+    async def test_regular_model_does_not_infer_mk2_from_address(self):
+        self.fake.written.clear()
+        ctl = CivController(
+            "/dev/fake",
+            civ_addr=MK2_CIV_ADDR,
+            transceive_cmd=SETMODE_CIV_TRANSCEIVE_ON,
+            query_timeout=0.05,
+        )
+        with patch("backends.ic7300.civ_controller.serial.Serial",
+                   return_value=self.fake):
+            ok = await ctl.connect()
+        self.assertTrue(ok)
+        expected = build_frame(
+            SETMODE_CIV_TRANSCEIVE_ON[0],
+            SETMODE_CIV_TRANSCEIVE_ON[1:],
+            to=MK2_CIV_ADDR,
+        )
+        self.assertIn(expected, bytes(self.fake.written))
+        self.assertNotIn(b"\x00\x89", bytes(self.fake.written))
         await ctl.disconnect()
 
 
@@ -164,6 +188,46 @@ class FrequencyTests(CivControllerTestBase):
     async def test_set_frequency_vfo_b_rejected(self):
         # vfo_b_direct=False: no swap-read-swap emulation.
         self.assertFalse(await self.ctl.set_frequency(7_050_000, vfo="B"))
+
+
+class PowerCommandTests(CivControllerTestBase):
+    def test_power_on_preamble_counts_match_icom_table(self):
+        counts = {
+            115200: 150,
+            57600: 75,
+            38400: 50,
+            19200: 25,
+            9600: 13,
+            4800: 7,
+        }
+        for baud, expected_count in counts.items():
+            with self.subTest(baud=baud):
+                raw = civ_module.build_power_on_frame(baud, 0x94)
+                actual_count = len(raw) - len(raw.lstrip(b"\xfe"))
+                self.assertEqual(actual_count, expected_count)
+                self.assertTrue(raw.endswith(bytes.fromhex("94 E0 18 01 FD")))
+
+    def test_unknown_baud_uses_standard_frame(self):
+        self.assertEqual(
+            civ_module.build_power_on_frame(230400, 0x94),
+            build_frame(0x18, b"\x01", to=0x94),
+        )
+
+    async def test_power_on_writes_documented_preamble(self):
+        self.fake.written.clear()
+        self.assertTrue(await self.ctl.set_power(True))
+        self.assertEqual(
+            bytes(self.fake.written),
+            civ_module.build_power_on_frame(self.ctl.baudrate, self.ctl.civ_addr),
+        )
+
+    async def test_power_off_keeps_standard_frame(self):
+        self.fake.written.clear()
+        self.assertTrue(await self.ctl.set_power(False))
+        self.assertEqual(
+            bytes(self.fake.written),
+            build_frame(0x18, b"\x00", to=self.ctl.civ_addr),
+        )
 
 
 class ModeTests(CivControllerTestBase):

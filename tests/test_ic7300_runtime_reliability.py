@@ -8,10 +8,16 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
-from unittest.mock import patch
+from typing import cast
+from unittest.mock import AsyncMock, patch
 
 from audio_handler import AudioHandler
-from backends.ic7300.backend import DEFAULT_SCOPE_SPAN, IC7300Backend
+from backends.ic7300.backend import (
+    DEFAULT_SCOPE_SPAN,
+    IC7300Backend,
+    IC7300MK2Backend,
+)
+from backends.ic7300.civ_controller import SETMODE_CIV_TRANSCEIVE_MK2
 from backends.ic7300.civ_codec import build_frame
 from backends.ic7300.civ_controller import CivController
 import server
@@ -157,11 +163,35 @@ class _RecordingScopeCiv:
         self.calls.append(("data", on))
 
 
+class IC7300ModelAndPowerTests(unittest.IsolatedAsyncioTestCase):
+    def test_mk2_backend_selects_mk2_transceive_item(self) -> None:
+        backend = IC7300MK2Backend("/dev/null")
+        self.assertEqual(
+            backend._civ._transceive_cmd,
+            SETMODE_CIV_TRANSCEIVE_MK2,
+        )
+
+    async def test_power_health_uses_frequency_query(self) -> None:
+        backend = IC7300Backend("/dev/null")
+        backend._civ.get_frequency = AsyncMock(return_value=14_200_000)
+        backend._civ._query_data = AsyncMock()
+
+        self.assertIs(await backend._get_power_on(timeout=0.4), True)
+
+        backend._civ.get_frequency.assert_awaited_once_with(timeout=0.4)
+        backend._civ._query_data.assert_not_awaited()
+
+    async def test_power_health_timeout_remains_unknown(self) -> None:
+        backend = IC7300Backend("/dev/null")
+        backend._civ.get_frequency = AsyncMock(return_value=None)
+        self.assertIsNone(await backend._get_power_on(timeout=0.4))
+
+
 class ScopeActivationTests(unittest.IsolatedAsyncioTestCase):
     async def test_backend_enables_display_before_data_output(self) -> None:
         backend = IC7300Backend("/dev/null")
         fake = _RecordingScopeCiv()
-        backend._civ = fake
+        backend._civ = cast(CivController, fake)
 
         await backend.init_scope()
 

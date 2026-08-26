@@ -16,15 +16,15 @@ pip install -r requirements.txt
 
 # FT-710 (Yaesu CAT, 38400 baud):
 # macOS (Enhanced COM Port):
-MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
+MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python3 server.py
 # Linux:
-MRRC_RADIO_MODEL=ft710 FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
 
 # IC-7300 (Icom CI-V, 115200 8N1, default address 0x94):
 # macOS:
-MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/cu.usbserial-A1234567 python3 server.py
+MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-A1234567 MRRC_BAUD_RATE=115200 python3 server.py
 # Linux:
-MRRC_RADIO_MODEL=ic7300 FT710_SERIAL_PORT=/dev/ttyUSB0 python3 server.py
+MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/ttyUSB0 MRRC_BAUD_RATE=115200 python3 server.py
 ```
 
 `MRRC_RADIO_MODEL` defaults to `ft710`, so it may be omitted for the FT-710. Open `http://localhost:8888` in a browser. **Default password: change it immediately** — see [SECURITY_GUIDE.md](SECURITY_GUIDE.md).
@@ -60,9 +60,10 @@ dist\windows\MRRC-Modern-Setup.exe
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, or `ic7300mk2` |
-| `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address (only used with `ic7300`/`ic7300mk2`) |
-| `FT710_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710: Enhanced COM Port, 38400 baud; IC-7300: USB CI-V, 115200 baud) |
-| `FT710_BAUD_RATE` | `38400` | CAT serial baud rate |
+| `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address |
+| `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V address |
+| `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
+| `MRRC_BAUD_RATE` | backend default | Serial baud: FT-710 `38400`; IC-7300/MK2 `115200`; explicit value overrides the default |
 | `FT710_WEB_PORT` | `8888` | Web server port |
 | `FT710_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change**) |
 | `FT710_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
@@ -70,8 +71,8 @@ dist\windows\MRRC-Modern-Setup.exe
 | `FT710_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
 | `FT710_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |
 | `FT710_SCOPE_BAUD` | `115200` | Scope serial baud rate |
-| `FT710_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"USB Audio"` or `"3"`; Windows package pre-locks `USB Audio`) |
-| `FT710_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
+| `MRRC_AUDIO_RX_DEVICE` | *(auto)* | Audio input device (index or name substring, e.g. `"USB Audio"` or `"3"`; Windows package pre-locks `USB Audio`) |
+| `MRRC_AUDIO_TX_DEVICE` | *(auto)* | Audio output device (index or name substring) |
 | `FT710_MEM_FILE` | `mem_channels.json` | Memory-channel JSON path; Windows launcher stores this under `%LOCALAPPDATA%` |
 | `FT710_ATR1000_HOST` | *(empty = disabled)* | ATR1000 networked tuner host; empty disables the linkage entirely |
 | `FT710_ATR1000_PORT` | `60001` | ATR1000 tuner WebSocket port |
@@ -82,7 +83,7 @@ dist\windows\MRRC-Modern-Setup.exe
 |----------|---------|-------------|
 | `--port` | `8888` | Web server port |
 | `--serial-port` | `/dev/cu.SLAB_USBtoUART` | CAT serial port |
-| `--baud` | `38400` | CAT serial baud rate |
+| `--baud` | backend default | CAT/CI-V serial baud rate (FT-710 38400; IC-7300/MK2 115200) |
 | `--password` | *(env default)* | Login password |
 | `--host` | `::` | Bind address (IPv6 dual-stack) |
 | `--ssl-cert` | `certs/fullchain.pem` | SSL certificate file |
@@ -120,7 +121,7 @@ Yaesu FT-710 or Icom IC-7300 Radio
 ### Dual-Mode Spectrum
 
 - **FT-710 FT4222 SPI mode**: Reads raw 4096-byte scope frames from the FTDI FT4222 chip via platform FTDI libraries (`libft4222.dylib` / `libft4222.so` / `FT4222.dll`). Provides true 850-point FFT spectrum waterfall.
-- **IC-7300 CI-V 0x27 mode**: Receives 475-bin scope frames on the same CI-V serial port, scales/upsamples to 850 points, and feeds the same waterfall.
+- **IC-7300 CI-V 0x27 mode**: Receives 475-bin scope frames on the same CI-V serial port through a bounded 44-segment newest-data queue, scales/upsamples to 850 points, and feeds the same waterfall. The WebSocket loop runs at 30 Hz and sends real data only when a new complete frame arrives.
 - **S-meter fallback**: Generates a synthetic multi-peak spectrum from CAT S-meter readings — still provides real-time band activity visualization when hardware scope data is unavailable.
 
 ### Audio Pipeline
@@ -149,7 +150,7 @@ Microphone → getUserMedia (48kHz) → ScriptProcessor (512buf, ~10.7ms)
 
 FT-710: the TX chain resamples from Opus 48kHz to the radio's native 44.1kHz USB audio rate using linear interpolation at an exact 160:147 ratio — frame boundaries stay phase-continuous so no periodic clicks.
 
-IC-7300: the radio's USB audio is already 48kHz, so no resampling is required.
+IC-7300: the radio's USB audio is already 48kHz, so no resampling is required. Startup and stream-open logs show the selected device's PortAudio host API, advertised default rate, actual opened rate, and channel count; a healthy IC RX/TX path reports `actual=48000Hz`.
 
 **TX audio stability (v1.2):**
 - **Jitter buffer**: Pre-buffers 60ms before first DAC write to absorb WebSocket jitter; hard cap at 400ms with oldest-first drop bounds latency under Wi-Fi stalls. Every dropped frame is counted as `queue_drops` in the PTT-release session log so a slow Windows output path cannot hide behind otherwise healthy decode/write counters.
@@ -337,7 +338,7 @@ python3 -m pytest tests/ -v
 python3 -m unittest discover -s tests -v
 ```
 
-**592 tests passing** in the current local test suite.
+**617 tests passing** in the current local test suite.
 
 ## Requirements
 
@@ -388,11 +389,11 @@ Set `MRRC_RADIO_MODEL` before starting the server:
 
 | Model | Value | Serial protocol | Scope source | USB audio rate |
 |-------|-------|-----------------|--------------|----------------|
-| Yaesu FT-710 | `ft710` (default) | CAT at `FT710_SERIAL_PORT`, 38400 baud | FT4222 SPI or S-meter fallback | 44.1 kHz |
-| Icom IC-7300 | `ic7300` | CI-V at `FT710_SERIAL_PORT`, 115200 8N1 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
+| Yaesu FT-710 | `ft710` (default) | CAT at `MRRC_SERIAL_PORT`, 38400 baud | FT4222 SPI or S-meter fallback | 44.1 kHz |
+| Icom IC-7300 | `ic7300` | CI-V at `MRRC_SERIAL_PORT`, 115200 8N1 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
 | Icom IC-7300MK2 | `ic7300mk2` | CI-V, same as IC-7300 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
 
-The CI-V address can be changed with `IC7300_CIV_ADDR` (default `0x94`).
+The IC-7300 address can be changed with `IC7300_CIV_ADDR` (default `0x94`); the IC-7300MK2 uses `IC7300MK2_CIV_ADDR` (default `0xB6`). Legacy `FT710_*` configuration aliases remain accepted, but new deployments should use `MRRC_*`.
 
 ## SDD Documentation
 

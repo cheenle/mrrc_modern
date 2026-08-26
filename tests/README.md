@@ -4,7 +4,7 @@
 
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710 and IC-7300/IC-7300MK2). All tests run **without hardware** — no radio,
-no serial port, no USB audio device needed. 593 tests across 29 test modules.
+no serial port, no USB audio device needed. 617 tests across 30 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -14,8 +14,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 593 |
-| Passed | 593 (with all optional dependencies installed) |
+| Total tests | 617 |
+| Passed | 617 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~13s (harness tests spawn CLI subprocesses) |
@@ -324,6 +324,18 @@ SDD coverage: AD-016
 | `IC7300CapabilitiesTests` | 4 | IC-7300 capability values, scope producer, UI tables, CAT surface |
 | `FullStateCapabilitiesTests` | 3 | fullState includes radioModel/radioDisplayName/capabilities, tables come from backend, fallback without backend |
 
+### 30. test_ic7300_runtime_reliability.py — IC-7300 Runtime Reliability (12 tests)
+
+SDD coverage: §9.2.4, §9.4, §9.5.1, §12.2
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `BackendBaudDefaultsTests` | 3 | FT-710 38400 default, IC-7300/MK2 115200 defaults, explicit baud override |
+| `IC7300DiagnosticProtocolTests` | 2 | Checksum-free CI-V diagnostic query and standard frequency-reply decoding |
+| `ScopeQueueFreshnessTests` | 2 | Bounded 44-segment queue, oldest-drop/latest-retention behavior |
+| `SpectrumBroadcastPolicyTests` | 3 | 30 Hz target and new-real-frame-only broadcast cursor |
+| `AudioDeviceDiagnosticsTests` | 2 | Host API/default/actual rate/channel summary and missing-metadata fallback |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -347,7 +359,7 @@ SDD coverage: AD-016
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests) | 4 tests |
 | NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 27 tests |
 | §9.8 ATR1000 Tuner Linkage | test_atr1000_tuner, test_atr1000_client, test_atr1000_server | 99 tests |
-| AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope | 115 tests |
+| AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope, test_ic7300_runtime_reliability | 127 tests |
 
 ## Running Specific Tests
 

@@ -1,6 +1,6 @@
 # MRRC Web 遥控 — 操作指南
 
-> 适用于 MRRC Web Control（v1.10.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。
+> 适用于 MRRC Web Control（v1.11.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。
 
 ---
 
@@ -72,20 +72,22 @@ MRRC_WEB_PORT=8888
 MRRC_WEB_PASSWORD=change_this_password
 MRRC_AUDIO_RX_DEVICE=USB Audio
 MRRC_AUDIO_TX_DEVICE=USB Audio
-# 若电台的 CI-V 地址不是默认 0x94，用下面这行覆盖：
+# IC-7300 地址覆盖（默认 0x94）：
 #IC7300_CIV_ADDR=0x94
+# IC-7300MK2 地址覆盖（默认 0xB6）：
+#IC7300MK2_CIV_ADDR=0xB6
 # IC-7300 用 CI-V 0x27 频谱，无需 FTDI 库——删掉/注释 MRRC_FTDI_LIB_DIR
 ```
 
 **电台侧设置**（面板菜单，开机时设置一次）：
 
-- `CI-V USB Baud Rate` = **115200**（`MRRC_BAUD_RATE` 必须一致）。
-- `CI-V USB Address` = **94h**（默认即可，与 `IC7300_CIV_ADDR` 一致）。
+- `CI-V USB Baud Rate` = **115200**。选择 `ic7300`/`ic7300mk2` 后服务端默认即为 115200；显式设置 `MRRC_BAUD_RATE` 时必须一致。
+- `CI-V USB Address`：IC-7300 默认 **94h**（`IC7300_CIV_ADDR`）；IC-7300MK2 默认 **B6h**（`IC7300MK2_CIV_ADDR`）。
 - 建议开启 `CI-V Transceive`（连接时服务端会自动发送开启命令）。
 
-**音频**：IC-7300 的 USB 音频是 **48 kHz 原生**，服务端直接透传，**无需重采样**。Windows 下该声卡以 `USB Audio CODEC` / `USB Audio Device` 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。`MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` 填 `USB Audio` 即可同时匹配两种形式。
+**音频**：IC-7300 的 USB 音频是 **48 kHz 原生**，服务端直接透传，**无需重采样**。Windows 下该声卡以 `USB Audio CODEC` / `USB Audio Device` 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。`MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` 填 `USB Audio` 即可同时匹配两种形式。启动及 RX/TX 打开日志会列出 `host`、`default`、`actual`、`channels`；IC 正常值应为 `actual=48000Hz`。
 
-**频谱**：来自 CI-V `0x27` 帧，走 CAT 串口，**不需要 FT4222**。默认跨度 ±100 kHz，可在菜单的 SPAN 下拉调整。
+**频谱**：来自 CI-V `0x27` 帧，走 CAT 串口，**不需要 FT4222**。分片队列最多保留 44 个片段，积压时丢弃最旧数据；WebSocket 以 30 Hz 调度且只发送新完成的真实帧。默认跨度 ±100 kHz，可在菜单的 SPAN 下拉调整。
 
 **验证清单**：
 
@@ -147,7 +149,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 | FT-710：两个 COM 口，选哪个？ | 选**较低编号**的 CP210x（Enhanced COM Port，CAT）。`MRRC_SCOPE_PORT` 留空自动探测另一个。 |
 | 没声音 / 只听到电脑音箱声音 | 音频设备没锁对。把 `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` 设为 `USB Audio`；若有多台同类 USB 声卡，用启动日志里 `PyAudio initialized. Available devices:` 列出的**索引号**锁定。 |
 | FT-710：瀑布图有图形但不是真频谱 | 这是 S-meter 合成频谱。确认 `MRRC_FTDI_LIB_DIR` 指向含 `FT4222.dll` / `ftd2xx.dll` 的目录，并已装 FTDI D2XX 驱动。 |
-| IC-7300：瀑布图不动 | 检查频谱是否停用：菜单里确保 CI-V `0x27` scope 数据输出开启；`MRRC_SERIAL_PORT` 若是错误的 COM 口也会导致无频谱。 |
+| IC-7300：瀑布图不动 | 检查 CI-V 地址与 115200 baud、`MRRC_SERIAL_PORT`，并运行 `python _diag_ic7300_scope.py <PORT> 115200 0x94`（MK2 用 `0xB6`）；脚本会在退出时关闭 scope 数据输出。 |
 | 状态栏出现红色「无声」 | RX 音频流 20 秒全零，电台 USB 音频接口可能卡死。重启电台或重插 USB 线。 |
 | 改了配置没生效 | 改完 `mrrc_modern.env` 必须**重启 MRRC Modern**（关掉窗口重新启动）。 |
 

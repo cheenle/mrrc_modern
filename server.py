@@ -20,7 +20,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Protocol
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -520,6 +520,26 @@ async def _start_atr_tune_assist(ws: WebSocket):
 
 # ── Spectrum/Scope ───────────────────────────────────────────────────
 
+SPECTRUM_BROADCAST_FPS = 30
+
+
+class _SpectrumFrameSource(Protocol):
+    _frame_count: int
+
+    def get_spectrum_binary(self) -> bytes: ...
+
+
+def _new_real_spectrum_frame(
+    scope_handler: _SpectrumFrameSource,
+    last_frame_count: int,
+) -> tuple[bytes | None, int]:
+    """Return the latest real scope frame only when its counter advanced."""
+    frame_count = scope_handler._frame_count
+    if frame_count == last_frame_count:
+        return None, last_frame_count
+    return scope_handler.get_spectrum_binary(), frame_count
+
+
 async def _on_scope_frame(_scope: ScopeHandler):
     """Called when a new scope frame is parsed.  Merges key metadata
     into the global radio state and marks dirty for broadcast.
@@ -558,8 +578,9 @@ async def _broadcast_spectrum_loop():
     idle wakeups.  Synthetic Gaussian generation is also skipped.
     """
     global scope, spectrum_clients
-    interval = 1.0 / 5.0      # ~200ms → 5 fps
+    interval = 1.0 / SPECTRUM_BROADCAST_FPS
     idle_interval = 0.500      # 500 ms deep-sleep when no listeners
+    last_real_frame_count = -1
     _first = True
     _idle_skipped = 0
     while True:
@@ -570,12 +591,20 @@ async def _broadcast_spectrum_loop():
                 continue
 
             if scope:
-                if not scope.connected:
-                    # No FT4222 data — use S-meter fallback
+                if scope.connected:
+                    binary, last_real_frame_count = _new_real_spectrum_frame(
+                        scope, last_real_frame_count
+                    )
+                    if binary is None:
+                        await asyncio.sleep(interval)
+                        continue
+                    mode = "real scope"
+                else:
+                    # No real scope data — use S-meter fallback.
                     scope.update_from_radio_state(radio)
-                binary = scope.get_spectrum_binary()
+                    binary = scope.get_spectrum_binary()
+                    mode = "S-meter fallback"
                 if _first:
-                    mode = "FT4222" if scope.connected else "S-meter fallback"
                     logger.info("Spectrum broadcast active: %s, %d bytes/frame, %d clients",
                                 mode, len(binary), len(spectrum_clients))
                     _first = False

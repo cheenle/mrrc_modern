@@ -119,6 +119,7 @@ _SUBKEYED_CMDS = frozenset((
 ))
 
 _DEFAULT_QUERY_TIMEOUT = 0.3    # per-attempt response timeout (seconds)
+SCOPE_QUEUE_MAX_SEGMENTS = 44  # four complete 11-segment USB waveforms
 _READ_CHUNK = 256               # reader-thread ser.read() size
 
 
@@ -176,9 +177,12 @@ class CivController:
         self._last_sent: bytes = b""
         self._pending: dict[tuple, deque[asyncio.Future]] = {}
         self._pending_acks: deque[asyncio.Future] = deque()
-        # Parsed 0x27 0x00 scope segments (consumed by the Phase 3
-        # scope producer; unbounded — segments are tiny).
-        self.scope_queue: asyncio.Queue = asyncio.Queue()
+        # Parsed 0x27 0x00 scope segments. Keep only a few complete USB
+        # waveforms so a paused consumer resumes with fresh radio data.
+        self.scope_queue: asyncio.Queue = asyncio.Queue(
+            maxsize=SCOPE_QUEUE_MAX_SEGMENTS
+        )
+        self.scope_queue_drops = 0
         self._broadcast_cb: Optional[Callable[[str, object], None]] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._reader_thread: Optional[threading.Thread] = None
@@ -342,7 +346,7 @@ class CivController:
         if frame.command == SCOPE_CMD and frame.data[:1] == bytes((SCOPE_SUB_DATA,)):
             seg = parse_scope_segment(frame)
             if seg is not None:
-                self.scope_queue.put_nowait(seg)
+                self._enqueue_scope_segment(seg)
             return
         # 3. Transceive broadcasts (to==0x00) and freq/mode broadcasts.
         if frame.to == 0x00 or frame.command in (CMD_FREQ_BCAST, CMD_MODE_BCAST):
@@ -371,6 +375,24 @@ class CivController:
                 fut.set_result(frame)
             return
         logger.debug("unmatched CI-V frame dropped: %s", bytes(frame).hex())
+
+    def _enqueue_scope_segment(self, segment: object) -> None:
+        """Enqueue a scope segment, dropping the oldest when at capacity."""
+        if self.scope_queue.full():
+            try:
+                self.scope_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            else:
+                self.scope_queue_drops += 1
+                if self.scope_queue_drops == 1 or self.scope_queue_drops % 100 == 0:
+                    logger.warning(
+                        "CI-V scope queue full; dropped oldest segment "
+                        "(drops=%d, max=%d)",
+                        self.scope_queue_drops,
+                        self.scope_queue.maxsize,
+                    )
+        self.scope_queue.put_nowait(segment)
 
     def _handle_broadcast(self, frame: CivFrame) -> None:
         """Parse a transceive broadcast and notify the state layer."""

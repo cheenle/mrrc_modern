@@ -34,8 +34,8 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.23 |
-| Baseline Date | 2026-08-17 |
+| SDD Version | V2.24 |
+| Baseline Date | 2026-08-26 |
 | Status | v1.8.0 Windows Stable; FT710Android native client implemented (JVM tests green, device acceptance pending); IC-7300/MK2 backend implemented |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend) |
@@ -55,8 +55,8 @@ FastAPI/Uvicorn MRRC Server (server.py)
   | Pluggable backend selected by MRRC_RADIO_MODEL
   |   ft710: Serial CAT (USB Enhanced COM Port, 38400 baud) → Yaesu FT-710
   |          FT4222 SPI (scope_pipe subprocess) → real spectrum data
-  |   ic7300/ic7300mk2: USB CI-V serial (115200 8N1, addr 0x94) → Icom IC-7300/MK2
-  |                     CI-V 0x27 spectrum on the same port
+  |   ic7300/ic7300mk2: USB CI-V serial (115200 8N1, addr 0x94/0xB6) → Icom IC-7300/MK2
+  |                     CI-V 0x27 spectrum on the same port (44-segment newest-data queue)
   | PyAudio (USB Audio device) → RX/TX audio capture/playback
   | Opus codec (libopus) → compressed audio transport
   v

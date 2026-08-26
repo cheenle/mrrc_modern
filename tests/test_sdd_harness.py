@@ -141,7 +141,8 @@ class HarnessCliTests(unittest.TestCase):
         """The harness must not cry wolf: shipped core modules pass block rules."""
         core = ["server.py", "cat_controller.py", "poll_scheduler.py",
                 "radio_state.py", "config.py", "audio_handler.py",
-                "audio_resample.py", "opus_rx.py"]
+                "audio_resample.py", "opus_rx.py",
+                "backends/ic7300/civ_controller.py"]
         r = run_cli("check", *core)
         self.assertEqual(r.returncode, 0,
                          f"core files trip block rules:\n{r.stderr}")

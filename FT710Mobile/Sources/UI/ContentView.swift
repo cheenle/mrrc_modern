@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var selectedTab = 0
     @State private var tuneStep: Int = 1000  // Hz, matches web default
     @State private var tuneHeld = false      // TUNE press-and-hold local state
+    @State private var pttHeld = false       // PTT press-and-hold local state
 
     var body: some View {
         ZStack {
@@ -228,10 +229,22 @@ struct ContentView: View {
                             .gesture(
                                 DragGesture(minimumDistance: 0)
                                     .onChanged { _ in
-                                        if viewModel.state.txStatus == 0 { viewModel.setPTT(true) }
+                                        if !pttHeld {
+                                            pttHeld = true
+                                            viewModel.setPTT(true)
+                                        }
                                     }
                                     .onEnded { _ in
-                                        if viewModel.state.txStatus > 0 { viewModel.setPTT(false) }
+                                        // 无条件发送 ptt:false（I11 释放竞态修复）:
+                                        // 旧逻辑依赖服务端回显 txStatus>0 才松键,
+                                        // WAN 延迟下快速点按会把 ptt:false 静默
+                                        // 丢弃,电台卡死在发射态。与下方 TUNE 的
+                                        // tuneHeld 模式一致:本地跟踪按住状态,
+                                        // 松开必定发送,不赌回显时序。
+                                        if pttHeld {
+                                            pttHeld = false
+                                            viewModel.setPTT(false)
+                                        }
                                     }
                             )
                         // TUNE: press-and-hold — touch down starts the tuning

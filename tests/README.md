@@ -4,7 +4,7 @@
 
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710 and IC-7300/IC-7300MK2). All tests run **without hardware** — no radio,
-no serial port, no USB audio device needed. 605 tests across 30 test modules.
+no serial port, no USB audio device needed. 623 tests across 32 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -14,8 +14,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 605 |
-| Passed | 605 (with all optional dependencies installed) |
+| Total tests | 623 |
+| Passed | 623 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -339,7 +339,26 @@ SDD coverage: V2.12/V2.13 power-command guards; PS0 write-only semantics
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `PowerOffTests` | 4 | Power-off success criterion: CAT silence after PS0 = success (radio goes deaf when powered down); only a PS1 answer means off FAILED — scripted-serial mocked, no hardware |
+| `PowerOffTests` | 4 | Power-off success criterion: CAT silence after PS0 = success (radio goes deaf when powered down); only a PS1 answer means off FAILED — scripted-serial mocked, no hardware. Boot-window test uses a monotonic-relative deadline so it stays valid on long-uptime hosts |
+
+### 31. test_server_security.py — Auth & Static Hardening (14 tests)
+
+SDD coverage: §13.4 I8 (path traversal), I9 (constant-time password compare)
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `ResolveStaticPathTests` | 7 | `_resolve_static_path` containment: empty→index, legit assets stay inside STATIC_DIR, `../` traversal rejected, absolute request paths rejected, dot-segment escapes rejected, `....//` lookalikes are harmless literals, missing-but-contained paths still resolve for the SPA fallback |
+| `PasswordCompareTests` | 4 | `_password_matches`: correct/wrong/empty, None + non-ASCII never raise, `hmac.compare_digest` used (no `!=`) |
+| `DefaultPasswordWarningTests` | 3 | Startup warning fires only when the well-known default is active; wired into lifespan |
+
+### 32. test_max_tx_watchdog.py — Opt-in Max-TX Safety Watchdog (3 tests)
+
+SDD coverage: §13.4 I12 / ch15 outermost release layer
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `MaxTxWatchdogTests` | 2 | Forces RX via exactly one fire-and-forget unkey after MRRC_PTT_MAX_TX_SECONDS of continuous TX; TX meters zeroed in the same update — no verify loop |
+| `MaxTxWatchdogDisabledTests` | 1 | Default (0 = off) never unkeys |
 
 ## Test Coverage by SDD Requirement
 
@@ -387,7 +406,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~605 tests in ~15s — can run on every commit.
+2. **Fast execution**: ~623 tests in ~15s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

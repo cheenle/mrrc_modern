@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -26,8 +27,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
     RADIO_MODEL, SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,
+    DEFAULT_WEB_PASSWORD, PTT_MAX_TX_SECONDS,
     SSL_CERTFILE, SSL_KEYFILE,
-    AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT, PTT_SAFETY_TIMEOUT,
+    AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT,
     UI_MODES, NARROW_MODES,
     ATR1000_HOST, ATR1000_PORT,
     _env,
@@ -81,6 +83,12 @@ atr_clients: set[WebSocket] = set()
 _atr_storage = None           # TunerStorage shared with the client
 _atr_tune_task = None         # running tune-assist asyncio.Task, if any
 _last_meter_broadcast_log = 0.0
+# Opt-in stuck-keyup watchdog (MRRC_PTT_MAX_TX_SECONDS, 0 = off). Covers
+# clients that hang WITHOUT disconnecting — the dead-man switch and client
+# watchdogs never fire for a zombie-but-connected socket.
+_max_tx_watchdog_task: asyncio.Task | None = None
+_tx_continuous_since: float | None = None
+MAX_TX_WATCHDOG_INTERVAL = 1.0  # seconds between watchdog checks (tests shrink this)
 # Single-owner guard for the TX uplink: only the first connected TX client's
 # audio is fed to the radio. Prevents two open tabs from interleaving mic
 # frames into the same playback queue (garbled TX). A later client takes over
@@ -224,6 +232,36 @@ def _make_auth_token() -> str:
     """Generate a new random session token."""
     return _secrets.token_hex(AUTH_TOKEN_BYTES)
 
+def _password_matches(candidate: str) -> bool:
+    """Constant-time password comparison (SDD I9).
+
+    A plain == leaks candidate length/prefix timing byte-by-byte;
+    hmac.compare_digest runs in time independent of where (or whether)
+    the strings first differ. Encoding both sides also keeps non-ASCII
+    input from raising.
+    """
+    return hmac.compare_digest(
+        str(candidate).encode("utf-8"), str(WEB_PASSWORD).encode("utf-8")
+    )
+
+def _warn_if_default_password() -> bool:
+    """Loud startup warning when the well-known default password is in use.
+
+    The default is public (it ships in config.py), so any LAN peer could
+    log in with it. Returns True when the warning fired so callers/tests
+    can observe the condition without parsing logs.
+    """
+    if hmac.compare_digest(
+        str(WEB_PASSWORD).encode("utf-8"),
+        str(DEFAULT_WEB_PASSWORD).encode("utf-8"),
+    ):
+        logger.warning(
+            "SECURITY: web login is using the well-known default password! "
+            "Set MRRC_WEB_PASSWORD (or --password) to a strong unique value."
+        )
+        return True
+    return False
+
 def _verify_auth(request: Request) -> bool:
     """Check whether the request carries a valid auth cookie or query-param token."""
     token = request.cookies.get(AUTH_COOKIE)
@@ -348,6 +386,51 @@ async def _broadcast_state():
                 atr.notify_tx(bool(radio.is_transmitting))
         except Exception as e:
             logger.debug("ATR1000 linkage hook failed: %s", e)
+
+async def _max_tx_watchdog():
+    """Force RX when continuous transmit exceeds MRRC_PTT_MAX_TX_SECONDS.
+
+    Opt-in (0 = disabled, the default). Runs at 1 s resolution; the first
+    tick of a TX keys the timestamp, so effective timeout is limit..limit+1s.
+    Mirrors the PTT-release path: fire-and-forget unkey via set_ptt(False)
+    plus a UI error toast — no blocking verify loop (SDD ch15).
+    """
+    global _tx_continuous_since
+    while True:
+        await asyncio.sleep(MAX_TX_WATCHDOG_INTERVAL)
+        if PTT_MAX_TX_SECONDS <= 0:
+            _tx_continuous_since = None
+            continue
+        if not (cat is not None and cat.connected and radio.is_transmitting):
+            _tx_continuous_since = None
+            continue
+        now = time.monotonic()
+        if _tx_continuous_since is None:
+            _tx_continuous_since = now
+            continue
+        if now - _tx_continuous_since < PTT_MAX_TX_SECONDS:
+            continue
+        elapsed = now - _tx_continuous_since
+        _tx_continuous_since = None
+        logger.warning(
+            "PTT safety: %.0fs continuous TX exceeds MRRC_PTT_MAX_TX_SECONDS"
+            " (%.0fs) — forcing RX", elapsed, PTT_MAX_TX_SECONDS)
+        try:
+            await cat.set_ptt(False)
+            radio.update(tx_status=0, power_meter=0, alc_meter=0,
+                         swr_meter=0, comp_meter=0, id_meter=0)
+        except Exception as e:
+            logger.error("PTT safety force-RX failed: %s", e)
+        scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+        msg = json.dumps({"type": "error", "message": (
+            f"Max TX time {PTT_MAX_TX_SECONDS:.0f}s reached — PTT released.")})
+        dead: set[WebSocket] = set()
+        for ws in ctrl_clients:
+            try:
+                await ws.send_text(msg)
+            except Exception:
+                dead.add(ws)
+        ctrl_clients.difference_update(dead)
 
 async def _broadcast_mem_channels():
     """Send memory channels to all connected clients."""
@@ -1473,6 +1556,7 @@ async def lifespan(app: FastAPI):
     logger.info("MRRC Modern Web Control starting on port %d", WEB_PORT)
     logger.info("Radio model: %s, serial port: %s @ %d baud",
                 RADIO_MODEL, SERIAL_PORT, BAUD_RATE)
+    _warn_if_default_password()
 
     backend = create_backend(RADIO_MODEL, port=SERIAL_PORT, baud_rate=BAUD_RATE)
     # The backend surface is CatController-compatible; keep the historical
@@ -1533,6 +1617,8 @@ async def lifespan(app: FastAPI):
     if _audio_ok:
         _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
     _audio_tx_task = asyncio.create_task(_audio_tx_drain_loop(), name="audio_tx")
+    global _max_tx_watchdog_task
+    _max_tx_watchdog_task = asyncio.create_task(_max_tx_watchdog(), name="max_tx_watchdog")
 
     # Start scope handler — broadcasts S-meter fallback until real data arrives
     scope = ScopeHandler()
@@ -1589,6 +1675,9 @@ async def lifespan(app: FastAPI):
         _audio_rx_task.cancel()
     if _audio_tx_task:
         _audio_tx_task.cancel()
+    if _max_tx_watchdog_task:
+        _max_tx_watchdog_task.cancel()
+        _max_tx_watchdog_task = None
     if _opus_tx_decoder:
         try:
             _opus_tx_decoder.close()
@@ -1710,14 +1799,14 @@ async def api_login(request: Request):
     if not _check_login_rate_limit(client_ip):
         logger.warning("Rate limit exceeded for login from IP: %s", client_ip)
         return JSONResponse({"error": "Too many login attempts. Please try again later."}, status_code=429)
-    
+
     try:
         body = await request.json()
         password = body.get("password", "")
     except Exception:
         password = ""
 
-    if password != WEB_PASSWORD:
+    if not _password_matches(password):
         return JSONResponse({"error": "Invalid password"}, status_code=401)
 
     # Password strength validation (only on first login)
@@ -2123,13 +2212,36 @@ async def ws_atr1000(ws: WebSocket):
 
 # ── Static File Serving ─────────────────────────────────────────────
 
+def _resolve_static_path(path: str):
+    """Resolve a request path to a file inside STATIC_DIR (SDD I8).
+
+    Naively joining the request path into STATIC_DIR lets
+    ``GET /../server.py`` (or an absolute request path, which Path()
+    replaces wholesale) read arbitrary files. Resolve the joined path and
+    require it to stay inside the resolved STATIC_DIR — this also defeats
+    symlink escapes. Returns None when the path escapes containment or
+    cannot be resolved.
+    """
+    rel = path if path else "index.html"
+    try:
+        resolved = STATIC_DIR.joinpath(rel).resolve()
+        contained = resolved.is_relative_to(STATIC_DIR.resolve())
+    except OSError:
+        return None
+    return resolved if contained else None
+
+
 @app.get("/{path:path}")
 async def serve_static(path: str, request: Request):
     """Serve static files.  Index.html is served for SPA routes."""
     if not _verify_auth(request) and path not in ("", "login", "favicon.png", "manifest.json", "sw.js"):
         return RedirectResponse("/login")
 
-    file_path = STATIC_DIR / (path if path else "index.html")
+    file_path = _resolve_static_path(path)
+    if file_path is None:
+        # Escapes STATIC_DIR (path traversal) or unresolvable — never fall
+        # through to the SPA fallback for these.
+        return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
 
     if file_path.is_file():
         # Determine content type

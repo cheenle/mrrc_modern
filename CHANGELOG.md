@@ -2,6 +2,45 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 2026-08-26 — Security & resilience hardening (SDD V2.28)
+
+### Security
+- **I8 — static path traversal fixed**: `serve_static` now resolves the
+  requested path and rejects anything that escapes `STATIC_DIR`
+  (`GET /../server.py`, absolute request paths, symlink escapes → 404).
+- **I9 (part 1) — constant-time login comparison**: password check uses
+  `hmac.compare_digest` (`_password_matches`); non-ASCII/None input can no
+  longer raise. A loud startup WARNING now fires while the well-known default
+  password is active. (Forced first-login change remains future work.)
+
+### Reliability
+- **I10 — web subchannel self-heal**: `/WSspectrum`, `/WSaudioRX` and
+  `/WSaudioTX` each reconnect independently with exponential backoff
+  (1 s→30 s) after a transient drop; a transient no longer leaves controls
+  alive but audio/spectrum dead until reload. Power-button OFF suppresses
+  self-heal via a dedicated flag.
+- **I12 — opt-in stuck-keyup watchdog**: new `MRRC_PTT_MAX_TX_SECONDS`
+  (default 0 = off) forces RX after continuous transmit beyond the limit,
+  covering zombie-but-connected clients that client watchdogs and the
+  disconnect dead-man switch cannot see.
+
+### iOS
+- **I11 (part 1) — PTT release race fixed** (docs/IOS_APP_ANALYSIS.md §2.1):
+  release is sent unconditionally on gesture end with optimistic local state
+  (same pattern as the TUNE button), so WAN-latency fast taps can no longer
+  leave the radio keyed up. Device verification pending; watchdog/scenePhase
+  layers remain open.
+
+### Housekeeping
+- Removed stale `.bak` files from the repo root and Xcode project.
+- Fixed an uptime-dependent power-script test (fixed monotonic threshold
+  expired on long-running hosts).
+
+### Tests
+- Suite **623 tests** across 32 modules (+18): static-path containment,
+  constant-time compare, default-password warning, max-TX watchdog, and a
+  subchannel-reconnect contract test.
+
 ## [v1.10.1] — 2026-08-17 — Add MRRC_RADIO_MODEL to launcher config template
 
 ### Fixed

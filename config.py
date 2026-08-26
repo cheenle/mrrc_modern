@@ -75,7 +75,8 @@ ATR1000_PORT = _env_int("MRRC_ATR1000_PORT", 60001)
 WEB_PORT = _env_int("MRRC_WEB_PORT", 8888)
 # SECURITY: Change this password in production! Use a strong, unique password.
 # Recommended: 16+ characters with mixed case, numbers, and symbols
-WEB_PASSWORD = _env("MRRC_WEB_PASSWORD", "changeme_please_use_strong_password!")
+DEFAULT_WEB_PASSWORD = "changeme_please_use_strong_password!"
+WEB_PASSWORD = _env("MRRC_WEB_PASSWORD", DEFAULT_WEB_PASSWORD)
 WEB_HOST = _env("MRRC_WEB_HOST", "::")  # IPv6 dual-stack
 
 # SSL (Let's Encrypt certs for radio.vlsc.net)
@@ -136,8 +137,16 @@ RECONNECT_BASE_DELAY = 1.0
 RECONNECT_MAX_DELAY = 30.0
 
 # ── PTT Safety ───────────────────────────────────────────────────────
+# Reserved: the dead-man switch fires immediately on disconnect, so this
+# grace period is currently unused by server.py.
 PTT_SAFETY_TIMEOUT = 2.0        # Seconds to force TX0; after WebSocket disconnect
 PTT_VERIFY_DELAY = 0.2          # Delay before verifying TX state change
+# Opt-in stuck-keyup watchdog: force RX after this many seconds of
+# continuous transmit. 0 (default) disables it — the client-side PTT
+# watchdogs and the disconnect dead-man switch stay the primary layers.
+# Covers the gap where a client hangs WITHOUT disconnecting (zombie socket),
+# which neither of those layers catches.
+PTT_MAX_TX_SECONDS = _env_float("MRRC_PTT_MAX_TX_SECONDS", 0.0)
 
 # ── Memory Channels ──────────────────────────────────────────────────
 MEM_CHANNEL_COUNT = 6

@@ -91,7 +91,7 @@ Python: 4-space indentation, type hints for shared state, `UPPER_CASE` for modul
 
 ## Testing Guidelines
 
-Run the full suite with `python -m unittest discover -s tests -v` (currently 605 tests across 30 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connected radio model, serial port, FT4222 availability (FT-710), audio device. Name tests `test_*.py`. Keep hardware-independent logic testable without a radio.
+Run the full suite with `python -m unittest discover -s tests -v` (currently 623 tests across 32 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connected radio model, serial port, FT4222 availability (FT-710), audio device. Name tests `test_*.py`. Keep hardware-independent logic testable without a radio.
 
 ## Commit & Pull Request Guidelines
 

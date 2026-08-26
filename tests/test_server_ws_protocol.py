@@ -212,12 +212,34 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=23', index_source)
-        self.assertIn('/ft710_main.js?v=25', index_source)
+        self.assertIn('/ft710_main.js?v=26', index_source)
         self.assertIn('/ft710_ui.js?v=25', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v25'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v26'", sw_source)
+        self.assertIn("'/ft710_main.js?v=26'", sw_source)
         self.assertIn("'/ft710_ui.js?v=25'", sw_source)
+
+    def test_subchannels_have_independent_reconnect(self):
+        """SDD I10: audio/spectrum subchannels must self-heal, not just null out."""
+        src = Path("static/ft710_main.js").read_text(encoding="utf-8")
+        # Shared backoff machinery exists
+        self.assertIn("function subchannelReconnect(", src)
+        self.assertIn("const SUBCHANNEL_RECONNECT_MAX = 30000;", src)
+        for name in ("spectrum", "audioRX", "audioTX"):
+            self.assertIn(f"{name}: {{ delay: 1000, timer: null }}", src)
+            self.assertIn(f'subchannelReconnect("{name}"', src)
+        # Success resets the backoff
+        self.assertIn("function subchannelConnected(", src)
+        # Power OFF suppresses subchannel self-heal (separate flag: radio
+        # onclose consumes _intentionalClose before subchannel closes fire)
+        self.assertIn("_webClientOff = true; // subchannels must not self-heal either", src)
+        self.assertIn("!st || _intentionalClose || _webClientOff || st.timer", src)
+        # Reconnect guards cover CONNECTING so backoff retries cannot stack sockets
+        self.assertIn(
+            "wsSpectrum.readyState === WebSocket.CONNECTING", src)
+        self.assertIn(
+            "wsAudioTX.readyState === WebSocket.CONNECTING", src)
 
 
 class CookieSettingsPersistenceTests(unittest.TestCase):

@@ -30,14 +30,16 @@ All notable changes to the MRRC Web Control project.
 
 ### Tests
 - Hardware-independent suite expanded to **633 tests across 31 modules** and
-  passes on macOS before packaging. These tests verify software protocol and
-  state behavior; real USB enumeration, radio ACK timing, RF operation, tuner
-  behavior, power cycling, and RX/TX audio quality still require physical-radio
-  acceptance.
+  passes on macOS and the Windows 11 build VM. These tests verify software
+  protocol and state behavior; real USB enumeration, radio ACK timing, RF
+  operation, tuner behavior, power cycling, and RX/TX audio quality still
+  require physical-radio acceptance.
 
 ### Packaging
 - Windows installer version bumped to **1.12.0**
-  (`packaging/windows/MRRC-Modern.iss`).
+  (`packaging/windows/MRRC-Modern.iss`). All three PyInstaller targets and Inno
+  Setup 6.7.3 passed; the 45,339,501-byte installer has SHA-256
+  `e7d1e460c408a6da2c0f66f23002d48429fa0b46bfd933305b4f150cbcefade2`.
 
 ## [v1.11.0] — 2026-08-23 — User-configurable spectrum and waterfall heights + v1.11.0 Windows installer
 

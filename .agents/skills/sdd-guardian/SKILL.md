@@ -9,7 +9,7 @@ arguments:
 
 # SDD Guardian — engineering lifecycle for mrrc_modern
 
-This repository is governed by `SDD/` (IBM TeamSD, 15 chapters, currently **V2.26**)
+This repository is governed by `SDD/` (IBM TeamSD, 15 chapters, currently **V2.27**)
 — requirements, system context, architecture decisions, service/component models,
 feasibility analysis, and version history. The SDD is the canonical design record:
 your job on every change is to keep the runtime AND the design record consistent.

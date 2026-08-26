@@ -34,9 +34,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.26 |
+| SDD Version | V2.27 |
 | Baseline Date | 2026-08-26 |
-| Status | v1.11.0 installer published; IC-7300/MK2 CI-V byte paths conformance-tested with hardware acceptance pending; FT710Android implemented with device acceptance pending; iOS P0 fixes pending; open issues I8–I11 tracked in §13.4 |
+| Status | v1.12.0 Windows Stable published from a verified 633-test build; IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance and iOS P0 fixes pending; open issues I8–I11 tracked in §13.4 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend) |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2` (default `ft710`) |

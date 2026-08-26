@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/scope.css?v=2">
-    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=2">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
+    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .sdd-layout {
@@ -138,7 +138,7 @@
 <p><strong>Text:</strong> <code class="scope-code">"s:"</code> = stop TX; <code class="scope-code">"m:rate,encode,..."</code> = settings.</p>
 <h3 id="wsspectrum-binary">9.2.4 /WSspectrum (binary)</h3>
 <p><strong>v1 format:</strong> 1-byte version (0x01) + 850 bytes wf1 = 851 bytes. <strong>v2 format:</strong> 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.</p>
-<p>Broadcast at ~30 fps from real scope data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2) or S-meter fallback.</p>
+<p>The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2) is sent only when <code class="scope-code">ScopeHandler._frame_count</code> advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick.</p>
 <h2 id="rx-audio-signal-chain">9.3 RX Audio Signal Chain</h2>
 <figure>
 <img src="diagrams/audio-chains.svg" alt="RX Audio Chain" />
@@ -152,11 +152,11 @@
 </figure>
 <p><em>See lower half of diagram.</em></p>
 <p><strong>TX runs at 48 kHz throughout the codec domain</strong> — browser capture and Opus encode/decode. The server bridges to the radio’s native USB audio rate: the FT-710 uses 44.1 kHz with frame-aligned resampling (960↔︎882 = exactly 20 ms, ratio 160:147); the IC-7300/MK2 uses 48 kHz native with no resample. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) and prevents a Windows shared-mode mix rate from bypassing the device-domain bridge.</p>
-<p>The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as <code class="scope-code">queue_drops</code> in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy RF acceptance run therefore requires <code class="scope-code">decode_fail=0</code>, <code class="scope-code">write_err=0</code>, <code class="scope-code">queue_drops=0</code>, and <code class="scope-code">non_owner_drops=0</code>; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds.</p>
+<p>The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as <code class="scope-code">queue_drops</code> in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy RF acceptance run therefore requires <code class="scope-code">decode_fail=0</code>, <code class="scope-code">write_err=0</code>, <code class="scope-code">queue_drops=0</code>, and <code class="scope-code">non_owner_drops=0</code>; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds. Startup and stream-open logs identify the selected device index/name, PortAudio host API, advertised default rate, actual opened rate, and channel count; IC-7300/MK2 should report <code class="scope-code">actual=48000Hz</code> for both RX and TX.</p>
 <h2 id="spectrum-signal-chain">9.5 Spectrum Signal Chain</h2>
 <h3 id="real-scope-path-ft4222-spi-for-ft-710-ci-v-0x27-for-ic-7300mk2">9.5.1 Real Scope Path (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2)</h3>
 <p>FT-710: FT4222 SPI → <code class="scope-code">scope_pipe.py</code> subprocess → 850-point wf1/wf2 → <code class="scope-code">ScopeHandler</code>.</p>
-<p>IC-7300/MK2: CI-V 0x27 frames → <code class="scope-code">civ_controller.py</code> demux → 475-bin scale/upsample to 850 → <code class="scope-code">ScopeHandler</code>.</p>
+<p>IC-7300/MK2: startup/reconnect sends scope display ON (<code class="scope-code">27 10 01</code>), Center mode, span, then waveform-data output ON (<code class="scope-code">27 11 01</code>). CI-V <code class="scope-code">27 00</code> frames → <code class="scope-code">civ_controller.py</code> demux → bounded 44-segment queue (four complete 11-segment USB waveforms, drop oldest on overflow) → 475-bin scale/upsample to 850 → <code class="scope-code">ScopeHandler</code>. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.</p>
 <figure>
 <img src="diagrams/spectrum-paths.svg" alt="Spectrum Paths" />
 <figcaption aria-hidden="true">Spectrum Paths</figcaption>
@@ -195,11 +195,11 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.27 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>
 
-<script src="../js/scope.js?v=2" defer></script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

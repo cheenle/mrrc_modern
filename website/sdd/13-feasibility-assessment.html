@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/scope.css?v=2">
-    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=2">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
+    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .sdd-layout {
@@ -124,12 +124,12 @@
 <tr>
 <td>CAT/CI-V control feasibility</td>
 <td>High</td>
-<td>FT-710 CAT and IC-7300 CI-V command sets implemented and tested via pyserial</td>
+<td>FT-710 CAT is field-tested; IC-7300/MK2 CI-V frame construction/parsing is conformance-tested against Icom manuals, with physical-radio ACK/timing acceptance pending</td>
 </tr>
 <tr>
 <td>Spectrum feasibility</td>
 <td>High</td>
-<td>Dual-mode real scope + S-meter fallback working for both FT-710 (FT4222) and IC-7300/MK2 (CI-V 0x27)</td>
+<td>FT-710 FT4222 is field-tested; IC-7300/MK2 CI-V 0x27 activation, parsing, and queue behavior are software-tested, with physical waveform cadence pending</td>
 </tr>
 <tr>
 <td>RX audio feasibility</td>
@@ -254,9 +254,9 @@
 <tbody>
 <tr>
 <td>A1</td>
-<td>Selected radio connected via USB with correct serial parameters (FT-710 Enhanced COM Port at 38400 baud; IC-7300 CI-V at 115200 8N1)</td>
+<td>Selected radio connected via USB with correct serial parameters (FT-710 Enhanced COM Port at 38400 baud; IC-7300 CI-V at explicit 115200 8N1 with USB port unlinked from [REMOTE])</td>
 <td>High</td>
-<td>Backend ID response</td>
+<td>Backend ID response; physical-radio acceptance checklist</td>
 </tr>
 <tr>
 <td>A2</td>
@@ -358,6 +358,34 @@
 <td>Open</td>
 <td>Server-side payload validation; keep <code class="scope-code">.bak</code> copy before overwrite</td>
 </tr>
+<tr>
+<td>I8</td>
+<td><code class="scope-code">serve_static</code> path traversal — <code class="scope-code">STATIC_DIR / path</code> (server.py) builds the response path from the request URL without <code class="scope-code">resolve()</code> + containment check, so an authenticated non-browser client can read arbitrary server-readable files (e.g. <code class="scope-code">GET /../server.py</code>, cert keys). Browsers normalize <code class="scope-code">..</code>, so exposure is raw-HTTP clients.</td>
+<td>High</td>
+<td>Open</td>
+<td>Resolve the joined path and reject unless <code class="scope-code">is_relative_to(STATIC_DIR)</code> before <code class="scope-code">FileResponse</code>; add a regression test</td>
+</tr>
+<tr>
+<td>I9</td>
+<td>Login password compared with <code class="scope-code">!=</code> (non-constant-time, timing side channel) and a weak default password only logs a warning — a fresh install that skips the warning is effectively open.</td>
+<td>Medium</td>
+<td>Open</td>
+<td>Switch to <code class="scope-code">hmac.compare_digest</code>; escalate weak-password handling (first-login forced change or startup banner); consider shrinking the 30-day auth cookie</td>
+</tr>
+<tr>
+<td>I10</td>
+<td>Web client audio/spectrum subchannels (<code class="scope-code">/WSaudioRX</code>, <code class="scope-code">/WSaudioTX</code>, <code class="scope-code">/WSspectrum</code>) have no independent reconnect — only <code class="scope-code">/WSradio</code> auto-reconnects, so a transient drop yields “controls alive but audio dead” until the control channel also cycles.</td>
+<td>Medium</td>
+<td>Open</td>
+<td>Give each subchannel its own exponential-backoff reconnect (pattern exists in <code class="scope-code">static/modules/atr1000.js</code>)</td>
+</tr>
+<tr>
+<td>I11</td>
+<td>iOS app PTT release race (P0 in docs/IOS_APP_ANALYSIS.md): <code class="scope-code">DragGesture.onEnded</code> sends <code class="scope-code">ptt:false</code> only when the server echo already shows <code class="scope-code">tx_status &gt; 0</code>, and there is no client watchdog/scenePhase guard — fast taps over WAN can leave the radio keyed up. Approved PTTManager fix design not yet implemented (0/N tasks).</td>
+<td>High</td>
+<td>Open</td>
+<td>Implement unconditional release on gesture end + 500 ms×3 watchdog + scenePhase force-release (mirror FT710Android <code class="scope-code">PTTManager</code>)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="dependencies">13.5 Dependencies</h2>
@@ -434,18 +462,18 @@
 </tbody>
 </table>
 <h2 id="feasibility-conclusion">13.6 Feasibility Conclusion</h2>
-<p>MRRC Modern is fully feasible and production-ready for remote operation of supported radios. All core capabilities — backend-specific control (Yaesu CAT / Icom CI-V), bidirectional audio with Opus compression, real-time spectrum waterfall (dual-mode real scope + S-meter fallback), multi-meter telemetry, memory channels, session authentication, and comprehensive PTT safety — are implemented and verified for both the FT-710 and IC-7300/MK2 backends. The primary operational constraint is iOS requiring HTTPS for microphone access, solvable with a TLS reverse proxy. FT-710 FT4222 scope requires specific library setup but degrades gracefully to S-meter fallback; IC-7300/MK2 0x27 spectrum requires only the CI-V USB serial port.</p>
+<p>MRRC Modern is fully feasible for remote operation of supported radios. Core software paths — backend-specific control, bidirectional Opus audio, spectrum waterfall, meter telemetry, memories, authentication, and PTT safety — are implemented. FT-710 has field-test history; the IC-7300/MK2 CI-V byte formats and asynchronous behavior are conformance-tested without hardware, so physical USB enumeration, command ACK timing, scope cadence, RF/tuner/power behavior, and RX/TX audio quality remain acceptance items rather than verified claims. iOS still requires HTTPS for microphone access. FT-710 FT4222 scope requires its libraries and degrades to S-meter fallback; IC-7300/MK2 scope requires the CI-V USB port unlinked from [REMOTE] at an explicitly selected 115200 baud.</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.27 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>
 
-<script src="../js/scope.js?v=2" defer></script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

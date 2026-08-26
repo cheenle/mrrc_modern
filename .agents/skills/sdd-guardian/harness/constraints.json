@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sdd_version": "V2.26",
+  "sdd_version": "V2.27",
   "description": "Machine-readable constraint registry distilled from SDD/ (IBM TeamSD) and AGENTS.md for the mrrc_modern codebase. Consumed by sdd_context.py (context | check | hook). severity: block = reject the edit, warn = allow but surface, info = guidance shown in context output only.",
   "rules": [
     {

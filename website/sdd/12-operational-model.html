@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/scope.css?v=2">
-    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=2">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
+    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .sdd-layout {
@@ -116,7 +116,7 @@ MRRC Host
   → Uvicorn on 0.0.0.0:8888 (configurable via MRRC_WEB_HOST / MRRC_WEB_PORT)
   → Backend selected by MRRC_RADIO_MODEL (ft710 / ic7300 / ic7300mk2)
   → FT-710: Serial CAT via USB Enhanced COM Port (configurable via MRRC_SERIAL_PORT)
-  → IC-7300/MK2: CI-V via USB serial port (configurable via MRRC_SERIAL_PORT, 115200 8N1)
+  → IC-7300/MK2: CI-V via USB serial port (configurable via MRRC_SERIAL_PORT, backend default 115200 8N1)
   → FT-710 FT4222 SPI: internal FTDI chip (via scope_pipe subprocess)
   → IC-7300/MK2 CI-V 0x27 spectrum: on the same CI-V serial port
   → USB Audio: supported radio USB audio device (auto-detected by PyAudio)
@@ -132,8 +132,9 @@ Yaesu FT-710
 
 Icom IC-7300 / IC-7300MK2
   → USB connection to host
-  → USB CI-V serial port (115200 baud, 8N1, default address 0x94)
-  → 0x27 spectrum data on the same CI-V port
+  → Radio menu: CI-V USB Port = Unlink from [REMOTE]
+  → USB CI-V serial port (explicit 115200 baud, not Auto; IC-7300 default 0x94, MK2 default 0xB6)
+  → 0x27 spectrum data on the same CI-V port (display + data-output switches ON)
   → 48kHz native USB Audio interface</code></pre>
 <h2 id="configuration">12.2 Configuration</h2>
 <table class="scope-table">
@@ -158,7 +159,12 @@ Icom IC-7300 / IC-7300MK2
 <tr>
 <td><code class="scope-code">IC7300_CIV_ADDR</code></td>
 <td><code class="scope-code">0x94</code></td>
-<td>IC-7300/MK2 CI-V controller address (hex)</td>
+<td>IC-7300 CI-V radio address (hex)</td>
+</tr>
+<tr>
+<td><code class="scope-code">IC7300MK2_CIV_ADDR</code></td>
+<td><code class="scope-code">0xB6</code></td>
+<td>IC-7300MK2 CI-V radio address (hex)</td>
 </tr>
 <tr>
 <td><code class="scope-code">MRRC_SERIAL_PORT</code></td>
@@ -167,8 +173,8 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 <tr>
 <td><code class="scope-code">MRRC_BAUD_RATE</code></td>
-<td><code class="scope-code">38400</code></td>
-<td>CAT serial baud rate (FT-710 default; IC-7300 uses 115200 regardless)</td>
+<td>backend default</td>
+<td>CAT/CI-V baud: FT-710 <code class="scope-code">38400</code>; IC-7300/MK2 <code class="scope-code">115200</code>; an explicit value overrides the backend default</td>
 </tr>
 <tr>
 <td><code class="scope-code">MRRC_WEB_PORT</code></td>
@@ -264,13 +270,13 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 <tr>
 <td>IC-7300 mode</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py</code></td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py</code></td>
 <td>Icom IC-7300 backend (CI-V 115200 8N1)</td>
 </tr>
 <tr>
 <td>IC-7300MK2 mode</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py</code></td>
-<td>Icom IC-7300MK2 backend</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py</code></td>
+<td>Icom IC-7300MK2 backend (default CI-V address 0xB6)</td>
 </tr>
 <tr>
 <td>Custom port</td>
@@ -456,15 +462,15 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 <tr>
 <td>Verify scope</td>
-<td>FT-710: “scope_pipe: first frame received — spectrum active”; IC-7300: CI-V 0x27 frames demuxed</td>
+<td>FT-710: “scope_pipe: first frame received — spectrum active”; IC-7300: first confirm Unlink from [REMOTE] + explicit 115200, then check “CI-V scope: first complete waveform — spectrum active”; real frames broadcast at up to 30 Hz without duplicates</td>
 </tr>
 <tr>
 <td>Verify RX audio</td>
-<td>Open browser; listen for radio audio; check “RX …K” bitrate indicator</td>
+<td>Open browser; listen for radio audio; check “RX …K” and startup log fields <code class="scope-code">host</code>, <code class="scope-code">default</code>, <code class="scope-code">actual</code>, <code class="scope-code">channels</code> (IC-7300/MK2: <code class="scope-code">actual=48000Hz</code>)</td>
 </tr>
 <tr>
 <td>Verify TX audio</td>
-<td>Key PTT; speak; confirm on monitoring receiver</td>
+<td>Key PTT; speak; confirm on monitoring receiver and check TX open log (<code class="scope-code">actual=48000Hz</code> on IC-7300/MK2)</td>
 </tr>
 <tr>
 <td>Verify PTT safety</td>
@@ -558,7 +564,7 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 <tr>
 <td>CI-V 0x27 not arriving (IC-7300)</td>
-<td>Verify <code class="scope-code">IC7300_CIV_ADDR</code> matches radio; check CI-V port baud/8N1; falls back to S-meter</td>
+<td>Verify <code class="scope-code">CI-V USB Port = Unlink from [REMOTE]</code>, explicit 115200 (not Auto), and the model-specific CI-V address; run <code class="scope-code">_diag_ic7300_scope.py</code>; initialization enables both <code class="scope-code">27 10</code> display and <code class="scope-code">27 11</code> data output; the bounded queue drops oldest data rather than replaying stale frames</td>
 </tr>
 <tr>
 <td>Audio not working</td>
@@ -584,11 +590,11 @@ Icom IC-7300 / IC-7300MK2
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.27 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>
 
-<script src="../js/scope.js?v=2" defer></script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

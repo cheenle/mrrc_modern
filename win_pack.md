@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.11.0**（2026-08-23，菜单设置新增频谱/瀑布图高度调节，Windows 安装包版本同步至 1.11.0；构建产物 45,330,264 bytes，SHA-256 `10deb527a164e901a1331147340116f7d3bdea67421b6ffd72afc15f786def84`）。
+> 最新构建：**v1.12.0**（2026-08-26，IC-7300/MK2 运行可靠性及官方 CI-V 一致性加固；Win11 上 633 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,339,501 bytes，SHA-256 `e7d1e460c408a6da2c0f66f23002d48429fa0b46bfd933305b4f150cbcefade2`）。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 ## 1. 环境拓扑
@@ -160,7 +160,7 @@ Write-Host "BUILD_DONE"
 远程执行（约 3-5 分钟：439 个测试 → 3 个 PyInstaller spec → iscc）：
 
 ```bash
-ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_mrrc_v180.ps1'"
+ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_mrrc_v1120.ps1'"
 ```
 
 ⚠️ **别用 `C:\Users\cheenle\build_vm.ps1`**——它当前 `Set-Location C:\mrrc_ft8`，指向的是**另一个项目**
@@ -173,7 +173,7 @@ build.ps1 有 `Invoke-Checked` 闸门：测试或任何一步非零退出都会�
 ### Step 5 — 验证产物（在 VM 上）
 
 ```powershell
-dir C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe                    # v1.8.0: 36,888,086 bytes
+dir C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe                    # v1.12.0: 45,339,501 bytes
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\vendor\ftdi\windows\bin\x64 # 两个 DLL 都在
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\_internal\static\index.html # static 在 _internal
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\_internal\mem_channels.json # 初始频道种子
@@ -183,10 +183,10 @@ Get-FileHash C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe -Algorithm SHA256
 ### Step 6 — 取回本机
 
 ```bash
-ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_modern/dist/windows/MRRC-Modern-Setup.exe /tmp/MRRC-Modern-v1.8.0-Windows-x64-Setup.exe"
-scp ham.vlsc.net:/tmp/MRRC-Modern-v1.8.0-Windows-x64-Setup.exe dist/windows/
-shasum -a 256 dist/windows/MRRC-Modern-v1.8.0-Windows-x64-Setup.exe
-# v1.8.0: 36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea
+ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_modern/dist/windows/MRRC-Modern-Setup.exe /tmp/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe"
+scp ham.vlsc.net:/tmp/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe dist/windows/
+shasum -a 256 dist/windows/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe
+# v1.12.0: e7d1e460c408a6da2c0f66f23002d48429fa0b46bfd933305b4f150cbcefade2
 ```
 
 ## 4. 发布到网站（可选）
@@ -195,8 +195,8 @@ shasum -a 256 dist/windows/MRRC-Modern-v1.8.0-Windows-x64-Setup.exe
 
 ```bash
 mkdir -p website/downloads
-cp dist/windows/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe website/downloads/MRRC-Modern-Setup.exe
-cp dist/windows/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe website/downloads/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe
+cp dist/windows/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe website/downloads/MRRC-Modern-Setup.exe
+cp dist/windows/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe website/downloads/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe
 shasum -a 256 website/downloads/*.exe
 cd website
 ./deploy.sh
@@ -209,11 +209,11 @@ cd website
 - `docs/WINDOWS_INSTALLER_GUIDE.md`（Download 表格 + 构建说明段）
 - `README.md`、`CHANGELOG.md`、`SDD/README.md`、`SDD/14-version-history.md`
 
-验证两个 URL 都返回 200、`content-length: 45326245`，下载后的 SHA-256 都等于 `e69126ccb64387eb80eabdc38f046cb64a1a33094ef1e0771aba9553c1b17bc5`：
+验证两个 URL 都返回 200、`content-length: 45339501`，下载后的 SHA-256 都等于 `e7d1e460c408a6da2c0f66f23002d48429fa0b46bfd933305b4f150cbcefade2`：
 
 ```bash
 curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe
-curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.11.0-Windows-x64-Setup.exe
+curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe
 ```
 
 ## 5. 故障排查（本次踩过的坑）

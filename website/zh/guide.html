@@ -169,7 +169,7 @@
     </aside>
     <main class="guide-content">
 <blockquote class="callout-info">
-<p>适用于 MRRC Web Control（v1.10.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
+<p>适用于 MRRC Web Control（v1.11.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
 </blockquote>
 <hr />
 <h2 id="开始之前连接与登录">0. 开始之前：连接与登录</h2>
@@ -313,17 +313,20 @@ MRRC_WEB_PORT=8888
 MRRC_WEB_PASSWORD=change_this_password
 MRRC_AUDIO_RX_DEVICE=USB Audio
 MRRC_AUDIO_TX_DEVICE=USB Audio
-# 若电台的 CI-V 地址不是默认 0x94，用下面这行覆盖：
+# IC-7300 地址覆盖（默认 0x94）：
 #IC7300_CIV_ADDR=0x94
+# IC-7300MK2 地址覆盖（默认 0xB6）：
+#IC7300MK2_CIV_ADDR=0xB6
 # IC-7300 用 CI-V 0x27 频谱，无需 FTDI 库——删掉/注释 MRRC_FTDI_LIB_DIR</code></pre>
 <p><strong>电台侧设置</strong>（面板菜单，开机时设置一次）：</p>
 <ul>
-<li><code>CI-V USB Baud Rate</code> = <strong>115200</strong>（<code>MRRC_BAUD_RATE</code> 必须一致）。</li>
-<li><code>CI-V USB Address</code> = <strong>94h</strong>（默认即可，与 <code>IC7300_CIV_ADDR</code> 一致）。</li>
-<li>建议开启 <code>CI-V Transceive</code>（连接时服务端会自动发送开启命令）。</li>
+<li><code>CI-V USB Port</code> = <strong>Unlink from [REMOTE]</strong>。</li>
+<li><code>CI-V USB Baud Rate</code> = <strong>115200</strong>，必须明确选择 115200，不能保留 <code>Auto</code>；Icom 规定 <code>27 11</code> 波形输出仅在 Unlink + 115200 下可设置。选择 <code>ic7300</code>/<code>ic7300mk2</code> 后服务端默认即为 115200；显式设置 <code>MRRC_BAUD_RATE</code> 时必须一致。</li>
+<li><code>CI-V Address</code>：IC-7300 默认 <strong>94h</strong>（<code>IC7300_CIV_ADDR</code>）；IC-7300MK2 默认 <strong>B6h</strong>（<code>IC7300MK2_CIV_ADDR</code>）。</li>
+<li>建议开启 <code>CI-V Transceive</code>（连接时服务端会按型号自动发送开启命令：IC-7300 项目 0071，MK2 项目 0089）。</li>
 </ul>
-<p><strong>音频</strong>：IC-7300 的 USB 音频是 <strong>48 kHz 原生</strong>，服务端直接透传，<strong>无需重采样</strong>。Windows 下该声卡以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code> 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 填 <code>USB Audio</code> 即可同时匹配两种形式。</p>
-<p><strong>频谱</strong>：来自 CI-V <code>0x27</code> 帧，走 CAT 串口，<strong>不需要 FT4222</strong>。默认跨度 ±100 kHz，可在菜单的 SPAN 下拉调整。</p>
+<p><strong>音频</strong>：IC-7300 的 USB 音频是 <strong>48 kHz 原生</strong>，服务端直接透传，<strong>无需重采样</strong>。Windows 下该声卡以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code> 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 填 <code>USB Audio</code> 即可同时匹配两种形式。启动及 RX/TX 打开日志会列出 <code>host</code>、<code>default</code>、<code>actual</code>、<code>channels</code>；IC 正常值应为 <code>actual=48000Hz</code>。</p>
+<p><strong>频谱</strong>：来自 CI-V <code>0x27</code> 帧，走 CAT 串口，<strong>不需要 FT4222</strong>。启动时依次发送 Scope Display ON（<code>27 10 01</code>）、Center、±100 kHz Span、Data Output ON（<code>27 11 01</code>）；两个 ON 开关缺一不可。分片队列最多保留 44 个片段，积压时丢弃最旧数据；WebSocket 以 30 Hz 调度且只发送新完成的真实帧。菜单 SPAN 可调跨度，SPD 对 IC 只提供 FAST/MID/SLOW。</p>
 <p><strong>验证清单</strong>：</p>
 <ol type="1">
 <li>状态栏 ●Serial 变绿。</li>
@@ -380,7 +383,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tbody>
 <tr>
 <td>我该选 <code>ft710</code>、<code>ic7300</code> 还是 <code>ic7300mk2</code>？</td>
-<td>看你手头的电台：Yaesu FT-710 用 <code>ft710</code>；Icom IC-7300 用 <code>ic7300</code>；IC-7300MK2 用 <code>ic7300mk2</code>（CI-V 指令面与 7300 相同）。</td>
+<td>看你手头的电台：Yaesu FT-710 用 <code>ft710</code>；Icom IC-7300 用 <code>ic7300</code>；IC-7300MK2 用 <code>ic7300mk2</code>。MK2 默认地址为 0xB6，且 Transceive 菜单项与普通 7300 不同，不能混选。</td>
 </tr>
 <tr>
 <td>换了一台电台，要重装软件吗？</td>
@@ -408,7 +411,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>IC-7300：瀑布图不动</td>
-<td>检查频谱是否停用：菜单里确保 CI-V <code>0x27</code> scope 数据输出开启；<code>MRRC_SERIAL_PORT</code> 若是错误的 COM 口也会导致无频谱。</td>
+<td>确认 <code>CI-V USB Port=Unlink from [REMOTE]</code>、<code>CI-V USB Baud Rate=115200</code>（不是 Auto）、CI-V 地址及 <code>MRRC_SERIAL_PORT</code>，再运行 <code>python _diag_ic7300_scope.py &lt;PORT&gt; 115200 0x94</code>（MK2 用 <code>0xB6</code>）；脚本会开启显示+数据输出，并在退出时关闭数据输出。</td>
 </tr>
 <tr>
 <td>状态栏出现红色「无声」</td>
@@ -926,7 +929,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>45</td>
 <td>SPD 下拉</td>
-<td>频谱刷新速度档 1–5（电台 <code>EX</code> scope speed）</td>
+<td>频谱刷新速度。FT-710 为 1–5；IC-7300/MK2 按 CI-V <code>27 1A</code> 仅显示 FAST/MID/SLOW</td>
 <td>选择后立即下发</td>
 </tr>
 <tr>

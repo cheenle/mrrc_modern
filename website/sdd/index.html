@@ -7,8 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../css/scope.css?v=2">
-    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=2">
+    <link rel="stylesheet" href="../css/scope.css?v=1">
+    <link rel="stylesheet" href="../css/mrrc_modern.scope.css?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .sdd-layout {
@@ -241,15 +241,15 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.23</td>
+<td>V2.27</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
-<td>2026-08-17</td>
+<td>2026-08-26</td>
 </tr>
 <tr>
 <td>Status</td>
-<td>v1.8.0 Windows Stable; FT710Android native client implemented (JVM tests green, device acceptance pending); IC-7300/MK2 backend implemented</td>
+<td>v1.12.0 Windows Stable published from a verified 633-test build; IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance and iOS P0 fixes pending; open issues I8–I11 tracked in §13.4</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -283,14 +283,14 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </table>
 <h2 id="system-at-a-glance">System at a Glance</h2>
 <pre class="scope-code text"><code>Browser (iPhone / Desktop / Tablet)
-  | HTTP + WebSocket: /WSradio /WSaudioRX /WSaudioTX /WSspectrum
+  | HTTP + WebSocket: /WSradio /WSaudioRX /WSaudioTX /WSspectrum (+optional /WSatr1000)
   v
 FastAPI/Uvicorn MRRC Server (server.py)
   | Pluggable backend selected by MRRC_RADIO_MODEL
   |   ft710: Serial CAT (USB Enhanced COM Port, 38400 baud) → Yaesu FT-710
   |          FT4222 SPI (scope_pipe subprocess) → real spectrum data
-  |   ic7300/ic7300mk2: USB CI-V serial (115200 8N1, addr 0x94) → Icom IC-7300/MK2
-  |                     CI-V 0x27 spectrum on the same port
+  |   ic7300/ic7300mk2: USB CI-V serial (115200 8N1, addr 0x94/0xB6) → Icom IC-7300/MK2
+  |                     CI-V 0x27 spectrum on the same port (display+data enabled; 44-segment newest-data queue)
   | PyAudio (USB Audio device) → RX/TX audio capture/playback
   | Opus codec (libopus) → compressed audio transport
   v
@@ -378,11 +378,11 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.20 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.27 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>
 
-<script src="../js/scope.js?v=2" defer></script>
+<script src="../js/scope.js?v=1" defer></script>
 </body>
 </html>

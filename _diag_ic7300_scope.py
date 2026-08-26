@@ -56,17 +56,21 @@ def main() -> None:
     port = sys.argv[1] if len(sys.argv) > 1 else os.environ.get(
         "MRRC_SERIAL_PORT", "COM3"
     )
-    baud = int(
+    baud_text = (
         sys.argv[2]
         if len(sys.argv) > 2
         else os.environ.get("MRRC_BAUD_RATE", "115200")
     )
-    civ_to = int(
+    civ_addr_text = (
         sys.argv[3]
         if len(sys.argv) > 3
-        else os.environ.get("IC7300_CIV_ADDR", "0x94"),
-        16,
+        else os.environ.get("IC7300_CIV_ADDR", "0x94")
     )
+    try:
+        baud = int(baud_text)
+        civ_to = int(civ_addr_text, 16)
+    except (TypeError, ValueError) as exc:
+        sys.exit(f"FAIL: invalid baud or CI-V address: {exc}")
 
     print(
         f"Opening {port} @ {baud} baud, controller addr "

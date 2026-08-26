@@ -2,6 +2,43 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.12.0] — 2026-08-26 — IC-7300 runtime reliability and official CI-V conformance + Windows installer
+
+### Added
+- Official IC-7300/IC-7300MK2 CI-V byte vectors and virtual-serial regression
+  coverage for scope initialization, SCROLL-C metadata, model-specific
+  Transceive settings, power commands, ALC calibration, and scope speed limits.
+- Audio startup/open diagnostics now include device index and name, PortAudio
+  host API, default rate, actual rate, and channel count.
+
+### Fixed
+- Backend-aware serial defaults now keep FT-710 at 38400 baud while selecting
+  115200 baud for IC-7300 and IC-7300MK2 unless explicitly overridden.
+- CI-V scope data uses a bounded 44-segment newest-data queue; spectrum
+  scheduling runs at 30 Hz and sends real data only when the hardware frame
+  counter advances, avoiding stale-frame catch-up and duplicate broadcasts.
+- `_diag_ic7300_scope.py` now reuses the production checksum-free codec/parser,
+  validates baud/address input, reads PTT without keying the radio, and disables
+  scope data output on exit.
+- Scope initialization sends display ON (`27 10 01`) before data output ON
+  (`27 11 01`), with SCROLL-C decoded as low/high frequency edges.
+- IC-7300 and MK2 select their documented Transceive items (`0071` / `0089`)
+  by model rather than CI-V address. Online health uses documented frequency
+  query `03`; power-on `18 01` uses the baud-dependent Icom `FE` preamble.
+- IC ALC raw value 120 now maps to 100%; FT-710 keeps its raw/255 mapping.
+- IC scope speed capabilities and UI are limited to FAST/MID/SLOW.
+
+### Tests
+- Hardware-independent suite expanded to **633 tests across 31 modules** and
+  passes on macOS before packaging. These tests verify software protocol and
+  state behavior; real USB enumeration, radio ACK timing, RF operation, tuner
+  behavior, power cycling, and RX/TX audio quality still require physical-radio
+  acceptance.
+
+### Packaging
+- Windows installer version bumped to **1.12.0**
+  (`packaging/windows/MRRC-Modern.iss`).
+
 ## [v1.11.0] — 2026-08-23 — User-configurable spectrum and waterfall heights + v1.11.0 Windows installer
 
 ### Added

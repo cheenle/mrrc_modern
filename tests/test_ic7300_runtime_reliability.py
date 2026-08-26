@@ -11,6 +11,8 @@ import unittest
 from unittest.mock import patch
 
 from audio_handler import AudioHandler
+from backends.ic7300.backend import DEFAULT_SCOPE_SPAN, IC7300Backend
+from backends.ic7300.civ_codec import build_frame
 from backends.ic7300.civ_controller import CivController
 import server
 
@@ -134,6 +136,56 @@ class AudioDeviceDiagnosticsTests(unittest.TestCase):
         handler = AudioHandler.__new__(AudioHandler)
         handler._pa = _FakePyAudioForDiagnostics(missing_host=True)
         self.assertIn("host=unknown", handler._device_summary(0, 48000, 1))
+
+
+class _RecordingScopeCiv:
+    connected = True
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    async def set_scope_on(self, on: bool) -> None:
+        self.calls.append(("display", on))
+
+    async def set_scope_mode(self, mode: int) -> None:
+        self.calls.append(("mode", mode))
+
+    async def set_scope_span(self, span: int) -> None:
+        self.calls.append(("span", span))
+
+    async def set_scope_data_output(self, on: bool) -> None:
+        self.calls.append(("data", on))
+
+
+class ScopeActivationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_backend_enables_display_before_data_output(self) -> None:
+        backend = IC7300Backend("/dev/null")
+        fake = _RecordingScopeCiv()
+        backend._civ = fake
+
+        await backend.init_scope()
+
+        self.assertEqual(
+            fake.calls,
+            [
+                ("display", True),
+                ("mode", 0),
+                ("span", DEFAULT_SCOPE_SPAN),
+                ("data", True),
+            ],
+        )
+
+    def test_diagnostic_scope_frames_match_official_order(self) -> None:
+        diag = IC7300DiagnosticProtocolTests._diag()
+        self.assertEqual(
+            diag.scope_enable_frames(0x94),
+            [
+                build_frame(0x27, b"\x10\x01", to=0x94),
+                build_frame(0x27, b"\x14\x00", to=0x94),
+                build_frame(0x27, b"\x15\x05", to=0x94),
+                build_frame(0x27, b"\x11\x01", to=0x94),
+            ],
+        )
 
 
 class IC7300DiagnosticProtocolTests(unittest.TestCase):

@@ -4,8 +4,8 @@ IC-7300 CI-V scope diagnostics (one-shot, no hardware in CI)
 Answers three questions on a live radio WITHOUT the server running:
 
   1. What is the radio's real CI-V address?  (frames from the radio)
-  2. Does 27 11 01 (scope data output ON) actually start a sustained
-     0x27 0x00 segment stream?  (counts segments over 4 seconds)
+  2. Do 27 10 01 (display ON) plus 27 11 01 (data output ON) start a
+     sustained 0x27 0x00 segment stream?  (counts segments over 4 seconds)
   3. Do addressed queries get answered?  (0x03 frequency read)
 
 Usage:
@@ -19,8 +19,10 @@ Protocol facts (Icom CI-V):
     frame   = FE FE to from cmd data... FD (no checksum byte)
     from    = 0xE0 = controller; to = 0x94 = IC-7300 default
     0x03    = read frequency (responds only if `to` matches the radio)
-    0x27 0x11 01 = scope data output ON   (0x27 0x10 = display only)
+    0x27 0x10 01 = scope display ON (required for waveform output)
+    0x27 0x11 01 = scope data output ON
     0x27 0x14 00 = scope mode center
+    0x27 0x15 05 = scope span ±100 kHz
     0x27 0x00    = scope waveform segment stream (radio pushes these)
     0xFB / 0xFA  = OK / NG acknowledgements
 
@@ -47,6 +49,16 @@ from backends.ic7300.civ_codec import (
 
 CONTROLLER_ADDR = 0xE0
 WINDOW_S = 4.0
+
+
+def scope_enable_frames(civ_to: int) -> list[bytes]:
+    """Return the documented Center-mode scope activation sequence."""
+    return [
+        build_frame(0x27, b"\x10\x01", to=civ_to),
+        build_frame(0x27, b"\x14\x00", to=civ_to),
+        build_frame(0x27, b"\x15\x05", to=civ_to),
+        build_frame(0x27, b"\x11\x01", to=civ_to),
+    ]
 
 
 def main() -> None:
@@ -98,14 +110,14 @@ def main() -> None:
     try:
         ser.reset_input_buffer()
 
-        # Probe set: frequency read, PTT read, scope output ON, center mode.
+        # Probe set: frequency read, PTT read, then complete scope activation.
         # PTT is read-only: this script never sends a key-up command.
         ser.write(build_frame(0x03, to=civ_to))
         time.sleep(0.3)
         ser.write(build_frame(0x1C, bytes((0x00,)), to=civ_to))
         time.sleep(0.3)
-        ser.write(build_frame(0x27, bytes((0x11, 0x01)), to=civ_to))
-        ser.write(build_frame(0x27, bytes((0x14, 0x00)), to=civ_to))
+        for frame in scope_enable_frames(civ_to):
+            ser.write(frame)
         ser.flush()
 
         started = time.monotonic()
@@ -209,8 +221,9 @@ def main() -> None:
             print("Frequency query answered -> address + baud are correct.")
         if counts["scope_seg"] == 0:
             print(
-                "NO scope stream after 27 11 01 -> radio menu 'CI-V Output' "
-                "must be 'Scope' (MENU > Set > Connectors > CI-V > CI-V Output)."
+                "NO scope stream after 27 10 01 + 27 11 01 -> set "
+                "CI-V USB Port to Unlink from [REMOTE] and CI-V USB Baud "
+                "Rate explicitly to 115200 (not Auto)."
             )
         elif counts["scope_seg"] < 10:
             print(

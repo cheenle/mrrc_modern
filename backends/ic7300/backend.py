@@ -237,9 +237,8 @@ class IC7300Backend(RadioBackend):
     async def init_scope(self) -> None:
         """Enable the CI-V scope stream (called at startup + on reconnect).
 
-        Sequence: center mode (27 14 00) → default span (27 15) → scope
-        data output ON (27 11 01 — the switch that starts the 0x27 0x00
-        waveform segments; 27 10 only toggles the radio's own display).
+        Icom requires both scope display ON (27 10 01) and waveform-data
+        output ON (27 11 01). Configure Center mode and span between them.
         """
         civ = self._civ
         if not civ.connected:
@@ -252,6 +251,7 @@ class IC7300Backend(RadioBackend):
             logger.warning("CAT not connected — scope-init unavailable")
             return
         for desc, coro in (
+            ("display on", civ.set_scope_on(True)),
             ("center mode", civ.set_scope_mode(0)),
             ("default span", civ.set_scope_span(DEFAULT_SCOPE_SPAN)),
             ("data output on", civ.set_scope_data_output(True)),

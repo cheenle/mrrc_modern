@@ -8,7 +8,7 @@
 
 **Tech stack:** Python 3.13, `unittest`/`IsolatedAsyncioTestCase`, `unittest.mock`, asyncio, pyserial abstraction, FastAPI backend interfaces, vanilla JavaScript, SDD Guardian.
 
-**Execution status:** Task 1 complete; Tasks 2–7 pending.
+**Execution status:** Tasks 1–2 complete; Tasks 3–7 pending.
 
 ---
 

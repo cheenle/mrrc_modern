@@ -30,7 +30,7 @@ from backends.ic7300.config_ic7300 import (
     FIL_DEFAULT_WIDTHS_HZ, SCOPE_SPANS, CIV_ADDR, MK2_CIV_ADDR,
     get_band_for_frequency,
     raw_to_dbm, raw_to_s_unit, raw_to_power, raw_to_swr,
-    raw_to_voltage, raw_to_current,
+    raw_to_alc_pct, raw_to_voltage, raw_to_current,
 )
 from config import NARROW_MODES
 
@@ -144,6 +144,7 @@ class IC7300Backend(RadioBackend):
             "raw_to_s_unit": raw_to_s_unit,
             "raw_to_power": raw_to_power,
             "raw_to_swr": raw_to_swr,
+            "raw_to_alc_pct": raw_to_alc_pct,
             "raw_to_voltage": raw_to_voltage,
             "raw_to_current": raw_to_current,
         }

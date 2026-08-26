@@ -188,6 +188,11 @@ def raw_to_alc(raw: int) -> float:
     return _interp(raw, ALC_CAL)
 
 
+def raw_to_alc_pct(raw: int) -> float:
+    """ALC raw -> 0..100%, clamped at the official raw-120 limit."""
+    return max(0.0, min(100.0, raw_to_alc(raw) * 100.0))
+
+
 def raw_to_comp(raw: int) -> float:
     """COMP raw 0-255 -> compression dB."""
     return _interp(raw, COMP_CAL)

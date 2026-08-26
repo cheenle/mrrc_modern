@@ -22,6 +22,11 @@ from backends.ft710.config_ft710 import (
 )
 
 
+def _default_alc_pct(raw: int) -> float:
+    """Preserve the FT-710 ALC raw 0..255 percentage scale."""
+    return max(0.0, min(100.0, raw / 255.0 * 100.0))
+
+
 def _default_tables() -> dict:
     """Default (FT-710) radio tables for RadioState derived properties."""
     return {
@@ -34,6 +39,7 @@ def _default_tables() -> dict:
         "raw_to_s_unit": raw_to_s_unit,
         "raw_to_power": raw_to_power,
         "raw_to_swr": raw_to_swr,
+        "raw_to_alc_pct": _default_alc_pct,
         "raw_to_voltage": raw_to_voltage,
         "raw_to_current": raw_to_current,
     }
@@ -152,7 +158,8 @@ class RadioState:
         Recognized keys (see backends.base.RadioBackend.state_tables):
         mode_num_to_name, preamp_labels, attenuator_labels,
         get_band_for_frequency, get_filter_hz, raw_to_dbm, raw_to_s_unit,
-        raw_to_power, raw_to_swr, raw_to_voltage, raw_to_current.
+        raw_to_power, raw_to_swr, raw_to_alc_pct, raw_to_voltage,
+        raw_to_current.
         Unknown keys are ignored; omitted keys keep the FT-710 defaults.
         """
         for key, value in tables.items():
@@ -217,8 +224,8 @@ class RadioState:
 
     @property
     def alc_pct(self) -> float:
-        """ALC deflection as 0-100% (RM4 raw 0-255)."""
-        return max(0.0, min(100.0, self.alc_meter / 255.0 * 100.0))
+        """Backend-calibrated ALC deflection as 0-100%."""
+        return self._tables["raw_to_alc_pct"](self.alc_meter)
 
     @property
     def filter_hz(self) -> Optional[int]:

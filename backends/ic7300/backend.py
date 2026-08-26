@@ -19,17 +19,18 @@ from typing import Awaitable, Callable, Optional
 
 from backends.base import RadioBackend, RadioCapabilities, ScopeProducer
 from backends.ic7300.civ_controller import (
-    CivController, CMD_LEVEL, CMD_POWER,
+    CivController, CMD_LEVEL,
     LVL_AF, LVL_RF_GAIN, LVL_SQL, LVL_RF_POWER, LVL_MIC,
+    SETMODE_CIV_TRANSCEIVE_ON, SETMODE_CIV_TRANSCEIVE_MK2,
     SW_PREAMP, SW_NB, SW_NR, SW_COMP,
 )
 from backends.ic7300.civ_scope import CivScopeProducer
 from backends.ic7300.config_ic7300 import (
     BANDS, MODE_NUM_TO_NAME, MODE_NAME_TO_NUM, PREAMP_LABELS,
-    FIL_DEFAULT_WIDTHS_HZ, SCOPE_SPANS, MK2_CIV_ADDR,
+    FIL_DEFAULT_WIDTHS_HZ, SCOPE_SPANS, CIV_ADDR, MK2_CIV_ADDR,
     get_band_for_frequency,
     raw_to_dbm, raw_to_s_unit, raw_to_power, raw_to_swr,
-    raw_to_voltage, raw_to_current,
+    raw_to_alc_pct, raw_to_voltage, raw_to_current,
 )
 from config import NARROW_MODES
 
@@ -61,7 +62,12 @@ class IC7300Backend(RadioBackend):
     _display_name = "Icom IC-7300"
 
     def __init__(self, port: str, baud_rate: int = 115200):
-        self._civ = CivController(port, baud_rate)
+        self._civ = CivController(
+            port,
+            baud_rate,
+            civ_addr=CIV_ADDR,
+            transceive_cmd=SETMODE_CIV_TRANSCEIVE_ON,
+        )
 
     @property
     def capabilities(self) -> RadioCapabilities:
@@ -82,6 +88,7 @@ class IC7300Backend(RadioBackend):
             preamp_steps=("OFF", "AMP1", "AMP2"),
             scope_type="civ27",
             scope_spans=SCOPE_SPANS,
+            scope_speeds=("FAST", "MID", "SLOW"),
             tune_via="atu",
         )
 
@@ -138,6 +145,7 @@ class IC7300Backend(RadioBackend):
             "raw_to_s_unit": raw_to_s_unit,
             "raw_to_power": raw_to_power,
             "raw_to_swr": raw_to_swr,
+            "raw_to_alc_pct": raw_to_alc_pct,
             "raw_to_voltage": raw_to_voltage,
             "raw_to_current": raw_to_current,
         }
@@ -210,11 +218,9 @@ class IC7300Backend(RadioBackend):
         return None if v is None else bool(v)
 
     async def _get_power_on(self, timeout=None) -> Optional[bool]:
-        """Power query (0x18); no response while the radio is off."""
-        data = await self._civ._query_data(CMD_POWER, timeout=timeout)
-        if data is None or not data:
-            return None
-        return bool(data[0])
+        """Treat a documented frequency response as proof of power-on."""
+        freq = await self._civ.get_frequency(timeout=timeout)
+        return True if freq is not None else None
 
     async def _get_scope_on_bool(self, timeout=None) -> Optional[bool]:
         v = await self._civ.get_scope_on()
@@ -237,9 +243,8 @@ class IC7300Backend(RadioBackend):
     async def init_scope(self) -> None:
         """Enable the CI-V scope stream (called at startup + on reconnect).
 
-        Sequence: center mode (27 14 00) → default span (27 15) → scope
-        data output ON (27 11 01 — the switch that starts the 0x27 0x00
-        waveform segments; 27 10 only toggles the radio's own display).
+        Icom requires both scope display ON (27 10 01) and waveform-data
+        output ON (27 11 01). Configure Center mode and span between them.
         """
         civ = self._civ
         if not civ.connected:
@@ -252,6 +257,7 @@ class IC7300Backend(RadioBackend):
             logger.warning("CAT not connected — scope-init unavailable")
             return
         for desc, coro in (
+            ("display on", civ.set_scope_on(True)),
             ("center mode", civ.set_scope_mode(0)),
             ("default span", civ.set_scope_span(DEFAULT_SCOPE_SPAN)),
             ("data output on", civ.set_scope_data_output(True)),
@@ -514,13 +520,17 @@ class IC7300MK2Backend(IC7300Backend):
     """IC-7300MK2 — same CI-V surface as the IC-7300, different address.
 
     The MK2's factory CI-V address is 0xB6 (IC-7300MK2 CI-V Reference
-    frame diagram; hamlib ic7300.c), not the IC-7300's 0x94, and its
-    "CI-V Transceive" set-mode item is 0089, not 0071.  The controller
-    picks the transceive item from the address; this subclass supplies
-    the MK2 default (override via IC7300MK2_CIV_ADDR).  hw-verify.
+    frame diagram), not the IC-7300's 0x94, and its "CI-V Transceive"
+    set-mode item is 0089, not 0071. The model selects that item even
+    when the operator overrides IC7300MK2_CIV_ADDR.
     """
 
     _display_name = "Icom IC-7300MK2"
 
     def __init__(self, port: str, baud_rate: int = 115200):
-        self._civ = CivController(port, baud_rate, civ_addr=MK2_CIV_ADDR)
+        self._civ = CivController(
+            port,
+            baud_rate,
+            civ_addr=MK2_CIV_ADDR,
+            transceive_cmd=SETMODE_CIV_TRANSCEIVE_MK2,
+        )

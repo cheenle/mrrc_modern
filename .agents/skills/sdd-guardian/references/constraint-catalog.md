@@ -1,6 +1,6 @@
 # Constraint Catalog — mrrc_modern
 
-Human-readable companion to `harness/constraints.json` (SDD V2.23, 21 rules).
+Human-readable companion to `harness/constraints.json` (SDD V2.27, 21 rules).
 Each rule lists its severity, SDD source, and the incident or rationale that
 produced it. The JSON file is the machine-readable source of truth; keep the
 two in sync.

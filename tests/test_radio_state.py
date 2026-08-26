@@ -395,6 +395,21 @@ class RadioStateConfigureTests(unittest.TestCase):
         state.vfo_a_freq = 14_200_000
         self.assertEqual(state.band_name, "20m")
 
+    def test_ft710_default_alc_scale_is_unchanged(self):
+        state = RadioState(alc_meter=120)
+        self.assertAlmostEqual(state.alc_pct, 120 / 255 * 100)
+
+    def test_ic7300_alc_uses_official_full_scale(self):
+        from backends.ic7300.backend import IC7300Backend
+        state = RadioState()
+        state.configure(**IC7300Backend("/dev/null").state_tables())
+        state.alc_meter = 60
+        self.assertEqual(state.alc_pct, 50.0)
+        state.alc_meter = 120
+        self.assertEqual(state.alc_pct, 100.0)
+        state.alc_meter = 241
+        self.assertEqual(state.alc_pct, 100.0)
+
     def test_configure_switches_mode_and_band_tables(self):
         from backends.ic7300.config_ic7300 import (
             MODE_NUM_TO_NAME as IC_MODE_NUM_TO_NAME,

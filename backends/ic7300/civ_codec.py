@@ -312,8 +312,9 @@ def parse_scope_segment(frame: CivFrame) -> Optional[ScopeSegment]:
         data[1]  receiver: 0x00 = main (IC-7300 is single-receiver)
         data[2]  sequence number, BCD: 0x01..0x11
         data[3]  division maximum, BCD: 0x11 for USB serial, 0x01 for LAN
-        seq 1:   data[4] scope mode, data[5:10] center/low freq BCD,
-                 data[10:15] span/high freq BCD, data[15] out-of-range
+        seq 1:   data[4] scope mode; Center uses data[5:10] center
+                 frequency + data[10:15] half-span; Fixed/SCROLL-C/
+                 SCROLL-F use lower + upper edge; data[15] out-of-range
         seq >=2: data[4:] waveform bins (amplitudes 0..160)
     """
     if frame.command != SCOPE_CMD:
@@ -335,7 +336,7 @@ def parse_scope_segment(frame: CivFrame) -> Optional[ScopeSegment]:
         # Info chunk: decode mode + frequency range; bins normally empty.
         if len(d) >= 15:
             seg.scope_mode = d[4]
-            if seg.scope_mode in (SCOPE_MODE_CENTER, SCOPE_MODE_SCROLL_C):
+            if seg.scope_mode == SCOPE_MODE_CENTER:
                 seg.center_freq_hz = decode_freq_bcd(d[5:10])
                 seg.span_hz = decode_freq_bcd(d[10:15])
             else:

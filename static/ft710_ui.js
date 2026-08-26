@@ -605,6 +605,48 @@ function setStored(key, val) {
     FT710Settings.setCookie('ft710_' + key, String(val));
 }
 
+// Spectrum / waterfall canvas heights (pixels).  null means "use responsive
+// default" (mobile vs desktop CSS).  Stored so a user-chosen height survives
+// reloads; sliders in the off-canvas menu expose both values.
+function _getFftHeight() {
+    const v = getStored('fftHeight', null);
+    if (v !== null) {
+        const n = parseInt(v);
+        if (!isNaN(n) && n >= 20) return n;
+    }
+    return _isDesktopLayout() ? 40 : 22;
+}
+function _getWfHeight() {
+    const v = getStored('wfHeight', null);
+    if (v !== null) {
+        const n = parseInt(v);
+        if (!isNaN(n) && n >= 30) return n;
+    }
+    return _isDesktopLayout() ? 80 : 45;
+}
+function applyScopeHeights() {
+    const fftCanvas = document.getElementById('fft-canvas');
+    const wfCanvas = document.getElementById('waterfall-canvas');
+    if (!fftCanvas || !wfCanvas) return;
+    const fftH = _getFftHeight();
+    const wfH = _getWfHeight();
+    const fftChanged = fftCanvas.height !== fftH;
+    const wfChanged = wfCanvas.height !== wfH;
+    fftCanvas.style.height = fftH + 'px';
+    fftCanvas.height = fftH;
+    wfCanvas.style.height = wfH + 'px';
+    wfCanvas.height = wfH;
+    if (fftChanged) {
+        const ctx = fftCanvas.getContext('2d');
+        ctx.clearRect(0, 0, fftCanvas.width, fftH);
+    }
+    if (wfChanged) {
+        waterfallHistory = [];
+        const ctx = wfCanvas.getContext('2d');
+        ctx.clearRect(0, 0, wfCanvas.width, wfH);
+    }
+}
+
 // ── Color palettes (matching wfview QCustomPlot themes) ───────────
 const WF_PALETTES = {
     // Jet: black → dark blue → blue → cyan → green → yellow → red (classic)
@@ -713,16 +755,14 @@ function initWaterfall() {
     if (!canvas) return;
     const rect = canvas.parentElement.getBoundingClientRect();
     const w = Math.max(100, rect.width - 8); // Minimum 100px wide
-    const desktop = _isDesktopLayout();
     canvas.width = w;
-    canvas.height = desktop ? 80 : 45;
 
     // Size FFT canvas to match width
     const fftCanvas = document.getElementById('fft-canvas');
-    if (fftCanvas) {
-        fftCanvas.width = w;
-        fftCanvas.height = desktop ? 40 : 22;
-    }
+    if (fftCanvas) fftCanvas.width = w;
+
+    // Apply user-configured or responsive default heights
+    applyScopeHeights();
 
     waterfallHistory = [];
     waterfallInitialized = true;
@@ -751,8 +791,11 @@ window.addEventListener('resize', function() {
         if (!canvas || !waterfallInitialized) return;
         const rect = canvas.parentElement.getBoundingClientRect();
         const targetW = Math.max(100, rect.width - 8);
-        const targetH = _isDesktopLayout() ? 80 : 45;
-        if (Math.abs(canvas.width - targetW) > 4 || canvas.height !== targetH) {
+        const hasCustomHeight = getStored('fftHeight', null) !== null ||
+                                getStored('wfHeight', null) !== null;
+        const targetH = _getWfHeight();
+        if (Math.abs(canvas.width - targetW) > 4 ||
+            (!hasCustomHeight && canvas.height !== targetH)) {
             initWaterfall();
         }
     }, 250);
@@ -997,6 +1040,16 @@ function renderScopeSettings() {
     const ceilVal = document.getElementById('val-ceil');
     if (ceilSlider) ceilSlider.value = scopeCeil;
     if (ceilVal) ceilVal.textContent = scopeCeil;
+    const fftHeightSlider = document.getElementById('slider-fftheight');
+    const fftHeightVal = document.getElementById('val-fftheight');
+    const fftH = _getFftHeight();
+    if (fftHeightSlider) fftHeightSlider.value = fftH;
+    if (fftHeightVal) fftHeightVal.textContent = fftH;
+    const wfHeightSlider = document.getElementById('slider-wfheight');
+    const wfHeightVal = document.getElementById('val-wfheight');
+    const wfH = _getWfHeight();
+    if (wfHeightSlider) wfHeightSlider.value = wfH;
+    if (wfHeightVal) wfHeightVal.textContent = wfH;
     const canvas = document.getElementById('waterfall-canvas');
     if (canvas && canvas.width > 0) {
         // Rebuild the VFO-centred range — renderFreqScale requires it
@@ -1052,6 +1105,20 @@ function _rebuildSpanSelect(c) {
             sel.appendChild(opt);
         });
     sel.value = String(radioState.scope_span);
+
+    // Icom CI-V defines exactly FAST/MID/SLOW (00/01/02). Replace the
+    // five FT-710 fallback choices so invalid values cannot be sent.
+    const speedSel = document.getElementById('scope-speed-select');
+    if (speedSel && Array.isArray(c.scope_speeds) && c.scope_speeds.length) {
+        speedSel.innerHTML = '';
+        c.scope_speeds.forEach(function(name, idx) {
+            const opt = document.createElement('option');
+            opt.value = String(idx);
+            opt.textContent = name;
+            speedSel.appendChild(opt);
+        });
+        speedSel.value = String(radioState.scope_speed);
+    }
 }
 
 // ── Render All ──────────────────────────────────────────────────────
@@ -1313,6 +1380,38 @@ function initUI() {
         scopeCeil = parseInt(this.value);
         setStored('scopeCeil', scopeCeil);
     });
+
+    // Spectrum height slider: adjusts FFT plot canvas height
+    const fftHeightSlider = document.getElementById('slider-fftheight');
+    const fftHeightVal = document.getElementById('val-fftheight');
+    if (fftHeightSlider && fftHeightVal) {
+        const fftH = _getFftHeight();
+        fftHeightSlider.value = fftH;
+        fftHeightVal.textContent = fftH;
+        fftHeightSlider.addEventListener('input', function() {
+            fftHeightVal.textContent = this.value;
+        });
+        fftHeightSlider.addEventListener('change', function() {
+            setStored('fftHeight', parseInt(this.value));
+            applyScopeHeights();
+        });
+    }
+
+    // Waterfall height slider: adjusts waterfall canvas height
+    const wfHeightSlider = document.getElementById('slider-wfheight');
+    const wfHeightVal = document.getElementById('val-wfheight');
+    if (wfHeightSlider && wfHeightVal) {
+        const wfH = _getWfHeight();
+        wfHeightSlider.value = wfH;
+        wfHeightVal.textContent = wfH;
+        wfHeightSlider.addEventListener('input', function() {
+            wfHeightVal.textContent = this.value;
+        });
+        wfHeightSlider.addEventListener('change', function() {
+            setStored('wfHeight', parseInt(this.value));
+            applyScopeHeights();
+        });
+    }
 
     // NR/NB level sliders
     const nrSlider = document.getElementById('slider-nrlevel');

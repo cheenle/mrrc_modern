@@ -42,15 +42,21 @@ def _env_float(name: str, default: float) -> float:
 
 
 # ── Radio Model Selection ───────────────────────────────────────────
-# Backend key registered in backends/__init__.py ("ft710" is currently
-# the only backend).  Select with MRRC_RADIO_MODEL.
+# Backend key registered in backends/__init__.py. Select with
+# MRRC_RADIO_MODEL.
 RADIO_MODEL = os.environ.get("MRRC_RADIO_MODEL", "ft710").strip().lower()
+_DEFAULT_BAUD_BY_MODEL = {
+    "ft710": 38400,
+    "ic7300": 115200,
+    "ic7300mk2": 115200,
+}
+DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 
 # ── Serial Configuration ────────────────────────────────────────────
 # macOS default: /dev/cu.SLAB_USBtoUART  (FT-710 Enhanced COM Port)
 # Linux default: /dev/ttyUSB0
 SERIAL_PORT = _env("MRRC_SERIAL_PORT", "/dev/cu.SLAB_USBtoUART")
-BAUD_RATE = _env_int("MRRC_BAUD_RATE", 38400)
+BAUD_RATE = _env_int("MRRC_BAUD_RATE", DEFAULT_BAUD_RATE)
 SERIAL_TIMEOUT = _env_float("MRRC_SERIAL_TIMEOUT", 1.0)
 # Short per-query timeout for background pollers.  Bounds how long a
 # non-responding poll query can hold the serial lock (and thus block a

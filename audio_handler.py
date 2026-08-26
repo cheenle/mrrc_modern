@@ -160,16 +160,52 @@ class AudioHandler:
         if HAS_PYAUDIO:
             self._init_pyaudio()
 
+    def _device_summary(
+        self,
+        device_index: int,
+        actual_rate: int,
+        channels: int,
+    ) -> str:
+        """Describe the selected PortAudio device and its actual stream format."""
+        pa = self._pa
+        if pa is None:
+            return (
+                f"[{device_index}] unknown (host=unknown, default=0Hz, "
+                f"actual={actual_rate}Hz, channels={channels})"
+            )
+        info = pa.get_device_info_by_index(device_index)
+        host_name = "unknown"
+        try:
+            host_index = int(info["hostApi"])
+            host_info = pa.get_host_api_info_by_index(host_index)
+            host_name = str(host_info.get("name") or "unknown")
+        except Exception:
+            pass
+        default_rate = int(float(info.get("defaultSampleRate", 0)))
+        return (
+            f"[{device_index}] {info.get('name', '')} "
+            f"(host={host_name}, default={default_rate}Hz, "
+            f"actual={actual_rate}Hz, channels={channels})"
+        )
+
     def _init_pyaudio(self):
         """Initialize PyAudio and list available devices."""
         try:
-            self._pa = pyaudio.PyAudio()
+            pa = pyaudio.PyAudio()
+            self._pa = pa
             logger.info("PyAudio initialized. Available devices:")
-            for i in range(self._pa.get_device_count()):
-                info = self._pa.get_device_info_by_index(i)
+            for i in range(pa.get_device_count()):
+                info = pa.get_device_info_by_index(i)
+                host_name = "unknown"
+                try:
+                    host_index = int(info["hostApi"])
+                    host_info = pa.get_host_api_info_by_index(host_index)
+                    host_name = str(host_info.get("name") or "unknown")
+                except Exception:
+                    pass
                 logger.info(
-                    "  [%d] %s (in=%d, out=%d, rate=%d)",
-                    i, info['name'],
+                    "  [%d] %s (host=%s, in=%d, out=%d, default=%dHz)",
+                    i, info['name'], host_name,
                     info.get('maxInputChannels', 0),
                     info.get('maxOutputChannels', 0),
                     int(info.get('defaultSampleRate', 0)),
@@ -203,7 +239,7 @@ class AudioHandler:
         """Find a suitable input device.
 
         Priority:
-        1. Explicit device index/name from config (env FT710_AUDIO_RX_DEVICE)
+        1. Explicit device index/name from config (env MRRC_AUDIO_RX_DEVICE)
         2. Name match: radio-specific hints (self._radio_hints, from the
            backend capabilities — FT-710 default: "FT-710"/"FT710"/"YAESU")
         3. Name match: USB_AUDIO_NAME_HINTS — the radio's built-in USB
@@ -258,7 +294,7 @@ class AudioHandler:
         # entry opens the same hardware, so the first match is safe. When
         # several *distinct* codec devices exist (e.g. an external digimode
         # interface), warn and let the operator lock the choice via
-        # FT710_AUDIO_RX_DEVICE.
+        # MRRC_AUDIO_RX_DEVICE.
         codec_matches = []  # (index, name, has_output)
         for i in range(self._pa.get_device_count()):
             info = self._pa.get_device_info_by_index(i)
@@ -276,12 +312,11 @@ class AudioHandler:
             # APIs share duplex-ness, so first match still wins among them.
             full_duplex = [m for m in codec_matches if m[2]]
             idx, name, _ = (full_duplex or codec_matches)[0]
-            logger.info("Using USB audio input (FT-710 built-in sound card): [%d] %s",
-                        idx, name)
+            logger.info("Using radio USB audio input: [%d] %s", idx, name)
             if len(codec_matches) > 1:
                 logger.warning(
                     "Multiple USB audio inputs: %s — using [%d]. If RX "
-                    "picks the wrong one, set FT710_AUDIO_RX_DEVICE to the index "
+                    "picks the wrong one, set MRRC_AUDIO_RX_DEVICE to the index "
                     "from the startup device list.",
                     ', '.join(f"[{i}] {n}" for i, n, _ in codec_matches), idx)
             return idx
@@ -296,7 +331,7 @@ class AudioHandler:
                 mono_candidates.append((i, info.get('name', '')))
         if mono_candidates:
             idx, name = mono_candidates[0]
-            logger.info("Using mono audio input (likely FT-710): [%d] %s", idx, name)
+            logger.info("Using mono audio input (likely radio): [%d] %s", idx, name)
             if len(mono_candidates) > 1:
                 logger.info("  Other mono candidates: %s",
                             ', '.join(f"[{i}] {n}" for i, n in mono_candidates[1:]))
@@ -335,11 +370,15 @@ class AudioHandler:
                     stream_callback=None,  # We'll read in the asyncio loop
                 )
                 self._rx_running = True
-                dev_info = self._pa.get_device_info_by_index(dev)
-                logger.info("RX audio started: [%d] %s @ %d Hz (%s)",
-                            dev, dev_info.get('name', ''), self._rx_dev_rate,
-                            "native 48k Opus rate" if self._rx_dev_rate == RX_RATE
-                            else "resampled to 48k for Opus")
+                summary = self._device_summary(
+                    dev, actual_rate=self._rx_dev_rate, channels=RX_CHANNELS
+                )
+                logger.info(
+                    "RX audio started: %s (%s)",
+                    summary,
+                    "native 48k Opus rate" if self._rx_dev_rate == RX_RATE
+                    else "resampled to 48k for Opus",
+                )
                 return True
             except Exception as e:
                 if reinit_round == 0:
@@ -473,7 +512,7 @@ class AudioHandler:
         """Find a suitable output device.
 
         Priority:
-        1. Explicit device from config (env FT710_AUDIO_TX_DEVICE)
+        1. Explicit device from config (env MRRC_AUDIO_TX_DEVICE)
         2. Name match: radio-specific hints (self._radio_hints, from the
            backend capabilities — FT-710 default: "FT-710"/"FT710"/"YAESU")
         3. Name match: USB_AUDIO_NAME_HINTS — the radio's built-in USB
@@ -535,12 +574,11 @@ class AudioHandler:
             # among them.
             full_duplex = [m for m in codec_matches if m[2]]
             idx, name, _ = (full_duplex or codec_matches)[0]
-            logger.info("Using USB audio output (FT-710 built-in sound card): [%d] %s",
-                        idx, name)
+            logger.info("Using radio USB audio output: [%d] %s", idx, name)
             if len(codec_matches) > 1:
                 logger.warning(
                     "Multiple USB audio outputs: %s — using [%d]. If TX "
-                    "plays through the wrong device, set FT710_AUDIO_TX_DEVICE "
+                    "plays through the wrong device, set MRRC_AUDIO_TX_DEVICE "
                     "to the index from the startup device list.",
                     ', '.join(f"[{i}] {n}" for i, n, _ in codec_matches), idx)
             return idx
@@ -674,11 +712,14 @@ class AudioHandler:
                         except Exception:
                             pass
 
-                dev_info = self._pa.get_device_info_by_index(dev)
-                logger.info("TX audio started: [%d] %s @ %d Hz (pre-buffer %dms, cap %dms)%s",
-                            dev, dev_info.get('name', ''), self._tx_rate,
-                            TX_PREBUFFER_MS, TX_MAX_BUFFER_MS,
-                            f" (attempt {attempt + 1})" if attempt > 0 else "")
+                summary = self._device_summary(
+                    dev, actual_rate=self._tx_rate, channels=TX_CHANNELS
+                )
+                logger.info(
+                    "TX audio started: %s (pre-buffer %dms, cap %dms)%s",
+                    summary, TX_PREBUFFER_MS, TX_MAX_BUFFER_MS,
+                    f" (attempt {attempt + 1})" if attempt > 0 else "",
+                )
                 return True
 
             if reinit_round == 0:

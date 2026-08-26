@@ -14,7 +14,6 @@ So the correct criterion is:
 
 Runs without hardware; `open_port` is mocked with a scripted serial.
 """
-import time
 import unittest
 from unittest.mock import patch
 
@@ -78,10 +77,14 @@ class PowerOffTests(unittest.TestCase):
     def setUp(self):
         self._sleep_patch = patch.object(ft710_power.time, "sleep")
         self._sleep_patch.start()
+        # Pin monotonic time so boot-window tests are independent of host uptime.
+        self._monotonic_patch = patch.object(ft710_power.time, "monotonic", return_value=100.0)
+        self._monotonic_patch.start()
         ft710_power._boot_until = 0.0
 
     def tearDown(self):
         self._sleep_patch.stop()
+        self._monotonic_patch.stop()
 
     def test_off_succeeds_when_radio_goes_silent(self):
         # Real-world case: PS0 gets no ACK (radio powers down), and a
@@ -104,9 +107,8 @@ class PowerOffTests(unittest.TestCase):
 
     def test_off_rejected_during_boot_window(self):
         # PS0 must not be sent inside the post-PS1 protection window.
-        # Relative to monotonic() — a fixed epoch value silently expires
-        # on hosts with longer uptimes than that constant (seen at 14d).
-        ft710_power._boot_until = time.monotonic() + 3600.0
+        # Mocked monotonic time is 100.0, so set the window well in the future.
+        ft710_power._boot_until = 200.0
         factory = _PortFactory([])
         with patch.object(ft710_power, "open_port", factory):
             self.assertFalse(ft710_power.power_off())

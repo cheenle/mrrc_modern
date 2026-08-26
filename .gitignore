@@ -17,6 +17,7 @@ logs/
 # IDE
 .vscode/
 .idea/
+.worktrees/
 *.swp
 *.swo
 

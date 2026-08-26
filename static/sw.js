@@ -1,11 +1,16 @@
 // MRRC Service Worker — basic offline cache (multi-radio: FT-710 / IC-7300)
-const CACHE = 'mrrc-v26';
+const CACHE = 'mrrc-v28';
 const ASSETS = [
     '/',
     '/index.html',
-    '/ft710.css?v=23',
+    '/ft710.css?v=24',
     '/ft710_main.js?v=26',
-    '/ft710_ui.js?v=25',
+    '/ft710_ui.js?v=27',
+    '/modules/ptt_manager.js?v=13',
+    '/modules/settings_manager.js?v=13',
+    '/modules/atr1000.js?v=1',
+    '/manifest.json',
+];
     '/modules/ptt_manager.js?v=13',
     '/modules/settings_manager.js?v=13',
     '/modules/atr1000.js?v=1',

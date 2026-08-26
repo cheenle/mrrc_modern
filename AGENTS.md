@@ -6,11 +6,11 @@ This repository contains a Python FastAPI server for remote radio control (Yaesu
 
 | Module | Responsibility |
 |--------|----------------|
-| `server.py` | FastAPI app, auth, 5 WebSocket endpoints (`/WSradio`, `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX`, optional `/WSatr1000`), REST APIs, lifespan management; TX uplink ownership follows the PTT client and same-session replacement connections |
+| `server.py` | FastAPI app, auth, 5 WebSocket endpoints (`/WSradio`, `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX`, optional `/WSatr1000`), REST APIs, lifespan management; TX uplink ownership follows the PTT client and same-session replacement connections; spectrum loop schedules at 30 Hz and sends real scope data only when the frame counter advances |
 | `cat_controller.py` | Compatibility shim — real module moved to `backends/ft710/cat_controller.py`: Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
 | `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command and post-query stale-read discard; watchdog re-runs scope init (`on_reconnected`) after serial reconnect |
-| `audio_handler.py` | PyAudio sound card capture/playback with per-backend device rate and name hints (FT-710: fixed 44.1kHz with 960→882 resample before TX; IC-7300: 48kHz native, no resample), Opus encode, radio USB-audio auto-detection (FT-710/YAESU name, "USB Audio CODEC"/"USB Audio Device" Windows names, mono/full-duplex heuristics); TX session stats include oldest-frame `queue_drops`; `restart_rx()` reopens RX capture on every TX→RX transition (Windows-only full-duplex wedge workaround); on TX/RX stream-open failure re-initializes PortAudio once and retries with a name-resolved index (USB re-enumeration on radio power cycles invalidates cached device IDs — macOS -9999) |
+| `audio_handler.py` | PyAudio sound card capture/playback with per-backend device rate and name hints (FT-710: fixed 44.1kHz with 960→882 resample before TX; IC-7300: 48kHz native, no resample), Opus encode, radio USB-audio auto-detection (FT-710/YAESU name, "USB Audio CODEC"/"USB Audio Device" Windows names, mono/full-duplex heuristics); startup/open logs include host API plus default/actual rates and channels; TX session stats include oldest-frame `queue_drops`; `restart_rx()` reopens RX capture on every TX→RX transition (Windows-only full-duplex wedge workaround); on TX/RX stream-open failure re-initializes PortAudio once and retries with a name-resolved index (USB re-enumeration on radio power cycles invalidates cached device IDs — macOS -9999) |
 | `audio_resample.py` | 44.1kHz ↔ 48kHz frame-aligned SRC (numpy linear interp; 882↔960 = 20ms) |
 | `opus_rx.py` | libopus ctypes wrapper: `RxOpusEncoder` (48kHz), `TxOpusDecoder` (48kHz) |
 | `scope_handler.py` | Spectrum data container: FT4222 real FFT + S-meter Gaussian fallback. Note: the in-process `connect`/`read_loop`/`_resync` SPI code is legacy — production reads go through the `scope_pipe` subprocess (byte-by-byte resync was proven impossible on FT4222; see SDD V2.8), kept only as historical reference |
@@ -18,7 +18,8 @@ This repository contains a Python FastAPI server for remote radio control (Yaesu
 | `ssl_bootstrap.py` | First-run self-signed TLS cert generation (ECDSA P-256, 10y, SANs localhost/hostname/LAN IPs) so the desktop launcher starts HTTPS by default; `MRRC_SSL_CERT/KEY` override (legacy `FT710_SSL_CERT/KEY` honored), `MRRC_SSL=off` escape |
 | `scope_frame.py` | Compatibility shim — real module moved to `backends/ft710/scope_frame.py`: shared frame parsing, pipe payload encode/decode, quality metrics |
 | `scope_libraries.py` | Compatibility shim — real module moved to `backends/ft710/scope_libraries.py`: FTDI library discovery and SPI clock configuration |
-| `config.py` | Protocol-neutral constants (serial/web/SSL/auth/poll/reconnect/PTT) + shared UI mode tables and the `_interp` calibration helper; FT-710-specific tables (modes, bands, filter widths, meter calibrations, scope spans/port) moved to `backends/ft710/config_ft710.py` |
+| `config.py` | Protocol-neutral constants (serial/web/SSL/auth/poll/reconnect/PTT) + backend-aware serial defaults (FT-710 38400; IC-7300/MK2 115200) + shared UI mode tables and the `_interp` calibration helper; FT-710-specific tables moved to `backends/ft710/config_ft710.py` |
+| `_diag_ic7300_scope.py` | One-shot IC-7300/MK2 CI-V field diagnostic using the production checksum-free codec/parser; probes frequency/PTT, enables both scope display (`27 10`) and data output (`27 11`), and disables data output on exit |
 | `atr1000_client.py` | Optional asyncio WS client for networked ATR1000 tuner: binary frame protocol, 5s reconnect, 55-min refresh, TX-no-SYNC watchdog, learning, throttled relay writes, `notify_freq`/`notify_tx` sync hooks |
 | `atr1000_tuner.py` | `TunerStorage` LC-learning JSON store (learn gate SWR 1.0–1.8, 1kHz keys ±5kHz nearest, atomic writes) |
 
@@ -29,7 +30,7 @@ Pluggable radio backends live in `backends/` (selected via `MRRC_RADIO_MODEL`, d
 | `backends/__init__.py` | `create_backend(model, ...)` lazy factory — registered keys `"ft710"`, `"ic7300"`, `"ic7300mk2"` |
 | `backends/base.py` | `RadioBackend` ABC (CAT surface mirroring `CatController`), `RadioCapabilities` dataclass (`to_dict()` for JSON), `ScopeProducer` protocol, defaulted hooks: `bands`/`ui_modes`/`mode_name_to_num`/`filter_tables()`/`state_tables()`/poll-item lists/`init_scope()`/`create_scope_producer()` |
 | `backends/ft710/` | FT-710 backend: `backend.py` (`FT710Backend` thin delegate + `init_scope()` EX040101/EX040200 + UI tables), `cat_controller.py`, `scope_pipe.py`, `scope_producer.py` (ScopeProducer: owns the scope_pipe subprocess — spawn/read/auto-restart/TX-notify, moved from `server.py` in Phase 1), `scope_frame.py`, `scope_libraries.py`, `config_ft710.py` (FT-710-only tables) |
-| `backends/ic7300/` | IC-7300/MK2 backend: `backend.py` (`IC7300Backend`/`IC7300MK2Backend`), `civ_codec.py` (pure CI-V framing/BCD/scope-segment codec), `civ_controller.py` (async CI-V demux: reader thread → frame parser → echo drop / 0x27 scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect), `civ_scope.py` (`CivScopeProducer`: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → `ScopeHandler`), `config_ic7300.py` (Icom-only tables; USB CI-V 115200 8N1, addr 0x94 via `IC7300_CIV_ADDR`) |
+| `backends/ic7300/` | IC-7300/MK2 backend: `backend.py` (`IC7300Backend`/`IC7300MK2Backend`, model-specific Transceive item 0071/0089, display+data scope init), `civ_codec.py` (pure checksum-free CI-V framing/BCD/scope-segment codec; Center versus edge metadata), `civ_controller.py` (async CI-V demux: reader thread → frame parser → echo drop / bounded 44-segment newest-data scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect; documented power-on preamble), `civ_scope.py` (`CivScopeProducer`: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → `ScopeHandler`), `config_ic7300.py` (Icom-only tables; USB CI-V 115200 8N1, IC-7300 addr 0x94 via `IC7300_CIV_ADDR`, MK2 addr 0xB6 via `IC7300MK2_CIV_ADDR`, ALC raw 120 full scale) |
 
 Frontend assets in `static/`:
 - `index.html` — SPA shell (mobile-first responsive layout)
@@ -75,7 +76,7 @@ Run the server:
 MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python server.py
 
 # IC-7300
-MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-A1234567 python server.py
+MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-A1234567 MRRC_BAUD_RATE=115200 python server.py
 ```
 
 Run tests:
@@ -83,7 +84,7 @@ Run tests:
 python -m unittest discover -s tests -v
 ```
 
-Environment variables: `MRRC_RADIO_MODEL` (backend key, default `ft710`), `IC7300_CIV_ADDR` (IC-7300 CI-V address, default `0x94`), `MRRC_SERIAL_PORT`, `MRRC_BAUD_RATE`, `MRRC_WEB_PORT`, `MRRC_WEB_PASSWORD`, `MRRC_WEB_HOST`, `MRRC_FTDI_LIB_DIR`, `MRRC_FT4222_CLK_DIV`, `MRRC_SCOPE_PORT`, `MRRC_SCOPE_BAUD`, `MRRC_ATR1000_HOST`, `MRRC_ATR1000_PORT`. All variables also honor the legacy `FT710_*` prefix via automatic fallback in `config.py` (`_env*` helpers read `MRRC_*` first).
+Environment variables: `MRRC_RADIO_MODEL` (backend key, default `ft710`), `IC7300_CIV_ADDR` (IC-7300 address, default `0x94`), `IC7300MK2_CIV_ADDR` (MK2 address, default `0xB6`), `MRRC_SERIAL_PORT`, `MRRC_BAUD_RATE` (backend default: 38400/115200), `MRRC_WEB_PORT`, `MRRC_WEB_PASSWORD`, `MRRC_WEB_HOST`, `MRRC_AUDIO_RX_DEVICE`, `MRRC_AUDIO_TX_DEVICE`, `MRRC_FTDI_LIB_DIR`, `MRRC_FT4222_CLK_DIV`, `MRRC_SCOPE_PORT`, `MRRC_SCOPE_BAUD`, `MRRC_ATR1000_HOST`, `MRRC_ATR1000_PORT`. All applicable variables also honor legacy `FT710_*` aliases through the config fallback (`MRRC_*` wins).
 
 ## Coding Style & Naming Conventions
 
@@ -91,7 +92,7 @@ Python: 4-space indentation, type hints for shared state, `UPPER_CASE` for modul
 
 ## Testing Guidelines
 
-Run the full suite with `python -m unittest discover -s tests -v` (currently 623 tests across 32 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connected radio model, serial port, FT4222 availability (FT-710), audio device. Name tests `test_*.py`. Keep hardware-independent logic testable without a radio.
+Run the full suite with `python -m unittest discover -s tests -v` (currently 651 tests across 33 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connecte
 
 ## Commit & Pull Request Guidelines
 

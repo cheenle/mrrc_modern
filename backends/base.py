@@ -46,6 +46,7 @@ class RadioCapabilities:
     preamp_steps: tuple = ()              # e.g. ("OFF", "AMP1", "AMP2")
     scope_type: str = "none"              # "ft4222" | "civ27" | "none"
     scope_spans: dict = field(default_factory=dict)
+    scope_speeds: tuple = ()               # display labels in protocol order
     tune_via: str = "tx2"                 # "tx2" (CAT tune carrier) | "atu"
 
     def to_dict(self) -> dict:
@@ -54,6 +55,7 @@ class RadioCapabilities:
         data["audio_name_hints"] = list(self.audio_name_hints)
         data["att_steps"] = list(self.att_steps)
         data["preamp_steps"] = list(self.preamp_steps)
+        data["scope_speeds"] = list(self.scope_speeds)
         return data
 
 

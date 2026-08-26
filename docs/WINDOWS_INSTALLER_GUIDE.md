@@ -5,24 +5,27 @@ This guide covers the Windows desktop package for MRRC Web Control
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.9.0 Stable)
+## Download (v1.12.0 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.9.0-Windows-x64-Setup.exe` | 45.3 MB | `f4d8e2a236f469d601cf7ef6122c9721d48c113a163b9c1c58f67fb990fd6734` |
+| `MRRC-Modern-v1.12.0-Windows-x64-Setup.exe` | 45.3 MB (45,339,501 bytes) | `e7d1e460c408a6da2c0f66f23002d48429fa0b46bfd933305b4f150cbcefade2` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.9.0-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-The v1.9.0 package was built from commit `deaf02d` on Windows 11 with Python
-3.12.4, PyInstaller 6.21.0, and Inno Setup 6.7.3. All 592 Windows tests, three
+The v1.12.0 package was built from `main` on Windows 11 with Python 3.12.4,
+PyInstaller 6.21.0, and Inno Setup 6.7.3. All 633 Windows tests, three
 PyInstaller targets, and the installer build passed; required bundled-file
-inspection (FTDI DLLs, opus.dll, static, mem_channels.json) and the SHA-256
-check passed. v1.9.0 adds the pluggable multi-radio backend — select the radio
-model via `MRRC_RADIO_MODEL` (`ft710` default, `ic7300`, `ic7300mk2`) — with new
-Icom IC-7300/MK2 support (USB CI-V control, `0x27` spectrum, native 48 kHz
-audio) alongside the unchanged FT-710 path.
+inspection (FTDI DLLs, opus.dll, static assets, `mem_channels.json`, and Icom
+backend hidden imports) and cross-host SHA-256 checks passed. v1.12.0 hardens
+IC-7300/MK2 runtime reliability and official CI-V conformance: backend-aware
+115200 baud defaults, newest-data scope delivery, display/data-output startup,
+SCROLL-C edge metadata, model-specific Transceive items, documented liveness
+and power-on framing, raw-120 ALC calibration, and three valid scope speeds.
+The FT-710 CAT, 44.1 kHz device-domain audio, PTT, and scope behavior is
+unchanged.
 
 Browser capture and Opus remain at 48 kHz. Every decoded 960-sample TX frame is
 converted to 882 samples before the FT-710 playback device is opened/written at

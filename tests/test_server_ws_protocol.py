@@ -209,16 +209,21 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn("const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;", main_source)
         self.assertIn("renderUpdates(changedFields);", main_source)
 
+    def test_civ_scope_speed_selector_uses_capabilities(self):
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("c.scope_speeds", ui_source)
+        self.assertIn("speedSel.innerHTML = '';", ui_source)
+
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
-        self.assertIn('/ft710.css?v=23', index_source)
+        self.assertIn('/ft710.css?v=24', index_source)
         self.assertIn('/ft710_main.js?v=26', index_source)
-        self.assertIn('/ft710_ui.js?v=25', index_source)
+        self.assertIn('/ft710_ui.js?v=27', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v26'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v28'", sw_source)
         self.assertIn("'/ft710_main.js?v=26'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=25'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=27'", sw_source)
 
     def test_subchannels_have_independent_reconnect(self):
         """SDD I10: audio/spectrum subchannels must self-heal, not just null out."""

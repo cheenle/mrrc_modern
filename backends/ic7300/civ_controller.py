@@ -44,7 +44,7 @@ from backends.ic7300.civ_codec import (
     CONTROLLER_ADDR, SCOPE_CMD, SCOPE_SUB_DATA,
 )
 from backends.ic7300.config_ic7300 import (
-    CIV_ADDR, MK2_CIV_ADDR, CIV_BAUD_RATE, SCOPE_SPAN_HZ,
+    CIV_ADDR, CIV_BAUD_RATE, SCOPE_SPAN_HZ,
     METER_SUB_S, METER_SUB_PO, METER_SUB_SWR, METER_SUB_ALC,
     METER_SUB_COMP,
 )
@@ -108,9 +108,33 @@ SCOPE_SUB_SPEED = 0x1A      # data 0=fast 1=mid 2=slow
 #   IC-7300MK2: 1A 05 00 89 01 — item 0089 per the IC-7300MK2 CI-V
 #             Reference ("CI-V Transceive setting").  On the MK2,
 #             item 0071 is "AF Output Level", NOT transceive.
-# The controller picks per its CI-V address (0xB6 ⇒ MK2).  hw-verify.
+# The backend selects this by radio model, independently of CI-V address.
 SETMODE_CIV_TRANSCEIVE_ON = bytes((CMD_SET_MODE_ITEM, 0x05, 0x00, 0x71, 0x01))
 SETMODE_CIV_TRANSCEIVE_MK2 = bytes((CMD_SET_MODE_ITEM, 0x05, 0x00, 0x89, 0x01))
+
+# Icom IC-7300 Full Manual §19, footnote 3: power-on requires this
+# approximate total number of consecutive FE bytes before the address.
+POWER_ON_FE_COUNTS = {
+    115200: 150,
+    57600: 75,
+    38400: 50,
+    19200: 25,
+    9600: 13,
+    4800: 7,
+}
+
+
+def build_power_on_frame(baudrate: int, civ_addr: int) -> bytes:
+    """Build documented 18 01 with the baud-dependent FE preamble."""
+    standard = build_frame(CMD_POWER, b"\x01", to=civ_addr)
+    count = POWER_ON_FE_COUNTS.get(baudrate)
+    if count is None:
+        logger.warning(
+            "No documented CI-V power-on preamble for %d baud", baudrate
+        )
+        return standard
+    return bytes((0xFE,)) * (count - 2) + standard
+
 
 # Commands whose response is identified by cmd + first data byte.
 _SUBKEYED_CMDS = frozenset((
@@ -119,6 +143,7 @@ _SUBKEYED_CMDS = frozenset((
 ))
 
 _DEFAULT_QUERY_TIMEOUT = 0.3    # per-attempt response timeout (seconds)
+SCOPE_QUEUE_MAX_SEGMENTS = 44  # four complete 11-segment USB waveforms
 _READ_CHUNK = 256               # reader-thread ser.read() size
 
 
@@ -152,16 +177,15 @@ class CivController:
         baudrate: int = CIV_BAUD_RATE,
         civ_addr: int = CIV_ADDR,
         query_timeout: float = _DEFAULT_QUERY_TIMEOUT,
+        transceive_cmd: bytes = SETMODE_CIV_TRANSCEIVE_ON,
     ):
         self.port = port
         self.baudrate = baudrate
         self.civ_addr = civ_addr
         self.query_timeout = query_timeout
-        # Transceive enable bytes: the MK2 (address 0xB6) uses set-mode
-        # item 0089, the IC-7300 item 0071 (see the constant comments).
-        self._transceive_cmd = (
-            SETMODE_CIV_TRANSCEIVE_MK2 if civ_addr == MK2_CIV_ADDR
-            else SETMODE_CIV_TRANSCEIVE_ON)
+        # Set-mode item differs by radio model, not by its configurable
+        # CI-V address. The backend passes the model's documented item.
+        self._transceive_cmd = transceive_cmd
         self._ser: Optional[serial.Serial] = None
         self._lock = asyncio.Lock()
         self._connected = False
@@ -176,9 +200,12 @@ class CivController:
         self._last_sent: bytes = b""
         self._pending: dict[tuple, deque[asyncio.Future]] = {}
         self._pending_acks: deque[asyncio.Future] = deque()
-        # Parsed 0x27 0x00 scope segments (consumed by the Phase 3
-        # scope producer; unbounded — segments are tiny).
-        self.scope_queue: asyncio.Queue = asyncio.Queue()
+        # Parsed 0x27 0x00 scope segments. Keep only a few complete USB
+        # waveforms so a paused consumer resumes with fresh radio data.
+        self.scope_queue: asyncio.Queue = asyncio.Queue(
+            maxsize=SCOPE_QUEUE_MAX_SEGMENTS
+        )
+        self.scope_queue_drops = 0
         self._broadcast_cb: Optional[Callable[[str, object], None]] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._reader_thread: Optional[threading.Thread] = None
@@ -342,7 +369,7 @@ class CivController:
         if frame.command == SCOPE_CMD and frame.data[:1] == bytes((SCOPE_SUB_DATA,)):
             seg = parse_scope_segment(frame)
             if seg is not None:
-                self.scope_queue.put_nowait(seg)
+                self._enqueue_scope_segment(seg)
             return
         # 3. Transceive broadcasts (to==0x00) and freq/mode broadcasts.
         if frame.to == 0x00 or frame.command in (CMD_FREQ_BCAST, CMD_MODE_BCAST):
@@ -371,6 +398,24 @@ class CivController:
                 fut.set_result(frame)
             return
         logger.debug("unmatched CI-V frame dropped: %s", bytes(frame).hex())
+
+    def _enqueue_scope_segment(self, segment: object) -> None:
+        """Enqueue a scope segment, dropping the oldest when at capacity."""
+        if self.scope_queue.full():
+            try:
+                self.scope_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            else:
+                self.scope_queue_drops += 1
+                if self.scope_queue_drops == 1 or self.scope_queue_drops % 100 == 0:
+                    logger.warning(
+                        "CI-V scope queue full; dropped oldest segment "
+                        "(drops=%d, max=%d)",
+                        self.scope_queue_drops,
+                        self.scope_queue.maxsize,
+                    )
+        self.scope_queue.put_nowait(segment)
 
     def _handle_broadcast(self, frame: CivFrame) -> None:
         """Parse a transceive broadcast and notify the state layer."""
@@ -795,8 +840,21 @@ class CivController:
             bytes((CMD_SPLIT, 0x01 if on else 0x00)))
 
     async def set_power(self, on: bool) -> bool:
-        return await self.send_set_command(
-            bytes((CMD_POWER, 0x01 if on else 0x00)))
+        if not on:
+            return await self.send_set_command(bytes((CMD_POWER, 0x00)))
+        async with self._lock:
+            if not self._connected or self._ser is None:
+                return False
+            try:
+                await self._write(build_power_on_frame(
+                    self.baudrate, self.civ_addr
+                ))
+                return True
+            except Exception as e:
+                logger.error("CI-V write error for power on: %s", e)
+                if self._is_device_fatal(e):
+                    self._connected = False
+                return False
 
     async def set_squelch(self, value: int) -> bool:
         # UI scale 0-100 (FT-710 parity) -> CI-V 0-255.

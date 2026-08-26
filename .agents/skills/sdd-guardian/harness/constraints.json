@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sdd_version": "V2.23",
+  "sdd_version": "V2.27",
   "description": "Machine-readable constraint registry distilled from SDD/ (IBM TeamSD) and AGENTS.md for the mrrc_modern codebase. Consumed by sdd_context.py (context | check | hook). severity: block = reject the edit, warn = allow but surface, info = guidance shown in context output only.",
   "rules": [
     {
@@ -45,13 +45,13 @@
     },
     {
       "id": "cat-direct-serial-io",
-      "title": "Serial I/O only inside CatController",
+      "title": "Serial I/O only inside radio controllers",
       "severity": "block",
       "sdd_ref": "AD-002",
       "scope": ["**/*.py"],
-      "exclude_scope": ["cat_controller.py", "scope_pipe.py", "_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "**/test_*.py", ".agents/**", "venv/**", "**/venv/**"],
+      "exclude_scope": ["cat_controller.py", "**/civ_controller.py", "scope_pipe.py", "_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "**/test_*.py", ".agents/**", "venv/**", "**/venv/**"],
       "patterns": ["\\b_ser\\.(write|read|reset_input_buffer)"],
-      "message": "All CAT serial I/O goes through CatController (asyncio.Lock serialization, asyncio.to_thread offload, 20 ms post-write pacing). Do not touch a raw serial object from other modules."
+      "message": "All radio serial I/O goes through CatController or CivController (asyncio.Lock serialization and asyncio.to_thread offload). Do not touch a raw serial object from other modules."
     },
     {
       "id": "secrets-hardcoded",

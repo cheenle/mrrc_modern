@@ -4,7 +4,7 @@
 
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710 and IC-7300/IC-7300MK2). All tests run **without hardware** — no radio,
-no serial port, no USB audio device needed. 623 tests across 32 test modules.
+no serial port, no USB audio device needed. 651 tests across 33 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -14,15 +14,15 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 623 |
-| Passed | 623 (with all optional dependencies installed) |
+| Total tests | 651 |
+| Passed | 651 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
 
 ## Test Modules
 
-### 1. test_radio_state.py — RadioState (44 tests)
+### 1. test_radio_state.py — RadioState (46 tests)
 
 SDD coverage: §7.2, AD-003, §9.7
 
@@ -32,8 +32,8 @@ SDD coverage: §7.2, AD-003, §9.7
 | `RadioStateDerivedPropertiesTests` | 13 | active_freq, mode_name, band_name, is_transmitting, s_meter_dbm, s_unit, preamp_label, attenuator_label |
 | `RadioStateSerializationTests` | 6 | to_dict (core + derived), to_dirty_dict, value accuracy |
 | `RadioStateFromSyncResultTests` | 6 | CAT response parsing, empty data, malformed data, booleans, preamp/att, tuner |
-| `FT710SyncParsingTests` | 7 | FT-710 initial-sync response parsing into state fields |
-| `RadioStateConfigureTests` | 4 | Table injection (`configure()`), whitelist validation, calibration helpers |
+| `FT710SyncParsingTests` | 7 | FT-710 initial-sync response parsing |
+| `RadioStateConfigureTests` | 6 | Backend table injection, including IC ALC raw-120 full scale and unchanged FT raw/255 scale |
 
 ### 2. test_cat_controller.py — CAT Protocol (30 tests)
 
@@ -81,7 +81,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `CustomNameHintsTests` | 7 | Backend-provided audio device name hints (FT-710/YAESU, USB Audio CODEC/Device) |
 | `CapabilitiesAudioWiringTests` | 3 | RadioCapabilities audio fields flow into AudioHandler construction |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (62 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (63 tests)
 
 SDD coverage: §9.2, §9.6, §10.4, §15
 
@@ -281,7 +281,7 @@ SDD coverage: AD-016, §7.2
 | `ScopeTableTests` | 3 | Span codes, span Hz consistency, fixed-mode edges |
 | `PreampAttTests` | 2 | Preamp labels, attenuator steps |
 
-### 26. test_civ_codec.py — CI-V Codec (45 tests)
+### 26. test_civ_codec.py — CI-V Codec (47 tests)
 
 SDD coverage: AD-016, §9.6
 
@@ -292,17 +292,17 @@ SDD coverage: AD-016, §9.6
 | `EchoTests` | 3 | Echo frame detection/drop |
 | `FreqBcdTests` | 5 | Frequency BCD encode/decode round-trip |
 | `LevelBcdTests` | 5 | Level BCD encode/decode |
-| `ScopeSegmentTests` | 4 | 0x27 scope segment parsing |
+| `ScopeSegmentTests` | 6 | 0x27 scope parsing, including Center center/span and SCROLL-C edge metadata |
 | `ScopeAssemblerTests` | 7 | Waveform assembly from segments |
 | `ScaleUpsampleTests` | 6 | 475 bins → scale 160→255 → upsample 850 |
 
-### 27. test_civ_controller.py — CI-V Controller (17 tests)
+### 27. test_civ_controller.py — CI-V Controller (22 tests)
 
 SDD coverage: AD-016, §9.6
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `ConnectTests` | 2 | Connect enables CI-V transceive |
+| `ConnectTests` | 3 | Connect enables model-specific CI-V Transceive independent of configurable address |
 | `FrequencyTests` | 3 | get_frequency with echo + broadcast interleaved, set frame format, VFO-B rejection |
 | `ModeTests` | 2 | Mode+FIL decode, set_mode resends current FIL |
 | `AckTests` | 2 | NG raises CivNak, OK resolves set |
@@ -311,6 +311,7 @@ SDD coverage: AD-016, §9.6
 | `PendingFifoTests` | 1 | Same-key pending futures resolve in order |
 | `FatalErrorTests` | 2 | Fatal write/read error flips connected False |
 | `PriorityTests` | 2 | PTT uses priority path, send_command yields when polls cancelled |
+| `PowerCommandTests` | 4 | Official baud-dependent power-on FE preambles and standard power-off frame |
 
 ### 28. test_civ_scope.py — CI-V Scope Producer (12 tests)
 
@@ -333,15 +334,30 @@ SDD coverage: AD-016
 | `IC7300CapabilitiesTests` | 4 | IC-7300 capability values, scope producer, UI tables, CAT surface |
 | `FullStateCapabilitiesTests` | 3 | fullState includes radioModel/radioDisplayName/capabilities, tables come from backend, fallback without backend |
 
-### 30. test_ft710_power.py — Standalone Power Script Semantics (4 tests)
+### 30. test_ic7300_runtime_reliability.py — IC-7300 Runtime Reliability (18 tests)
 
-SDD coverage: V2.12/V2.13 power-command guards; PS0 write-only semantics
+SDD coverage: §9.2.4, §9.4, §9.5.1, §12.2
 
 | Class | Tests | Covers |
 |-------|-------|--------|
-| `PowerOffTests` | 4 | Power-off success criterion: CAT silence after PS0 = success (radio goes deaf when powered down); only a PS1 answer means off FAILED — scripted-serial mocked, no hardware. Boot-window test uses a monotonic-relative deadline so it stays valid on long-uptime hosts |
+| `BackendBaudDefaultsTests` | 3 | FT-710 38400 default, IC-7300/MK2 115200 defaults, explicit baud override |
+| `IC7300DiagnosticProtocolTests` | 2 | Checksum-free CI-V diagnostic query and standard frequency-reply decoding |
+| `ScopeQueueFreshnessTests` | 2 | Bounded 44-segment queue, oldest-drop/latest-retention behavior |
+| `SpectrumBroadcastPolicyTests` | 3 | 30 Hz target and new-real-frame-only broadcast cursor |
+| `AudioDeviceDiagnosticsTests` | 2 | Host API/default/actual rate/channel summary and missing-metadata fallback |
+| `ScopeActivationTests` | 2 | Display-on/mode/span/data-out order in backend and diagnostic |
+| `IC7300ModelAndPowerTests` | 3 | MK2 Transceive item and documented frequency-based power liveness |
+| `IC7300CapabilityTests` | 1 | FAST/MID/SLOW-only CI-V scope speeds |
 
-### 31. test_server_security.py — Auth & Static Hardening (14 tests)
+### 31. test_ft710_power.py — FT-710 Power-Off Semantics (4 tests)
+
+SDD coverage: §10.4, §15
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `PowerOffTests` | 4 | Explicit PS0 acknowledgment, silent-off success, still-on failure, and boot-window guard (monotonic time mocked so the window test is host-uptime-independent) |
+
+### 32. test_server_security.py — Auth & Static Hardening (14 tests)
 
 SDD coverage: §13.4 I8 (path traversal), I9 (constant-time password compare)
 
@@ -351,7 +367,7 @@ SDD coverage: §13.4 I8 (path traversal), I9 (constant-time password compare)
 | `PasswordCompareTests` | 4 | `_password_matches`: correct/wrong/empty, None + non-ASCII never raise, `hmac.compare_digest` used (no `!=`) |
 | `DefaultPasswordWarningTests` | 3 | Startup warning fires only when the well-known default is active; wired into lifespan |
 
-### 32. test_max_tx_watchdog.py — Opt-in Max-TX Safety Watchdog (3 tests)
+### 33. test_max_tx_watchdog.py — Opt-in Max-TX Safety Watchdog (3 tests)
 
 SDD coverage: §13.4 I12 / ch15 outermost release layer
 
@@ -366,7 +382,7 @@ SDD coverage: §13.4 I12 / ch15 outermost release layer
 |-------------|---------------|--------|
 | AD-001 FastAPI/Uvicorn | test_server_scope_init | 2 tests |
 | AD-002 Direct Serial CAT | test_cat_controller | 30 tests |
-| AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 44+ tests |
+| AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 46+ tests |
 | AD-004 Dual-Codec Audio | test_audio | 90 tests |
 | AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart, test_scope_pipe_tx | 29 tests |
 | AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 8 tests |
@@ -374,7 +390,7 @@ SDD coverage: §13.4 I12 / ch15 outermost release layer
 | AD-008 PyAudio Detection | test_audio (AudioDeviceDetectionTests + USBCodecDeviceSelectionTests + CustomNameHintsTests) | 19 tests |
 | AD-009 7-Task Polling | test_poll_scheduler | 17 tests |
 | AD-010 Memory Channels | test_server_ws_protocol (mem messages), test_memory_recall | 6 tests |
-| §7.2 RadioState Entity | test_radio_state | 44 tests |
+| §7.2 RadioState Entity | test_radio_state | 46 tests |
 | §7.2 Config Tables | test_config, test_config_ic7300 | 50 tests |
 | §9.2 WS Protocol | test_server_ws_protocol (WSMessageFormatTests) | 11 tests |
 | §9.6 Polling (incl. stale-read guard) | test_poll_scheduler, test_server_ws_protocol | 17+ tests |
@@ -384,7 +400,7 @@ SDD coverage: §13.4 I12 / ch15 outermost release layer
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests), test_ssl_bootstrap | 10 tests |
 | NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 31 tests |
 | NFR-060–065 Audio Quality | test_audio | 90 tests |
-| AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope | 118 tests |
+| AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope, test_ic7300_runtime_reliability | 143 tests |
 | V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 13 tests |
 
 ## Running Specific Tests
@@ -406,7 +422,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~623 tests in ~15s — can run on every commit.
+2. **Fast execution**: ~651 tests in ~15s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

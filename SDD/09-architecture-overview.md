@@ -43,7 +43,7 @@ Server captures Int16 mono from the selected radio's USB audio (44.1kHz for FT-7
 **v1 format:** 1-byte version (0x01) + 850 bytes wf1 = 851 bytes.
 **v2 format:** 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.
 
-Broadcast at ~30 fps from real scope data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2) or S-meter fallback.
+The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2) is sent only when `ScopeHandler._frame_count` advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick.
 
 ## 9.3 RX Audio Signal Chain
 
@@ -59,7 +59,7 @@ Broadcast at ~30 fps from real scope data (FT4222 SPI for FT-710, CI-V 0x27 for 
 
 **TX runs at 48 kHz throughout the codec domain** — browser capture and Opus encode/decode. The server bridges to the radio's native USB audio rate: the FT-710 uses 44.1 kHz with frame-aligned resampling (960↔882 = exactly 20 ms, ratio 160:147); the IC-7300/MK2 uses 48 kHz native with no resample. This eliminates the v1.0 sample-rate mismatch (16 kHz mic → 48 kHz playback) and prevents a Windows shared-mode mix rate from bypassing the device-domain bridge.
 
-The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as `queue_drops` in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy RF acceptance run therefore requires `decode_fail=0`, `write_err=0`, `queue_drops=0`, and `non_owner_drops=0`; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds.
+The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame drops at that cap are counted as `queue_drops` in the per-PTT session log alongside received, decoded, written, write-error, peak, and non-owner counters. A healthy RF acceptance run therefore requires `decode_fail=0`, `write_err=0`, `queue_drops=0`, and `non_owner_drops=0`; sustained queue drops identify a host-output pacing problem even when Opus decoding succeeds. Startup and stream-open logs identify the selected device index/name, PortAudio host API, advertised default rate, actual opened rate, and channel count; IC-7300/MK2 should report `actual=48000Hz` for both RX and TX.
 
 ## 9.5 Spectrum Signal Chain
 
@@ -67,7 +67,7 @@ The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame dr
 
 FT-710: FT4222 SPI → `scope_pipe.py` subprocess → 850-point wf1/wf2 → `ScopeHandler`.
 
-IC-7300/MK2: CI-V 0x27 frames → `civ_controller.py` demux → 475-bin scale/upsample to 850 → `ScopeHandler`.
+IC-7300/MK2: startup/reconnect sends scope display ON (`27 10 01`), Center mode, span, then waveform-data output ON (`27 11 01`). CI-V `27 00` frames → `civ_controller.py` demux → bounded 44-segment queue (four complete 11-segment USB waveforms, drop oldest on overflow) → 475-bin scale/upsample to 850 → `ScopeHandler`. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.
 
 ![Spectrum Paths](diagrams/spectrum-paths.svg)
 

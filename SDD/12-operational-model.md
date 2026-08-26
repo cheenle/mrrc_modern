@@ -12,7 +12,7 @@ MRRC Host
   → Uvicorn on 0.0.0.0:8888 (configurable via MRRC_WEB_HOST / MRRC_WEB_PORT)
   → Backend selected by MRRC_RADIO_MODEL (ft710 / ic7300 / ic7300mk2)
   → FT-710: Serial CAT via USB Enhanced COM Port (configurable via MRRC_SERIAL_PORT)
-  → IC-7300/MK2: CI-V via USB serial port (configurable via MRRC_SERIAL_PORT, 115200 8N1)
+  → IC-7300/MK2: CI-V via USB serial port (configurable via MRRC_SERIAL_PORT, backend default 115200 8N1)
   → FT-710 FT4222 SPI: internal FTDI chip (via scope_pipe subprocess)
   → IC-7300/MK2 CI-V 0x27 spectrum: on the same CI-V serial port
   → USB Audio: supported radio USB audio device (auto-detected by PyAudio)
@@ -28,8 +28,9 @@ Yaesu FT-710
 
 Icom IC-7300 / IC-7300MK2
   → USB connection to host
-  → USB CI-V serial port (115200 baud, 8N1, default address 0x94)
-  → 0x27 spectrum data on the same CI-V port
+  → Radio menu: CI-V USB Port = Unlink from [REMOTE]
+  → USB CI-V serial port (explicit 115200 baud, not Auto; IC-7300 default 0x94, MK2 default 0xB6)
+  → 0x27 spectrum data on the same CI-V port (display + data-output switches ON)
   → 48kHz native USB Audio interface
 ```
 
@@ -38,9 +39,10 @@ Icom IC-7300 / IC-7300MK2
 | Name | Default | Purpose |
 |------|---------|---------|
 | `MRRC_RADIO_MODEL` | `ft710` | Backend selection: `ft710`, `ic7300`, or `ic7300mk2` |
-| `IC7300_CIV_ADDR` | `0x94` | IC-7300/MK2 CI-V controller address (hex) |
+| `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V radio address (hex) |
+| `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V radio address (hex) |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | Radio serial port (FT-710 Enhanced COM Port or IC-7300 CI-V port) |
-| `MRRC_BAUD_RATE` | `38400` | CAT serial baud rate (FT-710 default; IC-7300 uses 115200 regardless) |
+| `MRRC_BAUD_RATE` | backend default | CAT/CI-V baud: FT-710 `38400`; IC-7300/MK2 `115200`; an explicit value overrides the backend default |
 | `MRRC_WEB_PORT` | `8888` | Uvicorn listen port |
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Web login password |
 | `MRRC_WEB_HOST` | `::` | Bind address |
@@ -61,8 +63,8 @@ Icom IC-7300 / IC-7300MK2
 | Background | `./start.sh` | Starts in background, logs to `logs/`, writes PID file |
 | Stop | `./stop.sh` | Reads PID file, sends SIGTERM, cleans up PID |
 | FT-710 mode | `MRRC_RADIO_MODEL=ft710 python server.py` | Default Yaesu FT-710 backend |
-| IC-7300 mode | `MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py` | Icom IC-7300 backend (CI-V 115200 8N1) |
-| IC-7300MK2 mode | `MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py` | Icom IC-7300MK2 backend |
+| IC-7300 mode | `MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py` | Icom IC-7300 backend (CI-V 115200 8N1) |
+| IC-7300MK2 mode | `MRRC_RADIO_MODEL=ic7300mk2 MRRC_SERIAL_PORT=/dev/cu.usbserial-... MRRC_BAUD_RATE=115200 python server.py` | Icom IC-7300MK2 backend (default CI-V address 0xB6) |
 | Custom port | `MRRC_WEB_PORT=8889 python server.py` | Override listen port |
 | Custom serial | `MRRC_SERIAL_PORT=/dev/ttyUSB0 python server.py` | Override serial port |
 | Custom password | `MRRC_WEB_PASSWORD=mysecret python server.py` | Override login password |
@@ -96,9 +98,9 @@ Icom IC-7300 / IC-7300MK2
 | Start service | `./start.sh`; check `logs/` for startup messages |
 | Stop service | `./stop.sh` |
 | Verify radio connection | Server log shows backend-specific connect message (FT-710 ID or IC-7300 CI-V ID) |
-| Verify scope | FT-710: "scope_pipe: first frame received — spectrum active"; IC-7300: CI-V 0x27 frames demuxed |
-| Verify RX audio | Open browser; listen for radio audio; check "RX ...K" bitrate indicator |
-| Verify TX audio | Key PTT; speak; confirm on monitoring receiver |
+| Verify scope | FT-710: "scope_pipe: first frame received — spectrum active"; IC-7300: first confirm Unlink from [REMOTE] + explicit 115200, then check "CI-V scope: first complete waveform — spectrum active"; real frames broadcast at up to 30 Hz without duplicates |
+| Verify RX audio | Open browser; listen for radio audio; check "RX ...K" and startup log fields `host`, `default`, `actual`, `channels` (IC-7300/MK2: `actual=48000Hz`) |
+| Verify TX audio | Key PTT; speak; confirm on monitoring receiver and check TX open log (`actual=48000Hz` on IC-7300/MK2) |
 | Verify PTT safety | Release PTT; confirm radio returns to RX; check log for backend-specific unkey command |
 | Change backend | `MRRC_RADIO_MODEL=ic7300 python server.py` |
 | Change IC-7300 CI-V address | `IC7300_CIV_ADDR=0x94 python server.py` |
@@ -124,7 +126,7 @@ Icom IC-7300 / IC-7300MK2
 |------|------------|
 | Wrong serial port | Server logs warning; check `ls /dev/cu.*` or `ls /dev/ttyUSB*` |
 | FT4222 not working (FT-710) | Falls back to S-meter synthetic spectrum; check D2XX config |
-| CI-V 0x27 not arriving (IC-7300) | Verify `IC7300_CIV_ADDR` matches radio; check CI-V port baud/8N1; falls back to S-meter |
+| CI-V 0x27 not arriving (IC-7300) | Verify `CI-V USB Port = Unlink from [REMOTE]`, explicit 115200 (not Auto), and the model-specific CI-V address; run `_diag_ic7300_scope.py`; initialization enables both `27 10` display and `27 11` data output; the bounded queue drops oldest data rather than replaying stale frames |
 | Audio not working | Check PyAudio device list in logs; verify the selected radio's USB audio appears |
 | Port already in use | `./stop.sh` first; check for stale processes |
 | Stale JS cached | Service worker bypasses JS/HTML; version query strings |

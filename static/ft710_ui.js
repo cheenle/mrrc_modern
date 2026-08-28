@@ -489,7 +489,7 @@ function renderRecordingState() {
     recordBtn.disabled = false;
     recordBtn.classList.toggle('record-active', active);
     recordBtn.textContent = active ? 'STOP' : 'REC';
-    recordBtn.title = '录制接收音频为 MP3 (128kbps，首次点击时加载编码器)';
+    recordBtn.title = '按时间顺序录制接收+发射音频为 MP3 (128kbps，首次点击时加载编码器)';
 }
 
 function renderFFTPlot(wf1) {

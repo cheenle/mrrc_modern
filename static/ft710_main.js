@@ -630,7 +630,12 @@ function getRxOpusDecoder() {
 	return _rxOpusDecoder;
 }
 
-// ── RX MP3 Recorder (lamejs → real MP3, works in all browsers) ────────
+// ── QSO MP3 Recorder (lamejs → real MP3, works in all browsers) ───────
+// Records receive AND transmit audio into a single chronological mono
+// stream: RX frames are fed as they arrive from /WSaudioRX; while PTT is
+// held (txAudioRunning) RX feed is muted (the radio only returns sidetone
+// during TX, which the UI also dims to 0) and the local mic frames are fed
+// instead — so playback reproduces the whole QSO in time order.
 var RX_RECORDER_MIME = "audio/mpeg";
 var RX_RECORDER_EXT = "mp3";
 var RX_MP3_BITRATE = 128; // kbps, good balance of quality vs size
@@ -684,7 +689,7 @@ function _downloadRecording(chunks) {
 	var url = URL.createObjectURL(blob);
 	var a = document.createElement("a");
 	a.href = url;
-	a.download = "mrrc-rx-" + _formatRecordingTimestamp(new Date()) + ".mp3";
+	a.download = "mrrc-qso-" + _formatRecordingTimestamp(new Date()) + ".mp3";
 	document.body.appendChild(a);
 	a.click();
 	a.remove();
@@ -785,7 +790,7 @@ window.RXRecorder = (() => {
 		_notify();
 	}
 
-	/** Feed one chunk of decoded float32 RX audio into the MP3 encoder. */
+	/** Feed one chunk of decoded float32 audio into the MP3 encoder. */
 	function feed(f32) {
 		if (!active || !encoder || !f32 || f32.length === 0) return;
 		var int16 = _f32ToInt16(f32);
@@ -811,6 +816,15 @@ window.RXRecorder = (() => {
 })();
 
 function feedRXRecorderFrame(f32) {
+	// While PTT is held the mic is being recorded instead — the radio only
+	// returns sidetone/duplex audio during TX (the UI mutes it too), so
+	// feeding it here would duplicate the timeline.
+	if (typeof txAudioRunning !== "undefined" && txAudioRunning) return;
+	if (window.RXRecorder) window.RXRecorder.feed(f32);
+}
+
+/** Feed one chunk of local mic float32 audio (48 kHz) into the recorder. */
+function feedTXRecorderFrame(f32) {
 	if (window.RXRecorder) window.RXRecorder.feed(f32);
 }
 
@@ -1302,6 +1316,11 @@ function startTXAudio() {
 					_txMicAw.port.onmessage = (ev) => {
 						const d = ev.data || {};
 						if (d.type === "frame" && d.frame && txOpusWorker) {
+							// QSO recorder: copy BEFORE the transfer below neuters
+							// the buffer (only when actually recording).
+							if (window.RXRecorder && window.RXRecorder.isActive) {
+								feedTXRecorderFrame(new Float32Array(d.frame.slice(0)));
+							}
 							txOpusWorker.postMessage(
 								{
 									type: "float_frame",
@@ -1334,6 +1353,7 @@ function startTXAudio() {
 							event.inputBuffer.getChannelData(0),
 							_txMicCtx.sampleRate || 48000,
 						);
+						feedTXRecorderFrame(input);
 						if (txOpusWorker) {
 							const i16 = new Int16Array(input.length);
 							for (let i = 0; i < input.length; i++) {
@@ -1399,6 +1419,7 @@ function startTXAudioFallback() {
 					event.inputBuffer.getChannelData(0),
 					_txMicCtx.sampleRate || 48000,
 				);
+				feedTXRecorderFrame(input);
 				const i16 = new Int16Array(input.length);
 				for (let i = 0; i < input.length; i++) {
 					const v = input[i] * 32767;

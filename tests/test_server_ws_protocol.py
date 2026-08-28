@@ -217,12 +217,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=24', index_source)
-        self.assertIn('/ft710_main.js?v=25', index_source)
-        self.assertIn('/ft710_ui.js?v=27', index_source)
+        self.assertIn('/ft710_main.js?v=26', index_source)
+        self.assertIn('/ft710_ui.js?v=28', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v27'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=27'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v28'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=28'", sw_source)
 
 
 class CookieSettingsPersistenceTests(unittest.TestCase):

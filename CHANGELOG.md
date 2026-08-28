@@ -22,8 +22,9 @@ All notable changes to the MRRC Web Control project.
 
 ### Packaging
 - Windows installer version bumped to **1.12.1**
-  (`packaging/windows/MRRC-Modern.iss`). Artifact size/SHA-256 recorded after
-  the Windows build.
+  (`packaging/windows/MRRC-Modern.iss`). All three PyInstaller targets and Inno
+  Setup 6.7.3 passed on the Windows 11 build VM; the 45,329,503-byte installer
+  has SHA-256 `ba5fb7a9fd952e9c92508cf6b159c1d92b9292a3b03925f855f55166d5954e47`.
 
 ## [v1.12.0] — 2026-08-26 — IC-7300 runtime reliability and official CI-V conformance + Windows installer
 

@@ -5,27 +5,27 @@ This guide covers the Windows desktop package for MRRC Web Control
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.12.0 Stable)
+## Download (v1.12.1 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.12.0-Windows-x64-Setup.exe` | 45.3 MB (45,339,501 bytes) | `e7d1e460c408a6da2c0f66f23002d48429fa0b46bfd933305b4f150cbcefade2` |
+| `MRRC-Modern-v1.12.1-Windows-x64-Setup.exe` | 45.3 MB (45,329,503 bytes) | `ba5fb7a9fd952e9c92508cf6b159c1d92b9292a3b03925f855f55166d5954e47` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.12.0-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-The v1.12.0 package was built from `main` on Windows 11 with Python 3.12.4,
+The v1.12.1 package was built from `main` on Windows 11 with Python 3.12.4,
 PyInstaller 6.21.0, and Inno Setup 6.7.3. All 633 Windows tests, three
 PyInstaller targets, and the installer build passed; required bundled-file
-inspection (FTDI DLLs, opus.dll, static assets, `mem_channels.json`, and Icom
-backend hidden imports) and cross-host SHA-256 checks passed. v1.12.0 hardens
-IC-7300/MK2 runtime reliability and official CI-V conformance: backend-aware
-115200 baud defaults, newest-data scope delivery, display/data-output startup,
-SCROLL-C edge metadata, model-specific Transceive items, documented liveness
-and power-on framing, raw-120 ALC calibration, and three valid scope speeds.
-The FT-710 CAT, 44.1 kHz device-domain audio, PTT, and scope behavior is
-unchanged.
+inspection (FTDI DLLs, opus.dll, static assets including the lamejs MP3
+encoder, `mem_channels.json`, and Icom backend hidden imports) and cross-host
+SHA-256 checks passed. v1.12.1 makes the web UI recorder capture the whole
+QSO in time order: while PTT is held it mutes the RX feed (sidetone/duplex
+only, already dimmed to silence in the UI) and records the local microphone
+into the same mono 48 kHz MP3 stream, across all three TX capture paths;
+downloads are named `mrrc-qso-<timestamp>.mp3`. Radio-side CAT, audio, PTT,
+and scope behavior is unchanged from v1.12.0.
 
 Browser capture and Opus remain at 48 kHz. Every decoded 960-sample TX frame is
 converted to 882 samples before the FT-710 playback device is opened/written at

@@ -362,29 +362,36 @@
 <td>I8</td>
 <td><code class="scope-code">serve_static</code> path traversal — <code class="scope-code">STATIC_DIR / path</code> (server.py) builds the response path from the request URL without <code class="scope-code">resolve()</code> + containment check, so an authenticated non-browser client can read arbitrary server-readable files (e.g. <code class="scope-code">GET /../server.py</code>, cert keys). Browsers normalize <code class="scope-code">..</code>, so exposure is raw-HTTP clients.</td>
 <td>High</td>
-<td>Open</td>
-<td>Resolve the joined path and reject unless <code class="scope-code">is_relative_to(STATIC_DIR)</code> before <code class="scope-code">FileResponse</code>; add a regression test</td>
+<td><strong>Resolved 2026-08-26</strong> (<code class="scope-code">_resolve_static_path</code> resolves the join and rejects unless contained inside <code class="scope-code">STATIC_DIR</code>; traversal and absolute request paths now 404 instead of falling through to the SPA fallback; regression tests in <code class="scope-code">tests/test_server_security.py</code>)</td>
+<td><del>Resolve the joined path and reject unless <code class="scope-code">is_relative_to(STATIC_DIR)</code> before <code class="scope-code">FileResponse</code>; add a regression test</del> Done</td>
 </tr>
 <tr>
 <td>I9</td>
 <td>Login password compared with <code class="scope-code">!=</code> (non-constant-time, timing side channel) and a weak default password only logs a warning — a fresh install that skips the warning is effectively open.</td>
 <td>Medium</td>
-<td>Open</td>
-<td>Switch to <code class="scope-code">hmac.compare_digest</code>; escalate weak-password handling (first-login forced change or startup banner); consider shrinking the 30-day auth cookie</td>
+<td><strong>Partially resolved 2026-08-26</strong> (<code class="scope-code">hmac.compare_digest</code> via <code class="scope-code">_password_matches</code>; <code class="scope-code">_warn_if_default_password()</code> fires a loud startup WARNING when the well-known default is active; login-time &lt;12-char warning kept). Still open: first-login forced password change, shorter cookie TTL.</td>
+<td><del>Switch to <code class="scope-code">hmac.compare_digest</code></del> Done; forced first-login change remains future work</td>
 </tr>
 <tr>
 <td>I10</td>
 <td>Web client audio/spectrum subchannels (<code class="scope-code">/WSaudioRX</code>, <code class="scope-code">/WSaudioTX</code>, <code class="scope-code">/WSspectrum</code>) have no independent reconnect — only <code class="scope-code">/WSradio</code> auto-reconnects, so a transient drop yields “controls alive but audio dead” until the control channel also cycles.</td>
 <td>Medium</td>
-<td>Open</td>
-<td>Give each subchannel its own exponential-backoff reconnect (pattern exists in <code class="scope-code">static/modules/atr1000.js</code>)</td>
+<td><strong>Resolved 2026-08-26</strong> (<code class="scope-code">subchannelReconnect</code> gives each subchannel its own exponential backoff 1s→30s with on-open reset, CONNECTING-state guards against socket stacking, auth-expiry 4001 stays with the control flow, and <code class="scope-code">_webClientOff</code> suppresses self-heal while the power button has the client OFF; contract test in <code class="scope-code">tests/test_server_ws_protocol.py</code>)</td>
+<td><del>Give each subchannel its own exponential-backoff reconnect</del> Done</td>
 </tr>
 <tr>
 <td>I11</td>
 <td>iOS app PTT release race (P0 in docs/IOS_APP_ANALYSIS.md): <code class="scope-code">DragGesture.onEnded</code> sends <code class="scope-code">ptt:false</code> only when the server echo already shows <code class="scope-code">tx_status &gt; 0</code>, and there is no client watchdog/scenePhase guard — fast taps over WAN can leave the radio keyed up. Approved PTTManager fix design not yet implemented (0/N tasks).</td>
 <td>High</td>
-<td>Open</td>
-<td>Implement unconditional release on gesture end + 500 ms×3 watchdog + scenePhase force-release (mirror FT710Android <code class="scope-code">PTTManager</code>)</td>
+<td><strong>Partially resolved 2026-08-26</strong> (release race fixed: PTT gesture now tracks local <code class="scope-code">pttHeld</code> like TUNE’s <code class="scope-code">tuneHeld</code>, releases unconditionally on gesture end with optimistic local <code class="scope-code">txStatus</code> update in <code class="scope-code">RadioViewModel.setPTT</code>; requires device verification). Still open: 500 ms×3 watchdog, scenePhase force-release. Server side gained an opt-in stuck-keyup layer: <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> watchdog forces RX after continuous TX beyond the limit, covering zombie-but-connected sockets that neither client watchdogs nor the dead-man switch see.</td>
+<td><del>Unconditional release on gesture end</del> Done; watchdog + scenePhase remain</td>
+</tr>
+<tr>
+<td>I12</td>
+<td>Stuck-keyup gap for connected-but-hung clients: every existing TX-release layer assumes either a working client or a disconnect. A zombie socket mid-TX keys the radio forever.</td>
+<td>High</td>
+<td><strong>Resolved 2026-08-26</strong> (server-side <code class="scope-code">_max_tx_watchdog</code>, opt-in via <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code>, default off so operator QSO patterns are never interrupted; fire-and-forget unkey + zeroed TX meters + error toast, no verify loop per ch15)</td>
+<td>Opt-in max-continuous-TX force-RX implemented as a new outermost safety layer</td>
 </tr>
 </tbody>
 </table>
@@ -469,7 +476,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.29 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.30 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -3,8 +3,9 @@
 import subprocess, sys, os, re
 from pathlib import Path
 
-SDD_DIR = Path("/Users/cheenle/HAM/mrrc_modern/SDD")
-OUT_DIR = Path("/Users/cheenle/HAM/mrrc_modern/website/sdd")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SDD_DIR = REPO_ROOT / "SDD"
+OUT_DIR = Path(__file__).resolve().parent / "sdd"
 CSS_PATH = "../css/scope.css?v=1"
 SITE_CSS_PATH = "../css/mrrc_modern.scope.css?v=1"
 JS_PATH = "../js/scope.js?v=1"
@@ -86,6 +87,19 @@ def build_nav_sidebar(current_file: str) -> str:
         cls = ' class="active"' if href == current_file else ""
         items.append(f'            <li><a href="{href}"{cls}>{label}</a></li>')
     return "\n".join(items)
+
+
+def sdd_version() -> str:
+    """Read the live SDD version from the Quick Facts table in SDD/README.md
+    so the footer can never drift from the design record."""
+    try:
+        text = (SDD_DIR / "README.md").read_text(encoding="utf-8")
+        m = re.search(r"\|\s*SDD Version\s*\|\s*(V[\d.]+)\s*\|", text)
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return "SDD"
 
 
 def build_page(body_html: str, title: str, current_file: str) -> str:
@@ -190,7 +204,7 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.29 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · {sdd_version()} · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

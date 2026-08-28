@@ -51,7 +51,7 @@
           Software SCU-LAN10 replacement for the Yaesu FT-710 and Icom
           IC-7300/IC-7300MK2 HF/50MHz transceivers. Real-time FFT spectrum
           plot + waterfall (FT4222 SPI or CI-V), bidirectional Opus 48kHz
-          audio, full CAT control over 4 WebSocket channels — no $200 dongle
+          audio, full CAT control over 4+1 WebSocket channels — no $200 dongle
           required.
         </p>
 <div class="hero-actions">
@@ -446,7 +446,8 @@
 <span class="section-label">Architecture</span>
 <h2 class="section-title">One Process, Pluggable Backends</h2>
 <p class="section-subtitle">
-            4 WebSocket connections, zero external middleware, built entirely on
+            4+1 WebSocket connections (optional ATR1000 tuner link), zero
+            external middleware, built entirely on
             Python async frameworks. Pick the radio with MRRC_RADIO_MODEL.
           </p>
 </div>
@@ -512,7 +513,7 @@
               HTTPS / WSS
             </text>
 <text fill="#8899aa" font-family="inherit" font-size="10" text-anchor="middle" x="350" y="82">
-              4 WebSocket links
+              4+1 WS links
             </text>
 <path d="M 690 70 L 690 77 L 710 77" fill="none" stroke="rgba(46,204,113,0.35)" stroke-width="1.5"></path>
 <polygon fill="rgba(46,204,113,0.45)" points="718,73 710,77 718,81"></polygon>
@@ -584,7 +585,7 @@
 <div class="label">
 <i class="fas fa-network-wired"></i> WebSocket API
             </div>
-<div class="endpoint">4 endpoints · Token auth</div>
+<div class="endpoint">4+1 endpoints · Token auth</div>
 <div class="dir">JSON control + Binary audio/spectrum</div>
 <div class="payload">
               REST: /api/status, /api/auth, /api/mem_channels
@@ -632,9 +633,9 @@
 </div>
 </div>
 <div class="perf-card">
-<div class="metric">409</div>
+<div class="metric">633</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>Green on every build</small>
+              Hardware-Free Tests<br/><small>v1.12.0 release, macOS + Windows</small>
 </div>
 </div>
 </div>
@@ -668,7 +669,7 @@
 <h2 class="section-title">Native iOS &amp; Android Clients</h2>
 <p class="section-subtitle">
             SwiftUI (iOS 17+) and Kotlin/Compose (Android) companion apps —
-            same 4-channel WebSocket protocol as the browser, tuned for
+            same 4+1-channel WebSocket protocol as the browser, tuned for
             one-handed mobile operation.
           </p>
 </div>
@@ -711,6 +712,19 @@
 <li>Settings: reconnect, gain, volume</li>
 </ul>
 </div>
+<div class="feature-card animate">
+<div class="icon"><i class="fab fa-android"></i></div>
+<h3>Android Client — FT710Android</h3>
+<p>
+              Kotlin + Jetpack Compose (Material3, minSdk 26) app speaking the
+              same protocol: full control, waterfall + meters, Opus RX/TX,
+              memory channels, and DataStore settings.
+            </p>
+<ul>
+<li>PTT state machine designed-in from day one</li>
+<li>JVM-tested protocol &amp; PTT logic — device RF acceptance pending</li>
+</ul>
+</div>
 </div>
 <div style="
             background: rgba(230, 126, 34, 0.08);
@@ -724,15 +738,22 @@
 <strong>Early access — build from source</strong>
 </p>
 <p style="color: var(--scope-text-muted); font-size: 0.9rem; margin: 0">
-            Requires a physical iPhone (simulator unsupported — bundled libopus
-            is arm64-device-only), iOS 17+, Xcode 15 + XcodeGen, and a
-            TLS-enabled server. The P0 PTT-safety issues from the 2026-07-20
-            audit are resolved — TX uplink ownership follows the keying client.
+            iOS build requires a physical iPhone (simulator unsupported —
+            bundled libopus is arm64-device-only), iOS 17+, Xcode 15 +
+            XcodeGen, and a TLS-enabled server. The P0 PTT-safety issues from
+            the 2026-07-20 audit are resolved — TX uplink ownership follows
+            the keying client. Android: pure logic (protocol, PTT, spectrum,
+            memory channels) is covered by JVM tests via
+            <code>./gradlew test assembleDebug lintDebug</code>; on-device RF
+            acceptance is pending.
           </p>
 </div>
 <div style="text-align: center; margin-top: 2rem">
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/tree/main/FT710Mobile" rel="noopener" target="_blank">
 <i class="fab fa-apple"></i> iOS App on GitHub
+          </a>
+<a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/tree/main/FT710Android" rel="noopener" target="_blank">
+<i class="fab fa-android"></i> Android App on GitHub
           </a>
 </div>
 </div>
@@ -755,7 +776,7 @@
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.20</strong> · Architecture decisions, component
+            <strong>V2.27</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>
@@ -815,6 +836,8 @@
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>
 <li><a href="sdd.html">SDD Docs</a></li>
+<li><a href="guide.html">操作指南 (Guide)</a></li>
+<li><a href="fde.html">FDE</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" rel="noopener" target="_blank">SDD Source</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/LICENSE" rel="noopener" target="_blank">GPLv3 License</a></li>
 </ul>

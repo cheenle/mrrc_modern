@@ -12,7 +12,7 @@ hero header and back-to-top.
 import re, subprocess, sys
 from pathlib import Path
 
-OUT = Path("/Users/cheenle/HAM/mrrc_modern/website")
+OUT = Path(__file__).resolve().parent
 
 def convert(md_path: Path):
     """pandoc → (toc_fragment, body_html). TOC extracted to sidebar."""
@@ -275,7 +275,7 @@ window.addEventListener('scroll', () => {{
     return page
 
 def main():
-    md_path = Path("/Users/cheenle/HAM/mrrc_modern/docs/OPERATION_GUIDE.md")
+    md_path = Path(__file__).resolve().parent.parent / "docs" / "OPERATION_GUIDE.md"
     toc, body = convert(md_path)
     for lang, out in (("en", "guide.html"), ("zh", "zh/guide.html")):
         dest = OUT / out

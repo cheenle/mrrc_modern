@@ -32,6 +32,10 @@ let wsReconnectDelay = 1000;
 const WS_RECONNECT_MAX = 30000;
 let pingTimer = null;
 let _intentionalClose = false; // set by power button to block auto-reconnect
+// Web-client power OFF must also suppress subchannel reconnects. It cannot
+// reuse _intentionalClose: wsRadio.onclose consumes and resets that flag
+// before the audio/spectrum close events arrive.
+let _webClientOff = false;
 
 function wsUrlWithAuth(path) {
 	const token = getAuthToken();
@@ -128,10 +132,18 @@ function connectWebSocket() {
 
 // ── Spectrum WebSocket ──────────────────────────────────────────────
 function connectSpectrumSocket() {
-	if (wsSpectrum && wsSpectrum.readyState === WebSocket.OPEN) return;
+	if (
+		wsSpectrum &&
+		(wsSpectrum.readyState === WebSocket.OPEN ||
+			wsSpectrum.readyState === WebSocket.CONNECTING)
+	)
+		return;
 	const url = wsUrlWithAuth("/WSspectrum");
 	wsSpectrum = new WebSocket(url);
 	wsSpectrum.binaryType = "arraybuffer";
+	wsSpectrum.onopen = () => {
+		subchannelConnected("spectrum");
+	};
 	wsSpectrum.onmessage = (event) => {
 		if (event.data instanceof ArrayBuffer) {
 			if (!window.__netBytes)
@@ -146,8 +158,13 @@ function connectSpectrumSocket() {
 			handleSpectrumBinary(event.data);
 		}
 	};
-	wsSpectrum.onclose = () => {
+	wsSpectrum.onclose = (ev) => {
 		wsSpectrum = null;
+		if (ev && ev.code === 4001) {
+			handleAuthExpired();
+			return;
+		}
+		subchannelReconnect("spectrum", connectSpectrumSocket);
 	};
 	wsSpectrum.onerror = () => {};
 }
@@ -207,6 +224,57 @@ function scheduleReconnect() {
 		connectWebSocket();
 		wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_RECONNECT_MAX);
 	}, wsReconnectDelay);
+}
+
+// ── Subchannel independent reconnect (SDD I10) ──────────────────────
+// Only /WSradio auto-reconnected; /WSaudioRX, /WSaudioTX and /WSspectrum
+// just nulled out on close, so a transient drop left controls alive but
+// audio/spectrum dead until a full page reload. Each subchannel now owns
+// an exponential-backoff reconnect (same pattern as atr1000.js). Auth
+// expiry (4001) stays owned by the control-channel login flow, and the
+// power button's _intentionalClose suppresses all of them.
+const SUBCHANNEL_RECONNECT_MAX = 30000;
+const subchannelState = {
+	spectrum: { delay: 1000, timer: null },
+	audioRX: { delay: 1000, timer: null },
+	audioTX: { delay: 1000, timer: null },
+};
+
+function subchannelReconnect(name, connectFn) {
+	const st = subchannelState[name];
+	if (!st || _intentionalClose || _webClientOff || st.timer) return;
+	console.log(`Reconnecting ${name} in ${st.delay} ms`);
+	st.timer = setTimeout(() => {
+		st.timer = null;
+		if (_intentionalClose || _webClientOff) return;
+		try {
+			connectFn();
+			st.delay = Math.min(st.delay * 2, SUBCHANNEL_RECONNECT_MAX);
+		} catch (e) {
+			console.warn(`${name} reconnect attempt failed:`, e);
+			subchannelReconnect(name, connectFn);
+		}
+	}, st.delay);
+}
+
+function cancelSubchannelTimers() {
+	for (const name of Object.keys(subchannelState)) {
+		const st = subchannelState[name];
+		if (st.timer) {
+			clearTimeout(st.timer);
+			st.timer = null;
+		}
+	}
+}
+
+function subchannelConnected(name) {
+	const st = subchannelState[name];
+	if (!st) return;
+	st.delay = 1000;
+	if (st.timer) {
+		clearTimeout(st.timer);
+		st.timer = null;
+	}
 }
 
 // On WS handshake failure (1006), distinguish a stale auth token from a
@@ -507,6 +575,7 @@ function bodyload() {
 			if (wsRadio && wsRadio.readyState === WebSocket.OPEN) {
 				// Disconnect: stop web client
 				_intentionalClose = true; // block auto-reconnect
+				_webClientOff = true; // subchannels must not self-heal either
 				wsRadio.close();
 				if (wsAudioRX) wsAudioRX.close();
 				if (wsAudioTX) wsAudioTX.close();
@@ -514,6 +583,8 @@ function bodyload() {
 				powerBtn.classList.remove("active");
 			} else {
 				// Connect: start web client
+				cancelSubchannelTimers(); // stale backoff timers from the OFF period
+				_webClientOff = false;
 				// Close any stale connections first to avoid zombie WS
 				// accumulating TX ownership (non_owner_drops issue).
 				if (wsRadio) {
@@ -867,6 +938,7 @@ window.__pushRxFrame = __pushRxFrameNoop;
 // ── WebSocket event handlers ──────────────────────────────────────────
 function wsAudioRXopen() {
 	console.log("Audio RX WebSocket connected");
+	subchannelConnected("audioRX");
 }
 function wsAudioRXclose(ev) {
 	console.log("Audio RX WebSocket closed");
@@ -875,6 +947,7 @@ function wsAudioRXclose(ev) {
 		return;
 	}
 	wsAudioRX = null;
+	subchannelReconnect("audioRX", connectAudioRX);
 }
 function wsAudioRXerror(err) {
 	console.warn("Audio RX WebSocket error:", err);
@@ -1136,7 +1209,12 @@ let txAudioRunning = false;
 const TX_AUDIO_MAX_BUFFERED_BYTES = 4096;
 
 function connectAudioTX() {
-	if (wsAudioTX && wsAudioTX.readyState === WebSocket.OPEN) return;
+	if (
+		wsAudioTX &&
+		(wsAudioTX.readyState === WebSocket.OPEN ||
+			wsAudioTX.readyState === WebSocket.CONNECTING)
+	)
+		return;
 
 	const url = wsUrlWithAuth("/WSaudioTX");
 	console.log("Connecting Audio TX to", url);
@@ -1145,11 +1223,17 @@ function connectAudioTX() {
 
 	wsAudioTX.onopen = () => {
 		console.log("Audio TX WebSocket connected");
+		subchannelConnected("audioTX");
 	};
 
-	wsAudioTX.onclose = () => {
+	wsAudioTX.onclose = (ev) => {
 		console.log("Audio TX WebSocket closed");
 		wsAudioTX = null;
+		if (ev && ev.code === 4001) {
+			handleAuthExpired();
+			return;
+		}
+		subchannelReconnect("audioTX", connectAudioTX);
 	};
 
 	wsAudioTX.onerror = () => {};

@@ -65,8 +65,9 @@ dist\windows\MRRC-Modern-Setup.exe
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
 | `MRRC_BAUD_RATE` | backend default | Serial baud: FT-710 `38400`; IC-7300/MK2 `115200`; explicit value overrides the default |
 | `MRRC_WEB_PORT` | `8888` | Web server port |
-| `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change**) |
+| `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change** — startup logs a loud warning while the default is active) |
 | `MRRC_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
+| `MRRC_PTT_MAX_TX_SECONDS` | `0` (off) | Safety watchdog: force RX after this many seconds of continuous transmit (guards zombie-but-connected clients; 0 keeps the radio never interrupting an operator's transmission) |
 | `MRRC_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
 | `MRRC_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
 | `MRRC_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |

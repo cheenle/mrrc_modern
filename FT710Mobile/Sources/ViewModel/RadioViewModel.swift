@@ -268,6 +268,10 @@ final class RadioViewModel: ObservableObject {
     /// Toggle PTT. Starts mic capture on TX, stops on RX. Mutes RX audio during TX.
     func setPTT(_ tx: Bool) {
         sendSet("ptt", tx)
+        // 乐观本地更新（I11）:不等服务端回显。松开 PTT 后按钮立即回到 RX
+        // 态,且回显到达前的再次点按也能正确走按下分支;真实 tx_status 由
+        // 500ms 轮询纠偏。
+        state.txStatus = tx ? 1 : 0
         if tx {
             audioPlayback.isMuted = true
             audioCapture.start()

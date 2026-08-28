@@ -2,6 +2,29 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.12.1] — 2026-08-28 — Chronological RX+TX QSO recording (web UI)
+
+### Added
+- The web MP3 recorder now captures the whole QSO in time order instead of
+  RX audio only. While PTT is held, the recorder mutes the RX feed (the radio
+  only returns sidetone/duplex audio during TX, which the UI already dims to
+  silence) and feeds the local microphone into the same lamejs mono 48 kHz
+  stream. Mic frames are tapped in all three TX capture paths — AudioWorklet
+  (copied before the zero-copy transfer to the Opus worker), ScriptProcessor
+  fallback, and Int16 PCM fallback. Downloads are named
+  `mrrc-qso-<timestamp>.mp3` (was `mrrc-rx-`); the REC button tooltip notes
+  the new behavior.
+
+### Tests
+- Suite remains **633 tests across 31 modules**, green on macOS. Cache-bust
+  guard assertions re-pinned: `ft710_main.js?v=26`, `ft710_ui.js?v=28`,
+  service worker `mrrc-v28`.
+
+### Packaging
+- Windows installer version bumped to **1.12.1**
+  (`packaging/windows/MRRC-Modern.iss`). Artifact size/SHA-256 recorded after
+  the Windows build.
+
 ## [v1.12.0] — 2026-08-26 — IC-7300 runtime reliability and official CI-V conformance + Windows installer
 
 ### Added

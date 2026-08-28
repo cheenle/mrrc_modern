@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.28</td>
+<td>2026-08-28</td>
+<td>Kimi</td>
+<td><strong>Web QSO recorder: RX+TX chronological MP3.</strong> The web UI recorder (<code class="scope-code">window.RXRecorder</code>, <code class="scope-code">static/ft710_main.js</code>) previously captured only decoded RX frames; it now records the whole QSO in time order. While PTT is held (<code class="scope-code">txAudioRunning</code>), <code class="scope-code">feedRXRecorderFrame()</code> mutes the RX feed (the radio only returns sidetone/duplex audio during TX, which the UI already dims to 0 via <code class="scope-code">AUDIO_TX_DIM_FACTOR</code>) and local mic frames are fed into the same lamejs mono 48 kHz encoder instead — tapped in all three TX capture paths: AudioWorklet (copied before the zero-copy transfer to <code class="scope-code">tx_opus_worker</code> neuters the buffer, only while recording), ScriptProcessor fallback, and Int16 PCM fallback. Download filename prefix <code class="scope-code">mrrc-rx-</code> → <code class="scope-code">mrrc-qso-</code>; REC button tooltip updated; cache-bust bumped (<code class="scope-code">ft710_main.js?v=26</code>, <code class="scope-code">ft710_ui.js?v=28</code>, service worker <code class="scope-code">mrrc-v28</code>). Frontend-only change; no server/protocol impact, suite 633 tests green (cache-bust guard assertions re-pinned in <code class="scope-code">test_server_ws_protocol.py</code>/<code class="scope-code">test_audio.py</code>, JS syntax verified via <code class="scope-code">node --check</code>).</td>
+</tr>
+<tr>
 <td>SDD V2.27</td>
 <td>2026-08-26</td>
 <td>OpenAI</td>
@@ -533,7 +539,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.27 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.28 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

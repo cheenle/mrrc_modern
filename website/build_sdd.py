@@ -190,7 +190,7 @@ def build_page(body_html: str, title: str, current_file: str) -> str:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · SDD V2.27 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · SDD V2.28 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

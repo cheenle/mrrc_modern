@@ -59,7 +59,7 @@ source .venv/bin/activate
 packaging/macos/build.sh
 ```
 
-`build.sh` 依次：语法检查 → 测试 → 3 个 PyInstaller spec → 组装 `.app` → ad-hoc 签名 → `hdiutil` 打 dmg → 打印 MD5/SHA-256。约 3–5 分钟。
+`build.sh` 依次：语法检查 → 测试 → 3 个 PyInstaller spec → 组装 `.app` → **`Contents/Frameworks` symlink（关键，见 §5）** → ad-hoc 签名 → `hdiutil` 打 dmg → 打印 MD5/SHA-256。约 3–5 分钟。
 
 任何一步非零退出都会因 `set -euo pipefail` 中止，不会带病出包。
 
@@ -143,6 +143,7 @@ ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern
 | `MRRC-Modern.app` 体积异常大 | rumps 拉入了整个 PyObjC | 正常，PyObjC 约 40–50 MB；如需缩小可后续裁剪 frameworks |
 | `MRRC_RADIO_MODEL` 为空/非法 | env 里没写型号 | config.py 空值安全回落 `ft710`（`os.environ.get(...) or "ft710"`），服务正常启动，无需手动改 |
 | 首启自动探测没识别出电台 | 串口探测超时 / 电台未开 / 多设备 | 探测不打断服务：失败即安全回落（型号默认 ft710），server 照常启动；稍后可菜单栏 Edit Configuration… 手工修正 |
+| **server 起不来：`[PYI-XXXX:ERROR] Failed to load Python shared library '.../Contents/Frameworks/Python'`** | PyInstaller 的 onedir exe 放进 `.app` 的 `Contents/MacOS` 后，bootloader 切到 **bundle 模式**：Python 框架和整个 onedir 数据（`sys._MEIPASS`：base_library.zip/numpy/static…）都按 `Contents/Frameworks` 解析，而不是非 bundle 的 `_internal` 同级目录。v1.7.0 及之前的 mac 包都有此缺陷（server 一启动即崩，菜单栏/浏览器是死的） | **v1.13.0 已修**：build.sh 组装时 `ln -sfn MacOS/_internal "$APP_BUNDLE/Contents/Frameworks"`。若手动搭 app 务必照做；冒烟验证：`Contents/MacOS/MRRC-Modern-Server --no-ssl --port 8899 --serial-port ""` 起来后 `curl -s -o /dev/null -w '%{http_code}' 127.0.0.1:8899/api/health` 应返回 401 |
 
 ## 6. 常用命令速查
 

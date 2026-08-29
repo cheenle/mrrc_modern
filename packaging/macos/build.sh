@@ -85,6 +85,16 @@ if [[ -d "$REPO_ROOT/vendor/ftdi/macos" ]]; then
   cp -R "$REPO_ROOT/vendor/ftdi/macos" "$APP_MACOS/vendor/ftdi/macos"
 fi
 
+# Bundle-mode Python/data location. PyInstaller's macOS bootloader, when a
+# onedir exe lives inside Contents/MacOS of a .app, switches to "bundle mode":
+# it loads the Python framework AND treats the whole onedir data tree
+# (sys._MEIPASS: base_library.zip, numpy, static, ...) as Contents/Frameworks —
+# NOT the _internal sibling a non-bundle onedir uses. Without this symlink the
+# server binary dies at startup ("Failed to load Python shared library
+# .../Contents/Frameworks/Python"). The symlink makes Frameworks resolve to the
+# same runtime tree as MacOS/_internal. (Latent since v1.7.0; fixed in v1.13.0.)
+ln -sfn MacOS/_internal "$APP_BUNDLE/Contents/Frameworks"
+
 # strip stale bytecode caches
 find "$APP_BUNDLE" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 find "$APP_BUNDLE" -name "*.pyc" -delete 2>/dev/null || true

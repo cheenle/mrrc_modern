@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.12.1 · Stable</span>
+<span>v1.13.0 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -304,6 +304,43 @@
             </a>
 </div>
 </div>
+<div style="
+            background: var(--scope-surface);
+            border: 1px solid var(--scope-primary);
+            border-radius: 14px;
+            padding: 1.75rem 2rem;
+            max-width: 720px;
+            margin: 0 auto;
+          ">
+<p style="margin: 0 0 0.25rem; font-size: 1.15rem">
+<i class="fab fa-apple" style="color: var(--scope-primary)"></i>
+<strong> MRRC-Modern-v1.13.0-arm64.dmg — v1.13.0 Stable</strong>
+</p>
+<p style="color: var(--scope-text-muted); margin: 0 0 1rem">
+            50 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+<br/>
+<code style="font-size: 0.76rem">SHA-256: 6c25ae9ed0f4c453ca616f86bd1c332e6048c7abec4d0c1f6d44911c2d763f54</code>
+</p>
+<p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
+            First run needs zero configuration: MRRC Modern auto-generates a
+            web password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
+            0x19) and its serial port, and bundles the FT4222 true-spectrum
+            dylibs — the FT-710 FFT waterfall works out of the box. A web
+            连接设置 (Connection Settings) dialog lets you change the radio
+            model, serial port, RX+TX audio devices, and password with
+            save-and-restart. The server binds <code>::</code> dual-stack
+            (IPv4+IPv6), so LAN devices reach
+            <code>http://&lt;mac-ip&gt;:8888</code>. The DMG is ad-hoc signed —
+            on first launch, right-click → Open once.
+          </p>
+<div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.13.0-arm64.dmg">
+<i class="fab fa-apple"></i> Download for macOS
+            </a>
+<a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
+<i class="fab fa-github"></i> GitHub Releases
+            </a>
+</div>
+</div>
 <p style="
             text-align: center;
             color: var(--scope-text-muted);
@@ -312,8 +349,9 @@
           ">
           Without the FTDI DLLs the FT-710 backend falls back to the S-meter
           synthetic spectrum — CAT control and audio are unaffected (the IC-7300
-          backend needs no FTDI at all). macOS / Linux / Raspberry Pi: run from
-          source (see Quick Start below).
+          backend needs no FTDI at all). macOS users: use the installer above,
+          or run from source. Linux / Raspberry Pi: run from source (see Quick
+          Start below).
         </p>
 </div>
 </section>
@@ -324,8 +362,8 @@
 <span class="section-label">Quick Start</span>
 <h2 class="section-title">Up and Running in 5 Minutes</h2>
 <p class="section-subtitle">
-            Windows users take the installer track; macOS / Linux / Raspberry Pi
-            run from source. Both end at the same browser UI.
+            Windows and macOS users take the installer track; Linux / Raspberry
+            Pi run from source. All end at the same browser UI.
           </p>
 </div>
 <h3 style="
@@ -380,8 +418,51 @@
             margin-bottom: 1rem;
             text-align: center;
           ">
-<i class="fas fa-terminal" style="color: var(--scope-primary)"></i> Track B —
-          From Source (macOS / Linux / RPi)
+<i class="fab fa-apple" style="color: var(--scope-primary)"></i> Track B —
+          macOS Installer
+        </h3>
+<div class="steps" style="margin-bottom: 2.5rem">
+<div class="step">
+<h4>1 · Install</h4>
+<p>
+              Drag <code>MRRC-Modern-v1.13.0-arm64.dmg</code> → double-click to
+              mount → drag <strong>MRRC Modern</strong> into Applications. On
+              first launch, right-click the app → Open → Open (one-time
+              Gatekeeper bypass for the ad-hoc signature).
+            </p>
+</div>
+<div class="step">
+<h4>2 · Launch</h4>
+<p>
+              The menu-bar icon <code>MRRC Modern :8888</code> appears and the
+              browser opens the login page, which shows the auto-generated
+              password.
+            </p>
+</div>
+<div class="step">
+<h4>3 · Plug in the Radio</h4>
+<p>
+              Connect the FT-710 or IC-7300/MK2 via USB; the radio model and
+              serial port auto-detect on first run.
+            </p>
+</div>
+<div class="step">
+<h4>4 · Fine-tune</h4>
+<p>
+              Menu bar → 连接设置… (Connection Settings) to change the radio,
+              serial port, RX+TX audio devices, or password, then 保存并重启
+              (Save &amp; Restart). LAN devices reach
+              <code>http://&lt;mac-ip&gt;:8888</code>.
+            </p>
+</div>
+</div>
+<h3 style="
+            color: var(--scope-text);
+            margin-bottom: 1rem;
+            text-align: center;
+          ">
+<i class="fas fa-terminal" style="color: var(--scope-primary)"></i> Track C —
+          From Source (Linux / RPi)
         </h3>
 <div class="steps">
 <div class="step">

@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.12.1 · 稳定版</span>
+<span>v1.13.0 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -295,6 +295,40 @@
             </a>
 </div>
 </div>
+<div style="
+            background: var(--scope-surface);
+            border: 1px solid var(--scope-primary);
+            border-radius: 14px;
+            padding: 1.75rem 2rem;
+            max-width: 720px;
+            margin: 0 auto;
+          ">
+<p style="margin: 0 0 0.25rem; font-size: 1.15rem">
+<i class="fab fa-apple" style="color: var(--scope-primary)"></i>
+<strong> MRRC-Modern-v1.13.0-arm64.dmg — v1.13.0 稳定版</strong>
+</p>
+<p style="color: var(--scope-text-muted); margin: 0 0 1rem">
+            50 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+<br/>
+<code style="font-size: 0.76rem">SHA-256: 6c25ae9ed0f4c453ca616f86bd1c332e6048c7abec4d0c1f6d44911c2d763f54</code>
+</p>
+<p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
+            首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
+            （FT-710 ASCII CAT / Icom CI-V 0x19）与串口，并内置 FT4222 真频谱
+            动态库——FT-710 的 FFT 瀑布图开箱即用。网页"连接设置"对话框可修改
+            电台型号、串口、RX+TX 音频设备与密码，支持保存并重启。服务端绑定
+            <code>::</code> 双栈（IPv4+IPv6），局域网设备可访问
+            <code>http://&lt;mac-ip&gt;:8888</code>。DMG 为 ad-hoc 签名——
+            首次启动请右键 → 打开。
+          </p>
+<div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.13.0-arm64.dmg">
+<i class="fab fa-apple"></i> 下载 macOS 版
+            </a>
+<a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
+<i class="fab fa-github"></i> GitHub Releases
+            </a>
+</div>
+</div>
 <p style="
             text-align: center;
             color: var(--scope-text-muted);
@@ -302,8 +336,9 @@
             margin-top: 1.25rem;
           ">
           缺少 FTDI DLL 时 FT-710 后端自动回退到 S 表合成频谱——CAT 控制与
-          音频不受影响（IC-7300 后端完全不需要 FTDI）。macOS / Linux /
-          树莓派请从源码运行（见下方快速上手）。
+          音频不受影响（IC-7300 后端完全不需要 FTDI）。macOS 用户请使用
+          上方安装包，或从源码运行；Linux / 树莓派请从源码运行（见下方
+          快速上手）。
         </p>
 </div>
 </section>
@@ -314,8 +349,8 @@
 <span class="section-label">快速上手</span>
 <h2 class="section-title">五分钟跑起来</h2>
 <p class="section-subtitle">
-            Windows 用户走安装包路线；macOS / Linux / 树莓派从源码运行。
-            两条路线殊途同归，都是同一个浏览器界面。
+            Windows 与 macOS 用户走安装包路线；Linux / 树莓派从源码运行。
+            殊途同归，都是同一个浏览器界面。
           </p>
 </div>
 <h3 style="
@@ -368,8 +403,48 @@
             margin-bottom: 1rem;
             text-align: center;
           ">
-<i class="fas fa-terminal" style="color: var(--scope-primary)"></i> 路线 B —
-          源码运行（macOS / Linux / 树莓派）
+<i class="fab fa-apple" style="color: var(--scope-primary)"></i> 路线 B —
+          macOS 安装包
+        </h3>
+<div class="steps" style="margin-bottom: 2.5rem">
+<div class="step">
+<h4>1 · 安装</h4>
+<p>
+              拖动 <code>MRRC-Modern-v1.13.0-arm64.dmg</code> → 双击挂载 →
+              将 <strong>MRRC Modern</strong> 拖入"应用程序"。首次启动请右键
+              应用 → 打开 → 打开（一次性绕过 Gatekeeper 的 ad-hoc 签名）。
+            </p>
+</div>
+<div class="step">
+<h4>2 · 启动</h4>
+<p>
+              菜单栏出现 <code>MRRC Modern :8888</code> 图标，浏览器自动打开
+              登录页并显示自动生成的密码。
+            </p>
+</div>
+<div class="step">
+<h4>3 · 连接电台</h4>
+<p>
+              FT-710 或 IC-7300/MK2 通过 USB 连接；首次运行时电台型号与串口
+              自动识别。
+            </p>
+</div>
+<div class="step">
+<h4>4 · 微调</h4>
+<p>
+              菜单栏 → 连接设置…（Connection Settings）可修改电台、串口、
+              RX+TX 音频设备或密码，然后保存并重启。局域网设备可访问
+              <code>http://&lt;mac-ip&gt;:8888</code>。
+            </p>
+</div>
+</div>
+<h3 style="
+            color: var(--scope-text);
+            margin-bottom: 1rem;
+            text-align: center;
+          ">
+<i class="fas fa-terminal" style="color: var(--scope-primary)"></i> 路线 C —
+          源码运行（Linux / 树莓派）
         </h3>
 <div class="steps">
 <div class="step">

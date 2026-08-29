@@ -228,6 +228,7 @@ class MRRCModernApp(rumps.App):
         self.host = host
         self.port = port
         self.proc: subprocess.Popen | None = None
+        self._quitting = False
         # Set early so atexit (registered below) can always reach it.
         self.menu = [
             "Open Web UI",
@@ -252,6 +253,7 @@ class MRRCModernApp(rumps.App):
             rumps.quit_application()
             return None
         env = load_env(config_path())
+        env["MRRC_CONFIG_FILE"] = str(config_path())
         self.proc = subprocess.Popen(
             command,
             cwd=str(app_dir()),
@@ -278,6 +280,26 @@ class MRRCModernApp(rumps.App):
             )
             webbrowser.open(url)
 
+    def _monitor_loop(self) -> None:
+        """Watch the server; auto-restart when it exits with RESTART_EXIT_CODE."""
+        while not self._quitting:
+            proc = self.proc
+            if proc is None:
+                time.sleep(0.5)
+                continue
+            rc = proc.wait()
+            if rc == 42:  # config changed via the web UI -> apply by restarting
+                self.start_server()
+                threading.Thread(
+                    target=self.launch_and_open, name="wait-for-server", daemon=True
+                ).start()
+            elif rc != 0 and not self._quitting:
+                rumps.notification(
+                    APP_NAME, "服务器异常退出",
+                    f"进程退出码 {rc}。可在菜单栏 Restart Server 重新启动。",
+                )
+                self.proc = None  # stop watching the dead proc (avoid notify spam)
+
     # ---- menu callbacks --------------------------------------------------
 
     @rumps.clicked("Open Web UI")
@@ -302,6 +324,7 @@ class MRRCModernApp(rumps.App):
 
     @rumps.clicked("Quit MRRC Modern")
     def on_quit(self, _):
+        self._quitting = True
         stop_process(self.proc)
         rumps.quit_application()
 
@@ -323,6 +346,7 @@ def main() -> int:
     # `kill` from a terminal, or Activity Monitor's normal Quit). SIGKILL /
     # Force Quit cannot be caught and may orphan the server — documented.
     def _on_sigterm(signum, frame):
+        app._quitting = True
         stop_process(app.proc)
         rumps.quit_application()
 
@@ -330,6 +354,7 @@ def main() -> int:
     atexit.register(stop_process, app.proc)
 
     app.start_server()
+    threading.Thread(target=app._monitor_loop, name="server-monitor", daemon=True).start()
     threading.Thread(
         target=app.launch_and_open, name="wait-for-server", daemon=True
     ).start()

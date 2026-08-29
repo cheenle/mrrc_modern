@@ -2462,23 +2462,6 @@ async def serve_static(path: str, request: Request):
 
 # ── Entry Point ─────────────────────────────────────────────────────
 
-def _bind_dual_stack_socket(port: int) -> "socket.socket":
-    """Bind :: as a dual-stack socket (IPv4 + IPv6).
-
-    uvicorn's own bind_socket() marks an AF_INET6 :: socket IPV6_V6ONLY
-    (IPv6-only), which drops IPv4 — and the launcher opens the browser at
-    http://127.0.0.1:8888. Pre-binding with V6ONLY=0 and handing the socket
-    to uvicorn keeps both stacks working.
-    """
-    import socket
-    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
-    sock.bind(("::", port))
-    sock.listen(2048)
-    return sock
-
-
 def main():
     """Parse CLI args and start the server.
 
@@ -2519,18 +2502,13 @@ def main():
     # Pass the app object (not the "server:app" import string) so frozen
     # PyInstaller builds work — a frozen exe cannot re-import the "server"
     # module by name.
-    # Bind "::" as a dual-stack socket (uvicorn's own bind would be IPv6-only).
-    run_kwargs = dict(ssl_kwargs)
-    if args.host in ("::", ""):
-        run_kwargs["sockets"] = [_bind_dual_stack_socket(args.port)]
-    else:
-        run_kwargs["host"] = args.host
-        run_kwargs["port"] = args.port
     uvicorn.run(
         app,
+        host=args.host,
+        port=args.port,
         log_level="info",
         reload=False,
-        **run_kwargs,
+        **ssl_kwargs,
     )
 
 

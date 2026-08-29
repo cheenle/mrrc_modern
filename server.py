@@ -1873,14 +1873,23 @@ def _list_devices() -> dict:
     serial_ports = []
     try:
         import serial.tools.list_ports
-        _bogus = ("/dev/cu.Bluetooth", "/dev/cu.IRComm", "/dev/cu.debug-console")
+        import sys
         for p in serial.tools.list_ports.comports():
             dev = getattr(p, "device", "")
-            if dev.startswith("/dev/cu.") and not dev.startswith(_bogus):
-                serial_ports.append({
-                    "device": p.device,
-                    "description": getattr(p, "description", "") or p.device,
-                })
+            if sys.platform == "darwin":
+                _bogus = ("/dev/cu.Bluetooth", "/dev/cu.IRComm", "/dev/cu.debug-console")
+                if dev.startswith("/dev/cu.") and not dev.startswith(_bogus):
+                    serial_ports.append({
+                        "device": dev,
+                        "description": getattr(p, "description", "") or dev,
+                    })
+            else:
+                # Windows (COM*) / Linux: include any real serial device
+                if dev:
+                    serial_ports.append({
+                        "device": dev,
+                        "description": getattr(p, "description", "") or dev,
+                    })
     except Exception:
         pass
     audio = _list_audio_devices()

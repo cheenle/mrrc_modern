@@ -29,6 +29,18 @@ class ListDevicesTests(unittest.TestCase):
             result = server._list_devices()
         self.assertEqual([p["device"] for p in result["serial_ports"]], ["/dev/cu.usbserial-A1"])
 
+    def test_windows_lists_com_ports(self):
+        class _P:
+            def __init__(self, device, description=""):
+                self.device = device
+                self.description = description
+        with mock.patch("serial.tools.list_ports.comports",
+                        return_value=[_P("COM3", "CP210x USB to UART Bridge"),
+                                      _P("COM1", "Communications Port")]), \
+             mock.patch("sys.platform", "win32"):
+            result = server._list_devices()
+        self.assertEqual([p["device"] for p in result["serial_ports"]], ["COM3", "COM1"])
+
 
 class ConfigFilePathTests(unittest.TestCase):
     def test_uses_mrrc_config_file_env(self):

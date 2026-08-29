@@ -377,6 +377,11 @@
               >Advanced Settings</a
             >
           </li>
+          <li>
+            <a href="#" class="menu-item" data-action="conn-settings"
+              >连接设置…</a
+            >
+          </li>
           <li><a href="#" class="menu-item" data-action="logout">Logout</a></li>
         </ul>
         <!-- Menu Settings -->
@@ -535,6 +540,112 @@
         document.getElementById("fr-close").addEventListener("click", function () {
           banner.style.display = "none";
           localStorage.setItem("mrrc_welcome_dismissed", "1");
+        });
+      })();
+    </script>
+    <!-- Connection Settings Dialog -->
+    <div id="conn-dialog" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.6);align-items:center;justify-content:center;">
+      <div style="background:#222;color:#eee;border:1px solid #444;border-radius:12px;padding:20px;width:min(420px,92vw);font-family:-apple-system,sans-serif;max-height:88vh;overflow:auto;">
+        <h2 style="color:#f59e0b;margin:0 0 14px;font-size:18px;">连接设置</h2>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">电台型号</label>
+        <select id="cs-model" style="width:100%;padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;">
+          <option value="ft710">Yaesu FT-710</option>
+          <option value="ic7300">Icom IC-7300</option>
+          <option value="ic7300mk2">Icom IC-7300MK2</option>
+        </select>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">串口</label>
+        <select id="cs-port" style="width:100%;padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;"></select>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">RX 音频输入（电台 → 电脑）</label>
+        <select id="cs-audio-rx" style="width:100%;padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;"></select>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">TX 音频输出（电脑 → 电台）</label>
+        <select id="cs-audio-tx" style="width:100%;padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;"></select>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">登录密码（留空 = 保持不变，至少 8 位）</label>
+        <input id="cs-password" type="password" placeholder="留空 = 保持不变" style="width:calc(100% - 18px);padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;">
+        <div id="cs-msg" style="color:#4ade80;font-size:13px;min-height:18px;margin-top:8px;"></div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button id="cs-save" style="flex:2;padding:10px;background:#f59e0b;color:#000;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">保存并重启</button>
+          <button id="cs-restart" style="flex:1;padding:10px;background:#333;color:#fff;border:1px solid #555;border-radius:8px;cursor:pointer;">重启服务</button>
+          <button id="cs-close" style="flex:1;padding:10px;background:#333;color:#fff;border:1px solid #555;border-radius:8px;cursor:pointer;">关闭</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var dlg = document.getElementById("conn-dialog");
+        function openDlg() {
+          dlg.style.display = "flex";
+          dlg.querySelector("#cs-msg").textContent = "";
+          Promise.all([
+            fetch("/api/devices").then(function (r) { return r.ok ? r.json() : null; }),
+            fetch("/api/setup").then(function (r) { return r.ok ? r.json() : null; }),
+          ]).then(function (rs) {
+            var dev = rs[0], cur = rs[1];
+            if (!dev || !cur) return;
+            dlg.querySelector("#cs-model").value = cur.radio_model || "ft710";
+            fillSelect(dlg.querySelector("#cs-port"), dev.serial_ports, "device", cur.serial_port);
+            fillSelect(dlg.querySelector("#cs-audio-rx"), dev.audio_rx, "name", cur.audio_rx_device);
+            fillSelect(dlg.querySelector("#cs-audio-tx"), dev.audio_tx, "name", cur.audio_tx_device);
+          });
+        }
+        function fillSelect(sel, items, key, current) {
+          var opts = '<option value="">自动（推荐）</option>';
+          var seen = {};
+          items.forEach(function (it) {
+            var v = it[key];
+            if (!v || seen[v]) return;
+            seen[v] = 1;
+            var selAttr = current && v.indexOf(current) !== -1 ? " selected" : "";
+            opts += '<option value="' + v.replace(/"/g, "&quot;") + '"' + selAttr + ">" + v + "</option>";
+          });
+          sel.innerHTML = opts;
+        }
+        function post(path, body, done) {
+          fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : "{}" })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) { done(res); })
+            .catch(function () { done({ ok: false, j: { error: "network" } }); });
+        }
+        function waitAndReload() {
+          var msg = dlg.querySelector("#cs-msg");
+          msg.textContent = "已保存，正在重启…";
+          var t = setInterval(function () {
+            fetch("/api/health").catch(function () {
+              clearInterval(t);
+              var t2 = setInterval(function () {
+                fetch("/api/health").then(function () {
+                  clearInterval(t2);
+                  window.location.reload();
+                }).catch(function () {});
+              }, 1200);
+            });
+          }, 800);
+        }
+        document.getElementById("cs-save").addEventListener("click", function () {
+          var pwd = dlg.querySelector("#cs-password").value;
+          if (pwd && pwd.length < 8) { dlg.querySelector("#cs-msg").textContent = "密码至少 8 位"; return; }
+          var body = {
+            radio_model: dlg.querySelector("#cs-model").value,
+            serial_port: dlg.querySelector("#cs-port").value,
+            audio_rx_device: dlg.querySelector("#cs-audio-rx").value,
+            audio_tx_device: dlg.querySelector("#cs-audio-tx").value,
+          };
+          if (pwd) body.password = pwd;
+          post("/api/setup", body, function (res) {
+            if (res.ok) { waitAndReload(); }
+            else { dlg.querySelector("#cs-msg").textContent = "保存失败：" + (res.j && res.j.error || "未知错误"); }
+          });
+        });
+        document.getElementById("cs-restart").addEventListener("click", function () {
+          post("/api/restart", null, function (res) {
+            if (res.ok) { waitAndReload(); }
+            else { dlg.querySelector("#cs-msg").textContent = "重启失败：" + (res.j && res.j.error || "未知错误"); }
+          });
+        });
+        document.getElementById("cs-close").addEventListener("click", function () {
+          dlg.style.display = "none";
+        });
+        document.querySelectorAll("[data-action='conn-settings']").forEach(function (el) {
+          el.addEventListener("click", function (e) { e.preventDefault(); openDlg(); });
         });
       })();
     </script>

@@ -1,6 +1,6 @@
 # macOS 安装包打包流程（本机 Mac 直接构建）
 
-> 用途：在开发者本机 Mac 上构建 `MRRC-Modern-<ver>-arm64.dmg`。
+> 用途：在开发者本机 Mac 上构建 `MRRC-Modern-<ver>-arm64.dmg`（最新 v1.13.0）。
 > 本文按 v1.7.0 首次打包的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 > 与 Windows 不同，macOS 不需要 KVM 虚拟机——直接在本机用 `.venv` 打包。
@@ -9,9 +9,9 @@
 
 ```
 本机 Mac (Apple Silicon, macOS 11+)
-   .venv/                  Python 3.12 + 项目依赖 + PyInstaller + rumps
+   .venv/                  Python 3.13 + 项目依赖 + PyInstaller + rumps
    dist/macos/             构建产物
-   vendor/ftdi/macos/       可选：FT4222 真谱 dylib（缺则回退 S 表）
+   vendor/ftdi/macos/       FT4222 真谱 dylib（universal arm64，随包分发）
 ```
 
 系统要求：
@@ -19,7 +19,7 @@
 - Apple Silicon（arm64）。Intel Mac 不在此 build 支持范围内。
 - Xcode Command Line Tools：`codesign`、`hdiutil`（`xcode-select --install`）。
 - Homebrew：`brew install portaudio`（pyaudio wheel 需要的 PortAudio C 库）。
-- Python 3.12（系统自带或 pyenv 均可）。
+- Python 3.13（系统自带或 pyenv 均可，本机 `.venv` 即 3.13）。
 
 ## 2. 一次性准备
 
@@ -31,18 +31,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pip install -r packaging/macos/requirements-build.txt   # pyinstaller==6.21.0 锁版 + rumps
+python -m pip install -r packaging/macos/requirements-build.txt   # 已锁 pyinstaller==6.21.0 + rumps
 ```
 
 `requirements.txt` 里的 pyaudio 依赖 PortAudio，必须先 `brew install portaudio`，否则 pip 装不上。
 
-### 2.2 可选：FT4222 真谱 dylib
+### 2.2 FT4222 真谱 dylib
 
-需要 `vendor/ftdi/macos/libft4222.dylib` 和 `libftd2xx.dylib`，缺了也能打包（S 表回退频谱），build.sh 只警告。
+`vendor/ftdi/macos/libft4222.dylib` 和 `libftd2xx.dylib` 已就位（自 `lib/` 拷贝，universal arm64），**随包分发**，所以 FT-710 开箱即得真 FFT 频谱。
 
-来源是 FTDI 官网的 LibFT4222 macOS 构建和 D2XX 驱动包。FTDI 官网对脚本下载可能返回 403，需在浏览器手动下载后解压、改名为上面的文件名，放到 `vendor/ftdi/macos/`。
-
-> v1.7.0 默认**不**随包附带这两个 dylib——发布 S 表回退版本，用户可自行补齐（见用户指南的 FT4222 一节）。
+来源是 FTDI 官网的 LibFT4222 macOS 构建和 D2XX 驱动包。FTDI 官网对脚本下载可能返回 403，需在浏览器手动下载后解压、改名为上面的文件名，放到 `lib/`，再拷贝到 `vendor/ftdi/macos/`。
 
 ## 3. 每次打包流程
 
@@ -52,7 +50,7 @@ python -m pip install -r packaging/macos/requirements-build.txt   # pyinstaller=
 venv/bin/python -m unittest discover -s tests        # 必须全绿
 ```
 
-确认版本号一致：`CHANGELOG.md` 最新条目（`## [vX.Y.Z]`）——build.sh 会自动从这里读取版本注入 `Info.plist`，无需手动改 spec。
+确认版本号一致：版本来源是 `CHANGELOG.md` 顶部 `## [vX.Y.Z]`（顶部允许存在 `[Unreleased]`，`grep -m1` 会取到下一个已命名版本）——build.sh 会自动从这里读取版本注入 `Info.plist`，无需手动改 spec。
 
 ### Step 1 — 构建（在本机仓库根目录）
 
@@ -96,6 +94,17 @@ md5 -q dist/macos/MRRC-Modern-*-arm64.dmg
 shasum -a 256 dist/macos/MRRC-Modern-*-arm64.dmg
 ```
 
+### 3.5 首启自动配置
+
+`macos/first_run.py` 在菜单栏 launcher 里、server 启动**之前**运行，一次性完成零配置：
+
+- 生成随机 web 密码（`secrets.token_urlsafe(16)`），写回 env 的 `MRRC_WEB_PASSWORD` 并置 `MRRC_AUTO_PASSWORD=1`。
+- 扫描 `/dev/cu.*` 串口（CP210x/SLAB/usbserial 优先），逐个探测：FT-710 ASCII `ID;` @ 38400、Icom CI-V 0x19 @ 115200，命中即定型号并置 `MRRC_PORT_CONFIRMED=1`。
+- 全部探测失败时安全回落：`MRRC_RADIO_MODEL` 取默认 `ft710`，串口取首个候选。
+- 结果写回用户 env 文件；`needs_first_run()` 在配置已落定（非默认密码 + 合法型号 + 端口已确认）时跳过重探测。
+
+冒烟验证：首次运行弹密码通知 → 登录页横幅显示「首次运行已自动生成密码」→ 菜单栏 **Show Password…** 可随时查看。
+
 ## 4. 发布到网站（可选）
 
 下载镜像在 **www.vlsc.net**（webroot `/var/www/vlsc.net/mrrc_modern/`，属 `www-data:www-data`，cheenle 有 sudo 免密）：
@@ -127,11 +136,13 @@ ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern
 | 现象 | 原因 | 处理 |
 |------|------|------|
 | `pip install pyaudio` 失败 | 缺 PortAudio | `brew install portaudio` 后重装 |
-| rumps/PyObjC 装不上 | 用了非 arm64 或过旧的 Python | 用 Python 3.12，确保 `packaging/macos/requirements-build.txt` 已装 |
+| rumps/PyObjC 装不上 | 用了非 arm64 或过旧的 Python | 用 Python 3.13（本机 `.venv`），确保 `packaging/macos/requirements-build.txt` 已装 |
 | `codesign` 报 nested 内容未签名 | 用了 `--deep`（会误签 `_internal/*.dist-info`） | build.sh 已改用“先签 dylib/.so + 各主 exe + 根 bundle，不用 `--deep`”；若手动签也照此 |
 | 打出的 `.app` 首次打开“已损坏” | Gatekeeper 拦截 ad-hoc 签名 | 右键→打开，或 `xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app` |
 | 退出菜单栏 app 后 server 仍在跑 | 用了 Force Quit（SIGKILL 不可捕获） | `pkill -f MRRC-Modern-Server`；正常退出请用菜单栏的 Quit 项 |
 | `MRRC-Modern.app` 体积异常大 | rumps 拉入了整个 PyObjC | 正常，PyObjC 约 40–50 MB；如需缩小可后续裁剪 frameworks |
+| `MRRC_RADIO_MODEL` 为空/非法 | env 里没写型号 | config.py 空值安全回落 `ft710`（`os.environ.get(...) or "ft710"`），服务正常启动，无需手动改 |
+| 首启自动探测没识别出电台 | 串口探测超时 / 电台未开 / 多设备 | 探测不打断服务：失败即安全回落（型号默认 ft710），server 照常启动；稍后可菜单栏 Edit Configuration… 手工修正 |
 
 ## 6. 常用命令速查
 

@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [Unreleased] — 2026-08-26 — Security & resilience hardening (SDD V2.28)
+## [v1.13.0] — 2026-08-29 — macOS zero-config installer + security hardening (SDD V2.28)
 
 ### Security
 - **I8 — static path traversal fixed**: `serve_static` now resolves the
@@ -35,6 +35,17 @@ All notable changes to the MRRC Web Control project.
 - Removed stale `.bak` files from the repo root and Xcode project.
 - Fixed an uptime-dependent power-script test (fixed monotonic threshold
   expired on long-running hosts).
+
+### macOS Installer
+- **First-run zero-config**: the menu-bar launcher auto-generates a random web
+  password, scans `/dev/cu.*` for the radio's serial port, and probes FT-710
+  (ASCII `ID;`) vs Icom CI-V (0x19) to pick the radio model — no terminal, no
+  config editing. The generated password is shown in a login-page banner and a
+  menu-bar **Show Password…** item.
+- **FT4222 true spectrum bundled**: `libft4222.dylib` / `libftd2xx.dylib` now
+  ship inside the installer, so FT-710 gets a real FFT waterfall out of the box.
+- Ad-hoc signed (no Developer ID) — first launch is right-click → Open once.
+- Package renamed to `MRRC-Modern-v1.13.0-arm64.dmg`.
 
 ### Tests
 - Merged suite **651 tests** across 33 modules (this work adds 18): static-path containment,

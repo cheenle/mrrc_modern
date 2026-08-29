@@ -1870,8 +1870,10 @@ def _list_devices() -> dict:
     serial_ports = []
     try:
         import serial.tools.list_ports
+        _bogus = ("/dev/cu.Bluetooth", "/dev/cu.IRComm", "/dev/cu.debug-console")
         for p in serial.tools.list_ports.comports():
-            if getattr(p, "device", "").startswith("/dev/cu."):
+            dev = getattr(p, "device", "")
+            if dev.startswith("/dev/cu.") and not dev.startswith(_bogus):
                 serial_ports.append({
                     "device": p.device,
                     "description": getattr(p, "description", "") or p.device,

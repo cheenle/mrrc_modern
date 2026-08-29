@@ -1,7 +1,8 @@
-"""macOS first-launch auto-configuration for MRRC Modern.
+"""Cross-platform first-launch auto-configuration for MRRC Modern.
 
-Runs in the menu-bar launcher BEFORE the server starts. Generates a random
-web password, scans /dev/cu.* for a serial port, and probes each candidate
+Runs in the launcher (macOS menu-bar app, Windows tray app) BEFORE the server
+starts. Generates a random web password, scans for a serial port (macOS
+/dev/cu.*, Windows COM ports, Linux /dev/tty*), and probes each candidate
 port to identify the radio (FT-710 ASCII CAT vs Icom CI-V). Results are
 written back to the user env file so the server always sees final config.
 
@@ -10,13 +11,20 @@ not have rumps/PyObjC.
 """
 from __future__ import annotations
 
+import os
 import secrets
 import serial
 import serial.tools.list_ports
+import sys
 from pathlib import Path
 
 DEFAULT_WEB_PASSWORD = "changeme_please_use_strong_password!"
-DEFAULT_SERIAL_PORTS = ("/dev/cu.SLAB_USBtoUART",)
+if sys.platform == "darwin":
+    DEFAULT_SERIAL_PORTS = ("/dev/cu.SLAB_USBtoUART",)
+elif os.name == "nt":
+    DEFAULT_SERIAL_PORTS = ("COM3",)
+else:
+    DEFAULT_SERIAL_PORTS = ("/dev/ttyUSB0",)
 RADIO_MODEL_FALLBACK = "ft710"
 VALID_MODELS = frozenset({"ft710", "ic7300", "ic7300mk2"})
 
@@ -47,18 +55,25 @@ def generate_password() -> str:
     return secrets.token_urlsafe(16)
 
 
-def detect_serial_ports(comports: list | None = None) -> list[str]:
-    """Return /dev/cu.* devices, CP210x/SLAB/usbserial radios first.
-
-    Non-serial bogus ports (Bluetooth, IRComm, debug-console) are excluded so
-    they can never be picked as the radio port.
-    """
-    ports = list(serial.tools.list_ports.comports()) if comports is None else list(comports)
-    _bogus = ("/dev/cu.Bluetooth", "/dev/cu.IRComm", "/dev/cu.debug-console")
-    candidates = [
+def _candidates(ports: list) -> list:
+    """Platform filter: /dev/cu.* on macOS, all serial ports elsewhere."""
+    if sys.platform == "darwin":
+        bogus = ("/dev/cu.Bluetooth", "/dev/cu.IRComm", "/dev/cu.debug-console")
+        return [
+            p for p in ports
+            if p.device.startswith("/dev/cu.") and not p.device.startswith(bogus)
+        ]
+    # Windows (COM*) / Linux (/dev/tty*): exclude obviously bogus entries
+    return [
         p for p in ports
-        if p.device.startswith("/dev/cu.") and not p.device.startswith(_bogus)
+        if p.device
     ]
+
+
+def detect_serial_ports(comports: list | None = None) -> list[str]:
+    """Return candidate serial ports, radio-ish ones (CP210x/SLAB/usbserial) first."""
+    ports = list(serial.tools.list_ports.comports()) if comports is None else list(comports)
+    candidates = _candidates(ports)
 
     def _key(p) -> tuple[int, str]:
         text = (p.description + " " + p.hwid).lower()

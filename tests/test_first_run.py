@@ -104,6 +104,26 @@ class DetectSerialPortsTests(unittest.TestCase):
         self.assertEqual(fr.detect_serial_ports([]), [])
 
 
+class DetectSerialPortsWindowsTests(unittest.TestCase):
+    def test_windows_lists_com_ports(self):
+        ports = [
+            _FakeComPort("COM1", "Communications Port", ""),
+            _FakeComPort("COM3", "CP210x USB to UART Bridge", "USB VID:PID=10C4:EA60"),
+        ]
+        with mock.patch("macos.first_run.sys.platform", "win32"):
+            result = fr.detect_serial_ports(ports)
+        self.assertEqual(result, ["COM3", "COM1"])  # CP210x sorts first
+
+    def test_windows_no_bogus_filter_issue(self):
+        with mock.patch("macos.first_run.sys.platform", "win32"):
+            self.assertEqual(fr.detect_serial_ports([]), [])
+
+    def test_windows_candidates_keeps_all_devices(self):
+        ports = [_FakeComPort("COM3", "CP210x USB to UART Bridge", "USB")]
+        with mock.patch("macos.first_run.sys.platform", "win32"):
+            self.assertEqual([p.device for p in fr._candidates(ports)], ["COM3"])
+
+
 class ProbeRadioModelTests(unittest.TestCase):
     def test_ft710_detected(self):
         def open_func(**kw):

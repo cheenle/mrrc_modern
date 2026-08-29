@@ -30,7 +30,7 @@ VERSION = os.environ.get("MRRC_VERSION", "0.0.0").lstrip("v")
 
 a = Analysis(
     [str(ROOT / "macos" / "launcher.py")],
-    pathex=[str(ROOT)],
+    pathex=[str(ROOT), str(ROOT / "macos")],
     binaries=[],
     datas=[],
     hiddenimports=[
@@ -39,6 +39,10 @@ a = Analysis(
         "AppKit",
         "Foundation",
         "PyObjCTools",
+        "serial",
+        "serial.tools.list_ports",
+        "serial.tools.list_ports_osx",
+        "first_run",
     ],
     hookspath=[],
     hooksconfig={},

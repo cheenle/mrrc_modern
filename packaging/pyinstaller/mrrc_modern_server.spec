@@ -32,6 +32,15 @@ elif sys.platform == "darwin":
         _vendor_data.append((str(_ftdi_root), "vendor/ftdi/macos"))
 
 
+# default.env: the launcher seeds the user env from the platform-appropriate
+# template (windows/ for Win, macos/ for macOS). Do not ship the other
+# platform's template.
+if sys.platform == "darwin":
+    _config_env_data = [(str(ROOT / "macos" / "default.env"), "macos")]
+else:
+    _config_env_data = [(str(ROOT / "windows" / "default.env"), "windows")]
+
+
 a = Analysis(
     [str(ROOT / "server.py")],
     pathex=[str(ROOT)],
@@ -39,13 +48,15 @@ a = Analysis(
     datas=[
         (str(ROOT / "static"), "static"),
         (str(ROOT / "mem_channels.json"), "."),
-        (str(ROOT / "windows" / "default.env"), "windows"),
+        *_config_env_data,
         (str(ROOT / "windows" / "launcher.py"), "windows"),
         *_vendor_data,
     ],
     hiddenimports=[
         # Serial / audio runtime
         "serial",
+        "serial.tools.list_ports",
+        "serial.tools.list_ports_osx",
         "pyaudio",
         "numpy",
         # Web stack

@@ -13,6 +13,7 @@ from pathlib import Path
 # ssl_bootstrap lives at the repo root; PyInstaller bundles it via pathex.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import ssl_bootstrap
+from macos import first_run
 
 
 APP_NAME = "MRRC Modern"
@@ -136,6 +137,18 @@ def load_env(path: Path) -> dict[str, str]:
     return env
 
 
+def ensure_first_run() -> dict[str, str]:
+    """Apply first-launch auto-config if needed; return the (possibly updated) env."""
+    cfg = config_path()
+    env = load_env(cfg)
+    if first_run.needs_first_run(env):
+        env = first_run.apply_first_run(env, cfg)
+        if env.get("MRRC_AUTO_PASSWORD") == "1":
+            print("First run: auto-generated login password:", env.get("MRRC_WEB_PASSWORD", ""))
+            print("  (also shown on the web login page; change it later via 连接设置… in the UI)")
+    return env
+
+
 def local_url(env: dict[str, str], secure: bool = False) -> str:
     port = _env(env, "MRRC_WEB_PORT", DEFAULT_PORT)
     host = _env(env, "MRRC_WEB_HOST", "127.0.0.1")
@@ -211,46 +224,44 @@ def stop_process(proc: subprocess.Popen) -> None:
 def main() -> int:
     cfg = ensure_config()
     seed_mem_channels()
-    env = load_env(cfg)
-    ssl_pair = ssl_material(env)
-    secure = ssl_pair is not None
-    url = local_url(env, secure=secure)
-
-    print(APP_NAME)
-    print(f"Config: {cfg}")
-    print(f"URL:    {url}")
-    if secure:
-        print("HTTPS:  self-signed certificate (browser will warn once — accept it)")
-    print("Close this window or press Ctrl-C to stop the server.")
-
-    command = build_command(ssl_pair)
-    if command is None:
-        print("ERROR: MRRC-Modern-Server.exe not found next to the launcher.")
-        print("Reinstall the app, or restore the file if antivirus quarantined it.")
-        return 1
-
+    env = ensure_first_run()
     creationflags = 0
     if os.name == "nt":
         creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    proc = subprocess.Popen(
-        command,
-        cwd=str(app_dir()),
-        env=env,
-        creationflags=creationflags,
-    )
-    if wait_for_server(url, proc, secure=secure):
-        webbrowser.open(url)
-    elif proc.poll() is not None:
-        print("Server exited during startup — see messages above.")
-        return proc.returncode or 1
-    else:
-        print(f"Server did not answer within 15s; opening {url} anyway.")
-        webbrowser.open(url)
-    try:
-        return proc.wait()
-    except KeyboardInterrupt:
-        stop_process(proc)
-        return 0
+    while True:
+        ssl_pair = ssl_material(env)
+        secure = ssl_pair is not None
+        url = local_url(env, secure=secure)
+        print(APP_NAME)
+        print(f"Config: {cfg}")
+        print(f"URL:    {url}")
+        if secure:
+            print("HTTPS:  self-signed certificate (browser will warn once — accept it)")
+        print("Close this window or press Ctrl-C to stop the server.")
+        env["MRRC_CONFIG_FILE"] = str(config_path())
+        command = build_command(ssl_pair)
+        if command is None:
+            print("ERROR: MRRC-Modern-Server.exe not found next to the launcher.")
+            print("Reinstall the app, or restore the file if antivirus quarantined it.")
+            return 1
+        proc = subprocess.Popen(command, cwd=str(app_dir()), env=env, creationflags=creationflags)
+        if wait_for_server(url, proc, secure=secure):
+            webbrowser.open(url)
+        elif proc.poll() is not None:
+            print("Server exited during startup — see messages above.")
+            return proc.returncode or 1
+        else:
+            print(f"Server did not answer within 15s; opening {url} anyway.")
+            webbrowser.open(url)
+        try:
+            rc = proc.wait()
+        except KeyboardInterrupt:
+            stop_process(proc)
+            return 0
+        if rc != 42:
+            return rc
+        print("Config changed — restarting server...")
+        env = load_env(config_path())
 
 
 if __name__ == "__main__":

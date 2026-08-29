@@ -3,7 +3,10 @@ Tests for config.py — SDD §7, §10.4.
 Verifies: mode tables, band definitions, filter widths, S-meter calibration,
 CAT command field mappings.
 """
+import importlib
+import os
 import unittest
+from unittest.mock import patch
 
 from backends.ft710.config_ft710 import (
     MODE_NUM_TO_NAME,
@@ -194,6 +197,20 @@ class ConfigConstantsTests(unittest.TestCase):
         self.assertIsInstance(AUTH_COOKIE, str)
         self.assertGreater(len(AUTH_COOKIE), 0)
         self.assertGreater(AUTH_TOKEN_BYTES, 0)
+
+
+class RadioModelEmptyFallbackTests(unittest.TestCase):
+    def test_empty_model_env_falls_back_to_ft710(self):
+        import config as cfg
+        # patch.dict (not patch("os.environ", ...)): the kwargs form of patch
+        # rejects dict targets on Python 3.13 ("Can't pass kwargs to a mock
+        # we aren't creating"), while patch.dict supports clear=True.
+        with patch.dict(os.environ, {"MRRC_RADIO_MODEL": "", "MRRC_WEB_PASSWORD": "x"}, clear=True):
+            importlib.reload(cfg)
+            try:
+                self.assertEqual(cfg.RADIO_MODEL, "ft710")
+            finally:
+                importlib.reload(cfg)  # restore module globals for the rest of the suite
 
 
 if __name__ == "__main__":

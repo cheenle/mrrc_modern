@@ -44,7 +44,7 @@ def _env_float(name: str, default: float) -> float:
 # ── Radio Model Selection ───────────────────────────────────────────
 # Backend key registered in backends/__init__.py. Select with
 # MRRC_RADIO_MODEL.
-RADIO_MODEL = os.environ.get("MRRC_RADIO_MODEL", "ft710").strip().lower()
+RADIO_MODEL = (os.environ.get("MRRC_RADIO_MODEL") or "ft710").strip().lower()
 _DEFAULT_BAUD_BY_MODEL = {
     "ft710": 38400,
     "ic7300": 115200,

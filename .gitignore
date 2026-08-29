@@ -57,3 +57,4 @@ yagi_*.jpg
 
 # Accidental IDE workspace with backtick in name
 FT710Mobile/`.xcodeproj/
+website/downloads/*.dmg

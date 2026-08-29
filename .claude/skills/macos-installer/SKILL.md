@@ -1,13 +1,13 @@
 ---
 name: macos-installer
-description: Use when building, rebuilding, or verifying the MRRC Modern macOS installer (.dmg), or troubleshooting a macOS .app that fails to boot / the bundled server that dies at startup ("Failed to load Python shared library .../Contents/Frameworks/Python"), IPv4 refused when bound to "::", or the connection-settings restart chain. Covers packaging/macos/build.sh, the critical bundle gotchas, headless+GUI smoke, and the website deploy.
+description: Use when building, rebuilding, verifying, or deploying the MRRC Modern macOS installer (.dmg), or troubleshooting a macOS .app that fails to boot / the bundled server that dies at startup ("Failed to load Python shared library .../Contents/Frameworks/Python"), IPv4 refused when bound to "::", HTTPS or self-signed cert issues on the launcher, or the connection-settings restart chain.
 ---
 
 # macOS Installer Build (MRRC Modern)
 
 ## Overview
 
-The macOS release is a locally-built DMG: `packaging/macos/build.sh` runs tests → 3 PyInstaller specs → hand-assembles `Contents/MacOS/` → ad-hoc codesign → `hdiutil` DMG. Version is read from the top `## [vX.Y.Z]` heading in `CHANGELOG.md` — rename/keep that heading first. Since v1.13.0 the launcher serves **HTTPS by default** (mirrors `windows/launcher.py::ssl_material`): it honours `MRRC_SSL_CERT`/`MRRC_SSL_KEY`, else auto-generates a self-signed cert via `ssl_bootstrap.ensure_self_signed(user_data_dir()/certs)`; `MRRC_SSL=off` reverts to plain HTTP. The cert SANs cover localhost/hostname/127.0.0.1/::1/LAN IPs; browsers warn once on first visit (click Advanced → Continue) — call this out for novice users.
+The macOS release is a locally-built DMG: `packaging/macos/build.sh` runs tests → 3 PyInstaller specs → hand-assembles `Contents/MacOS/` → ad-hoc codesign → `hdiutil` DMG. Version is read from the top `## [vX.Y.Z]` heading in `CHANGELOG.md` — rename/keep that heading first. Since v1.13.0 the launcher serves **HTTPS by default**: a user-supplied `MRRC_SSL_CERT`/`MRRC_SSL_KEY` wins, otherwise a self-signed cert is auto-generated (wiring: gotcha 8); `MRRC_SSL=off` reverts to plain HTTP. The cert SANs cover localhost/hostname/127.0.0.1/::1/LAN IPs; browsers warn once on first visit (click Advanced → Continue) — call this out for novice users.
 
 ## Prerequisites
 
@@ -49,9 +49,9 @@ Output: `dist/macos/MRRC-Modern-v<ver>-arm64.dmg` (checksums printed at the end)
 
 7. **First-run zero-config.** `macos/first_run.py` (imports only stdlib+pyserial, no rumps): generates a random web password, scans serial ports (`/dev/cu.*`, bogus ports excluded), probes FT-710 (ASCII `ID;` @38400) then IC-7300 (CI-V 0x19 @115200). `macos/default.env` leaves `MRRC_WEB_PASSWORD`/`MRRC_SERIAL_PORT`/`MRRC_RADIO_MODEL` empty to trigger it. `MRRC_PORT_CONFIRMED=1` marks a probed port as settled. The launcher passes `MRRC_CONFIG_FILE` so the web connection-settings dialog can persist changes.
 
-9. **macOS launcher HTTPS wiring.** `macos/launcher.py` must keep `ssl_material(env)`, `local_url(env, secure=...)`, and `build_command(ssl_pair)` (passes `--ssl-cert`/`--ssl-key`; `--no-ssl` only when the pair is None). `start_server()` re-resolves `ssl_material` + `self.url` on every spawn so TextEdit config edits (e.g. adding `MRRC_SSL_CERT`) apply on Restart. `wait_for_server(..., secure=True)` probes with TLS verification skipped (the self-signed cert isn't in any trust store). The launcher onefile spec MUST list `ssl_bootstrap` + `cryptography` in hiddenimports (cert generation needs `cryptography`, which is also pulled into the server onedir by requirements.txt). Cert lives at `~/Library/Application Support/MRRC-Modern/certs/{server.crt,server.key}`.
+8. **macOS launcher HTTPS wiring** (mirrors `windows/launcher.py::ssl_material`). `macos/launcher.py` must keep `ssl_material(env)`, `local_url(env, secure=...)`, and `build_command(ssl_pair)` (passes `--ssl-cert`/`--ssl-key`; `--no-ssl` only when the pair is None). `start_server()` re-resolves `ssl_material` + `self.url` on every spawn so TextEdit config edits (e.g. adding `MRRC_SSL_CERT`) apply on Restart. `wait_for_server(..., secure=True)` probes with TLS verification skipped (the self-signed cert isn't in any trust store). The launcher onefile spec MUST list `ssl_bootstrap` + `cryptography` in hiddenimports (cert generation needs `cryptography`, which is also pulled into the server onedir by requirements.txt). Cert lives at `~/Library/Application Support/MRRC-Modern/certs/{server.crt,server.key}` via `ssl_bootstrap.ensure_self_signed(user_data_dir()/certs)`.
 
-8. **DMG must be the classic installer layout.** `hdiutil create -srcfolder "$APP_BUNDLE"` produces a DMG holding ONLY the bare .app — no "Applications" shortcut, which breaks the "drag into Applications" step the website guide promises and confuses novices. build.sh must stage a folder with `ln -sf /Applications <stage>/Applications` + a copy of the .app, then `-srcfolder` that staging dir (Step 6). After a DMG-layout change the SHA-256 on the website download card MUST be updated (the checksums change).
+9. **DMG must be the classic installer layout.** `hdiutil create -srcfolder "$APP_BUNDLE"` produces a DMG holding ONLY the bare .app — no "Applications" shortcut, which breaks the "drag into Applications" step the website guide promises and confuses novices. build.sh must stage a folder with `ln -sf /Applications <stage>/Applications` + a copy of the .app, then `-srcfolder` that staging dir (Step 6). After a DMG-layout change the SHA-256 on the website download card MUST be updated (the checksums change).
 
 ## Verification
 
@@ -66,7 +66,7 @@ hdiutil attach -readonly -nobrowse dist/macos/MRRC-Modern-*.dmg && ls -la "/Volu
 #   expect: MRRC-Modern.app  AND  Applications -> /Applications
 ```
 
-Headless (dual-stack + HTTPS + banner + endpoints):
+Headless (dual-stack + HTTPS + banner + endpoints) — run from the repo root (the heredoc imports `ssl_bootstrap` from the source tree):
 
 ```bash
 TMP=$(mktemp -d)
@@ -88,14 +88,22 @@ curl -sk https://127.0.0.1:8899/login | grep -q '首次运行已自动生成密�
 rm -rf "$TMP"
 ```
 
-GUI end-to-end (the "安装即可用" chain): mount the DMG → copy `MRRC-Modern.app` to `/Applications` → `xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app` → `open` → verify: menu-bar icon, browser opens login page with the auto-generated password banner, real hardware auto-detected (`MRRC_SERIAL_PORT` + `MRRC_PORT_CONFIRMED=1` in `~/Library/Application Support/MRRC-Modern/mrrc_modern.env`), `POST /api/setup` triggers a launcher auto-restart (server PID changes), `GET /api/devices` lists the real serial/audio devices.
+GUI end-to-end (the "安装即可用" chain):
+
+1. Mount the DMG → copy `MRRC-Modern.app` to `/Applications`
+2. `xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app` (or right-click → Open once)
+3. `open /Applications/MRRC-Modern.app`
+4. Verify menu-bar icon appears and the browser opens the login page (HTTPS — first visit shows the self-signed warning; Advanced → Continue) with the auto-generated password banner
+5. Verify real hardware auto-detected: `MRRC_SERIAL_PORT` + `MRRC_PORT_CONFIRMED=1` in `~/Library/Application Support/MRRC-Modern/mrrc_modern.env`
+6. Verify the restart chain: `POST /api/setup` triggers a launcher auto-restart (server PID changes)
+7. Verify `GET /api/devices` lists the real serial/audio devices
 
 Cleanup: `kill -TERM <server_pid>` then `pkill -KILL -f MRRC-Modern-Launcher`.
 
 ## Website Deploy
 
 - DMG goes to **www.vlsc.net** `/var/www/vlsc.net/mrrc_modern/downloads/` (sudo mv + chown www-data + chmod 644). `website/deploy.sh` EXCLUDES `downloads/` — the DMG is server-managed, never in the deploy tar; `website/downloads/*.dmg` is gitignored (untracked staging only).
-- `website/index.html` + `website/zh/index.html`: BEFORE deploying, update the version badge, the macOS download card (new size + SHA-256 printed by build.sh), the macOS install guide track, and keep the hero dual-platform (macOS primary + Windows). Then `echo y | ./deploy.sh` from `website/` (uploads HTML, backs up, nginx -t). Deploy target is www.vlsc.net (user must confirm production deploys).
+- `website/index.html` + `website/zh/index.html`: BEFORE deploying, update the version badge, the macOS download card (new size + SHA-256 printed by build.sh), and the macOS install guide track. Then `echo y | ./deploy.sh` from `website/` (uploads HTML, backs up, nginx -t). Deploy target is www.vlsc.net (user must confirm production deploys).
 - Keep the hero dual-platform (macOS primary + Windows) — the landing page should not favor one platform.
 
 ## Common Mistakes
@@ -108,4 +116,6 @@ Cleanup: `kill -TERM <server_pid>` then `pkill -KILL -f MRRC-Modern-Launcher`.
 | Launcher pegs CPU after server stops | Monitor didn't park `self.proc=None` on non-42 exit (see gotcha 4) |
 | Menu-bar Quit leaves server running | SIGTERM under rumps doesn't fire; use the menu item (see gotcha 5) |
 | Login rejects the `--password` you passed | Pass via env, not CLI (see gotcha 6) |
+| DMG contains only the bare .app, no Applications shortcut | Staging dir with `ln -sf /Applications` skipped (see gotcha 9); after re-fixing the layout, the website card SHA-256 MUST be updated |
+| TextEdit config edits (e.g. adding `MRRC_SSL_CERT`) ignored after Restart | `start_server()` must re-resolve `ssl_material` + `self.url` on every spawn (see gotcha 8) |
 | Rebuild shows old version | `CHANGELOG.md` top heading not bumped to `## [vX.Y.Z]` |

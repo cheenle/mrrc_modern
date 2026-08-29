@@ -117,11 +117,20 @@ codesign --force --sign - "$APP_BUNDLE" 2>/dev/null \
 codesign --verify --verbose=2 "$APP_BUNDLE" 2>&1 || true
 
 # ---- Step 6: .dmg -------------------------------------------------------
+# Classic installer layout: a staging folder holds the .app + an "Applications"
+# symlink, so double-clicking the DMG shows the familiar "drag MRRC Modern onto
+# Applications" window. (Before v1.13.0 fix the DMG held only the bare .app —
+# no Applications shortcut — which confused novices.)
 echo "==> DMG"
 DMG="$DIST_ROOT/MRRC-Modern-${VERSION}-arm64.dmg"
+DMG_STAGING="$DIST_ROOT/_dmg"
 rm -f "$DMG"
+rm -rf "$DMG_STAGING"; mkdir -p "$DMG_STAGING"
+ln -sf /Applications "$DMG_STAGING/Applications"
+cp -R "$APP_BUNDLE" "$DMG_STAGING/"
 hdiutil create -volname "MRRC Modern" -fs HFS+ -format UDZO \
-    -srcfolder "$APP_BUNDLE" "$DMG"
+    -srcfolder "$DMG_STAGING" "$DMG"
+rm -rf "$DMG_STAGING"
 
 # ---- Step 7: checksums (for the website download table) -----------------
 echo

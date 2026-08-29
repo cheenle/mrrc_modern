@@ -49,6 +49,8 @@ Output: `dist/macos/MRRC-Modern-v<ver>-arm64.dmg` (checksums printed at the end)
 
 7. **First-run zero-config.** `macos/first_run.py` (imports only stdlib+pyserial, no rumps): generates a random web password, scans serial ports (`/dev/cu.*`, bogus ports excluded), probes FT-710 (ASCII `ID;` @38400) then IC-7300 (CI-V 0x19 @115200). `macos/default.env` leaves `MRRC_WEB_PASSWORD`/`MRRC_SERIAL_PORT`/`MRRC_RADIO_MODEL` empty to trigger it. `MRRC_PORT_CONFIRMED=1` marks a probed port as settled. The launcher passes `MRRC_CONFIG_FILE` so the web connection-settings dialog can persist changes.
 
+8. **DMG must be the classic installer layout.** `hdiutil create -srcfolder "$APP_BUNDLE"` produces a DMG holding ONLY the bare .app — no "Applications" shortcut, which breaks the "drag into Applications" step the website guide promises and confuses novices. build.sh must stage a folder with `ln -sf /Applications <stage>/Applications` + a copy of the .app, then `-srcfolder` that staging dir (Step 6). After a DMG-layout change the SHA-256 on the website download card MUST be updated (the checksums change).
+
 ## Verification
 
 Post-build structural checks (confirm the critical bits landed):
@@ -57,6 +59,9 @@ Post-build structural checks (confirm the critical bits landed):
 ls -la dist/macos/MRRC-Modern.app/Contents/ | grep Frameworks        # expect Frameworks -> MacOS/_internal
 defaults read dist/macos/MRRC-Modern.app/Contents/Info.plist CFBundleShortVersionString   # = CHANGELOG version
 test -f dist/macos/MRRC-Modern.app/Contents/MacOS/vendor/ftdi/macos/libft4222.dylib && echo "FTDI bundled"
+# DMG must be the classic installer layout (app + Applications symlink), not a bare .app:
+hdiutil attach -readonly -nobrowse dist/macos/MRRC-Modern-*.dmg && ls -la "/Volumes/MRRC Modern" && hdiutil detach "/Volumes/MRRC Modern"
+#   expect: MRRC-Modern.app  AND  Applications -> /Applications
 ```
 
 Headless (dual-stack + banner + endpoints):

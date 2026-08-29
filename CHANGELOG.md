@@ -47,6 +47,18 @@ All notable changes to the MRRC Web Control project.
 - Ad-hoc signed (no Developer ID) — first launch is right-click → Open once.
 - Package renamed to `MRRC-Modern-v1.13.0-arm64.dmg`.
 
+### Windows Installer (v1.13.0, aligned with macOS)
+- First-run zero-config now on Windows too: the launcher auto-generates a web
+  password and auto-detects the radio model and serial port (COM) — no manual
+  config edit needed.
+- Web **连接设置** (Connection Settings) dialog (radio / serial / RX+TX audio /
+  password + save-and-restart) and the login-page auto-password banner are
+  shared with macOS; the Windows launcher auto-restarts the server on config
+  change (exit code 42).
+- Built on Win11: 681 tests, three PyInstaller targets, Inno Setup — installer
+  `MRRC-Modern-v1.13.0-Windows-x64-Setup.exe`, 45,433,215 bytes, SHA-256
+  `15ab8f9b6ddbabda0308cff041f1f5e48547d91c000724198a0b903549a808b0`.
+
 ### Tests
 - Merged suite **651 tests** across 33 modules (this work adds 18): static-path containment,
   constant-time compare, default-password warning, max-TX watchdog, and a

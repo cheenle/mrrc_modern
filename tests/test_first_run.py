@@ -72,6 +72,15 @@ class NeedsFirstRunTests(unittest.TestCase):
         }
         self.assertFalse(fr.needs_first_run(env))
 
+    def test_false_when_port_confirmed_on_default(self):
+        env = {
+            "MRRC_FIRST_RUN_DONE": "1", "MRRC_PORT_CONFIRMED": "1",
+            "MRRC_WEB_PASSWORD": "x",
+            "MRRC_SERIAL_PORT": "/dev/cu.SLAB_USBtoUART",
+            "MRRC_RADIO_MODEL": "ft710",
+        }
+        self.assertFalse(fr.needs_first_run(env))
+
 
 class GeneratePasswordTests(unittest.TestCase):
     def test_length_and_randomness(self):
@@ -153,6 +162,7 @@ class ApplyFirstRunTests(unittest.TestCase):
             env = fr.apply_first_run({}, path, open_func=lambda **kw: _FakeSerialFT())
         self.assertEqual(env["MRRC_SERIAL_PORT"], "/dev/cu.SLAB_USBtoUART")
         self.assertEqual(env["MRRC_RADIO_MODEL"], "ft710")
+        self.assertEqual(env["MRRC_PORT_CONFIRMED"], "1")
 
     def test_keeps_existing_config(self):
         path = self._tmp_config(

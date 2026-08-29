@@ -24,19 +24,23 @@ VALID_MODELS = frozenset({"ft710", "ic7300", "ic7300mk2"})
 def needs_first_run(env: dict[str, str]) -> bool:
     """True when first-launch auto-config should run.
 
-    Re-triggers whenever the web password is empty/default, the serial port
-    is empty/a default, or the radio model is not recognised — regardless of
-    the ``MRRC_FIRST_RUN_DONE`` flag. Once ``apply_first_run`` has stored real
-    values (non-default password, real port, valid model) this returns False.
+    Returns False (no re-probe) only when the config is genuinely settled:
+    a non-default password, a valid radio model, and either the port was
+    confirmed by a live probe (``MRRC_PORT_CONFIRMED=1``) or the port is a
+    real non-default device name. Otherwise the launcher re-runs auto-config.
     """
     pwd = env.get("MRRC_WEB_PASSWORD", "")
     port = env.get("MRRC_SERIAL_PORT", "").strip()
     model = env.get("MRRC_RADIO_MODEL", "").strip().lower()
-    return (
-        not pwd or pwd == DEFAULT_WEB_PASSWORD
-        or not port or port in DEFAULT_SERIAL_PORTS
-        or model not in VALID_MODELS
+    configured = (
+        pwd and pwd != DEFAULT_WEB_PASSWORD
+        and model in VALID_MODELS
+        and (
+            env.get("MRRC_PORT_CONFIRMED") == "1"
+            or (port and port not in DEFAULT_SERIAL_PORTS)
+        )
     )
+    return not configured
 
 
 def generate_password() -> str:
@@ -153,17 +157,19 @@ def apply_first_run(
     model_unset = model not in VALID_MODELS
 
     if port_unset or model_unset:
+        ports = detect_serial_ports()
         found_port, found_model = None, None
-        for candidate in detect_serial_ports():
+        for candidate in ports:
             found_model = probe_radio_model(candidate, open_func=open_func)
             if found_model:
                 found_port = candidate
                 break
         if found_model:
             port, model = found_port, found_model
+            env["MRRC_PORT_CONFIRMED"] = "1"
+            updates["MRRC_PORT_CONFIRMED"] = "1"
         else:
             if port_unset:
-                ports = detect_serial_ports()
                 port = ports[0] if ports else port
             if model_unset:
                 model = RADIO_MODEL_FALLBACK

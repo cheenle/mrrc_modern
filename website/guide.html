@@ -157,11 +157,12 @@
 <li><a href="#开始之前连接与登录" id="toc-开始之前连接与登录">0. 开始之前：连接与登录</a></li>
 <li><a href="#电台型号差异" id="toc-电台型号差异">0.5 电台型号差异</a></li>
 <li><a href="#windows-配置与运行" id="toc-windows-配置与运行">0.6 Windows 配置与运行</a></li>
+<li><a href="#macos-安装与初始化" id="toc-macos-安装与初始化">0.7 macOS 安装与初始化</a></li>
 <li><a href="#主界面控件编号图" id="toc-主界面控件编号图">1. 主界面控件编号图</a></li>
 <li><a href="#控件速查表编号-名称-功能-操作" id="toc-控件速查表编号-名称-功能-操作">2. 控件速查表（编号 → 名称 → 功能 → 操作）</a></li>
 <li><a href="#键盘快捷键桌面端" id="toc-键盘快捷键桌面端">3. 键盘快捷键（桌面端）</a></li>
 <li><a href="#安全须知请先阅读" id="toc-安全须知请先阅读">4. 安全须知（请先阅读）</a></li>
-<li><a href="#常见问题faq-1" id="toc-常见问题faq-1">5. 常见问题（FAQ）</a></li>
+<li><a href="#常见问题faq-2" id="toc-常见问题faq-2">5. 常见问题（FAQ）</a></li>
 <li><a href="#附界面元素与后台命令对照供高级用户排障" id="toc-附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</a></li>
 </ul></li>
 </ul>
@@ -420,6 +421,115 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>改了配置没生效</td>
 <td>改完 <code>mrrc_modern.env</code> 必须<strong>重启 MRRC Modern</strong>（关掉窗口重新启动）。</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="macos-安装与初始化">0.7 macOS 安装与初始化</h2>
+<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.13.0-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
+<blockquote class="callout-info">
+<p>适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是<strong>自包含</strong>的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。</p>
+</blockquote>
+<h3 id="安装5-步">0.7.1 安装（5 步）</h3>
+<ol type="1">
+<li>打开官网 https://www.vlsc.net/mrrc_modern/ ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.13.0-arm64.dmg</code>（约 56 MB）。</li>
+<li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
+<li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
+<li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
+<li>以后双击即可直接打开。</li>
+</ol>
+<blockquote class="callout-info">
+<p>如果双击后系统提示「无法打开，因为它来自身份不明的开发者」或「已损坏」，就用第 4 步的 <strong>右键 → 打开 → 打开</strong>，这是正常的一次性放行，不是软件坏了。</p>
+</blockquote>
+<h3 id="首次启动零配置-https">0.7.2 首次启动：零配置 + HTTPS</h3>
+<p>启动后<strong>什么都不用配</strong>，软件会自动完成：</p>
+<ol type="1">
+<li>屏幕<strong>右上角菜单栏</strong>出现 <code>MRRC Modern :8888</code> 图标。</li>
+<li><strong>浏览器自动打开</strong>登录页。首次访问是 HTTPS，浏览器会提示<strong>「连接不安全 / 您的连接不是私密连接」</strong>——这是<strong>正常的</strong>，因为用的是软件自动生成的<strong>自签名证书</strong>：点 <strong>高级 → 继续访问</strong> 即可（只需这一次）。</li>
+<li>登录页顶部显示<strong>自动生成的登录密码</strong>；忘记就点菜单栏 <strong>Show Password…</strong> 随时查看。</li>
+<li>用这个密码登录，进入主界面。</li>
+<li><strong>插上电台</strong>（FT-710 或 IC-7300/MK2，USB 线 A→B 或 C→B）：首次运行自动探测电台型号、串口和音频设备，<strong>插上就能用</strong>。</li>
+</ol>
+<blockquote class="callout-info">
+<p><strong>为什么默认 HTTPS？</strong> 局域网里密码和遥控数据默认加密传输，避免被同网段的人抓包。自签名证书不代表”不安全”，只是浏览器不认识签名者；点一次「继续访问」即可。</p>
+</blockquote>
+<h3 id="连接设置改电台-串口-音频-密码">0.7.3 连接设置（改电台 / 串口 / 音频 / 密码）</h3>
+<p>想换电台、换串口、换声卡或改密码，<strong>不用重装、不用碰配置文件</strong>：</p>
+<ol type="1">
+<li>登录后点网页<strong>顶栏菜单 →「连接设置…」</strong>。</li>
+<li>在弹出的对话框里修改：
+<ul>
+<li><strong>电台型号</strong>（<code>ft710</code> / <code>ic7300</code> / <code>ic7300mk2</code>）</li>
+<li><strong>串口</strong>（下拉列表自动列出可用的 <code>/dev/cu.*</code>）</li>
+<li><strong>RX 音频设备</strong> / <strong>TX 音频设备</strong>（下拉列表列出本机音频设备，FT-710 一般是 <code>USB Audio Device</code>，IC-7300 一般是 <code>USB Audio Codec</code>）</li>
+<li><strong>登录密码</strong></li>
+</ul></li>
+<li>点 <strong>保存并重启</strong> —— 软件自动重启生效；只点 <strong>重启服务</strong> 则不改设置、仅重启。</li>
+</ol>
+<h3 id="进阶edit-configuration可选">0.7.4 进阶：Edit Configuration（可选）</h3>
+<p>普通用户用不到。高级用户可在菜单栏 <strong>Edit Configuration…</strong> 用文本编辑器打开配置文件：</p>
+<pre><code>~/Library/Application Support/MRRC-Modern/mrrc_modern.env</code></pre>
+<ul>
+<li>变量用 <code>MRRC_*</code> 前缀（旧的 <code>FT710_*</code> 仍兼容）；改完在菜单栏 <strong>Restart Server</strong> 重启生效。</li>
+<li>想退回明文 HTTP：加一行 <code>MRRC_SSL=off</code>（默认开 HTTPS）。</li>
+<li>配置、自签名证书、记忆频道都在这一个目录里；<strong>彻底卸载</strong>时把应用拖进废纸篓、再删掉 <code>~/Library/Application Support/MRRC-Modern/</code> 即可完全清除。</li>
+</ul>
+<h3 id="手机-其他设备访问局域网">0.7.5 手机 / 其他设备访问（局域网）</h3>
+<ol type="1">
+<li>Mac 和手机连<strong>同一个 Wi-Fi / 局域网</strong>。</li>
+<li>查看 Mac 的 IP：<strong>系统设置 → Wi-Fi → 详细信息 → IP 地址</strong>（或以太网同理）。</li>
+<li>手机上浏览器打开 <strong><code>https://你的Mac的IP:8888</code></strong>（例如 <code>https://192.168.1.50:8888</code>）。</li>
+<li>首次同样会提示证书不受信任，点<strong>高级 → 继续访问</strong>。</li>
+<li>用登录页上的密码登录，手机就能遥控电台、看频谱、说话。</li>
+</ol>
+<h3 id="常见问题faq-1">0.7.6 常见问题（FAQ）</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>问题</th>
+<th>解答</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>双击打不开，提示「无法验证开发者」</td>
+<td>右键应用 → <strong>打开</strong> → 再点一次<strong>打开</strong>（0.7.1 第 4 步）。</td>
+</tr>
+<tr>
+<td>浏览器红色「您的连接不是私密连接」</td>
+<td><strong>正常</strong>。自签名证书未被浏览器厂商信任，点<strong>高级 → 继续访问</strong>即可，只第一次出现。</td>
+</tr>
+<tr>
+<td>「应用程序」里找不到它</td>
+<td>用 Spotlight（⌘+空格）搜 <code>MRRC</code>，或 Finder → 应用程序；Launchpad 对拖入的应用有时要等一会儿才显示。</td>
+</tr>
+<tr>
+<td>从 DMG 里运行的 app 导致安装盘弹不出</td>
+<td>先<strong>退出</strong>那个从安装盘运行的 MRRC Modern（菜单栏 Quit），再弹出安装盘。</td>
+</tr>
+<tr>
+<td>手机上连不上 <code>https://ip:8888</code></td>
+<td>确认同一网络、IP 正确、地址写的是 <code>https://</code>（不是 http）、Mac 的防火墙允许接收连接。</td>
+</tr>
+<tr>
+<td>换了台电台要重装吗？</td>
+<td>不用。网页「连接设置…」改<strong>电台型号 + 串口</strong>，保存并重启即可。</td>
+</tr>
+<tr>
+<td>串口下拉列表是空的 / 找不到电台串口</td>
+<td>确认 USB 线是<strong>数据线</strong>（不是纯充电线）、电台已开机；列表只显示真实串口（已过滤蓝牙等假端口）。</td>
+</tr>
+<tr>
+<td>怎么完全卸载？</td>
+<td>把 <code>MRRC-Modern.app</code> 拖进废纸篓；如需连密码/证书一起清掉，再删 <code>~/Library/Application Support/MRRC-Modern/</code>。</td>
+</tr>
+<tr>
+<td>端口 8888 被占用</td>
+<td>高级用户在 <code>mrrc_modern.env</code> 里改 <code>MRRC_WEB_PORT</code>，重启生效。</td>
 </tr>
 </tbody>
 </table>
@@ -1019,7 +1129,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <li>无线局域网内建议使用 HTTPS（自签名证书首次会有浏览器警告，属于预期行为）；<code>http://</code> 明文下浏览器会禁用麦克风与音频工作线程（AudioWorklet），iPhone 上尤其如此。</li>
 </ol>
 <hr />
-<h2 id="常见问题faq-1">5. 常见问题（FAQ）</h2>
+<h2 id="常见问题faq-2">5. 常见问题（FAQ）</h2>
 <table>
 <colgroup>
 <col style="width: 50%" />

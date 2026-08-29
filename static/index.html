@@ -21,6 +21,16 @@
   <body>
     <div class="safe-area-top"></div>
 
+    <div id="first-run-banner" style="display:none;background:#2d2410;color:#fbbf24;
+      border-bottom:1px solid #b45309;padding:10px 16px;font-size:14px;line-height:1.5;">
+      <strong>已自动配置</strong>：电台 <span id="fr-model"></span> · 串口
+      <span id="fr-port"></span><br>
+      <span style="color:#9ca3af;font-size:12px;">登录密码见登录页或菜单栏「Show Password…」。
+      本提示可关闭。</span>
+      <button id="fr-close" style="margin-left:8px;background:#b45309;color:#fff;border:none;
+        border-radius:6px;padding:2px 10px;cursor:pointer;">知道了</button>
+    </div>
+
     <div class="app-container">
       <!-- Header -->
       <header class="app-header">
@@ -509,5 +519,24 @@
     <script src="/modules/ptt_manager.js?v=13"></script>
     <script src="/ft710_ui.js?v=28"></script>
     <script src="/modules/atr1000.js?v=1"></script>
+    <script>
+      (function () {
+        var banner = document.getElementById("first-run-banner");
+        if (!banner || localStorage.getItem("mrrc_welcome_dismissed")) return;
+        fetch("/api/setup")
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (s) {
+            if (!s || !s.auto_password) return;
+            document.getElementById("fr-model").textContent = s.radio_model || "—";
+            document.getElementById("fr-port").textContent = s.serial_port || "自动";
+            banner.style.display = "block";
+          })
+          .catch(function () {});
+        document.getElementById("fr-close").addEventListener("click", function () {
+          banner.style.display = "none";
+          localStorage.setItem("mrrc_welcome_dismissed", "1");
+        });
+      })();
+    </script>
   </body>
 </html>

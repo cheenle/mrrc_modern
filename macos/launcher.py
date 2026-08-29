@@ -293,12 +293,16 @@ class MRRCModernApp(rumps.App):
                 threading.Thread(
                     target=self.launch_and_open, name="wait-for-server", daemon=True
                 ).start()
-            elif rc != 0 and not self._quitting:
-                rumps.notification(
-                    APP_NAME, "服务器异常退出",
-                    f"进程退出码 {rc}。可在菜单栏 Restart Server 重新启动。",
-                )
-                self.proc = None  # stop watching the dead proc (avoid notify spam)
+            else:
+                if rc != 0 and not self._quitting:
+                    rumps.notification(
+                        APP_NAME, "服务器异常退出",
+                        f"进程退出码 {rc}。可在菜单栏 Restart Server 重新启动。",
+                    )
+                # Park the monitor on any non-42 exit (incl. a clean rc==0 external
+                # stop). Without this, the loop would busy-spin on the reaped
+                # process's wait() returning immediately at 100% CPU.
+                self.proc = None
 
     # ---- menu callbacks --------------------------------------------------
 

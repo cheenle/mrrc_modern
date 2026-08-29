@@ -54,5 +54,24 @@ class ScheduleRestartTests(unittest.TestCase):
         exit_mock.assert_called_once_with(42)
 
 
+class DualStackSocketTests(unittest.TestCase):
+    def test_dual_stack_accepts_ipv4_and_ipv6(self):
+        import socket as _socket
+        sock = server._bind_dual_stack_socket(0)
+        self.addCleanup(sock.close)
+        port = sock.getsockname()[1]
+
+        def _try(target):
+            try:
+                s = _socket.create_connection(target, timeout=1)
+                s.close()
+                return True
+            except Exception:
+                return False
+
+        self.assertTrue(_try(("127.0.0.1", port)), "IPv4 connect failed on :: socket")
+        self.assertTrue(_try(("::1", port)), "IPv6 connect failed on :: socket")
+
+
 if __name__ == "__main__":
     unittest.main()

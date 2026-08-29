@@ -85,7 +85,13 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
     set -e
     if [ -d "/var/www/vlsc.net/mrrc_modern" ] && [ "$(ls -A /var/www/vlsc.net/mrrc_modern 2>/dev/null)" ]; then
         sudo mkdir -p /var/tmp
-        sudo cp -r /var/www/vlsc.net/mrrc_modern /var/tmp/mrrc_modern_backup_$(date +%Y%m%d_%H%M%S)
+        # Backup WITHOUT downloads/ and videos/ — those are large, server-managed
+        # binaries that never change during an HTML deploy. cp -r of the whole
+        # site accumulates ~300MB per release and fills the disk (hit 100% in
+        # 2026-08-29); rsync with excludes keeps each backup small.
+        sudo rsync -a --exclude='downloads' --exclude='videos' \
+            /var/www/vlsc.net/mrrc_modern/ \
+            /var/tmp/mrrc_modern_backup_$(date +%Y%m%d_%H%M%S)/
         echo "Backup created."
     fi
     # Clear any stale/partial deploy packages before the fresh one is scp'd,

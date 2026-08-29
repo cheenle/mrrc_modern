@@ -208,11 +208,18 @@ class ApplyFirstRunTests(unittest.TestCase):
             "MRRC_WEB_PASSWORD=S3cret!long\nMRRC_SERIAL_PORT=/dev/cu.usbserial-A1\n"
             "MRRC_RADIO_MODEL=ic7300\n"
         )
+        # In the real flow the launcher calls load_env(config_path()) first,
+        # so apply_first_run receives the existing values in ``env``.
+        env = {
+            "MRRC_WEB_PASSWORD": "S3cret!long",
+            "MRRC_SERIAL_PORT": "/dev/cu.usbserial-A1",
+            "MRRC_RADIO_MODEL": "ic7300",
+        }
         with mock.patch.object(fr, "detect_serial_ports") as detect:
-            env = fr.apply_first_run({}, path, open_func=lambda **kw: _FakeSerialNull())
+            result = fr.apply_first_run(env, path, open_func=lambda **kw: _FakeSerialNull())
         detect.assert_not_called()
-        self.assertEqual(env["MRRC_RADIO_MODEL"], "ic7300")
-        self.assertEqual(env["MRRC_SERIAL_PORT"], "/dev/cu.usbserial-A1")
+        self.assertEqual(result["MRRC_RADIO_MODEL"], "ic7300")
+        self.assertEqual(result["MRRC_SERIAL_PORT"], "/dev/cu.usbserial-A1")
 
 
 if __name__ == "__main__":

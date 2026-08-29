@@ -7,7 +7,7 @@ description: Use when building, rebuilding, or verifying the MRRC Modern macOS i
 
 ## Overview
 
-The macOS release is a locally-built DMG: `packaging/macos/build.sh` runs tests → 3 PyInstaller specs → hand-assembles `Contents/MacOS/` → ad-hoc codesign → `hdiutil` DMG. Version is read from the top `## [vX.Y.Z]` heading in `CHANGELOG.md` — rename/keep that heading first.
+The macOS release is a locally-built DMG: `packaging/macos/build.sh` runs tests → 3 PyInstaller specs → hand-assembles `Contents/MacOS/` → ad-hoc codesign → `hdiutil` DMG. Version is read from the top `## [vX.Y.Z]` heading in `CHANGELOG.md` — rename/keep that heading first. Since v1.13.0 the launcher serves **HTTPS by default** (mirrors `windows/launcher.py::ssl_material`): it honours `MRRC_SSL_CERT`/`MRRC_SSL_KEY`, else auto-generates a self-signed cert via `ssl_bootstrap.ensure_self_signed(user_data_dir()/certs)`; `MRRC_SSL=off` reverts to plain HTTP. The cert SANs cover localhost/hostname/127.0.0.1/::1/LAN IPs; browsers warn once on first visit (click Advanced → Continue) — call this out for novice users.
 
 ## Prerequisites
 
@@ -49,6 +49,8 @@ Output: `dist/macos/MRRC-Modern-v<ver>-arm64.dmg` (checksums printed at the end)
 
 7. **First-run zero-config.** `macos/first_run.py` (imports only stdlib+pyserial, no rumps): generates a random web password, scans serial ports (`/dev/cu.*`, bogus ports excluded), probes FT-710 (ASCII `ID;` @38400) then IC-7300 (CI-V 0x19 @115200). `macos/default.env` leaves `MRRC_WEB_PASSWORD`/`MRRC_SERIAL_PORT`/`MRRC_RADIO_MODEL` empty to trigger it. `MRRC_PORT_CONFIRMED=1` marks a probed port as settled. The launcher passes `MRRC_CONFIG_FILE` so the web connection-settings dialog can persist changes.
 
+9. **macOS launcher HTTPS wiring.** `macos/launcher.py` must keep `ssl_material(env)`, `local_url(env, secure=...)`, and `build_command(ssl_pair)` (passes `--ssl-cert`/`--ssl-key`; `--no-ssl` only when the pair is None). `start_server()` re-resolves `ssl_material` + `self.url` on every spawn so TextEdit config edits (e.g. adding `MRRC_SSL_CERT`) apply on Restart. `wait_for_server(..., secure=True)` probes with TLS verification skipped (the self-signed cert isn't in any trust store). The launcher onefile spec MUST list `ssl_bootstrap` + `cryptography` in hiddenimports (cert generation needs `cryptography`, which is also pulled into the server onedir by requirements.txt). Cert lives at `~/Library/Application Support/MRRC-Modern/certs/{server.crt,server.key}`.
+
 8. **DMG must be the classic installer layout.** `hdiutil create -srcfolder "$APP_BUNDLE"` produces a DMG holding ONLY the bare .app — no "Applications" shortcut, which breaks the "drag into Applications" step the website guide promises and confuses novices. build.sh must stage a folder with `ln -sf /Applications <stage>/Applications` + a copy of the .app, then `-srcfolder` that staging dir (Step 6). After a DMG-layout change the SHA-256 on the website download card MUST be updated (the checksums change).
 
 ## Verification
@@ -64,17 +66,26 @@ hdiutil attach -readonly -nobrowse dist/macos/MRRC-Modern-*.dmg && ls -la "/Volu
 #   expect: MRRC-Modern.app  AND  Applications -> /Applications
 ```
 
-Headless (dual-stack + banner + endpoints):
+Headless (dual-stack + HTTPS + banner + endpoints):
 
 ```bash
+TMP=$(mktemp -d)
+# generate a self-signed cert with the bundled bootstrap, then serve HTTPS on ::
+.venv/bin/python - "$TMP" <<'PY'
+import os, ssl_bootstrap, sys
+from pathlib import Path
+ssl_bootstrap.ensure_self_signed(Path(sys.argv[1]))
+PY
 MRRC_WEB_PASSWORD=testpass MRRC_AUTO_PASSWORD=1 \
   dist/macos/MRRC-Modern.app/Contents/MacOS/MRRC-Modern-Server \
-  --no-ssl --host :: --port 8899 --serial-port "" &
-# expect 401 from BOTH (IPv4 + IPv6):
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8899/api/health
-curl -s -o /dev/null -w '%{http_code}\n' 'http://[::1]:8899/api/health'
+  --ssl-cert "$TMP/server.crt" --ssl-key "$TMP/server.key" --host :: --port 8899 --serial-port "" &
+# expect 401 from BOTH (IPv4 + IPv6) over HTTPS; plain HTTP must fail:
+curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:8899/api/health
+curl -sk -o /dev/null -w '%{http_code}\n' 'https://[::1]:8899/api/health'
+curl -s  -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8899/api/health   # 000
 # expect the auto-password banner on the login page (loopback):
-curl -s http://127.0.0.1:8899/login | grep -q '首次运行已自动生成密码' && echo "banner OK"
+curl -sk https://127.0.0.1:8899/login | grep -q '首次运行已自动生成密码' && echo "banner OK"
+rm -rf "$TMP"
 ```
 
 GUI end-to-end (the "安装即可用" chain): mount the DMG → copy `MRRC-Modern.app` to `/Applications` → `xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app` → `open` → verify: menu-bar icon, browser opens login page with the auto-generated password banner, real hardware auto-detected (`MRRC_SERIAL_PORT` + `MRRC_PORT_CONFIRMED=1` in `~/Library/Application Support/MRRC-Modern/mrrc_modern.env`), `POST /api/setup` triggers a launcher auto-restart (server PID changes), `GET /api/devices` lists the real serial/audio devices.

@@ -321,8 +321,8 @@
 <strong> MRRC-Modern-v1.13.0-arm64.dmg — v1.13.0 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.8 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 51,812,896 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 7becf2598d5cbcdae1daef06bf85fab3d61c6252a48dac276a828f2f2cb00eca</code>
+            55.9 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 55,881,750 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 4dfd0a63360b0d9f671d2faaf5fe665664f5a126767f13c3c3490bc0bcf698cb</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -331,10 +331,12 @@
             dylibs — the FT-710 FFT waterfall works out of the box. A web
             连接设置 (Connection Settings) dialog lets you change the radio
             model, serial port, RX+TX audio devices, and password with
-            save-and-restart. The server binds <code>::</code> dual-stack
-            (IPv4+IPv6), so LAN devices reach
-            <code>http://&lt;mac-ip&gt;:8888</code>. The DMG is ad-hoc signed —
-            on first launch, right-click → Open once.
+            save-and-restart. HTTPS is on by default with an auto-generated
+            self-signed certificate, and the server binds <code>::</code>
+            dual-stack (IPv4+IPv6), so LAN devices reach
+            <code>https://&lt;mac-ip&gt;:8888</code> (browser warns once about
+            the self-signed cert — accept it). The DMG is ad-hoc signed — on
+            first launch, right-click → Open once.
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.13.0-arm64.dmg">
@@ -440,8 +442,9 @@
 <h4>2 · Launch</h4>
 <p>
               The menu-bar icon <code>MRRC Modern :8888</code> appears and the
-              browser opens the login page, which shows the auto-generated
-              password.
+              browser opens the login page (over HTTPS — the first time the
+              browser shows an "untrusted" warning, click Advanced →
+              Continue), which shows the auto-generated password.
             </p>
 </div>
 <div class="step">
@@ -457,7 +460,7 @@
               Menu bar → 连接设置… (Connection Settings) to change the radio,
               serial port, RX+TX audio devices, or password, then 保存并重启
               (Save &amp; Restart). LAN devices reach
-              <code>http://&lt;mac-ip&gt;:8888</code>.
+              <code>https://&lt;mac-ip&gt;:8888</code>.
             </p>
 </div>
 </div>

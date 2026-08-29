@@ -39,6 +39,8 @@ a = Analysis(
         "AppKit",
         "Foundation",
         "PyObjCTools",
+        "ssl_bootstrap",
+        "cryptography",
         "serial",
         "serial.tools.list_ports",
         "serial.tools.list_ports_osx",

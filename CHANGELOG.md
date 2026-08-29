@@ -46,6 +46,18 @@ All notable changes to the MRRC Web Control project.
   ship inside the installer, so FT-710 gets a real FFT waterfall out of the box.
 - Ad-hoc signed (no Developer ID) — first launch is right-click → Open once.
 - Package renamed to `MRRC-Modern-v1.13.0-arm64.dmg`.
+- **HTTPS by default (matches Windows)**: the launcher now resolves a TLS
+  cert/key pair via `ssl_material` — honours explicit `MRRC_SSL_CERT` /
+  `MRRC_SSL_KEY`, otherwise auto-generates a self-signed certificate
+  (`ssl_bootstrap.ensure_self_signed`, stored in
+  `~/Library/Application Support/MRRC-Modern/certs/`); `MRRC_SSL=off` reverts
+  to plain HTTP. Browsers show a one-time "untrusted" warning (Advanced →
+  Continue) on first visit.
+- **Installer-layout fix**: the DMG now ships the classic "drag MRRC Modern
+  onto Applications" layout (the bare-app DMG had no Applications shortcut).
+  Rebuilt for the corrected layout + HTTPS: SHA-256
+  `4dfd0a63360b0d9f671d2faaf5fe665664f5a126767f13c3c3490bc0bcf698cb`
+  (55,881,750 bytes).
 
 ### Windows Installer (v1.13.0, aligned with macOS)
 - First-run zero-config now on Windows too: the launcher auto-generates a web

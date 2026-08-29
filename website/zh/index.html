@@ -311,17 +311,19 @@
 <strong> MRRC-Modern-v1.13.0-arm64.dmg — v1.13.0 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.8 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 51,812,896 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 7becf2598d5cbcdae1daef06bf85fab3d61c6252a48dac276a828f2f2cb00eca</code>
+            55.9 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 55,881,750 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 4dfd0a63360b0d9f671d2faaf5fe665664f5a126767f13c3c3490bc0bcf698cb</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
             （FT-710 ASCII CAT / Icom CI-V 0x19）与串口，并内置 FT4222 真频谱
             动态库——FT-710 的 FFT 瀑布图开箱即用。网页"连接设置"对话框可修改
-            电台型号、串口、RX+TX 音频设备与密码，支持保存并重启。服务端绑定
-            <code>::</code> 双栈（IPv4+IPv6），局域网设备可访问
-            <code>http://&lt;mac-ip&gt;:8888</code>。DMG 为 ad-hoc 签名——
-            首次启动请右键 → 打开。
+            电台型号、串口、RX+TX 音频设备与密码，支持保存并重启。默认启用
+            HTTPS（自动生成自签名证书），服务端绑定 <code>::</code> 双栈
+            （IPv4+IPv6），局域网设备可访问
+            <code>https://&lt;mac-ip&gt;:8888</code>（浏览器首次会提示证书不受
+            信任，点"高级 → 继续访问"即可）。DMG 为 ad-hoc 签名——首次启动请
+            右键 → 打开。
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.13.0-arm64.dmg">
@@ -422,7 +424,8 @@
 <h4>2 · 启动</h4>
 <p>
               菜单栏出现 <code>MRRC Modern :8888</code> 图标，浏览器自动打开
-              登录页并显示自动生成的密码。
+              （走 HTTPS，首次会提示"连接不安全"，点高级 → 继续访问），登录页
+              显示自动生成的密码。
             </p>
 </div>
 <div class="step">
@@ -437,7 +440,7 @@
 <p>
               菜单栏 → 连接设置…（Connection Settings）可修改电台、串口、
               RX+TX 音频设备或密码，然后保存并重启。局域网设备可访问
-              <code>http://&lt;mac-ip&gt;:8888</code>。
+              <code>https://&lt;mac-ip&gt;:8888</code>。
             </p>
 </div>
 </div>

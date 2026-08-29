@@ -30,6 +30,7 @@ from pathlib import Path
 import rumps
 
 from macos import first_run
+import ssl_bootstrap
 
 
 APP_NAME = "MRRC Modern"
@@ -112,19 +113,27 @@ def seed_mem_channels() -> None:
 
 
 def wait_for_server(url: str, proc: subprocess.Popen | None = None,
-                    timeout_s: float = 15.0) -> bool:
+                    timeout_s: float = 15.0, secure: bool = False) -> bool:
     """Poll until the server answers HTTP (any status) or give up.
 
     Any HTTP response — even 401 from the auth middleware — proves the server is
-    listening. Returns False on startup crash or timeout.
+    listening. Returns False on startup crash or timeout. `secure` skips TLS
+    verification (self-signed bootstrap certs are not trusted by any store yet).
     """
+    ctx = None
+    if secure:
+        import ssl as _ssl
+
+        ctx = _ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = _ssl.CERT_NONE
     deadline = time.monotonic() + timeout_s
     probe = url + "/api/health"
     while time.monotonic() < deadline:
         if proc is not None and proc.poll() is not None:
             return False  # server exited during startup
         try:
-            with urllib.request.urlopen(probe, timeout=2):
+            with urllib.request.urlopen(probe, timeout=2, context=ctx):
                 return True
         except urllib.error.HTTPError:
             return True
@@ -191,14 +200,50 @@ def server_executable() -> Path | None:
     return None
 
 
-def build_command() -> list[str] | None:
+def local_url(env: dict[str, str], secure: bool = False) -> str:
+    port = _env(env, "MRRC_WEB_PORT", DEFAULT_PORT)
+    host = _env(env, "MRRC_WEB_HOST", "127.0.0.1")
+    scheme = "https" if secure else "http"
+    if host == "::":
+        url_host = "localhost"
+    elif host in ("0.0.0.0", ""):
+        url_host = "127.0.0.1"
+    else:
+        url_host = host
+    return f"{scheme}://{url_host}:{port}"
+
+
+def ssl_material(env: dict[str, str]):
+    """Resolve the TLS cert/key pair for the server.
+
+    Honours explicit MRRC_SSL_CERT/MRRC_SSL_KEY, then falls back to a
+    self-signed pair generated into the user data dir on first run.
+    Returns None to stay on plain HTTP (MRRC_SSL=off, or the
+    cryptography package missing).
+    """
+    if _env(env, "MRRC_SSL", "").strip().lower() == "off":
+        return None
+    cert = _env(env, "MRRC_SSL_CERT", "").strip()
+    key = _env(env, "MRRC_SSL_KEY", "").strip()
+    if cert and key and Path(cert).exists() and Path(key).exists():
+        return Path(cert), Path(key)
+    return ssl_bootstrap.ensure_self_signed(user_data_dir() / "certs")
+
+
+def build_command(ssl_pair=None) -> list[str] | None:
     server = server_executable()
     if server is None:
         return None
     # Both the frozen binary and `python server.py` take the same CLI args.
     if getattr(sys, "frozen", False) and server == app_dir() / "MRRC-Modern-Server":
-        return [str(server), "--no-ssl"]
-    return [sys.executable, str(server), "--no-ssl"]
+        args = [str(server)]
+    else:
+        args = [sys.executable, str(server)]
+    if ssl_pair is None:
+        args.append("--no-ssl")
+    else:
+        args += ["--ssl-cert", str(ssl_pair[0]), "--ssl-key", str(ssl_pair[1])]
+    return args
 
 
 def stop_process(proc: subprocess.Popen | None) -> None:
@@ -228,6 +273,7 @@ class MRRCModernApp(rumps.App):
         self.host = host
         self.port = port
         self.proc: subprocess.Popen | None = None
+        self.secure = False
         self._quitting = False
         # Set early so atexit (registered below) can always reach it.
         self.menu = [
@@ -243,7 +289,11 @@ class MRRCModernApp(rumps.App):
 
     def start_server(self) -> int | None:
         """Spawn the server subprocess. Returns its pid, or None on failure."""
-        command = build_command()
+        env = load_env(config_path())
+        ssl_pair = ssl_material(env)
+        self.secure = ssl_pair is not None
+        self.url = local_url(env, secure=self.secure)
+        command = build_command(ssl_pair)
         if command is None:
             rumps.alert(
                 title="MRRC Modern",
@@ -252,7 +302,6 @@ class MRRCModernApp(rumps.App):
             )
             rumps.quit_application()
             return None
-        env = load_env(config_path())
         env["MRRC_CONFIG_FILE"] = str(config_path())
         self.proc = subprocess.Popen(
             command,
@@ -266,7 +315,7 @@ class MRRCModernApp(rumps.App):
         if self.proc is None:
             return
         url = self.url
-        if wait_for_server(url, self.proc):
+        if wait_for_server(url, self.proc, secure=self.secure):
             webbrowser.open(url)
         elif self.proc.poll() is not None:
             rumps.notification(
@@ -341,8 +390,16 @@ def main() -> int:
     env = ensure_first_run()
     port = _env(env, "MRRC_WEB_PORT", DEFAULT_PORT)
     host = _env(env, "MRRC_WEB_HOST", "127.0.0.1")
-    url_host = "127.0.0.1" if host in ("::", "0.0.0.0", "") else host
-    url = f"http://{url_host}:{port}"
+    cert_new = not (user_data_dir() / "certs" / ssl_bootstrap.CERT_FILENAME).exists()
+    ssl_pair = ssl_material(env)
+    secure = ssl_pair is not None
+    url = local_url(env, secure=secure)
+    if secure and cert_new:
+        rumps.notification(
+            APP_NAME,
+            "HTTPS 已启用（自签名证书）",
+            "浏览器首次打开会提示“不安全”——点「高级 → 继续访问」即可。",
+        )
 
     app = MRRCModernApp(url=url, host=host, port=port)
 

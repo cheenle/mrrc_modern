@@ -1135,6 +1135,551 @@ The DMG is build output (check `.gitignore` for `dist/`); do not commit it unles
 
 ---
 
+### Task 11: Server — `/api/devices` + `/api/setup` + `/api/restart` (TDD)
+
+**Files:**
+- Modify: `server.py` (imports, new helpers + routes near the existing `_setup_status`/`/api/setup`)
+- Modify: `packaging/pyinstaller/mrrc_modern_server.spec` (hiddenimport `macos.first_run`, pathex `ROOT/macos`)
+- Test: `tests/test_server_setup.py`
+
+**Interfaces:**
+- Consumes: Task 1's `macos.first_run.update_env_file`; Task 4's `_verify_auth`; existing `MEM_FILE`.
+- Produces (used by Task 13 UI + Task 12 launcher):
+  - `RESTART_EXIT_CODE: int = 42`
+  - `_list_devices() -> dict` — `{"serial_ports": [{"device","description"}], "audio_rx": [...], "audio_tx": [...]}`
+  - `_list_audio_devices() -> dict`
+  - `_config_file_path() -> Path`
+  - `_schedule_restart() -> None` — `threading.Timer(1.2, lambda: os._exit(RESTART_EXIT_CODE)).start()`
+  - `GET /api/devices` (auth), `POST /api/setup` (auth), `POST /api/restart` (auth)
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `tests/test_server_setup.py`:
+
+```python
+"""Tests for the web connection-settings endpoints (devices/setup/restart)."""
+import os
+import unittest
+from unittest import mock
+from pathlib import Path
+
+import server
+from macos import first_run
+
+
+class ListDevicesTests(unittest.TestCase):
+    def test_shape_with_no_devices(self):
+        with mock.patch("serial.tools.list_ports.comports", return_value=[]), \
+             mock.patch("pyaudio.PyAudio", side_effect=Exception("no pyaudio")):
+            result = server._list_devices()
+        self.assertEqual(result["serial_ports"], [])
+        self.assertEqual(result["audio_rx"], [])
+        self.assertEqual(result["audio_tx"], [])
+
+    def test_filters_non_cu_ports(self):
+        class _P:
+            def __init__(self, device, description):
+                self.device = device
+                self.description = description
+        with mock.patch("serial.tools.list_ports.comports",
+                        return_value=[_P("/dev/cu.usbserial-A1", "USB Serial"),
+                                      _P("/dev/tty.Bluetooth", "")]):
+            result = server._list_devices()
+        self.assertEqual([p["device"] for p in result["serial_ports"]], ["/dev/cu.usbserial-A1"])
+
+
+class ConfigFilePathTests(unittest.TestCase):
+    def test_uses_mrrc_config_file_env(self):
+        with mock.patch.dict(os.environ, {"MRRC_CONFIG_FILE": "/tmp/x/mrrc_modern.env"}, clear=False):
+            self.assertEqual(server._config_file_path(), Path("/tmp/x/mrrc_modern.env"))
+
+    def test_falls_back_to_mem_file_parent(self):
+        with mock.patch.dict(os.environ, {}, clear=False), \
+             mock.patch.object(server, "MEM_FILE", Path("/tmp/data/mem_channels.json")):
+            self.assertEqual(server._config_file_path(), Path("/tmp/data/mrrc_modern.env"))
+
+
+class ScheduleRestartTests(unittest.TestCase):
+    def test_schedules_exit_with_code(self):
+        with mock.patch("threading.Timer") as timer:
+            server._schedule_restart()
+        timer.assert_called_once()
+        args, _ = timer.call_args
+        self.assertEqual(args[0], 1.2)
+        fn = args[1]
+        with mock.patch("os._exit") as exit_mock:
+            fn()
+        exit_mock.assert_called_once_with(42)
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `.venv/bin/python -m unittest tests.test_server_setup -v`
+Expected: FAIL — `AttributeError: module 'server' has no attribute '_list_devices'`.
+
+- [ ] **Step 3: Implement**
+
+In `server.py`:
+
+1. Add `import threading` to the imports (after `import sys`, line ~21).
+
+2. Add near the existing `_setup_status` helper:
+
+```python
+RESTART_EXIT_CODE = 42  # launcher re-reads config and restarts on this exit
+
+
+def _config_file_path() -> Path:
+    """Where the launcher keeps the user env file (MRRC_CONFIG_FILE)."""
+    env_path = os.environ.get("MRRC_CONFIG_FILE")
+    if env_path:
+        return Path(env_path)
+    return MEM_FILE.parent / "mrrc_modern.env"
+
+
+def _list_audio_devices() -> dict:
+    rx, tx = [], []
+    try:
+        import pyaudio
+        pa = pyaudio.PyAudio()
+        try:
+            for i in range(pa.get_device_count()):
+                info = pa.get_device_info_by_index(i)
+                name = str(info.get("name", ""))
+                if info.get("maxInputChannels", 0) > 0:
+                    rx.append({"index": i, "name": name,
+                               "channels": int(info.get("maxInputChannels", 0))})
+                if info.get("maxOutputChannels", 0) > 0:
+                    tx.append({"index": i, "name": name,
+                               "channels": int(info.get("maxOutputChannels", 0))})
+        finally:
+            pa.terminate()
+    except Exception:
+        pass
+    return {"rx": rx, "tx": tx}
+
+
+def _list_devices() -> dict:
+    serial_ports = []
+    try:
+        import serial.tools.list_ports
+        for p in serial.tools.list_ports.comports():
+            if getattr(p, "device", "").startswith("/dev/cu."):
+                serial_ports.append({
+                    "device": p.device,
+                    "description": getattr(p, "description", "") or p.device,
+                })
+    except Exception:
+        pass
+    audio = _list_audio_devices()
+    return {"serial_ports": serial_ports, "audio_rx": audio["rx"], "audio_tx": audio["tx"]}
+
+
+def _schedule_restart() -> None:
+    """Exit with RESTART_EXIT_CODE shortly so the launcher restarts the server."""
+    threading.Timer(1.2, lambda: os._exit(RESTART_EXIT_CODE)).start()
+
+
+@app.get("/api/devices", include_in_schema=False)
+async def api_devices(request: Request):
+    """Detected serial + audio devices for the connection-settings dialog."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse(_list_devices())
+
+
+@app.post("/api/setup", include_in_schema=False)
+async def api_setup_save(request: Request):
+    """Persist radio/serial/audio/password and restart to apply."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    radio_model = str(body.get("radio_model", "")).strip().lower()
+    serial_port = str(body.get("serial_port", "")).strip()
+    audio_rx = str(body.get("audio_rx_device", "")).strip()
+    audio_tx = str(body.get("audio_tx_device", "")).strip()
+    password = str(body.get("password", "")).strip()
+
+    if radio_model not in ("ft710", "ic7300", "ic7300mk2"):
+        return JSONResponse({"error": "invalid radio_model"}, status_code=400)
+    if not serial_port:
+        return JSONResponse({"error": "serial_port required"}, status_code=400)
+    if password and len(password) < 8:
+        return JSONResponse({"error": "password too short (min 8)"}, status_code=400)
+
+    updates = {
+        "MRRC_RADIO_MODEL": radio_model,
+        "MRRC_SERIAL_PORT": serial_port,
+        "MRRC_AUDIO_RX_DEVICE": audio_rx,
+        "MRRC_AUDIO_TX_DEVICE": audio_tx,
+        "MRRC_FIRST_RUN_DONE": "1",
+        "MRRC_PORT_CONFIRMED": "1",
+    }
+    if password:
+        updates["MRRC_WEB_PASSWORD"] = password
+        updates["MRRC_AUTO_PASSWORD"] = ""  # user-managed now; hide the banner
+    try:
+        first_run.update_env_file(_config_file_path(), updates)
+    except OSError as exc:
+        logger.error("Failed to write config: %s", exc)
+        return JSONResponse({"error": "write failed"}, status_code=500)
+    _schedule_restart()
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/restart", include_in_schema=False)
+async def api_restart(request: Request):
+    """Restart the server without changing configuration."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    _schedule_restart()
+    return JSONResponse({"ok": True})
+```
+
+3. Add `from macos import first_run` near the top (after the stdlib imports). Note: `macos/` is a namespace package (no `__init__.py`) — the import works in source mode and must be bundled (Step 4).
+
+- [ ] **Step 4: Bundle `macos.first_run` in the server spec**
+
+In `packaging/pyinstaller/mrrc_modern_server.spec`:
+- Change `pathex=[str(ROOT)]` to `pathex=[str(ROOT), str(ROOT / "macos")]`.
+- Add `"macos.first_run"` to `hiddenimports`.
+
+- [ ] **Step 5: Run tests to verify they pass**
+
+Run: `.venv/bin/python -m unittest tests.test_server_setup -v`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add server.py packaging/pyinstaller/mrrc_modern_server.spec tests/test_server_setup.py
+git commit -m "feat: web connection-settings endpoints (devices/setup/restart)"
+```
+
+---
+
+### Task 12: Launcher — pass `MRRC_CONFIG_FILE`, auto-restart on exit 42
+
+**Files:**
+- Modify: `macos/launcher.py`
+
+**Interfaces:**
+- Consumes: Task 11's `RESTART_EXIT_CODE = 42` convention; existing `config_path()`, `start_server()`, `launch_and_open()`.
+- Produces: `MRRC_CONFIG_FILE` env passed to the server; `self._quitting` flag; `_monitor_loop()` daemon thread.
+
+- [ ] **Step 1: Modify `start_server()` env + add monitor**
+
+In `macos/launcher.py`:
+
+1. In `start_server()`, add the config-file path to the spawned env (before `subprocess.Popen`):
+
+```python
+        env = load_env(config_path())
+        env["MRRC_CONFIG_FILE"] = str(config_path())
+        self.proc = subprocess.Popen(command, cwd=str(app_dir()), env=env)
+```
+
+2. In `MRRCModernApp.__init__`, initialize the quitting flag next to `self.proc`:
+
+```python
+        self.proc: subprocess.Popen | None = None
+        self._quitting = False
+```
+
+3. Add a monitor method to the class (near `launch_and_open`):
+
+```python
+    def _monitor_loop(self) -> None:
+        """Watch the server; auto-restart when it exits with RESTART_EXIT_CODE."""
+        while not self._quitting:
+            proc = self.proc
+            if proc is None:
+                time.sleep(0.5)
+                continue
+            rc = proc.wait()
+            if self._quitting:
+                break
+            if rc == 42:  # config changed via the web UI -> apply by restarting
+                self.start_server()
+                threading.Thread(
+                    target=self.launch_and_open, name="wait-for-server", daemon=True
+                ).start()
+            elif rc != 0:
+                rumps.notification(
+                    APP_NAME, "服务器异常退出",
+                    f"进程退出码 {rc}。可在菜单栏 Restart Server 重新启动。",
+                )
+```
+
+4. Set `_quitting` in `on_quit` and `_on_sigterm` (before `stop_process`):
+
+```python
+    @rumps.clicked("Quit MRRC Modern")
+    def on_quit(self, _):
+        self._quitting = True
+        stop_process(self.proc)
+        rumps.quit_application()
+```
+
+```python
+    def _on_sigterm(signum, frame):
+        app._quitting = True
+        stop_process(app.proc)
+        rumps.quit_application()
+```
+
+5. In `main()`, start the monitor thread after the first `app.start_server()`:
+
+```python
+    app.start_server()
+    threading.Thread(target=app._monitor_loop, name="server-monitor", daemon=True).start()
+    threading.Thread(
+        target=app.launch_and_open, name="wait-for-server", daemon=True
+    ).start()
+```
+
+- [ ] **Step 2: Syntax check**
+
+Run: `.venv/bin/python -m py_compile macos/launcher.py`
+Expected: exit 0.
+
+- [ ] **Step 3: Functional smoke (stub rumps) — exit-42 restart path**
+
+```bash
+.venv/bin/python - <<'PY'
+import sys, types
+rumps = types.ModuleType("rumps")
+rumps.App = type("App", (), {})
+rumps.clicked = lambda *a, **k: (lambda f: f)
+rumps.notification = lambda *a, **k: None
+rumps.alert = lambda *a, **k: None
+rumps.quit_application = lambda: None
+sys.modules["rumps"] = rumps
+
+import macos.launcher as L
+
+app = L.MRRCModernApp.__new__(L.MRRCModernApp)  # no rumps.App.__init__
+app.url = "http://127.0.0.1:8888"
+app.host = "127.0.0.1"
+app.port = "8888"
+app._quitting = False
+
+calls = []
+class _FakeProc:
+    def __init__(self, rc): self._rc = rc
+    def wait(self):
+        app._quitting = True  # stop after first event
+        return self._rc
+
+app.proc = _FakeProc(42)
+app.start_server = lambda: calls.append("start_server")
+app.launch_and_open = lambda: calls.append("launch_and_open")
+app._monitor_loop()
+assert "start_server" in calls and "launch_and_open" in calls, calls
+print("monitor exit-42 restart OK")
+PY
+```
+Expected: prints `monitor exit-42 restart OK`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add macos/launcher.py
+git commit -m "feat: launcher passes config path and auto-restarts server on exit 42"
+```
+
+---
+
+### Task 13: Web UI — connection-settings dialog
+
+**Files:**
+- Modify: `static/index.html`
+
+**Interfaces:**
+- Consumes: Task 11's `GET /api/devices`, `GET /api/setup`, `POST /api/setup`, `POST /api/restart`; current-config fields `radio_model`, `serial_port`, `audio_rx_device`, `audio_tx_device`.
+
+- [ ] **Step 1: Add the menu item**
+
+In `static/index.html`, near the "Advanced Settings" menu item (line ~376):
+
+```html
+            <a href="#" class="menu-item" data-action="conn-settings"
+              >连接设置…</a
+            >
+```
+
+- [ ] **Step 2: Add the dialog markup + JS before `</body>`**
+
+```html
+    <!-- Connection Settings Dialog -->
+    <div id="conn-dialog" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,.6);align-items:center;justify-content:center;">
+      <div style="background:#222;color:#eee;border:1px solid #444;border-radius:12px;padding:20px;width:min(420px,92vw);font-family:-apple-system,sans-serif;max-height:88vh;overflow:auto;">
+        <h2 style="color:#f59e0b;margin:0 0 14px;font-size:18px;">连接设置</h2>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">电台型号</label>
+        <select id="cs-model" style="width:100%;padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;">
+          <option value="ft710">Yaesu FT-710</option>
+          <option value="ic7300">Icom IC-7300</option>
+          <option value="ic7300mk2">Icom IC-7300MK2</option>
+        </select>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">串口</label>
+        <select id="cs-port" style="width:100%;padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;"></select>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">RX 音频输入（电台 → 电脑）</label>
+        <select id="cs-audio-rx" style="width:100%;padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;"></select>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">TX 音频输出（电脑 → 电台）</label>
+        <select id="cs-audio-tx" style="width:100%;padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;"></select>
+        <label style="display:block;margin:10px 0 4px;font-size:13px;color:#bbb;">登录密码（留空 = 保持不变，至少 8 位）</label>
+        <input id="cs-password" type="password" placeholder="留空 = 保持不变" style="width:calc(100% - 18px);padding:8px;background:#333;color:#fff;border:1px solid #444;border-radius:6px;">
+        <div id="cs-msg" style="color:#4ade80;font-size:13px;min-height:18px;margin-top:8px;"></div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button id="cs-save" style="flex:2;padding:10px;background:#f59e0b;color:#000;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">保存并重启</button>
+          <button id="cs-restart" style="flex:1;padding:10px;background:#333;color:#fff;border:1px solid #555;border-radius:8px;cursor:pointer;">重启服务</button>
+          <button id="cs-close" style="flex:1;padding:10px;background:#333;color:#fff;border:1px solid #555;border-radius:8px;cursor:pointer;">关闭</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        var dlg = document.getElementById("conn-dialog");
+        function openDlg() {
+          dlg.style.display = "flex";
+          dlg.querySelector("#cs-msg").textContent = "";
+          Promise.all([
+            fetch("/api/devices").then(function (r) { return r.ok ? r.json() : null; }),
+            fetch("/api/setup").then(function (r) { return r.ok ? r.json() : null; }),
+          ]).then(function (rs) {
+            var dev = rs[0], cur = rs[1];
+            if (!dev || !cur) return;
+            dlg.querySelector("#cs-model").value = cur.radio_model || "ft710";
+            fillSelect(dlg.querySelector("#cs-port"), dev.serial_ports, "device", cur.serial_port);
+            fillSelect(dlg.querySelector("#cs-audio-rx"), dev.audio_rx, "name", cur.audio_rx_device);
+            fillSelect(dlg.querySelector("#cs-audio-tx"), dev.audio_tx, "name", cur.audio_tx_device);
+          });
+        }
+        function fillSelect(sel, items, key, current) {
+          var opts = '<option value="">自动（推荐）</option>';
+          var seen = {};
+          items.forEach(function (it) {
+            var v = it[key];
+            if (!v || seen[v]) return;
+            seen[v] = 1;
+            var selAttr = current && v.indexOf(current) !== -1 ? " selected" : "";
+            opts += '<option value="' + v.replace(/"/g, "&quot;") + '"' + selAttr + ">" + v + "</option>";
+          });
+          sel.innerHTML = opts;
+        }
+        function post(path, body, done) {
+          fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : "{}" })
+            .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+            .then(function (res) { done(res); })
+            .catch(function () { done({ ok: false, j: { error: "network" } }); });
+        }
+        function waitAndReload() {
+          var msg = dlg.querySelector("#cs-msg");
+          msg.textContent = "已保存，正在重启…";
+          var t = setInterval(function () {
+            fetch("/api/health").catch(function () {
+              clearInterval(t);
+              var t2 = setInterval(function () {
+                fetch("/api/health").then(function () {
+                  clearInterval(t2);
+                  window.location.reload();
+                }).catch(function () {});
+              }, 1200);
+            });
+          }, 800);
+        }
+        document.getElementById("cs-save").addEventListener("click", function () {
+          var pwd = dlg.querySelector("#cs-password").value;
+          if (pwd && pwd.length < 8) { dlg.querySelector("#cs-msg").textContent = "密码至少 8 位"; return; }
+          var body = {
+            radio_model: dlg.querySelector("#cs-model").value,
+            serial_port: dlg.querySelector("#cs-port").value,
+            audio_rx_device: dlg.querySelector("#cs-audio-rx").value,
+            audio_tx_device: dlg.querySelector("#cs-audio-tx").value,
+          };
+          if (pwd) body.password = pwd;
+          post("/api/setup", body, function (res) {
+            if (res.ok) { waitAndReload(); }
+            else { dlg.querySelector("#cs-msg").textContent = "保存失败：" + (res.j && res.j.error || "未知错误"); }
+          });
+        });
+        document.getElementById("cs-restart").addEventListener("click", function () {
+          post("/api/restart", null, function (res) {
+            if (res.ok) { waitAndReload(); }
+            else { dlg.querySelector("#cs-msg").textContent = "重启失败：" + (res.j && res.j.error || "未知错误"); }
+          });
+        });
+        document.getElementById("cs-close").addEventListener("click", function () {
+          dlg.style.display = "none";
+        });
+        document.querySelectorAll("[data-action='conn-settings']").forEach(function (el) {
+          el.addEventListener("click", function (e) { e.preventDefault(); openDlg(); });
+        });
+      })();
+    </script>
+```
+
+- [ ] **Step 3: Verify markup integrity**
+
+Run:
+```bash
+.venv/bin/python - <<'PY'
+from pathlib import Path
+t = Path("static/index.html").read_text()
+for needle in ("data-action=\"conn-settings\"", "id=\"conn-dialog\"",
+               "/api/devices", "/api/setup", "/api/restart"):
+    assert needle in t, needle
+print("conn-settings markup OK")
+PY
+```
+Expected: prints `conn-settings markup OK`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add static/index.html
+git commit -m "feat: web connection-settings dialog (radio/serial/audio/password + restart)"
+```
+
+---
+
+### Task 14: Full suite + rebuild DMG + end-to-end verify
+
+- [ ] **Step 1: Full test suite**
+
+Run: `.venv/bin/python -m unittest discover -s tests 2>&1 | grep -E '^(Ran |OK|FAILED)'`
+Expected: `OK` (670 + new tests).
+
+- [ ] **Step 2: Rebuild the DMG**
+
+Run: `PYTHON=.venv/bin/python packaging/macos/build.sh 2>&1 | tail -12`
+Expected: `dist/macos/MRRC-Modern-v1.13.0-arm64.dmg` recreated.
+
+- [ ] **Step 3: Headless server smoke (incl. new endpoints)**
+
+```bash
+APP=dist/macos/MRRC-Modern.app
+"$APP/Contents/MacOS/MRRC-Modern-Server" --no-ssl --host 127.0.0.1 --port 8899 --serial-port "" --password testpass &
+sleep 5
+TOKEN=$(curl -s -X POST 127.0.0.1:8899/api/auth/login -H 'Content-Type: application/json' -d '{"password":"testpass"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+curl -s -H "Cookie: mrrc_auth=$TOKEN" 127.0.0.1:8899/api/devices | python3 -m json.tool | head -12
+kill %1
+```
+Expected: `/api/devices` returns JSON with `serial_ports`/`audio_rx`/`audio_tx`.
+
+- [ ] **Step 4: GUI smoke (settings dialog)**
+
+Install/launch the rebuilt app, log in with the auto-generated password, open 「连接设置…」, verify dropdowns populate and 保存并重启 re-applies (server restarts, page reloads). Clean up processes afterwards.
+
+---
+
 ## Self-Review Notes
 
 - **Spec coverage:** §3.1 (first_run.py) → Task 1; §3.2 (launcher) → Task 3; §3.3 (server banner + /api/setup) → Tasks 4–5; §3.4 (specs, default.env, FTDI) → Tasks 6–7; §3.5 (docs) → Task 8; §3.6 (version) → Task 8; §5 (tests) → Tasks 1/4/9; §7 (acceptance: DMG + novice path + FTDI) → Task 10.

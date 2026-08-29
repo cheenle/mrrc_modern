@@ -143,3 +143,48 @@ launcher main()
 - `dist/macos/MRRC-Modern-v1.13.0-arm64.dmg` 产出，测试全绿。
 - 全新用户路径：装后右键打开一次 → 菜单栏 → 自动密码登录 → 射频控制可用。
 - FT-710 真频谱：app 内 `Contents/MacOS/vendor/ftdi/macos/` 含两个 dylib，频谱走 FT4222。
+
+## 8. 追加：网页「连接设置」对话框（用户补充需求，2026-08-29 确认）
+
+自动探测有盲区（多设备选错/未识别），且随机密码难记。在 web UI 提供**手动覆盖**入口。
+
+### 8.1 UI
+
+侧边菜单加 **「连接设置…」**，打开对话框，5 项 + 双按钮：
+
+| 控件 | 选项来源 | 存配置 |
+|------|----------|--------|
+| 电台型号 | ft710 / ic7300 / ic7300mk2 | `MRRC_RADIO_MODEL` |
+| 串口 | 实时扫 `/dev/cu.*`（`GET /api/devices`） | `MRRC_SERIAL_PORT` |
+| RX 音频输入 | pyaudio 输入设备（含 "USB Audio Device"/"USB Audio Codec"） | `MRRC_AUDIO_RX_DEVICE`（名字串） |
+| TX 音频输出 | pyaudio 输出设备 | `MRRC_AUDIO_TX_DEVICE`（名字串） |
+| 登录密码 | 密码输入框，留空=不变；≥8 位 | `MRRC_WEB_PASSWORD` |
+
+- **「保存并重启」**（主）：`POST /api/setup` → 写 env → 退出码 42 重启。
+- **「重启服务」**（次）：`POST /api/restart` → 只触发退出码 42 重启。
+
+改密码时置空 `MRRC_AUTO_PASSWORD`（登录页横幅/Show Password 不再显示自动密码）。
+
+### 8.2 后端（server.py，均需登录）
+
+- `GET /api/devices` → `{serial_ports:[{device,description}], audio_rx:[{index,name,channels}], audio_tx:[...]}`。
+  串口用 `serial.tools.list_ports`；音频用 `pyaudio.PyAudio()` 枚举（临时实例，用完 terminate）。
+- `POST /api/setup` body `{radio_model, serial_port, audio_rx_device, audio_tx_device, password?}`
+  → 校验型号∈合法集、端口非空、密码≥8 → `first_run.update_env_file(cfg, updates)` 写配置 +
+  `MRRC_FIRST_RUN_DONE=1` + `MRRC_PORT_CONFIRMED=1` → `_schedule_restart()`（1.2s 后 `os._exit(42)`，先让响应发出）。
+- `POST /api/restart` → `_schedule_restart()`。
+- `_config_file_path()`：`MRRC_CONFIG_FILE`（launcher 传入）优先，回落 `MEM_FILE.parent/mrrc_modern.env`。
+- 复用 `macos.first_run.update_env_file`（DRY）；server spec 补 `macos.first_run` hiddenimport + pathex `ROOT/macos`。
+- server.py 补 `import threading`。
+
+### 8.3 launcher
+
+- `start_server()` 的 env 里加 `MRRC_CONFIG_FILE=config_path()`。
+- 新增 `self._quitting` 标记 + `_monitor_loop()` daemon 线程：`proc.wait()` 返回 42 → `start_server()`（重读 env）+
+  `launch_and_open()`；返回非 0 → 通知；`_quitting` 时退出。`on_quit`/`_on_sigterm` 置 `_quitting=True`。
+- 菜单栏原「Restart Server」保留。
+
+### 8.4 已知取舍
+
+- 改配置重启用 `os._exit(42)`（非优雅停机）：响应先发出；退出时串口关闭自动释放 RTS/DTR → PTT 硬件释放，无挂起风险。
+- 重启后会话 cookie 失效（`_auth_tokens` 内存态），改过密码需用新密码重新登录 —— 正常行为，UI 重启后自动回登录页。

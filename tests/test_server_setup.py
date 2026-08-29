@@ -54,15 +54,10 @@ class ScheduleRestartTests(unittest.TestCase):
         exit_mock.assert_called_once_with(42)
 
 
-class DualStackDefaultTests(unittest.TestCase):
-    def test_plain_dualsock_accepts_ipv4_and_ipv6(self):
-        # Guards the MRRC_WEB_HOST=:: default: uvicorn binds a plain AF_INET6
-        # :: socket (no IPV6_V6ONLY set), which on macOS accepts both stacks.
+class DualStackSocketTests(unittest.TestCase):
+    def test_dual_stack_accepts_ipv4_and_ipv6(self):
         import socket as _socket
-        sock = _socket.socket(_socket.AF_INET6)
-        sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
-        sock.bind(("::", 0))
-        sock.listen(2048)
+        sock = server._bind_dual_stack_socket(0)
         self.addCleanup(sock.close)
         port = sock.getsockname()[1]
 

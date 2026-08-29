@@ -8,7 +8,7 @@ ROOT = Path(SPECPATH).parents[1]
 
 a = Analysis(
     [str(ROOT / "windows" / "launcher.py")],
-    pathex=[str(ROOT)],
+    pathex=[str(ROOT), str(ROOT / "macos")],
     binaries=[],
     datas=[
         (str(ROOT / "windows" / "default.env"), "windows"),
@@ -16,6 +16,10 @@ a = Analysis(
     hiddenimports=[
         "ssl_bootstrap",
         "cryptography",
+        "serial",
+        "serial.tools.list_ports",
+        "serial.tools.list_ports_windows",
+        "macos.first_run",
     ],
     hookspath=[],
     hooksconfig={},

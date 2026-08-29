@@ -59,7 +59,7 @@
 <i class="fab fa-apple"></i> Download macOS v1.13.0
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.12.1
+<i class="fab fa-windows"></i> Windows Installer v1.13.0
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> Explore Features
@@ -278,29 +278,30 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.12.1 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.13.0 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            45.3 MB · x64 · 45,329,503 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: ba5fb7a9fd952e9c92508cf6b159c1d92b9292a3b03925f855f55166d5954e47</code>
+            45.4 MB · x64 · 45,433,215 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 15ab8f9b6ddbabda0308cff041f1f5e48547d91c000724198a0b903549a808b0</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.12.1 turns the web recorder into a true QSO recorder: receive
-            and transmit audio are captured into one chronological mono MP3 —
-            while PTT is held the local microphone is recorded instead of the
-            RX sidetone — downloaded as mrrc-qso-&lt;timestamp&gt;.mp3. The
-            Windows build passed all 633 tests, three PyInstaller targets,
-            Inno Setup compilation, and bundled-file/hash checks. Radio-side
-            CAT, audio, PTT, and scope behavior is unchanged from v1.12.0.
-            Physical USB, RF, power-cycle, and audio-quality acceptance still
-            requires a connected radio.
+            v1.13.0 is zero-config on first run: it auto-generates a web
+            password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
+            0x19) and its serial port (COM), and the login page shows the
+            auto-generated password. The web 连接设置 (Connection Settings)
+            dialog changes the radio model, serial port, RX+TX audio devices,
+            and password with save-and-restart — the server auto-restarts, and
+            the launcher restarts on config change. CAT, audio, PTT, and scope
+            behavior is unchanged from the previous release. Physical USB, RF,
+            power-cycle, and audio-quality acceptance still requires a
+            connected radio.
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.12.1
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.13.0-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.13.0
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
@@ -390,17 +391,18 @@
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.12.1, 45.3 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.13.0, 45.4 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 ba5fb7a9fd952e9c92508cf6b159c1d92b9292a3b03925f855f55166d5954e47</code>
+<code>SHA-256 15ab8f9b6ddbabda0308cff041f1f5e48547d91c000724198a0b903549a808b0</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
 <p>
-              Start Menu → Edit Configuration — set the radio model
-              (<code>MRRC_RADIO_MODEL</code>), serial port, and a strong web
-              password.
+              First run auto-configures the radio and password. The web
+              连接设置 (Connection Settings) dialog sets the radio model,
+              serial port, RX+TX audio devices, and password with
+              save-and-restart.
             </p>
 <code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>
 <p style="margin-top: 0.5rem">
@@ -900,7 +902,7 @@
 <div class="footer-grid">
 <div class="footer-section">
 <h4>MRRC Modern</h4>
-<p>Software SCU-LAN10 Replacement<br/>One USB Cable, Any Device<br/>v1.12.1 Stable · GPLv3 License</p>
+<p>Software SCU-LAN10 Replacement<br/>One USB Cable, Any Device<br/>v1.13.0 Stable · GPLv3 License</p>
 </div>
 <div class="footer-section">
 <h4>Links</h4>
@@ -916,7 +918,7 @@
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.12.1</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.13.0</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>
 <li><a href="sdd.html">SDD Docs</a></li>

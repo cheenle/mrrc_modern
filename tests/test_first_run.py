@@ -96,9 +96,10 @@ class DetectSerialPortsTests(unittest.TestCase):
             _FakeComPort("/dev/cu.SLAB_USBtoUART", "CP210x USB to UART Bridge", "USB"),
             _FakeComPort("/dev/cu.Bluetooth-Incoming-Port", "", ""),
         ]
-        result = fr.detect_serial_ports(ports)
+        with mock.patch("macos.first_run.sys.platform", "darwin"):
+            result = fr.detect_serial_ports(ports)
         self.assertEqual(result[0], "/dev/cu.SLAB_USBtoUART")
-        self.assertEqual(len(result), 2)  # Bluetooth port excluded (not cu-radio)
+        self.assertEqual(len(result), 2)  # Bluetooth port excluded
 
     def test_empty_when_no_ports(self):
         self.assertEqual(fr.detect_serial_ports([]), [])

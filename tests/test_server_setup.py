@@ -25,7 +25,8 @@ class ListDevicesTests(unittest.TestCase):
         with mock.patch("serial.tools.list_ports.comports",
                         return_value=[_P("/dev/cu.usbserial-A1", "USB Serial"),
                                       _P("/dev/tty.Bluetooth", ""),
-                                      _P("/dev/cu.Bluetooth-Incoming-Port", "Bluetooth")]):
+                                      _P("/dev/cu.Bluetooth-Incoming-Port", "Bluetooth")]), \
+             mock.patch("sys.platform", "darwin"):
             result = server._list_devices()
         self.assertEqual([p["device"] for p in result["serial_ports"]], ["/dev/cu.usbserial-A1"])
 

@@ -13,6 +13,7 @@ import asyncio
 import concurrent.futures
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import (
     RADIO_MODEL, SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,
     DEFAULT_WEB_PASSWORD, PTT_MAX_TX_SECONDS,
+    AUDIO_RX_DEVICE, AUDIO_TX_DEVICE,
     SSL_CERTFILE, SSL_KEYFILE,
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT,
     UI_MODES, NARROW_MODES,
@@ -1788,13 +1790,54 @@ async def auth_middleware(request: Request, call_next):
 
 # ── Login Routes ────────────────────────────────────────────────────
 
+def _first_run_password_banner() -> str:
+    """One-time banner showing the auto-generated login password.
+
+    Only rendered while MRRC_AUTO_PASSWORD=1 (set by the launcher on first
+    run). Once the user edits the password and removes that marker, the
+    banner disappears.
+    """
+    if os.environ.get("MRRC_AUTO_PASSWORD") != "1":
+        return ""
+    safe = html.escape(str(WEB_PASSWORD))
+    return (
+        '<div style="background:#2d2410;color:#fbbf24;border:1px solid #b45309;'
+        'border-radius:8px;padding:12px;margin:0 0 12px;font-size:14px;'
+        'text-align:center;">'
+        f'🔑 首次运行已自动生成密码：<b>{safe}</b><br>'
+        '<span style="color:#9ca3af;font-size:12px;">'
+        '如需修改：菜单栏 MRRC Modern → Edit Configuration…</span></div>'
+    )
+
+
+def _setup_status() -> dict:
+    """Status payload shown on the first-run welcome banner after login."""
+    return {
+        "first_run_done": os.environ.get("MRRC_FIRST_RUN_DONE", "") == "1",
+        "auto_password": os.environ.get("MRRC_AUTO_PASSWORD", "") == "1",
+        "radio_model": RADIO_MODEL,
+        "serial_port": SERIAL_PORT,
+        "audio_rx_device": AUDIO_RX_DEVICE,
+        "audio_tx_device": AUDIO_TX_DEVICE,
+    }
+
+
+@app.get("/api/setup", include_in_schema=False)
+async def api_setup(request: Request):
+    """First-run status for the welcome banner (requires login)."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse(_setup_status())
+
+
 @app.get("/login", include_in_schema=False)
 async def login_page(request: Request):
     """Serve the login page."""
     login_html = STATIC_DIR / "login.html"
     if login_html.exists():
-        return HTMLResponse(login_html.read_text())
-    return HTMLResponse("""
+        html_body = login_html.read_text()
+    else:
+        html_body = """
     <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport"
     content="width=device-width,initial-scale=1"><title>MRRC Modern Login</title>
     <style>body{font-family:-apple-system,sans-serif;background:#1a1a1a;color:#eee;
@@ -1817,7 +1860,13 @@ async def login_page(request: Request):
     window.location.replace(n);}else{document.getElementById('error').textContent='Invalid password';}
     }catch(err){document.getElementById('error').textContent='Connection error';}};
     </script></body></html>
-    """, status_code=200)
+    """
+    banner = _first_run_password_banner()
+    if banner and html_body:
+        html_body = html_body.replace(
+            "<h1>MRRC Modern</h1>", "<h1>MRRC Modern</h1>" + banner, 1
+        )
+    return HTMLResponse(html_body, status_code=200)
 
 
 @app.post("/api/auth/login")

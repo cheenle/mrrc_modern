@@ -1793,14 +1793,17 @@ async def auth_middleware(request: Request, call_next):
 
 # ── Login Routes ────────────────────────────────────────────────────
 
-def _first_run_password_banner() -> str:
+def _first_run_password_banner(request: Request) -> str:
     """One-time banner showing the auto-generated login password.
 
-    Only rendered while MRRC_AUTO_PASSWORD=1 (set by the launcher on first
-    run). Once the user edits the password and removes that marker, the
-    banner disappears.
+    Rendered only while MRRC_AUTO_PASSWORD=1 AND the connecting client is a
+    loopback address — never leak the auto password to LAN clients when the
+    server binds :: (dual-stack).
     """
     if os.environ.get("MRRC_AUTO_PASSWORD") != "1":
+        return ""
+    client = (request.client.host if request.client else "") or ""
+    if client not in ("127.0.0.1", "::1", "::ffff:127.0.0.1", "localhost"):
         return ""
     safe = html.escape(str(WEB_PASSWORD))
     return (
@@ -1979,7 +1982,7 @@ async def login_page(request: Request):
     }catch(err){document.getElementById('error').textContent='Connection error';}};
     </script></body></html>
     """
-    banner = _first_run_password_banner()
+    banner = _first_run_password_banner(request)
     if banner and html_body:
         html_body = html_body.replace(
             "<h1>MRRC Modern</h1>", "<h1>MRRC Modern</h1>" + banner, 1

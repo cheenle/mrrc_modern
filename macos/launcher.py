@@ -29,6 +29,8 @@ from pathlib import Path
 
 import rumps
 
+from macos import first_run
+
 
 APP_NAME = "MRRC Modern"
 DEFAULT_PORT = "8888"
@@ -148,6 +150,34 @@ def load_env(path: Path) -> dict[str, str]:
     return env
 
 
+def ensure_first_run() -> dict[str, str]:
+    """Apply first-launch auto-config if needed and surface the password.
+
+    Returns the (possibly updated) env dict ready to pass to the server.
+    """
+    cfg = config_path()
+    env = load_env(cfg)
+    if first_run.needs_first_run(env):
+        env = first_run.apply_first_run(env, cfg)
+        if env.get("MRRC_AUTO_PASSWORD") == "1":
+            rumps.notification(
+                APP_NAME,
+                "首次运行",
+                f"登录密码已自动生成：{env.get('MRRC_WEB_PASSWORD', '')}\n"
+                "已存入配置，菜单栏「Show Password…」可随时查看。",
+            )
+    return env
+
+
+def show_password() -> None:
+    env = load_env(config_path())
+    pwd = _env(env, "MRRC_WEB_PASSWORD", "")
+    rumps.alert(
+        title=APP_NAME,
+        message=f"Web 登录密码：{pwd}\n（菜单栏「Edit Configuration…」可修改）",
+    )
+
+
 def server_executable() -> Path | None:
     exe = app_dir() / "MRRC-Modern-Server"
     if exe.exists():
@@ -202,6 +232,7 @@ class MRRCModernApp(rumps.App):
         self.menu = [
             "Open Web UI",
             "Edit Configuration…",
+            "Show Password…",
             "Restart Server",
             None,  # separator
             "Quit MRRC Modern",
@@ -257,6 +288,10 @@ class MRRCModernApp(rumps.App):
     def on_edit(self, _):
         open_in_textedit(config_path())
 
+    @rumps.clicked("Show Password…")
+    def on_show_password(self, _):
+        show_password()
+
     @rumps.clicked("Restart Server")
     def on_restart(self, _):
         stop_process(self.proc)
@@ -276,7 +311,7 @@ def main() -> int:
     seed_mem_channels()
 
     # Determine the URL before starting the server (also seeds the env on disk).
-    env = load_env(config_path())
+    env = ensure_first_run()
     port = _env(env, "MRRC_WEB_PORT", DEFAULT_PORT)
     host = _env(env, "MRRC_WEB_HOST", "127.0.0.1")
     url_host = "127.0.0.1" if host in ("::", "0.0.0.0", "") else host

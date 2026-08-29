@@ -205,7 +205,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 ```
 
 - 变量用 `MRRC_*` 前缀（旧的 `FT710_*` 仍兼容）；改完在菜单栏 **Restart Server** 重启生效。
-- 想退回明文 HTTP：加一行 `MRRC_SSL=off`（默认开 HTTPS）。
+- **HTTPS 默认开启**（无需任何配置）；仅当想退回明文 HTTP 时才加一行 `MRRC_SSL=off`。
 - 配置、自签名证书、记忆频道都在这一个目录里；**彻底卸载**时把应用拖进废纸篓、再删掉 `~/Library/Application Support/MRRC-Modern/` 即可完全清除。
 
 ### 0.7.5 手机 / 其他设备访问（局域网）

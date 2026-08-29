@@ -43,7 +43,7 @@ else:
 
 a = Analysis(
     [str(ROOT / "server.py")],
-    pathex=[str(ROOT)],
+    pathex=[str(ROOT), str(ROOT / "macos")],
     binaries=[],
     datas=[
         (str(ROOT / "static"), "static"),
@@ -53,6 +53,8 @@ a = Analysis(
         *_vendor_data,
     ],
     hiddenimports=[
+        # First-run auto-config (launcher + setup endpoint)
+        "macos.first_run",
         # Serial / audio runtime
         "serial",
         "serial.tools.list_ports",

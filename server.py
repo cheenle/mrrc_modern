@@ -19,12 +19,15 @@ import logging
 import os
 import secrets as _secrets
 import sys
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional, Protocol
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+from macos import first_run
 
 from config import (
     RADIO_MODEL, SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,
@@ -1828,6 +1831,119 @@ async def api_setup(request: Request):
     if not _verify_auth(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return JSONResponse(_setup_status())
+
+
+RESTART_EXIT_CODE = 42  # launcher re-reads config and restarts on this exit
+
+
+def _config_file_path() -> Path:
+    """Where the launcher keeps the user env file (MRRC_CONFIG_FILE)."""
+    env_path = os.environ.get("MRRC_CONFIG_FILE")
+    if env_path:
+        return Path(env_path)
+    return MEM_FILE.parent / "mrrc_modern.env"
+
+
+def _list_audio_devices() -> dict:
+    rx, tx = [], []
+    try:
+        import pyaudio
+        pa = pyaudio.PyAudio()
+        try:
+            for i in range(pa.get_device_count()):
+                info = pa.get_device_info_by_index(i)
+                name = str(info.get("name", ""))
+                if info.get("maxInputChannels", 0) > 0:
+                    rx.append({"index": i, "name": name,
+                               "channels": int(info.get("maxInputChannels", 0))})
+                if info.get("maxOutputChannels", 0) > 0:
+                    tx.append({"index": i, "name": name,
+                               "channels": int(info.get("maxOutputChannels", 0))})
+        finally:
+            pa.terminate()
+    except Exception:
+        pass
+    return {"rx": rx, "tx": tx}
+
+
+def _list_devices() -> dict:
+    serial_ports = []
+    try:
+        import serial.tools.list_ports
+        for p in serial.tools.list_ports.comports():
+            if getattr(p, "device", "").startswith("/dev/cu."):
+                serial_ports.append({
+                    "device": p.device,
+                    "description": getattr(p, "description", "") or p.device,
+                })
+    except Exception:
+        pass
+    audio = _list_audio_devices()
+    return {"serial_ports": serial_ports, "audio_rx": audio["rx"], "audio_tx": audio["tx"]}
+
+
+def _schedule_restart() -> None:
+    """Exit with RESTART_EXIT_CODE shortly so the launcher restarts the server."""
+    threading.Timer(1.2, lambda: os._exit(RESTART_EXIT_CODE)).start()
+
+
+@app.get("/api/devices", include_in_schema=False)
+async def api_devices(request: Request):
+    """Detected serial + audio devices for the connection-settings dialog."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse(_list_devices())
+
+
+@app.post("/api/setup", include_in_schema=False)
+async def api_setup_save(request: Request):
+    """Persist radio/serial/audio/password and restart to apply."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    radio_model = str(body.get("radio_model", "")).strip().lower()
+    serial_port = str(body.get("serial_port", "")).strip()
+    audio_rx = str(body.get("audio_rx_device", "")).strip()
+    audio_tx = str(body.get("audio_tx_device", "")).strip()
+    password = str(body.get("password", "")).strip()
+
+    if radio_model not in ("ft710", "ic7300", "ic7300mk2"):
+        return JSONResponse({"error": "invalid radio_model"}, status_code=400)
+    if not serial_port:
+        return JSONResponse({"error": "serial_port required"}, status_code=400)
+    if password and len(password) < 8:
+        return JSONResponse({"error": "password too short (min 8)"}, status_code=400)
+
+    updates = {
+        "MRRC_RADIO_MODEL": radio_model,
+        "MRRC_SERIAL_PORT": serial_port,
+        "MRRC_AUDIO_RX_DEVICE": audio_rx,
+        "MRRC_AUDIO_TX_DEVICE": audio_tx,
+        "MRRC_FIRST_RUN_DONE": "1",
+        "MRRC_PORT_CONFIRMED": "1",
+    }
+    if password:
+        updates["MRRC_WEB_PASSWORD"] = password
+        updates["MRRC_AUTO_PASSWORD"] = ""  # user-managed now; hide the banner
+    try:
+        first_run.update_env_file(_config_file_path(), updates)
+    except OSError as exc:
+        logger.error("Failed to write config: %s", exc)
+        return JSONResponse({"error": "write failed"}, status_code=500)
+    _schedule_restart()
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/restart", include_in_schema=False)
+async def api_restart(request: Request):
+    """Restart the server without changing configuration."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    _schedule_restart()
+    return JSONResponse({"ok": True})
 
 
 @app.get("/login", include_in_schema=False)

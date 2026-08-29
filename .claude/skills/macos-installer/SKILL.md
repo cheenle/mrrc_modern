@@ -11,7 +11,15 @@ The macOS release is a locally-built DMG: `packaging/macos/build.sh` runs tests 
 
 ## Prerequisites
 
-- Python 3.13 venv: `.venv` (runtime deps + `pyinstaller==6.21.0` + `rumps` from `packaging/macos/requirements-build.txt`).
+- Python 3.13 venv (`.venv`) with the runtime deps AND `pyinstaller==6.21.0` + `rumps` (`packaging/macos/requirements-build.txt`). From scratch:
+
+  ```bash
+  python3.13 -m venv .venv
+  .venv/bin/python -m pip install --upgrade pip
+  .venv/bin/python -m pip install -r requirements.txt        # fastapi, uvicorn, pyserial, pyaudio...
+  .venv/bin/python -m pip install -r packaging/macos/requirements-build.txt
+  ```
+
 - Xcode Command Line Tools (`codesign`, `hdiutil`), `brew install portaudio` (pyaudio).
 - FTDI dylibs at `vendor/ftdi/macos/libft4222.dylib` + `libftd2xx.dylib` (universal arm64). Missing → S-meter fallback (warn only).
 - Apple Silicon only (arm64). No Developer ID → ad-hoc signed → first launch is right-click → Open once.
@@ -43,6 +51,14 @@ Output: `dist/macos/MRRC-Modern-v<ver>-arm64.dmg` (checksums printed at the end)
 
 ## Verification
 
+Post-build structural checks (confirm the critical bits landed):
+
+```bash
+ls -la dist/macos/MRRC-Modern.app/Contents/ | grep Frameworks        # expect Frameworks -> MacOS/_internal
+defaults read dist/macos/MRRC-Modern.app/Contents/Info.plist CFBundleShortVersionString   # = CHANGELOG version
+test -f dist/macos/MRRC-Modern.app/Contents/MacOS/vendor/ftdi/macos/libft4222.dylib && echo "FTDI bundled"
+```
+
 Headless (dual-stack + banner + endpoints):
 
 ```bash
@@ -52,6 +68,8 @@ MRRC_WEB_PASSWORD=testpass MRRC_AUTO_PASSWORD=1 \
 # expect 401 from BOTH (IPv4 + IPv6):
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8899/api/health
 curl -s -o /dev/null -w '%{http_code}\n' 'http://[::1]:8899/api/health'
+# expect the auto-password banner on the login page (loopback):
+curl -s http://127.0.0.1:8899/login | grep -q '首次运行已自动生成密码' && echo "banner OK"
 ```
 
 GUI end-to-end (the "安装即可用" chain): mount the DMG → copy `MRRC-Modern.app` to `/Applications` → `xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app` → `open` → verify: menu-bar icon, browser opens login page with the auto-generated password banner, real hardware auto-detected (`MRRC_SERIAL_PORT` + `MRRC_PORT_CONFIRMED=1` in `~/Library/Application Support/MRRC-Modern/mrrc_modern.env`), `POST /api/setup` triggers a launcher auto-restart (server PID changes), `GET /api/devices` lists the real serial/audio devices.
@@ -61,7 +79,7 @@ Cleanup: `kill -TERM <server_pid>` then `pkill -KILL -f MRRC-Modern-Launcher`.
 ## Website Deploy
 
 - DMG goes to **www.vlsc.net** `/var/www/vlsc.net/mrrc_modern/downloads/` (sudo mv + chown www-data + chmod 644). `website/deploy.sh` EXCLUDES `downloads/` — the DMG is server-managed, never in the deploy tar; `website/downloads/*.dmg` is gitignored (untracked staging only).
-- `website/index.html` + `website/zh/index.html`: version badge, download card (size + SHA-256), macOS install guide track, hero buttons. Then `echo y | ./deploy.sh` from `website/` (uploads HTML, backs up, nginx -t). Deploy target is www.vlsc.net (user must confirm production deploys).
+- `website/index.html` + `website/zh/index.html`: BEFORE deploying, update the version badge, the macOS download card (new size + SHA-256 printed by build.sh), the macOS install guide track, and keep the hero dual-platform (macOS primary + Windows). Then `echo y | ./deploy.sh` from `website/` (uploads HTML, backs up, nginx -t). Deploy target is www.vlsc.net (user must confirm production deploys).
 - Keep the hero dual-platform (macOS primary + Windows) — the landing page should not favor one platform.
 
 ## Common Mistakes

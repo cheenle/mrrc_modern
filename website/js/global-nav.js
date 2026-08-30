@@ -90,7 +90,14 @@
       'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}' +
       '.vlsc-to-top.show{opacity:1;visibility:visible;transform:translateY(0);}' +
       '.vlsc-to-top:hover{border-color:#f39c12;background:rgba(243,156,18,0.15);}' +
-      '@media(max-width:768px){.vlsc-gn-links{gap:0.85rem;}.vlsc-gn-inner{padding:0 1.25rem;}.vlsc-to-top{right:1rem;bottom:1rem;}}';
+      '@media(max-width:768px){' +
+      '.vlsc-gn{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);}' +
+      '.vlsc-gn-inner{padding:0 1rem;gap:0.6rem;}' +
+      '.vlsc-gn-brand{flex-shrink:0;}' +
+      '.vlsc-gn-links{gap:0.9rem;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;-ms-overflow-style:none;}' +
+      '.vlsc-gn-links::-webkit-scrollbar{display:none}' +
+      '.vlsc-gn-gh{flex-shrink:0}' +
+      '.vlsc-to-top{right:1rem;bottom:1rem;}}';
     (document.head || document.documentElement).appendChild(fb);
   }
 

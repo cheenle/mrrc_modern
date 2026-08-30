@@ -385,8 +385,11 @@ body.vlsc-gn-on .nav-links { top: var(--nav-h); }
 body.vlsc-gn-on .sdd-sidebar { top: calc(var(--gn-h) + 80px); }
 
 @media (max-width: 768px) {
-  .vlsc-gn-links { gap: 0.85rem; }
-  .vlsc-gn-inner { gap: 0.5rem; }
+  .vlsc-gn { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  .vlsc-gn-links { gap: 0.9rem; min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .vlsc-gn-links::-webkit-scrollbar { display: none; }
+  .vlsc-gn-brand, .vlsc-gn-gh { flex-shrink: 0; }
+  .vlsc-gn-inner { gap: 0.6rem; padding: 0 1rem; }
   body.vlsc-gn-on .nav-links { top: calc(var(--gn-h) + var(--nav-h)); }
 }
 

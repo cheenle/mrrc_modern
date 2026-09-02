@@ -15,7 +15,7 @@
   if (!SITE) {
     var p = location.pathname.replace(/\/+$/, '');
     if (p === '' || p === '/index.html' || /(^|\/)portal\//.test(p)) SITE = 'portal';
-    else if (/\/fde\.html/.test(p)) SITE = 'fde';
+    else if (/\/agentic\.html/.test(p)) SITE = 'agentic';
     else if (/\/mrrc\//.test(p)) SITE = 'mrrc';
     else if (/\/sunmrrc\//.test(p)) SITE = 'sunmrrc';
     else if (/\/sunsdrmobile\//.test(p)) SITE = 'sunsdrmobile';
@@ -31,7 +31,7 @@
   // Absolute paths (sites live under www.vlsc.net)
   var PATHS = {
     portal: '/',
-    fde: '/fde.html',
+    agentic: '/agentic.html',
     mrrc: '/mrrc/',
     mrrc_ft710: '/mrrc_ft710/',
     sunmrrc: '/sunmrrc/',
@@ -111,7 +111,7 @@
         '<span>VLSC<span class="dot">·</span>Projects</span>' +
       '</a>' +
       '<nav class="vlsc-gn-links">' +
-        siteLink('fde', 'FDE') +
+        siteLink('agentic', 'Agentic') +
         siteLink('mrrc', 'MRRC') +
         siteLink('mrrc_ft710', 'FT-710') +
         siteLink('sunmrrc', 'SunMRRC') +

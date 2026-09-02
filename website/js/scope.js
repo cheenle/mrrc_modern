@@ -9,7 +9,7 @@
 
   var PATHS = {
     portal: '/',
-    fde: '/fde.html',
+    agentic: '/agentic.html',
     mrrc: '/mrrc/',
     mrrc_ft710: '/mrrc_ft710/',
     mrrc_modern: '/mrrc_modern/',
@@ -43,7 +43,7 @@
         '<span>VLSC<span class="dot">·</span>Projects</span>' +
       '</a>' +
       '<nav class="scope-gn-links">' +
-        siteLink('fde', 'FDE') +
+        siteLink('agentic', 'Agentic') +
         siteLink('mrrc', 'MRRC') +
         siteLink('mrrc_ft710', 'FT-710') +
         siteLink('mrrc_modern', 'Modern') +

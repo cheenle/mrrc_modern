@@ -317,7 +317,7 @@
           <li><a href="index.html#features">Features</a></li>
           <li><a href="index.html#architecture">Architecture</a></li>
           <li><a href="sdd.html">SDD</a></li>
-          <li><a href="fde.html" style="color: var(--accent)">FDE</a></li>
+          <li><a href="agentic.html" style="color: var(--accent)">Agentic</a></li>
           <li>
             <a href="https://github.com/cheenle/mrrc_ft710" target="_blank"
               ><i class="fab fa-github"></i> GitHub</a
@@ -345,7 +345,7 @@
         </h1>
         <p class="hero-subtitle">
           Forward Deployed Engineering across 12 cycles: from initial baseline
-          (V1.0) to multi-client TX ownership fix (V2.1) — 16 days, 262 tests, 6
+          (V1.0) to multi-client TX ownership fix (V2.1) — every step evidenced, counts in the VLSC ledger
           reusable assets.
         </p>
         <div class="hero-actions">
@@ -498,7 +498,7 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">Step 3–4</span>
-          <h2 class="section-title">12 FDE Cycles (Git-Verified)</h2>
+          <h2 class="section-title">Field Signals, Version Steps</h2>
           <p class="section-subtitle">
             Each SDD version is one Echo → Delta → Product loop. Every cycle
             driven by a real field signal, not a speculative feature.
@@ -633,7 +633,7 @@
                 <td>Jul 22</td>
                 <td>"PTT keys but no voice / no RF power"</td>
                 <td>TX uplink promote + claim, per-session counters</td>
-                <td>5 tests + <code>TX session:</code> logging</td>
+                <td>Automated tests + <code>TX session:</code> logging</td>
               </tr>
             </tbody>
           </table>
@@ -1059,12 +1059,36 @@
             class="btn btn-secondary btn-large"
             ><i class="fas fa-history"></i> Version History</a
           >
-          <a href="/fde.html" class="btn btn-secondary btn-large"
-            ><i class="fas fa-satellite-dish"></i> VLSC FDE</a
+          <a href="/agentic.html" class="btn btn-secondary btn-large"
+            ><i class="fas fa-satellite-dish"></i> VLSC Agentic Engineering</a
           >
         </div>
       </div>
     </section>
+
+<section class="section" id="division">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-label">Division &amp; Contracts</span>
+      <h2 class="section-title">What this repository hands an agent</h2>
+      <p class="section-subtitle">And what it never lets the agent sign off.</p>
+    </div>
+    <div class="insight-grid">
+      <div class="insight-card">
+        <h3>Contracts loaded before editing</h3>
+        <p><code>AGENTS.md</code>, <code>constraints.json</code> (21 rules), the pre-edit hook ships as an installable snippet (install_hooks.py) and is not wired in this checkout, so no automated pre-edit gate is claimed here.</p>
+      </div>
+      <div class="insight-card">
+        <h3>TX ownership and PTT closure on a live rig</h3>
+        <p>Who owns the transmitter at any moment, and every PTT closure on a real radio, is signed off by a human at the station.</p>
+      </div>
+      <div class="insight-card">
+        <h3>Contract left behind</h3>
+        <p>The version-step ledger and the multi-client TX ownership rules remain as the contract for whoever edits next.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
     <footer class="footer">
       <div class="container">
@@ -1084,7 +1108,7 @@
               <li>
                 <a href="https://github.com/cheenle/mrrc_ft710">GitHub</a>
               </li>
-              <li><a href="/fde.html">VLSC FDE Methodology</a></li>
+              <li><a href="/agentic.html">VLSC Agentic Engineering</a></li>
             </ul>
           </div>
         </div>

@@ -92,6 +92,9 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
         sudo rsync -a --exclude='downloads' --exclude='videos' \
             /var/www/vlsc.net/mrrc_modern/ \
             /var/tmp/mrrc_modern_backup_$(date +%Y%m%d_%H%M%S)/
+        # retention: keep the 3 newest (|| true: none exist on the first deploy)
+        ls -1dt /var/tmp/mrrc_modern_backup_* 2>/dev/null | tail -n +4 \
+            | xargs -r -d '\n' sudo rm -rf || true
         echo "Backup created."
     fi
     # Clear any stale/partial deploy packages before the fresh one is scp'd,
@@ -167,4 +170,7 @@ echo -e "${GREEN}Deployment Complete!${NC}"
 echo "https://www.vlsc.net/mrrc_modern/"
 echo ""
 echo "Rollback: ssh $REMOTE_USER@$REMOTE_HOST"
-echo "  sudo rm -rf $REMOTE_WEBROOT && sudo cp -r /var/tmp/mrrc_modern_backup_* $REMOTE_WEBROOT"
+echo "  # Restore this site only. The DocumentRoot is shared: rm -rf on it would"
+echo "  # destroy the portal and every other sub-site. rsync-merge keeps downloads/."
+echo "  B=\$(ls -1dt /var/tmp/mrrc_modern_backup_* | head -1)"
+echo "  sudo rsync -a \$B/ $REMOTE_WEBROOT/mrrc_modern/"

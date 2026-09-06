@@ -34,9 +34,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 |-----------|-------|
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.31 |
-| Baseline Date | 2026-09-06 |
-| Status | RX capture is reopened after every TX→RX transition on all platforms to mitigate full-duplex USB-audio capture degradation seen in QSO recording analysis; v1.12.1 Windows Stable remains the latest published installer; IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved (remaining: forced first-login change; iOS watchdog/scenePhase); open issues tracked in §13.4 |
+| SDD Version | V2.32 |
+| Baseline Date | 2026-09-07 |
+| Status | RX catch-up bursts are no longer frame-trimmed (bounded by the read-side 4-chunk cap); RX capture is reopened after every TX→RX transition on all platforms to mitigate full-duplex USB-audio capture degradation seen in QSO recording analysis; v1.12.1 Windows Stable remains the latest published installer; IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved (remaining: forced first-login change; iOS watchdog/scenePhase); open issues tracked in §13.4 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend) |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2` (default `ft710`) |

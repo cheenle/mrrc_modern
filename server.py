@@ -175,7 +175,6 @@ _opus_tx_decoder: TxOpusDecoder | None = None
 
 # RX broadcast pacing/guard rails
 AUDIO_RX_SEND_TIMEOUT = 0.012          # per-frame per-client timeout (seconds)
-AUDIO_RX_MAX_FRAMES_PER_CYCLE = 2      # cap burst send when loop catches up
 RX_SILENCE_ALERT_S = 20                # zero-audio watchdog: alert after this many seconds of bit-exact silence
 METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5
 
@@ -760,7 +759,6 @@ async def _audio_rx_loop():
     _loop_count = 0
     _pcm_count = 0
     _send_count = 0
-    _trimmed_bursts = 0
     _idle_skipped = 0
     while True:
         try:
@@ -787,12 +785,11 @@ async def _audio_rx_loop():
                     frames = audio.encode_rx_audio(pcm)
 
                     if frames:
-                        # If the loop fell behind and produced multiple Opus
-                        # packets at once, prioritize freshest audio to keep
-                        # end-to-end latency bounded.
-                        if len(frames) > AUDIO_RX_MAX_FRAMES_PER_CYCLE:
-                            _trimmed_bursts += 1
-                            frames = frames[-AUDIO_RX_MAX_FRAMES_PER_CYCLE:]
+                        # Send every encoded frame.  Dropping frames here
+                        # leaves holes in the client's jitter buffer and in
+                        # recordings; read_rx_chunk already caps each read at
+                        # 4 chunks (~80 ms), so the burst is bounded and the
+                        # client's time-based jitter buffer absorbs it.
                         _send_count += 1
                         if _first:
                             tag_name = "Opus" if audio.opus_enabled else "Int16 PCM"
@@ -815,9 +812,8 @@ async def _audio_rx_loop():
                             audio_rx_clients -= dead
             # Periodic health log
             if _loop_count % 250 == 0 and _idle_skipped == 0:  # Every ~5s when active
-                logger.debug("Audio loop: loops=%d pcm_chunks=%d sends=%d trimmed=%d clients=%d running=%s peak=%d",
+                logger.debug("Audio loop: loops=%d pcm_chunks=%d sends=%d clients=%d running=%s peak=%d",
                            _loop_count, _pcm_count, _send_count,
-                           _trimmed_bursts,
                            len(audio_rx_clients), audio._rx_running if audio else False,
                            audio._rx_last_peak if audio else 0)
                 # RX silence watchdog: bit-exact zeros while the squelch is

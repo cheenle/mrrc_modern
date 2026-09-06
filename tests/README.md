@@ -4,7 +4,7 @@
 
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710 and IC-7300/IC-7300MK2). All tests run **without hardware** — no radio,
-no serial port, no USB audio device needed. 651 tests across 33 test modules.
+no serial port, no USB audio device needed. 693 tests across 33 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -14,8 +14,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 |--------|-------|
-| Total tests | 651 |
-| Passed | 651 (with all optional dependencies installed) |
+| Total tests | 693 |
+| Passed | 693 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -57,7 +57,7 @@ SDD coverage: §7.2, §10.4, NFRs
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (90 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (91 tests)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
@@ -73,7 +73,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `AudioFrameFormatTests` | 6 | Tagged PCM/Opus frame format, Int16 range, 768kbps PCM bandwidth, multi-frame tags |
 | `AudioDeviceDetectionTests` | 2 | FT-710 name pattern matching, non-FT-710 rejection |
 | `USBCodecDeviceSelectionTests` | 10 | Generic USB-audio tier ("USB Audio CODEC"/"USB Audio Device"): wins over mono/full-duplex heuristics (RX+TX), per-host-API duplicates, explicit name lock, "USB Audio" common-prefix lock |
-| `RestartRxTests` | 4 | Windows full-duplex wedge workaround: `restart_rx()` stop→start order, non-Windows no-op, RX-not-running guard, failed-reopen path |
+| `RestartRxTests` | 5 | Full-duplex RX recovery: `restart_rx()` stop→start order on Windows/macOS, platform-independent guard, RX-not-running guard, failed-reopen path |
 | `TxDeviceDomainTests` | 4 | Fixed 44.1kHz TX device domain: exact 960→882/1764-byte conversion, stale 48k rate cannot bypass SRC, prebuffer/cap budgets use 44100 |
 | `StartTxWindowsTests` | 2 | `start_tx` end-to-end: Windows keeps the selected device at 44.1kHz/882 frames; macOS stays 44.1kHz |
 | `PortAudioReinitTests` | 4 | RX/TX PortAudio reinit recovery, bounded give-up, and Windows re-enumeration preserving 44.1kHz/882-frame TX |
@@ -383,7 +383,7 @@ SDD coverage: §13.4 I12 / ch15 outermost release layer
 | AD-001 FastAPI/Uvicorn | test_server_scope_init | 2 tests |
 | AD-002 Direct Serial CAT | test_cat_controller | 30 tests |
 | AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 46+ tests |
-| AD-004 Dual-Codec Audio | test_audio | 90 tests |
+| AD-004 Dual-Codec Audio | test_audio | 91 tests |
 | AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart, test_scope_pipe_tx | 29 tests |
 | AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 8 tests |
 | AD-007 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
@@ -399,7 +399,7 @@ SDD coverage: §13.4 I12 / ch15 outermost release layer
 | §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests), test_ssl_bootstrap | 10 tests |
 | NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 31 tests |
-| NFR-060–065 Audio Quality | test_audio | 90 tests |
+| NFR-060–065 Audio Quality | test_audio | 91 tests |
 | AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope, test_ic7300_runtime_reliability | 143 tests |
 | V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 13 tests |
 
@@ -422,7 +422,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~651 tests in ~15s — can run on every commit.
+2. **Fast execution**: ~693 tests in ~15s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

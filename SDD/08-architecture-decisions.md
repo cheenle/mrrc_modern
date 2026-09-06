@@ -114,7 +114,9 @@
 
 **Consequences**: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.
 
-**Amended (V2.8)**: Windows full-duplex wedge — on Windows (MME/DirectSound), opening the TX playback stream on the FT-710's C-Media codec silently wedges the RX capture stream (stays open, error-free, delivers silence; field symptom: RX audio perfect after server restart, gone after one PTT). `AudioHandler.restart_rx()` reopens the capture stream on every TX→RX transition (hooked in `_broadcast_state` on `tx_status`), Windows-only; macOS CoreAudio is unaffected and pays no reopen cost.
+**Amended (V2.8)**: Windows full-duplex wedge — on Windows (MME/DirectSound), opening the TX playback stream on the FT-710's C-Media codec silently wedges RX capture (stays open, error-free, delivers silence; field symptom: RX audio perfect after server restart, gone after one PTT). `AudioHandler.restart_rx()` originally reopened capture on TX→RX only on Windows.
+
+**Amended (V2.31)**: Field QSO recordings on macOS showed intermittent 20 ms RX frames with low-bandwidth/attenuated content after repeated PTT activity while a fresh parallel capture stream stayed clean. The workaround is now platform-independent: after every TX→RX transition, the server asynchronously reopens the long-lived RX capture stream. The reopen is off the event loop and does not change the 44.1 kHz device-domain / 48 kHz codec-domain contract.
 
 ## AD-009: 7-Task Adaptive Polling with Bounded Lock Time
 

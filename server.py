@@ -332,9 +332,9 @@ async def _broadcast_state():
         if _scope_producer is not None:
             _scope_producer.notify_tx(bool(radio.is_transmitting))
         if not radio.is_transmitting and audio:
-            # Windows full-duplex quirk: the TX playback stream silently
-            # wedges RX capture on the same USB codec — reopen it on every
-            # TX→RX transition (no-op on other platforms).
+            # Full-duplex USB audio stacks can leave the long-lived RX
+            # capture stream degraded after TX playback opens.  Reopen it on
+            # every TX→RX transition; this runs off-loop below.
             global _rx_restart_task
             if _rx_restart_task is None or _rx_restart_task.done():
                 _rx_restart_task = asyncio.create_task(

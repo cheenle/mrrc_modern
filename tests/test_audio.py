@@ -632,9 +632,8 @@ class USBCodecDeviceSelectionTests(unittest.TestCase):
 
 
 class RestartRxTests(unittest.TestCase):
-    """Windows full-duplex workaround (SDD V2.8): the TX playback stream
-    silently wedges RX capture on the same C-Media USB codec, so the RX
-    stream is reopened on every TX→RX transition (Windows only)."""
+    """TX playback can degrade the long-lived RX capture stream, so the
+    stream is reopened on every TX→RX transition."""
 
     def _make_handler(self):
         from audio_handler import AudioHandler
@@ -654,36 +653,38 @@ class RestartRxTests(unittest.TestCase):
             h.restart_rx()
         self.assertEqual(calls, ["stop", "start"])
 
-    def test_non_windows_is_noop(self):
-        from unittest.mock import patch
+    def test_macos_reopens_stop_then_start(self):
         h = self._make_handler()
+        calls = []
+        h.stop_rx = lambda: calls.append("stop")
+        h.start_rx = lambda: (calls.append("start"), True)[1]
+        h.restart_rx()
+        self.assertEqual(calls, ["stop", "start"])
 
-        def _boom():
-            raise AssertionError("streams must not be touched off Windows")
-
-        h.stop_rx = _boom
-        h.start_rx = _boom
-        with patch("sys.platform", "darwin"):
-            h.restart_rx()
-
-    def test_skipped_when_rx_not_running(self):
-        from unittest.mock import patch
-        h = self._make_handler()
-        h._rx_running = False
-        called = []
-        h.stop_rx = lambda: called.append("stop")
-        with patch("sys.platform", "win32"):
-            h.restart_rx()
-        self.assertEqual(called, [])
-
-    def test_failed_reopen_logs_warning(self):
+    def test_restart_does_not_require_windows_platform(self):
         from unittest.mock import patch
         h = self._make_handler()
         calls = []
         h.stop_rx = lambda: calls.append("stop")
-        h.start_rx = lambda: (calls.append("start"), False)[1]
-        with patch("sys.platform", "win32"):
+        h.start_rx = lambda: (calls.append("start"), True)[1]
+        with patch("sys.platform", "darwin"):
             h.restart_rx()
+        self.assertEqual(calls, ["stop", "start"])
+
+    def test_skipped_when_rx_not_running(self):
+        h = self._make_handler()
+        h._rx_running = False
+        called = []
+        h.stop_rx = lambda: called.append("stop")
+        h.restart_rx()
+        self.assertEqual(called, [])
+
+    def test_failed_reopen_logs_warning(self):
+        h = self._make_handler()
+        calls = []
+        h.stop_rx = lambda: calls.append("stop")
+        h.start_rx = lambda: (calls.append("start"), False)[1]
+        h.restart_rx()
         self.assertEqual(calls, ["stop", "start"])
 
 

@@ -27,7 +27,37 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-import rumps
+try:
+    import rumps
+except ModuleNotFoundError:
+    class _RumpsMissing:
+        class App:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("rumps is required to run the macOS launcher")
+
+            @staticmethod
+            def run(_app):
+                raise RuntimeError("rumps is required to run the macOS launcher")
+
+        @staticmethod
+        def clicked(_title):
+            def _decorator(func):
+                return func
+            return _decorator
+
+        @staticmethod
+        def alert(*_args, **_kwargs):
+            raise RuntimeError("rumps is required to run the macOS launcher")
+
+        @staticmethod
+        def notification(*_args, **_kwargs):
+            raise RuntimeError("rumps is required to run the macOS launcher")
+
+        @staticmethod
+        def quit_application():
+            raise RuntimeError("rumps is required to run the macOS launcher")
+
+    rumps = _RumpsMissing()
 
 from macos import first_run
 import ssl_bootstrap

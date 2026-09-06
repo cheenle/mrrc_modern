@@ -409,22 +409,18 @@ class AudioHandler:
             self._rx_stream = None
 
     def restart_rx(self):
-        """Close and reopen the RX capture stream (Windows full-duplex fix).
+        """Close and reopen the RX capture stream after TX→RX.
 
-        Windows MME/DirectSound quirk with the FT-710's C-Media USB codec:
-        opening a playback stream on the same device for TX (start_tx)
-        silently wedges the capture side — the RX stream stays open and
-        error-free but delivers silence.  macOS CoreAudio is unaffected
-        (and must not pay the reopen cost per PTT), so this is a no-op
-        off Windows.  Called after every TX→RX transition.  Blocks on
-        PyAudio calls — run via asyncio.to_thread.
+        Some USB audio stacks do not recover a long-lived capture stream
+        cleanly after a playback stream was opened on the same radio codec:
+        the stream remains open and error-free but can deliver silence or
+        low-bandwidth/attenuated frames.  Reopening the capture stream after
+        every TX→RX transition gives PortAudio/CoreAudio/MME a fresh input
+        path.  Blocks on PyAudio calls — run via asyncio.to_thread.
         """
-        import sys as _sys
-        if _sys.platform != "win32":
-            return
         if self._pa is None or not self._rx_running:
             return
-        logger.info("RX audio: reopening capture stream after TX (Windows full-duplex workaround)")
+        logger.info("RX audio: reopening capture stream after TX")
         try:
             self.stop_rx()
         except Exception:

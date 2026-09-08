@@ -129,7 +129,28 @@ scp dist/mrrc_modern_src.zip ham.vlsc.net:/tmp/
 ssh ham.vlsc.net "scp /tmp/mrrc_modern_src.zip cheenle@192.168.122.133:mrrc_modern_src.zip"
 ```
 
-### Step 3 — VM 上解压
+### Step 3 — VM 上解压（保留 venv）
+
+**推荐**：先把 venv 移出删除范围，解压后移回，免去重装依赖（v1.14.0 起的标准做法，
+scp 一个脚本上去执行，避免多层 ssh 引号地狱）：
+
+```bash
+# 本地写 extract_v<ver>.ps1：
+#   $ErrorActionPreference = "Stop"
+#   Set-Location C:\Users\cheenle
+#   Get-Process python*,MRRC-Modern* -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+#   Start-Sleep -Seconds 2
+#   if (Test-Path C:\mrrc_modern\venv) { Move-Item C:\mrrc_modern\venv C:\mrrc_venv_keep -Force }
+#   if (Test-Path C:\mrrc_modern) { Remove-Item C:\mrrc_modern -Recurse -Force }
+#   Expand-Archive mrrc_modern_src.zip -DestinationPath C:\mrrc_modern
+#   if (Test-Path C:\mrrc_venv_keep) { Move-Item C:\mrrc_venv_keep C:\mrrc_modern\venv -Force }
+#   Write-Host "EXTRACT_DONE venv=$(Test-Path C:\mrrc_modern\venv\Scripts\Activate.ps1)"
+scp /tmp/extract_v1140.ps1 ham.vlsc.net:/tmp/
+ssh ham.vlsc.net "scp -q /tmp/extract_v1140.ps1 cheenle@192.168.122.133:extract_v1140.ps1"
+ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\extract_v1140.ps1'"
+```
+
+仅在 venv 保留失败时才用旧的单条解压（会把 venv 一起删掉）：
 
 ```bash
 ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -Command \"Set-Location C:\Users\cheenle; if (Test-Path C:\mrrc_modern) { Remove-Item C:\mrrc_modern -Recurse -Force }; Expand-Archive mrrc_modern_src.zip -DestinationPath C:\mrrc_modern\"'"
@@ -137,11 +158,12 @@ ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -Command \"
 
 如 `requirements*.txt` 有变化，重跑 §2.2 的 pip 两条。
 
-**注意**：这一步的删除会把 `C:\mrrc_modern\venv` 一起删掉（zip 不含 venv），
+**注意**：旧的单条解压会把 `C:\mrrc_modern\venv` 一起删掉（zip 不含 venv），
 之后 `build_vm.ps1` 会因找不到 `.\venv\Scripts\Activate.ps1` 直接失败——
 删过目录就必须重跑 §2.2 的**完整四条**（含 `python -m venv venv`）。
 若删除时报 `server_console.log` 被占用，是 VM 上 `start_mrrc_modern.ps1` 拉的
-`python server.py --no-ssl` 实例持有该文件，先停掉它再解压（见 §5 表）。
+`python server.py --no-ssl` 实例持有该文件，先停掉它再解压（上面脚本已含
+`Get-Process | Stop-Process`；见 §5 表）。
 
 ### Step 4 — 构建
 

@@ -53,6 +53,8 @@ Output: `dist/macos/MRRC-Modern-v<ver>-arm64.dmg` (checksums printed at the end)
 
 9. **DMG must be the classic installer layout.** `hdiutil create -srcfolder "$APP_BUNDLE"` produces a DMG holding ONLY the bare .app — no "Applications" shortcut, which breaks the "drag into Applications" step the website guide promises and confuses novices. build.sh must stage a folder with `ln -sf /Applications <stage>/Applications` + a copy of the .app, then `-srcfolder` that staging dir (Step 6). After a DMG-layout change the SHA-256 on the website download card MUST be updated (the checksums change).
 
+10. **Interpreter selection is explicit-path only.** `build.sh` is bash — run it with `bash`, never `python` (SyntaxError at `set -euo pipefail`; plain `python` may not even exist). Do NOT `source .venv/bin/activate`: this repo's `.venv` was copied from the `mrrc_ft710` project, whose activate hardcodes the wrong `VIRTUAL_ENV`, so activation silently selects an interpreter without PyInstaller. Test runs outside build.sh also need the explicit path (`.venv/bin/python -m unittest discover -s tests`) — Homebrew `python3` has no project deps. Canary: if a PyInstaller error message mentions `mrrc_ft710`, you activated the wrong venv.
+
 ## Verification
 
 Post-build structural checks (confirm the critical bits landed):
@@ -102,14 +104,14 @@ Cleanup: `kill -TERM <server_pid>` then `pkill -KILL -f MRRC-Modern-Launcher`.
 
 ## Website Deploy
 
-- DMG goes to **www.vlsc.net** `/var/www/vlsc.net/mrrc_modern/downloads/` (sudo mv + chown www-data + chmod 644). `website/deploy.sh` EXCLUDES `downloads/` — the DMG is server-managed, never in the deploy tar; `website/downloads/*.dmg` is gitignored (untracked staging only).
-- `website/index.html` + `website/zh/index.html`: BEFORE deploying, update the version badge, the macOS download card (new size + SHA-256 printed by build.sh), and the macOS install guide track. Then `echo y | ./deploy.sh` from `website/` (uploads HTML, backs up, nginx -t). Deploy target is www.vlsc.net (user must confirm production deploys).
+- DMG goes to **<www.vlsc.net>** `/var/www/vlsc.net/mrrc_modern/downloads/` (sudo mv + chown www-data + chmod 644). `website/deploy.sh` EXCLUDES `downloads/` — the DMG is server-managed, never in the deploy tar; `website/downloads/*.dmg` is gitignored (untracked staging only).
+- `website/index.html` + `website/zh/index.html`: BEFORE deploying, update the version badge, the macOS download card (new size + SHA-256 printed by build.sh), and the macOS install guide track. Then `echo y | ./deploy.sh` from `website/` (uploads HTML, backs up, nginx -t). Deploy target is <www.vlsc.net> (user must confirm production deploys).
 - Keep the hero dual-platform (macOS primary + Windows) — the landing page should not favor one platform.
 
 ## Common Mistakes
 
 | Symptom | Cause / Fix |
-|---|---|
+| --- | --- |
 | `[PYI-XXXX] Failed to load Python shared library .../Contents/Frameworks/Python` | Missing `Contents/Frameworks -> MacOS/_internal` symlink (see gotcha 1) |
 | Browser can't reach 127.0.0.1:8888 but ::1 works | `::` bound IPv6-only (see gotcha 2); pre-bind V6ONLY=0 + `Server.run(sockets=[sock])` |
 | Password banner visible on LAN | Loopback guard removed (see gotcha 3) |
@@ -119,3 +121,4 @@ Cleanup: `kill -TERM <server_pid>` then `pkill -KILL -f MRRC-Modern-Launcher`.
 | DMG contains only the bare .app, no Applications shortcut | Staging dir with `ln -sf /Applications` skipped (see gotcha 9); after re-fixing the layout, the website card SHA-256 MUST be updated |
 | TextEdit config edits (e.g. adding `MRRC_SSL_CERT`) ignored after Restart | `start_server()` must re-resolve `ssl_material` + `self.url` on every spawn (see gotcha 8) |
 | Rebuild shows old version | `CHANGELOG.md` top heading not bumped to `## [vX.Y.Z]` |
+| `SyntaxError: invalid syntax` at `set -euo pipefail` / `No module named PyInstaller` from `mrrc_ft710/.venv` | build.sh is a BASH script run as Python, or `source .venv/bin/activate` was used: this repo's `.venv` was copied from the `mrrc_ft710` project and its activate script hardcodes `VIRTUAL_ENV=/Users/cheenle/HAM/mrrc_ft710/.venv` — activation puts the WRONG project's venv (no PyInstaller) on PATH (v1.14.0 build, 2026-09-09). System `python3` (Homebrew) also lacks the project deps (50 `No module named 'serial'` test errors). Always invoke explicitly: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh` — never `source .venv/bin/activate`, never `python build.sh` (see gotcha 10) |

@@ -27,12 +27,18 @@
 
 ```bash
 cd ~/HAM/mrrc_modern
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -r packaging/macos/requirements-build.txt   # 已锁 pyinstaller==6.21.0 + rumps
+python3.13 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r packaging/macos/requirements-build.txt   # 已锁 pyinstaller==6.21.0 + rumps
 ```
+
+> ⚠️ **不要 `source .venv/bin/activate`**：本仓库的 `.venv` 当初是从隔壁 `mrrc_ft710` 项目复制来的，
+> activate 脚本里硬编码了 `VIRTUAL_ENV=/Users/cheenle/HAM/mrrc_ft710/.venv`——激活后 PATH 指向
+> **没有 PyInstaller 的错误项目 venv**，`build.sh` 会在 PyInstaller 步骤报 `No module named PyInstaller`
+> （2026-09-09 v1.14.0 发布时实测踩坑）。另外裸 `python3`（Homebrew 3.14）没装项目依赖，
+> 跑测试会得到 50 个 `No module named 'serial'` import error。
+> **一律用显式路径**：`.venv/bin/python` 或 `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh`。
 
 `requirements.txt` 里的 pyaudio 依赖 PortAudio，必须先 `brew install portaudio`，否则 pip 装不上。
 
@@ -55,8 +61,7 @@ venv/bin/python -m unittest discover -s tests        # 必须全绿
 ### Step 1 — 构建（在本机仓库根目录）
 
 ```bash
-source .venv/bin/activate
-packaging/macos/build.sh
+PYTHON=$(pwd)/.venv/bin/python packaging/macos/build.sh   # 不要 source .venv/bin/activate（见 §2.1 警告）
 ```
 
 `build.sh` 依次：语法检查 → 测试 → 3 个 PyInstaller spec → 组装 `.app` → **`Contents/Frameworks` symlink（关键，见 §5）** → ad-hoc 签名 → `hdiutil` 打 dmg → 打印 MD5/SHA-256。约 3–5 分钟。
@@ -149,7 +154,7 @@ ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern
 
 ```bash
 # 构建
-source .venv/bin/activate && packaging/macos/build.sh
+PYTHON=$(pwd)/.venv/bin/python packaging/macos/build.sh    # 勿用 activate（§2.1 警告：指向 mrrc_ft710）
 
 # 只跑测试
 .venv/bin/python -m unittest discover -s tests

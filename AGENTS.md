@@ -5,7 +5,7 @@
 This repository contains a Python FastAPI server for remote radio control (Yaesu FT-710 and Icom IC-7300/IC-7300MK2 via pluggable backends) plus a static browser UI. Core backend modules live at the repository root:
 
 | Module | Responsibility |
-|--------|----------------|
+| -------- | ---------------- |
 | `server.py` | FastAPI app, auth, 5 WebSocket endpoints (`/WSradio`, `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX`, optional `/WSatr1000`), REST APIs, lifespan management; TX uplink ownership follows the PTT client and same-session replacement connections; spectrum loop schedules at 30 Hz and sends real scope data only when the frame counter advances |
 | `cat_controller.py` | Compatibility shim — real module moved to `backends/ft710/cat_controller.py`: Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
@@ -26,13 +26,14 @@ This repository contains a Python FastAPI server for remote radio control (Yaesu
 Pluggable radio backends live in `backends/` (selected via `MRRC_RADIO_MODEL`, default `ft710`):
 
 | Module | Responsibility |
-|--------|----------------|
+| -------- | ---------------- |
 | `backends/__init__.py` | `create_backend(model, ...)` lazy factory — registered keys `"ft710"`, `"ic7300"`, `"ic7300mk2"` |
 | `backends/base.py` | `RadioBackend` ABC (CAT surface mirroring `CatController`), `RadioCapabilities` dataclass (`to_dict()` for JSON), `ScopeProducer` protocol, defaulted hooks: `bands`/`ui_modes`/`mode_name_to_num`/`filter_tables()`/`state_tables()`/poll-item lists/`init_scope()`/`create_scope_producer()` |
 | `backends/ft710/` | FT-710 backend: `backend.py` (`FT710Backend` thin delegate + `init_scope()` EX040101/EX040200 + UI tables), `cat_controller.py`, `scope_pipe.py`, `scope_producer.py` (ScopeProducer: owns the scope_pipe subprocess — spawn/read/auto-restart/TX-notify, moved from `server.py` in Phase 1), `scope_frame.py`, `scope_libraries.py`, `config_ft710.py` (FT-710-only tables) |
 | `backends/ic7300/` | IC-7300/MK2 backend: `backend.py` (`IC7300Backend`/`IC7300MK2Backend`, model-specific Transceive item 0071/0089, display+data scope init), `civ_codec.py` (pure checksum-free CI-V framing/BCD/scope-segment codec; Center versus edge metadata), `civ_controller.py` (async CI-V demux: reader thread → frame parser → echo drop / bounded 44-segment newest-data scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect; documented power-on preamble), `civ_scope.py` (`CivScopeProducer`: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → `ScopeHandler`), `config_ic7300.py` (Icom-only tables; USB CI-V 115200 8N1, IC-7300 addr 0x94 via `IC7300_CIV_ADDR`, MK2 addr 0xB6 via `IC7300MK2_CIV_ADDR`, ALC raw 120 full scale) |
 
 Frontend assets in `static/`:
+
 - `index.html` — SPA shell (mobile-first responsive layout)
 - `ft710.css` — Dark amber theme, iPhone safe-area support
 - `ft710_main.js` — WebSocket client (4+1 channels: control/audio RX/TX/spectrum + optional ATR1000), state management, audio RX/TX, spectrum
@@ -63,14 +64,26 @@ SDD (Software Design Description) in `SDD/` — 15-chapter IBM TeamSD documentat
 
 Before editing, run `python3 .agents/skills/sdd-guardian/harness/sdd_context.py brief <files>`; before committing, `... check --staged` must be clean. To make enforcement automatic (session-start context injection + pre-edit blocking), install the hooks once: `python3 .agents/skills/sdd-guardian/harness/install_hooks.py` (appends `[[hooks]]` to `~/.kimi-code/config.toml`, idempotent, backs up first). Behavior changes still owe the doc-sync described in SKILL.md Phase 5 (SDD chapters + version history + this file + README + tests/README).
 
+## Release & Packaging Skills
+
+Installer/release process is captured as project skills in `.agents/skills/` (each gotcha traces to a real broken build):
+
+- `dual-platform-release/` — release-day orchestrator: version bump (CHANGELOG top entry is the single source of truth + `.iss`), build order, docs/SDD/website sync checklist, <www.vlsc.net> deploy, URL/SHA verification, commit/tag/**explicit tag push** (`--follow-tags` skips lightweight tags). Start here for 发布.
+- `macos-installer/` — local DMG build (`packaging/macos/build.sh`): interpreter selection (`PYTHON=$(pwd)/.venv/bin/python`; never `source .venv/bin/activate` — copied venv points at mrrc_ft710), `Contents/Frameworks` symlink, dual-stack `::`, HTTPS-default wiring, classic DMG layout, headless + GUI verification.
+- `windows-installer/` — Win11 KVM VM build via `ham.vlsc.net` jump: source-zip exclusion rules (`.agents/` in, `certs/`/`promo/` out), venv-preserving extract, per-version build script (never the hijacked `build_vm.ps1`), PowerShell 5.1 quirks, KVM USB limits (TX audio unverifiable on VM).
+
+Operator manuals with full troubleshooting: `mac_pack.md` / `win_pack.md`.
+
 ## Build, Test, and Development Commands
 
 Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 Run the server:
+
 ```bash
 # FT-710
 MRRC_RADIO_MODEL=ft710 MRRC_SERIAL_PORT=/dev/cu.usbserial-0121DB3A0 python server.py
@@ -80,6 +93,7 @@ MRRC_RADIO_MODEL=ic7300 MRRC_SERIAL_PORT=/dev/cu.usbserial-A1234567 MRRC_BAUD_RA
 ```
 
 Run tests:
+
 ```bash
 python -m unittest discover -s tests -v
 ```

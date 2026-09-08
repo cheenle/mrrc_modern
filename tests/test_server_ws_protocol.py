@@ -214,6 +214,16 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn("c.scope_speeds", ui_source)
         self.assertIn("speedSel.innerHTML = '';", ui_source)
 
+    def test_settings_panel_exposes_rf_power_slider(self):
+        """SDD V2.34: the ☰ settings action opens a radio-settings panel
+        with the RF PWR slider; poll echo must not fight an in-flight drag."""
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("function showSettingsPanel(", ui_source)
+        self.assertIn("'slider-rfpower-p'", ui_source)
+        self.assertIn("sendCommand('rf_power', v);", ui_source)
+        self.assertIn("showSettingsPanel();", ui_source)
+        self.assertIn("pSlider.dataset.dragging !== '1'", ui_source)
+
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=24', index_source)

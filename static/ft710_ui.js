@@ -262,9 +262,7 @@ function getBandCycle() {
     // table is only the pre-fullState fallback.
     if (bands && bands.length) {
         const defaultsByName = new Map(DEFAULT_BAND_CYCLE.map(b => [b.name, b]));
-        return bands.map(function(serverBand) {
-            return Object.assign({}, defaultsByName.get(serverBand.name) || {}, serverBand);
-        });
+        return bands.map((serverBand) => Object.assign({}, defaultsByName.get(serverBand.name) || {}, serverBand));
     }
     return DEFAULT_BAND_CYCLE;
 }
@@ -420,6 +418,13 @@ function renderSliders() {
     // NOT the radio's AF gain — it is intentionally not rendered from
     // radio state, or the CAT poll would fight the user's setting.
     setSlider('slider-rfpower', 'val-rfpower', radioState.rf_power);
+    // Settings-panel slider: skip the echo while the user is dragging,
+    // or the poll would snap the thumb back mid-drag.
+    const pSlider = document.getElementById('slider-rfpower-p');
+    if (pSlider && pSlider.dataset.dragging !== '1') {
+        pSlider.value = radioState.rf_power;
+        setText('val-rfpower-p', radioState.rf_power);
+    }
     // RF Gain (RG 0-255) shown as 0-100% on the slider.
     setSlider('slider-rfgain', 'val-rfgain',
         Math.round((radioState.rf_gain ?? 255) / 255 * 100));
@@ -650,62 +655,60 @@ function applyScopeHeights() {
 // ── Color palettes (matching wfview QCustomPlot themes) ───────────
 const WF_PALETTES = {
     // Jet: black → dark blue → blue → cyan → green → yellow → red (classic)
-    jet: function(v) {
+    jet: (v) => {
         let r, g, b;
-        if (v < 0.125) { let u = v / 0.125; r = 0; g = 0; b = Math.floor(128 + u * 127); }
-        else if (v < 0.375) { let u = (v - 0.125) / 0.25; r = 0; g = Math.floor(u * 255); b = 255; }
-        else if (v < 0.625) { let u = (v - 0.375) / 0.25; r = Math.floor(u * 255); g = 255; b = Math.floor(255 * (1 - u)); }
-        else if (v < 0.875) { let u = (v - 0.625) / 0.25; r = 255; g = Math.floor(255 * (1 - u)); b = 0; }
-        else { let u = (v - 0.875) / 0.125; r = Math.floor(255 * (1 - u * 0.5)); g = 0; b = 0; }
+        if (v < 0.125) { const u = v / 0.125; r = 0; g = 0; b = Math.floor(128 + u * 127); }
+        else if (v < 0.375) { const u = (v - 0.125) / 0.25; r = 0; g = Math.floor(u * 255); b = 255; }
+        else if (v < 0.625) { const u = (v - 0.375) / 0.25; r = Math.floor(u * 255); g = 255; b = Math.floor(255 * (1 - u)); }
+        else if (v < 0.875) { const u = (v - 0.625) / 0.25; r = 255; g = Math.floor(255 * (1 - u)); b = 0; }
+        else { const u = (v - 0.875) / 0.125; r = Math.floor(255 * (1 - u * 0.5)); g = 0; b = 0; }
         return [r, g, b];
     },
     // Hot: black → red → orange → yellow → white
-    hot: function(v) {
+    hot: (v) => {
         let r, g, b;
-        if (v < 0.33) { let u = v / 0.33; r = Math.floor(u * 255); g = 0; b = 0; }
-        else if (v < 0.66) { let u = (v - 0.33) / 0.33; r = 255; g = Math.floor(u * 255); b = 0; }
-        else { let u = (v - 0.66) / 0.34; r = 255; g = 255; b = Math.floor(u * 255); }
+        if (v < 0.33) { const u = v / 0.33; r = Math.floor(u * 255); g = 0; b = 0; }
+        else if (v < 0.66) { const u = (v - 0.33) / 0.33; r = 255; g = Math.floor(u * 255); b = 0; }
+        else { const u = (v - 0.66) / 0.34; r = 255; g = 255; b = Math.floor(u * 255); }
         return [r, g, b];
     },
     // Cold: black → dark blue → cyan → white
-    cold: function(v) {
+    cold: (v) => {
         let r, g, b;
-        if (v < 0.5) { let u = v / 0.5; r = 0; g = Math.floor(u * 200); b = Math.floor(40 + u * 215); }
-        else { let u = (v - 0.5) / 0.5; r = Math.floor(u * 255); g = Math.floor(200 + u * 55); b = 255; }
+        if (v < 0.5) { const u = v / 0.5; r = 0; g = Math.floor(u * 200); b = Math.floor(40 + u * 215); }
+        else { const u = (v - 0.5) / 0.5; r = Math.floor(u * 255); g = Math.floor(200 + u * 55); b = 255; }
         return [r, g, b];
     },
     // Thermal: black → dark red → orange → yellow → white
-    thermal: function(v) {
+    thermal: (v) => {
         let r, g, b;
-        if (v < 0.25) { let u = v / 0.25; r = Math.floor(60 + u * 140); g = 0; b = 0; }
-        else if (v < 0.5) { let u = (v - 0.25) / 0.25; r = Math.floor(200 + u * 55); g = Math.floor(u * 180); b = 0; }
-        else if (v < 0.75) { let u = (v - 0.5) / 0.25; r = 255; g = Math.floor(180 + u * 75); b = Math.floor(u * 200); }
-        else { let u = (v - 0.75) / 0.25; r = 255; g = 255; b = Math.floor(200 + u * 55); }
+        if (v < 0.25) { const u = v / 0.25; r = Math.floor(60 + u * 140); g = 0; b = 0; }
+        else if (v < 0.5) { const u = (v - 0.25) / 0.25; r = Math.floor(200 + u * 55); g = Math.floor(u * 180); b = 0; }
+        else if (v < 0.75) { const u = (v - 0.5) / 0.25; r = 255; g = Math.floor(180 + u * 75); b = Math.floor(u * 200); }
+        else { const u = (v - 0.75) / 0.25; r = 255; g = 255; b = Math.floor(200 + u * 55); }
         return [r, g, b];
     },
     // Night: black → blue → purple → white (low-light friendly)
-    night: function(v) {
+    night: (v) => {
         let r, g, b;
-        if (v < 0.33) { let u = v / 0.33; r = 0; g = 0; b = Math.floor(u * 128); }
-        else if (v < 0.66) { let u = (v - 0.33) / 0.33; r = Math.floor(u * 180); g = 0; b = Math.floor(128 + u * 127); }
-        else { let u = (v - 0.66) / 0.34; r = Math.floor(180 + u * 75); g = Math.floor(u * 200); b = 255; }
+        if (v < 0.33) { const u = v / 0.33; r = 0; g = 0; b = Math.floor(u * 128); }
+        else if (v < 0.66) { const u = (v - 0.33) / 0.33; r = Math.floor(u * 180); g = 0; b = Math.floor(128 + u * 127); }
+        else { const u = (v - 0.66) / 0.34; r = Math.floor(180 + u * 75); g = Math.floor(u * 200); b = 255; }
         return [r, g, b];
     },
     // Gray: black → gray → white (monochrome)
-    gray: function(v) {
+    gray: (v) => {
         var val = Math.floor(v * 255);
         return [val, val, val];
     },
 };
 
 // Legacy palette (kept for reference — matches original hardcoded colors)
-const WF_PALETTE_LEGACY = function(v) {
-    return [
+const WF_PALETTE_LEGACY = (v) => [
         Math.floor(v * v * 180),
         Math.floor(v * v * v * 255),
         Math.floor(5 + v * 250)
     ];
-};
 
 const SCOPE_SPAN_HZ = {
     0: 1000,
@@ -784,9 +787,9 @@ function ensureWaterfallInitialized() {
 
 // Re-init on viewport resize / rotation (debounced)
 let _wfResizeTimer = null;
-window.addEventListener('resize', function() {
+window.addEventListener('resize', () => {
     clearTimeout(_wfResizeTimer);
-    _wfResizeTimer = setTimeout(function() {
+    _wfResizeTimer = setTimeout(() => {
         const canvas = document.getElementById('waterfall-canvas');
         if (!canvas || !waterfallInitialized) return;
         const rect = canvas.parentElement.getBoundingClientRect();
@@ -1080,7 +1083,7 @@ function applyRadioCapabilities() {
     if (atuBtn) atuBtn.style.display = c.has_atu === false ? 'none' : '';
 
     // Vd/Id meters exist only on radios with drain telemetry (FT-710).
-    ['meter-id-bar', 'meter-vd-bar'].forEach(function(id) {
+    ['meter-id-bar', 'meter-vd-bar'].forEach((id) => {
         const bar = document.getElementById(id);
         const item = bar && bar.closest('.meter-item');
         if (item) item.style.display = c.has_vd_id_meters === false ? 'none' : '';
@@ -1095,9 +1098,9 @@ function _rebuildSpanSelect(c) {
     if (c.scope_type !== 'civ27' || !c.scope_spans) return;
     const sel = document.getElementById('scope-span-select');
     if (!sel) return;
-    sel.innerHTML = '';
-    Object.keys(c.scope_spans).map(Number).sort(function(a, b) { return a - b; })
-        .forEach(function(idx) {
+    sel.replaceChildren();
+    Object.keys(c.scope_spans).map(Number).sort((a, b) => a - b)
+        .forEach((idx) => {
             const entry = c.scope_spans[idx];
             const opt = document.createElement('option');
             opt.value = String(idx);
@@ -1110,8 +1113,8 @@ function _rebuildSpanSelect(c) {
     // five FT-710 fallback choices so invalid values cannot be sent.
     const speedSel = document.getElementById('scope-speed-select');
     if (speedSel && Array.isArray(c.scope_speeds) && c.scope_speeds.length) {
-        speedSel.innerHTML = '';
-        c.scope_speeds.forEach(function(name, idx) {
+        speedSel.replaceChildren();
+        c.scope_speeds.forEach((name, idx) => {
             const opt = document.createElement('option');
             opt.value = String(idx);
             opt.textContent = name;
@@ -1228,7 +1231,7 @@ function handleTuneEnd() {
 // ── Event Wiring ────────────────────────────────────────────────────
 function initUI() {
     // Mode button: cycles to next mode
-    document.getElementById('btn-mode').addEventListener('click', function() {
+    document.getElementById('btn-mode').addEventListener('click', () => {
         const nextMode = getNextMode(radioState.mode_name);
         sendCommand('mode', nextMode);
         radioState.mode_name = nextMode;
@@ -1237,7 +1240,7 @@ function initUI() {
     });
 
     // Band button: cycles to next band
-    document.getElementById('btn-band').addEventListener('click', function() {
+    document.getElementById('btn-band').addEventListener('click', () => {
         const nextBand = getNextBand(radioState.band_name);
         if (nextBand) {
             console.log('[Band] click', {
@@ -1258,7 +1261,7 @@ function initUI() {
     });
 
     // Filter button: cycles filter width
-    document.getElementById('btn-filter').addEventListener('click', function() {
+    document.getElementById('btn-filter').addEventListener('click', () => {
         const nextIdx = getNextFilter(radioState.filter_width, radioState.mode_name);
         sendCommand('filter', nextIdx);
         radioState.filter_width = nextIdx;
@@ -1266,7 +1269,7 @@ function initUI() {
     });
 
     // ATT button: cycles attenuator
-    document.getElementById('btn-att').addEventListener('click', function() {
+    document.getElementById('btn-att').addEventListener('click', () => {
         const nextAtt = (radioState.attenuator + 1) % _attStepCount();
         sendCommand('att', nextAtt);
         radioState.attenuator = nextAtt;
@@ -1274,7 +1277,7 @@ function initUI() {
     });
 
     // PRE button: cycles preamp
-    document.getElementById('btn-pre').addEventListener('click', function() {
+    document.getElementById('btn-pre').addEventListener('click', () => {
         const nextPre = (radioState.preamp + 1) % _preStepCount();
         sendCommand('preamp', nextPre);
         radioState.preamp = nextPre;
@@ -1317,7 +1320,7 @@ function initUI() {
     function wireDspBtn(id, field, cmd, onVal, offVal) {
         const btn = document.getElementById(id);
         if (!btn) return;
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', () => {
             const cur = radioState[field];
             const next = !cur;
             const val = next ? (onVal !== undefined ? onVal : true) : (offVal !== undefined ? offVal : false);
@@ -1447,7 +1450,7 @@ function initUI() {
         });
     }
     // Restore persisted browser volume before wiring
-    (function() {
+    (() => {
         var v = 128;
         try { var s = FT710Settings.getCookie('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
         if (isNaN(v)) v = 128;
@@ -1475,7 +1478,7 @@ function initUI() {
     }
     // 🎙 Vol: device-side software mic gain (browser-local, like 🔊 Vol).
     // 0–200 → linear 0–2×, 100 = unity. Persisted in a cookie.
-    (function() {
+    (() => {
         var v = 100;
         try { var s = FT710Settings.getCookie('ft710_micVol'); if (s !== null) v = parseInt(s); } catch(e) {}
         if (isNaN(v)) v = 100;
@@ -1493,7 +1496,7 @@ function initUI() {
     }
 
     // VFO buttons
-    document.getElementById('btn-vfoa').addEventListener('click', function() {
+    document.getElementById('btn-vfoa').addEventListener('click', () => {
         if (radioState.active_vfo !== 'A') {
             sendCommand('vfo', 'A');
             radioState.active_vfo = 'A';
@@ -1501,7 +1504,7 @@ function initUI() {
             renderFrequency();
         }
     });
-    document.getElementById('btn-vfob').addEventListener('click', function() {
+    document.getElementById('btn-vfob').addEventListener('click', () => {
         if (radioState.active_vfo !== 'B') {
             sendCommand('vfo', 'B');
             radioState.active_vfo = 'B';
@@ -1509,12 +1512,12 @@ function initUI() {
             renderFrequency();
         }
     });
-    document.getElementById('btn-ab').addEventListener('click', function() {
+    document.getElementById('btn-ab').addEventListener('click', () => {
         sendCommand('vfo_equal', true);
         radioState.vfo_a_freq = radioState.vfo_b_freq;
         renderFrequency();
     });
-    document.getElementById('btn-split').addEventListener('click', function() {
+    document.getElementById('btn-split').addEventListener('click', () => {
         const newSplit = !radioState.split;
         sendCommand('split', newSplit);
         radioState.split = newSplit;
@@ -1524,32 +1527,32 @@ function initUI() {
     // PTT button — routed through PTTManager so the safety watchdog and
     // pagehide force-RX stay armed (previously bypassed = dead watchdog).
     const pttBtn = document.getElementById('btn-ptt');
-    const pttStart = function() { if (window.PTTManager) PTTManager.pttStart(); else handlePTTStart(); };
-    const pttEnd = function() { if (window.PTTManager) PTTManager.pttEnd(); else handlePTTEnd(); };
+    const pttStart = () => { if (window.PTTManager) PTTManager.pttStart(); else handlePTTStart(); };
+    const pttEnd = () => { if (window.PTTManager) PTTManager.pttEnd(); else handlePTTEnd(); };
     pttBtn.addEventListener('mousedown', pttStart);
-    pttBtn.addEventListener('touchstart', function(e) { e.preventDefault(); pttStart(); });
+    pttBtn.addEventListener('touchstart', (e) => { e.preventDefault(); pttStart(); });
     pttBtn.addEventListener('mouseup', pttEnd);
-    pttBtn.addEventListener('touchend', function(e) { e.preventDefault(); pttEnd(); });
+    pttBtn.addEventListener('touchend', (e) => { e.preventDefault(); pttEnd(); });
     pttBtn.addEventListener('mouseleave', pttEnd);
     pttBtn.addEventListener('touchcancel', pttEnd);
 
     // TUNE button — press-and-HOLD (carrier only while held). The previous
     // latch-on-click design could key the radio from a single accidental tap.
     const tuneBtn = document.getElementById('btn-tune');
-    const tuneStart = function() { if (window.PTTManager) PTTManager.tuneStart(); else handleTuneStart(); };
-    const tuneEnd = function() { if (window.PTTManager) PTTManager.tuneEnd(); else handleTuneEnd(); };
+    const tuneStart = () => { if (window.PTTManager) PTTManager.tuneStart(); else handleTuneStart(); };
+    const tuneEnd = () => { if (window.PTTManager) PTTManager.tuneEnd(); else handleTuneEnd(); };
     tuneBtn.title = '按住发射调谐载波，松开即停';
     tuneBtn.addEventListener('mousedown', tuneStart);
-    tuneBtn.addEventListener('touchstart', function(e) { e.preventDefault(); tuneStart(); });
+    tuneBtn.addEventListener('touchstart', (e) => { e.preventDefault(); tuneStart(); });
     tuneBtn.addEventListener('mouseup', tuneEnd);
-    tuneBtn.addEventListener('touchend', function(e) { e.preventDefault(); tuneEnd(); });
+    tuneBtn.addEventListener('touchend', (e) => { e.preventDefault(); tuneEnd(); });
     tuneBtn.addEventListener('mouseleave', tuneEnd);
     tuneBtn.addEventListener('touchcancel', tuneEnd);
 
     // RX recording button
     const recordBtn = document.getElementById('btn-record');
     if (recordBtn) {
-        recordBtn.addEventListener('click', async function() {
+        recordBtn.addEventListener('click', async () => {
             if (window.RXRecorder) {
                 const ok = await window.RXRecorder.toggle();
                 if (ok === false && !window.RXRecorder.isActive && typeof showToast === 'function') {
@@ -1566,7 +1569,7 @@ function initUI() {
         let longPressHandled = false;
         const idx = parseInt(btn.dataset.mem);
 
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', () => {
             if (longPressHandled) {
                 longPressHandled = false;
                 return;
@@ -1611,22 +1614,22 @@ function initUI() {
         }
 
         // Long press: save (uses active VFO)
-        btn.addEventListener('touchstart', function(e) {
-            pressTimer = setTimeout(function() {
+        btn.addEventListener('touchstart', () => {
+            pressTimer = setTimeout(() => {
                 saveMemoryChannel();
                 hapticFeedback('medium');
             }, 800);
         });
-        btn.addEventListener('touchend', function() { clearTimeout(pressTimer); });
-        btn.addEventListener('touchcancel', function() { clearTimeout(pressTimer); });
+        btn.addEventListener('touchend', () => { clearTimeout(pressTimer); });
+        btn.addEventListener('touchcancel', () => { clearTimeout(pressTimer); });
         // Desktop long press (uses active VFO)
-        btn.addEventListener('mousedown', function(e) {
-            pressTimer = setTimeout(function() {
+        btn.addEventListener('mousedown', () => {
+            pressTimer = setTimeout(() => {
                 saveMemoryChannel();
             }, 800);
         });
-        btn.addEventListener('mouseup', function() { clearTimeout(pressTimer); });
-        btn.addEventListener('mouseleave', function() { clearTimeout(pressTimer); });
+        btn.addEventListener('mouseup', () => { clearTimeout(pressTimer); });
+        btn.addEventListener('mouseleave', () => { clearTimeout(pressTimer); });
     });
 
     // Waterfall / FFT click-to-tune (QSY). Click maps the x position to a
@@ -1651,15 +1654,15 @@ function initUI() {
             else radioState.vfo_b_freq = f;
             renderFrequency();
         }
-        cv.addEventListener('mousedown', function(e) { downX = e.clientX; });
-        cv.addEventListener('mouseup', function(e) {
+        cv.addEventListener('mousedown', (e) => { downX = e.clientX; });
+        cv.addEventListener('mouseup', (e) => {
             if (downX === null) return;
             const dx = Math.abs(e.clientX - downX);
             downX = null;
             if (dx <= 8) qsy(e.clientX);
         });
-        cv.addEventListener('touchstart', function(e) { downX = e.touches[0].clientX; }, {passive: true});
-        cv.addEventListener('touchend', function(e) {
+        cv.addEventListener('touchstart', (e) => { downX = e.touches[0].clientX; }, {passive: true});
+        cv.addEventListener('touchend', (e) => {
             if (downX === null) return;
             const x = e.changedTouches[0].clientX;
             const dx = Math.abs(x - downX);
@@ -1673,7 +1676,7 @@ function initUI() {
     wireScopeQSY('fft-canvas');
 
     // Menu
-    document.getElementById('menu-toggle').addEventListener('click', function() {
+    document.getElementById('menu-toggle').addEventListener('click', () => {
         document.getElementById('main-menu').classList.add('open');
         document.getElementById('menu-overlay').classList.add('open');
     });
@@ -1706,12 +1709,10 @@ function handleMenuAction(action) {
             showMemoryManager();
             break;
         case 'settings':
-            // Scroll to DSP panel
-            const dspPanel = document.querySelector('.dsp-panel');
-            if (dspPanel) dspPanel.scrollIntoView({behavior:'smooth'});
+            showSettingsPanel();
             break;
         case 'logout':
-            fetch('/api/auth/logout', {method:'POST'}).then(function() {
+            fetch('/api/auth/logout', {method:'POST'}).then(() => {
                 window.location.replace('/login');
             });
             break;
@@ -1737,14 +1738,14 @@ function showModal(title, items, onSelect, currentValue) {
     const grid = document.createElement('div');
     grid.className = 'modal-grid';
 
-    items.forEach(function(item) {
+    items.forEach((item) => {
         const btn = document.createElement('button');
         btn.className = 'modal-btn';
         btn.textContent = item.label || item.name || item;
         if (item === currentValue || item.name === currentValue) {
             btn.classList.add('selected');
         }
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', () => {
             onSelect(item);
             overlay.remove();
         });
@@ -1754,7 +1755,7 @@ function showModal(title, items, onSelect, currentValue) {
     const closeBtn = document.createElement('button');
     closeBtn.className = 'modal-close';
     closeBtn.textContent = 'Cancel';
-    closeBtn.addEventListener('click', function() { overlay.remove(); });
+    closeBtn.addEventListener('click', () => { overlay.remove(); });
 
     content.appendChild(titleEl);
     content.appendChild(grid);
@@ -1762,14 +1763,14 @@ function showModal(title, items, onSelect, currentValue) {
     overlay.appendChild(content);
     document.body.appendChild(overlay);
 
-    overlay.addEventListener('click', function(e) {
+    overlay.addEventListener('click', (e) => {
         if (e.target === overlay) overlay.remove();
     });
 }
 
 function showBandSelector() {
-    const items = bands.map(function(b) { return {name: b.name, label: b.name + ' (' + (b.start/1e6).toFixed(1) + '-' + (b.end/1e6).toFixed(1) + ' MHz)'}; });
-    showModal('Select Band', items, function(band) {
+    const items = bands.map((b) => ({name: b.name, label: b.name + ' (' + (b.start/1e6).toFixed(1) + '-' + (b.end/1e6).toFixed(1) + ' MHz)'}));
+    showModal('Select Band', items, (band) => {
         sendCommand('band', band.name);
         radioState.band_name = band.name;
         if (band.default_freq) {
@@ -1782,8 +1783,8 @@ function showBandSelector() {
 }
 
 function showModeSelector() {
-    const items = getModeCycle().map(function(m) { return {name: m, label: m}; });
-    showModal('Select Mode', items, function(mode) {
+    const items = getModeCycle().map((m) => ({name: m, label: m}));
+    showModal('Select Mode', items, (mode) => {
         sendCommand('mode', mode.name);
         radioState.mode_name = mode.name;
         radioState.mode = (mode.name === 'LSB' ? 1 : mode.name === 'USB' ? 2 : mode.name === 'CW-U' ? 3 : mode.name === 'AM' ? 5 : mode.name === 'FM' ? 4 : mode.name === 'RTTY-L' ? 6 : mode.name === 'DATA-L' ? 8 : 1);
@@ -1793,25 +1794,43 @@ function showModeSelector() {
 }
 
 function showMemoryManager() {
-    let html = '<div class="modal-title">Memory Manager</div>';
-    for (let i = 0; i < 6; i++) {
-        const ch = memChannels[i];
-        const freqStr = ch ? (ch.freq / 1e6).toFixed(3) + ' MHz' : 'Empty';
-        const label = ch ? (ch.label || '') : '';
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #444;">';
-        html += '<span style="font-weight:700;color:#f59e0b;">M' + (i+1) + '</span>';
-        html += '<span>' + freqStr + '</span>';
-        html += '<span style="font-size:11px;color:#999;">' + label + '</span>';
-        html += '<button data-clear="' + i + '" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:4px 8px;font-size:11px;">Clear</button>';
-        html += '</div>';
-    }
-    html += '<button class="modal-close" id="mem-close">Close</button>';
-
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     const content = document.createElement('div');
     content.className = 'modal-content';
-    content.innerHTML = html;
+
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    title.textContent = 'Memory Manager';
+    content.appendChild(title);
+
+    for (let i = 0; i < 6; i++) {
+        const ch = memChannels[i];
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #444;';
+        const id = document.createElement('span');
+        id.style.fontWeight = '700';
+        id.style.color = '#f59e0b';
+        id.textContent = 'M' + (i + 1);
+        const freq = document.createElement('span');
+        freq.textContent = ch ? (ch.freq / 1e6).toFixed(3) + ' MHz' : 'Empty';
+        const lbl = document.createElement('span');
+        lbl.style.fontSize = '11px';
+        lbl.style.color = '#999';
+        lbl.textContent = (ch && ch.label) ? ch.label : '';
+        const clear = document.createElement('button');
+        clear.dataset.clear = String(i);
+        clear.textContent = 'Clear';
+        clear.style.cssText = 'background:#ef4444;color:#fff;border:none;border-radius:4px;padding:4px 8px;font-size:11px;';
+        row.append(id, freq, lbl, clear);
+        content.appendChild(row);
+    }
+    const close = document.createElement('button');
+    close.className = 'modal-close';
+    close.id = 'mem-close';
+    close.textContent = 'Close';
+    content.appendChild(close);
+
     overlay.appendChild(content);
     document.body.appendChild(overlay);
 
@@ -1826,8 +1845,73 @@ function showMemoryManager() {
             overlay.remove();
         });
     });
-    document.getElementById('mem-close').addEventListener('click', function() { overlay.remove(); });
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('mem-close').addEventListener('click', () => { overlay.remove(); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+// ── Radio Settings Panel ────────────────────────────────────
+function showSettingsPanel() {
+    const existing = document.querySelector('.modal-overlay');
+    if (existing) existing.remove();
+
+    const initVal = radioState.rf_power || 100;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const content = document.createElement('div');
+    content.className = 'modal-content';
+
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    title.textContent = 'Radio Settings';
+    content.appendChild(title);
+
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    const lbl = document.createElement('span');
+    lbl.className = 'slider-label';
+    lbl.textContent = 'RF PWR';
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.id = 'slider-rfpower-p';
+    slider.className = 'ft-slider';
+    slider.min = '5';
+    slider.max = '100';
+    slider.value = String(initVal);
+    const val = document.createElement('span');
+    val.className = 'slider-val';
+    val.id = 'val-rfpower-p';
+    val.textContent = String(initVal);
+    row.append(lbl, slider, val);
+    content.appendChild(row);
+
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:11px;color:#999;margin:6px 2px 10px;';
+    hint.textContent = 'FT-710: watts (5-100 W) · IC-7300: percent';
+    content.appendChild(hint);
+
+    const close = document.createElement('button');
+    close.className = 'modal-close';
+    close.id = 'rsp-close';
+    close.textContent = 'Close';
+    content.appendChild(close);
+
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+
+    slider.dataset.dragging = '0';
+    slider.addEventListener('input', function() {
+        slider.dataset.dragging = '1';
+        setText('val-rfpower-p', this.value);
+    });
+    slider.addEventListener('change', function() {
+        slider.dataset.dragging = '0';
+        setText('val-rfpower-p', this.value);
+        const v = parseInt(this.value, 10);
+        sendCommand('rf_power', v);
+        radioState.rf_power = v;   // optimistic; next poll (3 s skip) corrects if needed
+    });
+    document.getElementById('rsp-close').addEventListener('click', () => { overlay.remove(); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
 // ── Haptic Feedback ─────────────────────────────────────────────────
@@ -1851,7 +1935,7 @@ function showToast(message, durationMs) {
     toast.textContent = message;
     toast.classList.add('show');
     clearTimeout(toast._hideTimer);
-    toast._hideTimer = setTimeout(function() { toast.classList.remove('show'); }, durationMs || 3500);
+    toast._hideTimer = setTimeout(() => { toast.classList.remove('show'); }, durationMs || 3500);
 }
 
 // ── Frequency input (click-to-edit) ─────────────────────────────────
@@ -1860,7 +1944,7 @@ function initFreqInput() {
     const input = document.getElementById('freq-input');
     if (!display || !input) return;
 
-    display.addEventListener('click', function() {
+    display.addEventListener('click', () => {
         const freq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
         // Show MHz with kHz precision
         input.value = (freq / 1e6).toFixed(3);
@@ -1875,8 +1959,8 @@ function initFreqInput() {
         display.querySelectorAll('span').forEach(s => s.style.display = '');
     }
 
-    input.addEventListener('blur', function() { commitFreq(); });
-    input.addEventListener('keydown', function(e) {
+    input.addEventListener('blur', () => { commitFreq(); });
+    input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); commitFreq(); input.blur(); }
         if (e.key === 'Escape') { hideInput(); }
     });
@@ -1902,7 +1986,7 @@ function initFreqInput() {
 }
 
 // ── Initialize ──────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
     initUI();
     initFreqInput();
 });

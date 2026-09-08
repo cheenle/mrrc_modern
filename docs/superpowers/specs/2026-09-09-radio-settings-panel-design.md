@@ -23,7 +23,7 @@
 - 滑块行为：
   - `input` 事件 → 只更新数值显示（不发送）。
   - `change` 事件（松手）→ `sendCommand('rf_power', v)` —— 拖动过程不连发 CAT 命令。
-  - 服务端回显（`rf_power` 广播 → `renderSliders`）在**用户正在拖动时被抑制**，松手后恢复跟随（现有 `setSlider` 无拖动保护，需在面板内补：拖动标志或时间戳）。
+  - 服务端回显（`rf_power` 广播 → `renderSliders`）在**用户正在拖动时被抑制**，松手后恢复跟随。实现：面板滑块上的 `isDragging` 布尔标志——`pointerdown`/`touchstart`/`input` 置位，`pointerup`/`touchend`/`change` 清除；`setSlider` 更新前检查（现有 `setSlider` 无拖动保护，需在面板内补）。
 - 电台未连接时 `sendCommand` 静默丢弃（现有行为），面板不阻塞、不报错。
 - 旧 `#dsp-sliders` 隐藏区块保持原样不动。
 
@@ -32,7 +32,7 @@
 | 文件 | 改动 |
 | --- | --- |
 | `static/ft710_ui.js` | 新增 `showSettingsPanel()`：动态生成模态 DOM（标题「电台设置」/ "Radio Settings"、RF PWR 滑块行、关闭按钮）；绑定 input/change；`handleMenuAction('settings')` 改为调用 `showSettingsPanel()`；`renderSliders` 增加面板滑块回显（带拖动保护） |
-| `static/index.html` | 不改 |
+| `static/index.html` | 仅 cache-bust 引用更新（`ft710_ui.js?v=29`），无结构改动 |
 | `static/ft710_main.js` | 不改（`sendCommand('rf_power')` 已支持） |
 | 服务端 | 零改动 |
 

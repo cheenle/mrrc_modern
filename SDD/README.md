@@ -34,9 +34,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.33 |
+| SDD Version | V2.34 |
 | Baseline Date | 2026-09-09 |
-| Status | v1.14.0 is the latest published release on both platforms (macOS DMG 55,885,519 bytes + Windows Setup 45,423,529 bytes, SDD V2.33); both carry the V2.31/V2.32 RX recording-quality fixes (capture reopened after every TX→RX transition on all platforms; RX broadcast no longer frame-trims catch-up bursts); IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved (remaining: forced first-login change; iOS watchdog/scenePhase); open issues tracked in §13.4 |
+| Status | Radio-settings panel with RF power slider shipped (frontend-only, SDD V2.34); v1.14.0 is the latest published release on both platforms (macOS DMG 55,885,519 bytes + Windows Setup 45,423,529 bytes, SDD V2.33); both carry the V2.31/V2.32 RX recording-quality fixes (capture reopened after every TX→RX transition on all platforms; RX broadcast no longer frame-trims catch-up bursts); IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved (remaining: forced first-login change; iOS watchdog/scenePhase); open issues tracked in §13.4 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend) |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2` (default `ft710`) |

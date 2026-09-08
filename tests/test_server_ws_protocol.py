@@ -212,7 +212,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_civ_scope_speed_selector_uses_capabilities(self):
         ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
         self.assertIn("c.scope_speeds", ui_source)
-        self.assertIn("speedSel.innerHTML = '';", ui_source)
+        self.assertIn("speedSel.replaceChildren();", ui_source)
 
     def test_settings_panel_exposes_rf_power_slider(self):
         """SDD V2.34: the ☰ settings action opens a radio-settings panel
@@ -228,12 +228,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=24', index_source)
         self.assertIn('/ft710_main.js?v=27', index_source)
-        self.assertIn('/ft710_ui.js?v=28', index_source)
+        self.assertIn('/ft710_ui.js?v=29', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v29'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v30'", sw_source)
         self.assertIn("'/ft710_main.js?v=27'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=28'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=29'", sw_source)
 
     def test_subchannels_have_independent_reconnect(self):
         """SDD I10: audio/spectrum subchannels must self-heal, not just null out."""

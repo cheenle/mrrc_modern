@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.13.0**（2026-08-29，Windows 与 macOS 对齐：首启零配置自动密码/串口/电台探测、网页「连接设置」对话框（电台/串口/音频/密码 + 保存并重启）、launcher 退出码 42 自动重启、登录页自动密码横幅；Win11 上 681 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,433,215 bytes，SHA-256 `15ab8f9b6ddbabda0308cff041f1f5e48547d91c000724198a0b903549a808b0`）。
+> 最新构建：**v1.14.0**（2026-09-09，RX 录音质量修复（SDD V2.31/V2.32）：每次 TX→RX 转换后全平台重开 RX 采集流（restart_rx），RX 广播不再丢弃追赶帧（不再截断到最新 2 帧）；Win11 上 693 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,423,529 bytes，SHA-256 `747f1c6b6b9e7bca1cdfeff7a4a498ca3fbdba4b03c044113da17c160f21e48a`）。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 ## 1. 环境拓扑
@@ -75,7 +75,7 @@ FT-710 的 USB 接在宿主机 ham.vlsc.net 上（经 Cypress TetraHub），三�
 `virsh attach-device win11 <xml> --live --config` 按 VID:PID 直通进 VM（持久化，重启 VM 不失效）：
 
 | 设备 | VID:PID | VM 内表现 |
-|------|---------|-----------|
+| ------ | --------- | ----------- |
 | CP2105 双串口（CAT + PTT） | `10c4:ea70` | COM3 = **Standard**（无 CAT），COM4 = **Enhanced**（CAT 用它） |
 | FTDI FT4222H（频谱 SPI） | `0403:601c` | FT4222H Interface A/B，FTDIBUS 驱动 2.12.36.20（Windows 自动装） |
 | C-Media USB Audio（FT-710 声卡） | `0d8c:0013` | "USB Audio Device"，自动检测可匹配 |
@@ -173,7 +173,7 @@ build.ps1 有 `Invoke-Checked` 闸门：测试或任何一步非零退出都会�
 ### Step 5 — 验证产物（在 VM 上）
 
 ```powershell
-dir C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe                    # v1.12.1: 45,329,503 bytes
+dir C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe                    # v1.14.0: 45,423,529 bytes
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\vendor\ftdi\windows\bin\x64 # 两个 DLL 都在
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\_internal\static\index.html # static 在 _internal
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\_internal\mem_channels.json # 初始频道种子
@@ -183,20 +183,20 @@ Get-FileHash C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe -Algorithm SHA256
 ### Step 6 — 取回本机
 
 ```bash
-ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_modern/dist/windows/MRRC-Modern-Setup.exe /tmp/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe"
-scp ham.vlsc.net:/tmp/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe dist/windows/
-shasum -a 256 dist/windows/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe
-# v1.12.1: ba5fb7a9fd952e9c92508cf6b159c1d92b9292a3b03925f855f55166d5954e47
+ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_modern/dist/windows/MRRC-Modern-Setup.exe /tmp/MRRC-Modern-v1.14.0-Windows-x64-Setup.exe"
+scp ham.vlsc.net:/tmp/MRRC-Modern-v1.14.0-Windows-x64-Setup.exe dist/windows/
+shasum -a 256 dist/windows/MRRC-Modern-v1.14.0-Windows-x64-Setup.exe
+# v1.14.0: 747f1c6b6b9e7bca1cdfeff7a4a498ca3fbdba4b03c044113da17c160f21e48a
 ```
 
 ## 4. 发布到网站（可选）
 
-下载镜像在 **www.vlsc.net**（另一台机器，非 ham），webroot `/var/www/vlsc.net/mrrc_modern/`。发布脚本会备份整个站点、上传中英文页面和两个安装包、设置权限并在 reload 前执行 `nginx -t`：
+下载镜像在 **<www.vlsc.net**（另一台机器，非> ham），webroot `/var/www/vlsc.net/mrrc_modern/`。发布脚本会备份整个站点、上传中英文页面和两个安装包、设置权限并在 reload 前执行 `nginx -t`：
 
 ```bash
 mkdir -p website/downloads
-cp dist/windows/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe website/downloads/MRRC-Modern-Setup.exe
-cp dist/windows/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe website/downloads/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe
+cp dist/windows/MRRC-Modern-v1.14.0-Windows-x64-Setup.exe website/downloads/MRRC-Modern-Setup.exe
+cp dist/windows/MRRC-Modern-v1.14.0-Windows-x64-Setup.exe website/downloads/MRRC-Modern-v1.14.0-Windows-x64-Setup.exe
 shasum -a 256 website/downloads/*.exe
 cd website
 ./deploy.sh
@@ -209,17 +209,17 @@ cd website
 - `docs/WINDOWS_INSTALLER_GUIDE.md`（Download 表格 + 构建说明段）
 - `README.md`、`CHANGELOG.md`、`SDD/README.md`、`SDD/14-version-history.md`
 
-验证两个 URL 都返回 200、`content-length: 45329503`，下载后的 SHA-256 都等于 `ba5fb7a9fd952e9c92508cf6b159c1d92b9292a3b03925f855f55166d5954e47`：
+验证两个 URL 都返回 200、`content-length: 45423529`，下载后的 SHA-256 都等于 `747f1c6b6b9e7bca1cdfeff7a4a498ca3fbdba4b03c044113da17c160f21e48a`：
 
 ```bash
 curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe
-curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe
+curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.14.0-Windows-x64-Setup.exe
 ```
 
 ## 5. 故障排查（本次踩过的坑）
 
 | 现象 | 原因 | 处理 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `virsh list` 看不到 win11 | 默认连 qemu:///session | `sudo virsh -c qemu:///system list --all` |
 | 公钥加了仍 Permission denied | 管理员用户只认 `C:\ProgramData\ssh\administrators_authorized_keys` | 见 §2.1，注意 icacls 权限 |
 | SSH 里 `&&` 报错 | VM 默认 shell 是 PowerShell 5.1 | 用 `;` 或把命令写成 .ps1 scp 上去执行 |

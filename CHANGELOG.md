@@ -2,9 +2,36 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.14.0] — 2026-09-07 — RX recording quality: capture restart + no dropped frames (SDD V2.31/V2.32)
+
+### Audio
+
+- **RX capture reopened after every TX→RX transition (all platforms)**
+  (SDD V2.31): field analysis of 2026-09-06 `mrrc-qso-*` browser recordings
+  showed intermittent 20 ms RX frames with low-frequency/attenuated energy
+  while TX mic frames stayed clean. The field-consistent failure mode is a
+  long-lived PortAudio RX capture stream degraded after TX playback on the
+  same USB codec (previously documented only for Windows).
+  `AudioHandler.restart_rx()` now reopens the RX capture stream on every
+  TX→RX transition, still off the asyncio loop; extends the full-duplex
+  recovery guard to macOS/CoreAudio-like stacks.
+- **RX broadcast no longer drops catch-up frames** (SDD V2.32):
+  `_audio_rx_loop` trimmed multi-chunk bursts to the newest 2 Opus frames,
+  leaving permanent holes in the client jitter buffer (audible flutter) and
+  in browser recordings. The trim is removed — every encoded frame is sent;
+  the burst stays bounded by the read-side cap (~80 ms) and the client's
+  time-based jitter buffer absorbs it.
+
+### Installers
+
+- Windows installer version bumped to **1.14.0**; macOS DMG rebuilt as
+  `MRRC-Modern-v1.14.0-arm64.dmg`. Both packages carry the two audio fixes
+  above; no CAT/PTT/scope/protocol changes.
+
 ## [v1.13.0] — 2026-08-29 — macOS zero-config installer + security hardening (SDD V2.28)
 
 ### Security
+
 - **I8 — static path traversal fixed**: `serve_static` now resolves the
   requested path and rejects anything that escapes `STATIC_DIR`
   (`GET /../server.py`, absolute request paths, symlink escapes → 404).
@@ -14,6 +41,7 @@ All notable changes to the MRRC Web Control project.
   password is active. (Forced first-login change remains future work.)
 
 ### Reliability
+
 - **I10 — web subchannel self-heal**: `/WSspectrum`, `/WSaudioRX` and
   `/WSaudioTX` each reconnect independently with exponential backoff
   (1 s→30 s) after a transient drop; a transient no longer leaves controls
@@ -25,6 +53,7 @@ All notable changes to the MRRC Web Control project.
   disconnect dead-man switch cannot see.
 
 ### iOS
+
 - **I11 (part 1) — PTT release race fixed** (docs/IOS_APP_ANALYSIS.md §2.1):
   release is sent unconditionally on gesture end with optimistic local state
   (same pattern as the TUNE button), so WAN-latency fast taps can no longer
@@ -32,11 +61,13 @@ All notable changes to the MRRC Web Control project.
   layers remain open.
 
 ### Housekeeping
+
 - Removed stale `.bak` files from the repo root and Xcode project.
 - Fixed an uptime-dependent power-script test (fixed monotonic threshold
   expired on long-running hosts).
 
 ### macOS Installer
+
 - **First-run zero-config**: the menu-bar launcher auto-generates a random web
   password, scans `/dev/cu.*` for the radio's serial port, and probes FT-710
   (ASCII `ID;`) vs Icom CI-V (0x19) to pick the radio model — no terminal, no
@@ -60,6 +91,7 @@ All notable changes to the MRRC Web Control project.
   (55,881,750 bytes).
 
 ### Windows Installer (v1.13.0, aligned with macOS)
+
 - First-run zero-config now on Windows too: the launcher auto-generates a web
   password and auto-detects the radio model and serial port (COM) — no manual
   config edit needed.
@@ -72,6 +104,7 @@ All notable changes to the MRRC Web Control project.
   `15ab8f9b6ddbabda0308cff041f1f5e48547d91c000724198a0b903549a808b0`.
 
 ### Tests
+
 - Merged suite **651 tests** across 33 modules (this work adds 18): static-path containment,
   constant-time compare, default-password warning, max-TX watchdog, and a
   subchannel-reconnect contract test.
@@ -79,6 +112,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.12.1] — 2026-08-28 — Chronological RX+TX QSO recording (web UI)
 
 ### Added
+
 - The web MP3 recorder now captures the whole QSO in time order instead of
   RX audio only. While PTT is held, the recorder mutes the RX feed (the radio
   only returns sidetone/duplex audio during TX, which the UI already dims to
@@ -90,11 +124,13 @@ All notable changes to the MRRC Web Control project.
   the new behavior.
 
 ### Tests
+
 - Suite remains **633 tests across 31 modules**, green on macOS. Cache-bust
   guard assertions re-pinned: `ft710_main.js?v=26`, `ft710_ui.js?v=28`,
   service worker `mrrc-v28`.
 
 ### Packaging
+
 - Windows installer version bumped to **1.12.1**
   (`packaging/windows/MRRC-Modern.iss`). All three PyInstaller targets and Inno
   Setup 6.7.3 passed on the Windows 11 build VM; the 45,329,503-byte installer
@@ -103,6 +139,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.12.0] — 2026-08-26 — IC-7300 runtime reliability and official CI-V conformance + Windows installer
 
 ### Added
+
 - Official IC-7300/IC-7300MK2 CI-V byte vectors and virtual-serial regression
   coverage for scope initialization, SCROLL-C metadata, model-specific
   Transceive settings, power commands, ALC calibration, and scope speed limits.
@@ -110,6 +147,7 @@ All notable changes to the MRRC Web Control project.
   host API, default rate, actual rate, and channel count.
 
 ### Fixed
+
 - Backend-aware serial defaults now keep FT-710 at 38400 baud while selecting
   115200 baud for IC-7300 and IC-7300MK2 unless explicitly overridden.
 - CI-V scope data uses a bounded 44-segment newest-data queue; spectrum
@@ -127,6 +165,7 @@ All notable changes to the MRRC Web Control project.
 - IC scope speed capabilities and UI are limited to FAST/MID/SLOW.
 
 ### Tests
+
 - Hardware-independent suite expanded to **633 tests across 31 modules** and
   passes on macOS and the Windows 11 build VM. These tests verify software
   protocol and state behavior; real USB enumeration, radio ACK timing, RF
@@ -134,6 +173,7 @@ All notable changes to the MRRC Web Control project.
   require physical-radio acceptance.
 
 ### Packaging
+
 - Windows installer version bumped to **1.12.0**
   (`packaging/windows/MRRC-Modern.iss`). All three PyInstaller targets and Inno
   Setup 6.7.3 passed; the 45,339,501-byte installer has SHA-256
@@ -142,6 +182,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.11.0] — 2026-08-23 — User-configurable spectrum and waterfall heights + v1.11.0 Windows installer
 
 ### Added
+
 - Off-canvas menu Settings now has `Spec H` and `WF H` sliders to adjust the
   FFT spectrum plot and waterfall canvas heights independently. Values are
   persisted in cookies (`ft710_fftHeight`, `ft710_wfHeight`) and applied to
@@ -151,12 +192,14 @@ All notable changes to the MRRC Web Control project.
   artifacts.
 
 ### Frontend
+
 - `static/index.html`: added slider rows and bumped cache-busters
   (`ft710.css?v=24`, `ft710_ui.js?v=26`).
 - `static/ft710_ui.js`: `_getFftHeight()`, `_getWfHeight()`,
   `applyScopeHeights()` helpers; resize handler respects user settings.
 
 ### Fixed
+
 - `tests/test_ft710_power.py`: `test_off_rejected_during_boot_window` was
   flaky/host-dependent because it compared `time.monotonic()` against a
   hardcoded 1_000_000 s boot window. Now `time.monotonic()` is mocked in
@@ -164,12 +207,13 @@ All notable changes to the MRRC Web Control project.
   so the test passes regardless of host uptime.
 
 ### Packaging
-- Windows installer version bumped to **1.11.0** (`packaging/windows/MRRC-Modern.iss`).
 
+- Windows installer version bumped to **1.11.0** (`packaging/windows/MRRC-Modern.iss`).
 
 ## [v1.10.1] — 2026-08-17 — Add MRRC_RADIO_MODEL to launcher config template
 
 ### Fixed
+
 - The `windows/default.env` and `macos/default.env` launcher config templates
   were missing the `MRRC_RADIO_MODEL` key that selects the radio backend
   (`ft710` / `ic7300` / `ic7300mk2`). The installer copy and docs referenced
@@ -179,6 +223,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.10.0] — 2026-08-17 — MRRC Modern rebrand + MRRC_* env migration + macOS packaging fix
 
 ### Changed
+
 - **Environment variables `FT710_*` → `MRRC_*`** with automatic backward
   compatibility: `config.py` now reads `MRRC_*` first and falls back to the
   legacy `FT710_*` prefix, so existing deployments and config files keep
@@ -199,11 +244,13 @@ All notable changes to the MRRC Web Control project.
   `https://www.vlsc.net/mrrc_modern/`.
 
 ### Tests
+
 - Suite **596 tests** (592 + 4 new env-compat fallback tests).
 
 ## [v1.9.0] — 2026-08-17 — Multi-Radio Backend: FT-710 + IC-7300/IC-7300MK2
 
 ### Added
+
 - **Pluggable radio backends** (`backends/ft710/` and `backends/ic7300/`):
   - `RadioBackend` ABC in `backends/base.py` with `RadioCapabilities` exposure.
   - Backend factory in `backends/__init__.py` registered for `ft710`, `ic7300`, and `ic7300mk2`.
@@ -221,31 +268,37 @@ All notable changes to the MRRC Web Control project.
 - **Capability-driven frontend**: full state message now includes `radioModel`, `radioDisplayName`, and `capabilities`; UI adapts controls (e.g., hides AN/Vd-Id on IC-7300, cycles FIL1–FIL3 filters).
 
 ### Changed
+
 - `server.py`, `poll_scheduler.py`, and `radio_state.py` are now backend-agnostic.
 - Moved FT-710-specific modules into `backends/ft710/`: `cat_controller.py`, `scope_pipe.py`, `scope_frame.py`, `scope_libraries.py`, `config_ft710.py`.
 - Updated root compatibility shims to point to the new backend locations.
 
 ### Tests
+
 - Suite expanded to **592 tests** covering backend factory, CI-V codec, controller, and existing FT-710 regressions.
 
 ## [v1.8.1] — 2026-08-16 — 界面精简（紧凑瀑布 + 页面滚动 + RF Gain 移入菜单）
 
 ### Changed
+
 - **瀑布/FFT 画布紧凑化**：移动端 67→45 px / 33→22 px，桌面 120→80 / 60→40 px。
 - **页面随内容滚动**：移除 `body {height:100%; overflow:hidden}` 固定视口，`.app-container` 由 `height` 改为 `min-height:100dvh`，内容超屏时可滚动。
 - **RF Gain 滑块移入菜单**：从主控制区（RF PWR 旁）移入菜单「设置」（原「Scope Display」更名「Settings」）。
 - **缓存版本同步**：css v23 / main v23 / ui v24，sw.js CACHE `ft710-v24` + ASSETS 列表同步；钉住缓存版本的测试同步更新。
 
 ### Tests
+
 - 套件 439 项全绿。
 
 ## [v1.8.0] — 2026-08-15 — RF Gain 滑块 + 稳定性修复
 
 ### Added
+
 - **RF Gain 滑块（UI）**：FT-710 射频增益（RG 0-255）映射为 0-100% 滑块，置于 RF PWR 旁。
   拖动实时跟随、松开生效；外部改动经 `rf_gain` 脏集合回同步到滑块。
 
 ### Fixed
+
 - **消除串口超时导致的"电台未连接"误报**：调谐/切频等指令争用下 IF 轮询超时
   曾被每 2-6s 锁存为 `serial_connected=False`，频谱闪烁"电台未连接"横幅，实则电台健康。
   现在 `serial_connected` 仅由看门狗（`cat.connected`）置 off，IF 轮询失败不再直接判离线，
@@ -257,9 +310,11 @@ All notable changes to the MRRC Web Control project.
 - **website 部署改为 tmpfs 外暂存**：stage 目录移出 tmpfs，避免重启丢文件。
 
 ### Tests
+
 - 本机与 VM 上各 439 项全绿。
 
 ### Release
+
 - 构建于 Windows 11（Python 3.12.4 / PyInstaller 6.21.0 / Inno Setup 6.7.3），提交 `4ce4d26`。
 - 产物 `MRRC-FT710-v1.8.0-Windows-x64-Setup.exe`，36,888,086 bytes，SHA-256
   `36a48a5f3f325d112937751bddcdebc581039d0484a40c95c1b00fd4bcc170ea`。
@@ -270,6 +325,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.7.8] — 2026-07-31 — Stable — Windows TX Restored to 44.1 kHz Device Audio
 
 ### Fixed
+
 - **Windows TX now keeps the FT-710 USB device domain at 44.1 kHz**
   (SDD V2.14). Browser capture and Opus remain correctly fixed at 48 kHz
   with 960 samples per 20 ms; every decoded frame is now unconditionally
@@ -284,11 +340,13 @@ All notable changes to the MRRC Web Control project.
   PortAudio terminate/reinitialize/device-name re-resolution recovery.
 
 ### Tests
+
 - Replaced the obsolete WASAPI-selection contract with regressions for
   fixed 44.1 kHz stream opening, exact 960→882 conversion, 44.1 kHz byte
   budgets, and rate preservation after device re-enumeration.
 
 ### Follow-up — 2026-07-31 TX Audit
+
 - Fixed the frontend intentional-disconnect flag (`const` → `let`), which
   could throw before closing the audio sockets and leave a stale TX owner.
 - A replacement `/WSaudioTX` connection from the same authenticated session
@@ -299,6 +357,7 @@ All notable changes to the MRRC Web Control project.
   suite is 439 tests.
 
 ### Stable Release Verification — 2026-07-31
+
 - Built from commit `8629f0c` on Windows 11 with Python 3.12.4,
   PyInstaller 6.21.0, and Inno Setup 6.7.3. All 439 Windows tests passed and
   all three PyInstaller targets plus the installer compiled successfully.
@@ -316,6 +375,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.7.7] — 2026-07-28 — Audio Survives Radio Power Cycles (Power Switch Withdrawn)
 
 ### Fixed
+
 - **TX/RX audio survives radio power cycles** (SDD V2.12): every
   power-off/on re-enumerates the FT-710's USB sound card, invalidating
   the CoreAudio device IDs cached inside PortAudio at `Pa_Initialize`
@@ -328,10 +388,12 @@ All notable changes to the MRRC Web Control project.
   (e.g. `USB Audio Device`) instead.
 
 ### Added
+
 - `PS;` is polled in the Tier-3 settings loop, so power changes made at
   the radio's front panel are reflected in `power_on` state.
 
 ### Withdrawn (after field reliability testing, SDD V2.13)
+
 - **The header power switch (CAT `PS0;`/`PS1;`) was removed before
   release.** Two days of live testing proved the FT-710's CAT power
   control too fragile for a remote UI button: (1) a `PS0;` landing
@@ -345,6 +407,7 @@ All notable changes to the MRRC Web Control project.
   read-back verification, `PS0` double-send, power-off refused while TX.
 
 ### Tests
+
 - New `tests/test_power_switch.py` (9 tests: boot-window rejection,
   TX-while-off rejection, PS0 double-send, PS1 retry/verify/give-up,
   error reporting) and `PortAudioReinitTests` in `tests/test_audio.py`
@@ -354,6 +417,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.7.6] — 2026-07-26 — HTTPS by Default on Windows (Self-Signed Bootstrap)
 
 ### Changed
+
 - **The Windows app now starts on HTTPS by default** (SDD V2.10): the
   launcher no longer hardcodes `--no-ssl`. On first run it generates a
   throwaway self-signed certificate (ECDSA P-256, 10-year, SANs for
@@ -368,6 +432,7 @@ All notable changes to the MRRC Web Control project.
   skips TLS verification for the self-signed bootstrap cert.
 
 ### Tests
+
 - New `tests/test_ssl_bootstrap.py` (6 tests) and launcher SSL tests
   (6 tests); suite 421 tests. `cryptography>=41` is now a hard
   dependency (was commented out).
@@ -375,6 +440,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.7.5] — 2026-07-26 — Hotfix: NameError in start_tx (v1.7.4 Regression)
 
 ### Fixed
+
 - **`name 'sys' is not defined` on PTT** (v1.7.4 regression): the
   WASAPI selection branch in `start_tx()` referenced `sys.platform`
   without importing `sys` at module level, so every PTT on the v1.7.4
@@ -386,6 +452,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.7.4] — 2026-07-26 — Windows TX Crackle Fix (WASAPI 48 kHz Output)
 
 ### Fixed
+
 - **TX audio crackles into noise on Windows** (SDD V2.9): the C-Media
   codec's MME 44.1 kHz playback path paces ~1.4× slow (measured on the
   Win11 KVM rig: 50×20 ms frames block 1.36–1.42 s instead of 1.00 s),
@@ -401,6 +468,7 @@ All notable changes to the MRRC Web Control project.
   rate is host-API-dependent, not universally 44.1 kHz.
 
 ### Tests
+
 - New `WindowsWasapiTxTests` (5 tests: WASAPI variant selection,
   other-device/WASAPI-absent guards, 48 k feed passthrough, 44.1 k feed
   resample); suite 407 tests.
@@ -408,6 +476,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.7.3] — 2026-07-26 — Windows RX Audio Dies After First PTT (Full-Duplex Wedge)
 
 ### Fixed
+
 - **RX audio silent after the first PTT on Windows** (SDD V2.8): opening
   the TX playback stream on the FT-710's C-Media USB codec silently
   wedges the RX capture stream (MME/DirectSound full-duplex driver
@@ -428,12 +497,14 @@ All notable changes to the MRRC Web Control project.
   — the pattern that reliably realigns (same as a pipe restart).
 
 ### Tests
+
 - New `RestartRxTests` (4 tests: Windows stop→start order, non-Windows
   no-op, RX-not-running guard, failed-reopen path); suite 402 tests.
 
 ## [v1.7.2] — 2026-07-26 — TX-Safe Spectrum (Scope Pipe TX Pause)
 
 ### Fixed
+
 - **Spectrum wrecked for 30–45 s after every PTT** (SDD V2.7): the
   FT-710 garbles its scope stream during TX, but `scope_pipe` kept
   reading it — sync_lost → stall reinit → more sync failures →
@@ -458,6 +529,7 @@ All notable changes to the MRRC Web Control project.
   DLL drop into the install dir after every reinstall.
 
 ### Tests
+
 - New `tests/test_scope_pipe_tx.py` (13 tests: control-line parsing,
   server TX-notify transitions/force/dead-pipe guard, Windows taskkill
   vs POSIX SIGTERM); suite 398 tests.
@@ -465,6 +537,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.7.1] — 2026-07-26 — Windows Audio Device Lock & Installer Diagnostics
 
 ### Fixed
+
 - **Windows RX/TX audio broken after install** (SDD V2.6): the FT-710's
   built-in USB sound card enumerates on Windows under generic names —
   `USB Audio CODEC` or `USB Audio Device` depending on driver/OS build —
@@ -486,6 +559,7 @@ All notable changes to the MRRC Web Control project.
   platform-matched FTDI tree.
 
 ### Changed
+
 - **`windows/default.env` pre-locks the audio devices**:
   `FT710_AUDIO_RX_DEVICE` / `FT710_AUDIO_TX_DEVICE` = `USB Audio` (the
   common substring of both Windows enumeration forms; name locking is
@@ -500,6 +574,7 @@ All notable changes to the MRRC Web Control project.
 ## [v1.7.0] — 2026-07-26 — ATR1000 Tuner Linkage & Frontend Settings in Cookies
 
 ### Added
+
 - **Optional ATR1000 tuner linkage** (SDD V2.4; default disabled, enable
   with `FT710_ATR1000_HOST`/`FT710_ATR1000_PORT`): asyncio-native client
   for the networked ATR1000 (`atr1000_client.py`) with the LC-learning
@@ -517,6 +592,7 @@ All notable changes to the MRRC Web Control project.
   independent of the radio's CAT mic gain.
 
 ### Changed
+
 - **All frontend settings now persist in cookies** (SDD V2.3): unified the
   previous localStorage/sessionStorage mix behind `settings_manager.js`
   cookie helpers with a one-time legacy migration. Memory channels now
@@ -528,6 +604,7 @@ All notable changes to the MRRC Web Control project.
   spec lists the new modules explicitly.
 
 ### Fixes (previously uncommitted, SDD V2.1/V2.2)
+
 - TX uplink ownership promotion/claim + per-session TX observability.
 - Windows packaging chain: frozen `_internal` resource resolution,
   scope_pipe stdout heartbeat, hardened `build.ps1`, launcher
@@ -541,6 +618,7 @@ Deep audit of the Windows packaging chain (`windows/`, `packaging/`); all
 fixes verified hardware-free, suite now 271 tests.
 
 ### Fixes
+
 - **Packaged web UI 404 (P0)**: PyInstaller 6 onedir puts datas under
   `_internal/`, but `STATIC_DIR` pointed next to the exe — the installed app
   served only the inline fallback login page and "Static files not found".
@@ -569,6 +647,7 @@ fixes verified hardware-free, suite now 271 tests.
 ## [v1.6.2] — 2026-07-21 — Spectrum Freeze After USB Reconnect
 
 ### Fixes
+
 - **Spectrum survives serial hiccups**: the connection watchdog's reconnect
   path now re-runs the scope-init CAT sequence (`EX040101`/`EX040200`) via a
   new `PollScheduler(on_reconnected=...)` hook wired to `_init_scope_cat`.
@@ -580,6 +659,7 @@ fixes verified hardware-free, suite now 271 tests.
 ## [v1.6.1] — 2026-07-21 — Web Frontend Safety & UX Overhaul
 
 ### Safety
+
 - **PTT watchdog actually armed**: PTT/TUNE buttons and Space-bar PTT now
   route through `PTTManager` (previously bypassed — watchdog, pagehide
   force-RX and unload beacon were dead code); broken `sendBeacon` removed
@@ -587,6 +667,7 @@ fixes verified hardware-free, suite now 271 tests.
 - **Keyboard guards**: ignore `e.repeat` and events from inputs
 
 ### Fixes
+
 - Silent `renderFreqScale` crash (missing `range` arg) that skipped
   VFO/PTT renders every update cycle
 - Server `error` messages now show a toast banner
@@ -595,6 +676,7 @@ fixes verified hardware-free, suite now 271 tests.
 - S-meter label: relative `dB` (S9=0) instead of misleading `dBm`
 
 ### Features
+
 - Waterfall/FFT click-to-QSY (8 px drag threshold)
 - Desktop layout ≥768 px (720 px container, 120 px waterfall, larger controls)
 - Filter tables server-authoritative (`fullState.filterTables`)
@@ -603,6 +685,7 @@ fixes verified hardware-free, suite now 271 tests.
 ## [v1.6.0] — 2026-07-21 — Windows Desktop Installer
 
 ### Windows Package
+
 - **Desktop installer**: `MRRC-FT710-Setup.exe` (28.3 MB, x64) built with
   PyInstaller 6.21 + Inno Setup 6.7.3 — embedded Python 3.12 runtime, no
   manual Python install required
@@ -616,6 +699,7 @@ fixes verified hardware-free, suite now 271 tests.
   or GitHub Releases
 
 ### Build Fixes
+
 - **PyInstaller specs**: `ROOT = Path(SPECPATH).parents[1]` — `SPECPATH`
   is the spec directory in PyInstaller 6, `parents[2]` escaped the repo
   root and broke the build entirely
@@ -623,12 +707,14 @@ fixes verified hardware-free, suite now 271 tests.
   of the `"server:app"` import string, which a frozen exe cannot import
 
 ### Verified
+
 - End-to-end on a clean Windows 11 VM: silent install → launcher →
   server start → web login → `/api/health` + 4 WebSocket channels OK
 
 ## [v1.1.0] — 2026-07-14 — iOS App Enhancement
 
 ### iOS App Features
+
 - **Complete Opus Codec Implementation**: Full libopus integration via C bridge
 - **Unified Audio Session Management**: Consistent TX/RX audio handling
 - **Error Handling UI**: User-friendly error alerts and recovery options
@@ -637,6 +723,7 @@ fixes verified hardware-free, suite now 271 tests.
 - **Documentation**: Complete iOS development guides
 
 ### Technical Improvements
+
 - Optimized spectrum rendering with performance monitoring
 - Enhanced PTT button implementation (removed duplication)
 - Added audio session route change handling
@@ -644,6 +731,7 @@ fixes verified hardware-free, suite now 271 tests.
 - Pre-allocated buffers for memory efficiency
 
 ### Security & Stability
+
 - Robust error handling for audio operations
 - Graceful degradation on connection failures
 - Thread-safe audio processing
@@ -652,6 +740,7 @@ fixes verified hardware-free, suite now 271 tests.
 ## [v2.0.0] — 2026-07-14 — Stability & Security Hardening
 
 ### Security
+
 - **Login rate limiting**: Max 5 attempts per 5 minutes per IP (`_check_login_rate_limit`)
 - **Strong default password**: Changed from `ft710` to `changeme_please_use_strong_password!`
 - **Password strength warnings**: Client-side feedback for weak passwords
@@ -659,26 +748,31 @@ fixes verified hardware-free, suite now 271 tests.
 - **Startup time tracking**: Monitored via health endpoint
 
 ### Critical Fixes
+
 - **Race condition fix**: `_cancel_polls` changed from `bool` to `asyncio.Event` in `cat_controller.py` and `poll_scheduler.py` — eliminates TOCTOU race between priority commands (PTT/Tune) and background pollers
 - **Python 3.10+ compatibility**: Added `from __future__ import annotations` to `config.py` and `server.py`; removed `asyncio.Lock` from `radio_state.py` dataclass field (was causing RuntimeError on Python 3.9)
 - **Removed duplicate `rf_gain` handler** in `server.py`
 
 ### Performance Optimizations
+
 - **Initial sync speed**: `initial_state_sync` sleep reduced from 50ms to 20ms (60% faster connection)
 - **Log noise reduction**: IF poll debug threshold raised from 50→1000 consecutive errors; TX meter logging throttled to first 5 seconds
 - **Class-level state cleanup**: `_tx_meter_first_logged` moved from class-level to instance-level in `poll_scheduler.py`
 - **Module-level `import time`**: Added missing import in `poll_scheduler.py`
 
 ### Code Quality
+
 - **Debug cleanup**: Removed verbose `_dbg_*` flags and associated logging from `audio_handler.py`
 - **Docstring fix**: Corrected misleading sample rate description in `opus_rx.py` (16kHz → 48kHz)
 - **Test compatibility**: Updated `FakeCat` mock in `tests/test_poll_scheduler.py` to use `asyncio.Event()` for `_cancel_polls`
 
 ### Testing
+
 - **206/206 tests passing** (was 35 failing before fixes)
 - Full pytest and unittest coverage maintained
 
 ### Documentation
+
 - Created `SECURITY_GUIDE.md` — complete security configuration guide
 - Created `QUICKSTART.md` — step-by-step setup guide
 - Created `FIXES_SUMMARY.md` — detailed fix documentation
@@ -694,6 +788,7 @@ fixes verified hardware-free, suite now 271 tests.
 ## [v2.1.0] — 2026-07-14 — TX Link Analysis Complete
 
 ### Analysis Completed
+
 - **TX audio chain deep review**: Full stack analysis from browser → WebSocket → radio
 - **Issues identified**: 2 high-risk, 3 medium-risk, 3 low-risk
 - **Key findings**:
@@ -704,6 +799,7 @@ fixes verified hardware-free, suite now 271 tests.
   - Unused TxJitterBuffer (medium risk)
 
 ### Recommendations
+
 - Fix PTT button to use PTTManager immediately
 - Clean up AudioWorklet SAB code within 1 week
 - Add TX Opus availability check within 1 week
@@ -717,6 +813,7 @@ fixes verified hardware-free, suite now 271 tests.
 ## [v2.2.0] — 2026-07-14 — iOS App Analysis Complete
 
 ### Analysis Completed
+
 - **FT710Mobile iOS app deep review**: Full stack analysis from SwiftUI → WebSocket → radio
 - **Issues identified**: 2 high-risk, 3 medium-risk, 3 low-risk
 - **Key findings**:
@@ -727,6 +824,7 @@ fixes verified hardware-free, suite now 271 tests.
   - Memory management risks (medium risk)
 
 ### Recommendations
+
 - Implement Opus codec support immediately
 - Unify PTT button implementation
 - Add comprehensive error handling
@@ -740,6 +838,7 @@ fixes verified hardware-free, suite now 271 tests.
 ## [v1.2.0] — Previous Release
 
 ### Features
+
 - Bidirectional Opus audio (RX/TX) with jitter buffers
 - Real-time FFT spectrum + waterfall (FT4222 SPI + S-meter fallback)
 - PTT safety: dead-man switch, triple verify, forced RX on disconnect

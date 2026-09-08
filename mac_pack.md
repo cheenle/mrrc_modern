@@ -1,6 +1,6 @@
 # macOS 安装包打包流程（本机 Mac 直接构建）
 
-> 用途：在开发者本机 Mac 上构建 `MRRC-Modern-<ver>-arm64.dmg`（最新 v1.13.0）。
+> 用途：在开发者本机 Mac 上构建 `MRRC-Modern-<ver>-arm64.dmg`（最新 v1.14.0）。
 > 本文按 v1.7.0 首次打包的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 > 与 Windows 不同，macOS 不需要 KVM 虚拟机——直接在本机用 `.venv` 打包。
@@ -107,7 +107,7 @@ shasum -a 256 dist/macos/MRRC-Modern-*-arm64.dmg
 
 ## 4. 发布到网站（可选）
 
-下载镜像在 **www.vlsc.net**（webroot `/var/www/vlsc.net/mrrc_modern/`，属 `www-data:www-data`，cheenle 有 sudo 免密）：
+下载镜像在 **<www.vlsc.net**（webroot> `/var/www/vlsc.net/mrrc_modern/`，属 `www-data:www-data`，cheenle 有 sudo 免密）：
 
 ```bash
 scp dist/macos/MRRC-Modern-<ver>-arm64.dmg www.vlsc.net:/tmp/MRRC-Modern-<ver>-arm64.dmg.new
@@ -134,7 +134,7 @@ ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern
 ## 5. 故障排查
 
 | 现象 | 原因 | 处理 |
-|------|------|------|
+| ------ | ------ | ------ |
 | `pip install pyaudio` 失败 | 缺 PortAudio | `brew install portaudio` 后重装 |
 | rumps/PyObjC 装不上 | 用了非 arm64 或过旧的 Python | 用 Python 3.13（本机 `.venv`），确保 `packaging/macos/requirements-build.txt` 已装 |
 | `codesign` 报 nested 内容未签名 | 用了 `--deep`（会误签 `_internal/*.dist-info`） | build.sh 已改用“先签 dylib/.so + 各主 exe + 根 bundle，不用 `--deep`”；若手动签也照此 |

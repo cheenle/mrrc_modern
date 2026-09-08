@@ -5,27 +5,29 @@ This guide covers the Windows desktop package for MRRC Web Control
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.12.1 Stable)
+## Download (v1.14.0 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.12.1-Windows-x64-Setup.exe` | 45.3 MB (45,329,503 bytes) | `ba5fb7a9fd952e9c92508cf6b159c1d92b9292a3b03925f855f55166d5954e47` |
+| `MRRC-Modern-v1.14.0-Windows-x64-Setup.exe` | 45.4 MB (45,423,529 bytes) | `747f1c6b6b9e7bca1cdfeff7a4a498ca3fbdba4b03c044113da17c160f21e48a` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.12.1-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.14.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-The v1.12.1 package was built from `main` on Windows 11 with Python 3.12.4,
-PyInstaller 6.21.0, and Inno Setup 6.7.3. All 633 Windows tests, three
+The v1.14.0 package was built from `main` on Windows 11 with Python 3.12.4,
+PyInstaller 6.21.0, and Inno Setup 6.7.3. All 693 Windows tests, three
 PyInstaller targets, and the installer build passed; required bundled-file
 inspection (FTDI DLLs, opus.dll, static assets including the lamejs MP3
 encoder, `mem_channels.json`, and Icom backend hidden imports) and cross-host
-SHA-256 checks passed. v1.12.1 makes the web UI recorder capture the whole
-QSO in time order: while PTT is held it mutes the RX feed (sidetone/duplex
-only, already dimmed to silence in the UI) and records the local microphone
-into the same mono 48 kHz MP3 stream, across all three TX capture paths;
-downloads are named `mrrc-qso-<timestamp>.mp3`. Radio-side CAT, audio, PTT,
-and scope behavior is unchanged from v1.12.0.
+SHA-256 checks passed. v1.14.0 fixes RX recording quality (SDD V2.31/V2.32):
+`AudioHandler.restart_rx()` reopens the RX capture stream after every TX→RX
+transition on all platforms (a long-lived PortAudio capture stream degraded
+after TX playback on the same USB codec produced low-frequency/attenuated
+frames in browser recordings), and the RX broadcast loop no longer trims
+catch-up bursts to the newest 2 Opus frames (the dropped frames left permanent
+holes in the client jitter buffer and in recordings). Radio-side CAT, PTT,
+and scope behavior is unchanged from v1.13.0.
 
 Browser capture and Opus remain at 48 kHz. Every decoded 960-sample TX frame is
 converted to 882 samples before the FT-710 playback device is opened/written at
@@ -209,7 +211,7 @@ TX modulation source is configured **per mode** (FT-710 Operation Manual,
 `FUNC` → `RADIO SETTING`):
 
 | Menu | Setting | Value |
-|------|---------|-------|
+| ------ | --------- | ------- |
 | `RADIO SETTING` → `MODE SSB` | `MOD SOURCE` | **`USB`** |
 | `RADIO SETTING` → `MODE AM` | `MOD SOURCE` | `USB` (if AM is used) |
 | `RADIO SETTING` → `MODE FM` | `MOD SOURCE` | `USB` (if FM is used) |
@@ -233,7 +235,6 @@ TX modulation source is configured **per mode** (FT-710 Operation Manual,
 3. TX: the first PTT shows `TX audio started: [n] ... @ 44100 Hz`.
 4. TX: hold PTT and speak — the PO/ALC meter on the radio (and in the web
    UI) moves; confirm on a monitoring receiver.
-
 
 ### 4. Launch
 
@@ -333,7 +334,7 @@ The build script runs syntax checks and the test suite before packaging.
 ## Build Components
 
 | File | Purpose |
-|------|---------|
+| ------ | --------- |
 | `windows\launcher.py` | Desktop launcher; starts/stops the server and opens the browser |
 | `windows\default.env` | Initial user configuration template |
 | `packaging\pyinstaller\mrrc_modern_server.spec` | Bundles the FastAPI server, both radio backends, and the static UI |
@@ -358,7 +359,7 @@ After installing on Windows:
 ## Troubleshooting
 
 | Symptom | Likely Cause | Fix |
-|---------|--------------|-----|
+| --------- | -------------- | ----- |
 | `Failed to connect to COM3: could not open port 'COM3': FileNotFoundError` | Default `COM3` does not exist on this Windows machine, or the CP210x driver is not installed | Install the Silicon Labs CP210x driver, reconnect the radio, then set `MRRC_SERIAL_PORT=COMx` to the Enhanced COM Port shown in Device Manager |
 | Browser opens but radio state does not update | Wrong COM port | Set `MRRC_SERIAL_PORT` to the Enhanced COM Port |
 | `Server did not answer within 15s` while Uvicorn says `http://[::]:8888` | Older launcher probed IPv4 loopback while the server was listening on IPv6 wildcard | Open `http://localhost:8888`, or update to a package with the launcher fix |

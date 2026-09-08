@@ -347,7 +347,8 @@
 <p><strong>Problem</strong>: USB audio device naming varies by radio, OS, and driver version. Hardcoding a device index is fragile. Previous version only searched by name substring and fell back to first input device — could select webcam mic instead of the radio. On Windows the FT-710’s card carries no “FT-710”/“YAESU” string at all (“USB Audio CODEC” or “USB Audio Device”, possibly localized/prefixed), so without tier (3) the heuristics grabbed a laptop mic (RX) or PC speakers (TX) — V2.6 field report.</p>
 <p><strong>Rationale</strong>: Name-based matching is more robust than index-based. The mono-channel heuristic is reliable: supported radio USB audio typically provides exactly 1 input channel (mono RX), while webcams and USB mics typically offer 2 (stereo). Full-duplex preference for TX ensures the same device is used for both RX and TX paths. Logs all available devices at startup for debugging. The generic USB-audio names rank below the radio-specific hints but above the channel heuristics; duplicates from per-host-API enumeration (MME/DirectSound/WASAPI) open the same hardware, and a genuine multi-device setup is warned about with a pointer to the env-var lock (<code class="scope-code">USB Audio</code> is the common substring covering both enumeration forms).</p>
 <p><strong>Consequences</strong>: Audio may still use wrong device if multiple mono USB audio devices are present. Configurable device override via env vars is the recommended approach for such setups.</p>
-<p><strong>Amended (V2.8)</strong>: Windows full-duplex wedge — on Windows (MME/DirectSound), opening the TX playback stream on the FT-710’s C-Media codec silently wedges the RX capture stream (stays open, error-free, delivers silence; field symptom: RX audio perfect after server restart, gone after one PTT). <code class="scope-code">AudioHandler.restart_rx()</code> reopens the capture stream on every TX→RX transition (hooked in <code class="scope-code">_broadcast_state</code> on <code class="scope-code">tx_status</code>), Windows-only; macOS CoreAudio is unaffected and pays no reopen cost.</p>
+<p><strong>Amended (V2.8)</strong>: Windows full-duplex wedge — on Windows (MME/DirectSound), opening the TX playback stream on the FT-710’s C-Media codec silently wedges RX capture (stays open, error-free, delivers silence; field symptom: RX audio perfect after server restart, gone after one PTT). <code class="scope-code">AudioHandler.restart_rx()</code> originally reopened capture on TX→RX only on Windows.</p>
+<p><strong>Amended (V2.31)</strong>: Field QSO recordings on macOS showed intermittent 20 ms RX frames with low-bandwidth/attenuated content after repeated PTT activity while a fresh parallel capture stream stayed clean. The workaround is now platform-independent: after every TX→RX transition, the server asynchronously reopens the long-lived RX capture stream. The reopen is off the event loop and does not change the 44.1 kHz device-domain / 48 kHz codec-domain contract.</p>
 <h2 id="ad-009-7-task-adaptive-polling-with-bounded-lock-time">AD-009: 7-Task Adaptive Polling with Bounded Lock Time</h2>
 <table class="scope-table">
 <colgroup>
@@ -693,7 +694,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.30 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.33 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

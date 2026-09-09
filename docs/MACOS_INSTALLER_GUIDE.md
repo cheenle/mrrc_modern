@@ -1,10 +1,10 @@
-# macOS 安装使用说明（MRRC Modern v1.14.0）
+# macOS 安装使用说明（MRRC Modern v1.14.1）
 
 本页面面向第一次使用 MRRC Modern 的用户 —— 不需要会命令行，不需要改文件。
 
 ## 一、安装（约 1 分钟）
 
-1. 打开下载的 `MRRC-Modern-v1.14.0-arm64.dmg`。
+1. 打开下载的 `MRRC-Modern-v1.14.1-arm64.dmg`。
 2. 把 **MRRC Modern** 图标拖进 **应用程序** 文件夹。
 3. 弹出磁盘后，到「应用程序」里找到 **MRRC Modern**。
 
@@ -40,4 +40,4 @@
 | 提示"无法打开，因为无法验证开发者" | 右键 → 打开 → 再点打开（一次性） |
 | 登录页没显示密码 | 点菜单栏图标 → Show Password… |
 | 电台没反应 | 确认 USB 已插；菜单栏 → Edit Configuration… 看 `MRRC_SERIAL_PORT` |
-| 频谱是假的 | 确认 `MRRC_FTDI_LIB_DIR=vendor/ftdi/macos` 且安装的是 v1.14.0 |
+| 频谱是假的 | 确认 `MRRC_FTDI_LIB_DIR=vendor/ftdi/macos` 且安装的是 v1.14.1 |

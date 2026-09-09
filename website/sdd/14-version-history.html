@@ -123,6 +123,18 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.35</td>
+<td>2026-09-09</td>
+<td>Kimi</td>
+<td><strong>v1.14.1 dual-platform release (macOS DMG + Windows Setup) — Radio Settings panel.</strong> Published the V2.34 frontend work in rebuilt installers: <code class="scope-code">MRRC-Modern-v1.14.1-arm64.dmg</code> (55,886,045 bytes, SHA-256 <code class="scope-code">c08f2d172f9e1beb44d4bc00381374263cd910bfc74d69f2dd6e77170ffcc8d7</code>) and <code class="scope-code">MRRC-Modern-v1.14.1-Windows-x64-Setup.exe</code> (45,427,335 bytes, SHA-256 <code class="scope-code">b76da0e985e8c1faabdc98df8d1ce92224b5800be721b81947837d931bd6cb71</code>, Win11 KVM VM: 694 tests, three PyInstaller targets, Inno Setup, bundled-file inspection, cross-host SHA-256 all green). CHANGELOG v1.14.1 entry, Inno <code class="scope-code">MyAppVersion</code>, installer guides, packer playbooks, website EN/ZH pages and regenerated SDD HTML updated; AGENTS.md test count corrected (651→694, drifted since V2.19). No CAT/audio/PTT/scope/protocol changes; real-radio slider acceptance remains an operator check.</td>
+</tr>
+<tr>
+<td>SDD V2.34</td>
+<td>2026-09-09</td>
+<td>Kimi</td>
+<td><strong>Radio settings panel with RF power slider (frontend-only).</strong> The ☰ menu “Settings” action now opens a “Radio Settings” modal (<code class="scope-code">showSettingsPanel</code>, ft710_ui.js) instead of scrolling to the hidden DSP sliders block. It exposes the RF PWR slider (5–100; FT-710 = watts via <code class="scope-code">PC</code>, IC-7300 = percent via CI-V level 0x0A pct↔︎raw) reusing the existing <code class="scope-code">rf_power</code> server route — no server changes. <code class="scope-code">input</code> updates the readout only; <code class="scope-code">change</code> (release) sends <code class="scope-code">sendCommand('rf_power', v)</code> so a drag cannot flood the serial port, and <code class="scope-code">renderSliders</code> skips the poll echo while <code class="scope-code">slider-rfpower-p</code> is mid-drag (<code class="scope-code">dataset.dragging</code> guard). The panel is DOM-built (createElement/textContent, no innerHTML) to satisfy the XSS lint gate; the same hardening was applied to <code class="scope-code">showMemoryManager</code> (mem labels are external JSON — closes an injection vector) and the two scope-selector <code class="scope-code">innerHTML=''</code> clears became <code class="scope-code">replaceChildren()</code>. The dormant hidden <code class="scope-code">#dsp-sliders</code> block is left untouched. Cache-bust <code class="scope-code">ft710_ui.js?v=28→29</code>, service worker <code class="scope-code">mrrc-v29→mrrc-v30</code> (<code class="scope-code">ft710_main.js?v=27</code> unchanged); cache-bust assertions re-pinned in <code class="scope-code">test_server_ws_protocol.py</code> AND <code class="scope-code">test_audio.py</code> (second sw pin), scope-speed selector assertion updated for the new idiom (+1 new panel test → 694 tests green); JS syntax verified via <code class="scope-code">node --check</code>. Real-radio acceptance (slider → radio power readout, both models) remains an operator check.</td>
+</tr>
+<tr>
 <td>SDD V2.33</td>
 <td>2026-09-09</td>
 <td>Kimi</td>
@@ -535,7 +547,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.33 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.35 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

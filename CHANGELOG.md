@@ -2,6 +2,30 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.14.1] — 2026-09-09 — Radio settings panel with RF power slider (web UI)
+
+### Web UI
+
+- **Radio Settings panel**: the ☰ menu "Settings" action now opens a
+  "Radio Settings" modal instead of scrolling to the hidden DSP sliders
+  block. It exposes an **RF PWR slider (5–100)** — FT-710 = watts (`PC`),
+  IC-7300 = percent (CI-V level 0x0A, pct↔raw) — reusing the existing
+  `rf_power` server route (no server changes). `input` updates the readout
+  only; `change` (release) sends the command so a drag cannot flood the
+  serial port, and the poll echo does not fight an in-flight drag.
+- Panel and Memory Manager are DOM-built (`createElement`/`textContent`,
+  no `innerHTML`); the two scope-selector clears use `replaceChildren()` —
+  memory-channel labels come from external JSON, so this also closes an
+  injection vector.
+- Cache-bust: `ft710_ui.js?v=29`, service worker `mrrc-v30`
+  (`ft710_main.js?v=27` unchanged).
+
+### Installers
+
+- Windows installer version bumped to **1.14.1**; macOS DMG rebuilt as
+  `MRRC-Modern-v1.14.1-arm64.dmg`. Frontend-only release: no
+  CAT/audio/PTT/scope/protocol changes.
+
 ## [v1.14.0] — 2026-09-07 — RX recording quality: capture restart + no dropped frames (SDD V2.31/V2.32)
 
 ### Audio

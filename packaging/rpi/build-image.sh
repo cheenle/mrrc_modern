@@ -18,9 +18,15 @@ docker info >/dev/null 2>&1 || { echo "ERROR: Docker daemon not running (open -a
 FREE_GB=$(df -Pk "$REPO_ROOT" | awk 'NR==2 {print int($4/1048576)}')
 (( FREE_GB >= 20 )) || { echo "ERROR: need >=20GB free, have ${FREE_GB}GB"; exit 1; }
 
-# ── pi-gen clone (pinned) ──
-rm -rf "$WORK"
-git clone --depth 1 --branch "$PIGEN_REF" https://github.com/RPi-Distro/pi-gen.git "$WORK"
+# ── pi-gen clone (pinned; skip when the right ref is already in place —
+#    allows pre-seeding the clone on hosts where GitHub is unreachable) ──
+if [ -d "$WORK/.git" ] && \
+   [ "$(git -c safe.directory="$WORK" -C "$WORK" describe --tags 2>/dev/null)" = "$PIGEN_REF" ]; then
+    echo "==> pi-gen $PIGEN_REF already present, skipping clone"
+else
+    rm -rf "$WORK"
+    git clone --depth 1 --branch "$PIGEN_REF" https://github.com/RPi-Distro/pi-gen.git "$WORK"
+fi
 
 # ── stage: copy ours in, inject code tree ──
 rsync -a --delete "$REPO_ROOT/packaging/rpi/pi-gen-stage4/" "$WORK/rpi-stage4/"

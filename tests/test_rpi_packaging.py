@@ -13,7 +13,10 @@ class RpiPackagingFilesTests(unittest.TestCase):
         self.assertTrue((STAGE / "prerun.sh").is_file())
         self.assertIn("copy_previous", (STAGE / "prerun.sh").read_text(encoding="utf-8"))
         self.assertTrue((STAGE / "00-install-packages" / "00-packages").is_file())
-        self.assertTrue((STAGE / "01-deploy-mrrc" / "00-run.sh").is_file())
+        rc = STAGE / "01-deploy-mrrc" / "00-run-chroot.sh"
+        self.assertTrue(rc.is_file())
+        self.assertIn("python3 -m venv /opt/mrrc_modern/venv", rc.read_text(encoding="utf-8"))
+        self.assertIn("systemctl enable mrrc-firstboot.service", rc.read_text(encoding="utf-8"))
 
     def test_service_units_pin_user_and_env(self):
         svc = (STAGE / "01-deploy-mrrc" / "files" / "etc" / "systemd" / "system"

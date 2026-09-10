@@ -5,27 +5,30 @@ This guide covers the Windows desktop package for MRRC Web Control
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.14.1 Stable)
+## Download (v1.14.2 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.14.1-Windows-x64-Setup.exe` | 45.4 MB (45,427,335 bytes) | `b76da0e985e8c1faabdc98df8d1ce92224b5800be721b81947837d931bd6cb71` |
+| `MRRC-Modern-v1.14.2-Windows-x64-Setup.exe` | 45.4 MB (45,429,662 bytes) | `4ea74b2a0d1987673de0d2821ab6de224aa0134611919ee86ddd6ab6d8da934c` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.14.1-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.14.2-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-The v1.14.1 package was built from `main` on Windows 11 with Python 3.12.4,
-PyInstaller 6.21.0, and Inno Setup 6.7.3. All 694 Windows tests, three
+The v1.14.2 package was built from `main` on Windows 11 with Python 3.12.4,
+PyInstaller 6.21.0, and Inno Setup 6.7.3. All 721 Windows tests, three
 PyInstaller targets, and the installer build passed; required bundled-file
 inspection (FTDI DLLs, opus.dll, static assets including the lamejs MP3
 encoder, `mem_channels.json`, and Icom backend hidden imports) and cross-host
-SHA-256 checks passed. v1.14.1 is a frontend-only release: the ☰ menu
-Settings action opens a Radio Settings panel with an RF power slider (5–100,
-watts on FT-710 via `PC`, percent on IC-7300 via CI-V level 0x0A); the panel
-and Memory Manager are DOM-built (no `innerHTML`), closing an injection
-vector for memory-channel labels. CAT, audio, PTT, and scope behavior is
-unchanged from v1.14.0.
+SHA-256 checks passed. v1.14.2 fixes two IC-7300 field failures
+(2026-09-10 log): the connection-settings save and first-run probing now
+align `MRRC_BAUD_RATE` with the selected model (IC-7300/MK2 = 115200; the
+legacy installer template pre-filled 38400, which starved the CI-V scope
+stream → S-meter fallback), and `-9999` audio-open retries now resolve a
+different host-API duplicate (a dialog-saved name that only matched the
+WDM-KS entry — whose open fails on some rigs — falls back to the working
+MME duplicate of the same codec). Set the radio menu CI-V baud to Auto (or
+match the server). CAT, PTT, and protocol behavior is unchanged.
 
 Browser capture and Opus remain at 48 kHz. Every decoded 960-sample TX frame is
 converted to 882 samples before the FT-710 playback device is opened/written at

@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [Unreleased] — IC-7300 baud linkage + audio duplicate recovery
+## [v1.14.2] — 2026-09-10 — IC-7300 baud linkage + audio duplicate recovery
 
 ### Fixed
 

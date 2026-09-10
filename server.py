@@ -37,7 +37,7 @@ from config import (
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT,
     UI_MODES, NARROW_MODES,
     ATR1000_HOST, ATR1000_PORT,
-    _env,
+    _env, default_baud_for,
 )
 from backends import create_backend
 from backends.base import RadioBackend
@@ -1930,11 +1930,24 @@ async def api_setup_save(request: Request):
     updates = {
         "MRRC_RADIO_MODEL": radio_model,
         "MRRC_SERIAL_PORT": serial_port,
+        # Model↔baud linkage (V2.33): the dialog has no baud field, and a
+        # stale MRRC_BAUD_RATE from the legacy installer template (38400 —
+        # the FT-710 value) silently overrode the model default and broke
+        # the IC-7300 CI-V scope stream (requires 115200). Always align the
+        # stored baud with the selected model; anyone needing a non-default
+        # baud edits the env file directly (the radio's CI-V baud menu must
+        # match — Auto works for both).
+        "MRRC_BAUD_RATE": str(default_baud_for(radio_model)),
         "MRRC_AUDIO_RX_DEVICE": audio_rx,
         "MRRC_AUDIO_TX_DEVICE": audio_tx,
         "MRRC_FIRST_RUN_DONE": "1",
         "MRRC_PORT_CONFIRMED": "1",
     }
+    logger.info(
+        "Saving connection settings: model=%s port=%s baud=%s "
+        "(radio menu CI-V baud should be Auto or match)",
+        radio_model, serial_port, updates["MRRC_BAUD_RATE"],
+    )
     if password:
         updates["MRRC_WEB_PASSWORD"] = password
         updates["MRRC_AUTO_PASSWORD"] = ""  # user-managed now; hide the banner

@@ -10,6 +10,8 @@ STAGE = RPI / "pi-gen-stage4"
 
 class RpiPackagingFilesTests(unittest.TestCase):
     def test_stage_layout_exists(self):
+        self.assertTrue((STAGE / "prerun.sh").is_file())
+        self.assertIn("copy_previous", (STAGE / "prerun.sh").read_text(encoding="utf-8"))
         self.assertTrue((STAGE / "00-install-packages" / "00-packages").is_file())
         self.assertTrue((STAGE / "01-deploy-mrrc" / "00-run.sh").is_file())
 

@@ -213,5 +213,32 @@ class RadioModelEmptyFallbackTests(unittest.TestCase):
                 importlib.reload(cfg)  # restore module globals for the rest of the suite
 
 
+class DefaultBaudForTests(unittest.TestCase):
+    """V2.33: backend-aware default baud exposed as a function so the
+    connection-dialog save (api_setup_save) and first-run probing can
+    align MRRC_BAUD_RATE with the selected model. Rationale: the legacy
+    installer templates pre-filled MRRC_BAUD_RATE=38400 (the FT-710 value)
+    regardless of model; on an IC-7300 that stale value overrode the
+    model default (115200) and broke the CI-V scope stream, which
+    requires 115200 (field log 2026-09-10)."""
+
+    def test_ft710_uses_38400(self):
+        from config import default_baud_for
+        self.assertEqual(default_baud_for("ft710"), 38400)
+
+    def test_ic7300_and_mk2_use_115200(self):
+        from config import default_baud_for
+        self.assertEqual(default_baud_for("ic7300"), 115200)
+        self.assertEqual(default_baud_for("ic7300mk2"), 115200)
+
+    def test_unknown_model_falls_back_to_38400(self):
+        from config import default_baud_for
+        self.assertEqual(default_baud_for("unknown"), 38400)
+
+    def test_normalizes_case_and_whitespace(self):
+        from config import default_baud_for
+        self.assertEqual(default_baud_for("  IC7300 "), 115200)
+
+
 if __name__ == "__main__":
     unittest.main()

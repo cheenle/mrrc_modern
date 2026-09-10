@@ -1180,5 +1180,132 @@ class CapabilitiesAudioWiringTests(unittest.TestCase):
         self.assertIn("name_hints=tuple(_caps.audio_name_hints)", source)
 
 
+class ConfiguredNameHostApiPreferenceTests(unittest.TestCase):
+    """V2.33: the connection dialog lists every host-API duplicate of the
+    radio codec ("麦克风 (USB Audio CODEC )" on MME vs "麦克风 (USB Audio
+    CODEC)" on WDM-KS — one invisible trailing space apart). Saving the
+    WDM-KS name locks device selection to an entry whose open() fails with
+    -9999 on the affected Windows rigs (field log 2026-09-10). When a
+    configured name matches several host-API duplicates, prefer a
+    non-WDM-KS entry."""
+
+    DEVICES = [
+        _dev("Microsoft Sound Mapper - Input", inputs=2, host_api=0),
+        _dev("麦克风 (USB Audio CODEC )", inputs=2, host_api=0),    # MME
+        _dev("麦克风 (USB Audio CODEC )", inputs=2, host_api=1),    # WASAPI
+        _dev("麦克风 (USB Audio CODEC)", inputs=2, host_api=2),     # WDM-KS
+        _dev("扬声器 (USB Audio CODEC )", outputs=2, host_api=0),   # MME
+        _dev("扬声器 (USB Audio CODEC )", outputs=2, host_api=1),   # WASAPI
+        _dev("扬声器 (USB Audio CODEC)", outputs=2, host_api=2),    # WDM-KS
+    ]
+    HOST_APIS = ["MME", "Windows WASAPI", "Windows WDM-KS"]
+
+    def setUp(self):
+        import config
+        self._old = (config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE)
+
+    def tearDown(self):
+        import config
+        config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = self._old
+
+    def _handler(self):
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._pa = _FakePyAudio(self.DEVICES, self.HOST_APIS)
+        h.rx_device = None
+        h.tx_device = None
+        h._radio_hints = ("ic-7300", "icom")
+        return h
+
+    def test_rx_prefers_non_wdmks_duplicate(self):
+        import config
+        config.AUDIO_RX_DEVICE = "麦克风 (USB Audio CODEC)"
+        self.assertEqual(self._handler()._find_rx_device(), 1)  # MME, not [3] WDM-KS
+
+    def test_tx_prefers_non_wdmks_duplicate(self):
+        import config
+        config.AUDIO_TX_DEVICE = "扬声器 (USB Audio CODEC)"
+        self.assertEqual(self._handler()._find_tx_device(), 4)  # MME speaker
+
+    def test_exclude_skips_failed_candidate(self):
+        import config
+        config.AUDIO_RX_DEVICE = "麦克风 (USB Audio CODEC)"
+        h = self._handler()
+        self.assertEqual(h._find_rx_device(exclude={1}), 2)     # next dup (WASAPI)
+        self.assertEqual(h._find_rx_device(exclude={1, 2}), 3)  # WDM-KS left
+        self.assertEqual(h._find_rx_device(exclude={1, 2, 3}), 0)  # fallback tier
+
+
+class DeviceExcludeRetryTests(unittest.TestCase):
+    """V2.33: when the selected device fails to open (-9999), the reinit
+    retry must resolve a *different* candidate instead of re-selecting the
+    same locked entry (field log 2026-09-10: 6 identical failures on the
+    WDM-KS duplicate, then give-up, on every PTT)."""
+
+    def _make_handler(self, pa):
+        import threading
+        from collections import deque
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._pa = pa
+        h.rx_device = None
+        h.tx_device = None
+        h._tx_stream = None
+        h._tx_queue = deque()
+        h._tx_queued_bytes = 0
+        h._tx_primed = False
+        h._tx_lock = threading.Lock()
+        h._tx_write_lock = threading.Lock()
+        h._rx_stream = None
+        h._rx_running = False
+        return h
+
+    def _patch_devices(self):
+        import config
+        self._old = (config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE)
+        config.AUDIO_RX_DEVICE = ""
+        config.AUDIO_TX_DEVICE = ""
+
+    def _restore_devices(self):
+        import config
+        config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = self._old
+
+    def test_start_rx_excludes_failed_device_on_retry(self):
+        self._patch_devices()
+        try:
+            h = self._make_handler(_FailingOpenPyAudio([_dev("Mic", inputs=1)]))
+            find_calls = []
+
+            def fake_find(exclude=None):
+                find_calls.append(set(exclude or ()))
+                return 5
+
+            h._find_rx_device = fake_find
+            h._reinit_pyaudio = lambda: None
+            ok = h.start_rx()
+            self.assertFalse(ok)                        # open keeps failing
+            self.assertEqual(find_calls, [set(), {5}])  # retry excludes failed dev
+        finally:
+            self._restore_devices()
+
+    def test_start_tx_excludes_failed_device_on_retry(self):
+        self._patch_devices()
+        try:
+            h = self._make_handler(_FailingOpenPyAudio([_dev("Spk", outputs=2)]))
+            find_calls = []
+
+            def fake_find(exclude=None):
+                find_calls.append(set(exclude or ()))
+                return 6
+
+            h._find_tx_device = fake_find
+            h._reinit_pyaudio = lambda: None
+            ok = h.start_tx()
+            self.assertFalse(ok)                        # open keeps failing
+            self.assertEqual(find_calls, [set(), {6}])  # retry excludes failed dev
+        finally:
+            self._restore_devices()
+
+
 if __name__ == "__main__":
     unittest.main()

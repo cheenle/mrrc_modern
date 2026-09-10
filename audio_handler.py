@@ -18,8 +18,9 @@ import asyncio
 import logging
 import threading
 import time
+import types
 from collections import deque
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -34,8 +35,16 @@ try:
     HAS_PYAUDIO = True
 except ImportError:
     HAS_PYAUDIO = False
-    pyaudio = None
+    # Empty module stub instead of None: keeps ``pyaudio.X`` attribute
+    # references valid at import time (the stream-open sites below never
+    # touch it unless a real PyAudio context exists — guarded by HAS_PYAUDIO
+    # and the per-instance ``self._pa is None`` checks, with try/except in
+    # _init_pyaudio as the final net).
+    pyaudio = types.ModuleType("pyaudio")
     logger.warning("PyAudio not available — audio disabled. Install: pip install pyaudio")
+
+# Sample-format constant resolved once at import (pyaudio.paInt16 == 8).
+PA_FORMAT = getattr(pyaudio, "paInt16", 8)
 
 # ── Audio Config ───────────────────────────────────────────────────────
 # Module-level values are the FT-710 defaults; AudioHandler instances may
@@ -120,9 +129,12 @@ class AudioHandler:
             h.lower() for h in name_hints
             if h.lower() not in USB_AUDIO_NAME_HINTS
         )
-        self._pa: Optional["pyaudio.PyAudio"] = None
-        self._rx_stream: Optional["pyaudio.Stream"] = None
-        self._tx_stream: Optional["pyaudio.Stream"] = None
+        # Typed as Any: the real types (pyaudio.PyAudio / pyaudio.Stream)
+        # come from an optional dependency that may be absent at analysis
+        # time (pyaudio falls back to an empty module stub above).
+        self._pa: Optional[Any] = None        # pyaudio.PyAudio when audio available
+        self._rx_stream: Optional[Any] = None  # pyaudio.Stream while RX capturing
+        self._tx_stream: Optional[Any] = None  # pyaudio.Stream while TX playing
         self._rx_running = False
         self._tx_queue: deque = deque()  # Queue of int16 PCM bytes to play
         # TX playback state — guarded by _tx_lock so the drain loop (worker
@@ -235,8 +247,35 @@ class AudioHandler:
 
     # ── RX: Capture from sound card → Opus frames ──────────────────
 
-    def _find_rx_device(self) -> Optional[int]:
+    def _host_api_name(self, info: dict) -> str:
+        """Host-API name for a device info dict ('' when unavailable)."""
+        pa = self._pa
+        if pa is None:
+            return ''
+        try:
+            api = pa.get_host_api_info_by_index(info.get('hostApi'))
+            return str(api.get('name', ''))
+        except Exception:
+            return ''
+
+    @staticmethod
+    def _prefer_non_wdmks(matches):
+        """Stable-sort host-API duplicates so non-WDM-KS entries come first.
+
+        WDM-KS is an exclusive-mode kernel stream; on several Windows rigs
+        opening the radio codec through it fails with -9999 while the MME/
+        DirectSound/WASAPI duplicates of the same hardware open fine
+        (field log 2026-09-10: 6× identical TX-open failures on the WDM-KS
+        entry, every PTT). Same physical hardware, so the swap is safe.
+        """
+        return sorted(matches, key=lambda m: "wdm-ks" in m[2].lower())
+
+    def _find_rx_device(self, exclude: Optional[set] = None) -> Optional[int]:
         """Find a suitable input device.
+
+        ``exclude`` lists device indices that just failed to open; every
+        tier skips them so the PortAudio re-init retry resolves a
+        different host-API duplicate instead of the same broken entry.
 
         Priority:
         1. Explicit device index/name from config (env MRRC_AUDIO_RX_DEVICE)
@@ -261,7 +300,9 @@ class AudioHandler:
             # Try as integer index first
             try:
                 idx = int(AUDIO_RX_DEVICE)
-                if 0 <= idx < self._pa.get_device_count():
+                if exclude and idx in exclude:
+                    pass  # this exact index just failed — fall to the name tier
+                elif 0 <= idx < self._pa.get_device_count():
                     info = self._pa.get_device_info_by_index(idx)
                     if info.get('maxInputChannels', 0) > 0:
                         logger.info("Using configured audio input: [%d] %s", idx, info.get('name', ''))
@@ -269,18 +310,36 @@ class AudioHandler:
                     logger.warning("Configured device [%d] has no input channels", idx)
             except ValueError:
                 pass
-            # Try as name substring
+            # Try as name substring. The connection dialog can save a name
+            # that only matches ONE host-API duplicate of the codec (the
+            # MME entry carries an invisible trailing space: "USB Audio
+            # CODEC )"), so collect ALL matches: when several host APIs
+            # enumerate the same hardware, prefer a non-WDM-KS entry — its
+            # open() fails with -9999 on affected Windows rigs while the
+            # duplicates of the same device work (V2.33 field log).
+            matches = []  # (index, name, host_api)
             for i in range(self._pa.get_device_count()):
                 info = self._pa.get_device_info_by_index(i)
-                if info.get('maxInputChannels', 0) > 0:
-                    if AUDIO_RX_DEVICE.lower() in info.get('name', '').lower():
-                        logger.info("Found configured audio input: [%d] %s", i, info.get('name', ''))
-                        return i
+                if info.get('maxInputChannels', 0) > 0 \
+                        and AUDIO_RX_DEVICE.lower() in info.get('name', '').lower():
+                    matches.append((i, info.get('name', ''), self._host_api_name(info)))
+            matches = [m for m in matches if not exclude or m[0] not in exclude]
+            if matches:
+                matches = self._prefer_non_wdmks(matches)
+                idx, name, api = matches[0]
+                logger.info("Found configured audio input: [%d] %s (host=%s)", idx, name, api)
+                if len(matches) > 1:
+                    logger.info(
+                        "  Other matches for '%s': %s", AUDIO_RX_DEVICE,
+                        ', '.join(f"[{i}] {n} ({a})" for i, n, a in matches[1:]))
+                return idx
             logger.warning("Configured audio device '%s' not found", AUDIO_RX_DEVICE)
 
         # Try to find a device by radio-specific name hints
         # (case-insensitive substring; FT-710 default: FT-710/FT710/YAESU)
         for i in range(self._pa.get_device_count()):
+            if exclude and i in exclude:
+                continue
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
                 name = info.get('name', '')
@@ -295,36 +354,43 @@ class AudioHandler:
         # several *distinct* codec devices exist (e.g. an external digimode
         # interface), warn and let the operator lock the choice via
         # MRRC_AUDIO_RX_DEVICE.
-        codec_matches = []  # (index, name, has_output)
+        codec_matches = []  # (index, name, has_output, host_api)
         for i in range(self._pa.get_device_count()):
+            if exclude and i in exclude:
+                continue
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
                 name = info.get('name', '')
                 if any(h in name.lower() for h in USB_AUDIO_NAME_HINTS):
                     codec_matches.append(
-                        (i, name, info.get('maxOutputChannels', 0) > 0))
+                        (i, name, info.get('maxOutputChannels', 0) > 0,
+                         self._host_api_name(info)))
         if codec_matches:
             # When several distinct codec devices exist, prefer the
             # full-duplex one: the FT-710 USB sound card exposes both input
             # and output, while a codec-named interloper (headset/interface)
             # is often input-only. First-index ordering would otherwise route
             # RX to the wrong device. Same-hardware duplicates across host
-            # APIs share duplex-ness, so first match still wins among them.
+            # APIs share duplex-ness; among equals, non-WDM-KS entries win
+            # (the WDM-KS twin can fail to open with -9999, V2.33).
             full_duplex = [m for m in codec_matches if m[2]]
-            idx, name, _ = (full_duplex or codec_matches)[0]
-            logger.info("Using radio USB audio input: [%d] %s", idx, name)
+            idx, name, _, api = self._prefer_non_wdmks(
+                full_duplex or codec_matches)[0]
+            logger.info("Using radio USB audio input: [%d] %s (host=%s)", idx, name, api)
             if len(codec_matches) > 1:
                 logger.warning(
                     "Multiple USB audio inputs: %s — using [%d]. If RX "
                     "picks the wrong one, set MRRC_AUDIO_RX_DEVICE to the index "
                     "from the startup device list.",
-                    ', '.join(f"[{i}] {n}" for i, n, _ in codec_matches), idx)
+                    ', '.join(f"[{i}] {n}" for i, n, _, _ in codec_matches), idx)
             return idx
 
         # Heuristic: FT-710 USB audio has exactly 1 input channel (mono RX)
         # Most other "USB Audio CODEC" devices have 2 (stereo). Prefer mono.
         mono_candidates = []
         for i in range(self._pa.get_device_count()):
+            if exclude and i in exclude:
+                continue
             info = self._pa.get_device_info_by_index(i)
             channels = info.get('maxInputChannels', 0)
             if channels == 1:
@@ -339,6 +405,8 @@ class AudioHandler:
 
         # Fallback: first device with input channels
         for i in range(self._pa.get_device_count()):
+            if exclude and i in exclude:
+                continue
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
                 logger.info("Using default audio input: [%d] %s", i, info.get('name', ''))
@@ -358,10 +426,11 @@ class AudioHandler:
             logger.warning("No audio input device found")
             return False
 
+        excluded: set = set()
         for reinit_round in range(2):
             try:
                 self._rx_stream = self._pa.open(
-                    format=pyaudio.paInt16,
+                    format=PA_FORMAT,
                     channels=RX_CHANNELS,
                     rate=self._rx_dev_rate,
                     input=True,
@@ -386,13 +455,19 @@ class AudioHandler:
                     # the device IDs PortAudio cached at Pa_Initialize time;
                     # every open then fails (macOS: -9999) until re-init.
                     logger.warning("RX open failed (%s) — re-initializing PortAudio", e)
+                    excluded.add(dev)
                     self._reinit_pyaudio()
                     if self._pa is None:
                         break
-                    dev = self._find_rx_device()
-                    if dev is None:
-                        logger.error("No audio input device after PortAudio re-init")
-                        break
+                    # Prefer a different host-API duplicate of the codec
+                    # (V2.33: the WDM-KS twin of a working MME entry fails
+                    # with -9999 on some Windows rigs); if none exists, keep
+                    # the original index — after a re-init it may simply
+                    # work again (the USB re-enumeration case above).
+                    found = self._find_rx_device(exclude=excluded)
+                    dev = dev if found is None else found
+                    if found is None:
+                        logger.info("RX retry keeps device [%d] (no other candidate)", dev)
                 else:
                     logger.error("Failed to start RX audio: %s", e)
         return False
@@ -504,8 +579,11 @@ class AudioHandler:
 
     # ── TX: Receive from browser → play to sound card ───────────────
 
-    def _find_tx_device(self) -> Optional[int]:
+    def _find_tx_device(self, exclude: Optional[set] = None) -> Optional[int]:
         """Find a suitable output device.
+
+        ``exclude`` lists device indices that just failed to open; every
+        tier skips them (see _find_rx_device, V2.33).
 
         Priority:
         1. Explicit device from config (env MRRC_AUDIO_TX_DEVICE)
@@ -526,21 +604,37 @@ class AudioHandler:
         if AUDIO_TX_DEVICE:
             try:
                 idx = int(AUDIO_TX_DEVICE)
-                if 0 <= idx < self._pa.get_device_count():
+                if exclude and idx in exclude:
+                    pass  # this exact index just failed — fall to the name tier
+                elif 0 <= idx < self._pa.get_device_count():
                     info = self._pa.get_device_info_by_index(idx)
                     if info.get('maxOutputChannels', 0) > 0:
                         logger.info("Using configured audio output: [%d] %s", idx, info.get('name', ''))
                         return idx
             except ValueError:
+                # Collect ALL name matches and prefer a non-WDM-KS host-API
+                # duplicate (see _find_rx_device, V2.33 field log).
+                matches = []  # (index, name, host_api)
                 for i in range(self._pa.get_device_count()):
                     info = self._pa.get_device_info_by_index(i)
-                    if info.get('maxOutputChannels', 0) > 0:
-                        if AUDIO_TX_DEVICE.lower() in info.get('name', '').lower():
-                            logger.info("Found configured audio output: [%d] %s", i, info.get('name', ''))
-                            return i
+                    if info.get('maxOutputChannels', 0) > 0 \
+                            and AUDIO_TX_DEVICE.lower() in info.get('name', '').lower():
+                        matches.append((i, info.get('name', ''), self._host_api_name(info)))
+                matches = [m for m in matches if not exclude or m[0] not in exclude]
+                if matches:
+                    matches = self._prefer_non_wdmks(matches)
+                    idx, name, api = matches[0]
+                    logger.info("Found configured audio output: [%d] %s (host=%s)", idx, name, api)
+                    if len(matches) > 1:
+                        logger.info(
+                            "  Other matches for '%s': %s", AUDIO_TX_DEVICE,
+                            ', '.join(f"[{i}] {n} ({a})" for i, n, a in matches[1:]))
+                    return idx
 
         # Try radio USB audio output by radio-specific name hints
         for i in range(self._pa.get_device_count()):
+            if exclude and i in exclude:
+                continue
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxOutputChannels', 0) > 0:
                 name = info.get('name', '')
@@ -552,36 +646,42 @@ class AudioHandler:
         # generic name (USB_AUDIO_NAME_HINTS; see _find_rx_device). Prefer
         # it over the full-duplex heuristic, which can grab a random sound
         # card and pipe TX modulation to the PC speakers instead of the radio.
-        codec_matches = []  # (index, name, has_input)
+        codec_matches = []  # (index, name, has_input, host_api)
         for i in range(self._pa.get_device_count()):
+            if exclude and i in exclude:
+                continue
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxOutputChannels', 0) > 0:
                 name = info.get('name', '')
                 if any(h in name.lower() for h in USB_AUDIO_NAME_HINTS):
                     codec_matches.append(
-                        (i, name, info.get('maxInputChannels', 0) > 0))
+                        (i, name, info.get('maxInputChannels', 0) > 0,
+                         self._host_api_name(info)))
         if codec_matches:
             # When several distinct codec devices exist, prefer the
             # full-duplex one: the FT-710 USB sound card exposes both input
             # and output, while a codec-named interloper (headset/interface)
             # is often output-only. First-index ordering would otherwise send
             # TX modulation to the wrong device. Same-hardware duplicates
-            # across host APIs share duplex-ness, so first match still wins
-            # among them.
+            # across host APIs share duplex-ness; among equals, non-WDM-KS
+            # entries win (the WDM-KS twin can fail with -9999, V2.33).
             full_duplex = [m for m in codec_matches if m[2]]
-            idx, name, _ = (full_duplex or codec_matches)[0]
-            logger.info("Using radio USB audio output: [%d] %s", idx, name)
+            idx, name, _, api = self._prefer_non_wdmks(
+                full_duplex or codec_matches)[0]
+            logger.info("Using radio USB audio output: [%d] %s (host=%s)", idx, name, api)
             if len(codec_matches) > 1:
                 logger.warning(
                     "Multiple USB audio outputs: %s — using [%d]. If TX "
                     "plays through the wrong device, set MRRC_AUDIO_TX_DEVICE "
                     "to the index from the startup device list.",
-                    ', '.join(f"[{i}] {n}" for i, n, _ in codec_matches), idx)
+                    ', '.join(f"[{i}] {n}" for i, n, _, _ in codec_matches), idx)
             return idx
 
         # Heuristic: prefer a device that has BOTH input and output
         # (full-duplex USB audio like FT-710)
         for i in range(self._pa.get_device_count()):
+            if exclude and i in exclude:
+                continue
             info = self._pa.get_device_info_by_index(i)
             if info.get('maxOutputChannels', 0) > 0 and info.get('maxInputChannels', 0) > 0:
                 logger.info("Using full-duplex audio output: [%d] %s", i, info.get('name', ''))
@@ -590,7 +690,7 @@ class AudioHandler:
         # Fallback: system default output
         try:
             default = self._pa.get_default_output_device_info()
-            if default:
+            if default and not (exclude and default.get('index') in exclude):
                 logger.info("Using default audio output: [%d] %s",
                            default.get('index'), default.get('name', ''))
                 return default.get('index')
@@ -627,6 +727,7 @@ class AudioHandler:
             logger.warning("No audio output device found for TX")
             return False
 
+        excluded: set = set()
         # The browser/Opus codec domain is 48 kHz; the radio's USB audio
         # device domain is backend-specific (FT-710: always 44.1 kHz,
         # IC-7300: 48 kHz).  A Windows WASAPI shared-mode defaultSampleRate
@@ -670,7 +771,7 @@ class AudioHandler:
             for attempt in range(START_TX_RETRIES):
                 try:
                     stream = self._pa.open(
-                        format=pyaudio.paInt16,
+                        format=PA_FORMAT,
                         channels=TX_CHANNELS,
                         rate=self._tx_rate,
                         output=True,
@@ -721,13 +822,19 @@ class AudioHandler:
             if reinit_round == 0:
                 logger.warning("TX open failed x%d (%s) — re-initializing PortAudio "
                                "(USB re-enumeration?)", START_TX_RETRIES, last_error)
+                excluded.add(dev)
                 self._reinit_pyaudio()
                 if self._pa is None:
                     break
-                dev = self._find_tx_device()
-                if dev is None:
-                    logger.error("No audio output device after PortAudio re-init")
-                    break
+                # Prefer a different host-API duplicate of the codec (V2.33:
+                # the WDM-KS twin of a working MME entry fails with -9999 on
+                # some Windows rigs); if none exists, keep the original
+                # index — after a re-init it may simply work again (the USB
+                # re-enumeration case above).
+                found = self._find_tx_device(exclude=excluded)
+                dev = dev if found is None else found
+                if found is None:
+                    logger.info("TX retry keeps device [%d] (no other candidate)", dev)
 
         logger.error("Failed to start TX audio after %d attempts: %s",
                      START_TX_RETRIES * 2, last_error)

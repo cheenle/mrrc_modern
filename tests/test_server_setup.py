@@ -86,5 +86,47 @@ class DualStackSocketTests(unittest.TestCase):
         self.assertTrue(_try(("::1", port)), "IPv6 connect failed on :: socket")
 
 
+class SetupSaveBaudLinkageTests(unittest.TestCase):
+    """V2.33: the connection dialog has no baud field; saving a model
+    must align MRRC_BAUD_RATE with it. A stale 38400 from the legacy
+    installer template silently broke the IC-7300 CI-V scope stream
+    (requires 115200) even after the user switched the model in the UI
+    (field log 2026-09-10: ic7300 @ 38400 → scope stalled → S-meter
+    fallback)."""
+
+    class _FakeRequest:
+        def __init__(self, body):
+            self._body = body
+
+        async def json(self):
+            return self._body
+
+    def _save(self, body):
+        import asyncio
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server, "_schedule_restart"), \
+             mock.patch.object(server.first_run, "update_env_file") as uf:
+            resp = asyncio.run(server.api_setup_save(self._FakeRequest(body)))
+        return resp, uf
+
+    def test_ic7300_aligns_baud_to_115200(self):
+        resp, uf = self._save({"radio_model": "ic7300", "serial_port": "COM6"})
+        self.assertEqual(resp.status_code, 200)
+        updates = uf.call_args[0][1]
+        self.assertEqual(updates["MRRC_BAUD_RATE"], "115200")
+
+    def test_ft710_aligns_baud_to_38400(self):
+        resp, uf = self._save({"radio_model": "ft710", "serial_port": "COM6"})
+        self.assertEqual(resp.status_code, 200)
+        updates = uf.call_args[0][1]
+        self.assertEqual(updates["MRRC_BAUD_RATE"], "38400")
+
+    def test_mk2_aligns_baud_to_115200(self):
+        resp, uf = self._save({"radio_model": "ic7300mk2", "serial_port": "COM6"})
+        self.assertEqual(resp.status_code, 200)
+        updates = uf.call_args[0][1]
+        self.assertEqual(updates["MRRC_BAUD_RATE"], "115200")
+
+
 if __name__ == "__main__":
     unittest.main()

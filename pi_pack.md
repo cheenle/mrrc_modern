@@ -63,6 +63,7 @@ curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v<ver>-rpi64.img
 
 ```
 packaging/rpi/pi-gen-stage4/
+├── prerun.sh                              # copy_previous（承接 stage2 根文件系统）
 ├── 00-install-packages/00-packages       # python3-venv pip portaudio19-dev libopus0 avahi-daemon e2fsprogs
 └── 01-deploy-mrrc/
     ├── 00-run.sh                          # chroot：venv、mrrc 用户(dialout/audio)、服务启用、构建闸门

@@ -52,6 +52,19 @@ _DEFAULT_BAUD_BY_MODEL = {
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 
+
+def default_baud_for(model: str) -> int:
+    """Backend-aware default CAT/CI-V baud for a radio model key.
+
+    Shared by the connection-dialog save (api_setup_save) and first-run
+    probing so the stored MRRC_BAUD_RATE always aligns with the selected
+    model. Rationale (V2.33): the legacy installer templates pre-filled
+    MRRC_BAUD_RATE=38400 — the FT-710 value — regardless of model; an
+    IC-7300 then kept the stale value and its CI-V scope stream, which
+    requires 115200, never came up (field log 2026-09-10).
+    """
+    return _DEFAULT_BAUD_BY_MODEL.get(str(model).strip().lower(), 38400)
+
 # ── Serial Configuration ────────────────────────────────────────────
 # macOS default: /dev/cu.SLAB_USBtoUART  (FT-710 Enhanced COM Port)
 # Linux default: /dev/ttyUSB0

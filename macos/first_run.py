@@ -17,6 +17,9 @@ import serial
 import serial.tools.list_ports
 import sys
 from pathlib import Path
+from typing import Any, Callable
+
+from config import default_baud_for
 
 DEFAULT_WEB_PASSWORD = "changeme_please_use_strong_password!"
 if sys.platform == "darwin":
@@ -108,7 +111,11 @@ def probe_ic7300(ser) -> bool:
     return resp.startswith(b"\xfe\xfe") and len(resp) >= 6 and resp[4] == 0x19
 
 
-def probe_radio_model(port: str, open_func=serial.Serial, timeout: float = 1.0) -> str | None:
+def probe_radio_model(
+    port: str,
+    open_func: Callable[..., Any] = serial.Serial,
+    timeout: float = 1.0,
+) -> str | None:
     """Try FT-710 then IC-7300 on ``port``; return model or None."""
     for baud, probe in ((38400, probe_ft710), (115200, probe_ic7300)):
         try:
@@ -153,7 +160,7 @@ def apply_first_run(
     env: dict[str, str],
     config_path: Path,
     *,
-    open_func=serial.Serial,
+    open_func: Callable[..., Any] = serial.Serial,
 ) -> dict[str, str]:
     """Fill password/serial/model, persist, mark done. Returns updated env."""
     updates: dict[str, str] = {}
@@ -173,14 +180,14 @@ def apply_first_run(
 
     if port_unset or model_unset:
         ports = detect_serial_ports()
-        found_port, found_model = None, None
+        found: tuple[str, str] | None = None
         for candidate in ports:
             found_model = probe_radio_model(candidate, open_func=open_func)
             if found_model:
-                found_port = candidate
+                found = (candidate, found_model)
                 break
-        if found_model:
-            port, model = found_port, found_model
+        if found is not None:
+            port, model = found
             env["MRRC_PORT_CONFIRMED"] = "1"
             updates["MRRC_PORT_CONFIRMED"] = "1"
         else:
@@ -195,6 +202,18 @@ def apply_first_run(
     updates["MRRC_RADIO_MODEL"] = model
     env["MRRC_FIRST_RUN_DONE"] = "1"
     updates["MRRC_FIRST_RUN_DONE"] = "1"
+
+    # V2.33: legacy installer templates pre-filled MRRC_BAUD_RATE=38400
+    # (the FT-710 value) regardless of model, so a discovered IC-7300 kept
+    # the stale value and its CI-V scope stream (which requires 115200)
+    # never came up (field log 2026-09-10: scope stalled → S-meter
+    # fallback). Align the baud with the discovered model, but never
+    # override an explicitly customized value (anything other than the
+    # template default is treated as operator intent).
+    stored_baud = str(env.get("MRRC_BAUD_RATE", "")).strip()
+    if stored_baud in ("", "38400"):
+        env["MRRC_BAUD_RATE"] = str(default_baud_for(model))
+        updates["MRRC_BAUD_RATE"] = env["MRRC_BAUD_RATE"]
 
     update_env_file(config_path, updates)
     return env

@@ -204,5 +204,54 @@ class ApplyFirstRunTests(unittest.TestCase):
         self.assertEqual(result["MRRC_SERIAL_PORT"], "/dev/cu.usbserial-A1")
 
 
+class ApplyFirstRunBaudLinkageTests(unittest.TestCase):
+    """V2.33: legacy installer templates pre-filled MRRC_BAUD_RATE=38400
+    (the FT-710 value) regardless of model. apply_first_run probes the
+    radio and must align the stored baud with the discovered model, or a
+    discovered IC-7300 keeps the stale 38400 and the CI-V scope stream
+    (which requires 115200) never works. An explicitly customized baud
+    (anything other than the template default) is preserved."""
+
+    def _tmp_config(self, body):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "mrrc_modern.env"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def _run(self, env, body, open_func):
+        path = self._tmp_config(body)
+        with mock.patch.object(fr, "detect_serial_ports",
+                               return_value=["/dev/cu.usbserial-A1"]):
+            env = fr.apply_first_run(env, path, open_func=open_func)
+        return env, path
+
+    def test_template_38400_becomes_115200_for_ic7300(self):
+        env, path = self._run({"MRRC_BAUD_RATE": "38400"},
+                              "MRRC_BAUD_RATE=38400\n",
+                              lambda **kw: _FakeSerialIC())
+        self.assertEqual(env["MRRC_BAUD_RATE"], "115200")
+        self.assertIn("MRRC_BAUD_RATE=115200", path.read_text(encoding="utf-8"))
+
+    def test_template_38400_stays_38400_for_ft710(self):
+        env, path = self._run({"MRRC_BAUD_RATE": "38400"},
+                              "MRRC_BAUD_RATE=38400\n",
+                              lambda **kw: _FakeSerialFT())
+        self.assertEqual(env["MRRC_BAUD_RATE"], "38400")
+        self.assertIn("MRRC_BAUD_RATE=38400", path.read_text(encoding="utf-8"))
+
+    def test_explicit_custom_baud_is_preserved(self):
+        env, path = self._run({"MRRC_BAUD_RATE": "57600"},
+                              "MRRC_BAUD_RATE=57600\n",
+                              lambda **kw: _FakeSerialIC())
+        self.assertEqual(env["MRRC_BAUD_RATE"], "57600")
+        self.assertIn("MRRC_BAUD_RATE=57600", path.read_text(encoding="utf-8"))
+
+    def test_unset_baud_is_filled_from_model(self):
+        env, path = self._run({}, "", lambda **kw: _FakeSerialIC())
+        self.assertEqual(env["MRRC_BAUD_RATE"], "115200")
+        self.assertIn("MRRC_BAUD_RATE=115200", path.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

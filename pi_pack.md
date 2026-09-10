@@ -1,7 +1,7 @@
 # Raspberry Pi 镜像打包流程（rpi64）
 
 > 用途：构建并发布 `MRRC-Modern-v<ver>-rpi64.img.xz` —— Raspberry Pi OS Lite 64-bit (Bookworm) 定制镜像，烧卡即用、首启零配置。规格见 `docs/superpowers/specs/2026-09-09-raspberry-pi-image-design.md`。
-> 最新构建：**v1.14.1**（2026-09-09，构建主机 ham.vlsc.net x86_64 + qemu-user-static 交叉构建；产物 55,886,045 → 待发布回填 bytes，SHA-256 待发布回填；chroot 闸门与 debugfs 抽查通过；真机烧卡验收留操作员）。
+> 最新构建：**v1.14.1**（2026-09-09，构建主机 ham.vlsc.net x86_64 + qemu-user-static 交叉构建；产物 539,720,392 bytes，SHA-256 `b13778c2fe6f72e6f30229214b6837f950b551596d8c562f952b0c27001fdb43`；chroot 闸门（deps OK/scope libs OK）与 debugfs 抽查通过；真机烧卡验收留操作员。）
 > 用户向的安装/使用说明见 `docs/RASPBERRY_PI_GUIDE.md`。
 
 ## 1. 环境拓扑

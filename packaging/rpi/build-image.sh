@@ -6,8 +6,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PIGEN_REF="2026-06-18-raspios-bookworm-arm64"
-WORK="$REPO_ROOT/build/pi-gen"
-OUT="$REPO_ROOT/dist/rpi"
+WORK="${MRRC_PI_WORK:-$REPO_ROOT/build/pi-gen}"
+OUT="${MRRC_PI_OUT:-$REPO_ROOT/dist/rpi}"
 
 VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO_ROOT/CHANGELOG.md" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' )"
 : "${VERSION:?Could not read version from CHANGELOG.md}"
@@ -15,7 +15,7 @@ echo "==> Building MRRC Modern ${VERSION} rpi64 image"
 
 # ── preflight ──
 docker info >/dev/null 2>&1 || { echo "ERROR: Docker daemon not running (open -a Docker)"; exit 1; }
-FREE_GB=$(df -g "$REPO_ROOT" | awk 'NR==2 {print $4}')
+FREE_GB=$(df -Pk "$REPO_ROOT" | awk 'NR==2 {print int($4/1048576)}')
 (( FREE_GB >= 20 )) || { echo "ERROR: need >=20GB free, have ${FREE_GB}GB"; exit 1; }
 
 # ── pi-gen clone (pinned) ──
@@ -59,4 +59,4 @@ XZ_OUT="$OUT/MRRC-Modern-${VERSION}-rpi64.img.xz"
 xz -T0 -9 -c "$IMG" > "$XZ_OUT"
 rm -f "$IMG"
 echo "==> Done: $XZ_OUT"
-shasum -a 256 "$XZ_OUT"
+if command -v sha256sum >/dev/null 2>&1; then sha256sum "$XZ_OUT"; else shasum -a 256 "$XZ_OUT"; fi

@@ -43,12 +43,12 @@ rsync -a "$REPO_ROOT/" "$STAGE_FILES/opt/mrrc_modern/" \
 printf '%s\n' "${VERSION#v}" > "$STAGE_FILES/opt/mrrc_modern/VERSION"
 mkdir -p "$STAGE_FILES/opt/mrrc_modern/vendor/ftdi"
 
-# ── export-image for the custom stage + skip the bare Lite intermediate ──
-# stage2 contains export-image (would emit a bare Lite img). Our final image
-# must be assembled AFTER stage4 content lands, so: skip stage2's export and
-# give rpi-stage4 its own (generic) export-image directory.
-cp -r "$WORK/stage2/export-image" "$WORK/rpi-stage4/export-image"
+# ── export markers ──
+# Modern pi-gen: a stage exports the final image when it contains an
+# EXPORT_IMAGE file (assembly logic lives in the top-level export-image/).
+# Skip stage2's bare-Lite export; export once, after stage4 content lands.
 touch "$WORK/stage2/SKIP_IMAGES"
+touch "$WORK/rpi-stage4/EXPORT_IMAGE"
 
 # ── pi-gen config ──
 cat > "$WORK/config" <<EOF

@@ -259,8 +259,12 @@ class AudioHandler:
             return ''
 
     @staticmethod
-    def _prefer_non_wdmks(matches):
+    def _prefer_non_wdmks(matches, api_index: int = 2):
         """Stable-sort host-API duplicates so non-WDM-KS entries come first.
+
+        ``matches`` tuples carry the host-API name at ``api_index``
+        (2 for the configured-name tier, 3 for the codec tier, which also
+        carries a duplex flag).
 
         WDM-KS is an exclusive-mode kernel stream; on several Windows rigs
         opening the radio codec through it fails with -9999 while the MME/
@@ -268,7 +272,8 @@ class AudioHandler:
         (field log 2026-09-10: 6× identical TX-open failures on the WDM-KS
         entry, every PTT). Same physical hardware, so the swap is safe.
         """
-        return sorted(matches, key=lambda m: "wdm-ks" in m[2].lower())
+        return sorted(
+            matches, key=lambda m: "wdm-ks" in str(m[api_index]).lower())
 
     def _find_rx_device(self, exclude: Optional[set] = None) -> Optional[int]:
         """Find a suitable input device.
@@ -375,7 +380,7 @@ class AudioHandler:
             # (the WDM-KS twin can fail to open with -9999, V2.33).
             full_duplex = [m for m in codec_matches if m[2]]
             idx, name, _, api = self._prefer_non_wdmks(
-                full_duplex or codec_matches)[0]
+                full_duplex or codec_matches, api_index=3)[0]
             logger.info("Using radio USB audio input: [%d] %s (host=%s)", idx, name, api)
             if len(codec_matches) > 1:
                 logger.warning(
@@ -667,7 +672,7 @@ class AudioHandler:
             # entries win (the WDM-KS twin can fail with -9999, V2.33).
             full_duplex = [m for m in codec_matches if m[2]]
             idx, name, _, api = self._prefer_non_wdmks(
-                full_duplex or codec_matches)[0]
+                full_duplex or codec_matches, api_index=3)[0]
             logger.info("Using radio USB audio output: [%d] %s (host=%s)", idx, name, api)
             if len(codec_matches) > 1:
                 logger.warning(

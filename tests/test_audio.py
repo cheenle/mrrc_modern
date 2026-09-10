@@ -124,7 +124,7 @@ class TxFrontendContractTests(unittest.TestCase):
             r"postMessage\(\s*\{\s*type:\s*['\"]start['\"]\s*\}",
             start_fn,
         )
-        self.assertIsNotNone(start_match)
+        assert start_match is not None
         start_idx = start_match.start()
         self.assertLess(ensure_idx, start_idx)
 
@@ -793,9 +793,11 @@ class StartTxWindowsTests(unittest.TestCase):
                 ok = h.start_tx()
             self.assertTrue(ok)
             self.assertEqual(h._tx_rate, 44100)
-            self.assertEqual(h._pa.open_calls[0]["output_device_index"], 0)
-            self.assertEqual(h._pa.open_calls[0]["rate"], 44100)
-            self.assertEqual(h._pa.open_calls[0]["frames_per_buffer"], 882)
+            pa = h._pa
+            assert pa is not None
+            self.assertEqual(pa.open_calls[0]["output_device_index"], 0)
+            self.assertEqual(pa.open_calls[0]["rate"], 44100)
+            self.assertEqual(pa.open_calls[0]["frames_per_buffer"], 882)
             self.assertEqual(h._tx_prebuffer_bytes, 44100 * 2 * 60 // 1000)
             self.assertEqual(h._tx_max_buffer_bytes, 44100 * 2 * 400 // 1000)
         finally:
@@ -816,7 +818,9 @@ class StartTxWindowsTests(unittest.TestCase):
                 ok = h.start_tx()
             self.assertTrue(ok)
             self.assertEqual(h._tx_rate, 44100)
-            self.assertEqual(h._pa.open_calls[0]["rate"], 44100)
+            pa = h._pa
+            assert pa is not None
+            self.assertEqual(pa.open_calls[0]["rate"], 44100)
         finally:
             config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = old_rx, old_tx
 
@@ -996,6 +1000,7 @@ class ParameterizedRateTests(unittest.TestCase):
                    wraps=__import__("audio_resample").resample_pcm) as rs:
             out = h.read_rx_chunk()
         rs.assert_called_once_with(pcm, 44100, 48000)
+        assert out is not None
         self.assertEqual(len(out), 960 * 2)
 
     def _tx_handler(self, dev_rate):
@@ -1055,8 +1060,10 @@ class ParameterizedRateTests(unittest.TestCase):
             h._tx_chunk = 960
             self.assertTrue(h.start_tx())
             self.assertEqual(h._tx_rate, 48000)
-            self.assertEqual(h._pa.open_calls[0]["rate"], 48000)
-            self.assertEqual(h._pa.open_calls[0]["frames_per_buffer"], 960)
+            pa = h._pa
+            assert pa is not None
+            self.assertEqual(pa.open_calls[0]["rate"], 48000)
+            self.assertEqual(pa.open_calls[0]["frames_per_buffer"], 960)
             self.assertEqual(h._tx_prebuffer_bytes, 48000 * 2 * 60 // 1000)
             self.assertEqual(h._tx_max_buffer_bytes, 48000 * 2 * 400 // 1000)
         finally:
@@ -1218,22 +1225,117 @@ class ConfiguredNameHostApiPreferenceTests(unittest.TestCase):
         return h
 
     def test_rx_prefers_non_wdmks_duplicate(self):
+        # A name WITHOUT the closing paren matches all host-API duplicates
+        # (the MME entries carry an invisible trailing space before ")"),
+        # and the non-WDM-KS one must win.
         import config
-        config.AUDIO_RX_DEVICE = "麦克风 (USB Audio CODEC)"
+        config.AUDIO_RX_DEVICE = "麦克风 (USB Audio CODEC"
         self.assertEqual(self._handler()._find_rx_device(), 1)  # MME, not [3] WDM-KS
 
     def test_tx_prefers_non_wdmks_duplicate(self):
         import config
-        config.AUDIO_TX_DEVICE = "扬声器 (USB Audio CODEC)"
+        config.AUDIO_TX_DEVICE = "扬声器 (USB Audio CODEC"
         self.assertEqual(self._handler()._find_tx_device(), 4)  # MME speaker
 
     def test_exclude_skips_failed_candidate(self):
+        # The dialog-saved exact name ("USB Audio CODEC)") only matches the
+        # WDM-KS duplicate (the MME/WASAPI names carry a trailing space
+        # before ")"). Once it fails and is excluded, the codec-hints tier
+        # must take over and resolve a non-WDM-KS duplicate.
         import config
         config.AUDIO_RX_DEVICE = "麦克风 (USB Audio CODEC)"
         h = self._handler()
-        self.assertEqual(h._find_rx_device(exclude={1}), 2)     # next dup (WASAPI)
-        self.assertEqual(h._find_rx_device(exclude={1, 2}), 3)  # WDM-KS left
+        self.assertEqual(h._find_rx_device(), 3)                 # exact name → WDM-KS
+        self.assertEqual(h._find_rx_device(exclude={3}), 1)      # MME via codec tier
+        self.assertEqual(h._find_rx_device(exclude={1, 3}), 2)   # WASAPI next
         self.assertEqual(h._find_rx_device(exclude={1, 2, 3}), 0)  # fallback tier
+
+
+class WdmksRecoveryEndToEndTests(unittest.TestCase):
+    """V2.33 field log 2026-09-10: the connection-dialog-saved name matched
+    only the WDM-KS duplicate; every open failed with -9999 (6× per PTT)
+    and audio never came up. With the exclude retry, the second resolution
+    must land on a non-WDM-KS duplicate and the stream must open."""
+
+    DEVICES = [
+        _dev("Microsoft Sound Mapper - Input", inputs=2, host_api=0),
+        _dev("麦克风 (USB Audio CODEC )", inputs=2, host_api=0),    # MME — works
+        _dev("麦克风 (USB Audio CODEC )", inputs=2, host_api=1),    # WASAPI
+        _dev("麦克风 (USB Audio CODEC)", inputs=2, host_api=2),     # WDM-KS — -9999
+        _dev("扬声器 (USB Audio CODEC )", outputs=2, host_api=0),   # MME — works
+        _dev("扬声器 (USB Audio CODEC )", outputs=2, host_api=1),   # WASAPI
+        _dev("扬声器 (USB Audio CODEC)", outputs=2, host_api=2),    # WDM-KS — -9999
+    ]
+    HOST_APIS = ["MME", "Windows WASAPI", "Windows WDM-KS"]
+
+    def _make_handler(self, pa):
+        import threading
+        from collections import deque
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._pa = pa
+        h.rx_device = None
+        h.tx_device = None
+        h._tx_stream = None
+        h._tx_queue = deque()
+        h._tx_queued_bytes = 0
+        h._tx_primed = False
+        h._tx_lock = threading.Lock()
+        h._tx_write_lock = threading.Lock()
+        h._rx_stream = None
+        h._rx_running = False
+        return h
+
+    class _SelectiveFailPyAudio(_FakePyAudioOpen):
+        """Opens fail with the -9999 signature on WDM-KS indices only."""
+
+        wdmks_indices = frozenset({3, 6})
+
+        def open(self, **kwargs):
+            self.open_calls.append(kwargs)
+            if (kwargs.get("input_device_index") in self.wdmks_indices
+                    or kwargs.get("output_device_index") in self.wdmks_indices):
+                raise OSError("[Errno -9999] Unanticipated host error")
+            return _FakeTxStream()
+
+    def _patch_devices(self, rx, tx):
+        import config
+        self._old = (config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE)
+        config.AUDIO_RX_DEVICE = rx
+        config.AUDIO_TX_DEVICE = tx
+
+    def _restore_devices(self):
+        import config
+        config.AUDIO_RX_DEVICE, config.AUDIO_TX_DEVICE = self._old
+
+    def test_rx_recovers_on_mme_duplicate_after_wdmks_failure(self):
+        self._patch_devices("麦克风 (USB Audio CODEC)", "")
+        try:
+            pa = self._SelectiveFailPyAudio(self.DEVICES, self.HOST_APIS)
+            h = self._make_handler(pa)
+            h._reinit_pyaudio = lambda: None  # re-init covered separately
+            self.assertTrue(h.start_rx())
+            self.assertTrue(h._rx_running)
+            # First open hit the WDM-KS duplicate; the retry (after exclude)
+            # landed on the working MME one.
+            self.assertEqual(pa.open_calls[0]["input_device_index"], 3)
+            self.assertEqual(pa.open_calls[-1]["input_device_index"], 1)
+        finally:
+            self._restore_devices()
+
+    def test_tx_recovers_on_mme_duplicate_after_wdmks_failure(self):
+        self._patch_devices("", "扬声器 (USB Audio CODEC)")
+        try:
+            pa = self._SelectiveFailPyAudio(self.DEVICES, self.HOST_APIS)
+            h = self._make_handler(pa)
+            h._reinit_pyaudio = lambda: None
+            from unittest.mock import patch
+            with patch("sys.platform", "win32"):
+                self.assertTrue(h.start_tx())
+            self.assertEqual(pa.open_calls[0]["output_device_index"], 6)
+            self.assertEqual(pa.open_calls[-1]["output_device_index"], 4)
+        finally:
+            self._restore_devices()
 
 
 class DeviceExcludeRetryTests(unittest.TestCase):

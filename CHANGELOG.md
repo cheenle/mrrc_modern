@@ -2,6 +2,23 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — IC-7300 baud linkage + audio duplicate recovery
+
+### Fixed
+
+- **IC-7300 频谱不工作（S-meter 合成回退）**：连接设置保存与首启探测现在自动按型号
+  对齐 `MRRC_BAUD_RATE`（IC-7300/MK2 = 115200；FT-710 = 38400）。旧安装模板预填的
+  38400 曾静默覆盖型号默认值并饿死 CI-V 频谱数据流（日志特征：
+  `CI-V scope stream stalled` → S-meter fallback）；安装模板 `MRRC_BAUD_RATE`
+  改为留空（按型号自动）。电台菜单 CI-V 波特率请保持 Auto（或与服务器一致）。
+- **RX/TX 音频 -9999 打不开（每次 PTT 重复 6 次失败后放弃）**：设备名匹配改为
+  收集全部 host-API 重复条目并优先非 WDM-KS（同名声卡在 MME/WASAPI 下可正常
+  打开，WDM-KS 独占模式在部分 Windows 机器上 -9999）；-9999 重试改用排除列表
+  轮换候选，WDM-KS 锁定的配置名会回退到同硬件的 MME 条目。设备选择日志现在
+  附带 host API 与其余候选。
+- 无 CAT/PTT/协议变更；电台侧验收（IC-7300 频谱 @115200、现场机音频恢复）
+  留待操作员检查。
+
 ## [v1.14.1] — 2026-09-09 — Radio settings panel with RF power slider (web UI)
 
 ### Web UI

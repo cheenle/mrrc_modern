@@ -63,7 +63,10 @@ STAGE_LIST="stage0 stage1 stage2 rpi-stage4"
 EOF
 
 cd "$WORK"
-IGNORE_FILE_CHANGES=1 PRESERVE_CONTAINER=0 ./build-docker.sh
+# PRESERVE_CONTAINER=1 keeps the pigen_work container on failure — under
+# qemu a full redo costs hours, so always preserve and resume via CONTINUE=1:
+#   CONTINUE=1 IGNORE_FILE_CHANGES=1 ./build-docker.sh   (after a failure)
+IGNORE_FILE_CHANGES=1 PRESERVE_CONTAINER=1 ./build-docker.sh
 
 # ── artifact ──
 mkdir -p "$OUT"

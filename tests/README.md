@@ -4,7 +4,7 @@
 
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710 and IC-7300/IC-7300MK2). All tests run **without hardware** — no radio,
-no serial port, no USB audio device needed. 693 tests across 33 test modules.
+no serial port, no USB audio device needed. 721 tests across 39 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -13,9 +13,9 @@ python -m unittest discover -s tests -v
 ## Test Results Summary
 
 | Metric | Value |
-|--------|-------|
-| Total tests | 693 |
-| Passed | 693 (with all optional dependencies installed) |
+| -------- | ------- |
+| Total tests | 721 |
+| Passed | 721 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -27,7 +27,7 @@ python -m unittest discover -s tests -v
 SDD coverage: §7.2, AD-003, §9.7
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `RadioStateFieldMutationTests` | 8 | Field updates, dirty tracking, unknown field handling, batch mutation |
 | `RadioStateDerivedPropertiesTests` | 13 | active_freq, mode_name, band_name, is_transmitting, s_meter_dbm, s_unit, preamp_label, attenuator_label |
 | `RadioStateSerializationTests` | 6 | to_dict (core + derived), to_dirty_dict, value accuracy |
@@ -40,7 +40,7 @@ SDD coverage: §7.2, AD-003, §9.7
 SDD coverage: AD-002, §9.6, §10.4
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `CatCommandFormattingTests` | 15 | FA, FB, MD0, TX, SM0, SH00, AG, PC, PA0, RA0, NB0, NR0, BC, PR, PS, ST, VS, SS, AC, BS — all command formats |
 | `CatResponseParsingTests` | 7 | Frequency parse, S-meter parse, mode parse, PTT parse, IF response parse, filter width parse, error detection |
 | `CatControllerMockedTests` | 8 | Command terminator (;), query vs set, ASCII encoding, SH two-digit width format, write-only set, PTT verify sequence, available-port diagnostics on connect failure |
@@ -50,7 +50,7 @@ SDD coverage: AD-002, §9.6, §10.4
 SDD coverage: §7.2, §10.4, NFRs
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `ModeTableTests` | 5 | Mode name↔num mapping, bidirectional lookup, display names, UI_MODES |
 | `BandTableTests` | 8 | Band list structure, get_band_for_frequency (20m/40m/80m/10m/edge cases) |
 | `FilterTableTests` | 6 | Filter widths by mode (SSB, CW, FM), get_filter_hz |
@@ -62,7 +62,7 @@ SDD coverage: §7.2, §10.4, NFRs
 SDD coverage: AD-004, NFR-060–NFR-065
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `CodecTagTests` | 4 | AUDIO_TAG_PCM (0x00), AUDIO_TAG_OPUS (0x01), tag distinctness, 1-byte fit |
 | `OpusConstantsTests` | 7 | RX_RATE=48000, FRAME_SAMPLES=960, DEFAULT_BITRATE=64000, MIN=8000, MAX=128000, Windows packaged opus.dll search paths |
 | `TxFrontendContractTests` | 12 | TX worklet/worker contract: 48kHz, frame sizes, packet format, mutable intentional-close cleanup flag |
@@ -86,7 +86,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 SDD coverage: §9.2, §9.6, §10.4, §15
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `WSMessageFormatTests` | 11 | fullState, stateUpdate, set, get, ping/pong, error, memChannels, memSave, value, legacy colon format |
 | `WSAuthTests` | 4 | Token format (64 hex chars), valid/invalid token check, WS close code 4001 |
 | `PTTSafetyLogicTests` | 10 | TX1/TX0 commands, dead-man switch (3 conditions), watchdog retry count, sendBeacon format, tx audio stop signal, m: settings format |
@@ -101,7 +101,7 @@ SDD coverage: §9.2, §9.6, §10.4, §15
 SDD coverage: AD-009, §9.6
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `PollTierStructureTests` | 6 | Tier intervals (100ms/500ms/2s/5s), tier commands, throughput limit |
 | `PollSkipLogicTests` | 4 | Skip field accumulation, expiry, multi-field skip, duration types |
 | `PollingOrderTests` | 3 | User command priority over poll, polling pause after user command, resume after skip expiry |
@@ -179,7 +179,7 @@ SDD coverage: §12.2 (Windows packaging)
 SDD coverage: §12.2 (Windows packaging)
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `WindowsPackagingPathTests` | 4 | Frozen-runtime resource path resolution |
 | `ScopePipeCommandTests` | 2 | `backends.ft710.scope_pipe` command construction under frozen runtime |
 | `ResourceDirTests` | 2 | `_resource_dir()` prefers `_MEIPASS` when frozen (PyInstaller 6 `_internal` layout), falls back to SCRIPT_DIR |
@@ -189,7 +189,7 @@ SDD coverage: §12.2 (Windows packaging)
 SDD coverage: NFR-051 (explicit gaps documented), §14 (doc-sync discipline)
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `ConstraintRegistryTests` | 5 | constraints.json well-formed: required fields, unique ids, valid severities, regexes compile, SDD traceability, core-module coverage |
 | `HarnessCliTests` | 10 | prime digest, context routing, check blocks DN/SH0NN (exit 2), clean passes, hook blocks/allows/fail-open, core files stay clean |
 | `KnowledgeIndexTests` | 4 | index.json: chapter files exist, every topic ref resolves to live SDD text, topics reachable + routed, core-area coverage |
@@ -201,7 +201,7 @@ SDD coverage: NFR-051 (explicit gaps documented), §14 (doc-sync discipline)
 SDD coverage: §9.8, §11.1 (TunerStorage)
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `LearnGateTests` | 6 | Learn gate SWR 1.0–1.8 acceptance/rejection |
 | `NeedsVerifyTests` | 2 | Verify-needed detection for learned entries |
 | `OverwritePolicyTests` | 4 | When a new learn overwrites an existing entry |
@@ -216,7 +216,7 @@ SDD coverage: §9.8, §11.1 (TunerStorage)
 SDD coverage: §9.8, §11.1 (ATR1000Client)
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `FrameEncodeTests` | 5 | Binary frame encoding [0xFF,CMD,LEN,DATA] |
 | `FrameParseTests` | 13 | Binary frame parsing |
 | `LearningBufferTests` | 13 | 4-sample stability-window learning |
@@ -230,7 +230,7 @@ SDD coverage: §9.8, §11.1 (ATR1000Client)
 SDD coverage: §9.8, §15 (tune-assist carrier safety)
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `TuneAssistSkippedTests` | 1 | Tune skipped when SWR≤1.6 |
 | `TuneAssistSuccessTests` | 1 | SWR improved ≥0.02 → keep + learn |
 | `TuneAssistRollbackTests` | 1 | No improvement → rollback relays |
@@ -243,7 +243,7 @@ SDD coverage: §9.8, §15 (tune-assist carrier safety)
 SDD coverage: AD-005 (V2.7 amendment — stdin control channel + Windows tree kill), §9.5.1
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `ApplyControlLineTests` | 6 | `TX:1`/`TX:0` parsing: activate, one-shot resync arm, idempotence, unknown-line ignore, whitespace/case tolerance |
 | `NotifyScopePipeTxTests` | 5 | Server → pipe stdin notify: TX/RX transitions, no-write on unchanged state, force resend, dead-pipe guard |
 | `TerminateProcessTreeTests` | 2 | Windows `taskkill /PID /T /F` vs POSIX SIGTERM selection |
@@ -253,7 +253,7 @@ SDD coverage: AD-005 (V2.7 amendment — stdin control channel + Windows tree ki
 SDD coverage: V2.10 (HTTPS-by-default launcher bootstrap)
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `SelfSignedCertTests` | 4 | First-run generation, PEM validity, SAN coverage (localhost/hostname/IPs), self-issued 10-year server cert, idempotent reuse |
 | `CryptoMissingTests` | 1 | Graceful None when cryptography is unavailable |
 | `LanIpTests` | 1 | LAN IP detection excludes loopback, IPv4-parseable |
@@ -272,7 +272,7 @@ SDD coverage: V2.11 (header power switch), V2.12 (boot-window guard + PS1 verify
 SDD coverage: AD-016, §7.2
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `ConnectionTests` | 1 | CI-V defaults (115200 8N1, address 0x94) |
 | `ModeTableTests` | 3 | CI-V mode codes, inverse map consistency, UI mode names reused |
 | `BandTests` | 4 | Band shape (FT-710 minus `bsr`), radio coverage, expected bands, get_band_for_frequency |
@@ -286,7 +286,7 @@ SDD coverage: AD-016, §7.2
 SDD coverage: AD-016, §9.6
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `FramingTests` | 4 | CI-V frame build/parse (0xFE 0xFE … 0xFD) |
 | `ParserTests` | 11 | Stream parser: partial frames, garbage resync, multi-frame |
 | `EchoTests` | 3 | Echo frame detection/drop |
@@ -301,7 +301,7 @@ SDD coverage: AD-016, §9.6
 SDD coverage: AD-016, §9.6
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `ConnectTests` | 3 | Connect enables model-specific CI-V Transceive independent of configurable address |
 | `FrequencyTests` | 3 | get_frequency with echo + broadcast interleaved, set frame format, VFO-B rejection |
 | `ModeTests` | 2 | Mode+FIL decode, set_mode resends current FIL |
@@ -327,7 +327,7 @@ SDD coverage: AD-016, §9.5
 SDD coverage: AD-016
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `CreateBackendTests` | 8 | ft710/ic7300 keys, ic7300mk2 alias, key normalization, unknown model ValueError, MRRC_RADIO_MODEL env default |
 | `CapabilitiesTests` | 3 | Capability keys/values, to_dict JSON-serializable, dataclass round-trip |
 | `BackendUiTableTests` | 4 | FT-710 bands/ui_modes/filter tables match config, scope producer created |
@@ -339,7 +339,7 @@ SDD coverage: AD-016
 SDD coverage: §9.2.4, §9.4, §9.5.1, §12.2
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `BackendBaudDefaultsTests` | 3 | FT-710 38400 default, IC-7300/MK2 115200 defaults, explicit baud override |
 | `IC7300DiagnosticProtocolTests` | 2 | Checksum-free CI-V diagnostic query and standard frequency-reply decoding |
 | `ScopeQueueFreshnessTests` | 2 | Bounded 44-segment queue, oldest-drop/latest-retention behavior |
@@ -362,7 +362,7 @@ SDD coverage: §10.4, §15
 SDD coverage: §13.4 I8 (path traversal), I9 (constant-time password compare)
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `ResolveStaticPathTests` | 7 | `_resolve_static_path` containment: empty→index, legit assets stay inside STATIC_DIR, `../` traversal rejected, absolute request paths rejected, dot-segment escapes rejected, `....//` lookalikes are harmless literals, missing-but-contained paths still resolve for the SPA fallback |
 | `PasswordCompareTests` | 4 | `_password_matches`: correct/wrong/empty, None + non-ASCII never raise, `hmac.compare_digest` used (no `!=`) |
 | `DefaultPasswordWarningTests` | 3 | Startup warning fires only when the well-known default is active; wired into lifespan |
@@ -379,7 +379,7 @@ SDD coverage: §13.4 I12 / ch15 outermost release layer
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
-|-------------|---------------|--------|
+| ------------- | --------------- | -------- |
 | AD-001 FastAPI/Uvicorn | test_server_scope_init | 2 tests |
 | AD-002 Direct Serial CAT | test_cat_controller | 30 tests |
 | AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 46+ tests |
@@ -422,7 +422,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~693 tests in ~15s — can run on every commit.
+2. **Fast execution**: ~721 tests in ~15s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

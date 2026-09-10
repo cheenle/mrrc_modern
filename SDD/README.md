@@ -34,9 +34,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.36 |
-| Baseline Date | 2026-09-09 |
-| Status | Raspberry Pi rpi64 image packaging line added (SDD V2.36); v1.14.1 is the latest published release on both platforms (Radio Settings panel with RF power slider; macOS DMG 55,886,045 bytes + Windows Setup 45,427,335 bytes, SDD V2.35); both carry the V2.31/V2.32 RX recording-quality fixes (capture reopened after every TX→RX transition on all platforms; RX broadcast no longer frame-trims catch-up bursts); IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved (remaining: forced first-login change; iOS watchdog/scenePhase); open issues tracked in §13.4 |
+| SDD Version | V2.37 |
+| Baseline Date | 2026-09-10 |
+| Status | **IC-7300 model↔baud linkage + audio-device duplicate recovery (SDD V2.37)**: connection-dialog save and first-run probing now align MRRC_BAUD_RATE with the selected model (legacy templates pre-filled 38400 — the FT-710 value — which silently broke the IC-7300 CI-V scope stream, field log 2026-09-10), installer templates leave the baud empty, and -9999 audio-open retries now resolve a different host-API duplicate (WDM-KS opens failing while MME/WASAPI twins of the same codec work). Raspberry Pi rpi64 image packaging line added (SDD V2.36); v1.14.1 is the latest published release on both platforms (Radio Settings panel with RF power slider; macOS DMG 55,886,045 bytes + Windows Setup 45,427,335 bytes, SDD V2.35); both carry the V2.31/V2.32 RX recording-quality fixes (capture reopened after every TX→RX transition on all platforms; RX broadcast no longer frame-trims catch-up bursts); IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved (remaining: forced first-login change; iOS watchdog/scenePhase); open issues tracked in §13.4 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend) |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2` (default `ft710`) |

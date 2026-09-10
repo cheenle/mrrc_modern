@@ -2,6 +2,9 @@
 # Stage: deploy MRRC Modern runtime (chroot). Code tree already in place
 # under files/opt/mrrc_modern/ (copied there by build-image.sh before the run).
 
+# pi-gen's chroot env has an empty PATH — set it explicitly.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 # ── venv (build-time; first boot needs no network) ──
 python3 -m venv /opt/mrrc_modern/venv
 /opt/mrrc_modern/venv/bin/pip install --upgrade pip

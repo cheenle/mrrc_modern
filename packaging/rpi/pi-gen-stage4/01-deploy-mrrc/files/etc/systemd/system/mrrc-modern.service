@@ -1,0 +1,17 @@
+[Unit]
+Description=MRRC Modern web control server
+After=network-online.target mrrc-firstboot.service
+Wants=network-online.target
+Requires=mrrc-firstboot.service
+
+[Service]
+User=mrrc
+Group=mrrc
+WorkingDirectory=/opt/mrrc_modern
+EnvironmentFile=/opt/mrrc_modern/env/mrrc.env
+ExecStart=/opt/mrrc_modern/venv/bin/python server.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

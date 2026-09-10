@@ -1,0 +1,15 @@
+[Unit]
+Description=MRRC Modern first-boot auto-configuration
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/mrrc/firstboot-done
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/firstboot_wrapper.py
+StandardOutput=console
+StandardError=journal
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,2 @@
+#!/bin/sh
+echo "  MRRC Modern: https://raspberrypi.local:8888   (web password: sudo mrrc-show-password)"

@@ -7,7 +7,7 @@ description: Use when publishing a new MRRC Modern release end-to-end — bumpin
 
 ## Overview
 
-One version → two artifacts → one website. The version's **single source of truth is the top `## [vX.Y.Z]` heading in `CHANGELOG.md`** — `packaging/macos/build.sh` parses it at build time, and `packaging/windows/MRRC-Modern.iss` `#define MyAppVersion` must be manually kept equal. Platform mechanics live in the sibling skills (`macos-installer`, `windows-installer`) and the operator manuals (`mac_pack.md`, `win_pack.md`); this skill owns the release-day order and the cross-cutting traps.
+One version → two artifacts → one website. The version's **single source of truth is the top `## [vX.Y.Z]` heading in `CHANGELOG.md`** — `packaging/macos/build.sh` parses it at build time, and `packaging/windows/MRRC-Modern.iss` `#define MyAppVersion` must be manually kept equal. Platform mechanics live in the sibling skills (`macos-installer`, `windows-installer`) and the operator manuals (`mac_pack.md`, `win_pack.md`); this skill owns the release-day order and the cross-cutting traps. Optional Raspberry Pi artifact: `MRRC-Modern-v<ver>-rpi64.img.xz` built/published via `pi_pack.md` (`packaging/rpi/build-image.sh`); build it before the release-day pipeline when shipping it with a release, and re-verify its download URL in step 7 alongside the installers.
 
 ## Pipeline (v1.14.0-proven order)
 

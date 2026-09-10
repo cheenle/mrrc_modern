@@ -343,9 +343,50 @@
             font-size: 0.85rem;
             margin-top: 1.25rem;
           ">
+<div style="
+            background: var(--scope-surface);
+            border: 1px solid var(--scope-primary);
+            border-radius: 14px;
+            padding: 1.75rem 2rem;
+            max-width: 720px;
+            margin: 0 auto;
+          ">
+<p style="margin: 0 0 0.25rem; font-size: 1.15rem">
+<i class="fab fa-raspberry-pi" style="color: var(--scope-primary)"></i>
+<strong> MRRC-Modern-v1.14.1-rpi64.img.xz — 树莓派</strong>
+</p>
+<p style="color: var(--scope-text-muted); margin: 0 0 1rem">
+            __PI_SIZE__ · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
+<code style="font-size: 0.76rem">SHA-256: __PI_SHA__</code>
+</p>
+<p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
+            用 Raspberry Pi Imager（"使用自定义镜像"）烧卡，上电后浏览器打开
+            <code>https://raspberrypi.local:8888</code>。首启零配置：自动生成
+            网页密码（HDMI 控制台 / SSH motd / <code>sudo mrrc-show-password</code>），
+            或烧卡前把 <code>mrrc.env</code> 放到 boot 分区预置自己的密码。
+            电台与串口自动识别；FT-710 真 FFT 需把 FTDI aarch64 库放到
+            <code>/opt/mrrc_modern/vendor/ftdi/</code>（缺库自动回落 S 表频谱）；
+            IC-7300 经 CI-V 开箱即用。
+          </p>
+<div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.14.1-rpi64.img.xz">
+<i class="fab fa-raspberry-pi"></i> 下载树莓派镜像
+            </a>
+<a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/blob/main/docs/RASPBERRY_PI_GUIDE.md" rel="noopener" target="_blank">
+<i class="fas fa-book"></i> 树莓派安装指南
+            </a>
+</div>
+</div>
+        </p>
+        <p style="
+            text-align: center;
+            color: var(--scope-text-muted);
+            font-size: 0.85rem;
+            margin-top: 1.25rem;
+          ">
           缺少 FTDI DLL 时 FT-710 后端自动回退到 S 表合成频谱——CAT 控制与
-          音频不受影响（IC-7300 后端完全不需要 FTDI）。macOS 用户请使用
-          上方安装包，或从源码运行；Linux / 树莓派请从源码运行（见下方
+          音频不受影响（IC-7300 后端完全不需要 FTDI）。macOS / Windows：请使用
+          上方安装包。树莓派：烧录上方镜像。通用 Linux：从源码运行（见下方
           快速上手）。
         </p>
 </div>
@@ -895,6 +936,7 @@
 <h4>资源</h4>
 <ul>
 <li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.14.1</a></li>
+<li><a href="../downloads/MRRC-Modern-v1.14.1-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像 v1.14.1</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>
 <li><a href="../sdd.html">SDD 文档</a></li>

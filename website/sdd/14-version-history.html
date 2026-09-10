@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.36</td>
+<td>2026-09-09</td>
+<td>Kimi</td>
+<td><strong>Raspberry Pi image packaging line (rpi64, frontend/packaging-only).</strong> New <code class="scope-code">packaging/rpi/</code> builds a bootable Raspberry Pi OS Lite 64-bit (Bookworm) image via pi-gen (locked <code class="scope-code">2026-06-18-raspios-bookworm-arm64</code>): custom stage4 installs runtime deps, deploys the code tree to <code class="scope-code">/opt/mrrc_modern</code>, creates the venv at build time (first boot needs no network), adds the <code class="scope-code">mrrc</code> user (dialout/audio), and wires <code class="scope-code">mrrc-modern.service</code> (systemd, EnvironmentFile, Restart=on-failure) + <code class="scope-code">mrrc-firstboot.service</code> (oneshot: adopt a pre-seeded <code class="scope-code">/boot/firmware/mrrc.env</code> — operator-chosen password — else run <code class="scope-code">linux/first_run.py</code> to generate a password and probe FT-710 ASCII / Icom CI-V 0x19 across <code class="scope-code">/dev/ttyUSB*|ttyACM*</code> with onboard-UART filtering; then ssl_bootstrap cert, headless defaults <code class="scope-code">MRRC_WEB_HOST=::</code>, motd + <code class="scope-code">sudo mrrc-show-password</code> discovery; the web login banner stays loopback-only). FT-710 true spectrum ships without FTDI Linux libs (manual aarch64 drop-in to <code class="scope-code">vendor/ftdi/</code>, documented; S-meter fallback unchanged; IC-7300 unaffected). Build hosts: Docker Desktop (native aarch64) or the ham.vlsc.net host via qemu-user-static (documented fallback used for the first build). <code class="scope-code">linux/first_run.py</code> ported from <code class="scope-code">macos/first_run.py</code> with Linux USB-serial filtering (4 unit tests); <code class="scope-code">test_rpi_packaging.py</code> structural assertions (7 tests → suite 696 green); chroot build gate asserts runtime imports inside the image; post-build <code class="scope-code">verify-image.sh</code> (xz integrity, size bounds, debugfs spot-checks). Docs: <code class="scope-code">pi_pack.md</code>, <code class="scope-code">docs/RASPBERRY_PI_GUIDE.md</code>, website EN/ZH Pi download cards, dual-platform-release skill reference. Real-Pi acceptance (flash, first-boot paths, CAT/audio) remains an operator check.</td>
+</tr>
+<tr>
 <td>SDD V2.35</td>
 <td>2026-09-09</td>
 <td>Kimi</td>
@@ -547,7 +553,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.35 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.36 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

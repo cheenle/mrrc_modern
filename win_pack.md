@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.14.2**（2026-09-10，IC-7300 波特率联动 + 音频重复条目恢复（SDD V2.37）：连接设置保存/首启探测按型号对齐 `MRRC_BAUD_RATE`（旧模板预填 38400 饿死 CI-V 频谱流），-9999 音频打开重试轮换 host-API 重复条目，WDM-KS 锁定名回退到可用的 MME 条目；Win11 上 721 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,429,662 bytes，SHA-256 `4ea74b2a0d1987673de0d2821ab6de224aa0134611919ee86ddd6ab6d8da934c`）。
+> 最新构建：**v1.14.2**（2026-09-10，IC-7300 波特率联动 + 音频重复条目恢复（SDD V2.37）：连接设置保存/首启探测按型号对齐 `MRRC_BAUD_RATE`（旧模板预填 38400 饿死 CI-V 频谱流），-9999 音频打开重试轮换 host-API 重复条目，WDM-KS 锁定名回退到可用的 MME 条目；Win11 上 721 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,435,022 bytes，SHA-256 `a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706`）。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 ## 1. 环境拓扑
@@ -195,7 +195,7 @@ build.ps1 有 `Invoke-Checked` 闸门：测试或任何一步非零退出都会�
 ### Step 5 — 验证产物（在 VM 上）
 
 ```powershell
-dir C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe                    # v1.14.2: 45,429,662 bytes
+dir C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe                    # v1.14.2: 45,435,022 bytes
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\vendor\ftdi\windows\bin\x64 # 两个 DLL 都在
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\_internal\static\index.html # static 在 _internal
 dir C:\mrrc_modern\dist\windows\MRRC-Modern\_internal\mem_channels.json # 初始频道种子
@@ -208,7 +208,7 @@ Get-FileHash C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe -Algorithm SHA256
 ssh ham.vlsc.net "scp cheenle@192.168.122.133:C:/mrrc_modern/dist/windows/MRRC-Modern-Setup.exe /tmp/MRRC-Modern-v1.14.2-Windows-x64-Setup.exe"
 scp ham.vlsc.net:/tmp/MRRC-Modern-v1.14.2-Windows-x64-Setup.exe dist/windows/
 shasum -a 256 dist/windows/MRRC-Modern-v1.14.2-Windows-x64-Setup.exe
-# v1.14.2: 4ea74b2a0d1987673de0d2821ab6de224aa0134611919ee86ddd6ab6d8da934c
+# v1.14.2: a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706
 ```
 
 ## 4. 发布到网站（可选）
@@ -231,7 +231,7 @@ cd website
 - `docs/WINDOWS_INSTALLER_GUIDE.md`（Download 表格 + 构建说明段）
 - `README.md`、`CHANGELOG.md`、`SDD/README.md`、`SDD/14-version-history.md`
 
-验证两个 URL 都返回 200、`content-length: 45429662`，下载后的 SHA-256 都等于 `4ea74b2a0d1987673de0d2821ab6de224aa0134611919ee86ddd6ab6d8da934c`：
+验证两个 URL 都返回 200、`content-length: 45435022`，下载后的 SHA-256 都等于 `a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706`：
 
 ```bash
 curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe

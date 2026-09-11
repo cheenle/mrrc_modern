@@ -2,6 +2,22 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.14.3] — 2026-09-11 — IC-7300 S-meter 闪烁修复 + 树莓派镜像重建
+
+### Fixed
+
+- **IC-7300 S-meter 闪烁（SDD V2.39）**：CI-V `0x27` 频谱段不携带 S 表字节，
+  `ScopeHandler.s_meter` 保持 0 初始化值（合法 S0），`_on_scope_frame` 的
+  `>= 0` 闸门在约 30fps 的波形回调里持续广播它，把 10Hz CAT 轮询（`15 02`）
+  之间把 `radio.s_meter` 压回 0——UI S 表连续闪烁。无数据哨兵改为 **-1**
+  （被闸门跳过）；FT-710 逐帧值、合成 S 表回退与已有行为不变。
+
+### Raspberry Pi
+
+- **rpi64 镜像重建**：`MRRC-Modern-v1.14.3-rpi64.img.xz`，携带本次修复及
+  v1.14.1/v1.14.2 全部改动（电台设置面板、RX 录音质量修复、IC-7300 波特率
+  联动、音频重复恢复、S 表修复）。构建基线与发布说明见 `pi_pack.md`。
+
 ## [v1.14.2] — 2026-09-10 — IC-7300 baud linkage + audio duplicate recovery
 
 ### Fixed

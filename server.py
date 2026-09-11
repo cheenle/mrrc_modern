@@ -634,7 +634,12 @@ async def _on_scope_frame(_scope: ScopeHandler):
     if _scope.last_update > 0:
         changes = {}
         # S-meter from scope is 30 fps (vs 10 fps CAT) — safe to merge
-        # because CAT corrects it every 100 ms.
+        # because CAT corrects it every 100 ms. The sentinel -1 (ScopeHandler
+        # init) means "this scope source carries no S-meter byte" and is
+        # skipped: the IC-7300's CI-V scope segments have no S-meter field,
+        # and with the old 0-initialized field every waveform forced
+        # radio.s_meter back to 0 between CAT polls — the UI S-meter
+        # flickered between 0 and the true reading (SDD V2.39).
         if _scope.s_meter >= 0:
             changes["s_meter"] = _scope.s_meter
         # vfo_a_freq / mode / preamp / attenuator are deliberately NOT

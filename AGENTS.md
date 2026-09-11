@@ -106,7 +106,7 @@ Python: 4-space indentation, type hints for shared state, `UPPER_CASE` for modul
 
 ## Testing Guidelines
 
-Run the full suite with `python -m unittest discover -s tests -v` (currently 721 tests across 39 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connecte
+Run the full suite with `python -m unittest discover -s tests -v` (currently 724 tests across 39 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connecte
 
 ## Commit & Pull Request Guidelines
 

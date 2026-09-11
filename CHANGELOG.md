@@ -18,6 +18,11 @@ All notable changes to the MRRC Web Control project.
   附带 host API 与其余候选。
 - 无 CAT/PTT/协议变更；电台侧验收（IC-7300 频谱 @115200、现场机音频恢复）
   留待操作员检查。
+- **IC-7300 S 表闪烁跳跃**：IC-7300 的 CI-V 频谱段不带 S 表字节，`ScopeHandler`
+  初始值 0（合法的 S0）被 `_on_scope_frame` 的 `>= 0` 门槛当成真实值，每个
+  频谱帧（~30 fps）把 `radio.s_meter` 强推回 0，与 10 Hz CAT 轮询的真实读数
+  交替打架 → UI S 表疯狂闪烁。无数据哨兵改为 -1（`>= 0` 门槛自动跳过；
+  FT-710 逐帧真实值与合成回退路径不变）。
 
 ## [v1.14.1] — 2026-09-09 — Radio settings panel with RF power slider (web UI)
 

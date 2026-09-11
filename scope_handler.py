@@ -27,7 +27,7 @@ from ctypes import (
     POINTER, byref, CDLL, create_string_buffer,
 )
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from backends.ft710.scope_frame import (
     SCOPE_FRAME_SIZE, WF_SIZE, SYNC_TAIL, SYNC_FULL, parse_scope_frame,
@@ -67,7 +67,16 @@ class ScopeHandler:
         # Latest data
         self.spectrum_rx1: list[int] = [0] * WF_SIZE
         self.spectrum_rx2: list[int] = [0] * WF_SIZE
-        self.s_meter: int = 0
+        # -1 = "this scope source carries no S-meter". The FT-710's FT4222
+        # frame embeds a real S-meter byte (parsed at data[110]); the
+        # IC-7300's CI-V scope segments do NOT, so the field would otherwise
+        # stay at 0 — a legal S-zero — and _on_scope_frame would force
+        # radio.s_meter back to 0 on every ~30 fps waveform while the 10 Hz
+        # CAT poll wrote the true reading: the UI S-meter flickered between
+        # the two (SDD V2.39 field log 2026-09-10). The >= 0 gate in
+        # server._on_scope_frame skips the sentinel; synthetic fallback
+        # seeds the real radio value via update_from_radio_state().
+        self.s_meter: int = -1
         self.vfoa_freq: int = 0
         self.vfoa_freq_bin: int = 0
         self.vfob_freq: int = 0
@@ -82,7 +91,7 @@ class ScopeHandler:
         self._last_frame_time = 0.0
         self._fps = 0.0
 
-        self._on_frame: Optional[callable] = None
+        self._on_frame: Optional[Callable] = None
 
     @property
     def connected(self) -> bool:
@@ -92,7 +101,7 @@ class ScopeHandler:
     def fps(self) -> float:
         return self._fps
 
-    def set_on_frame(self, callback: callable):
+    def set_on_frame(self, callback: Callable):
         self._on_frame = callback
 
     def update_from_radio_state(self, state):

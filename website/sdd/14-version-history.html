@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.39</td>
+<td>2026-09-10</td>
+<td>Claude</td>
+<td><strong>IC-7300 S-meter flicker fix — scope “no data” sentinel (hotfix folded into the v1.14.2 installers, rebuilt same day).</strong> Field report: the IC-7300’s web S-meter flickered/jumped constantly. Root cause: the IC-7300’s CI-V scope segments carry NO S-meter byte (unlike the FT-710’s FT4222 frame at data[110]), so <code class="scope-code">ScopeHandler.s_meter</code> stayed at its 0-initialized value — a legal S-zero — and <code class="scope-code">_on_scope_frame</code>’s <code class="scope-code">&gt;= 0</code> gate broadcast it on every ~30 fps waveform, forcing <code class="scope-code">radio.s_meter</code> back to 0 between the 10 Hz CAT poll (15 02) updates that wrote the true reading: the UI flipped between the two continuously. Fix: the “no data” sentinel is now <strong>-1</strong>, skipped by the existing <code class="scope-code">&gt;= 0</code> gate; FT-710 per-frame real values and the synthetic fallback (<code class="scope-code">update_from_radio_state</code> seeds the true radio value) are unchanged. Also fixes the pre-existing <code class="scope-code">Optional[callable]</code> type misuse in ScopeHandler (builtins.callable is not a type). 3 new sentinel tests; suite 724 tests. Docs: SDD README Quick Facts, CHANGELOG v1.14.2. Real-radio flicker acceptance on the field rig remains an operator check. <strong>Same-day rebuild</strong>: the macOS DMG was rebuilt with this fix and redeployed (55,898,038 bytes, SHA-256 <code class="scope-code">88ed7c626e86b8cb2ba03a5ce2419c9313fece0e97eb579da75b8dda6c6bbb75</code>, replacing the V2.38 build); the Windows rebuild is pending — ham.vlsc.net (KVM jump host) went offline mid-pipeline (DDNS failure mode per win_pack §5), so the online <code class="scope-code">MRRC-Modern-Setup.exe</code> is still the V2.38 pre-flicker-fix build and must be replaced when the host returns.</td>
+</tr>
+<tr>
 <td>SDD V2.38</td>
 <td>2026-09-10</td>
 <td>Claude</td>
@@ -565,7 +571,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.38 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.39 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

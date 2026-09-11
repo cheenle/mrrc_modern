@@ -7,8 +7,8 @@
 python3 -m venv /opt/mrrc_modern/venv
 /opt/mrrc_modern/venv/bin/pip install --upgrade pip
 # PyPI direct first; CN mirror fallback (ham build host has flaky egress).
-/opt/mrrc_modern/venv/bin/pip install -r /opt/mrrc_modern/requirements.txt \
-  || /opt/mrrc_modern/venv/bin/pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r /opt/mrrc_modern/requirements.txt
+/opt/mrrc_modern/venv/bin/pip install -r /opt/mrrc_modern/requirements.txt ||
+	/opt/mrrc_modern/venv/bin/pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r /opt/mrrc_modern/requirements.txt
 
 # ── groups & ownership ──
 usermod -aG dialout,audio mrrc
@@ -27,6 +27,6 @@ echo "MRRC Modern $(cat /opt/mrrc_modern/VERSION) — rpi64 image"
 
 # ── BUILD GATE: runtime imports + syntax inside the image ──
 python3 -m py_compile /opt/mrrc_modern/server.py \
-    /opt/mrrc_modern/linux/first_run.py /opt/mrrc_modern/linux/firstboot_wrapper.py
+	/opt/mrrc_modern/linux/first_run.py /opt/mrrc_modern/linux/firstboot_wrapper.py
 /opt/mrrc_modern/venv/bin/python -c "import fastapi, uvicorn, serial, pyaudio, numpy, cryptography; print('deps OK')"
 /opt/mrrc_modern/venv/bin/python -c "import sys; sys.path.insert(0,'/opt/mrrc_modern'); import scope_libraries; print('scope libs OK')"

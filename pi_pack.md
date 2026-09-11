@@ -1,7 +1,7 @@
 # Raspberry Pi 镜像打包流程（rpi64）
 
 > 用途：构建并发布 `MRRC-Modern-v<ver>-rpi64.img.xz` —— Raspberry Pi OS Lite 64-bit (Bookworm) 定制镜像，烧卡即用、首启零配置。规格见 `docs/superpowers/specs/2026-09-09-raspberry-pi-image-design.md`。
-> 最新构建：**v1.14.1**（2026-09-09，构建主机 ham.vlsc.net x86_64 + qemu-user-static 交叉构建；产物 539,720,392 bytes，SHA-256 `b13778c2fe6f72e6f30229214b6837f950b551596d8c562f952b0c27001fdb43`；chroot 闸门（deps OK/scope libs OK）与 debugfs 抽查通过；真机烧卡验收留操作员。）
+> 最新构建：**v1.14.3**（2026-09-12，**本机 Mac Docker Desktop 原生 aarch64 构建，8 分钟**；产物 588,677,000 bytes，SHA-256 `2894c895685c72d27e6c97d997d51cf2835ddb018e813375c15950da733a2509`；含 SDD V2.37–2.39 全部修复；chroot 闸门与 debugfs 抽查（含 S-meter 哨兵）通过；真机烧卡验收留操作员。）
 > 用户向的安装/使用说明见 `docs/RASPBERRY_PI_GUIDE.md`。
 
 ## 1. 环境拓扑
@@ -9,10 +9,17 @@
 两条构建路径（首选本机，资源不足时用构建机）：
 
 ```
-首选：本机 Mac (Apple Silicon)
-   Docker Desktop 的 Linux VM 就是 aarch64 → pi-gen 原生构建，无仿真，15–30 分钟
+首选：本机 Mac (Apple Silicon) + Docker Desktop
+   Docker Desktop 的 Linux VM 就是 aarch64 → pi-gen 原生构建，无仿真，实测约 8 分钟
+   ⚠ 两个前置条件（2026-09-12 实测踩坑）：
+     1) Docker Desktop 数据目录（Docker.raw，构建 work 在里面，约 6–10GB）默认在内置盘：
+        8GB 内存 / 小内置盘的机器建议把数据目录移到外置 SSD（见 §6 首行）
+     2) Dockerfile 基础镜像仍是 debian:bullseye（其 security 源已过期）：
+        构建 pi-gen 镜像时必须 `--build-arg BASE_IMAGE=debian:bookworm`
 备选：ham.vlsc.net (x86_64, Ubuntu 24.04, 2C/59G, sudo 免密)
    apt 装 qemu-user-static + binfmt-support → qemu 交叉构建，慢（约 1–2.5 小时）
+   ⚠ ham 的 GitHub/docker.io 都可能不通（DNS 污染）：pi-gen 克隆需本机预置后 rsync 过去；
+     debian:bookworm 需 daocloud 镜像源预拉 + retag
 ```
 
 - pi-gen 锁定 ref：`2026-06-18-raspios-bookworm-arm64`（升级 ref = 计划性变更：重跑全量构建 + 真机验收，并在本文件记录新 ref）。
@@ -89,6 +96,11 @@ packaging/rpi/pi-gen-stage4/
 | ham 上 pi-gen clone 慢/失败 | GitHub 网络波动 | 本机 clone 后 `rsync -a build/pi-gen ham.vlsc.net:` 再继续 |
 | 构建中途 pip/apt 网络错误 | 瞬态 | 重跑（pi-gen stage 缓存：`touch` 已完成 stage 的 `.SKIP` 之外的缓存机制按提示续跑） |
 | `TARGET_ARCH` 不被识别 | pi-gen ref 太老 | 确认 ref ≥ 2022 版本；本文件锁定 ref 已验证 |
+| Docker.raw 撑爆内置盘（构建中途 EROFS / Docker 崩溃） | 构建 work 默认在 Docker.raw 里（约 6–10GB），内置盘不够 | 把 Docker Desktop 数据目录移到外置盘：退出 Docker → `rsync -a ~/Library/Containers/com.docker.docker/Data/vms/0/data/ /Volumes/SSD/docker-vm-data/` → `mv data data.bak && ln -s /Volumes/SSD/docker-vm-data data` → 重启 Docker 验证镜像仍在 → 删 data.bak（8GB Mac 实测有效） |
+| `docker build` 报 `Release file ... expired`（bullseye-security） | pi-gen Dockerfile 默认 `BASE_IMAGE=debian:bullseye`，其源已过期 | `docker build --build-arg BASE_IMAGE=debian:bookworm -t pi-gen /path/to/pi-gen`（镜像内容仍是 bookworm，基础镜像只作构建工具） |
+| debootstrap 报 `mknod: Operation not permitted` / `mounted with noexec or nodev` | 把 work 挂到 macOS 外置卷（hdiutil/HFS+/APFS 经 virtiofs 进容器后禁止设备节点）——**work 必须留在 Docker VM 内部** | 不要给 `/pi-gen/work`、`/pi-gen/deploy` 传宿主绑定挂载（pi-gen 的 Dockerfile 已声明 VOLUME，匿名卷会自然接住）；构建完用 `docker cp <container>:/pi-gen/deploy/. <宿主目录>` 取出产物 |
+| `xz -T12 -9` 长时间 0 输出、系统疯狂 swap | 8GB 内存机器跑不动 -9 × 12 线程（每线程约 700MB） | 用 `xz -T4 -6`（约 100 秒出 500MB，整像 3–4 分钟） |
+| 上传大文件到 www 报 `write remote ... Failure` | www 的 /tmp 是 454MB tmpfs | 流式直写：`cat file | ssh www.vlsc.net "sudo -n tee /path/dest > /dev/null"` 再 chown/chmod |
 | 镜像超体积界 | venv 膨胀/误入大文件 | `debugfs` 进像 du 排查；检查 rsync exclude 是否漏改 |
 | 首启没生成密码（真机） | firstboot 依赖 venv 失败 | HDMI 看 console 报错；`journalctl -u mrrc-firstboot` |
 

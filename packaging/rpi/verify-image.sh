@@ -41,6 +41,8 @@ for f in /opt/mrrc_modern/VERSION /etc/systemd/system/mrrc-modern.service \
 	echo "--- $f ---"
 	"$DEBUGFS" -R "cat $f" "$DEV" 2>/dev/null | head -6
 done
+echo "--- scope_handler S-meter sentinel (SDD V2.39) ---"
+"$DEBUGFS" -R "cat /opt/mrrc_modern/scope_handler.py" "$DEV" 2>/dev/null | grep -m1 "s_meter: int = -1" || echo "WARNING: sentinel not found"
 echo "==> venv python present:"
 "$DEBUGFS" -R "stat /opt/mrrc_modern/venv/bin/python3" "$DEV" 2>/dev/null | head -2
 echo "==> VERIFY_OK"

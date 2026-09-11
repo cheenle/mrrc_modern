@@ -15,8 +15,11 @@ echo "==> Building MRRC Modern ${VERSION} rpi64 image"
 
 # ── preflight ──
 docker info >/dev/null 2>&1 || { echo "ERROR: Docker daemon not running (open -a Docker)"; exit 1; }
-FREE_GB=$(df -Pk "$REPO_ROOT" | awk 'NR==2 {print int($4/1048576)}')
-(( FREE_GB >= 20 )) || { echo "ERROR: need >=20GB free, have ${FREE_GB}GB"; exit 1; }
+# Free space is checked on the WORK volume (pi-gen scratch, image and xz all
+# land there; MRRC_PI_WORK can point at an external disk).
+mkdir -p "$(dirname "$WORK")"
+FREE_GB=$(df -Pk "$(dirname "$WORK")" | awk 'NR==2 {print int($4/1048576)}')
+(( FREE_GB >= 20 )) || { echo "ERROR: need >=20GB free on $(dirname "$WORK"), have ${FREE_GB}GB"; exit 1; }
 
 # ── pi-gen clone (pinned; skip when the right ref is already in place —
 #    allows pre-seeding the clone on hosts where GitHub is unreachable) ──
@@ -63,6 +66,9 @@ STAGE_LIST="stage0 stage1 stage2 rpi-stage4"
 EOF
 
 cd "$WORK"
+# Mount the host pi-gen dir into the container so work/ + deploy/ (multi-GB)
+# live on the WORK volume instead of Docker.raw.
+export PIGEN_DOCKER_OPTS="-v $WORK:/pi-gen"
 # PRESERVE_CONTAINER=1 keeps the pigen_work container on failure — under
 # qemu a full redo costs hours, so always preserve and resume via CONTINUE=1:
 #   CONTINUE=1 IGNORE_FILE_CHANGES=1 ./build-docker.sh   (after a failure)

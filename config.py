@@ -41,6 +41,21 @@ def _env_float(name: str, default: float) -> float:
     return float(_env(name) or default)
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Read a boolean env var: 1/true/yes/on are true, anything else false."""
+    val = _env(name)
+    if val is None:
+        return default
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+
+# ── Unverified-Model Transmit Gate ──────────────────────────────────
+# Radios whose profile has no hardware evidence refuse PTT/TUNE until the
+# operator opts in (spec 2026-09-12 §6.1).  Read at import time, like the
+# other safety switches, so the state is visible in the startup log.
+ALLOW_UNVERIFIED_TX = _env_bool("MRRC_ALLOW_UNVERIFIED_TX", False)
+
+
 # ── Radio Model Selection ───────────────────────────────────────────
 # Backend key registered in backends/__init__.py. Select with
 # MRRC_RADIO_MODEL.

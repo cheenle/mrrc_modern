@@ -6,6 +6,7 @@ import asyncio
 import json
 from pathlib import Path
 import re
+from typing import Any, cast
 import unittest
 from unittest.mock import patch
 
@@ -447,10 +448,12 @@ class CookieSettingsPersistenceTests(unittest.TestCase):
             elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                 if node.target.id == 'BANDS':
                     target = node.target
-            if target is not None:
+            if target is not None and isinstance(node, (ast.Assign, ast.AnnAssign)):
+                assert node.value is not None
                 server_bands = ast.literal_eval(node.value)
                 break
         self.assertIsNotNone(server_bands, "Could not parse BANDS from backends/ft710/config_ft710.py")
+        assert server_bands is not None
         self.assertEqual(len(server_bands), 12,
                          f"Server expects 12 bands, got {len(server_bands)}")
 
@@ -557,7 +560,7 @@ class TXUplinkOwnershipTests(unittest.TestCase):
         """After the owner drops, a remaining client must become owner —
         otherwise everyone stays muted until they reconnect."""
         s = self.server
-        a, b = object(), object()
+        a, b = _fake_socket(), _fake_socket()
         s.audio_tx_clients.update([a, b])
         s._tx_owner_ws = a
         s.audio_tx_clients.discard(a)  # endpoint discards before promoting
@@ -567,7 +570,7 @@ class TXUplinkOwnershipTests(unittest.TestCase):
 
     def test_promote_with_no_clients_yields_none(self):
         s = self.server
-        s._tx_owner_ws = object()
+        s._tx_owner_ws = _fake_socket()
         self.assertIsNone(s._promote_tx_owner())
         self.assertIsNone(s._tx_owner_ws)
 
@@ -575,7 +578,7 @@ class TXUplinkOwnershipTests(unittest.TestCase):
         """The client keying the radio owns the uplink, even if another
         client connected first."""
         s = self.server
-        ios, browser = object(), object()
+        ios, browser = _fake_socket(), _fake_socket()
         s.audio_tx_clients.update([ios, browser])
         s._ws_tokens[ios] = "ios-token"
         s._ws_tokens[browser] = "browser-token"
@@ -586,7 +589,7 @@ class TXUplinkOwnershipTests(unittest.TestCase):
 
     def test_claim_with_unknown_token_keeps_current_owner(self):
         s = self.server
-        a = object()
+        a = _fake_socket()
         s.audio_tx_clients.add(a)
         s._tx_owner_ws = a
         self.assertIsNone(s._claim_tx_owner_for_token("no-such-token"))
@@ -598,7 +601,7 @@ class TXUplinkOwnershipTests(unittest.TestCase):
         """A page reload must not leave its new mic socket muted behind the
         old socket authenticated by the same browser session."""
         s = self.server
-        stale, current = object(), object()
+        stale, current = _fake_socket(), _fake_socket()
         s._ws_tokens[stale] = "same-browser-session"
         s._ws_tokens[current] = "same-browser-session"
         s._tx_owner_ws = stale
@@ -609,7 +612,7 @@ class TXUplinkOwnershipTests(unittest.TestCase):
 
     def test_new_different_token_connection_cannot_steal_owner(self):
         s = self.server
-        owner, newcomer = object(), object()
+        owner, newcomer = _fake_socket(), _fake_socket()
         s._ws_tokens[owner] = "owner-session"
         s._ws_tokens[newcomer] = "other-session"
         s._tx_owner_ws = owner
@@ -667,6 +670,18 @@ class _SetFakeCat:
     async def set_frequency(self, freq_hz, vfo="A"):
         self.frequency_calls.append((freq_hz, vfo))
         return True
+
+
+# Test doubles for FastAPI WebSocket objects.  The server helpers are
+# annotated with the real types, but these tests only need object identity
+# (owner tracking) or a send_text sink, so the doubles are typed Any at
+# their creation point instead of casting at every call site.
+def _fake_socket() -> Any:
+    return object()
+
+
+def _fake_ws() -> Any:
+    return _SetFakeWS()
 
 
 class _SetFakeWS:
@@ -734,14 +749,14 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
             MODE_NAME_TO_NUM as CIV_MODE_NAME_TO_NUM)
         cat = self._install(_SetFakeBackend(
             tune_via="atu", mode_name_to_num=CIV_MODE_NAME_TO_NUM))
-        ws = _SetFakeWS()
+        ws = _fake_ws()
         await self.server._execute_set_command("mode", "LSB", ws)
         self.assertEqual(cat.mode_calls, [0x00])
         self.assertEqual(server_radio_mode(self.server), 0x00)
 
     async def test_mode_set_without_backend_uses_ft710_table(self):
         cat = self._install(None)
-        ws = _SetFakeWS()
+        ws = _fake_ws()
         await self.server._execute_set_command("mode", "LSB", ws)
         self.assertEqual(cat.mode_calls, [0x01])  # Yaesu register number
 
@@ -750,7 +765,7 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
             MODE_NAME_TO_NUM as CIV_MODE_NAME_TO_NUM)
         cat = self._install(_SetFakeBackend(
             tune_via="atu", mode_name_to_num=CIV_MODE_NAME_TO_NUM))
-        ws = _SetFakeWS()
+        ws = _fake_ws()
         await self.server._handle_ws_message(
             ws, json.dumps({"type": "memRecall", "mode": "USB"}))
         self.assertEqual(cat.mode_calls, [0x01])  # CI-V USB, not Yaesu 2
@@ -759,7 +774,7 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_tune_atu_never_touches_priority_command(self):
         cat = self._install(_SetFakeBackend(tune_via="atu"))
-        ws = _SetFakeWS()
+        ws = _fake_ws()
         await self.server._execute_set_command("tune", True, ws)
         await self.server._execute_set_command("tune", False, ws)
         self.assertEqual(cat.tune_calls, [True, False])
@@ -767,7 +782,7 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_tune_tx2_keeps_ac_sequence(self):
         cat = self._install(_SetFakeBackend(tune_via="tx2"))
-        ws = _SetFakeWS()
+        ws = _fake_ws()
         await self.server._execute_set_command("tune", True, ws)
         await self.server._execute_set_command("tune", False, ws)
         self.assertEqual(cat.tune_calls, [True, False])
@@ -776,7 +791,7 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_tune_without_backend_keeps_legacy_ac_sequence(self):
         cat = self._install(None)
-        ws = _SetFakeWS()
+        ws = _fake_ws()
         await self.server._execute_set_command("tune", True, ws)
         await self.server._execute_set_command("tune", False, ws)
         self.assertEqual(cat.priority_calls, ["AC003", "AC000"])
@@ -790,7 +805,7 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
             tune_via="atu", mode_name_to_num=CIV_MODE_NAME_TO_NUM,
             bands=CIV_BANDS)
         cat = self._install(backend)
-        ws = _SetFakeWS()
+        ws = _fake_ws()
         await self.server._execute_set_command("band", "40m", ws)
         self.assertEqual(cat.band_stack_calls, [])  # no BSR on Icom
         self.assertEqual(cat.frequency_calls, [(7_050_000, "A")])
@@ -806,7 +821,7 @@ class BackendAwareSetCommandTests(unittest.IsolatedAsyncioTestCase):
             tune_via="tx2", mode_name_to_num=FT_MODE_NAME_TO_NUM,
             bands=FT_BANDS)
         cat = self._install(backend)
-        ws = _SetFakeWS()
+        ws = _fake_ws()
         await self.server._execute_set_command("band", "20m", ws)
         self.assertEqual(cat.band_stack_calls, [5])
         self.assertEqual(cat.frequency_calls, [(14_270_000, "A")])
@@ -827,14 +842,20 @@ class BackendModeMapSurfaceTests(unittest.TestCase):
     def test_ic7300_backend_exposes_civ_map(self):
         from backends.ic7300.backend import IC7300Backend
         from backends.ic7300.config_ic7300 import MODE_NAME_TO_NUM
-        self.assertIs(IC7300Backend("/dev/null").mode_name_to_num,
-                      MODE_NAME_TO_NUM)
+        # Equality, not identity: the backend now serves the map from its
+        # model profile, which owns a copy so a caller cannot mutate the
+        # verified config table through the backend. Drift is still
+        # caught by the value comparison.
+        self.assertEqual(IC7300Backend("/dev/null").mode_name_to_num,
+                         MODE_NAME_TO_NUM)
         self.assertEqual(MODE_NAME_TO_NUM["LSB"], 0x00)
         self.assertEqual(MODE_NAME_TO_NUM["USB"], 0x01)
 
     def test_base_backend_default_map_is_empty(self):
         from backends.base import RadioBackend
-        self.assertEqual(RadioBackend.mode_name_to_num.fget(object()), {})
+        getter = RadioBackend.mode_name_to_num.fget
+        assert getter is not None
+        self.assertEqual(getter(cast(Any, object())), {})
 
 
 if __name__ == "__main__":

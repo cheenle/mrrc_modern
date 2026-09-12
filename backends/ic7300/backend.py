@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Awaitable, Callable, Optional
 
+import config
 from backends.base import RadioBackend, RadioCapabilities, ScopeProducer
 from backends.ic7300.civ_controller import (
     CivController, CMD_LEVEL,
@@ -24,72 +25,85 @@ from backends.ic7300.civ_controller import (
     SETMODE_CIV_TRANSCEIVE_ON, SETMODE_CIV_TRANSCEIVE_MK2,
     SW_PREAMP, SW_NB, SW_NR, SW_COMP,
 )
+from backends.ic7300.civ_profiles import PROFILES, CivModelProfile
 from backends.ic7300.civ_scope import CivScopeProducer
-from backends.ic7300.config_ic7300 import (
-    BANDS, MODE_NUM_TO_NAME, MODE_NAME_TO_NUM, PREAMP_LABELS,
-    FIL_DEFAULT_WIDTHS_HZ, SCOPE_SPANS, CIV_ADDR, MK2_CIV_ADDR,
-    get_band_for_frequency,
-    raw_to_dbm, raw_to_s_unit, raw_to_power, raw_to_swr,
-    raw_to_alc_pct, raw_to_voltage, raw_to_current,
-)
-from config import NARROW_MODES
 
 logger = logging.getLogger("ic7300.backend")
 
 # Primary modes exposed in the UI cycle button (in order): the shared
-# config.UI_MODES list minus DATA-L, which the IC-7300 does not have.
+# config.UI_MODES list minus DATA-L, which the IC-7300 family does not
+# have (IC-705 DV/WFM and IC-7610/IC-7760 PSK stay reachable on the radio
+# and are decodable by name, but are deliberately absent from the cycle).
 UI_MODES_IC7300 = ["LSB", "USB", "CW-U", "AM", "FM", "RTTY-L"]
 
 # Default scope span index (±100 kHz — see SCOPE_SPAN_HZ).
 DEFAULT_SCOPE_SPAN = 5
 
-# RadioState.attenuator stores the UI index (0/1), matching the FT-710's
-# index semantics so server.py's (0,1,2,3) validation keeps working.
-_ATTENUATOR_INDEX_LABELS = {0: "OFF", 1: "20dB"}
+# One warning per process is enough: the gate is a configuration state,
+# not a per-keystroke event (a log flood would bury real failures).
+_TX_GATE_WARNED = False
 
 
-def _ic7300_filter_hz(mode_name: str, fil_index: int) -> Optional[int]:
-    """FIL1-3 default width (Hz) for the given mode — fil123 model."""
-    widths = FIL_DEFAULT_WIDTHS_HZ.get(mode_name)
-    if widths is None or not 1 <= fil_index <= len(widths):
-        return None
-    return widths[fil_index - 1]
+def _log_tx_gate_once(profile: CivModelProfile) -> None:
+    global _TX_GATE_WARNED
+    if _TX_GATE_WARNED:
+        return
+    _TX_GATE_WARNED = True
+    logger.warning(
+        "%s is not hardware-verified — transmit refused. Set "
+        "MRRC_ALLOW_UNVERIFIED_TX=1 and restart to enable TX after "
+        "checking the radio with _diag_civ.py.", profile.display_name)
 
 
 class IC7300Backend(RadioBackend):
-    """RadioBackend implementation for the Icom IC-7300."""
+    """RadioBackend for Icom CI-V radios (profile-driven).
 
+    Every model difference (CI-V address, Transceive set-mode item,
+    scope geometry, bands, modes, attenuator steps, meter curves,
+    verification status) comes from ``_profile``; a new model is a
+    profile entry plus a subclass that overrides that attribute.
+    """
+
+    _profile: CivModelProfile = PROFILES["ic7300"]
     _display_name = "Icom IC-7300"
 
     def __init__(self, port: str, baud_rate: int = 115200):
+        p = self._profile
         self._civ = CivController(
             port,
             baud_rate,
-            civ_addr=CIV_ADDR,
-            transceive_cmd=SETMODE_CIV_TRANSCEIVE_ON,
+            civ_addr=p.civ_addr,
+            transceive_cmd=p.transceive_cmd,
+            profile=p,
+            att_steps=p.att_steps,
         )
 
     @property
     def capabilities(self) -> RadioCapabilities:
+        p = self._profile
         return RadioCapabilities(
-            model_name="ic7300",
+            model_name=p.model_key,
             display_name=self._display_name,
             default_baud=115200,
-            audio_rx_rate=48000,
-            audio_tx_rate=48000,
-            audio_name_hints=("ic-7300", "ic7300",
-                              "usb audio codec", "usb audio device"),
-            has_atu=True,
+            audio_rx_rate=p.audio_rx_rate,
+            audio_tx_rate=p.audio_tx_rate,
+            audio_name_hints=p.audio_name_hints,
+            has_atu=p.has_atu,
             has_auto_notch=False,
             has_vd_id_meters=False,
             vfo_b_direct=False,
-            filter_model="fil123",
-            att_steps=(0, 20),
-            preamp_steps=("OFF", "AMP1", "AMP2"),
+            filter_model=p.filter_model,
+            att_steps=p.att_steps,
+            preamp_steps=tuple(p.preamp_labels.values()),
             scope_type="civ27",
-            scope_spans=SCOPE_SPANS,
+            scope_spans=p.scope_spans,
             scope_speeds=("FAST", "MID", "SLOW"),
-            tune_via="atu",
+            tune_via=p.tune_via,
+            verified=p.verified,
+            tx_gated=not self._tx_allowed(),
+            dual_rx=p.dual_rx,
+            unverified_meters=p.unverified_meters,
+            audio_gain_boost=p.audio_gain_boost,
         )
 
     def create_scope_producer(
@@ -99,14 +113,21 @@ class IC7300Backend(RadioBackend):
     ) -> Optional[ScopeProducer]:
         # In-process consumer of CivController.scope_queue (no
         # subprocess — the waveform arrives as CI-V frames on the CAT
-        # port the controller already owns).
-        return CivScopeProducer(self._civ, scope_handler, on_frame)
+        # port the controller already owns).  Scope geometry and the
+        # amplitude ceiling come from the model profile.
+        p = self._profile
+        return CivScopeProducer(
+            self._civ, scope_handler, on_frame,
+            amp_max=p.scope_amp_max,
+            expected_bins=p.scope_bins,
+            seq_max=p.scope_seq_max,
+        )
 
     # ── UI Tables ──────────────────────────────────────────────────
 
     @property
     def bands(self) -> list:
-        return BANDS
+        return list(self._profile.bands)
 
     @property
     def ui_modes(self) -> list:
@@ -114,7 +135,7 @@ class IC7300Backend(RadioBackend):
 
     @property
     def mode_name_to_num(self) -> dict:
-        return MODE_NAME_TO_NUM
+        return self._profile.mode_name_to_num
 
     def filter_tables(self) -> dict:
         """FIL1-3 selection model: the "width index" is the FIL number.
@@ -123,31 +144,35 @@ class IC7300Backend(RadioBackend):
         voice/narrow hold (fil, default_hz) pairs and the extra keys let
         the frontend render per-mode defaults.
         """
+        p = self._profile
+        widths = p.fil_default_widths_hz
         return {
-            "voice": [(i + 1, w) for i, w in enumerate(FIL_DEFAULT_WIDTHS_HZ["USB"])],
-            "narrow": [(i + 1, w) for i, w in enumerate(FIL_DEFAULT_WIDTHS_HZ["CW-U"])],
-            "narrowModes": sorted(NARROW_MODES & set(MODE_NUM_TO_NAME.values())),
-            "model": "fil123",
-            "filDefaults": FIL_DEFAULT_WIDTHS_HZ,
+            "voice": [(i + 1, w) for i, w in enumerate(widths["USB"])],
+            "narrow": [(i + 1, w) for i, w in enumerate(widths["CW-U"])],
+            "narrowModes": p.narrow_modes(),
+            "model": p.filter_model,
+            "filDefaults": widths,
         }
 
     # ── RadioState table injection ─────────────────────────────────
 
     def state_tables(self) -> dict:
-        """Tables for RadioState.configure() (IC-7300 calibrations)."""
+        """Tables for RadioState.configure() (profile calibrations)."""
+        p = self._profile
+        cal = p.meter_cal
         return {
-            "mode_num_to_name": MODE_NUM_TO_NAME,
-            "preamp_labels": PREAMP_LABELS,
-            "attenuator_labels": _ATTENUATOR_INDEX_LABELS,
-            "get_band_for_frequency": get_band_for_frequency,
-            "get_filter_hz": _ic7300_filter_hz,
-            "raw_to_dbm": raw_to_dbm,
-            "raw_to_s_unit": raw_to_s_unit,
-            "raw_to_power": raw_to_power,
-            "raw_to_swr": raw_to_swr,
-            "raw_to_alc_pct": raw_to_alc_pct,
-            "raw_to_voltage": raw_to_voltage,
-            "raw_to_current": raw_to_current,
+            "mode_num_to_name": p.mode_num_to_name,
+            "preamp_labels": p.preamp_labels,
+            "attenuator_labels": p.attenuator_labels(),
+            "get_band_for_frequency": p.get_band_for_frequency,
+            "get_filter_hz": p.filter_hz,
+            "raw_to_dbm": cal.raw_to_dbm,
+            "raw_to_s_unit": cal.raw_to_s_unit,
+            "raw_to_power": cal.raw_to_power,
+            "raw_to_swr": cal.raw_to_swr,
+            "raw_to_alc_pct": cal.raw_to_alc_pct,
+            "raw_to_voltage": cal.raw_to_voltage,
+            "raw_to_current": cal.raw_to_current,
         }
 
     # ── Poll items (consumed by poll_scheduler.py) ─────────────────
@@ -297,8 +322,13 @@ class IC7300Backend(RadioBackend):
         self._civ.set_broadcast_callback(cb)
 
     # ── Command Interface ──────────────────────────────────────────
+    # The ABC declares the Yaesu string-CAT surface (``cmd: str``,
+    # ``Optional[str]``); this backend speaks framed CI-V (bytes in,
+    # CivFrame out), which the loose ABC annotations cannot express.
+    # Suppression is deliberate and local rather than loosening the ABC
+    # for the FT-710, whose callers rely on the str types.
 
-    async def send_command(self, cmd, timeout: Optional[float] = None):
+    async def send_command(self, cmd, timeout: Optional[float] = None):  # type: ignore[override]
         return await self._civ.send_command(cmd, timeout=timeout)
 
     async def send_set_command(self, cmd) -> bool:
@@ -307,7 +337,7 @@ class IC7300Backend(RadioBackend):
     async def send_priority_set_command(self, cmd) -> bool:
         return await self._civ.send_priority_set_command(cmd)
 
-    async def query(self, cmd, timeout: Optional[float] = None):
+    async def query(self, cmd, timeout: Optional[float] = None):  # type: ignore[override]
         return await self._civ.query(cmd, timeout=timeout)
 
     async def set(self, cmd) -> bool:
@@ -339,10 +369,24 @@ class IC7300Backend(RadioBackend):
         """
         return bool(await cat.query(0x03, timeout=timeout))
 
+    # ── Unverified-model transmit gate (spec §6.1) ─────────────────
+
+    def _tx_allowed(self) -> bool:
+        """A hardware-verified profile, or an explicit operator opt-in."""
+        return self._profile.verified or bool(config.ALLOW_UNVERIFIED_TX)
+
     async def set_ptt(self, tx: bool) -> bool:
+        # A release is never gated: refusing TX0 would strand the carrier
+        # (Chapter 15 layering) — only keying is refused.
+        if tx and not self._tx_allowed():
+            _log_tx_gate_once(self._profile)
+            return False
         return await self._civ.set_ptt(tx)
 
     async def set_tune(self, tune: bool) -> bool:
+        if tune and not self._tx_allowed():
+            _log_tx_gate_once(self._profile)
+            return False
         return await self._civ.set_tune(tune)
 
     async def get_ptt(self, timeout: Optional[float] = None) -> Optional[int]:
@@ -512,25 +556,90 @@ class IC7300Backend(RadioBackend):
 
     # ── Bulk State Query ──────────────────────────────────────────
 
+    # ── Model identity (19 00) ─────────────────────────────────────
+
+    async def _check_model_identity(self) -> Optional[bool]:
+        """Compare the radio's 19 00 ID with the profile expectation.
+
+        True = confirmed mismatch, False = confirmed match, None = no
+        answer or no recorded expectation.  Every profile currently
+        records ``model_id_bytes=None``, so the observed bytes are logged
+        and no verdict is invented — a false mismatch warning on a
+        working radio would be worse than no check (spec §6.2).
+        """
+        p = self._profile
+        try:
+            observed = await self._civ.get_model_id(timeout=0.5)
+        except Exception:
+            return None
+        if observed is None:
+            return None
+        if p.model_id_bytes is None:
+            logger.info(
+                "Radio reports model ID %s; profile %s records no expectation "
+                "(fill it from a _diag_civ.py report to enable the check)",
+                observed.hex(" ").upper(), p.model_key)
+            return None
+        if tuple(observed) == tuple(p.model_id_bytes):
+            return False
+        logger.warning(
+            "Model mismatch: radio reports model ID %s but profile %s expects "
+            "%s — check MRRC_RADIO_MODEL / the connection dialog",
+            observed.hex(" ").upper(), p.model_key,
+            bytes(p.model_id_bytes).hex(" ").upper())
+        return True
+
     async def initial_state_sync(self) -> dict:
-        return await self._civ.initial_state_sync()
+        data = await self._civ.initial_state_sync()
+        mismatch = await self._check_model_identity()
+        if mismatch is not None:
+            # None must not be written: RadioState.from_sync_result honours
+            # False, so a None would clear a real mismatch on re-sync.
+            data["model_mismatch"] = mismatch
+        return data
 
 
 class IC7300MK2Backend(IC7300Backend):
-    """IC-7300MK2 — same CI-V surface as the IC-7300, different address.
+    """IC-7300MK2 — same CI-V surface as the IC-7300, different profile.
 
     The MK2's factory CI-V address is 0xB6 (IC-7300MK2 CI-V Reference
     frame diagram), not the IC-7300's 0x94, and its "CI-V Transceive"
-    set-mode item is 0089, not 0071. The model selects that item even
+    set-mode item is 0089, not 0071.  The profile selects that item even
     when the operator overrides IC7300MK2_CIV_ADDR.
     """
 
+    _profile = PROFILES["ic7300mk2"]
     _display_name = "Icom IC-7300MK2"
 
-    def __init__(self, port: str, baud_rate: int = 115200):
-        self._civ = CivController(
-            port,
-            baud_rate,
-            civ_addr=MK2_CIV_ADDR,
-            transceive_cmd=SETMODE_CIV_TRANSCEIVE_MK2,
-        )
+
+class IC705Backend(IC7300Backend):
+    """IC-705 — 10 W portable, 475-bin scope, HF + 2m/70cm.
+
+    Not hardware-verified: ``capabilities.tx_gated`` is True until
+    ``MRRC_ALLOW_UNVERIFIED_TX=1`` (spec §6.1).
+    """
+
+    _profile = PROFILES["ic705"]
+    _display_name = "Icom IC-705"
+
+
+class IC7610Backend(IC7300Backend):
+    """IC-7610 — dual receiver, 689-bin scope, 3 dB attenuator steps.
+
+    MAIN receiver only: ``dual_rx`` is advertised but the cmd 29 prefix
+    is deliberately not sent (spec §2 D4), and the attenuator steps are
+    the radio's 0-45 dB set.
+    """
+
+    _profile = PROFILES["ic7610"]
+    _display_name = "Icom IC-7610"
+
+
+class IC7760Backend(IC7300Backend):
+    """IC-7760 — 200 W dual receiver, 689-bin scope.
+
+    Not hardware-verified: transmitted is gated like the IC-705.
+    """
+
+    _profile = PROFILES["ic7760"]
+    _display_name = "Icom IC-7760"

@@ -222,6 +222,23 @@ class FullStateCapabilitiesTests(unittest.TestCase):
         json.dumps(msg)
 
 
+    def test_new_icom_models_construct(self):
+        from backends.ic7300.backend import (
+            IC705Backend, IC7610Backend, IC7760Backend)
+        self.assertIsInstance(create_backend("ic705", port="/dev/null"),
+                              IC705Backend)
+        self.assertIsInstance(create_backend("ic7610", port="/dev/null"),
+                              IC7610Backend)
+        self.assertIsInstance(create_backend("ic7760", port="/dev/null"),
+                              IC7760Backend)
+
+    def test_known_models_covers_every_backend(self):
+        from backends import known_models
+        self.assertEqual(known_models(),
+                         ("ft710", "ic7300", "ic7300mk2", "ic705",
+                          "ic7610", "ic7760"))
+
+
 class CapabilityVerificationFieldsTests(unittest.TestCase):
     """Verification-boundary capability fields (spec 2026-09-12 §4.2/§6)."""
 

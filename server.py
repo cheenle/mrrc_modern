@@ -125,13 +125,16 @@ def _promote_tx_owner():
     return None
 
 
-def _claim_tx_owner_for_token(token: str):
+def _claim_tx_owner_for_token(token: Optional[str]):
     """Make the TX-audio client authenticated with `token` the uplink owner.
 
     Called on PTT key-up: the device that keys the radio is the one whose
     voice must go out.  Fixes the multi-client case (browser tab + iOS app,
     or a stale zombie owner) where an idle first-connected client owned the
     uplink and the PTT-ing client's mic frames were silently dropped.
+
+    ``token`` is Optional in practice: the caller passes ``_ws_tokens.get(ws)``,
+    which is None for a socket that never carried an auth token.
     """
     global _tx_owner_ws
     if not token:

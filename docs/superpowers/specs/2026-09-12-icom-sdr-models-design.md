@@ -95,7 +95,7 @@ class CivModelProfile:
     scope_seq_max: int              # 11  / 15
     scope_queue_segments: int       # 4 * scope_seq_max
     scope_spans: dict[int, dict]    # UI index -> {"name", "freq": half-span Hz}
-    bands: list[dict]               # {"name","start","end","default_freq","power_w"}
+    bands: list[dict]               # {"name","start","end","default_freq"}
     mode_num_to_name: dict[int, str]
     mode_name_to_num: dict[str, int]
     fil_default_widths_hz: dict[str, list[int]]
@@ -173,7 +173,7 @@ and the IC-7610/IC-7760 SUB receiver.
 ### 5.2 Band tables
 
 Built from the rig `Bands` entries, restricted to TX bands and normalised to the existing
-`config_ic7300.BANDS` shape plus `power_w`:
+`config_ic7300.BANDS` shape:
 
 - IC-705: 160m, 80m (3.500–4.000), 60m, 40m (7.000–7.300), 30m, 20m, 17m, 15m, 12m, 10m, 6m, **2m (144–148 MHz)**, **70cm (430–440 MHz)** — all 10 W.
 - IC-7610: the IC-7300 list, all 100 W.
@@ -182,6 +182,12 @@ Built from the rig `Bands` entries, restricted to TX bands and normalised to the
 The rig files carry regional variants (40m 7.0–7.2 vs 7.0–7.3, three 80m ranges, three 70cm/2m
 ranges). The widest ITU-Region-3 set already used by the IC-7300 table is taken; per-region
 override is out of scope.
+
+Rated power is a single per-profile scalar (`MeterCal.rated_power_w`: 10 W / 100 W / 200 W),
+not a per-band field. Per-band `power_w` was dropped during implementation: the rig data shows
+no band whose rating differs from the radio's own, and adding the key would have changed the
+shape of the verified IC-7300 band table — breaking the existing regression assertion that the
+backend's bands equal `config_ic7300.BANDS` — for no runtime benefit.
 
 ### 5.3 Mode tables
 
@@ -315,7 +321,7 @@ endpoint is introduced, so the auth surface is unchanged.
 
 | Test module | Coverage |
 | --- | --- |
-| `tests/test_civ_profiles.py` (new) | five profiles present; IC-7300/MK2 profiles equal today's hardcoded tables value-for-value; `scope_queue_segments == 4 * scope_seq_max`; mode tables are bijective; band tables ordered/contiguous; every TX band's `power_w` equals `meter_cal.rated_power_w`; `verified is False` on exactly the three new profiles; `model_id_bytes is None` on every profile |
+| `tests/test_civ_profiles.py` (new) | five profiles present; IC-7300/MK2 profiles equal today's hardcoded tables value-for-value; `scope_queue_segments == 4 * scope_seq_max`; mode tables are bijective; band tables ordered, non-overlapping and value-identical to the verified IC-7300 table; `verified is False` on exactly the three new profiles; `model_id_bytes is None` on every profile |
 | `tests/test_backend_factory.py` (extend) | the three new keys construct; capabilities carry the right address/scope/meter fields; unknown key still raises |
 | `tests/test_civ_codec.py` (extend) | 689-bin / 15-segment reassembly; `scale_scope_bins(in_max=200)`; single-segment (LAN-style) waveform; mismatched assembled length is adopted with one warning |
 | `tests/test_civ_scope.py` (extend) | 200-ceiling frame renders to 850 bins in range; `spectrum_rx2` stays zero; no crash on unexpected bin count |

@@ -38,10 +38,17 @@ from typing import Optional
 
 import numpy as np
 
+from audio_resample import resample_pcm
+
 logger = logging.getLogger("recorder")
 
 #: Storage-domain sample rate (AD-017) — not the codec or device rate.
 RECORDING_RATE = 16000
+
+#: Opus-mandated codec rate (AD-011).  Device audio whose rate is not an
+#: integer multiple of the recording rate (the FT-710's 44.1 kHz) is
+#: bridged here first with the sanctioned resampler, then decimated 3:1.
+CODEC_RATE = 48000
 
 #: mrrc-compatible file name: <freq kHz>_<YYYYmmdd>_<HHMMSS>.mp3
 _NAME_RE = re.compile(r"^(\d{5})kHz_(\d{8})_(\d{6})\.mp3$")
@@ -183,3 +190,231 @@ def list_recordings(directory, index: dict, bitrate: int) -> list:
         })
     rows.sort(key=lambda row: (row["started_at"], row["name"]), reverse=True)
     return rows
+
+
+# ── Recording session ───────────────────────────────────────────────
+
+class RecordingSession:
+    """One QSO recording: a 16 kHz mono timeline written incrementally.
+
+    All mutation happens on a single thread (server.py funnels calls
+    through one writer task), so no lock is needed here.
+    """
+
+    #: Blocks closer than this to the previous one are treated as
+    #: contiguous — this absorbs scheduler jitter instead of turning it
+    #: into a silence gap, which is what makes playback smooth.
+    CONTINUITY_TOLERANCE_SAMPLES = RECORDING_RATE * 5 // 100       # 50 ms
+    #: Silence is encoded in chunks so a long pause does not allocate one
+    #: huge buffer.
+    _SILENCE_CHUNK = RECORDING_RATE // 50                          # 20 ms
+
+    def __init__(self, directory, bitrate: int = 64,
+                 max_seconds: float = 4 * 3600, quality: int = 2):
+        self.directory = Path(directory)
+        self.bitrate = int(bitrate)
+        self.max_seconds = float(max_seconds)
+        self.quality = int(quality)
+        self._enc = None
+        self._fh = None
+        self._active = False
+        self._start_ns = None
+        self._started_at = None
+        self._freq_hz = 0
+        self._name = None
+        self._cursor = 0
+        self._bytes = 0
+        self._decimators = {}
+        self._source_cursors = {}
+        self._last_source = None
+
+    # ── Lifecycle ──────────────────────────────────────────────────
+
+    @property
+    def active(self) -> bool:
+        return self._active
+
+    @property
+    def max_samples(self) -> int:
+        return int(RECORDING_RATE * self.max_seconds)
+
+    def start(self, freq_hz: int = 0, now: Optional[datetime] = None) -> bool:
+        """Begin a recording; False when one is already running."""
+        if self._active:
+            return False
+        import lameenc                       # local: keeps import cost off
+                                             # the always-imported path
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self._name = recording_name(freq_hz, now)
+        self._fh = open(self.directory / self._name, "wb")
+        encoder = lameenc.Encoder()
+        encoder.set_channels(1)
+        encoder.set_in_sample_rate(RECORDING_RATE)
+        encoder.set_bit_rate(self.bitrate)
+        encoder.set_quality(self.quality)
+        self._enc = encoder
+        self._start_ns = time.monotonic_ns()
+        self._started_at = (now or datetime.now()).isoformat(timespec="seconds")
+        self._freq_hz = int(freq_hz or 0)
+        self._cursor = 0
+        self._bytes = 0
+        self._decimators = {}
+        self._source_cursors = {}
+        self._last_source = None
+        self._active = True
+        logger.info("Recording started: %s (%d kbps, %d Hz mono)",
+                    self._name, self.bitrate, RECORDING_RATE)
+        return True
+
+    def add_audio(self, source: str, pcm: bytes, source_rate: int,
+                  timestamp_ns: Optional[int] = None) -> bool:
+        """Place one PCM block on the timeline; False when it was ignored."""
+        if not self._active or not pcm:
+            return False
+        if source_rate <= 0:
+            raise ValueError("source_rate must be positive")
+        # lameenc rejects non-int16-aligned input; trim here so a stray odd
+        # byte can never raise into the audio path.
+        if len(pcm) % 2:
+            pcm = pcm[:-1]
+        samples = np.frombuffer(pcm, dtype='<i2')
+        if samples.size == 0:
+            return False
+        if source_rate != RECORDING_RATE:
+            rate = int(source_rate)
+            if rate % RECORDING_RATE:
+                # Not an integer ratio (FT-710 44.1 kHz device domain):
+                # bridge to the codec rate with the sanctioned resampler,
+                # then decimate 48k -> 16k below.
+                pcm = resample_pcm(pcm, rate, CODEC_RATE)
+                rate = CODEC_RATE
+                samples = np.frombuffer(pcm, dtype='<i2')
+                if samples.size == 0:
+                    return False
+            key = (source, rate)
+            decimator = self._decimators.get(key)
+            if decimator is None:
+                decimator = _StreamingDecimator(rate, RECORDING_RATE)
+                self._decimators[key] = decimator
+            samples = decimator.process(samples)
+
+        timestamp_ns = (time.monotonic_ns() if timestamp_ns is None
+                        else int(timestamp_ns))
+        start_ns = self._start_ns
+        if start_ns is None:
+            return False
+        offset = max(0, (timestamp_ns - start_ns) * RECORDING_RATE
+                     // 1_000_000_000)
+        expected = self._source_cursors.get(source)
+        if (expected is not None and source == self._last_source
+                and abs(offset - expected) <= self.CONTINUITY_TOLERANCE_SAMPLES):
+            offset = expected
+        if offset >= self.max_samples:
+            return False
+        samples = samples[: self.max_samples - offset]
+        if samples.size == 0:
+            return False
+        self._write_silence_upto(offset)
+        self._encode(samples)
+        self._source_cursors[source] = offset + samples.size
+        self._last_source = source
+        return True
+
+    def stop(self, now_ns: Optional[int] = None) -> Optional[RecordingInfo]:
+        """Finish the recording: pad, flush, close and report."""
+        if not self._active:
+            return None
+        enc, fh = self._enc, self._fh
+        start_ns, name = self._start_ns, self._name
+        if enc is None or fh is None or start_ns is None or name is None:
+            # Half-initialised session: never raise out of the recorder.
+            logger.warning("Recording session was not fully started — closing")
+            self.close_without_finishing()
+            return None
+        now_ns = time.monotonic_ns() if now_ns is None else int(now_ns)
+        stop_offset = min(max(0, (now_ns - start_ns) * RECORDING_RATE
+                              // 1_000_000_000), self.max_samples)
+        self._write_silence_upto(max(stop_offset, self._cursor))
+        tail = b""
+        try:
+            tail = enc.flush()                          # final frames + Xing
+        except Exception as e:                          # pragma: no cover
+            logger.warning("MP3 flush failed: %s", e)
+        if tail:
+            fh.write(tail)
+            self._bytes += len(tail)
+        fh.close()
+        info = RecordingInfo(
+            name=name,
+            freq_hz=self._freq_hz,
+            started_at=self._started_at or "",
+            duration=self._cursor / RECORDING_RATE,
+            bytes=self._bytes,
+        )
+        logger.info("Recording stopped: %s (%.1fs, %d bytes)",
+                    info.name, info.duration, info.bytes)
+        self._reset()
+        return info
+
+    def close_without_finishing(self) -> None:
+        """Abandon the session (shutdown/crash path): never flush."""
+        if self._active and self._fh is not None:
+            try:
+                self._fh.flush()
+                self._fh.close()
+            except OSError:
+                pass
+        self._reset()
+
+    def _reset(self) -> None:
+        self._active = False
+        self._enc = None
+        self._fh = None
+        self._name = None
+        self._start_ns = None
+        self._started_at = None
+        self._freq_hz = 0
+        self._cursor = 0
+        self._bytes = 0
+        self._decimators = {}
+        self._source_cursors = {}
+        self._last_source = None
+
+    # ── Timeline / encoding ────────────────────────────────────────
+
+    def _write_silence_upto(self, offset_samples: int) -> None:
+        """Encode silence until the timeline cursor reaches *offset*."""
+        while self._cursor < offset_samples:
+            count = min(self._SILENCE_CHUNK, offset_samples - self._cursor)
+            self._encode(np.zeros(count, dtype=np.int16))
+
+    def _encode(self, samples: np.ndarray) -> None:
+        enc, fh = self._enc, self._fh
+        if enc is None:
+            return
+        payload = np.ascontiguousarray(samples, dtype='<i2').tobytes()
+        data = enc.encode(payload)
+        if data and fh is not None:
+            fh.write(data)
+            fh.flush()          # crash safety: never leave audio in an
+                                # 8 KB stdio buffer (a killed process keeps
+                                # everything already written)
+            self._bytes += len(data)
+        self._cursor += len(samples)
+
+    # ── Status ─────────────────────────────────────────────────────
+
+    def status(self, now_ns: Optional[int] = None) -> dict:
+        """Snapshot for the ``recordingState`` broadcast."""
+        duration = 0.0
+        if self._active and self._start_ns is not None:
+            now_ns = time.monotonic_ns() if now_ns is None else int(now_ns)
+            duration = max(0.0, (now_ns - self._start_ns) / 1_000_000_000)
+        return {
+            "recording": self._active,
+            "freq_hz": self._freq_hz,
+            "started_at": self._started_at,
+            "duration": round(duration, 2),
+            "name": self._name,
+            "bytes": self._bytes,
+        }

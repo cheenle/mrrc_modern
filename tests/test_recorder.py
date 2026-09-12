@@ -20,6 +20,7 @@ import numpy as np
 
 from recorder import (
     RECORDING_RATE,
+    RecordingSession,
     _StreamingDecimator,
     list_recordings,
     load_index,
@@ -179,6 +180,180 @@ class IndexTests(unittest.TestCase):
 
     def test_missing_directory_is_empty_not_an_error(self):
         self.assertEqual(list_recordings(self.dir / "nope", {}, 64), [])
+
+
+def _session(dirpath: Path, **kw) -> RecordingSession:
+    return RecordingSession(dirpath, bitrate=64,
+                            max_seconds=kw.pop("max_seconds", 60), **kw)
+
+
+class RecordingSessionTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_start_creates_a_file_and_refuses_a_second_session(self):
+        s = _session(self.dir)
+        self.assertTrue(s.start(freq_hz=14_270_000))
+        self.assertTrue(s.active)
+        self.assertFalse(s.start(freq_hz=7_050_000))     # already recording
+        self.assertEqual(len(list(self.dir.glob("*.mp3"))), 1)
+        s.add_audio("rx", sine_pcm(1000, 0.02, 48000), 48000, s._start_ns)
+        info = s.stop()
+        self.assertIsNotNone(info)
+        self.assertFalse(s.active)
+        self.assertEqual(info.freq_hz, 14_270_000)
+        self.assertGreater(info.duration, 0.0)
+
+    def test_file_grows_while_recording(self):
+        s = _session(self.dir)
+        s.start()
+        for _ in range(40):                              # 40 x 20 ms = 0.8 s
+            s.add_audio("rx", sine_pcm(1000, 0.02, 48000), 48000)
+        size_mid = list(self.dir.glob("*.mp3"))[0].stat().st_size
+        self.assertGreater(size_mid, 0)                  # already on disk
+        info = s.stop()
+        self.assertGreaterEqual(info.bytes, size_mid)
+
+    def test_gap_is_filled_with_silence(self):
+        s = _session(self.dir)
+        s.start()
+        block = sine_pcm(1000, 0.02, 48000)              # 320 samples @16k
+        base = s._start_ns                               # exact session anchor
+        s.add_audio("rx", block, 48000, base)
+        # 500 ms later -> the timeline must contain the hole as silence.
+        s.add_audio("rx", block, 48000, base + 500_000_000)
+        # The timeline advances to the new block's own offset (8000) and the
+        # hole before it is silence: 8000 + 320, not 320 + 8000 + 320.
+        self.assertEqual(s._cursor, 8000 + 320)
+        info = s.stop(now_ns=base + 520_000_000)
+        self.assertAlmostEqual(info.duration, 0.52, places=2)
+
+    def test_jitter_within_tolerance_does_not_punch_holes(self):
+        s = _session(self.dir)
+        s.start()
+        block = sine_pcm(1000, 0.02, 48000)
+        base = s._start_ns
+        # Bounded jitter: each 20 ms block arrives up to 10 ms late, but the
+        # offset never drifts — the divergence stays inside the 50 ms
+        # tolerance, so the timeline stays contiguous (no silence inserted).
+        for i in range(10):
+            skew = 10_000_000 if i % 2 else 0            # ±10 ms, zero mean
+            s.add_audio("rx", block, 48000, base + i * 20_000_000 + skew)
+        self.assertEqual(s._cursor, 3200)                # 10 x 320, no holes
+        s.stop()
+
+    def test_cumulative_drift_reanchors_with_one_silence_fill(self):
+        # A *constant* per-block drift (a badly mismatched clock) eventually
+        # exceeds the tolerance; the timeline then re-anchors to the observed
+        # time, filling the accumulated divergence with silence once.
+        block = sine_pcm(1000, 0.02, 48000)
+        s = _session(self.dir)
+        s.start()
+        base = s._start_ns
+        for i in range(10):
+            s.add_audio("rx", block, 48000, base + i * 30_000_000)
+        # Blocks 0-5 stay within 50 ms; block 6 crosses it (960 samples =
+        # 60 ms of accumulated divergence) and re-anchors.
+        self.assertEqual(s._cursor, 4160)
+        s.stop()
+
+    def test_pause_beyond_tolerance_advances_the_timeline(self):
+        s = _session(self.dir)
+        s.start()
+        block = sine_pcm(1000, 0.02, 48000)
+        base = s._start_ns
+        s.add_audio("rx", block, 48000, base)
+        s.add_audio("rx", block, 48000, base + 500_000_000)
+        # The timeline advances to the late block's own offset (8000) and the
+        # hole before it is silence: 8000 + 320, not 320 + 8000 + 320.
+        self.assertEqual(s._cursor, 8000 + 320)
+        info = s.stop(now_ns=base + 520_000_000)
+        self.assertAlmostEqual(info.duration, 0.52, places=2)
+
+    def test_source_switch_reanchors(self):
+        s = _session(self.dir)
+        s.start()
+        block = sine_pcm(1000, 0.02, 48000)
+        base = s._start_ns
+        s.add_audio("rx", block, 48000, base)
+        # TX starts 100 ms later: a new talk spurt, anchored at its own time.
+        s.add_audio("tx", block, 48000, base + 100_000_000)
+        self.assertEqual(s._source_cursors["tx"], 1600 + 320)
+        info = s.stop(now_ns=base + 120_000_000)
+        self.assertAlmostEqual(info.duration, 0.12, places=2)
+
+    def test_44100_device_audio_is_accepted(self):
+        # FT-710 device domain: 882 samples = 20 ms @44.1k.  44100 is not an
+        # integer multiple of the recording rate, so the session must first
+        # bridge to 48 kHz with audio_resample, then decimate 3:1.
+        s = _session(self.dir)
+        s.start()
+        base = s._start_ns
+        self.assertTrue(s.add_audio("rx", sine_pcm(1000, 0.02, 44100), 44100, base))
+        info = s.stop(now_ns=base + 20_000_000)
+        self.assertAlmostEqual(info.duration, 0.02, places=2)
+
+    def test_session_cap_stops_storing_but_not_the_file(self):
+        s = RecordingSession(self.dir, bitrate=64, max_seconds=0.1)
+        s.start()
+        base = s._start_ns
+        block = sine_pcm(1000, 0.02, 48000)
+        accepted = [s.add_audio("rx", block, 48000, base + i * 20_000_000)
+                    for i in range(20)]
+        self.assertIn(False, accepted)                   # past the cap
+        info = s.stop(now_ns=base + 100_000_000)
+        self.assertLessEqual(info.duration, 0.11)
+
+    def test_odd_length_pcm_is_trimmed_not_raised(self):
+        # lameenc raises on byte-misaligned input; the recorder must never
+        # let that reach the audio path.
+        s = _session(self.dir)
+        s.start()
+        self.assertTrue(s.add_audio("rx", sine_pcm(1000, 0.02, 48000) + b"\x01", 48000))
+        self.assertIsNotNone(s.stop())
+
+    def test_add_audio_on_an_idle_session_is_false(self):
+        self.assertFalse(_session(self.dir).add_audio("rx", b"\x00\x00" * 10, 48000))
+
+    def test_abandoned_session_leaves_a_playable_prefix(self):
+        # Crash safety: no stop(), no flush() — the bytes on disk must exist.
+        s = _session(self.dir)
+        s.start()
+        base = s._start_ns
+        for i in range(25):
+            s.add_audio("rx", sine_pcm(1000, 0.02, 48000), 48000,
+                        base + i * 20_000_000)
+        path = next(self.dir.glob("*.mp3"))
+        self.assertGreater(path.stat().st_size, 0)
+        s.close_without_finishing()                      # simulate abandonment
+        self.assertGreater(path.stat().st_size, 0)
+        self.assertFalse(s.active)
+
+    def test_status_reports_progress(self):
+        s = _session(self.dir)
+        self.assertFalse(s.status()["recording"])
+        s.start(freq_hz=7_050_000)
+        base = s._start_ns
+        s.add_audio("rx", sine_pcm(1000, 0.02, 48000), 48000, base)
+        st = s.status(now_ns=base + 250_000_000)
+        self.assertTrue(st["recording"])
+        self.assertEqual(st["freq_hz"], 7_050_000)
+        self.assertAlmostEqual(st["duration"], 0.25, places=2)
+        self.assertTrue(st["name"].endswith(".mp3"))
+        s.stop()
+
+    def test_stop_when_idle_is_none(self):
+        self.assertIsNone(_session(self.dir).stop())
+
+    def test_stop_twice_is_none_the_second_time(self):
+        s = _session(self.dir)
+        s.start()
+        self.assertIsNotNone(s.stop())
+        self.assertIsNone(s.stop())
 
 
 if __name__ == "__main__":

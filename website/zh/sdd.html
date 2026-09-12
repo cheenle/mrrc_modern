@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.27 更新</a></li>
+            <li><a href="#updates">V2.46 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.27 · 2026-08-26</span>
+            <span>SDD V2.46 · 2026-09-12</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.27</td></tr>
-            <tr><td>基线日期</td><td>2026-08-26</td></tr>
+            <tr><td>版本</td><td>V2.46</td></tr>
+            <tr><td>基线日期</td><td>2026-09-12</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
             <tr><td>核心接口</td><td>4+1 路 WebSocket（可选 ATR1000）+ 串口 CAT / CI-V + FT4222 SPI / CI-V 0x27 + USB 音频</td></tr>
@@ -111,6 +111,31 @@
                 <h3>v1.12.0 Windows 稳定版发布 <small>（V2.27）</small></h3>
                 <p>经 macOS 与 Windows 11 双端 633/633 测试、三个 PyInstaller 目标、Inno Setup 编译与跨主机 SHA-256 校验后发布。FT-710 的 CAT、音频、PTT 与频谱行为保持不变。</p>
             </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-tower-cell"></i></div>
+                <h3>ICOM SDR 机型：IC-705 / IC-7610 / IC-7760 <small>（V2.41）</small></h3>
+                <p>再添三台 CI-V 机型，采用 profile 驱动核心并带显式未验证边界：能力位、发射门禁（<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 显式开启）与只读 <code>19 00</code> 型号身份校验。三台均无真机，因此不声称已验证。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-microphone-lines"></i></div>
+                <h3>服务端 QSO 录音 <small>（V2.42–V2.45）</small></h3>
+                <p>边录边落的 16 kHz 单声道 MP3（lameenc），RX/TX 落在同一条单调时间轴上；录音面板支持列表/拖动定位/下载/删除；浏览器端编码器退役。写入端生命周期修复终结了"同一进程第二次录音静音"。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-plug-circle-check"></i></div>
+                <h3>CAT 掉线恢复成本 <small>（V2.43）</small></h3>
+                <p>USB 串口重枚举后不再重放 24 条全量状态同步（轮询分层本已覆盖所有字段），原先约 62 秒的 CAT 死区降为秒级恢复；重试日志分级并给出 ENXIO 可操作提示。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-box-archive"></i></div>
+                <h3>v1.15.0 发布 <small>（V2.44–V2.45）</small></h3>
+                <p>macOS DMG、Windows 安装包与 rpi64 镜像发布，跨主机 SHA-256 校验一致，含上述录音功能与掉线恢复修复。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-radio"></i></div>
+                <h3>Yaesu SDR 家族：FTDX10 / FTDX101D / FTDX101MP / FTX-1F <small>（V2.46）</small></h3>
+                <p>profile 驱动的共享 ASCII-CAT 核心（<code>backends/yaesu/</code>），传输层移植自已验证的 FT-710 路径，每机型模式/滤波/频段/表头表均带溯源。四台均无真机：发射默认拒绝、Yaesu 频谱波形无文档（瀑布走 S 表回退）、双接收留二期；已验证的 FT-710 路径刻意不动（AD-018/AD-019）。</p>
+            </div>
         </div>
     </div>
 </section>
@@ -145,7 +170,7 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">架构决策</span>
-            <h2 class="section-title">AD-001 ... AD-016</h2>
+            <h2 class="section-title">AD-001 ... AD-019</h2>
         </div>
         <div class="tech-stack">
             <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -164,6 +189,9 @@
             <span class="tech-tag">AD-014 CAT 勘误处理</span>
             <span class="tech-tag">AD-015 优先级 CAT 抢占</span>
             <span class="tech-tag">AD-016 可插拔电台后端</span>
+            <span class="tech-tag">AD-017 服务端录音</span>
+            <span class="tech-tag">AD-018 Profile 驱动的 Yaesu 核心</span>
+            <span class="tech-tag">AD-019 未验证机型策略</span>
         </div>
     </div>
 </section>

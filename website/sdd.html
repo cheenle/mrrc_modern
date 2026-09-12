@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#updates">V2.27</a></li>
+            <li><a href="#updates">V2.46</a></li>
             <li><a href="#chapters">Chapters</a></li>
             <li><a href="#decisions">AD Index</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.27 · 2026-08-26</span>
+            <span>SDD V2.46 · 2026-09-12</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">Software Design Description</span></h1>
         <p class="hero-subtitle">
@@ -75,8 +75,8 @@
             </thead>
             <tbody>
             <tr><td>Document ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>Version</td><td>V2.27</td></tr>
-            <tr><td>Baseline Date</td><td>2026-08-26</td></tr>
+            <tr><td>Version</td><td>V2.46</td></tr>
+            <tr><td>Baseline Date</td><td>2026-09-12</td></tr>
             <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
             <tr><td>Core Interfaces</td><td>4+1 WebSockets (optional ATR1000) + Serial CAT / CI-V + FT4222 SPI / CI-V 0x27 + USB Audio</td></tr>
@@ -112,6 +112,31 @@
                 <h3>v1.12.0 Windows Stable <small>(V2.27)</small></h3>
                 <p>Published after 633/633 tests on macOS and Windows 11, three PyInstaller targets, Inno Setup compilation, and cross-host SHA-256 verification. FT-710 CAT, audio, PTT, and spectrum behavior unchanged.</p>
             </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-tower-cell"></i></div>
+                <h3>ICOM SDR Models: IC-705 / IC-7610 / IC-7760 <small>(V2.41)</small></h3>
+                <p>Three more CI-V radios behind a profile-driven core, with an explicit unverified boundary: capability flags, a transmit gate (<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> to opt in) and a read-only <code>19 00</code> model identity check. No unit of any of the three was available, so nothing is presented as verified.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-microphone-lines"></i></div>
+                <h3>Server-Side QSO Recording <small>(V2.42–V2.45)</small></h3>
+                <p>16 kHz mono MP3 written incrementally while recording (lameenc), with RX/TX placed on one monotonic timeline; recordings panel with list/seek/download/delete; the browser encoder was retired. A writer-liveness fix ended the silent second recording in the same process.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-plug-circle-check"></i></div>
+                <h3>CAT Reconnect Recovery <small>(V2.43)</small></h3>
+                <p>A USB serial re-enumeration no longer replays the 24-query full state sync on reconnect — the poll tiers already cover every field — so a link that used to cost ~62 s of dead CAT recovers in seconds, with per-attempt log discipline and an actionable ENXIO hint.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-box-archive"></i></div>
+                <h3>v1.15.0 Released <small>(V2.44–V2.45)</small></h3>
+                <p>macOS DMG, Windows installer and the rpi64 image published with cross-host SHA-256 verification, including the recording feature above and the reconnect fix.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-radio"></i></div>
+                <h3>Yaesu SDR Family: FTDX10 / FTDX101D / FTDX101MP / FTX-1F <small>(V2.46)</small></h3>
+                <p>Profile-driven shared ASCII-CAT core (<code>backends/yaesu/</code>) whose transport is ported from the verified FT-710 path, with per-model mode/filter/band/meter tables and provenance. No unit tested: transmit is gated, the Yaesu scope waveform is undocumented (S-meter fallback covers the waterfall), and dual receive is deferred to phase 2. The verified FT-710 backend is deliberately untouched (AD-018/AD-019).</p>
+            </div>
         </div>
     </div>
 </section>
@@ -146,7 +171,7 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">Architecture Decisions</span>
-            <h2 class="section-title">AD-001 ... AD-016</h2>
+            <h2 class="section-title">AD-001 ... AD-019</h2>
         </div>
         <div class="tech-stack">
             <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -165,6 +190,9 @@
             <span class="tech-tag">AD-014 CAT Errata Handling</span>
             <span class="tech-tag">AD-015 Priority CAT Preemption</span>
             <span class="tech-tag">AD-016 Pluggable Radio Backend</span>
+            <span class="tech-tag">AD-017 Server-Side Recording</span>
+            <span class="tech-tag">AD-018 Profile-Driven Yaesu Core</span>
+            <span class="tech-tag">AD-019 Unverified-Model Policy</span>
         </div>
     </div>
 </section>

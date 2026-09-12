@@ -2475,20 +2475,20 @@ git commit -m "build(pyinstaller): bundle backends.ic7300.civ_profiles"
 - 修改：`SDD/14-version-history.md`、`SDD/README.md`、`SDD/08-architecture-decisions.md`、`SDD/05-non-functional-requirements.md`、`SDD/09-architecture-overview.md`、`SDD/11-component-model.md`、`SDD/13-feasibility-assessment.md`、`SDD/15-ptt-safety-architecture.md`
 - 修改：`AGENTS.md`、`README.md`、`tests/README.md`、`IC-7300_硬件验收清单.md`
 
-- [ ] **步骤 1：取得准确的测试计数**
+- [x] **步骤 1：取得准确的测试计数**
 
 运行：`.venv/bin/python -m unittest discover -s tests 2>&1 | tail -3`
 记录 `Ran N tests` 与模块数：`ls tests/test_*.py | wc -l`
 
-- [ ] **步骤 2：SDD/14 版本历史新条目（V2.41）**
+- [x] **步骤 2：SDD/14 版本历史新条目（V2.41）**
 
 在 `SDD/14-version-history.md` 的表格顶部（紧接表头）插入一行，内容必须包含：新增三机型与 profile 驱动核心；`backends/ic7300/civ_profiles.py`；`ScopeAssembler`/`CivScopeProducer`/`CivController` 的参数化（默认值 = 旧常量）；`RadioCapabilities.verified/tx_gated/dual_rx/unverified_meters/audio_gain_boost`；`RadioState.model_mismatch`；`MRRC_ALLOW_UNVERIFIED_TX` 门控（release 永不被拦）；`19 00` 只记录不判定；`_diag_civ.py`；新增测试模块与总数；明确写出"三台机型无真机验证"的边界。
 
-- [ ] **步骤 3：SDD/README Quick Facts**
+- [x] **步骤 3：SDD/README Quick Facts**
 
 `SDD Version | V2.41`，状态行补一句：`IC-705/IC-7610/IC-7760 backend profiles added without hardware verification (TX gated by MRRC_ALLOW_UNVERIFIED_TX); diagnostic script _diag_civ.py ready for field reports;`
 
-- [ ] **步骤 4：AD-016 扩充**
+- [x] **步骤 4：AD-016 扩充**
 
 在 `SDD/08-architecture-decisions.md` AD-016 的 Consequences 段追加：
 
@@ -2502,7 +2502,7 @@ new protocol code and no `server.py` model branches; models without hardware evi
 `verified=False` and refuse PTT/TUNE until `MRRC_ALLOW_UNVERIFIED_TX=1`.
 ```
 
-- [ ] **步骤 5：SDD/05、09、11、13、15**
+- [x] **步骤 5：SDD/05、09、11、13、15**
 
 - `SDD/05`：NFR-032 的 verification 列补 "five model keys (ft710, ic7300, ic7300mk2, ic705, ic7610, ic7760)"; NFR-041 补 `MRRC_ALLOW_UNVERIFIED_TX`；NFR-060/065 注明 IC-705/7610/7760 走 48 kHz 无重采样路径（assumed, `TODO(hw-verify)`）。
 - `SDD/09`：backend 综述加一句 profile 驱动 + 三机型。
@@ -2511,14 +2511,14 @@ new protocol code and no `server.py` model branches; models without hardware evi
 - `SDD/13.3`：新增假设 **A7**：`The three new models share the IC-7300 CI-V command surface (frequency/mode/preamp/AGC/NB/NR/comp/filter-width/squelch/RF power/PTT/tune, meter sub-codes) — evidenced by identical wfview rig command tables` | Medium | `_diag_civ.py` read-only probe step`。**注意**：不要把它写成 High——它是基于本地 rig 数据的推断。
 - `SDD/15`：在分层释放模型之前加一层说明：unverified 机型的 PTT/TUNE 在 backend 边界即被拒绝（`MRRC_ALLOW_UNVERIFIED_TX` 放行），释放路径永不门控。
 
-- [ ] **步骤 6：AGENTS.md / README.md / tests/README.md / 硬件验收清单**
+- [x] **步骤 6：AGENTS.md / README.md / tests/README.md / 硬件验收清单**
 
 - `AGENTS.md`：模块表 `backends/ic7300/` 行补 `civ_profiles.py`（"per-model CI-V profiles: address, Transceive item, scope geometry, bands, modes, attenuator steps, meter curves, verification flags — the single source of truth for every Icom model"），并在环境变量清单加入 `MRRC_ALLOW_UNVERIFIED_TX` 与三个新模型 key；模块表 `server.py` 行补"model validation from the backend registry"。
 - `README.md`：支持机型表加三行，标注 `experimental — not hardware-verified (TX disabled until MRRC_ALLOW_UNVERIFIED_TX=1)`。
 - `tests/README.md`：更新 Total/模块数（用步骤 1 的实测值）并新增四个测试模块的用途说明。
 - `IC-7300_硬件验收清单.md`：末尾加一段指向 `_diag_civ.py`（多机型自检的继任工具）并说明其与本文档的关系。
 
-- [ ] **步骤 7：Commit**
+- [x] **步骤 7：Commit**
 
 ```bash
 git add SDD/ AGENTS.md README.md tests/README.md IC-7300_硬件验收清单.md

@@ -43,7 +43,7 @@ Server captures Int16 mono from the selected radio's USB audio (44.1kHz for FT-7
 **v1 format:** 1-byte version (0x01) + 850 bytes wf1 = 851 bytes.
 **v2 format:** 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.
 
-The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2) is sent only when `ScopeHandler._frame_count` advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick.
+The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when `ScopeHandler._frame_count` advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick.
 
 ## 9.3 RX Audio Signal Chain
 
@@ -67,7 +67,7 @@ The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame dr
 
 FT-710: FT4222 SPI → `scope_pipe.py` subprocess → 850-point wf1/wf2 → `ScopeHandler`.
 
-IC-7300/MK2: startup/reconnect sends scope display ON (`27 10 01`), Center mode, span, then waveform-data output ON (`27 11 01`). CI-V `27 00` frames → `civ_controller.py` demux → bounded 44-segment queue (four complete 11-segment USB waveforms, drop oldest on overflow) → 475-bin scale/upsample to 850 → `ScopeHandler`. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.
+IC-7300/MK2: startup/reconnect sends scope display ON (`27 10 01`), Center mode, span, then waveform-data output ON (`27 11 01`). CI-V `27 00` frames → `civ_controller.py` demux → bounded queue sized `4 × scope_seq_max` (44 segments on 475-bin models, 60 on the 689-bin IC-7610/IC-7760; drop oldest on overflow) → bin scale (0..160 or 0..200 from the profile) → upsample to 850 → `ScopeHandler`. A bin count or segment count that disagrees with the profile logs once and is adopted, so a wrong profile cannot freeze the waterfall. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.
 
 ![Spectrum Paths](diagrams/spectrum-paths.svg)
 

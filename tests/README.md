@@ -4,7 +4,7 @@
 
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710 and IC-7300/IC-7300MK2). All tests run **without hardware** — no radio,
-no serial port, no USB audio device needed. 724 tests across 39 test modules.
+no serial port, no USB audio device needed. 820 tests across 43 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -14,8 +14,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 724 |
-| Passed | 724 (with all optional dependencies installed) |
+| Total tests | 820 |
+| Passed | 820 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |

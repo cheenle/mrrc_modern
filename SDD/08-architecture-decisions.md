@@ -232,6 +232,8 @@
 
 **Rationale**: A backend ABC mirroring the CAT surface plus defaulted hooks (bands/ui_modes/filter_tables/poll-item lists/init_scope/create_scope_producer) keeps `server.py`, polling, and state radio-neutral; capabilities pushed in `fullState` let the frontend adapt bands, modes, FIL1-3 filters, ATT/PRE steps, meter visibility, and scope banner without protocol changes.
 
+**Amended 2026-09-12 (V2.41)**: the Icom side of this layer became profile-driven. `backends/ic7300/civ_profiles.py` holds one `CivModelProfile` per model (address, Transceive set-mode item, scope geometry, bands, modes, attenuator steps, meter curves, verification flags, provenance) and the shared codec/controller/scope producer take those values as optional parameters whose defaults reproduce the previous IC-7300 constants. Adding IC-705/IC-7610/IC-7760 therefore required **no new protocol code and no `server.py` model branches** — three subclasses overriding one attribute, one registry entry, and a capability-driven attenuation bound. Models without hardware evidence set `verified=False` and refuse keying until `MRRC_ALLOW_UNVERIFIED_TX=1` (the first time this layer carries an explicit *unverified* state rather than implying acceptance). The package directory name `backends/ic7300/` now hosts the shared Icom core; renaming it to `backends/icom/` is tracked as a separate change.
+
 **Consequences**: New radios are added as a `backends/<model>/` package plus factory registration; FT-710 behavior is unchanged (compat shims keep root imports valid); IC-7300 hardware-verification items (S-meter top point, TUNE carrier behavior, MK2 transceive item) remain flagged in code comments.
 
 ## 8.16 Decision Summary

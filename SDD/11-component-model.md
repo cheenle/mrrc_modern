@@ -5,12 +5,12 @@
 | Component | Type | File | Responsibility |
 |-----------|------|------|----------------|
 | FastAPIApp | Backend core | `server.py` | Route registration, lifespan, auth middleware, static serving, all WebSockets |
-| RadioBackendFactory | Backend core | `backends/__init__.py` | `create_backend(model)` lazy factory; registered keys `ft710`, `ic7300`, `ic7300mk2`; selected by `MRRC_RADIO_MODEL` |
+| RadioBackendFactory | Backend core | `backends/__init__.py` | `create_backend(model)` lazy factory + `known_models()`; registered keys `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`; selected by `MRRC_RADIO_MODEL`; the server's model whitelist and baud defaults derive from this registry |
 | RadioBackend | Backend core | `backends/base.py` | `RadioBackend` ABC + `RadioCapabilities` dataclass + `ScopeProducer` protocol; CAT surface, defaulted hooks for bands/modes/filter tables/poll lists/scope init |
 | CatController | Backend core | `backends/ft710/cat_controller.py` (root shim: `cat_controller.py`) | FT-710 serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers |
 | CivCodec | Backend core | `backends/ic7300/civ_codec.py` | Pure CI-V framing/BCD encoding/scope-segment codec for IC-7300/MK2 |
 | CivController | Backend core | `backends/ic7300/civ_controller.py` | Async CI-V demux: reader thread → frame parser → echo drop / 0x27 scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect |
-| CivScopeProducer | Backend core | `backends/ic7300/civ_scope.py` | `ScopeProducer` implementation: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → `ScopeHandler` |
+| CivScopeProducer | Backend core | `backends/ic7300/civ_scope.py` | `ScopeProducer` implementation: CI-V 0x27 waveform (475 or 689 bins per profile) → scale amp ceiling (160/200) → 255 → upsample 850 → `ScopeHandler` |
 | RadioState | Backend core | `radio_state.py` | Dataclass with dirty-field change tracking; to_dict/to_dirty_dict serialization; from_sync_result deserialization; derived properties (mode_name, s_unit, band_name, filter_hz) |
 | PollScheduler | Backend core | `poll_scheduler.py` | 7-task asyncio polling (IF/VFO/TX-status/TX-meters/settings/slow/watchdog), skip-on-command, cancel-aware preemption for priority radio writes; watchdog re-runs scope init (`on_reconnected` hook) after reconnect |
 | AudioHandler | Backend core | `audio_handler.py` | PyAudio device enumeration, RX capture stream, TX playback stream, Opus encode (via RxOpusEncoder), multi-layer audio device auto-detection parameterized by backend (name hints + mono heuristic + full-duplex) |
@@ -20,6 +20,7 @@
 | ScopePipeProducer | Backend core | `backends/ft710/scope_producer.py` | `ScopeProducer` implementation: owns `scope_pipe` subprocess spawn/read/auto-restart/TX-notify (FT-710 only) |
 | ScopeFrame | Backend support | `backends/ft710/scope_frame.py` (root shim: `scope_frame.py`) | Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics |
 | ScopeLibraries | Backend support | `backends/ft710/scope_libraries.py` (root shim: `scope_libraries.py`) | FTDI library discovery and SPI clock configuration |
+| CivModelProfile | Backend core | `backends/ic7300/civ_profiles.py` | Per-model CI-V facts (address, Transceive item, scope geometry, bands, modes, attenuator steps, meter curves, `verified`/`unverified_meters`, provenance) + `get_profile()`/`known_models()`; one entry per Icom model, defaults reproduce the IC-7300 constants |
 | Config | Backend support | `config.py` | Protocol-neutral constants + shared UI mode tables; per-backend tables live in `backends/ft710/config_ft710.py` and `backends/ic7300/config_ic7300.py` |
 | ATR1000Client | Backend support | `atr1000_client.py` | Optional asyncio client for networked ATR1000 tuner (frame protocol, reconnect/refresh, TX-no-SYNC, learning, throttled relay writes) |
 | TunerStorage | Backend support | `atr1000_tuner.py` | LC-learning persistence (SWR-gated, atomic JSON) |

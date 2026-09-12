@@ -20,6 +20,8 @@ The MRRC Modern PTT safety architecture provides **7 independent layers of defen
 
 ## 15.2 Layer Details
 
+**Layer 0 (V2.41): unverified-model transmit gate.** Before any of the layers below can key the radio, `IC7300Backend.set_ptt(True)`/`set_tune(True)` refuse when the active model profile has no hardware evidence (`verified=False`) and the operator has not set `MRRC_ALLOW_UNVERIFIED_TX=1`. The refusal happens at the backend boundary — so the browser, the iOS and Android apps and the ATR1000 tune assist are all covered — and it never blocks a *release* (`set_ptt(False)` always passes through, because a stranded carrier is the failure this chapter exists to prevent). The WebSocket handler answers a refused key-up with an actionable error message. This layer is not a replacement for any other: everything below still applies, unchanged, on verified radios.
+
 ### Layer 1: Touch-and-Hold UX
 
 PTT only transmits while the user is actively touching the PTT button:

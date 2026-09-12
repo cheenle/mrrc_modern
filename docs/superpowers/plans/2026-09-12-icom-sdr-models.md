@@ -624,7 +624,7 @@ git commit -m "feat(icom): per-model CI-V profiles (IC-705/IC-7610/IC-7760 data)
 - 修改：`backends/ic7300/civ_codec.py:340-390`
 - 测试：`tests/test_civ_codec.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_civ_codec.py`（文件顶部已 import `unittest`；若缺 `logging` 断言所需的模块则一并加上）：
 
@@ -688,12 +688,12 @@ class ScopeAssemblerProfileHintTests(unittest.TestCase):
         self.assertEqual(len(asm.feed(seg)), 689)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_codec.py" 2>&1 | tail -6`
 预期：FAIL，`TypeError: ScopeAssembler.__init__() got an unexpected keyword argument 'seq_max'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 在 `backends/ic7300/civ_codec.py` 顶部 import 区加入 logger（文件当前没有 logging）：
 
@@ -776,12 +776,12 @@ class ScopeAssembler:
         return None
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_codec.py" 2>&1 | tail -5`
 预期：`OK`（既有用例 + 5 个新用例）
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add backends/ic7300/civ_codec.py tests/test_civ_codec.py
@@ -797,7 +797,7 @@ git commit -m "feat(icom): profile-supplied scope geometry in ScopeAssembler (wa
 - 修改：`backends/ic7300/civ_scope.py:63-110`、`_handle_waveform`
 - 测试：`tests/test_civ_scope.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_civ_scope.py`：
 
@@ -865,12 +865,12 @@ class CivScopeProducerProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.scope._connected, True)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_scope.py" 2>&1 | tail -6`
 预期：FAIL，`TypeError: CivScopeProducer.__init__() got an unexpected keyword argument 'amp_max'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `backends/ic7300/civ_scope.py` 的 `__init__` 与组装：
 
@@ -899,12 +899,12 @@ class CivScopeProducerProfileTests(unittest.IsolatedAsyncioTestCase):
 
 （其余不变；`SCOPE_AMPLITUDE_MAX` 的 import 保留为默认值来源。）
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_scope.py" 2>&1 | tail -5`
 预期：`OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add backends/ic7300/civ_scope.py tests/test_civ_scope.py
@@ -920,7 +920,7 @@ git commit -m "feat(icom): configurable scope amplitude ceiling in CivScopeProdu
 - 修改：`backends/ic7300/civ_controller.py:174-215`（`__init__`）、`:804-808`（`set_attenuator`）、`:1058-1063`（`_get_attenuator`）、新增 `get_model_id()`
 - 测试：`tests/test_civ_controller.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_civ_controller.py`：
 
@@ -999,12 +999,12 @@ class CivControllerProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await civ.get_model_id())
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_controller.py" 2>&1 | tail -6`
 预期：FAIL，`AttributeError: 'CivController' object has no attribute '_att_steps'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `__init__` 签名与赋值（新增两个关键字参数，默认值 = 现状）：
 
@@ -1088,17 +1088,17 @@ class CivControllerProfileTests(unittest.IsolatedAsyncioTestCase):
         return data if data else None
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_controller.py" 2>&1 | tail -5`
 预期：`OK`
 
-- [ ] **步骤 5：运行全部 CI-V 相关测试**
+- [x] **步骤 5：运行全部 CI-V 相关测试**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_*.py" 2>&1 | tail -3`
 预期：`OK`
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
 ```bash
 git add backends/ic7300/civ_controller.py tests/test_civ_controller.py
@@ -1115,7 +1115,7 @@ git commit -m "feat(icom): profile plumbing (address/queue/attenuator steps) + 1
 - 修改：`radio_state.py`（新增 `model_mismatch`）
 - 测试：`tests/test_backend_factory.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_backend_factory.py`：
 
@@ -1154,12 +1154,12 @@ class RadioStateModelMismatchTests(unittest.TestCase):
         self.assertTrue(state.snapshot()["model_mismatch"])
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_backend_factory.py" 2>&1 | tail -6`
 预期：FAIL，`TypeError: RadioCapabilities.__init__() got an unexpected keyword argument 'verified'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `backends/base.py` 的 `RadioCapabilities` 追加字段（放在 `tune_via` 之后）：
 
@@ -1190,12 +1190,12 @@ class RadioStateModelMismatchTests(unittest.TestCase):
             "model_mismatch": self.model_mismatch,
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_backend_factory.py" 2>&1 | tail -5`
 预期：`OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add backends/base.py radio_state.py tests/test_backend_factory.py
@@ -1212,7 +1212,7 @@ git commit -m "feat(backend): verification-boundary capability fields + model_mi
 - 修改：`backends/__init__.py`
 - 测试：`tests/test_unverified_tx_gate.py`（新建）、`tests/test_model_mismatch.py`（新建）、`tests/test_backend_factory.py`（扩展）
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 `tests/test_unverified_tx_gate.py`:
 
@@ -1386,12 +1386,12 @@ class ModelIdentityTests(unittest.IsolatedAsyncioTestCase):
                           "ic7610", "ic7760"))
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_unverified_tx_gate.py" 2>&1 | tail -5`
 预期：FAIL，`ValueError: unknown radio model 'ic705' (registered: ft710, ic7300, ic7300mk2)`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `backends/__init__.py`：
 
@@ -1647,19 +1647,19 @@ class IC7760Backend(IC7300Backend):
 
 清理被 profile 取代的死代码：`grep -rn "_ATTENUATOR_INDEX_LABELS\|_ic7300_filter_hz" --include=*.py .` 必须零命中（测试也不引用它们——任务 1 的测试已改为直接对照 `FIL_DEFAULT_WIDTHS_HZ`）。
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_unverified_tx_gate.py" 2>&1 | tail -5`
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_model_mismatch.py" 2>&1 | tail -5`
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_backend_factory.py" 2>&1 | tail -5`
 预期：三者均 `OK`
 
-- [ ] **步骤 5：回归全量测试**
+- [x] **步骤 5：回归全量测试**
 
 运行：`.venv/bin/python -m unittest discover -s tests 2>&1 | tail -3`
 预期：`OK`，通过数 = 任务 5 后的通过数 + 新增用例数（不得出现新的 FAIL/ERROR）
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
 ```bash
 git add backends/ic7300/backend.py backends/__init__.py tests/test_unverified_tx_gate.py tests/test_model_mismatch.py tests/test_backend_factory.py
@@ -1675,7 +1675,7 @@ git commit -m "feat(icom): profile-driven Icom backend, TX gate, model identity 
 - 修改：`config.py:44-66`
 - 测试：`tests/test_config.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_config.py`：
 
@@ -1721,12 +1721,12 @@ class UnverifiedTxGateConfigTests(unittest.TestCase):
 
 （`tests/test_config.py` 顶部若无 `import os, mock` 则补上。）
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_config.py" 2>&1 | tail -6`
 预期：FAIL，`AttributeError: module 'config' has no attribute 'ALLOW_UNVERIFIED_TX'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `config.py`：在 `_env_float` 之后加 helper：
 
@@ -1763,12 +1763,12 @@ _DEFAULT_BAUD_BY_MODEL = {
 ALLOW_UNVERIFIED_TX = _env_bool("MRRC_ALLOW_UNVERIFIED_TX", False)
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_config.py" 2>&1 | tail -5`
 预期：`OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add config.py tests/test_config.py
@@ -1784,7 +1784,7 @@ git commit -m "feat(config): ICOM model baud defaults + MRRC_ALLOW_UNVERIFIED_TX
 - 修改：`server.py:42-48`（import）、`:1242-1247`（att 边界）、`:1113-1125`（ptt 门控）、`:1180-1200`（tune 门控）、`:1623-1631`（启动告警）、`:1922-1929`（模型白名单）
 - 测试：`tests/test_server_ws_protocol.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_server_ws_protocol.py`：
 
@@ -1812,12 +1812,12 @@ class ServerModelRegistryTests(unittest.TestCase):
         self.assertIn("MRRC_ALLOW_UNVERIFIED_TX", source)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -6`
 预期：FAIL，`AssertionError: 'known_models()' not found`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 import：`from backends import create_backend, known_models`
 
@@ -1886,13 +1886,13 @@ TUNE 门控（`elif field == "tune":` 分支，`on` 解析之后）：
         return JSONResponse({"error": "invalid radio_model"}, status_code=400)
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -5`
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_*.py" 2>&1 | tail -3`
 预期：`OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add server.py tests/test_server_ws_protocol.py
@@ -1911,7 +1911,7 @@ git commit -m "feat(server): registry-driven model validation, capability attenu
 - 修改：`static/sw.js:2,17,39`
 - 测试：`tests/test_server_ws_protocol.py:229-236`、`tests/test_audio.py:151`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 修改 `tests/test_server_ws_protocol.py` 的缓存版本断言（v27→v28、v29→v30、mrrc-v30→v31）：
 
@@ -1950,12 +1950,12 @@ class FrontendNewModelContractTests(unittest.TestCase):
         self.assertIn("tx_gated", js)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -6`
 预期：FAIL，`AssertionError: '/ft710_main.js?v=28' not found`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `static/index.html` 下拉：
 
@@ -2025,13 +2025,13 @@ function applyCapabilityBadges() {
 }
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -5`
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_audio.py" 2>&1 | tail -5`
 预期：`OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add static/index.html static/ft710_main.js static/ft710_ui.js static/sw.js tests/test_server_ws_protocol.py tests/test_audio.py
@@ -2047,7 +2047,7 @@ git commit -m "feat(ui): IC-705/7610/7760 dialog options, capability audio boost
 - 创建：`_diag_civ.py`
 - 创建：`tests/test_diag_civ.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 `tests/test_diag_civ.py`:
 
@@ -2120,12 +2120,12 @@ class ReportFormattingTests(unittest.TestCase):
         self.assertIn("TX check", report)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_diag_civ.py" 2>&1 | tail -5`
 预期：FAIL，`ModuleNotFoundError: No module named '_diag_civ'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `_diag_civ.py`（完整可运行脚本；所有串口 I/O 走生产 `CivController`，无裸 pyserial）：
 
@@ -2400,13 +2400,13 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_diag_civ.py" 2>&1 | tail -5`
 运行：`.venv/bin/python _diag_civ.py --help 2>&1 | head -12`
 预期：测试 `OK`；`--help` 打印参数列表（证明脚本可导入/可运行，无需硬件）
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add _diag_civ.py tests/test_diag_civ.py
@@ -2422,7 +2422,7 @@ git commit -m "feat(diag): generic _diag_civ.py self-check (model ID, scope geom
 - 修改：`packaging/pyinstaller/mrrc_modern_server.spec:89-93`
 - 测试：`tests/test_windows_packaging_files.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_windows_packaging_files.py`：
 
@@ -2436,12 +2436,12 @@ class IcomProfileHiddenImportTests(unittest.TestCase):
 
 （若该文件未定义 `ROOT`，使用该文件中既有的路径常量。）
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_windows_packaging_files.py" 2>&1 | tail -5`
 预期：FAIL，`AssertionError: 'backends.ic7300.civ_profiles' not found`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `packaging/pyinstaller/mrrc_modern_server.spec` 的 hiddenimports 列表（按字母序插入）：
 
@@ -2454,12 +2454,12 @@ class IcomProfileHiddenImportTests(unittest.TestCase):
         "backends.ic7300.config_ic7300",
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_windows_packaging_files.py" 2>&1 | tail -5`
 预期：`OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add packaging/pyinstaller/mrrc_modern_server.spec tests/test_windows_packaging_files.py

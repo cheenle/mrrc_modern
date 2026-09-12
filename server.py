@@ -225,10 +225,16 @@ RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
 # One writer task owns the session so the timeline cursor and the MP3
 # encoder are never touched concurrently, and encoder CPU stays off the
 # event loop (asyncio.to_thread).
-REC_QUEUE_MAX = 200            # ~4 s of audio; a stalled encoder must not
-                               # grow memory without limit
+REC_QUEUE_MAX = 200            # ~16 s of audio at 80 ms blocks: a stalled
+                               # writer must not grow memory without limit
 _rec_queue: "asyncio.Queue" = asyncio.Queue(maxsize=REC_QUEUE_MAX)
-_rec_dropped = 0
+# Dedicated single-thread pool: the recorder must never compete for the
+# default executor, which the serial/audio paths can monopolise (a CAT
+# reconnect storm starved the writer and every RX block was dropped —
+# 2026-09-12 field report).  Encoding an 80 ms block measures ~0.04 ms,
+# so one thread is far more than enough.
+_rec_pool = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="recorder")
 _rec_failures = 0
 _rec_writer_task: Optional["asyncio.Task"] = None
 _rec_session = RecordingSession(RECORDINGS_DIR,
@@ -275,17 +281,26 @@ def _recording_should_capture_rx() -> bool:
 
 def _rec_enqueue(source: str, pcm: bytes, rate: int,
                  timestamp_ns: Optional[int] = None) -> None:
-    """Queue one PCM block for the writer (never blocks, never raises)."""
-    global _rec_dropped
+    """Queue one PCM block for the writer (never blocks, never raises).
+
+    Slowness here means a recording with holes: the count is tracked per
+    session and surfaced in the UI status, and the first drop is logged
+    with the reason so a field report can be diagnosed immediately.
+    """
     if not _rec_session.active:
         return
     try:
         _rec_queue.put_nowait((source, pcm, rate, timestamp_ns))
     except asyncio.QueueFull:
-        _rec_dropped += 1
-        if _rec_dropped % 50 == 1:
-            logger.warning("Recording queue full — dropped %d block(s)",
-                           _rec_dropped)
+        _rec_session.dropped += 1
+        if _rec_session.dropped == 1:
+            logger.warning(
+                "Recording writer is falling behind — dropping audio (the "
+                "recording will have holes). Check disk speed / CPU load "
+                "for %s.", RECORDINGS_DIR)
+        elif _rec_session.dropped % 50 == 0:
+            logger.warning("Recording dropped %d block(s) so far",
+                           _rec_session.dropped)
 
 
 def _rec_enqueue_stop():
@@ -336,7 +351,8 @@ async def _recording_writer_loop(queue: "asyncio.Queue",
         if source == "stop":
             info = None
             try:
-                info = await asyncio.to_thread(session.stop)
+                loop = asyncio.get_running_loop()
+                info = await loop.run_in_executor(_rec_pool, session.stop)
             except Exception as e:
                 logger.warning("Recording stop failed: %s", e)
             if info is not None:
@@ -346,8 +362,9 @@ async def _recording_writer_loop(queue: "asyncio.Queue",
                 extra.set_result(info)
             return
         try:
-            await asyncio.to_thread(session.add_audio, source, pcm, rate,
-                                    extra)
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(_rec_pool, session.add_audio,
+                                       source, pcm, rate, extra)
         except Exception as e:
             _rec_failures += 1
             if _rec_failures in (1, 10, 100):
@@ -1974,6 +1991,7 @@ async def lifespan(app: FastAPI):
             _rec_writer_task.cancel()
         _rec_writer_task = None
     _rec_session.close_without_finishing()
+    _rec_pool.shutdown(wait=False)
     if _opus_tx_decoder:
         try:
             _opus_tx_decoder.close()

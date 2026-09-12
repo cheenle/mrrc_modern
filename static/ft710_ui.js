@@ -526,8 +526,10 @@ function renderRecordingState() {
     recordBtn.disabled = false;
     recordBtn.classList.toggle('record-active', !!rec.recording);
     recordBtn.textContent = rec.recording ? 'STOP' : 'REC';
+    const dropped = Number(rec.dropped) || 0;
     recordBtn.title = rec.recording
         ? '服务端录制中（RX+TX，MP3 16 kHz）· 已录 ' + _formatDuration(rec.duration || 0)
+            + (dropped ? ' · ⚠ 已丢 ' + dropped + ' 块（请检查磁盘/负载）' : '')
         : '服务端录制：点击开始，录音保存在服务端并可回放/下载';
 }
 
@@ -1841,7 +1843,8 @@ function _recordingsRow(rec) {
     head.style.color = rec.recording ? '#ef4444' : '#f59e0b';
     const meta = document.createElement('div');
     meta.style.color = '#9ca3af';
-    meta.textContent = _formatDuration(rec.duration) + ' · ' + _formatBytes(rec.bytes);
+    meta.textContent = _formatDuration(rec.duration) + ' · ' + _formatBytes(rec.bytes)
+        + (Number(rec.dropped) > 0 ? ' · ⚠ 丢失 ' + rec.dropped + ' 块' : '');
     info.append(head, meta);
 
     const actions = document.createElement('div');

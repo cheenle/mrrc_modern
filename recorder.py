@@ -247,6 +247,11 @@ class RecordingSession:
         self._decimators = {}
         self._source_cursors = {}
         self._last_source = None
+        #: Blocks dropped for this session (queue full).  Per session, not
+        #: per process: a cumulative counter made a field diagnosis read
+        #: "701 drops 0.4 s after start" when the truth was spread over
+        #: several recordings (2026-09-12).
+        self.dropped = 0
 
     # ── Lifecycle ──────────────────────────────────────────────────
 
@@ -301,6 +306,7 @@ class RecordingSession:
         self._decimators = {}
         self._source_cursors = {}
         self._last_source = None
+        self.dropped = 0
         self._active = True
         logger.info("Recording started: %s (%d kbps, %d Hz mono)",
                     self._name, self.bitrate, RECORDING_RATE)
@@ -457,4 +463,5 @@ class RecordingSession:
             "duration": round(duration, 2),
             "name": self._name,
             "bytes": self._bytes,
+            "dropped": self.dropped,
         }

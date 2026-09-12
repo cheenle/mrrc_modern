@@ -1035,6 +1035,12 @@ class RecordingsPanelContractTests(unittest.TestCase):
         # The button state comes from the server, not a local recorder.
         self.assertIn("radioState.recording", js)
 
+    def test_panel_and_button_surface_dropped_blocks(self):
+        # A recording with holes must be visible, not silent (field report
+        # 2026-09-12: three recordings were 100% dropped audio).
+        js = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("rec.dropped", js)
+
     def test_main_stores_the_recording_state_message(self):
         js = Path("static/ft710_main.js").read_text(encoding="utf-8")
         self.assertIn('"recordingState"', js)

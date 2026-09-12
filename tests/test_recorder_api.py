@@ -79,13 +79,72 @@ class RecordingWriterTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(next(self.dir.glob("*.mp3")).stat().st_size, 0)
 
 
+class RecorderExecutorTests(unittest.IsolatedAsyncioTestCase):
+    """The writer must own its executor (field report 2026-09-12).
+
+    The default thread pool is shared with serial/audio work; a CAT
+    reconnect storm saturated it, the writer never ran, and every RX block
+    of three recordings was dropped.
+    """
+
+    async def test_writer_never_uses_the_shared_default_pool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            session = RecordingSession(Path(tmp), bitrate=64, max_seconds=60)
+            session.start(freq_hz=14_270_000)
+            queue: asyncio.Queue = asyncio.Queue()
+            calls = []
+            real_to_thread = asyncio.to_thread
+
+            def _forbidden(*args, **kwargs):
+                calls.append(args[0].__name__ if args else "?")
+                raise AssertionError("recorder must not use asyncio.to_thread")
+
+            with mock.patch.object(asyncio, "to_thread", _forbidden):
+                task = asyncio.create_task(
+                    server._recording_writer_loop(queue, session))
+                for _ in range(3):
+                    queue.put_nowait(("rx", _block(), 48000, None))
+                queue.put_nowait(("stop", b"", 0, None))
+                await asyncio.wait_for(task, timeout=3.0)
+            self.assertEqual(calls, [])
+            self.assertFalse(session.active)
+            self.assertGreater(next(Path(tmp).glob("*.mp3")).stat().st_size, 0)
+            self.assertTrue(real_to_thread)               # sanity: it exists
+
+    async def test_writer_uses_the_dedicated_pool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            session = RecordingSession(Path(tmp), bitrate=64, max_seconds=60)
+            session.start(freq_hz=7_050_000)
+            queue: asyncio.Queue = asyncio.Queue()
+            seen = []
+            real_pool = server._rec_pool
+            with mock.patch.object(server, "_rec_pool") as pool:
+                pool.submit.side_effect = (
+                    lambda fn, *a, **kw: seen.append(fn.__name__)
+                    or real_pool.submit(fn, *a, **kw))
+                # run_in_executor accepts an executor; give it a wrapper that
+                # routes submit() through the recording above.
+                class _Proxy:
+                    def submit(self, fn, *a, **kw):
+                        seen.append(fn.__name__)
+                        return real_pool.submit(fn, *a, **kw)
+
+                with mock.patch.object(server, "_rec_pool", _Proxy()):
+                    task = asyncio.create_task(
+                        server._recording_writer_loop(queue, session))
+                    queue.put_nowait(("rx", _block(), 48000, None))
+                    queue.put_nowait(("stop", b"", 0, None))
+                    await asyncio.wait_for(task, timeout=3.0)
+            self.assertEqual(seen.count("add_audio"), 1)
+            self.assertEqual(seen.count("stop"), 1)
+
+
 class RecordingQueueTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.session = RecordingSession(Path(self._tmp.name), bitrate=64,
                                         max_seconds=60)
         self._saved = server._rec_session
-        self._saved_dropped = server._rec_dropped
         server._rec_session = self.session
         # Start from an empty queue regardless of other tests.
         while not server._rec_queue.empty():
@@ -96,7 +155,6 @@ class RecordingQueueTests(unittest.TestCase):
             server._rec_queue.get_nowait()
         self.session.close_without_finishing()
         server._rec_session = self._saved
-        server._rec_dropped = self._saved_dropped
         self._tmp.cleanup()
 
     def test_blocks_are_queued_with_their_source_and_rate(self):
@@ -109,13 +167,21 @@ class RecordingQueueTests(unittest.TestCase):
         server._rec_enqueue("rx", b"\x00\x00" * 320, 48000)
         self.assertTrue(server._rec_queue.empty())
 
-    def test_queue_is_bounded_and_counts_drops(self):
-        self.session.start()
-        before = server._rec_dropped
+    def test_queue_is_bounded_and_counts_drops_per_session(self):
+        self.session.start(freq_hz=7_050_000)
+        first = self.session.status()["name"]
         for _ in range(server.REC_QUEUE_MAX + 25):
             server._rec_enqueue("rx", _block(), 48000)
-        self.assertGreater(server._rec_dropped, before)
+        self.assertGreater(self.session.dropped, 0)
         self.assertLessEqual(server._rec_queue.qsize(), server.REC_QUEUE_MAX)
+        # The count belongs to this recording, not to the process: a
+        # cumulative counter made the 2026-09-12 diagnosis read wrong.
+        self.assertEqual(self.session.status()["dropped"], self.session.dropped)
+        self.session.close_without_finishing()
+        self.session.start(freq_hz=7_050_000)
+        self.assertEqual(self.session.dropped, 0)
+        self.assertTrue(self.session.status()["name"].endswith(".mp3"))
+        self.assertTrue(first.endswith(".mp3"))
 
 
 class RecorderTapTests(unittest.TestCase):

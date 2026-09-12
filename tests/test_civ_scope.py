@@ -206,7 +206,9 @@ class CivScopeProducerTests(unittest.IsolatedAsyncioTestCase):
 class BackendFactoryScopeProducerTests(unittest.TestCase):
     def test_create_scope_producer_returns_civ_producer(self):
         from backends import create_backend
+        from backends.ic7300.backend import IC7300Backend
         backend = create_backend("ic7300", port="/dev/null")
+        assert isinstance(backend, IC7300Backend)   # narrow for the checker
         scope = ScopeHandler()
 
         async def cb(scope):
@@ -214,8 +216,89 @@ class BackendFactoryScopeProducerTests(unittest.TestCase):
 
         producer = backend.create_scope_producer(scope, cb)
         self.assertIsInstance(producer, CivScopeProducer)
+        assert isinstance(producer, CivScopeProducer)
         self.assertIs(producer._civ, backend.cat)
         self.assertIs(producer._scope, scope)
+
+
+def make_waveform_segments_n(seg_max: int, bin_total: int,
+                            bin_value: int) -> list[ScopeSegment]:
+    """One complete waveform with arbitrary profile geometry."""
+    segs = [ScopeSegment(
+        sequence=1, sequence_max=seg_max, bins=b"",
+        is_division_start=True, scope_mode=SCOPE_MODE_CENTER,
+        center_freq_hz=14_074_000, span_hz=100_000)]
+    remaining = bin_total
+    for seq in range(2, seg_max + 1):
+        n = min(50, remaining)
+        segs.append(ScopeSegment(sequence=seq, sequence_max=seg_max,
+                                 bins=bytes([bin_value] * max(n, 0))))
+        remaining -= n
+    return segs
+
+
+class CivScopeProducerProfileTests(unittest.IsolatedAsyncioTestCase):
+    """Amplitude ceiling / bin expectation supplied by the model profile."""
+
+    def _producer(self, **kwargs) -> CivScopeProducer:
+        self.civ = CivController("/dev/null")          # never connected
+        self.scope = ScopeHandler()
+        self.frames: list[ScopeHandler] = []
+        self._frame_event = asyncio.Event()
+
+        async def on_frame(scope):
+            self.frames.append(scope)
+            self._frame_event.set()
+
+        return CivScopeProducer(self.civ, self.scope, on_frame, **kwargs)
+
+    async def _run(self, producer, segs) -> bool:
+        """Push one waveform; return whether the handler was connected.
+
+        The flag is read before ``stop()`` (which resets ``_connected``
+        by design), so the caller can assert liveness after cleanup.
+        """
+        await producer.start()
+        try:
+            for seg in segs:
+                self.civ.scope_queue.put_nowait(seg)
+            await asyncio.wait_for(self._frame_event.wait(), timeout=2.0)
+            await asyncio.sleep(0.05)
+            return bool(self.scope.connected)
+        finally:
+            await producer.stop()
+
+    async def test_200_amp_ceiling_reaches_full_scale(self):
+        # 689 bins, amplitude ceiling 200 -> a 200 bin value maps to 255.
+        producer = self._producer(amp_max=200, expected_bins=689, seq_max=15)
+        connected = await self._run(producer,
+                                    make_waveform_segments_n(15, 689, 200))
+        self.assertEqual(len(self.scope.spectrum_rx1), 850)
+        self.assertEqual(max(self.scope.spectrum_rx1), 255)
+        self.assertEqual(set(self.scope.spectrum_rx2), {0})
+        self.assertTrue(connected)
+
+    async def test_160_amp_ceiling_still_used_by_default(self):
+        producer = self._producer()
+        await self._run(producer, make_waveform_segments(bin_value=160))
+        self.assertEqual(max(self.scope.spectrum_rx1), 255)
+
+    async def test_200_ceiling_rescales_half_amplitude(self):
+        producer = self._producer(amp_max=200, expected_bins=689, seq_max=15)
+        await self._run(producer, make_waveform_segments_n(15, 689, 100))
+        # 100 / 200 * 255 = 127.5 -> 127 or 128 (round-half-even varies).
+        self.assertTrue(all(v in (127, 128) for v in self.scope.spectrum_rx1),
+                        msg=f"unexpected: {set(self.scope.spectrum_rx1)}")
+
+    async def test_unexpected_bin_count_still_renders(self):
+        # Profile says 475 bins, the radio sends 689: adopt the measurement
+        # (one warning, still a working waterfall — spec §6.3).
+        producer = self._producer(amp_max=200, expected_bins=475, seq_max=15)
+        with self.assertLogs("ic7300.codec", level="WARNING"):
+            connected = await self._run(
+                producer, make_waveform_segments_n(15, 689, 200))
+        self.assertEqual(len(self.scope.spectrum_rx1), 850)
+        self.assertTrue(connected)
 
 
 if __name__ == "__main__":

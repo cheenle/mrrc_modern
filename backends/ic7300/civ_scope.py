@@ -91,11 +91,20 @@ class CivScopeProducer:
         controller: "CivController",
         scope: Optional["ScopeHandler"] = None,
         on_frame: Optional[OnFrameCallback] = None,
+        amp_max: int = SCOPE_AMPLITUDE_MAX,
+        expected_bins: Optional[int] = None,
+        seq_max: Optional[int] = None,
     ):
         self._civ = controller
         self._scope = scope
         self._on_frame = on_frame
-        self._assembler = ScopeAssembler()
+        # Profile-supplied scope geometry: the IC-7300 family sends 475
+        # bins with a 0..160 ceiling, the IC-7610/IC-7760 send 689 bins
+        # with 0..200.  Both are hints — the assembler warns once and
+        # adopts whatever the radio actually sends (spec §6.3).
+        self._amp_max = amp_max
+        self._assembler = ScopeAssembler(seq_max=seq_max,
+                                        expected_bins=expected_bins)
         self._task: Optional[asyncio.Task] = None
         # True between start() and stop() — gates the stall warning.
         self._active: bool = False
@@ -202,7 +211,7 @@ class CivScopeProducer:
             return
 
         scope.spectrum_rx1 = upsample_bins(
-            scale_scope_bins(bins, SCOPE_AMPLITUDE_MAX, 255), WF_SIZE)
+            scale_scope_bins(bins, self._amp_max, 255), WF_SIZE)
         scope.spectrum_rx2 = [0] * WF_SIZE  # single-receiver radio
 
         if self._scope_mode is not None:

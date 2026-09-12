@@ -1160,7 +1160,7 @@ Evidence that fixes the three shapes this task implements:
   `PC` read in one of two shapes depending on the head/amplifier configuration
   (`ftx1/ftx1_readme.txt`).
 
-- [x] **步骤 1：编写失败的测试**
+- [ ] **步骤 1：编写失败的测试**
 
 Append to `tests/test_yaesu_cat_core.py`:
 
@@ -1325,12 +1325,12 @@ class PowerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await ctrl.effective_power_max(), 100)
 ```
 
-- [x] **步骤 2：运行测试验证失败**
+- [ ] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_cat_core -v`
 预期：FAIL — `AttributeError: 'YaesuCatController' object has no attribute 'get_model_id'`
 
-- [x] **步骤 3：编写实现代码**
+- [ ] **步骤 3：编写实现代码**
 
 Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
 
@@ -1694,12 +1694,12 @@ Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
         return state
 ```
 
-- [x] **步骤 4：运行测试验证通过**
+- [ ] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_cat_core -v`
 预期：PASS（约 42 个测试）。
 
-- [x] **步骤 5：Commit**
+- [ ] **步骤 5：Commit**
 
 ```bash
 git add backends/yaesu/cat_core.py tests/test_yaesu_cat_core.py
@@ -1719,7 +1719,7 @@ and the family PC power format with FTX-1 configuration detection."
 - 创建：`backends/yaesu/backend.py`
 - 创建：`tests/test_yaesu_backend.py`
 
-- [x] **步骤 1：编写失败的测试**
+- [ ] **步骤 1：编写失败的测试**
 
 `tests/test_yaesu_backend.py`:
 
@@ -1885,12 +1885,12 @@ class IdentityTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse([m for m in cm.output if m.startswith("WARNING")])
 ```
 
-- [x] **步骤 2：运行测试验证失败**
+- [ ] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_backend -v`
 预期：FAIL — `ModuleNotFoundError: No module named 'backends.yaesu.backend'`
 
-- [x] **步骤 3：编写实现代码**
+- [ ] **步骤 3：编写实现代码**
 
 `backends/yaesu/backend.py`:
 
@@ -2259,12 +2259,12 @@ RAW_TO_METER_TABLES = {
 }
 ```
 
-- [x] **步骤 4：运行测试验证通过**
+- [ ] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_backend -v`
 预期：PASS（约 20 个测试）。另外运行 `.venv/bin/python -m py_compile backends/yaesu/*.py` 确认无语法错误。
 
-- [x] **步骤 5：Commit**
+- [ ] **步骤 5：Commit**
 
 ```bash
 git add backends/yaesu/backend.py backends/yaesu/cat_core.py tests/test_yaesu_backend.py
@@ -2290,7 +2290,7 @@ model ID and warns (never blocks) on a mismatch."
 - 修改：`tests/test_config.py:230-240`
 - 创建：`tests/test_yaesu_wiring.py`
 
-- [x] **步骤 1：编写失败的测试**
+- [ ] **步骤 1：编写失败的测试**
 
 `tests/test_yaesu_wiring.py`:
 
@@ -2335,12 +2335,12 @@ class BaudTests(unittest.TestCase):
             self.assertIn(default_baud_for(key), (38400, 115200))
 ```
 
-- [x] **步骤 2：运行测试验证失败**
+- [ ] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_wiring -v`
 预期：FAIL — `test_keys_are_registered` 失败（`ftdx10` 不在 `known_models()` 中）
 
-- [x] **步骤 3：修改实现**
+- [ ] **步骤 3：修改实现**
 
 `backends/__init__.py` — extend the registry (keep the lazy-import comment):
 
@@ -2411,13 +2411,13 @@ next to the existing `backends.*` entries:
             "ftdx10", "ftdx101d", "ftdx101mp", "ftx1"))
 ```
 
-- [x] **步骤 4：运行测试验证通过**
+- [ ] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_wiring tests.test_backend_factory tests.test_config -v`
 预期：PASS。然后跑全量：`.venv/bin/python -m unittest discover -s tests 2>&1 | tail -3`
 预期：`OK`（909 + 新增测试）。
 
-- [x] **步骤 5：Commit**
+- [ ] **步骤 5：Commit**
 
 ```bash
 git add backends/__init__.py config.py static/index.html \
@@ -2444,7 +2444,7 @@ simulators are not built by default (`simulators/` in the Hamlib tree contains o
 today — verified 2026-09-12) and their intended wiring is `socat` pty pairs
 (`simulators/simftdx101.c:1`: "can run this using rigctl/rigctld and socat pty devices").
 
-- [x] **步骤 1：编写失败的测试**
+- [ ] **步骤 1：编写失败的测试**
 
 `tests/test_yaesu_fake_radio.py`:
 
@@ -2643,7 +2643,7 @@ class HamlibSimulatorPeerTests(unittest.IsolatedAsyncioTestCase):
             proc.terminate()
 ```
 
-- [x] **步骤 2：运行测试验证失败/通过**
+- [ ] **步骤 2：运行测试验证失败/通过**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_fake_radio -v`
 预期：pty 测试 PASS；`HamlibSimulatorPeerTests` SKIP（附注原因）。若 pty 打开失败（例如受限沙箱），测试必须在 `asyncSetUp` 内 `self.skipTest(...)` 而不是报错——把
@@ -2654,14 +2654,14 @@ class HamlibSimulatorPeerTests(unittest.IsolatedAsyncioTestCase):
             self.skipTest("pyserial cannot open a pty device path in this environment")
 ```
 
-- [x] **步骤 3：可选设置（写入 `tests/README.md`，非 CI 必需）**
+- [ ] **步骤 3：可选设置（写入 `tests/README.md`，非 CI 必需）**
 
 ```bash
 cd ~/hamlib/Hamlib-4.7.2/simulators && make            # builds simftdx101 et al.
 brew install socat                                     # macOS; apt install socat on Linux
 ```
 
-- [x] **步骤 4：Commit**
+- [ ] **步骤 4：Commit**
 
 ```bash
 git add tests/test_yaesu_fake_radio.py tests/README.md
@@ -2681,7 +2681,7 @@ skipped unless the simulator is built and socat is installed."
 - 创建：`_diag_yaesu.py`
 - 创建：`tests/test_diag_yaesu.py`
 
-- [x] **步骤 1：编写失败的测试**
+- [ ] **步骤 1：编写失败的测试**
 
 `tests/test_diag_yaesu.py`:
 
@@ -2745,12 +2745,12 @@ class ReportTests(unittest.TestCase):
         self.assertIn("FAIL", report)
 ```
 
-- [x] **步骤 2：运行测试验证失败**
+- [ ] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest tests.test_diag_yaesu -v`
 预期：FAIL — `ModuleNotFoundError: No module named '_diag_yaesu'`
 
-- [x] **步骤 3：编写实现代码**
+- [ ] **步骤 3：编写实现代码**
 
 `_diag_yaesu.py` — read-only by default; the only write path is
 `--tx-check --allow-tx`, which is bounded by a sub-second key-up with PTT read-back and always
@@ -2907,12 +2907,12 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [x] **步骤 4：运行测试验证通过**
+- [ ] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest tests.test_diag_yaesu -v`
 预期：PASS（6 个测试）。再手工确认帮助文本：`.venv/bin/python _diag_yaesu.py --help`
 
-- [x] **步骤 5：Commit**
+- [ ] **步骤 5：Commit**
 
 ```bash
 git add _diag_yaesu.py tests/test_diag_yaesu.py
@@ -2933,7 +2933,7 @@ requires --tx-check --allow-tx and always releases PTT."
 - 修改：`README.md`、`AGENTS.md`、`DEPENDENCIES.md`、`tests/README.md`
 - 修改：`SDD/02`、`SDD/05`、`SDD/08`、`SDD/09`、`SDD/10`、`SDD/11`、`SDD/12`、`SDD/13`、`SDD/14`、`SDD/15`、`SDD/README.md`
 
-- [x] **步骤 1：README 与 AGENTS**
+- [ ] **步骤 1：README 与 AGENTS**
 
 `README.md` — 机型表加入四行（Yaesu 段），并写明未验证边界：
 
@@ -2947,12 +2947,12 @@ requires --tx-check --allow-tx and always releases PTT."
 `AGENTS.md` — 后端表新增 `backends/yaesu/` 一行，说明"共享 ASCII 核心 + 每机型 profile；
 FT-710 保持独立路径，迁移是三期"。
 
-- [x] **步骤 2：DEPENDENCIES 与 tests/README**
+- [ ] **步骤 2：DEPENDENCIES 与 tests/README**
 
 `DEPENDENCIES.md` — 四行（USB 串口 CAT、无频谱通路、UAC 音频假设 44.1 kHz 标 TODO）。
 `tests/README.md` — 五个新测试模块；并记录 Hamlib 模拟器的可选设置命令（任务 6 步骤 3）。
 
-- [x] **步骤 3：SDD 各章**
+- [ ] **步骤 3：SDD 各章**
 
 - `SDD/02`（业务方向/机型清单）：四机型 + 未验证标注。
 - `SDD/05`（NFR）：新增一条"无硬件证据的机型不得声称已验证"的一致性要求，引用本规格 §6。
@@ -2962,7 +2962,7 @@ FT-710 保持独立路径，迁移是三期"。
 - `SDD/13`（可行性）新增风险：未验证 CAT 表 / 假设的音频采样率 / 频谱缺失 / FT-710 双路径维护成本（含各自缓解措施与三期计划）。
 - `SDD/14` 版本历史新行；`SDD/15` 附录（机型表）；`SDD/README.md` 状态行更新。
 
-- [x] **步骤 4：Commit**
+- [ ] **步骤 4：Commit**
 
 ```bash
 git add README.md AGENTS.md DEPENDENCIES.md tests/README.md SDD/
@@ -2977,7 +2977,7 @@ shared profile-driven core, the missing spectrum path and the phased plan
 
 ### 任务 9：Final verification
 
-- [x] **步骤 1：全量测试与静态检查**
+- [ ] **步骤 1：全量测试与静态检查**
 
 ```bash
 .venv/bin/python -m unittest discover -s tests 2>&1 | tail -4
@@ -2987,7 +2987,7 @@ python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged
 
 预期：`OK`（≥ 960 tests），编译无输出，guardian 无阻塞违规。
 
-- [x] **步骤 2：端到端烟测（无硬件）**
+- [ ] **步骤 2：端到端烟测（无硬件）**
 
 ```bash
 .venv/bin/python - <<'PY'
@@ -3004,7 +3004,7 @@ PY
 
 预期输出（四行，全部 `verified=False tx_gated=True scope=none`）。
 
-- [x] **步骤 3：服务器启动烟测（无硬件，串口不存在）**
+- [ ] **步骤 3：服务器启动烟测（无硬件，串口不存在）**
 
 ```bash
 MRRC_RADIO_MODEL=ftx1 MRRC_SERIAL_PORT=/dev/does-not-exist MRRC_WEB_PORT=8898 \
@@ -3013,7 +3013,7 @@ MRRC_RADIO_MODEL=ftx1 MRRC_SERIAL_PORT=/dev/does-not-exist MRRC_WEB_PORT=8898 \
 
 预期：出现 `Yaesu FTX-1F` 相关日志与一次 TX 门禁警告，进程在超时后结束（无崩溃）。
 
-- [x] **步骤 4：最终 commit 与推送**
+- [ ] **步骤 4：最终 commit 与推送**
 
 ```bash
 git add -A && git commit -m "chore(yaesu): final wiring and verification pass

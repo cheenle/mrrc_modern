@@ -37,6 +37,7 @@ from config import (
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT,
     UI_MODES, NARROW_MODES,
     ATR1000_HOST, ATR1000_PORT,
+    RECORDINGS_BITRATE, RECORDINGS_MAX_SESSION_MIN,
     _env, default_baud_for,
 )
 from backends import create_backend, known_models
@@ -47,12 +48,13 @@ from backends.ft710.config_ft710 import (
 )
 from backends.ft710.cat_controller import CatController
 from radio_state import RadioState
+from recorder import RecordingSession
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
 from audio_handler import AudioHandler
 from opus_rx import (
     RxOpusEncoder, TxOpusDecoder,
-    AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE,
+    AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, TX_RATE,
 )
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -215,6 +217,93 @@ MEM_FILE = Path(_env("MRRC_MEM_FILE", str(_runtime_dir() / "mem_channels.json"))
 # MRRC_RECORDINGS_DIR at the per-user data directory on packaged installs.
 RECORDINGS_DIR = Path(_env("MRRC_RECORDINGS_DIR", str(_runtime_dir() / "recordings")))
 RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
+
+# ── Recording: server-side QSO session (AD-017) ─────────────────────
+# One writer task owns the session so the timeline cursor and the MP3
+# encoder are never touched concurrently, and encoder CPU stays off the
+# event loop (asyncio.to_thread).
+REC_QUEUE_MAX = 200            # ~4 s of audio; a stalled encoder must not
+                               # grow memory without limit
+_rec_queue: "asyncio.Queue" = asyncio.Queue(maxsize=REC_QUEUE_MAX)
+_rec_dropped = 0
+_rec_failures = 0
+_rec_writer_task: Optional["asyncio.Task"] = None
+_rec_session = RecordingSession(RECORDINGS_DIR,
+                                bitrate=RECORDINGS_BITRATE,
+                                max_seconds=RECORDINGS_MAX_SESSION_MIN * 60)
+
+
+def _recording_should_capture_rx() -> bool:
+    """RX is recorded only while not transmitting.
+
+    During PTT/TUNE the radio returns sidetone/duplex audio; recording it
+    would double the timeline (the sibling mrrc project uses the same rule).
+    """
+    return not (radio is not None and radio.tx_status)
+
+
+def _rec_enqueue(source: str, pcm: bytes, rate: int,
+                 timestamp_ns: Optional[int] = None) -> None:
+    """Queue one PCM block for the writer (never blocks, never raises)."""
+    global _rec_dropped
+    if not _rec_session.active:
+        return
+    try:
+        _rec_queue.put_nowait((source, pcm, rate, timestamp_ns))
+    except asyncio.QueueFull:
+        _rec_dropped += 1
+        if _rec_dropped % 50 == 1:
+            logger.warning("Recording queue full — dropped %d block(s)",
+                           _rec_dropped)
+
+
+def _rec_enqueue_stop() -> None:
+    """Ask the writer to finish the session (idempotent)."""
+    try:
+        _rec_queue.put_nowait(("stop", b"", 0, None))
+    except asyncio.QueueFull:                          # pragma: no cover
+        logger.warning("Recording queue full on stop — finishing directly")
+        _rec_session.stop()
+
+
+def _rec_tap_rx(pcm: bytes, device_rate: int) -> None:
+    """RX tap: device-domain PCM straight from the sound card."""
+    if not pcm or not _recording_should_capture_rx():
+        return
+    _rec_enqueue("rx", pcm, device_rate)
+
+
+def _rec_tap_tx(pcm: bytes) -> None:
+    """TX tap: decoded browser-mic PCM (Opus codec rate)."""
+    if not pcm:
+        return
+    _rec_enqueue("tx", pcm, TX_RATE)
+
+
+async def _recording_writer_loop(queue: "asyncio.Queue",
+                                 session: RecordingSession) -> None:
+    """Single writer: serialises every session mutation off the event loop."""
+    global _rec_failures
+    while True:
+        source, pcm, rate, timestamp_ns = await queue.get()
+        if source == "stop":
+            try:
+                info = await asyncio.to_thread(session.stop)
+            except Exception as e:
+                logger.warning("Recording stop failed: %s", e)
+                return
+            if info is not None:
+                logger.info("Recording finished: %s (%.1fs)",
+                            info.name, info.duration)
+            return
+        try:
+            await asyncio.to_thread(session.add_audio, source, pcm, rate,
+                                    timestamp_ns)
+        except Exception as e:
+            _rec_failures += 1
+            if _rec_failures in (1, 10, 100):
+                logger.warning("Recording block failed (%d so far): %s",
+                               _rec_failures, e)
 
 # ── Auth Helpers ────────────────────────────────────────────────────
 
@@ -777,10 +866,12 @@ async def _audio_rx_loop():
         try:
             _loop_count += 1
             if audio and audio._rx_running:
-                # ── Idle: no clients → skip PCM read entirely ──────
+                # ── Idle: no clients and no recording → skip the read ──
                 # PCM read + resample + Opus encode is the #1 CPU
-                # consumer when idle.  Skip everything, sleep deep.
-                if not audio_rx_clients:
+                # consumer when idle.  Skip everything, sleep deep — but a
+                # running recording still needs the audio, so it keeps the
+                # loop awake.
+                if not audio_rx_clients and not _rec_session.active:
                     _idle_skipped += 1
                     if _loop_count % 500 == 0 and _idle_skipped > 50:
                         logger.info(
@@ -793,6 +884,7 @@ async def _audio_rx_loop():
                 pcm = audio.read_rx_chunk()
                 audio.note_rx_chunk(pcm)
                 if pcm:
+                    _rec_tap_rx(pcm, audio._rx_dev_rate)
                     _idle_skipped = 0
                     _pcm_count += 1
                     frames = audio.encode_rx_audio(pcm)
@@ -1695,6 +1787,9 @@ async def lifespan(app: FastAPI):
     if _audio_ok:
         _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
     _audio_tx_task = asyncio.create_task(_audio_tx_drain_loop(), name="audio_tx")
+    global _rec_writer_task
+    _rec_writer_task = asyncio.create_task(
+        _recording_writer_loop(_rec_queue, _rec_session), name="rec_writer")
     global _max_tx_watchdog_task
     _max_tx_watchdog_task = asyncio.create_task(_max_tx_watchdog(), name="max_tx_watchdog")
 
@@ -1756,6 +1851,18 @@ async def lifespan(app: FastAPI):
     if _max_tx_watchdog_task:
         _max_tx_watchdog_task.cancel()
         _max_tx_watchdog_task = None
+    # Recording: let the writer finish whatever is queued (a stop sentinel
+    # flushes the MP3), then make sure no session is left open.  A crash
+    # here must never block shutdown, so close_without_finishing() is the
+    # backstop rather than the normal path.
+    _rec_enqueue_stop()
+    if _rec_writer_task:
+        try:
+            await asyncio.wait_for(_rec_writer_task, timeout=3.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            _rec_writer_task.cancel()
+        _rec_writer_task = None
+    _rec_session.close_without_finishing()
     if _opus_tx_decoder:
         try:
             _opus_tx_decoder.close()
@@ -2380,6 +2487,7 @@ async def ws_audio_tx(ws: WebSocket):
                 if tag == AUDIO_TAG_OPUS and _opus_tx_decoder:
                     pcm = _opus_tx_decoder.decode(frame)
                     if pcm and audio:
+                        _rec_tap_tx(pcm)
                         audio.feed_tx_audio(pcm)
                         _tx_session_decoded += 1
                     elif not pcm:

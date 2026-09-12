@@ -401,7 +401,11 @@ class RXBackpressureTests(unittest.TestCase):
 
     def test_rx_loop_skips_encode_when_no_clients(self):
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
-        self.assertIn("if not audio_rx_clients:", source)
+        # Idle with no listeners: skip the PCM read/encode entirely.  A
+        # running recording keeps the loop awake (V2.42) — otherwise a REC
+        # with nobody listening would capture silence.
+        self.assertIn("if not audio_rx_clients and not _rec_session.active:",
+                      source)
         self.assertIn("await asyncio.sleep(idle_interval)", source)
         self.assertIn("continue", source)
 

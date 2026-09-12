@@ -133,7 +133,7 @@
 <td>RadioBackendFactory</td>
 <td>Backend core</td>
 <td><code class="scope-code">backends/__init__.py</code></td>
-<td><code class="scope-code">create_backend(model)</code> lazy factory; registered keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>; selected by <code class="scope-code">MRRC_RADIO_MODEL</code></td>
+<td><code class="scope-code">create_backend(model)</code> lazy factory + <code class="scope-code">known_models()</code>; registered keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>; selected by <code class="scope-code">MRRC_RADIO_MODEL</code>; the server’s model whitelist and baud defaults derive from this registry</td>
 </tr>
 <tr>
 <td>RadioBackend</td>
@@ -163,7 +163,7 @@
 <td>CivScopeProducer</td>
 <td>Backend core</td>
 <td><code class="scope-code">backends/ic7300/civ_scope.py</code></td>
-<td><code class="scope-code">ScopeProducer</code> implementation: CI-V 0x27 475 bins → scale 160→255 → upsample 850 → <code class="scope-code">ScopeHandler</code></td>
+<td><code class="scope-code">ScopeProducer</code> implementation: CI-V 0x27 waveform (475 or 689 bins per profile) → scale amp ceiling (160/200) → 255 → upsample 850 → <code class="scope-code">ScopeHandler</code></td>
 </tr>
 <tr>
 <td>RadioState</td>
@@ -218,6 +218,18 @@
 <td>Backend support</td>
 <td><code class="scope-code">backends/ft710/scope_libraries.py</code> (root shim: <code class="scope-code">scope_libraries.py</code>)</td>
 <td>FTDI library discovery and SPI clock configuration</td>
+</tr>
+<tr>
+<td>CivModelProfile</td>
+<td>Backend core</td>
+<td><code class="scope-code">backends/ic7300/civ_profiles.py</code></td>
+<td>Per-model CI-V facts (address, Transceive item, scope geometry, bands, modes, attenuator steps, meter curves, <code class="scope-code">verified</code>/<code class="scope-code">unverified_meters</code>, provenance) + <code class="scope-code">get_profile()</code>/<code class="scope-code">known_models()</code>; one entry per Icom model, defaults reproduce the IC-7300 constants</td>
+</tr>
+<tr>
+<td>Recorder</td>
+<td>Backend support</td>
+<td><code class="scope-code">recorder.py</code></td>
+<td><code class="scope-code">RecordingSession</code>: 16 kHz mono timeline (monotonic timestamps, 50 ms jitter tolerance, silence gap fill) + <code class="scope-code">_StreamingDecimator</code> (96-tap FIR, 48k→16k) + incremental lameenc MP3 (<code class="scope-code">flush()</code> per block) + mrrc-compatible naming and the <code class="scope-code">recordings.json</code> index helpers</td>
 </tr>
 <tr>
 <td>Config</td>
@@ -435,7 +447,7 @@ PTT button touchend/mouseup:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.40 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.42 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

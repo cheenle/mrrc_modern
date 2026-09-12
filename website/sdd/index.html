@@ -241,7 +241,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.40</td>
+<td>V2.42</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
@@ -249,7 +249,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Status</td>
-<td>rpi64 image rebuilt at v1.14.3 from HEAD and published (SDD V2.40; local native aarch64 build path primary); v1.14.2 is the latest published installer pair (macOS DMG 55,898,038 + Windows Setup 45,435,022 bytes, SDD V2.39, carrying the V2.37–V2.39 fixes); IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved; open issues tracked in §13.4</td>
+<td>rpi64 image rebuilt at v1.14.3 from HEAD and published (SDD V2.40; local native aarch64 build path primary); v1.14.2 is the latest published installer pair (macOS DMG 55,898,038 + Windows Setup 45,435,022 bytes, SDD V2.39, carrying the V2.37–V2.39 fixes); IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved; <strong>IC-705/IC-7610/IC-7760 backend profiles added without hardware present — experimentell, TX gated by <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code>, <code class="scope-code">_diag_civ.py</code> ready for field reports (SDD V2.41, R9/A7)</strong>; <strong>服务端 QSO 录音已实现（SDD V2.42 / AD-017）：16 kHz mono MP3 增量编码，浏览器录音器与 lame.js 已移除</strong>；open issues tracked in §13.4</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -257,11 +257,11 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Primary Radios</td>
-<td>Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable via backend)</td>
+<td>Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (verified) and IC-705 / IC-7610 / IC-7760 (profiles without hardware verification, TX gated) — all selectable via backend</td>
 </tr>
 <tr>
 <td>Backend Selection</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2</code> (default <code class="scope-code">ft710</code>)</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760</code> (default <code class="scope-code">ft710</code>); <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> unlocks transmit on the three unverified models</td>
 </tr>
 <tr>
 <td>Runtime</td>
@@ -269,11 +269,11 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Frontend</td>
-<td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td>
+<td>HTML5, CSS3, vanilla JavaScript, Web Audio API (no client-side MP3 encoder)</td>
 </tr>
 <tr>
 <td>Transport</td>
-<td>HTTP/WS for browser; Serial CAT (Yaesu) or USB CI-V (Icom) for radio; FT4222 SPI for FT-710 scope; CI-V 0x27 spectrum for IC-7300</td>
+<td>HTTP/WS for browser; Serial CAT (Yaesu) or USB CI-V (Icom) for radio; FT4222 SPI for FT-710 scope; recording as server-side 16 kHz MP3 (AD-017); CI-V 0x27 spectrum for the Icom family (475 bins on IC-7300/IC-7300MK2/IC-705, 689 bins on IC-7610/IC-7760)</td>
 </tr>
 <tr>
 <td>Default Entry</td>
@@ -378,7 +378,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.40 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.42 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

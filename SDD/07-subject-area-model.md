@@ -12,6 +12,8 @@
 | RadioConnection | serial_port, baudrate, connected, model_id | Serial connection state within the active backend controller |
 | RadioState | vfo_a_freq, vfo_b_freq, active_vfo, mode, tx_status, s_meter, af_gain, rf_gain, rf_power, filter_width, preamp, attenuator, noise_blanker, noise_reduction, auto_notch, compressor, compressor_level, nr_level, nb_level, tuner_status, power_on, squelch, mic_gain, split, vox, break_in, comp_meter, alc_meter, power_meter, swr_meter, id_meter, vd_meter, scope_span, scope_speed, scope_mode, scope_start_freq, serial_connected | Dataclass with dirty-field tracking |
 | RadioCommand | prefix, value, response | Backend-specific command: e.g., FT-710 CAT `"FA014200000;"` → receive `"FA014200000;"`; IC-7300 CI-V framed command/response |
+| RecordingSession | active, started_at, freq_hz, name, bytes, cursor | Server-side QSO recording session: 16 kHz mono timeline, RX/TX blocks placed by monotonic timestamp, incrementally encoded to `recordings/<freq>kHz_<date>_<time>.mp3` (AD-017) |
+| RecordingFile | name, freq_hz, started_at, duration, bytes, recording | One MP3 in `MRRC_RECORDINGS_DIR`; `recording=true` marks the file currently being written (delete refused) |
 | ScopeFrame | wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq | Parsed from real-scope source (FT-710 `scope_pipe` stdout or IC-7300 CI-V 0x27 demux) |
 | SpectrumFrame | version_byte, wf1_bytes[850], wf2_bytes[850] | Binary frame broadcast via `/WSspectrum` |
 | AudioChunk | pcm_bytes, sample_count, timestamp | Raw Int16 PCM from PyAudio capture |

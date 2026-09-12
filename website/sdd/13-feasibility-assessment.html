@@ -233,6 +233,20 @@
 <td>Medium</td>
 <td>Service worker bypasses JS/HTML; version query strings</td>
 </tr>
+<tr>
+<td>R10</td>
+<td>Recording disk growth is unbounded <strong>by operator choice</strong> — recordings are never deleted automatically; a long-running unattended server can fill the disk (the Pi image boots from an SD card)</td>
+<td>Medium</td>
+<td>Low-Medium</td>
+<td>Deliberate per the V2.42 design review: the panel shows total usage, the per-session cap <code class="scope-code">MRRC_RECORDINGS_MAX_SESSION_MIN</code> (default 240 min) stops a forgotten recording without deleting anything, and <code class="scope-code">MRRC_RECORDINGS_DIR</code> can point at a bigger volume</td>
+</tr>
+<tr>
+<td>R9</td>
+<td>Unverified model profiles (IC-705/IC-7610/IC-7760) ship without hardware evidence — the 689-bin amplitude ceiling, the inherited+rescaled meter curves and the 48 kHz USB-audio properties are assumptions, and an unverified radio could be keyed with a frame the profile got wrong</td>
+<td>Medium-High</td>
+<td>Medium</td>
+<td><code class="scope-code">verified=False</code> + <code class="scope-code">unverified_meters</code> capability list; PTT/TUNE refused at the backend boundary until <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> (release never gated); <code class="scope-code">_diag_civ.py</code> report round-trip turns each assumption into a measurement; SDD V2.41</td>
+</tr>
 </tbody>
 </table>
 <h2 id="assumptions">13.3 Assumptions</h2>
@@ -287,6 +301,18 @@
 <td>libft4222.dylib from wfview app bundle for correct version (FT-710 backend only)</td>
 <td>Medium</td>
 <td>scope_pipe SPI read success</td>
+</tr>
+<tr>
+<td>A8</td>
+<td><code class="scope-code">lameenc</code> ships prebuilt wheels for every target platform (macOS arm64/x86_64, Windows x64, Linux aarch64), so the recorder needs no ffmpeg and no compiler on the build machines</td>
+<td>High</td>
+<td>Verified on macOS locally; must be re-verified inside the DMG and the Windows installer by recording a short sample (packaging step in the V2.42 plan)</td>
+</tr>
+<tr>
+<td>A7</td>
+<td>The IC-705/IC-7610/IC-7760 share the IC-7300 CI-V command surface (frequency/mode/preamp/AGC/NB/NR/compressor/filter-width/squelch/RF-power/PTT/tune, meter sub-codes) — evidenced by identical wfview rig command tables, not by a radio</td>
+<td>Medium</td>
+<td><code class="scope-code">_diag_civ.py</code> read-only probe step; <code class="scope-code">19 00</code> identity log</td>
 </tr>
 </tbody>
 </table>
@@ -476,7 +502,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.40 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.42 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

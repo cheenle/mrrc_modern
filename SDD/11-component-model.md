@@ -21,6 +21,7 @@
 | ScopeFrame | Backend support | `backends/ft710/scope_frame.py` (root shim: `scope_frame.py`) | Shared frame parsing: parse_pipe_payload, WF_SIZE constant, quality metrics |
 | ScopeLibraries | Backend support | `backends/ft710/scope_libraries.py` (root shim: `scope_libraries.py`) | FTDI library discovery and SPI clock configuration |
 | CivModelProfile | Backend core | `backends/ic7300/civ_profiles.py` | Per-model CI-V facts (address, Transceive item, scope geometry, bands, modes, attenuator steps, meter curves, `verified`/`unverified_meters`, provenance) + `get_profile()`/`known_models()`; one entry per Icom model, defaults reproduce the IC-7300 constants |
+| Recorder | Backend support | `recorder.py` | `RecordingSession`: 16 kHz mono timeline (monotonic timestamps, 50 ms jitter tolerance, silence gap fill) + `_StreamingDecimator` (96-tap FIR, 48k→16k) + incremental lameenc MP3 (`flush()` per block) + mrrc-compatible naming and the `recordings.json` index helpers |
 | Config | Backend support | `config.py` | Protocol-neutral constants + shared UI mode tables; per-backend tables live in `backends/ft710/config_ft710.py` and `backends/ic7300/config_ic7300.py` |
 | ATR1000Client | Backend support | `atr1000_client.py` | Optional asyncio client for networked ATR1000 tuner (frame protocol, reconnect/refresh, TX-no-SYNC, learning, throttled relay writes) |
 | TunerStorage | Backend support | `atr1000_tuner.py` | LC-learning persistence (SWR-gated, atomic JSON) |

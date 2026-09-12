@@ -45,7 +45,7 @@
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
 | NFR-040 | Logging | Startup, CAT connect, scope status, audio device selection logged | High | `logs/` directory output |
-| NFR-041 | Configuration | `MRRC_RADIO_MODEL`, `IC7300_CIV_ADDR`, `MRRC_ALLOW_UNVERIFIED_TX` (transmit gate for hardware-unverified models), `MRRC_SERIAL_PORT`, `MRRC_WEB_PORT`, `MRRC_WEB_PASSWORD`, `MRRC_WEB_HOST` env vars | Medium | Env var test |
+| NFR-041 | Configuration | `MRRC_RADIO_MODEL`, `IC7300_CIV_ADDR`, `MRRC_ALLOW_UNVERIFIED_TX` (transmit gate for hardware-unverified models), `MRRC_RECORDINGS_DIR` / `MRRC_RECORDINGS_BITRATE` / `MRRC_RECORDINGS_MAX_SESSION_MIN` (recording), `MRRC_SERIAL_PORT`, `MRRC_WEB_PORT`, `MRRC_WEB_PASSWORD`, `MRRC_WEB_HOST` env vars | Medium | Env var test |
 | NFR-042 | PID file | `.ft710-server.pid` tracks running process | Medium | `start.sh` / `stop.sh` behavior |
 | NFR-043 | Static cache safety | Service worker bypasses JS/HTML cache | High | `sw.js` review |
 
@@ -66,4 +66,5 @@
 | NFR-062 | TX audio quality | Clean mic audio reaches radio without distortion | High | On-air listening test |
 | NFR-063 | AudioWorklet playback | Jitter buffer: 220ms prebuffer, 90ms recovery, 800ms max | High | Listening under network jitter |
 | NFR-064 | PCM fallback | Automatic when libopus unavailable (server or browser) | High | Start without libopus |
+| NFR-066 | QSO recording | Server-side 16 kHz mono MP3 at ≤64 kbps written incrementally to `recordings/`; timeline length within ±50 ms of elapsed real time regardless of scheduler jitter; disk usage observable in the UI (no automatic deletion by design) | Medium | `tests/test_recorder.py` (gap fill / tolerance / drift), `tests/test_recorder_api.py` (routes, Range) |
 | NFR-065 | PyAudio device selection | Auto-detect per-backend device hints (e.g., "FT-710"/"YAESU" for FT-710; "ic-7300"/"ic-705"/"ic-7610"/"ic-7760" then generic "USB Audio CODEC"/"USB Audio Device" for the Icom family), then mono/full-duplex heuristics; fallback to system default | Medium | Device enumeration log |

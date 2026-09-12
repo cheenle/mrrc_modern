@@ -2,118 +2,511 @@
   "version": 1,
   "description": "Routing index for the SDD knowledge layer. Maps engineering areas (by file globs and keywords) to typed SDD references. Contains NO duplicated content — sdd_context.py resolves refs by slicing the live SDD/*.md files, so the harness can never drift stale from the design record. Ref grammar: ad:AD-xxx | nfr:NFR-xxx | uc:UC-xxx | risk:Rn | issue:In | sc:SCn | assume:An | sec:N.N (chapter section) | ch:NN (whole chapter, manual use).",
   "chapters": {
-    "1":  {"file": "SDD/01-executive-summary.md", "title": "Executive Summary"},
-    "2":  {"file": "SDD/02-business-direction.md", "title": "Business Direction"},
-    "3":  {"file": "SDD/03-project-definition.md", "title": "Project Definition (scope, success criteria SC1-SC9)"},
-    "4":  {"file": "SDD/04-system-context.md", "title": "System Context (actors, interfaces, data flows)"},
-    "5":  {"file": "SDD/05-non-functional-requirements.md", "title": "Non-Functional Requirements (NFR-001…065)"},
-    "6":  {"file": "SDD/06-use-case-model.md", "title": "Use Case Model (UC-001…008)"},
-    "7":  {"file": "SDD/07-subject-area-model.md", "title": "Subject Area Model (entities, state ownership)"},
-    "8": {"file": "SDD/08-architecture-decisions.md", "title": "Architecture Decisions (AD-001…016)"},
-    "9":  {"file": "SDD/09-architecture-overview.md", "title": "Architecture Overview (pipelines, polling, broadcasting)"},
-    "10": {"file": "SDD/10-service-model.md", "title": "Service Model (WS/REST command contract)"},
-    "11": {"file": "SDD/11-component-model.md", "title": "Component Model"},
-    "12": {"file": "SDD/12-operational-model.md", "title": "Operational Model (deploy, config, troubleshooting)"},
-    "13": {"file": "SDD/13-feasibility-assessment.md", "title": "Feasibility Assessment (risks R1-R8, assumptions A1-A6, issues I1-I11)"},
-    "14": {"file": "SDD/14-version-history.md", "title": "Version History"},
-    "15": {"file": "SDD/15-ptt-safety-architecture.md", "title": "PTT Safety Architecture"}
+    "1": {
+      "file": "SDD/01-executive-summary.md",
+      "title": "Executive Summary"
+    },
+    "2": {
+      "file": "SDD/02-business-direction.md",
+      "title": "Business Direction"
+    },
+    "3": {
+      "file": "SDD/03-project-definition.md",
+      "title": "Project Definition (scope, success criteria SC1-SC9)"
+    },
+    "4": {
+      "file": "SDD/04-system-context.md",
+      "title": "System Context (actors, interfaces, data flows)"
+    },
+    "5": {
+      "file": "SDD/05-non-functional-requirements.md",
+      "title": "Non-Functional Requirements (NFR-001…065)"
+    },
+    "6": {
+      "file": "SDD/06-use-case-model.md",
+      "title": "Use Case Model (UC-001…008)"
+    },
+    "7": {
+      "file": "SDD/07-subject-area-model.md",
+      "title": "Subject Area Model (entities, state ownership)"
+    },
+    "8": {
+      "file": "SDD/08-architecture-decisions.md",
+      "title": "Architecture Decisions (AD-001…016)"
+    },
+    "9": {
+      "file": "SDD/09-architecture-overview.md",
+      "title": "Architecture Overview (pipelines, polling, broadcasting)"
+    },
+    "10": {
+      "file": "SDD/10-service-model.md",
+      "title": "Service Model (WS/REST command contract)"
+    },
+    "11": {
+      "file": "SDD/11-component-model.md",
+      "title": "Component Model"
+    },
+    "12": {
+      "file": "SDD/12-operational-model.md",
+      "title": "Operational Model (deploy, config, troubleshooting)"
+    },
+    "13": {
+      "file": "SDD/13-feasibility-assessment.md",
+      "title": "Feasibility Assessment (risks R1-R8, assumptions A1-A6, issues I1-I11)"
+    },
+    "14": {
+      "file": "SDD/14-version-history.md",
+      "title": "Version History"
+    },
+    "15": {
+      "file": "SDD/15-ptt-safety-architecture.md",
+      "title": "PTT Safety Architecture"
+    }
   },
   "topics": [
     {
       "id": "cat-serial",
-      "globs": ["cat_controller.py"],
-      "keywords": ["cat", "serial", "command", "query", "baud", "串口", "命令"],
-      "refs": ["ad:AD-002", "ad:AD-014", "sec:10.4", "uc:UC-003", "uc:UC-006", "risk:R1", "sc:SC1", "sc:SC2"]
+      "globs": [
+        "cat_controller.py"
+      ],
+      "keywords": [
+        "cat",
+        "serial",
+        "command",
+        "query",
+        "baud",
+        "串口",
+        "命令"
+      ],
+      "refs": [
+        "ad:AD-002",
+        "ad:AD-014",
+        "sec:10.4",
+        "uc:UC-003",
+        "uc:UC-006",
+        "risk:R1",
+        "sc:SC1",
+        "sc:SC2"
+      ]
     },
     {
       "id": "polling-state",
-      "globs": ["poll_scheduler.py", "radio_state.py"],
-      "keywords": ["poll", "state", "dirty", "broadcast", "stale", "skip", "轮询", "状态"],
-      "refs": ["ad:AD-003", "ad:AD-009", "ad:AD-012", "ad:AD-015", "sec:9.6", "sec:9.7", "nfr:NFR-002", "nfr:NFR-006"]
+      "globs": [
+        "poll_scheduler.py",
+        "radio_state.py"
+      ],
+      "keywords": [
+        "poll",
+        "state",
+        "dirty",
+        "broadcast",
+        "stale",
+        "skip",
+        "轮询",
+        "状态"
+      ],
+      "refs": [
+        "ad:AD-003",
+        "ad:AD-009",
+        "ad:AD-012",
+        "ad:AD-015",
+        "sec:9.6",
+        "sec:9.7",
+        "nfr:NFR-002",
+        "nfr:NFR-006"
+      ]
     },
     {
       "id": "ptt-tx-safety",
-      "globs": ["static/modules/ptt_manager.js"],
-      "keywords": ["ptt", "tx", "tune", "transmit", "key", "watchdog", "发射"],
-      "refs": ["ad:AD-007", "ad:AD-015", "sec:15", "nfr:NFR-008", "nfr:NFR-012", "uc:UC-005", "risk:R4", "sc:SC8"]
+      "globs": [
+        "static/modules/ptt_manager.js"
+      ],
+      "keywords": [
+        "ptt",
+        "tx",
+        "tune",
+        "transmit",
+        "key",
+        "watchdog",
+        "发射"
+      ],
+      "refs": [
+        "ad:AD-007",
+        "ad:AD-015",
+        "sec:15",
+        "nfr:NFR-008",
+        "nfr:NFR-012",
+        "uc:UC-005",
+        "risk:R4",
+        "sc:SC8"
+      ]
     },
     {
       "id": "audio-pipeline",
-      "globs": ["audio_handler.py", "audio_resample.py", "opus_rx.py", "static/rx_worklet_processor.js", "static/tx_capture_worklet.js", "static/tx_opus_worker.js", "static/modules/opus_codec.js", "static/modules/opus_wasm.js"],
-      "keywords": ["audio", "opus", "pcm", "resample", "worklet", "44.1", "48k", "音频", "声音"],
-      "refs": ["ad:AD-004", "ad:AD-008", "ad:AD-011", "sec:9.3", "sec:9.4", "nfr:NFR-001", "nfr:NFR-004", "nfr:NFR-060", "nfr:NFR-061", "nfr:NFR-063", "nfr:NFR-064", "nfr:NFR-065", "uc:UC-002", "risk:R3", "risk:R5", "risk:R6", "sc:SC3", "sc:SC4", "issue:I1", "issue:I2"]
+      "globs": [
+        "audio_handler.py",
+        "audio_resample.py",
+        "opus_rx.py",
+        "static/rx_worklet_processor.js",
+        "static/tx_capture_worklet.js",
+        "static/tx_opus_worker.js",
+        "static/modules/opus_codec.js",
+        "static/modules/opus_wasm.js"
+      ],
+      "keywords": [
+        "audio",
+        "opus",
+        "pcm",
+        "resample",
+        "worklet",
+        "44.1",
+        "48k",
+        "音频",
+        "声音"
+      ],
+      "refs": [
+        "ad:AD-004",
+        "ad:AD-008",
+        "ad:AD-011",
+        "sec:9.3",
+        "sec:9.4",
+        "nfr:NFR-001",
+        "nfr:NFR-004",
+        "nfr:NFR-060",
+        "nfr:NFR-061",
+        "nfr:NFR-063",
+        "nfr:NFR-064",
+        "nfr:NFR-065",
+        "uc:UC-002",
+        "risk:R3",
+        "risk:R5",
+        "risk:R6",
+        "sc:SC3",
+        "sc:SC4",
+        "issue:I1",
+        "issue:I2"
+      ]
     },
     {
       "id": "scope-spectrum",
-      "globs": ["scope_handler.py", "scope_pipe.py", "scope_frame.py", "scope_libraries.py"],
-      "keywords": ["scope", "spectrum", "waterfall", "ft4222", "spi", "fft", "频谱", "瀑布"],
-      "refs": ["ad:AD-005", "ad:AD-006", "sec:9.5", "nfr:NFR-003", "uc:UC-004", "risk:R2", "risk:R7", "sc:SC6", "sc:SC7", "assume:A4", "assume:A6"]
+      "globs": [
+        "scope_handler.py",
+        "scope_pipe.py",
+        "scope_frame.py",
+        "scope_libraries.py"
+      ],
+      "keywords": [
+        "scope",
+        "spectrum",
+        "waterfall",
+        "ft4222",
+        "spi",
+        "fft",
+        "频谱",
+        "瀑布"
+      ],
+      "refs": [
+        "ad:AD-005",
+        "ad:AD-006",
+        "sec:9.5",
+        "nfr:NFR-003",
+        "uc:UC-004",
+        "risk:R2",
+        "risk:R7",
+        "sc:SC6",
+        "sc:SC7",
+        "assume:A4",
+        "assume:A6"
+      ]
     },
     {
       "id": "frontend-ui",
-      "globs": ["static/**/*.js", "static/index.html", "static/**/*.css", "static/sw.js", "static/manifest.json"],
-      "keywords": ["ui", "frontend", "button", "css", "canvas", "mobile", "ios", "界面", "前端"],
-      "refs": ["sec:9.7", "risk:R8", "nfr:NFR-011", "nfr:NFR-030", "nfr:NFR-031", "nfr:NFR-043", "uc:UC-001", "issue:I1", "issue:I10"]
+      "globs": [
+        "static/**/*.js",
+        "static/index.html",
+        "static/**/*.css",
+        "static/sw.js",
+        "static/manifest.json"
+      ],
+      "keywords": [
+        "ui",
+        "frontend",
+        "button",
+        "css",
+        "canvas",
+        "mobile",
+        "ios",
+        "界面",
+        "前端"
+      ],
+      "refs": [
+        "sec:9.7",
+        "risk:R8",
+        "nfr:NFR-011",
+        "nfr:NFR-030",
+        "nfr:NFR-031",
+        "nfr:NFR-043",
+        "uc:UC-001",
+        "issue:I1",
+        "issue:I10"
+      ]
     },
     {
       "id": "server-ws-protocol",
-      "globs": ["server.py"],
-      "keywords": ["websocket", "ws", "endpoint", "fastapi", "server", "协议"],
-      "refs": ["ad:AD-001", "ad:AD-003", "sec:9.2", "sec:10.4", "uc:UC-001", "nfr:NFR-002", "issue:I6"]
+      "globs": [
+        "server.py"
+      ],
+      "keywords": [
+        "websocket",
+        "ws",
+        "endpoint",
+        "fastapi",
+        "server",
+        "协议"
+      ],
+      "refs": [
+        "ad:AD-001",
+        "ad:AD-003",
+        "sec:9.2",
+        "sec:10.4",
+        "uc:UC-001",
+        "nfr:NFR-002",
+        "issue:I6"
+      ]
     },
     {
       "id": "auth-security",
-      "globs": ["server.py"],
-      "keywords": ["auth", "token", "password", "login", "security", "static", "traversal", "认证", "密码", "安全", "路径"],
-      "refs": ["sec:5.3", "nfr:NFR-020", "nfr:NFR-021", "nfr:NFR-022", "nfr:NFR-023", "issue:I8", "issue:I9"]
+      "globs": [
+        "server.py"
+      ],
+      "keywords": [
+        "auth",
+        "token",
+        "password",
+        "login",
+        "security",
+        "static",
+        "traversal",
+        "认证",
+        "密码",
+        "安全",
+        "路径"
+      ],
+      "refs": [
+        "sec:5.3",
+        "nfr:NFR-020",
+        "nfr:NFR-021",
+        "nfr:NFR-022",
+        "nfr:NFR-023",
+        "issue:I8",
+        "issue:I9"
+      ]
     },
     {
       "id": "mobile-clients",
-      "globs": ["FT710Mobile/**", "FT710Android/**"],
-      "keywords": ["ios", "android", "swift", "kotlin", "app", "mobile", "移动", "苹果", "安卓"],
-      "refs": ["issue:I11", "nfr:NFR-008", "nfr:NFR-012", "sec:15", "uc:UC-005"]
+      "globs": [
+        "FT710Mobile/**",
+        "FT710Android/**"
+      ],
+      "keywords": [
+        "ios",
+        "android",
+        "swift",
+        "kotlin",
+        "app",
+        "mobile",
+        "移动",
+        "苹果",
+        "安卓"
+      ],
+      "refs": [
+        "issue:I11",
+        "nfr:NFR-008",
+        "nfr:NFR-012",
+        "sec:15",
+        "uc:UC-005"
+      ]
     },
     {
       "id": "memory-channels",
-      "globs": ["mem_channels.json"],
-      "keywords": ["memory", "channel", "mem", "频道", "存储"],
-      "refs": ["ad:AD-010", "uc:UC-007", "issue:I7", "sc:SC9"]
+      "globs": [
+        "mem_channels.json"
+      ],
+      "keywords": [
+        "memory",
+        "channel",
+        "mem",
+        "频道",
+        "存储"
+      ],
+      "refs": [
+        "ad:AD-010",
+        "uc:UC-007",
+        "issue:I7",
+        "sc:SC9"
+      ]
     },
     {
       "id": "deploy-operations",
-      "globs": ["start.sh", "stop.sh", "restart.sh", "install.sh", "packaging/**", "windows/**", "docs/WINDOWS_INSTALLER_GUIDE.md"],
-      "keywords": ["deploy", "install", "windows", "package", "installer", "launch", "部署", "安装", "打包"],
-      "refs": ["ch:12", "nfr:NFR-010", "nfr:NFR-040", "nfr:NFR-041", "nfr:NFR-042", "risk:R1", "nfr:NFR-033"]
+      "globs": [
+        "start.sh",
+        "stop.sh",
+        "restart.sh",
+        "install.sh",
+        "packaging/**",
+        "windows/**",
+        "docs/WINDOWS_INSTALLER_GUIDE.md"
+      ],
+      "keywords": [
+        "deploy",
+        "install",
+        "windows",
+        "package",
+        "installer",
+        "launch",
+        "部署",
+        "安装",
+        "打包"
+      ],
+      "refs": [
+        "ch:12",
+        "nfr:NFR-010",
+        "nfr:NFR-040",
+        "nfr:NFR-041",
+        "nfr:NFR-042",
+        "risk:R1",
+        "nfr:NFR-033"
+      ]
     },
     {
       "id": "config-tables",
-      "globs": ["config.py"],
-      "keywords": ["config", "band", "mode", "filter", "width", "calibration", "table", "配置", "波段", "校准", "滤波"],
-      "refs": ["sec:7.2", "ad:AD-013", "nfr:NFR-050"]
+      "globs": [
+        "config.py"
+      ],
+      "keywords": [
+        "config",
+        "band",
+        "mode",
+        "filter",
+        "width",
+        "calibration",
+        "table",
+        "配置",
+        "波段",
+        "校准",
+        "滤波"
+      ],
+      "refs": [
+        "sec:7.2",
+        "ad:AD-013",
+        "nfr:NFR-050"
+      ]
     },
     {
       "id": "testing-quality",
-      "globs": ["tests/**"],
-      "keywords": ["test", "unittest", "regression", "测试"],
-      "refs": ["nfr:NFR-051", "sec:5.6"]
+      "globs": [
+        "tests/**"
+      ],
+      "keywords": [
+        "test",
+        "unittest",
+        "regression",
+        "测试"
+      ],
+      "refs": [
+        "nfr:NFR-051",
+        "sec:5.6"
+      ]
     },
     {
       "id": "sdd-docs",
-      "globs": ["SDD/**"],
-      "keywords": ["sdd", "documentation", "design", "文档", "设计"],
-      "refs": ["ch:14", "nfr:NFR-051"]
+      "globs": [
+        "SDD/**"
+      ],
+      "keywords": [
+        "sdd",
+        "documentation",
+        "design",
+        "文档",
+        "设计"
+      ],
+      "refs": [
+        "ch:14",
+        "nfr:NFR-051"
+      ]
     },
     {
       "id": "project-scope",
       "globs": [],
-      "keywords": ["scope", "requirement", "feature", "milestone", "需求", "范围", "里程碑"],
-      "refs": ["sec:3.2", "sec:3.3", "sec:3.4", "sec:4.5", "sec:4.6", "sec:13.1", "sec:13.6"]
+      "keywords": [
+        "scope",
+        "requirement",
+        "feature",
+        "milestone",
+        "需求",
+        "范围",
+        "里程碑"
+      ],
+      "refs": [
+        "sec:3.2",
+        "sec:3.3",
+        "sec:3.4",
+        "sec:4.5",
+        "sec:4.6",
+        "sec:13.1",
+        "sec:13.6"
+      ]
     },
     {
       "id": "specs-plans",
-      "globs": ["docs/superpowers/**"],
-      "keywords": ["spec", "plan", "brainstorm", "设计稿", "计划", "头脑风暴"],
-      "refs": ["sec:3.2", "sec:3.3", "sec:3.4", "issue:I6", "issue:I7", "nfr:NFR-051"]
+      "globs": [
+        "docs/superpowers/**"
+      ],
+      "keywords": [
+        "spec",
+        "plan",
+        "brainstorm",
+        "设计稿",
+        "计划",
+        "头脑风暴"
+      ],
+      "refs": [
+        "sec:3.2",
+        "sec:3.3",
+        "sec:3.4",
+        "issue:I6",
+        "issue:I7",
+        "nfr:NFR-051"
+      ]
+    },
+    {
+      "id": "recording",
+      "globs": [
+        "recorder.py",
+        "tests/test_recorder.py",
+        "tests/test_recorder_api.py"
+      ],
+      "keywords": [
+        "recording",
+        "record",
+        "mp3",
+        "lameenc",
+        "recordings",
+        "录音",
+        "回放"
+      ],
+      "refs": [
+        "ad:AD-017",
+        "ad:AD-011",
+        "nfr:NFR-066",
+        "risk:R10",
+        "assumption:A8",
+        "sec:9.3",
+        "sec:9.4",
+        "sec:12",
+        "issue:I6",
+        "issue:I8"
+      ]
     }
   ]
 }

@@ -147,6 +147,16 @@
 <td>Backend-specific command: e.g., FT-710 CAT <code class="scope-code">"FA014200000;"</code> → receive <code class="scope-code">"FA014200000;"</code>; IC-7300 CI-V framed command/response</td>
 </tr>
 <tr>
+<td>RecordingSession</td>
+<td>active, started_at, freq_hz, name, bytes, cursor</td>
+<td>Server-side QSO recording session: 16 kHz mono timeline, RX/TX blocks placed by monotonic timestamp, incrementally encoded to <code class="scope-code">recordings/&lt;freq&gt;kHz_&lt;date&gt;_&lt;time&gt;.mp3</code> (AD-017)</td>
+</tr>
+<tr>
+<td>RecordingFile</td>
+<td>name, freq_hz, started_at, duration, bytes, recording</td>
+<td>One MP3 in <code class="scope-code">MRRC_RECORDINGS_DIR</code>; <code class="scope-code">recording=true</code> marks the file currently being written (delete refused)</td>
+</tr>
+<tr>
 <td>ScopeFrame</td>
 <td>wf1[850], wf2[850], s_meter, vfoa_freq, mode, scope_span, scope_mode, preamp, attenuator, scope_start_freq</td>
 <td>Parsed from real-scope source (FT-710 <code class="scope-code">scope_pipe</code> stdout or IC-7300 CI-V 0x27 demux)</td>
@@ -318,7 +328,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.40 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.42 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

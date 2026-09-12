@@ -2,6 +2,15 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 服务端 QSO 录音（修复回放颤抖）
+
+### Changed
+
+- **录音改在服务端进行。** 旧浏览器录音器把到达的帧**无时间戳顺序拼接**，网络抖动与 jitter buffer 的补帧被写进文件 —— 即回放"颤抖"的根因。现在服务端直接取音：RX 用声卡的设备域 PCM、TX 用解码后的麦克风 PCM，全部落在**一条单调时钟轴**上（50 ms 抖动容差；真实停顿补静音），并用 **lameenc 增量编码边录边落盘** —— 进程崩溃时磁盘上仍有可播放的前缀。
+- **新增「录音 Recordings」面板**（菜单内）：列表含频率/日期/时长/大小、内嵌播放器（**支持拖动 seek** —— 服务端响应 Range 请求）、下载、删除（正在录制的那份禁用）。REC 按钮显示服务端会话状态，所有客户端一致；**电台 CAT 断线时依然可录**。
+- 文件命名 `<频率>kHz_<日期>_<时间>.mp3`（与兄弟项目 `mrrc` 同布局），存放在 `MRRC_RECORDINGS_DIR`；**不会自动删除任何录音**。`lameenc` 取代了原先要下发到浏览器的 530 KB `lame.js`。
+- 新增环境变量：`MRRC_RECORDINGS_DIR`、`MRRC_RECORDINGS_BITRATE`（64 kbps）、`MRRC_RECORDINGS_MAX_SESSION_MIN`（240；0 = 不限 —— 只停止录音，不删文件）。
+
 ## [v1.14.3] — 2026-09-12 — 树莓派镜像重建（含 v1.14.2 全部修复）
 
 ### Raspberry Pi

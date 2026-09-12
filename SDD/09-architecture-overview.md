@@ -30,11 +30,11 @@ Control channel. Carries all radio commands, state updates, and memory managemen
 
 **Format:** 1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.
 
-Server captures Int16 mono from the selected radio's USB audio (44.1kHz for FT-710, 48kHz for IC-7300/MK2) → resamples to 48kHz if needed → Opus encodes (64kbps default) → broadcasts to all `audio_rx_clients` at 20ms intervals. Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.
+Server captures Int16 mono from the selected radio's USB audio (44.1kHz for FT-710, 48kHz for IC-7300/MK2) → resamples to 48kHz if needed → Opus encodes (64kbps default) → broadcasts to all `audio_rx_clients` at 20ms intervals. Parallel to the encode path, `_rec_tap_rx()` hands the same device-domain PCM to the recorder (which is why the RX loop no longer idles while a recording runs). Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.
 
 ### 9.2.3 /WSaudioTX (binary + text)
 
-**Binary:** 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → queues to PyAudio output stream → played to the selected radio's USB audio input (44.1kHz for FT-710 with resample, 48kHz native for IC-7300/MK2).
+**Binary:** 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → `_rec_tap_tx()` copies it to the recorder (only while not transmitting, to avoid the radio's sidetone) → queues to PyAudio output stream → played to the selected radio's USB audio input (44.1kHz for FT-710 with resample, 48kHz native for IC-7300/MK2).
 
 **Text:** `"s:"` = stop TX; `"m:rate,encode,..."` = settings.
 

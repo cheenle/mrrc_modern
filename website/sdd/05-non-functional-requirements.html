@@ -310,9 +310,9 @@
 <tr>
 <td>NFR-032</td>
 <td>Radio firmware</td>
-<td>Protocol compatible with current FT-710 or IC-7300/MK2 firmware for the selected backend</td>
+<td>Protocol compatible with current FT-710 or Icom CI-V firmware for the selected backend: <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code></td>
 <td>Critical</td>
-<td>Radio connect and control test</td>
+<td>Radio connect and control test; <code class="scope-code">_diag_civ.py</code> field report for the three unverified models</td>
 </tr>
 <tr>
 <td>NFR-033</td>
@@ -359,7 +359,7 @@
 <tr>
 <td>NFR-041</td>
 <td>Configuration</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL</code>, <code class="scope-code">IC7300_CIV_ADDR</code>, <code class="scope-code">MRRC_SERIAL_PORT</code>, <code class="scope-code">MRRC_WEB_PORT</code>, <code class="scope-code">MRRC_WEB_PASSWORD</code>, <code class="scope-code">MRRC_WEB_HOST</code> env vars</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL</code>, <code class="scope-code">IC7300_CIV_ADDR</code>, <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code> (transmit gate for hardware-unverified models), <code class="scope-code">MRRC_RECORDINGS_DIR</code> / <code class="scope-code">MRRC_RECORDINGS_BITRATE</code> / <code class="scope-code">MRRC_RECORDINGS_MAX_SESSION_MIN</code> (recording), <code class="scope-code">MRRC_SERIAL_PORT</code>, <code class="scope-code">MRRC_WEB_PORT</code>, <code class="scope-code">MRRC_WEB_PASSWORD</code>, <code class="scope-code">MRRC_WEB_HOST</code> env vars</td>
 <td>Medium</td>
 <td>Env var test</td>
 </tr>
@@ -443,9 +443,9 @@
 <tr>
 <td>NFR-060</td>
 <td>RX sample rate</td>
-<td>FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2: 48kHz native capture, no resample</td>
+<td>FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2: 48kHz native capture, no resample; IC-705/IC-7610/IC-7760 inherit the 48kHz no-resample path as an <strong>assumption</strong> (A7, unverified)</td>
 <td>Critical</td>
-<td>PyAudio stream config</td>
+<td>PyAudio stream config; <code class="scope-code">_diag_civ.py</code> startup device log</td>
 </tr>
 <tr>
 <td>NFR-061</td>
@@ -476,9 +476,16 @@
 <td>Start without libopus</td>
 </tr>
 <tr>
+<td>NFR-066</td>
+<td>QSO recording</td>
+<td>Server-side 16 kHz mono MP3 at ≤64 kbps written incrementally to <code class="scope-code">recordings/</code>; timeline length within ±50 ms of elapsed real time regardless of scheduler jitter; disk usage observable in the UI (no automatic deletion by design)</td>
+<td>Medium</td>
+<td><code class="scope-code">tests/test_recorder.py</code> (gap fill / tolerance / drift), <code class="scope-code">tests/test_recorder_api.py</code> (routes, Range)</td>
+</tr>
+<tr>
 <td>NFR-065</td>
 <td>PyAudio device selection</td>
-<td>Auto-detect per-backend device hints (e.g., “FT-710”/“YAESU” for FT-710; generic “USB Audio CODEC”/“USB Audio Device”), then mono/full-duplex heuristics; fallback to system default</td>
+<td>Auto-detect per-backend device hints (e.g., “FT-710”/“YAESU” for FT-710; “ic-7300”/“ic-705”/“ic-7610”/“ic-7760” then generic “USB Audio CODEC”/“USB Audio Device” for the Icom family), then mono/full-duplex heuristics; fallback to system default</td>
 <td>Medium</td>
 <td>Device enumeration log</td>
 </tr>
@@ -490,7 +497,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.40 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.42 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

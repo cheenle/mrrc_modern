@@ -236,6 +236,20 @@
 
 **Consequences**: New radios are added as a `backends/<model>/` package plus factory registration; FT-710 behavior is unchanged (compat shims keep root imports valid); IC-7300 hardware-verification items (S-meter top point, TUNE carrier behavior, MK2 transceive item) remain flagged in code comments.
 
+## AD-017: 服务端 QSO 录音（增量 MP3、16 kHz 存储域）
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Structural |
+| Status | Implemented (V2.42) |
+| Decision | 录音在服务端进行：`recorder.py` 的 `RecordingSession` 把 RX（设备域 PCM）与 TX（解码后的麦克风 PCM）放在一条 `time.monotonic_ns()` 定位的单声道时间轴上（源切换重锚定、50 ms 连续性容差吸收调度抖动、真实停顿补静音），用 **lameenc 增量编码边录边落盘**到 16 kHz 单声道 MP3；`server.py` 用**单 writer 任务 + 有界队列**驱动它（`asyncio.to_thread` 编码，事件循环零阻塞），控制面复用 `/WSradio`（`set{field:"recording"}` + `recordingState` 广播 + `fullState` 快照），文件面为三条 REST 路由（列表 / Range 流 / 删除），前端提供「录音」面板 |
+
+**Problem**: 浏览器端录音器把到达的帧无时间戳地顺序拼接，网络抖动、jitter-buffer 补帧与队列丢弃被永久写进文件 —— 表现为回放"颤抖/哆嗦"（字段报告 2026-09-12）。此外音频只在页面可见时可靠，且 500 KB 的 MP3 编码器要下发到每个客户端。
+
+**Rationale**: 服务端取音点是设备域 PCM（`AudioHandler.read_rx_chunk()`）与 Opus 解码输出，二者都不经过网络；时间戳 + 容差 + 空洞填静音把"抖动"与"真实停顿"分开处理，这正是回放平滑的关键。增量编码让 RAM 恒定（编码器 + FIR 状态 + 单块）且进程崩溃后磁盘上的前缀仍可播放，相对内存缓冲方案 1 小时录音省约 115 MB（本项目发布树莓派镜像）。16 kHz 是与兄弟项目 `mrrc` 一致的存储域，使 `recordings/` 目录可直接被其既有工具消费（同一命名 `<freq>kHz_<date>_<time>.mp3`）。
+
+**Consequences**: 16 kHz 是**只写汇点**，从 48 kHz codec 域到达：44.1 kHz 设备音频先经 `audio_resample`（AD-011 唯一 SRC 桥），再经专用抗混叠 FIR 抽取 3:1；录音路径不回灌 codec/device 域，AD-011 不受影响。录音与 CAT 解耦（USB 音频可用、CAT 断线也能录，无 CAT 时频率记为 0 → 文件名 `00000kHz`）。保留策略**刻意不自动清理**（§13 R10），会话上限 `MRRC_RECORDINGS_MAX_SESSION_MIN` 只停止录音、不删除文件。不做所有权仲裁（I6 仍未解决）：任何已认证客户端可启停，状态对所有客户端广播。
+
 ## 8.16 Decision Summary
 
 | ID | Topic | Status |
@@ -256,3 +270,4 @@
 | AD-014 | FT-710 CAT errata handling | Implemented |
 | AD-015 | Priority CAT command preemption | Implemented |
 | AD-016 | Pluggable radio backend architecture (FT-710 + IC-7300) | Implemented |
+| AD-017 | Server-side QSO recording (incremental MP3, 16 kHz storage domain) | Implemented |

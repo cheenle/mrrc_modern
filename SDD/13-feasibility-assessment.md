@@ -24,6 +24,7 @@
 | R6 | Audio device contention | Low | Medium | PyAudio opens/closes streams on demand; only one TX stream at a time |
 | R7 | scope_pipe subprocess crash | Low-Medium | Low | Server continues; falls back to S-meter spectrum; pipe exit handled in finally block |
 | R8 | Stale frontend assets | Low | Medium | Service worker bypasses JS/HTML; version query strings |
+| R10 | Recording disk growth is unbounded **by operator choice** — recordings are never deleted automatically; a long-running unattended server can fill the disk (the Pi image boots from an SD card) | Medium | Low-Medium | Deliberate per the V2.42 design review: the panel shows total usage, the per-session cap `MRRC_RECORDINGS_MAX_SESSION_MIN` (default 240 min) stops a forgotten recording without deleting anything, and `MRRC_RECORDINGS_DIR` can point at a bigger volume |
 | R9 | Unverified model profiles (IC-705/IC-7610/IC-7760) ship without hardware evidence — the 689-bin amplitude ceiling, the inherited+rescaled meter curves and the 48 kHz USB-audio properties are assumptions, and an unverified radio could be keyed with a frame the profile got wrong | Medium-High | Medium | `verified=False` + `unverified_meters` capability list; PTT/TUNE refused at the backend boundary until `MRRC_ALLOW_UNVERIFIED_TX=1` (release never gated); `_diag_civ.py` report round-trip turns each assumption into a measurement; SDD V2.41 |
 
 ## 13.3 Assumptions
@@ -36,6 +37,7 @@
 | A4 | FTDI libraries in `lib/` match OS architecture (FT-710 backend only) | Medium | scope_pipe startup log |
 | A5 | Browser supports WebSocket, Web Audio, Canvas | High | Modern browsers |
 | A6 | libft4222.dylib from wfview app bundle for correct version (FT-710 backend only) | Medium | scope_pipe SPI read success |
+| A8 | `lameenc` ships prebuilt wheels for every target platform (macOS arm64/x86_64, Windows x64, Linux aarch64), so the recorder needs no ffmpeg and no compiler on the build machines | High | Verified on macOS locally; must be re-verified inside the DMG and the Windows installer by recording a short sample (packaging step in the V2.42 plan) |
 | A7 | The IC-705/IC-7610/IC-7760 share the IC-7300 CI-V command surface (frequency/mode/preamp/AGC/NB/NR/compressor/filter-width/squelch/RF-power/PTT/tune, meter sub-codes) — evidenced by identical wfview rig command tables, not by a radio | Medium | `_diag_civ.py` read-only probe step; `19 00` identity log |
 
 ## 13.4 Current Issues

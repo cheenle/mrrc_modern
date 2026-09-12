@@ -132,13 +132,13 @@
 </ul>
 <h3 id="wsaudiorx-binary">9.2.2 /WSaudioRX (binary)</h3>
 <p><strong>Format:</strong> 1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.</p>
-<p>Server captures Int16 mono from the selected radio’s USB audio (44.1kHz for FT-710, 48kHz for IC-7300/MK2) → resamples to 48kHz if needed → Opus encodes (64kbps default) → broadcasts to all <code class="scope-code">audio_rx_clients</code> at 20ms intervals. Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.</p>
+<p>Server captures Int16 mono from the selected radio’s USB audio (44.1kHz for FT-710, 48kHz for IC-7300/MK2) → resamples to 48kHz if needed → Opus encodes (64kbps default) → broadcasts to all <code class="scope-code">audio_rx_clients</code> at 20ms intervals. Parallel to the encode path, <code class="scope-code">_rec_tap_rx()</code> hands the same device-domain PCM to the recorder (which is why the RX loop no longer idles while a recording runs). Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.</p>
 <h3 id="wsaudiotx-binary-text">9.2.3 /WSaudioTX (binary + text)</h3>
-<p><strong>Binary:</strong> 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → queues to PyAudio output stream → played to the selected radio’s USB audio input (44.1kHz for FT-710 with resample, 48kHz native for IC-7300/MK2).</p>
+<p><strong>Binary:</strong> 1-byte codec tag + encoded mic audio. Server decodes (Opus→PCM or pass-through PCM) → <code class="scope-code">_rec_tap_tx()</code> copies it to the recorder (only while not transmitting, to avoid the radio’s sidetone) → queues to PyAudio output stream → played to the selected radio’s USB audio input (44.1kHz for FT-710 with resample, 48kHz native for IC-7300/MK2).</p>
 <p><strong>Text:</strong> <code class="scope-code">"s:"</code> = stop TX; <code class="scope-code">"m:rate,encode,..."</code> = settings.</p>
 <h3 id="wsspectrum-binary">9.2.4 /WSspectrum (binary)</h3>
 <p><strong>v1 format:</strong> 1-byte version (0x01) + 850 bytes wf1 = 851 bytes. <strong>v2 format:</strong> 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.</p>
-<p>The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2) is sent only when <code class="scope-code">ScopeHandler._frame_count</code> advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick.</p>
+<p>The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when <code class="scope-code">ScopeHandler._frame_count</code> advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick.</p>
 <h2 id="rx-audio-signal-chain">9.3 RX Audio Signal Chain</h2>
 <figure>
 <img src="diagrams/audio-chains.svg" alt="RX Audio Chain" />
@@ -156,7 +156,7 @@
 <h2 id="spectrum-signal-chain">9.5 Spectrum Signal Chain</h2>
 <h3 id="real-scope-path-ft4222-spi-for-ft-710-ci-v-0x27-for-ic-7300mk2">9.5.1 Real Scope Path (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2)</h3>
 <p>FT-710: FT4222 SPI → <code class="scope-code">scope_pipe.py</code> subprocess → 850-point wf1/wf2 → <code class="scope-code">ScopeHandler</code>.</p>
-<p>IC-7300/MK2: startup/reconnect sends scope display ON (<code class="scope-code">27 10 01</code>), Center mode, span, then waveform-data output ON (<code class="scope-code">27 11 01</code>). CI-V <code class="scope-code">27 00</code> frames → <code class="scope-code">civ_controller.py</code> demux → bounded 44-segment queue (four complete 11-segment USB waveforms, drop oldest on overflow) → 475-bin scale/upsample to 850 → <code class="scope-code">ScopeHandler</code>. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.</p>
+<p>IC-7300/MK2: startup/reconnect sends scope display ON (<code class="scope-code">27 10 01</code>), Center mode, span, then waveform-data output ON (<code class="scope-code">27 11 01</code>). CI-V <code class="scope-code">27 00</code> frames → <code class="scope-code">civ_controller.py</code> demux → bounded queue sized <code class="scope-code">4 × scope_seq_max</code> (44 segments on 475-bin models, 60 on the 689-bin IC-7610/IC-7760; drop oldest on overflow) → bin scale (0..160 or 0..200 from the profile) → upsample to 850 → <code class="scope-code">ScopeHandler</code>. A bin count or segment count that disagrees with the profile logs once and is adopted, so a wrong profile cannot freeze the waterfall. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.</p>
 <figure>
 <img src="diagrams/spectrum-paths.svg" alt="Spectrum Paths" />
 <figcaption aria-hidden="true">Spectrum Paths</figcaption>
@@ -195,7 +195,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.40 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.42 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

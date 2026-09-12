@@ -270,6 +270,7 @@ class RecordingsRestTests(unittest.TestCase):
 
         response = server._recording_response(self.name)
         self.assertIsNotNone(response)
+        assert response is not None                 # narrow for the checker
         scope = {"type": "http", "method": "GET",
                  "path": f"/api/recordings/{self.name}",
                  "headers": [(b"range", b"bytes=0-99")]}
@@ -290,6 +291,7 @@ class RecordingsRestTests(unittest.TestCase):
             return {"type": "http.request", "body": b"", "more_body": False}
 
         response = server._recording_response(self.name)
+        assert response is not None                 # narrow for the checker
         scope = {"type": "http", "method": "GET",
                  "path": f"/api/recordings/{self.name}", "headers": []}
         asyncio.run(response(scope, receive, send))

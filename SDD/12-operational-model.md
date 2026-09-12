@@ -78,6 +78,10 @@ Icom IC-7300 / IC-7300MK2
 | Browser | Server | WS | `/WSaudioRX` | RX audio (binary tagged) |
 | Browser | Server | WS | `/WSaudioTX` | TX mic uplink (binary tagged + text) |
 | Browser | Server | WS | `/WSspectrum` | Spectrum waterfall (binary) |
+| Browser | Server | WS | `/WSradio` | `recording` set command + `recordingState` broadcasts (recording control rides the control channel) |
+| Browser | Server | HTTP | `/api/recordings` | Recording list + total usage |
+| Browser | Server | HTTP | `/api/recordings/{name}` | Recording stream (Range → seeking; inline player + download) |
+| Browser | Server | HTTP | `/api/recordings/{name}` (DELETE) | Delete a recording (409 while it is being recorded) |
 | Browser | Server | HTTP | `/api/status` | Full radio state |
 | Browser | Server | HTTP | `/api/mem_channels` | Memory channels |
 | Browser | Server | HTTP | `/api/auth/login` | Login |

@@ -92,3 +92,14 @@ sudo nano /opt/mrrc_modern/env/mrrc.env # 编辑配置
 | 服务没起来 | `sudo systemctl status mrrc-modern`；`journalctl -u mrrc-modern -n 50` |
 | 忘记密码 | `ssh mrrc@raspberrypi.local` → `sudo mrrc-show-password` |
 | Zero 2 W 上很卡 | 内存不足属预期；建议 Pi 4 2GB 起步 |
+
+## 录音落盘（v2.42 起）
+
+QSO 录音写入 `/opt/mrrc_modern/recordings`（该目录属 `mrrc` 用户，镜像构建时已
+`chown`）。16 kHz 单声道 MP3 约 **28.8 MB/小时，即约 0.7 GB/天**（仅在你实际录音时增长）。
+
+- SD 卡容量：录音**不会自动删除**，长时间使用请定期清理，或把录音目录换到大容量卷：
+  编辑 `/opt/mrrc_modern/env/mrrc.env` 增加 `MRRC_RECORDINGS_DIR=/mnt/usb/recordings`
+  后 `sudo systemctl restart mrrc-modern`。
+- 单次录音上限 `MRRC_RECORDINGS_MAX_SESSION_MIN`（默认 240 分钟）会自动停止，
+  避免忘记停止写满卡。

@@ -430,3 +430,19 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 ---
 
 *文档维护：与 `static/index.html`、`static/ft710_main.js`、`static/ft710_ui.js` 保持一致；界面改动后请同步本指南与编号图。*
+
+## QSO 录音（服务端，v2.42 起）
+
+点按 **REC** 开始录制、再点按停止。录制在**服务端**进行（不是浏览器），
+因此：页面切到后台/关闭标签、甚至电台 CAT 断线都仍在录。
+
+- 内容：接收音频 + 你的麦克风（单声道 MP3，16 kHz，64 kbps ≈ 28.8 MB/小时）。
+  发射期间不录接收（避免录到电台自监听），电台暂停处补静音，时间轴与真实时间一致。
+- 位置：`MRRC_RECORDINGS_DIR`（打包安装默认在用户数据目录；
+  树莓派镜像为 `/opt/mrrc_modern/recordings`；源码运行默认 `recordings/`）。
+- 回放：菜单 →「录音 Recordings」，列表里点「播放」（可拖动进度），
+  也可「下载」或「删除」。**正在录制的那一份不能删除**。
+- 保留：**不自动删除**。面板顶部显示条数与总占用；磁盘紧张时请手工清理
+  （或把 `MRRC_RECORDINGS_DIR` 指向更大的卷）。
+- 保护：单次录音超过 `MRRC_RECORDINGS_MAX_SESSION_MIN`（默认 240 分钟）会自动停止
+  （只停，不删），防止忘记停止把磁盘写满。

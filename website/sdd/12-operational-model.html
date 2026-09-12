@@ -352,6 +352,34 @@ Icom IC-7300 / IC-7300MK2
 <tr>
 <td>Browser</td>
 <td>Server</td>
+<td>WS</td>
+<td><code class="scope-code">/WSradio</code></td>
+<td><code class="scope-code">recording</code> set command + <code class="scope-code">recordingState</code> broadcasts (recording control rides the control channel)</td>
+</tr>
+<tr>
+<td>Browser</td>
+<td>Server</td>
+<td>HTTP</td>
+<td><code class="scope-code">/api/recordings</code></td>
+<td>Recording list + total usage</td>
+</tr>
+<tr>
+<td>Browser</td>
+<td>Server</td>
+<td>HTTP</td>
+<td><code class="scope-code">/api/recordings/{name}</code></td>
+<td>Recording stream (Range → seeking; inline player + download)</td>
+</tr>
+<tr>
+<td>Browser</td>
+<td>Server</td>
+<td>HTTP</td>
+<td><code class="scope-code">/api/recordings/{name}</code> (DELETE)</td>
+<td>Delete a recording (409 while it is being recorded)</td>
+</tr>
+<tr>
+<td>Browser</td>
+<td>Server</td>
 <td>HTTP</td>
 <td><code class="scope-code">/api/status</code></td>
 <td>Full radio state</td>
@@ -590,7 +618,7 @@ Icom IC-7300 / IC-7300MK2
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.40 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.42 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

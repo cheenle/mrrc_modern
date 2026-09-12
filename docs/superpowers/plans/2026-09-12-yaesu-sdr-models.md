@@ -35,7 +35,7 @@
 - 创建：`backends/yaesu/__init__.py`
 - 创建：`tests/test_yaesu_profiles.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 `tests/test_yaesu_profiles.py`:
 
@@ -248,12 +248,12 @@ class MeterCalTests(unittest.TestCase):
         self.assertTrue(cal.s_unit(60).startswith("S"))
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_profiles -v`
 预期：FAIL — `ModuleNotFoundError: No module named 'backends.yaesu'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `backends/yaesu/__init__.py`:
 
@@ -644,12 +644,12 @@ def known_models() -> Tuple[str, ...]:
     return tuple(PROFILES)
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_profiles -v`
 预期：PASS（约 20 个测试）。LSP 与 `interpreter-check` 无阻塞：`_YN` 之外没有引用未定义的符号。
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add backends/yaesu/yaesu_profiles.py backends/yaesu/__init__.py tests/test_yaesu_profiles.py

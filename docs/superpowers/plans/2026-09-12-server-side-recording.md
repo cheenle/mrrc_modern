@@ -1,6 +1,6 @@
 # 服务端 QSO 录音（增量 MP3）实现计划
 
-> **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
+> **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [x]`）语法来跟踪进度。
 
 **Goal:** 把 QSO 录音从浏览器搬到服务端：在 RX 设备域 PCM 与已解码的 TX 麦克风 PCM 上取音，按单一时钟轴（16 kHz 单声道、真实停顿补静音）**增量**编码成 MP3 边录边落盘，并在网页面板里提供列表／播放（支持 seek）／下载／删除。
 
@@ -33,7 +33,7 @@
 - 创建：`recorder.py`
 - 创建：`tests/test_recorder.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 `tests/test_recorder.py`：
 
@@ -123,12 +123,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder.py" 2>&1 | tail -5`
 预期：FAIL，`ModuleNotFoundError: No module named 'recorder'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 创建 `recorder.py`（本任务是抽取器部分，其余部分在后续任务补齐）：
 
@@ -220,12 +220,12 @@ class _StreamingDecimator:
         return np.clip(np.rint(output), -32768, 32767).astype(np.int16)
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder.py" 2>&1 | tail -5`
 预期：`Ran 4 tests` … `OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add recorder.py tests/test_recorder.py
@@ -241,7 +241,7 @@ git commit -m "feat(recorder): anti-aliasing FIR decimator (48k->16k storage dom
 - 修改：`recorder.py`
 - 测试：`tests/test_recorder.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_recorder.py`：
 
@@ -329,12 +329,12 @@ class IndexTests(unittest.TestCase):
         self.assertEqual(list_recordings(self.dir / "nope", {}, 64), [])
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder.py" 2>&1 | tail -5`
 预期：FAIL，`ImportError: cannot import name 'recording_name' from 'recorder'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 追加到 `recorder.py`：
 
@@ -429,12 +429,12 @@ def list_recordings(directory: Path, index: dict, bitrate: int) -> list:
     return rows
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder.py" 2>&1 | tail -5`
 预期：`Ran 14 tests` … `OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add recorder.py tests/test_recorder.py
@@ -450,7 +450,7 @@ git commit -m "feat(recorder): mrrc-compatible naming + recordings index helpers
 - 修改：`recorder.py`
 - 测试：`tests/test_recorder.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_recorder.py`：
 
@@ -589,12 +589,12 @@ class RecordingSessionTests(unittest.TestCase):
         self.assertIsNone(_session(self.dir).stop())
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder.py" 2>&1 | tail -5`
 预期：FAIL，`ImportError: cannot import name 'RecordingSession' from 'recorder'`（或 `AttributeError: 'RecordingSession' has no attribute 'start'`）
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 追加到 `recorder.py`（`import json/os/lameenc` 放到文件顶部）：
 
@@ -803,12 +803,12 @@ class RecordingSession:
         }
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder.py" 2>&1 | tail -5`
 预期：`Ran 25 tests` … `OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add recorder.py tests/test_recorder.py
@@ -826,7 +826,7 @@ git commit -m "feat(recorder): timeline session with silence gap fill + incremen
 - 修改：`windows/launcher.py`、`macos/launcher.py`（用户数据目录）
 - 测试：`tests/test_config.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_config.py`：
 
@@ -865,12 +865,12 @@ class RecordingConfigTests(unittest.TestCase):
 
 （`tests/test_config.py` 当前**没有** `from pathlib import Path`，因此在本步骤里同时把 `from pathlib import Path` 加到 `import os` 之后——`test_launchers_point_recordings_at_the_user_data_dir` 要用它。）
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_config.py" 2>&1 | tail -5`
 预期：FAIL，`AttributeError: module 'config' has no attribute 'RECORDINGS_BITRATE'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `config.py`（放在 Unverified-Model Transmit Gate 段之后）：
 
@@ -896,12 +896,12 @@ RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
     env.setdefault("MRRC_RECORDINGS_DIR", str(user_data_dir() / "recordings"))
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_config.py" 2>&1 | tail -5`
 预期：`OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add config.py server.py windows/launcher.py macos/launcher.py tests/test_config.py
@@ -917,7 +917,7 @@ git commit -m "feat(config): recording bitrate/session cap + per-platform record
 - 修改：`server.py`（全局对象、writer 循环、RX tap、TX tap、生命周期）
 - 测试：`tests/test_recorder_api.py`（新建，本任务先放 writer/tap 的单测）
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 `tests/test_recorder_api.py`：
 
@@ -1008,12 +1008,12 @@ class RecorderTapTests(unittest.TestCase):
         server._rec_tap_tx(b"\x00\x00" * 10)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder_api.py" 2>&1 | tail -5`
 预期：FAIL，`AttributeError: module 'server' has no attribute '_rec_enqueue'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `server.py` —— 新增全局与插件（放在 `MEM_FILE`/`RECORDINGS_DIR` 之后）：
 
@@ -1159,13 +1159,13 @@ TX tap 接入 `ws_audio_tx` 的两处解码之后（Opus 与 PCM 分支）：
         _rec_session.close_without_finishing()
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder_api.py" 2>&1 | tail -5`
 运行：`.venv/bin/python -m unittest discover -s tests 2>&1 | grep -E "^(Ran|OK|FAILED)"`
 预期：新测试 OK，全量无回归
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add server.py tests/test_recorder_api.py
@@ -1181,7 +1181,7 @@ git commit -m "feat(server): recording writer task + RX/TX taps (idle-skip keeps
 - 修改：`server.py`
 - 测试：`tests/test_server_ws_protocol.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_server_ws_protocol.py`：
 
@@ -1242,12 +1242,12 @@ class RecordingSetRoutingTests(unittest.TestCase):
                         source.index("Radio not connected"))
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -5`
 预期：FAIL，`AssertionError: False is not true`（会话未启动）或 `KeyError: 'recording'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `_execute_set_command` **开头**（在 `cat is None` 守卫之前）插入：
 
@@ -1304,12 +1304,12 @@ RX 音频循环里的 1 Hz 刷新（`_loop_count % 50 == 0` 处）：
                 await _broadcast_recording_state()
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -5`
 预期：`OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add server.py tests/test_server_ws_protocol.py
@@ -1325,7 +1325,7 @@ git commit -m "feat(server): recording set command + recordingState broadcast"
 - 修改：`server.py`
 - 测试：`tests/test_recorder_api.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_recorder_api.py`：
 
@@ -1408,12 +1408,12 @@ class RecordingsRestTests(unittest.TestCase):
         self.assertEqual(dict(headers)[b"accept-ranges"], b"bytes")
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder_api.py" 2>&1 | tail -5`
 预期：FAIL，`AttributeError: module 'server' has no attribute '_recording_path'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `server.py`（放在 `/api/mem_channels` 路由附近）：
 
@@ -1502,12 +1502,12 @@ async def api_recording_delete(name: str):
 
 顶部 import 增补：`from fastapi.responses import FileResponse`（若尚未导入）、`from recorder import (RecordingSession, list_recordings, load_index, parse_recording_name, save_index)`。
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_recorder_api.py" 2>&1 | tail -5`
 预期：`OK`（含 206 + `content-range` 断言）
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add server.py tests/test_recorder_api.py
@@ -1524,7 +1524,7 @@ git commit -m "feat(server): recordings REST routes (list, Range stream, delete)
 - 修改：`static/ft710_main.js`（`recordingState` 落状态）
 - 测试：`tests/test_server_ws_protocol.py`（前端契约）
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_server_ws_protocol.py`：
 
@@ -1550,12 +1550,12 @@ class RecordingsPanelContractTests(unittest.TestCase):
         self.assertNotIn("window.RXRecorder", js)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -4`
 预期：FAIL，`AssertionError: 'data-action="recordings"' not found`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `static/index.html`：在 `data-action="memory-manage"` 那一项之后插入
 
@@ -1769,13 +1769,13 @@ function _recordingsRow(rec) {
 }
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -4`
 运行：`node --check static/ft710_ui.js && node --check static/ft710_main.js && echo JS_OK`
 预期：`OK` / `JS_OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add static/index.html static/ft710_ui.js static/ft710_main.js tests/test_server_ws_protocol.py
@@ -1792,7 +1792,7 @@ git commit -m "feat(ui): REC drives the server session + recordings panel (list/
 - 删除：`static/modules/lame.js`
 - 测试：`tests/test_audio.py`、`tests/test_server_ws_protocol.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 改写 `tests/test_audio.py` 里的 4 条录音断言（`RxRecordingTests`）：
 
@@ -1835,12 +1835,12 @@ class ServerSideRecordingContractTests(unittest.TestCase):
 
 并把 `tests/test_audio.py:151` 的 `mrrc-v31` 改为 `mrrc-v32`。
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_audio.py" 2>&1 | tail -4`
 预期：FAIL（`window.RXRecorder` 仍在）
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `static/ft710_main.js`：删除 `RX_MP3_BITRATE`、`RX_RECORDER_MIME`、`RX_RECORDER_EXT`、`_loadLame`、`_f32ToInt16`、`_downloadRecording`、`window.RXRecorder` 整块、`feedRXRecorderFrame`、`feedTXRecorderFrame` 及其三处调用（TX 采集路径里的 `feedTXRecorderFrame(...)` 行，保留其余逻辑）；`decodeRxAudioFrame` 调用点只保留播放/入队路径。
 
@@ -1854,14 +1854,14 @@ class ServerSideRecordingContractTests(unittest.TestCase):
 git rm static/modules/lame.js
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_audio.py" 2>&1 | tail -4`
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_server_ws_protocol.py" 2>&1 | tail -4`
 运行：`grep -rn "RXRecorder\|lamejs\|lame.js" static/ tests/ | grep -v Binary || echo CLEAN`
 预期：`OK` / `OK` / `CLEAN`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add -A static tests/test_audio.py tests/test_server_ws_protocol.py
@@ -1877,7 +1877,7 @@ git commit -m "refactor(ui): delete the browser recorder and lame.js (530 KB) + 
 - 修改：`requirements.txt`、`packaging/pyinstaller/mrrc_modern_server.spec`
 - 测试：`tests/test_windows_packaging_files.py`
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 追加到 `tests/test_windows_packaging_files.py`：
 
@@ -1893,12 +1893,12 @@ class RecordingDependencyPackagingTests(unittest.TestCase):
         self.assertIn("lameenc", spec)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_windows_packaging_files.py" 2>&1 | tail -4`
 预期：FAIL
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `requirements.txt`（在 Numeric Processing 段之后新增一段）：
 
@@ -1919,13 +1919,13 @@ lameenc>=1.8.0
     ],
 ```
 
-- [ ] **步骤 4：运行测试验证通过 + 本机冻结自检**
+- [x] **步骤 4：运行测试验证通过 + 本机冻结自检**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_windows_packaging_files.py" 2>&1 | tail -4`
 运行：`.venv/bin/python -c "import lameenc, lameenc._lameenc; print('lameenc OK')"`
 预期：`OK` / `lameenc OK`
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add requirements.txt packaging/pyinstaller/mrrc_modern_server.spec tests/test_windows_packaging_files.py
@@ -1943,12 +1943,12 @@ git commit -m "build: add lameenc dependency + PyInstaller collection"
 - 修改：`docs/OPERATION_GUIDE.md`、`docs/RASPBERRY_PI_GUIDE.md`
 - 修改：`website/guide.html`、`website/zh/guide.html`、`.agents/skills/sdd-guardian/harness/index.json`
 
-- [ ] **步骤 1：取得准确计数**
+- [x] **步骤 1：取得准确计数**
 
 运行：`.venv/bin/python -m unittest discover -s tests 2>&1 | grep -E "^Ran"`（记录 N）
 运行：`ls tests/test_*.py | wc -l`（记录模块数）
 
-- [ ] **步骤 2：SDD 逐章**
+- [x] **步骤 2：SDD 逐章**
 
 - `SDD/08`：新增 **AD-017**（标题/类型/状态/决策/问题/理由/后果），决策文本必须写清"16 kHz 是**存储域**、由 44.1→48（`audio_resample`）→48→16（FIR 抽取）到达、且是**只写汇点**，不回灌 codec/device 域"；`8.16 Decision Summary` 表加一行。
 - `SDD/05`：新增 **NFR-066**（录音：16 kHz mono MP3 ≤64 kbps、时长=时间轴长度±50 ms、占用可在面板观测、单会话上限可配）；NFR-041 追加三个 env。
@@ -1960,7 +1960,7 @@ git commit -m "build: add lameenc dependency + PyInstaller collection"
 - `SDD/14`：新条目 V2.42（含：颤抖根因、增量编码、16 kHz、lameenc、面板、无所有权、无自动清理、测试计数、**硬件边界**：真机 RX tap 质量与冻结包内 lameenc 未验证）。
 - `SDD/README.md`：Quick Facts 版本号与状态行。
 
-- [ ] **步骤 3：仓库内文档**
+- [x] **步骤 3：仓库内文档**
 
 - `AGENTS.md`：模块表加 `recorder.py`（一句话职责 + "16 kHz 存储域，见 AD-017"）；env 表加三个 `MRRC_RECORDINGS_*`；`server.py` 行的 WS/REST 面补 `recording`/`recordingState`/三条路由。
 - `README.md`：功能段落把"浏览器录制并下载"改为"服务端录制 + 面板回放/下载/删除"，env 表加三行。
@@ -1971,12 +1971,12 @@ git commit -m "build: add lameenc dependency + PyInstaller collection"
 - `website/guide.html` + `website/zh/guide.html`：把"停止时浏览器自动下载…500KB MP3 编码器"那段改为服务端录制与面板说明（保持中英一致）。
 - `.agents/skills/sdd-guardian/harness/index.json`：新增 `recorder.py` / 录音主题的知识路由（AD-017、NFR-066、R10、§9.3、`audio-16k-rate` 的作用域说明）。
 
-- [ ] **步骤 4：重新生成网站 SDD 页面**
+- [x] **步骤 4：重新生成网站 SDD 页面**
 
 运行：`python3 website/build_sdd.py`
 预期：`website/sdd/*.html` 更新（含新的 V2.42 条目与 AD-017）
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add SDD/ AGENTS.md README.md tests/README.md CHANGELOG.md docs/OPERATION_GUIDE.md docs/RASPBERRY_PI_GUIDE.md website/ .agents/skills/sdd-guardian/harness/index.json
@@ -1987,23 +1987,23 @@ git commit -m "docs(sdd): V2.42 — server-side recording (AD-017, NFR-066, R10/
 
 ### 任务 12：最终验证
 
-- [ ] **步骤 1：全量测试**
+- [x] **步骤 1：全量测试**
 
 运行：`.venv/bin/python -m unittest discover -s tests 2>&1 | grep -E "^(Ran|OK|FAILED)"`
 预期：`OK`，计数与 `tests/README.md` 一致
 
-- [ ] **步骤 2：语法与静态检查**
+- [x] **步骤 2：语法与静态检查**
 
 运行：`python3 -m py_compile recorder.py server.py config.py windows/launcher.py macos/launcher.py && echo COMPILE_OK`
 运行：`node --check static/ft710_main.js && node --check static/ft710_ui.js && node --check static/sw.js && echo JS_OK`
 运行：`git diff --check && echo DIFF_CLEAN`
 
-- [ ] **步骤 3：SDD Guardian**
+- [x] **步骤 3：SDD Guardian**
 
 运行：`python3 .agents/skills/sdd-guardian/harness/sdd_context.py check recorder.py server.py config.py`
 预期：clean（`audio-16k-rate` 不应命中 —— 它只作用于四个音频通路文件；若命中，说明放错了文件，必须修而不是加豁免）
 
-- [ ] **步骤 4：端到端自检（无硬件，用合成音频）**
+- [x] **步骤 4：端到端自检（无硬件，用合成音频）**
 
 运行：
 
@@ -2032,11 +2032,11 @@ PY
 
 预期：打印文件名、`duration≈1.5`、`bytes > 0`，且 `starts with an MP3 frame sync: True`
 
-- [ ] **步骤 5：硬件边界声明**
+- [x] **步骤 5：硬件边界声明**
 
 在最终报告中明确：**未验证**项 = 真机 RX tap 的音频连续性（依赖声卡/`restart_rx()` 路径）、TX 侧实测音质、mac DMG 与 Win 安装包内 `lameenc` 的加载与录制、树莓派 SD 卡上的长时间录制。这些必须在对应平台上各录一段实测（Mac 本地可做，Windows 需 KVM VM，真机需电台）。
 
-- [ ] **步骤 6：最终 Commit（若步骤 1–5 产生修正）**
+- [x] **步骤 6：最终 Commit（若步骤 1–5 产生修正）**
 
 ```bash
 git add -A

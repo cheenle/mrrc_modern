@@ -1,7 +1,7 @@
 # Raspberry Pi 镜像打包流程（rpi64）
 
 > 用途：构建并发布 `MRRC-Modern-v<ver>-rpi64.img.xz` —— Raspberry Pi OS Lite 64-bit (Bookworm) 定制镜像，烧卡即用、首启零配置。规格见 `docs/superpowers/specs/2026-09-09-raspberry-pi-image-design.md`。
-> 最新构建：**v1.14.3**（2026-09-12，**本机 Mac Docker Desktop 原生 aarch64 构建，8 分钟**；产物 588,677,000 bytes，SHA-256 `2894c895685c72d27e6c97d997d51cf2835ddb018e813375c15950da733a2509`；含 SDD V2.37–2.39 全部修复；chroot 闸门与 debugfs 抽查（含 S-meter 哨兵）通过；真机烧卡验收留操作员。）
+> 最新构建：**v1.15.0**（2026-09-13，**本机 Mac Docker Desktop 原生 aarch64 构建**；冷缓存约 45 分钟（首次 apt/固件下载），产物 546,128,812 bytes，SHA-256 `c9936a3befb780c17133851330d901d43885c181eb86d68e9eb903f1ee3a0773`；含服务端 QSO 录音（AD-017，镜像内自带 `lameenc` aarch64）+ 录音写入端存活修复 + **Linux 首启 env 容错读取**（`/boot/firmware/mrrc.env` 被 ANSI/GBK 编辑器保存不再让 `mrrc-firstboot.service` 失败）；chroot 闸门、`verify-image.sh` 与包内抽查（VERSION=1.15.0、`_ensure_rec_writer`、`read_env_text`、`lameenc.cpython-311-aarch64-linux-gnu.so`）均通过；真机烧卡验收留操作员。）
 > 用户向的安装/使用说明见 `docs/RASPBERRY_PI_GUIDE.md`。
 
 ## 1. 环境拓扑

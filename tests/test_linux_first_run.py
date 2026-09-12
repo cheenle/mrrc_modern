@@ -1,5 +1,6 @@
 """Tests for linux/first_run.py — Pi first-boot auto-configuration."""
 import sys
+import tempfile
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -72,3 +73,57 @@ class FirstRunFlowTests(unittest.TestCase):
         env = {"MRRC_WEB_PASSWORD": "s3cret-pass", "MRRC_RADIO_MODEL": "ic7300",
                "MRRC_SERIAL_PORT": "/dev/ttyUSB0", "MRRC_PORT_CONFIRMED": "1"}
         self.assertFalse(first_run.needs_first_run(env))
+
+
+class EnvFileEncodingTests(unittest.TestCase):
+    """The Pi env file is edited elsewhere and copied in — it may not be UTF-8.
+
+    Same field bug as the Windows/macOS launchers (2026-09-12): an ANSI (GBK)
+    editor turns the template's em-dash into `e2 80 3f`, and a strict UTF-8
+    read raises.  On the Pi this file is the *preseed* the operator writes on
+    their own PC and drops into /boot/firmware/, so it is the likeliest place
+    for a foreign encoding to arrive.
+    """
+
+    DAMAGED = (b"# mrrc_modern.env \xe2\x80?MRRC Modern launcher "
+               b"configuration template.\nMRRC_WEB_PASSWORD=secret\n"
+               b"MRRC_RADIO_MODEL=ft710\n")
+
+    def _write(self, tmp, raw):
+        path = Path(tmp) / "mrrc.env"
+        path.write_bytes(raw)
+        return path
+
+    def test_the_field_regression_file_is_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text, _enc = first_run.read_env_text(self._write(tmp, self.DAMAGED))
+        self.assertIn("MRRC_WEB_PASSWORD=secret", text)
+
+    def test_gbk_values_survive(self):
+        name = "麦克风 (USB Audio CODEC)"
+        raw = ("# 配置\nMRRC_AUDIO_RX_DEVICE=" + name + "\n").encode("cp936")
+        with tempfile.TemporaryDirectory() as tmp:
+            text, enc = first_run.read_env_text(self._write(tmp, raw))
+        self.assertNotEqual(enc, "utf-8")
+        self.assertIn(f"MRRC_AUDIO_RX_DEVICE={name}", text)
+
+    def test_utf16_saved_file_is_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = "MRRC_WEB_PORT=8888\r\n".encode("utf-16")
+            text, _enc = first_run.read_env_text(self._write(tmp, raw))
+        self.assertIn("MRRC_WEB_PORT=8888", text)
+
+    def test_utf8_files_stay_untouched(self):
+        raw = "# 中文注释 — em dash\nMRRC_RADIO_MODEL=ic7300\n".encode("utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            text, enc = first_run.read_env_text(self._write(tmp, raw))
+        self.assertEqual(enc, "utf-8")
+        self.assertIn("中文注释 — em dash", text)
+
+    def test_update_env_file_heals_a_non_utf8_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, self.DAMAGED)
+            first_run.update_env_file(path, {"MRRC_WEB_PORT": "8443"})
+            text = path.read_bytes().decode("utf-8")     # must be valid UTF-8
+        self.assertIn("MRRC_WEB_PORT=8443", text)
+        self.assertIn("MRRC_WEB_PASSWORD=secret", text)

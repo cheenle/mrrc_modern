@@ -30,6 +30,11 @@ All notable changes to the MRRC Web Control project.
   现在 `macos/first_run.py: read_env_text` 按 BOM → UTF-8 → 本地代码页(cp936) → latin-1 兜底解码，
   `update_env_file` 回写时统一为 UTF-8（下次启动即自愈）；两个启动器都加了 `guarded_main()` +
   `report_fatal()`：失败会写 `<用户数据目录>/launcher.log` 并弹消息框，不再静默消失。
+- **树莓派首启可能直接失败（同类编码坑）**：`/boot/firmware/mrrc.env` 预置文件是操作者在**自己 PC 上**
+  写好拷进 SD 卡的，用 ANSI/GBK 编辑器保存即非 UTF-8 字节，而 `linux/first_run.py` 与
+  `firstboot_wrapper.py` 都以 UTF-8 严格读取 —— 会抛 `UnicodeDecodeError` 让 `mrrc-firstboot.service`
+  在**第一次上电**就失败。现在两者共用 `read_env_text()`（BOM → UTF-8 → cp936 → latin-1 兜底），
+  预置文件被规范化写成 UTF-8；+7 项回归测试。
 - **同一进程内第二次录音全静音**：MP3 writer 任务是**每会话一次性**的（它在 MP3 收尾后返回，
   这正是关停时能 `await` 到它的原因），但原先**只在进程启动时创建一次**。因此首次 REC/STOP 之后
   任务已结束、无人消费队列 → 200 块积压瞬间灌满、后续每次录音的音频**全部被丢弃**，`stop()`
@@ -67,6 +72,13 @@ All notable changes to the MRRC Web Control project.
   从同一 commit 重建（919 项测试 + 3 个 PyInstaller 目标 + Inno Setup 全部通过），并且**按字节码
   校验**包内确实含本次修复（`MRRC-Modern-Server.exe` 的 `server` 脚本条目含 `_ensure_rec_writer`；
   `strings`/grep 看不见压缩的 PYZ，不能作为证据）。
+- **树莓派 rpi64 镜像 v1.15.0 已发布**（`MRRC-Modern-v1.15.0-rpi64.img.xz`，546,128,812 bytes，
+  SHA-256 `c9936a3befb780c17133851330d901d43885c181eb86d68e9eb903f1ee3a0773`）：本机 Docker Desktop
+  原生 aarch64 重建，**镜像内首次自带 `lameenc` aarch64**（v1.14.3 早于录音功能，完全没有服务端录音），
+  并含 Linux 首启 env 容错修复。`verify-image.sh` + `debugfs` 包内抽查（VERSION=1.15.0、
+  `_ensure_rec_writer`、`read_env_text`、`lameenc.cpython-311-aarch64-linux-gnu.so`）通过。
+- **产物来源**：Windows/macOS 安装包由 919 项测试的树构建；树莓派镜像由最终 926 项测试的树构建
+  （+7 为 Linux 首启 env 容错测试；该修复只影响 `linux/`，不在 Windows/macOS 包的运行路径内）。
 
 ### Verification Boundary
 

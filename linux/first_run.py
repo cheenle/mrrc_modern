@@ -10,10 +10,13 @@ not have rumps/PyObjC.
 """
 from __future__ import annotations
 
+import codecs
+import locale
 import os
 import secrets
 import serial
 import serial.tools.list_ports
+import sys
 from pathlib import Path
 
 DEFAULT_WEB_PASSWORD = "changeme_please_use_strong_password!"
@@ -116,12 +119,64 @@ def probe_radio_model(port: str, open_func=serial.Serial, timeout: float = 1.0) 
     return None
 
 
+def _bom_encodings() -> tuple[tuple[bytes, str], ...]:
+    """BOMs a text editor may have written (UTF-32 first: its BOM prefixes UTF-16's)."""
+    return (
+        (codecs.BOM_UTF32_LE, "utf-32"),
+        (codecs.BOM_UTF32_BE, "utf-32"),
+        (codecs.BOM_UTF8, "utf-8-sig"),
+        (codecs.BOM_UTF16_LE, "utf-16"),
+        (codecs.BOM_UTF16_BE, "utf-16"),
+    )
+
+
+def read_env_text(path: Path) -> tuple[str, str]:
+    """Read a user-editable text file without ever raising on its encoding.
+
+    Returns ``(text, encoding)`` where ``encoding`` is ``"utf-8"`` for a clean
+    file and the fallback that was used otherwise, so callers can say so.
+
+    On the Pi this file arrives as the **preseed**: written on the operator's
+    own PC and copied into /boot/firmware/ with the SD card, so a non-UTF-8
+    save (an ANSI/GBK editor turns the template's em-dash ``e2 80 94`` into
+    ``e2 80 3f``) is the likeliest encoding to show up.  A strict UTF-8 read
+    made mrrc-firstboot.service fail on the very first boot — the same field
+    bug as the Windows/macOS launchers (2026-09-12).  Keep in sync with
+    macos/first_run.py.
+    """
+    raw = path.read_bytes()
+    for bom, encoding in _bom_encodings():
+        if raw.startswith(bom):
+            return raw.decode(encoding, errors="replace"), encoding
+    try:
+        return raw.decode("utf-8"), "utf-8"
+    except UnicodeDecodeError:
+        pass
+    # Not UTF-8: prefer the local code page (so Chinese device names survive),
+    # then GBK explicitly, then a codec that cannot fail — KEY=VALUE lines are
+    # ASCII and still parse.
+    for encoding in ("cp936", locale.getpreferredencoding(False), "latin-1"):
+        try:
+            text = raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+        print(f"Warning: {path} is not valid UTF-8; reading it as {encoding}. "
+              f"Re-save it as UTF-8 (any edit from MRRC does that).",
+              file=sys.stderr)
+        return text, encoding
+    return raw.decode("utf-8", errors="replace"), "utf-8-replace"
+
+
 def update_env_file(path: Path, updates: dict[str, str]) -> None:
-    """Rewrite KEY=VALUE lines in place, preserving comments and appending new keys."""
+    """Rewrite KEY=VALUE lines in place, preserving comments and appending new keys.
+
+    Always writes UTF-8: a file that arrived from an ANSI (GBK) editor is
+    normalised by the first write (see read_env_text for why that matters).
+    """
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("", encoding="utf-8")
-    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = read_env_text(path)[0].splitlines()
     pending = dict(updates)
     out: list[str] = []
     for line in lines:
@@ -194,7 +249,7 @@ def main() -> int:
     if os.environ.get("MRRC_PRESEED") == "1":
         return 0  # preseed handled by the wrapper; nothing to generate
     env = dict(
-        line.split("=", 1) for line in env_path.read_text(encoding="utf-8").splitlines()
+        line.split("=", 1) for line in read_env_text(env_path)[0].splitlines()
         if line.strip() and not line.strip().startswith("#") and "=" in line
     )
     if not needs_first_run(env):

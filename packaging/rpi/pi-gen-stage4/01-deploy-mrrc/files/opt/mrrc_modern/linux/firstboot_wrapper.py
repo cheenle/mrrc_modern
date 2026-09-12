@@ -19,6 +19,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# linux/first_run.py is this script's sibling inside the image; it owns the
+# tolerant env reader (BOM/UTF-8/cp936/latin-1) that keeps a preseed saved by
+# an ANSI editor from killing the very first boot.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from first_run import read_env_text  # noqa: E402  # type: ignore[import-not-found]
+
 ENV_DIR = Path("/opt/mrrc_modern/env")
 ENV_FILE = ENV_DIR / "mrrc.env"
 PRESEED = Path("/boot/firmware/mrrc.env")
@@ -30,7 +36,13 @@ def adopt_preseed() -> bool:
     if not PRESEED.is_file():
         return False
     ENV_DIR.mkdir(parents=True, exist_ok=True)
-    ENV_FILE.write_text(PRESEED.read_text(encoding="utf-8"), encoding="utf-8")
+    # The preseed is written on the operator's PC and travels on the SD card,
+    # so it may be GBK/UTF-16 rather than UTF-8 (field class 2026-09-12).
+    # read_env_text never raises; the copy is normalised to UTF-8 here.
+    text, encoding = read_env_text(PRESEED)
+    if encoding != "utf-8":
+        print(f"[mrrc-firstboot] preseed is not valid UTF-8; read as {encoding}")
+    ENV_FILE.write_text(text, encoding="utf-8")
     shutil.copy2(PRESEED, PRESEED.with_suffix(".env.applied"))
     PRESEED.unlink()
     print("[mrrc-firstboot] preseed mrrc.env adopted from boot partition")

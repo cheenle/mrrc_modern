@@ -5,6 +5,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class IcomProfileHiddenImportTests(unittest.TestCase):
+    """PyInstaller must bundle the per-model profile module.
+
+    The frozen server imports backends.ic7300.civ_profiles lazily via the
+    backend module; without an explicit hiddenimport the packaged build
+    would fail at runtime for every Icom model.
+    """
+
+    def test_civ_profiles_is_bundled(self):
+        spec = (ROOT / "packaging" / "pyinstaller"
+                / "mrrc_modern_server.spec").read_text(encoding="utf-8")
+        self.assertIn("backends.ic7300.civ_profiles", spec)
+
+    def test_every_ic7300_module_is_bundled(self):
+        import backends.ic7300 as pkg
+        spec = (ROOT / "packaging" / "pyinstaller"
+                / "mrrc_modern_server.spec").read_text(encoding="utf-8")
+        for name in ("backend", "civ_codec", "civ_controller", "civ_profiles",
+                     "civ_scope", "config_ic7300"):
+            with self.subTest(module=name):
+                self.assertIn(f"backends.ic7300.{name}", spec)
+        self.assertTrue(pkg.__name__)
+
+
 class WindowsPackagingFilesTests(unittest.TestCase):
     def test_pyinstaller_specs_use_repo_root(self):
         for spec in (

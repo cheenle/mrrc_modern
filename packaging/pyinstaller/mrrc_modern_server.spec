@@ -89,6 +89,7 @@ a = Analysis(
         "backends.ic7300.backend",
         "backends.ic7300.civ_codec",
         "backends.ic7300.civ_controller",
+        "backends.ic7300.civ_profiles",
         "backends.ic7300.civ_scope",
         "backends.ic7300.config_ic7300",
     ],

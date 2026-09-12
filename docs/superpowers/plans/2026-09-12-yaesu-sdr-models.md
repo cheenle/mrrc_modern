@@ -97,13 +97,16 @@ class ProfileInvariantTests(unittest.TestCase):
             for name in p.ui_modes:
                 self.assertIn(name, p.mode_numbers, f"{key}: {name}")
 
-    def test_mode_numbers_are_unique_and_hex(self):
+    def test_mode_registers_are_unique_and_have_a_cat_code(self):
+        """Registers are ints (RadioState contract); H/I are not hex digits."""
         for key in EXPECTED_KEYS:
             p = yp.get_profile(key)
-            codes = list(p.mode_numbers.values())
-            self.assertEqual(len(codes), len(set(codes)), key)
-            for code in codes:
-                self.assertRegex(code, r"^[0-9A-F]$", key)
+            registers = list(p.mode_numbers.values())
+            self.assertEqual(len(registers), len(set(registers)), key)
+            for name, num in p.mode_numbers.items():
+                self.assertIsInstance(num, int, f"{key}/{name}")
+                self.assertIn(num, p.mode_codes, f"{key}/{name}")
+            self.assertEqual(len(set(p.mode_codes)), len(p.mode_codes), key)
 
     def test_filter_widths_are_ordered_and_positive(self):
         for key in EXPECTED_KEYS:
@@ -170,19 +173,28 @@ class ProfileInvariantTests(unittest.TestCase):
 class ModelSpecificDataTests(unittest.TestCase):
     def test_ftdx10_uses_the_documented_family_mode_table(self):
         p = yp.get_profile("ftdx10")
-        self.assertEqual(p.mode_numbers["LSB"], "1")
-        self.assertEqual(p.mode_numbers["USB"], "2")
-        self.assertEqual(p.mode_numbers["CW-U"], "3")
-        self.assertEqual(p.mode_numbers["DATA-U"], "C")
-        self.assertEqual(p.mode_numbers["AM-N"], "D")
-        self.assertEqual(p.mode_numbers["C4FM"], "E")
+        self.assertEqual(p.mode_numbers["LSB"], 0x1)
+        self.assertEqual(p.mode_numbers["USB"], 0x2)
+        self.assertEqual(p.mode_numbers["CW-U"], 0x3)
+        self.assertEqual(p.mode_numbers["DATA-U"], 0xC)
+        self.assertEqual(p.mode_numbers["AM-N"], 0xD)
+        self.assertEqual(p.mode_numbers["C4FM"], 0xE)
+        self.assertEqual(p.mode_codes[0xE], "E")
 
-    def test_ftx1_differs_on_the_e_and_h_i_codes(self):
-        """ftx1/ftx1_mode.c: E=PSK, H=C4FM-DN, I=C4FM-VW — not E=C4FM."""
+    def test_ftx1_mode_codes_are_not_hex_formatted(self):
+        """ftx1/ftx1_mode.c: E=PSK, H=C4FM-DN, I=C4FM-VW.
+
+        H and I are not hex digits, so the CAT layer must look the character
+        up instead of formatting the register as hex — `f"{0x11:X}"` would
+        send `MD011`, which is not a mode at all.
+        """
         p = yp.get_profile("ftx1")
-        self.assertEqual(p.mode_numbers["PSK"], "E")
-        self.assertEqual(p.mode_numbers["C4FM-DN"], "H")
-        self.assertEqual(p.mode_numbers["C4FM-VW"], "I")
+        self.assertEqual(p.mode_numbers["PSK"], 0xE)
+        self.assertEqual(p.mode_numbers["C4FM-DN"], 0x10)
+        self.assertEqual(p.mode_numbers["C4FM-VW"], 0x11)
+        self.assertEqual(p.mode_codes[0xE], "E")
+        self.assertEqual(p.mode_codes[0x10], "H")
+        self.assertEqual(p.mode_codes[0x11], "I")
         self.assertNotIn("C4FM", p.mode_numbers)
 
     def test_ftdx10_filter_table_matches_hamlib(self):
@@ -353,7 +365,8 @@ class YaesuModelProfile:
     id_answer: str                       # expected "ID;" answer, "" = log only
 
     # Modes / filters
-    mode_numbers: Dict[str, str]         # UI mode name -> MD P2 character
+    mode_numbers: Dict[str, int]         # UI mode name -> mode register (int)
+    mode_codes: Dict[int, str]           # mode register -> MD P2 character
     ui_modes: Tuple[str, ...]            # order of the UI mode cycle button
     filter_widths: Dict[str, Tuple[Tuple[int, int], ...]]   # mode -> ((idx, Hz), ...)
 
@@ -388,12 +401,23 @@ class YaesuModelProfile:
 
 # ── Shared tables ───────────────────────────────────────────────────
 # Hamlib 4.7.2 rigs/yaesu/newcat.c:12043 newcat_mode_conv[] — the ASCII-CAT
-# family mode characters.  The FTX-1 differs on E/H/I (see its profile).
+# family mode characters.  Registers are ints because that is the contract
+# (`RadioBackend.set_mode(mode_num: int)`, `RadioState.mode: int`,
+# `MODE_NUM_TO_NAME: dict[int, str]`).  The CAT layer needs the character,
+# and H/I are NOT hex digits, so the character is looked up in `mode_codes`
+# rather than formatted as hex: `f"{0x11:X}"` would send "MD011" on an FTX-1
+# C4FM-VW change instead of "MD0I" (design review finding, 2026-09-12).
 _FAMILY_MODE_NUMBERS = {
-    "LSB": "1", "USB": "2", "CW-U": "3", "FM": "4", "AM": "5",
-    "RTTY-L": "6", "CW-L": "7", "DATA-L": "8", "RTTY-U": "9",
-    "DATA-FM": "A", "FM-N": "B", "DATA-U": "C", "AM-N": "D",
-    "C4FM": "E", "DATA-FM-N": "F",
+    "LSB": 0x1, "USB": 0x2, "CW-U": 0x3, "FM": 0x4, "AM": 0x5,
+    "RTTY-L": 0x6, "CW-L": 0x7, "DATA-L": 0x8, "RTTY-U": 0x9,
+    "DATA-FM": 0xA, "FM-N": 0xB, "DATA-U": 0xC, "AM-N": 0xD,
+    "C4FM": 0xE, "DATA-FM-N": 0xF,
+}
+
+_FAMILY_MODE_CODES = {
+    0x1: "1", 0x2: "2", 0x3: "3", 0x4: "4", 0x5: "5", 0x6: "6",
+    0x7: "7", 0x8: "8", 0x9: "9", 0xA: "A", 0xB: "B", 0xC: "C",
+    0xD: "D", 0xE: "E", 0xF: "F",
 }
 
 _FAMILY_UI_MODES = ("LSB", "USB", "CW-U", "CW-L", "AM", "FM", "DATA-U", "RTTY-U")
@@ -486,6 +510,7 @@ FTDX10 = YaesuModelProfile(
     default_baud=38400,
     id_answer="",                        # TODO(hw-verify)
     mode_numbers=dict(_FAMILY_MODE_NUMBERS),
+    mode_codes=dict(_FAMILY_MODE_CODES),
     ui_modes=_FAMILY_UI_MODES,
     filter_widths=dict(_FAMILY_FILTER_WIDTHS),
     bands=_HF_BANDS,
@@ -512,6 +537,7 @@ FTDX101D = YaesuModelProfile(
     default_baud=38400,
     id_answer="",                        # TODO(hw-verify)
     mode_numbers=dict(_FAMILY_MODE_NUMBERS),
+    mode_codes=dict(_FAMILY_MODE_CODES),
     ui_modes=_FAMILY_UI_MODES,
     filter_widths=dict(_FAMILY_FILTER_WIDTHS),
     bands=_HF_BANDS,
@@ -539,6 +565,7 @@ FTDX101MP = YaesuModelProfile(
     default_baud=38400,
     id_answer="",                        # TODO(hw-verify)
     mode_numbers=dict(_FAMILY_MODE_NUMBERS),
+    mode_codes=dict(_FAMILY_MODE_CODES),
     ui_modes=_FAMILY_UI_MODES,
     filter_widths=dict(_FAMILY_FILTER_WIDTHS),
     bands=_HF_BANDS,
@@ -567,11 +594,12 @@ FTX1 = YaesuModelProfile(
     default_baud=38400,
     id_answer="0840",                    # ftx1/ftx1_readme.txt: all configs
     mode_numbers={
-        "LSB": "1", "USB": "2", "CW-U": "3", "FM": "4", "AM": "5",
-        "RTTY-L": "6", "CW-L": "7", "DATA-L": "8", "RTTY-U": "9",
-        "DATA-FM": "A", "FM-N": "B", "DATA-U": "C", "AM-N": "D",
-        "PSK": "E", "DATA-FM-N": "F", "C4FM-DN": "H", "C4FM-VW": "I",
+        "LSB": 0x1, "USB": 0x2, "CW-U": 0x3, "FM": 0x4, "AM": 0x5,
+        "RTTY-L": 0x6, "CW-L": 0x7, "DATA-L": 0x8, "RTTY-U": 0x9,
+        "DATA-FM": 0xA, "FM-N": 0xB, "DATA-U": 0xC, "AM-N": 0xD,
+        "PSK": 0xE, "DATA-FM-N": 0xF, "C4FM-DN": 0x10, "C4FM-VW": 0x11,
     },
+    mode_codes={**_FAMILY_MODE_CODES, 0x10: "H", 0x11: "I"},
     ui_modes=("LSB", "USB", "CW-U", "CW-L", "AM", "FM", "DATA-U", "PSK"),
     filter_widths=dict(_FAMILY_FILTER_WIDTHS),
     bands=_FTX1_BANDS,
@@ -1166,35 +1194,56 @@ class FrequencyAndVfoTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ModeTests(unittest.IsolatedAsyncioTestCase):
-    async def test_set_mode_uses_the_profile_code(self):
+    async def test_set_mode_uses_the_profile_register(self):
+        """The register is an int (RadioBackend.set_mode(mode_num) contract)."""
         ctrl = _controller([])
-        await ctrl.set_mode("C")                     # FTDX10 DATA-U
+        await ctrl.set_mode(0xC)                     # FTDX10 DATA-U
         self.assertEqual(ctrl._ser.writes, [b"MD0C;"])
 
-    async def test_set_mode_hex_round_trip_for_c4fm(self):
+    async def test_set_mode_round_trip_for_c4fm(self):
         ctrl = _controller([])
-        await ctrl.set_mode("E")
+        await ctrl.set_mode(0xE)
         self.assertEqual(ctrl._ser.writes, [b"MD0E;"])
+
+    async def test_ftx1_c4fm_codes_are_not_hex_formatted(self):
+        """0x11 must go out as 'I', never as "MD011" (review finding)."""
+        ctrl = _controller([], model="ftx1")
+        await ctrl.set_mode(0x11)
+        self.assertEqual(ctrl._ser.writes, [b"MD0I;"])
+
+    async def test_unknown_register_is_refused_without_a_write(self):
+        ctrl = _controller([])
+        self.assertFalse(await ctrl.set_mode(0x99))
+        self.assertEqual(ctrl._ser.writes, [])
 
     async def test_ftx1_leaves_memory_mode_before_setting_mode(self):
         """A memory-mode MD set does not persist (ftx1_mode.c)."""
         ctrl = _controller(["VM1;", "MD02;"])       # radio is in memory mode
-        self.assertTrue(await ctrl.set_mode("2"))
+        self.assertTrue(await ctrl.set_mode(0x2))
         self.assertEqual(ctrl._ser.writes, [b"VM;", b"VM000;", b"MD02;"])
 
     async def test_ftx1_skips_the_leave_step_when_already_in_vfo_mode(self):
         ctrl = _controller(["VM0;"])
-        await ctrl.set_mode("2")
+        await ctrl.set_mode(0x2)
         self.assertEqual(ctrl._ser.writes, [b"VM;", b"MD02;"])
 
     async def test_ftdx10_does_not_query_memory_mode(self):
         ctrl = _controller([])
-        await ctrl.set_mode("C")
+        await ctrl.set_mode(0xC)
         self.assertEqual(ctrl._ser.writes, [b"MD0C;"])
 
-    async def test_get_mode_reads_hex_after_md0(self):
+    async def test_get_mode_reads_the_register_after_md0(self):
         ctrl = _controller(["MD0C;"])
-        self.assertEqual(await ctrl.get_mode(), "C")
+        self.assertEqual(await ctrl.get_mode(), 0xC)
+
+    async def test_ftx1_get_mode_maps_i_back_to_0x11(self):
+        """The reverse lookup must handle the non-hex characters too."""
+        ctrl = _controller(["MD0I;"], model="ftx1")
+        self.assertEqual(await ctrl.get_mode(), 0x11)
+
+    async def test_unknown_mode_character_is_not_guessed(self):
+        ctrl = _controller(["MD0Z;"])
+        self.assertIsNone(await ctrl.get_mode())
 
 
 class FilterTests(unittest.IsolatedAsyncioTestCase):
@@ -1343,21 +1392,32 @@ Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
                          self._profile.display_name)
             await self.set("VM000")
 
-    async def set_mode(self, mode: str) -> bool:
-        """Set the operating mode.
+    async def set_mode(self, mode_num: int) -> bool:
+        """Set the operating mode from its numeric register.
 
-        ``mode`` is the profile's mode character ("1".."9", "A".."I"),
-        which is what the UI's mode names map to through
-        ``YaesuModelProfile.mode_numbers``; the raw character is accepted so
-        that a mode read back from the radio can be written again unchanged.
+        ``mode_num`` is the profile register — the same int `RadioState.mode`
+        and the UI carry.  The CAT character comes from `profile.mode_codes`
+        rather than from `f"{mode_num:X}"`, because the FTX-1 uses H and I
+        for its C4FM variants and those are not hex digits: formatting the
+        register would send `MD011` instead of `MD0I`.
         """
+        code = self._profile.mode_codes.get(int(mode_num))
+        if code is None:
+            logger.warning("%s: mode register 0x%X is not in the profile — "
+                           "no MD sent", self._profile.display_name, mode_num)
+            return False
         await self._leave_memory_mode_if_needed()
-        return await self.set(f"MD0{mode}")
+        return await self.set(f"MD0{code}")
 
-    async def get_mode(self, timeout: Optional[float] = None) -> Optional[str]:
+    async def get_mode(self, timeout: Optional[float] = None) -> Optional[int]:
         resp = await self.query("MD0", timeout=timeout)
         if resp and len(resp) >= 4:
-            return resp[3].upper()
+            char = resp[3].upper()
+            for num, code in self._profile.mode_codes.items():
+                if code == char:
+                    return num
+            logger.debug("%s: mode character %r is not in the profile",
+                         self._profile.display_name, char)
         return None
 
     # ── Filter width (slot index, not Hz) ───────────────────────────
@@ -1421,6 +1481,31 @@ Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
         return None
 
     # ── Gains / DSP / RF controls ───────────────────────────────────
+
+    async def _get_int(self, cmd: str, offset: int,
+                       timeout: Optional[float] = None) -> Optional[int]:
+        """Read a numeric answer field starting at ``offset``.
+
+        Shared by the polled readers: the poll tiers and
+        `RadioState.from_sync_result` require PARSED values, so a raw answer
+        string must never be returned from here.
+        """
+        resp = await self.query(cmd, timeout=timeout)
+        if resp and len(resp) > offset:
+            try:
+                return int(resp[offset:])
+            except ValueError:
+                return None
+        return None
+
+    async def get_af_gain(self, timeout: Optional[float] = None) -> Optional[int]:
+        return await self._get_int("AG0", 3, timeout)
+
+    async def get_rf_gain(self, timeout: Optional[float] = None) -> Optional[int]:
+        return await self._get_int("RG0", 3, timeout)
+
+    async def get_rf_power(self, timeout: Optional[float] = None) -> Optional[int]:
+        return await self._get_int("PC", 2, timeout)
 
     async def set_af_gain(self, value: int) -> bool:
         return await self.set(f"AG0{value:03d}")
@@ -1580,24 +1665,32 @@ Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
     # ── Bulk state ──────────────────────────────────────────────────
 
     async def initial_state_sync(self) -> dict:
-        """Read the fields the poll tiers do not cover before first push.
+        """Parsed RadioState fields for the first state push.
 
-        Same shape as the FT-710 controller: a dict of RadioState field
-        values, missing entries simply left out.
+        Contract (`RadioState.from_sync_result`): plain
+        ``{RadioState field: parsed value}`` pairs.  Raw CAT answers are not
+        accepted here, and the names must be the dataclass fields —
+        `vfo_a_freq`, not `frequency`.
         """
         state: dict = {}
-        freq = await self.get_frequency("A")
-        if freq is not None:
-            state["frequency"] = freq
-        mode = await self.get_mode()
-        if mode is not None:
-            state["mode"] = mode
-        width = await self.get_filter_width()
-        if width is not None:
-            state["filter_width"] = width
-        vfo = await self.get_active_vfo()
-        if vfo is not None:
-            state["active_vfo"] = vfo
+        for field, getter in (
+            ("vfo_a_freq", lambda: self.get_frequency("A")),
+            ("vfo_b_freq", lambda: self.get_frequency("B")),
+            ("active_vfo", lambda: self.get_active_vfo()),
+            ("mode", lambda: self.get_mode()),
+            ("filter_width", lambda: self.get_filter_width()),
+            ("tx_status", lambda: self.get_ptt()),
+            ("s_meter", lambda: self.get_s_meter()),
+            ("af_gain", lambda: self.get_af_gain()),
+            ("rf_gain", lambda: self.get_rf_gain()),
+            ("rf_power", lambda: self.get_rf_power()),
+            ("preamp", lambda: self.get_preamp()),
+            ("attenuator", lambda: self.get_attenuator()),
+            ("agc", lambda: self.get_agc()),
+        ):
+            value = await getter()
+            if value is not None:
+                state[field] = value
         return state
 ```
 
@@ -1700,7 +1793,7 @@ class TableTests(unittest.TestCase):
                     "get_band_for_frequency", "get_filter_hz", "raw_to_dbm",
                     "raw_to_s_unit", "raw_to_power"):
             self.assertIn(key, tables)
-        self.assertEqual(tables["mode_num_to_name"]["1"], "LSB")
+        self.assertEqual(tables["mode_num_to_name"][0x1], "LSB")
         self.assertEqual(tables["get_filter_hz"]("USB", 2), 2400)
 
     def test_poll_items_are_callables_of_the_expected_shape(self):
@@ -1712,6 +1805,24 @@ class TableTests(unittest.TestCase):
             self.assertIsInstance(label, str)
             self.assertIsInstance(field, str)
             self.assertTrue(callable(getter))
+
+
+class DelegationTests(unittest.TestCase):
+    def test_every_abstract_method_is_implemented(self):
+        """A missing delegate would leave the class abstract and unbuildable."""
+        from backends.base import RadioBackend
+        for name in RadioBackend.__abstractmethods__:
+            self.assertTrue(hasattr(yb.YaesuBackend, name), name)
+
+    def test_the_backend_class_is_concrete(self):
+        self.assertEqual(yb.YaesuBackend.__abstractmethods__, frozenset())
+        yb.FTX1Backend("/dev/null")          # TypeError if still abstract
+
+    def test_gated_methods_are_wired_through_the_delegate(self):
+        b = yb.FTDX10Backend("/dev/null")
+        b._cat.set_ptt = AsyncMock(return_value=True)
+        self.assertFalse(b._cat.connected)   # never touched: the gate runs first
+        self.assertTrue(hasattr(yb.YaesuBackend, "set_frequency"))
 
 
 class GateTests(unittest.IsolatedAsyncioTestCase):
@@ -1927,15 +2038,15 @@ class YaesuBackend(RadioBackend):
     # ── Poll items ──────────────────────────────────────────────────
 
     def settings_poll_items(self) -> list:
+        """2s-tier items; getters return PARSED RadioState values (never raw)."""
         cat = self._cat
         return [
-            ("af_gain", lambda t=None: cat.query("AG0", timeout=t)),
-            ("rf_gain", lambda t=None: cat.query("RG0", timeout=t)),
-            ("squelch", lambda t=None: cat.query("SQ0", timeout=t)),
-            ("mic_gain", lambda t=None: cat.query("MG", timeout=t)),
+            ("af_gain", lambda t=None: cat.get_af_gain(timeout=t)),
+            ("rf_gain", lambda t=None: cat.get_rf_gain(timeout=t)),
+            ("rf_power", lambda t=None: cat.get_rf_power(timeout=t)),
+            ("filter_width", lambda t=None: cat.get_filter_width(timeout=t)),
             ("preamp", lambda t=None: cat.get_preamp(timeout=t)),
             ("attenuator", lambda t=None: cat.get_attenuator(timeout=t)),
-            ("filter_width", lambda t=None: cat.get_filter_width(timeout=t)),
             ("agc", lambda t=None: cat.get_agc(timeout=t)),
         ]
 
@@ -1945,7 +2056,7 @@ class YaesuBackend(RadioBackend):
         async def _freq_mode(timeout=None):
             values: dict = {}
             if (f := await cat.get_frequency("A", timeout=timeout)) is not None:
-                values["frequency"] = f
+                values["vfo_a_freq"] = f
             if (m := await cat.get_mode(timeout=timeout)) is not None:
                 values["mode"] = m
             return values
@@ -1991,24 +2102,6 @@ class YaesuBackend(RadioBackend):
         """The Yaesu family answers a frequency read-back (`FA;`)."""
         return bool(await self._cat.query("FA", timeout=timeout))
 
-    def __getattr__(self, name: str):
-        """Delegate the remaining RadioBackend surface to the CAT core.
-
-        The abstract method set is long and purely mechanical (see
-        `backends/base.py`); every method exists on `YaesuCatController` with
-        the same name and signature, with PTT/TUNE gated here.
-        """
-        if name in ("set_ptt", "set_tune"):
-            async def _gated(value, _name=name):
-                if value and not self._tx_allowed():
-                    return False
-                return await getattr(self._cat, _name)(value)
-            return _gated
-        try:
-            return getattr(self._cat, name)
-        except AttributeError:
-            raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
-
     # ── Identity (spec §6.2) ────────────────────────────────────────
 
     async def _check_model_identity(self) -> Optional[str]:
@@ -2043,6 +2136,47 @@ class YaesuBackend(RadioBackend):
 def make_backend(model: str) -> type:
     """Return the backend class for a model key (used by tests and the factory)."""
     return _CLASSES[model]
+
+
+# ── Mechanical delegates for the rest of the abstract surface ───────
+#
+# Design review finding (2026-09-12): `RadioBackend` is an ABC and
+# `__getattr__` does NOT satisfy ABCMeta — the class would have stayed
+# abstract and `FTDX10Backend("/dev/null")` would raise TypeError.  The
+# delegates are therefore bound onto the class at import time, and the
+# abstract set is cleared afterwards because ABCMeta froze it at class
+# creation.  `test_every_abstract_method_is_implemented` keeps this honest
+# if the ABC grows a method later.
+_GATED_METHODS = {"set_ptt", "set_tune"}
+
+
+def _make_delegate(name: str):
+    async def _delegate(self, *args, **kwargs):
+        if name in _GATED_METHODS and args and args[0] and not self._tx_allowed():
+            return False
+        if name in _GATED_METHODS and kwargs.get("tx") and not self._tx_allowed():
+            return False
+        return await getattr(self._cat, name)(*args, **kwargs)
+
+    _delegate.__name__ = name
+    _delegate.__qualname__ = f"YaesuBackend.{name}"
+    return _delegate
+
+
+# Everything the class implements itself (including the gated PTT/TUNE pair).
+_EXPLICIT = {
+    "capabilities", "create_scope_producer", "bands", "ui_modes",
+    "mode_name_to_num", "filter_tables", "state_tables",
+    "settings_poll_items", "slow_poll_items", "tx_meter_items",
+    "always_meter_items", "connected", "model", "connect", "disconnect",
+    "reconnect_loop", "boot_verify", "initial_state_sync",
+    "_tx_allowed", "_check_model_identity",
+}
+
+for _name in sorted(RadioBackend.__abstractmethods__ - _EXPLICIT):
+    setattr(YaesuBackend, _name, _make_delegate(_name))
+
+YaesuBackend.__abstractmethods__ = frozenset()
 
 
 # ── Model classes (profile + label only, like the Icom family) ──────
@@ -2435,9 +2569,9 @@ class FakeRadioRoundTripTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ctrl.get_frequency("A"), 7_050_000)
 
     async def test_mode_round_trip(self):
-        self.assertEqual(await self.ctrl.get_mode(), "2")
-        await self.ctrl.set_mode("C")
-        self.assertEqual(await self.ctrl.get_mode(), "C")
+        self.assertEqual(await self.ctrl.get_mode(), 0x2)
+        await self.ctrl.set_mode(0xC)
+        self.assertEqual(await self.ctrl.get_mode(), 0xC)
 
     async def test_filter_slot_round_trip(self):
         self.assertEqual(await self.ctrl.get_filter_width(), 2)
@@ -2499,7 +2633,7 @@ class HamlibSimulatorPeerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(await ctrl.connect())
                 # The simulator boots at 14074000 Hz in mode 0xc (DATA-U).
                 self.assertEqual(await ctrl.get_frequency("A"), 14_074_000)
-                self.assertEqual(await ctrl.get_mode(), "C")
+                self.assertEqual(await ctrl.get_mode(), 0xC)   # simulator boots in DATA-U
                 await ctrl.set_frequency(21_074_000, vfo="A")
                 self.assertEqual(await ctrl.get_frequency("A"), 21_074_000)
                 await ctrl.disconnect()
@@ -2918,5 +3052,13 @@ server boot for every new model." && git push origin main
 | §12 分期 | 任务 1（`dual_rx` 标志）、任务 8（SDD 记录三期计划） |
 
 **2. 占位符扫描**：无"待定/TODO 实现"式步骤；出现的 `TODO(hw-verify)` 全部是**规格要求的数据诚实标记**（寄存器期望值、音频速率、部分衰减步进、FTX-1 滤波宽度），并有任务 7 的现场工具负责闭合。
+
+**2b. 执行前设计审查发现（2026-09-12，执行者复核计划时提出并已内联修正）**
+
+| # | 发现 | 影响 | 修正 |
+| --- | --- | --- | --- |
+| R1 | 计划用 `__getattr__` 委托 `RadioBackend` 的其余抽象方法 | `RadioBackend` 是 ABC，`__getattr__` **不满足** ABCMeta → 四个后端类仍是抽象类，实例化直接 `TypeError`，任务 4/5/6 的测试全部无法运行 | 改为在导入时把委托方法绑到类上，随后清空 `YaesuBackend.__abstractmethods__`（ABCMeta 在创建类时已冻结该集合）；新增 `test_every_abstract_method_is_implemented` 防止 ABC 以后新增方法时静默漏接 |
+| R2 | 计划里 `set_mode`/`get_mode` 走 CAT **字符**（`"C"`、`"H"`） | 违反契约：`RadioBackend.set_mode(mode_num: int)`、`RadioState.mode: int`（`radio_state.py:77`）、`MODE_NUM_TO_NAME: dict[int, str]`；且 `f"MD0{mode_num:X}"` 对 FTX-1 的 `H`/`I` 会发出**无效命令 `MD011`**（H/I 不是十六进制字符） | 改为整数寄存器 + `profile.mode_codes` 显式字符查找（`set_mode(0x11)` → `MD0I`），`get_mode` 反查并拒绝未知字符；新增两条测试固定该行为 |
+| R3 | 计划的 poll 项与 `initial_state_sync` 返回**原始应答字符串**，且键名用 `frequency` | 违反 `RadioState.from_sync_result` 契约（"`sync_data` is ALREADY PARSED"、键必须是 dataclass 字段名）→ 状态里会写入 `"AG0120"` 这样的字符串，`radio_state.py:263` 之类的比较全部失效 | poll 项改用解析后的 getter（新增 `get_af_gain`/`get_rf_gain`/`get_rf_power` 与 `_get_int` 共享助手），键名改为 `vfo_a_freq`/`vfo_b_freq`/`active_vfo`/`mode`/`filter_width`/`tx_status`/`s_meter`/… |
 
 **3. 类型一致性**：`YaesuModelProfile.mode_numbers` 全程是 `dict[str, str]`（模式名 → `MD` 字符），`filter_widths` 全程是 `dict[str, tuple[tuple[int, int], ...]]`（(槽位, Hz)），`set_mode` 接受字符而 `mode_name_to_num` 提供字符，`get_mode` 返回字符（FT-710 的整数约定**不**沿用，任务 3/4 的测试固定这一点）；`initial_state_sync` 返回 `dict` 与 `RadioBackend` 契约一致；`_detected_power` 在 `detect_power_config`/`effective_power_max`/`set_rf_power` 三处同名同形。

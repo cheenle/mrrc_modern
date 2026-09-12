@@ -58,3 +58,6 @@ yagi_*.jpg
 # Accidental IDE workspace with backtick in name
 FT710Mobile/`.xcodeproj/
 website/downloads/*.dmg
+
+# Runtime QSO recordings (server-side MP3s; AD-017 — never commit audio)
+recordings/

@@ -115,10 +115,16 @@ zip -qr dist/mrrc_modern_src.zip . \
   -x "./.git/*" "./venv/*" "./.venv/*" "./dist/*" "./build/*" "./logs/*" "./certs/*" \
      "./FT710Mobile/*" "./website/*" "./lib/*" "./__pycache__/*" "./windows/__pycache__/*" \
      "./tests/__pycache__/*" "./.pytest_cache/*" "./.claude/*" "./.superpowers/*" \
-     "./.agnes/*" "./*.pyc" "./.DS_Store" "./SDD/.DS_Store"
+     "./.agnes/*" "./*.pyc" "./.DS_Store" "./SDD/.DS_Store" \
+  "./FT710Android/*" "./vendor/ftdi/LibFT4222-v1.4.8.zip" "./yagi_*.jpg"
 ```
 
 **关键**：`./.agents/*` 不能排除——`tests/test_sdd_harness.py` 依赖其中的 harness 文件，缺了会导致 VM 上 24 个测试失败。`./certs/*` 必须排除（含 TLS 私钥）。
+
+**实测（v1.15.0）**：`./FT710Android/*`（Gradle 构建产物，未压缩 191 MB）与 `./vendor/ftdi/LibFT4222-v1.4.8.zip`、
+`./yagi_*.jpg` 都属于与 Windows 打包无关的大文件 —— 不排除时 zip 达 **109 MB**（跨境上传在 flaky 链路上反复中断），
+排除后 **9.8 MB**，且 `server.py`/`recorder.py`/`requirements.txt`/`packaging/`/`.agents/`/`tests/`/`static/`/
+`vendor/opus/windows` 与 FTDI DLL 均完整。
 
 **建议**：另加 `./promo/*` 排除——那是 gitignored 的市场宣传视频（约 630MB），与构建/测试无关；不排除也能构建，但上传极慢（v1.8.0 起已排除）。
 

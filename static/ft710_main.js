@@ -426,9 +426,15 @@ function handleMessage(msg) {
 			radioModel = msg.radioModel || null;
 			radioDisplayName = msg.radioDisplayName || null;
 			_applyRadioBranding();
-			// IC-7300 USB audio is much hotter than the FT-710's — skip the
-			// 10x boost there. (Initial guess — tune after hardware test.)
-			AUDIO_GAIN_BOOST = radioModel === "ic7300" ? 1.0 : 10.0;
+			// RX playback boost comes from capabilities when the server
+			// provides it (Icom USB audio is much hotter than the FT-710's);
+			// the legacy model-string check is the fallback for older servers.
+			AUDIO_GAIN_BOOST =
+				msg.capabilities && typeof msg.capabilities.audio_gain_boost === "number"
+					? msg.capabilities.audio_gain_boost
+					: radioModel === "ic7300"
+						? 1.0
+						: 10.0;
 			if (msg.memChannels) {
 				memChannels.length = 0;
 				memChannels.push(...msg.memChannels);
@@ -444,6 +450,10 @@ function handleMessage(msg) {
 			// BEFORE the first render pass so labels come up correct.
 			if (typeof applyRadioCapabilities === "function") {
 				applyRadioCapabilities();
+			}
+			// Unverified-model badge / TX-disabled notice (spec 2026-09-12 §6.1).
+			if (typeof applyCapabilityBadges === "function") {
+				applyCapabilityBadges();
 			}
 			renderAll();
 			_applyAfGainToAudioNode(); // sync gain node from radio state

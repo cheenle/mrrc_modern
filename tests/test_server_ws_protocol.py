@@ -228,13 +228,35 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=24', index_source)
-        self.assertIn('/ft710_main.js?v=27', index_source)
-        self.assertIn('/ft710_ui.js?v=29', index_source)
+        self.assertIn('/ft710_main.js?v=28', index_source)
+        self.assertIn('/ft710_ui.js?v=30', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v30'", sw_source)
-        self.assertIn("'/ft710_main.js?v=27'", sw_source)
-        self.assertIn("'/ft710_ui.js?v=29'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v31'", sw_source)
+        self.assertIn("'/ft710_main.js?v=28'", sw_source)
+        self.assertIn("'/ft710_ui.js?v=30'", sw_source)
+
+
+class FrontendNewModelContractTests(unittest.TestCase):
+    """Frontend surface for the three new models (spec 2026-09-12 §8)."""
+
+    def test_connection_dialog_lists_new_models(self):
+        html = Path("static/index.html").read_text(encoding="utf-8")
+        for key in ("ic705", "ic7610", "ic7760"):
+            with self.subTest(model=key):
+                self.assertIn(f'<option value="{key}">', html)
+        # Each new model is labelled experimental (no hardware evidence).
+        self.assertIn("实验性", html)
+
+    def test_audio_boost_comes_from_capabilities(self):
+        js = Path("static/ft710_main.js").read_text(encoding="utf-8")
+        self.assertIn("audio_gain_boost", js)
+        self.assertIn("applyCapabilityBadges", js)
+
+    def test_experimental_badge_function_exists(self):
+        js = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("function applyCapabilityBadges(", js)
+        self.assertIn("tx_gated", js)
 
     def test_subchannels_have_independent_reconnect(self):
         """SDD I10: audio/spectrum subchannels must self-heal, not just null out."""

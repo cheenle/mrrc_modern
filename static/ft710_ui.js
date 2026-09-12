@@ -37,6 +37,35 @@ function _isFil123() {
     return !!(c && c.filter_model === 'fil123');
 }
 
+// ── Experimental-model badge (spec 2026-09-12 §6.1) ───────────────────
+// A model whose profile has no hardware evidence is labelled in the UI and
+// a transmit-disabled notice is surfaced, so an unverified radio never
+// looks fully supported and a refused key-up is explained.
+function applyCapabilityBadges() {
+    const c = _caps();
+    const existing = document.getElementById('ft710-exp-badge');
+    if (!c || c.verified !== false) {
+        if (existing) existing.remove();
+        return;
+    }
+    let badge = existing;
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.id = 'ft710-exp-badge';
+        badge.style.cssText =
+            'margin-left:6px;padding:1px 6px;border-radius:8px;' +
+            'background:#78350f;color:#fbbf24;font-size:11px;vertical-align:middle;';
+        badge.textContent = '实验性';
+        (document.getElementById('status-bar') || document.body).appendChild(badge);
+    }
+    badge.title = c.tx_gated
+        ? '该机型未硬件实测 — 发射已禁用（设置 MRRC_ALLOW_UNVERIFIED_TX=1 后重启可启用）'
+        : '该机型未硬件实测 — 发射已由环境变量放行';
+    if (c.tx_gated && typeof showToast === 'function') {
+        showToast('未实测机型：发射已禁用。设置 MRRC_ALLOW_UNVERIFIED_TX=1 并重启后可用。', 8000);
+    }
+}
+
 // FT-710 (ft4222 scope) garbles its stream during TX — pause & banner.
 // CI-V 0x27 scopes (IC-7300) keep streaming through TX; render normally.
 function _scopePausesOnTx() {
@@ -1452,7 +1481,8 @@ function initUI() {
     // Restore persisted browser volume before wiring
     (() => {
         var v = 128;
-        try { var s = FT710Settings.getCookie('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
+        var s;
+        try { s = FT710Settings.getCookie('ft710_afVol'); if (s !== null) v = parseInt(s); } catch(e) {}
         if (isNaN(v)) v = 128;
         var sl = document.getElementById('slider-afgain');
         if (sl) sl.value = v;
@@ -1480,7 +1510,8 @@ function initUI() {
     // 0–200 → linear 0–2×, 100 = unity. Persisted in a cookie.
     (() => {
         var v = 100;
-        try { var s = FT710Settings.getCookie('ft710_micVol'); if (s !== null) v = parseInt(s); } catch(e) {}
+        var s;
+        try { s = FT710Settings.getCookie('ft710_micVol'); if (s !== null) v = parseInt(s); } catch(e) {}
         if (isNaN(v)) v = 100;
         v = Math.max(0, Math.min(200, v));
         var sl = document.getElementById('slider-micvol');
@@ -1948,7 +1979,7 @@ function initFreqInput() {
         const freq = radioState.active_vfo === 'A' ? radioState.vfo_a_freq : radioState.vfo_b_freq;
         // Show MHz with kHz precision
         input.value = (freq / 1e6).toFixed(3);
-        display.querySelectorAll('span').forEach(s => s.style.display = 'none');
+        display.querySelectorAll('span').forEach(s => { s.style.display = 'none'; });
         input.style.display = '';
         input.focus();
         input.select();
@@ -1956,7 +1987,7 @@ function initFreqInput() {
 
     function hideInput() {
         input.style.display = 'none';
-        display.querySelectorAll('span').forEach(s => s.style.display = '');
+        display.querySelectorAll('span').forEach(s => { s.style.display = ''; });
     }
 
     input.addEventListener('blur', () => { commitFreq(); });

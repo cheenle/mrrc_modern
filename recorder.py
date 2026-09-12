@@ -86,3 +86,100 @@ class _StreamingDecimator:
         output = filtered[self._phase::self.factor]
         self._phase = (self._phase - values.size) % self.factor
         return np.clip(np.rint(output), -32768, 32767).astype(np.int16)
+
+
+# ── Naming ──────────────────────────────────────────────────────────
+
+def recording_name(freq_hz: int, when: Optional[datetime] = None) -> str:
+    """mrrc-compatible file name for a new recording."""
+    when = when or datetime.now()
+    khz = int(freq_hz / 1000) if freq_hz and freq_hz > 0 else 0
+    return f"{khz:05d}kHz_{when:%Y%m%d_%H%M%S}.mp3"
+
+
+def parse_recording_name(name: Optional[str]) -> Optional[dict]:
+    """Parse a recorder file name, or return None when it is not ours.
+
+    This is the only accepted shape: the REST routes reject anything else,
+    which is what keeps path traversal out of the recordings API.
+    """
+    match = _NAME_RE.match(name or "")
+    if not match:
+        return None
+    return {
+        "freq_hz": int(match.group(1)) * 1000,
+        "date": match.group(2),
+        "time": match.group(3),
+    }
+
+
+def _name_timestamp(parsed: dict) -> str:
+    """ISO timestamp recovered from a parsed file name."""
+    date, clock = parsed["date"], parsed["time"]
+    return (f"{date[:4]}-{date[4:6]}-{date[6:]}T"
+            f"{clock[:2]}:{clock[2:4]}:{clock[4:]}")
+
+
+# ── Index ───────────────────────────────────────────────────────────
+
+@dataclass
+class RecordingInfo:
+    """Metadata for one finished recording."""
+
+    name: str
+    freq_hz: int
+    started_at: str
+    duration: float
+    bytes: int
+
+
+def load_index(path) -> dict:
+    """Read the recordings index; a missing/corrupt file is an empty index."""
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+    entries = data.get("recordings") if isinstance(data, dict) else None
+    return entries if isinstance(entries, dict) else {}
+
+
+def save_index(path, entries: dict) -> None:
+    """Atomically write the recordings index (tmp file + replace)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps({"version": 1, "recordings": entries}, indent=2))
+    os.replace(tmp, path)
+
+
+def list_recordings(directory, index: dict, bitrate: int) -> list:
+    """List our recordings, newest first, merging the index with the disk.
+
+    The directory is the source of truth for existence (an index entry
+    whose file is gone disappears from the list); the index supplies the
+    exact duration, and anything without an entry — a file the operator
+    copied in, as is normal in an mrrc ``recordings/`` directory — falls
+    back to size/bitrate arithmetic.
+    """
+    directory = Path(directory)
+    if not directory.is_dir():
+        return []
+    rows = []
+    for path in directory.iterdir():
+        parsed = parse_recording_name(path.name)
+        if parsed is None or not path.is_file():
+            continue
+        meta = index.get(path.name) or {}
+        size = path.stat().st_size
+        duration = meta.get("duration")
+        if not isinstance(duration, (int, float)) or duration <= 0:
+            duration = size * 8.0 / (bitrate * 1000) if bitrate > 0 else 0.0
+        rows.append({
+            "name": path.name,
+            "freq_hz": meta.get("freq_hz", parsed["freq_hz"]),
+            "started_at": meta.get("started_at") or _name_timestamp(parsed),
+            "duration": float(duration),
+            "bytes": size,
+        })
+    rows.sort(key=lambda row: (row["started_at"], row["name"]), reverse=True)
+    return rows

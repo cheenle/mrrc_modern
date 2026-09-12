@@ -18,7 +18,15 @@ from pathlib import Path
 
 import numpy as np
 
-from recorder import RECORDING_RATE, _StreamingDecimator
+from recorder import (
+    RECORDING_RATE,
+    _StreamingDecimator,
+    list_recordings,
+    load_index,
+    parse_recording_name,
+    recording_name,
+    save_index,
+)
 
 
 def sine_pcm(freq_hz: float, seconds: float, rate: int, amp: int = 12000) -> bytes:
@@ -79,6 +87,98 @@ class StreamingDecimatorTests(unittest.TestCase):
         dec = _StreamingDecimator(48000, RECORDING_RATE)
         out = dec.process(np.zeros(0, dtype='<i2'))
         self.assertEqual(out.size, 0)
+
+
+class RecordingNameTests(unittest.TestCase):
+    def test_generates_mrrc_compatible_name(self):
+        name = recording_name(14_270_000, datetime(2026, 9, 12, 21, 4, 5))
+        self.assertEqual(name, "14270kHz_20260912_210405.mp3")
+
+    def test_zero_frequency_matches_mrrc(self):
+        # CAT offline: mrrc writes 00000kHz; the panel shows "—".
+        self.assertEqual(
+            recording_name(0, datetime(2026, 9, 12, 21, 4, 5)),
+            "00000kHz_20260912_210405.mp3")
+
+    def test_parses_its_own_names(self):
+        parsed = parse_recording_name("07050kHz_20260912_210405.mp3")
+        self.assertEqual(parsed["freq_hz"], 7_050_000)
+        self.assertEqual(parsed["date"], "20260912")
+        self.assertEqual(parsed["time"], "210405")
+
+    def test_rejects_other_names(self):
+        for bad in ("x.mp3", "14270kHz_20260912_210405.wav",
+                    "../14270kHz_20260912_210405.mp3",
+                    "14270kHz_20260912_210405.mp3.mp3",
+                    "/etc/passwd", "", "1427kHz_20260912_210405.mp3"):
+            with self.subTest(name=bad):
+                self.assertIsNone(parse_recording_name(bad))
+
+    def test_rejects_non_string_input(self):
+        self.assertIsNone(parse_recording_name(None))
+
+
+class IndexTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self.index = self.dir / "recordings.json"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_round_trip_and_prune(self):
+        (self.dir / "07050kHz_20260912_210405.mp3").write_bytes(b"x" * 100)
+        save_index(self.index, {"07050kHz_20260912_210405.mp3": {
+            "freq_hz": 7_050_000, "started_at": "2026-09-12T21:04:05",
+            "duration": 3.0, "bytes": 100}})
+        loaded = load_index(self.index)
+        self.assertIn("07050kHz_20260912_210405.mp3", loaded)
+
+        # An entry whose file vanished is dropped from the listing.
+        (self.dir / "07050kHz_20260912_210405.mp3").unlink()
+        rows = list_recordings(self.dir, loaded, bitrate=64)
+        self.assertEqual(rows, [])
+
+    def test_corrupt_index_is_an_empty_index(self):
+        self.index.write_text("{not json")
+        self.assertEqual(load_index(self.index), {})
+
+    def test_listing_sorts_newest_first_and_sums_bytes(self):
+        older = "07050kHz_20260912_200000.mp3"
+        newer = "14270kHz_20260912_210000.mp3"
+        (self.dir / older).write_bytes(b"x" * 200)
+        (self.dir / newer).write_bytes(b"x" * 400)
+        index = {
+            older: {"freq_hz": 7_050_000, "started_at": "2026-09-12T20:00:00",
+                    "duration": 1.0, "bytes": 200},
+            newer: {"freq_hz": 14_270_000, "started_at": "2026-09-12T21:00:00",
+                    "duration": 2.0, "bytes": 400},
+        }
+        rows = list_recordings(self.dir, index, bitrate=64)
+        self.assertEqual([r["name"] for r in rows], [newer, older])
+        self.assertEqual(rows[0]["freq_hz"], 14_270_000)
+        self.assertEqual(rows[0]["duration"], 2.0)
+
+    def test_duration_falls_back_to_size_for_unknown_files(self):
+        # A file the operator dropped in themselves: no index entry, so
+        # duration comes from the size and the configured CBR bitrate.
+        name = "07050kHz_20260912_210405.mp3"
+        (self.dir / name).write_bytes(b"x" * 8000)   # 8000*8/64000 = 1.0 s
+        rows = list_recordings(self.dir, {}, bitrate=64)
+        self.assertEqual(len(rows), 1)
+        self.assertAlmostEqual(rows[0]["duration"], 1.0, places=3)
+        self.assertEqual(rows[0]["freq_hz"], 7_050_000)
+        # Timestamp comes from the file name when the index has no entry.
+        self.assertEqual(rows[0]["started_at"], "2026-09-12T21:04:05")
+
+    def test_listing_ignores_foreign_files(self):
+        (self.dir / "notes.txt").write_text("x")
+        (self.dir / "random.mp3").write_bytes(b"x")
+        self.assertEqual(list_recordings(self.dir, {}, bitrate=64), [])
+
+    def test_missing_directory_is_empty_not_an_error(self):
+        self.assertEqual(list_recordings(self.dir / "nope", {}, 64), [])
 
 
 if __name__ == "__main__":

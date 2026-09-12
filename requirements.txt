@@ -33,6 +33,12 @@ pyaudio>=0.2.11
 #           S-meter-based synthetic spectrum fallback (Gaussian peaks).
 numpy>=1.24.0
 
+# ── Recording (server-side QSO MP3) ─────────────────────────────────────
+# Bundles libmp3lame as a prebuilt wheel — no ffmpeg dependency.  Wheels
+# exist for macOS arm64/x86_64, Windows x64 and Linux aarch64 (the
+# Raspberry Pi image).
+lameenc>=1.8.0
+
 # ── TLS/SSL (HTTPS) ─────────────────────────────────────────────────────────
 # Used by ssl_bootstrap.py: the desktop launcher generates a self-signed
 # certificate on first run so the app starts on HTTPS by default.

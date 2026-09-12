@@ -29,6 +29,24 @@ class IcomProfileHiddenImportTests(unittest.TestCase):
         self.assertTrue(pkg.__name__)
 
 
+class RecordingDependencyPackagingTests(unittest.TestCase):
+    """The MP3 encoder must ship in the installers (spec §8)."""
+
+    def test_lameenc_is_in_requirements(self):
+        text = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+        self.assertIn("lameenc", text)
+
+    def test_pyinstaller_collects_the_lameenc_extension(self):
+        spec = (ROOT / "packaging" / "pyinstaller"
+                / "mrrc_modern_server.spec").read_text(encoding="utf-8")
+        # lameenc is a single compiled extension module (no submodules).
+        self.assertIn('"lameenc"', spec)
+
+    def test_encoder_imports_on_this_host(self):
+        import lameenc
+        self.assertTrue(callable(lameenc.Encoder))
+
+
 class WindowsPackagingFilesTests(unittest.TestCase):
     def test_pyinstaller_specs_use_repo_root(self):
         for spec in (

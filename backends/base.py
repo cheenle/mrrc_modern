@@ -49,6 +49,15 @@ class RadioCapabilities:
     scope_speeds: tuple = ()               # display labels in protocol order
     tune_via: str = "tx2"                 # "tx2" (CAT tune carrier) | "atu"
 
+    # ── Verification boundary (spec 2026-09-12 §4.2/§6) ────────────
+    # A model with no hardware evidence must not be presented as verified
+    # and must not transmit until the operator opts in.
+    verified: bool = True                 # False = no hardware evidence yet
+    tx_gated: bool = False                # True = PTT/TUNE refused by the backend
+    dual_rx: bool = False                 # radio has a second receiver
+    unverified_meters: tuple = ()         # meter names not hardware-verified
+    audio_gain_boost: float = 1.0         # browser RX playback gain multiplier
+
     def to_dict(self) -> dict:
         """JSON-serializable representation for WebSocket/REST clients."""
         data = asdict(self)
@@ -56,6 +65,7 @@ class RadioCapabilities:
         data["att_steps"] = list(self.att_steps)
         data["preamp_steps"] = list(self.preamp_steps)
         data["scope_speeds"] = list(self.scope_speeds)
+        data["unverified_meters"] = list(self.unverified_meters)
         return data
 
 

@@ -137,6 +137,7 @@ class RadioState:
 
     # ── Connection State ──────────────────────────────────────────
     serial_connected: bool = False
+    model_mismatch: bool = False         # 19 00 identity disagrees with the profile
     rx_audio_silent: bool = False        # Watchdog: RX PCM bit-exact zero (USB audio wedged?)
     last_update: float = 0.0
 
@@ -357,6 +358,7 @@ class RadioState:
             "amc_level": self.amc_level,
             # Connection
             "serial_connected": self.serial_connected,
+            "model_mismatch": self.model_mismatch,
             "rx_audio_silent": self.rx_audio_silent,
             "last_update": self.last_update,
         }

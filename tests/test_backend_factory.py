@@ -7,6 +7,7 @@ from backends import create_backend
 from backends.base import RadioCapabilities
 from backends.ft710.backend import FT710Backend
 from backends.ft710 import config_ft710
+from backends.ic7300.backend import IC7300Backend
 import config
 
 try:
@@ -156,7 +157,11 @@ class IC7300CapabilitiesTests(unittest.TestCase):
         for attr in ("start", "stop", "notify_tx", "set_on_frame"):
             self.assertTrue(hasattr(producer, attr), attr)
         # Producer consumes the backend's own controller queue.
-        self.assertIs(producer._civ, self.backend.cat)
+        self.assertIsInstance(producer, CivScopeProducer)
+        assert isinstance(producer, CivScopeProducer)   # narrow for the checker
+        backend = self.backend
+        assert isinstance(backend, IC7300Backend)       # narrow for the checker
+        self.assertIs(producer._civ, backend.cat)
 
     def test_ui_tables(self):
         from backends.ic7300 import config_ic7300
@@ -171,7 +176,9 @@ class IC7300CapabilitiesTests(unittest.TestCase):
     def test_backend_exposes_cat_surface(self):
         # server.py does `cat = backend.cat`
         from backends.ic7300.civ_controller import CivController
-        self.assertIsInstance(self.backend.cat, CivController)
+        backend = self.backend
+        assert isinstance(backend, IC7300Backend)   # narrow for the checker
+        self.assertIsInstance(backend.cat, CivController)
 
 
 @unittest.skipIf(server is None, "fastapi not available in test environment")
@@ -179,6 +186,7 @@ class FullStateCapabilitiesTests(unittest.TestCase):
     """server._full_state_message() must include the Phase 1 fields."""
 
     def _build(self, backend):
+        assert server is not None            # guarded by the class skipIf
         old = server.backend
         server.backend = backend
         try:
@@ -212,6 +220,57 @@ class FullStateCapabilitiesTests(unittest.TestCase):
         self.assertEqual(msg["bands"], config_ft710.BANDS)
         self.assertEqual(msg["modes"], config.UI_MODES)
         json.dumps(msg)
+
+
+class CapabilityVerificationFieldsTests(unittest.TestCase):
+    """Verification-boundary capability fields (spec 2026-09-12 §4.2/§6)."""
+
+    def test_defaults_are_conservative(self):
+        caps = RadioCapabilities(
+            model_name="x", display_name="X", default_baud=38400,
+            audio_rx_rate=44100, audio_tx_rate=44100)
+        self.assertTrue(caps.verified)
+        self.assertFalse(caps.tx_gated)
+        self.assertFalse(caps.dual_rx)
+        self.assertEqual(caps.unverified_meters, ())
+        self.assertEqual(caps.audio_gain_boost, 1.0)
+
+    def test_to_dict_serializes_new_fields(self):
+        caps = RadioCapabilities(
+            model_name="x", display_name="X", default_baud=38400,
+            audio_rx_rate=48000, audio_tx_rate=48000,
+            verified=False, tx_gated=True,
+            unverified_meters=("power", "voltage"), audio_gain_boost=1.0)
+        data = caps.to_dict()
+        self.assertFalse(data["verified"])
+        self.assertTrue(data["tx_gated"])
+        self.assertEqual(data["unverified_meters"], ["power", "voltage"])
+        self.assertEqual(data["audio_gain_boost"], 1.0)
+        json.dumps(data)
+
+    def test_ft710_capabilities_serialize_with_new_fields(self):
+        caps = create_backend("ft710", port="/dev/null").capabilities
+        data = caps.to_dict()
+        self.assertIn("verified", data)
+        self.assertIn("tx_gated", data)
+        self.assertIn("audio_gain_boost", data)
+
+
+class RadioStateModelMismatchTests(unittest.TestCase):
+    def test_default_is_false_and_field_is_tracked(self):
+        from radio_state import RadioState
+        state = RadioState()
+        self.assertFalse(state.model_mismatch)
+        state.update(model_mismatch=True)
+        self.assertIn("model_mismatch", state._dirty_fields)
+        self.assertTrue(state.to_dict()["model_mismatch"])
+
+    def test_sync_result_can_carry_the_field(self):
+        from radio_state import RadioState
+        state = RadioState.from_sync_result({"model_mismatch": True,
+                                           "mode": 1})
+        self.assertTrue(state.model_mismatch)
+        self.assertEqual(state.mode, 1)
 
 
 if __name__ == "__main__":

@@ -515,15 +515,38 @@ function renderPTTState() {
     renderRecordingState();
 }
 
+// ── REC button: server-side session (spec 2026-09-12 §7) ─────────────
+// The button mirrors the server's session state, which is broadcast to
+// every client, so two browsers always agree; the caption and the elapsed
+// time come from the server snapshot rather than a local timer.
 function renderRecordingState() {
     const recordBtn = document.getElementById('btn-record');
     if (!recordBtn) return;
-    const recorder = window.RXRecorder;
-    const active = !!(recorder && recorder.isActive);
+    const rec = (radioState && radioState.recording) || { recording: false };
     recordBtn.disabled = false;
-    recordBtn.classList.toggle('record-active', active);
-    recordBtn.textContent = active ? 'STOP' : 'REC';
-    recordBtn.title = '按时间顺序录制接收+发射音频为 MP3 (128kbps，首次点击时加载编码器)';
+    recordBtn.classList.toggle('record-active', !!rec.recording);
+    recordBtn.textContent = rec.recording ? 'STOP' : 'REC';
+    recordBtn.title = rec.recording
+        ? '服务端录制中（RX+TX，MP3 16 kHz）· 已录 ' + _formatDuration(rec.duration || 0)
+        : '服务端录制：点击开始，录音保存在服务端并可回放/下载';
+}
+
+function _formatDuration(seconds) {
+    const total = Math.max(0, Math.floor(seconds || 0));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    const mm = String(m).padStart(2, '0');
+    const ss = String(sec).padStart(2, '0');
+    return h > 0 ? h + ':' + mm + ':' + ss : mm + ':' + ss;
+}
+
+function _formatBytes(bytes) {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1073741824).toFixed(2) + ' GB';
 }
 
 function renderFFTPlot(wf1) {
@@ -1583,13 +1606,9 @@ function initUI() {
     // RX recording button
     const recordBtn = document.getElementById('btn-record');
     if (recordBtn) {
-        recordBtn.addEventListener('click', async () => {
-            if (window.RXRecorder) {
-                const ok = await window.RXRecorder.toggle();
-                if (ok === false && !window.RXRecorder.isActive && typeof showToast === 'function') {
-                    showToast('MP3 编码器加载失败，无法录音');
-                }
-            }
+        recordBtn.addEventListener('click', function() {
+            const rec = (radioState && radioState.recording) || { recording: false };
+            sendCommand('recording', !rec.recording);
         });
         renderRecordingState();
     }
@@ -1728,6 +1747,144 @@ function closeMenu() {
     document.getElementById('menu-overlay').classList.remove('open');
 }
 
+// ── Recordings panel: list / play / download / delete ────────────────
+// Server-side recordings (spec 2026-09-12 §7).  One audio element is reused
+// as the player; Starlette serves Range, so seeking inside a long QSO works.
+var _recordingsAudio = null;
+
+function showRecordingsPanel() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    const content = document.createElement('div');
+    content.className = 'modal-content';
+    content.id = 'recordings-content';
+
+    const title = document.createElement('div');
+    title.className = 'modal-title';
+    title.textContent = '录音 Recordings';
+    content.appendChild(title);
+
+    const summary = document.createElement('div');
+    summary.id = 'recordings-summary';
+    summary.style.cssText = 'font-size:12px;color:#9ca3af;padding:0 4px 8px;';
+    summary.textContent = '加载中…';
+    content.appendChild(summary);
+
+    const list = document.createElement('div');
+    list.id = 'recordings-list';
+    content.appendChild(list);
+
+    if (!_recordingsAudio) {
+        _recordingsAudio = document.createElement('audio');
+        _recordingsAudio.controls = true;
+        _recordingsAudio.preload = 'none';
+        _recordingsAudio.id = 'recordings-player';
+        _recordingsAudio.style.cssText = 'width:100%;margin:8px 0;';
+    }
+    content.appendChild(_recordingsAudio);
+
+    const refresh = document.createElement('button');
+    refresh.className = 'modal-close';
+    refresh.textContent = '刷新 Refresh';
+    refresh.style.marginRight = '8px';
+    refresh.addEventListener('click', refreshRecordingsPanel);
+    const close = document.createElement('button');
+    close.className = 'modal-close';
+    close.textContent = '关闭 Close';
+    close.addEventListener('click', function() { overlay.remove(); });
+    content.append(refresh, close);
+
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+    refreshRecordingsPanel();
+}
+
+function refreshRecordingsPanel() {
+    const list = document.getElementById('recordings-list');
+    if (!list) return;
+    const summary = document.getElementById('recordings-summary');
+    fetch('/api/recordings')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+            if (!data) return;
+            if (summary) {
+                summary.textContent = data.count + ' 条 · 共 ' +
+                    _formatBytes(data.total_bytes);
+            }
+            list.replaceChildren();
+            if (!data.recordings.length) {
+                const empty = document.createElement('div');
+                empty.style.cssText = 'font-size:12px;color:#9ca3af;padding:8px 4px;';
+                empty.textContent = '暂无录音';
+                list.appendChild(empty);
+                return;
+            }
+            data.recordings.forEach(function(rec) {
+                list.appendChild(_recordingsRow(rec));
+            });
+        })
+        .catch(function() {});
+}
+
+function _recordingsRow(rec) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;' +
+        'justify-content:space-between;padding:8px;border-bottom:1px solid #444;';
+
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:12px;line-height:1.5;flex:1 1 55%;';
+    const head = document.createElement('div');
+    const khz = Math.round((rec.freq_hz || 0) / 1000);
+    head.textContent = (khz > 0 ? khz + ' kHz' : '—') + ' · ' +
+        String(rec.started_at || '').replace('T', ' ') +
+        (rec.recording ? ' · 录制中' : '');
+    head.style.color = rec.recording ? '#ef4444' : '#f59e0b';
+    const meta = document.createElement('div');
+    meta.style.color = '#9ca3af';
+    meta.textContent = _formatDuration(rec.duration) + ' · ' + _formatBytes(rec.bytes);
+    info.append(head, meta);
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:6px;align-items:center;';
+    const play = document.createElement('button');
+    play.textContent = '播放';
+    play.style.cssText = 'background:#0ea5e9;color:#fff;border:none;border-radius:4px;padding:4px 8px;';
+    play.addEventListener('click', function() {
+        if (_recordingsAudio) {
+            _recordingsAudio.src = '/api/recordings/' + encodeURIComponent(rec.name);
+            _recordingsAudio.play().catch(function() {});
+        }
+    });
+    const dl = document.createElement('a');
+    dl.textContent = '下载';
+    dl.href = '/api/recordings/' + encodeURIComponent(rec.name);
+    dl.setAttribute('download', rec.name);
+    dl.style.cssText = 'color:#0ea5e9;font-size:12px;';
+    const del = document.createElement('button');
+    del.textContent = '删除';
+    del.style.cssText = 'background:#ef4444;color:#fff;border:none;border-radius:4px;padding:4px 8px;';
+    if (rec.recording) {
+        del.disabled = true;
+        del.style.opacity = '0.4';
+    } else {
+        del.addEventListener('click', function() {
+            if (!window.confirm('删除录音 ' + rec.name + ' ?')) return;
+            fetch('/api/recordings/' + encodeURIComponent(rec.name),
+                  {method: 'DELETE'})
+                .then(function(r) {
+                    if (!r.ok && typeof showToast === 'function') {
+                        showToast(r.status === 409 ? '该录音正在录制中' : '删除失败');
+                    }
+                    refreshRecordingsPanel();
+                })
+                .catch(function() {});
+        });
+    }
+    actions.append(play, dl, del);
+    row.append(info, actions);
+    return row;
+}
+
 function handleMenuAction(action) {
     switch (action) {
         case 'band-select':
@@ -1738,6 +1895,9 @@ function handleMenuAction(action) {
             break;
         case 'memory-manage':
             showMemoryManager();
+            break;
+        case 'recordings':
+            showRecordingsPanel();
             break;
         case 'settings':
             showSettingsPanel();

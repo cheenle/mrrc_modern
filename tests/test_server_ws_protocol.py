@@ -1021,6 +1021,25 @@ class RecordingSetRoutingTests(unittest.TestCase):
                         source.index("Radio not connected"))
 
 
+class RecordingsPanelContractTests(unittest.TestCase):
+    def test_menu_has_a_recordings_entry(self):
+        html = Path("static/index.html").read_text(encoding="utf-8")
+        self.assertIn('data-action="recordings"', html)
+
+    def test_ui_exposes_the_panel_and_reads_server_state(self):
+        js = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("function showRecordingsPanel(", js)
+        self.assertIn("case 'recordings':", js)
+        self.assertIn("/api/recordings", js)
+        self.assertIn("sendCommand('recording'", js)
+        # The button state comes from the server, not a local recorder.
+        self.assertIn("radioState.recording", js)
+
+    def test_main_stores_the_recording_state_message(self):
+        js = Path("static/ft710_main.js").read_text(encoding="utf-8")
+        self.assertIn('"recordingState"', js)
+
+
 if __name__ == "__main__":
     unittest.main()
 

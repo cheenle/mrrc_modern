@@ -502,6 +502,14 @@ function handleMessage(msg) {
 			}
 			break;
 
+		case "recordingState":
+			// Server-side recording session (spec 2026-09-12 §6): every client
+			// renders the same state, so two browsers always agree.
+			radioState.recording = msg.recording || { recording: false };
+			if (typeof renderRecordingState === "function") renderRecordingState();
+			if (typeof refreshRecordingsPanel === "function") refreshRecordingsPanel();
+			break;
+
 		case "pong":
 			if (window.__pingSent) {
 				window.__lastRtt = Math.round(performance.now() - window.__pingSent);

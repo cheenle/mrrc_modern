@@ -880,6 +880,8 @@ class YaesuCatController:
         # Set by priority commands (PTT/TUNE) to make in-flight poll reads
         # release the serial lock immediately.
         self._cancel_polls = asyncio.Event()
+        # (power class, max watts) once detected; None until first use.
+        self._detected_power: Optional[tuple] = None
 
     # ── Error classification (ported verbatim; see FT-710 field notes) ──
 
@@ -1160,7 +1162,7 @@ Evidence that fixes the three shapes this task implements:
   `PC` read in one of two shapes depending on the head/amplifier configuration
   (`ftx1/ftx1_readme.txt`).
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 Append to `tests/test_yaesu_cat_core.py`:
 
@@ -1209,7 +1211,7 @@ class ModeTests(unittest.IsolatedAsyncioTestCase):
         """0x11 must go out as 'I', never as "MD011" (review finding)."""
         ctrl = _controller([], model="ftx1")
         await ctrl.set_mode(0x11)
-        self.assertEqual(ctrl._ser.writes, [b"MD0I;"])
+        self.assertEqual(ctrl._ser.writes[-1], b"MD0I;")
 
     async def test_unknown_register_is_refused_without_a_write(self):
         ctrl = _controller([])
@@ -1218,12 +1220,12 @@ class ModeTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_ftx1_leaves_memory_mode_before_setting_mode(self):
         """A memory-mode MD set does not persist (ftx1_mode.c)."""
-        ctrl = _controller(["VM1;", "MD02;"])       # radio is in memory mode
+        ctrl = _controller(["VM1;", "MD02;"], model="ftx1")
         self.assertTrue(await ctrl.set_mode(0x2))
         self.assertEqual(ctrl._ser.writes, [b"VM;", b"VM000;", b"MD02;"])
 
     async def test_ftx1_skips_the_leave_step_when_already_in_vfo_mode(self):
-        ctrl = _controller(["VM0;"])
+        ctrl = _controller(["VM0;"], model="ftx1")
         await ctrl.set_mode(0x2)
         self.assertEqual(ctrl._ser.writes, [b"VM;", b"MD02;"])
 
@@ -1314,23 +1316,23 @@ class PowerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await ctrl.effective_power_max(), 10)
 
     async def test_ftx1_clamps_a_request_above_the_detected_maximum(self):
-        ctrl = _controller(["PC1010;"])
+        ctrl = _controller(["PC1010;"], model="ftx1")
         await ctrl.set_rf_power(100)
         self.assertEqual(ctrl._ser.writes[-1], b"PC010;")   # clamped to 10 W
 
     async def test_ftx1_unknown_configuration_falls_back_to_the_profile_max(self):
-        ctrl = _controller([])                              # no PC answer
+        ctrl = _controller([], model="ftx1")             # no PC answer
         ctrl._timeout = 0.05
         await ctrl.detect_power_config()
         self.assertEqual(await ctrl.effective_power_max(), 100)
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_cat_core -v`
 预期：FAIL — `AttributeError: 'YaesuCatController' object has no attribute 'get_model_id'`
 
-- [ ] **步骤 3：编写实现代码**
+- [x] **步骤 3：编写实现代码**
 
 Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
 
@@ -1517,7 +1519,8 @@ Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
         return await self.set(f"SQ0{value:03d}")
 
     async def set_mic_gain(self, value: int) -> bool:
-        return await self.set(f"MG{value:03d}")
+        # Family form is "MG P1 P2 P2 P2" with P1=0, like AG/RG/SQ.
+        return await self.set(f"MG0{value:03d}")
 
     async def set_preamp(self, value: int) -> bool:
         return await self.set(f"PA0{value}")
@@ -1622,7 +1625,11 @@ Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
         not been observed on hardware yet (spec §10).
         """
         if self._profile.power_format != "auto":
-            return (self._profile.power_format, self._profile.power_max_w)
+            # Fixed configuration: no probe, but record it so
+            # effective_power_max()/set_rf_power() have a value.
+            self._detected_power = (self._profile.power_format,
+                                    self._profile.power_max_w)
+            return self._detected_power
         resp = await self.query("PC", timeout=timeout)
         if resp and len(resp) >= 3:
             try:
@@ -1649,7 +1656,7 @@ Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
 
     async def effective_power_max(self) -> int:
         """Maximum settable watts, from the detected (or profile) config."""
-        if getattr(self, "_detected_power", None) is None:
+        if self._detected_power is None:
             await self.detect_power_config()
         return self._detected_power[1]
 
@@ -1694,12 +1701,12 @@ Append to `backends/yaesu/cat_core.py` (inside `YaesuCatController`):
         return state
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest tests.test_yaesu_cat_core -v`
 预期：PASS（约 42 个测试）。
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 git add backends/yaesu/cat_core.py tests/test_yaesu_cat_core.py

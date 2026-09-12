@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import re
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -262,10 +263,14 @@ class RecordingSession:
         if self._active:
             return False
         if lameenc is None:
+            # Name the interpreter: this failure mode is almost always the
+            # "installed into the wrong virtualenv" trap (field report
+            # 2026-09-12), and the server knows exactly which one it runs.
+            pip = f"{sys.executable} -m pip install lameenc"
             raise RecorderError(
-                "MP3 encoder (lameenc) is not installed on the server — "
-                "run `pip install -r requirements.txt` (or `pip install lameenc`) "
-                "and restart")
+                f"MP3 encoder (lameenc) is not installed for this "
+                f"interpreter ({sys.executable}) — run `{pip}` and restart "
+                f"the server")
         try:
             self.directory.mkdir(parents=True, exist_ok=True)
         except OSError as e:

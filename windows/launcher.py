@@ -130,6 +130,7 @@ def load_env(path: Path) -> dict[str, str]:
         env[key.strip()] = value.strip()
     env.setdefault("MRRC_MEM_FILE", str(user_data_dir() / "mem_channels.json"))
     env.setdefault("MRRC_ATR1000_STORE", str(user_data_dir() / "atr1000_tuner.json"))
+    env.setdefault("MRRC_RECORDINGS_DIR", str(user_data_dir() / "recordings"))
     env.setdefault("MRRC_FTDI_LIB_DIR", str(app_dir() / "vendor" / "ftdi" / "windows" / "bin" / "x64"))
     ftdi_dir = Path(_env(env, "MRRC_FTDI_LIB_DIR").replace("\\", os.sep))
     if not ftdi_dir.is_absolute():

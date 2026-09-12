@@ -55,6 +55,13 @@ def _env_bool(name: str, default: bool = False) -> bool:
 # other safety switches, so the state is visible in the startup log.
 ALLOW_UNVERIFIED_TX = _env_bool("MRRC_ALLOW_UNVERIFIED_TX", False)
 
+# ── Recording ───────────────────────────────────────────────────────
+# 16 kHz mono MP3 written incrementally while recording (AD-017).  The
+# session cap is a forgot-to-stop guard, not a retention policy: it stops
+# the session and never deletes a recording.
+RECORDINGS_BITRATE = _env_int("MRRC_RECORDINGS_BITRATE", 64)
+RECORDINGS_MAX_SESSION_MIN = _env_int("MRRC_RECORDINGS_MAX_SESSION_MIN", 240)
+
 
 # ── Radio Model Selection ───────────────────────────────────────────
 # Backend key registered in backends/__init__.py. Select with

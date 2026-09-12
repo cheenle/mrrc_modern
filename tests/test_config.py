@@ -6,6 +6,7 @@ CAT command field mappings.
 import config
 import importlib
 import os
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -289,6 +290,37 @@ class UnverifiedTxGateConfigTests(unittest.TestCase):
             importlib.reload(config)
             self.assertTrue(config.ALLOW_UNVERIFIED_TX)
         importlib.reload(config)
+
+
+class RecordingConfigTests(unittest.TestCase):
+    def test_defaults(self):
+        self.assertEqual(config.RECORDINGS_BITRATE, 64)
+        self.assertEqual(config.RECORDINGS_MAX_SESSION_MIN, 240)
+
+    def test_env_overrides(self):
+        for name, value, expected in (
+                ("MRRC_RECORDINGS_BITRATE", "96", 96),
+                ("MRRC_RECORDINGS_MAX_SESSION_MIN", "0", 0),
+                ("MRRC_RECORDINGS_MAX_SESSION_MIN", "30", 30)):
+            with self.subTest(name=name, value=value):
+                with patch.dict(os.environ, {name: value}):
+                    importlib.reload(config)
+                    attr = name.replace("MRRC_", "")
+                    self.assertEqual(getattr(config, attr), expected)
+        importlib.reload(config)
+
+    def test_server_module_exposes_recording_paths(self):
+        import server
+        self.assertTrue(str(server.RECORDINGS_DIR).endswith("recordings"))
+        self.assertEqual(server.RECORDINGS_INDEX.name, "recordings.json")
+
+    def test_launchers_point_recordings_at_the_user_data_dir(self):
+        root = Path(__file__).resolve().parents[1]
+        for path in ("windows/launcher.py", "macos/launcher.py"):
+            with self.subTest(launcher=path):
+                source = (root / path).read_text(encoding="utf-8")
+                self.assertIn("MRRC_RECORDINGS_DIR", source)
+                self.assertIn('"recordings"', source)
 
 
 if __name__ == "__main__":

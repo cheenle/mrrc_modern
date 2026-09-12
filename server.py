@@ -210,6 +210,11 @@ def _resource_dir() -> Path:
 
 STATIC_DIR = _resource_dir() / "static"
 MEM_FILE = Path(_env("MRRC_MEM_FILE", str(_runtime_dir() / "mem_channels.json")))
+# Recordings live in a directory of media files (mrrc layout) plus a small
+# JSON index next to the other runtime files; the launchers point
+# MRRC_RECORDINGS_DIR at the per-user data directory on packaged installs.
+RECORDINGS_DIR = Path(_env("MRRC_RECORDINGS_DIR", str(_runtime_dir() / "recordings")))
+RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
 
 # ── Auth Helpers ────────────────────────────────────────────────────
 

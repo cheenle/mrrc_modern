@@ -55,6 +55,35 @@ def _env_bool(name: str, default: bool = False) -> bool:
 # other safety switches, so the state is visible in the startup log.
 ALLOW_UNVERIFIED_TX = _env_bool("MRRC_ALLOW_UNVERIFIED_TX", False)
 
+# ── Shared TX meter curves ──────────────────────────────────────────
+# Same shapes as the FT-710 tables (config_ft710.py:166-208); only the
+# rated power differs per model, so the profile passes its own maximum.
+def _make_raw_to_power(rated_w: int):
+    def _raw_to_power(raw: int) -> float:
+        return round(max(0, min(raw, 255)) / 255 * rated_w, 1)
+    return _raw_to_power
+
+
+def _raw_to_swr(raw: int) -> float:
+    return round(1.0 + max(0, min(raw, 255)) / 255 * 9.0, 2)
+
+
+def _raw_to_voltage(raw: int) -> float:
+    return round(max(0, min(raw, 255)) / 255 * 16.0, 1)
+
+
+def _raw_to_current(raw: int) -> float:
+    return round(max(0, min(raw, 255)) / 255 * 25.0, 1)
+
+
+RAW_TO_METER_TABLES = {
+    "power": _make_raw_to_power,
+    "swr": lambda: _raw_to_swr,
+    "voltage": lambda: _raw_to_voltage,
+    "current": lambda: _raw_to_current,
+}
+
+
 # ── Recording ───────────────────────────────────────────────────────
 # 16 kHz mono MP3 written incrementally while recording (AD-017).  The
 # session cap is a forgot-to-stop guard, not a retention policy: it stops

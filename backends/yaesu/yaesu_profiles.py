@@ -45,17 +45,17 @@ class MeterCal:
     def value(self, raw: int) -> float:
         pts = self.points
         if raw <= pts[0][0]:
-            return float(pts[0][1])
+            return pts[0][1]
         if raw >= pts[-1][0]:
-            return float(pts[-1][1])
+            return pts[-1][1]
         for (r0, v0), (r1, v1) in zip(pts, pts[1:]):
             if r0 <= raw <= r1:
                 span = r1 - r0
                 if span == 0:
-                    return float(v1)
+                    return v1
                 frac = (raw - r0) / span
-                return float(v0) + (float(v1) - float(v0)) * frac
-        return float(pts[-1][1])            # unreachable, keeps the type honest
+                return v0 + (v1 - v0) * frac
+        return pts[-1][1]                   # unreachable, keeps the type honest
 
     def s_unit(self, raw: int) -> str:
         """Format a raw reading as an S-unit string.
@@ -65,7 +65,7 @@ class MeterCal:
         """
         dbm = self.value(raw)
         if dbm >= 0:
-            return f"S9+{int(round(dbm))}"
+            return f"S9+{round(dbm)}"
         s_units = 9 + dbm / 6.0
         if s_units <= 1:
             return "S1"

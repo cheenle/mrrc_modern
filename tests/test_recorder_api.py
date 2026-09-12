@@ -277,6 +277,10 @@ class RecorderWriterLivenessTests(unittest.IsolatedAsyncioTestCase):
         if task is not None and not task.done():
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+        # Release the MP3 before the temp dir goes away: Windows refuses to
+        # delete a file that is still open (WinError 32), which is how this
+        # leaked session first showed up — on the Win11 build VM.
+        self.session.close_without_finishing()
         (server._rec_session, server._rec_queue,
          server._rec_writer_task) = self._saved
         self._tmp.cleanup()

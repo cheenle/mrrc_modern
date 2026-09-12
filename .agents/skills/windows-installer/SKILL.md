@@ -1,6 +1,6 @@
 ---
 name: windows-installer
-description: Use when building, rebuilding, verifying, or deploying the MRRC Modern Windows installer (MRRC-Modern-Setup.exe / Inno Setup), or when the Win11 KVM build VM is unreachable, PyInstaller or iscc fails on the VM, tests fail only on the VM, the built exe is missing FTDI DLLs / opus.dll / static assets / mem_channels.json, the VM builds the wrong product (MRRC_FT8-Setup.exe), the venv is missing on the VM (Activate.ps1 not found), or TX audio crackles on the VM and cannot be fixed.
+description: Use when building, rebuilding, verifying, or deploying the MRRC Modern Windows installer (MRRC-Modern-Setup.exe / Inno Setup), or when the Win11 KVM build VM is unreachable mid-build ("No route to host", qemu OOM-killed), the build script prints BUILD_DONE although nothing was built, PyInstaller or iscc fails on the VM, tests fail only on the VM (WinError 32 temp cleanup, GBK locale), the built exe is missing FTDI DLLs / opus.dll / static assets / mem_channels.json / lameenc, the VM builds the wrong product (MRRC_FT8-Setup.exe), the venv is missing (Activate.ps1 not found), an installed app will not start at all, or TX audio crackles on the VM.
 ---
 
 # Windows Installer Build (MRRC Modern)
@@ -32,7 +32,54 @@ Build gate mirrors macOS: full test suite → 3 PyInstaller specs → `iscc`. A 
 7. **venv preservation**: the Move-Item trick in Step 3 avoids the documented 4-command pip reinstall. If the venv was still deleted, re-run the FULL `win_pack.md` §2.2 sequence starting with `python -m venv venv` (otherwise `.\venv\Scripts\Activate.ps1` is missing and the build fails immediately).
 8. **Dependency drift**: if `requirements*.txt` changed since the last build, re-run the two pip install commands after extraction (the preserved venv has the old deps).
 
+9. **The KVM host can OOM-kill the whole VM, mid-build** (2026-09-12: the extraction died after ~5 min and the VM was simply gone). `ham.vlsc.net` also runs heavy neighbours (a ~9 GB java process was resident); win11 asks for 16 GB on a 28 GB host, so the kernel picked the biggest process — `qemu-system-x86`. Symptoms, in order: `ssh` suddenly says `No route to host`; `virsh -c qemu:///system domifaddr win11` says `domain is not running`; `/var/log/libvirt/qemu/win11.log` ends with `shutting down, reason=crashed`; `sudo dmesg -T | grep -i oom` shows `Killed process … (qemu-system-x86)`. Remedy: shrink the VM for the build and give the host swap, then start it again:
+
+```bash
+sudo virsh -c qemu:///system setmaxmem win11 10G --config && sudo virsh -c qemu:///system setmem win11 10G --config
+sudo fallocate -l 16G /swap2.img && sudo chmod 600 /swap2.img && sudo mkswap /swap2.img && sudo swapon /swap2.img
+sudo virsh -c qemu:///system start win11          # check `free -m` first: <1 GB available = it will die again
+```
+
+Restore 16 GB (`setmaxmem`/`setmem 16G --config`) once the neighbour shrinks, or leave 10 GB if it does not.
+
+10. **`BUILD_DONE` is not a success signal.** The per-version wrapper prints it unconditionally; `build.ps1`'s `Invoke-Checked` aborts the *child* PowerShell (exit 1) and the wrapper happily continues to the next line. A v1.15.0 attempt printed `BUILD_DONE` with a failed test gate and no exe at all. Always prove the artifact: `Get-Item dist\windows\MRRC-Modern-Setup.exe` (fresh mtime + 45–46 MB) and `Get-FileHash`.
+
+11. **Extract with `tar -xf`, not `Expand-Archive`.** Windows' bundled bsdtar unpacks the ~13 MB source zip in seconds and with far less memory/CPU than the PowerShell cmdlet (the OOM in gotcha 9 hit an `Expand-Archive` run). Have the script assert its own result: `EXTRACT_DONE venv=True server=True` (venv moved back, `server.py` present), with `Expand-Archive` only as a fallback.
+
+12. **"I installed it and it will not run" is a launcher startup failure with no visible message.** Triage: start `C:\Program Files\MRRC Modern\MRRC-Modern-Launcher.exe` (note: *Launcher*, not the old `MRRC-Modern.exe` name) over SSH with `Start-Process … -RedirectStandardOutput o.txt -RedirectStandardError e.txt`, then read `e.txt` — the traceback is there even though the user's console window closed instantly. Since v1.15.0 the launcher also writes `%LOCALAPPDATA%\MRRC-Modern\launcher.log` and shows a message box. Known cause found exactly this way: `mrrc_modern.env` saved by an ANSI (GBK) editor was not valid UTF-8 (`e2 80 3f` where the shipped template has `e2 80 94`) → `load_env` raised `UnicodeDecodeError` before anything printed. Fixed in `macos/first_run.py: read_env_text` (BOM → UTF-8 → cp936 → latin-1) plus `guarded_main()/report_fatal()`. Both launchers share that reader — **a launcher fix means rebuilding BOTH installers.**
+
+13. **Windows-only test failures are usually open-file handling.** A test that leaves a file open (an MP3 session, a log) passes on macOS/Linux, where unlinking an open file is legal, and fails the VM gate with `PermissionError: [WinError 32] … being used by another process` during `TemporaryDirectory.cleanup()`. Close the handle in `tearDown`/`asyncTearDown` (`session.close_without_finishing()`); treat "green locally, red on the VM" as a real portability bug, not a VM quirk.
+
 ## Verification
+
+### Prove the code is inside the artifact (do not grep it)
+
+`strings(1)`/`grep` cannot see into PyInstaller's compressed PYZ — a missing or stale symbol looks identical to a present one. Walk the archive instead (the VM's venv has PyInstaller 6.21.0):
+
+```python
+# bundle_check.py — run on the VM: .\venv\Scripts\python.exe bundle_check.py
+import marshal, types
+from PyInstaller.archive.readers import CArchiveReader
+exe = r"C:\mrrc_modern\dist\windows\MRRC-Modern\MRRC-Modern-Server.exe"
+r = CArchiveReader(exe)
+# the entry *script* (`server`) is a CArchive TOC entry, not a PYZ module:
+code = marshal.loads(r.extract("server"))
+seen = set(); walk = lambda c: (seen.update(c.co_names), [walk(k) for k in c.co_consts if isinstance(k, types.CodeType)])
+walk(code)
+print("_ensure_rec_writer" in seen)          # the symbol you shipped
+z = r.open_embedded_archive(next(n for n, e in r.toc.items() if e[4] == "z"))
+print("recorder" in z.toc)                   # + imported modules in the PYZ
+```
+
+### Smoke-test the launcher, not only the server exe
+
+The user runs the *launcher*; starting `MRRC-Modern-Server.exe` by hand proves less. Run the launcher once with the real (already existing) user config and watch its output — a non-UTF-8 `mrrc_modern.env` used to kill it before it printed anything (gotcha 12):
+
+```powershell
+$o="$env:TEMP\l_out.txt"; $e="$env:TEMP\l_err.txt"
+Start-Process "C:\Program Files\MRRC Modern\MRRC-Modern-Launcher.exe" -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+Start-Sleep 25; Get-Content $o; Get-Content $e       # expect the URL banner, no traceback
+```
 
 ```bash
 # on Mac, after retrieval — all three must agree:
@@ -59,3 +106,7 @@ The exe is **server-managed on <www.vlsc.net>** — `website/deploy.sh` EXCLUDES
 | COM ports + USB audio vanish on the VM | Radio USB unplugged; re-attach passthrough (gotcha 5) |
 | Service disappears after SSH logout | SSH-launched process killed by job object (gotcha 6); use the scheduled-task path |
 | `virsh list` shows no win11 VM | Missing `sudo` + `qemu:///system`: `sudo virsh -c qemu:///system list --all` |
+| VM vanishes mid-build, `ssh` says `No route to host`, `domifaddr` says domain not running | Host OOM-killed qemu (16 GB VM on a 28 GB host with a 9 GB neighbour): shrink to 10 GB + add swap, see gotcha 9 |
+| Script printed `BUILD_DONE` but no (or an old) exe exists | `BUILD_DONE` is unconditional (gotcha 10): check the exe mtime + hash, and read the test output above it |
+| Installed app does nothing at all, console flashes | Launcher startup exception — reproduce with redirects / read `%LOCALAPPDATA%\MRRC-Modern\launcher.log` (gotcha 12); check the env file's bytes when it mentions `UnicodeDecodeError` |
+| Tests green on the Mac, `WinError 32` on the VM | A test leaked an open file; close it in teardown (gotcha 13) |

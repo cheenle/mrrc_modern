@@ -5,30 +5,30 @@ This guide covers the Windows desktop package for MRRC Web Control
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.14.2 Stable — v1.15.0 pending)
+## Download (v1.15.0 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.14.2-Windows-x64-Setup.exe` | 45.4 MB (45,435,022 bytes) | `5bcefc511ac168638dd00962f385dbda06df4ba8441279e3d6fb3d4f9953ab86` |
+| `MRRC-Modern-v1.15.0-Windows-x64-Setup.exe` | 45.5 MB (45,494,587 bytes) | `74d04b84ab7b3d0b85314efff304fccb1494f60d95f07c24c0758bee6f13ee0c` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.14.2-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.15.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.15.0 Windows build is pending**: the build host (`ham.vlsc.net`, a KVM VM on the LAN)
-went unreachable during the release window, so the currently published Windows installer is
-the v1.14.2 build. It will be replaced by a v1.15.0 build (server-side QSO recording) as soon
-as the host is back; no incomplete or pre-fix build is published in the meantime.
-
-The v1.14.2 package was built from `main` on Windows 11 with Python 3.12.4,
-PyInstaller 6.21.0, and Inno Setup 6.7.3. All 906 tests, three PyInstaller
-targets, and the installer build passed; required bundled-file inspection
-(FTDI DLLs, opus.dll, `static/`, `mem_channels.json`, Icom backend hidden
-imports) plus the new **MP3 encoder** (`lameenc.cp312-win_amd64.pyd`) passed,
-and cross-host SHA-256 matched. The frozen app was also started with a
-temporary recordings directory and logged
-`Recording ready: ... (16 kHz mono MP3)` — i.e. recording works inside the
+**v1.15.0 (rebuilt) is the published Windows installer.** It was built from the release
+commit on Windows 11 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. All 919
+tests, three PyInstaller targets and the installer build passed, and the required
+bundled-file inspection passed (FTDI DLLs, opus.dll, `static/`, `mem_channels.json`, the MP3
+encoder `lameenc.cp312-win_amd64.pyd`). The packaged code was then checked **by walking the
+bundle's bytecode** (`MRRC-Modern-Server.exe` → PYZ → the `server` code object contains
+`_ensure_rec_writer`), because `strings`/grep cannot see into the compressed PYZ and would
+"prove" nothing; cross-host SHA-256 matched (VM == jump host == build Mac). Finally the frozen
+app itself was started with a temporary recordings directory and logged
+`Recording ready: ... (16 kHz mono MP3)` + `Server ready!` — i.e. recording works inside the
 packaged build, not just in the test environment.
+
+The earlier v1.14.2 package (45,435,022 bytes, SHA-256 `a7ee1667…`) remains downloadable as an
+archive; v1.15.0 supersedes it.
 
 **What's new in v1.15.0**: QSO recording moved to the server (device-domain RX
 PCM + decoded mic PCM on one monotonic 16 kHz timeline, incremental `lameenc`

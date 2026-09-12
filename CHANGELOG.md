@@ -2,20 +2,6 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [Unreleased] — 录音写入端生命周期修复（同一进程里第二次录音全哑）
-
-### Fixed — 录音全哑：只有进程里的第一次录音有声音
-
-- **根因**：服务端单 writer 任务是**每会话一次性**的（stop 后收尾退出），却只在服务启动时创建一次
-  —— 首次 REC/STOP 之后没有消费者，200 块队列瞬间填满、每个音频块都被丢弃，`stop()` 再把时间轴
-  补成静音，于是文件**时长与大小都正常、内容 100% 静音**。现在 `_ensure_rec_writer()` 在每次录音
-  开始、每个音频块入队与 stop 入队前确保 writer 存活（幂等）；任务若因异常死亡会打印 WARNING 并
-  自动重启，不再静默丢弃。
-- **队列满时的停止**不再在事件循环上直接结束会话（会与编码线程并发写同一时间轴），
-  改为丢弃最旧一块把 stop 哨兵交给 writer，MP3 定稿仍由单一线程独占。
-- 现场判定：日志里 `Recording started` 之后**立刻**出现「正在丢弃」，或录音面板显示 `⚠ 丢失 N 块`
-  而文件全哑 → 升级并重启服务。
-
 ## [v1.15.0] — 2026-09-12 — 服务端 QSO 录音 + 录音面板（修复回放颤抖）
 
 ### New — 录音改在服务端进行
@@ -38,13 +24,19 @@ All notable changes to the MRRC Web Control project.
 
 ### Fixed
 
+- **装好却完全打不开（启动器崩溃且无任何提示）**：启动器按 UTF-8 严格读取用户可编辑的
+  `mrrc_modern.env`，被 ANSI/GBK 编辑器保存过的文件（模板的 `—` 变成 `e2 80 3f`）会让它抛
+  `UnicodeDecodeError` 并立刻退出，控制台一闪而过 —— 现场（Win11 VM）只能报「装了运行不起来」。
+  现在 `macos/first_run.py: read_env_text` 按 BOM → UTF-8 → 本地代码页(cp936) → latin-1 兜底解码，
+  `update_env_file` 回写时统一为 UTF-8（下次启动即自愈）；两个启动器都加了 `guarded_main()` +
+  `report_fatal()`：失败会写 `<用户数据目录>/launcher.log` 并弹消息框，不再静默消失。
 - **同一进程内第二次录音全静音**：MP3 writer 任务是**每会话一次性**的（它在 MP3 收尾后返回，
   这正是关停时能 `await` 到它的原因），但原先**只在进程启动时创建一次**。因此首次 REC/STOP 之后
   任务已结束、无人消费队列 → 200 块积压瞬间灌满、后续每次录音的音频**全部被丢弃**，`stop()`
   再按时间轴补出静音 —— 得到一个长度正确、内容 100% 静音的 MP3（现场 22:26 报告
   "Recording dropped 950 block(s) so far"）。现在 `_ensure_rec_writer()` 在每次 `add_audio`、
   stop 入队与每次 REC 时幂等重建 writer（并在发现 writer 已死时告警），队列满时改为丢弃最旧块
-  以腾出位置给 stop 哨兵（而不是在事件循环里同步 stop）。3 个新测试（909 总数）。
+  以腾出位置给 stop 哨兵（而不是在事件循环里同步 stop）。3 个新测试（含启动器修复，本轮发布共 919 项）。
 - **回放"颤抖/哆嗦"（录音根本问题）**：旧浏览器录音器把到达的帧**无时间戳顺序拼接**，
   网络抖动与播放端 jitter buffer 的补帧被永久写进文件。服务端录制从结构上消除了这一类故障。
 - **按 REC 导致 WebSocket 1006 重连循环**：单条命令的异常会拆掉整个控制通道（接收循环用了
@@ -70,16 +62,17 @@ All notable changes to the MRRC Web Control project.
 
 ### Platform Status
 
-- **macOS v1.15.0 已发布**（DMG 55,972,182 bytes，SHA-256 `552db6db2272e06e3219524128c702d78f2bf034ea3390142de9cd6d8da9d829`）。
-- **Windows v1.15.0 待发布**：打包宿主 `ham.vlsc.net` 在发布窗口内不可达，网站上当前仍是
-  **v1.14.2** 安装包；主机恢复后会以 v1.15.0（含服务端录音）替换。期间**不发布**任何未完成或
-  修复前的构建。
+- **macOS v1.15.0 已发布**（DMG 55,976,374 bytes，SHA-256 `d66cb2adff34a5f0a4d85c64d20d97d448eed7eb278a58acffdb4852aa55099e`）。
+- **Windows v1.15.0 已发布**（Setup.exe 45,494,587 bytes，SHA-256 `74d04b84ab7b3d0b85314efff304fccb1494f60d95f07c24c0758bee6f13ee0c`）：打包宿主恢复后
+  从同一 commit 重建（919 项测试 + 3 个 PyInstaller 目标 + Inno Setup 全部通过），并且**按字节码
+  校验**包内确实含本次修复（`MRRC-Modern-Server.exe` 的 `server` 脚本条目含 `_ensure_rec_writer`；
+  `strings`/grep 看不见压缩的 PYZ，不能作为证据）。
 
 ### Verification Boundary
 
 - 已在真机（FT-710 + macOS）验证：录制可回放、有声音、CAT 掉线后恢复不再有 62 秒空窗。
-- **未验证**：Windows 安装包内的 `lameenc`（本次未构建 Windows 包：构建宿主 `ham.vlsc.net` 不可达）、
-  长时间连续录制、树莓派上的录制。
+- **未验证**：长时间连续录制（>8 h）、树莓派 SD 卡上的长时间录制；Windows 真机上的 **TX 音频**
+  （KVM 等时 OUT 限制，见 `windows-installer` gotcha 4）仍需物理机验收。
 
 ## [v1.14.3] — 2026-09-12 — 树莓派镜像重建（含 v1.14.2 全部修复）
 

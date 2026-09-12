@@ -11,6 +11,8 @@ not have rumps/PyObjC.
 """
 from __future__ import annotations
 
+import codecs
+import locale
 import os
 import secrets
 import serial
@@ -135,12 +137,63 @@ def probe_radio_model(
     return None
 
 
+def _bom_encodings() -> tuple[tuple[bytes, str], ...]:
+    """BOMs a text editor may have written (UTF-32 first: its BOM prefixes UTF-16's)."""
+    return (
+        (codecs.BOM_UTF32_LE, "utf-32"),
+        (codecs.BOM_UTF32_BE, "utf-32"),
+        (codecs.BOM_UTF8, "utf-8-sig"),
+        (codecs.BOM_UTF16_LE, "utf-16"),
+        (codecs.BOM_UTF16_BE, "utf-16"),
+    )
+
+
+def read_env_text(path: Path) -> tuple[str, str]:
+    """Read a user-editable text file without ever raising on its encoding.
+
+    Returns ``(text, encoding)`` where ``encoding`` is ``"utf-8"`` for a clean
+    file and the fallback that was used otherwise, so callers can say so.
+
+    This file is edited by hand, on machines whose ANSI code page is not UTF-8.
+    A zh-CN editor turned the shipped template's em-dash (``e2 80 94``) into
+    ``e2 80 3f``; the strict UTF-8 read then raised before the launcher could
+    print anything, the console window closed instantly, and the operator could
+    only report "I installed it and it will not run" (field report 2026-09-12,
+    Win11 VM).  A config file must never be able to do that.
+    """
+    raw = path.read_bytes()
+    for bom, encoding in _bom_encodings():
+        if raw.startswith(bom):
+            return raw.decode(encoding, errors="replace"), encoding
+    try:
+        return raw.decode("utf-8"), "utf-8"
+    except UnicodeDecodeError:
+        pass
+    # Not UTF-8: the user's editor re-encoded it.  Prefer the local code page
+    # (so Chinese device names survive), then GBK explicitly, then a codec that
+    # cannot fail — KEY=VALUE lines are ASCII and still parse.
+    for encoding in ("cp936", locale.getpreferredencoding(False), "latin-1"):
+        try:
+            text = raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+        print(f"Warning: {path} is not valid UTF-8; reading it as {encoding}. "
+              f"Re-save it as UTF-8 (any edit from the launcher does that).",
+              file=sys.stderr)
+        return text, encoding
+    return raw.decode("utf-8", errors="replace"), "utf-8-replace"
+
+
 def update_env_file(path: Path, updates: dict[str, str]) -> None:
-    """Rewrite KEY=VALUE lines in place, preserving comments and appending new keys."""
+    """Rewrite KEY=VALUE lines in place, preserving comments and appending new keys.
+
+    Always writes UTF-8: a config that arrived from an ANSI (GBK) editor is
+    normalised by the first write (see read_env_text for why that matters).
+    """
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("", encoding="utf-8")
-    lines = path.read_text(encoding="utf-8").splitlines()
+    lines = read_env_text(path)[0].splitlines()
     pending = dict(updates)
     out: list[str] = []
     for line in lines:

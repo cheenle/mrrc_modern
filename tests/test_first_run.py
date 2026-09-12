@@ -255,3 +255,63 @@ class ApplyFirstRunBaudLinkageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EnvFileEncodingTests(unittest.TestCase):
+    """The user-editable env file must never crash the launcher.
+
+    Field report 2026-09-12 (Win11 VM): a launcher installed from the v1.15.0
+    installer died before printing anything — `load_env` read the config with
+    UTF-8 strict and the file had been round-tripped through an ANSI (GBK)
+    editor, turning the template's em-dash (e2 80 94) into `e2 80 3f`.  The
+    console window closed instantly, so the operator saw only "installed but
+    will not run".
+    """
+
+    #: the exact byte sequence found in the field report
+    DAMAGED = (b"# mrrc_modern.env \xe2\x80?MRRC Modern launcher "
+               b"configuration template.\nMRRC_RADIO_MODEL=ft710\n"
+               b"MRRC_SERIAL_PORT=COM3\nMRRC_WEB_PORT=8888\n")
+
+    def _write(self, tmp, raw):
+        path = Path(tmp) / "mrrc_modern.env"
+        path.write_bytes(raw)
+        return path
+
+    def test_the_field_regression_file_is_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text, _enc = fr.read_env_text(self._write(tmp, self.DAMAGED))
+        self.assertIn("MRRC_SERIAL_PORT=COM3", text)
+        self.assertIn("MRRC_WEB_PORT=8888", text)
+
+    def test_gbk_values_survive(self):
+        """A Chinese device name must come back as the same Chinese name."""
+        name = "麦克风 (USB Audio CODEC)"
+        raw = ("# 配置\nMRRC_AUDIO_RX_DEVICE=" + name + "\n").encode("cp936")
+        with tempfile.TemporaryDirectory() as tmp:
+            text, enc = fr.read_env_text(self._write(tmp, raw))
+        self.assertNotEqual(enc, "utf-8")
+        self.assertIn(f"MRRC_AUDIO_RX_DEVICE={name}", text)
+
+    def test_utf16_saved_file_is_readable(self):
+        """Notepad's 'Unicode' save writes a UTF-16 BOM."""
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = "MRRC_WEB_PORT=9000\r\n".encode("utf-16")
+            text, _enc = fr.read_env_text(self._write(tmp, raw))
+        self.assertIn("MRRC_WEB_PORT=9000", text)
+
+    def test_utf8_files_stay_untouched(self):
+        raw = "# 中文注释 — em dash\nMRRC_RADIO_MODEL=ic7300\n".encode("utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            text, enc = fr.read_env_text(self._write(tmp, raw))
+        self.assertEqual(enc, "utf-8")
+        self.assertIn("中文注释 — em dash", text)
+
+    def test_update_env_file_heals_a_non_utf8_file(self):
+        """Rewriting normalises the file to UTF-8 (next launch is clean)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, self.DAMAGED)
+            fr.update_env_file(path, {"MRRC_WEB_PORT": "8443"})
+            raw = path.read_bytes()
+        self.assertIn("MRRC_WEB_PORT=8443", raw.decode("utf-8"))   # must decode
+        self.assertIn("MRRC_RADIO_MODEL=ft710", raw.decode("utf-8"))

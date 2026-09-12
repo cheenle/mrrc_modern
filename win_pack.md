@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.15.0**（2026-09-12，服务端 QSO 录音 + 录音面板（SDD V2.42/AD-017）：服务端取 RX 设备域 PCM 与解码后 TX 麦克风 PCM，单调时钟轴 + 空洞补静音，`lameenc` 增量编码边录边落盘（崩溃安全）；新增「录音」面板（列表/可 seek 播放/下载/删除，Range 请求）；CAT 掉线后恢复由 62 秒降为秒级。Win11 VM：906 项测试、三个 PyInstaller 目标、Inno Setup 6.7.3 均通过，`lameenc` 已随包（冻结环境实测 `Recording ready`）；产物 45,491,710 bytes，SHA-256 `5bcefc511ac168638dd00962f385dbda06df4ba8441279e3d6fb3d4f9953ab86`。（历史记录 v1.14.2 = 2026-09-10，IC-7300 波特率联动 + 音频重复条目恢复（SDD V2.37）：连接设置保存/首启探测按型号对齐 `MRRC_BAUD_RATE`（旧模板预填 38400 饿死 CI-V 频谱流），-9999 音频打开重试轮换 host-API 重复条目，WDM-KS 锁定名回退到可用的 MME 条目；Win11 上 721 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,435,022 bytes，SHA-256 `a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706`）。
+> 最新构建：**v1.15.0**（2026-09-12，服务端 QSO 录音 + 录音面板（SDD V2.42/AD-017）：服务端取 RX 设备域 PCM 与解码后 TX 麦克风 PCM，单调时钟轴 + 空洞补静音，`lameenc` 增量编码边录边落盘（崩溃安全）；新增「录音」面板（列表/可 seek 播放/下载/删除，Range 请求）；CAT 掉线后恢复由 62 秒降为秒级。修复「同一进程里第二次录音全静音」（writer 任务每会话一次性，原先只在启动时创建一次）。Win11 VM：919 项测试、三个 PyInstaller 目标、Inno Setup 6.7.3 均通过，`lameenc` 已随包（冻结环境实测 `Recording ready`）；产物 45,494,587 bytes，SHA-256 `74d04b84ab7b3d0b85314efff304fccb1494f60d95f07c24c0758bee6f13ee0c`；另按字节码校验包内 `server` 条目含 `_ensure_rec_writer`（`strings` 看不见压缩 PYZ，不作证据）。（历史记录 v1.14.2 = 2026-09-10，IC-7300 波特率联动 + 音频重复条目恢复（SDD V2.37）：连接设置保存/首启探测按型号对齐 `MRRC_BAUD_RATE`（旧模板预填 38400 饿死 CI-V 频谱流），-9999 音频打开重试轮换 host-API 重复条目，WDM-KS 锁定名回退到可用的 MME 条目；Win11 上 721 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,435,022 bytes，SHA-256 `a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706`）。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 ## 1. 环境拓扑
@@ -137,8 +137,9 @@ ssh ham.vlsc.net "scp /tmp/mrrc_modern_src.zip cheenle@192.168.122.133:mrrc_mode
 
 ### Step 3 — VM 上解压（保留 venv）
 
-**推荐**：先把 venv 移出删除范围，解压后移回，免去重装依赖（v1.14.0 起的标准做法，
-scp 一个脚本上去执行，避免多层 ssh 引号地狱）：
+**推荐**：先用 `tar -xf`（Win11 自带 bsdtar，秒级、内存/CPU 远低于 `Expand-Archive`），并把 venv 移出
+删除范围、解压后移回，免去重装依赖（v1.14.0 起的标准做法，scp 一个脚本上去执行，避免多层 ssh 引号地狱）。
+脚本必须自证结果 —— 末尾打印 `EXTRACT_DONE venv=<bool> server=<bool>`，两个都是 True 才继续：
 
 ```bash
 # 本地写 extract_v<ver>.ps1：
@@ -190,6 +191,10 @@ Write-Host "BUILD_DONE"
 ```bash
 ssh ham.vlsc.net "ssh cheenle@192.168.122.133 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_mrrc_v1121.ps1'"
 ```
+
+⚠️ **`BUILD_DONE` 不等于构建成功**：`build.ps1` 的 `Invoke-Checked` 中止的是**子** PowerShell（退出码 1），
+外层按版本脚本仍会执行到最后一行打印 `BUILD_DONE`（2026-09-12 实测：测试门禁失败也打印了它，`dist\windows` 里根本没有新 exe）。
+判定成功请查产物：`Get-Item dist\windows\MRRC-Modern-Setup.exe` 的**时间戳** + 大小（45–46 MB）+ `Get-FileHash`。
 
 ⚠️ **别用 `C:\Users\cheenle\build_vm.ps1`**——它当前 `Set-Location C:\mrrc_ft8`，指向的是**另一个项目**
 （MRRC_FT8 工作区），会构建出错的 `MRRC_FT8-Setup.exe`（2026-08-15 实测踩坑，产物路径和包名都不对）。
@@ -249,6 +254,10 @@ curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.15.0-Windows-
 | 现象 | 原因 | 处理 |
 | ------ | ------ | ------ |
 | `virsh list` 看不到 win11 | 默认连 qemu:///session | `sudo virsh -c qemu:///system list --all` |
+| 构建到一半 VM 整个消失：`ssh` 报 `No route to host`、`domifaddr` 报 domain is not running | **宿主 OOM killer 杀掉 qemu**（宿主 28 GB 还跑着 ~9 GB 的 java 邻居，VM 却配了 16 GB；`dmesg -T \| grep -i oom` 可见）。修复：`setmaxmem/setmem win11 10G --config` 后 `start win11`，并在宿主加交换文件（`fallocate -l 16G /swap2.img` + `mkswap` + `swapon`）；构建完成后再决定是否恢复 16 GB |
+| 脚本打印了 `BUILD_DONE` 却没有新 exe / exe 是旧的 | 见上文「`BUILD_DONE` 不等于构建成功」：查产物时间戳与 `Get-FileHash` |
+| 安装后双击没反应、控制台一闪而过 | 启动器 `main()` 抛异常且无提示。排查：`Start-Process` 启动 `MRRC-Modern-Launcher.exe` 并把 stdout/stderr 重定向到文件，读 traceback；v1.15.0 起还会写 `%LOCALAPPDATA%\MRRC-Modern\launcher.log` 并弹消息框。已知成因：`mrrc_modern.env` 被 ANSI/GBK 编辑器保存成非 UTF-8（模板 `—` 是 `e2 80 94`，被写坏成 `e2 80 3f`）→ `load_env` 抛 `UnicodeDecodeError`；修复见 `macos/first_run.py: read_env_text` |
+| 装完能启动但连不上电台（CAT 无响应） | 这台 VM 上 COM3 是 CP2105 **Standard** 口，CAT 在 COM4；确认 `mrrc_modern.env` 里是 `MRRC_SERIAL_PORT=COM4`（本轮用户配置里曾是 COM3） |
 | 公钥加了仍 Permission denied | 管理员用户只认 `C:\ProgramData\ssh\administrators_authorized_keys` | 见 §2.1，注意 icacls 权限 |
 | SSH 里 `&&` 报错 | VM 默认 shell 是 PowerShell 5.1 | 用 `;` 或把命令写成 .ps1 scp 上去执行 |
 | PS 远程命令引号地狱 | 多层 ssh 转义 | 本地写脚本 → scp → 远程执行；或 `powershell -EncodedCommand <UTF16LE-Base64>` |

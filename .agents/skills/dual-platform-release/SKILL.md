@@ -29,6 +29,7 @@ One version → two artifacts → one website. The version's **single source of 
 
 - `SDD/14-version-history.md`: new `| SDD V2.x |` row — release record with both artifacts' sizes + SHA-256 + verification summary.
 - `SDD/README.md`: SDD Version, Baseline Date, Status line (latest release + artifact sizes).
+- If an artifact is rebuilt after publication (same version, new SHA — the 2026-09-12 launcher fix), amend the existing `SDD/14` release row instead of inventing a version, and re-run step 7 for the new hash.
 - `docs/WINDOWS_INSTALLER_GUIDE.md`: Download table (file, size, SHA-256, mirrors) + the "built from main on Windows 11…" paragraph.
 - `docs/MACOS_INSTALLER_GUIDE.md`: dmg filename + version mentions.
 - `win_pack.md` / `mac_pack.md`: `> 最新构建：` header line (version, date, tests count, size, SHA-256).
@@ -73,7 +74,13 @@ git ls-remote --tags origin | grep vX.Y.Z                                    # v
 
 ## CRITICAL Gotchas
 
-1. **`git push --follow-tags` does NOT push lightweight tags** — `git tag vX.Y.Z` (no `-a`) stays local and the release ships tag-less (v1.14.0 hit this). Always `git push origin vX.Y.Z` explicitly, then verify with `git ls-remote`.
+1. **A launcher change means rebuilding BOTH installers** (2026-09-12). The Windows and macOS launchers share `macos/first_run.py` (env parsing/first-run), so a fix there ships in both bundles — rebuilding only one platform publishes an app that still crashes for the other. The same holds for anything under `windows/` or `macos/`.
+
+2. **`BUILD_DONE` (Windows wrapper) proves nothing.** It prints even when the test/PyInstaller/Inno gate aborted (v1.15.0 attempt printed it with a failed suite and no exe). Verify by artifact: fresh mtime, 45–46 MB, `Get-FileHash` == Mac hash, and (new) walk the bundle bytecode to confirm the symbol you shipped is actually inside.
+
+3. **Prove the code is inside the bundle, not next to it.** `strings`/`grep` cannot see into the compressed PYZ: a stale bundle looks identical to a fresh one. Use `CArchiveReader` → the `server` *script* entry (`marshal.loads`) + the PYZ for imported modules; and start the packaged **launcher** once against the user's existing env file (that is the binary the user double-clicks). Recipe: `windows-installer` skill, Verification.
+
+4. **`git push --follow-tags` does NOT push lightweight tags** — `git tag vX.Y.Z` (no `-a`) stays local and the release ships tag-less (v1.14.0 hit this). Always `git push origin vX.Y.Z` explicitly, then verify with `git ls-remote`.
 2. **Order matters**: bump versions → build → only then write SHA-256/sizes into docs and website cards (the hashes don't exist before the build; the build reads the version from CHANGELOG). Writing docs first = stale-checksum release.
 3. **Mac interpreter trap**: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh`; `.venv/bin/python` for tests. Canary: any error path mentioning `mrrc_ft710/.venv` means the wrong interpreter was selected (`macos-installer` gotcha 10).
 4. **Static-asset changes need cache-bust bumps** (`ft710_main.js?v=N`, service worker `mrrc-vN`) pinned by tests; download-page HTML edits don't.
@@ -88,7 +95,7 @@ git ls-remote --tags origin | grep vX.Y.Z                                    # v
 | 1 | CHANGELOG top entry + `.iss` version | `grep MyAppVersion` == CHANGELOG |
 | 2 | macOS build | DMG bytes + SHA-256 recorded |
 | 3 | Windows build (KVM VM) | VM hash == local hash |
-| 4 | Docs + website sync + `build_sdd.py` | `grep -r vX.Y.Z` clean of old version (except CHANGELOG history) |
+| 4 | Docs + website sync + `build_sdd.py` | `grep -r vX.Y.Z` clean of old version (except CHANGELOG history); bundle bytecode walked + launcher smoke-tested |
 | 5 | Installers on <www.vlsc.net> | `ls -la downloads/` shows new files |
 | 6 | HTML deploy | deploy.sh completes, nginx -t ok |
 | 7 | URL + hash verification | 3× `HTTP/2 200`, content-length match, shasum match |

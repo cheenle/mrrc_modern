@@ -171,3 +171,51 @@ class WindowsLauncherSslTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WindowsLauncherEnvEncodingTests(unittest.TestCase):
+    """Field report 2026-09-12 (Win11 VM): the installed app did not start.
+
+    The config had gone through an ANSI (GBK) editor and was not valid UTF-8;
+    `load_env` raised UnicodeDecodeError, the console closed instantly and the
+    operator saw nothing at all.
+    """
+
+    DAMAGED = (b"# mrrc_modern.env \xe2\x80?MRRC Modern launcher "
+               b"configuration template.\nMRRC_WEB_HOST=127.0.0.1\n"
+               b"MRRC_WEB_PORT=8888\n")
+
+    def test_load_env_survives_a_non_utf8_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "mrrc_modern.env"
+            config.write_bytes(self.DAMAGED)
+            app_root = Path(tmp) / "app"
+            with patch.object(launcher, "app_dir", return_value=app_root):
+                env = launcher.load_env(config)
+        self.assertEqual(env["MRRC_WEB_HOST"], "127.0.0.1")
+        self.assertEqual(env["MRRC_WEB_PORT"], "8888")
+
+    def test_load_env_decodes_gbk_device_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "mrrc_modern.env"
+            config.write_bytes("MRRC_AUDIO_RX_DEVICE=麦克风 (USB Audio CODEC)\n"
+                               .encode("cp936"))
+            with patch.object(launcher, "app_dir", return_value=Path(tmp)):
+                env = launcher.load_env(config)
+        self.assertEqual(env["MRRC_AUDIO_RX_DEVICE"], "麦克风 (USB Audio CODEC)")
+
+    def test_a_fatal_error_is_logged_and_shown(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(launcher, "user_data_dir", return_value=Path(tmp)), \
+             patch.object(launcher, "_show_message_box") as box:
+            try:
+                raise RuntimeError("config exploded")
+            except RuntimeError as exc:
+                rc = launcher.report_fatal(exc)
+            log = Path(tmp) / "launcher.log"
+            self.assertTrue(log.exists(), "a dying launcher must leave a log")
+            text = log.read_text(encoding="utf-8")
+        self.assertEqual(rc, 1)
+        self.assertIn("config exploded", text)
+        self.assertIn("Traceback", text)
+        self.assertTrue(box.called, "and must show a message box")

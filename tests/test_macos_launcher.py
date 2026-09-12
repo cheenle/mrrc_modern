@@ -127,3 +127,34 @@ class MacLauncherSslTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MacLauncherEnvEncodingTests(unittest.TestCase):
+    """Same field bug as Windows: a non-UTF-8 config killed the launcher."""
+
+    DAMAGED = (b"# mrrc_modern.env \xe2\x80?MRRC Modern launcher "
+               b"configuration template.\nMRRC_WEB_PORT=8888\n")
+
+    def test_load_env_survives_a_non_utf8_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "mrrc_modern.env"
+            config.write_bytes(self.DAMAGED)
+            with patch.object(launcher, "app_dir", return_value=Path(tmp)):
+                env = launcher.load_env(config)
+        self.assertEqual(env["MRRC_WEB_PORT"], "8888")
+
+    def test_a_fatal_error_is_logged(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(launcher, "user_data_dir", return_value=Path(tmp)), \
+             patch.object(launcher.rumps, "alert") as alert:
+            try:
+                raise RuntimeError("config exploded")
+            except RuntimeError as exc:
+                rc = launcher.report_fatal(exc)
+            log = Path(tmp) / "launcher.log"
+            self.assertTrue(log.exists())
+            text = log.read_text(encoding="utf-8")
+        self.assertEqual(rc, 1)
+        self.assertIn("config exploded", text)
+        self.assertIn("Traceback", text)
+        self.assertTrue(alert.called)

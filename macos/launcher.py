@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.request
 import webbrowser
@@ -174,7 +175,12 @@ def wait_for_server(url: str, proc: subprocess.Popen | None = None,
 
 def load_env(path: Path) -> dict[str, str]:
     env = os.environ.copy()
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    # read_env_text tolerates a config saved by a non-UTF-8 editor instead of
+    # killing the launcher before it can say anything (field report 2026-09-12).
+    text, encoding = first_run.read_env_text(path)
+    if encoding != "utf-8":
+        print(f"Warning: {path} is not valid UTF-8 (read as {encoding}).")
+    for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -456,5 +462,37 @@ def main() -> int:
     return 0
 
 
+def report_fatal(exc: BaseException) -> int:
+    """Log a startup failure and show it, instead of vanishing.
+
+    A .app launched from Finder has no console: an unhandled exception in
+    main() looked exactly like "it does not start" (the Windows field report
+    was the same, with a console that closed too fast to read).
+    """
+    log = user_data_dir() / "launcher.log"
+    detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    message = (f"{APP_NAME} 启动失败\n\n{type(exc).__name__}: {exc}\n\n"
+               f"日志: {log}\n配置: {config_path()}")
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(f"{message}\n\n{detail}", encoding="utf-8")
+    except OSError:
+        pass
+    print(message, file=sys.stderr)
+    try:
+        rumps.alert(f"{APP_NAME} 启动失败", message)
+    except Exception:
+        pass
+    return 1
+
+
+def guarded_main() -> int:
+    """Run main(), turning any startup failure into a visible error."""
+    try:
+        return main()
+    except Exception as exc:                       # report every failure
+        return report_fatal(exc)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(guarded_main())

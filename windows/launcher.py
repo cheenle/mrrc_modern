@@ -5,6 +5,7 @@ import signal
 import subprocess
 import sys
 import time
+import traceback
 import urllib.error
 import urllib.request
 import webbrowser
@@ -122,7 +123,12 @@ def _env(env: dict[str, str], name: str, default: str = "") -> str:
 
 def load_env(path: Path) -> dict[str, str]:
     env = os.environ.copy()
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    # read_env_text tolerates a config saved by a non-UTF-8 editor instead of
+    # killing the launcher before it can say anything (field report 2026-09-12).
+    text, encoding = first_run.read_env_text(path)
+    if encoding != "utf-8":
+        print(f"Warning: {path} is not valid UTF-8 (read as {encoding}).")
+    for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -265,5 +271,47 @@ def main() -> int:
         env = load_env(config_path())
 
 
+def _show_message_box(text: str) -> None:
+    """Best-effort Windows dialog: a dead launcher must not be silent."""
+    try:
+        import ctypes
+        # CDLL (not windll) keeps this type-clean and cross-platform loadable:
+        # user32.dll only exists on Windows, the x64 ABI has one convention,
+        # and the whole call is best-effort anyway.
+        ctypes.CDLL("user32.dll").MessageBoxW(0, text, f"{APP_NAME} — 启动失败", 0x10)
+    except Exception:
+        pass
+
+
+def report_fatal(exc: BaseException) -> int:
+    """Log a startup failure and show it, instead of vanishing.
+
+    The launcher is a console app that a packaged install starts from a
+    shortcut: when it raised, the window closed in milliseconds and the
+    operator had nothing to report but "installed, will not run".  The log
+    file is the diagnosable artifact (error + traceback + config location).
+    """
+    log = user_data_dir() / "launcher.log"
+    detail = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    message = (f"{APP_NAME} 启动失败\n\n{type(exc).__name__}: {exc}\n\n"
+               f"日志: {log}\n配置: {config_path()}")
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(f"{message}\n\n{detail}", encoding="utf-8")
+    except OSError:
+        pass
+    print(message, file=sys.stderr)
+    _show_message_box(message)
+    return 1
+
+
+def guarded_main() -> int:
+    """Run main(), turning any startup failure into a visible error."""
+    try:
+        return main()
+    except Exception as exc:                       # report every failure
+        return report_fatal(exc)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(guarded_main())

@@ -9,6 +9,7 @@ Uses standard pyserial (synchronous) with asyncio.to_thread()
 for I/O — no serial_asyncio dependency needed.
 """
 import asyncio
+import errno
 import logging
 import time
 from typing import Optional
@@ -17,6 +18,11 @@ import serial
 import serial.tools.list_ports
 
 from config import SERIAL_TIMEOUT, RECONNECT_BASE_DELAY, RECONNECT_MAX_DELAY
+
+#: Emit one "the port is still gone" WARNING once an outage has lasted this
+#: many reconnect attempts (1+2+4+8 = 15 s of backoff).  Keeps a flapping
+#: USB bridge from flooding the log while still surfacing the real cause.
+RECONNECT_HINT_AFTER_ATTEMPTS = 5
 
 logger = logging.getLogger("mrrc.backend.ft710.cat")
 
@@ -52,6 +58,10 @@ class CatController:
         self._lock = asyncio.Lock()
         self._timeout = SERIAL_TIMEOUT
         self._connected = False
+        # Log/backoff bookkeeping for a flapping USB bridge (V2.42): count
+        # consecutive connect failures and warn once per outage.
+        self._connect_failures = 0
+        self._device_gone_warned = False
         self._model = "Unknown"
         # Set by send_priority_set_command() to signal poll queries
         # (both in-progress _read_until threads and queued send_command
@@ -60,6 +70,23 @@ class CatController:
         self._cancel_polls: asyncio.Event = asyncio.Event()
 
     # ── Connection Management ──────────────────────────────────────
+
+    @staticmethod
+    @staticmethod
+    def _is_device_gone(exc: Exception) -> bool:
+        """True when the USB serial bridge itself vanished.
+
+        macOS reports this as errno 6 (ENXIO, "Device not configured") and
+        the node then fails to open with ENOENT.  It is a physical-layer
+        event (re-enumeration, marginal cable/hub/power), not a protocol
+        error, so it is worth one actionable warning per outage.
+        """
+        errno_value = getattr(exc, "errno", None)
+        if errno_value in (errno.ENXIO, errno.ENODEV, errno.ENOENT):
+            return True
+        text = str(exc).lower()
+        return ("device not configured" in text
+                or "no such file or directory" in text)
 
     @staticmethod
     def _is_device_fatal(exc: Exception) -> bool:
@@ -120,6 +147,8 @@ class CatController:
 
             # Mark connected early so send_set_command/query will work.
             self._connected = True
+            self._connect_failures = 0
+            self._device_gone_warned = False
 
             # Disable AI (Auto Information) mode FIRST, before any query.
             # If a previous session left AI1 enabled, the radio streams IF
@@ -145,8 +174,15 @@ class CatController:
                 # Stay connected — UI still works, polls will retry.
             return self._connected
         except Exception as e:
-            logger.error("Failed to connect to %s: %s", self.port, e)
-            logger.error("Available serial ports: %s", _available_serial_ports_summary())
+            self._connect_failures += 1
+            if self._connect_failures == 1:
+                logger.error("Failed to connect to %s: %s", self.port, e)
+                logger.error("Available serial ports: %s",
+                             _available_serial_ports_summary())
+            else:
+                # Same failure repeated inside one outage: keep the log
+                # readable (an unstable bridge can flap 30+ times a day).
+                logger.debug("Failed to connect to %s: %s", self.port, e)
             await self._cleanup()
             return False
 
@@ -297,7 +333,17 @@ class CatController:
                     return result
                 result = response_bytes.decode("ascii", errors="replace").rstrip(";")
             except Exception as e:
-                logger.error("Serial read error for '%s': %s", cmd, e)
+                if self._is_device_gone(e) and not self._device_gone_warned:
+                    self._device_gone_warned = True
+                    logger.warning(
+                        "Serial device %s disappeared (%s) — the radio's USB "
+                        "bridge re-enumerated, or the cable/hub/power is "
+                        "marginal.  Reconnecting; the poll tiers will refresh "
+                        "the state once it is back.", self.port, e)
+                elif self._connect_failures == 0:
+                    logger.error("Serial read error for '%s': %s", cmd, e)
+                else:
+                    logger.debug("Serial read error for '%s': %s", cmd, e)
                 if self._is_device_fatal(e):
                     self._connected = False
             return result
@@ -832,12 +878,38 @@ class CatController:
     # ── Reconnect ──────────────────────────────────────────────────
 
     async def reconnect_loop(self) -> bool:
-        """Attempt reconnection with exponential backoff."""
+        """Attempt reconnection with exponential backoff.
+
+        Log discipline: the first attempt is INFO, later attempts are DEBUG
+        (one unstable USB bridge can flap 30+ times a day), and exactly one
+        WARNING is emitted once the outage has outlived
+        RECONNECT_HINT_AFTER_ATTEMPTS with an actionable hint.
+        """
         delay = RECONNECT_BASE_DELAY
+        attempts = 0
+        hinted = False
         while True:
-            logger.info("Attempting reconnect to %s (delay=%.1fs)...", self.port, delay)
+            attempts += 1
+            if attempts == 1:
+                logger.info("Attempting reconnect to %s (delay=%.1fs)...",
+                            self.port, delay)
+            else:
+                logger.debug("Reconnect attempt %d to %s (delay=%.1fs)...",
+                             attempts, self.port, delay)
             if await self.connect():
-                logger.info("Reconnected to %s", self.port)
+                if attempts > 1:
+                    logger.info("Reconnected to %s after %d attempts",
+                                self.port, attempts)
+                else:
+                    logger.info("Reconnected to %s", self.port)
                 return True
+            if not hinted and attempts >= RECONNECT_HINT_AFTER_ATTEMPTS:
+                hinted = True
+                logger.warning(
+                    "Serial port %s still unavailable after %d attempts — "
+                    "the radio's USB bridge may be flapping (check the USB "
+                    "cable/hub/power; avoid unpowered hubs).  Retrying in "
+                    "the background every %.0fs.", self.port, attempts,
+                    RECONNECT_MAX_DELAY)
             await asyncio.sleep(delay)
             delay = min(delay * 2, RECONNECT_MAX_DELAY)

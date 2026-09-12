@@ -159,6 +159,67 @@ class TXMeterPollingPreemptionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake_cat.commands, ["RM3"])
 
 
+class WatchdogReconnectCostTests(unittest.IsolatedAsyncioTestCase):
+    """After a reconnect the scheduler must NOT run the full sync sweep.
+
+    Measured 2026-09-12: the 24-query initial_state_sync held the serial
+    lock for ~62 s after a reconnect (17:10:23 -> 17:11:25), during which
+    user commands queued behind it and every field was re-dirtied (which
+    also flooded the log).  Every one of those fields is already refreshed
+    by a poll tier within seconds, so the sweep is pure cost.
+    """
+
+    async def _run_one_watchdog_cycle(self, backend):
+        from poll_scheduler import PollScheduler
+        from radio_state import RadioState
+
+        class FakeCat:
+            def __init__(self):
+                self.connected = False
+
+            async def reconnect_loop(self):
+                self.connected = True
+                return True
+
+            async def initial_state_sync(self):
+                raise AssertionError("the watchdog must not run the full sync")
+
+        hooks = []
+
+        async def on_reconnected():
+            hooks.append(1)
+
+        state = RadioState()
+        state.update(vfo_a_freq=14_270_000, mode=1)      # pre-outage values
+        fake = FakeCat()
+        scheduler = PollScheduler(fake, state, on_reconnected=on_reconnected,
+                                  backend=backend)
+        scheduler._running = True
+        task = asyncio.create_task(scheduler._connection_watchdog())
+        try:
+            await asyncio.sleep(0.15)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            scheduler._running = False
+        return state, hooks
+
+    async def test_reconnect_skips_the_full_sync_and_keeps_state(self):
+        state, hooks = await self._run_one_watchdog_cycle(backend=None)
+        self.assertTrue(state.serial_connected)
+        self.assertEqual(hooks, [1])                     # scope init still runs
+        # Fields the sweep would have re-read keep their values until a poll
+        # refreshes them (nothing is clobbered with dataclass defaults).
+        self.assertEqual(state.vfo_a_freq, 14_270_000)
+        self.assertEqual(state.mode, 1)
+
+    async def test_reconnect_does_not_touch_the_backend_sync(self):
+        from unittest import mock
+        backend = mock.MagicMock()
+        state, hooks = await self._run_one_watchdog_cycle(backend=backend)
+        backend.initial_state_sync.assert_not_called()
+
+
 class WatchdogReconnectTests(unittest.IsolatedAsyncioTestCase):
     """After a successful watchdog reconnect, scope init must be re-run —
     a USB re-enumeration resets the radio's scope output (EX040101), and

@@ -6,6 +6,7 @@ All tests run without hardware (mock the serial port).
 import asyncio
 import serial
 import unittest
+from unittest import mock
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -247,6 +248,83 @@ class CatControllerMockedTests(unittest.IsolatedAsyncioTestCase):
         cmd = "FA014200000;"
         encoded = cmd.encode("ascii")
         self.assertEqual(len(encoded), len(cmd))
+
+
+class ReconnectLogDisciplineTests(unittest.IsolatedAsyncioTestCase):
+    """A flapping USB bridge must not flood the log (2026-09-12 field data:
+    171 outages, ~6 lines each, 84 of them the serial_connected diagnostic).
+
+    The port genuinely disappears (macOS errno 6 / ENOENT), so the useful
+    information is the *cause* hint and the fact the server keeps trying —
+    not one ERROR block per attempt.
+    """
+
+    def _controller(self, failures):
+        from backends.ft710.cat_controller import CatController
+
+        class _C(CatController):
+            def __init__(self):
+                super().__init__("/dev/ttyFAKE", baudrate=38400)
+                self.calls = 0
+                self._failures = failures
+
+            async def connect(self):
+                self.calls += 1
+                if self.calls <= self._failures:
+                    self._connect_failures += 1
+                    return False
+                self._connect_failures = 0
+                self._connected = True
+                return True
+
+            async def _cleanup(self):
+                return None
+
+        return _C()
+
+    async def test_first_attempt_info_then_debug_plus_one_hint(self):
+        import backends.ft710.cat_controller as cat_module
+        ctl = self._controller(failures=6)
+        with mock.patch.object(cat_module, "RECONNECT_BASE_DELAY", 0.001), \
+             mock.patch.object(cat_module, "RECONNECT_MAX_DELAY", 0.002), \
+             self.assertLogs("mrrc.backend.ft710.cat", level="DEBUG") as cap:
+            ok = await ctl.reconnect_loop()
+        self.assertTrue(ok)
+        infos = [m for m in cap.output if "[INFO]" in m or "INFO:" in m]
+        warnings = [m for m in cap.output if "WARNING" in m]
+        self.assertTrue(any("Attempting reconnect" in m for m in infos))
+        # Exactly one actionable hint, naming the physical suspects.
+        self.assertEqual(len(warnings), 1, warnings)
+        self.assertIn("USB", warnings[0])
+        self.assertIn("5 attempts", warnings[0])
+
+    async def test_reconnect_after_a_single_failure_is_reported(self):
+        import backends.ft710.cat_controller as cat_module
+        ctl = self._controller(failures=1)
+        with mock.patch.object(cat_module, "RECONNECT_BASE_DELAY", 0.001), \
+             self.assertLogs("mrrc.backend.ft710.cat", level="INFO") as cap:
+            await ctl.reconnect_loop()
+        self.assertTrue(any("after 2 attempts" in m for m in cap.output), cap.output)
+
+    def test_device_gone_recognition(self):
+        import errno as _errno
+        from backends.ft710.cat_controller import CatController
+        for exc in (OSError(_errno.ENXIO, "Device not configured"),
+                    OSError(_errno.ENOENT, "No such file or directory"),
+                    OSError(_errno.ENODEV, "No such device"),
+                    "plain string with device not configured"):
+            with self.subTest(exc=exc):
+                if isinstance(exc, Exception):
+                    self.assertTrue(CatController._is_device_gone(exc))
+                else:
+                    self.assertTrue(CatController._is_device_gone(OSError(exc)))
+        # A transient protocol error must NOT be classified as device loss.
+        self.assertFalse(CatController._is_device_gone(
+            ValueError("bad response")))
+
+
+if __name__ == "__main__":
+    unittest.main()
 
 
 if __name__ == "__main__":

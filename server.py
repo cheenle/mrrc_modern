@@ -483,9 +483,11 @@ async def _broadcast_state():
     if not dirty:
         return
     if "serial_connected" in dirty:
-        # Diagnostic (2026-08-15): frontend reported serial=false while the
-        # radio was healthy; log every broadcast that flips this flag.
-        logger.warning(
+        # Diagnostic (2026-08-15: frontend showed serial=false while the
+        # radio was healthy).  Demoted to DEBUG for V2.42: it fired 84 times
+        # per USB outage (the reconnect sweep used to mark every field
+        # dirty), burying the actual cause.
+        logger.debug(
             "state broadcast contains serial_connected=%s (dirty=%s)",
             radio.serial_connected, sorted(dirty),
         )

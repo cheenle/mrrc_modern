@@ -543,19 +543,25 @@ class PollScheduler:
                     logger.warning("Serial disconnected, attempting reconnect...")
                     reconnected = await self.cat.reconnect_loop()
                     if reconnected:
-                        # Perform full state sync after reconnect
-                        logger.info("Reconnected! Performing state sync...")
-                        if self._backend is not None:
-                            sync_data = await self._backend.initial_state_sync()
-                        else:
-                            sync_data = await self.cat.initial_state_sync()
-                        new_state = RadioState.from_sync_result(sync_data)
-                        new_state.serial_connected = True
-                        # Copy all fields
-                        for field_name in vars(new_state):
-                            if not field_name.startswith('_'):
-                                setattr(self.state, field_name, getattr(new_state, field_name))
-                        self.state.mark_dirty(*list(vars(new_state).keys()))
+                        # Deliberately NO full initial_state_sync here.  It is
+                        # a 24-query sweep (FT-710) that holds the serial lock
+                        # for tens of seconds when the radio answers slowly —
+                        # measured 2026-09-12: 17:10:23 -> 17:11:25, ~62 s
+                        # during which user commands queued behind it and
+                        # every field was re-dirtied (flooding the log with
+                        # the serial_connected diagnostic).
+                        #
+                        # Every one of those fields is already refreshed by a
+                        # poll tier: IF 0.1 s (freq/mode/S-meter), VFO and TX
+                        # status 0.5 s, settings 2 s, slow telemetry 5 s.  So
+                        # the reconnect only has to restore the connection
+                        # flag; the polls repopulate the state within seconds,
+                        # and untouched fields keep their last known values
+                        # instead of being clobbered with defaults.
+                        logger.info(
+                            "Reconnected — state refreshes via the poll tiers "
+                            "(no full sync sweep)")
+                        self.state.update(serial_connected=True)
                         if self._on_state_changed:
                             await self._on_state_changed()
                         # Re-run scope init (EX040101/EX040200) — the radio's

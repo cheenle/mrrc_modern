@@ -34,7 +34,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.42 |
+| SDD Version | V2.43 |
 | Baseline Date | 2026-09-12 |
 | Status | rpi64 image rebuilt at v1.14.3 from HEAD and published (SDD V2.40; local native aarch64 build path primary); v1.14.2 is the latest published installer pair (macOS DMG 55,898,038 + Windows Setup 45,435,022 bytes, SDD V2.39, carrying the V2.37–V2.39 fixes); IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved; **IC-705/IC-7610/IC-7760 backend profiles added without hardware present — experimentell, TX gated by `MRRC_ALLOW_UNVERIFIED_TX`, `_diag_civ.py` ready for field reports (SDD V2.41, R9/A7)**; **服务端 QSO 录音已实现（SDD V2.42 / AD-017）：16 kHz mono MP3 增量编码，浏览器录音器与 lame.js 已移除**；open issues tracked in §13.4 |
 | Project | MRRC Modern / `mrrc_modern` |

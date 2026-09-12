@@ -1,0 +1,6 @@
+{
+  "ignore": [
+    "static/ft710_main.js",
+    "static/ft710_ui.js"
+  ]
+}

@@ -75,6 +75,32 @@ Installer/release process is captured as project skills in `.agents/skills/` (ea
 
 Operator manuals with full troubleshooting: `mac_pack.md` / `win_pack.md`.
 
+## Tooling Guards (do not remove)
+
+Two legacy frontend files — `static/ft710_main.js` and `static/ft710_ui.js` — must not be
+reformatted or "autofixed" by tooling:
+
+- They are tab-indented with double quotes, while `biome.json` configures 4-space/single-quote
+  for the rest of the project. Letting biome format them rewrites ~3200 lines for no behavior
+  change (and breaks the whitespace-sensitive frontend contract tests in
+  `tests/test_ws_protocol.py`).
+- Their top-level names (`radioCapabilities`, `AUDIO_TAG_PCM`, `RX_RECORDER_MIME`, …) are
+  **cross-file globals** (classic `<script>` files, read from the other file). A single-file
+  "unused variable" analysis calls them unused and renames them with a leading underscore —
+  which silently breaks the capability-driven UI in the browser, invisible to the Python suite.
+
+Guards in place (both verified against biome 2.5.6, the binary pi-lens runs):
+
+| File | Guard |
+| --- | --- |
+| `biome.json` | `overrides` for both files: `formatter.enabled=false` and `noUnusedVariables`/`noUnusedFunctionParameters`/`noInnerDeclarations` off |
+| `.pi-lens.json` | `ignore` for both files, so no diagnostic/autofix dispatch touches them |
+
+Important: `biome.json` must stay **strict JSON** — a comment makes this biome fall back to its
+built-in defaults (2-space/double-quote) and reformat every file it touches. Keep the rationale
+here instead. If those two files ever come back dirty with tab→space or `catch (e)` → `catch (_e)`
+churn, `git checkout -- static/ft710_main.js static/ft710_ui.js`.
+
 ## Build, Test, and Development Commands
 
 Install dependencies:

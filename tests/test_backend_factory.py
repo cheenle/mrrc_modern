@@ -272,6 +272,19 @@ class CapabilityVerificationFieldsTests(unittest.TestCase):
         self.assertIn("tx_gated", data)
         self.assertIn("audio_gain_boost", data)
 
+    def test_ft710_keeps_its_10x_rx_boost(self):
+        # Regression guard: the browser now takes the RX playback boost from
+        # capabilities, so a bare dataclass default of 1.0 would silently
+        # make the FT-710 ten times quieter than before V2.41.
+        self.assertEqual(
+            create_backend("ft710", port="/dev/null")
+            .capabilities.audio_gain_boost, 10.0)
+        for model in ("ic7300", "ic7300mk2", "ic705", "ic7610", "ic7760"):
+            with self.subTest(model=model):
+                self.assertEqual(
+                    create_backend(model, port="/dev/null")
+                    .capabilities.audio_gain_boost, 1.0)
+
 
 class RadioStateModelMismatchTests(unittest.TestCase):
     def test_default_is_false_and_field_is_tracked(self):

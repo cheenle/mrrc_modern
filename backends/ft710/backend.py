@@ -122,6 +122,11 @@ class FT710Backend(RadioBackend):
             scope_type="ft4222",
             scope_spans=SCOPE_SPANS,
             tune_via="tx2",
+            # The FT-710's USB audio level is much lower than the Icom
+            # family's: the browser applies a 10x RX playback boost (was a
+            # model-string comparison in ft710_main.js before V2.41, now a
+            # capability so a third vendor cannot silently inherit it).
+            audio_gain_boost=10.0,
         )
 
     def create_scope_producer(

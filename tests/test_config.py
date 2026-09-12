@@ -3,6 +3,7 @@ Tests for config.py — SDD §7, §10.4.
 Verifies: mode tables, band definitions, filter widths, S-meter calibration,
 CAT command field mappings.
 """
+import config
 import importlib
 import os
 import unittest
@@ -81,21 +82,25 @@ class BandTableTests(unittest.TestCase):
     def test_get_band_for_frequency_20m(self):
         band = get_band_for_frequency(14_200_000)
         self.assertIsNotNone(band)
+        assert band is not None      # narrow for the checker
         self.assertEqual(band["name"], "20m")
 
     def test_get_band_for_frequency_40m(self):
         band = get_band_for_frequency(7_050_000)
         self.assertIsNotNone(band)
+        assert band is not None      # narrow for the checker
         self.assertEqual(band["name"], "40m")
 
     def test_get_band_for_frequency_80m(self):
         band = get_band_for_frequency(3_700_000)
         self.assertIsNotNone(band)
+        assert band is not None      # narrow for the checker
         self.assertEqual(band["name"], "80m")
 
     def test_get_band_for_frequency_10m(self):
         band = get_band_for_frequency(28_500_000)
         self.assertIsNotNone(band)
+        assert band is not None      # narrow for the checker
         self.assertEqual(band["name"], "10m")
 
     def test_get_band_for_out_of_band_frequency(self):
@@ -238,6 +243,52 @@ class DefaultBaudForTests(unittest.TestCase):
     def test_normalizes_case_and_whitespace(self):
         from config import default_baud_for
         self.assertEqual(default_baud_for("  IC7300 "), 115200)
+
+    def test_new_icom_models_use_115200(self):
+        from config import default_baud_for
+        for model in ("ic705", "ic7610", "ic7760"):
+            with self.subTest(model=model):
+                self.assertEqual(default_baud_for(model), 115200)
+
+    def test_every_registered_model_has_a_baud_default(self):
+        # A backend added to the registry without a baud entry would
+        # silently inherit the FT-710's 38400 and break the Icom CI-V
+        # scope stream (the V2.33 field incident this table exists for).
+        import config as config_module
+        from backends import known_models
+        for model in known_models():
+            with self.subTest(model=model):
+                self.assertIn(model, config_module._DEFAULT_BAUD_BY_MODEL)
+
+
+class UnverifiedTxGateConfigTests(unittest.TestCase):
+    """MRRC_ALLOW_UNVERIFIED_TX parsing (spec 2026-09-12 §6.1)."""
+
+    def test_env_bool_parsing(self):
+        for raw, expected in (("1", True), ("true", True), ("YES", True),
+                              ("on", True), (" 1 ", True), ("0", False),
+                              ("no", False), ("", False), ("banana", False)):
+            with self.subTest(raw=raw):
+                with patch.dict(os.environ,
+                                {"MRRC_ALLOW_UNVERIFIED_TX": raw}):
+                    importlib.reload(config)
+                    self.assertIs(config.ALLOW_UNVERIFIED_TX, expected)
+        importlib.reload(config)
+
+    def test_default_is_off(self):
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("MRRC_ALLOW_UNVERIFIED_TX",
+                            "FT710_ALLOW_UNVERIFIED_TX")}
+        with patch.dict(os.environ, env, clear=True):
+            importlib.reload(config)
+            self.assertFalse(config.ALLOW_UNVERIFIED_TX)
+        importlib.reload(config)
+
+    def test_legacy_ft710_alias_is_honored(self):
+        with patch.dict(os.environ, {"FT710_ALLOW_UNVERIFIED_TX": "1"}):
+            importlib.reload(config)
+            self.assertTrue(config.ALLOW_UNVERIFIED_TX)
+        importlib.reload(config)
 
 
 if __name__ == "__main__":

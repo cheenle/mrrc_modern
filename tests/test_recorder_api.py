@@ -8,6 +8,7 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any, cast
 from unittest import mock
 
 import numpy as np
@@ -56,7 +57,8 @@ class RecordingWriterTests(unittest.IsolatedAsyncioTestCase):
 
         boom = _Boom()
         queue: asyncio.Queue = asyncio.Queue()
-        task = asyncio.create_task(server._recording_writer_loop(queue, boom))
+        task = asyncio.create_task(
+            server._recording_writer_loop(queue, cast(Any, boom)))
         for _ in range(3):
             queue.put_nowait(("rx", _block(), 48000, None))
         queue.put_nowait(("stop", None, 0, None))

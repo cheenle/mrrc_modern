@@ -103,6 +103,7 @@ class RecordingNameTests(unittest.TestCase):
 
     def test_parses_its_own_names(self):
         parsed = parse_recording_name("07050kHz_20260912_210405.mp3")
+        assert parsed is not None
         self.assertEqual(parsed["freq_hz"], 7_050_000)
         self.assertEqual(parsed["date"], "20260912")
         self.assertEqual(parsed["time"], "210405")
@@ -182,6 +183,19 @@ class IndexTests(unittest.TestCase):
         self.assertEqual(list_recordings(self.dir / "nope", {}, 64), [])
 
 
+def _anchor(session: RecordingSession) -> int:
+    """The session's own timeline origin (never None while recording)."""
+    assert session._start_ns is not None
+    return session._start_ns
+
+
+def _stop(session: RecordingSession, **kw):
+    """stop() that asserts a result (every test here expects one)."""
+    info = session.stop(**kw)
+    assert info is not None
+    return info
+
+
 def _session(dirpath: Path, **kw) -> RecordingSession:
     return RecordingSession(dirpath, bitrate=64,
                             max_seconds=kw.pop("max_seconds", 60), **kw)
@@ -202,7 +216,7 @@ class RecordingSessionTests(unittest.TestCase):
         self.assertFalse(s.start(freq_hz=7_050_000))     # already recording
         self.assertEqual(len(list(self.dir.glob("*.mp3"))), 1)
         s.add_audio("rx", sine_pcm(1000, 0.02, 48000), 48000, s._start_ns)
-        info = s.stop()
+        info = _stop(s)
         self.assertIsNotNone(info)
         self.assertFalse(s.active)
         self.assertEqual(info.freq_hz, 14_270_000)
@@ -215,28 +229,28 @@ class RecordingSessionTests(unittest.TestCase):
             s.add_audio("rx", sine_pcm(1000, 0.02, 48000), 48000)
         size_mid = list(self.dir.glob("*.mp3"))[0].stat().st_size
         self.assertGreater(size_mid, 0)                  # already on disk
-        info = s.stop()
+        info = _stop(s)
         self.assertGreaterEqual(info.bytes, size_mid)
 
     def test_gap_is_filled_with_silence(self):
         s = _session(self.dir)
         s.start()
         block = sine_pcm(1000, 0.02, 48000)              # 320 samples @16k
-        base = s._start_ns                               # exact session anchor
+        base = _anchor(s)                               # exact session anchor
         s.add_audio("rx", block, 48000, base)
         # 500 ms later -> the timeline must contain the hole as silence.
         s.add_audio("rx", block, 48000, base + 500_000_000)
         # The timeline advances to the new block's own offset (8000) and the
         # hole before it is silence: 8000 + 320, not 320 + 8000 + 320.
         self.assertEqual(s._cursor, 8000 + 320)
-        info = s.stop(now_ns=base + 520_000_000)
+        info = _stop(s, now_ns=base + 520_000_000)
         self.assertAlmostEqual(info.duration, 0.52, places=2)
 
     def test_jitter_within_tolerance_does_not_punch_holes(self):
         s = _session(self.dir)
         s.start()
         block = sine_pcm(1000, 0.02, 48000)
-        base = s._start_ns
+        base = _anchor(s)
         # Bounded jitter: each 20 ms block arrives up to 10 ms late, but the
         # offset never drifts — the divergence stays inside the 50 ms
         # tolerance, so the timeline stays contiguous (no silence inserted).
@@ -253,7 +267,7 @@ class RecordingSessionTests(unittest.TestCase):
         block = sine_pcm(1000, 0.02, 48000)
         s = _session(self.dir)
         s.start()
-        base = s._start_ns
+        base = _anchor(s)
         for i in range(10):
             s.add_audio("rx", block, 48000, base + i * 30_000_000)
         # Blocks 0-5 stay within 50 ms; block 6 crosses it (960 samples =
@@ -265,25 +279,25 @@ class RecordingSessionTests(unittest.TestCase):
         s = _session(self.dir)
         s.start()
         block = sine_pcm(1000, 0.02, 48000)
-        base = s._start_ns
+        base = _anchor(s)
         s.add_audio("rx", block, 48000, base)
         s.add_audio("rx", block, 48000, base + 500_000_000)
         # The timeline advances to the late block's own offset (8000) and the
         # hole before it is silence: 8000 + 320, not 320 + 8000 + 320.
         self.assertEqual(s._cursor, 8000 + 320)
-        info = s.stop(now_ns=base + 520_000_000)
+        info = _stop(s, now_ns=base + 520_000_000)
         self.assertAlmostEqual(info.duration, 0.52, places=2)
 
     def test_source_switch_reanchors(self):
         s = _session(self.dir)
         s.start()
         block = sine_pcm(1000, 0.02, 48000)
-        base = s._start_ns
+        base = _anchor(s)
         s.add_audio("rx", block, 48000, base)
         # TX starts 100 ms later: a new talk spurt, anchored at its own time.
         s.add_audio("tx", block, 48000, base + 100_000_000)
         self.assertEqual(s._source_cursors["tx"], 1600 + 320)
-        info = s.stop(now_ns=base + 120_000_000)
+        info = _stop(s, now_ns=base + 120_000_000)
         self.assertAlmostEqual(info.duration, 0.12, places=2)
 
     def test_44100_device_audio_is_accepted(self):
@@ -292,20 +306,20 @@ class RecordingSessionTests(unittest.TestCase):
         # bridge to 48 kHz with audio_resample, then decimate 3:1.
         s = _session(self.dir)
         s.start()
-        base = s._start_ns
+        base = _anchor(s)
         self.assertTrue(s.add_audio("rx", sine_pcm(1000, 0.02, 44100), 44100, base))
-        info = s.stop(now_ns=base + 20_000_000)
+        info = _stop(s, now_ns=base + 20_000_000)
         self.assertAlmostEqual(info.duration, 0.02, places=2)
 
     def test_session_cap_stops_storing_but_not_the_file(self):
         s = RecordingSession(self.dir, bitrate=64, max_seconds=0.1)
         s.start()
-        base = s._start_ns
+        base = _anchor(s)
         block = sine_pcm(1000, 0.02, 48000)
         accepted = [s.add_audio("rx", block, 48000, base + i * 20_000_000)
                     for i in range(20)]
         self.assertIn(False, accepted)                   # past the cap
-        info = s.stop(now_ns=base + 100_000_000)
+        info = _stop(s, now_ns=base + 100_000_000)
         self.assertLessEqual(info.duration, 0.11)
 
     def test_odd_length_pcm_is_trimmed_not_raised(self):
@@ -323,7 +337,7 @@ class RecordingSessionTests(unittest.TestCase):
         # Crash safety: no stop(), no flush() — the bytes on disk must exist.
         s = _session(self.dir)
         s.start()
-        base = s._start_ns
+        base = _anchor(s)
         for i in range(25):
             s.add_audio("rx", sine_pcm(1000, 0.02, 48000), 48000,
                         base + i * 20_000_000)
@@ -337,7 +351,7 @@ class RecordingSessionTests(unittest.TestCase):
         s = _session(self.dir)
         self.assertFalse(s.status()["recording"])
         s.start(freq_hz=7_050_000)
-        base = s._start_ns
+        base = _anchor(s)
         s.add_audio("rx", sine_pcm(1000, 0.02, 48000), 48000, base)
         st = s.status(now_ns=base + 250_000_000)
         self.assertTrue(st["recording"])

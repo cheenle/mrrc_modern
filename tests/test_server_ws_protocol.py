@@ -6,8 +6,10 @@ import asyncio
 import json
 from pathlib import Path
 import re
+import tempfile
 from typing import Any, cast
 import unittest
+from unittest import mock
 from unittest.mock import patch
 
 
@@ -926,6 +928,97 @@ class ServerModelRegistryTests(unittest.TestCase):
         getter = RadioBackend.mode_name_to_num.fget
         assert getter is not None
         self.assertEqual(getter(cast(Any, object())), {})
+
+
+class RecordingControlTests(unittest.IsolatedAsyncioTestCase):
+    """REC is a server-side session (spec 2026-09-12 §6)."""
+
+    def setUp(self):
+        import server as server_module
+        self._tmp = tempfile.TemporaryDirectory()
+        self.server = server_module
+        self._saved_session = server_module._rec_session
+        self._saved_queue = server_module._rec_queue
+        self.session = server_module.RecordingSession(
+            Path(self._tmp.name), bitrate=64, max_seconds=60)
+        self.queue: asyncio.Queue = asyncio.Queue()
+        server_module._rec_session = self.session
+        server_module._rec_queue = self.queue
+
+    def tearDown(self):
+        self.session.close_without_finishing()
+        self.server._rec_session = self._saved_session
+        self.server._rec_queue = self._saved_queue
+        self._tmp.cleanup()
+
+    async def _start(self, ws):
+        """Run the handler with a live writer and a stubbed broadcast."""
+        writer = asyncio.create_task(
+            self.server._recording_writer_loop(self.queue, self.session))
+        with mock.patch.object(self.server, "_broadcast_recording_state",
+                               mock.AsyncMock()):
+            await self.server._execute_set_command("recording", True, ws)
+        return writer
+
+    async def test_start_and_stop_over_the_control_channel(self):
+        ws = _fake_ws()
+        writer = await self._start(ws)
+        self.assertTrue(self.session.active)
+
+        with mock.patch.object(self.server, "_broadcast_recording_state",
+                               mock.AsyncMock()):
+            await self.server._execute_set_command("recording", False, ws)
+        await asyncio.wait_for(writer, timeout=2.0)
+        self.assertFalse(self.session.active)
+        self.assertEqual(ws.errors(), [])
+
+    async def test_recording_works_without_a_connected_radio(self):
+        # Recording depends on USB audio, not CAT: the branch sits before the
+        # "Radio not connected" guard on purpose.
+        ws = _fake_ws()
+        with mock.patch.object(self.server, "cat", None):
+            writer = await self._start(ws)
+        self.assertTrue(self.session.active)
+        self.assertEqual(ws.errors(), [])
+        self.session.close_without_finishing()
+        writer.cancel()
+        await asyncio.gather(writer, return_exceptions=True)
+
+    async def test_second_start_is_reported_not_silent(self):
+        ws = _fake_ws()
+        writer = await self._start(ws)
+        with mock.patch.object(self.server, "_broadcast_recording_state",
+                               mock.AsyncMock()):
+            await self.server._execute_set_command("recording", True, ws)
+        messages = [m.get("message", "").lower() for m in ws.errors()]
+        self.assertTrue(any("already" in m for m in messages), messages)
+        self.session.close_without_finishing()
+        writer.cancel()
+        await asyncio.gather(writer, return_exceptions=True)
+
+    async def test_status_snapshot_is_broadcast_ready(self):
+        self.session.start(freq_hz=7_050_000)
+        payload = self.server._recording_state_payload()
+        self.assertTrue(payload["recording"])
+        self.assertEqual(payload["freq_hz"], 7_050_000)
+        self.assertTrue(payload["name"].endswith(".mp3"))
+
+    def test_state_message_carries_the_recording_fields(self):
+        self.session.start(freq_hz=7_050_000)
+        msg = self.server._full_state_message({"vfo_a_freq": 7_050_000}, [])
+        self.assertIn("recording", msg)
+        self.assertTrue(msg["recording"]["recording"])
+        self.assertEqual(msg["recording"]["freq_hz"], 7_050_000)
+
+
+class RecordingSetRoutingTests(unittest.TestCase):
+    def test_recording_branch_precedes_the_radio_guard(self):
+        import inspect
+        import server
+        source = inspect.getsource(server._execute_set_command)
+        self.assertIn('field == "recording"', source)
+        self.assertLess(source.index('field == "recording"'),
+                        source.index("Radio not connected"))
 
 
 if __name__ == "__main__":

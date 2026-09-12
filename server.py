@@ -257,13 +257,26 @@ def _rec_enqueue(source: str, pcm: bytes, rate: int,
                            _rec_dropped)
 
 
-def _rec_enqueue_stop() -> None:
-    """Ask the writer to finish the session (idempotent)."""
+def _rec_enqueue_stop():
+    """Ask the writer to finish the session; returns a future for the result.
+
+    Returning a future lets the WebSocket handler answer only once the MP3
+    has been flushed (so the broadcast carries the final size and the
+    button flips back to REC exactly when the file is complete).
+    """
+    fut = None
     try:
-        _rec_queue.put_nowait(("stop", b"", 0, None))
+        fut = asyncio.get_running_loop().create_future()
+    except RuntimeError:                               # no loop (tests/tools)
+        fut = None
+    try:
+        _rec_queue.put_nowait(("stop", b"", 0, fut))
     except asyncio.QueueFull:                          # pragma: no cover
         logger.warning("Recording queue full on stop — finishing directly")
-        _rec_session.stop()
+        info = _rec_session.stop()
+        if fut is not None and not fut.done():
+            fut.set_result(info)
+    return fut
 
 
 def _rec_tap_rx(pcm: bytes, device_rate: int) -> None:
@@ -285,20 +298,25 @@ async def _recording_writer_loop(queue: "asyncio.Queue",
     """Single writer: serialises every session mutation off the event loop."""
     global _rec_failures
     while True:
-        source, pcm, rate, timestamp_ns = await queue.get()
+        # Audio items: ("rx"|"tx", pcm, rate, timestamp).  The stop item
+        # carries its completion future in the fourth slot
+        # ("stop", b"", 0, future | None).
+        source, pcm, rate, extra = await queue.get()
         if source == "stop":
+            info = None
             try:
                 info = await asyncio.to_thread(session.stop)
             except Exception as e:
                 logger.warning("Recording stop failed: %s", e)
-                return
             if info is not None:
                 logger.info("Recording finished: %s (%.1fs)",
                             info.name, info.duration)
+            if extra is not None and not extra.done():
+                extra.set_result(info)
             return
         try:
             await asyncio.to_thread(session.add_audio, source, pcm, rate,
-                                    timestamp_ns)
+                                    extra)
         except Exception as e:
             _rec_failures += 1
             if _rec_failures in (1, 10, 100):
@@ -532,6 +550,26 @@ async def _max_tx_watchdog():
             except Exception:
                 dead.add(ws)
         ctrl_clients.difference_update(dead)
+
+def _recording_state_payload() -> dict:
+    """Recording snapshot for the ``recordingState`` message / fullState."""
+    return _rec_session.status()
+
+
+async def _broadcast_recording_state() -> None:
+    """Push the recording session snapshot to every control client."""
+    if not ctrl_clients:
+        return
+    payload = json.dumps({"type": "recordingState",
+                          "recording": _recording_state_payload()})
+    dead = set()
+    for ws in list(ctrl_clients):
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            dead.add(ws)
+    ctrl_clients -= dead
+
 
 async def _broadcast_mem_channels():
     """Send memory channels to all connected clients."""
@@ -885,6 +923,10 @@ async def _audio_rx_loop():
                 audio.note_rx_chunk(pcm)
                 if pcm:
                     _rec_tap_rx(pcm, audio._rx_dev_rate)
+                    # While recording, keep every client's duration display
+                    # live without a dedicated task (20 ms tick / 50 = 1 Hz).
+                    if _rec_session.active and _loop_count % 50 == 0:
+                        await _broadcast_recording_state()
                     _idle_skipped = 0
                     _pcm_count += 1
                     frames = audio.encode_rx_audio(pcm)
@@ -1168,6 +1210,32 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
     """Execute a set command against the radio."""
     global cat, radio, scheduler
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail, _tx_non_owner_drops
+
+    # Recording is a server-side session over USB audio, not a radio
+    # command: handled before the "radio not connected" guard so a working
+    # sound card with a broken CAT link can still record (freq_hz is 0 then,
+    # which the file name shows as 00000kHz exactly like mrrc).
+    if field == "recording":
+        on = value is True or str(value).lower() == "true"
+        if on:
+            freq_hz = radio.active_freq if radio is not None else 0
+            if not _rec_session.start(freq_hz=freq_hz):
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "Recording already in progress",
+                }))
+            else:
+                logger.info("Recording started by client (freq=%s)", freq_hz)
+        else:
+            pending = _rec_enqueue_stop()
+            if pending is not None:
+                try:
+                    await asyncio.wait_for(pending, timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Recording stop timed out — broadcasting "
+                                   "the current state anyway")
+        await _broadcast_recording_state()
+        return
 
     if cat is None or not cat.connected:
         await ws.send_text(json.dumps({
@@ -2285,6 +2353,7 @@ def _full_state_message(data: dict, channels: list) -> dict:
         "data": data,
         "bands": backend.bands if backend else BANDS,
         "modes": backend.ui_modes if backend else UI_MODES,
+        "recording": _recording_state_payload(),
         "radioModel": backend.capabilities.model_name if backend else RADIO_MODEL,
         "radioDisplayName": (backend.capabilities.display_name
                              if backend else "Yaesu FT-710"),

@@ -148,7 +148,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("mrrc-v31", sw_source)
+        self.assertIn("mrrc-v32", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
@@ -170,8 +170,13 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertNotIn("_opus_encoder_ctl(this.handle, 4030", source)
 
 
-class RxRecordingFrontendTests(unittest.TestCase):
-    """RX recording must produce real MP3 via lamejs encoder."""
+class ServerSideRecordingContractTests(unittest.TestCase):
+    """V2.42: recording moved to the server; the browser must not encode.
+
+    The old browser recorder concatenated untimestamped frames, so delivery
+    jitter ended up in the file.  These assertions pin the replacement
+    contract: REC talks to the server, and no MP3 encoder ships to clients.
+    """
 
     def test_record_button_sits_next_to_tune(self):
         source = (REPO_ROOT / "static" / "index.html").read_text(encoding="utf-8")
@@ -180,36 +185,29 @@ class RxRecordingFrontendTests(unittest.TestCase):
         self.assertIn('id="btn-record"', ptt_footer)
         self.assertLess(ptt_footer.index('id="btn-tune"'), ptt_footer.index('id="btn-record"'))
 
-    def test_recorder_uses_lamejs_for_real_mp3_encoding(self):
-        source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
-        self.assertIn("window.RXRecorder", source)
-        self.assertIn("lamejs.Mp3Encoder", source)
-        self.assertIn("new lamejs.Mp3Encoder", source)
-        self.assertIn("encoder.encodeBuffer", source)
-        self.assertIn("encoder.flush", source)
-        self.assertIn("audio/mpeg", source)
-        self.assertIn(".mp3", source)
-        self.assertIn("_f32ToInt16", source)
+    def test_browser_recorder_is_gone(self):
+        main = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
+        self.assertNotIn("window.RXRecorder", main)
+        self.assertNotIn("lamejs", main)
+        self.assertNotIn("feedRXRecorderFrame", main)
+        self.assertNotIn("feedTXRecorderFrame", main)
+        self.assertNotIn("_loadLame", main)
+        self.assertNotIn("/modules/lame.js", main)
 
-    def test_lamejs_is_lazy_loaded_not_in_html(self):
-        # lame.js (~500 KB) is intentionally NOT in index.html — the REC
-        # feature lazy-loads it on first click via _loadLame().
-        html_source = (REPO_ROOT / "static" / "index.html").read_text(encoding="utf-8")
-        self.assertNotIn("lame.js", html_source)
-        main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
-        self.assertIn("function _loadLame()", main_source)
-        self.assertIn("/modules/lame.js", main_source)
+    def test_lamejs_asset_is_deleted(self):
+        self.assertFalse((REPO_ROOT / "static" / "modules" / "lame.js").exists())
 
-    def test_decoded_rx_frames_feed_recorder(self):
-        source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
-        self.assertIn("function feedRXRecorderFrame(f32)", source)
-        self.assertGreaterEqual(source.count("feedRXRecorderFrame("), 3)
+    def test_rec_button_talks_to_the_server_and_shows_server_state(self):
+        ui = (REPO_ROOT / "static" / "ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("sendCommand('recording'", ui)
+        self.assertIn("radioState.recording", ui)
+        self.assertIn("record-active", ui)
+        self.assertNotIn("window.RXRecorder", ui)
 
-    def test_record_button_click_is_bound_in_ui(self):
-        source = (REPO_ROOT / "static" / "ft710_ui.js").read_text(encoding="utf-8")
-        self.assertIn("const recordBtn = document.getElementById('btn-record')", source)
-        self.assertIn("window.RXRecorder.toggle()", source)
-        self.assertIn("record-active", source)
+    def test_recording_state_message_is_handled(self):
+        main = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
+        self.assertIn('"recordingState"', main)
+        self.assertIn("renderRecordingState", main)
 
 
 class TXBufferTests(unittest.TestCase):

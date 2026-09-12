@@ -182,6 +182,17 @@ class YaesuBackend(RadioBackend):
     # ── Connection / command surface (delegating) ───────────────────
 
     @property
+    def cat(self) -> YaesuCatController:
+        """Direct access to the wrapped controller.
+
+        `server.py` reads this unconditionally during lifespan startup
+        (and the field diagnostic drives it), so it must exist on every
+        backend — a missing attribute there aborts application startup
+        (found by the task-9 boot smoke test).
+        """
+        return self._cat
+
+    @property
     def connected(self) -> bool:
         return self._cat.connected
 

@@ -1936,12 +1936,17 @@ async def lifespan(app: FastAPI):
     if backend is not None:
         _caps = backend.capabilities
         if not _caps.verified:
+            # Name the matching field tool: the CI-V and ASCII-CAT families
+            # have different self-checks (Icom `19 00`/scope vs Yaesu `ID;`).
+            _diag = ("_diag_civ.py" if _caps.scope_type == "civ27"
+                     else "_diag_yaesu.py")
             logger.warning(
                 "Radio model %s is NOT hardware-verified — transmit is %s "
-                "(profile verified=False; check the radio with _diag_civ.py, "
+                "(profile verified=False; check the radio with %s, "
                 "then set MRRC_ALLOW_UNVERIFIED_TX=1 to enable TX)",
                 _caps.model_name,
-                "DISABLED" if _caps.tx_gated else "ENABLED by env override")
+                "DISABLED" if _caps.tx_gated else "ENABLED by env override",
+                _diag)
         audio = AudioHandler(rx_rate=_caps.audio_rx_rate,
                              tx_rate=_caps.audio_tx_rate,
                              name_hints=tuple(_caps.audio_name_hints))

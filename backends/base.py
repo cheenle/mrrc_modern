@@ -117,6 +117,35 @@ class RadioBackend(ABC):
         """
         return None
 
+    @property
+    def cat(self) -> Any:
+        """The backend's CAT controller — the server's direct-access seam.
+
+        Every concrete backend exposes this (FT-710 ``CatController``, Icom
+        ``CivController``, Yaesu ``YaesuCatController``): ``server.py`` reads
+        it unconditionally during lifespan startup to build the poll
+        scheduler, and the field diagnostics drive it directly.  Typed
+        ``Any`` because the ABC cannot name three unrelated controller
+        classes; a backend without it aborts application startup rather than
+        degrading a feature, so it belongs to the contract, not to extras.
+        """
+        return None
+
+    def set_broadcast_callback(
+        self, cb: Callable[[str, Any], None]
+    ) -> None:
+        """Register a callback for radio-originated state changes (optional).
+
+        ``cb`` is called as ``cb(field, value)`` on the event loop when the
+        radio reports a change by itself (the CI-V transceive broadcast);
+        the server's handler reuses the normal dirty-broadcast path.
+
+        Default no-op: only the CI-V family has such a broadcast to forward.
+        The ASCII-CAT transport filters unsolicited frames itself, so the
+        Yaesu family uses this default.
+        """
+        return None
+
     async def boot_verify(self, cat, timeout: float = 0.4) -> bool:
         """After power-on, return True once the radio answers a boot check.
 

@@ -34,6 +34,35 @@ class RegistryTests(unittest.TestCase):
             create_backend("ftdx9999", "/dev/null")
 
 
+class ServerVisibleSurfaceTests(unittest.TestCase):
+    """Guards the surface `server.py`/`poll_scheduler.py` read from a backend.
+
+    The lifespan startup reads `backend.cat` unconditionally, so a backend
+    without it aborts application startup entirely — not a degraded feature,
+    a dead server.  (`set_broadcast_callback` is absent from this list: the
+    server calls it behind `hasattr`, and the ASCII-CAT family has no
+    transceive broadcast to forward.)  Found by the task-9 boot smoke test.
+    """
+
+    REQUIRED = (
+        "cat", "capabilities", "bands", "ui_modes", "mode_name_to_num",
+        "filter_tables", "state_tables", "settings_poll_items",
+        "slow_poll_items", "tx_meter_items", "always_meter_items",
+        "connected", "model", "init_scope", "boot_verify",
+        "initial_state_sync", "create_scope_producer",
+    )
+
+    def test_every_registered_backend_exposes_the_required_surface(self):
+        for key in known_models():
+            backend = create_backend(key, "/dev/null")
+            for name in self.REQUIRED:
+                self.assertTrue(hasattr(backend, name), f"{key}.{name}")
+
+    def test_the_yaesu_cat_property_returns_the_controller(self):
+        backend = create_backend("ftx1", "/dev/null")
+        self.assertIs(backend.cat, backend._cat)
+
+
 class BaudTests(unittest.TestCase):
     def test_yaesu_models_default_to_38400(self):
         for key in YAESU_KEYS:

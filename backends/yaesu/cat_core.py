@@ -48,6 +48,8 @@ class YaesuCatController:
         # Set by priority commands (PTT/TUNE) to make in-flight poll reads
         # release the serial lock immediately.
         self._cancel_polls = asyncio.Event()
+        # (power class, max watts) once detected; None until first use.
+        self._detected_power: Optional[tuple] = None
 
     # ── Error classification (ported; see the FT-710 field notes) ────
 
@@ -323,3 +325,369 @@ class YaesuCatController:
             delay = min(delay * 2, 10.0)
             logger.debug("%s: CAT reconnect retry in %.0fs",
                          self._profile.display_name, delay)
+
+    # ── Identity ────────────────────────────────────────────────────
+
+    async def get_model_id(self, timeout: Optional[float] = None) -> Optional[str]:
+        """Read the model ID (`ID;`), e.g. "0840" on every FTX-1 configuration.
+
+        Read-only: the caller logs the observed value and only warns when the
+        profile records an expectation (spec §6.2).  Never a hard failure.
+        """
+        resp = await self.query("ID", timeout=timeout)
+        if resp and len(resp) > 2:
+            return resp[2:]
+        return None
+
+    # ── Frequency / VFO ─────────────────────────────────────────────
+
+    async def set_frequency(self, freq_hz: int, vfo: str = "A") -> bool:
+        prefix = "FA" if vfo.upper() == "A" else "FB"
+        return await self.set(f"{prefix}{freq_hz:09d}")
+
+    async def get_frequency(self, vfo: str = "A",
+                            timeout: Optional[float] = None) -> Optional[int]:
+        prefix = "FA" if vfo.upper() == "A" else "FB"
+        resp = await self.query(prefix, timeout=timeout)
+        if resp and len(resp) >= len(prefix) + 1:
+            try:
+                return int(resp[len(prefix):])
+            except ValueError:
+                return None
+        return None
+
+    async def get_active_vfo(self, timeout: Optional[float] = None) -> Optional[str]:
+        """`VS;` -> "VS0" (VFO-A active) or "VS1" (VFO-B active)."""
+        resp = await self.query("VS", timeout=timeout)
+        if resp and len(resp) >= 3:
+            return "B" if resp.endswith("1") else "A"
+        return None
+
+    async def set_vfo(self, vfo: str) -> bool:
+        return await self.set("VS0" if vfo.upper() == "A" else "VS1")
+
+    # ── Mode ────────────────────────────────────────────────────────
+
+    async def _leave_memory_mode_if_needed(self) -> None:
+        """FTX-1 only: exit memory mode, whose MD sets do not persist.
+
+        Mirrors Hamlib `ftx1/ftx1.c:881-899`, which sends `VM000;` for the
+        same reason (the firmware accepts a memory-mode MAIN `MD` but treats
+        it as a transient tune overlay).
+        """
+        if not self._profile.mode_set_leaves_memory:
+            return
+        resp = await self.query("VM")
+        if resp and resp[2:3] == "1":
+            logger.debug("%s: leaving memory mode before the mode set",
+                         self._profile.display_name)
+            await self.set("VM000")
+
+    async def set_mode(self, mode_num: int) -> bool:
+        """Set the operating mode from its numeric register.
+
+        ``mode_num`` is the profile register — the same int `RadioState.mode`
+        and the UI carry.  The CAT character comes from `profile.mode_codes`
+        rather than from `f"{mode_num:X}"`, because the FTX-1 uses H and I
+        for its C4FM variants and those are not hex digits: formatting the
+        register would send `MD011` instead of `MD0I`.
+        """
+        code = self._profile.mode_codes.get(int(mode_num))
+        if code is None:
+            logger.warning("%s: mode register 0x%X is not in the profile — "
+                           "no MD sent", self._profile.display_name, mode_num)
+            return False
+        await self._leave_memory_mode_if_needed()
+        return await self.set(f"MD0{code}")
+
+    async def get_mode(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("MD0", timeout=timeout)
+        if resp and len(resp) >= 4:
+            char = resp[3].upper()
+            for num, code in self._profile.mode_codes.items():
+                if code == char:
+                    return num
+            logger.debug("%s: mode character %r is not in the profile",
+                         self._profile.display_name, char)
+        return None
+
+    # ── Filter width (slot index, not Hz) ───────────────────────────
+
+    async def set_filter_width(self, index: int) -> bool:
+        """`SH00NN;` with the radio's own filter slot number (2 digits)."""
+        return await self.set(f"SH00{index:02d}")
+
+    async def get_filter_width(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("SH0", timeout=timeout)
+        if resp and len(resp) >= 4:
+            try:
+                return int(resp[-2:])
+            except ValueError:
+                return None
+        return None
+
+    # ── Transmit (latency-critical: priority path) ──────────────────
+
+    async def set_ptt(self, tx: bool) -> bool:
+        return await self.send_priority_set_command("TX1" if tx else "TX0")
+
+    async def set_tune(self, tune: bool) -> bool:
+        if self._profile.tune_via == "atu":
+            return await self.send_priority_set_command("AC1" if tune else "AC0")
+        return await self.send_priority_set_command("TX2" if tune else "TX0")
+
+    async def get_ptt(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("TX", timeout=timeout)
+        if resp and len(resp) >= 3:
+            try:
+                return int(resp[2:])
+            except ValueError:
+                return None
+        return None
+
+    # ── Meters ──────────────────────────────────────────────────────
+
+    async def get_s_meter(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("SM0", timeout=timeout)
+        if resp and len(resp) >= 4:
+            try:
+                return int(resp[3:])
+            except ValueError:
+                return None
+        return None
+
+    async def get_meter(self, meter: str, timeout: Optional[float] = None) -> Optional[int]:
+        """Read a raw meter value (`RM3`..`RM8`, `RM0` for the S-meter).
+
+        The answer is "RM" + meter-id + 6 digits; the meaningful 0..255 raw
+        value is the FIRST three of those six, as the FT-710 implementation
+        documents (the rest is zero padding).
+        """
+        resp = await self.query(meter, timeout=timeout)
+        if resp and len(resp) >= 6:
+            try:
+                return int(resp[3:6])
+            except ValueError:
+                return None
+        return None
+
+    # ── Gains / DSP / RF controls ───────────────────────────────────
+
+    async def _get_int(self, cmd: str, offset: int,
+                       timeout: Optional[float] = None) -> Optional[int]:
+        """Read a numeric answer field starting at ``offset``.
+
+        Shared by the polled readers: the poll tiers and
+        `RadioState.from_sync_result` require PARSED values, so a raw answer
+        string must never be returned from here.
+        """
+        resp = await self.query(cmd, timeout=timeout)
+        if resp and len(resp) > offset:
+            try:
+                return int(resp[offset:])
+            except ValueError:
+                return None
+        return None
+
+    async def get_af_gain(self, timeout: Optional[float] = None) -> Optional[int]:
+        return await self._get_int("AG0", 3, timeout)
+
+    async def get_rf_gain(self, timeout: Optional[float] = None) -> Optional[int]:
+        return await self._get_int("RG0", 3, timeout)
+
+    async def get_rf_power(self, timeout: Optional[float] = None) -> Optional[int]:
+        return await self._get_int("PC", 2, timeout)
+
+    async def set_af_gain(self, value: int) -> bool:
+        return await self.set(f"AG0{value:03d}")
+
+    async def set_rf_gain(self, value: int) -> bool:
+        return await self.set(f"RG0{value:03d}")
+
+    async def set_squelch(self, value: int) -> bool:
+        return await self.set(f"SQ0{value:03d}")
+
+    async def set_mic_gain(self, value: int) -> bool:
+        # Family form is "MG P1 P2 P2 P2" with P1=0 — the same shape
+        # AG/RG/SQ use. (The verified FT-710 path sends "MG{value:03d}"
+        # without the selector; that discrepancy is flagged for the
+        # field diagnostic and not changed here.)
+        return await self.set(f"MG0{value:03d}")
+
+    async def set_preamp(self, value: int) -> bool:
+        return await self.set(f"PA0{value}")
+
+    async def set_attenuator(self, value: int) -> bool:
+        return await self.set(f"RA0{value}")
+
+    async def set_noise_blanker(self, on: bool) -> bool:
+        return await self.set(f"NB0{'1' if on else '0'}")
+
+    async def set_nb_level(self, level: int) -> bool:
+        return await self.set(f"NL0{level:03d}")
+
+    async def set_noise_reduction(self, on: bool) -> bool:
+        return await self.set(f"NR0{'1' if on else '0'}")
+
+    async def set_nr_level(self, level: int) -> bool:
+        return await self.set(f"RL0{level:03d}")
+
+    async def set_auto_notch(self, on: bool) -> bool:
+        return await self.set(f"BC0{'1' if on else '0'}")
+
+    async def set_compressor(self, on: bool) -> bool:
+        return await self.set(f"PR0{'1' if on else '0'}")
+
+    async def set_compressor_level(self, level: int) -> bool:
+        return await self.set(f"PL0{level:03d}")
+
+    async def set_agc(self, value: int) -> bool:
+        return await self.set(f"GT0{value}")
+
+    async def get_agc(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("GT0", timeout=timeout)
+        return int(resp[3]) if resp and len(resp) >= 4 and resp[3].isdigit() else None
+
+    async def set_vox(self, on: bool) -> bool:
+        return await self.set(f"VX0{'1' if on else '0'}")
+
+    async def set_break_in(self, on: bool) -> bool:
+        return await self.set(f"BI0{'1' if on else '0'}")
+
+    async def set_key_speed(self, speed: int) -> bool:
+        return await self.set(f"KS{speed:03d}")
+
+    async def set_cw_pitch(self, pitch: int) -> bool:
+        return await self.set(f"KP{pitch:03d}")
+
+    async def set_rit(self, on: bool) -> bool:
+        return await self.set(f"RT0{'1' if on else '0'}")
+
+    async def set_rit_freq(self, value: int) -> bool:
+        sign = "+" if value >= 0 else "-"
+        return await self.set(f"RU{sign}{abs(value):04d}")
+
+    async def set_xit(self, on: bool) -> bool:
+        return await self.set(f"XT0{'1' if on else '0'}")
+
+    async def set_split(self, on: bool) -> bool:
+        return await self.set(f"ST0{'1' if on else '0'}")
+
+    async def set_power(self, on: bool) -> bool:
+        return await self.set(f"PS{'1' if on else '0'}")
+
+    async def set_antenna(self, ant: int) -> bool:
+        return await self.set(f"AN{ant}")
+
+    async def get_antenna(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("AN", timeout=timeout)
+        return int(resp[2]) if resp and len(resp) >= 3 and resp[2].isdigit() else None
+
+    async def set_tuner(self, value: int) -> bool:
+        """0 = tuner off, 1 = tune cycle (`AC` = antenna tuner control)."""
+        return await self.set(f"AC{value}")
+
+    async def set_amc_level(self, level: int) -> bool:
+        return await self.set(f"AO0{level:03d}")
+
+    async def get_amc_level(self, timeout: Optional[float] = None) -> Optional[int]:
+        resp = await self.query("AO0", timeout=timeout)
+        if resp and len(resp) >= 4:
+            try:
+                return int(resp[3:])
+            except ValueError:
+                return None
+        return None
+
+    async def set_monitor(self, on: bool) -> bool:
+        return await self.set(f"ML0{'1' if on else '0'}")
+
+    async def set_monitor_gain(self, value: int) -> bool:
+        return await self.set(f"ML0{value:03d}")
+
+    # ── Power (family PC format; FTX-1 self-detects its configuration) ──
+
+    async def detect_power_config(self, timeout: Optional[float] = None) -> tuple:
+        """Read `PC;` and classify the FTX-1 head/amplifier configuration.
+
+        `ftx1/ftx1_readme.txt`: Field head (battery 0.5-6 W, 12 V 0.5-10 W)
+        answers in the `PC1xxx` shape, the SPA-1/Optima 100 W configuration in
+        `PC2xxx`.  Models with a fixed configuration skip the probe and report
+        their profile value.  TODO(hw-verify): the exact answer strings have
+        not been observed on hardware yet (spec §10).
+        """
+        if self._profile.power_format != "auto":
+            # Fixed configuration: no probe, but record it so
+            # effective_power_max()/set_rf_power() have a value.
+            self._detected_power = (self._profile.power_format,
+                                    self._profile.power_max_w)
+            return self._detected_power
+        resp = await self.query("PC", timeout=timeout)
+        if resp and len(resp) >= 3:
+            try:
+                raw = int(resp[2:])
+            except ValueError:
+                raw = None
+            if raw is not None:
+                # A four-digit answer (PC1xxx / PC2xxx) carries the class.
+                if len(resp) >= 4 and resp[2] in "12" and len(resp[2:]) >= 4:
+                    cfg = "PC" + resp[2]
+                    self._detected_power = (cfg, 100 if cfg == "PC2" else 10)
+                else:
+                    self._detected_power = ("PC1", 10)
+                logger.info("%s: power configuration %s (max %d W)",
+                            self._profile.display_name, *self._detected_power)
+                return self._detected_power
+        self._detected_power = (self._profile.power_format if
+                                self._profile.power_format != "auto" else "PC1",
+                                self._profile.power_max_w)
+        logger.info("%s: power configuration unknown, using the profile "
+                    "maximum %d W", self._profile.display_name,
+                    self._detected_power[1])
+        return self._detected_power
+
+    async def effective_power_max(self) -> int:
+        """Maximum settable watts, from the detected (or profile) config."""
+        if self._detected_power is None:
+            await self.detect_power_config()
+        return self._detected_power[1]
+
+    async def set_rf_power(self, watts: int) -> bool:
+        limit = await self.effective_power_max()
+        value = max(0, min(int(watts), limit))
+        if value != int(watts):
+            logger.debug("%s: RF power %d W clamped to the %s maximum %d W",
+                         self._profile.display_name, watts,
+                         self._detected_power[0], limit)
+        return await self.set(f"PC{value:03d}")
+
+    # ── Bulk state ──────────────────────────────────────────────────
+
+    async def initial_state_sync(self) -> dict:
+        """Parsed RadioState fields for the first state push.
+
+        Contract (`RadioState.from_sync_result`): plain
+        ``{RadioState field: parsed value}`` pairs.  Raw CAT answers are not
+        accepted here, and the names must be the dataclass fields —
+        `vfo_a_freq`, not `frequency`.
+        """
+        state: dict = {}
+        for field, getter in (
+            ("vfo_a_freq", lambda: self.get_frequency("A")),
+            ("vfo_b_freq", lambda: self.get_frequency("B")),
+            ("active_vfo", lambda: self.get_active_vfo()),
+            ("mode", lambda: self.get_mode()),
+            ("filter_width", lambda: self.get_filter_width()),
+            ("tx_status", lambda: self.get_ptt()),
+            ("s_meter", lambda: self.get_s_meter()),
+            ("af_gain", lambda: self.get_af_gain()),
+            ("rf_gain", lambda: self.get_rf_gain()),
+            ("rf_power", lambda: self.get_rf_power()),
+            ("preamp", lambda: self.get_preamp()),
+            ("attenuator", lambda: self.get_attenuator()),
+            ("agc", lambda: self.get_agc()),
+        ):
+            value = await getter()
+            if value is not None:
+                state[field] = value
+        return state

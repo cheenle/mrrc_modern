@@ -93,7 +93,7 @@ Guards in place (both verified against biome 2.5.6, the binary pi-lens runs):
 
 | File | Guard |
 | --- | --- |
-| `biome.json` | `overrides` for both files: `formatter.enabled=false` and `noUnusedVariables`/`noUnusedFunctionParameters`/`noInnerDeclarations` off |
+| `biome.json` | `overrides` for both files: `formatter.enabled=false` plus the six rules whose autofixes mutate them (`noUnusedVariables`, `noUnusedFunctionParameters`, `noInnerDeclarations`, `useParseIntRadix`, `useTemplate`, `useOptionalChain`, `noGlobalIsNan`) turned off — verified: even a direct `biome check --write --unsafe` leaves both files byte-identical |
 | `.pi-lens.json` | `ignore` for both files, so no diagnostic/autofix dispatch touches them |
 
 Important: `biome.json` must stay **strict JSON** — a comment makes this biome fall back to its

@@ -1,37 +1,47 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 4,
-    "lineWidth": 100
-  },
-  "javascript": {
+    "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
     "formatter": {
-      "quoteStyle": "single",
-      "jsxQuoteStyle": "double",
-      "semicolons": "always",
-      "trailingCommas": "es5"
-    }
-  },
-  "overrides": [
-    {
-      "includes": [
-        "static/ft710_main.js",
-        "static/ft710_ui.js"
-      ],
-      "formatter": {
-        "enabled": false
-      },
-      "linter": {
-        "rules": {
-          "correctness": {
-            "noUnusedVariables": "off",
-            "noUnusedFunctionParameters": "off",
-            "noInnerDeclarations": "off"
-          }
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 100
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "single",
+            "jsxQuoteStyle": "double",
+            "semicolons": "always",
+            "trailingCommas": "es5"
         }
-      }
-    }
-  ]
+    },
+    "overrides": [
+        {
+            "includes": [
+                "static/ft710_main.js",
+                "static/ft710_ui.js"
+            ],
+            "formatter": {
+                "enabled": false
+            },
+            "linter": {
+                "rules": {
+                    "correctness": {
+                        "noUnusedVariables": "off",
+                        "noUnusedFunctionParameters": "off",
+                        "noInnerDeclarations": "off",
+                        "useParseIntRadix": "off"
+                    },
+                    "style": {
+                        "useTemplate": "off"
+                    },
+                    "complexity": {
+                        "useOptionalChain": "off"
+                    },
+                    "suspicious": {
+                        "noGlobalIsNan": "off"
+                    }
+                }
+            }
+        }
+    ]
 }

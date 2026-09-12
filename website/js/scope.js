@@ -11,11 +11,10 @@
     portal: '/',
     agentic: '/agentic.html',
     mrrc: '/mrrc/',
-    mrrc_ft710: '/mrrc_ft710/',
     mrrc_modern: '/mrrc_modern/',
     mrrc_ft8: '/mrrc_ft8/',
     sunmrrc: '/sunmrrc/',
-    sunsdrmobile: '/sunsdrmobile/',
+    efhw: '/efhw/',
     blog: '/blog/'
   };
 
@@ -45,11 +44,10 @@
       '<nav class="scope-gn-links">' +
         siteLink('agentic', 'Agentic') +
         siteLink('mrrc', 'MRRC') +
-        siteLink('mrrc_ft710', 'FT-710') +
         siteLink('mrrc_modern', 'Modern') +
         siteLink('mrrc_ft8', 'FT-8') +
         siteLink('sunmrrc', 'SunMRRC') +
-        siteLink('sunsdrmobile', 'SunsdrMobile') +
+        siteLink('efhw', 'EFHW') +
         siteLink('blog', 'Blog') +
       '</nav>' +
       '<a class="scope-gn-gh" href="https://github.com/cheenle" target="_blank" rel="noopener">' +

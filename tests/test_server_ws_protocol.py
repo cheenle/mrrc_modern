@@ -879,11 +879,12 @@ class ServerModelRegistryTests(unittest.TestCase):
         self.assertIn("known_models()", source)
         self.assertNotIn('("ft710", "ic7300", "ic7300mk2")', source)
 
-    def test_registry_covers_six_models(self):
+    def test_registry_covers_every_supported_model(self):
         from backends import known_models
         self.assertEqual(known_models(),
                          ("ft710", "ic7300", "ic7300mk2", "ic705",
-                          "ic7610", "ic7760"))
+                          "ic7610", "ic7760", "ftdx10", "ftdx101d",
+                          "ftdx101mp", "ftx1"))
 
     def test_attenuator_bound_comes_from_capabilities(self):
         # The IC-7610/IC-7760 have 16 attenuator steps; a hardcoded

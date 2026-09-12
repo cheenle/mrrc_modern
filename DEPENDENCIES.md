@@ -150,6 +150,22 @@ HTTPS, you also need `cryptography` (`pip install cryptography`).
 
 ## USB / Serial Device Drivers
 
+### Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (experimental)
+
+Same ASCII-CAT family as the FT-710 (38400 8N1 over the radio's USB serial
+bridge). Differences that matter here:
+
+- **No spectrum path.** The Yaesu scope waveform is not part of any CAT
+  reference (`SS` is a settings command only; Hamlib's whole Yaesu family
+  contains no scope code), so these models run with the S-meter synthesiser
+  and `scope_type="none"`.
+- **Audio**: enumerated as a USB audio device like the FT-710; the sample
+  rate is an **assumption (44.1 kHz, `TODO(hw-verify)`)** — a wrong rate is
+  audible as pitch shift and `_diag_yaesu.py` reports the enumeration.
+- **FTX-1F** exposes three power configurations (Field head 6/10 W, SPA-1
+  100 W); the server detects the class from the `PC` answer format.
+
+
 ### FT-710
 
 The FT-710 connects to the computer via a single USB cable but exposes

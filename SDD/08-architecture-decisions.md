@@ -273,3 +273,33 @@
 | AD-015 | Priority CAT command preemption | Implemented |
 | AD-016 | Pluggable radio backend architecture (FT-710 + IC-7300) | Implemented |
 | AD-017 | Server-side QSO recording (incremental MP3, 16 kHz storage domain) | Implemented |
+| AD-018 | Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F); the verified FT-710 path stays separate | Accepted (V2.46), migration deferred to phase 3 |
+| AD-019 | Unverified models ship receive-only: transmit gate, read-only identity check, per-table provenance | Implemented (V2.46) |
+
+## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Structural |
+| Status | Accepted (V2.46)；FT-710 迁移列为三期 |
+| Decision | 新增 `backends/yaesu/`：`yaesu_profiles.py` 是每机型差异的唯一来源（模式寄存器 **与** 独立的 CAT 字符查找表、滤波槽位、频段、衰减/前置步进、功率格式、S 表曲线、验证状态、逐表溯源），`cat_core.py` 承载从 FT-710 `cat_controller.py` **移植**过来的传输层（`;` 帧、AI 帧前缀过滤、写-only set、PTT/TUNE 优先级抢占、ENXIO 与瞬态错误分类、重连节奏），`backend.py` 由 profile 派生能力位/UI 表/状态表/poll 项。`backends/ft710/` **完全不动**。 |
+
+**Problem**: 加 Yaesu 机型时最省事的做法是让每台新机继承 `FT710Backend`，但这会把每日在用的 FT-710 类层次拖进三台**未验证**机型的需求里，并把并非按共享核心设计的 `cat_controller.py` 事实上变成共享核心（含 FT-710 专有假设）；而「同期把 FT-710 也迁到共享核心」虽能让核心被真机验证，却让一个发布里改动用户每天通话的代码路径，爆炸半径最大。
+
+**Rationale**: Hamlib 4.7.2 自身就是该架构的先例（`newcat.c` 13,048 行共享核心 + `ftdx10.c`/`ftdx101.c`/`ft710.c` 各 ~300 行机型表），仓库内也有已验证的同类先例（`backends/ic7300/civ_profiles.py`）。新核心因此坐在「被真机验证过的传输逻辑 + 数据化机型表」之上，同时 FT-710 的现场行为零风险。核心的无真机验证问题由 Hamlib 模拟器与 pty 假电台测试补偿。
+
+**Consequences**: 短期存在两条 Yaesu 代码路径（框架/串口逻辑有少量重复），迁移列为三期：真机在手时逐命令 A/B 对比新旧实现，`MRRC_RADIO_MODEL=ft710` 是回滚开关。加第 5 个 Yaesu 机型只需加一张 profile 表。
+
+## AD-019: 未验证机型仅接收（TX 门禁 + 只读身份校验 + 逐表溯源）
+
+| Attribute | Value |
+|-----------|-------|
+| Type | Policy |
+| Status | Implemented (V2.46) |
+| Decision | 四台 Yaesu 机型（以及此前的 IC-705/7610/7760）在无真机证据时：`RadioCapabilities.verified=False`、`tx_gated=True`，`set_ptt(True)`/`set_tune(True)` 直接拒绝并**每进程仅告警一次**（`MRRC_ALLOW_UNVERIFIED_TX=1` 才放行，**释放永不被拦**）；`ID;` 只读校验记录实测字节，profile 未记录期望值时仅 INFO，不符只告警**绝不阻断**；每张表在 `provenance` 里写明来源文件与符号，拿不到的数据标 `TODO(hw-verify)` 并进入 `unverified_meters`；`_diag_yaesu.py` 负责在有真机时闭合这些缺口。 |
+
+**Problem**: 无真机的实现容易被呈现为「已验证」：表头曲线看起来一样、模式表看起来合理，一旦现场表现不同，用户无法判断是电台行为、接线还是实现猜测。更危险的是 TX——在未验证的频率/功率语义上发射可能对电台或天线系统不利。
+
+**Rationale**: 「不确定就说不确定」比「猜一个并当作数据」成本低得多：门禁把风险最高的动作（发射）变成显式选择，溯源让每张表都可追溯、可纠正，诊断脚本把闭合缺口变成一次粘贴。
+
+**Consequences**: 新机型首次连接只收不发（UI 显示"实验性，仅接收"），需要操作者显式开启；模式/滤波/表头在获得现场回传前都带未验证标记；`dual_rx`（FTDX101D/MP 与 FTX-1F 的双接收）**只记录不实现**，留待二期独立规格。

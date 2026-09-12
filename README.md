@@ -1,8 +1,8 @@
 # MRRC Web Control
 
-Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) and Icom CI-V transceivers: [IC-7300](https://www.icomjapan.com/)/IC-7300MK2 (verified) plus IC-705, IC-7610 and IC-7760 (**experimental — implemented from offline rig data, no unit tested; transmit stays disabled until `MRRC_ALLOW_UNVERIFIED_TX=1`**). Full browser-based control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry, PTT management, and memory channels. Mobile-first responsive UI optimized for iPhone/iOS Safari.
+Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) and Icom CI-V transceivers: [IC-7300](https://www.icomjapan.com/)/IC-7300MK2 (verified) plus IC-705, IC-7610 and IC-7760, and the Yaesu ASCII-CAT family FTDX10, FTDX101D, FTDX101MP and FTX-1F (**experimental — implemented from offline rig data, no unit tested; transmit stays disabled until `MRRC_ALLOW_UNVERIFIED_TX=1`**). Full browser-based control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry, PTT management, and memory channels. Mobile-first responsive UI optimized for iPhone/iOS Safari.
 
-The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, or `ic7300mk2`). The default is `ft710`.
+The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`). The default is `ft710`.
 
 ![FT-710 Web Control Screenshot](IMG_8888.PNG)
 
@@ -59,7 +59,7 @@ dist\windows\MRRC-Modern-Setup.exe
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, or `ic7300mk2` |
+| `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1` |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V address |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
@@ -67,7 +67,7 @@ dist\windows\MRRC-Modern-Setup.exe
 | `MRRC_RECORDINGS_DIR` | `<runtime>/recordings` | Where recorded QSO MP3s live (packaged installs: the per-user data dir) |
 | `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate for recordings (kbps, 16 kHz mono) |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
-| `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760). Off = keying refused with an explanatory UI message; releases are never blocked |
+| `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F). Off = keying refused with an explanatory UI message; releases are never blocked |
 | `MRRC_WEB_PORT` | `8888` | Web server port |
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change** — startup logs a loud warning while the default is active) |
 | `MRRC_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |

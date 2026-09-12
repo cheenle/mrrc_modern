@@ -391,6 +391,51 @@ SDD coverage: AD-017, §12.4
 | `RecordingsRestTests` | 8 | List / Range stream / delete routes and name containment |
 | `RecordingFailureHandlingTests` | 9 | Missing encoder, unwritable dir, failing handler answers instead of dropping the WS |
 
+### 35. test_yaesu_profiles.py — Yaesu Model Profiles (23 tests)
+
+Profile invariants (spec 2026-09-12 §5): provenance recorded for every table,
+unverified/tx-gated flags, mode registers unique with a CAT character for
+each, filter slots ordered, S-meter curves monotonic and clamped, and the
+model-specific facts that differ between the four radios (including the
+FTX-1's non-hex `H`/`I` C4FM codes).
+
+### 36. test_yaesu_cat_core.py — Yaesu ASCII-CAT Transport and Commands (41 tests)
+
+Transport framing/prefix filtering/priority preemption/error classification
+against a scripted serial double, plus the profile-driven command layer:
+frequency/VFO, int-register modes with the FTX-1 leave-memory step,
+slot-based filter width, PTT/TUNE, meters, gains and the power-format
+detection with clamping.
+
+### 37. test_yaesu_backend.py — Profile-Driven Backend, Gate and Identity (21 tests)
+
+Capabilities/tables/poll items derived from the profile, the transmit gate
+(refusal, release never blocked, one warning per process, opt-in switch), the
+read-only `ID;` check (log, warn-only mismatch, no warning without an
+expectation) and the ABC delegation completeness guard.
+
+### 38. test_yaesu_fake_radio.py — pty Fake Radio and Optional Hamlib Peer (8 tests)
+
+End-to-end CAT round trips against a real pty device path with a fake radio
+on the other end (no mocks in the transport), plus an opt-in
+cross-implementation check against Hamlib's `simftdx101` simulator. The
+simulator test skips unless it is built and `socat` is installed:
+
+```bash
+cd ~/hamlib/Hamlib-4.7.2/simulators && make   # builds simftdx101 et al.
+brew install socat                            # macOS; apt install socat on Linux
+```
+
+### 39. test_diag_yaesu.py — Field Diagnostic Helpers (7 tests)
+
+Identity evaluation (match/mismatch/no expectation/silent), the two-switch
+TX-check rule and the paste-ready report formatting.
+
+### 40. test_yaesu_wiring.py — Registry, Baud and Factory Wiring (6 tests)
+
+The four registry keys, factory construction, the FT-710 path staying
+verified and untouched, and the model-aware baud table.
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |

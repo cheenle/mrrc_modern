@@ -74,6 +74,16 @@ git ls-remote --tags origin | grep vX.Y.Z                                    # v
 
 ## CRITICAL Gotchas
 
+0. **`/tmp` on `www.vlsc.net` is a 454 MB tmpfs** — uploads above that fail mid-transfer (`scp: write remote ...: Failure`, and afterwards `df -h /tmp` shows it 100 % full). The Pi image (~546 MB) hits this every time, the installers (~45–56 MB) do not. Stream large artifacts to the disk-backed path and move them into place atomically (same filesystem):
+
+```bash
+ssh www.vlsc.net 'cat > /var/tmp/<name>.new' < dist/rpi/MRRC-Modern-vX.Y.Z-rpi64.img.xz
+ssh www.vlsc.net 'sha256sum /var/tmp/<name>.new'      # verify BEFORE publishing
+ssh www.vlsc.net 'd=/var/www/vlsc.net/mrrc_modern/downloads; sudo -n mv /var/tmp/<name>.new $d/<name>; sudo -n chown www-data:www-data $d/<name>; sudo -n chmod 644 $d/<name>'
+```
+
+0b. **Another agent/session may be committing in the same worktree.** Before `git add -A`, read `git log`/`git status`: during the v1.15.0 Pi release a parallel session had 4 Yaesu commits plus uncommitted files in flight (one of its test modules hung `unittest discover` in uninterruptible I/O). Stage **explicit paths** for your release commit, leave the other session's files alone, and expect `git tag`/`push` to carry their commits along (unavoidable on a linear branch — say so in the release record).
+
 1. **A launcher change means rebuilding BOTH installers** (2026-09-12). The Windows and macOS launchers share `macos/first_run.py` (env parsing/first-run), so a fix there ships in both bundles — rebuilding only one platform publishes an app that still crashes for the other. The same holds for anything under `windows/` or `macos/`.
 
 2. **`BUILD_DONE` (Windows wrapper) proves nothing.** It prints even when the test/PyInstaller/Inno gate aborted (v1.15.0 attempt printed it with a failed suite and no exe). Verify by artifact: fresh mtime, 45–46 MB, `Get-FileHash` == Mac hash, and (new) walk the bundle bytecode to confirm the symbol you shipped is actually inside.

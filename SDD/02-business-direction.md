@@ -2,7 +2,7 @@
 
 ## 2.1 Vision
 
-Make supported radios (Yaesu FT-710 and Icom IC-7300 / IC-7300MK2) usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.
+Make supported radios (Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 — both hardware-verified — plus the experimental Icom IC-705 / IC-7610 / IC-7760 and the Yaesu ASCII-CAT family FTDX10 / FTDX101D / FTDX101MP / FTX-1F) usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.
 
 ## 2.2 Mission
 
@@ -40,7 +40,7 @@ Deliver a pragmatic, browser-native remote control surface for supported radios 
 | S2 | Direct radio protocol | Use serial CAT or CI-V directly; no Hamlib/rigctld dependency |
 | S3 | Browser-native audio | RX playback via Web Audio/AudioWorklet; TX via getUserMedia |
 | S4 | Small service surface | FastAPI owns static files, WebSockets, backend, audio in one process |
-| S5 | Dual-mode spectrum | Real scope data when available (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300), S-meter fallback always works |
+| S5 | Dual-mode spectrum | Real scope data when available (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2 family); the Yaesu ASCII-CAT family has no scope stream at all and runs on the S-meter fallback alone |
 | S6 | Document actual state | SDD distinguishes implemented from planned features |
 
 ## 2.6 Tactics

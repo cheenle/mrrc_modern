@@ -249,7 +249,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Status</td>
-<td>v1.15.0 released on both platforms (macOS DMG 55,976,374 bytes, SHA-256 <code class="scope-code">d66cb2ad…55099e</code>; Windows Setup 45,494,587 bytes, SHA-256 <code class="scope-code">74d04b84…13ee0c</code>, SDD V2.45) with server-side QSO recording (AD-017) and the writer-liveness fix (a second recording in the same process used to be 100 % silent); both bundles carry <code class="scope-code">lameenc</code>, and the Windows bundle’s bytecode was walked to confirm <code class="scope-code">_ensure_rec_writer</code> is present. Superseded note: the build host <code class="scope-code">ham.vlsc.net</code> was unreachable, so the site still serves the v1.14.2 exe; <code class="scope-code">lameenc</code> verified inside the macOS bundle; CAT serial flapping (R11) is a physical-layer issue with software mitigations; the rpi64 image is v1.15.0 (546,128,812 bytes, SHA-256 <code class="scope-code">c9936a3b…3a0773</code>), rebuilt from the same release line with <code class="scope-code">lameenc</code> aarch64 inside the image venv and the tolerant Linux first-boot env reader</td>
+<td>v1.15.0 released on both platforms (macOS DMG 55,976,374 bytes, SHA-256 <code class="scope-code">d66cb2ad…55099e</code>; Windows Setup 45,494,587 bytes, SHA-256 <code class="scope-code">74d04b84…13ee0c</code>, SDD V2.45) with server-side QSO recording (AD-017) and the writer-liveness fix (a second recording in the same process used to be 100 % silent); both bundles carry <code class="scope-code">lameenc</code>, and the Windows bundle’s bytecode was walked to confirm <code class="scope-code">_ensure_rec_writer</code> is present. Superseded note: the build host <code class="scope-code">ham.vlsc.net</code> was unreachable, so the site still serves the v1.14.2 exe; <code class="scope-code">lameenc</code> verified inside the macOS bundle; CAT serial flapping (R11) is a physical-layer issue with software mitigations; the rpi64 image is v1.15.0 (546,128,812 bytes, SHA-256 <code class="scope-code">c9936a3b…3a0773</code>), rebuilt from the same release line with <code class="scope-code">lameenc</code> aarch64 inside the image venv and the tolerant Linux first-boot env reader. Yaesu ASCII-CAT family added: <code class="scope-code">ftdx10</code>/<code class="scope-code">ftdx101d</code>/<code class="scope-code">ftdx101mp</code>/<code class="scope-code">ftx1</code> are profile-driven and <strong>unverified</strong> — receive-only until <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>, no waterfall because the Yaesu scope waveform is not documented anywhere — with the verified FT-710 backend deliberately left untouched, dual receive deferred to phase 2 and FT-710 migration to phase 3 (AD-018/AD-019, SDD V2.46)</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -257,11 +257,11 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Primary Radios</td>
-<td>Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (verified) and IC-705 / IC-7610 / IC-7760 (profiles without hardware verification, TX gated) — all selectable via backend</td>
+<td>Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend</td>
 </tr>
 <tr>
 <td>Backend Selection</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760</code> (default <code class="scope-code">ft710</code>); <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> unlocks transmit on the three unverified models</td>
+<td><code class="scope-code">MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1</code> (default <code class="scope-code">ft710</code>); <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> unlocks transmit on the seven unverified models</td>
 </tr>
 <tr>
 <td>Runtime</td>

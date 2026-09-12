@@ -137,7 +137,7 @@
 <td>External radio device controlled via serial CAT; provides scope data via FT4222 SPI; provides audio via USB sound card</td>
 </tr>
 <tr>
-<td>Icom IC-7300 / IC-7300MK2</td>
+<td>Icom CI-V family (IC-7300/MK2 verified; IC-705/7610/7760 experimental)</td>
 <td>External radio device controlled via USB CI-V serial; provides in-band 0x27 spectrum on the same port; provides 48kHz native USB audio</td>
 </tr>
 <tr>
@@ -247,7 +247,14 @@
 <td>Serial</td>
 <td>Same CI-V port</td>
 <td>Radio → Server</td>
-<td>IC-7300 0x27 spectrum frames on the CI-V bus</td>
+<td>CI-V 0x27 spectrum frames on the CI-V bus (all Icom backends)</td>
+</tr>
+<tr>
+<td>Yaesu ASCII-CAT</td>
+<td>Serial</td>
+<td>USB serial bridge</td>
+<td>Server ↔︎ Radio</td>
+<td>FTDX10/FTDX101D/FTDX101MP/FTX-1F: the same Yaesu ASCII CAT framing at 38400 8N1 as the FT-710; <strong>no scope interface exists</strong> (undocumented waveform)</td>
 </tr>
 <tr>
 <td>USB Audio IN</td>

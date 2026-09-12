@@ -136,6 +136,14 @@ Icom IC-7300 / IC-7300MK2
   → USB CI-V serial port (explicit 115200 baud, not Auto; IC-7300 default 0x94, MK2 default 0xB6)
   → 0x27 spectrum data on the same CI-V port (display + data-output switches ON)
   → 48kHz native USB Audio interface</code></pre>
+<pre class="scope-code text"><code>Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (experimental)
+  → USB connection to host
+  → USB serial bridge (same ASCII-CAT protocol as the FT-710; 38400 8N1)
+  → No scope interface: the Yaesu scope waveform is undocumented, so the
+    server keeps broadcasting the S-meter synthesiser instead
+  → USB Audio interface (sample rate per profile, family default 44.1kHz,
+    TODO(hw-verify))</code></pre>
+<p><strong>First connection is receive-only for an unverified model</strong> (IC-705/IC-7610/ IC-7760 and all four Yaesu models): the startup log reports <code class="scope-code">Radio model &lt;key&gt; is NOT hardware-verified — transmit is DISABLED</code>, the connection dialog labels the model 实验性/仅接收, and <code class="scope-code">set_ptt(True)</code>/ <code class="scope-code">set_tune(True)</code> are refused until the operator sets <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> and restarts. PTT <strong>releases are never gated</strong>, and the model identity check (<code class="scope-code">ID;</code>, read-only) only logs.</p>
 <h2 id="configuration">12.2 Configuration</h2>
 <table class="scope-table">
 <colgroup>
@@ -154,7 +162,7 @@ Icom IC-7300 / IC-7300MK2
 <tr>
 <td><code class="scope-code">MRRC_RADIO_MODEL</code></td>
 <td><code class="scope-code">ft710</code></td>
-<td>Backend selection: <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, or <code class="scope-code">ic7300mk2</code></td>
+<td>Backend selection (registry-validated): <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code></td>
 </tr>
 <tr>
 <td><code class="scope-code">IC7300_CIV_ADDR</code></td>
@@ -174,7 +182,7 @@ Icom IC-7300 / IC-7300MK2
 <tr>
 <td><code class="scope-code">MRRC_BAUD_RATE</code></td>
 <td>backend default</td>
-<td>CAT/CI-V baud: FT-710 <code class="scope-code">38400</code>; IC-7300/MK2 <code class="scope-code">115200</code>; an explicit value overrides the backend default</td>
+<td>CAT/CI-V baud: FT-710 and the four Yaesu models <code class="scope-code">38400</code>; Icom models <code class="scope-code">115200</code>; an explicit value overrides the backend default</td>
 </tr>
 <tr>
 <td><code class="scope-code">MRRC_WEB_PORT</code></td>

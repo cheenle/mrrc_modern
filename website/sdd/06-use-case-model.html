@@ -136,8 +136,12 @@
 <td>Radio device controlled via serial CAT, scope via FT4222 SPI, audio via USB</td>
 </tr>
 <tr>
-<td>Icom IC-7300 / IC-7300MK2</td>
-<td>Radio device controlled via USB CI-V serial, 0x27 spectrum on same port, 48kHz native USB audio</td>
+<td>Icom CI-V family</td>
+<td>Radio devices controlled via USB CI-V serial, 0x27 spectrum on the same port, 48kHz native USB audio (IC-7300/MK2 verified; IC-705/7610/7760 experimental)</td>
+</tr>
+<tr>
+<td>Yaesu ASCII-CAT family</td>
+<td>Radio devices (FTDX10/FTDX101D/FTDX101MP/FTX-1F) controlled over the same ASCII-CAT serial protocol as the FT-710 at 38400 8N1; experimental (no unit tested) → receive-only until <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>, no scope frames</td>
 </tr>
 </tbody>
 </table>

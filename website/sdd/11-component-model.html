@@ -133,13 +133,37 @@
 <td>RadioBackendFactory</td>
 <td>Backend core</td>
 <td><code class="scope-code">backends/__init__.py</code></td>
-<td><code class="scope-code">create_backend(model)</code> lazy factory + <code class="scope-code">known_models()</code>; registered keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>; selected by <code class="scope-code">MRRC_RADIO_MODEL</code>; the server’s model whitelist and baud defaults derive from this registry</td>
+<td><code class="scope-code">create_backend(model)</code> lazy factory + <code class="scope-code">known_models()</code>; registered keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code></td>
 </tr>
 <tr>
 <td>RadioBackend</td>
 <td>Backend core</td>
 <td><code class="scope-code">backends/base.py</code></td>
 <td><code class="scope-code">RadioBackend</code> ABC + <code class="scope-code">RadioCapabilities</code> dataclass + <code class="scope-code">ScopeProducer</code> protocol; CAT surface, defaulted hooks for bands/modes/filter tables/poll lists/scope init</td>
+</tr>
+<tr>
+<td>YaesuProfiles</td>
+<td>Backend (Yaesu)</td>
+<td><code class="scope-code">backends/yaesu/yaesu_profiles.py</code></td>
+<td>Per-model Yaesu facts: mode registers <strong>and</strong> the separate CAT character table (the FTX-1’s <code class="scope-code">H</code>/<code class="scope-code">I</code> are not hex digits), filter slots, bands, attenuator/preamp steps, power format, S-meter curves, <code class="scope-code">verified</code>/<code class="scope-code">unverified_meters</code> and provenance (AD-018)</td>
+</tr>
+<tr>
+<td>YaesuCatCore</td>
+<td>Backend (Yaesu)</td>
+<td><code class="scope-code">backends/yaesu/cat_core.py</code></td>
+<td><code class="scope-code">YaesuCatController</code>: transport ported from the verified FT-710 path (framing, AI-frame filtering, priority PTT/TUNE, ENXIO vs transient classification, reconnect) parameterised by profile, plus the FTX-1 <code class="scope-code">VM000;</code> leave-memory step</td>
+</tr>
+<tr>
+<td>YaesuBackend</td>
+<td>Backend (Yaesu)</td>
+<td><code class="scope-code">backends/yaesu/backend.py</code></td>
+<td><code class="scope-code">YaesuBackend</code> + four model subclasses: capabilities/tables/poll items from the profile, TX gate and read-only <code class="scope-code">ID;</code> identity check; <code class="scope-code">scope_type="none"</code> (AD-019)</td>
+</tr>
+<tr>
+<td>YaesuDiagnostic</td>
+<td>Tooling</td>
+<td><code class="scope-code">_diag_yaesu.py</code></td>
+<td>Read-only field self-check for the four Yaesu models: probes the claimed commands, compares <code class="scope-code">ID;</code> with the profile, optional bounded key-up, paste-ready Markdown report</td>
 </tr>
 <tr>
 <td>CatController</td>

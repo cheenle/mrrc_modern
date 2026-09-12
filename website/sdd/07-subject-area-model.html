@@ -142,6 +142,11 @@
 <td>Dataclass with dirty-field tracking</td>
 </tr>
 <tr>
+<td>YaesuModelProfile</td>
+<td>model_key, display_name, mode_numbers, mode_codes, filter_widths, bands, att_steps, power_format, s_meter_cal, verified, provenance</td>
+<td>Per-model Yaesu facts (spec 2026-09-12 §5): the mode <strong>register</strong> (int, the <code class="scope-code">RadioState</code> contract) and the separate CAT <strong>character</strong> (H/I are not hex digits), filter slots, bands, attenuator/preamp steps, power class, S-meter curve and the offline source of every table</td>
+</tr>
+<tr>
 <td>RadioCommand</td>
 <td>prefix, value, response</td>
 <td>Backend-specific command: e.g., FT-710 CAT <code class="scope-code">"FA014200000;"</code> → receive <code class="scope-code">"FA014200000;"</code>; IC-7300 CI-V framed command/response</td>

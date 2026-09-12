@@ -107,7 +107,7 @@
     <main class="sdd-content">
 <h1 id="executive-summary">1. Executive Summary</h1>
 <h2 id="project-overview">1.1 Project Overview</h2>
-<p>MRRC Modern (<code class="scope-code">mrrc_modern</code>) is a mobile-first browser remote-control system for supported HF/50MHz transceivers — currently the Yaesu FT-710 and the Icom IC-7300 / IC-7300MK2. It provides a single web UI, WebSocket control/audio/spectrum channels, a pluggable radio-backend layer, spectrum data capture, PyAudio sound card audio streaming, Opus codec compression, and real-time waterfall/S-meter/multi-meter visualization.</p>
+<p>MRRC Modern (<code class="scope-code">mrrc_modern</code>) is a mobile-first browser remote-control system for supported HF/50MHz transceivers — the Yaesu FT-710 and the Icom IC-7300 / IC-7300MK2 (both verified), the Icom IC-705 / IC-7610 / IC-7760, and the Yaesu ASCII-CAT family FTDX10 / FTDX101D / FTDX101MP / FTX-1F. The seven models beyond the FT-710 and the IC-7300/MK2 are <strong>experimental</strong>: implemented from offline evidence with no unit tested, so they report <code class="scope-code">verified=false</code>, refuse to transmit until <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> is set, and the Yaesu family additionally has no scope stream (the Yaesu scope waveform is not documented anywhere, so the S-meter fallback covers the UI). It provides a single web UI, WebSocket control/audio/spectrum channels, a pluggable radio-backend layer, spectrum data capture, PyAudio sound card audio streaming, Opus codec compression, and real-time waterfall/S-meter/multi-meter visualization.</p>
 <p>The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend on wfview, Hamlib, or any external radio middleware. The backend is selected at startup by <code class="scope-code">MRRC_RADIO_MODEL</code> (<code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, or <code class="scope-code">ic7300mk2</code>; default <code class="scope-code">ft710</code>). Each backend talks directly to its radio: the FT-710 backend sends Yaesu ASCII CAT over a serial port and reads FT4222 SPI scope data via a subprocess; the IC-7300 backend sends Icom CI-V frames over USB serial and demuxes in-band 0x27 spectrum on the same port. RX/TX audio is captured/played through the radio’s built-in USB audio interface via PyAudio.</p>
 <h2 id="current-design-goals">1.2 Current Design Goals</h2>
 <table class="scope-table">
@@ -205,6 +205,11 @@
 <td>Serial radio protocol</td>
 <td>Implemented</td>
 <td>FT-710: Yaesu ASCII CAT via pyserial; IC-7300: CI-V framing via <code class="scope-code">civ_codec.py</code>/<code class="scope-code">civ_controller.py</code></td>
+</tr>
+<tr>
+<td>Yaesu ASCII-CAT family</td>
+<td>Experimental</td>
+<td><code class="scope-code">backends/yaesu/</code>: shared profile-driven core (FTDX10/FTDX101D/FTDX101MP/FTX-1F) whose transport is ported from the verified FT-710 path; per-model mode registers, filter slots, bands, meter curves and provenance; TX gated, <code class="scope-code">scope_type=none</code>, dual receive deferred</td>
 </tr>
 <tr>
 <td>7-task polling</td>

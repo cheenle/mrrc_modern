@@ -67,7 +67,8 @@
     {
       "id": "cat-serial",
       "globs": [
-        "cat_controller.py"
+        "cat_controller.py",
+        "backends/**/*.py"
       ],
       "keywords": [
         "cat",
@@ -76,7 +77,10 @@
         "query",
         "baud",
         "串口",
-        "命令"
+        "命令",
+        "yaesu",
+        "ascii",
+        "profile"
       ],
       "refs": [
         "ad:AD-002",
@@ -86,7 +90,10 @@
         "uc:UC-006",
         "risk:R1",
         "sc:SC1",
-        "sc:SC2"
+        "sc:SC2",
+        "ad:AD-018",
+        "ad:AD-019",
+        "nfr:NFR-067"
       ]
     },
     {
@@ -506,6 +513,43 @@
         "sec:12",
         "issue:I6",
         "issue:I8"
+      ]
+    },
+    {
+      "id": "yaesu-model-profiles",
+      "globs": [
+        "backends/yaesu/**/*.py",
+        "_diag_yaesu.py",
+        "tests/test_yaesu_profiles.py",
+        "tests/test_yaesu_cat_core.py",
+        "tests/test_yaesu_backend.py",
+        "tests/test_yaesu_wiring.py",
+        "tests/test_yaesu_fake_radio.py",
+        "tests/test_diag_yaesu.py"
+      ],
+      "keywords": [
+        "yaesu",
+        "ftdx10",
+        "ftdx101d",
+        "ftdx101mp",
+        "ftx1",
+        "ftx-1f",
+        "profile",
+        "provenance",
+        "unverified",
+        "机型",
+        "未验证",
+        "溯源"
+      ],
+      "refs": [
+        "ad:AD-018",
+        "ad:AD-019",
+        "nfr:NFR-067",
+        "risk:R12",
+        "assumption:A9",
+        "sec:11",
+        "ch:11",
+        "ch:12"
       ]
     }
   ]

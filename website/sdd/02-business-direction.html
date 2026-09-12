@@ -107,7 +107,7 @@
     <main class="sdd-content">
 <h1 id="business-direction-bus-411">2. Business Direction (BUS 411)</h1>
 <h2 id="vision">2.1 Vision</h2>
-<p>Make supported radios (Yaesu FT-710 and Icom IC-7300 / IC-7300MK2) usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.</p>
+<p>Make supported radios (Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 — both hardware-verified — plus the experimental Icom IC-705 / IC-7610 / IC-7760 and the Yaesu ASCII-CAT family FTDX10 / FTDX101D / FTDX101MP / FTX-1F) usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.</p>
 <h2 id="mission">2.2 Mission</h2>
 <p>Deliver a pragmatic, browser-native remote control surface for supported radios that favors direct serial protocol integration (Yaesu ASCII CAT or Icom CI-V), mobile ergonomics, low latency audio, and field maintainability over heavyweight framework or native-app complexity.</p>
 <h2 id="business-goals">2.3 Business Goals</h2>
@@ -262,7 +262,7 @@
 <tr>
 <td>S5</td>
 <td>Dual-mode spectrum</td>
-<td>Real scope data when available (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300), S-meter fallback always works</td>
+<td>Real scope data when available (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300/MK2 family); the Yaesu ASCII-CAT family has no scope stream at all and runs on the S-meter fallback alone</td>
 </tr>
 <tr>
 <td>S6</td>

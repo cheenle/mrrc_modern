@@ -7,14 +7,14 @@
 | Project Name | MRRC Modern / `mrrc_modern` |
 | Project Type | Web remote control for supported HF/50MHz transceivers |
 | Primary Users | HAM operators using phone or desktop browsers |
-| Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable at runtime) |
-| Backend Selection | `MRRC_RADIO_MODEL` env var: `ft710` (default), `ic7300`, `ic7300mk2` |
+| Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (experimental) — all selectable at runtime |
+| Backend Selection | `MRRC_RADIO_MODEL` env var (registry-validated): `ft710` (default), `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1` |
 | Server Platform | macOS/Linux/Windows with Python 3.12+ |
 | Client Platform | Modern browser (Safari 15+, Chrome, Firefox) |
 | Runtime Framework | FastAPI + Uvicorn |
 | Frontend Stack | HTML/CSS/vanilla JavaScript/Web Audio API/Canvas |
 | Radio Interface | Backend-specific: Yaesu ASCII CAT (USB Enhanced COM Port, 38400 baud) or Icom CI-V (USB serial, 115200 8N1, default addr `0x94`) |
-| Scope Interface | FT-710: FTDI FT4222 SPI via standalone Python subprocess; IC-7300: CI-V 0x27 spectrum frames on the CI-V serial port |
+| Scope Interface | FT-710: FTDI FT4222 SPI via standalone Python subprocess; Icom: CI-V 0x27 spectrum frames on the CI-V serial port; Yaesu FTDX10/FTDX101D/MP/FTX-1F: none documented → S-meter synthesiser (`scope_type="none"`) |
 | Audio Interface | PyAudio sound card capture/playback + libopus codec (per-backend sample rate) |
 
 ## 3.2 In Scope

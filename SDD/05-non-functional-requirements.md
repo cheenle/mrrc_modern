@@ -36,7 +36,7 @@
 |----|-------------|--------|----------|-------------|
 | NFR-030 | iOS Safari | RX audio, touch controls, PWA support | High | iPhone test |
 | NFR-031 | Desktop Chrome/Safari/Firefox | Full functionality | High | Desktop browser test |
-| NFR-032 | Radio firmware | Protocol compatible with current FT-710 or Icom CI-V firmware for the selected backend: `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760` | Critical | Radio connect and control test; `_diag_civ.py` field report for the three unverified models |
+| NFR-032 | Radio firmware | Protocol compatible with current vendor firmware for the selected backend: the ten registry keys `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1` | Critical | Radio connection fails with a logged error; the operator can switch models |
 | NFR-033 | macOS + Linux | Server runs on both platforms | High | Cross-platform build test |
 | NFR-034 | opus_rx.py | Works on arm64 (Apple Silicon) and x86_64 | High | ctypes libopus loading test |
 
@@ -61,10 +61,12 @@
 
 | ID | Requirement | Target | Priority | Verification |
 |----|-------------|--------|----------|-------------|
-| NFR-060 | RX sample rate | FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2: 48kHz native capture, no resample; IC-705/IC-7610/IC-7760 inherit the 48kHz no-resample path as an **assumption** (A7, unverified) | Critical | PyAudio stream config; `_diag_civ.py` startup device log |
+| NFR-060 | RX sample rate | FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2 and the IC-705/IC-7610/IC-7760 profiles: 48kHz native capture, no resample; the Yaesu FTDX10/FTDX101D/FTDX101MP/FTX-1F profiles assume the family 44.1kHz value (`TODO(hw-verify)`, per-profile `audio_rx_rate`) | Important | A wrong per-model rate is audible as pitch shift and is the first thing `_diag_yaesu.py` reports |
 | NFR-061 | Opus bitrate | 64kbps default, 16-128kbps adjustable | Medium | Codec config |
 | NFR-062 | TX audio quality | Clean mic audio reaches radio without distortion | High | On-air listening test |
 | NFR-063 | AudioWorklet playback | Jitter buffer: 220ms prebuffer, 90ms recovery, 800ms max | High | Listening under network jitter |
 | NFR-064 | PCM fallback | Automatic when libopus unavailable (server or browser) | High | Start without libopus |
-| NFR-066 | QSO recording | Server-side 16 kHz mono MP3 at ≤64 kbps written incrementally to `recordings/`; timeline length within ±50 ms of elapsed real time regardless of scheduler jitter; disk usage observable in the UI (no automatic deletion by design) | Medium | `tests/test_recorder.py` (gap fill / tolerance / drift), `tests/test_recorder_api.py` (routes, Range) |
+| NFR-066 |
+ QSO recording | Server-side 16 kHz mono MP3 at ≤64 kbps written incrementally to `recordings/`; timeline length within ±50 ms of elapsed real time regardless of scheduler jitter; disk usage observable in the UI (no automatic deletion by design) | Medium | `tests/test_recorder.py` (gap fill / tolerance / drift), `tests/test_recorder_api.py` (routes, Range) |
 | NFR-065 | PyAudio device selection | Auto-detect per-backend device hints (e.g., "FT-710"/"YAESU" for FT-710; "ic-7300"/"ic-705"/"ic-7610"/"ic-7760" then generic "USB Audio CODEC"/"USB Audio Device" for the Icom family), then mono/full-duplex heuristics; fallback to system default | Medium | Device enumeration log |
+| NFR-067 | Verification honesty | A radio model without hardware evidence must report `verified=false`, gate transmit behind `MRRC_ALLOW_UNVERIFIED_TX=1`, list its unverified meters, record a provenance source per table and never be presented as verified in the UI, README or SDD (AD-019) | Critical | Operators cannot mistake documentation-derived tables for measured behaviour; the four Yaesu models and the three Icom experimental models follow this rule |

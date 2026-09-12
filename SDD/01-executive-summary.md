@@ -2,7 +2,7 @@
 
 ## 1.1 Project Overview
 
-MRRC Modern (`mrrc_modern`) is a mobile-first browser remote-control system for supported HF/50MHz transceivers — currently the Yaesu FT-710 and the Icom IC-7300 / IC-7300MK2. It provides a single web UI, WebSocket control/audio/spectrum channels, a pluggable radio-backend layer, spectrum data capture, PyAudio sound card audio streaming, Opus codec compression, and real-time waterfall/S-meter/multi-meter visualization.
+MRRC Modern (`mrrc_modern`) is a mobile-first browser remote-control system for supported HF/50MHz transceivers — the Yaesu FT-710 and the Icom IC-7300 / IC-7300MK2 (both verified), the Icom IC-705 / IC-7610 / IC-7760, and the Yaesu ASCII-CAT family FTDX10 / FTDX101D / FTDX101MP / FTX-1F. The seven models beyond the FT-710 and the IC-7300/MK2 are **experimental**: implemented from offline evidence with no unit tested, so they report `verified=false`, refuse to transmit until `MRRC_ALLOW_UNVERIFIED_TX=1` is set, and the Yaesu family additionally has no scope stream (the Yaesu scope waveform is not documented anywhere, so the S-meter fallback covers the UI). It provides a single web UI, WebSocket control/audio/spectrum channels, a pluggable radio-backend layer, spectrum data capture, PyAudio sound card audio streaming, Opus codec compression, and real-time waterfall/S-meter/multi-meter visualization.
 
 The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend on wfview, Hamlib, or any external radio middleware. The backend is selected at startup by `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, or `ic7300mk2`; default `ft710`). Each backend talks directly to its radio: the FT-710 backend sends Yaesu ASCII CAT over a serial port and reads FT4222 SPI scope data via a subprocess; the IC-7300 backend sends Icom CI-V frames over USB serial and demuxes in-band 0x27 spectrum on the same port. RX/TX audio is captured/played through the radio's built-in USB audio interface via PyAudio.
 
@@ -28,6 +28,7 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 | Spectrum WebSocket | Implemented | `/WSspectrum` binary: v1=851B wf1, v2=1701B wf1+wf2, ~30fps |
 | Spectrum dual-mode | Implemented | Real FFT data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300) + S-meter fallback (synthetic Gaussian peaks) |
 | Serial radio protocol | Implemented | FT-710: Yaesu ASCII CAT via pyserial; IC-7300: CI-V framing via `civ_codec.py`/`civ_controller.py` |
+| Yaesu ASCII-CAT family | Experimental | `backends/yaesu/`: shared profile-driven core (FTDX10/FTDX101D/FTDX101MP/FTX-1F) whose transport is ported from the verified FT-710 path; per-model mode registers, filter slots, bands, meter curves and provenance; TX gated, `scope_type=none`, dual receive deferred |
 | 7-task polling | Implemented | 100ms–5s adaptive polling (7 asyncio tasks) with skip-on-command |
 | S-meter + Multi-meter | Implemented | Canvas S-meter bar + PWR/ALC/SWR/Id/Vd horizontal bar meters |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with `mem_channels.json` persistence |

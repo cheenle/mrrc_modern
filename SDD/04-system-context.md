@@ -11,7 +11,7 @@
 | HAM Operator | Uses browser UI to listen, tune, adjust settings, key PTT, monitor meters |
 | System Maintainer | Starts/stops service, manages serial ports/backend selection, checks logs |
 | Yaesu FT-710 | External radio device controlled via serial CAT; provides scope data via FT4222 SPI; provides audio via USB sound card |
-| Icom IC-7300 / IC-7300MK2 | External radio device controlled via USB CI-V serial; provides in-band 0x27 spectrum on the same port; provides 48kHz native USB audio |
+| Icom CI-V family (IC-7300/MK2 verified; IC-705/7610/7760 experimental) | External radio device controlled via USB CI-V serial; provides in-band 0x27 spectrum on the same port; provides 48kHz native USB audio |
 | Browser Runtime | Provides WebSocket, Web Audio, microphone, touch input, Canvas API |
 
 ## 4.3 External Interfaces
@@ -29,7 +29,8 @@
 | CAT Serial | Serial | USB Enhanced COM Port | Server → Radio | Yaesu FT-710 CAT commands (38400, 8N1) |
 | CI-V Serial | Serial | USB CI-V port | Server ↔ Radio | Icom CI-V frames (115200, 8N1, default addr `0x94`) |
 | FT4222 SPI | SPI | Internal FTDI chip | Radio → Server | FT-710 850-point FFT scope data via `scope_pipe.py` subprocess |
-| CI-V 0x27 Spectrum | Serial | Same CI-V port | Radio → Server | IC-7300 0x27 spectrum frames on the CI-V bus |
+| CI-V 0x27 Spectrum | Serial | Same CI-V port | Radio → Server | CI-V 0x27 spectrum frames on the CI-V bus (all Icom backends) |
+| Yaesu ASCII-CAT | Serial | USB serial bridge | Server ↔ Radio | FTDX10/FTDX101D/FTDX101MP/FTX-1F: the same Yaesu ASCII CAT framing at 38400 8N1 as the FT-710; **no scope interface exists** (undocumented waveform) |
 | USB Audio IN | Audio | USB Audio Device | Radio → Server | RX audio capture via PyAudio |
 | USB Audio OUT | Audio | USB Audio Device | Server → Radio | TX audio playback via PyAudio |
 

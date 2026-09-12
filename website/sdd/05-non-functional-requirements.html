@@ -310,9 +310,9 @@
 <tr>
 <td>NFR-032</td>
 <td>Radio firmware</td>
-<td>Protocol compatible with current FT-710 or Icom CI-V firmware for the selected backend: <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code></td>
+<td>Protocol compatible with current vendor firmware for the selected backend: the ten registry keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code></td>
 <td>Critical</td>
-<td>Radio connect and control test; <code class="scope-code">_diag_civ.py</code> field report for the three unverified models</td>
+<td>Radio connection fails with a logged error; the operator can switch models</td>
 </tr>
 <tr>
 <td>NFR-033</td>
@@ -443,9 +443,9 @@
 <tr>
 <td>NFR-060</td>
 <td>RX sample rate</td>
-<td>FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2: 48kHz native capture, no resample; IC-705/IC-7610/IC-7760 inherit the 48kHz no-resample path as an <strong>assumption</strong> (A7, unverified)</td>
-<td>Critical</td>
-<td>PyAudio stream config; <code class="scope-code">_diag_civ.py</code> startup device log</td>
+<td>FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2 and the IC-705/IC-7610/IC-7760 profiles: 48kHz native capture, no resample; the Yaesu FTDX10/FTDX101D/FTDX101MP/FTX-1F profiles assume the family 44.1kHz value (<code class="scope-code">TODO(hw-verify)</code>, per-profile <code class="scope-code">audio_rx_rate</code>)</td>
+<td>Important</td>
+<td>A wrong per-model rate is audible as pitch shift and is the first thing <code class="scope-code">_diag_yaesu.py</code> reports</td>
 </tr>
 <tr>
 <td>NFR-061</td>
@@ -477,10 +477,17 @@
 </tr>
 <tr>
 <td>NFR-066</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
 <td>QSO recording</td>
 <td>Server-side 16 kHz mono MP3 at ≤64 kbps written incrementally to <code class="scope-code">recordings/</code>; timeline length within ±50 ms of elapsed real time regardless of scheduler jitter; disk usage observable in the UI (no automatic deletion by design)</td>
 <td>Medium</td>
 <td><code class="scope-code">tests/test_recorder.py</code> (gap fill / tolerance / drift), <code class="scope-code">tests/test_recorder_api.py</code> (routes, Range)</td>
+<td></td>
 </tr>
 <tr>
 <td>NFR-065</td>
@@ -488,6 +495,13 @@
 <td>Auto-detect per-backend device hints (e.g., “FT-710”/“YAESU” for FT-710; “ic-7300”/“ic-705”/“ic-7610”/“ic-7760” then generic “USB Audio CODEC”/“USB Audio Device” for the Icom family), then mono/full-duplex heuristics; fallback to system default</td>
 <td>Medium</td>
 <td>Device enumeration log</td>
+</tr>
+<tr>
+<td>NFR-067</td>
+<td>Verification honesty</td>
+<td>A radio model without hardware evidence must report <code class="scope-code">verified=false</code>, gate transmit behind <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>, list its unverified meters, record a provenance source per table and never be presented as verified in the UI, README or SDD (AD-019)</td>
+<td>Critical</td>
+<td>Operators cannot mistake documentation-derived tables for measured behaviour; the four Yaesu models and the three Icom experimental models follow this rule</td>
 </tr>
 </tbody>
 </table>

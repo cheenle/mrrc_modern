@@ -8,7 +8,8 @@
 | System Maintainer | Starts service, manages serial ports/backend selection, observes logs |
 | Browser Runtime | Supplies WebSocket, Web Audio, touch, microphone, Canvas |
 | Yaesu FT-710 | Radio device controlled via serial CAT, scope via FT4222 SPI, audio via USB |
-| Icom IC-7300 / IC-7300MK2 | Radio device controlled via USB CI-V serial, 0x27 spectrum on same port, 48kHz native USB audio |
+| Icom CI-V family | Radio devices controlled via USB CI-V serial, 0x27 spectrum on the same port, 48kHz native USB audio (IC-7300/MK2 verified; IC-705/7610/7760 experimental) |
+| Yaesu ASCII-CAT family | Radio devices (FTDX10/FTDX101D/FTDX101MP/FTX-1F) controlled over the same ASCII-CAT serial protocol as the FT-710 at 38400 8N1; experimental (no unit tested) → receive-only until `MRRC_ALLOW_UNVERIFIED_TX=1`, no scope frames |
 
 ## 6.2 Core Use Cases
 

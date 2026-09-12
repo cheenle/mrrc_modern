@@ -163,13 +163,19 @@
 <td>CATSerialService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>FT-710: Serial CAT protocol over USB Enhanced COM Port (38400, 8N1)</td>
+<td>Yaesu ASCII-CAT transport (FT-710 verified path; also the basis for the <code class="scope-code">backends/yaesu/</code> core) over the USB Enhanced COM Port (38400, 8N1)</td>
 </tr>
 <tr>
 <td>CIVSerialService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr <code class="scope-code">0x94</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>YaesuCatService</td>
+<td>Core</td>
+<td>Implemented</td>
+<td>FTDX10/FTDX101D/FTDX101MP/FTX-1F: shared profile-driven ASCII-CAT core (<code class="scope-code">backends/yaesu/</code>) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback)</td>
 </tr>
 <tr>
 <td>PollingService</td>
@@ -229,6 +235,7 @@ TXAudioService
 SpectrumService
   → ScopePipeService (FT-710 FT4222 path)
   → CIVScopeService (IC-7300 0x27 path)
+  → YaesuCatService (FTDX10/FTDX101D/FTDX101MP/FTX-1F ASCII-CAT — no scope producer, so the fallback below is the only spectrum path)
   → PollingService (S-meter fallback path)
 
 PollingService

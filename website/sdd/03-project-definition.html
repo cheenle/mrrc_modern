@@ -133,11 +133,11 @@
 </tr>
 <tr>
 <td>Primary Radios</td>
-<td>Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (selectable at runtime)</td>
+<td>Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (experimental) — all selectable at runtime</td>
 </tr>
 <tr>
 <td>Backend Selection</td>
-<td><code class="scope-code">MRRC_RADIO_MODEL</code> env var: <code class="scope-code">ft710</code> (default), <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code></td>
+<td><code class="scope-code">MRRC_RADIO_MODEL</code> env var (registry-validated): <code class="scope-code">ft710</code> (default), <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code></td>
 </tr>
 <tr>
 <td>Server Platform</td>
@@ -161,7 +161,7 @@
 </tr>
 <tr>
 <td>Scope Interface</td>
-<td>FT-710: FTDI FT4222 SPI via standalone Python subprocess; IC-7300: CI-V 0x27 spectrum frames on the CI-V serial port</td>
+<td>FT-710: FTDI FT4222 SPI via standalone Python subprocess; Icom: CI-V 0x27 spectrum frames on the CI-V serial port; Yaesu FTDX10/FTDX101D/MP/FTX-1F: none documented → S-meter synthesiser (<code class="scope-code">scope_type="none"</code>)</td>
 </tr>
 <tr>
 <td>Audio Interface</td>

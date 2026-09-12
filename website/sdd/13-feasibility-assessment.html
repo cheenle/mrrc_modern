@@ -234,6 +234,13 @@
 <td>Service worker bypasses JS/HTML; version query strings</td>
 </tr>
 <tr>
+<td>R12</td>
+<td>四台 Yaesu 机型（FTDX10/FTDX101D/MP/FTX-1F）的 CAT 表、S 表曲线与音频采样率来自离线证据（Hamlib 4.7.2 + 手册），<strong>没有真机验证</strong>；频谱通路在 Yaesu CAT 参考中不存在</td>
+<td>Medium</td>
+<td>Medium</td>
+<td>V2.46：profile 驱动 + 逐表 <code class="scope-code">provenance</code> + <code class="scope-code">unverified_meters</code> 标注；TX 走 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code> 门禁（默认拒绝发射）；<code class="scope-code">ID;</code> 只读校验；<code class="scope-code">_diag_yaesu.py</code> 供现场一键回传（含音频枚举与表头对照），闭合前不声称已验证</td>
+</tr>
+<tr>
 <td>R11</td>
 <td>电台 USB 串口桥在物理层反复重枚举（macOS <code class="scope-code">ENXIO</code>/<code class="scope-code">ENOENT</code>），导致 CAT 周期性中断（现场单日 171 次）；软件无法阻止，只能快速恢复</td>
 <td>Medium</td>
@@ -320,6 +327,12 @@
 <td>The IC-705/IC-7610/IC-7760 share the IC-7300 CI-V command surface (frequency/mode/preamp/AGC/NB/NR/compressor/filter-width/squelch/RF-power/PTT/tune, meter sub-codes) — evidenced by identical wfview rig command tables, not by a radio</td>
 <td>Medium</td>
 <td><code class="scope-code">_diag_civ.py</code> read-only probe step; <code class="scope-code">19 00</code> identity log</td>
+</tr>
+<tr>
+<td>A9</td>
+<td>The four Yaesu models share the FT-710’s ASCII-CAT command surface (frequency/mode/filter/PTT/gains/meters/memory), differing mainly in mode codes, filter slots, bands, power class and meter curves — evidenced by Hamlib 4.7.2’s shared <code class="scope-code">newcat.c</code> core plus per-model table files (<code class="scope-code">ftdx10.c</code>, <code class="scope-code">ftdx101.c</code>, <code class="scope-code">ftdx101mp.c</code>, <code class="scope-code">ftx1/</code>) and the FTX-1 CAT reference (90/90 commands mapped)</td>
+<td>Verified offline; no unit tested, so every derived table carries provenance and the transmit gate stays on (AD-019)</td>
+<td></td>
 </tr>
 </tbody>
 </table>

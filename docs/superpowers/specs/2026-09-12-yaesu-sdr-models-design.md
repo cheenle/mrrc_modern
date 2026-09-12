@@ -252,3 +252,26 @@ runs `_diag_yaesu.py` on real hardware:
 - Risks: unverified CAT tables (R: mitigated by provenance + diagnostics), assumed audio rate,
   absent spectrum, the FT-710 daily path staying on an older code shape until phase 3.
 - Verification boundary: §10 above; SDD §13 and the README carry the same list.
+
+
+## Implementation outcome (2026-09-12)
+
+Shipped as planned in `docs/superpowers/plans/2026-09-12-yaesu-sdr-models.md`
+(9 tasks / 42 steps, commits `76e3664` … `f22e17c`). The deviations below were found while executing
+the plan and are recorded in the plan's review tables; each one changed this design.
+
+| Finding | Effect on this design |
+| --- | --- |
+| R1 — `__getattr__` does not satisfy `ABCMeta`, so the four backend classes would have stayed abstract and failed to instantiate | §4.3: the abstract surface is satisfied by delegates bound onto the class at import time, with the frozen abstract set cleared and a test that fails if the ABC grows a method |
+| R2 — mode must be an **int** register (`RadioBackend.set_mode(mode_num: int)`, `RadioState.mode: int`), and the FTX-1's `H`/`I` C4FM codes are not hex digits (`f"{0x11:X}"` would have sent an invalid `MD011`) | §5 gained `mode_codes`: registers for the state/UI contract, a separate explicit CAT-character table for the wire, plus reverse lookup with unknown-character rejection |
+| R3 — poll items and `initial_state_sync` must return **parsed** values under real `RadioState` field names (`vfo_a_freq`, not `frequency`) | §4.3: the core gained `get_af_gain`/`get_rf_gain`/`get_rf_power` + a shared `_get_int` helper; the sync keys are the dataclass fields |
+| Task-9 boot smoke test — `server.py` reads `backend.cat` unconditionally, so a backend without it aborts application startup | §4.3/§6: `backends/base.py` now declares `cat` and `set_broadcast_callback` (documented contract, no-op default), and a regression test asserts every server-visible attribute exists on every registered backend |
+| The unverified-model startup warning told Yaesu operators to run `_diag_civ.py` | §7: the warning now names the matching tool per capability family |
+| The verified FT-710 path sends `MG{value:03d}` without the family `P1` selector | §5: the new core sends the documented `MG0xxx` form; the discrepancy is flagged for the field diagnostic rather than changed on the verified path |
+
+Verification actually achieved against §10's boundary: **1034 tests** (1 opt-in Hamlib-simulator test
+skipped), authoritative pyright clean, backend smoke test for the four models, hardware-free server
+boot with `MRRC_RADIO_MODEL=ftx1` (ENXIO classification and the TX-gate warning observed, no
+traceback). The hardware boundary itself is unchanged: no unit of any of the four models has been
+tested, so `id_answer` stays empty for three of them, the audio rate stays an assumption, the meter
+curves stay in `unverified_meters`, and there is still no waterfall. Phases 2-4 (§12) are unstarted.

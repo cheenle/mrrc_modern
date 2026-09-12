@@ -67,7 +67,9 @@ The playback queue pre-buffers 60 ms and caps latency at 400 ms. Oldest-frame dr
 
 FT-710: FT4222 SPI → `scope_pipe.py` subprocess → 850-point wf1/wf2 → `ScopeHandler`.
 
-IC-7300/MK2: startup/reconnect sends scope display ON (`27 10 01`), Center mode, span, then waveform-data output ON (`27 11 01`). CI-V `27 00` frames → `civ_controller.py` demux → bounded queue sized `4 × scope_seq_max` (44 segments on 475-bin models, 60 on the 689-bin IC-7610/IC-7760; drop oldest on overflow) → bin scale (0..160 or 0..200 from the profile) → upsample to 850 → `ScopeHandler`. A bin count or segment count that disagrees with the profile logs once and is adopted, so a wrong profile cannot freeze the waterfall. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.
+IC-7300/MK2: startup/reconnect sends scope display ON (`27 10 01`), Center mode, span, then waveform-data output ON (`27 11 01`).
+
+Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F: **no scope path exists.** The Yaesu scope waveform is not part of any CAT reference (`SS` sets span/speed/mode only) and Hamlib's entire Yaesu family contains no scope-data code, so these backends return no scope producer; the server's S-meter synthesiser keeps `/WSspectrum` alive and the frontend is unchanged. CI-V `27 00` frames → `civ_controller.py` demux → bounded queue sized `4 × scope_seq_max` (44 segments on 475-bin models, 60 on the 689-bin IC-7610/IC-7760; drop oldest on overflow) → bin scale (0..160 or 0..200 from the profile) → upsample to 850 → `ScopeHandler`. A bin count or segment count that disagrees with the profile logs once and is adopted, so a wrong profile cannot freeze the waterfall. Center information carries center frequency plus half-span; Fixed, SCROLL-C, and SCROLL-F carry lower and upper edges. The browser constrains CI-V scope speed to FAST/MID/SLOW.
 
 ![Spectrum Paths](diagrams/spectrum-paths.svg)
 

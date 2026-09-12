@@ -5,8 +5,12 @@
 | Component | Type | File | Responsibility |
 |-----------|------|------|----------------|
 | FastAPIApp | Backend core | `server.py` | Route registration, lifespan, auth middleware, static serving, all WebSockets |
-| RadioBackendFactory | Backend core | `backends/__init__.py` | `create_backend(model)` lazy factory + `known_models()`; registered keys `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`; selected by `MRRC_RADIO_MODEL`; the server's model whitelist and baud defaults derive from this registry |
+| RadioBackendFactory | Backend core | `backends/__init__.py` | `create_backend(model)` lazy factory + `known_models()`; registered keys `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1` |
 | RadioBackend | Backend core | `backends/base.py` | `RadioBackend` ABC + `RadioCapabilities` dataclass + `ScopeProducer` protocol; CAT surface, defaulted hooks for bands/modes/filter tables/poll lists/scope init |
+| YaesuProfiles | Backend (Yaesu) | `backends/yaesu/yaesu_profiles.py` | Per-model Yaesu facts: mode registers **and** the separate CAT character table (the FTX-1's `H`/`I` are not hex digits), filter slots, bands, attenuator/preamp steps, power format, S-meter curves, `verified`/`unverified_meters` and provenance (AD-018) |
+| YaesuCatCore | Backend (Yaesu) | `backends/yaesu/cat_core.py` | `YaesuCatController`: transport ported from the verified FT-710 path (framing, AI-frame filtering, priority PTT/TUNE, ENXIO vs transient classification, reconnect) parameterised by profile, plus the FTX-1 `VM000;` leave-memory step |
+| YaesuBackend | Backend (Yaesu) | `backends/yaesu/backend.py` | `YaesuBackend` + four model subclasses: capabilities/tables/poll items from the profile, TX gate and read-only `ID;` identity check; `scope_type="none"` (AD-019) |
+| YaesuDiagnostic | Tooling | `_diag_yaesu.py` | Read-only field self-check for the four Yaesu models: probes the claimed commands, compares `ID;` with the profile, optional bounded key-up, paste-ready Markdown report |
 | CatController | Backend core | `backends/ft710/cat_controller.py` (root shim: `cat_controller.py`) | FT-710 serial CAT protocol: connect, disconnect, send/query/set, priority set path for PTT/TUNE preemption; high-level FT-710 command helpers |
 | CivCodec | Backend core | `backends/ic7300/civ_codec.py` | Pure CI-V framing/BCD encoding/scope-segment codec for IC-7300/MK2 |
 | CivController | Backend core | `backends/ic7300/civ_controller.py` | Async CI-V demux: reader thread → frame parser → echo drop / 0x27 scope queue / transceive broadcast / pending-response matching; 3-tier priority; reconnect |

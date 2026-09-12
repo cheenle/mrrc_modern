@@ -4,10 +4,11 @@
 
 ## 15.1 Safety Model — Defense in Depth
 
-The MRRC Modern PTT safety architecture provides **7 independent layers of defense** against stuck-TX scenarios for all supported radio backends.
+The MRRC Modern PTT safety architecture provides **7 independent layers of defense** against stuck-TX scenarios for all supported radio backends, preceded by a configuration precondition (Layer 0) that decides whether the chain may key the radio at all.
 
 | Layer | Location | Mechanism | Failure Mode Caught |
 |-------|----------|-----------|---------------------|
+| 0 | Server (backend, precondition) | Unverified-model transmit gate: `set_ptt(True)`/`set_tune(True)` refuse unless `MRRC_ALLOW_UNVERIFIED_TX=1`; PTT releases are never gated | Keying a radio whose CAT semantics are documentation-derived rather than measured (AD-019) |
 | 1 | Browser UX | Touch-and-hold: release on `mouseup`/`touchend`/`mouseleave`/`touchcancel` | User intentionally releasing PTT |
 | 2 | Browser → Server | `sendCommand('ptt', false)` over `/WSradio` | Normal network path |
 | 3 | Browser | PTT Watchdog: 500ms interval checks `radioState.tx_status`; up to 3 retries | TX0 command or state broadcast lost |
@@ -20,7 +21,7 @@ The MRRC Modern PTT safety architecture provides **7 independent layers of defen
 
 ## 15.2 Layer Details
 
-**Layer 0 (V2.41): unverified-model transmit gate.** Before any of the layers below can key the radio, `IC7300Backend.set_ptt(True)`/`set_tune(True)` refuse when the active model profile has no hardware evidence (`verified=False`) and the operator has not set `MRRC_ALLOW_UNVERIFIED_TX=1`. The refusal happens at the backend boundary — so the browser, the iOS and Android apps and the ATR1000 tune assist are all covered — and it never blocks a *release* (`set_ptt(False)` always passes through, because a stranded carrier is the failure this chapter exists to prevent). The WebSocket handler answers a refused key-up with an actionable error message. This layer is not a replacement for any other: everything below still applies, unchanged, on verified radios.
+**Layer 0 (V2.41, extended V2.46): unverified-model transmit gate.** Before any of the layers below can key the radio, the active backend's `set_ptt(True)`/`set_tune(True)` refuse when the model profile is not hardware-verified (`IC7300Backend` for IC-705/IC-7610/IC-7760, `YaesuBackend` for FTDX10/FTDX101D/FTDX101MP/FTX-1F) unless `MRRC_ALLOW_UNVERIFIED_TX=1` is set; the refusal is logged once per process and PTT **releases are never gated**, so the layers below can always unkey. See AD-019.
 
 ### Layer 1: Touch-and-Hold UX
 

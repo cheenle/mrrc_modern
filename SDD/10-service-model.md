@@ -10,8 +10,9 @@
 | RXAudioService | Core | Implemented | Capture radio USB audio → Opus encode → `/WSaudioRX` tagged frame broadcast (per-backend sample rate) |
 | TXAudioService | Core | Implemented | Receive `/WSaudioTX` tagged frames → Opus decode → resample if needed → PyAudio → radio |
 | SpectrumService | Core | Implemented | Real scope data (FT4222 SPI or CI-V 0x27) + S-meter fallback → `/WSspectrum` binary broadcast |
-| CATSerialService | Core | Implemented | FT-710: Serial CAT protocol over USB Enhanced COM Port (38400, 8N1) |
-| CIVSerialService | Core | Implemented | IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr `0x94`) |
+| CATSerialService | Core | Implemented | Yaesu ASCII-CAT transport (FT-710 verified path; also the basis for the `backends/yaesu/` core) over the USB Enhanced COM Port (38400, 8N1) |
+| CIVSerialService | Core | Implemented |
+| YaesuCatService | Core | Implemented | FTDX10/FTDX101D/FTDX101MP/FTX-1F: shared profile-driven ASCII-CAT core (`backends/yaesu/`) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback) | IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr `0x94`) |
 | PollingService | Core | Implemented | 7-task adaptive background polling with priority-command yield |
 | ScopePipeService | Core | Implemented | Manage scope_pipe subprocess lifecycle; read stdout/stderr |
 | MemoryChannelService | Core | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
@@ -36,6 +37,7 @@ TXAudioService
 SpectrumService
   → ScopePipeService (FT-710 FT4222 path)
   → CIVScopeService (IC-7300 0x27 path)
+  → YaesuCatService (FTDX10/FTDX101D/FTDX101MP/FTX-1F ASCII-CAT — no scope producer, so the fallback below is the only spectrum path)
   → PollingService (S-meter fallback path)
 
 PollingService

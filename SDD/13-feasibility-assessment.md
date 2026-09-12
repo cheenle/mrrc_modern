@@ -41,6 +41,7 @@
 | A6 | libft4222.dylib from wfview app bundle for correct version (FT-710 backend only) | Medium | scope_pipe SPI read success |
 | A8 | `lameenc` ships prebuilt wheels for every target platform (macOS arm64/x86_64, Windows x64, Linux aarch64), so the recorder needs no ffmpeg and no compiler on the build machines | High | Verified on macOS locally; must be re-verified inside the DMG and the Windows installer by recording a short sample (packaging step in the V2.42 plan) |
 | A7 | The IC-705/IC-7610/IC-7760 share the IC-7300 CI-V command surface (frequency/mode/preamp/AGC/NB/NR/compressor/filter-width/squelch/RF-power/PTT/tune, meter sub-codes) — evidenced by identical wfview rig command tables, not by a radio | Medium | `_diag_civ.py` read-only probe step; `19 00` identity log |
+| A9 | The four Yaesu models share the FT-710's ASCII-CAT command surface (frequency/mode/filter/PTT/gains/meters/memory), differing mainly in mode codes, filter slots, bands, power class and meter curves — evidenced by Hamlib 4.7.2's shared `newcat.c` core plus per-model table files (`ftdx10.c`, `ftdx101.c`, `ftdx101mp.c`, `ftx1/`) and the FTX-1 CAT reference (90/90 commands mapped) | Verified offline; no unit tested, so every derived table carries provenance and the transmit gate stays on (AD-019) |
 
 ## 13.4 Current Issues
 

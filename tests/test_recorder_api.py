@@ -180,5 +180,125 @@ class RecorderLifecycleContractTests(unittest.TestCase):
         self.assertIn("close_without_finishing", source)
 
 
+class RecordingsRestTests(unittest.TestCase):
+    """The three recordings routes and their path safety (spec §6)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self._saved_dir = server.RECORDINGS_DIR
+        self._saved_index = server.RECORDINGS_INDEX
+        self._saved_session = server._rec_session
+        server.RECORDINGS_DIR = self.dir
+        server.RECORDINGS_INDEX = self.dir.parent / f"{self.dir.name}-index.json"
+        self.name = "14270kHz_20260912_210405.mp3"
+        (self.dir / self.name).write_bytes(b"ID3" + b"x" * 8000)
+
+    def tearDown(self):
+        server.RECORDINGS_DIR = self._saved_dir
+        server.RECORDINGS_INDEX = self._saved_index
+        server._rec_session = self._saved_session
+        self._tmp.cleanup()
+
+    def test_path_helper_accepts_our_names_only(self):
+        self.assertEqual(server._recording_path(self.name),
+                         (self.dir / self.name).resolve())
+        for bad in ("../server.py", "/etc/passwd", "x.mp3",
+                    "14270kHz_20260912_210405.mp3.bak", "",
+                    "14270kHz_20260912_210405.mp3/../x.mp3"):
+            with self.subTest(name=bad):
+                self.assertIsNone(server._recording_path(bad))
+
+    def test_listing_payload_shape(self):
+        payload = server._recordings_payload()
+        self.assertEqual(payload["count"], 1)
+        row = payload["recordings"][0]
+        self.assertEqual(row["name"], self.name)
+        self.assertEqual(row["freq_hz"], 14_270_000)
+        self.assertFalse(row["recording"])
+        self.assertGreaterEqual(payload["total_bytes"], 8000)
+
+    def test_listing_marks_the_active_recording(self):
+        session = RecordingSession(self.dir, bitrate=64, max_seconds=60)
+        server._rec_session = session
+        session.start(freq_hz=14_270_000)
+        active_name = session.status()["name"]
+        payload = server._recordings_payload()
+        by_name = {r["name"]: r for r in payload["recordings"]}
+        self.assertTrue(by_name[active_name]["recording"])
+        session.close_without_finishing()
+
+    def test_delete_removes_the_file_and_updates_the_index(self):
+        asyncio.run(server._delete_recording(self.name))
+        self.assertFalse((self.dir / self.name).exists())
+        self.assertEqual(server._recordings_payload()["count"], 0)
+
+    def test_delete_refuses_a_missing_or_invalid_name(self):
+        for bad in ("07050kHz_20260912_210405.mp3", "../server.py", ""):
+            with self.subTest(name=bad):
+                self.assertFalse(asyncio.run(server._delete_recording(bad)))
+
+    def test_delete_refuses_the_active_recording(self):
+        session = RecordingSession(self.dir, bitrate=64, max_seconds=60)
+        server._rec_session = session
+        session.start(freq_hz=14_270_000)
+        try:
+            active_name = session.status()["name"]
+            self.assertFalse(asyncio.run(server._delete_recording(active_name)))
+        finally:
+            session.close_without_finishing()
+
+    def test_delete_endpoint_reports_409_while_recording(self):
+        session = RecordingSession(self.dir, bitrate=64, max_seconds=60)
+        server._rec_session = session
+        session.start(freq_hz=14_270_000)
+        try:
+            active_name = session.status()["name"]
+            response = asyncio.run(server.api_recording_delete(active_name))
+            self.assertEqual(response.status_code, 409)
+        finally:
+            session.close_without_finishing()
+
+    def test_audio_stream_supports_range_requests(self):
+        captured = []
+
+        async def send(message):
+            captured.append(message)
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        response = server._recording_response(self.name)
+        self.assertIsNotNone(response)
+        scope = {"type": "http", "method": "GET",
+                 "path": f"/api/recordings/{self.name}",
+                 "headers": [(b"range", b"bytes=0-99")]}
+        asyncio.run(response(scope, receive, send))
+        start = captured[0]
+        self.assertEqual(start["status"], 206)
+        headers = {k.lower(): v for k, v in start["headers"]}
+        self.assertEqual(headers[b"accept-ranges"], b"bytes")
+        self.assertIn(b"content-range", headers)
+
+    def test_audio_stream_without_range_is_200(self):
+        captured = []
+
+        async def send(message):
+            captured.append(message)
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        response = server._recording_response(self.name)
+        scope = {"type": "http", "method": "GET",
+                 "path": f"/api/recordings/{self.name}", "headers": []}
+        asyncio.run(response(scope, receive, send))
+        self.assertEqual(captured[0]["status"], 200)
+
+    def test_unknown_name_has_no_response(self):
+        self.assertIsNone(server._recording_response("../server.py"))
+        self.assertIsNone(server._recording_response("07050kHz_20260912_210405.mp3"))
+
+
 if __name__ == "__main__":
     unittest.main()

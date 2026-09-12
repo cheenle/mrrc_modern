@@ -48,7 +48,10 @@ from backends.ft710.config_ft710 import (
 )
 from backends.ft710.cat_controller import CatController
 from radio_state import RadioState
-from recorder import RecordingSession
+from recorder import (
+    RecordingSession, list_recordings, load_index,
+    parse_recording_name, save_index,
+)
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
 from audio_handler import AudioHandler
@@ -558,6 +561,7 @@ def _recording_state_payload() -> dict:
 
 async def _broadcast_recording_state() -> None:
     """Push the recording session snapshot to every control client."""
+    global ctrl_clients
     if not ctrl_clients:
         return
     payload = json.dumps({"type": "recordingState",
@@ -2320,6 +2324,89 @@ async def api_health():
 
 
 # ── Memory Channels API ─────────────────────────────────────────────
+
+def _recording_path(name: str) -> Optional[Path]:
+    """Resolve a recording name inside RECORDINGS_DIR, or None.
+
+    The name must be one this server would generate (recorder.parse_recording_name)
+    and the resolved path must stay inside the recordings directory — the
+    I8 lesson applied to the recordings API.
+    """
+    if parse_recording_name(name) is None:
+        return None
+    try:
+        root = RECORDINGS_DIR.resolve()
+        resolved = (RECORDINGS_DIR / name).resolve()
+        if not resolved.is_relative_to(root):
+            return None
+    except (OSError, ValueError):
+        return None
+    return resolved
+
+
+def _recordings_payload() -> dict:
+    """Recording list with the index merged in, plus the usage total."""
+    rows = list_recordings(RECORDINGS_DIR, load_index(RECORDINGS_INDEX),
+                           RECORDINGS_BITRATE)
+    active = _rec_session.status()["name"] if _rec_session.active else None
+    for row in rows:
+        row["recording"] = row["name"] == active
+    return {"recordings": rows, "count": len(rows),
+            "total_bytes": sum(row["bytes"] for row in rows)}
+
+
+async def _delete_recording(name: str) -> bool:
+    """Delete one recording; False when unknown or currently recording."""
+    path = _recording_path(name)
+    if path is None or not path.is_file():
+        return False
+    if _rec_session.active and _rec_session.status()["name"] == name:
+        return False
+    try:
+        path.unlink()
+    except OSError as e:
+        logger.warning("Cannot delete recording %s: %s", name, e)
+        return False
+    index = load_index(RECORDINGS_INDEX)
+    if index.pop(name, None) is not None:
+        save_index(RECORDINGS_INDEX, index)
+    logger.info("Recording deleted: %s", name)
+    await _broadcast_recording_state()
+    return True
+
+
+def _recording_response(name: str):
+    """Range-capable FileResponse for one recording (None when invalid)."""
+    path = _recording_path(name)
+    if path is None or not path.is_file():
+        return None
+    return FileResponse(path, media_type="audio/mpeg", filename=name)
+
+
+@app.get("/api/recordings", include_in_schema=False)
+async def api_recordings():
+    """List recordings (authentication is enforced by auth_middleware)."""
+    return JSONResponse(_recordings_payload())
+
+
+@app.get("/api/recordings/{name}", include_in_schema=False)
+async def api_recording_file(name: str):
+    """Stream one recording; Starlette's FileResponse handles Range/seek."""
+    response = _recording_response(name)
+    if response is None:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return response
+
+
+@app.delete("/api/recordings/{name}", include_in_schema=False)
+async def api_recording_delete(name: str):
+    """Delete one recording (409 while it is the active recording)."""
+    if _rec_session.active and _rec_session.status()["name"] == name:
+        return JSONResponse({"error": "recording in progress"}, status_code=409)
+    if not await _delete_recording(name):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return JSONResponse({"ok": True})
+
 
 @app.get("/api/mem_channels")
 async def api_get_mem_channels():

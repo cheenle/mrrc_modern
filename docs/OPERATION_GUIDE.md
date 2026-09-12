@@ -431,6 +431,25 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 *文档维护：与 `static/index.html`、`static/ft710_main.js`、`static/ft710_ui.js` 保持一致；界面改动后请同步本指南与编号图。*
 
+### 升级到含录音的版本（与旧安装/旧镜像的差异）
+
+`requirements.txt` 在 v2.42 增加了 **`lameenc`**（服务端 MP3 编码器）。升级代码后**必须同步依赖**，否则 REC 会拒绝并提示原因（不会影响 CAT/音频/频谱）：
+
+```bash
+# 源码/脚本部署（start.sh 用的 venv/）
+venv/bin/pip install -r requirements.txt
+./restart.sh
+```
+
+启动日志会出现二者之一，据此判断是否就绪：
+
+```
+[INFO] mrrc: Recording ready: /opt/mrrc_modern/recordings (16 kHz mono MP3)
+[WARNING] mrrc: Recording disabled: the MP3 encoder is missing — run `pip install -r requirements.txt` …
+```
+
+**已烧录的树莓派镜像**里没有 `lameenc`（镜像构建时该依赖还不存在）：在设备上执行 `venv/bin/pip install lameenc && sudo systemctl restart mrrc-modern` 即可；或重新烧录由 v2.42 之后源码构建的新镜像（其构建门禁已含该依赖）。
+
 ## QSO 录音（服务端，v2.42 起）
 
 点按 **REC** 开始录制、再点按停止。录制在**服务端**进行（不是浏览器），

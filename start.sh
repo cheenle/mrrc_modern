@@ -71,7 +71,16 @@ if ! "$VENV_PY" -c "import fastapi, uvicorn, serial" 2>/dev/null; then
   exit 1
 fi
 
-# 1d. Already running?
+# 1d. Optional imports (a missing one degrades a feature, never the boot):
+# the MP3 encoder is only needed for QSO recording (AD-017).  Warn here so
+# the operator sees it in the startup log instead of discovering it when
+# the REC button refuses (field report 2026-09-12).
+if ! "$VENV_PY" -c "import lameenc" 2>/dev/null; then
+  echo -e "${YELLOW}⚠ lameenc missing — QSO recording (REC) will refuse until installed${NC}"
+  echo "  Run: venv/bin/pip install -r requirements.txt"
+fi
+
+# 1e. Already running?
 if [ -f "$PID_FILE" ]; then
   old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
@@ -84,7 +93,7 @@ if [ -f "$PID_FILE" ]; then
   rm -f "$PID_FILE"
 fi
 
-# 1e. Port check
+# 1f. Port check
 PORT="${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}"
 if command -v lsof &>/dev/null; then
   port_pid=$(lsof -ti ":$PORT" -sTCP:LISTEN 2>/dev/null || true)
@@ -105,7 +114,7 @@ if command -v lsof &>/dev/null; then
   fi
 fi
 
-# 1f. Serial port check
+# 1g. Serial port check
 SERIAL_PORT="${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-}}"
 if [ -n "${SERIAL_PORT:-}" ]; then
   if [ ! -e "$SERIAL_PORT" ]; then
@@ -119,7 +128,7 @@ if [ -n "${SERIAL_PORT:-}" ]; then
   fi
 fi
 
-# 1g. Log rotation
+# 1h. Log rotation
 mkdir -p "$LOG_DIR"
 if [ -f "$LOG_FILE" ]; then
   log_size=$(du -m "$LOG_FILE" 2>/dev/null | cut -f1 || echo 0)

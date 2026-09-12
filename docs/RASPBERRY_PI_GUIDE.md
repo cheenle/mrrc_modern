@@ -93,6 +93,25 @@ sudo nano /opt/mrrc_modern/env/mrrc.env # 编辑配置
 | 忘记密码 | `ssh mrrc@raspberrypi.local` → `sudo mrrc-show-password` |
 | Zero 2 W 上很卡 | 内存不足属预期；建议 Pi 4 2GB 起步 |
 
+### 升级到含录音的版本（与旧安装/旧镜像的差异）
+
+`requirements.txt` 在 v2.42 增加了 **`lameenc`**（服务端 MP3 编码器）。升级代码后**必须同步依赖**，否则 REC 会拒绝并提示原因（不会影响 CAT/音频/频谱）：
+
+```bash
+# 源码/脚本部署（start.sh 用的 venv/）
+venv/bin/pip install -r requirements.txt
+./restart.sh
+```
+
+启动日志会出现二者之一，据此判断是否就绪：
+
+```
+[INFO] mrrc: Recording ready: /opt/mrrc_modern/recordings (16 kHz mono MP3)
+[WARNING] mrrc: Recording disabled: the MP3 encoder is missing — run `pip install -r requirements.txt` …
+```
+
+**已烧录的树莓派镜像**里没有 `lameenc`（镜像构建时该依赖还不存在）：在设备上执行 `venv/bin/pip install lameenc && sudo systemctl restart mrrc-modern` 即可；或重新烧录由 v2.42 之后源码构建的新镜像（其构建门禁已含该依赖）。
+
 ## 录音落盘（v2.42 起）
 
 QSO 录音写入 `/opt/mrrc_modern/recordings`（该目录属 `mrrc` 用户，镜像构建时已

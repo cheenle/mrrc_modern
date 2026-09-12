@@ -2529,25 +2529,25 @@ git commit -m "docs(sdd): V2.41 — ICOM SDR model profiles, TX gate, unverified
 
 ### 任务 13：Final verification
 
-- [ ] **步骤 1：全量测试**
+- [x] **步骤 1：全量测试**
 
 运行：`.venv/bin/python -m unittest discover -s tests 2>&1 | tail -3`
 预期：`OK`，无 FAIL/ERROR，计数与 `tests/README.md` 一致
 
-- [ ] **步骤 2：语法与静态检查**
+- [x] **步骤 2：语法与静态检查**
 
 运行：`python3 -m py_compile server.py config.py radio_state.py backends/base.py backends/ic7300/*.py _diag_civ.py && echo COMPILE_OK`
 运行：`node --check static/ft710_main.js && node --check static/ft710_ui.js && node --check static/sw.js && echo JS_OK`
 运行：`git diff --check && echo DIFF_CLEAN`
 预期：`COMPILE_OK` / `JS_OK` / `DIFF_CLEAN`
 
-- [ ] **步骤 3：SDD Guardian 检查**
+- [x] **步骤 3：SDD Guardian 检查**
 
 运行：`python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged`
 若尚无暂存文件：`python3 .agents/skills/sdd-guardian/harness/sdd_context.py check backends/ic7300/civ_profiles.py server.py config.py radio_state.py backends/base.py _diag_civ.py`
 预期：`SDD-GUARDIAN: clean` 或仅有可解释的 warn（例如 `env-hardcoded-device`）
 
-- [ ] **步骤 4：能力表人工核对**
+- [x] **步骤 4：能力表人工核对**
 
 运行：`.venv/bin/python -c "
 from backends import create_backend
@@ -2558,16 +2558,16 @@ scope={c.scope_type:6s} att={len(c.att_steps)} audio={c.audio_rx_rate} boost={c.
 "`
 预期：`ft710`/`ic7300`/`ic7300mk2` → `tx_gated=False`；`ic705`/`ic7610`/`ic7760` → `verified=False tx_gated=True`
 
-- [ ] **步骤 5：LSP 诊断**
+- [x] **步骤 5：LSP 诊断**
 
 运行：`lens_diagnostics mode=all`（对所有已编辑文件）
 预期：无新增 blocking error
 
-- [ ] **步骤 6：硬件边界声明**
+- [x] **步骤 6：硬件边界声明**
 
 在最终报告中明确写出：本变更的证据边界 = 离线 rig 数据 + 单元测试 + 能力表自查；**未**验证：`19 00` 机型 ID 字节、IC-7610/7760 的 689-bin/200 幅值/15 段、三台的表计绝对刻度、USB 音频速率与设备名、前面板 CI-V 菜单前置条件、SUB 接收。这些由 `_diag_civ.py` 在现场报告中解决，并据此翻转对应 profile 的 `verified` 标志。
 
-- [ ] **步骤 7：最终 Commit（若步骤 1-5 产生了修正）**
+- [x] **步骤 7：最终 Commit（若步骤 1-5 产生了修正）**
 
 ```bash
 git add -A

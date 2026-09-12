@@ -246,6 +246,7 @@ class ScopeSegmentTests(unittest.TestCase):
         (frame,) = p.feed(raw)
         seg = parse_scope_segment(frame)
         self.assertIsNotNone(seg)
+        assert seg is not None      # narrow for the type checker
         return seg
 
     def test_info_chunk(self):
@@ -313,7 +314,7 @@ class ScopeAssemblerTests(unittest.TestCase):
     def _feed_waveform(self, asm: ScopeAssembler, skip=(), duplicate=()):
         """Feed one full 11-segment, 475-bin fixed-mode waveform."""
         results = []
-        segments = [None]  # 1-based
+        segments: list = [None]  # 1-based
         segments.append(ScopeSegment(sequence=1, sequence_max=11, bins=b"",
                                      is_division_start=True, scope_mode=1,
                                      low_edge_hz=14_000_000,
@@ -364,7 +365,7 @@ class ScopeAssemblerTests(unittest.TestCase):
         asm = ScopeAssembler()
         seg = ScopeSegment(sequence=1, sequence_max=1, bins=bytes(475),
                            is_division_start=True)
-        self.assertEqual(len(asm.feed(seg)), 475)
+        self.assertEqual(len(asm.feed(seg) or []), 475)
 
     def test_end_to_end_through_parser(self):
         """Full pipeline: wire bytes -> parser -> segments -> waveform."""
@@ -377,8 +378,10 @@ class ScopeAssemblerTests(unittest.TestCase):
         for frame in p.feed(raw):
             seg = parse_scope_segment(frame)
             self.assertIsNotNone(seg)
+            assert seg is not None
             complete = asm.feed(seg) or complete
         self.assertIsNotNone(complete)
+        assert complete is not None
         self.assertEqual(len(complete), 475)
 
 
@@ -403,6 +406,72 @@ class ScaleUpsampleTests(unittest.TestCase):
 
     def test_upsample_empty(self):
         self.assertEqual(upsample_bins([]), [])
+
+
+class ScopeAssemblerProfileHintTests(unittest.TestCase):
+    """Profile-supplied scope geometry: warn once, never drop data."""
+
+    def _segments(self, seq_max: int, bin_total: int) -> list:
+        per = 50
+        segs = [ScopeSegment(sequence=1, sequence_max=seq_max, bins=b"",
+                             is_division_start=True,
+                             scope_mode=SCOPE_MODE_CENTER,
+                             center_freq_hz=14_074_000, span_hz=100_000)]
+        remaining = bin_total
+        for seq in range(2, seq_max + 1):
+            n = min(per, remaining)
+            segs.append(ScopeSegment(sequence=seq, sequence_max=seq_max,
+                                     bins=bytes([160] * max(n, 0))))
+            remaining -= n
+        return segs
+
+    def test_689_bin_waveform_across_15_segments(self):
+        asm = ScopeAssembler(seq_max=15, expected_bins=689)
+        bins = None
+        for seg in self._segments(15, 689):
+            bins = asm.feed(seg)
+        self.assertIsNotNone(bins)
+        assert bins is not None
+        self.assertEqual(len(bins), 689)
+
+    def test_mismatched_bin_count_warns_once_and_is_adopted(self):
+        asm = ScopeAssembler(seq_max=15, expected_bins=475)
+        bins = None
+        with self.assertLogs("ic7300.codec", level="WARNING") as cap:
+            for seg in self._segments(15, 689):
+                bins = asm.feed(seg)
+            for seg in self._segments(15, 689):
+                bins = asm.feed(seg)
+        self.assertIsNotNone(bins)
+        assert bins is not None
+        self.assertEqual(len(bins), 689)             # data still rendered
+        self.assertEqual(len(cap.output), 1)         # warning only once
+        self.assertIn("475", cap.output[0])
+        self.assertIn("689", cap.output[0])
+
+    def test_mismatched_segment_count_warns_once(self):
+        asm = ScopeAssembler(seq_max=11, expected_bins=689)
+        with self.assertLogs("ic7300.codec", level="WARNING") as cap:
+            for seg in self._segments(15, 689):
+                asm.feed(seg)
+        self.assertEqual(len(cap.output), 1)
+        self.assertIn("15", cap.output[0])
+
+    def test_defaults_do_not_warn(self):
+        asm = ScopeAssembler()                       # 11 segments / 475 bins
+        bins = None
+        with self.assertNoLogs("ic7300.codec", level="WARNING"):
+            for seg in self._segments(11, 475):
+                bins = asm.feed(seg)
+        self.assertIsNotNone(bins)
+        assert bins is not None
+        self.assertEqual(len(bins), 475)
+
+    def test_single_segment_lan_waveform_still_supported(self):
+        asm = ScopeAssembler(seq_max=15, expected_bins=689)
+        seg = ScopeSegment(sequence=1, sequence_max=1,
+                           bins=bytes([100] * 689))
+        self.assertEqual(len(asm.feed(seg) or []), 689)
 
 
 if __name__ == "__main__":

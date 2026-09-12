@@ -33,8 +33,11 @@ big-endian ``from_bcd``/``to_bcd`` use for Icom levels.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Optional, Sequence
+
+logger = logging.getLogger("ic7300.codec")
 
 # ── Framing ─────────────────────────────────────────────────────────
 PREAMBLE = b"\xfe\xfe"
@@ -353,12 +356,21 @@ class ScopeAssembler:
     """Reassemble a complete scope waveform from scope segments.
 
     Feed segments in arrival order; returns the full bin list (475 bins
-    in fixed mode, up to 475 in center mode) when the final segment
-    arrives, else None.  A sequence gap, duplicate, or mismatched
+    on the IC-7300 family, 689 on the IC-7610/IC-7760) when the final
+    segment arrives, else None.  A sequence gap, duplicate, or mismatched
     sequence_max drops the whole in-progress waveform (reset).
+
+    ``seq_max`` / ``expected_bins`` come from the active model profile.
+    They are *hints*: a disagreement is logged once as a WARNING and the
+    observed geometry is adopted, so a wrong profile degrades to one log
+    line instead of a frozen or dropped waterfall (spec 2026-09-12 §6.3).
     """
 
-    def __init__(self):
+    def __init__(self, seq_max: Optional[int] = None,
+                 expected_bins: Optional[int] = None):
+        self._seq_max_hint = seq_max
+        self._expected_bins = expected_bins
+        self._drift_warned = False
         self._reset()
 
     def _reset(self) -> None:
@@ -366,10 +378,23 @@ class ScopeAssembler:
         self._expected = 0
         self._bins = bytearray()
 
+    def _warn_once(self, message: str, *args) -> None:
+        if self._drift_warned:
+            return
+        self._drift_warned = True
+        logger.warning(message, *args)
+
     def feed(self, segment: ScopeSegment) -> Optional[list[int]]:
         if segment.sequence == 1:
             # Division start: begin a fresh waveform.
             self._reset()
+            if (self._seq_max_hint is not None
+                    and segment.sequence_max != self._seq_max_hint):
+                self._warn_once(
+                    "scope segment count %d != profile expectation %d — the "
+                    "profile scope_seq_max may be wrong; update it from a "
+                    "_diag_civ.py report", segment.sequence_max,
+                    self._seq_max_hint)
             if segment.sequence_max == 1:
                 # LAN-style single segment carries the whole waveform.
                 return list(segment.bins) if segment.bins else None
@@ -385,6 +410,12 @@ class ScopeAssembler:
         self._bins.extend(segment.bins)
         if segment.sequence == self._seq_max:
             complete = list(self._bins)
+            if (self._expected_bins is not None
+                    and len(complete) != self._expected_bins):
+                self._warn_once(
+                    "scope waveform length %d != profile expectation %d — the "
+                    "profile scope_bins may be wrong; update it from a "
+                    "_diag_civ.py report", len(complete), self._expected_bins)
             self._reset()
             return complete
         self._expected += 1

@@ -34,7 +34,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.45 |
+| SDD Version | V2.46 |
 | Baseline Date | 2026-09-12 |
 | Status | v1.15.0 released on both platforms (macOS DMG 55,976,374 bytes, SHA-256 `d66cb2ad…55099e`; Windows Setup 45,494,587 bytes, SHA-256 `74d04b84…13ee0c`, SDD V2.45) with server-side QSO recording (AD-017) and the writer-liveness fix (a second recording in the same process used to be 100 % silent); both bundles carry `lameenc`, and the Windows bundle's bytecode was walked to confirm `_ensure_rec_writer` is present. Superseded note: the build host `ham.vlsc.net` was unreachable, so the site still serves the v1.14.2 exe; `lameenc` verified inside the macOS bundle; CAT serial flapping (R11) is a physical-layer issue with software mitigations; the rpi64 image is v1.15.0 (546,128,812 bytes, SHA-256 `c9936a3b…3a0773`), rebuilt from the same release line with `lameenc` aarch64 inside the image venv and the tolerant Linux first-boot env reader. Yaesu ASCII-CAT family added: `ftdx10`/`ftdx101d`/`ftdx101mp`/`ftx1` are profile-driven and **unverified** — receive-only until `MRRC_ALLOW_UNVERIFIED_TX=1`, no waterfall because the Yaesu scope waveform is not documented anywhere — with the verified FT-710 backend deliberately left untouched, dual receive deferred to phase 2 and FT-710 migration to phase 3 (AD-018/AD-019, SDD V2.46) |
 | Project | MRRC Modern / `mrrc_modern` |

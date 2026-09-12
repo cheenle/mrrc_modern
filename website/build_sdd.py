@@ -90,8 +90,21 @@ def build_nav_sidebar(current_file: str) -> str:
 
 
 def sdd_version() -> str:
-    """Read the live SDD version from the Quick Facts table in SDD/README.md
-    so the footer can never drift from the design record."""
+    """Latest SDD version, taken from the version-history chapter.
+
+    Chapter 14 is the authority (its table is newest-first), not the Quick
+    Facts row in SDD/README.md: that row is hand-maintained and silently
+    drifted one release behind (V2.45 while the history already carried
+    V2.46), which made every generated page advertise an old baseline.
+    README stays as a fallback for a missing/unparsable chapter.
+    """
+    try:
+        text = (SDD_DIR / "14-version-history.md").read_text(encoding="utf-8")
+        m = re.search(r"^\|\s*(SDD\s+)?(V[\d.]+)\s*\|", text, re.MULTILINE)
+        if m:
+            return m.group(2)
+    except OSError:
+        pass
     try:
         text = (SDD_DIR / "README.md").read_text(encoding="utf-8")
         m = re.search(r"\|\s*SDD Version\s*\|\s*(V[\d.]+)\s*\|", text)

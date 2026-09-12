@@ -39,7 +39,7 @@ from config import (
     ATR1000_HOST, ATR1000_PORT,
     _env, default_baud_for,
 )
-from backends import create_backend
+from backends import create_backend, known_models
 from backends.base import RadioBackend
 from backends.ft710.config_ft710 import (
     MODE_NAME_TO_NUM, BANDS,
@@ -892,6 +892,15 @@ def _mode_name_to_num() -> dict:
     return MODE_NAME_TO_NUM
 
 
+# Operator-facing text for a refused key-up on a model whose profile has
+# no hardware evidence (spec 2026-09-12 §6.1).  The refusal is deliberate,
+# so it must name the switch that turns it off.
+_TX_GATE_MESSAGE = (
+    "This radio model is not hardware-verified — transmit is disabled. "
+    "Set MRRC_ALLOW_UNVERIFIED_TX=1 and restart to enable TX."
+)
+
+
 async def _handle_ws_message(ws: WebSocket, msg_str: str):
     """Process incoming WebSocket control messages.
 
@@ -1115,6 +1124,15 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "ptt":
             tx = value is True or str(value).lower() == "true"
+            if tx and backend is not None and backend.capabilities.tx_gated:
+                # Refused before any CAT write. The backend guard stays as
+                # defense in depth (iOS/Android/ATR paths do not come
+                # through here).
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": _TX_GATE_MESSAGE,
+                }))
+                return
             if tx:
                 # The client keying the radio owns the TX-audio uplink —
                 # otherwise an idle first-connected client (second tab,
@@ -1179,6 +1197,12 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "tune":
             on = value is True or str(value).lower() == "true"
+            if on and backend is not None and backend.capabilities.tx_gated:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": _TX_GATE_MESSAGE,
+                }))
+                return
             # "tx2": CAT tune carrier + AC003 tuner trigger (FT-710).
             # "atu": set_tune() alone runs the radio's internal-ATU
             # sequence (IC-7300 1C 01 02/00) — no AC command exists.
@@ -1244,7 +1268,11 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "att" or field == "attenuator":
             v = int(value)
-            if v in (0, 1, 2, 3):
+            # Step count is per radio: 0/1 on the FT-710 and IC-7300/IC-705,
+            # 0..15 on the IC-7610/IC-7760 (0-45 dB in 3 dB steps).
+            _att_steps = (backend.capabilities.att_steps
+                          if backend is not None else (0, 6, 12, 18))
+            if 0 <= v < len(_att_steps):
                 await cat.set_attenuator(v)
                 radio.update(attenuator=v)
                 scheduler and scheduler.skip_next_poll("attenuator", 3.0)
@@ -1625,6 +1653,13 @@ async def lifespan(app: FastAPI):
     # capabilities (FT-710 values reproduce the historical defaults).
     if backend is not None:
         _caps = backend.capabilities
+        if not _caps.verified:
+            logger.warning(
+                "Radio model %s is NOT hardware-verified — transmit is %s "
+                "(profile verified=False; check the radio with _diag_civ.py, "
+                "then set MRRC_ALLOW_UNVERIFIED_TX=1 to enable TX)",
+                _caps.model_name,
+                "DISABLED" if _caps.tx_gated else "ENABLED by env override")
         audio = AudioHandler(rx_rate=_caps.audio_rx_rate,
                              tx_rate=_caps.audio_tx_rate,
                              name_hints=tuple(_caps.audio_name_hints))
@@ -1928,7 +1963,11 @@ async def api_setup_save(request: Request):
     audio_tx = str(body.get("audio_tx_device", "")).strip()
     password = str(body.get("password", "")).strip()
 
-    if radio_model not in ("ft710", "ic7300", "ic7300mk2"):
+    if radio_model not in known_models():
+        # Registry-derived: a backend added to backends/__init__.py is
+        # immediately selectable here instead of being rejected by a
+        # hardcoded tuple (which is how ic705/ic7610/ic7760 would have
+        # been unreachable from the connection dialog).
         return JSONResponse({"error": "invalid radio_model"}, status_code=400)
     if not serial_port:
         return JSONResponse({"error": "serial_port required"}, status_code=400)

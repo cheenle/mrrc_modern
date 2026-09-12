@@ -839,6 +839,54 @@ class BackendModeMapSurfaceTests(unittest.TestCase):
                       MODE_NAME_TO_NUM)
         self.assertEqual(MODE_NAME_TO_NUM["LSB"], 0x01)
 
+
+class ServerModelRegistryTests(unittest.TestCase):
+    """The model whitelist must come from the backend registry (task 8).
+
+    A hardcoded tuple silently rejects every model added to
+    ``backends/__init__.py`` — exactly how ic705/ic7610/ic7760 would have
+    been unreachable from the connection dialog.
+    """
+
+    def test_setup_validates_against_the_registry(self):
+        import inspect
+        import server
+        source = inspect.getsource(server.api_setup_save)
+        self.assertIn("known_models()", source)
+        self.assertNotIn('("ft710", "ic7300", "ic7300mk2")', source)
+
+    def test_registry_covers_six_models(self):
+        from backends import known_models
+        self.assertEqual(known_models(),
+                         ("ft710", "ic7300", "ic7300mk2", "ic705",
+                          "ic7610", "ic7760"))
+
+    def test_attenuator_bound_comes_from_capabilities(self):
+        # The IC-7610/IC-7760 have 16 attenuator steps; a hardcoded
+        # (0, 1, 2, 3) whitelist would reject every step past 3.
+        import inspect
+        import server
+        source = inspect.getsource(server)
+        self.assertNotIn("if v in (0, 1, 2, 3):", source)
+        self.assertIn("len(_att_steps)", source)
+
+    def test_tx_gate_message_is_wired_into_ptt_and_tune(self):
+        import inspect
+        import server
+        source = inspect.getsource(server)
+        self.assertIn("MRRC_ALLOW_UNVERIFIED_TX", source)
+        # PTT handler, TUNE handler and the startup warning each consult
+        # the gate (the backend guard is the fourth layer, in backend.py).
+        self.assertGreaterEqual(source.count("tx_gated"), 3,
+                                "PTT and TUNE handlers each need a gate check "
+                                "(plus the startup warning)")
+
+    def test_startup_warns_about_unverified_models(self):
+        import inspect
+        import server
+        source = inspect.getsource(server)
+        self.assertIn("NOT hardware-verified", source)
+
     def test_ic7300_backend_exposes_civ_map(self):
         from backends.ic7300.backend import IC7300Backend
         from backends.ic7300.config_ic7300 import MODE_NAME_TO_NUM

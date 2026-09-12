@@ -16,6 +16,7 @@
     var p = location.pathname.replace(/\/+$/, '');
     if (p === '' || p === '/index.html' || /(^|\/)portal\//.test(p)) SITE = 'portal';
     else if (/\/agentic\.html/.test(p)) SITE = 'agentic';
+    else if (/\/mrrc_modern\//.test(p)) SITE = 'mrrc_modern';
     else if (/\/mrrc\//.test(p)) SITE = 'mrrc';
     else if (/\/sunmrrc\//.test(p)) SITE = 'sunmrrc';
     else if (/\/efhw\//.test(p)) SITE = 'efhw';
@@ -33,6 +34,7 @@
     portal: '/',
     agentic: '/agentic.html',
     mrrc: '/mrrc/',
+    mrrc_modern: '/mrrc_modern/',
     sunmrrc: '/sunmrrc/',
     efhw: '/efhw/',
     mrrc_ft8: '/mrrc_ft8/',

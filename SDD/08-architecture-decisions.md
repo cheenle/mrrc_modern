@@ -242,13 +242,15 @@
 |-----------|-------|
 | Type | Structural |
 | Status | Implemented (V2.42) |
-| Decision | 录音在服务端进行：`recorder.py` 的 `RecordingSession` 把 RX（设备域 PCM）与 TX（解码后的麦克风 PCM）放在一条 `time.monotonic_ns()` 定位的单声道时间轴上（源切换重锚定、50 ms 连续性容差吸收调度抖动、真实停顿补静音），用 **lameenc 增量编码边录边落盘**到 16 kHz 单声道 MP3；`server.py` 用**单 writer 任务 + 有界队列**驱动它（`asyncio.to_thread` 编码，事件循环零阻塞），控制面复用 `/WSradio`（`set{field:"recording"}` + `recordingState` 广播 + `fullState` 快照），文件面为三条 REST 路由（列表 / Range 流 / 删除），前端提供「录音」面板 |
+| Decision | 录音在服务端进行：`recorder.py` 的 `RecordingSession` 把 RX（设备域 PCM）与 TX（解码后的麦克风 PCM）放在一条 `time.monotonic_ns()` 定位的单声道时间轴上（源切换重锚定、50 ms 连续性容差吸收调度抖动、真实停顿补静音），用 **lameenc 增量编码边录边落盘**到 16 kHz 单声道 MP3；`server.py` 用**单 writer 任务 + 有界队列**驱动它（**专用单线程池**编码，绝不占用与串口/音频共享的默认 executor；事件循环零阻塞），控制面复用 `/WSradio`（`set{field:"recording"}` + `recordingState` 广播 + `fullState` 快照），文件面为三条 REST 路由（列表 / Range 流 / 删除），前端提供「录音」面板 |
 
 **Problem**: 浏览器端录音器把到达的帧无时间戳地顺序拼接，网络抖动、jitter-buffer 补帧与队列丢弃被永久写进文件 —— 表现为回放"颤抖/哆嗦"（字段报告 2026-09-12）。此外音频只在页面可见时可靠，且 500 KB 的 MP3 编码器要下发到每个客户端。
 
 **Rationale**: 服务端取音点是设备域 PCM（`AudioHandler.read_rx_chunk()`）与 Opus 解码输出，二者都不经过网络；时间戳 + 容差 + 空洞填静音把"抖动"与"真实停顿"分开处理，这正是回放平滑的关键。增量编码让 RAM 恒定（编码器 + FIR 状态 + 单块）且进程崩溃后磁盘上的前缀仍可播放，相对内存缓冲方案 1 小时录音省约 115 MB（本项目发布树莓派镜像）。16 kHz 是与兄弟项目 `mrrc` 一致的存储域，使 `recordings/` 目录可直接被其既有工具消费（同一命名 `<freq>kHz_<date>_<time>.mp3`）。
 
 **Consequences**: 16 kHz 是**只写汇点**，从 48 kHz codec 域到达：44.1 kHz 设备音频先经 `audio_resample`（AD-011 唯一 SRC 桥），再经专用抗混叠 FIR 抽取 3:1；录音路径不回灌 codec/device 域，AD-011 不受影响。录音与 CAT 解耦（USB 音频可用、CAT 断线也能录，无 CAT 时频率记为 0 → 文件名 `00000kHz`）。保留策略**刻意不自动清理**（§13 R10），会话上限 `MRRC_RECORDINGS_MAX_SESSION_MIN` 只停止录音、不删除文件。不做所有权仲裁（I6 仍未解决）：任何已认证客户端可启停，状态对所有客户端广播。
+
+**Writer 生命周期（V2.45 修正）**：writer 任务是**每会话一次性**的 —— 收到 stop 哨兵、MP3 定稿后即 `return`，这正是关闭流程能 `await` 它完成刷盘的前提。因此它的创建属于**每个会话**，而不是 lifespan：`_ensure_rec_writer()`（幂等）在录音开始、stop 入队与音频块入队前调用，发现任务已结束就重建。只在启动时创建一次会让任务在首次 REC/STOP 后永久消失 —— 此后每个会话都没有消费者，有界队列瞬间填满、所有块被丢弃，`stop()` 再用静音补齐时间轴，产出一个**大小正确但 100% 静音的 MP3**（2026-09-12 现场报告）。队列满时 stop 路径**不得**在事件循环上直接调用 `session.stop()`（writer 线程可能正在 `add_audio`）：改为丢弃最旧的一块给哨兵腾位，保持单写者不变式。丢弃计数按会话统计并随 `recordingState` 上报 —— 块被丢弃是"录音有空洞"的唯一可观测信号。
 
 ## 8.16 Decision Summary
 

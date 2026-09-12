@@ -6,6 +6,7 @@ and the ASGI routes are exercised through Starlette's FileResponse.
 """
 import asyncio
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from typing import Any, cast
@@ -22,6 +23,18 @@ from recorder import RecordingSession
 def _block(samples: int = 960) -> bytes:
     """One 20 ms block of 48 kHz Int16 PCM."""
     return np.zeros(samples, dtype='<i2').tobytes()
+
+
+class _FakeWS:
+    def __init__(self):
+        self.messages = []
+
+    async def send_text(self, text):
+        self.messages.append(json.loads(text))
+
+    def errors(self):
+        return [m.get("message", "") for m in self.messages
+                if m.get("type") == "error"]
 
 
 class RecordingWriterTests(unittest.IsolatedAsyncioTestCase):
@@ -233,6 +246,137 @@ class RecorderTapTests(unittest.TestCase):
         self.assertFalse(server._rec_session.active)
 
 
+class RecorderWriterLivenessTests(unittest.IsolatedAsyncioTestCase):
+    """A second recording in the same process must still capture audio.
+
+    Field report 2026-09-12 22:26: the writer loop is one-shot per session
+    (it returns once the MP3 is finalised, which is what lets shutdown await
+    it), but it was created once in the lifespan.  After the first REC/STOP
+    the task was done and nothing recreated it, so every later session had no
+    consumer: the 200-block backlog filled within milliseconds, every block
+    was dropped ("Recording dropped 950 block(s) so far") and stop() padded
+    the timeline with silence — a correctly-sized, 100 % silent MP3.
+    """
+
+    async def asyncSetUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.session = RecordingSession(Path(self._tmp.name), bitrate=64,
+                                        max_seconds=60)
+        self._saved = (server._rec_session, server._rec_queue,
+                       server._rec_writer_task)
+        server._rec_session = self.session
+        server._rec_queue = asyncio.Queue(maxsize=server.REC_QUEUE_MAX)
+        # Nothing yet: the lifespan's writer is created by the test itself
+        # (see _lifespan_writer) or, after the fix, on demand per session.
+        server._rec_writer_task = None
+        self.ws = _FakeWS()
+        self._names = 0
+
+    async def asyncTearDown(self):
+        task = server._rec_writer_task
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        (server._rec_session, server._rec_queue,
+         server._rec_writer_task) = self._saved
+        self._tmp.cleanup()
+
+    def _unique_names(self):
+        """Two REC/STOP cycles in the same second must not share a file."""
+        def _name(freq_hz, when=None):
+            self._names += 1
+            return f"sess{self._names}.mp3"
+        return mock.patch.object(recorder, "recording_name", _name)
+
+    async def _toggle(self, on: bool):
+        with mock.patch.object(server, "_broadcast_recording_state",
+                               mock.AsyncMock()):
+            await server._execute_set_command("recording", on,
+                                              cast(Any, self.ws))
+
+    async def _drain(self, timeout: float = 2.0) -> None:
+        """Wait for the writer to catch up (no fixed sleeps)."""
+        deadline = time.monotonic() + timeout
+        while not server._rec_queue.empty() and time.monotonic() < deadline:
+            await asyncio.sleep(0.01)
+
+    async def _session(self, blocks: int, taken: list) -> None:
+        """One REC → N blocks → STOP cycle through the real handler."""
+        await self._toggle(True)
+        real = self.session.add_audio
+
+        def _counting(*args, **kwargs):
+            taken.append(1)
+            return real(*args, **kwargs)
+
+        with mock.patch.object(self.session, "add_audio", _counting):
+            for _ in range(blocks):
+                server._rec_enqueue("rx", _block(), 48000)
+            await self._drain()
+        await self._toggle(False)
+
+    def _lifespan_writer(self) -> None:
+        """The single writer task the lifespan creates at boot."""
+        server._rec_writer_task = asyncio.create_task(
+            server._recording_writer_loop(server._rec_queue, server._rec_session),
+            name="rec_writer")
+
+    async def test_every_session_gets_a_writer(self):
+        first, second = [], []
+        self._lifespan_writer()
+        with self._unique_names():
+            await self._session(5, first)
+            self.assertEqual(len(first), 5)              # the first REC works
+            task = server._rec_writer_task
+            assert task is not None
+            self.assertTrue(task.done())                 # ... and it is one-shot
+            await self._session(5, second)
+
+        # The heart of the bug: without a writer these stayed at 0 while the
+        # queue filled up and the drops piled on (the field log's "dropped
+        # 950 block(s) so far" over a file containing nothing but silence).
+        self.assertEqual(len(second), 5)
+        self.assertTrue(server._rec_queue.empty())
+        self.assertEqual(self.session.dropped, 0)
+        self.assertEqual(sorted(p.name for p in Path(self._tmp.name).glob("*.mp3")),
+                         ["sess1.mp3", "sess2.mp3"])
+
+    async def test_a_dead_writer_is_restarted_and_named(self):
+        """A writer that died must be recreated loudly, not silently."""
+        async def _boom():
+            raise RuntimeError("writer exploded")
+
+        server._rec_session.start(freq_hz=7_050_000)
+        server._rec_writer_task = asyncio.create_task(_boom())
+        await asyncio.gather(server._rec_writer_task, return_exceptions=True)
+
+        with self.assertLogs("mrrc", level="WARNING") as cap:
+            server._rec_enqueue("rx", _block(), 48000)
+            await self._drain()
+        self.assertTrue(any("writer failed" in m for m in cap.output), cap.output)
+        task = server._rec_writer_task
+        assert task is not None
+        self.assertFalse(task.done())                     # a live one again
+        self.assertTrue(server._rec_queue.empty())
+
+    async def test_stop_is_queued_not_run_on_the_event_loop_when_full(self):
+        """A full queue must not make stop() mutate the session inline.
+
+        The writer thread may be inside add_audio; the single-mutator rule is
+        what keeps the timeline cursor and the encoder consistent.
+        """
+        self.session.start(freq_hz=14_270_000)
+        for _ in range(server.REC_QUEUE_MAX):
+            server._rec_enqueue("rx", _block(), 48000)
+        fut = server._rec_enqueue_stop()
+        assert fut is not None
+        self.assertFalse(fut.done())                     # the writer owns it
+        self.assertTrue(self.session.active)
+        queued = [item[0] for item in list(getattr(server._rec_queue, "_queue"))]
+        self.assertIn("stop", queued)
+        self.assertLessEqual(server._rec_queue.qsize(), server.REC_QUEUE_MAX)
+
+
 class RecorderLifecycleContractTests(unittest.TestCase):
     """The writer task must be started and stopped with the other loops."""
 
@@ -368,18 +512,6 @@ class RecordingsRestTests(unittest.TestCase):
     def test_unknown_name_has_no_response(self):
         self.assertIsNone(server._recording_response("../server.py"))
         self.assertIsNone(server._recording_response("07050kHz_20260912_210405.mp3"))
-
-
-class _FakeWS:
-    def __init__(self):
-        self.messages = []
-
-    async def send_text(self, text):
-        self.messages.append(json.loads(text))
-
-    def errors(self):
-        return [m.get("message", "") for m in self.messages
-                if m.get("type") == "error"]
 
 
 class RecordingFailureHandlingTests(unittest.IsolatedAsyncioTestCase):

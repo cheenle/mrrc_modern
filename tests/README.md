@@ -4,7 +4,7 @@
 
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710 and IC-7300/IC-7300MK2). All tests run **without hardware** — no radio,
-no serial port, no USB audio device needed. 891 tests across 45 test modules.
+no serial port, no USB audio device needed. 909 tests across 45 test modules.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -14,8 +14,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 891 |
-| Passed | 891 (with all optional dependencies installed) |
+| Total tests | 909 |
+| Passed | 909 (with all optional dependencies installed) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -376,6 +376,21 @@ SDD coverage: §13.4 I12 / ch15 outermost release layer
 | `MaxTxWatchdogTests` | 2 | Forces RX via exactly one fire-and-forget unkey after MRRC_PTT_MAX_TX_SECONDS of continuous TX; TX meters zeroed in the same update — no verify loop |
 | `MaxTxWatchdogDisabledTests` | 1 | Default (0 = off) never unkeys |
 
+### 34. test_recorder_api.py — Recorder Wiring & Writer Lifetime (35 tests)
+
+SDD coverage: AD-017, §12.4
+
+| Class | Tests | Covers |
+|-------|-------|--------|
+| `RecordingWriterTests` | 3 | Writer encodes blocks, stops on the sentinel, survives a failing block |
+| `RecorderExecutorTests` | 2 | Never touches the shared default pool; uses the dedicated recorder pool |
+| `RecordingQueueTests` | 3 | Source/rate tagging, no queueing without a session, bounded queue + per-session drop count |
+| `RecorderTapTests` | 5 | RX/TX taps, skip while transmitting, shutdown finishes the session |
+| `RecorderWriterLivenessTests` | 3 | A second REC in the same process is really recorded; a dead writer is restarted with a WARNING; a full queue queues the stop instead of running it on the event loop |
+| `RecorderLifecycleContractTests` | 2 | Writer task started/cancelled with the other loops |
+| `RecordingsRestTests` | 8 | List / Range stream / delete routes and name containment |
+| `RecordingFailureHandlingTests` | 9 | Missing encoder, unwritable dir, failing handler answers instead of dropping the WS |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -422,7 +437,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~891 tests in ~15s — can run on every commit.
+2. **Fast execution**: ~909 tests in ~15s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

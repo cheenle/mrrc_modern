@@ -5,30 +5,39 @@ This guide covers the Windows desktop package for MRRC Web Control
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.14.2 Stable)
+## Download (v1.14.2 Stable — v1.15.0 pending)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.14.2-Windows-x64-Setup.exe` | 45.4 MB (45,435,022 bytes) | `a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706` |
+| `MRRC-Modern-v1.14.2-Windows-x64-Setup.exe` | 45.4 MB (45,435,022 bytes) | `5bcefc511ac168638dd00962f385dbda06df4ba8441279e3d6fb3d4f9953ab86` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.14.2-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
+**v1.15.0 Windows build is pending**: the build host (`ham.vlsc.net`, a KVM VM on the LAN)
+went unreachable during the release window, so the currently published Windows installer is
+the v1.14.2 build. It will be replaced by a v1.15.0 build (server-side QSO recording) as soon
+as the host is back; no incomplete or pre-fix build is published in the meantime.
+
 The v1.14.2 package was built from `main` on Windows 11 with Python 3.12.4,
-PyInstaller 6.21.0, and Inno Setup 6.7.3. All 721 Windows tests, three
-PyInstaller targets, and the installer build passed; required bundled-file
-inspection (FTDI DLLs, opus.dll, static assets including the lamejs MP3
-encoder, `mem_channels.json`, and Icom backend hidden imports) and cross-host
-SHA-256 checks passed. v1.14.2 fixes two IC-7300 field failures
-(2026-09-10 log): the connection-settings save and first-run probing now
-align `MRRC_BAUD_RATE` with the selected model (IC-7300/MK2 = 115200; the
-legacy installer template pre-filled 38400, which starved the CI-V scope
-stream → S-meter fallback), and `-9999` audio-open retries now resolve a
-different host-API duplicate (a dialog-saved name that only matched the
-WDM-KS entry — whose open fails on some rigs — falls back to the working
-MME duplicate of the same codec). Set the radio menu CI-V baud to Auto (or
-match the server). CAT, PTT, and protocol behavior is unchanged.
+PyInstaller 6.21.0, and Inno Setup 6.7.3. All 906 tests, three PyInstaller
+targets, and the installer build passed; required bundled-file inspection
+(FTDI DLLs, opus.dll, `static/`, `mem_channels.json`, Icom backend hidden
+imports) plus the new **MP3 encoder** (`lameenc.cp312-win_amd64.pyd`) passed,
+and cross-host SHA-256 matched. The frozen app was also started with a
+temporary recordings directory and logged
+`Recording ready: ... (16 kHz mono MP3)` — i.e. recording works inside the
+packaged build, not just in the test environment.
+
+**What's new in v1.15.0**: QSO recording moved to the server (device-domain RX
+PCM + decoded mic PCM on one monotonic 16 kHz timeline, incremental `lameenc`
+MP3 written while recording, crash-safe), a new **Recordings panel** (list,
+seekable player — the server answers Range requests — download, delete), and a
+CAT recovery fix (a reconnect no longer runs a 24-query state sweep that used
+to hold the serial lock for ~60 s). The browser-side recorder and its 530 KB
+`lame.js` encoder are gone. See `CHANGELOG.md` for the full list; CAT protocol
+and PTT behaviour are unchanged from v1.14.2.
 
 Browser capture and Opus remain at 48 kHz. Every decoded 960-sample TX frame is
 converted to 882 samples before the FT-710 playback device is opened/written at

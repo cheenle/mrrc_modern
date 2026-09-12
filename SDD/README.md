@@ -34,9 +34,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.43 |
+| SDD Version | V2.45 |
 | Baseline Date | 2026-09-12 |
-| Status | rpi64 image rebuilt at v1.14.3 from HEAD and published (SDD V2.40; local native aarch64 build path primary); v1.14.2 is the latest published installer pair (macOS DMG 55,898,038 + Windows Setup 45,435,022 bytes, SDD V2.39, carrying the V2.37–V2.39 fixes); IC-7300/MK2 physical hardware acceptance pending; FT710Android device acceptance pending; I8/I10/I12 resolved, I9/I11 partially resolved; **IC-705/IC-7610/IC-7760 backend profiles added without hardware present — experimentell, TX gated by `MRRC_ALLOW_UNVERIFIED_TX`, `_diag_civ.py` ready for field reports (SDD V2.41, R9/A7)**; **服务端 QSO 录音已实现（SDD V2.42 / AD-017）：16 kHz mono MP3 增量编码，浏览器录音器与 lame.js 已移除**；open issues tracked in §13.4 |
+| Status | v1.15.0 released for macOS (DMG 55,972,182 bytes, SHA-256 `552db6db…d9d829`, SDD V2.44) with server-side QSO recording (AD-017) and the writer-liveness fix (a second recording in the same process used to be 100 % silent); **the v1.15.0 Windows installer is pending** — the build host `ham.vlsc.net` was unreachable, so the site still serves the v1.14.2 exe; `lameenc` verified inside the macOS bundle; CAT serial flapping (R11) is a physical-layer issue with software mitigations; Pi image remains v1.14.3 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710; Icom IC-7300 / IC-7300MK2 (verified) and IC-705 / IC-7610 / IC-7760 (profiles without hardware verification, TX gated) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the three unverified models |

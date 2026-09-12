@@ -224,7 +224,9 @@ RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
 # ── Recording: server-side QSO session (AD-017) ─────────────────────
 # One writer task owns the session so the timeline cursor and the MP3
 # encoder are never touched concurrently, and encoder CPU stays off the
-# event loop (asyncio.to_thread).
+# event loop.  The task is one-shot per session (it returns when the MP3 is
+# finalised, which is what shutdown awaits) — `_ensure_rec_writer()` creates
+# it for every session, not just at boot.
 REC_QUEUE_MAX = 200            # ~16 s of audio at 80 ms blocks: a stalled
                                # writer must not grow memory without limit
 _rec_queue: "asyncio.Queue" = asyncio.Queue(maxsize=REC_QUEUE_MAX)
@@ -279,6 +281,44 @@ def _recording_should_capture_rx() -> bool:
     return not (radio is not None and radio.tx_status)
 
 
+def _ensure_rec_writer() -> None:
+    """Guarantee that a writer task is waiting on the queue.
+
+    The writer loop is **one-shot per session**: it returns once the MP3 is
+    finalised, which is what lets shutdown await its completion.  Creating it
+    only in the lifespan made it one-shot per *process*: after the first
+    REC/STOP the task was done, nothing drained the queue, the 200-block
+    backlog filled within milliseconds and every block of every later
+    recording was dropped — and stop() then padded the timeline with silence,
+    leaving a correctly-sized, 100 % silent MP3 (field report 2026-09-12
+    22:26, "Recording dropped 950 block(s) so far").
+
+    Idempotent and cheap, so the taps can call it on every block: an active
+    session must never be without a consumer.
+    """
+    global _rec_writer_task
+    task = _rec_writer_task
+    if task is not None and not task.done():
+        return
+    if task is not None and not task.cancelled():
+        try:
+            failure = task.exception()
+        except asyncio.CancelledError:      # cancelled between the checks
+            failure = None
+        if failure is not None:
+            # A writer that died mid-session looks exactly like a healthy one
+            # from the outside: the queue just stops draining.  Never let that
+            # pass unnoticed again.
+            logger.warning("Recording writer failed — restarting it: %s",
+                           failure)
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:                       # no loop (sync tests/tools)
+        return
+    _rec_writer_task = asyncio.create_task(
+        _recording_writer_loop(_rec_queue, _rec_session), name="rec_writer")
+
+
 def _rec_enqueue(source: str, pcm: bytes, rate: int,
                  timestamp_ns: Optional[int] = None) -> None:
     """Queue one PCM block for the writer (never blocks, never raises).
@@ -289,6 +329,7 @@ def _rec_enqueue(source: str, pcm: bytes, rate: int,
     """
     if not _rec_session.active:
         return
+    _ensure_rec_writer()
     try:
         _rec_queue.put_nowait((source, pcm, rate, timestamp_ns))
     except asyncio.QueueFull:
@@ -315,13 +356,27 @@ def _rec_enqueue_stop():
         fut = asyncio.get_running_loop().create_future()
     except RuntimeError:                               # no loop (tests/tools)
         fut = None
+    _ensure_rec_writer()
     try:
         _rec_queue.put_nowait(("stop", b"", 0, fut))
-    except asyncio.QueueFull:                          # pragma: no cover
-        logger.warning("Recording queue full on stop — finishing directly")
-        info = _rec_session.stop()
-        if fut is not None and not fut.done():
-            fut.set_result(info)
+    except asyncio.QueueFull:
+        # A stalled writer left a full backlog.  The oldest block is the least
+        # valuable item here, so make room for the sentinel instead of
+        # finishing inline: session.stop() encodes and writes, and the writer
+        # thread may be inside add_audio right now — a single mutator is what
+        # keeps the timeline cursor and the encoder consistent.
+        logger.warning("Recording queue full on stop — dropping the oldest "
+                       "block to finish")
+        try:
+            _rec_queue.get_nowait()
+            _rec_session.dropped += 1
+        except asyncio.QueueEmpty:                     # pragma: no cover
+            pass
+        try:
+            _rec_queue.put_nowait(("stop", b"", 0, fut))
+        except asyncio.QueueFull:                      # pragma: no cover
+            logger.warning("Recording stop could not be queued — the "
+                           "session stays open")
     return fut
 
 
@@ -1286,6 +1341,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                     "message": "Recording already in progress",
                 }))
             else:
+                _ensure_rec_writer()      # every session needs a consumer
                 logger.info("Recording started by client (freq=%s)", freq_hz)
         else:
             pending = _rec_enqueue_stop()

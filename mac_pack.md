@@ -1,6 +1,6 @@
 # macOS 安装包打包流程（本机 Mac 直接构建）
 
-> 用途：在开发者本机 Mac 上构建 `MRRC-Modern-<ver>-arm64.dmg`（最新 v1.14.2）。
+> 用途：在开发者本机 Mac 上构建 `MRRC-Modern-<ver>-arm64.dmg`（最新 v1.15.0）。
 > 本文按 v1.7.0 首次打包的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 > 与 Windows 不同，macOS 不需要 KVM 虚拟机——直接在本机用 `.venv` 打包。

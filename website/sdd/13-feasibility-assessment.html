@@ -234,6 +234,13 @@
 <td>Service worker bypasses JS/HTML; version query strings</td>
 </tr>
 <tr>
+<td>R11</td>
+<td>电台 USB 串口桥在物理层反复重枚举（macOS <code class="scope-code">ENXIO</code>/<code class="scope-code">ENOENT</code>），导致 CAT 周期性中断（现场单日 171 次）；软件无法阻止，只能快速恢复</td>
+<td>Medium</td>
+<td>Low</td>
+<td>V2.43：重连不再跑 24 条全量同步（原先占串口锁约 62 秒），改由轮询分层在数秒内补齐；退避提示 + 日志静音 + ENXIO 可操作提示；硬件侧建议见运维文档（直连 USB、避免无源 HUB、检查线缆/供电）</td>
+</tr>
+<tr>
 <td>R10</td>
 <td>Recording disk growth is unbounded <strong>by operator choice</strong> — recordings are never deleted automatically; a long-running unattended server can fill the disk (the Pi image boots from an SD card)</td>
 <td>Medium</td>
@@ -502,7 +509,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.42 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.45 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

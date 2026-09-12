@@ -6,6 +6,7 @@ buffer stands in for the radio (bus echo + scripted responses).
 import asyncio
 import threading
 import unittest
+from typing import Callable, Optional
 from unittest.mock import patch
 
 import serial
@@ -31,7 +32,7 @@ class FakeSerial:
         self.written = bytearray()
         self._rx = bytearray()
         self._cond = threading.Condition()
-        self.responder = None       # callable(bytes) -> bytes | None
+        self.responder: Optional[Callable[[bytes], Optional[bytes]]] = None
         self.echo = True
         self.fail_writes = False
         self.fail_reads = False
@@ -357,6 +358,123 @@ class PriorityTests(CivControllerTestBase):
             self.assertIsNone(await self.ctl.send_command(0x03))
         finally:
             self.ctl._cancel_polls.clear()
+
+
+class CivControllerProfileTests(unittest.IsolatedAsyncioTestCase):
+    """Profile-supplied address / queue / attenuator steps (task 4)."""
+
+    def test_default_construction_matches_legacy_behaviour(self):
+        civ = CivController("/dev/null")
+        self.assertEqual(civ.civ_addr, 0x94)
+        self.assertEqual(civ._att_steps, (0, 20))
+        self.assertEqual(civ._model, "IC-7300")
+        self.assertEqual(civ.scope_queue.maxsize, 44)   # 4 x 11 segments
+
+    def test_profile_supplies_address_transceive_and_queue(self):
+        from backends.ic7300.civ_profiles import PROFILES
+        profile = PROFILES["ic7760"]
+        civ = CivController("/dev/null", 115200, civ_addr=profile.civ_addr,
+                            transceive_cmd=profile.transceive_cmd,
+                            profile=profile, att_steps=profile.att_steps)
+        self.assertEqual(civ.civ_addr, 0xB2)
+        self.assertEqual(civ.scope_queue.maxsize, 60)   # 4 x 15 segments
+        self.assertEqual(civ._att_steps[-1], 45)
+        self.assertIn("IC-7760", civ._model)
+
+    def test_explicit_kwargs_beat_profile(self):
+        from backends.ic7300.civ_profiles import PROFILES
+        civ = CivController("/dev/null", 115200, civ_addr=0x99,
+                            profile=PROFILES["ic7300"])
+        self.assertEqual(civ.civ_addr, 0x99)
+
+    async def test_set_attenuator_writes_db_from_profile_steps(self):
+        from backends.ic7300.civ_profiles import PROFILES
+        civ = CivController("/dev/null", 115200,
+                            att_steps=PROFILES["ic7760"].att_steps)
+        sent = []
+
+        async def fake_send(cmd):
+            sent.append(cmd)
+            return True
+
+        civ.send_set_command = fake_send
+        self.assertTrue(await civ.set_attenuator(0))
+        self.assertTrue(await civ.set_attenuator(5))
+        self.assertFalse(await civ.set_attenuator(16))   # out of range
+        # Wire bytes are packed BCD: 0 dB -> 0x00, 15 dB -> 0x15.
+        self.assertEqual(sent, [bytes((0x11, 0x00)), bytes((0x11, 0x15))])
+
+    async def test_set_attenuator_legacy_steps_unchanged(self):
+        civ = CivController("/dev/null")
+        sent = []
+
+        async def fake_send(cmd):
+            sent.append(cmd)
+            return True
+
+        civ.send_set_command = fake_send
+        self.assertTrue(await civ.set_attenuator(1))
+        self.assertFalse(await civ.set_attenuator(2))
+        # 20 dB is BCD 0x20 on the wire (not decimal 20 = 0x14) — the
+        # IC-7300MK2 CI-V reference documents "00/20" and wfview encodes
+        # this byte with its BCD helpers.
+        self.assertEqual(sent, [bytes((0x11, 0x20))])
+
+    async def test_get_attenuator_returns_index_for_3db_steps(self):
+        from backends.ic7300.civ_profiles import PROFILES
+        civ = CivController("/dev/null", 115200,
+                            att_steps=PROFILES["ic7760"].att_steps)
+
+        async def fake_query(command, sub=None, timeout=None):
+            return bytes((0x15,))          # BCD 15 dB
+
+        civ._query_data = fake_query
+        self.assertEqual(await civ._get_attenuator(), 5)
+
+    async def test_get_attenuator_legacy_and_unknown_values(self):
+        civ = CivController("/dev/null")
+
+        async def fake_query(command, sub=None, timeout=None):
+            return bytes((0x20,))          # BCD 20 dB -> index 1
+
+        civ._query_data = fake_query
+        self.assertEqual(await civ._get_attenuator(), 1)
+
+        async def fake_unknown(command, sub=None, timeout=None):
+            return bytes((0x07,))          # not a step -> index 0 (off)
+
+        civ._query_data = fake_unknown
+        self.assertEqual(await civ._get_attenuator(), 0)
+
+    async def test_get_model_id_reads_19_00(self):
+        civ = CivController("/dev/null")
+        seen = []
+
+        async def fake_query(command, sub=None, timeout=None):
+            seen.append((command, sub))
+            return bytes((0xB2,))
+
+        civ._query_data = fake_query
+        self.assertEqual(await civ.get_model_id(), bytes((0xB2,)))
+        self.assertEqual(seen, [(0x19, 0x00)])
+
+    async def test_get_model_id_none_when_radio_does_not_answer(self):
+        civ = CivController("/dev/null")
+
+        async def fake_query(command, sub=None, timeout=None):
+            return None
+
+        civ._query_data = fake_query
+        self.assertIsNone(await civ.get_model_id())
+
+    async def test_get_model_id_none_when_reply_is_empty(self):
+        civ = CivController("/dev/null")
+
+        async def fake_query(command, sub=None, timeout=None):
+            return b""
+
+        civ._query_data = fake_query
+        self.assertIsNone(await civ.get_model_id())
 
 
 if __name__ == "__main__":

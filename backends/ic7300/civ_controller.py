@@ -32,14 +32,18 @@ import asyncio
 import logging
 import threading
 from collections import deque
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 import serial
+
+if TYPE_CHECKING:                       # avoid a runtime import cycle:
+    from backends.ic7300.civ_profiles import CivModelProfile
 
 from backends.ic7300.civ_codec import (
     CivFrame, CivFrameParser, build_frame,
     encode_freq_bcd, decode_freq_bcd,
     encode_level_bcd, decode_level_bcd,
+    encode_bcd_byte, decode_bcd_byte,
     is_echo, parse_scope_segment,
     CONTROLLER_ADDR, SCOPE_CMD, SCOPE_SUB_DATA,
 )
@@ -178,6 +182,8 @@ class CivController:
         civ_addr: int = CIV_ADDR,
         query_timeout: float = _DEFAULT_QUERY_TIMEOUT,
         transceive_cmd: bytes = SETMODE_CIV_TRANSCEIVE_ON,
+        profile: "Optional[CivModelProfile]" = None,
+        att_steps: tuple = (0, 20),
     ):
         self.port = port
         self.baudrate = baudrate
@@ -189,7 +195,13 @@ class CivController:
         self._ser: Optional[serial.Serial] = None
         self._lock = asyncio.Lock()
         self._connected = False
-        self._model = "IC-7300"
+        # Model profile (backends.ic7300.civ_profiles) supersedes the
+        # hardcoded IC-7300 defaults; explicit keyword arguments always
+        # win, so existing callers keep their behaviour unchanged.
+        self._model = profile.display_name if profile is not None else "IC-7300"
+        self._att_steps = tuple(att_steps) if att_steps else (0, 20)
+        queue_segments = (profile.scope_queue_segments if profile is not None
+                          else SCOPE_QUEUE_MAX_SEGMENTS)
         # Priority preemption flag — same semantics as CatController:
         # set by send_priority_set_command (PTT/tune) so queued/in-flight
         # poll queries yield the serial lock as soon as possible.
@@ -203,7 +215,7 @@ class CivController:
         # Parsed 0x27 0x00 scope segments. Keep only a few complete USB
         # waveforms so a paused consumer resumes with fresh radio data.
         self.scope_queue: asyncio.Queue = asyncio.Queue(
-            maxsize=SCOPE_QUEUE_MAX_SEGMENTS
+            maxsize=queue_segments
         )
         self.scope_queue_drops = 0
         self._broadcast_cb: Optional[Callable[[str, object], None]] = None
@@ -442,10 +454,12 @@ class CivController:
         """Write a raw frame (threaded) and remember it for echo drop."""
         if self._ser is None or not self._ser.is_open:
             raise serial.SerialException("Port not open")
+        ser = self._ser          # narrowed: the closure below needs a
+                                 # non-Optional binding
 
         def _w():
-            self._ser.write(data)
-            self._ser.flush()
+            ser.write(data)
+            ser.flush()
 
         await asyncio.to_thread(_w)
         self._last_sent = data
@@ -802,10 +816,18 @@ class CivController:
         return await self._switch_set(SW_PREAMP, value)
 
     async def set_attenuator(self, value: int) -> bool:
-        # UI index 0/1 (matches FT-710's index semantics); wire data is
-        # the attenuation in dB (00 off / 20 on).
+        """Set the attenuator by UI index (position in the profile steps).
+
+        Wire data is the attenuation in dB: 0/20 on the IC-7300/IC-705,
+        0..45 in 3 dB steps on the IC-7610/IC-7760.  The index semantics
+        (not the dB value) match the FT-710 so server validation and the
+        UI cycle button stay radio-neutral.
+        """
+        if not 0 <= value < len(self._att_steps):
+            return False
+        # The wire byte is packed BCD (20 dB -> 0x20, 15 dB -> 0x15).
         return await self.send_set_command(
-            bytes((CMD_ATT, 0x20 if value else 0x00)))
+            bytes((CMD_ATT, encode_bcd_byte(self._att_steps[value]))))
 
     async def set_noise_blanker(self, on: bool) -> bool:
         return await self._switch_set(SW_NB, 0x01 if on else 0x00)
@@ -1056,11 +1078,29 @@ class CivController:
         return state
 
     async def _get_attenuator(self) -> Optional[int]:
-        """ATT query -> UI index (0=off, 1=20dB)."""
+        """ATT query -> UI index (position in the profile's att_steps).
+
+        A dB value that is not one of the profile's steps maps to index 0
+        (off) rather than a bogus index — the radio never reports a step
+        it did not accept, so this only guards against a stale profile.
+        """
         data = await self._query_data(CMD_ATT)
         if data is None or not data:
             return None
-        return 1 if data[0] else 0
+        try:
+            return self._att_steps.index(decode_bcd_byte(data[0]))
+        except ValueError:
+            return 0
+
+    async def get_model_id(self, timeout: Optional[float] = None) -> Optional[bytes]:
+        """Read the transceiver ID (19 00) — the fixed model identity.
+
+        Distinct from the user-configurable CI-V address.  Returns the
+        raw ID bytes, or None when the radio does not answer (older
+        radios and LAN-unlinked ports do not implement 19 00).
+        """
+        data = await self._query_data(0x19, 0x00, timeout=timeout)
+        return data if data else None
 
     async def _get_tuner(self) -> Optional[int]:
         """Tuner query -> RadioState.tuner_status (0=off 1=on 2=tuning)."""

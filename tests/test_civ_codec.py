@@ -15,8 +15,10 @@ from backends.ic7300.civ_codec import (
     ScopeAssembler,
     ScopeSegment,
     build_frame,
+    decode_bcd_byte,
     decode_freq_bcd,
     decode_level_bcd,
+    encode_bcd_byte,
     encode_freq_bcd,
     encode_level_bcd,
     is_echo,
@@ -472,6 +474,41 @@ class ScopeAssemblerProfileHintTests(unittest.TestCase):
         seg = ScopeSegment(sequence=1, sequence_max=1,
                            bins=bytes([100] * 689))
         self.assertEqual(len(asm.feed(seg) or []), 689)
+
+
+class BcdByteTests(unittest.TestCase):
+    """Single-byte packed BCD (attenuator cmd 0x11 and friends)."""
+
+    def test_encode_packs_decimal_digits(self):
+        self.assertEqual(encode_bcd_byte(0), 0x00)
+        self.assertEqual(encode_bcd_byte(3), 0x03)
+        self.assertEqual(encode_bcd_byte(15), 0x15)
+        self.assertEqual(encode_bcd_byte(20), 0x20)
+        self.assertEqual(encode_bcd_byte(45), 0x45)
+        self.assertEqual(encode_bcd_byte(99), 0x99)
+
+    def test_decode_unpacks(self):
+        self.assertEqual(decode_bcd_byte(0x00), 0)
+        self.assertEqual(decode_bcd_byte(0x15), 15)
+        self.assertEqual(decode_bcd_byte(0x20), 20)
+        self.assertEqual(decode_bcd_byte(0x45), 45)
+
+    def test_round_trip_covers_attenuator_steps(self):
+        for db in range(0, 46, 3):
+            with self.subTest(db=db):
+                self.assertEqual(decode_bcd_byte(encode_bcd_byte(db)), db)
+
+    def test_encode_rejects_out_of_range(self):
+        for value in (-1, 100, 255):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    encode_bcd_byte(value)
+
+    def test_twenty_db_is_not_decimal_twenty(self):
+        # Guards the pitfall documented in IC-7300MK2_CI-V_Knowledge_Base.md
+        # ("ON is 0x20, not 01") and the decimal-vs-BCD mix-up that would
+        # send 0x14 for the 20 dB step.
+        self.assertNotEqual(encode_bcd_byte(20), 20)
 
 
 if __name__ == "__main__":

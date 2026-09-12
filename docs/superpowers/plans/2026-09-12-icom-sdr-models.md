@@ -41,7 +41,7 @@
 - 创建：`tests/test_civ_profiles.py`
 - 修改：`docs/superpowers/specs/2026-09-12-icom-sdr-models-design.md`（§5.2 / §9 的一处事实更正，见步骤 6）
 
-- [ ] **步骤 1：编写失败的测试**
+- [x] **步骤 1：编写失败的测试**
 
 `tests/test_civ_profiles.py`:
 
@@ -124,13 +124,17 @@ class VerifiedProfileFidelityTests(unittest.TestCase):
             self.assertAlmostEqual(cal.raw_to_current(raw),
                                    config_ic7300.raw_to_current(raw), places=9)
 
-    def test_ic7300_filter_hz_matches_legacy_helper(self):
-        from backends.ic7300.backend import _ic7300_filter_hz
+    def test_ic7300_filter_hz_matches_legacy_table(self):
+        # Compared against the table itself (not the backend helper), so
+        # task 6 can delete the now-redundant _ic7300_filter_hz.
         p = PROFILES["ic7300"]
         for mode in ("USB", "CW-U", "AM", "FM"):
-            for fil in (0, 1, 2, 3, 4):
+            for fil in (1, 2, 3):
                 self.assertEqual(p.filter_hz(mode, fil),
-                                 _ic7300_filter_hz(mode, fil))
+                                 config_ic7300.FIL_DEFAULT_WIDTHS_HZ[mode][fil - 1])
+        self.assertIsNone(p.filter_hz("USB", 0))
+        self.assertIsNone(p.filter_hz("USB", 4))
+        self.assertIsNone(p.filter_hz("NO-SUCH-MODE", 1))
 
 
 class NewModelProfileTests(unittest.TestCase):
@@ -225,7 +229,7 @@ class ProfileInvariantTests(unittest.TestCase):
 
     def test_narrow_modes_intersect_profile_mode_names(self):
         self.assertEqual(PROFILES["ic7300"].narrow_modes(),
-                         ["CW-U", "RTTY-L", "RTTY-U"])
+                         ["CW-L", "CW-U", "RTTY-L", "RTTY-U"])
 
     def test_attenuator_labels_from_steps(self):
         self.assertEqual(PROFILES["ic7300"].attenuator_labels(),
@@ -250,12 +254,12 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **步骤 2：运行测试验证失败**
+- [x] **步骤 2：运行测试验证失败**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_profiles.py" 2>&1 | tail -5`
 预期：FAIL，`ModuleNotFoundError: No module named 'backends.ic7300.civ_profiles'`
 
-- [ ] **步骤 3：编写最少实现代码**
+- [x] **步骤 3：编写最少实现代码**
 
 `backends/ic7300/civ_profiles.py`:
 
@@ -575,17 +579,17 @@ def get_profile(model_key: str) -> CivModelProfile:
     return profile
 ```
 
-- [ ] **步骤 4：运行测试验证通过**
+- [x] **步骤 4：运行测试验证通过**
 
 运行：`.venv/bin/python -m unittest discover -s tests -p "test_civ_profiles.py" 2>&1 | tail -5`
 预期：`Ran 20 tests` … `OK`
 
-- [ ] **步骤 5：验证没有破坏现有测试**
+- [x] **步骤 5：验证没有破坏现有测试**
 
 运行：`.venv/bin/python -m unittest discover -s tests 2>&1 | tail -3`
 预期：`OK`（与改动前的通过数一致；本任务只新增模块，不改运行时）
 
-- [ ] **步骤 6：修正规格中的一处事实错误**
+- [x] **步骤 6：修正规格中的一处事实错误**
 
 设计规格 §5.2/§9 原计划给每条 band 记录加 `power_w`。实现时发现这会破坏已验证的回归断言
 `IC7300Backend.bands == config_ic7300.BANDS`（`test_backend_factory.py:163`），而五台机型
@@ -604,7 +608,7 @@ verified IC-7300 band table for no runtime benefit.
 IC-7300 table …
 ```
 
-- [ ] **步骤 7：Commit**
+- [x] **步骤 7：Commit**
 
 ```bash
 git add backends/ic7300/civ_profiles.py tests/test_civ_profiles.py docs/superpowers/specs/2026-09-12-icom-sdr-models-design.md
@@ -959,7 +963,8 @@ class CivControllerProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await civ.set_attenuator(0))
         self.assertTrue(await civ.set_attenuator(5))
         self.assertFalse(await civ.set_attenuator(16))
-        self.assertEqual(sent, [bytes((0x11, 0x00)), bytes((0x11, 0x0F))])
+        # Wire bytes are packed BCD: 0 dB -> 0x00, 15 dB -> 0x15.
+        self.assertEqual(sent, [bytes((0x11, 0x00)), bytes((0x11, 0x15))])
 
     async def test_get_attenuator_returns_index_for_3db_steps(self):
         from backends.ic7300.civ_profiles import PROFILES
@@ -967,7 +972,7 @@ class CivControllerProfileTests(unittest.IsolatedAsyncioTestCase):
                             att_steps=PROFILES["ic7760"].att_steps)
 
         async def fake_query(command, sub=None, timeout=None):
-            return bytes((0x0F,))
+            return bytes((0x15,))          # BCD 15 dB
 
         civ._query_data = fake_query
         self.assertEqual(await civ._get_attenuator(), 5)   # 15 dB -> index 5
@@ -1036,7 +1041,7 @@ class CivControllerProfileTests(unittest.IsolatedAsyncioTestCase):
 
 删除原先硬编码的 `self._model = "IC-7300"` 行（已被上面替换）。
 
-`set_attenuator` / `_get_attenuator`：
+`set_attenuator` / `_get_attenuator`（**注意：线值是 packed BCD**——20 dB 发 `0x20`，15 dB 发 `0x15`；依据 `IC-7300MK2_CI-V_Knowledge_Base.md` "00=OFF, 20=ON（⚠️ ON 是 0x20，不是 01）" 与 wfview `icomcommander.cpp` 的 `bcdEncodeChar`/`bcdHexToUChar`）：
 
 ```python
     async def set_attenuator(self, value: int) -> bool:
@@ -1225,73 +1230,65 @@ from backends import create_backend
 from backends.ic7300.civ_profiles import PROFILES
 
 
-def _backend(model: str, allow: bool):
-    with mock.patch.object(config, "ALLOW_UNVERIFIED_TX", allow, create=True):
-        backend = create_backend(model, port="/dev/null")
-        # Re-read the gate with the patched value at call time.
-        return backend
+class UnverifiedTxGateTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        # The gate warns once per process — reset it so the log-count
+        # assertion cannot depend on test execution order.
+        import backends.ic7300.backend as icom_backend
+        icom_backend._TX_GATE_WARNED = False
 
-
-class UnverifiedTxGateTests(unittest.TestCase):
-    def test_ic705_is_gated_by_default(self):
-        backend = _backend("ic705", allow=False)
+    async def test_ic705_is_gated_by_default(self):
+        backend = create_backend("ic705", port="/dev/null")
         self.assertTrue(backend.capabilities.tx_gated)
         self.assertFalse(backend.capabilities.verified)
 
     @mock.patch.object(config, "ALLOW_UNVERIFIED_TX", False, create=True)
-    def test_refused_ptt_does_not_write_to_serial(self):
+    async def test_refused_ptt_does_not_write_to_serial(self):
         backend = create_backend("ic705", port="/dev/null")
         backend._civ.send_set_command = mock.AsyncMock(return_value=True)
-        result = self._run(backend.set_ptt(True))
-        self.assertFalse(result)
+        self.assertFalse(await backend.set_ptt(True))
         backend._civ.send_set_command.assert_not_called()
 
     @mock.patch.object(config, "ALLOW_UNVERIFIED_TX", False, create=True)
-    def test_refused_tune_does_not_write_to_serial(self):
+    async def test_refused_tune_does_not_write_to_serial(self):
         backend = create_backend("ic7760", port="/dev/null")
         backend._civ.send_set_command = mock.AsyncMock(return_value=True)
-        result = self._run(backend.set_tune(True))
-        self.assertFalse(result)
+        self.assertFalse(await backend.set_tune(True))
         backend._civ.send_set_command.assert_not_called()
 
     @mock.patch.object(config, "ALLOW_UNVERIFIED_TX", False, create=True)
-    def test_release_is_never_blocked(self):
+    async def test_release_is_never_blocked(self):
         backend = create_backend("ic705", port="/dev/null")
         backend._civ.set_ptt = mock.AsyncMock(return_value=True)
-        self.assertTrue(self._run(backend.set_ptt(False)))
+        self.assertTrue(await backend.set_ptt(False))
         backend._civ.set_ptt.assert_awaited_once_with(False)
         backend._civ.set_tune = mock.AsyncMock(return_value=True)
-        self.assertTrue(self._run(backend.set_tune(False)))
+        self.assertTrue(await backend.set_tune(False))
         backend._civ.set_tune.assert_awaited_once_with(False)
 
     @mock.patch.object(config, "ALLOW_UNVERIFIED_TX", True, create=True)
-    def test_env_var_allows_transmit(self):
+    async def test_env_var_allows_transmit(self):
         backend = create_backend("ic705", port="/dev/null")
         self.assertFalse(backend.capabilities.tx_gated)
         backend._civ.set_ptt = mock.AsyncMock(return_value=True)
-        self.assertTrue(self._run(backend.set_ptt(True)))
+        self.assertTrue(await backend.set_ptt(True))
 
     @mock.patch.object(config, "ALLOW_UNVERIFIED_TX", False, create=True)
-    def test_verified_models_are_unaffected(self):
+    async def test_verified_models_are_unaffected(self):
         for model in ("ic7300", "ic7300mk2"):
             backend = create_backend(model, port="/dev/null")
             self.assertFalse(backend.capabilities.tx_gated)
             backend._civ.set_ptt = mock.AsyncMock(return_value=True)
-            self.assertTrue(self._run(backend.set_ptt(True)))
+            self.assertTrue(await backend.set_ptt(True))
 
     @mock.patch.object(config, "ALLOW_UNVERIFIED_TX", False, create=True)
-    def test_gate_logs_once(self):
+    async def test_gate_logs_once(self):
         backend = create_backend("ic7610", port="/dev/null")
         backend._civ.send_set_command = mock.AsyncMock(return_value=True)
         with self.assertLogs("ic7300.backend", level="WARNING") as cap:
-            self._run(backend.set_ptt(True))
-            self._run(backend.set_ptt(True))
+            await backend.set_ptt(True)
+            await backend.set_ptt(True)
         self.assertEqual(len(cap.output), 1)
-
-    @staticmethod
-    def _run(coro):
-        import asyncio
-        return asyncio.get_event_loop().run_until_complete(coro)
 
 
 class NewModelCapabilityTests(unittest.TestCase):
@@ -1321,8 +1318,9 @@ observed bytes and never raise a mismatch verdict from a guess.
 import unittest
 from unittest import mock
 
+import dataclasses
+
 from backends.ic7300.backend import IC7300Backend, IC705Backend
-from backends.ic7300 import civ_profiles
 
 
 class ModelIdentityTests(unittest.IsolatedAsyncioTestCase):
@@ -1342,15 +1340,19 @@ class ModelIdentityTests(unittest.IsolatedAsyncioTestCase):
     async def test_expected_bytes_match_returns_false(self):
         backend = IC705Backend(port="/dev/null")
         backend._civ.get_model_id = mock.AsyncMock(return_value=bytes((0xA4,)))
-        with mock.patch.object(civ_profiles.PROFILES["ic705"],
-                               "model_id_bytes", (0xA4,)):
+        # The profile is a frozen dataclass and lives on the class
+        # attribute, so inject an expectation by patching the class.
+        patched = dataclasses.replace(IC705Backend._profile,
+                                      model_id_bytes=(0xA4,))
+        with mock.patch.object(IC705Backend, "_profile", patched):
             self.assertIs(await backend._check_model_identity(), False)
 
     async def test_expected_bytes_mismatch_returns_true_and_warns(self):
         backend = IC7300Backend(port="/dev/null")
         backend._civ.get_model_id = mock.AsyncMock(return_value=bytes((0xB2,)))
-        with mock.patch.object(civ_profiles.PROFILES["ic7300"],
-                               "model_id_bytes", (0x94,)):
+        patched = dataclasses.replace(IC7300Backend._profile,
+                                      model_id_bytes=(0x94,))
+        with mock.patch.object(IC7300Backend, "_profile", patched):
             with self.assertLogs("ic7300.backend", level="WARNING") as cap:
                 verdict = await backend._check_model_identity()
         self.assertIs(verdict, True)
@@ -1643,7 +1645,7 @@ class IC7760Backend(IC7300Backend):
     _display_name = "Icom IC-7760"
 ```
 
-保留 `_ATTENUATOR_INDEX_LABELS` 删除后的引用清理：`grep -rn "_ATTENUATOR_INDEX_LABELS" .` 必须只剩测试（若有）并在同一提交内更新。
+清理被 profile 取代的死代码：`grep -rn "_ATTENUATOR_INDEX_LABELS\|_ic7300_filter_hz" --include=*.py .` 必须零命中（测试也不引用它们——任务 1 的测试已改为直接对照 `FIL_DEFAULT_WIDTHS_HZ`）。
 
 - [ ] **步骤 4：运行测试验证通过**
 
@@ -1802,16 +1804,13 @@ class ServerModelRegistryTests(unittest.TestCase):
         import inspect
         source = inspect.getsource(server)
         self.assertNotIn("if v in (0, 1, 2, 3):", source)
-        self.assertIn("len(_att_steps)", inspect.getsource(server._handle_ws_message)
-                      if hasattr(server, "_handle_ws_message") else source)
+        self.assertIn("len(_att_steps)", source)
 
     def test_tx_gate_message_present(self):
         import inspect
         source = inspect.getsource(server)
         self.assertIn("MRRC_ALLOW_UNVERIFIED_TX", source)
 ```
-
-（若 `_handle_ws_message` 在当前版本中不是模块级函数，则该断言退化到对整个模块源码的检查——保持 `assertIn("len(_att_steps)", source)` 这一条即可。）
 
 - [ ] **步骤 2：运行测试验证失败**
 
@@ -2322,8 +2321,15 @@ async def run(args) -> int:
               f"{stats.min_bins}..{stats.max_bins}, amp "
               f"{stats.amp_min}..{stats.amp_max}")
 
-        for meter in ("po", "swr", "alc", "comp", "vd", "id"):
+        # get_meter() deliberately leaves vd/id unmapped on this backend
+        # (has_vd_id_meters=False), so those two are read raw — the
+        # diagnostic is exactly the place where they must still be visible.
+        for meter in ("po", "swr", "alc", "comp"):
             meter_results.append((meter, await civ.get_meter(meter)))
+        for name, sub in (("vd", 0x15), ("id", 0x16)):
+            raw = await civ._query_data(0x15, sub)
+            meter_results.append(
+                (name, raw.hex(" ").upper() if raw else None))
         print(f"  meters: {meter_results}")
 
         if args.tx_check and args.allow_tx:

@@ -273,6 +273,25 @@ def _bcd_byte_to_int(b: int) -> int:
     return (b >> 4) * 10 + (b & 0x0F)
 
 
+def encode_bcd_byte(value: int) -> int:
+    """Encode a 0-99 value as one packed-BCD byte (15 -> 0x15).
+
+    Icom's single-data-byte tables write values as decimal digit pairs on
+    the wire.  The attenuator (cmd 0x11) is the one this backend uses:
+    the IC-7300MK2 CI-V reference documents "00/20" for the 20 dB step
+    and wfview encodes/decodes that byte with its BCD helpers
+    (icomcommander.cpp bcdEncodeChar / bcdHexToUChar).
+    """
+    if not 0 <= value <= 99:
+        raise ValueError(f"bcd byte out of range 0-99: {value}")
+    return ((value // 10) << 4) | (value % 10)
+
+
+def decode_bcd_byte(byte: int) -> int:
+    """Decode one packed-BCD byte (0x15 -> 15)."""
+    return _bcd_byte_to_int(byte)
+
+
 @dataclass
 class ScopeSegment:
     """One 0x27 0x00 scope chunk.

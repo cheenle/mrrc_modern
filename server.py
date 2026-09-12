@@ -49,8 +49,8 @@ from backends.ft710.config_ft710 import (
 from backends.ft710.cat_controller import CatController
 from radio_state import RadioState
 from recorder import (
-    RecordingSession, list_recordings, load_index,
-    parse_recording_name, save_index,
+    RecorderError, RecordingSession, encoder_available,
+    list_recordings, load_index, parse_recording_name, save_index,
 )
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
@@ -234,6 +234,34 @@ _rec_writer_task: Optional["asyncio.Task"] = None
 _rec_session = RecordingSession(RECORDINGS_DIR,
                                 bitrate=RECORDINGS_BITRATE,
                                 max_seconds=RECORDINGS_MAX_SESSION_MIN * 60)
+
+
+def _log_recording_readiness() -> None:
+    """Report recording readiness at startup (missing deps, read-only dir).
+
+    Recording is optional, so this warns instead of failing the boot — but
+    the operator must be able to see *why* REC would refuse before pressing
+    it (field report 2026-09-12: the reason only surfaced as a dropped
+    WebSocket).
+    """
+    if not encoder_available():
+        logger.warning(
+            "Recording disabled: the MP3 encoder is missing — run "
+            "`pip install -r requirements.txt` (or `pip install lameenc`) "
+            "and restart. CAT, audio and spectrum are unaffected.")
+        return
+    try:
+        RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+        probe = RECORDINGS_DIR / ".write_test"
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError as e:
+        logger.warning(
+            "Recording disabled: %s is not writable (%s) — set "
+            "MRRC_RECORDINGS_DIR to a writable directory and restart.",
+            RECORDINGS_DIR, e)
+        return
+    logger.info("Recording ready: %s (16 kHz mono MP3)", RECORDINGS_DIR)
 
 
 def _recording_should_capture_rx() -> bool:
@@ -1223,7 +1251,17 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         on = value is True or str(value).lower() == "true"
         if on:
             freq_hz = radio.active_freq if radio is not None else 0
-            if not _rec_session.start(freq_hz=freq_hz):
+            try:
+                started = _rec_session.start(freq_hz=freq_hz)
+            except RecorderError as e:
+                # Actionable reason (missing lameenc, unwritable directory)
+                # instead of an exception that would drop the control
+                # channel — the 2026-09-12 field report.
+                logger.warning("Recording could not start: %s", e)
+                await ws.send_text(json.dumps({"type": "error",
+                                               "message": str(e)}))
+                return
+            if not started:
                 await ws.send_text(json.dumps({
                     "type": "error",
                     "message": "Recording already in progress",
@@ -1862,6 +1900,7 @@ async def lifespan(app: FastAPI):
     global _rec_writer_task
     _rec_writer_task = asyncio.create_task(
         _recording_writer_loop(_rec_queue, _rec_session), name="rec_writer")
+    _log_recording_readiness()
     global _max_tx_watchdog_task
     _max_tx_watchdog_task = asyncio.create_task(_max_tx_watchdog(), name="max_tx_watchdog")
 
@@ -2499,7 +2538,22 @@ async def ws_radio(ws: WebSocket):
     try:
         while True:
             msg_str = await ws.receive_text()
-            await _handle_ws_message(ws, msg_str)
+            # One bad command must not tear down the control channel: an
+            # exception here used to close the socket with 1006, and the
+            # client then reconnect-looped (field report 2026-09-12).
+            try:
+                await _handle_ws_message(ws, msg_str)
+            except Exception as e:
+                logger.warning("Command failed (%d bytes): %s",
+                               len(msg_str), e)
+                logger.debug("Command traceback", exc_info=True)
+                try:
+                    await ws.send_text(json.dumps({
+                        "type": "error",
+                        "message": f"Command failed: {e}",
+                    }))
+                except Exception:
+                    pass
     except WebSocketDisconnect:
         pass
     except Exception as e:

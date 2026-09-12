@@ -11,8 +11,10 @@ from pathlib import Path
 from typing import Any, cast
 from unittest import mock
 
+import json
 import numpy as np
 
+import recorder
 import server
 from recorder import RecordingSession
 
@@ -300,6 +302,93 @@ class RecordingsRestTests(unittest.TestCase):
     def test_unknown_name_has_no_response(self):
         self.assertIsNone(server._recording_response("../server.py"))
         self.assertIsNone(server._recording_response("07050kHz_20260912_210405.mp3"))
+
+
+class _FakeWS:
+    def __init__(self):
+        self.messages = []
+
+    async def send_text(self, text):
+        self.messages.append(json.loads(text))
+
+    def errors(self):
+        return [m.get("message", "") for m in self.messages
+                if m.get("type") == "error"]
+
+
+class RecordingFailureHandlingTests(unittest.IsolatedAsyncioTestCase):
+    """A failing REC must answer with a reason, not kill the control channel.
+
+    Field report (2026-09-12): pressing REC on a deployed server closed
+    /WSradio with 1006 in a reconnect loop, because an exception inside a
+    set handler propagated out of the receive loop.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+        self._saved = server._rec_session
+
+    def tearDown(self):
+        server._rec_session = self._saved
+        self._tmp.cleanup()
+
+    async def test_missing_encoder_start_raises_an_actionable_error(self):
+        session = RecordingSession(self.dir, bitrate=64, max_seconds=60)
+        with mock.patch.object(recorder, "lameenc", None), \
+             mock.patch.object(recorder, "encoder_available",
+                               staticmethod(lambda: False)):
+            with self.assertRaises(recorder.RecorderError) as ctx:
+                session.start(freq_hz=14_270_000)
+        message = str(ctx.exception)
+        self.assertIn("lameenc", message)
+        self.assertIn("install", message.lower())
+        self.assertFalse(session.active)
+
+    async def test_unwritable_directory_start_raises_an_actionable_error(self):
+        session = RecordingSession(self.dir, bitrate=64, max_seconds=60)
+        with mock.patch("pathlib.Path.mkdir", side_effect=PermissionError("read-only")):
+            with self.assertRaises(recorder.RecorderError) as ctx:
+                session.start(freq_hz=14_270_000)
+        self.assertIn(str(self.dir), str(ctx.exception))
+        self.assertFalse(session.active)
+
+    async def test_handler_reports_the_reason_and_stays_alive(self):
+        session = RecordingSession(self.dir, bitrate=64, max_seconds=60)
+        session.start = mock.MagicMock(                          # type: ignore[method-assign]
+            side_effect=recorder.RecorderError("MP3 encoder (lameenc) "
+                                               "is not installed on the server"))
+        server._rec_session = session
+        ws = _FakeWS()
+        with mock.patch.object(server, "_broadcast_recording_state",
+                               mock.AsyncMock()):
+            await server._execute_set_command(
+                "recording", True, cast(Any, ws))            # must not raise
+        self.assertTrue(any("lameenc" in m for m in ws.errors()), ws.errors())
+
+    async def test_encoder_availability_helper_reflects_reality(self):
+        self.assertTrue(recorder.encoder_available())            # installed here
+        with mock.patch.object(recorder, "lameenc", None):
+            self.assertFalse(recorder.encoder_available())
+
+    def test_readiness_check_is_called_at_startup(self):
+        import inspect
+        self.assertIn("_log_recording_readiness", inspect.getsource(server.lifespan))
+
+    def test_readiness_check_warns_when_the_encoder_is_missing(self):
+        # server.py imported the helper by value, so patch it there.
+        with mock.patch.object(server, "encoder_available", lambda: False):
+            with self.assertLogs("mrrc", level="WARNING") as cap:
+                server._log_recording_readiness()
+        self.assertTrue(any("lameenc" in line for line in cap.output), cap.output)
+
+    def test_ws_loop_survives_a_failing_message(self):
+        import inspect
+        source = inspect.getsource(server.ws_radio)
+        # The per-message dispatch must be guarded so one bad command cannot
+        # tear down the control channel (the 1006 loop of 2026-09-12).
+        guarded = source.index("try:", source.index("await ws.receive_text()"))
+        self.assertIn("_handle_ws_message", source[guarded:guarded + 400])
 
 
 if __name__ == "__main__":

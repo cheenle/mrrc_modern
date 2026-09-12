@@ -40,7 +40,26 @@ import numpy as np
 
 from audio_resample import resample_pcm
 
+try:                                # optional at import time: a server
+    import lameenc                  # without it still runs CAT/audio and
+except ImportError:                 # reports a clear error on REC.
+    lameenc = None                  # type: ignore[assignment]
+
 logger = logging.getLogger("recorder")
+
+
+class RecorderError(RuntimeError):
+    """Recording could not start (missing encoder, unwritable directory).
+
+    Carries an operator-actionable message: it is shown in the UI and the
+    server log, and it must never be allowed to tear down the control
+    WebSocket (field report 2026-09-12).
+    """
+
+
+def encoder_available() -> bool:
+    """True when the MP3 encoder is importable in this interpreter."""
+    return lameenc is not None
 
 #: Storage-domain sample rate (AD-017) — not the codec or device rate.
 RECORDING_RATE = 16000
@@ -242,16 +261,32 @@ class RecordingSession:
         """Begin a recording; False when one is already running."""
         if self._active:
             return False
-        import lameenc                       # local: keeps import cost off
-                                             # the always-imported path
-        self.directory.mkdir(parents=True, exist_ok=True)
+        if lameenc is None:
+            raise RecorderError(
+                "MP3 encoder (lameenc) is not installed on the server — "
+                "run `pip install -r requirements.txt` (or `pip install lameenc`) "
+                "and restart")
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise RecorderError(
+                f"cannot create the recordings directory {self.directory}: {e}") from e
         self._name = recording_name(freq_hz, now)
-        self._fh = open(self.directory / self._name, "wb")
-        encoder = lameenc.Encoder()
-        encoder.set_channels(1)
-        encoder.set_in_sample_rate(RECORDING_RATE)
-        encoder.set_bit_rate(self.bitrate)
-        encoder.set_quality(self.quality)
+        try:
+            self._fh = open(self.directory / self._name, "wb")
+        except OSError as e:
+            raise RecorderError(
+                f"cannot write a recording to {self.directory}: {e}") from e
+        try:
+            encoder = lameenc.Encoder()
+            encoder.set_channels(1)
+            encoder.set_in_sample_rate(RECORDING_RATE)
+            encoder.set_bit_rate(self.bitrate)
+            encoder.set_quality(self.quality)
+        except Exception as e:                  # encoder/library failure
+            self._fh.close()
+            self._fh = None
+            raise RecorderError(f"MP3 encoder failed to start: {e}") from e
         self._enc = encoder
         self._start_ns = time.monotonic_ns()
         self._started_at = (now or datetime.now()).isoformat(timespec="seconds")

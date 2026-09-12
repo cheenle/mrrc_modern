@@ -22,6 +22,12 @@ _BACKENDS = {
     "ic705": ("backends.ic7300.backend", "IC705Backend"),
     "ic7610": ("backends.ic7300.backend", "IC7610Backend"),
     "ic7760": ("backends.ic7300.backend", "IC7760Backend"),
+    # Yaesu ASCII-CAT family (spec 2026-09-12): same core, four profiles.
+    # Unverified models: TX gated behind MRRC_ALLOW_UNVERIFIED_TX.
+    "ftdx10": ("backends.yaesu.backend", "FTDX10Backend"),
+    "ftdx101d": ("backends.yaesu.backend", "FTDX101DBackend"),
+    "ftdx101mp": ("backends.yaesu.backend", "FTDX101MPBackend"),
+    "ftx1": ("backends.yaesu.backend", "FTX1Backend"),
 }
 
 

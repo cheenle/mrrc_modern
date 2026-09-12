@@ -103,6 +103,12 @@ _DEFAULT_BAUD_BY_MODEL = {
     "ic705": 115200,
     "ic7610": 115200,
     "ic7760": 115200,
+    # Yaesu ASCII-CAT family: Yaesu's documented default is 38400 8N1
+    # (Hamlib ftx1/ftx1_readme.txt confirms the FTX-1's default).
+    "ftdx10": 38400,
+    "ftdx101d": 38400,
+    "ftdx101mp": 38400,
+    "ftx1": 38400,
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 

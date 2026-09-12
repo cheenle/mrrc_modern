@@ -92,6 +92,9 @@ a = Analysis(
         "backends.ic7300.civ_profiles",
         "backends.ic7300.civ_scope",
         "backends.ic7300.config_ic7300",
+        "backends.yaesu.backend",
+        "backends.yaesu.cat_core",
+        "backends.yaesu.yaesu_profiles",
         # lameenc is a single compiled extension module (not a package) and
         # is imported lazily inside the recorder, so name it explicitly.
         "lameenc",

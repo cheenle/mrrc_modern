@@ -236,7 +236,8 @@ class FullStateCapabilitiesTests(unittest.TestCase):
         from backends import known_models
         self.assertEqual(known_models(),
                          ("ft710", "ic7300", "ic7300mk2", "ic705",
-                          "ic7610", "ic7760"))
+                          "ic7610", "ic7760", "ftdx10", "ftdx101d",
+                          "ftdx101mp", "ftx1"))
 
 
 class CapabilityVerificationFieldsTests(unittest.TestCase):

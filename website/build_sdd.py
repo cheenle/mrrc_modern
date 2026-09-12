@@ -8,7 +8,7 @@ SDD_DIR = REPO_ROOT / "SDD"
 OUT_DIR = Path(__file__).resolve().parent / "sdd"
 CSS_PATH = "../css/scope.css?v=1"
 SITE_CSS_PATH = "../css/mrrc_modern.scope.css?v=1"
-JS_PATH = "../js/scope.js?v=1"
+JS_PATH = "../js/scope.js?v=3"
 SITE_KEY = "mrrc_modern"
 
 FILES = [

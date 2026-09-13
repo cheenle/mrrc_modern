@@ -1,5 +1,7 @@
 # FT-710 远程控制项目最终状态报告
 
+> ⚠️ **历史文档** —— 本文件记录的是 2026-07 月 FT-710 单机型时代的状态，不是当前项目状态；现状请看 [CHANGELOG.md](CHANGELOG.md) 与 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
+
 ## 🎯 项目目标达成情况
 
 ### ✅ 核心目标完成度

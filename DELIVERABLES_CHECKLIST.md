@@ -1,5 +1,7 @@
 # FT-710 Web Control — 文档更新交付清单
 
+> ⚠️ **历史文档** —— 本文件记录的是 2026-07 月 FT-710 单机型时代的状态，不是当前项目状态；现状请看 [CHANGELOG.md](CHANGELOG.md) 与 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
+
 **项目**: FT-710 Web Control  
 **任务**: TX 链路深度分析文档整合  
 **完成时间**: 2026-07-14 08:27  

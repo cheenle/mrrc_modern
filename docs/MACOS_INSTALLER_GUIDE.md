@@ -24,6 +24,8 @@
 
 - **FT-710**：USB 线插上 Mac 即自动识别，真 FFT 频谱开箱即用。
 - **IC-7300 / IC-7300MK2**：USB 线插上自动识别；频谱走 CI-V。
+- **IC-705 / IC-7610 / IC-7760（预览）**：同样即插即用，但配置未做真机验证 —— 接收可用，**发射默认被拒绝**（核对电台后设 `MRRC_ALLOW_UNVERIFIED_TX=1`）。
+- **Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F（实验性）**：串口 ASCII-CAT，驱动与 FT-710 相同；同样默认只收不发，且没有真机频谱源（界面显示 S 表合成频谱）。
 - 若同时插了多个串口设备，程序会优先选 CP210x/USB 串口；可到菜单栏
   **Edit Configuration…** 里确认 `MRRC_SERIAL_PORT`。
 

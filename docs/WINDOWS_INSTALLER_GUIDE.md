@@ -1,7 +1,9 @@
 # Windows Desktop Installer Guide
 
 This guide covers the Windows desktop package for MRRC Web Control
-(FT-710 and IC-7300/IC-7300MK2). The package is designed for Windows 11 and
+(the Yaesu FT-710, the Icom IC-7300/IC-7300MK2 plus preview profiles for
+IC-705/IC-7610/IC-7760, and the Yaesu SDR family FTDX10/FTDX101D/FTDX101MP/FTX-1F).
+The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
@@ -31,7 +33,16 @@ packaged build, not just in the test environment.
 The earlier v1.14.2 package (45,435,022 bytes, SHA-256 `a7ee1667…`) remains downloadable as an
 archive; v1.16.0 supersedes it.
 
-**What's new in v1.16.0**: QSO recording moved to the server (device-domain RX
+**What's new in v1.16.0**: the **Yaesu SDR family** — FTDX10 / FTDX101D /
+FTDX101MP / FTX-1F — behind one profile-driven ASCII-CAT core ported from the
+verified FT-710 path (AD-018). These four profiles are **experimental and
+receive-only**: transmit is refused until you check the radio and set
+`MRRC_ALLOW_UNVERIFIED_TX=1`, and they have no real spectrum source, so the UI
+shows the S-meter synthesised spectrum. The same release makes the release
+itself checkable (`release-artifacts.json` + `release_check.py`, enforced by
+the test suite).
+
+**v1.15.0 brought**: QSO recording moved to the server (device-domain RX
 PCM + decoded mic PCM on one monotonic 16 kHz timeline, incremental `lameenc`
 MP3 written while recording, crash-safe), a new **Recordings panel** (list,
 seekable player — the server answers Range requests — download, delete), and a

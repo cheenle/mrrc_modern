@@ -5,7 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1055 tests across 53 test modules.
+1055 tests across 53 test modules (7 pty-based Yaesu round-trip tests skip on
+Windows; the per-module counts below were read from `unittest` on 2026-09-13, macOS).
 
 ```bash
 python -m unittest discover -s tests -v
@@ -67,7 +68,6 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `CodecTagTests` | 4 | AUDIO_TAG_PCM (0x00), AUDIO_TAG_OPUS (0x01), tag distinctness, 1-byte fit |
 | `OpusConstantsTests` | 7 | RX_RATE=48000, FRAME_SAMPLES=960, DEFAULT_BITRATE=64000, MIN=8000, MAX=128000, Windows packaged opus.dll search paths |
 | `TxFrontendContractTests` | 12 | TX worklet/worker contract: 48kHz, frame sizes, packet format, mutable intentional-close cleanup flag |
-| `RxRecordingFrontendTests` | 5 | RX recording (MP3/lamejs) frontend contract |
 | `TXBufferTests` | 9 | TX jitter buffer pre-buffer/cap behavior and oldest-frame drop diagnostics |
 | `TXReleaseOrderTests` | 3 | PTT release ordering: audio drain before TX0 |
 | `RXBackpressureTests` | 3 | RX broadcast backpressure handling |
@@ -162,7 +162,7 @@ SDD coverage: AD-005 (pipe subprocess lifecycle)
 | `ScopePipeRestartTests` | 2 | Exited pipe can restart while the previous reader task finishes |
 | `ScopePipeHeartbeatTests` | 2 | len=0 stdout heartbeat accepted silently by the server reader; scope_pipe emits the heartbeat (dead-parent EPIPE detection) |
 
-### 15. test_windows_launcher.py — Windows Launcher (15 tests)
+### 15. test_windows_launcher.py — Windows Launcher (18 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
@@ -437,19 +437,94 @@ TX-check rule and the paste-ready report formatting.
 The four registry keys, factory construction, the FT-710 path staying
 verified and untouched, and the model-aware baud table.
 
+### 41. test_first_run.py — First-Launch Auto-Config (27 tests)
+
+`needs_first_run`, password generation, serial-port detection (macOS and
+Windows paths), radio probing, the baud<->model linkage applied on save, and
+`update_env_file`. `EnvFileEncodingTests` covers the 2026-09-12 field bug: a
+config saved by an ANSI/GBK editor must not kill the launcher.
+
+### 42. test_linux_first_run.py — Raspberry Pi First-Boot Auto-Config (9 tests)
+
+The Linux serial filter (no onboard UARTs), the first-run flow, and
+`read_env_text` - the `/boot/firmware/mrrc.env` preseed travels on the SD card
+and may be GBK/UTF-16 rather than UTF-8.
+
+### 43. test_rpi_packaging.py — rpi64 Image Packaging (7 tests)
+
+Stage layout, both systemd units (user, EnvironmentFile, oneshot guard), the
+build/verify scripts, and `adopt_preseed()` converting a non-UTF-8 preseed.
+
+### 44. test_macos_launcher.py — macOS Menu-Bar Launcher (13 tests)
+
+HTTPS-by-default command construction, cert/key resolution (explicit pair,
+bootstrap, `MRRC_SSL=off`, legacy `FT710_*` names), and the tolerant env
+reader plus fatal-report path.
+
+### 45. test_recorder.py — Recording Timeline and Index (31 tests)
+
+`RecordingSession` (monotonic placement, 50 ms continuity tolerance, silence
+gaps, per-source cursors), the 96-tap streaming 48k->16k decimator, file
+naming/parsing, and the `recordings.json` index helpers.
+
+### 46. test_civ_profiles.py — Icom Model Profiles (22 tests)
+
+The profile registry (addresses, scope geometry, `verified` flags), profile
+invariants, and IC-7300/MK2 fidelity: the data-driven profiles must reproduce
+the previously hard-coded constants byte for byte.
+
+### 47. test_diag_civ.py — Icom CI-V Field Diagnostic (10 tests)
+
+Argument parsing, identity evaluation, scope statistics and report formatting
+for `_diag_civ.py`.
+
+### 48. test_unverified_tx_gate.py — Unverified-Model TX Gate (11 tests)
+
+Registry-derived capabilities for the hardware-unverified Icom profiles, and
+the transmit refusal that only `MRRC_ALLOW_UNVERIFIED_TX=1` lifts - a release
+is always allowed.
+
+### 49. test_model_mismatch.py — Identity Check (7 tests)
+
+The read-only `19 00` / `ID;` identity comparison and the dirty-tracked
+`model_mismatch` flag: a warning with the observed bytes, never an invented
+verdict and never a blocked session.
+
+### 50. test_server_first_run.py — Login Banner and Setup Status (4 tests)
+
+The loopback-only auto-password banner and the `/api/setup` first-run status
+payload.
+
+### 51. test_server_setup.py — Connection Settings and Restart (10 tests)
+
+Config-file path resolution, the dual-stack pre-bound socket, device listing,
+the restart chain, and the baud<->model linkage written on every save.
+
+### 52. test_release_artifacts.py — Release Completeness (15 tests)
+
+The artifact registry rules (app/SDD version sources, ISS, both language cards,
+guides, README, Quick Facts), diagram-copy consistency, and the publish audit -
+offline rules plus the `--online`/`--deep` modes.
+
+### 53. test_sdd_docs_consistency.py — SDD and Website Consistency (6 tests)
+
+Generated SDD pages carry the current version, the hand-written landing pages
+agree with the version history, and every architecture decision appears in the
+AD index.
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
 | ------------- | --------------- | -------- |
 | AD-001 FastAPI/Uvicorn | test_server_scope_init | 2 tests |
-| AD-002 Direct Serial CAT | test_cat_controller | 30 tests |
+| AD-002 Direct Serial CAT | test_cat_controller | 33 tests |
 | AD-003 Dirty-Field Broadcasting | test_radio_state, test_server_ws_protocol | 46+ tests |
-| AD-004 Dual-Codec Audio | test_audio | 91 tests |
+| AD-004 Dual-Codec Audio | test_audio | 98 tests |
 | AD-005 scope_pipe Subprocess | test_scope_frame, test_scope_runtime_config, test_server_scope_init, test_scope_pipe_restart, test_scope_pipe_tx | 29 tests |
 | AD-006 Dual-Mode Spectrum | test_scope_frame, test_scope_handler_fallback | 8 tests |
 | AD-007 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | AD-008 PyAudio Detection | test_audio (AudioDeviceDetectionTests + USBCodecDeviceSelectionTests + CustomNameHintsTests) | 19 tests |
-| AD-009 7-Task Polling | test_poll_scheduler | 17 tests |
+| AD-009 7-Task Polling | test_poll_scheduler | 19 tests |
 | AD-010 Memory Channels | test_server_ws_protocol (mem messages), test_memory_recall | 6 tests |
 | §7.2 RadioState Entity | test_radio_state | 46 tests |
 | §7.2 Config Tables | test_config, test_config_ic7300 | 50 tests |
@@ -460,9 +535,13 @@ verified and untouched, and the model-aware baud table.
 | §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests), test_ssl_bootstrap | 10 tests |
 | NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 31 tests |
-| NFR-060–065 Audio Quality | test_audio | 91 tests |
+| NFR-060–065 Audio Quality | test_audio | 98 tests |
 | AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope, test_ic7300_runtime_reliability | 143 tests |
 | V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 13 tests |
+| AD-017 Server-Side QSO Recording | test_recorder, test_recorder_api | 66 tests |
+| AD-018 Yaesu SDR Family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F) | test_yaesu_profiles, test_yaesu_cat_core, test_yaesu_backend, test_yaesu_wiring, test_yaesu_fake_radio, test_diag_yaesu | 101 tests |
+| Preview Icom models + TX gate | test_civ_profiles, test_unverified_tx_gate, test_model_mismatch | 40 tests |
+| Release engineering (registry, completeness) | test_release_artifacts, test_sdd_docs_consistency | 21 tests |
 
 ## Running Specific Tests
 

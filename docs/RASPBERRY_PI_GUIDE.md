@@ -51,6 +51,7 @@
 
 - **FT-710**：USB 线直插树莓派——CP210x 串口驱动内核自带，两个串口自动探测；真 FFT 频谱需要手动放 FTDI 库（见第七节），没放也能用 S 表频谱。电台菜单 `MOD SOURCE = USB` 仍需设置（与桌面版相同）。
 - **IC-7300 / MK2**：USB 直插即可，CI-V 走同一条线，频谱开箱即用。
+- **IC-705 / IC-7610 / IC-7760（预览）** 与 **Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F（实验性）**：串口可选对应 `MRRC_RADIO_MODEL`；两者都**默认只收不发**（核对真机后设 `MRRC_ALLOW_UNVERIFIED_TX=1`），Yaesu 这几款没有真机频谱源，界面用 S 表合成频谱。
 - **音频**：电台的 USB 声卡自动识别；若有多个声卡，在 `/opt/mrrc_modern/env/mrrc.env` 里写 `MRRC_AUDIO_RX_DEVICE=USB Audio` / `MRRC_AUDIO_TX_DEVICE=USB Audio` 锁定后 `sudo systemctl restart mrrc-modern`。
 
 ## 六、常用命令

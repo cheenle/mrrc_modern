@@ -1,5 +1,7 @@
 # FT-710 Web Control — Complete Fix Summary
 
+> ⚠️ **历史文档** —— 本文件记录的是 2026-07 月 FT-710 单机型时代的状态，不是当前项目状态；现状请看 [CHANGELOG.md](CHANGELOG.md) 与 [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)。
+
 ## Overview
 This document summarizes all fixes and improvements applied during the v2.0.0 hardening cycle. All issues identified in the deep code review have been resolved.
 

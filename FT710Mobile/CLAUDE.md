@@ -63,6 +63,8 @@ FT710MobileApp (登录页 → Keychain 取密码 → RadioViewModel)
 | 频谱帧 | 1701 字节 = `0x01` 版本 + 850B wf1 + 850B wf2;iOS 只用 wf1。服务端实际 ~5fps 广播(`server.py:285`;`/WSspectrum` docstring 写的 "~30fps" 已过时) |
 | scheme | `https`/`wss` 硬编码 → **连不了 `--no-ssl` 服务端**;默认主机 `radio.vlsc.net:8888`(登录页可改,@AppStorage 持久化) |
 | 服务端端口/密码 | `FT710_WEB_PORT`(默认 8888)、`FT710_WEB_PASSWORD`,见 `config.py` |
+| 服务端录音(AD-017,v1.15.0 起) | `{"type":"set","field":"recording","value":true/false}` 启停;下行 `recordingState`(recording/freq_hz/started_at/duration/name/bytes/dropped,录制中 1 Hz)+ 随 `fullState.recording` 给快照。**iOS 端仍是客户端本地录音(`AudioCapture.isRecording`),尚未迁移到服务端**;列表/播放/下载/删除在 Web「录音」面板 |
+| 机型 key | `MRRC_RADIO_MODEL` 共 10 个:`ft710` `ic7300` `ic7300mk2` `ic705` `ic7610` `ic7760` `ftdx10` `ftdx101d` `ftdx101mp` `ftx1`。后六个(三款 Icom 预览 + 四款 Yaesu)默认拒绝发射,需服务端 `MRRC_ALLOW_UNVERIFIED_TX=1`;机型由服务端 env 决定,客户端不选 |
 
 服务端对照: `server.py:1514`(login)、`:1621`(/WSradio)、`:1678`(/WSspectrum)、`:1711`(/WSaudioRX)、`:1739`(/WSaudioTX)。
 

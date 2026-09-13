@@ -1,12 +1,22 @@
 # MRRC Web Control — 完整文档索引
 
-**最后更新**: 2026-08-17  
-**文档总数**: 18 份核心 + 10 份 iOS  
-**版本**: v1.9.0（多电台后端：FT-710 + IC-7300/IC-7300MK2）
+**最后更新**: 2026-09-13  
+**版本**: v1.16.0（Yaesu SDR 机型族 + 服务端 QSO 录音；后端注册表共 10 个 key）  
+**入口**: 想知道「改了这个要同步哪些文档」→ 直接看 [PROJECT_MAP.md](PROJECT_MAP.md)
 
 ---
 
 ## 📚 文档导航
+
+> 机器可校验的版本/尺寸/SHA 一致性由 `.agents/skills/dual-platform-release/harness/release_check.py`
+> 检查（`tests/test_release_artifacts.py` 在套件内强制执行）；本索引只负责「哪份文档讲什么」。
+
+### 🧭 从这里开始
+| 文档 | 说明 | 读者 |
+|------|------|------|
+| [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) | **改动 → 必更文档** 的映射、图层与发布日命令链 | 所有人 |
+| [AGENTS.md](AGENTS.md) | 仓库结构、模块表、构建/测试、约定（面向编码代理） | 开发者/代理 |
+| [.agents/skills/](.agents/skills/) | 工程护栏与流程技能：`sdd-guardian`（SDD 约束/文档同步）、`dual-platform-release`（发布日全流程 + 产物登记表）、`macos-installer`、`windows-installer` | 开发者/发布 |
 
 ### 🚀 快速开始
 | 文档 | 说明 | 读者 |
@@ -28,21 +38,37 @@
 | [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) | 验证报告 | QA/测试 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更历史 | 所有人 |
 
+### 👤 使用手册（按平台）
+| 文档 | 说明 | 读者 |
+|------|------|------|
+| [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 桌面版完整操作指南（每个按钮/滑杆/菜单 + 服务端录音 + 故障排查） | 用户 |
+| [docs/RASPBERRY_PI_GUIDE.md](docs/RASPBERRY_PI_GUIDE.md) | 树莓派镜像：烧卡、首启、电台接入、真 FFT 库 | 用户 |
+| [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows 安装包说明（含下载表与校验） | 用户 |
+| [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS 安装包说明 | 用户 |
+
 ### 🔧 技术细节
 | 文档 | 说明 | 读者 |
 |------|------|------|
-| [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | 修复详细说明（含 TX 分析） | 开发者 |
-| [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | FT-710 CAT 命令参考 | 开发者 |
-| [AGENTS.md](AGENTS.md) | Agnes 代理配置 | 开发者 |
-| [win_pack.md](win_pack.md) | Windows 安装包打包手册（ham.vlsc.net KVM 虚拟机全流程，兼真机测试环境；含 KVM USB 等时 OUT 不可用于 TX 音频验证的限制说明） | 开发者/发布 |
+| [DEPENDENCIES.md](DEPENDENCIES.md) | 跨平台依赖与各机型 USB/驱动要求（含 Yaesu SDR 四款） | 开发者 |
+| [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | 历史修复说明（含 TX 分析） | 开发者 |
+| [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) / [FT-710_CAT.md](FT-710_CAT.md) | FT-710 CAT 命令参考 | 开发者 |
+| [IC-7300MK2_CI-V_Knowledge_Base.md](IC-7300MK2_CI-V_Knowledge_Base.md) / [IC-7300_硬件验收清单.md](IC-7300_硬件验收清单.md) | Icom CI-V 参考与真机验收清单 | 开发者 |
 | [backends/ft710/](backends/ft710/) | FT-710 后端（CAT、FT4222 频谱、44.1kHz 音频） | 开发者 |
-| [backends/ic7300/](backends/ic7300/) | IC-7300/MK2 后端（CI-V、0x27 频谱、48kHz 音频） | 开发者 |
+| [backends/ic7300/](backends/ic7300/) | Icom 共享 CI-V 核心 + profile（IC-7300/MK2/705/7610/7760） | 开发者 |
+| [backends/yaesu/](backends/yaesu/) | Yaesu 共享 ASCII-CAT 核心 + profile（FTDX10/101D/101MP/FTX-1F） | 开发者 |
+
+### 🚢 发布与打包
+| 文档 | 说明 | 读者 |
+|------|------|------|
+| [.agents/skills/dual-platform-release/SKILL.md](.agents/skills/dual-platform-release/SKILL.md) | 发布日总流程（版本 bump → 构建 → 文档/站点 → 部署 → 验证 → tag） | 发布 |
+| [.agents/skills/dual-platform-release/release-artifacts.json](.agents/skills/dual-platform-release/release-artifacts.json) | 产物登记表：每个承载版本/尺寸/SHA 的文件一条规则 | 发布 |
+| [win_pack.md](win_pack.md) / [mac_pack.md](mac_pack.md) / [pi_pack.md](pi_pack.md) | 三平台打包操作手册（KVM VM / 本机 DMG / Docker pi-gen） | 发布 |
 
 ### 🔍 专项分析
 | 文档 | 说明 | 读者 |
 |------|------|------|
 | [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX 音频链路深度分析 | 架构师/高级开发 |
-| [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) | 本次文档更新总结 | 文档维护者 |
+| [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) / [docs/DOCUMENT_UPDATE_COMPLETION.md](docs/DOCUMENT_UPDATE_COMPLETION.md) | **历史报告（2026-08-17，多电台后端那轮）** —— 不是当前状态，现状看 [PROJECT_MAP.md](PROJECT_MAP.md) | 文档维护者 |
 
 ### 📱 iOS App (FT710Mobile/)
 | 文档 | 说明 | 读者 |
@@ -57,6 +83,13 @@
 | [docs/IOS_FIXES_PROGRESS.md](docs/IOS_FIXES_PROGRESS.md) | iOS 修复进度核实 | 开发者 |
 | [docs/IOS_OPUS_INTEGRATION.md](docs/IOS_OPUS_INTEGRATION.md) | iOS Opus 现状与 TX 启用指南 | 开发者 |
 | [docs/IOS_TESTING_GUIDE.md](docs/IOS_TESTING_GUIDE.md) | iOS 测试指南 | 开发者/QA |
+
+### 🤖 Android App (FT710Android/)
+| 文档 | 说明 | 读者 |
+|------|------|------|
+| [FT710Android/CLAUDE.md](FT710Android/CLAUDE.md) | 协议事实、PTT 安全铁律、构建与测试 | 开发者/代理 |
+| [FT710Android/BUILD_GUIDE.md](FT710Android/BUILD_GUIDE.md) | 工具链与构建步骤 | 开发者 |
+| [docs/superpowers/specs/2026-08-16-ft710-android-app-design.md](docs/superpowers/specs/2026-08-16-ft710-android-app-design.md) | Android 设计 spec | 架构师 |
 
 ### 📐 设计规范
 | 文档 | 说明 | 读者 |

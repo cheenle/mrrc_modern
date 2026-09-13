@@ -1,7 +1,7 @@
 # FDE: Forward Deployed Engineering — MRRC Web Control
 
 > **Echo → Delta → Product** in the multi-radio remote control project
-> (originally FT-710, now also Icom IC-7300/IC-7300MK2).
+> (originally FT-710; the registry now spans 10 model keys — Icom CI-V and the Yaesu SDR family).
 >
 > 版本 1.1 · 2026-08-17 · 基于 SDD V2.1 + git 历史 + 日志分析
 

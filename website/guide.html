@@ -297,7 +297,7 @@
     </aside>
     <main class="guide-content">
 <blockquote class="callout-info">
-<p>适用于 MRRC Web Control（v1.11.x，2026-08 之后的界面），支持 FT-710、IC-7300 与 IC-7300MK2。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
+<p>适用于 MRRC Web Control <strong>v1.15.x</strong>（2026-09 之后的界面，含服务端 QSO 录音），支持 FT-710、IC-7300 与 IC-7300MK2；另含 <strong>IC-705 / IC-7610 / IC-7760 预览配置</strong>（未做硬件验证，默认只收不发，见 0.5 节）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
 </blockquote>
 <hr />
 <h2 id="开始之前连接与登录">0. 开始之前：连接与登录</h2>
@@ -336,7 +336,7 @@
 </blockquote>
 <hr />
 <h2 id="电台型号差异">0.5 电台型号差异</h2>
-<p>服务器通过 <code>MRRC_RADIO_MODEL</code>（<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>）选择后端，前端会根据后端上报的 <code>capabilities</code> 自动调整可用控件。</p>
+<p>服务器通过 <code>MRRC_RADIO_MODEL</code>（<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>，以及预览的 <code>ic705</code>、<code>ic7610</code>、<code>ic7760</code>）选择后端，前端会根据后端上报的 <code>capabilities</code> 自动调整可用控件（频段、模式、滤波器档位、ATT/PRE 步进、仪表可见性、频谱提示）。三个预览机型尚未做硬件验证，因此<strong>默认拒绝发射</strong>：接收、频谱、音频与 CAT 都能用，想发射需先按 <code>_diag_civ.py</code> 核对真机，再设 <code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 并重启。</p>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
 <colgroup>
 <col style="width: 17%" />
@@ -408,6 +408,9 @@
 </tr>
 </tbody>
 </table></div>
+<blockquote class="callout-warn">
+<p><strong>IC-705 / IC-7610 / IC-7760（预览）</strong>：三款与 IC-7300/MK2 共用同一套 CI-V 核心，但配置表（CI-V 地址、频谱几何 475/689 bins、衰减器步进、仪表曲线）尚未在真机验证 —— 接收、频谱与音频可直接使用，<strong>发射被默认拒绝</strong>（即使按下 PTT 也会被服务端拦截并给出原因）。核对真机后设 <code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 并重启即可解锁；核对脚本与清单见仓库 <code>_diag_civ.py</code> 与 SDD §13 A7/R9。</p>
+</blockquote>
 <hr />
 <h2 id="windows-配置与运行">0.6 Windows 配置与运行</h2>
 <p>本章说明 IC-7300 与 FT-710 在 <strong>Windows 桌面版（MRRC-Modern-Setup.exe）</strong> 下分别如何配置并使其工作：装驱动 → 确认串口 → 编辑配置 → 电台侧设置 → 启动验证。</p>
@@ -433,7 +436,7 @@
 <p><strong>驱动</strong>：IC-7300 用标准 Windows USB-serial 驱动（通常自动安装），<strong>不需要</strong> FTDI 驱动。</p>
 <p><strong>设备管理器确认</strong>：「端口 (COM 和 LPT)」显示一个 COM 口，即 USB CI-V。</p>
 <p><strong><code>mrrc_modern.env</code> 完整示例</strong>：</p>
-<pre class="ini"><code>MRRC_RADIO_MODEL=ic7300        # 或 ic7300mk2
+<pre class="ini"><code>MRRC_RADIO_MODEL=ic7300        # 或 ic7300mk2 / ic705 / ic7610 / ic7760
 MRRC_SERIAL_PORT=COM5          # 改成设备管理器里看到的 CI-V COM 口
 MRRC_BAUD_RATE=115200
 MRRC_WEB_HOST=127.0.0.1
@@ -511,7 +514,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tbody>
 <tr>
 <td>我该选 <code>ft710</code>、<code>ic7300</code> 还是 <code>ic7300mk2</code>？</td>
-<td>看你手头的电台：Yaesu FT-710 用 <code>ft710</code>；Icom IC-7300 用 <code>ic7300</code>；IC-7300MK2 用 <code>ic7300mk2</code>。MK2 默认地址为 0xB6，且 Transceive 菜单项与普通 7300 不同，不能混选。</td>
+<td>看你手头的电台：Yaesu FT-710 用 <code>ft710</code>；Icom IC-7300 用 <code>ic7300</code>；IC-7300MK2 用 <code>ic7300mk2</code>。MK2 默认地址为 0xB6，且 Transceive 菜单项与普通 7300 不同，不能混选。IC-705 / IC-7610 / IC-7760 目前是<strong>预览配置</strong>（未做硬件验证，默认只收不发）。</td>
 </tr>
 <tr>
 <td>换了一台电台，要重装软件吗？</td>

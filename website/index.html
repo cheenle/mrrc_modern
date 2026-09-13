@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<meta content="MRRC Modern — software SCU-LAN10 replacement for the Yaesu FT-710 and Icom IC-7300/IC-7300MK2. Browser-based remote control, real-time waterfall spectrum, bidirectional Opus 48kHz audio, mobile-first UI." name="description"/>
-<meta content="FT-710, IC-7300, Yaesu FT-710, Icom IC-7300, SCU-LAN10 replacement, remote radio control, FT4222 SPI, waterfall spectrum, HAM radio, Opus audio, WebSocket CAT" name="keywords"/>
+<meta content="MRRC Modern — software SCU-LAN10 replacement for Yaesu (FT-710) and Icom (IC-7300/IC-7300MK2, plus IC-705/IC-7610/IC-7760 preview) HF/50MHz transceivers. Browser remote control, real-time waterfall spectrum, bidirectional Opus 48kHz audio, and server-side QSO recording straight to MP3." name="description"/>
+<meta content="FT-710, IC-7300, Yaesu FT-710, Icom IC-7300, SCU-LAN10 replacement, remote radio control, FT4222 SPI, waterfall spectrum, HAM radio, Opus audio, WebSocket CAT, QSO recording, server-side MP3 recording, IC-705, IC-7610, IC-7760" name="keywords"/>
 <meta content="BG1SB" name="author"/>
 <meta content="#0a0a0a" name="theme-color"/>
 <title>MRRC Modern — Software SCU-LAN10 Replacement</title><link href="css/scope.css?v=2" rel="stylesheet"/><link href="css/mrrc_modern.scope.css?v=2" rel="stylesheet"/>
@@ -48,11 +48,12 @@
 <span class="gradient">Any Device</span>
 </h1>
 <p class="hero-subtitle">
-          Software SCU-LAN10 replacement for the Yaesu FT-710 and Icom
-          IC-7300/IC-7300MK2 HF/50MHz transceivers. Real-time FFT spectrum
-          plot + waterfall (FT4222 SPI or CI-V), bidirectional Opus 48kHz
-          audio, full CAT control over 4+1 WebSocket channels — no $200 dongle
-          required.
+          Software SCU-LAN10 replacement for Yaesu (FT-710) and Icom
+          (IC-7300/IC-7300MK2, plus preview profiles for IC-705 / IC-7610 /
+          IC-7760) HF/50MHz transceivers. Real-time FFT spectrum plot +
+          waterfall (FT4222 SPI or CI-V), bidirectional Opus 48kHz audio,
+          server-side QSO recording to MP3, full CAT control over 4+1
+          WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.15.0-arm64.dmg">
@@ -73,7 +74,7 @@
 <!-- Screenshot -->
 <section class="scope-section" style="background: var(--scope-bg); padding: 2rem 0">
 <div class="container" style="text-align: center">
-<img alt="FT-710 Web Control Screenshot" loading="lazy" src="images/IMG_8888.PNG" style="
+<img alt="MRRC Modern — FT-710 web control screenshot" loading="lazy" src="images/IMG_8888.PNG" style="
             max-width: 360px;
             width: 100%;
             border-radius: 14px;
@@ -84,7 +85,7 @@
             font-size: 0.8rem;
             margin-top: 0.75rem;
           ">
-          FT-710 Web Control — FFT spectrum plot + waterfall on iPhone
+          MRRC Modern — FFT spectrum plot + waterfall on iPhone
         </p>
 </div>
 </section>
@@ -95,7 +96,7 @@
 <span class="section-label">Video</span>
 <h2 class="section-title">Watch the Intro</h2>
 <p class="section-subtitle">
-            A two-minute product tour of FT-710 Web Control (Chinese narration
+            A two-minute product tour of MRRC Modern (Chinese narration
             and subtitles).
           </p>
 </div>
@@ -117,9 +118,11 @@
 <span class="section-label">Features</span>
 <h2 class="section-title">Complete Multi-Radio Remote Control</h2>
 <p class="section-subtitle">
-            Real spectrum (FT4222 SPI or CI-V), bidirectional Opus audio, full
-            CAT/CI-V control and multi-layer PTT safety — pluggable backends
-            for FT-710, IC-7300 and IC-7300MK2, no middleware anywhere.
+            Real spectrum (FT4222 SPI or CI-V), bidirectional Opus audio,
+            server-side QSO recording, full CAT/CI-V control and multi-layer
+            PTT safety — pluggable backends for FT-710 and IC-7300/IC-7300MK2,
+            with IC-705 / IC-7610 / IC-7760 preview profiles, no middleware
+            anywhere.
           </p>
 </div>
 <div class="features-grid">
@@ -210,6 +213,22 @@
 <ul>
 <li>Seeded starter channels, per-user storage</li>
 <li>AF volume, scope options, mic gain — all remembered</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-record-vinyl"></i></div>
+<h3>Server-Side QSO Recording</h3>
+<p>
+              Press REC in the browser and the whole QSO is written on the
+              server: reloading the page, closing the tab or losing CAT does
+              not stop it. RX and mic audio land on one monotonic 16 kHz
+              timeline and encode to MP3 as they arrive, so even a server crash
+              leaves a playable prefix on disk.
+            </p>
+<ul>
+<li>Recordings panel — list, seekable player, download, delete</li>
+<li>16 kHz mono MP3 @64 kbps (~29 MB/h), no client-side encoder</li>
+<li>Never auto-deleted; <code>MRRC_RECORDINGS_MAX_SESSION_MIN</code> only stops</li>
 </ul>
 </div>
 <div class="feature-card animate">
@@ -554,6 +573,7 @@
 <div class="tech-stack" style="margin-bottom: 0">
 <span class="tech-tag"><i class="fas fa-microchip"></i> Yaesu FT-710</span>
 <span class="tech-tag"><i class="fas fa-microchip"></i> Icom IC-7300 / IC-7300MK2</span>
+<span class="tech-tag"><i class="fas fa-flask"></i> Icom IC-705 / IC-7610 / IC-7760 (preview)</span>
 <span class="tech-tag"><i class="fas fa-usb"></i> USB Cable (A→B or C→B)</span>
 <span class="tech-tag"><i class="fab fa-windows"></i> Windows Installer (bundled Python)</span>
 <span class="tech-tag"><i class="fab fa-python"></i> or Python 3.12+ from source</span>
@@ -767,9 +787,9 @@
 </div>
 </div>
 <div class="perf-card">
-<div class="metric">1000+</div>
+<div class="metric">900+</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>v1.15.0 release, macOS + Windows</small>
+              Hardware-Free Tests<br/><small>926 in the v1.15.0 release (macOS + Windows)</small>
 </div>
 </div>
 </div>
@@ -792,6 +812,7 @@
 <span class="tech-tag">WASM Opus</span>
 <span class="tech-tag">Web Audio API</span>
 <span class="tech-tag">Service Worker PWA</span>
+<span class="tech-tag">lameenc (server-side MP3)</span>
 </div>
 </div>
 </section>

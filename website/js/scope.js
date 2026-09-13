@@ -147,4 +147,20 @@
       }
     }
   }
+
+  // ── Google Analytics (GA4) ──
+  // 注入而非逐页内联：SDD 页由 build_sdd.py 生成，改 HTML 会在下次 rebuild 时静默丢失。
+  // vlsc.net 后缀守卫使 file:// / localhost / 其他域名不上报；dataLayer 存在性检查
+  // 兼作幂等守卫（同页同时加载 scope.js + global-nav.js 时只注入一次），并保证
+  // 将来某页若内联官方片段，这里自动让位、不会重复计数。
+  if (/(^|\.)vlsc\.net$/.test(location.hostname) && !window.dataLayer) {
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    var gaScript = document.createElement('script');
+    gaScript.async = true;
+    gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-JQLSKV1MCT';
+    document.head.appendChild(gaScript);
+    window.gtag('js', new Date());
+    window.gtag('config', 'G-JQLSKV1MCT');
+  }
 })();

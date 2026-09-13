@@ -552,6 +552,10 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>改了配置没生效</td>
 <td>改完 <code>mrrc_modern.env</code> 必须<strong>重启 MRRC Modern</strong>（关掉窗口重新启动）。</td>
 </tr>
+<tr>
+<td>装好了双击没反应 / 控制台窗口一闪而过</td>
+<td>启动器在启动阶段就抛了异常。v1.15.0 起会把原因与完整堆栈写进 <code>%LOCALAPPDATA%\MRRC-Modern\launcher.log</code>（macOS：<code>~/Library/Application Support/MRRC-Modern/launcher.log</code>）并弹窗提示，先看这个文件。已知旧版故障（v1.15.0 已修）：<code>mrrc_modern.env</code> 被记事本以 ANSI/GBK 保存后不是合法 UTF-8，启动器解码失败即退出、窗口一闪而过 —— 现在会按 BOM/UTF-8/本地编码(cp936)/latin-1 依次兜底并回写为 UTF-8。</td>
+</tr>
 </tbody>
 </table></div>
 <hr />

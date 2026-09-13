@@ -132,6 +132,82 @@ class CQPlayer:
     def is_calling(self) -> bool:
         return self._task is not None and not self._task.done()
 
+    async def _release(self, graceful: bool) -> None:
+        """Unkey through the injected callback (absent in asset-only tests)."""
+        if self._unkey is not None:
+            await self._unkey(graceful)
+
+    async def wait_finished(self) -> None:
+        """Await the in-flight call (tests + shutdown)."""
+        if self._task is not None:
+            await asyncio.shield(self._task)
+
+    async def start(self, *, started_by: str,
+                    owner_token: Optional[str] = None) -> None:
+        """Key the radio and play the asset once. Raises CQUnavailable."""
+        if not self._ready:
+            raise CQUnavailable(self._reason or "CQ asset not ready")
+        if self.is_calling:
+            raise CQUnavailable("CQ already in progress")
+        if self._key is None or not await self._key(owner_token):
+            raise CQUnavailable("CQ could not key the radio")
+        self._state = "calling"
+        self._sent = 0
+        self._started_by = started_by
+        self._owner_token = owner_token
+        self._reason_code = None
+        self._task = asyncio.create_task(self._run(), name="cq_player")
+        await self._broadcast()
+
+    async def abort(self, reason: str = "aborted_by_user") -> None:
+        """Stop an in-flight call and release the carrier (no graceful drain)."""
+        task, self._task = self._task, None
+        if task is not None:
+            if not task.done():
+                task.cancel()
+            # gather() awaits the cancelled task without re-raising its
+            # CancelledError — abort itself must always complete.
+            for result in await asyncio.gather(task, return_exceptions=True):
+                if isinstance(result, Exception):
+                    logger.warning("CQ playback task ended with %s", result)
+        if self._state == "calling":
+            await self._release(False)
+            self._state = "aborted"
+            self._reason_code = reason
+            logger.info("CQ aborted (%s) after %d/%d frames",
+                        reason, self._sent, len(self._frames))
+            await self._broadcast()
+
+    async def _run(self) -> None:
+        """Feed one 20 ms frame per tick while the device queue is shallow."""
+        while self._sent < len(self._frames):
+            if self._is_transmitting is not None and not self._is_transmitting():
+                # Watchdog, TUNE or another client released the carrier.
+                await self._finish("aborted", "unkeyed", graceful=False)
+                return
+            if self._audio is None or \
+                    self._audio.tx_queue_frames() <= CQ_LOW_WATER_FRAMES:
+                if self._audio is not None:
+                    self._audio.feed_tx_audio(self._frames[self._sent])
+                self._sent += 1
+                if self._sent % 50 == 0:                  # 1 Hz progress
+                    await self._broadcast()
+            await asyncio.sleep(_TICK_S)
+        await self._finish("complete", None, graceful=True)
+
+    async def _finish(self, state: str, reason: Optional[str], *,
+                      graceful: bool) -> None:
+        self._state = state
+        self._reason_code = reason
+        await self._release(graceful)
+        logger.info("CQ %s after %d/%d frames (%.1fs)",
+                    state, self._sent, len(self._frames), self._sent * _TICK_S)
+        await self._broadcast()
+
+    async def _broadcast(self) -> None:
+        if self._on_change is not None:
+            await self._on_change(self.status())
+
     # ── status ─────────────────────────────────────────────────────
 
     def status(self) -> dict:

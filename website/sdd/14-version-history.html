@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.50</td>
+<td>2026-09-13</td>
+<td>Claude</td>
+<td><strong>v1.17.0 发布：一键 CQ 按键（服务端一次性自动化发射）。</strong> 三平台产物：macOS <code class="scope-code">MRRC-Modern-v1.17.0-arm64.dmg</code> 56,298,417 bytes <code class="scope-code">5bbb363d…cdfe38</code>（实际前缀见下）；Windows <code class="scope-code">MRRC-Modern-v1.17.0-Windows-x64-Setup.exe</code> 45,970,364 bytes <code class="scope-code">f378ab6d…</code>；rpi64 <code class="scope-code">MRRC-Modern-v1.17.0-rpi64.img.xz</code> 551,282,340 bytes <code class="scope-code">a56e5658…</code>。 <strong>发布前验证</strong>：套件 1103 项（VM 上 8 skipped）全绿；<code class="scope-code">release_check.py</code> 离线 29 ok / 0 failing；macOS 冻结包无头双栈 HTTPS（IPv4/IPv6 皆 401、明文 000）+ 自动密码横幅 + <code class="scope-code">CQ ready: …(6.1 s, 48 kHz mono, 307 frames)</code>，DMG 经典安装布局（含 Applications 链接）；Windows 走查 PYZ（<code class="scope-code">cq_player</code> + 8 个 CQ 符号）与 <code class="scope-code">_internal\static\audio\cq.wav</code>(588,566 B)，server.exe 启动打印同一条 <code class="scope-code">CQ ready</code>；线上 exe 下载 SHA-256 与本地一致。<strong>构建期缺陷（本机全绿、VM 才暴露）</strong>：测试里 <code class="scope-code">str(path).endswith("static/audio/cq.wav")</code> 是 POSIX 假设，Windows 用反斜杠 → 单个测试失败并拦住构建；改为 <code class="scope-code">Path.parts</code> 断言，并把该类坑写进 <code class="scope-code">win_pack.md</code> 排错表。<strong>验收边界</strong>：真机（电台 + 监听）的 CQ 端到端验收由现场执行，结果回填本条目。</td>
+</tr>
+<tr>
 <td>SDD V2.49</td>
 <td>2026-09-13</td>
 <td>Claude</td>
@@ -631,7 +637,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.49 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.50 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

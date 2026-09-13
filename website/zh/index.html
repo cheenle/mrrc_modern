@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.16.0 · 稳定版</span>
+<span>v1.17.0 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -56,11 +56,11 @@
           CAT/CI-V 控制——无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.16.0-arm64.dmg">
-<i class="fab fa-apple"></i> 下载 macOS v1.16.0
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.17.0-arm64.dmg">
+<i class="fab fa-apple"></i> 下载 macOS v1.17.0
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.16.0
+<i class="fab fa-windows"></i> Windows 安装包 v1.17.0
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> 了解功能
@@ -84,25 +84,23 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.16.0 更新内容</strong>
+<strong> v1.17.0 更新内容</strong>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>Yaesu SDR 机型族：</strong>FTDX10 / FTDX101D / FTDX101MP / FTX-1F ——
-              一套 profile 驱动的 ASCII-CAT 核心，传输层移植自 FT-710 已验证的实现
-              （<code>MRRC_RADIO_MODEL=ftdx10|ftdx101d|ftdx101mp|ftx1</code>）。
-              <strong>实验性、默认只收不发</strong>：核对真机后设
-              <code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 才可发射；这几款没有真机频谱数据源，
-              界面用 S 表合成频谱，不伪造瀑布数据。
+<strong>一键 CQ 按键</strong>——点一下 CQ，由<strong>服务端</strong>按下 PTT、
+              播送内置 CQ 录音，播完自动松开；再点一次立即中止。音频从磁盘直接进声卡、
+              不经过网络，因此网络抖动不会改变发出去的内容。呼叫期间麦克风上行被丢弃、
+              PTT/TUNE 被拒绝，发起端页面断开则呼叫立即结束（<code>MRRC_CQ_FILE</code> 可换录音）。
             </li>
 <li>
-<strong>服务端 QSO 录音</strong>（v1.15.0 起，所有安装包均已内置）——
-              点 REC 由<strong>服务端</strong>录制：刷新页面、关标签页、CAT 掉线都不会中断；
-              「录音」面板可拖动播放、下载、删除。
+<strong>Yaesu SDR 机型族</strong>（v1.16.0）——FTDX10 / FTDX101D / FTDX101MP / FTX-1F
+              走一套 profile 驱动的 ASCII-CAT 核心；实验性、默认只收不发，核对真机后设
+              <code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 才可发射。
             </li>
 <li>
-<strong>十款机型、一套界面</strong>——前端按当前后端上报的
-              <code>capabilities</code> 自动适配频段、模式、滤波档位、ATT/PRE、仪表与频谱提示。
+<strong>服务端 QSO 录音</strong>（v1.15.0 起）——点 REC 由服务端录制：刷新页面、关标签页、
+              CAT 掉线都不会中断；「录音」面板可拖动播放、下载、删除。
             </li>
 </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -330,14 +328,14 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.16.0 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.17.0 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            45.5 · x64 · 45,532,589 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: e453446bfc82072be703279c69edc8c34cc40ff99841e3a0239dc83fc97ceae4</code>
+            46.0 · x64 · 45,970,364 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: f378ab6d1a7ca6d8b93a928376ed3e69429b3d8fd45f1a52d0fa943fee2b371d</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.16.0 首次运行零配置：自动生成网页密码，自动识别电台
+            v1.17.0 首次运行零配置：自动生成网页密码，自动识别电台
             （FT-710 ASCII CAT / Icom CI-V 0x19）与串口（COM），登录页
             直接显示自动生成的密码。网页"连接设置"对话框可修改电台型号、
             串口、RX+TX 音频设备与密码，支持保存并重启——服务自动重启，
@@ -349,8 +347,8 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.16.0-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.16.0 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.17.0-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.17.0 版本化安装包
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
@@ -367,11 +365,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.16.0-arm64.dmg — v1.16.0 稳定版</strong>
+<strong> MRRC-Modern-v1.17.0-arm64.dmg — v1.17.0 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            56.0 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 56,001,051 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: a3b35f4843fc178306e67fc8e2bd732dd05bfecff6bea9a3c3d1b1f508cdfe38</code>
+            56.3 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 56,298,417 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 5bbb363d6db36d354b4570dfcf2c1d1cadd10dd6aa27bb562e7418475603f270</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
@@ -388,7 +386,7 @@
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.16.0-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.17.0-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -412,11 +410,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-raspberry-pi" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.16.0-rpi64.img.xz — 树莓派</strong>
+<strong> MRRC-Modern-v1.17.0-rpi64.img.xz — 树莓派</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            519 MB (543,966,776 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
-<code style="font-size: 0.76rem">SHA-256: c8f3c3fd2e0f9dd050d998c8351a9cba0999f21e6994e4b9fe2caea09fd8dcb8</code>
+            551 MB (551,282,340 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
+<code style="font-size: 0.76rem">SHA-256: a56e5658e200d2c8fa0eac147299b8533757934009b776f3f2340cb55944dc1b</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             用 Raspberry Pi Imager（"使用自定义镜像"）烧卡，上电后浏览器打开
@@ -428,7 +426,7 @@
             IC-7300 经 CI-V 开箱即用。
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.16.0-rpi64.img.xz">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.17.0-rpi64.img.xz">
 <i class="fab fa-raspberry-pi"></i> 下载树莓派镜像
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/blob/main/docs/RASPBERRY_PI_GUIDE.md" rel="noopener" target="_blank">
@@ -482,10 +480,10 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.16.0，45.5，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.17.0，46.0，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 e453446bfc82072be703279c69edc8c34cc40ff99841e3a0239dc83fc97ceae4</code>
+<code>SHA-256 f378ab6d1a7ca6d8b93a928376ed3e69429b3d8fd45f1a52d0fa943fee2b371d</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -518,7 +516,7 @@
 <div class="step">
 <h4>1 · 安装</h4>
 <p>
-              拖动 <code>MRRC-Modern-v1.16.0-arm64.dmg</code> → 双击挂载 →
+              拖动 <code>MRRC-Modern-v1.17.0-arm64.dmg</code> → 双击挂载 →
               将 <strong>MRRC Modern</strong> 拖入"应用程序"。首次启动请右键
               应用 → 打开 → 打开（一次性绕过 Gatekeeper 的 ad-hoc 签名）。
             </p>
@@ -803,7 +801,7 @@
 <div class="perf-card">
 <div class="metric">900+</div>
 <div class="metric-label">
-              无硬件依赖测试<br/><small>v1.16.0 发布版实测 1055 项（macOS + Windows）</small>
+              无硬件依赖测试<br/><small>v1.17.0 发布版实测 1103 项（macOS + Windows）</small>
 </div>
 </div>
 </div>
@@ -941,7 +939,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.49</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V2.50</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>
@@ -981,7 +979,7 @@
 <div class="footer-grid">
 <div class="footer-section">
 <h4>MRRC Modern</h4>
-<p>多机型远程控制<br/>一根 USB 线，任意设备操控<br/>v1.16.0 稳定版 · GPLv3 许可证</p>
+<p>多机型远程控制<br/>一根 USB 线，任意设备操控<br/>v1.17.0 稳定版 · GPLv3 许可证</p>
 </div>
 <div class="footer-section">
 <h4>导航</h4>
@@ -997,8 +995,8 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.16.0</a></li>
-<li><a href="../downloads/MRRC-Modern-v1.16.0-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像 v1.16.0</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.17.0</a></li>
+<li><a href="../downloads/MRRC-Modern-v1.17.0-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像 v1.17.0</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>
 <li><a href="../sdd.html">SDD 文档</a></li>

@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.49 更新</a></li>
+            <li><a href="#updates">V2.50 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.49 · 2026-09-13</span>
+            <span>SDD V2.50 · 2026-09-13</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,7 +74,7 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.49</td></tr>
+            <tr><td>版本</td><td>V2.50</td></tr>
             <tr><td>基线日期</td><td>2026-09-13</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
@@ -133,7 +133,12 @@
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-radio"></i></div>
-                <h3>一键 CQ 按键 <small>（V2.48–V2.49）</small></h3>
+                <h3>v1.17.0 发布：三平台同步 <small>（V2.50）</small></h3>
+                <p>macOS DMG、Windows 安装包与 rpi64 镜像由同一提交构建，发布前各自验证：macOS 冻结包无头 HTTPS 冒烟、Windows PYZ 走查 + 包内资产核对、树莓派镜像 debugfs 抽查（含 <code>static/audio/cq.wav</code>）。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-bullhorn"></i></div>
+                <h3>一键 CQ 按键 <small>（V2.48–V2.50）</small></h3>
                 <p>由服务端键控电台、播送打包的 CQ 录音并松键——发射内容不经过网络，因此不受抖动影响。呼叫期间麦克风帧被丢弃，PTT/TUNE 被拒绝，发起端断开即切断载波（<code>MRRC_CQ_FILE</code> 可替换录音；AD-020）。</p>
             </div>
             <div class="feature-card">

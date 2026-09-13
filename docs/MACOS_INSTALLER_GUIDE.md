@@ -4,7 +4,7 @@
 
 ## 一、安装（约 1 分钟）
 
-1. 打开下载的 `MRRC-Modern-v1.16.0-arm64.dmg`。
+1. 打开下载的 `MRRC-Modern-v1.17.0-arm64.dmg`。
 2. 把 **MRRC Modern** 图标拖进 **应用程序** 文件夹。
 3. 弹出磁盘后，到「应用程序」里找到 **MRRC Modern**。
 

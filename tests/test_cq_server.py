@@ -8,6 +8,7 @@ sequence and the state broadcast — all without hardware.
 import asyncio
 import json
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import server
@@ -257,8 +258,13 @@ class CqUplinkExclusivityTests(_CqServerTestCase):
 
 class CqStateTests(_CqServerTestCase):
     def test_asset_path_defaults_to_the_packaged_file(self):
+        # Separator-independent: str(Path) uses backslashes on Windows, so
+        # assert on the parts (the VM build caught exactly this).
         import config
-        self.assertTrue(str(config.CQ_ASSET_PATH).endswith("static/audio/cq.wav"))
+        path = Path(config.CQ_ASSET_PATH)
+        self.assertEqual(path.name, "cq.wav")
+        self.assertEqual(path.parent.parts[-2:], ("static", "audio"))
+        self.assertTrue(path.exists(), f"{path} must exist in the tree")
 
     def test_full_state_carries_the_cq_snapshot(self):
         player = mock.MagicMock()
@@ -297,7 +303,6 @@ class CqFrontendContractTests(unittest.TestCase):
     """
 
     def _read(self, *parts):
-        from pathlib import Path
         return (Path(__file__).resolve().parents[1].joinpath(*parts)
                 .read_text(encoding="utf-8"))
 

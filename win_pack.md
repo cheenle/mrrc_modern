@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.16.0**（2026-09-13，**Yaesu SDR 机型族** FTDX10 / FTDX101D / FTDX101MP / FTX-1F（实验性、默认只收不发，`MRRC_ALLOW_UNVERIFIED_TX=1` 解锁）+ 发布工程化（`release-artifacts.json` 登记表、`harness/release_check.py` 离线/在线/深检、套件内强制）。**新增：源码包不能整目录排除 `./website/*`**（文档一致性与产物检查测试要读落地页/SDD 生成页）且必须排除 `./promo/*`、`./recordings/*`，见 Step 1。上一版 v1.15.0 = 服务端 QSO 录音 + 录音面板（SDD V2.42/AD-017）：服务端取 RX 设备域 PCM 与解码后 TX 麦克风 PCM，单调时钟轴 + 空洞补静音，`lameenc` 增量编码边录边落盘（崩溃安全）；新增「录音」面板（列表/可 seek 播放/下载/删除，Range 请求）；CAT 掉线后恢复由 62 秒降为秒级。修复「同一进程里第二次录音全静音」（writer 任务每会话一次性，原先只在启动时创建一次）。Win11 VM：1055 项测试（7 项 pty 用例在 Windows 跳过）、三个 PyInstaller 目标、Inno Setup 6.7.3 均通过，`lameenc` 已随包（冻结环境实测 `Recording ready`）；产物 45,532,589 bytes，SHA-256 `e453446bfc82072be703279c69edc8c34cc40ff99841e3a0239dc83fc97ceae4`；另按字节码校验包内 `server` 条目含 `_ensure_rec_writer`（`strings` 看不见压缩 PYZ，不作证据）。（历史记录 v1.14.2 = 2026-09-10，IC-7300 波特率联动 + 音频重复条目恢复（SDD V2.37）：连接设置保存/首启探测按型号对齐 `MRRC_BAUD_RATE`（旧模板预填 38400 饿死 CI-V 频谱流），-9999 音频打开重试轮换 host-API 重复条目，WDM-KS 锁定名回退到可用的 MME 条目；Win11 上 721 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,435,022 bytes，SHA-256 `a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706`）。
+> 最新构建：**v1.17.0**（2026-09-13，**一键 CQ 按键**——服务端一次性自动化发射：`set{field:"cq"}` → 服务端键控、按设备队列深度投喂 20 ms 帧、播完 `stop_tx(graceful=True)` 再松 PTT；呼叫期间麦克风帧丢弃、PTT/TUNE 被拒、发起端断线即中止（SDD AD-020 / V2.49）。产物 `MRRC-Modern-v1.17.0-Windows-x64-Setup.exe` 45,970,364 bytes，SHA-256 `f378ab6d1a7ca6d8b93a928376ed3e69429b3d8fd45f1a52d0fa943fee2b371d`；VM 实测 1103 项测试 OK（8 skipped），PYZ 走查确认 `_bind_cq_player`/`cq_player` 与 `_internal\static\audio\cq.wav` 均在包内，server.exe 启动日志打印 `CQ ready: …(6.1 s, 48 kHz mono, 307 frames)`。**本轮踩到的新坑**：VM 上单个测试失败（`str(path).endswith("static/audio/cq.wav")`）—— 测试里的 POSIX 路径假设，见 §6 排错表。上一版 v1.16.0 = Yaesu SDR 机型族 + 发布工程化。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 ## 1. 环境拓扑
@@ -269,6 +269,7 @@ curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.15.0-Windows-
 | 装完能启动但连不上电台（CAT 无响应） | 这台 VM 上 COM3 是 CP2105 **Standard** 口，CAT 在 COM4；确认 `mrrc_modern.env` 里是 `MRRC_SERIAL_PORT=COM4`（本轮用户配置里曾是 COM3） |
 | 公钥加了仍 Permission denied | 管理员用户只认 `C:\ProgramData\ssh\administrators_authorized_keys` | 见 §2.1，注意 icacls 权限 |
 | SSH 里 `&&` 报错 | VM 默认 shell 是 PowerShell 5.1 | 用 `;` 或把命令写成 .ps1 scp 上去执行 |
+| VM 上**单个**测试失败而本机全绿（例：`str(path).endswith("static/audio/x.wav")`） | 测试里写了 POSIX 路径假设 —— Windows 的 `str(Path)` 用反斜杠。改用 `Path.parts[-2:]` / `path.name` 断言（v1.17.0 构建实测踩到，本机 macOS 全绿） |
 | PS 远程命令引号地狱 | 多层 ssh 转义 | 本地写脚本 → scp → 远程执行；或 `powershell -EncodedCommand <UTF16LE-Base64>` |
 | 测试输出文件 grep 不到内容 | PowerShell `2>` 重定向写 UTF-16LE | `iconv -f UTF-16LE -t UTF-8` 后再处理 |
 | `python -m py_compile *.py` 报 Invalid argument | PowerShell 不给原生命令展开 glob | build.ps1 已修：`Get-ChildItem -Name *.py` + splat |

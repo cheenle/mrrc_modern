@@ -1,7 +1,7 @@
 # Raspberry Pi 镜像打包流程（rpi64）
 
 > 用途：构建并发布 `MRRC-Modern-v<ver>-rpi64.img.xz` —— Raspberry Pi OS Lite 64-bit (Bookworm) 定制镜像，烧卡即用、首启零配置。规格见 `docs/superpowers/specs/2026-09-09-raspberry-pi-image-design.md`。
-> 最新构建：**v1.16.0**（2026-09-13（**同一晚 v1.15.0 之后的机型扩展版**），**本机 Mac Docker Desktop 原生 aarch64 构建**；冷缓存约 45 分钟（首次 apt/固件下载），产物 543,966,776 bytes，SHA-256 `c8f3c3fd2e0f9dd050d998c8351a9cba0999f21e6994e4b9fe2caea09fd8dcb8`；含 **Yaesu SDR 机型族**（`backends/yaesu/`：FTDX10 / FTDX101D / FTDX101MP / FTX-1F，实验性、默认只收不发）+ 服务端 QSO 录音（AD-017，镜像内自带 `lameenc` aarch64）+ 录音写入端存活修复 + **Linux 首启 env 容错读取**（`/boot/firmware/mrrc.env` 被 ANSI/GBK 编辑器保存不再让 `mrrc-firstboot.service` 失败）；chroot 闸门、`verify-image.sh` 与包内抽查（VERSION=1.16.0、`_ensure_rec_writer`、`read_env_text`、`lameenc.cpython-311-aarch64-linux-gnu.so`）均通过；真机烧卡验收留操作员。）
+> 最新构建：**v1.17.0**（2026-09-13，本机 Mac Docker Desktop 原生 aarch64 构建），产物 551,282,340 bytes（551 MB），SHA-256 `a56e5658e200d2c8fa0eac147299b8533757934009b776f3f2340cb55944dc1b`。本版内容 = 一键 CQ 按键（服务端一次性自动化发射，SDD AD-020 / V2.49）：镜像内置 `static/audio/cq.wav`，开机即可用（`MRRC_CQ_FILE` 可替换）；构建闸门新增 `py_compile`/依赖导入之外的 CQ 资产存在性检查（stage4 注入后核对 `static/audio/cq.wav` 字节数）。上一版 v1.16.0 = Yaesu SDR 机型族 + 发布工程化。
 > 用户向的安装/使用说明见 `docs/RASPBERRY_PI_GUIDE.md`。
 
 ## 1. 环境拓扑

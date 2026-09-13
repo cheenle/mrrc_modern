@@ -2,6 +2,66 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.17.0] — 2026-09-13 — 一键 CQ 按键（服务端一次性自动化发射）
+
+### New — CQ 键
+
+- **底部 PTT 区新增 CQ 键**：单击即由**服务端**按下 PTT、播送内置 CQ 录音、播完自动松开；
+  按钮转为绿色 **STOP**，再点一次立即中止（不排空尾音，直接松载波）。发射期间按钮显示播放进度，
+  所有已连接客户端（浏览器 / iOS / Android）看到同一个 `cqState`。
+- **音频从磁盘直接进声卡**：整段录音不走网络，网络抖动与丢包不影响发出去的内容；
+  只在设备队列低于 4 帧时投喂下一帧（20 ms/帧），因此呼叫本身**不会**制造 `queue_drops`。
+- **替换录音**：`MRRC_CQ_FILE=/path/to/cq.wav`（任意 16-bit WAV，单/双声道、任意采样率，
+  启动时归一化为 48 kHz 单声道，上限 30 秒）。默认资产 `static/audio/cq.wav`（≈6.1 秒）。
+  文件缺失/损坏/超长时启动日志打印 `CQ key disabled: <原因>`，按键失效但**绝不静默**。
+- **每次发射都有明确终点**：播完即止；任何外部松键（`MRRC_PTT_MAX_TX_SECONDS` 看门狗、TUNE、
+  另一端松 PTT）都会被识别为 `aborted/unkeyed` 并立即终止。
+
+### Safety — CQ 与既有 PTT 链路的互锁
+
+- 一次呼叫**只有一个音频来源**：CQ 进行中浏览器麦克风帧被丢弃（日志 `mic_drops`），
+  PTT 与 TUNE 的请求被服务端拒绝并给出可操作提示。
+- **发起端断开即中止**（`client_gone`）：不会留下"别人的载波"；最后一个控制端断开、
+  服务端退出同样强制结束。
+- 未验证机型（TX 门禁）下 CQ 与 PTT 一样被拒绝，且**先报门禁原因**再考虑资产是否可用。
+- 新增 `tests/test_cq_player.py` + `tests/test_cq_server.py`（45 项）：资产解析/长度上限/损坏文件、
+  键控→投喂→排空→松键全链路、背压、中止语义、麦克风互斥、断线中止、`cqState` 广播、
+  前端契约（按钮/渲染/门禁禁用）与**真实 player + 真实回调 + 真实打包资产**的端到端用例。
+
+### Fixed
+
+- **启动崩溃（本次实现期发现）**：CQ 资产就绪日志对帧数误用 `len()`，在资产有效时反而让
+  `Application startup failed`（单元测试全绿也发现不了，真机启动才暴露）。已改为 `frames`/`duration_s`
+  属性并补回归测试。
+- **门禁提示顺序**：TX 门禁检查原先排在资产检查之后，未验证机型会看到"资产未加载"而非门禁说明。
+- `config._env_int/_env_float`：环境变量写错时回退默认值并打印警告，不再让服务**起不来**。
+- 界面编号图与 CSS 不一致（底部 TUNE/REC 画成上下叠放，实际是横排）：本次随 CQ 键一并重绘，
+  菜单编号顺延 40–52；操作指南中仍是"浏览器 lame.js 128 kbps"的旧 REC 行也已更正为服务端录音。
+
+### Docs
+
+- SDD：**AD-020**（服务端一次性自动化发射的选型对比与后果）、§9.2 `cqState` 协议行、
+  §15 第 8 层防线（唯一自动化发射源）、§12 运维流程（含"如何替换 CQ 录音"）、
+  版本表 V2.49；12 张设计图版本戳同步，`audio-chains` 与 `ptt-safety` 补画 CQ。
+- README / AGENTS / 操作指南 / tests/README（1103 项、55 模块）与网站指南页（中英）同步。
+
+### Platform Status
+
+- **macOS**：`MRRC-Modern-v1.17.0-arm64.dmg` — 56,298,417 bytes，SHA-256 `5bbb363d6db36d354b4570dfcf2c1d1cadd10dd6aa27bb562e7418475603f270`。
+- **Windows**：`MRRC-Modern-v1.17.0-Windows-x64-Setup.exe` — 45,970,364 bytes，SHA-256 `f378ab6d1a7ca6d8b93a928376ed3e69429b3d8fd45f1a52d0fa943fee2b371d`。
+- **树莓派 rpi64**：`MRRC-Modern-v1.17.0-rpi64.img.xz` — 551,282,340 bytes，SHA-256 `a56e5658e200d2c8fa0eac147299b8533757934009b776f3f2340cb55944dc1b`。
+
+### Upgrade Notes
+
+- 依赖无变化；覆盖安装即可。**静态资源缓存版本已 bump**（`ft710_main.js?v=30`、`ft710_ui.js?v=32`、
+  `ft710.css?v=25`、Service Worker `mrrc-v33`），因此旧安装不会继续使用没有 CQ 逻辑的缓存脚本。
+- 首次使用前建议按操作指南「一键 CQ 呼叫」一节核对：真机点 CQ → 起载波、播放、自动解除。
+
+### Verification Boundary
+
+- 本版 CQ 功能的具体验证记录见 `SDD/14-version-history.md` V2.49 条目；真机（电台 + 监听手段）
+  的端到端验收在发布后由现场执行，结果回填该条目。
+
 ## [v1.16.0] — 2026-09-13 — Yaesu SDR 机型族（FTDX10 / FTDX101D / FTDX101MP / FTX-1F）+ 发布工程化
 
 ### New — Yaesu SDR 机型族（实验性，仅接收）

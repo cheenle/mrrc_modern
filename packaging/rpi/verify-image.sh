@@ -45,4 +45,10 @@ echo "--- scope_handler S-meter sentinel (SDD V2.39) ---"
 "$DEBUGFS" -R "cat /opt/mrrc_modern/scope_handler.py" "$DEV" 2>/dev/null | grep -m1 "s_meter: int = -1" || echo "WARNING: sentinel not found"
 echo "==> venv python present:"
 "$DEBUGFS" -R "stat /opt/mrrc_modern/venv/bin/python3" "$DEV" 2>/dev/null | head -2
+echo "--- CQ asset (AD-020: the one-touch key is dead without it) ---"
+"$DEBUGFS" -R "stat /opt/mrrc_modern/static/audio/cq.wav" "$DEV" 2>/dev/null | grep -E "Size:|Inode:" | head -2 \
+	|| echo "FAIL: static/audio/cq.wav missing from the image"
+echo "--- server.py carries the CQ wiring (AD-020) ---"
+"$DEBUGFS" -R "cat /opt/mrrc_modern/server.py" "$DEV" 2>/dev/null | grep -cE "_bind_cq_player|_cq_key" \
+	| sed 's/^/    symbol hits: /'
 echo "==> VERIFY_OK"

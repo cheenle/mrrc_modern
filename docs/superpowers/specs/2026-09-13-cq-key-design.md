@@ -155,7 +155,7 @@ state, the backend (for the TX gate) and a broadcast callback — no globals, fu
 ## 9. Documentation synchronization
 
 CHANGELOG (next version), `README.md` (`MRRC_CQ_FILE`), `AGENTS.md` module table (`cq_player.py`),
-SDD §9.2 (protocol: `cqState`), §9.4/§15 (TX path + safety), a new **AD-019** (server-side CQ call),
+SDD §9.2 (protocol: `cqState`), §9.4/§15 (TX path + safety), a new **AD-020** (server-side CQ call),
 §12 + `docs/OPERATION_GUIDE.md` ("换成自己的呼号录音", with the ffmpeg command), `tests/README.md`
 (counts + module entry), website guide (CQ paragraph) and the release notes.
 
@@ -177,6 +177,6 @@ SDD §9.2 (protocol: `cqState`), §9.4/§15 (TX path + safety), a new **AD-019**
 
 ## 12. SDD traceability
 
-AD-007 (PTT release safety) and AD-017 (server-side audio session) are reused; AD-019 records the
+AD-007 (PTT release safety) and AD-017 (server-side audio session) are reused; AD-020 records the
 new decision. Requirements touched: §9.2 (WS protocol), §9.4 (TX audio chain), §12.x (operator
 assets), §15 (PTT safety layering), §13 R-list (real-radio acceptance).

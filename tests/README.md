@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1055 tests across 53 test modules (7 pty-based Yaesu round-trip tests skip on
+1103 tests across 55 test modules (7 pty-based Yaesu round-trip tests skip on
 Windows; the per-module counts below were read from `unittest` on 2026-09-13, macOS).
 
 ```bash
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1055 |
-| Passed | 1055 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1103 |
+| Passed | 1103 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -512,6 +512,28 @@ Generated SDD pages carry the current version, the hand-written landing pages
 agree with the version history, and every architecture decision appears in the
 AD index.
 
+### 54. test_cq_player.py — One-Touch CQ Player (15 tests)
+
+SDD coverage: AD-020, §9.2, §15
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `CQAssetTests` | 9 | WAV parsing (mono/stereo, 8 kHz→48 kHz, bad rates), the 30 s length guard, corrupt/empty files, `status()` idle snapshot |
+| `CQPlaybackTests` | 6 | Key→feed→drain→unkey lifecycle, refusal while already calling, refusal without an asset, immediate abort (no graceful drain), external unkey (watchdog/TUNE) → `aborted`/`unkeyed`, backpressure (nothing fed while the device queue is deep) |
+
+### 55. test_cq_server.py — CQ Wiring and Frontend Contract (30 tests)
+
+SDD coverage: AD-020, §9.2, §15, I6
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `CqCommandTests` | 8 | TX gate first (message, no CAT write), start/abort routing, second start while calling, PTT/TUNE mutual exclusion, unavailable-asset error surface |
+| `CqKeyingTests` | 3 | `_cq_key` claims ownership + starts TX audio, releases on device failure; `_cq_unkey` drains gracefully and zeroes meters |
+| `CqUplinkExclusivityTests` | 4 | Mic frames dropped and counted while calling, passthrough otherwise, initiator-disconnect abort, bystander disconnect does not abort |
+| `CqStateTests` | 5 | `CQ_ASSET_PATH` default, `fullState.cq`, `_bind_cq_player()` wiring, broadcast no-op without clients, readiness logging in both states |
+| `CqFrontendContractTests` | 6 | Button in the PTT footer before TUNE, `sendCommand('cq'`, `cqState` + `fullState` ingestion, four rendered states, gated-model disabling, CSS |
+| `CqEndToEndTests` | 4 | Real player + real key/unkey callbacks + real bundled asset: full call (graceful stop, meters zeroed, `complete`), abort path without draining, bundled-asset usability |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -539,6 +561,7 @@ AD index.
 | AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope, test_ic7300_runtime_reliability | 143 tests |
 | V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 13 tests |
 | AD-017 Server-Side QSO Recording | test_recorder, test_recorder_api | 66 tests |
+| AD-020 One-Touch CQ Key | test_cq_player, test_cq_server | 45 tests |
 | AD-018 Yaesu SDR Family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F) | test_yaesu_profiles, test_yaesu_cat_core, test_yaesu_backend, test_yaesu_wiring, test_yaesu_fake_radio, test_diag_yaesu | 101 tests |
 | Preview Icom models + TX gate | test_civ_profiles, test_unverified_tx_gate, test_model_mismatch | 40 tests |
 | Release engineering (registry, completeness) | test_release_artifacts, test_sdd_docs_consistency | 21 tests |
@@ -562,7 +585,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1055 tests in ~21s — can run on every commit.
+2. **Fast execution**: ~1103 tests in ~22s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

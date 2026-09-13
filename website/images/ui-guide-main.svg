@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" data-diagram-version="V2.46" viewBox="0 0 470 840" width="470" height="840" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
-  <!-- diagram-version: V2.46 -->
+<svg xmlns="http://www.w3.org/2000/svg" data-diagram-version="V2.49" viewBox="0 0 470 840" width="470" height="840" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <!-- diagram-version: V2.49 -->
   <defs>
     <style>
       .phone { fill:#111418; stroke:#3a3f47; stroke-width:3; }
@@ -136,8 +136,9 @@
   <!-- ===== Footer ===== -->
   <rect class="btn-on" x="46" y="708" width="196" height="84" rx="10"/>
   <text x="144" y="752" class="txt-big" text-anchor="middle" font-size="26">PTT</text>
-  <rect class="btn" x="250" y="708" width="170" height="38" rx="6"/><text x="335" y="731" class="txt" text-anchor="middle" font-size="12">TUNE</text>
-  <rect class="btn" x="250" y="754" width="170" height="38" rx="6"/><text x="335" y="777" class="txt" text-anchor="middle" font-size="12">REC</text>
+  <rect class="btn" x="250" y="708" width="54" height="84" rx="6"/><text x="277" y="754" class="txt" text-anchor="middle" font-size="13">CQ</text>
+  <rect class="btn" x="308" y="708" width="54" height="84" rx="6"/><text x="335" y="754" class="txt" text-anchor="middle" font-size="11">TUNE</text>
+  <rect class="btn" x="366" y="708" width="54" height="84" rx="6"/><text x="393" y="754" class="txt" text-anchor="middle" font-size="13">REC</text>
 
   <!-- ===== Number badges ===== -->
   <!-- Header -->
@@ -187,7 +188,8 @@
   <!-- Footer -->
   <g><circle class="badge" cx="44" cy="706" r="10"/><text class="badge-txt" x="44" y="706">36</text></g>
   <g><circle class="badge" cx="248" cy="706" r="10"/><text class="badge-txt" x="248" y="706">37</text></g>
-  <g><circle class="badge" cx="248" cy="752" r="10"/><text class="badge-txt" x="248" y="752">38</text></g>
+  <g><circle class="badge" cx="306" cy="706" r="10"/><text class="badge-txt" x="306" y="706">38</text></g>
+  <g><circle class="badge" cx="364" cy="706" r="10"/><text class="badge-txt" x="364" y="706">39</text></g>
 
   <text x="235" y="826" class="cap" text-anchor="middle">图 1 · FT-710 Web 主界面控件编号图（序号与正文速查表对应）</text>
 </svg>

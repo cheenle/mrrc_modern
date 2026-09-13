@@ -795,13 +795,52 @@
 <p><strong>Problem</strong>: 无真机的实现容易被呈现为「已验证」：表头曲线看起来一样、模式表看起来合理，一旦现场表现不同，用户无法判断是电台行为、接线还是实现猜测。更危险的是 TX——在未验证的频率/功率语义上发射可能对电台或天线系统不利。</p>
 <p><strong>Rationale</strong>: 「不确定就说不确定」比「猜一个并当作数据」成本低得多：门禁把风险最高的动作（发射）变成显式选择，溯源让每张表都可追溯、可纠正，诊断脚本把闭合缺口变成一次粘贴。</p>
 <p><strong>Consequences</strong>: 新机型首次连接只收不发（UI 显示”实验性，仅接收”），需要操作者显式开启；模式/滤波/表头在获得现场回传前都带未验证标记；<code class="scope-code">dual_rx</code>（FTDX101D/MP 与 FTX-1F 的双接收）<strong>只记录不实现</strong>，留待二期独立规格。</p>
+<hr />
+<h2 id="ad-020-一键-cq服务端一次性自动化发射复用-ptt-安全链路">AD-020: 一键 CQ（服务端一次性自动化发射，复用 PTT 安全链路）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V2.49)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>CQ 呼叫<strong>由服务端播放</strong>：<code class="scope-code">set{field:"cq",value:true}</code> → 校验（TX 门禁 → 是否已呼叫 → TUNE/PTT 占用）→ 按 PTT 链路键控（<code class="scope-code">_claim_tx_owner_for_token</code> + <code class="scope-code">set_ptt(True)</code> + <code class="scope-code">start_tx()</code>）→ <code class="scope-code">cq_player.py</code> 以 20 ms 帧、设备队列低于 <code class="scope-code">CQ_LOW_WATER_FRAMES=4</code> 时投喂 <code class="scope-code">audio.feed_tx_audio()</code> → <code class="scope-code">stop_tx(graceful=True)</code> 排空尾音 → <code class="scope-code">set_ptt(False)</code> → 广播 <code class="scope-code">cqState{state:"complete"}</code>。再次按下 <code class="scope-code">cq:true</code>（或 <code class="scope-code">cq:false</code>）中止：<strong>不排空</strong>，立即松载波，<code class="scope-code">state:"aborted"</code> + <code class="scope-code">reason</code>。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong>浏览器播放</strong>（<code class="scope-code">/WSaudioTX</code> 上传 CQ 音频，同兄弟项目 <code class="scope-code">mrrc</code>）：后台标签页被节流、断网即断播、三端（Web/iOS/Android）各写一遍；②<strong>完整 TX 源多路复用器</strong>（mic/CQ/录音回放统一抽象）：把改动引入安全关键路径，回归面最大；③服务端播放 + 最小侵入（采纳）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>录音随服务端一起打包（<code class="scope-code">static/audio/cq.wav</code>，<code class="scope-code">MRRC_CQ_FILE</code> 可替换），所有客户端零代码即可用；CQ 期间浏览器麦克风帧被丢弃并计数（<code class="scope-code">_tx_cq_mic_drops</code>），避免两种人声混进同一发射；CQ 与 TUNE/PTT 互斥；发起端断线、最后一个客户端断线、外部松键（看门狗/TUNE）、服务端退出都会立即终止呼叫；<code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> 依旧生效。代价：一个新增的 TX 源标记（<code class="scope-code">tx_source</code> 语义落在 <code class="scope-code">_cq_player.is_calling</code>），以及 CQ 音频不经过 Opus 链路（服务端直接用 48 kHz PCM）。</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: 呼叫 CQ 是每次通联都要做的重复动作：按住 PTT、对准话筒、念完一整套呼号与”Listening”。远程操作时这套动作最容易出问题——说话时麦克风增益、网络抖动、忘记松 PTT。现场反馈（2026-09-13）希望「按一下就能 CQ」，且<strong>每次发射必须有明确终点</strong>。</p>
+<p><strong>Rationale</strong>: 播放端放在服务端，则音频从磁盘到声卡全程不过网络，抖动与丢包都不影响发射内容；键控路径复用已现场验证的 PTT 释放架构（AD-007 的强制松键 + 15 章的七层防线），因此”忘记停止”这一类风险由既有防线兜底，而不是新写一套超时逻辑。前端只做状态镜像（<code class="scope-code">cqState</code>），多端天然一致。</p>
+<p><strong>Consequences</strong>: <code class="scope-code">cq_player.py</code> 是纯音频/状态机模块（可脱机测试，不 import 硬件库）；服务端启动时若资产缺失/损坏/超长（&gt;30 s）则以 <strong>WARNING</strong> 明确说明并禁用按键，绝不静默；<code class="scope-code">fullState.cq</code> 让中途刷新页面/重连的客户端也能看到进行中的呼叫。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.48 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.49 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

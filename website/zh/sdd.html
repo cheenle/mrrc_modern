@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.48 更新</a></li>
+            <li><a href="#updates">V2.49 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.48 · 2026-09-13</span>
+            <span>SDD V2.49 · 2026-09-13</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,8 +74,8 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.46</td></tr>
-            <tr><td>基线日期</td><td>2026-09-12</td></tr>
+            <tr><td>版本</td><td>V2.49</td></tr>
+            <tr><td>基线日期</td><td>2026-09-13</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
             <tr><td>核心接口</td><td>4+1 路 WebSocket（可选 ATR1000）+ 串口 CAT / CI-V + FT4222 SPI / CI-V 0x27 + USB 音频</td></tr>
@@ -130,6 +130,11 @@
                 <div class="icon"><i class="fas fa-box-archive"></i></div>
                 <h3>v1.15.0 发布 <small>（V2.44–V2.45）</small></h3>
                 <p>macOS DMG、Windows 安装包与 rpi64 镜像发布，跨主机 SHA-256 校验一致，含上述录音功能与掉线恢复修复。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-radio"></i></div>
+                <h3>一键 CQ 按键 <small>（V2.48–V2.49）</small></h3>
+                <p>由服务端键控电台、播送打包的 CQ 录音并松键——发射内容不经过网络，因此不受抖动影响。呼叫期间麦克风帧被丢弃，PTT/TUNE 被拒绝，发起端断开即切断载波（<code>MRRC_CQ_FILE</code> 可替换录音；AD-020）。</p>
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-radio"></i></div>

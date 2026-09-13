@@ -125,6 +125,8 @@ and the model identity check (`ID;`, read-only) only logs.
 | Verify RX audio | Open browser; listen for radio audio; check "RX ...K" and startup log fields `host`, `default`, `actual`, `channels` (IC-7300/MK2: `actual=48000Hz`) |
 | Verify TX audio | Key PTT; speak; confirm on monitoring receiver and check TX open log (`actual=48000Hz` on IC-7300/MK2) |
 | Verify PTT safety | Release PTT; confirm radio returns to RX; check log for backend-specific unkey command |
+| Verify CQ key | Press CQ: the button shows STOP, `cqState` broadcasts `calling` with `frames_sent` rising at 50/s, and the radio keys for the length of the recording (~6 s) then drops back to RX. Log: `CQ: keyed the radio` … `CQ complete after 307/307 frames` … `CQ session: written=… write_err=0 queue_drops=0`. Pressing CQ again mid-call shows `aborted`/`aborted_by_user` and unkeys immediately. |
+| Replace the CQ recording | Put your own 16-bit WAV anywhere readable and start with `MRRC_CQ_FILE=/path/to/cq.wav python server.py` (mono or stereo, any sample rate; normalised to 48 kHz mono once at startup). Check the startup line `CQ ready: <path> (…)`; if the file is missing, corrupt or longer than 30 s the log says `CQ key disabled: <reason>` and the button stays inert. |
 | Change backend | `MRRC_RADIO_MODEL=ic7300 python server.py` |
 | Change IC-7300 CI-V address | `IC7300_CIV_ADDR=0x94 python server.py` |
 | Change password | `MRRC_WEB_PASSWORD=newpass python server.py` |

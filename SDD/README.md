@@ -34,14 +34,14 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.48 |
+| SDD Version | V2.49 |
 | Baseline Date | 2026-09-12 |
 | Status | v1.15.0 released on both platforms (macOS DMG 56,001,051 bytes, SHA-256 `a3b35f48…cdfe38`; Windows Setup 45,532,589 bytes, SHA-256 `e453446b…7ceae4`; rpi64 image 543,966,776 bytes, SHA-256 `c8f3c3fd…d8dcb8`, SDD V2.45) with server-side QSO recording (AD-017) and the writer-liveness fix (a second recording in the same process used to be 100 % silent); both bundles carry `lameenc`, and the Windows bundle's bytecode was walked to confirm `_ensure_rec_writer` is present. Superseded note: the build host `ham.vlsc.net` was unreachable, so the site still serves the v1.14.2 exe; `lameenc` verified inside the macOS bundle; CAT serial flapping (R11) is a physical-layer issue with software mitigations; the rpi64 image is v1.15.0 (546,128,812 bytes, SHA-256 `c9936a3b…3a0773`), rebuilt from the same release line with `lameenc` aarch64 inside the image venv and the tolerant Linux first-boot env reader. Yaesu ASCII-CAT family added: `ftdx10`/`ftdx101d`/`ftdx101mp`/`ftx1` are profile-driven and **unverified** — receive-only until `MRRC_ALLOW_UNVERIFIED_TX=1`, no waterfall because the Yaesu scope waveform is not documented anywhere — with the verified FT-710 backend deliberately left untouched, dual receive deferred to phase 2 and FT-710 migration to phase 3 (AD-018/AD-019, SDD V2.46) |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the seven unverified models |
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy, PyAudio |
-| Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API (no client-side MP3 encoder) |
+| Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API (no client-side MP3 encoder; CQ playback is server-side, AD-020) |
 | Transport | HTTP/WS for browser; Serial CAT (Yaesu) or USB CI-V (Icom) for radio; FT4222 SPI for FT-710 scope; recording as server-side 16 kHz MP3 (AD-017); CI-V 0x27 spectrum for the Icom family (475 bins on IC-7300/IC-7300MK2/IC-705, 689 bins on IC-7610/IC-7760) |
 | Default Entry | `http://localhost:8888` |
 

@@ -120,11 +120,13 @@
 <li><code class="scope-code">{"type":"stateUpdate","fields":{...},"dirty":[...]}</code> — partial changed-field update</li>
 <li><code class="scope-code">{"type":"value","field":"...","value":...}</code> — single-value query response</li>
 <li><code class="scope-code">{"type":"memChannels","channels":[...]}</code> — memory channel broadcast</li>
+<li><code class="scope-code">{"type":"recordingState","recording":{...}}</code> — server-side QSO recording snapshot (AD-017), broadcast on change</li>
+<li><code class="scope-code">{"type":"cqState","cq":{...}}</code> — one-shot CQ call snapshot (AD-020): <code class="scope-code">state</code> = <code class="scope-code">idle|calling|complete|aborted</code>, plus <code class="scope-code">frames_sent</code>/<code class="scope-code">frames_total</code>/<code class="scope-code">started_by</code>/<code class="scope-code">reason</code>; broadcast on change and at 1 Hz while calling</li>
 <li><code class="scope-code">{"type":"pong"}</code> — keepalive response</li>
 </ul>
 <p><strong>Client → Server:</strong></p>
 <ul>
-<li><code class="scope-code">{"type":"set","field":"...","value":...}</code> — command (40+ supported fields)</li>
+<li><code class="scope-code">{"type":"set","field":"...","value":...}</code> — command (40+ supported fields, incl. <code class="scope-code">recording</code> and <code class="scope-code">cq</code>)</li>
 <li><code class="scope-code">{"type":"get","field":"..."}</code> — query current value</li>
 <li><code class="scope-code">{"type":"memSave","channels":[...]}</code> — save memory channels</li>
 <li><code class="scope-code">{"type":"memDelete","index":N}</code> — delete memory slot</li>
@@ -196,7 +198,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.48 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.49 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

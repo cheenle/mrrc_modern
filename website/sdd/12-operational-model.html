@@ -513,6 +513,14 @@ Icom IC-7300 / IC-7300MK2
 <td>Release PTT; confirm radio returns to RX; check log for backend-specific unkey command</td>
 </tr>
 <tr>
+<td>Verify CQ key</td>
+<td>Press CQ: the button shows STOP, <code class="scope-code">cqState</code> broadcasts <code class="scope-code">calling</code> with <code class="scope-code">frames_sent</code> rising at 50/s, and the radio keys for the length of the recording (~6 s) then drops back to RX. Log: <code class="scope-code">CQ: keyed the radio</code> … <code class="scope-code">CQ complete after 307/307 frames</code> … <code class="scope-code">CQ session: written=… write_err=0 queue_drops=0</code>. Pressing CQ again mid-call shows <code class="scope-code">aborted</code>/<code class="scope-code">aborted_by_user</code> and unkeys immediately.</td>
+</tr>
+<tr>
+<td>Replace the CQ recording</td>
+<td>Put your own 16-bit WAV anywhere readable and start with <code class="scope-code">MRRC_CQ_FILE=/path/to/cq.wav python server.py</code> (mono or stereo, any sample rate; normalised to 48 kHz mono once at startup). Check the startup line <code class="scope-code">CQ ready: &lt;path&gt; (…)</code>; if the file is missing, corrupt or longer than 30 s the log says <code class="scope-code">CQ key disabled: &lt;reason&gt;</code> and the button stays inert.</td>
+</tr>
+<tr>
 <td>Change backend</td>
 <td><code class="scope-code">MRRC_RADIO_MODEL=ic7300 python server.py</code></td>
 </tr>
@@ -626,7 +634,7 @@ Icom IC-7300 / IC-7300MK2
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.48 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.49 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -175,6 +175,12 @@
 <td>Stop TX audio stream; clear audio queue; <code class="scope-code">wsAudioTX.send('s:')</code></td>
 <td>Audio continuing to feed radio after release</td>
 </tr>
+<tr>
+<td>8</td>
+<td>Server</td>
+<td>One-shot CQ call (AD-020): server-side player keys, plays the packaged recording once, then drains and unkeys (<code class="scope-code">stop_tx(graceful=True)</code> → <code class="scope-code">set_ptt(False)</code>). Aborts immediately on <code class="scope-code">cq:false</code>, initiator disconnect, last-client disconnect, external unkey (watchdog/TUNE), or shutdown</td>
+<td>Automated transmission with no operator finger on PTT — every call has a definite end</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Removed layer — Triple TX0 Verify (removed in V1.2, 2026-07-08):</strong> earlier releases queried <code class="scope-code">TX;</code> three times at 200ms intervals after every release and re-sent <code class="scope-code">TX0;</code> on non-zero. This added ~600ms to every release, and field observation showed the radio obeys <code class="scope-code">TX0;</code> on the first write (fire-and-forget). Stuck-keyup detection is now covered by the server-side TX-status poll (500ms) feeding the browser PTT watchdog (Layer 3).</p>
@@ -257,6 +263,15 @@ if not ctrl_clients and radio.is_transmitting and backend and backend.connected:
         wsAudioTX.send(&#39;s:&#39;);  // Flush server TX queue
     }
 }</code></pre>
+<h3 id="layer-8-server-side-cq-call-ad-020">Layer 8: Server-Side CQ Call (AD-020)</h3>
+<p>The CQ key transmits without a human holding PTT, so it is the one path where “the operator lets go” cannot be the safety net. Instead the <em>player</em> is the safety net:</p>
+<ul>
+<li>The call is a single finite asset (&lt;= 30 s guard) played once; the player knows the frame count, so <code class="scope-code">complete</code> is reached by arithmetic, not by a timer.</li>
+<li>While it runs, a manual key-up (PTT), a second CQ start, and TUNE are all refused — one carrier, one source.</li>
+<li>Any external release of the carrier (<code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> watchdog, TUNE, another client, dead-man switch) is observed through <code class="scope-code">radio.is_transmitting</code> and ends the call as <code class="scope-code">aborted</code>/<code class="scope-code">unkeyed</code>.</li>
+<li>The initiator’s disconnect aborts immediately (<code class="scope-code">reason:"client_gone"</code>), never leaving a bystander’s carrier on the air.</li>
+<li><code class="scope-code">cq:false</code> cuts the tail (no graceful drain) because the operator asked to stop <em>now</em>; a natural end drains gracefully so the last syllable is not chopped.</li>
+</ul>
 <h2 id="safety-flow-diagram">15.3 Safety Flow Diagram</h2>
 <pre class="scope-code text"><code>Normal Release Path:
   PTT Button Release (any trigger)
@@ -345,7 +360,7 @@ Emergency Paths:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.48 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.49 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

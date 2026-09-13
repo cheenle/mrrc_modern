@@ -16,6 +16,7 @@ The MRRC Modern PTT safety architecture provides **7 independent layers of defen
 | 5 | Browser | `beforeunload` → `navigator.sendBeacon()` with TX0 | Tab/browser close during TX |
 | 6 | Browser | `pagehide` → `sendCommand('ptt', false)` | Mobile app switch / backgrounding |
 | 7 | Server + Browser | Stop TX audio stream; clear audio queue; `wsAudioTX.send('s:')` | Audio continuing to feed radio after release |
+| 8 | Server | One-shot CQ call (AD-020): server-side player keys, plays the packaged recording once, then drains and unkeys (`stop_tx(graceful=True)` → `set_ptt(False)`). Aborts immediately on `cq:false`, initiator disconnect, last-client disconnect, external unkey (watchdog/TUNE), or shutdown | Automated transmission with no operator finger on PTT — every call has a definite end |
 
 **Removed layer — Triple TX0 Verify (removed in V1.2, 2026-07-08):** earlier releases queried `TX;` three times at 200ms intervals after every release and re-sent `TX0;` on non-zero. This added ~600ms to every release, and field observation showed the radio obeys `TX0;` on the first write (fire-and-forget). Stuck-keyup detection is now covered by the server-side TX-status poll (500ms) feeding the browser PTT watchdog (Layer 3).
 
@@ -132,6 +133,25 @@ function stopTXAudio() {
     }
 }
 ```
+
+### Layer 8: Server-Side CQ Call (AD-020)
+
+The CQ key transmits without a human holding PTT, so it is the one path where
+"the operator lets go" cannot be the safety net.  Instead the *player* is the
+safety net:
+
+- The call is a single finite asset (<= 30 s guard) played once; the player
+  knows the frame count, so `complete` is reached by arithmetic, not by a timer.
+- While it runs, a manual key-up (PTT), a second CQ start, and TUNE are all
+  refused — one carrier, one source.
+- Any external release of the carrier (`MRRC_PTT_MAX_TX_SECONDS` watchdog,
+  TUNE, another client, dead-man switch) is observed through
+  `radio.is_transmitting` and ends the call as `aborted`/`unkeyed`.
+- The initiator's disconnect aborts immediately (`reason:"client_gone"`),
+  never leaving a bystander's carrier on the air.
+- `cq:false` cuts the tail (no graceful drain) because the operator asked to
+  stop *now*; a natural end drains gracefully so the last syllable is not
+  chopped.
 
 ## 15.3 Safety Flow Diagram
 

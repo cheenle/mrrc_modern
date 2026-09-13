@@ -67,6 +67,7 @@ dist\windows\MRRC-Modern-Setup.exe
 | `MRRC_RECORDINGS_DIR` | `<runtime>/recordings` | Where recorded QSO MP3s live (packaged installs: the per-user data dir) |
 | `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate for recordings (kbps, 16 kHz mono) |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
+| `MRRC_CQ_FILE` | `static/audio/cq.wav` | Recording played by the one-touch CQ key (any 16-bit WAV; normalised to 48 kHz mono at startup, 30 s max) |
 | `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F). Off = keying refused with an explanatory UI message; releases are never blocked |
 | `MRRC_WEB_PORT` | `8888` | Web server port |
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change** — startup logs a loud warning while the default is active) |
@@ -236,6 +237,7 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | Filter | Cycle through curated filter widths (FT-710: voice/narrow CAT indices; IC-7300: FIL1–FIL3) |
 | ATT / PRE | FT-710: OFF→6dB→12dB→18dB / OFF→AMP1→AMP2. IC-7300: ATT on/off |
 | PTT | Touch-and-hold TX, release RX; PTT watchdog; dead-man switch; graceful audio drain before RF drop |
+| CQ | One-touch CQ call: the **server** keys the radio, plays the packaged CQ recording once and unkeys (`cqState` broadcast; abort with a second press, initiator disconnect or any external unkey) |
 | TUNE | Antenna tuner activation (FT-710 external/ATU; IC-7300 internal ATU) |
 | Wake Lock | ☀ toggle: screen stays on during operation (Wake Lock API + video/audio fallback for iOS) |
 | Fullscreen | ⛶ toggle: hides browser chrome for a dedicated control surface |
@@ -295,6 +297,7 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 | `{"type":"stateUpdate","fields":{...},"dirty":[...]}` | Partial changed-fields update |
 | `{"type":"value","field":"freq","value":7050000}` | Single value reply |
 | `{"type":"memChannels","channels":[...]}` | Memory channels sync |
+| `{"type":"cqState","cq":{"state":"calling",...}}` | One-touch CQ snapshot (`idle`/`calling`/`complete`/`aborted`), on change + at 1 Hz while calling |
 | `{"type":"pong"}` | PING response |
 
 **Client → Server:**
@@ -304,6 +307,7 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 | `{"type":"set","field":"freq","value":14200000}` | Set VFO-A frequency |
 | `{"type":"set","field":"mode","value":"USB"}` | Set mode |
 | `{"type":"set","field":"ptt","value":true}` | PTT on/off |
+| `{"type":"set","field":"cq","value":true}` | One-touch CQ call: `true` starts a call, `false` aborts it |
 | `{"type":"set","field":"filter","value":5}` | Set filter width index |
 | `{"type":"set","field":"nr","value":true}` | Toggle NR |
 | `{"type":"get","field":"fullState"}` | Request full state |
@@ -336,6 +340,7 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 - **Server-side forced RX**: When last WebSocket client disconnects during TX, server sends `TX0;`
 - **Browser unload beacon**: `beforeunload` + `pagehide` events force `TX0;` on tab close
 - **TX audio stop**: Audio stream stopped before RF on PTT release
+- **One-touch CQ**: the only automated TX source — one carrier per call, mic frames dropped while it runs, PTT/TUNE refused, and the call dies with its initiating client; the CQ asset missing/corrupt disables the key with a startup warning instead of failing silently
 
 ## Tests
 

@@ -3,7 +3,7 @@
 ## AD-001: Use FastAPI/Uvicorn for MRRC Modern Server
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Architectural |
 | Status | Implemented |
 | Decision | Use FastAPI with native WebSocket routes and Uvicorn runtime |
@@ -17,7 +17,7 @@
 ## AD-002: Direct Serial CAT — No Hamlib/Rigctld
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Architectural |
 | Status | Implemented |
 | Decision | Use `pyserial` (sync API) with `asyncio.to_thread()` for serial I/O |
@@ -31,7 +31,7 @@
 ## AD-003: Dirty-Field State Broadcasting
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | `RadioState` dataclass tracks changed fields via `_dirty_fields` set; broadcast only changed fields |
@@ -45,7 +45,7 @@
 ## AD-004: Tagged Dual-Codec Audio Transport (Opus + Int16 PCM)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Architectural |
 | Status | Implemented |
 | Decision | Both `/WSaudioRX` and `/WSaudioTX` carry a 1-byte codec tag per frame: `0x00` = Int16 PCM, `0x01` = Opus. RX: 48kHz @ 64kbps (fullband, transparent for broadcast music). TX: 48kHz @ 64kbps CBR (voice with fidelity priority: complexity=5, SIGNAL=VOICE, VBR/FEC/DTX disabled). Default Opus; falls back to PCM. |
@@ -59,7 +59,7 @@
 ## AD-005: scope_pipe as Standalone Subprocess
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Architectural |
 | Status | Implemented |
 | Decision | FT4222 SPI I/O runs in a separate Python process (`scope_pipe.py`), communicating with the server via stdout/stderr pipes |
@@ -75,7 +75,7 @@
 ## AD-006: Dual-Mode Spectrum (FT4222 + S-Meter Fallback)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | When FT4222 is available, broadcast real 850-point FFT data. When unavailable, generate synthetic multi-peak Gaussian spectrum from CAT S-meter readings |
@@ -89,7 +89,7 @@
 ## AD-007: PTT Release as Safety-Critical Flow
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Safety |
 | Status | Implemented |
 | Decision | Multiple independent release paths: normal WebSocket command (fire-and-forget TX0), PTT watchdog, dead-man switch on WS disconnect, beforeunload beacon, pagehide handler |
@@ -103,7 +103,7 @@
 ## AD-008: PyAudio Auto-Detection of Supported Radio USB Audio
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | Multi-layer device selection parameterized by backend: (1) explicit `MRRC_AUDIO_RX_DEVICE`/`MRRC_AUDIO_TX_DEVICE` env var (index or name substring), (2) per-backend name hints (e.g., "FT-710"/"FT710"/"YAESU" for FT-710), (3) generic "USB Audio CODEC" / "USB Audio Device" fallback (common built-in sound card names on Windows; first match wins, multi-match warns), (4) mono-channel heuristic (radio USB audio is typically mono), (5) full-duplex heuristic for TX (device with both input + output), (6) system default fallback |
@@ -121,7 +121,7 @@
 ## AD-009: 7-Task Adaptive Polling with Bounded Lock Time
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | Background CAT polling split into 7 cooperative tasks (IF, VFO, TX status, TX meters, settings, slow telemetry, connection watchdog), with skip-on-command and short per-query timeout |
@@ -135,7 +135,7 @@
 ## AD-010: Memory Channels as Server-Side JSON
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | Memory channels stored server-side in `mem_channels.json`; API: GET/POST `/api/mem_channels`; auto-broadcast to all clients on change |
@@ -149,7 +149,7 @@
 ## AD-011: 48kHz Codec Domain with Per-Backend Device-Rate Bridge
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | TX audio chain runs at 48 kHz in the codec domain (browser capture → Opus encode → server decode). The server bridges to the radio's native USB audio rate via `audio_resample.py` when needed: FT-710 uses a 44.1 kHz device rate (960↔882 frame-aligned resample, ratio 160:147); IC-7300/MK2 uses 48 kHz native USB audio (no resample). RX uses the inverse bridge only when the capture rate differs from 48 kHz. |
@@ -167,7 +167,7 @@
 ## AD-012: Active-VFO-Aware Frequency Model
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | Poll `VS` + `FB` at 0.5s and treat `freq` set command as "apply to currently active VFO" |
@@ -181,7 +181,7 @@
 ## AD-013: FT-710 Meter Calibration Tables
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | Convert raw RM meter values (0–255) into engineering units via piecewise-linear calibration tables in `config.py` |
@@ -195,7 +195,7 @@
 ## AD-014: FT-710 CAT Errata Handling
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Design |
 | Status | Implemented |
 | Decision | Apply FT-710-specific command corrections: treat `DN` as step-down (never poll), use `PR00/PR01` for compressor, and map tuner control to `AC000/AC001/AC003` |
@@ -209,7 +209,7 @@
 ## AD-015: Priority CAT Command Preemption
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Safety / Responsiveness |
 | Status | Implemented |
 | Decision | Introduce `send_priority_set_command()` and `_cancel_polls` cooperative abort so latency-sensitive commands (PTT/TUNE) preempt poll queries |
@@ -223,7 +223,7 @@
 ## AD-016: Pluggable Radio Backend Architecture (FT-710 + IC-7300 via RadioBackend/Capabilities)
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Structural |
 | Status | Implemented |
 | Decision | Introduce a `RadioBackend` ABC + `RadioCapabilities` dataclass + `ScopeProducer` protocol in `backends/base.py`, a lazy `create_backend(model)` factory (`backends/__init__.py`, keys `ft710`/`ic7300`/`ic7300mk2`, selected by `MRRC_RADIO_MODEL`), and per-model packages `backends/ft710/` (Yaesu ASCII CAT + FT4222 scope_pipe) and `backends/ic7300/` (CI-V codec/controller at 115200 8N1 addr 0x94, 0x27 scope demux on the same port); radio-specific tables move to per-backend config modules, `fullState` carries radioModel/radioDisplayName/capabilities, and server mode/band/tune branches become backend-aware |
@@ -239,7 +239,7 @@
 ## AD-017: 服务端 QSO 录音（增量 MP3、16 kHz 存储域）
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Structural |
 | Status | Implemented (V2.42) |
 | Decision | 录音在服务端进行：`recorder.py` 的 `RecordingSession` 把 RX（设备域 PCM）与 TX（解码后的麦克风 PCM）放在一条 `time.monotonic_ns()` 定位的单声道时间轴上（源切换重锚定、50 ms 连续性容差吸收调度抖动、真实停顿补静音），用 **lameenc 增量编码边录边落盘**到 16 kHz 单声道 MP3；`server.py` 用**单 writer 任务 + 有界队列**驱动它（**专用单线程池**编码，绝不占用与串口/音频共享的默认 executor；事件循环零阻塞），控制面复用 `/WSradio`（`set{field:"recording"}` + `recordingState` 广播 + `fullState` 快照），文件面为三条 REST 路由（列表 / Range 流 / 删除），前端提供「录音」面板 |
@@ -255,7 +255,7 @@
 ## 8.16 Decision Summary
 
 | ID | Topic | Status |
-|----|-------|--------|
+| ---- | ------- | -------- |
 | AD-001 | FastAPI/Uvicorn backend | Implemented |
 | AD-002 | Direct serial CAT (no Hamlib) | Implemented |
 | AD-003 | Dirty-field state broadcasting | Implemented |
@@ -279,7 +279,7 @@
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Structural |
 | Status | Accepted (V2.46)；FT-710 迁移列为三期 |
 | Decision | 新增 `backends/yaesu/`：`yaesu_profiles.py` 是每机型差异的唯一来源（模式寄存器 **与** 独立的 CAT 字符查找表、滤波槽位、频段、衰减/前置步进、功率格式、S 表曲线、验证状态、逐表溯源），`cat_core.py` 承载从 FT-710 `cat_controller.py` **移植**过来的传输层（`;` 帧、AI 帧前缀过滤、写-only set、PTT/TUNE 优先级抢占、ENXIO 与瞬态错误分类、重连节奏），`backend.py` 由 profile 派生能力位/UI 表/状态表/poll 项。`backends/ft710/` **完全不动**。 |
@@ -293,7 +293,7 @@
 ## AD-019: 未验证机型仅接收（TX 门禁 + 只读身份校验 + 逐表溯源）
 
 | Attribute | Value |
-|-----------|-------|
+| ----------- | ------- |
 | Type | Policy |
 | Status | Implemented (V2.46) |
 | Decision | 四台 Yaesu 机型（以及此前的 IC-705/7610/7760）在无真机证据时：`RadioCapabilities.verified=False`、`tx_gated=True`，`set_ptt(True)`/`set_tune(True)` 直接拒绝并**每进程仅告警一次**（`MRRC_ALLOW_UNVERIFIED_TX=1` 才放行，**释放永不被拦**）；`ID;` 只读校验记录实测字节，profile 未记录期望值时仅 INFO，不符只告警**绝不阻断**；每张表在 `provenance` 里写明来源文件与符号，拿不到的数据标 `TODO(hw-verify)` 并进入 `unverified_meters`；`_diag_yaesu.py` 负责在有真机时闭合这些缺口。 |
@@ -303,3 +303,21 @@
 **Rationale**: 「不确定就说不确定」比「猜一个并当作数据」成本低得多：门禁把风险最高的动作（发射）变成显式选择，溯源让每张表都可追溯、可纠正，诊断脚本把闭合缺口变成一次粘贴。
 
 **Consequences**: 新机型首次连接只收不发（UI 显示"实验性，仅接收"），需要操作者显式开启；模式/滤波/表头在获得现场回传前都带未验证标记；`dual_rx`（FTDX101D/MP 与 FTX-1F 的双接收）**只记录不实现**，留待二期独立规格。
+
+---
+
+## AD-020: 一键 CQ（服务端一次性自动化发射，复用 PTT 安全链路）
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Design |
+| Status | Implemented (V2.49) |
+| Decision | CQ 呼叫**由服务端播放**：`set{field:"cq",value:true}` → 校验（TX 门禁 → 是否已呼叫 → TUNE/PTT 占用）→ 按 PTT 链路键控（`_claim_tx_owner_for_token` + `set_ptt(True)` + `start_tx()`）→ `cq_player.py` 以 20 ms 帧、设备队列低于 `CQ_LOW_WATER_FRAMES=4` 时投喂 `audio.feed_tx_audio()` → `stop_tx(graceful=True)` 排空尾音 → `set_ptt(False)` → 广播 `cqState{state:"complete"}`。再次按下 `cq:true`（或 `cq:false`）中止：**不排空**，立即松载波，`state:"aborted"` + `reason`。 |
+| Alternatives | ①**浏览器播放**（`/WSaudioTX` 上传 CQ 音频，同兄弟项目 `mrrc`）：后台标签页被节流、断网即断播、三端（Web/iOS/Android）各写一遍；②**完整 TX 源多路复用器**（mic/CQ/录音回放统一抽象）：把改动引入安全关键路径，回归面最大；③服务端播放 + 最小侵入（采纳）。 |
+| Consequences | 录音随服务端一起打包（`static/audio/cq.wav`，`MRRC_CQ_FILE` 可替换），所有客户端零代码即可用；CQ 期间浏览器麦克风帧被丢弃并计数（`_tx_cq_mic_drops`），避免两种人声混进同一发射；CQ 与 TUNE/PTT 互斥；发起端断线、最后一个客户端断线、外部松键（看门狗/TUNE）、服务端退出都会立即终止呼叫；`MRRC_PTT_MAX_TX_SECONDS` 依旧生效。代价：一个新增的 TX 源标记（`tx_source` 语义落在 `_cq_player.is_calling`），以及 CQ 音频不经过 Opus 链路（服务端直接用 48 kHz PCM）。 |
+
+**Problem**: 呼叫 CQ 是每次通联都要做的重复动作：按住 PTT、对准话筒、念完一整套呼号与"Listening"。远程操作时这套动作最容易出问题——说话时麦克风增益、网络抖动、忘记松 PTT。现场反馈（2026-09-13）希望「按一下就能 CQ」，且**每次发射必须有明确终点**。
+
+**Rationale**: 播放端放在服务端，则音频从磁盘到声卡全程不过网络，抖动与丢包都不影响发射内容；键控路径复用已现场验证的 PTT 释放架构（AD-007 的强制松键 + 15 章的七层防线），因此"忘记停止"这一类风险由既有防线兜底，而不是新写一套超时逻辑。前端只做状态镜像（`cqState`），多端天然一致。
+
+**Consequences**: `cq_player.py` 是纯音频/状态机模块（可脱机测试，不 import 硬件库）；服务端启动时若资产缺失/损坏/超长（>30 s）则以 **WARNING** 明确说明并禁用按键，绝不静默；`fullState.cq` 让中途刷新页面/重连的客户端也能看到进行中的呼叫。

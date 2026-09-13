@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 796" width="470" height="796" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
-  <!-- diagram-version: V2.46 -->
+  <!-- diagram-version: V2.49 -->
   <defs>
     <style>
       .panel { fill:#22262c; }
@@ -67,7 +67,7 @@
   <!-- Mic -->
   <text x="60" y="692" class="lbl">Mic</text>
   <rect x="100" y="684" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="684" width="100" height="8" rx="4" class="accent" opacity="0.7"/>
-  <text x="330" y="692" class="txt-sm" font-size="9.5">50</text>
+  <text x="330" y="692" class="txt-sm" font-size="9.5">51</text>
 
   <!-- 🎙 Vol -->
   <text x="60" y="734" class="lbl">🎙 Vol</text>
@@ -75,19 +75,19 @@
   <text x="330" y="734" class="txt-sm" font-size="9.5">100</text>
 
   <!-- Badges -->
-  <g><circle class="badge" cx="416" cy="84" r="10"/><text class="badge-txt" x="416" y="84">39</text></g>
-  <g><circle class="badge" cx="416" cy="132" r="10"/><text class="badge-txt" x="416" y="132">40</text></g>
-  <g><circle class="badge" cx="416" cy="180" r="10"/><text class="badge-txt" x="416" y="180">41</text></g>
-  <g><circle class="badge" cx="416" cy="228" r="10"/><text class="badge-txt" x="416" y="228">42</text></g>
-  <g><circle class="badge" cx="416" cy="276" r="10"/><text class="badge-txt" x="416" y="276">43</text></g>
-  <g><circle class="badge" cx="212" cy="466" r="10"/><text class="badge-txt" x="212" y="466">44</text></g>
-  <g><circle class="badge" cx="372" cy="466" r="10"/><text class="badge-txt" x="372" y="466">45</text></g>
-  <g><circle class="badge" cx="372" cy="508" r="10"/><text class="badge-txt" x="372" y="508">46</text></g>
-  <g><circle class="badge" cx="312" cy="556" r="10"/><text class="badge-txt" x="312" y="556">47</text></g>
-  <g><circle class="badge" cx="312" cy="598" r="10"/><text class="badge-txt" x="312" y="598">48</text></g>
-  <g><circle class="badge" cx="312" cy="640" r="10"/><text class="badge-txt" x="312" y="640">49</text></g>
-  <g><circle class="badge" cx="312" cy="682" r="10"/><text class="badge-txt" x="312" y="682">50</text></g>
-  <g><circle class="badge" cx="312" cy="724" r="10"/><text class="badge-txt" x="312" y="724">51</text></g>
+  <g><circle class="badge" cx="416" cy="84" r="10"/><text class="badge-txt" x="416" y="84">40</text></g>
+  <g><circle class="badge" cx="416" cy="132" r="10"/><text class="badge-txt" x="416" y="132">41</text></g>
+  <g><circle class="badge" cx="416" cy="180" r="10"/><text class="badge-txt" x="416" y="180">42</text></g>
+  <g><circle class="badge" cx="416" cy="228" r="10"/><text class="badge-txt" x="416" y="228">43</text></g>
+  <g><circle class="badge" cx="416" cy="276" r="10"/><text class="badge-txt" x="416" y="276">44</text></g>
+  <g><circle class="badge" cx="212" cy="466" r="10"/><text class="badge-txt" x="212" y="466">45</text></g>
+  <g><circle class="badge" cx="372" cy="466" r="10"/><text class="badge-txt" x="372" y="466">46</text></g>
+  <g><circle class="badge" cx="372" cy="508" r="10"/><text class="badge-txt" x="372" y="508">47</text></g>
+  <g><circle class="badge" cx="312" cy="556" r="10"/><text class="badge-txt" x="312" y="556">48</text></g>
+  <g><circle class="badge" cx="312" cy="598" r="10"/><text class="badge-txt" x="312" y="598">49</text></g>
+  <g><circle class="badge" cx="312" cy="640" r="10"/><text class="badge-txt" x="312" y="640">50</text></g>
+  <g><circle class="badge" cx="312" cy="682" r="10"/><text class="badge-txt" x="312" y="682">51</text></g>
+  <g><circle class="badge" cx="312" cy="724" r="10"/><text class="badge-txt" x="312" y="724">52</text></g>
 
   <text x="235" y="778" class="cap" text-anchor="middle">图 2 · 左侧抽屉菜单（点 ☰ 打开）控件编号图</text>
 </svg>

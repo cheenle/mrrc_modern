@@ -217,7 +217,8 @@
         "require": [
           "16 kHz",
           "AD-017",
-          "48 kHz"
+          "48 kHz",
+          "AD-020"
         ]
       },
       {
@@ -233,7 +234,8 @@
         "require": [
           "LAYER 0",
           "MRRC_ALLOW_UNVERIFIED_TX",
-          "releases are never gated"
+          "releases are never gated",
+          "AD-020"
         ]
       },
       {
@@ -259,7 +261,8 @@
         "path": "docs/images/ui-guide-main.svg",
         "require": [
           "REC",
-          "PTT"
+          "PTT",
+          "CQ"
         ]
       },
       {

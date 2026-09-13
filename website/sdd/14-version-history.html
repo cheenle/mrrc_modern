@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.49</td>
+<td>2026-09-13</td>
+<td>Claude</td>
+<td><strong>一键 CQ 按键（服务端一次性自动化发射）。</strong> 需求：远程呼叫 CQ 每次都要按住 PTT 念一整套呼号，现场反馈要「按一下就能 CQ」，且每次发射必须有明确终点。选型对比三条路（浏览器播放 / 完整 TX 源多路复用器 / 服务端播放+最小侵入），<strong>采纳服务端播放</strong>：音频从磁盘到声卡不经过网络，键控路径复用已现场验证的 PTT 释放架构，前端只镜像状态。新增 <code class="scope-code">cq_player.py</code>（WAV 解析→48 kHz 单声道归一化→20 ms 分帧→按设备队列深度投喂，队列低于 4 帧才喂下一帧，绝不制造 <code class="scope-code">queue_drops</code>），服务端接线（<code class="scope-code">_cq_key</code>/<code class="scope-code">_cq_unkey</code> 镜像 PTT 链路、CQ 期间麦克风帧丢弃计数、发起端断线/退出立即中止、与 TUNE/PTT 互斥），前端 <code class="scope-code">#btn-cq</code>（绿=呼叫，呼叫中变 STOP）+ <code class="scope-code">cqState</code> 广播（1 Hz 进度）与 <code class="scope-code">fullState.cq</code>。<strong>实现期抓到的两个真缺陷</strong>：①启动日志对 <code class="scope-code">frames</code> 计数用了 <code class="scope-code">len()</code> → 有效资产的服务器<strong>启动直接失败</strong>（单元测试全绿也发现不了，真机启动才暴露，已加回归测试）；②TX 门禁检查顺序在资产检查之后 → 未验证机型会看到「资产未加载」而不是门禁说明。文档：AD-020、§9.2 协议表、§15 第 8 层防线、§12 运维流程（含「如何替换 CQ 录音」）。</td>
+</tr>
+<tr>
 <td>SDD V2.48</td>
 <td>2026-09-13</td>
 <td>Claude</td>
@@ -625,7 +631,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.48 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.49 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

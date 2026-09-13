@@ -16,11 +16,13 @@ Control channel. Carries all radio commands, state updates, and memory managemen
 - `{"type":"stateUpdate","fields":{...},"dirty":[...]}` — partial changed-field update
 - `{"type":"value","field":"...","value":...}` — single-value query response
 - `{"type":"memChannels","channels":[...]}` — memory channel broadcast
+- `{"type":"recordingState","recording":{...}}` — server-side QSO recording snapshot (AD-017), broadcast on change
+- `{"type":"cqState","cq":{...}}` — one-shot CQ call snapshot (AD-020): `state` = `idle|calling|complete|aborted`, plus `frames_sent`/`frames_total`/`started_by`/`reason`; broadcast on change and at 1 Hz while calling
 - `{"type":"pong"}` — keepalive response
 
 **Client → Server:**
 
-- `{"type":"set","field":"...","value":...}` — command (40+ supported fields)
+- `{"type":"set","field":"...","value":...}` — command (40+ supported fields, incl. `recording` and `cq`)
 - `{"type":"get","field":"..."}` — query current value
 - `{"type":"memSave","channels":[...]}` — save memory channels
 - `{"type":"memDelete","index":N}` — delete memory slot

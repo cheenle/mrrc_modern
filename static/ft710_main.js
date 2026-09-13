@@ -445,6 +445,11 @@ function handleMessage(msg) {
 				);
 				renderMemoryChannels();
 			}
+			if (msg.cq) {
+				// A call started before this page loaded (or a reconnect) is
+				// rendered from the fullState snapshot.
+				radioState.cq = msg.cq;
+			}
 			radioState.ws_connected = true;
 			// Hide controls the radio lacks / rebuild model-specific selects
 			// BEFORE the first render pass so labels come up correct.
@@ -500,6 +505,14 @@ function handleMessage(msg) {
 				);
 				renderMemoryChannels();
 			}
+			break;
+
+		case "cqState":
+			// Server-side CQ call (spec 2026-09-13 §5): the snapshot is
+			// authoritative so two browsers always agree, and a reload during
+			// a call resumes rendering it rather than inventing a local timer.
+			radioState.cq = msg.cq || { state: "idle" };
+			if (typeof renderCqState === "function") renderCqState();
 			break;
 
 		case "recordingState":

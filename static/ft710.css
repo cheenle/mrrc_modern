@@ -326,6 +326,22 @@ a { color: var(--accent); text-decoration: none; }
 .record-button:disabled {
     opacity: 0.45; cursor: default; box-shadow: none;
 }
+/* CQ key: green = "call".  Distinguishable at a glance from TUNE (amber)
+   and REC (red); while calling the button becomes the STOP control. */
+.cq-button {
+    flex: 1; min-width: 60px; font-size: 13px; font-weight: 700;
+    background: var(--bg-card); color: var(--success);
+    border: 1px solid var(--success); border-radius: var(--radius-md);
+    padding: 8px 12px; min-height: 60px;
+}
+.cq-button:active, .cq-button.cq-active {
+    background: var(--success); color: #06210f; border-color: var(--success);
+    box-shadow: 0 0 14px rgba(34, 197, 94, 0.5);
+}
+.cq-button:disabled {
+    opacity: 0.45; cursor: default; box-shadow: none;
+    color: var(--text-muted); border-color: var(--border);
+}
 
 /* ── Off-Canvas Menu ────────────────────────────────────────────── */
 .off-canvas-menu {

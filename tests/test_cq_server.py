@@ -277,3 +277,63 @@ class CqStateTests(_CqServerTestCase):
     async def test_broadcast_is_a_noop_without_clients(self):
         with mock.patch.object(server, "ctrl_clients", set()):
             await self.real_broadcast_cq_state()                # real function
+
+    async def test_ptt_is_refused_while_calling(self):
+        player = mock.MagicMock()
+        player.is_calling = True
+        server._cq_player = player
+        await server._execute_set_command("ptt", True, self.ws)
+        self.assertEqual(self.cat.calls, [])                  # nothing keyed
+        self.assertTrue(any("cq" in e.lower() for e in self.ws.errors()), self.ws.errors())
+
+
+class CqFrontendContractTests(unittest.TestCase):
+    """The browser side of the CQ key (spec 2026-09-13 §5).
+
+    Source assertions, not DOM tests: the UI is classic <script> files with
+    cross-file globals, so behaviour is pinned through the contracts the CQ
+    state machine depends on (button wiring, ingestion, rendering).
+    """
+
+    def _read(self, *parts):
+        from pathlib import Path
+        return (Path(__file__).resolve().parents[1].joinpath(*parts)
+                .read_text(encoding="utf-8"))
+
+    def test_cq_button_sits_next_to_tune_and_record(self):
+        source = self._read("static", "index.html")
+        footer = source[source.index('<footer class="ptt-footer">'):
+                        source.index("</footer>", source.index('<footer class="ptt-footer">'))]
+        self.assertIn('id="btn-cq"', footer)
+        self.assertLess(footer.index('id="btn-cq"'), footer.index('id="btn-tune"'))
+
+    def test_button_sends_the_cq_command(self):
+        ui = self._read("static", "ft710_ui.js")
+        self.assertIn("btn-cq", ui)
+        self.assertIn("sendCommand('cq'", ui)
+
+    def test_main_js_ingests_cq_state_and_full_state(self):
+        main = self._read("static", "ft710_main.js")
+        self.assertIn('case "cqState"', main)
+        self.assertIn("radioState.cq", main)
+        self.assertIn("msg.cq", main)                 # fullState snapshot
+        self.assertIn("renderCqState", main)
+
+    def test_renderer_has_the_four_states(self):
+        ui = self._read("static", "ft710_ui.js")
+        body = ui[ui.index("function renderCqState("):]
+        body = body[:body.index("\nfunction ")]
+        self.assertIn("cq-active", body)
+        self.assertIn("calling", body)
+        self.assertIn("complete", body)
+        self.assertIn("aborted", body)
+
+    def test_button_is_disabled_on_a_gated_model(self):
+        ui = self._read("static", "ft710_ui.js")
+        self.assertIn("btn-cq", ui)
+        self.assertIn("tx_gated", ui)
+
+    def test_styles_exist(self):
+        css = self._read("static", "ft710.css")
+        self.assertIn(".cq-button", css)
+        self.assertIn(".cq-button.cq-active", css)

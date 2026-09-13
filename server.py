@@ -1585,6 +1585,14 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "ptt":
             tx = value is True or str(value).lower() == "true"
+            if tx and _cq_player.is_calling:
+                # The CQ player owns the carrier; a manual key-up would key a
+                # second source into the same transmission (spec §6).
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "CQ call in progress — press CQ to stop it first",
+                }))
+                return
             if tx and backend is not None and backend.capabilities.tx_gated:
                 # Refused before any CAT write. The backend guard stays as
                 # defense in depth (iOS/Android/ATR paths do not come

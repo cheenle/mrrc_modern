@@ -513,6 +513,7 @@ function renderPTTState() {
     // server-driven stateUpdate / the PTT watchdog's forced-RX path.
     if (typeof _applyAfGainToAudioNode === 'function') _applyAfGainToAudioNode();
     renderRecordingState();
+    renderCqState();
 }
 
 // ── REC button: server-side session (spec 2026-09-12 §7) ─────────────
@@ -531,6 +532,51 @@ function renderRecordingState() {
         ? '服务端录制中（RX+TX，MP3 16 kHz）· 已录 ' + _formatDuration(rec.duration || 0)
             + (dropped ? ' · ⚠ 已丢 ' + dropped + ' 块（请检查磁盘/负载）' : '')
         : '服务端录制：点击开始，录音保存在服务端并可回放/下载';
+}
+
+// ── CQ button: server-side one-shot call (spec 2026-09-13 §5) ────────
+// The server plays the recording and owns the carrier, so the button only
+// mirrors `cqState` — every client sees the same call, and a page reload
+// during a call resumes rendering it instead of inventing a local timer.
+function renderCqState() {
+    const cqBtn = document.getElementById('btn-cq');
+    if (!cqBtn) return;
+    const cq = (radioState && radioState.cq) || { state: 'idle' };
+    const calling = cq.state === 'calling';
+    const gated = !!(radioCapabilities && radioCapabilities.tx_gated);
+    cqBtn.disabled = gated && !calling;
+    cqBtn.classList.toggle('cq-active', calling);
+    cqBtn.textContent = calling ? 'STOP' : 'CQ';
+    let title;
+    if (gated) {
+        title = '此型号未经过发射验证，CQ 已禁用（服务端可用 MRRC_ALLOW_UNVERIFIED_TX=1 解除）';
+    } else if (calling) {
+        title = 'CQ 呼叫中 · 已播 ' + (cq.frames_sent || 0) + ' 帧'
+            + (cq.started_by ? ' · 发起端 ' + cq.started_by : '')
+            + ' · 点击停止（立即松开载波）';
+    } else if (cq.state === 'complete') {
+        title = 'CQ 呼叫已完成 · 点击再次呼叫';
+    } else if (cq.state === 'aborted') {
+        title = 'CQ 已中止（' + _cqReasonText(cq.reason) + '） · 点击再次呼叫';
+    } else {
+        title = '一键 CQ：服务端自动按 PTT、播送内置 CQ 录音并松开（再次点击可重复）';
+    }
+    cqBtn.title = title;
+    // While the CQ player owns the carrier a manual key-up is refused by the
+    // server (spec §6); the button reflects that instead of fighting it.
+    const pttBtn = document.getElementById('btn-ptt');
+    if (pttBtn) pttBtn.disabled = calling;
+}
+
+function _cqReasonText(reason) {
+    switch (reason) {
+        case 'aborted_by_user': return '手动停止';
+        case 'client_gone': return '发起端已断开';
+        case 'unkeyed': return '载波被外部释放';
+        case 'shutdown': return '服务端退出';
+        case 'watchdog': return '超过最大发射时长';
+        default: return reason || '未知原因';
+    }
 }
 
 function _formatDuration(seconds) {
@@ -1604,6 +1650,16 @@ function initUI() {
     tuneBtn.addEventListener('touchend', (e) => { e.preventDefault(); tuneEnd(); });
     tuneBtn.addEventListener('mouseleave', tuneEnd);
     tuneBtn.addEventListener('touchcancel', tuneEnd);
+
+    // CQ button (one-shot call)
+    const cqBtn = document.getElementById('btn-cq');
+    if (cqBtn) {
+        cqBtn.addEventListener('click', function() {
+            const cq = (radioState && radioState.cq) || { state: 'idle' };
+            sendCommand('cq', cq.state !== 'calling');
+        });
+        renderCqState();
+    }
 
     // RX recording button
     const recordBtn = document.getElementById('btn-record');

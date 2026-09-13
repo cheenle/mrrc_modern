@@ -235,6 +235,48 @@ def _http(url: str, method: str = "GET") -> Tuple[int, Dict[str, str], bytes]:
         return 0, {"error": str(exc)}, b""
 
 
+def check_published_completeness() -> List[Tuple[str, str, str]]:
+    """Every page/asset the site is built from must be published, byte for byte.
+
+    Catches the "generated but never deployed" direction of the drift problem:
+    the site builders write ~40 files (16 SDD pages, 10 diagrams, the UI
+    diagrams, the landing pages), and a forgotten deploy used to be invisible
+    until a reader noticed an old page.
+    """
+    site = ROOT / "website"
+    targets: List[Path] = []
+    for rel_dir in ("sdd", "images"):
+        d = site / rel_dir
+        if d.is_dir():
+            targets += [f for f in sorted(d.rglob("*")) if f.is_file()
+                        and f.suffix in (".html", ".svg", ".css", ".js")]
+    for name in ("index.html", "zh/index.html", "guide.html", "zh/guide.html",
+                 "sdd.html", "zh/sdd.html"):
+        f = site / name
+        if f.exists():
+            targets.append(f)
+
+    out: List[Tuple[str, str, str]] = []
+    published = mismatched = 0
+    for path in targets:
+        rel = path.relative_to(site).as_posix()
+        status, headers, _ = _http(f"{SITE}/{rel}", method="HEAD")
+        if status != 200:
+            out.append((FAIL, f"published:{rel}", f"{rel} -> HTTP {status}"))
+            continue
+        length = headers.get("Content-Length")
+        if length is not None and length != str(path.stat().st_size):
+            out.append((FAIL, f"published:{rel}",
+                        f"{rel}: published {length} bytes != built {path.stat().st_size}"))
+            mismatched += 1
+        else:
+            published += 1
+    if not [r for r in out if r[0] == FAIL]:
+        out.append((PASS, "published-complete",
+                    f"{published} generated pages/assets published with matching sizes"))
+    return out
+
+
 def check_online(registry: dict, app: str, sdd: str,
                  deep: bool = False) -> List[Tuple[str, str, str]]:
     out: List[Tuple[str, str, str]] = []
@@ -325,6 +367,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                + check_diagrams(registry, sdd))
     if args.online:
         results += check_online(registry, app, sdd, deep=args.deep)
+        results += check_published_completeness()
 
     failures = [r for r in results if r[0] == FAIL]
     if args.json:

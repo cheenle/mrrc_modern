@@ -155,6 +155,24 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
     find /var/www/vlsc.net/mrrc_modern -type f -name "*.css" -exec sudo chmod 644 {} \;
     find /var/www/vlsc.net/mrrc_modern -type f -name "*.js" -exec sudo chmod 644 {} \; 2>/dev/null || true
     find /var/www/vlsc.net/mrrc_modern/downloads -type f -name "*.exe" -exec sudo chmod 644 {} \; 2>/dev/null || true
+      # Prune files the repo no longer has. Extraction only overwrites, so a
+      # removed page or diagram used to stay published forever (found when three
+      # diagrams from a *different* project were deleted from the repo and kept
+      # serving).  Scope is limited to the generated trees on purpose:
+      # downloads/ and videos/ are server-managed and never touched.
+      TARBALL=$(ls -1t /var/tmp/mrrc_modern_website_*.tar.gz | head -1)
+      tar -tzf "$TARBALL" | sed 's|^\./||' | grep -E '^(sdd|images)/' | sort -u > /var/tmp/_deployed_list.txt
+      for dir in sdd images; do
+          if [ -d "/var/www/vlsc.net/mrrc_modern/$dir" ]; then
+              find "/var/www/vlsc.net/mrrc_modern/$dir" -type f \
+                  | sed 's|^/var/www/vlsc.net/mrrc_modern/||' | sort > /var/tmp/_on_disk.txt
+              comm -23 /var/tmp/_on_disk.txt /var/tmp/_deployed_list.txt > /var/tmp/_stale_list.txt
+              while read -r stale; do
+                  [ -n "$stale" ] && sudo rm -f "/var/www/vlsc.net/mrrc_modern/$stale" && echo "pruned $stale"
+              done < /var/tmp/_stale_list.txt
+          fi
+      done
+      sudo rm -f /var/tmp/_deployed_list.txt /var/tmp/_on_disk.txt /var/tmp/_stale_list.txt
     rm -f "/var/tmp/mrrc_modern_website_"*.tar.gz
     sudo nginx -t
     sudo systemctl reload nginx

@@ -180,6 +180,45 @@ class DiagramRuleTests(unittest.TestCase):
         self.assertTrue(any(r[0] == rc.FAIL and "differs" in r[2] for r in results), results)
 
 
+class PublishAuditTests(unittest.TestCase):
+    """The "generated but never deployed" direction of the drift problem."""
+
+    def test_matching_size_is_reported_as_published(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "website/sdd").mkdir(parents=True)
+            page = root / "website/sdd/x.html"
+            page.write_text("<html>ok</html>", encoding="utf-8")
+            size = str(page.stat().st_size)
+            with mock.patch.object(rc, "ROOT", root), \
+                 mock.patch.object(rc, "_http", return_value=(200, {"Content-Length": size}, b"")):
+                results = rc.check_published_completeness()
+        self.assertEqual([r for r in results if r[0] == rc.FAIL], [])
+
+    def test_stale_published_size_is_a_failure(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "website/sdd").mkdir(parents=True)
+            (root / "website/sdd/x.html").write_text("<html>new</html>", encoding="utf-8")
+            with mock.patch.object(rc, "ROOT", root), \
+                 mock.patch.object(rc, "_http", return_value=(200, {"Content-Length": "5"}, b"")):
+                results = rc.check_published_completeness()
+        self.assertTrue(any(r[0] == rc.FAIL and "!= built" in r[2] for r in results), results)
+
+    def test_missing_page_is_a_failure(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "website/sdd").mkdir(parents=True)
+            (root / "website/sdd/x.html").write_text("<html>x</html>", encoding="utf-8")
+            with mock.patch.object(rc, "ROOT", root), \
+                 mock.patch.object(rc, "_http", return_value=(404, {}, b"")):
+                results = rc.check_published_completeness()
+        self.assertTrue(any(r[0] == rc.FAIL and "HTTP 404" in r[2] for r in results), results)
+
+
 class ReportTests(unittest.TestCase):
     def test_report_lists_failures_and_manual_review(self):
         registry = json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8"))

@@ -281,19 +281,17 @@ def _log_recording_readiness() -> None:
 
 
 def _log_cq_readiness() -> None:
-    """Report CQ-asset readiness at startup (missing/corrupt file, bad length).
+    """Warn at startup when the CQ key is unavailable (missing/corrupt asset).
 
-    The CQ key is optional, but pressing it must never fail silently: the
-    operator needs to see *why* before the button is pressed (same reasoning
-    as the recording readiness check).
+    The ready case is announced by ``CQPlayer.load()`` itself, so this only
+    adds the actionable half: *why* it is disabled and the env var that fixes
+    it.  Pressing CQ must never fail silently (same reasoning as the
+    recording readiness check).
     """
-    if _cq_player.ready:
-        logger.info("CQ ready: %s (%.1fs, %d frames of 20 ms)",
-                    CQ_ASSET_PATH, _cq_player.duration_s,
-                    len(_cq_player.frames))
-    else:
+    if not _cq_player.ready:
         logger.warning("CQ key disabled: %s — set MRRC_CQ_FILE to a "
-                       "16-bit WAV file and restart.", _cq_player.unavailable_reason)
+                       "16-bit WAV file and restart.",
+                       _cq_player.unavailable_reason)
 
 
 def _recording_should_capture_rx() -> bool:

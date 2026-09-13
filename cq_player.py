@@ -73,6 +73,16 @@ class CQPlayer:
     def unavailable_reason(self) -> str:
         return self._reason
 
+    @property
+    def frames(self) -> int:
+        """Number of 20 ms frames in the loaded asset (0 when not loaded)."""
+        return len(self._frames)
+
+    @property
+    def duration_s(self) -> float:
+        """Playback length of the loaded asset in seconds."""
+        return round(len(self._frames) * _TICK_S, 3)
+
     def load(self) -> bool:
         """Read + normalise the asset. False (with a reason) on any failure."""
         path = self._asset_path

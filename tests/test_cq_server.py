@@ -5,6 +5,7 @@ interlocks (microphone exclusivity, disconnect abort, forced RX), the key/unkey
 sequence and the state broadcast — all without hardware.
 """
 
+import asyncio
 import json
 import unittest
 from unittest import mock
@@ -337,3 +338,64 @@ class CqFrontendContractTests(unittest.TestCase):
         css = self._read("static", "ft710.css")
         self.assertIn(".cq-button", css)
         self.assertIn(".cq-button.cq-active", css)
+
+
+class CqEndToEndTests(_CqServerTestCase):
+    """One full call through the real player, the real key/unkey callbacks and
+    the real bundled asset — the wiring the unit mocks cannot prove."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        import config
+        server._cq_player = server.CQPlayer(
+            asset_path=config.CQ_ASSET_PATH,
+            audio=self.audio,
+            key=server._cq_key,
+            unkey=server._cq_unkey,
+            is_transmitting=lambda: bool(server.radio.is_transmitting),
+            on_change=lambda snap: self.broadcast(),
+        )
+        self.assertTrue(server._cq_player.load())
+        # Play only the first 100 ms: the real asset is validated by
+        # test_bundled_asset_is_usable, timing is not what this class checks.
+        server._cq_player._frames = server._cq_player._frames[:5]
+
+    async def test_full_call_keys_plays_and_releases(self):
+        await server._execute_set_command("cq", True, self.ws)
+        player = server._cq_player
+        await asyncio.wait_for(player.wait_finished(), timeout=5.0)
+        self.assertEqual(self.cat.calls, [("ptt", True), ("ptt", False)])
+        self.assertEqual(len(self.audio.frames), 5)           # every frame fed
+        self.assertEqual(self.audio.calls,
+                         [("start_tx",), ("stop_tx", True)])   # graceful drain
+        self.assertEqual(self.radio.tx_status, 0)
+        snap = player.status()
+        self.assertEqual(snap["state"], "complete")
+        self.assertEqual(snap["frames_sent"], snap["frames_total"])
+        self.assertEqual(self.ws.errors(), [])                 # no complaints
+
+    async def test_abort_releases_without_draining(self):
+        await server._execute_set_command("cq", True, self.ws)
+        await asyncio.sleep(0.05)
+        await server._execute_set_command("cq", False, self.ws)
+        self.assertEqual(server._cq_player.status()["state"], "aborted")
+        self.assertIn(("stop_tx", False), self.audio.calls)    # immediate cut
+        self.assertEqual(self.radio.tx_status, 0)
+
+    async def test_bundled_asset_is_usable(self):
+        """The shipped recording must load — otherwise the key is dead on air."""
+        import config
+        player = server.CQPlayer(asset_path=config.CQ_ASSET_PATH)
+        self.assertTrue(player.load(), msg=player.unavailable_reason)
+        self.assertGreater(player.duration_s, 4.0)             # a real exchange
+        self.assertLess(player.duration_s, 15.0)               # not a runaway
+        self.assertGreater(player.frames, 200)          # ~6.1 s of audio
+
+    async def test_readiness_logging_survives_both_states(self):
+        """A real boot crashed here once (len() on the frames count)."""
+        import config
+        server._cq_player = server.CQPlayer(asset_path=config.CQ_ASSET_PATH)
+        server._cq_player.load()
+        server._log_cq_readiness()                       # ready: no-op
+        server._cq_player = server.CQPlayer(asset_path=None)
+        server._log_cq_readiness()                       # disabled: warns

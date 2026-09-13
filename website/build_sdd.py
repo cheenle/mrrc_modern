@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Convert SDD markdown files to styled HTML pages (Scope.css design system)."""
-import subprocess, sys, os, re
+import subprocess, sys, os, re, shutil
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -240,6 +240,29 @@ def convert(md_path: Path) -> str:
     return result.stdout.strip()
 
 
+def copy_diagrams() -> int:
+    """Copy SDD/diagrams into the generated site tree.
+
+    The diagrams used to be maintained as manual copies under
+    website/sdd/diagrams, which silently diverged (and shipped a diagram from a
+    different project).  The SDD tree is now the single source: the site copy is
+    generated, so a diagram update is one file edit plus a rebuild.
+    """
+    src = SDD_DIR / "diagrams"
+    dst = OUT_DIR / "diagrams"
+    if not src.is_dir():
+        return 0
+    dst.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for svg in sorted(src.glob("*.svg")):
+        shutil.copyfile(svg, dst / svg.name)
+        copied += 1
+    for stale in sorted(dst.glob("*.svg")):          # drop removed diagrams
+        if not (src / stale.name).exists():
+            stale.unlink()
+    return copied
+
+
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for md_name, html_name, title in FILES:
@@ -251,7 +274,8 @@ def main():
         body = convert(md_path)
         page = build_page(body, title, html_name)
         (OUT_DIR / html_name).write_text(page, encoding="utf-8")
-    print(f"\nDone. {len(FILES)} pages written to {OUT_DIR}")
+    copied = copy_diagrams()
+    print(f"\nDone. {len(FILES)} pages and {copied} diagrams written to {OUT_DIR}")
 
 
 if __name__ == "__main__":

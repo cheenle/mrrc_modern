@@ -60,6 +60,25 @@ def sdd_version(registry: dict) -> Optional[str]:
     return _first_match(src["path"], src["pattern"])
 
 
+def recent_sdd_versions(registry: dict, count: int = 3) -> List[str]:
+    """The newest ``count`` SDD versions from the version-history table.
+
+    Diagrams may lag a release or two behind (redrawing all of them for a
+    documentation-only change is busywork), but "19 versions stale" is what this
+    check exists to prevent.
+    """
+    src = registry.get("sdd_version_source")
+    if not src:
+        return []
+    path = ROOT / src["path"]
+    if not path.exists():
+        return []
+    found = re.findall(src["pattern"], path.read_text(encoding="utf-8",
+                                                     errors="replace"),
+                       re.MULTILINE)
+    return [v if str(v).startswith("V") else f"V{v}" for v in found[:count]]
+
+
 # ── Rule evaluation ─────────────────────────────────────────────────
 
 def check_rules(registry: dict, app: str, sdd: str) -> List[Tuple[str, str, str]]:
@@ -144,6 +163,60 @@ def check_stale_tokens(registry: dict, app: str) -> List[Tuple[str, str, str]]:
         out.append((PASS, "stale-tokens",
                     f"{len(registry['stale_tokens']['scope'])} current-facing files "
                     "reference only the current release"))
+    return out
+
+
+def check_diagrams(registry: dict, sdd: str) -> List[Tuple[str, str, str]]:
+    """Design diagrams: version marker + the keywords of what they depict.
+
+    A picture is a design artifact like a chapter: when a capability changes,
+    the diagram must change with it.  The per-file keyword lists are what makes
+    that automatic — a new backend family or a removed feature fails the check
+    until the diagram is redrawn.
+    """
+    spec = registry.get("diagrams")
+    if not spec:
+        return []
+    out: List[Tuple[str, str, str]] = []
+    for entry in spec["files"]:
+        path = ROOT / entry["path"]
+        if not path.exists():
+            out.append((FAIL, f"diagram:{path.name}", f"{entry['path']} is missing"))
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        problems = []
+        accepted = recent_sdd_versions(registry,
+                                       registry.get("diagrams", {}).get("max_versions_behind", 2) + 1)
+        marker = re.search(r"diagram-version:\s*(V[0-9.]+)", text)
+        if marker is None:
+            problems.append("no diagram-version marker")
+        elif accepted and marker.group(1) not in accepted:
+            problems.append(f"diagram-version {marker.group(1)} is older than {accepted}")
+        missing = [kw for kw in entry["require"] if kw not in text]
+        if missing:
+            problems.append(f"does not mention {missing}")
+        out.append((FAIL, f"diagram:{path.name}", f"{entry['path']}: " + "; ".join(problems))
+                   if problems else
+                   (PASS, f"diagram:{path.name}",
+                    f"{entry['path']}: {sdd} marker + {len(entry['require'])} keyword(s)"))
+
+    # generated copies must match their source tree byte for byte
+    for src_rel, dst_rel in spec["source_dirs"].items():
+        src, dst = ROOT / src_rel, ROOT / dst_rel
+        if not src.is_dir():
+            continue
+        for svg in sorted(src.glob("*.svg")):
+            copy = dst / svg.name
+            if not copy.exists():
+                out.append((FAIL, f"diagram-copy:{svg.name}",
+                            f"{dst_rel}/{svg.name} is missing (run the site builders)"))
+            elif copy.read_bytes() != svg.read_bytes():
+                out.append((FAIL, f"diagram-copy:{svg.name}",
+                            f"{dst_rel}/{svg.name} differs from {src_rel}/{svg.name} "
+                            "— regenerate instead of editing the copy"))
+    if not [r for r in out if r[0] == FAIL]:
+        out.append((PASS, "diagram-copies",
+                    "every generated diagram copy matches its source"))
     return out
 
 
@@ -248,7 +321,8 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     results = (check_rules(registry, app, sdd)
                + check_artifact_facts(registry, app)
-               + check_stale_tokens(registry, app))
+               + check_stale_tokens(registry, app)
+               + check_diagrams(registry, sdd))
     if args.online:
         results += check_online(registry, app, sdd, deep=args.deep)
 

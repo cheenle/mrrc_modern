@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 840" width="470" height="840" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" data-diagram-version="V2.46" viewBox="0 0 470 840" width="470" height="840" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <!-- diagram-version: V2.46 -->
   <defs>
     <style>
       .phone { fill:#111418; stroke:#3a3f47; stroke-width:3; }

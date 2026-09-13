@@ -178,6 +178,10 @@
 </tbody>
 </table>
 <p><strong>Removed layer — Triple TX0 Verify (removed in V1.2, 2026-07-08):</strong> earlier releases queried <code class="scope-code">TX;</code> three times at 200ms intervals after every release and re-sent <code class="scope-code">TX0;</code> on non-zero. This added ~600ms to every release, and field observation showed the radio obeys <code class="scope-code">TX0;</code> on the first write (fire-and-forget). Stuck-keyup detection is now covered by the server-side TX-status poll (500ms) feeding the browser PTT watchdog (Layer 3).</p>
+<figure>
+<img src="diagrams/ptt-safety-architecture.svg" alt="PTT Safety Layers" />
+<figcaption aria-hidden="true">PTT Safety Layers</figcaption>
+</figure>
 <h2 id="layer-details">15.2 Layer Details</h2>
 <p><strong>Layer 0 (V2.41, extended V2.46): unverified-model transmit gate.</strong> Before any of the layers below can key the radio, the active backend’s <code class="scope-code">set_ptt(True)</code>/<code class="scope-code">set_tune(True)</code> refuse when the model profile is not hardware-verified (<code class="scope-code">IC7300Backend</code> for IC-705/IC-7610/IC-7760, <code class="scope-code">YaesuBackend</code> for FTDX10/FTDX101D/FTDX101MP/FTX-1F) unless <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> is set; the refusal is logged once per process and PTT <strong>releases are never gated</strong>, so the layers below can always unkey. See AD-019.</p>
 <h3 id="layer-1-touch-and-hold-ux">Layer 1: Touch-and-Hold UX</h3>
@@ -341,7 +345,7 @@ Emergency Paths:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.46 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.47 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

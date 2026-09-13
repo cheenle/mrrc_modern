@@ -1,11 +1,80 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 280">
-  <style>text{font-family:Inter,-apple-system,sans-serif}.h{fill:#f0a030;font-size:11px;font-weight:600}.t{fill:#e0e0e0;font-size:10px}.m{fill:#888;font-size:9px}</style>
-  <rect x="16" y="12" width="190" height="54" rx="6" fill="#f0a03014" stroke="#f0a03044"/><text x="111" y="30" text-anchor="middle" class="h">ClientSession</text><text x="111" y="46" text-anchor="middle" class="m">WS memberships + UI state</text>
-  <rect x="222" y="12" width="190" height="54" rx="6" fill="#5dade214" stroke="#5dade244"/><text x="317" y="30" text-anchor="middle" class="h">RadioControl</text><text x="317" y="46" text-anchor="middle" class="m">CAT: freq/mode/PTT/gains</text>
-  <rect x="428" y="12" width="190" height="54" rx="6" fill="#a78bfa14" stroke="#a78bfa44"/><text x="523" y="30" text-anchor="middle" class="h">ScopeSystem</text><text x="523" y="46" text-anchor="middle" class="m">FT4222 SPI + S-meter fallback</text>
-  <rect x="100" y="82" width="200" height="54" rx="6" fill="#22c55e14" stroke="#22c55e44"/><text x="200" y="100" text-anchor="middle" class="h">AudioSystem</text><text x="200" y="116" text-anchor="middle" class="m">PyAudio · Opus · WS fan-out</text>
-  <rect x="320" y="82" width="200" height="54" rx="6" fill="#e74c3c14" stroke="#e74c3c44"/><text x="420" y="100" text-anchor="middle" class="h">SpectrumDisplay</text><text x="420" y="116" text-anchor="middle" class="m">FFT · waterfall · S-meter</text>
-  <rect x="60" y="152" width="190" height="54" rx="6" fill="#f0a03014" stroke="#f0a03044"/><text x="155" y="170" text-anchor="middle" class="h">RadioState</text><text x="155" y="186" text-anchor="middle" class="m">Dirty-field change tracking</text>
-  <rect x="270" y="152" width="200" height="54" rx="6" fill="#5dade214" stroke="#5dade244"/><text x="370" y="170" text-anchor="middle" class="h">PollingSystem</text><text x="370" y="186" text-anchor="middle" class="m">7-task adaptive background poll</text>
-  <rect x="490" y="152" width="130" height="54" rx="6" fill="#88888814" stroke="#88888844"/><text x="555" y="170" text-anchor="middle" class="h">OpConfig</text><text x="555" y="186" text-anchor="middle" class="m">Port/auth/env</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300">
+  <!-- diagram-version: V2.46 -->
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:10px;font-weight:700}.m{fill:#999;font-size:9.5px}.s{fill:#777;font-size:9px}</style>
+
+  <text x="380" y="18" text-anchor="middle" class="b">Subject Area Model (SDD V2.46)</text>
+
+  <g>
+    <rect x="12" y="30" width="180" height="56" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
+    <text x="22" y="48" class="h">ClientSession</text>
+    <text x="22" y="64" class="m">WS memberships (5 channels)</text>
+    <text x="22" y="78" class="m">TX-uplink ownership · UI state</text>
+
+    <rect x="202" y="30" width="180" height="56" rx="9" fill="#5dade218" stroke="#5dade255"/>
+    <text x="212" y="48" class="h">RadioBackend</text>
+    <text x="212" y="64" class="m">10 registry keys → 3 families</text>
+    <text x="212" y="78" class="m">capabilities · poll items · gate</text>
+
+    <rect x="392" y="30" width="180" height="56" rx="9" fill="#5dade218" stroke="#5dade255"/>
+    <text x="402" y="48" class="h">ModelProfile</text>
+    <text x="402" y="64" class="m">modes/filters/bands/meters</text>
+    <text x="402" y="78" class="m">provenance · verified flag</text>
+
+    <rect x="582" y="30" width="166" height="56" rx="9" fill="#22c55e18" stroke="#22c55e55"/>
+    <text x="592" y="48" class="h">RadioControl</text>
+    <text x="592" y="64" class="m">CAT: freq/mode/PTT/gains</text>
+    <text x="592" y="78" class="m">memory channels · tuner</text>
+  </g>
+
+  <g>
+    <rect x="12" y="98" width="180" height="56" rx="9" fill="#a78bfa18" stroke="#a78bfa55"/>
+    <text x="22" y="116" class="h">RadioState</text>
+    <text x="22" y="132" class="m">dirty-field change tracking</text>
+    <text x="22" y="146" class="m">derived properties (band, S)</text>
+
+    <rect x="202" y="98" width="180" height="56" rx="9" fill="#a78bfa18" stroke="#a78bfa55"/>
+    <text x="212" y="116" class="h">PollingSystem</text>
+    <text x="212" y="132" class="m">7 tasks · 100 ms → 5 s</text>
+    <text x="212" y="146" class="m">skip-on-command · stale-read drop</text>
+
+    <rect x="392" y="98" width="180" height="56" rx="9" fill="#22c55e18" stroke="#22c55e55"/>
+    <text x="402" y="116" class="h">ScopeSystem</text>
+    <text x="402" y="132" class="m">FT4222 · CI-V 0x27 · none</text>
+    <text x="402" y="146" class="m">S-meter fallback · 30 Hz broadcast</text>
+
+    <rect x="582" y="98" width="166" height="56" rx="9" fill="#22c55e18" stroke="#22c55e55"/>
+    <text x="592" y="116" class="h">AudioSystem</text>
+    <text x="592" y="132" class="m">PyAudio · Opus · WS fan-out</text>
+    <text x="592" y="146" class="m">per-model device rate hints</text>
+  </g>
+
+  <g>
+    <rect x="12" y="166" width="180" height="70" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
+    <text x="22" y="184" class="h">RecordingSession</text>
+    <text x="22" y="200" class="m">active · started_at · freq_hz</text>
+    <text x="22" y="214" class="m">16 kHz mono timeline (RX+TX)</text>
+    <text x="22" y="228" class="m">bytes · cursor · drops</text>
+
+    <rect x="202" y="166" width="180" height="70" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
+    <text x="212" y="184" class="h">RecordingFile</text>
+    <text x="212" y="200" class="m">&lt;freq&gt;kHz_&lt;date&gt;_&lt;time&gt;.mp3</text>
+    <text x="212" y="214" class="m">duration · bytes · recording=true</text>
+    <text x="212" y="228" class="m">Range streaming · delete (409 while active)</text>
+
+    <rect x="392" y="166" width="180" height="70" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
+    <text x="402" y="184" class="h">TunerLinkage (optional)</text>
+    <text x="402" y="200" class="m">ATR1000 over its own WS</text>
+    <text x="402" y="214" class="m">learned LC store · tune assist</text>
+    <text x="402" y="228" class="m">default off: no client, no traffic</text>
+
+    <rect x="582" y="166" width="166" height="70" rx="9" fill="#e0e0e018" stroke="#e0e0e055"/>
+    <text x="592" y="184" class="h">OpConfig</text>
+    <text x="592" y="200" class="m">port · MODEL · baud · audio devices</text>
+    <text x="592" y="214" class="m">auth · TLS · recordings dir</text>
+    <text x="592" y="228" class="m">MRRC_* (+ legacy FT710_*)</text>
+  </g>
+
+  <text x="380" y="256" text-anchor="middle" class="m">A radio-originated change (CI-V transceive broadcast, front-panel knob) enters the same dirty-field path as a poll-driven change.</text>
+  <text x="380" y="272" text-anchor="middle" class="m">Unverified models carry their boundary in the data itself: ModelProfile.verified / unverified_meters / provenance → RadioCapabilities → TX gate + UI badge.</text>
+  <text x="380" y="290" text-anchor="middle" class="s">Spectrum and ATR1000 data deliberately stay outside RadioState (separate channels), so a slow producer cannot stall the state fan-out.</text>
 </svg>

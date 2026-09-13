@@ -290,6 +290,7 @@
 <li><a href="#安全须知请先阅读" id="toc-安全须知请先阅读">4. 安全须知（请先阅读）</a></li>
 <li><a href="#常见问题faq-2" id="toc-常见问题faq-2">5. 常见问题（FAQ）</a></li>
 <li><a href="#附界面元素与后台命令对照供高级用户排障" id="toc-附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</a></li>
+<li><a href="#qso-录音服务端v2.42-起" id="toc-qso-录音服务端v2.42-起">QSO 录音（服务端，v2.42 起）</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -1102,7 +1103,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>38</td>
 <td>REC</td>
 <td>把 <strong>RX 接收到的音频</strong>录成 MP3 文件（128 kbps，48 kHz 单声道）</td>
-<td>单击开始/再单击停止。<strong>录音在服务端进行</strong>（v2.42 起）：关闭标签页、甚至电台 CAT 断线都仍在录；文件存为 16 kHz 单声道 MP3，菜单 →「录音 Recordings」里可播放（支持拖动）、下载、删除，<strong>不自动删除</strong></td>
+<td>单击开始/再单击停止；停止时浏览器自动下载 <code>.mp3</code>。首次点击会现场加载约 500KB 的 MP3 编码器（<code>lame.js</code>），加载失败会提示「MP3 编码器加载失败」</td>
 </tr>
 </tbody>
 </table></div>
@@ -1376,6 +1377,27 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </table></div>
 <hr />
 <p><em>文档维护：与 <code>static/index.html</code>、<code>static/ft710_main.js</code>、<code>static/ft710_ui.js</code> 保持一致；界面改动后请同步本指南与编号图。</em></p>
+<h3 id="升级到含录音的版本与旧安装旧镜像的差异">升级到含录音的版本（与旧安装/旧镜像的差异）</h3>
+<p><code>requirements.txt</code> 在 v2.42 增加了 <strong><code>lameenc</code></strong>（服务端 MP3 编码器）。升级代码后<strong>必须同步依赖</strong>，否则 REC 会拒绝并提示原因（不会影响 CAT/音频/频谱）：</p>
+<pre class="bash"><code># 源码/脚本部署（start.sh 用的 venv/）
+venv/bin/pip install -r requirements.txt
+./restart.sh</code></pre>
+<p>启动日志会出现二者之一，据此判断是否就绪：</p>
+<pre><code>[INFO] mrrc: Recording ready: /opt/mrrc_modern/recordings (16 kHz mono MP3)
+[WARNING] mrrc: Recording disabled: the MP3 encoder is missing — run `pip install -r requirements.txt` …</code></pre>
+<p><strong>已烧录的树莓派镜像</strong>里没有 <code>lameenc</code>（镜像构建时该依赖还不存在）：在设备上执行 <code>venv/bin/pip install lameenc &amp;&amp; sudo systemctl restart mrrc-modern</code> 即可；或重新烧录由 v2.42 之后源码构建的新镜像（其构建门禁已含该依赖）。</p>
+<h2 id="qso-录音服务端v2.42-起">QSO 录音（服务端，v2.42 起）</h2>
+<p>点按 <strong>REC</strong> 开始录制、再点按停止。录制在<strong>服务端</strong>进行（不是浏览器）， 因此：页面切到后台/关闭标签、甚至电台 CAT 断线都仍在录。</p>
+<ul>
+<li>内容：接收音频 + 你的麦克风（单声道 MP3，16 kHz，64 kbps ≈ 28.8 MB/小时）。 发射期间不录接收（避免录到电台自监听），电台暂停处补静音，时间轴与真实时间一致。</li>
+<li>位置：<code>MRRC_RECORDINGS_DIR</code>（打包安装默认在用户数据目录； 树莓派镜像为 <code>/opt/mrrc_modern/recordings</code>；源码运行默认 <code>recordings/</code>）。</li>
+<li>回放：菜单 →「录音 Recordings」，列表里点「播放」（可拖动进度）， 也可「下载」或「删除」。<strong>正在录制的那一份不能删除</strong>。</li>
+<li>保留：<strong>不自动删除</strong>。面板顶部显示条数与总占用；磁盘紧张时请手工清理 （或把 <code>MRRC_RECORDINGS_DIR</code> 指向更大的卷）。</li>
+<li>保护：单次录音超过 <code>MRRC_RECORDINGS_MAX_SESSION_MIN</code>（默认 240 分钟）会自动停止 （只停，不删），防止忘记停止把磁盘写满。</li>
+</ul>
+<h3 id="录音出现丢失-n-块怎么办">录音出现”丢失 N 块”怎么办</h3>
+<p>录制按钮提示或面板行里出现 <code>⚠ 丢失 N 块</code>，表示<strong>写入端跟不上音频输入</strong>，该录音会有空洞。服务端日志会打印首条丢弃与原因。常见原因：磁盘/网络盘写入太慢（把 <code>MRRC_RECORDINGS_DIR</code> 换成本地盘）、CPU 长时间满载。编码本身极快（实测 80 ms 音频块约 0.04 ms，约 1900 倍实时），所以几乎不会是编码器的问题。</p>
+<p><strong>整段录音全哑（能播但没声音）</strong>：若日志里 <code>Recording started</code> 之后<strong>立刻</strong>出现「正在丢弃」、丢弃数一路涨，最后以 <code>Recording queue full on stop</code> 收尾 —— 或录音面板每次都显示 <code>⚠ 丢失 N 块</code>、文件明显是静音 —— 那是 v1.15.0 的录音写入端生命周期缺陷（同一进程里从第二次录音起没有消费者）。升级到含该修复的版本并<strong>重启服务</strong>即可；判定办法：<code>REC</code> → 停止 → 从菜单「录音」播放，听第一秒有没有声音。</p>
     </main>
 </div>
 

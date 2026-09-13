@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 540">
+  <!-- diagram-version: V2.46 -->
   <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#f0a030"/></marker></defs>
   <style>text{font-family:Inter,-apple-system,sans-serif}.h{fill:#f0a030;font-size:10px;font-weight:600}.t{fill:#e0e0e0;font-size:9px}.m{fill:#888;font-size:8px}.c{fill:#5dade2;font-size:9px}</style>
-  <text x="16" y="18" fill="#f0a030" font-size="14" font-weight="700">Polling Architecture — 7-Task Adaptive Scheduler</text>
+  <text x="16" y="18" fill="#f0a030" font-size="14" font-weight="700">Polling Architecture — 7-Task Adaptive Scheduler (SDD V2.46)</text>
 
   <!-- PollScheduler box -->
   <rect x="16" y="30" width="628" height="500" rx="10" fill="none" stroke="#f0a03022"/>
@@ -44,15 +45,16 @@
   <!-- Tier 5 -->
   <rect x="36" y="310" width="588" height="50" rx="6" fill="#e74c3c10" stroke="#e74c3c33"/>
   <text x="50" y="328" class="h">Tier 5 · 1s (connection watchdog)</text>
-  <text x="50" y="344" class="t">ID; query → reconnect + full-state re-sync + scope re-init (on_reconnected hook)</text>
-  <text x="50" y="356" class="m">Auto-recover from USB disconnects; re-runs EX040101/EX040200 after successful reconnect</text>
+  <text x="50" y="344" class="t">ID; → reconnect + backend.init_scope() (on_reconnected hook); V2.43: no full re-sync — the tiers cover every field</text>
+  <text x="50" y="356" class="m">Auto-recover from USB re-enumeration; FT-710 re-runs EX040101/EX040200 · Yaesu ASCII-CAT family needs no scope init</text>
 
   <!-- Bottom notes -->
   <rect x="36" y="380" width="588" height="80" rx="6" fill="#f0a03008" stroke="#f0a03022"/>
   <text x="330" y="398" text-anchor="middle" class="h">User Commands &amp; Priority Preemption</text>
   <text x="330" y="414" text-anchor="middle" class="t">skip_next_poll(field, duration) · _cancel_polls for PTT/TUNE · send_priority_set_command</text>
   <text x="330" y="430" text-anchor="middle" class="t">Stale-read guard: poll loop re-checks skip AFTER each in-flight query response and discards stale data</text>
-  <text x="330" y="446" text-anchor="middle" class="t">CAT I/O serialized via CatController._lock · blocking work offloaded to asyncio.to_thread()</text>
+  <text x="330" y="446" text-anchor="middle" class="t">CAT I/O serialized via the active backend's controller lock · blocking work offloaded to asyncio.to_thread()</text>
+  <text x="330" y="460" text-anchor="middle" class="t">Item lists come from the active RadioBackend: settings_poll_items() / slow_poll_items() / tx_meter_items() / always_meter_items()</text>
 
   <rect x="36" y="472" width="588" height="50" rx="6" fill="#88888810" stroke="#88888822"/>
   <text x="330" y="490" text-anchor="middle" class="h">Adaptive Rate Scaling</text>

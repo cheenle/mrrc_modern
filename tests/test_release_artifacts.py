@@ -117,6 +117,69 @@ class RuleEngineTests(unittest.TestCase):
         self.assertEqual(results[0][0], rc.SKIP)
 
 
+class DiagramRuleTests(unittest.TestCase):
+    """Diagrams are governed like chapters: marker + depicted keywords.
+
+    Caught in the wild: three of the SDD diagrams were from a *different*
+    project (SunMRRC/SunSDR2 — TX EQ chain, 0x1F00 telemetry) and the rest were
+    a month behind the capabilities they drew.
+    """
+
+    def test_every_registered_diagram_passes(self):
+        registry = json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8"))
+        results = rc.check_diagrams(registry, "V2.46")
+        failures = [r for r in results if r[0] == rc.FAIL]
+        self.assertEqual(failures, [], failures)
+
+    def test_missing_marker_is_a_failure(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "SDD/diagrams").mkdir(parents=True)
+            (root / "SDD/diagrams/x.svg").write_text("<svg>nothing</svg>", encoding="utf-8")
+            registry = {"diagrams": {"files": [
+                {"path": "SDD/diagrams/x.svg", "require": ["NOPE"]}],
+                "source_dirs": {}, "max_versions_behind": 2},
+                "sdd_version_source": {"path": "SDD/14-version-history.md",
+                                       "pattern": r"^\|\s*(?:SDD\s+)?(V[0-9.]+)\s*\|"}}
+            with mock.patch.object(rc, "ROOT", root):
+                results = rc.check_diagrams(registry, "V2.46")
+        self.assertEqual(results[0][0], rc.FAIL)
+        self.assertIn("marker", results[0][2])
+        self.assertIn("NOPE", results[0][2])
+
+    def test_a_lagging_marker_is_accepted_within_the_window(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "SDD/diagrams").mkdir(parents=True)
+            (root / "SDD/14-version-history.md").write_text(
+                "| SDD V2.47 | x | | |\n| SDD V2.46 | x | | |\n| SDD V2.45 | x | | |\n",
+                encoding="utf-8")
+            (root / "SDD/diagrams/x.svg").write_text(
+                "<!-- diagram-version: V2.45 -->\n<svg></svg>", encoding="utf-8")
+            registry = {"diagrams": {"files": [{"path": "SDD/diagrams/x.svg", "require": []}],
+                                     "source_dirs": {}, "max_versions_behind": 2},
+                        "sdd_version_source": {"path": "SDD/14-version-history.md",
+                                               "pattern": r"^\|\s*(?:SDD\s+)?(V[0-9.]+)\s*\|"}}
+            with mock.patch.object(rc, "ROOT", root):
+                results = rc.check_diagrams(registry, "V2.47")
+        self.assertEqual(results[0][0], rc.PASS, results)
+
+    def test_copies_must_match_their_source(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a").mkdir(); (root / "b").mkdir()
+            (root / "a/x.svg").write_text("one", encoding="utf-8")
+            (root / "b/x.svg").write_text("two", encoding="utf-8")
+            registry = {"diagrams": {"files": [], "source_dirs": {"a": "b"},
+                                     "max_versions_behind": 2}}
+            with mock.patch.object(rc, "ROOT", root):
+                results = rc.check_diagrams(registry, "V2.46")
+        self.assertTrue(any(r[0] == rc.FAIL and "differs" in r[2] for r in results), results)
+
+
 class ReportTests(unittest.TestCase):
     def test_report_lists_failures_and_manual_review(self):
         registry = json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8"))

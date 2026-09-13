@@ -1,24 +1,58 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 220">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 330">
+  <!-- diagram-version: V2.46 -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
-  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:13px;font-weight:600}.t{fill:#f0a030;font-size:11px}.m{fill:#888;font-size:10px}.l{fill:#5dade2;font-size:10px}</style>
-  <!-- HAM Operator -->
-  <rect x="180" y="16" width="200" height="44" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="280" y="36" text-anchor="middle" class="b">📡 HAM Operator</text>
-  <text x="280" y="52" text-anchor="middle" class="m">Mobile or desktop browser</text>
-  <!-- Arrow down -->
-  <line x1="280" y1="60" x2="280" y2="78" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
-  <text x="295" y="74" class="l">HTTP / WebSocket</text>
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:13px;font-weight:600}.t{fill:#f0a030;font-size:11px}.m{fill:#888;font-size:10px}.l{fill:#5dade2;font-size:10px}.s{fill:#666;font-size:9px}</style>
+
+  <text x="360" y="16" text-anchor="middle" class="b">System Context — MRRC Modern</text>
+  <text x="360" y="30" text-anchor="middle" class="m">One browser, one Python process, ten radio backends over USB · SDD V2.46</text>
+
+  <!-- Browser -->
+  <rect x="240" y="42" width="240" height="42" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="360" y="60" text-anchor="middle" class="b">📱 HAM Operator · browser</text>
+  <text x="360" y="75" text-anchor="middle" class="m">mobile / desktop · Web Audio · Canvas waterfall</text>
+
+  <line x1="360" y1="84" x2="360" y2="102" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="372" y="97" class="l">HTTPS / WSS</text>
+
   <!-- Server -->
-  <rect x="140" y="82" width="280" height="56" rx="10" fill="#5dade218" stroke="#5dade255"/>
-  <text x="280" y="102" text-anchor="middle" class="b">MRRC Modern FastAPI Server</text>
-  <text x="280" y="120" text-anchor="middle" class="m">Static UI · 4× WS · CAT · SPI · Audio</text>
-  <!-- Arrow down -->
-  <line x1="280" y1="138" x2="280" y2="156" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
-  <text x="295" y="152" class="l">USB (CAT + SPI + Audio)</text>
-  <!-- FT-710 -->
-  <rect x="180" y="160" width="200" height="44" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
-  <text x="280" y="180" text-anchor="middle" class="b">Yaesu FT-710</text>
-  <text x="280" y="196" text-anchor="middle" class="m">CAT serial · FT4222 SPI · USB Audio</text>
+  <rect x="150" y="106" width="420" height="62" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="360" y="124" text-anchor="middle" class="b">MRRC Modern server (single FastAPI process)</text>
+  <text x="360" y="140" text-anchor="middle" class="m">5 WS: /WSradio · /WSspectrum · /WSaudioRX · /WSaudioTX · /WSatr1000 (optional)</text>
+  <text x="360" y="155" text-anchor="middle" class="m">REST: /api/auth · /api/setup · /api/mem_channels · /api/recordings (list · Range stream · delete) · /api/status</text>
+
+  <line x1="360" y1="168" x2="360" y2="186" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="372" y="181" class="l">USB — CAT / CI-V, SPI, USB audio</text>
+
+  <!-- Radio families -->
+  <rect x="18" y="192" width="222" height="120" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="129" y="210" text-anchor="middle" class="b">Yaesu FT-710 ✔ verified</text>
+  <text x="129" y="227" text-anchor="middle" class="m">ASCII CAT 38400 8N1 (Enhanced COM)</text>
+  <text x="129" y="242" text-anchor="middle" class="m">scope: FT4222 SPI (scope_pipe subprocess)</text>
+  <text x="129" y="257" text-anchor="middle" class="m">USB audio 44.1 kHz · resample 882→960</text>
+  <text x="129" y="272" text-anchor="middle" class="m">FT-710 backend path, untouched by AD-018</text>
+  <text x="129" y="292" text-anchor="middle" class="s">reference implementation for the family</text>
+
+  <rect x="249" y="192" width="222" height="120" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="360" y="210" text-anchor="middle" class="b">Icom CI-V family</text>
+  <text x="360" y="227" text-anchor="middle" class="m">IC-7300 / IC-7300MK2 ✔ verified</text>
+  <text x="360" y="242" text-anchor="middle" class="m">IC-705 · IC-7610 · IC-7760 — experimental</text>
+  <text x="360" y="257" text-anchor="middle" class="m">CI-V 115200 8N1 · addr per model</text>
+  <text x="360" y="272" text-anchor="middle" class="m">scope: CI-V 0x27 on the same port</text>
+  <text x="360" y="287" text-anchor="middle" class="m">USB audio 48 kHz native (no resample)</text>
+  <text x="360" y="302" text-anchor="middle" class="s">profile-driven core (civ_profiles)</text>
+
+  <rect x="480" y="192" width="222" height="120" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="591" y="210" text-anchor="middle" class="b">Yaesu ASCII-CAT family</text>
+  <text x="591" y="227" text-anchor="middle" class="m">FTDX10 · FTDX101D · FTDX101MP · FTX-1F</text>
+  <text x="591" y="242" text-anchor="middle" class="m">all experimental — no unit tested (AD-018/19)</text>
+  <text x="591" y="257" text-anchor="middle" class="m">ASCII CAT 38400 8N1 (shared core)</text>
+  <text x="591" y="272" text-anchor="middle" class="m">scope: none documented → S-meter fallback</text>
+  <text x="591" y="287" text-anchor="middle" class="m">USB audio 44.1 kHz assumed (hw-verify)</text>
+  <text x="591" y="302" text-anchor="middle" class="s">TX gated until MRRC_ALLOW_UNVERIFIED_TX=1</text>
+
+  <!-- Optional tuner -->
+  <rect x="249" y="318" width="222" height="10" rx="5" fill="none"/>
+  <text x="360" y="326" text-anchor="middle" class="s">optional: ATR1000 networked tuner over its own WS (disabled when MRRC_ATR1000_HOST is empty)</text>
 </svg>

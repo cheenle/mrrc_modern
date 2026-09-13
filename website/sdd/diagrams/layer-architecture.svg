@@ -1,36 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 340">
-  <defs>
-    <linearGradient id="layerGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f0a03022"/><stop offset="100%" stop-color="#f0a03008"/></linearGradient>
-    <linearGradient id="appGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5dade222"/><stop offset="100%" stop-color="#5dade208"/></linearGradient>
-  </defs>
-  <style>text{font-family:Inter,-apple-system,sans-serif}.t{fill:#e0e0e0;font-size:12px;font-weight:500}.h{fill:#f0a030;font-size:11px;font-weight:600}.m{fill:#888;font-size:10px}</style>
-  <!-- Client Layer -->
-  <rect x="120" y="16" width="360" height="56" rx="8" fill="url(#layerGrad)" stroke="#f0a03055"/>
-  <text x="300" y="36" text-anchor="middle" class="h">CLIENT LAYER</text>
-  <text x="300" y="54" text-anchor="middle" class="t">Mobile browser UI · Web Audio API · WebSocket · Service Worker</text>
-  <!-- Arrow -->
-  <line x1="300" y1="72" x2="300" y2="86" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <!-- App Layer -->
-  <rect x="100" y="88" width="400" height="56" rx="8" fill="url(#appGrad)" stroke="#5dade255"/>
-  <text x="300" y="108" text-anchor="middle" class="h">APPLICATION LAYER</text>
-  <text x="300" y="126" text-anchor="middle" class="t">FastAPI · Static Files · 4× WebSocket · Auth · Fan-out</text>
-  <!-- Arrow -->
-  <line x1="300" y1="144" x2="300" y2="158" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <!-- Radio Layer -->
-  <rect x="100" y="160" width="400" height="56" rx="8" fill="url(#layerGrad)" stroke="#f0a03055"/>
-  <text x="300" y="180" text-anchor="middle" class="h">RADIO LAYER</text>
-  <text x="300" y="198" text-anchor="middle" class="t">Serial CAT (pyserial) · FT4222 SPI (subprocess) · PyAudio I/O</text>
-  <!-- Arrow -->
-  <line x1="300" y1="216" x2="300" y2="230" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <!-- Codec Layer -->
-  <rect x="140" y="232" width="320" height="44" rx="8" fill="url(#layerGrad)" stroke="#a78bfa55"/>
-  <text x="300" y="252" text-anchor="middle" class="h">CODEC LAYER</text>
-  <text x="300" y="266" text-anchor="middle" class="t">Opus encode/decode (libopus ctypes) · Int16 PCM fallback</text>
-  <!-- Arrow -->
-  <line x1="300" y1="276" x2="300" y2="290" stroke="#555" stroke-width="1.5" marker-end="url(#arrow)"/>
-  <!-- Device Layer -->
-  <rect x="180" y="292" width="240" height="40" rx="8" fill="url(#layerGrad)" stroke="#22c55e55"/>
-  <text x="300" y="312" text-anchor="middle" class="h">DEVICE LAYER</text>
-  <text x="300" y="326" text-anchor="middle" class="t">Yaesu FT-710 via USB (CAT + SPI + Audio)</text>
-  <defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 Z" fill="#555"/></marker></defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 330">
+  <!-- diagram-version: V2.46 -->
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.08em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
+
+  <text x="360" y="18" text-anchor="middle" class="b">Layer Architecture — MRRC Modern (SDD V2.46)</text>
+
+  <!-- CLIENT -->
+  <rect x="20" y="30" width="680" height="46" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="34" y="48" class="h">CLIENT</text>
+  <text x="34" y="66" class="m">Mobile-first browser UI · Web Audio API (AudioWorklet jitter buffer) · Web Worker Opus encode (48 kHz, 64 kbps CBR) · Canvas waterfall/S-meter · Service Worker · 5 WebSocket channels</text>
+
+  <!-- APPLICATION -->
+  <rect x="20" y="84" width="680" height="46" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="34" y="102" class="h">APPLICATION</text>
+  <text x="34" y="120" class="m">FastAPI · static assets · auth (token per WS, cookie session) · /WSradio · /WSspectrum · /WSaudioRX · /WSaudioTX · /WSatr1000 · recordings REST (list/stream/delete) · dirty-field state fan-out</text>
+
+  <!-- BACKEND -->
+  <rect x="20" y="138" width="680" height="60" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="34" y="156" class="h">BACKEND</text>
+  <text x="34" y="174" class="m">backends/ registry (10 model keys) → RadioBackend ABC + RadioCapabilities</text>
+  <text x="34" y="189" class="m">ft710 (verified, own path) · ic7300 core + profiles (IC-7300/MK2 verified; IC-705/7610/7760 experimental) · yaesu core + profiles (FTDX10/FTDX101D/FTDX101MP/FTX-1F experimental)</text>
+
+  <!-- AUDIO / CODEC / RECORDING -->
+  <rect x="20" y="206" width="680" height="60" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="34" y="224" class="h">AUDIO · CODEC · RECORDING</text>
+  <text x="34" y="242" class="m">PyAudio capture/playback (per-backend device rate + name hints) · Opus encode/decode (libopus ctypes) · audio_resample 44.1k↔48k (AD-011)</text>
+  <text x="34" y="257" class="m">recorder.py: 96-tap FIR 48k→16k · monotonic RX/TX timeline · incremental lameenc MP3 (16 kHz mono storage domain, AD-017)</text>
+
+  <!-- DEVICE -->
+  <rect x="20" y="274" width="680" height="46" rx="10" fill="#e0e0e018" stroke="#e0e0e055"/>
+  <text x="34" y="292" class="h">DEVICE</text>
+  <text x="34" y="310" class="m">USB: Yaesu ASCII CAT (38400) · Icom CI-V (115200) · FT4222 SPI scope (FT-710 only) · CI-V 0x27 scope (Icom) · USB audio; optional ATR1000 tuner over the network</text>
+
+  <text x="700" y="326" text-anchor="end" class="s">no extra hardware: one USB cable per radio (AD-018 keeps the verified FT-710 path separate)</text>
 </svg>

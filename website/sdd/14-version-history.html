@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.47</td>
+<td>2026-09-13</td>
+<td>Claude</td>
+<td><strong>设计图全面校对 + 图纳入发布索引。</strong> 发现 <code class="scope-code">SDD/diagrams/</code> 里 <strong>3 张图根本不是本项目的</strong>（<code class="scope-code">system-architecture.svg</code> 写着 “SunMRRC System Architecture / SunSDR2 DX (SDD V3.4)”、<code class="scope-code">tx-gain-staging.svg</code> 的 TX EQ/压缩链、<code class="scope-code">telemetry-flow.svg</code> 的 0x1F00 二进制遥测包——MRRC Modern 都没有这些），且三张均无文档引用；其余图停在 8 月中旬，落后约 20 个 SDD 版本。处理：删除该 3 张（含 website 副本）；按当前能力<strong>重画</strong> system-context / layer-architecture / logical-architecture / spectrum-paths / audio-chains / subject-area-model / ptt-safety（补 <strong>Layer 0</strong> 未验证门禁，并从 SDD/15 正式引用，解决孤儿图）；light-touch 更新 polling-architecture（V2.43 后不再全量重同步、轮询项来自 <code class="scope-code">RadioBackend</code>）；UI 菜单图补 <strong>录音 Recordings</strong> 与「连接设置…」两行并把标题改为型号无关的 “MRRC Modern 菜单”。<strong>图成为受管承载物</strong>：每张带 <code class="scope-code">diagram-version</code> 标记（允许滞后 ≤2 版）与所描绘能力的关键词，<code class="scope-code">website/sdd/diagrams/</code> 与 <code class="scope-code">website/images/</code> 改由 <code class="scope-code">build_sdd.py</code>/<code class="scope-code">build_guide.py</code> <strong>生成</strong>（此前是手工副本，静默漂移的温床），<code class="scope-code">release_check.py</code> 新增 <code class="scope-code">diagrams</code> 规则（标记+关键词+副本一致性）与 <code class="scope-code">tests/test_release_artifacts.py</code> 的 4 项测试；<code class="scope-code">docs/PROJECT_MAP.md</code> 补齐图的来源⁄生成关系与不变量。另修 <code class="scope-code">docs/OPERATION_GUIDE.md</code> 仍在指引下载 <strong>v1.13.0</strong> 的 DMG（2 处）与首页硬编码的旧测试数 633。</td>
+</tr>
+<tr>
 <td>SDD V2.46</td>
 <td>2026-09-12</td>
 <td>Claude</td>
@@ -613,7 +619,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.46 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.47 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

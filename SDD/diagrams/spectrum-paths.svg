@@ -1,54 +1,57 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 380">
-  <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#f0a030"/></marker><marker id="ab" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#5dade2"/></marker></defs>
-  <style>text{font-family:Inter,-apple-system,sans-serif}.h{fill:#f0a030;font-size:11px;font-weight:600}.t{fill:#e0e0e0;font-size:9px}.m{fill:#888;font-size:8px}.b{fill:#5dade2;font-size:10px}</style>
-  <!-- FT4222 Path -->
-  <text x="16" y="20" fill="#f0a030" font-size="13" font-weight="700">FT4222 Path (Real FFT Data)</text>
-  <rect x="16" y="32" width="160" height="50" rx="6" fill="#f0a03010" stroke="#f0a03033"/>
-  <text x="96" y="52" text-anchor="middle" class="h">FT-710 FT4222 SPI</text>
-  <text x="96" y="68" text-anchor="middle" class="m">4096-byte SPI reads</text>
-  <line x1="176" y1="57" x2="204" y2="57" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300">
+  <!-- diagram-version: V2.46 -->
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
+  </defs>
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.06em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
 
-  <rect x="208" y="32" width="160" height="50" rx="6" fill="#5dade210" stroke="#5dade233"/>
-  <text x="288" y="52" text-anchor="middle" class="h">scope_pipe.py subprocess</text>
-  <text x="288" y="68" text-anchor="middle" class="m">ctypes → libft4222</text>
-  <line x1="368" y1="57" x2="396" y2="57" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <text x="380" y="18" text-anchor="middle" class="b">Spectrum Paths — three sources, one waterfall (SDD V2.46)</text>
 
-  <rect x="400" y="32" width="160" height="50" rx="6" fill="#a78bfa10" stroke="#a78bfa33"/>
-  <text x="480" y="52" text-anchor="middle" class="h">stdout pipe</text>
-  <text x="480" y="68" text-anchor="middle" class="m">4B BE len + payload</text>
-  <line x1="560" y1="57" x2="588" y2="57" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- FT4222 -->
+  <rect x="12" y="32" width="238" height="196" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="131" y="50" text-anchor="middle" class="h">FT-710 · FT4222 SPI</text>
+  <text x="131" y="68" text-anchor="middle" class="m">real FFT data, verified</text>
+  <text x="26" y="90" class="m">FT4222 SPI · 4096-byte reads</text>
+  <text x="26" y="106" class="m">scope_pipe.py subprocess</text>
+  <text x="26" y="122" class="m">ctypes → libft4222</text>
+  <text x="26" y="138" class="m">stdout pipe: 4B BE len + payload</text>
+  <text x="26" y="154" class="m">1 s len=0 heartbeat (dead-parent)</text>
+  <text x="26" y="170" class="m">stdin TX:1 / TX:0 pause</text>
+  <text x="26" y="186" class="m">resync = close / settle / reopen</text>
+  <text x="131" y="208" text-anchor="middle" class="m">→ wf1[850] + wf2[850]</text>
+  <text x="131" y="222" text-anchor="middle" class="s">broadcast: v1 851 B · v2 1701 B</text>
 
-  <rect x="492" y="100" width="160" height="50" rx="6" fill="#22c55e10" stroke="#22c55e33"/>
-  <text x="572" y="120" text-anchor="middle" class="h">parse → broadcast</text>
-  <text x="572" y="136" text-anchor="middle" class="m">wf1[850] + wf2[850]</text>
-  <line x1="572" y1="82" x2="572" y2="100" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
+  <!-- CI-V 0x27 -->
+  <rect x="261" y="32" width="238" height="196" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="380" y="50" text-anchor="middle" class="h">Icom · CI-V 0x27</text>
+  <text x="380" y="68" text-anchor="middle" class="m">in-band waveform on the CAT port</text>
+  <text x="275" y="90" class="m">startup/reconnect: 27 10 01 (display ON)</text>
+  <text x="275" y="106" class="m">+ center mode, span, then 27 11 01</text>
+  <text x="275" y="122" class="m">0x27 00 frames → civ_controller demux</text>
+  <text x="275" y="138" class="m">profile geometry: 475×11 or 689×15 bins</text>
+  <text x="275" y="154" class="m">bounded newest-data queue (44 segments)</text>
+  <text x="275" y="170" class="m">amp ceiling from the profile → 255</text>
+  <text x="275" y="186" class="m">upsample 850 → ScopeHandler</text>
+  <text x="380" y="208" text-anchor="middle" class="m">→ wf1[850] (+ wf2 on the 689-bin models)</text>
+  <text x="380" y="222" text-anchor="middle" class="s">IC-7300/MK2 verified · IC-705/7610/7760 experimental</text>
 
-  <rect x="492" y="168" width="160" height="30" rx="6" fill="#88888810" stroke="#88888822"/>
-  <text x="572" y="186" text-anchor="middle" class="m">stderr → STATUS: logs</text>
-  <line x1="572" y1="150" x2="572" y2="168" stroke="#888" stroke-width="1" marker-end="url(#ar)"/>
+  <!-- Yaesu family: none + fallback -->
+  <rect x="510" y="32" width="238" height="196" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="629" y="50" text-anchor="middle" class="h">Yaesu FTDX10/101D/101MP/FTX-1F</text>
+  <text x="629" y="68" text-anchor="middle" class="m">no scope stream exists (AD-018)</text>
+  <text x="524" y="90" class="m">SS; is a settings command only</text>
+  <text x="524" y="106" class="m">(span / speed / mode) — no waveform</text>
+  <text x="524" y="122" class="m">no vendor scope command in any CAT doc</text>
+  <text x="524" y="138" class="m">Hamlib's Yaesu family: zero scope code</text>
+  <text x="524" y="154" class="m">→ create_scope_producer() returns None</text>
+  <text x="629" y="176" text-anchor="middle" class="m">S-meter fallback only</text>
+  <text x="524" y="196" class="m">a real waterfall needs field captures of the</text>
+  <text x="524" y="210" class="m">undocumented scope stream (phase 4)</text>
+  <text x="629" y="224" text-anchor="middle" class="s">TX gated while unverified</text>
 
-  <!-- S-Meter Fallback -->
-  <text x="16" y="230" fill="#f0a030" font-size="13" font-weight="700">S-Meter Fallback (Synthetic Spectrum)</text>
-  <rect x="16" y="242" width="160" height="50" rx="6" fill="#f0a03010" stroke="#f0a03033"/>
-  <text x="96" y="262" text-anchor="middle" class="h">CAT SM0; poll · 100ms</text>
-  <text x="96" y="278" text-anchor="middle" class="m">S-meter value 0–255</text>
-  <line x1="176" y1="267" x2="204" y2="267" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-
-  <rect x="208" y="242" width="180" height="50" rx="6" fill="#5dade210" stroke="#5dade233"/>
-  <text x="298" y="262" text-anchor="middle" class="h">scope_handler.py</text>
-  <text x="298" y="278" text-anchor="middle" class="m">Gaussian peaks @ band edges</text>
-  <line x1="388" y1="267" x2="416" y2="267" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-
-  <rect x="420" y="242" width="160" height="50" rx="6" fill="#a78bfa10" stroke="#a78bfa33"/>
-  <text x="500" y="262" text-anchor="middle" class="h">v1 (851B) / v2 (1701B)</text>
-  <text x="500" y="278" text-anchor="middle" class="m">Same format as FT4222</text>
-  <line x1="580" y1="267" x2="620" y2="267" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-
-  <rect x="504" y="310" width="150" height="30" rx="6" fill="#22c55e10" stroke="#22c55e33"/>
-  <text x="579" y="329" text-anchor="middle" class="h">/WSspectrum broadcast</text>
-
-  <!-- Spectrum info -->
-  <rect x="16" y="330" width="460" height="40" rx="6" fill="#f0a03008" stroke="#f0a03022"/>
-  <text x="246" y="348" text-anchor="middle" class="t">Dual-mode spectrum: FT4222 SPI (real FFT) with automatic S-meter Gaussian fallback when FTDI unavailable</text>
-  <text x="246" y="362" text-anchor="middle" class="m">Same binary format both paths · browser waterfall renders identically · ~30 fps broadcast</text>
+  <!-- Shared fallback + scheduler -->
+  <rect x="12" y="238" width="736" height="52" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="380" y="256" text-anchor="middle" class="h">SHARED · S-meter synthesiser + 30 Hz scheduler</text>
+  <text x="380" y="274" text-anchor="middle" class="m">CAT SM0; poll (~100 ms) → raw 0-255 → Gaussian peaks at band edges → same 851/1701-byte frame format → /WSspectrum</text>
+  <text x="380" y="288" text-anchor="middle" class="s">the scheduler sends real scope data only when the frame counter advances, so a stale radio cannot freeze the waterfall</text>
 </svg>

@@ -1,62 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280">
-  <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#f0a030"/></marker></defs>
-  <style>text{font-family:Inter,-apple-system,sans-serif}.s{fill:#f0a030;font-size:10px;font-weight:600}.t{fill:#e0e0e0;font-size:9px}.m{fill:#888;font-size:8px}</style>
-  <!-- RX chain -->
-  <text x="16" y="20" fill="#f0a030" font-size="13" font-weight="700">RX Audio Signal Chain</text>
-  <!-- Box 1 -->
-  <rect x="16" y="32" width="130" height="44" rx="6" fill="#f0a03010" stroke="#f0a03033"/>
-  <text x="81" y="50" text-anchor="middle" class="s">FT-710 USB Audio</text>
-  <text x="81" y="64" text-anchor="middle" class="m">44.1kHz Int16 mono</text>
-  <line x1="146" y1="54" x2="168" y2="54" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-  <!-- Box 2 -->
-  <rect x="172" y="32" width="120" height="44" rx="6" fill="#5dade210" stroke="#5dade233"/>
-  <text x="232" y="50" text-anchor="middle" class="s">PyAudio Capture</text>
-  <text x="232" y="64" text-anchor="middle" class="m">882-sample chunks</text>
-  <line x1="292" y1="54" x2="314" y2="54" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-  <!-- Box 3 -->
-  <rect x="318" y="32" width="110" height="44" rx="6" fill="#a78bfa10" stroke="#a78bfa33"/>
-  <text x="373" y="50" text-anchor="middle" class="s">Resample</text>
-  <text x="373" y="64" text-anchor="middle" class="m">882→960 (48kHz)</text>
-  <line x1="428" y1="54" x2="450" y2="54" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-  <!-- Box 4 -->
-  <rect x="454" y="32" width="110" height="44" rx="6" fill="#22c55e10" stroke="#22c55e33"/>
-  <text x="509" y="50" text-anchor="middle" class="s">Opus Encode</text>
-  <text x="509" y="64" text-anchor="middle" class="m">64kbps 20ms</text>
-  <line x1="564" y1="54" x2="586" y2="54" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-  <!-- Box 5 -->
-  <rect x="590" y="32" width="120" height="44" rx="6" fill="#e74c3c10" stroke="#e74c3c33"/>
-  <text x="650" y="50" text-anchor="middle" class="s">WSaudioRX</text>
-  <text x="650" y="64" text-anchor="middle" class="m">tagged Opus/PCM</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330">
+  <!-- diagram-version: V2.46 -->
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
+  </defs>
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.06em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
 
-  <!-- TX chain -->
-  <text x="16" y="140" fill="#f0a030" font-size="13" font-weight="700">TX Audio Signal Chain</text>
-  <!-- Box 1 -->
-  <rect x="16" y="152" width="130" height="44" rx="6" fill="#f0a03010" stroke="#f0a03033"/>
-  <text x="81" y="170" text-anchor="middle" class="s">Browser Mic</text>
-  <text x="81" y="184" text-anchor="middle" class="m">48kHz mono</text>
-  <line x1="146" y1="174" x2="168" y2="174" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-  <!-- Box 2 -->
-  <rect x="172" y="152" width="120" height="44" rx="6" fill="#5dade210" stroke="#5dade233"/>
-  <text x="232" y="170" text-anchor="middle" class="s">AudioWorklet</text>
-  <text x="232" y="184" text-anchor="middle" class="m">20ms float32 frames</text>
-  <line x1="292" y1="174" x2="314" y2="174" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-  <!-- Box 3 -->
-  <rect x="318" y="152" width="110" height="44" rx="6" fill="#a78bfa10" stroke="#a78bfa33"/>
-  <text x="373" y="170" text-anchor="middle" class="s">Opus Worker</text>
-  <text x="373" y="184" text-anchor="middle" class="m">64kbps CBR cpx=5</text>
-  <line x1="428" y1="174" x2="450" y2="174" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-  <!-- Box 4 -->
-  <rect x="454" y="152" width="110" height="44" rx="6" fill="#22c55e10" stroke="#22c55e33"/>
-  <text x="509" y="170" text-anchor="middle" class="s">WSaudioTX → Server</text>
-  <text x="509" y="184" text-anchor="middle" class="m">tagged binary</text>
-  <line x1="564" y1="174" x2="586" y2="174" stroke="#f0a030" stroke-width="1.5" marker-end="url(#ar)"/>
-  <!-- Box 5 -->
-  <rect x="590" y="152" width="120" height="44" rx="6" fill="#e74c3c10" stroke="#e74c3c33"/>
-  <text x="650" y="170" text-anchor="middle" class="s">PyAudio → FT-710</text>
-  <text x="650" y="184" text-anchor="middle" class="m">44.1kHz TX out</text>
+  <text x="380" y="18" text-anchor="middle" class="b">Audio Chains — RX, TX and the recording tap (SDD V2.46)</text>
 
-  <!-- Key difference -->
-  <rect x="16" y="220" width="694" height="40" rx="6" fill="#f0a03008" stroke="#f0a03022"/>
-  <text x="363" y="238" text-anchor="middle" class="s">48kHz codec domain throughout · bridging to FT-710 native 44.1kHz via frame-aligned resampling (960↔882)</text>
-  <text x="363" y="254" text-anchor="middle" class="m">Browser Opus 48kHz → server resample 48→44.1k → radio · Radio 44.1k → server resample 44.1→48k → browser Opus 48kHz</text>
+  <!-- RX -->
+  <rect x="12" y="30" width="736" height="120" rx="10" fill="#5dade218" stroke="#5dade255"/>
+  <text x="26" y="48" class="h">RX · radio → browser</text>
+  <text x="26" y="68" class="m">USB audio capture (per-backend device rate + name hints):</text>
+  <text x="26" y="84" class="m">Yaesu FT-710 + the four Yaesu models — 44.1 kHz mono (the Yaesu profiles assume the family value, hw-verify) → 882-sample chunks → audio_resample 882→960</text>
+  <text x="26" y="100" class="m">Icom IC-7300/MK2 + the three Icom models — 48 kHz native (960-sample chunks), no resample</text>
+  <text x="26" y="120" class="m">→ Opus encode 64 kbps 20 ms (libopus ctypes) → /WSaudioRX tagged frames (PCM fallback tag) → browser AudioWorklet jitter buffer → speakers</text>
+  <text x="26" y="140" class="s">full-duplex codecs are reopened on every TX→RX transition (restart_rx); on a failed stream open PortAudio is re-initialised once and the device is re-resolved by name (USB re-enumeration)</text>
+
+  <!-- Recording tap -->
+  <rect x="12" y="158" width="736" height="76" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="26" y="176" class="h">RECORDING TAP · server-side QSO recording (AD-017)</text>
+  <text x="26" y="196" class="m">RX PCM (device domain) and decoded TX PCM are both tapped server-side and placed on ONE monotonic timeline (re-anchor on source switch, 50 ms continuity tolerance, real gaps filled with silence)</text>
+  <text x="26" y="212" class="m">→ _StreamingDecimator (96-tap FIR 48k→16k) → 16 kHz mono → incremental lameenc MP3 → &lt;freq&gt;kHz_&lt;date&gt;_&lt;time&gt;.mp3 + recordings.json index</text>
+  <text x="26" y="228" class="s">16 kHz is a write-only storage domain: nothing re-enters the audio path; one writer per session, dedicated thread pool, session cap MRRC_RECORDINGS_MAX_SESSION_MIN (240 min, 0 = unlimited)</text>
+
+  <!-- TX -->
+  <rect x="12" y="242" width="736" height="84" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="26" y="260" class="h">TX · browser → radio</text>
+  <text x="26" y="280" class="m">getUserMedia mic → tx_capture_worklet (48 kHz mono, 960-sample frames) → tx_opus_worker (Opus 64 kbps CBR, cpx=5) → /WSaudioTX tagged frames</text>
+  <text x="26" y="296" class="m">→ server Opus decode → 48 kHz PCM → (44.1 kHz devices only) audio_resample 960→882 → PyAudio playback → radio USB audio</text>
+  <text x="26" y="314" class="s">PTT ownership follows the control session: the TX uplink is owned by the PTT client, same-session replacements take it over, the dead-man switch drops the carrier when that client disappears (SDD 15)</text>
 </svg>

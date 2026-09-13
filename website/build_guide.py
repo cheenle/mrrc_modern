@@ -9,7 +9,8 @@ unified site font tokens (--font-sans/--font-mono), numbered amber badges
 in the control reference tables, info/warning callouts, figure captions,
 hero header and back-to-top.
 """
-import re, subprocess, sys
+import re
+import shutil, subprocess, sys
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent
@@ -490,7 +491,28 @@ def build_page(toc: str, body_html: str, lang: str) -> str:
         page = page.replace('class="guide-toc"', 'class="guide-toc"')
     return page
 
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def copy_images() -> int:
+    """Copy the UI guide diagrams from docs/images into the site tree.
+
+    They were manual copies before (byte-identical by luck); the docs tree is
+    the single source, so an updated UI diagram lands with one rebuild.
+    """
+    src = ROOT / "docs" / "images"
+    dst = ROOT / "website" / "images"
+    if not src.is_dir():
+        return 0
+    copied = 0
+    for svg in sorted(src.glob("*.svg")):
+        shutil.copyfile(svg, dst / svg.name)
+        copied += 1
+    return copied
+
+
 def main():
+    copy_images()
     md_path = Path(__file__).resolve().parent.parent / "docs" / "OPERATION_GUIDE.md"
     toc, body = convert(md_path)
     for lang, out in (("en", "guide.html"), ("zh", "zh/guide.html")):

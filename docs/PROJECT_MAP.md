@@ -49,7 +49,9 @@
 | `SDD/14` | 版本历史（SDD 版本唯一真相） | **每次**发布/设计变更 |
 | `docs/superpowers/specs/**` | 规格（日期命名，设计权威） | 设计阶段；实现后追加"Implementation outcome" |
 | `docs/superpowers/plans/**` | 实现计划（步骤可勾选） | 执行期同步偏差 |
-| `website/sdd/**` | **生成物**（`python3 website/build_sdd.py`） | 改了 `SDD/*.md` 之后 |
+| `website/sdd/**` | **生成物**（`python3 website/build_sdd.py`；含 `diagrams/` 副本） | 改了 `SDD/*.md` 或 `SDD/diagrams/*` 之后 |
+| `SDD/diagrams/*.svg`（10 张） | 设计图（**图的唯一来源**） | 能力/架构变化时重画；每张带 `diagram-version` 标记 + 关键能力关键词 |
+| `docs/images/ui-guide-*.svg`（2 张） | UI 图（**唯一来源**，`website/images/` 为生成副本） | UI 布局/菜单变化时更新 |
 
 ### 2.3 工程层
 
@@ -84,6 +86,7 @@
 | 前端行为/缓存版本 | 09.7 | AGENTS（勿格式化清单） | 前端契约测试 | — |
 | 新增 WebSocket 端点 | 05（鉴权 NFR）、10 | README、AGENTS | `test_server_security.py`、`test_server_ws_protocol.py` | — |
 | 打包/安装流程 | 12 | `mac_pack.md`/`win_pack.md`/`pi_pack.md`、安装指南 | `test_*_packaging*.py` | 规则通常已覆盖 |
+| 架构/能力变化（含图） | 对应章 + 14 | `PROJECT_MAP`、相关指南 | 相关测试 + `release_check` 图规则 | `release-artifacts.json` 的 `diagrams` 段（新图或新关键词） |
 | **每次发布** | **14（新行）** | CHANGELOG、README/SDD 状态、落地页、指南 | 全套 + `release_check` | 版本/制品规则随制品变化 |
 
 ---
@@ -115,6 +118,7 @@ python3 .agents/skills/dual-platform-release/harness/release_check.py --online -
 | README Quick Facts == SDD/14 首行 == 生成器 == 落地页 == 首页徽章 | `tests/test_sdd_docs_consistency.py` |
 | 落地页 AD 索引包含 `SDD/08` 的每一条 AD | 同上 |
 | 应用版本在 `.iss`/网站卡片/指南/文档中一致，且旧下载链接不残留 | `tests/test_release_artifacts.py` + `release_check.py` |
+| 每张设计图带版本标记（≤2 版滞后）且含其描绘能力的关键词；`website/` 下的图副本与来源逐字节一致 | `release_check.py` 的 `diagrams` 规则 + `tests/test_release_artifacts.py` |
 | 卡片字节数/SHA == 实际构建产物 | `release_check.py`（有构建时） |
 | `SH00NN` 滤波格式 + 回读、`PR00/PR01` 压缩机、不查询 `DN;` | 守护 `constraints.json`（block 级） |
 | 未验证机型：`verified=false` + TX 门禁 + 逐表溯源 + 只读身份校验 | profile/后端测试 + NFR-067 + AD-019 |

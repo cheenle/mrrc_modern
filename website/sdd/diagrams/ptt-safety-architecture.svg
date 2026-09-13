@@ -1,75 +1,55 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', monospace">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420">
+  <!-- diagram-version: V2.46 -->
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#080c14"/>
-      <stop offset="100%" style="stop-color:#0d1220"/>
-    </linearGradient>
-    <linearGradient id="layerCard" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f1525"/>
-      <stop offset="100%" style="stop-color:#0a0f1a"/>
-    </linearGradient>
-    <filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.5"/></filter>
-    <marker id="arr" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 Z" fill="#5b9bd5"/></marker>
-    <marker id="arrRed" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 Z" fill="#cf6a6a"/></marker>
-    <marker id="arrGreen" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5 Z" fill="#6bcf7f"/></marker>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
+  <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12.5px;font-weight:600}.h{fill:#f0a030;font-size:10px;font-weight:700}.m{fill:#999;font-size:9.5px}.s{fill:#777;font-size:9px}.n{fill:#22c55e;font-size:11px;font-weight:700}</style>
 
-  <rect width="900" height="620" fill="url(#bg)" rx="10"/>
+  <text x="380" y="18" text-anchor="middle" class="b">🛡️ PTT Safety — Defense in Depth (SDD V2.46 · chapter 15)</text>
+  <text x="380" y="34" text-anchor="middle" class="m">Layer 0 decides whether the chain may key at all; layers 1-7 guarantee nothing can leave the radio stuck in TX.</text>
 
-  <text x="450" y="28" text-anchor="middle" fill="#cf6a6a" font-size="16" font-weight="700">🛡️ PTT Safety — Defense in Depth</text>
-  <text x="450" y="44" text-anchor="middle" fill="#6a7a8a" font-size="10">8 independent layers · No single point of failure can trap the radio in TX · SDD Ch 15</text>
+  <!-- Layer 0 -->
+  <rect x="14" y="44" width="732" height="46" rx="10" fill="#ef444418" stroke="#ef444488" stroke-dasharray="5 3"/>
+  <text x="28" y="62" class="h">LAYER 0 · PRECONDITION — unverified-model transmit gate (AD-019, NFR-067)</text>
+  <text x="28" y="80" class="m">set_ptt(True) / set_tune(True) refuse on a model whose profile is not hardware-verified (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F) unless MRRC_ALLOW_UNVERIFIED_TX=1 — one warning per process, and PTT <tspan font-weight="700">releases are never gated</tspan>, so every layer below can always unkey.</text>
 
-  <!-- Layer cards -->
-  <rect x="15" y="58" width="870" height="58" rx="6" fill="url(#layerCard)" stroke="#6bcf7f" stroke-width="1.2" filter="url(#sh)"/>
-  <text x="30" y="78" fill="#6bcf7f" font-size="12" font-weight="700">❶ Touch UX</text>
-  <text x="150" y="78" fill="#9abfdf" font-size="9">touchstart → TXControl('start')</text>
-  <text x="360" y="78" fill="#cf6a6a" font-size="9">touchend → stop</text>
-  <text x="510" y="78" fill="#cf6a6a" font-size="9">touchmove-out → stop</text>
-  <text x="670" y="78" fill="#cf6a6a" font-size="9">touchcancel → stop</text>
-  <text x="830" y="78" fill="#cf6a6a" font-size="9">mouseleave</text>
-  <text x="30" y="100" fill="#5a7a8a" font-size="8">touchId tracking prevents cross-touch interference · { passive:false, capture:true } fires first · tx_button.js</text>
+  <!-- Layers 1-7 -->
+  <rect x="14" y="98" width="356" height="52" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="26" y="116" class="h">❶ TOUCH-AND-HOLD UX · browser</text>
+  <text x="26" y="133" class="m">touchstart → key; touchend / touchcancel / touchmove-out / mouseleave → release; touchId tracking prevents cross-touch interference; passive:false capture listeners fire first.</text>
 
-  <rect x="15" y="122" width="870" height="58" rx="6" fill="url(#layerCard)" stroke="#6bcf7f" stroke-width="1.2" filter="url(#sh)"/>
-  <text x="30" y="142" fill="#6bcf7f" font-size="12" font-weight="700">❷ State Machine Lock</text>
-  <text x="190" y="142" fill="#9abfdf" font-size="9">TXState.isProcessing — prevents concurrent start/stop races</text>
-  <text x="590" y="142" fill="#cfaf4a" font-size="9">TXState.pendingStop — queue stop when start is in-flight</text>
-  <text x="30" y="164" fill="#cf6a6a" font-size="8">Lock leak detection: if isProcessing held >3s → force-unlock</text>
+  <rect x="390" y="98" width="356" height="52" rx="9" fill="#f0a03018" stroke="#f0a03055"/>
+  <text x="402" y="116" class="h">❷ STATE MACHINE LOCK · browser</text>
+  <text x="402" y="133" class="m">ptt_manager.js: one in-flight transition at a time, watchdog armed on key, click suppression while TX, release wins over a racing key request.</text>
 
-  <rect x="15" y="186" width="870" height="58" rx="6" fill="url(#layerCard)" stroke="#cfaf4a" stroke-width="1.2" filter="url(#sh)"/>
-  <text x="30" y="206" fill="#cfaf4a" font-size="12" font-weight="700">❸ Hardware Watchdog</text>
-  <text x="200" y="206" fill="#9abfdf" font-size="9">30-second setTimeout started on every TX start</text>
-  <text x="500" y="206" fill="#cf6a6a" font-size="9">fires → force-release PTT + clear audio + reset UI</text>
-  <text x="30" y="228" fill="#5a7a8a" font-size="8">Ultimate frontend failsafe — triggers even if event loop frozen · tx_button.js</text>
+  <rect x="14" y="158" width="356" height="52" rx="9" fill="#5dade218" stroke="#5dade255"/>
+  <text x="26" y="176" class="h">❸ COMMAND PATH · /WSradio</text>
+  <text x="26" y="193" class="m">{"type":"set","field":"ptt","value":false} → the backend's priority set command (FT-710/ASCII-CAT TX0; · CI-V 1C 00) preempts poll reads and is fire-and-forget.</text>
 
-  <rect x="15" y="250" width="870" height="58" rx="6" fill="url(#layerCard)" stroke="#e8a840" stroke-width="1.2" filter="url(#sh)"/>
-  <text x="30" y="270" fill="#e8a840" font-size="12" font-weight="700">❹ Command ACK Retry</text>
-  <text x="200" y="270" fill="#9abfdf" font-size="9">sendTRXptt(false) → wait 1s for getPTT:false echo → retry 3×</text>
-  <text x="30" y="292" fill="#cf6a6a" font-size="8">Each retry also sends backup s: on TX audio WS · After 3 failures → onControlConnectionDead() force-reconnect · ptt_manager.js</text>
-  <text x="660" y="292" fill="#6bcf7f" font-size="8">setPTT:true (key) has NO ACK — lost key = safe</text>
+  <rect x="390" y="158" width="356" height="52" rx="9" fill="#5dade218" stroke="#5dade255"/>
+  <text x="402" y="176" class="h">❹ PTT WATCHDOG · browser</text>
+  <text x="402" y="193" class="m">500 ms interval checks radioState.tx_status; up to 3 retries when the state still says TX, catching a lost TX0 or a lost state broadcast.</text>
 
-  <rect x="15" y="314" width="870" height="58" rx="6" fill="url(#layerCard)" stroke="#8a6acf" stroke-width="1.2" filter="url(#sh)"/>
-  <text x="30" y="334" fill="#8a6acf" font-size="12" font-weight="700">❺ Backup Channel (s:)</text>
-  <text x="200" y="334" fill="#9abfdf" font-size="9">wsAudioTX.send("s:") → independent TCP socket → server ws_audio_tx() → radio.set_ptt(False)</text>
-  <text x="30" y="356" fill="#6bcf7f" font-size="8">TX audio WS and control WS are separate connections — WiFi glitch rarely kills both · server broadcasts getPTT:false to ALL clients</text>
+  <rect x="14" y="218" width="356" height="52" rx="9" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="26" y="236" class="h">❺ DEAD-MAN SWITCH · server</text>
+  <text x="26" y="253" class="m">force release when the last control client disconnects during TX, or when the TX-audio owner (the PTT client's uplink) disappears — ownership follows the PTT client, same-session reconnects replace it.</text>
 
-  <rect x="15" y="378" width="870" height="58" rx="6" fill="url(#layerCard)" stroke="#cf6a6a" stroke-width="1.2" filter="url(#sh)"/>
-  <text x="30" y="398" fill="#cf6a6a" font-size="12" font-weight="700">❻ PING/PONG Health Check</text>
-  <text x="230" y="398" fill="#9abfdf" font-size="9">Every 5s: wsControlTRX.send("PING") → wait PONG_TIMEOUT → no reply? → onControlConnectionDead()</text>
-  <text x="30" y="420" fill="#5a7a8a" font-size="8">Catches TCP half-open dead connections · Forces backup s: release before reconnect · controls.js checklatency()</text>
+  <rect x="390" y="218" width="356" height="52" rx="9" fill="#22c55e18" stroke="#22c55e55"/>
+  <text x="402" y="236" class="h">❻ MAX-TX WATCHDOG · server (opt-in)</text>
+  <text x="402" y="253" class="m">MRRC_PTT_MAX_TX_SECONDS caps an unattended carrier and releases it; disabled by default, logged when it fires.</text>
 
-  <rect x="15" y="442" width="870" height="58" rx="6" fill="url(#layerCard)" stroke="#6bcf7f" stroke-width="1.2" filter="url(#sh)"/>
-  <text x="30" y="462" fill="#6bcf7f" font-size="12" font-weight="700">❼ Page Lifecycle</text>
-  <text x="160" y="462" fill="#9abfdf" font-size="9">visibilitychange → hidden → stop</text>
-  <text x="400" y="462" fill="#9abfdf" font-size="9">blur → stop</text>
-  <text x="560" y="462" fill="#cf6a6a" font-size="9">pagehide → stop</text>
-  <text x="30" y="484" fill="#5a7a8a" font-size="8">iOS suspends JS when app goes to background → touchend never delivered · tx_button.js</text>
+  <rect x="14" y="278" width="356" height="52" rx="9" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="26" y="296" class="h">❼ PAGE-UNLOAD BEACONS · browser</text>
+  <text x="26" y="313" class="m">beforeunload → sendBeacon(TX0) · pagehide → sendCommand('ptt', false) — covers tab close, navigation and mobile app switching.</text>
 
-  <rect x="15" y="506" width="870" height="58" rx="6" fill="url(#layerCard)" stroke="#5b9bd5" stroke-width="1.2" filter="url(#sh)"/>
-  <text x="30" y="526" fill="#5b9bd5" font-size="12" font-weight="700">❽ Server Forced-RX</text>
-  <text x="190" y="526" fill="#9abfdf" font-size="9">ws_ctrl() s: handler → radio.set_ptt(False) + dsp_proc.demodulator.set_ptt(False) + broadcast getPTT:false</text>
-  <text x="30" y="548" fill="#6bcf7f" font-size="8">Always available · Handled identically to setPTT:false · server.py</text>
+  <rect x="390" y="278" width="356" height="52" rx="9" fill="#a78bfa18" stroke="#a78bfa55"/>
+  <text x="402" y="296" class="h">❽ TX AUDIO STOP · server + browser</text>
+  <text x="402" y="313" class="m">on release: stop the TX stream, clear the audio queue, send the 's:' marker — so no buffered mic audio keeps modulating after the carrier drops.</text>
 
-  <!-- Bottom summary -->
-  <rect x="15" y="574" width="870" height="36" rx="5" fill="#0a0f1a" stroke="#2a3a4a" stroke-width="0.5"/>
-  <text x="30" y="596" fill="#8ab4e0" font-size="10" font-weight="700">🔑 Release is more safety-critical than keying. 8 independent paths to force RX. A lost setPTT:false must never leave the radio stuck in TX.</text>
+  <!-- Removed layer note -->
+  <rect x="14" y="338" width="732" height="30" rx="9" fill="#e0e0e00f" stroke="#e0e0e030"/>
+  <text x="28" y="357" class="s">Removed: triple TX0 verify (200 ms ×3 after every release) — retired in V1.2 as redundant once layers 4-6 existed, and noisy on the CAT link.</text>
+
+  <text x="380" y="386" text-anchor="middle" class="m">Verified by tests: `tests/test_max_tx_watchdog.py`, `tests/test_unverified_tx_gate.py`, the frontend contract tests for ptt_manager/beacons, and the field evidence recorded in SDD 15.4.</text>
+  <text x="380" y="404" text-anchor="middle" class="s">Unverified models therefore key only after an explicit operator opt-in, and even then all eight guarantees below the gate stay in force.</text>
 </svg>

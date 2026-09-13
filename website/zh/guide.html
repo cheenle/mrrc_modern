@@ -297,7 +297,7 @@
     </aside>
     <main class="guide-content">
 <blockquote class="callout-info">
-<p>适用于 MRRC Web Control <strong>v1.15.x</strong>（2026-09 之后的界面，含服务端 QSO 录音），支持 FT-710、IC-7300 与 IC-7300MK2；另含 <strong>IC-705 / IC-7610 / IC-7760 预览配置</strong>（未做硬件验证，默认只收不发，见 0.5 节）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
+<p>适用于 MRRC Web Control <strong>v1.16.x</strong>（2026-09 之后的界面，含服务端 QSO 录音），支持 FT-710、IC-7300 与 IC-7300MK2；另含 <strong>IC-705 / IC-7610 / IC-7760 预览配置</strong>（未做硬件验证，默认只收不发，见 0.5 节）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
 </blockquote>
 <hr />
 <h2 id="开始之前连接与登录">0. 开始之前：连接与登录</h2>
@@ -554,19 +554,19 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>装好了双击没反应 / 控制台窗口一闪而过</td>
-<td>启动器在启动阶段就抛了异常。v1.15.0 起会把原因与完整堆栈写进 <code>%LOCALAPPDATA%\MRRC-Modern\launcher.log</code>（macOS：<code>~/Library/Application Support/MRRC-Modern/launcher.log</code>）并弹窗提示，先看这个文件。已知旧版故障（v1.15.0 已修）：<code>mrrc_modern.env</code> 被记事本以 ANSI/GBK 保存后不是合法 UTF-8，启动器解码失败即退出、窗口一闪而过 —— 现在会按 BOM/UTF-8/本地编码(cp936)/latin-1 依次兜底并回写为 UTF-8。</td>
+<td>启动器在启动阶段就抛了异常。v1.16.0 起会把原因与完整堆栈写进 <code>%LOCALAPPDATA%\MRRC-Modern\launcher.log</code>（macOS：<code>~/Library/Application Support/MRRC-Modern/launcher.log</code>）并弹窗提示，先看这个文件。已知旧版故障（v1.16.0 已修）：<code>mrrc_modern.env</code> 被记事本以 ANSI/GBK 保存后不是合法 UTF-8，启动器解码失败即退出、窗口一闪而过 —— 现在会按 BOM/UTF-8/本地编码(cp936)/latin-1 依次兜底并回写为 UTF-8。</td>
 </tr>
 </tbody>
 </table></div>
 <hr />
 <h2 id="macos-安装与初始化">0.7 macOS 安装与初始化</h2>
-<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.15.0-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
+<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.16.0-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
 <blockquote class="callout-info">
 <p>适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是<strong>自包含</strong>的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。</p>
 </blockquote>
 <h3 id="安装5-步">0.7.1 安装（5 步）</h3>
 <ol type="1">
-<li>打开官网 https://www.vlsc.net/mrrc_modern/ ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.15.0-arm64.dmg</code>（约 56 MB）。</li>
+<li>打开官网 https://www.vlsc.net/mrrc_modern/ ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.16.0-arm64.dmg</code>（约 56 MB）。</li>
 <li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
 <li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
 <li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
@@ -1404,7 +1404,7 @@ venv/bin/pip install -r requirements.txt
 </ul>
 <h3 id="录音出现丢失-n-块怎么办">录音出现”丢失 N 块”怎么办</h3>
 <p>录制按钮提示或面板行里出现 <code>⚠ 丢失 N 块</code>，表示<strong>写入端跟不上音频输入</strong>，该录音会有空洞。服务端日志会打印首条丢弃与原因。常见原因：磁盘/网络盘写入太慢（把 <code>MRRC_RECORDINGS_DIR</code> 换成本地盘）、CPU 长时间满载。编码本身极快（实测 80 ms 音频块约 0.04 ms，约 1900 倍实时），所以几乎不会是编码器的问题。</p>
-<p><strong>整段录音全哑（能播但没声音）</strong>：若日志里 <code>Recording started</code> 之后<strong>立刻</strong>出现「正在丢弃」、丢弃数一路涨，最后以 <code>Recording queue full on stop</code> 收尾 —— 或录音面板每次都显示 <code>⚠ 丢失 N 块</code>、文件明显是静音 —— 那是 v1.15.0 的录音写入端生命周期缺陷（同一进程里从第二次录音起没有消费者）。升级到含该修复的版本并<strong>重启服务</strong>即可；判定办法：<code>REC</code> → 停止 → 从菜单「录音」播放，听第一秒有没有声音。</p>
+<p><strong>整段录音全哑（能播但没声音）</strong>：若日志里 <code>Recording started</code> 之后<strong>立刻</strong>出现「正在丢弃」、丢弃数一路涨，最后以 <code>Recording queue full on stop</code> 收尾 —— 或录音面板每次都显示 <code>⚠ 丢失 N 块</code>、文件明显是静音 —— 那是 v1.16.0 的录音写入端生命周期缺陷（同一进程里从第二次录音起没有消费者）。升级到含该修复的版本并<strong>重启服务</strong>即可；判定办法：<code>REC</code> → 停止 → 从菜单「录音」播放，听第一秒有没有声音。</p>
     </main>
 </div>
 

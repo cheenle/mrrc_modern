@@ -5,19 +5,20 @@ This guide covers the Windows desktop package for MRRC Web Control
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.15.0 Stable)
+## Download (v1.16.0 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.15.0-Windows-x64-Setup.exe` | 45.5 MB (45,494,587 bytes) | `74d04b84ab7b3d0b85314efff304fccb1494f60d95f07c24c0758bee6f13ee0c` |
+| `MRRC-Modern-v1.16.0-Windows-x64-Setup.exe` | 45.5 MB (45,532,589 bytes) | `e453446bfc82072be703279c69edc8c34cc40ff99841e3a0239dc83fc97ceae4` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.15.0-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.16.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.15.0 (rebuilt) is the published Windows installer.** It was built from the release
-commit on Windows 11 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. All 919
-tests, three PyInstaller targets and the installer build passed, and the required
+**v1.16.0 (rebuilt) is the published Windows installer.** It was built from the release
+commit on Windows 11 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. All 1055
+tests (7 pty-based Yaesu round-trip tests skip on Windows), three PyInstaller targets and
+the installer build passed, and the required
 bundled-file inspection passed (FTDI DLLs, opus.dll, `static/`, `mem_channels.json`, the MP3
 encoder `lameenc.cp312-win_amd64.pyd`). The packaged code was then checked **by walking the
 bundle's bytecode** (`MRRC-Modern-Server.exe` → PYZ → the `server` code object contains
@@ -28,9 +29,9 @@ app itself was started with a temporary recordings directory and logged
 packaged build, not just in the test environment.
 
 The earlier v1.14.2 package (45,435,022 bytes, SHA-256 `a7ee1667…`) remains downloadable as an
-archive; v1.15.0 supersedes it.
+archive; v1.16.0 supersedes it.
 
-**What's new in v1.15.0**: QSO recording moved to the server (device-domain RX
+**What's new in v1.16.0**: QSO recording moved to the server (device-domain RX
 PCM + decoded mic PCM on one monotonic 16 kHz timeline, incremental `lameenc`
 MP3 written while recording, crash-safe), a new **Recordings panel** (list,
 seekable player — the server answers Range requests — download, delete), and a

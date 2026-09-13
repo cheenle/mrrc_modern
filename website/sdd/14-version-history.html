@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.48</td>
+<td>2026-09-13</td>
+<td>Claude</td>
+<td><strong>v1.16.0 发布：Yaesu SDR 机型族 + 发布工程化。</strong> 发布 V2.46–V2.47 的工作，并把「文档漂移」变成可执行门禁：<code class="scope-code">release-artifacts.json</code> 登记每个承载版本/尺寸/SHA 的文件，<code class="scope-code">harness/release_check.py</code> 做离线版本一致性检查（<code class="scope-code">--online</code> 校验线上页面与下载、<code class="scope-code">--deep</code> 下载比对 SHA），<code class="scope-code">tests/test_release_artifacts.py</code> 在套件里强制执行；新增 <code class="scope-code">docs/PROJECT_MAP.md</code> 作为「改什么该同步哪些文档」的入口。部署侧新增 prune（<code class="scope-code">sdd/</code>、<code class="scope-code">images/</code> 删除的页面不再永久残留）与发布完整性审计。文档：网站落地页补齐服务端录音功能卡与三款 Icom 预览机型、指南 intro 由 v1.11.x 升到当前版本并新增 TX 门禁与启动器 FAQ、SDD 落地页同步。测试 1055。<strong>产物</strong>：macOS <code class="scope-code">MRRC-Modern-v1.16.0-arm64.dmg</code> 56,001,051 bytes / SHA-256 <code class="scope-code">a3b35f4843fc178306e67fc8e2bd732dd05bfecff6bea9a3c3d1b1f508cdfe38</code>；Windows <code class="scope-code">MRRC-Modern-v1.16.0-Windows-x64-Setup.exe</code> 45,532,589 bytes / <code class="scope-code">e453446bfc82072be703279c69edc8c34cc40ff99841e3a0239dc83fc97ceae4</code>；rpi64 <code class="scope-code">MRRC-Modern-v1.16.0-rpi64.img.xz</code> 543,966,776 bytes / <code class="scope-code">c8f3c3fd2e0f9dd050d998c8351a9cba0999f21e6994e4b9fe2caea09fd8dcb8</code>。三件产物均按字节码/镜像内抽查验证（不含 <code class="scope-code">strings</code> 式证据），并逐项核对下载 URL 与 content-length。</td>
+</tr>
+<tr>
 <td>SDD V2.47</td>
 <td>2026-09-13</td>
 <td>Claude</td>
@@ -619,7 +625,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.47 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.48 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

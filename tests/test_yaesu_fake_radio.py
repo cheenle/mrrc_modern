@@ -8,13 +8,20 @@ exercised together.
 """
 import asyncio
 import os
-import pty
 import shutil
 import subprocess
 import unittest
 
+try:
+    import pty                      # Unix only: Windows has no pty/termios,
+except ImportError:                 # and an unguarded import made the whole
+    pty = None                      # module an ImportError there (Win11 gate).
+
 from backends.yaesu.cat_core import YaesuCatController
 from backends.yaesu.yaesu_profiles import get_profile
+
+#: The pty-based fake radio needs a Unix tty pair.
+requires_pty = unittest.skipIf(pty is None, "pty is Unix-only (no termios on Windows)")
 
 
 class FakeYaesuRadio:
@@ -124,6 +131,7 @@ class FakeYaesuRadio:
         os.close(self._slave)
 
 
+@requires_pty
 class FakeRadioRoundTripTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.radio = await FakeYaesuRadio(model="ftdx10").__aenter__()
@@ -160,6 +168,7 @@ class FakeRadioRoundTripTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.ctrl.get_model_id(), "0000")   # no expectation
 
 
+@requires_pty
 class FakeFTX1RoundTripTests(unittest.IsolatedAsyncioTestCase):
     async def test_ftx1_power_detection_from_the_answer_shape(self):
         async with FakeYaesuRadio(model="ftx1", freq=50_313_000) as radio:
@@ -182,6 +191,7 @@ HAMLIB_SIM = os.path.expanduser("~/hamlib/Hamlib-4.7.2/simulators/simftdx101")
 @unittest.skipUnless(os.access(HAMLIB_SIM, os.X_OK) and shutil.which("socat"),
                      "optional: build ~/hamlib/Hamlib-4.7.2/simulators and install socat "
                      "(see tests/README.md) to run the third-party protocol check")
+@requires_pty
 class HamlibSimulatorPeerTests(unittest.IsolatedAsyncioTestCase):
     """Cross-implementation check: our core against Hamlib's FTDX101 simulator.
 

@@ -2,6 +2,48 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.16.0] — 2026-09-13 — Yaesu SDR 机型族（FTDX10 / FTDX101D / FTDX101MP / FTX-1F）+ 发布工程化
+
+### New — Yaesu SDR 机型族（实验性，仅接收）
+
+- **四款新机型**：`MRRC_RADIO_MODEL=ftdx10 | ftdx101d | ftdx101mp | ftx1`。与 FT-710 同族的
+  八重洲 ASCII-CAT，但**每一处差异都由 profile 表驱动**（`backends/yaesu/yaesu_profiles.py`）：
+  模式寄存器与**独立的 CAT 字符表**（FTX-1 的 `H`/`I` 是 C4FM 码，不是十六进制）、滤波槽位、
+  频段、衰减/前置步进、功率格式（`PC1`/`PC2`/auto；FTX-1 自动识别 Field 头与 SPA-1 形态）、
+  S 表曲线（取自 Hamlib `newcat.c` / `ftdx101.h` / `ftx1.h`，逐项标注溯源）。
+- **传输层是移植而非新写**：`cat_core.py` 沿用 FT-710 已验证的 `;` 帧、AI 帧前缀过滤、写-only set、
+  PTT/TUNE 优先级抢占、ENXIO 与瞬时错误分类、重连，并按 profile 参数化；`backends/ft710/` **零改动**（AD-018）。
+- **默认只收不发**：四款均为 `verified=False`，PTT/TUNE 被服务端拒绝并回给可操作原因；在真机核对 `ID;` 后
+  设 `MRRC_ALLOW_UNVERIFIED_TX=1` 解开（与三款 Icom 预览机型同一门禁）。
+- **没有真机频谱数据源**（这些机型不输出 FT4222/CI-V 波形）：UI 继续用既有的 S 表合成频谱，不伪造瀑布数据。
+- 测试 926 → **1055**（机型注册、profile 表、CAT 字符表、TX 门禁、抽象面守卫等）。
+
+### New — 发布工程化
+
+- `release-artifacts.json`（产物登记表）+ `harness/release_check.py`（离线版本一致性；`--online` 校验线上页面/下载/字节数，
+  `--deep` 下载比对 SHA-256），并由 `tests/test_release_artifacts.py` 在套件内强制执行 —— 文档版本号漂移会让套件直接失败
+  （v1.13.0「文档落后一整轮」教训的工具化）。
+- `docs/PROJECT_MAP.md`：改什么该同步哪些文档的单一入口。
+- 部署 `prune`：`sdd/`、`images/` 中已从仓库删除的页面不再永久残留在线上；`downloads/` 与 `videos/` 仍归服务器管理。
+
+### Docs
+
+- 网站落地页补齐 v1.15.0 的功能内容：服务端 QSO 录音功能卡、IC-705 / IC-7610 / IC-7760 预览机型、
+  技术栈 `lameenc`、测试指标修正；指南 intro 由 v1.11.x 升到当前版本，并新增预览机型与 TX 门禁说明、
+  以及「装好双击没反应」的 FAQ（`launcher.log`）。
+- SDD 手写落地页（`sdd.html` / `zh/sdd.html`）同步 SDD 版本；设计图校对（V2.47）。
+
+### Platform Status
+
+- **macOS**：`MRRC-Modern-v1.16.0-arm64.dmg` — 56,001,051 bytes，SHA-256 `a3b35f4843fc178306e67fc8e2bd732dd05bfecff6bea9a3c3d1b1f508cdfe38`。
+- **Windows**：`MRRC-Modern-v1.16.0-Windows-x64-Setup.exe` — 45,532,589 bytes，SHA-256 `e453446bfc82072be703279c69edc8c34cc40ff99841e3a0239dc83fc97ceae4`。
+- **树莓派 rpi64**：`MRRC-Modern-v1.16.0-rpi64.img.xz` — 543,966,776 bytes，SHA-256 `c8f3c3fd2e0f9dd050d998c8351a9cba0999f21e6994e4b9fe2caea09fd8dcb8`。
+
+### Upgrade Notes
+
+- 依赖无变化（沿用 v1.15.0 的 `lameenc`）；覆盖安装或 `pip install -r requirements.txt` 后重启即可。
+- 新机型要发信必须显式设 `MRRC_ALLOW_UNVERIFIED_TX=1`（默认拒绝），并先在真机核对身份与 CAT 行为。
+
 ## [v1.15.0] — 2026-09-12 — 服务端 QSO 录音 + 录音面板（修复回放颤抖）
 
 ### New — 录音改在服务端进行

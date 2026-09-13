@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.15.0**（2026-09-12，服务端 QSO 录音 + 录音面板（SDD V2.42/AD-017）：服务端取 RX 设备域 PCM 与解码后 TX 麦克风 PCM，单调时钟轴 + 空洞补静音，`lameenc` 增量编码边录边落盘（崩溃安全）；新增「录音」面板（列表/可 seek 播放/下载/删除，Range 请求）；CAT 掉线后恢复由 62 秒降为秒级。修复「同一进程里第二次录音全静音」（writer 任务每会话一次性，原先只在启动时创建一次）。Win11 VM：919 项测试、三个 PyInstaller 目标、Inno Setup 6.7.3 均通过，`lameenc` 已随包（冻结环境实测 `Recording ready`）；产物 45,494,587 bytes，SHA-256 `74d04b84ab7b3d0b85314efff304fccb1494f60d95f07c24c0758bee6f13ee0c`；另按字节码校验包内 `server` 条目含 `_ensure_rec_writer`（`strings` 看不见压缩 PYZ，不作证据）。（历史记录 v1.14.2 = 2026-09-10，IC-7300 波特率联动 + 音频重复条目恢复（SDD V2.37）：连接设置保存/首启探测按型号对齐 `MRRC_BAUD_RATE`（旧模板预填 38400 饿死 CI-V 频谱流），-9999 音频打开重试轮换 host-API 重复条目，WDM-KS 锁定名回退到可用的 MME 条目；Win11 上 721 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,435,022 bytes，SHA-256 `a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706`）。
+> 最新构建：**v1.16.0**（2026-09-13，**Yaesu SDR 机型族** FTDX10 / FTDX101D / FTDX101MP / FTX-1F（实验性、默认只收不发，`MRRC_ALLOW_UNVERIFIED_TX=1` 解锁）+ 发布工程化（`release-artifacts.json` 登记表、`harness/release_check.py` 离线/在线/深检、套件内强制）。**新增：源码包不能整目录排除 `./website/*`**（文档一致性与产物检查测试要读落地页/SDD 生成页）且必须排除 `./promo/*`、`./recordings/*`，见 Step 1。上一版 v1.15.0 = 服务端 QSO 录音 + 录音面板（SDD V2.42/AD-017）：服务端取 RX 设备域 PCM 与解码后 TX 麦克风 PCM，单调时钟轴 + 空洞补静音，`lameenc` 增量编码边录边落盘（崩溃安全）；新增「录音」面板（列表/可 seek 播放/下载/删除，Range 请求）；CAT 掉线后恢复由 62 秒降为秒级。修复「同一进程里第二次录音全静音」（writer 任务每会话一次性，原先只在启动时创建一次）。Win11 VM：1055 项测试（7 项 pty 用例在 Windows 跳过）、三个 PyInstaller 目标、Inno Setup 6.7.3 均通过，`lameenc` 已随包（冻结环境实测 `Recording ready`）；产物 45,532,589 bytes，SHA-256 `e453446bfc82072be703279c69edc8c34cc40ff99841e3a0239dc83fc97ceae4`；另按字节码校验包内 `server` 条目含 `_ensure_rec_writer`（`strings` 看不见压缩 PYZ，不作证据）。（历史记录 v1.14.2 = 2026-09-10，IC-7300 波特率联动 + 音频重复条目恢复（SDD V2.37）：连接设置保存/首启探测按型号对齐 `MRRC_BAUD_RATE`（旧模板预填 38400 饿死 CI-V 频谱流），-9999 音频打开重试轮换 host-API 重复条目，WDM-KS 锁定名回退到可用的 MME 条目；Win11 上 721 项测试、三个 PyInstaller 目标及 Inno Setup 均通过；构建产物 45,435,022 bytes，SHA-256 `a7ee16674c0db29a80fbb072301581a3ecf4805e6705382db380ea534862c706`）。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 ## 1. 环境拓扑
@@ -113,20 +113,29 @@ venv/bin/python -m unittest discover -s tests        # 必须全绿（当前 593
 mkdir -p dist && rm -f dist/mrrc_modern_src.zip
 zip -qr dist/mrrc_modern_src.zip . \
   -x "./.git/*" "./venv/*" "./.venv/*" "./dist/*" "./build/*" "./logs/*" "./certs/*" \
-     "./FT710Mobile/*" "./website/*" "./lib/*" "./__pycache__/*" "./windows/__pycache__/*" \
+     "./FT710Mobile/*" "./lib/*" "./__pycache__/*" "./windows/__pycache__/*" \
      "./tests/__pycache__/*" "./.pytest_cache/*" "./.claude/*" "./.superpowers/*" \
      "./.agnes/*" "./*.pyc" "./.DS_Store" "./SDD/.DS_Store" \
-  "./FT710Android/*" "./vendor/ftdi/LibFT4222-v1.4.8.zip" "./yagi_*.jpg"
+  "./FT710Android/*" "./vendor/ftdi/LibFT4222-v1.4.8.zip" "./yagi_*.jpg" \
+  "./website/downloads/*" "./website/videos/*" "./website/__pycache__/*" \
+  "./promo/*" "./recordings/*" "./logs/*"
 ```
 
 **关键**：`./.agents/*` 不能排除——`tests/test_sdd_harness.py` 依赖其中的 harness 文件，缺了会导致 VM 上 24 个测试失败。`./certs/*` 必须排除（含 TLS 私钥）。
+
+**另一条同样关键（2026-09-13 实测）**：`./website/*` **不能整目录排除**。文档一致性测试（`tests/test_sdd_docs_consistency.py`）与产物登记检查（`tests/test_release_artifacts.py` 的 diagram-copy 规则）要读
+`website/index.html`、`website/zh/*`、`website/guide.html`、`website/sdd/**`（含 10 张图）与 `website/images/**` —— 整目录排除会在 VM 上造成 **14 个失败**（6 错 + 2 失败 + 12 项 diagram-copy）。
+只排除三样与构建无关的大件：`./website/downloads/*`（本地暂存安装包，约 363 MB）、`./website/videos/*`（宣传视频 31 MB）、`./website/__pycache__/*`。
+这样源码包 ~22 MB（此前 20.5 MB）。
 
 **实测（v1.15.0）**：`./FT710Android/*`（Gradle 构建产物，未压缩 191 MB）与 `./vendor/ftdi/LibFT4222-v1.4.8.zip`、
 `./yagi_*.jpg` 都属于与 Windows 打包无关的大文件 —— 不排除时 zip 达 **109 MB**（跨境上传在 flaky 链路上反复中断），
 排除后 **9.8 MB**，且 `server.py`/`recorder.py`/`requirements.txt`/`packaging/`/`.agents/`/`tests/`/`static/`/
 `vendor/opus/windows` 与 FTDI DLL 均完整。
 
-**建议**：另加 `./promo/*` 排除——那是 gitignored 的市场宣传视频（约 630MB），与构建/测试无关；不排除也能构建，但上传极慢（v1.8.0 起已排除）。
+**必须**排除 `./promo/*`（gitignored 的市场宣传视频，约 630MB）与 `./recordings/*`（运行时通联录音，含个人内容）：
+2026-09-13 实测漏掉这两条会得到一个 **667MB** 的源码包（promo 占了 ~600MB，上传极慢）。
+这两条已直接写进上面的命令里 —— 别再靠记忆手工拼排除列表。
 
 ### Step 2 — 上传到 VM（经 ham 跳板）
 

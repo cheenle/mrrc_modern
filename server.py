@@ -38,6 +38,7 @@ from config import (
     UI_MODES, NARROW_MODES,
     ATR1000_HOST, ATR1000_PORT,
     RECORDINGS_BITRATE, RECORDINGS_MAX_SESSION_MIN,
+    CQ_ASSET_PATH,
     _env, default_baud_for,
 )
 from backends import create_backend, known_models
@@ -52,6 +53,7 @@ from recorder import (
     RecorderError, RecordingSession, encoder_available,
     list_recordings, load_index, parse_recording_name, save_index,
 )
+from cq_player import CQPlayer, CQUnavailable
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
 from audio_handler import AudioHandler
@@ -112,6 +114,7 @@ _tx_session_frames = 0      # owner frames received over /WSaudioTX
 _tx_session_decoded = 0     # frames successfully decoded + fed to the device queue
 _tx_session_decode_fail = 0 # Opus frames that failed to decode
 _tx_non_owner_drops = 0     # mic frames ignored from non-owner clients
+_tx_cq_mic_drops = 0        # mic frames ignored while a CQ call owns TX
 
 
 def _promote_tx_owner():
@@ -243,6 +246,11 @@ _rec_session = RecordingSession(RECORDINGS_DIR,
                                 bitrate=RECORDINGS_BITRATE,
                                 max_seconds=RECORDINGS_MAX_SESSION_MIN * 60)
 
+# ── CQ call (spec 2026-09-13): server-side one-shot CQ playback ──────
+# The player is (re)bound to the live audio handler in the lifespan by
+# _bind_cq_player(); before that it only knows the asset path.
+_cq_player = CQPlayer(asset_path=CQ_ASSET_PATH)
+
 
 def _log_recording_readiness() -> None:
     """Report recording readiness at startup (missing deps, read-only dir).
@@ -270,6 +278,22 @@ def _log_recording_readiness() -> None:
             RECORDINGS_DIR, e)
         return
     logger.info("Recording ready: %s (16 kHz mono MP3)", RECORDINGS_DIR)
+
+
+def _log_cq_readiness() -> None:
+    """Report CQ-asset readiness at startup (missing/corrupt file, bad length).
+
+    The CQ key is optional, but pressing it must never fail silently: the
+    operator needs to see *why* before the button is pressed (same reasoning
+    as the recording readiness check).
+    """
+    if _cq_player.ready:
+        logger.info("CQ ready: %s (%.1fs, %d frames of 20 ms)",
+                    CQ_ASSET_PATH, _cq_player.duration_s,
+                    len(_cq_player.frames))
+    else:
+        logger.warning("CQ key disabled: %s — set MRRC_CQ_FILE to a "
+                       "16-bit WAV file and restart.", _cq_player.unavailable_reason)
 
 
 def _recording_should_capture_rx() -> bool:
@@ -675,6 +699,121 @@ async def _broadcast_recording_state() -> None:
         except Exception:
             dead.add(ws)
     ctrl_clients -= dead
+
+
+# ── CQ call (spec 2026-09-13 §3/§6) ───────────────────────────────
+
+def _ws_client_id(ws: WebSocket) -> str:
+    """Short opaque id for a control client (used to name the CQ initiator)."""
+    return f"{id(ws) & 0xFFFFFF:06x}"
+
+
+def _cq_state_payload() -> dict:
+    """CQ snapshot for the ``cqState`` message / fullState."""
+    return _cq_player.status()
+
+
+async def _broadcast_cq_state() -> None:
+    """Push the CQ snapshot to every control client (recordingState pattern)."""
+    global ctrl_clients
+    if not ctrl_clients:
+        return
+    payload = json.dumps({"type": "cqState", "cq": _cq_state_payload()})
+    dead = set()
+    for ws in list(ctrl_clients):
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            dead.add(ws)
+    ctrl_clients -= dead
+
+
+async def _cq_key(owner_token: Optional[str]) -> bool:
+    """Key the radio for a CQ call — the PTT-on sequence, ownership included.
+
+    Returns False (with the carrier released again) when the gate refuses or
+    the TX audio device cannot open, so the caller never reports a silent
+    dead carrier as a successful call.
+    """
+    global _tx_cq_mic_drops
+    if backend is not None and backend.capabilities.tx_gated:
+        return False
+    _claim_tx_owner_for_token(owner_token)
+    _tx_cq_mic_drops = 0
+    try:
+        await cat.set_ptt(True)
+        radio.update(tx_status=1)
+        if audio and not await asyncio.to_thread(audio.start_tx):
+            logger.error("CQ: TX audio stream failed — unkeying radio")
+            await cat.set_ptt(False)
+            radio.update(tx_status=0)
+            return False
+    except Exception as e:
+        logger.error("CQ: keying failed (%s) — releasing", e)
+        try:
+            await cat.set_ptt(False)
+        except Exception:
+            pass
+        radio.update(tx_status=0)
+        return False
+    logger.info("CQ: keyed the radio")
+    return True
+
+
+async def _cq_unkey(graceful: bool) -> None:
+    """Release the carrier after a CQ call (tail drain when graceful)."""
+    if audio:
+        await asyncio.to_thread(audio.stop_tx, graceful)
+    if cat is not None and cat.connected:
+        try:
+            await cat.set_ptt(False)
+        except Exception as e:
+            logger.warning("CQ: unkey failed: %s", e)
+    radio.update(tx_status=0, power_meter=0, alc_meter=0, swr_meter=0,
+                 comp_meter=0, id_meter=0)
+    scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+    if audio:
+        st = audio.tx_stats()
+        logger.info("CQ session: written=%d write_err=%d queue_drops=%d "
+                    "mic_drops=%d", st["written"], st["write_err"],
+                    st["queue_drops"], _tx_cq_mic_drops)
+
+
+async def _feed_tx_from_uplink(pcm: bytes) -> None:
+    """Route decoded browser-mic audio to the DAC, unless a CQ call owns TX.
+
+    During a CQ call the server is the audio source; mixing the operator's
+    microphone in would transmit two voices at once (spec §6).
+    """
+    global _tx_cq_mic_drops
+    if _cq_player is not None and _cq_player.is_calling:
+        _tx_cq_mic_drops += 1
+        return
+    if audio:
+        audio.feed_tx_audio(pcm)
+
+
+async def _cq_abort_if_client_gone(ws: WebSocket) -> None:
+    """Abort a CQ call whose initiating client just disconnected."""
+    if _cq_player is None or not _cq_player.is_calling:
+        return
+    if _cq_player.status().get("started_by") == _ws_client_id(ws):
+        logger.warning("CQ initiator disconnected — aborting the call")
+        await _cq_player.abort("client_gone")
+
+
+def _bind_cq_player() -> None:
+    """Attach the live audio handler and callbacks (called from the lifespan)."""
+    global _cq_player
+    _cq_player = CQPlayer(
+        asset_path=CQ_ASSET_PATH,
+        audio=audio,
+        key=_cq_key,
+        unkey=_cq_unkey,
+        is_transmitting=lambda: bool(radio.is_transmitting),
+        on_change=lambda snap: _broadcast_cq_state(),
+    )
+    _cq_player.load()
 
 
 async def _broadcast_mem_channels():
@@ -1354,6 +1493,46 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
         await _broadcast_recording_state()
         return
 
+    # CQ call (spec 2026-09-13 §3): handled before the "radio not connected"
+    # guard like recording, because a refused call must still report a reason.
+    # true = start one call, false = abort the running one.
+    if field == "cq":
+        on = value is True or str(value).lower() == "true"
+        if not on:
+            if _cq_player.is_calling:
+                await _cq_player.abort("aborted_by_user")
+            else:
+                await _broadcast_cq_state()
+            return
+        if _cq_player.is_calling:
+            await _broadcast_cq_state()      # "already calling" state to the UI
+            return
+        if backend is not None and backend.capabilities.tx_gated:
+            # Same gate as PTT/TUNE (SDD ch15): checked here as well so an
+            # unverified model gets the gate message, not an asset error.
+            await ws.send_text(json.dumps({"type": "error",
+                                           "message": _TX_GATE_MESSAGE}))
+            return
+        if radio.tx_status == 2:
+            await ws.send_text(json.dumps({
+                "type": "error",
+                "message": "TUNE is active — stop it before calling CQ",
+            }))
+            return
+        if radio.is_transmitting:
+            await ws.send_text(json.dumps({
+                "type": "error",
+                "message": "Radio is already transmitting — release PTT first",
+            }))
+            return
+        try:
+            await _cq_player.start(started_by=_ws_client_id(ws),
+                                   owner_token=_ws_tokens.get(ws))
+        except CQUnavailable as e:
+            logger.info("CQ refused: %s", e)
+            await ws.send_text(json.dumps({"type": "error", "message": str(e)}))
+        return
+
     if cat is None or not cat.connected:
         await ws.send_text(json.dumps({
             "type": "error", "message": "Radio not connected",
@@ -1479,6 +1658,12 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "tune":
             on = value is True or str(value).lower() == "true"
+            if on and _cq_player.is_calling:
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "CQ call in progress — stop it before tuning",
+                }))
+                return
             if on and backend is not None and backend.capabilities.tx_gated:
                 await ws.send_text(json.dumps({
                     "type": "error",
@@ -1981,6 +2166,8 @@ async def lifespan(app: FastAPI):
     _rec_writer_task = asyncio.create_task(
         _recording_writer_loop(_rec_queue, _rec_session), name="rec_writer")
     _log_recording_readiness()
+    _bind_cq_player()
+    _log_cq_readiness()
     global _max_tx_watchdog_task
     _max_tx_watchdog_task = asyncio.create_task(_max_tx_watchdog(), name="max_tx_watchdog")
 
@@ -2024,6 +2211,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # ── Shutdown ──
+    if _cq_player is not None and _cq_player.is_calling:
+        await _cq_player.abort("shutdown")
     logger.info("Shutting down...")
 
     # Force RX (safety)
@@ -2561,6 +2750,7 @@ def _full_state_message(data: dict, channels: list) -> dict:
         "bands": backend.bands if backend else BANDS,
         "modes": backend.ui_modes if backend else UI_MODES,
         "recording": _recording_state_payload(),
+        "cq": _cq_state_payload(),
         "radioModel": backend.capabilities.model_name if backend else RADIO_MODEL,
         "radioDisplayName": (backend.capabilities.display_name
                              if backend else "Yaesu FT-710"),
@@ -2645,6 +2835,13 @@ async def ws_radio(ws: WebSocket):
         logger.info("WS client disconnected (%d remain)", len(ctrl_clients))
         if scheduler:
             scheduler.set_active(len(ctrl_clients) > 0)
+
+        # A CQ call belongs to the client that started it: if that client goes
+        # away the call is cut immediately (never a bystander's carrier).
+        try:
+            await _cq_abort_if_client_gone(ws)
+        except Exception as e:
+            logger.warning("CQ abort on disconnect failed: %s", e)
 
         # PTT safety: if no clients remain and radio is transmitting, force RX
         if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
@@ -2779,18 +2976,18 @@ async def ws_audio_tx(ws: WebSocket):
                     pcm = _opus_tx_decoder.decode(frame)
                     if pcm and audio:
                         _rec_tap_tx(pcm)
-                        audio.feed_tx_audio(pcm)
+                        await _feed_tx_from_uplink(pcm)
                         _tx_session_decoded += 1
                     elif not pcm:
                         _tx_session_decode_fail += 1
                 elif tag == AUDIO_TAG_PCM:
                     if audio:
-                        audio.feed_tx_audio(frame)
+                        await _feed_tx_from_uplink(frame)
                         _tx_session_decoded += 1
                 else:
                     # Legacy: untagged, assume PCM
                     if audio:
-                        audio.feed_tx_audio(data)
+                        await _feed_tx_from_uplink(data)
                         _tx_session_decoded += 1
 
             elif "text" in msg and msg["text"]:

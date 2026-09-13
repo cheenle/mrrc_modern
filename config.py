@@ -34,11 +34,21 @@ def _env(name: str, default: str | None = None) -> str | None:
 
 
 def _env_int(name: str, default: int) -> int:
-    return int(_env(name) or default)
+    """Integer env var; a typo falls back to the default instead of killing boot."""
+    try:
+        return int(_env(name) or default)
+    except (TypeError, ValueError):
+        print(f"Warning: {name} is not an integer — using {default}", flush=True)
+        return default
 
 
 def _env_float(name: str, default: float) -> float:
-    return float(_env(name) or default)
+    """Float env var; a typo falls back to the default instead of killing boot."""
+    try:
+        return float(_env(name) or default)
+    except (TypeError, ValueError):
+        print(f"Warning: {name} is not a number — using {default}", flush=True)
+        return default
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -90,6 +100,14 @@ RAW_TO_METER_TABLES = {
 # the session and never deletes a recording.
 RECORDINGS_BITRATE = _env_int("MRRC_RECORDINGS_BITRATE", 64)
 RECORDINGS_MAX_SESSION_MIN = _env_int("MRRC_RECORDINGS_MAX_SESSION_MIN", 240)
+
+# ── CQ key (spec 2026-09-13) ──────────────────────────────────────
+#: CQ recording played by the CQ key.  MRRC_CQ_FILE overrides it (any
+#: mono/stereo 16-bit WAV; normalised to 48 kHz mono once at startup).
+#: The default lives under static/, so it ships inside every bundle
+#: (PyInstaller puts static/ next to the bundled modules as _internal/static).
+CQ_ASSET_PATH = Path(_env("MRRC_CQ_FILE", "") or
+                     (Path(__file__).resolve().parent / "static" / "audio" / "cq.wav"))
 
 
 # ── Radio Model Selection ───────────────────────────────────────────

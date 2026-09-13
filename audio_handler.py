@@ -998,6 +998,18 @@ class AudioHandler:
                 "queue_drops": self._tx_queue_drops,
             }
 
+    def tx_queue_frames(self) -> int:
+        """Number of chunks waiting for the DAC (backpressure signal).
+
+        Server-side audio producers (the CQ player) feed one 20 ms frame per
+        tick while this stays shallow, so a slow sound card makes the producer
+        wait instead of overflowing the queue and hitting the drop cap.
+        """
+        with self._tx_lock:
+            if self._tx_stream is None:
+                return 0
+            return len(self._tx_queue)
+
     def has_pending_tx_audio(self) -> bool:
         """Return True when the TX drain loop has useful work to do."""
         with self._tx_lock:

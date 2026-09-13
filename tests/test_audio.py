@@ -1413,3 +1413,34 @@ class DeviceExcludeRetryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TxQueueDepthTests(unittest.TestCase):
+    """Server-side audio producers (the CQ player) need the queue depth.
+
+    They feed one 20 ms frame per tick while the device queue stays shallow, so
+    a slow sound card makes the producer wait instead of hitting the drop cap.
+    """
+
+    def test_tx_queue_frames_reports_queued_chunks(self):
+        import audio_handler
+        h = audio_handler.AudioHandler()
+        h._tx_stream = object()                      # pretend the output is open
+        self.assertEqual(h.tx_queue_frames(), 0)
+        h.feed_tx_audio(b"\x00\x00" * 480)           # one 10 ms chunk
+        h.feed_tx_audio(b"\x00\x00" * 480)
+        self.assertEqual(h.tx_queue_frames(), 2)
+
+    def test_tx_queue_frames_is_zero_without_a_stream(self):
+        import audio_handler
+        h = audio_handler.AudioHandler()
+        h.feed_tx_audio(b"\x00\x00" * 480)           # dropped: stream not open
+        self.assertEqual(h.tx_queue_frames(), 0)
+
+    def test_tx_queue_frames_is_zero_after_stop_tx(self):
+        import audio_handler
+        h = audio_handler.AudioHandler()
+        h._tx_stream = object()
+        h.feed_tx_audio(b"\x00\x00" * 480)
+        h._tx_stream = None                          # device closed
+        self.assertEqual(h.tx_queue_frames(), 0)

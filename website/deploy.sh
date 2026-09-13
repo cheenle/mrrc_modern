@@ -21,8 +21,8 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 if [ ! -d "$LOCAL_DIR" ]; then
-    echo -e "${RED}Error: Local directory not found: $LOCAL_DIR${NC}"
-    exit 1
+	echo -e "${RED}Error: Local directory not found: $LOCAL_DIR${NC}"
+	exit 1
 fi
 
 echo "Local directory: $LOCAL_DIR"
@@ -34,36 +34,37 @@ cd "$LOCAL_DIR"
 
 echo "Checking required files..."
 REQUIRED_FILES=(
-    "index.html"
-    "zh/index.html"
-    "css/scope.css"
-    "css/mrrc_modern.scope.css"
-    "js/scope.js"
-    "images/qr-wechat-group.jpg"
-    "sdd.html"
-    "zh/sdd.html"
-    "sdd/index.html"
-    "sdd/01-executive-summary.html"
-    "sdd/15-ptt-safety-architecture.html"
-    "images/IMG_8888.PNG"
+	"index.html"
+	"zh/index.html"
+	"css/scope.css"
+	"css/mrrc_modern.scope.css"
+	"js/scope.js"
+	"images/qr-wechat-group.jpg"
+	"sdd.html"
+	"zh/sdd.html"
+	"sdd/index.html"
+	"sdd/01-executive-summary.html"
+	"sdd/15-ptt-safety-architecture.html"
+	"images/IMG_8888.PNG"
 )
 # Note: downloads/*.exe and videos/ are NOT shipped from the repo (gitignored,
 # ~45 MB each). They are managed on the server directly; the tar below also
 # excludes them so deploys stay small.
 for file in "${REQUIRED_FILES[@]}"; do
-    if [ ! -f "$file" ]; then
-        echo -e "${RED}Error: Required file missing: $file${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✓${NC} $file"
+	if [ ! -f "$file" ]; then
+		echo -e "${RED}Error: Required file missing: $file${NC}"
+		exit 1
+	fi
+	echo -e "${GREEN}✓${NC} $file"
 done
 echo ""
 
 DEPLOY_PACKAGE="/tmp/mrrc_modern_website_$(date +%Y%m%d_%H%M%S).tar.gz"
 tar -czf "$DEPLOY_PACKAGE" \
-    --exclude='deploy.sh' --exclude='.DS_Store' --exclude='.__*' \
-    --exclude='downloads' --exclude='videos' --exclude='__pycache__' \
-    -C "$LOCAL_DIR" .
+	--exclude='deploy.sh' --exclude='.DS_Store' --exclude='.__*' \
+	--exclude='downloads' --exclude='videos' --exclude='__pycache__' \
+	--exclude='build_sdd.py' --exclude='build_guide.py' \
+	-C "$LOCAL_DIR" .
 echo -e "${GREEN}✓${NC} Package created: $DEPLOY_PACKAGE"
 echo ""
 
@@ -76,12 +77,12 @@ echo ""
 
 read -p "Continue with deployment? (y/N): " confirm
 if [[ $confirm != [yY] ]]; then
-    echo "Deployment cancelled."
-    rm "$DEPLOY_PACKAGE"
-    exit 0
+	echo "Deployment cancelled."
+	rm "$DEPLOY_PACKAGE"
+	exit 0
 fi
 
-ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
+ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
     set -e
     if [ -d "/var/www/vlsc.net/mrrc_modern" ] && [ "$(ls -A /var/www/vlsc.net/mrrc_modern 2>/dev/null)" ]; then
         sudo mkdir -p /var/tmp
@@ -89,11 +90,18 @@ ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
         # binaries that never change during an HTML deploy. cp -r of the whole
         # site accumulates ~300MB per release and fills the disk (hit 100% in
         # 2026-08-29); rsync with excludes keeps each backup small.
+        BK="/var/tmp/mrrc_modern_backup_$(date +%Y%m%d_%H%M%S)"
         sudo rsync -a --exclude='downloads' --exclude='videos' \
-            /var/www/vlsc.net/mrrc_modern/ \
-            /var/tmp/mrrc_modern_backup_$(date +%Y%m%d_%H%M%S)/
-        # retention: keep the 3 newest (|| true: none exist on the first deploy)
-        ls -1dt /var/tmp/mrrc_modern_backup_* 2>/dev/null | tail -n +4 \
+            /var/www/vlsc.net/mrrc_modern/ "$BK"/
+        # rsync -a copies the source dir's mtime onto "$BK", so `ls -lt` would show
+        # the source's timestamp, not the backup's. Touch it so the listing (and
+        # anything that sorts by mtime) tells the truth.
+        sudo touch "$BK"
+        # retention: keep the 3 newest, sorted by NAME (YYYYmmdd_HHMMSS) — never by
+        # mtime: on 2026-09-13 all backups shared one mtime inherited from the
+        # source dir, so `ls -1dt | tail -n +4` deleted the backup it had just made
+        # and the printed rollback path silently pointed at a day-old state.
+        ls -1d /var/tmp/mrrc_modern_backup_* 2>/dev/null | sort -r | tail -n +4 \
             | xargs -r -d '\n' sudo rm -rf || true
         echo "Backup created."
     fi
@@ -146,9 +154,14 @@ EOF
 
 scp "$DEPLOY_PACKAGE" "$REMOTE_USER@$REMOTE_HOST:/var/tmp/"
 
-ssh "$REMOTE_USER@$REMOTE_HOST" << 'EOF'
+ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
     set -e
     sudo tar -xzf "/var/tmp/mrrc_modern_website_"*.tar.gz -C /var/www/vlsc.net/mrrc_modern --overwrite
+    # tar -x never deletes: the SDD/guide builders an earlier package published are
+    # still served (measured 2026-09-13: /mrrc_modern/build_sdd.py and build_guide.py
+    # both HTTP 200). Build-time tooling must not be in the DocumentRoot at all.
+    sudo rm -f /var/www/vlsc.net/mrrc_modern/build_sdd.py /var/www/vlsc.net/mrrc_modern/build_guide.py
+    echo "Pruned tooling that older versions of this script published."
     sudo chown -R www-data:www-data /var/www/vlsc.net/mrrc_modern
     sudo chmod -R 755 /var/www/vlsc.net/mrrc_modern
     find /var/www/vlsc.net/mrrc_modern -type f -name "*.html" -exec sudo chmod 644 {} \;
@@ -190,5 +203,5 @@ echo ""
 echo "Rollback: ssh $REMOTE_USER@$REMOTE_HOST"
 echo "  # Restore this site only. The DocumentRoot is shared: rm -rf on it would"
 echo "  # destroy the portal and every other sub-site. rsync-merge keeps downloads/."
-echo "  B=\$(ls -1dt /var/tmp/mrrc_modern_backup_* | head -1)"
+echo "  B=\$(ls -1d /var/tmp/mrrc_modern_backup_* | sort -r | head -1)"
 echo "  sudo rsync -a \$B/ $REMOTE_WEBROOT/mrrc_modern/"

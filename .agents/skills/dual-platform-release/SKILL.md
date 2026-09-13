@@ -76,6 +76,38 @@ git push origin main && git push origin vX.Y.Z                               # t
 git ls-remote --tags origin | grep vX.Y.Z                                    # verify it landed
 ```
 
+## Artifact registry — the no-omission protocol
+
+`release-artifacts.json` (this skill's directory) is the machine-readable list of **every file that
+carries a version, an installer size or a SHA-256**, plus the sources of truth. `harness/release_check.py`
+turns it into an executable check and `tests/test_release_artifacts.py` runs it in the suite, so a stale
+document fails the build instead of being found by a reader.
+
+```bash
+# offline: versions, artifact facts (when the build is present), stale download links
+python3 .agents/skills/dual-platform-release/harness/release_check.py
+# published-state: site pages, download URLs + byte counts, the tag on origin
+python3 .agents/skills/dual-platform-release/harness/release_check.py --online
+# full: also download the artifacts and compare SHA-256
+python3 .agents/skills/dual-platform-release/harness/release_check.py --online --deep
+```
+Exit code 0 = clean, 2 = violations (the report lists each one with file and expected value).
+
+**Rule kinds in the registry** — add one whenever a new file starts carrying a version:
+
+| Kind | Meaning |
+| --- | --- |
+| `rules[].expect: app\|sdd` | every match must equal the current app version (CHANGELOG top) or SDD version (chapter 14 row). `count` / `min_count` catch missing cards; `optional: true` skips rather than fails when an artifact has not been published yet (the Pi image). |
+| `artifact_facts` | a download card's byte count + SHA-256 prefix must describe the artifact actually built locally (skips with a note when `dist/` has no build). |
+| `stale_tokens` | the current-facing pages must not link a previous release's DMG/EXE/image — the classic "built but not published" symptom. |
+| `manual_review` | not machine-checkable (packaging manuals, the installer skills, AGENTS.md): printed on every run so it cannot be forgotten. |
+| `history_only` | dated design records, `CHANGELOG`, `SDD/14`, generated pages — never "updated" to the current version. |
+
+**Two sources of truth, deliberately:** the app version is the top `## [vX.Y.Z]` heading in
+`CHANGELOG.md`; the SDD version is the newest row of `SDD/14-version-history.md`. Hand-maintained
+duplicates (the `.iss` literal, the `SDD/README.md` Quick Facts row, the landing-page badges) are all
+governed by rules instead of trust.
+
 ## CRITICAL Gotchas
 
 0. **`/tmp` on `www.vlsc.net` is a 454 MB tmpfs** — uploads above that fail mid-transfer (`scp: write remote ...: Failure`, and afterwards `df -h /tmp` shows it 100 % full). The Pi image (~546 MB) hits this every time, the installers (~45–56 MB) do not. Stream large artifacts to the disk-backed path and move them into place atomically (same filesystem):
@@ -99,7 +131,14 @@ ssh www.vlsc.net 'd=/var/www/vlsc.net/mrrc_modern/downloads; sudo -n mv /var/tmp
 3. **Mac interpreter trap**: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh`; `.venv/bin/python` for tests. Canary: any error path mentioning `mrrc_ft710/.venv` means the wrong interpreter was selected (`macos-installer` gotcha 10).
 4. **Static-asset changes need cache-bust bumps** (`ft710_main.js?v=N`, service worker `mrrc-vN`) pinned by tests; download-page HTML edits don't.
 5. **The v1.13.0 lesson**: docs-only releases drift — `docs/WINDOWS_INSTALLER_GUIDE.md` stayed on v1.12.1 through the whole v1.13.0 cycle. Step 4's checklist is the antidote; run it even when the release is "just installers".
-6. **Post-release operator checks stay open**: real-QSO recording acceptance on the radio; TX audio on physical Windows hardware (the KVM VM can never verify it — `windows-installer` gotcha 4). Say so in the release summary.
+6. **Hand-maintained rows are drift generators — make the generator read the authority.** The
+   generated SDD pages advertised V2.45 for a whole cycle because `build_sdd.py` read the "SDD Version"
+   Quick Facts row in `SDD/README.md` instead of the newest row of `SDD/14-version-history.md`; the fix
+   was to point the generator at the authority *and* to add a rule. Same class: the hand-written
+   `website/sdd.html` + `website/zh/sdd.html` are **not** generated and were still advertising V2.27 with
+   an AD index ending at AD-016; `docs/OPERATION_GUIDE.md` still pointed at the v1.13.0 DMG. All three are
+   now registry rules with tests behind them.
+7. **Post-release operator checks stay open**: real-QSO recording acceptance on the radio; TX audio on physical Windows hardware (the KVM VM can never verify it — `windows-installer` gotcha 4). Say so in the release summary.
 
 ## Release-Day Checklist
 
@@ -109,8 +148,10 @@ ssh www.vlsc.net 'd=/var/www/vlsc.net/mrrc_modern/downloads; sudo -n mv /var/tmp
 | 1 | CHANGELOG top entry + `.iss` version | `grep MyAppVersion` == CHANGELOG |
 | 2 | macOS build | DMG bytes + SHA-256 recorded |
 | 3 | Windows build (KVM VM) | VM hash == local hash |
-| 4 | Docs + website sync + `build_sdd.py` | `grep -r vX.Y.Z` clean of old version (except CHANGELOG history); bundle bytecode walked + launcher smoke-tested |
+| 4 | Docs + website sync + `build_sdd.py` | `release_check.py` → **0 failing** (versions, cards, stale links) + `python3 -m unittest tests.test_release_artifacts tests.test_sdd_docs_consistency` green; bundle bytecode walked + launcher smoke-tested |
+| 4b | Hand-written pages + harness | `website/sdd.html`/`zh/sdd.html` badge + a card for this release + AD index extended; guardian `index.json` topic updated when new modules landed |
 | 5 | Installers on <www.vlsc.net> | `ls -la downloads/` shows new files |
 | 6 | HTML deploy | deploy.sh completes, nginx -t ok |
-| 7 | URL + hash verification | 3× `HTTP/2 200`, content-length match, shasum match |
+| 7 | URL + hash verification | `release_check.py --online --deep` → **0 failing** (3× `HTTP/2 200`, content-length == built bytes, SHA-256 match, tag on origin) |
 | 8 | Commit + tag + explicit push | `git ls-remote` shows tag; `check --staged` exit 0 |
+| 9 | Docs/design/harness sweep | `release_check.py` (offline) still 0 failing after the tag commit; `SDD/14` row + `SDD/README` status/Quick Facts + README/AGENTS/DEPENDENCIES/tests/README updated; see `docs/PROJECT_MAP.md` for the ownership table |

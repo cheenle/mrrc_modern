@@ -158,13 +158,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 ## 0.7 macOS 安装与初始化
 
-本章面向 **macOS 桌面版（`MRRC-Modern-v1.13.0-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
+本章面向 **macOS 桌面版（`MRRC-Modern-v1.15.0-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
 
 > 适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是**自包含**的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。
 
 ### 0.7.1 安装（5 步）
 
-1. 打开官网 https://www.vlsc.net/mrrc_modern/ ，点 **Download for macOS** 下载 `MRRC-Modern-v1.13.0-arm64.dmg`（约 56 MB）。
+1. 打开官网 https://www.vlsc.net/mrrc_modern/ ，点 **Download for macOS** 下载 `MRRC-Modern-v1.15.0-arm64.dmg`（约 56 MB）。
 2. 双击刚下载的 `.dmg` → 弹出窗口里看到 **MRRC Modern** 图标和一个 **Applications** 文件夹。
 3. 把 **MRRC Modern** 图标**拖进 Applications** 文件夹（松手即完成安装）。
 4. **第一次启动**请右键点 Applications 里的 **MRRC Modern** → 选 **打开** → 弹窗里再点一次 **打开**（因为免费签名，系统会拦一次；只第一次需要）。

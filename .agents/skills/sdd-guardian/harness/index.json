@@ -551,6 +551,37 @@
         "ch:11",
         "ch:12"
       ]
+    },
+    {
+      "id": "release-artifacts",
+      "globs": [
+        "CHANGELOG.md",
+        "packaging/windows/*.iss",
+        "website/*.html",
+        "website/zh/*.html",
+        "docs/*GUIDE.md",
+        "mac_pack.md",
+        "win_pack.md",
+        "pi_pack.md",
+        ".agents/skills/dual-platform-release/**",
+        "tests/test_release_artifacts.py",
+        "tests/test_sdd_docs_consistency.py"
+      ],
+      "keywords": [
+        "release",
+        "version",
+        "sha256",
+        "dmg",
+        "setup.exe",
+        "发布",
+        "版本",
+        "安装包"
+      ],
+      "refs": [
+        "ch:14",
+        "nfr:NFR-051",
+        "sec:12.2"
+      ]
     }
   ]
 }

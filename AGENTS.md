@@ -67,11 +67,13 @@ SDD (Software Design Description) in `SDD/` — 15-chapter IBM TeamSD documentat
 
 Before editing, run `python3 .agents/skills/sdd-guardian/harness/sdd_context.py brief <files>`; before committing, `... check --staged` must be clean. To make enforcement automatic (session-start context injection + pre-edit blocking), install the hooks once: `python3 .agents/skills/sdd-guardian/harness/install_hooks.py` (appends `[[hooks]]` to `~/.kimi-code/config.toml`, idempotent, backs up first). Behavior changes still owe the doc-sync described in SKILL.md Phase 5 (SDD chapters + version history + this file + README + tests/README).
 
+**Human entry point for “what must I update?”: `docs/PROJECT_MAP.md`** — layers (code → design → tests → engineering → harness → release artifacts), the change-type → document-ownership table, the release-day command chain, and the list of invariants that tests now enforce.
+
 ## Release & Packaging Skills
 
 Installer/release process is captured as project skills in `.agents/skills/` (each gotcha traces to a real broken build):
 
-- `dual-platform-release/` — release-day orchestrator: version bump (CHANGELOG top entry is the single source of truth + `.iss`), build order, docs/SDD/website sync checklist, <www.vlsc.net> deploy, URL/SHA verification, commit/tag/**explicit tag push** (`--follow-tags` skips lightweight tags). Start here for 发布.
+- `dual-platform-release/` — release-day orchestrator: version bump (CHANGELOG top entry is the single source of truth + `.iss`), build order, docs/SDD/website sync checklist, <www.vlsc.net> deploy, URL/SHA verification, commit/tag/**explicit tag push** (`--follow-tags` skips lightweight tags). Start here for 发布. Ships a **machine-readable artifact registry** (`release-artifacts.json`: every file carrying a version, a size or a SHA) and a checker (`harness/release_check.py`; offline rules, `--online` for the published site/downloads/tag, `--deep` for SHA comparison) that `tests/test_release_artifacts.py` runs in the suite — a stale document now fails the build instead of being found by a reader. Add a rule whenever a new file starts carrying a version.
 - `macos-installer/` — local DMG build (`packaging/macos/build.sh`): interpreter selection (`PYTHON=$(pwd)/.venv/bin/python`; never `source .venv/bin/activate` — copied venv points at mrrc_ft710), `Contents/Frameworks` symlink, dual-stack `::`, HTTPS-default wiring, classic DMG layout, headless + GUI verification.
 - `windows-installer/` — Win11 KVM VM build via `ham.vlsc.net` jump: source-zip exclusion rules (`.agents/` in, `certs/`/`promo/` out), venv-preserving extract, per-version build script (never the hijacked `build_vm.ps1`), PowerShell 5.1 quirks, KVM USB limits (TX audio unverifiable on VM).
 

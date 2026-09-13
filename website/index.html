@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<meta content="MRRC Modern — software SCU-LAN10 replacement for Yaesu (FT-710) and Icom (IC-7300/IC-7300MK2, plus IC-705/IC-7610/IC-7760 preview) HF/50MHz transceivers. Browser remote control, real-time waterfall spectrum, bidirectional Opus 48kHz audio, and server-side QSO recording straight to MP3." name="description"/>
-<meta content="FT-710, IC-7300, Yaesu FT-710, Icom IC-7300, SCU-LAN10 replacement, remote radio control, FT4222 SPI, waterfall spectrum, HAM radio, Opus audio, WebSocket CAT, QSO recording, server-side MP3 recording, IC-705, IC-7610, IC-7760" name="keywords"/>
+<meta content="MRRC Modern — software SCU-LAN10 replacement for ten HF/50MHz radio profiles: Yaesu (FT-710 and the FTDX10 / FTDX101D / FTDX101MP / FTX-1F SDR family) and Icom (IC-7300/IC-7300MK2, plus IC-705/IC-7610/IC-7760 preview). Browser remote control, real-time waterfall spectrum, bidirectional Opus 48kHz audio, and server-side QSO recording straight to MP3." name="description"/>
+<meta content="FT-710, IC-7300, Yaesu FT-710, Icom IC-7300, SCU-LAN10 replacement, remote radio control, FT4222 SPI, waterfall spectrum, HAM radio, Opus audio, WebSocket CAT, QSO recording, server-side MP3 recording, IC-705, IC-7610, IC-7760, FTDX10, FTDX101D, FTDX101MP, FTX-1F" name="keywords"/>
 <meta content="BG1SB" name="author"/>
 <meta content="#0a0a0a" name="theme-color"/>
 <title>MRRC Modern — Software SCU-LAN10 Replacement</title><link href="css/scope.css?v=2" rel="stylesheet"/><link href="css/mrrc_modern.scope.css?v=2" rel="stylesheet"/>
@@ -48,9 +48,10 @@
 <span class="gradient">Any Device</span>
 </h1>
 <p class="hero-subtitle">
-          Software SCU-LAN10 replacement for Yaesu (FT-710) and Icom
-          (IC-7300/IC-7300MK2, plus preview profiles for IC-705 / IC-7610 /
-          IC-7760) HF/50MHz transceivers. Real-time FFT spectrum plot +
+          Software SCU-LAN10 replacement for ten HF/50MHz radio profiles:
+          Yaesu FT-710 and the SDR family FTDX10 / FTDX101D / FTDX101MP /
+          FTX-1F, Icom IC-7300/IC-7300MK2 plus the IC-705 / IC-7610 / IC-7760
+          preview profiles. Real-time FFT spectrum plot +
           waterfall (FT4222 SPI or CI-V), bidirectional Opus 48kHz audio,
           server-side QSO recording to MP3, full CAT control over 4+1
           WebSocket channels — no $200 dongle required.
@@ -68,6 +69,51 @@
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub
           </a>
+</div>
+</div>
+</section>
+<!-- What's new in the current release -->
+<section class="scope-section" id="whats-new" style="background: var(--scope-bg); padding: 2.5rem 0 0">
+<div class="container">
+<div style="
+            max-width: 900px;
+            margin: 0 auto;
+            border: 1px solid rgba(255, 176, 0, 0.28);
+            background: rgba(255, 176, 0, 0.06);
+            border-radius: 16px;
+            padding: 1.4rem 1.75rem;
+          ">
+<p style="margin: 0 0 0.6rem; font-size: 1.05rem">
+<i class="fas fa-star" style="color: var(--scope-primary)"></i>
+<strong> What's new in v1.16.0</strong>
+</p>
+<ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
+<li>
+<strong>Yaesu SDR family:</strong> FTDX10 / FTDX101D / FTDX101MP / FTX-1F —
+              one profile-driven ASCII-CAT core ported from the field-proven FT-710
+              transport (<code>MRRC_RADIO_MODEL=ftdx10|ftdx101d|ftdx101mp|ftx1</code>).
+              Experimental and <strong>receive-only</strong>: transmit stays refused until
+              you check the radio and set <code>MRRC_ALLOW_UNVERIFIED_TX=1</code>. These
+              models have no real spectrum source, so the UI shows the S-meter
+              synthesised spectrum instead of pretending to have a waterfall.
+            </li>
+<li>
+<strong>Server-side QSO recording</strong> (v1.15.0, in every installer) —
+              REC writes on the server, so a page reload, a closed tab or a CAT dropout
+              cannot stop it; the Recordings panel plays (seekable), downloads and
+              deletes.
+            </li>
+<li>
+<strong>Ten radio profiles, one UI</strong> — the front end adapts to the
+              capabilities the active backend reports (bands, modes, filter steps,
+              ATT/PRE, meter visibility, scope banner).
+            </li>
+</ul>
+<p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
+              Every size and SHA-256 on this page is checked against the built artifact by
+              <code>release_check.py</code>, so a stale download card fails the build
+              instead of shipping.
+            </p>
 </div>
 </div>
 </section>
@@ -120,9 +166,9 @@
 <p class="section-subtitle">
             Real spectrum (FT4222 SPI or CI-V), bidirectional Opus audio,
             server-side QSO recording, full CAT/CI-V control and multi-layer
-            PTT safety — pluggable backends for FT-710 and IC-7300/IC-7300MK2,
-            with IC-705 / IC-7610 / IC-7760 preview profiles, no middleware
-            anywhere.
+            PTT safety — ten pluggable radio profiles (FT-710, IC-7300/MK2,
+            the IC-705 / IC-7610 / IC-7760 previews and the Yaesu SDR family
+            FTDX10 / FTDX101D / FTDX101MP / FTX-1F), no middleware anywhere.
           </p>
 </div>
 <div class="features-grid">
@@ -574,6 +620,7 @@
 <span class="tech-tag"><i class="fas fa-microchip"></i> Yaesu FT-710</span>
 <span class="tech-tag"><i class="fas fa-microchip"></i> Icom IC-7300 / IC-7300MK2</span>
 <span class="tech-tag"><i class="fas fa-flask"></i> Icom IC-705 / IC-7610 / IC-7760 (preview)</span>
+<span class="tech-tag"><i class="fas fa-flask"></i> Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (experimental)</span>
 <span class="tech-tag"><i class="fas fa-usb"></i> USB Cable (A→B or C→B)</span>
 <span class="tech-tag"><i class="fab fa-windows"></i> Windows Installer (bundled Python)</span>
 <span class="tech-tag"><i class="fab fa-python"></i> or Python 3.12+ from source</span>

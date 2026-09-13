@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<meta content="MRRC Modern — 八重洲 FT-710 与 Icom IC-7300/IC-7300MK2（另含 IC-705 / IC-7610 / IC-7760 预览）的软件化 SCU-LAN10 替代方案。浏览器远程控制、实时瀑布频谱、双向 Opus 48kHz 音频，以及服务端 QSO 录音（直接落 MP3）。" name="description"/>
-<meta content="FT-710, IC-7300, 八重洲 FT-710, Icom IC-7300, IC-705, IC-7610, IC-7760, SCU-LAN10 替代, 远程电台控制, FT4222 SPI, 瀑布频谱, 业余无线电, Opus 音频, WebSocket CAT, QSO 录音, 服务端录音" name="keywords"/>
+<meta content="MRRC Modern — 十款 HF/50MHz 机型的软件化 SCU-LAN10 替代方案：八重洲 FT-710 与 SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F，Icom IC-7300/IC-7300MK2（另含 IC-705 / IC-7610 / IC-7760 预览）。浏览器远程控制、实时瀑布频谱、双向 Opus 48kHz 音频，以及服务端 QSO 录音（直接落 MP3）。" name="description"/>
+<meta content="FT-710, IC-7300, 八重洲 FT-710, Icom IC-7300, IC-705, IC-7610, IC-7760, SCU-LAN10 替代, 远程电台控制, FT4222 SPI, 瀑布频谱, 业余无线电, Opus 音频, WebSocket CAT, QSO 录音, 服务端录音, FTDX10, FTDX101D, FTDX101MP, FTX-1F" name="keywords"/>
 <meta content="BG1SB" name="author"/>
 <meta content="#0a0a0a" name="theme-color"/>
 <title>MRRC Modern — 软件化 SCU-LAN10 替代方案</title><link href="../css/scope.css?v=2" rel="stylesheet"/><link href="../css/mrrc_modern.scope.css?v=2" rel="stylesheet"/>
@@ -48,8 +48,9 @@
 <span class="gradient">任意设备操控</span>
 </h1>
 <p class="hero-subtitle">
-          八重洲 FT-710 与 Icom IC-7300/IC-7300MK2（另含 IC-705 / IC-7610 /
-          IC-7760 预览配置）HF/50MHz 电台的软件化 SCU-LAN10 替代方案。
+          十款 HF/50MHz 机型的软件化 SCU-LAN10 替代方案：八重洲 FT-710 与 SDR
+          机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F，Icom IC-7300 /
+          IC-7300MK2，另含 IC-705 / IC-7610 / IC-7760 预览配置。
           实时 FFT 频谱图 + 瀑布图（FT4222 SPI 或 CI-V）、双向 Opus 48kHz
           音频、服务端 QSO 录音（直接落 MP3）、4+1 路 WebSocket 全功能
           CAT/CI-V 控制——无需 200 美元的硬件盒子。
@@ -67,6 +68,47 @@
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub
           </a>
+</div>
+</div>
+</section>
+<!-- 本版更新 -->
+<section class="scope-section" id="whats-new" style="background: var(--scope-bg); padding: 2.5rem 0 0">
+<div class="container">
+<div style="
+            max-width: 900px;
+            margin: 0 auto;
+            border: 1px solid rgba(255, 176, 0, 0.28);
+            background: rgba(255, 176, 0, 0.06);
+            border-radius: 16px;
+            padding: 1.4rem 1.75rem;
+          ">
+<p style="margin: 0 0 0.6rem; font-size: 1.05rem">
+<i class="fas fa-star" style="color: var(--scope-primary)"></i>
+<strong> v1.16.0 更新内容</strong>
+</p>
+<ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
+<li>
+<strong>Yaesu SDR 机型族：</strong>FTDX10 / FTDX101D / FTDX101MP / FTX-1F ——
+              一套 profile 驱动的 ASCII-CAT 核心，传输层移植自 FT-710 已验证的实现
+              （<code>MRRC_RADIO_MODEL=ftdx10|ftdx101d|ftdx101mp|ftx1</code>）。
+              <strong>实验性、默认只收不发</strong>：核对真机后设
+              <code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 才可发射；这几款没有真机频谱数据源，
+              界面用 S 表合成频谱，不伪造瀑布数据。
+            </li>
+<li>
+<strong>服务端 QSO 录音</strong>（v1.15.0 起，所有安装包均已内置）——
+              点 REC 由<strong>服务端</strong>录制：刷新页面、关标签页、CAT 掉线都不会中断；
+              「录音」面板可拖动播放、下载、删除。
+            </li>
+<li>
+<strong>十款机型、一套界面</strong>——前端按当前后端上报的
+              <code>capabilities</code> 自动适配频段、模式、滤波档位、ATT/PRE、仪表与频谱提示。
+            </li>
+</ul>
+<p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
+              本页每个尺寸与 SHA-256 都由 <code>release_check.py</code> 对照构建产物校验 ——
+              下载卡片过期会直接让构建失败，而不是发布出去。
+            </p>
 </div>
 </div>
 </section>
@@ -117,8 +159,9 @@
 <h2 class="section-title">完整的多电台远程控制</h2>
 <p class="section-subtitle">
             真实频谱（FT4222 SPI 或 CI-V）、双向 Opus 音频、服务端 QSO 录音、
-            全功能 CAT/CI-V 控制与多层 PTT 安全——FT-710、IC-7300/IC-7300MK2
-            可插拔后端，另含 IC-705 / IC-7610 / IC-7760 预览配置，全链路零中间件。
+            全功能 CAT/CI-V 控制与多层 PTT 安全——<strong>十款可插拔机型</strong>：
+            FT-710、IC-7300/IC-7300MK2，IC-705 / IC-7610 / IC-7760 预览配置，
+            以及 Yaesu SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F，全链路零中间件。
           </p>
 </div>
 <div class="features-grid">
@@ -547,6 +590,7 @@
 <span class="tech-tag"><i class="fas fa-microchip"></i> 八重洲 FT-710</span>
 <span class="tech-tag"><i class="fas fa-microchip"></i> Icom IC-7300 / IC-7300MK2</span>
 <span class="tech-tag"><i class="fas fa-flask"></i> Icom IC-705 / IC-7610 / IC-7760（预览）</span>
+<span class="tech-tag"><i class="fas fa-flask"></i> Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F（实验性）</span>
 <span class="tech-tag"><i class="fas fa-usb"></i> USB 线（A→B 或 C→B）</span>
 <span class="tech-tag"><i class="fab fa-windows"></i> Windows 安装包（内置 Python）</span>
 <span class="tech-tag"><i class="fab fa-python"></i> 或源码运行 Python 3.12+</span>

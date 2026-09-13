@@ -49,7 +49,7 @@ seekable player — the server answers Range requests — download, delete), and
 CAT recovery fix (a reconnect no longer runs a 24-query state sweep that used
 to hold the serial lock for ~60 s). The browser-side recorder and its 530 KB
 `lame.js` encoder are gone. See `CHANGELOG.md` for the full list; CAT protocol
-and PTT behaviour are unchanged from v1.14.2.
+and PTT behaviour are unchanged for the FT-710/IC-7300 path since v1.14.2 (this release adds model profiles, it does not alter the existing ones).
 
 Browser capture and Opus remain at 48 kHz. Every decoded 960-sample TX frame is
 converted to 882 samples before the FT-710 playback device is opened/written at

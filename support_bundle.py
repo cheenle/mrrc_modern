@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 
 REDACTED = "<redacted>"
 
@@ -77,3 +78,56 @@ def is_collectable(relative_path: str) -> bool:
     """Whether a path may enter the bundle (spec §6)."""
     lowered = str(relative_path).lower().replace("\\", "/")
     return not any(token in lowered for token in FORBIDDEN_SUBSTRINGS)
+
+
+# ── log discovery and bounded tails (spec §5/§6) ────────────────────────────
+DEFAULT_TAIL_BYTES = 2 * 1024 * 1024
+
+
+def tail_lines(path, max_bytes: int = DEFAULT_TAIL_BYTES) -> str:
+    """Read at most `max_bytes` from the end of a file, on a line boundary."""
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as fh:
+            if size > max_bytes:
+                fh.seek(size - max_bytes)
+                fh.readline()                      # drop the half line
+            data = fh.read()
+    except OSError:
+        return ""
+    return data.decode("utf-8", "replace")
+
+
+def resolve_log_files(log_dir, data_dir="", install_dir="") -> dict:
+    """Map bundle role -> existing log file (spec §5).
+
+    Roles: server / server-prev / stdout / stdout-prev / launcher / legacy.
+    The desktop launcher puts logs under the user data dir; systemd and
+    `start.sh` write into the install dir, which is also where a hand-started
+    server writes when MRRC_LOG_DIR is unset.
+    """
+    log_dir = Path(log_dir)
+    candidates = [
+        ("server", log_dir / "server.log"),
+        ("server-prev", log_dir / "server.log.1"),
+        ("stdout", log_dir / "server-stdout.log"),
+        ("stdout-prev", log_dir / "server-stdout.log.1"),
+    ]
+    if data_dir:
+        candidates.append(("launcher", Path(data_dir) / "launcher.log"))
+    if install_dir:
+        candidates.append(("legacy", Path(install_dir) / "logs" / "ft710-server.log"))
+        candidates.append(("legacy-server", Path(install_dir) / "logs" / "server.log"))
+
+    found: dict = {}
+    seen: set = set()
+    for role, path in candidates:
+        try:
+            key = os.path.realpath(path)
+        except OSError:
+            continue
+        if key in seen or not os.path.isfile(path):
+            continue
+        seen.add(key)
+        found[role] = str(path)
+    return found

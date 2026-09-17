@@ -1,5 +1,7 @@
 """Support bundle core (spec 2026-09-17 §4/§6): redaction is the security boundary."""
+import tempfile
 import unittest
+from pathlib import Path
 
 import support_bundle as sb
 
@@ -65,3 +67,58 @@ class CollectableTests(unittest.TestCase):
 
     def test_windows_separators_are_normalised(self):
         self.assertFalse(sb.is_collectable(r"C:\Users\x\certs\server.key"))
+
+
+class TailLinesTests(unittest.TestCase):
+    def test_small_file_is_read_whole(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server.log"
+            path.write_text("line1\nline2\n", encoding="utf-8")
+            self.assertEqual(sb.tail_lines(str(path)), "line1\nline2\n")
+
+    def test_tail_is_byte_bounded_and_line_aligned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server.log"
+            path.write_text("".join(f"line{i:05d}\n" for i in range(1000)), encoding="utf-8")
+            text = sb.tail_lines(str(path), max_bytes=100)
+            self.assertLessEqual(len(text.encode()), 100)
+            self.assertTrue(text.startswith("line"), text[:20])
+            self.assertTrue(text.endswith("\n"))
+
+    def test_missing_file_is_empty_not_an_exception(self):
+        self.assertEqual(sb.tail_lines("/nonexistent/server.log"), "")
+
+    def test_invalid_utf8_is_replaced_not_raised(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server.log"
+            path.write_bytes(b"ok\n\xff\xfe bad\n")
+            self.assertIn("ok", sb.tail_lines(str(path)))
+
+
+class ResolveLogFilesTests(unittest.TestCase):
+    def test_finds_server_stdout_and_launcher_across_two_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp)
+            (data / "logs").mkdir()
+            (data / "logs" / "server.log").write_text("s", encoding="utf-8")
+            (data / "logs" / "server-stdout.log").write_text("o", encoding="utf-8")
+            (data / "logs" / "server.log.1").write_text("p", encoding="utf-8")
+            (data / "launcher.log").write_text("l", encoding="utf-8")
+            found = sb.resolve_log_files(data / "logs", data)
+        self.assertEqual(Path(found["server"]).name, "server.log")
+        self.assertEqual(Path(found["server-prev"]).name, "server.log.1")
+        self.assertEqual(Path(found["stdout"]).name, "server-stdout.log")
+        self.assertEqual(Path(found["launcher"]).name, "launcher.log")
+
+    def test_only_existing_files_are_returned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(sb.resolve_log_files(Path(tmp) / "logs", Path(tmp)), {})
+
+    def test_source_mode_legacy_name_is_picked_up_without_duplicates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            install = Path(tmp)
+            (install / "logs").mkdir()
+            (install / "logs" / "ft710-server.log").write_text("x", encoding="utf-8")
+            found = sb.resolve_log_files(install / "logs", "", install)
+        self.assertEqual(Path(found["legacy"]).name, "ft710-server.log")
+        self.assertEqual(len(set(found.values())), len(found))

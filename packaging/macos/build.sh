@@ -104,16 +104,12 @@ fi
 # Contents/MacOS must hold NOTHING but executables and symlinks: codesign walks
 # it for code objects and refuses to sign the bundle when it meets a plain data
 # file (mem_channels.json, version.txt, macos/default.env all failed in turn).
-# Runtime files therefore live in Resources and are symlinked back, so every
-# path under Contents/MacOS still resolves for the launcher and the server.
+# These runtime items move into the resource tree instead — the launchers resolve
+# them through runtime_path(), which falls back to Contents/MacOS/_internal.
 for item in macos mem_channels.json version.txt vendor; do
     [ -e "$APP_MACOS/$item" ] || continue
-    if [ -e "$APP_BUNDLE/Contents/Resources/$item" ]; then
-        rm -rf "$APP_MACOS/$item"
-    else
-        mv "$APP_MACOS/$item" "$APP_BUNDLE/Contents/Resources/$item"
-    fi
-    ln -sfn "../Resources/$item" "$APP_MACOS/$item"
+    cp -Rf "$APP_MACOS/$item" "$APP_BUNDLE/Contents/Resources/"
+    rm -rf "$APP_MACOS/$item"
 done
 
 # Data tree -> Contents/Resources, with BOTH code locations symlinked to it.
@@ -126,10 +122,14 @@ done
 # Resources/ is a resource location, so the tree is sealed instead of inspected,
 # and the symlinks keep both the bundle-mode bootloader (Frameworks) and the
 # explicit _internal paths (datas, scope_pipe) working.
-mv "$APP_MACOS/_internal"/* "$APP_BUNDLE/Contents/Resources/" 2>/dev/null || true
-rmdir "$APP_MACOS/_internal" 2>/dev/null || true
+# cp -Rf + rm -rf, not `mv ... || true`: the swallowed failure left a real
+# MacOS/_internal directory behind and `ln -sfn` then nested the symlink inside
+# it, so codesign kept walking the data tree and kept refusing to sign.
+cp -Rf "$APP_MACOS/_internal"/* "$APP_BUNDLE/Contents/Resources/"
+rm -rf "$APP_MACOS/_internal"
 ln -sfn Resources "$APP_BUNDLE/Contents/Frameworks"
 ln -sfn ../Resources "$APP_MACOS/_internal"
+[ -L "$APP_MACOS/_internal" ] || { echo "ERROR: MacOS/_internal is not a symlink" >&2; exit 1; }
 
 # strip stale bytecode caches
 find "$APP_BUNDLE" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true

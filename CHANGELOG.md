@@ -78,7 +78,7 @@ All notable changes to the MRRC Web Control project.
 
 ### Platform Status
 
-- **macOS**：`MRRC-Modern-v1.18.0-arm64.dmg` — 56,556,621 bytes，SHA-256 `af868988…`（冻结包实跑：三端点未登录 401、`server.log` 落盘、`support_bundle`/`upgrade_core` 在 PYZ 内、`version.txt=1.18.0`）。
+- **macOS**：`MRRC-Modern-v1.18.0-arm64.dmg` — **55,640,517 bytes，SHA-256 `754e345f…`**（**重新构建：修复了长期存在的签名失败** —— 详见下方 Fixed 段；签名 `valid on disk`、`spctl` 只报无 Developer ID、冻结服务实跑并把 `version.txt` 解析为 1.18.0）（冻结包实跑：三端点未登录 401、`server.log` 落盘、`support_bundle`/`upgrade_core` 在 PYZ 内、`version.txt=1.18.0`）。
 - **Windows**：`MRRC-Modern-v1.18.0-Windows-x64-Setup.exe` — 45,990,451 bytes，SHA-256 `938384ad…`（VM 内 1261 项测试绿、三个 PyInstaller 目标 + Inno Setup 编译成功；包内 FTDI DLL、`static/support.html`、`cq.wav`、`version.txt=1.18.0` 均在位；服务器侧 SHA 与本地一致）。
 - **rpi64**：**未重建** —— 外部构建卷（`/Volumes/MRRCBuild`）在构建中途消失，脚本要求 ≥20 GB 而根盘只剩 3.8 GB；命令已备（见验证边界）。
 - **更新通道已上线**：`https://www.vlsc.net/mrrc_modern/downloads/latest.json`（`latest=1.18.0`，installer size/SHA 与产物一致，`previous=1.17.0`），线上文件与本地逐字节一致；1.17.0 客户端检查即得 `available: true`。

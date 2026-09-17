@@ -43,7 +43,7 @@ def config_path() -> Path:
 
 
 def default_config_path() -> Path:
-    return app_dir() / "windows" / "default.env"
+    return runtime_path("windows", "default.env")
 
 
 def ensure_config() -> Path:
@@ -142,7 +142,8 @@ def load_env(path: Path) -> dict[str, str]:
     env.setdefault("MRRC_ATR1000_STORE", str(user_data_dir() / "atr1000_tuner.json"))
     env.setdefault("MRRC_RECORDINGS_DIR", str(user_data_dir() / "recordings"))
     env.setdefault("MRRC_LOG_DIR", str(user_data_dir() / "logs"))
-    env.setdefault("MRRC_FTDI_LIB_DIR", str(app_dir() / "vendor" / "ftdi" / "windows" / "bin" / "x64"))
+    env.setdefault("MRRC_FTDI_LIB_DIR",
+                 str(runtime_path("vendor", "ftdi", "windows", "bin", "x64")))
     ftdi_dir = Path(_env(env, "MRRC_FTDI_LIB_DIR").replace("\\", os.sep))
     if not ftdi_dir.is_absolute():
         env["MRRC_FTDI_LIB_DIR"] = str(app_dir() / ftdi_dir)
@@ -159,6 +160,23 @@ def ensure_first_run() -> dict[str, str]:
             print("First run: auto-generated login password:", env.get("MRRC_WEB_PASSWORD", ""))
             print("  (also shown on the web login page; change it later via 连接设置… in the UI)")
     return env
+
+
+def runtime_path(*parts: str) -> Path:
+    """Resolve a bundled runtime file or directory.
+
+    The frozen macOS .app stores its data tree in ``Contents/Resources`` — data
+    under ``Contents/MacOS`` makes codesign treat it as unsigned code and refuse
+    to sign the whole bundle, which shipped every release so far as "damaged"
+    (2026-09-17 field report).  That tree is reachable through the
+    ``Contents/MacOS/_internal`` symlink, so look there when the file is not
+    sitting next to the executable (source checkouts, Windows onedir).
+    """
+    for base in (app_dir(), app_dir() / "_internal"):
+        candidate = base.joinpath(*parts)
+        if candidate.exists():
+            return candidate
+    return app_dir().joinpath(*parts)
 
 
 def local_url(env: dict[str, str], secure: bool = False) -> str:

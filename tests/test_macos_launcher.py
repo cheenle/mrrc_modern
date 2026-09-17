@@ -125,6 +125,35 @@ class MacLauncherSslTests(unittest.TestCase):
             self.assertIsNotNone(pair)
 
 
+class RuntimePathTests(unittest.TestCase):
+    """The frozen app keeps its data tree in Contents/Resources, reached through
+    the Contents/MacOS/_internal symlink: data under MacOS made codesign refuse to
+    sign the bundle, which shipped "damaged" apps (2026-09-17)."""
+
+    def test_prefers_the_file_next_to_the_executable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "macos").mkdir()
+            (root / "macos" / "default.env").write_text("A=1", encoding="utf-8")
+            with patch.object(launcher, "app_dir", return_value=root):
+                self.assertEqual(launcher.runtime_path("macos", "default.env"),
+                                 root / "macos" / "default.env")
+
+    def test_falls_back_to_the_internal_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "_internal" / "macos").mkdir(parents=True)
+            (root / "_internal" / "macos" / "default.env").write_text("A=1", encoding="utf-8")
+            with patch.object(launcher, "app_dir", return_value=root):
+                self.assertEqual(launcher.runtime_path("macos", "default.env"),
+                                 root / "_internal" / "macos" / "default.env")
+
+    def test_returns_the_primary_location_when_nothing_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.object(launcher, "app_dir", return_value=root):
+                self.assertEqual(launcher.runtime_path("version.txt"), root / "version.txt")
+
 if __name__ == "__main__":
     unittest.main()
 

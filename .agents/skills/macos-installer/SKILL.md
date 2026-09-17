@@ -28,10 +28,7 @@ description: Use when building, rebuilding, verifying, or deploying the MRRC Mod
 `spctl` 只报「无 Developer ID」（用户右键打开即可，不再是"已损坏"），且**冻结服务真跑成功**
 （`/api/health` 401、`server.log` 落盘、无 "Failed to load Python"）。
 
-**剩余一步**（未完成）：`macos/`、`version.txt`、`mem_channels.json`、`vendor/` 这四个运行时路径
-目前由启动器/服务端按 `app_dir()/名字` 读取，而 `app_dir()` = `Contents/MacOS`。
-把它们放进数据树后需要**启动器回退到 `_internal/`**（或改成 `sys._MEIPASS` 优先），否则这些文件在
-MacOS 里就必须是真实文件 → 又触发上面的签名失败。改完后重建 DMG 并用上面的双重校验放行。
+**启动器已改**：`runtime_path()`（`macos/launcher.py` 与 `windows/launcher.py`）先看 `app_dir()`，再回退 `app_dir()/_internal/`，因此 `macos/`、`version.txt`、`mem_channels.json`、`vendor/` 可以住在数据树里。另有两条实测教训：`mv ... || true` 会**吞掉失败**并留下真目录（`ln -sfn` 随后把符号链接嵌进去，签名继续失败）——现在用 `cp -Rf` + `rm -rf` 并断言 `MacOS/_internal` 必须是符号链接；`spctl` 对 ad-hoc 包报 `rejected (no usable signature)`/`no Developer ID` 是**正常**结果（用户右键打开即可），而 `damaged`/`invalid signature` 才是必须阻断发布的状态。
 
 **用户侧立刻解封**（对已下载的 v1.17.0/v1.18.0 同样有效）：
 

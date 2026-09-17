@@ -89,7 +89,30 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>One-touch CQ key</strong> — press CQ and the
+<strong>🐞 Report a problem</strong> — one menu entry builds a <strong>redacted diagnostics
+              bundle</strong> on the server (logs + config snapshot + environment/radio/audio state +
+              an auto-triage summary) and uploads it to this project's own receiver; without a network
+              you can save it locally instead. It never contains passwords, private keys, tokens,
+              recordings, memory channels or tuner learning data.
+            </li>
+<li>
+<strong>Answers page</strong> — a maintainer-side autopilot reads each bundle, maps the log
+              evidence onto real code positions and publishes the conclusion to
+              <a href="answers/">/answers/</a>, searchable by bundle id or keyword. Evidence is cited
+              line by line; when there is not enough material it says so instead of guessing.
+            </li>
+<li>
+<strong>Packaged builds finally keep logs</strong> — a rotating
+              <code>server.log</code> plus a launcher startup tee that captures the window before the
+              server's own logging exists. This is what makes a report diagnosable instead of a story.
+            </li>
+<li>
+<strong>Update check</strong> — the app reports whether a newer release exists, from a generated
+              <code>latest.json</code> whose size and SHA-256 come from the artifacts themselves.
+              Read-only for now: download and install follow in the next slice.
+            </li>
+<li>
+<strong>One-touch CQ key</strong> (v1.17.0) — press CQ and the
               <strong>server</strong> keys the radio, plays the packaged CQ recording and
               unkeys when it ends; press again to cut it immediately. The audio goes from
               disk to the sound card without touching the network, so jitter cannot
@@ -287,6 +310,22 @@
 <ul>
 <li>Off by default — zero impact without the hardware</li>
 <li>Learning gated on SWR 1.0–1.8, ±5kHz nearest match</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-bug"></i></div>
+<h3>Report a problem &amp; get an answer</h3>
+<p>
+              The menu's <strong>🐞 Report a problem</strong> builds a redacted diagnostics bundle on
+              the server — logs, config snapshot, radio/audio state and an auto-triage summary — and
+              uploads it to this project's own receiver, or saves it locally when there is no uplink.
+              Conclusions are published on the <a href="answers/">answers page</a>, searchable by
+              bundle id or keyword.
+            </p>
+<ul>
+<li>Never contains passwords, keys, tokens, recordings or memory channels</li>
+<li>Packaged builds now keep a rotating server log — reports became diagnosable</li>
+<li>An autopilot maps the evidence onto real code before answering</li>
 </ul>
 </div>
 <div class="feature-card animate">

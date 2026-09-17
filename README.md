@@ -267,6 +267,19 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | Codec | Tagged dual-codec: Opus (64kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
 | Bandwidth | Opus ~64kbps (12× smaller than 768kbps PCM) |
 
+### Support & Diagnostics
+
+The menu's **🐞 Report a problem** entry builds a **redacted diagnostics bundle** on the server and can
+upload it to this project's own receiver (or save it locally when the machine is offline):
+
+| Feature | Implementation |
+|---------|---------------|
+| Bundle contents | Log tails (bounded, line-aligned), an allow-list-redacted config snapshot, environment/radio/audio state (device table with host API, real rates), browser-side context, and `diagnostics/summary.txt` with auto-triage conclusions |
+| Never included | Passwords, private keys, tokens, recordings, memory channels and ATR learning data — the allow-list drops everything else and every collected text passes a secret-value filter (the hit count is published in `manifest.json`) |
+| Server-side logs | `MRRC_LOG_DIR` holds a rotating `server.log` (2 MB × 2) plus a launcher tee of the startup window; packaged installs finally keep logs |
+| Report loop | `dev_tools/support_autopilot.py` polls the receiver, analyses each bundle with a read-only agent (repo as cwd, incident history consulted) and publishes answer cards to the [answers page](https://www.vlsc.net/mrrc_modern/answers/) — drafts by default, and "needs more info" never publishes |
+| Update check | `GET /api/update/check` compares the running version with the generated `latest.json` (size/SHA-256 come from the artifacts themselves); download and install follow in the next slice |
+
 ## Polling Strategy
 
 5-tier background polling at 38400 baud (~296 bytes/sec total):

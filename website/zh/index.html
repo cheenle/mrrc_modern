@@ -88,7 +88,25 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>一键 CQ 按键</strong>——点一下 CQ，由<strong>服务端</strong>按下 PTT、
+<strong>🐞 遇到问题</strong>——菜单里点一下，服务端就生成一个<strong>脱敏诊断包</strong>
+              （日志 + 配置快照 + 环境/电台/音频状态 + 自动体检结论）并上传到本项目自己的接收端；
+              没有网络时可以只保存到本地。包里<b>不含</b>密码、证书私钥、令牌、录音、记忆频道与天调学习值。
+            </li>
+<li>
+<strong>问题答复页</strong>——维护者侧的 autopilot 读每个包、把日志现象对到真实代码位置，
+              结论发布到 <a href="answers/">/answers/</a>，可按编号或关键词搜索；每条诊断都附原始证据行，
+              材料不足时它会明说「需要更多信息」而不是猜。
+            </li>
+<li>
+<strong>打包版终于有日志文件</strong>——轮转的 <code>server.log</code> 加启动器 tee 的启动窗口捕获
+              （这段窗口是服务端自己的日志系统起来之前唯一的见证）。这才让上报从「一段描述」变成可诊断。
+            </li>
+<li>
+<strong>更新检查</strong>——根据生成式 <code>latest.json</code>（size/SHA-256 取自产物本身）判断有没有新版本。
+              目前只读：下载与安装是下一片。
+            </li>
+<li>
+<strong>一键 CQ 按键</strong>（v1.17.0）——点一下 CQ，由<strong>服务端</strong>按下 PTT、
               播送内置 CQ 录音，播完自动松开；再点一次立即中止。音频从磁盘直接进声卡、
               不经过网络，因此网络抖动不会改变发出去的内容。呼叫期间麦克风上行被丢弃、
               PTT/TUNE 被拒绝，发起端页面断开则呼叫立即结束（<code>MRRC_CQ_FILE</code> 可换录音）。
@@ -274,6 +292,20 @@
 <ul>
 <li>默认关闭——无硬件时零影响</li>
 <li>学习门限 SWR 1.0–1.8，±5kHz 就近匹配</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-bug"></i></div>
+<h3>遇到问题，拿到答复</h3>
+<p>
+              菜单里的 <strong>🐞 遇到问题</strong> 由服务端生成脱敏诊断包 —— 日志、配置快照、
+              电台/音频状态与自动体检结论 —— 上传到本项目自己的接收端；没有网络时可只保存到本地。
+              结论发布在<a href="answers/">答复页</a>，可按编号或关键词搜索。
+            </p>
+<ul>
+<li>包内绝不含密码、证书私钥、令牌、录音与记忆频道</li>
+<li>打包版现在会保留轮转日志 —— 上报从「描述」变成可诊断</li>
+<li>答复前 autopilot 会把证据对到真实代码位置（并查本仓事故史）</li>
 </ul>
 </div>
 <div class="feature-card animate">

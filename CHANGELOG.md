@@ -40,6 +40,8 @@ All notable changes to the MRRC Web Control project.
 - **答复页**：`website/answers/index.html` 由结论卡生成（可搜编号/关键词、`#编号` 直达），
   公开页对**邮箱/手机号/设备路径/串口/内网地址/本机与临时路径**做过滤。
 - 运维命令：`--inspect <编号>`（不调模型的预检）、`--status`、`--force <编号>`、`--install-cron`。
+- **答复页上线方式**：docroot 属 `www-data`，所以发布是两步（传到家目录 → `sudo install -o www-data`）。
+  直接 rsync 会被拒绝，**且在文件未变化时返回 0** —— 这一点差点让"发布已通"的错误结论通过，已用带标记的真实文件验证过。
 
 ### Verification
 

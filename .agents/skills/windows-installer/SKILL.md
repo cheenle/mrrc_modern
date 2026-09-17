@@ -5,6 +5,28 @@ description: Use when building, rebuilding, verifying, or deploying the MRRC Mod
 
 # Windows Installer Build (MRRC Modern)
 
+## 远程触发构建：别用 `-NoNewWindow`，直接同步跑（2026-09-18）
+
+`ssh` 里 `Start-Process powershell ... -NoNewWindow` 起的构建**挂在 ssh 会话的控制台上**，
+会话一断就被清掉：日志停在测试输出之后、进程消失、`dist\windows` 时间戳不动 —— 看起来"卡住"，
+其实是没了。这一天为它白等了两轮。
+
+- 可靠做法：**同步执行**，让 ssh 会话活着盯完。VM 上套件只要 ~35 s、PyInstaller + Inno 约十几分钟，
+  单次 `ssh` 给足超时即可：`ssh -o ServerAliveInterval=30 ... 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_mrrc_v1xxx.ps1'`。
+- 若确实要后台跑：去掉 `-NoNewWindow`（让它脱离会话），并且**只认产物**（`dist\windows` 的 mtime/大小 + `Get-FileHash`），
+  不要认日志有没有输出 —— 重定向到文件时 Python 是块缓冲，几十秒不刷是正常的。
+
+## 验证打包产物：`version.txt` + 走查脚本入口
+
+`a.toc` 在 PyInstaller 6 里是 **dict**（不是 list），`a.toc[0]` 会 `KeyError: 0`；用
+`list(a.toc.items())`。`CArchiveReader.extract(name)` 拿到的 marshalled 代码可能带 8 字节头，
+先 `marshal.loads(data)`、失败再 `marshal.loads(data[8:])`。最有价值的两个断言：
+
+- `dist\windows\MRRC-Modern\version.txt` == 本次版本（证明构建读的是新 CHANGELOG）；
+- 走查**脚本入口**的 `co_names`（递归 `co_consts`）确认新符号真的在包里 —— 服务器改动看 `server` 入口，
+  启动器改动看 `launcher` 入口（`strings`/`findstr` 看不到压缩后的 PYZ）。
+
+
 ## Overview
 
 The Windows release is built **on the Win11 KVM VM, never on the Mac** (no Windows toolchain locally; PyInstaller 6.21.0 + Inno Setup 6.7.3 + Python 3.12.4 live in the VM). Topology: Mac → `ssh ham.vlsc.net` (KVM host, sudo passwordless) → `ssh cheenle@192.168.122.133` (win11 VM; default shell is **PowerShell 5.1**). Full operator manual: `win_pack.md`. The end-to-end release sequence (both platforms + website) lives in the `dual-platform-release` skill.

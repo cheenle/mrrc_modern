@@ -20,6 +20,7 @@
 | AuthService | Support | Implemented | Password login, session tokens, cookie management, WS gating |
 | StatusService | Support | Implemented | `/api/status` full radio state JSON |
 | ProcessService | Support | Implemented | `start.sh` / `stop.sh` background service management, PID file |
+| SupportService | Support | Implemented | `/api/support/{bundle,upload,save}`: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021 |
 
 ## 10.2 Service Dependencies
 
@@ -66,6 +67,7 @@ AuthService
 | MemoryChannelService | JSON array | JSON array + broadcast | HTTP `/api/mem_channels` |
 | AuthService | Password + request | Cookie + token + redirect | HTTP `/api/auth/*` |
 | StatusService | GET request | Full radio state JSON (50+ fields) | HTTP `/api/status` |
+| SupportService | POST + JSON body | Bundle id/listing, receiver id, local path | HTTP `/api/support/bundle`, `/api/support/upload`, `/api/support/save` |
 | ATR1000Service | JSON `atrTune` / `ping` | JSON `atrState` / `atrTuneResult` / `pong` | WS `/WSatr1000` |
 
 ## 10.4 Control Service Command Contract

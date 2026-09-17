@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.50 更新</a></li>
+            <li><a href="#updates">V2.51 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.50 · 2026-09-13</span>
+            <span>SDD V2.51 · 2026-09-17</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,7 +74,7 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.50</td></tr>
+            <tr><td>版本</td><td>V2.51</td></tr>
             <tr><td>基线日期</td><td>2026-09-13</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
@@ -133,7 +133,12 @@
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-radio"></i></div>
-                <h3>v1.17.0 发布：三平台同步 <small>（V2.50）</small></h3>
+                <div class="feature-card">
+                <div class="icon"><i class="fas fa-bug"></i></div>
+                <h3>诊断包与上报闭环 <small>（V2.51）</small></h3>
+                <p>菜单新增「🐞 遇到问题」：一键生成脱敏诊断包（日志 + 配置 + 环境/电台/音频快照 + 自动体检结论）并上传到本项目专属接收端；无网络时可只保存到本地。包内不含密码、证书私钥、令牌、录音与记忆频道（AD-021）。</p>
+            </div>
+            <h3>v1.17.0 发布：三平台同步 <small>（V2.50）</small></h3>
                 <p>macOS DMG、Windows 安装包与 rpi64 镜像由同一提交构建，发布前各自验证：macOS 冻结包无头 HTTPS 冒烟、Windows PYZ 走查 + 包内资产核对、树莓派镜像 debugfs 抽查（含 <code>static/audio/cq.wav</code>）。</p>
             </div>
             <div class="feature-card">
@@ -180,7 +185,7 @@
     <div class="container">
         <div class="section-header">
             <span class="section-label">架构决策</span>
-            <h2 class="section-title">AD-001 ... AD-019</h2>
+            <h2 class="section-title">AD-001 ... AD-021</h2>
         </div>
         <div class="tech-stack">
             <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -202,6 +207,7 @@
             <span class="tech-tag">AD-017 服务端录音</span>
             <span class="tech-tag">AD-018 Profile 驱动的 Yaesu 核心</span>
             <span class="tech-tag">AD-019 未验证机型策略</span>
+            <span class="tech-tag">AD-021 诊断包与上报闭环</span>
         </div>
     </div>
 </section>

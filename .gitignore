@@ -10,6 +10,7 @@ __pycache__/
 # Logs
 logs/
 *.log
+nohup.out
 
 # Built support bundles (support-out/ is LOG_DIR's sibling — spec 2026-09-17 §7)
 support-out/

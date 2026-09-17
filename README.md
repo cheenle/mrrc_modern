@@ -67,7 +67,7 @@ dist\windows\MRRC-Modern-Setup.exe
 | `MRRC_RECORDINGS_DIR` | `<runtime>/recordings` | Where recorded QSO MP3s live (packaged installs: the per-user data dir) |
 | `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate for recordings (kbps, 16 kHz mono) |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
-| `MRRC_CQ_FILE` | `static/audio/cq.wav` | Recording played by the one-touch CQ key (any 16-bit WAV; normalised to 48 kHz mono at startup, 30 s max) |
+| `MRRC_LOG_DIR` / `MRRC_SUPPORT_URL` / `MRRC_CQ_FILE` | `static/audio/cq.wav` | Recording played by the one-touch CQ key (any 16-bit WAV; normalised to 48 kHz mono at startup, 30 s max) |
 | `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F). Off = keying refused with an explanatory UI message; releases are never blocked |
 | `MRRC_WEB_PORT` | `8888` | Web server port |
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change** — startup logs a loud warning while the default is active) |

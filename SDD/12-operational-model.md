@@ -133,11 +133,28 @@ and the model identity check (`ID;`, read-only) only logs.
 | Change serial port | `MRRC_SERIAL_PORT=/dev/ttyUSB0 ./start.sh` |
 | View server status | `curl http://localhost:8888/api/status` (with auth cookie) |
 
+## 12.5.1 支持链路（诊断包与接收端）
+
+1. **部署接收端**（维护者，幂等）：`./deploy_support_receiver.sh`。它会创建 systemd unit
+   `support-receiver-modern`（端口 8098）、存储目录 `/var/www/support-modern`（`www-data`，**不在 docroot**）、
+   口令文件 `/etc/mrrc-modern-support.env`（0600 root）、nginx 路径 `/mrrc_modern/support/`，
+   并打印两条自检：本地与公网的 `/api/list` 无口令时必须 **401**。
+2. **读一个诊断包**：先看 `diagnostics/summary.txt`（启动次数 vs `Traceback`、数据新鲜度、
+   音频/串口/频谱事实、TX 门禁、录音写盘告警），再按需看 `logs/`、`state/config-redacted.env`、
+   `diagnostics/env.json`。`manifest.json` 记有每个文件的 sha256、脱敏计数与告警。
+3. **收包**：`https://www.vlsc.net/mrrc_modern/support/api/list`（Basic 口令见维护者的口令文件），
+   编号形如 `20260917-072530-ab12`。
+4. **排查未复现的问题**：包内 `warnings` 里"日志可能过旧"意味着这不是现场；`summary.txt` 会显式写出。
+
 ## 12.6 Logs and Artifacts
 
 | Artifact | Purpose |
 |----------|---------|
 | `logs/` directory | Server stdout/stderr when background-started |
+| `MRRC_LOG_DIR/server.log` | Rotating server log (2 MB × 2, UTF-8): the canonical log, written in every launch mode. Default `MRRC_LOG_DIR` = the install dir's `logs/`; the desktop launchers point it at the user data directory (Program Files and /Applications are not writable) |
+| `MRRC_LOG_DIR/server-stdout.log` | Launcher tee of the child's stdout/stderr, **rebuilt at each launch and closed once the server answers HTTP**: the only witness of a server that dies before its own logging exists. It keeps draining afterwards so a chatty server can never block on a full pipe. On systemd (`install.sh`) and launchd the same name is used for the process redirect — never `server.log`, which the in-process handler owns |
+| `support-out/` | Built diagnostics bundles, newest 5 (`MRRC_LOG_DIR`'s sibling); `support-export/` holds the copies made by 「只保存到本地」 |
+| `version.txt` | App version shipped inside each artifact (macOS `Contents/MacOS/`, Windows install dir, rpi64 `/opt/mrrc_modern/`); the bundle manifest and the future one-click upgrade read it |
 | `.ft710-server.pid` | Running process PID |
 | `mem_channels.json` | Persisted memory channels |
 | `config.py` | Protocol-neutral constants + shared UI mode tables |

@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.51</td>
+<td>2026-09-17</td>
+<td>Claude</td>
+<td><strong>支持诊断包与上报闭环（支持链路 1/4）。</strong> 需求：问题上报长期只有现象描述，第一轮往返都花在索取证据上；而打包版<strong>根本没有服务端日志文件</strong>（<code class="scope-code">logging.basicConfig</code> 只进控制台）。选型对比四条路（浏览器构建/第三方日志服务/复用兄弟项目接收端/服务端构建+白名单脱敏+独立实例），<strong>采纳服务端构建</strong>：<code class="scope-code">support_bundle.py</code>（纯标准库、无应用依赖、可热修）按 <strong>env 键白名单</strong>裁剪配置 + 键值正则二次清洗（<code class="scope-code">\b</code> 在 <code class="scope-code">_PASSWORD</code> 上不成立，改用负向后顾；替换计数写进 manifest），收集日志尾部（≤2 MB/行对齐、按 512 KB/128 KB 逐级降级以免超接收端 20 MB 上限）、环境/电台/音频快照（含 host API —— 2026-09-10 的 WDM-KS 重名坑）与浏览器侧上下文，产出 <code class="scope-code">diagnostics/summary.txt</code> 自动体检结论（匹配本仓真实日志行：<code class="scope-code">Server ready!</code>/<code class="scope-code">Configured audio device</code>/<code class="scope-code">RX open failed</code>/<code class="scope-code">Device not configured</code>/<code class="scope-code">S-meter fallback</code>/<code class="scope-code">Recording writer is falling behind</code>/<code class="scope-code">enable TX after</code>）。<strong>日志持久化是前置</strong>：新增 <code class="scope-code">MRRC_LOG_DIR</code> 轮转 <code class="scope-code">server.log</code>(2 MB×2) + 启动器 tee <code class="scope-code">server-stdout.log</code>（只在启动窗口写文件，之后仅排空管道——退出读循环会让服务端因 64 KB 管道写满而阻塞或 EPIPE）；<code class="scope-code">install.sh</code> 的 systemd 与 launchd 重定向改名以免与 handler 双写同名文件。<strong>独立接收端</strong>：vendor 兄弟项目 262 行标准库服务（三处本地改动：端口 8098、存储 <code class="scope-code">/var/www/support-modern</code>、meta 记 <code class="scope-code">product</code>），<code class="scope-code">deploy_support_receiver.sh</code> 幂等部署 unit + nginx <code class="scope-code">/mrrc_modern/support/</code>，并自检本地/公网 <code class="scope-code">/api/list</code> 无口令必须 401。<strong>入口</strong>：SPA 菜单纯 <code class="scope-code">&lt;a target="_blank"&gt;</code>（<code class="scope-code">ft710_ui.js</code> 只绑定 <code class="scope-code">[data-action]</code>，两个受护栏保护的文件零改动）+ <code class="scope-code">static/support.html</code>；<code class="scope-code">/api/support/{bundle,upload,save}</code> 走既有 auth 中间件，单飞构建、保留最近 5 包，断网时「只保存到本地」等价可用。<strong>规则引擎抓到实现期三个真缺陷</strong>：<code class="scope-code">backend.capabilities</code> 是 <code class="scope-code">@property</code>（写成调用会被 per-block try 吞成 <code class="scope-code">{'error':…}</code>，已补驱动真实代码路径的守卫测试）、测试桩类体内自引用自身类名、以及 vendor 的模块名 <code class="scope-code">server</code> 与本仓 <code class="scope-code">server.py</code> 同名（测试改为按路径 importlib 加载）。<strong>真机验收</strong>：接收端已上线；端到端跑通「生成（2096 B、2 处脱敏、密钥零命中）→ 上传（编号 <code class="scope-code">20260917-085006-1a0d</code>）→ 清单可见且 <code class="scope-code">product=mrrc_modern</code> → 下载 SHA-256 与本地一致」。套件 1103→1186 项全绿；<code class="scope-code">release_check</code> 29 ok / 0 failing（含全部图与生成副本规则）。<strong>验收边界</strong>：三个安装包与本版镜像<strong>未重建</strong>（本条目只到源码与网站；<code class="scope-code">version.txt</code> 由三处构建脚本写入，rpi64 旧镜像的 <code class="scope-code">VERSION</code> 仍被识别），因此「从已安装的桌面版点一次生成/上传」与树莓派实机尚未执行；答复页目前是占位页（第 2 期接自动分诊）。文档：AD-021、§5 NFR-068、§10 SupportService、§12.5.1/12.6、§13 R13。</td>
+</tr>
+<tr>
 <td>SDD V2.50</td>
 <td>2026-09-13</td>
 <td>Claude</td>
@@ -637,7 +643,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.50 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.51 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

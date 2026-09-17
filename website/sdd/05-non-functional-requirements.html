@@ -503,6 +503,13 @@
 <td>Critical</td>
 <td>Operators cannot mistake documentation-derived tables for measured behaviour; the four Yaesu models and the three Icom experimental models follow this rule</td>
 </tr>
+<tr>
+<td>NFR-068</td>
+<td>Data ownership</td>
+<td>Operator data leaves the machine only in a redacted, operator-initiated diagnostics bundle: passwords, keys/tokens, certificates, recordings, memory channels and ATR learning values are never included; the bundle is built server-side and the hit count is published in its manifest</td>
+<td>AD-021, <code class="scope-code">tests/test_support_bundle.py</code>, <code class="scope-code">tests/test_support_api.py</code></td>
+<td></td>
+</tr>
 </tbody>
 </table>
     </main>
@@ -511,7 +518,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.50 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.51 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

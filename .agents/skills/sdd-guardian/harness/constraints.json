@@ -8,9 +8,24 @@
       "title": "DN; is step-DOWN, never send it",
       "severity": "block",
       "sdd_ref": "AD-014; SDD V1.2 freq-drift incident",
-      "scope": ["**/*.py"],
-      "exclude_scope": ["**/test_*.py", ".agents/**", "_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "venv/**", "**/venv/**"],
-      "patterns": ["query\\([^)]{0,40}[\"']DN[\"']", "[\"']DN;[\"']\\s*[,)\\+]", "send_set_command\\(\\s*[\"']DN"],
+      "scope": [
+        "**/*.py"
+      ],
+      "exclude_scope": [
+        "**/test_*.py",
+        ".agents/**",
+        "_probe*.py",
+        "_diag*.py",
+        "_test*.py",
+        "_power*.py",
+        "venv/**",
+        "**/venv/**"
+      ],
+      "patterns": [
+        "query\\([^)]{0,40}[\"']DN[\"']",
+        "[\"']DN;[\"']\\s*[,)\\+]",
+        "send_set_command\\(\\s*[\"']DN"
+      ],
       "message": "On the FT-710, 'DN;' is NOT a DNR query — it steps the active VFO DOWN ~20 Hz per call. Polling it caused a live frequency-drift incident (V1.2). DNR level is intentionally not polled."
     },
     {
@@ -18,9 +33,23 @@
       "title": "Compressor PR mapping is 0=OFF/1=ON",
       "severity": "block",
       "sdd_ref": "AD-014; cat_controller.set_compressor comment",
-      "scope": ["**/*.py"],
-      "exclude_scope": ["**/test_*.py", ".agents/**", "_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "venv/**", "**/venv/**"],
-      "patterns": ["[\"']PR0?2[\"']", "[\"']PR1[\"']"],
+      "scope": [
+        "**/*.py"
+      ],
+      "exclude_scope": [
+        "**/test_*.py",
+        ".agents/**",
+        "_probe*.py",
+        "_diag*.py",
+        "_test*.py",
+        "_power*.py",
+        "venv/**",
+        "**/venv/**"
+      ],
+      "patterns": [
+        "[\"']PR0?2[\"']",
+        "[\"']PR1[\"']"
+      ],
       "message": "Use PR00=OFF / PR01=ON. The Yaesu PDF (1=OFF/2=ON) is a known errata — sending PR02 kills TX audio."
     },
     {
@@ -28,9 +57,23 @@
       "title": "Tuner AC mapping is AC000/AC001/AC003",
       "severity": "block",
       "sdd_ref": "AD-014; gap-analysis §1.1 note",
-      "scope": ["**/*.py"],
-      "exclude_scope": ["**/test_*.py", ".agents/**", "_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "venv/**", "**/venv/**"],
-      "patterns": ["[\"']AC010[\"']", "[\"']AC011[\"']"],
+      "scope": [
+        "**/*.py"
+      ],
+      "exclude_scope": [
+        "**/test_*.py",
+        ".agents/**",
+        "_probe*.py",
+        "_diag*.py",
+        "_test*.py",
+        "_power*.py",
+        "venv/**",
+        "**/venv/**"
+      ],
+      "patterns": [
+        "[\"']AC010[\"']",
+        "[\"']AC011[\"']"
+      ],
       "message": "This codebase deliberately maps the ATU to AC000 (off) / AC001 (on) / AC003 (tune start), not the Hamlib AC010/AC011 forms. See SDD gap-analysis §1.1 before changing."
     },
     {
@@ -38,9 +81,24 @@
       "title": "SH set format is SH00NN",
       "severity": "block",
       "sdd_ref": "§10.4; commit a07bb49; V1.7 read-back",
-      "scope": ["**/*.py"],
-      "exclude_scope": ["**/test_*.py", ".agents/**", "_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "venv/**", "**/venv/**"],
-      "patterns": ["[\"']SH0\\d\\d[\"';]", "[\"']SH0\\{", "[\"']SH0[\"']\\s*\\+"],
+      "scope": [
+        "**/*.py"
+      ],
+      "exclude_scope": [
+        "**/test_*.py",
+        ".agents/**",
+        "_probe*.py",
+        "_diag*.py",
+        "_test*.py",
+        "_power*.py",
+        "venv/**",
+        "**/venv/**"
+      ],
+      "patterns": [
+        "[\"']SH0\\d\\d[\"';]",
+        "[\"']SH0\\{",
+        "[\"']SH0[\"']\\s*\\+"
+      ],
       "message": "Filter width SET is SH00NN (SH + P1=0 + P2=0 + 2-digit index), e.g. f\"SH00{idx:02d}\". The SH0NN form is silently ignored by the radio. Set handlers must also read SH0 back (~150 ms) and broadcast the actual index."
     },
     {
@@ -48,9 +106,25 @@
       "title": "Serial I/O only inside radio controllers",
       "severity": "block",
       "sdd_ref": "AD-002",
-      "scope": ["**/*.py"],
-      "exclude_scope": ["cat_controller.py", "**/civ_controller.py", "scope_pipe.py", "_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "**/test_*.py", ".agents/**", "venv/**", "**/venv/**"],
-      "patterns": ["\\b_ser\\.(write|read|reset_input_buffer)"],
+      "scope": [
+        "**/*.py"
+      ],
+      "exclude_scope": [
+        "cat_controller.py",
+        "**/civ_controller.py",
+        "scope_pipe.py",
+        "_probe*.py",
+        "_diag*.py",
+        "_test*.py",
+        "_power*.py",
+        "**/test_*.py",
+        ".agents/**",
+        "venv/**",
+        "**/venv/**"
+      ],
+      "patterns": [
+        "\\b_ser\\.(write|read|reset_input_buffer)"
+      ],
       "message": "All radio serial I/O goes through CatController or CivController (asyncio.Lock serialization and asyncio.to_thread offload). Do not touch a raw serial object from other modules."
     },
     {
@@ -58,9 +132,23 @@
       "title": "No hardcoded secrets",
       "severity": "block",
       "sdd_ref": "AGENTS.md Security; §5.3",
-      "scope": ["**/*.py", "**/*.js", "**/*.html", "**/*.toml"],
-      "exclude_scope": ["**/test_*.py", ".agents/**", "venv/**", "**/venv/**", "windows/default.env"],
-      "patterns": ["FT710_WEB_PASSWORD\\s*=\\s*[\"']\\S", "\\bpassword\\s*=\\s*[\"'][^\"'\\s]{6,}[\"']"],
+      "scope": [
+        "**/*.py",
+        "**/*.js",
+        "**/*.html",
+        "**/*.toml"
+      ],
+      "exclude_scope": [
+        "**/test_*.py",
+        ".agents/**",
+        "venv/**",
+        "**/venv/**",
+        "windows/default.env"
+      ],
+      "patterns": [
+        "FT710_WEB_PASSWORD\\s*=\\s*[\"']\\S",
+        "\\bpassword\\s*=\\s*[\"'][^\"'\\s]{6,}[\"']"
+      ],
       "message": "Secrets come from environment variables (MRRC_WEB_PASSWORD etc.; legacy FT710_* names still honored via config fallback), never literals. Do not commit passwords, serial-device paths, or local driver assumptions."
     },
     {
@@ -68,9 +156,14 @@
       "title": "No inline JS logic in index.html",
       "severity": "block",
       "sdd_ref": "AGENTS.md Coding Style",
-      "scope": ["static/index.html"],
+      "scope": [
+        "static/index.html"
+      ],
       "exclude_scope": [],
-      "patterns": ["<script>[^<\\s]", "<script>\\s*$"],
+      "patterns": [
+        "<script>[^<\\s]",
+        "<script>\\s*$"
+      ],
       "message": "index.html is the SPA shell only. UI logic goes into ft710_ui.js or static/modules/ (vanilla JS, camelCase). Bump the ?v= cache-buster on edited assets."
     },
     {
@@ -78,9 +171,20 @@
       "title": "Audio rates are 44.1k device / 48k codec — never 16k",
       "severity": "block",
       "sdd_ref": "AD-011; V1.1 crackling incident",
-      "scope": ["audio_handler.py", "audio_resample.py", "opus_rx.py", "static/tx_opus_worker.js", "static/tx_capture_worklet.js", "static/rx_worklet_processor.js", "static/ft710_main.js"],
+      "scope": [
+        "audio_handler.py",
+        "audio_resample.py",
+        "opus_rx.py",
+        "static/tx_opus_worker.js",
+        "static/tx_capture_worklet.js",
+        "static/rx_worklet_processor.js",
+        "static/ft710_main.js"
+      ],
       "exclude_scope": [],
-      "patterns": ["\\b16000\\b", "\\b320\\s*samples"],
+      "patterns": [
+        "\\b16000\\b",
+        "\\b320\\s*samples"
+      ],
       "message": "16 kHz capture was the V1.0/1.1 'crackling' bug. Codec domain is 48 kHz (Opus mandates it), FT-710 USB device domain is 44.1 kHz; audio_resample.py is the only SRC bridge (960↔882 = 20 ms)."
     },
     {
@@ -88,9 +192,13 @@
       "title": "PyAudio device rate comes from backend capabilities",
       "severity": "warn",
       "sdd_ref": "AD-011 (amended V2.9/V2.14); §9.4",
-      "scope": ["audio_handler.py"],
+      "scope": [
+        "audio_handler.py"
+      ],
       "exclude_scope": [],
-      "patterns": ["rate\\s*=\\s*48000"],
+      "patterns": [
+        "rate\\s*=\\s*48000"
+      ],
       "message": "The device-domain sample rate is a per-backend capability, not a constant: FT-710 USB is 44100 (882 frames/20 ms), IC-7300 is 48000 natively (no SRC). Open device streams from capabilities.audio_rx_rate/audio_tx_rate; hardcoding either rate bypasses the backend contract and the audio_resample.py bridge (960↔882)."
     },
     {
@@ -98,9 +206,15 @@
       "title": "Mutate state via RadioState.update()",
       "severity": "warn",
       "sdd_ref": "AD-003; §9.7",
-      "scope": ["server.py", "poll_scheduler.py"],
+      "scope": [
+        "server.py",
+        "poll_scheduler.py"
+      ],
       "exclude_scope": [],
-      "patterns": ["\\bradio\\.[a-z_]+\\s*=[^=]", "\\bstate\\.[a-z_]+\\s*=[^=]"],
+      "patterns": [
+        "\\bradio\\.[a-z_]+\\s*=[^=]",
+        "\\bstate\\.[a-z_]+\\s*=[^=]"
+      ],
       "message": "Assigning state fields directly bypasses dirty-field tracking, so clients never see the change. Use radio.update(field=value) (deliberate bulk re-sync via setattr in the watchdog is the one exception)."
     },
     {
@@ -108,9 +222,13 @@
       "title": "WebSocket endpoints require token auth",
       "severity": "warn",
       "sdd_ref": "AGENTS.md Security; §5.3",
-      "scope": ["server.py"],
+      "scope": [
+        "server.py"
+      ],
       "exclude_scope": [],
-      "patterns": ["@app\\.websocket\\("],
+      "patterns": [
+        "@app\\.websocket\\("
+      ],
       "message": "Any new WebSocket endpoint must validate the ?token= query param against _auth_tokens before accept, like the existing five (/WSradio, /WSspectrum, /WSaudioRX, /WSaudioTX, /WSatr1000). Tokens are cleared on server restart."
     },
     {
@@ -118,9 +236,24 @@
       "title": "Deployment values via env vars",
       "severity": "warn",
       "sdd_ref": "AGENTS.md Security; §12.2",
-      "scope": ["**/*.py"],
-      "exclude_scope": ["_probe*.py", "_diag*.py", "_test*.py", "_power*.py", "**/test_*.py", ".agents/**", "venv/**", "**/venv/**"],
-      "patterns": ["/dev/cu\\.", "/dev/ttyUSB", "COM\\d+"],
+      "scope": [
+        "**/*.py"
+      ],
+      "exclude_scope": [
+        "_probe*.py",
+        "_diag*.py",
+        "_test*.py",
+        "_power*.py",
+        "**/test_*.py",
+        ".agents/**",
+        "venv/**",
+        "**/venv/**"
+      ],
+      "patterns": [
+        "/dev/cu\\.",
+        "/dev/ttyUSB",
+        "COM\\d+"
+      ],
       "message": "Serial ports and other deployment-specific values belong in environment variables (MRRC_SERIAL_PORT, MRRC_BAUD_RATE, ...; legacy FT710_* names still honored), not source literals."
     },
     {
@@ -128,9 +261,16 @@
       "title": "Static file paths must stay inside STATIC_DIR",
       "severity": "warn",
       "sdd_ref": "§13.4 I8; §5.3",
-      "scope": ["server.py", "**/server.py"],
-      "exclude_scope": ["**/test_*.py"],
-      "patterns": ["STATIC_DIR\\s*/\\s*\\(?\\s*(?:path\\b|raw|user|route)"],
+      "scope": [
+        "server.py",
+        "**/server.py"
+      ],
+      "exclude_scope": [
+        "**/test_*.py"
+      ],
+      "patterns": [
+        "STATIC_DIR\\s*/\\s*\\(?\\s*(?:path\\b|raw|user|route)"
+      ],
       "message": "Joining the request path into STATIC_DIR without containment is the I8 path-traversal hole: GET /../server.py reads arbitrary files. Resolve the joined path and reject unless file_path.is_relative_to(STATIC_DIR) (or match against an explicit allowlist) before FileResponse. Fix exists? Then this warning should no longer be reachable — do not reintroduce raw joins."
     },
     {
@@ -138,9 +278,18 @@
       "title": "Password checks use hmac.compare_digest",
       "severity": "warn",
       "sdd_ref": "§13.4 I9; §5.3",
-      "scope": ["server.py", "**/server.py"],
-      "exclude_scope": ["**/test_*.py"],
-      "patterns": ["!=\\s*[A-Z_]*PASSWORD", "[A-Z_]*PASSWORD\\s*==", "\\bpassword\\s*=="],
+      "scope": [
+        "server.py",
+        "**/server.py"
+      ],
+      "exclude_scope": [
+        "**/test_*.py"
+      ],
+      "patterns": [
+        "!=\\s*[A-Z_]*PASSWORD",
+        "[A-Z_]*PASSWORD\\s*==",
+        "\\bpassword\\s*=="
+      ],
       "message": "Plain ==/!= on passwords leaks a timing side channel (I9). Compare with hmac.compare_digest, and remember the default password only warns today — keep any change moving toward forced first-login change, not away from it."
     },
     {
@@ -148,7 +297,11 @@
       "title": "TX0 is fire-and-forget — no verify loops",
       "severity": "info",
       "sdd_ref": "AD-007; Ch15; V1.2",
-      "scope": ["server.py", "cat_controller.py", "static/**/*.js"],
+      "scope": [
+        "server.py",
+        "cat_controller.py",
+        "static/**/*.js"
+      ],
       "exclude_scope": [],
       "patterns": [],
       "message": "The 3×200 ms post-release TX0 verify loop was removed in V1.2 (cost ~600 ms per release; the radio obeys the first write). Stuck-keyup detection = 500 ms TX-status poll + browser PTT watchdog + dead-man switch. Do not re-add a blocking verify."
@@ -158,7 +311,10 @@
       "title": "Poll loops discard stale in-flight reads",
       "severity": "info",
       "sdd_ref": "AD-009; §9.6; V1.7 filter race fix",
-      "scope": ["poll_scheduler.py", "server.py"],
+      "scope": [
+        "poll_scheduler.py",
+        "server.py"
+      ],
       "exclude_scope": [],
       "patterns": [],
       "message": "After every awaited poll query, re-check _should_skip(field) and _polling_paused() before applying the value — a response in flight when the user's set arrived is stale (V1.7 SSB filter race). Set handlers must call skip_next_poll BEFORE the CAT write."
@@ -168,7 +324,11 @@
       "title": "Latency-critical CAT uses the priority path",
       "severity": "info",
       "sdd_ref": "AD-015",
-      "scope": ["server.py", "cat_controller.py", "poll_scheduler.py"],
+      "scope": [
+        "server.py",
+        "cat_controller.py",
+        "poll_scheduler.py"
+      ],
       "exclude_scope": [],
       "patterns": [],
       "message": "PTT/TUNE-class commands go through send_priority_set_command() (_cancel_polls cooperative abort). Poll loops and _read_until must stay cancel-aware; keep poll query timeouts at 0.25 s to bound lock occupancy."
@@ -178,7 +338,9 @@
       "title": "Audio/spectrum WS subchannels need their own reconnect",
       "severity": "info",
       "sdd_ref": "§13.4 I10",
-      "scope": ["static/**/*.js"],
+      "scope": [
+        "static/**/*.js"
+      ],
       "exclude_scope": [],
       "patterns": [],
       "message": "Only /WSradio auto-reconnects today; /WSaudioRX, /WSaudioTX and /WSspectrum just null out on close, so a transient drop leaves controls alive but audio dead (I10). When touching client WS lifecycle, give each subchannel its own exponential-backoff reconnect — the pattern already exists in static/modules/atr1000.js."
@@ -188,7 +350,9 @@
       "title": "iOS PTT release must be unconditional + watchdogged",
       "severity": "info",
       "sdd_ref": "§13.4 I11; Ch15",
-      "scope": ["FT710Mobile/**/*.swift"],
+      "scope": [
+        "FT710Mobile/**/*.swift"
+      ],
       "exclude_scope": [],
       "patterns": [],
       "message": "The iOS app's DragGesture.onEnded only sends ptt:false when the server echo already shows tx_status>0, with no watchdog or scenePhase guard — fast WAN taps can leave the radio keyed up (documented P0, I11). Any iOS PTT work must implement unconditional release on gesture end + 500 ms×3 retry watchdog + scenePhase forceRelease, mirroring FT710Android's PTTManager; do not regress toward echo-gated release."
@@ -198,8 +362,17 @@
       "title": "Documentation sync is part of the change",
       "severity": "info",
       "sdd_ref": "§14; AGENTS.md",
-      "scope": ["**/*.py", "static/**/*.js", "config.py"],
-      "exclude_scope": ["**/test_*.py", ".agents/**", "venv/**", "**/venv/**"],
+      "scope": [
+        "**/*.py",
+        "static/**/*.js",
+        "config.py"
+      ],
+      "exclude_scope": [
+        "**/test_*.py",
+        ".agents/**",
+        "venv/**",
+        "**/venv/**"
+      ],
       "patterns": [],
       "message": "A change that alters behavior, commands, state fields, or conventions also updates: affected SDD chapters, SDD/14-version-history.md (new entry), SDD/README Quick Facts version, AGENTS.md module table/conventions, README.md, tests/README.md counts."
     },
@@ -208,66 +381,163 @@
       "title": "Tests: hardware-free, unittest, counts synced",
       "severity": "info",
       "sdd_ref": "AGENTS.md Testing; tests/README.md",
-      "scope": ["tests/**/*.py"],
+      "scope": [
+        "tests/**/*.py"
+      ],
       "exclude_scope": [],
       "patterns": [],
       "message": "Tests are stdlib unittest, named test_*.py, and must run without radio/serial/audio hardware (mock at the boundary). Add a regression test for every bug fix. Keep tests/README.md module/test counts accurate."
+    },
+    {
+      "id": "support-bundle-privacy",
+      "title": "A diagnostics bundle never carries secrets or operator media",
+      "severity": "block",
+      "sdd_ref": "AD-021; SDD §5 NFR-068; spec 2026-09-17 §6",
+      "scope": [
+        "support_bundle.py",
+        "server.py"
+      ],
+      "exclude_scope": [
+        "**/test_*.py"
+      ],
+      "patterns": [
+        "extra_files\\s*=\\s*\\{[^}]{0,80}(cert|recordings|mem_channels|atr1000)",
+        "log_files\\s*=\\s*\\{[^}]{0,80}(cert|recordings|mem_channels|atr1000)",
+        "MRRC_WEB_PASSWORD.*CONFIG_KEY_ALLOWLIST",
+        "\"MRRC_WEB_PASSWORD\"\\s*,\\s*$"
+      ],
+      "message": "The support bundle is built from one button press: config keys only through CONFIG_KEY_ALLOWLIST, files only through is_collectable(), and the secret-value pass on every collected text. Passwords, private keys, tokens, recordings, memory channels and ATR learning values must never enter a bundle (AD-021, NFR-068)."
     }
   ],
   "context_map": [
     {
-      "globs": ["server.py"],
-      "sdd_refs": ["§9.2 WS protocol", "§10.4 command contract", "Ch15 PTT safety", "AD-001", "AD-003", "AD-007", "AD-015"],
+      "globs": [
+        "server.py"
+      ],
+      "sdd_refs": [
+        "§9.2 WS protocol",
+        "§10.4 command contract",
+        "Ch15 PTT safety",
+        "AD-001",
+        "AD-003",
+        "AD-007",
+        "AD-015"
+      ],
       "notes": "All server logic lives in server.py (AD-001) with modular sibling imports; lifespan via @asynccontextmanager. Set handlers: call scheduler.skip_next_poll() BEFORE the CAT write, then radio.update() so the change broadcasts. PTT/tune use the priority path."
     },
     {
-      "globs": ["cat_controller.py"],
-      "sdd_refs": ["AD-002", "AD-014", "§10.4"],
+      "globs": [
+        "cat_controller.py"
+      ],
+      "sdd_refs": [
+        "AD-002",
+        "AD-014",
+        "§10.4"
+      ],
       "notes": "pyserial sync API + asyncio.to_thread; all I/O serialized through _lock; 20 ms post-write pacing; set commands are write-only (fire-and-forget); queries read with prefix matching. CAT errata: DN forbidden, PR 0/1, AC 000/001/003, SH00NN."
     },
     {
-      "globs": ["poll_scheduler.py"],
-      "sdd_refs": ["AD-009", "AD-015", "§9.6"],
+      "globs": [
+        "poll_scheduler.py"
+      ],
+      "sdd_refs": [
+        "AD-009",
+        "AD-015",
+        "§9.6"
+      ],
       "notes": "7 cooperative tasks (IF 100 ms / VFO 500 ms / TX status 500 ms / TX meters / settings 2 s / slow 5 s / watchdog 1 s). Re-check skip AFTER each query await (stale-read guard). Query timeout 0.25 s. Never poll DN;."
     },
     {
-      "globs": ["radio_state.py"],
-      "sdd_refs": ["AD-003", "§7.2"],
+      "globs": [
+        "radio_state.py"
+      ],
+      "sdd_refs": [
+        "AD-003",
+        "§7.2"
+      ],
       "notes": "Dataclass + _dirty_fields; to_dirty_dict broadcasts only changes; derived properties (mode_name, band_name, filter_hz, s_unit...) live in the DERIVED map — new derived fields register there."
     },
     {
-      "globs": ["audio_handler.py", "opus_rx.py", "audio_resample.py"],
-      "sdd_refs": ["AD-004", "AD-008", "AD-011", "NFR-060..065"],
+      "globs": [
+        "audio_handler.py",
+        "opus_rx.py",
+        "audio_resample.py"
+      ],
+      "sdd_refs": [
+        "AD-004",
+        "AD-008",
+        "AD-011",
+        "NFR-060..065"
+      ],
       "notes": "Two rate domains: codec 48 kHz (Opus, browser) vs device 44.1 kHz (FT-710 USB). Exactly one SRC step per direction at the server boundary (audio_resample.py, 960↔882). Frames carry a 1-byte codec tag (0x00 PCM / 0x01 Opus). RX silence watchdog feeds rx_audio_silent."
     },
     {
-      "globs": ["scope_handler.py", "scope_pipe.py", "scope_frame.py", "scope_libraries.py"],
-      "sdd_refs": ["AD-005", "AD-006", "§9.5"],
+      "globs": [
+        "scope_handler.py",
+        "scope_pipe.py",
+        "scope_frame.py",
+        "scope_libraries.py"
+      ],
+      "sdd_refs": [
+        "AD-005",
+        "AD-006",
+        "§9.5"
+      ],
       "notes": "FT4222 SPI runs in the scope_pipe subprocess (ctypes hangs must not stall asyncio); identical binary frame format for real FFT and S-meter Gaussian fallback; server degrades gracefully on pipe exit."
     },
     {
-      "globs": ["config.py"],
-      "sdd_refs": ["§7.2", "AD-013"],
+      "globs": [
+        "config.py"
+      ],
+      "sdd_refs": [
+        "§7.2",
+        "AD-013"
+      ],
       "notes": "Single source of truth for mode/band/filter tables, S-meter + meter calibration, poll intervals, constants. UI-facing tables must stay consistent with static/ counterparts (there is a consistency test)."
     },
     {
-      "globs": ["static/**/*.js", "static/index.html", "static/**/*.css"],
-      "sdd_refs": ["§9.7 state broadcasting", "AGENTS.md style", "R8 stale assets", "§13.4 I10"],
+      "globs": [
+        "static/**/*.js",
+        "static/index.html",
+        "static/**/*.css"
+      ],
+      "sdd_refs": [
+        "§9.7 state broadcasting",
+        "AGENTS.md style",
+        "R8 stale assets",
+        "§13.4 I10"
+      ],
       "notes": "Vanilla JS, camelCase; UI rendering in ft710_ui.js or static/modules/ — never inline in index.html. Client merges partial stateUpdate into local radioState mirror. Bump ?v= cache-busters on edited assets — they are the ACTIVE cache-control mechanism: sw.js exists but no serviceWorker.register() call ships anywhere, so the Service Worker is dormant (I10-adjacent cleanup candidate). Only /WSradio auto-reconnects; audio/spectrum subchannels need their own backoff reconnect."
     },
     {
-      "globs": ["FT710Mobile/**/*.swift", "FT710Android/**/*.kt"],
-      "sdd_refs": ["§13.4 I11", "Ch15 PTT safety", "§9.2 WS protocol"],
+      "globs": [
+        "FT710Mobile/**/*.swift",
+        "FT710Android/**/*.kt"
+      ],
+      "sdd_refs": [
+        "§13.4 I11",
+        "Ch15 PTT safety",
+        "§9.2 WS protocol"
+      ],
       "notes": "Native clients share the server's 4+1 WS protocol (JSON control, tagged audio frames, 1701B spectrum). PTT safety is load-bearing on every client: unconditional release on gesture end, 500 ms×3 watchdog, lifecycle force-release (Android PTTManager is the reference implementation; iOS still owes the documented P0 fix, I11)."
     },
     {
-      "globs": ["tests/**/*.py"],
-      "sdd_refs": ["tests/README.md", "AGENTS.md testing"],
+      "globs": [
+        "tests/**/*.py"
+      ],
+      "sdd_refs": [
+        "tests/README.md",
+        "AGENTS.md testing"
+      ],
       "notes": "unittest discover -s tests; no hardware; every regression gets a test; sync tests/README.md counts when adding modules/tests."
     },
     {
-      "globs": ["SDD/**/*.md"],
-      "sdd_refs": ["§14 version history"],
+      "globs": [
+        "SDD/**/*.md"
+      ],
+      "sdd_refs": [
+        "§14 version history"
+      ],
       "notes": "Doc edits that reflect runtime changes get a 14-version-history.md entry and a SDD/README.md Quick Facts version bump. SDD describes the runtime as-is — if the SDD is wrong, fix the SDD in the same commit as the code."
     }
   ]

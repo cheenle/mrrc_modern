@@ -542,6 +542,13 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 </tbody>
 </table>
+<h2 id="支持链路诊断包与接收端">12.5.1 支持链路（诊断包与接收端）</h2>
+<ol type="1">
+<li><strong>部署接收端</strong>（维护者，幂等）：<code class="scope-code">./deploy_support_receiver.sh</code>。它会创建 systemd unit <code class="scope-code">support-receiver-modern</code>（端口 8098）、存储目录 <code class="scope-code">/var/www/support-modern</code>（<code class="scope-code">www-data</code>，<strong>不在 docroot</strong>）、 口令文件 <code class="scope-code">/etc/mrrc-modern-support.env</code>（0600 root）、nginx 路径 <code class="scope-code">/mrrc_modern/support/</code>， 并打印两条自检：本地与公网的 <code class="scope-code">/api/list</code> 无口令时必须 <strong>401</strong>。</li>
+<li><strong>读一个诊断包</strong>：先看 <code class="scope-code">diagnostics/summary.txt</code>（启动次数 vs <code class="scope-code">Traceback</code>、数据新鲜度、 音频/串口/频谱事实、TX 门禁、录音写盘告警），再按需看 <code class="scope-code">logs/</code>、<code class="scope-code">state/config-redacted.env</code>、 <code class="scope-code">diagnostics/env.json</code>。<code class="scope-code">manifest.json</code> 记有每个文件的 sha256、脱敏计数与告警。</li>
+<li><strong>收包</strong>：<code class="scope-code">https://www.vlsc.net/mrrc_modern/support/api/list</code>（Basic 口令见维护者的口令文件）， 编号形如 <code class="scope-code">20260917-072530-ab12</code>。</li>
+<li><strong>排查未复现的问题</strong>：包内 <code class="scope-code">warnings</code> 里”日志可能过旧”意味着这不是现场；<code class="scope-code">summary.txt</code> 会显式写出。</li>
+</ol>
 <h2 id="logs-and-artifacts">12.6 Logs and Artifacts</h2>
 <table class="scope-table">
 <colgroup>
@@ -558,6 +565,22 @@ Icom IC-7300 / IC-7300MK2
 <tr>
 <td><code class="scope-code">logs/</code> directory</td>
 <td>Server stdout/stderr when background-started</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_LOG_DIR/server.log</code></td>
+<td>Rotating server log (2 MB × 2, UTF-8): the canonical log, written in every launch mode. Default <code class="scope-code">MRRC_LOG_DIR</code> = the install dir’s <code class="scope-code">logs/</code>; the desktop launchers point it at the user data directory (Program Files and /Applications are not writable)</td>
+</tr>
+<tr>
+<td><code class="scope-code">MRRC_LOG_DIR/server-stdout.log</code></td>
+<td>Launcher tee of the child’s stdout/stderr, <strong>rebuilt at each launch and closed once the server answers HTTP</strong>: the only witness of a server that dies before its own logging exists. It keeps draining afterwards so a chatty server can never block on a full pipe. On systemd (<code class="scope-code">install.sh</code>) and launchd the same name is used for the process redirect — never <code class="scope-code">server.log</code>, which the in-process handler owns</td>
+</tr>
+<tr>
+<td><code class="scope-code">support-out/</code></td>
+<td>Built diagnostics bundles, newest 5 (<code class="scope-code">MRRC_LOG_DIR</code>’s sibling); <code class="scope-code">support-export/</code> holds the copies made by 「只保存到本地」</td>
+</tr>
+<tr>
+<td><code class="scope-code">version.txt</code></td>
+<td>App version shipped inside each artifact (macOS <code class="scope-code">Contents/MacOS/</code>, Windows install dir, rpi64 <code class="scope-code">/opt/mrrc_modern/</code>); the bundle manifest and the future one-click upgrade read it</td>
 </tr>
 <tr>
 <td><code class="scope-code">.ft710-server.pid</code></td>
@@ -634,7 +657,7 @@ Icom IC-7300 / IC-7300MK2
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.50 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.51 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

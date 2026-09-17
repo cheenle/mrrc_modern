@@ -2,6 +2,53 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 支持诊断包与上报闭环（支持链路 1/4）
+
+### New — 「🐞 遇到问题」
+
+- **菜单新增「🐞 遇到问题」**（新标签页打开，不打断当前电台连接）：写下现象 → **生成诊断包** →
+  **上传给维护者**（拿到一个编号），或 **只保存到本地**（脱网机器/树莓派走这条路）。
+  包由**服务端**生成：日志、脱敏配置、环境/电台/音频状态快照、浏览器侧上下文，
+  以及一份 `diagnostics/summary.txt` 自动体检结论（先看它）。
+- **永不入包**：登录密码、证书私钥、任何令牌、录音、记忆频道、天调学习值 —— 按 env 键白名单裁剪 +
+  值替换，替换次数写进 `manifest.json`。
+- **服务端终于有日志文件**：`MRRC_LOG_DIR` 下的轮转 `server.log`（2 MB × 2）覆盖所有启动方式；
+  启动器另写 `server-stdout.log`（只在"日志系统起来之前就死了"这段窗口写文件，之后仅排空管道）。
+  桌面版路径在用户数据目录（Windows `%LOCALAPPDATA%\MRRC-Modern\logs`，macOS
+  `~/Library/Application Support/MRRC-Modern/logs`）。
+- **专属接收端**：同机独立实例（systemd `support-receiver-modern`，端口 8098，存储
+  `/var/www/support-modern`，nginx `/mrrc_modern/support/`），`./deploy_support_receiver.sh` 幂等部署。
+- **`version.txt`** 随三平台产物一起打包（macOS `Contents/MacOS`、Windows 安装目录、
+  rpi64 `/opt/mrrc_modern`；旧镜像的 `VERSION` 仍被识别），诊断包 manifest 与后续一键升级都读它。
+
+### Documentation
+
+- SDD：**AD-021**、§5 **NFR-068**（用户数据仅在脱敏且由操作员发起的包中离开本机）、§10 `SupportService`、
+  §12.5.1（如何部署接收端 / 如何读包）、§12.6 日志与产物清单、§13 **R13**（脱敏尽力而为 + 接收端
+  create/PUT 设计上不鉴权）、版本表 V2.51；SDD 落地页与产品页同步到 V2.51。
+- 操作指南新增 §6「遇到问题怎么报（诊断包）」；菜单编号图补画「🐞 遇到问题」一行（仍为 40–52 编号体系），
+  并修正菜单表此前的三处不一致（缺 `连接设置…`/`录音` 两行、44 号标成了 Logout）。
+- `docs/PROJECT_MAP.md`、`README.md`、`AGENTS.md`（测试数由陈旧的 1055/53 修正为实测值）、
+  `tests/README.md`、`constraints.json`（新增隐私守卫 `support-bundle-privacy`）、
+  发布 skill 与三个打包手册（产物抽查须含 `version.txt`）。
+
+### Verification
+
+- 套件 **1186 项全绿**（基线 1103 + 83 新增：bundle 核心 38、API 13、前端契约 6、接收端 12、
+  启动器 tee 7、日志 5、发布脚本 2）。
+- `release_check.py`：**29 ok / 0 failing**（含全部图与生成副本规则）。
+- **接收端已上线并端到端验收**：真机上传 → 清单可见（`product=mrrc_modern`）→ 下载 SHA-256 与本地一致；
+  本地/公网 `/api/list` 无口令均为 401。
+
+### Verification Boundary
+
+- **三个安装包与本版镜像未重建**：本次只到源码与网站，因此「从已安装的桌面版点一次生成/上传」、
+  树莓派实机、以及 Windows 真机路径尚未执行（`version.txt` 的写入代码已就位并有源码级测试守护）。
+- 答复页目前是**占位页**（`/mrrc_modern/answers/`），自动分诊与答复发布是第 2 期。
+- 脱敏是**尽力而为**且被明确记录为风险（§13 R13）：白名单 + 值替换 + 负例测试，但不断言"绝无遗漏"。
+- 接收端 `api/create` 与 `api/<id>/bundle` **设计上不鉴权**（上传端无法持有服务器密钥），
+  靠限速、不可猜 ID、清单 Basic 鉴权与人工删除兜底。
+
 ## [v1.17.0] — 2026-09-13 — 一键 CQ 按键（服务端一次性自动化发射）
 
 ### New — CQ 键

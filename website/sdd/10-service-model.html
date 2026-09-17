@@ -219,6 +219,12 @@
 <td>Implemented</td>
 <td><code class="scope-code">start.sh</code> / <code class="scope-code">stop.sh</code> background service management, PID file</td>
 </tr>
+<tr>
+<td>SupportService</td>
+<td>Support</td>
+<td>Implemented</td>
+<td><code class="scope-code">/api/support/{bundle,upload,save}</code>: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021</td>
+</tr>
 </tbody>
 </table>
 <h2 id="service-dependencies">10.2 Service Dependencies</h2>
@@ -324,6 +330,12 @@ AuthService
 <td>GET request</td>
 <td>Full radio state JSON (50+ fields)</td>
 <td>HTTP <code class="scope-code">/api/status</code></td>
+</tr>
+<tr>
+<td>SupportService</td>
+<td>POST + JSON body</td>
+<td>Bundle id/listing, receiver id, local path</td>
+<td>HTTP <code class="scope-code">/api/support/bundle</code>, <code class="scope-code">/api/support/upload</code>, <code class="scope-code">/api/support/save</code></td>
 </tr>
 <tr>
 <td>ATR1000Service</td>
@@ -549,7 +561,7 @@ AuthService
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.50 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.51 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -241,6 +241,13 @@
 <td>V2.46：profile 驱动 + 逐表 <code class="scope-code">provenance</code> + <code class="scope-code">unverified_meters</code> 标注；TX 走 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code> 门禁（默认拒绝发射）；<code class="scope-code">ID;</code> 只读校验；<code class="scope-code">_diag_yaesu.py</code> 供现场一键回传（含音频枚举与表头对照），闭合前不声称已验证</td>
 </tr>
 <tr>
+<td>R13</td>
+<td>Diagnostics-bundle redaction is best-effort, and the receiver’s create/PUT endpoints are unauthenticated by design (the uploading machine holds no server secret)</td>
+<td>Medium</td>
+<td>Open</td>
+<td>Allow-list config keys (never deny-list), a secret-value pass over every collected text with the hit count published in <code class="scope-code">manifest.json</code>, plus negative tests asserting that private keys, passwords, recordings, memory channels and ATR learning values never enter a bundle. Receiver: rate limit (5 creates/min/IP), unguessable ids, Basic-auth list/download, manual deletion</td>
+</tr>
+<tr>
 <td>R11</td>
 <td>电台 USB 串口桥在物理层反复重枚举（macOS <code class="scope-code">ENXIO</code>/<code class="scope-code">ENOENT</code>），导致 CAT 周期性中断（现场单日 171 次）；软件无法阻止，只能快速恢复</td>
 <td>Medium</td>
@@ -522,7 +529,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.50 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.51 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

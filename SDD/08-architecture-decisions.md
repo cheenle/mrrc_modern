@@ -275,6 +275,7 @@
 | AD-017 | Server-side QSO recording (incremental MP3, 16 kHz storage domain) | Implemented |
 | AD-018 | Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F); the verified FT-710 path stays separate | Accepted (V2.46), migration deferred to phase 3 |
 | AD-019 | Unverified models ship receive-only: transmit gate, read-only identity check, per-table provenance | Implemented (V2.46) |
+| AD-021 | Server-built, allow-list-redacted diagnostics bundle with a dedicated receiver (support chain 1/4) | Implemented (V2.51) |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -321,3 +322,22 @@
 **Rationale**: 播放端放在服务端，则音频从磁盘到声卡全程不过网络，抖动与丢包都不影响发射内容；键控路径复用已现场验证的 PTT 释放架构（AD-007 的强制松键 + 15 章的七层防线），因此"忘记停止"这一类风险由既有防线兜底，而不是新写一套超时逻辑。前端只做状态镜像（`cqState`），多端天然一致。
 
 **Consequences**: `cq_player.py` 是纯音频/状态机模块（可脱机测试，不 import 硬件库）；服务端启动时若资产缺失/损坏/超长（>30 s）则以 **WARNING** 明确说明并禁用按键，绝不静默；`fullState.cq` 让中途刷新页面/重连的客户端也能看到进行中的呼叫。
+
+---
+
+## AD-021: 支持诊断包（服务端构建 + 白名单脱敏 + 独立接收端）
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Design |
+| Status | Implemented (V2.51) |
+| Decision | 「🐞 遇到问题」入口在**浏览器**（`static/support.html`，SPA 菜单纯 `<a target="_blank">`，不打断 WebSocket），**包由服务端构建**（`support_bundle.py` + `POST /api/support/bundle|upload|save`）：日志尾部 + 按 **env 键白名单**裁剪的 `state/config-redacted.env` + 环境/电台/音频状态快照 + 浏览器侧上下文 + `diagnostics/summary.txt` 自动体检结论；上传到**独立接收端实例**（同机 systemd `support-receiver-modern`、端口 8098、存储 `/var/www/support-modern`、nginx `/mrrc_modern/support/`）；无网络时 `只保存到本地` 是等价按钮。 |
+| Alternatives | ①**浏览器构建并下载**：拿不到服务端日志/设备/端口状态，且移动端无法把包送出去；②**上传第三方日志服务**：用户数据出境、无法保证脱敏；③**复用兄弟项目 `mrrc` 的接收端与答复页**：两个产品的包混在一张清单里，第 2 期自动分诊无法按产品过滤；④服务端构建 + 白名单脱敏 + 独立实例（采纳）。 |
+| Consequences | ①**日志持久化成为前置**：打包版此前只有控制台输出（没有任何日志文件），故新增 `MRRC_LOG_DIR` 下的轮转 `server.log`（3×2 MB）与启动器 tee 的 `server-stdout.log`（只在"日志系统起来之前就死了"这段窗口写，之后仅排空管道以保证子进程不会因 64 KB 管道写满而阻塞）；RPi 与 `start.sh` 的重定向改名 `server-stdout.log`，避免与会话内 handler 双写同名文件。②**版本权威**：构建脚本写入 `version.txt`（macOS `Contents/MacOS`、Windows 安装目录、rpi64 `/opt/mrrc_modern`；旧镜像的 `VERSION` 仍被识别），既是包 manifest 的版本来源，也是第 3 期一键升级的判据。③**隐私不变量**：证书私钥、`MRRC_WEB_PASSWORD`/令牌、录音、记忆频道与天调学习值**永不入包**，由负例测试守住；`redactions` 计数写进 manifest。④**接收端 create/PUT 不鉴权**（上传端无法持有服务器密钥）：靠限速 + 不可猜 ID + 清单 Basic 鉴权 + 人工删除兜底。 |
+| Status detail | 规格 `docs/superpowers/specs/2026-09-17-support-bundle-design.md`；验收：真机上传→清单可见→下载 SHA-256 与本地一致 |
+
+**Problem**: 问题上报长期以"现象描述"到达（"有杂音""升级后不响了"），第一轮往返都花在索取证据上：哪个版本、什么平台、日志在哪。而 MRRC Modern 的打包版**根本没有服务端日志文件**——日志只进控制台窗口，窗口关掉就没了。
+
+**Rationale**: 证据只有在**故障现场**才能收集：设备表、实际采样率、串口状态、scope 是真实还是 S 表回退、TX 门禁状态，这些都无法事后补问。因此在服务端一次性收集、脱敏、自证（含自动体检结论），把"维护者第一眼要看的东西"直接写进包里的 `summary.txt`；入口放在浏览器则三端（Web/iOS/Android）与树莓派都可用。
+
+**Consequences**: 用户自助路径从"发消息描述问题"变成"点三下拿到编号"；维护者从"追问"变成"读摘要"。代价是一个新的常驻服务（接收端）与一条隐私契约——后者是硬约束：白名单之外一律丢弃并计数，包内出现密钥即是回归。

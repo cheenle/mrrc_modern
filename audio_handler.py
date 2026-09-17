@@ -987,6 +987,16 @@ class AudioHandler:
                             "TX session): %s", e)
                     return
 
+    @property
+    def device_rates(self) -> dict:
+        """Device-domain rates actually opened (diagnostics).
+
+        The FT-710 codec runs at 44.1 kHz and the Icoms at 48 kHz, so a rate
+        mismatch is a plausible cause of pitch/click symptoms in a report — it
+        belongs in the bundle next to the configured device names.
+        """
+        return {"rx": self._rx_dev_rate, "tx": self._tx_dev_rate}
+
     def tx_stats(self) -> dict:
         """TX-session diagnostics for the server to log on PTT release."""
         with self._tx_lock:

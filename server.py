@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import secrets as _secrets
+import socket
 import sys
 import threading
 import time
@@ -259,6 +260,9 @@ SUPPORT_OUT_DIR = LOG_DIR.parent / "support-out"
 SUPPORT_URL = _env("MRRC_SUPPORT_URL", "https://www.vlsc.net/mrrc_modern/support/")
 # Attach the file handler now that LOG_DIR exists (it needs the constant).
 SUPPORT_LOG_FILE = _setup_file_logging()
+
+# Process start (for /api/health uptime; reset by the lifespan below).
+STARTUP_TIME = time.time()
 
 # ── Recording: server-side QSO session (AD-017) ─────────────────────
 # One writer task owns the session so the timeline cursor and the MP3
@@ -2124,10 +2128,10 @@ async def lifespan(app: FastAPI):
     """Startup: connect to the radio, start polling, scope, and audio.
        Shutdown: disconnect, force RX, cancel tasks."""
     global backend, cat, scheduler, scope, audio, _scope_producer, _scope_broadcast_task
-    global _audio_rx_task, _audio_tx_task, _opus_tx_decoder
+    global _audio_rx_task, _audio_tx_task, _opus_tx_decoder, STARTUP_TIME
 
     # ── Startup ──
-    startup_time = time.time()
+    STARTUP_TIME = time.time()
     logger.info("MRRC Modern Web Control starting on port %d", WEB_PORT)
     logger.info("Radio model: %s, serial port: %s @ %d baud",
                 RADIO_MODEL, SERIAL_PORT, BAUD_RATE)
@@ -2421,6 +2425,27 @@ def _config_file_path() -> Path:
     return MEM_FILE.parent / "mrrc_modern.env"
 
 
+def _as_int(value, default: int = 0) -> int:
+    """Coerce an untyped PyAudio field to int (never raises)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _host_api_name(pa, index) -> str:
+    """Best-effort host API name for a device.
+
+    Field-relevant: the FT-710/IC-7300 codec enumerates several times (MME,
+    WASAPI, WDM-KS), only some of which open successfully — a device-name
+    collision across host APIs was a real 2026-09-10 field failure.
+    """
+    try:
+        return str(pa.get_host_api_info_by_index(index).get("name", ""))
+    except Exception:
+        return ""
+
+
 def _list_audio_devices() -> dict:
     rx, tx = [], []
     try:
@@ -2430,12 +2455,14 @@ def _list_audio_devices() -> dict:
             for i in range(pa.get_device_count()):
                 info = pa.get_device_info_by_index(i)
                 name = str(info.get("name", ""))
-                if info.get("maxInputChannels", 0) > 0:
+                if _as_int(info.get("maxInputChannels")) > 0:
                     rx.append({"index": i, "name": name,
-                               "channels": int(info.get("maxInputChannels", 0))})
-                if info.get("maxOutputChannels", 0) > 0:
+                               "channels": _as_int(info.get("maxInputChannels")),
+                               "host_api": _host_api_name(pa, info.get("hostApi", -1))})
+                if _as_int(info.get("maxOutputChannels")) > 0:
                     tx.append({"index": i, "name": name,
-                               "channels": int(info.get("maxOutputChannels", 0))})
+                               "channels": _as_int(info.get("maxOutputChannels")),
+                               "host_api": _host_api_name(pa, info.get("hostApi", -1))})
         finally:
             pa.terminate()
     except Exception:
@@ -2663,7 +2690,7 @@ async def api_health():
         "radio_connected": cat.connected if cat else False,
         "audio_available": audio is not None and audio._rx_running if audio else False,
         "scope_connected": scope.connected if scope else False,
-        "uptime_seconds": _time.time() - startup_time if 'startup_time' in globals() else 0,
+        "uptime_seconds": round(_time.time() - STARTUP_TIME, 1),
     }
     
     # Check if any critical components are down
@@ -2763,6 +2790,184 @@ async def api_recording_delete(name: str):
 async def api_get_mem_channels():
     """Return memory channels."""
     return JSONResponse({"channels": _load_mem_channels()})
+
+
+# ── Support bundle (spec 2026-09-17): server-side diagnostics + report loop ──
+# The bundle is built here (not in the browser) because only the server can see
+# the logs, the real device table and the radio state.  One build at a time: a
+# stuck build must not pile up bundles.
+_support_build_lock = threading.Lock()
+
+
+def _support_env_snapshot() -> dict:
+    """Live state a maintainer needs and cannot infer from a log file.
+
+    Every block is guarded: a diagnostics helper that throws would turn a
+    support request into "bundle build failed" (spec §11).
+    """
+    snapshot = support_bundle.collect_env_snapshot(
+        support_bundle.detect_version(_runtime_dir(), _resource_dir()))
+    try:
+        caps = backend.capabilities if backend is not None else None
+        snapshot["radio"] = {
+            "model": getattr(caps, "model_name", None),
+            "display_name": getattr(caps, "display_name", None),
+            "scope_type": getattr(caps, "scope_type", None),
+            "tx_gated": getattr(caps, "tx_gated", None),
+            "serial_connected": bool(radio.serial_connected),
+        }
+    except Exception as e:
+        snapshot["radio"] = {"error": str(e)}
+    try:
+        snapshot["audio"] = {
+            "devices": _list_audio_devices(),
+            "device_rates": audio.device_rates if audio is not None else None,
+            "tx_stats": audio.tx_stats() if audio is not None else None,
+            "configured_rx": AUDIO_RX_DEVICE,
+            "configured_tx": AUDIO_TX_DEVICE,
+        }
+    except Exception as e:
+        snapshot["audio"] = {"error": str(e)}
+    try:
+        snapshot["recording"] = {"dir": str(RECORDINGS_DIR),
+                                 "active": _rec_writer_task is not None}
+    except Exception as e:
+        snapshot["recording"] = {"error": str(e)}
+    snapshot["log_dir"] = str(LOG_DIR)
+    snapshot["log_file"] = str(SUPPORT_LOG_FILE) if SUPPORT_LOG_FILE else ""
+    snapshot["config_file"] = str(_config_file_path())
+    snapshot["support_url"] = SUPPORT_URL
+    return snapshot
+
+
+def _support_collect(problem: str, contact: str, client) -> dict:
+    """Build one bundle from live paths (single-flight is the caller's job)."""
+    try:
+        config_text = _config_file_path().read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        config_text = "; 配置文件不可读（可能尚未生成）\n"
+    log_files = support_bundle.resolve_log_files(LOG_DIR, LOG_DIR.parent, _runtime_dir())
+    version = support_bundle.detect_version(_runtime_dir(), _resource_dir())
+    return support_bundle.build_bundle(
+        SUPPORT_OUT_DIR, problem=problem, contact=contact,
+        env=_support_env_snapshot(), log_files=log_files, config_text=config_text,
+        extra_files={"diagnostics/client.json": json.dumps(client or {}, ensure_ascii=False,
+                                                         indent=2)},
+        manifest_extra={"version": version},
+    )
+
+
+def _support_upload(zip_file) -> str:
+    """POST api/create then PUT the zip; return the receiver's id (stdlib only)."""
+    import urllib.request
+
+    base = SUPPORT_URL.rstrip("/")
+
+    def _exchange(request) -> dict:
+        """Send one request and parse its JSON body (never a raw traceback)."""
+        with urllib.request.urlopen(request, timeout=20) as response:
+            raw = response.read().decode("utf-8", "replace")
+        try:
+            return json.loads(raw)
+        except ValueError as e:                     # a proxy/error page, not our API
+            raise RuntimeError(f"接收端未返回 JSON（{e}）：{raw[:200]}") from e
+
+    payload = json.dumps({
+        "problem": "", "contact": "",
+        "version": support_bundle.detect_version(_runtime_dir(), _resource_dir()),
+    }).encode("utf-8")
+    created = _exchange(urllib.request.Request(
+        f"{base}/api/create", data=payload,
+        headers={"Content-Type": "application/json"}))
+    remote_id = created.get("id", "")
+    if not created.get("ok") or not remote_id:
+        raise RuntimeError(created.get("reason") or "创建记录失败")
+    try:
+        with open(zip_file, "rb") as fh:
+            body_bytes = fh.read()
+    except OSError as e:
+        raise RuntimeError(f"诊断包不可读：{e}") from e
+    result = _exchange(urllib.request.Request(
+        f"{base}/api/{remote_id}/bundle", data=body_bytes, method="PUT",
+        headers={"Content-Type": "application/zip"}))
+    if not result.get("ok"):
+        raise RuntimeError(result.get("reason") or "上传失败")
+    return remote_id
+
+
+def _support_export_dir() -> Path:
+    """Where 只保存到本地 puts the zip (the user data dir, next to the logs)."""
+    target = LOG_DIR.parent / "support-export"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+@app.post("/api/support/bundle", include_in_schema=False)
+async def api_support_bundle(request: Request):
+    """Build a redacted diagnostics bundle (spec §7)."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not _support_build_lock.acquire(blocking=False):
+        return JSONResponse({"ok": False, "reason": "build in progress"})
+    try:
+        result = await asyncio.to_thread(
+            _support_collect, str(body.get("problem", ""))[:4000],
+            str(body.get("contact", ""))[:200], body.get("client") or {})
+        logger.info("Support bundle built: %s (%d KB, %d redactions)",
+                    result["id"], result["size"] // 1024, result["redactions"])
+        return JSONResponse(dict(result, ok=True))
+    except Exception as e:
+        logger.warning("Support bundle build failed: %s", e)
+        return JSONResponse({"ok": False, "reason": str(e)})
+    finally:
+        _support_build_lock.release()
+
+
+@app.post("/api/support/upload", include_in_schema=False)
+async def api_support_upload(request: Request):
+    """Upload a built bundle; never lose it on failure (spec §9/§11)."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    path = support_bundle.bundle_path(SUPPORT_OUT_DIR, str(body.get("id", "")))
+    if not path.is_file():
+        return JSONResponse({"ok": False, "reason": "unknown bundle", "localPath": ""})
+    try:
+        remote_id = await asyncio.to_thread(_support_upload, path)
+    except Exception as e:
+        logger.warning("Support bundle upload failed: %s", e)
+        return JSONResponse({"ok": False, "reason": str(e), "localPath": str(path)})
+    logger.info("Support bundle uploaded: %s -> %s", path.name, remote_id)
+    return JSONResponse({"ok": True, "remoteId": remote_id, "size": path.stat().st_size})
+
+
+@app.post("/api/support/save", include_in_schema=False)
+async def api_support_save(request: Request):
+    """Copy the bundle where the operator can send it by hand (mail/WeChat)."""
+    import shutil
+
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    path = support_bundle.bundle_path(SUPPORT_OUT_DIR, str(body.get("id", "")))
+    if not path.is_file():
+        return JSONResponse({"ok": False, "reason": "unknown bundle"})
+    try:
+        target = _support_export_dir() / path.name
+        shutil.copy2(path, target)
+    except OSError as e:
+        return JSONResponse({"ok": False, "reason": str(e)})
+    return JSONResponse({"ok": True, "path": str(target)})
 
 
 @app.post("/api/mem_channels")

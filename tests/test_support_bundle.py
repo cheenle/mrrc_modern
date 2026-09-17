@@ -1,6 +1,9 @@
 """Support bundle core (spec 2026-09-17 §4/§6): redaction is the security boundary."""
+import hashlib
+import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 import support_bundle as sb
@@ -208,3 +211,98 @@ class EnvSnapshotTests(unittest.TestCase):
         self.assertIn("platform", snap)
         self.assertIn("python", snap)
         self.assertIn("frozen", snap)
+
+
+class BuildBundleTests(unittest.TestCase):
+    def _build(self, tmp, **kwargs):
+        logs = Path(tmp) / "logs"
+        logs.mkdir(exist_ok=True)
+        (logs / "server.log").write_text(
+            "2026-09-17 07:00:00 [INFO] mrrc: Server ready!\nMRRC_WEB_PASSWORD=hunter2\n",
+            encoding="utf-8")
+        return sb.build_bundle(
+            Path(tmp) / "out",
+            problem="接收有杂音",
+            contact="BH1XXX",
+            env={"version": "1.17.0"},
+            log_files={"server": str(logs / "server.log")},
+            config_text="MRRC_WEB_PASSWORD=hunter2\nMRRC_WEB_PORT=8888\n",
+        )
+
+    def test_bundle_contains_the_expected_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._build(tmp)
+            with zipfile.ZipFile(result["path"]) as archive:
+                names = set(archive.namelist())
+        for expected in ("problem.txt", "README.txt", "manifest.json", "logs/server.log",
+                         "state/config-redacted.env", "diagnostics/summary.txt",
+                         "diagnostics/env.json"):
+            self.assertIn(expected, names)
+
+    def test_no_secret_anywhere_in_the_zip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._build(tmp)
+            with zipfile.ZipFile(result["path"]) as archive:
+                blob = b"".join(archive.read(n) for n in archive.namelist())
+        self.assertNotIn(b"hunter2", blob)
+        self.assertGreater(result["redactions"], 0)
+
+    def test_redaction_count_covers_config_and_logs(self):
+        """The page promises 已脱敏 N 处 — N must include the log value pass."""
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._build(tmp)
+        # 1 dropped config key (MRRC_WEB_PASSWORD) + 1 log line value replacement
+        self.assertEqual(result["redactions"], 2)
+
+    def test_manifest_hashes_every_collected_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._build(tmp)
+            with zipfile.ZipFile(result["path"]) as archive:
+                manifest = json.loads(archive.read("manifest.json"))
+                for name, digest in manifest["sha256"].items():
+                    self.assertEqual(hashlib.sha256(archive.read(name)).hexdigest(), digest)
+
+    def test_never_collects_forbidden_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = sb.build_bundle(
+                Path(tmp) / "out", log_files={"recordings": str(Path(tmp) / "qso.mp3")},
+                extra_files={"certs/server.key": b"PRIVATE"})
+            with zipfile.ZipFile(result["path"]) as archive:
+                names = " ".join(archive.namelist())
+        self.assertNotIn("qso.mp3", names)
+        self.assertNotIn("server.key", names)
+        self.assertTrue(any("受限" in w for w in result["warnings"]), result["warnings"])
+
+    def test_degradation_shrinks_the_tail_to_the_smallest_rung(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            big = Path(tmp) / "logs" / "server.log"
+            big.parent.mkdir(parents=True)
+            big.write_text("".join(f"line{i:06d}\n" for i in range(30000)), encoding="utf-8")
+            self.assertGreater(big.stat().st_size, 200 * 1024)   # bigger than any rung
+            result = sb.build_bundle(Path(tmp) / "out",
+                                     log_files={"server": str(big)},
+                                     max_total_bytes=1024)
+            with zipfile.ZipFile(result["path"]) as archive:
+                collected = archive.read("logs/server.log")
+        self.assertLess(len(collected), 140 * 1024)               # last rung is 128 KB
+        self.assertIn("已降级", " ".join(result["warnings"]))
+
+    def test_id_is_validated_before_any_path_is_built(self):
+        self.assertRegex(sb.new_bundle_id(), sb.BUNDLE_ID_RE)
+        self.assertTrue(sb.is_valid_bundle_id("20260917-072530-ab12"))
+        self.assertFalse(sb.is_valid_bundle_id("../../etc/passwd"))
+        self.assertFalse(sb.is_valid_bundle_id("20260917-072530-ZZZZ"))
+
+    def test_prune_keeps_the_newest_and_ignores_foreign_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            names = [f"support-20260917-0725{i:02d}-ab12.zip" for i in range(7)]
+            for name in names:
+                (out / name).write_bytes(b"z")
+            (out / "keep-me.txt").write_text("x", encoding="utf-8")
+            sb.prune_bundles(out, keep=5)
+            remaining = sorted(p.name for p in out.glob("support-*.zip"))
+            # inside the block: TemporaryDirectory is gone after it
+            self.assertTrue((out / "keep-me.txt").exists())
+        self.assertEqual(len(remaining), 5)
+        self.assertEqual(remaining[0], names[2])

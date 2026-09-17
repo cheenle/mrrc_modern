@@ -6,8 +6,11 @@ testable in isolation and can be hot-fixed later without a release.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
+import time
 from pathlib import Path
 
 REDACTED = "<redacted>"
@@ -172,7 +175,8 @@ def summarize_log(text: str, freshness_hours: float | None = None) -> str:
     elif freshness_hours >= 1:
         conclusions.append(f"数据新鲜度：日志写于 {freshness_hours:.1f} 小时前")
     else:
-        conclusions.append(f"数据新鲜度：日志写于 {max(1, int(freshness_hours * 60))} 分钟前")
+        minutes = max(1, round(freshness_hours * 60))
+        conclusions.append(f"数据新鲜度：日志写于 {minutes} 分钟前")
 
     for label, pattern in (("音频设备", SUMMARY_PATTERNS[2][1]),
                            ("录音写入", SUMMARY_PATTERNS[6][1])):
@@ -275,3 +279,167 @@ def collect_env_snapshot(version: str = "", extra=None) -> dict:
     }
     snapshot.update(extra or {})
     return snapshot
+
+
+# ── packaging + retention (spec §6/§7) ──────────────────────────────────────
+BUNDLE_ID_RE = r"^\d{8}-\d{6}-[0-9a-f]{4}$"
+DEFAULT_MAX_TOTAL_BYTES = 20 * 1024 * 1024
+# Largest tail first; the bundle degrades instead of failing when a log is huge,
+# because the receiver refuses anything over 20 MB (spec §7).
+_TAIL_LADDER = (DEFAULT_TAIL_BYTES, 512 * 1024, 128 * 1024)
+
+README_TEXT = (
+    "本包由 MRRC Modern「🐞 遇到问题」生成。\n\n"
+    "包含：日志尾部、脱敏配置快照、环境/电台/音频状态快照、自动体检摘要\n"
+    "      （先看 diagnostics/summary.txt）。\n"
+    "不含：登录密码、证书私钥、任何令牌，也不含录音、记忆频道与天调学习值\n"
+    "      （生成时按白名单裁剪 + 值替换，替换次数写在 manifest.json）。\n"
+)
+
+
+def new_bundle_id() -> str:
+    """`YYYYmmdd-HHMMSS-xxxx` — same shape as the receiver's id validation."""
+    import secrets
+    return time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
+
+
+def is_valid_bundle_id(bundle_id: str) -> bool:
+    return bool(re.fullmatch(BUNDLE_ID_RE, str(bundle_id or "")))
+
+
+def bundle_path(out_dir: str | os.PathLike[str], bundle_id: str) -> Path:
+    """Absolute path of a built bundle; an empty Path when the id is not valid."""
+    if not is_valid_bundle_id(bundle_id):
+        return Path("")
+    return Path(out_dir) / f"support-{bundle_id}.zip"
+
+
+def prune_bundles(out_dir: str | os.PathLike[str], keep: int = 5) -> list:
+    """Delete older support-*.zip files; never touches anything else."""
+    out = Path(out_dir)
+    if not out.is_dir():
+        return []
+    zips = sorted(out.glob("support-*.zip"), key=lambda p: p.name)
+    removed: list = []
+    for path in (zips[:-keep] if keep > 0 else zips):
+        try:
+            path.unlink()
+            removed.append(str(path))
+        except OSError:
+            pass
+    return removed
+
+
+def build_bundle(out_dir: str | os.PathLike[str], *, problem: str = "", contact: str = "",
+                 env: dict | None = None, log_files: dict | None = None, config_text: str = "",
+                 extra_files: dict | None = None, manifest_extra: dict | None = None,
+                 initial_warnings: list | None = None,
+                 max_total_bytes: int = DEFAULT_MAX_TOTAL_BYTES) -> dict:
+    """Write one support zip; return {id, path, size, files, redactions, warnings}.
+
+    Per-file problems become warnings, never failures: a bundle with nothing but
+    a manifest still beats "collect failed" (spec §11 minimal-bundle degradation).
+    """
+    import zipfile
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    bundle_id = new_bundle_id()
+    zip_path = bundle_path(out, bundle_id)
+    warnings: list = list(initial_warnings or [])
+    redactions = 0
+    collected: list = []
+    hashes: dict = {}
+    newest_mtime = None
+
+    config_clean, dropped, cfg_hits = redact_env_text(config_text or "")
+    redactions += dropped + cfg_hits
+
+    collectible: dict = {}
+    for role, path in (log_files or {}).items():
+        if is_collectable(role):
+            collectible[role] = path
+        else:
+            warnings.append(f"跳过受限文件：{role}")
+
+    payloads: dict = {}
+    payload_hits: dict = {}
+    for rung in _TAIL_LADDER:
+        payloads.clear()
+        payload_hits.clear()
+        total = 0
+        for role, path in collectible.items():
+            text = tail_lines(path, max_bytes=rung)
+            if not text:
+                continue
+            cleaned, hits = redact_text(text)
+            payloads[role] = cleaned
+            payload_hits[role] = hits
+            total += len(cleaned.encode("utf-8"))
+            try:
+                mtime = os.path.getmtime(path)
+                newest_mtime = mtime if newest_mtime is None else max(newest_mtime, mtime)
+            except OSError:
+                pass
+        if total + 4096 <= max_total_bytes or rung == _TAIL_LADDER[-1]:
+            if rung != _TAIL_LADDER[0]:
+                warnings.append(f"日志过大，已降级到每文件 {rung // 1024} KB 尾部")
+            break
+
+    # Counted after the ladder: it re-reads every file per rung, so counting
+    # inside would multiply the number by the number of rungs tried.
+    redactions += sum(payload_hits.values())
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        def add(name: str, data) -> None:
+            blob = data.encode("utf-8") if isinstance(data, str) else data
+            archive.writestr(name, blob)
+            collected.append(name)
+            hashes[name] = hashlib.sha256(blob).hexdigest()
+
+        add("problem.txt", f"# 问题描述\n{problem or '(未填写)'}\n\n"
+                           f"# 联系方式\n{contact or '(未填写)'}\n")
+        add("README.txt", README_TEXT)
+
+        summary_parts: list = []
+        for role, text in payloads.items():
+            add(f"logs/{role}.log", text)
+            summary_parts.append(text)
+        for role, path in collectible.items():
+            if role not in payloads:
+                warnings.append(f"日志不存在、为空或无权限：{role} -> {path}")
+
+        freshness = None
+        if newest_mtime:
+            freshness = max(0.0, (time.time() - newest_mtime) / 3600.0)
+            if freshness > STALE_LOG_HOURS:
+                warnings.append(f"日志可能过旧：最新日志写于 {freshness / 24:.1f} 天前，"
+                                "可能不是本次问题的现场")
+
+        add("state/config-redacted.env", config_clean)
+        add("diagnostics/summary.txt", summarize_log("\n".join(summary_parts),
+                                                    freshness_hours=freshness))
+        add("diagnostics/env.json", json.dumps(env or {}, ensure_ascii=False, indent=2))
+
+        for name, data in (extra_files or {}).items():
+            if not is_collectable(name):
+                warnings.append(f"跳过受限文件：{name}")
+                continue
+            add(name, data)
+
+        manifest = {
+            "id": bundle_id,
+            "createdAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "problem": problem or "",
+            "contact": contact or "",
+            "files": collected,
+            "sha256": hashes,
+            "redactions": redactions,
+            "warnings": warnings,
+        }
+        manifest.update(manifest_extra or {})
+        add("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+
+    prune_bundles(out, keep=5)
+    return {"id": bundle_id, "path": str(zip_path), "size": os.path.getsize(zip_path),
+            "files": collected, "redactions": redactions, "warnings": warnings}

@@ -76,9 +76,17 @@ All notable changes to the MRRC Web Control project.
   **在 zip 字节流中均无命中**，记忆频道/天调文件不在清单里；无网络路径下包完整落在磁盘
   （2602 B / 7 个文件 / 脱敏 2 处）。
 
+### Platform Status
+
+- **macOS**：`MRRC-Modern-v1.18.0-arm64.dmg` — 56,556,621 bytes，SHA-256 `af868988…`（冻结包实跑：三端点未登录 401、`server.log` 落盘、`support_bundle`/`upgrade_core` 在 PYZ 内、`version.txt=1.18.0`）。
+- **Windows**：`MRRC-Modern-v1.18.0-Windows-x64-Setup.exe` — 45,990,451 bytes，SHA-256 `938384ad…`（VM 内 1261 项测试绿、三个 PyInstaller 目标 + Inno Setup 编译成功；包内 FTDI DLL、`static/support.html`、`cq.wav`、`version.txt=1.18.0` 均在位；服务器侧 SHA 与本地一致）。
+- **rpi64**：**未重建** —— 外部构建卷（`/Volumes/MRRCBuild`）在构建中途消失，脚本要求 ≥20 GB 而根盘只剩 3.8 GB；命令已备（见验证边界）。
+- **更新通道已上线**：`https://www.vlsc.net/mrrc_modern/downloads/latest.json`（`latest=1.18.0`，installer size/SHA 与产物一致，`previous=1.17.0`），线上文件与本地逐字节一致；1.17.0 客户端检查即得 `available: true`。
+
 ### Verification Boundary
 
-- `latest.json` **尚未生成**（需三个安装包先重建）：更新检查目前只会报「无新版本」或「拉取失败」；端到端升级未验证（下载与安装在 slice 2）。
+- **rpi64 镜像未重建**（外部卷消失）：树莓派实机验收仍待执行。
+- **端到端升级未验证**：slice 2（下载 → 校验 → 发射门禁 → 安装 → 自证）尚未实现，因此 `latest.json` 目前只支撑只读检查。
 - **三个安装包与本版镜像未重建**：本次只到源码与网站，因此「从已安装的桌面版点一次生成/上传」、
   树莓派实机、以及 Windows 真机路径尚未执行（`version.txt` 的写入代码已就位并有源码级测试守护）。
 - 答复页**首次上线需一次站点部署**（autopilot 发布时只 rsync 该页；全站部署仍是交互式的）；cron 连续运行与真实用户包的结论质量待观察（第 2 期的质量结论目前只来自一个合成包）。

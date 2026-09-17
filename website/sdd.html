@@ -133,6 +133,11 @@
                 <p>macOS DMG, Windows installer and the rpi64 image published with cross-host SHA-256 verification, including the recording feature above and the reconnect fix.</p>
             </div>
             <div class="feature-card">
+                <div class="icon"><i class="fas fa-box-archive"></i></div>
+                <h3>v1.18.0 Released <small>(V2.53)</small></h3>
+                <p>macOS DMG and Windows installer built from one commit and verified before publication: the frozen macOS server boots with the new support endpoints and finally writes a server log; the VM ran 1261 tests and Inno Setup produced the installer. <code>latest.json</code> is live, so 1.17.0 installs now see the update.</p>
+            </div>
+            <div class="feature-card">
                 <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
                 <h3>Update Channel <small>(V2.53)</small></h3>
                 <p>A generated <code>latest.json</code> says whether a newer release exists and carries the installer's size and SHA-256 taken from the artifact itself; <code>GET /api/update/check</code> reports it read-only. Success is defined as a fact only the new version can write (<code>state.json.lastResult</code>) — "installer launched" is explicitly not success. Download/install is slice 2 (AD-022).</p>

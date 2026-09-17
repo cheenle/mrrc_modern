@@ -1,0 +1,19 @@
+{
+  "latest": "1.18.0",
+  "installer": {
+    "version": "1.18.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe",
+    "sha256": "938384ad7e46232b63e8b29f5ac98ed2bfe3c04ae2950a88a6ad0c319098a0c1",
+    "size": 45990451
+  },
+  "previous": {
+    "version": "1.17.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.17.0-Windows-x64-Setup.exe",
+    "sha256": "f378ab6d1a7ca6d8b93a928376ed3e69429b3d8fd45f1a52d0fa943fee2b371d",
+    "size": 45970364
+  },
+  "minSupported": "1.15.0",
+  "mandatory": false,
+  "releasedAt": "2026-09-17T23:32:37",
+  "notes": "支持链路第 1–3 期：🐞 一键诊断包（含日志持久化）、自动分诊与答复页、更新通道只读检查。新增菜单项与新页面；修复打包版没有服务端日志文件的问题。"
+}

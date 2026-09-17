@@ -55,19 +55,20 @@ class StartupTeeTests(unittest.TestCase):
             self.assertFalse(log.exists())
 
     def test_unwritable_dir_returns_a_disabled_tee(self):
+        """A FILE where the directory belongs: fails identically on every OS.
+
+        chmod-based read-only simulation is a POSIX assumption — Windows ignored
+        it and the test failed only on the build VM (2026-09-17).
+        """
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "ro"
-            target.mkdir()
-            target.chmod(0o500)
-            try:
-                tee = launcher_log.StartupTee(str(target / "logs"), echo=False)
-                proc = self._spawn("print('y')")
-                tee.start(proc)
-                self._close(proc)
-                tee.stop()
-                self.assertFalse(tee.attached)
-            finally:
-                target.chmod(0o700)
+            blocker = Path(tmp) / "logs"
+            blocker.write_text("not a directory", encoding="utf-8")
+            tee = launcher_log.StartupTee(str(blocker), echo=False)
+            proc = self._spawn("print('y')")
+            tee.start(proc)
+            self._close(proc)
+            tee.stop()
+            self.assertFalse(tee.attached)
 
     def test_start_without_a_pipe_is_a_no_op(self):
         """A launcher that forgets stdout=PIPE must not crash the app."""

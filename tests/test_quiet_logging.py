@@ -114,15 +114,17 @@ class SupportLogFileTests(unittest.TestCase):
             self.assertEqual(handlers[0].backupCount, 1)
 
     def test_unwritable_dir_degrades_to_console_only(self):
+        """A FILE where the directory must be created: fails on every OS.
+
+        The first version chmod'ed a directory read-only, which Windows ignores
+        (POSIX modes are not ACLs) — so the test passed on macOS and failed on the
+        build VM (2026-09-17).
+        """
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "ro"
-            target.mkdir()
-            target.chmod(0o500)
-            try:
-                with mock.patch.object(server, "LOG_DIR", target / "logs"):
-                    self.assertIsNone(server._setup_file_logging())
-            finally:
-                target.chmod(0o700)
+            blocker = Path(tmp) / "logs"
+            blocker.write_text("not a directory", encoding="utf-8")
+            with mock.patch.object(server, "LOG_DIR", blocker):
+                self.assertIsNone(server._setup_file_logging())
 
     def test_log_dir_defaults_to_logs_next_to_the_runtime(self):
         self.assertEqual(server.LOG_DIR.name, "logs")

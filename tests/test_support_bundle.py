@@ -74,9 +74,11 @@ class CollectableTests(unittest.TestCase):
 
 class TailLinesTests(unittest.TestCase):
     def test_small_file_is_read_whole(self):
+        # write_bytes, not write_text: Windows would translate \n to \r\n and the
+        # fixture — not the code — would decide the outcome (VM failure 2026-09-17).
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "server.log"
-            path.write_text("line1\nline2\n", encoding="utf-8")
+            path.write_bytes(b"line1\nline2\n")
             self.assertEqual(sb.tail_lines(str(path)), "line1\nline2\n")
 
     def test_tail_is_byte_bounded_and_line_aligned(self):

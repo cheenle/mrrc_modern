@@ -37,8 +37,12 @@ All notable changes to the MRRC Web Control project.
 - 套件 **1186 项全绿**（基线 1103 + 83 新增：bundle 核心 38、API 13、前端契约 6、接收端 12、
   启动器 tee 7、日志 5、发布脚本 2）。
 - `release_check.py`：**29 ok / 0 failing**（含全部图与生成副本规则）。
-- **接收端已上线并端到端验收**：真机上传 → 清单可见（`product=mrrc_modern`）→ 下载 SHA-256 与本地一致；
-  本地/公网 `/api/list` 无口令均为 401。
+- **接收端已上线并端到端验收**：真机上传 → 清单可见（`product=mrrc_modern`）→ 下载 SHA-256 与本地一致
+  （本地 `e31fba81…` == 远端）；本地/公网 `/api/list` 无口令均为 401；验收用的测试包已从接收端删除，清单回到空。
+- **规格 §13 本地验收**（自动化，含负例数据）：包内 `logs/server.log` 非空且 `summary.txt` 含
+  `启动次数：1 次`；`LEAK-CHECK`（密码）、`PRIVATE-KEY-MARKER`（私钥）、`QSO-AUDIO`（录音）三者
+  **在 zip 字节流中均无命中**，记忆频道/天调文件不在清单里；无网络路径下包完整落在磁盘
+  （2602 B / 7 个文件 / 脱敏 2 处）。
 
 ### Verification Boundary
 

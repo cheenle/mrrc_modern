@@ -151,6 +151,17 @@ and the model identity check (`ID;`, read-only) only logs.
    人工预检用 `--inspect <编号>`（不调模型）；`--status` 看已处理清单；`--force <编号>` 重跑。
    草稿永远留在 `dist/support_answers/`，即使发布失败也不丢结论。
 
+## 12.5.2 更新通道（slice 1：只读检查）
+
+1. **发布侧**：`python3 dev_tools/make_latest_json.py --installer <版本> <URL> <本地安装包> [--previous …]`
+   —— size/SHA-256 从文件本身算出，版本必须等于 CHANGELOG 顶版本，`previous` 必须更旧；缺任一条件**拒绝生成**。
+   产物 `website/downloads/latest.json` 随站点部署。
+2. **客户端侧**：`GET /api/update/check`（需登录）返回 `{available, current, latest, url, sha256, size, mandatory, notes}`；
+   清单拉取失败只返回 `{available: false, reason}`，不会让服务端返回 500。
+3. **成功判据（slice 2）**：`<data dir>/updates/state.json` 的 `lastResult.status == ok`，由**新版本启动时**写入；
+   `installing` 只表示已拉起安装器。
+4. **门禁**：发射或录音期间升级请求返回 **423**（slice 2 在交接前复查）。
+
 ## 12.6 Logs and Artifacts
 
 | Artifact | Purpose |

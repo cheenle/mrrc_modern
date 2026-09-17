@@ -276,6 +276,7 @@
 | AD-018 | Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F); the verified FT-710 path stays separate | Accepted (V2.46), migration deferred to phase 3 |
 | AD-019 | Unverified models ship receive-only: transmit gate, read-only identity check, per-table provenance | Implemented (V2.46) |
 | AD-021 | Server-built, allow-list-redacted diagnostics bundle with a dedicated receiver (support chain 1/4) | Implemented (V2.51) |
+| AD-022 | Update channel: generated `latest.json`, self-proving `state.json`, upgrade blocked while transmitting (support chain 3/4, slice 1) | Implemented (V2.53) |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -353,3 +354,22 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 并有用带敏感值的假包做负例测试——与第 1 期的入包白名单互为镜像。**实测边界**：真机跑通一次端到端
 （4m12s，结论引用了 `server.py:_rec_enqueue` 与 `recorder.py:383` 的真实代码位置），但结论质量只在
 该合成包上验证过；cron 连续运行与真实用户包的表现待观察。
+
+---
+
+## AD-022: 一键升级通道（生成式清单 + 自证成功 + 发射门禁）
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Design |
+| Status | Slice 1 implemented (V2.53)；下载/安装为 slice 2 |
+| Decision | 更新通道分两片交付。**Slice 1（本次）**：`upgrade_core.py`（清单拉取/校验/比较、`state.json` schema）+ `dev_tools/make_latest_json.py`（从**真实产物**算出 size/SHA-256 生成 `website/downloads/latest.json`）+ `GET /api/update/check`（鉴权、**只读**、失败只报原因）。**Slice 2（下次）**：下载到 `<data dir>/updates/` → SHA-256 校验 → 发射/录音中拒绝（423，交接前复查）→ 拉起安装器 → **由新版本启动时自证** `state.json.lastResult.status == ok`。 |
+| Alternatives | ①**应用内自动安装**（下载后直接替换自身文件）：跨平台权限/签名/回滚都不可控，且失败会把用户留在半个安装上；②**只做提示有新版本**（跳转下载页）：零风险但把升级退化成手工三步，正是本链路要消除的摩擦；③生成式清单 + 自证状态 + 两片交付（采纳）。 |
+| Consequences | ①**清单不可手写**：size/SHA 来自文件本身、installer 版本必须等于 CHANGELOG 顶版本、`previous` 必须更旧，任一不满足即拒绝生成，并由与客户端同一套 `parse_manifest` 复验；②**成功不可伪造**：只有新版本启动时看到 `pendingInstall.version == 自己` 才写 ok，`installing` 明确不等于成功（测试直接断言：旧版本无法宣称胜利）；③**发射优先**：升级请求在发射/录音期间返回 423，交接前复查（第 4 期热修沿用）；④离线检测**静默**；⑤**不自动安装**：始终由操作员按键触发。 |
+| Status detail | 规格 `docs/superpowers/specs/2026-09-17-upgrade-channel-design.md`；`version.txt`（AD-021 已铺到三平台）是本决策的版本权威 |
+
+**Problem**: 前两期把报障→结论打通了，但用户拿到修复仍要自己找下载页、对 SHA、重装。同时升级类功能最容易自欺：安装器退出码 0 不等于升级成功，已拉起安装器更不等于。
+
+**Rationale**: 因此把成功定义成一个**只能由新版本自己写下的事实**（`lastResult.status == ok`），并把清单做成**生成物**（从产物本身算哈希）—— 这两条让升级成功与清单可信都不依赖任何人的自觉。发射门禁沿用第 15 章的既有分层：升级是维护动作，绝不与载波争资源。
+
+**Consequences**: 维护者发版时多一步 `make_latest_json.py`，换来用户侧检查→下载→校验→安装→自证全程可判定；代价是两片交付期间只有检查可用 —— 这是有意的：半成品升级器会动用户的机器。

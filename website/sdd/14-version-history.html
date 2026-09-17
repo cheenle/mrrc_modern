@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.53</td>
+<td>2026-09-17</td>
+<td>Claude</td>
+<td><strong>支持链路第 3 期 slice 1：更新通道（只读检查 + 生成式清单 + 自证状态）。</strong> <code class="scope-code">upgrade_core.py</code>（纯标准库）：版本三元组比较（<code class="scope-code">v</code> 前缀/预发布后缀容忍、畸形排最旧）、<code class="scope-code">latest.json</code> 校验（缺字段/版本不一致/非 https/SHA 非 64 位/尺寸非正/<code class="scope-code">previous</code> 不更旧一律 <code class="scope-code">ManifestError</code>）、<code class="scope-code">check()</code> 与 <code class="scope-code">check_quietly()</code>（离线只报原因不抛），以及<strong>升级状态 schema</strong>：<code class="scope-code">mark_install_started</code> 写 <code class="scope-code">installing</code> + <code class="scope-code">pendingInstall</code>，<code class="scope-code">confirm_boot(新版本)</code> 才写 <code class="scope-code">ok</code> —— 测试直接断言旧版本无法宣称胜利。<code class="scope-code">dev_tools/make_latest_json.py</code> 从真实产物算 size/SHA-256（小于 1 KB 视为不是安装包而拒绝）、installer 版本必须等于 CHANGELOG 顶版本、并用与客户端同一套 <code class="scope-code">parse_manifest</code> 复验后才写盘。<code class="scope-code">GET /api/update/check</code> 走既有鉴权、只读、失败不 500。<strong>为什么分两片</strong>：下载/安装会修改运行中的机器，半成品升级器比没有升级器更糟，故 slice 2（下载→校验→发射门禁 423→交接→自证）单独一轮交付。套件 1226→1258 项全绿；<code class="scope-code">release_check</code> 29 ok / 0 failing。<strong>边界</strong>：无真实安装器参与，端到端升级未验证；<code class="scope-code">latest.json</code> 尚未生成（需三个安装包先重建）。</td>
+</tr>
+<tr>
 <td>SDD V2.52</td>
 <td>2026-09-17</td>
 <td>Claude</td>
@@ -649,7 +655,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.52 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.53 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

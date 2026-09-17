@@ -43,11 +43,23 @@ All notable changes to the MRRC Web Control project.
 - **答复页上线方式**：docroot 属 `www-data`，所以发布是两步（传到家目录 → `sudo install -o www-data`）。
   直接 rsync 会被拒绝，**且在文件未变化时返回 0** —— 这一点差点让"发布已通"的错误结论通过，已用带标记的真实文件验证过。
 
+### New — 更新通道（支持链路第 3 期 slice 1：只读检查）
+
+- **生成式清单**：`dev_tools/make_latest_json.py` 从**真实产物**算出 size/SHA-256 生成
+  `website/downloads/latest.json`；installer 版本必须等于 CHANGELOG 顶版本、`previous` 必须更旧，
+  缺任一条件**拒绝生成**（并用与客户端同一套 `parse_manifest` 复验）。
+- **客户端只读检查**：`GET /api/update/check`（需登录）返回 `{available, current, latest, url, sha256, size, …}`；
+  清单拉取失败只返回原因，不会 500。
+- **成功判据（为 slice 2 定死）**：`state.json.lastResult.status == "ok"` 只能由**新版本启动时**写下；
+  `installing` 明确不等于成功（测试直接断言旧版本无法宣称胜利）。
+- **为何分两片**：下载/安装会修改运行中的机器，半成品升级器比没有升级器更糟；slice 2（下载 → SHA 校验 →
+  发射/录音中拒绝 423 → 交接 → 自证）单独一轮交付。
+
 ### Verification
 
-- 套件 **1186 项全绿**（基线 1103 + 83 新增：bundle 核心 38、API 13、前端契约 6、接收端 12、
-  启动器 tee 7、日志 5、发布脚本 2）。
+- 套件 **1260 项全绿**（基线 1103：第 1 期 +83、第 2 期 +40、第 3 期 slice 1 +34）。
 - `release_check.py`：**29 ok / 0 failing**（含全部图与生成副本规则）。
+- 第 3 期 slice 1 的清单生成器与客户端共用同一套 `parse_manifest` 校验，因此发布一个客户端不接受的清单在测试里就会被拦住。
 - **第 2 期真机冒烟**：合成诊断包 → 接收端 → `--inspect`（摘要正确命中 3 条录音证据）→ 真调模型
   **4m12s** 跑完并出草稿卡，结论引用了 `server.py:_rec_enqueue`（`REC_QUEUE_MAX=200`）与
   `recorder.py:383` 的补静音逻辑；合成包与其接收端副本事后已删除。冒烟抓到 3 个 mock 测不出的缺陷
@@ -62,6 +74,7 @@ All notable changes to the MRRC Web Control project.
 
 ### Verification Boundary
 
+- `latest.json` **尚未生成**（需三个安装包先重建）：更新检查目前只会报「无新版本」或「拉取失败」；端到端升级未验证（下载与安装在 slice 2）。
 - **三个安装包与本版镜像未重建**：本次只到源码与网站，因此「从已安装的桌面版点一次生成/上传」、
   树莓派实机、以及 Windows 真机路径尚未执行（`version.txt` 的写入代码已就位并有源码级测试守护）。
 - 答复页**首次上线需一次站点部署**（autopilot 发布时只 rsync 该页；全站部署仍是交互式的）；cron 连续运行与真实用户包的结论质量待观察（第 2 期的质量结论目前只来自一个合成包）。

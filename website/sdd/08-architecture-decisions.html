@@ -738,6 +738,11 @@
 <td>Server-built, allow-list-redacted diagnostics bundle with a dedicated receiver (support chain 1/4)</td>
 <td>Implemented (V2.51)</td>
 </tr>
+<tr>
+<td>AD-022</td>
+<td>Update channel: generated <code class="scope-code">latest.json</code>, self-proving <code class="scope-code">state.json</code>, upgrade blocked while transmitting (support chain 3/4, slice 1)</td>
+<td>Implemented (V2.53)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -883,13 +888,56 @@
 <p><strong>Rationale</strong>: 证据只有在<strong>故障现场</strong>才能收集：设备表、实际采样率、串口状态、scope 是真实还是 S 表回退、TX 门禁状态，这些都无法事后补问。因此在服务端一次性收集、脱敏、自证（含自动体检结论），把”维护者第一眼要看的东西”直接写进包里的 <code class="scope-code">summary.txt</code>；入口放在浏览器则三端（Web/iOS/Android）与树莓派都可用。</p>
 <p><strong>Consequences</strong>: 用户自助路径从”发消息描述问题”变成”点三下拿到编号”；维护者从”追问”变成”读摘要”。代价是一个新的常驻服务（接收端）与一条隐私契约——后者是硬约束：白名单之外一律丢弃并计数，包内出现密钥即是回归。</p>
 <p><strong>Amendment (2026-09-17, 支持链路第 2 期)</strong>: 分诊与答复由 <code class="scope-code">dev_tools/support_autopilot.py</code> + <code class="scope-code">support_answers.py</code> 完成： 轮询接收端 → 取包解包 → 组装摘要（复用第 1 期的 <code class="scope-code">collect_context</code>，含 <code class="scope-code">summary.txt</code> 与日志尾部）→ <code class="scope-code">pi</code>（只读工具、仓库为工作目录）按固定 JSON 契约产出结论 → 渲染成答复卡。 <strong>发布规则</strong>：默认只写草稿（<code class="scope-code">dist/support_answers/</code>），<code class="scope-code">--publish</code> 才更新 <code class="scope-code">website/answers/index.html</code>、 git commit 并<strong>单文件 rsync</strong> 上线（全站部署仍是交互式的，不能进 cron）；即使带 <code class="scope-code">--publish</code>， <code class="scope-code">need_more_info</code> 也<strong>不发布</strong>（那是给操作员的问题，不是答复）。护栏：幂等 <code class="scope-code">state.json</code>、 单轮上限 2 条、<code class="scope-code">pi</code> 超时 540 s、半包跳过、单条失败不中断。 <strong>公开页的隐私边界</strong>由 <code class="scope-code">support_answers.redact_public</code> 承担（邮箱/手机号/设备路径/串口/内网地址/本机与临时路径）， 并有用带敏感值的假包做负例测试——与第 1 期的入包白名单互为镜像。<strong>实测边界</strong>：真机跑通一次端到端 （4m12s，结论引用了 <code class="scope-code">server.py:_rec_enqueue</code> 与 <code class="scope-code">recorder.py:383</code> 的真实代码位置），但结论质量只在 该合成包上验证过；cron 连续运行与真实用户包的表现待观察。</p>
+<hr />
+<h2 id="ad-022-一键升级通道生成式清单-自证成功-发射门禁">AD-022: 一键升级通道（生成式清单 + 自证成功 + 发射门禁）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Slice 1 implemented (V2.53)；下载/安装为 slice 2</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>更新通道分两片交付。<strong>Slice 1（本次）</strong>：<code class="scope-code">upgrade_core.py</code>（清单拉取/校验/比较、<code class="scope-code">state.json</code> schema）+ <code class="scope-code">dev_tools/make_latest_json.py</code>（从<strong>真实产物</strong>算出 size/SHA-256 生成 <code class="scope-code">website/downloads/latest.json</code>）+ <code class="scope-code">GET /api/update/check</code>（鉴权、<strong>只读</strong>、失败只报原因）。<strong>Slice 2（下次）</strong>：下载到 <code class="scope-code">&lt;data dir&gt;/updates/</code> → SHA-256 校验 → 发射/录音中拒绝（423，交接前复查）→ 拉起安装器 → <strong>由新版本启动时自证</strong> <code class="scope-code">state.json.lastResult.status == ok</code>。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong>应用内自动安装</strong>（下载后直接替换自身文件）：跨平台权限/签名/回滚都不可控，且失败会把用户留在半个安装上；②<strong>只做提示有新版本</strong>（跳转下载页）：零风险但把升级退化成手工三步，正是本链路要消除的摩擦；③生成式清单 + 自证状态 + 两片交付（采纳）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>清单不可手写</strong>：size/SHA 来自文件本身、installer 版本必须等于 CHANGELOG 顶版本、<code class="scope-code">previous</code> 必须更旧，任一不满足即拒绝生成，并由与客户端同一套 <code class="scope-code">parse_manifest</code> 复验；②<strong>成功不可伪造</strong>：只有新版本启动时看到 <code class="scope-code">pendingInstall.version == 自己</code> 才写 ok，<code class="scope-code">installing</code> 明确不等于成功（测试直接断言：旧版本无法宣称胜利）；③<strong>发射优先</strong>：升级请求在发射/录音期间返回 423，交接前复查（第 4 期热修沿用）；④离线检测<strong>静默</strong>；⑤<strong>不自动安装</strong>：始终由操作员按键触发。</td>
+</tr>
+<tr>
+<td>Status detail</td>
+<td>规格 <code class="scope-code">docs/superpowers/specs/2026-09-17-upgrade-channel-design.md</code>；<code class="scope-code">version.txt</code>（AD-021 已铺到三平台）是本决策的版本权威</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: 前两期把报障→结论打通了，但用户拿到修复仍要自己找下载页、对 SHA、重装。同时升级类功能最容易自欺：安装器退出码 0 不等于升级成功，已拉起安装器更不等于。</p>
+<p><strong>Rationale</strong>: 因此把成功定义成一个<strong>只能由新版本自己写下的事实</strong>（<code class="scope-code">lastResult.status == ok</code>），并把清单做成<strong>生成物</strong>（从产物本身算哈希）—— 这两条让升级成功与清单可信都不依赖任何人的自觉。发射门禁沿用第 15 章的既有分层：升级是维护动作，绝不与载波争资源。</p>
+<p><strong>Consequences</strong>: 维护者发版时多一步 <code class="scope-code">make_latest_json.py</code>，换来用户侧检查→下载→校验→安装→自证全程可判定；代价是两片交付期间只有检查可用 —— 这是有意的：半成品升级器会动用户的机器。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.52 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.53 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -550,6 +550,13 @@ Icom IC-7300 / IC-7300MK2
 <li><strong>排查未复现的问题</strong>：包内 <code class="scope-code">warnings</code> 里”日志可能过旧”意味着这不是现场；<code class="scope-code">summary.txt</code> 会显式写出。</li>
 <li><strong>答复怎么产生</strong>：<code class="scope-code">dev_tools/support_autopilot.py</code>（crontab 每 10 分钟，<code class="scope-code">--once --publish</code>）轮询接收端 → 解包 → <code class="scope-code">pi</code> 只读分析（提示词带探查预算：≤5 次检索 / ≤6 个文件）→ 按 JSON 契约渲染答复卡 → 仅当 <code class="scope-code">status</code> 为 <code class="scope-code">answered</code>/<code class="scope-code">needs_fix</code> 时更新 <code class="scope-code">website/answers/index.html</code>、commit 并 rsync 单文件上线。 人工预检用 <code class="scope-code">--inspect &lt;编号&gt;</code>（不调模型）；<code class="scope-code">--status</code> 看已处理清单；<code class="scope-code">--force &lt;编号&gt;</code> 重跑。 草稿永远留在 <code class="scope-code">dist/support_answers/</code>，即使发布失败也不丢结论。</li>
 </ol>
+<h2 id="更新通道slice-1只读检查">12.5.2 更新通道（slice 1：只读检查）</h2>
+<ol type="1">
+<li><strong>发布侧</strong>：<code class="scope-code">python3 dev_tools/make_latest_json.py --installer &lt;版本&gt; &lt;URL&gt; &lt;本地安装包&gt; [--previous …]</code> —— size/SHA-256 从文件本身算出，版本必须等于 CHANGELOG 顶版本，<code class="scope-code">previous</code> 必须更旧；缺任一条件<strong>拒绝生成</strong>。 产物 <code class="scope-code">website/downloads/latest.json</code> 随站点部署。</li>
+<li><strong>客户端侧</strong>：<code class="scope-code">GET /api/update/check</code>（需登录）返回 <code class="scope-code">{available, current, latest, url, sha256, size, mandatory, notes}</code>； 清单拉取失败只返回 <code class="scope-code">{available: false, reason}</code>，不会让服务端返回 500。</li>
+<li><strong>成功判据（slice 2）</strong>：<code class="scope-code">&lt;data dir&gt;/updates/state.json</code> 的 <code class="scope-code">lastResult.status == ok</code>，由<strong>新版本启动时</strong>写入； <code class="scope-code">installing</code> 只表示已拉起安装器。</li>
+<li><strong>门禁</strong>：发射或录音期间升级请求返回 <strong>423</strong>（slice 2 在交接前复查）。</li>
+</ol>
 <h2 id="logs-and-artifacts">12.6 Logs and Artifacts</h2>
 <table class="scope-table">
 <colgroup>
@@ -658,7 +665,7 @@ Icom IC-7300 / IC-7300MK2
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.52 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.53 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

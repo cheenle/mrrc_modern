@@ -45,6 +45,7 @@ from config import (
 from backends import create_backend, known_models
 from backends.base import RadioBackend
 import support_bundle
+import upgrade_core
 from backends.ft710.config_ft710 import (
     MODE_NAME_TO_NUM, BANDS,
     FILTER_WIDTHS_VOICE, FILTER_WIDTHS_NARROW,
@@ -258,6 +259,7 @@ RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
 LOG_DIR = Path(_env("MRRC_LOG_DIR", str(_runtime_dir() / "logs")))
 SUPPORT_OUT_DIR = LOG_DIR.parent / "support-out"
 SUPPORT_URL = _env("MRRC_SUPPORT_URL", "https://www.vlsc.net/mrrc_modern/support/")
+UPDATE_MANIFEST_URL = _env("MRRC_UPDATE_MANIFEST_URL", upgrade_core.DEFAULT_MANIFEST_URL)
 # Attach the file handler now that LOG_DIR exists (it needs the constant).
 SUPPORT_LOG_FILE = _setup_file_logging()
 
@@ -2900,6 +2902,21 @@ def _support_export_dir() -> Path:
     target = LOG_DIR.parent / "support-export"
     target.mkdir(parents=True, exist_ok=True)
     return target
+
+
+# ── Update check (spec 2026-09-17-upgrade-channel, slice 1) ─────────
+# Read-only: reports whether a newer release exists.  Nothing is downloaded and
+# nothing is written here — the download/install half is slice 2, and it must not
+# exist half-built (a half-built updater modifies the machine it runs on).
+@app.get("/api/update/check", include_in_schema=False)
+async def api_update_check(request: Request):
+    """Compare the running version with the published manifest."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    result = await asyncio.to_thread(upgrade_core.check_quietly,
+                                     support_bundle.detect_version(_runtime_dir(), _resource_dir()),
+                                     UPDATE_MANIFEST_URL)
+    return JSONResponse(result)
 
 
 @app.post("/api/support/bundle", include_in_schema=False)

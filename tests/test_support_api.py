@@ -130,6 +130,38 @@ class SupportApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
 
+class UpdateCheckTests(unittest.TestCase):
+    """`/api/update/check` is read-only and must never take the server down when
+    the manifest is unreachable (spec 2026-09-17-upgrade-channel §2 D5)."""
+
+    def _call(self):
+        return asyncio.run(server.api_update_check(_req({})))
+
+    def test_reports_a_newer_release(self):
+        result = {"available": True, "current": "1.17.0", "latest": "1.18.0",
+                  "url": "https://example.invalid/setup.exe", "sha256": "a" * 64, "size": 4242,
+                  "mandatory": False, "notes": "说明", "releasedAt": "2026-10-01T10:00:00"}
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server.upgrade_core, "check_quietly", return_value=result) as check:
+            payload = _payload(self._call())
+        self.assertTrue(payload["available"])
+        self.assertEqual(payload["latest"], "1.18.0")
+        self.assertEqual(check.call_count, 1)
+
+    def test_unreachable_manifest_reports_a_reason_not_a_500(self):
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server.upgrade_core, "check_quietly",
+                               return_value={"available": False, "reason": "URLError: timed out"}):
+            payload = _payload(self._call())
+        self.assertFalse(payload["available"])
+        self.assertIn("timed out", payload["reason"])
+
+    def test_requires_auth(self):
+        with mock.patch.object(server, "_verify_auth", return_value=False):
+            response = self._call()
+        self.assertEqual(response.status_code, 401)
+
+
 class SupportUploadTransportTests(unittest.TestCase):
     """`_support_upload` is the only network code: verify it against a stub."""
 

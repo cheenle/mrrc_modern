@@ -66,6 +66,11 @@ mkdir -p "$APP_MACOS" "$APP_BUNDLE/Contents/Resources"
 # Info.plist with the CHANGELOG version injected.
 sed "s/__VERSION__/${VERSION}/" "$SCRIPT_DIR/Info.plist" \
     > "$APP_BUNDLE/Contents/Info.plist"
+grep -q "NSMicrophoneUsageDescription" "$APP_BUNDLE/Contents/Info.plist" || {
+    echo "ERROR: Info.plist lacks NSMicrophoneUsageDescription — macOS would deny" >&2
+    echo "       audio input and RX would play silence with no error at all." >&2
+    exit 1
+}
 
 # launcher onefile exe (the entry point named by CFBundleExecutable)
 cp "$PYI_ROOT/MRRC-Modern-Launcher" "$APP_MACOS/MRRC-Modern-Launcher"

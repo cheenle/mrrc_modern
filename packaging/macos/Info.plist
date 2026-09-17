@@ -23,6 +23,15 @@
     <!-- Background menu-bar app: no Dock icon, no main menu bar. -->
     <key>LSUIElement</key>
     <true/>
+    <!-- Audio INPUT (the radio's USB CODEC) needs the microphone TCC class.
+         Without this key macOS refuses the authorization ("Refusing
+         authorization request for service kTCCServiceMicrophone ... without
+         NSMicrophoneUsageDescription key") and CoreAudio then opens the stream
+         happily but fills it with zeros: RX plays silence with peak=0.0% and no
+         error anywhere (2026-09-18 field report). -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>MRRC Modern 需要访问音频输入设备（电台的 USB 声卡），以便把接收到的电台音频转发到浏览器。
+MRRC Modern needs audio input access (the radio's USB sound card) to stream received radio audio to the browser.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>LSMultipleInstancesProhibited</key>

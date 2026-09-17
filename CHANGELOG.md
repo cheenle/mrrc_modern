@@ -78,7 +78,7 @@ All notable changes to the MRRC Web Control project.
 
 ### Platform Status
 
-- **macOS**：`MRRC-Modern-v1.18.0-arm64.dmg` — **55,640,517 bytes，SHA-256 `754e345f…`**（**重新构建：修复了长期存在的签名失败** —— 详见下方 Fixed 段；签名 `valid on disk`、`spctl` 只报无 Developer ID、冻结服务实跑并把 `version.txt` 解析为 1.18.0）（冻结包实跑：三端点未登录 401、`server.log` 落盘、`support_bundle`/`upgrade_core` 在 PYZ 内、`version.txt=1.18.0`）。
+- **macOS**：`MRRC-Modern-v1.18.0-arm64.dmg` — **55,639,405 bytes，SHA-256 `799efeb9…`**（重新构建：修复了①长期存在的签名失败、②**音频输入权限缺失导致 RX 无声**；签名 `valid on disk`、冻结服务实跑正常）
 - **Windows**：`MRRC-Modern-v1.18.0-Windows-x64-Setup.exe` — 45,990,451 bytes，SHA-256 `938384ad…`（VM 内 1261 项测试绿、三个 PyInstaller 目标 + Inno Setup 编译成功；包内 FTDI DLL、`static/support.html`、`cq.wav`、`version.txt=1.18.0` 均在位；服务器侧 SHA 与本地一致）。
 - **rpi64**：**未重建** —— 外部构建卷（`/Volumes/MRRCBuild`）在构建中途消失，脚本要求 ≥20 GB 而根盘只剩 3.8 GB；命令已备（见验证边界）。
 - **更新通道已上线**：`https://www.vlsc.net/mrrc_modern/downloads/latest.json`（`latest=1.18.0`，installer size/SHA 与产物一致，`previous=1.17.0`），线上文件与本地逐字节一致；1.17.0 客户端检查即得 `available: true`。
@@ -95,6 +95,18 @@ All notable changes to the MRRC Web Control project.
   需回退到 `_internal/` 查找，之后重建 DMG。
 - **build.sh 已加硬门禁**：签名/校验失败或 `spctl` 报 damaged 即 `exit 1`（此前是静默警告）。
 - **用户侧立刻解封**（v1.17.0/v1.18.0 均适用）：`sudo xattr -dr com.apple.quarantine "/Applications/MRRC Modern.app"`。
+
+### Fixed — macOS 装机后 RX 无声（音频输入权限缺失）
+
+- **症状**：本地装好应用后，网页里"打开远程接收"**完全没声音**。日志里 RX 捕获流**打开成功**（`RX audio started: [3] USB Audio Device … 44100Hz`），
+  却报 `peak=0.0%`，并提示"检查电台 AF 增益 / USB 连接"——把人引向电台，而电台是好的。
+- **根因（系统日志原话）**：`tccd: Refusing authorization request for service kTCCServiceMicrophone … without NSMicrophoneUsageDescription key`。
+  打包的 `Info.plist` **没有任何权限说明键**。macOS 的"麦克风"权限管理的正是**音频输入**（电台 USB CODEC 在系统里就是输入设备）；
+  缺键时 CoreAudio **照常允许打开流、但把缓冲填零** —— 不报错、只是静音，所以最难察觉。
+- **修复**：`packaging/macos/Info.plist` 加 `NSMicrophoneUsageDescription`；`build.sh` 加断言（缺键即 `exit 1`，防止回归）；
+  `server.py` 的近静默警告在打包版 macOS 上追加提示"请在 系统设置 → 隐私与安全性 → 麦克风 中允许 MRRC Modern"。
+- **需要用户动作**：首次启动会弹一次权限询问，**必须点"允许"**（旧版连询问都不会弹，所以必须换新包）；
+  ad-hoc 签名下授权绑定当次构建的 cdhash，**今后每次升级都会重新询问**（要免除需 Developer ID 签名）。
 
 ### Verification Boundary
 

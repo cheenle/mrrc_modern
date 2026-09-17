@@ -1167,6 +1167,21 @@ async def _send_audio_frames_to_clients(
             dead.add(ws)
     return dead
 
+def _audio_permission_hint() -> str:
+    """Trailing clause for the near-silent RX warning.
+
+    A frozen macOS build is a normal TCC subject: without the microphone
+    authorization CoreAudio still opens the input stream and fills it with
+    zeros, so the server sees a healthy stream carrying nothing.  Say so —
+    "check the radio" sent an operator looking at the radio while the fix was in
+    System Settings (2026-09-18 field report: no RX audio, peak=0.0%).
+    """
+    if sys.platform == "darwin" and getattr(sys, "frozen", False):
+        return ("; in a packaged macOS app also allow MRRC Modern under "
+                "System Settings > Privacy & Security > Microphone")
+    return ""
+
+
 async def _audio_rx_loop():
     """Capture RX audio from the sound card and broadcast to clients.
 
@@ -1236,7 +1251,8 @@ async def _audio_rx_loop():
                                            tag_name, len(audio_rx_clients), _peak)
                                 if _peak < 0.5:
                                     logger.warning("RX audio is near-silent (peak=%.1f%%) — "
-                                                 "check radio AF gain / USB audio connection", _peak)
+                                                 "check radio AF gain / USB audio connection%s",
+                                                 _peak, _audio_permission_hint())
                             _first = False
                         dead = await _send_audio_frames_to_clients(frames, audio_rx_clients)
                         if dead:

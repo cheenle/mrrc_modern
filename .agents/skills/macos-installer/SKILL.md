@@ -30,6 +30,36 @@ description: Use when building, rebuilding, verifying, or deploying the MRRC Mod
 
 **启动器已改**：`runtime_path()`（`macos/launcher.py` 与 `windows/launcher.py`）先看 `app_dir()`，再回退 `app_dir()/_internal/`，因此 `macos/`、`version.txt`、`mem_channels.json`、`vendor/` 可以住在数据树里。另有两条实测教训：`mv ... || true` 会**吞掉失败**并留下真目录（`ln -sfn` 随后把符号链接嵌进去，签名继续失败）——现在用 `cp -Rf` + `rm -rf` 并断言 `MacOS/_internal` 必须是符号链接；`spctl` 对 ad-hoc 包报 `rejected (no usable signature)`/`no Developer ID` 是**正常**结果（用户右键打开即可），而 `damaged`/`invalid signature` 才是必须阻断发布的状态。
 
+## 装机后「RX 无声」= 音频输入权限（2026-09-18 第二次上报）
+
+应用装好了、电台正常、日志里 RX 流**打开成功** —— 就是没声音。日志只有
+`RX audio is near-silent (peak=0.0%)`，提示"检查电台 AF 增益/USB 连接"，把人引向电台。
+
+**真相在系统日志里**（`log show --predicate 'subsystem == "com.apple.TCC"'`）：
+
+```
+tccd: Refusing authorization request for service kTCCServiceMicrophone ...
+      without NSMicrophoneUsageDescription key
+```
+
+打包的 `Info.plist` **没有任何权限说明键**。macOS 把**音频输入**（电台 USB CODEC）归入麦克风权限类；
+缺键时 **CoreAudio 依然允许 `open stream` 成功，但把所有输入缓冲填零** —— 不抛错、不返回失败，
+只是纯零采样。这就是它最难查的地方：**"流健康"与"有数据"在 macOS 上不是一回事。**
+
+修法：`packaging/macos/Info.plist` 必须有 `NSMicrophoneUsageDescription`
+（`build.sh` 已加断言，缺键 `exit 1`）；`server.py` 的静默警告在 frozen macOS 上追加指向
+`系统设置 → 隐私与安全性 → 麦克风`。**用户必须点一次"允许"** —— 旧包连询问都不会弹。
+
+排查套路（下次遇到"有流无声"直接照做）：
+
+```bash
+log show --last 30m --predicate 'subsystem == "com.apple.TCC"' | grep -i mrrc   # 权限拒绝？
+/usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "/Applications/MRRC-Modern.app/Contents/Info.plist"
+```
+
+**注意**：ad-hoc 签名下 TCC 授权绑定的是当次构建的 cdhash，**每次升级都会重新询问**；
+要免除这一点需要 Developer ID 签名。
+
 **用户侧立刻解封**（对已下载的 v1.17.0/v1.18.0 同样有效）：
 
 ```bash

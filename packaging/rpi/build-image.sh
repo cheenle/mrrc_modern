@@ -43,7 +43,10 @@ rsync -a "$REPO_ROOT/" "$STAGE_FILES/opt/mrrc_modern/" \
   --exclude "packaging/" --exclude "macos/" --exclude "windows/" \
   --exclude "__pycache__/" --exclude "*.pyc" --exclude ".DS_Store" \
   --exclude "atr1000_tuner.json"
-printf '%s\n' "${VERSION#v}" > "$STAGE_FILES/opt/mrrc_modern/VERSION"
+# version.txt is the cross-platform name (support bundle manifest + the future
+# one-click upgrade read it); VERSION is kept for operators upgrading in place.
+printf '%s\n' "${VERSION#v}" > "$STAGE_FILES/opt/mrrc_modern/version.txt"
+cp "$STAGE_FILES/opt/mrrc_modern/version.txt" "$STAGE_FILES/opt/mrrc_modern/VERSION"
 mkdir -p "$STAGE_FILES/opt/mrrc_modern/vendor/ftdi"
 
 # ── export markers ──

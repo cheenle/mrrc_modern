@@ -239,12 +239,15 @@ def detect_version(runtime_dir: str | os.PathLike[str], resource_dir="") -> str:
     for directory in (runtime_dir, resource_dir):
         if not directory:
             continue
-        try:
-            text = (Path(directory) / "version.txt").read_text(encoding="utf-8").strip()
-        except OSError:
-            continue
-        if text:
-            return text
+        # version.txt first, then the rpi64 image's original VERSION name (images
+        # flashed before 2026-09-17 carry only that one)
+        for name in ("version.txt", "VERSION"):
+            try:
+                text = (Path(directory) / name).read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+            if text:
+                return text
     if runtime_dir:
         try:
             text = (Path(runtime_dir) / "packaging" / "windows" / "MRRC-Modern.iss").read_text(

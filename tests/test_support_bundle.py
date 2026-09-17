@@ -198,6 +198,18 @@ class VersionTests(unittest.TestCase):
                 '#define MyAppVersion "1.16.0"\n', encoding="utf-8")
             self.assertEqual(sb.detect_version(root), "1.16.0")
 
+    def test_legacy_rpi_version_file_is_accepted(self):
+        """The rpi64 image wrote /opt/mrrc_modern/VERSION before 2026-09-17."""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "VERSION").write_text("1.17.0\n", encoding="utf-8")
+            self.assertEqual(sb.detect_version(Path(tmp)), "1.17.0")
+
+    def test_version_txt_wins_over_the_legacy_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "VERSION").write_text("1.16.0\n", encoding="utf-8")
+            (Path(tmp) / "version.txt").write_text("1.17.0\n", encoding="utf-8")
+            self.assertEqual(sb.detect_version(Path(tmp)), "1.17.0")
+
     def test_unknown_when_nothing_is_found(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(sb.detect_version(Path(tmp)), "unknown")

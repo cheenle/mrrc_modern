@@ -5,6 +5,10 @@
 > 用户向的安装/使用说明见 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 > 与 Windows 不同，macOS 不需要 KVM 虚拟机——直接在本机用 `.venv` 打包。
 
+- `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：
+  macOS `Contents/MacOS/version.txt`、Windows `<install>\version.txt`、树莓派镜像 `/opt/mrrc_modern/version.txt`。
+  源码/构建脚本由 `tests/test_release_artifacts.py` 的 `VersionTxtBuildStepTests` 守着。
+
 ## 1. 环境拓扑
 
 ```

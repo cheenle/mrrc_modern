@@ -71,6 +71,12 @@ sed "s/__VERSION__/${VERSION}/" "$SCRIPT_DIR/Info.plist" \
 cp "$PYI_ROOT/MRRC-Modern-Launcher" "$APP_MACOS/MRRC-Modern-Launcher"
 # server onedir (MRRC-Modern-Server + _internal/) -> Contents/MacOS/
 cp -R "$PYI_ROOT/MRRC-Modern-Server/." "$APP_MACOS/"
+
+# version.txt next to the frozen server executable: $APP_MACOS is Contents/MacOS,
+# which is what _runtime_dir() resolves to at runtime.  Without it the app cannot
+# state what it is (support bundle manifest; and it is the version authority the
+# one-click upgrade will need).  $VERSION comes from the CHANGELOG top entry.
+printf '%s\n' "$VERSION" > "$APP_MACOS/version.txt"
 # scope_pipe onefile -> Contents/MacOS/
 cp "$PYI_ROOT/scope_pipe" "$APP_MACOS/scope_pipe"
 

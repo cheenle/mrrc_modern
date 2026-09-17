@@ -5,6 +5,10 @@ description: Use when publishing a new MRRC Modern release end-to-end — bumpin
 
 # Dual-Platform Release Pipeline (MRRC Modern)
 
+- `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：
+  macOS `Contents/MacOS/version.txt`、Windows `<install>\version.txt`、树莓派镜像 `/opt/mrrc_modern/version.txt`。
+  源码/构建脚本由 `tests/test_release_artifacts.py` 的 `VersionTxtBuildStepTests` 守着。
+
 ## Overview
 
 One version → two artifacts → one website. The version's **single source of truth is the top `## [vX.Y.Z]` heading in `CHANGELOG.md`** — `packaging/macos/build.sh` parses it at build time, and `packaging/windows/MRRC-Modern.iss` `#define MyAppVersion` must be manually kept equal. Platform mechanics live in the sibling skills (`macos-installer`, `windows-installer`) and the operator manuals (`mac_pack.md`, `win_pack.md`); this skill owns the release-day order and the cross-cutting traps. Optional Raspberry Pi artifact: `MRRC-Modern-v<ver>-rpi64.img.xz` built/published via `pi_pack.md` (`packaging/rpi/build-image.sh`); build it before the release-day pipeline when shipping it with a release, and re-verify its download URL in step 7 alongside the installers.

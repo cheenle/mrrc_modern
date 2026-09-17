@@ -22,8 +22,8 @@ systemctl enable mrrc-firstboot.service
 systemctl enable mrrc-modern.service
 systemctl enable ssh
 
-# ── version stamp (written by build-image.sh as files/opt/mrrc_modern/VERSION) ──
-echo "MRRC Modern $(cat /opt/mrrc_modern/VERSION) — rpi64 image"
+# ── version stamp (build-image.sh writes both version.txt and VERSION) ──
+echo "MRRC Modern $(cat /opt/mrrc_modern/version.txt) — rpi64 image"
 
 # ── BUILD GATE: runtime imports + syntax inside the image ──
 python3 -m py_compile /opt/mrrc_modern/server.py \

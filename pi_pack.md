@@ -4,6 +4,10 @@
 > 最新构建：**v1.17.0**（2026-09-13，本机 Mac Docker Desktop 原生 aarch64 构建），产物 551,282,340 bytes（551 MB），SHA-256 `a56e5658e200d2c8fa0eac147299b8533757934009b776f3f2340cb55944dc1b`。本版内容 = 一键 CQ 按键（服务端一次性自动化发射，SDD AD-020 / V2.49）：镜像内置 `static/audio/cq.wav`，开机即可用（`MRRC_CQ_FILE` 可替换）；构建闸门新增 `py_compile`/依赖导入之外的 CQ 资产存在性检查（stage4 注入后核对 `static/audio/cq.wav` 字节数）。上一版 v1.16.0 = Yaesu SDR 机型族 + 发布工程化。
 > 用户向的安装/使用说明见 `docs/RASPBERRY_PI_GUIDE.md`。
 
+- `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：
+  macOS `Contents/MacOS/version.txt`、Windows `<install>\version.txt`、树莓派镜像 `/opt/mrrc_modern/version.txt`。
+  源码/构建脚本由 `tests/test_release_artifacts.py` 的 `VersionTxtBuildStepTests` 守着。
+
 ## 1. 环境拓扑
 
 两条构建路径（首选本机，资源不足时用构建机）：

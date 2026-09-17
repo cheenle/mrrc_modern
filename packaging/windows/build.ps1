@@ -55,6 +55,13 @@ Copy-Item (Join-Path $PyInstallerRoot "MRRC-Modern-Server\*") $AppRoot -Recurse 
 Copy-Item (Join-Path $PyInstallerRoot "scope_pipe.exe") $AppRoot -Force
 Copy-Item (Join-Path $PyInstallerRoot "MRRC-Modern-Launcher.exe") $AppRoot -Force
 Copy-Item (Join-Path $RepoRoot "windows") $AppRoot -Recurse -Force
+
+# version.txt beside the exe inside the assembled app dir: $AppRoot is what the
+# installer packages and what _runtime_dir() resolves to at runtime (see
+# packaging/macos/build.sh for why it exists).
+$appVersion = (Select-String -Path "CHANGELOG.md" -Pattern '^## \[v?([0-9]+\.[0-9]+\.[0-9]+)' |
+    Select-Object -First 1).Matches[0].Groups[1].Value
+Set-Content -Path (Join-Path $AppRoot "version.txt") -Value $appVersion -Encoding ascii
 # Do not ship stale bytecode caches in the installer.
 Remove-Item (Join-Path $AppRoot "windows\__pycache__") -Recurse -Force -ErrorAction SilentlyContinue
 

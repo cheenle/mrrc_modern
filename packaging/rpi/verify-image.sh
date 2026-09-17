@@ -36,7 +36,7 @@ PY
 echo "==> rootfs partition offset: ${P2_LBA} bytes"
 DEV="${TMP}/root.img?offset=${P2_LBA}"
 
-for f in /opt/mrrc_modern/VERSION /etc/systemd/system/mrrc-modern.service \
+for f in /opt/mrrc_modern/version.txt /opt/mrrc_modern/VERSION /etc/systemd/system/mrrc-modern.service \
 	/etc/systemd/system/mrrc-firstboot.service /usr/local/bin/mrrc-show-password; do
 	echo "--- $f ---"
 	"$DEBUGFS" -R "cat $f" "$DEV" 2>/dev/null | head -6

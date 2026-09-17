@@ -227,5 +227,24 @@ class ReportTests(unittest.TestCase):
         self.assertTrue(registry["history_only"]["paths"])
 
 
+class VersionTxtBuildStepTests(unittest.TestCase):
+    """version.txt is a build product, so the offline release rules cannot see
+    it; the enforceable part is that each build script still derives it from the
+    CHANGELOG (spec 2026-09-17 §16) — the artifact-time inspection step in the
+    release skill checks the value inside the built bundle."""
+
+    def test_macos_build_writes_version_txt_next_to_the_executable(self):
+        script = (REPO / "packaging" / "macos" / "build.sh").read_text(encoding="utf-8")
+        self.assertIn("version.txt", script)
+        self.assertIn("CHANGELOG.md", script)
+        self.assertIn('"$APP_MACOS/version.txt"', script)
+
+    def test_windows_build_writes_version_txt(self):
+        script = (REPO / "packaging" / "windows" / "build.ps1").read_text(encoding="utf-8")
+        self.assertIn("version.txt", script)
+        self.assertIn("CHANGELOG.md", script)
+        self.assertIn('Join-Path $AppRoot "version.txt"', script)
+
+
 if __name__ == "__main__":
     unittest.main()

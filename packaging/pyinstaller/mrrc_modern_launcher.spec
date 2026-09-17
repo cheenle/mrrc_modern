@@ -14,6 +14,7 @@ a = Analysis(
         (str(ROOT / "windows" / "default.env"), "windows"),
     ],
     hiddenimports=[
+        "launcher_log",
         "ssl_bootstrap",
         "cryptography",
         "serial",

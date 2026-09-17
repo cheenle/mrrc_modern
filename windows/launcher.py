@@ -8,11 +8,15 @@ import time
 import traceback
 import urllib.error
 import urllib.request
+# Bare names on purpose: the exception types are raised dotted below
+# (`urllib.error.HTTPError` is an attribute expression, not an identifier).
+from urllib.error import HTTPError, URLError
 import webbrowser
 from pathlib import Path
 
 # ssl_bootstrap lives at the repo root; PyInstaller bundles it via pathex.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import launcher_log
 import ssl_bootstrap
 from macos import first_run
 
@@ -103,9 +107,9 @@ def wait_for_server(url: str, proc: subprocess.Popen | None = None,
         try:
             with urllib.request.urlopen(probe, timeout=2, context=ctx):
                 return True
-        except urllib.error.HTTPError:
+        except HTTPError:
             return True
-        except (urllib.error.URLError, OSError):
+        except (URLError, OSError):
             time.sleep(0.3)
     return False
 
@@ -137,6 +141,7 @@ def load_env(path: Path) -> dict[str, str]:
     env.setdefault("MRRC_MEM_FILE", str(user_data_dir() / "mem_channels.json"))
     env.setdefault("MRRC_ATR1000_STORE", str(user_data_dir() / "atr1000_tuner.json"))
     env.setdefault("MRRC_RECORDINGS_DIR", str(user_data_dir() / "recordings"))
+    env.setdefault("MRRC_LOG_DIR", str(user_data_dir() / "logs"))
     env.setdefault("MRRC_FTDI_LIB_DIR", str(app_dir() / "vendor" / "ftdi" / "windows" / "bin" / "x64"))
     ftdi_dir = Path(_env(env, "MRRC_FTDI_LIB_DIR").replace("\\", os.sep))
     if not ftdi_dir.is_absolute():
@@ -251,13 +256,25 @@ def main() -> int:
             print("ERROR: MRRC-Modern-Server.exe not found next to the launcher.")
             print("Reinstall the app, or restore the file if antivirus quarantined it.")
             return 1
-        proc = subprocess.Popen(command, cwd=str(app_dir()), env=env, creationflags=creationflags)
+        # Capture the startup window: a server that dies before its own logging
+        # exists is otherwise invisible (spec 2026-09-17 §5).  The tee stops
+        # writing the moment the server answers HTTP — the in-server rotating log
+        # takes over from there — but keeps draining the pipe so a chatty server
+        # can never block on a full pipe (and the console keeps showing output).
+        tee = launcher_log.StartupTee(env.get("MRRC_LOG_DIR", str(user_data_dir() / "logs")))
+        proc = subprocess.Popen(command, cwd=str(app_dir()), env=env,
+                                creationflags=creationflags,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        tee.start(proc)
         if wait_for_server(url, proc, secure=secure):
+            tee.stop()
             webbrowser.open(url)
         elif proc.poll() is not None:
-            print("Server exited during startup — see messages above.")
+            tee.stop()
+            print(f"Server exited during startup — see {tee.path}")
             return proc.returncode or 1
         else:
+            tee.stop()
             print(f"Server did not answer within 15s; opening {url} anyway.")
             webbrowser.open(url)
         try:

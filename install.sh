@@ -936,8 +936,8 @@ EnvironmentFile=$SCRIPT_DIR/.env
 ExecStart=$VENV_DIR/bin/python $SCRIPT_DIR/server.py
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:$SCRIPT_DIR/logs/server.log
-StandardError=append:$SCRIPT_DIR/logs/server.log
+StandardOutput=append:$SCRIPT_DIR/logs/server-stdout.log
+StandardError=append:$SCRIPT_DIR/logs/server-stdout.log
 
 [Install]
 WantedBy=multi-user.target
@@ -989,9 +989,9 @@ SVCEOF
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$SCRIPT_DIR/logs/server.log</string>
+    <string>$SCRIPT_DIR/logs/server-stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>$SCRIPT_DIR/logs/server.log</string>
+    <string>$SCRIPT_DIR/logs/server-stdout.log</string>
 </dict>
 </plist>
 PLISTEOF

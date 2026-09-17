@@ -25,20 +25,34 @@ import time
 import traceback
 import urllib.error
 import urllib.request
+# Bare names on purpose: the exception types are raised dotted below
+# (`urllib.error.HTTPError` is an attribute expression, not an identifier).
+from urllib.error import HTTPError, URLError
 import webbrowser
 from pathlib import Path
 
 try:
     import rumps
 except ModuleNotFoundError:
-    class _RumpsMissing:
-        class App:
-            def __init__(self, *args, **kwargs):
-                raise RuntimeError("rumps is required to run the macOS launcher")
+    class _RumpsMissingApp:
+        """Stand-in for rumps.App (raises on use): tests and non-macOS hosts."""
 
-            @staticmethod
-            def run(_app):
-                raise RuntimeError("rumps is required to run the macOS launcher")
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("rumps is required to run the macOS launcher")
+
+        @staticmethod
+        def run(_app):
+            raise RuntimeError("rumps is required to run the macOS launcher")
+
+    class _RumpsMissing:
+        """Stand-in for the rumps *module* — same attribute surface.
+
+        Assigned as the class itself (not an instance): `rumps.App` must stay a
+        class for `class MRRCModernApp(rumps.App)` to be well-typed, and every
+        other use is a class-level attribute lookup that works either way.
+        """
+
+        App = _RumpsMissingApp
 
         @staticmethod
         def clicked(_title):
@@ -58,10 +72,11 @@ except ModuleNotFoundError:
         def quit_application():
             raise RuntimeError("rumps is required to run the macOS launcher")
 
-    rumps = _RumpsMissing()
+    rumps = _RumpsMissing
 
-from macos import first_run
+import launcher_log
 import ssl_bootstrap
+from macos import first_run
 
 
 APP_NAME = "MRRC Modern"
@@ -166,9 +181,9 @@ def wait_for_server(url: str, proc: subprocess.Popen | None = None,
         try:
             with urllib.request.urlopen(probe, timeout=2, context=ctx):
                 return True
-        except urllib.error.HTTPError:
+        except HTTPError:
             return True
-        except (urllib.error.URLError, OSError):
+        except (URLError, OSError):
             time.sleep(0.3)
     return False
 
@@ -300,7 +315,10 @@ def open_in_textedit(path: Path) -> None:
     subprocess.Popen(["open", "-a", "TextEdit", str(path)])
 
 
-class MRRCModernApp(rumps.App):
+# `rumps.App` is a union of "class from the real module" and "class from the
+# no-rumps fallback" when rumps is absent; pyright refuses a union as a base
+# class (pre-existing, unrelated to the support work).
+class MRRCModernApp(rumps.App):  # type: ignore[misc]
     def __init__(self, url: str, host: str, port: str) -> None:
         super().__init__(
             f"{APP_NAME} :{port}",
@@ -340,11 +358,21 @@ class MRRCModernApp(rumps.App):
             rumps.quit_application()
             return None
         env["MRRC_CONFIG_FILE"] = str(config_path())
+        env.setdefault("MRRC_LOG_DIR", str(user_data_dir() / "logs"))
+        # Startup tee (spec 2026-09-17 §5): the launcher is the only component
+        # that sees a server dying before its own logging exists.  stop() only
+        # stops writing to the file — the drain thread keeps the pipe empty so a
+        # chatty server can never block on it.
+        self.tee = launcher_log.StartupTee(env["MRRC_LOG_DIR"])
         self.proc = subprocess.Popen(
             command,
             cwd=str(app_dir()),
             env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
         )
+        self.tee.start(self.proc)
         return self.proc.pid
 
     def launch_and_open(self) -> None:
@@ -353,6 +381,7 @@ class MRRCModernApp(rumps.App):
             return
         url = self.url
         if wait_for_server(url, self.proc, secure=self.secure):
+            self.tee.stop()
             webbrowser.open(url)
         elif self.proc.poll() is not None:
             rumps.notification(

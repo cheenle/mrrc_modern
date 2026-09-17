@@ -55,6 +55,8 @@ a = Analysis(
     hiddenimports=[
         # First-run auto-config (launcher + setup endpoint)
         "macos.first_run",
+        # Support diagnostics bundle (spec 2026-09-17)
+        "support_bundle",
         # Serial / audio runtime
         "serial",
         "serial.tools.list_ports",

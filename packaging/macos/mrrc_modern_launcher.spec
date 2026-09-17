@@ -39,6 +39,7 @@ a = Analysis(
         "AppKit",
         "Foundation",
         "PyObjCTools",
+        "launcher_log",
         "ssl_bootstrap",
         "cryptography",
         "serial",

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import overload
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -22,8 +23,20 @@ _LEGACY_ENV_PREFIX = "FT710_"
 _NEW_ENV_PREFIX = "MRRC_"
 
 
+@overload
+def _env(name: str, default: str) -> str: ...
+
+
+@overload
+def _env(name: str, default: str | None = None) -> str | None: ...
+
+
 def _env(name: str, default: str | None = None) -> str | None:
-    """Read ``MRRC_*`` env var, falling back to the legacy ``FT710_*`` alias."""
+    """Read ``MRRC_*`` env var, falling back to the legacy ``FT710_*`` alias.
+
+    The overloads matter: with a string default the result is always a string,
+    which is what every ``Path(_env(...))`` call site relies on.
+    """
     val = os.environ.get(name)
     if val is not None:
         return val

@@ -1,6 +1,13 @@
 import asyncio
+import logging
+import logging.handlers
+import tempfile
 from pathlib import Path
+from typing import Any, cast
 import unittest
+from unittest import mock
+
+import server
 
 
 class QuietLoggingSourceTests(unittest.TestCase):
@@ -31,7 +38,7 @@ class TXOnlyMeterResetTests(unittest.IsolatedAsyncioTestCase):
         from poll_scheduler import PollScheduler
         from radio_state import RadioState
 
-        scheduler = None
+        scheduler: Any = None
 
         class FakeCat:
             connected = True
@@ -49,7 +56,7 @@ class TXOnlyMeterResetTests(unittest.IsolatedAsyncioTestCase):
             comp_meter=20,
             id_meter=70,
         )
-        scheduler = PollScheduler(FakeCat(), state)
+        scheduler = PollScheduler(cast(Any, FakeCat()), state)
         scheduler._running = True
 
         await scheduler._poll_tx_status()
@@ -59,6 +66,73 @@ class TXOnlyMeterResetTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.swr_meter, 0)
         self.assertEqual(state.comp_meter, 0)
         self.assertEqual(state.id_meter, 0)
+
+
+class SupportLogFileTests(unittest.TestCase):
+    """Spec 2026-09-17 §5: the packaged app had no server log file at all."""
+
+    def _fresh(self, tmp):
+        """Re-run the file-logging setup against a patched LOG_DIR.
+
+        LOG_DIR is a module constant (import time), so the env var cannot be
+        patched here — the env-driven path is verified by the smoke run in the
+        plan (a fresh process with MRRC_LOG_DIR set).
+        """
+        root = logging.getLogger()
+        saved = list(root.handlers)
+        try:
+            for handler in saved:
+                root.removeHandler(handler)
+            with mock.patch.object(server, "LOG_DIR", Path(tmp)):
+                path = server._setup_file_logging()
+            logging.getLogger("mrrc").info("hello from the test")
+        finally:
+            for handler in list(root.handlers):
+                if isinstance(handler, logging.handlers.RotatingFileHandler):
+                    handler.close()
+                    root.removeHandler(handler)
+            for handler in saved:
+                root.addHandler(handler)
+        return path
+
+    def test_creates_a_rotating_log_under_log_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._fresh(tmp)
+            if path is None:                    # must not degrade in a writable dir
+                self.fail("file logging did not attach")
+            self.assertTrue(str(path).startswith(tmp))
+            self.assertTrue(path.exists())
+            self.assertIn("hello from the test", path.read_text(encoding="utf-8"))
+
+    def test_handler_rotates_so_the_file_stays_bounded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._fresh(tmp)
+            handlers = [h for h in logging.getLogger().handlers
+                        if isinstance(h, logging.handlers.RotatingFileHandler)]
+            self.assertEqual(len(handlers), 1)
+            self.assertEqual(handlers[0].maxBytes, 2 * 1024 * 1024)
+            self.assertEqual(handlers[0].backupCount, 1)
+
+    def test_unwritable_dir_degrades_to_console_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "ro"
+            target.mkdir()
+            target.chmod(0o500)
+            try:
+                with mock.patch.object(server, "LOG_DIR", target / "logs"):
+                    self.assertIsNone(server._setup_file_logging())
+            finally:
+                target.chmod(0o700)
+
+    def test_log_dir_defaults_to_logs_next_to_the_runtime(self):
+        self.assertEqual(server.LOG_DIR.name, "logs")
+        self.assertEqual(server.SUPPORT_OUT_DIR, server.LOG_DIR.parent / "support-out")
+
+    def test_support_log_file_is_attached_at_import(self):
+        log_file = server.SUPPORT_LOG_FILE
+        if log_file is None:
+            self.fail("import-time file logging did not attach")
+        self.assertEqual(log_file.name, "server.log")
 
 
 if __name__ == "__main__":

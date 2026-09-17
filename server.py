@@ -43,6 +43,7 @@ from config import (
 )
 from backends import create_backend, known_models
 from backends.base import RadioBackend
+import support_bundle
 from backends.ft710.config_ft710 import (
     MODE_NAME_TO_NUM, BANDS,
     FILTER_WIDTHS_VOICE, FILTER_WIDTHS_NARROW,
@@ -70,10 +71,33 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # ── Logging ─────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+
+def _setup_file_logging() -> Optional[Path]:
+    """Attach a rotating file handler next to the console one.
+
+    Returns the log path, or None when the directory cannot be created —
+    logging must never be the reason the server refuses to start (spec §11).
+    Must be called *after* LOG_DIR is defined (support logging block below).
+    """
+    import logging.handlers
+
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = LOG_DIR / "server.log"
+        handler = logging.handlers.RotatingFileHandler(
+            path, maxBytes=2 * 1024 * 1024, backupCount=1, encoding="utf-8")
+        handler.setFormatter(logging.Formatter(LOG_FORMAT))
+        logging.getLogger().addHandler(handler)
+        return path
+    except OSError as e:
+        logging.getLogger("mrrc").warning(
+            "File logging disabled (%s) — set MRRC_LOG_DIR to a writable directory", e)
+        return None
+
+
 logger = logging.getLogger("mrrc")
 
 # ── Global State ────────────────────────────────────────────────────
@@ -223,6 +247,18 @@ MEM_FILE = Path(_env("MRRC_MEM_FILE", str(_runtime_dir() / "mem_channels.json"))
 # MRRC_RECORDINGS_DIR at the per-user data directory on packaged installs.
 RECORDINGS_DIR = Path(_env("MRRC_RECORDINGS_DIR", str(_runtime_dir() / "recordings")))
 RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
+
+# ── Support logging (spec 2026-09-17 §5) ──────────────────────────
+# The packaged desktop app had NO server log file (logging went to the console
+# window only), so a diagnostics bundle would have been empty.  The launchers
+# set MRRC_LOG_DIR to the user data directory — Program Files and /Applications
+# are not writable — while the default keeps source and Raspberry Pi runs
+# working.  support-out/ holds the built bundles (newest 5, spec §7).
+LOG_DIR = Path(_env("MRRC_LOG_DIR", str(_runtime_dir() / "logs")))
+SUPPORT_OUT_DIR = LOG_DIR.parent / "support-out"
+SUPPORT_URL = _env("MRRC_SUPPORT_URL", "https://www.vlsc.net/mrrc_modern/support/")
+# Attach the file handler now that LOG_DIR exists (it needs the constant).
+SUPPORT_LOG_FILE = _setup_file_logging()
 
 # ── Recording: server-side QSO session (AD-017) ─────────────────────
 # One writer task owns the session so the timeline cursor and the MP3

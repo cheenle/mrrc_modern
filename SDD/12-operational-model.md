@@ -145,6 +145,11 @@ and the model identity check (`ID;`, read-only) only logs.
 3. **收包**：`https://www.vlsc.net/mrrc_modern/support/api/list`（Basic 口令见维护者的口令文件），
    编号形如 `20260917-072530-ab12`。
 4. **排查未复现的问题**：包内 `warnings` 里"日志可能过旧"意味着这不是现场；`summary.txt` 会显式写出。
+5. **答复怎么产生**：`dev_tools/support_autopilot.py`（crontab 每 10 分钟，`--once --publish`）轮询接收端 → 解包 →
+   `pi` 只读分析（提示词带探查预算：≤5 次检索 / ≤6 个文件）→ 按 JSON 契约渲染答复卡 →
+   仅当 `status` 为 `answered`/`needs_fix` 时更新 `website/answers/index.html`、commit 并 rsync 单文件上线。
+   人工预检用 `--inspect <编号>`（不调模型）；`--status` 看已处理清单；`--force <编号>` 重跑。
+   草稿永远留在 `dist/support_answers/`，即使发布失败也不丢结论。
 
 ## 12.6 Logs and Artifacts
 

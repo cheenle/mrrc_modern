@@ -548,6 +548,7 @@ Icom IC-7300 / IC-7300MK2
 <li><strong>读一个诊断包</strong>：先看 <code class="scope-code">diagnostics/summary.txt</code>（启动次数 vs <code class="scope-code">Traceback</code>、数据新鲜度、 音频/串口/频谱事实、TX 门禁、录音写盘告警），再按需看 <code class="scope-code">logs/</code>、<code class="scope-code">state/config-redacted.env</code>、 <code class="scope-code">diagnostics/env.json</code>。<code class="scope-code">manifest.json</code> 记有每个文件的 sha256、脱敏计数与告警。</li>
 <li><strong>收包</strong>：<code class="scope-code">https://www.vlsc.net/mrrc_modern/support/api/list</code>（Basic 口令见维护者的口令文件）， 编号形如 <code class="scope-code">20260917-072530-ab12</code>。</li>
 <li><strong>排查未复现的问题</strong>：包内 <code class="scope-code">warnings</code> 里”日志可能过旧”意味着这不是现场；<code class="scope-code">summary.txt</code> 会显式写出。</li>
+<li><strong>答复怎么产生</strong>：<code class="scope-code">dev_tools/support_autopilot.py</code>（crontab 每 10 分钟，<code class="scope-code">--once --publish</code>）轮询接收端 → 解包 → <code class="scope-code">pi</code> 只读分析（提示词带探查预算：≤5 次检索 / ≤6 个文件）→ 按 JSON 契约渲染答复卡 → 仅当 <code class="scope-code">status</code> 为 <code class="scope-code">answered</code>/<code class="scope-code">needs_fix</code> 时更新 <code class="scope-code">website/answers/index.html</code>、commit 并 rsync 单文件上线。 人工预检用 <code class="scope-code">--inspect &lt;编号&gt;</code>（不调模型）；<code class="scope-code">--status</code> 看已处理清单；<code class="scope-code">--force &lt;编号&gt;</code> 重跑。 草稿永远留在 <code class="scope-code">dist/support_answers/</code>，即使发布失败也不丢结论。</li>
 </ol>
 <h2 id="logs-and-artifacts">12.6 Logs and Artifacts</h2>
 <table class="scope-table">
@@ -657,7 +658,7 @@ Icom IC-7300 / IC-7300MK2
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.51 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.52 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

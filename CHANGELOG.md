@@ -32,11 +32,25 @@ All notable changes to the MRRC Web Control project.
   `tests/README.md`、`constraints.json`（新增隐私守卫 `support-bundle-privacy`）、
   发布 skill 与三个打包手册（产物抽查须含 `version.txt`）。
 
+### New — 自动分诊与答复页（支持链路第 2 期）
+
+- **维护者侧 autopilot**：`dev_tools/support_autopilot.py` 每 10 分钟轮询接收端，取包解包、组装摘要，
+  交给 `pi`（只读工具、仓库为工作目录）按固定 JSON 契约产出结论。默认**只出草稿**
+  （`dist/support_answers/`），`--publish` 才更新答复页；`need_more_info` **不发布**。
+- **答复页**：`website/answers/index.html` 由结论卡生成（可搜编号/关键词、`#编号` 直达），
+  公开页对**邮箱/手机号/设备路径/串口/内网地址/本机与临时路径**做过滤。
+- 运维命令：`--inspect <编号>`（不调模型的预检）、`--status`、`--force <编号>`、`--install-cron`。
+
 ### Verification
 
 - 套件 **1186 项全绿**（基线 1103 + 83 新增：bundle 核心 38、API 13、前端契约 6、接收端 12、
   启动器 tee 7、日志 5、发布脚本 2）。
 - `release_check.py`：**29 ok / 0 failing**（含全部图与生成副本规则）。
+- **第 2 期真机冒烟**：合成诊断包 → 接收端 → `--inspect`（摘要正确命中 3 条录音证据）→ 真调模型
+  **4m12s** 跑完并出草稿卡，结论引用了 `server.py:_rec_enqueue`（`REC_QUEUE_MAX=200`）与
+  `recorder.py:383` 的补静音逻辑；合成包与其接收端副本事后已删除。冒烟抓到 3 个 mock 测不出的缺陷
+  （提示词字段名带空格、`pi` 继承 stdin 等 EOF、无预算探查导致超时）与 2 个展示缺陷（标题取到 markdown 头、
+  `/var/folders` 临时路径进入公开页），均已修并有负例测试。
 - **接收端已上线并端到端验收**：真机上传 → 清单可见（`product=mrrc_modern`）→ 下载 SHA-256 与本地一致
   （本地 `e31fba81…` == 远端）；本地/公网 `/api/list` 无口令均为 401；验收用的测试包已从接收端删除，清单回到空。
 - **规格 §13 本地验收**（自动化，含负例数据）：包内 `logs/server.log` 非空且 `summary.txt` 含
@@ -48,7 +62,7 @@ All notable changes to the MRRC Web Control project.
 
 - **三个安装包与本版镜像未重建**：本次只到源码与网站，因此「从已安装的桌面版点一次生成/上传」、
   树莓派实机、以及 Windows 真机路径尚未执行（`version.txt` 的写入代码已就位并有源码级测试守护）。
-- 答复页目前是**占位页**（`/mrrc_modern/answers/`），自动分诊与答复发布是第 2 期。
+- 答复页**首次上线需一次站点部署**（autopilot 发布时只 rsync 该页；全站部署仍是交互式的）；cron 连续运行与真实用户包的结论质量待观察（第 2 期的质量结论目前只来自一个合成包）。
 - 脱敏是**尽力而为**且被明确记录为风险（§13 R13）：白名单 + 值替换 + 负例测试，但不断言"绝无遗漏"。
 - 接收端 `api/create` 与 `api/<id>/bundle` **设计上不鉴权**（上传端无法持有服务器密钥），
   靠限速、不可猜 ID、清单 Basic 鉴权与人工删除兜底。

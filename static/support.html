@@ -1,151 +1,283 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MRRC Modern · 遇到问题</title>
-<style>
-  body{background:#12121a;color:#e0e0e0;font-family:-apple-system,tahoma,sans-serif;
-       margin:0;padding:16px;line-height:1.6}
-  h2{margin:0 0 4px}
-  .muted{color:#8a8a96;font-size:12.5px}
-  textarea,input[type=text]{width:100%;box-sizing:border-box;background:#0f0f16;color:#fff;
-    border:1px solid #444;border-radius:4px;padding:9px;font-size:13.5px}
-  textarea{min-height:112px;resize:vertical}
-  button{padding:11px 16px;border:0;border-radius:4px;background:#e8a33d;color:#1a1a1a;
-    font-weight:bold;font-size:14px;margin:6px 8px 0 0;cursor:pointer}
-  button[disabled]{background:#39414d;color:#8a8a96;cursor:not-allowed}
-  pre{background:#0f0f16;border:1px solid #333;border-radius:4px;padding:10px;
-    white-space:pre-wrap;word-break:break-all;font-size:12px;max-height:260px;overflow:auto}
-  .ok{color:#5ad07a}.warn{color:#e8c25a}.bad{color:#e86464}
-  .card{background:#181824;border:1px solid #2c2c38;border-radius:6px;padding:14px;margin-bottom:14px}
-  a{color:#e8a33d}
-  code{background:#1b1b26;border-radius:3px;padding:1px 4px}
-</style>
-</head>
-<body>
-  <h2>🐞 遇到问题</h2>
-  <p class="muted">生成一个诊断包（日志 + 脱敏配置 + 环境/电台/音频状态 + 自动体检结论）并上传给维护者。
-  <b>不会包含</b>登录密码、证书私钥、任何令牌，也不会包含录音、记忆频道与天调学习值。</p>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MRRC Modern · 遇到问题</title>
+    <style>
+      body {
+        background: #12121a;
+        color: #e0e0e0;
+        font-family: -apple-system, tahoma, sans-serif;
+        margin: 0;
+        padding: 16px;
+        line-height: 1.6;
+      }
+      h2 {
+        margin: 0 0 4px;
+      }
+      .muted {
+        color: #8a8a96;
+        font-size: 12.5px;
+      }
+      textarea,
+      input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        background: #0f0f16;
+        color: #fff;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 9px;
+        font-size: 13.5px;
+      }
+      textarea {
+        min-height: 112px;
+        resize: vertical;
+      }
+      button {
+        padding: 11px 16px;
+        border: 0;
+        border-radius: 4px;
+        background: #e8a33d;
+        color: #1a1a1a;
+        font-weight: bold;
+        font-size: 14px;
+        margin: 6px 8px 0 0;
+        cursor: pointer;
+      }
+      button[disabled] {
+        background: #39414d;
+        color: #8a8a96;
+        cursor: not-allowed;
+      }
+      pre {
+        background: #0f0f16;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 10px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-size: 12px;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .ok {
+        color: #5ad07a;
+      }
+      .warn {
+        color: #e8c25a;
+      }
+      .bad {
+        color: #e86464;
+      }
+      .card {
+        background: #181824;
+        border: 1px solid #2c2c38;
+        border-radius: 6px;
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+      a {
+        color: #e8a33d;
+      }
+      code {
+        background: #1b1b26;
+        border-radius: 3px;
+        padding: 1px 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>🐞 遇到问题</h2>
+    <p class="muted">
+      生成一个诊断包（日志 + 脱敏配置 + 环境/电台/音频状态 +
+      自动体检结论）并上传给维护者。
+      <b>不会包含</b
+      >登录密码、证书私钥、任何令牌，也不会包含录音、记忆频道与天调学习值。
+    </p>
 
-  <div class="card">
-    <label class="muted">① 问题描述（越具体越好：什么现象、什么时候开始、电台型号/频率）</label>
-    <textarea id="problem" placeholder="例如：接收声音每隔约 1 秒卡一下；FT-710，14.265MHz；今天换到 Windows 后开始"></textarea>
-    <label class="muted">联系方式（可选）</label>
-    <input type="text" id="contact" placeholder="呼号 / 邮箱 / 微信">
-    <div>
-      <button id="btn-build">② 生成诊断包</button>
-      <button id="btn-upload" disabled>③ 上传给维护者</button>
-      <button id="btn-save" disabled>只保存到本地</button>
+    <div class="card">
+      <label class="muted"
+        >① 问题描述（越具体越好：什么现象、什么时候开始、电台型号/频率）</label
+      >
+      <textarea
+        id="problem"
+        placeholder="例如：接收声音每隔约 1 秒卡一下；FT-710，14.265MHz；今天换到 Windows 后开始"
+      ></textarea>
+      <label class="muted">联系方式（可选）</label>
+      <input type="text" id="contact" placeholder="呼号 / 邮箱 / 微信" />
+      <div>
+        <button id="btn-build">② 生成诊断包</button>
+        <button id="btn-upload" disabled>③ 上传给维护者</button>
+        <button id="btn-save" disabled>只保存到本地</button>
+      </div>
     </div>
-  </div>
 
-  <div class="card">
-    <div id="status" class="muted">尚未生成。</div>
-    <pre id="listing" style="display:none"></pre>
-  </div>
+    <div class="card">
+      <div id="status" class="muted">尚未生成。</div>
+      <pre id="listing" style="display: none"></pre>
+    </div>
 
-<script>
-var currentId = null;
+    <script>
+      var currentId = null;
 
-function $(id) { return document.getElementById(id); }
+      function $(id) {
+        return document.getElementById(id);
+      }
 
-function setStatus(text, cls) {
-  var node = $('status');
-  node.className = cls || 'muted';
-  node.textContent = text;                       // DOM text only (repository XSS gate)
-}
+      function setStatus(text, cls) {
+        var node = $("status");
+        node.className = cls || "muted";
+        node.textContent = text; // DOM text only (repository XSS gate)
+      }
 
-function clientContext() {
-  var ctx = {ua: navigator.userAgent, language: navigator.language,
-             platform: navigator.platform,
-             screen: screen.width + 'x' + screen.height,
-             visibility: document.visibilityState};
-  try {
-    if (window.radioState) {
-      ctx.radio = {freq: window.radioState.frequency, mode: window.radioState.mode,
-                   serial_connected: window.radioState.serial_connected};
-    }
-    if (window.wsReconnectCount !== undefined) { ctx.wsReconnects = window.wsReconnectCount; }
-  } catch (e) {
-    ctx.context_error = String(e);
-  }
-  return ctx;
-}
+      function clientContext() {
+        var ctx = {
+          ua: navigator.userAgent,
+          language: navigator.language,
+          platform: navigator.platform,
+          screen: screen.width + "x" + screen.height,
+          visibility: document.visibilityState,
+        };
+        try {
+          if (window.radioState) {
+            ctx.radio = {
+              freq: window.radioState.frequency,
+              mode: window.radioState.mode,
+              serial_connected: window.radioState.serial_connected,
+            };
+          }
+          if (window.wsReconnectCount !== undefined) {
+            ctx.wsReconnects = window.wsReconnectCount;
+          }
+        } catch (e) {
+          ctx.context_error = String(e);
+        }
+        return ctx;
+      }
 
-async function api(path, payload) {
-  var res = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json'},
-                              body: JSON.stringify(payload || {})});
-  if (res.status === 401 || res.status === 403) {
-    throw new Error('请先回到 MRRC Modern 界面登录');
-  }
-  try {
-    return await res.json();
-  } catch (e) {
-    return {ok: false, reason: 'HTTP ' + res.status};
-  }
-}
+      async function api(path, payload) {
+        var res = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload || {}),
+        });
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("请先回到 MRRC Modern 界面登录");
+        }
+        try {
+          return await res.json();
+        } catch (e) {
+          return { ok: false, reason: "HTTP " + res.status };
+        }
+      }
 
-async function buildBundle() {
-  $('btn-build').disabled = true;
-  setStatus('正在收集（读取日志、设备与配置快照）…');
-  try {
-    var data = await api('/api/support/bundle', {problem: $('problem').value,
-                                                contact: $('contact').value,
-                                                client: clientContext()});
-    if (!data.ok) { setStatus('生成失败：' + (data.reason || '未知原因'), 'bad'); return; }
-    currentId = data.id;
-    $('listing').style.display = 'block';
-    $('listing').textContent = data.files.map(function (f) { return '  ' + f; }).join('\n') +
-      '\n\n合计 ' + (data.size / 1024).toFixed(0) + ' KB，已脱敏 ' + data.redactions + ' 处' +
-      (data.warnings.length
-        ? '\n提示：\n' + data.warnings.map(function (w) { return '  ! ' + w; }).join('\n')
-        : '');
-    $('btn-upload').disabled = false;
-    $('btn-save').disabled = false;
-    setStatus('已生成。确认清单没问题就可以上传（或只保存到本地）。', 'ok');
-  } catch (e) {
-    setStatus('生成失败：' + e.message, 'bad');
-  } finally {
-    $('btn-build').disabled = false;
-  }
-}
+      async function buildBundle() {
+        $("btn-build").disabled = true;
+        setStatus("正在收集（读取日志、设备与配置快照）…");
+        try {
+          var data = await api("/api/support/bundle", {
+            problem: $("problem").value,
+            contact: $("contact").value,
+            client: clientContext(),
+          });
+          if (!data.ok) {
+            setStatus("生成失败：" + (data.reason || "未知原因"), "bad");
+            return;
+          }
+          currentId = data.id;
+          $("listing").style.display = "block";
+          $("listing").textContent =
+            data.files
+              .map(function (f) {
+                return "  " + f;
+              })
+              .join("\n") +
+            "\n\n合计 " +
+            (data.size / 1024).toFixed(0) +
+            " KB，已脱敏 " +
+            data.redactions +
+            " 处" +
+            (data.warnings.length
+              ? "\n提示：\n" +
+                data.warnings
+                  .map(function (w) {
+                    return "  ! " + w;
+                  })
+                  .join("\n")
+              : "");
+          $("btn-upload").disabled = false;
+          $("btn-save").disabled = false;
+          setStatus(
+            "已生成。确认清单没问题就可以上传（或只保存到本地）。",
+            "ok",
+          );
+        } catch (e) {
+          setStatus("生成失败：" + e.message, "bad");
+        } finally {
+          $("btn-build").disabled = false;
+        }
+      }
 
-async function uploadBundle() {
-  if (!currentId) { return; }
-  $('btn-upload').disabled = true;
-  setStatus('正在上传…');
-  try {
-    var data = await api('/api/support/upload', {id: currentId});
-    if (data.ok) {
-      var url = 'https://www.vlsc.net/mrrc_modern/answers/#' + data.remoteId;
-      setStatus('已上传（编号 ' + data.remoteId + '，' + (data.size / 1024).toFixed(0) +
-                ' KB）。答复会发布在 ' + url + ' —— 多数问题那里直接有解决办法。', 'ok');
-    } else {
-      setStatus('上传失败：' + (data.reason || '未知原因') + '\n诊断包仍在：' +
-                (data.localPath || '') + '\n可点「只保存到本地」再用邮件/微信发给我。', 'bad');
-    }
-  } catch (e) {
-    setStatus('上传失败：' + e.message, 'bad');
-  } finally {
-    $('btn-upload').disabled = false;
-  }
-}
+      async function uploadBundle() {
+        if (!currentId) {
+          return;
+        }
+        $("btn-upload").disabled = true;
+        setStatus("正在上传…");
+        try {
+          var data = await api("/api/support/upload", { id: currentId });
+          if (data.ok) {
+            var url =
+              "https://www.vlsc.net/mrrc_modern/answers/#" + data.remoteId;
+            setStatus(
+              "已上传（编号 " +
+                data.remoteId +
+                "，" +
+                (data.size / 1024).toFixed(0) +
+                " KB）。答复会发布在 " +
+                url +
+                " —— 多数问题那里直接有解决办法。",
+              "ok",
+            );
+          } else {
+            setStatus(
+              "上传失败：" +
+                (data.reason || "未知原因") +
+                "\n诊断包仍在：" +
+                (data.localPath || "") +
+                "\n可点「只保存到本地」再用邮件/微信发给我。",
+              "bad",
+            );
+          }
+        } catch (e) {
+          setStatus("上传失败：" + e.message, "bad");
+        } finally {
+          $("btn-upload").disabled = false;
+        }
+      }
 
-async function saveLocal() {
-  if (!currentId) { return; }
-  try {
-    var data = await api('/api/support/save', {id: currentId});
-    setStatus(data.ok ? '已保存到：' + data.path : '保存失败：' + (data.reason || ''),
-              data.ok ? 'ok' : 'bad');
-  } catch (e) {
-    setStatus('保存失败：' + e.message, 'bad');
-  }
-}
+      async function saveLocal() {
+        if (!currentId) {
+          return;
+        }
+        try {
+          var data = await api("/api/support/save", { id: currentId });
+          setStatus(
+            data.ok
+              ? "已保存到：" + data.path
+              : "保存失败：" + (data.reason || ""),
+            data.ok ? "ok" : "bad",
+          );
+        } catch (e) {
+          setStatus("保存失败：" + e.message, "bad");
+        }
+      }
 
-$('btn-build').addEventListener('click', buildBundle);
-$('btn-upload').addEventListener('click', uploadBundle);
-$('btn-save').addEventListener('click', saveLocal);
-</script>
-</body>
+      $("btn-build").addEventListener("click", buildBundle);
+      $("btn-upload").addEventListener("click", uploadBundle);
+      $("btn-save").addEventListener("click", saveLocal);
+    </script>
+  </body>
 </html>

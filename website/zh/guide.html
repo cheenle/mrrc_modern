@@ -1331,7 +1331,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <ol type="1">
 <li>写清现象：什么表现、什么时候开始、电台型号与频率（越具体越省一轮往返）；</li>
 <li>点 <strong>生成诊断包</strong> —— 服务端收集日志尾部、脱敏配置、环境/电台/音频状态快照与自动体检结论；</li>
-<li>点 <strong>上传给维护者</strong>（需要这台机器能访问互联网），界面会给出一个<strong>编号</strong>； 答复会发布在 <a href="https://www.vlsc.net/mrrc_modern/answers/" class="uri">https://www.vlsc.net/mrrc_modern/answers/</a>（第 2 期上线，目前为人工回填）；</li>
+<li>点 <strong>上传给维护者</strong>（需要这台机器能访问互联网），界面会给出一个<strong>编号</strong>； 答复会发布在 <a href="https://www.vlsc.net/mrrc_modern/answers/" class="uri">https://www.vlsc.net/mrrc_modern/answers/</a>：自动分诊每 10 分钟看一次新包， 结论以卡片形式出现在该页（可用编号或关键词搜索；证据不足时会被标为「需要更多信息」）；</li>
 <li>没有网络时（例如脱网的树莓派）点 <strong>只保存到本地</strong>，把生成的 <code>support-&lt;编号&gt;.zip</code> 用邮件/微信发给我。</li>
 </ol>
 <p><strong>包里有什么</strong>：<code>logs/</code>（日志）、<code>state/config-redacted.env</code>（脱敏配置）、 <code>diagnostics/summary.txt</code>（<strong>先看这个</strong>：启动次数/崩溃痕迹/数据新鲜度/音频与串口事实）、 <code>diagnostics/env.json</code>（机型、串口、频谱模式、音频设备表与采样率）、<code>diagnostics/client.json</code>（浏览器侧上下文）。</p>

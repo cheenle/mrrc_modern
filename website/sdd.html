@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#updates">V2.51</a></li>
+            <li><a href="#updates">V2.52</a></li>
             <li><a href="#chapters">Chapters</a></li>
             <li><a href="#decisions">AD Index</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.51 · 2026-09-17</span>
+            <span>SDD V2.52 · 2026-09-17</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">Software Design Description</span></h1>
         <p class="hero-subtitle">
@@ -75,7 +75,7 @@
             </thead>
             <tbody>
             <tr><td>Document ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>Version</td><td>V2.51</td></tr>
+            <tr><td>Version</td><td>V2.52</td></tr>
             <tr><td>Baseline Date</td><td>2026-09-13</td></tr>
             <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
@@ -139,6 +139,11 @@
                 并上传至本项目专属接收端；无网络时可只保存到本地。
                 包内<b>不含</b>密码、证书私钥、令牌、录音与记忆频道。见 AD-021。</p>
                 <div class="feature-card">
+                <div class="icon"><i class="fas fa-robot"></i></div>
+                <h3>Autopilot Triage &amp; Answers <small>(V2.52)</small></h3>
+                <p>A maintainer-side autopilot polls the receiver every 10 minutes, has a read-only agent map the log evidence onto real code positions, and publishes the resulting answer card. Drafts by default; "needs more info" never publishes. The public page filters operator identifiers.</p>
+            </div>
+            <div class="feature-card">
                 <div class="icon"><i class="fas fa-bug"></i></div>
                 <h3>Diagnostics Bundle &amp; Report Loop <small>(V2.51)</small></h3>
                 <p>The menu gains <b>🐞 Report a problem</b>: one press builds a redacted bundle (logs + config + environment/radio/audio snapshot + auto-triage summary) and uploads it to this project's own receiver; without a network it can be saved locally instead. No passwords, keys, tokens, recordings or memory channels are ever included (AD-021).</p>

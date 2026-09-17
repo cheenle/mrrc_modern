@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.52</td>
+<td>2026-09-17</td>
+<td>Claude</td>
+<td><strong>支持链路第 2 期：自动分诊与答复页（<code class="scope-code">dev_tools/support_autopilot.py</code> + <code class="scope-code">support_answers.py</code>）。</strong> 轮询接收端 → 解包 → 组装摘要（复用第 1 期的体检结论）→ <code class="scope-code">pi</code>（只读 read/grep/find/ls，仓库为 cwd）按固定 JSON 契约产出结论 → 渲染答复卡 → 默认只出草稿，<code class="scope-code">--publish</code> 才更新 <code class="scope-code">website/answers/index.html</code> + git commit + <strong>单文件 rsync</strong>（全站部署是交互式的，不能进 cron）；<code class="scope-code">need_more_info</code> 即使带 <code class="scope-code">--publish</code> 也不发布。护栏：幂等 <code class="scope-code">state.json</code>、单轮上限 2 条、<code class="scope-code">pi</code> 超时 540 s（env 可调）、半包跳过、单条失败不中断、<code class="scope-code">--inspect</code> 不调模型的预检、<code class="scope-code">--install-cron</code> 写绝对路径 + 显式 PATH。<strong>公开页隐私边界</strong>：<code class="scope-code">redact_public</code> 过滤邮箱/手机号/设备路径/串口/内网地址/本机与临时路径，用带敏感值的假包做负例测试。 <strong>真机冒烟抓到三个 mock 测不出的缺陷</strong>：①提示词模板写成 <code class="scope-code">{ digest }</code> → <code class="scope-code">str.format</code> 读成键名 <code class="scope-code">" digest "</code>，第一次真调用即 KeyError；②<code class="scope-code">pi</code> 继承 stdin，父进程是管道时它等 EOF 直到超时（cron 传 /dev/null，兄弟仓因此从未暴露）→ 传 <code class="scope-code">DEVNULL</code>；③真摘要下模型在仓库里探查到超时 → 提示词加探查预算（≤5 次检索/≤6 个文件）+ 思考档位可调（默认 medium，实测 4m12s 跑完）。<strong>第一张真卡又暴露两处</strong>：标题取了 <code class="scope-code">problem.txt</code> 的 markdown 头「# 问题描述」（改为取首个非标题行）、macOS 临时路径 <code class="scope-code">/var/folders/…</code> 进了公开页（补进过滤）。<strong>端到端验收</strong>：真包 → 摘要 → pi → 契约 → 草稿卡，结论引用 <code class="scope-code">server.py:_rec_enqueue</code>（<code class="scope-code">REC_QUEUE_MAX=200</code>）与 <code class="scope-code">recorder.py:383</code> 的补静音逻辑，附操作员原始证据行；合成包与其接收端副本事后已删除。套件 1224 项全绿（含 21 项答复逻辑、17 项 CLI）。<strong>边界</strong>：只在合成包上验证过结论质量；cron 连续运行与真实用户包待观察；答复页首次上线需一次站点部署（rsync 只发布该页）。</td>
+</tr>
+<tr>
 <td>SDD V2.51</td>
 <td>2026-09-17</td>
 <td>Claude</td>
@@ -643,7 +649,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.51 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.52 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

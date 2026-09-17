@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.51 · 2026-09-17</span>
+            <span>SDD V2.52 · 2026-09-17</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -134,6 +134,11 @@
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-radio"></i></div>
                 <div class="feature-card">
+                <div class="icon"><i class="fas fa-robot"></i></div>
+                <h3>自动分诊与答复页 <small>（V2.52）</small></h3>
+                <p>维护者侧的 autopilot 每 10 分钟轮询接收端，用只读 agent 把日志现象对到代码位置，产出结论卡并发布到<a href="../answers/index.html">答复页</a>；默认只出草稿，证据不足时判「需要更多信息」且不发布。公开页过滤邮箱/手机号/设备路径/内网地址。</p>
+            </div>
+            <div class="feature-card">
                 <div class="icon"><i class="fas fa-bug"></i></div>
                 <h3>诊断包与上报闭环 <small>（V2.51）</small></h3>
                 <p>菜单新增「🐞 遇到问题」：一键生成脱敏诊断包（日志 + 配置 + 环境/电台/音频快照 + 自动体检结论）并上传到本项目专属接收端；无网络时可只保存到本地。包内不含密码、证书私钥、令牌、录音与记忆频道（AD-021）。</p>

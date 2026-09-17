@@ -882,13 +882,14 @@
 <p><strong>Problem</strong>: 问题上报长期以”现象描述”到达（“有杂音”“升级后不响了”），第一轮往返都花在索取证据上：哪个版本、什么平台、日志在哪。而 MRRC Modern 的打包版<strong>根本没有服务端日志文件</strong>——日志只进控制台窗口，窗口关掉就没了。</p>
 <p><strong>Rationale</strong>: 证据只有在<strong>故障现场</strong>才能收集：设备表、实际采样率、串口状态、scope 是真实还是 S 表回退、TX 门禁状态，这些都无法事后补问。因此在服务端一次性收集、脱敏、自证（含自动体检结论），把”维护者第一眼要看的东西”直接写进包里的 <code class="scope-code">summary.txt</code>；入口放在浏览器则三端（Web/iOS/Android）与树莓派都可用。</p>
 <p><strong>Consequences</strong>: 用户自助路径从”发消息描述问题”变成”点三下拿到编号”；维护者从”追问”变成”读摘要”。代价是一个新的常驻服务（接收端）与一条隐私契约——后者是硬约束：白名单之外一律丢弃并计数，包内出现密钥即是回归。</p>
+<p><strong>Amendment (2026-09-17, 支持链路第 2 期)</strong>: 分诊与答复由 <code class="scope-code">dev_tools/support_autopilot.py</code> + <code class="scope-code">support_answers.py</code> 完成： 轮询接收端 → 取包解包 → 组装摘要（复用第 1 期的 <code class="scope-code">collect_context</code>，含 <code class="scope-code">summary.txt</code> 与日志尾部）→ <code class="scope-code">pi</code>（只读工具、仓库为工作目录）按固定 JSON 契约产出结论 → 渲染成答复卡。 <strong>发布规则</strong>：默认只写草稿（<code class="scope-code">dist/support_answers/</code>），<code class="scope-code">--publish</code> 才更新 <code class="scope-code">website/answers/index.html</code>、 git commit 并<strong>单文件 rsync</strong> 上线（全站部署仍是交互式的，不能进 cron）；即使带 <code class="scope-code">--publish</code>， <code class="scope-code">need_more_info</code> 也<strong>不发布</strong>（那是给操作员的问题，不是答复）。护栏：幂等 <code class="scope-code">state.json</code>、 单轮上限 2 条、<code class="scope-code">pi</code> 超时 540 s、半包跳过、单条失败不中断。 <strong>公开页的隐私边界</strong>由 <code class="scope-code">support_answers.redact_public</code> 承担（邮箱/手机号/设备路径/串口/内网地址/本机与临时路径）， 并有用带敏感值的假包做负例测试——与第 1 期的入包白名单互为镜像。<strong>实测边界</strong>：真机跑通一次端到端 （4m12s，结论引用了 <code class="scope-code">server.py:_rec_enqueue</code> 与 <code class="scope-code">recorder.py:383</code> 的真实代码位置），但结论质量只在 该合成包上验证过；cron 连续运行与真实用户包的表现待观察。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.51 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.52 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

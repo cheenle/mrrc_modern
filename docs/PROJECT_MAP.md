@@ -39,6 +39,7 @@
 | `static/**`（前端） | SDD 9.7 | `test_ws_protocol.py` 中的前端契约测试 | AGENTS（两个勿格式化文件）、缓存版本号 |
 | `support_bundle.py` / `server.py` 的 `/api/support/*` / `static/support.html` | **AD-021**、NFR-068、SDD 12.5.1 | `test_support_bundle.py`、`test_support_api.py`、`test_support_frontend.py` | AGENTS 模块表、README env、SDD 10/12/13、CHANGELOG |
 | `launcher_log.py`（启动器 tee）、`MRRC_LOG_DIR` | AD-021、SDD 12.6 | `test_launcher_log.py`、`test_quiet_logging.py` | AGENTS、SDD 12.6、`mac_pack.md`/`win_pack.md`/`pi_pack.md` |
+| `support_answers.py` + `dev_tools/support_autopilot.py`（第 2 期） | AD-021 amendment、SDD 12.5.1 | `test_support_answers.py`、`test_support_autopilot.py` | AGENTS 模块表、SDD 08/12、CHANGELOG |
 | `tools/support_receiver/**` + `deploy_support_receiver.sh` | AD-021 §9 | `test_support_receiver.py` | SDD 12.5.1、CHANGELOG |
 | `packaging/**` | AD-001、SDD 12 | `test_windows_packaging_files.py`、`test_rpi_packaging.py` | `mac_pack.md` / `win_pack.md` / `pi_pack.md`、安装指南 |
 
@@ -62,7 +63,7 @@
 | --- | --- | --- |
 | 依赖 | `requirements.txt` / `DEPENDENCIES.md` | 支持链路**无新增依赖**（纯标准库）；新依赖要同时进 PyInstaller spec 的 `hiddenimports` |
 | 环境变量 | `config.py`（`MRRC_*`，兼容 `FT710_*`） | README 环境表 + AGENTS + SDD 12 三处同改 |
-| 测试 | `python -m unittest discover -s tests`（当前 1186 例 / 60 模块） | 新增模块要进 `tests/README.md` 与 AGENTS.md 的计数 |
+| 测试 | `python -m unittest discover -s tests`（当前 1224 例 / 62 模块） | 新增模块要进 `tests/README.md` 与 AGENTS.md 的计数 |
 | 打包 | `packaging/{macos,windows,rpi}/` | 见 §4 发布链 |
 | 支持链路 | `support_bundle.py`、`tools/support_receiver/`、`deploy_support_receiver.sh` | 接收端部署是幂等的；诊断包隐私契约由 `constraints.json` 的 `support-bundle-privacy` + 三个测试模块守住（AD-021） |
 | 静态检查 | `~/.pi-lens/tools/node_modules/.bin/pyright`（配 `pyrightconfig.json`）+ `biome.json` | 两个前端文件禁止被格式化（见 AGENTS） |

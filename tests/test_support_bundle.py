@@ -174,3 +174,37 @@ class SummarizeLogTests(unittest.TestCase):
         self.assertIn("音频设备：9 条", out)
         self.assertEqual(out.count("      - Configured audio device"), 3)
         self.assertIn("D8", out)                   # newest kept
+
+
+class VersionTests(unittest.TestCase):
+    def test_version_txt_wins(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "version.txt").write_text("1.17.0\n", encoding="utf-8")
+            self.assertEqual(sb.detect_version(Path(tmp)), "1.17.0")
+
+    def test_falls_back_to_changelog_then_iss(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "CHANGELOG.md").write_text("# Changelog\n\n## [v1.17.0] — 2026-09-13\n",
+                                               encoding="utf-8")
+            self.assertEqual(sb.detect_version(root), "1.17.0")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "packaging" / "windows").mkdir(parents=True)
+            (root / "packaging" / "windows" / "MRRC-Modern.iss").write_text(
+                '#define MyAppVersion "1.16.0"\n', encoding="utf-8")
+            self.assertEqual(sb.detect_version(root), "1.16.0")
+
+    def test_unknown_when_nothing_is_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(sb.detect_version(Path(tmp)), "unknown")
+
+
+class EnvSnapshotTests(unittest.TestCase):
+    def test_carries_version_platform_and_caller_extras(self):
+        snap = sb.collect_env_snapshot("1.17.0", extra={"backend": "ft710"})
+        self.assertEqual(snap["version"], "1.17.0")
+        self.assertEqual(snap["backend"], "ft710")
+        self.assertIn("platform", snap)
+        self.assertIn("python", snap)
+        self.assertIn("frozen", snap)

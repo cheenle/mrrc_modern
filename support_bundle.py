@@ -222,3 +222,56 @@ def summarize_log(text: str, freshness_hours: float | None = None) -> str:
 
     head = ["=== 自动体检结论 ==="] + [f"  * {c}" for c in conclusions] + ["", "=== 命中明细 ==="]
     return "\n".join(head + parts + [""])
+
+
+# ── version + environment snapshot (spec §6; version authority for sub-project 3) ──
+_ISS_VERSION_RE = re.compile(r'MyAppVersion\s+"([^"]+)"')
+_CHANGELOG_VERSION_RE = re.compile(r"^##\s*\[?v?([0-9]+\.[0-9]+\.[0-9]+)", re.M)
+VERSION_UNKNOWN = "unknown"
+
+
+def detect_version(runtime_dir: str | os.PathLike[str], resource_dir="") -> str:
+    """version.txt (build product) -> MRRC-Modern.iss -> CHANGELOG.md -> unknown."""
+    for directory in (runtime_dir, resource_dir):
+        if not directory:
+            continue
+        try:
+            text = (Path(directory) / "version.txt").read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if text:
+            return text
+    if runtime_dir:
+        try:
+            text = (Path(runtime_dir) / "packaging" / "windows" / "MRRC-Modern.iss").read_text(
+                encoding="utf-8", errors="replace")
+            match = _ISS_VERSION_RE.search(text)
+            if match:
+                return match.group(1)
+        except OSError:
+            pass
+        try:
+            text = (Path(runtime_dir) / "CHANGELOG.md").read_text(
+                encoding="utf-8", errors="replace")
+            match = _CHANGELOG_VERSION_RE.search(text)
+            if match:
+                return match.group(1)
+        except OSError:
+            pass
+    return VERSION_UNKNOWN
+
+
+def collect_env_snapshot(version: str = "", extra=None) -> dict:
+    """Version / platform / interpreter facts plus whatever the caller adds."""
+    import platform
+    import sys
+
+    snapshot = {
+        "version": version or VERSION_UNKNOWN,
+        "frozen": bool(getattr(sys, "frozen", False)),
+        "python": sys.version.split()[0],
+        "platform": platform.platform(),
+        "cpuCount": os.cpu_count(),
+    }
+    snapshot.update(extra or {})
+    return snapshot

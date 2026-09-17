@@ -5,6 +5,43 @@ description: Use when building, rebuilding, verifying, or deploying the MRRC Mod
 
 # macOS Installer Build (MRRC Modern)
 
+## 现场缺陷：用户看到「已损坏，无法打开」（2026-09-17 上报）
+
+**不是签名"不够好"，而是根签名根本没成功** —— `codesign --verify` 报
+`code has no resources but signature indicates they must be present`，`Contents/_CodeSignature`
+不存在。`build.sh` 把签名失败写成了警告（`|| echo WARNING: ... non-fatal`），于是**每个版本都带着
+坏签名发布**（v1.17.0 的 DMG 实测同样如此）。
+
+**根因**：codesign 会遍历 `Contents/MacOS` 与 `Contents/Frameworks` 寻找嵌套代码，遇到**数据文件/数据目录**
+就判为「未签名的代码对象」而拒绝签整个 bundle，报错逐次指向：
+
+| 布局 | codesign 报的 subcomponent |
+|---|---|
+| 数据树在 `MacOS/_internal` | `.../MacOS/_internal/macos/default.env` — `code object is not signed at all` |
+| 数据树移到真 `Frameworks/` | `.../Frameworks/click-8.4.2.dist-info` — `bundle format unrecognized` |
+| 数据树在 `Resources/` + `Frameworks` 与 `MacOS/_internal` 两个符号链接 | **签名成功**（`valid on disk`） |
+| 再加 `MacOS/{macos,version.txt,mem_channels.json,vendor}` 符号链接 | 又失败（codesign 顺着这些链接把目录当嵌套代码） |
+
+**已验证可用的布局**：数据树放 `Contents/Resources/`，只保留
+`Contents/Frameworks -> Resources` 与 `Contents/MacOS/_internal -> ../Resources` 两个符号链接，
+`Contents/MacOS` 里除可执行文件外**什么都不能有**。此布局下 `codesign --verify` 通过、
+`spctl` 只报「无 Developer ID」（用户右键打开即可，不再是"已损坏"），且**冻结服务真跑成功**
+（`/api/health` 401、`server.log` 落盘、无 "Failed to load Python"）。
+
+**剩余一步**（未完成）：`macos/`、`version.txt`、`mem_channels.json`、`vendor/` 这四个运行时路径
+目前由启动器/服务端按 `app_dir()/名字` 读取，而 `app_dir()` = `Contents/MacOS`。
+把它们放进数据树后需要**启动器回退到 `_internal/`**（或改成 `sys._MEIPASS` 优先），否则这些文件在
+MacOS 里就必须是真实文件 → 又触发上面的签名失败。改完后重建 DMG 并用上面的双重校验放行。
+
+**用户侧立刻解封**（对已下载的 v1.17.0/v1.18.0 同样有效）：
+
+```bash
+sudo xattr -dr com.apple.quarantine "/Applications/MRRC Modern.app"
+```
+
+**build.sh 已加硬门禁**：签名或校验失败即 `exit 1`，`spctl` 报 damaged/invalid 也 `exit 1`
+（此前正是这条静默警告让坏包一路发出）。
+
 ## Overview
 
 The macOS release is a locally-built DMG: `packaging/macos/build.sh` runs tests → 3 PyInstaller specs → hand-assembles `Contents/MacOS/` → ad-hoc codesign → `hdiutil` DMG. Version is read from the top `## [vX.Y.Z]` heading in `CHANGELOG.md` — rename/keep that heading first. Since v1.13.0 the launcher serves **HTTPS by default**: a user-supplied `MRRC_SSL_CERT`/`MRRC_SSL_KEY` wins, otherwise a self-signed cert is auto-generated (wiring: gotcha 8); `MRRC_SSL=off` reverts to plain HTTP. The cert SANs cover localhost/hostname/127.0.0.1/::1/LAN IPs; browsers warn once on first visit (click Advanced → Continue) — call this out for novice users.

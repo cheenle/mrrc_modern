@@ -83,6 +83,19 @@ All notable changes to the MRRC Web Control project.
 - **rpi64**：**未重建** —— 外部构建卷（`/Volumes/MRRCBuild`）在构建中途消失，脚本要求 ≥20 GB 而根盘只剩 3.8 GB；命令已备（见验证边界）。
 - **更新通道已上线**：`https://www.vlsc.net/mrrc_modern/downloads/latest.json`（`latest=1.18.0`，installer size/SHA 与产物一致，`previous=1.17.0`），线上文件与本地逐字节一致；1.17.0 客户端检查即得 `available: true`。
 
+### Fixed — macOS 签名（发布阻断级）
+
+- **打包版 macOS 应用签名实际从未成功**：`Contents/_CodeSignature` 缺失，Gatekeeper 因此对下载到的应用报
+  **「已损坏，无法打开」**（该提示**不能**用右键打开绕过）。**v1.17.0 的 DMG 实测同样如此**，即这不是本版引入，
+  而是长期存在、随每次发布发出的缺陷。根因是 codesign 会把 `Contents/MacOS`/`Frameworks` 下的**数据文件与目录**
+  当嵌套代码，从而拒绝签署整个 bundle，而 `build.sh` 把这次失败写成了警告。
+- **已定位可用布局**：数据树放 `Contents/Resources/`，仅保留 `Frameworks -> Resources` 与
+  `MacOS/_internal -> ../Resources` 两个符号链接；该布局下签名通过、`spctl` 只报"无 Developer ID"（可右键打开）、
+  冻结服务实跑正常。**剩余一步**：启动器对 `macos/`、`version.txt`、`mem_channels.json`、`vendor/`
+  需回退到 `_internal/` 查找，之后重建 DMG。
+- **build.sh 已加硬门禁**：签名/校验失败或 `spctl` 报 damaged 即 `exit 1`（此前是静默警告）。
+- **用户侧立刻解封**（v1.17.0/v1.18.0 均适用）：`sudo xattr -dr com.apple.quarantine "/Applications/MRRC Modern.app"`。
+
 ### Verification Boundary
 
 - **rpi64 镜像未重建**（外部卷消失）：树莓派实机验收仍待执行。

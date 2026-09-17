@@ -101,7 +101,35 @@ fi
 # server binary dies at startup ("Failed to load Python shared library
 # .../Contents/Frameworks/Python"). The symlink makes Frameworks resolve to the
 # same runtime tree as MacOS/_internal. (Latent since v1.7.0; fixed in v1.13.0.)
-ln -sfn MacOS/_internal "$APP_BUNDLE/Contents/Frameworks"
+# Contents/MacOS must hold NOTHING but executables and symlinks: codesign walks
+# it for code objects and refuses to sign the bundle when it meets a plain data
+# file (mem_channels.json, version.txt, macos/default.env all failed in turn).
+# Runtime files therefore live in Resources and are symlinked back, so every
+# path under Contents/MacOS still resolves for the launcher and the server.
+for item in macos mem_channels.json version.txt vendor; do
+    [ -e "$APP_MACOS/$item" ] || continue
+    if [ -e "$APP_BUNDLE/Contents/Resources/$item" ]; then
+        rm -rf "$APP_MACOS/$item"
+    else
+        mv "$APP_MACOS/$item" "$APP_BUNDLE/Contents/Resources/$item"
+    fi
+    ln -sfn "../Resources/$item" "$APP_MACOS/$item"
+done
+
+# Data tree -> Contents/Resources, with BOTH code locations symlinked to it.
+# codesign refuses to sign a bundle whose Contents/MacOS or Contents/Frameworks
+# holds directories of *data*: it walks them looking for nested code and dies on
+# the first plain file (`code object is not signed at all` / `bundle format
+# unrecognized` for *.dist-info).  The root signing step below used to swallow
+# that error with a warning, so Contents/_CodeSignature was never written and
+# Gatekeeper told users the app was "damaged" — in every release up to v1.18.0.
+# Resources/ is a resource location, so the tree is sealed instead of inspected,
+# and the symlinks keep both the bundle-mode bootloader (Frameworks) and the
+# explicit _internal paths (datas, scope_pipe) working.
+mv "$APP_MACOS/_internal"/* "$APP_BUNDLE/Contents/Resources/" 2>/dev/null || true
+rmdir "$APP_MACOS/_internal" 2>/dev/null || true
+ln -sfn Resources "$APP_BUNDLE/Contents/Frameworks"
+ln -sfn ../Resources "$APP_MACOS/_internal"
 
 # strip stale bytecode caches
 find "$APP_BUNDLE" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
@@ -120,9 +148,20 @@ find "$APP_BUNDLE" -type f \( -name "*.dylib" -o -name "*.so" \) \
 for exe in "$APP_MACOS/MRRC-Modern-Launcher" "$APP_MACOS/MRRC-Modern-Server" "$APP_MACOS/scope_pipe"; do
   [[ -f "$exe" ]] && codesign --force --sign - "$exe" 2>/dev/null || true
 done
-codesign --force --sign - "$APP_BUNDLE" 2>/dev/null \
-  || echo "WARNING: ad-hoc codesign reported errors (non-fatal; right-click -> Open still works)." >&2
-codesign --verify --verbose=2 "$APP_BUNDLE" 2>&1 || true
+# A bundle whose signature cannot be produced must NOT be packaged: that silent
+# failure is what shipped "damaged" apps (2026-09-17 field report).
+codesign --force --sign - "$APP_BUNDLE" 2>&1 | tail -2
+codesign --verify --verbose=2 "$APP_BUNDLE" || {
+    echo "ERROR: signature verification failed for $APP_BUNDLE" >&2
+    echo "       (Gatekeeper would report the app as damaged)" >&2
+    exit 1
+}
+codesign --verify --verbose=2 "$APP_BUNDLE" 2>&1 | tail -2
+if spctl -a -t exec "$APP_BUNDLE" 2>&1 | grep -qiE "damaged|invalid signature|not signed at all"; then
+    echo "ERROR: Gatekeeper still reports a damaged/invalid bundle" >&2
+    spctl -a -vvv -t exec "$APP_BUNDLE" >&2 || true
+    exit 1
+fi
 
 # ---- Step 6: .dmg -------------------------------------------------------
 # Classic installer layout: a staging folder holds the .app + an "Applications"

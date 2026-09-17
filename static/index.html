@@ -384,6 +384,11 @@
             >
           </li>
           <li><a href="#" class="menu-item" data-action="recordings">录音 Recordings</a></li>
+          <li>
+            <a href="/support.html" target="_blank" rel="noopener" class="menu-item"
+              >🐞 遇到问题</a
+            >
+          </li>
           <li><a href="#" class="menu-item" data-action="logout">Logout</a></li>
         </ul>
         <!-- Menu Settings -->
@@ -597,16 +602,24 @@
           });
         }
         function fillSelect(sel, items, key, current) {
-          var opts = '<option value="">自动（推荐）</option>';
+          // DOM API, not innerHTML: device names come from the OS/PyAudio and are
+          // external strings (repository XSS gate — see the setup dialog audit).
+          sel.replaceChildren();
+          var auto = document.createElement("option");
+          auto.value = "";
+          auto.textContent = "自动（推荐）";
+          sel.appendChild(auto);
           var seen = {};
           items.forEach(function (it) {
             var v = it[key];
             if (!v || seen[v]) return;
             seen[v] = 1;
-            var selAttr = current && v.indexOf(current) !== -1 ? " selected" : "";
-            opts += '<option value="' + v.replace(/"/g, "&quot;") + '"' + selAttr + ">" + v + "</option>";
+            var opt = document.createElement("option");
+            opt.value = v;
+            opt.textContent = v;
+            if (current && v.indexOf(current) !== -1) { opt.selected = true; }
+            sel.appendChild(opt);
           });
-          sel.innerHTML = opts;
         }
         function post(path, body, done) {
           fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : "{}" })

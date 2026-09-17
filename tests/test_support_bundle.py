@@ -122,3 +122,55 @@ class ResolveLogFilesTests(unittest.TestCase):
             found = sb.resolve_log_files(install / "logs", "", install)
         self.assertEqual(Path(found["legacy"]).name, "ft710-server.log")
         self.assertEqual(len(set(found.values())), len(found))
+
+
+class SummarizeLogTests(unittest.TestCase):
+    def test_startups_without_tracebacks_are_not_a_crash(self):
+        log = ("2026-09-17 07:00:00 [INFO] mrrc: Server ready!\n"
+               "2026-09-17 07:05:00 [INFO] mrrc: Server ready!\n")
+        out = sb.summarize_log(log, freshness_hours=0.2)
+        self.assertIn("启动次数：2 次", out)
+        self.assertIn("无崩溃痕迹", out)
+        self.assertIn("数据新鲜度：日志写于 12 分钟前", out)
+
+    def test_traceback_changes_the_verdict(self):
+        log = ("2026-09-17 07:00:00 [INFO] mrrc: Server ready!\n"
+               "Traceback (most recent call last):\n")
+        out = sb.summarize_log(log)
+        self.assertIn("Traceback", out)
+        self.assertIn("按崩溃排查", out)
+
+    def test_stale_bundle_is_flagged_as_not_the_scene(self):
+        out = sb.summarize_log("2026-09-14 07:00:00 [INFO] mrrc: Server ready!\n",
+                              freshness_hours=72.0)
+        self.assertIn("可能不是本次故障现场", out)
+
+    def test_no_logs_at_all_is_stated_not_omitted(self):
+        out = sb.summarize_log("")
+        self.assertIn("数据新鲜度：无日志文件", out)
+        self.assertIn("启动次数：日志中未见", out)
+
+    def test_audio_and_serial_and_scope_facts_are_reported(self):
+        log = ("Configured audio device 'X' not found\n"
+               "RX open failed (-9996) — re-initializing PortAudio\n"
+               "[Errno 6] Device not configured\n"
+               "scope_pipe worker not found — spectrum will use S-meter fallback only\n"
+               "Recording writer is falling behind — dropping audio (the encoder is slower)\n")
+        out = sb.summarize_log(log)
+        self.assertIn("音频设备", out)
+        self.assertIn("-9996", out)
+        self.assertIn("串口掉线", out)
+        self.assertIn("S 表合成", out)
+        self.assertIn("录音写入", out)
+
+    def test_unverified_tx_gate_is_reported(self):
+        out = sb.summarize_log("Transmit disabled: set MRRC_ALLOW_UNVERIFIED_TX=1 and restart "
+                              "to enable TX after checking\n")
+        self.assertIn("TX 门禁", out)
+
+    def test_each_class_shows_at_most_three_recent_lines(self):
+        log = "".join(f"Configured audio device 'D{i}' not found\n" for i in range(9))
+        out = sb.summarize_log(log)
+        self.assertIn("音频设备：9 条", out)
+        self.assertEqual(out.count("      - Configured audio device"), 3)
+        self.assertIn("D8", out)                   # newest kept

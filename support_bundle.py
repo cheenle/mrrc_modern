@@ -98,7 +98,9 @@ def tail_lines(path, max_bytes: int = DEFAULT_TAIL_BYTES) -> str:
     return data.decode("utf-8", "replace")
 
 
-def resolve_log_files(log_dir, data_dir="", install_dir="") -> dict:
+def resolve_log_files(log_dir: str | os.PathLike[str],
+                      data_dir: str | os.PathLike[str] = "",
+                      install_dir: str | os.PathLike[str] = "") -> dict:
     """Map bundle role -> existing log file (spec §5).
 
     Roles: server / server-prev / stdout / stdout-prev / launcher / legacy.
@@ -131,3 +133,92 @@ def resolve_log_files(log_dir, data_dir="", install_dir="") -> dict:
         seen.add(key)
         found[role] = str(path)
     return found
+
+
+# ── automatic triage summary (spec §6; patterns verified against this repo) ──
+# Every pattern below matches a line this project actually prints (server.py,
+# audio_handler.py, scope_producer.py, recorder.py, backends/*/backend.py).
+# The sibling project's markers (🎧 音频健康, IOLoop stall) do NOT exist here.
+STALE_LOG_HOURS = 24.0
+
+SUMMARY_PATTERNS = (
+    ("Traceback", re.compile(r"Traceback \(most recent call last\)")),
+    ("ERROR", re.compile(r"\bERROR\b")),
+    ("音频设备", re.compile(r"Configured audio device|No audio input device found|"
+                          r"PyAudio not available")),
+    ("音频恢复", re.compile(r"RX open failed|RX stream lost|RX audio restart failed")),
+    ("串口掉线", re.compile(r"Device not configured|Errno 6")),
+    ("频谱", re.compile(r"S-meter fallback|scope_pipe: ")),
+    ("录音写入", re.compile(r"Recording writer is falling behind|Recording dropped|"
+                          r"Recording queue full|Recording disabled")),
+    ("TX 门禁", re.compile(r"enable TX after")),
+)
+
+PORT_AUDIO_CODE_RE = re.compile(r"-[0-9]{4}\b")
+
+
+def summarize_log(text: str, freshness_hours: float | None = None) -> str:
+    """Triage conclusions + per-class hit lines (the maintainer reads this first)."""
+    lines = (text or "").splitlines()
+    conclusions: list[str] = []
+
+    if not lines:
+        conclusions.append("数据新鲜度：无日志文件（未找到 server.log / server-stdout.log / launcher.log）")
+    elif freshness_hours is None:
+        conclusions.append("数据新鲜度：未记录")
+    elif freshness_hours > STALE_LOG_HOURS:
+        conclusions.append(f"数据新鲜度：最新日志约 {freshness_hours / 24:.1f} 天前"
+                           "（>24h，可能不是本次故障现场，下列结论仅供参考）")
+    elif freshness_hours >= 1:
+        conclusions.append(f"数据新鲜度：日志写于 {freshness_hours:.1f} 小时前")
+    else:
+        conclusions.append(f"数据新鲜度：日志写于 {max(1, int(freshness_hours * 60))} 分钟前")
+
+    for label, pattern in (("音频设备", SUMMARY_PATTERNS[2][1]),
+                           ("录音写入", SUMMARY_PATTERNS[6][1])):
+        hits = [ln for ln in lines if pattern.search(ln)]
+        if hits:
+            conclusions.append(f"{label}：{len(hits)} 条命中（见下方明细）")
+
+    codes = sorted({c for c in PORT_AUDIO_CODE_RE.findall(text or "")})
+    if "-9996" in (text or "") or "no default output device" in (text or ""):
+        extra = f"（日志内音频错误码：{', '.join(codes[:5])}）" if codes else ""
+        conclusions.append("音频设备：PortAudio 报 -9996（找不到可用设备）" + extra +
+                           " —— 若 env.json 的 audio.devices 为空，说明本机没有音频设备"
+                           "（虚拟机常见），纯 Web 模式属预期")
+
+    if re.search(r"Device not configured|Errno 6", text or ""):
+        conclusions.append("串口恢复：出现 ENXIO/「Device not configured」—— USB 串口桥掉线后重枚举，"
+                           "检查电缆/供电/勿用无源 HUB")
+
+    if "S-meter fallback" in (text or ""):
+        conclusions.append("频谱：出现 S 表合成回退 —— 真实频谱（FT4222 / CI-V 0x27）未工作")
+
+    if "enable TX after" in (text or ""):
+        conclusions.append("TX 门禁：未验证机型拒绝发射（MRRC_ALLOW_UNVERIFIED_TX=1 才可开）"
+                           " —— 属预期行为")
+
+    startups = sum(1 for ln in lines if "Server ready!" in ln)
+    crashes = sum(1 for ln in lines if "Traceback (most recent call last)" in ln)
+    if startups:
+        span = ""
+        stamps = [ln[:19] for ln in lines if re.match(r"\d{4}-\d{2}-\d{2}", ln)]
+        if len(stamps) >= 2:
+            span = f"，时间跨度 {stamps[0]} → {stamps[-1]}"
+        verdict = ("⚠️ 同时有 Traceback，按崩溃排查" if crashes
+                   else "无崩溃痕迹（升级/重启属正常行为）")
+        conclusions.append(f"启动次数：{startups} 次{span} —— {verdict}")
+    else:
+        conclusions.append("启动次数：日志中未见 —— 日志可能被截断，或服务从未成功启动")
+
+    parts: list[str] = []
+    for label, pattern in SUMMARY_PATTERNS:
+        hits = [ln.strip()[:300] for ln in lines if pattern.search(ln)]
+        if not hits:
+            continue
+        parts.append(f"== {label}：{len(hits)} 条 ==")
+        parts.extend(f"      - {h}" for h in hits[-3:])
+        parts.append("")
+
+    head = ["=== 自动体检结论 ==="] + [f"  * {c}" for c in conclusions] + ["", "=== 命中明细 ==="]
+    return "\n".join(head + parts + [""])

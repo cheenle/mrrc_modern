@@ -1,0 +1,25 @@
+[Unit]
+Description=MRRC Modern support bundle receiver
+After=network.target
+
+[Service]
+# 口令放在 0600 的 EnvironmentFile 里，不写进 unit（也不入库）
+EnvironmentFile=/etc/mrrc-modern-support.env
+Environment=SUPPORT_DIR=/var/www/support-modern
+Environment=SUPPORT_PORT=8098
+Environment=SUPPORT_PRODUCT=mrrc_modern
+Environment=SUPPORT_MAX_MB=20
+Environment=SUPPORT_RATE_PER_MINUTE=5
+ExecStart=/usr/bin/python3 /opt/mrrc-modern-support/server.py
+Restart=always
+RestartSec=2
+User=www-data
+Group=www-data
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/www/support-modern
+
+[Install]
+WantedBy=multi-user.target

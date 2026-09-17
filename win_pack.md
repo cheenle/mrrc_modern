@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.17.0**（2026-09-13，**一键 CQ 按键**——服务端一次性自动化发射：`set{field:"cq"}` → 服务端键控、按设备队列深度投喂 20 ms 帧、播完 `stop_tx(graceful=True)` 再松 PTT；呼叫期间麦克风帧丢弃、PTT/TUNE 被拒、发起端断线即中止（SDD AD-020 / V2.49）。产物 `MRRC-Modern-v1.17.0-Windows-x64-Setup.exe` 45,970,364 bytes，SHA-256 `f378ab6d1a7ca6d8b93a928376ed3e69429b3d8fd45f1a52d0fa943fee2b371d`；VM 实测 1103 项测试 OK（8 skipped），PYZ 走查确认 `_bind_cq_player`/`cq_player` 与 `_internal\static\audio\cq.wav` 均在包内，server.exe 启动日志打印 `CQ ready: …(6.1 s, 48 kHz mono, 307 frames)`。**本轮踩到的新坑**：VM 上单个测试失败（`str(path).endswith("static/audio/cq.wav")`）—— 测试里的 POSIX 路径假设，见 §6 排错表。上一版 v1.16.0 = Yaesu SDR 机型族 + 发布工程化。
+> 最新构建：**v1.18.1**（2026-09-18）—— 套件 1271 项全绿；`release_check.py` 离线 29 ok / 0 failing。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 - `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：

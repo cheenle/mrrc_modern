@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.18.0 · Stable</span>
+<span>v1.18.1 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -57,11 +57,11 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.18.0-arm64.dmg">
-<i class="fab fa-apple"></i> Download macOS v1.18.0
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.18.1-arm64.dmg">
+<i class="fab fa-apple"></i> Download macOS v1.18.1
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.18.0
+<i class="fab fa-windows"></i> Windows Installer v1.18.1
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> Explore Features
@@ -85,9 +85,23 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.18.0</strong>
+<strong> What's new in v1.18.1</strong>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
+<li>
+<strong>macOS: "damaged" is fixed</strong> — every macOS build so far shipped an
+              <strong>unsigned</strong> app (the signing step failed silently), so Gatekeeper refused it
+              with "is damaged and can't be opened" — a dialog no right-click can bypass. The bundle is now
+              laid out the way codesign requires and a failed signature <strong>aborts the build</strong>.
+              Reinstalling is what fixes an already-installed copy.
+            </li>
+<li>
+<strong>macOS: silent RX is fixed</strong> — the bundle declared no audio-input permission key, and macOS
+              answers that by letting the capture stream open while filling it with zeros: RX played
+              nothing, the log said "check the radio", and CoreAudio reported no error at all. The
+              microphone permission is now requested properly (grant it once on first launch) and the
+              warning points at System Settings instead of the radio.
+            </li>
 <li>
 <strong>🐞 Report a problem</strong> — one menu entry builds a <strong>redacted diagnostics
               bundle</strong> on the server (logs + config snapshot + environment/radio/audio state +
@@ -381,14 +395,14 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.18.0 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.18.1 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            46.0 · x64 · 45,990,451 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 938384ad…</code>
+            46.0 · x64 · 46,002,543 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 19b5cef2…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.18.0 is zero-config on first run: it auto-generates a web
+            v1.18.1 is zero-config on first run: it auto-generates a web
             password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
             0x19) and its serial port (COM), and the login page shows the
             auto-generated password. The web 连接设置 (Connection Settings)
@@ -403,8 +417,8 @@
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.18.0-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.18.0
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.18.1-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.18.1
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
@@ -421,11 +435,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.18.0-arm64.dmg — v1.18.0 Stable</strong>
+<strong> MRRC-Modern-v1.18.1-arm64.dmg — v1.18.1 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            56.3 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 55,639,405 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 799efeb9…</code>
+            56.3 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 55,643,537 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 931b312c…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -445,7 +459,7 @@
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.18.0-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.18.1-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -472,7 +486,7 @@
 <strong> MRRC-Modern-rpi64.img.xz — Raspberry Pi</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            551 MB (551,282,340 bytes) · arm64 · Pi 3B+/4/5 · <em>still the v1.17.0 image — the v1.18.0 rebuild is pending</em> · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
+            551 MB (551,282,340 bytes) · arm64 · Pi 3B+/4/5 · <em>still the v1.17.0 image — the v1.18.1 rebuild is pending</em> · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
 <code style="font-size: 0.76rem">SHA-256: a56e5658e200d2c8fa0eac147299b8533757934009b776f3f2340cb55944dc1b</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
@@ -541,10 +555,10 @@
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.18.0, 46.0, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.18.1, 46.0, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 f378ab6d1a7ca6d8b93a928376ed3e69429b3d8fd45f1a52d0fa943fee2b371d</code>
+<code>SHA-256 19b5cef2300e510d3ae54b9817f70c4612455fe6f917a052ea98b661dcbd8992</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -580,7 +594,7 @@
 <div class="step">
 <h4>1 · Install</h4>
 <p>
-              Drag <code>MRRC-Modern-v1.18.0-arm64.dmg</code> → double-click to
+              Drag <code>MRRC-Modern-v1.18.1-arm64.dmg</code> → double-click to
               mount → drag <strong>MRRC Modern</strong> into Applications. On
               first launch, right-click the app → Open → Open (one-time
               Gatekeeper bypass for the ad-hoc signature).
@@ -874,7 +888,7 @@
 <div class="perf-card">
 <div class="metric">1261</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>1261 tests in the v1.18.0 release (macOS + Windows)</small>
+              Hardware-Free Tests<br/><small>1261 tests in the v1.18.1 release (macOS + Windows)</small>
 </div>
 </div>
 </div>
@@ -1016,7 +1030,7 @@
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.53</strong> · Architecture decisions, component
+            <strong>V2.54</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>
@@ -1056,7 +1070,7 @@
 <div class="footer-grid">
 <div class="footer-section">
 <h4>MRRC Modern</h4>
-<p>Multi-Radio Remote Control<br/>One USB Cable, Any Device<br/>v1.18.0 Stable · GPLv3 License</p>
+<p>Multi-Radio Remote Control<br/>One USB Cable, Any Device<br/>v1.18.1 Stable · GPLv3 License</p>
 </div>
 <div class="footer-section">
 <h4>Links</h4>
@@ -1072,7 +1086,7 @@
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.18.0</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.18.1</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

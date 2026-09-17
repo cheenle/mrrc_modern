@@ -2,6 +2,60 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.18.1] — 2026-09-18 — macOS 装机两处致命修复：「已损坏」与 RX 无声
+
+**这是一个应当升级的补丁版本。** v1.18.0 的 macOS 包有两个只在**安装后**才暴露的问题：应用报
+**「已损坏，无法打开」**（右键打开也绕不过去），以及装好之后**远程接收完全没声音**。
+两者都不是电台或配置问题，而是**打包层面的缺陷**，本版修掉并加了防回归门禁。
+
+### Installers / macOS
+
+- **签名从来没成功过**：`Contents/_CodeSignature` 始终缺失，`codesign --verify` 报
+  `code has no resources but signature indicates they must be present`。根因是 codesign 会把
+  `Contents/MacOS`、`Contents/Frameworks` 下的**数据文件与目录**当成"必须已签名的嵌套代码"，从而拒绝签整个 bundle；
+  而构建脚本把这次失败写成了**警告**（`non-fatal`），于是坏签名一路发出去 —— **v1.17.0 的 DMG 实测同样如此**。
+  现在数据树放在 `Contents/Resources/`（资源位置会被封存而非被当作代码检查），只保留
+  `Frameworks -> Resources` 与 `MacOS/_internal -> ../Resources` 两条符号链接；**签名/校验失败即中止构建**，
+  `spctl` 报 `damaged` 也中止（对 ad-hoc 包，`rejected（无 Developer ID）`是正常结果 —— 右键打开即可）。
+- **音频输入权限缺失 → RX 静音**：打包的 `Info.plist` 没有任何权限说明键，系统日志原文
+  `tccd: Refusing authorization request for service kTCCServiceMicrophone … without NSMicrophoneUsageDescription key`。
+  macOS 把**音频输入**（电台 USB CODEC）归入麦克风权限类，缺键时 **CoreAudio 照常让捕获流打开成功、却把缓冲填零** ——
+  日志里只有 `peak=0.0%` 和"检查电台 AF 增益"，最难察觉的一类故障。现在 `Info.plist` 带
+  `NSMicrophoneUsageDescription`（构建期断言，缺键即中止），近静默警告也会在打包版 macOS 上直接指向
+  `系统设置 → 隐私与安全性 → 麦克风`。
+- **首次启动需要你点一次「允许」**：旧包连询问都不会弹，所以**必须换新包**。ad-hoc 签名下授权绑定当次构建，
+  今后每次升级都会重新询问（要免除需 Developer ID 签名）。
+- **两个启动器**新增 `runtime_path()`（先 `app_dir()`，再回退 `_internal/`），使上述运行时文件可以住在资源树里。
+  Windows 包同步重建（启动器改动跨平台共享）。
+
+### Fixed
+
+### Fixed — macOS 签名（发布阻断级）
+
+- **打包版 macOS 应用签名实际从未成功**：`Contents/_CodeSignature` 缺失，Gatekeeper 因此对下载到的应用报
+  **「已损坏，无法打开」**（该提示**不能**用右键打开绕过）。**v1.17.0 的 DMG 实测同样如此**，即这不是本版引入，
+  而是长期存在、随每次发布发出的缺陷。根因是 codesign 会把 `Contents/MacOS`/`Frameworks` 下的**数据文件与目录**
+  当嵌套代码，从而拒绝签署整个 bundle，而 `build.sh` 把这次失败写成了警告。
+- **已定位可用布局**：数据树放 `Contents/Resources/`，仅保留 `Frameworks -> Resources` 与
+  `MacOS/_internal -> ../Resources` 两个符号链接；该布局下签名通过、`spctl` 只报"无 Developer ID"（可右键打开）、
+  冻结服务实跑正常。**剩余一步**：启动器对 `macos/`、`version.txt`、`mem_channels.json`、`vendor/`
+  需回退到 `_internal/` 查找，之后重建 DMG。
+- **build.sh 已加硬门禁**：签名/校验失败或 `spctl` 报 damaged 即 `exit 1`（此前是静默警告）。
+- **用户侧立刻解封**（v1.17.0/v1.18.0 均适用）：`sudo xattr -dr com.apple.quarantine "/Applications/MRRC Modern.app"`。
+
+### Fixed — macOS 装机后 RX 无声（音频输入权限缺失）
+
+- **症状**：本地装好应用后，网页里"打开远程接收"**完全没声音**。日志里 RX 捕获流**打开成功**（`RX audio started: [3] USB Audio Device … 44100Hz`），
+  却报 `peak=0.0%`，并提示"检查电台 AF 增益 / USB 连接"——把人引向电台，而电台是好的。
+- **根因（系统日志原话）**：`tccd: Refusing authorization request for service kTCCServiceMicrophone … without NSMicrophoneUsageDescription key`。
+  打包的 `Info.plist` **没有任何权限说明键**。macOS 的"麦克风"权限管理的正是**音频输入**（电台 USB CODEC 在系统里就是输入设备）；
+  缺键时 CoreAudio **照常允许打开流、但把缓冲填零** —— 不报错、只是静音，所以最难察觉。
+- **修复**：`packaging/macos/Info.plist` 加 `NSMicrophoneUsageDescription`；`build.sh` 加断言（缺键即 `exit 1`，防止回归）；
+  `server.py` 的近静默警告在打包版 macOS 上追加提示"请在 系统设置 → 隐私与安全性 → 麦克风 中允许 MRRC Modern"。
+- **需要用户动作**：首次启动会弹一次权限询问，**必须点"允许"**（旧版连询问都不会弹，所以必须换新包）；
+  ad-hoc 签名下授权绑定当次构建的 cdhash，**今后每次升级都会重新询问**（要免除需 Developer ID 签名）。
+
+
 ## [v1.18.0] — 2026-09-17 — 支持链路（诊断包 + 自动分诊 + 更新检查）
 
 **一条链：开发发版 → 问题诊断 → AI 分析 → 回复解决。** 本版把这条链从"人工来回追问"做成产品能力：
@@ -82,31 +136,6 @@ All notable changes to the MRRC Web Control project.
 - **Windows**：`MRRC-Modern-v1.18.0-Windows-x64-Setup.exe` — 45,990,451 bytes，SHA-256 `938384ad…`（VM 内 1261 项测试绿、三个 PyInstaller 目标 + Inno Setup 编译成功；包内 FTDI DLL、`static/support.html`、`cq.wav`、`version.txt=1.18.0` 均在位；服务器侧 SHA 与本地一致）。
 - **rpi64**：**未重建** —— 外部构建卷（`/Volumes/MRRCBuild`）在构建中途消失，脚本要求 ≥20 GB 而根盘只剩 3.8 GB；命令已备（见验证边界）。
 - **更新通道已上线**：`https://www.vlsc.net/mrrc_modern/downloads/latest.json`（`latest=1.18.0`，installer size/SHA 与产物一致，`previous=1.17.0`），线上文件与本地逐字节一致；1.17.0 客户端检查即得 `available: true`。
-
-### Fixed — macOS 签名（发布阻断级）
-
-- **打包版 macOS 应用签名实际从未成功**：`Contents/_CodeSignature` 缺失，Gatekeeper 因此对下载到的应用报
-  **「已损坏，无法打开」**（该提示**不能**用右键打开绕过）。**v1.17.0 的 DMG 实测同样如此**，即这不是本版引入，
-  而是长期存在、随每次发布发出的缺陷。根因是 codesign 会把 `Contents/MacOS`/`Frameworks` 下的**数据文件与目录**
-  当嵌套代码，从而拒绝签署整个 bundle，而 `build.sh` 把这次失败写成了警告。
-- **已定位可用布局**：数据树放 `Contents/Resources/`，仅保留 `Frameworks -> Resources` 与
-  `MacOS/_internal -> ../Resources` 两个符号链接；该布局下签名通过、`spctl` 只报"无 Developer ID"（可右键打开）、
-  冻结服务实跑正常。**剩余一步**：启动器对 `macos/`、`version.txt`、`mem_channels.json`、`vendor/`
-  需回退到 `_internal/` 查找，之后重建 DMG。
-- **build.sh 已加硬门禁**：签名/校验失败或 `spctl` 报 damaged 即 `exit 1`（此前是静默警告）。
-- **用户侧立刻解封**（v1.17.0/v1.18.0 均适用）：`sudo xattr -dr com.apple.quarantine "/Applications/MRRC Modern.app"`。
-
-### Fixed — macOS 装机后 RX 无声（音频输入权限缺失）
-
-- **症状**：本地装好应用后，网页里"打开远程接收"**完全没声音**。日志里 RX 捕获流**打开成功**（`RX audio started: [3] USB Audio Device … 44100Hz`），
-  却报 `peak=0.0%`，并提示"检查电台 AF 增益 / USB 连接"——把人引向电台，而电台是好的。
-- **根因（系统日志原话）**：`tccd: Refusing authorization request for service kTCCServiceMicrophone … without NSMicrophoneUsageDescription key`。
-  打包的 `Info.plist` **没有任何权限说明键**。macOS 的"麦克风"权限管理的正是**音频输入**（电台 USB CODEC 在系统里就是输入设备）；
-  缺键时 CoreAudio **照常允许打开流、但把缓冲填零** —— 不报错、只是静音，所以最难察觉。
-- **修复**：`packaging/macos/Info.plist` 加 `NSMicrophoneUsageDescription`；`build.sh` 加断言（缺键即 `exit 1`，防止回归）；
-  `server.py` 的近静默警告在打包版 macOS 上追加提示"请在 系统设置 → 隐私与安全性 → 麦克风 中允许 MRRC Modern"。
-- **需要用户动作**：首次启动会弹一次权限询问，**必须点"允许"**（旧版连询问都不会弹，所以必须换新包）；
-  ad-hoc 签名下授权绑定当次构建的 cdhash，**今后每次升级都会重新询问**（要免除需 Developer ID 签名）。
 
 ### Verification Boundary
 

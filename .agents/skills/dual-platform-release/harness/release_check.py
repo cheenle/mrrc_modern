@@ -340,7 +340,25 @@ def check_online(registry: dict, app: str, sdd: str,
 
 # ── Report ──────────────────────────────────────────────────────────
 
+def _make_output_encoding_safe() -> None:
+    """Never let a check die on an unprintable character.
+
+    The Windows build VM runs with a GBK console code page: the ✓/·/✗ marks and
+    the em-dash in a message raised UnicodeEncodeError *inside* the reporter,
+    which turns a reportable violation into a traceback (and, worse, into a test
+    failure that looks like a rules violation).  backslashreplace keeps the
+    console's own encoding and degrades just those characters to ASCII escapes,
+    so the captured output stays decodable by any parent.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
+    _make_output_encoding_safe()
     ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     ap.add_argument("--online", action="store_true",
                     help="also verify the published site and downloads")

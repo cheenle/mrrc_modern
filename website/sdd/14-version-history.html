@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.54</td>
+<td>2026-09-18</td>
+<td>Claude</td>
+<td><strong>v1.18.1 补丁发布：macOS 装机两处致命修复 —— 签名（「已损坏」）与音频输入权限（RX 无声）。</strong> 两处都只在<strong>安装后</strong>暴露，且都不是电台/配置问题。①<strong>签名从未成功</strong>：<code class="scope-code">Contents/_CodeSignature</code> 始终缺失，<code class="scope-code">codesign --verify</code> 报 <code class="scope-code">code has no resources but signature indicates they must be present</code>，Gatekeeper 给出「已损坏，无法打开」（右键也绕不过去）；根因是 codesign 把 <code class="scope-code">Contents/MacOS</code>、<code class="scope-code">Contents/Frameworks</code> 下的<strong>数据文件/目录</strong>当嵌套代码而拒绝签整个 bundle，而 <code class="scope-code">build.sh</code> 把这次失败写成警告（<code class="scope-code">non-fatal</code>）—— <strong>v1.17.0 的 DMG 实测同样坏</strong>，即该缺陷自首次发版起一直存在。修法：数据树放 <code class="scope-code">Contents/Resources/</code>（资源位置被封存而非被当代码检查），只保留 <code class="scope-code">Frameworks -&gt; Resources</code> 与 <code class="scope-code">MacOS/_internal -&gt; ../Resources</code> 两条符号链接；<code class="scope-code">MacOS</code> 内除可执行文件外不得有数据（<code class="scope-code">mem_channels.json</code>/<code class="scope-code">version.txt</code>/<code class="scope-code">macos/</code>/<code class="scope-code">vendor/</code> 已移入资源树，启动器新增 <code class="scope-code">runtime_path()</code> 先 <code class="scope-code">app_dir()</code> 再回退 <code class="scope-code">_internal/</code>）；<strong>签名或校验失败即 <code class="scope-code">exit 1</code></strong>，<code class="scope-code">spctl</code> 报 <code class="scope-code">damaged</code> 也中止（ad-hoc 下 <code class="scope-code">rejected（无 Developer ID）</code>是正常结果）。②<strong>音频输入权限缺失 → RX 静音</strong>：打包 <code class="scope-code">Info.plist</code> 无任何权限说明键，系统日志 <code class="scope-code">tccd: Refusing authorization request for service kTCCServiceMicrophone … without NSMicrophoneUsageDescription key</code>；macOS 把音频输入（电台 USB CODEC）归入麦克风权限类，缺键时 <strong>CoreAudio 照常让捕获流打开成功、却把缓冲填零</strong> —— 日志只有 <code class="scope-code">peak=0.0%</code> 与误导性的”检查电台 AF 增益”。修法：<code class="scope-code">Info.plist</code> 加 <code class="scope-code">NSMicrophoneUsageDescription</code>（构建期断言缺键即中止），近静默警告在 frozen macOS 上改写系统设置路径。<strong>实测证据</strong>：修复包 <code class="scope-code">codesign --verify</code> = <code class="scope-code">valid on disk</code> + <code class="scope-code">satisfies its Designated Requirement</code>、<code class="scope-code">_CodeSignature/CodeResources</code> 存在、<code class="scope-code">spctl</code> 只报无 Developer ID、DMG 内外双重校验（内部应用 <code class="scope-code">CFBundleShortVersionString=v1.18.1</code> + 麦克风键 + <code class="scope-code">version.txt=1.18.1</code>）、冻结服务 <code class="scope-code">/api/update/check</code> 自报 <code class="scope-code">current=1.18.0</code>（v1.18.0 包，同时证明更新通道与线上 <code class="scope-code">latest.json</code> 首次端到端打通）、替换安装后 tccd 由 <code class="scope-code">Refusing …</code> 变为 <code class="scope-code">AUTHREQ_PROMPTING</code>。产物：macOS <code class="scope-code">MRRC-Modern-v1.18.1-arm64.dmg</code> 55,643,537 bytes <code class="scope-code">931b312c…</code>；Windows <code class="scope-code">MRRC-Modern-v1.18.1-Windows-x64-Setup.exe</code> <strong>WIN_BYTES</strong> bytes <code class="scope-code">__WIN_SHA__</code>。套件 1271→1276 项（含 7 项启动器回退与权限提示测试）全绿；<code class="scope-code">release_check.py</code> 离线 29 ok / 0 failing。<strong>顺带修掉 harness 自身的编码缺陷</strong>：Windows VM 的 GBK 控制台下 <code class="scope-code">✓/·/✗</code> 让 reporter 抛 <code class="scope-code">UnicodeEncodeError</code>（把”规则违规”伪装成 traceback），改为 <code class="scope-code">errors=backslashreplace</code>。<strong>边界</strong>：麦克风授权需用户首次点「允许」，ad-hoc 签名下授权绑定当次构建 cdhash、<strong>今后每次升级都会重新询问</strong>（要免除需 Developer ID 签名）；Windows 包在 KVM 上构建（无物理声卡，TX 话音仍待真机验收）。</td>
+</tr>
+<tr>
 <td>SDD V2.53</td>
 <td>2026-09-17</td>
 <td>Claude</td>
@@ -655,7 +661,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.53 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.54 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

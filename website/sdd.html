@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#updates">V2.53</a></li>
+            <li><a href="#updates">V2.54</a></li>
             <li><a href="#chapters">Chapters</a></li>
             <li><a href="#decisions">AD Index</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.53 · 2026-09-17</span>
+            <span>SDD V2.54 · 2026-09-17</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">Software Design Description</span></h1>
         <p class="hero-subtitle">
@@ -75,7 +75,7 @@
             </thead>
             <tbody>
             <tr><td>Document ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>Version</td><td>V2.53</td></tr>
+            <tr><td>Version</td><td>V2.54</td></tr>
             <tr><td>Baseline Date</td><td>2026-09-13</td></tr>
             <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
@@ -134,12 +134,21 @@
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <h3>v1.18.0 Released <small>(V2.53)</small></h3>
+                <div class="card">
+                <h3>v1.18.1 Released <small>(V2.54)</small></h3>
+                <p>A patch that makes the macOS download usable at all: every earlier bundle carried a
+                <strong>failed signature</strong> (the step failed silently), so Gatekeeper refused it with
+                "is damaged and can't be opened" — and it declared no audio-input permission key, which
+                macOS answers by opening the capture stream and filling it with zeros, i.e. RX plays
+                silence with no error and a log line that blames the radio. Both are fixed at the packaging
+                layer, and a failed signature now aborts the build.</p>
+            </div>
+            <h3>v1.18.0 Released <small>(V2.54)</small></h3>
                 <p>macOS DMG and Windows installer built from one commit and verified before publication: the frozen macOS server boots with the new support endpoints and finally writes a server log; the VM ran 1261 tests and Inno Setup produced the installer. <code>latest.json</code> is live, so 1.17.0 installs now see the update.</p>
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
-                <h3>Update Channel <small>(V2.53)</small></h3>
+                <h3>Update Channel <small>(V2.54)</small></h3>
                 <p>A generated <code>latest.json</code> says whether a newer release exists and carries the installer's size and SHA-256 taken from the artifact itself; <code>GET /api/update/check</code> reports it read-only. Success is defined as a fact only the new version can write (<code>state.json.lastResult</code>) — "installer launched" is explicitly not success. Download/install is slice 2 (AD-022).</p>
             </div>
             <div class="feature-card">

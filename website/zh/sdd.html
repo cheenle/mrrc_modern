@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.53 更新</a></li>
+            <li><a href="#updates">V2.54 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.53 · 2026-09-17</span>
+            <span>SDD V2.54 · 2026-09-17</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,7 +74,7 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.53</td></tr>
+            <tr><td>版本</td><td>V2.54</td></tr>
             <tr><td>基线日期</td><td>2026-09-13</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
@@ -133,12 +133,19 @@
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <h3>v1.18.0 发布 <small>（V2.53）</small></h3>
+                <div class="card">
+                <h3>v1.18.1 发布 <small>(V2.54)</small></h3>
+                <p>一个让 macOS 包真正可用的补丁：此前每个包的应用<strong>签名都没成功</strong>（该步骤静默失败），
+                Gatekeeper 因此报「已损坏，无法打开」；同时包内没有任何音频输入权限说明键，而 macOS 对此的回应是
+                <em>让捕获流打开成功、却把缓冲填零</em> —— 于是 RX 完全无声、不报错，日志还把矛头指向电台。
+                两者都在打包层面修掉，且签名失败现在会直接中止构建。</p>
+            </div>
+            <h3>v1.18.0 发布 <small>（V2.54）</small></h3>
                 <p>macOS DMG 与 Windows 安装包由同一提交构建并各自验证：macOS 冻结版能启动、支持端点齐备、**首次真的写出服务端日志**；VM 内 1261 项测试 + Inno Setup 出包。<code>latest.json</code> 已上线，1.17.0 客户端检查即得「有新版本」。</p>
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
-                <h3>更新通道（只读检查） <small>（V2.53）</small></h3>
+                <h3>更新通道（只读检查） <small>（V2.54）</small></h3>
                 <p>生成式 <code>latest.json</code>（size/SHA-256 取自产物本身）回答“有没有新版本”；<code>GET /api/update/check</code> 只读上报。成功被定义为**只有新版本能写下的事实**（<code>state.json.lastResult</code>），“已拉起安装器”明确不算成功；下载/安装是 slice 2（AD-022）。</p>
             </div>
             <div class="feature-card">

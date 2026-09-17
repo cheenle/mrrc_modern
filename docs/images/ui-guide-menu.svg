@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 796" width="470" height="796" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
-  <!-- diagram-version: V2.49 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 470 844" width="470" height="844" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <!-- diagram-version: V2.50 -->
   <defs>
     <style>
       .panel { fill:#22262c; }
@@ -18,7 +18,7 @@
   </defs>
 
   <!-- Panel -->
-  <rect class="panel border" x="40" y="20" width="390" height="736" rx="14"/>
+  <rect class="panel border" x="40" y="20" width="390" height="784" rx="14"/>
 
   <!-- Header -->
   <text x="60" y="56" class="txt" font-size="16" font-weight="bold">MRRC Modern 菜单</text>
@@ -33,46 +33,47 @@
     <rect class="row" x="56" y="228" width="358" height="42" rx="6"/><text x="70" y="254" class="txt">Advanced Settings</text>
     <rect class="row" x="56" y="276" width="358" height="42" rx="6"/><text x="70" y="302" class="txt">连接设置…</text>
     <rect class="row" x="56" y="324" width="358" height="42" rx="6"/><text x="70" y="350" class="txt">录音 Recordings</text>
-    <rect class="row" x="56" y="372" width="358" height="42" rx="6"/><text x="70" y="398" class="txt" fill="#ef4444">Logout</text>
+    <rect class="row" x="56" y="372" width="358" height="42" rx="6"/><text x="70" y="398" class="txt">🐞 遇到问题</text>
+    <rect class="row" x="56" y="420" width="358" height="42" rx="6"/><text x="70" y="446" class="txt" fill="#ef4444">Logout</text>
   </g>
 
   <line x1="54" y1="426" x2="416" y2="426" stroke="#33383f" stroke-width="1"/>
-  <text x="60" y="448" class="txt" font-size="13" fill="#f59e0b">Settings（设置面板）</text>
+  <text x="60" y="496" class="txt" font-size="13" fill="#f59e0b">Settings（设置面板）</text>
 
   <!-- SPAN / SPD row -->
-  <text x="60" y="482" class="lbl">SPAN</text>
-  <rect class="sel" x="100" y="468" width="110" height="24" rx="4"/><text x="155" y="484" class="txt-sm" text-anchor="middle">100k ▾</text>
-  <text x="226" y="482" class="lbl">SPD</text>
-  <rect class="sel" x="260" y="468" width="110" height="24" rx="4"/><text x="315" y="484" class="txt-sm" text-anchor="middle">3 ▾</text>
+  <text x="60" y="530" class="lbl">SPAN</text>
+  <rect class="sel" x="100" y="516" width="110" height="24" rx="4"/><text x="155" y="532" class="txt-sm" text-anchor="middle">100k ▾</text>
+  <text x="226" y="530" class="lbl">SPD</text>
+  <rect class="sel" x="260" y="516" width="110" height="24" rx="4"/><text x="315" y="532" class="txt-sm" text-anchor="middle">3 ▾</text>
 
   <!-- Color -->
-  <text x="60" y="524" class="lbl">Color</text>
-  <rect class="sel" x="100" y="510" width="270" height="24" rx="4"/><text x="235" y="526" class="txt-sm" text-anchor="middle">Jet ▾</text>
+  <text x="60" y="572" class="lbl">Color</text>
+  <rect class="sel" x="100" y="558" width="270" height="24" rx="4"/><text x="235" y="574" class="txt-sm" text-anchor="middle">Jet ▾</text>
 
   <!-- Floor -->
-  <text x="60" y="566" class="lbl">Floor</text>
-  <rect x="100" y="558" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="558" width="24" height="8" rx="4" class="accent" opacity="0.7"/>
-  <text x="330" y="566" class="txt-sm" font-size="9.5">5</text>
+  <text x="60" y="614" class="lbl">Floor</text>
+  <rect x="100" y="606" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="606" width="24" height="8" rx="4" class="accent" opacity="0.7"/>
+  <text x="330" y="614" class="txt-sm" font-size="9.5">5</text>
 
   <!-- Ceil -->
-  <text x="60" y="608" class="lbl">Ceil</text>
-  <rect x="100" y="600" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="600" width="170" height="8" rx="4" class="accent" opacity="0.7"/>
-  <text x="330" y="608" class="txt-sm" font-size="9.5">220</text>
+  <text x="60" y="656" class="lbl">Ceil</text>
+  <rect x="100" y="648" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="648" width="170" height="8" rx="4" class="accent" opacity="0.7"/>
+  <text x="330" y="656" class="txt-sm" font-size="9.5">220</text>
 
   <!-- RF Gain -->
-  <text x="60" y="650" class="lbl">RF Gain</text>
-  <rect x="100" y="642" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="642" width="200" height="8" rx="4" class="accent" opacity="0.7"/>
-  <text x="330" y="650" class="txt-sm" font-size="9.5">100%</text>
+  <text x="60" y="698" class="lbl">RF Gain</text>
+  <rect x="100" y="690" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="690" width="200" height="8" rx="4" class="accent" opacity="0.7"/>
+  <text x="330" y="698" class="txt-sm" font-size="9.5">100%</text>
 
   <!-- Mic -->
-  <text x="60" y="692" class="lbl">Mic</text>
-  <rect x="100" y="684" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="684" width="100" height="8" rx="4" class="accent" opacity="0.7"/>
-  <text x="330" y="692" class="txt-sm" font-size="9.5">51</text>
+  <text x="60" y="740" class="lbl">Mic</text>
+  <rect x="100" y="732" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="732" width="100" height="8" rx="4" class="accent" opacity="0.7"/>
+  <text x="330" y="740" class="txt-sm" font-size="9.5">51</text>
 
   <!-- 🎙 Vol -->
-  <text x="60" y="734" class="lbl">🎙 Vol</text>
-  <rect x="100" y="726" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="726" width="140" height="8" rx="4" class="accent" opacity="0.7"/>
-  <text x="330" y="734" class="txt-sm" font-size="9.5">100</text>
+  <text x="60" y="782" class="lbl">🎙 Vol</text>
+  <rect x="100" y="774" width="210" height="8" rx="4" fill="#1c2026"/><rect x="100" y="774" width="140" height="8" rx="4" class="accent" opacity="0.7"/>
+  <text x="330" y="782" class="txt-sm" font-size="9.5">100</text>
 
   <!-- Badges -->
   <g><circle class="badge" cx="416" cy="84" r="10"/><text class="badge-txt" x="416" y="84">40</text></g>
@@ -80,14 +81,14 @@
   <g><circle class="badge" cx="416" cy="180" r="10"/><text class="badge-txt" x="416" y="180">42</text></g>
   <g><circle class="badge" cx="416" cy="228" r="10"/><text class="badge-txt" x="416" y="228">43</text></g>
   <g><circle class="badge" cx="416" cy="276" r="10"/><text class="badge-txt" x="416" y="276">44</text></g>
-  <g><circle class="badge" cx="212" cy="466" r="10"/><text class="badge-txt" x="212" y="466">45</text></g>
-  <g><circle class="badge" cx="372" cy="466" r="10"/><text class="badge-txt" x="372" y="466">46</text></g>
-  <g><circle class="badge" cx="372" cy="508" r="10"/><text class="badge-txt" x="372" y="508">47</text></g>
-  <g><circle class="badge" cx="312" cy="556" r="10"/><text class="badge-txt" x="312" y="556">48</text></g>
-  <g><circle class="badge" cx="312" cy="598" r="10"/><text class="badge-txt" x="312" y="598">49</text></g>
-  <g><circle class="badge" cx="312" cy="640" r="10"/><text class="badge-txt" x="312" y="640">50</text></g>
-  <g><circle class="badge" cx="312" cy="682" r="10"/><text class="badge-txt" x="312" y="682">51</text></g>
-  <g><circle class="badge" cx="312" cy="724" r="10"/><text class="badge-txt" x="312" y="724">52</text></g>
+  <g><circle class="badge" cx="212" cy="514" r="10"/><text class="badge-txt" x="212" y="514">45</text></g>
+  <g><circle class="badge" cx="372" cy="514" r="10"/><text class="badge-txt" x="372" y="514">46</text></g>
+  <g><circle class="badge" cx="372" cy="556" r="10"/><text class="badge-txt" x="372" y="556">47</text></g>
+  <g><circle class="badge" cx="312" cy="604" r="10"/><text class="badge-txt" x="312" y="604">48</text></g>
+  <g><circle class="badge" cx="312" cy="646" r="10"/><text class="badge-txt" x="312" y="646">49</text></g>
+  <g><circle class="badge" cx="312" cy="688" r="10"/><text class="badge-txt" x="312" y="688">50</text></g>
+  <g><circle class="badge" cx="312" cy="730" r="10"/><text class="badge-txt" x="312" y="730">51</text></g>
+  <g><circle class="badge" cx="312" cy="772" r="10"/><text class="badge-txt" x="312" y="772">52</text></g>
 
-  <text x="235" y="778" class="cap" text-anchor="middle">图 2 · 左侧抽屉菜单（点 ☰ 打开）控件编号图</text>
+  <text x="235" y="826" class="cap" text-anchor="middle">图 2 · 左侧抽屉菜单（点 ☰ 打开）控件编号图</text>
 </svg>

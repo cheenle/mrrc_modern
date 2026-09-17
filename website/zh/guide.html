@@ -289,6 +289,7 @@
 <li><a href="#键盘快捷键桌面端" id="toc-键盘快捷键桌面端">3. 键盘快捷键（桌面端）</a></li>
 <li><a href="#安全须知请先阅读" id="toc-安全须知请先阅读">4. 安全须知（请先阅读）</a></li>
 <li><a href="#常见问题faq-2" id="toc-常见问题faq-2">5. 常见问题（FAQ）</a></li>
+<li><a href="#遇到问题怎么报诊断包" id="toc-遇到问题怎么报诊断包">6. 遇到问题怎么报（诊断包）</a></li>
 <li><a href="#附界面元素与后台命令对照供高级用户排障" id="toc-附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</a></li>
 <li><a href="#一键-cq-呼叫服务端v1.17-起" id="toc-一键-cq-呼叫服务端v1.17-起">一键 CQ 呼叫（服务端，v1.17 起）</a></li>
 <li><a href="#qso-录音服务端v2.42-起" id="toc-qso-录音服务端v2.42-起">QSO 录音（服务端，v2.42 起）</a></li>
@@ -560,7 +561,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </blockquote>
 <h3 id="安装5-步">0.7.1 安装（5 步）</h3>
 <ol type="1">
-<li>打开官网 https://www.vlsc.net/mrrc_modern/ ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.17.0-arm64.dmg</code>（约 56 MB）。</li>
+<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.17.0-arm64.dmg</code>（约 56 MB）。</li>
 <li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
 <li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
 <li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
@@ -1135,7 +1136,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </thead>
 <tbody>
 <tr>
-<td>39</td>
+<td>40</td>
 <td>Band Selection</td>
 <td>弹窗列出全部 12 个波段（含频率范围），精确选段</td>
 <td>单击波段项；选中后跳到该波段默认频率</td>
@@ -1160,6 +1161,24 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>44</td>
+<td>连接设置…</td>
+<td>打开连接设置对话框（机型 / 串口 / 波特率 / 音频设备）</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>—</td>
+<td>录音 Recordings</td>
+<td>打开录音面板（列表 / 播放 / 下载 / 删除）</td>
+<td>单击</td>
+</tr>
+<tr>
+<td>—</td>
+<td>🐞 遇到问题</td>
+<td>打开诊断包页面（新标签页）：填写现象 → 生成 → 上传，或只保存到本地</td>
+<td>单击（不打断当前连接）</td>
+</tr>
+<tr>
+<td>—</td>
 <td>Logout</td>
 <td>退出登录：调 <code>/api/auth/logout</code> 作废会话并跳回登录页</td>
 <td>单击</td>
@@ -1307,6 +1326,18 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tbody>
 </table></div>
 <hr />
+<h2 id="遇到问题怎么报诊断包">6. 遇到问题怎么报（诊断包）</h2>
+<p>菜单（图 2）→ <strong>🐞 遇到问题</strong>，会新开一个标签页（不打断当前的电台连接）：</p>
+<ol type="1">
+<li>写清现象：什么表现、什么时候开始、电台型号与频率（越具体越省一轮往返）；</li>
+<li>点 <strong>生成诊断包</strong> —— 服务端收集日志尾部、脱敏配置、环境/电台/音频状态快照与自动体检结论；</li>
+<li>点 <strong>上传给维护者</strong>（需要这台机器能访问互联网），界面会给出一个<strong>编号</strong>； 答复会发布在 <a href="https://www.vlsc.net/mrrc_modern/answers/" class="uri">https://www.vlsc.net/mrrc_modern/answers/</a>（第 2 期上线，目前为人工回填）；</li>
+<li>没有网络时（例如脱网的树莓派）点 <strong>只保存到本地</strong>，把生成的 <code>support-&lt;编号&gt;.zip</code> 用邮件/微信发给我。</li>
+</ol>
+<p><strong>包里有什么</strong>：<code>logs/</code>（日志）、<code>state/config-redacted.env</code>（脱敏配置）、 <code>diagnostics/summary.txt</code>（<strong>先看这个</strong>：启动次数/崩溃痕迹/数据新鲜度/音频与串口事实）、 <code>diagnostics/env.json</code>（机型、串口、频谱模式、音频设备表与采样率）、<code>diagnostics/client.json</code>（浏览器侧上下文）。</p>
+<p><strong>包里绝不包含</strong>：登录密码、证书私钥、任何令牌，也不包含录音、记忆频道与天调学习值 —— 生成时按白名单裁剪 + 值替换，替换次数写在 <code>manifest.json</code> 里。</p>
+<p>日志位置：桌面安装版在用户数据目录（Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs</code>， macOS <code>~/Library/Application Support/MRRC-Modern/logs</code>）：<code>server.log</code>（轮转 2 MB × 2）与 <code>server-stdout.log</code>（启动窗口，每次启动重建）；源码与树莓派模式写在程序目录的 <code>logs/</code> 下。</p>
+<hr />
 <h2 id="附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</h2>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
 <colgroup>
@@ -1378,7 +1409,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>CQ 按键</td>
-<td><code>{"type":"set","field":"cq","value":true|false}</code> → 状态由 <code>cqState</code> 广播（<code>idle/calling/complete/aborted</code>）；录音默认 <code>static/audio/cq.wav</code>，用 <code>MRRC_CQ_FILE</code> 替换</td>
+<td><code>{"type":"set","field":"cq","value":true | false}</code> → 状态由 <code>cqState</code>广播（<code>idle/calling/complete/aborted</code>）；录音默认<code>static/audio/cq.wav</code>，用<code>MRRC_CQ_FILE</code> 替换</td>
 </tr>
 <tr>
 <td>天调（可选）</td>

@@ -41,6 +41,7 @@ REQUIRED_FILES=(
 	"js/scope.js"
 	"images/qr-wechat-group.jpg"
 	"sdd.html"
+	"answers/index.html"
 	"zh/sdd.html"
 	"sdd/index.html"
 	"sdd/01-executive-summary.html"

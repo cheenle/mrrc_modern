@@ -77,7 +77,13 @@ class WindowsPackagingFilesTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("$LASTEXITCODE", text)
-        self.assertIn("Invoke-Checked python -m unittest", text)
+        # 2026-09-17: PowerShell 5.1 turns a native command's stderr output into
+        # a NativeCommandError, which $ErrorActionPreference="Stop" then escalates —
+        # and unittest writes everything to stderr. Hence Start-Process with
+        # explicit redirects, plus both an exit-code and a FAIL/ERROR check.
+        self.assertIn("-RedirectStandardError $utErr", text)
+        self.assertIn("$utExit = $utProc.ExitCode", text)
+        self.assertIn("-Pattern '^(FAIL|ERROR): '", text)
         self.assertIn("Invoke-Checked pyinstaller", text)
 
     def test_inno_setup_script_uses_modern_branding(self):

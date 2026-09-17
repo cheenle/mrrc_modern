@@ -27,7 +27,24 @@ Set-Location $RepoRoot
 
 $pyFiles = Get-ChildItem -Name *.py
 Invoke-Checked python -m py_compile @pyFiles
-Invoke-Checked python -m unittest discover -s tests -v
+# Tests: Start-Process with explicit redirects, NOT `python ... *> $log`.
+# PowerShell 5.1 turns any native-command stderr output into a NativeCommandError,
+# and `$ErrorActionPreference = "Stop"` (set above) then aborts the build — while
+# unittest writes ALL of its output to stderr.  That was the "spurious errors=1"
+# on the VM (2026-09-17): the suite was green, the shell was not.
+$utOut = Join-Path $RepoRoot "dist\windows\unittest.stdout.txt"
+$utErr = Join-Path $RepoRoot "dist\windows\unittest.stderr.txt"
+New-Item -ItemType Directory -Force -Path (Split-Path $utOut) | Out-Null
+$utProc = Start-Process -FilePath "python" `
+    -ArgumentList "-m", "unittest", "discover", "-s", "tests", "-v" `
+    -NoNewWindow -Wait -PassThru -RedirectStandardOutput $utOut -RedirectStandardError $utErr
+$utExit = $utProc.ExitCode
+Get-Content $utErr -Tail 6
+$utBad = Select-String -Path @($utOut, $utErr) -Pattern '^(FAIL|ERROR): ' -ErrorAction SilentlyContinue
+if ($utExit -ne 0 -or $utBad) {
+    $utBad | Select-Object -First 5 | ForEach-Object { Write-Host $_.Line }
+    throw "tests failed (exit $utExit) - logs: $utOut / $utErr"
+}
 
 $ft4222 = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\FT4222.dll"
 $d2xx = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\ftd2xx.dll"

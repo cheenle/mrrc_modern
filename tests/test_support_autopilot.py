@@ -245,6 +245,33 @@ class CronTests(AutopilotFixture):
         self.assertIn("/usr/bin/true", written)            # other entries survive
 
 
+class PageDeployTests(AutopilotFixture):
+    """The docroot belongs to www-data: a direct rsync is refused (and returns 0
+    when nothing changed, which is how a broken path looked healthy)."""
+
+    def test_upload_then_sudo_install(self):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr=b"")
+
+        with mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
+            self.assertTrue(autopilot.rsync_page())
+        self.assertEqual(calls[0][0], "rsync")
+        self.assertIn(autopilot.STAGING, calls[0][-1])
+        self.assertEqual(calls[1][0], "ssh")
+        self.assertIn("sudo install", calls[1][-1])
+        self.assertIn(autopilot.REMOTE_PAGE, calls[1][-1])
+
+    def test_failure_is_reported_not_raised(self):
+        def fake_run(cmd, **kwargs):
+            raise subprocess.CalledProcessError(12, cmd, stderr=b"Permission denied")
+
+        with mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
+            self.assertFalse(autopilot.rsync_page())
+
+
 class ContextTests(AutopilotFixture):
     def test_digest_carries_problem_summary_and_log_tail(self):
         folder = self.root / "20260917-072530-ab12"

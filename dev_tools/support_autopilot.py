@@ -245,14 +245,28 @@ def git_commit(bundle_id: str) -> bool:
         return False
 
 
+STAGING = "~/mrrc_modern_answers.html"
+
+
 def rsync_page() -> bool:
-    """Ship just the answers page (spec §1 D4): full-site deploy stays manual."""
+    """Ship just the answers page (spec §1 D4); the full-site deploy stays manual.
+
+    Two steps on purpose: the docroot belongs to www-data, so a direct rsync into
+    it is refused — and it *silently* returns 0 when the file happens to be
+    unchanged, which is how the first "verification" of this path passed while
+    being unable to write anything (measured 2026-09-17).  Upload to the
+    maintainer's home, then install it into place as www-data.
+    """
     try:
-        subprocess.run(["rsync", "-az", str(ANSWERS_PAGE),
-                        f"{REMOTE_HOST}:{REMOTE_PAGE}"], check=True)
+        subprocess.run(["rsync", "-az", str(ANSWERS_PAGE), f"{REMOTE_HOST}:{STAGING}"],
+                       check=True, capture_output=True)
+        subprocess.run(["ssh", REMOTE_HOST,
+                        f"sudo install -m 644 -o www-data -g www-data {STAGING} {REMOTE_PAGE}"],
+                       check=True, capture_output=True)
         return True
     except (OSError, subprocess.CalledProcessError) as e:
-        log(f"答复页 rsync 失败（本地 commit 已保留）：{e}")
+        detail = getattr(e, "stderr", b"") or b""
+        log(f"答复页发布失败（本地 commit 已保留）：{e} {detail.decode('utf-8', 'replace')[:200]}")
         return False
 
 

@@ -76,7 +76,9 @@ cp -R "$PYI_ROOT/MRRC-Modern-Server/." "$APP_MACOS/"
 # which is what _runtime_dir() resolves to at runtime.  Without it the app cannot
 # state what it is (support bundle manifest; and it is the version authority the
 # one-click upgrade will need).  $VERSION comes from the CHANGELOG top entry.
-printf '%s\n' "$VERSION" > "$APP_MACOS/version.txt"
+# ${VERSION#v}: Windows and the Pi image write a bare triple, so all three
+# platforms agree on what version.txt contains (detect_version tolerates both).
+printf '%s\n' "${VERSION#v}" > "$APP_MACOS/version.txt"
 # scope_pipe onefile -> Contents/MacOS/
 cp "$PYI_ROOT/scope_pipe" "$APP_MACOS/scope_pipe"
 

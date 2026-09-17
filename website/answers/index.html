@@ -6,34 +6,69 @@
 <title>MRRC Modern · 问题答复</title>
 <style>
   body{background:#12121a;color:#e0e0e0;font-family:-apple-system,tahoma,sans-serif;
-       margin:0 auto;padding:24px;max-width:760px;line-height:1.7}
+       margin:0 auto;padding:24px;max-width:820px;line-height:1.7}
   h1{font-size:22px;margin:0 0 6px}
   h2{font-size:17px;margin:26px 0 6px}
+  h3{font-size:16px;margin:10px 0 4px}
+  h4{font-size:14px;margin:14px 0 4px;color:#e8a33d}
   .muted{color:#8a8a96;font-size:13px}
-  code{background:#1b1b26;border-radius:3px;padding:1px 5px}
+  code{background:#1b1b26;border-radius:3px;padding:1px 5px;font-size:12.5px}
   a{color:#e8a33d}
   .card{background:#181824;border:1px solid #2c2c38;border-radius:6px;padding:14px;margin:16px 0}
+  .card header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .id{font-family:ui-monospace,monospace;font-size:12.5px;color:#e8a33d}
+  .badge{font-size:12px;padding:1px 7px;border-radius:10px;border:1px solid #39414d}
+  .badge.ok{color:#5ad07a;border-color:#2f6b40}
+  .badge.warn{color:#e8c25a;border-color:#6b5f2f}
+  .verdict{margin:6px 0 0;color:#e6e6e6}
+  ul{margin:4px 0 0;padding-left:1.2rem}
+  li{margin:2px 0;color:#cfcfd6}
+  li.ev{font-family:ui-monospace,monospace;font-size:12px;color:#8a8a96}
+  details{margin-top:10px}
+  summary{cursor:pointer;color:#8a8a96;font-size:13px}
+  #search{width:100%;box-sizing:border-box;background:#0f0f16;color:#fff;border:1px solid #444;
+          border-radius:4px;padding:9px;font-size:14px;margin-top:8px}
+  .empty{background:#181824;border:1px solid #2c2c38;border-radius:6px;padding:14px;margin:16px 0}
 </style>
 </head>
 <body>
   <h1>🐞 问题答复</h1>
-  <p class="muted">这一页发布「🐞 遇到问题」上报的分析结论。每条的编号形如
-  <code>20260917-072530-ab12</code>，就是你上传成功后界面显示的那一串。</p>
-
-  <div class="card">
+  <p class="muted">这一页发布「🐞 遇到问题」上报的分析结论。输入编号（形如
+  <code>20260917-072530-ab12</code>）或关键词即可筛选。</p>
+  <input id="search" type="search" placeholder="编号 / 关键词（如 录音、-9996、CI-V）" autocomplete="off">
+  <p class="muted" id="count"></p>
+  <div class="empty">
     <h2>现在还没有答复</h2>
-    <p>自动分诊与答复发布正在建设中（支持链路第 2 期）。目前诊断包已经可以上传，
-    维护者会人工查看，并把结论发布到这一页。</p>
+    <p>诊断包已经可以上传（菜单 → 🐞 遇到问题）。自动分诊每 10 分钟检查一次新包，
+    结论会作为卡片出现在这一页。</p>
+    <h2>着急的话</h2>
+    <p>把界面上的<b>编号</b>连同问题描述发到
+    <a href="https://www.vlsc.net/mrrc_modern/">MRRC Modern 主页</a>上的联系方式；
+    也可以在「🐞 遇到问题」页点<b>只保存到本地</b>，把 zip 直接发给我。</p>
   </div>
+  <p class="muted">最后更新：2026-09-17 10:30（自动生成，勿手改）</p>
 
-  <h2>着急的话</h2>
-  <p>请把界面上的 <b>编号</b> 连同问题描述一起发到
-  <a href="https://www.vlsc.net/mrrc_modern/">MRRC Modern 主页</a> 上的联系方式。
-  也可以先在「🐞 遇到问题」页点 <b>只保存到本地</b>，用邮件或微信把诊断包直接发给我。</p>
-
-  <h2>诊断包里有什么</h2>
-  <p>日志尾部、脱敏后的配置快照、环境/电台/音频状态快照，以及一份自动体检结论
-  （<code>diagnostics/summary.txt</code>）。<b>不含</b>登录密码、证书私钥、任何令牌，
-  也不含录音、记忆频道与天调学习值。</p>
+<script>
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var box = document.getElementById('search');
+  var count = document.getElementById('count');
+  function applyFilter() {
+    var q = (box.value || '').trim().toLowerCase();
+    var shown = 0;
+    cards.forEach(function (card) {
+      var hit = !q || card.textContent.toLowerCase().indexOf(q) !== -1;
+      card.style.display = hit ? '' : 'none';
+      if (hit) { shown += 1; }
+    });
+    count.textContent = shown + ' / ' + cards.length + ' 条';
+  }
+  box.addEventListener('input', applyFilter);
+  if (location.hash) {                       // #<编号> 直达并填入搜索框
+    box.value = decodeURIComponent(location.hash.slice(1));
+    var target = document.getElementById(box.value);
+    if (target) { target.scrollIntoView(); }
+  }
+  applyFilter();
+</script>
 </body>
 </html>

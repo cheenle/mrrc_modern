@@ -15,13 +15,13 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 PW="${SUPPORT_PASSWORD:-}"
 if [ -z "$PW" ] && [ -f "$HOME/.mrrc-support-credentials.txt" ]; then
-    PW="$(tr -d '\n' < "$HOME/.mrrc-support-credentials.txt")"
+	PW="$(tr -d '\n' <"$HOME/.mrrc-support-credentials.txt")"
 fi
 if [ -z "$PW" ]; then
-    PW="$(python3 -c 'import secrets,string;print("".join(secrets.choice(string.ascii_letters+string.digits) for _ in range(24)))')"
-    printf '%s' "$PW" > "$HOME/.mrrc-support-credentials.txt"
-    chmod 600 "$HOME/.mrrc-support-credentials.txt"
-    echo "generated a new password -> ~/.mrrc-support-credentials.txt"
+	PW="$(python3 -c 'import secrets,string;print("".join(secrets.choice(string.ascii_letters+string.digits) for _ in range(24)))')"
+	printf '%s' "$PW" >"$HOME/.mrrc-support-credentials.txt"
+	chmod 600 "$HOME/.mrrc-support-credentials.txt"
+	echo "generated a new password -> ~/.mrrc-support-credentials.txt"
 fi
 
 echo "==> directories (storage belongs to www-data and lives outside the docroot)"
@@ -67,5 +67,5 @@ ssh "$REMOTE" 'sudo nginx -t && sudo systemctl reload nginx'
 
 echo "==> public probe"
 curl -s -o /dev/null -w "  https://www.vlsc.net/mrrc_modern/support/api/list -> HTTP %{http_code} (want 401)\n" \
-    https://www.vlsc.net/mrrc_modern/support/api/list || true
+	https://www.vlsc.net/mrrc_modern/support/api/list || true
 echo "==> done"

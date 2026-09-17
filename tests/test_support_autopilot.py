@@ -190,6 +190,16 @@ class PromptTests(AutopilotFixture):
         # An unbounded agent loop is what timed out in the live smoke run.
         self.assertIn("探查预算", prompt)
 
+    def test_prompt_requires_checking_the_repo_incident_history(self):
+        """The first live card called a documented code defect an environment problem
+        because the model never read our own version history (2026-09-17)."""
+        prompt = autopilot.PROMPT_TEMPLATE.format(rid="x", digest="d", separator="-")
+        self.assertIn("本仓历史", prompt)
+        self.assertIn("CHANGELOG.md", prompt)
+        self.assertIn("SDD/14-version-history.md", prompt)
+        self.assertIn("按回归排查", prompt)
+        self.assertIn("至少 1 次", prompt)
+
     def test_prompt_lists_the_status_and_category_vocabularies(self):
         prompt = autopilot.PROMPT_TEMPLATE.format(rid="x", digest="d", separator="-")
         for token in ("need_more_info", "needs_fix", "环境", "产品缺陷"):

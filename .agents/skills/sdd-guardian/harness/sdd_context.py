@@ -27,15 +27,64 @@ Stdlib only — hook latency budget is ~5 s including interpreter startup.
 """
 import fnmatch
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 HARNESS_DIR = Path(__file__).resolve().parent
+
+
+def _find_harness_dir() -> Path:
+    """Pick the harness instance that owns the constraint registry.
+
+    A project may carry its own instance at
+    .agents/skills/sdd-guardian/harness/ (constraints.json + index.json
+    describing THAT project's SDD).  It wins when the cwd lives inside
+    such a project, so one globally-installed copy of this script
+    (~/.pi/agent/skills/sdd-guardian/) serves many projects.  Otherwise
+    the copy this file lives in is used — which is the same directory
+    for the in-repo instance, so the in-repo behaviour is unchanged.
+    """
+    cwd = Path.cwd().resolve()
+    for base in (cwd, *cwd.parents):
+        cand = base / ".agents" / "skills" / "sdd-guardian" / "harness"
+        if cand != HARNESS_DIR and (cand / "constraints.json").is_file() \
+                and (cand / "index.json").is_file():
+            return cand
+    return HARNESS_DIR
+
+
+HARNESS_DIR = _find_harness_dir()
 REGISTRY_PATH = HARNESS_DIR / "constraints.json"
 INDEX_PATH = HARNESS_DIR / "index.json"
-PROJECT_ROOT = HARNESS_DIR.parents[3]
+
+
+def _find_project_root() -> Path:
+    """Locate the documented project this harness guards.
+
+    Order: SDD_GUARDIAN_ROOT env → nearest ancestor of cwd containing
+    SDD/ → the legacy layout (harness inside <project>/.agents/skills/
+    sdd-guardian/harness/ ⇒ root is three parents up).  A global
+    install outside any SDD project falls back to cwd; brief/sdd then
+    print a bootstrap hint instead of slicing a wrong tree.
+    """
+    env = os.environ.get("SDD_GUARDIAN_ROOT")
+    if env:
+        return Path(env).resolve()
+    cwd = Path.cwd().resolve()
+    for base in (cwd, *cwd.parents):
+        if (base / "SDD").is_dir():
+            return base
+    legacy = Path(__file__).resolve().parent.parents[3]
+    if (legacy / "SDD").is_dir():
+        return legacy
+    return cwd
+
+
+PROJECT_ROOT = _find_project_root()
+HAS_PROJECT_SDD = (PROJECT_ROOT / "SDD").is_dir()
 
 BRIEF_REF_LINE_CAP = 40     # per extracted SDD section
 BRIEF_TOTAL_LINE_CAP = 300  # whole knowledge section
@@ -354,16 +403,28 @@ def cmd_trace(reg: dict, idx: dict, paths: list[str]) -> int:
 # ── Commands ────────────────────────────────────────────────────────
 
 def cmd_prime(reg: dict) -> int:
-    blocks = [r for r in reg["rules"] if r["severity"] == "block"]
-    print("═══ SDD-GUARDIAN — mrrc_modern design harness (SDD " + reg["sdd_version"] + ") ═══")
+    cli = HARNESS_DIR / "sdd_context.py"
+    if HAS_PROJECT_SDD:
+        print("═══ SDD-GUARDIAN — " + PROJECT_ROOT.name + " design harness (SDD "
+              + reg["sdd_version"] + ") ═══")
+    else:
+        print("═══ SDD-GUARDIAN — no SDD/ project found from cwd ═══")
+        print(f"Using the bundled example registry ({HARNESS_DIR}).")
+        print("To guard THIS project: document it under SDD/, then copy")
+        print(".agents/skills/sdd-guardian/harness/{constraints,index}.json from")
+        print("a guarded project (or the templates shipped with the skill) and")
+        print("route your chapters in index.json. Constraints then come from the")
+        print("project instance automatically.")
+        print("")
     print("This repo is documented by SDD/ (IBM TeamSD, 15 chapters: requirements,")
     print("context, decisions, feasibility...). Before changing code, pull the full")
     print("engineering brief for the files you touch:")
-    print("  python3 .agents/skills/sdd-guardian/harness/sdd_context.py brief <paths>")
+    print(f"  python3 {cli} brief <paths>")
     print("Validate a change before committing:")
-    print("  python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged")
+    print(f"  python3 {cli} check --staged")
     print("")
     print("GOLDEN RULES (block-level, SDD-enforced):")
+    blocks = [r for r in reg["rules"] if r["severity"] == "block"]
     for r in blocks:
         print(f"  ✗ {r['id']}: {r['title']}  [{r['sdd_ref']}]")
     print("")
@@ -442,8 +503,10 @@ def cmd_sdd(idx: dict, term: str) -> int:
     m = re.match(r"^(AD-\d+|NFR-\d+|UC-\d+|R\d+|I\d+|SC\d+|A\d+)$", t, re.I)
     if m:
         ident = m.group(1).upper()
+        prefix_m = re.match(r"[A-Z]+", ident)
+        assert prefix_m is not None  # ident was matched with a [A-Z]+ prefix above
         kind = {"AD": "ad", "NFR": "nfr", "UC": "uc", "R": "risk",
-                "I": "issue", "SC": "sc", "A": "assume"}[re.match(r"[A-Z]+", ident).group(0)]
+                "I": "issue", "SC": "sc", "A": "assume"}[prefix_m.group(0)]
         item = resolve_ref(idx, f"{kind}:{ident}")
         if item:
             _print_extracted(item, cap=200)

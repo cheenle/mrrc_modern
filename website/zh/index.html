@@ -570,7 +570,20 @@
             </p>
 </div>
 <div class="step">
-<h4>2 · 启动</h4>
+<h4>2 · USB 驱动（通常无需安装）</h4>
+<p>
+              macOS 11.3+ 已内置 CP210x 支持——FT-710 串口免驱（macOS 15.3
+              实测）。仅 <strong>macOS 10.11–11.2</strong> 需先装 Silicon Labs
+              CP210x VCP 驱动 v6.0.3：
+              <a href="../downloads/SiLabsUSBDriverDisk.dmg" style="color: var(--scope-primary)">SiLabsUSBDriverDisk.dmg</a>
+              （挂载 → 双击安装器 → 系统设置批准内核扩展；Apple Silicon 需先
+              把启动安全性降到「允许用户管理内核扩展」）。FT4222 真频谱库已
+              随应用打包——无需另装 D2XX。
+            </p>
+<code>ls /dev/cu.usbserial-*</code>
+</div>
+<div class="step">
+<h4>3 · 启动</h4>
 <p>
               菜单栏出现 <code>MRRC Modern :8888</code> 图标，浏览器自动打开
               （走 HTTPS，首次会提示"连接不安全"，点高级 → 继续访问），登录页
@@ -578,14 +591,14 @@
             </p>
 </div>
 <div class="step">
-<h4>3 · 连接电台</h4>
+<h4>4 · 连接电台</h4>
 <p>
               FT-710 或 IC-7300/MK2 通过 USB 连接；首次运行时电台型号与串口
               自动识别。
             </p>
 </div>
 <div class="step">
-<h4>4 · 微调</h4>
+<h4>5 · 微调</h4>
 <p>
               菜单栏 → 连接设置…（Connection Settings）可修改电台、串口、
               RX+TX 音频设备或密码，然后保存并重启。局域网设备可访问

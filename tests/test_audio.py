@@ -407,6 +407,25 @@ class RXBackpressureTests(unittest.TestCase):
         self.assertIn("await asyncio.sleep(idle_interval)", source)
         self.assertIn("continue", source)
 
+    def test_rx_loop_skips_broadcast_while_transmitting(self):
+        """While the radio is keyed, its USB RX output is muted silence.
+        Broadcasting those frames piles silent Opus into every client's
+        jitter buffer, which must then DRAIN after unkey before real RX
+        audio is heard.  The guard must gate encode+send only — the read,
+        the recording tap and the silence watchdog stay live."""
+        source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
+        self.assertIn("_radio_txing = (radio is not None", source)
+        self.assertIn("None if _radio_txing", source)
+        self.assertIn("else audio.encode_rx_audio(pcm)", source)
+        # The recording tap must stay BEFORE the guard (always fed).
+        tap_idx = source.index("_rec_tap_rx(pcm")
+        guard_idx = source.index("_radio_txing = (radio is not None")
+        self.assertLess(tap_idx, guard_idx)
+        # ... and the guard must sit before the send helper call.
+        send_idx = source.index("await _send_audio_frames_to_clients(",
+                                guard_idx)
+        self.assertLess(guard_idx, send_idx)
+
 
 
 class AudioFrameFormatTests(unittest.TestCase):

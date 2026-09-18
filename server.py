@@ -1229,7 +1229,18 @@ async def _audio_rx_loop():
                         await _broadcast_recording_state()
                     _idle_skipped = 0
                     _pcm_count += 1
-                    frames = audio.encode_rx_audio(pcm)
+                    # While the radio is keyed (half-duplex), its USB RX
+                    # output is muted silence: encoding + pushing those
+                    # frames only piles silent Opus packets into every
+                    # client's jitter buffer, which must then DRAIN after
+                    # unkey before real RX audio is heard (~100+ ms of
+                    # the post-PTT release gap).  Read / rec tap / silence
+                    # watchdog above stay live; only encode + fan-out is
+                    # skipped.
+                    _radio_txing = (radio is not None
+                                    and radio.is_transmitting)
+                    frames = (None if _radio_txing
+                              else audio.encode_rx_audio(pcm))
 
                     if frames:
                         # Send every encoded frame.  Dropping frames here

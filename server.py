@@ -1696,6 +1696,13 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         scheduler and scheduler.skip_next_poll("tx_status", 1.0)
                         return
             else:
+                # Skip the next TX-status poll BEFORE the drain + unkey
+                # (poll-stale-guard: the skip must precede the CAT write, or
+                # an in-flight poll transaction — up to POLL_TIMEOUT on the
+                # serial lock — answers after TX0 with a stale PTT=1 that
+                # would flip the UI back to TX).  radio.update(tx_status=0)
+                # below stays authoritative in the meantime.
+                scheduler and scheduler.skip_next_poll("tx_status", 1.0)
                 # Graceful TX stop: drain queued audio to the DAC and block
                 # until it has played (Pa_StopStream semantics), so word-
                 # endings go out over RF before we drop PTT. Must run off the

@@ -107,7 +107,7 @@ def norm(path: str) -> str:
         p = str(Path(p).resolve().relative_to(PROJECT_ROOT)).replace("\\", "/")
     except (ValueError, OSError):
         pass
-    return p.lstrip("./")
+    return p[2:] if p.startswith("./") else p
 
 
 def glob_match(path: str, pattern: str) -> bool:

@@ -76,21 +76,46 @@ PYTHON=$(pwd)/.venv/bin/python packaging/macos/build.sh   # 不要 source .venv/
 
 ```bash
 ls -lh dist/macos/MRRC-Modern-*.dmg
-codesign -dv dist/macos/MRRC-Modern.app                            # 显示 ad-hoc 签名
-ls dist/macos/MRRC-Modern.app/Contents/MacOS/MRRC-Modern-Server          # server 在位
-ls dist/macos/MRRC-Modern.app/Contents/MacOS/_internal/static/index.html   # static 在 _internal
-ls dist/macos/MRRC-Modern.app/Contents/MacOS/macos/default.env     # 配置模板
-ls dist/macos/MRRC-Modern.app/Contents/MacOS/mem_channels.json     # 初始频道种子
+
+# 布局硬约束（见下方"签名布局"）：Contents/MacOS 里**只允许可执行文件与符号链接**，
+# 任何数据文件/目录都会让 codesign 拒绝签整个 bundle —— 数据树在 Contents/Resources。
+ls -la dist/macos/MRRC-Modern.app/Contents/MacOS/          # 3 个可执行 + _internal(符号链接)
+ls -la dist/macos/MRRC-Modern.app/Contents/                # Frameworks(链接) MacOS Resources Info.plist _CodeSignature
+ls dist/macos/MRRC-Modern.app/Contents/Resources/static/index.html
+ls dist/macos/MRRC-Modern.app/Contents/Resources/macos/default.env
+ls dist/macos/MRRC-Modern.app/Contents/MacOS/_internal/macos/default.env   # 经 _internal 链接同样可达
+
+# 签名 / 版本 / 权限三项门禁（build.sh 已内置，失败即 exit 1；这里手工复核）
+codesign --verify --verbose=2 dist/macos/MRRC-Modern.app     # 必须 "valid on disk"
+ls dist/macos/MRRC-Modern.app/Contents/_CodeSignature/CodeResources
+cat dist/macos/MRRC-Modern.app/Contents/Resources/version.txt          # == CHANGELOG 顶版本
+/usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" dist/macos/MRRC-Modern.app/Contents/Info.plist
+spctl -a -vvv -t exec dist/macos/MRRC-Modern.app             # 只应报"无 Developer ID"；报 damaged 即坏包
 ```
+
+**签名布局（别改回去）**：codesign 会遍历 `Contents/MacOS` 与 `Contents/Frameworks` 找"嵌套代码"，
+遇到**数据文件或 `*.dist-info` 目录**就判定为未签名代码并拒绝签整个 bundle。因此：
+
+- 数据树放 `Contents/Resources/`（资源位置会被封存，不被当代码检查）；
+- 仅两条符号链接：`Contents/Frameworks -> Resources`、`Contents/MacOS/_internal -> ../Resources`；
+- `macos/`、`version.txt`、`mem_channels.json`、`vendor/` 都在资源树里，由启动器的
+  `runtime_path()`（先 `app_dir()`、再 `app_dir()/_internal/`）解析；
+- `Info.plist` 必须含 `NSMicrophoneUsageDescription` —— **缺了它 macOS 会让 RX 静音且不报错**。
+
+这两条（签名布局、权限键）都在 2026-09-17/18 造成过"装好即坏"的发布事故，`build.sh` 现在会硬拦。
 
 冒烟测试：
 
 ```bash
 hdiutil attach dist/macos/MRRC-Modern-*.dmg
+codesign --verify --verbose=2 "/Volumes/MRRC Modern/MRRC-Modern.app"   # 挂载后再验一次内层应用
 cp -R "/Volumes/MRRC Modern/MRRC-Modern.app" /Applications/
-xattr -dr com.apple.quarantine /Applications/MRRC-Modern.app      # 跳过 Gatekeeper 首次拦截
 open /Applications/MRRC-Modern.app                                 # 应在菜单栏出现图标并开浏览器
 hdiutil detach "/Volumes/MRRC Modern"
+
+# 注意：**不要**再用 `xattr -dr com.apple.quarantine` 做冒烟测试的前置步骤 ——
+# 它会掩盖"签名是否真的有效"这件事，而签名无效正是此前每个版本都发出去的缺陷。
+# 该命令只保留给用户侧应急解封 v1.18.0 及更早的旧包。
 ```
 
 ### Step 3 — 记录校验和
@@ -135,6 +160,10 @@ ssh www.vlsc.net "sudo -n cp /var/www/vlsc.net/mrrc_modern/downloads/MRRC-Modern
 - `website/index.html`（Windows + macOS 两处 MD5/SHA-256 + 版本/大小文字）
 - `website/zh/index.html`（同上）
 - `docs/WINDOWS_INSTALLER_GUIDE.md` + `docs/MACOS_INSTALLER_GUIDE.md`（Download 表格 + 构建说明段）
+- `README.md`（Windows 与 macOS 两个下载块：版本 + 字节数 + SHA-256）
+- `SDD/14-version-history.md` 发布行 + `SDD/README.md` 状态行（SDD 版本号从第 14 章最新行取）
+- 机器校验（**少一处就失败**）：`python3 .agents/skills/dual-platform-release/harness/release_check.py`
+  离线须 0 failing；发布后加 `--online --deep`（含线上 SHA 与标签）
 
 改完上传 `website/index.html` → webroot 根、`website/zh/index.html` → webroot `zh/`（同样 sudo + chown www-data）。
 

@@ -44,7 +44,7 @@
 | [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 桌面版完整操作指南（每个按钮/滑杆/菜单 + 服务端录音 + 故障排查） | 用户 |
 | [docs/RASPBERRY_PI_GUIDE.md](docs/RASPBERRY_PI_GUIDE.md) | 树莓派镜像：烧卡、首启、电台接入、真 FFT 库 | 用户 |
 | [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows 安装包说明（含下载表与校验） | 用户 |
-| [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS 安装包说明 | 用户 |
+| [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS 安装与使用指南：两种 Gatekeeper 弹窗、麦克风权限（RX 无声）、数据位置、升级/卸载、故障排查表 | 用户 |
 
 ### 🔧 技术细节
 | 文档 | 说明 | 读者 |

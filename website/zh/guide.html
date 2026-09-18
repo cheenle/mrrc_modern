@@ -568,7 +568,12 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <li>以后双击即可直接打开。</li>
 </ol>
 <blockquote class="callout-info">
-<p>如果双击后系统提示「无法打开，因为它来自身份不明的开发者」或「已损坏」，就用第 4 步的 <strong>右键 → 打开 → 打开</strong>，这是正常的一次性放行，不是软件坏了。</p>
+<p><strong>两种弹窗必须分清</strong>（含义完全不同）：</p>
+<ul>
+<li>「<strong>无法验证开发者</strong>」/「无法检查是否包含恶意软件」= <strong>正常</strong>。本应用使用自签名（ad-hoc），系统”不认识”它 → 用第 4 步的 <strong>右键 → 打开 → 打开</strong> 放行一次即可，之后双击可用。</li>
+<li>「<strong>已损坏，无法打开。你应该将它移到废纸篓</strong>」= <strong>不正常</strong>：应用签名无效，<strong>这个提示右键也绕不过去</strong>。说明你拿到的是 <strong>v1.18.0 或更早</strong>的包 —— 请重新下载 <strong>v1.18.1 或更新</strong>版本。</li>
+</ul>
+<p>详见 <code>docs/MACOS_INSTALLER_GUIDE.md</code> 第 3 章（含 <code>xattr</code> 应急解封与签名自检命令）。</p>
 </blockquote>
 <h3 id="首次启动零配置-https">0.7.2 首次启动：零配置 + HTTPS</h3>
 <p>启动后<strong>什么都不用配</strong>，软件会自动完成：</p>
@@ -578,7 +583,11 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <li>登录页顶部显示<strong>自动生成的登录密码</strong>；忘记就点菜单栏 <strong>Show Password…</strong> 随时查看。</li>
 <li>用这个密码登录，进入主界面。</li>
 <li><strong>插上电台</strong>（FT-710 或 IC-7300/MK2，USB 线 A→B 或 C→B）：首次运行自动探测电台型号、串口和音频设备，<strong>插上就能用</strong>。</li>
+<li><strong>首次启动会弹一次「麦克风」权限询问 → 点「允许」</strong>：这是<strong>接收</strong>电台声音所必需（macOS 把”音频输入”统一归入麦克风权限类，不是只有麦克风才需要）。</li>
 </ol>
+<blockquote class="callout-info">
+<p><strong>为什么需要麦克风权限？</strong> 应用要把电台 USB 声卡收到的声音送到浏览器播放，就必须读取”音频输入”。macOS 对”未授权”的回应<strong>不是报错，而是沉默</strong>：捕获流照样显示”已启动”，但数据全为 0 —— 于是<strong>控制、频谱、PTT 都正常，就是接收没有声音</strong>。当时点了「不允许」也可以补救：<strong>系统设置 → 隐私与安全性 → 麦克风</strong> → 打开 <strong>MRRC Modern</strong>。注意<strong>每次升级都会再问一次</strong>（自签名应用的授权绑定当次构建，属正常现象）。</p>
+</blockquote>
 <blockquote class="callout-info">
 <p><strong>为什么默认 HTTPS？</strong> 局域网里密码和遥控数据默认加密传输，避免被同网段的人抓包。自签名证书不代表”不安全”，只是浏览器不认识签名者；点一次「继续访问」即可。</p>
 </blockquote>
@@ -654,7 +663,23 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>怎么完全卸载？</td>
-<td>把 <code>MRRC-Modern.app</code> 拖进废纸篓；如需连密码/证书一起清掉，再删 <code>~/Library/Application Support/MRRC-Modern/</code>。</td>
+<td>① 菜单栏 Quit；② 把 <code>MRRC-Modern.app</code> 拖进废纸篓；③ 如需连密码/证书/录音一起清掉，删 <code>~/Library/Application Support/MRRC-Modern/</code>；④ 可选：清掉系统里的麦克风授权 <code>tccutil reset Microphone net.vlsc.mrrc-modern</code>。</td>
+</tr>
+<tr>
+<td>提示「<strong>已损坏，无法打开</strong>」（右键也无效）</td>
+<td>旧版包的签名缺陷 → <strong>重新下载 v1.18.1 或更新</strong>；v1.18.0 及更早请勿使用。</td>
+</tr>
+<tr>
+<td>控件都正常，但<strong>接收没有声音</strong></td>
+<td>最常见是<strong>麦克风权限</strong>（0.7.2 第 6 步，或 系统设置 → 隐私与安全性 → 麦克风）；其次是电台 AF 增益太低、RX 音频设备选错。</td>
+</tr>
+<tr>
+<td><strong>麦克风列表里找不到 MRRC Modern</strong></td>
+<td>当前运行的包缺少权限说明键（v1.18.0 及更早）→ 换新版。</td>
+</tr>
+<tr>
+<td><strong>每次升级都问一次麦克风权限</strong></td>
+<td>正常：自签名应用的授权绑定”当次构建”，新版本会被再问一次。</td>
 </tr>
 <tr>
 <td>端口 8888 被占用</td>

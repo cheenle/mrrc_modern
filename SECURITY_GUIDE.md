@@ -110,6 +110,42 @@ Use this for monitoring and alerting.
 3. **VPN**: Consider running behind WireGuard/OpenVPN for remote access
 4. **Monitoring**: Set up alerts on `/api/health` for downtime detection
 
+## Desktop Installers — Permissions & Privacy
+
+The packaged desktop apps (macOS `.dmg`, Windows `Setup.exe`) run the same server, so every
+security property above still applies. Two things are installer-specific:
+
+**macOS asks for exactly one permission: Microphone (audio input).**
+
+- It is required to read the radio's USB sound card so received audio can be streamed to
+  the browser. macOS files *all* audio input under the microphone permission class.
+- The app requests nothing else — no camera, no screen recording, no contacts, no
+  accessibility. The bundle declares only `NSMicrophoneUsageDescription`.
+- Denying it fails **silently** (CoreAudio opens the capture stream and fills it with
+  zeros), so it looks like a radio problem: control, spectrum and PTT all work, RX is
+  silent. Grant it in *System Settings → Privacy & Security → Microphone*.
+- The desktop bundles are **ad-hoc signed** (no paid Developer ID), so macOS re-asks after
+  each upgrade and Gatekeeper shows a one-time "cannot verify the developer" prompt.
+  `spctl` reporting *no Developer ID* is expected; a *damaged / invalid signature* verdict
+  is not — that means the package is older than v1.18.1.
+
+**HTTPS uses a self-signed certificate generated on first run.**
+
+- The private key stays on the machine (`~/Library/Application Support/MRRC-Modern/certs/`
+  on macOS, `%LOCALAPPDATA%\MRRC-Modern\certs\` on Windows) and is **never** uploaded.
+- The browser warning is expected for self-signed certificates; replace the certs with your
+  own (or front the app with a reverse proxy) if the LAN is not trusted.
+
+**Data and diagnostics never leave the machine unless you ask.**
+
+- Passwords, private keys and tokens are excluded from diagnostics bundles by an
+  allow-list filter plus a secret-value pass; recordings, memory channels and tuner
+  learning data are excluded outright. Uploading is an explicit action, and a
+  save-locally-only path exists for offline machines.
+- Uninstalling removes the app only. User data lives in the user's own directory
+  (`~/Library/Application Support/MRRC-Modern/`); delete it explicitly if needed, and
+  reset the recorded permission with `tccutil reset Microphone net.vlsc.mrrc-modern`.
+
 ## Known Limitations
 
 - Auth tokens are **cleared on server restart** — no persistent session storage

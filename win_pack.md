@@ -226,6 +226,22 @@ dir C:\mrrc_modern\dist\windows\MRRC-Modern\_internal\mem_channels.json # 初始
 Get-FileHash C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe -Algorithm SHA256
 ```
 
+**必查的两条硬证据**（`strings`/`findstr` 看不到压缩后的 PYZ，陈旧包与新鲜包长得一模一样）：
+
+```powershell
+# ① 包内版本号 == 本次版本（证明构建读的是新 CHANGELOG）
+Get-Content C:\mrrc_modern\dist\windows\MRRC-Modern\version.txt      # 应打印 1.18.x
+
+# ② 走查脚本入口，确认新代码真的在包里（服务器改动看 server 入口，启动器改动看 launcher 入口）
+#    PyInstaller 6 的 CArchiveReader.toc 是 dict；extract() 的字节可能带 8 字节头。
+python C:\Users\cheenle\verify_v1xxx.py     # 见本仓库 skills/windows-installer 技能里的脚本
+```
+
+> **远程触发构建时不要用 `-NoNewWindow`**：它挂在 ssh 会话的控制台上，会话一断构建就被清掉
+> （日志停在测试输出之后、`dist\windows` 时间戳不动，看着像"卡住"，其实是没了）。
+> 可靠做法是**同步执行**并给足超时；要后台跑就去掉 `-NoNewWindow`，并且**只认产物**
+> （mtime/大小/`Get-FileHash`），不要认日志有没有输出 —— 重定向到文件时 Python 是块缓冲。
+
 ### Step 6 — 取回本机
 
 ```bash

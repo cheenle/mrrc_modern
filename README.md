@@ -35,8 +35,8 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.16.0 Stable** (46.0 MB, SHA-256
-`f378ab6d1a7ca6d8b93a928376ed3e69429b3d8fd45f1a52d0fa943fee2b371d`):
+**Download v1.18.1 Stable** (46,002,543 bytes, SHA-256
+`19b5cef2300e510d3ae54b9817f70c4612455fe6f917a052ea98b661dcbd8992`):
 
 - Fast mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.18.1-Windows-x64-Setup.exe>
@@ -54,6 +54,30 @@ packaging\windows\build.ps1
 dist\windows\MRRC-Modern-Setup.exe
 %LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env
 ```
+
+### macOS Desktop Installer
+
+Apple-silicon Macs (macOS 11+) can install the desktop package — no Python
+install required. The app lives in the menu bar (no Dock icon), starts the
+server itself, and opens the browser.
+
+**Download v1.18.1 Stable** (55,643,537 bytes, SHA-256
+`931b312cd45426818c8e185009c58aada47cff9f55da4baa964c85a737d54a08`):
+
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.18.1-arm64.dmg>
+
+Two things to know before the first launch (full guide:
+[docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)):
+
+1. **Right-click → Open** the first time. The bundle is ad-hoc signed, so macOS
+   offers "cannot verify the developer" once. A "**is damaged and can't be
+   opened**" dialog is a *different* and unbypassable condition: it means the
+   package predates v1.18.1, whose signature never actually succeeded.
+2. **Allow the microphone when asked.** macOS files audio *input* (the radio's
+   USB sound card) under the microphone permission class. When it is missing,
+   CoreAudio still opens the capture stream and fills it with zeros — control,
+   spectrum and PTT all work, RX plays silence, and no error is logged anywhere.
+   The grant is bound to the build, so **each upgrade asks once again**.
 
 ### Environment Variables
 
@@ -389,7 +413,7 @@ python3 -m unittest discover -s tests -v
 | [QUICKSTART.md](QUICKSTART.md) | Step-by-step setup guide |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | Cross-platform dependency and driver guide |
 | [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows desktop installer, FTDI DLLs, FT4222 packaging |
-| [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS desktop installer, dylibs, menu-bar launcher |
+| [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS install/use guide: Gatekeeper dialogs, microphone permission, data locations, update & uninstall, troubleshooting |
 | [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | Web UI operation guide (button-by-button, Chinese) |
 | [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | Detailed fix documentation (v2.0.0 + TX analysis) |
 | [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) | Verification report |

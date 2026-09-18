@@ -608,7 +608,22 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
             </p>
 </div>
 <div class="step">
-<h4>2 · Launch</h4>
+<h4>2 · USB Driver (usually NOT needed)</h4>
+<p>
+              macOS 11.3+ ships native CP210x support — the FT-710's serial
+              port enumerates without any driver install (verified on
+              Sequoia). Only on <strong>macOS 10.11–11.2</strong>, install
+              Silicon Labs CP210x VCP Driver v6.0.3:
+              <a href="downloads/SiLabsUSBDriverDisk.dmg" style="color: var(--scope-primary)">SiLabsUSBDriverDisk.dmg</a>
+              (mount → run the installer → approve the kernel extension in
+              System Settings; on Apple Silicon this requires lowering
+              Startup Security to allow user-managed kernel extensions).
+              FT4222 spectrum libraries are bundled — no D2XX install.
+            </p>
+<code>ls /dev/cu.usbserial-*</code>
+</div>
+<div class="step">
+<h4>3 · Launch</h4>
 <p>
               The menu-bar icon <code>MRRC Modern :8888</code> appears and the
               browser opens the login page (over HTTPS — the first time the
@@ -617,14 +632,14 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
             </p>
 </div>
 <div class="step">
-<h4>3 · Plug in the Radio</h4>
+<h4>4 · Plug in the Radio</h4>
 <p>
               Connect the FT-710 or IC-7300/MK2 via USB; the radio model and
               serial port auto-detect on first run.
             </p>
 </div>
 <div class="step">
-<h4>4 · Fine-tune</h4>
+<h4>5 · Fine-tune</h4>
 <p>
               Menu bar → 连接设置… (Connection Settings) to change the radio,
               serial port, RX+TX audio devices, or password, then 保存并重启
@@ -633,6 +648,14 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
             </p>
 </div>
 </div>
+<p style="margin-top: 0.5rem; text-align: center">
+          Optional drivers — usually not needed (macOS has built-in support):
+          <a href="https://www.vlsc.net/mrrc_modern/downloads/D2XX1.4.35.dmg">FTDI D2XX</a>
+          (FT-710 spectrum fallback) ·
+          <a href="https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg">SiLabs CP210x</a>
+          (serial-port fallback) — prerequisites &amp; install steps in the
+          <a href="guide.html#macos-%E5%AE%89%E8%A3%85%E4%B8%8E%E5%88%9D%E5%A7%8B%E5%8C%96">guide §0.7</a>.
+        </p>
 <h3 style="
             color: var(--scope-text);
             margin-bottom: 1rem;

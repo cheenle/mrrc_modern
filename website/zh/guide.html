@@ -575,6 +575,9 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </ul>
 <p>详见 <code>docs/MACOS_INSTALLER_GUIDE.md</code> 第 3 章（含 <code>xattr</code> 应急解封与签名自检命令）。</p>
 </blockquote>
+<blockquote class="callout-info">
+<p><strong>FT-710 USB 驱动：macOS 11.3+ 免驱</strong>（2026-09-18 实测：macOS 15.3 从未装过任何第三方驱动，内核日志显示 CP2105 <code>0x10c4/ea70</code> 由系统直接枚举）。仅 <strong>macOS 10.11–11.2</strong> 需要先装 Silicon Labs CP210x VCP 驱动 v6.0.3：下载 <a href="https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg" class="uri">https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg</a> → 挂载 → 双击「Install CP210x VCP Driver」→ 系统设置里批准内核扩展；<strong>Apple Silicon 需先把启动安全性降到「允许用户管理内核扩展」</strong>（恢复模式 → 启动安全性实用工具）——所以能免驱就不要装。验证：插入电台后 <code>ls /dev/cu.usbserial-*</code> 应出现设备。FT4222 真频谱库已随应用打包，无需另装 D2XX。</p>
+</blockquote>
 <h3 id="首次启动零配置-https">0.7.2 首次启动：零配置 + HTTPS</h3>
 <p>启动后<strong>什么都不用配</strong>，软件会自动完成：</p>
 <ol type="1">

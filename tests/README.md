@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1224 tests across 62 test modules (7 pty-based Yaesu round-trip tests skip on
-Windows; the per-module counts below were read from `unittest` on 2026-09-13, macOS).
+1276 tests across 65 test modules (7 pty-based Yaesu round-trip tests skip on
+Windows; the per-module counts below were read from `unittest` on 2026-09-18, macOS).
 
 ```bash
 python -m unittest discover -s tests -v
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1224 |
-| Passed | 1224 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1276 |
+| Passed | 1276 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -585,7 +585,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1224 tests in ~24s — can run on every commit.
+2. **Fast execution**: ~1276 tests in ~24s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

@@ -126,6 +126,11 @@ macOS 把「音频输入」统一归入**麦克风权限**类（不是只有麦�
 同时插了多个串口设备时，程序优先选 CP210x/USB 串口；可在菜单栏 **Edit Configuration…** 里确认
 `MRRC_SERIAL_PORT`。
 
+macOS 自带 CP210x 驱动，插上电台即出现 `/dev/cu.usbserial-*`，**一般无需装任何驱动**。仅当串口列表里
+找不到电台时，才安装 Silicon Labs CP210x 驱动（本站镜像：<https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg>；
+安装前拔掉电台 USB 线，装完插回；10.13+ 若扩展被拦截到「隐私与安全性」放行）。FT-710 频谱兑底：
+FTDI D2XX 库镜像 <https://www.vlsc.net/mrrc_modern/downloads/D2XX1.4.35.dmg>（安装见 §13）。
+
 ---
 
 ## 7. 菜单栏与网页端功能
@@ -232,8 +237,8 @@ tccutil reset Microphone net.vlsc.mrrc-modern
 | 系统设置里**找不到 MRRC Modern**（麦克风列表） | 说明当前运行的包缺少权限说明键（v1.18.0 及更早）→ 换新版 |
 | 菜单栏没有图标 | 应用没启动成功：`open -a "MRRC Modern"` 重开；仍无则查 `logs/server-stdout.log` |
 | 登录页打不开 | 端口被占用或服务未起：菜单栏 **Restart Server**；或在配置里换 `MRRC_WEB_PORT` |
-| 频谱是假的（S 表合成） | 该机型无真机频谱源；FT-710 需确认 `MRRC_FTDI_LIB_DIR=vendor/ftdi/macos` 且使用 v1.18.1+ |
-| 串口找不到 / 电台没反应 | 确认 USB 已插；Edit Configuration… 看 `MRRC_SERIAL_PORT`（同时插多个串口时可能选错） |
+| 频谱是假的（S 表合成） | 该机型无真机频谱源；FT-710 需确认 `MRRC_FTDI_LIB_DIR=vendor/ftdi/macos` 且使用 v1.18.1+；仍不行时安装 FTDI D2XX 库（镜像 [D2XX1.4.35.dmg](https://www.vlsc.net/mrrc_modern/downloads/D2XX1.4.35.dmg)，SHA-256 `208ea2d6…6655c`）：`sudo cp /Volumes/dmg/release/build/libftd2xx.1.4.35.dylib /usr/local/lib/` + `sudo ln -sf /usr/local/lib/libftd2xx.1.4.35.dylib /usr/local/lib/libftd2xx.dylib`，然后菜单栏 **Restart Server** |
+| 串口找不到 / 电台没反应 | 确认 USB 已插；Edit Configuration… 看 `MRRC_SERIAL_PORT`（同时插多个串口时可能选错）；仍不行时安装 Silicon Labs CP210x 驱动（镜像 [SiLabsUSBDriverDisk.dmg](https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg)，SHA-256 `0b1d6857…bf2eda`；**安装前拔掉电台**，装完插回） |
 | 首次启动卡几秒 | 系统对未认证应用做一次扫描，正常 |
 | Intel Mac 上打不开 | **不支持**：安装包是 arm64 构建 |
 

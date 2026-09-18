@@ -50,7 +50,7 @@ python3.13 -m venv .venv
 
 `vendor/ftdi/macos/libft4222.dylib` 和 `libftd2xx.dylib` 已就位（自 `lib/` 拷贝，universal arm64），**随包分发**，所以 FT-710 开箱即得真 FFT 频谱。
 
-来源是 FTDI 官网的 LibFT4222 macOS 构建和 D2XX 驱动包。FTDI 官网对脚本下载可能返回 403，需在浏览器手动下载后解压、改名为上面的文件名，放到 `lib/`，再拷贝到 `vendor/ftdi/macos/`。
+来源是 FTDI 官网的 LibFT4222 macOS 构建和 D2XX 驱动包。FTDI 官网对脚本下载可能返回 403，需在浏览器手动下载后解压、改名为上面的文件名，放到 `lib/`，再拷贝到 `vendor/ftdi/macos/`。两个驱动包已镜像到本站下载目录（官网直链下载可能 403）：`https://www.vlsc.net/mrrc_modern/downloads/D2XX1.4.35.dmg`（D2XX 1.4.35，SHA-256 `208ea2d6…6655c`）与 `https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg`（CP210x VCP v6，SHA-256 `0b1d6857…bf2eda`）。macOS 包随包分发 dylib，系统级驱动安装非构建依赖，镜像主要用于用户排查与源码运行场景。
 
 ## 3. 每次打包流程
 

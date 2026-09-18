@@ -708,6 +708,96 @@ class RestartRxTests(unittest.TestCase):
         h.restart_rx()
         self.assertEqual(calls, ["stop", "start"])
 
+    def test_restart_settle_is_short(self):
+        """The post-stop settle must not pad the TX→RX gap: stop_tx already
+        sleeps 20 ms before releasing PTT, so a 50 ms settle here doubled
+        the dead air on every release."""
+        from unittest.mock import patch
+        import audio_handler as ah
+        h = self._make_handler()
+        h.stop_rx = lambda: None
+        h.start_rx = lambda: True
+        with patch("audio_handler.time.sleep") as sl:
+            h.restart_rx()
+        slept = [c.args[0] for c in sl.call_args_list]
+        self.assertTrue(slept and all(s <= ah.RX_REOPEN_SETTLE_S for s in slept),
+                        slept)
+
+
+class RxCachedDeviceHintTests(unittest.TestCase):
+    """restart_rx() runs after every TX→RX; _find_rx_device() re-scans the
+    whole PortAudio device list (up to 4 tiers of enumeration), a large
+    slice of the measured ~270 ms reopen.  start_rx() must reuse the
+    (index, name) hint recorded by the last successful open, falling back
+    to the full scan when the hint is stale (USB re-enumeration)."""
+
+    def _make_pa(self, devices):
+        class FakePA:
+            def __init__(self):
+                self._devices = devices
+                self.open_kwargs: dict = {}
+
+            def get_device_count(self):
+                return max(self._devices) + 1
+
+            def get_device_info_by_index(self, i):
+                if i not in self._devices:
+                    raise IOError("invalid device index")
+                return self._devices[i]
+
+            def open(self, **kwargs):
+                self.open_kwargs = dict(kwargs)
+                return object()
+
+        return FakePA()
+
+    def _make_handler(self, pa):
+        from audio_handler import AudioHandler
+        h = AudioHandler.__new__(AudioHandler)
+        h._pa = pa
+        h._rx_running = False
+        h._rx_stream = None
+        h.rx_device = None
+        h._radio_hints = ("ft-710", "ft710", "yaesu")
+        h._rx_dev_rate = 44100
+        h._rx_chunk = 882
+        h._reinit_pyaudio = lambda: None
+        h._device_summary = lambda *a, **kw: "fake"
+        return h
+
+    def test_start_rx_reuses_cached_device_without_rescan(self):
+        pa = self._make_pa({3: {"name": "USB Audio CODEC",
+                                "maxInputChannels": 1}})
+        h = self._make_handler(pa)
+        h._rx_dev_hint = (3, "USB Audio CODEC")
+        scanned = []
+        h._find_rx_device = lambda exclude=None: scanned.append(1) or 3
+        self.assertTrue(h.start_rx())
+        self.assertEqual(scanned, [])  # fast path: no device-list rescan
+        self.assertEqual(pa.open_kwargs["input_device_index"], 3)
+
+    def test_start_rx_refreshes_hint_after_open(self):
+        pa = self._make_pa({3: {"name": "USB Audio CODEC",
+                                "maxInputChannels": 1}})
+        h = self._make_handler(pa)
+        h._rx_dev_hint = None
+        h._find_rx_device = lambda exclude=None: 3
+        self.assertTrue(h.start_rx())
+        self.assertEqual(h._rx_dev_hint, (3, "USB Audio CODEC"))
+
+    def test_start_rx_stale_hint_falls_back_to_rescan(self):
+        """USB re-enumeration renamed the device at the hinted index —
+        the hint must be rejected and the full scan must run."""
+        pa = self._make_pa({3: {"name": "Some Other Mic",
+                                "maxInputChannels": 2}})
+        h = self._make_handler(pa)
+        h._rx_dev_hint = (3, "USB Audio CODEC")
+        scanned = []
+        h._find_rx_device = lambda exclude=None: scanned.append(1) or 3
+        self.assertTrue(h.start_rx())
+        self.assertEqual(scanned, [1])
+        self.assertEqual(pa.open_kwargs["input_device_index"], 3)
+
 
 class TxDeviceDomainTests(unittest.TestCase):
     """SDD AD-011: Opus PCM is always converted from 48 kHz to the

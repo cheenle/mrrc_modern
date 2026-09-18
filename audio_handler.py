@@ -20,7 +20,7 @@ import threading
 import time
 import types
 from collections import deque
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import numpy as np
 
@@ -82,6 +82,8 @@ TX_FRAME_MS = 20
 TX_PREBUFFER_MS = 60          # ~3 frames cushion before playback starts
 TX_MAX_BUFFER_MS = 400        # drop oldest beyond this (~20 frames)
 TX_DRAIN_MS = 50              # bounded drain on PTT release (word-tail flush)
+RX_REOPEN_SETTLE_S = 0.02     # RX capture close→reopen settle; stop_tx already
+                              # sleeps 20 ms, so 50 ms here doubled the dead air
 TX_PREBUFFER_BYTES = TX_SAMPLE_RATE * TX_CHANNELS * 2 * TX_PREBUFFER_MS // 1000
 TX_MAX_BUFFER_BYTES = TX_SAMPLE_RATE * TX_CHANNELS * 2 * TX_MAX_BUFFER_MS // 1000
 
@@ -106,6 +108,11 @@ class AudioHandler:
     _rx_chunk = RX_CHUNK_SIZE        # 20 ms of device samples (RX)
     _tx_chunk = RX_CHUNK_SIZE        # 20 ms of device samples (TX buffer)
     _radio_hints = RADIO_NAME_HINTS  # tier-2 device-name substrings
+    # (index, name) of the last RX device that opened successfully. The
+    # TX→RX reopen reuses it instead of re-scanning the whole PortAudio
+    # device list; start_rx falls back to _find_rx_device when the hint is
+    # stale (USB re-enumeration renamed or re-indexed the codec).
+    _rx_dev_hint: Optional[Tuple[int, str]] = None
 
     def __init__(self,
                  rx_device_index: Optional[int] = None,
@@ -426,7 +433,23 @@ class AudioHandler:
             logger.warning("PyAudio not available — cannot start RX")
             return False
 
-        dev = self._find_rx_device()
+        dev: Optional[int] = None
+        hint = self._rx_dev_hint
+        if hint is not None:
+            # Fast path: reuse the device proven by the last successful
+            # open.  _find_rx_device re-scans the whole device list (up to
+            # 4 name/heuristic tiers) and is a large slice of the measured
+            # ~270 ms TX→RX reopen.  Name + input-channel check rejects a
+            # stale hint (USB re-enumeration) → full scan fallback.
+            try:
+                info = self._pa.get_device_info_by_index(hint[0])
+                if (info.get('maxInputChannels', 0) > 0
+                        and info.get('name') == hint[1]):
+                    dev = hint[0]
+            except Exception:
+                dev = None
+        if dev is None:
+            dev = self._find_rx_device()
         if dev is None:
             logger.warning("No audio input device found")
             return False
@@ -444,6 +467,10 @@ class AudioHandler:
                     stream_callback=None,  # We'll read in the asyncio loop
                 )
                 self._rx_running = True
+                # Remember where the codec lives so the next TX→RX reopen
+                # skips the device-list rescan.
+                self._rx_dev_hint = (
+                    dev, self._pa.get_device_info_by_index(dev).get('name', ''))
                 summary = self._device_summary(
                     dev, actual_rate=self._rx_dev_rate, channels=RX_CHANNELS
                 )
@@ -505,7 +532,7 @@ class AudioHandler:
             self.stop_rx()
         except Exception:
             pass
-        time.sleep(0.05)
+        time.sleep(RX_REOPEN_SETTLE_S)
         if not self.start_rx():
             logger.warning("RX audio restart failed — capture stays down")
 

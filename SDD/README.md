@@ -34,7 +34,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.54 |
+| SDD Version | V2.55 |
 | Baseline Date | 2026-09-18 |
 | Status | v1.18.1 released (macOS DMG 55,643,537 bytes, SHA-256 `931b312c…` — **first release whose bundle actually verifies as signed**; Windows Setup 46,002,543 bytes, SHA-256 `19b5cef2…`; rpi64 image still v1.17.0, 551,282,340 bytes, SHA-256 `a56e5658…`) |
 | Project | MRRC Modern / `mrrc_modern` |

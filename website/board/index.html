@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MRRC Modern · FDE 看板</title>
+<style>
+body{background:#101018;color:#e2e2e8;font-family:-apple-system,tahoma,sans-serif;margin:0;padding:20px;max-width:1400px}
+h1{font-size:21px;margin:0 0 4px}
+.muted{color:#8a8a96;font-size:13px;margin:0 0 18px}
+.board{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+@media(max-width:1100px){.board{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:640px){.board{grid-template-columns:1fr}}
+.col{background:#17171f;border:1px solid #262633;border-radius:10px;padding:10px;min-height:120px}
+.col h2{font-size:13px;margin:2px 4px 10px;color:#c9c9d4}
+.col h2 .n{float:right;color:#6f6f80}
+.card{background:#1e1e29;border:1px solid #2c2c3a;border-radius:8px;padding:9px;margin-bottom:10px;font-size:13px}
+.card code{color:#9fb4c7;font-size:11px}
+.tags{margin-bottom:6px}
+.title{margin:2px 0 4px;line-height:1.5}
+.hint,.result,.note,.branch{margin:4px 0 0;color:#9a9aa8;font-size:12px;line-height:1.5}
+.result{color:#c7b98a}
+.k,.s{display:inline-block;border-radius:4px;padding:0 6px;font-size:11px;margin-right:4px}
+.k-bug{background:#4a2230;color:#ff9db1}.k-feature{background:#1f3a2c;color:#8fe3b0}
+.k-noise{background:#2b2b36;color:#9a9aa8}.k-未分类{background:#2b2b36;color:#9a9aa8}
+.s-high{background:#4a2230;color:#ff9db1}.s-med{background:#46361c;color:#f2ce7b}
+.s-low{background:#1f3a2c;color:#8fe3b0}
+.empty{color:#5c5c68;text-align:center}
+</style>
+</head>
+<body>
+<h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
+<p class="muted">字段信号自动分类（bug / feature / noise）→ 排期决策 → 无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）→ 结果回看板。
+共 2 条 · 待决 2 · 已排期 0 · 已提交 0 · 最后更新 2026-09-19 10:57（自动生成，勿手改）</p>
+<div class="board">
+<div class='col' id='backlog'><h2>待分类决策<span class='n'>2</span></h2><div class='card' id='20260918-114118-9ad3'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20260918-114118-9ad3</code><span class='t'>2026-09-19 10:57</span></div>
+<p class='title'>录音签名与 V2.44/V2.45 修复的「写入端一次性生命周期」缺陷同签名，当前 v1.18.1 已包含修复；包内命中行全部为 2026-09-12 修复前的历史日志，9/18 当天无新录音丢弃，按回归排查（用户先做一次新录音验证），其余</p>
+</div>
+<div class='card' id='20260919-085517-b3aa'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20260919-085517-b3aa</code><span class='t'>2026-09-19 10:57</span></div>
+<p class='title'>无在发产品缺陷：录音「dropped/queue full」签名与 V2.44/V2.45（v1.15.0 发布）修复的写入端生命周期缺陷同签名，但均为 2026-09-12 旧日志、当前 v1.18.1 已含修复（server.py:34</p>
+</div></div>
+<div class='col' id='scheduled'><h2>已排期（后台实施）<span class='n'>0</span></h2><p class='empty'>—</p></div>
+<div class='col' id='in_progress'><h2>实施中<span class='n'>0</span></h2><p class='empty'>—</p></div>
+<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>0</span></h2><p class='empty'>—</p></div>
+<div class='col' id='failed'><h2>实施失败（已回滚）<span class='n'>0</span></h2><p class='empty'>—</p></div>
+<div class='col' id='rejected'><h2>不处理<span class='n'>0</span></h2><p class='empty'>—</p></div>
+</div>
+</body>
+</html>

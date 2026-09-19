@@ -48,6 +48,8 @@ class AutopilotFixture(unittest.TestCase):
         root = Path(self.tmp.name)
         self.patches = [
             mock.patch.object(autopilot, "STATE_FILE", root / "state.json"),
+            mock.patch.object(autopilot, "BOARD_STATE_FILE", root / "board_state.json"),
+            mock.patch.object(autopilot, "BOARD_PAGE_PATH", root / "board" / "index.html"),
             mock.patch.object(autopilot, "INBOX", root / "inbox"),
             mock.patch.object(autopilot, "DRAFTS", root / "drafts"),
             mock.patch.object(autopilot, "ANSWERS_PAGE", root / "answers" / "index.html"),

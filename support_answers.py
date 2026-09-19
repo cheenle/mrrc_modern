@@ -86,6 +86,11 @@ def parse_analysis(raw: str) -> dict:
         "needs_code_change": bool(data.get("needs_code_change", False)),
         "code_hint": str(data.get("code_hint", "") or "").strip(),
     }
+    # Optional FDE-board fields (support_board): kind/severity/title. Older
+    # model outputs stay valid — absent means unclassified on the board.
+    for opt in ("kind", "severity", "title"):
+        if str(data.get(opt) or "").strip():
+            cleaned[opt] = str(data[opt]).strip()[:120]
     for key in LIST_KEYS:
         value = data.get(key) or []
         if isinstance(value, str):
@@ -231,8 +236,11 @@ def render_page(cards: list, generated_at: str = "") -> str:
     """The whole answers page: newest cards first, empty state when there are none."""
     stamp = generated_at or time.strftime("%Y-%m-%d %H:%M")
     body = "\n".join(cards) if cards else EMPTY_STATE
+    nav = ('\n  <p class="muted">工作流看板：'
+           '<a href="../board/">FDE 看板</a>'
+           '（bug/需求分类 · 排期 · 后台实施结果）</p>\n')
     footer = f'\n  <p class="muted">最后更新：{html.escape(stamp)}（自动生成，勿手改）</p>\n'
-    return PAGE_HEAD + body + footer + PAGE_TAIL
+    return PAGE_HEAD + body + nav + footer + PAGE_TAIL
 
 
 # ── state (idempotency) ────────────────────────────────────────────────────

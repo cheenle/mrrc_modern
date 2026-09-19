@@ -36,6 +36,7 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 import support_answers as answers                                    # noqa: E402
+import support_board as board                                        # noqa: E402
 
 RECEIVER_URL = os.environ.get("MRRC_SUPPORT_URL",
                              "https://www.vlsc.net/mrrc_modern/support/").rstrip("/")
@@ -43,6 +44,10 @@ CRED_FILE = Path(os.environ.get("MRRC_SUPPORT_CREDENTIALS",
                                 str(Path.home() / ".mrrc-support-credentials.txt")))
 SUPPORT_USER = os.environ.get("SUPPORT_USER", "mrrc")
 STATE_FILE = REPO / "dist" / "support_autopilot" / "state.json"
+BOARD_STATE_FILE = REPO / "dist" / "support_autopilot" / board.BOARD_STATE_NAME
+BOARD_PAGE_PATH = REPO / "website" / "board" / "index.html"
+REMOTE_BOARD_PAGE = "/var/www/vlsc.net/mrrc_modern/board/index.html"
+BOARD_STAGING = "~/mrrc_modern_board.html"
 RUN_LOG = REPO / "dist" / "support_autopilot" / "run.log"
 INBOX = REPO / "dist" / "support_inbox"
 DRAFTS = REPO / "dist" / "support_answers"
@@ -94,6 +99,28 @@ PROMPT_TEMPLATE = """你是 MRRC Modern 的支持工程师。仓库就是你当�
 诊断包编号：{rid}
 {separator}
 {digest}
+"""
+
+
+IMPLEMENT_TEMPLATE = """你是 MRRC Modern 的实施工程师。仓库是当前工作目录（只读检索：read/grep/find/ls）。
+
+FDE 看板条目 {rid} 已排期，请产出实施计划。条目信息：
+标题：{title}
+分类/严重度：{kind} / {severity}
+诊断与代码线索：
+{code_hint}
+
+要求：
+1. 先只读定位相关代码（探查预算：最多 8 次检索、最多 8 个文件），最小 diff；
+2. **只输出一个 JSON 对象**：
+{{"understanding":"一句话：改什么、为什么",
+ "patch":"unified diff（从当前 HEAD 改；新增文件用 --- /dev/null；不要包含二进制）",
+ "test_plan":"跑哪些验证（命令+预期）",
+ "risk":"low|med|high",
+ "commit_message":"fix(scope): ..."}}
+3. 禁止改动 static/ft710_main.js、static/ft710_ui.js（跨文件全局护栏文件）、certs/、packaging/；
+4. 若判断**不该改代码**（环境问题/重复上报/风险过高/信息不足），输出
+   {{"understanding":"...","no_action":"原因"}} —— 这不算失败。
 """
 
 
@@ -300,6 +327,7 @@ def publish(bundle_id: str, analysis: dict, problem: str, state: dict, push: boo
     state = answers.record_result(state, bundle_id, analysis, published=True)
     answers.save_state(STATE_FILE, state)
     rebuild_page(state)
+    rebuild_board_page()
     committed = git_commit(bundle_id)
     if push:
         try:
@@ -312,6 +340,166 @@ def publish(bundle_id: str, analysis: dict, problem: str, state: dict, push: boo
 
 
 # ── one bundle ─────────────────────────────────────────────────────────────
+# ── unattended implementation (FDE loop, board scheduled stage) ───────────
+def _parse_implementation(raw: str) -> dict:
+    """Validate the implementation contract; raises ValueError on malformed."""
+    text = str(raw or "").strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("实施输出里没有 JSON 对象")
+    try:
+        data = json.loads(text[start:end + 1])
+    except ValueError as e:
+        raise ValueError(f"实施输出的 JSON 无法解析：{e}") from e
+    if not isinstance(data, dict):
+        raise ValueError("实施输出的 JSON 不是对象")
+    if not str(data.get("understanding", "")).strip():
+        raise ValueError("understanding 为空")
+    if str(data.get("no_action", "")).strip():
+        data["no_action"] = str(data["no_action"]).strip()
+        return data
+    patch = str(data.get("patch", ""))
+    if not patch.strip():
+        raise ValueError("patch 为空（无 no_action 解释时必须给补丁）")
+    if str(data.get("risk", "")) not in ("low", "med", "high"):
+        raise ValueError("risk 不是 low|med|high")
+    if not str(data.get("commit_message", "")).strip():
+        raise ValueError("commit_message 为空")
+    return data
+
+
+def _git(args: list[str], cwd: Path = REPO) -> "subprocess.CompletedProcess[str]":
+    return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
+                          text=True, timeout=120)
+
+
+def implement_one(bundle_id: str, model: str = "") -> str:
+    """Implement one scheduled board entry in an isolated fde/<id> branch.
+
+    Safety rails: the model gets read-only tools and returns the patch as a
+    JSON contract; the patch is guarded (protected paths, size), applied only
+    after `git apply --check`, and committed only if the full unittest suite
+    passes.  main is never touched by an unattended process.
+    """
+    bstate = board.load_state(BOARD_STATE_FILE)
+    entry = bstate.get(bundle_id) or {}
+    if entry.get("status") != "scheduled":
+        return "not_scheduled"
+    clean, why = board.repo_clean(REPO)
+    if not clean:
+        log(f"[{bundle_id}] 实施跳过：{why}")
+        return "skipped_dirty"
+    if not board.begin_implementation(bstate, bundle_id):
+        return "not_scheduled"
+    board.save_state(BOARD_STATE_FILE, bstate)
+    try:
+        prompt = IMPLEMENT_TEMPLATE.format(
+            rid=bundle_id, title=entry.get("title", ""), kind=entry.get("kind", ""),
+            severity=entry.get("severity", "") or "未评",
+            code_hint=entry.get("code_hint", "") or "（无）")
+        cmd = [pi_binary(), "--name", f"implement-{bundle_id}",
+               "--tools", "read,grep,find,ls", "--thinking", PI_THINKING,
+               "-p", prompt]
+        if model:
+            cmd[1:1] = ["--model", model]
+        log(f"[{bundle_id}] 调用 pi 实施规划（超时 {PI_TIMEOUT}s）…")
+        proc = subprocess.run(cmd, cwd=str(REPO), capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL, timeout=PI_TIMEOUT)
+        result = _parse_implementation((proc.stdout or "") + "\n" + (proc.stderr or ""))
+    except (ValueError, subprocess.TimeoutExpired) as e:
+        board.finish_implementation(bstate, bundle_id, False,
+                                    f"实施契约失败：{e}")
+        board.save_state(BOARD_STATE_FILE, bstate)
+        return "failed"
+    if result.get("no_action"):
+        board.decide(bstate, bundle_id, "reject", note=f"模型判定不涉及代码：{result['no_action']}")
+        board.save_state(BOARD_STATE_FILE, bstate)
+        log(f"[{bundle_id}] 实施裁决：不涉及代码（{result['no_action'][:80]}）")
+        return "rejected"
+    refusal = board.guard_check(result["patch"])
+    if refusal:
+        board.finish_implementation(bstate, bundle_id, False, f"补丁被护栏拒绝：{refusal}")
+        board.save_state(BOARD_STATE_FILE, bstate)
+        return "failed"
+    branch = f"fde/{bundle_id}"
+    proc_check = subprocess.run(["git", "apply", "--check", "-"], cwd=str(REPO),
+                                input=result["patch"], capture_output=True, text=True,
+                                timeout=60)
+    if proc_check.returncode != 0:
+        board.finish_implementation(bstate, bundle_id, False,
+                                    f"git apply --check 失败：{proc_check.stderr[:200]}")
+        board.save_state(BOARD_STATE_FILE, bstate)
+        return "failed"
+    _git(["checkout", "-b", branch])
+    applied = subprocess.run(["git", "apply", "-"], cwd=str(REPO),
+                             input=result["patch"], capture_output=True, text=True,
+                             timeout=60)
+    if applied.returncode != 0:
+        _git(["checkout", "main"])
+        _git(["branch", "-D", branch])
+        board.finish_implementation(bstate, bundle_id, False,
+                                    f"git apply 失败：{applied.stderr[:200]}")
+        board.save_state(BOARD_STATE_FILE, bstate)
+        return "failed"
+    log(f"[{bundle_id}] 测试（全套 unittest）…")
+    test = subprocess.run([".venv/bin/python", "-m", "unittest", "discover", "-s", "tests"],
+                          cwd=str(REPO), capture_output=True, text=True, timeout=600)
+    tail = (test.stdout or "").strip().splitlines()[-1:] or [""]
+    if test.returncode != 0:
+        _git(["checkout", "main"])
+        _git(["branch", "-D", branch])
+        board.finish_implementation(bstate, bundle_id, False,
+                                    f"测试未绿，分支已回滚：{tail[0][:200]}")
+        board.save_state(BOARD_STATE_FILE, bstate)
+        log(f"[{bundle_id}] 测试未绿 —— fde/ 分支已删除")
+        return "failed"
+    _git(["add", "-A"])
+    commit = _git(["commit", "-m",
+                   f"{result['commit_message'].strip()}\n\nFDE {bundle_id}（{entry.get('kind', '')}）"
+                   f"\n understanding: {result.get('understanding', '')[:200]}"])
+    csha = _git(["rev-parse", "--short", "HEAD"]).stdout.strip()
+    if commit.returncode != 0:
+        csha = ""
+    _git(["checkout", "main"])
+    detail = f"{result.get('understanding', '')[:200]} · 测试 {tail[0].strip()}"
+    board.finish_implementation(bstate, bundle_id, True, detail,
+                                branch=branch, commit=csha)
+    board.save_state(BOARD_STATE_FILE, bstate)
+    log(f"[{bundle_id}] 已提交到 {branch}{('@' + csha) if csha else ''}（main 未动，待人工合入）")
+    return "committed"
+
+
+def run_implementations(model: str = "", limit: int = 1) -> list[tuple[str, str]]:
+    """Implement scheduled entries, one per run (single-flight)."""
+    bstate = board.load_state(BOARD_STATE_FILE)
+    scheduled = [k for k, v in bstate.items() if v.get("status") == "scheduled"]
+    results = []
+    for bundle_id in scheduled[:max(1, limit)]:
+        results.append((bundle_id, implement_one(bundle_id, model=model)))
+        rebuild_board_page()
+    if not scheduled:
+        log("看板：没有已排期条目")
+    return results
+
+
+def rebuild_board_page(generated_at: str = "") -> Path:
+    """Render + ship the FDE board (same staged-install model as answers)."""
+    bstate = board.load_state(BOARD_STATE_FILE)
+    BOARD_PAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    BOARD_PAGE_PATH.write_text(board.render_board(bstate, generated_at),
+                               encoding="utf-8")
+    try:
+        subprocess.run(["rsync", "-az", str(BOARD_PAGE_PATH),
+                        f"{REMOTE_HOST}:{BOARD_STAGING}"],
+                       check=True, capture_output=True)
+        subprocess.run(["ssh", REMOTE_HOST,
+                        f"sudo install -m 644 -o www-data -g www-data {BOARD_STAGING} "
+                        f"{REMOTE_BOARD_PAGE}"], check=True, capture_output=True)
+    except Exception as e:  # noqa: BLE001 — page ships locally even if remote refuses
+        log(f"看板页发布失败（本地已生成 {BOARD_PAGE_PATH}）：{e}")
+    return BOARD_PAGE_PATH
+
+
 def process_one(bundle_id: str, publish_it: bool, model: str = "", push: bool = False,
                 state: dict | None = None) -> str:
     """Returns one of: published | drafted | need_more_info | failed."""
@@ -331,6 +519,14 @@ def process_one(bundle_id: str, publish_it: bool, model: str = "", push: bool = 
             state = answers.record_result(state, bundle_id, {"status": "failed"}, published=False)
             answers.save_state(STATE_FILE, state)
             return "failed"
+        # FDE board: classify + record every finished analysis (best-effort —
+        # board problems must never take down the support loop itself).
+        try:
+            bstate = board.load_state(BOARD_STATE_FILE)
+            if board.record(bstate, bundle_id, analysis):
+                board.save_state(BOARD_STATE_FILE, bstate)
+        except Exception as e:  # noqa: BLE001 — board is a projection, not the source of truth
+            log(f"[{bundle_id}] 看板记录失败（忽略）：{e}")
         write_draft(bundle_id, analysis, problem)
         if not publish_it:
             log(f"[{bundle_id}] 草稿已生成（未加 --publish）：{DRAFTS / (bundle_id + '.card.html')}")
@@ -396,7 +592,7 @@ def show_status() -> int:
 def cron_line() -> str:
     """Absolute paths + explicit PATH: cron's environment is nearly empty."""
     return (f"*/10 * * * * PATH=/opt/homebrew/bin:/usr/local/bin:{Path.home()}/.hermes/node/bin "
-            f"{sys.executable} {REPO / 'dev_tools' / 'support_autopilot.py'} --once --publish "
+            f"{sys.executable} {REPO / 'dev_tools' / 'support_autopilot.py'} --once --publish --implement "
             f">> {RUN_LOG} 2>&1 {CRON_MARK}")
 
 
@@ -427,6 +623,10 @@ def main(argv=None) -> int:
     parser.add_argument("--force", metavar="编号", help="强制重跑某条（忽略 state.json）")
     parser.add_argument("--inspect", metavar="编号", help="只看摘要，不调用模型")
     parser.add_argument("--status", action="store_true", help="列出已处理条目")
+    parser.add_argument("--implement", nargs="?", const="ALL", default="",
+                        metavar="编号",
+                        help="后台实施：不带编号=处理所有已排期条目（单飞，每轮 1 条）；"
+                            "带编号=只实施该条。需要 --once 之外的入口时直接用")
     parser.add_argument("--install-cron", action="store_true", help="安装每 10 分钟的 crontab")
     parser.add_argument("--uninstall-cron", action="store_true", help="移除 crontab 条目")
     parser.add_argument("--model", default="", help="传给 pi 的 --model")
@@ -445,10 +645,24 @@ def main(argv=None) -> int:
         result = process_one(args.force, args.publish, model=args.model, push=args.push)
         print(f"{args.force}: {result}")
         return 0 if result != "failed" else 1
+    if args.implement:
+        if args.implement == "ALL":
+            results = run_implementations(model=args.model)
+        else:
+            results = [(args.implement,
+                        implement_one(args.implement, model=args.model))]
+            rebuild_board_page()
+        for bundle_id, result in results:
+            print(f"{bundle_id}: {result}")
+        return 0 if all(r in ("committed", "rejected", "not_scheduled",
+                               "skipped_dirty") for _, r in results) else 1
     if args.once:
         results = run_once(args.publish, model=args.model, limit=args.limit, push=args.push)
         for bundle_id, result in results:
             print(f"{bundle_id}: {result}")
+        impl = run_implementations(model=args.model)
+        for bundle_id, result in impl:
+            print(f"{bundle_id}: implement → {result}")
         return 0
     parser.print_help()
     return 0

@@ -211,3 +211,50 @@ The MRRC Web Control SDD follows the same three-level harness structure as MRRC 
 
 *This document records the MRRC Web Control project through the FDE lens defined at [vlsc.net/fde.html](https://www.vlsc.net/fde.html).*
 *Cross-reference: SDD 14-version-history.md, AGENTS.md, CHANGELOG.md, vlsc.net FDE methodology.*
+
+---
+
+## Part 5: FDE Loop — 支持回路的自我迭代(实践沉淀,2026-09-19)
+
+> FDE 公式 `Echo + Delta + Product` 的第 4 次演化:**把 Echo(现场信号)的整理、排期与实施变成无人值守回路**,人的介入点收敛到一次排期决策。
+
+### 5.1 回路全景
+
+```
+🐞 用户上报(诊断包)
+  → support_autopilot(pi 只读分析,JSON 契约)
+      ├─ 答复页(answers)   → 用户侧:结论/自解步骤
+      └─ FDE 看板(board)   → 维护者侧:kind 分类(bug/feature/noise)入 Backlog
+  → 排期决策(dev_tools/fde_board.py decide)      ← 唯一的人工介入点
+  → 后台实施(autopilot --implement,单飞每轮 1 条):
+      pi 只读定位 → unified-diff JSON 契约 → guard(护栏路径/规模)
+      → git apply --check → fde/<id> 分支 → 全量 unittest
+      → 绿:commit(fde/ 分支) → 看板 Done(hash+测试结果)
+      → 红:分支删除、工作区回滚 → 看板 Failed(原因)
+      → 模型判 no_action → 看板 Rejected(理由)
+  → 看板展示结果 → 人工审查合入 main
+```
+
+### 5.2 安全边界(与 PTT 门禁同源的设计观)
+
+| 边界 | 实现 |
+| --- | --- |
+| 模型无写权限 | pi 只有 read/grep/find/ls;补丁以 **JSON 文本契约**返回 |
+| main 不被无人值守进程触碰 | 实施只发生在独立 `fde/<id>` 分支;合入 main 是人工动作 |
+| 护栏路径 | `static/ft710_main.js`/`ft710_ui.js`(跨文件全局)、`certs/`、`packaging/`、`.iss`、`.github` 一律拒绝 |
+| 规模上限 | 单条补丁 ≤8 文件,超出需人工拆分 |
+| 测试门禁 | 全量 unittest 绿才 commit;红即回滚分支 |
+| 单飞 | 每轮只实施 1 条,实施要求干净 main 工作区 |
+| 隐私 | 看板与答复页共用 `redact_public` 过滤 |
+
+### 5.3 运维入口
+
+```bash
+python3 dev_tools/fde_board.py list                  # 看板状态
+python3 dev_tools/fde_board.py decide <编号> schedule --note "排期理由"
+python3 dev_tools/fde_board.py decide <编号> reject   --note "理由"
+python3 dev_tools/fde_board.py implement [编号]       # 立即后台实施(否则等 cron)
+python3 dev_tools/fde_board.py rebuild               # 重建+发布看板页
+```
+
+线上:<https://www.vlsc.net/mrrc_modern/board/>(cron 每 10 分钟自动更新)。

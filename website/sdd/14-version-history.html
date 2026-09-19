@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.56</td>
+<td>2026-09-19</td>
+<td>Claude</td>
+<td><strong>FDE 看板：支持回路的自我迭代成为常设实践（loop practice 4）。</strong> 需求：支持回路只有「分析→答复」，分类出的 bug/feature 没有去处，人每次都要手动挑、手动改、手动收尾。新增 <code class="scope-code">support_board.py</code>（数据模型/渲染/护栏，stdlib-only）与 <code class="scope-code">dev_tools/fde_board.py</code>（排期决策 CLI）：pi 分析契约加可选 <code class="scope-code">kind</code>(bug/feature/noise)+severity+title 字段（向后兼容，旧输出无字段则按 needs_code_change 回退 bug、否则 noise），每条分析自动入板；<strong>排期决策是唯一人工介入点</strong>（<code class="scope-code">fde_board.py decide</code>），cron 新增 <code class="scope-code">--implement</code>：对已排期条目单飞实施——pi 只读定位后以 <strong>unified-diff JSON 契约</strong>返回补丁（模型无写权限），护栏拒绝（工具护栏 JS/certs/packaging/&gt;8 文件）→ <code class="scope-code">git apply --check</code> → 仅在<strong>独立 fde/<编号>分支</strong>应用，全套 unittest 绿才 commit，红则回滚分支；<strong>main 永不被无人值守进程触碰</strong>；no_action 判定自动进 Rejected。看板页 &lt;www.vlsc.net/mrrc_modern/board/&gt; 与答复页互链，同 redact_public 隐私过滤；cron 行升级为 <code class="scope-code">--once --publish --implement</code>（幂等重装）。事故修复：cron 里 pi 连续两天 SIGABRT（Homebrew 升级 llhttp 打断 bottled node 的 dylib 链接）——run_pi 信号死亡时日志点名成因与修复；测试隔离补 BOARD_STATE_FILE/BOARD_PAGE_PATH（fixture 曾污染真实看板）。套件 1276→1297（+21 看板测试）；release_check 0 failing。<strong>边界</strong>：fde/ 分支的人工合入与真实 bug 端到端（上报→排期→自动实施→合入）待首次真实排期；实施 pi 的探查预算与 diff 质量待真实样本校准。</td>
+</tr>
+<tr>
 <td>SDD V2.55</td>
 <td>2026-09-18</td>
 <td>Claude</td>
@@ -667,7 +673,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.55 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.56 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -281,6 +281,7 @@ h1{{font-size:21px;margin:0 0 4px}}
 <body>
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
+用户侧结论在 <a href="../answers/">答复页</a>。
 共 {len(state)} 条 · 待决 {counts['backlog']} · 已排期 {counts['scheduled']} · 已答复 {counts['answered']} · 已提交 {counts['done']} · 最后更新 {stamp}（自动生成，勿手改）</p>
 <div class="board">
 {body}

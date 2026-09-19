@@ -30,7 +30,15 @@ from pathlib import Path
 from support_answers import redact_public  # same privacy filter as the answers page
 
 KINDS = ("bug", "feature", "noise")
-STATUSES = ("backlog", "scheduled", "in_progress", "done", "failed", "rejected")
+STATUSES = ("backlog", "scheduled", "in_progress", "answered", "done", "failed", "rejected")
+# Classification IS the scheduling decision (operator policy, 2026-09-19):
+#   noise   → answered  (环境/误报：答复页已回，无代码工作，看板终态)
+#   bug     → scheduled (自动排期，后台实施接管)
+#   feature → backlog   (排期待决策：由操作员 schedule/reject)
+# A closed outcome (answered/scheduled) requires the answer to be publishable
+# (not need_more_info): an un-answered report stays in the backlog for the
+# operator instead of pretending the loop closed.
+PUBLISHABLE_STATUSES = ("answered", "needs_fix")
 PROTECTED_PATHS = ("static/ft710_main.js", "static/ft710_ui.js",
                    "certs/", "win/", "packaging/", ".iss")
 MAX_PATCH_FILES = 8
@@ -66,30 +74,40 @@ def normalize_kind(kind: "str | None") -> str:
 
 
 def record(state: dict, bundle_id: str, analysis: dict) -> bool:
-    """Create/refresh a Backlog entry from a finished analysis.
+    """Create/refresh a board entry from a finished analysis.
 
-    Returns True when the entry changed.  Classification: kind comes from the
-    model (optional contract field); entries the model marked as needing a
-    code change but left unclassified default to "bug" (conservative: show
-    them to the scheduler rather than silently dropping work).
+    Returns True when the entry changed.  Classification IS the scheduling
+    decision: noise closes as answered, bug auto-schedules into the
+    unattended implementation queue, feature waits in the backlog for the
+    operator.  A closed outcome additionally requires a publishable answer
+    (need_more_info stays in the backlog) and operator-owned stages are
+    never reset by re-analysis.
     """
     entry = state.get(bundle_id) or {}
-    if entry.get("status") in ("scheduled", "in_progress", "done"):
-        return False  # operator-owned stages are never reset by re-analysis
+    if entry and entry.get("status") != "backlog":
+        return False  # past the decision point: scheduling/implementation results stand
     kind = normalize_kind(analysis.get("kind"))
     if not kind and analysis.get("needs_code_change"):
         kind = "bug"
     if not kind:
         kind = "noise"
+    closed = str(analysis.get("status", "")) in PUBLISHABLE_STATUSES
+    if kind == "noise":
+        status = "answered" if closed else "backlog"
+    elif kind == "bug":
+        status = "scheduled" if closed else "backlog"
+    else:
+        status = "backlog"
     new = {
         "kind": kind,
         "severity": str(analysis.get("severity", "")).strip().lower(),
         "title": str(analysis.get("title", "") or analysis.get("verdict", ""))[:120],
-        "status": "backlog",
+        "status": status,
         "needs_code_change": bool(analysis.get("needs_code_change")),
         "code_hint": str(analysis.get("code_hint", ""))[:200],
         "updated": time.strftime("%Y-%m-%d %H:%M"),
-        "note": str(entry.get("note", "")),
+        "note": str(entry.get("note", "")) or (
+            "自动分类：环境/误报，答复页已回" if status == "answered" else ""),
     }
     if entry == new:
         return False
@@ -180,10 +198,11 @@ def repo_clean(repo: Path, branch_prefix: str = "fde/") -> tuple[bool, str]:
 
 
 # ── rendering ──────────────────────────────────────────────────────────────
-COLUMNS = ("backlog", "scheduled", "in_progress", "done", "failed", "rejected")
+COLUMNS = ("backlog", "scheduled", "in_progress", "answered", "done", "failed", "rejected")
 COLUMN_TITLES = {
-    "backlog": "待分类决策", "scheduled": "已排期（后台实施）",
-    "in_progress": "实施中", "done": "已提交（fde/ 分支）",
+    "backlog": "待决策（新需求）", "scheduled": "已排期（bug 自动）",
+    "in_progress": "实施中", "answered": "已答复（无需代码）",
+    "done": "已提交（fde/ 分支）",
     "failed": "实施失败（已回滚）", "rejected": "不处理",
 }
 
@@ -240,8 +259,7 @@ def render_board(state: dict, generated_at: str = "") -> str:
 body{{background:#101018;color:#e2e2e8;font-family:-apple-system,tahoma,sans-serif;margin:0;padding:20px;max-width:1400px}}
 h1{{font-size:21px;margin:0 0 4px}}
 .muted{{color:#8a8a96;font-size:13px;margin:0 0 18px}}
-.board{{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}}
-@media(max-width:1100px){{.board{{grid-template-columns:repeat(3,1fr)}}}}
+.board{{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}}
 @media(max-width:640px){{.board{{grid-template-columns:1fr}}}}
 .col{{background:#17171f;border:1px solid #262633;border-radius:10px;padding:10px;min-height:120px}}
 .col h2{{font-size:13px;margin:2px 4px 10px;color:#c9c9d4}}
@@ -262,8 +280,8 @@ h1{{font-size:21px;margin:0 0 4px}}
 </head>
 <body>
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
-<p class="muted">字段信号自动分类（bug / feature / noise）→ 排期决策 → 无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）→ 结果回看板。
-共 {len(state)} 条 · 待决 {counts['backlog']} · 已排期 {counts['scheduled']} · 已提交 {counts['done']} · 最后更新 {stamp}（自动生成，勿手改）</p>
+<p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
+共 {len(state)} 条 · 待决 {counts['backlog']} · 已排期 {counts['scheduled']} · 已答复 {counts['answered']} · 已提交 {counts['done']} · 最后更新 {stamp}（自动生成，勿手改）</p>
 <div class="board">
 {body}
 </div>

@@ -26,6 +26,30 @@ class RecordTests(unittest.TestCase):
     def setUp(self):
         self.state = {}
 
+    def test_classification_is_the_decision(self):
+        """Operator policy (2026-09-19): noise → answered (closed), bug →
+        scheduled (auto-implement queue), feature → backlog (waits for the
+        operator)."""
+        state = {}
+        board.record(state, "N", _analysis(kind="noise"))
+        board.record(state, "B", _analysis(kind="bug"))
+        board.record(state, "F", _analysis(kind="feature"))
+        self.assertEqual(state["N"]["status"], "answered")
+        self.assertEqual(state["B"]["status"], "scheduled")
+        self.assertEqual(state["F"]["status"], "backlog")
+        self.assertIn("自动分类", state["N"]["note"])
+
+    def test_need_more_info_stays_in_backlog(self):
+        """An un-answered report must not pretend the loop closed: without a
+        publishable answer (need_more_info) even noise/bug stay in the backlog
+        for the operator."""
+        state = {}
+        board.record(state, "N", _analysis(kind="noise", status="need_more_info"))
+        board.record(state, "B", _analysis(kind="bug", status="need_more_info"))
+        self.assertEqual(state["N"]["status"], "backlog")
+        self.assertEqual(state["B"]["status"], "backlog")
+        self.assertNotIn("答复页已回", state["N"]["note"])
+
     def test_kind_from_model_wins(self):
         self.assertTrue(board.record(self.state, "B1", _analysis(kind="feature")))
         self.assertEqual(self.state["B1"]["kind"], "feature")
@@ -44,10 +68,11 @@ class RecordTests(unittest.TestCase):
         self.assertEqual(self.state["B4"]["kind"], "noise")
 
     def test_operator_owned_stages_never_reset(self):
-        for status in ("scheduled", "in_progress", "done"):
+        for status in ("scheduled", "in_progress", "done", "answered", "failed",
+                       "rejected"):
             state = {f"B-{status}": {"status": status, "kind": "bug"}}
             self.assertFalse(board.record(state, f"B-{status}",
-                                          _analysis(kind="noise")))
+                                         _analysis(kind="noise")))
 
     def test_re_record_with_same_analysis_is_idempotent(self):
         board.record(self.state, "B5", _analysis(kind="bug"))
@@ -153,15 +178,20 @@ class RenderBoardTests(unittest.TestCase):
         state = {}
         board.record(state, "B1", _analysis(kind="bug", severity="high"))
         board.record(state, "B2", _analysis(kind="feature"))
+        board.record(state, "N1", _analysis(kind="noise"))
         board.decide(state, "B1", "schedule")
         board.finish_implementation(state, "B1", True, "测试 OK",
                                     branch="fde/B1", commit="abc1234")
         html = board.render_board(state)
-        for col in ("待分类决策", "已排期（后台实施）", "实施中", "已提交",
-                    "实施失败", "不处理"):
+        for col in ("待决策（新需求）", "已排期（bug 自动）", "实施中",
+                    "已答复（无需代码）", "已提交（fde/ 分支）",
+                    "实施失败（已回滚）", "不处理"):
             self.assertIn(col, html)
         self.assertIn("fde/B1", html)
         self.assertIn("abc1234", html)
+        # auto-scheduled bug must show in the queue, noise in answered
+        self.assertIn("id='scheduled'", html)
+        self.assertIn("id='answered'", html)
 
     def test_title_escaped_and_redacted(self):
         state = {}

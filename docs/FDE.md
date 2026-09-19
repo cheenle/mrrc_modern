@@ -224,8 +224,10 @@ The MRRC Web Control SDD follows the same three-level harness structure as MRRC 
 🐞 用户上报(诊断包)
   → support_autopilot(pi 只读分析,JSON 契约)
       ├─ 答复页(answers)   → 用户侧:结论/自解步骤
-      └─ FDE 看板(board)   → 维护者侧:kind 分类(bug/feature/noise)入 Backlog
-  → 排期决策(dev_tools/fde_board.py decide)      ← 唯一的人工介入点
+      └─ FDE 看板(board)   → 分类即决策:
+          noise   → 已答复(无需代码,看板终态)
+          bug     → 已排期(自动进后台实施队列)
+          feature → 待决策(等操作员 schedule/reject)
   → 后台实施(autopilot --implement,单飞每轮 1 条):
       pi 只读定位 → unified-diff JSON 契约 → guard(护栏路径/规模)
       → git apply --check → fde/<id> 分支 → 全量 unittest
@@ -235,7 +237,16 @@ The MRRC Web Control SDD follows the same three-level harness structure as MRRC 
   → 看板展示结果 → 人工审查合入 main
 ```
 
-### 5.2 安全边界(与 PTT 门禁同源的设计观)
+### 5.2 分类即决策（operator policy, 2026-09-19）
+
+| 分类 | 自动动作 | 依据 |
+| --- | --- | --- |
+| noise（环境/误报/已修复签名） | **直接答复客户**，看板「已答复」终态，不进实施 | 答复页已发布 |
+| bug（可定位的产品缺陷） | **答复客户 + 自动排期**，后台实施接管 | needs_fix/answered 已发布 |
+| feature（新能力/新参数） | 答复客户 + 留「待决策」等操作员排期 | 排期是产品选择，不自动化 |
+| 未答复（need_more_info） | 留「待决策」跟进，不允许闭环 | 答复未出的上报不能假装完成 |
+
+### 5.3 安全边界(与 PTT 门禁同源的设计观)
 
 | 边界 | 实现 |
 | --- | --- |
@@ -247,7 +258,7 @@ The MRRC Web Control SDD follows the same three-level harness structure as MRRC 
 | 单飞 | 每轮只实施 1 条,实施要求干净 main 工作区 |
 | 隐私 | 看板与答复页共用 `redact_public` 过滤 |
 
-### 5.3 运维入口
+### 5.4 运维入口
 
 ```bash
 python3 dev_tools/fde_board.py list                  # 看板状态

@@ -52,7 +52,15 @@ REMOTE_HOST = os.environ.get("MRRC_SUPPORT_DEPLOY_HOST", "cheenle@www.vlsc.net")
 REMOTE_PAGE = "/var/www/vlsc.net/mrrc_modern/answers/index.html"
 MAX_PER_RUN = 2
 # Env override keeps the smoke run and cron tuning cheap (cron uses the default).
-PI_TIMEOUT = int(os.environ.get("MRRC_AUTOPILOT_PI_TIMEOUT", "540"))
+def _pi_timeout() -> int:
+    raw = os.environ.get("MRRC_AUTOPILOT_PI_TIMEOUT", "540")
+    try:
+        return int(raw)
+    except ValueError:
+        return 540
+
+
+PI_TIMEOUT = _pi_timeout()
 # "high" spends minutes exploring this repo (measured: >7 min on one real digest,
 # vs 3.4 s on a trivial prompt); "medium" is the tuned default for unattended runs.
 PI_THINKING = os.environ.get("MRRC_AUTOPILOT_THINKING", "medium")
@@ -212,6 +220,14 @@ def run_pi(digest: str, bundle_id: str, model: str = "") -> dict:
     output = (proc.stdout or "") + "\n" + (proc.stderr or "")
     if proc.returncode != 0:
         log(f"[{bundle_id}] pi 退出码 {proc.returncode}")
+        if proc.returncode is not None and proc.returncode < 0:
+            # 2026-09-18 field incident: Homebrew upgraded llhttp out from
+            # under the bottled node that runs `pi`; dyld aborted (SIGABRT
+            # ⇒ Python sees -6) on EVERY cron run and the answers page sat
+            # empty for two days.  Name the fix in the log.
+            log(f"[{bundle_id}] pi 被信号 {-proc.returncode} 杀死 — 典型原因是 "
+                "Homebrew 升级打断了 node 的动态库链接：用 cron 同款 PATH 跑 "
+                "`pi --version` 可复现，`brew upgrade node` 修复")
     return answers.parse_analysis(output)
 
 
@@ -272,7 +288,7 @@ def rsync_page() -> bool:
                         f"sudo install -m 644 -o www-data -g www-data {STAGING} {REMOTE_PAGE}"],
                        check=True, capture_output=True)
         return True
-    except (OSError, subprocess.CalledProcessError) as e:
+    except Exception as e:  # noqa: BLE001 — publish failure is logged, never raised
         detail = getattr(e, "stderr", b"") or b""
         log(f"答复页发布失败（本地 commit 已保留）：{e} {detail.decode('utf-8', 'replace')[:200]}")
         return False

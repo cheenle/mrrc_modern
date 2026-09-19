@@ -299,26 +299,34 @@ def git_commit(bundle_id: str) -> bool:
 STAGING = "~/mrrc_modern_answers.html"
 
 
-def rsync_page() -> bool:
-    """Ship just the answers page (spec §1 D4); the full-site deploy stays manual.
+def _ship_page(local_path: Path, staging: str, remote_page: str,
+               label: str) -> bool:
+    """Two-stage page ship: rsync to the maintainer's home, then sudo install.
 
-    Two steps on purpose: the docroot belongs to www-data, so a direct rsync into
-    it is refused — and it *silently* returns 0 when the file happens to be
-    unchanged, which is how the first "verification" of this path passed while
-    being unable to write anything (measured 2026-09-17).  Upload to the
-    maintainer's home, then install it into place as www-data.
+    The docroot belongs to www-data, so a direct rsync into it is refused —
+    and it *silently* returns 0 when the file happens to be unchanged, which
+    is how the first "verification" of this path passed while being unable to
+    write anything (measured 2026-09-17).  Also the single point tests patch
+    to keep fixture pages off the live server (2026-09-19 leak: only the
+    local paths were patched, so a test run published a fixture board).
     """
     try:
-        subprocess.run(["rsync", "-az", str(ANSWERS_PAGE), f"{REMOTE_HOST}:{STAGING}"],
+        subprocess.run(["rsync", "-az", str(local_path), f"{REMOTE_HOST}:{staging}"],
                        check=True, capture_output=True)
         subprocess.run(["ssh", REMOTE_HOST,
-                        f"sudo install -m 644 -o www-data -g www-data {STAGING} {REMOTE_PAGE}"],
+                        f"sudo install -m 644 -o www-data -g www-data {staging} {remote_page}"],
                        check=True, capture_output=True)
         return True
     except Exception as e:  # noqa: BLE001 — publish failure is logged, never raised
         detail = getattr(e, "stderr", b"") or b""
-        log(f"答复页发布失败（本地 commit 已保留）：{e} {detail.decode('utf-8', 'replace')[:200]}")
+        log(f"{label}发布失败（本地文件已保留）：{e} "
+            f"{detail.decode('utf-8', 'replace')[:200]}")
         return False
+
+
+def rsync_page() -> bool:
+    """Ship just the answers page (spec §1 D4); the full-site deploy stays manual."""
+    return _ship_page(ANSWERS_PAGE, STAGING, REMOTE_PAGE, "答复页")
 
 
 def publish(bundle_id: str, analysis: dict, problem: str, state: dict, push: bool = False) -> bool:
@@ -488,15 +496,7 @@ def rebuild_board_page(generated_at: str = "") -> Path:
     BOARD_PAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
     BOARD_PAGE_PATH.write_text(board.render_board(bstate, generated_at),
                                encoding="utf-8")
-    try:
-        subprocess.run(["rsync", "-az", str(BOARD_PAGE_PATH),
-                        f"{REMOTE_HOST}:{BOARD_STAGING}"],
-                       check=True, capture_output=True)
-        subprocess.run(["ssh", REMOTE_HOST,
-                        f"sudo install -m 644 -o www-data -g www-data {BOARD_STAGING} "
-                        f"{REMOTE_BOARD_PAGE}"], check=True, capture_output=True)
-    except Exception as e:  # noqa: BLE001 — page ships locally even if remote refuses
-        log(f"看板页发布失败（本地已生成 {BOARD_PAGE_PATH}）：{e}")
+    _ship_page(BOARD_PAGE_PATH, BOARD_STAGING, REMOTE_BOARD_PAGE, "看板页")
     return BOARD_PAGE_PATH
 
 

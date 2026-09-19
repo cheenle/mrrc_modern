@@ -46,6 +46,8 @@ class AutopilotFixture(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name)
+        # Capture before patching: PageDeployTests re-enables the real ship.
+        self.real_ship_page = autopilot._ship_page
         self.patches = [
             mock.patch.object(autopilot, "STATE_FILE", root / "state.json"),
             mock.patch.object(autopilot, "BOARD_STATE_FILE", root / "board_state.json"),
@@ -54,6 +56,10 @@ class AutopilotFixture(unittest.TestCase):
             mock.patch.object(autopilot, "DRAFTS", root / "drafts"),
             mock.patch.object(autopilot, "ANSWERS_PAGE", root / "answers" / "index.html"),
             mock.patch.object(autopilot, "RUN_LOG", root / "run.log"),
+            # 2026-09-19 leak: patching only the local paths still shipped
+            # fixture pages to the live server (the rsync/ssh targets were
+            # unpatched).  The ship itself is now a single patchable seam.
+            mock.patch.object(autopilot, "_ship_page", return_value=True),
         ]
         for patch in self.patches:
             patch.start()
@@ -268,7 +274,9 @@ class PageDeployTests(AutopilotFixture):
             calls.append(cmd)
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr=b"")
 
-        with mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
+        with mock.patch.object(autopilot, "_ship_page",
+                               side_effect=self.real_ship_page), \
+                mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
             self.assertTrue(autopilot.rsync_page())
         self.assertEqual(calls[0][0], "rsync")
         self.assertIn(autopilot.STAGING, calls[0][-1])
@@ -280,7 +288,9 @@ class PageDeployTests(AutopilotFixture):
         def fake_run(cmd, **kwargs):
             raise subprocess.CalledProcessError(12, cmd, stderr=b"Permission denied")
 
-        with mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
+        with mock.patch.object(autopilot, "_ship_page",
+                               side_effect=self.real_ship_page), \
+                mock.patch.object(autopilot.subprocess, "run", side_effect=fake_run):
             self.assertFalse(autopilot.rsync_page())
 
 

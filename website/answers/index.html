@@ -1,184 +1,103 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MRRC Modern · 问题答复</title>
-    <style>
-      body {
-        background: #12121a;
-        color: #e0e0e0;
-        font-family: -apple-system, tahoma, sans-serif;
-        margin: 0 auto;
-        padding: 24px;
-        max-width: 820px;
-        line-height: 1.7;
-      }
-      h1 {
-        font-size: 22px;
-        margin: 0 0 6px;
-      }
-      h2 {
-        font-size: 17px;
-        margin: 26px 0 6px;
-      }
-      h3 {
-        font-size: 16px;
-        margin: 10px 0 4px;
-      }
-      h4 {
-        font-size: 14px;
-        margin: 14px 0 4px;
-        color: #e8a33d;
-      }
-      .muted {
-        color: #8a8a96;
-        font-size: 13px;
-      }
-      code {
-        background: #1b1b26;
-        border-radius: 3px;
-        padding: 1px 5px;
-        font-size: 12.5px;
-      }
-      a {
-        color: #e8a33d;
-      }
-      .card {
-        background: #181824;
-        border: 1px solid #2c2c38;
-        border-radius: 6px;
-        padding: 14px;
-        margin: 16px 0;
-      }
-      .card header {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        flex-wrap: wrap;
-        margin-bottom: 6px;
-      }
-      .id {
-        font-family: ui-monospace, monospace;
-        font-size: 12.5px;
-        color: #e8a33d;
-      }
-      .badge {
-        font-size: 12px;
-        padding: 1px 7px;
-        border-radius: 10px;
-        border: 1px solid #39414d;
-      }
-      .badge.ok {
-        color: #5ad07a;
-        border-color: #2f6b40;
-      }
-      .badge.warn {
-        color: #e8c25a;
-        border-color: #6b5f2f;
-      }
-      .verdict {
-        margin: 6px 0 0;
-        color: #e6e6e6;
-      }
-      ul {
-        margin: 4px 0 0;
-        padding-left: 1.2rem;
-      }
-      li {
-        margin: 2px 0;
-        color: #cfcfd6;
-      }
-      li.ev {
-        font-family: ui-monospace, monospace;
-        font-size: 12px;
-        color: #8a8a96;
-      }
-      details {
-        margin-top: 10px;
-      }
-      summary {
-        cursor: pointer;
-        color: #8a8a96;
-        font-size: 13px;
-      }
-      #search {
-        width: 100%;
-        box-sizing: border-box;
-        background: #0f0f16;
-        color: #fff;
-        border: 1px solid #444;
-        border-radius: 4px;
-        padding: 9px;
-        font-size: 14px;
-        margin-top: 8px;
-      }
-      .empty {
-        background: #181824;
-        border: 1px solid #2c2c38;
-        border-radius: 6px;
-        padding: 14px;
-        margin: 16px 0;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>🐞 问题答复</h1>
-    <p class="muted">
-      这一页发布「🐞 遇到问题」上报的分析结论。输入编号（形如
-      <code>20260917-072530-ab12</code>）或关键词即可筛选。
-    </p>
-    <input
-      id="search"
-      type="search"
-      placeholder="编号 / 关键词（如 录音、-9996、CI-V）"
-      autocomplete="off"
-    />
-    <p class="muted" id="count"></p>
-    <div class="empty">
-      <h2>现在还没有答复</h2>
-      <p>
-        诊断包已经可以上传（菜单 → 🐞 遇到问题）。自动分诊每 10
-        分钟检查一次新包， 结论会作为卡片出现在这一页。
-      </p>
-      <h2>着急的话</h2>
-      <p>
-        把界面上的<b>编号</b>连同问题描述发到
-        <a href="https://www.vlsc.net/mrrc_modern/">MRRC Modern 主页</a
-        >上的联系方式； 也可以在「🐞 遇到问题」页点<b>只保存到本地</b>，把 zip
-        直接发给我。
-      </p>
-    </div>
-    <p class="muted">最后更新：2026-09-17 10:30（自动生成，勿手改）</p>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MRRC Modern · 问题答复</title>
+<style>
+  body{background:#12121a;color:#e0e0e0;font-family:-apple-system,tahoma,sans-serif;
+       margin:0 auto;padding:24px;max-width:820px;line-height:1.7}
+  h1{font-size:22px;margin:0 0 6px}
+  h2{font-size:17px;margin:26px 0 6px}
+  h3{font-size:16px;margin:10px 0 4px}
+  h4{font-size:14px;margin:14px 0 4px;color:#e8a33d}
+  .muted{color:#8a8a96;font-size:13px}
+  code{background:#1b1b26;border-radius:3px;padding:1px 5px;font-size:12.5px}
+  a{color:#e8a33d}
+  .card{background:#181824;border:1px solid #2c2c38;border-radius:6px;padding:14px;margin:16px 0}
+  .card header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .id{font-family:ui-monospace,monospace;font-size:12.5px;color:#e8a33d}
+  .badge{font-size:12px;padding:1px 7px;border-radius:10px;border:1px solid #39414d}
+  .badge.ok{color:#5ad07a;border-color:#2f6b40}
+  .badge.warn{color:#e8c25a;border-color:#6b5f2f}
+  .verdict{margin:6px 0 0;color:#e6e6e6}
+  ul{margin:4px 0 0;padding-left:1.2rem}
+  li{margin:2px 0;color:#cfcfd6}
+  li.ev{font-family:ui-monospace,monospace;font-size:12px;color:#8a8a96}
+  details{margin-top:10px}
+  summary{cursor:pointer;color:#8a8a96;font-size:13px}
+  #search{width:100%;box-sizing:border-box;background:#0f0f16;color:#fff;border:1px solid #444;
+          border-radius:4px;padding:9px;font-size:14px;margin-top:8px}
+  .empty{background:#181824;border:1px solid #2c2c38;border-radius:6px;padding:14px;margin:16px 0}
+</style>
+</head>
+<body>
+  <h1>🐞 问题答复</h1>
+  <p class="muted">这一页发布「🐞 遇到问题」上报的分析结论。输入编号（形如
+  <code>20260917-072530-ab12</code>）或关键词即可筛选。</p>
+  <input id="search" type="search" placeholder="编号 / 关键词（如 录音、-9996、CI-V）" autocomplete="off">
+  <p class="muted" id="count"></p>
+    <article class="card" id="20260918-114118-9ad3">
+      <header>
+        <span class="id">20260918-114118-9ad3</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">音频 · 2026-09-19 09:10</span>
+      </header>
+      <h3>(未填写)</h3>
+      <p class="verdict">录音签名与 V2.44/V2.45 修复的「写入端一次性生命周期」缺陷同签名，当前 v1.18.1 已包含修复；包内命中行全部为 2026-09-12 修复前的历史日志，9/18 当天无新录音丢弃，按回归排查（用户先做一次新录音验证），其余告警（串口 ENXIO、音频 -9999、TX 门禁、弱密码）均为已知环境/预期行为</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>录音签名逐行吻合本仓历史：`Recording dropped 350 block(s) so far` + `Recording queue full on stop — finishing directly` 与 V2.44/V2.45（v1.15.0 发布，2026-09-12）记录并修复的『MP3 writer 只在进程启动时创建一次，首次 REC/STOP 后每会话无人消费、时长正确内容全静音』缺陷完全同签名；当前代码已含修复（server.py:348 `_ensure_rec_writer()` 在每次 add_audio/stop/REC 幂等重建 writer，队列满改为丢最旧块）→ 按回归排查：包内该签名的样本行时间戳均为 2026-09-12 22:30/22:37（修复发布前的旧日志残留），而 2026-09-18 当天的 log 尾部零条录音丢弃，故需用户在 1.18.1 上录一段新 QSO 验证；若新录音仍全静音即为回归</li>
+        <li>串口掉线 6893 条：`[Errno 6] Device not configured` + `No such file or directory: [已隐去]` 为 USB 串口桥物理层消失后重枚举（V2.43 已优化恢复成本：重连不再做 17 s 的全量状态同步），属线缆/HUB/供电环境问题，非产品缺陷</li>
+        <li>音频恢复 192 条：`RX open failed ([Errno -9999] Unanticipated host error)` 是 macOS Core Audio 在 USB 重枚举后缓存设备索引失效的已知现象，产品已内置 PortAudio 重初始化 + 按设备名重解析重试（audio_handler.py）；`Configured audio device &#x27;USB Audio Device&#x27; not found` 与之同源，env.json 显示当前两设备均已枚举到，属瞬时环境问题</li>
+        <li>TX 门禁 141 条（IC-705/IC-7760/FTDX10 not hardware-verified — transmit refused）为预期安全行为，且本机 radio.model=ft710、tx_gated=false，不影响使用；`Weak password detected!` 为密码强度提醒</li>
+        <li>Traceback 47 条在包内未附任何堆栈内容（仅重复标题行），且 server-prev.log 显示本机同时跑过单元测试（tests/test_cq_player.py 等），无法归因到运行故障；如需排查需附原始堆栈段落</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>录音回归验证：在 v1.18.1 上开启一次录音（REC）→ 收发几十秒 → 停止，回放生成的 MP3 确认有声音；本仓 recordings 目录文件名含频率与时间（如 `&lt;freq&gt;kHz_&lt;日期&gt;_&lt;时间&gt;.mp3`），若新录音正常则说明包内命中只是 9/12 的旧日志，无需处理；若仍全静音，再上报并注明新录音的文件名与时间</li>
+        <li>串口稳定性：电台 USB 线直连电脑、不经无源 HUB；换一根短一点的优质 USB 线；确认电台供电稳定（重枚举多由供电/接触引起）；掉线后程序会自动重连并经轮询层级恢复状态，无需手动重启</li>
+        <li>音频无声/启动时 RX 打不开：电台断电重开或换 USB 口后，在设置里重新选择 RX/TX 设备（macOS 重枚举会改变设备序号，程序会按名称重解析，但设备被系统改名/占用时需手动重选）并重启服务</li>
+        <li>如确需在未验证机型上发射才设置 MRRC_ALLOW_UNVERIFIED_TX=1（先用 _diag_civ.py 验证电台），本例 FT-710 已验证、无需设置</li>
+        <li>按提醒把 Web 登录密码改为 ≥12 位、含大小写/数字/符号的强密码</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">summary.txt 录音写入：`2026-09-12 22:30:23,503 [WARNING] mrrc: Recording dropped 350 block(s) so far`；`2026-09-12 22:30:24,151 [WARNING] mrrc: Recording queue full on stop — finishing directly`</li>
+        <li class="ev">CHANGELOG.md:290 `现在 _ensure_rec_writer() 在每次 add_audio、stop 入队与每次 REC 时幂等重建 writer…队列满时改为丢弃最旧块以腾出位置给 stop 哨兵`</li>
+        <li class="ev">SDD/14-version-history.md:15-16 SDD V2.45/V2.44：『录音写入端生命周期修复——同一进程里只有第一次录音有声音…大小和时长都正确、内容全哑』，随 v1.15.0 发布</li>
+        <li class="ev">server.py:348 `def _ensure_rec_writer()`；server.py:396/423/1550 三处调用；server.py:432 `Recording queue full on stop — dropping the oldest block to finish`（新行为）</li>
+        <li class="ev">summary.txt 串口掉线：`Serial device [已隐去] disappeared ([Errno 6] Device not configured) — the radio&#x27;s USB bridge re-enumerated, or the cable/hub/power is marginal`</li>
+        <li class="ev">summary.txt 音频恢复：`2026-09-18 07:11:25,831 [WARNING] mrrc.audio: RX open failed ([Errno -9999] Unanticipated host error) — re-initializing PortAudio`</li>
+        <li class="ev">env.json: version=1.18.1, radio.model=ft710, tx_gated=false, configured_rx/configured_tx=USB Audio Device；summary.txt TX 门禁：`Icom IC-705 is not hardware-verified — transmit refused`</li>
+        <li class="ev">server-prev.log：`tests/test_cq_player.py`、`tests/test_poll_scheduler.py` 等测试输出（说明本机日志混有开发测试记录）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_ensure_rec_writer（修复已在当代码；如复现回归再查 recorder.py:_recording_writer_loop 与 server.py 的 _rec_queue 消费端）</code></p>
+    </article>
+  <p class="muted">最后更新：2026-09-19 09:10（自动生成，勿手改）</p>
 
-    <script>
-      var cards = Array.prototype.slice.call(
-        document.querySelectorAll(".card"),
-      );
-      var box = document.getElementById("search");
-      var count = document.getElementById("count");
-      function applyFilter() {
-        var q = (box.value || "").trim().toLowerCase();
-        var shown = 0;
-        cards.forEach(function (card) {
-          var hit = !q || card.textContent.toLowerCase().indexOf(q) !== -1;
-          card.style.display = hit ? "" : "none";
-          if (hit) {
-            shown += 1;
-          }
-        });
-        count.textContent = shown + " / " + cards.length + " 条";
-      }
-      box.addEventListener("input", applyFilter);
-      if (location.hash) {
-        // #<编号> 直达并填入搜索框
-        box.value = decodeURIComponent(location.hash.slice(1));
-        var target = document.getElementById(box.value);
-        if (target) {
-          target.scrollIntoView();
-        }
-      }
-      applyFilter();
-    </script>
-  </body>
+<script>
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var box = document.getElementById('search');
+  var count = document.getElementById('count');
+  function applyFilter() {
+    var q = (box.value || '').trim().toLowerCase();
+    var shown = 0;
+    cards.forEach(function (card) {
+      var hit = !q || card.textContent.toLowerCase().indexOf(q) !== -1;
+      card.style.display = hit ? '' : 'none';
+      if (hit) { shown += 1; }
+    });
+    count.textContent = shown + ' / ' + cards.length + ' 条';
+  }
+  box.addEventListener('input', applyFilter);
+  if (location.hash) {                       // #<编号> 直达并填入搜索框
+    box.value = decodeURIComponent(location.hash.slice(1));
+    var target = document.getElementById(box.value);
+    if (target) { target.scrollIntoView(); }
+  }
+  applyFilter();
+</script>
+</body>
 </html>

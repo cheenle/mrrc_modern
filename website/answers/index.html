@@ -37,6 +37,44 @@
   <code>20260917-072530-ab12</code>）或关键词即可筛选。</p>
   <input id="search" type="search" placeholder="编号 / 关键词（如 录音、-9996、CI-V）" autocomplete="off">
   <p class="muted" id="count"></p>
+    <article class="card" id="20260919-085517-b3aa">
+      <header>
+        <span class="id">20260919-085517-b3aa</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">环境 · 2026-09-19 09:12</span>
+      </header>
+      <h3>(未填写)</h3>
+      <p class="verdict">无在发产品缺陷：录音「dropped/queue full」签名与 V2.44/V2.45（v1.15.0 发布）修复的写入端生命周期缺陷同签名，但均为 2026-09-12 旧日志、当前 v1.18.1 已含修复（server.py:348 `_ensure_rec_writer()` 幂等重建 writer、server.py:432 队列满改为丢最旧块），09-19 近期日志录音/音频/串口全部健康；其余命中为 USB 串口重枚举（环境）与开发机跑测试套件写同一日志造成的 Traceback 误报</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>录音命中全部是 2026-09-12 22:30 的旧日志（summary.txt『== 录音写入：233 条 ==』首条 2026-09-12 22:30:23,503 『Recording dropped 350 block(s) so far』、22:30:24,151 『Recording queue full on stop — finishing directly』），与 SDD/14-version-history.md V2.44/V2.45 记录的 22:26 现场签名（dropped 950 块 + queue full on stop + 时长正确全静音）同源，该缺陷在 v1.15.0 已修复，当前 1.18.1 远高于修复版本 → 按已修复的历史残留处理，非回归：2026-09-19 的 server.log 尾部无任何录音告警，env.json 显示 recording.active=true 正常</li>
+        <li>『串口掉线 5335 条』为 [Errno 6] Device not configured 的 USB 桥重枚举（summary.txt『串口恢复：出现 ENXIO…』），日志原文已指明电缆/供电/无源 HUB 嫌疑，且均发生在 2026-09-12；09-19 近期日志 serial_connected=True、IF poll 每约 5 分钟一次干净返回（『2026-09-19 08:55:14,656 IF poll: vfo_a=7060000 Hz (+0 Hz)』），属环境问题非缺陷</li>
+        <li>『Traceback 47 条 + 启动 25 次 ⚠️崩溃』是误报：server-prev.log 尾部大量行是单元测试输出（/dev/fake 端口、tmp 路径、『test_cq_player.py:162』『test_memory_recall.py:66』等），即本机在仓库目录跑测试套件时与服务器共用 logs/server*.log，测试的 Traceback 被计入体检；09-19 真实服务器会话（08:13–08:55）无异常，TX 会话 frames/written 正常、queue_drops=0</li>
+        <li>音频『Configured audio device not found』与『RX open failed -9999』均为 09-12/09-18 旧记录，对应设备重枚举后缓存索引失效（AGENTS.md 已记载该已知行为并带重初始化恢复）；09-19 日志显示『RX audio started: [4] USB Audio Device』反复成功</li>
+        <li>『Weak password detected!』（2026-09-19 08:55:07,770）为使用建议；『未验证机型拒绝发射』TX 门禁 141 条属预期安全行为（env.json tx_gated=false，实际在用 FT-710 未被门禁）</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>若近期再次遇到录音无声：直接重新录一段并用播放器确认，当前版本已按会话重建写入器；如新录音仍全静音再上报并注明时间点</li>
+        <li>串口若再掉线：把 FT-710 USB 线直插主机（不用无源 HUB），换一根短一点的优质 USB 线，并确认电台供电稳定；掉线后服务器会自动重连，无需重启</li>
+        <li>设备重插后若提示『Configured audio device not found』：在设置里重新选择当前的 USB Audio 设备名保存即可（系统重枚举会改变设备序号，程序已按名称解析）</li>
+        <li>建议把测试/开发运行的服务端日志与日常使用的 MRRC_LOG_DIR 分开（例如日常启动器已指向用户数据目录），避免测试 Traceback 污染体检摘要</li>
+        <li>把 Web 登录密码改为至少 12 位、含大小写/数字/符号，消除 Weak password 告警</li>
+        <li>如需 IC-705/IC-7760 等未验证机型发射，先按日志提示用 _diag_civ.py 核验电台，再设 MRRC_ALLOW_UNVERIFIED_TX=1 并重启；对 FT-710 无影响，可忽略该告警</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">summary.txt:『2026-09-12 22:30:23,503 [WARNING] mrrc: Recording dropped 350 block(s) so far』『2026-09-12 22:30:24,151 [WARNING] mrrc: Recording queue full on stop — finishing directly』</li>
+        <li class="ev">SDD/14-version-history.md:15 (SDD V2.45 2026-09-12) 与 :16 (SDD V2.44 / v1.15.0)：『Recording dropped 950 block(s) so far』…『_ensure_rec_writer() 在每次 add_audio/stop 入队/每次 REC 时幂等重建』</li>
+        <li class="ev">server.py:348 def _ensure_rec_writer() / server.py:432 『Recording queue full on stop — dropping the oldest …』（修复后措辞，证明当代码含修复）</li>
+        <li class="ev">summary.txt:『2026-09-12 23:05:05,849 Serial device [已隐去] disappeared ([Errno 6] Device not configured)』</li>
+        <li class="ev">server-prev.log:『test_cq_player.py:162』『test_memory_recall.py:66』『Connected to IC-7300 (CI-V 0x94) on /dev/fake』——Traceback 来自测试套件共享日志</li>
+        <li class="ev">server.log:『2026-09-19 08:16:11,620 TX session: frames=137 … queue_drops=0』『2026-09-19 08:16:11,879 RX audio started: [4] USB Audio Device …』『2026-09-19 08:55:14,656 IF poll: vfo_a=7060000 Hz (+0 Hz)』</li>
+        <li class="ev">server.log:『2026-09-19 08:55:07,770 [WARNING] mrrc: Weak password detected!』</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:348 _ensure_rec_writer（V2.44/V2.45 修复已存在，当代码无需改动）</code></p>
+    </article>
     <article class="card" id="20260918-114118-9ad3">
       <header>
         <span class="id">20260918-114118-9ad3</span>
@@ -75,7 +113,7 @@
       </details>
       <p class="muted">相关代码：<code>server.py:_ensure_rec_writer（修复已在当代码；如复现回归再查 recorder.py:_recording_writer_loop 与 server.py 的 _rec_queue 消费端）</code></p>
     </article>
-  <p class="muted">最后更新：2026-09-19 09:10（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-09-19 09:12（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

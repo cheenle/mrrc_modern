@@ -242,9 +242,23 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 | 控件都正常，但**接收没有声音** | 最常见是**麦克风权限**（0.7.2 第 6 步，或 系统设置 → 隐私与安全性 → 麦克风）；其次是电台 AF 增益太低、RX 音频设备选错。 |
 | **麦克风列表里找不到 MRRC Modern** | 当前运行的包缺少权限说明键（v1.18.0 及更早）→ 换新版。 |
 | **每次升级都问一次麦克风权限** | 正常：自签名应用的授权绑定"当次构建"，新版本会被再问一次。 |
+| WSJT-X / FLDIGI 报 Port busy、打不开串口 | CAT 串口被独占了——退出菜单栏的 MRRC Modern 再开电台软件（反之 MRRC 启动失败也先关它们）。详见 §0.8；另确认用的是 `cu.` 开头而非 `tty.`。 |
 | 端口 8888 被占用 | 高级用户在 `mrrc_modern.env` 里改 `MRRC_WEB_PORT`，重启生效。 |
 
 ---
+
+## 0.8 与第三方电台软件共用串口（WSJT-X / JTDX / FLDIGI / rumLogNG 等）
+
+在 WSJT-X 等软件里直接对照以下参数填入（FT-710，macOS 串口名为例；Windows 填对应的 Enhanced COM 口）：
+
+| 参数 | 填入 | 为什么 |
+| --- | --- | --- |
+| Serial Port | **`/dev/cu.usbserial-0121DB3A0`** | 必须 `cu.` 开头——`tty.` 是等载波的调制解调器语义，极易报「Port busy」 |
+| Baud Rate | **38400** | Yaesu 官方默认；电台菜单 **CAT RATE 必须同为 38400**（MRRC Modern 默认值相同） |
+| Handshake / Flow Control | **None**（或 Hardware RTS/CTS） | **禁选 Xon/Xoff**——软件流控会把 0x11/0x13 当控制字节，CAT 问答直接失灵 |
+| Data/Parity/Stop | 8N1 | 与电台菜单 CAT 设置一致 |
+
+> ⚠️ **串口独占法则（最容易撞的坑）**：同一时刻**只能有一个程序**打开 CAT 串口。要用 WSJT-X/JTDX/FLDIGI，先退出菜单栏的 MRRC Modern（它持有 CAT 口）；反过来 MRRC 启动时串口打不开，先关掉正在运行的其它电台软件。FT-710 的 CP2105 双口里只有 **Enhanced**（`…A0`）是 CAT，另一个 `…A1`（Standard）跑不了 CAT。占用排查：`lsof /dev/cu.usbserial-0121DB3A0`。
 
 ## 1. 主界面控件编号图
 

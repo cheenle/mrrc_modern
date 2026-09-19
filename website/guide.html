@@ -284,6 +284,7 @@
 <li><a href="#电台型号差异" id="toc-电台型号差异">0.5 电台型号差异</a></li>
 <li><a href="#windows-配置与运行" id="toc-windows-配置与运行">0.6 Windows 配置与运行</a></li>
 <li><a href="#macos-安装与初始化" id="toc-macos-安装与初始化">0.7 macOS 安装与初始化</a></li>
+<li><a href="#与第三方电台软件共用串口wsjt-x-jtdx-fldigi-rumlogng-等" id="toc-与第三方电台软件共用串口wsjt-x-jtdx-fldigi-rumlogng-等">0.8 与第三方电台软件共用串口（WSJT-X / JTDX / FLDIGI / rumLogNG 等）</a></li>
 <li><a href="#主界面控件编号图" id="toc-主界面控件编号图">1. 主界面控件编号图</a></li>
 <li><a href="#控件速查表编号-名称-功能-操作" id="toc-控件速查表编号-名称-功能-操作">2. 控件速查表（编号 → 名称 → 功能 → 操作）</a></li>
 <li><a href="#键盘快捷键桌面端" id="toc-键盘快捷键桌面端">3. 键盘快捷键（桌面端）</a></li>
@@ -578,15 +579,6 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <blockquote class="callout-info">
 <p><strong>FT-710 USB 驱动：macOS 11.3+ 免驱</strong>（2026-09-18 实测：macOS 15.3 从未装过任何第三方驱动，内核日志显示 CP2105 <code>0x10c4/ea70</code> 由系统直接枚举）。仅 <strong>macOS 10.11–11.2</strong> 需要先装 Silicon Labs CP210x VCP 驱动 v6.0.3：下载 <a href="https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg" class="uri">https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg</a> → 挂载 → 双击「Install CP210x VCP Driver」→ 系统设置里批准内核扩展；<strong>Apple Silicon 需先把启动安全性降到「允许用户管理内核扩展」</strong>（恢复模式 → 启动安全性实用工具）——所以能免驱就不要装。验证：插入电台后 <code>ls /dev/cu.usbserial-*</code> 应出现设备。FT4222 真频谱库已随应用打包，无需另装 D2XX。</p>
 </blockquote>
-<blockquote class="callout-info">
-<p><strong>可选：FTDI D2XX 库（频谱兑底，一般不用装）</strong>：如上所述 FT4222 库已随包内置，正常无需此步。仅当 <strong>FT-710 频谱只有 S-meter 合成频谱</strong>（瀑布无信号，且配置里 <code>MRRC_FTDI_LIB_DIR=vendor/ftdi/macos</code> 无误）或源码方式运行缺库时，安装 FTDI 官方 D2XX 1.4.35（本站镜像 <a href="https://www.vlsc.net/mrrc_modern/downloads/D2XX1.4.35.dmg" class="uri">D2XX1.4.35.dmg</a>，约 2.1 MB，SHA-256 <code>208ea2d6…6655c</code>；IC-7300/MK2 频谱走 CI-V，不需要）。前置动作：需管理员密码，终端执行：</p>
-<pre><code>hdiutil attach ~/Downloads/D2XX1.4.35.dmg
-sudo mkdir -p /usr/local/lib
-sudo cp /Volumes/dmg/release/build/libftd2xx.1.4.35.dylib /usr/local/lib/
-sudo ln -sf /usr/local/lib/libftd2xx.1.4.35.dylib /usr/local/lib/libftd2xx.dylib
-hdiutil detach /Volumes/dmg</code></pre>
-<p>完成后菜单栏 <strong>Restart Server</strong> 生效。官方原版：<a href="https://ftdichip.com/drivers/d2xx-drivers/" class="uri">ftdichip.com</a>（直链下载可能 403，故提供镜像）。</p>
-</blockquote>
 <h3 id="首次启动零配置-https">0.7.2 首次启动：零配置 + HTTPS</h3>
 <p>启动后<strong>什么都不用配</strong>，软件会自动完成：</p>
 <ol type="1">
@@ -671,7 +663,7 @@ hdiutil detach /Volumes/dmg</code></pre>
 </tr>
 <tr>
 <td>串口下拉列表是空的 / 找不到电台串口</td>
-<td>确认 USB 线是<strong>数据线</strong>（不是纯充电线）、电台已开机；列表只显示真实串口（已过滤蓝牙等假端口）。仍找不到时，按 0.7.1「FT-710 USB 驱动」安装 SiLabs CP210x 驱动（装前拔电台、装完插回）。</td>
+<td>确认 USB 线是<strong>数据线</strong>（不是纯充电线）、电台已开机；列表只显示真实串口（已过滤蓝牙等假端口）。</td>
 </tr>
 <tr>
 <td>怎么完全卸载？</td>
@@ -686,10 +678,6 @@ hdiutil detach /Volumes/dmg</code></pre>
 <td>最常见是<strong>麦克风权限</strong>（0.7.2 第 6 步，或 系统设置 → 隐私与安全性 → 麦克风）；其次是电台 AF 增益太低、RX 音频设备选错。</td>
 </tr>
 <tr>
-<td><strong>FT-710 频谱只有 S-meter 合成频谱</strong></td>
-<td>确认 <code>MRRC_FTDI_LIB_DIR=vendor/ftdi/macos</code>；仍不行时按 0.7.1「可选：FTDI D2XX 库」安装后 <strong>Restart Server</strong>（IC-7300/MK2 不适用——频谱走 CI-V）。</td>
-</tr>
-<tr>
 <td><strong>麦克风列表里找不到 MRRC Modern</strong></td>
 <td>当前运行的包缺少权限说明键（v1.18.0 及更早）→ 换新版。</td>
 </tr>
@@ -698,12 +686,57 @@ hdiutil detach /Volumes/dmg</code></pre>
 <td>正常：自签名应用的授权绑定”当次构建”，新版本会被再问一次。</td>
 </tr>
 <tr>
+<td>WSJT-X / FLDIGI 报 Port busy、打不开串口</td>
+<td>CAT 串口被独占了——退出菜单栏的 MRRC Modern 再开电台软件（反之 MRRC 启动失败也先关它们）。详见 §0.8；另确认用的是 <code>cu.</code> 开头而非 <code>tty.</code>。</td>
+</tr>
+<tr>
 <td>端口 8888 被占用</td>
 <td>高级用户在 <code>mrrc_modern.env</code> 里改 <code>MRRC_WEB_PORT</code>，重启生效。</td>
 </tr>
 </tbody>
 </table></div>
 <hr />
+<h2 id="与第三方电台软件共用串口wsjt-x-jtdx-fldigi-rumlogng-等">0.8 与第三方电台软件共用串口（WSJT-X / JTDX / FLDIGI / rumLogNG 等）</h2>
+<p>在 WSJT-X 等软件里直接对照以下参数填入（FT-710，macOS 串口名为例；Windows 填对应的 Enhanced COM 口）：</p>
+<div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>参数</th>
+<th>填入</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Serial Port</td>
+<td><strong><code>/dev/cu.usbserial-0121DB3A0</code></strong></td>
+<td>必须 <code>cu.</code> 开头——<code>tty.</code> 是等载波的调制解调器语义，极易报「Port busy」</td>
+</tr>
+<tr>
+<td>Baud Rate</td>
+<td><strong>38400</strong></td>
+<td>Yaesu 官方默认；电台菜单 <strong>CAT RATE 必须同为 38400</strong>（MRRC Modern 默认值相同）</td>
+</tr>
+<tr>
+<td>Handshake / Flow Control</td>
+<td><strong>None</strong>（或 Hardware RTS/CTS）</td>
+<td><strong>禁选 Xon/Xoff</strong>——软件流控会把 0x11/0x13 当控制字节，CAT 问答直接失灵</td>
+</tr>
+<tr>
+<td>Data/Parity/Stop</td>
+<td>8N1</td>
+<td>与电台菜单 CAT 设置一致</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote class="callout-warn">
+<p>⚠️ <strong>串口独占法则（最容易撞的坑）</strong>：同一时刻<strong>只能有一个程序</strong>打开 CAT 串口。要用 WSJT-X/JTDX/FLDIGI，先退出菜单栏的 MRRC Modern（它持有 CAT 口）；反过来 MRRC 启动时串口打不开，先关掉正在运行的其它电台软件。FT-710 的 CP2105 双口里只有 <strong>Enhanced</strong>（<code>…A0</code>）是 CAT，另一个 <code>…A1</code>（Standard）跑不了 CAT。占用排查：<code>lsof /dev/cu.usbserial-0121DB3A0</code>。</p>
+</blockquote>
 <h2 id="主界面控件编号图">1. 主界面控件编号图</h2>
 <figure id="fig1">
 <img loading="lazy" decoding="async" src="images/ui-guide-main.svg" alt="主界面控件编号图" />
@@ -1558,16 +1591,8 @@ function toggleMobileMenu() {
         if (!lb) {
             lb = document.createElement('div');
             lb.className = 'guide-lightbox';
-            var limg = document.createElement('img');
-            limg.alt = '放大图片';
-            lb.appendChild(limg);
-            var lbtn = document.createElement('button');
-            lbtn.className = 'guide-lightbox-close';
-            lbtn.setAttribute('aria-label', '关闭');
-            var licon = document.createElement('i');
-            licon.className = 'fas fa-xmark';
-            lbtn.appendChild(licon);
-            lb.appendChild(lbtn);
+            lb.innerHTML = '<img alt="放大图片">' +
+                '<button class="guide-lightbox-close" aria-label="关闭"><i class="fas fa-xmark"></i></button>';
             document.body.appendChild(lb);
             lb.addEventListener('click', closeLb);
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLb(); });

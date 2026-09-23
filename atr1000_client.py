@@ -63,7 +63,7 @@ SCMD_MEMORY_INFO = 7       # memory info
 # ── Stable-window learning parameters ─────────────────────────────
 LEARN_WINDOW_SIZE = 4        # consecutive stable samples required
 LEARN_SWR_STABILITY = 0.08   # max in-window SWR spread
-LEARN_MIN_POWER = 5          # minimum power (W)
+LEARN_MIN_POWER = 3          # minimum power (W) — QRP friendly; idle reads ~1-2 W
 LEARN_IGNORE_WINDOW = 1.0    # ignore time after TX start / relay change (s)
 LEARN_SWR_MIN = 1.0          # learnable SWR lower bound
 LEARN_SWR_MAX = 1.8          # learnable SWR upper bound
@@ -592,8 +592,12 @@ class ATR1000Client:
         # High-SWR auto-retune guard (decides only; the worker sends the frame)
         self._check_swr_retune(swr, power)
 
-        # Stable-window learning on the METER stream during TX
-        if not (self._tx and not self._tuning and power > 0 and self._freq > 0):
+        # Stable-window learning on the METER stream while transmitting.
+        # Measured power — not the server-side TX signal — decides this, so a
+        # transmission from the radio panel or external software learns too
+        # (sibling mrrc V5.8.5 fix). _tx still drives SYNC suppression only.
+        if not (not self._tuning and power >= LEARN_MIN_POWER
+                and self._freq > 0):
             return
         in_ignore_window = (
             (self._tx_started_at > 0 and now - self._tx_started_at < LEARN_IGNORE_WINDOW)

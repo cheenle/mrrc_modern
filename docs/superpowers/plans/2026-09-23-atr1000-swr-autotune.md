@@ -1130,3 +1130,11 @@ git commit -m "docs(atr1000): SDD §9.8/§15、版本历史 V2.57、模块表与
    需要比对的用例显式调用 `_clear_tuning("relay stable >5s")`；`_flush()` 负责把截止时间推到过去。
    原计划写法会让「首次挂接记录 reason」这条逻辑无法被覆盖（早退于 `compare_at > 0`）。
 3. 任务 2 实测：该模块 `Ran 72 tests`、全套 `Ran 1321 tests ... OK (skipped=1)`，9 个新增用例。
+
+### 任务 3（2026-09-23，已完成）
+
+1. 计划遗漏的连带修改：`LearningBufferTests.test_rejects_low_power` / `test_accepts_min_power_boundary`
+   把旧默认门限写死成字面量 4.9 W / 5.0 W，`LEARN_MIN_POWER` 降到 3 W 后前者会假通过（4.9 W 现在可学习）、
+   后者仍通过但语义已错。改为从 `LEARN_MIN_POWER` 派生（`LEARN_MIN_POWER - 0.1` / `LEARN_MIN_POWER`），
+   以后再调门限不会静默失效。
+2. 任务 3 实测：全套 `Ran 1323 tests ... OK (skipped=1)`（净增 2 个用例：改写 1 个为 3 个）。

@@ -16,6 +16,7 @@ from atr1000_client import (
     SCMD_SYNC,
     SCMD_TUNE_MODE,
     SCMD_RELAY_STATUS,
+    LEARN_MIN_POWER,
     RELAY_MIN_INTERVAL,
     SWR_RETUNE_COOLDOWN,
     SWR_RETUNE_DEBOUNCE,
@@ -161,11 +162,11 @@ class LearningBufferTests(unittest.TestCase):
         self.assertAlmostEqual(median, 1.2)
 
     def test_rejects_low_power(self):
-        should, _ = self._feed(6, power=4.9)
+        should, _ = self._feed(6, power=LEARN_MIN_POWER - 0.1)
         self.assertFalse(should)
 
     def test_accepts_min_power_boundary(self):
-        should, _ = self._feed(4, power=5.0)
+        should, _ = self._feed(4, power=LEARN_MIN_POWER)
         self.assertTrue(should)
 
     def test_rejects_swr_above_max(self):
@@ -307,11 +308,23 @@ class MeterLearningFlowTests(unittest.TestCase):
         self.assertAlmostEqual(swr, 1.20)
         self.assertFalse(force)
 
-    def test_no_learning_when_not_tx(self):
+    def test_learns_without_the_server_tx_signal(self):
+        """V5.8.5 parity: a panel/external transmission learns too — measured
+        power, not notify_tx(), is the gate."""
         self.client.notify_tx(False)
-        for _ in range(6):
+        for _ in range(4):
             self.client._handle_frame(make_meter_frame(120, 50))
+        self.assertEqual(len(self.storage.learned), 1)
+
+    def test_no_learning_below_min_power(self):
+        for _ in range(6):
+            self.client._handle_frame(make_meter_frame(120, 2))   # 2 W idle read
         self.assertEqual(len(self.storage.learned), 0)
+
+    def test_qrp_level_power_still_learns(self):
+        for _ in range(4):
+            self.client._handle_frame(make_meter_frame(120, 4))   # 4 W ≥ 3 W
+        self.assertEqual(len(self.storage.learned), 1)
 
     def test_no_learning_during_ignore_window(self):
         self.client._tx_started_at = time.monotonic()  # inside 1.0s window

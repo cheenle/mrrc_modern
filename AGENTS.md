@@ -29,7 +29,7 @@ This repository contains a Python FastAPI server for remote radio control (Yaesu
 | `scope_libraries.py` | Compatibility shim — real module moved to `backends/ft710/scope_libraries.py`: FTDI library discovery and SPI clock configuration |
 | `config.py` | Protocol-neutral constants (serial/web/SSL/auth/poll/reconnect/PTT) + backend-aware serial defaults (FT-710 38400; IC-7300/MK2 115200) + shared UI mode tables and the `_interp` calibration helper; FT-710-specific tables moved to `backends/ft710/config_ft710.py` |
 | `_diag_ic7300_scope.py` | One-shot IC-7300/MK2 CI-V field diagnostic using the production checksum-free codec/parser; probes frequency/PTT, enables both scope display (`27 10`) and data output (`27 11`), and disables data output on exit |
-| `atr1000_client.py` | Optional asyncio WS client for networked ATR1000 tuner: binary frame protocol, 5s reconnect, 55-min refresh, TX-no-SYNC watchdog, learning, throttled relay writes, `notify_freq`/`notify_tx` sync hooks |
+| `atr1000_client.py` | Optional asyncio WS client for networked ATR1000 tuner: binary frame protocol, 5s reconnect, 55-min refresh, TX-no-SYNC watchdog, learning, throttled relay writes, `notify_freq`/`notify_tx` sync hooks, **high-SWR auto full tune** (SWR>2.0 for ≥1.5s at ≥5W measured power → one `mode=2` frame, 30s cooldown, 3 tries per frequency, never keys the radio) with post-tune write-back only when improved ≥0.02 and ≤1.8; **learning gate is measured power ≥3W**, so panel/external-PTT transmissions learn too |
 | `atr1000_tuner.py` | `TunerStorage` LC-learning JSON store (learn gate SWR 1.0–1.8, 1kHz keys ±5kHz nearest, atomic writes) |
 
 Pluggable radio backends live in `backends/` (selected via `MRRC_RADIO_MODEL`, default `ft710`):

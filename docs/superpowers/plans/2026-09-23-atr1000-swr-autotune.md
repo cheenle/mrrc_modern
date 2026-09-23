@@ -1145,3 +1145,18 @@ git commit -m "docs(atr1000): SDD §9.8/§15、版本历史 V2.57、模块表与
    实际只能覆盖 `get_running_loop()` 抛异常被吞掉的路径（测不到"无客户端"分支）。改为在
    `asyncio.run()` 内调用 + `await asyncio.sleep(0)`，真正走 `_broadcast_atr` 的空客户端集合。
 2. 任务 4 实测：该模块 `Ran 18 tests`、全套 `Ran 1328 tests ... OK (skipped=1)`，5 个新增用例。
+
+### 任务 6（2026-09-23，已完成）
+
+1. **计划遗漏的版本载体连带项**（`tests/test_release_artifacts.py` 抓到）：SDD 版本升到 V2.57 后，
+   图表版本窗口（`release_check` 的 `diagram-version` 规则：不得早于最近 3 个 SDD 版本）把 12 张停在
+   V2.54 的图全部判失败。按仓库既有做法（前一次升版的 commit `434a085` 同样只改标记行）把
+   `SDD/diagrams/*.svg`（9 张）与 `docs/images/ui-guide-*.svg`（2 张）的 `diagram-version` 标记推到 V2.57。
+2. **ATR 链路图是真改而不是只盖章**：`SDD/diagrams/atr1000-linkage.svg` 增加本次能力（client 框补
+   「SWR>2 for ≥1.5 s while transmitting → one full tune (mode=2) · never keys PTT」、LearningBuffer 标注
+   `≥3 W`、server 框补 `atrTuneResult (auto=true)`），并把画布从 320 高扩到 336 以容纳新文字行。
+3. 站点副本由生成器产出：`python3 website/build_sdd.py`（16 页 + 10 图）与 `python3 website/build_guide.py`
+   （ui-guide 图片副本）；4 处手写版本载体（`website/{,zh/}{index,sdd}.html`）同步 V2.57，并顺手把两处
+   停留的 `Baseline Date` 从 2026-09-13 改成 2026-09-23。
+4. 任务 6 实测：全套 `Ran 1330 tests ... OK (skipped=1)`；`test_release_artifacts` + `test_sdd_docs_consistency`
+   23 项全绿（含 12 张图的版本与关键词规则）。

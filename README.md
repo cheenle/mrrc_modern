@@ -107,6 +107,14 @@ Two things to know before the first launch (full guide:
 | `MRRC_ATR1000_HOST` | *(empty = disabled)* | ATR1000 networked tuner host; empty disables the linkage entirely |
 | `MRRC_ATR1000_PORT` | `60001` | ATR1000 tuner WebSocket port |
 
+When the tuner is enabled, transmitting into SWR > 2.0 (measured power ≥ 5 W for 1.5 s)
+starts one automatic full tune — the UI shows「ATR: SWR x.x 自动调谐中…」and the result as a toast.
+30 s cooldown, and 3 tries per frequency before it gives up until the frequency changes or the SWR
+recovers. The resulting relays are stored only when the match improves (≥ 0.02 and ≤ 1.8), so later
+visits to that frequency start from the tuned values. **The auto tune never keys the radio** — it
+only acts while you are already transmitting. Learning now follows measured power (≥ 3 W) rather than
+the server's TX signal, so transmissions from the radio's own PTT or external software are learned too.
+
 All applicable variables also accept legacy `FT710_*` aliases (for example,
 `FT710_SERIAL_PORT`); `config.py` reads `MRRC_*` first and falls back automatically.
 

@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1299 tests across 66 test modules (7 pty-based Yaesu round-trip tests skip on
-Windows; the per-module counts below were read from `unittest` on 2026-09-18, macOS).
+1330 tests across 66 test modules (7 pty-based Yaesu round-trip tests skip on
+Windows; the per-module counts below were read from `unittest` on 2026-09-23, macOS).
 
 ```bash
 python -m unittest discover -s tests -v
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1299 |
-| Passed | 1299 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1330 |
+| Passed | 1330 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -212,21 +212,24 @@ SDD coverage: §9.8, §11.1 (TunerStorage)
 | `DeleteClearStatsTests` | 7 | Entry delete, clear, statistics |
 | `SingletonTests` | 2 | Shared store instance behavior |
 
-### 20. test_atr1000_client.py — ATR1000 WS Client (50 tests)
+### 20. test_atr1000_client.py — ATR1000 WS Client (74 tests)
 
-SDD coverage: §9.8, §11.1 (ATR1000Client)
+SDD coverage: §9.8, §11.1 (ATR1000Client), §15 (auto tune never keys the radio)
 
 | Class | Tests | Covers |
 | ------- | ------- | -------- |
 | `FrameEncodeTests` | 5 | Binary frame encoding [0xFF,CMD,LEN,DATA] |
 | `FrameParseTests` | 13 | Binary frame parsing |
 | `LearningBufferTests` | 13 | 4-sample stability-window learning |
-| `MeterLearningFlowTests` | 6 | Learning flow from meter pushes |
+| `MeterLearningFlowTests` | 8 | Learning flow from meter pushes, measured-power gate (≥3W, panel/external PTT) |
 | `RelayThrottleTests` | 5 | 5s relay-write throttle |
-| `StateCallbackTests` | 3 | `on_change` callback |
 | `TuningHeuristicTests` | 5 | Tuning-clear heuristics |
+| `StateCallbackTests` | 3 | `on_change` callback |
+| `SwrRetuneGuardTests` | 11 | High-SWR auto-retune guard: debounce, cooldown, 3-try give-up, QSY/relay resets, low-power and tuning suppression, per-frequency counts, contained callback |
+| `AutoTuneCompletionTests` | 8 | Queued tune frame flush, post-tune write-back (improved ≥0.02 and ≤1.8), no rollback, 45s timeout, disconnect abort |
+| `GuardSourceTests` | 3 | No CAT/PTT reference in the module, guard only queues a frame, disconnect wiring pinned |
 
-### 21. test_atr1000_server.py — Server Linkage + Tune Assist (13 tests)
+### 21. test_atr1000_server.py — Server Linkage + Tune Assist (20 tests)
 
 SDD coverage: §9.8, §15 (tune-assist carrier safety)
 
@@ -237,7 +240,9 @@ SDD coverage: §9.8, §15 (tune-assist carrier safety)
 | `TuneAssistRollbackTests` | 1 | No improvement → rollback relays |
 | `TuneAssistNoMeterTests` | 1 | Meter-wait timeout path |
 | `LinkageHookTests` | 3 | Freq-dirty → notify_freq, TX → notify_tx hooks |
-| `SourceGuardTests` | 6 | Disabled/default guard: hooks short-circuit, no client task, frozen-store env override |
+| `AutoTuneEventTests` | 3 | Auto-tune phases → `atrTuneResult` with `auto=true`; lifespan wiring |
+| `TuneAssistBusyTests` | 2 | Manual assist refuses while the tuner is already tuning |
+| `SourceGuardTests` | 8 | Disabled/default guard: hooks short-circuit, no client task, frozen-store env override, auto-phase switch + module cache bust |
 
 ### 22. test_scope_pipe_tx.py — Scope Pipe TX Pause (13 tests)
 
@@ -552,7 +557,7 @@ SDD coverage: AD-020, §9.2, §15, I6
 | §7.2 Config Tables | test_config, test_config_ic7300 | 50 tests |
 | §9.2 WS Protocol | test_server_ws_protocol (WSMessageFormatTests) | 11 tests |
 | §9.6 Polling (incl. stale-read guard) | test_poll_scheduler, test_server_ws_protocol | 17+ tests |
-| §9.8 ATR1000 Tuner Linkage | test_atr1000_tuner, test_atr1000_client, test_atr1000_server | 99 tests |
+| §9.8 ATR1000 Tuner Linkage | test_atr1000_tuner, test_atr1000_client, test_atr1000_server | 130 tests |
 | §12.2 Power Scripts / Guards | test_power_switch, test_ft710_power | 15 tests |
 | §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
 | NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests), test_ssl_bootstrap | 10 tests |
@@ -585,7 +590,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1299 tests in ~25s — can run on every commit.
+2. **Fast execution**: ~1330 tests in ~25s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

@@ -8,7 +8,7 @@ const ASSETS = [
     '/ft710_ui.js?v=32',
     '/modules/ptt_manager.js?v=13',
     '/modules/settings_manager.js?v=13',
-    '/modules/atr1000.js?v=1',
+    '/modules/atr1000.js?v=2',
     '/manifest.json',
 ];
 

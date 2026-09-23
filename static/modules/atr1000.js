@@ -126,23 +126,41 @@
     }
 
     // ── Tune assist ───────────────────────────────────────────────
+    function tuneResultText(msg) {
+        const before = msg.swr_before, after = msg.swr_after;
+        switch (msg.phase) {
+        case 'skipped':
+            return 'ATR: SWR ' + (before || '?') + ' 已达标,无需调谐';
+        case 'success':
+            return 'ATR 调谐完成: SWR ' + before + ' → ' + after;
+        case 'rollback':
+            return 'ATR 调谐无改善,已回滚 (SWR ' + before + ')';
+        case 'auto_success':
+            return 'ATR 自动调谐完成: SWR ' + before + ' → ' + after;
+        case 'auto_no_improve':
+            return 'ATR 自动调谐无改善 (SWR ' + before + ' → ' + after + ')';
+        case 'auto_timeout':
+            return 'ATR 自动调谐超时 (SWR ' + before + ')';
+        case 'auto_aborted':
+            return 'ATR 自动调谐中断: ' + (msg.message || '天调断开');
+        case 'auto_giveup':
+            return 'ATR 连续 3 次无改善,已放弃该频点自动调谐';
+        default:
+            return 'ATR 调谐失败: ' + (msg.message || msg.phase);
+        }
+    }
+
     function onTuneResult(msg) {
-        if (msg.phase === 'start') {
+        const starting = msg.phase === 'start' || msg.phase === 'auto_start';
+        if (starting) {
             tuneInProgress = true;
+            if (msg.phase === 'auto_start' && typeof showToast === 'function') {
+                showToast('ATR: SWR ' + (msg.swr_before || '?') + ' 自动调谐中…');
+            }
         } else {
             tuneInProgress = false;
             if (typeof showToast === 'function') {
-                let text;
-                if (msg.phase === 'skipped') {
-                    text = 'ATR: SWR ' + (msg.swr_before || '?') + ' 已达标,无需调谐';
-                } else if (msg.phase === 'success') {
-                    text = 'ATR 调谐完成: SWR ' + msg.swr_before + ' → ' + msg.swr_after;
-                } else if (msg.phase === 'rollback') {
-                    text = 'ATR 调谐无改善,已回滚 (SWR ' + msg.swr_before + ')';
-                } else {
-                    text = 'ATR 调谐失败: ' + (msg.message || msg.phase);
-                }
-                showToast(text);
+                showToast(tuneResultText(msg));
             }
         }
         const btn = $('btn-atr-tune');

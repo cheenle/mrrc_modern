@@ -200,8 +200,8 @@ phases are unchanged):
 | `auto_success` | `ATR 自动调谐完成: SWR a → b` | back to `TUNE` |
 | `auto_no_improve` | `ATR 自动调谐无改善 (SWR a → b)` | back to `TUNE` |
 | `auto_timeout` | `ATR 自动调谐超时 (SWR a)` | back to `TUNE` |
-| `auto_giveup` | `ATR 连续 3 次无改善，已放弃该频点自动调谐` | back to `TUNE` |
-| `auto_aborted` | `ATR 自动调谐中断: <message>` | back to `TUNE` |
+| `auto_giveup` | `ATR 连续 3 次无改善,已放弃该频点自动调谐` | back to `TUNE` |
+| `auto_aborted` | `ATR 自动调谐中断: <message>`（message 为空时 `天调断开`） | back to `TUNE` |
 
 No HTML or CSS change; `sw.js` gets the `atr1000.js` cache-version bump so the new switch ships.
 

@@ -333,6 +333,18 @@ class SourceGuardTests(unittest.TestCase):
         index_src = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('id="atr-row" hidden', index_src)
 
+    def test_frontend_handles_the_auto_phases(self):
+        src = Path("static/modules/atr1000.js").read_text(encoding="utf-8")
+        for phase in ("auto_start", "auto_success", "auto_no_improve",
+                      "auto_timeout", "auto_aborted", "auto_giveup"):
+            self.assertIn(phase, src)
+        self.assertIn("自动调谐中", src)
+        self.assertIn("已放弃该频点自动调谐", src)
+
+    def test_frontend_cache_bust_for_the_new_module(self):
+        sw_src = Path("static/sw.js").read_text(encoding="utf-8")
+        self.assertIn("'/modules/atr1000.js?v=2',", sw_src)
+
 
 if __name__ == "__main__":
     unittest.main()

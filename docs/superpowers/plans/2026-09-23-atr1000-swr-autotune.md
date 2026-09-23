@@ -1118,3 +1118,15 @@ git commit -m "docs(atr1000): SDD §9.8/§15、版本历史 V2.57、模块表与
 3. `test_failure_count_is_per_frequency` 相应改为 `_aged_run()` 起段后触发 —— QSY 会重启去抖（设计语义，
    不是缺陷）。
 4. 任务 1 实测：`Ran 63 tests`（该模块）、全套 `Ran 1312 tests ... OK (skipped=1)`，13 个新增用例。
+
+### 任务 2（2026-09-23，已完成）
+
+1. **规格已更正**（计划要求的步骤 0）：§6.1 由「四条清调谐路径」改为「每条清调谐路径」并补上
+   `_handle_tune()` 的设备显式 `TUNE_STATUS=0`（第 5 条）；§6.2 补「连接断开 → 丢弃快照 + `auto_aborted`」
+   及其理由（`auto_start` 之后必须有且只有一条终态事件，否则前端 `tuneInProgress` 永久卡在 `···`）；
+   §7 补 `auto_aborted` 文案行；§8 第 16 条由「五个 auto 阶段」改为「六个」。
+2. **测试脚手架改为照生产时序**：`AutoTuneCompletionTests._pending()` 不再预置
+   `_auto_tune_compare_at`（生产里快照建立时它必然是 0，由清调谐路径首次挂接并写入 reason）——
+   需要比对的用例显式调用 `_clear_tuning("relay stable >5s")`；`_flush()` 负责把截止时间推到过去。
+   原计划写法会让「首次挂接记录 reason」这条逻辑无法被覆盖（早退于 `compare_at > 0`）。
+3. 任务 2 实测：该模块 `Ran 72 tests`、全套 `Ran 1321 tests ... OK (skipped=1)`，9 个新增用例。

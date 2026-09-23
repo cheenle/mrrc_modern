@@ -151,11 +151,12 @@ Consequences:
 
 ## 6. Post-tune write-back
 
-1. `_clear_tuning(reason)` — reached from any of the four existing paths (relay stable > 5 s,
-   same-relay confirm > 1.5 s, TX end, 45 s hard timeout) — additionally records the reason in the
-   pending `_auto_tune` snapshot and, if no comparison is scheduled yet, sets
-   `_auto_tune_compare_at = now + SWR_RETUNE_COMPARE_SETTLE` (0.8 s, so the METER stream has a
-   fresh reading for the relays the tuner landed on). No other `_clear_tuning()` behaviour changes.
+1. Every tuning-clear path — `_clear_tuning(reason)` (relay stable > 5 s, same-relay confirm
+   > 1.5 s, TX end, 45 s hard timeout) **and** `_handle_tune()`'s device-reported
+   `TUNE_STATUS=0` — records the reason in the pending `_auto_tune` snapshot and, if no
+   comparison is scheduled yet, sets `_auto_tune_compare_at = now + SWR_RETUNE_COMPARE_SETTLE`
+   (0.8 s, so the METER stream has a fresh reading for the relays the tuner landed on). Later
+   clears keep the first reason. Nothing else changes in those two paths.
 2. `_poll_loop()` compares once the deadline passes (single-shot, then state is cleared):
    - `reason == "45s hard timeout"` → `auto_timeout`.
    - `swr_before - _swr >= SWR_RETUNE_IMPROVED` **and** `0 < _swr <= LEARN_SWR_MAX` →
@@ -165,6 +166,11 @@ Consequences:
    - anything else → `auto_no_improve`. **Relays are never restored** (decision 3).
    - Every branch emits through `on_tune_event` (and therefore reaches the UI) and clears
      `_auto_tune` / `_auto_tune_compare_at`.
+   - **Connection drop** (`_run`'s disconnect path, which clears tuning without `_clear_tuning()`):
+     the pending snapshot is discarded and `auto_aborted` ("tuner disconnected") is emitted.
+     Without a terminal event after `auto_start` the frontend's in-progress state would stay stuck
+     at `···` forever — every `auto_start` must be followed by exactly one terminal phase.
+     A failed tune-frame send takes the same path (`auto_aborted`, "send failed").
 
 `_retune_fail_count` needs no eviction policy: an entry is only created when a retune actually
 fires, and entries are removed when that frequency's SWR recovers, so the dict is bounded by the
@@ -195,6 +201,7 @@ phases are unchanged):
 | `auto_no_improve` | `ATR 自动调谐无改善 (SWR a → b)` | back to `TUNE` |
 | `auto_timeout` | `ATR 自动调谐超时 (SWR a)` | back to `TUNE` |
 | `auto_giveup` | `ATR 连续 3 次无改善，已放弃该频点自动调谐` | back to `TUNE` |
+| `auto_aborted` | `ATR 自动调谐中断: <message>` | back to `TUNE` |
 
 No HTML or CSS change; `sw.js` gets the `atr1000.js` cache-version bump so the new switch ships.
 
@@ -227,7 +234,8 @@ No HTML or CSS change; `sw.js` gets the `atr1000.js` cache-version bump so the n
 14. `_on_atr_tune_event` broadcasts `atrTuneResult` with `auto: true` and the phase payload.
 15. `_start_atr_tune_assist()` refuses with the new "Tuner is already tuning" error when
     `read_state()["tuning"]` is true.
-16. Frontend switch guard: `atr1000.js` handles all five auto phases.
+16. Frontend switch guard: `atr1000.js` handles all six auto phases (`auto_start`, `auto_success`,
+    `auto_no_improve`, `auto_timeout`, `auto_aborted`, `auto_giveup`).
 
 `tests/README.md` module/test counts updated.
 

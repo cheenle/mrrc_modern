@@ -538,6 +538,104 @@ class SwrRetuneGuardTests(unittest.TestCase):
         self.assertEqual(self.client._pending_tune_mode, 2)
 
 
+class AutoTuneCompletionTests(unittest.TestCase):
+    """Queued-frame flush + post-tune comparison (write back, never roll back)."""
+
+    def setUp(self):
+        self.storage = FakeStorage()
+        self.client = ATR1000Client("127.0.0.1", 1234, storage=self.storage)
+        self.client.notify_freq(7_074_000)
+        self.client._handle_frame(make_relay_frame(1, 10, 20))
+        self.client._relay_changed_at = time.monotonic() - 5.0
+        self.events = []
+        self.client.on_tune_event = self.events.append
+
+    def _flush(self):
+        """Worker step with the comparison deadline reached."""
+        if self.client._auto_tune_compare_at:
+            self.client._auto_tune_compare_at = time.monotonic() - 0.001
+        asyncio.run(self.client._flush_auto_tune(time.monotonic()))
+
+    def _pending(self, swr_before=2.4):
+        """An auto tune that fired and waits for its tuning-clear (compare_at
+        is armed by the clear path, exactly like production)."""
+        self.client._auto_tune = {
+            "freq": 7_074_000, "swr_before": swr_before,
+            "relays": (1, 10, 20), "count": 1, "reason": "",
+        }
+        self.client._auto_tune_compare_at = 0.0
+
+    def test_worker_flushes_a_queued_tune_frame(self):
+        self.client._ws = AsyncMock()
+        self.client._pending_tune_mode = 2
+        asyncio.run(self.client._flush_auto_tune(time.monotonic()))
+        self.assertEqual(self.client._ws.send.await_count, 1)
+        self.assertEqual(self.client._pending_tune_mode, None)
+        self.assertTrue(self.client._tuning)
+
+    def test_improved_swr_writes_back_with_force_update(self):
+        self._pending()
+        # The tuner landed on better relays and the SWR improved.
+        self.client._handle_frame(make_relay_frame(1, 40, 60))
+        self.client._handle_frame(make_meter_frame(135, 50))   # SWR 1.35
+        self.client._clear_tuning("relay stable >5s")          # tuning finished
+        self._flush()
+        self.assertEqual(self.storage.learned,
+                         [(7_074_000, 1, 40, 60, 1.35, True)])
+        self.assertEqual(self.events[-1]["phase"], "auto_success")
+        self.assertIsNone(self.client._auto_tune)
+
+    def test_no_improvement_writes_nothing_and_keeps_the_relays(self):
+        self._pending()
+        self.client._handle_frame(make_relay_frame(1, 40, 60))
+        self.client._handle_frame(make_meter_frame(240, 50))   # still 2.40
+        self.client._clear_tuning("relay stable >5s")
+        self._flush()
+        self.assertEqual(self.storage.learned, [])
+        self.assertEqual(self.events[-1]["phase"], "auto_no_improve")
+        self.assertEqual((self.client._sw, self.client._ind, self.client._cap),
+                         (1, 40, 60))          # what the tuner chose stays
+
+    def test_improvement_outside_the_learn_gate_is_not_stored(self):
+        self._pending(swr_before=3.4)
+        self.client._handle_frame(make_relay_frame(1, 40, 60))
+        self.client._handle_frame(make_meter_frame(200, 50))   # SWR 2.00 > 1.8
+        self.client._clear_tuning("relay stable >5s")
+        self._flush()
+        self.assertEqual(self.storage.learned, [])
+        self.assertEqual(self.events[-1]["phase"], "auto_no_improve")
+
+    def test_hard_timeout_is_reported_as_timeout(self):
+        self._pending()
+        self.client._tuning = True
+        self.client._tuning_started_at = time.monotonic()
+        self.client._clear_tuning("45s hard timeout")
+        self.client._handle_frame(make_meter_frame(240, 50))
+        self._flush()
+        self.assertEqual(self.events[-1]["phase"], "auto_timeout")
+
+    def test_tune_status_zero_arms_the_comparison(self):
+        self._pending()
+        self.client._handle_frame(make_tune_frame(0))          # device says done
+        self.assertEqual(self.client._auto_tune["reason"], "tune status 0")
+        self.client._handle_frame(make_meter_frame(120, 50))   # SWR 1.20
+        self._flush()
+        self.assertEqual(self.events[-1]["phase"], "auto_success")
+
+    def test_disconnect_aborts_a_pending_comparison(self):
+        self._pending()
+        self.client._clear_tuning("relay stable >5s")
+        self.client._abort_auto_tune("tuner disconnected")
+        self.assertIsNone(self.client._auto_tune)
+        self.assertEqual(self.client._auto_tune_compare_at, 0.0)
+        self.assertEqual(self.events[-1]["phase"], "auto_aborted")
+        self.assertEqual(self.events[-1]["message"], "tuner disconnected")
+
+    def test_abort_without_pending_state_is_silent(self):
+        self.client._abort_auto_tune("tuner disconnected")
+        self.assertEqual(self.events, [])
+
+
 class GuardSourceTests(unittest.TestCase):
     """The auto-retune guard must be structurally unable to key the radio."""
 
@@ -552,6 +650,10 @@ class GuardSourceTests(unittest.TestCase):
         guard = guard.split("# ── Internals", 1)[0]
         self.assertIn("self._pending_tune_mode = 2", guard)
         self.assertNotIn("set_relay", guard)
+
+    def test_disconnect_wires_the_abort(self):
+        src = Path("atr1000_client.py").read_text(encoding="utf-8")
+        self.assertIn('self._abort_auto_tune("tuner disconnected")', src)
 
 
 if __name__ == "__main__":

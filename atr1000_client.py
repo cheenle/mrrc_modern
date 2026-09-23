@@ -456,6 +456,7 @@ class ATR1000Client:
                     self._tuning = False
                     self._tuning_started_at = 0.0
                     self._tuning_relay_stable_since = 0.0
+                    self._abort_auto_tune("tuner disconnected")
                     self._emit_change()
             if not self._stopping:
                 logger.info("ATR-1000 reconnecting in %.0fs...", RECONNECT_DELAY)
@@ -487,6 +488,9 @@ class ATR1000Client:
             # 频率联动 auto-apply scheduled by notify_freq()
             if self._pending_freq is not None:
                 await self._apply_pending_freq()
+
+            # Auto-retune: queued full-tune frame + deferred SWR comparison
+            await self._flush_auto_tune(now)
 
             # Tuning 45s hard timeout
             if (self._tuning and self._tuning_started_at > 0
@@ -644,6 +648,7 @@ class ATR1000Client:
         self._tuning_started_at = time.monotonic() if tuning else 0.0
         if not tuning:
             self._tuning_relay_stable_since = 0.0
+            self._schedule_auto_tune_compare("tune status 0")
         self._emit_change()
 
     # ── Learning dedup ────────────────────────────────────────────
@@ -763,6 +768,77 @@ class ATR1000Client:
         except Exception:
             logger.exception("on_tune_event callback failed")
 
+    async def _flush_auto_tune(self, now: float) -> None:
+        """Worker-side auto-tune step: send a queued full tune, then run the
+        deferred post-tune comparison once its settle time has passed."""
+        mode, self._pending_tune_mode = self._pending_tune_mode, None
+        if mode is not None:
+            try:
+                await self.start_tune(mode)
+            except Exception as e:
+                logger.warning("auto tune send failed: %s", e)
+                self._abort_auto_tune("send failed")
+        if (self._auto_tune is not None and self._auto_tune_compare_at > 0
+                and now >= self._auto_tune_compare_at):
+            self._finish_auto_tune()
+
+    def _schedule_auto_tune_compare(self, reason: str) -> None:
+        """The first tuning-clear after an auto tune arms the deferred compare
+        (later clears keep the original reason)."""
+        if self._auto_tune is None or self._auto_tune_compare_at > 0:
+            return
+        self._auto_tune["reason"] = reason
+        self._auto_tune_compare_at = (
+            time.monotonic() + SWR_RETUNE_COMPARE_SETTLE)
+
+    def _finish_auto_tune(self) -> None:
+        """Compare SWR after an auto tune and write the relays back to the
+        learned store when the match improved and landed inside the learn
+        gate. The relays are never rolled back (design decision 3)."""
+        snap, self._auto_tune = self._auto_tune, None
+        self._auto_tune_compare_at = 0.0
+        if snap is None:
+            return
+        final = self._swr
+        improved = snap["swr_before"] - final
+        if snap.get("reason") == "45s hard timeout":
+            phase, message = "auto_timeout", "tune timeout (45s)"
+        elif improved >= SWR_RETUNE_IMPROVED and 0 < final <= LEARN_SWR_MAX:
+            phase, message = "auto_success", ""
+            storage = self._get_storage()
+            if storage is not None:
+                try:
+                    storage.learn(freq=snap["freq"], sw=self._sw,
+                                  ind=self._ind, cap=self._cap,
+                                  swr=final, force_update=True)
+                except Exception as e:
+                    logger.warning("auto-tune learn failed: %s", e)
+        else:
+            phase, message = "auto_no_improve", ""
+        logger.info(
+            "ATR-1000 auto tune %s: SWR %.2f → %.2f at %.1f kHz (try %d)",
+            phase, snap["swr_before"], final, snap["freq"] / 1000, snap["count"])
+        self._emit_tune_event({
+            "phase": phase, "freq": snap["freq"], "message": message,
+            "swr_before": round(snap["swr_before"], 2),
+            "swr_after": round(final, 2), "attempt": snap["count"],
+        })
+
+    def _abort_auto_tune(self, reason: str) -> None:
+        """Discard a pending auto-tune comparison (device gone / send failed)
+        and close the UI's in-progress state with a terminal event."""
+        snap, self._auto_tune = self._auto_tune, None
+        self._auto_tune_compare_at = 0.0
+        if snap is None:
+            return
+        logger.info("ATR-1000 auto tune aborted (%s) at %.1f kHz",
+                    reason, snap["freq"] / 1000)
+        self._emit_tune_event({
+            "phase": "auto_aborted", "freq": snap["freq"], "message": reason,
+            "swr_before": round(snap["swr_before"], 2), "swr_after": None,
+            "attempt": snap["count"],
+        })
+
     # ── Internals ─────────────────────────────────────────────────
 
     def _get_storage(self):
@@ -794,6 +870,7 @@ class ATR1000Client:
         self._tuning = False
         self._tuning_started_at = 0.0
         self._tuning_relay_stable_since = 0.0
+        self._schedule_auto_tune_compare(reason)
         logger.info("tuning cleared (%s)", reason)
 
     def _emit_change(self) -> None:

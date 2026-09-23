@@ -1138,3 +1138,10 @@ git commit -m "docs(atr1000): SDD §9.8/§15、版本历史 V2.57、模块表与
    后者仍通过但语义已错。改为从 `LEARN_MIN_POWER` 派生（`LEARN_MIN_POWER - 0.1` / `LEARN_MIN_POWER`），
    以后再调门限不会静默失效。
 2. 任务 3 实测：全套 `Ran 1323 tests ... OK (skipped=1)`（净增 2 个用例：改写 1 个为 3 个）。
+
+### 任务 4（2026-09-23，已完成）
+
+1. 计划里 `AutoTuneEventTests.test_no_clients_is_a_noop` 在事件循环**外**直接调用 `_on_atr_tune_event`，
+   实际只能覆盖 `get_running_loop()` 抛异常被吞掉的路径（测不到"无客户端"分支）。改为在
+   `asyncio.run()` 内调用 + `await asyncio.sleep(0)`，真正走 `_broadcast_atr` 的空客户端集合。
+2. 任务 4 实测：该模块 `Ran 18 tests`、全套 `Ran 1328 tests ... OK (skipped=1)`，5 个新增用例。

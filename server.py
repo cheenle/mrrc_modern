@@ -906,6 +906,17 @@ def _on_atr_change(state: dict):
         pass
 
 
+def _on_atr_tune_event(event: dict):
+    """Sync callback from ATR1000Client: forward an auto-tune phase to the
+    tuner channel. Same message type as the manual tune assist, plus
+    auto=true so the UI can label it."""
+    try:
+        asyncio.get_running_loop().create_task(_broadcast_atr(
+            {"type": "atrTuneResult", **event, "auto": True}))
+    except Exception:
+        pass
+
+
 async def _atr_wait_swr(timeout: float) -> Optional[float]:
     """Wait for a fresh SWR reading from the tuner (device pushes
     METER frames at a high rate while a carrier is present)."""
@@ -1019,6 +1030,12 @@ async def _start_atr_tune_assist(ws: WebSocket):
     if radio.is_transmitting:
         await ws.send_text(json.dumps({
             "type": "error", "message": "Radio is transmitting"}))
+        return
+    if atr.read_state().get("tuning"):
+        # Polled tx_status lags up to ~500 ms; this closes the window in which
+        # an auto tune started by the high-SWR guard is already running.
+        await ws.send_text(json.dumps({
+            "type": "error", "message": "Tuner is already tuning"}))
         return
     if _atr_tune_task and not _atr_tune_task.done():
         return  # already running — the button shows progress
@@ -2276,6 +2293,7 @@ async def lifespan(app: FastAPI):
             _atr_storage = get_storage()
             atr = ATR1000Client(ATR1000_HOST, ATR1000_PORT, storage=_atr_storage)
             atr.on_change = _on_atr_change
+            atr.on_tune_event = _on_atr_tune_event
             await atr.start()
             # Prime the linkage with the current radio state — the startup
             # freq sync ran BEFORE the client existed, so without this the

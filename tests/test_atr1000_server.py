@@ -15,6 +15,7 @@ Runs without hardware; `import server` follows the existing suite pattern
 (test_memory_recall, test_windows_packaging_paths).
 """
 import asyncio
+import json
 import time
 import unittest
 from pathlib import Path
@@ -197,6 +198,96 @@ class LinkageHookTests(unittest.TestCase):
         server.atr = BadATR()
         server.radio.update(vfo_a_freq=14_074_000)
         asyncio.run(server._broadcast_state())  # exception must not escape
+
+
+class _FakeWS:
+    def __init__(self):
+        self.sent = []
+
+    async def send_text(self, text):
+        self.sent.append(text)
+
+
+class AutoTuneEventTests(unittest.TestCase):
+    """_on_atr_tune_event → atrTuneResult(auto=true) on the tuner channel."""
+
+    def tearDown(self):
+        server.atr_clients.clear()
+
+    def test_event_is_broadcast_with_the_auto_flag(self):
+        ws = _FakeWS()
+
+        async def run():
+            server.atr_clients.add(ws)
+            server._on_atr_tune_event({
+                "phase": "auto_success", "freq": 7_074_000,
+                "swr_before": 2.4, "swr_after": 1.35, "attempt": 1, "message": "",
+            })
+            await asyncio.sleep(0)          # let the scheduled broadcast run
+
+        asyncio.run(run())
+        self.assertEqual(len(ws.sent), 1)
+        msg = json.loads(ws.sent[0])
+        self.assertEqual(msg["type"], "atrTuneResult")
+        self.assertTrue(msg["auto"])
+        self.assertEqual(msg["phase"], "auto_success")
+        self.assertEqual(msg["swr_after"], 1.35)
+
+    def test_no_clients_is_a_noop(self):
+        async def run():
+            server._on_atr_tune_event({"phase": "auto_start"})
+            await asyncio.sleep(0)
+
+        asyncio.run(run())                   # must not raise
+
+    def test_lifespan_wires_the_callback(self):
+        self.assertIn("atr.on_tune_event = _on_atr_tune_event", SERVER_SOURCE)
+
+
+class TuneAssistBusyTests(unittest.TestCase):
+    """The manual assist must refuse while an auto tune is running."""
+
+    def setUp(self):
+        self.saved = (server.cat, server.atr, server._atr_tune_task)
+        self.addCleanup(self._restore)
+        server.cat = _FakeCat()
+        server.radio.update(tx_status=0)
+
+    def _restore(self):
+        server.cat, server.atr, server._atr_tune_task = self.saved
+        server.radio.update(tx_status=0)
+
+    def _fake_atr(self, tuning):
+        atr = _FakeATR()
+
+        def read_state():
+            state = _FakeATR.read_state(atr)
+            state["tuning"] = tuning
+            return state
+
+        atr.read_state = read_state
+        return atr
+
+    def test_refuses_while_the_tuner_is_tuning(self):
+        server.atr = self._fake_atr(tuning=True)
+        ws = _FakeWS()
+        asyncio.run(server._start_atr_tune_assist(ws))
+        self.assertIsNone(server._atr_tune_task)
+        self.assertIn("already tuning", ws.sent[0])
+
+    def test_launches_when_the_tuner_is_idle(self):
+        saved_assist = server._atr_tune_assist
+
+        async def fake_assist():
+            return None
+
+        server._atr_tune_assist = fake_assist
+        self.addCleanup(setattr, server, "_atr_tune_assist", saved_assist)
+        server.atr = self._fake_atr(tuning=False)
+        ws = _FakeWS()
+        asyncio.run(server._start_atr_tune_assist(ws))
+        self.assertIsNotNone(server._atr_tune_task)
+        self.assertEqual(ws.sent, [])
 
 
 class SourceGuardTests(unittest.TestCase):

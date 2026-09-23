@@ -1,19 +1,19 @@
 {
-  "latest": "1.18.1",
+  "latest": "1.19.0",
   "installer": {
+    "version": "1.19.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.19.0-Windows-x64-Setup.exe",
+    "sha256": "7b9cabcaab51ecdcafc29ff10f6ca1f28339e055e4fe4bd825af1d4e96c4cd40",
+    "size": 46002941
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-09-23T23:04:10",
+  "notes": "新增 ATR-1000 天调自动调谐：发射中驻波超过 2.0 时自动做一次完整调谐，调好即写回学习库（绝不自行键控电台）；学习门限改为实测功率 ≥3W，用面板 PTT 或外部软件发射也会学习。",
+  "previous": {
     "version": "1.18.1",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.18.1-Windows-x64-Setup.exe",
     "sha256": "19b5cef2300e510d3ae54b9817f70c4612455fe6f917a052ea98b661dcbd8992",
     "size": 46002543
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-09-18T07:27:26",
-  "notes": "macOS 修复：应用签名（「已损坏，无法打开」）与音频输入权限（RX 无声，首次启动请点「允许」麦克风）；Windows 包同步重建。",
-  "previous": {
-    "version": "1.18.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.18.0-Windows-x64-Setup.exe",
-    "sha256": "938384ad7e46232b63e8b29f5ac98ed2bfe3c04ae2950a88a6ad0c319098a0c1",
-    "size": 45990451
   }
 }

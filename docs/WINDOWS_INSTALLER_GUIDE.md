@@ -7,18 +7,18 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.16.0 Stable)
+## Download (v1.19.0 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.18.1-Windows-x64-Setup.exe` | 46.0 MB (46,002,543 bytes) | `19b5cef2300e510d3ae54b9817f70c4612455fe6f917a052ea98b661dcbd8992` |
+| `MRRC-Modern-v1.19.0-Windows-x64-Setup.exe` | 46.0 MB (46,002,941 bytes) | `7b9cabcaab51ecdcafc29ff10f6ca1f28339e055e4fe4bd825af1d4e96c4cd40` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.18.1-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.19.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.16.0 (rebuilt) is the published Windows installer.** It was built from the release
-commit on Windows 11 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. All 1055
+**v1.19.0 is the published Windows installer.** It was built from the release
+commit on Windows 11 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. All 1330
 tests (7 pty-based Yaesu round-trip tests skip on Windows), three PyInstaller targets and
 the installer build passed, and the required
 bundled-file inspection passed (FTDI DLLs, opus.dll, `static/`, `mem_channels.json`, the MP3

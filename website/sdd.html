@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#updates">V2.57</a></li>
+            <li><a href="#updates">V2.58</a></li>
             <li><a href="#chapters">Chapters</a></li>
             <li><a href="#decisions">AD Index</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.57 · 2026-09-23</span>
+            <span>SDD V2.58 · 2026-09-23</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">Software Design Description</span></h1>
         <p class="hero-subtitle">
@@ -75,7 +75,7 @@
             </thead>
             <tbody>
             <tr><td>Document ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>Version</td><td>V2.57</td></tr>
+            <tr><td>Version</td><td>V2.58</td></tr>
             <tr><td>Baseline Date</td><td>2026-09-23</td></tr>
             <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
@@ -170,6 +170,16 @@
                 <div class="icon"><i class="fas fa-bullhorn"></i></div>
                 <h3>One-Touch CQ Key <small>(V2.48–V2.50)</small></h3>
                 <p>The server keys the radio, plays the packaged CQ recording once and unkeys — no microphone, no network timing in the transmitted audio. Mic frames are dropped while the call runs, PTT/TUNE are refused, and the initiator disconnecting cuts the carrier (<code>MRRC_CQ_FILE</code> replaces the recording; AD-020).</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+                <h3>v1.19.0 Released — ATR-1000 Tunes Itself <small>(V2.57–V2.58)</small></h3>
+                <p>With the optional networked tuner, a transmission into SWR &gt; 2.0 starts one full tune by
+                itself — 30 s cooldown, three tries per frequency, and the tuned relays are stored when the match
+                improves. <strong>It never keys the radio</strong>: it acts only inside a transmission you started
+                (measured power ≥ 5 W), and learning follows measured power (≥ 3 W) so panel and external-software
+                transmissions are learned too. macOS DMG and Windows installer published with cross-host SHA-256
+                verification.</p>
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-radio"></i></div>

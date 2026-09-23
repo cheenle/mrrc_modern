@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.58</td>
+<td>2026-09-23</td>
+<td>Claude</td>
+<td><strong>v1.19.0 发布：ATR-1000 驻波超阈值自动调谐（能力实现见 V2.57 条目）。</strong> 产物：macOS <code class="scope-code">MRRC-Modern-v1.19.0-arm64.dmg</code> <strong>55,654,218 bytes</strong> <code class="scope-code">40d8a15b…</code>（完整哈希 <code class="scope-code">40d8a15b739d156db7c015a95b206e98ec247f71fa08ce63a34d5c7a56af3886</code>）；Windows <code class="scope-code">MRRC-Modern-v1.19.0-Windows-x64-Setup.exe</code> <strong>46,002,941 bytes</strong> <code class="scope-code">7b9cabca…</code>（<code class="scope-code">7b9cabcaab51ecdcafc29ff10f6ca1f28339e055e4fe4bd825af1d4e96c4cd40</code>）；rpi64 镜像仍为 v1.17.0（本次未重建）。<strong>发布前验证</strong>：套件本机 1330 项全绿、VM 上同套件绿；<code class="scope-code">release_check.py</code> 离线 29 ok / 0 failing；<strong>macOS</strong>：<code class="scope-code">codesign --verify</code> = valid on disk + satisfies Designated Requirement、<code class="scope-code">Frameworks -&gt; Resources</code> 与 <code class="scope-code">MacOS/_internal -&gt; ../Resources</code> 两条链接就位、<code class="scope-code">CFBundleShortVersionString=1.19.0</code> + <code class="scope-code">version.txt=1.19.0</code>、<code class="scope-code">NSMicrophoneUsageDescription</code> 存在、FTDI dylib 在包内、DMG 含 <code class="scope-code">Applications</code> 链接、冻结服务双栈 HTTPS（IPv4/IPv6 均 401、明文 000）+ 首次密码横幅正常、<strong>走查 PYZ 确认新代码在包内</strong>（<code class="scope-code">SWR_RETUNE_THRESHOLD</code>/<code class="scope-code">_check_swr_retune</code>/<code class="scope-code">_finish_auto_tune</code>/<code class="scope-code">auto_aborted</code>）；<strong>Windows</strong>：<code class="scope-code">version.txt=1.19.0</code>、FTDI DLL / <code class="scope-code">static/</code> / <code class="scope-code">mem_channels.json</code> / <code class="scope-code">static/modules/atr1000.js</code> 均在包内、走查 <code class="scope-code">server</code> 入口得 <code class="scope-code">_on_atr_tune_event</code>、PYZ 得 <code class="scope-code">atr1000_client</code> 与新常量、VM <code class="scope-code">Get-FileHash</code> == 本机 <code class="scope-code">shasum</code>；<code class="scope-code">latest.json</code> 由 <code class="scope-code">dev_tools/make_latest_json.py</code> 从真实产物重生（installer 1.19.0 / previous 1.18.1）。<strong>发布期两个现场事故</strong>：① 构建 VM 的 guest 卡死 —— libvirt 报 running、端口 22 可连但 sshd 无法创建任何进程（<code class="scope-code">exec request failed on channel 0</code>，ACPI shutdown 也无响应，积屏为黑屏），<code class="scope-code">virsh destroy</code> + <code class="scope-code">start</code> 后恢复（宿主可用内存 6.2 GB，未触发 gotcha 9 的 OOM）；② <strong>VM 上未安装 git</strong>，而 2026-09-19 随 FDE 看板引入的 <code class="scope-code">RepoCleanTests</code> 在 <code class="scope-code">setUp</code> 里直接调 <code class="scope-code">git init</code> → Windows 构建门禁挂 3 项（<code class="scope-code">WinError 2</code>）。修法按仓库“按可用工具跳过”的约定：该类加 <code class="scope-code">setUpClass</code> 无 <code class="scope-code">git</code> 则 <code class="scope-code">SkipTest</code>，<code class="scope-code">tearDown</code> 的 <code class="scope-code">rm -rf</code> 换 <code class="scope-code">shutil.rmtree</code>（POSIX 命令在 Windows 不存在）。<strong>边界</strong>：ATR-1000 自动调谐的真机验收（FT-710 + 天调 + 大驻波天线）待现场；树莓派镜像未重建；Windows 包在 KVM 上构建，TX 话音仍需物理 Windows 机验收。</td>
+</tr>
+<tr>
 <td>SDD V2.57</td>
 <td>2026-09-23</td>
 <td>Claude</td>
@@ -679,7 +685,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.57 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.58 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -6,6 +6,7 @@ size cap, clean-worktree gate) and the board page rendering (columns, counts,
 HTML escaping, public-redaction).
 """
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -140,6 +141,13 @@ class GuardCheckTests(unittest.TestCase):
 
 
 class RepoCleanTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # The build VM ships without git; the worktree gate only ever runs on
+        # a real checkout, so skip instead of failing the Windows build gate.
+        if shutil.which("git") is None:
+            raise unittest.SkipTest("git is not installed")
+
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self._run("git", "init", "-q")
@@ -150,7 +158,7 @@ class RepoCleanTests(unittest.TestCase):
         self._run("git", "commit", "-qm", "init")
 
     def tearDown(self):
-        subprocess.run(["rm", "-rf", str(self.tmp)], check=True)
+        shutil.rmtree(self.tmp, ignore_errors=True)   # POSIX `rm -rf` does not exist on Windows
 
     def _run(self, *args):
         subprocess.run(args, cwd=self.tmp, capture_output=True, check=True)

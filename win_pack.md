@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.18.1**（2026-09-18）—— 套件 1271 项全绿；`release_check.py` 离线 29 ok / 0 failing。
+> 最新构建：**v1.19.0**（2026-09-23）—— 套件 1330 项全绿；`release_check.py` 离线 29 ok / 0 failing。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 - `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：

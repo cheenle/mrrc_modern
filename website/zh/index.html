@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.18.1 · 稳定版</span>
+<span>v1.19.0 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -56,11 +56,11 @@
           CAT/CI-V 控制——无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.18.1-arm64.dmg">
-<i class="fab fa-apple"></i> 下载 macOS v1.18.1
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.19.0-arm64.dmg">
+<i class="fab fa-apple"></i> 下载 macOS v1.19.0
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.18.1
+<i class="fab fa-windows"></i> Windows 安装包 v1.19.0
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> 了解功能
@@ -84,16 +84,31 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.18.1 更新内容</strong>
+<strong> v1.19.0 更新内容</strong>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>macOS「已损坏」已修</strong>——此前每个 macOS 包的应用<strong>签名都没成功</strong>（签名步骤静默失败），
+<strong>ATR-1000 天调会在你发射时自己动手</strong>——接了可选网络天调后，发射中
+              <strong>SWR &gt; 2.0</strong>（实测功率 ≥ 5 W 持续 1.5 s）会自动做一次完整调谐：
+              弹出提示、TUNE 按钮显示进行中，结束时告知结果（完成／无改善／超时／已放弃该频点）。
+              30 s 冷却，同一频点最多试 3 次。<strong>它绝不自行键控电台</strong>——只在你已经在发射时动手，
+              因此不可能产生无人看管的载波。
+            </li>
+<li>
+<strong>调好的参数会被记住</strong>——当这次调谐确实改善了匹配（改善 ≥ 0.02 且终值 ≤ 1.8），
+              LC 继电器值会写回学习库：再回到这个频点直接套用，不必重调。没改善的调谐<strong>不会</strong>在 QSO 中途回滚。
+            </li>
+<li>
+<strong>面板直发也能学习</strong>——学习门限改为跟随<strong>实测功率（≥ 3 W，原 5 W）</strong>
+              而不是网页端的 TX 信号，因此用<strong>电台面板 PTT 或外部软件</strong>发起的发射同样会学到参数，QRP 也不再例外。
+            </li>
+<li>
+<strong>macOS「已损坏」已修</strong>（v1.18.1）——此前每个 macOS 包的应用<strong>签名都没成功</strong>（签名步骤静默失败），
               被 Gatekeeper 判为「已损坏，无法打开」——这个提示右键也绕不过去。现在 bundle 布局符合 codesign 要求，
               且<strong>签名失败会直接中止构建</strong>。已经装过旧版的机器需要重装才生效。
             </li>
 <li>
-<strong>macOS RX 无声已修</strong>——打包的 Info.plist 没有任何音频输入权限说明键，而 macOS 对此的回应是：
+<strong>macOS RX 无声已修</strong>（v1.18.1）——打包的 Info.plist 没有任何音频输入权限说明键，而 macOS 对此的回应是：
               <b>让捕获流打开成功、却把缓冲填零</b>。于是 RX 一点声音都没有、日志只说"检查电台"，而 CoreAudio
               全程不报错。现在会正常申请麦克风权限（首次启动点一次「允许」），警告也改为指向系统设置而不是电台。
             </li>
@@ -378,14 +393,14 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.18.1 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.19.0 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            46.0 · x64 · 46,002,543 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 19b5cef2…</code>
+            46.0 · x64 · 46,002,941 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 7b9cabca…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.18.1 首次运行零配置：自动生成网页密码，自动识别电台
+            v1.19.0 首次运行零配置：自动生成网页密码，自动识别电台
             （FT-710 ASCII CAT / Icom CI-V 0x19）与串口（COM），登录页
             直接显示自动生成的密码。网页"连接设置"对话框可修改电台型号、
             串口、RX+TX 音频设备与密码，支持保存并重启——服务自动重启，
@@ -397,8 +412,8 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.18.1-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.18.1 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.19.0-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.19.0 版本化安装包
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
@@ -415,11 +430,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.18.1-arm64.dmg — v1.18.1 稳定版</strong>
+<strong> MRRC-Modern-v1.19.0-arm64.dmg — v1.19.0 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            56.3 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 55,643,537 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 931b312c…</code>
+            55.7 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 55,654,218 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 40d8a15b…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
@@ -436,7 +451,7 @@
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.18.1-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.19.0-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -463,7 +478,7 @@
 <strong> MRRC-Modern-rpi64.img.xz — 树莓派</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            551 MB (551,282,340 bytes) · arm64 · Pi 3B+/4/5 · <em>仍是 v1.17.0 镜像，v1.18.1 重建待完成</em> · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
+            551 MB (551,282,340 bytes) · arm64 · Pi 3B+/4/5 · <em>仍是 v1.17.0 镜像，v1.19.0 重建待完成</em> · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
 <code style="font-size: 0.76rem">SHA-256: a56e5658e200d2c8fa0eac147299b8533757934009b776f3f2340cb55944dc1b</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
@@ -530,10 +545,10 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.18.1，46.0，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.19.0，46.0，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 19b5cef2300e510d3ae54b9817f70c4612455fe6f917a052ea98b661dcbd8992</code>
+<code>SHA-256 7b9cabcaab51ecdcafc29ff10f6ca1f28339e055e4fe4bd825af1d4e96c4cd40</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -566,7 +581,7 @@
 <div class="step">
 <h4>1 · 安装</h4>
 <p>
-              拖动 <code>MRRC-Modern-v1.18.1-arm64.dmg</code> → 双击挂载 →
+              拖动 <code>MRRC-Modern-v1.19.0-arm64.dmg</code> → 双击挂载 →
               将 <strong>MRRC Modern</strong> 拖入"应用程序"。首次启动请右键
               应用 → 打开 → 打开（一次性绕过 Gatekeeper 的 ad-hoc 签名）。
             </p>
@@ -871,7 +886,7 @@
 <div class="perf-card">
 <div class="metric">1261</div>
 <div class="metric-label">
-              无硬件依赖测试<br/><small>v1.18.1 发布版实测 1261 项（macOS + Windows）</small>
+              无硬件依赖测试<br/><small>v1.19.0 发布版实测 1330 项（macOS + Windows）</small>
 </div>
 </div>
 </div>
@@ -1009,7 +1024,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.57</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V2.58</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>
@@ -1049,7 +1064,7 @@
 <div class="footer-grid">
 <div class="footer-section">
 <h4>MRRC Modern</h4>
-<p>多机型远程控制<br/>一根 USB 线，任意设备操控<br/>v1.18.1 稳定版 · GPLv3 许可证</p>
+<p>多机型远程控制<br/>一根 USB 线，任意设备操控<br/>v1.19.0 稳定版 · GPLv3 许可证</p>
 </div>
 <div class="footer-section">
 <h4>导航</h4>
@@ -1065,7 +1080,7 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.18.1</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.19.0</a></li>
 <li><a href="../downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

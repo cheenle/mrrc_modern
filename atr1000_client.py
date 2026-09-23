@@ -70,6 +70,15 @@ LEARN_SWR_MAX = 1.8          # learnable SWR upper bound
 LEARN_DEDUP_COOLDOWN = 5.0   # unchanged-SWR relearn cooldown (s)
 LEARN_FREQ_STEP = 1000       # window resets on freq change beyond this (Hz)
 
+# ── High-SWR auto-retune parameters (sibling mrrc V5.8.0/V5.8.5) ───
+SWR_RETUNE_THRESHOLD = 2.0        # strictly greater → too high
+SWR_RETUNE_MIN_POWER = 5          # W measured power proving "really transmitting"
+SWR_RETUNE_DEBOUNCE = 1.5         # s continuously above the threshold
+SWR_RETUNE_COOLDOWN = 30.0        # s between two auto tunes
+SWR_RETUNE_MAX_FAILS = 3          # consecutive no-improvement tunes per frequency
+SWR_RETUNE_COMPARE_SETTLE = 0.8   # s after tuning clears before comparing SWR
+SWR_RETUNE_IMPROVED = 0.02        # minimum improvement required to write back
+
 # ── Connection / polling parameters ───────────────────────────────
 RECONNECT_DELAY = 5.0        # retry delay after connection drop (s)
 REFRESH_THRESHOLD = 3300.0   # proactive refresh at 55 min (device drops ~hourly)
@@ -198,6 +207,12 @@ class ATR1000Client:
         # Optional sync callable invoked with read_state() on state changes;
         # the caller (server) schedules broadcasts from it.
         self.on_change: Optional[Callable[[dict], None]] = None
+        # Optional sync callable invoked with an auto-tune event dict
+        # {"phase": "auto_start"|"auto_success"|"auto_no_improve"|
+        #  "auto_timeout"|"auto_aborted"|"auto_giveup", "freq", "swr_before",
+        #  "swr_after", "attempt", "message"}; the server broadcasts it to
+        # /WSatr1000 clients as atrTuneResult (auto=true). Never raises out.
+        self.on_tune_event: Optional[Callable[[dict], None]] = None
         # Server-settable client count → selects idle/active SYNC interval.
         self.client_count: int = 0
 
@@ -229,6 +244,15 @@ class ATR1000Client:
 
         # Learn dedup: (freq_khz, sw, ind, cap) → {"swr", "time"}
         self._last_learned: dict = {}
+
+        # High-SWR auto-retune guard (design 2026-09-23-atr1000-swr-autotune)
+        self._swr_high_since = 0.0        # monotonic start of the run (0 = none)
+        self._swr_high_freq = 0           # frequency the run belongs to (Hz)
+        self._last_retune_at = 0.0        # last auto tune (cooldown)
+        self._retune_fail_count: dict = {}  # freq_khz → consecutive no-improvement
+        self._pending_tune_mode = None    # worker-side request, consumed by _poll_loop
+        self._auto_tune = None            # pending post-tune comparison snapshot
+        self._auto_tune_compare_at = 0.0  # monotonic deadline (0 = none)
 
         self._learning = LearningBuffer()
 
@@ -561,6 +585,9 @@ class ATR1000Client:
 
         self._emit_change()
 
+        # High-SWR auto-retune guard (decides only; the worker sends the frame)
+        self._check_swr_retune(swr, power)
+
         # Stable-window learning on the METER stream during TX
         if not (self._tx and not self._tuning and power > 0 and self._freq > 0):
             return
@@ -650,6 +677,91 @@ class ATR1000Client:
                             "CL" if self._sw else "LC", self._ind, self._cap)
         except Exception as e:
             logger.error("failed to learn tuner params: %s", e)
+
+    # ── High-SWR auto-retune guard ────────────────────────────────
+
+    def _check_swr_retune(self, swr: float, power: float) -> None:
+        """Queue one full tune when the operator transmits into a high SWR.
+
+        Runs on the METER stream and only decides — the frame itself is sent
+        by the worker (`_flush_auto_tune`), so all device I/O stays in one
+        place. The operator's own transmission is the precondition: below
+        SWR_RETUNE_MIN_POWER measured power nothing happens, which is why
+        this guard can never key the radio. Ported from the sibling project
+        (mrrc V5.8.0 `check_swr_retune`), with instance state instead of
+        module globals so no locking is needed.
+        """
+        now = time.monotonic()
+        if self._tuning or power < SWR_RETUNE_MIN_POWER or self._freq <= 0:
+            self._swr_high_since = 0.0
+            return
+        if swr <= SWR_RETUNE_THRESHOLD:
+            # Matched again — this frequency is eligible for a retune later.
+            self._swr_high_since = 0.0
+            self._retune_fail_count.pop(self._freq // 1000, None)
+            return
+        if (self._swr_high_freq == 0
+                or abs(self._freq - self._swr_high_freq) > LEARN_FREQ_STEP):
+            self._swr_high_since = 0.0        # QSY (or first sight) — new run
+        self._swr_high_freq = self._freq
+        if (self._relay_changed_at > 0
+                and now - self._relay_changed_at < LEARN_IGNORE_WINDOW):
+            self._swr_high_since = 0.0        # relays just moved, not settled
+            return
+
+        key = self._freq // 1000
+        if self._retune_fail_count.get(key, 0) >= SWR_RETUNE_MAX_FAILS:
+            if self._swr_high_since == 0.0:
+                # Announce once per run, then stay quiet until the frequency
+                # changes or the SWR recovers.
+                self._swr_high_since = now
+                logger.info(
+                    "SWR %.2f still high, auto tune given up after %d tries "
+                    "(%.1f kHz)", swr, SWR_RETUNE_MAX_FAILS, self._freq / 1000)
+                self._emit_tune_event({
+                    "phase": "auto_giveup", "freq": self._freq,
+                    "swr_before": round(swr, 2), "swr_after": None,
+                    "attempt": self._retune_fail_count[key], "message": "",
+                })
+            return
+
+        if self._swr_high_since == 0.0:
+            self._swr_high_since = now
+        if (now - self._swr_high_since < SWR_RETUNE_DEBOUNCE
+                or now - self._last_retune_at < SWR_RETUNE_COOLDOWN):
+            return
+
+        # Fire: queue ONE full-tune frame for the worker.
+        self._retune_fail_count[key] = self._retune_fail_count.get(key, 0) + 1
+        self._last_retune_at = now
+        self._swr_high_since = 0.0
+        self._auto_tune = {
+            "freq": self._freq,
+            "swr_before": swr,
+            "relays": (self._sw, self._ind, self._cap),
+            "count": self._retune_fail_count[key],
+            "reason": "",
+        }
+        self._pending_tune_mode = 2
+        self._wake.set()
+        logger.info("SWR %.2f > %.1f at %.1f kHz, auto full tune (try %d)",
+                    swr, SWR_RETUNE_THRESHOLD, self._freq / 1000,
+                    self._auto_tune["count"])
+        self._emit_tune_event({
+            "phase": "auto_start", "freq": self._freq,
+            "swr_before": round(swr, 2), "swr_after": None,
+            "attempt": self._auto_tune["count"], "message": "",
+        })
+
+    def _emit_tune_event(self, event: dict) -> None:
+        """Dispatch an auto-tune phase to the server callback (contained)."""
+        cb = self.on_tune_event
+        if cb is None:
+            return
+        try:
+            cb(event)
+        except Exception:
+            logger.exception("on_tune_event callback failed")
 
     # ── Internals ─────────────────────────────────────────────────
 

@@ -89,10 +89,15 @@ class SwrRetuneGuardTests(unittest.TestCase):
     def _meter(self, swr_raw, power):
         self.client._handle_frame(make_meter_frame(swr_raw, power))
 
-    def _fire_run(self):
-        """A run already older than the debounce — fires on this meter."""
+    def _aged_run(self):
+        """Prime a run at the current frequency, then age it past the debounce."""
+        self._meter(240, 50)                       # starts the run (sets the freq)
         self.client._swr_high_since = time.monotonic() - SWR_RETUNE_DEBOUNCE - 0.1
-        self._meter(240, 50)                       # SWR 2.40 at 50 W
+
+    def _fire_run(self):
+        """A run primed at the current frequency and older than the debounce."""
+        self._aged_run()
+        self._meter(240, 50)                       # fires on this frame
 
     def test_debounce_blocks_until_the_run_is_long_enough(self):
         self._meter(240, 50)                       # starts a run
@@ -183,10 +188,11 @@ class SwrRetuneGuardTests(unittest.TestCase):
         self.client._last_retune_at = time.monotonic() - SWR_RETUNE_COOLDOWN - 1
         self.client.notify_freq(14_100_000)        # QSY keeps 7074's count
         self.assertEqual(self.client._retune_fail_count[7074], 1)
-        self.client._swr_high_since = time.monotonic() - SWR_RETUNE_DEBOUNCE - 0.1
+        self._aged_run()                           # a QSY restarts the run
         self._meter(240, 50)
         self.assertEqual(self.client._pending_tune_mode, 2)   # new freq fires
         self.assertEqual(self.client._retune_fail_count[14100], 1)
+        self.assertEqual(self.client._retune_fail_count[7074], 1)
 
     def test_tune_event_callback_exception_is_contained(self):
         self.client.on_tune_event = lambda event: 1 / 0
@@ -287,9 +293,9 @@ SWR_RETUNE_IMPROVED = 0.02        # minimum improvement required to write back
             self._swr_high_since = 0.0
             self._retune_fail_count.pop(self._freq // 1000, None)
             return
-        if (self._swr_high_freq
-                and abs(self._freq - self._swr_high_freq) > LEARN_FREQ_STEP):
-            self._swr_high_since = 0.0        # QSY — new run
+        if (self._swr_high_freq == 0
+                or abs(self._freq - self._swr_high_freq) > LEARN_FREQ_STEP):
+            self._swr_high_since = 0.0        # QSY (or first sight) — new run
         self._swr_high_freq = self._freq
         if (self._relay_changed_at > 0
                 and now - self._relay_changed_at < LEARN_IGNORE_WINDOW):
@@ -1095,3 +1101,20 @@ git commit -m "docs(atr1000): SDD §9.8/§15、版本历史 V2.57、模块表与
 | 学习门槛 | 实测功率 ≥3 W（V5.8.5） | 同 | — |
 | 失败后回滚 | 无 | 无 | 语音 QSO 中途回滚有害 |
 | 前端 | 代理日志 | 6 个 auto 阶段 toast `atrTuneResult` | 本仓有现成 toast 通道且无 4 层代理 |
+
+---
+
+## 执行偏差记录
+
+### 任务 1（2026-09-23，已完成）
+
+1. **守卫的频率归属判定补 `_swr_high_freq == 0` 分支**。计划原写法 `if (self._swr_high_freq and abs(...) > LEARN_FREQ_STEP)`
+   漏了"首次见到该频率"的情形 —— `test_frequency_change_restarts_the_run` 抓到：`_swr_high_freq` 仍为 0 时
+   不会重置连续段，于是旧连续段会跨 QSY 触发。生产语义不变（≤1 kHz 抖动仍不重置），新条件只把"首次见到"
+   显式化。`atr1000_client.py` 与本文件上方代码块已一致。
+2. **守卫测试助手改为按生产时序**：新增 `_aged_run()`（先发一帧起段、同时写入 `_swr_high_freq`，再老化
+   `_swr_high_since`），`_fire_run()` = `_aged_run()` + 一帧触发。原计划直接预老化会构造出生产不可能出现的
+   状态（有连续段但频率未知：连续段只在 `_swr_high_freq` 被赋值的同一次调用里建立）。
+3. `test_failure_count_is_per_frequency` 相应改为 `_aged_run()` 起段后触发 —— QSY 会重启去抖（设计语义，
+   不是缺陷）。
+4. 任务 1 实测：`Ran 63 tests`（该模块）、全套 `Ran 1312 tests ... OK (skipped=1)`，13 个新增用例。

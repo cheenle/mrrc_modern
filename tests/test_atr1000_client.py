@@ -6,6 +6,7 @@ import asyncio
 import struct
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 from atr1000_client import (
@@ -16,6 +17,9 @@ from atr1000_client import (
     SCMD_TUNE_MODE,
     SCMD_RELAY_STATUS,
     RELAY_MIN_INTERVAL,
+    SWR_RETUNE_COOLDOWN,
+    SWR_RETUNE_DEBOUNCE,
+    SWR_RETUNE_MAX_FAILS,
     build_sync_frame,
     build_set_relay_frame,
     build_tune_frame,
@@ -407,6 +411,147 @@ class StateCallbackTests(unittest.TestCase):
         client = ATR1000Client("127.0.0.1", 1234)
         client.on_change = lambda state: 1 / 0
         client._handle_frame(make_meter_frame(150, 42))  # must not raise
+
+
+class SwrRetuneGuardTests(unittest.TestCase):
+    """High-SWR auto-retune guard (sibling mrrc V5.8.0 parity)."""
+
+    def setUp(self):
+        self.client = ATR1000Client("127.0.0.1", 1234, storage=FakeStorage())
+        self.client.notify_freq(7_074_000)
+        self.client._handle_frame(make_relay_frame(1, 10, 20))
+        self.client._relay_changed_at = time.monotonic() - 5.0
+
+    def _meter(self, swr_raw, power):
+        self.client._handle_frame(make_meter_frame(swr_raw, power))
+
+    def _aged_run(self):
+        """Prime a run at the current frequency, then age it past the debounce."""
+        self._meter(240, 50)                       # starts the run (sets the freq)
+        self.client._swr_high_since = time.monotonic() - SWR_RETUNE_DEBOUNCE - 0.1
+
+    def _fire_run(self):
+        """A run primed at the current frequency and older than the debounce."""
+        self._aged_run()
+        self._meter(240, 50)                       # fires on this frame
+
+    def test_debounce_blocks_until_the_run_is_long_enough(self):
+        self._meter(240, 50)                       # starts a run
+        self.assertIsNone(self.client._pending_tune_mode)
+        self.client._swr_high_since = time.monotonic() - SWR_RETUNE_DEBOUNCE - 0.1
+        self._meter(240, 50)
+        self.assertEqual(self.client._pending_tune_mode, 2)
+        self.assertIsNotNone(self.client._auto_tune)
+        self.assertAlmostEqual(self.client._auto_tune["swr_before"], 2.4)
+
+    def test_low_power_never_fires(self):
+        self.client._swr_high_since = time.monotonic() - 10.0
+        self._meter(240, 2)                        # idle leakage / tuner scan
+        self.assertIsNone(self.client._pending_tune_mode)
+        self.assertEqual(self.client._swr_high_since, 0.0)
+
+    def test_no_fire_while_the_tuner_is_busy(self):
+        self.client._tuning = True
+        self.client._swr_high_since = time.monotonic() - 10.0
+        self._meter(240, 50)
+        self.assertIsNone(self.client._pending_tune_mode)
+        self.assertEqual(self.client._swr_high_since, 0.0)
+
+    def test_frequency_change_restarts_the_run(self):
+        self._meter(240, 50)                       # run starts at 7.074 MHz
+        self.client._swr_high_since = time.monotonic() - 10.0
+        self.client.notify_freq(14_100_000)        # QSY
+        self._meter(240, 50)
+        self.assertIsNone(self.client._pending_tune_mode)   # run restarted
+
+    def test_relay_change_restarts_the_run(self):
+        self._meter(240, 50)                       # run starts
+        self.client._swr_high_since = time.monotonic() - 10.0
+        self.client._relay_changed_at = time.monotonic()
+        self._meter(240, 50)
+        self.assertIsNone(self.client._pending_tune_mode)
+
+    def test_cooldown_blocks_the_next_run(self):
+        self._fire_run()
+        self.client._auto_tune = None              # ignore the pending compare
+        self.client._pending_tune_mode = None
+        self._aged_run()
+        self._meter(240, 50)                       # inside the 30 s cooldown
+        self.assertIsNone(self.client._pending_tune_mode)
+        self.client._last_retune_at = time.monotonic() - SWR_RETUNE_COOLDOWN - 1
+        self._aged_run()
+        self._meter(240, 50)
+        self.assertEqual(self.client._pending_tune_mode, 2)
+
+    def test_start_event_and_failure_count(self):
+        events = []
+        self.client.on_tune_event = events.append
+        self._fire_run()
+        self.assertEqual(events[0]["phase"], "auto_start")
+        self.assertEqual(events[0]["attempt"], 1)
+        self.assertEqual(events[0]["freq"], 7_074_000)
+        self.assertAlmostEqual(events[0]["swr_before"], 2.4)
+        self.assertEqual(self.client._retune_fail_count[7074], 1)
+
+    def test_recovery_clears_the_failure_count(self):
+        for _ in range(SWR_RETUNE_MAX_FAILS):
+            self._fire_run()
+            self.client._auto_tune = None
+            self.client._pending_tune_mode = None
+            self.client._last_retune_at = time.monotonic() - SWR_RETUNE_COOLDOWN - 1
+        self.assertEqual(self.client._retune_fail_count[7074], SWR_RETUNE_MAX_FAILS)
+        self._meter(120, 50)                       # SWR 1.20 — matched again
+        self.assertNotIn(7074, self.client._retune_fail_count)
+
+    def test_give_up_after_three_failures_announces_once(self):
+        events = []
+        self.client.on_tune_event = events.append
+        for _ in range(SWR_RETUNE_MAX_FAILS):
+            self._fire_run()
+            self.client._auto_tune = None
+            self.client._pending_tune_mode = None
+            self.client._last_retune_at = time.monotonic() - SWR_RETUNE_COOLDOWN - 1
+        self.assertEqual(self.client._swr_high_since, 0.0)
+        events.clear()
+        self._meter(240, 50)                       # first frame of the next run
+        self.assertIsNone(self.client._pending_tune_mode)   # no 4th tune
+        self.assertEqual([e["phase"] for e in events], ["auto_giveup"])
+        self._meter(240, 50)                       # announce once per run only
+        self.assertEqual([e["phase"] for e in events], ["auto_giveup"])
+
+    def test_failure_count_is_per_frequency(self):
+        self._fire_run()
+        self.client._auto_tune = None
+        self.client._pending_tune_mode = None
+        self.client._last_retune_at = time.monotonic() - SWR_RETUNE_COOLDOWN - 1
+        self.client.notify_freq(14_100_000)        # QSY keeps 7074's count
+        self.assertEqual(self.client._retune_fail_count[7074], 1)
+        self._aged_run()                           # a QSY restarts the run
+        self._meter(240, 50)
+        self.assertEqual(self.client._pending_tune_mode, 2)   # new freq fires
+        self.assertEqual(self.client._retune_fail_count[14100], 1)
+        self.assertEqual(self.client._retune_fail_count[7074], 1)
+
+    def test_tune_event_callback_exception_is_contained(self):
+        self.client.on_tune_event = lambda event: 1 / 0
+        self._fire_run()                           # must not raise
+        self.assertEqual(self.client._pending_tune_mode, 2)
+
+
+class GuardSourceTests(unittest.TestCase):
+    """The auto-retune guard must be structurally unable to key the radio."""
+
+    def test_client_has_no_cat_or_ptt_reference(self):
+        src = Path("atr1000_client.py").read_text(encoding="utf-8")
+        for forbidden in ("set_ptt", "set_tune(", "cat_controller", "import server"):
+            self.assertNotIn(forbidden, src)
+
+    def test_guard_section_only_queues_a_tune_frame(self):
+        src = Path("atr1000_client.py").read_text(encoding="utf-8")
+        guard = src.split("# ── High-SWR auto-retune guard", 1)[1]
+        guard = guard.split("# ── Internals", 1)[0]
+        self.assertIn("self._pending_tune_mode = 2", guard)
+        self.assertNotIn("set_relay", guard)
 
 
 if __name__ == "__main__":

@@ -1160,3 +1160,20 @@ git commit -m "docs(atr1000): SDD §9.8/§15、版本历史 V2.57、模块表与
    停留的 `Baseline Date` 从 2026-09-13 改成 2026-09-23。
 4. 任务 6 实测：全套 `Ran 1330 tests ... OK (skipped=1)`；`test_release_artifacts` + `test_sdd_docs_consistency`
    23 项全绿（含 12 张图的版本与关键词规则）。
+
+### 任务 7（2026-09-23，已完成）—— 验证证据
+
+| 检查 | 命令 | 结果 |
+| --- | --- | --- |
+| 全套测试 | `venv/bin/python -m unittest discover -s tests` | `Ran 1330 tests ... OK (skipped=1)`（基线 1299 → +31） |
+| 语法 | `venv/bin/python -m py_compile atr1000_client.py server.py` | 退出码 0 |
+| 约束检查 | `sdd_context.py check <改动文件>` | 仅 `ws-endpoint-auth`（5 个既有端点装饰器）与 `env-hardcoded-device`（`/dev/cu.*` 启发式黑名单）两类**既有** warn，无新增违规 |
+| 规格覆盖 | 断言脚本逐条核对 §3–§8 | 参数 10/10、守卫状态与接线 11/11、学习门限 2/2、写回 6/6、服务端+前端 12/12、§8 测试 16/16 全 ✓ |
+| 文档门禁 | `test_release_artifacts` + `test_sdd_docs_consistency` | 23 项全绿（含 12 张图的版本窗口与关键词规则） |
+| 工作树 | `git status --porcelain` | 仅 `atr1000_tuner.json` / `mem_channels.json`（运行时数据，按约定不提交） |
+
+**交付边界（现场待验收）**：真机（FT-710 + ATR-1000 + 大驻波天线）端到端未执行 —— 需现场确认
+① 发射中被吃掉的一小段体感是否可接受；② 写回后二次访问该频点是否省掉整次调谐；③ 面板直发 PTT
+时学习确实入库（本次新增能力的关键场景）。验收方法：服务端日志搜 `auto full tune` /
+`ATR-1000 auto tune auto_success`，浏览器侧看 toast 与 `atr1000_tuner.json` 对应 kHz 记录的
+`swr_avg`/`last_update` 时间戳。

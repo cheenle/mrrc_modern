@@ -2,7 +2,7 @@
   "channels": [
     {
       "freq": 7050000,
-      "mode": "LSB",
+      "mode": "CW-U",
       "label": "40m 7.050"
     },
     {
@@ -26,9 +26,9 @@
       "label": "GEN 15.800"
     },
     {
-      "freq": 7065000,
-      "mode": "LSB",
-      "label": "40m 7.065"
+      "freq": 29600700,
+      "mode": "FM",
+      "label": "10m 29.601"
     }
   ]
 }

@@ -152,6 +152,22 @@ _tx_session_decode_fail = 0 # Opus frames that failed to decode
 _tx_non_owner_drops = 0     # mic frames ignored from non-owner clients
 _tx_cq_mic_drops = 0        # mic frames ignored while a CQ call owns TX
 
+# Control-plane mirror of the TX-audio owner: while a client holds the key,
+# only that client's release is honored. Field log 2026-09-25: two
+# full-control clients produced 75 TX sessions in 5 minutes (16 with zero
+# mic frames, three releases 30 ms apart) because every browser tab runs its
+# own PTT watchdog (ptt_manager.js) which re-sends ptt:false whenever ITS
+# radioState.tx_status != 0 — it cannot distinguish "my release did not
+# land" from "another client just keyed", so an idle tab kept unkeying the
+# tab that was actually transmitting (SDD I6, PTT half).
+_ptt_key_ws: Optional[WebSocket] = None
+_ptt_foreign_releases = 0   # releases ignored because another client keyed
+
+
+def _ptt_release_allowed(ws) -> bool:
+    """True when `ws` may drop the carrier (it keyed, or nobody did)."""
+    return _ptt_key_ws is None or ws is _ptt_key_ws
+
 
 def _promote_tx_owner():
     """Promote a remaining TX-audio client to owner after the owner left.
@@ -724,7 +740,7 @@ async def _max_tx_watchdog():
     Mirrors the PTT-release path: fire-and-forget unkey via set_ptt(False)
     plus a UI error toast — no blocking verify loop (SDD ch15).
     """
-    global _tx_continuous_since
+    global _tx_continuous_since, _ptt_key_ws
     while True:
         await asyncio.sleep(MAX_TX_WATCHDOG_INTERVAL)
         if PTT_MAX_TX_SECONDS <= 0:
@@ -746,6 +762,7 @@ async def _max_tx_watchdog():
             " (%.0fs) — forcing RX", elapsed, PTT_MAX_TX_SECONDS)
         try:
             await cat.set_ptt(False)
+            _ptt_key_ws = None
             radio.update(tx_status=0, power_meter=0, alc_meter=0,
                          swr_meter=0, comp_meter=0, id_meter=0)
         except Exception as e:
@@ -1615,6 +1632,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
     """Execute a set command against the radio."""
     global cat, radio, scheduler
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail, _tx_non_owner_drops
+    global _ptt_key_ws, _ptt_foreign_releases
 
     # Recording is a server-side session over USB audio, not a radio
     # command: handled before the "radio not connected" guard so a working
@@ -1769,6 +1787,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # client's mic frames are silently dropped: radio keys
                 # but there is no modulation / no RF power.
                 _claim_tx_owner_for_token(_ws_tokens.get(ws))
+                _ptt_key_ws = ws  # control-plane owner: only this socket's release is honored
                 _tx_session_frames = 0
                 _tx_session_decoded = 0
                 _tx_session_decode_fail = 0
@@ -1791,6 +1810,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         # than silently transmitting a dead carrier.
                         logger.error("PTT: TX audio stream failed — unkeying radio")
                         await cat.set_ptt(False)
+                        _ptt_key_ws = None
                         radio.update(tx_status=0, power_meter=0, alc_meter=0,
                                      swr_meter=0, comp_meter=0, id_meter=0)
                         await ws.send_text(json.dumps({
@@ -1800,6 +1820,29 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         scheduler and scheduler.skip_next_poll("tx_status", 1.0)
                         return
             else:
+                # Control-plane arbitration (SDD I6, PTT half): while another
+                # client holds the key, its carrier is not ours to drop —
+                # every browser tab runs a PTT watchdog that re-sends
+                # ptt:false on stale local state and used to unkey the tab
+                # that was actually transmitting. Push the authoritative
+                # state back so the sender's optimistic UI resyncs and its
+                # watchdog stands down (ptt_keyed_by_other).
+                if not _ptt_release_allowed(ws):
+                    _ptt_foreign_releases += 1
+                    if _ptt_foreign_releases % 50 == 1:
+                        logger.warning(
+                            "PTT release ignored — another client holds the key "
+                            "(ignored=%d)", _ptt_foreign_releases)
+                    try:
+                        await ws.send_text(json.dumps({
+                            "type": "stateUpdate",
+                            "fields": {"tx_status": radio.tx_status},
+                            "dirty": ["tx_status"],
+                            "ptt_keyed_by_other": True,
+                        }))
+                    except Exception:
+                        pass
+                    return
                 # Skip the next TX-status poll BEFORE the drain + unkey
                 # (poll-stale-guard: the skip must precede the CAT write, or
                 # an in-flight poll transaction — up to POLL_TIMEOUT on the
@@ -1827,6 +1870,7 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # poll (plus the client PTT watchdog) catches a stuck keyup.
                 # The previous 3×200 ms verify loop added ~600 ms to release.
                 await cat.set_ptt(False)
+                _ptt_key_ws = None
                 radio.update(tx_status=0, power_meter=0, alc_meter=0,
                              swr_meter=0, comp_meter=0, id_meter=0)
             scheduler and scheduler.skip_next_poll("tx_status", 1.0)
@@ -3202,6 +3246,7 @@ def _full_state_message(data: dict, channels: list) -> dict:
 @app.websocket("/WSradio")
 async def ws_radio(ws: WebSocket):
     """Main control WebSocket.  Handles all real-time radio state and commands."""
+    global _ptt_key_ws
     # Check auth via query param (browser WebSocket doesn't support custom headers)
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
@@ -3277,6 +3322,23 @@ async def ws_radio(ws: WebSocket):
             await _cq_abort_if_client_gone(ws)
         except Exception as e:
             logger.warning("CQ abort on disconnect failed: %s", e)
+
+        # PTT safety: the client that keyed just vanished. Drop the carrier
+        # even when other clients remain — they are not the keyer and their
+        # watchdogs are exactly what the arbitration ignores (a zombie keyer
+        # would otherwise hold the radio until the last client leaves or
+        # MRRC_PTT_MAX_TX_SECONDS fires). Mirrors the /WSaudioTX owner rule.
+        if ws is _ptt_key_ws:
+            _ptt_key_ws = None
+            if radio.is_transmitting and cat and cat.connected:
+                logger.warning("PTT keyer disconnected during TX! Forcing RX.")
+                try:
+                    await cat.set_ptt(False)
+                    radio.update(tx_status=0)
+                except Exception:
+                    pass
+                if audio:
+                    await asyncio.to_thread(audio.stop_tx)
 
         # PTT safety: if no clients remain and radio is transmitting, force RX
         if not ctrl_clients and radio.is_transmitting and cat and cat.connected:
@@ -3367,7 +3429,7 @@ async def ws_audio_tx(ws: WebSocket):
     connection from the same authenticated browser session takes over; other
     clients wait until they key the radio or the owner disconnects.
     """
-    global audio, _opus_tx_decoder, _tx_owner_ws
+    global audio, _opus_tx_decoder, _tx_owner_ws, _ptt_key_ws
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail
     global _tx_non_owner_drops
 
@@ -3462,6 +3524,7 @@ async def ws_audio_tx(ws: WebSocket):
                 logger.warning("TX audio owner disconnected during TX! Forcing RX.")
                 try:
                     await cat.set_ptt(False)
+                    _ptt_key_ws = None
                     radio.update(tx_status=0)
                 except Exception:
                     pass

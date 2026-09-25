@@ -474,6 +474,13 @@ function handleMessage(msg) {
 			break;
 
 		case "stateUpdate":
+			if (msg.ptt_keyed_by_other && window.PTTManager) {
+				// Our ptt:false was ignored by the server's control-plane
+				// arbitration — another client holds the key. Stop the local
+				// watchdog so it doesn't keep re-sending releases, and let
+				// the authoritative fields below fix our TX indicator.
+				PTTManager.cancelWatchdog();
+			}
 			if (msg.fields) {
 				Object.assign(radioState, msg.fields);
 			}

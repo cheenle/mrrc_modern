@@ -230,12 +230,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=25', index_source)
-        self.assertIn('/ft710_main.js?v=33', index_source)
+        self.assertIn('/ft710_main.js?v=34', index_source)
         self.assertIn('/ft710_ui.js?v=32', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v36'", sw_source)
-        self.assertIn("'/ft710_main.js?v=33'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v37'", sw_source)
+        self.assertIn("'/ft710_main.js?v=34'", sw_source)
         self.assertIn("'/ft710_ui.js?v=32'", sw_source)
 
 
@@ -654,6 +654,115 @@ class TXUplinkOwnershipTests(unittest.TestCase):
                       server_source)
 
 
+class PTTControlArbitrationTests(unittest.IsolatedAsyncioTestCase):
+    """Control-plane mirror of the TX-audio owner (SDD I6, PTT half).
+
+    Field log 2026-09-25: every browser tab runs its own PTT watchdog which
+    re-sends ptt:false on stale local tx_status — with two tabs open, the
+    idle tab's watchdog unkeyed the tab that was actually transmitting
+    (75 TX sessions in 5 minutes, 16 with zero mic frames, three releases
+    30 ms apart). The socket that keyed is now the only one whose release
+    is honored while it stays keyed.
+    """
+
+    def setUp(self):
+        import server
+        from radio_state import RadioState
+        self.server = server
+        self._saved = (server.cat, server.radio, server.scheduler,
+                       server.audio, server._ptt_key_ws,
+                       server._ptt_foreign_releases)
+        server.radio = RadioState()
+        server.scheduler = None
+        server.audio = None
+        server._ptt_key_ws = None
+        server._ptt_foreign_releases = 0
+        self.cat = _PTTFakeCat()
+        server.cat = self.cat
+
+    def tearDown(self):
+        s = self.server
+        (s.cat, s.radio, s.scheduler, s.audio, s._ptt_key_ws,
+         s._ptt_foreign_releases) = self._saved
+
+    # ── helper semantics ─────────────────────────────────────────
+
+    def test_release_allowed_when_nobody_holds_key(self):
+        self.assertTrue(self.server._ptt_release_allowed(_fake_socket()))
+
+    def test_release_allowed_for_keyer_denied_for_others(self):
+        keyer, bystander = _fake_socket(), _fake_socket()
+        self.server._ptt_key_ws = keyer
+        self.assertTrue(self.server._ptt_release_allowed(keyer))
+        self.assertFalse(self.server._ptt_release_allowed(bystander))
+
+    # ── handler behaviour ────────────────────────────────────────
+
+    async def test_key_up_records_the_keying_socket(self):
+        a = _fake_ws()
+        await self.server._execute_set_command("ptt", True, a)
+        self.assertEqual(self.cat.ptt_calls, [True])
+        self.assertIs(self.server._ptt_key_ws, a)
+
+    async def test_foreign_release_is_ignored_and_corrected(self):
+        """The bystander's watchdog must not drop the keyer's carrier; it
+        gets the authoritative tx_status back plus ptt_keyed_by_other so
+        its own watchdog stands down."""
+        keyer, bystander = _fake_ws(), _fake_ws()
+        await self.server._execute_set_command("ptt", True, keyer)
+        await self.server._execute_set_command("ptt", False, bystander)
+        self.assertEqual(self.cat.ptt_calls, [True])  # no TX0 written
+        self.assertEqual(self.server.radio.tx_status, 1)
+        self.assertIs(self.server._ptt_key_ws, keyer)
+        pushes = [m for m in bystander.messages if m.get("ptt_keyed_by_other")]
+        self.assertEqual(len(pushes), 1)
+        self.assertEqual(pushes[0]["type"], "stateUpdate")
+        self.assertEqual(pushes[0]["fields"], {"tx_status": 1})
+
+    async def test_keyers_own_release_is_honored_and_clears_owner(self):
+        keyer, bystander = _fake_ws(), _fake_ws()
+        await self.server._execute_set_command("ptt", True, keyer)
+        await self.server._execute_set_command("ptt", False, keyer)
+        self.assertEqual(self.cat.ptt_calls, [True, False])
+        self.assertEqual(self.server.radio.tx_status, 0)
+        self.assertIsNone(self.server._ptt_key_ws)
+        # With nobody keyed, any client's release passes through again
+        # (the stuck-keyup watchdog path must keep working).
+        await self.server._execute_set_command("ptt", False, bystander)
+        self.assertEqual(self.cat.ptt_calls, [True, False, False])
+
+    async def test_second_client_may_take_over_with_key_up(self):
+        """Takeover stays last-writer-wins on purpose: a client that keys
+        becomes the new owner (the dead-keyer case is covered by the
+        disconnect force-RX, not by blocking key-ups)."""
+        a, b = _fake_ws(), _fake_ws()
+        await self.server._execute_set_command("ptt", True, a)
+        await self.server._execute_set_command("ptt", True, b)
+        self.assertIs(self.server._ptt_key_ws, b)
+        await self.server._execute_set_command("ptt", False, a)
+        self.assertEqual(self.cat.ptt_calls, [True, True])  # a cannot unkey b
+        await self.server._execute_set_command("ptt", False, b)
+        self.assertEqual(self.cat.ptt_calls, [True, True, False])
+
+    # ── wiring contract ──────────────────────────────────────────
+
+    def test_keyer_disconnect_forces_rx(self):
+        """A zombie keyer must not hold the carrier: when its control
+        socket dies the server unkeys even if other clients remain."""
+        repo_root = Path(__file__).resolve().parents[1]
+        src = (repo_root / "server.py").read_text(encoding="utf-8")
+        self.assertIn("PTT keyer disconnected during TX! Forcing RX.", src)
+        self.assertIn("if ws is _ptt_key_ws:", src)
+
+    def test_browser_watchdog_stands_down_on_arbitration(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        main_js = (repo_root / "static" / "ft710_main.js").read_text(encoding="utf-8")
+        self.assertIn("msg.ptt_keyed_by_other", main_js)
+        self.assertIn("PTTManager.cancelWatchdog()", main_js)
+        mgr_js = (repo_root / "static" / "modules" / "ptt_manager.js").read_text(encoding="utf-8")
+        self.assertIn("cancelWatchdog: function()", mgr_js)
+
+
 # ── Backend-aware set-command branches (functional) ─────────────────
 
 async def _no_sleep(_delay):
@@ -693,6 +802,18 @@ class _SetFakeCat:
 
     async def set_frequency(self, freq_hz, vfo="A"):
         self.frequency_calls.append((freq_hz, vfo))
+        return True
+
+
+class _PTTFakeCat(_SetFakeCat):
+    """Adds PTT recording for the control-plane arbitration tests."""
+
+    def __init__(self):
+        super().__init__()
+        self.ptt_calls = []
+
+    async def set_ptt(self, tx):
+        self.ptt_calls.append(bool(tx))
         return True
 
 

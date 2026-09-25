@@ -99,6 +99,14 @@
             }
             stopPTTWatchdog();
         },
+
+        // Server told us another client holds the key (our ptt:false was
+        // ignored by the control-plane arbitration). Stand down: retrying
+        // would keep fighting the client that is actually transmitting, and
+        // the forced-local-RX below would desync our UI from the radio.
+        cancelWatchdog: function() {
+            stopPTTWatchdog();
+        },
     };
 
     // ── Safety: force RX on page hide (mobile app switch) ─────────

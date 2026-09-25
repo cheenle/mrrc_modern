@@ -76,6 +76,8 @@ pttVerifyTimer = setInterval(function() {
 
 The watchdog's input is the server-side TX-status poll (500ms), which keeps `radioState.tx_status` fresh even if the release command's state update was lost. The same ownership/dead-man logic applies to the IC-7300/MK2 backend, where PTT key/unkey is sent as CI-V 0x1C 0x00 frames.
 
+**Cross-client false positive (fixed 2026-09-25, SDD I6 PTT half):** the watchdog cannot tell "my release did not land" from "another client just keyed" — with two tabs open, the idle tab's watchdog re-sent `ptt:false` on the *other* tab's key-up and unkeyed the live transmission (field log: 75 TX sessions in 5 minutes, 16 with zero mic frames, three releases 30 ms apart). Two layers now stop this: the server ignores a release from any socket that is not the current keyer (`_ptt_key_ws`, Layer 4b) and pushes the authoritative `tx_status` back with `ptt_keyed_by_other: true`; on that flag the browser calls `PTTManager.cancelWatchdog()` and stands down instead of retrying.
+
 ### Layer 4: Dead-Man Switch (Server)
 
 ```python
@@ -89,6 +91,29 @@ if not ctrl_clients and radio.is_transmitting and backend and backend.connected:
 ```
 
 **ATR1000 tune assist (server-side TX2 keying):** the optional ATR tune assist (`_atr_tune_assist()`, §9.8) keys a TX2 carrier server-side for up to 45 s (ATR_TUNE deadline). Safety: the carrier drop is guaranteed by a `finally` block on every exit path (skip/success/rollback/error); the Layer 4 last-client-disconnect dead-man switch still applies while the carrier is up; an SWR≤1.6 gate skips tuning entirely; relays roll back when SWR does not improve. All ATR I/O runs in its own asyncio task — never on the audio path.
+
+### Layer 4b: Control-Plane PTT Arbitration (Server)
+
+The TX-audio uplink has had a single owner since V2.4x; the **control plane** did not — any full-control client could send `ptt:false` at any time (last-writer-wins, SDD I6). Since 2026-09-25 the socket that sends `ptt:true` is recorded as `_ptt_key_ws`, and while it holds the key:
+
+```python
+# /WSradio "set ptt" handler:
+if not _ptt_release_allowed(ws):        # ws is not the keyer
+    # ignore the release, push the authoritative state back:
+    await ws.send_text(json.dumps({
+        "type": "stateUpdate",
+        "fields": {"tx_status": radio.tx_status},
+        "dirty": ["tx_status"],
+        "ptt_keyed_by_other": True,     # browser watchdog stands down
+    }))
+    return
+```
+
+- A key-up from any client is still honored (takeover by re-keying), and the keyer's own release always passes — the stuck-keyup retry path (Layer 3) is untouched.
+- `_ptt_key_ws` is cleared on every server-initiated unkey: normal release, audio-open-failure unkey, `MRRC_PTT_MAX_TX_SECONDS` watchdog, /WSaudioTX owner-disconnect force-RX.
+- **Zombie keyer:** when the keying control socket disconnects mid-TX the server forces RX immediately — even with other clients still connected (they are not the keyer, and their releases are exactly what the arbitration ignores). Mirrors the /WSaudioTX owner rule.
+- Trade-off: while a keyer is connected but unresponsive (browser frozen, socket alive), other clients cannot unkey it; the coverage is the keyer-disconnect rule, the Layer 4 dead-man, and the opt-in `MRRC_PTT_MAX_TX_SECONDS` watchdog.
+- Tests: `PTTControlArbitrationTests` (tests/test_server_ws_protocol.py).
 
 **ATR1000 auto full tune (no self-keying):** the high-SWR guard (`atr1000_client.py`, §9.8 behaviour 4) never keys the radio — it only acts while the operator is already transmitting (measured power ≥5 W) and emits nothing but an ATR-1000 tune frame; `atr1000_client.py` holds no CAT/PTT reference at all (a source-level test pins this). The manual assist's TX2 carrier path above is unchanged and remains the only ATR-initiated keying, with its `finally` drop rule.
 

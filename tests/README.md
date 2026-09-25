@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1361 tests across 67 test modules (7 pty-based Yaesu round-trip tests skip on
+1369 tests across 67 test modules (7 pty-based Yaesu round-trip tests skip on
 Windows; the per-module counts below were read from `unittest` on 2026-09-25, macOS).
 
 ```bash
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1361 |
-| Passed | 1361 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1369 |
+| Passed | 1369 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -82,7 +82,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `CustomNameHintsTests` | 7 | Backend-provided audio device name hints (FT-710/YAESU, USB Audio CODEC/Device) |
 | `CapabilitiesAudioWiringTests` | 3 | RadioCapabilities audio fields flow into AudioHandler construction |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (63 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (71 tests)
 
 SDD coverage: §9.2, §9.6, §10.4, §15
 

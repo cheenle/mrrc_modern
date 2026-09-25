@@ -6,7 +6,7 @@ This repository contains a Python FastAPI server for remote radio control (Yaesu
 
 | Module | Responsibility |
 | -------- | ---------------- |
-| `server.py` | FastAPI app, auth, 5 WebSocket endpoints (`/WSradio`, `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX`, optional `/WSatr1000`), REST APIs, lifespan management; TX uplink ownership follows the PTT client and same-session replacement connections; spectrum loop schedules at 30 Hz and sends real scope data only when the frame counter advances; listen-only role (`MRRC_LISTEN_PASSWORD` → `_listen_tokens`, `/listen` page): server-side gate allows only freq/mode sets + memRecall on `/WSradio`, closes `/WSaudioTX`+`/WSatr1000` with 4003, and makes REST read-only (non-GET `/api/*` → 403) |
+| `server.py` | FastAPI app, auth, 5 WebSocket endpoints (`/WSradio`, `/WSspectrum`, `/WSaudioRX`, `/WSaudioTX`, optional `/WSatr1000`), REST APIs, lifespan management; TX uplink ownership follows the PTT client and same-session replacement connections; **PTT control-plane arbitration** (`_ptt_key_ws`, SDD §15 Layer 4b): while a client holds the key only its own release is honored — a foreign `ptt:false` is ignored and answered with the authoritative `tx_status` + `ptt_keyed_by_other` push (the sender's browser watchdog stands down), and a keyer disconnect forces RX even with other clients connected; spectrum loop schedules at 30 Hz and sends real scope data only when the frame counter advances; listen-only role (`MRRC_LISTEN_PASSWORD` → `_listen_tokens`, `/listen` page): server-side gate allows only freq/mode sets + memRecall on `/WSradio`, closes `/WSaudioTX`+`/WSatr1000` with 4003, and makes REST read-only (non-GET `/api/*` → 403) |
 | `cat_controller.py` | Compatibility shim — real module moved to `backends/ft710/cat_controller.py`: Serial CAT protocol (pyserial + asyncio.to_thread), 40+ command helpers |
 | `radio_state.py` | `RadioState` dataclass with dirty-field change tracking and derived properties |
 | `poll_scheduler.py` | 7-task adaptive background polling (100ms→5s) with skip-on-command and post-query stale-read discard; watchdog re-runs scope init (`on_reconnected`) after serial reconnect |
@@ -147,7 +147,7 @@ Python: 4-space indentation, type hints for shared state, `UPPER_CASE` for modul
 
 ## Testing Guidelines
 
-Run the full suite with `python -m unittest discover -s tests -v` (currently 1361 tests across 67 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connecte
+Run the full suite with `python -m unittest discover -s tests -v` (currently 1369 tests across 67 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connecte
 
 ## Commit & Pull Request Guidelines
 

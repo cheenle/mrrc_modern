@@ -2,6 +2,17 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 多客户端 PTT 仲裁（SDD I6 控制面半边）
+
+- **修复两个全控客户端互相掐键**：现场日志（2026-09-25 20:00–20:05）显示 5 分钟内 75 次 TX 会话、
+  16 次一个麦克风帧都没有、三次释放间隔仅 30ms —— 每个浏览器标签页的 PTT 看门狗只看本地
+  `tx_status`，分不清「我的释放没生效」和「别的客户端刚合法键控」，空闲标签页的看门狗会把
+  正在发射的标签页 unkey 掉。现在服务端记录键控者（`_ptt_key_ws`)：持键期间只接受它自己的释放，
+  外来 `ptt:false` 被忽略并回推权威 `tx_status` + `ptt_keyed_by_other`，浏览器看门狗收到即停
+  （`PTTManager.cancelWatchdog()`)；键控者掉线时即使还有其他客户端在线也立即强制 RX（防僵尸键控）。
+  接管仍然允许：任何客户端 `ptt:true` 即成为新键控者。
+- 缓存版本：`ft710_main.js?v=34`、`ptt_manager.js?v=14`、sw `mrrc-v37`。
+
 ## [v1.21.0] — 2026-09-25 — iPhone 开机锁屏竞态修复 + 收听页增强（FFT 迹线 / 频率步进 / 公网缓冲）
 
 **修掉 iPhone 开机后仍约 30 秒黑屏的最后一处竞态；收听页补上 FFT 迹线、频率步进与公网抖动缓冲。**

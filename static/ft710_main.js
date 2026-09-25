@@ -583,6 +583,45 @@ var _isMobile =
 	/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
 	(navigator.maxTouchPoints > 1 && !/Chrome/.test(navigator.userAgent));
 
+var _isIOS =
+	/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+	(navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+// ── iOS audio-session activation via mic permission ─────────────────
+// Field-confirmed: on iOS Safari RX audio stays silent until the audio
+// session is flipped to play-and-record. Requesting — and immediately
+// releasing — the microphone does exactly that (same trick as
+// listen.js activateAudioSession). Nothing is recorded; the tracks are
+// stopped at once. Also grants mic permission up front, so the first
+// PTT never hits a permission prompt mid-transmission. Runs at power-on,
+// inside the click gesture so the prompt is allowed.
+// MUST NOT block: in some in-app webviews the prompt never settles.
+var _micSessionActivated = false;
+var _micSessionPending = false;
+
+function activateAudioSession() {
+	if (!_isIOS || _micSessionActivated || _micSessionPending) return;
+	if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+	_micSessionPending = true;
+	Promise.race([
+		navigator.mediaDevices.getUserMedia({ audio: true }),
+		new Promise((_, reject) =>
+			setTimeout(() => reject(new Error("mic prompt timeout")), 10000),
+		),
+	])
+		.then((stream) => {
+			stream.getTracks().forEach((t) => t.stop());
+			_micSessionActivated = true;
+			console.log("iOS audio session activated via mic permission");
+		})
+		.catch((e) => {
+			console.warn("Mic permission not granted — RX may stay silent:", e);
+		})
+		.finally(() => {
+			_micSessionPending = false;
+		});
+}
+
 function bodyload() {
 	// Restore memory channels from cookie first (instant, before server responds)
 	try {
@@ -616,6 +655,9 @@ function bodyload() {
 				// Connect: start web client
 				cancelSubchannelTimers(); // stale backoff timers from the OFF period
 				_webClientOff = false;
+				// iOS: activate the audio session (mic permission) inside this
+				// gesture, or RX stays silent until the first PTT.
+				activateAudioSession();
 				// Close any stale connections first to avoid zombie WS
 				// accumulating TX ownership (non_owner_drops issue).
 				if (wsRadio) {
@@ -1436,6 +1478,33 @@ var WakeLockMgr = (() => {
 		return sentinel !== null || videoEl !== null || audioEl !== null;
 	}
 
+	// Home Screen Web App (PWA launched from the home-screen icon) on iOS.
+	// WebKit bug 254545: wakeLock.request() exists but is always rejected
+	// (or the sentinel never holds) there — fixed only in iOS/iPadOS 18.4.
+	// The /listen page works because it is opened in real Safari.
+	function isStandalone() {
+		return (
+			window.navigator.standalone === true ||
+			(window.matchMedia &&
+				window.matchMedia("(display-mode: standalone)").matches)
+		);
+	}
+	function iosVersion() {
+		var m = navigator.userAgent.match(/OS (\d+)[_.](\d+)/);
+		return m ? parseFloat(m[1] + "." + m[2]) : 0;
+	}
+	var _standaloneWarned = false;
+	function maybeWarnStandalone() {
+		if (_standaloneWarned || !_isIOS || !isStandalone()) return;
+		var v = iosVersion();
+		if (v >= 18.4) return;
+		_standaloneWarned = true;
+		var msg =
+			"主屏幕图标模式在 iOS 18.4 之前不支持防锁屏 — 若屏幕仍自动锁定，请改用 Safari 直接打开本页面，或升级系统";
+		console.warn("WakeLockMgr:", msg);
+		if (typeof showToast === "function") showToast(msg, 8000);
+	}
+
 	function setBtn(on, hint) {
 		if (!btn) return;
 		btn.setAttribute("aria-pressed", String(on));
@@ -1526,6 +1595,12 @@ var WakeLockMgr = (() => {
 			});
 			return true;
 		} catch (e) {
+			console.warn(
+				"WakeLockMgr: request rejected —",
+				e && e.name,
+				e && e.message,
+			);
+			maybeWarnStandalone();
 			return false;
 		}
 	}
@@ -1582,6 +1657,7 @@ var WakeLockMgr = (() => {
 		document.addEventListener("visibilitychange", () => {
 			if (requested && document.visibilityState === "visible" && !sentinel) {
 				acquireWakeLock().then((ok) => {
+					if (!ok && !active()) startFallback(); // no gesture here — best effort
 					setBtn(active(), wakeLockAvailable() ? false : "unsupported");
 				});
 			}
@@ -1596,6 +1672,14 @@ var WakeLockMgr = (() => {
 	// completion).  A 30 s periodic refresh re-acquires silently-
 	// released sentinels (some desktop browsers release after a few
 	// minutes even with a visible foreground tab).
+	//
+	// iOS field report (2026-09-25): listening only on touchstart /
+	// pointerdown is NOT enough — WebKit does not count those as
+	// transient activation for wakeLock.request(), so the request is
+	// silently rejected and the screen auto-locks (the /listen page
+	// worked because it requests inside a click handler). "click" and
+	// "touchend" are the gestures WebKit honors; keep the others as
+	// cheap retries for browsers that accept them.
 	function initAutoEnable() {
 		function onGesture(ev) {
 			if (active()) return; // already running — nothing to do
@@ -1603,13 +1687,19 @@ var WakeLockMgr = (() => {
 			if (!hasWL) startFallback();
 			requested = true;
 			acquireWakeLock().then((ok) => {
+				// Request rejected despite the API being present (iOS
+				// from a non-click gesture): fall back to the silent
+				// media trick — still within the ~5 s activation window.
+				if (!ok && hasWL && !active()) startFallback();
 				setBtn(ok || active(), hasWL ? false : "unsupported");
 			});
 		}
 		// Listen continuously (not {once}) so a failed attempt gets
 		// retried on the very next tap/click/key.
 		document.addEventListener("touchstart", onGesture, { passive: false });
+		document.addEventListener("touchend", onGesture);
 		document.addEventListener("pointerdown", onGesture);
+		document.addEventListener("click", onGesture);
 		document.addEventListener("keydown", onGesture);
 
 		// Periodic refresh: re-request if sentinel was silently released
@@ -1620,6 +1710,7 @@ var WakeLockMgr = (() => {
 				var hasWL = wakeLockAvailable();
 				if (!hasWL) startFallback();
 				acquireWakeLock().then((ok) => {
+					if (!ok && hasWL && !active()) startFallback(); // best effort
 					setBtn(ok || active(), hasWL ? false : "unsupported");
 				});
 			}

@@ -3,6 +3,20 @@
 All notable changes to the MRRC Web Control project.
 
 ## [Unreleased] — 收听专用界面（独立收听密码）
+
+- 修复 iPhone 主控界面约 30 秒自动锁屏：自动申请 Wake Lock 之前只监听
+  `touchstart`/`pointerdown`/`keydown`，而 WebKit 不把这些算作有效用户激活，
+  `wakeLock.request()` 被静默拒绝（`/listen` 正常是因为它在「开始收听」的 click 里申请）。
+  自动申请增加 `click`/`touchend` 监听（点 ⏻ 开机即触发），请求被拒时用静音媒体兜底，
+  `visibilitychange` 与 30 s 周期刷新路径同样补兜底。
+- 诊断主屏幕图标（PWA）模式防锁屏失效：WebKit bug 254545 —— 主屏幕 Web App 里
+  `wakeLock.request()` 必被拒绝，直到 iOS/iPadOS 18.4 才修复。申请被拒时控制台记录
+  具体错误名/原因；iOS <18.4 的主屏幕模式下弹出一次性提示，建议改用 Safari 直接打开
+  或升级系统（静音视频兜底在该模式下也不可靠，见 bug 内 2025 年现场报告）。
+- 主控界面开机即激活 iOS 音频会话：手机端点 ⏻ 开机时借一次麦克风权限（立即释放，不录音）
+  把 iOS Safari 的音频会话切到 play-and-record，RX 不再需要等第一次 PTT 才出声；
+  同时提前拿到麦克风权限，首次发射不会再中途弹权限框。仅 iOS 触发，带 10 s 超时防卡死。
+
 ### 🎧 Listen-only 模式 `/listen`
 
 - 新增可选环境变量 `MRRC_LISTEN_PASSWORD`（默认空 = 不启用）：用收听密码登录后进入独立的

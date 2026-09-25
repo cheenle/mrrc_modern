@@ -2,7 +2,7 @@
   "channels": [
     {
       "freq": 7050000,
-      "mode": "CW-U",
+      "mode": "LSB",
       "label": "40m 7.050"
     },
     {
@@ -21,9 +21,9 @@
       "label": "20m 14.270"
     },
     {
-      "freq": 15800000,
-      "mode": "USB",
-      "label": "GEN 15.800"
+      "freq": 7081500,
+      "mode": "LSB",
+      "label": "40m 7.082"
     },
     {
       "freq": 29600700,

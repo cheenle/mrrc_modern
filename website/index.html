@@ -97,17 +97,18 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>Listen-only interface</strong> — a second password (<code>MRRC_LISTEN_PASSWORD</code>) opens
-              <code>/listen</code>: frequency and mode tuning, memory recall, S-meter, waterfall and RX
-              audio. Transmit, recording and every device setting are refused <strong>by the server</strong>,
-              not by hiding buttons. Fixes on top: the iPhone main UI no longer auto-locks after ~30 s, and
-              RX is audible as soon as you power on.
+<strong>iPhone power-on wake-lock race fixed</strong> — the system mic-permission
+              dialog used to drop the just-acquired screen lock, so the main UI still auto-locked
+              ~30 s after power-on; the lock is now re-acquired when the prompt settles. Plus
+              <strong>listen-page upgrades</strong>: an FFT trace above the waterfall, frequency
+              step buttons, WAN-sized audio buffering, and the public listen URL now reaches the
+              radio host by DNS name (survives home IPv6 changes).
             </li>
 <li>
-<strong>ATR-1000 tuner</strong> (v1.19.0) — transmitting into <strong>SWR &gt; 2.0</strong> starts one
-              full tune by itself while you are already transmitting, stores the result when the match
-              improves, and learns from panel or external-software transmissions too (measured power
-              ≥ 3 W). <strong>It never keys the radio.</strong>
+<strong>Listen-only interface</strong> (v1.20.0) — a second password (<code>MRRC_LISTEN_PASSWORD</code>) opens
+              <code>/listen</code>: frequency and mode tuning, memory recall, S-meter, waterfall and RX
+              audio. Transmit, recording and every device setting are refused <strong>by the server</strong>,
+              not by hiding buttons.
             </li>
 </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -365,8 +366,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-Setup.exe — v1.21.0 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            46.0 · x64 · 46,015,844 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: b5b41eac…</code>
+            46.0 · x64 · 46,014,388 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: ccb6e26c…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             v1.21.0 is zero-config on first run: it auto-generates a web
@@ -405,8 +406,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-v1.21.0-arm64.dmg — v1.21.0 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            55.6 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 55,638,163 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: a40269b3…</code>
+            55.9 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 55,933,998 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: df833cdf…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -525,7 +526,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               MRRC-Modern-Setup.exe — v1.21.0, 46.0, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0</code>
+<code>SHA-256 ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -1020,7 +1021,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.60</strong> · Architecture decisions, component
+            <strong>V2.61</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>

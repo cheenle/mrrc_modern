@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.60</a></li>
+          <li><a href="#updates">V2.61</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.60 · 2026-09-25</span>
+          <span>SDD V2.61 · 2026-09-25</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,11 +113,11 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.60</td>
+              <td>V2.61</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
-              <td>2026-09-23</td>
+              <td>2026-09-25</td>
             </tr>
             <tr>
               <td>Runtime</td>
@@ -316,6 +316,25 @@
                 >MRRC_CQ_FILE</code
               >
               replaces the recording; AD-020).
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-mobile-screen"></i></div>
+            <h3>
+              v1.21.0 Released — iPhone Wake-Lock Race Fixed <small>(V2.61)</small>
+            </h3>
+            <p>
+              The iOS system mic-permission dialog shown at power-on released
+              the just-acquired screen wake lock, and every automatic
+              re-request (no user gesture) was rejected — the main UI still
+              auto-locked ~30&nbsp;s after power-on. The lock is now
+              re-acquired when the prompt settles and on window
+              <code>focus</code>. The listen page gains an FFT trace above the
+              waterfall, frequency step buttons, WAN-sized audio buffering,
+              and the public proxy backend moved to the DNS name
+              <code>radio.vlsc.net</code> with a 300&nbsp;s resolver (survives
+              home IPv6 changes). macOS DMG and Windows installer published
+              with cross-host SHA-256 verification.
             </p>
           </div>
           <div class="feature-card">

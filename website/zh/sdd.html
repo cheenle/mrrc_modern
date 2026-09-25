@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.60 更新</a></li>
+          <li><a href="#updates">V2.61 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.60 · 2026-09-25</span>
+          <span>SDD V2.61 · 2026-09-25</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,7 +110,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.60</td>
+              <td>V2.61</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -290,6 +290,20 @@
               发射内容不经过网络，因此不受抖动影响。呼叫期间麦克风帧被丢弃，PTT/TUNE
               被拒绝，发起端断开即切断载波（<code>MRRC_CQ_FILE</code>
               可替换录音；AD-020）。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-mobile-screen"></i></div>
+            <h3>v1.21.0 发布 —— iPhone 开机锁屏竞态修复 <small>（V2.61）</small></h3>
+            <p>
+              开机时弹出的 iOS 系统麦克风权限框会释放刚拿到的屏幕锁，
+              而所有无用户手势的自动重申请都被拒绝 —— 主控界面开机后
+              约 30 秒仍会黑屏。现在权限框结束时立即重申请，并新增
+              window <code>focus</code> 兜底。收听页新增瀑布上方的
+              FFT 迹线、频率步进按钮、公网尺寸音频缓冲；公网代理后端
+              改用 DNS 名 <code>radio.vlsc.net</code>（300 秒重解析，
+              家中 IPv6 变化自愈）。macOS DMG 与 Windows
+              安装包均已发布并做了跨主机 SHA-256 校验。
             </p>
           </div>
           <div class="feature-card">

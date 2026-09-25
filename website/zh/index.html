@@ -89,15 +89,15 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>收听专用界面</strong>——把<strong>另一个密码</strong>（<code>MRRC_LISTEN_PASSWORD</code>）交给访客，
-              他就得到一个 <code>/listen</code> 页面：调频率与模式、调用记忆频道、看 S 表与瀑布、听 RX 音频。
-              发射、录音与全部设备设置都被<b>服务端</b>拒绝，不依赖页面隐藏按钮。附带修复：iPhone 主控界面
-              不再约 30 秒自动锁屏，开机即有声。
+<strong>iPhone 开机锁屏竞态修复</strong>——开机时的系统麦克风权限框会冲掉刚拿到的屏幕锁，
+              主控界面开机后约 30 秒仍会黑屏；现在权限框结束立即重新申请锁。外加
+              <strong>收听页增强</strong>：瀑布上方新增 FFT 迹线、频率步进按钮、公网尺寸音频缓冲，
+              公网收听入口改用 DNS 名解析电台主机（家中 IPv6 变化不再断线）。
             </li>
 <li>
-<strong>ATR-1000 天调</strong>（v1.19.0）——发射中 <strong>SWR &gt; 2.0</strong> 时自己动手做一次完整调谐，
-              匹配改善就把参数写回学习库；面板 PTT 与外部软件的发射同样会被学习（实测功率 ≥ 3 W）。
-              <b>它绝不自行键控电台。</b>
+<strong>收听专用界面</strong>（v1.20.0）——把<strong>另一个密码</strong>（<code>MRRC_LISTEN_PASSWORD</code>）交给访客，
+              他就得到一个 <code>/listen</code> 页面：调频率与模式、调用记忆频道、看 S 表与瀑布、听 RX 音频。
+              发射、录音与全部设备设置都被<b>服务端</b>拒绝，不依赖页面隐藏按钮。
             </li>
 </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -350,8 +350,8 @@
 <strong> MRRC-Modern-Setup.exe — v1.21.0 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            46.0 · x64 · 46,015,844 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: b5b41eac…</code>
+            46.0 · x64 · 46,014,388 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: ccb6e26c…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             v1.21.0 首次运行零配置：自动生成网页密码，自动识别电台
@@ -387,8 +387,8 @@
 <strong> MRRC-Modern-v1.21.0-arm64.dmg — v1.21.0 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            55.6 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 55,638,163 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: a40269b3…</code>
+            55.9 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 55,933,998 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: df833cdf…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
@@ -502,7 +502,7 @@
               MRRC-Modern-Setup.exe — v1.21.0，46.0，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0</code>
+<code>SHA-256 ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -978,7 +978,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.60</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V2.61</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>

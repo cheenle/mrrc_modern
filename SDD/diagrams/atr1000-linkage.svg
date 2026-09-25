@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 336">
-  <!-- diagram-version: V2.57 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 356">
+  <!-- diagram-version: V2.60 -->
   <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#f0a030"/></marker></defs>
   <style>text{font-family:Inter,-apple-system,sans-serif}.h{fill:#f0a030;font-size:11px;font-weight:600}.t{fill:#e0e0e0;font-size:9px}.m{fill:#888;font-size:8px}</style>
   <text x="16" y="20" fill="#f0a030" font-size="14" font-weight="700">ATR1000 Tuner Linkage (Optional)</text>
@@ -30,4 +30,5 @@
   <rect x="16" y="294" width="528" height="32" rx="6" fill="#f0a03008" stroke="#f0a03022"/>
   <text x="280" y="312" text-anchor="middle" class="t">Default-disabled: MRRC_ATR1000_HOST empty → no client task, hooks short-circuit</text>
   <text x="280" y="324" text-anchor="middle" class="m">ATR data separate from RadioState · audio path untouched</text>
+  <text x="280" y="344" text-anchor="middle" class="m">listen-only tokens are closed with 4003 on /WSatr1000 — the tuner relay path is operator-only (V2.59)</text>
 </svg>

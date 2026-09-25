@@ -1,19 +1,19 @@
 {
-  "latest": "1.19.0",
+  "latest": "1.20.0",
   "installer": {
+    "version": "1.20.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.20.0-Windows-x64-Setup.exe",
+    "sha256": "b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0",
+    "size": 46015844
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-09-25T11:05:00",
+  "notes": "新增收听专用界面 /listen：用独立收听密码可调频率/模式、听 RX 音频与看瀑布，发射与设备设置由服务端拒绝；同时修掉 iPhone 主控界面约 30 秒自动锁屏，并在开机时激活 iOS 音频会话（RX 不必先按 PTT 才出声）。",
+  "previous": {
     "version": "1.19.0",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.19.0-Windows-x64-Setup.exe",
     "sha256": "7b9cabcaab51ecdcafc29ff10f6ca1f28339e055e4fe4bd825af1d4e96c4cd40",
     "size": 46002941
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-09-23T23:04:10",
-  "notes": "新增 ATR-1000 天调自动调谐：发射中驻波超过 2.0 时自动做一次完整调谐，调好即写回学习库（绝不自行键控电台）；学习门限改为实测功率 ≥3W，用面板 PTT 或外部软件发射也会学习。",
-  "previous": {
-    "version": "1.18.1",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.18.1-Windows-x64-Setup.exe",
-    "sha256": "19b5cef2300e510d3ae54b9817f70c4612455fe6f917a052ea98b661dcbd8992",
-    "size": 46002543
   }
 }

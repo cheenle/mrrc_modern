@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200">
-  <!-- diagram-version: V2.57 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 218">
+  <!-- diagram-version: V2.60 -->
   <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#f0a030"/></marker></defs>
   <style>text{font-family:Inter,-apple-system,sans-serif}.h{fill:#f0a030;font-size:11px;font-weight:600}.t{fill:#e0e0e0;font-size:10px}.m{fill:#888;font-size:9px}</style>
   <text x="16" y="20" fill="#f0a030" font-size="14" font-weight="700">State Broadcasting — Dirty-Field Change Tracking</text>
@@ -48,4 +48,5 @@
   <rect x="16" y="152" width="608" height="36" rx="6" fill="#f0a03008" stroke="#f0a03022"/>
   <text x="320" y="168" text-anchor="middle" class="t">Only changed fields are transmitted · dirty-field tracking minimizes bandwidth · efficient multi-client fan-out</text>
   <text x="320" y="182" text-anchor="middle" class="m">to_dirty_dict(dirty) → {type:"stateUpdate", fields:{...}, dirty:[...]} → ws.send_text(json.dumps(update))</text>
+  <text x="320" y="204" text-anchor="middle" class="m">side-channel broadcasts (not dirty-field): onlineUsers = len(ctrl_clients) on every /WSradio connect/disconnect (V2.59, powers the /listen footer)</text>
 </svg>

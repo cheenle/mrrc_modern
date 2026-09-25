@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 340">
-  <!-- diagram-version: V2.57 -->
+  <!-- diagram-version: V2.60 -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
   <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:10px;font-weight:700;letter-spacing:.05em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
 
-  <text x="380" y="18" text-anchor="middle" class="b">Logical Architecture (SDD V2.49)</text>
+  <text x="380" y="18" text-anchor="middle" class="b">Logical Architecture (V2.60)</text>
 
   <!-- Browser -->
   <rect x="250" y="30" width="260" height="48" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
   <text x="380" y="50" text-anchor="middle" class="b">Browser (mobile-first SPA)</text>
-  <text x="380" y="66" text-anchor="middle" class="m">waterfall · S-meter · meters · PTT · recordings panel · settings</text>
+  <text x="380" y="66" text-anchor="middle" class="m">waterfall · S-meter · meters · PTT · recordings panel · settings · separate /listen page (listen role)</text>
 
   <line x1="380" y1="78" x2="380" y2="96" stroke="#888" stroke-width="2" marker-end="url(#arr)"/>
   <text x="392" y="91" class="m">HTTP / WS (token per channel)</text>
@@ -20,7 +20,7 @@
   <text x="74" y="118" class="h">SERVER · server.py (FastAPI + lifespan)</text>
   <text x="74" y="136" class="m">WS: /WSradio · /WSspectrum · /WSaudioRX · /WSaudioTX · /WSatr1000 (optional)</text>
   <text x="74" y="151" class="m">REST: /api/auth · /api/setup · /api/mem_channels · /api/recordings · /api/status</text>
-  <text x="74" y="166" class="m">state fan-out (dirty fields) · TX-uplink ownership = PTT client · PTT/max-TX watchdogs · auth tokens</text>
+  <text x="74" y="166" class="m">state fan-out (dirty fields) · TX-uplink ownership = PTT client · PTT/max-TX watchdogs · auth tokens + listen-only role gate (MRRC_LISTEN_PASSWORD)</text>
   <text x="74" y="184" class="m">radio_state.py (dirty tracking · derived properties) · poll_scheduler.py (7 tasks, 100 ms-5 s, skip-on-command)</text>
   <text x="74" y="199" class="m">recorder.py (16 kHz MP3 writer) · atr1000_client.py (optional tuner) · audio_handler.py + opus_rx.py + audio_resample.py</text>
 

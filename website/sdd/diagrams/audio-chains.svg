@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 366">
-  <!-- diagram-version: V2.57 -->
+  <!-- diagram-version: V2.60 -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
   <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.06em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
 
-  <text x="380" y="18" text-anchor="middle" class="b">Audio Chains — RX, TX and the recording tap (SDD V2.49)</text>
+  <text x="380" y="18" text-anchor="middle" class="b">Audio Chains — RX, TX and the recording tap (V2.60)</text>
 
   <!-- RX -->
   <rect x="12" y="30" width="736" height="120" rx="10" fill="#5dade218" stroke="#5dade255"/>
@@ -30,5 +30,5 @@
   <text x="26" y="296" class="m">→ server Opus decode → 48 kHz PCM → (44.1 kHz devices only) audio_resample 960→882 → PyAudio playback → radio USB audio</text>
   <text x="26" y="315" class="m">CQ key (AD-020): server-side one-shot source — static/audio/cq.wav (48 kHz mono) → cq_player 20 ms frames → the same device queue (feed_tx_audio)</text>
   <text x="26" y="331" class="m">while a call runs the browser mic is dropped (_tx_cq_mic_drops), PTT/TUNE are refused, and cq:false / initiator disconnect cuts the carrier immediately</text>
-  <text x="26" y="349" class="s">PTT ownership follows the control session: the TX uplink is owned by the PTT client, same-session replacements take it over, the dead-man switch drops the carrier when that client disappears (SDD 15)</text>
+  <text x="26" y="349" class="s">PTT ownership follows the control session: the TX uplink is owned by the PTT client, same-session replacements take it over, the dead-man switch drops the carrier when that client disappears (SDD 15) · the RX chain above is shared by the listen role, but /WSaudioTX is closed with 4003 for listen-only tokens (V2.59)</text>
 </svg>

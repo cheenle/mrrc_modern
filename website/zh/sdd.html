@@ -27,7 +27,7 @@
         </a>
         <ul class="nav-links">
             <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.59 更新</a></li>
+            <li><a href="#updates">V2.60 更新</a></li>
             <li><a href="#chapters">章节目录</a></li>
             <li><a href="#decisions">AD 索引</a></li>
             <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
@@ -43,7 +43,7 @@
     <div class="hero-content">
         <div class="hero-badge">
             <i class="fas fa-book"></i>
-            <span>SDD V2.59 · 2026-09-25</span>
+            <span>SDD V2.60 · 2026-09-25</span>
         </div>
         <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
         <p class="hero-subtitle">
@@ -74,7 +74,7 @@
             </thead>
             <tbody>
             <tr><td>文档 ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.59</td></tr>
+            <tr><td>版本</td><td>V2.60</td></tr>
             <tr><td>基线日期</td><td>2026-09-23</td></tr>
             <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
             <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
@@ -167,6 +167,15 @@
                 <div class="icon"><i class="fas fa-bullhorn"></i></div>
                 <h3>一键 CQ 按键 <small>（V2.48–V2.50）</small></h3>
                 <p>由服务端键控电台、播送打包的 CQ 录音并松键 —— 发射内容不经过网络，因此不受抖动影响。呼叫期间麦克风帧被丢弃，PTT/TUNE 被拒绝，发起端断开即切断载波（<code>MRRC_CQ_FILE</code> 可替换录音；AD-020）。</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon"><i class="fas fa-headphones"></i></div>
+                <h3>v1.20.0 发布 —— 收听专用界面 <small>（V2.59）</small></h3>
+                <p>用另一个独立密码（<code>MRRC_LISTEN_PASSWORD</code>）可进入 <code>/listen</code>：调频率与模式、
+调用记忆频道、看 S 表与瀑布、听 RX 音频（浏览器端音量）。管控<b>全在服务端</b>——<code>/WSradio</code>
+角色门只放行频率/模式与记忆调用，TX 与天调通道直接 <code>4003</code> 断开，REST 只读——因此发射、录音与
+设备设置从页面根本到不了。同一版还修掉 iPhone 主控界面自动锁屏（Wake Lock 改由真实用户手势发起），
+并在开机时激活 iOS 音频会话。macOS DMG 与 Windows 安装包均已发布并做了跨主机 SHA-256 校验。</p>
             </div>
             <div class="feature-card">
                 <div class="icon"><i class="fas fa-tower-broadcast"></i></div>

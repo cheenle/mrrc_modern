@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300">
-  <!-- diagram-version: V2.57 -->
+  <!-- diagram-version: V2.60 -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
   <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.06em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
 
-  <text x="380" y="18" text-anchor="middle" class="b">Spectrum Paths — three sources, one waterfall (SDD V2.49)</text>
+  <text x="380" y="18" text-anchor="middle" class="b">Spectrum Paths — three sources, one waterfall (V2.60)</text>
 
   <!-- FT4222 -->
   <rect x="12" y="32" width="238" height="196" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
@@ -53,5 +53,5 @@
   <rect x="12" y="238" width="736" height="52" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
   <text x="380" y="256" text-anchor="middle" class="h">SHARED · S-meter synthesiser + 30 Hz scheduler</text>
   <text x="380" y="274" text-anchor="middle" class="m">CAT SM0; poll (~100 ms) → raw 0-255 → Gaussian peaks at band edges → same 851/1701-byte frame format → /WSspectrum</text>
-  <text x="380" y="288" text-anchor="middle" class="s">the scheduler sends real scope data only when the frame counter advances, so a stale radio cannot freeze the waterfall</text>
+  <text x="380" y="288" text-anchor="middle" class="s">the scheduler sends real scope data only when the frame counter advances, so a stale radio cannot freeze the waterfall · listen-only clients get every 3rd frame (LISTEN_SPECTRUM_DIVIDER=3, 30 Hz → ~10 Hz)</text>
 </svg>

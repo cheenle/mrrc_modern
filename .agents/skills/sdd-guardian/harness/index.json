@@ -282,9 +282,37 @@
       ]
     },
     {
+      "id": "listen-only-role",
+      "globs": [
+        "static/listen.html",
+        "static/listen.js",
+        "deploy_listen_proxy.sh",
+        "tests/test_listen_only.py"
+      ],
+      "keywords": [
+        "listen",
+        "listener",
+        "role",
+        "MRRC_LISTEN_PASSWORD",
+        "4003",
+        "收听",
+        "访客",
+        "只读"
+      ],
+      "refs": [
+        "sec:9.2",
+        "sec:5.3",
+        "nfr:NFR-020",
+        "nfr:NFR-021",
+        "issue:I9"
+      ]
+    },
+    {
       "id": "auth-security",
       "globs": [
-        "server.py"
+        "server.py",
+        "static/listen.js",
+        "static/listen.html"
       ],
       "keywords": [
         "auth",
@@ -297,7 +325,11 @@
         "认证",
         "密码",
         "安全",
-        "路径"
+        "路径",
+        "listen",
+        "MRRC_LISTEN_PASSWORD",
+        "收听",
+        "角色"
       ],
       "refs": [
         "sec:5.3",

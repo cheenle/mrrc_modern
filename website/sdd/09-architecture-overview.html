@@ -122,6 +122,7 @@
 <li><code class="scope-code">{"type":"memChannels","channels":[...]}</code> — memory channel broadcast</li>
 <li><code class="scope-code">{"type":"recordingState","recording":{...}}</code> — server-side QSO recording snapshot (AD-017), broadcast on change</li>
 <li><code class="scope-code">{"type":"cqState","cq":{...}}</code> — one-shot CQ call snapshot (AD-020): <code class="scope-code">state</code> = <code class="scope-code">idle|calling|complete|aborted</code>, plus <code class="scope-code">frames_sent</code>/<code class="scope-code">frames_total</code>/<code class="scope-code">started_by</code>/<code class="scope-code">reason</code>; broadcast on change and at 1 Hz while calling</li>
+<li><code class="scope-code">{"type":"onlineUsers","count":N}</code> — online control-client count, broadcast on every /WSradio connect/disconnect (V2.59; shown in the listen page footer, ignored by UIs that do not know the type)</li>
 <li><code class="scope-code">{"type":"pong"}</code> — keepalive response</li>
 </ul>
 <p><strong>Client → Server:</strong></p>
@@ -141,7 +142,7 @@
 <p><strong>Text:</strong> <code class="scope-code">"s:"</code> = stop TX; <code class="scope-code">"m:rate,encode,..."</code> = settings.</p>
 <h3 id="wsspectrum-binary">9.2.4 /WSspectrum (binary)</h3>
 <p><strong>v1 format:</strong> 1-byte version (0x01) + 850 bytes wf1 = 851 bytes. <strong>v2 format:</strong> 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.</p>
-<p>The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when <code class="scope-code">ScopeHandler._frame_count</code> advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick.</p>
+<p>The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when <code class="scope-code">ScopeHandler._frame_count</code> advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick. Listen-role clients are throttled to every Nth frame (<code class="scope-code">LISTEN_SPECTRUM_DIVIDER = 3</code>, ~10 Hz) to cut their bandwidth by two thirds (V2.59).</p>
 <h2 id="rx-audio-signal-chain">9.3 RX Audio Signal Chain</h2>
 <figure>
 <img src="diagrams/audio-chains.svg" alt="RX Audio Chain" />
@@ -200,7 +201,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.59 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.60 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

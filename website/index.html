@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.19.0 · Stable</span>
+<span>v1.20.0 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -57,11 +57,11 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.19.0-arm64.dmg">
-<i class="fab fa-apple"></i> Download macOS v1.19.0
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.20.0-arm64.dmg">
+<i class="fab fa-apple"></i> Download macOS v1.20.0
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.19.0
+<i class="fab fa-windows"></i> Windows Installer v1.20.0
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> Explore Features
@@ -92,11 +92,25 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.19.0</strong>
+<strong> What's new in v1.20.0</strong>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>ATR-1000 tunes itself while you transmit</strong> — with the optional networked
+<strong>Listen-only interface</strong> — hand a visitor a <strong>separate password</strong>
+              (<code>MRRC_LISTEN_PASSWORD</code>) and they get <code>/listen</code>: a large frequency
+              readout, direct frequency/band entry, mode buttons, memory recall, S-meter, waterfall and
+              RX audio with browser-side volume. Frequency and mode are all they can change —
+              transmit, recording and every device setting are refused <strong>by the server</strong>,
+              so the restriction does not depend on hiding buttons in the page.
+            </li>
+<li>
+<strong>iPhone: no more 30-second lock, and sound from power-on</strong> — the Wake Lock request
+              now fires from a real user gesture (WebKit silently refused the old listeners, which are
+              not counted as activation), and the iOS audio session is switched to play-and-record when
+              you press ⏻, so RX is audible without pressing PTT once first.
+            </li>
+<li>
+<strong>ATR-1000 tunes itself while you transmit</strong> (v1.19.0) — with the optional networked
               tuner, transmitting into <strong>SWR &gt; 2.0</strong> (measured power ≥ 5 W for
               1.5 s) now starts one full tune by itself: a toast announces it, the TUNE button
               shows progress, and the outcome is reported (done / no improvement / timeout /
@@ -425,14 +439,14 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.19.0 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.20.0 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            46.0 · x64 · 46,002,941 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 7b9cabca…</code>
+            46.0 · x64 · 46,015,844 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: b5b41eac…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.19.0 is zero-config on first run: it auto-generates a web
+            v1.20.0 is zero-config on first run: it auto-generates a web
             password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
             0x19) and its serial port (COM), and the login page shows the
             auto-generated password. The web 连接设置 (Connection Settings)
@@ -447,8 +461,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.19.0-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.19.0
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.20.0-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.20.0
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
@@ -465,11 +479,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.19.0-arm64.dmg — v1.19.0 Stable</strong>
+<strong> MRRC-Modern-v1.20.0-arm64.dmg — v1.20.0 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            55.7 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 55,654,218 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 40d8a15b…</code>
+            55.6 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 55,638,163 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: a40269b3…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -489,7 +503,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.19.0-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.20.0-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -516,7 +530,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-rpi64.img.xz — Raspberry Pi</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            551 MB (551,282,340 bytes) · arm64 · Pi 3B+/4/5 · <em>still the v1.17.0 image — the v1.19.0 rebuild is pending</em> · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
+            551 MB (551,282,340 bytes) · arm64 · Pi 3B+/4/5 · <em>still the v1.17.0 image — the v1.20.0 rebuild is pending</em> · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
 <code style="font-size: 0.76rem">SHA-256: a56e5658e200d2c8fa0eac147299b8533757934009b776f3f2340cb55944dc1b</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
@@ -585,10 +599,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.19.0, 46.0, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.20.0, 46.0, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 7b9cabcaab51ecdcafc29ff10f6ca1f28339e055e4fe4bd825af1d4e96c4cd40</code>
+<code>SHA-256 b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -624,7 +638,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>1 · Install</h4>
 <p>
-              Drag <code>MRRC-Modern-v1.19.0-arm64.dmg</code> → double-click to
+              Drag <code>MRRC-Modern-v1.20.0-arm64.dmg</code> → double-click to
               mount → drag <strong>MRRC Modern</strong> into Applications. On
               first launch, right-click the app → Open → Open (one-time
               Gatekeeper bypass for the ad-hoc signature).
@@ -941,7 +955,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="perf-card">
 <div class="metric">1261</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>1330 tests in the v1.19.0 release (macOS + Windows)</small>
+              Hardware-Free Tests<br/><small>1361 tests in the v1.20.0 release (macOS + Windows)</small>
 </div>
 </div>
 </div>
@@ -1083,7 +1097,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.59</strong> · Architecture decisions, component
+            <strong>V2.60</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>
@@ -1123,7 +1137,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-grid">
 <div class="footer-section">
 <h4>MRRC Modern</h4>
-<p>Multi-Radio Remote Control<br/>One USB Cable, Any Device<br/>v1.19.0 Stable · GPLv3 License</p>
+<p>Multi-Radio Remote Control<br/>One USB Cable, Any Device<br/>v1.20.0 Stable · GPLv3 License</p>
 </div>
 <div class="footer-section">
 <h4>Links</h4>
@@ -1139,7 +1153,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.19.0</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.20.0</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

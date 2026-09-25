@@ -619,6 +619,11 @@ function activateAudioSession() {
 		})
 		.finally(() => {
 			_micSessionPending = false;
+			// The system mic-permission prompt can obscure the page and make
+			// iOS release a just-acquired screen wake lock — re-acquire now
+			// that the prompt has settled (still inside the ~5 s activation
+			// window when the user answers promptly).
+			if (typeof WakeLockMgr !== "undefined") WakeLockMgr.enable();
 		});
 }
 
@@ -1609,13 +1614,13 @@ var WakeLockMgr = (() => {
 
 	async function enable() {
 		requested = true;
-		var ok = false;
-		if (!active()) {
-			// Fallback must have been started sync by the click handler.
-			// If enable() is called from visibilitychange (not a click),
-			// fallback may not be running — start it via wakeLock only.
+		if (sentinel) {
+			// Already held — don't tear down a good lock (callers use
+			// enable() as a "make sure it's on" re-acquire).
+			setBtn(true, false);
+			return;
 		}
-		ok = (await acquireWakeLock()) || active();
+		var ok = (await acquireWakeLock()) || active();
 		setBtn(ok, wakeLockAvailable() ? false : "unsupported");
 	}
 
@@ -1658,6 +1663,21 @@ var WakeLockMgr = (() => {
 			if (requested && document.visibilityState === "visible" && !sentinel) {
 				acquireWakeLock().then((ok) => {
 					if (!ok && !active()) startFallback(); // no gesture here — best effort
+					setBtn(active(), wakeLockAvailable() ? false : "unsupported");
+				});
+			}
+		});
+
+		// iOS releases the screen wake lock while a SYSTEM dialog (e.g. the
+		// mic permission prompt fired by activateAudioSession at power-on)
+		// obscures the page; visibilitychange does not always fire for it,
+		// but window focus does when the dialog is dismissed. Field report
+		// 2026-09-25: lock acquired at power-on, screen still auto-locked;
+		// tapping ☀ (a fresh gesture) was the only thing that held it.
+		window.addEventListener("focus", () => {
+			if (requested && document.visibilityState === "visible" && !sentinel) {
+				acquireWakeLock().then((ok) => {
+					if (!ok && !active()) startFallback(); // best effort
 					setBtn(active(), wakeLockAvailable() ? false : "unsupported");
 				});
 			}
@@ -1717,7 +1737,7 @@ var WakeLockMgr = (() => {
 		}, 30000);
 	}
 
-	return { init: init, initAutoEnable: initAutoEnable, active: active };
+	return { init: init, initAutoEnable: initAutoEnable, enable: enable, active: active };
 })();
 
 var FullscreenMgr = (() => {

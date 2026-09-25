@@ -230,12 +230,12 @@ class StateBroadcastLogicTests(unittest.TestCase):
     def test_static_assets_are_cache_busted_after_ui_changes(self):
         index_source = Path("static/index.html").read_text(encoding="utf-8")
         self.assertIn('/ft710.css?v=25', index_source)
-        self.assertIn('/ft710_main.js?v=32', index_source)
+        self.assertIn('/ft710_main.js?v=33', index_source)
         self.assertIn('/ft710_ui.js?v=32', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v35'", sw_source)
-        self.assertIn("'/ft710_main.js?v=32'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v36'", sw_source)
+        self.assertIn("'/ft710_main.js?v=33'", sw_source)
         self.assertIn("'/ft710_ui.js?v=32'", sw_source)
 
 

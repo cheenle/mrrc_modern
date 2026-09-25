@@ -2,6 +2,27 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.21.0] — 2026-09-25 — iPhone 开机锁屏竞态修复 + 收听页增强（FFT 迹线 / 频率步进 / 公网缓冲）
+
+**修掉 iPhone 开机后仍约 30 秒黑屏的最后一处竞态；收听页补上 FFT 迹线、频率步进与公网抖动缓冲。**
+
+### 📱 iPhone 主控界面锁屏竞态修复
+
+- 修复开机后 wake lock 被麦克风权限框冲掉：开机时 iOS 系统级权限弹窗会遮挡页面并
+  释放刚拿到的屏幕锁，而无手势的自动重申请在 iOS 上必被拒（表现为开机 ~30 s 仍黑屏，
+  手动点 ☀ 后才正常）。现在权限框结束后立即用残余激活窗口重申请，并新增 window
+  `focus` 事件兜底重申请；`WakeLockMgr.enable()` 已持锁时直接返回不再重复申请。
+
+### 🎧 收听页增强（`/listen`）
+
+- **FFT 迹线**：瀑布上方新增频谱曲线（网格 + EMA 平滑 + 琥珀迹线与渐变填充，无频率刻度——
+  收听角色本就不能改 span）。
+- **频率步进**：◀/▶ 单步、◀◀/▶▶ 五倍，步进钮循环 10 Hz–25 kHz（30 kHz–75 MHz 边界内）。
+- **公网抖动缓冲**：RX jitter buffer 由局域网取向的 120/300 ms 加大到 500/250/1500 ms，
+  公网链路收听不再卡顿。
+- 公网入口后端由 IPv6 字面量改为 DNS 名 `radio.vlsc.net`（AAAA）：nginx 每 300 s 自动
+  重解析，家中 IPv6 变化不再断服务（`deploy_listen_proxy.sh` 重跑即生效，已部署）。
+
 ## [v1.20.0] — 2026-09-25 — 收听专用界面（独立收听密码）+ iPhone 主控锁屏修复
 
 **给访客开一个「只能听」的入口：可调频率与模式、能听音频看瀑布，但发射与设备设置全部被服务端拒绝；同时修掉 iPhone 用主控界面约 30 秒自动锁屏。**
@@ -30,9 +51,9 @@ All notable changes to the MRRC Web Control project.
   **服务端**拒绝（`/WSradio` 角色门 + `/WSaudioTX`/`/WSatr1000` 对收听 token 直接断开 +
   REST API 只读），不依赖前端隐藏按钮。
 - 收听密码与操作员密码互不影响；两密码相同时按操作员（全控）处理。
-- 公网入口：`https://www.vlsc.net/mrrc_modern/listen` —— www 主机 nginx 经**公网 IPv6 直连**
-  反代到电台服务器（无 SSH 隧道），由 `deploy_listen_proxy.sh` 幂等部署；
-  电台机 IPv6 变化时更新脚本里的 `LISTEN_BACKEND` 重跑即可。
+- 公网入口：`https://www.vlsc.net/mrrc_modern/listen` —— www 主机 nginx 反代到电台服务器
+  （DNS 名 `radio.vlsc.net` 走 AAAA/IPv6，无 SSH 隧道），由 `deploy_listen_proxy.sh` 幂等部署；
+  nginx 每 300s 自动重解析，家中 IPv6 变化不再影响服务。
 - **iPhone/iOS 支持**：点击「开始收听」激活音频；iOS 上借一次麦克风权限激活扬声器输出
   （不录音）；Wake Lock 防止收听中自动锁屏断音；页脚显示在线人数；
   单屏紧凑布局，记忆频道 3×2 网格一键直达。

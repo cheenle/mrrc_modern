@@ -7,22 +7,22 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.20.0 Stable)
+## Download (v1.21.0 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.20.0-Windows-x64-Setup.exe` | 46.0 MB (46,015,844 bytes) | `b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0` |
+| `MRRC-Modern-v1.21.0-Windows-x64-Setup.exe` | 46.0 MB (46,015,844 bytes) | `b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.20.0-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.21.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.20.0 is the published Windows installer.** It was built from the release
+**v1.21.0 is the published Windows installer.** It was built from the release
 commit on Windows 11 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. All 1361
 tests (7 pty-based Yaesu round-trip tests skip on Windows), three PyInstaller targets and
 the installer build passed, and the required
 bundled-file inspection passed (FTDI DLLs, opus.dll, `static/`, `static/listen.js`, `mem_channels.json`, the MP3
-encoder `lameenc.cp312-win_amd64.pyd`, and `version.txt` = `1.20.0`). The packaged code was then checked **by
+encoder `lameenc.cp312-win_amd64.pyd`, and `version.txt` = `1.21.0`). The packaged code was then checked **by
 walking the bundle's bytecode** (`MRRC-Modern-Server.exe` → the `server` entry script contains
 `_listen_tokens`, `LISTEN_ONLY_MESSAGE`, `LISTEN_ALLOWED_SET_FIELDS`, `_listen_spectrum_clients` and
 `LISTEN_SPECTRUM_DIVIDER`; the PYZ holds `config`, `support_bundle`, `cq_player`, `atr1000_client`,
@@ -36,9 +36,9 @@ and `200` on `/login` — i.e. the frozen build really serves the app, not just 
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.14.2 package (45,435,022 bytes, SHA-256 `a7ee1667…`) remains downloadable as an
-archive; v1.20.0 supersedes it.
+archive; v1.21.0 supersedes it.
 
-**What's new in v1.20.0**: the **listen-only interface `/listen`** — an operator can hand a visitor a
+**What's new in v1.21.0**: the **listen-only interface `/listen`** — an operator can hand a visitor a
 second, *separate* password (`MRRC_LISTEN_PASSWORD`, empty = disabled) that unlocks a page with a large
 frequency readout, direct frequency/band entry, mode buttons, memory recall, S-meter, waterfall and RX
 audio with browser-side volume. The restriction is enforced **server-side** (a role gate on `/WSradio`

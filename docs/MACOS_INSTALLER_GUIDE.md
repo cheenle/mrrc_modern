@@ -1,9 +1,9 @@
-# macOS 安装与使用指南（MRRC Modern v1.20.0）
+# macOS 安装与使用指南（MRRC Modern v1.21.0）
 
 本指南面向**第一次使用 MRRC Modern 的 macOS 用户**：从下载到出声，全程**不需要打开终端、不需要编辑配置文件**。
 只有「故障排查」和「高级用法」两章需要命令行，且都是可选。
 
-> **本版（v1.20.0）新增：收听专用界面 `/listen`**——用独立的收听密码（`MRRC_LISTEN_PASSWORD`）登录一个
+> **本版（v1.21.0）新增：收听专用界面 `/listen`**——用独立的收听密码（`MRRC_LISTEN_PASSWORD`）登录一个
 > 「只能听」的入口：可以调频率、切模式、听音频、看频谱瀑布，但发射（PTT/TUNE/CQ）、录音与所有设备设置
 > 都被**服务端**拒绝，不依赖前端隐藏按钮。同时修掉 iPhone 用主控界面约 30 秒自动锁屏（Wake Lock 手势
 > 判定）并在开机时激活 iOS 音频会话（详情见官网「What's new」）。
@@ -32,12 +32,12 @@
 | 权限 | **麦克风**（= 音频输入，必需）；局域网访问时还需要 macOS 防火墙放行 |
 
 下载地址：<https://www.vlsc.net/mrrc_modern/> → **Download macOS**，文件名为
-`MRRC-Modern-v1.20.0-arm64.dmg`（55,638,163 bytes，SHA-256 `a40269b3…`）。
+`MRRC-Modern-v1.21.0-arm64.dmg`（55,638,163 bytes，SHA-256 `a40269b3…`）。
 
 **校验下载完整性（可选，命令行）**：
 
 ```bash
-shasum -a 256 ~/Downloads/MRRC-Modern-v1.20.0-arm64.dmg
+shasum -a 256 ~/Downloads/MRRC-Modern-v1.21.0-arm64.dmg
 ```
 
 与官网下载卡片上的 SHA-256 一致即可。
@@ -46,7 +46,7 @@ shasum -a 256 ~/Downloads/MRRC-Modern-v1.20.0-arm64.dmg
 
 ## 2. 安装（约 1 分钟）
 
-1. 双击打开 `MRRC-Modern-v1.20.0-arm64.dmg`。
+1. 双击打开 `MRRC-Modern-v1.21.0-arm64.dmg`。
 2. 把 **MRRC Modern** 图标拖进右侧的**应用程序**文件夹快捷方式。
 3. 在访达侧边栏弹出该磁盘映像（点 ⏏）。
 4. 到「应用程序」里找到 **MRRC Modern**。

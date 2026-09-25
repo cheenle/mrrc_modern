@@ -95,6 +95,7 @@ python3 .agents/skills/dual-platform-release/harness/release_check.py --online
 # full: also download the artifacts and compare SHA-256
 python3 .agents/skills/dual-platform-release/harness/release_check.py --online --deep
 ```
+
 Exit code 0 = clean, 2 = violations (the report lists each one with file and expected value).
 
 **Rule kinds in the registry** — add one whenever a new file starts carrying a version:
@@ -120,7 +121,7 @@ governed by rules instead of trust.
 
 ## CRITICAL Gotchas
 
-0. **`/tmp` on `www.vlsc.net` is a 454 MB tmpfs** — uploads above that fail mid-transfer (`scp: write remote ...: Failure`, and afterwards `df -h /tmp` shows it 100 % full). The Pi image (~546 MB) hits this every time, the installers (~45–56 MB) do not. Stream large artifacts to the disk-backed path and move them into place atomically (same filesystem):
+1. **`/tmp` on `www.vlsc.net` is a 454 MB tmpfs** — uploads above that fail mid-transfer (`scp: write remote ...: Failure`, and afterwards `df -h /tmp` shows it 100 % full). The Pi image (~546 MB) hits this every time, the installers (~45–56 MB) do not. Stream large artifacts to the disk-backed path and move them into place atomically (same filesystem):
 
 ```bash
 ssh www.vlsc.net 'cat > /var/tmp/<name>.new' < dist/rpi/MRRC-Modern-vX.Y.Z-rpi64.img.xz
@@ -128,27 +129,27 @@ ssh www.vlsc.net 'sha256sum /var/tmp/<name>.new'      # verify BEFORE publishing
 ssh www.vlsc.net 'd=/var/www/vlsc.net/mrrc_modern/downloads; sudo -n mv /var/tmp/<name>.new $d/<name>; sudo -n chown www-data:www-data $d/<name>; sudo -n chmod 644 $d/<name>'
 ```
 
-0b. **Another agent/session may be committing in the same worktree.** Before `git add -A`, read `git log`/`git status`: during the v1.15.0 Pi release a parallel session had 4 Yaesu commits plus uncommitted files in flight (one of its test modules hung `unittest discover` in uninterruptible I/O). Stage **explicit paths** for your release commit, leave the other session's files alone, and expect `git tag`/`push` to carry their commits along (unavoidable on a linear branch — say so in the release record).
+2. **Another agent/session may be committing in the same worktree.** Before `git add -A`, read `git log`/`git status`: during the v1.15.0 Pi release a parallel session had 4 Yaesu commits plus uncommitted files in flight (one of its test modules hung `unittest discover` in uninterruptible I/O). Stage **explicit paths** for your release commit, leave the other session's files alone, and expect `git tag`/`push` to carry their commits along (unavoidable on a linear branch — say so in the release record).
 
-1. **A launcher change means rebuilding BOTH installers** (2026-09-12). The Windows and macOS launchers share `macos/first_run.py` (env parsing/first-run), so a fix there ships in both bundles — rebuilding only one platform publishes an app that still crashes for the other. The same holds for anything under `windows/` or `macos/`.
+3. **A launcher change means rebuilding BOTH installers** (2026-09-12). The Windows and macOS launchers share `macos/first_run.py` (env parsing/first-run), so a fix there ships in both bundles — rebuilding only one platform publishes an app that still crashes for the other. The same holds for anything under `windows/` or `macos/`.
 
-2. **`BUILD_DONE` (Windows wrapper) proves nothing.** It prints even when the test/PyInstaller/Inno gate aborted (v1.15.0 attempt printed it with a failed suite and no exe). Verify by artifact: fresh mtime, 45–46 MB, `Get-FileHash` == Mac hash, and (new) walk the bundle bytecode to confirm the symbol you shipped is actually inside.
+4. **`BUILD_DONE` (Windows wrapper) proves nothing.** It prints even when the test/PyInstaller/Inno gate aborted (v1.15.0 attempt printed it with a failed suite and no exe). Verify by artifact: fresh mtime, 45–46 MB, `Get-FileHash` == Mac hash, and (new) walk the bundle bytecode to confirm the symbol you shipped is actually inside.
 
-3. **Prove the code is inside the bundle, not next to it.** `strings`/`grep` cannot see into the compressed PYZ: a stale bundle looks identical to a fresh one. Use `CArchiveReader` → the `server` *script* entry (`marshal.loads`) + the PYZ for imported modules; and start the packaged **launcher** once against the user's existing env file (that is the binary the user double-clicks). Recipe: `windows-installer` skill, Verification.
+5. **Prove the code is inside the bundle, not next to it.** `strings`/`grep` cannot see into the compressed PYZ: a stale bundle looks identical to a fresh one. Use `CArchiveReader` → the `server` *script* entry (`marshal.loads`) + the PYZ for imported modules; and start the packaged **launcher** once against the user's existing env file (that is the binary the user double-clicks). Recipe: `windows-installer` skill, Verification.
 
-4. **`git push --follow-tags` does NOT push lightweight tags** — `git tag vX.Y.Z` (no `-a`) stays local and the release ships tag-less (v1.14.0 hit this). Always `git push origin vX.Y.Z` explicitly, then verify with `git ls-remote`.
-2. **Order matters**: bump versions → build → only then write SHA-256/sizes into docs and website cards (the hashes don't exist before the build; the build reads the version from CHANGELOG). Writing docs first = stale-checksum release.
-3. **Mac interpreter trap**: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh`; `.venv/bin/python` for tests. Canary: any error path mentioning `mrrc_ft710/.venv` means the wrong interpreter was selected (`macos-installer` gotcha 10).
-4. **Static-asset changes need cache-bust bumps** (`ft710_main.js?v=N`, service worker `mrrc-vN`) pinned by tests; download-page HTML edits don't.
-5. **The v1.13.0 lesson**: docs-only releases drift — `docs/WINDOWS_INSTALLER_GUIDE.md` stayed on v1.12.1 through the whole v1.13.0 cycle. Step 4's checklist is the antidote; run it even when the release is "just installers".
-6. **Hand-maintained rows are drift generators — make the generator read the authority.** The
+6. **`git push --follow-tags` does NOT push lightweight tags** — `git tag vX.Y.Z` (no `-a`) stays local and the release ships tag-less (v1.14.0 hit this). Always `git push origin vX.Y.Z` explicitly, then verify with `git ls-remote`.
+7. **Order matters — and the first step is EVERY version string, not just two files.** The build's own test gate runs the full suite, which includes `test_release_artifacts.RepositoryStateTests`; that test fails on any version-bearing file still on the previous release (v1.20.0 stopped a macOS build with **14 failing** version rules: the two `website/index.html` cards, both guide pages, `docs/MACOS_INSTALLER_GUIDE.md`, `docs/WINDOWS_INSTALLER_GUIDE.md`, README and the stale-token scope). So the order is: bump **every** version reference → build → *then* write the sizes/SHA-256 into the same files → re-run the suite. The `artifact_facts` rules (card byte count + SHA prefix) skip with a note while `dist/` has no build for the new version, so the pre-build suite is green once the versions agree; the numbers are what must wait. Writing docs first = stale-checksum release; building first = a red gate and a wasted build.
+8. **Mac interpreter trap**: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh`; `.venv/bin/python` for tests. Canary: any error path mentioning `mrrc_ft710/.venv` means the wrong interpreter was selected (`macos-installer` gotcha 10).
+9. **Static-asset changes need cache-bust bumps** (`ft710_main.js?v=N`, service worker `mrrc-vN`) pinned by tests; download-page HTML edits don't.
+10. **The v1.13.0 lesson**: docs-only releases drift — `docs/WINDOWS_INSTALLER_GUIDE.md` stayed on v1.12.1 through the whole v1.13.0 cycle. Step 4's checklist is the antidote; run it even when the release is "just installers".
+11. **Hand-maintained rows are drift generators — make the generator read the authority.** The
    generated SDD pages advertised V2.45 for a whole cycle because `build_sdd.py` read the "SDD Version"
    Quick Facts row in `SDD/README.md` instead of the newest row of `SDD/14-version-history.md`; the fix
    was to point the generator at the authority *and* to add a rule. Same class: the hand-written
    `website/sdd.html` + `website/zh/sdd.html` are **not** generated and were still advertising V2.27 with
    an AD index ending at AD-016; `docs/OPERATION_GUIDE.md` still pointed at the v1.13.0 DMG. All three are
    now registry rules with tests behind them.
-7. **Post-release operator checks stay open**: real-QSO recording acceptance on the radio; TX audio on physical Windows hardware (the KVM VM can never verify it — `windows-installer` gotcha 4). Say so in the release summary.
+12. **Post-release operator checks stay open**: real-QSO recording acceptance on the radio; TX audio on physical Windows hardware (the KVM VM can never verify it — `windows-installer` gotcha 4). Say so in the release summary.
 
 ## Release-Day Checklist
 

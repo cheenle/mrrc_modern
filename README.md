@@ -82,7 +82,7 @@ Two things to know before the first launch (full guide:
 ### Environment Variables
 
 | Variable | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `MRRC_RADIO_MODEL` | `ft710` | Radio backend: `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1` |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V address |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V address |
@@ -122,7 +122,7 @@ All applicable variables also accept legacy `FT710_*` aliases (for example,
 ### CLI Arguments
 
 | Argument | Default | Description |
-|----------|---------|-------------|
+| ---------- | --------- | ------------- |
 | `--port` | `8888` | Web server port |
 | `--serial-port` | `/dev/cu.SLAB_USBtoUART` | CAT serial port |
 | `--baud` | backend default | CAT/CI-V serial baud rate (FT-710 38400; IC-7300/MK2 115200) |
@@ -153,7 +153,7 @@ Yaesu FT-710 or Icom IC-7300 Radio
 ### WebSocket Endpoints
 
 | Endpoint | Protocol | Description |
-|----------|----------|-------------|
+| ---------- | ---------- | ------------- |
 | `/WSradio` | JSON text | Control commands, state updates, memory management |
 | `/WSaudioRX` | Binary tagged | RX audio: 1-byte codec tag (0x00=PCM, 0x01=Opus 48kHz) + payload |
 | `/WSaudioTX` | Binary tagged + text | TX mic uplink: tagged audio frames + text control (`s:` stop, `m:` settings) |
@@ -171,6 +171,7 @@ Yaesu FT-710 or Icom IC-7300 Radio
 Opus runs at 48 kHz end-to-end. The backend-specific USB audio rate is handled just before capture/after playback.
 
 **RX Audio:**
+
 ```
 Radio USB Audio → PyAudio capture (per-backend rate)
   → Resample if needed (FT-710: 44.1k→48k; IC-7300: already 48k)
@@ -180,6 +181,7 @@ Radio USB Audio → PyAudio capture (per-backend rate)
 ```
 
 **TX Audio:**
+
 ```
 Microphone → getUserMedia (48kHz) → ScriptProcessor (512buf, ~10.7ms)
   → Float32→Int16 → Opus Worker encode (48kHz, 960-sample frames, 64kbps CBR)
@@ -195,6 +197,7 @@ FT-710: the TX chain resamples from Opus 48kHz to the radio's native 44.1kHz USB
 IC-7300: the radio's USB audio is already 48kHz, so no resampling is required. Startup and stream-open logs show the selected device's PortAudio host API, advertised default rate, actual opened rate, and channel count; a healthy IC RX/TX path reports `actual=48000Hz`.
 
 **TX audio stability (v1.2):**
+
 - **Jitter buffer**: Pre-buffers 60ms before first DAC write to absorb WebSocket jitter; hard cap at 400ms with oldest-first drop bounds latency under Wi-Fi stalls. Every dropped frame is counted as `queue_drops` in the PTT-release session log so a slow Windows output path cannot hide behind otherwise healthy decode/write counters.
 - **Graceful PTT release**: On PTT off, queued audio is written to the device buffer and `Pa_StopStream` blocks until the DAC finishes playing — word-endings survive before RF drops (TX_DRAIN=50ms).
 - **`start_tx` is awaited** (not background): avoids a race where the drain loop queues mic frames before the PortAudio stream opens and `start_tx` clears the queue, which would cause SSB zero-power (no modulation).
@@ -262,7 +265,7 @@ mrrc/
 Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 
 | Feature | Implementation |
-|---------|---------------|
+| --------- | --------------- |
 | Frequency | 8-digit display, ±1k/±5k tuning, step cycling 10Hz–25kHz |
 | Mode | Cycle button; modal picker. FT-710: LSB→USB→CW→AM→FM→RTTY→DATA. IC-7300: mode set appropriate to Icom UI modes |
 | Band | Cycle button through supported amateur bands (e.g., 160m→6m; IC-7300 may include 70 MHz where region permits) |
@@ -284,7 +287,7 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 ### Visualizations
 
 | Feature | Implementation |
-|---------|---------------|
+| --------- | --------------- |
 | FFT Spectrum | 33px real-time amplitude-vs-frequency polyline, cyan (#06b6d4), EMA-smoothed (α=0.30, 2× boost), horizontal + vertical grid |
 | Waterfall | 850-point real-time spectrum, 120-row history, 6 colormaps (Jet/Hot/Cold/Thermal/Night/Gray) |
 | Frequency scale | Auto-scaled labels below waterfall + vertical grid lines on FFT plot |
@@ -294,11 +297,18 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 ### Audio
 
 | Feature | Implementation |
-|---------|---------------|
+| --------- | --------------- |
 | RX Audio | PyAudio capture → Opus 64kbps → AudioWorklet playback |
 | TX Audio | Browser mic (48kHz) → Opus 64kbps CBR → server TxOpusDecoder → resample when required (FT-710: 48→44.1k; IC-7300: pass-through 48k) → PyAudio playback. Jitter buffer (60ms pre-buffer / 400ms cap) + graceful PTT drain |
 | Codec | Tagged dual-codec: Opus (64kbps CBR TX, 64kbps RX) with Int16 PCM fallback |
 | Bandwidth | Opus ~64kbps (12× smaller than 768kbps PCM) |
+
+### Remote Access Roles
+
+| Feature | Implementation |
+| --------- | --------------- |
+| Operator | Full control, authenticated with `MRRC_WEB_PASSWORD` — every control in the tables above |
+| Listen-only | A **second, independent password** (`MRRC_LISTEN_PASSWORD`, empty = off) logs into `/listen`: frequency and mode tuning, memory recall, S-meter, waterfall and RX audio with browser-side volume. Enforced **server-side**, not by hiding buttons: the `/WSradio` role gate passes only `ping`/`get`/`memLoadAll`/`memRecall` and `set` on `freq`/`vfo_a_freq`/`vfo_b_freq`/`mode`, `/WSaudioTX` and `/WSatr1000` close with 4003, and non-GET `/api/*` returns 403 (except logout). Setting both passwords to the same value grants full control. `deploy_listen_proxy.sh` publishes it on a public host (idempotent nginx block, direct IPv6 reverse proxy) |
 
 ### Support & Diagnostics
 
@@ -306,7 +316,7 @@ The menu's **🐞 Report a problem** entry builds a **redacted diagnostics bundl
 upload it to this project's own receiver (or save it locally when the machine is offline):
 
 | Feature | Implementation |
-|---------|---------------|
+| --------- | --------------- |
 | Bundle contents | Log tails (bounded, line-aligned), an allow-list-redacted config snapshot, environment/radio/audio state (device table with host API, real rates), browser-side context, and `diagnostics/summary.txt` with auto-triage conclusions |
 | Never included | Passwords, private keys, tokens, recordings, memory channels and ATR learning data — the allow-list drops everything else and every collected text passes a secret-value filter (the hit count is published in `manifest.json`) |
 | Server-side logs | `MRRC_LOG_DIR` holds a rotating `server.log` (2 MB × 2) plus a launcher tee of the startup window; packaged installs finally keep logs |
@@ -318,7 +328,7 @@ upload it to this project's own receiver (or save it locally when the machine is
 5-tier background polling at 38400 baud (~296 bytes/sec total):
 
 | Tier | Rate | Commands | Fields |
-|------|------|----------|--------|
+| ------ | ------ | ---------- | -------- |
 | 1 | 100ms | `FA;` `MD0;` `SM0;` | VFO freq, mode, S-meter |
 | 2A | 500ms (TX only) | `RM4;` `RM5;` `RM6;` | ALC, Power, SWR (zeroed on RX transition) |
 | 2B | 500ms | `TX;` | PTT status (also triggers TX-meter zero-reset on TX→RX transition) |
@@ -338,7 +348,7 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 **Server → Client:**
 
 | Message | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `{"type":"fullState","data":{...},"bands":[...],"modes":[...]}` | Initial full state |
 | `{"type":"stateUpdate","fields":{...},"dirty":[...]}` | Partial changed-fields update |
 | `{"type":"value","field":"freq","value":7050000}` | Single value reply |
@@ -349,7 +359,7 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 **Client → Server:**
 
 | Message | Example |
-|---------|---------|
+| --------- | --------- |
 | `{"type":"set","field":"freq","value":14200000}` | Set VFO-A frequency |
 | `{"type":"set","field":"mode","value":"USB"}` | Set mode |
 | `{"type":"set","field":"ptt","value":true}` | PTT on/off |
@@ -362,7 +372,7 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 ## REST API
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
+| ---------- | -------- | ------------- |
 | `/api/status` | GET | Full radio state JSON (44+ fields) |
 | `/api/mem_channels` | GET | Memory channels |
 | `/api/mem_channels` | POST | Save memory channels `{"channels":[...]}` |
@@ -416,7 +426,7 @@ python3 -m unittest discover -s tests -v
 ## Documentation
 
 | Document | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | [SECURITY_GUIDE.md](SECURITY_GUIDE.md) | Security configuration, password policies, rate limiting |
 | [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 操作指南：界面每个按钮/功能的编号图解与说明（含线上版 guide.html） |
 | [QUICKSTART.md](QUICKSTART.md) | Step-by-step setup guide |
@@ -447,7 +457,7 @@ python3 -m unittest discover -s tests -v
 Set `MRRC_RADIO_MODEL` before starting the server:
 
 | Model | Value | Serial protocol | Scope source | USB audio rate |
-|-------|-------|-----------------|--------------|----------------|
+| ------- | ------- | ----------------- | -------------- | ---------------- |
 | Yaesu FT-710 | `ft710` (default) | CAT at `MRRC_SERIAL_PORT`, 38400 baud | FT4222 SPI or S-meter fallback | 44.1 kHz |
 | Icom IC-7300 | `ic7300` | CI-V at `MRRC_SERIAL_PORT`, 115200 8N1 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
 | Icom IC-7300MK2 | `ic7300mk2` | CI-V, same as IC-7300 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
@@ -457,6 +467,7 @@ The IC-7300 address can be changed with `IC7300_CIV_ADDR` (default `0x94`); the 
 ## SDD Documentation
 
 See [`SDD/`](SDD/) for the complete Software Design Description (15 chapters, IBM TeamSD v2.3.2 aligned):
+
 - Executive summary, business direction, project definition
 - System context, NFRs, use cases, subject area model
 - Architecture decisions (10 ADs), architecture overview

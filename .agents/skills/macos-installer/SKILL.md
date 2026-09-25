@@ -16,7 +16,7 @@ description: Use when building, rebuilding, verifying, or deploying the MRRC Mod
 就判为「未签名的代码对象」而拒绝签整个 bundle，报错逐次指向：
 
 | 布局 | codesign 报的 subcomponent |
-|---|---|
+| --- | --- |
 | 数据树在 `MacOS/_internal` | `.../MacOS/_internal/macos/default.env` — `code object is not signed at all` |
 | 数据树移到真 `Frameworks/` | `.../Frameworks/click-8.4.2.dist-info` — `bundle format unrecognized` |
 | 数据树在 `Resources/` + `Frameworks` 与 `MacOS/_internal` 两个符号链接 | **签名成功**（`valid on disk`） |
@@ -185,6 +185,6 @@ Cleanup: `kill -TERM <server_pid>` then `pkill -KILL -f MRRC-Modern-Launcher`.
 | DMG contains only the bare .app, no Applications shortcut | Staging dir with `ln -sf /Applications` skipped (see gotcha 9); after re-fixing the layout, the website card SHA-256 MUST be updated |
 | TextEdit config edits (e.g. adding `MRRC_SSL_CERT`) ignored after Restart | `start_server()` must re-resolve `ssl_material` + `self.url` on every spawn (see gotcha 8) |
 | Double-clicking the .app does nothing, no window, no error | Launcher raised before rumps started: it now logs to `~/Library/Application Support/MRRC-Modern/launcher.log` and shows an alert; reproduce from a terminal to see the traceback. A non-UTF-8 `mrrc_modern.env` (ANSI/GBK editor) used to raise `UnicodeDecodeError` in `load_env` — read it via `macos.first_run.read_env_text` (BOM → UTF-8 → cp936 → latin-1), never `read_text(encoding="utf-8")` |
-| Fixing the launcher/env reader but only rebuilding the DMG | The Windows and macOS launchers share `macos/first_run.py`: a launcher fix invalidates **both** installers (see dual-platform-release gotcha 1) |
+| Fixing the launcher/env reader but only rebuilding the DMG | The Windows and macOS launchers share `macos/first_run.py`: a launcher fix invalidates **both** installers (see dual-platform-release gotcha 3) |
 | Rebuild shows old version | `CHANGELOG.md` top heading not bumped to `## [vX.Y.Z]` |
 | `SyntaxError: invalid syntax` at `set -euo pipefail` / `No module named PyInstaller` from `mrrc_ft710/.venv` | build.sh is a BASH script run as Python, or `source .venv/bin/activate` was used: this repo's `.venv` was copied from the `mrrc_ft710` project and its activate script hardcodes `VIRTUAL_ENV=/Users/cheenle/HAM/mrrc_ft710/.venv` — activation puts the WRONG project's venv (no PyInstaller) on PATH (v1.14.0 build, 2026-09-09). System `python3` (Homebrew) also lacks the project deps (50 `No module named 'serial'` test errors). Always invoke explicitly: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh` — never `source .venv/bin/activate`, never `python build.sh` (see gotcha 10) |

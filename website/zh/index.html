@@ -85,76 +85,19 @@
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
 <strong> v1.20.0 更新内容</strong>
+              <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
 <strong>收听专用界面</strong>——把<strong>另一个密码</strong>（<code>MRRC_LISTEN_PASSWORD</code>）交给访客，
-              他就得到一个 <code>/listen</code> 页面：大频率显示、直接输频/频段、模式按钮、记忆频道调用、
-              S 表、频谱瀑布，以及带浏览器端音量的 RX 音频。他能改的只有频率和模式 —— 发射、录音与
-              全部设备设置都被<b>服务端</b>拒绝，不依赖页面隐藏按钮。
+              他就得到一个 <code>/listen</code> 页面：调频率与模式、调用记忆频道、看 S 表与瀑布、听 RX 音频。
+              发射、录音与全部设备设置都被<b>服务端</b>拒绝，不依赖页面隐藏按钮。附带修复：iPhone 主控界面
+              不再约 30 秒自动锁屏，开机即有声。
             </li>
 <li>
-<strong>iPhone：不再 30 秒自动锁屏，开机就有声音</strong>——Wake Lock 申请现在从真实用户手势发起
-              （旧版监听的事件 WebKit 不算作有效激活，于是静默拒绝），并在点 ⏻ 开机时把 iOS 音频会话切到
-              play-and-record，RX 不必先按一次 PTT 才出声。
-            </li>
-<li>
-<strong>ATR-1000 天调会在你发射时自己动手</strong>（v1.19.0）——接了可选网络天调后，发射中
-              <strong>SWR &gt; 2.0</strong>（实测功率 ≥ 5 W 持续 1.5 s）会自动做一次完整调谐：
-              弹出提示、TUNE 按钮显示进行中，结束时告知结果（完成／无改善／超时／已放弃该频点）。
-              30 s 冷却，同一频点最多试 3 次。<strong>它绝不自行键控电台</strong>——只在你已经在发射时动手，
-              因此不可能产生无人看管的载波。
-            </li>
-<li>
-<strong>调好的参数会被记住</strong>——当这次调谐确实改善了匹配（改善 ≥ 0.02 且终值 ≤ 1.8），
-              LC 继电器值会写回学习库：再回到这个频点直接套用，不必重调。没改善的调谐<strong>不会</strong>在 QSO 中途回滚。
-            </li>
-<li>
-<strong>面板直发也能学习</strong>——学习门限改为跟随<strong>实测功率（≥ 3 W，原 5 W）</strong>
-              而不是网页端的 TX 信号，因此用<strong>电台面板 PTT 或外部软件</strong>发起的发射同样会学到参数，QRP 也不再例外。
-            </li>
-<li>
-<strong>macOS「已损坏」已修</strong>（v1.18.1）——此前每个 macOS 包的应用<strong>签名都没成功</strong>（签名步骤静默失败），
-              被 Gatekeeper 判为「已损坏，无法打开」——这个提示右键也绕不过去。现在 bundle 布局符合 codesign 要求，
-              且<strong>签名失败会直接中止构建</strong>。已经装过旧版的机器需要重装才生效。
-            </li>
-<li>
-<strong>macOS RX 无声已修</strong>（v1.18.1）——打包的 Info.plist 没有任何音频输入权限说明键，而 macOS 对此的回应是：
-              <b>让捕获流打开成功、却把缓冲填零</b>。于是 RX 一点声音都没有、日志只说"检查电台"，而 CoreAudio
-              全程不报错。现在会正常申请麦克风权限（首次启动点一次「允许」），警告也改为指向系统设置而不是电台。
-            </li>
-<li>
-<strong>🐞 遇到问题</strong>——菜单里点一下，服务端就生成一个<strong>脱敏诊断包</strong>
-              （日志 + 配置快照 + 环境/电台/音频状态 + 自动体检结论）并上传到本项目自己的接收端；
-              没有网络时可以只保存到本地。包里<b>不含</b>密码、证书私钥、令牌、录音、记忆频道与天调学习值。
-            </li>
-<li>
-<strong>问题答复页</strong>——维护者侧的 autopilot 读每个包、把日志现象对到真实代码位置，
-              结论发布到 <a href="answers/">/answers/</a>，可按编号或关键词搜索；每条诊断都附原始证据行，
-              材料不足时它会明说「需要更多信息」而不是猜。
-            </li>
-<li>
-<strong>打包版终于有日志文件</strong>——轮转的 <code>server.log</code> 加启动器 tee 的启动窗口捕获
-              （这段窗口是服务端自己的日志系统起来之前唯一的见证）。这才让上报从「一段描述」变成可诊断。
-            </li>
-<li>
-<strong>更新检查</strong>——根据生成式 <code>latest.json</code>（size/SHA-256 取自产物本身）判断有没有新版本。
-              目前只读：下载与安装是下一片。
-            </li>
-<li>
-<strong>一键 CQ 按键</strong>（v1.17.0）——点一下 CQ，由<strong>服务端</strong>按下 PTT、
-              播送内置 CQ 录音，播完自动松开；再点一次立即中止。音频从磁盘直接进声卡、
-              不经过网络，因此网络抖动不会改变发出去的内容。呼叫期间麦克风上行被丢弃、
-              PTT/TUNE 被拒绝，发起端页面断开则呼叫立即结束（<code>MRRC_CQ_FILE</code> 可换录音）。
-            </li>
-<li>
-<strong>Yaesu SDR 机型族</strong>（v1.16.0）——FTDX10 / FTDX101D / FTDX101MP / FTX-1F
-              走一套 profile 驱动的 ASCII-CAT 核心；实验性、默认只收不发，核对真机后设
-              <code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 才可发射。
-            </li>
-<li>
-<strong>服务端 QSO 录音</strong>（v1.15.0 起）——点 REC 由服务端录制：刷新页面、关标签页、
-              CAT 掉线都不会中断；「录音」面板可拖动播放、下载、删除。
+<strong>ATR-1000 天调</strong>（v1.19.0）——发射中 <strong>SWR &gt; 2.0</strong> 时自己动手做一次完整调谐，
+              匹配改善就把参数写回学习库；面板 PTT 与外部软件的发射同样会被学习（实测功率 ≥ 3 W）。
+              <b>它绝不自行键控电台。</b>
             </li>
 </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">

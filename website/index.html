@@ -93,98 +93,21 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
 <strong> What's new in v1.20.0</strong>
+              <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>Listen-only interface</strong> — hand a visitor a <strong>separate password</strong>
-              (<code>MRRC_LISTEN_PASSWORD</code>) and they get <code>/listen</code>: a large frequency
-              readout, direct frequency/band entry, mode buttons, memory recall, S-meter, waterfall and
-              RX audio with browser-side volume. Frequency and mode are all they can change —
-              transmit, recording and every device setting are refused <strong>by the server</strong>,
-              so the restriction does not depend on hiding buttons in the page.
+<strong>Listen-only interface</strong> — a second password (<code>MRRC_LISTEN_PASSWORD</code>) opens
+              <code>/listen</code>: frequency and mode tuning, memory recall, S-meter, waterfall and RX
+              audio. Transmit, recording and every device setting are refused <strong>by the server</strong>,
+              not by hiding buttons. Fixes on top: the iPhone main UI no longer auto-locks after ~30 s, and
+              RX is audible as soon as you power on.
             </li>
 <li>
-<strong>iPhone: no more 30-second lock, and sound from power-on</strong> — the Wake Lock request
-              now fires from a real user gesture (WebKit silently refused the old listeners, which are
-              not counted as activation), and the iOS audio session is switched to play-and-record when
-              you press ⏻, so RX is audible without pressing PTT once first.
-            </li>
-<li>
-<strong>ATR-1000 tunes itself while you transmit</strong> (v1.19.0) — with the optional networked
-              tuner, transmitting into <strong>SWR &gt; 2.0</strong> (measured power ≥ 5 W for
-              1.5 s) now starts one full tune by itself: a toast announces it, the TUNE button
-              shows progress, and the outcome is reported (done / no improvement / timeout /
-              given up for that frequency). 30 s cooldown, three tries per frequency.
-              <strong>It never keys the radio</strong> — it only acts while you are already
-              transmitting, so it can never create a carrier of its own.
-            </li>
-<li>
-<strong>The tuned values are remembered</strong> — when a tune actually improves the match
-              (≥ 0.02 improvement and a result at or below 1.8) the LC relays are written into
-              the learned store, so returning to that frequency applies them immediately instead
-              of retuning. A tune that does not improve is never rolled back mid-QSO.
-            </li>
-<li>
-<strong>Learning works from the radio's own PTT</strong> — the learning gate now follows
-              <strong>measured power (≥ 3 W, was 5 W)</strong> instead of the web client's TX
-              signal, so a transmission started from the front panel or by external software is
-              learned too — QRP operators included.
-            </li>
-<li>
-<strong>macOS: "damaged" is fixed</strong> (v1.18.1) — every macOS build so far shipped an
-              <strong>unsigned</strong> app (the signing step failed silently), so Gatekeeper refused it
-              with "is damaged and can't be opened" — a dialog no right-click can bypass. The bundle is now
-              laid out the way codesign requires and a failed signature <strong>aborts the build</strong>.
-              Reinstalling is what fixes an already-installed copy.
-            </li>
-<li>
-<strong>macOS: silent RX is fixed</strong> (v1.18.1) — the bundle declared no audio-input permission key, and macOS
-              answers that by letting the capture stream open while filling it with zeros: RX played
-              nothing, the log said "check the radio", and CoreAudio reported no error at all. The
-              microphone permission is now requested properly (grant it once on first launch) and the
-              warning points at System Settings instead of the radio.
-            </li>
-<li>
-<strong>🐞 Report a problem</strong> — one menu entry builds a <strong>redacted diagnostics
-              bundle</strong> on the server (logs + config snapshot + environment/radio/audio state +
-              an auto-triage summary) and uploads it to this project's own receiver; without a network
-              you can save it locally instead. It never contains passwords, private keys, tokens,
-              recordings, memory channels or tuner learning data.
-            </li>
-<li>
-<strong>Answers page</strong> — a maintainer-side autopilot reads each bundle, maps the log
-              evidence onto real code positions and publishes the conclusion to
-              <a href="answers/">/answers/</a>, searchable by bundle id or keyword. Evidence is cited
-              line by line; when there is not enough material it says so instead of guessing.
-            </li>
-<li>
-<strong>Packaged builds finally keep logs</strong> — a rotating
-              <code>server.log</code> plus a launcher startup tee that captures the window before the
-              server's own logging exists. This is what makes a report diagnosable instead of a story.
-            </li>
-<li>
-<strong>Update check</strong> — the app reports whether a newer release exists, from a generated
-              <code>latest.json</code> whose size and SHA-256 come from the artifacts themselves.
-              Read-only for now: download and install follow in the next slice.
-            </li>
-<li>
-<strong>One-touch CQ key</strong> (v1.17.0) — press CQ and the
-              <strong>server</strong> keys the radio, plays the packaged CQ recording and
-              unkeys when it ends; press again to cut it immediately. The audio goes from
-              disk to the sound card without touching the network, so jitter cannot
-              change what is transmitted. While a call runs the microphone uplink is
-              dropped, PTT/TUNE are refused, and the call dies with its initiating client
-              (<code>MRRC_CQ_FILE</code> replaces the recording).
-            </li>
-<li>
-<strong>Yaesu SDR family</strong> (v1.16.0) — FTDX10 / FTDX101D / FTDX101MP / FTX-1F
-              on a profile-driven ASCII-CAT core. Experimental and receive-only until you
-              set <code>MRRC_ALLOW_UNVERIFIED_TX=1</code>.
-            </li>
-<li>
-<strong>Server-side QSO recording</strong> (v1.15.0) — REC writes on the server, so a
-              page reload or a CAT dropout cannot stop it; the Recordings panel plays
-              (seekable), downloads and deletes.
+<strong>ATR-1000 tuner</strong> (v1.19.0) — transmitting into <strong>SWR &gt; 2.0</strong> starts one
+              full tune by itself while you are already transmitting, stores the result when the match
+              improves, and learns from panel or external-software transmissions too (measured power
+              ≥ 3 W). <strong>It never keys the radio.</strong>
             </li>
 </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">

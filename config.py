@@ -187,6 +187,10 @@ WEB_PORT = _env_int("MRRC_WEB_PORT", 8888)
 # Recommended: 16+ characters with mixed case, numbers, and symbols
 DEFAULT_WEB_PASSWORD = "changeme_please_use_strong_password!"
 WEB_PASSWORD = _env("MRRC_WEB_PASSWORD", DEFAULT_WEB_PASSWORD)
+# Optional second password for the listen-only interface (/listen): frequency
+# and mode changes plus RX audio/spectrum, no TX and no device settings.
+# Empty (default) disables listen-only logins entirely.
+LISTEN_PASSWORD = _env("MRRC_LISTEN_PASSWORD", "")
 WEB_HOST = _env("MRRC_WEB_HOST", "::")  # IPv6 dual-stack
 
 # SSL (Let's Encrypt certs for radio.vlsc.net)

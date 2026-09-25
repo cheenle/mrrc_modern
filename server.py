@@ -32,7 +32,7 @@ from macos import first_run
 
 from config import (
     RADIO_MODEL, SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,
-    DEFAULT_WEB_PASSWORD, PTT_MAX_TX_SECONDS,
+    DEFAULT_WEB_PASSWORD, LISTEN_PASSWORD, PTT_MAX_TX_SECONDS,
     AUDIO_RX_DEVICE, AUDIO_TX_DEVICE,
     SSL_CERTFILE, SSL_KEYFILE,
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT,
@@ -113,6 +113,16 @@ audio: AudioHandler | None = None
 # Connected clients
 ctrl_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
+# Listen-role spectrum clients get every Nth frame (30 fps → ~10 fps):
+# a phone on a metered link does not need full-rate waterfall (V2.59).
+_listen_spectrum_clients: set[WebSocket] = set()
+LISTEN_SPECTRUM_DIVIDER = 3
+
+
+def _spectrum_frame_due(ws: WebSocket, tick: int) -> bool:
+    """Throttle gate for the spectrum fan-out (see above)."""
+    return (ws not in _listen_spectrum_clients
+            or tick % LISTEN_SPECTRUM_DIVIDER == 0)
 audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
 # ATR1000 external tuner (optional; None = feature disabled)
@@ -217,6 +227,17 @@ METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5
 
 # Auth: valid session tokens (server-side, cleared on restart)
 _auth_tokens: set[str] = set()
+# Subset of _auth_tokens authenticated with the listen-only password
+# (MRRC_LISTEN_PASSWORD). A listen session may tune frequency and mode and
+# receive audio/spectrum, but every transmit/device-setting path is refused
+# server-side (the browser UI being hidden is never the enforcement).
+_listen_tokens: set[str] = set()
+# /WSradio "set" fields a listen-only session may use. memRecall is allowed
+# separately — it only ever writes frequency + mode.
+LISTEN_ALLOWED_SET_FIELDS = frozenset({"freq", "vfo_a_freq", "vfo_b_freq", "mode"})
+LISTEN_ONLY_MESSAGE = (
+    "Listen-only session: only frequency and mode can be changed."
+)
 
 # Memory channels file
 SCRIPT_DIR = Path(__file__).parent
@@ -529,6 +550,26 @@ def _password_matches(candidate: str) -> bool:
     return hmac.compare_digest(
         str(candidate).encode("utf-8"), str(WEB_PASSWORD).encode("utf-8")
     )
+
+def _listen_password_matches(candidate: str) -> bool:
+    """Constant-time comparison against the optional listen-only password.
+
+    An empty LISTEN_PASSWORD (the default) never matches, so the listen role
+    cannot be entered unless the operator configured it.
+    """
+    if not LISTEN_PASSWORD:
+        return False
+    return hmac.compare_digest(
+        str(candidate).encode("utf-8"), str(LISTEN_PASSWORD).encode("utf-8")
+    )
+
+def _is_listen_request(request: Request) -> bool:
+    """True when the request is authenticated with a listen-only token."""
+    token = request.cookies.get(AUTH_COOKIE)
+    if token and token in _listen_tokens:
+        return True
+    token = request.query_params.get("token")
+    return token is not None and token in _listen_tokens
 
 def _warn_if_default_password() -> bool:
     """Loud startup warning when the well-known default password is in use.
@@ -869,6 +910,20 @@ async def _broadcast_mem_channels():
             dead.add(ws)
     ctrl_clients -= dead
 
+
+async def _broadcast_client_count():
+    """Push the online-user count to every control client (listen page
+    shows it in the footer; unknown types are ignored by the other UIs)."""
+    global ctrl_clients
+    msg = json.dumps({"type": "onlineUsers", "count": len(ctrl_clients)})
+    dead: set[WebSocket] = set()
+    for ws in ctrl_clients:
+        try:
+            await ws.send_text(msg)
+        except Exception:
+            dead.add(ws)
+    ctrl_clients -= dead
+
 # ── ATR1000 External Tuner (optional) ─────────────────────────────
 # Enabled only when MRRC_ATR1000_HOST is set.  When disabled, `atr`
 # stays None: no client task, no linkage hooks, and /WSatr1000 closes
@@ -1113,6 +1168,7 @@ async def _broadcast_spectrum_loop():
     last_real_frame_count = -1
     _first = True
     _idle_skipped = 0
+    _broadcast_tick = 0
     while True:
         try:
             if not spectrum_clients:
@@ -1139,7 +1195,10 @@ async def _broadcast_spectrum_loop():
                                 mode, len(binary), len(spectrum_clients))
                     _first = False
                 dead: set[WebSocket] = set()
+                _broadcast_tick += 1
                 for ws in spectrum_clients:
+                    if not _spectrum_frame_due(ws, _broadcast_tick):
+                        continue
                     try:
                         await ws.send_bytes(binary)
                     except Exception:
@@ -1390,6 +1449,23 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
     msg_type = msg.get("type", "")
     field = msg.get("field", "")
     value = msg.get("value")
+
+    # Listen-only role gate (MRRC_LISTEN_PASSWORD sessions): receive anything,
+    # tune frequency/mode, recall memory channels (freq+mode only) — every
+    # other mutation (PTT/TUNE/CQ/recording/settings/memory writes) is refused
+    # here, server-side, regardless of what the client UI shows.
+    if _ws_tokens.get(ws) in _listen_tokens:
+        allowed = msg_type in ("ping", "get", "memLoadAll", "memRecall") or (
+            msg_type == "set" and field in LISTEN_ALLOWED_SET_FIELDS
+        )
+        if not allowed:
+            logger.info(
+                "Listen-only client refused %s %s", msg_type or "message", field,
+            )
+            await ws.send_text(json.dumps({
+                "type": "error", "message": LISTEN_ONLY_MESSAGE,
+            }))
+            return
 
     if msg_type == "ping":
         await ws.send_text(json.dumps({"type": "pong"}))
@@ -2420,6 +2496,19 @@ async def auth_middleware(request: Request, call_next):
         next_url = request.url.path + ("?" + request.url.query if request.url.query else "")
         return RedirectResponse(f"/login?next={next_url}", status_code=302)
 
+    # Listen-only role: REST is read-only. Every mutating API (setup, restart,
+    # recordings delete, memory-channel POST, support bundle/upload) is a
+    # non-GET under /api/ — refuse those; logout stays reachable.
+    if (
+        _is_listen_request(request)
+        and path.startswith("/api/")
+        and request.method not in ("GET", "HEAD", "OPTIONS")
+        and path != "/api/auth/logout"
+    ):
+        return JSONResponse(
+            {"error": LISTEN_ONLY_MESSAGE}, status_code=403,
+        )
+
     return await call_next(request)
 
 
@@ -2656,9 +2745,10 @@ async def login_page(request: Request):
     <button type="submit">Login</button><div class="error" id="error"></div></form>
     <script>
     document.getElementById('loginForm').onsubmit=async function(e){e.preventDefault();
-    var p=document.getElementById('password').value;try{var r=await fetch('/api/auth/login',
+    var p=document.getElementById('password').value;try{var r=await fetch('api/auth/login',
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});
-    if(r.ok){var n=new URLSearchParams(window.location.search).get('next')||'/';
+    if(r.ok){var d=await r.json();var n=(d&&d.role==='listen')?'listen':
+    (new URLSearchParams(window.location.search).get('next')||'/');
     window.location.replace(n);}else{document.getElementById('error').textContent='Invalid password';}
     }catch(err){document.getElementById('error').textContent='Connection error';}};
     </script></body></html>
@@ -2686,7 +2776,13 @@ async def api_login(request: Request):
     except Exception:
         password = ""
 
-    if not _password_matches(password):
+    # The admin password wins when both are configured identically — an
+    # operator who set them equal expects full control, not a restricted UI.
+    if _password_matches(password):
+        role = "admin"
+    elif _listen_password_matches(password):
+        role = "listen"
+    else:
         return JSONResponse({"error": "Invalid password"}, status_code=401)
 
     # Password strength validation (only on first login)
@@ -2695,8 +2791,11 @@ async def api_login(request: Request):
 
     token = _make_auth_token()
     _auth_tokens.add(token)
+    if role == "listen":
+        _listen_tokens.add(token)
+        logger.info("Listen-only session logged in from %s", client_ip)
 
-    response = JSONResponse({"ok": True, "token": token})
+    response = JSONResponse({"ok": True, "token": token, "role": role})
     response.set_cookie(
         AUTH_COOKIE, token,
         max_age=30 * 24 * 3600,  # 30 days
@@ -2712,6 +2811,7 @@ async def api_logout(request: Request):
     token = request.cookies.get(AUTH_COOKIE)
     if token:
         _auth_tokens.discard(token)
+        _listen_tokens.discard(token)
     response = JSONResponse({"ok": True})
     response.delete_cookie(AUTH_COOKIE)
     return response
@@ -2723,6 +2823,20 @@ async def api_auth_check(request: Request):
     if _verify_auth(request):
         return JSONResponse({"authenticated": True})
     return JSONResponse({"authenticated": False}, status_code=401)
+
+
+@app.get("/listen", include_in_schema=False)
+async def listen_page(request: Request):
+    """Serve the listen-only interface (auth enforced by the middleware).
+
+    Reachable with any valid session; sessions authenticated with
+    MRRC_LISTEN_PASSWORD are redirected here by the login page and get a
+    server-enforced frequency/mode-only role.
+    """
+    page = STATIC_DIR / "listen.html"
+    if page.exists():
+        return FileResponse(page, media_type="text/html")
+    return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
 
 
 # ── Status API ──────────────────────────────────────────────────────
@@ -3100,6 +3214,7 @@ async def ws_radio(ws: WebSocket):
     logger.info("WS client connected (%d total)", len(ctrl_clients))
     if scheduler:
         scheduler.set_active(len(ctrl_clients) > 0)
+    await _broadcast_client_count()
 
     # Push full initial state
     try:
@@ -3151,6 +3266,10 @@ async def ws_radio(ws: WebSocket):
         logger.info("WS client disconnected (%d remain)", len(ctrl_clients))
         if scheduler:
             scheduler.set_active(len(ctrl_clients) > 0)
+        try:
+            await _broadcast_client_count()
+        except Exception:
+            pass
 
         # A CQ call belongs to the client that started it: if that client goes
         # away the call is cut immediately (never a bystander's carrier).
@@ -3187,6 +3306,8 @@ async def ws_spectrum(ws: WebSocket):
 
     await ws.accept()
     spectrum_clients.add(ws)
+    if token in _listen_tokens:
+        _listen_spectrum_clients.add(ws)
     logger.info("Spectrum client connected (%d total)", len(spectrum_clients))
     if _scope_producer is not None:
         await _scope_producer.start()
@@ -3200,6 +3321,7 @@ async def ws_spectrum(ws: WebSocket):
         pass
     finally:
         spectrum_clients.discard(ws)
+        _listen_spectrum_clients.discard(ws)
         logger.info("Spectrum client disconnected (%d remain)", len(spectrum_clients))
         if not spectrum_clients and _scope_producer is not None:
             await _scope_producer.stop()
@@ -3252,6 +3374,10 @@ async def ws_audio_tx(ws: WebSocket):
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
         await ws.close(code=4001, reason="Unauthorized")
+        return
+    if token in _listen_tokens:
+        # Listen-only sessions never get a mic uplink.
+        await ws.close(code=4003, reason="Listen-only session")
         return
 
     await ws.accept()
@@ -3361,6 +3487,11 @@ async def ws_atr1000(ws: WebSocket):
     token = ws.query_params.get("token", "")
     if not token or token not in _auth_tokens:
         await ws.close(code=4001, reason="Unauthorized")
+        return
+    if token in _listen_tokens:
+        # The tuner channel carries the relay-driving atrTune command —
+        # off-limits for listen-only sessions.
+        await ws.close(code=4003, reason="Listen-only session")
         return
 
     await ws.accept()

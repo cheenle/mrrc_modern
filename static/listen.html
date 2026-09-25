@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MRRC Modern · 收听模式</title>
+<style>
+	:root {
+		--bg: #1a1a1a;
+		--panel: #262626;
+		--panel-border: #3a3a3a;
+		--amber: #f59e0b;
+		--amber-dim: #b45309;
+		--text: #eee;
+		--text-dim: #9ca3af;
+		--danger: #ef4444;
+		--ok: #22c55e;
+	}
+	* { box-sizing: border-box; }
+	html, body { height: 100%; }
+	body {
+		margin: 0;
+		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+		background: var(--bg);
+		color: var(--text);
+		height: 100dvh;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+	header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 6px 10px;
+		padding-top: calc(6px + env(safe-area-inset-top));
+		background: var(--panel);
+		border-bottom: 1px solid var(--panel-border);
+		flex: 0 0 auto;
+	}
+	header h1 { font-size: 14px; margin: 0; color: var(--amber); font-weight: 600; }
+	.listen-badge {
+		background: #2d2410;
+		color: var(--amber);
+		border: 1px solid var(--amber-dim);
+		border-radius: 5px;
+		font-size: 10px;
+		padding: 1px 6px;
+		white-space: nowrap;
+	}
+	.tx-badge {
+		display: none;
+		background: #3b0f0f;
+		color: var(--danger);
+		border: 1px solid var(--danger);
+		border-radius: 5px;
+		font-size: 10px;
+		padding: 1px 6px;
+		white-space: nowrap;
+	}
+	.tx-badge.on { display: inline-block; }
+	.spacer { flex: 1; }
+	.conn-dot {
+		width: 8px; height: 8px; border-radius: 50%;
+		background: var(--danger);
+		display: inline-block;
+	}
+	.conn-dot.on { background: var(--ok); }
+	.hdr-btn {
+		background: #333;
+		color: var(--text);
+		border: 1px solid #444;
+		border-radius: 7px;
+		padding: 4px 10px;
+		font-size: 12px;
+		cursor: pointer;
+	}
+	main {
+		flex: 1 1 auto;
+		min-height: 0;
+		padding: 8px 10px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		max-width: 980px;
+		width: 100%;
+		margin: 0 auto;
+	}
+	.freq-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: center;
+		gap: 10px;
+		flex: 0 0 auto;
+	}
+	.freq-display {
+		font-size: clamp(30px, 8vw, 46px);
+		font-weight: 700;
+		color: var(--amber);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 1px;
+		line-height: 1.1;
+	}
+	.mode-badge {
+		font-size: 15px;
+		color: var(--text);
+		background: #333;
+		border: 1px solid #444;
+		border-radius: 7px;
+		padding: 2px 10px;
+	}
+	.band-name { color: var(--text-dim); font-size: 13px; }
+	.wf-wrap {
+		flex: 0 0 auto;
+		height: clamp(90px, 16dvh, 150px);
+		border-radius: 8px;
+		overflow: hidden;
+		background: #000;
+		border: 1px solid var(--panel-border);
+	}
+	#waterfall { width: 100%; height: 100%; display: block; }
+	.meter-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex: 0 0 auto;
+	}
+	.meter-bg {
+		flex: 1;
+		height: 12px;
+		background: #111;
+		border-radius: 6px;
+		overflow: hidden;
+		border: 1px solid #333;
+	}
+	.meter-fill {
+		height: 100%;
+		width: 0%;
+		background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+		transition: width 80ms linear;
+	}
+	.meter-text {
+		font-size: 12px;
+		color: var(--text);
+		min-width: 80px;
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.chips {
+		display: flex;
+		gap: 6px;
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		flex: 0 0 auto;
+		padding-bottom: 1px;
+	}
+	.chips::-webkit-scrollbar { display: none; }
+	.qbtn {
+		background: #333;
+		color: var(--text);
+		border: 1px solid #444;
+		border-radius: 7px;
+		padding: 6px 12px;
+		font-size: 13px;
+		cursor: pointer;
+		white-space: nowrap;
+		flex: 0 0 auto;
+	}
+	.qbtn:hover { border-color: var(--amber-dim); }
+	.qbtn.active { background: var(--amber); color: #000; border-color: var(--amber); font-weight: 600; }
+	.tune-row {
+		display: flex;
+		gap: 6px;
+		align-items: center;
+		flex: 0 0 auto;
+	}
+	.tune-row input {
+		flex: 1;
+		min-width: 0;
+		background: #333;
+		border: 1px solid #444;
+		border-radius: 7px;
+		color: #fff;
+		font-size: 15px;
+		padding: 7px 10px;
+		font-variant-numeric: tabular-nums;
+	}
+	.mem-btn .mem-freq { display: block; color: var(--text-dim); margin: 1px 0 0; font-size: 10px; }
+	#mem-panel { flex: 0 0 auto; }
+	#mem-list {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 6px;
+		width: 100%;
+	}
+	#mem-list .qbtn {
+		white-space: normal;
+		text-align: center;
+		padding: 6px 4px;
+		font-size: 12px;
+		line-height: 1.25;
+	}
+	.vol-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex: 0 0 auto;
+	}
+	.vol-row input[type="range"] { flex: 1; accent-color: var(--amber); min-width: 0; }
+	#status-line {
+		min-height: 16px;
+		font-size: 12px;
+		color: var(--danger);
+		text-align: center;
+		flex: 0 0 auto;
+	}
+	#diag-line {
+		min-height: 12px;
+		font-size: 10px;
+		color: #6b7280;
+		text-align: center;
+		font-variant-numeric: tabular-nums;
+		flex: 0 0 auto;
+	}
+	#start-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.85);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 50;
+	}
+	#start-btn {
+		background: var(--amber);
+		color: #000;
+		border: none;
+		border-radius: 12px;
+		font-size: 20px;
+		font-weight: 700;
+		padding: 18px 42px;
+		cursor: pointer;
+	}
+	.hidden { display: none !important; }
+	footer {
+		padding: 4px;
+		padding-bottom: calc(4px + env(safe-area-inset-bottom));
+		text-align: center;
+		color: var(--text-dim);
+		font-size: 10px;
+		flex: 0 0 auto;
+	}
+</style>
+</head>
+<body>
+<header>
+	<h1>MRRC Modern</h1>
+	<span class="listen-badge">收听 LISTEN</span>
+	<span class="tx-badge" id="tx-badge">发射中 TX</span>
+	<span class="spacer"></span>
+	<span class="conn-dot" id="conn-dot"></span>
+	<button class="hdr-btn" id="logout-btn">退出</button>
+</header>
+<main>
+	<div class="freq-row">
+		<div class="freq-display" id="freq-display">--.---.---</div>
+		<div class="mode-badge" id="mode-badge">---</div>
+		<div class="band-name" id="band-name"></div>
+	</div>
+
+	<div class="wf-wrap"><canvas id="waterfall"></canvas></div>
+
+	<div class="meter-row">
+		<div class="meter-bg"><div class="meter-fill" id="meter-fill"></div></div>
+		<div class="meter-text" id="meter-text">—</div>
+	</div>
+
+	<div class="tune-row">
+		<input type="number" id="freq-input" step="0.1" min="30" max="75000" placeholder="频率 kHz，如 7050">
+		<button class="qbtn" id="freq-set-btn">调谐</button>
+	</div>
+
+	<div class="chips" id="band-btns"></div>
+	<div class="chips" id="mode-btns"></div>
+	<div id="mem-panel"><div id="mem-list"></div></div>
+
+	<div class="vol-row">
+		<span>🔈</span>
+		<input type="range" id="vol-slider" min="0" max="255" value="128">
+		<span>🔊</span>
+		<button class="qbtn" id="test-sound-btn">测试音</button>
+	</div>
+
+	<div id="status-line"></div>
+	<div id="diag-line"></div>
+</main>
+<footer>收听模式仅允许调整频率与模式<span id="online-count"></span><span id="net-stats"></span></footer>
+
+<div id="start-overlay">
+	<div style="text-align:center">
+		<button id="start-btn">▶ 开始收听</button>
+		<div id="ios-note" style="display:none;color:#9ca3af;font-size:12px;margin-top:12px;max-width:300px"></div>
+	</div>
+</div>
+
+<script src="modules/opus_wasm.js"></script>
+<script src="modules/opus_codec.js"></script>
+<script src="listen.js?v=10"></script>
+</body>
+</html>

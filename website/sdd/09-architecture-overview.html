@@ -132,6 +132,7 @@
 <li><code class="scope-code">{"type":"memDelete","index":N}</code> — delete memory slot</li>
 <li><code class="scope-code">{"type":"ping"}</code> — keepalive</li>
 </ul>
+<p><strong>Listen-only role (V2.59):</strong> a session authenticated with <code class="scope-code">MRRC_LISTEN_PASSWORD</code> gets its token tagged in <code class="scope-code">_listen_tokens</code> and is redirected to the <code class="scope-code">/listen</code> page. Enforcement is server-side: <code class="scope-code">_handle_ws_message</code> refuses every message except <code class="scope-code">ping</code>/<code class="scope-code">get</code>/<code class="scope-code">memLoadAll</code>/<code class="scope-code">memRecall</code> and <code class="scope-code">set</code> on {<code class="scope-code">freq</code>, <code class="scope-code">vfo_a_freq</code>, <code class="scope-code">vfo_b_freq</code>, <code class="scope-code">mode</code>} (legacy <code class="scope-code">field:value</code> text goes through the same gate); <code class="scope-code">/WSaudioTX</code> and <code class="scope-code">/WSatr1000</code> close listen tokens with code 4003; the auth middleware returns 403 for non-GET <code class="scope-code">/api/*</code> (except <code class="scope-code">/api/auth/logout</code>). RX audio and spectrum stay open — listening is the point.</p>
 <h3 id="wsaudiorx-binary">9.2.2 /WSaudioRX (binary)</h3>
 <p><strong>Format:</strong> 1-byte codec tag (0x00=PCM, 0x01=Opus) + payload.</p>
 <p>Server captures Int16 mono from the selected radio’s USB audio (44.1kHz for FT-710, 48kHz for IC-7300/MK2) → resamples to 48kHz if needed → Opus encodes (64kbps default) → broadcasts to all <code class="scope-code">audio_rx_clients</code> at 20ms intervals. Parallel to the encode path, <code class="scope-code">_rec_tap_rx()</code> hands the same device-domain PCM to the recorder (which is why the RX loop no longer idles while a recording runs). Browser decodes via WASM OpusDecoder (or Int16→Float32 for PCM) → AudioWorklet playback with jitter buffer.</p>
@@ -199,7 +200,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.58 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.59 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

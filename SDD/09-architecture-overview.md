@@ -18,6 +18,7 @@ Control channel. Carries all radio commands, state updates, and memory managemen
 - `{"type":"memChannels","channels":[...]}` — memory channel broadcast
 - `{"type":"recordingState","recording":{...}}` — server-side QSO recording snapshot (AD-017), broadcast on change
 - `{"type":"cqState","cq":{...}}` — one-shot CQ call snapshot (AD-020): `state` = `idle|calling|complete|aborted`, plus `frames_sent`/`frames_total`/`started_by`/`reason`; broadcast on change and at 1 Hz while calling
+- `{"type":"onlineUsers","count":N}` — online control-client count, broadcast on every /WSradio connect/disconnect (V2.59; shown in the listen page footer, ignored by UIs that do not know the type)
 - `{"type":"pong"}` — keepalive response
 
 **Client → Server:**
@@ -27,6 +28,8 @@ Control channel. Carries all radio commands, state updates, and memory managemen
 - `{"type":"memSave","channels":[...]}` — save memory channels
 - `{"type":"memDelete","index":N}` — delete memory slot
 - `{"type":"ping"}` — keepalive
+
+**Listen-only role (V2.59):** a session authenticated with `MRRC_LISTEN_PASSWORD` gets its token tagged in `_listen_tokens` and is redirected to the `/listen` page. Enforcement is server-side: `_handle_ws_message` refuses every message except `ping`/`get`/`memLoadAll`/`memRecall` and `set` on {`freq`, `vfo_a_freq`, `vfo_b_freq`, `mode`} (legacy `field:value` text goes through the same gate); `/WSaudioTX` and `/WSatr1000` close listen tokens with code 4003; the auth middleware returns 403 for non-GET `/api/*` (except `/api/auth/logout`). RX audio and spectrum stay open — listening is the point.
 
 ### 9.2.2 /WSaudioRX (binary)
 
@@ -45,7 +48,7 @@ Server captures Int16 mono from the selected radio's USB audio (44.1kHz for FT-7
 **v1 format:** 1-byte version (0x01) + 850 bytes wf1 = 851 bytes.
 **v2 format:** 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.
 
-The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when `ScopeHandler._frame_count` advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick.
+The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when `ScopeHandler._frame_count` advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick. Listen-role clients are throttled to every Nth frame (`LISTEN_SPECTRUM_DIVIDER = 3`, ~10 Hz) to cut their bandwidth by two thirds (V2.59).
 
 ## 9.3 RX Audio Signal Chain
 

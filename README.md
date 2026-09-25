@@ -95,6 +95,7 @@ Two things to know before the first launch (full guide:
 | `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F). Off = keying refused with an explanatory UI message; releases are never blocked |
 | `MRRC_WEB_PORT` | `8888` | Web server port |
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change** — startup logs a loud warning while the default is active) |
+| `MRRC_LISTEN_PASSWORD` | *(empty = off)* | Optional listen-only password: logging in with it opens `/listen` — frequency/mode tuning, memory recall, S-meter, waterfall and RX audio only. Transmit and every device setting are refused server-side (WS gate + 4003 on `/WSaudioTX`/`/WSatr1000` + read-only REST). This instance is also public at `https://www.vlsc.net/mrrc_modern/listen` via `deploy_listen_proxy.sh` (IPv6 reverse proxy) |
 | `MRRC_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
 | `MRRC_PTT_MAX_TX_SECONDS` | `0` (off) | Safety watchdog: force RX after this many seconds of continuous transmit (guards zombie-but-connected clients; 0 keeps the radio never interrupting an operator's transmission) |
 | `MRRC_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |

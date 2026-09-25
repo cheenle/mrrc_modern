@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1330 tests across 66 test modules (7 pty-based Yaesu round-trip tests skip on
-Windows; the per-module counts below were read from `unittest` on 2026-09-23, macOS).
+1361 tests across 67 test modules (7 pty-based Yaesu round-trip tests skip on
+Windows; the per-module counts below were read from `unittest` on 2026-09-25, macOS).
 
 ```bash
 python -m unittest discover -s tests -v
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1330 |
-| Passed | 1330 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1361 |
+| Passed | 1361 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -539,6 +539,18 @@ SDD coverage: AD-020, §9.2, §15, I6
 | `CqFrontendContractTests` | 6 | Button in the PTT footer before TUNE, `sendCommand('cq'`, `cqState` + `fullState` ingestion, four rendered states, gated-model disabling, CSS |
 | `CqEndToEndTests` | 4 | Real player + real key/unkey callbacks + real bundled asset: full call (graceful stop, meters zeroed, `complete`), abort path without draining, bundled-asset usability |
 
+### 56. test_listen_only.py — Listen-Only Role (31 tests)
+
+SDD coverage: §9.2 (listen role), §5.3, I9
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `ListenPasswordTests` | 3 | Empty `MRRC_LISTEN_PASSWORD` never matches, match/mismatch, constant-time source ratchet |
+| `ListenLoginTests` | 7 | admin/listen role issuance, wrong password, unconfigured listen password rejects, identical passwords resolve to admin, logout clears both token sets |
+| `ListenWsGateTests` | 7 | freq/mode/vfo_b allowed, memRecall allowed, 11 forbidden commands refused without touching CAT, legacy colon format gated, read-only messages pass, admin session unaffected |
+| `ListenEndpointGateTests` | 8 | `/WSaudioTX` + `/WSatr1000` close 4003, RX/spectrum stay open, middleware 403 on API writes, reads + logout pass, `/listen` page served, `onlineUsers` broadcast + dead-client pruning, listen spectrum throttle gate |
+| `ListenProxyContractTests` | 6 | Prefix-aware listen.js/listen.html (relative URLs, no root-absolute bypass), iOS ScriptProcessor audio fallback present, relative login page, deploy_listen_proxy.sh nginx block markers incl. load-bearing `^~` |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -569,6 +581,7 @@ SDD coverage: AD-020, §9.2, §15, I6
 | AD-020 One-Touch CQ Key | test_cq_player, test_cq_server | 45 tests |
 | AD-018 Yaesu SDR Family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F) | test_yaesu_profiles, test_yaesu_cat_core, test_yaesu_backend, test_yaesu_wiring, test_yaesu_fake_radio, test_diag_yaesu | 101 tests |
 | Preview Icom models + TX gate | test_civ_profiles, test_unverified_tx_gate, test_model_mismatch | 40 tests |
+| Listen-only role (/listen, §9.2) | test_listen_only | 31 tests |
 | Release engineering (registry, completeness) | test_release_artifacts, test_sdd_docs_consistency | 21 tests |
 
 ## Running Specific Tests
@@ -590,7 +603,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1330 tests in ~25s — can run on every commit.
+2. **Fast execution**: ~1361 tests in ~25s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

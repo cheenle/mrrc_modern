@@ -2,6 +2,23 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 收听专用界面（独立收听密码）
+### 🎧 Listen-only 模式 `/listen`
+
+- 新增可选环境变量 `MRRC_LISTEN_PASSWORD`（默认空 = 不启用）：用收听密码登录后进入独立的
+  `/listen` 收听界面 —— 大频率显示、直接输频/频段快捷键、模式切换、记忆频道调用、S 表、
+  频谱瀑布、RX 音频与浏览器端音量。
+- **只允许调整频率和模式**：发射（PTT/TUNE/CQ）、录音、设备设置、记忆写入等全部被
+  **服务端**拒绝（`/WSradio` 角色门 + `/WSaudioTX`/`/WSatr1000` 对收听 token 直接断开 +
+  REST API 只读），不依赖前端隐藏按钮。
+- 收听密码与操作员密码互不影响；两密码相同时按操作员（全控）处理。
+- 公网入口：`https://www.vlsc.net/mrrc_modern/listen` —— www 主机 nginx 经**公网 IPv6 直连**
+  反代到电台服务器（无 SSH 隧道），由 `deploy_listen_proxy.sh` 幂等部署；
+  电台机 IPv6 变化时更新脚本里的 `LISTEN_BACKEND` 重跑即可。
+- **iPhone/iOS 支持**：点击「开始收听」激活音频；iOS 上借一次麦克风权限激活扬声器输出
+  （不录音）；Wake Lock 防止收听中自动锁屏断音；页脚显示在线人数；
+  单屏紧凑布局，记忆频道 3×2 网格一键直达。
+
 ## [v1.19.0] — 2026-09-23 — ATR-1000 驻波超阈值自动调谐 + QRP 学习（对齐兄弟项目 mrrc V5.8.0/V5.8.5）
 
 **大驻波天线上发射时，天调会自己动手了。** 之前只有手动 TUNE 按钮；现在操作者不必停下正在进行的 QSO。

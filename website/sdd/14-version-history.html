@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.59</td>
+<td>2026-09-25</td>
+<td>Kimi</td>
+<td><strong>收听专用界面（listen-only 角色 + 独立收听密码）。</strong> 需求：给访客开一个「只能听」的入口 —— 可以调整频率和模式、听音频、看频谱，但绝不能发射、不能改任何设备设置，且密码与操作员密码分开。新增 <code class="scope-code">MRRC_LISTEN_PASSWORD</code>（默认空 = 不启用收听登录）：用它登录得到带 listen 角色的 token（<code class="scope-code">_auth_tokens</code> 保持不变，<code class="scope-code">_listen_tokens</code> 标记角色），登录接口返回 <code class="scope-code">role</code>，登录页对 listen 角色跳转到新页面 <code class="scope-code">/listen</code>（<code class="scope-code">static/listen.html</code> + 自包含 <code class="scope-code">static/listen.js</code>：大频率显示、直接输频/频段快捷键、模式按钮、记忆频道调用（memRecall 只写频率+模式）、S 表、频谱瀑布、RX 音频 + 浏览器端音量；复用 <code class="scope-code">rx_worklet_processor.js</code> 与 WASM Opus 解码，<strong>不加载</strong>两个受 tooling-guard 保护的 monolith JS）。<strong>管控全部在服务端</strong>（UI 隐藏从来不是执行点）：<code class="scope-code">_handle_ws_message</code> 角色门只放行 <code class="scope-code">ping</code>/<code class="scope-code">get</code>/<code class="scope-code">memLoadAll</code>/<code class="scope-code">memRecall</code> 与 <code class="scope-code">set</code>{<code class="scope-code">freq</code>,<code class="scope-code">vfo_a_freq</code>,<code class="scope-code">vfo_b_freq</code>,<code class="scope-code">mode</code>}，其余（含 legacy 冒号格式、memSave/memDelete、recording/cq/ptt/tune/全部设备设置）回 <code class="scope-code">LISTEN_ONLY_MESSAGE</code> 错误；<code class="scope-code">/WSaudioTX</code> 与 <code class="scope-code">/WSatr1000</code> 对 listen token 直接 close 4003（拿不到麦克上行与天调继电器命令）；auth 中间件对 listen 角色的非 GET <code class="scope-code">/api/*</code>（logout 除外）回 403，REST 只读。口令比对走 <code class="scope-code">hmac.compare_digest</code>（I9 同款棘轮测试钉住）；两个密码相同时按 admin 处理（操作员设成一样时期望全控而非受限）。测试 1330→1352（+22：口令匹配 3、登录角色 7、WS 门 7、端点门 5）；<code class="scope-code">sdd_context check</code> 无新增告警，全套 1352 绿。<strong>边界</strong>：真机收听体验（音频延迟、瀑布流畅度、多收听者并发）待现场；iOS/Android App 无 listen 角色入口（纯网页版功能）；收听密码强度与首次强制改密沿用 WEB_PASSWORD 现状（仅警告）。文档：§9.2 角色说明、AGENTS.md（env/前端清单/计数）、README env 表、tests/README、CHANGELOG。</td>
+</tr>
+<tr>
 <td>SDD V2.58</td>
 <td>2026-09-23</td>
 <td>Claude</td>
@@ -685,7 +691,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.58 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.59 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

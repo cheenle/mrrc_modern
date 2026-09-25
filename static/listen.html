@@ -112,13 +112,16 @@
 	.band-name { color: var(--text-dim); font-size: 13px; }
 	.wf-wrap {
 		flex: 0 0 auto;
-		height: clamp(90px, 16dvh, 150px);
+		height: clamp(130px, 22dvh, 210px);
 		border-radius: 8px;
 		overflow: hidden;
 		background: #000;
 		border: 1px solid var(--panel-border);
+		display: flex;
+		flex-direction: column;
 	}
-	#waterfall { width: 100%; height: 100%; display: block; }
+	#fft-canvas { width: 100%; height: 42%; display: block; }
+	#waterfall { width: 100%; height: 58%; display: block; }
 	.meter-row {
 		display: flex;
 		align-items: center;
@@ -269,7 +272,15 @@
 		<div class="band-name" id="band-name"></div>
 	</div>
 
-	<div class="wf-wrap"><canvas id="waterfall"></canvas></div>
+	<div class="tune-row" style="justify-content:center">
+		<button class="qbtn" data-tune="-5">◀◀</button>
+		<button class="qbtn" data-tune="-1">◀</button>
+		<button class="qbtn" id="step-btn" title="点按切换步进">1kHz</button>
+		<button class="qbtn" data-tune="1">▶</button>
+		<button class="qbtn" data-tune="5">▶▶</button>
+	</div>
+
+	<div class="wf-wrap"><canvas id="fft-canvas"></canvas><canvas id="waterfall"></canvas></div>
 
 	<div class="meter-row">
 		<div class="meter-bg"><div class="meter-fill" id="meter-fill"></div></div>
@@ -306,6 +317,6 @@
 
 <script src="modules/opus_wasm.js"></script>
 <script src="modules/opus_codec.js"></script>
-<script src="listen.js?v=10"></script>
+<script src="listen.js?v=13"></script>
 </body>
 </html>

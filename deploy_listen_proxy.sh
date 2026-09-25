@@ -4,14 +4,15 @@
 #
 #   ./deploy_listen_proxy.sh [user@host]
 #
-# Backend: the operator's radio server reached directly over public IPv6
-# (HTTPS :8888) — no SSH tunnel. If the radio host's IPv6 address changes,
-# update LISTEN_BACKEND below and re-run (the nginx block is replaced when
-# the backend literal differs).
+# Backend: the operator's radio server reached by DNS name over IPv6
+# (HTTPS :8888) — no SSH tunnel. nginx re-resolves the name every 300 s
+# (resolver in each location), so a changed home IPv6 keeps working.
+# If the hostname itself changes, update LISTEN_BACKEND below and re-run
+# (the nginx block is replaced when the backend literal differs).
 set -euo pipefail
 
 REMOTE="${1:-cheenle@www.vlsc.net}"
-LISTEN_BACKEND="https://[2409:8a00:1894:9940:41:1df2:337d:6e4b]:8888"
+LISTEN_BACKEND="https://radio.vlsc.net:8888"
 
 echo "==> backend reachability from $REMOTE ($LISTEN_BACKEND)"
 ssh "$REMOTE" "curl -6 -sk --max-time 10 -o /dev/null -w '  backend /api/health -> HTTP %{http_code} (want 401 = server reachable, auth required)\n' '$LISTEN_BACKEND/api/health'"
@@ -29,10 +30,16 @@ path = "/etc/nginx/sites-available/vlsc.net"
 text = open(path, encoding="utf-8").read()
 
 block = f"""    # ── MRRC Modern listen-only UI (/mrrc_modern/listen) ──
-    # Backend: operator's radio server over public IPv6 (HTTPS :8888).
-    # If the radio host's IPv6 changes, edit deploy_listen_proxy.sh and re-run.
+    # Backend: operator's radio server by DNS name over IPv6 (HTTPS :8888).
+    # proxy_pass with a variable + resolver → nginx re-resolves the AAAA
+    # every 300 s, so a changed home IPv6 keeps working without a reload.
+    # (resolver is per-location because this block must not touch the rest
+    # of the server block.)
     location = /mrrc_modern/listen {{
-        proxy_pass {backend}/listen;
+        resolver 1.1.1.1 8.8.8.8 valid=300s;
+        set $mrrc_listen_be {backend};
+        rewrite ^ /listen break;
+        proxy_pass $mrrc_listen_be;
         proxy_ssl_verify off;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -40,27 +47,42 @@ block = f"""    # ── MRRC Modern listen-only UI (/mrrc_modern/listen) ──
         proxy_redirect /login /mrrc_modern/login;
     }}
     location = /mrrc_modern/login {{
-        proxy_pass {backend}/login;
+        resolver 1.1.1.1 8.8.8.8 valid=300s;
+        set $mrrc_listen_be {backend};
+        rewrite ^ /login break;
+        proxy_pass $mrrc_listen_be;
         proxy_ssl_verify off;
         proxy_set_header Host $host;
     }}
     location = /mrrc_modern/listen.js {{
-        proxy_pass {backend}/listen.js;
+        resolver 1.1.1.1 8.8.8.8 valid=300s;
+        set $mrrc_listen_be {backend};
+        rewrite ^ /listen.js break;
+        proxy_pass $mrrc_listen_be;
         proxy_ssl_verify off;
         proxy_set_header Host $host;
     }}
     location = /mrrc_modern/rx_worklet_processor.js {{
-        proxy_pass {backend}/rx_worklet_processor.js;
+        resolver 1.1.1.1 8.8.8.8 valid=300s;
+        set $mrrc_listen_be {backend};
+        rewrite ^ /rx_worklet_processor.js break;
+        proxy_pass $mrrc_listen_be;
         proxy_ssl_verify off;
         proxy_set_header Host $host;
     }}
     location ^~ /mrrc_modern/modules/ {{
-        proxy_pass {backend}/modules/;
+        resolver 1.1.1.1 8.8.8.8 valid=300s;
+        set $mrrc_listen_be {backend};
+        rewrite ^/mrrc_modern(/modules/.*)$ $1 break;
+        proxy_pass $mrrc_listen_be;
         proxy_ssl_verify off;
         proxy_set_header Host $host;
     }}
     location ^~ /mrrc_modern/api/ {{
-        proxy_pass {backend}/api/;
+        resolver 1.1.1.1 8.8.8.8 valid=300s;
+        set $mrrc_listen_be {backend};
+        rewrite ^/mrrc_modern(/api/.*)$ $1 break;
+        proxy_pass $mrrc_listen_be;
         proxy_ssl_verify off;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -71,8 +93,10 @@ block = f"""    # ── MRRC Modern listen-only UI (/mrrc_modern/listen) ──
     # static-asset rule) further up outrank a plain prefix match and would
     # serve local 404s.
     location ^~ /mrrc_modern/WS {{
+        resolver 1.1.1.1 8.8.8.8 valid=300s;
+        set $mrrc_listen_be {backend};
         rewrite ^/mrrc_modern(/WS.*)$ $1 break;
-        proxy_pass {backend};
+        proxy_pass $mrrc_listen_be;
         proxy_ssl_verify off;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;

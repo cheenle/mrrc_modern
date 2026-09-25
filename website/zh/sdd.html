@@ -1,291 +1,504 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="MRRC Modern 软件设计说明书（SDD）总览：架构决策、服务模型、组件模型与版本演进。">
-    <meta name="author" content="BG1SB">
-    <meta name="theme-color" content="#0a0a0a">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="MRRC Modern 软件设计说明书（SDD）总览：架构决策、服务模型、组件模型与版本演进。"
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
     <title>MRRC Modern SDD</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
 
-    <link rel="stylesheet" href="../css/octen.css?v=5">
-    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
-    <link rel="stylesheet" href="../css/ft710.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body data-site="mrrc_modern">
-
-<nav class="navbar">
-    <div class="container navbar-content">
+    <link rel="stylesheet" href="../css/octen.css?v=5" />
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="../css/ft710.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+  </head>
+  <body data-site="mrrc_modern">
+    <nav class="navbar">
+      <div class="container navbar-content">
         <a href="index.html" class="logo">
-            <span class="logo-icon"><i class="fas fa-file-lines"></i></span>
-            <span>MRRC <span style="color: var(--accent);">Modern</span> <span style="color: var(--accent);">SDD</span></span>
+          <span class="logo-icon"><i class="fas fa-file-lines"></i></span>
+          <span
+            >MRRC <span style="color: var(--accent)">Modern</span>
+            <span style="color: var(--accent)">SDD</span></span
+          >
         </a>
         <ul class="nav-links">
-            <li><a href="#overview">总览</a></li>
-            <li><a href="#updates">V2.60 更新</a></li>
-            <li><a href="#chapters">章节目录</a></li>
-            <li><a href="#decisions">AD 索引</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="#overview">总览</a></li>
+          <li><a href="#updates">V2.60 更新</a></li>
+          <li><a href="#chapters">章节目录</a></li>
+          <li><a href="#decisions">AD 索引</a></li>
+          <li>
+            <a
+              href="https://github.com/cheenle/mrrc_modern/tree/main/SDD"
+              target="_blank"
+              rel="noopener"
+              >GitHub</a
+            >
+          </li>
         </ul>
         <div class="nav-actions">
-            <a href="../sdd.html" class="lang-btn">English</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+          <a href="../sdd.html" class="lang-btn">English</a>
+          <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+            <i class="fas fa-bars"></i>
+          </button>
         </div>
-    </div>
-</nav>
+      </div>
+    </nav>
 
-<section class="hero">
-    <div class="hero-content">
+    <section class="hero">
+      <div class="hero-content">
         <div class="hero-badge">
-            <i class="fas fa-book"></i>
-            <span>SDD V2.60 · 2026-09-25</span>
+          <i class="fas fa-book"></i>
+          <span>SDD V2.60 · 2026-09-25</span>
         </div>
-        <h1 class="hero-title">MRRC Modern<br><span class="gradient">软件设计说明书</span></h1>
+        <h1 class="hero-title">
+          MRRC Modern<br /><span class="gradient">软件设计说明书</span>
+        </h1>
         <p class="hero-subtitle">
-            用于记录多电台（FT-710 / IC-7300 / IC-7300MK2）网页控制系统的架构、
-            接口、运行模型与版本演进，作为实现与设计的一致性基线文档。
+          用于记录多电台（FT-710 / IC-7300 / IC-7300MK2）网页控制系统的架构、
+          接口、运行模型与版本演进，作为实现与设计的一致性基线文档。
         </p>
         <div class="hero-actions">
-            <a href="../sdd/index.html" class="btn btn-primary btn-large">
-                <i class="fas fa-book"></i> 浏览 SDD 章节
-            </a>
-            <a href="index.html" class="btn btn-secondary btn-large">
-                <i class="fas fa-arrow-left"></i> 返回产品页面
-            </a>
+          <a href="../sdd/index.html" class="btn btn-primary btn-large">
+            <i class="fas fa-book"></i> 浏览 SDD 章节
+          </a>
+          <a href="index.html" class="btn btn-secondary btn-large">
+            <i class="fas fa-arrow-left"></i> 返回产品页面
+          </a>
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
-<section class="section" id="overview" style="background: var(--bg-secondary);">
-    <div class="container">
+    <section
+      class="section"
+      id="overview"
+      style="background: var(--bg-secondary)"
+    >
+      <div class="container">
         <div class="section-header">
-            <span class="section-label">总览</span>
-            <h2 class="section-title">SDD 范围</h2>
-            <p class="section-subtitle">IBM TeamSD 对齐，15 章，内容基于实际代码状态。</p>
+          <span class="section-label">总览</span>
+          <h2 class="section-title">SDD 范围</h2>
+          <p class="section-subtitle">
+            IBM TeamSD 对齐，15 章，内容基于实际代码状态。
+          </p>
         </div>
         <table>
-            <thead>
-            <tr><th>属性</th><th>值</th></tr>
-            </thead>
-            <tbody>
-            <tr><td>文档 ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>版本</td><td>V2.60</td></tr>
-            <tr><td>基线日期</td><td>2026-09-23</td></tr>
-            <tr><td>后端运行时</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
-            <tr><td>前端技术</td><td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td></tr>
-            <tr><td>核心接口</td><td>4+1 路 WebSocket（可选 ATR1000）+ 串口 CAT / CI-V + FT4222 SPI / CI-V 0x27 + USB 音频</td></tr>
-            </tbody>
+          <thead>
+            <tr>
+              <th>属性</th>
+              <th>值</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>文档 ID</td>
+              <td>SDD-MRRC-MODERN-2026-001</td>
+            </tr>
+            <tr>
+              <td>版本</td>
+              <td>V2.60</td>
+            </tr>
+            <tr>
+              <td>基线日期</td>
+              <td>2026-09-23</td>
+            </tr>
+            <tr>
+              <td>后端运行时</td>
+              <td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td>
+            </tr>
+            <tr>
+              <td>前端技术</td>
+              <td>HTML5, CSS3, 原生 JavaScript, Web Audio API</td>
+            </tr>
+            <tr>
+              <td>核心接口</td>
+              <td>
+                4+1 路 WebSocket（可选 ATR1000）+ 串口 CAT / CI-V + FT4222 SPI /
+                CI-V 0x27 + USB 音频
+              </td>
+            </tr>
+          </tbody>
         </table>
-    </div>
-</section>
+      </div>
+    </section>
 
-<section class="section" id="updates" style="background: var(--bg-primary);">
-    <div class="container">
+    <section class="section" id="updates" style="background: var(--bg-primary)">
+      <div class="container">
         <div class="section-header">
-            <span class="section-label">最新更新</span>
-            <h2 class="section-title">V2.20 之后的变更重点</h2>
+          <span class="section-label">最新更新</span>
+          <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
-                <h3>MRRC 品牌统一 + 环境变量迁移 <small>（V2.21–V2.22）</small></h3>
-                <p><code>FT710_*</code> 环境变量更名为 <code>MRRC_*</code> 并自动兼容旧前缀；启动器、认证 Cookie 与日志命名统一为 MRRC Modern；启动配置模板暴露 <code>MRRC_RADIO_MODEL</code>。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-shield-halved"></i></div>
-                <h3>IC-7300/MK2 运行可靠性 <small>（V2.24）</small></h3>
-                <p>按后端选择串口默认波特率（FT-710 38400；IC-7300/MK2 115200）；CI-V 0x27 分路队列上限 44 段、积压丢最旧，防止暂停后回放陈旧波形；频谱以 30 Hz 广播且只发送新完成的真实帧。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-file-contract"></i></div>
-                <h3>官方 CI-V 一致性对齐 <small>（V2.25–V2.26）</small></h3>
-                <p>频谱启动同时开启显示（27 10 01）与波形输出（27 11 01）；SCROLL-C 解码为下/上边缘；按型号选择 Transceive 菜单项（IC-7300 0071 / MK2 0089）；改用文档化的 03 在线探测；ALC 采用官方 raw 120 满刻度。全仓审计记录了开放问题 I8–I11。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <h3>v1.12.0 Windows 稳定版发布 <small>（V2.27）</small></h3>
-                <p>经 macOS 与 Windows 11 双端 633/633 测试、三个 PyInstaller 目标、Inno Setup 编译与跨主机 SHA-256 校验后发布。FT-710 的 CAT、音频、PTT 与频谱行为保持不变。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-tower-cell"></i></div>
-                <h3>ICOM SDR 机型：IC-705 / IC-7610 / IC-7760 <small>（V2.41）</small></h3>
-                <p>再添三台 CI-V 机型，采用 profile 驱动核心并带显式未验证边界：能力位、发射门禁（<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 显式开启）与只读 <code>19 00</code> 型号身份校验。三台均无真机，因此不声称已验证。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-microphone-lines"></i></div>
-                <h3>服务端 QSO 录音 <small>（V2.42–V2.45）</small></h3>
-                <p>边录边落的 16 kHz 单声道 MP3（lameenc），RX/TX 落在同一条单调时间轴上；录音面板支持列表/拖动定位/下载/删除；浏览器端编码器退役。写入端生命周期修复终结了"同一进程第二次录音静音"。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-plug-circle-check"></i></div>
-                <h3>CAT 掉线恢复成本 <small>（V2.43）</small></h3>
-                <p>USB 串口重枚举后不再重放 24 条全量状态同步（轮询分层本已覆盖所有字段），原先约 62 秒的 CAT 死区降为秒级恢复；重试日志分级并给出 ENXIO 可操作提示。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <h3>v1.15.0 发布 <small>（V2.44–V2.45）</small></h3>
-                <p>macOS DMG、Windows 安装包与 rpi64 镜像发布，跨主机 SHA-256 校验一致，含上述录音功能与掉线恢复修复。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <div class="card">
-                <h3>v1.18.1 发布 <small>(V2.54)</small></h3>
-                <p>一个让 macOS 包真正可用的补丁：此前每个包的应用<strong>签名都没成功</strong>（该步骤静默失败），
-                Gatekeeper 因此报「已损坏，无法打开」；同时包内没有任何音频输入权限说明键，而 macOS 对此的回应是
-                <em>让捕获流打开成功、却把缓冲填零</em> —— 于是 RX 完全无声、不报错，日志还把矛头指向电台。
-                两者都在打包层面修掉，且签名失败现在会直接中止构建。</p>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
+            <h3>MRRC 品牌统一 + 环境变量迁移 <small>（V2.21–V2.22）</small></h3>
+            <p>
+              <code>FT710_*</code> 环境变量更名为
+              <code>MRRC_*</code> 并自动兼容旧前缀；启动器、认证 Cookie
+              与日志命名统一为 MRRC Modern；启动配置模板暴露
+              <code>MRRC_RADIO_MODEL</code>。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-shield-halved"></i></div>
+            <h3>IC-7300/MK2 运行可靠性 <small>（V2.24）</small></h3>
+            <p>
+              按后端选择串口默认波特率（FT-710 38400；IC-7300/MK2 115200）；CI-V
+              0x27 分路队列上限 44
+              段、积压丢最旧，防止暂停后回放陈旧波形；频谱以 30 Hz
+              广播且只发送新完成的真实帧。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-file-contract"></i></div>
+            <h3>官方 CI-V 一致性对齐 <small>（V2.25–V2.26）</small></h3>
+            <p>
+              频谱启动同时开启显示（27 10 01）与波形输出（27 11 01）；SCROLL-C
+              解码为下/上边缘；按型号选择 Transceive 菜单项（IC-7300 0071 / MK2
+              0089）；改用文档化的 03 在线探测；ALC 采用官方 raw 120
+              满刻度。全仓审计记录了开放问题 I8–I11。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <h3>v1.12.0 Windows 稳定版发布 <small>（V2.27）</small></h3>
+            <p>
+              经 macOS 与 Windows 11 双端 633/633 测试、三个 PyInstaller
+              目标、Inno Setup 编译与跨主机 SHA-256 校验后发布。FT-710 的
+              CAT、音频、PTT 与频谱行为保持不变。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-tower-cell"></i></div>
+            <h3>
+              ICOM SDR 机型：IC-705 / IC-7610 / IC-7760 <small>（V2.41）</small>
+            </h3>
+            <p>
+              再添三台 CI-V 机型，采用 profile
+              驱动核心并带显式未验证边界：能力位、发射门禁（<code
+                >MRRC_ALLOW_UNVERIFIED_TX=1</code
+              >
+              显式开启）与只读
+              <code>19 00</code> 型号身份校验。三台均无真机，因此不声称已验证。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-microphone-lines"></i></div>
+            <h3>服务端 QSO 录音 <small>（V2.42–V2.45）</small></h3>
+            <p>
+              边录边落的 16 kHz 单声道 MP3（lameenc），RX/TX
+              落在同一条单调时间轴上；录音面板支持列表/拖动定位/下载/删除；浏览器端编码器退役。写入端生命周期修复终结了"同一进程第二次录音静音"。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-plug-circle-check"></i></div>
+            <h3>CAT 掉线恢复成本 <small>（V2.43）</small></h3>
+            <p>
+              USB 串口重枚举后不再重放 24
+              条全量状态同步（轮询分层本已覆盖所有字段），原先约 62 秒的 CAT
+              死区降为秒级恢复；重试日志分级并给出 ENXIO 可操作提示。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <h3>v1.15.0 发布 <small>（V2.44–V2.45）</small></h3>
+            <p>
+              macOS DMG、Windows 安装包与 rpi64 镜像发布，跨主机 SHA-256
+              校验一致，含上述录音功能与掉线恢复修复。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <div class="card">
+              <h3>v1.18.1 发布 <small>(V2.54)</small></h3>
+              <p>
+                一个让 macOS
+                包真正可用的补丁：此前每个包的应用<strong>签名都没成功</strong>（该步骤静默失败），
+                Gatekeeper
+                因此报「已损坏，无法打开」；同时包内没有任何音频输入权限说明键，而
+                macOS 对此的回应是 <em>让捕获流打开成功、却把缓冲填零</em> ——
+                于是 RX 完全无声、不报错，日志还把矛头指向电台。
+                两者都在打包层面修掉，且签名失败现在会直接中止构建。
+              </p>
             </div>
             <h3>v1.18.0 发布 <small>（V2.54）</small></h3>
-                <p>macOS DMG 与 Windows 安装包由同一提交构建并各自验证：macOS 冻结版能启动、支持端点齐备、**首次真的写出服务端日志**；VM 内 1261 项测试 + Inno Setup 出包。<code>latest.json</code> 已上线，1.17.0 客户端检查即得「有新版本」。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
-                <h3>更新通道（只读检查） <small>（V2.54）</small></h3>
-                <p>生成式 <code>latest.json</code>（size/SHA-256 取自产物本身）回答“有没有新版本”；<code>GET /api/update/check</code> 只读上报。成功被定义为**只有新版本能写下的事实**（<code>state.json.lastResult</code>），“已拉起安装器”明确不算成功；下载/安装是 slice 2（AD-022）。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-robot"></i></div>
-                <h3>自动分诊与答复页 <small>（V2.52）</small></h3>
-                <p>维护者侧的 autopilot 每 10 分钟轮询接收端，用只读 agent 把日志现象对到代码位置，产出结论卡并发布到答复页；默认只出草稿，证据不足时判「需要更多信息」且不发布。公开页过滤邮箱/手机号/设备路径/内网地址。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-bug"></i></div>
-                <h3>诊断包与上报闭环 <small>（V2.51）</small></h3>
-                <p>菜单新增 <b>🐞 遇到问题</b>：一键生成脱敏诊断包（日志 + 配置 + 环境/电台/音频快照 + 自动体检结论）并上传到本项目专属接收端；无网络时可只保存到本地。包内<b>不含</b>密码、证书私钥、令牌、录音与记忆频道（AD-021）。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <h3>v1.17.0 发布：三平台同步 <small>（V2.50）</small></h3>
-                <p>macOS DMG、Windows 安装包与 rpi64 镜像由同一提交构建，发布前各自验证：macOS 冻结包无头 HTTPS 冒烟、Windows PYZ 走查 + 包内资产核对、树莓派镜像 debugfs 抽查（含 <code>static/audio/cq.wav</code>）。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-bullhorn"></i></div>
-                <h3>一键 CQ 按键 <small>（V2.48–V2.50）</small></h3>
-                <p>由服务端键控电台、播送打包的 CQ 录音并松键 —— 发射内容不经过网络，因此不受抖动影响。呼叫期间麦克风帧被丢弃，PTT/TUNE 被拒绝，发起端断开即切断载波（<code>MRRC_CQ_FILE</code> 可替换录音；AD-020）。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-headphones"></i></div>
-                <h3>v1.20.0 发布 —— 收听专用界面 <small>（V2.59）</small></h3>
-                <p>用另一个独立密码（<code>MRRC_LISTEN_PASSWORD</code>）可进入 <code>/listen</code>：调频率与模式、
-调用记忆频道、看 S 表与瀑布、听 RX 音频（浏览器端音量）。管控<b>全在服务端</b>——<code>/WSradio</code>
-角色门只放行频率/模式与记忆调用，TX 与天调通道直接 <code>4003</code> 断开，REST 只读——因此发射、录音与
-设备设置从页面根本到不了。同一版还修掉 iPhone 主控界面自动锁屏（Wake Lock 改由真实用户手势发起），
-并在开机时激活 iOS 音频会话。macOS DMG 与 Windows 安装包均已发布并做了跨主机 SHA-256 校验。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
-                <h3>v1.19.0 发布 —— ATR-1000 自己动手调谐 <small>(V2.57–V2.58)</small></h3>
-                <p>接了可选网络天调后，发射中驻波超过 2.0 会自动做一次完整调谐：30 s 冷却、同频最多 3 次，
-                调好且匹配改善时把继电器值写回学习库。<strong>它绝不自行键控电台</strong>——只在你已经发射时动手
-                （实测功率 ≥ 5 W），学习门限也改为跟随实测功率（≥ 3 W），因此面板 PTT 与外部软件的发射同样会被学习。
-                macOS DMG 与 Windows 安装包均已发布并做了跨主机 SHA-256 校验。</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-radio"></i></div>
-                <h3>Yaesu SDR 家族：FTDX10 / FTDX101D / FTDX101MP / FTX-1F <small>（V2.46）</small></h3>
-                <p>profile 驱动的共享 ASCII-CAT 核心（<code>backends/yaesu/</code>），传输层移植自已验证的 FT-710 路径，每机型表均带溯源。四台均无真机：发射默认拒绝、Yaesu 频谱波形无文档（瀑布走 S 表回退）、双接收留二期；已验证的 FT-710 路径刻意不动（AD-018/AD-019）。</p>
-            </div>
+            <p>
+              macOS DMG 与 Windows 安装包由同一提交构建并各自验证：macOS
+              冻结版能启动、支持端点齐备、**首次真的写出服务端日志**；VM 内 1261
+              项测试 + Inno Setup 出包。<code>latest.json</code> 已上线，1.17.0
+              客户端检查即得「有新版本」。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
+            <h3>更新通道（只读检查） <small>（V2.54）</small></h3>
+            <p>
+              生成式 <code>latest.json</code>（size/SHA-256
+              取自产物本身）回答“有没有新版本”；<code
+                >GET /api/update/check</code
+              >
+              只读上报。成功被定义为**只有新版本能写下的事实**（<code>state.json.lastResult</code>），“已拉起安装器”明确不算成功；下载/安装是
+              slice 2（AD-022）。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-robot"></i></div>
+            <h3>自动分诊与答复页 <small>（V2.52）</small></h3>
+            <p>
+              维护者侧的 autopilot 每 10 分钟轮询接收端，用只读 agent
+              把日志现象对到代码位置，产出结论卡并发布到答复页；默认只出草稿，证据不足时判「需要更多信息」且不发布。公开页过滤邮箱/手机号/设备路径/内网地址。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-bug"></i></div>
+            <h3>诊断包与上报闭环 <small>（V2.51）</small></h3>
+            <p>
+              菜单新增 <b>🐞 遇到问题</b>：一键生成脱敏诊断包（日志 + 配置 +
+              环境/电台/音频快照 +
+              自动体检结论）并上传到本项目专属接收端；无网络时可只保存到本地。包内<b>不含</b>密码、证书私钥、令牌、录音与记忆频道（AD-021）。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <h3>v1.17.0 发布：三平台同步 <small>（V2.50）</small></h3>
+            <p>
+              macOS DMG、Windows 安装包与 rpi64
+              镜像由同一提交构建，发布前各自验证：macOS 冻结包无头 HTTPS
+              冒烟、Windows PYZ 走查 + 包内资产核对、树莓派镜像 debugfs 抽查（含
+              <code>static/audio/cq.wav</code>）。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-bullhorn"></i></div>
+            <h3>一键 CQ 按键 <small>（V2.48–V2.50）</small></h3>
+            <p>
+              由服务端键控电台、播送打包的 CQ 录音并松键 ——
+              发射内容不经过网络，因此不受抖动影响。呼叫期间麦克风帧被丢弃，PTT/TUNE
+              被拒绝，发起端断开即切断载波（<code>MRRC_CQ_FILE</code>
+              可替换录音；AD-020）。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-headphones"></i></div>
+            <h3>v1.20.0 发布 —— 收听专用界面 <small>（V2.59）</small></h3>
+            <p>
+              用另一个独立密码（<code>MRRC_LISTEN_PASSWORD</code>）可进入
+              <code>/listen</code>：调频率与模式、 调用记忆频道、看 S
+              表与瀑布、听 RX 音频（浏览器端音量）。管控<b>全在服务端</b>——<code
+                >/WSradio</code
+              >
+              角色门只放行频率/模式与记忆调用，TX 与天调通道直接
+              <code>4003</code> 断开，REST 只读——因此发射、录音与
+              设备设置从页面根本到不了。同一版还修掉 iPhone
+              主控界面自动锁屏（Wake Lock 改由真实用户手势发起），
+              并在开机时激活 iOS 音频会话。macOS DMG 与 Windows
+              安装包均已发布并做了跨主机 SHA-256 校验。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+            <h3>
+              v1.19.0 发布 —— ATR-1000 自己动手调谐 <small>(V2.57–V2.58)</small>
+            </h3>
+            <p>
+              接了可选网络天调后，发射中驻波超过 2.0 会自动做一次完整调谐：30 s
+              冷却、同频最多 3 次，
+              调好且匹配改善时把继电器值写回学习库。<strong>它绝不自行键控电台</strong>——只在你已经发射时动手
+              （实测功率 ≥ 5 W），学习门限也改为跟随实测功率（≥ 3 W），因此面板
+              PTT 与外部软件的发射同样会被学习。 macOS DMG 与 Windows
+              安装包均已发布并做了跨主机 SHA-256 校验。
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-radio"></i></div>
+            <h3>
+              Yaesu SDR 家族：FTDX10 / FTDX101D / FTDX101MP / FTX-1F
+              <small>（V2.46）</small>
+            </h3>
+            <p>
+              profile 驱动的共享 ASCII-CAT
+              核心（<code>backends/yaesu/</code>），传输层移植自已验证的 FT-710
+              路径，每机型表均带溯源。四台均无真机：发射默认拒绝、Yaesu
+              频谱波形无文档（瀑布走 S 表回退）、双接收留二期；已验证的 FT-710
+              路径刻意不动（AD-018/AD-019）。
+            </p>
+          </div>
         </div>
-        </div>
-</section>
+      </div>
+    </section>
 
-<section class="section" id="chapters" style="background: var(--bg-secondary);">
-    <div class="container">
+    <section
+      class="section"
+      id="chapters"
+      style="background: var(--bg-secondary)"
+    >
+      <div class="container">
         <div class="section-header">
-            <span class="section-label">章节目录</span>
-            <h2 class="section-title">SDD 15 章</h2>
+          <span class="section-label">章节目录</span>
+          <h2 class="section-title">SDD 15 章</h2>
         </div>
         <div class="steps">
-            <div class="step"><h4><a href="../sdd/01-executive-summary.html">01 执行摘要</a></h4></div>
-            <div class="step"><h4><a href="../sdd/02-business-direction.html">02 业务方向</a></h4></div>
-            <div class="step"><h4><a href="../sdd/03-project-definition.html">03 项目定义</a></h4></div>
-            <div class="step"><h4><a href="../sdd/04-system-context.html">04 系统上下文</a></h4></div>
-            <div class="step"><h4><a href="../sdd/05-non-functional-requirements.html">05 非功能需求</a></h4></div>
-            <div class="step"><h4><a href="../sdd/06-use-case-model.html">06 用例模型</a></h4></div>
-            <div class="step"><h4><a href="../sdd/07-subject-area-model.html">07 领域模型</a></h4></div>
-            <div class="step"><h4><a href="../sdd/08-architecture-decisions.html">08 架构决策</a></h4></div>
-            <div class="step"><h4><a href="../sdd/09-architecture-overview.html">09 架构总览</a></h4></div>
-            <div class="step"><h4><a href="../sdd/10-service-model.html">10 服务模型</a></h4></div>
-            <div class="step"><h4><a href="../sdd/11-component-model.html">11 组件模型</a></h4></div>
-            <div class="step"><h4><a href="../sdd/12-operational-model.html">12 运行模型</a></h4></div>
-            <div class="step"><h4><a href="../sdd/13-feasibility-assessment.html">13 可行性评估</a></h4></div>
-            <div class="step"><h4><a href="../sdd/14-version-history.html">14 版本历史</a></h4></div>
-            <div class="step"><h4><a href="../sdd/15-ptt-safety-architecture.html">15 PTT 安全架构</a></h4></div>
+          <div class="step">
+            <h4><a href="../sdd/01-executive-summary.html">01 执行摘要</a></h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/02-business-direction.html">02 业务方向</a></h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/03-project-definition.html">03 项目定义</a></h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/04-system-context.html">04 系统上下文</a></h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="../sdd/05-non-functional-requirements.html"
+                >05 非功能需求</a
+              >
+            </h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/06-use-case-model.html">06 用例模型</a></h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/07-subject-area-model.html">07 领域模型</a></h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="../sdd/08-architecture-decisions.html">08 架构决策</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="../sdd/09-architecture-overview.html">09 架构总览</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/10-service-model.html">10 服务模型</a></h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/11-component-model.html">11 组件模型</a></h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/12-operational-model.html">12 运行模型</a></h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="../sdd/13-feasibility-assessment.html">13 可行性评估</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4><a href="../sdd/14-version-history.html">14 版本历史</a></h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="../sdd/15-ptt-safety-architecture.html"
+                >15 PTT 安全架构</a
+              >
+            </h4>
+          </div>
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
-<section class="section" id="decisions" style="background: var(--bg-primary);">
-    <div class="container">
+    <section
+      class="section"
+      id="decisions"
+      style="background: var(--bg-primary)"
+    >
+      <div class="container">
         <div class="section-header">
-            <span class="section-label">架构决策</span>
-            <h2 class="section-title">AD-001 ... AD-022</h2>
+          <span class="section-label">架构决策</span>
+          <h2 class="section-title">AD-001 ... AD-022</h2>
         </div>
         <div class="tech-stack">
-            <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
-            <span class="tech-tag">AD-002 直连 CAT</span>
-            <span class="tech-tag">AD-003 脏字段广播</span>
-            <span class="tech-tag">AD-004 Opus/PCM 标签流</span>
-            <span class="tech-tag">AD-005 scope_pipe 隔离</span>
-            <span class="tech-tag">AD-006 双模式频谱</span>
-            <span class="tech-tag">AD-007 PTT 安全流程</span>
-            <span class="tech-tag">AD-008 音频设备自动检测</span>
-            <span class="tech-tag">AD-009 7 任务轮询</span>
-            <span class="tech-tag">AD-010 JSON 记忆信道</span>
-            <span class="tech-tag">AD-011 48kHz 编解码 + 44.1kHz 桥接</span>
-            <span class="tech-tag">AD-012 Active-VFO 跟踪</span>
-            <span class="tech-tag">AD-013 表头校准</span>
-            <span class="tech-tag">AD-014 CAT 勘误处理</span>
-            <span class="tech-tag">AD-015 优先级 CAT 抢占</span>
-            <span class="tech-tag">AD-016 可插拔电台后端</span>
-            <span class="tech-tag">AD-017 服务端录音</span>
-            <span class="tech-tag">AD-018 Profile 驱动的 Yaesu 核心</span>
-            <span class="tech-tag">AD-019 未验证机型策略</span>
-            <span class="tech-tag">AD-021 诊断包与上报闭环</span>
-            <span class="tech-tag">AD-022 更新通道</span>
+          <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
+          <span class="tech-tag">AD-002 直连 CAT</span>
+          <span class="tech-tag">AD-003 脏字段广播</span>
+          <span class="tech-tag">AD-004 Opus/PCM 标签流</span>
+          <span class="tech-tag">AD-005 scope_pipe 隔离</span>
+          <span class="tech-tag">AD-006 双模式频谱</span>
+          <span class="tech-tag">AD-007 PTT 安全流程</span>
+          <span class="tech-tag">AD-008 音频设备自动检测</span>
+          <span class="tech-tag">AD-009 7 任务轮询</span>
+          <span class="tech-tag">AD-010 JSON 记忆信道</span>
+          <span class="tech-tag">AD-011 48kHz 编解码 + 44.1kHz 桥接</span>
+          <span class="tech-tag">AD-012 Active-VFO 跟踪</span>
+          <span class="tech-tag">AD-013 表头校准</span>
+          <span class="tech-tag">AD-014 CAT 勘误处理</span>
+          <span class="tech-tag">AD-015 优先级 CAT 抢占</span>
+          <span class="tech-tag">AD-016 可插拔电台后端</span>
+          <span class="tech-tag">AD-017 服务端录音</span>
+          <span class="tech-tag">AD-018 Profile 驱动的 Yaesu 核心</span>
+          <span class="tech-tag">AD-019 未验证机型策略</span>
+          <span class="tech-tag">AD-021 诊断包与上报闭环</span>
+          <span class="tech-tag">AD-022 更新通道</span>
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
-<footer class="footer">
-    <div class="container">
+    <footer class="footer">
+      <div class="container">
         <div class="footer-grid">
-            <div class="footer-section">
-                <h4>MRRC Modern SDD</h4>
-                <p>与实际实现状态同步的设计文档入口页。</p>
-            </div>
-            <div class="footer-section">
-                <h4>链接</h4>
-                <ul>
-                    <li><a href="index.html">MRRC Modern 网站</a></li>
-                    <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">SDD 目录</a></li>
-                    <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/SDD/README.md" target="_blank" rel="noopener">SDD README</a></li>
-                </ul>
-            </div>
+          <div class="footer-section">
+            <h4>MRRC Modern SDD</h4>
+            <p>与实际实现状态同步的设计文档入口页。</p>
+          </div>
+          <div class="footer-section">
+            <h4>链接</h4>
+            <ul>
+              <li><a href="index.html">MRRC Modern 网站</a></li>
+              <li>
+                <a
+                  href="https://github.com/cheenle/mrrc_modern/tree/main/SDD"
+                  target="_blank"
+                  rel="noopener"
+                  >SDD 目录</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/cheenle/mrrc_modern/blob/main/SDD/README.md"
+                  target="_blank"
+                  rel="noopener"
+                  >SDD README</a
+                >
+              </li>
+            </ul>
+          </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern 项目 · 基于 GPLv3 开源协议。</p>
+          <p>&copy; 2026 MRRC Modern 项目 · 基于 GPLv3 开源协议。</p>
         </div>
-    </div>
-</footer>
+      </div>
+    </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach((a) => {
-    a.addEventListener('click', function (e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-</script>
-<script src="../js/global-nav.js?v=5" defer data-gn="1"></script>
-</body>
+    <script>
+      function toggleMobileMenu() {
+        document.querySelector(".nav-links").classList.toggle("active");
+      }
+      document.querySelectorAll('a[href^="#"]').forEach((a) => {
+        a.addEventListener("click", function (e) {
+          e.preventDefault();
+          const t = document.querySelector(this.getAttribute("href"));
+          if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+    </script>
+    <script src="../js/global-nav.js?v=5" defer data-gn="1"></script>
+  </body>
 </html>

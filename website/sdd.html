@@ -1,298 +1,560 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="MRRC Modern Software Design Description (SDD) overview: architecture decisions, service model, component model, and version history.">
-    <meta name="author" content="BG1SB">
-    <meta name="theme-color" content="#0a0a0a">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="MRRC Modern Software Design Description (SDD) overview: architecture decisions, service model, component model, and version history."
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
     <title>MRRC Modern SDD</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
 
-    <link rel="stylesheet" href="css/octen.css?v=5">
-    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1">
-    <link rel="stylesheet" href="css/ft710.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body data-site="mrrc_modern">
-
-<nav class="navbar">
-    <div class="container navbar-content">
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="css/ft710.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+  </head>
+  <body data-site="mrrc_modern">
+    <nav class="navbar">
+      <div class="container navbar-content">
         <a href="index.html" class="logo">
-            <span class="logo-icon"><i class="fas fa-file-lines"></i></span>
-            <span>MRRC <span style="color: var(--accent);">Modern</span> <span style="color: var(--accent);">SDD</span></span>
+          <span class="logo-icon"><i class="fas fa-file-lines"></i></span>
+          <span
+            >MRRC <span style="color: var(--accent)">Modern</span>
+            <span style="color: var(--accent)">SDD</span></span
+          >
         </a>
         <ul class="nav-links">
-            <li><a href="#overview">Overview</a></li>
-            <li><a href="#updates">V2.60</a></li>
-            <li><a href="#chapters">Chapters</a></li>
-            <li><a href="#decisions">AD Index</a></li>
-            <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="#overview">Overview</a></li>
+          <li><a href="#updates">V2.60</a></li>
+          <li><a href="#chapters">Chapters</a></li>
+          <li><a href="#decisions">AD Index</a></li>
+          <li>
+            <a
+              href="https://github.com/cheenle/mrrc_modern/tree/main/SDD"
+              target="_blank"
+              rel="noopener"
+              >GitHub</a
+            >
+          </li>
         </ul>
         <div class="nav-actions">
-            <a href="zh/sdd.html" class="lang-btn">中文</a>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
+          <a href="zh/sdd.html" class="lang-btn">中文</a>
+          <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">
+            <i class="fas fa-bars"></i>
+          </button>
         </div>
-    </div>
-</nav>
+      </div>
+    </nav>
 
-<section class="hero">
-    <div class="hero-content">
+    <section class="hero">
+      <div class="hero-content">
         <div class="hero-badge">
-            <i class="fas fa-book"></i>
-            <span>SDD V2.60 · 2026-09-25</span>
+          <i class="fas fa-book"></i>
+          <span>SDD V2.60 · 2026-09-25</span>
         </div>
-        <h1 class="hero-title">MRRC Modern<br><span class="gradient">Software Design Description</span></h1>
+        <h1 class="hero-title">
+          MRRC Modern<br /><span class="gradient"
+            >Software Design Description</span
+          >
+        </h1>
         <p class="hero-subtitle">
-            Canonical design record for architecture, interfaces, operational model,
-            and runtime evolution of the multi-radio (FT-710 / IC-7300 / IC-7300MK2)
-            web control system.
+          Canonical design record for architecture, interfaces, operational
+          model, and runtime evolution of the multi-radio (FT-710 / IC-7300 /
+          IC-7300MK2) web control system.
         </p>
         <div class="hero-actions">
-            <a href="sdd/index.html" class="btn btn-primary btn-large">
-                <i class="fas fa-book"></i> Browse SDD Chapters
-            </a>
-            <a href="index.html" class="btn btn-secondary btn-large">
-                <i class="fas fa-arrow-left"></i> Back to Product Page
-            </a>
+          <a href="sdd/index.html" class="btn btn-primary btn-large">
+            <i class="fas fa-book"></i> Browse SDD Chapters
+          </a>
+          <a href="index.html" class="btn btn-secondary btn-large">
+            <i class="fas fa-arrow-left"></i> Back to Product Page
+          </a>
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
-<section class="section" id="overview" style="background: var(--bg-secondary);">
-    <div class="container">
+    <section
+      class="section"
+      id="overview"
+      style="background: var(--bg-secondary)"
+    >
+      <div class="container">
         <div class="section-header">
-            <span class="section-label">Overview</span>
-            <h2 class="section-title">SDD Scope</h2>
-            <p class="section-subtitle">IBM TeamSD aligned, 15 chapters, implementation-grounded content.</p>
+          <span class="section-label">Overview</span>
+          <h2 class="section-title">SDD Scope</h2>
+          <p class="section-subtitle">
+            IBM TeamSD aligned, 15 chapters, implementation-grounded content.
+          </p>
         </div>
         <table>
-            <thead>
-            <tr><th>Attribute</th><th>Value</th></tr>
-            </thead>
-            <tbody>
-            <tr><td>Document ID</td><td>SDD-MRRC-MODERN-2026-001</td></tr>
-            <tr><td>Version</td><td>V2.60</td></tr>
-            <tr><td>Baseline Date</td><td>2026-09-23</td></tr>
-            <tr><td>Runtime</td><td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td></tr>
-            <tr><td>Frontend</td><td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td></tr>
-            <tr><td>Core Interfaces</td><td>4+1 WebSockets (optional ATR1000) + Serial CAT / CI-V + FT4222 SPI / CI-V 0x27 + USB Audio</td></tr>
-            </tbody>
+          <thead>
+            <tr>
+              <th>Attribute</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Document ID</td>
+              <td>SDD-MRRC-MODERN-2026-001</td>
+            </tr>
+            <tr>
+              <td>Version</td>
+              <td>V2.60</td>
+            </tr>
+            <tr>
+              <td>Baseline Date</td>
+              <td>2026-09-23</td>
+            </tr>
+            <tr>
+              <td>Runtime</td>
+              <td>Python 3.12+, FastAPI, Uvicorn, PyAudio, NumPy</td>
+            </tr>
+            <tr>
+              <td>Frontend</td>
+              <td>HTML5, CSS3, vanilla JavaScript, Web Audio API</td>
+            </tr>
+            <tr>
+              <td>Core Interfaces</td>
+              <td>
+                4+1 WebSockets (optional ATR1000) + Serial CAT / CI-V + FT4222
+                SPI / CI-V 0x27 + USB Audio
+              </td>
+            </tr>
+          </tbody>
         </table>
-    </div>
-</section>
+      </div>
+    </section>
 
-<section class="section" id="updates" style="background: var(--bg-primary);">
-    <div class="container">
+    <section class="section" id="updates" style="background: var(--bg-primary)">
+      <div class="container">
         <div class="section-header">
-            <span class="section-label">Latest Updates</span>
-            <h2 class="section-title">What's New Since V2.20</h2>
+          <span class="section-label">Latest Updates</span>
+          <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
-                <h3>MRRC Rebrand + Env Migration <small>(V2.21–V2.22)</small></h3>
-                <p><code>FT710_*</code> environment variables renamed to <code>MRRC_*</code> with automatic legacy fallback; launchers, auth cookie, and logging rebranded to MRRC Modern; launcher config template exposes <code>MRRC_RADIO_MODEL</code>.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-shield-halved"></i></div>
-                <h3>IC-7300/MK2 Runtime Reliability <small>(V2.24)</small></h3>
-                <p>Backend-aware serial baud defaults (FT-710 38400; IC-7300/MK2 115200), CI-V 0x27 demux queue bounded at 44 segments dropping oldest on overflow, and 30 Hz spectrum broadcasting that only emits newly completed real frames.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-file-contract"></i></div>
-                <h3>Official CI-V Conformance <small>(V2.25–V2.26)</small></h3>
-                <p>Scope startup enables display (27 10 01) + waveform output (27 11 01); SCROLL-C decoded as lower/upper edges; per-model Transceive items (IC-7300 0071 / MK2 0089); documented 03 liveness polling; official raw-120 ALC full scale. Full-repo audit recorded open issues I8–I11.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <h3>v1.12.0 Windows Stable <small>(V2.27)</small></h3>
-                <p>Published after 633/633 tests on macOS and Windows 11, three PyInstaller targets, Inno Setup compilation, and cross-host SHA-256 verification. FT-710 CAT, audio, PTT, and spectrum behavior unchanged.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-tower-cell"></i></div>
-                <h3>ICOM SDR Models: IC-705 / IC-7610 / IC-7760 <small>(V2.41)</small></h3>
-                <p>Three more CI-V radios behind a profile-driven core, with an explicit unverified boundary: capability flags, a transmit gate (<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> to opt in) and a read-only <code>19 00</code> model identity check. No unit of any of the three was available, so nothing is presented as verified.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-microphone-lines"></i></div>
-                <h3>Server-Side QSO Recording <small>(V2.42–V2.45)</small></h3>
-                <p>16 kHz mono MP3 written incrementally while recording (lameenc), with RX/TX placed on one monotonic timeline; recordings panel with list/seek/download/delete; the browser encoder was retired. A writer-liveness fix ended the silent second recording in the same process.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-plug-circle-check"></i></div>
-                <h3>CAT Reconnect Recovery <small>(V2.43)</small></h3>
-                <p>A USB serial re-enumeration no longer replays the 24-query full state sync on reconnect — the poll tiers already cover every field — so a link that used to cost ~62 s of dead CAT recovers in seconds, with per-attempt log discipline and an actionable ENXIO hint.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <h3>v1.15.0 Released <small>(V2.44–V2.45)</small></h3>
-                <p>macOS DMG, Windows installer and the rpi64 image published with cross-host SHA-256 verification, including the recording feature above and the reconnect fix.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <div class="card">
-                <h3>v1.18.1 Released <small>(V2.54)</small></h3>
-                <p>A patch that makes the macOS download usable at all: every earlier bundle carried a
-                <strong>failed signature</strong> (the step failed silently), so Gatekeeper refused it with
-                "is damaged and can't be opened" — and it declared no audio-input permission key, which
-                macOS answers by opening the capture stream and filling it with zeros, i.e. RX plays
-                silence with no error and a log line that blames the radio. Both are fixed at the packaging
-                layer, and a failed signature now aborts the build.</p>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
+            <h3>MRRC Rebrand + Env Migration <small>(V2.21–V2.22)</small></h3>
+            <p>
+              <code>FT710_*</code> environment variables renamed to
+              <code>MRRC_*</code> with automatic legacy fallback; launchers,
+              auth cookie, and logging rebranded to MRRC Modern; launcher config
+              template exposes <code>MRRC_RADIO_MODEL</code>.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-shield-halved"></i></div>
+            <h3>IC-7300/MK2 Runtime Reliability <small>(V2.24)</small></h3>
+            <p>
+              Backend-aware serial baud defaults (FT-710 38400; IC-7300/MK2
+              115200), CI-V 0x27 demux queue bounded at 44 segments dropping
+              oldest on overflow, and 30 Hz spectrum broadcasting that only
+              emits newly completed real frames.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-file-contract"></i></div>
+            <h3>Official CI-V Conformance <small>(V2.25–V2.26)</small></h3>
+            <p>
+              Scope startup enables display (27 10 01) + waveform output (27 11
+              01); SCROLL-C decoded as lower/upper edges; per-model Transceive
+              items (IC-7300 0071 / MK2 0089); documented 03 liveness polling;
+              official raw-120 ALC full scale. Full-repo audit recorded open
+              issues I8–I11.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <h3>v1.12.0 Windows Stable <small>(V2.27)</small></h3>
+            <p>
+              Published after 633/633 tests on macOS and Windows 11, three
+              PyInstaller targets, Inno Setup compilation, and cross-host
+              SHA-256 verification. FT-710 CAT, audio, PTT, and spectrum
+              behavior unchanged.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-tower-cell"></i></div>
+            <h3>
+              ICOM SDR Models: IC-705 / IC-7610 / IC-7760 <small>(V2.41)</small>
+            </h3>
+            <p>
+              Three more CI-V radios behind a profile-driven core, with an
+              explicit unverified boundary: capability flags, a transmit gate
+              (<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> to opt in) and a
+              read-only <code>19 00</code> model identity check. No unit of any
+              of the three was available, so nothing is presented as verified.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-microphone-lines"></i></div>
+            <h3>Server-Side QSO Recording <small>(V2.42–V2.45)</small></h3>
+            <p>
+              16 kHz mono MP3 written incrementally while recording (lameenc),
+              with RX/TX placed on one monotonic timeline; recordings panel with
+              list/seek/download/delete; the browser encoder was retired. A
+              writer-liveness fix ended the silent second recording in the same
+              process.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-plug-circle-check"></i></div>
+            <h3>CAT Reconnect Recovery <small>(V2.43)</small></h3>
+            <p>
+              A USB serial re-enumeration no longer replays the 24-query full
+              state sync on reconnect — the poll tiers already cover every field
+              — so a link that used to cost ~62 s of dead CAT recovers in
+              seconds, with per-attempt log discipline and an actionable ENXIO
+              hint.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <h3>v1.15.0 Released <small>(V2.44–V2.45)</small></h3>
+            <p>
+              macOS DMG, Windows installer and the rpi64 image published with
+              cross-host SHA-256 verification, including the recording feature
+              above and the reconnect fix.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <div class="card">
+              <h3>v1.18.1 Released <small>(V2.54)</small></h3>
+              <p>
+                A patch that makes the macOS download usable at all: every
+                earlier bundle carried a <strong>failed signature</strong> (the
+                step failed silently), so Gatekeeper refused it with "is damaged
+                and can't be opened" — and it declared no audio-input permission
+                key, which macOS answers by opening the capture stream and
+                filling it with zeros, i.e. RX plays silence with no error and a
+                log line that blames the radio. Both are fixed at the packaging
+                layer, and a failed signature now aborts the build.
+              </p>
             </div>
             <h3>v1.18.0 Released <small>(V2.54)</small></h3>
-                <p>macOS DMG and Windows installer built from one commit and verified before publication: the frozen macOS server boots with the new support endpoints and finally writes a server log; the VM ran 1261 tests and Inno Setup produced the installer. <code>latest.json</code> is live, so 1.17.0 installs now see the update.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
-                <h3>Update Channel <small>(V2.54)</small></h3>
-                <p>A generated <code>latest.json</code> says whether a newer release exists and carries the installer's size and SHA-256 taken from the artifact itself; <code>GET /api/update/check</code> reports it read-only. Success is defined as a fact only the new version can write (<code>state.json.lastResult</code>) — "installer launched" is explicitly not success. Download/install is slice 2 (AD-022).</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-robot"></i></div>
-                <h3>Autopilot Triage &amp; Answers <small>(V2.52)</small></h3>
-                <p>A maintainer-side autopilot polls the receiver every 10 minutes, has a read-only agent map the log evidence onto real code positions, and publishes the resulting answer card. Drafts by default; “needs more info” never publishes. The public page filters operator identifiers.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-bug"></i></div>
-                <h3>Diagnostics Bundle &amp; Report Loop <small>(V2.51)</small></h3>
-                <p>The menu gains <b>🐞 Report a problem</b>: one press builds a redacted bundle (logs + config + environment/radio/audio snapshot + auto-triage summary) and uploads it to this project's own receiver; without a network it can be saved locally instead. No passwords, keys, tokens, recordings or memory channels are ever included (AD-021).</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-box-archive"></i></div>
-                <h3>v1.17.0 Released — CQ key on all three platforms <small>(V2.50)</small></h3>
-                <p>macOS DMG, Windows installer and the rpi64 image built from one commit and each verified before publication: frozen HTTPS smoke on macOS, PYZ walk plus in-package asset check on Windows, debugfs spot-check (incl. <code>static/audio/cq.wav</code>) on the Pi image.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-bullhorn"></i></div>
-                <h3>One-Touch CQ Key <small>(V2.48–V2.50)</small></h3>
-                <p>The server keys the radio, plays the packaged CQ recording once and unkeys — no microphone, no network timing in the transmitted audio. Mic frames are dropped while the call runs, PTT/TUNE are refused, and the initiator disconnecting cuts the carrier (<code>MRRC_CQ_FILE</code> replaces the recording; AD-020).</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-headphones"></i></div>
-                <h3>v1.20.0 Released — Listen-Only Interface <small>(V2.59)</small></h3>
-                <p>A second, separate password (<code>MRRC_LISTEN_PASSWORD</code>) opens <code>/listen</code>:
-frequency and mode tuning, memory recall, S-meter, waterfall and RX audio with browser-side volume. The
-role is enforced <strong>on the server</strong> — the <code>/WSradio</code> gate passes only frequency/mode
-sets and memory recall, the TX and tuner channels close with <code>4003</code>, and REST is read-only — so
-transmit, recording and every device setting are unreachable from the page. The same release fixes the
-iPhone main-UI auto-lock (Wake Lock from a real user gesture) and activates the iOS audio session at
-power-on. macOS DMG and Windows installer published with cross-host SHA-256 verification.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
-                <h3>v1.19.0 Released — ATR-1000 Tunes Itself <small>(V2.57–V2.58)</small></h3>
-                <p>With the optional networked tuner, a transmission into SWR &gt; 2.0 starts one full tune by
-                itself — 30 s cooldown, three tries per frequency, and the tuned relays are stored when the match
-                improves. <strong>It never keys the radio</strong>: it acts only inside a transmission you started
-                (measured power ≥ 5 W), and learning follows measured power (≥ 3 W) so panel and external-software
-                transmissions are learned too. macOS DMG and Windows installer published with cross-host SHA-256
-                verification.</p>
-            </div>
-            <div class="feature-card">
-                <div class="icon"><i class="fas fa-radio"></i></div>
-                <h3>Yaesu SDR Family: FTDX10 / FTDX101D / FTDX101MP / FTX-1F <small>(V2.46)</small></h3>
-                <p>Profile-driven shared ASCII-CAT core (<code>backends/yaesu/</code>) whose transport is ported from the verified FT-710 path, with per-model tables and provenance. No unit tested: transmit is gated, the Yaesu scope waveform is undocumented (S-meter fallback covers the waterfall), dual receive is deferred. The verified FT-710 backend is deliberately untouched (AD-018/AD-019).</p>
-            </div>
+            <p>
+              macOS DMG and Windows installer built from one commit and verified
+              before publication: the frozen macOS server boots with the new
+              support endpoints and finally writes a server log; the VM ran 1261
+              tests and Inno Setup produced the installer.
+              <code>latest.json</code> is live, so 1.17.0 installs now see the
+              update.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
+            <h3>Update Channel <small>(V2.54)</small></h3>
+            <p>
+              A generated <code>latest.json</code> says whether a newer release
+              exists and carries the installer's size and SHA-256 taken from the
+              artifact itself; <code>GET /api/update/check</code> reports it
+              read-only. Success is defined as a fact only the new version can
+              write (<code>state.json.lastResult</code>) — "installer launched"
+              is explicitly not success. Download/install is slice 2 (AD-022).
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-robot"></i></div>
+            <h3>Autopilot Triage &amp; Answers <small>(V2.52)</small></h3>
+            <p>
+              A maintainer-side autopilot polls the receiver every 10 minutes,
+              has a read-only agent map the log evidence onto real code
+              positions, and publishes the resulting answer card. Drafts by
+              default; “needs more info” never publishes. The public page
+              filters operator identifiers.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-bug"></i></div>
+            <h3>Diagnostics Bundle &amp; Report Loop <small>(V2.51)</small></h3>
+            <p>
+              The menu gains <b>🐞 Report a problem</b>: one press builds a
+              redacted bundle (logs + config + environment/radio/audio snapshot
+              + auto-triage summary) and uploads it to this project's own
+              receiver; without a network it can be saved locally instead. No
+              passwords, keys, tokens, recordings or memory channels are ever
+              included (AD-021).
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <h3>
+              v1.17.0 Released — CQ key on all three platforms
+              <small>(V2.50)</small>
+            </h3>
+            <p>
+              macOS DMG, Windows installer and the rpi64 image built from one
+              commit and each verified before publication: frozen HTTPS smoke on
+              macOS, PYZ walk plus in-package asset check on Windows, debugfs
+              spot-check (incl. <code>static/audio/cq.wav</code>) on the Pi
+              image.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-bullhorn"></i></div>
+            <h3>One-Touch CQ Key <small>(V2.48–V2.50)</small></h3>
+            <p>
+              The server keys the radio, plays the packaged CQ recording once
+              and unkeys — no microphone, no network timing in the transmitted
+              audio. Mic frames are dropped while the call runs, PTT/TUNE are
+              refused, and the initiator disconnecting cuts the carrier (<code
+                >MRRC_CQ_FILE</code
+              >
+              replaces the recording; AD-020).
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-headphones"></i></div>
+            <h3>
+              v1.20.0 Released — Listen-Only Interface <small>(V2.59)</small>
+            </h3>
+            <p>
+              A second, separate password (<code>MRRC_LISTEN_PASSWORD</code>)
+              opens <code>/listen</code>: frequency and mode tuning, memory
+              recall, S-meter, waterfall and RX audio with browser-side volume.
+              The role is enforced <strong>on the server</strong> — the
+              <code>/WSradio</code> gate passes only frequency/mode sets and
+              memory recall, the TX and tuner channels close with
+              <code>4003</code>, and REST is read-only — so transmit, recording
+              and every device setting are unreachable from the page. The same
+              release fixes the iPhone main-UI auto-lock (Wake Lock from a real
+              user gesture) and activates the iOS audio session at power-on.
+              macOS DMG and Windows installer published with cross-host SHA-256
+              verification.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
+            <h3>
+              v1.19.0 Released — ATR-1000 Tunes Itself
+              <small>(V2.57–V2.58)</small>
+            </h3>
+            <p>
+              With the optional networked tuner, a transmission into SWR &gt;
+              2.0 starts one full tune by itself — 30 s cooldown, three tries
+              per frequency, and the tuned relays are stored when the match
+              improves. <strong>It never keys the radio</strong>: it acts only
+              inside a transmission you started (measured power ≥ 5 W), and
+              learning follows measured power (≥ 3 W) so panel and
+              external-software transmissions are learned too. macOS DMG and
+              Windows installer published with cross-host SHA-256 verification.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-radio"></i></div>
+            <h3>
+              Yaesu SDR Family: FTDX10 / FTDX101D / FTDX101MP / FTX-1F
+              <small>(V2.46)</small>
+            </h3>
+            <p>
+              Profile-driven shared ASCII-CAT core
+              (<code>backends/yaesu/</code>) whose transport is ported from the
+              verified FT-710 path, with per-model tables and provenance. No
+              unit tested: transmit is gated, the Yaesu scope waveform is
+              undocumented (S-meter fallback covers the waterfall), dual receive
+              is deferred. The verified FT-710 backend is deliberately untouched
+              (AD-018/AD-019).
+            </p>
+          </div>
         </div>
-        </div>
-</section>
+      </div>
+    </section>
 
-<section class="section" id="chapters" style="background: var(--bg-secondary);">
-    <div class="container">
+    <section
+      class="section"
+      id="chapters"
+      style="background: var(--bg-secondary)"
+    >
+      <div class="container">
         <div class="section-header">
-            <span class="section-label">Chapter Index</span>
-            <h2 class="section-title">15 SDD Chapters</h2>
+          <span class="section-label">Chapter Index</span>
+          <h2 class="section-title">15 SDD Chapters</h2>
         </div>
         <div class="steps">
-            <div class="step"><h4><a href="sdd/01-executive-summary.html">01 Executive Summary</a></h4></div>
-            <div class="step"><h4><a href="sdd/02-business-direction.html">02 Business Direction</a></h4></div>
-            <div class="step"><h4><a href="sdd/03-project-definition.html">03 Project Definition</a></h4></div>
-            <div class="step"><h4><a href="sdd/04-system-context.html">04 System Context</a></h4></div>
-            <div class="step"><h4><a href="sdd/05-non-functional-requirements.html">05 Non-Functional Requirements</a></h4></div>
-            <div class="step"><h4><a href="sdd/06-use-case-model.html">06 Use Case Model</a></h4></div>
-            <div class="step"><h4><a href="sdd/07-subject-area-model.html">07 Subject Area Model</a></h4></div>
-            <div class="step"><h4><a href="sdd/08-architecture-decisions.html">08 Architecture Decisions</a></h4></div>
-            <div class="step"><h4><a href="sdd/09-architecture-overview.html">09 Architecture Overview</a></h4></div>
-            <div class="step"><h4><a href="sdd/10-service-model.html">10 Service Model</a></h4></div>
-            <div class="step"><h4><a href="sdd/11-component-model.html">11 Component Model</a></h4></div>
-            <div class="step"><h4><a href="sdd/12-operational-model.html">12 Operational Model</a></h4></div>
-            <div class="step"><h4><a href="sdd/13-feasibility-assessment.html">13 Feasibility Assessment</a></h4></div>
-            <div class="step"><h4><a href="sdd/14-version-history.html">14 Version History</a></h4></div>
-            <div class="step"><h4><a href="sdd/15-ptt-safety-architecture.html">15 PTT Safety Architecture</a></h4></div>
+          <div class="step">
+            <h4>
+              <a href="sdd/01-executive-summary.html">01 Executive Summary</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/02-business-direction.html">02 Business Direction</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/03-project-definition.html">03 Project Definition</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4><a href="sdd/04-system-context.html">04 System Context</a></h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/05-non-functional-requirements.html"
+                >05 Non-Functional Requirements</a
+              >
+            </h4>
+          </div>
+          <div class="step">
+            <h4><a href="sdd/06-use-case-model.html">06 Use Case Model</a></h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/07-subject-area-model.html">07 Subject Area Model</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/08-architecture-decisions.html"
+                >08 Architecture Decisions</a
+              >
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/09-architecture-overview.html"
+                >09 Architecture Overview</a
+              >
+            </h4>
+          </div>
+          <div class="step">
+            <h4><a href="sdd/10-service-model.html">10 Service Model</a></h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/11-component-model.html">11 Component Model</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/12-operational-model.html">12 Operational Model</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/13-feasibility-assessment.html"
+                >13 Feasibility Assessment</a
+              >
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/14-version-history.html">14 Version History</a>
+            </h4>
+          </div>
+          <div class="step">
+            <h4>
+              <a href="sdd/15-ptt-safety-architecture.html"
+                >15 PTT Safety Architecture</a
+              >
+            </h4>
+          </div>
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
-<section class="section" id="decisions" style="background: var(--bg-primary);">
-    <div class="container">
+    <section
+      class="section"
+      id="decisions"
+      style="background: var(--bg-primary)"
+    >
+      <div class="container">
         <div class="section-header">
-            <span class="section-label">Architecture Decisions</span>
-            <h2 class="section-title">AD-001 ... AD-022</h2>
+          <span class="section-label">Architecture Decisions</span>
+          <h2 class="section-title">AD-001 ... AD-022</h2>
         </div>
         <div class="tech-stack">
-            <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
-            <span class="tech-tag">AD-002 Direct CAT</span>
-            <span class="tech-tag">AD-003 Dirty State Broadcast</span>
-            <span class="tech-tag">AD-004 Tagged Opus/PCM Audio</span>
-            <span class="tech-tag">AD-005 scope_pipe Isolation</span>
-            <span class="tech-tag">AD-006 Dual-Mode Spectrum</span>
-            <span class="tech-tag">AD-007 PTT Safety Flow</span>
-            <span class="tech-tag">AD-008 Audio Auto-Detection</span>
-            <span class="tech-tag">AD-009 7-Task Polling</span>
-            <span class="tech-tag">AD-010 JSON Memory Channels</span>
-            <span class="tech-tag">AD-011 48kHz Codec + 44.1kHz Bridge</span>
-            <span class="tech-tag">AD-012 Active-VFO Tracking</span>
-            <span class="tech-tag">AD-013 Meter Calibration</span>
-            <span class="tech-tag">AD-014 CAT Errata Handling</span>
-            <span class="tech-tag">AD-015 Priority CAT Preemption</span>
-            <span class="tech-tag">AD-016 Pluggable Radio Backend</span>
-            <span class="tech-tag">AD-017 Server-Side Recording</span>
-            <span class="tech-tag">AD-018 Profile-Driven Yaesu Core</span>
-            <span class="tech-tag">AD-019 Unverified-Model Policy</span>
-            <span class="tech-tag">AD-021 Diagnostics Bundle</span>
-            <span class="tech-tag">AD-022 Update Channel</span>
+          <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
+          <span class="tech-tag">AD-002 Direct CAT</span>
+          <span class="tech-tag">AD-003 Dirty State Broadcast</span>
+          <span class="tech-tag">AD-004 Tagged Opus/PCM Audio</span>
+          <span class="tech-tag">AD-005 scope_pipe Isolation</span>
+          <span class="tech-tag">AD-006 Dual-Mode Spectrum</span>
+          <span class="tech-tag">AD-007 PTT Safety Flow</span>
+          <span class="tech-tag">AD-008 Audio Auto-Detection</span>
+          <span class="tech-tag">AD-009 7-Task Polling</span>
+          <span class="tech-tag">AD-010 JSON Memory Channels</span>
+          <span class="tech-tag">AD-011 48kHz Codec + 44.1kHz Bridge</span>
+          <span class="tech-tag">AD-012 Active-VFO Tracking</span>
+          <span class="tech-tag">AD-013 Meter Calibration</span>
+          <span class="tech-tag">AD-014 CAT Errata Handling</span>
+          <span class="tech-tag">AD-015 Priority CAT Preemption</span>
+          <span class="tech-tag">AD-016 Pluggable Radio Backend</span>
+          <span class="tech-tag">AD-017 Server-Side Recording</span>
+          <span class="tech-tag">AD-018 Profile-Driven Yaesu Core</span>
+          <span class="tech-tag">AD-019 Unverified-Model Policy</span>
+          <span class="tech-tag">AD-021 Diagnostics Bundle</span>
+          <span class="tech-tag">AD-022 Update Channel</span>
         </div>
-    </div>
-</section>
+      </div>
+    </section>
 
-<footer class="footer">
-    <div class="container">
+    <footer class="footer">
+      <div class="container">
         <div class="footer-grid">
-            <div class="footer-section">
-                <h4>MRRC Modern SDD</h4>
-                <p>Design documentation aligned with implementation state.</p>
-            </div>
-            <div class="footer-section">
-                <h4>Links</h4>
-                <ul>
-                    <li><a href="index.html">MRRC Modern Website</a></li>
-                    <li><a href="https://github.com/cheenle/mrrc_modern/tree/main/SDD" target="_blank" rel="noopener">SDD Folder</a></li>
-                    <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/SDD/README.md" target="_blank" rel="noopener">SDD README</a></li>
-                </ul>
-            </div>
+          <div class="footer-section">
+            <h4>MRRC Modern SDD</h4>
+            <p>Design documentation aligned with implementation state.</p>
+          </div>
+          <div class="footer-section">
+            <h4>Links</h4>
+            <ul>
+              <li><a href="index.html">MRRC Modern Website</a></li>
+              <li>
+                <a
+                  href="https://github.com/cheenle/mrrc_modern/tree/main/SDD"
+                  target="_blank"
+                  rel="noopener"
+                  >SDD Folder</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/cheenle/mrrc_modern/blob/main/SDD/README.md"
+                  target="_blank"
+                  rel="noopener"
+                  >SDD README</a
+                >
+              </li>
+            </ul>
+          </div>
         </div>
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project. Open Source under GPLv3 License.</p>
+          <p>
+            &copy; 2026 MRRC Modern Project. Open Source under GPLv3 License.
+          </p>
         </div>
-    </div>
-</footer>
+      </div>
+    </footer>
 
-<script>
-function toggleMobileMenu() {
-    document.querySelector('.nav-links').classList.toggle('active');
-}
-document.querySelectorAll('a[href^="#"]').forEach((a) => {
-    a.addEventListener('click', function (e) {
-        e.preventDefault();
-        const t = document.querySelector(this.getAttribute('href'));
-        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-});
-</script>
-<script src="js/global-nav.js?v=5" defer data-gn="1"></script>
-</body>
+    <script>
+      function toggleMobileMenu() {
+        document.querySelector(".nav-links").classList.toggle("active");
+      }
+      document.querySelectorAll('a[href^="#"]').forEach((a) => {
+        a.addEventListener("click", function (e) {
+          e.preventDefault();
+          const t = document.querySelector(this.getAttribute("href"));
+          if (t) t.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+    </script>
+    <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
+  </body>
 </html>

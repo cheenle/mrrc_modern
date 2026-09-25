@@ -62,6 +62,7 @@ const el = {};
     'meter-text', 'freq-input', 'freq-set-btn', 'band-btns', 'mode-btns',
     'mem-list', 'vol-slider', 'status-line', 'conn-dot', 'tx-badge',
     'start-overlay', 'start-btn', 'logout-btn', 'online-count', 'net-stats',
+    'step-btn', 'fft-canvas',
 ].forEach((id) => { el[id] = document.getElementById(id); });
 
 let statusTimer = null;
@@ -271,7 +272,58 @@ const colormap = (() => {
 })();
 
 let wfCtx = null;
+let fftCtx = null;
+let fftSmooth = null;
 let spectrumRetry = 0;
+
+// FFT trace line above the waterfall — simplified renderFFTPlot from the
+// main UI (grid + EMA smoothing + amber trace, no frequency axis: the
+// listen role cannot change the scope span anyway).
+function drawFftLine(wf1) {
+    if (!fftCtx) return;
+    const w = WF_COLS;
+    const h = fftCtx.canvas.height;
+    fftCtx.fillStyle = '#000';
+    fftCtx.fillRect(0, 0, w, h);
+
+    fftCtx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    fftCtx.lineWidth = 1;
+    for (let pct = 0.25; pct <= 0.75; pct += 0.25) {
+        const gy = Math.round(h - pct * h) + 0.5;
+        fftCtx.beginPath();
+        fftCtx.moveTo(0, gy);
+        fftCtx.lineTo(w, gy);
+        fftCtx.stroke();
+    }
+
+    if (!fftSmooth || fftSmooth.length !== wf1.length) {
+        fftSmooth = new Float32Array(wf1.length);
+    }
+    for (let i = 0; i < wf1.length; i++) {
+        fftSmooth[i] += 0.3 * (wf1[i] - fftSmooth[i]);
+    }
+
+    // Filled area, then the trace itself (same amber as the theme).
+    fftCtx.beginPath();
+    fftCtx.moveTo(0, h);
+    for (let i = 0; i < wf1.length; i++) {
+        fftCtx.lineTo(i, h - (fftSmooth[i] / 255) * h);
+    }
+    fftCtx.lineTo(w, h);
+    fftCtx.closePath();
+    fftCtx.fillStyle = 'rgba(245, 158, 11, 0.18)';
+    fftCtx.fill();
+
+    fftCtx.beginPath();
+    for (let i = 0; i < wf1.length; i++) {
+        const y = h - (fftSmooth[i] / 255) * h;
+        if (i === 0) fftCtx.moveTo(i, y);
+        else fftCtx.lineTo(i, y);
+    }
+    fftCtx.strokeStyle = '#f59e0b';
+    fftCtx.lineWidth = 1.5;
+    fftCtx.stroke();
+}
 
 function drawWaterfallRow(wf1) {
     if (!wfCtx) return;
@@ -302,6 +354,7 @@ function connectSpectrum() {
         const version = data[0];
         if (version < 1 || version > 2) return;
         drawWaterfallRow(data.subarray(1, 851));
+        drawFftLine(data.subarray(1, 851));
     };
 
     ws.onclose = (ev) => {
@@ -460,8 +513,11 @@ async function initAudio() {
         await audioCtx.audioWorklet.addModule(
             staticUrlWithAuth('/rx_worklet_processor.js?v=2'));
         rxNode = new AudioWorkletNode(audioCtx, 'rx-player');
+        // Generous jitter buffer: this page is listen-only and typically
+        // reached over the public internet, where RTT/jitter are far above
+        // LAN — the main UI's tight 120/300 ms values stutter there.
         rxNode.port.postMessage({
-            type: 'config', prebufferMs: 120, recoveryMs: 60, maxMs: 300,
+            type: 'config', prebufferMs: 500, recoveryMs: 250, maxMs: 1500,
         });
         rxNode.port.onmessage = (ev) => {
             if (ev.data && ev.data.type === 'stats') {
@@ -470,8 +526,8 @@ async function initAudio() {
         };
         rxNode.connect(rxGainNode);
     } catch (e) {
-        // iOS Safari: same ScriptProcessor fallback as the main UI
-        // (60 ms prebuffer, 300 ms cap).
+        // iOS Safari: same ScriptProcessor fallback as the main UI, but with
+        // the public-internet buffer sizes (400 ms prebuffer, 1.5 s cap).
         rxNode = null;
         setupScriptProcessorFallback();
     }
@@ -491,8 +547,8 @@ function setupScriptProcessorFallback() {
     const node = audioCtx.createScriptProcessor(2048, 1, 1);
     let queue = [];
     let queued = 0;
-    const prebuffer = Math.round(0.06 * audioCtx.sampleRate);
-    const maxBuffer = Math.round(0.3 * audioCtx.sampleRate);
+    const prebuffer = Math.round(0.4 * audioCtx.sampleRate);
+    const maxBuffer = Math.round(1.5 * audioCtx.sampleRate);
     let priming = true;
 
     node.onaudioprocess = (ev) => {
@@ -560,6 +616,36 @@ function connectAudioRX() {
     ws.onerror = () => { try { ws.close(); } catch (e) { /* noop */ } };
 }
 
+// ── Frequency step tuning (same preset/×5 pattern as the main UI) ───
+
+const TUNE_STEPS = [10, 100, 1000, 5000, 10000, 25000];
+const TUNE_STEP_LABELS = { 10: '10Hz', 100: '100Hz', 1000: '1kHz',
+    5000: '5kHz', 10000: '10kHz', 25000: '25kHz' };
+let tuneStep = 1000;
+
+function currentFreq() {
+    return radioState.active_freq ||
+        (radioState.active_vfo === 'B' ? radioState.vfo_b_freq : radioState.vfo_a_freq) || 0;
+}
+
+function tuneBy(mult) {
+    const cur = currentFreq();
+    if (!cur) return;
+    const next = cur + mult * tuneStep;
+    if (next < 30000 || next > 75000000) return;
+    sendSet('freq', next);
+}
+
+document.querySelectorAll('[data-tune]').forEach((btn) => {
+    btn.addEventListener('click', () => tuneBy(parseInt(btn.dataset.tune, 10)));
+});
+
+el['step-btn'].addEventListener('click', () => {
+    const idx = TUNE_STEPS.indexOf(tuneStep);
+    tuneStep = TUNE_STEPS[(idx + 1) % TUNE_STEPS.length];
+    el['step-btn'].textContent = TUNE_STEP_LABELS[tuneStep] || tuneStep + 'Hz';
+});
+
 // ── UI wiring ───────────────────────────────────────────────────────
 
 function tuneFromInput() {
@@ -620,6 +706,12 @@ el['start-btn'].addEventListener('click', async () => {
     wfCtx = canvas.getContext('2d');
     wfCtx.fillStyle = '#000';
     wfCtx.fillRect(0, 0, canvas.width, canvas.height);
+    const fft = el['fft-canvas'];
+    fft.width = WF_COLS;
+    fft.height = 130;
+    fftCtx = fft.getContext('2d');
+    fftCtx.fillStyle = '#000';
+    fftCtx.fillRect(0, 0, fft.width, fft.height);
     connectControl();
     connectSpectrum();
     requestWakeLock(); // keep screen (and audio) alive while listening

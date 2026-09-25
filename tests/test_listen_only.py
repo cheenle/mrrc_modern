@@ -488,6 +488,9 @@ class ListenProxyContractTests(unittest.TestCase):
         self.assertIn("proxy_ssl_verify off", sh)
         self.assertIn("sites-available/vlsc.net", sh)
         self.assertIn("nginx -t", sh)
+        # DNS-name backend with per-location resolver → survives IPv6 changes.
+        self.assertIn("resolver 1.1.1.1 8.8.8.8 valid=300s", sh)
+        self.assertIn("set $mrrc_listen_be {backend}", sh)
         # Idempotence + backend-update path, same pattern as
         # deploy_support_receiver.sh.
         self.assertIn("already present", sh)

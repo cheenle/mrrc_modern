@@ -225,3 +225,41 @@ Emergency Paths:
 4. **Server has final authority.** Even if the browser is completely gone, the server forces RX (Layer 4).
 5. **Verify, don't assume.** TX state is read back continuously via the 500ms TX-status poll, and the browser watchdog acts on any stuck-TX indication (Layer 3). The per-release triple readback was removed in V1.2 — see §15.1.
 6. **Stop audio before RF.** Audio stream stops before the RF carrier drops, preventing hot-switching noise.
+
+## 15.6 Hub-mode extension (planned, NOT implemented)
+
+> 本节由 `mrrc_hub`（MRRC Cloud Hub）SDD V0.1 的评审引入，记录一个**当前实现未覆盖**的失效模式。
+> 代码未改动，本节描述的是**待实现**的层；实现时本节须改为 Implemented 并更新测试计数。
+> 设计细节见 `mrrc_hub/SDD/15-ptt-safety-hub-mode.md`（AD-H06 的来源）。
+
+**缺口**：Layer 4 的 dead-man switch **只在 WebSocket 真正断开时触发**。源码注释（`server.py`）已明确：
+
+> `Opt-in stuck-keyup watchdog (MRRC_PTT_MAX_TX_SECONDS, 0 = off). Covers clients that hang WITHOUT
+> disconnecting — the dead-man switch and client watchdogs never fire for a zombie-but-connected socket.`
+
+且该兜底默认关闭（`config.py`：`_env_float("MRRC_PTT_MAX_TX_SECONDS", 0.0)`，检查粒度 1.0 s）。因此：
+
+| 失效模式 | 当前是否有本地释放路径 |
+|---|---|
+| 关闭浏览器 / 进程退出 / TCP RST | ✅ Layer 4（立即） |
+| **拔网线 / 换 Wi-Fi / NAT 掉表 / 静默丢弃（`iptables DROP`）** | ❌ **无** —— TCP 未断，Layer 4 与 Layer 3 都不触发 |
+| 进程卡死但仍连着 | ⚠️ 仅当 `MRRC_PTT_MAX_TX_SECONDS` 非零（默认 off） |
+
+在 LAN 场景这不致命（断线 ≈ 真断线）。但在**经 Hub 的远程接入**场景（运营商 NAT、双层 NAT、
+弱网、频繁换网）中，半开连接是**主路径**而非边缘；此刻租约仍在、云端 TTL 未到期 —— 即"释放
+依赖云端"，而这正是远程接入设计明令禁止的。
+
+**计划的扩展（Hub 模式必需）**：
+
+| 项 | 设计 |
+|---|---|
+| 新增配置 | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 1.0 s，0 = 关闭） |
+| 新层 | **远程会话活性层**：TX 期间会话心跳缺失 ≥1.0 s → `set_ptt(False)` + 清 TX 音频队列 |
+| 心跳节奏 | TX 期间 500 ms；隧道层连续 2 次未达（≈1.0 s）主动关流并通知（**不发 TX0**） |
+| 仲裁 | **必须复用 Layer 4 的 key-owner 仲裁**（`_ptt_key_ws` / `_ptt_release_allowed`）：不得释放**别人**的载波（例如 LAN 客户端正在发射时，远端 Listener 的半开不得导致释放） |
+| 时限 | EOF 型 ≤ 1 s（现状已满足）；**半开型 ≤ 1.5 s**（新增） |
+| 兜底 | Hub 模式建议 `MRRC_PTT_MAX_TX_SECONDS=120` —— 语义是"最长连续发射上限"，**不是**释放机制 |
+| 验证 | `mrrc_hub/SDD/15-ptt-safety-hub-mode.md` §15.5 的 V1–V10 注入矩阵（含 V8 LAN 载波不被误释放、V10 单包丢失不误释放） |
+
+**术语订正**：对外文档长期写作"七层 PTT 安全释放"，本章实为 **Layer 0（前置闸门）+ Layer 1–8**
+（Layer 0 于 V2.41 引入、V2.46 扩展；Layer 8 为 V2.49 的一次性 CQ 播放器）。以本章为准。

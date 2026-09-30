@@ -3,12 +3,12 @@ const CACHE = 'mrrc-v42';
 const ASSETS = [
     '/',
     '/index.html',
-    '/ft710.css?v=25',
-    '/ft710_main.js?v=37',
-    '/ft710_ui.js?v=32',
-    '/modules/ptt_manager.js?v=15',
-    '/modules/settings_manager.js?v=13',
-    '/modules/atr1000.js?v=4',
+    '/ft710.css?v=26',
+    '/ft710_main.js?v=38',
+    '/ft710_ui.js?v=33',
+    '/modules/ptt_manager.js?v=16',
+    '/modules/settings_manager.js?v=15',
+    '/modules/atr1000.js?v=5',
     '/manifest.json',
 ];
 

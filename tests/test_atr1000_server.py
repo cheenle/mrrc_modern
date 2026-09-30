@@ -343,7 +343,7 @@ class SourceGuardTests(unittest.TestCase):
 
     def test_frontend_cache_bust_for_the_new_module(self):
         sw_src = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("'/modules/atr1000.js?v=4',", sw_src)
+        self.assertIn("'/modules/atr1000.js?v=5',", sw_src)
 
 
 if __name__ == "__main__":

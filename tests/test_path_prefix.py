@@ -30,6 +30,19 @@ class AssetTagTests(unittest.TestCase):
                     continue
                 self.assertFalse(val.startswith("/"), f"absolute asset in {tag!r}")
 
+    def test_static_html_has_no_site_root_absolute_refs(self):
+        """static/*.html 里不得有指向站点根的绝对引用。
+
+        补漏：index.html 里曾有一处 href="/support.html"，在路径反代下会 404，
+        而当时的守卫只扫了 JS 与部分资源，没覆盖它。前端资源一旦新增，先跑本测试。
+        """
+        offenders = []
+        for path in sorted(Path(__file__).resolve().parent.parent.joinpath("static").glob("*.html")):
+            for lineno, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                for m in re.finditer(r'(?:href|src)="(/[^/"][^"]*)"', line):
+                    offenders.append(f"{path.name}:{lineno} {m.group(1)}")
+        self.assertEqual([], offenders, "站点根绝对引用（路径反代下会 404）: " + ", ".join(offenders))
+
 
 class InlineScriptTests(unittest.TestCase):
     def test_inline_api_calls_go_through_the_base_path(self):

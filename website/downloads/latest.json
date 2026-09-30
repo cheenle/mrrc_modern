@@ -1,19 +1,19 @@
 {
-  "latest": "1.21.0",
+  "latest": "1.22.0",
   "installer": {
+    "version": "1.22.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.22.0-Windows-x64-Setup.exe",
+    "sha256": "8f96e45de6c4ad17f7d6e7a52016787e5b8db9894ff18e68d9103f615ac1635f",
+    "size": 45923406
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-10-01T06:37:54",
+  "notes": "Cloud Hub 前置能力：路径前缀、令牌不进 URL、会话遥测、PTT 活性闸门（阈值可配置）",
+  "previous": {
     "version": "1.21.0",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.21.0-Windows-x64-Setup.exe",
     "sha256": "ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a",
     "size": 46014388
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-09-25T18:17:00",
-  "notes": "修复 iPhone 开机锁屏竞态（系统麦克风权限框冲掉屏幕锁导致开机后仍约 30 秒黑屏）；收听页新增 FFT 迹线、频率步进按钮与公网尺寸音频缓冲；公网收听入口改用 DNS 名解析，家中 IPv6 变化自愈。",
-  "previous": {
-    "version": "1.20.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.20.0-Windows-x64-Setup.exe",
-    "sha256": "b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0",
-    "size": 46015844
   }
 }

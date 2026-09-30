@@ -191,3 +191,16 @@
 **更新者**: Agnes Code Review  
 **审核状态**: 待用户确认  
 **历史更新时间**: 2026-07-14
+
+## Cloud Hub 前置能力（2026-09-30）
+
+本仓新增/更新一批与"实例可被云端入口接入"相关的文档与实现，清单如下：
+
+| 主题 | 实现 | 文档 |
+|------|------|------|
+| 路径前缀 | `FT710Settings.basePath`/`url`；`index.html` 资源相对化；`apiUrl`；TX 编码 Worker 不逃逸 | `SDD/12-operational-model.md` §12.9；`tests/test_path_prefix.py` |
+| 令牌传输 | 不再进 URL（AD-024） | `SDD/08-architecture-decisions.md`；`SECURITY_GUIDE.md`；`tests/test_ws_token_transport.py` |
+| 会话遥测 | `GET /api/session_metrics` + 周期日志（AD-023） | `SDD/08`、`SDD/12` §12.9；`tests/test_session_metrics.py` |
+| PTT 活性闸门 | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 0=关） | `SDD/15-ptt-safety-architecture.md`；`tests/test_tx_liveness.py` |
+
+Hub 端设计记录与实况：`../../mrrc_hub/SDD/`（§12.8 为部署事实）。

@@ -360,3 +360,19 @@ $ ls -lh *.md docs/*.md
 **审核状态**: ✅ 完成  
 **历史更新时间**: 2026-07-14  
 **下次更新**: SDD/架构决策随后端模型更新后
+
+## Cloud Hub 前置能力：文档完成情况（2026-09-30）
+
+| 文档 | 状态 |
+|------|------|
+| `SDD/15-ptt-safety-architecture.md`（含 Hub 模式与活性闸门） | 已更新 |
+| `SDD/08-architecture-decisions.md`（AD-023 遥测 / AD-024 令牌传输） | 已更新 |
+| `SDD/12-operational-model.md` §12.9（Hub 模式运维要点） | 已更新 |
+| `SDD/14-version-history.md` | 已更新 |
+| `SDD/README.md` | 已更新 |
+| `SECURITY_GUIDE.md` §Cloud Hub 模式 | 已更新 |
+| `docs/DOCUMENT_INDEX.md` | 已更新 |
+| `tests/README.md` §本轮新增（四个守卫套件） | 已更新 |
+| `AGENTS.md` §Cloud Hub 上下文 | 已更新 |
+
+测试环境提示：本仓测试用 **`.venv/bin/python -m pytest`**（`venv/` 内未安装 pytest）。

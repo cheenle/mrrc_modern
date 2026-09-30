@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1435 tests across 70 test modules (7 pty-based Yaesu round-trip tests skip on
+1443 tests across 71 test modules (7 pty-based Yaesu round-trip tests skip on
 Windows; the per-module counts below were read from `unittest` on 2026-09-25, macOS).
 
 ```bash
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1435 |
-| Passed | 1435 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1443 |
+| Passed | 1443 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |

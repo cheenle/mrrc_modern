@@ -77,7 +77,8 @@
         if (!FT710Settings.getAuthToken()) return;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         try {
-            ws = new WebSocket(proto + '//' + location.host + '/WSatr1000');
+            ws = new WebSocket(proto + '//' + location.host +
+                (FT710Settings.basePath ? FT710Settings.basePath() : '') + '/WSatr1000');
         } catch(e) {
             scheduleReconnect();
             return;

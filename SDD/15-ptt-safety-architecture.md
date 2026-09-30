@@ -228,9 +228,9 @@ Emergency Paths:
 
 ## 15.6 Hub-mode extension (planned, NOT implemented)
 
-> 本节由 `mrrc_hub`（MRRC Cloud Hub）SDD V0.1 的评审引入，记录一个**当前实现未覆盖**的失效模式。
-> 代码未改动，本节描述的是**待实现**的层；实现时本节须改为 Implemented 并更新测试计数。
-> 设计细节见 `mrrc_hub/SDD/15-ptt-safety-hub-mode.md`（AD-H06 的来源）。
+> V2.62 由 `mrrc_hub`（MRRC Cloud Hub）SDD V0.1 的评审引入，记录一个原先未覆盖的失效模式；
+> **V2.63 已实现（opt-in）**，见本节末的"实现"段。设计细节见
+> `mrrc_hub/SDD/15-ptt-safety-hub-mode.md`（AD-H06 的来源），两侧以 V1–V10 注入矩阵对齐。
 
 **缺口**：Layer 4 的 dead-man switch **只在 WebSocket 真正断开时触发**。源码注释（`server.py`）已明确：
 
@@ -249,7 +249,16 @@ Emergency Paths:
 弱网、频繁换网）中，半开连接是**主路径**而非边缘；此刻租约仍在、云端 TTL 未到期 —— 即"释放
 依赖云端"，而这正是远程接入设计明令禁止的。
 
-**计划的扩展（Hub 模式必需）**：
+**实现（V2.63，opt-in）**：`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 `0` = 关闭）→ 服务端
+`_tx_liveness_timeout()` + `_tx_liveness_watchdog()`（tick 0.25 s，检测延迟 ≤ 阈值 + 1 tick）；浏览器在
+PTT/TUNE 期间每 500 ms 发 `{type:"txhb"}`（`ptt_manager.js`，起于 pttStart/tuneStart，止于
+pttEnd/tuneEnd/forceRX）。三个不释放条件是**故意的负例**：①未声明能力的会话（旧原生客户端、自带 watchdog
+的 LAN 客户端）永不被门控 —— 发 `txhb` 本身就是能力声明；②只有**持键会话**超时才释放，陈旧 Listener
+不得掐掉别人的载波（Layer 4 仲裁）；③刚连上就按键、还没发过心跳的会话不算超时。释放走既有
+fire-and-forget 路径（单次 `set_ptt(False)` + 清零 TX 表 + 告知控制面），无 verify 循环。
+`tests/test_tx_liveness.py` 21 项覆盖上述每一条（含"单包丢失不释放"与"陈旧 Listener 不释放"）。
+
+**原计划轮廓（保留作设计对照）**：
 
 | 项 | 设计 |
 |---|---|

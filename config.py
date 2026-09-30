@@ -200,6 +200,13 @@ WEB_HOST = _env("MRRC_WEB_HOST", "::")  # IPv6 dual-stack
 SESSION_METRICS_INTERVAL_S = _env_float("MRRC_SESSION_METRICS_INTERVAL_S", 300.0)
 SESSION_METRICS_WINDOW_S = _env_float("MRRC_SESSION_METRICS_WINDOW_S", 3600.0)
 
+# TX-phase liveness gate (SDD ch15 §15.6, hub AD-H06): while transmitting, the
+# session holding the key must keep proving it is alive; when its heartbeat goes
+# stale the server unkeys locally instead of waiting for a TCP close that a
+# dropped NAT entry never produces. 0 = off (the default) — the cloud hub sets
+# it, and only sessions that declare capability by sending `txhb` are gated.
+REMOTE_SESSION_TX_HEARTBEAT_S = _env_float("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S", 0.0)
+
 # SSL (Let's Encrypt certs for radio.vlsc.net)
 CERT_DIR = SCRIPT_DIR / "certs"
 SSL_CERTFILE = _env("MRRC_SSL_CERT", str(CERT_DIR / "fullchain.pem"))

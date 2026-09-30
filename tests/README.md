@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1414 tests across 69 test modules (7 pty-based Yaesu round-trip tests skip on
+1435 tests across 70 test modules (7 pty-based Yaesu round-trip tests skip on
 Windows; the per-module counts below were read from `unittest` on 2026-09-25, macOS).
 
 ```bash
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1414 |
-| Passed | 1414 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1435 |
+| Passed | 1435 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -576,6 +576,17 @@ SDD coverage: AD-024, §10.2, hub AD-H07 / NFR-H020
 | `VerificationTests` | 3 | `_verify_auth` accepts all three transports, rejects unknown/empty, listen role recognised from a header |
 | `SourceGuardTests` | 5 | only the resolver touches the query param, HTTP paths share it, no frontend token URLs, login guards kept, cache-bust covers changed assets |
 
+### 59. test_tx_liveness.py — TX-Phase Liveness Gate (21 tests)
+
+SDD coverage: §15.6, AD-007 (V2.63 amendment), hub AD-H06 / NFR-H006
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `ReleaseTests` | 5 | stale keying session unkeys, exactly one unkey write (no verify loop), TX meters zeroed, control clients told why, key owner cleared |
+| `NoReleaseTests` | 7 | undeclared client never gated, single missing beat, stale listener cannot drop another's carrier, capable-but-unsent, no key owner, not transmitting, disabled by default |
+| `DecisionTests` | 3 | comfortably within the threshold, past it, disabled threshold |
+| `SourceGuardTests` | 6 | `txhb` handled, disconnect forgets the session, task created only when enabled + cancelled, env default off, frontend sends/stops (2 start / 4 stop call sites), cache-bust |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -592,6 +603,7 @@ SDD coverage: AD-024, §10.2, hub AD-H07 / NFR-H020
 | AD-010 Memory Channels | test_server_ws_protocol (mem messages), test_memory_recall | 6 tests |
 | AD-023 Remote-Session Metering | test_session_metrics | 27 tests |
 | AD-024 Session-token transport | test_ws_token_transport | 18 tests |
+| §15.6 TX-phase liveness gate | test_tx_liveness | 21 tests |
 | §7.2 RadioState Entity | test_radio_state | 46 tests |
 | §7.2 Config Tables | test_config, test_config_ic7300 | 50 tests |
 | §9.2 WS Protocol | test_server_ws_protocol (WSMessageFormatTests) | 11 tests |
@@ -630,7 +642,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1414 tests in ~25s — can run on every commit.
+2. **Fast execution**: ~1435 tests in ~28s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

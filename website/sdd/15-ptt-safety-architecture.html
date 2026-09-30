@@ -377,7 +377,7 @@ Emergency Paths:
 </ol>
 <h2 id="hub-mode-extension-planned-not-implemented">15.6 Hub-mode extension (planned, NOT implemented)</h2>
 <blockquote>
-<p>本节由 <code class="scope-code">mrrc_hub</code>（MRRC Cloud Hub）SDD V0.1 的评审引入，记录一个<strong>当前实现未覆盖</strong>的失效模式。 代码未改动，本节描述的是<strong>待实现</strong>的层；实现时本节须改为 Implemented 并更新测试计数。 设计细节见 <code class="scope-code">mrrc_hub/SDD/15-ptt-safety-hub-mode.md</code>（AD-H06 的来源）。</p>
+<p>V2.62 由 <code class="scope-code">mrrc_hub</code>（MRRC Cloud Hub）SDD V0.1 的评审引入，记录一个原先未覆盖的失效模式； <strong>V2.63 已实现（opt-in）</strong>，见本节末的”实现”段。设计细节见 <code class="scope-code">mrrc_hub/SDD/15-ptt-safety-hub-mode.md</code>（AD-H06 的来源），两侧以 V1–V10 注入矩阵对齐。</p>
 </blockquote>
 <p><strong>缺口</strong>：Layer 4 的 dead-man switch <strong>只在 WebSocket 真正断开时触发</strong>。源码注释（<code class="scope-code">server.py</code>）已明确：</p>
 <blockquote>
@@ -411,7 +411,8 @@ Emergency Paths:
 </tbody>
 </table>
 <p>在 LAN 场景这不致命（断线 ≈ 真断线）。但在<strong>经 Hub 的远程接入</strong>场景（运营商 NAT、双层 NAT、 弱网、频繁换网）中，半开连接是<strong>主路径</strong>而非边缘；此刻租约仍在、云端 TTL 未到期 —— 即”释放 依赖云端”，而这正是远程接入设计明令禁止的。</p>
-<p><strong>计划的扩展（Hub 模式必需）</strong>：</p>
+<p><strong>实现（V2.63，opt-in）</strong>：<code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>（默认 <code class="scope-code">0</code> = 关闭）→ 服务端 <code class="scope-code">_tx_liveness_timeout()</code> + <code class="scope-code">_tx_liveness_watchdog()</code>（tick 0.25 s，检测延迟 ≤ 阈值 + 1 tick）；浏览器在 PTT/TUNE 期间每 500 ms 发 <code class="scope-code">{type:"txhb"}</code>（<code class="scope-code">ptt_manager.js</code>，起于 pttStart/tuneStart，止于 pttEnd/tuneEnd/forceRX）。三个不释放条件是<strong>故意的负例</strong>：①未声明能力的会话（旧原生客户端、自带 watchdog 的 LAN 客户端）永不被门控 —— 发 <code class="scope-code">txhb</code> 本身就是能力声明；②只有<strong>持键会话</strong>超时才释放，陈旧 Listener 不得掐掉别人的载波（Layer 4 仲裁）；③刚连上就按键、还没发过心跳的会话不算超时。释放走既有 fire-and-forget 路径（单次 <code class="scope-code">set_ptt(False)</code> + 清零 TX 表 + 告知控制面），无 verify 循环。 <code class="scope-code">tests/test_tx_liveness.py</code> 21 项覆盖上述每一条（含”单包丢失不释放”与”陈旧 Listener 不释放”）。</p>
+<p><strong>原计划轮廓（保留作设计对照）</strong>：</p>
 <table class="scope-table">
 <colgroup>
 <col style="width: 50%" />
@@ -461,7 +462,7 @@ Emergency Paths:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.63 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

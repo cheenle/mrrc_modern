@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.63</td>
+<td>2026-09-30</td>
+<td>pi</td>
+<td><strong>PTT 半开释放：TX 期间会话活性闸门（§15.6 由”计划”转为已实现，opt-in）。</strong> 背景：V2.62 记下的缺口——dead-man switch 只在真正断线时触发，而半开连接（NAT 掉表、换 Wi-Fi、静默丢弃）没有断线可观测；唯一的兜底 <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> 出厂关闭。LAN 下这是边缘情况，经 NAT 远程访问时它是<strong>主路径</strong>（hub AD-H06/NFR-H006）。<strong>机制</strong>：新增 <code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>（默认 <code class="scope-code">0</code> = 关闭，由 Cloud Hub 显式开启）；服务端 <code class="scope-code">_tx_liveness_timeout()</code> 决策 + <code class="scope-code">_tx_liveness_watchdog()</code>（tick 0.25 s，检测延迟 ≤ 阈值 + 1 tick，落在 hub 契约的 ≤1.5 s 内）；浏览器在 PTT/TUNE 期间每 500 ms 发 <code class="scope-code">{type:"txhb"}</code>（<code class="scope-code">ptt_manager.js</code>；起于 pttStart/tuneStart、止于 pttEnd/tuneEnd/forceRX）。<strong>三个”不释放”是故意的负例</strong>：①<strong>未声明能力的会话永不被门控</strong>——发 <code class="scope-code">txhb</code> 本身就是能力声明，因此旧原生客户端与自带 watchdog 的 LAN 客户端不受影响（这是”只改服务端闸门”会踩的坑：老客户端不心跳就会被误杀）；②只有<strong>持键会话</strong>超时才释放，陈旧 Listener 不得掐掉别人的载波（复用 Layer 4 key-owner 仲裁）；③刚连上就按键、尚未发过心跳的会话不算超时。释放走既有 fire-and-forget 路径（单次 <code class="scope-code">set_ptt(False)</code> + 清零 TX 表 + 一条说明性提示给控制面），无 verify 循环。<strong>缓存版本</strong>：<code class="scope-code">modules/ptt_manager.js?v=15</code>、sw <code class="scope-code">mrrc-v39</code>（<code class="scope-code">test_audio.py</code>/<code class="scope-code">test_server_ws_protocol.py</code>/<code class="scope-code">test_ws_token_transport.py</code> 三处 pin 同步重钉）。<strong>测试</strong> 1414→1435（+21：真跑 async 循环 + 假 cat/radio，覆盖释放、单写、表清零、提示、仲裁、默认关闭、阈值决策边界与源码守卫）。实现期由测试抓到的两处：浮点边界竞态（<code class="scope-code">now-last</code> 恰等于阈值时被 µs 抖动越过，改为”舒适区间 + 明确越界”两条）与我自己数错的调用次数（<code class="scope-code">stopTXHeartbeat()</code> 4 处：3 个释放路径 + start 内部的幂等停止，防重叠按键堆计时器）。文档：AD-007 修订（V2.63 amendment）、§15.6、AGENTS.md env、README env + PTT 段、tests/README 计数与模块小节。<strong>未做/边界</strong>：默认仍为关闭（提出需求的是 Hub，而误释放会打断真实 QSO，故由 Hub 显式开启）；Cloud Hub 侧尚无隧道，<code class="scope-code">TX_ABORT</code> 与 hub §15.5 的 <strong>V1–V10 全矩阵实测</strong>（尤其 V5 杀 Tunnel 节点、V6 停整个 Hub、V7 深度半开）须在 Hub 试点时在实例上复跑；浏览器实测同样待做。</td>
+</tr>
+<tr>
 <td>SDD V2.62</td>
 <td>2026-09-30</td>
 <td>pi</td>
@@ -715,7 +721,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.63 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

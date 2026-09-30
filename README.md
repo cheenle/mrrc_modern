@@ -100,6 +100,7 @@ Two things to know before the first launch (full guide:
 | `MRRC_SESSION_METRICS_INTERVAL_S` | `300` | Interval of the `Session metrics:` INFO line (listener/operator concurrency + uplink kbps); `0` disables the line, `GET /api/session_metrics` keeps working |
 | `MRRC_SESSION_METRICS_WINDOW_S` | `3600` | Window for the listener-concurrency peak reported alongside it |
 | `MRRC_PTT_MAX_TX_SECONDS` | `0` (off) | Safety watchdog: force RX after this many seconds of continuous transmit (guards zombie-but-connected clients; 0 keeps the radio never interrupting an operator's transmission) |
+| `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` | `0` (off) | TX-phase liveness gate: while transmitting, the keying session must keep sending `txhb` (the web UI does, every 500 ms); if it goes silent for this many seconds the server unkeys locally, covering links that die without a TCP close (dropped NAT, Wi-Fi switch). Only clients that send `txhb` are ever gated; the cloud hub enables this |
 | `MRRC_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
 | `MRRC_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
 | `MRRC_SCOPE_PORT` | *(optional)* | Scope serial port (Standard COM Port, for SCU-LAN10 models) |

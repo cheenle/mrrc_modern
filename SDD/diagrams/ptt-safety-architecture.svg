@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 420">
-  <!-- diagram-version: V2.60 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 482">
+  <!-- diagram-version: V2.63 -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
   <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12.5px;font-weight:600}.h{fill:#f0a030;font-size:10px;font-weight:700}.m{fill:#999;font-size:9.5px}.s{fill:#777;font-size:9px}.n{fill:#22c55e;font-size:11px;font-weight:700}</style>
 
-  <text x="380" y="18" text-anchor="middle" class="b">🛡️ PTT Safety — Defense in Depth (chapter 15 · V2.60)</text>
-  <text x="380" y="34" text-anchor="middle" class="m">Layer 0 decides whether the chain may key at all; layers 1-7 guarantee nothing can leave the radio stuck in TX.</text>
+  <text x="380" y="18" text-anchor="middle" class="b">🛡️ PTT Safety — Defense in Depth (chapter 15 · V2.63)</text>
+  <text x="380" y="34" text-anchor="middle" class="m">Layer 0 decides whether the chain may key at all; layers 1-8 guarantee nothing can leave the radio stuck in TX, and 9 covers the one case a disconnect-based layer cannot see.</text>
 
   <!-- Layer 0 -->
   <rect x="14" y="44" width="732" height="46" rx="10" fill="#ef444418" stroke="#ef444488" stroke-dasharray="5 3"/>
@@ -46,11 +46,15 @@
   <text x="402" y="296" class="h">❽ TX AUDIO STOP · server + browser</text>
   <text x="402" y="313" class="m">on release: stop the TX stream, clear the audio queue, send the 's:' marker — so no buffered mic audio keeps modulating after the carrier drops.</text>
 
-  <!-- Removed layer note -->
-  <rect x="14" y="338" width="732" height="30" rx="9" fill="#e0e0e00f" stroke="#e0e0e030"/>
-  <text x="28" y="357" class="s">Removed: triple TX0 verify (200 ms ×3 after every release) — retired in V1.2 as redundant once layers 4-6 existed, and noisy on the CAT link.</text>
+  <rect x="14" y="338" width="732" height="52" rx="9" fill="#ef444418" stroke="#ef444455"/>
+  <text x="26" y="356" class="h">❾ TX-PHASE LIVENESS GATE · server (opt-in, V2.63)</text>
+  <text x="26" y="373" class="m">Every layer above keys off a <tspan font-weight="700">disconnect</tspan>; a link that dies silently (dropped NAT entry, Wi-Fi switch, discarded packets) produces none, and Layer ❹/❺ never fire for a zombie-but-connected socket. With MRRC_REMOTE_SESSION_TX_HEARTBEAT_S &gt; 0 the keying session must keep sending <tspan font-weight="700">txhb</tspan> (the web UI does, every 500 ms); when it goes quiet the server unkeys locally — and only a session that declared the capability can be released, so older clients and LAN clients keeping their own watchdog are never affected. Fired once per stale carrier, no verify loop.</text>
 
-  <text x="380" y="402" text-anchor="middle" class="m">Only automated source: one-touch CQ (AD-020, server-side playback) — it claims the uplink like PTT, refuses a manual key-up while running, and ends by frame count, cq:false, initiator disconnect or any external unkey.</text>
-  <text x="380" y="386" text-anchor="middle" class="m">Verified by tests: `tests/test_max_tx_watchdog.py`, `tests/test_unverified_tx_gate.py`, the frontend contract tests for ptt_manager/beacons, and the field evidence recorded in SDD 15.4.</text>
-  <text x="380" y="404" text-anchor="middle" class="s">Unverified models therefore key only after an explicit operator opt-in, and even then all eight guarantees below the gate stay in force.</text>
+  <!-- Removed layer note -->
+  <rect x="14" y="398" width="732" height="30" rx="9" fill="#e0e0e00f" stroke="#e0e0e030"/>
+  <text x="28" y="417" class="s">Removed: triple TX0 verify (200 ms ×3 after every release) — retired in V1.2 as redundant once layers 4-6 existed, and noisy on the CAT link.</text>
+
+  <text x="380" y="462" text-anchor="middle" class="m">Only automated source: one-touch CQ (AD-020, server-side playback) — it claims the uplink like PTT, refuses a manual key-up while running, and ends by frame count, cq:false, initiator disconnect or any external unkey.</text>
+  <text x="380" y="446" text-anchor="middle" class="m">Verified by tests: `tests/test_max_tx_watchdog.py`, `tests/test_tx_liveness.py`, `tests/test_unverified_tx_gate.py`, the frontend contract tests for ptt_manager/beacons, and the field evidence recorded in SDD 15.4.</text>
+  <text x="380" y="464" text-anchor="middle" class="s">Unverified models therefore key only after an explicit operator opt-in, and even then every guarantee below the gate stays in force.</text>
 </svg>

@@ -92,11 +92,11 @@
 | ----------- | ------- |
 | Type | Safety |
 | Status | Implemented |
-| Decision | Multiple independent release paths: normal WebSocket command (fire-and-forget TX0), PTT watchdog, dead-man switch on WS disconnect, beforeunload beacon, pagehide handler |
+| Decision | Multiple independent release paths: normal WebSocket command (fire-and-forget TX0), PTT watchdog, dead-man switch on WS disconnect, beforeunload beacon, pagehide handler, and — since V2.63 — the **TX-phase liveness gate** (`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`, off by default) for connections that die without a TCP close. Amended V2.63: see ch15 §15.6 |
 
 **Problem**: A lost or unprocessed PTT release command can leave the radio transmitting indefinitely — a serious safety and regulatory issue.
 
-**Rationale**: Release is more safety-critical than keying. Each layer catches a different failure mode: lost WS message, half-open socket, browser crash, tab close, app switch. See Chapter 15 for detailed PTT Safety Architecture.
+**Rationale**: Release is more safety-critical than keying. Each layer catches a different failure mode: lost WS message, half-open socket, browser crash, tab close, app switch. See Chapter 15 for detailed PTT Safety Architecture. **V2.63 amendment — what the original list missed:** every layer above keys off a *disconnect*, and a connection that never closes (dropped NAT entry, Wi-Fi switch, silently discarded packets) produces no disconnect to observe, while the one opt-in fallback (`MRRC_PTT_MAX_TX_SECONDS`) shipped disabled. In a LAN that is an edge case; reached through a NAT it is the normal failure mode, which is why the liveness gate exists and why the cloud hub turns it on.
 
 **Consequences**: Frontend PTT logic is more complex; polling skip-on-PTT ensures state consistency. (V1.2 removed the 3×200ms post-release verify loop — it added ~600ms to every release; stuck-keyup detection now relies on the 500ms TX-status poll plus the browser watchdog.)
 

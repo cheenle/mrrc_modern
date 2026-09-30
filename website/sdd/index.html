@@ -274,7 +274,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.62</td>
+<td>V2.63</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
@@ -396,7 +396,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <tr>
 <td>PTT safety</td>
 <td>Implemented</td>
-<td>Touch-and-hold, PTT watchdog, dead-man switch, unload beacon</td>
+<td>Touch-and-hold, PTT watchdog, dead-man switch, unload beacon, <strong>TX-phase liveness gate</strong> (opt-in via <code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>; catches connections that die without a TCP close — §15.6)</td>
 </tr>
 <tr>
 <td>Remote-session telemetry</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.63 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

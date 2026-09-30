@@ -12,6 +12,34 @@
     let pttActive = false;
     let tuneActive = false;
     let pttVerifyTimer = null;
+    let txHeartbeatTimer = null;
+
+    // ── TX-phase Liveness Heartbeat (SDD ch15 §15.6) ──────────────
+    // While transmitting, keep proving this session is still alive. A dropped
+    // NAT entry or a Wi-Fi switch kills the link without closing the socket, so
+    // the server's disconnect dead-man switch never fires; when these stop
+    // arriving the server unkeys locally instead of leaving a carrier on. Only
+    // clients that send them are ever gated, so an older native client (or a
+    // LAN client keeping its own watchdog) is unaffected.
+
+    function startTXHeartbeat() {
+        stopTXHeartbeat();
+        sendTXHeartbeat();   // declare capability at key time, not 500 ms later
+        txHeartbeatTimer = setInterval(sendTXHeartbeat, 500);
+    }
+
+    function stopTXHeartbeat() {
+        if (txHeartbeatTimer) {
+            clearInterval(txHeartbeatTimer);
+            txHeartbeatTimer = null;
+        }
+    }
+
+    function sendTXHeartbeat() {
+        if (typeof sendMsg === 'function') {
+            sendMsg({ type: 'txhb' });
+        }
+    }
 
     // ── PTT Safety Watchdog ──────────────────────────────────────
     // After releasing PTT, verify the radio actually returned to RX.
@@ -65,6 +93,7 @@
             if (typeof handlePTTStart === 'function') {
                 handlePTTStart();
             }
+            startTXHeartbeat();
             stopPTTWatchdog(); // Stop any existing watchdog
         },
 
@@ -73,6 +102,7 @@
             if (typeof handlePTTEnd === 'function') {
                 handlePTTEnd();
             }
+            stopTXHeartbeat();
             startPTTWatchdog();
         },
 
@@ -81,6 +111,7 @@
             if (typeof handleTuneStart === 'function') {
                 handleTuneStart();
             }
+            startTXHeartbeat();   // TUNE keys the radio too
         },
 
         tuneEnd: function() {
@@ -88,12 +119,14 @@
             if (typeof handleTuneEnd === 'function') {
                 handleTuneEnd();
             }
+            stopTXHeartbeat();
             startPTTWatchdog();
         },
 
         forceRX: function() {
             pttActive = false;
             tuneActive = false;
+            stopTXHeartbeat();
             if (typeof sendCommand === 'function') {
                 sendCommand('ptt', false);
             }

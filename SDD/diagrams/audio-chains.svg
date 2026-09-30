@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 366">
-  <!-- diagram-version: V2.60 -->
+  <!-- diagram-version: V2.63 -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
   <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.06em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
 
-  <text x="380" y="18" text-anchor="middle" class="b">Audio Chains — RX, TX and the recording tap (V2.60)</text>
+  <text x="380" y="18" text-anchor="middle" class="b">Audio Chains — RX, TX and the recording tap (V2.63)</text>
 
   <!-- RX -->
   <rect x="12" y="30" width="736" height="120" rx="10" fill="#5dade218" stroke="#5dade255"/>

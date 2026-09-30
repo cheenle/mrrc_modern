@@ -41,6 +41,7 @@ from config import (
     RECORDINGS_BITRATE, RECORDINGS_MAX_SESSION_MIN,
     CQ_ASSET_PATH,
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
+    REMOTE_SESSION_TX_HEARTBEAT_S,
     _env, default_baud_for,
 )
 from backends import create_backend, known_models
@@ -141,6 +142,83 @@ _session_metrics_task: asyncio.Task | None = None
 def _role_for_token(token: str) -> str:
     """Metering role for an authenticated token (see _listen_tokens)."""
     return "listener" if token in _listen_tokens else "operator"
+
+
+# TX-phase liveness gate (SDD ch15 §15.6, hub AD-H06). Opt-in via
+# MRRC_REMOTE_SESSION_TX_HEARTBEAT_S; the cloud hub sets it. A session becomes
+# gated by *declaring* capability — sending `txhb` — so a client that predates
+# the mechanism is never unkeyed by something it does not implement.
+_tx_hb_capable: set[WebSocket] = set()
+_tx_hb_last: dict[WebSocket, float] = {}
+_tx_liveness_task: asyncio.Task | None = None
+TX_LIVENESS_TICK_S = 0.25   # detection latency is threshold + at most one tick
+
+
+def _tx_liveness_timeout() -> Optional[WebSocket]:
+    """The keying session whose heartbeat went stale, or None.
+
+    All three conditions must hold, and each corresponds to a failure the
+    design review insisted must not release:
+      * the feature is enabled (0 = off is the shipped default);
+      * the *keying* session is the one that timed out — a stale listener, or a
+        LAN client keying while a remote session dies, must never drop someone
+        else's carrier (ch15 Layer 4 key-owner arbitration);
+      * that session declared capability and has sent at least one heartbeat, so
+        keying immediately after connecting is not a false positive.
+    """
+    if REMOTE_SESSION_TX_HEARTBEAT_S <= 0:
+        return None
+    ws = _ptt_key_ws
+    if ws is None or ws not in _tx_hb_capable:
+        return None
+    last = _tx_hb_last.get(ws)
+    if last is None:
+        return None
+    if time.monotonic() - last <= REMOTE_SESSION_TX_HEARTBEAT_S:
+        return None
+    return ws
+
+
+async def _tx_liveness_watchdog():
+    """Unkey when the transmitting session stops proving it is alive.
+
+    Covers the one failure mode the other layers cannot see: a connection that
+    never closes — NAT entry dropped, Wi-Fi switched, packets silently discarded
+    — where Layer 4's dead-man switch never fires because there is no TCP
+    teardown to observe. Fire-and-forget unkey, no verify loop (V1.2 rule).
+    """
+    global _ptt_key_ws
+    while True:
+        await asyncio.sleep(TX_LIVENESS_TICK_S)
+        if not (cat is not None and cat.connected and radio.is_transmitting):
+            continue
+        ws = _tx_liveness_timeout()
+        if ws is None:
+            continue
+        age = time.monotonic() - _tx_hb_last.get(ws, 0.0)
+        logger.warning(
+            "PTT safety: no session heartbeat for %.1fs while transmitting "
+            "(limit %.1fs) — forcing RX", age, REMOTE_SESSION_TX_HEARTBEAT_S)
+        try:
+            await cat.set_ptt(False)
+            _ptt_key_ws = None
+            radio.update(tx_status=0, power_meter=0, alc_meter=0,
+                         swr_meter=0, comp_meter=0, id_meter=0)
+        except Exception as e:
+            logger.error("PTT safety force-RX failed: %s", e)
+        scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+        _tx_hb_capable.discard(ws)
+        _tx_hb_last.pop(ws, None)
+        msg = json.dumps({"type": "error", "message": (
+            "Link lost while transmitting — PTT released locally. "
+            "Check your network before keying again.")})
+        dead: set[WebSocket] = set()
+        for client in ctrl_clients:
+            try:
+                await client.send_text(msg)
+            except Exception:
+                dead.add(client)
+        ctrl_clients.difference_update(dead)
 
 
 async def _session_metrics_loop():
@@ -1587,6 +1665,12 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
     if msg_type == "ping":
         await ws.send_text(json.dumps({"type": "pong"}))
 
+    elif msg_type == "txhb":
+        # TX-phase liveness (ch15 §15.6): sending this *is* the capability
+        # declaration, so clients that predate the mechanism are never gated.
+        _tx_hb_capable.add(ws)
+        _tx_hb_last[ws] = time.monotonic()
+
     elif msg_type == "get":
         if field == "fullState":
             await ws.send_text(json.dumps({
@@ -2493,6 +2577,10 @@ async def lifespan(app: FastAPI):
     if SESSION_METRICS_INTERVAL_S > 0:
         _session_metrics_task = asyncio.create_task(
             _session_metrics_loop(), name="session_metrics")
+    global _tx_liveness_task
+    if REMOTE_SESSION_TX_HEARTBEAT_S > 0:
+        _tx_liveness_task = asyncio.create_task(
+            _tx_liveness_watchdog(), name="tx_liveness")
 
     # Start scope handler — broadcasts S-meter fallback until real data arrives
     scope = ScopeHandler()
@@ -2558,6 +2646,9 @@ async def lifespan(app: FastAPI):
     if _session_metrics_task:
         _session_metrics_task.cancel()
         _session_metrics_task = None
+    if _tx_liveness_task:
+        _tx_liveness_task.cancel()
+        _tx_liveness_task = None
     # Recording: let the writer finish whatever is queued (a stop sentinel
     # flushes the MP3), then make sure no session is left open.  A crash
     # here must never block shutdown, so close_without_finishing() is the
@@ -3429,6 +3520,8 @@ async def ws_radio(ws: WebSocket):
     finally:
         ctrl_clients.discard(ws)
         _ws_tokens.pop(ws, None)
+        _tx_hb_capable.discard(ws)
+        _tx_hb_last.pop(ws, None)
         metrics.close(role, "control", token)
         logger.info("WS client disconnected (%d remain)", len(ctrl_clients))
         if scheduler:

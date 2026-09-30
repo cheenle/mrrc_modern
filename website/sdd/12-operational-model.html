@@ -557,6 +557,9 @@ Icom IC-7300 / IC-7300MK2
 <li><strong>成功判据（slice 2）</strong>：<code class="scope-code">&lt;data dir&gt;/updates/state.json</code> 的 <code class="scope-code">lastResult.status == ok</code>，由<strong>新版本启动时</strong>写入； <code class="scope-code">installing</code> 只表示已拉起安装器。</li>
 <li><strong>门禁</strong>：发射或录音期间升级请求返回 <strong>423</strong>（slice 2 在交接前复查）。</li>
 </ol>
+<h2 id="远程会话遥测ad-023">12.5.3 远程会话遥测（AD-023）</h2>
+<p><code class="scope-code">GET /api/session_metrics</code> 返回实测并发与上行（仅计数与字节，无标识）：<code class="scope-code">listeners</code>/<code class="scope-code">operators</code> 的 会话数与 socket 数、生命期峰值与滑动窗口峰值、<code class="scope-code">sockets_by_kind</code>，以及 <code class="scope-code">spectrum</code>/<code class="scope-code">audio_rx</code> 两路上行 的累计字节。每 <code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S</code>（默认 300 s）另输出一条 <code class="scope-code">Session metrics:</code> INFO 行， 含该区间的平均 kbps —— 它就是 Cloud Hub 判断”要不要做 RX 扇出”的输入（<code class="scope-code">mrrc_hub/SDD</code> AD-H12 / I-H1）。</p>
+<p><code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S=0</code> 关闭周期行，端点照常可用；<code class="scope-code">MRRC_SESSION_METRICS_WINDOW_S</code> （默认 3600 s）决定窗口峰值的宽度。</p>
 <h2 id="logs-and-artifacts">12.6 Logs and Artifacts</h2>
 <table class="scope-table">
 <colgroup>
@@ -665,7 +668,7 @@ Icom IC-7300 / IC-7300MK2
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.61 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "sdd_version": "V2.27",
+  "sdd_version": "V2.62",
   "description": "Machine-readable constraint registry distilled from SDD/ (IBM TeamSD) and AGENTS.md for the mrrc_modern codebase. Consumed by sdd_context.py (context | check | hook). severity: block = reject the edit, warn = allow but surface, info = guidance shown in context output only.",
   "rules": [
     {
@@ -219,9 +219,9 @@
     },
     {
       "id": "ws-endpoint-auth",
-      "title": "WebSocket endpoints require token auth",
+      "title": "WebSocket endpoints require token auth (cookie, header, or legacy query)",
       "severity": "warn",
-      "sdd_ref": "AGENTS.md Security; §5.3",
+      "sdd_ref": "AD-024; AGENTS.md Security; §10.2",
       "scope": [
         "server.py"
       ],
@@ -229,7 +229,7 @@
       "patterns": [
         "@app\\.websocket\\("
       ],
-      "message": "Any new WebSocket endpoint must validate the ?token= query param against _auth_tokens before accept, like the existing five (/WSradio, /WSspectrum, /WSaudioRX, /WSaudioTX, /WSatr1000). Tokens are cleared on server restart."
+      "message": "Any new WebSocket endpoint must resolve its token with _token_from_ws_handshake(ws) and validate it against _auth_tokens before accept, like the existing five (/WSradio, /WSspectrum, /WSaudioRX, /WSaudioTX, /WSatr1000). Resolution order is Authorization: Bearer (native clients) → AUTH_COOKIE (browser; sent automatically on the same-origin handshake) → ?token= query param, which is DEPRECATED (AD-024) because it writes a 30-day credential into every access log, the browser history and any Referer. Never build a token URL in the frontend. Tokens are cleared on server restart."
     },
     {
       "id": "env-hardcoded-device",

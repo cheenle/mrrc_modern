@@ -193,6 +193,13 @@ WEB_PASSWORD = _env("MRRC_WEB_PASSWORD", DEFAULT_WEB_PASSWORD)
 LISTEN_PASSWORD = _env("MRRC_LISTEN_PASSWORD", "")
 WEB_HOST = _env("MRRC_WEB_HOST", "::")  # IPv6 dual-stack
 
+# Remote-session metering (hub open issue I-H1): one INFO line per interval with
+# listener/operator concurrency and uplink kbps, plus GET /api/session_metrics.
+# Counts and bytes only — no identifiers. 0 disables the periodic line (the
+# endpoint keeps working).
+SESSION_METRICS_INTERVAL_S = _env_float("MRRC_SESSION_METRICS_INTERVAL_S", 300.0)
+SESSION_METRICS_WINDOW_S = _env_float("MRRC_SESSION_METRICS_WINDOW_S", 3600.0)
+
 # SSL (Let's Encrypt certs for radio.vlsc.net)
 CERT_DIR = SCRIPT_DIR / "certs"
 SSL_CERTFILE = _env("MRRC_SSL_CERT", str(CERT_DIR / "fullchain.pem"))

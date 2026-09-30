@@ -162,6 +162,16 @@ and the model identity check (`ID;`, read-only) only logs.
    `installing` 只表示已拉起安装器。
 4. **门禁**：发射或录音期间升级请求返回 **423**（slice 2 在交接前复查）。
 
+## 12.5.3 远程会话遥测（AD-023）
+
+`GET /api/session_metrics` 返回实测并发与上行（仅计数与字节，无标识）：`listeners`/`operators` 的
+会话数与 socket 数、生命期峰值与滑动窗口峰值、`sockets_by_kind`，以及 `spectrum`/`audio_rx` 两路上行
+的累计字节。每 `MRRC_SESSION_METRICS_INTERVAL_S`（默认 300 s）另输出一条 `Session metrics:` INFO 行，
+含该区间的平均 kbps —— 它就是 Cloud Hub 判断"要不要做 RX 扇出"的输入（`mrrc_hub/SDD` AD-H12 / I-H1）。
+
+`MRRC_SESSION_METRICS_INTERVAL_S=0` 关闭周期行，端点照常可用；`MRRC_SESSION_METRICS_WINDOW_S`
+（默认 3600 s）决定窗口峰值的宽度。
+
 ## 12.6 Logs and Artifacts
 
 | Artifact | Purpose |

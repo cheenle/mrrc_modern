@@ -401,8 +401,8 @@
 <td>I6</td>
 <td>No multi-client control arbitration — concurrent browsers can issue conflicting PTT/frequency commands (last-writer-wins)</td>
 <td>Medium</td>
-<td>Open</td>
-<td>Define arbitration rules (e.g., single-controller lock or role-based gating)</td>
+<td><strong>PTT half resolved 2026-09-25</strong> (field log: two tabs produced 75 TX sessions in 5 min, 16 with zero mic frames — each tab’s watchdog re-sent <code class="scope-code">ptt:false</code> on stale local state and unkeyed the tab that was transmitting. Fix: <code class="scope-code">_ptt_key_ws</code> control-plane owner — only the keying socket’s release is honored while it holds the key, the ignored client gets the authoritative <code class="scope-code">tx_status</code> + <code class="scope-code">ptt_keyed_by_other</code> push so its watchdog stands down, and a keyer disconnect forces RX even with other clients connected; SDD §15 Layer 4b, <code class="scope-code">PTTControlArbitrationTests</code>). Frequency/mode conflicts remain last-writer-wins</td>
+<td>Define arbitration rules for the remaining set-commands (e.g., single-controller lock or role-based gating)</td>
 </tr>
 <tr>
 <td>I7</td>
@@ -529,7 +529,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.61 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

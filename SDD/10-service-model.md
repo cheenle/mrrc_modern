@@ -17,7 +17,7 @@
 | ScopePipeService | Core | Implemented | Manage scope_pipe subprocess lifecycle; read stdout/stderr |
 | MemoryChannelService | Core | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
 | ATR1000Service | Optional | Implemented | `/WSatr1000` Browser↔Server: optional external-tuner state + tune assist, token-gated, closed when disabled |
-| AuthService | Support | Implemented | Password login, session tokens, cookie management, WS gating |
+| AuthService | Support | Implemented | Password login, session tokens, cookie management, WS gating. WS/HTTP tokens resolve as `Authorization: Bearer` → `mrrc_auth` cookie → deprecated `?token=` (AD-024) |
 | StatusService | Support | Implemented | `/api/status` full radio state JSON |
 | ProcessService | Support | Implemented | `start.sh` / `stop.sh` background service management, PID file |
 | SupportService | Support | Implemented | `/api/support/{bundle,upload,save}`: server-built, allow-list-redacted diagnostics bundle (logs + redacted config + env/radio/audio snapshot) plus the report loop (upload to the dedicated receiver, or save locally); see AD-021 |
@@ -49,7 +49,7 @@ StaticUIService
   → browser runtime
 
 AuthService
-  → all WebSocket endpoints (token validation on connect)
+  → all WebSocket endpoints (token resolved by `_token_from_ws_handshake`, AD-024)
   → all HTTP routes (cookie-based middleware)
 ```
 

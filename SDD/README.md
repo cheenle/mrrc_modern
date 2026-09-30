@@ -29,13 +29,26 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | 14 | Version History | - | [14-version-history.md](14-version-history.md) |
 | 15 | PTT Safety Architecture | ART 0535 | [15-ptt-safety-architecture.md](15-ptt-safety-architecture.md) |
 
+## Related Design Records
+
+| Record | Repo | Authority |
+| --- | --- | --- |
+| [MRRC Cloud Hub SDD V0.1](../../mrrc_hub/SDD/README.md) | `mrrc_hub` | **公网远程接入**：实例出站隧道、Access/Tunnel Gateway、Registry、Ticket/Lease、设备证书、Portal、OTA 灰度、审计 |
+| [Fleet Hub 设计评审（2026-09-30）](../../mrrc_hub/docs/2026-09-30-fleet-hub-design-review.md) | `mrrc_hub` | 对本仓远程接入现有能力的代码取证评审（含本仓侧需改动的 C1–C6） |
+| `docs/legacy/sdd/original-sdd/` | `mrrc` | 旧架构（前身项目）设计记录 |
+
+**边界**：**电台控制与媒体**（CAT/CI-V、Opus 音频、频谱/瀑布、PTT 多层安全释放、5 个 WS 端点）
+的权威是**本 SDD**；**接入与租约**（隧道、子域路由、凭证、Operator 租约、Portal）的权威是
+`mrrc_hub/SDD/`。两者交叉引用，不互相复制。注意 `mrrc_hub` 的 ID 带 `-H` 中缀
+（`AD-H06` / `NFR-H006` / `R-H1`），以免与本章集的裸 ID 撞号。
+
 ## Quick Facts
 
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.61 |
-| Baseline Date | 2026-09-25 |
+| SDD Version | V2.62 |
+| Baseline Date | 2026-09-30 |
 | Status | v1.21.0 released (macOS DMG 55,933,998 bytes, SHA-256 `df833cdf…`; Windows Setup 46,014,388 bytes, SHA-256 `ccb6e26c…`; rpi64 image still v1.17.0, 551,282,340 bytes, SHA-256 `a56e5658…`) |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
@@ -76,6 +89,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio
 | Radio telemetry (RI) | Implemented | Hi-SWR, recorder, RX/TX, tuner, scan, squelch-open status from `RI0;` |
 | Meter display + AMC | Implemented | `MS`/`AO` commands exposed in state and control path |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
-| Session authentication | Implemented | Shared-password login; `_auth_tokens` + `mrrc_auth` cookie; all WS gated |
+| Session authentication | Implemented | Shared-password login; `_auth_tokens` + `mrrc_auth` cookie; all WS gated. Token transport is header → cookie → deprecated `?token=` (AD-024); no frontend builds a token URL |
 | PTT safety | Implemented | Touch-and-hold, PTT watchdog, dead-man switch, unload beacon |
+| Remote-session telemetry | Implemented | `session_metrics.py` + `GET /api/session_metrics`: listener/operator concurrency (sessions + sockets), lifetime/window peaks, spectrum+audio_rx uplink bytes — counts only, no identifiers (AD-023) |
 | Scope visualization | Implemented | 850-point FFT waterfall, frequency scale, S-meter bar |

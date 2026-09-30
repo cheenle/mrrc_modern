@@ -373,3 +373,31 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 **Rationale**: 因此把成功定义成一个**只能由新版本自己写下的事实**（`lastResult.status == ok`），并把清单做成**生成物**（从产物本身算哈希）—— 这两条让升级成功与清单可信都不依赖任何人的自觉。发射门禁沿用第 15 章的既有分层：升级是维护动作，绝不与载波争资源。
 
 **Consequences**: 维护者发版时多一步 `make_latest_json.py`，换来用户侧检查→下载→校验→安装→自证全程可判定；代价是两片交付期间只有检查可用 —— 这是有意的：半成品升级器会动用户的机器。
+
+## AD-023: 远程会话遥测（实测 Listener 并发与上行，计数不含标识）
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Design / Capacity |
+| Status | Implemented (V2.62) |
+| Decision | 新增 `session_metrics.py`（纯标准库、不引应用模块）：按 `(role, kind)` 统计在活 WebSocket、按 token 统计**会话数**、生命期与滑动窗口并发峰值，并对两条上行扇出路径（`spectrum` / `audio_rx`）计量字节；`server.py` 在五个 WS 端点的 accept/finally 接线、在两处扇出发送点计量字节；新增 `GET /api/session_metrics` 与每 `MRRC_SESSION_METRICS_INTERVAL_S`（默认 300 s）一条 `Session metrics:` INFO 行。 |
+| Alternatives | ①**只在客户端量**（浏览器已经在算接收速率）：看不到"有几个 Listener"这件事，而并发才是扇出的触发门槛；②**把遥测上传到中心**：需要先有设备证书与用户同意，属于 Cloud Hub 的 AD-H11/AD-H13，不在本仓先做；③**只记累计值不记峰值**：典型/峰值是设计门槛的两个输入，只有累计值无法回答；④本地计数 + 峰值 + 端点（采纳）。 |
+| Consequences | ①**只记计数与字节**：token 只在模块内部作不透明键，绝不进入 `snapshot()`/`report()`，因此端点与日志可安全暴露（沿用 AD-021/NFR-068 的隐私边界）；②**双重关闭容忍**：清理既走正常返回也走异常路径，且广播可能已把 socket 移出集合，计数下溢必须不抛；③**窗口峰值不衰减**：滑动窗口内的采样是真实观测，窗口内无采样时取当前值，绝不报告低于当前值；④控制面文本帧不计量（<10 kbps，对比频谱 408 kbps），这是刻意的范围限制。 |
+
+**Problem**: Cloud Hub（`mrrc_hub/SDD` AD-H12）明确拒绝在拿到"单实例真实 Listener 并发分布"之前建设 RX 扇出，而那个数字的原材料（`spectrum_clients` / `audio_rx_clients` / `_listen_tokens`）一直只活在内存里、随进程消失。同时实测已表明单会话带宽里**频谱占 ~86%**（1701 B/帧 × 30 fps ≈ 408 kbps，对比 RX Opus 64 kbps）—— 猜错的代价不是数字难看，而是重构错了子系统。
+
+**Rationale**: 把"要不要做扇出"从判断变成读数：峰值会话数回答"值不值得"，两路上行字节回答"省下多少"。同时把隐私边界写死在模块里（只有计数和字节），使这份观测可以默认开启、可以放上公网端点，而不必先谈同意书。
+
+## AD-024: 会话令牌传输（Cookie 优先、Header 给原生客户端、Query 弃用）
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Security |
+| Status | Implemented (V2.62) |
+| Decision | WS 与 HTTP 的会话令牌统一由 `_token_from_ws_handshake()` / `_token_from_request()` 解析，顺序为 `Authorization: Bearer`（原生客户端）→ `mrrc_auth` Cookie（浏览器；同源握手自动携带）→ `?token=` query（**弃用**，仍可用，每进程告警一次并点名迁移方式）。前端四个构造点（`ft710_main.js` ×2、`listen.js` ×2、`modules/atr1000.js` ×1）不再拼 token。 |
+| Alternatives | ①**`Sec-WebSocket-Protocol` 传令牌**：可行但需要服务端在 `accept(subprotocol=...)` 里回选，五个端点都要改，收益与 Cookie 相同（Cookie 本来就自动发送）；②**直接删掉 query 支持**：已安装的 iOS/Android 客户端会当场断连——它们的 `WebSocketConnection.swift` / `ConnectionManager.kt` 拼的就是 `?token=`；③三步走：Cookie 优先 + Header 可用 + Query 弃用告警（采纳）。 |
+| Consequences | ①**网页侧不再有可复用凭证进 URL**，因此 Hub 透明代理、nginx access log、`$request_uri`、浏览器历史与 Referer 都不再记录令牌；②仍支持 query 是为了不打断在装机型，但每次都是可观测事件（一条 WARNING 点名 `Authorization: Bearer`）；③Cookie 依旧是 30 天 —— 缩短会话时长属于 Cloud Hub 的 AD-H09（`NFR-H013`），本次不动；④`ws-endpoint-auth` 约束规则同步改写为"必须走 `_token_from_ws_handshake`"。 |
+
+**Problem**: 浏览器前端把会话令牌拼进 `?token=`，而实例跑 uvicorn 默认访问日志（含 query string），项目自己也早已知道这一点（`support_bundle.py` 的脱敏正则注释点名 "a `?token=` inside a URL"）—— 但脱敏只在导出诊断包时发生。一旦进入 Cloud Hub 的透明代理模式，中心侧每一条访问日志都会记录各实例的 30 天令牌；而浏览器侧没有自定义头能力这一"技术理由"，其实并不成立：**同源 WS 握手会自动带上 Cookie**。
+
+**Rationale**: 让凭证回到它能被系统正确保护的位置（Cookie / Header），URL 里只留资源路径。对已安装的原生客户端保留 query 兜底，是因为"安全改进"不该以现有用户的连接为代价 —— 但必须让它可观测，否则永远不会有人去改。

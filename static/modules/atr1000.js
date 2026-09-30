@@ -71,11 +71,13 @@
     // ── WebSocket ─────────────────────────────────────────────────
     function connect() {
         if (!enabled) return;
-        const token = FT710Settings.getAuthToken();
-        if (!token) return;
+        // Auth rides the session cookie on this same-origin handshake; the URL
+        // used to carry `?token=`, which leaked a 30-day credential into access
+        // logs (hub AD-H07). Bail out when there is no session at all.
+        if (!FT710Settings.getAuthToken()) return;
         const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         try {
-            ws = new WebSocket(proto + '//' + location.host + '/WSatr1000?token=' + token);
+            ws = new WebSocket(proto + '//' + location.host + '/WSatr1000');
         } catch(e) {
             scheduleReconnect();
             return;

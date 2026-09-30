@@ -222,6 +222,39 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 </tbody>
 </table>
+<h2 id="related-design-records">Related Design Records</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Record</th>
+<th>Repo</th>
+<th>Authority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../../mrrc_hub/SDD/README.md">MRRC Cloud Hub SDD V0.1</a></td>
+<td><code class="scope-code">mrrc_hub</code></td>
+<td><strong>公网远程接入</strong>：实例出站隧道、Access/Tunnel Gateway、Registry、Ticket/Lease、设备证书、Portal、OTA 灰度、审计</td>
+</tr>
+<tr>
+<td><a href="../../mrrc_hub/docs/2026-09-30-fleet-hub-design-review.md">Fleet Hub 设计评审（2026-09-30）</a></td>
+<td><code class="scope-code">mrrc_hub</code></td>
+<td>对本仓远程接入现有能力的代码取证评审（含本仓侧需改动的 C1–C6）</td>
+</tr>
+<tr>
+<td><code class="scope-code">docs/legacy/sdd/original-sdd/</code></td>
+<td><code class="scope-code">mrrc</code></td>
+<td>旧架构（前身项目）设计记录</td>
+</tr>
+</tbody>
+</table>
+<p><strong>边界</strong>：<strong>电台控制与媒体</strong>（CAT/CI-V、Opus 音频、频谱/瀑布、PTT 多层安全释放、5 个 WS 端点） 的权威是<strong>本 SDD</strong>；<strong>接入与租约</strong>（隧道、子域路由、凭证、Operator 租约、Portal）的权威是 <code class="scope-code">mrrc_hub/SDD/</code>。两者交叉引用，不互相复制。注意 <code class="scope-code">mrrc_hub</code> 的 ID 带 <code class="scope-code">-H</code> 中缀 （<code class="scope-code">AD-H06</code> / <code class="scope-code">NFR-H006</code> / <code class="scope-code">R-H1</code>），以免与本章集的裸 ID 撞号。</p>
 <h2 id="quick-facts">Quick Facts</h2>
 <table class="scope-table">
 <colgroup>
@@ -241,11 +274,11 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.61</td>
+<td>V2.62</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
-<td>2026-09-25</td>
+<td>2026-09-30</td>
 </tr>
 <tr>
 <td>Status</td>
@@ -358,12 +391,17 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <tr>
 <td>Session authentication</td>
 <td>Implemented</td>
-<td>Shared-password login; <code class="scope-code">_auth_tokens</code> + <code class="scope-code">mrrc_auth</code> cookie; all WS gated</td>
+<td>Shared-password login; <code class="scope-code">_auth_tokens</code> + <code class="scope-code">mrrc_auth</code> cookie; all WS gated. Token transport is header → cookie → deprecated <code class="scope-code">?token=</code> (AD-024); no frontend builds a token URL</td>
 </tr>
 <tr>
 <td>PTT safety</td>
 <td>Implemented</td>
 <td>Touch-and-hold, PTT watchdog, dead-man switch, unload beacon</td>
+</tr>
+<tr>
+<td>Remote-session telemetry</td>
+<td>Implemented</td>
+<td><code class="scope-code">session_metrics.py</code> + <code class="scope-code">GET /api/session_metrics</code>: listener/operator concurrency (sessions + sockets), lifetime/window peaks, spectrum+audio_rx uplink bytes — counts only, no identifiers (AD-023)</td>
 </tr>
 <tr>
 <td>Scope visualization</td>
@@ -378,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.61 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

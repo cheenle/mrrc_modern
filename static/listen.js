@@ -20,15 +20,18 @@ function getAuthToken() {
     return m ? m[1] : '';
 }
 
+// Auth rides the session cookie: the browser attaches it to this same-origin
+// WebSocket handshake by itself. Appending `?token=` (as this used to) put a
+// 30-day credential into every access log, the browser history and any Referer
+// (hub AD-H07); the page could only have loaded with the cookie present, so the
+// handshake carries it too.
 function wsUrlWithAuth(path) {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return proto + '//' + window.location.host + URL_BASE + path +
-        '?token=' + encodeURIComponent(getAuthToken());
+    return proto + '//' + window.location.host + URL_BASE + path;
 }
 
 function staticUrlWithAuth(path) {
-    const sep = path.indexOf('?') >= 0 ? '&' : '?';
-    return URL_BASE + path + sep + 'token=' + encodeURIComponent(getAuthToken());
+    return URL_BASE + path;
 }
 
 function getCookie(name) {

@@ -18,9 +18,14 @@ from unittest import mock
 class _FakeWS:
     """WebSocket double: send_text sink + close recorder."""
 
-    def __init__(self, token=""):
+    def __init__(self, token="", headers=None, cookies=None):
         self.messages = []
         self.query_params = {"token": token} if token else {}
+        # Real Starlette WebSockets always carry both mappings; token resolution
+        # consults the Authorization header, then the cookie, then the deprecated
+        # query param (AD-024).
+        self.headers = headers or {}
+        self.cookies = cookies or {}
         self.closed = None
         self.accepted = False
 
@@ -68,9 +73,13 @@ class _FakeRequest:
     """Starlette Request double for handler/middleware-level tests."""
 
     def __init__(self, path="/", method="GET", cookies=None,
-                 query=None, body=None, client_host="127.0.0.1"):
+                 query=None, body=None, client_host="127.0.0.1", headers=None):
         self.url = SimpleNamespace(path=path, query="")
         self.method = method
+        # Real Starlette requests/WebSockets always carry a header mapping;
+        # auth resolves the session token from it (Authorization: Bearer) before
+        # the cookie, so the double needs one too (AD-024).
+        self.headers = headers or {}
         self.cookies = cookies or {}
         self.query_params = query or {}
         self._body = body or {}

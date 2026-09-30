@@ -931,13 +931,87 @@
 <p><strong>Problem</strong>: 前两期把报障→结论打通了，但用户拿到修复仍要自己找下载页、对 SHA、重装。同时升级类功能最容易自欺：安装器退出码 0 不等于升级成功，已拉起安装器更不等于。</p>
 <p><strong>Rationale</strong>: 因此把成功定义成一个<strong>只能由新版本自己写下的事实</strong>（<code class="scope-code">lastResult.status == ok</code>），并把清单做成<strong>生成物</strong>（从产物本身算哈希）—— 这两条让升级成功与清单可信都不依赖任何人的自觉。发射门禁沿用第 15 章的既有分层：升级是维护动作，绝不与载波争资源。</p>
 <p><strong>Consequences</strong>: 维护者发版时多一步 <code class="scope-code">make_latest_json.py</code>，换来用户侧检查→下载→校验→安装→自证全程可判定；代价是两片交付期间只有检查可用 —— 这是有意的：半成品升级器会动用户的机器。</p>
+<h2 id="ad-023-远程会话遥测实测-listener-并发与上行计数不含标识">AD-023: 远程会话遥测（实测 Listener 并发与上行，计数不含标识）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / Capacity</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V2.62)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>新增 <code class="scope-code">session_metrics.py</code>（纯标准库、不引应用模块）：按 <code class="scope-code">(role, kind)</code> 统计在活 WebSocket、按 token 统计<strong>会话数</strong>、生命期与滑动窗口并发峰值，并对两条上行扇出路径（<code class="scope-code">spectrum</code> / <code class="scope-code">audio_rx</code>）计量字节；<code class="scope-code">server.py</code> 在五个 WS 端点的 accept/finally 接线、在两处扇出发送点计量字节；新增 <code class="scope-code">GET /api/session_metrics</code> 与每 <code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S</code>（默认 300 s）一条 <code class="scope-code">Session metrics:</code> INFO 行。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong>只在客户端量</strong>（浏览器已经在算接收速率）：看不到”有几个 Listener”这件事，而并发才是扇出的触发门槛；②<strong>把遥测上传到中心</strong>：需要先有设备证书与用户同意，属于 Cloud Hub 的 AD-H11/AD-H13，不在本仓先做；③<strong>只记累计值不记峰值</strong>：典型/峰值是设计门槛的两个输入，只有累计值无法回答；④本地计数 + 峰值 + 端点（采纳）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>只记计数与字节</strong>：token 只在模块内部作不透明键，绝不进入 <code class="scope-code">snapshot()</code>/<code class="scope-code">report()</code>，因此端点与日志可安全暴露（沿用 AD-021/NFR-068 的隐私边界）；②<strong>双重关闭容忍</strong>：清理既走正常返回也走异常路径，且广播可能已把 socket 移出集合，计数下溢必须不抛；③<strong>窗口峰值不衰减</strong>：滑动窗口内的采样是真实观测，窗口内无采样时取当前值，绝不报告低于当前值；④控制面文本帧不计量（&lt;10 kbps，对比频谱 408 kbps），这是刻意的范围限制。</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: Cloud Hub（<code class="scope-code">mrrc_hub/SDD</code> AD-H12）明确拒绝在拿到”单实例真实 Listener 并发分布”之前建设 RX 扇出，而那个数字的原材料（<code class="scope-code">spectrum_clients</code> / <code class="scope-code">audio_rx_clients</code> / <code class="scope-code">_listen_tokens</code>）一直只活在内存里、随进程消失。同时实测已表明单会话带宽里<strong>频谱占 ~86%</strong>（1701 B/帧 × 30 fps ≈ 408 kbps，对比 RX Opus 64 kbps）—— 猜错的代价不是数字难看，而是重构错了子系统。</p>
+<p><strong>Rationale</strong>: 把”要不要做扇出”从判断变成读数：峰值会话数回答”值不值得”，两路上行字节回答”省下多少”。同时把隐私边界写死在模块里（只有计数和字节），使这份观测可以默认开启、可以放上公网端点，而不必先谈同意书。</p>
+<h2 id="ad-024-会话令牌传输cookie-优先header-给原生客户端query-弃用">AD-024: 会话令牌传输（Cookie 优先、Header 给原生客户端、Query 弃用）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Security</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V2.62)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>WS 与 HTTP 的会话令牌统一由 <code class="scope-code">_token_from_ws_handshake()</code> / <code class="scope-code">_token_from_request()</code> 解析，顺序为 <code class="scope-code">Authorization: Bearer</code>（原生客户端）→ <code class="scope-code">mrrc_auth</code> Cookie（浏览器；同源握手自动携带）→ <code class="scope-code">?token=</code> query（<strong>弃用</strong>，仍可用，每进程告警一次并点名迁移方式）。前端四个构造点（<code class="scope-code">ft710_main.js</code> ×2、<code class="scope-code">listen.js</code> ×2、<code class="scope-code">modules/atr1000.js</code> ×1）不再拼 token。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong><code class="scope-code">Sec-WebSocket-Protocol</code> 传令牌</strong>：可行但需要服务端在 <code class="scope-code">accept(subprotocol=...)</code> 里回选，五个端点都要改，收益与 Cookie 相同（Cookie 本来就自动发送）；②<strong>直接删掉 query 支持</strong>：已安装的 iOS/Android 客户端会当场断连——它们的 <code class="scope-code">WebSocketConnection.swift</code> / <code class="scope-code">ConnectionManager.kt</code> 拼的就是 <code class="scope-code">?token=</code>；③三步走：Cookie 优先 + Header 可用 + Query 弃用告警（采纳）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>网页侧不再有可复用凭证进 URL</strong>，因此 Hub 透明代理、nginx access log、<code class="scope-code">$request_uri</code>、浏览器历史与 Referer 都不再记录令牌；②仍支持 query 是为了不打断在装机型，但每次都是可观测事件（一条 WARNING 点名 <code class="scope-code">Authorization: Bearer</code>）；③Cookie 依旧是 30 天 —— 缩短会话时长属于 Cloud Hub 的 AD-H09（<code class="scope-code">NFR-H013</code>），本次不动；④<code class="scope-code">ws-endpoint-auth</code> 约束规则同步改写为”必须走 <code class="scope-code">_token_from_ws_handshake</code>“。</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: 浏览器前端把会话令牌拼进 <code class="scope-code">?token=</code>，而实例跑 uvicorn 默认访问日志（含 query string），项目自己也早已知道这一点（<code class="scope-code">support_bundle.py</code> 的脱敏正则注释点名 “a <code class="scope-code">?token=</code> inside a URL”）—— 但脱敏只在导出诊断包时发生。一旦进入 Cloud Hub 的透明代理模式，中心侧每一条访问日志都会记录各实例的 30 天令牌；而浏览器侧没有自定义头能力这一”技术理由”，其实并不成立：<strong>同源 WS 握手会自动带上 Cookie</strong>。</p>
+<p><strong>Rationale</strong>: 让凭证回到它能被系统正确保护的位置（Cookie / Header），URL 里只留资源路径。对已安装的原生客户端保留 query 兜底，是因为”安全改进”不该以现有用户的连接为代价 —— 但必须让它可观测，否则永远不会有人去改。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.61 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1369 tests across 67 test modules (7 pty-based Yaesu round-trip tests skip on
+1414 tests across 69 test modules (7 pty-based Yaesu round-trip tests skip on
 Windows; the per-module counts below were read from `unittest` on 2026-09-25, macOS).
 
 ```bash
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1369 |
-| Passed | 1369 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1414 |
+| Passed | 1414 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -551,6 +551,31 @@ SDD coverage: §9.2 (listen role), §5.3, I9
 | `ListenEndpointGateTests` | 8 | `/WSaudioTX` + `/WSatr1000` close 4003, RX/spectrum stay open, middleware 403 on API writes, reads + logout pass, `/listen` page served, `onlineUsers` broadcast + dead-client pruning, listen spectrum throttle gate |
 | `ListenProxyContractTests` | 6 | Prefix-aware listen.js/listen.html (relative URLs, no root-absolute bypass), iOS ScriptProcessor audio fallback present, relative login page, deploy_listen_proxy.sh nginx block markers incl. load-bearing `^~` |
 
+### 57. test_session_metrics.py — Remote-Session Metering (27 tests)
+
+SDD coverage: AD-023, §12.4, hub AD-H12 / I-H1
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `CountingTests` | 6 | sockets per role/kind, one session owning several sockets, session removal on last socket, double-close and never-opened-close tolerance |
+| `PeakTests` | 5 | lifetime peaks survive disconnects, windowed peak forgets an old spike but keeps a recent one, never below current, operator peaks tracked separately |
+| `ByteTests` | 5 | per-kind byte accumulation, non-positive ignored, report rate reproduces the measured 408 kbps spectrum cost, real elapsed time, report carries concurrency |
+| `PrivacyTests` | 2 | no session identifier in snapshot/report, stable snapshot keys |
+| `ValidationTests` | 2 | unknown role/kind rejected |
+| `SourceGuardTests` | 7 | all five WS endpoints meter open+close, control endpoint meters both cleanup paths, both fan-out byte paths metered, REST endpoint present, report loop created/cancelled, env knobs in config, singleton built from the config window |
+
+### 58. test_ws_token_transport.py — Session-Token Transport (18 tests)
+
+SDD coverage: AD-024, §10.2, hub AD-H07 / NFR-H020
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `BearerParsingTests` | 3 | scheme case-insensitivity + trimming, non-Bearer rejected, missing header |
+| `ResolutionOrderTests` | 5 | header > cookie > query for requests and WS handshakes, empty result |
+| `QueryDeprecationTests` | 2 | query token warns exactly once and names the cookie + migration header, header/cookie do not warn |
+| `VerificationTests` | 3 | `_verify_auth` accepts all three transports, rejects unknown/empty, listen role recognised from a header |
+| `SourceGuardTests` | 5 | only the resolver touches the query param, HTTP paths share it, no frontend token URLs, login guards kept, cache-bust covers changed assets |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -565,6 +590,8 @@ SDD coverage: §9.2 (listen role), §5.3, I9
 | AD-008 PyAudio Detection | test_audio (AudioDeviceDetectionTests + USBCodecDeviceSelectionTests + CustomNameHintsTests) | 19 tests |
 | AD-009 7-Task Polling | test_poll_scheduler | 19 tests |
 | AD-010 Memory Channels | test_server_ws_protocol (mem messages), test_memory_recall | 6 tests |
+| AD-023 Remote-Session Metering | test_session_metrics | 27 tests |
+| AD-024 Session-token transport | test_ws_token_transport | 18 tests |
 | §7.2 RadioState Entity | test_radio_state | 46 tests |
 | §7.2 Config Tables | test_config, test_config_ic7300 | 50 tests |
 | §9.2 WS Protocol | test_server_ws_protocol (WSMessageFormatTests) | 11 tests |
@@ -603,7 +630,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1361 tests in ~25s — can run on every commit.
+2. **Fast execution**: ~1414 tests in ~25s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

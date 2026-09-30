@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.62</td>
+<td>2026-09-30</td>
+<td>pi</td>
+<td><strong>远程接入前置项两件：会话遥测（AD-023）+ 会话令牌不再进 URL（AD-024）。</strong> 背景：Cloud Hub 设计评审（<code class="scope-code">mrrc_hub/SDD</code> V0.1，取证见该仓 <code class="scope-code">docs/2026-09-30-fleet-hub-design-review.md</code>）把两项列为 MVP 前置 —— ①扇出决策缺实测并发（hub I-H1）；②前端把 30 天令牌拼进 <code class="scope-code">?token=</code>，而实例跑 uvicorn 默认访问日志（含 query string），项目自己早已记录该问题（<code class="scope-code">support_bundle.py</code> 脱敏正则注释点名 “a <code class="scope-code">?token=</code> inside a URL”），但脱敏只在导出诊断包时发生。<strong>① <code class="scope-code">session_metrics.py</code>（AD-023）</strong>：纯标准库、不引应用模块；按 <code class="scope-code">(role, kind)</code> 计在活 socket、按 token 计<strong>会话数</strong>（一个人三个 socket 仍是一个人）、生命期与滑动窗口并发峰值、<code class="scope-code">spectrum</code>/<code class="scope-code">audio_rx</code> 两路上行字节。刻意范围：控制面文本帧不计量（&lt;10 kbps，对比频谱 408 kbps）；token 只作模块内部不透明键，<strong>绝不进入 <code class="scope-code">snapshot()</code>/<code class="scope-code">report()</code></strong>（测试直接断言渲染结果不含令牌串，沿用 AD-021/NFR-068 的隐私边界），因此可安全默认开启并暴露在 <code class="scope-code">GET /api/session_metrics</code>；另有每 <code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S</code>（默认 300 s，0=关闭）一条 <code class="scope-code">Session metrics:</code> INFO 行，含区间平均 kbps。实现期由测试抓到的三处：双重关闭必须容忍下溢（清理既走正常返回也走异常路径）、窗口内无采样时窗口峰值取当前值（绝不低于当前）、以及我自己写错的峰值用例（开了三个会话没关就断言”只剩一个”）。<strong>② 令牌传输（AD-024）</strong>：<code class="scope-code">_token_from_ws_handshake()</code> / <code class="scope-code">_token_from_request()</code> 统一解析，顺序 <code class="scope-code">Authorization: Bearer</code>（原生客户端）→ <code class="scope-code">mrrc_auth</code> Cookie（浏览器，<strong>同源握手自动携带</strong> —— 这推翻了”浏览器 WS 无法带头因此必须放 URL”的旧注释）→ <code class="scope-code">?token=</code>（<strong>弃用</strong>，仍可用，每进程一条 WARNING 点名迁移方式）。前端五个构造点全部停拼 token（<code class="scope-code">ft710_main.js</code> ×2、<code class="scope-code">listen.js</code> ×2、<strong><code class="scope-code">modules/atr1000.js</code> ×1</strong> —— 后者是首轮只扫 <code class="scope-code">static/*.js</code> 漏掉的子目录第 6 个端点）。原生 iOS/Android 客户端仍用 <code class="scope-code">?token=</code>，故保留 query 兜底而非直接删除（删了它们当场断连），但让每次使用都成为可观测事件。<strong>缓存版本</strong>：<code class="scope-code">ft710_main.js?v=35</code>、<code class="scope-code">listen.js?v=14</code>、<code class="scope-code">modules/atr1000.js?v=3</code>（顺带修掉 index.html 长期钉 v1 而 sw.js 预缓存 v2 的漂移）、sw <code class="scope-code">mrrc-v38</code>；<code class="scope-code">test_server_ws_protocol.py</code> / <code class="scope-code">test_audio.py</code> / <code class="scope-code">test_atr1000_server.py</code> 的 cache-bust 断言同步重钉。<strong>测试</strong> 1369→1414（+45：会话遥测 27 = 逻辑 20 + 接线守卫 7；令牌传输 18；另修 <code class="scope-code">test_listen_only.py</code> 的 <code class="scope-code">_FakeRequest</code>/<code class="scope-code">_FakeWS</code> 替身缺 <code class="scope-code">headers</code> —— 真实 Starlette 对象必然有，是替身不完整而非产品代码该放宽）。文档：AD-023/AD-024、§10.2 AuthService 行、§12.5.3 遥测小节、AGENTS.md 模块表 + 安全段、README WS 鉴权段 + env 表 + REST 表、tests/README 计数与模块小节、<code class="scope-code">ws-endpoint-auth</code> 约束规则改写（原文要求 <code class="scope-code">?token=</code>，已过时）。<strong>未做/边界</strong>：Cookie 仍是 30 天（会话时长属 hub AD-H09，本次不动）；原生客户端迁移未实施；<code class="scope-code">?token=</code> 的移除未排期；<strong>浏览器侧验收待做</strong> —— 本次对令牌传输的验证是单元级（解析优先级、弃用告警、接线与前端源码守卫），尚未在真实浏览器 + 登录态下确认五个 WS 端点全部连上（预期：页面能加载即说明 Cookie 在，同源握手必然携带；若某端 4001，客户端会回到登录态而不是静默半连）。这一点在 Cloud Hub 试点前必须实测。</td>
+</tr>
+<tr>
 <td>SDD V2.61</td>
 <td>2026-09-25</td>
 <td>Kimi</td>
@@ -709,7 +715,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.61 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

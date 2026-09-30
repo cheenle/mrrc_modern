@@ -97,6 +97,8 @@ Two things to know before the first launch (full guide:
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change** — startup logs a loud warning while the default is active) |
 | `MRRC_LISTEN_PASSWORD` | *(empty = off)* | Optional listen-only password: logging in with it opens `/listen` — frequency/mode tuning, memory recall, S-meter, waterfall and RX audio only. Transmit and every device setting are refused server-side (WS gate + 4003 on `/WSaudioTX`/`/WSatr1000` + read-only REST). This instance is also public at `https://www.vlsc.net/mrrc_modern/listen` via `deploy_listen_proxy.sh` (IPv6 reverse proxy) |
 | `MRRC_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
+| `MRRC_SESSION_METRICS_INTERVAL_S` | `300` | Interval of the `Session metrics:` INFO line (listener/operator concurrency + uplink kbps); `0` disables the line, `GET /api/session_metrics` keeps working |
+| `MRRC_SESSION_METRICS_WINDOW_S` | `3600` | Window for the listener-concurrency peak reported alongside it |
 | `MRRC_PTT_MAX_TX_SECONDS` | `0` (off) | Safety watchdog: force RX after this many seconds of continuous transmit (guards zombie-but-connected clients; 0 keeps the radio never interrupting an operator's transmission) |
 | `MRRC_FTDI_LIB_DIR` | *(auto)* | Directory containing FTDI libraries |
 | `MRRC_FT4222_CLK_DIV` | `6` | SPI clock divider (1=fastest, 9=slowest). Default CLK_DIV_64 matches wfview |
@@ -343,7 +345,9 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 
 ## WebSocket Protocol
 
-### `/WSradio?token=<auth_token>` (JSON text)
+All WebSocket endpoints authenticate with the session token resolved in this order: `Authorization: Bearer <token>` (native clients), the `mrrc_auth` cookie (set at login; the browser attaches it to the same-origin handshake automatically), then the deprecated `?token=` query param (still honoured for already-installed native builds, logged once per process — it puts a 30-day credential into access logs, browser history and Referer).
+
+### `/WSradio` (JSON text) — auth via `mrrc_auth` cookie / `Authorization: Bearer`
 
 **Server → Client:**
 
@@ -380,6 +384,7 @@ Filter width sets are additionally verified by an `SH0;` read-back ~150 ms after
 | `/api/auth/logout` | POST | Logout → clears cookie |
 | `/api/auth/check` | GET | Check auth status |
 | `/api/health` | GET | Health check with uptime, radio connection status |
+| `/api/session_metrics` | GET | Measured listener/operator concurrency, peak (lifetime + window), uplink bytes/kbps — counts only, no identifiers (AD-023) |
 
 ## Security
 

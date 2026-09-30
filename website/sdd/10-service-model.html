@@ -205,7 +205,7 @@
 <td>AuthService</td>
 <td>Support</td>
 <td>Implemented</td>
-<td>Password login, session tokens, cookie management, WS gating</td>
+<td>Password login, session tokens, cookie management, WS gating. WS/HTTP tokens resolve as <code class="scope-code">Authorization: Bearer</code> → <code class="scope-code">mrrc_auth</code> cookie → deprecated <code class="scope-code">?token=</code> (AD-024)</td>
 </tr>
 <tr>
 <td>StatusService</td>
@@ -252,7 +252,7 @@ StaticUIService
   → browser runtime
 
 AuthService
-  → all WebSocket endpoints (token validation on connect)
+  → all WebSocket endpoints (token resolved by `_token_from_ws_handshake`, AD-024)
   → all HTTP routes (cookie-based middleware)</code></pre>
 <h2 id="service-interfaces">10.3 Service Interfaces</h2>
 <table class="scope-table">
@@ -561,7 +561,7 @@ AuthService
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.61 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.62 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

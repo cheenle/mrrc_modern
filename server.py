@@ -40,6 +40,7 @@ from config import (
     ATR1000_HOST, ATR1000_PORT,
     RECORDINGS_BITRATE, RECORDINGS_MAX_SESSION_MIN,
     CQ_ASSET_PATH,
+    SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     _env, default_baud_for,
 )
 from backends import create_backend, known_models
@@ -57,6 +58,7 @@ from recorder import (
     list_recordings, load_index, parse_recording_name, save_index,
 )
 from cq_player import CQPlayer, CQUnavailable
+from session_metrics import SessionMetrics
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
 from audio_handler import AudioHandler
@@ -128,6 +130,45 @@ audio_tx_clients: set[WebSocket] = set()
 # ATR1000 external tuner (optional; None = feature disabled)
 atr = None                    # ATR1000Client, lazily imported in lifespan
 atr_clients: set[WebSocket] = set()
+
+# Remote-session metering (session_metrics.py): the listener/operator
+# concurrency and uplink numbers the hub's RX fan-out decision waits on
+# (mrrc_hub AD-H12 / open issue I-H1). Counts and bytes only — no identifiers.
+metrics = SessionMetrics(window_seconds=SESSION_METRICS_WINDOW_S)
+_session_metrics_task: asyncio.Task | None = None
+
+
+def _role_for_token(token: str) -> str:
+    """Metering role for an authenticated token (see _listen_tokens)."""
+    return "listener" if token in _listen_tokens else "operator"
+
+
+async def _session_metrics_loop():
+    """One INFO line per interval with measured concurrency and uplink.
+
+    This is the observation the hub's fan-out decision waits on: the design
+    refuses to build RX fan-out before the real listener-concurrency
+    distribution is known (mrrc_hub AD-H12 / I-H1), and the numbers have to come
+    from an instance that is actually serving listeners, not from a load test.
+    """
+    while True:
+        await asyncio.sleep(SESSION_METRICS_INTERVAL_S)
+        try:
+            r = metrics.take_report()
+        except Exception as e:      # a log line must never take the server down
+            logger.debug("Session metrics report failed: %s", e)
+            continue
+        logger.info(
+            "Session metrics: listeners %d (sockets %d, peak %d/%.0fs) | "
+            "operators %d | uplink spectrum %.1f kbps, audio_rx %.1f kbps | "
+            "%.0fs since last report",
+            r["listeners"]["sessions"], r["listeners"]["sockets"],
+            r["listeners"]["peak_sessions_window"], r["window_seconds"],
+            r["operators"]["sessions"],
+            r["kbps_since_report"]["spectrum"], r["kbps_since_report"]["audio_rx"],
+            r["elapsed_seconds"])
+
+
 _atr_storage = None           # TunerStorage shared with the client
 _atr_tune_task = None         # running tune-assist asyncio.Task, if any
 _last_meter_broadcast_log = 0.0
@@ -581,11 +622,7 @@ def _listen_password_matches(candidate: str) -> bool:
 
 def _is_listen_request(request: Request) -> bool:
     """True when the request is authenticated with a listen-only token."""
-    token = request.cookies.get(AUTH_COOKIE)
-    if token and token in _listen_tokens:
-        return True
-    token = request.query_params.get("token")
-    return token is not None and token in _listen_tokens
+    return _token_from_request(request) in _listen_tokens
 
 def _warn_if_default_password() -> bool:
     """Loud startup warning when the well-known default password is in use.
@@ -605,13 +642,74 @@ def _warn_if_default_password() -> bool:
         return True
     return False
 
+def _bearer_token(header_value: Optional[str]) -> str:
+    """Token from an `Authorization: Bearer <token>` header, or ""."""
+    parts = str(header_value or "").split(None, 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return ""
+
+
+_query_token_warned = False
+
+
+def _warn_query_token_once() -> None:
+    """Deprecation notice for a session token arriving in the URL.
+
+    The query-param path writes a 30-day credential into every access log, the
+    browser history and any Referer — which is why the web client stopped using
+    it (hub AD-H07 / NFR-H020). It is still honoured so already-installed native
+    clients keep working, and logged once per process so an operator learns they
+    need updating instead of getting one line per reconnect.
+    """
+    global _query_token_warned
+    if _query_token_warned:
+        return
+    _query_token_warned = True
+    logger.warning(
+        "SECURITY: session token arrived in the URL query string. That path is "
+        "deprecated — it leaks the credential into access logs, browser history "
+        "and Referer. The web UI now authenticates with the %s cookie; native "
+        "clients should send 'Authorization: Bearer <token>'.", AUTH_COOKIE)
+
+
+def _token_from_ws_handshake(ws: WebSocket) -> str:
+    """Session token for a WebSocket upgrade: header, cookie, then query param.
+
+    The browser sends the auth cookie automatically on the same-origin
+    handshake, so the URL needs no credential at all; native clients can set a
+    header (they already set Origin/User-Agent). The query param stays as the
+    last resort for clients that predate this change, and warns once.
+    """
+    token = _bearer_token(ws.headers.get("authorization"))
+    if token:
+        return token
+    token = ws.cookies.get(AUTH_COOKIE) or ""
+    if token:
+        return token
+    token = ws.query_params.get("token", "") or ""
+    if token:
+        _warn_query_token_once()
+    return token
+
+
+def _token_from_request(request: Request) -> str:
+    """Same resolution order as _token_from_ws_handshake, for HTTP requests."""
+    token = _bearer_token(request.headers.get("authorization"))
+    if token:
+        return token
+    token = request.cookies.get(AUTH_COOKIE) or ""
+    if token:
+        return token
+    token = request.query_params.get("token", "") or ""
+    if token:
+        _warn_query_token_once()
+    return token
+
+
 def _verify_auth(request: Request) -> bool:
-    """Check whether the request carries a valid auth cookie or query-param token."""
-    token = request.cookies.get(AUTH_COOKIE)
-    if token and token in _auth_tokens:
-        return True
-    token = request.query_params.get("token")
-    return token is not None and token in _auth_tokens
+    """Whether the request carries a valid session token (see _token_from_request)."""
+    return _token_from_request(request) in _auth_tokens
 
 # ── Memory Channel Helpers ──────────────────────────────────────────
 
@@ -1218,6 +1316,7 @@ async def _broadcast_spectrum_loop():
                         continue
                     try:
                         await ws.send_bytes(binary)
+                        metrics.add_bytes("spectrum", len(binary))
                     except Exception:
                         dead.add(ws)
                 spectrum_clients -= dead
@@ -1249,6 +1348,7 @@ async def _send_audio_frames_to_clients(
     async def _send_one(ws: WebSocket):
         for frame in frames:
             await asyncio.wait_for(ws.send_bytes(frame), timeout=per_frame_timeout)
+            metrics.add_bytes("audio_rx", len(frame))
 
     results = await asyncio.gather(
         *[_send_one(ws) for ws in clients_snapshot],
@@ -2389,6 +2489,10 @@ async def lifespan(app: FastAPI):
     _log_cq_readiness()
     global _max_tx_watchdog_task
     _max_tx_watchdog_task = asyncio.create_task(_max_tx_watchdog(), name="max_tx_watchdog")
+    global _session_metrics_task
+    if SESSION_METRICS_INTERVAL_S > 0:
+        _session_metrics_task = asyncio.create_task(
+            _session_metrics_loop(), name="session_metrics")
 
     # Start scope handler — broadcasts S-meter fallback until real data arrives
     scope = ScopeHandler()
@@ -2451,6 +2555,9 @@ async def lifespan(app: FastAPI):
     if _max_tx_watchdog_task:
         _max_tx_watchdog_task.cancel()
         _max_tx_watchdog_task = None
+    if _session_metrics_task:
+        _session_metrics_task.cancel()
+        _session_metrics_task = None
     # Recording: let the writer finish whatever is queued (a stop sentinel
     # flushes the MP3), then make sure no session is left open.  A crash
     # here must never block shutdown, so close_without_finishing() is the
@@ -2913,6 +3020,17 @@ async def api_health():
     return JSONResponse(health_status)
 
 
+@app.get("/api/session_metrics")
+async def api_session_metrics():
+    """Measured remote-session concurrency and uplink (session_metrics.py).
+
+    The hub's RX fan-out decision needs the real listener-concurrency
+    distribution rather than an assumption (mrrc_hub AD-H12 / open issue I-H1).
+    Counts and bytes only — no tokens, addresses, frequencies or audio.
+    """
+    return JSONResponse(metrics.snapshot())
+
+
 # ── Memory Channels API ─────────────────────────────────────────────
 
 def _recording_path(name: str) -> Optional[Path]:
@@ -3248,14 +3366,16 @@ async def ws_radio(ws: WebSocket):
     """Main control WebSocket.  Handles all real-time radio state and commands."""
     global _ptt_key_ws
     # Check auth via query param (browser WebSocket doesn't support custom headers)
-    token = ws.query_params.get("token", "")
+    token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
         await ws.close(code=4001, reason="Unauthorized")
         return
+    role = _role_for_token(token)
 
     await ws.accept()
     ctrl_clients.add(ws)
     _ws_tokens[ws] = token
+    metrics.open(role, "control", token)
     logger.info("WS client connected (%d total)", len(ctrl_clients))
     if scheduler:
         scheduler.set_active(len(ctrl_clients) > 0)
@@ -3280,6 +3400,7 @@ async def ws_radio(ws: WebSocket):
         await ws.send_text(json.dumps(_full_state_message(_full_state_data, channels)))
     except Exception:
         ctrl_clients.discard(ws)
+        metrics.close(role, "control", token)
         return
 
     try:
@@ -3308,6 +3429,7 @@ async def ws_radio(ws: WebSocket):
     finally:
         ctrl_clients.discard(ws)
         _ws_tokens.pop(ws, None)
+        metrics.close(role, "control", token)
         logger.info("WS client disconnected (%d remain)", len(ctrl_clients))
         if scheduler:
             scheduler.set_active(len(ctrl_clients) > 0)
@@ -3361,7 +3483,7 @@ async def ws_spectrum(ws: WebSocket):
     Format: 1-byte version (0x01) + 850 bytes wf1 spectrum + 850 bytes wf2.
     Total: 1701 bytes per frame.
     """
-    token = ws.query_params.get("token", "")
+    token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
         await ws.close(code=4001, reason="Unauthorized")
         return
@@ -3370,6 +3492,7 @@ async def ws_spectrum(ws: WebSocket):
     spectrum_clients.add(ws)
     if token in _listen_tokens:
         _listen_spectrum_clients.add(ws)
+    metrics.open(_role_for_token(token), "spectrum", token)
     logger.info("Spectrum client connected (%d total)", len(spectrum_clients))
     if _scope_producer is not None:
         await _scope_producer.start()
@@ -3384,6 +3507,7 @@ async def ws_spectrum(ws: WebSocket):
     finally:
         spectrum_clients.discard(ws)
         _listen_spectrum_clients.discard(ws)
+        metrics.close(_role_for_token(token), "spectrum", token)
         logger.info("Spectrum client disconnected (%d remain)", len(spectrum_clients))
         if not spectrum_clients and _scope_producer is not None:
             await _scope_producer.stop()
@@ -3399,13 +3523,14 @@ async def ws_audio_rx(ws: WebSocket):
     Data is produced by the _audio_rx_loop and broadcast to all
     connected audio_rx_clients.
     """
-    token = ws.query_params.get("token", "")
+    token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
         await ws.close(code=4001, reason="Unauthorized")
         return
 
     await ws.accept()
     audio_rx_clients.add(ws)
+    metrics.open(_role_for_token(token), "audio_rx", token)
     logger.info("Audio RX client connected (%d total)", len(audio_rx_clients))
     try:
         while True:
@@ -3414,6 +3539,7 @@ async def ws_audio_rx(ws: WebSocket):
         pass
     finally:
         audio_rx_clients.discard(ws)
+        metrics.close(_role_for_token(token), "audio_rx", token)
         logger.info("Audio RX client disconnected (%d remain)", len(audio_rx_clients))
 
 
@@ -3433,7 +3559,7 @@ async def ws_audio_tx(ws: WebSocket):
     global _tx_session_frames, _tx_session_decoded, _tx_session_decode_fail
     global _tx_non_owner_drops
 
-    token = ws.query_params.get("token", "")
+    token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
         await ws.close(code=4001, reason="Unauthorized")
         return
@@ -3445,6 +3571,7 @@ async def ws_audio_tx(ws: WebSocket):
     await ws.accept()
     audio_tx_clients.add(ws)
     _ws_tokens[ws] = token
+    metrics.open(_role_for_token(token), "audio_tx", token)
     # Same-token replacement fixes the "PTT keys but non_owner_drops"
     # pattern where a half-open socket hoards the uplink after page reload.
     is_owner = _assign_tx_owner_on_connect(ws, token)
@@ -3515,6 +3642,7 @@ async def ws_audio_tx(ws: WebSocket):
     finally:
         audio_tx_clients.discard(ws)
         _ws_tokens.pop(ws, None)
+        metrics.close(_role_for_token(token), "audio_tx", token)
         if ws is _tx_owner_ws:
             _tx_owner_ws = None
             # Force RX if the TX-audio owner vanishes while keyed — otherwise
@@ -3547,7 +3675,7 @@ async def ws_atr1000(ws: WebSocket):
     """External-tuner channel: state pushes (meter/relay/tuning) and the
     server-side tune-assist command.  Closes immediately when the
     feature is disabled (no MRRC_ATR1000_HOST configured)."""
-    token = ws.query_params.get("token", "")
+    token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
         await ws.close(code=4001, reason="Unauthorized")
         return
@@ -3563,6 +3691,7 @@ async def ws_atr1000(ws: WebSocket):
         return
 
     atr_clients.add(ws)
+    metrics.open(_role_for_token(token), "atr", token)
     atr.client_count = len(atr_clients)  # drives the client's SYNC poll policy
     logger.info("ATR1000 WS client connected (%d total)", len(atr_clients))
     try:
@@ -3580,6 +3709,7 @@ async def ws_atr1000(ws: WebSocket):
         logger.debug("WSatr1000 error: %s", e)
     finally:
         atr_clients.discard(ws)
+        metrics.close(_role_for_token(token), "atr", token)
         if atr is not None:
             atr.client_count = len(atr_clients)
         logger.info("ATR1000 WS client disconnected (%d remain)", len(atr_clients))

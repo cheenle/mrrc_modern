@@ -72,7 +72,7 @@ Golden rules (block-level; the PreToolUse hook rejects these edits):
 - No hardcoded secrets, serial paths, or device assumptions — env vars only.
 
 Warn-level: mutate state via `radio.update(...)` (dirty-field broadcast, AD-003);
-new WS endpoints need `?token=` auth; poll loops re-check `_should_skip` /
+new WS endpoints need a session token via `_token_from_ws_handshake()` (cookie → header → deprecated query, AD-024) and must never be handed a token in a URL; poll loops re-check `_should_skip` /
 `_polling_paused()` AFTER every query await (V1.7 stale-read race), and set
 handlers call `skip_next_poll` BEFORE the CAT write. Security ratchets: static
 serving must resolve + contain paths inside `STATIC_DIR` (I8) and password

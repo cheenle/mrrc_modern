@@ -37,31 +37,22 @@ let _intentionalClose = false; // set by power button to block auto-reconnect
 // before the audio/spectrum close events arrive.
 let _webClientOff = false;
 
+// Auth rides the session cookie, which the browser attaches to this
+// same-origin WebSocket handshake by itself. It used to be appended as
+// `?token=` here — that put a 30-day credential into every access log, the
+// browser history and any Referer (hub AD-H07). The page can only have loaded
+// with that cookie present, so the handshake carries it too.
 function wsUrlWithAuth(path) {
-	const token = getAuthToken();
 	const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
 	const host = window.location.host;
-	return (
-		proto +
-		"//" +
-		host +
-		path +
-		(token ? "?token=" + encodeURIComponent(token) : "")
-	);
+	return proto + "//" + host + path;
 }
 
 // Same-auth URL for static files (uses http/https, not ws/wss)
 function staticUrlWithAuth(path) {
-	const token = getAuthToken();
 	const proto = window.location.protocol;
 	const host = window.location.host;
-	return (
-		proto +
-		"//" +
-		host +
-		path +
-		(token ? "?token=" + encodeURIComponent(token) : "")
-	);
+	return proto + "//" + host + path;
 }
 
 function connectWebSocket() {

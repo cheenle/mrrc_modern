@@ -70,6 +70,14 @@ AuthService
 | SupportService | POST + JSON body | Bundle id/listing, receiver id, local path | HTTP `/api/support/bundle`, `/api/support/upload`, `/api/support/save` |
 | ATR1000Service | JSON `atrTune` / `ping` | JSON `atrState` / `atrTuneResult` / `pong` | WS `/WSatr1000` |
 
+### 10.3.1 Cloud Hub 前置能力新增的接口（2026-09-30）
+
+- `GET /api/session_metrics` —— 会话遥测（AD-023）：并发 Listener 数、上行占用、丢帧与解码失败计数。
+  用途是给 Hub 侧容量决策提供真实数据（RX 扇出的触发器 AD-H12 依赖它）。
+  经云端入口访问时，前缀由 `FT710Settings.basePath` 决定，调用方不得硬编码根路径。
+
+鉴权沿用既有会话机制，但**令牌不得出现在查询串**（AD-024）：改用 Cookie 或 `Authorization: Bearer`。
+
 ## 10.4 Control Service Command Contract
 
 Key commands (see `_execute_set_command` in `server.py` and the active backend for complete mapping):

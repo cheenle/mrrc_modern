@@ -54,6 +54,16 @@
 | TxOpusWorker | Frontend audio | `static/tx_opus_worker.js` | Web Worker: Opus encoder (48kHz, 960-sample frames, 64kbps CBR, complexity=5); frames arrive via postMessage (SAB path dormant); posts to main thread for WS send (transferable buffers) |
 | ServiceWorker | Frontend support | `static/sw.js` | Cache static assets; bypass JS/HTML to prevent stale cache |
 
+### 11.1.1 Cloud Hub 前置能力新增/变更的组件（2026-09-30）
+
+| 组件 | 作用 | 备注 |
+|------|------|------|
+| `session_metrics.py` | 会话遥测聚合与周期日志（AD-023） | 由 `GET /api/session_metrics` 读取 |
+| `config.py` → `FT710Settings.basePath` / `.url` | 路径前缀的唯一来源 | 供服务端与前端共用的 URL 组装 |
+| `static/modules/ptt_manager.js` | 增加发射**活性闸门**（`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`，默认 0=关） | 与 `MRRC_PTT_MAX_TX_SECONDS` 构成两条独立防线（SDD/15 §15.4） |
+| 前端资源引用 | 由绝对路径改为**相对路径**，`sw.js` 预缓存保持绝对 | 断言规则见 `tests/test_path_prefix.py` |
+| TX 编码 Worker | 修复其逃逸路径前缀的加载方式 | 症状为 `frames=0`（表现为"按下不发射"） |
+
 ## 11.2 Backend Component Collaboration (Startup)
 
 ```text

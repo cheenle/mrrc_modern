@@ -20,13 +20,13 @@ class SupportEntryTests(unittest.TestCase):
         self.page = PAGE.read_text(encoding="utf-8")
 
     def test_menu_has_a_support_link(self):
-        self.assertIn('href="/support.html"', self.index)
+        self.assertIn('href="support.html"', self.index)
         # Bound the match at </li>: the anchor's closing tag is itself wrapped
         # across lines by the file's formatter, so `</a>` is not a safe anchor.
-        entry = re.search(r'<li>\s*<a[^>]*href="/support.html"[^>]*>(.*?)</li>',
+        entry = re.search(r'<li>\s*<a[^>]*href="support.html"[^>]*>(.*?)</li>',
                           self.index, re.S)
         if entry is None:
-            self.fail("menu entry for /support.html not found in static/index.html")
+            self.fail("menu entry for support.html not found in static/index.html")
         block = entry.group(0)
         self.assertIn("遇到问题", entry.group(1))
         self.assertIn('target="_blank"', block)

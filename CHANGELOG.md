@@ -13,6 +13,18 @@ All notable changes to the MRRC Web Control project.
   接管仍然允许：任何客户端 `ptt:true` 即成为新键控者。
 - 缓存版本：`ft710_main.js?v=34`、`ptt_manager.js?v=14`、sw `mrrc-v37`。
 
+
+### ☁️ Cloud Hub 前置能力（实例可被云端入口接入）
+
+- **路径前缀**：`FT710Settings.basePath`/`.url` 成为唯一前缀来源；`index.html` 资源相对化、内联 API/WS 前缀化，
+  以及 **TX 编码 Worker 的前缀逃逸修复**（此前症状是 `frames=0`，表现为"按下不发射"，很容易误判成音频问题）。
+  守卫：`tests/test_path_prefix.py`（断言规则：文档资源相对、`sw.js` 预缓存绝对）。
+- **令牌不再进 URL**（AD-024）：cookie/Bearer 优先，query 形式仅兼容并会告警；URL 会进访问日志与浏览器历史。
+- **会话遥测**（AD-023）：`GET /api/session_metrics` + 周期日志，供 Hub 侧容量决策（RX 扇出）用真实数据而非估计。
+- **PTT 活性闸门**：`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 0 = 关闭；Hub 模式建议 3–5s），与
+  `MRRC_PTT_MAX_TX_SECONDS` 构成两条独立防线，用于客户端失联/假死时自动释放 PTT。
+- **打包注意**：新增了 Python 模块（遥测）并改动 `server.py`/`config.py`，**落在 PYZ 里 ⇒ 必须重发安装包**，
+  不能只发热修；若希望它可热修，需把新模块加进 `packaging/pyinstaller/mrrc_server.spec` 的 `_APP_MODULES`。
 ## [v1.21.0] — 2026-09-25 — iPhone 开机锁屏竞态修复 + 收听页增强（FFT 迹线 / 频率步进 / 公网缓冲）
 
 **修掉 iPhone 开机后仍约 30 秒黑屏的最后一处竞态；收听页补上 FFT 迹线、频率步进与公网抖动缓冲。**

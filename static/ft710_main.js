@@ -42,17 +42,25 @@ let _webClientOff = false;
 // `?token=` here — that put a 30-day credential into every access log, the
 // browser history and any Referer (hub AD-H07). The page can only have loaded
 // with that cookie present, so the handshake carries it too.
+// Raised-path support: empty at the root (the normal LAN case), the sub-path when
+// the instance is fronted under a prefix such as /mrrc_modern/<name>. See
+// settings_manager.js basePath(). Guarded so a missing module degrades to root
+// behaviour instead of throwing on every URL build.
+function basePath() {
+	return (window.FT710Settings && FT710Settings.basePath) ? FT710Settings.basePath() : "";
+}
+
 function wsUrlWithAuth(path) {
 	const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
 	const host = window.location.host;
-	return proto + "//" + host + path;
+	return proto + "//" + host + basePath() + path;
 }
 
 // Same-auth URL for static files (uses http/https, not ws/wss)
 function staticUrlWithAuth(path) {
 	const proto = window.location.protocol;
 	const host = window.location.host;
-	return proto + "//" + host + path;
+	return proto + "//" + host + basePath() + path;
 }
 
 function connectWebSocket() {
@@ -275,7 +283,7 @@ let authCheckInFlight = false;
 function checkAuthThenReconnect() {
 	if (authCheckInFlight) return;
 	authCheckInFlight = true;
-	fetch("/api/auth/check", { cache: "no-store" })
+	fetch(basePath() + "/api/auth/check", { cache: "no-store" })
 		.then((r) => {
 			if (r.status === 401) {
 				handleAuthExpired();

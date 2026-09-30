@@ -7,8 +7,8 @@
  * sessionStorage values into cookies on first load.
  */
 
-(function() {
-    'use strict';
+(() => {
+    
 
     const SETTINGS_KEY = 'ft710_user_settings';
     const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;  // 1 year
@@ -58,8 +58,8 @@
     }
 
     function migrateLegacyStorage() {
-        LEGACY_LOCAL_KEYS.forEach(function(k) { migrateKey(k, localStorage); });
-        LEGACY_SESSION_KEYS.forEach(function(k) { migrateKey(k, sessionStorage); });
+        LEGACY_LOCAL_KEYS.forEach((k) => { migrateKey(k, localStorage); });
+        LEGACY_SESSION_KEYS.forEach((k) => { migrateKey(k, sessionStorage); });
     }
 
     // ── Settings object ───────────────────────────────────────────
@@ -83,12 +83,38 @@
     }
 
     function get(key, defaultValue) {
-        return settings.hasOwnProperty(key) ? settings[key] : defaultValue;
+        return  Object.hasOwn(settings, key) ? settings[key] : defaultValue;
     }
 
     // ── Auth Cookie Helper ────────────────────────────────────────
     function getAuthToken() {
         return getCookie('mrrc_auth') || '';
+    }
+
+    // ── Base path (raised-path deployments) ──────────────────────
+    // Normally the UI is served from the root (`http://host:8888/`), the base is
+    // empty, and every URL below is exactly what it always was. It can also be
+    // served behind a path prefix — `https://edge/mrrc_modern/<name>/...` — which
+    // is how the Cloud Hub can front an instance on a standard port with a trusted
+    // certificate instead of a bare non-standard one. Without this, the absolute
+    // `/WSradio` and `/api/...` URLs would escape the prefix and reach the edge
+    // instead of the instance.
+    //
+    // Derivation follows the listen page (static/listen.js URL_BASE): the
+    // directory part of the current path. A trailing slash, `/index.html` and a
+    // bare route like `/login` all resolve to the same base.
+    function basePath() {
+        var p = window.location.pathname || '/';
+        if (p.endsWith('/')) return p.slice(0, -1);
+        var seg = p.slice(p.lastIndexOf('/') + 1);
+        if (seg === '' || seg.indexOf('.') >= 0) {
+            return p.slice(0, p.lastIndexOf('/'));
+        }
+        return p;
+    }
+
+    function url(path) {
+        return basePath() + path;
     }
 
     // ── Initialize ────────────────────────────────────────────────
@@ -99,10 +125,12 @@
         get: get,
         save: save,
         load: load,
-        getAll: function() { return Object.assign({}, settings); },
+        getAll: () => Object.assign({}, settings),
         getAuthToken: getAuthToken,
         setCookie: setCookie,
         getCookie: getCookie,
+        basePath: basePath,
+        url: url,
     };
 
     console.log('Settings Manager initialized');

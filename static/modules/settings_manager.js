@@ -8,10 +8,8 @@
  */
 
 (() => {
-    
-
     const SETTINGS_KEY = 'ft710_user_settings';
-    const COOKIE_MAX_AGE = 365 * 24 * 60 * 60;  // 1 year
+    const COOKIE_MAX_AGE = 365 * 24 * 60 * 60; // 1 year
     const DEFAULT_SETTINGS = {
         callsign: '',
         tuneStep: 1000,
@@ -38,9 +36,14 @@
     // ── Cookie Helpers ────────────────────────────────────────────
     function setCookie(name, value) {
         try {
-            document.cookie = name + '=' + encodeURIComponent(value) +
-                ';max-age=' + COOKIE_MAX_AGE + ';path=/;SameSite=Lax';
-        } catch(e) {}
+            document.cookie =
+                name +
+                '=' +
+                encodeURIComponent(value) +
+                ';max-age=' +
+                COOKIE_MAX_AGE +
+                ';path=/;SameSite=Lax';
+        } catch (e) {}
     }
 
     function getCookie(name) {
@@ -54,12 +57,16 @@
             const v = storage.getItem(name);
             if (v !== null && getCookie(name) === null) setCookie(name, v);
             if (v !== null) storage.removeItem(name);
-        } catch(e) {}
+        } catch (e) {}
     }
 
     function migrateLegacyStorage() {
-        LEGACY_LOCAL_KEYS.forEach((k) => { migrateKey(k, localStorage); });
-        LEGACY_SESSION_KEYS.forEach((k) => { migrateKey(k, sessionStorage); });
+        LEGACY_LOCAL_KEYS.forEach((k) => {
+            migrateKey(k, localStorage);
+        });
+        LEGACY_SESSION_KEYS.forEach((k) => {
+            migrateKey(k, sessionStorage);
+        });
     }
 
     // ── Settings object ───────────────────────────────────────────
@@ -71,7 +78,7 @@
             } else {
                 settings = Object.assign({}, DEFAULT_SETTINGS);
             }
-        } catch(e) {
+        } catch (e) {
             settings = Object.assign({}, DEFAULT_SETTINGS);
         }
         return settings;
@@ -83,7 +90,7 @@
     }
 
     function get(key, defaultValue) {
-        return  Object.hasOwn(settings, key) ? settings[key] : defaultValue;
+        return Object.hasOwn(settings, key) ? settings[key] : defaultValue;
     }
 
     // ── Auth Cookie Helper ────────────────────────────────────────

@@ -14,6 +14,8 @@ All notable changes to the MRRC Web Control project.
 - 缓存版本：`ft710_main.js?v=34`、`ptt_manager.js?v=14`、sw `mrrc-v37`。
 
 
+## [v1.22.0] — 2026-09-30 — Cloud Hub 前置能力（路径前缀 / 令牌传输 / 会话遥测 / PTT 活性闸门）
+
 ### ☁️ Cloud Hub 前置能力（实例可被云端入口接入）
 
 - **路径前缀**：`FT710Settings.basePath`/`.url` 成为唯一前缀来源；`index.html` 资源相对化、内联 API/WS 前缀化，
@@ -25,6 +27,8 @@ All notable changes to the MRRC Web Control project.
   `MRRC_PTT_MAX_TX_SECONDS` 构成两条独立防线，用于客户端失联/假死时自动释放 PTT。
 - **打包注意**：新增了 Python 模块（遥测）并改动 `server.py`/`config.py`，**落在 PYZ 里 ⇒ 必须重发安装包**，
   不能只发热修；若希望它可热修，需把新模块加进 `packaging/pyinstaller/mrrc_server.spec` 的 `_APP_MODULES`。
+- **缓存版本**：`index.html` 各资源 `?v=` 全部 +1、`listen.html` +1、sw `mrrc-v42`（前端有改动，不升缓存号则已装用户看不到变化）。
+
 ## [v1.21.0] — 2026-09-25 — iPhone 开机锁屏竞态修复 + 收听页增强（FFT 迹线 / 频率步进 / 公网缓冲）
 
 **修掉 iPhone 开机后仍约 30 秒黑屏的最后一处竞态；收听页补上 FFT 迹线、频率步进与公网抖动缓冲。**

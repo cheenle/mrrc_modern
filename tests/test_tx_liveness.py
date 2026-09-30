@@ -236,7 +236,7 @@ class SourceGuardTests(unittest.TestCase):
         sw = Path("static/sw.js").read_text(encoding="utf-8")
         self.assertIn("modules/ptt_manager.js?v=15", index)
         self.assertIn("'/modules/ptt_manager.js?v=15'", sw)
-        self.assertIn("const CACHE = 'mrrc-v40'", sw)
+        self.assertIn("const CACHE = 'mrrc-v41'", sw)
 
 
 if __name__ == "__main__":

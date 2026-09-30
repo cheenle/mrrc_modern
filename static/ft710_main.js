@@ -1125,7 +1125,9 @@ function connectAudioTX() {
 
 function ensureTXOpusWorker() {
 	if (txOpusWorker) return txOpusWorker;
-	txOpusWorker = new Worker("/tx_opus_worker.js?v=tx-audio-4");
+	// Same prefix rule as every other local URL: a bare "/..." 404s under a
+	// raised path, which shows up as "TX keys but sends no audio" (frames=0).
+	txOpusWorker = new Worker(staticUrlWithAuth("/tx_opus_worker.js?v=tx-audio-4"));
 	txOpusWorker.onmessage = (ev) => {
 		const d = ev.data || {};
 		if (d.type === "tx_audio" && d.data instanceof ArrayBuffer) {

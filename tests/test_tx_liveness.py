@@ -234,7 +234,7 @@ class SourceGuardTests(unittest.TestCase):
     def test_cache_bust_covers_the_ptt_manager(self):
         index = Path("static/index.html").read_text(encoding="utf-8")
         sw = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("/modules/ptt_manager.js?v=15", index)
+        self.assertIn("modules/ptt_manager.js?v=15", index)
         self.assertIn("'/modules/ptt_manager.js?v=15'", sw)
         self.assertIn("const CACHE = 'mrrc-v40'", sw)
 

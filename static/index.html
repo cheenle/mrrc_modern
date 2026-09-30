@@ -14,9 +14,9 @@
     />
     <meta name="theme-color" content="#1a1a1a" />
     <title>MRRC Modern Web Control</title>
-    <link rel="apple-touch-icon" href="/favicon.png" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="stylesheet" href="/ft710.css?v=25" />
+    <link rel="apple-touch-icon" href="favicon.png" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="ft710.css?v=25" />
   </head>
   <body>
     <div class="safe-area-top"></div>
@@ -555,18 +555,24 @@
     <div class="safe-area-bottom"></div>
 
     <!-- Scripts -->
-    <script src="/modules/settings_manager.js?v=14"></script>
-    <script src="/modules/opus_wasm.js"></script>
-    <script src="/modules/opus_codec.js"></script>
-    <script src="/ft710_main.js?v=36"></script>
-    <script src="/modules/ptt_manager.js?v=15"></script>
-    <script src="/ft710_ui.js?v=32"></script>
-    <script src="/modules/atr1000.js?v=3"></script>
+    <script src="modules/settings_manager.js?v=14"></script>
+    <script src="modules/opus_wasm.js"></script>
+    <script src="modules/opus_codec.js"></script>
+    <script src="ft710_main.js?v=36"></script>
+    <script src="modules/ptt_manager.js?v=15"></script>
+    <script src="ft710_ui.js?v=32"></script>
+    <script src="modules/atr1000.js?v=3"></script>
     <script>
+        // Raised-path deployments prefix every local URL (see settings_manager.js
+        // basePath); at the root this is a no-op.
+        function apiUrl(path) {
+            return (window.FT710Settings && FT710Settings.url) ? FT710Settings.url(path) : path;
+        }
+
       (function () {
         var banner = document.getElementById("first-run-banner");
         if (!banner || localStorage.getItem("mrrc_welcome_dismissed")) return;
-        fetch("/api/setup")
+        fetch(apiUrl("/api/setup"))
           .then(function (r) {
             return r.ok ? r.json() : null;
           })
@@ -792,10 +798,10 @@
           dlg.style.display = "flex";
           dlg.querySelector("#cs-msg").textContent = "";
           Promise.all([
-            fetch("/api/devices").then(function (r) {
+            fetch(apiUrl("/api/devices")).then(function (r) {
               return r.ok ? r.json() : null;
             }),
-            fetch("/api/setup").then(function (r) {
+            fetch(apiUrl("/api/setup")).then(function (r) {
               return r.ok ? r.json() : null;
             }),
           ]).then(function (rs) {
@@ -846,6 +852,7 @@
           });
         }
         function post(path, body, done) {
+            path = apiUrl(path);
           fetch(path, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -867,10 +874,10 @@
           var msg = dlg.querySelector("#cs-msg");
           msg.textContent = "已保存，正在重启…";
           var t = setInterval(function () {
-            fetch("/api/health").catch(function () {
+            fetch(apiUrl("/api/health")).catch(function () {
               clearInterval(t);
               var t2 = setInterval(function () {
-                fetch("/api/health")
+                fetch(apiUrl("/api/health"))
                   .then(function () {
                     clearInterval(t2);
                     window.location.reload();

@@ -152,3 +152,18 @@ security property above still applies. Two things are installer-specific:
 - No 2FA/MFA support — rely on strong passwords
 - No IP whitelisting — use firewall/proxy for network-level access control
 - Rate limiting is **per-process** — doesn't persist across restarts
+
+## Cloud Hub 模式的安全要点（2026-09-30）
+
+实例现在可以被放在云端入口之后（`<呼号>.mrrc.vlsc.net` 或 `www.vlsc.net/mrrc_modern/<呼号>/`），
+这改变了若干安全前提：
+
+- **令牌不进 URL**（AD-024）：URL 会进入访问日志、Referer 与浏览器历史。现以 cookie / Bearer 传输；
+  query 形式仅为兼容保留且会告警 —— 新增接口一律不要用 query 传令牌。
+- **上游证书校验必须开启**（NFR-H021 / NFR-H030）：链路两端用受信任的 CA 证书，
+  禁止 `proxy_ssl_verify off` 出现在生产配置；续期自动化，**不需要跨机同步**任何信任材料。
+- **PTT 安全**：Hub 模式下应开启活性闸门 `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`，
+  否则客户端断网/崩溃可能留下半开的发射态（详见 `SDD/15-ptt-safety-architecture.md` §15.4）。
+  它与 `MRRC_PTT_MAX_TX_SECONDS` 是两条**独立**防线，不要只留一条。
+- **已知限制（有意接受，非缺陷）**：① 经隧道时登录限流退化为全局桶；② 实例存在性可枚举（呼号本身是公开信息）。
+  两条均已入档（hub SDD I-H9 与 §12.8），运维需知情。

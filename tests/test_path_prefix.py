@@ -79,3 +79,36 @@ class ServiceWorkerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LocalUrlShapeTests(unittest.TestCase):
+    """Scan for the *shapes* that have already escaped the prefix three times.
+
+    Asset tags, the login redirect and the TX encoder Worker were three different
+    flavours of one mistake - a bare "/..." local URL - and each was found by
+    breaking something in production, not by a test. The call sites are expected to
+    go through a builder; this asserts nobody reintroduced the literal.
+    """
+
+    FRONTEND = ([Path("static/ft710_main.js"), Path("static/ft710_ui.js")]
+                + sorted(Path("static/modules").glob("*.js")))
+
+    def test_no_worker_is_built_from_an_absolute_path(self):
+        for path in self.FRONTEND:
+            src = path.read_text(encoding="utf-8")
+            for m in re.finditer(r'new Worker\(\s*["\'](/[^"\']*)', src):
+                self.fail(f"{path.name}: Worker from an absolute path: {m.group(1)}")
+
+    def test_no_local_script_or_wasm_is_referenced_absolutely(self):
+        """sw.js is excluded on purpose: a service worker's precache list is not
+        resolved against a document, so its entries stay absolute."""
+        for path in self.FRONTEND:
+            src = path.read_text(encoding="utf-8")
+            for m in re.finditer(r'["\'](/[A-Za-z0-9_./-]+\.(?:js|wasm))["\']', src):
+                self.fail(f"{path.name}: absolute local URL literal: {m.group(1)}")
+
+    def test_the_worker_and_worklet_use_the_same_builder(self):
+        main = Path("static/ft710_main.js").read_text(encoding="utf-8")
+        for asset in ("tx_opus_worker.js", "rx_worklet_processor.js"):
+            line = [l for l in main.splitlines() if asset in l and "staticUrlWithAuth" not in l]
+            self.assertEqual(line, [], f"{asset} is not built via staticUrlWithAuth(): {line}")

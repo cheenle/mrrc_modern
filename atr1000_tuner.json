@@ -1,17 +1,17 @@
 {
   "version": "2.0",
-  "updated": "2026-09-27T21:22:15.538267",
+  "updated": "2026-09-30T21:13:33.640466",
   "records": [
     {
       "freq": 7050000,
       "sw": 0,
       "ind": 9,
       "cap": 47,
-      "swr_avg": 1.0787752161383275,
+      "swr_avg": 1.0787452107279683,
       "swr_min": 1.0,
       "swr_max": 1.8,
-      "sample_count": 1041,
-      "last_update": 1790515335.538263,
+      "sample_count": 1044,
+      "last_update": 1790774013.640453,
       "needs_verify": false
     },
     {

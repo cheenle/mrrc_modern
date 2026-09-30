@@ -450,3 +450,15 @@ README.md
 **索引生成时间**: 2026-08-17  
 **维护者**: Agnes Code Review  
 **下次审查**: 2026-09-17
+
+## Cloud Hub 相关（2026-09-30 新增）
+
+| 文档 | 内容 |
+|------|------|
+| `../SDD/15-ptt-safety-architecture.md` | PTT 半开与 Hub 模式安全（活性闸门） |
+| `../SDD/08-architecture-decisions.md` | AD-023（会话遥测）、AD-024（令牌传输） |
+| `../SDD/12-operational-model.md` §12.9 | Hub 模式运维要点（前缀/心跳/遥测/限流退化） |
+| `../SECURITY_GUIDE.md` §Cloud Hub 模式 | 令牌、上游校验、PTT、已知限制 |
+| `../tests/README.md` §本轮新增 | 四项前置能力的守卫测试 |
+| `../../mrrc_hub/SDD/` | Hub 端设计记录（15 章）；实况见其 §12.8 |
+| `../../mrrc_hub/docs/2026-09-30-fleet-hub-design-review.md` | 现状取证评审（四项 P0） |

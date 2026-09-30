@@ -199,3 +199,17 @@ and the model identity check (`ID;`, read-only) only logs.
 | Port already in use | `./stop.sh` first; check for stale processes |
 | Stale JS cached | Service worker bypasses JS/HTML; version query strings |
 | Stuck TX | Multiple safety layers (see Ch. 15); server forces RX on WS disconnect |
+
+## 12.9 Cloud Hub 模式运维要点（2026-09-30）
+
+实例可被置于云端入口之后运行（呼号子域或路径前缀），此时下列参数与退化需要有意识地被管理：
+
+| 项 | 说明 |
+|----|------|
+| 路径前缀 | 由 `FT710Settings.basePath` / `.url` 驱动，服务端与前端（含 TX 编码 Worker）均已前缀安全；由 `tests/test_path_prefix.py` 守 |
+| 令牌传输 | **不进 URL**（AD-024）：cookie/Bearer 优先，query 形式仅兼容并告警 |
+| PTT 活性闸门 | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 `0` = 关闭）。Hub 模式下建议 3–5 秒：客户端失联即释放 PTT，与 `MRRC_PTT_MAX_TX_SECONDS` 构成两条独立防线 |
+| 会话遥测 | `GET /api/session_metrics` 与周期日志；用于判断 Listener 并发与上行占用（支撑 AD-H12 的扇出决策） |
+| 登录限流退化 | 经隧道/反代时所有登录共享一个来源 IP（5 次失败 / 300 秒**全局**桶）。运维须知：误锁影响**全部用户**，不是单个来源 |
+
+Hub 端对应事实见 `../../mrrc_hub/SDD/12-operational-model.md` §12.8。

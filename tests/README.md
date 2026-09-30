@@ -646,3 +646,12 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.
+
+### 本轮新增（Cloud Hub 前置能力，2026-09-30）
+
+| 测试 | 覆盖 |
+|------|------|
+| `test_path_prefix.py` | 路径前缀：文档资源相对化、`sw.js` 预缓存保持绝对、内联 API/WS 前缀化、**TX 编码 Worker 不逃逸前缀** |
+| `test_ws_token_transport.py` | 令牌经 cookie / Bearer / WS 握手头到达；query 形式触发弃用告警 |
+| `test_session_metrics.py` | `/api/session_metrics` 的聚合与并发计数 |
+| `test_tx_liveness.py` | PTT 活性闸门：默认关闭、心跳超时释放、复用 key-owner 仲裁 |

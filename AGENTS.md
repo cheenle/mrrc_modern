@@ -157,3 +157,15 @@ Short imperative summaries. Pull requests should describe user-visible behavior,
 ## Security & Configuration Tips
 
 Never commit passwords, serial-device paths, or local driver assumptions. Use environment variables for deployment-specific values. All WebSocket endpoints require a session token, resolved by `_token_from_ws_handshake()` as `Authorization: Bearer` → `mrrc_auth` cookie → deprecated `?token=` query param (AD-024). The browser sends the cookie automatically on the same-origin handshake, so the frontend never builds a token URL (a 30-day credential in a URL lands in access logs, browser history and Referer). Auth tokens cleared on server restart. Transmit safety: every release path keys off a disconnect, so a connection that dies without a TCP close (dropped NAT, Wi-Fi switch) needs `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` (default 0 = off; the cloud hub enables it). Only sessions that send `txhb` are gated, and only the session holding the key can be released (ch15 §15.6).
+
+## Cloud Hub（多实例远程接入）上下文
+
+本仓同时充当「实例侧」，可被置于云端入口之后运行。改动时注意：
+
+- **前缀安全**：入口可能是 `<呼号>.mrrc.vlsc.net`（根路径）或 `www.vlsc.net/mrrc_modern/<呼号>/`（路径前缀），
+  因此新增资源/请求必须前缀安全 —— 断言规则见 `tests/test_path_prefix.py`（文档资源相对、`sw.js` 预缓存绝对）
+- **令牌不进 URL**（AD-024）：新增接口用 cookie / Bearer，不要用 query 传令牌
+- **新增会话级行为请打点**：Hub 侧的容量决策（如 RX 扇出 AD-H12）依赖 `session_metrics`
+- **PTT 改动必须双防线**：`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（活性闸门）与 `MRRC_PTT_MAX_TX_SECONDS`（时长上限）
+- **Hub 端文档**：设计记录 `../mrrc_hub/SDD/`（实况 §12.8）、部署与证书 `../mrrc_hub/deploy/README.md`
+- **勿动**：`atr1000_tuner.json`、`mem_channels.json`、`website/js/global-nav.js`（用户运行期文件，未提交）

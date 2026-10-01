@@ -407,6 +407,11 @@
             >
           </li>
           <li>
+            <a href="#" class="menu-item" data-action="cloud-hub"
+              >接入云端（Cloud Hub）…</a
+            >
+          </li>
+          <li>
             <a href="#" class="menu-item" data-action="recordings"
               >录音 Recordings</a
             >
@@ -562,6 +567,7 @@
     <script src="modules/ptt_manager.js?v=17"></script>
     <script src="ft710_ui.js?v=33"></script>
     <script src="modules/atr1000.js?v=5"></script>
+    <script src="modules/cloud_hub.js?v=1"></script>
     <script>
         // Raised-path deployments prefix every local URL (see settings_manager.js
         // basePath); at the root this is a no-op.
@@ -938,5 +944,76 @@
           });
       })();
     </script>
+    <!-- Cloud Hub onboarding: apply, wait for approval, then the app configures itself. -->
+    <div
+      id="cloud-dialog"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        background: rgba(0, 0, 0, 0.6);
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      <div
+        style="
+          background: #222;
+          color: #eee;
+          border: 1px solid #444;
+          border-radius: 12px;
+          padding: 20px;
+          width: min(460px, 92vw);
+          font-family: -apple-system, sans-serif;
+          max-height: 88vh;
+          overflow: auto;
+        "
+      >
+        <h2 style="color: #f59e0b; margin: 0 0 10px; font-size: 18px">
+          接入云端（Cloud Hub）
+        </h2>
+        <p style="color: #9ca3af; font-size: 13px; margin: 0 0 14px">
+          提交呼号后由运维批准；批准一到，本机会自动签证书、登记并建立隧道。
+          服务器：<span id="cloud-portal">—</span>
+        </p>
+
+        <div id="cloud-form">
+          <label style="display: block; margin: 8px 0 4px; font-size: 13px; color: #bbb">呼号</label>
+          <input id="cloud-callsign" placeholder="BG1SB" style="width: calc(100% - 18px); padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px" />
+          <label style="display: block; margin: 10px 0 4px; font-size: 13px; color: #bbb">联系方式（可选，便于运维核对）</label>
+          <input id="cloud-contact" placeholder="邮箱或电话" style="width: calc(100% - 18px); padding: 8px; background: #333; color: #fff; border: 1px solid #444; border-radius: 6px" />
+          <button id="cloud-apply" style="margin-top: 14px; width: 100%; padding: 10px; background: #f59e0b; color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer">
+            申请入口
+          </button>
+        </div>
+
+        <div id="cloud-pending" style="display: none">
+          <p style="margin: 6px 0">
+            已提交申请（呼号 <b id="cloud-callsign-shown">—</b>），等待运维批准。
+          </p>
+          <button id="cloud-refresh" style="margin-top: 10px; width: 100%; padding: 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; cursor: pointer">
+            刷新状态
+          </button>
+        </div>
+
+        <div id="cloud-done" style="display: none">
+          <p style="margin: 6px 0">已接入 ✓</p>
+          <p style="margin: 6px 0">
+            入口：<a id="cloud-entry" href="#" style="color: #f59e0b"></a>
+          </p>
+          <p style="margin: 6px 0; font-size: 13px; color: #9ca3af">
+            证书：<span id="cloud-cert">—</span><br />
+            隧道：<span id="cloud-tunnel">—</span>
+          </p>
+        </div>
+
+        <div id="cloud-msg" style="color: #9ca3af; font-size: 13px; min-height: 18px; margin-top: 10px"></div>
+        <button id="cloud-close" style="margin-top: 6px; width: 100%; padding: 10px; background: #333; color: #fff; border: 1px solid #555; border-radius: 8px; cursor: pointer">
+          关闭
+        </button>
+      </div>
+    </div>
+
   </body>
 </html>

@@ -3934,5 +3934,147 @@ def main():
         )
 
 
+
+# ---------------------------------------------------------------------------
+# Cloud Hub onboarding. The tenant-side flow used to be a shell script; it now lives in
+# cloud_hub.py and is driven from the settings dialog. State is kept in the same config file the
+# launcher reads on every start, so a reboot does not undo it.
+# ---------------------------------------------------------------------------
+_cloud_tunnel: "cloud_hub.TunnelProcess | None" = None
+_cloud_lock = threading.Lock()
+
+_CLOUD_KEYS = ("MRRC_CLOUD_CALLSIGN", "MRRC_CLOUD_TOKEN", "MRRC_CLOUD_LABEL",
+               "MRRC_CLOUD_PORT", "MRRC_CLOUD_ENTRY", "MRRC_CLOUD_PORTAL")
+
+
+def _cloud_fleet_dir() -> Path:
+    """Where the installer put frpc/openssl. Windows: <app>/fleet; macOS: Resources/payload."""
+    for cand in (_runtime_dir() / "fleet", _resource_dir() / "payload", _resource_dir() / "fleet"):
+        if cand.exists():
+            return cand
+    return _runtime_dir() / "fleet"
+
+
+def _cloud_user_dir() -> Path:
+    """The per-user data directory the launcher points MRRC_LOG_DIR at."""
+    return LOG_DIR.parent
+
+
+def _cloud_cert_dir() -> Path:
+    return _cloud_user_dir() / "certs"
+
+
+def _cloud_data_dir() -> Path:
+    return _cloud_user_dir() / "fleet"
+
+
+def _cloud_settings() -> dict:
+    """Cloud Hub values as stored in the app's config file (fresh read, not import-time)."""
+    out = {}
+    try:
+        for raw in _config_file_path().read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                if k.strip() in _CLOUD_KEYS:
+                    out[k.strip()] = v.strip()
+    except OSError:
+        pass
+    return out
+
+
+def _cloud_portal(settings: dict) -> str:
+    return settings.get("MRRC_CLOUD_PORTAL") or cloud_hub.PORTAL_DEFAULT
+
+
+def _cloud_start_tunnel(settings: dict) -> None:
+    """Start frpc if this instance has been connected. Called lazily from /api/cloud/state."""
+    global _cloud_tunnel
+    label = settings.get("MRRC_CLOUD_LABEL")
+    if not label or _cloud_tunnel is not None:
+        return
+    fleet = _cloud_fleet_dir()
+    frpc = fleet / ("frpc.exe" if os.name == "nt" else "frpc")
+    conf = _cloud_data_dir() / f"frpc-{label}.toml"
+    if not (frpc.exists() and conf.exists()):
+        return
+    with _cloud_lock:
+        if _cloud_tunnel is None:
+            _cloud_tunnel = cloud_hub.TunnelProcess(frpc, conf)
+            _cloud_tunnel.start()
+
+
+@app.get("/api/cloud/state", include_in_schema=False)
+async def api_cloud_state(request: Request):
+    """What the settings dialog needs to draw itself."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    settings = _cloud_settings()
+    _cloud_start_tunnel(settings)
+    return JSONResponse({
+        "connected": bool(settings.get("MRRC_CLOUD_LABEL")),
+        "callsign": settings.get("MRRC_CLOUD_CALLSIGN", ""),
+        "has_token": bool(settings.get("MRRC_CLOUD_TOKEN")),
+        "label": settings.get("MRRC_CLOUD_LABEL", ""),
+        "entry": settings.get("MRRC_CLOUD_ENTRY", ""),
+        "cert": os.environ.get("MRRC_SSL_CERT", ""),
+        "portal": _cloud_portal(settings),
+        "tunnel_running": bool(_cloud_tunnel and _cloud_tunnel.running),
+        "tunnel_error": (_cloud_tunnel.last_error if _cloud_tunnel else ""),
+    })
+
+
+@app.post("/api/cloud/apply", include_in_schema=False)
+async def api_cloud_apply(request: Request):
+    """Ask the portal for an entry. The request token is stored so status can be polled later."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await request.json()
+    callsign = str(body.get("callsign", "")).strip().upper()
+    contact = str(body.get("contact", "")).strip()
+    portal = _cloud_portal(_cloud_settings())
+    if not callsign:
+        return JSONResponse({"error": "需要呼号"}, status_code=400)
+    try:
+        reply = cloud_hub.apply(portal, callsign, contact, "mrrc_modern")
+    except cloud_hub.CloudHubError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    cloud_hub._write_config(_config_file_path(), {
+        "MRRC_CLOUD_CALLSIGN": callsign,
+        "MRRC_CLOUD_TOKEN": reply["request_token"],
+        "MRRC_CLOUD_PORTAL": portal,
+    })
+    return JSONResponse({"submitted": True, "status": reply.get("status", "applied"),
+                          "callsign": callsign})
+
+
+@app.post("/api/cloud/refresh", include_in_schema=False)
+async def api_cloud_refresh(request: Request):
+    """Poll for approval; once granted, do the whole connection and report the entry."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    settings = _cloud_settings()
+    callsign, token = settings.get("MRRC_CLOUD_CALLSIGN", ""), settings.get("MRRC_CLOUD_TOKEN", "")
+    if not (callsign and token):
+        return JSONResponse({"error": "还没有申请"}, status_code=400)
+    portal = _cloud_portal(settings)
+    try:
+        state = cloud_hub.status(portal, callsign, token)
+        if state.get("status") != "granted":
+            return JSONResponse({"connected": False, "status": state.get("status", "unknown")})
+        result = cloud_hub.connect(portal, callsign, token, config_path=_config_file_path(),
+                                   cert_dir=_cloud_cert_dir(), fleet_dir=_cloud_fleet_dir(),
+                                   data_dir=_cloud_data_dir(), local_port=config.WEB_PORT,
+                                   tunnel=_cloud_tunnel)
+    except cloud_hub.CloudHubError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    cloud_hub._write_config(_config_file_path(), {
+        "MRRC_CLOUD_LABEL": result.get("label", ""),
+        "MRRC_CLOUD_PORT": str(result.get("port", "")),
+        "MRRC_CLOUD_ENTRY": result.get("entry", ""),
+    })
+    return JSONResponse(result)
+
+
 if __name__ == "__main__":
     main()

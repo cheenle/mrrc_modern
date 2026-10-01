@@ -230,6 +230,9 @@ class CloudHubTests(unittest.TestCase):
         self.assertNotEqual(raw[:3], b"\xef\xbb\xbf", "frpc rejects a BOM at line 1 column 1")
         raw.decode("ascii")
         conf_text = raw.decode()
+        # A backslash in a TOML basic string starts an escape: a raw Windows path makes frpc refuse
+        # the file ("non-hex character" at the \U of C:\Users) and the tunnel never starts.
+        self.assertNotIn("\\", conf_text, "unescaped backslash in the TOML frpc has to parse")
         self.assertIn('auth.token = "tok-frps"', conf_text)
         self.assertIn("remotePort = 18877", conf_text)
         self.assertIn("localPort = 8888", conf_text)

@@ -2,6 +2,24 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.24.2] — 2026-10-02 — 界面接入真的会把隧道起来；TOML 里的 Windows 路径
+
+v1.24.1 让设置里的接入走到了"签证书、登记、写配置"，但**隧道从界面接入时永远不启动** —— 现场
+（VM 实测）表现为入口一直 502，而租户侧看起来一切都对。
+
+- **端点里第一次用 `TunnelProcess` 是 `None`，而没人创建它** ⇒ `connect()` 拿到 None 就跳过启动。
+  现在 refresh 前先确保它存在，接着由 `connect()` 启动并托管（退出自动重启）。
+- **隧道 TOML 里的 Windows 路径写了反斜杠**：TOML 的双引号串把 `\` 当转义 ⇒ `\U`（`C:\Users`）
+  被当成 Unicode 转义 ⇒ frpc 报 `toml: line 7, column 15: non-hex character` 并拒绝启动 ⇒
+  入口 502，而**别处没有任何错误**。改为写**正斜杠**（frpc 在 Windows 上接受，且租户脚本一直这么写）；
+  新增测试断言 TOML 里不得出现未转义的反斜杠。
+- **实测补充**：同一配置在"计划任务里跑脚本、由脚本拉起 frpc"的形态下会被 job object 回收
+  （任务结束 ⇒ 子进程死）——应用自己托管就没有这个问题，这正是本版的做法。
+
+**验证**：VM 上手工把这两处按同样方式修正后，`frpc verify` 通过、`login to server success`、
+`proxy added`、`start proxy success`，入口 `https://bg9aaa-mrrc-modern.mrrc.vlsc.net:9988/` 返回
+**401/302/200** ✓。
+
 ## [v1.24.1] — 2026-10-02 — 接入云端第一次真按就 500：那个模块谁也没导入
 
 v1.24.0 把接入搬进了设置菜单，但**真按「申请」只会得到一个 500**。现场（打包版）的日志：

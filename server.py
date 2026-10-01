@@ -3992,6 +3992,18 @@ def _cloud_portal(settings: dict) -> str:
     return settings.get("MRRC_CLOUD_PORTAL") or cloud_hub.PORTAL_DEFAULT
 
 
+def _ensure_tunnel_object():
+    """Create the supervisor if it does not exist yet. connect() starts it."""
+    global _cloud_tunnel
+    if _cloud_tunnel is None:
+        fleet = _cloud_fleet_dir()
+        frpc = fleet / ("frpc.exe" if os.name == "nt" else "frpc")
+        with _cloud_lock:
+            if _cloud_tunnel is None:
+                _cloud_tunnel = cloud_hub.TunnelProcess(frpc, _cloud_data_dir() / "pending.toml")
+    return _cloud_tunnel
+
+
 def _cloud_start_tunnel(settings: dict) -> None:
     """Start frpc if this instance has been connected. Called lazily from /api/cloud/state."""
     global _cloud_tunnel
@@ -4074,6 +4086,7 @@ async def api_cloud_refresh(request: Request):
     if not (callsign and token):
         return JSONResponse({"error": "还没有申请"}, status_code=400)
     portal = _cloud_portal(settings)
+    _ensure_tunnel_object()          # first use has none; without this frpc is never started
     try:
         state = cloud_hub.status(portal, callsign, token)
         if state.get("status") != "granted":

@@ -165,7 +165,11 @@ def frpc_config_text(name: str, token: str, local_port: int, remote_port: int,
         "",
     ]
     if log_file:
-        lines += [f'log.to = "{log_file}"', 'log.level = "info"', ""]
+        # Forward slashes: a backslash inside a TOML basic string is an escape, so a raw Windows
+        # path makes the file unparseable - frpc reports "non-hex character" at the \U of
+        # "C:\Users" and refuses to start, which is a silent 502 for the entry. Measured, at byte
+        # level, after chasing it for a while. frpc accepts forward slashes on Windows.
+        lines += [f'log.to = "{str(log_file).replace(chr(92), "/")}"', 'log.level = "info"', ""]
     lines += [
         "[[proxies]]",
         f'name = "{name}"',

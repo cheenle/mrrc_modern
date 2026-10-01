@@ -11,6 +11,7 @@ calibration, scope spans) live with their backend — see
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import overload
 
@@ -213,12 +214,22 @@ REMOTE_SESSION_TX_HEARTBEAT_S = _env_float("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S",
 # shipped a certificate path that existed on nobody's machine. When the file is missing the server
 # generates a self-signed one here (see server.py) instead of silently serving plain HTTP, which
 # made the browser show a protocol error and the UI look dead.
-try:
-    from first_run import user_data_dir as _user_data_dir
+def _default_cert_dir() -> Path:
+    """Where a generated certificate goes: the user's own data directory, per platform.
 
-    CERT_DIR = Path(_user_data_dir()) / "certs"
-except Exception:                                                 # noqa: BLE001 - never fatal
-    CERT_DIR = SCRIPT_DIR / "certs"
+    Self-contained on purpose - the launcher has its own copy of this logic and config.py must not
+    depend on a module that only exists in some of the builds.
+    """
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    elif sys.platform == "darwin":
+        base = str(Path.home() / "Library" / "Application Support")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "MRRC-Modern" / "certs"
+
+
+CERT_DIR = _default_cert_dir()
 SSL_CERTFILE = _env("MRRC_SSL_CERT", str(CERT_DIR / "fullchain.pem"))
 SSL_KEYFILE = _env("MRRC_SSL_KEY", str(CERT_DIR / "localhost.key"))
 

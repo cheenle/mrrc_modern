@@ -1,7 +1,7 @@
 # Raspberry Pi 镜像打包流程（rpi64）
 
 > 用途：构建并发布 `MRRC-Modern-v<ver>-rpi64.img.xz` —— Raspberry Pi OS Lite 64-bit (Bookworm) 定制镜像，烧卡即用、首启零配置。规格见 `docs/superpowers/specs/2026-09-09-raspberry-pi-image-design.md`。
-> 最新构建：**v1.17.0**（2026-09-13，本机 Mac Docker Desktop 原生 aarch64 构建），产物 551,282,340 bytes（551 MB），SHA-256 `a56e5658e200d2c8fa0eac147299b8533757934009b776f3f2340cb55944dc1b`。本版内容 = 一键 CQ 按键（服务端一次性自动化发射，SDD AD-020 / V2.49）：镜像内置 `static/audio/cq.wav`，开机即可用（`MRRC_CQ_FILE` 可替换）；构建闸门新增 `py_compile`/依赖导入之外的 CQ 资产存在性检查（stage4 注入后核对 `static/audio/cq.wav` 字节数）。上一版 v1.16.0 = Yaesu SDR 机型族 + 发布工程化。
+> 最新构建：**v1.24.0**（2026-10-01，本机 Mac Docker Desktop 原生 aarch64 构建，pi-gen ref `2026-06-18-raspios-bookworm-arm64`），产物 662,225,336 bytes（662 MB），SHA-256 `9a81ca4c6520811c3cba591e2848ffa52d2c5055a23f73ada76545309c147ea8`。
 > 用户向的安装/使用说明见 `docs/RASPBERRY_PI_GUIDE.md`。
 
 - `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：

@@ -2,6 +2,32 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.24.1] — 2026-10-02 — 接入云端第一次真按就 500：那个模块谁也没导入
+
+v1.24.0 把接入搬进了设置菜单，但**真按「申请」只会得到一个 500**。现场（打包版）的日志：
+
+    File "server.py", line 4035, in api_cloud_apply
+    File "server.py", line 3987, in _cloud_portal
+    NameError: name 'cloud_hub' is not defined
+
+`server.py` 从 `_cloud_portal()` 到 `api_cloud_refresh()` 一路调用 `cloud_hub.*`（并在 refresh 路径上
+引用 `config.WEB_PORT`），却既没有 `import cloud_hub`，也只绑定了裸名 `WEB_PORT`。单测没拦住的原因是
+**测试自己把那一行导入写在了开头** —— `tests/test_cloud_hub.py` 顶部 `import cloud_hub`，恰好就是
+server 缺的那一行；它只驱动模块，从不驱动端点。本版因此新增 `tests/test_cloud_endpoints.py`：直接调
+`api_cloud_apply` / `api_cloud_refresh`（伪造 request、打桩 portal），并把 `cloud_hub` 写进
+`mrrc_modern_server.spec` 的 `hiddenimports`，让冻结包不可能再缺这个模块。
+
+- **默认入口改回 hub 主路** `https://portal.mrrc.vlsc.net:8899`，海外边缘降为**退化路**。2026-10-01 晚
+  实测（国内家宽）：主路 3/3 通、0.30–1.40 s；边缘 6 次里 3 次挂到客户端放弃 —— 这正是 hub SDD §12.8
+  记录的间歇故障（边缘 → hub:9988 的 IPv6 上游超时），而应用此前默认就走它。
+- **只有"没送达"才换路**：DNS/TCP/TLS 失败、超时、代埋 502/504 → 回落边缘；portal 只要答复过（含拒绝）
+  绝不重发 —— 重试不会把一次重复申请变成两条。第一跳预算 8 s（可达时 ~1.4 s 即答），因此只放行
+  80/443 的网络不会把整个超时耗在主路上。
+- `connect()` 把 portal 发来的非数字端口变成一句可显示的错误，而不是未捕获的 ValueError。
+
+**验证**：套件 1458 项全绿（本版新增：端点 2、路径回退 4、以及把 `_RecordingTunnel` 改成真继承
+`TunnelProcess` 后消掉的三条类型告警）；`release_check.py` 离线 0 failing。
+
 ## [v1.24.0] — 2026-10-02 — 接入云端搬进应用：设置里申请 → 后台批准 → 应用自己接好
 
 租户侧过去是一份 shell 脚本：把令牌和一次性口令粘进终端、跑脚本、再把一条 root 命令交给运维。

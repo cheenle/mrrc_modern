@@ -1,6 +1,6 @@
 # macOS 安装包打包流程（本机 Mac 直接构建）
 
-> 最新构建：**v1.21.0**（2026-09-25）—— 套件 1361 项全绿；`release_check.py` 离线 29 ok / 0 failing。
+> 最新构建：**v1.24.1**（2026-10-02）—— 套件 1460 项全绿；`release_check.py` 离线 29 ok / 0 failing；产物 `MRRC-Modern-v1.24.1-arm64.dmg` 62,257,332 bytes，SHA-256 `137de9f2b13f43d4377baf4d49c93bcd200813c9e9cee3c6c7fed89d338e806a`。
 > 本文按 v1.7.0 首次打包的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 > 与 Windows 不同，macOS 不需要 KVM 虚拟机——直接在本机用 `.venv` 打包。

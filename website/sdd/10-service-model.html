@@ -345,6 +345,11 @@ AuthService
 </tr>
 </tbody>
 </table>
+<h3 id="cloud-hub-前置能力新增的接口2026-09-30">10.3.1 Cloud Hub 前置能力新增的接口（2026-09-30）</h3>
+<ul>
+<li><code class="scope-code">GET /api/session_metrics</code> —— 会话遥测（AD-023）：并发 Listener 数、上行占用、丢帧与解码失败计数。 用途是给 Hub 侧容量决策提供真实数据（RX 扇出的触发器 AD-H12 依赖它）。 经云端入口访问时，前缀由 <code class="scope-code">FT710Settings.basePath</code> 决定，调用方不得硬编码根路径。</li>
+</ul>
+<p>鉴权沿用既有会话机制，但<strong>令牌不得出现在查询串</strong>（AD-024）：改用 Cookie 或 <code class="scope-code">Authorization: Bearer</code>。</p>
 <h2 id="control-service-command-contract">10.4 Control Service Command Contract</h2>
 <p>Key commands (see <code class="scope-code">_execute_set_command</code> in <code class="scope-code">server.py</code> and the active backend for complete mapping):</p>
 <table class="scope-table">
@@ -561,7 +566,7 @@ AuthService
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.63 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.64 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

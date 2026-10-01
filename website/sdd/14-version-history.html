@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.64</td>
+<td>2026-10-02</td>
+<td>pi</td>
+<td><strong>v1.24.1 发布：接入云端的三个缺陷一次修完（客户端两处 + portal 一处），并钉掉边缘→hub 的 IPv6 黑洞。</strong> ① <strong>客户端 <code class="scope-code">server.py</code> 从未导入 <code class="scope-code">cloud_hub</code></strong>（refresh 路径还引用了只绑定裸名的 <code class="scope-code">config.WEB_PORT</code>）⇒ 打包版按下「申请」即 500 <code class="scope-code">NameError</code>；单测没拦住，是因为 <code class="scope-code">test_cloud_hub.py</code> 自己就 import 了那个模块 —— 那行 import 恰好是 server 缺的。新增 <code class="scope-code">test_cloud_endpoints.py</code> 直接驱动两个端点，并把 <code class="scope-code">cloud_hub</code> 写进 <code class="scope-code">mrrc_modern_server.spec</code> 的 hiddenimports。② <strong><code class="scope-code">GET /api/cloud/state</code> 被 SPA 兜底吞掉</strong>（<code class="scope-code">@app.get("/{path:path}")</code> 注册在云端点之前 ⇒ 200 + index.html）⇒ 设置对话框读不到自己的状态；改为在所有 API 路由之后用 <code class="scope-code">app.add_api_route</code> 注册兜底，并加两条路由顺序守卫（通用那条对任意 <code class="scope-code">/api/</code> 路由生效）。<strong>这一条是「冻结包真跑」抓到的</strong>，端点级单测看不见。③ <strong>hub 侧 <code class="scope-code">POST /apply</code> 从不交出申请令牌</strong>（hub SDD V0.18；其测试直读 store，绕过了唯一真实的取令牌路径）⇒ 应用拿不到令牌、<code class="scope-code">/status</code> 无从开始；修好并部署，公网实测 32 字符令牌 + <code class="scope-code">200 applied</code> + 错令牌 403。<strong>默认入口改回 hub 主路</strong> <code class="scope-code">portal.mrrc.vlsc.net:8899</code>（实测 3/3 通、0.30–1.40 s），海外边缘降为退化路，且只对「没送达」的失败换路（DNS/TCP/TLS/超时/502/504），portal 答复过就绝不重发。<strong>边缘→hub 的 IPv6 黑洞（真凶）</strong>：<code class="scope-code">www.vlsc.net</code> 与 <code class="scope-code">*.mrrc.vlsc.net</code> 加上 AAAA 后，边缘 nginx 两处 <code class="scope-code">proxy_pass</code> 仍是裸主机名（启动时解析一次，而本机 getaddrinfo 把 AAAA 排前面）⇒ 任何一次 reload 都会把边缘路径切到 hub 不可达的 IPv6（实测 0/4 全超时；同机 v4 4/4 通，且边缘自身 v6 正常 ⇒ 坏在 hub 的 v6 入站）。已钉为 hub 的 IPv4 并 reload：复测 portal 路径 <strong>8/8 200</strong>（修前 3/6 挂死）—— 顺带给 §12.8 那条「边缘间歇无响应」补上了根因与判据。<strong>产物</strong>：macOS <code class="scope-code">MRRC-Modern-v1.24.1-arm64.dmg</code> 62,257,332 bytes <code class="scope-code">137de9f2…</code>；Windows <code class="scope-code">MRRC-Modern-v1.24.1-Windows-x64-Setup.exe</code> 54,080,541 bytes <code class="scope-code">46323320…</code>；<code class="scope-code">latest.json</code> 的 previous 指向 v1.23.3（<strong>不指向 v1.24.0</strong> —— 它的接入云端是已知坏版本）。<strong>验证</strong>：本机套件 1460 项全绿；VM 门禁 1457 项 OK（10 skip）；<code class="scope-code">release_check.py</code> 离线 0 failing；两端产物均<strong>走查字节码</strong>（<code class="scope-code">server</code> 入口引用 <code class="scope-code">cloud_hub</code> 与 <code class="scope-code">add_api_route</code>，PYZ 内含 <code class="scope-code">cloud_hub</code>）并在<strong>冻结包真跑</strong>里跑通「申请 → 令牌落盘 → 状态 applied」（macOS 与 Windows 各一遍）；<code class="scope-code">version.txt</code> = 1.24.1。<strong>边界</strong>：批准之后的自动接好（grant → 证书登记 → 隧道）仍待真实租户机复测；旧实例（bg1sb）仍指向上游证书名 <code class="scope-code">radio.vlsc.net</code>；rpi 镜像仍为 v1.24.0（未重建）；KVM 无声卡，TX 话音仍须物理 Windows 机验收。</td>
+</tr>
+<tr>
 <td>SDD V2.63</td>
 <td>2026-09-30</td>
 <td>pi</td>
@@ -721,7 +727,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.63 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.64 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

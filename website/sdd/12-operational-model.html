@@ -662,13 +662,50 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 </tbody>
 </table>
+<h2 id="cloud-hub-模式运维要点2026-09-30">12.9 Cloud Hub 模式运维要点（2026-09-30）</h2>
+<p>实例可被置于云端入口之后运行（呼号子域或路径前缀），此时下列参数与退化需要有意识地被管理：</p>
+<table class="scope-table">
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr>
+<th>项</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>路径前缀</td>
+<td>由 <code class="scope-code">FT710Settings.basePath</code> / <code class="scope-code">.url</code> 驱动，服务端与前端（含 TX 编码 Worker）均已前缀安全；由 <code class="scope-code">tests/test_path_prefix.py</code> 守</td>
+</tr>
+<tr>
+<td>令牌传输</td>
+<td><strong>不进 URL</strong>（AD-024）：cookie/Bearer 优先，query 形式仅兼容并告警</td>
+</tr>
+<tr>
+<td>PTT 活性闸门</td>
+<td><code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>（默认 <code class="scope-code">0</code> = 关闭）。Hub 模式下建议 3–5 秒：客户端失联即释放 PTT，与 <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> 构成两条独立防线</td>
+</tr>
+<tr>
+<td>会话遥测</td>
+<td><code class="scope-code">GET /api/session_metrics</code> 与周期日志；用于判断 Listener 并发与上行占用（支撑 AD-H12 的扇出决策）</td>
+</tr>
+<tr>
+<td>登录限流退化</td>
+<td>经隧道/反代时所有登录共享一个来源 IP（5 次失败 / 300 秒<strong>全局</strong>桶）。运维须知：误锁影响<strong>全部用户</strong>，不是单个来源</td>
+</tr>
+</tbody>
+</table>
+<p>Hub 端对应事实见 <code class="scope-code">../../mrrc_hub/SDD/12-operational-model.md</code> §12.8。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.63 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.64 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

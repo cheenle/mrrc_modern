@@ -419,6 +419,48 @@
 </tr>
 </tbody>
 </table>
+<h3 id="cloud-hub-前置能力新增变更的组件2026-09-30">11.1.1 Cloud Hub 前置能力新增/变更的组件（2026-09-30）</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>组件</th>
+<th>作用</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code class="scope-code">session_metrics.py</code></td>
+<td>会话遥测聚合与周期日志（AD-023）</td>
+<td>由 <code class="scope-code">GET /api/session_metrics</code> 读取</td>
+</tr>
+<tr>
+<td><code class="scope-code">config.py</code> → <code class="scope-code">FT710Settings.basePath</code> / <code class="scope-code">.url</code></td>
+<td>路径前缀的唯一来源</td>
+<td>供服务端与前端共用的 URL 组装</td>
+</tr>
+<tr>
+<td><code class="scope-code">static/modules/ptt_manager.js</code></td>
+<td>增加发射<strong>活性闸门</strong>（<code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>，默认 0=关）</td>
+<td>与 <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> 构成两条独立防线（SDD/15 §15.4）</td>
+</tr>
+<tr>
+<td>前端资源引用</td>
+<td>由绝对路径改为<strong>相对路径</strong>，<code class="scope-code">sw.js</code> 预缓存保持绝对</td>
+<td>断言规则见 <code class="scope-code">tests/test_path_prefix.py</code></td>
+</tr>
+<tr>
+<td>TX 编码 Worker</td>
+<td>修复其逃逸路径前缀的加载方式</td>
+<td>症状为 <code class="scope-code">frames=0</code>（表现为”按下不发射”）</td>
+</tr>
+</tbody>
+</table>
 <h2 id="backend-component-collaboration-startup">11.2 Backend Component Collaboration (Startup)</h2>
 <pre class="scope-code text"><code>FastAPIApp lifespan startup:
   1. create_backend(MRRC_RADIO_MODEL) → `RadioBackend` instance + `RadioCapabilities`
@@ -471,7 +513,7 @@ PTT button touchend/mouseup:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.63 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.64 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

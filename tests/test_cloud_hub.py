@@ -17,6 +17,7 @@ import os
 import stat
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -92,6 +93,29 @@ class _FakePortal(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+
+class _RecordingTunnel:
+    """Stands in for TunnelProcess so the assertions work on every platform.
+
+    The real thing runs frpc; a test that waits for a real process can only do so where a shell
+    script is executable, which is not Windows - and it was Windows that turned this test red the
+    first time.
+    """
+
+    def __init__(self):
+        self.frpc = None
+        self.conf = None
+        self.started = False
+        self.running = False
+
+    def start(self):
+        self.started = True
+        self.running = True
+
+    def stop(self):
+        self.running = False
+
+
 class CloudHubTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -144,17 +168,18 @@ class CloudHubTests(unittest.TestCase):
 
     def test_connect_signs_enrolls_configures_and_tunnels(self):
         _FakePortal.state["status"] = "granted"
-        self._fake_frpc()
-        tunnel = cloud_hub.TunnelProcess(self.fleet / "frpc", self.root / "unused.toml")
-        try:
-            result = cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg,
-                                       cert_dir=self.cert_dir, fleet_dir=self.fleet,
-                                       data_dir=self.data_dir, tunnel=tunnel)
-        finally:
-            tunnel.stop()
+        # connect() only starts a tunnel when the frpc binary is there - a sensible guard. The stub
+        # never executes it, so a placeholder is enough.
+        (self.fleet / ("frpc.exe" if os.name == "nt" else "frpc")).write_text("", encoding="utf-8")
+        tunnel = _RecordingTunnel()
+        result = cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg,
+                                  cert_dir=self.cert_dir, fleet_dir=self.fleet,
+                                  data_dir=self.data_dir, tunnel=tunnel)
 
         self.assertTrue(result["connected"], result)
         self.assertEqual(result["entry"], "https://bg9zzz.mrrc.vlsc.net:9988/")
+        self.assertTrue(tunnel.started, "the tunnel was not started")
+        self.assertEqual(str(tunnel.conf), result["tunnel_config"])
 
         # the certificate carries the name the hub verifies
         from cryptography import x509
@@ -178,17 +203,31 @@ class CloudHubTests(unittest.TestCase):
         self.assertNotEqual(raw[:3], b"\xef\xbb\xbf", "frpc rejects a BOM at line 1 column 1")
         raw.decode("ascii")
         conf_text = raw.decode()
-        self.assertIn("auth.token = \"tok-frps\"", conf_text)
-        self.assertIn(f"remotePort = {18877}", conf_text)
+        self.assertIn('auth.token = "tok-frps"', conf_text)
+        self.assertIn("remotePort = 18877", conf_text)
         self.assertIn("localPort = 8888", conf_text)
 
-        # and the tunnel process really started
-        for _ in range(50):
-            if (self.root / "frpc-started").exists():
-                break
-            import time
-            time.sleep(0.1)
-        self.assertTrue((self.root / "frpc-started").exists(), "frpc was not started")
+    @unittest.skipIf(os.name == "nt", "needs an executable shell script, which Windows has not")
+    def test_the_supervisor_really_starts_a_process(self):
+        """The recording stub above proves the call; this proves the process starts, on POSIX."""
+        _FakePortal.state["status"] = "granted"
+        marker = self.root / "frpc-started"
+        script = self.fleet / "frpc"
+        script.write_text(f"#!/bin/sh\ntouch {marker}\nwhile true; do sleep 1; done\n", encoding="utf-8")
+        script.chmod(script.stat().st_mode | stat.S_IEXEC)
+        tunnel = cloud_hub.TunnelProcess(script, self.root / "unused.toml")
+        try:
+            cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg,
+                              cert_dir=self.cert_dir, fleet_dir=self.fleet,
+                              data_dir=self.data_dir, tunnel=tunnel)
+            for _ in range(60):
+                if marker.exists():
+                    break
+                time.sleep(0.1)
+            self.assertTrue(marker.exists(), "frpc was not started")
+            self.assertTrue(tunnel.running)
+        finally:
+            tunnel.stop()
 
 
 if __name__ == "__main__":

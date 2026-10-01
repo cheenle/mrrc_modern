@@ -264,10 +264,11 @@ class PortalPathTests(unittest.TestCase):
     """One portal, one address. The two-path era ended when everything moved onto one machine."""
 
     def test_default_is_the_merged_address(self):
-        self.assertEqual(cloud_hub.PORTAL_DEFAULT, "https://portal.mrrc.vlsc.net/mrrc_portal")
+        self.assertEqual(cloud_hub.PORTAL_DEFAULT, "https://portal.mrrc.vlsc.net")
 
     def test_a_config_from_before_the_merge_is_sent_to_the_new_address(self):
-        for legacy in ("https://portal.mrrc.vlsc.net:8899", "https://www.vlsc.net/mrrc_portal"):
+        for legacy in ("https://portal.mrrc.vlsc.net:8899", "https://www.vlsc.net/mrrc_portal",
+                       "https://portal.mrrc.vlsc.net/mrrc_portal"):
             seen = []
             real = cloud_hub._post_once
 

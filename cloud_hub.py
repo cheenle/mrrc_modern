@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 #: (2026-10-01): 3/3 answered in 0.30-1.40 s with the wildcard certificate in place. An earlier note
 #: blamed the hub's TLS for every port at once - that measurement was against the bare IP and this
 #: name (which is what the app uses, and what the hub's vhost has a certificate for) was never it.
-PORTAL_DEFAULT = "https://portal.mrrc.vlsc.net/mrrc_portal"
+PORTAL_DEFAULT = "https://portal.mrrc.vlsc.net"
 
 #: The overseas path proxy, which exists for networks that only allow 80/443 outbound (R-H12).
 #: It is a hop away and was measured intermittent on that same evening - 3 of 6 requests hung
@@ -100,7 +100,9 @@ def _post(portal: str, route: str, payload: dict, timeout: int = TIMEOUT) -> dic
     merge still names an old address; those are sent to the current one instead, because each of
     them now redirects there anyway.
     """
-    legacy = ("https://portal.mrrc.vlsc.net:8899", "https://www.vlsc.net/mrrc_portal")
+    legacy = ("https://portal.mrrc.vlsc.net:8899",
+              "https://www.vlsc.net/mrrc_portal",
+              "https://portal.mrrc.vlsc.net/mrrc_portal")
     base = PORTAL_DEFAULT if portal.rstrip("/") in legacy else portal
     try:
         return _post_once(base, route, payload, timeout)

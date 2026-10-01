@@ -4133,7 +4133,9 @@ async def api_cloud_refresh(request: Request):
 def _cert_reload_required() -> bool:
     """True when the certificate signed at connect time is not the one this process serves."""
     if not _SERVED_CERT_AT_STARTUP:
-        return False
+        # Started without a certificate (a fresh install generates its own bootstrap one) and one is
+        # configured now: that is exactly a certificate this process is not serving.
+        return bool(str(_cloud_settings().get("MRRC_SSL_CERT") or ""))
     now_configured = str(_cloud_settings().get("MRRC_SSL_CERT") or "")
     if not now_configured:
         return False

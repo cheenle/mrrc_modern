@@ -129,7 +129,16 @@ if (Test-Path $PayloadSource) {
 }
 
 if (Get-Command iscc -ErrorAction SilentlyContinue) {
-    Invoke-Checked iscc packaging\windows\MRRC-Modern.iss
+    # Build into a scratch directory and copy the result into place. Measured twice on a clean VM:
+    # iscc aborts with "The output file appears to be in use (32)" because real-time antivirus has
+    # the freshly written exe open, and it cannot recover from that - while a plain copy of the
+    # finished file succeeds every time.
+    $scratch = Join-Path $env:TEMP ("mrrc-iscc-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+    New-Item -ItemType Directory -Path $scratch -Force | Out-Null
+    Invoke-Checked iscc "/O$scratch" packaging\windows\MRRC-Modern.iss
+    $finalDir = Join-Path $PSScriptRoot "..\..\dist\windows"
+    Copy-Item (Join-Path $scratch "MRRC-Modern-Setup.exe") (Join-Path $finalDir "MRRC-Modern-Setup.exe") -Force
+    Remove-Item $scratch -Recurse -Force -ErrorAction SilentlyContinue
 } else {
     Write-Warning "Inno Setup Compiler 'iscc' was not found. Install Inno Setup and rerun this script to create the setup EXE."
 }

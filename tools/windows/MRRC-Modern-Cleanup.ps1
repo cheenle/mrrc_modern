@@ -46,6 +46,10 @@ if (-not $BackupDir) { $BackupDir = Join-Path ([Environment]::GetFolderPath("Des
 # Fixed list. Nothing outside it is ever removed, so a typo in a path cannot take a user's data.
 $AppDir   = Join-Path ${env:ProgramFiles} "MRRC Modern"
 $LegacyAppDir = Join-Path ${env:ProgramFiles(x86)} "MRRC Modern"
+#: Directories whose *contents* are skipped in the backup: recorded QSOs can be gigabytes, they are
+#: not configuration, and copying them makes the backup step look frozen on a real machine.
+$BackupSkip = @("recordings")
+
 $DataDirs = @(
     (Join-Path $env:LOCALAPPDATA "MRRC-Modern"),   # current: config, certs, logs, fleet, recordings
     (Join-Path $env:APPDATA      "MRRC-Modern"),
@@ -141,7 +145,11 @@ if (-not $Force -and -not $WhatIf) {
     Say ""
     Say "   Everything listed above will be removed. Configuration, certificates and logs are copied"
     Say "   to $BackupDir first, so you can look at them afterwards (or put them back)."
-    $answer = Read-Host "   Type 'clean' to continue"
+    Say ""
+    Say "   >>> This window is waiting for you. If you do not see the question above, look for"
+    Say "   >>> another PowerShell window (it opened when you approved the administrator prompt)."
+    Say "   >>> To skip this question next time, run with -Force."
+    $answer = Read-Host "   Type 'clean' and press Enter to continue (anything else cancels)"
     if ($answer -ne "clean") { Say "   Stopped. Nothing was changed."; return }
 }
 
@@ -156,15 +164,28 @@ if ($WhatIf) {
         if (-not (Test-Path $d)) { continue }
         $dest = Join-Path $BackupDir (Split-Path $d -Leaf)
         if (Test-Path $dest) { $dest = "$dest-(2)" }
+
+        # Report the size before copying: a recordings folder can be gigabytes, and a copy with no
+        # output for minutes looks like a hang (it did, the first time this ran on a real machine).
+        $files = @(Get-ChildItem $d -Recurse -File -Force -ErrorAction SilentlyContinue)
+        $bytes = ($files | Measure-Object -Property Length -Sum).Sum
+        $mb = if ($bytes) { [math]::Round($bytes / 1MB, 1) } else { 0 }
+        Say "   copying $d ($($files.Count) files, $mb MB) ..."
         try {
-            Copy-Item $d $dest -Recurse -Force -ErrorAction Stop
+            foreach ($f in $files) {
+                $rel = $f.FullName.Substring($d.Length).TrimStart("\")
+                if ($BackupSkip | Where-Object { $rel -like "$_\*" }) { continue }
+                $target = Join-Path $dest $rel
+                New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
+                Copy-Item $f.FullName $target -Force -ErrorAction SilentlyContinue
+            }
             $copied++
-            Say "   copied $d"
+            Say "     done"
         } catch {
-            Say "   could not copy $d ($($_.Exception.Message)) - continuing anyway"
+            Say "     could not copy ($($_.Exception.Message)) - continuing anyway"
         }
     }
-    Say "   backup: $BackupDir ($copied director$($(if ($copied -eq 1) {'y'} else {'ies'})) copied)"
+    Say "   backup: $BackupDir ($copied copied)"
 }
 
 # ---------------------------------------------------------------- stop
@@ -194,10 +215,13 @@ foreach ($u in $uninstallers) {
     try {
         if ($cmd -match '^\s*"([^"]+)"\s*(.*)$') {
             $exe = $Matches[1]; $rest = $Matches[2]
-            Start-Process -FilePath $exe -ArgumentList ($rest + " /VERYSILENT /NORESTART /SUPPRESSMSGBOXES") -Wait
+            $proc = Start-Process -FilePath $exe -ArgumentList ($rest + " /VERYSILENT /NORESTART /SUPPRESSMSGBOXES") -PassThru
+            # Bounded wait: a hidden modal dialog in the uninstaller must not stop the cleanup.
+            if (-not $proc.WaitForExit(180000)) { Say "   uninstaller still running after 3 minutes - continuing without it" }
         } else {
             $exe = ($cmd -split " ")[0]
-            Start-Process -FilePath $exe -ArgumentList "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES" -Wait
+            $proc = Start-Process -FilePath $exe -ArgumentList "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES" -PassThru
+            if (-not $proc.WaitForExit(180000)) { Say "   uninstaller still running after 3 minutes - continuing" }
         }
         $ranUninstaller = $true
         Say "   uninstaller finished: $($u.Name)"
@@ -209,7 +233,8 @@ if (-not $ranUninstaller -and -not $WhatIf) {
     # No entry in the registry: try the well-known path.
     $un = Join-Path $AppDir "unins000.exe"
     if (Test-Path $un) {
-        Start-Process -FilePath $un -ArgumentList "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES" -Wait
+        $proc = Start-Process -FilePath $un -ArgumentList "/VERYSILENT /NORESTART /SUPPRESSMSGBOXES" -PassThru
+        if (-not $proc.WaitForExit(180000)) { Say "   uninstaller still running after 3 minutes - continuing" }
         Say "   uninstaller finished: $un"
     } else {
         Say "   no uninstaller found (this is normal after a partial upgrade)"

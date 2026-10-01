@@ -292,9 +292,11 @@ class PortalPathTests(unittest.TestCase):
         finally:
             probe.server_close()
 
-    def test_the_default_is_the_hub_entry_and_the_edge_is_only_the_fallback(self):
-        self.assertEqual(cloud_hub.PORTAL_DEFAULT, "https://portal.mrrc.vlsc.net:8899")
-        self.assertEqual(cloud_hub.PORTAL_EDGE, "https://www.vlsc.net/mrrc_portal")
+    def test_the_default_is_the_edge_and_the_hub_port_is_the_fallback(self):
+        # The edge first: the TLS handshake to :8899 is interfered with on some paths, so a client
+        # that starts there waits out a timeout before it works. :8899 stays as the second try.
+        self.assertEqual(cloud_hub.PORTAL_DEFAULT, "https://www.vlsc.net/mrrc_portal")
+        self.assertEqual(cloud_hub.PORTAL_EDGE, "https://portal.mrrc.vlsc.net:8899")
 
     def test_a_path_that_never_answered_is_retried_on_the_edge(self):
         calls = []
@@ -334,3 +336,24 @@ class PortalPathTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_a_tls_handshake_failure_also_falls_back(self):
+        """Not just "never answered": a handshake that dies is the failure we actually measured."""
+        import ssl
+        import urllib.error
+        calls = []
+        real = cloud_hub._post_once
+
+        def fake(base, route, payload, timeout):
+            calls.append(base)
+            if base == cloud_hub.PORTAL_DEFAULT:
+                raise urllib.error.URLError(ssl.SSLError("tlsv1 alert protocol version"))
+            return {"status": "granted"}
+
+        cloud_hub._post_once = fake
+        try:
+            out = cloud_hub._post(cloud_hub.PORTAL_DEFAULT, "/status", {})
+        finally:
+            cloud_hub._post_once = real
+        self.assertEqual(out["status"], "granted")
+        self.assertEqual(calls, [cloud_hub.PORTAL_DEFAULT, cloud_hub.PORTAL_EDGE])

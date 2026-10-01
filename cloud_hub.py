@@ -37,12 +37,14 @@ logger = logging.getLogger(__name__)
 #: (2026-10-01): 3/3 answered in 0.30-1.40 s with the wildcard certificate in place. An earlier note
 #: blamed the hub's TLS for every port at once - that measurement was against the bare IP and this
 #: name (which is what the app uses, and what the hub's vhost has a certificate for) was never it.
-PORTAL_DEFAULT = "https://portal.mrrc.vlsc.net:8899"
+PORTAL_DEFAULT = "https://www.vlsc.net/mrrc_portal"
 
 #: The overseas path proxy, which exists for networks that only allow 80/443 outbound (R-H12).
 #: It is a hop away and was measured intermittent on that same evening - 3 of 6 requests hung
 #: until the client gave up - so it is the **fallback**, never the default.
-PORTAL_EDGE = "https://www.vlsc.net/mrrc_portal"
+#: :8899 hands the connection to the same portal, but the TLS handshake to it is interfered with
+#: on some paths (measured: the TCP connect succeeds and the handshake dies). Try the edge first.
+PORTAL_EDGE = "https://portal.mrrc.vlsc.net:8899"
 
 TIMEOUT = 25
 #: Budget for the first of two paths: a network that blocks 8899 must not spend the whole timeout

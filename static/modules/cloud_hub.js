@@ -48,6 +48,9 @@
                 : state.tunnel_error || '未运行（稍候会自动重试）';
             el('cloud-tunnel').style.color = state.tunnel_running ? '#4ade80' : '#fbbf24';
         }
+        if (state.connected && state.cert_reload_required) {
+            el('cloud-restart').style.display = 'inline-block';
+        }
         el('cloud-portal').textContent = state.portal || '';
     }
 
@@ -61,7 +64,12 @@
             if (r.j.callsign && r.j.has_token && !r.j.connected) {
                 api('/api/cloud/refresh').then((rr) => {
                     if (rr.j && rr.j.connected) {
-                        show('已接入 ✓ 正在重启以启用证书…', 'ok');
+                        // The certificate is signed during connect, and the running process still
+                        // holds the one it started with, so the entry answers 502 until a restart.
+                        show(rr.j.cert_reload_required
+                            ? '已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）'
+                            : '已接入 ✓', rr.j.cert_reload_required ? 'ok' : 'ok');
+                        if (rr.j.cert_reload_required) { el('cloud-restart').style.display = 'inline-block'; }
                         setTimeout(() => {
                             location.reload();
                         }, 2500);
@@ -114,7 +122,10 @@
                 return;
             }
             if (r.j && r.j.connected) {
-                show('已接入 ✓ 正在重启以启用证书…', 'ok');
+                show(r.j.cert_reload_required
+                    ? '已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）'
+                    : '已接入 ✓', 'ok');
+                if (r.j.cert_reload_required) { el('cloud-restart').style.display = 'inline-block'; }
                 setTimeout(() => {
                     location.reload();
                 }, 2500);
@@ -132,6 +143,12 @@
         dialog.querySelector('#cloud-apply').addEventListener('click', submitApply);
         dialog.querySelector('#cloud-refresh').addEventListener('click', () => {
             refresh();
+        });
+        dialog.querySelector('#cloud-restart').addEventListener('click', () => {
+            show('正在重启…页面会在几秒后自动回来');
+            api('/api/cloud/restart', {}).then(() => {
+                setTimeout(() => { location.reload(); }, 6000);
+            });
         });
         document.querySelectorAll("[data-action='cloud-hub']").forEach((elm) => {
             elm.addEventListener('click', (e) => {

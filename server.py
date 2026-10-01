@@ -4004,6 +4004,10 @@ def _ensure_tunnel_object():
     return _cloud_tunnel
 
 
+#: The certificate this process was started with - the TLS context cannot be reloaded.
+_SERVED_CERT_AT_STARTUP = os.environ.get("MRRC_SSL_CERT", "")
+
+
 def _cloud_start_tunnel(settings: dict) -> None:
     """Start frpc if this instance has been connected. Called lazily from /api/cloud/state."""
     global _cloud_tunnel
@@ -4038,6 +4042,7 @@ async def api_cloud_state(request: Request):
         "portal": _cloud_portal(settings),
         "tunnel_running": bool(_cloud_tunnel and _cloud_tunnel.running),
         "tunnel_error": (_cloud_tunnel.last_error if _cloud_tunnel else ""),
+        "cert_reload_required": _cert_reload_required(),
     })
 
 
@@ -4102,7 +4107,37 @@ async def api_cloud_refresh(request: Request):
         "MRRC_CLOUD_PORT": str(result.get("port", "")),
         "MRRC_CLOUD_ENTRY": result.get("entry", ""),
     })
+    # The TLS context was built when uvicorn started, so the certificate signed just now is not the
+    # certificate being served: the hub verifies the upstream against the enrolled one and the entry
+    # answers 502 until the process restarts. Measured on a clean machine, where the served
+    # fingerprint stayed at the bootstrap certificate until the launcher was told to restart. The
+    # launcher already restarts the server when asked, so say so instead of pretending.
+    result = dict(result)
+    result["cert_reload_required"] = _cert_reload_required()
     return JSONResponse(result)
+
+
+def _cert_reload_required() -> bool:
+    """True when the certificate signed at connect time is not the one this process serves."""
+    started_with = _SERVED_CERT_AT_STARTUP
+    now_configured = str(_cloud_settings().get("MRRC_SSL_CERT") or "")
+    return bool(started_with and now_configured and _resolve(started_with) != _resolve(now_configured))
+
+
+def _resolve(path: str) -> str:
+    try:
+        return str(Path(path).resolve())
+    except OSError:
+        return path
+
+
+@app.post("/api/cloud/restart", include_in_schema=False)
+async def api_cloud_restart(request: Request):
+    """Exit so the launcher starts us again with the certificate written at connect time."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    threading.Timer(1.2, lambda: os._exit(0)).start()
+    return JSONResponse({"restarting": True})
 
 
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route

@@ -1,8 +1,8 @@
 {
-  "latest": "1.24.2",
+  "latest": "1.24.3",
   "installer": {
-    "version": "1.24.2",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.2-Windows-x64-Setup.exe",
+    "version": "1.24.3",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.3-Windows-x64-Setup.exe",
     "sha256": "28ab6ff6335fe0d3b88ebc3ea21c00e70ae9cd8cc01e024d067c4f3fba04bb55",
     "size": 54074352
   },

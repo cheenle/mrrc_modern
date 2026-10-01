@@ -3,17 +3,17 @@
   "installer": {
     "version": "1.24.0",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.0-Windows-x64-Setup.exe",
-    "sha256": "7489bf50de42027de38740d9ad0eb785515ebba7244d56e5745be4b85e884b0b",
-    "size": 54064479
+    "sha256": "e25e3995cf46640e90ef5c614a59807a29eefbdf82f62dbd51167d9cf454ca95",
+    "size": 54121827
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-01T16:35:57",
-  "notes": "接入脚本：写完环境后重启应用、重跑即重启隧道、 解析不再依赖调用方式；hub 侧权限错误改为 500",
+  "releasedAt": "2026-10-01T18:51:02",
+  "notes": "接入云端搬进应用：设置里申请 → 后台批准 → 应用自动签证书/登记/起隧道；并含 443 登记入口、BOM、配置文件等真机修复",
   "previous": {
-    "version": "1.23.2",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.2-Windows-x64-Setup.exe",
-    "sha256": "b4a2e4df5ae81daf2db976fde2b033cd6a9715ed7c4e9a8842cda136a31c066e",
-    "size": 54064060
+    "version": "1.23.3",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.3-Windows-x64-Setup.exe",
+    "sha256": "7489bf50de42027de38740d9ad0eb785515ebba7244d56e5745be4b85e884b0b",
+    "size": 54064479
   }
 }

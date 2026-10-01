@@ -222,29 +222,31 @@ REMOTE_SESSION_TX_HEARTBEAT_S = _env_float("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S",
 # generates a self-signed one here (see server.py) instead of silently serving plain HTTP, which
 # made the browser show a protocol error and the UI look dead.
 def default_user_dir() -> Path:
-    """The per-user directory this app may write to, per platform."""
-    if os.name == "nt":
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-    elif sys.platform == "darwin":
-        base = str(Path.home() / "Library" / "Application Support")
-    else:
-        base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    """The per-user directory this app may write to, per platform.
+
+    Never raises: a test that reloads this module with a stripped environment made Path.home() throw
+    on Windows, and a path helper is not a place to fail a start-up over.
+    """
+    try:
+        if os.name == "nt":
+            base = os.environ.get("LOCALAPPDATA") or ""
+            if not base:
+                profile = os.environ.get("USERPROFILE") or ""
+                if profile:
+                    base = os.path.join(profile, "AppData", "Local")
+        elif sys.platform == "darwin":
+            base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
+        else:
+            base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    except Exception:                                                 # noqa: BLE001 - see docstring
+        base = ""
+    if not base or base in ("~", os.sep):
+        return Path(SCRIPT_DIR) / "user-data"
     return Path(base) / "MRRC-Modern"
 
 
 def _default_cert_dir() -> Path:
-    """Where a generated certificate goes: the user's own data directory, per platform.
-
-    Self-contained on purpose - the launcher has its own copy of this logic and config.py must not
-    depend on a module that only exists in some of the builds.
-    """
-    if os.name == "nt":
-        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-    elif sys.platform == "darwin":
-        base = str(Path.home() / "Library" / "Application Support")
-    else:
-        base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
-    return Path(base) / "MRRC-Modern" / "certs"
+    return default_user_dir() / "certs"
 
 
 CERT_DIR = _default_cert_dir()

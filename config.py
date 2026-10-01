@@ -160,7 +160,14 @@ def default_baud_for(model: str) -> int:
 # ── Serial Configuration ────────────────────────────────────────────
 # macOS default: /dev/cu.SLAB_USBtoUART  (FT-710 Enhanced COM Port)
 # Linux default: /dev/ttyUSB0
-SERIAL_PORT = _env("MRRC_SERIAL_PORT", "/dev/cu.SLAB_USBtoUART")
+# Per platform. The macOS device name used to be the default everywhere, so a Windows install
+# started out pointing at a port that cannot exist there and the radio was never found (reported
+# from a real machine: the log said /dev/cu.SLAB_USBtoUART while COM5 was sitting right there).
+if sys.platform == "darwin":
+    _DEFAULT_SERIAL_PORT = "/dev/cu.SLAB_USBtoUART"
+else:
+    _DEFAULT_SERIAL_PORT = ""            # empty = auto-detect on first run
+SERIAL_PORT = _env("MRRC_SERIAL_PORT", _DEFAULT_SERIAL_PORT)
 BAUD_RATE = _env_int("MRRC_BAUD_RATE", DEFAULT_BAUD_RATE)
 SERIAL_TIMEOUT = _env_float("MRRC_SERIAL_TIMEOUT", 1.0)
 # Short per-query timeout for background pollers.  Bounds how long a
@@ -214,6 +221,17 @@ REMOTE_SESSION_TX_HEARTBEAT_S = _env_float("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S",
 # shipped a certificate path that existed on nobody's machine. When the file is missing the server
 # generates a self-signed one here (see server.py) instead of silently serving plain HTTP, which
 # made the browser show a protocol error and the UI look dead.
+def default_user_dir() -> Path:
+    """The per-user directory this app may write to, per platform."""
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    elif sys.platform == "darwin":
+        base = str(Path.home() / "Library" / "Application Support")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "MRRC-Modern"
+
+
 def _default_cert_dir() -> Path:
     """Where a generated certificate goes: the user's own data directory, per platform.
 

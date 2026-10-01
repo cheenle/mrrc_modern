@@ -43,7 +43,7 @@ from config import (
     CQ_ASSET_PATH,
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     REMOTE_SESSION_TX_HEARTBEAT_S,
-    _env, default_baud_for,
+    _env, default_baud_for, default_user_dir,
 )
 from backends import create_backend, known_models
 from backends.base import RadioBackend
@@ -414,7 +414,10 @@ RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
 # set MRRC_LOG_DIR to the user data directory — Program Files and /Applications
 # are not writable — while the default keeps source and Raspberry Pi runs
 # working.  support-out/ holds the built bundles (newest 5, spec §7).
-LOG_DIR = Path(_env("MRRC_LOG_DIR", str(_runtime_dir() / "logs")))
+# Default to the user's own data directory: the packaged directory is read-only for a normal user,
+# so a bare start (without the launcher, which sets MRRC_LOG_DIR) had no logs at all - reported as
+# "File logging disabled ([WinError 5] 拒绝访问 : 'C:\Program Files\MRRC Modern\logs')".
+LOG_DIR = Path(_env("MRRC_LOG_DIR", str(default_user_dir() / "logs")))
 SUPPORT_OUT_DIR = LOG_DIR.parent / "support-out"
 SUPPORT_URL = _env("MRRC_SUPPORT_URL", "https://www.vlsc.net/mrrc_modern/support/")
 UPDATE_MANIFEST_URL = _env("MRRC_UPDATE_MANIFEST_URL", upgrade_core.DEFAULT_MANIFEST_URL)
@@ -703,6 +706,27 @@ def _listen_password_matches(candidate: str) -> bool:
 def _is_listen_request(request: Request) -> bool:
     """True when the request is authenticated with a listen-only token."""
     return _token_from_request(request) in _listen_tokens
+
+def _ensure_strong_password() -> None:
+    """Replace the well-known default password with a generated one, once, and remember it.
+
+    The launcher generates a password on first run; starting MRRC-Modern-Server.exe by itself (what
+    a user does when the launcher will not start) skipped that and served the login page with the
+    password written in the source. Generate one and save it, so the next start uses the same value.
+    """
+    global WEB_PASSWORD
+    if not hmac.compare_digest(str(WEB_PASSWORD).encode(), str(DEFAULT_WEB_PASSWORD).encode()):
+        return
+    generated = _secrets.token_urlsafe(12)
+    WEB_PASSWORD = generated
+    os.environ["MRRC_WEB_PASSWORD"] = generated
+    try:
+        cloud_hub._write_config(_config_file_path(), {"MRRC_WEB_PASSWORD": generated})
+        logger.info("generated a login password and saved it in %s", _config_file_path())
+    except Exception as exc:                                          # noqa: BLE001
+        logger.warning("could not save the generated password (%s)", exc)
+    logger.warning("login password for this run: %s   (change it in the settings dialog)", generated)
+
 
 def _warn_if_default_password() -> bool:
     """Loud startup warning when the well-known default password is in use.
@@ -3906,7 +3930,18 @@ def main():
     os.environ["MRRC_SERIAL_PORT"] = args.serial_port
     os.environ["MRRC_BAUD_RATE"] = str(args.baud)
     os.environ["MRRC_WEB_PORT"] = str(args.port)
+    # A port name from another operating system can never work here: the macOS default shipped in
+    # config.py used to apply everywhere, so a Windows install pointed at /dev/cu.SLAB_USBtoUART
+    # while the radio sat on COM5 (seen in a screenshot of a real console). Clear it so the first-run
+    # detection does its job, and say so.
+    _port = str(getattr(args, "serial_port", "") or "")
+    _wrong_os = (os.name == "nt" and _port.startswith("/dev/")) or (os.name != "nt" and _port.upper().startswith("COM"))
+    if _wrong_os:
+        logger.warning("serial port %r does not exist on this system - ignoring it and detecting instead", _port)
+        args.serial_port = ""
+
     os.environ["MRRC_WEB_PASSWORD"] = args.password
+    _ensure_strong_password()
     os.environ["MRRC_WEB_HOST"] = args.host
 
     # SSL configuration

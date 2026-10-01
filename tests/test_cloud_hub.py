@@ -1,0 +1,195 @@
+"""Cloud Hub onboarding from inside the app.
+
+These tests exist because the tenant-side flow used to be a shell script that had to be debugged on
+a real Windows machine, three times, in one night. What is asserted here is what those debugging
+sessions taught:
+
+* the certificate must carry the entry name the hub verifies (it refuses any other),
+* the tunnel config must be ASCII with no byte order mark, because frpc's TOML parser rejects a BOM
+  outright and reports it at column 1 of line 1,
+* the certificate paths must land in the launcher's own config file, not only in user-scope
+  variables, because a process started by Explorer keeps the environment block Explorer had,
+* and nothing may be written at all before the operator has approved the application.
+"""
+
+import json
+import os
+import stat
+import tempfile
+import threading
+import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+import cloud_hub
+
+
+class _FakePortal(BaseHTTPRequestHandler):
+    """Just enough portal: /apply, /status, /enroll, with the facts the tests assert on."""
+
+    state = {
+        "status": "applied",
+        "label": "bg9zzz",
+        "port": 18877,
+        "enroll_secret": "s" * 32,
+        "hub_token": "tok-frps",
+        "token": "t0k",
+    }
+    seen: dict = {}
+
+    def log_message(self, format: str, *args) -> None:    # noqa: A002 - matches the base class
+        """Silence the per-request logging; the assertions read the recorded fields instead."""
+
+    def _fields(self) -> dict:
+        length = int(self.headers.get("Content-Length") or 0)
+        raw = self.rfile.read(length).decode()
+        import urllib.parse
+        return {k: v[0] for k, v in urllib.parse.parse_qs(raw).items()}
+
+    def do_POST(self):                             # noqa: N802
+        fields = self._fields()
+        if self.path == "/apply":
+            _FakePortal.seen["apply"] = fields
+            self._json(200, {"callsign": fields.get("callsign", ""), "status": "applied",
+                             "request_token": self.state["token"]})
+        elif self.path == "/status":
+            if fields.get("token") != self.state["token"]:
+                self._json(403, {"error": "申请令牌无效"})
+                return
+            granted = self.state["status"] == "granted"
+            self._json(200, {
+                "callsign": fields.get("callsign", ""),
+                "status": self.state["status"],
+                "label": self.state["label"] if granted else "",
+                "port": self.state["port"] if granted else 0,
+                "enroll_secret": self.state["enroll_secret"] if granted else "",
+                "hub_token": self.state["hub_token"] if granted else "",
+                "entry": f"https://{self.state['label']}.mrrc.vlsc.net:9988/" if granted else "",
+            })
+        elif self.path == "/enroll":
+            _FakePortal.seen["enroll"] = fields
+            if fields.get("secret") != self.state["enroll_secret"]:
+                self._json(403, {"error": "登记口令无效或未获授权"})
+                return
+            from cryptography import x509
+            cert = x509.load_pem_x509_certificate(fields.get("cert", "").encode())
+            cn = cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
+            expected = f"{self.state['label']}.mrrc.vlsc.net"
+            _FakePortal.seen["cert_cn"] = cn
+            if cn != expected:
+                self._json(400, {"error": f"证书名字不符：期望 {expected}，实得 {cn}"})
+                return
+            self._json(200, {"callsign": fields.get("callsign", ""), "names": [cn]})
+        else:
+            self._json(404, {"error": "no such route"})
+
+    def _json(self, code: int, payload: dict) -> None:
+        body = json.dumps(payload).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+class CloudHubTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), _FakePortal)
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+        cls.portal = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+
+    def setUp(self):
+        _FakePortal.state.update({"status": "applied"})
+        _FakePortal.seen.clear()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.cfg = self.root / "mrrc_modern.env"
+        self.cert_dir = self.root / "certs"
+        self.data_dir = self.root / "fleet"
+        self.fleet = self.root / "fleetbin"
+        self.fleet.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _fake_frpc(self) -> Path:
+        """An executable that records that it ran, then stays alive like the real one."""
+        marker = self.root / "frpc-started"
+        script = self.fleet / ("frpc.exe" if os.name == "nt" else "frpc")
+        script.write_text(f"#!/bin/sh\ntouch {marker}\nwhile true; do sleep 1; done\n", encoding="utf-8")
+        script.chmod(script.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        return script
+
+    def test_apply_returns_the_token_the_app_must_keep(self):
+        reply = cloud_hub.apply(self.portal, "BG9ZZZ", "op@example.com")
+        self.assertEqual(reply["request_token"], "t0k")
+        self.assertEqual(_FakePortal.seen["apply"]["callsign"], "BG9ZZZ")
+
+    def test_status_refuses_a_wrong_token(self):
+        with self.assertRaises(cloud_hub.CloudHubError):
+            cloud_hub.status(self.portal, "BG9ZZZ", "not-the-token")
+
+    def test_nothing_is_written_before_approval(self):
+        result = cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg,
+                                   cert_dir=self.cert_dir, fleet_dir=self.fleet,
+                                   data_dir=self.data_dir)
+        self.assertFalse(result["connected"])
+        self.assertFalse(self.cfg.exists())
+        self.assertFalse(self.cert_dir.exists())
+
+    def test_connect_signs_enrolls_configures_and_tunnels(self):
+        _FakePortal.state["status"] = "granted"
+        self._fake_frpc()
+        tunnel = cloud_hub.TunnelProcess(self.fleet / "frpc", self.root / "unused.toml")
+        try:
+            result = cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg,
+                                       cert_dir=self.cert_dir, fleet_dir=self.fleet,
+                                       data_dir=self.data_dir, tunnel=tunnel)
+        finally:
+            tunnel.stop()
+
+        self.assertTrue(result["connected"], result)
+        self.assertEqual(result["entry"], "https://bg9zzz.mrrc.vlsc.net:9988/")
+
+        # the certificate carries the name the hub verifies
+        from cryptography import x509
+        cert = x509.load_pem_x509_certificate(Path(result["cert"]).read_bytes())
+        cn = cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)[0].value
+        self.assertEqual(cn, "bg9zzz.mrrc.vlsc.net")
+        self.assertEqual(_FakePortal.seen["cert_cn"], "bg9zzz.mrrc.vlsc.net")
+
+        # the config file the launcher reads got the certificate, and kept what was there
+        self.cfg.write_text("MRRC_RADIO_MODEL=ft710\nMRRC_SSL_CERT=/old/path.pem\n", encoding="utf-8")
+        cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg, cert_dir=self.cert_dir,
+                          fleet_dir=self.fleet, data_dir=self.data_dir, tunnel=tunnel)
+        text = self.cfg.read_text(encoding="utf-8")
+        self.assertIn("MRRC_RADIO_MODEL=ft710", text)
+        self.assertIn(f"MRRC_SSL_CERT={result['cert']}", text)
+        self.assertNotIn("/old/path.pem", text)
+        self.assertEqual(text.count("MRRC_SSL_CERT="), 1)
+
+        # the TOML frpc reads: ASCII, no BOM, one tcp proxy
+        raw = Path(result["tunnel_config"]).read_bytes()
+        self.assertNotEqual(raw[:3], b"\xef\xbb\xbf", "frpc rejects a BOM at line 1 column 1")
+        raw.decode("ascii")
+        conf_text = raw.decode()
+        self.assertIn("auth.token = \"tok-frps\"", conf_text)
+        self.assertIn(f"remotePort = {18877}", conf_text)
+        self.assertIn("localPort = 8888", conf_text)
+
+        # and the tunnel process really started
+        for _ in range(50):
+            if (self.root / "frpc-started").exists():
+                break
+            import time
+            time.sleep(0.1)
+        self.assertTrue((self.root / "frpc-started").exists(), "frpc was not started")
+
+
+if __name__ == "__main__":
+    unittest.main()

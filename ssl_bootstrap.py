@@ -46,6 +46,56 @@ def _lan_ips() -> list[str]:
     return sorted(ips)
 
 
+def sign_for(name: str, cert_dir: Path, filename: str = "fullchain.pem"):
+    """Generate a self-signed pair whose CN and SAN are ``name`` (an instance's entry name).
+
+    The Cloud Hub verifies the instance by exactly this name (its /enroll endpoint refuses a
+    certificate for any other), so the certificate the app serves when it is published through the
+    hub must carry it. Same primitives as the localhost pair, different subject.
+    """
+    cert_dir = Path(cert_dir)
+    cert_dir.mkdir(parents=True, exist_ok=True)
+    cert_path = cert_dir / filename
+    key_path = cert_dir / (name.split(".")[0] + ".key")
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.x509.oid import NameOID
+    except ImportError:
+        logger.warning("cryptography not installed — cannot sign a certificate for %s", name)
+        return None
+    key = ec.generate_private_key(ec.SECP256R1())
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(minutes=5))
+        .not_valid_after(now + datetime.timedelta(days=VALID_DAYS))
+        .add_extension(x509.SubjectAlternativeName([x509.DNSName(name)]), critical=False)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .sign(key, hashes.SHA256())
+    )
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    try:
+        key_path.chmod(0o600)
+    except OSError:
+        pass
+    logger.info("signed a self-signed certificate for %s", name)
+    return cert_path, key_path
+
+
 def ensure_self_signed(cert_dir: Path):
     """Return (cert_path, key_path), generating a self-signed pair if absent.
 

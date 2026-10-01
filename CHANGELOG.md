@@ -2,6 +2,22 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.23.3] — 2026-10-02 — 接入脚本对"真租户"友好：重启应用、重启隧道、说清权限错误
+
+三处都是"装完真跑"才会遇到的，来自一次真实的**重装**验证：
+
+- **脚本写完环境变量后重启应用**。已经在运行的应用继承的是启动时的环境块（从开始菜单启动 =
+  Explorer 的环境）⇒ 它继续用自己那张 `localhost` 证书 ⇒ hub 报
+  `upstream SSL certificate verify error`、入口永远 502，而租户侧一切"看起来正常"。
+- **重跑脚本会重启隧道任务**。升级应用时安装器会关掉 frpc（它住在应用目录里），而任务是登录时
+  启动 ⇒ 不自己回来。脚本本来就承诺"可重跑"，现在这句承诺成立。
+- **`$FleetDir` 不再取 param 默认值里的 `$PSScriptRoot`**：从 PowerShell 窗口里调用它时该变量为空
+  ⇒ `Join-Path $FleetDir "frpc.exe"` 报"参数 Path 为空字符串"，指向一行看起来无辜的代码。
+  改为在脚本体里逐级回退（`$PSScriptRoot` → `$MyInvocation` → 当前目录）。
+
+**hub 侧**：登记端点的 `PermissionError` 不再返回 **409**（会被理解成"你提交的东西有冲突"），
+改为 **500** 并在响应体里写明是 hub 侧写入失败 —— 这个误导在 2026-10-01 的排障里花掉两轮。
+
 ## [v1.23.2] — 2026-10-02 — macOS 安装包也带上接入件（与 Windows 的 fleet\ 对等）
 
 v1.23.1 的 Windows 包里有 `fleet\`（frpc + openssl + 接入脚本 + openssl.cnf），macOS 的 DMG 里

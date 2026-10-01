@@ -1,19 +1,19 @@
 {
-  "latest": "1.23.2",
+  "latest": "1.23.3",
   "installer": {
+    "version": "1.23.3",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.3-Windows-x64-Setup.exe",
+    "sha256": "7489bf50de42027de38740d9ad0eb785515ebba7244d56e5745be4b85e884b0b",
+    "size": 54064479
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-10-01T16:35:57",
+  "notes": "接入脚本：写完环境后重启应用、重跑即重启隧道、 解析不再依赖调用方式；hub 侧权限错误改为 500",
+  "previous": {
     "version": "1.23.2",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.2-Windows-x64-Setup.exe",
     "sha256": "b4a2e4df5ae81daf2db976fde2b033cd6a9715ed7c4e9a8842cda136a31c066e",
     "size": 54064060
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-10-01T15:33:58",
-  "notes": "macOS 安装包带上接入件（frpc + 四个脚本 + 说明），与 Windows 的 fleet/ 对等",
-  "previous": {
-    "version": "1.23.1",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.1-Windows-x64-Setup.exe",
-    "sha256": "fabdf0de0eabb05abf7f0b9c1a5eaf0bf5b33a43bfdfb71487a7438a086bd5af",
-    "size": 54065911
   }
 }

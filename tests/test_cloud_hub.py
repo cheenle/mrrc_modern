@@ -21,6 +21,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest import mock
 
 import cloud_hub
 
@@ -94,26 +95,30 @@ class _FakePortal(BaseHTTPRequestHandler):
 
 
 
-class _RecordingTunnel:
+class _RecordingTunnel(cloud_hub.TunnelProcess):
     """Stands in for TunnelProcess so the assertions work on every platform.
 
     The real thing runs frpc; a test that waits for a real process can only do so where a shell
     script is executable, which is not Windows - and it was Windows that turned this test red the
-    first time.
+    first time. It subclasses the real class rather than duplicating its shape, so the type check
+    keeps proving that connect() is handed something it can actually use.
     """
 
     def __init__(self):
-        self.frpc = None
-        self.conf = None
+        super().__init__(Path("unused-frpc"), Path("unused.toml"))
         self.started = False
-        self.running = False
+        self._running = False
 
     def start(self):
         self.started = True
-        self.running = True
+        self._running = True
 
     def stop(self):
-        self.running = False
+        self._running = False
+
+    @property
+    def running(self) -> bool:
+        return self._running
 
 
 class CloudHubTests(unittest.TestCase):
@@ -228,6 +233,78 @@ class CloudHubTests(unittest.TestCase):
             self.assertTrue(tunnel.running)
         finally:
             tunnel.stop()
+
+
+class PortalPathTests(unittest.TestCase):
+    """Which entry the app talks to, and what it does when that entry never answers.
+
+    Measured 2026-10-01 from a mainland home line: the hub's own entry answered 3/3 in 0.30-1.40 s,
+    while the overseas edge path hung on 3 of 6 requests. The app shipped with the edge as its
+    default - onboarding could sit out a whole timeout on a path already known to be flaky - so the
+    hub entry is the default now and the edge is the fallback for 80/443-only networks (R-H12).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), _FakePortal)
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+        cls.portal = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+
+    def setUp(self):
+        _FakePortal.state.update({"status": "applied"})
+        _FakePortal.seen.clear()
+
+    @staticmethod
+    def _closed_port() -> int:
+        """A port nothing listens on: bind one, read the number, release it."""
+        probe = ThreadingHTTPServer(("127.0.0.1", 0), _FakePortal)
+        try:
+            return probe.server_address[1]
+        finally:
+            probe.server_close()
+
+    def test_the_default_is_the_hub_entry_and_the_edge_is_only_the_fallback(self):
+        self.assertEqual(cloud_hub.PORTAL_DEFAULT, "https://portal.mrrc.vlsc.net:8899")
+        self.assertEqual(cloud_hub.PORTAL_EDGE, "https://www.vlsc.net/mrrc_portal")
+
+    def test_a_path_that_never_answered_is_retried_on_the_edge(self):
+        calls = []
+
+        def fake_post_once(base, route, payload, timeout):
+            calls.append(base)
+            if base == cloud_hub.PORTAL_DEFAULT:
+                raise cloud_hub._Unreachable("cannot reach the portal (ConnectionRefusedError)")
+            return {"status": "applied"}
+
+        with mock.patch.object(cloud_hub, "_post_once", side_effect=fake_post_once):
+            reply = cloud_hub._post(cloud_hub.PORTAL_DEFAULT, "/apply", {})
+        self.assertEqual(reply, {"status": "applied"})
+        self.assertEqual(calls, [cloud_hub.PORTAL_DEFAULT, cloud_hub.PORTAL_EDGE])
+
+    def test_a_rejection_is_not_retried_on_the_other_path(self):
+        calls = []
+
+        def fake_post_once(base, route, payload, timeout):
+            calls.append(base)
+            raise cloud_hub.CloudHubError("BG9ZZZ 已存在申请（状态 applied）")
+
+        with mock.patch.object(cloud_hub, "_post_once", side_effect=fake_post_once):
+            with self.assertRaises(cloud_hub.CloudHubError) as caught:
+                cloud_hub._post(cloud_hub.PORTAL_DEFAULT, "/apply", {})
+        self.assertEqual(calls, [cloud_hub.PORTAL_DEFAULT], "a rejection must not be re-sent")
+        self.assertIn("已存在申请", str(caught.exception))
+
+    def test_apply_reaches_the_edge_when_the_hub_entry_refuses(self):
+        dead = f"http://127.0.0.1:{self._closed_port()}"
+        with mock.patch.object(cloud_hub, "PORTAL_DEFAULT", dead), \
+             mock.patch.object(cloud_hub, "PORTAL_EDGE", self.portal):
+            reply = cloud_hub.apply(dead, "BG9ZZZ", "op@example.com", "mrrc_modern")
+        self.assertEqual(reply["request_token"], "t0k")
+        self.assertEqual(_FakePortal.seen["apply"]["callsign"], "BG9ZZZ")
 
 
 if __name__ == "__main__":

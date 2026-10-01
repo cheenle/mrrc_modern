@@ -33,18 +33,38 @@ import ssl_bootstrap
 
 logger = logging.getLogger(__name__)
 
-#: The 443 edge, not the hub's own address on 8899. Measured from a mainland home line: TLS to the
-#: hub IP fails on every port at once, while the edge answers (see the hub's R-H13 note).
-PORTAL_DEFAULT = "https://www.vlsc.net/mrrc_portal"
+#: The hub's own portal entry, and the app's default. Measured from a mainland home line
+#: (2026-10-01): 3/3 answered in 0.30-1.40 s with the wildcard certificate in place. An earlier note
+#: blamed the hub's TLS for every port at once - that measurement was against the bare IP and this
+#: name (which is what the app uses, and what the hub's vhost has a certificate for) was never it.
+PORTAL_DEFAULT = "https://portal.mrrc.vlsc.net:8899"
+
+#: The overseas path proxy, which exists for networks that only allow 80/443 outbound (R-H12).
+#: It is a hop away and was measured intermittent on that same evening - 3 of 6 requests hung
+#: until the client gave up - so it is the **fallback**, never the default.
+PORTAL_EDGE = "https://www.vlsc.net/mrrc_portal"
+
 TIMEOUT = 25
+#: Budget for the first of two paths: a network that blocks 8899 must not spend the whole timeout
+#: before the fallback gets its turn (the portal answers in ~1.4 s when it is reachable).
+FALLBACK_FIRST_TIMEOUT = 8
 
 
 class CloudHubError(RuntimeError):
     """Anything the UI should show as a sentence rather than a traceback."""
 
 
-def _post(portal: str, route: str, payload: dict, timeout: int = TIMEOUT) -> dict:
-    """POST form-encoded fields - the shape the portal speaks - and return its JSON."""
+class _Unreachable(CloudHubError):
+    """The request never reached a portal: DNS/TCP/TLS failure, a timeout, or a hop's 502/504.
+
+    Kept apart from a portal that *answered* (even with a rejection), because only the former is
+    worth retrying on the other path - repeating an application the portal already recorded would
+    just trade one failure for a duplicate.
+    """
+
+
+def _post_once(portal: str, route: str, payload: dict, timeout: int) -> dict:
+    """POST form-encoded fields on one path - the shape the portal speaks - and return its JSON."""
     url = portal.rstrip("/") + route
     data = urllib.parse.urlencode(payload).encode()
     req = urllib.request.Request(url, data=data,
@@ -58,9 +78,35 @@ def _post(portal: str, route: str, payload: dict, timeout: int = TIMEOUT) -> dic
             detail = json.loads(exc.read() or b"{}").get("error", "")
         except Exception:                       # noqa: BLE001 - the body is best effort
             pass
-        raise CloudHubError(detail or f"portal returned HTTP {exc.code}") from exc
+        message = detail
+        if not message:
+            message = f"portal returned HTTP {exc.code}"
+        if exc.code in (502, 504):              # a proxy hop died; the portal never spoke
+            raise _Unreachable(message) from exc
+        raise CloudHubError(message) from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise CloudHubError(f"cannot reach the portal ({exc.__class__.__name__}: {exc})") from exc
+        raise _Unreachable(f"cannot reach the portal ({exc.__class__.__name__}: {exc})") from exc
+
+
+def _post(portal: str, route: str, payload: dict, timeout: int = TIMEOUT) -> dict:
+    """POST to the portal, asking the overseas edge only when the first path never answered.
+
+    The default entry is the hub's own; the edge exists for networks that permit just 80/443
+    outbound (R-H12). A portal that answered - even with a bad callsign or a duplicate - is never
+    asked twice, so a retry can not turn a rejection into a second application.
+    """
+    paths = [portal]
+    if portal.rstrip("/") == PORTAL_DEFAULT:
+        paths.append(PORTAL_EDGE)
+    last_error: CloudHubError = CloudHubError("no portal path to try")
+    for index, base in enumerate(paths):
+        budget = FALLBACK_FIRST_TIMEOUT if len(paths) > 1 and index == 0 else timeout
+        try:
+            return _post_once(base, route, payload, budget)
+        except _Unreachable as exc:
+            logger.info("cloud hub: %s did not answer (%s); trying the next path", base, exc)
+            last_error = exc
+    raise last_error
 
 
 def apply(portal: str, callsign: str, contact: str = "", product: str = "") -> dict:
@@ -192,7 +238,12 @@ def connect(portal: str, callsign: str, token: str, *, config_path: Path, cert_d
         return {"connected": False, "status": state.get("status", "unknown"), "reason": "尚未批准"}
 
     label = str(state.get("label") or "")
-    port = int(state.get("port") or 0)
+    # The portal is remote input: a malformed port must read as a sentence in the UI, not as an
+    # unhandled ValueError that the endpoint turns into a 500.
+    try:
+        port = int(state.get("port") or 0)
+    except (TypeError, ValueError) as exc:
+        raise CloudHubError(f"portal sent a non-numeric port: {state.get('port')!r}") from exc
     secret = str(state.get("enroll_secret") or "")
     hub_token = str(state.get("hub_token") or "") or os.environ.get("MRRC_HUB_TOKEN", "")
     if not (label and port and secret):

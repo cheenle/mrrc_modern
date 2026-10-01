@@ -4037,11 +4037,19 @@ async def api_cloud_apply(request: Request):
     body = await request.json()
     callsign = str(body.get("callsign", "")).strip().upper()
     contact = str(body.get("contact", "")).strip()
+    secret = str(body.get("secret", "")).strip()
     portal = _cloud_portal(_cloud_settings())
     if not callsign:
         return JSONResponse({"error": "需要呼号"}, status_code=400)
     try:
-        reply = cloud_hub.apply(portal, callsign, contact, "mrrc_modern")
+        if secret:
+            # The operator already approved this application (perhaps it was entered on the web).
+            # The one-time secret they were given claims it, so the tenant does not have to start
+            # over. The same secret is what the hub uses to accept the certificate, so it grants
+            # nothing new.
+            reply = cloud_hub.claim(portal, callsign, secret)
+        else:
+            reply = cloud_hub.apply(portal, callsign, contact, "mrrc_modern")
     except cloud_hub.CloudHubError as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)
     cloud_hub._write_config(_config_file_path(), {
@@ -4049,8 +4057,11 @@ async def api_cloud_apply(request: Request):
         "MRRC_CLOUD_TOKEN": reply["request_token"],
         "MRRC_CLOUD_PORTAL": portal,
     })
+    if reply.get("status") == "granted":
+        # A claimed application is already approved: connect now instead of asking for another click.
+        return await api_cloud_refresh(request)
     return JSONResponse({"submitted": True, "status": reply.get("status", "applied"),
-                          "callsign": callsign})
+                         "callsign": callsign})
 
 
 @app.post("/api/cloud/refresh", include_in_schema=False)

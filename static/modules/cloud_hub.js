@@ -101,14 +101,23 @@
     function submitApply() {
         var callsign = (el('cloud-callsign').value || '').trim();
         var contact = (el('cloud-contact').value || '').trim();
+        var secretField = el('cloud-secret');
+        var secret = secretField ? (secretField.value || '').trim() : '';
         if (!callsign) {
             show('请填呼号', 'error');
             return;
         }
-        show('提交中…');
-        api('/api/cloud/apply', { callsign: callsign, contact: contact }).then((r) => {
+        show(secret ? '接入中…' : '提交中…');
+        api('/api/cloud/apply', { callsign: callsign, contact: contact, secret: secret }).then((r) => {
             if (!r.ok) {
                 show((r.j && r.j.error) || '提交失败', 'error');
+                return;
+            }
+            if (r.j && r.j.connected) {
+                show('已接入 ✓ 正在重启以启用证书…', 'ok');
+                setTimeout(() => {
+                    location.reload();
+                }, 2500);
                 return;
             }
             show('已提交 ✓ 等运维批准后这里会自动继续', 'ok');

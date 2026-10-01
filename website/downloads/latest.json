@@ -3,12 +3,12 @@
   "installer": {
     "version": "1.23.1",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.1-Windows-x64-Setup.exe",
-    "sha256": "b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0",
-    "size": 46015844
+    "sha256": "fabdf0de0eabb05abf7f0b9c1a5eaf0bf5b33a43bfdfb71487a7438a086bd5af",
+    "size": 54065911
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-01T14:22:12",
+  "releasedAt": "2026-10-01T14:22:44",
   "notes": "一键接入在真机上跑通：内置 openssl 配置、计划任务账号、隧道配置 BOM 等 5 个只在装机后才现形的修复",
   "previous": {
     "version": "1.23.0",

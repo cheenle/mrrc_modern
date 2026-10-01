@@ -1,19 +1,19 @@
 {
-  "latest": "1.24.0",
+  "latest": "1.24.2",
   "installer": {
+    "version": "1.24.2",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.2-Windows-x64-Setup.exe",
+    "sha256": "28ab6ff6335fe0d3b88ebc3ea21c00e70ae9cd8cc01e024d067c4f3fba04bb55",
+    "size": 54074352
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-10-01T22:16:20",
+  "notes": "接入云端：应用自己启动并托管隧道；TOML 路径改正斜杠（否则 frpc 拒绝启动）",
+  "previous": {
     "version": "1.24.0",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.0-Windows-x64-Setup.exe",
     "sha256": "e25e3995cf46640e90ef5c614a59807a29eefbdf82f62dbd51167d9cf454ca95",
     "size": 54121827
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-10-01T18:51:02",
-  "notes": "接入云端搬进应用：设置里申请 → 后台批准 → 应用自动签证书/登记/起隧道；并含 443 登记入口、BOM、配置文件等真机修复",
-  "previous": {
-    "version": "1.23.3",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.3-Windows-x64-Setup.exe",
-    "sha256": "7489bf50de42027de38740d9ad0eb785515ebba7244d56e5745be4b85e884b0b",
-    "size": 54064479
   }
 }

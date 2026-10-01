@@ -2,6 +2,33 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.23.1] — 2026-10-02 — 一键接入真机上跑通：5 个只在"装完真跑"才现形的修复
+
+v1.23.0 的包**装得上，但接不进任何入口** —— 单元测试、构建门禁、产物哈希当时全绿。以下 5 个
+缺陷全部由"在干净 Windows VM 上装线上包、按租户的方式跑一遍"发现，并已在真机验证修复：
+
+- **内置 openssl 找不到自己的配置**（`Can't open …/etc/ssl/openssl.cnf`）：msys2 的 openssl 按
+  **编译前缀**找默认配置，租户机上没有那个前缀 ⇒ 签不出实例证书。现在随包带 `openssl.cnf` 并由
+  安装脚本显式 `-config`；缺文件时明确报错，不再回退。
+- **shell 侧用了 `-addext`**：OpenSSL 3 有、**LibreSSL 没有**，而 stock macOS 的 `/usr/bin/openssl`
+  就是 LibreSSL ⇒ 改用两边都认的 `-config` 形式。
+- **PowerShell 5.1 把原生程序的 stderr 当致命错误**（openssl 的进度点 `+++…`）⇒ 脚本在签名一步
+  中断。原生调用周围降为首选项 Continue，成败仍由 `$LASTEXITCODE` 判定。
+- **计划任务主体写成 `USERDOMAIN\USERNAME`**：非域机器上等于 `WORKGROUP\user` ⇒
+  `HRESULT 0x80070534`。改用 `COMPUTERNAME\USERNAME`。
+- **隧道配置带 BOM**：PowerShell 5.1 的 `Set-Content -Encoding utf8` 会写 BOM，而 frpc 的 TOML
+  解析器直接拒绝（`invalid character at start of key`）⇒ 隧道永远起不来、入口永远 502，且**别处
+  没有任何错误**。改用 `-Encoding ascii`（TOML 本就是纯 ASCII）。
+
+**同时修复的还有 hub 侧一处配置默认值**（写错会让每个新租户都 502）：`gen_hub_routes.py` 过去在
+注册表未写 `tls_name` 时按固定旧名 `radio.vlsc.net` 校验，而新式自签租户的证书是签给**自己的入口名**的
+⇒ nginx 报 `upstream SSL certificate does not match`。现在缺列即用自己的入口名，老实例显式写明旧名。
+
+**验收证据**（在一台干净 VM 上，从零开始）：签出 `CN=<呼号>.mrrc.vlsc.net` → 登记 200 → hub 落盘 →
+信任包与 map 正确 → frpc `login success` / `start proxy success` → 应用 TLS 出示的证书指纹与登记的一致
+→ 公网入口 `401`（= hub 认了这张自签证书）。前 7 项全绿也**不足以**说明包能用，这一条已写进
+`packaging/README.md` 的验收表。
+
 ## [v1.23.0] — 2026-10-02 — 多客户端 PTT 仲裁 + Cloud Hub 前置件齐备（一键接入可用）
 
 - **修复两个全控客户端互相掐键**：现场日志（2026-09-25 20:00–20:05）显示 5 分钟内 75 次 TX 会话、

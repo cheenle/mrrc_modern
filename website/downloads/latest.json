@@ -1,19 +1,19 @@
 {
-  "latest": "1.23.0",
+  "latest": "1.23.1",
   "installer": {
+    "version": "1.23.1",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.1-Windows-x64-Setup.exe",
+    "sha256": "b5b41eac8b642aa7b7c28ff6c0096124348929a0c4104aba82de4a1bf2424ed0",
+    "size": 46015844
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-10-01T14:22:12",
+  "notes": "一键接入在真机上跑通：内置 openssl 配置、计划任务账号、隧道配置 BOM 等 5 个只在装机后才现形的修复",
+  "previous": {
     "version": "1.23.0",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.0-Windows-x64-Setup.exe",
     "sha256": "4499f2dfce75aa5f42919446755f0d8b0678d2847876d324f9b1baaeb2bceab0",
     "size": 54057763
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-10-01T10:17:30",
-  "notes": "多客户端 PTT 仲裁（两个全控客户端不再互相掐键）+ Cloud Hub 前置件齐备：安装包内置 frpc 与自足的 openssl，并带一键接入脚本",
-  "previous": {
-    "version": "1.22.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.22.0-Windows-x64-Setup.exe",
-    "sha256": "8f96e45de6c4ad17f7d6e7a52016787e5b8db9894ff18e68d9103f615ac1635f",
-    "size": 45923406
   }
 }

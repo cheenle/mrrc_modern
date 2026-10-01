@@ -204,7 +204,7 @@ class CloudHubTests(unittest.TestCase):
                                   data_dir=self.data_dir, tunnel=tunnel)
 
         self.assertTrue(result["connected"], result)
-        self.assertEqual(result["entry"], "https://bg9zzz.mrrc.vlsc.net:9988/")
+        self.assertEqual(result["entry"], "https://bg9zzz.mrrc.vlsc.net/")
         self.assertTrue(tunnel.started, "the tunnel was not started")
         self.assertEqual(str(tunnel.conf), result["tunnel_config"])
 
@@ -261,99 +261,63 @@ class CloudHubTests(unittest.TestCase):
 
 
 class PortalPathTests(unittest.TestCase):
-    """Which entry the app talks to, and what it does when that entry never answers.
+    """One portal, one address. The two-path era ended when everything moved onto one machine."""
 
-    Measured 2026-10-01 from a mainland home line: the hub's own entry answered 3/3 in 0.30-1.40 s,
-    while the overseas edge path hung on 3 of 6 requests. The app shipped with the edge as its
-    default - onboarding could sit out a whole timeout on a path already known to be flaky - so the
-    hub entry is the default now and the edge is the fallback for 80/443-only networks (R-H12).
-    """
+    def test_default_is_the_merged_address(self):
+        self.assertEqual(cloud_hub.PORTAL_DEFAULT, "https://portal.mrrc.vlsc.net/mrrc_portal")
 
-    @classmethod
-    def setUpClass(cls):
-        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), _FakePortal)
-        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
-        cls.portal = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
+    def test_a_config_from_before_the_merge_is_sent_to_the_new_address(self):
+        for legacy in ("https://portal.mrrc.vlsc.net:8899", "https://www.vlsc.net/mrrc_portal"):
+            seen = []
+            real = cloud_hub._post_once
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.httpd.shutdown()
+            def fake(base, route, payload, timeout):
+                seen.append(base)
+                return {"status": "granted"}
 
-    def setUp(self):
-        _FakePortal.state.update({"status": "applied"})
-        _FakePortal.seen.clear()
+            cloud_hub._post_once = fake
+            try:
+                out = cloud_hub._post(legacy, "/status", {})
+            finally:
+                cloud_hub._post_once = real
+            self.assertEqual(out["status"], "granted")
+            self.assertEqual(seen, [cloud_hub.PORTAL_DEFAULT], legacy)
 
-    @staticmethod
-    def _closed_port() -> int:
-        """A port nothing listens on: bind one, read the number, release it."""
-        probe = ThreadingHTTPServer(("127.0.0.1", 0), _FakePortal)
-        try:
-            return probe.server_address[1]
-        finally:
-            probe.server_close()
-
-    def test_the_default_is_the_edge_and_the_hub_port_is_the_fallback(self):
-        # The edge first: the TLS handshake to :8899 is interfered with on some paths, so a client
-        # that starts there waits out a timeout before it works. :8899 stays as the second try.
-        self.assertEqual(cloud_hub.PORTAL_DEFAULT, "https://www.vlsc.net/mrrc_portal")
-        self.assertEqual(cloud_hub.PORTAL_EDGE, "https://portal.mrrc.vlsc.net:8899")
-
-    def test_a_path_that_never_answered_is_retried_on_the_edge(self):
-        calls = []
-
-        def fake_post_once(base, route, payload, timeout):
-            calls.append(base)
-            if base == cloud_hub.PORTAL_DEFAULT:
-                raise cloud_hub._Unreachable("cannot reach the portal (ConnectionRefusedError)")
-            return {"status": "applied"}
-
-        with mock.patch.object(cloud_hub, "_post_once", side_effect=fake_post_once):
-            reply = cloud_hub._post(cloud_hub.PORTAL_DEFAULT, "/apply", {})
-        self.assertEqual(reply, {"status": "applied"})
-        self.assertEqual(calls, [cloud_hub.PORTAL_DEFAULT, cloud_hub.PORTAL_EDGE])
-
-    def test_a_rejection_is_not_retried_on_the_other_path(self):
-        calls = []
-
-        def fake_post_once(base, route, payload, timeout):
-            calls.append(base)
-            raise cloud_hub.CloudHubError("BG9ZZZ 已存在申请（状态 applied）")
-
-        with mock.patch.object(cloud_hub, "_post_once", side_effect=fake_post_once):
-            with self.assertRaises(cloud_hub.CloudHubError) as caught:
-                cloud_hub._post(cloud_hub.PORTAL_DEFAULT, "/apply", {})
-        self.assertEqual(calls, [cloud_hub.PORTAL_DEFAULT], "a rejection must not be re-sent")
-        self.assertIn("已存在申请", str(caught.exception))
-
-    def test_apply_reaches_the_edge_when_the_hub_entry_refuses(self):
-        dead = f"http://127.0.0.1:{self._closed_port()}"
-        with mock.patch.object(cloud_hub, "PORTAL_DEFAULT", dead), \
-             mock.patch.object(cloud_hub, "PORTAL_EDGE", self.portal):
-            reply = cloud_hub.apply(dead, "BG9ZZZ", "op@example.com", "mrrc_modern")
-        self.assertEqual(reply["request_token"], "t0k")
-        self.assertEqual(_FakePortal.seen["apply"]["callsign"], "BG9ZZZ")
-
-
-if __name__ == "__main__":
-    unittest.main()
-
-    def test_a_tls_handshake_failure_also_falls_back(self):
-        """Not just "never answered": a handshake that dies is the failure we actually measured."""
-        import ssl
-        import urllib.error
-        calls = []
+    def test_a_custom_portal_is_used_as_given(self):
+        seen = []
         real = cloud_hub._post_once
 
         def fake(base, route, payload, timeout):
-            calls.append(base)
-            if base == cloud_hub.PORTAL_DEFAULT:
-                raise urllib.error.URLError(ssl.SSLError("tlsv1 alert protocol version"))
-            return {"status": "granted"}
+            seen.append(base)
+            return {"ok": True}
 
         cloud_hub._post_once = fake
         try:
-            out = cloud_hub._post(cloud_hub.PORTAL_DEFAULT, "/status", {})
+            cloud_hub._post("https://example.invalid/portal/", "/status", {})
         finally:
             cloud_hub._post_once = real
-        self.assertEqual(out["status"], "granted")
-        self.assertEqual(calls, [cloud_hub.PORTAL_DEFAULT, cloud_hub.PORTAL_EDGE])
+        self.assertEqual(seen, ["https://example.invalid/portal/"])
+
+    def test_an_unreachable_portal_raises_a_cloud_hub_error(self):
+        real = cloud_hub._post_once
+
+        def fake(base, route, payload, timeout):
+            raise cloud_hub._Unreachable("connection refused")
+
+        cloud_hub._post_once = fake
+        try:
+            with self.assertRaises(cloud_hub.CloudHubError):
+                cloud_hub._post(cloud_hub.PORTAL_DEFAULT, "/status", {})
+        finally:
+            cloud_hub._post_once = real
+
+    def test_the_entry_carries_no_port(self):
+        """The entries are on 443 with everything else; :9988 is gone."""
+        pkg = Path(cloud_hub.__file__).read_text(encoding="utf-8")
+        self.assertNotIn(":9988", pkg)
+
+
+class StaleTunnelTests(unittest.TestCase):
+    def test_cleanup_is_a_no_op_off_windows(self):
+        with mock.patch.object(cloud_hub.os, "name", "posix"):
+            cloud_hub._kill_stale_frpc(Path("/tmp/nope.toml"))

@@ -37,14 +37,15 @@ logger = logging.getLogger(__name__)
 #: (2026-10-01): 3/3 answered in 0.30-1.40 s with the wildcard certificate in place. An earlier note
 #: blamed the hub's TLS for every port at once - that measurement was against the bare IP and this
 #: name (which is what the app uses, and what the hub's vhost has a certificate for) was never it.
-PORTAL_DEFAULT = "https://www.vlsc.net/mrrc_portal"
+PORTAL_DEFAULT = "https://portal.mrrc.vlsc.net/mrrc_portal"
 
 #: The overseas path proxy, which exists for networks that only allow 80/443 outbound (R-H12).
 #: It is a hop away and was measured intermittent on that same evening - 3 of 6 requests hung
 #: until the client gave up - so it is the **fallback**, never the default.
-#: :8899 hands the connection to the same portal, but the TLS handshake to it is interfered with
-#: on some paths (measured: the TCP connect succeeds and the handshake dies). Try the edge first.
-PORTAL_EDGE = "https://portal.mrrc.vlsc.net:8899"
+#: The hub used to be a separate box the instances reached on :8899, with www.vlsc.net as a second
+#: path for networks that only permit 80/443. Both now live on one machine, one port, one path, so
+#: the second path is gone: measured, the old :8899 was never actually open to the internet.
+PORTAL_EDGE = ""
 
 TIMEOUT = 25
 #: Budget for the first of two paths: a network that blocks 8899 must not spend the whole timeout
@@ -91,24 +92,20 @@ def _post_once(portal: str, route: str, payload: dict, timeout: int) -> dict:
 
 
 def _post(portal: str, route: str, payload: dict, timeout: int = TIMEOUT) -> dict:
-    """POST to the portal, asking the overseas edge only when the first path never answered.
+    """POST form-encoded fields to the portal on the one address it now has.
 
-    The default entry is the hub's own; the edge exists for networks that permit just 80/443
-    outbound (R-H12). A portal that answered - even with a bad callsign or a duplicate - is never
-    asked twice, so a retry can not turn a rejection into a second application.
+    The hub used to be a box of its own reached on :8899, with www.vlsc.net as a second path for
+    networks that only allow 80/443. Both are one machine now, on one port, behind one name - and
+    :8899 turned out never to have been open to the internet at all. A config written before the
+    merge still names an old address; those are sent to the current one instead, because each of
+    them now redirects there anyway.
     """
-    paths = [portal]
-    if portal.rstrip("/") == PORTAL_DEFAULT:
-        paths.append(PORTAL_EDGE)
-    last_error: CloudHubError = CloudHubError("no portal path to try")
-    for index, base in enumerate(paths):
-        budget = FALLBACK_FIRST_TIMEOUT if len(paths) > 1 and index == 0 else timeout
-        try:
-            return _post_once(base, route, payload, budget)
-        except _Unreachable as exc:
-            logger.info("cloud hub: %s did not answer (%s); trying the next path", base, exc)
-            last_error = exc
-    raise last_error
+    legacy = ("https://portal.mrrc.vlsc.net:8899", "https://www.vlsc.net/mrrc_portal")
+    base = PORTAL_DEFAULT if portal.rstrip("/") in legacy else portal
+    try:
+        return _post_once(base, route, payload, timeout)
+    except _Unreachable as exc:
+        raise CloudHubError(f"portal did not answer ({base}): {exc}") from exc
 
 
 def apply(portal: str, callsign: str, contact: str = "", product: str = "") -> dict:
@@ -183,6 +180,29 @@ def frpc_config_text(name: str, token: str, local_port: int, remote_port: int,
     return "\n".join(lines) + "\n"
 
 
+def _kill_stale_frpc(config_path: Path) -> None:
+    """Kill an frpc left behind by a previous run of this instance, if there is one.
+
+    Measured: killing the app can leave its frpc running, and the next start then cannot register
+    the same proxy name - the tunnel stays down with nothing in the UI to say why. Only a process
+    whose command line names this instance's own config is touched, so a second instance on the
+    same machine is not disturbed.
+    """
+    if os.name != "nt":
+        return
+    try:
+        out = subprocess.run(["wmic", "process", "where", "name='frpc.exe'", "get", "ProcessId,CommandLine"],
+                             capture_output=True, text=True, timeout=15).stdout
+    except Exception:                                            # noqa: BLE001 - best effort
+        return
+    for line in out.splitlines():
+        if str(config_path) in line:
+            pid = line.strip().split()[-1]
+            if pid.isdigit():
+                logger.info("cloud hub: clearing a stale frpc (pid %s) holding this instance's tunnel", pid)
+                subprocess.run(["taskkill", "/PID", pid, "/F"], capture_output=True, timeout=10)
+
+
 class TunnelProcess:
     """Keep one frpc alive, restarting it if it exits.
 
@@ -193,6 +213,7 @@ class TunnelProcess:
     def __init__(self, frpc: Path, conf: Path):
         self.frpc = Path(frpc)
         self.conf = Path(conf)
+        _kill_stale_frpc(self.conf)
         self.proc: subprocess.Popen | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -305,7 +326,7 @@ def connect(portal: str, callsign: str, token: str, *, config_path: Path, cert_d
         "label": label,
         "port": port,
         "fqdn": fqdn,
-        "entry": f"https://{fqdn}:9988/",
+        "entry": f"https://{fqdn}/",
         "cert": str(cert_path),
         "tunnel_config": str(conf),
         "tunnel_started": started,

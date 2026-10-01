@@ -48,6 +48,7 @@ from config import (
 from backends import create_backend, known_models
 from backends.base import RadioBackend
 import cloud_hub
+import ssl_bootstrap
 import support_bundle
 import upgrade_core
 from backends.ft710.config_ft710 import (
@@ -3908,6 +3909,45 @@ def _bind_dual_stack_socket(port: int) -> "socket.socket":
     return sock
 
 
+def _resolve_ssl_kwargs(args) -> dict:
+    """uvicorn's ``ssl_*`` keyword arguments for this start-up.
+
+    ``{}`` means plain HTTP, and plain HTTP is only ever what ``--no-ssl`` explicitly asked for:
+    the launcher opens an https:// URL, so a server that quietly degraded to HTTP showed the
+    browser a protocol error and the UI never appeared — reported from a real machine as
+    "installed, then a black screen". A missing certificate is therefore signed here, the same
+    thing the launcher does on a fresh install.
+
+    This lives in a function of its own on purpose. Inlined in ``main()`` it was unreachable from
+    the suite, so a missing ``import ssl_bootstrap`` — a bare NameError swallowed by the broad
+    ``except`` below — survived 1460 green tests, a successful PyInstaller/iscc build and a
+    matching SHA-256 to ship broken in v1.24.5, the very release meant to fix this path. Only
+    running the packaged Server exe against a clean per-user state exposed it.
+    """
+    if args.no_ssl:
+        logger.warning("SSL disabled by request (--no-ssl): serving plain HTTP")
+        return {}
+    if os.path.exists(args.ssl_cert) and os.path.exists(args.ssl_key):
+        logger.info("SSL enabled: %s", args.ssl_cert)
+        return {"ssl_certfile": args.ssl_cert, "ssl_keyfile": args.ssl_key}
+    try:
+        cert_dir = Path(args.ssl_cert).parent
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        host = args.host or "127.0.0.1"
+        if host in ("0.0.0.0", "::", "[::]"):
+            host = "localhost"
+        pair = ssl_bootstrap.sign_for(host, cert_dir)
+        cert_path, key_path = (pair if isinstance(pair, tuple) else (pair, None))
+        if key_path is None:
+            raise RuntimeError("sign_for did not return a key path")
+        logger.info("SSL enabled with a self-signed certificate just generated: %s", cert_path)
+        return {"ssl_certfile": str(cert_path), "ssl_keyfile": str(key_path)}
+    except Exception as exc:                                      # noqa: BLE001
+        logger.error("could not create a certificate (%s) - falling back to plain HTTP", exc)
+        logger.error("open http://%s:%s/ in the browser (NOT https://)", args.host, args.port)
+        return {}
+
+
 def main():
     """Parse CLI args and start the server.
 
@@ -3944,36 +3984,8 @@ def main():
     _ensure_strong_password()
     os.environ["MRRC_WEB_HOST"] = args.host
 
-    # SSL configuration
-    ssl_kwargs = {}
-    if not args.no_ssl and os.path.exists(args.ssl_cert) and os.path.exists(args.ssl_key):
-        ssl_kwargs = {
-            "ssl_certfile": args.ssl_cert,
-            "ssl_keyfile": args.ssl_key,
-        }
-        logger.info("SSL enabled: %s", args.ssl_cert)
-    elif not args.no_ssl:
-        # A missing certificate used to mean "serve plain HTTP", and the launcher then opened an
-        # https:// URL against it: the browser showed a protocol error and the UI never appeared -
-        # reported from a real machine as "black screen, will not start". The app can sign its own
-        # certificate (it does exactly this on a fresh install), so do that instead of degrading.
-        try:
-            cert_dir = Path(args.ssl_cert).parent
-            cert_dir.mkdir(parents=True, exist_ok=True)
-            host = os.environ.get("MRRC_WEB_HOST") or "127.0.0.1"
-            if host in ("0.0.0.0", "::", "[::]"):
-                host = "localhost"
-            pair = ssl_bootstrap.sign_for(host, cert_dir)
-            cert_path, key_path = (pair if isinstance(pair, tuple) else (pair, None))
-            if key_path is None:
-                raise RuntimeError("sign_for did not return a key path")
-            ssl_kwargs = {"ssl_certfile": str(cert_path), "ssl_keyfile": str(key_path)}
-            logger.info("SSL enabled with a self-signed certificate just generated: %s", cert_path)
-        except Exception as exc:                                      # noqa: BLE001
-            logger.error("could not create a certificate (%s) - falling back to plain HTTP", exc)
-            logger.error("open http://%s:%s/ in the browser (NOT https://)", args.host, args.port)
-    else:
-        logger.warning("SSL disabled by request (--no-ssl): serving plain HTTP")
+    # SSL configuration (see _resolve_ssl_kwargs for why this is not inline)
+    ssl_kwargs = _resolve_ssl_kwargs(args)
 
     # Pass the app object (not the "server:app" import string) so frozen
     # PyInstaller builds work — a frozen exe cannot re-import the "server"

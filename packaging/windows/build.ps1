@@ -94,6 +94,26 @@ if (Test-Path $OpusSource) {
     $OpusDest = Join-Path $AppRoot "vendor\opus\windows"
     New-Item -ItemType Directory -Path (Split-Path $OpusDest) -Force | Out-Null
     Copy-Item $OpusSource $OpusDest -Recurse -Force
+
+# Cloud Hub 接入所需的**内置件**：frpc（隧道客户端）+ openssl（签实例自签证书用）
+# + 隧道安装脚本。它们由 mrrc_hub 的取件器在构建机上取好并逐个校验 SHA-256 后放在
+# packaging/payload/ 下（见 mrrc_hub/deploy/fetch_installer_payload.sh）。
+#
+# 为什么是硬要求：实例侧的网络未必能访问 GitHub（实测国内家宽连 github.com 超时），
+# 所以"让租户自己去下载 frpc"这条路不可靠；内置件缺了就装不出一个能接入的包。
+# 允许用 MRRC_ALLOW_MISSING_PAYLOAD=1 显式放行（只给临时试验用）。
+$PayloadSource = Join-Path $RepoRoot "packaging\payload\windows-amd64"
+$FleetDest = Join-Path $AppRoot "fleet"
+if (Test-Path $PayloadSource) {
+    New-Item -ItemType Directory -Path $FleetDest -Force | Out-Null
+    Copy-Item (Join-Path $PayloadSource "*") $FleetDest -Recurse -Force
+    $fleetFiles = (Get-ChildItem $FleetDest -File | Select-Object -ExpandProperty Name) -join ", "
+    Write-Host "Fleet payload: $fleetFiles"
+} elseif ($env:MRRC_ALLOW_MISSING_PAYLOAD -eq "1") {
+    Write-Warning "fleet payload missing ($PayloadSource) - building anyway because MRRC_ALLOW_MISSING_PAYLOAD=1; the installer will NOT be able to set up a tunnel offline"
+} else {
+    throw "fleet payload missing: $PayloadSource — run mrrc_hub/deploy/fetch_installer_payload.sh --out packaging/payload first (or set MRRC_ALLOW_MISSING_PAYLOAD=1 to build a test package without it)"
+}
 }
 
 if (Get-Command iscc -ErrorAction SilentlyContinue) {

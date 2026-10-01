@@ -46,6 +46,7 @@ from config import (
 )
 from backends import create_backend, known_models
 from backends.base import RadioBackend
+import cloud_hub
 import support_bundle
 import upgrade_core
 from backends.ft710.config_ft710 import (
@@ -4064,7 +4065,7 @@ async def api_cloud_refresh(request: Request):
             return JSONResponse({"connected": False, "status": state.get("status", "unknown")})
         result = cloud_hub.connect(portal, callsign, token, config_path=_config_file_path(),
                                    cert_dir=_cloud_cert_dir(), fleet_dir=_cloud_fleet_dir(),
-                                   data_dir=_cloud_data_dir(), local_port=config.WEB_PORT,
+                                   data_dir=_cloud_data_dir(), local_port=WEB_PORT,
                                    tunnel=_cloud_tunnel)
     except cloud_hub.CloudHubError as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)

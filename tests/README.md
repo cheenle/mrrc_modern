@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1443 tests across 71 test modules (7 pty-based Yaesu round-trip tests skip on
-Windows; the per-module counts below were read from `unittest` on 2026-09-25, macOS).
+1458 tests across 73 test modules (7 pty-based Yaesu round-trip tests skip on
+Windows; the per-module counts below were read from `unittest` on 2026-10-01, macOS).
 
 ```bash
 python -m unittest discover -s tests -v
@@ -16,8 +16,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1443 |
-| Passed | 1443 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1458 |
+| Passed | 1458 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -387,7 +387,7 @@ SDD coverage: §13.4 I12 / ch15 outermost release layer
 SDD coverage: AD-017, §12.4
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `RecordingWriterTests` | 3 | Writer encodes blocks, stops on the sentinel, survives a failing block |
 | `RecorderExecutorTests` | 2 | Never touches the shared default pool; uses the dedicated recorder pool |
 | `RecordingQueueTests` | 3 | Source/rate tagging, no queueing without a session, bounded queue + per-session drop count |
@@ -642,7 +642,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1435 tests in ~28s — can run on every commit.
+2. **Fast execution**: ~1458 tests in ~29s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.
@@ -650,7 +650,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ### 本轮新增（Cloud Hub 前置能力，2026-09-30）
 
 | 测试 | 覆盖 |
-|------|------|
+| ------ | ------ |
 | `test_path_prefix.py` | 路径前缀：文档资源相对化、`sw.js` 预缓存保持绝对、内联 API/WS 前缀化、**TX 编码 Worker 不逃逸前缀** |
 | `test_ws_token_transport.py` | 令牌经 cookie / Bearer / WS 握手头到达；query 形式触发弃用告警 |
 | `test_session_metrics.py` | `/api/session_metrics` 的聚合与并发计数 |

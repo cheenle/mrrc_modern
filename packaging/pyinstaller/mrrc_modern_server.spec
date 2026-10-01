@@ -55,6 +55,10 @@ a = Analysis(
     hiddenimports=[
         # First-run auto-config (launcher + setup endpoint)
         "macos.first_run",
+        # Cloud Hub onboarding (settings dialog -> portal -> tunnel).  server.py
+        # imports this module, but name it anyway: the v1.24.0 build shipped
+        # without the import and every 云端申请 answered 500 with NameError.
+        "cloud_hub",
         # Support diagnostics bundle (spec 2026-09-17)
         "support_bundle",
         # Serial / audio runtime

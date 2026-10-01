@@ -3,17 +3,17 @@
   "installer": {
     "version": "1.24.3",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.3-Windows-x64-Setup.exe",
-    "sha256": "28ab6ff6335fe0d3b88ebc3ea21c00e70ae9cd8cc01e024d067c4f3fba04bb55",
-    "size": 54074352
+    "sha256": "45bb40832bac1f5565972f1d48e036f9286af11ddec00eb93892d40cdb540966",
+    "size": 54077021
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-01T22:16:20",
-  "notes": "接入云端：应用自己启动并托管隧道；TOML 路径改正斜杠（否则 frpc 拒绝启动）",
+  "releasedAt": "2026-10-02T00:05:25",
+  "notes": "默认走 443 边缘；接入后提示重启以启用证书；同呼号复用入口",
   "previous": {
-    "version": "1.24.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.0-Windows-x64-Setup.exe",
-    "sha256": "e25e3995cf46640e90ef5c614a59807a29eefbdf82f62dbd51167d9cf454ca95",
-    "size": 54121827
+    "version": "1.24.2",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.2-Windows-x64-Setup.exe",
+    "sha256": "28ab6ff6335fe0d3b88ebc3ea21c00e70ae9cd8cc01e024d067c4f3fba04bb55",
+    "size": 54074352
   }
 }

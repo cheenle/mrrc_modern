@@ -1533,7 +1533,37 @@ venv/bin/pip install -r requirements.txt
         <div class="footer-bottom">
             <p>&copy; 2026 MRRC Modern Project · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
-    </div>
+    
+<div class="step" id="clean-slate">
+  <h4>Clean slate (when an upgrade misbehaves)</h4>
+  <p>
+    Several versions of leftovers - a second configuration directory, <code>MRRC_*</code> /
+    <code>FT710_*</code> environment variables, ad-hoc scheduled tasks, a stale certificate - can
+    make a machine behave in ways that look like bugs: the Cloud Hub dialog sits at <em>waiting for
+    approval</em>, or the entry answers 502 while everything on the hub looks right.
+  </p>
+  <p>
+    Download both files into one folder (e.g. the Desktop) and double-click the <code>.cmd</code>:
+  </p>
+  <p>
+    <a class="btn btn-secondary" href="downloads/MRRC-Modern-Cleanup.cmd"><i class="fas fa-broom"></i> MRRC-Modern-Cleanup.cmd</a>
+    <a class="btn btn-secondary" href="downloads/MRRC-Modern-Cleanup.ps1"><i class="fas fa-file-code"></i> MRRC-Modern-Cleanup.ps1</a>
+  </p>
+  <p style="color: var(--scope-text-muted)">
+    It asks for confirmation, copies your configuration, certificates and logs to a backup folder on
+    the Desktop, then removes the application, its settings, its environment variables and its
+    scheduled tasks. It does <strong>not</strong> touch anything else on the machine, and it leaves
+    the older <em>MRRC 6.x</em> product alone unless you ask for it (<code>-IncludeLegacy</code>).
+    Add <code>-WhatIf</code> to see what it would do without changing anything. After a cleanup,
+    install again and use <em>Settings → Cloud Hub</em>: the instance re-enrols itself and the entry
+    comes back.
+  </p>
+  <p style="color: var(--scope-text-muted); font-size: 0.82rem">
+    SHA-256 &nbsp; MRRC-Modern-Cleanup.ps1 <code>466e1520ffb0b4d1…</code> &nbsp;·&nbsp;
+    MRRC-Modern-Cleanup.cmd <code>90b7e1c9f1d50385…</code>
+  </p>
+</div>
+</div>
 </footer>
 
 <script>

@@ -1533,7 +1533,31 @@ venv/bin/pip install -r requirements.txt
         <div class="footer-bottom">
             <p>&copy; 2026 MRRC Modern Project · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
-    </div>
+    
+<div class="step" id="clean-slate">
+  <h4>装乱了？一键清空重来</h4>
+  <p>
+    多个版本叠着装，会留下别人看不见的残留：第二份配置目录、<code>MRRC_*</code> /
+    <code>FT710_*</code> 环境变量、零散的计划任务、过期的证书。它们造成的现象很像产品缺陷 ——
+    比如「接入云端」一直停在<em>等待运维批准</em>，或者 hub 侧一切正常而入口却是 502。
+  </p>
+  <p>把下面两个文件下到同一个文件夹（比如桌面），双击 <code>.cmd</code> 即可：</p>
+  <p>
+    <a class="btn btn-secondary" href="downloads/MRRC-Modern-Cleanup.cmd"><i class="fas fa-broom"></i> MRRC-Modern-Cleanup.cmd</a>
+    <a class="btn btn-secondary" href="downloads/MRRC-Modern-Cleanup.ps1"><i class="fas fa-file-code"></i> MRRC-Modern-Cleanup.ps1</a>
+  </p>
+  <p style="color: var(--scope-text-muted)">
+    它会先确认，再把配置、证书与日志**备份到桌面**，然后卸载程序并清掉设置、环境变量与计划任务。
+    它**不碰**机器上任何其它东西；旧产品 <em>MRRC 6.x</em> 也默认不动（要一起清就加
+    <code>-IncludeLegacy</code>）。想先看看会做什么，加 <code>-WhatIf</code> 干跑。
+    清理后重新安装，用<em>设置 → 接入云端</em>填呼号即可：实例会自己重新登记，入口随即恢复。
+  </p>
+  <p style="color: var(--scope-text-muted); font-size: 0.82rem">
+    SHA-256 &nbsp; MRRC-Modern-Cleanup.ps1 <code>466e1520ffb0b4d1…</code> &nbsp;·&nbsp;
+    MRRC-Modern-Cleanup.cmd <code>90b7e1c9f1d50385…</code>
+  </p>
+</div>
+</div>
 </footer>
 
 <script>

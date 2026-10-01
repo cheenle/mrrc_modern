@@ -3917,9 +3917,28 @@ def main():
             "ssl_keyfile": args.ssl_key,
         }
         logger.info("SSL enabled: %s", args.ssl_cert)
+    elif not args.no_ssl:
+        # A missing certificate used to mean "serve plain HTTP", and the launcher then opened an
+        # https:// URL against it: the browser showed a protocol error and the UI never appeared -
+        # reported from a real machine as "black screen, will not start". The app can sign its own
+        # certificate (it does exactly this on a fresh install), so do that instead of degrading.
+        try:
+            cert_dir = Path(args.ssl_cert).parent
+            cert_dir.mkdir(parents=True, exist_ok=True)
+            host = os.environ.get("MRRC_WEB_HOST") or "127.0.0.1"
+            if host in ("0.0.0.0", "::", "[::]"):
+                host = "localhost"
+            pair = ssl_bootstrap.sign_for(host, cert_dir)
+            cert_path, key_path = (pair if isinstance(pair, tuple) else (pair, None))
+            if key_path is None:
+                raise RuntimeError("sign_for did not return a key path")
+            ssl_kwargs = {"ssl_certfile": str(cert_path), "ssl_keyfile": str(key_path)}
+            logger.info("SSL enabled with a self-signed certificate just generated: %s", cert_path)
+        except Exception as exc:                                      # noqa: BLE001
+            logger.error("could not create a certificate (%s) - falling back to plain HTTP", exc)
+            logger.error("open http://%s:%s/ in the browser (NOT https://)", args.host, args.port)
     else:
-        logger.warning("SSL disabled or cert/key not found (cert=%s key=%s)",
-                       args.ssl_cert, args.ssl_key)
+        logger.warning("SSL disabled by request (--no-ssl): serving plain HTTP")
 
     # Pass the app object (not the "server:app" import string) so frozen
     # PyInstaller builds work — a frozen exe cannot re-import the "server"

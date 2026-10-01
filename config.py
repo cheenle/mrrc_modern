@@ -208,9 +208,19 @@ SESSION_METRICS_WINDOW_S = _env_float("MRRC_SESSION_METRICS_WINDOW_S", 3600.0)
 REMOTE_SESSION_TX_HEARTBEAT_S = _env_float("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S", 0.0)
 
 # SSL (Let's Encrypt certs for radio.vlsc.net)
-CERT_DIR = SCRIPT_DIR / "certs"
+# The certificate lives in the user's data directory, not next to the program: the packaged
+# directory is read-only for a normal user, and baking the build machine's path into a default
+# shipped a certificate path that existed on nobody's machine. When the file is missing the server
+# generates a self-signed one here (see server.py) instead of silently serving plain HTTP, which
+# made the browser show a protocol error and the UI look dead.
+try:
+    from first_run import user_data_dir as _user_data_dir
+
+    CERT_DIR = Path(_user_data_dir()) / "certs"
+except Exception:                                                 # noqa: BLE001 - never fatal
+    CERT_DIR = SCRIPT_DIR / "certs"
 SSL_CERTFILE = _env("MRRC_SSL_CERT", str(CERT_DIR / "fullchain.pem"))
-SSL_KEYFILE = _env("MRRC_SSL_KEY", str(CERT_DIR / "radio.vlsc.net.key"))
+SSL_KEYFILE = _env("MRRC_SSL_KEY", str(CERT_DIR / "localhost.key"))
 
 # ── Auth ────────────────────────────────────────────────────────────
 AUTH_COOKIE = "mrrc_auth"

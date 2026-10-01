@@ -70,7 +70,7 @@ class CloudRefreshEndpointTests(unittest.TestCase):
         request = _Request()
         grant = {"connected": True, "status": "granted", "label": "bg9zzz",
                  "port": 18899, "fqdn": "bg9zzz.mrrc.vlsc.net",
-                 "entry": "https://bg9zzz.mrrc.vlsc.net:9988/",
+                 "entry": "https://bg9zzz.mrrc.vlsc.net/",
                  "cert": "C:/certs/bg9zzz.crt", "tunnel_config": "C:/fleet/frpc-bg9zzz.toml",
                  "tunnel_started": True}
         with tempfile.TemporaryDirectory() as tmp:

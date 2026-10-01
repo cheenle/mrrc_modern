@@ -66,7 +66,7 @@ class _FakePortal(BaseHTTPRequestHandler):
                 "port": self.state["port"] if granted else 0,
                 "enroll_secret": self.state["enroll_secret"] if granted else "",
                 "hub_token": self.state["hub_token"] if granted else "",
-                "entry": f"https://{self.state['label']}.mrrc.vlsc.net:9988/" if granted else "",
+                "entry": f"https://{self.state['label']}.mrrc.vlsc.net/" if granted else "",
             })
         elif self.path == "/claim":
             _FakePortal.seen["claim"] = fields
@@ -77,7 +77,7 @@ class _FakePortal(BaseHTTPRequestHandler):
                              "label": self.state["label"], "port": self.state["port"],
                              "enroll_secret": self.state["enroll_secret"],
                              "hub_token": self.state["hub_token"],
-                             "entry": f"https://{self.state['label']}.mrrc.vlsc.net:9988/",
+                             "entry": f"https://{self.state['label']}.mrrc.vlsc.net/",
                              "request_token": "adopted-token"})
         elif self.path == "/enroll":
             _FakePortal.seen["enroll"] = fields

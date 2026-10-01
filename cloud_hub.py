@@ -48,9 +48,11 @@ PORTAL_DEFAULT = "https://portal.mrrc.vlsc.net"
 PORTAL_EDGE = ""
 
 TIMEOUT = 25
-#: Budget for the first of two paths: a network that blocks 8899 must not spend the whole timeout
+#: Timeout for the first path
+#: Budget for the first attempt when more than one path is configured (kept for the case where a
+#: deployment adds its own second path): a network that blocks the first one must not spend the
+#: whole timeout
 #: before the fallback gets its turn (the portal answers in ~1.4 s when it is reachable).
-FALLBACK_FIRST_TIMEOUT = 8
 
 
 class CloudHubError(RuntimeError):

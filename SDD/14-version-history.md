@@ -95,6 +95,17 @@
 | SDD V1.1 | 2026-07-06 | Claude | Bug fix: TX audio chain unified to 48 kHz (was 16 kHz mic → 48 kHz playback = crackling). Enhanced `_find_rx_device()` with multi-layer detection (config env var, name match, mono-channel heuristic, full-duplex TX). Enhanced `_find_tx_device()` with same heuristics. `opus_rx.py`: TX_RATE 16k→48k, added TX_FRAME_SAMPLES constant. `tx_opus_worker.js`: FRAME_SIZE 320→960, OpusEncoder 16k→48k. `ft710_main.js`: getUserMedia + AudioContext sampleRate 16k→48k (both main + fallback). TX Opus encoder optimized for voice: CBR 28kbps, VBR/FEC/DTX/HPF disabled. Added SSL CLI args. Event-based power button (mobile-first connect). Added AD-011 (Unified 48kHz TX audio pipeline). AudioContext gain explicitly set to 1.0. iOS unlock oscillator during user gesture. |
 | SDD V1.0 | 2026-07-06 | Claude | Initial SDD baseline for MRRC FT-710 codebase. All 15 chapters written from scratch based on current repository state: `server.py`, `cat_controller.py`, `audio_handler.py`, `opus_rx.py`, `radio_state.py`, `poll_scheduler.py`, `scope_handler.py`, `scope_pipe.py`, `config.py`, `static/` (HTML, CSS, JS, modules, worklets, worker). Documents: Full CAT control, FT4222 scope + S-meter fallback, Opus/PCM dual-codec bidirectional audio, AudioWorklet RX playback, TX mic capture, 5-tier polling, dirty-field state broadcasting, session auth, memory channels, PTT safety architecture. |
 
+## v1.24.4 — 2026-10-02 — 一个 hub、一个地址、入口就是呼号
+
+- 门户收敛为 `https://portal.mrrc.vlsc.net/`（根路径）；配置里写着 `:8899`、`www.vlsc.net/mrrc_portal`
+  或带 `/mrrc_portal` 的旧写法**自动改道**（`:8899` 实测从未对公网开放，这正是"申请成功但状态
+  刷不出来"的根因 —— 申请走了边缘兜底，其余请求直连 8899 全部失败）。
+- 实例入口不再带 `:9988`：与其他服务同在 **443**。
+- **入口标签 = 裸呼号**（`bg9aaa` 而非 `bg9aaa-mrrc-modern`）；原因见上。
+- 启动前清理本实例残留的 frpc（实测：被杀的应用会留下 frpc 占着同名代理，下一次注册不上）。
+- 接入成功后的回执/状态带 `cert_reload_required`，界面据此提示并给出重启入口 —— TLS 上下文是
+  进程启动时建好的，新签的证书不重启不会被采用（实测：入口会一直 502）。
+
 ## Design Baseline Notes
 
 - **Radios**: Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 superheterodyne transceivers (not SDRs). Backend selected by `MRRC_RADIO_MODEL`.

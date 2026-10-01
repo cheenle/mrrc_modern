@@ -1,11 +1,11 @@
-# macOS 安装与使用指南（MRRC Modern v1.24.3）
+# macOS 安装与使用指南（MRRC Modern v1.24.4）
 
 本指南面向**第一次使用 MRRC Modern 的 macOS 用户**：从下载到出声，全程**不需要打开终端、不需要编辑配置文件**。
 只有「故障排查」和「高级用法」两章需要命令行，且都是可选。
 
-> **本版（v1.24.3）新增：修掉「接入云端」的 500，并把默认入口改回 hub 主路。** 上一版把接入搬进设置菜单，
+> **本版（v1.24.4）新增：修掉「接入云端」的 500，并把默认入口改回 hub 主路。** 上一版把接入搬进设置菜单，
 > 但「申请」按钮会回 500 —— `server.py` 调用了一个从未导入的模块（本版修复，并补了端点级回归测试与打包
-> 清单）。同时应用默认入口改为 `portal.mrrc.vlsc.net:8899`，海外边缘只在主路不通时兜底：2026-10-01 实测
+> 清单）。同时应用默认入口改为 `https://portal.mrrc.vlsc.net`，海外边缘只在主路不通时兜底：2026-10-01 实测
 > 主路 3/3 通（0.3–1.4 s），边缘 6 次里 3 次挂死。
 >
 > 安装层面的两个历史问题已在 **v1.18.1** 修好：应用报「已损坏，无法打开」，以及装好后**接收完全没声音**。
@@ -32,12 +32,12 @@
 | 权限 | **麦克风**（= 音频输入，必需）；局域网访问时还需要 macOS 防火墙放行 |
 
 下载地址：<https://www.vlsc.net/mrrc_modern/> → **Download macOS**，文件名为
-`MRRC-Modern-v1.24.3-arm64.dmg`（62,255,154 bytes，SHA-256 `137de9f2…`）。
+`MRRC-Modern-v1.24.4-arm64.dmg`（62,255,154 bytes，SHA-256 `137de9f2…`）。
 
 **校验下载完整性（可选，命令行）**：
 
 ```bash
-shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.3-arm64.dmg
+shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.4-arm64.dmg
 ```
 
 与官网下载卡片上的 SHA-256 一致即可。
@@ -46,7 +46,7 @@ shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.3-arm64.dmg
 
 ## 2. 安装（约 1 分钟）
 
-1. 双击打开 `MRRC-Modern-v1.24.3-arm64.dmg`。
+1. 双击打开 `MRRC-Modern-v1.24.4-arm64.dmg`。
 2. 把 **MRRC Modern** 图标拖进右侧的**应用程序**文件夹快捷方式。
 3. 在访达侧边栏弹出该磁盘映像（点 ⏏）。
 4. 到「应用程序」里找到 **MRRC Modern**。
@@ -213,7 +213,7 @@ grep -i "audio\|permission\|silent" ~/Library/Application\ Support/MRRC-Modern/l
 
 ## 11.5 接入 Cloud Hub（实例侧，可选）
 
-本应用支持把电台通过隧道发布到云端入口（`<呼号>.mrrc.vlsc.net:9988`），客户侧**不需要公网 IP**。
+本应用支持把电台通过隧道发布到云端入口（`https://<呼号>.mrrc.vlsc.net/`），客户侧**不需要公网 IP**。
 安装包里已经带好了所需的一切，无需另装 frpc 或 openssl：
 
 1. 打开应用（保持运行）。
@@ -230,7 +230,7 @@ grep -i "audio\|permission\|silent" ~/Library/Application\ Support/MRRC-Modern/l
    把应用侧环境（证书路径、端口、心跳）写到 `~/.config/mrrc/env.sh` 与 `environment.d`/LaunchAgent →
    装一个 launchd 常驻隧道。
 4. 脚本最后会打印一条 **root 命令**，交给运维在 hub 上执行（生成路由 + reload nginx）。
-5. 完成后访问 `https://<呼号>.mrrc.vlsc.net:9988/` 应看到登录页（首次访问自签证书，浏览器会
+5. 完成后访问 `https://<呼号>.mrrc.vlsc.net/` 应看到登录页（首次访问自签证书，浏览器会
    提示一次，点"继续"即可）。
 
 脚本**幂等**：中途失败（例如 hub 暂时不可达）重跑同一条命令即可；证书已在磁盘上时会复用。

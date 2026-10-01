@@ -2,6 +2,23 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.24.5] — 2026-10-02 — 没有证书就自己签一张，而不是悄悄退回 HTTP
+
+现场报障："装完之后黑屏、不启动"。复现出来了，是两个"只在构建机上成立"的默认值凑在一起：
+
+- **`config.py` 把证书指向打包目录**（普通用户只读 ✗），文件名还是开发机上的
+  `radio.vlsc.net.key` ✗ —— 换句话说，包里带的是一条**在任何人机器上都不存在**的路径。
+- **`server.py` 找不到证书就静默降级为纯 HTTP** ✗，而启动器打开的是 **https://** 地址
+  ⇒ 浏览器报协议错误 ⇒ 界面一片黑 ✓。
+
+修法：证书目录改为**用户可写的运行目录**（Windows = `%LOCALAPPDATA%\MRRC-Modern\certs`，
+macOS = `~/Library/Application Support/MRRC-Modern/certs`，Linux = `$XDG_DATA_HOME` 或
+`~/.local/share`），**缺证书时当场签一张自签证书**（首次运行本来就这么做 ✓），纯 HTTP 只保留给
+显式的 `--no-ssl`，并且在日志里说清楚。
+
+- 另外：`cert_reload_required` 现在按**文件身份**（路径+时间戳+大小）比较，并且
+  "启动时没有证书、之后才有"也算需要重启 —— 这正是重新登记后的情形 ✓。
+
 ## [v1.24.4] — 2026-10-02 — 一个 hub、一个地址、入口就是呼号
 
 hub 与 www.vlsc.net 合并到同一台机器（hub.vlsc.net）之后，"两条路"的设计没有存在理由了。

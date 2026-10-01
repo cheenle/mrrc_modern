@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [Unreleased] — 多客户端 PTT 仲裁（SDD I6 控制面半边）
+## [v1.23.0] — 2026-10-02 — 多客户端 PTT 仲裁 + Cloud Hub 前置件齐备（一键接入可用）
 
 - **修复两个全控客户端互相掐键**：现场日志（2026-09-25 20:00–20:05）显示 5 分钟内 75 次 TX 会话、
   16 次一个麦克风帧都没有、三次释放间隔仅 30ms —— 每个浏览器标签页的 PTT 看门狗只看本地

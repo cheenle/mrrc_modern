@@ -1,17 +1,17 @@
 {
   "version": "2.0",
-  "updated": "2026-10-01T08:46:12.821209",
+  "updated": "2026-10-01T09:22:14.175825",
   "records": [
     {
       "freq": 7050000,
       "sw": 0,
       "ind": 7,
       "cap": 47,
-      "swr_avg": 1.077277413308341,
+      "swr_avg": 1.0766542750929369,
       "swr_min": 1.0,
       "swr_max": 1.8,
-      "sample_count": 1067,
-      "last_update": 1790809703.669693,
+      "sample_count": 1076,
+      "last_update": 1790817734.175808,
       "needs_verify": false
     },
     {
@@ -79,11 +79,11 @@
       "sw": 0,
       "ind": 7,
       "cap": 47,
-      "swr_avg": 1.1105785123966951,
+      "swr_avg": 1.108780487804879,
       "swr_min": 1.0,
       "swr_max": 1.8,
-      "sample_count": 121,
-      "last_update": 1790815572.821204,
+      "sample_count": 123,
+      "last_update": 1790816072.250327,
       "needs_verify": false
     },
     {

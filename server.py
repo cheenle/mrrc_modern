@@ -20,6 +20,7 @@ import os
 import secrets as _secrets
 import socket
 import sys
+import subprocess
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -4004,8 +4005,20 @@ def _ensure_tunnel_object():
     return _cloud_tunnel
 
 
-#: The certificate this process was started with - the TLS context cannot be reloaded.
-_SERVED_CERT_AT_STARTUP = os.environ.get("MRRC_SSL_CERT", "")
+#: The certificate this process was started with. The TLS context cannot be reloaded, and the path
+#: usually does not change when the certificate is re-signed - so remember the file's identity, not
+#: its name. Comparing names reported "no reload needed" right after a re-enrolment, which is
+#: exactly the case the flag exists for.
+def _cert_identity(path: str) -> tuple:
+    try:
+        st = Path(path).stat()
+        return (str(Path(path).resolve()), st.st_mtime_ns, st.st_size)
+    except OSError:
+        return (str(path), 0, 0)
+
+
+_SERVED_CERT_AT_STARTUP = (_cert_identity(os.environ["MRRC_SSL_CERT"])
+                           if os.environ.get("MRRC_SSL_CERT") else None)
 
 
 def _cloud_start_tunnel(settings: dict) -> None:
@@ -4119,24 +4132,53 @@ async def api_cloud_refresh(request: Request):
 
 def _cert_reload_required() -> bool:
     """True when the certificate signed at connect time is not the one this process serves."""
-    started_with = _SERVED_CERT_AT_STARTUP
+    if not _SERVED_CERT_AT_STARTUP:
+        return False
     now_configured = str(_cloud_settings().get("MRRC_SSL_CERT") or "")
-    return bool(started_with and now_configured and _resolve(started_with) != _resolve(now_configured))
+    if not now_configured:
+        return False
+    return _cert_identity(now_configured) != _SERVED_CERT_AT_STARTUP
 
 
-def _resolve(path: str) -> str:
-    try:
-        return str(Path(path).resolve())
-    except OSError:
-        return path
+
+def _relaunch_command() -> list:
+    """How to start this app again, or [] when there is nothing that would.
+
+    Measured: exiting without a supervisor leaves the instance with no service at all - the tunnel
+    keeps running and every request to the entry becomes 502, with nothing on the machine to say
+    why. So we only exit if we can start the launcher ourselves, detached.
+    """
+    exe = Path(sys.executable)
+    for candidate in (exe.parent / "MRRC-Modern-Launcher",
+                      exe.parent / "MRRC-Modern-Launcher.exe",
+                      exe.parent.parent / "MRRC-Modern-Launcher",
+                      exe.parent.parent / "MRRC-Modern-Launcher.exe"):
+        if candidate.exists():
+            return [str(candidate)]
+    return []
 
 
 @app.post("/api/cloud/restart", include_in_schema=False)
 async def api_cloud_restart(request: Request):
-    """Exit so the launcher starts us again with the certificate written at connect time."""
+    """Restart so the certificate signed at connect time is the one being served."""
     if not _verify_auth(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    threading.Timer(1.2, lambda: os._exit(0)).start()
+    command = _relaunch_command()
+    if not command:
+        return JSONResponse({"error": "找不到启动器，无法自动重启；请手动退出并重新打开应用"}, status_code=409)
+
+    def _go():
+        try:
+            flags = 0
+            if os.name == "nt":
+                flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            subprocess.Popen(command, creationflags=flags, close_fds=True)
+        except Exception:                                        # noqa: BLE001
+            logger.exception("cloud hub: could not start the launcher; staying up")
+            return
+        os._exit(0)
+
+    threading.Timer(1.2, _go).start()
     return JSONResponse({"restarting": True})
 
 

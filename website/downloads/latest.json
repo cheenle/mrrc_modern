@@ -3,17 +3,17 @@
   "installer": {
     "version": "1.23.0",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.0-Windows-x64-Setup.exe",
-    "sha256": "8f96e45de6c4ad17f7d6e7a52016787e5b8db9894ff18e68d9103f615ac1635f",
-    "size": 45923406
+    "sha256": "4499f2dfce75aa5f42919446755f0d8b0678d2847876d324f9b1baaeb2bceab0",
+    "size": 54057763
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-01T06:37:54",
-  "notes": "Cloud Hub 前置能力：路径前缀、令牌不进 URL、会话遥测、PTT 活性闸门（阈值可配置）",
+  "releasedAt": "2026-10-01T10:17:30",
+  "notes": "多客户端 PTT 仲裁（两个全控客户端不再互相掐键）+ Cloud Hub 前置件齐备：安装包内置 frpc 与自足的 openssl，并带一键接入脚本",
   "previous": {
-    "version": "1.21.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.21.0-Windows-x64-Setup.exe",
-    "sha256": "ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a",
-    "size": 46014388
+    "version": "1.22.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.22.0-Windows-x64-Setup.exe",
+    "sha256": "8f96e45de6c4ad17f7d6e7a52016787e5b8db9894ff18e68d9103f615ac1635f",
+    "size": 45923406
   }
 }

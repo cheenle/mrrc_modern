@@ -113,6 +113,12 @@ if (Test-Path $PayloadSource) {
     if ($missing.Count -gt 0 -and $env:MRRC_ALLOW_MISSING_PAYLOAD -ne "1") {
         throw ("fleet payload incomplete: missing " + ($missing -join ", ") + " in " + $PayloadSource)
     }
+    # Put it there. These two lines were lost when the guard above was added, which is why the
+    # build failed at Get-ChildItem with "fleet does not exist": the check was rewritten and the
+    # work it was checking disappeared with it.
+    if (-not (Test-Path $FleetDest)) { New-Item -ItemType Directory -Path $FleetDest -Force | Out-Null }
+    foreach ($f in Get-ChildItem $PayloadSource -File) { Copy-Item $f.FullName (Join-Path $FleetDest $f.Name) -Force }
+    if (-not (Test-Path $FleetDest)) { throw ("fleet dir was not created: " + $FleetDest) }
     $fleetFiles = (Get-ChildItem $FleetDest -File | Select-Object -ExpandProperty Name) -join ", "
     Write-Host "Fleet payload: $fleetFiles"
 } elseif ($env:MRRC_ALLOW_MISSING_PAYLOAD -eq "1") {

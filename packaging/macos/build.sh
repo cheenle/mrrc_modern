@@ -98,6 +98,37 @@ if [[ -d "$REPO_ROOT/vendor/ftdi/macos" ]]; then
   cp -R "$REPO_ROOT/vendor/ftdi/macos" "$APP_MACOS/vendor/ftdi/macos"
 fi
 
+# ---- Cloud Hub 接入所需的实例侧件（与 Windows 的 fleet\ 对等）----
+# 租户在一台没有装过任何东西的 Mac 上接入时，需要：frpc（隧道客户端）+ 四个脚本
+# （隧道安装 / 环境接线 / 证书签名 / 公共 openssl 配置）。它们由 mrrc_hub 的取件器
+# 按 payload.lock 的哈希取好放在 packaging/payload/darwin-arm64/ 下。
+# 放在 Contents/Resources（**不能放 Contents/MacOS**：那里只许有可执行文件与符号链接，
+# 否则 codesign 会把数据目录当成未签名的代码对象而拒绝签整个 bundle —— 见本仓技能）。
+PAYLOAD_SRC="$REPO_ROOT/packaging/payload/darwin-arm64"
+PAYLOAD_DST="$APP_BUNDLE/Contents/Resources/payload"
+if [ -d "$PAYLOAD_SRC" ]; then
+    mkdir -p "$PAYLOAD_DST"
+    cp -R "$PAYLOAD_SRC/." "$PAYLOAD_DST/"
+    chmod +x "$PAYLOAD_DST/frpc" "$PAYLOAD_DST"/*.sh
+    cat > "$PAYLOAD_DST/README.txt" <<'TXT'
+接入 Cloud Hub（实例侧）
+  1. 先让应用运行起来（本应用）
+  2. 在本目录执行：MRRC_HUB_TOKEN=<frps 令牌> MRRC_ENROLL_SECRET=<一次性登记口令> \
+       ./install_instance_tunnel.sh <呼号> <端口>
+     呼号与端口由运维在门户「分配入口」后给出
+  3. 把脚本最后打印的那条 root 命令交给运维，在 hub 上执行
+  脚本是幂等的：失败后重跑即可。
+TXT
+    echo "==> Hub payload: $(ls -1 "$PAYLOAD_DST" | tr '\n' ' ')"
+elif [ "${MRRC_ALLOW_MISSING_PAYLOAD:-0}" = "1" ]; then
+    echo "WARNING: hub payload missing ($PAYLOAD_SRC) - building anyway because MRRC_ALLOW_MISSING_PAYLOAD=1;" >&2
+    echo "         the app will not be able to set up a tunnel offline" >&2
+else
+    echo "ERROR: hub payload missing: $PAYLOAD_SRC" >&2
+    echo "       run: mrrc_hub/deploy/fetch_installer_payload.sh --out packaging/payload --platforms darwin-arm64" >&2
+    exit 1
+fi
+
 # Bundle-mode Python/data location. PyInstaller's macOS bootloader, when a
 # onedir exe lives inside Contents/MacOS of a .app, switches to "bundle mode":
 # it loads the Python framework AND treats the whole onedir data tree

@@ -2,6 +2,21 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.23.2] — 2026-10-02 — macOS 安装包也带上接入件（与 Windows 的 fleet\ 对等）
+
+v1.23.1 的 Windows 包里有 `fleet\`（frpc + openssl + 接入脚本 + openssl.cnf），macOS 的 DMG 里
+**什么都没有** —— 也就是说 macOS 租户**拿不到**接入脚本，除非自己去 hub 取。本版把它补齐：
+
+- `build.sh` 现在把 `packaging/payload/darwin-arm64/` 装配进 `Contents/Resources/payload/`
+  （**不放 `Contents/MacOS`**：那里只许有可执行文件和符号链接，否则 codesign 会把数据目录当作
+  未签名的代码对象而拒绝签整个 bundle —— 这是本仓实测过的红线）。
+- 缺 payload 即**拒绝出包**（`MRRC_ALLOW_MISSING_PAYLOAD=1` 可显式放行，与 Windows 同规矩）。
+- 目录里附一份 `README.txt`，直接告诉租户跑什么命令。
+- 用户指南新增 §11.5「接入 Cloud Hub」，写明接入件在包内的位置与幂等重跑。
+
+验证：装配后四个脚本与 `mrrc_hub/deploy/` 的源**逐字节一致**，且 `codesign --verify` 仍为
+`valid on disk`（数据放 `Resources/` 没有破坏签名）。
+
 ## [v1.23.1] — 2026-10-02 — 一键接入真机上跑通：5 个只在"装完真跑"才现形的修复
 
 v1.23.0 的包**装得上，但接不进任何入口** —— 单元测试、构建门禁、产物哈希当时全绿。以下 5 个

@@ -7,22 +7,22 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.23.1 Stable)
+## Download (v1.23.2 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.23.1-Windows-x64-Setup.exe` | 46.0 MB (46,014,388 bytes) | `ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a` |
+| `MRRC-Modern-v1.23.2-Windows-x64-Setup.exe` | 46.0 MB (46,014,388 bytes) | `ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.1-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.23.2-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.23.1 is the published Windows installer.** It was built from the release
+**v1.23.2 is the published Windows installer.** It was built from the release
 commit on Windows 11 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. The build
 gate ran 1358 tests OK (9 platform skips), three PyInstaller targets and
 the installer build passed, and the required
 bundled-file inspection passed (FTDI DLLs, `static/`, `static/listen.js`, `mem_channels.json`,
-and `version.txt` = `1.23.1`). This release's changes are all in the frontend assets, so the
+and `version.txt` = `1.23.2`). This release's changes are all in the frontend assets, so the
 in-bundle check verified them directly: the packaged `ft710_main.js` contains the new
 `focus`-event wake-lock re-acquire, `listen.html` references `listen.js?v=13` (FFT trace),
 and `sw.js` is at cache `mrrc-v36` (the `server.py` bytecode is unchanged from v1.20.0, whose
@@ -35,9 +35,9 @@ and `200` on `/login` — i.e. the frozen build really serves the app, not just 
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.14.2 package (45,435,022 bytes, SHA-256 `a7ee1667…`) remains downloadable as an
-archive; v1.23.1 supersedes it.
+archive; v1.23.2 supersedes it.
 
-**What's new in v1.23.1**: the iPhone main-UI power-on race fix — the system mic-permission
+**What's new in v1.23.2**: the iPhone main-UI power-on race fix — the system mic-permission
 dialog released the just-acquired screen wake lock and the screen still auto-locked ~30 s after
 power-on; the lock is now re-acquired when the prompt settles and on window `focus`. Plus
 **listen-page enhancements**: an FFT trace above the waterfall, frequency step buttons

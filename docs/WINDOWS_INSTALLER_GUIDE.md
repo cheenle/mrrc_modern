@@ -11,7 +11,7 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.24.4-Windows-x64-Setup.exe` | 46.0 MB (54,077,021 bytes) | `ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a` |
+| `MRRC-Modern-v1.24.4-Windows-x64-Setup.exe` | 46.0 MB (54,076,580 bytes) | `ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.4-Windows-x64-Setup.exe>
@@ -34,7 +34,7 @@ and `200` on `/login` — i.e. the frozen build really serves the app, not just 
 **TX audio still needs acceptance on real Windows hardware**; the VM also had no radio attached during
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
-The earlier v1.14.2 package (54,077,021 bytes, SHA-256 `a7ee1667…`) remains downloadable as an
+The earlier v1.14.2 package (54,076,580 bytes, SHA-256 `a7ee1667…`) remains downloadable as an
 archive; v1.24.4 supersedes it.
 
 **What's new in v1.24.0**: the iPhone main-UI power-on race fix — the system mic-permission

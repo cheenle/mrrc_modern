@@ -64,7 +64,10 @@ class WindowsPackagingFilesTests(unittest.TestCase):
         self.assertIn("scope_pipe.spec", text)
         self.assertIn("mrrc_modern_server.spec", text)
         self.assertIn("mrrc_modern_launcher.spec", text)
-        self.assertIn("iscc packaging\\windows\\MRRC-Modern.iss", text)
+        self.assertIn("iscc", text)
+        # 出到临时目录再复制：真机上 iscc 会被实时杀毒锁住输出文件（Error 32）
+        self.assertIn('"/O$scratch"', text)
+        self.assertIn("Copy-Item", text)
         self.assertIn("vendor\\opus\\windows", text)
         self.assertIn("opus.dll", text)
         self.assertIn("MRRC-Modern-Server", text)

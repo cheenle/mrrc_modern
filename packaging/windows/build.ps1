@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 # $ErrorActionPreference does NOT apply to native commands (python, pyinstaller,
 # iscc) — check $LASTEXITCODE explicitly so a failing test or build aborts the
@@ -105,6 +105,14 @@ if (Test-Path $OpusSource) {
 $PayloadSource = Join-Path $RepoRoot "packaging\payload\windows-amd64"
 $FleetDest = Join-Path $AppRoot "fleet"
 if (Test-Path $PayloadSource) {
+    # 目录存在不等于件齐：少了 openssl 的包，租户签不出证书；少了 frpc 的包，隧道起不来；
+    # 少了安装器脚本的包，租户根本没法接入。三者缺一就等于发了一个"装完接不上"的包，
+    # 所以在构建时拦下，而不是等租户发现。放行口只有 MRRC_ALLOW_MISSING_PAYLOAD=1（临时试验用）。
+    $need = @("frpc.exe", "install_instance_tunnel.ps1", "openssl.exe")
+    $missing = @($need | Where-Object { -not (Test-Path (Join-Path $PayloadSource $_)) })
+    if ($missing.Count -gt 0 -and $env:MRRC_ALLOW_MISSING_PAYLOAD -ne "1") {
+        throw "fleet payload incomplete: missing $($missing -join ', ') in $PayloadSource — run mrrc_hub/deploy/fetch_installer_payload.sh --out packaging/payload first"
+    }
     New-Item -ItemType Directory -Path $FleetDest -Force | Out-Null
     Copy-Item (Join-Path $PayloadSource "*") $FleetDest -Recurse -Force
     $fleetFiles = (Get-ChildItem $FleetDest -File | Select-Object -ExpandProperty Name) -join ", "

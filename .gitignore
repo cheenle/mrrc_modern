@@ -65,3 +65,6 @@ website/downloads/*.dmg
 
 # Runtime QSO recordings (server-side MP3s; AD-017 — never commit audio)
 recordings/
+# 构建输入：由 mrrc_hub/deploy/fetch_installer_payload.sh 按 payload.lock 的哈希复现，
+# 不入库（入库的是那份哈希锁，不是 26MB 二进制）。
+packaging/payload/

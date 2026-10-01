@@ -3830,9 +3830,13 @@ def _resolve_static_path(path: str):
     return resolved if contained else None
 
 
-@app.get("/{path:path}")
 async def serve_static(path: str, request: Request):
-    """Serve static files.  Index.html is served for SPA routes."""
+    """Serve static files.  Index.html is served for SPA routes.
+
+    Registered with ``app.add_api_route`` at the **end** of this module, not here: this handler
+    matches every GET path, so anything registered after it is unreachable. Defining it here and
+    registering it below all API routes is what keeps that order obvious.
+    """
     if not _verify_auth(request) and path not in ("", "login", "favicon.png", "manifest.json", "sw.js"):
         return RedirectResponse("/login")
 
@@ -4075,6 +4079,14 @@ async def api_cloud_refresh(request: Request):
         "MRRC_CLOUD_ENTRY": result.get("entry", ""),
     })
     return JSONResponse(result)
+
+
+# The SPA fallback is registered last on purpose: it matches every GET path, so any GET route
+# defined after it is answered with index.html instead of its own handler. That is how
+# GET /api/cloud/state came back as 200 + a web page in v1.24.0 (the settings dialog could not
+# read its own state), while the POST endpoints beside it worked. Keep this the last route in the
+# file; tests/test_cloud_endpoints.py fails if an /api/ route ends up below it.
+app.add_api_route("/{path:path}", serve_static, methods=["GET"])
 
 
 if __name__ == "__main__":

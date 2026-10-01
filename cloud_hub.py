@@ -117,6 +117,18 @@ def apply(portal: str, callsign: str, contact: str = "", product: str = "") -> d
     return reply
 
 
+def claim(portal: str, callsign: str, secret: str) -> dict:
+    """Adopt an application the operator already approved, using the secret they handed over.
+
+    Without this, an app can only see an application it submitted itself - so an approval made
+    against a web-submitted application would be invisible to the app that has to use it.
+    """
+    reply = _post(portal, "/claim", {"callsign": callsign, "secret": secret})
+    if not reply.get("request_token"):
+        raise CloudHubError("portal did not return a request token")
+    return reply
+
+
 def status(portal: str, callsign: str, token: str) -> dict:
     """Ask whether this application has been approved, and for its connection details once it is."""
     return _post(portal, "/status", {"callsign": callsign, "token": token})

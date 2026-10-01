@@ -95,5 +95,32 @@ class CloudRefreshEndpointTests(unittest.TestCase):
             self.assertIn("MRRC_CLOUD_LABEL=bg9zzz", written)
 
 
+class ServerRouteOrderTests(unittest.TestCase):
+    """The SPA fallback must not swallow API routes.
+
+    ``serve_static`` matches *every* GET path. In v1.24.0 it was registered (by decorator, in the
+    middle of the module) before the Cloud Hub endpoints, so a frozen build answered
+    ``GET /api/cloud/state`` with 200 + index.html - the settings dialog could never read its own
+    state, while the POST endpoints beside it reached their handlers and 500'd for the missing
+    import. Route order is the only thing that keeps this honest, so it is asserted here.
+    """
+
+    @staticmethod
+    def _paths() -> list[str]:
+        return [getattr(route, "path", "") for route in server.app.router.routes]
+
+    def test_the_state_route_is_registered_before_the_spa_fallback(self):
+        paths = self._paths()
+        self.assertIn("/api/cloud/state", paths)
+        self.assertLess(paths.index("/api/cloud/state"), paths.index("/{path:path}"))
+
+    def test_no_api_route_is_registered_after_the_spa_fallback(self):
+        paths = self._paths()
+        catch_all = paths.index("/{path:path}")
+        shadowed = [p for p in paths[catch_all + 1:] if p.startswith("/api/")]
+        self.assertEqual(shadowed, [],
+                         "these API routes would be answered with index.html: " + repr(shadowed))
+
+
 if __name__ == "__main__":
     unittest.main()

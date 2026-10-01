@@ -23,10 +23,22 @@ server 缺的那一行；它只驱动模块，从不驱动端点。本版因此�
 - **只有"没送达"才换路**：DNS/TCP/TLS 失败、超时、代埋 502/504 → 回落边缘；portal 只要答复过（含拒绝）
   绝不重发 —— 重试不会把一次重复申请变成两条。第一跳预算 8 s（可达时 ~1.4 s 即答），因此只放行
   80/443 的网络不会把整个超时耗在主路上。
+- **`GET /api/cloud/state` 被 SPA 兜底吞掉**：`@app.get("/{path:path}")` 注册在云端点之前，于是这条 GET 被
+  首页接走（200 + HTML）—— 设置对话框因此永远读不到自己的状态；POST 不受兜底影响，所以只有"申请"报 500。
+  改为在所有 API 路由**之后**用 `app.add_api_route` 注册兜底，并加两条路由顺序守卫（一条针对 state，
+  一条对任意 `/api/` 路由通用）。**这条是冻结包真跑冒烟抓到的**：包起来后 `GET /api/cloud/state` 回了 HTML。
 - `connect()` 把 portal 发来的非数字端口变成一句可显示的错误，而不是未捕获的 ValueError。
 
-**验证**：套件 1458 项全绿（本版新增：端点 2、路径回退 4、以及把 `_RecordingTunnel` 改成真继承
-`TunnelProcess` 后消掉的三条类型告警）；`release_check.py` 离线 0 failing。
+**hub 侧同一批修复（`../mrrc_hub`，已部署）**：`POST /apply` 的应答此前**从不交出申请令牌**，
+于是应用拿不到它、`/status` 也就无从开始 —— 真机联调时在这一步报 "portal did not return a request
+token"。原因与本次客户端同源：portal 的测试从 store 直读令牌，绕过了唯一真实的取令牌路径（HTTP 应答）。
+修法见 hub SDD V0.18（含部署与公网实测记录）。
+
+**验证**：套件 1460 项全绿（本版新增：端点 2、路由顺序 2、路径回退 4，另把 `_RecordingTunnel` 改成真继承
+`TunnelProcess` 以消掉三条类型告警）；`release_check.py` 离线 0 failing；**macOS 产物级**：`codesign --verify`
+通过、`version.txt = 1.24.1`、麦克风权限键在、DMG 经典布局，且**走查冻结包字节码**证明 `server` 入口引用
+`cloud_hub`（PYZ 1070 个模块里 `cloud_hub` 在）—— 最后把包**真跑起来**：登录后 `GET /api/cloud/state`
+回 200 + JSON（修复前回的是首页 HTML）、server 输出 0 个 Traceback。
 
 ## [v1.24.0] — 2026-10-02 — 接入云端搬进应用：设置里申请 → 后台批准 → 应用自己接好
 

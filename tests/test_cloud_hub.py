@@ -68,6 +68,17 @@ class _FakePortal(BaseHTTPRequestHandler):
                 "hub_token": self.state["hub_token"] if granted else "",
                 "entry": f"https://{self.state['label']}.mrrc.vlsc.net:9988/" if granted else "",
             })
+        elif self.path == "/claim":
+            _FakePortal.seen["claim"] = fields
+            if fields.get("secret") != self.state["enroll_secret"]:
+                self._json(403, {"error": "登记口令无效或未获授权"})
+                return
+            self._json(200, {"callsign": fields.get("callsign", ""), "status": "granted",
+                             "label": self.state["label"], "port": self.state["port"],
+                             "enroll_secret": self.state["enroll_secret"],
+                             "hub_token": self.state["hub_token"],
+                             "entry": f"https://{self.state['label']}.mrrc.vlsc.net:9988/",
+                             "request_token": "adopted-token"})
         elif self.path == "/enroll":
             _FakePortal.seen["enroll"] = fields
             if fields.get("secret") != self.state["enroll_secret"]:
@@ -158,6 +169,17 @@ class CloudHubTests(unittest.TestCase):
         reply = cloud_hub.apply(self.portal, "BG9ZZZ", "op@example.com")
         self.assertEqual(reply["request_token"], "t0k")
         self.assertEqual(_FakePortal.seen["apply"]["callsign"], "BG9ZZZ")
+
+    def test_claim_adopts_an_approved_application(self):
+        """凭运维给的口令直接认领已批准的申请，拿到接入信息与一个可用的申请令牌。"""
+        _FakePortal.state["status"] = "granted"
+        reply = cloud_hub.claim(self.portal, "BG9AAA", "s" * 32)
+        self.assertEqual(reply["label"], "bg9zzz")
+        self.assertEqual(reply["port"], 18877)
+        self.assertTrue(reply["request_token"])
+        self.assertEqual(_FakePortal.seen["claim"]["callsign"], "BG9AAA")
+        with self.assertRaises(cloud_hub.CloudHubError):
+            cloud_hub.claim(self.portal, "BG9AAA", "wrong")
 
     def test_status_refuses_a_wrong_token(self):
         with self.assertRaises(cloud_hub.CloudHubError):

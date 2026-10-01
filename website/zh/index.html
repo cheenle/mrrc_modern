@@ -59,7 +59,7 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.24.1-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS v1.24.1
           </a>
-<div class="dl-meta">62,243,449 bytes · SHA-256 c31f8f77…</div>
+<div class="dl-meta">62,257,332 bytes · SHA-256 137de9f2…</div>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Windows 安装包 v1.24.1
           </a>
@@ -90,8 +90,9 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>接入云端的「申请」能用了</strong>——按钮此前回 <code>500</code>：<code>server.py</code>
-              调用了一个从未导入的模块。本版修复，并补上端点级测试与打包清单，冻结包不可能再缺它。
+<strong>接入云端的「申请」能用了</strong>——按钮此前回 <code>500</code>（<code>server.py</code>
+              调用了一个从未导入的模块），且 <code>GET /api/cloud/state</code> 被 SPA 兜底吞掉，对话框读不到
+              自己的状态。两处都已修复，并补上端点级测试、路由顺序守卫与打包清单。
             </li>
 <li>
 <strong>应用改为直连 hub 主路</strong>——默认入口 <code>portal.mrrc.vlsc.net:8899</code>，海外边缘降为
@@ -352,8 +353,8 @@
 <strong> MRRC-Modern-Setup.exe — v1.24.1 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.6 MB · x64 · 54,121,827 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: e25e3995…</code>
+            51.6 MB · x64 · 54,080,541 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 46323320…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             v1.24.1 首次运行零配置：自动生成网页密码，自动识别电台
@@ -371,7 +372,7 @@
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.24.1-Windows-x64-Setup.exe">
 <i class="fas fa-fingerprint"></i> v1.24.1 版本化安装包
             </a>
-<div class="dl-meta">54,121,827 bytes · SHA-256 e25e3995…</div>
+<div class="dl-meta">54,080,541 bytes · SHA-256 46323320…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -390,8 +391,8 @@
 <strong> MRRC-Modern-v1.24.1-arm64.dmg — v1.24.1 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            55.9 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 62,243,449 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: c31f8f77…</code>
+            59.4 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 62,257,332 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 137de9f2…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
@@ -502,10 +503,10 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.24.1，46.0，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.24.1，51.6，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 e25e3995cf46640e90ef5c614a59807a29eefbdf82f62dbd51167d9cf454ca95</code>
+<code>SHA-256 46323320630b67d47360a20a21cb1f0144965d42f4fa56cada6609148f05b1ec</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -981,7 +982,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.63</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V2.64</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>

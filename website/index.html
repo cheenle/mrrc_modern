@@ -60,7 +60,7 @@
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.24.1-arm64.dmg">
 <i class="fab fa-apple"></i> Download macOS v1.24.1
           </a>
-<div class="dl-meta">62,243,449 bytes · SHA-256 c31f8f77…</div>
+<div class="dl-meta">62,257,332 bytes · SHA-256 137de9f2…</div>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Windows Installer v1.24.1
           </a>
@@ -99,9 +99,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
 <strong>Cloud Hub onboarding works again</strong> — the settings dialog's 申请 button
-              answered <code>500</code>, because <code>server.py</code> drove the onboarding through a
-              module it never imported. Fixed here, with endpoint-level tests and a bundle entry so the
-              packaged app cannot ship without it again.
+              answered <code>500</code> (<code>server.py</code> drove the onboarding through a module it
+              never imported) and <code>GET /api/cloud/state</code> was swallowed by the SPA fallback, so the
+              dialog could not read its own state. Both fixed, with endpoint tests, a route-order guard and a
+              bundle entry so a packaged build cannot ship without them again.
             </li>
 <li>
 <strong>The app talks to the hub itself now</strong> — the portal entry is
@@ -370,8 +371,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-Setup.exe — v1.24.1 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.6 MB · x64 · 54,121,827 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: e25e3995…</code>
+            51.6 MB · x64 · 54,080,541 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 46323320…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             v1.24.1 is zero-config on first run: it auto-generates a web
@@ -392,7 +393,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.24.1-Windows-x64-Setup.exe">
 <i class="fas fa-fingerprint"></i> Versioned v1.24.1
             </a>
-<div class="dl-meta">54,121,827 bytes · SHA-256 e25e3995…</div>
+<div class="dl-meta">54,080,541 bytes · SHA-256 46323320…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -408,11 +409,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.24.1-arm64.dmg — v1.24.0 Stable </strong>
+<strong> MRRC-Modern-v1.24.1-arm64.dmg — v1.24.1 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            55.9 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,243,449 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: c31f8f77…</code>
+            59.4 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,257,332 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 137de9f2…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -528,10 +529,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.24.1, 54.1 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.24.1, 51.6 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 e25e3995cf46640e90ef5c614a59807a29eefbdf82f62dbd51167d9cf454ca95</code>
+<code>SHA-256 46323320630b67d47360a20a21cb1f0144965d42f4fa56cada6609148f05b1ec</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -1026,7 +1027,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.63</strong> · Architecture decisions, component
+            <strong>V2.64</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>

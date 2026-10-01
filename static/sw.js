@@ -6,7 +6,7 @@ const ASSETS = [
     '/ft710.css?v=26',
     '/ft710_main.js?v=38',
     '/ft710_ui.js?v=33',
-    '/modules/ptt_manager.js?v=16',
+    '/modules/ptt_manager.js?v=17',
     '/modules/settings_manager.js?v=15',
     '/modules/atr1000.js?v=5',
     '/manifest.json',

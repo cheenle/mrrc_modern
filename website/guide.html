@@ -556,13 +556,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </table></div>
 <hr />
 <h2 id="macos-安装与初始化">0.7 macOS 安装与初始化</h2>
-<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.24.5-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
+<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.24.6-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
 <blockquote class="callout-info">
 <p>适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是<strong>自包含</strong>的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。</p>
 </blockquote>
 <h3 id="安装5-步">0.7.1 安装（5 步）</h3>
 <ol type="1">
-<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.24.5-arm64.dmg</code>（约 56 MB）。</li>
+<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.24.6-arm64.dmg</code>（约 56 MB）。</li>
 <li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
 <li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
 <li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
@@ -690,8 +690,12 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>CAT 串口被独占了——退出菜单栏的 MRRC Modern 再开电台软件（反之 MRRC 启动失败也先关它们）。详见 §0.8；另确认用的是 <code>cu.</code> 开头而非 <code>tty.</code>。</td>
 </tr>
 <tr>
+<td>浏览器打开是<strong>空白页</strong>、或报「网址协议不受支持 / 无法访问此网站」</td>
+<td>多半是<strong>浏览器被送到了服务器没在监听的那个协议</strong>上（启动器算的是 <code>https://</code>，而服务器退回了纯 HTTP）。<strong>v1.24.6 起启动器会先问服务器到底在哪个地址应答</strong>，再打开浏览器；若它提示「已切换到 <code>http://</code>」，说明证书没签出来 —— 界面能用，但请到日志（macOS <code>~/Library/Application Support/MRRC-Modern/logs/server.log</code>、Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs\server.log</code>）看 <code>could not create a certificate</code> 那一行的原因，别把警告当噪音忽略。</td>
+</tr>
+<tr>
 <td>端口 8888 被占用</td>
-<td>高级用户在 <code>mrrc_modern.env</code> 里改 <code>MRRC_WEB_PORT</code>，重启生效。</td>
+<td><strong>v1.24.6 起第二个实例会明确报错并退出</strong>（Windows 上此前两个实例可以<strong>同时</strong>绑同一端口，浏览器可能落到没拿到电台那一个）。报错里会点名「另一个 MRRC Modern 还在跑」：先关掉已有窗口/菜单栏图标；确实要并行就高级用户在 <code>mrrc_modern.env</code> 里改 <code>MRRC_WEB_PORT</code>，重启生效。</td>
 </tr>
 </tbody>
 </table></div>
@@ -1533,37 +1537,7 @@ venv/bin/pip install -r requirements.txt
         <div class="footer-bottom">
             <p>&copy; 2026 MRRC Modern Project · <a href="https://github.com/cheenle/mrrc_modern" style="color:var(--accent);">GitHub</a></p>
         </div>
-    
-<div class="step" id="clean-slate">
-  <h4>Clean slate (when an upgrade misbehaves)</h4>
-  <p>
-    Several versions of leftovers - a second configuration directory, <code>MRRC_*</code> /
-    <code>FT710_*</code> environment variables, ad-hoc scheduled tasks, a stale certificate - can
-    make a machine behave in ways that look like bugs: the Cloud Hub dialog sits at <em>waiting for
-    approval</em>, or the entry answers 502 while everything on the hub looks right.
-  </p>
-  <p>
-    Download both files into one folder (e.g. the Desktop) and double-click the <code>.cmd</code>:
-  </p>
-  <p>
-    <a class="btn btn-secondary" href="downloads/MRRC-Modern-Cleanup.cmd"><i class="fas fa-broom"></i> MRRC-Modern-Cleanup.cmd</a>
-    <a class="btn btn-secondary" href="downloads/MRRC-Modern-Cleanup.ps1"><i class="fas fa-file-code"></i> MRRC-Modern-Cleanup.ps1</a>
-  </p>
-  <p style="color: var(--scope-text-muted)">
-    It asks for confirmation, copies your configuration, certificates and logs to a backup folder on
-    the Desktop, then removes the application, its settings, its environment variables and its
-    scheduled tasks. It does <strong>not</strong> touch anything else on the machine, and it leaves
-    the older <em>MRRC 6.x</em> product alone unless you ask for it (<code>-IncludeLegacy</code>).
-    Add <code>-WhatIf</code> to see what it would do without changing anything. After a cleanup,
-    install again and use <em>Settings → Cloud Hub</em>: the instance re-enrols itself and the entry
-    comes back.
-  </p>
-  <p style="color: var(--scope-text-muted); font-size: 0.82rem">
-    SHA-256 &nbsp; MRRC-Modern-Cleanup.ps1 <code>5f36bc64aef90351…</code> &nbsp;·&nbsp;
-    MRRC-Modern-Cleanup.cmd <code>90b7e1c9f1d50385…</code>
-  </p>
-</div>
-</div>
+    </div>
 </footer>
 
 <script>
@@ -1665,24 +1639,5 @@ function toggleMobileMenu() {
 
 </script>
     <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
-
-<div class="step" id="launcher-trouble-en">
-  <h4>When the launcher will not start</h4>
-  <p>The launcher does three things: seed the configuration, start the server, open the browser.
-     <strong>The server runs without it</strong>:</p>
-  <ol>
-    <li>Start Menu → <code>MRRC Modern Server</code> (or <code>C:\Program Files\MRRC Modern\MRRC-Modern-Server.exe</code>)</li>
-    <li>Open <code>http://127.0.0.1:8888/</code> in a browser; from 1.24.5 a missing certificate is signed on the spot, so https works too</li>
-    <li>Password: from 1.24.5 the window prints <em>login password for this run: …</em> and saves it;
-        earlier versions use <code>changeme_please_use_strong_password!</code> (change it in the settings dialog)</li>
-    <li>Radio not found: Settings → Connection → pick the COM port from Device Manager (1.24.5 detects it)</li>
-  </ol>
-  <p style="color: var(--scope-text-muted)">
-    To see why the launcher fails, in CMD run <code>cd /d "C:\Program Files\MRRC Modern"</code> then
-    <code>MRRC-Modern-Launcher.exe &gt; "%TEMP%\launcher.txt" 2&gt;&amp;1</code> and send
-    <code>launcher.txt</code> plus <code>%LOCALAPPDATA%\MRRC-Modern\launcher.log</code> to support.
-    It is usually antivirus: whitelist the install directory and reinstall.
-  </p>
-</div>
 </body>
 </html>

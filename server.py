@@ -4178,6 +4178,14 @@ def main():
     # for SO_EXCLUSIVEADDRUSE on Windows, retries the restart race, and turns a taken port
     # into a message naming the other instance. Config still carries host/port so the
     # "Uvicorn running on ..." line matches the socket that is really listening.
+    # An instance that is already connected must serve its entry after a restart, without
+    # anyone opening the settings dialog: the tunnel used to start only from /api/cloud/state,
+    # so a rebooted machine answered 502 until somebody clicked.
+    try:
+        _cloud_start_tunnel(_cloud_settings())
+    except Exception as exc:                                      # noqa: BLE001
+        logger.warning("could not start the tunnel at start-up (%s) - the dialog retries", exc)
+
     server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port,
                                            log_level="info", reload=False, **ssl_kwargs))
     server.run(sockets=[_bind_listener_socket(args.host, args.port)])

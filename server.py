@@ -26,7 +26,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Callable, Optional, Protocol
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -4001,13 +4001,32 @@ def _bind_dual_stack_socket(port: int, *, retries: int = 10,
     rather than reporting success: binding is the one place where "keep going anyway"
     produced a server that answered nobody.
     """
+    def make() -> socket.socket:
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        _set_bind_exclusion(sock, windows=(os.name == "nt"))
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        return sock
+
+    return _bind_with_retry(make, ("::", port), port,
+                            retries=retries, retry_delay_s=retry_delay_s)
+
+
+def _bind_with_retry(make_socket: Callable[[], socket.socket], addr: tuple, port: int, *,
+                     retries: int, retry_delay_s: float) -> socket.socket:
+    """Bind and listen, retrying a taken port briefly and then failing loudly.
+
+    One implementation for every host, so no start-up path can skip the guard. The retry
+    covers the launcher restarting this exe in-process on a config change while the
+    previous listener is still on its way out; the final raise is what turns "two servers
+    on one port, and the browser landed on the one without the radio" into a message that
+    names the port and the likely cause. Binding is the one place where "keep going
+    anyway" produced a server that answered nobody.
+    """
     last: OSError | None = None
     for attempt in range(retries):
-        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        sock = make_socket()
         try:
-            _set_bind_exclusion(sock, windows=(os.name == "nt"))
-            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
-            sock.bind(("::", port))
+            sock.bind(addr)
             sock.listen(2048)
             return sock
         except OSError as exc:
@@ -4018,6 +4037,40 @@ def _bind_dual_stack_socket(port: int, *, retries: int = 10,
             if attempt + 1 < retries:
                 time.sleep(retry_delay_s)
     raise RuntimeError(_already_running_hint(port, last)) from last
+
+
+def _bind_listener_socket(host: str, port: int, *, retries: int = 10,
+                          retry_delay_s: float = 0.3) -> socket.socket:
+    """The listening socket for ANY configured host, guarded the same way.
+
+    An explicit host used to be handed to ``uvicorn.run(host=...)`` instead, which on
+    Windows neither asks for ``SO_EXCLUSIVEADDRUSE`` nor says anything an operator can act
+    on. Verified on the packaged v1.24.6 exe with a clean per-user state: a second
+    instance first logged ``Server ready!`` (the app's startup event fires before uvicorn
+    binds) and only then failed with
+    ``ERROR: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 18892)``,
+    i.e. the OS refused it, not this code — no retry for the restart race and no hint that
+    another instance is running. ``MRRC_WEB_HOST=127.0.0.1`` is exactly what the
+    2026-10-02 field machine was configured with, so that was the path in use.
+
+    The wildcard keeps the dual-stack socket (see ``_bind_dual_stack_socket``); a specific
+    address binds only itself, and a specific IPv6 address stays V6ONLY so it does not also
+    claim the IPv4 wildcard.
+    """
+    if host in ("::", ""):
+        return _bind_dual_stack_socket(port, retries=retries, retry_delay_s=retry_delay_s)
+
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+    def make() -> socket.socket:
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        _set_bind_exclusion(sock, windows=(os.name == "nt"))
+        if family == socket.AF_INET6:
+            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+        return sock
+
+    return _bind_with_retry(make, (host, port), port,
+                            retries=retries, retry_delay_s=retry_delay_s)
 
 
 def _resolve_ssl_kwargs(args) -> dict:
@@ -4101,20 +4154,13 @@ def main():
     # Pass the app object (not the "server:app" import string) so frozen
     # PyInstaller builds work — a frozen exe cannot re-import the "server"
     # module by name.
-    if args.host in ("::", ""):
-        # uvicorn.run(host="::") would be IPv6-only (asyncio sets V6ONLY=1);
-        # pre-bind a dual-stack socket and hand it to Server.run(sockets=).
-        server = uvicorn.Server(uvicorn.Config(app, log_level="info", reload=False, **ssl_kwargs))
-        server.run(sockets=[_bind_dual_stack_socket(args.port)])
-    else:
-        uvicorn.run(
-            app,
-            host=args.host,
-            port=args.port,
-            log_level="info",
-            reload=False,
-            **ssl_kwargs,
-        )
+    # Bind here for EVERY host instead of letting uvicorn do it: the pre-bind is what asks
+    # for SO_EXCLUSIVEADDRUSE on Windows, retries the restart race, and turns a taken port
+    # into a message naming the other instance. Config still carries host/port so the
+    # "Uvicorn running on ..." line matches the socket that is really listening.
+    server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port,
+                                           log_level="info", reload=False, **ssl_kwargs))
+    server.run(sockets=[_bind_listener_socket(args.host, args.port)])
 
 
 

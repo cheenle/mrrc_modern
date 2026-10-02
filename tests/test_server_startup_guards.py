@@ -300,3 +300,110 @@ class DuplicateLogLineTests(unittest.TestCase):
                                  "a stream handler has no file to compare")
             finally:
                 handler.close()
+
+class ExplicitHostBindTests(unittest.TestCase):
+    """An explicit ``MRRC_WEB_HOST`` must be guarded exactly like the wildcard.
+
+    The 2026-10-02 field machine ran with ``MRRC_WEB_HOST=127.0.0.1``, which took the
+    ``else: uvicorn.run(host=...)`` branch and so skipped ``SO_EXCLUSIVEADDRUSE``, the
+    restart retry and the actionable message. Measured on the packaged v1.24.6 exe with a
+    clean per-user state: a second instance logged ``Server ready!`` (the app's startup
+    event fires before uvicorn binds) and only then died on uvicorn's bare
+    ``ERROR: [Errno 10048] error while attempting to bind on address ('127.0.0.1', 18892)``
+    — the OS refused it, nothing explained it.
+    """
+
+    def test_explicit_ipv4_host_binds_that_address_only(self):
+        made: list[RecordingSocket] = []
+        with _socket_patch(made), patch.object(server, "time", MagicMock()):
+            returned = server._bind_listener_socket("127.0.0.1", 18892)
+        self.assertIs(returned, made[0])
+        self.assertEqual(made[0].family, _socket.AF_INET)
+        self.assertEqual(made[0].bound, ("127.0.0.1", 18892))
+        self.assertEqual(made[0].backlog, 2048)
+
+    def test_explicit_host_consults_the_platform_exclusivity_guard(self):
+        """The whole point: Windows asks for exclusivity on EVERY host, not just ``::``."""
+        seen: list[bool] = []
+        with patch.object(server, "_set_bind_exclusion", lambda sock, windows: seen.append(windows)), \
+                _socket_patch([]), patch.object(server, "time", MagicMock()):
+            server._bind_listener_socket("127.0.0.1", 18892)
+        self.assertEqual(seen, [os.name == "nt"])
+
+    def test_wildcard_host_still_binds_dual_stack(self):
+        made: list[RecordingSocket] = []
+        with _socket_patch(made), patch.object(server, "time", MagicMock()):
+            server._bind_listener_socket("::", 8888)
+        self.assertEqual(made[0].family, _socket.AF_INET6)
+        self.assertEqual(made[0].bound, ("::", 8888))
+        self.assertIn((_socket.IPPROTO_IPV6, _socket.IPV6_V6ONLY, 0), made[0].options,
+                      "V6ONLY=0 is what lets the launcher's 127.0.0.1 reach the :: listener")
+
+    def test_an_empty_host_is_the_wildcard(self):
+        made: list[RecordingSocket] = []
+        with _socket_patch(made), patch.object(server, "time", MagicMock()):
+            server._bind_listener_socket("", 8888)
+        self.assertEqual(made[0].bound, ("::", 8888))
+
+    def test_explicit_ipv6_host_stays_v6only(self):
+        made: list[RecordingSocket] = []
+        with _socket_patch(made), patch.object(server, "time", MagicMock()):
+            server._bind_listener_socket("::1", 8888)
+        self.assertEqual(made[0].family, _socket.AF_INET6)
+        self.assertEqual(made[0].bound, ("::1", 8888))
+        self.assertIn((_socket.IPPROTO_IPV6, _socket.IPV6_V6ONLY, 1), made[0].options,
+                      "a specific address must not also claim the IPv4 wildcard")
+
+    def test_contention_on_an_explicit_host_is_retried_then_explained(self):
+        made: list[RecordingSocket] = []
+        boom = OSError(10048, "only one usage of each socket address")
+        with _socket_patch(made, boom), patch.object(server, "time", MagicMock()) as slept:
+            with self.assertRaises(RuntimeError) as caught:
+                server._bind_listener_socket("127.0.0.1", 18892, retries=4)
+        text = str(caught.exception)
+        self.assertIn("18892", text)
+        self.assertIn("Another MRRC Modern", text)
+        self.assertEqual([s.bind_attempts for s in made], [1] * 4,
+                         "every attempt must use a fresh socket")
+        self.assertTrue(all(s.closed for s in made), "failed sockets must not leak")
+        self.assertEqual(slept.sleep.call_count, 3, "the last attempt does not wait")
+
+    def test_a_permission_error_on_an_explicit_host_is_not_retried(self):
+        made: list[RecordingSocket] = []
+        with _socket_patch(made, OSError(errno.EACCES, "denied")), \
+                patch.object(server, "time", MagicMock()):
+            with self.assertRaises(OSError) as caught:
+                server._bind_listener_socket("127.0.0.1", 18892, retries=4)
+        self.assertNotIsInstance(caught.exception, RuntimeError)
+        self.assertEqual(len(made), 1)
+
+    def test_main_never_hands_a_host_to_uvicorn_to_bind(self):
+        """Guard the call graph, not the text: ``uvicorn.run(host=...)`` was the branch
+        that skipped every guard above.
+
+        AST rather than a substring, because this module's own docstrings quote
+        ``uvicorn.run(host=...)`` when explaining the defect - a text search matches the
+        explanation and reports a healthy tree as broken (it did, on first run).
+        """
+        import ast
+
+        source = (Path(__file__).resolve().parent.parent / "server.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        calls = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                base = node.func.value
+                if isinstance(base, ast.Name):
+                    calls.append(f"{base.id}.{node.func.attr}")
+                elif isinstance(base, ast.Call):
+                    continue
+                else:
+                    calls.append(node.func.attr)
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                calls.append(node.func.id)
+
+        self.assertNotIn("uvicorn.run", calls,
+                         "every start-up path must bind through _bind_listener_socket")
+        self.assertIn("_bind_listener_socket", calls)
+        self.assertEqual(calls.count("_bind_dual_stack_socket"), 1,
+                         "the dual-stack bind is reached only via _bind_listener_socket")

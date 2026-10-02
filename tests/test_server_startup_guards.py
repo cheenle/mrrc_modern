@@ -241,9 +241,9 @@ class DuplicateLogLineTests(unittest.TestCase):
         import logging
 
         saved = list(self._root_handlers())
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                log_dir = Path(tmp)
+        with tempfile.TemporaryDirectory() as tmp:
+            log_dir = Path(tmp)
+            try:
                 with patch.object(server, "LOG_DIR", log_dir):
                     first = server._setup_file_logging()
                     after_one = len(self._root_handlers())
@@ -253,21 +253,25 @@ class DuplicateLogLineTests(unittest.TestCase):
                 self.assertEqual(second, first, "the second call must report the same file")
                 self.assertEqual(after_two, after_one,
                                  "a second handler on one file doubles every log line")
-        finally:
-            # never leak a live file handler back into the suite
-            for handler in list(self._root_handlers()):
-                if handler not in saved:
-                    logging.getLogger().removeHandler(handler)
-                    handler.close()
+            finally:
+                # Close the handlers BEFORE the TemporaryDirectory goes away.
+                # This cleanup placed outside the with-block is green on
+                # macOS/Linux (they delete an open file happily) and red on
+                # Windows: PermissionError [WinError 32] inside cleanup() takes
+                # down the whole build gate. Never leak a live handler.
+                for handler in list(self._root_handlers()):
+                    if handler not in saved:
+                        logging.getLogger().removeHandler(handler)
+                        handler.close()
 
     def test_a_different_log_file_still_gets_its_handler(self):
         """Idempotence is per file: a relocated LOG_DIR must start logging there."""
         import logging
 
         saved = list(self._root_handlers())
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                dir_a, dir_b = Path(tmp) / "a", Path(tmp) / "b"
+        with tempfile.TemporaryDirectory() as tmp:
+            dir_a, dir_b = Path(tmp) / "a", Path(tmp) / "b"
+            try:
                 with patch.object(server, "LOG_DIR", dir_a):
                     server._setup_file_logging()
                 count_a = len(self._root_handlers())
@@ -275,11 +279,12 @@ class DuplicateLogLineTests(unittest.TestCase):
                     path_b = server._setup_file_logging()
                 self.assertEqual(len(self._root_handlers()), count_a + 1)
                 self.assertEqual(path_b, dir_b / "server.log")
-        finally:
-            for handler in list(self._root_handlers()):
-                if handler not in saved:
-                    logging.getLogger().removeHandler(handler)
-                    handler.close()
+            finally:
+                # inside the with-block: Windows cannot delete an open file
+                for handler in list(self._root_handlers()):
+                    if handler not in saved:
+                        logging.getLogger().removeHandler(handler)
+                        handler.close()
 
     def test_already_logging_to_matches_by_resolved_path(self):
         import logging

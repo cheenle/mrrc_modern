@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="云端的第一公里：内网电台如何接上去，以及它为什么曾经黑屏 —— MRRC Cloud Hub 的架构、不变量与真机踩坑记录"
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>云端的第一公里 —— 内网电台接入实录</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/octen.css?v=5" />
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="../css/ft710.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="../js/global-nav.js?v=5" defer data-gn="1"></script>
+    <style>
+      :root { --ink: #e8e8ea; --muted: #9a9aa2; --amber: #f59e0b; --cyan: #22d3ee; --line: #26262c; }
+      body { background: #0a0a0a; color: var(--ink); }
+      .essay { max-width: 780px; margin: 0 auto; padding: 140px 1.5rem 120px; font-size: 1.05rem; line-height: 1.85; }
+      .essay h1 { font-size: 2rem; line-height: 1.35; margin: 0 0 0.4rem; }
+      .essay .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 2.6rem; }
+      .essay h2 { font-size: 1.28rem; margin: 3rem 0 1rem; padding-left: 0.7rem; border-left: 3px solid var(--amber); }
+      .essay h3 { font-size: 1.02rem; margin: 1.8rem 0 0.5rem; color: var(--cyan); }
+      .essay p { margin: 0 0 1.05rem; }
+      .essay strong { color: #fff; font-weight: 600; }
+      .essay em { color: var(--amber); font-style: normal; }
+      .essay code { font-family: "JetBrains Mono", monospace; font-size: 0.86em; background: #16161a; border: 1px solid var(--line); border-radius: 4px; padding: 0.1em 0.35em; }
+      .essay pre { background: #0f0f12; border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6; }
+      .essay pre code { background: none; border: 0; padding: 0; }
+      .essay table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 1rem 0 1.6rem; }
+      .essay th, .essay td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+      .essay th { color: var(--muted); font-weight: 500; }
+      .essay .tag { display: inline-block; font-size: 0.74rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.6rem; margin-right: 0.4rem; }
+      .essay .foot { margin-top: 3rem; color: var(--muted); font-size: 0.88rem; }
+      .essay a { color: var(--cyan); }
+      .essay .note { background: #101014; border: 1px solid var(--line); border-radius: 8px; padding: 0.9rem 1.1rem; margin: 1.2rem 0; font-size: 0.94rem; }
+    </style>
+  </head>
+  <body>
+    <main class="essay">
+      <p><span class="tag">技术</span><span class="tag">Cloud Hub</span><span class="tag">2026-10-02</span></p>
+      <h1>云端的第一公里<br />—— 内网电台怎么接上去，以及它为什么曾经黑屏</h1>
+      <p class="sub">
+        一个业余无线电爱好者家里通常没有公网 IP：运营商 NAT、双 NAT、不能做端口映射、路由器不给 UPnP。
+        但电台想被远程用，就必须"在互联网上有一个入口"。这篇文章讲我们怎么在不要求客户改网络的前提下做到这一点，
+        以及在这个过程中，为什么装完之后会<strong>黑屏</strong>。
+      </p>
+
+      <h2>一、目标与约束</h2>
+      <table>
+        <tr><th>约束</th><th>后果</th></tr>
+        <tr><td>实例侧没有公网 IP、不能端口映射、不能 UPnP</td><td>入口不能建在客户端 ⇒ 必须**出站**建隧道</td></tr>
+        <tr><td>客户网络可能只放行 80/443，也可能只放行别的</td><td>隧道控制端口只能要**一个**，且要能配置</td></tr>
+        <tr><td>用户是业余爱好者，不是系统管理员</td><td>接入必须**在应用里点几下**完成，不能让他们敲命令</td></tr>
+        <tr><td>一台设备只属于一个呼号</td><td>入口名就是呼号本身：<code>https://bg9aaa.mrrc.vlsc.net/</code></td></tr>
+      </table>
+
+      <h2>二、四条不变量</h2>
+      <h3>1. 实例主动出站，hub 从不主动连实例</h3>
+      <p>
+        实例里跑一个 <code>frpc</code>，拨向 <code>tunnel.mrrc.vlsc.net:8989</code>（<em>唯一</em>保留的独立端口），
+        把自己的 8888 映射到 hub 回环上某个独占端口（如 <code>127.0.0.1:18803</code>）。
+        hub 侧的 nginx 再把 <code>bg9aaa.mrrc.vlsc.net</code> 反代到那个回环端口。
+        客户侧因此**零入站要求**，只需能出一个 TCP。
+      </p>
+
+      <h3>2. hub 按"每个实例自己的证书"校验，而不是公有 CA</h3>
+      <p>
+        实例的证书是它自己签的（首启自动生成，CN/SAN 就是它的入口名），hub 端
+        <code>proxy_ssl_trusted_certificate</code> 指向一个**由注册表生成**的信任包
+        （系统根证书 + 各实例公钥）。这带来两个好处：续期/重签不需要跨机同步，且
+        <strong>只有登记过的实例会被信任</strong>。
+      </p>
+      <div class="note">
+        反过来也成立：<strong>实例换了证书、hub 没重新生成信任包 ⇒ 上游校验失败 ⇒ 入口 502</strong>。
+        这条我们踩过两次，现在写进了运维脚本（新增/改名/换证书后跑一条命令）。
+      </div>
+
+      <h3>3. 路由是生成出来的，不是手写的</h3>
+      <p>
+        注册表 <code>/etc/mrrc-hub/instances.tsv</code> 每行是 <code>标签 回环端口 入口名</code>；
+        一条命令生成 nginx 的 map 与通配 vhost。加一个实例 = 加一行 + 重生成，**不需要碰站点配置**。
+      </p>
+
+      <h3>4. 门户只做非 root 的动作</h3>
+      <p>
+        呼号自助门户跑在回环上、以普通服务账号运行：它能写申请状态、能签发实例证书，但**不能**
+        reload nginx、不能改防火墙。需要 root 的两件事（重生成路由、放行端口）由运维照抄命令完成——
+        权限边界画在明处，门户被攻破也拿不到机器。
+      </p>
+
+      <h2>三、为什么"装完黑屏"</h2>
+      <p>
+        上线当天就有客户报：装完之后<strong>黑屏、起不来</strong>。我们在真机上复现，发现是四个
+        <em>只在构建机上成立</em>的默认值凑在一起：
+      </p>
+      <table>
+        <tr><th>默认值</th><th>客户机上发生了什么</th></tr>
+        <tr>
+          <td>证书路径 = 打包目录（<code>…\_internal\certs\fullchain.pem</code>）</td>
+          <td>普通用户对 <code>C:\Program Files</code> 只读 ⇒ 找不到证书 ⇒ 服务**悄悄退回纯 HTTP**，而启动器打开的是 <code>https://</code> ⇒ 浏览器协议错误 ⇒ <strong>一片黑</strong></td>
+        </tr>
+        <tr>
+          <td>日志目录 = 打包目录</td>
+          <td><code>[WinError 5] 拒绝访问</code> ⇒ 一条日志都没有 ⇒ 出事时无据可查</td>
+        </tr>
+        <tr>
+          <td>串口 = <code>/dev/cu.SLAB_USBtoUART</code>（macOS 的名字）</td>
+          <td>Windows 上电台明明在 <code>COM5</code>，程序却去找一个不存在的端口 ⇒ "电台找不到"</td>
+        </tr>
+        <tr>
+          <td>登录口令 = 源码里那个公开默认值</td>
+          <td>局域网里谁都能进（改了口令后没事，但首启不该是公开值）</td>
+        </tr>
+      </table>
+      <p>修法不是"注意一点"，而是三条结构性改动：</p>
+      <pre><code>1. 所有"运行时要写"的默认路径 → 用户目录（%LOCALAPPDATA%\MRRC-Modern\…）
+2. 缺证书 ⇒ **当场自签一张**（不再是"降级为 HTTP"）
+3. 加了闸门测试：任何可写默认路径落在程序目录里 ⇒ 测试直接红
+
+   def test_runtime_paths_are_outside_the_program_directory(self): ...</code></pre>
+      <p>
+        第三条是这一次最值钱的产出：它把"下次注意"变成了"下次一定红"——
+        同类问题再也进不了发布。顺带它当场咬出了第五个（内存通道文件）我们还没注意的默认值。
+      </p>
+
+      <h2>四、两个只在真机上现形的时序问题</h2>
+      <h3>1. 换了证书，进程还在服务旧的</h3>
+      <p>
+        TLS 上下文是进程启动时建好的。实例接入时会生成新证书并写盘，但正在运行的进程**不会**换。
+        hub 那边按新证书校验 ⇒ 上游失败 ⇒ 入口 502。而且它最坑的形态是顺序：
+        <em>先重启应用、之后才接入</em> —— 这时文件变了、进程还是旧的。
+        最终判据改成一句事实：
+      </p>
+      <pre><code>证书文件的写入时间 &gt; 本进程启动时间  ⇒  需要重启才能启用</code></pre>
+
+      <h3>2. 隧道是"懒启动"的</h3>
+      <p>
+        隧道原本只在打开设置对话框（调 <code>/api/cloud/state</code>）时才拉起——
+        于是**机器重启之后，入口会一直 502，直到有人点一下设置**。这个缺口在端到端验收里被发现，
+        改成应用启动时就把隧道拉起来（失败只记日志，不阻塞服务）。
+      </p>
+
+      <h2>五、运维四条判据（都是真机换来的）</h2>
+      <div class="note">
+        <p><strong>① 别用退出码证明成功。</strong>构建脚本退出码 0、"<code>Successful compile</code>"、<code>version.txt</code> 写着新版本——这三样都可能同时成立而包是旧的。可靠组合是：<em>版本 + 今天的时间戳 + 与上一版不同的哈希</em>，最后再加一步"装完真跑"。</p>
+        <p><strong>② 同一个版本号不能重建。</strong>升级通道比的是版本串：用同一个号重新构建，装了那一版的人永远拿不到新包，点"升级"只会反复重放同一版本。</p>
+        <p><strong>③ 发版列车只能有一个司机。</strong>两个写者并行时，清单文件会被覆盖成"新标签 + 旧数字"，更新器拿到对不上号的哈希。</p>
+        <p><strong>④ 每次真机失败，当天变成一条测试或一条不变量。</strong>否则它会换个名字再来。</p>
+      </div>
+
+      <h2>六、对使用者：三步接入</h2>
+      <pre><code>① 安装 MRRC Modern（Windows 安装包 / macOS DMG）
+② 设置 → 接入云端 → 填呼号 → 申请
+③ 运维在门户核验并批准（或运营方给你一个登记口令，填进框里即可）
+
+完成后你的入口是：  https://&lt;呼号&gt;.mrrc.vlsc.net/
+   —— 就是呼号本身，没有端口、没有路径、没有产品后缀</code></pre>
+      <p>
+        出问题时：界面里点 🐞 一键带日志上报；环境乱掉了可以从站点下载
+        <a href="guide.html#clean-slate">一键清理脚本</a>，它先把你配置与证书备份到桌面，再彻底清干净重来。
+      </p>
+      <p>
+        启动器万一打不开（黑屏/闪退），服务本身照样能跑：开始菜单里的
+        <em>MRRC Modern Server</em> + 浏览器打开 <code>http://127.0.0.1:8888/</code>，
+        口令会打印在窗口里。详细步骤见<a href="guide.html#launcher-trouble">安装指南的对应一节</a>。
+      </p>
+
+      <p class="foot">
+        写于 2026-10-02，MRRC Cloud Hub 上线首日。文中的每个细节都来自当天的真机日志、提交与产物校验。
+        <br />另见随笔：<a href="muscle-and-mind.html">阳春白雪与下里巴人 —— 论肌肉与思维</a>
+      </p>
+    </main>
+  </body>
+</html>

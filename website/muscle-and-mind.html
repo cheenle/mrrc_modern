@@ -27,182 +27,385 @@
     <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
 
     <style>
-      :root { --ink: #e8e8ea; --muted: #9a9aa2; --amber: #f59e0b; --cyan: #22d3ee; --line: #26262c; }
-      body { background: #0a0a0a; color: var(--ink); }
-      .essay { max-width: 760px; margin: 0 auto; padding: 140px 1.5rem 120px; font-size: 1.06rem; line-height: 1.85; }
-      .essay h1 { font-size: 2.1rem; line-height: 1.35; margin: 0 0 0.4rem; }
-      .essay .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 2.6rem; }
-      .essay h2 { font-size: 1.3rem; margin: 3rem 0 1rem; padding-left: 0.7rem; border-left: 3px solid var(--amber); }
-      .essay p { margin: 0 0 1.1rem; }
-      .essay strong { color: #fff; font-weight: 600; }
-      .essay em { color: var(--amber); font-style: normal; }
-      .essay code { font-family: "JetBrains Mono", monospace; font-size: 0.86em; background: #16161a; border: 1px solid var(--line); border-radius: 4px; padding: 0.1em 0.35em; }
-      .essay pre { background: #0f0f12; border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; overflow-x: auto; font-size: 0.84rem; line-height: 1.6; }
-      .essay pre code { background: none; border: 0; padding: 0; }
-      .essay blockquote { margin: 1.4rem 0; padding: 0.2rem 0 0.2rem 1.1rem; border-left: 2px solid var(--line); color: var(--muted); }
-      .essay .rule { margin: 2.4rem 0; border-top: 1px solid var(--line); }
-      .essay table { width: 100%; border-collapse: collapse; font-size: 0.92rem; margin: 1rem 0 1.6rem; }
-      .essay th, .essay td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-      .essay th { color: var(--muted); font-weight: 500; }
-      .essay .tag { display: inline-block; font-size: 0.74rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.6rem; margin-right: 0.4rem; }
-      .essay .foot { margin-top: 3rem; color: var(--muted); font-size: 0.88rem; }
-      .essay a { color: var(--cyan); }
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --cyan: #22d3ee;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .essay {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 140px 1.5rem 120px;
+        font-size: 1.06rem;
+        line-height: 1.85;
+      }
+      .essay h1 {
+        font-size: 2.1rem;
+        line-height: 1.35;
+        margin: 0 0 0.4rem;
+      }
+      .essay .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.6rem;
+      }
+      .essay h2 {
+        font-size: 1.3rem;
+        margin: 3rem 0 1rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .essay p {
+        margin: 0 0 1.1rem;
+      }
+      .essay strong {
+        color: #fff;
+        font-weight: 600;
+      }
+      .essay em {
+        color: var(--amber);
+        font-style: normal;
+      }
+      .essay code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.86em;
+        background: #16161a;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      .essay pre {
+        background: #0f0f12;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-size: 0.84rem;
+        line-height: 1.6;
+      }
+      .essay pre code {
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+      .essay blockquote {
+        margin: 1.4rem 0;
+        padding: 0.2rem 0 0.2rem 1.1rem;
+        border-left: 2px solid var(--line);
+        color: var(--muted);
+      }
+      .essay .rule {
+        margin: 2.4rem 0;
+        border-top: 1px solid var(--line);
+      }
+      .essay table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+        margin: 1rem 0 1.6rem;
+      }
+      .essay th,
+      .essay td {
+        text-align: left;
+        padding: 0.55rem 0.6rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .essay th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .essay .tag {
+        display: inline-block;
+        font-size: 0.74rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.1rem 0.6rem;
+        margin-right: 0.4rem;
+      }
+      .essay .foot {
+        margin-top: 3rem;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .essay a {
+        color: var(--cyan);
+      }
     </style>
   </head>
   <body>
     <main class="essay">
-      <p><span class="tag">Post-mortem</span><span class="tag">Working with AI</span><span class="tag">2026-10-02</span></p>
+      <p>
+        <span class="tag">Post-mortem</span
+        ><span class="tag">Working with AI</span
+        ><span class="tag">2026-10-02</span>
+      </p>
       <h1>Highbrow and Lowbrow<br />— On Muscle and Mind</h1>
       <p class="sub">
-        Forty-eight hours, two models, six releases, one Windows VM, one Mac, one Hong Kong VPS, and a
-        tunnel that would not come up. This is not about how capable the models were. It is about the
-        one thing those hours made clear: <strong>the thing that works and the thing that thinks are
-        different organs.</strong>
+        Forty-eight hours, two models, six releases, one Windows VM, one Mac,
+        one Hong Kong VPS, and a tunnel that would not come up. This is not
+        about how capable the models were. It is about the one thing those hours
+        made clear:
+        <strong
+          >the thing that works and the thing that thinks are different
+          organs.</strong
+        >
       </p>
 
       <h2>1. Two kinds of "it works"</h2>
       <p>
-        Two in the morning, staring at <code>[INFO] mrrc: Server ready!</code>. The port is listening,
-        the processes are up, the build script exited 0, and the log says <code>Successful compile</code>.
-        The only problem: <strong>the user opens a browser and sees black.</strong>
+        Two in the morning, staring at <code>[INFO] mrrc: Server ready!</code>.
+        The port is listening, the processes are up, the build script exited 0,
+        and the log says <code>Successful compile</code>. The only problem:
+        <strong>the user opens a browser and sees black.</strong>
       </p>
       <p>A default value was dug out of the package:</p>
       <pre><code>cert=C:\Program Files\MRRC Modern\_internal\certs\fullchain.pem
 key =C:\Program Files\MRRC Modern\_internal\certs\radio.vlsc.net.key</code></pre>
       <p>
-        The build machine's paths, baked into a certificate default shipped to customers. On anyone
-        else's machine neither file exists, so the server <em>quietly</em> fell back to plain HTTP -
-        while the launcher opened an <code>https://</code> URL. The browser reported a protocol error;
-        the screen stayed black.
+        The build machine's paths, baked into a certificate default shipped to
+        customers. On anyone else's machine neither file exists, so the server
+        <em>quietly</em> fell back to plain HTTP - while the launcher opened an
+        <code>https://</code> URL. The browser reported a protocol error; the
+        screen stayed black.
       </p>
       <p>
-        Three more of the same that night: logs defaulting into <code>C:\Program Files\</code>
-        (<code>[WinError 5]</code>, no logs at all), a serial port defaulting to macOS's
-        <code>/dev/cu.SLAB_USBtoUART</code> while the radio sat on <code>COM5</code>, and a login
-        password defaulting to the one written in the source.
+        Three more of the same that night: logs defaulting into
+        <code>C:\Program Files\</code> (<code>[WinError 5]</code>, no logs at
+        all), a serial port defaulting to macOS's
+        <code>/dev/cu.SLAB_USBtoUART</code> while the radio sat on
+        <code>COM5</code>, and a login password defaulting to the one written in
+        the source.
       </p>
       <p>
-        Four bugs, one disease: <strong>defaults that only hold on the build machine.</strong>
-        And each one cost a full release - build, install, reproduce on real hardware - to find.
+        Four bugs, one disease:
+        <strong>defaults that only hold on the build machine.</strong>
+        And each one cost a full release - build, install, reproduce on real
+        hardware - to find.
       </p>
 
       <h2>2. Lowbrow: what muscle does</h2>
-      <p>The actions that actually pinned things down were none of them clever:</p>
+      <p>
+        The actions that actually pinned things down were none of them clever:
+      </p>
       <table>
-        <tr><th>Action</th><th>What it bought</th></tr>
-        <tr><td>Pull the exe back from the VM and hash it locally</td><td>The "successful" build was the <strong>previous release</strong> - same size, same hash, older timestamp</td></tr>
-        <tr><td>Read timestamps <strong>with the year</strong></td><td>Nearly shipped a two-week-old artifact; now a hard rule</td></tr>
-        <tr><td>Read one line of TOML byte by byte</td><td>A backslash inside a quoted string is an escape; <code>\U</code> became a Unicode escape and frpc refused the file. Three hours of reasoning that "the config looks fine" lost to one line of bytes</td></tr>
-        <tr><td>Run the server bare in a Windows console and screenshot it</td><td>Four warnings in one image; four bugs at once</td></tr>
-        <tr><td><code>ssh</code> to the VPS and run <code>ufw status</code></td><td>"The cloud panel is not blocking 8989" was wrong - the machine's own firewall was</td></tr>
-        <tr><td>Strip every non-ASCII character out of a <code>.ps1</code></td><td>PowerShell 5.1 reads BOM-less files as GBK; Chinese text breaks string terminators. Three times.</td></tr>
+        <tr>
+          <th>Action</th>
+          <th>What it bought</th>
+        </tr>
+        <tr>
+          <td>Pull the exe back from the VM and hash it locally</td>
+          <td>
+            The "successful" build was the <strong>previous release</strong> -
+            same size, same hash, older timestamp
+          </td>
+        </tr>
+        <tr>
+          <td>Read timestamps <strong>with the year</strong></td>
+          <td>Nearly shipped a two-week-old artifact; now a hard rule</td>
+        </tr>
+        <tr>
+          <td>Read one line of TOML byte by byte</td>
+          <td>
+            A backslash inside a quoted string is an escape;
+            <code>\U</code> became a Unicode escape and frpc refused the file.
+            Three hours of reasoning that "the config looks fine" lost to one
+            line of bytes
+          </td>
+        </tr>
+        <tr>
+          <td>Run the server bare in a Windows console and screenshot it</td>
+          <td>Four warnings in one image; four bugs at once</td>
+        </tr>
+        <tr>
+          <td><code>ssh</code> to the VPS and run <code>ufw status</code></td>
+          <td>
+            "The cloud panel is not blocking 8989" was wrong - the machine's own
+            firewall was
+          </td>
+        </tr>
+        <tr>
+          <td>Strip every non-ASCII character out of a <code>.ps1</code></td>
+          <td>
+            PowerShell 5.1 reads BOM-less files as GBK; Chinese text breaks
+            string terminators. Three times.
+          </td>
+        </tr>
       </table>
       <p>
-        They share one property: they all <strong>touch the real world</strong> - real kernels, real
-        encodings, real firewalls, real antivirus, real desktops. They produce no insight, only
-        <em>facts</em>.
+        They share one property: they all
+        <strong>touch the real world</strong> - real kernels, real encodings,
+        real firewalls, real antivirus, real desktops. They produce no insight,
+        only <em>facts</em>.
       </p>
       <hr class="rule" />
       <p>And the real world's favourite forgery is exactly "success":</p>
       <ul>
         <li>exit code 0, because the last statement succeeded;</li>
-        <li><code>Successful compile</code>, because the compile did succeed - nobody wanted the result;</li>
-        <li><code>version.txt</code> naming the new version, because it is written before the build that then failed;</li>
-        <li>"fetch complete", because the missing <code>frpc.exe</code> was announced on stderr.</li>
+        <li>
+          <code>Successful compile</code>, because the compile did succeed -
+          nobody wanted the result;
+        </li>
+        <li>
+          <code>version.txt</code> naming the new version, because it is written
+          before the build that then failed;
+        </li>
+        <li>
+          "fetch complete", because the missing <code>frpc.exe</code> was
+          announced on stderr.
+        </li>
       </ul>
       <p>
-        Muscle's value is <strong>refusing that evidence</strong>: counting bytes, comparing hashes,
-        checking timestamps, pointing a real browser at the address, and reporting back: 502.
+        Muscle's value is <strong>refusing that evidence</strong>: counting
+        bytes, comparing hashes, checking timestamps, pointing a real browser at
+        the address, and reporting back: 502.
       </p>
 
       <h2>3. Highbrow: what mind does</h2>
-      <p>Other work that night changed the nature of the problem while appearing to fix nothing.</p>
       <p>
-        The first move was to <strong>name</strong> it: to call four scattered bugs one <em>class</em> -
-        "defaults that only hold on the build machine". Once named, the shape changed from "one more
-        fix" to "where else can this hide?", and a sweep followed:
-        <code>LOG_DIR</code>, <code>MEM_FILE</code>, <code>RECORDINGS_DIR</code>, <code>CERT_DIR</code>,
-        <code>SSL_CERTFILE</code> - each asked "can a customer's machine write here?"
+        Other work that night changed the nature of the problem while appearing
+        to fix nothing.
+      </p>
+      <p>
+        The first move was to <strong>name</strong> it: to call four scattered
+        bugs one <em>class</em> - "defaults that only hold on the build
+        machine". Once named, the shape changed from "one more fix" to "where
+        else can this hide?", and a sweep followed: <code>LOG_DIR</code>,
+        <code>MEM_FILE</code>, <code>RECORDINGS_DIR</code>,
+        <code>CERT_DIR</code>, <code>SSL_CERTFILE</code> - each asked "can a
+        customer's machine write here?"
       </p>
       <p>The second move was to build a <strong>gate</strong>:</p>
       <pre><code>def test_runtime_paths_are_outside_the_program_directory(self):
     """Nothing this program writes to may default inside its own program directory."""</code></pre>
       <p>
-        It immediately caught <code>MEM_FILE</code>, a case nobody had noticed. More importantly, this
-        class can no longer ship: it is not "be careful next time", it is "red next time". One test is
-        worth a stack of post-mortems.
+        It immediately caught <code>MEM_FILE</code>, a case nobody had noticed.
+        More importantly, this class can no longer ship: it is not "be careful
+        next time", it is "red next time". One test is worth a stack of
+        post-mortems.
       </p>
       <p>
-        The third move was to <strong>change the criterion</strong>. Whether a restart is needed to
-        serve a new certificate had been decided by a snapshot of the file's identity taken at import -
-        which missed the ordering that matters (the app restarts, then the enrolment completes). It now
-        follows the fact: <em>was the certificate written after this process started?</em> Not cleverer;
-        just closer to what the question meant.
+        The third move was to <strong>change the criterion</strong>. Whether a
+        restart is needed to serve a new certificate had been decided by a
+        snapshot of the file's identity taken at import - which missed the
+        ordering that matters (the app restarts, then the enrolment completes).
+        It now follows the fact:
+        <em>was the certificate written after this process started?</em> Not
+        cleverer; just closer to what the question meant.
       </p>
       <p>
-        The fourth move was quieter: writing down that the upgrade channel <strong>compares version
-        strings</strong>. Rebuilding under the same number means anyone who already installed it will
-        never see the new package - their update button replays the same version forever. That is not
-        code; it is an understanding of the mechanism, and it decided that the night's fix had to ship
-        as 1.24.6 rather than "docs only".
+        The fourth move was quieter: writing down that the upgrade channel
+        <strong>compares version strings</strong>. Rebuilding under the same
+        number means anyone who already installed it will never see the new
+        package - their update button replays the same version forever. That is
+        not code; it is an understanding of the mechanism, and it decided that
+        the night's fix had to ship as 1.24.6 rather than "docs only".
       </p>
 
       <h2>4. Two models: one writing design, one crawling through consoles</h2>
       <table>
-        <tr><th></th><th>The highbrow side</th><th>The lowbrow side</th></tr>
-        <tr><td>Output</td><td>Decision records, tidy commits, systematic test gates, a launcher that asks the server which address to use</td><td>Installing packages, killing processes, reading GBK, opening firewalls, counting hashes, turning four console warnings into four bugs</td></tr>
-        <tr><td>How it failed</td><td>Defaults and mechanisms - invisible without real hardware</td><td>Slips of the hand: Chinese in a <code>.ps1</code>, <code>pkill -f</code> killing its own session, <code>&amp;</code> blocking forever on a process that never exits</td></tr>
-        <tr><td>Contribution</td><td>Stops it <strong>recurring</strong></td><td>Makes it <strong>visible the first time</strong></td></tr>
+        <tr>
+          <th></th>
+          <th>The highbrow side</th>
+          <th>The lowbrow side</th>
+        </tr>
+        <tr>
+          <td>Output</td>
+          <td>
+            Decision records, tidy commits, systematic test gates, a launcher
+            that asks the server which address to use
+          </td>
+          <td>
+            Installing packages, killing processes, reading GBK, opening
+            firewalls, counting hashes, turning four console warnings into four
+            bugs
+          </td>
+        </tr>
+        <tr>
+          <td>How it failed</td>
+          <td>Defaults and mechanisms - invisible without real hardware</td>
+          <td>
+            Slips of the hand: Chinese in a <code>.ps1</code>,
+            <code>pkill -f</code> killing its own session,
+            <code>&amp;</code> blocking forever on a process that never exits
+          </td>
+        </tr>
+        <tr>
+          <td>Contribution</td>
+          <td>Stops it <strong>recurring</strong></td>
+          <td>Makes it <strong>visible the first time</strong></td>
+        </tr>
       </table>
       <p>
-        Neither is sufficient. Muscle alone: six releases in 48 hours, each "fixed", the next bug
-        already queued - a perpetual release machine. Mind alone: elegant documents, complete tests,
-        and a default still pointing at <code>C:\Program Files</code> while the customer stares at a
-        black screen.
+        Neither is sufficient. Muscle alone: six releases in 48 hours, each
+        "fixed", the next bug already queued - a perpetual release machine. Mind
+        alone: elegant documents, complete tests, and a default still pointing
+        at <code>C:\Program Files</code> while the customer stares at a black
+        screen.
       </p>
       <p>
-        There is one direction that closes the loop: <strong>muscle produces facts; mind turns facts
-        into structure.</strong> Every grubby, lowbrow discovery has to become a test, an invariant, a
+        There is one direction that closes the loop:
+        <strong>muscle produces facts; mind turns facts into structure.</strong>
+        Every grubby, lowbrow discovery has to become a test, an invariant, a
         sentence in the runbook that day - otherwise it was just luck.
       </p>
       <p>
-        One purely social lesson, too: two writers on one repository means one <code>latest.json</code>
-        overwriting the other's ("1.24.7" label, 1.24.6 numbers - an updater comparing mismatched
-        hashes). Intelligence does not solve that. <em>Discipline</em> does: a release train has one
-        driver.
+        One purely social lesson, too: two writers on one repository means one
+        <code>latest.json</code> overwriting the other's ("1.24.7" label, 1.24.6
+        numbers - an updater comparing mismatched hashes). Intelligence does not
+        solve that. <em>Discipline</em> does: a release train has one driver.
       </p>
 
       <h2>5. So which is highbrow?</h2>
       <p>
-        The old Chinese phrase - <em>yangchun baixue</em>, "spring snow", for the refined; <em>xiali
-        baren</em>, "the rustic songs of the village", for the coarse - is usually read as a ranking.
-        In engineering it is not. They are two strokes of the same hand.
+        The old Chinese phrase - <em>yangchun baixue</em>, "spring snow", for
+        the refined; <em>xiali baren</em>, "the rustic songs of the village",
+        for the coarse - is usually read as a ranking. In engineering it is not.
+        They are two strokes of the same hand.
       </p>
       <p>
-        Spring snow is the comment, the decision, the guard test that spares the next person. The
-        village song is the VM reinstalled at two in the morning, the quote eaten by GBK, the
-        <code>ping</code> that returns nothing - the opposite evidence that makes "it should be fine"
-        falsifiable.
+        Spring snow is the comment, the decision, the guard test that spares the
+        next person. The village song is the VM reinstalled at two in the
+        morning, the quote eaten by GBK, the
+        <code>ping</code> that returns nothing - the opposite evidence that
+        makes "it should be fine" falsifiable.
       </p>
       <p>The two sentences I am keeping out of those hours:</p>
       <blockquote>
-        <p>1. Do not prove success with <strong>exit codes</strong>; prove it with <strong>facts</strong> - a timestamp with a year, a hash different from the last one, a real request coming back 401.</p>
-        <p>2. Every failure on real hardware must become a test or an invariant <strong>that same day</strong>, or it will return under another name.</p>
+        <p>
+          1. Do not prove success with <strong>exit codes</strong>; prove it
+          with <strong>facts</strong> - a timestamp with a year, a hash
+          different from the last one, a real request coming back 401.
+        </p>
+        <p>
+          2. Every failure on real hardware must become a test or an invariant
+          <strong>that same day</strong>, or it will return under another name.
+        </p>
       </blockquote>
       <p>
-        As for the models: over these hours one was the dirty hand and one wrote the gate - and
-        occasionally the same hand broke something (committed once with the suite red, killed its own
-        session three times, treated a half-written hash as final). The old line holds: <strong>tools
-        amplify method, not character.</strong> With the right method, muscle and mind complete each
-        other; with the wrong one they conspire to build a perpetual release machine.
+        As for the models: over these hours one was the dirty hand and one wrote
+        the gate - and occasionally the same hand broke something (committed
+        once with the suite red, killed its own session three times, treated a
+        half-written hash as final). The old line holds:
+        <strong>tools amplify method, not character.</strong> With the right
+        method, muscle and mind complete each other; with the wrong one they
+        conspire to build a perpetual release machine.
       </p>
 
       <p class="foot">
-        Written 2026-10-02, the day the MRRC Cloud Hub went up. Every number here comes from that day's
-        logs, commits or artifact checks: 1.24.2 to 1.24.7, six releases, one Windows VM, one Mac, one
-        Hong Kong VPS.
+        Written 2026-10-02, the day the MRRC Cloud Hub went up. Every number
+        here comes from that day's logs, commits or artifact checks: 1.24.2 to
+        1.24.7, six releases, one Windows VM, one Mac, one Hong Kong VPS.
         <br />中文版：<a href="zh/muscle-and-mind.html">阳春白雪与下里巴人</a>
       </p>
     </main>
-  </body>
+  <p style="color: var(--scope-text-muted); font-size: 0.9rem">Technical companion: <a href="cloud-first-mile.html">The Cloud's First Mile</a> · <a href="blog.html">All posts</a></p>
+</body>
 </html>

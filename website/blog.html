@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Writing down what we broke, so the next person does not." />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>Blog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="css/ft710.css" />
+    <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
+    <style>
+      :root { --ink: #e8e8ea; --muted: #9a9aa2; --amber: #f59e0b; --cyan: #22d3ee; --line: #26262c; }
+      body { background: #0a0a0a; color: var(--ink); }
+      .wrap { max-width: 780px; margin: 0 auto; padding: 140px 1.5rem 120px; }
+      h1 { font-size: 2rem; margin: 0 0 0.4rem; }
+      .sub { color: var(--muted); margin-bottom: 2.6rem; }
+      .card { display: block; border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.2rem; margin: 0 0 1rem; text-decoration: none; color: var(--ink); }
+      .card:hover { border-color: var(--amber); }
+      .card h2 { font-size: 1.12rem; margin: 0 0 0.35rem; color: #fff; }
+      .card p { margin: 0; color: var(--muted); font-size: 0.92rem; }
+      .card .when { color: var(--muted); font-size: 0.78rem; }
+      a { color: var(--cyan); }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Blog</h1>
+      <p class="sub">Writing down what we broke, so the next person does not.</p>
+      
+      <a class="card" href="cloud-first-mile.html">
+        <span class="when">2026-10-02 · Technical</span>
+        <h2>The Cloud's First Mile - Putting a Radio on the Internet</h2>
+        <p>Four invariants (outbound tunnel, per-instance certificate checks, generated routes, a portal that touches no root), four defaults that only held on the build machine, and two timing problems only real hardware shows.</p>
+      </a>
+      <a class="card" href="muscle-and-mind.html">
+        <span class="when">2026-10-02 · Essay</span>
+        <h2>Highbrow and Lowbrow - On Muscle and Mind</h2>
+        <p>Forty-eight hours, two models, six releases: why "it looks done" is the most dangerous evidence, and how one test ended a whole class of bugs.</p>
+      </a>
+
+      <p style="color: var(--muted); font-size: 0.88rem; margin-top: 2.5rem">中文站：<a href="zh/blog.html">博客（中文）</a> · <a href="index.html">Home</a></p>
+    </main>
+  </body>
+</html>

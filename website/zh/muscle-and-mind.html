@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="阳春白雪与下里巴人：论肌肉与思维 —— 48 小时、两个模型、六个版本之后的复盘"
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>阳春白雪与下里巴人 —— 论肌肉与思维</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/octen.css?v=5" />
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="../css/ft710.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="../js/global-nav.js?v=5" defer data-gn="1"></script>
+
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --cyan: #22d3ee;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .essay {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 140px 1.5rem 120px;
+        font-size: 1.06rem;
+        line-height: 1.85;
+      }
+      .essay h1 {
+        font-size: 2.1rem;
+        line-height: 1.35;
+        margin: 0 0 0.4rem;
+      }
+      .essay .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.6rem;
+      }
+      .essay h2 {
+        font-size: 1.3rem;
+        margin: 3rem 0 1rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .essay h3 {
+        font-size: 1.05rem;
+        margin: 2rem 0 0.6rem;
+        color: var(--cyan);
+      }
+      .essay p {
+        margin: 0 0 1.1rem;
+      }
+      .essay strong {
+        color: #fff;
+        font-weight: 600;
+      }
+      .essay em {
+        color: var(--amber);
+        font-style: normal;
+      }
+      .essay code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.86em;
+        background: #16161a;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      .essay pre {
+        background: #0f0f12;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-size: 0.84rem;
+        line-height: 1.6;
+      }
+      .essay pre code {
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+      .essay blockquote {
+        margin: 1.4rem 0;
+        padding: 0.2rem 0 0.2rem 1.1rem;
+        border-left: 2px solid var(--line);
+        color: var(--muted);
+      }
+      .essay .rule {
+        margin: 2.4rem 0;
+        border-top: 1px solid var(--line);
+      }
+      .essay table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+        margin: 1rem 0 1.6rem;
+      }
+      .essay th,
+      .essay td {
+        text-align: left;
+        padding: 0.55rem 0.6rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .essay th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .essay .tag {
+        display: inline-block;
+        font-size: 0.74rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.1rem 0.6rem;
+        margin-right: 0.4rem;
+      }
+      .essay .foot {
+        margin-top: 3rem;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .essay a {
+        color: var(--cyan);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="essay">
+      <p><span class="tag">复盘</span><span class="tag">AI 协作</span><span class="tag">2026-10-02</span></p>
+      <h1>阳春白雪与下里巴人<br />—— 论肌肉与思维</h1>
+      <p class="sub">
+        48 小时，两个模型，六个版本，一台 Windows 虚拟机，一台 macOS，一台香港 VPS，一条跑不通的隧道。
+        这篇文章讲的不是 AI 有多强，而是这 48 小时教我认清的一件事：<strong>能干活的，和会思考的，是两种器官。</strong>
+      </p>
+
+      <h2>一、两次"看起来成了"</h2>
+      <p>
+        凌晨两点，我盯着一行日志：<code>[INFO] mrrc: Server ready!</code>。端口在听，进程都在，
+        构建脚本退出码 0，日志里明明白白一行 <code>Successful compile</code>。
+        唯一的问题是——<strong>用户打开浏览器看到的是一片黑</strong>。
+      </p>
+      <p>
+        后来我们从包里挖出来一个默认值：
+      </p>
+      <pre><code>cert=C:\Program Files\MRRC Modern\_internal\certs\fullchain.pem
+key =C:\Program Files\MRRC Modern\_internal\certs\radio.vlsc.net.key</code></pre>
+      <p>
+        这是<strong>编译那台机器上的路径</strong>。它被写进了一个要发给客户的自签证书默认值里，
+        而在任何一台别人的机器上，这两个文件都不存在。找不到证书，服务就<em>悄悄</em>退回纯 HTTP；
+        启动器打开的却是 <code>https://</code> 地址——浏览器报协议错误，界面一片黑。
+      </p>
+      <p>
+        同一夜还有另外三个同类：日志目录默认写进 <code>C:\Program Files\</code>（于是
+        <code>[WinError 5] 拒绝访问</code>，一条日志都没有）；串口默认是 macOS 的
+        <code>/dev/cu.SLAB_USBtoUART</code>（而电台老老实实待在 <code>COM5</code>）；
+        登录口令默认用源码里那个"公开的默认口令"。
+      </p>
+      <p>
+        四个 bug，同一个病：<strong>默认值只在构建机上成立。</strong>
+        而四个中的每一个，都要一次完整的"发版—安装—真机复现"才能被发现。
+      </p>
+
+      <h2>二、下里巴人：肌肉干的事</h2>
+      <p>
+        这 48 小时里，真正把问题钉死的动作，没有一个是"聪明"的：
+      </p>
+      <table>
+        <tr><th>动作</th><th>它换来了什么</th></tr>
+        <tr>
+          <td>把 exe 从 VM 拉回来，本地算一遍 sha256</td>
+          <td>发现"构建成功"的那个包，其实是<strong>上一版</strong>（时间戳 22:10，尺寸一模一样，哈希一模一样）</td>
+        </tr>
+        <tr>
+          <td>看时间戳时<strong>带上年份</strong></td>
+          <td>差点把一个 9-25 的旧产物当当晚构建；此后成了硬规矩</td>
+        </tr>
+        <tr>
+          <td>逐字节读那行 TOML</td>
+          <td><code>log.to = "C:\Users\…"</code>——双引号里的反斜杠是转义，<code>\U</code> 被当成 Unicode 转义，frpc 报 <code>non-hex character</code> 拒绝启动。三个小时里所有"配置看起来没错"的推理都输给这一行字节</td>
+        </tr>
+        <tr>
+          <td>在 Windows 控制台里跑一遍裸启动，看它到底打印什么</td>
+          <td>拿到截图里的四行警告，四个 bug 一次性现形</td>
+        </tr>
+        <tr>
+          <td><code>ssh</code> 到 VPS 上 <code>ufw status</code></td>
+          <td>"云面板没挡 8989"是错的——挡它的是<strong>机器自己的防火墙</strong>；一条 <code>ufw allow</code> 通了</td>
+        </tr>
+        <tr>
+          <td>把中文从 <code>.ps1</code> 里删干净</td>
+          <td>PowerShell 5.1 按 GBK 读无 BOM 文件，中文字符会把字符串终止符搅乱——我为此连栽三次</td>
+        </tr>
+      </table>
+      <p>
+        这些动作有个共同点：它们都要<strong>碰到真实世界</strong>——真实的内核、真实的编码、真实的防火墙、
+        真实的杀毒软件、真实的用户桌面。它们不产生洞见，只产生<em>事实</em>。
+      </p>
+      <hr class="rule" />
+      <p>
+        而真实世界最喜欢伪造的东西，恰恰是"成功"：
+      </p>
+      <ul>
+        <li>退出码 0——因为脚本最后一句成功了；</li>
+        <li><code>Successful compile</code>——因为编译确实成功了，只是产物没人要；</li>
+        <li><code>version.txt</code> 写着新版本——因为打包前就写好了，之后失败也没人回滚；</li>
+        <li>取件脚本打印"取件完成"——因为 <code>frpc.exe</code> 缺失是写在 <code>stderr</code> 的。</li>
+      </ul>
+      <p>
+        肌肉的价值，就是<strong>不接受这些证据</strong>：它会去数字节、比哈希、看时间戳、
+        拿真实的浏览器去打那个地址，然后回来说：502。
+      </p>
+
+      <h2>三、阳春白雪：思维干的事</h2>
+      <p>
+        48 小时里同样有一批工作，看起来"什么都没修"，却把整件事的性质改了。
+      </p>
+      <p>
+        第一个动作是<strong>命名</strong>：把四个散落的 bug 叫成<b>一类</b>——
+        "只在构建机上成立的默认值"。命名之后，问题的形状变了：不再是"再修一个"，
+        而是"这类还能从哪儿冒出来"。于是有了那次全仓扫描：
+        <code>LOG_DIR</code>、<code>MEM_FILE</code>、<code>RECORDINGS_DIR</code>、
+        <code>CERT_DIR</code>、<code>SSL_CERTFILE</code>……一个个对着"这路径在客户机上是可写的吗"过一遍。
+      </p>
+      <p>
+        第二个动作是<strong>造闸门</strong>。修完之后，写了一条测试：
+      </p>
+      <pre><code>def test_runtime_paths_are_outside_the_program_directory(self):
+    """任何一个本程序要写入的默认路径，都不许落在程序目录里。"""</code></pre>
+      <p>
+        它当场咬到了 <code>MEM_FILE</code>——一个我们还没注意到的同类。更重要的是，
+        <strong>从此这一类 bug 再也进不了发布</strong>：它不再是"下次注意"，而是"下次一定红"。
+        一条测试抵得上一打复盘。
+      </p>
+      <p>
+        第三个动作是<strong>换判据</strong>。"是否需要重启才能启用新证书"这个问题，
+        先前用"导入时的文件快照"来判——它漏掉了真正要命的那种顺序（应用先重启、之后才完成登记）。
+        改成按事实判：<em>证书的写入时间晚于本进程的启动时间</em>。
+        不是更聪明，而是更接近那句提问真正想说的事。
+      </p>
+      <p>
+        第四个动作更安静：把"升级通道比的是版本串"这件事写成结论——
+        同一个版本号重建，<strong>装上那一版的人永远拿不到新包</strong>，点升级只会反复重放同一版本。
+        这条不是代码，是<em>机制</em>的理解。它决定了那晚的修复必须以 1.24.6 发，而不是"只补文档"。
+      </p>
+
+      <h2>四、两个模型：一个在写设计，一个在爬控制台</h2>
+      <p>
+        这 48 小时里有两个不同模型在同一套仓库上并行干活，分工几乎是自然形成的：
+      </p>
+      <table>
+        <tr><th></th><th>更像"阳春白雪"的那一侧</th><th>更像"下里巴人"的那一侧</th></tr>
+        <tr>
+          <td>产出</td>
+          <td>设计记录（SDD 决策条目）、干净的提交说明、成体系的测试闸门、启动器改成"问服务器要哪个地址"</td>
+          <td>装机、杀进程、读 GBK、改防火墙、数哈希、把控制台截图里的四行警告翻译成四个 bug</td>
+        </tr>
+        <tr>
+          <td>失败方式</td>
+          <td>默认值/机制层面的错——不碰到真机不会暴露</td>
+          <td>手滑层面的错——中文写进 <code>.ps1</code>、<code>pkill -f</code> 杀掉自己的 ssh 会话、用 <code>&amp;</code> 同步启动一个永不退出的进程</td>
+        </tr>
+        <tr>
+          <td>贡献</td>
+          <td>让问题<strong>不再复发</strong></td>
+          <td>让问题<strong>第一次被看见</strong></td>
+        </tr>
+      </table>
+      <p>
+        两边都不可或缺，而两边都单独都不够。只有肌肉：48 小时六个版本，bug 一个接一个，
+        每次都能"修好"然后下次再犯——这就是一台永动发版机。只有思维：文档漂亮、决策完备、
+        测试齐全，但默认值仍然指向 <code>C:\Program Files</code>，客户仍然看到黑屏。
+      </p>
+      <p>
+        真正的闭环只有一个方向：<strong>肌肉产生事实，思维把事实固化成结构。</strong>
+        每一个下里巴人的、脏兮兮的发现，都要在当天变成一条测试、一条不变量、一句写进技能文档的判据——
+        否则它就只是一次运气好。
+      </p>
+      <p>
+        顺带一个纯社会性的教训：两个写者在一套仓库上并行 = 一份 <code>latest.json</code> 会被另一份覆盖
+        （"1.24.7 的标签 + 1.24.6 的数字"，升级的人会拿到对不上号的包）。
+        智能解决不了这个，<em>纪律</em>才行——发版列车只能有一个司机。
+      </p>
+
+      <h2>五、所以，"阳春白雪"和"下里巴人"是什么关系</h2>
+      <p>
+        宋玉说"其曲弥高，其和弥寡"。这个故事常被读成等级：高的雅，低的俗。
+        但工程里不是这样——它们是<strong>同一只手的两段行程</strong>。
+      </p>
+      <p>
+        白雪是那行注释、那条决策、那个 guard test，它让后来的人不必再踩一次。
+        巴人是那台凌晨还在重装的虚拟机、那行被 GBK 吃掉的引号、那次 <code>ping</code> 全丢包的等待，
+        它让"应该没问题"这句话第一次有了反面证据。
+      </p>
+      <p>
+        这 48 小时我最大的收获，是把两句话从口号变成了判据：
+      </p>
+      <blockquote>
+        <p>① 别用<strong>退出码</strong>证明成功，用<strong>事实</strong>证明成功：时间戳（带年份）、哈希（与上一版不同）、真实请求返回的状态码。</p>
+        <p>② 每一次真机上的失败，都必须<strong>当天</strong>变成一条测试或一条不变量——不然它一定会以另一个名字再来一次。</p>
+      </blockquote>
+      <p>
+        至于 AI 的角色：这 48 小时里，它既是那双脏手，也是那个写下闸门的人——偶尔还是那只把东西碰坏的笨手
+        （我今晚红着测试提交过一次，用 <code>pkill -f</code> 杀掉过自己的会话三次，把半成品的哈希当成过最终产物）。
+        这恰恰说明老话仍然成立：<strong>工具能放大的是方法，不是品格。</strong>
+        方法对了，肌肉与思维就互相成就；方法错了，它们会合谋造出一台永动发版机。
+      </p>
+
+      <p class="foot">
+        写于 2026-10-02，MRRC Cloud Hub 上线首日。文中的每个数字都来自当天的日志、提交或产物校验：
+        1.24.2 → 1.24.7，六个版本，一台 Windows VM，一台 macOS，一台香港 VPS。
+        <br />英文版：<a href="muscle-and-mind.html">Muscle and Mind</a>
+      </p>
+    </main>
+  </body>
+</html>

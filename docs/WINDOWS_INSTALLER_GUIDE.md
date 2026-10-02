@@ -49,7 +49,7 @@ https://127.0.0.1:18890` — and answered **`200` on `/login` over HTTPS**.
 **TX audio still needs acceptance on real Windows hardware**; the VM also had no radio attached during
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
-The earlier v1.24.4 package (54,085,618 bytes, SHA-256 `935a7ed9…`) remains downloadable as an
+The earlier v1.24.4 package (54,087,234 bytes, SHA-256 `28ac7743…`) remains downloadable as an
 archive; v1.24.5 supersedes it.
 
 **What's new in v1.24.5**: **no certificate means the app signs one, instead of quietly serving

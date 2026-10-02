@@ -1659,5 +1659,23 @@ function toggleMobileMenu() {
 
 </script>
     <script src="../js/global-nav.js?v=5" defer data-gn="1"></script>
+
+<div class="step" id="launcher-trouble">
+  <h4>启动器打不开（黑屏/闪退）时怎么办</h4>
+  <p>启动器只做三件事：播种配置、启动服务、打开浏览器。<strong>它打不开时，服务本身照样能跑</strong>：</p>
+  <ol>
+    <li>开始菜单 → <code>MRRC Modern Server</code>（或 <code>C:\Program Files\MRRC Modern\MRRC-Modern-Server.exe</code>）</li>
+    <li>浏览器打开 <code>http://127.0.0.1:8888/</code>；1.24.5 起缺证书会当场自签，用 https 也可以</li>
+    <li>口令：1.24.5 起会在窗口里打印 <em>login password for this run: …</em> 并写进配置；
+        更早的版本默认口令是 <code>changeme_please_use_strong_password!</code>（进设置可改）</li>
+    <li>电台找不到：设置 → 连接设置 → 串口选设备管理器里的 COM 口（1.24.5 起会自动探测）</li>
+  </ol>
+  <p style="color: var(--scope-text-muted)">
+    想查启动器为什么打不开：CMD 里 <code>cd /d "C:\Program Files\MRRC Modern"</code> 然后
+    <code>MRRC-Modern-Launcher.exe &gt; "%TEMP%\launcher.txt" 2&gt;&amp;1</code>，
+    把 <code>launcher.txt</code> 和 <code>%LOCALAPPDATA%\MRRC-Modern\launcher.log</code> 发给运维。
+    多半是杀毒拦截：把安装目录加入白名单后重装即可。
+  </p>
+</div>
 </body>
 </html>

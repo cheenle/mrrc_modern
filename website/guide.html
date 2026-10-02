@@ -1665,5 +1665,24 @@ function toggleMobileMenu() {
 
 </script>
     <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
+
+<div class="step" id="launcher-trouble-en">
+  <h4>When the launcher will not start</h4>
+  <p>The launcher does three things: seed the configuration, start the server, open the browser.
+     <strong>The server runs without it</strong>:</p>
+  <ol>
+    <li>Start Menu → <code>MRRC Modern Server</code> (or <code>C:\Program Files\MRRC Modern\MRRC-Modern-Server.exe</code>)</li>
+    <li>Open <code>http://127.0.0.1:8888/</code> in a browser; from 1.24.5 a missing certificate is signed on the spot, so https works too</li>
+    <li>Password: from 1.24.5 the window prints <em>login password for this run: …</em> and saves it;
+        earlier versions use <code>changeme_please_use_strong_password!</code> (change it in the settings dialog)</li>
+    <li>Radio not found: Settings → Connection → pick the COM port from Device Manager (1.24.5 detects it)</li>
+  </ol>
+  <p style="color: var(--scope-text-muted)">
+    To see why the launcher fails, in CMD run <code>cd /d "C:\Program Files\MRRC Modern"</code> then
+    <code>MRRC-Modern-Launcher.exe &gt; "%TEMP%\launcher.txt" 2&gt;&amp;1</code> and send
+    <code>launcher.txt</code> plus <code>%LOCALAPPDATA%\MRRC-Modern\launcher.log</code> to support.
+    It is usually antivirus: whitelist the install directory and reinstall.
+  </p>
+</div>
 </body>
 </html>

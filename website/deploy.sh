@@ -20,6 +20,19 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# One deploy at a time. Two concurrent runs leave two packages in /var/tmp, and
+# whichever finishes first deletes them all - which made the other run's prune
+# step read an empty manifest and delete sdd/ and images/ from the live site
+# (2026-10-02). mkdir is atomic, so it is a lock that works without flock(1).
+LOCK_DIR="/tmp/mrrc_modern_deploy.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+	echo -e "${RED}Another deploy is already running ($LOCK_DIR exists).${NC}"
+	echo "Refusing to run concurrently - that is what deleted the live sdd/ and images/ trees."
+	echo "If you are certain no deploy is running: rmdir $LOCK_DIR"
+	exit 1
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+
 if [ ! -d "$LOCAL_DIR" ]; then
 	echo -e "${RED}Error: Local directory not found: $LOCAL_DIR${NC}"
 	exit 1
@@ -174,18 +187,41 @@ ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
       # diagrams from a *different* project were deleted from the repo and kept
       # serving).  Scope is limited to the generated trees on purpose:
       # downloads/ and videos/ are server-managed and never touched.
-      TARBALL=$(ls -1t /var/tmp/mrrc_modern_website_*.tar.gz | head -1)
-      tar -tzf "$TARBALL" | sed 's|^\./||' | grep -E '^(sdd|images)/' | sort -u > /var/tmp/_deployed_list.txt
-      for dir in sdd images; do
-          if [ -d "/var/www/vlsc.net/mrrc_modern/$dir" ]; then
-              find "/var/www/vlsc.net/mrrc_modern/$dir" -type f \
-                  | sed 's|^/var/www/vlsc.net/mrrc_modern/||' | sort > /var/tmp/_on_disk.txt
-              comm -23 /var/tmp/_on_disk.txt /var/tmp/_deployed_list.txt > /var/tmp/_stale_list.txt
-              while read -r stale; do
-                  [ -n "$stale" ] && sudo rm -f "/var/www/vlsc.net/mrrc_modern/$stale" && echo "pruned $stale"
-              done < /var/tmp/_stale_list.txt
+      #
+      # Three guards, added after two concurrent runs of this script deleted sdd/
+      # and images/ from the live site (2026-10-02). The run that finished first
+      # removes every package below, so the second run's `ls -1t` matched nothing,
+      # `tar -tzf ""` failed, and because a pipeline's exit status comes from its
+      # LAST command (`sort -u`, which succeeds) `set -e` did not stop it. The
+      # manifest was therefore empty, `comm -23` reported every file on disk as
+      # stale, and the loop deleted the lot. An empty manifest must never be read
+      # as "delete everything".
+      TARBALL=$(ls -1t /var/tmp/mrrc_modern_website_*.tar.gz 2>/dev/null | head -1)
+      if [ -z "$TARBALL" ] || [ ! -f "$TARBALL" ]; then
+          echo "PRUNE SKIPPED: no deploy package in /var/tmp - refusing to treat every file as stale."
+      else
+          tar -tzf "$TARBALL" | sed 's|^\./||' | grep -E '^(sdd|images)/' | sort -u > /var/tmp/_deployed_list.txt
+          if [ ! -s /var/tmp/_deployed_list.txt ]; then
+              echo "PRUNE SKIPPED: $TARBALL lists no sdd/ or images/ files - refusing to delete the site."
+          else
+              SHIPPED=$(wc -l < /var/tmp/_deployed_list.txt)
+              for dir in sdd images; do
+                  if [ -d "/var/www/vlsc.net/mrrc_modern/$dir" ]; then
+                      find "/var/www/vlsc.net/mrrc_modern/$dir" -type f \
+                          | sed 's|^/var/www/vlsc.net/mrrc_modern/||' | sort > /var/tmp/_on_disk.txt
+                      comm -23 /var/tmp/_on_disk.txt /var/tmp/_deployed_list.txt > /var/tmp/_stale_list.txt
+                      STALE=$(grep -c . /var/tmp/_stale_list.txt || true)
+                      if [ "$STALE" -ge "$SHIPPED" ]; then
+                          echo "PRUNE SKIPPED for $dir/: $STALE stale >= $SHIPPED shipped - the manifest is suspect, not the site."
+                      else
+                          while read -r stale; do
+                              [ -n "$stale" ] && sudo rm -f "/var/www/vlsc.net/mrrc_modern/$stale" && echo "pruned $stale"
+                          done < /var/tmp/_stale_list.txt
+                      fi
+                  fi
+              done
           fi
-      done
+      fi
       sudo rm -f /var/tmp/_deployed_list.txt /var/tmp/_on_disk.txt /var/tmp/_stale_list.txt
     rm -f "/var/tmp/mrrc_modern_website_"*.tar.gz
     sudo nginx -t

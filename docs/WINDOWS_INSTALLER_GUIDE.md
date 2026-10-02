@@ -11,13 +11,91 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.24.6-Windows-x64-Setup.exe` | {{WIN_MB}} MB ({{WIN_BYTES}} bytes) | `{{WIN_SHA}}` |
+| `MRRC-Modern-v1.24.6-Windows-x64-Setup.exe` | 51.6 MB (54,110,069 bytes) | `ed127697f2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.6-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-{{WIN_RELEASE_NARRATIVE}}
+**v1.24.6 is the published Windows installer.** It was built from the release commit on
+Windows 11 (the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3.
+The build gate ran **1530 tests OK (17 platform skips)**, three PyInstaller targets, and the
+installer compiled into a scratch directory and was copied in (`Successful compile
+(32.141 sec)` — Defender's real-time scan otherwise locks the freshly written exe and iscc
+fails with `Error 32`). Bundled-file inspection passed: FTDI DLLs (`ftd2xx.dll`,
+`FT4222.dll`), `opus.dll`, `static/`, `static/listen.js`, `mem_channels.json`,
+`windows\default.env`, `version.txt` = `1.24.6`, and the complete Cloud Hub fleet payload at
+the **app root** under `fleet\` — 13 files: `frpc.exe` (16,708,608 B), `openssl.exe`
+(1,105,591 B), its nine DLLs, `install_instance_tunnel.ps1`, `openssl.cnf`. Cross-host
+SHA-256 matched (build VM == build Mac).
+
+This release's fixes live in **frozen entry scripts** (`server.py`, `windows/launcher.py`),
+which the hotfix overlay channel cannot reach, so the acceptance was **running the packaged
+binary against a clean per-user state** (`LOCALAPPDATA` pointed at an empty directory, no
+launcher environment — the way the Start Menu "MRRC Modern Server" shortcut starts it):
+
+- it **signed its own certificate** — `signed a self-signed certificate for 127.0.0.1` →
+  `SSL enabled with a self-signed certificate just generated: …\MRRC-Modern\certs\fullchain.pem`
+  → `Uvicorn running on https://127.0.0.1:18892`; a raw TLS handshake confirmed
+  **TLS 1.3, Aes256, subject `CN=127.0.0.1`**, and plain HTTP to the same port returned
+  **0 bytes** (the port speaks TLS only — which is exactly what a browser turned into a
+  blank page in v1.24.5);
+- the **bare start read the user's own config**: it bound `127.0.0.1:18892` from
+  `mrrc_modern.env` instead of the default `:::8888`;
+- it wrote the certificate and its config into the **per-user data directory** —
+  `Recording ready: C:\tmp\accept246b\MRRC-Modern\recordings` — and the install directory
+  gained no `mrrc_modern.env`, no `mrrc_modern.env.tmp`, no `certs\` and no `recordings\`
+  (v1.24.5 in the field logged `Permission denied` for the first and
+  `Recording disabled: … is not writable` for the last);
+- with **one** instance running, the log held 19 lines / 18 distinct — the only repeated
+  line is `Opening serial port COM3`, which the code genuinely logs twice (initial connect
+  plus scope-init). No duplicated handler;
+- a **second instance on the taken port failed loudly and exited** with
+  `RuntimeError: cannot listen on port 18892: it is already taken ([WinError 10048] …).
+  Another MRRC Modern is most likely still running — close its server window (or exit it
+  from the tray) and start it again.` Exactly one `LISTENING` row remained in `netstat`,
+  and — unlike the build before this one — the second instance never logged
+  `Server ready!`, because binding now happens before uvicorn starts.
+
+The symbols were also verified **inside** the archives rather than assumed: walking the
+frozen `server` entry's code object finds `_writable_runtime_dir`, `_already_logging_to`,
+`_is_addr_in_use`, `_already_running_hint`, `_bind_listener_socket`, `_bind_with_retry`,
+`_set_bind_exclusion` and `ssl_bootstrap`, with `SO_EXCLUSIVEADDRUSE` in its constant pool
+(it is read via `getattr`, so it is a string constant, not a name); the server's PYZ carries
+`config` with `load_user_config_into_environ` / `boot_config_file` / `MRRC_NO_CONFIG_FILE`;
+the frozen `launcher` entry carries `url_to_open`, `running_instance_url`, `served_url` and
+`other_scheme`, and its PYZ carries the new shared `launcher_net` module with `answers`,
+`first_answering`, `served_url`, `other_scheme` and `/api/health`.
+
+> **Three builds of this version were discarded before this one.** The first packaged macOS
+> metadata (`_internal\static\.DS_Store` and an AppleDouble `._.DS_Store`) that earlier
+> source tarballs had left in the tree — small, but it ships to every user and FastAPI's
+> static handler will serve it on request. The second was clean, but its acceptance run
+> exposed the bind gap described in *What's new* below: with an explicit
+> `MRRC_WEB_HOST=127.0.0.1` the port guard did not apply at all. The third was found by the
+> **macOS** acceptance run, which is why both platforms were rebuilt: a packaged build kept
+> writable state next to its own code, and on macOS that is inside the signed bundle —
+> `Recording ready: …/MRRC-Modern.app/Contents/MacOS/recordings`, where one file breaks the
+> seal (`a sealed resource is missing or invalid`). On this VM the same rule showed up as
+> `Recording ready: C:\mrrc_modern\dist\windows\MRRC-Modern\recordings`, i.e. inside the
+> package, because a build tree *is* writable — the field machine's `Program Files` was not,
+> which is why it logged `Recording disabled` instead. All three were deleted, the causes
+> fixed, and the numbers above are the fourth build's. A "successful compile" proved nothing
+> any of those times.
+
+> **The build VM also had to be cleaned before it could be trusted.** Earlier release
+> tarballs had left the operator's private material in `C:\mrrc_modern`: `certs\` including
+> `radio.vlsc.net.key`, a 1,817-byte `.env` holding the web password, 63 real QSO recordings
+> (125.9 MB) and runtime logs. None of it is needed to build and none of it belongs on a
+> build machine; all of it was deleted and verified gone, and the shipped tarball now
+> excludes `certs/`, `.env`, `recordings/`, `logs/`, `promo/` and macOS metadata. The
+> packaged installer was checked for key-shaped files afterwards: **zero**.
+
+**Boundary**: this Windows VM has no physical sound card path (KVM breaks isochronous USB
+OUT), so **TX audio still needs acceptance on real Windows hardware**; the VM also had no
+radio attached during this run (only COM1 exists), so CAT/audio device behaviour is
+unverified here. The field machine's own clean-install acceptance is recorded in
+`SDD/14` V2.66.
 
 **Boundary**: this Windows VM has no physical sound card path (KVM breaks isochronous USB OUT), so
 **TX audio still needs acceptance on real Windows hardware**; the VM also had no radio attached during

@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.24.5**（2026-10-02）—— VM 门禁 1464 项 OK（10 skip）；`release_check.py` 离线 29 ok / 0 failing；产物 `MRRC-Modern-v1.24.5-Windows-x64-Setup.exe` 54,087,234 bytes，SHA-256 `28ac7743da7f5cc75dbecbb7b8ea2d373cb4c0eb2fd1be52871206d9efd80bae`。**本版第一个构建（54,085,618 bytes `935a7ed9…`）被作废** —— 它通过了全部门禁却仍然只能起纯 HTTP（见 Step 5 的第三条硬证据）。
+> 最新构建：**v1.24.6**（2026-10-02）—— VM 门禁 **1530 项 OK（17 skip）**；产物 `MRRC-Modern-v1.24.6-Windows-x64-Setup.exe` **54,110,069 bytes**，SHA-256 `ed127697f2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79`；`version.txt` = 1.24.6；Inno Setup 6.7.3、PyInstaller 6.21.0、Python 3.12.4；fleet 13 个文件在**应用根目录**（不是 `_internal\`）；VM 与 Mac 两侧 SHA-256 逐字节一致。**本版作废了三个构建**：b248 把 macOS 元数据打进了包（`_internal\static\.DS_Store` + AppleDouble `._.DS_Store`，是历次 tar 留在 VM 树上的），b249 干净但洁净室验收暴露出**显式 host 绕过端口守卫**（`MRRC_WEB_HOST=127.0.0.1` 走 `uvicorn.run` 那条 else 分支，第二个实例只留下 uvicorn 的裸 `[Errno 10048]`），b250 又因 macOS 洁净室发现**冻结包会把可写状态放进自己代码旁边**（macOS 是签名 bundle 内部 ⇒ 写坏封印；Windows 在 VM 上表现为 `Recording ready: …\dist\windows\MRRC-Modern\recordings`）。三次都删产物、修因、重建 —— **`Successful compile` 三次都没说明任何问题**，每次都只有「拿打包出的 exe 真跑一遍洁净室」才暴露。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 - `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：
@@ -27,6 +27,34 @@ win11 虚拟机 (desktop-ssddf0b)
 - VM 管理：`sudo virsh -c qemu:///system list --all`（必须带 `qemu:///system` 且用 sudo，普通 `virsh list` 看不到）
 - VM IP 查询：`sudo virsh -c qemu:///system domifaddr win11`
 - VM 的 22 端口有 OpenSSH Server，默认 shell 是 **PowerShell 5.1**（写命令时注意，见 §6 坑列表）
+
+## 2026-10-02 实测：v1.24.6 这一轮新增的七条
+
+1. **打 tar 必须 `export COPYFILE_DISABLE=1`，并排除 `._*` / `.DS_Store`。**
+   否则 macOS 的 AppleDouble 会跟着进包，而 spec 是把 `vendor/`、`static/` **整目录**塞进
+   `datas` 的 ⇒ `._FT4222.dll`、`static/._.DS_Store` 会真的发给用户，且 FastAPI 的静态处理器
+   会照请求把它们发出去。解包**只覆盖不删除**，所以 VM 树上的历史垃圾要先手工清一遍再构建。
+2. **源码 tar 必须排除 `certs/`、`.env`、`recordings/`、`logs/`、`promo/`。**
+   本轮在 VM 上发现历次 tar 已经把操作员的 `radio.vlsc.net.key`、含网页密码的 `.env`、
+   **63 个真实 QSO 录音（125.9 MB）**和运行日志留在了构建机上。它们对构建毫无用处。
+   顺带：`promo/` + `recordings/` + `website/videos/` 让 tar 从 855 MB 降到 **36.6 MB**。
+3. **解包前先清空 VM 的 `tests\*.py`。** tar 不删除文件，本地已删的旧测试会留在 VM 上被
+   `unittest discover` 收集，制造与代码无关的红。
+4. **测试里关文件句柄要放在 `with tempfile.TemporaryDirectory()` 里面。**
+   放在外面的 `finally` 在 macOS/Linux 全绿（它们允许删除打开的文件），在 Windows 报
+   `PermissionError: [WinError 32]` 且**炸在 cleanup 阶段**，整个门禁挂掉。本轮两个日志测试中了。
+5. **`Invoke-WebRequest` 在 PS 5.1 + 非交互 SSH 里无法用脚本块绕过自签证书**：
+   `ServerCertificateValidationCallback = { $true }` 会报
+   `PSInvalidOperationException: 线程没有可用运行空间 … DefaultRunspace`。
+   验 HTTPS 改用 .NET 的 `SslStream.AuthenticateAsClient()`，它能直接给出
+   `Tls13 / Aes256 / CN=127.0.0.1`，比 cmdlet 更有证据力。
+6. **`fleet\` 在应用根目录，不在 `_internal\`**（`build.ps1:106` 的 `FleetDest = $AppRoot\fleet`）。
+   查错位置会误判"payload 丢了"。
+7. **绑定语义要按 host 全覆盖**：`server.py` 曾只在 `host in ("::","")` 时预绑双栈 socket，
+   显式 host 交给 `uvicorn.run()` ⇒ Windows 上既没有 `SO_EXCLUSIVEADDRUSE`、也没有重试与
+   可操作提示，第二个实例只留下 uvicorn 的裸 `[Errno 10048]`，而且它**先打了 `Server ready!`**
+   （app 的 startup 事件在 uvicorn 绑定之前跑）。现在所有 host 都走 `_bind_listener_socket()`，
+   绑定发生在 uvicorn 启动之前 ⇒ 绑不上端口的服务器不可能再自称就绪。
 
 ## 2. 一次性准备（已完成，仅备查）
 

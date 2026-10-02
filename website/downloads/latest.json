@@ -1,19 +1,19 @@
 {
-  "latest": "1.24.5",
+  "latest": "1.24.6",
   "installer": {
+    "version": "1.24.6",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.6-Windows-x64-Setup.exe",
+    "sha256": "ed127697f2b699a87ca7b6655aaaa1673a9eca12fc80cf75123c8c7c308fea79",
+    "size": 54110069
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-10-02T11:21:50",
+  "notes": "启动器改为先问服务器在哪个地址应答，再打开浏览器（修掉「装完黑屏」）；Windows 端口改独占绑定，第二个实例明确报错而不是静默共享；裸启动不再往安装目录写，密码与录音落到用户数据目录；日志不再每行写两遍",
+  "previous": {
     "version": "1.24.5",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.5-Windows-x64-Setup.exe",
     "sha256": "28ac7743da7f5cc75dbecbb7b8ea2d373cb4c0eb2fd1be52871206d9efd80bae",
     "size": 54087234
-  },
-  "minSupported": "",
-  "mandatory": false,
-  "releasedAt": "2026-10-02T04:50:57",
-  "notes": "缺证书时自己签一张，不再静默退回 HTTP（修掉装完黑屏）；证书移到用户可写的运行目录；接入后如需重启会如实提示",
-  "previous": {
-    "version": "1.24.4",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.4-Windows-x64-Setup.exe",
-    "sha256": "12a828f040c0d97fea398d86ee0f6348edfc49f35027ef604e86297a64dd2908",
-    "size": 54076580
   }
 }

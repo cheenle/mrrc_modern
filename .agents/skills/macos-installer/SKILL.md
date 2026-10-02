@@ -103,6 +103,8 @@ Output: `dist/macos/MRRC-Modern-v<ver>-arm64.dmg` (checksums printed at the end)
 
 2. **Dual-stack `::` needs a pre-bound socket.** `asyncio.loop.create_server(host="::")` sets `IPV6_V6ONLY=1` (IPv6-only), so uvicorn's plain `host="::"` refuses IPv4 — and the launcher opens `http://127.0.0.1:8888` (IPv4), locking out the local user. server.py must pre-bind a `V6ONLY=0` socket and hand it to `uvicorn.Server(uvicorn.Config(app,...)).run(sockets=[sock])`. Do NOT pass `sockets=` to `uvicorn.run()` or `uvicorn.Config` — uvicorn 0.52 has no such parameter (TypeError crash). A manually created `socket.socket(AF_INET6)` + `setsockopt(IPV6_V6ONLY,0)` is dual-stack on macOS.
 
+   **Since v1.24.6 EVERY host is pre-bound, not just `::`.** `main()` used to branch: `host in ("::","")` got the guarded pre-bind, everything else went to `uvicorn.run(host=...)` — so an explicit `MRRC_WEB_HOST=127.0.0.1` skipped the platform bind semantics, the restart retry, and the actionable error entirely. All hosts now go through `_bind_listener_socket()` (wildcard → `_bind_dual_stack_socket()`, a specific address → its own family, a specific IPv6 address staying `V6ONLY=1` so it does not also claim the IPv4 wildcard), sharing one `_bind_with_retry()`. Binding therefore happens **before** uvicorn starts, so a server that binds nothing can no longer log `Server ready!` first. An AST guard in `tests/test_server_startup_guards.py` fails if `uvicorn.run(` reappears in `server.py`. Measured on the frozen binary: a second instance exits **1** with `RuntimeError: cannot listen on port 18893: it is already taken ([Errno 48] …). Another MRRC Modern is most likely still running — …`, and exactly one listener remains.
+
 3. **Password banner is loopback-only.** `server.py::_first_run_password_banner(request)` renders the auto-generated login password only when `MRRC_AUTO_PASSWORD=1` AND the client is 127.0.0.1/::1 — binding `::` would otherwise leak it to the LAN. Keep that guard.
 
 4. **Launcher monitor** (`macos/launcher.py::_monitor_loop`): restarts the server when it exits with code 42 (web "保存并重启"), and must `self.proc = None` on ANY non-42 exit — otherwise it busy-spins at 100% CPU on the reaped process's `wait()`. `_quitting` is set before stopping in `on_quit`/`_on_sigterm`.
@@ -113,11 +115,26 @@ Output: `dist/macos/MRRC-Modern-v<ver>-arm64.dmg` (checksums printed at the end)
 
 7. **First-run zero-config.** `macos/first_run.py` (imports only stdlib+pyserial, no rumps): generates a random web password, scans serial ports (`/dev/cu.*`, bogus ports excluded), probes FT-710 (ASCII `ID;` @38400) then IC-7300 (CI-V 0x19 @115200). `macos/default.env` leaves `MRRC_WEB_PASSWORD`/`MRRC_SERIAL_PORT`/`MRRC_RADIO_MODEL` empty to trigger it. `MRRC_PORT_CONFIRMED=1` marks a probed port as settled. The launcher passes `MRRC_CONFIG_FILE` so the web connection-settings dialog can persist changes.
 
-8. **macOS launcher HTTPS wiring** (mirrors `windows/launcher.py::ssl_material`). `macos/launcher.py` must keep `ssl_material(env)`, `local_url(env, secure=...)`, and `build_command(ssl_pair)` (passes `--ssl-cert`/`--ssl-key`; `--no-ssl` only when the pair is None). `start_server()` re-resolves `ssl_material` + `self.url` on every spawn so TextEdit config edits (e.g. adding `MRRC_SSL_CERT`) apply on Restart. `wait_for_server(..., secure=True)` probes with TLS verification skipped (the self-signed cert isn't in any trust store). The launcher onefile spec MUST list `ssl_bootstrap` + `cryptography` in hiddenimports (cert generation needs `cryptography`, which is also pulled into the server onedir by requirements.txt). Cert lives at `~/Library/Application Support/MRRC-Modern/certs/{server.crt,server.key}` via `ssl_bootstrap.ensure_self_signed(user_data_dir()/certs)`.
+8. **macOS launcher HTTPS wiring** (mirrors `windows/launcher.py::ssl_material`). `macos/launcher.py` must keep `ssl_material(env)`, `local_url(env, secure=...)`, and `build_command(ssl_pair)` (passes `--ssl-cert`/`--ssl-key`; `--no-ssl` only when the pair is None). `start_server()` re-resolves `ssl_material` + `self.url` on every spawn so TextEdit config edits (e.g. adding `MRRC_SSL_CERT`) apply on Restart. The launcher onefile spec MUST list `ssl_bootstrap` + `cryptography` in hiddenimports (cert generation needs `cryptography`, which is also pulled into the server onedir by requirements.txt). Cert lives at `~/Library/Application Support/MRRC-Modern/certs/{server.crt,server.key}` via `ssl_bootstrap.ensure_self_signed(user_data_dir()/certs)`.
+
+   **Since v1.24.6 the launcher no longer trusts its own scheme decision.** It used to compute `secure = ssl_pair is not None` and then `webbrowser.open(url)` unconditionally — so when the server degraded to plain HTTP for any reason, the browser was sent to an `https://` port nobody was listening on and the user saw a **black window over a perfectly healthy app** (that is the reported "installed, then black screen"). Both launchers now share `launcher_net.py` (`answers()` probes `/api/health`, where *any* HTTP status counts as "listening", including 401; `served_url()` tries the preferred scheme then the other; TLS is implied by the URL scheme): `url_to_open()` opens whichever scheme actually answers and **says so** instead of degrading silently, and `running_instance_url()` probes *before* spawning so an already-running server is reused rather than doubled. `launcher_net.py` lives at the repo root and must be importable from `macos/launcher.py` — PyInstaller picks it up by import analysis, but confirm it in the launcher's PYZ (`windows-installer` skill, Verification layer 3).
 
 9. **DMG must be the classic installer layout.** `hdiutil create -srcfolder "$APP_BUNDLE"` produces a DMG holding ONLY the bare .app — no "Applications" shortcut, which breaks the "drag into Applications" step the website guide promises and confuses novices. build.sh must stage a folder with `ln -sf /Applications <stage>/Applications` + a copy of the .app, then `-srcfolder` that staging dir (Step 6). After a DMG-layout change the SHA-256 on the website download card MUST be updated (the checksums change).
 
 10. **Interpreter selection is explicit-path only.** `build.sh` is bash — run it with `bash`, never `python` (SyntaxError at `set -euo pipefail`; plain `python` may not even exist). Do NOT `source .venv/bin/activate`: this repo's `.venv` was copied from the `mrrc_ft710` project, whose activate hardcodes the wrong `VIRTUAL_ENV`, so activation silently selects an interpreter without PyInstaller. Test runs outside build.sh also need the explicit path (`.venv/bin/python -m unittest discover -s tests`) — Homebrew `python3` has no project deps. Canary: if a PyInstaller error message mentions `mrrc_ft710`, you activated the wrong venv.
+
+11. **A packaged app must never keep writable state inside its own bundle.** `_writable_runtime_dir()` used to prefer `_runtime_dir()` whenever `os.access(..., W_OK)` — and inside a `.app` that test passes, because the owner can write `Contents/MacOS`. A bare server start therefore created `Contents/MacOS/recordings/`, and **one file in it breaks the code signature**:
+
+    ```
+    dist/macos/MRRC-Modern.app: a sealed resource is missing or invalid
+    file added: .../MRRC-Modern.app/Contents/MacOS/recordings/probe.mp3
+    ```
+
+    (deleting the file restored `valid on disk` + `satisfies its Designated Requirement`). So recording a single QSO would leave the app failing signature checks on its next launch — the same class of accident as v1.18.1, where data under `Contents/MacOS` made codesign refuse the whole bundle. **"Writable" is not the same as "correct"**: since v1.24.6, when `sys.frozen` the function returns `default_user_dir()` without consulting `os.access` at all. Source checkouts and the Linux/Pi install are unaffected and still keep their files next to the code. Both launchers already `setdefault` `MRRC_MEM_FILE` / `MRRC_RECORDINGS_DIR` to the per-user directory, so this also removes the last way for a bare start and a launcher start to disagree about where the same files live.
+
+    Verify it in the clean-room run, not by reading the code: `Recording ready:` must name a path under `~/Library/Application Support/MRRC-Modern/`, the bundle must have **0 files touched** by the run, and `codesign --verify` must still pass **afterwards**.
+
+12. **No macOS metadata may reach the bundle.** `build.sh` assembles from the working tree, so a stray `static/.DS_Store` (or an AppleDouble `._*` left by a tar made without `COPYFILE_DISABLE=1`) is copied into `Contents/Resources/static/` and shipped to every user — where FastAPI's static handler will serve it on request. Check the built bundle: `find dist/macos/MRRC-Modern.app \( -name .DS_Store -o -name '._*' \) | wc -l` must be **0**, and so must the count of `*.pem` / `*.key` / `.env` / `mrrc_modern.env` inside it.
 
 ## Verification
 
@@ -154,6 +171,50 @@ curl -sk https://127.0.0.1:8899/login | grep -q '首次运行已自动生成密�
 rm -rf "$TMP"
 ```
 
+### Clean-room run of the FROZEN binary (the layer that actually catches broken releases)
+
+Everything above can pass while the package is still wrong: v1.24.1 shipped `cloud_hub` unused, v1.24.5 shipped `ssl_bootstrap` unimported, and v1.24.6's discarded builds were killed by *this* step alone. Run the packaged server with an **empty `HOME`** and **no launcher environment** — equivalent to a user starting the binary themselves:
+
+```bash
+TH=$(mktemp -d); mkdir -p "$TH/Library/Application Support/MRRC-Modern"
+printf 'MRRC_WEB_HOST=127.0.0.1\nMRRC_WEB_PORT=18893\nMRRC_WEB_PASSWORD=\n' \
+  > "$TH/Library/Application Support/MRRC-Modern/mrrc_modern.env"
+# Use the FIELD configuration (an explicit host), not the default: two v1.24.6 defects
+# existed only on the explicit-host path, while the `::` default measured green.
+A=dist/macos/MRRC-Modern.app/Contents/MacOS/MRRC-Modern-Server
+find dist/macos/MRRC-Modern.app -newermt '-1 minute' -type f | wc -l   # bundle baseline
+HOME="$TH" "$A" > "$TH/a.out" 2> "$TH/a.err" &
+sleep 12
+curl -k -s -o /dev/null -w 'https /login -> %{http_code}\n' https://127.0.0.1:18893/login       # 200
+curl    -s -o /dev/null -w 'http  /login -> %{http_code}\n' http://127.0.0.1:18893/login        # 000
+curl -k -s -o /dev/null -w '/api/health -> %{http_code}\n' https://127.0.0.1:18893/api/health   # 401
+grep -E 'signed a self-signed|SSL enabled|Recording ready|starting on port' \
+  "$TH/Library/Application Support/MRRC-Modern/logs/server.log"
+# duplicate-handler check: one instance must write each line once
+L="$TH/Library/Application Support/MRRC-Modern/logs/server.log"
+echo "lines=$(grep -c . "$L") distinct=$(sed -E 's/^[0-9-]+ [0-9:,]+ //' "$L" | sort -u | grep -c .)"
+# a second instance must fail loudly, exit non-zero, and never claim readiness
+HOME="$TH" "$A" > "$TH/b.out" 2> "$TH/b.err"; echo "B exit=$?"
+grep -c 'Server ready' "$TH/b.err"; tail -6 "$TH/b.err"     # RuntimeError naming the port
+lsof -nP -iTCP:18893 -sTCP:LISTEN | grep -c LISTEN         # exactly 1
+kill %1 2>/dev/null
+```
+
+Then assert the bundle survived the run — **this is gotcha 11's only real test**:
+
+```bash
+find dist/macos/MRRC-Modern.app -newermt '-3 minutes' -type f | wc -l         # 0
+ls dist/macos/MRRC-Modern.app/Contents/MacOS/                                 # no recordings/
+codesign --verify --verbose=2 dist/macos/MRRC-Modern.app                      # still valid on disk
+find dist/macos/MRRC-Modern.app \( -name .DS_Store -o -name '._*' \) | wc -l   # 0 (gotcha 12)
+find dist/macos/MRRC-Modern.app \( -name '*.pem' -o -name '*.key' -o -name '.env' \) | wc -l   # 0
+rm -rf "$TH"
+```
+
+Expected evidence, measured on v1.24.6: `signed a self-signed certificate for 127.0.0.1` → `SSL enabled with a self-signed certificate just generated: …/MRRC-Modern/certs/fullchain.pem` → `Recording ready: …/Library/Application Support/MRRC-Modern/recordings` (a **user** path, never a bundle path) → `https /login 200`, `http /login 000`, `/api/health 401`; log `lines=26 distinct=25`, where the single repeat is `Opening serial port` (logged twice by design: initial connect + scope-init), **not** a duplicated handler; instance B exits `1` with `RuntimeError: cannot listen on port 18893 … Another MRRC Modern is most likely still running`, logs `Server ready` **0** times, and exactly one listener remains.
+
+Also walk the frozen bytecode — the `CArchiveReader` recipe in the `windows-installer` skill (Verification layer 3) works unchanged on `Contents/MacOS/MRRC-Modern-Server` with entry `server` and on `MRRC-Modern-Launcher` with entry `launcher`. Two traps: a symbol read via `getattr(mod, "NAME", …)` lives in **`co_consts`**, not `co_names`; and a function called from another module's body (`config.load_user_config_into_environ`) must be sought in **that PYZ module**, not in the entry script.
+
 GUI end-to-end (the "安装即可用" chain):
 
 1. Mount the DMG → copy `MRRC-Modern.app` to `/Applications`
@@ -187,4 +248,10 @@ Cleanup: `kill -TERM <server_pid>` then `pkill -KILL -f MRRC-Modern-Launcher`.
 | Double-clicking the .app does nothing, no window, no error | Launcher raised before rumps started: it now logs to `~/Library/Application Support/MRRC-Modern/launcher.log` and shows an alert; reproduce from a terminal to see the traceback. A non-UTF-8 `mrrc_modern.env` (ANSI/GBK editor) used to raise `UnicodeDecodeError` in `load_env` — read it via `macos.first_run.read_env_text` (BOM → UTF-8 → cp936 → latin-1), never `read_text(encoding="utf-8")` |
 | Fixing the launcher/env reader but only rebuilding the DMG | The Windows and macOS launchers share `macos/first_run.py`: a launcher fix invalidates **both** installers (see dual-platform-release gotcha 3) |
 | Rebuild shows old version | `CHANGELOG.md` top heading not bumped to `## [vX.Y.Z]` |
+| App fails signature checks / reports "is damaged" **after it has been used** | Writable state was created inside the bundle (`Contents/MacOS/recordings/…`): one added file breaks the seal (gotcha 11). `_writable_runtime_dir()` must return the per-user directory whenever `sys.frozen` |
+| Bundle contains `.DS_Store` or `._*` files | Stray macOS metadata in the working tree, copied in by `build.sh` (gotcha 12); clean the tree and rebuild — FastAPI's static handler serves them to users on request |
+| A second server logs `Server ready!` and then dies on a bare `[Errno 48]` | The explicit-host path handed the bind to `uvicorn.run()` (gotcha 2): every host must go through `_bind_listener_socket()`, which binds before uvicorn starts |
+| Browser shows a **black/blank window** while the server is running fine | The launcher opened the scheme it *computed* while the server served the other one (gotcha 8): probe `/api/health` through `launcher_net.served_url()` and open whichever answers, announcing any switch |
+| Two instances fight over the port and the radio's serial port | The launcher spawned a second server instead of reusing the running one: probe with `running_instance_url()` **before** spawning |
+| Suite is green locally but the VM gate dies with `WinError 32` | A test closed its log handler **outside** the `with tempfile.TemporaryDirectory()` block (`windows-installer` gotcha 13) |
 | `SyntaxError: invalid syntax` at `set -euo pipefail` / `No module named PyInstaller` from `mrrc_ft710/.venv` | build.sh is a BASH script run as Python, or `source .venv/bin/activate` was used: this repo's `.venv` was copied from the `mrrc_ft710` project and its activate script hardcodes `VIRTUAL_ENV=/Users/cheenle/HAM/mrrc_ft710/.venv` — activation puts the WRONG project's venv (no PyInstaller) on PATH (v1.14.0 build, 2026-09-09). System `python3` (Homebrew) also lacks the project deps (50 `No module named 'serial'` test errors). Always invoke explicitly: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh` — never `source .venv/bin/activate`, never `python build.sh` (see gotcha 10) |

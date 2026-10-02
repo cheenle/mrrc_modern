@@ -1,133 +1,293 @@
 ---
 name: windows-installer
-description: Use when building, rebuilding, verifying, or deploying the MRRC Modern Windows installer (MRRC-Modern-Setup.exe / Inno Setup), or when the Win11 KVM build VM is unreachable mid-build ("No route to host", qemu OOM-killed), the build script prints BUILD_DONE although nothing was built, PyInstaller or iscc fails on the VM, tests fail only on the VM (WinError 32 temp cleanup, GBK locale), the built exe is missing FTDI DLLs / opus.dll / static assets / mem_channels.json / lameenc, the VM builds the wrong product (MRRC_FT8-Setup.exe), the venv is missing (Activate.ps1 not found), an installed app will not start at all, or TX audio crackles on the VM.
+description: Use when building, rebuilding, verifying, or deploying the MRRC Modern Windows installer (MRRC-Modern-Setup.exe / Inno Setup), or when the Win11 KVM build VM is unreachable mid-build ("No route to host", qemu OOM-killed), the build script prints BUILD_DONE although nothing was built, PyInstaller or iscc fails on the VM, tests fail only on the VM (WinError 32 temp cleanup, GBK locale), the built exe is missing FTDI DLLs / opus.dll / static assets / mem_channels.json / lameenc / the fleet payload, the package ships macOS metadata (.DS_Store, AppleDouble ._* files), private material (certs, .env, recordings) ends up on the build VM, the VM builds the wrong product (MRRC_FT8-Setup.exe), the venv is missing (Activate.ps1 not found), an installed app will not start at all, a packaged build behaves differently from the source tree, TX audio crackles on the VM, or a website deploy deleted pages.
 ---
 
 # Windows Installer Build (MRRC Modern)
 
-## 远程触发构建：别用 `-NoNewWindow`，直接同步跑（2026-09-18）
+## 五条铁律（每次构建前重读）
 
-`ssh` 里 `Start-Process powershell ... -NoNewWindow` 起的构建**挂在 ssh 会话的控制台上**，
-会话一断就被清掉：日志停在测试输出之后、进程消失、`dist\windows` 时间戳不动 —— 看起来"卡住"，
-其实是没了。这一天为它白等了两轮。
+1. **退出码不是证据。** `BUILD_DONE`、`Successful compile`、`version.txt`、任务退出码 —— 任何**单独一个**都不能证明包是新的。唯一可靠组合：**mtime 是今天（带年份看）+ size + SHA ≠ 上一版 + 装完真跑**。
+2. **代码定稿 → 构建 → 才写数字。** 给"还不是最终代码"的构建填字节数/SHA，等于发布一个**数字对得上、代码对不上**的包。本版就因此作废了两个已验完的产物（见下）。
+3. **洁净室真跑打包出的 exe 是不可省略的一层。** 本仓三次发布事故（v1.24.1 `cloud_hub`、v1.24.5 `ssl_bootstrap`、v1.24.6 显式 host 绕过端口守卫 + 冻结包写坏签名 bundle）**全部只有这一步能抓到**：套件全绿、签名通过、SHA 三处一致，包照样是坏的。
+4. **一次只做一件事。** 绝不同时发两条会改同一批文件或动同一台机器的命令。并发跑 `deploy.sh` 曾把线上 `sdd/` 与 `images/` **整棵树删光**；并发跑"变异脚本 + 全量套件"曾让套件在被改坏的文件上跑出一堆假红。
+5. **构建机不是保险箱。** 源码包必须排除 `certs/`、`.env`、`recordings/`、`logs/`、`promo/`、`website/videos/`、`website/downloads/*` 与 macOS 元数据。曾经把操作员的 **TLS 私钥、含网页密码的 .env、63 个真实 QSO 录音**送到了构建 VM 上。
 
-- 可靠做法：**同步执行**，让 ssh 会话活着盯完。VM 上套件只要 ~35 s、PyInstaller + Inno 约十几分钟，
-  单次 `ssh` 给足超时即可：`ssh -o ServerAliveInterval=30 ... 'powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\cheenle\build_mrrc_v1xxx.ps1'`。
-- 若确实要后台跑：去掉 `-NoNewWindow`（让它脱离会话），并且**只认产物**（`dist\windows` 的 mtime/大小 + `Get-FileHash`），
-  不要认日志有没有输出 —— 重定向到文件时 Python 是块缓冲，几十秒不刷是正常的。
+---
 
-## 验证打包产物：`version.txt` + 走查脚本入口
+## 拓扑与实测可用的命令序列（2026-10-02 v1.24.6 全程照此跑通）
 
-`a.toc` 在 PyInstaller 6 里是 **dict**（不是 list），`a.toc[0]` 会 `KeyError: 0`；用
-`list(a.toc.items())`。`CArchiveReader.extract(name)` 拿到的 marshalled 代码可能带 8 字节头，
-先 `marshal.loads(data)`、失败再 `marshal.loads(data[8:])`。最有价值的两个断言：
+```
+Mac ──ssh -o ProxyJump=cheenle@ham.vlsc.net──► cheenle@192.168.122.133（win11 VM，默认 shell = PowerShell 5.1）
+                                              仓库在 C:\mrrc_modern（mrrc 是 C:\mrrc）
+```
 
-- `dist\windows\MRRC-Modern\version.txt` == 本次版本（证明构建读的是新 CHANGELOG）；
-- 走查**脚本入口**的 `co_names`（递归 `co_consts`）确认新符号真的在包里 —— 服务器改动看 `server` 入口，
-  启动器改动看 `launcher` 入口（`strings`/`findstr` 看不到压缩后的 PYZ）。
+**直连用 `ProxyJump`，不要再两跳中转**（旧文档写的 "scp 到 ham:/tmp 再由 ham 转发" 已废弃：`ham` 的 `/tmp` 是 **454 MB tmpfs**，38 MB 的包能过、大一点的会炸，而且多一跳多一次静默失败的机会）。实测 38.4 MB 源码包 **6.4 秒**传完。
 
-## Overview
+```bash
+# ① 打源码包：排除清单一个都不能少（漏一条 = 白跑一轮或泄密）
+cd <repo> && export COPYFILE_DISABLE=1 && tar czf /tmp/src.tgz \
+  --exclude='./.git' --exclude='./.venv' --exclude='./venv' --exclude='./dist' \
+  --exclude='./build' --exclude='./node_modules' --exclude='__pycache__' \
+  --exclude='./packaging/payload' --exclude='./promo' --exclude='./recordings' \
+  --exclude='./logs' --exclude='./certs' --exclude='./.env' --exclude='./FT710Android' \
+  --exclude='./website/videos' --exclude='./website/downloads/*.exe' \
+  --exclude='./website/downloads/*.dmg' --exclude='./website/downloads/*.xz' \
+  --exclude='./.DS_Store' --exclude='._*' .
 
-The Windows release is built **on the Win11 KVM VM, never on the Mac** (no Windows toolchain locally; PyInstaller 6.21.0 + Inno Setup 6.7.3 + Python 3.12.4 live in the VM). Topology: Mac → `ssh ham.vlsc.net` (KVM host, sudo passwordless) → `ssh cheenle@192.168.122.133` (win11 VM; default shell is **PowerShell 5.1**). Full operator manual: `win_pack.md`. The end-to-end release sequence (both platforms + website) lives in the `dual-platform-release` skill.
+# ② 打完必须自查：关键文件在、隐私目录不在、体积合理（855 MB → 36.6 MB 是这一版的实测差）
+tar tzf /tmp/src.tgz | grep -c "\._\|DS_Store"          # 必须 0
+for d in promo recordings logs certs; do tar tzf /tmp/src.tgz "./$d/" | wc -l; done   # 必须全 0
+tar xzf /tmp/src.tgz -O ./packaging/windows/MRRC-Modern.iss | grep -m1 'MyAppVersion "'
 
-Build gate mirrors macOS: full test suite → 3 PyInstaller specs → `iscc`. A non-zero step aborts the build (`Invoke-Checked`), so a green run implies 693 tests passed.
+# ③ 送 + 解包（解包**前**清掉 VM 上的 tests\*.py：tar 只覆盖不删除，本地已删的旧测试会留在
+#    VM 上被 unittest discover 收集，制造与代码无关的红）
+scp -o ProxyJump=cheenle@ham.vlsc.net /tmp/src.tgz cheenle@192.168.122.133:C:/tmp/src.tgz
+#    然后跑一个 .ps1（见"操作纪律"：绝不内联 PowerShell）：清 tests\*.py → tar xzf → 断言
+#    venv\Scripts\python.exe 还在 → 断言 .iss 版本 → 断言新模块在 → 断言 payload 齐
 
-## Build Flow (v1.14.0-proven)
+# ④ 同步构建（输出进日志，一步看全；别用 Start-Process，见 gotcha 6）
+ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=60 -o ProxyJump=cheenle@ham.vlsc.net \
+  cheenle@192.168.122.133 'cmd /c "cd /d C:\mrrc_modern && set PATH=C:\mrrc_modern\venv\Scripts;%PATH% && powershell -NoProfile -ExecutionPolicy Bypass -File C:\mrrc_modern\packaging\windows\build.ps1 > C:\tmp\bNNN.log 2>&1 && echo BUILD_CMD_OK || echo BUILD_CMD_FAIL"'
 
-0. **Pre-flight on Mac**: full suite green via `.venv/bin/python -m unittest discover -s tests` (NOT system `python3` — no deps); version bumped in `packaging/windows/MRRC-Modern.iss` (`#define MyAppVersion`) to match the top `CHANGELOG.md` entry.
-1. **Source zip** from repo root (~27 MB) with the exact exclusion set from `win_pack.md` Step 1 — `./certs/*` and `./promo/*` MUST be excluded, `.agents/` MUST be INCLUDED (gotcha 2).
-2. **Upload via jump host**: `scp dist/mrrc_modern_src.zip ham.vlsc.net:/tmp/` then ham relays it to the VM.
-3. **Extract with venv preservation** (gotcha 7): write `extract_v<ver>.ps1` locally (stop `python*`/`MRRC-Modern*` processes → `Move-Item C:\mrrc_modern\venv C:\mrrc_venv_keep -Force` → `Remove-Item C:\mrrc_modern -Recurse -Force` → `Expand-Archive` → move venv back → print `EXTRACT_DONE venv=<bool>`), scp it to the VM, run with `powershell -NoProfile -ExecutionPolicy Bypass -File`. Template in `win_pack.md` Step 3.
-4. **Build** with a per-version script `C:\Users\cheenle\build_mrrc_v<ver>.ps1` (Inno Setup dir onto PATH → activate `C:\mrrc_modern\venv` → `packaging\windows\build.ps1`), scp'd to the VM and run the same way. Output: `C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe`.
-5. **Verify on VM**: exe exists (45–46 MB range), `dist\windows\MRRC-Modern\_internal\vendor\ftdi\windows\bin\x64` has `FT4222.dll` + `ftd2xx.dll`, `_internal\static\index.html` and `_internal\mem_channels.json` exist, `(Get-FileHash ... -Algorithm SHA256).Hash`.
-6. **Retrieve via jump**: ham pulls from the VM, Mac pulls from ham; `shasum -a 256` locally must equal the VM hash.
+# ⑤ 取回 + 跨主机比对（ProxyJump 一步，不要经 ham 落地）
+scp -o ProxyJump=cheenle@ham.vlsc.net cheenle@192.168.122.133:C:/mrrc_modern/dist/windows/MRRC-Modern-Setup.exe \
+    dist/windows/MRRC-Modern-v<ver>-Windows-x64-Setup.exe
+shasum -a 256 dist/windows/MRRC-Modern-v<ver>-Windows-x64-Setup.exe   # 必须 == VM 的 Get-FileHash
+```
 
-## CRITICAL Gotchas (each caused a real failure)
+`build.ps1` 的门禁顺序（任一步失败即中止）：`py_compile` → **全量 unittest**（含 `release_check`，所以版本串必须先改完，见 `dual-platform-release`）→ `dev_tools/test_config_encoding.py` → 3 个 PyInstaller spec → 从 `.iss` 的 `MyAppVersion` 写 `version.txt` → 拷 fleet payload → `iscc`（**出到临时目录再复制**，否则 Defender 实时扫描锁住新写的 exe，报 `Error 32`）。
 
-1. **Never use `C:\Users\cheenle\build_vm.ps1`.** It was repurposed to `Set-Location C:\mrrc_ft8` (a different project) and silently builds a broken `MRRC_FT8-Setup.exe` (hit 2026-08-15). Every release creates its own `build_mrrc_v<ver>.ps1` with `Set-Location C:\mrrc_modern`.
-2. **Zip exclusion list is load-bearing.** Excluding `./.agents/*` breaks `tests/test_sdd_harness.py` → 24 test failures on the VM (the harness files live there); excluding `./website/*` breaks `tests/test_sdd_docs_consistency.py` + the `diagram-copy` rules in `tests/test_release_artifacts.py` → 14 failures, because those tests read the landing pages and the generated SDD pages (v1.16.0 gate hit exactly this). Keep `website/` in and exclude only `website/downloads/`, `website/videos/`, `website/__pycache__/`. Excluding `./certs/*` is mandatory (TLS private keys). Forgetting `./promo/*` makes a ~670 MB zip that uploads forever.
-3. **PowerShell 5.1 on the VM**: `&&` is invalid (use `;` or a script); `2>` redirects as UTF-16LE (`iconv -f UTF-16LE -t UTF-8` before grep); multi-hop ssh quoting is a trap — always write a local `.ps1`, scp it, execute with `-File`. `Start-Process -ArgumentList` **rejects an empty-string element** (`ParameterArgumentValidationError: ...ArgumentList 执行参数验证失败，因为 Null 或空`), so `-ArgumentList "--port","8899","--serial-port",""` throws before the process starts — pass a real value instead (e.g. a non-existent `COM99` when the goal is just "do not touch the radio").
-4. **TX audio can never be verified on this VM.** KVM USB passthrough breaks isochronous OUT scheduling (playback timing chaos on MME and WASAPI alike; RX capture and FT4222 bulk are fine). Don't debug TX crackling here — physical Windows hardware only.
-5. **Radio USB unplug kills COM/audio until passthrough is reattached.** If the VM suddenly has only COM1 and no `USB Audio`: the radio was unplugged/powered off; after re-plugging, re-run the three `sudo virsh -c qemu:///system attach-device win11` commands (VID:PID loop in `win_pack.md` §6) and restart the server.
-6. **Processes launched over SSH die when the session ends** (Windows job object). The persistent 8443 service runs via scheduled task `MRRC-Modern-HTTPS` → `start_mrrc_modern_https.ps1` (hidden `Start-Process`), never a bare SSH-launched launcher console.
-7. **venv preservation**: the Move-Item trick in Step 3 avoids the documented 4-command pip reinstall. If the venv was still deleted, re-run the FULL `win_pack.md` §2.2 sequence starting with `python -m venv venv` (otherwise `.\venv\Scripts\Activate.ps1` is missing and the build fails immediately).
-8. **Dependency drift**: if `requirements*.txt` changed since the last build, re-run the two pip install commands after extraction (the preserved venv has the old deps).
+---
 
-9. **The KVM host can OOM-kill the whole VM, mid-build** (2026-09-12: the extraction died after ~5 min and the VM was simply gone). `ham.vlsc.net` also runs heavy neighbours (a ~9 GB java process was resident); win11 asks for 16 GB on a 28 GB host, so the kernel picked the biggest process — `qemu-system-x86`. Symptoms, in order: `ssh` suddenly says `No route to host`; `virsh -c qemu:///system domifaddr win11` says `domain is not running`; `/var/log/libvirt/qemu/win11.log` ends with `shutting down, reason=crashed`; `sudo dmesg -T | grep -i oom` shows `Killed process … (qemu-system-x86)`. Remedy: shrink the VM for the build and give the host swap, then start it again:
+## 构建前置检查（缺一即在 VM 上白跑一轮）
+
+| 检查 | 命令 / 判据 |
+| --- | --- |
+| 宿主内存 | `ssh cheenle@ham.vlsc.net 'free -m'` —— available **< 1 GB 就别开机**，会再被 OOM 杀一次（gotcha 9） |
+| VM 在跑 | `sudo virsh -c qemu:///system list --all`（缺 `sudo` + `qemu:///system` 会说 domain not running） |
+| venv 是**这台 VM 的** | `venv\Scripts\python.exe -V` = 3.12.4；`pyvenv.cfg` 指向 `C:\Program Files\Python312`。**别把 Mac 的 venv 解进去** |
+| 依赖没漂 | `requirements*.txt` / `packaging/windows/requirements-build.txt` 本轮**没改**才能复用 venv（改了必须重装，gotcha 8） |
+| fleet payload 齐 | `packaging\payload\windows-amd64\` 里 `frpc.exe`（16,708,608 B）+ `openssl.exe` + **9 个 DLL** + `install_instance_tunnel.ps1` + `openssl.cnf`。**缺 frpc 就停**：取件脚本拉不到校验和时按设计整批不放 frpc，消息只在 stderr |
+| vendor 齐 | `vendor\opus\windows\bin\x64\opus.dll`、`vendor\ftdi\windows\bin\x64\{ftd2xx,FT4222}.dll` |
+| **VM 树上没有历史垃圾** | `Get-ChildItem vendor,static -Recurse -Force \| ? { $_.Name -like "._*" -or $_.Name -eq ".DS_Store" }` —— 必须 0（gotcha 14） |
+| **VM 树上没有隐私残留** | `certs\`、`.env`、`recordings\`、`logs\`、`promo\` 都不该在构建机上（gotcha 15） |
+| **删掉上一版产物** | `Remove-Item dist\windows\MRRC-Modern-Setup.exe` —— 这样"文件存在"才只可能来自本次构建（gotcha 10 的正解） |
+
+---
+
+## CRITICAL Gotchas（每条都对应一次真实失败）
+
+1. **Never use `C:\Users\cheenle\build_vm.ps1`.** 它被改成 `Set-Location C:\mrrc_ft8`（另一个项目），会静默产出坏掉的 `MRRC_FT8-Setup.exe`（2026-08-15 中过）。每次发版用当次自己的脚本，`Set-Location C:\mrrc_modern`。
+2. **打包排除清单是承重的。** 排除 `./.agents/*` ⇒ `tests/test_sdd_harness.py` 在 VM 上 24 项失败（harness 就住在那儿）；排除 `./website/*` ⇒ `test_sdd_docs_consistency.py` + `test_release_artifacts.py` 的 diagram-copy 规则 14 项失败（这些测试**读着陆页和生成的 SDD 页**）。`website/` 必须进包，只排除 `website/downloads/`、`website/videos/`、`website/__pycache__/`。`./certs/*` 必须排除（TLS 私钥）。漏 `./promo/*` ⇒ ~670 MB 的包传到天荒地老。
+3. **PowerShell 5.1**：`&&` 非法（用 `;`）；`2>` 重定向写出 **UTF-16LE**（grep 前 `iconv -f UTF-16LE -t UTF-8`）；**多跳 ssh 的内联引号必被逐层吃掉** —— 永远写 `.ps1` → `scp` → `-File`（见"操作纪律"，本版为此白跑 4 次）。`Start-Process -ArgumentList` **拒绝空字符串元素**（`ParameterArgumentValidationError: …ArgumentList 执行参数验证失败，因为 Null 或空`），`-ArgumentList "--port","8899","--serial-port",""` 会在进程启动前就抛 —— 传个真值（比如只想"别碰电台"就传不存在的 `COM99`）。
+4. **TX 音频在这台 VM 上永远无法验证。** KVM 的 USB 透传破坏等时 OUT 调度（MME 与 WASAPI 一样乱；RX 采集与 FT4222 批量传输不受影响）。别在这儿调 TX 噼啪声 —— 只能去物理 Windows 机。
+5. **电台 USB 被拔会连带 COM 口和音频设备一起消失**，直到重新附加透传设备。VM 突然只剩 COM1、没有 `USB Audio`：电台被拔/关机了；重插后重跑三条 `sudo virsh -c qemu:///system attach-device win11`（VID:PID 循环见 `win_pack.md` §6）并重启服务。
+6. **SSH 起的进程随会话结束被回收**（Windows job object）。长任务**同步跑**（`cmd /c "... > log 2>&1"`），别用裸 `ssh ... Start-Process`；要常驻就用计划任务（`schtasks /create /tn X /tr <命令行> /RL HIGHEST /RU <user> /IT`，**`/tr` 里别塞引号**；带空格的路径要 `\"…\"` 正确加引号，否则 `last=2147942402`）。运行器脚本放**固定目录**（`C:\tools\`），别放 `C:\tmp`（会被清理脚本删掉）。
+7. **venv 保命**：本版做法是**解包覆盖、不删仓库目录**（tar 不含 `venv/`，所以 venv 自然保住），比旧的 `Move-Item venv → 删整个 C:\mrrc_modern → Expand-Archive → 移回` 少两个失败点。真要删了 venv，就跑 `win_pack.md` §2.2 的完整四条（从 `python -m venv venv` 开始），否则 `.\venv\Scripts\Activate.ps1` 不存在，构建立刻失败。
+8. **依赖漂移**：`requirements*.txt` 变过就要重装依赖（保下来的 venv 里是旧依赖）。**发版中途不要引入新构建依赖** —— 本版宁可用标准库 AST 写守卫，也不往 `requirements-build.txt` 加 pyflakes/ruff，就是为了不惊动 VM 的 venv。
+9. **宿主会 OOM 杀掉整个 VM，就在构建中途**（2026-09-12：解包跑了 ~5 分钟，VM 直接没了）。`ham.vlsc.net` 上还住着重量级邻居（曾有 ~9 GB 的 java 常驻），win11 在 28 GB 宿主上要 16 GB，内核挑了最大的进程 —— `qemu-system-x86`。症状依次：`ssh` 突然 `No route to host` → `virsh -c qemu:///system domifaddr win11` 说 domain not running → `/var/log/libvirt/qemu/win11.log` 结尾 `shutting down, reason=crashed` → `sudo dmesg -T | grep -i oom` 有 `Killed process … (qemu-system-x86)`。处置：
 
 ```bash
 sudo virsh -c qemu:///system setmaxmem win11 10G --config && sudo virsh -c qemu:///system setmem win11 10G --config
 sudo fallocate -l 16G /swap2.img && sudo chmod 600 /swap2.img && sudo mkswap /swap2.img && sudo swapon /swap2.img
-sudo virsh -c qemu:///system start win11          # check `free -m` first: <1 GB available = it will die again
+sudo virsh -c qemu:///system start win11          # 先看 free -m：available <1 GB 就还会再死一次
 ```
 
-Restore 16 GB (`setmaxmem`/`setmem 16G --config`) once the neighbour shrinks, or leave 10 GB if it does not.
+邻居缩了之后可恢复 16 GB（`setmaxmem`/`setmem 16G --config`），否则就留 10 GB。
 
- 1. **`BUILD_DONE` is not a success signal.** The per-version wrapper prints it unconditionally; `build.ps1`'s `Invoke-Checked` aborts the *child* PowerShell (exit 1) and the wrapper happily continues to the next line. A v1.15.0 attempt printed `BUILD_DONE` with a failed test gate and no exe at all. Always prove the artifact: `Get-Item dist\windows\MRRC-Modern-Setup.exe` (fresh mtime + 45–46 MB) and `Get-FileHash`.
-
- 2. **Extract with `tar -xf`, not `Expand-Archive`.** Windows' bundled bsdtar unpacks the ~13 MB source zip in seconds and with far less memory/CPU than the PowerShell cmdlet (the OOM in gotcha 9 hit an `Expand-Archive` run). Have the script assert its own result: `EXTRACT_DONE venv=True server=True` (venv moved back, `server.py` present), with `Expand-Archive` only as a fallback.
-
- 3. **"I installed it and it will not run" is a launcher startup failure with no visible message.** Triage: start `C:\Program Files\MRRC Modern\MRRC-Modern-Launcher.exe` (note: *Launcher*, not the old `MRRC-Modern.exe` name) over SSH with `Start-Process … -RedirectStandardOutput o.txt -RedirectStandardError e.txt`, then read `e.txt` — the traceback is there even though the user's console window closed instantly. Since v1.15.0 the launcher also writes `%LOCALAPPDATA%\MRRC-Modern\launcher.log` and shows a message box. Known cause found exactly this way: `mrrc_modern.env` saved by an ANSI (GBK) editor was not valid UTF-8 (`e2 80 3f` where the shipped template has `e2 80 94`) → `load_env` raised `UnicodeDecodeError` before anything printed. Fixed in `macos/first_run.py: read_env_text` (BOM → UTF-8 → cp936 → latin-1) plus `guarded_main()/report_fatal()`. Both launchers share that reader — **a launcher fix means rebuilding BOTH installers.**
-
- 4. **Windows-only test failures are usually open-file handling.** A test that leaves a file open (an MP3 session, a log) passes on macOS/Linux, where unlinking an open file is legal, and fails the VM gate with `PermissionError: [WinError 32] … being used by another process` during `TemporaryDirectory.cleanup()`. Close the handle in `tearDown`/`asyncTearDown` (`session.close_without_finishing()`); treat "green locally, red on the VM" as a real portability bug, not a VM quirk.
-
-## Verification
-
-### Prove the code is inside the artifact (do not grep it)
-
-`strings(1)`/`grep` cannot see into PyInstaller's compressed PYZ — a missing or stale symbol looks identical to a present one. Walk the archive instead (the VM's venv has PyInstaller 6.21.0):
+10. **`BUILD_DONE` / `BUILD_CMD_OK` / `Successful compile` 都不是成功信号。** 包装脚本无条件打印它；`Invoke-Checked` 中止的是*子* PowerShell，外层照样往下走。v1.15.0 有一次打印了 `BUILD_DONE`，而测试门禁是红的、exe 根本不存在。**正解是让"文件存在"本身成为证据**：构建前先 `Remove-Item` 掉上一版产物。
+11. **解包用 `tar -xf`，不用 `Expand-Archive`。** Windows 自带的 bsdtar 几秒解完 ~13 MB 源码包，内存/CPU 都远低于那个 cmdlet（gotcha 9 的 OOM 就砸在一次 `Expand-Archive` 上）。脚本要**自证结果**：`EXTRACT_DONE venv=True server=True`。
+12. **"装了但完全不启动"是启动器启动期异常，且没有任何可见消息。** 定位：用 `Start-Process … -RedirectStandardOutput o.txt -RedirectStandardError e.txt` 起 `C:\Program Files\MRRC Modern\MRRC-Modern-Launcher.exe`（注意是 *Launcher*，不是旧的 `MRRC-Modern.exe`），然后读 `e.txt` —— 用户的控制台窗口瞬间关了，traceback 还在文件里。v1.15.0 起启动器也写 `%LOCALAPPDATA%\MRRC-Modern\launcher.log` 并弹消息框。用这招抓到过的真因：ANSI(GBK) 编辑器存过的 `mrrc_modern.env` 不是合法 UTF-8（`e2 80 3f`，出厂模板是 `e2 80 94`）⇒ `load_env` 在打印任何东西之前抛 `UnicodeDecodeError`。修在 `macos/first_run.py: read_env_text`（BOM → UTF-8 → cp936 → latin-1）+ `guarded_main()/report_fatal()`。两个启动器共用这个读取器 —— **改启动器意味着两端安装包都要重建。**
+13. **只在 Windows 红的测试，几乎都是文件句柄没关。** macOS/Linux 允许删除打开的文件，Windows 报 `PermissionError: [WinError 32] … being used by another process`，而且**炸在 `TemporaryDirectory.cleanup()` 阶段**（离真正的原因隔了两层）。关闭动作必须写在 **`with tempfile.TemporaryDirectory()` 块内部** —— 写在块外的 `finally` 里，删目录时句柄还开着，照样红：
 
 ```python
-# bundle_check.py — run on the VM: .\venv\Scripts\python.exe bundle_check.py
-import marshal, types
-from PyInstaller.archive.readers import CArchiveReader
-exe = r"C:\mrrc_modern\dist\windows\MRRC-Modern\MRRC-Modern-Server.exe"
-r = CArchiveReader(exe)
-# the entry *script* (`server`) is a CArchive TOC entry, not a PYZ module:
-code = marshal.loads(r.extract("server"))
-seen = set(); walk = lambda c: (seen.update(c.co_names), [walk(k) for k in c.co_consts if isinstance(k, types.CodeType)])
-walk(code)
-print("_ensure_rec_writer" in seen)          # the symbol you shipped
-z = r.open_embedded_archive(next(n for n, e in r.toc.items() if e[4] == "z"))
-print("recorder" in z.toc)                   # + imported modules in the PYZ
+with tempfile.TemporaryDirectory() as tmp:
+    try:
+        ...                                   # 这里挂上了 RotatingFileHandler
+    finally:
+        for h in list(logging.getLogger().handlers):
+            if h not in saved:
+                logging.getLogger().removeHandler(h); h.close()   # 必须在 with 里面
 ```
 
-### Smoke-test the launcher, not only the server exe
+把它当**真实的跨平台 bug**，不要当 VM 怪癖。
+14. **`COPYFILE_DISABLE=1` + 排除 `._*`/`.DS_Store`，否则 macOS 元数据会进包发给用户。** spec 把 `static/`、`vendor/` **整目录**塞进 `datas`，所以 `static/.DS_Store`、`vendor/…/._ftd2xx.dll` 会真的装到用户机器上，而且 FastAPI 的静态处理器会照请求把它们发出去。解包**只覆盖不删除**，所以 VM 树上的历史垃圾要在构建前手工清一遍（本版清了 46 个）。
+15. **构建机上不该有任何密钥或个人数据。** 本版在 `C:\mrrc_modern` 上发现历次 tar 留下的 `certs\radio.vlsc.net.key`（+ `.orig` 备份）、含 `MRRC_WEB_PASSWORD` 的 1817 字节 `.env`、**63 个真实 QSO 录音（125.9 MB）**、运行日志、`promo\`（629.9 MB）。全部删除并核实，源码 tar 加上排除项。**事后还要在产物里查一遍**：`.pem/.key/.p12/.pfx/.env` 形状的文件数必须是 0。
+16. **fleet payload 在应用根目录，不在 `_internal\`。** `build.ps1:106` 是 `FleetDest = $AppRoot\fleet` ⇒ `dist\windows\MRRC-Modern\fleet\`（13 个文件）。在 `_internal\fleet` 找会误判"payload 丢了"。
+17. **静默安装不会拉起应用。** Inno 的 `[Run]` 带 `skipifsilent` ⇒ 装完自己起一次；隧道会在应用调 `/api/cloud/state`（打开设置对话框）时自己起来。
+18. **`_APP_MODULES` 之外新增的模块不能被热修覆盖**（见 `mrrc` 那份技能）；而 `server.py`、`windows/launcher.py` 是**冻结入口脚本**，热修通道根本覆盖不到 —— 改它们**只能重建安装包**。
+19. **看产物时间务必带年份。** 差点把 9-25 的旧 exe 当成当晚构建（只看了 `HH:mm:ss`）。用 `.ToString("yyyy-MM-dd HH:mm:ss")`。
+20. **同一版本号不能重发。** 升级通道比的是**版本串**：已经以 vX 上线的包，修好了也**永远送不到**装了同一个 vX 的机器（点"升级"只会反复重放同一版本）。修完必须**升号**。
 
-The user runs the *launcher*; starting `MRRC-Modern-Server.exe` by hand proves less. Run the launcher once with the real (already existing) user config and watch its output — a non-UTF-8 `mrrc_modern.env` used to kill it before it printed anything (gotcha 12):
+---
+
+## 验证：四层，缺一层就等于没验
+
+### 第 1 层 三证合一（不是"看起来成了"）
 
 ```powershell
-$o="$env:TEMP\l_out.txt"; $e="$env:TEMP\l_err.txt"
-Start-Process "C:\Program Files\MRRC Modern\MRRC-Modern-Launcher.exe" -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
-Start-Sleep 25; Get-Content $o; Get-Content $e       # expect the URL banner, no traceback
+$i = Get-Item C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe
+$i.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")     # 必须是今天，带年份
+$i.Length                                            # 必须 != 上一版
+(Get-FileHash $i.FullName -Algorithm SHA256).Hash     # 必须 != 上一版
+Get-Content C:\mrrc_modern\dist\windows\MRRC-Modern\version.txt   # 必须 == 本版
 ```
 
-```bash
-# on Mac, after retrieval — all three must agree:
-ls -l dist/windows/MRRC-Modern-v<ver>-Windows-x64-Setup.exe        # size == VM size
-shasum -a 256 dist/windows/MRRC-Modern-v<ver>-Windows-x64-Setup.exe # == VM Get-FileHash
-# VM-side structural checks (win_pack.md Step 5): FTDI DLLs, static, mem_channels.json
+### 第 2 层 结构核对
+
+三个 exe（`MRRC-Modern-Server.exe` ~8.9 MB、`MRRC-Modern-Launcher.exe` ~11.9 MB、`scope_pipe.exe` ~10.0 MB）；`_internal\` 下 `static\index.html`、`static\listen.js`、`mem_channels.json`、`windows\default.env`、`vendor\ftdi\windows\bin\x64\{ftd2xx,FT4222}.dll`、`vendor\opus\windows\bin\x64\opus.dll`；**应用根目录** `fleet\` 13 个文件；`.DS_Store`/`._*` **0 个**；`.pem/.key/.env` 形状 **0 个**。
+
+### 第 3 层 符号走查（`grep`/`strings`/`findstr` 看不进压缩的 PYZ）
+
+缺的符号和在的符号长得一模一样，只能反序列化归档。**两个必须记住的坑**：
+
+- 经 `getattr(socket, "SO_EXCLUSIVEADDRUSE", 1024)` 读的名字是**字符串常量（`co_consts`）**，不在 `co_names` 里 —— 只扫 `co_names` 会误报"缺失"。
+- 符号要**在它真正定义/调用的那个模块里**找：`load_user_config_into_environ` 在 `config` 的**模块体**里被调用，所以查 PYZ 里的 `config`，而不是查 `server` 入口。
+
+```python
+# C:\tools\bundle_check.py —— 用 VM 的 venv 跑（它有 PyInstaller）
+import marshal, os, tempfile, types
+from PyInstaller.archive.readers import CArchiveReader, ZlibArchiveReader
+
+def walk(code, names, consts):
+    names.update(code.co_names)
+    for k in code.co_consts:
+        if isinstance(k, types.CodeType): walk(k, names, consts)
+        elif isinstance(k, str): consts.add(k)
+    return names, consts
+
+r = CArchiveReader(r"C:\mrrc_modern\dist\windows\MRRC-Modern\MRRC-Modern-Server.exe")
+raw = r.extract("server")                       # 入口"脚本"是 CArchive 条目，不是 PYZ 模块
+try:    code = marshal.loads(raw)
+except Exception: code = marshal.loads(raw[8:]) # 可能带 8 字节头
+names, consts = walk(code, set(), set())
+
+pyz = next(k for k, v in (r.toc.items() if hasattr(r.toc, "items") else r.toc)
+           if (getattr(v, "typecode", None) or (v[4] if len(v) > 4 else None)) == "z")
+fd, tmp = tempfile.mkstemp(suffix=".pyz"); os.write(fd, r.extract(pyz)); os.close(fd)
+mods = set(ZlibArchiveReader(tmp).toc.keys())   # PyInstaller 6: r.toc 是 dict，r.toc[0] 会 KeyError
 ```
 
-Install smoke test on the VM: Start Menu shortcut opens the login page; launcher console shows `RX audio started ... (USB Audio ...) @ 44100 Hz`; COM4 (Enhanced port) answers `FA;`. TX audio checks are forbidden here (gotcha 4).
+### 第 4 层 洁净室真跑（**唯一**能抓到"包是坏的"那一层）
+
+以**空的 per-user 状态** + **不给启动器环境变量**跑打包出的 exe —— 等同安装菜单里那个 "MRRC Modern Server" 快捷方式的裸启动。**必须用现场机的配置，不能用默认值**：本版两个缺陷（显式 host 绕过端口守卫、冻结包写坏签名 bundle）**只在 `MRRC_WEB_HOST=127.0.0.1` 这条路上**，默认 `::` 那条全是绿的。
+
+必查清单（每条都对应一个真实缺陷）：
+
+| 查什么 | 判据 | 抓的是哪个缺陷 |
+| --- | --- | --- |
+| 证书 | 日志有 `signed a self-signed certificate for 127.0.0.1` + `SSL enabled with a self-signed certificate just generated` | v1.24.5：模块在包里却没 import，`NameError` 被宽 `except` 吞掉后静默退回纯 HTTP |
+| 真的在服务 TLS | `https://127.0.0.1:<port>/login` → **200**；同端口明文 HTTP → **0 字节**/失败 | "黑屏" = 浏览器被送到没人监听的 scheme |
+| 证书主体 | 原始 TLS 握手报 `CN=127.0.0.1`（PS 5.1 里用 `SslStream.AuthenticateAsClient`，**不要**用 `Invoke-WebRequest`，见操作纪律） | 签给 0.0.0.0 与启动器要打开的 127.0.0.1 不匹配 |
+| 读到用户配置 | 绑的是配置文件里的 host/port，不是默认 `:::8888` | 裸启动完全无视 `mrrc_modern.env` |
+| 写在哪 | `Recording ready:` 指向**用户数据目录**；安装目录/bundle 里**没有**多出 `mrrc_modern.env`、`.tmp`、`certs\`、`recordings\` | 密码存不下 ⇒ 每次启动换一个新密码（"装了新包还是登不上"）；macOS 写进签名 bundle ⇒ `a sealed resource is missing or invalid` |
+| 日志不重复 | 单实例跑，`行数 ≈ distinct 行数`（允许代码本来就打两次的那种，如 `Opening serial port`） | root logger 是进程级的，冻结包把模块当 `__main__` 和 `server` 各加载一次 ⇒ 每行写两遍 |
+| 第二实例 | **退出码非 0** + 报错里点名端口和"另一个 MRRC Modern 还在跑" + **不再打 `Server ready!`** + `netstat` 只剩 1 个 LISTENING | Windows 的 `SO_REUSEADDR` 允许第二个进程绑到正在监听的端口，两个实例同时"就绪"，浏览器可能落到没拿到电台那一个 |
+| 装完真跑 | 静默装 → 起应用 → 入口 302/200/401 | `[Run]` 的 `skipifsilent`（gotcha 17） |
+
+---
+
+## 操作纪律：反复自伤的那几类（与 Windows 无关，纯纪律）
+
+**并发**
+
+- **绝不把有依赖关系的两条命令放进同一个并行块。** 实测翻车四次：① 同一块里发了两次全量套件 ⇒ 两个进程抢端口，打出 3 failures + 3 errors 的**假红**；② 变异脚本（会重写 `server.py`）与全量套件并行 ⇒ 套件在被改坏的文件上跑；③ **同一条 `deploy.sh` 并行发两次 ⇒ 线上 `sdd/` 和 `images/` 被删光**；④ `git commit` 与 `git push` 同块 ⇒ push 先跑，报 "Everything up-to-date"，提交其实没推上去。
+- 判据：**只要两条命令可能碰同一个文件、同一台机器、同一个远端目录，就串行。**
+
+**远端 shell**
+
+- **永远不要把 PowerShell 内联进 ssh。** `\"` 转义会被逐层吃掉，症状是"脚本没错、命令没跑"或 `TerminatorExpectedAtEndOfString` / `EmptyPipeElement` / `FINDSTR: 无法打开`。做法：`write` 工具落 `.ps1`（**纯 ASCII**，用 `LC_ALL=C grep -c '[^ -~]'` 自查必须 0）→ `scp` 到 `C:\tools\` → `powershell -NoProfile -ExecutionPolicy Bypass -File`。
+- 需要参数化就用 `param([string]$Path=..., [string]$Pattern=..., [int]$First=...)`，一个 `readlog.ps1` / `greplog.ps1` 能覆盖所有"看日志"的需求。
+- **GBK 输出**：中文 Windows 的 stderr 是 GBK，`sed`/`grep` 会报 `RE error: illegal byte sequence` ⇒ 前置 `LC_ALL=C`，或 `LC_ALL=C tr -cd '\11\12\15\40-\176\200-\377'` 过一遍再匹配。数据行仍可读，只是表头会花。
+
+**读证据**
+
+- **失败日志要读尾巴，不是读头。** 本版一度断定"第二个实例绑定成功了"，因为只看了 stderr 的**前 20 行**（里面确实有 `Server ready!`）；真正的 `RuntimeError` 在**最后**。用 `Get-Content -Tail` / `tail -n`。
+- **`head`/`tail` 截断过的输出不能当完整事实。** 一次 `tail -14` 把关键的 `df` 三行截掉了，而那正是要判断"`/tmp` 是不是小 tmpfs"的依据。
+- **"某个东西不存在"要用两种方式确认**（换路径 + 换命令）。曾报 "fleet MISSING"，实际是查错了目录（gotcha 16）。
+
+**本地 shell**
+
+- **`&` 的优先级低于 `&&`**：`cd X && A &` 会把**整个 `cd X && A`** 丢进后台子 shell，主 shell 的 cwd 没变，后面的相对路径全部失效。要后台跑就写成 `( cd X && A ) &` 或直接用绝对路径。
+- **带引号的 heredoc（`<<'EOF'`）里反斜杠是字面量**：写 `"\\n"` 得到的是**反斜杠 + n**，不是换行（本版因此在测试文件里多出一行 `\n`，直接 SyntaxError）。
+- **字符串结尾的 `\` 会转义引号**：`echo "...C:\tools\"` ⇒ 引号没闭合 ⇒ `unexpected EOF while looking for matching '"'`。
+- **`bash -n` 检查不到 heredoc 里的远端脚本**（对它来说那只是一个字符串）。要把每个 `<<'EOF' … EOF` 块抽出来单独 `bash -n`，否则远端语法错会在解包之后、reload 之前断掉，把站点留在更糟的状态。
+- macOS 是 BSD 工具链：`cat -A`、`du --exclude`、`sed -i`（要 `sed -i ''`）、`stat -c`（用 `stat -f`）都不可用。
+
+**改代码**
+
+- **改完必须做变异验证**：把修复逐条改回坏行为，对应测试**必须变红**；不变红说明测试是装饰品。变异脚本的 anchor **必须唯一**（本版 `if getattr(sys, "frozen", False):` 在文件里出现 2 次，断言正确地拦住了它），并且**变异完一定要还原并 `cmp` 核对**。
+- **文档里的声明必须与实测一致，宁窄勿宽。** 本版两次在 CHANGELOG 里写过宽的声明（"端口冲突会重试并点名另一个实例"、"裸启动不再往安装目录写"），都被洁净室验收当场推翻。写声明前先问：**这条在用户实际的那条配置路径上成立吗？**
+- **源码级守卫用 AST，不用子串匹配。** `assertNotIn("uvicorn.run(", source)` 会命中**本文件 docstring 里解释这个缺陷时引用的那句话**，把健康的树报成坏的（而且 `assertNotIn` 会把整个源文件当容器打印出来，一次刷掉 50 KB）。
+
+---
 
 ## Website Deploy
 
-The exe is **server-managed on <www.vlsc.net>** — `website/deploy.sh` EXCLUDES `downloads/` from its tar. Upload both names (generic `MRRC-Modern-Setup.exe` + versioned) to `/tmp/*.new`, then `sudo -n mv` into `/var/www/vlsc.net/mrrc_modern/downloads/`, `chown www-data:www-data`, `chmod 644`. Old versioned installers stay (archive); only the generic name is replaced in place. Then `curl -sI` both URLs → 200 + `content-length` == byte size, and hash one downloaded copy. Full sequence: `dual-platform-release` skill / `win_pack.md` §4.
+产物是**服务器侧管理**的：`website/deploy.sh` 的 tar **排除 `downloads/`**（也排除 `videos/`）。
+
+```bash
+# ① 上传到 /var/tmp —— 不是 /tmp：www.vlsc.net 的 /tmp 是 958 MB tmpfs（RAM），
+#    而 /var/tmp 与 webroot 同在 /dev/vda1 ⇒ mv 原子、不占内存
+scp dist/windows/MRRC-Modern-v<ver>-Windows-x64-Setup.exe cheenle@www.vlsc.net:/var/tmp/win.new
+scp dist/macos/MRRC-Modern-v<ver>-arm64.dmg              cheenle@www.vlsc.net:/var/tmp/mac.new
+scp website/downloads/latest.json                        cheenle@www.vlsc.net:/var/tmp/latest.new
+
+# ② 移动前先在服务器侧算 SHA（上传被截断就会发出坏包）
+ssh cheenle@www.vlsc.net 'for f in win mac; do stat -c%s /var/tmp/$f.new; sha256sum /var/tmp/$f.new; done'
+
+# ③ 就位：版本化名单独存在（旧版本保留为归档），通用名就地替换；latest.json 最后放
+#    （先放清单会出现"清单指向一个还不存在的文件"的窗口期）
+ssh cheenle@www.vlsc.net 'bash -s' <<'EOS'
+D=/var/www/vlsc.net/mrrc_modern/downloads
+sudo -n mv /var/tmp/win.new "$D/MRRC-Modern-v<ver>-Windows-x64-Setup.exe"
+sudo -n mv /var/tmp/mac.new "$D/MRRC-Modern-v<ver>-arm64.dmg"
+sudo -n cp "$D/MRRC-Modern-v<ver>-Windows-x64-Setup.exe" "$D/MRRC-Modern-Setup.exe"
+sudo -n cp "$D/MRRC-Modern-v<ver>-arm64.dmg"             "$D/MRRC-Modern-arm64.dmg"
+sudo -n mv /var/tmp/latest.new "$D/latest.json"
+sudo -n chown www-data:www-data "$D"/MRRC-Modern*; sudo -n chmod 644 "$D"/MRRC-Modern* "$D/latest.json"
+EOS
+
+# ④ HTML：cd website && echo y | ./deploy.sh   （一次！内部有备份 + nginx -t + reload）
+# ⑤ 公网复核：HEAD 的 content-length 不足以证明文件完好，必须完整下载后比 SHA
+curl -s -o /tmp/v.exe https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe && shasum -a 256 /tmp/v.exe
+curl -s https://www.vlsc.net/mrrc_modern/downloads/latest.json | python3 -m json.tool
+```
+
+**两个通用名（快速镜像）都要更新**：`MRRC-Modern-Setup.exe` 被站点 6 处链接（含两个主下载按钮），`MRRC-Modern-arm64.dmg` 虽然当前没有链接指向它，但留着旧版就是个陷阱（本版发现它停在 **v1.24.0**，落后 5 个版本）。
+
+**`deploy.sh` 只能一次跑一个**（脚本内已有 `mkdir` 锁）。它的 prune 步骤曾把线上 `sdd/` 与 `images/` 删光：并发两次 ⇒ 先跑完的那次删掉所有 tarball ⇒ 后跑的那次 `TARBALL` 为空 ⇒ `tar -tzf ""` 失败但**管道退出码取自最后一个命令 `sort -u`（成功）**，`set -e` 拦不住 ⇒ 清单为空 ⇒ `comm -23` 把磁盘上每个文件都判成过期 ⇒ 全删。现已加三道防呆（缺包不删 / 清单空不删 / 过期数 ≥ 发布数不删）+ 并发锁。**部署完必须逐个 URL 验 200**，别只看脚本打印的 "Deployment Complete!"。
+
+---
 
 ## Common Mistakes
 
 | Symptom | Cause / Fix |
 | --- | --- |
-| Build produces `MRRC_FT8-Setup.exe`, `C:\mrrc_modern\dist` empty | Used the hijacked `build_vm.ps1` (gotcha 1); use per-version script |
-| 24 harness test failures on the VM | Source zip excluded `./.agents/*` (gotcha 2) |
+| Build produces `MRRC_FT8-Setup.exe`, `C:\mrrc_modern\dist` empty | Used the hijacked `build_vm.ps1` (gotcha 1); use a per-version script |
+| 24 harness test failures on the VM | Source package excluded `./.agents/*` (gotcha 2) |
+| 14 doc/diagram test failures on the VM | Source package excluded `./website/*` (gotcha 2) |
 | `.\venv\Scripts\Activate.ps1` not found at build | venv deleted during extract (gotcha 7); re-run §2.2 full four commands |
 | `&&` parse error / empty grep over redirected output | PowerShell 5.1 quirks (gotcha 3); use `;` and scripts |
-| TX audio crackles on the VM | KVM isochronous OUT is broken — do not debug (gotcha 4); verify on physical hardware |
+| `TerminatorExpectedAtEndOfString`, `EmptyPipeElement`, `FINDSTR: 无法打开` | Inline PowerShell over ssh (gotcha 3): write `.ps1` → scp → `-File` |
+| `sed: RE error: illegal byte sequence` on VM output | GBK console: prefix `LC_ALL=C` |
+| TX audio crackles on the VM | KVM isochronous OUT is broken — do not debug (gotcha 4); physical hardware only |
 | COM ports + USB audio vanish on the VM | Radio USB unplugged; re-attach passthrough (gotcha 5) |
-| Service disappears after SSH logout | SSH-launched process killed by job object (gotcha 6); use the scheduled-task path |
-| `virsh list` shows no win11 VM | Missing `sudo` + `qemu:///system`: `sudo virsh -c qemu:///system list --all` |
-| VM vanishes mid-build, `ssh` says `No route to host`, `domifaddr` says domain not running | Host OOM-killed qemu (16 GB VM on a 28 GB host with a 9 GB neighbour): shrink to 10 GB + add swap, see gotcha 9 |
-| Script printed `BUILD_DONE` but no (or an old) exe exists | `BUILD_DONE` is unconditional (gotcha 10): check the exe mtime + hash, and read the test output above it |
-| Installed app does nothing at all, console flashes | Launcher startup exception — reproduce with redirects / read `%LOCALAPPDATA%\MRRC-Modern\launcher.log` (gotcha 12); check the env file's bytes when it mentions `UnicodeDecodeError` |
-| Tests green on the Mac, `WinError 32` on the VM | A test leaked an open file; close it in teardown (gotcha 13) |
+| Service disappears after SSH logout | SSH-launched process killed by job object (gotcha 6); scheduled task |
+| `virsh list` shows no win11 VM | Missing `sudo` + `qemu:///system` |
+| VM vanishes mid-build, `No route to host`, `domifaddr` says not running | Host OOM-killed qemu (gotcha 9): shrink to 10 GB + add swap |
+| Script printed `BUILD_DONE`/`BUILD_CMD_OK` but no (or an old) exe | Unconditional print (gotcha 10): delete the previous artifact **before** building, then check mtime + size + hash |
+| `iscc: The output file appears to be in use (32)` and the file does not exist afterwards | Defender locked the fresh exe; `build.ps1` already compiles to a scratch dir and copies in |
+| Package contains `.DS_Store` / `._*.dll` | tar without `COPYFILE_DISABLE=1` + no `._*` exclude, and the VM tree kept old junk (gotcha 14): clean the tree, rebuild |
+| `certs\`, `.env`, `recordings\` found on the build VM | Earlier tarballs shipped them (gotcha 15): delete, add the excludes, and consider rotating the keys |
+| "fleet payload missing" but the build log says `Fleet payload: frpc.exe, …` | Looked in `_internal\fleet`; it is at the **app root** (gotcha 16) |
+| Installed app does nothing, console flashes | Launcher startup exception — reproduce with redirects / read `launcher.log` (gotcha 12); check the env file's bytes on `UnicodeDecodeError` |
+| App installed silently but is not running | `[Run]` has `skipifsilent` (gotcha 17): start it yourself |
+| Tests green on the Mac, `WinError 32` on the VM | A test leaked an open file **and closed it outside the `with` block** (gotcha 13) |
+| Suite shows failures nobody can reproduce | Two suite runs (or a mutation script + a suite) in one parallel block, fighting over ports/files: run them serially |
+| `git push` says "Everything up-to-date" but the commit is local | commit and push were in the same parallel block: push ran first |
+| Bundle walk says a symbol is missing, but the code is there | It is a `getattr(..., "NAME", …)` **string constant**, or it lives in another module (Verification layer 3) |
+| A "fixed" build still shows the old behaviour | The change is in a frozen entry script (`server.py`, `windows/launcher.py`) — the hotfix overlay cannot reach it (gotcha 18): rebuild |
+| An installed box never receives the rebuilt package | Same version string (gotcha 20): the upgrade channel compares versions — bump it |
+| Live site pages 404 after a deploy | Two concurrent `deploy.sh` runs → empty prune manifest (Website Deploy): re-run once, then verify every URL |

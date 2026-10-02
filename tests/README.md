@@ -5,8 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1461 tests across 73 test modules (7 pty-based Yaesu round-trip tests skip on
-Windows; the per-module counts below were read from `unittest` on 2026-10-01, macOS).
+1540 tests across 77 test modules (7 pty-based Yaesu round-trip tests skip on
+Windows; totals re-read from `unittest discover` on 2026-10-02, macOS). The
+per-module sections below itemise 63 of those 77 — the support-chain, Cloud Hub
+and upgrade-channel modules predate the list and are not yet written up, so
+`python -m unittest discover -s tests` is the authority for any total.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -16,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1461 |
-| Passed | 1461 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1540 |
+| Passed | 1540 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -47,7 +50,7 @@ SDD coverage: AD-002, §9.6, §10.4
 | `CatResponseParsingTests` | 7 | Frequency parse, S-meter parse, mode parse, PTT parse, IF response parse, filter width parse, error detection |
 | `CatControllerMockedTests` | 8 | Command terminator (;), query vs set, ASCII encoding, SH two-digit width format, write-only set, PTT verify sequence, available-port diagnostics on connect failure |
 
-### 3. test_config.py — Configuration Tables (28 tests)
+### 3. test_config.py — Configuration Tables (49 tests)
 
 SDD coverage: §7.2, §10.4, NFRs
 
@@ -162,7 +165,7 @@ SDD coverage: AD-005 (pipe subprocess lifecycle)
 | `ScopePipeRestartTests` | 2 | Exited pipe can restart while the previous reader task finishes |
 | `ScopePipeHeartbeatTests` | 2 | len=0 stdout heartbeat accepted silently by the server reader; scope_pipe emits the heartbeat (dead-parent EPIPE detection) |
 
-### 15. test_windows_launcher.py — Windows Launcher (18 tests)
+### 15. test_windows_launcher.py — Windows Launcher (28 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
@@ -460,7 +463,7 @@ and may be GBK/UTF-16 rather than UTF-8.
 Stage layout, both systemd units (user, EnvironmentFile, oneshot guard), the
 build/verify scripts, and `adopt_preseed()` converting a non-UTF-8 preseed.
 
-### 44. test_macos_launcher.py — macOS Menu-Bar Launcher (13 tests)
+### 44. test_macos_launcher.py — macOS Menu-Bar Launcher (21 tests)
 
 HTTPS-by-default command construction, cert/key resolution (explicit pair,
 bootstrap, `MRRC_SSL=off`, legacy `FT710_*` names), and the tolerant env
@@ -587,6 +590,71 @@ SDD coverage: §15.6, AD-007 (V2.63 amendment), hub AD-H06 / NFR-H006
 | `DecisionTests` | 3 | comfortably within the threshold, past it, disabled threshold |
 | `SourceGuardTests` | 6 | `txhb` handled, disconnect forgets the session, task created only when enabled + cancelled, env default off, frontend sends/stops (2 start / 4 stop call sites), cache-bust |
 
+### 60. test_launcher_net.py — Launcher URL/Scheme Probe (13 tests)
+
+SDD coverage: V2.66 ①
+
+`launcher_net.py` is the module both launchers import. A launcher used to derive
+the scheme from **its own** ability to produce a certificate while the server
+derived TLS from **its own** ability to load one — two decisions, one socket. When
+they disagreed the browser was opened on a port nobody was listening on and the
+operator saw a black window in front of a healthy app.
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `AnswersTests` | 5 | any HTTP status counts as "listening" (200 / 401 / 404), a refused connection does not, TLS is implied by the URL scheme, and a child process that already exited stops the wait early |
+| `FirstAnsweringTests` | 3 | the first answering URL wins, order is honoured, none answering yields `None` |
+| `ServedUrlTests` | 3 | the preferred scheme is kept when it answers, the alternate is chosen when it does not, and neither answering falls back to the preferred (so the browser is still opened, with a warning) |
+| `OtherSchemeTests` | 2 | `https`→`http` and `http`→`https`, host/port/path preserved |
+
+### 61. test_server_startup_guards.py — Start-Up Guards: One Listener, Writable Paths, One Handler (25 tests)
+
+SDD coverage: V2.66 ②③④⑤
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `BindExclusionTests` | 3 | Windows asks for `SO_EXCLUSIVEADDRUSE` — **not** `SO_REUSEADDR`, which there lets a second process bind a port already *listening*; POSIX keeps `SO_REUSEADDR` so a restart can rebind through TIME_WAIT; `IPV6_V6ONLY=0` still lets the launcher's `127.0.0.1` reach the `::` listener |
+| `ExplicitHostBindTests` | 8 | every host is bound through the guard, not only the wildcard: explicit IPv4 binds that address, an explicit IPv6 stays `V6ONLY=1`, the wildcard keeps dual stack, contention is retried then reported, a permission error is **not** retried as contention, and an AST guard that `main()` holds no `uvicorn.run()` call (a substring guard reports a healthy tree as broken, because the module's own docstrings quote `uvicorn.run(host=…)` when explaining the defect) |
+| `PortContentionTests` | 4 | `EADDRINUSE` recognised on Windows (10048) and POSIX, retried with a fresh socket per attempt then raised naming the port and the other instance, non-contention errors propagate, the hint names cause and cure |
+| `WritableRuntimeDirTests` | 7 | a read-only install dir falls back to the per-user dir; a source checkout keeps its files next to the code; `recordings.json` and the config/password file follow the writable dir; and — the measured macOS defect — a **frozen** build never keeps writable state next to its own code even when it is writable, without consulting `os.access` at all (one file inside `Contents/MacOS/recordings/` breaks the code signature) |
+| `DuplicateLogLineTests` | 3 | the rotating handler is attached once per file (a second `_setup_file_logging()` must not write every line twice), a relocated `LOG_DIR` still gets its own handler, `_already_logging_to()` matches by resolved path and ignores stream handlers |
+
+### 62. test_undefined_app_module_names.py — App Modules Used but Never Imported (9 tests)
+
+SDD coverage: V2.64 ①, V2.65 ②④, V2.66 ⑥
+
+The same defect class shipped twice: `server.py` drove Cloud Hub onboarding
+through `cloud_hub` (v1.24.1) and the certificate through `ssl_bootstrap`
+(v1.24.5) without importing either — and in both cases the module **was** in the
+bundle, so every structural check passed while the packaged app raised `NameError`
+at runtime, swallowed by a broad `except`.
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `GuardSelfTests` | 7 | the checker is proven against real history: the v1.24.5 `server.py` (commit 9f03868) reports `ssl_bootstrap`, HEAD reports nothing, the v1.24.1 shape reports `cloud_hub`; and `from X import Y`, `import X as Y`, parameters, locals and class attributes all count as bound (no false positives) |
+| `AppCodeGuardTests` | 2 | every root module and everything under `windows/`, `macos/`, `backends/` is clean |
+
+Deliberately stdlib AST rather than `pyflakes`/`ruff`: `requirements-build.txt`
+carries PyInstaller alone, and adding a linter mid-release would force the build VM
+to reinstall its venv.
+
+### 63. test_skill_docs_consistency.py — Skill Document Consistency (7 tests)
+
+Guards `.agents/skills/**/SKILL.md`, which the release harness lists as
+"review by hand" — so nothing else checks it.
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `FrontmatterTests` | 1 | `name:` equals the directory name (or the loader cannot resolve it) and `description:` is long enough to actually trigger |
+| `NumberingTests` | 2 | no item hidden behind a single leading space (markdown restarts an indented list at 1), and every numbered list runs from 1 without gaps |
+| `ReferenceTests` | 2 | `(see gotcha N)` / `陷阱 N` self-references and `<skill> gotcha N` cross-references from `docs/`, `SDD/` and `CHANGELOG.md` all resolve |
+| `StructureTests` | 2 | code fences balanced; the three release-pipeline skills still exist |
+
+Both failure modes are real: a mid-list insertion shifted `macos-installer gotcha
+10` — quoted by two plan documents — onto the wrong entry, and four
+`windows-installer` items written with one leading space were unreachable by
+number while three of them were referenced from the Common Mistakes table.
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -622,6 +690,10 @@ SDD coverage: §15.6, AD-007 (V2.63 amendment), hub AD-H06 / NFR-H006
 | Preview Icom models + TX gate | test_civ_profiles, test_unverified_tx_gate, test_model_mismatch | 40 tests |
 | Listen-only role (/listen, §9.2) | test_listen_only | 31 tests |
 | Release engineering (registry, completeness) | test_release_artifacts, test_sdd_docs_consistency | 21 tests |
+| V2.66 Launcher opens the scheme that answers | test_launcher_net, test_windows_launcher, test_macos_launcher | 13+ tests |
+| V2.66 Start-up guards (exclusive bind, writable dirs, one log handler) | test_server_startup_guards | 25 tests |
+| V2.64/V2.65 Missing-import guard (app module used, never bound) | test_undefined_app_module_names | 9 tests |
+| NFR-051 Doc-sync — skill documents | test_skill_docs_consistency | 7 tests |
 
 ## Running Specific Tests
 

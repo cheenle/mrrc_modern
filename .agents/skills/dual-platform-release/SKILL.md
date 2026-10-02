@@ -121,48 +121,65 @@ governed by rules instead of trust.
 
 ## CRITICAL Gotchas
 
-1. **`/tmp` on `www.vlsc.net` is a 454 MB tmpfs** — uploads above that fail mid-transfer (`scp: write remote ...: Failure`, and afterwards `df -h /tmp` shows it 100 % full). The Pi image (~546 MB) hits this every time, the installers (~45–56 MB) do not. Stream large artifacts to the disk-backed path and move them into place atomically (same filesystem):
+1. **`/tmp` on `www.vlsc.net` is a tmpfs** (measured 2026-10-02: **958 MB**, 902 MB available; `ham.vlsc.net`'s is 454 MB) — uploads above that fail mid-transfer (`scp: write remote ...: Failure`, and afterwards `df -h /tmp` shows it 100 % full). The Pi image (~546 MB) hits this every time, the installers (~54–62 MB) do not. **Prefer `/var/tmp`**: it is on `/dev/vda1`, the same filesystem as the webroot, so `mv` into place is atomic and nothing lands in RAM. Stream large artifacts to the disk-backed path and move them into place atomically:
 
-```bash
-ssh www.vlsc.net 'cat > /var/tmp/<name>.new' < dist/rpi/MRRC-Modern-vX.Y.Z-rpi64.img.xz
-ssh www.vlsc.net 'sha256sum /var/tmp/<name>.new'      # verify BEFORE publishing
-ssh www.vlsc.net 'd=/var/www/vlsc.net/mrrc_modern/downloads; sudo -n mv /var/tmp/<name>.new $d/<name>; sudo -n chown www-data:www-data $d/<name>; sudo -n chmod 644 $d/<name>'
-```
+   ```bash
+   ssh www.vlsc.net 'cat > /var/tmp/<name>.new' < dist/rpi/MRRC-Modern-vX.Y.Z-rpi64.img.xz
+   ssh www.vlsc.net 'sha256sum /var/tmp/<name>.new'      # verify BEFORE publishing
+   ssh www.vlsc.net 'd=/var/www/vlsc.net/mrrc_modern/downloads; sudo -n mv /var/tmp/<name>.new $d/<name>; sudo -n chown www-data:www-data $d/<name>; sudo -n chmod 644 $d/<name>'
+   ```
 
 2. **Another agent/session may be committing in the same worktree.** Before `git add -A`, read `git log`/`git status`: during the v1.15.0 Pi release a parallel session had 4 Yaesu commits plus uncommitted files in flight (one of its test modules hung `unittest discover` in uninterruptible I/O). Stage **explicit paths** for your release commit, leave the other session's files alone, and expect `git tag`/`push` to carry their commits along (unavoidable on a linear branch — say so in the release record).
 
+   It happened again during v1.24.6, in a worse shape: the other session ran `commit -a`-style commits (**"release: v1.24.5 for Windows", "site: the numbers …", "release: v1.24.5 macOS"**) that **swept my uncommitted v1.24.6 work into commits whose messages name the wrong version**. Two rules follow:
+
+   - **Commit early and often during a release.** An uncommitted working tree is not yours — any other session's `commit -a` adopts it under its own message.
+   - **When the index behaves oddly (nothing staged, files suddenly "clean"), check `git log` and `git reflog` before assuming your edits were lost.** Then verify HEAD's *content*, not its message: `git show HEAD:packaging/windows/MRRC-Modern.iss | grep MyAppVersion`, `git show HEAD:CHANGELOG.md | sed -n 5p`. Rewriting already-pushed history is worse than a misleading message plus an accurate CHANGELOG/SDD record.
+   - A tracked **runtime data file** (here `atr1000_tuner.json`, which a source-run server writes real tuner-learning samples into) will show up as modified forever. Stage explicit paths so it never rides along in a release commit, and prove the suite is innocent before blaming it (trace `learn()` across a full run: 0 hits, file byte-identical before and after).
+
 3. **A launcher change means rebuilding BOTH installers** (2026-09-12). The Windows and macOS launchers share `macos/first_run.py` (env parsing/first-run), so a fix there ships in both bundles — rebuilding only one platform publishes an app that still crashes for the other. The same holds for anything under `windows/` or `macos/`.
 
-4. **`BUILD_DONE` (Windows wrapper) proves nothing.** It prints even when the test/PyInstaller/Inno gate aborted (v1.15.0 attempt printed it with a failed suite and no exe). Verify by artifact: fresh mtime, 45–46 MB, `Get-FileHash` == Mac hash, and (new) walk the bundle bytecode to confirm the symbol you shipped is actually inside.
+4. **`BUILD_DONE` (Windows wrapper) proves nothing.** It prints even when the test/PyInstaller/Inno gate aborted (v1.15.0 attempt printed it with a failed suite and no exe). Verify by artifact: fresh mtime **with the year**, a size and SHA that differ from the previous release, `Get-FileHash` == Mac hash, and (new) walk the bundle bytecode to confirm the symbol you shipped is actually inside. **Never compare against a hardcoded size range** ("45–46 MB" was true for v1.13–v1.21 and wrong from v1.23 on; v1.24.6 is 54.1 MB) — compare against the previous release's actual bytes. And **delete the previous artifact before building**, so "the file exists" can only mean "this build made it".
 
 5. **Prove the code is inside the bundle, not next to it.** `strings`/`grep` cannot see into the compressed PYZ: a stale bundle looks identical to a fresh one. Use `CArchiveReader` → the `server` *script* entry (`marshal.loads`) + the PYZ for imported modules; and start the packaged **launcher** once against the user's existing env file (that is the binary the user double-clicks). Recipe: `windows-installer` skill, Verification.
 
 6. **`git push --follow-tags` does NOT push lightweight tags** — `git tag vX.Y.Z` (no `-a`) stays local and the release ships tag-less (v1.14.0 hit this). Always `git push origin vX.Y.Z` explicitly, then verify with `git ls-remote`.
 7. **Order matters — and the first step is EVERY version string, not just two files.** The build's own test gate runs the full suite, which includes `test_release_artifacts.RepositoryStateTests`; that test fails on any version-bearing file still on the previous release (v1.20.0 stopped a macOS build with **14 failing** version rules: the two `website/index.html` cards, both guide pages, `docs/MACOS_INSTALLER_GUIDE.md`, `docs/WINDOWS_INSTALLER_GUIDE.md`, README and the stale-token scope). So the order is: bump **every** version reference → build → *then* write the sizes/SHA-256 into the same files → re-run the suite. The `artifact_facts` rules (card byte count + SHA prefix) skip with a note while `dist/` has no build for the new version, so the pre-build suite is green once the versions agree; the numbers are what must wait. Writing docs first = stale-checksum release; building first = a red gate and a wasted build.
-8. **Mac interpreter trap**: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh`; `.venv/bin/python` for tests. Canary: any error path mentioning `mrrc_ft710/.venv` means the wrong interpreter was selected (`macos-installer` gotcha 10).
-9. **Static-asset changes need cache-bust bumps** (`ft710_main.js?v=N`, service worker `mrrc-vN`) pinned by tests; download-page HTML edits don't.
-10. **The v1.13.0 lesson**: docs-only releases drift — `docs/WINDOWS_INSTALLER_GUIDE.md` stayed on v1.12.1 through the whole v1.13.0 cycle. Step 4's checklist is the antidote; run it even when the release is "just installers".
-11. **Hand-maintained rows are drift generators — make the generator read the authority.** The
+
+   **Two corollaries that both bit during v1.24.6:**
+
+   - **`artifact_facts` flips from SKIP to FAIL the moment the artifact lands in `dist/`.** Copying the freshly built Windows exe into `dist/windows/` while the card still carried the previous release's bytes made `release_check` fail — and therefore **aborted the macOS build's own gate**. So: fill a platform's numbers as soon as its artifact lands locally, *before* starting the other platform's build.
+   - **Adding an `SDD/14` row can turn every diagram rule red.** The marker window is "lag at most two releases", computed from the newest rows; adding V2.66 made the window `[V2.66, V2.65, V2.64]` and all twelve `V2.63` markers fell out of it. Review each diagram against the release (do they depict anything that changed?) and then bump the markers — the marker means "reviewed as of", the in-figure title means "last redrawn", so only the marker moves. Regenerate the copies afterwards (`build_sdd.py` for `website/sdd/diagrams/`, `build_guide.py` for `website/images/`) or the `diagram-copies` rule fails.
+   - **`website/sdd.html` and `website/zh/sdd.html` are hand-maintained, not generated.** `build_sdd.py` writes only `website/sdd/**`. Badge, `#updates` nav label, the Quick-Facts version cell and a card for this release must be edited by hand in both languages.
+
+8. **Never write artifact numbers for a build that is not final.** v1.24.6 discarded **three** builds, and every one of them compiled successfully: one shipped macOS metadata from the VM tree, one was clean but its clean-room run showed an explicit `MRRC_WEB_HOST` bypassing the port guard, one was found by the *macOS* clean-room run keeping writable state inside the signed bundle. Each discard invalidated numbers already written into five files. The rule: **code final → build → numbers.** If a fix lands after a build, delete the artifact from `dist/` (so the rules skip again) and rebuild both platforms — server code is shared, so a defect found on one platform invalidates the other's artifact too.
+9. **Mac interpreter trap**: `PYTHON=$(pwd)/.venv/bin/python bash packaging/macos/build.sh`; `.venv/bin/python` for tests. Canary: any error path mentioning `mrrc_ft710/.venv` means the wrong interpreter was selected (`macos-installer` gotcha 10).
+10. **Static-asset changes need cache-bust bumps** (`ft710_main.js?v=N`, service worker `mrrc-vN`) pinned by tests; download-page HTML edits don't.
+11. **The v1.13.0 lesson**: docs-only releases drift — `docs/WINDOWS_INSTALLER_GUIDE.md` stayed on v1.12.1 through the whole v1.13.0 cycle. Step 4's checklist is the antidote; run it even when the release is "just installers".
+12. **Hand-maintained rows are drift generators — make the generator read the authority.** The
    generated SDD pages advertised V2.45 for a whole cycle because `build_sdd.py` read the "SDD Version"
    Quick Facts row in `SDD/README.md` instead of the newest row of `SDD/14-version-history.md`; the fix
    was to point the generator at the authority *and* to add a rule. Same class: the hand-written
    `website/sdd.html` + `website/zh/sdd.html` are **not** generated and were still advertising V2.27 with
    an AD index ending at AD-016; `docs/OPERATION_GUIDE.md` still pointed at the v1.13.0 DMG. All three are
    now registry rules with tests behind them.
-12. **Post-release operator checks stay open**: real-QSO recording acceptance on the radio; TX audio on physical Windows hardware (the KVM VM can never verify it — `windows-installer` gotcha 4). Say so in the release summary.
+13. **Post-release operator checks stay open**: real-QSO recording acceptance on the radio; TX audio on physical Windows hardware (the KVM VM can never verify it — `windows-installer` gotcha 4). Say so in the release summary.
+14. **A byte count and an SVG colour can be the same string.** The landing pages carry `rgba(54,087,234,0.08)` — RGB(54,87,234) written zero-padded — which is *literally* `54,087,234`, the v1.24.5 installer's byte count. A global `s/54,087,234/54,109,294/` would have produced `rgba(54,109,294,…)`: an invalid channel (>255) and a recoloured site. Replace numbers **with their surrounding markup** (`51.6 MB · x64 · 54,109,294 bytes<br/>`, `<code>SHA-256 …</code>`), assert an exact hit count per replacement, and afterwards re-grep for the colour literals to prove they survived. Same class: a `"…C:\tools\"` shell string ends in an escaped quote, and an `assertNotIn` failure prints the whole container (a 50 KB source dump).
+15. **`website/deploy.sh` must run exactly once, and the deploy is not done until every URL is verified.** Two concurrent runs deleted the live `sdd/` and `images/` trees: the first run's trailing `rm -f /var/tmp/mrrc_modern_website_*.tar.gz` removed *both* packages, so the second run's prune step computed an empty manifest (`tar -tzf ""` fails, but a pipeline's exit status comes from its last command, `sort -u`, so `set -e` never fired) and `comm -23` then reported **every file on disk** as stale. The script now has a `mkdir` lock plus three prune guards (no package / empty manifest / stale ≥ shipped ⇒ refuse), and `bash -n` on the local file does **not** check the remote `<<'EOF'` blocks — extract and check each one. Afterwards, curl every published page: the downloads were fine while 16 page URLs returned 404, and the script still printed "Deployment Complete!".
 
 ## Release-Day Checklist
 
 | # | Step | Gate / evidence |
 | --- | ------ | ----------------- |
-| 0 | Tests green + SDD brief | `693 tests OK` |
+| 0 | Tests green + SDD brief | the suite count recorded in this release's CHANGELOG entry (v1.24.6: **1533 macOS / 1530 Windows**) — never a number copied from the previous row |
 | 1 | CHANGELOG top entry + `.iss` version | `grep MyAppVersion` == CHANGELOG |
-| 2 | macOS build | DMG bytes + SHA-256 recorded |
-| 3 | Windows build (KVM VM) | VM hash == local hash |
+| 2 | macOS build | DMG bytes + SHA-256 recomputed locally (not copied from the build script's own output); `codesign --verify` = valid + satisfies DR; version in `Info.plist` **and** `Resources/version.txt`; **clean-room run of the frozen binary** |
+| 3 | Windows build (KVM VM) | VM hash == Mac hash == the hash published later; `version.txt`; fleet payload at the **app root**; junk and key-shaped files both 0; symbol walk + **clean-room run** |
+| 3b | Code is final **before** any number is written | a fix landing after a build invalidates it: delete the artifact from `dist/` (so `artifact_facts` skips again) and rebuild **both** platforms — server code is shared. v1.24.6 discarded three builds this way |
 | 4 | Docs + website sync + `build_sdd.py` | `release_check.py` → **0 failing** (versions, cards, stale links) + `python3 -m unittest tests.test_release_artifacts tests.test_sdd_docs_consistency` green; bundle bytecode walked + launcher smoke-tested |
 | 4b | Hand-written pages + harness | `website/sdd.html`/`zh/sdd.html` badge + a card for this release + AD index extended; guardian `index.json` topic updated when new modules landed |
-| 5 | Installers on <www.vlsc.net> | `ls -la downloads/` shows new files |
-| 6 | HTML deploy | deploy.sh completes, nginx -t ok |
-| 7 | URL + hash verification | `release_check.py --online --deep` → **0 failing** (3× `HTTP/2 200`, content-length == built bytes, SHA-256 match, tag on origin) |
+| 5 | Installers on <www.vlsc.net> | upload to **`/var/tmp`** (not the tmpfs `/tmp`), hash **server-side before moving**, then `mv` into `downloads/`; versioned names + **both** generic mirrors (`MRRC-Modern-Setup.exe` is linked from six places; `MRRC-Modern-arm64.dmg` was found five releases stale); `chown www-data:www-data` + `chmod 644`; **`latest.json` goes last** so the manifest never points at a file that 404s |
+| 6 | HTML deploy | `cd website && echo y \| ./deploy.sh` — **once** (gotcha 15); it backs up, runs `nginx -t` and reloads. "Deployment Complete!" is not evidence: curl every page afterwards |
+| 7 | URL + hash verification | `release_check.py --online --deep` → **0 failing**, plus a **full download** of each artifact and a local `shasum -a 256` equal to the built file — `content-length` alone does not prove the bytes are intact |
 | 8 | Commit + tag + explicit push | `git ls-remote` shows tag; `check --staged` exit 0 |
 | 9 | Docs/design/harness sweep | `release_check.py` (offline) still 0 failing after the tag commit; `SDD/14` row + `SDD/README` status/Quick Facts + README/AGENTS/DEPENDENCIES/tests/README updated; see `docs/PROJECT_MAP.md` for the ownership table |

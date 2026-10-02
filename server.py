@@ -4374,15 +4374,26 @@ async def api_cloud_refresh(request: Request):
 
 
 def _cert_reload_required() -> bool:
-    """True when the certificate signed at connect time is not the one this process serves."""
-    if not _SERVED_CERT_AT_STARTUP:
-        # Started without a certificate (a fresh install generates its own bootstrap one) and one is
-        # configured now: that is exactly a certificate this process is not serving.
-        return bool(str(_cloud_settings().get("MRRC_SSL_CERT") or ""))
-    now_configured = str(_cloud_settings().get("MRRC_SSL_CERT") or "")
-    if not now_configured:
+    """True when the certificate on disk was written after this process started.
+
+    The TLS context is built once, at start-up, so a certificate enrolled or generated afterwards is
+    not the one being served - the hub verifies the upstream against the enrolled one and the entry
+    answers 502 (measured repeatedly). Comparing the file's identity at import missed the case where
+    the app restarted before the enrolment: the file then changed while the process kept serving the
+    previous certificate. The process start time is the fact that matters.
+    """
+    configured = str(_cloud_settings().get("MRRC_SSL_CERT") or os.environ.get("MRRC_SSL_CERT") or "")
+    if not configured:
         return False
-    return _cert_identity(now_configured) != _SERVED_CERT_AT_STARTUP
+    try:
+        cert_mtime = Path(configured).stat().st_mtime
+    except OSError:
+        return False
+    return cert_mtime > _PROCESS_STARTED_AT + 1.0          # one second of slack for clock granularity
+
+
+_PROCESS_STARTED_AT = time.monotonic()
+
 
 
 

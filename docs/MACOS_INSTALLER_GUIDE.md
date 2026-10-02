@@ -1,9 +1,9 @@
-# macOS 安装与使用指南（MRRC Modern v1.24.6）
+# macOS 安装与使用指南（MRRC Modern v1.24.7）
 
 本指南面向**第一次使用 MRRC Modern 的 macOS 用户**：从下载到出声，全程**不需要打开终端、不需要编辑配置文件**。
 只有「故障排查」和「高级用法」两章需要命令行，且都是可选。
 
-> **本版（v1.24.6）新增：启动器不再猜地址，改成问服务器「你到底在哪个协议上应答」。** 现场那台
+> **本版（v1.24.7）新增：启动器不再猜地址，改成问服务器「你到底在哪个协议上应答」。** 现场那台
 > Windows 机器装了 v1.24.5 **仍然黑屏**；取证（它自己的 `server.log` + 直接跑包内的 Server）证明
 > **应用是健康的** —— 纯 HTTP 的 `/login` 回 **200**（1726 字节），而浏览器被送到了 `https://`，
 > 于是显示的是协议错误空白页。根因是**两边各自决定 TLS**：启动器按「自己能不能签出证书」算 scheme，
@@ -51,12 +51,12 @@
 | 权限 | **麦克风**（= 音频输入，必需）；局域网访问时还需要 macOS 防火墙放行 |
 
 下载地址：<https://www.vlsc.net/mrrc_modern/> → **Download macOS**，文件名为
-`MRRC-Modern-v1.24.6-arm64.dmg`（62,286,150 bytes，SHA-256 `6cb5cc02…`）。
+`MRRC-Modern-v1.24.7-arm64.dmg`（62,286,150 bytes，SHA-256 `6cb5cc02…`）。
 
 **校验下载完整性（可选，命令行）**：
 
 ```bash
-shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.6-arm64.dmg
+shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.7-arm64.dmg
 ```
 
 与官网下载卡片上的 SHA-256 一致即可。
@@ -65,7 +65,7 @@ shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.6-arm64.dmg
 
 ## 2. 安装（约 1 分钟）
 
-1. 双击打开 `MRRC-Modern-v1.24.6-arm64.dmg`。
+1. 双击打开 `MRRC-Modern-v1.24.7-arm64.dmg`。
 2. 把 **MRRC Modern** 图标拖进右侧的**应用程序**文件夹快捷方式。
 3. 在访达侧边栏弹出该磁盘映像（点 ⏏）。
 4. 到「应用程序」里找到 **MRRC Modern**。

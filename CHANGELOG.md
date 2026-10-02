@@ -2,6 +2,15 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.24.7] — 2026-10-02 — 重启提示按事实判断（证书写入时间 vs 进程启动时间）
+
+端到端实测（撤销 → 申请 → 批准 → 接入 → 重启）时抓到：**应用先重启、之后才完成登记**这种顺序下，
+`cert_reload_required` 报 false ✗ —— 因为它比的是"导入时的文件身份快照"，而那条路径上文件确实变了、
+进程也确实还在服务旧证书 ⇒ **入口 502 却没人提示重启** ✓。
+
+改成按**事实**判断：证书文件的写入时间晚于本进程启动时间 ⇒ 必须重启才能启用 ✓。
+（本地全量测试通过；线上 1.24.6 里仍是旧判据，本版修正。）
+
 ## [v1.24.6] — 2026-10-02 — 黑屏不止一个原因：启动器改为「问服务器要哪个地址」
 
 v1.24.5 修的是「缺证书就自己签一张」。现场那台机器（主机名 `MRRC`，操作员账号 `cheen`，装的是 1.24.5）**仍然黑屏**。这次先把远程通道打开（`install_remote_access.ps1`：OpenSSH Server + RDP，公钥进 `C:\ProgramData\ssh\administrators_authorized_keys`），再拿发布产物本身取证，结论是：**同一个"黑屏"现象下叠着四条独立成因**，而 v1.24.5 那条已经修好了 —— 证据是 `C:\Users\cheen\AppData\Local\MRRC-Modern\logs\server.log` 与用包内 `MRRC-Modern-Server.exe` 的实跑：

@@ -35,11 +35,11 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.24.6 Stable** (54,110,069 bytes, SHA-256
+**Download v1.24.7 Stable** (54,110,069 bytes, SHA-256
 `ed127697f2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79`):
 
 - Fast mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.6-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.7-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 After install, edit `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` (Start Menu →
@@ -61,10 +61,10 @@ Apple-silicon Macs (macOS 11+) can install the desktop package — no Python
 install required. The app lives in the menu bar (no Dock icon), starts the
 server itself, and opens the browser.
 
-**Download v1.24.6 Stable** (62,286,150 bytes, SHA-256
+**Download v1.24.7 Stable** (62,286,150 bytes, SHA-256
 `6cb5cc0288187c32d42a6f43e6d300b33db7e223f0919c2c4d4b8370692e6fbb`):
 
-- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.6-arm64.dmg>
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.7-arm64.dmg>
 
 Two things to know before the first launch (full guide:
 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)):
@@ -89,7 +89,7 @@ Two things to know before the first launch (full guide:
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
 | `MRRC_BAUD_RATE` | backend default | Serial baud: FT-710 `38400`; all Icom models `115200`; explicit value overrides the default |
 | `MRRC_RECORDINGS_DIR` | `<runtime>/recordings` | Where recorded QSO MP3s live (packaged installs: the per-user data dir) |
-| `MRRC_CONFIG_FILE` | `<user data dir>/mrrc_modern.env` | The config file the server reads and the setup dialog writes. The launchers set it explicitly; a bare `Server` start resolves it next to `MRRC_MEM_FILE`. Since v1.24.6 a **packaged** start also loads this file into the environment before any constant is computed, so starting the server without its launcher honours the same host/port it would have — previously a bare start bound `:::8888` while the file said `MRRC_WEB_HOST=127.0.0.1`. |
+| `MRRC_CONFIG_FILE` | `<user data dir>/mrrc_modern.env` | The config file the server reads and the setup dialog writes. The launchers set it explicitly; a bare `Server` start resolves it next to `MRRC_MEM_FILE`. Since v1.24.7 a **packaged** start also loads this file into the environment before any constant is computed, so starting the server without its launcher honours the same host/port it would have — previously a bare start bound `:::8888` while the file said `MRRC_WEB_HOST=127.0.0.1`. |
 | `MRRC_NO_CONFIG_FILE` | off | Set to `1`/`true`/`yes` to stop that load. It only ever happens for a frozen build or when `MRRC_CONFIG_FILE` names a file explicitly, so source checkouts, systemd and CI are unaffected; real environment variables always win over file values (the loader only fills keys that are missing). |
 | `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate for recordings (kbps, 16 kHz mono) |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |

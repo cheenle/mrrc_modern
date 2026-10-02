@@ -3,17 +3,17 @@
   "installer": {
     "version": "1.24.5",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.5-Windows-x64-Setup.exe",
-    "sha256": "12a828f040c0d97fea398d86ee0f6348edfc49f35027ef604e86297a64dd2908",
-    "size": 54076580
+    "sha256": "28ac7743da7f5cc75dbecbb7b8ea2d373cb4c0eb2fd1be52871206d9efd80bae",
+    "size": 54087234
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-02T02:00:10",
-  "notes": "门户/入口合并为同一台机器的 443；入口就是呼号；修正接入后需重启以启用证书",
+  "releasedAt": "2026-10-02T04:50:57",
+  "notes": "缺证书时自己签一张，不再静默退回 HTTP（修掉装完黑屏）；证书移到用户可写的运行目录；接入后如需重启会如实提示",
   "previous": {
-    "version": "1.24.3",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.3-Windows-x64-Setup.exe",
-    "sha256": "45bb40832bac1f5565972f1d48e036f9286af11ddec00eb93892d40cdb540966",
-    "size": 54077021
+    "version": "1.24.4",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.4-Windows-x64-Setup.exe",
+    "sha256": "12a828f040c0d97fea398d86ee0f6348edfc49f35027ef604e86297a64dd2908",
+    "size": 54076580
   }
 }

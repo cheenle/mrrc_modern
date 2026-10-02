@@ -7,6 +7,8 @@ import config
 import importlib
 import os
 from pathlib import Path
+import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -325,3 +327,132 @@ class RecordingConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BareStartConfigFileTests(unittest.TestCase):
+    """A packaged server started without its launcher must still read the user's file.
+
+    The launchers parse ``mrrc_modern.env`` and pass it down as the child environment, so a
+    server spawned by one sees everything. Starting ``MRRC-Modern-Server.exe`` on its own —
+    which the installer ships as a Start Menu shortcut, and which the server's own password
+    help text tells the user to do when the launcher will not start — saw none of it. The
+    2026-10-02 field log is that case: the file said ``MRRC_WEB_HOST=127.0.0.1`` and the
+    server bound the built-in ``::``; the file had a real password and the server used the
+    built-in default.
+
+    Auto-loading is limited to packaged runs (``sys.frozen``) plus an explicit
+    ``MRRC_CONFIG_FILE``, so a stray file in a developer's home directory can never change
+    what this suite sees: the last test here is that guarantee.
+    """
+
+    def _env_dir(self, tmp: Path) -> Path:
+        """Pin the per-user directory to ``tmp`` on every platform."""
+        return config.default_user_dir()
+
+    def _write_user_file(self, user_dir: Path, body: str) -> Path:
+        user_dir.mkdir(parents=True, exist_ok=True)
+        path = user_dir / "mrrc_modern.env"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def test_explicit_config_file_drives_the_constants(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write_user_file(
+                Path(tmp), "MRRC_WEB_HOST=127.0.0.1\nMRRC_WEB_PORT=9123\n")
+            with patch.dict(os.environ, {"MRRC_CONFIG_FILE": str(path)}, clear=True):
+                try:
+                    importlib.reload(config)
+                    self.assertEqual(config.WEB_HOST, "127.0.0.1")
+                    self.assertEqual(config.WEB_PORT, 9123)
+                finally:
+                    importlib.reload(config)
+
+    def test_explicit_environment_beats_the_file(self):
+        """An env set by systemd/CI/a shell is not silently overridden by an old file.
+
+        The launchers put the file's values *into* the child environment, so this keeps a
+        packaged start-up behaving exactly as it did before: the file still wins there,
+        because by the time the server reads it the file's values already are the env.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write_user_file(Path(tmp), "MRRC_WEB_HOST=127.0.0.1\n")
+            with patch.dict(os.environ,
+                            {"MRRC_CONFIG_FILE": str(path), "MRRC_WEB_HOST": "8.8.8.8"},
+                            clear=True):
+                try:
+                    importlib.reload(config)
+                    self.assertEqual(config.WEB_HOST, "8.8.8.8")
+                finally:
+                    importlib.reload(config)
+
+    def test_frozen_start_without_an_explicit_path_still_reads_the_user_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"HOME": tmp, "USERPROFILE": tmp,
+                   "XDG_DATA_HOME": tmp, "LOCALAPPDATA": tmp}
+            with patch.dict(os.environ, env, clear=True):
+                user_dir = self._env_dir(Path(tmp))
+                self._write_user_file(user_dir, "MRRC_WEB_PORT=9999\n")
+                with patch.object(sys, "frozen", True, create=True):
+                    try:
+                        importlib.reload(config)
+                        self.assertEqual(config.WEB_PORT, 9999,
+                                         "a packaged bare start must honour the user file")
+                    finally:
+                        importlib.reload(config)
+
+    def test_a_source_run_never_reads_a_file_we_did_not_ask_for(self):
+        """Suite isolation: unfrozen and no explicit path means the constants are the
+        built-in defaults, whatever sits in the developer's real user directory."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"HOME": tmp, "USERPROFILE": tmp,
+                   "XDG_DATA_HOME": tmp, "LOCALAPPDATA": tmp}
+            with patch.dict(os.environ, env, clear=True):
+                self._write_user_file(self._env_dir(Path(tmp)),
+                                      "MRRC_WEB_HOST=127.0.0.1\nMRRC_WEB_PORT=9999\n")
+                try:
+                    importlib.reload(config)
+                    self.assertEqual(config.WEB_HOST, "::")
+                    self.assertEqual(config.WEB_PORT, 8888)
+                finally:
+                    importlib.reload(config)
+
+    def test_only_mrrc_keys_are_promoted(self):
+        """The file is settings, not an environment import.
+
+        ``PATH``/``HOME`` lines (a typo, or a file someone pasted a shell profile into) must
+        not be lifted into the process environment — that would break the interpreter that
+        is reading it.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write_user_file(
+                Path(tmp), "PATH=/broken\nHOME=/broken\nMRRC_LISTEN_PASSWORD=lets-see-me\n")
+            with patch.dict(os.environ, {"MRRC_CONFIG_FILE": str(path),
+                                         "PATH": "/keep/me", "HOME": "/keep/home"},
+                            clear=False):
+                try:
+                    importlib.reload(config)
+                    self.assertEqual(os.environ["PATH"], "/keep/me")
+                    self.assertEqual(os.environ["HOME"], "/keep/home")
+                    self.assertEqual(config.LISTEN_PASSWORD, "lets-see-me")
+                finally:
+                    importlib.reload(config)
+
+    def test_the_escape_hatch_disables_it(self):
+        """MRRC_NO_CONFIG_FILE=1 for a deployment that wants the env to be the only input."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write_user_file(Path(tmp), "MRRC_WEB_PORT=9123\n")
+            with patch.dict(os.environ, {"MRRC_CONFIG_FILE": str(path),
+                                         "MRRC_NO_CONFIG_FILE": "1"}, clear=True):
+                try:
+                    importlib.reload(config)
+                    self.assertEqual(config.WEB_PORT, 8888)
+                finally:
+                    importlib.reload(config)
+
+    def test_a_missing_or_unreadable_file_is_not_fatal(self):
+        with patch.dict(os.environ, {"MRRC_CONFIG_FILE": "/nope/nothing.env"}, clear=True):
+            try:
+                importlib.reload(config)
+                self.assertEqual(config.WEB_PORT, 8888)
+            finally:
+                importlib.reload(config)

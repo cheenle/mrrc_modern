@@ -2,6 +2,35 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.24.6] — 2026-10-02 — 黑屏不止一个原因：启动器改为「问服务器要哪个地址」
+
+v1.24.5 修的是「缺证书就自己签一张」。现场那台机器（主机名 `MRRC`，操作员账号 `cheen`，装的是 1.24.5）**仍然黑屏**。这次先把远程通道打开（`install_remote_access.ps1`：OpenSSH Server + RDP，公钥进 `C:\ProgramData\ssh\administrators_authorized_keys`），再拿发布产物本身取证，结论是：**同一个"黑屏"现象下叠着四条独立成因**，而 v1.24.5 那条已经修好了 —— 证据是 `C:\Users\cheen\AppData\Local\MRRC-Modern\logs\server.log` 与用包内 `MRRC-Modern-Server.exe` 的实跑：
+
+- HTTP `/login` **200**（`text/html; charset=utf-8`，1726 B）—— 应用是**健康**的；
+- 对同一端口做 TLS 握手 ⇒ uvicorn `Invalid HTTP request received` —— 浏览器拿到的是协议错误空白页；
+- `could not save the generated password ([Errno 13] Permission denied: \'C:\\Program Files\\MRRC Modern\\mrrc_modern.env.tmp\')`；
+- `Recording disabled: C:\\Program Files\\MRRC Modern\\recordings is not writable`；
+- `open http://:::8888/ in the browser (NOT https://)`，而用户配置文件明明写着 `MRRC_WEB_HOST=127.0.0.1`；
+- 日志**每一行都成对**出现，相差 1–10 ms。
+
+**① 启动器不再猜，改成问。** 启动器按**自己**能不能生成证书决定 `https://`，服务器按**自己**能加载到哪些文件决定 TLS —— 两次独立决策、一个 socket，不一致时浏览器就被送到没人监听的 scheme 上。新增 `launcher_net.py`（探 `/api/health`，TLS 由 URL scheme 决定，`served_url()` 先问首选再问另一个），`windows/launcher.py` 与 `macos/launcher.py` **共用**（macOS 有完全相同的盲 `webbrowser.open(url)`）；切换 scheme 必须打印/通知，绝不静默 —— 证书坏了是运维需要知道的事。
+
+**② 端口被占不再"照样成功"。** Windows 的 `SO_REUSEADDR` **不是** POSIX 那个含义：它允许第二个进程绑到**正在监听**的端口上，于是两个 MRRC Modern 同时 `Server ready!`，由 OS 把连接分给它们 —— 浏览器可能落到那个**没拿到电台**的实例。日志成对正是这个画面（两套栈各自枚举音频设备、各自开 CAT 口）。现在 Windows 用 `SO_EXCLUSIVEADDRUSE`（POSIX 保留 `SO_REUSEADDR`，启动器改配置就地重启要靠它），冲突重试约 3 s 后**抛错并说清"另一个 MRRC Modern 还在跑"**；启动器 spawn **之前**先探一次（两种 scheme 都问），已有实例就复用并说明，不再叠第二个。
+
+**③ 裸启动不再往安装目录写。** `_runtime_dir()` 在打包版就是 `C:\\Program Files\\MRRC Modern`（普通用户只读）。启动器会下发 `MRRC_MEM_FILE`/`MRRC_RECORDINGS_DIR`，但服务器 exe **自己也是入口**（安装菜单里就有 "MRRC Modern Server" 快捷方式，且 `_ensure_strong_password` 的帮助文本还教用户这么干）—— 于是它把可写默认值全指向自己装身的目录：每次启动生成一个新密码且存不下（⇒ **"换了新包还是登不上"**），录音整体关闭。新增 `_writable_runtime_dir()`：不可写就回落 `default_user_dir()`（`LOG_DIR`/`certs` 早就这么做了 ✓），`MEM_FILE`/`RECORDINGS_DIR`/`RECORDINGS_INDEX` 走它，`_config_file_path()` 随 `MEM_FILE` 一起搬走 ⇒ 密码真的落盘了，也终于读得到用户自己那份配置。
+
+**④ 裸启动开始读用户配置。** `config.load_user_config_into_environ()` 在任何常量计算之前跑（为此把 `default_user_dir()` 上移）。**只在** `sys.frozen` 或显式 `MRRC_CONFIG_FILE` 时生效，且只做 `setdefault` —— 显式环境变量仍然赢（Pi/systemd/CI 不受影响），`MRRC_NO_CONFIG_FILE=1` 可整个关掉。这条限制同时保住测试隔离：开发者 home 里那份真实配置**不可能**改变套件看到的值。
+
+**⑤ 文件日志幂等。** root logger 是进程级的，冻结包会把本模块当 `__main__` 与 `server` 各加载一次，两次 `_setup_file_logging()` 就是两个 handler 指向同一个文件 ⇒ 每行写两遍（上面"成对"的另一半成因）。新增 `_already_logging_to()` 按**已解析路径**比对，同一文件只挂一个 handler；换 `MRRC_LOG_DIR` 仍照常新建。
+
+**⑥ 常设守卫落地**（v1.24.5 条目里"建议但本次未加"的那条）。`tests/test_undefined_app_module_names.py`：纯标准库 **AST** 检查「应用模块被 `name.attr` 使用却在文件里从未绑定」，覆盖根模块与 `windows/`、`macos/`、`backends/`。它**不是**泛化的 pyflakes（名字限定在应用模块集合内，避免误报被关掉），也**故意不引入** `pyflakes`/`ruff` —— `requirements-build.txt` 现在只有 PyInstaller，加依赖会迫使构建 VM 重装 venv，而发版中途不引入新构建依赖。有效性是**实测**的：把 9f03868（装进 1.24.5 包的那版 `server.py`）喂给它 ⇒ `\'ssl_bootstrap\'`，喂 HEAD ⇒ 干净；v1.24.1 的 `cloud_hub` 同样命中。**这是同一类缺陷第二次进发布包**，守卫必须在门禁里，不能只靠 review。
+
+**发布决定（重要）**：修复后的那次 Windows 构建（54,087,234 B `28ac7743…`）**已经以 1.24.5 的号在线上**，`latest.json` 也指过去。升级通道比的是版本串 ⇒ 那台 04:03 装了 1.24.5 的机器**永远拿不到它**，点"升级"只会反复重放同一版本。所以本轮改动**必须以 v1.24.6 发**，不能只补文档 —— 顺带说明：`server.py`/`windows/launcher.py` 是冻结入口脚本，**不在热修通道能覆盖的范围内**（`mrrc-release` 技能里那条判据），重建安装包是唯一出路。
+
+**测试** macOS 1467 → **1522**（新增 `test_launcher_net.py` 13、`test_server_startup_guards.py` 14、`test_undefined_app_module_names.py` 9、启动器 scheme 与"已有实例" 7+6、`config` 裸启动 7）。**六处变异验证**（逐条把修复改回坏行为，对应测试必须红）：config 装载器停用 ⇒ 3 红；不可写目录不回落 ⇒ 2 红；换回 `SO_REUSEADDR` ⇒ 1 红；允许重复 handler ⇒ 1 红；启动器改回盲开自己的 scheme ⇒ win 2 / mac 1 / net 1 红；守卫的应用模块集合缩小 ⇒ 2 红。
+
+**边界与未做**：① 安装菜单里那条 "MRRC Modern Server" 快捷方式**保留**（裸启动现在已经是正确的，但它仍不是该递给普通用户的入口；删它要动 `.iss` 的 `[Icons]`，与站点清单/文档一致后再做）；② `certs` 命名仍不统一 —— `config.py` 期望 `fullchain.pem`/`localhost.key`，`ssl_bootstrap.ensure_self_signed` 的默认是 `server.crt`/`server.key`（`sign_for()` 默认才是 `fullchain.pem`），本版**未改**，因为它不影响当前自签路径，但值得统一，已在 `win_pack.md` 记录；③ KVM 构建机无声卡，**TX 话音仍须物理 Windows 机验收**；④ 本机黑屏的真机复验（洁净安装 + 真实浏览器加载 UI）在 v1.24.6 装完后执行，结果回填本条目。
+
 ## [v1.24.5] — 2026-10-02 — 没有证书就自己签一张，而不是悄悄退回 HTTP
 
 现场报障："装完之后黑屏、不启动"。复现出来了，是两个"只在构建机上成立"的默认值凑在一起：
@@ -19,9 +48,35 @@ macOS = `~/Library/Application Support/MRRC-Modern/certs`，Linux = `$XDG_DATA_H
 - 另外：`cert_reload_required` 现在按**文件身份**（路径+时间戳+大小）比较，并且
   "启动时没有证书、之后才有"也算需要重启 —— 这正是重新登记后的情形 ✓。
 
+**发布验收时抓到：这个修复本身在冻结包里是坏的。** `server.py` 调用
+`ssl_bootstrap.sign_for()` 却**从未 import `ssl_bootstrap`** ⇒ 打包版每次启动都是 `NameError`，
+被那段宽泛的 `except Exception` 吞成一条日志后**照样退回纯 HTTP** —— 也就是本版要修的黑屏
+原封不动地留在了发布包里。它通过了所有既有门禁：VM 上 1460 项测试 OK、三个 PyInstaller 目标、
+`Successful compile`、`version.txt` 对、SHA-256 三处一致；模块本来就在
+`mrrc_modern_server.spec` 的 hiddenimports 里（**在包里，只是没被 import**），而启动器自带
+一份能用的同款逻辑，所以装好的应用看起来是健康的。唯一暴露它的手段是**拿发布产物跑洁净室**：
+干净的 `LOCALAPPDATA` + 不存在的证书路径启动打包出的 `MRRC-Modern-Server.exe`。
+
+修法：补 import，并把这段逻辑从 `main()` 抽成 `_resolve_ssl_kwargs()`（内联在 `main()` 时测试
+根本够不着），钉住四条契约：缺证书必须签出来（除 `--no-ssl` 外绝不返回空）、通配绑定地址要签给
+`localhost`、既有证书（运维自装或 hub 登记的）绝不替换、`--no-ssl` 是唯一的纯 HTTP 入口。
+套件 macOS 1463→1467、Windows 1460→1464；两端产物**重建**后才发布。
+
+> ⚠️ 这是同一文件里**第二次**出现同一类缺陷 —— 上一版（v1.24.1）修的是「`server.py` 从未导入
+> `cloud_hub`」⇒ 打包版按「申请」即 500。两次都是「模块在包里、名字没绑定」，且都被宽 `except`
+> 或 SPA 兜底掩盖。**建议对入口模块常设一遍未定义名检查（pyflakes/ruff）**；本版未加，因为
+> venv 里没有该依赖，而改 `requirements-build.txt` 会迫使构建 VM 重装依赖。
+
+顺带修掉两处：`config.default_user_dir()` 在**被清空的环境**下会抛（`tests/test_config.py` 用
+`patch.dict(clear=True)` reload 本模块，Windows 上 `Path.home()` 抛
+`RuntimeError: Could not determine home directory`，已在 VM 实测复现）—— 路径助手不该让启动失败，
+改为直接解析 `LOCALAPPDATA`/`USERPROFILE` 并兜底到 `<repo>/user-data`；
+`tests/test_ssl_bootstrap.py` 用了 `unittest.mock` 却没显式 import，只在**整套跑**时靠别的模块
+顺带导入才不报（单跑即 `AttributeError`）。
+
 ## [v1.24.4] — 2026-10-02 — 一个 hub、一个地址、入口就是呼号
 
-hub 与 www.vlsc.net 合并到同一台机器（hub.vlsc.net）之后，"两条路"的设计没有存在理由了。
+hub 与 <www.vlsc.net> 合并到同一台机器（hub.vlsc.net）之后，"两条路"的设计没有存在理由了。
 
 - **门户只有一个地址**：`https://portal.mrrc.vlsc.net/`（根，不再带 `/mrrc_portal` 路径）。
   配置里写着旧写法（`portal…:8899`、`www.vlsc.net/mrrc_portal`、或带路径的同名地址）的实例
@@ -202,7 +257,6 @@ v1.23.0 的包**装得上，但接不进任何入口** —— 单元测试、构
   （`PTTManager.cancelWatchdog()`)；键控者掉线时即使还有其他客户端在线也立即强制 RX（防僵尸键控）。
   接管仍然允许：任何客户端 `ptt:true` 即成为新键控者。
 - 缓存版本：`ft710_main.js?v=34`、`ptt_manager.js?v=14`、sw `mrrc-v37`。
-
 
 ## [v1.22.0] — 2026-09-30 — Cloud Hub 前置能力（路径前缀 / 令牌传输 / 会话遥测 / PTT 活性闸门）
 

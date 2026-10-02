@@ -187,3 +187,45 @@ class MacLauncherEnvEncodingTests(unittest.TestCase):
         self.assertIn("config exploded", text)
         self.assertIn("Traceback", text)
         self.assertTrue(alert.called)
+
+
+class MacSchemeProbeTests(unittest.TestCase):
+    """macOS shared the Windows bug: the launcher opened the scheme *it* chose.
+
+    ``macos/launcher.py`` had the same blind ``webbrowser.open(url)`` after a TLS decision
+    the server could not keep up with, so a Mac install whose server fell back to plain
+    HTTP produced the same blank-tab protocol error. Both launchers now probe.
+    """
+
+    def test_falls_back_to_the_scheme_that_answers(self):
+        with patch("launcher_net.answers",
+                   lambda url, proc=None, timeout_s=2.0, secure=None:
+                   not url.startswith("https://")):
+            self.assertEqual(launcher.url_to_open("https://127.0.0.1:8888"),
+                             "http://127.0.0.1:8888")
+
+    def test_keeps_the_preferred_scheme(self):
+        with patch("launcher_net.answers", return_value=True):
+            self.assertEqual(launcher.url_to_open("https://127.0.0.1:8888"),
+                             "https://127.0.0.1:8888")
+
+    def test_neither_answering_opens_the_original_url(self):
+        with patch("launcher_net.answers", return_value=False):
+            self.assertEqual(launcher.url_to_open("http://127.0.0.1:8888"),
+                             "http://127.0.0.1:8888")
+
+    def test_both_schemes_are_asked_before_spawning(self):
+        """An instance already on the port must be reused, not duplicated."""
+        with patch("launcher_net.first_answering",
+                   return_value="http://127.0.0.1:8888") as probe:
+            self.assertEqual(launcher.running_instance_url("https://127.0.0.1:8888"),
+                             "http://127.0.0.1:8888")
+        self.assertEqual(probe.call_args.args[0],
+                         ["https://127.0.0.1:8888", "http://127.0.0.1:8888"])
+
+    def test_wait_for_server_delegates_to_the_shared_probe(self):
+        with patch("launcher_net.answers", return_value=True) as answers:
+            self.assertTrue(launcher.wait_for_server("https://127.0.0.1:8888",
+                                                    secure=True, timeout_s=1))
+        self.assertEqual(answers.call_args.args[0], "https://127.0.0.1:8888")
+        self.assertTrue(answers.call_args.kwargs["secure"])

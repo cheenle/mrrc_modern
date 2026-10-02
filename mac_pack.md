@@ -1,6 +1,6 @@
 # macOS 安装包打包流程（本机 Mac 直接构建）
 
-> 最新构建：**v1.24.1**（2026-10-02）—— 套件 1460 项全绿；`release_check.py` 离线 29 ok / 0 failing；产物 `MRRC-Modern-v1.24.1-arm64.dmg` 62,257,332 bytes，SHA-256 `137de9f2b13f43d4377baf4d49c93bcd200813c9e9cee3c6c7fed89d338e806a`。
+> 最新构建：**v1.24.5**（2026-10-02）—— 套件 1467 项全绿；`release_check.py` 离线 29 ok / 0 failing；产物 `MRRC-Modern-v1.24.5-arm64.dmg` 62,267,377 bytes，SHA-256 `039106e5b14ec7c9baedff6fe4e50bda4e521e459743e1bb338871b6861f3b2f`。**本版第一个构建（62,260,761 bytes `c67ce53d…`）被作废** —— 套件全绿、签名校验通过，但包里 `server.py` 从未 import `ssl_bootstrap`，无证书时只能退回纯 HTTP（见 Step 2 的洁净室验收）。
 > 本文按 v1.7.0 首次打包的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 > 与 Windows 不同，macOS 不需要 KVM 虚拟机——直接在本机用 `.venv` 打包。
@@ -117,6 +117,33 @@ hdiutil detach "/Volumes/MRRC Modern"
 # 它会掩盖"签名是否真的有效"这件事，而签名无效正是此前每个版本都发出去的缺陷。
 # 该命令只保留给用户侧应急解封 v1.18.0 及更早的旧包。
 ```
+
+**洁净室实跑（必做：证明冻结包能自己活下来）**：拿【打包出来的】Server 在【全新的证书状态】下
+起一次，看它能不能自己签出证书并以 **https** 服务。v1.24.5 的第一个构建过了上面全部门禁
+（套件 1463 项全绿、`codesign --verify` 通过、SHA-256 一致）却仍然只能起纯 HTTP，因为
+`server.py` 调用 `ssl_bootstrap.sign_for()` 而从未 import 它 —— `NameError` 被宽泛的 `except`
+吞成一行日志。启动器自带一份能用的同款逻辑，所以"装好的应用"看起来是健康的。
+
+```bash
+rm -rf /tmp/cleanroom && mkdir -p /tmp/cleanroom/certs
+MRRC_SSL_CERT=/tmp/cleanroom/certs/fullchain.pem \
+MRRC_SSL_KEY=/tmp/cleanroom/certs/localhost.key \
+MRRC_WEB_PORT=18889 MRRC_WEB_HOST=127.0.0.1 \
+  dist/macos/MRRC-Modern.app/Contents/MacOS/MRRC-Modern-Server > /tmp/cleanroom/out.log 2>&1 &
+sleep 25
+ls -l /tmp/cleanroom/certs/                                  # 必须真的签出了证书
+grep -iE 'ssl|cert|Uvicorn running' /tmp/cleanroom/out.log
+curl -sk -o /dev/null -w '%{http_code}\n' https://127.0.0.1:18889/login   # 必须 200（https）
+pkill -f MRRC-Modern-Server
+```
+
+> 正确的三行：`signed a self-signed certificate for …` → `SSL enabled with a self-signed
+> certificate just generated: …` → `Uvicorn running on https://…`。
+> 看到 `could not create a certificate (…)` + `open http://…  (NOT https://)` 就是**没修好**。
+>
+> ⚠️ **跑完必须清掉 bundle 里多出来的 `Contents/MacOS/mrrc_modern.env`** —— 打包出的二进制首启会
+> 生成密码并把 env 写到自己旁边，不清掉就会**随下一次打包进 dmg**（把一台机器的密码发出去）。
+> `rm -f dist/macos/MRRC-Modern.app/Contents/MacOS/mrrc_modern.env`
 
 ### Step 3 — 记录校验和
 

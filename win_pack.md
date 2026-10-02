@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.24.1**（2026-10-02）—— VM 门禁 1457 项 OK（10 skip）；`release_check.py` 离线 29 ok / 0 failing；产物 `MRRC-Modern-v1.24.1-Windows-x64-Setup.exe` 54,080,541 bytes，SHA-256 `46323320630b67d47360a20a21cb1f0144965d42f4fa56cada6609148f05b1ec`。
+> 最新构建：**v1.24.5**（2026-10-02）—— VM 门禁 1464 项 OK（10 skip）；`release_check.py` 离线 29 ok / 0 failing；产物 `MRRC-Modern-v1.24.5-Windows-x64-Setup.exe` 54,087,234 bytes，SHA-256 `28ac7743da7f5cc75dbecbb7b8ea2d373cb4c0eb2fd1be52871206d9efd80bae`。**本版第一个构建（54,085,618 bytes `935a7ed9…`）被作废** —— 它通过了全部门禁却仍然只能起纯 HTTP（见 Step 5 的第三条硬证据）。
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 - `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：
@@ -226,7 +226,7 @@ dir C:\mrrc_modern\dist\windows\MRRC-Modern\_internal\mem_channels.json # 初始
 Get-FileHash C:\mrrc_modern\dist\windows\MRRC-Modern-Setup.exe -Algorithm SHA256
 ```
 
-**必查的两条硬证据**（`strings`/`findstr` 看不到压缩后的 PYZ，陈旧包与新鲜包长得一模一样）：
+**必查的三条硬证据**（`strings`/`findstr` 看不到压缩后的 PYZ，陈旧包与新鲜包长得一模一样）：
 
 ```powershell
 # ① 包内版本号 == 本次版本（证明构建读的是新 CHANGELOG）
@@ -236,6 +236,29 @@ Get-Content C:\mrrc_modern\dist\windows\MRRC-Modern\version.txt      # 应打印
 #    PyInstaller 6 的 CArchiveReader.toc 是 dict；extract() 的字节可能带 8 字节头。
 python C:\Users\cheenle\verify_v1xxx.py     # 见本仓库 skills/windows-installer 技能里的脚本
 ```
+
+```powershell
+# ③ 洁净室实跑：拿【打包出来的】Server 在【全新的用户状态】下起一次，看它能不能自己活下来。
+#    这是本版唯一抓住发布级缺陷的一步：测试、PyInstaller、iscc、三处 SHA 全绿，而包里
+#    server.py 从未 import ssl_bootstrap ⇒ NameError 被宽 except 吞掉 ⇒ 退回纯 HTTP ⇒ 启动器
+#    打开 https:// 就是黑屏。启动器自带一份能用的同款逻辑，所以「装好的应用」看起来是健康的。
+$tmp = "C:\tmp\cleanroom"; New-Item -ItemType Directory -Path "$tmp\certs" -Force | Out-Null
+$env:LOCALAPPDATA="$tmp\appdata"; $env:MRRC_SSL_CERT="$tmp\certs\fullchain.pem"
+$env:MRRC_SSL_KEY="$tmp\certs\localhost.key"; $env:MRRC_WEB_PORT="18890"; $env:MRRC_WEB_HOST="127.0.0.1"
+$p = Start-Process C:\mrrc_modern\dist\windows\MRRC-Modern\MRRC-Modern-Server.exe -PassThru -WindowStyle Hidden `
+       -RedirectStandardOutput "$tmp\out.log" -RedirectStandardError "$tmp\err.log"
+Start-Sleep 25
+Get-ChildItem "$tmp\certs"                                       # 必须真的签出了证书
+Select-String "$tmp\out.log","$tmp\err.log" -Pattern 'ssl|cert|Uvicorn running'
+curl.exe -sk -o NUL -w "%{http_code}`n" "https://127.0.0.1:18890/login"   # 必须是 200（https，不是 http）
+Stop-Process -Id $p.Id -Force; Remove-Item Env:\LOCALAPPDATA,Env:\MRRC_SSL_CERT,Env:\MRRC_SSL_KEY,Env:\MRRC_WEB_PORT,Env:\MRRC_WEB_HOST
+```
+
+> 日志里出现 `could not create a certificate (…)` + `open http://…  (NOT https://)` 就是**没修好**；
+> 正确的三行是 `signed a self-signed certificate for …` → `SSL enabled with a self-signed
+> certificate just generated: …` → `Uvicorn running on https://…`。
+> 用独立的 `LOCALAPPDATA` + 空闲端口，**不会碰到 VM 上正在跑的实例**（那台常是活的租户入口）。
+> PowerShell 5.1 没有 `Invoke-WebRequest -SkipCertificateCheck`（那是 PS 6+），用 `curl.exe -k`。
 
 > **远程触发构建时不要用 `-NoNewWindow`**：它挂在 ssh 会话的控制台上，会话一断构建就被清掉
 > （日志停在测试输出之后、`dist\windows` 时间戳不动，看着像"卡住"，其实是没了）。

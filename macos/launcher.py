@@ -23,11 +23,6 @@ import sys
 import threading
 import time
 import traceback
-import urllib.error
-import urllib.request
-# Bare names on purpose: the exception types are raised dotted below
-# (`urllib.error.HTTPError` is an attribute expression, not an identifier).
-from urllib.error import HTTPError, URLError
 import webbrowser
 from pathlib import Path
 
@@ -75,6 +70,7 @@ except ModuleNotFoundError:
     rumps = _RumpsMissing
 
 import launcher_log
+import launcher_net
 import ssl_bootstrap
 from macos import first_run
 
@@ -166,26 +162,34 @@ def wait_for_server(url: str, proc: subprocess.Popen | None = None,
     listening. Returns False on startup crash or timeout. `secure` skips TLS
     verification (self-signed bootstrap certs are not trusted by any store yet).
     """
-    ctx = None
-    if secure:
-        import ssl as _ssl
+    return launcher_net.answers(url, proc=proc, timeout_s=timeout_s, secure=secure)
 
-        ctx = _ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = _ssl.CERT_NONE
-    deadline = time.monotonic() + timeout_s
-    probe = url + "/api/health"
-    while time.monotonic() < deadline:
-        if proc is not None and proc.poll() is not None:
-            return False  # server exited during startup
-        try:
-            with urllib.request.urlopen(probe, timeout=2, context=ctx):
-                return True
-        except HTTPError:
-            return True
-        except (URLError, OSError):
-            time.sleep(0.3)
-    return False
+
+# How long to wait for a "is one already there?" answer, per scheme. Short on purpose:
+# this runs on every start, and two schemes x 0.4 s is paid before the server appears.
+_RUNNING_PROBE_S = 0.4
+
+
+def running_instance_url(preferred: str) -> str | None:
+    """A URL that already answers on the configured port, or None if nothing is there.
+
+    Same reason as the Windows launcher: a second server on one port splits the browser's
+    connections between two processes, and the one the browser lands on may be the copy
+    that never got the radio.
+    """
+    return launcher_net.first_answering(
+        [preferred, launcher_net.other_scheme(preferred)], timeout_s=_RUNNING_PROBE_S)
+
+
+def url_to_open(url: str, proc=None) -> str:
+    """``url``, or the other scheme on it if that is what actually answers.
+
+    The launcher's scheme comes from the certificate pair it generated; the server decides
+    TLS again from the files it could load and drops to plain HTTP when that fails. Opening
+    the scheme nothing listens for is a browser protocol error on a blank tab — the exact
+    "installed it and the screen is black" report.
+    """
+    return launcher_net.served_url(url, launcher_net.other_scheme(url), proc=proc)
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -366,6 +370,18 @@ class MRRCModernApp(rumps.App):  # type: ignore[misc]
         ssl_pair = ssl_material(env)
         self.secure = ssl_pair is not None
         self.url = local_url(env, secure=self.secure)
+        running = running_instance_url(self.url)
+        if running is not None:
+            # Reuse it and say so, rather than stacking a second server on the same port
+            # (and on the same radio serial port).
+            self.url = running
+            rumps.notification(
+                APP_NAME, "Already running",
+                f"{running} answers on this port — opening that server instead of "
+                f"starting a second one. Close its window first if you meant to restart.",
+            )
+            webbrowser.open(running)
+            return None
         command = build_command(ssl_pair)
         if command is None:
             rumps.alert(
@@ -407,11 +423,23 @@ class MRRCModernApp(rumps.App):  # type: ignore[misc]
                 "See Console for details.",
             )
         else:
-            rumps.notification(
-                APP_NAME, "Server slow to start",
-                f"No HTTP answer within 15s; opening {url} anyway.",
-            )
-            webbrowser.open(url)
+            # Ask the other scheme before blaming the server: if the two disagreed about
+            # TLS this is a live app on a URL we were about to call dead.
+            chosen = url_to_open(url, self.proc)
+            self.tee.stop()
+            if chosen != url:
+                self.url = chosen   # so "Open Web UI" follows the server too
+                rumps.notification(
+                    APP_NAME, "Serving plain HTTP",
+                    f"{url} does not answer but {chosen} does — the server could not "
+                    f"set up TLS. Opening {chosen}.",
+                )
+            else:
+                rumps.notification(
+                    APP_NAME, "Server slow to start",
+                    f"No HTTP answer within 15s; opening {url} anyway.",
+                )
+            webbrowser.open(self.url)
 
     def _monitor_loop(self) -> None:
         """Watch the server; auto-restart when it exits with RESTART_EXIT_CODE."""

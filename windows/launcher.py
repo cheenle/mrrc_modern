@@ -4,19 +4,14 @@ import os
 import signal
 import subprocess
 import sys
-import time
 import traceback
-import urllib.error
-import urllib.request
-# Bare names on purpose: the exception types are raised dotted below
-# (`urllib.error.HTTPError` is an attribute expression, not an identifier).
-from urllib.error import HTTPError, URLError
 import webbrowser
 from pathlib import Path
 
 # ssl_bootstrap lives at the repo root; PyInstaller bundles it via pathex.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import launcher_log
+import launcher_net
 import ssl_bootstrap
 from macos import first_run
 
@@ -92,26 +87,43 @@ def wait_for_server(url: str, proc: subprocess.Popen | None = None,
     `secure` skips TLS verification (self-signed bootstrap certs are not
     trusted by any store yet).
     """
-    ctx = None
-    if secure:
-        import ssl as _ssl
+    return launcher_net.answers(url, proc=proc, timeout_s=timeout_s, secure=secure)
 
-        ctx = _ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = _ssl.CERT_NONE
-    deadline = time.monotonic() + timeout_s
-    probe = url + "/api/health"
-    while time.monotonic() < deadline:
-        if proc is not None and proc.poll() is not None:
-            return False  # server exited during startup
-        try:
-            with urllib.request.urlopen(probe, timeout=2, context=ctx):
-                return True
-        except HTTPError:
-            return True
-        except (URLError, OSError):
-            time.sleep(0.3)
-    return False
+
+# How long to wait for a "is one already there?" answer. Short on purpose: this runs on
+# every start, and two schemes x 0.4 s is a cost the user pays before the server appears.
+_RUNNING_PROBE_S = 0.4
+
+
+def running_instance_url(preferred: str) -> str | None:
+    """A URL that already answers on the configured port, or None if nothing is there.
+
+    Checked *before* spawning: two servers on one port is not extra capacity. On Windows
+    ``SO_REUSEADDR`` lets the second bind succeed and the OS then hands connections to
+    whichever listener it likes, so the browser can end up driving the copy that never got
+    the radio — and the operator reads that as a dead UI (2026-10-02 field log). The server
+    refuses such a bind now; the launcher declines to make one in the first place.
+    """
+    return launcher_net.first_answering(
+        [preferred, launcher_net.other_scheme(preferred)], timeout_s=_RUNNING_PROBE_S)
+
+
+def url_to_open(url: str, proc=None) -> str:
+    """The URL to hand the browser: ``url``, or the other scheme if that is what answers.
+
+    The launcher chose this URL from the certificate pair *it* generated; the server chose
+    TLS again from the files *it* could load, and falls back to plain HTTP when that fails.
+    If they disagree, opening ``url`` gets the user a browser protocol error on a blank tab
+    — the report this whole path exists to avoid. So when ``url`` never answered, ask the
+    other scheme before giving up, and say out loud which one we are opening.
+    """
+    chosen = launcher_net.served_url(url, launcher_net.other_scheme(url), proc=proc)
+    if chosen != url:
+        print(f"WARNING: {url} does not answer but {chosen} does.")
+        print("         The server could not set up TLS, so it is serving plain HTTP:")
+        print("         the browser warns once about the certificate, and the radio")
+        print("         still works. Check the certificate lines in the server log.")
+    return chosen
 
 
 def _env(env: dict[str, str], name: str, default: str = "") -> str:
@@ -268,6 +280,13 @@ def main() -> int:
         if secure:
             print("HTTPS:  self-signed certificate (browser will warn once — accept it)")
         print("Close this window or press Ctrl-C to stop the server.")
+        running = running_instance_url(url)
+        if running is not None:
+            print(f"Already running: {running} answers on this port.")
+            print("Opening that server instead of starting a second one.")
+            print("If you did not start it on purpose, close its window and run this again.")
+            webbrowser.open(running)
+            return 0
         env["MRRC_CONFIG_FILE"] = str(config_path())
         command = build_command(ssl_pair)
         if command is None:
@@ -293,8 +312,10 @@ def main() -> int:
             return proc.returncode or 1
         else:
             tee.stop()
-            print(f"Server did not answer within 15s; opening {url} anyway.")
-            webbrowser.open(url)
+            print(f"Server did not answer on {url} within 15s.")
+            open_url = url_to_open(url, proc)
+            print(f"Opening {open_url}.")
+            webbrowser.open(open_url)
         try:
             rc = proc.wait()
         except KeyboardInterrupt:

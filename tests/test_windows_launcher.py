@@ -1,3 +1,5 @@
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -248,3 +250,85 @@ class WindowsLauncherEnvEncodingTests(unittest.TestCase):
         self.assertIn("config exploded", text)
         self.assertIn("Traceback", text)
         self.assertTrue(box.called, "and must show a message box")
+
+
+@contextlib.contextmanager
+def _quiet_stdout():
+    """The scheme fallback prints on purpose; keep it out of the suite output."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        yield
+
+
+class SchemeProbeTests(unittest.TestCase):
+    """The launcher must open the scheme the server actually answers on (v1.24.6).
+
+    Field case: the installed 1.24.5 server logged ``falling back to plain HTTP`` while the
+    launcher opened ``https://127.0.0.1:8888``. The browser reported a protocol error on a
+    blank tab and the machine was written up as "black screen, app will not start" — while
+    the app was in fact running and serving HTTP one scheme away.
+    """
+
+    def _refuse_https(self):
+        """Stand in for a server that ended up on plain HTTP."""
+        def answers(url, proc=None, timeout_s=2.0, secure=None):
+            return not url.startswith("https://")
+        return answers
+
+    def test_wait_for_server_accepts_any_http_status(self):
+        """A 401 from the auth middleware still proves the listener is up."""
+        with patch("launcher_net.urllib.request.urlopen",
+                   side_effect=__import__("urllib.error", fromlist=["HTTPError"]).HTTPError(
+                       "http://127.0.0.1:8888/api/health", 401, "Unauthorized", {}, None)):
+            self.assertTrue(launcher.wait_for_server("http://127.0.0.1:8888", timeout_s=0))
+
+    def test_https_url_falls_back_to_the_answering_http_url(self):
+        url = "https://127.0.0.1:8888"
+        with patch("launcher_net.answers", self._refuse_https()), _quiet_stdout():
+            self.assertEqual(launcher.url_to_open(url), "http://127.0.0.1:8888")
+
+    def test_the_fallback_is_announced(self):
+        """A silent scheme switch would hide a broken certificate from everyone."""
+        with patch("launcher_net.answers", self._refuse_https()):
+            import io
+            import contextlib
+
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                launcher.url_to_open("https://127.0.0.1:8888")
+        text = buf.getvalue()
+        self.assertIn("WARNING", text)
+        self.assertIn("plain HTTP", text)
+
+    def test_preferred_scheme_is_kept_when_it_answers(self):
+        with patch("launcher_net.answers", return_value=True), _quiet_stdout():
+            self.assertEqual(launcher.url_to_open("https://127.0.0.1:8888"),
+                             "https://127.0.0.1:8888")
+
+    def test_no_fallback_invents_a_url_when_neither_scheme_answers(self):
+        with patch("launcher_net.answers", return_value=False), _quiet_stdout():
+            self.assertEqual(launcher.url_to_open("https://127.0.0.1:8888"),
+                             "https://127.0.0.1:8888")
+
+
+class AlreadyRunningTests(unittest.TestCase):
+    """Starting a second server on a live port is the failure, not the fix.
+
+    Windows ``SO_REUSEADDR`` let the second bind succeed, so the two instances shared the
+    port and split connections; the 2026-10-02 log has both of them enumerating the radio's
+    audio devices and opening its CAT port ~1 ms apart. The server now refuses such a bind
+    and the launcher declines to make one.
+    """
+
+    def test_finds_the_instance_that_is_up(self):
+        with patch("launcher_net.first_answering",
+                   return_value="http://127.0.0.1:8888") as probe:
+            self.assertEqual(launcher.running_instance_url("https://127.0.0.1:8888"),
+                             "http://127.0.0.1:8888")
+        asked = probe.call_args.args[0]
+        self.assertEqual(asked, ["https://127.0.0.1:8888", "http://127.0.0.1:8888"],
+                         "both schemes must be asked: the port may hold either")
+
+    def test_none_means_start_normally(self):
+        with patch("launcher_net.first_answering", return_value=None):
+            self.assertIsNone(launcher.running_instance_url("http://127.0.0.1:8888"))

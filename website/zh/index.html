@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.24.5 · 稳定版</span>
+<span>v1.24.6 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -56,11 +56,11 @@
           CAT/CI-V 控制——无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.24.5-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.24.5
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.24.6-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.24.6
           </a>
-<div class="dl-meta">62,261,825 bytes · SHA-256 2e1e87fd…</div>
+<div class="dl-meta">62,267,377 bytes · SHA-256 039106e5…</div>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.24.5
+<i class="fab fa-windows"></i> Windows 安装包 v1.24.6
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> 了解功能
@@ -84,18 +84,24 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.24.5 更新内容</strong>
+<strong> v1.24.6 更新内容</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>接入云端的「申请」能用了</strong>——按钮此前回 <code>500</code>（<code>server.py</code>
-              调用了一个从未导入的模块），且 <code>GET /api/cloud/state</code> 被 SPA 兜底吞掉，对话框读不到
-              自己的状态。两处都已修复，并补上端点级测试、路由顺序守卫与打包清单。
+<strong>「装完黑屏」修好了</strong>——启动器打开的是 <code>https://</code>，而服务器早已悄悄退回纯 HTTP，
+              于是浏览器在<strong>一个其实完全健康的程序</strong>面前显示了空白页。现在启动器在打开浏览器<strong>之前先问
+              服务器到底在哪个地址应答</strong>（Windows 与 macOS 同步修复），换了协议也会明确提示，不再静默。
             </li>
 <li>
-<strong>应用改为直连 hub 主路</strong>——默认入口 <code>https://portal.mrrc.vlsc.net</code>，海外边缘降为
-              兜底（供只放行 80/443 的网络）。国内家宽实测：主路 3/3 通（0.3–1.4 s），边缘 6 次里 3 次挂死。
+<strong>第二个实例抢不走端口了</strong>——Windows 上两个服务器可以同时报 <code>Server ready!</code>，而
+              浏览器可能落到<strong>没拿到电台</strong>那一个。现在启动是独占的，且启动器发现已有实例在跑就直接复用，
+              不再叠第二个。
+            </li>
+<li>
+<strong>不再往 <code>Program Files</code> 里写东西</strong>——直接启动服务器时，密码文件与
+              <code>recordings/</code> 曾指向<strong>只读</strong>的安装目录：每次启动换一个新密码（于是「装了新包还是
+              登不上」），录音也整体关闭。现在回落到当前用户的数据目录，并读取你在那里保存的配置。
             </li>
 <li>
 <strong>设置里的「接入云端」</strong>（v1.24.0）——填呼号 → 申请 → 等批准；批下来后应用自己签证书、登记、
@@ -349,14 +355,14 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.24.5 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.24.6 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.6 MB · x64 · 54,076,580 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 12a828f0…</code>
+            51.6 MB · x64 · 54,087,234 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 28ac7743…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.24.5 首次运行零配置：自动生成网页密码，自动识别电台
+            v1.24.6 首次运行零配置：自动生成网页密码，自动识别电台
             （FT-710 ASCII CAT / Icom CI-V 0x19）与串口（COM），登录页
             直接显示自动生成的密码。网页"连接设置"对话框可修改电台型号、
             串口、RX+TX 音频设备与密码，支持保存并重启——服务自动重启，
@@ -368,10 +374,10 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.24.5-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.24.5 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.24.6-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.24.6 版本化安装包
             </a>
-<div class="dl-meta">54,076,580 bytes · SHA-256 12a828f0…</div>
+<div class="dl-meta">54,087,234 bytes · SHA-256 28ac7743…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -387,11 +393,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.24.5-arm64.dmg — v1.24.5 稳定版 </strong>
+<strong> MRRC-Modern-v1.24.6-arm64.dmg — v1.24.6 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            59.4 · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 54,076,580 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 2e1e87fd…</code>
+            59.4 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 62,267,377 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 039106e5…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
@@ -408,7 +414,7 @@
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.24.5-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.24.6-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -502,10 +508,10 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.24.5，51.6，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.24.6，51.6 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 12a828f02bac1f5565972f1d48e036f9286af11ddec00eb93892d40cdb540966</code>
+<code>SHA-256 28ac7743da7f5cc75dbecbb7b8ea2d373cb4c0eb2fd1be52871206d9efd80bae</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -669,12 +675,12 @@
 <stop offset="100%" stop-color="rgba(240,160,48,0.02)"></stop>
 </lineargradient>
 <lineargradient id="gBoxSrv2" x1="0" x2="1" y1="0" y2="1">
-<stop offset="0%" stop-color="rgba(54,076,580,0.08)"></stop>
-<stop offset="100%" stop-color="rgba(54,076,580,0.02)"></stop>
+<stop offset="0%" stop-color="rgba(54,085,618,0.08)"></stop>
+<stop offset="100%" stop-color="rgba(54,085,618,0.02)"></stop>
 </lineargradient>
 <lineargradient id="gBoxHw2" x1="0" x2="1" y1="0" y2="1">
-<stop offset="0%" stop-color="rgba(54,076,580,0.08)"></stop>
-<stop offset="100%" stop-color="rgba(54,076,580,0.02)"></stop>
+<stop offset="0%" stop-color="rgba(54,085,618,0.08)"></stop>
+<stop offset="100%" stop-color="rgba(54,085,618,0.02)"></stop>
 </lineargradient>
 </defs>
 <rect fill="url(#gBoxApp2)" height="110" rx="14" stroke="rgba(240,160,48,0.35)" stroke-width="1.5" width="230" x="10" y="15"></rect>
@@ -690,7 +696,7 @@
 <text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="125" y="107">
               WASM Opus · PWA
             </text>
-<rect fill="url(#gBoxSrv2)" height="110" rx="14" stroke="rgba(54,076,580,0.35)" stroke-width="1.5" width="230" x="460" y="15"></rect>
+<rect fill="url(#gBoxSrv2)" height="110" rx="14" stroke="rgba(54,085,618,0.35)" stroke-width="1.5" width="230" x="460" y="15"></rect>
 <text fill="#5dade2" font-family="inherit" font-size="15" font-weight="700" text-anchor="middle" x="575" y="44">
               MRRC Modern Server
             </text>
@@ -703,7 +709,7 @@
 <text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="575" y="107">
               Windows / macOS / Linux / RPi
             </text>
-<rect fill="url(#gBoxHw2)" height="95" rx="14" stroke="rgba(54,076,580,0.35)" stroke-width="1.5" width="160" x="710" y="30"></rect>
+<rect fill="url(#gBoxHw2)" height="95" rx="14" stroke="rgba(54,085,618,0.35)" stroke-width="1.5" width="160" x="710" y="30"></rect>
 <text fill="#2ecc71" font-family="inherit" font-size="14" font-weight="700" text-anchor="middle" x="790" y="58">
               FT-710 / IC-7300
             </text>
@@ -725,13 +731,13 @@
 <text fill="#8899aa" font-family="inherit" font-size="10" text-anchor="middle" x="350" y="82">
               4+1 路 WS
             </text>
-<path d="M 690 70 L 690 77 L 710 77" fill="none" stroke="rgba(54,076,580,0.35)" stroke-width="1.5"></path>
-<polygon fill="rgba(54,076,580,0.45)" points="718,73 710,77 718,81"></polygon>
+<path d="M 690 70 L 690 77 L 710 77" fill="none" stroke="rgba(54,085,618,0.35)" stroke-width="1.5"></path>
+<polygon fill="rgba(54,085,618,0.45)" points="718,73 710,77 718,81"></polygon>
 <text fill="#2ecc71" font-family="inherit" font-size="10" font-weight="600" text-anchor="middle" x="700" y="135">
               USB
             </text>
 <g transform="translate(10,145)">
-<rect fill="rgba(254,076,580,0.03)" height="36" rx="6" stroke="rgba(254,076,580,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<rect fill="rgba(254,085,618,0.03)" height="36" rx="6" stroke="rgba(254,085,618,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
 <text fill="#f0a030" font-family="monospace" font-size="9" x="8" y="15">
                 /WSradio
               </text>
@@ -740,7 +746,7 @@
               </text>
 </g>
 <g transform="translate(215,145)">
-<rect fill="rgba(254,076,580,0.03)" height="36" rx="6" stroke="rgba(254,076,580,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<rect fill="rgba(254,085,618,0.03)" height="36" rx="6" stroke="rgba(254,085,618,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
 <text fill="#2ecc71" font-family="monospace" font-size="9" x="8" y="15">
                 /WSaudioRX
               </text>
@@ -749,7 +755,7 @@
               </text>
 </g>
 <g transform="translate(430,145)">
-<rect fill="rgba(254,076,580,0.03)" height="36" rx="6" stroke="rgba(254,076,580,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<rect fill="rgba(254,085,618,0.03)" height="36" rx="6" stroke="rgba(254,085,618,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
 <text fill="#e67e22" font-family="monospace" font-size="9" x="8" y="15">
                 /WSaudioTX
               </text>
@@ -758,7 +764,7 @@
               </text>
 </g>
 <g transform="translate(645,145)">
-<rect fill="rgba(254,076,580,0.03)" height="36" rx="6" stroke="rgba(254,076,580,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<rect fill="rgba(254,085,618,0.03)" height="36" rx="6" stroke="rgba(254,085,618,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
 <text fill="#9b59b6" font-family="monospace" font-size="9" x="8" y="15">
                 /WSspectrum
               </text>
@@ -841,9 +847,9 @@
 </div>
 </div>
 <div class="perf-card">
-<div class="metric">1261</div>
+<div class="metric">1467</div>
 <div class="metric-label">
-              无硬件依赖测试<br/><small>v1.24.5 发布版实测 1461 项（macOS + Windows）</small>
+              无硬件依赖测试<br/><small>v1.24.6 发布版实测：macOS 1467 项 / Windows 1464 项</small>
 </div>
 </div>
 </div>
@@ -981,7 +987,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.64</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V2.66</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>
@@ -1021,7 +1027,7 @@
 <div class="footer-grid">
 <div class="footer-section">
 <h4>MRRC Modern</h4>
-<p>多机型远程控制<br/>一根 USB 线，任意设备操控<br/>v1.24.5 稳定版 · GPLv3 许可证</p>
+<p>多机型远程控制<br/>一根 USB 线，任意设备操控<br/>v1.24.6 稳定版 · GPLv3 许可证</p>
 </div>
 <div class="footer-section">
 <h4>导航</h4>
@@ -1037,7 +1043,7 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.24.5</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.24.6</a></li>
 <li><a href="../downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

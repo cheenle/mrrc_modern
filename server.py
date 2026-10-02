@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import errno
 import hashlib
 import hmac
 import html
@@ -83,22 +84,46 @@ LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
+def _already_logging_to(handlers, path: Path) -> bool:
+    """Whether one of ``handlers`` already writes to ``path``.
+
+    File handlers are the only kind that can duplicate a log file; anything without a
+    ``baseFilename`` (StreamHandler, the uvicorn handlers) is skipped rather than guessed
+    about.
+    """
+    wanted = os.path.abspath(str(path))
+    for handler in handlers:
+        base = getattr(handler, "baseFilename", None)
+        if base and os.path.abspath(str(base)) == wanted:
+            return True
+    return False
+
+
 def _setup_file_logging() -> Optional[Path]:
     """Attach a rotating file handler next to the console one.
 
     Returns the log path, or None when the directory cannot be created —
     logging must never be the reason the server refuses to start (spec §11).
     Must be called *after* LOG_DIR is defined (support logging block below).
+
+    Idempotent, because the root logger is process-wide: a packaged server can end up with
+    this module loaded twice (once as ``__main__``, once as ``server``), and a second
+    handler aimed at the same file writes every line twice. The 2026-10-02 field log looked
+    exactly like that — each entry paired — which made an already confusing outage read as
+    if two things were happening at once.
     """
     import logging.handlers
 
     try:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         path = LOG_DIR / "server.log"
+        root = logging.getLogger()
+        if _already_logging_to(root.handlers, path):
+            return path
         handler = logging.handlers.RotatingFileHandler(
             path, maxBytes=2 * 1024 * 1024, backupCount=1, encoding="utf-8")
         handler.setFormatter(logging.Formatter(LOG_FORMAT))
-        logging.getLogger().addHandler(handler)
+        root.addHandler(handler)
         return path
     except OSError as e:
         logging.getLogger("mrrc").warning(
@@ -388,6 +413,34 @@ def _runtime_dir() -> Path:
     return SCRIPT_DIR
 
 
+def _writable_runtime_dir() -> Path:
+    """Where runtime state goes when nothing pointed us at a writable place.
+
+    ``_runtime_dir()`` is the install directory in a packaged build, and on Windows that is
+    ``C:\\Program Files\\...`` — readable, not writable. The launchers set
+    ``MRRC_MEM_FILE``/``MRRC_RECORDINGS_DIR`` for the servers they spawn, but the server is a
+    standalone entry-point exe too (the installer even ships a shortcut for it), and a
+    server started on its own then tries to write next to itself. The field log of
+    2026-10-02 shows what that costs:
+
+        could not save the generated password ([Errno 13] Permission denied:
+            'C:\\Program Files\\MRRC Modern\\mrrc_modern.env.tmp')
+
+    which means a fresh random admin password on every start, none of them ever readable by
+    the user — "installed it and it will not log me in" — plus ``Recording disabled:
+    C:\\Program Files\\MRRC Modern\\recordings is not writable``. So a default that lands
+    in a directory this process cannot write falls back to the per-user directory, which is
+    already what ``LOG_DIR``, the certificate directory and the config file use.
+    """
+    base = _runtime_dir()
+    try:
+        if os.access(base, os.W_OK):
+            return base
+    except OSError:                                        # odd filesystem: use user dir
+        pass
+    return default_user_dir()
+
+
 def _resource_dir() -> Path:
     """Return the directory containing bundled read-only resources.
 
@@ -402,12 +455,12 @@ def _resource_dir() -> Path:
 
 
 STATIC_DIR = _resource_dir() / "static"
-MEM_FILE = Path(_env("MRRC_MEM_FILE", str(_runtime_dir() / "mem_channels.json")))
+MEM_FILE = Path(_env("MRRC_MEM_FILE", str(_writable_runtime_dir() / "mem_channels.json")))
 # Recordings live in a directory of media files (mrrc layout) plus a small
 # JSON index next to the other runtime files; the launchers point
 # MRRC_RECORDINGS_DIR at the per-user data directory on packaged installs.
-RECORDINGS_DIR = Path(_env("MRRC_RECORDINGS_DIR", str(_runtime_dir() / "recordings")))
-RECORDINGS_INDEX = _runtime_dir() / "recordings.json"
+RECORDINGS_DIR = Path(_env("MRRC_RECORDINGS_DIR", str(_writable_runtime_dir() / "recordings")))
+RECORDINGS_INDEX = _writable_runtime_dir() / "recordings.json"
 
 # ── Support logging (spec 2026-09-17 §5) ──────────────────────────
 # The packaged desktop app had NO server log file (logging went to the console
@@ -3892,21 +3945,79 @@ async def serve_static(path: str, request: Request):
 
 # ── Entry Point ─────────────────────────────────────────────────────
 
-def _bind_dual_stack_socket(port: int) -> "socket.socket":
+# EADDRINUSE is 98 on Linux and 48 on macOS; Windows reports 10048 (WSAEADDRINUSE)
+# and does not put it in errno's map under some Python builds, so all three are listed.
+_ADDR_IN_USE_ERRNOS = frozenset({errno.EADDRINUSE, 98, 48, 10048})
+
+
+def _is_addr_in_use(exc: OSError) -> bool:
+    """Whether this bind failure means " somebody else holds this port"."""
+    return getattr(exc, "errno", None) in _ADDR_IN_USE_ERRNOS
+
+
+def _set_bind_exclusion(sock: "socket.socket", *, windows: bool) -> None:
+    """Ask the OS for the bind semantics this app needs, per platform.
+
+    On Windows ``SO_REUSEADDR`` does not mean what it means on POSIX: it lets a second
+    process bind a port another process is already *listening* on. Two MRRC Modern
+    instances then start side by side, both log "Server ready!", and the OS splits
+    incoming connections between them. The 2026-10-02 field log is that exact picture —
+    every line written twice, ~1 ms apart, two stacks each enumerating the radio's audio
+    devices and opening its CAT port. Whichever instance the browser landed on might be
+    the one that never got the radio, and the operator saw a console that would not
+    answer. So on Windows the listener asks for ``SO_EXCLUSIVEADDRUSE`` instead and a
+    second instance fails immediately and visibly; POSIX keeps ``SO_REUSEADDR``, which is
+    what lets a restart rebind while the old socket is in TIME_WAIT.
+    """
+    if windows:
+        # The constant only exists on Windows; the literal is its value there, kept so the
+        # intent survives a socket module that does not export it.
+        sock.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_EXCLUSIVEADDRUSE", 1024), 1)
+    else:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+
+def _already_running_hint(port: int, exc: OSError) -> str:
+    """The message a user can act on when the bind fails because of contention."""
+    return (
+        f"cannot listen on port {port}: it is already taken ({exc}). "
+        f"Another MRRC Modern is most likely still running — close its server window "
+        f"(or exit it from the tray) and start it again. Starting a second copy is not "
+        f"a fix: the two would fight over the port and over the radio's serial port."
+    )
+
+
+def _bind_dual_stack_socket(port: int, *, retries: int = 10,
+                            retry_delay_s: float = 0.3) -> "socket.socket":
     """Bind :: as a dual-stack socket (IPv4 + IPv6).
 
     asyncio's loop.create_server(host="::") creates an IPv6-only socket
     (IPV6_V6ONLY=1), which refuses IPv4 — and the launcher opens the browser
     at http://127.0.0.1:8888. Pre-binding with V6ONLY=0 and handing the
     socket to uvicorn.Server.run(sockets=[...]) keeps both stacks working.
+
+    A port already in use is retried briefly (the launcher restarts this exe in-process on
+    a config change, and the previous listener can still be on its way out) and then raises
+    rather than reporting success: binding is the one place where "keep going anyway"
+    produced a server that answered nobody.
     """
-    import socket
-    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
-    sock.bind(("::", port))
-    sock.listen(2048)
-    return sock
+    last: OSError | None = None
+    for attempt in range(retries):
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        try:
+            _set_bind_exclusion(sock, windows=(os.name == "nt"))
+            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            sock.bind(("::", port))
+            sock.listen(2048)
+            return sock
+        except OSError as exc:
+            sock.close()
+            last = exc
+            if not _is_addr_in_use(exc):
+                raise
+            if attempt + 1 < retries:
+                time.sleep(retry_delay_s)
+    raise RuntimeError(_already_running_hint(port, last)) from last
 
 
 def _resolve_ssl_kwargs(args) -> dict:

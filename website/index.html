@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.24.5 · Stable</span>
+<span>v1.24.6 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -57,11 +57,11 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.24.5-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.24.5
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.24.6-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.24.6
           </a>
-<div class="dl-meta">62,261,825 bytes · SHA-256 2e1e87fd…</div>
+<div class="dl-meta">62,267,377 bytes · SHA-256 039106e5…</div>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.24.5
+<i class="fab fa-windows"></i> Windows Installer v1.24.6
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> Explore Features
@@ -92,22 +92,28 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.24.5</strong>
+<strong> What's new in v1.24.6</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>Cloud Hub onboarding works again</strong> — the settings dialog's 申请 button
-              answered <code>500</code> (<code>server.py</code> drove the onboarding through a module it
-              never imported) and <code>GET /api/cloud/state</code> was swallowed by the SPA fallback, so the
-              dialog could not read its own state. Both fixed, with endpoint tests, a route-order guard and a
-              bundle entry so a packaged build cannot ship without them again.
+<strong>“Black screen after install” is fixed</strong> — the launcher opened
+              <code>https://</code> while the server had already fallen back to plain HTTP, so the browser
+              showed a blank page over a perfectly healthy app. The launcher now <em>asks the server which
+              address answers</em> before opening the browser, on Windows and macOS alike, and says so out
+              loud when it has to switch schemes.
             </li>
 <li>
-<strong>The app talks to the hub itself now</strong> — the portal entry is
-              <code>https://portal.mrrc.vlsc.net</code>, with the overseas edge kept as a fallback for
-              networks that allow only 80/443 outbound. Measured on a mainland home line: the hub entry
-              answered 3/3 (0.3–1.4 s) while the edge hung on 3 of 6 requests.
+<strong>A second instance can no longer hijack the port</strong> — on Windows two servers could both
+              report <code>Server ready!</code> on port 8888, and the browser might land on the one holding
+              no radio. Starts are now exclusive, and the launcher reuses an instance that is already
+              running instead of spawning another one.
+            </li>
+<li>
+<strong>No more writes into <code>Program Files</code></strong> — launching the server directly used to
+              aim its password file and <code>recordings/</code> at the (read-only) install folder: a fresh
+              password every start, and recording silently disabled. It falls back to your per-user data
+              folder now, and reads the settings you saved there.
             </li>
 <li>
 <strong>Cloud Hub in the settings menu</strong> (v1.24.0) — fill in a callsign, apply, and wait: once the
@@ -367,14 +373,14 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.24.5 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.24.6 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.6 MB · x64 · 54,076,580 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 12a828f0…</code>
+            51.6 MB · x64 · 54,087,234 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 28ac7743…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.24.5 is zero-config on first run: it auto-generates a web
+            v1.24.6 is zero-config on first run: it auto-generates a web
             password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
             0x19) and its serial port (COM), and the login page shows the
             auto-generated password. The web 连接设置 (Connection Settings)
@@ -389,10 +395,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.24.5-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.24.5
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.24.6-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.24.6
             </a>
-<div class="dl-meta">54,076,580 bytes · SHA-256 12a828f0…</div>
+<div class="dl-meta">54,087,234 bytes · SHA-256 28ac7743…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -408,11 +414,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.24.5-arm64.dmg — v1.24.5 Stable </strong>
+<strong> MRRC-Modern-v1.24.6-arm64.dmg — v1.24.6 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            59.4 · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,261,825 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 2e1e87fd…</code>
+            59.4 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,267,377 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 039106e5…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -432,7 +438,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.24.5-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.24.6-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -528,10 +534,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.24.5, 51.6 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.24.6, 51.6 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 12a828f02bac1f5565972f1d48e036f9286af11ddec00eb93892d40cdb540966</code>
+<code>SHA-256 28ac7743da7f5cc75dbecbb7b8ea2d373cb4c0eb2fd1be52871206d9efd80bae</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -708,12 +714,12 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <stop offset="100%" stop-color="rgba(240,160,48,0.02)"></stop>
 </lineargradient>
 <lineargradient id="gBoxSrv" x1="0" x2="1" y1="0" y2="1">
-<stop offset="0%" stop-color="rgba(54,076,580,0.08)"></stop>
-<stop offset="100%" stop-color="rgba(54,076,580,0.02)"></stop>
+<stop offset="0%" stop-color="rgba(54,085,618,0.08)"></stop>
+<stop offset="100%" stop-color="rgba(54,085,618,0.02)"></stop>
 </lineargradient>
 <lineargradient id="gBoxHw" x1="0" x2="1" y1="0" y2="1">
-<stop offset="0%" stop-color="rgba(54,076,580,0.08)"></stop>
-<stop offset="100%" stop-color="rgba(54,076,580,0.02)"></stop>
+<stop offset="0%" stop-color="rgba(54,085,618,0.08)"></stop>
+<stop offset="100%" stop-color="rgba(54,085,618,0.02)"></stop>
 </lineargradient>
 </defs>
 <rect fill="url(#gBoxApp)" height="110" rx="14" stroke="rgba(240,160,48,0.35)" stroke-width="1.5" width="230" x="10" y="15"></rect>
@@ -729,7 +735,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="125" y="107">
               WASM Opus · PWA
             </text>
-<rect fill="url(#gBoxSrv)" height="110" rx="14" stroke="rgba(54,076,580,0.35)" stroke-width="1.5" width="230" x="460" y="15"></rect>
+<rect fill="url(#gBoxSrv)" height="110" rx="14" stroke="rgba(54,085,618,0.35)" stroke-width="1.5" width="230" x="460" y="15"></rect>
 <text fill="#5dade2" font-family="inherit" font-size="15" font-weight="700" text-anchor="middle" x="575" y="44">
               MRRC Modern Server
             </text>
@@ -742,7 +748,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="575" y="107">
               Windows / macOS / Linux / RPi
             </text>
-<rect fill="url(#gBoxHw)" height="95" rx="14" stroke="rgba(54,076,580,0.35)" stroke-width="1.5" width="160" x="710" y="30"></rect>
+<rect fill="url(#gBoxHw)" height="95" rx="14" stroke="rgba(54,085,618,0.35)" stroke-width="1.5" width="160" x="710" y="30"></rect>
 <text fill="#2ecc71" font-family="inherit" font-size="14" font-weight="700" text-anchor="middle" x="790" y="58">
               FT-710 / IC-7300
             </text>
@@ -764,13 +770,13 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <text fill="#8899aa" font-family="inherit" font-size="10" text-anchor="middle" x="350" y="82">
               4+1 WS links
             </text>
-<path d="M 690 70 L 690 77 L 710 77" fill="none" stroke="rgba(54,076,580,0.35)" stroke-width="1.5"></path>
-<polygon fill="rgba(54,076,580,0.45)" points="718,73 710,77 718,81"></polygon>
+<path d="M 690 70 L 690 77 L 710 77" fill="none" stroke="rgba(54,085,618,0.35)" stroke-width="1.5"></path>
+<polygon fill="rgba(54,085,618,0.45)" points="718,73 710,77 718,81"></polygon>
 <text fill="#2ecc71" font-family="inherit" font-size="10" font-weight="600" text-anchor="middle" x="700" y="135">
               USB
             </text>
 <g transform="translate(10,145)">
-<rect fill="rgba(254,076,580,0.03)" height="36" rx="6" stroke="rgba(254,076,580,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<rect fill="rgba(254,085,618,0.03)" height="36" rx="6" stroke="rgba(254,085,618,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
 <text fill="#f0a030" font-family="monospace" font-size="9" x="8" y="15">
                 /WSradio
               </text>
@@ -779,7 +785,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               </text>
 </g>
 <g transform="translate(215,145)">
-<rect fill="rgba(254,076,580,0.03)" height="36" rx="6" stroke="rgba(254,076,580,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<rect fill="rgba(254,085,618,0.03)" height="36" rx="6" stroke="rgba(254,085,618,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
 <text fill="#2ecc71" font-family="monospace" font-size="9" x="8" y="15">
                 /WSaudioRX
               </text>
@@ -788,7 +794,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               </text>
 </g>
 <g transform="translate(430,145)">
-<rect fill="rgba(254,076,580,0.03)" height="36" rx="6" stroke="rgba(254,076,580,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<rect fill="rgba(254,085,618,0.03)" height="36" rx="6" stroke="rgba(254,085,618,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
 <text fill="#e67e22" font-family="monospace" font-size="9" x="8" y="15">
                 /WSaudioTX
               </text>
@@ -797,7 +803,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               </text>
 </g>
 <g transform="translate(645,145)">
-<rect fill="rgba(254,076,580,0.03)" height="36" rx="6" stroke="rgba(254,076,580,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
+<rect fill="rgba(254,085,618,0.03)" height="36" rx="6" stroke="rgba(254,085,618,0.05)" stroke-width="1" width="195" x="0" y="0"></rect>
 <text fill="#9b59b6" font-family="monospace" font-size="9" x="8" y="15">
                 /WSspectrum
               </text>
@@ -882,9 +888,9 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </div>
 </div>
 <div class="perf-card">
-<div class="metric">1261</div>
+<div class="metric">1463</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>1461 tests in the v1.24.5 release (macOS + Windows)</small>
+              Hardware-Free Tests<br/><small>1467 tests on macOS / 1464 on Windows in the v1.24.6 release</small>
 </div>
 </div>
 </div>
@@ -1026,7 +1032,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.64</strong> · Architecture decisions, component
+            <strong>V2.66</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>
@@ -1066,7 +1072,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-grid">
 <div class="footer-section">
 <h4>MRRC Modern</h4>
-<p>Multi-Radio Remote Control<br/>One USB Cable, Any Device<br/>v1.24.5 Stable · GPLv3 License</p>
+<p>Multi-Radio Remote Control<br/>One USB Cable, Any Device<br/>v1.24.6 Stable · GPLv3 License</p>
 </div>
 <div class="footer-section">
 <h4>Links</h4>
@@ -1082,7 +1088,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.24.5</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.24.6</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

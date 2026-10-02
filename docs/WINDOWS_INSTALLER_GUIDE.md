@@ -11,39 +11,58 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.24.5-Windows-x64-Setup.exe` | 46.0 MB (54,076,580 bytes) | `ccb6e26cfea431fdc6a9924b2befbf4c4f086cf3adcf12de7444ee09c626993a` |
+| `MRRC-Modern-v1.24.5-Windows-x64-Setup.exe` | 51.6 MB (54,087,234 bytes) | `28ac7743da7f5cc75dbecbb7b8ea2d373cb4c0eb2fd1be52871206d9efd80bae` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.5-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 **v1.24.5 is the published Windows installer.** It was built from the release
-commit on Windows 11 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. The build
-gate ran 1358 tests OK (9 platform skips), three PyInstaller targets and
-the installer build passed, and the required
-bundled-file inspection passed (FTDI DLLs, `static/`, `static/listen.js`, `mem_channels.json`,
-and `version.txt` = `1.24.5`). This release's changes are all in the frontend assets, so the
-in-bundle check verified them directly: the packaged `ft710_main.js` contains the new
-`focus`-event wake-lock re-acquire, `listen.html` references `listen.js?v=13` (FFT trace),
-and `sw.js` is at cache `mrrc-v36` (the `server.py` bytecode is unchanged from v1.20.0, whose
-bundle walk is recorded below); cross-host SHA-256 matched (VM == build Mac). Finally the packaged
-server was started against the bundle itself and answered `401` on `/api/health`
-and `200` on `/login` — i.e. the frozen build really serves the app, not just the test environment.
+commit on Windows 11 (the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup
+6.7.3. The build gate ran **1464 tests OK (10 platform skips)**, three PyInstaller targets and
+the installer build passed (iscc compiles into a scratch directory and the result is copied in —
+Defender's real-time scan otherwise locks the freshly written exe and the build fails with
+`Error 32`). Bundled-file inspection passed: FTDI DLLs, `opus.dll`, `static/`,
+`static/listen.js`, `mem_channels.json`, `version.txt` = `1.24.5`, and the complete Cloud Hub
+fleet payload under `fleet\` (`frpc.exe`, `openssl.exe` with its nine DLLs,
+`install_instance_tunnel.ps1`, `openssl.cnf`). Cross-host SHA-256 matched on three hosts
+(build VM == jump host == build Mac).
+
+This release's fix is server-side Python, so the acceptance was **running the packaged binary**,
+not walking the bundle: the frozen `MRRC-Modern-Server.exe` was started against a **clean
+per-user state** (`LOCALAPPDATA` pointed at an empty directory, `MRRC_SSL_CERT` at a path that
+does not exist) and it signed its own certificate — `signed a self-signed certificate for
+127.0.0.1` → `SSL enabled with a self-signed certificate just generated` → `Uvicorn running on
+https://127.0.0.1:18890` — and answered **`200` on `/login` over HTTPS**.
+
+> **That clean-room run is why this release is not broken.** The first v1.24.5 build passed every
+> gate above — 1460 tests OK, three PyInstaller targets, `Successful compile`, a matching
+> SHA-256 on three hosts — and still served **plain HTTP**, because `server.py` called
+> `ssl_bootstrap.sign_for()` without ever importing the module: a `NameError` swallowed by the
+> broad `except` around it, i.e. exactly the black screen this release set out to fix. The module
+> *was* in the bundle (`mrrc_modern_server.spec` hiddenimports) and the launcher has its own
+> working copy of the logic, so an installed app looked healthy. Fixed by importing it and
+> extracting `_resolve_ssl_kwargs()` so the suite can reach it; both installers were rebuilt
+> afterwards and the numbers above are the rebuilt ones.
 
 **Boundary**: this Windows VM has no physical sound card path (KVM breaks isochronous USB OUT), so
 **TX audio still needs acceptance on real Windows hardware**; the VM also had no radio attached during
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
-The earlier v1.14.2 package (54,076,580 bytes, SHA-256 `a7ee1667…`) remains downloadable as an
+The earlier v1.24.4 package (54,085,618 bytes, SHA-256 `935a7ed9…`) remains downloadable as an
 archive; v1.24.5 supersedes it.
 
-**What's new in v1.24.0**: the iPhone main-UI power-on race fix — the system mic-permission
-dialog released the just-acquired screen wake lock and the screen still auto-locked ~30 s after
-power-on; the lock is now re-acquired when the prompt settles and on window `focus`. Plus
-**listen-page enhancements**: an FFT trace above the waterfall, frequency step buttons
-(1x/5x, 10 Hz–25 kHz), a WAN-sized RX jitter buffer (500/250/1500 ms), and the public
-`/mrrc_modern/listen` proxy backend moved to the DNS name `radio.vlsc.net` with a 300 s
-resolver (survives home IPv6 changes).
+**What's new in v1.24.5**: **no certificate means the app signs one, instead of quietly serving
+plain HTTP.** Two build-machine-only defaults combined into a dead UI on a real machine: the
+certificate pointed into the (read-only) install directory under a developer-machine filename that
+exists on nobody's computer, and a missing certificate degraded the server to plain HTTP while the
+launcher opened an **https://** URL — the browser showed a protocol error and the window stayed
+black. The certificate now lives in the user's own writable data directory
+(`%LOCALAPPDATA%\MRRC-Modern\certs`), is generated on first run, and plain HTTP is left only to an
+explicit `--no-ssl`. A certificate that appears *after* start-up (what re-enrolling with the Cloud
+Hub produces) is detected by file identity — path + timestamp + size — and prompts the restart that
+actually enables it. Also new: a cleanup script that removes every generation of leftovers, and the
+server-side signing path itself now works when the Server is started without the launcher.
 
 **What's new in v1.20.0**: the **listen-only interface `/listen`** — an operator can hand a visitor a
 second, *separate* password (`MRRC_LISTEN_PASSWORD`, empty = disabled) that unlocks a page with a large

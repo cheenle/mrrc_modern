@@ -17,11 +17,98 @@ from typing import overload
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 
+
+# ── Which config file a start-up reads ─────────────────────────────
+# Kept above the constants on purpose: ``load_user_config_into_environ`` below has to run
+# before any ``_env(...)`` call site, and this helper is what resolves the file's directory.
+def default_user_dir() -> Path:
+    """The per-user directory this app may write to, per platform.
+
+    Never raises: a test that reloads this module with a stripped environment made Path.home() throw
+    on Windows, and a path helper is not a place to fail a start-up over.
+    """
+    try:
+        if os.name == "nt":
+            base = os.environ.get("LOCALAPPDATA") or ""
+            if not base:
+                profile = os.environ.get("USERPROFILE") or ""
+                if profile:
+                    base = os.path.join(profile, "AppData", "Local")
+        elif sys.platform == "darwin":
+            base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
+        else:
+            base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    except Exception:                                                 # noqa: BLE001 - see docstring
+        base = ""
+    if not base or base in ("~", os.sep):
+        return Path(SCRIPT_DIR) / "user-data"
+    return Path(base) / "MRRC-Modern"
+
+
+
+
+def boot_config_file() -> Path | None:
+    """The user env file this process should read at start-up, or None.
+
+    ``MRRC_CONFIG_FILE`` names it explicitly (the launchers always do); otherwise the
+    per-user copy, which is where a packaged install keeps its settings.
+    """
+    raw = os.environ.get("MRRC_CONFIG_FILE", "").strip()
+    path = Path(raw) if raw else default_user_dir() / "mrrc_modern.env"
+    try:
+        return path if path.is_file() else None
+    except OSError:                                       # unreadable path: not our problem
+        return None
+
+
+def load_user_config_into_environ() -> None:
+    """Fill ``MRRC_*`` from the user config file for a start-up that has no launcher.
+
+    The launchers read the file and pass it down as the child environment, so a server
+    started *by* a launcher sees everything. Starting ``MRRC-Modern-Server.exe`` on its own
+    — which the installer ships as the "MRRC Modern Server" shortcut, and which
+    ``_ensure_strong_password`` documents as the "the launcher will not start" path — read
+    none of it: a field log showed it binding the built-in ``::`` while the file said
+    ``127.0.0.1``, and serving the built-in default password while the file had a real one.
+
+    Only variables the process does not already have are filled, so an explicit environment
+    (systemd on the Pi, a shell, a test) still wins, and a launcher start-up is a no-op: it
+    has already put every file key into the environment. Auto-loading is limited to packaged
+    runs (``sys.frozen``) plus an explicit ``MRRC_CONFIG_FILE``, so a stray file in a
+    developer's home directory can never change what the suite sees.
+    """
+    if os.environ.get("MRRC_NO_CONFIG_FILE", "").strip().lower() in ("1", "true", "yes"):
+        return
+    explicit = os.environ.get("MRRC_CONFIG_FILE", "").strip()
+    if not explicit and not getattr(sys, "frozen", False):
+        return
+    path = boot_config_file()
+    if path is None:
+        return
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key.startswith((_NEW_ENV_PREFIX, _LEGACY_ENV_PREFIX)):
+            continue
+        os.environ.setdefault(key, value.strip())
+
+
 # ── Environment helpers ─────────────────────────────────────────────
 # Prefer the MRRC_* variable name, falling back to the legacy FT710_*
 # prefix so existing deployments keep working unchanged.
 _LEGACY_ENV_PREFIX = "FT710_"
 _NEW_ENV_PREFIX = "MRRC_"
+
+# Runs here rather than next to the helpers above: it filters on the prefixes, so it
+# must not execute before they are bound. Nothing reads an env var until _env below.
+load_user_config_into_environ()
 
 
 @overload
@@ -221,30 +308,6 @@ REMOTE_SESSION_TX_HEARTBEAT_S = _env_float("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S",
 # shipped a certificate path that existed on nobody's machine. When the file is missing the server
 # generates a self-signed one here (see server.py) instead of silently serving plain HTTP, which
 # made the browser show a protocol error and the UI look dead.
-def default_user_dir() -> Path:
-    """The per-user directory this app may write to, per platform.
-
-    Never raises: a test that reloads this module with a stripped environment made Path.home() throw
-    on Windows, and a path helper is not a place to fail a start-up over.
-    """
-    try:
-        if os.name == "nt":
-            base = os.environ.get("LOCALAPPDATA") or ""
-            if not base:
-                profile = os.environ.get("USERPROFILE") or ""
-                if profile:
-                    base = os.path.join(profile, "AppData", "Local")
-        elif sys.platform == "darwin":
-            base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
-        else:
-            base = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
-    except Exception:                                                 # noqa: BLE001 - see docstring
-        base = ""
-    if not base or base in ("~", os.sep):
-        return Path(SCRIPT_DIR) / "user-data"
-    return Path(base) / "MRRC-Modern"
-
-
 def _default_cert_dir() -> Path:
     return default_user_dir() / "certs"
 

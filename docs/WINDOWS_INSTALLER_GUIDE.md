@@ -11,7 +11,7 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.24.7-Windows-x64-Setup.exe` | 51.6 MB (54,110,069 bytes) | `ed127697f2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79` |
+| `MRRC-Modern-v1.24.7-Windows-x64-Setup.exe` | 51.6 MB (54,112,355 bytes) | `4a83ab9bf2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.7-Windows-x64-Setup.exe>

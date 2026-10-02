@@ -7,50 +7,60 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.24.5 Stable)
+## Download (v1.24.6 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.24.5-Windows-x64-Setup.exe` | 51.6 MB (54,087,234 bytes) | `28ac7743da7f5cc75dbecbb7b8ea2d373cb4c0eb2fd1be52871206d9efd80bae` |
+| `MRRC-Modern-v1.24.6-Windows-x64-Setup.exe` | {{WIN_MB}} MB ({{WIN_BYTES}} bytes) | `{{WIN_SHA}}` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.5-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.6-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.24.5 is the published Windows installer.** It was built from the release
-commit on Windows 11 (the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup
-6.7.3. The build gate ran **1464 tests OK (10 platform skips)**, three PyInstaller targets and
-the installer build passed (iscc compiles into a scratch directory and the result is copied in —
-Defender's real-time scan otherwise locks the freshly written exe and the build fails with
-`Error 32`). Bundled-file inspection passed: FTDI DLLs, `opus.dll`, `static/`,
-`static/listen.js`, `mem_channels.json`, `version.txt` = `1.24.5`, and the complete Cloud Hub
-fleet payload under `fleet\` (`frpc.exe`, `openssl.exe` with its nine DLLs,
-`install_instance_tunnel.ps1`, `openssl.cnf`). Cross-host SHA-256 matched on three hosts
-(build VM == jump host == build Mac).
-
-This release's fix is server-side Python, so the acceptance was **running the packaged binary**,
-not walking the bundle: the frozen `MRRC-Modern-Server.exe` was started against a **clean
-per-user state** (`LOCALAPPDATA` pointed at an empty directory, `MRRC_SSL_CERT` at a path that
-does not exist) and it signed its own certificate — `signed a self-signed certificate for
-127.0.0.1` → `SSL enabled with a self-signed certificate just generated` → `Uvicorn running on
-https://127.0.0.1:18890` — and answered **`200` on `/login` over HTTPS**.
-
-> **That clean-room run is why this release is not broken.** The first v1.24.5 build passed every
-> gate above — 1460 tests OK, three PyInstaller targets, `Successful compile`, a matching
-> SHA-256 on three hosts — and still served **plain HTTP**, because `server.py` called
-> `ssl_bootstrap.sign_for()` without ever importing the module: a `NameError` swallowed by the
-> broad `except` around it, i.e. exactly the black screen this release set out to fix. The module
-> *was* in the bundle (`mrrc_modern_server.spec` hiddenimports) and the launcher has its own
-> working copy of the logic, so an installed app looked healthy. Fixed by importing it and
-> extracting `_resolve_ssl_kwargs()` so the suite can reach it; both installers were rebuilt
-> afterwards and the numbers above are the rebuilt ones.
+{{WIN_RELEASE_NARRATIVE}}
 
 **Boundary**: this Windows VM has no physical sound card path (KVM breaks isochronous USB OUT), so
 **TX audio still needs acceptance on real Windows hardware**; the VM also had no radio attached during
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
-The earlier v1.24.4 package (54,087,234 bytes, SHA-256 `28ac7743…`) remains downloadable as an
-archive; v1.24.5 supersedes it.
+The earlier v1.24.5 package (54,087,234 bytes, SHA-256 `28ac7743…`) and v1.24.4
+(54,076,580 bytes, SHA-256 `12a828f0…`) remain downloadable as archives; v1.24.6 supersedes both.
+
+> **Support note — why this release is 1.24.6 and not a rebuilt 1.24.5.** A machine that installed the
+> *first* 1.24.5 build (the one published before the `ssl_bootstrap` import fix) will **never** be
+> offered the rebuilt 1.24.5 package: the upgrade channel compares **version strings**, and they are
+> equal. Such a machine keeps showing the black screen until it is given a *higher* version — which is
+> exactly what v1.24.6 is. When a user reports "I already installed the fixed build and it is still
+> black", check `version.txt` **and** the install timestamp, not just the version number.
+
+**What's new in v1.24.6**: **the launcher asks the server which address actually answers, instead of
+guessing.** A field machine (hostname `MRRC`) that had installed 1.24.5 still showed a black screen; the
+forensics — its own `server.log` plus running the packaged `MRRC-Modern-Server.exe` over SSH — showed the
+app was perfectly healthy on plain HTTP (`/login` → **200**, 1726 bytes) while the browser had been sent
+to `https://`, i.e. a protocol error rendered as a blank page. Four independent causes were fixed:
+① the launcher used to derive the scheme from *its own* ability to produce a certificate while the server
+derived TLS from *its own* ability to load one — two decisions, one socket. Both launchers now probe
+`/api/health` (new shared `launcher_net.py`; any HTTP answer counts, including `401`) and open whichever
+scheme responds, **saying so out loud** when they switch. ② On Windows `SO_REUSEADDR` does not mean what
+it means on POSIX: it lets a second process bind a port that is *already listening*, so two servers could
+both print `Server ready!` and the browser might land on the one holding no radio (the field log showed
+every line duplicated 1–10 ms apart — two stacks each enumerating audio devices and opening the CAT port).
+Windows now binds with `SO_EXCLUSIVEADDRUSE`, retries `WSAEADDRINUSE` for ~3 s, then fails with a message
+naming the port and "another MRRC Modern is already running"; the launcher probes *before* spawning and
+reuses an instance that is already up. ③ Starting the Server directly (the Start Menu has a shortcut for
+it) used to aim its writable defaults at the read-only install directory:
+`Permission denied: 'C:\Program Files\MRRC Modern\mrrc_modern.env.tmp'` meant **a new password every
+start that was never saved** — the real cause of "I installed the new package and still cannot log in" —
+and `Recording disabled: …\recordings is not writable`. `_writable_runtime_dir()` now falls back to the
+per-user data directory (`LOG_DIR` and `certs` already did). ④ A bare start now reads the user's
+`mrrc_modern.env` (`config.load_user_config_into_environ()`, only when frozen or when `MRRC_CONFIG_FILE`
+is explicit, `setdefault` only, so real environment variables still win) — previously the server bound `::`
+while the user's file said `MRRC_WEB_HOST=127.0.0.1`. Also: the rotating file handler is attached
+idempotently (the frozen package loads this module twice, as `__main__` and as `server`, which is the
+other half of those duplicated log lines), and a new stdlib-AST gate
+(`tests/test_undefined_app_module_names.py`) fails the build when an app module is used as `name.attr`
+without ever being imported — the class of defect that shipped twice (`cloud_hub` in v1.24.1,
+`ssl_bootstrap` in v1.24.5).
 
 **What's new in v1.24.5**: **no certificate means the app signs one, instead of quietly serving
 plain HTTP.** Two build-machine-only defaults combined into a dead UI on a real machine: the

@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.65</a></li>
+          <li><a href="#updates">V2.66</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.65 · 2026-10-02</span>
+          <span>SDD V2.66 · 2026-10-02</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.65</td>
+              <td>V2.66</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,45 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-triangle-exclamation"></i></div>
+            <h3>
+              v1.24.6 Released — The Launcher Asks Before It Opens
+              <small>(V2.66)</small>
+            </h3>
+            <p>
+              A field machine that had installed v1.24.5
+              <strong>still showed a black screen</strong>. Its own
+              <code>server.log</code> plus a run of the packaged server proved
+              the app was healthy on plain HTTP (<code>/login</code> → 200)
+              while the browser had been sent to <code>https://</code> — a
+              protocol error rendered as a blank page. The launcher derived the
+              scheme from <em>its own</em> ability to produce a certificate
+              while the server derived TLS from <em>its own</em> ability to load
+              one: two independent decisions, one socket. Both launchers now
+              probe <code>/api/health</code> first (shared
+              <code>launcher_net.py</code>) and open whichever scheme actually
+              answers, announcing any switch instead of degrading silently.
+            </p>
+            <p>
+              Also fixed: Windows now binds the port
+              <strong>exclusively</strong> — <code>SO_REUSEADDR</code> there lets
+              a second process bind a port that is already listening, so two
+              servers could both report <code>Server ready!</code> and the
+              browser might land on the one holding no radio (the field log
+              showed every line duplicated 1–10&nbsp;ms apart); a bare
+              <code>Server</code> start no longer aims its password file and
+              <code>recordings/</code> at the read-only install directory, which
+              meant <strong>a new password every start that was never saved</strong>
+              — the real cause of "I installed the new package and still cannot
+              log in"; a bare start now reads the user's
+              <code>mrrc_modern.env</code>; log lines are written once instead of
+              twice; and a stdlib-AST gate fails the build when an app module is
+              used as <code>name.attr</code> without ever being imported — the
+              defect class that shipped twice (<code>cloud_hub</code> in v1.24.1,
+              <code>ssl_bootstrap</code> in v1.24.5).
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
             <h3>MRRC Rebrand + Env Migration <small>(V2.21–V2.22)</small></h3>

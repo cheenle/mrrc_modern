@@ -1,20 +1,28 @@
-# macOS 安装与使用指南（MRRC Modern v1.24.5）
+# macOS 安装与使用指南（MRRC Modern v1.24.6）
 
 本指南面向**第一次使用 MRRC Modern 的 macOS 用户**：从下载到出声，全程**不需要打开终端、不需要编辑配置文件**。
 只有「故障排查」和「高级用法」两章需要命令行，且都是可选。
 
-> **本版（v1.24.5）新增：没有证书就自己签一张，而不是悄悄退回 HTTP。** 现场报障「装完之后黑屏、
-> 不启动」：包里带的证书路径指向**只读的安装目录**，文件名还是开发机上的 `radio.vlsc.net.key`
-> —— 换句话说是一条**在任何人机器上都不存在**的路径；而找不到证书时服务会**静默降级为纯
-> HTTP**，启动器打开的却是 https:// ⇒ 浏览器报协议错误 ⇒ 界面一片黑。现在证书目录改为用户可写的
-> 运行目录（macOS = `~/Library/Application Support/MRRC-Modern/certs`），**缺证书时当场签一张
-> 自签证书**，纯 HTTP 只留给显式的 `--no-ssl`。
+> **本版（v1.24.6）新增：启动器不再猜地址，改成问服务器「你到底在哪个协议上应答」。** 现场那台
+> Windows 机器装了 v1.24.5 **仍然黑屏**；取证（它自己的 `server.log` + 直接跑包内的 Server）证明
+> **应用是健康的** —— 纯 HTTP 的 `/login` 回 **200**（1726 字节），而浏览器被送到了 `https://`，
+> 于是显示的是协议错误空白页。根因是**两边各自决定 TLS**：启动器按「自己能不能签出证书」算 scheme，
+> 服务器按「自己能加载到什么」决定要不要 TLS —— 两次独立决策、一个 socket，不一致就黑屏。
+> 现在启动器打开浏览器**之前先探一次** `/api/health`（新增共用模块 `launcher_net.py`，**macOS 与
+> Windows 同一份逻辑**；任何 HTTP 应答都算在听，包括 401），打开**真的应答**的那个 scheme，
+> 并且**切换必提示、绝不静默** —— 证书签不出来是运维需要知道的事。
 >
-> ⚠️ 这个修复本身在**第一次构建的包里是坏的**：`server.py` 调用 `ssl_bootstrap.sign_for()` 却从未
-> import 它，`NameError` 被宽泛的 `except` 吞掉后照样退回纯 HTTP。它过了所有门禁（1463 项测试全绿、
-> 签名校验通过、SHA-256 一致），只有**拿打包出的 Server 跑一次洁净室**才暴露 —— 无证书启动，看它
-> 是否真的签出证书并以 **https** 服务。修好后两端产物均已重建，本指南的数字是重建后的。
-> 详见 [docs/WINDOWS_INSTALLER_GUIDE.md](WINDOWS_INSTALLER_GUIDE.md) 与 `SDD/14` V2.65。
+> 同版还修了三个会让「装完就用不了」的问题：**① 端口被占不再"照样成功"** —— 第二个实例会明确报错
+> （Windows 上此前两个实例能同时绑同一端口，浏览器可能落到没拿到电台那一个），启动器发现已有实例在跑
+> 就直接复用；**② 直接启动 Server 不再往只读的安装目录写** —— 此前密码存不下（于是**每次启动换一个新
+> 密码**，「装了新包还是登不上」就是这么来的）、录音整体关闭，现在回落到用户数据目录
+> （macOS = `~/Library/Application Support/MRRC-Modern/`）；**③ 日志不再每行写两遍**。
+>
+> 上一版（v1.24.5）修的是「缺证书就自己签一张，而不是悄悄退回 HTTP」，详见
+> [docs/WINDOWS_INSTALLER_GUIDE.md](WINDOWS_INSTALLER_GUIDE.md) 与 `SDD/14` V2.65–V2.66。
+>
+> 再上一版（v1.24.1）修的是同类缺陷的另一例：`server.py` 从未导入 `cloud_hub`，打包版按「申请」即 500。
+> 默认入口也已改回 hub 主路 `https://portal.mrrc.vlsc.net`，海外边缘只在主路不通时兜底。
 >
 > 上一版（v1.24.1）修的是同类缺陷的另一例：`server.py` 从未导入 `cloud_hub`，打包版按「申请」即 500。
 > 默认入口也已改回 hub 主路 `https://portal.mrrc.vlsc.net`，海外边缘只在主路不通时兜底。
@@ -43,12 +51,12 @@
 | 权限 | **麦克风**（= 音频输入，必需）；局域网访问时还需要 macOS 防火墙放行 |
 
 下载地址：<https://www.vlsc.net/mrrc_modern/> → **Download macOS**，文件名为
-`MRRC-Modern-v1.24.5-arm64.dmg`（62,267,377 bytes，SHA-256 `039106e5…`）。
+`MRRC-Modern-v1.24.6-arm64.dmg`（{{MAC_BYTES}} bytes，SHA-256 `{{MAC_SHA8}}…`）。
 
 **校验下载完整性（可选，命令行）**：
 
 ```bash
-shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.5-arm64.dmg
+shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.6-arm64.dmg
 ```
 
 与官网下载卡片上的 SHA-256 一致即可。
@@ -57,7 +65,7 @@ shasum -a 256 ~/Downloads/MRRC-Modern-v1.24.5-arm64.dmg
 
 ## 2. 安装（约 1 分钟）
 
-1. 双击打开 `MRRC-Modern-v1.24.5-arm64.dmg`。
+1. 双击打开 `MRRC-Modern-v1.24.6-arm64.dmg`。
 2. 把 **MRRC Modern** 图标拖进右侧的**应用程序**文件夹快捷方式。
 3. 在访达侧边栏弹出该磁盘映像（点 ⏏）。
 4. 到「应用程序」里找到 **MRRC Modern**。

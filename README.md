@@ -35,11 +35,11 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.24.5 Stable** (54,080,541 bytes, SHA-256
-`46323320630b67d47360a20a21cb1f0144965d42f4fa56cada6609148f05b1ec`):
+**Download v1.24.6 Stable** ({{WIN_BYTES}} bytes, SHA-256
+`{{WIN_SHA}}`):
 
 - Fast mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.5-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.6-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 After install, edit `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` (Start Menu →
@@ -61,10 +61,10 @@ Apple-silicon Macs (macOS 11+) can install the desktop package — no Python
 install required. The app lives in the menu bar (no Dock icon), starts the
 server itself, and opens the browser.
 
-**Download v1.24.5 Stable** (62,257,332 bytes, SHA-256
-`137de9f2b13f43d4377baf4d49c93bcd200813c9e9cee3c6c7fed89d338e806a`):
+**Download v1.24.6 Stable** ({{MAC_BYTES}} bytes, SHA-256
+`{{MAC_SHA}}`):
 
-- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.5-arm64.dmg>
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.6-arm64.dmg>
 
 Two things to know before the first launch (full guide:
 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)):

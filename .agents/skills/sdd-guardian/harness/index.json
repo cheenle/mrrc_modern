@@ -394,6 +394,9 @@
         "install.sh",
         "packaging/**",
         "windows/**",
+        "macos/**",
+        "launcher_net.py",
+        "website/deploy.sh",
         "docs/WINDOWS_INSTALLER_GUIDE.md"
       ],
       "keywords": [
@@ -403,6 +406,8 @@
         "package",
         "installer",
         "launch",
+        "launcher",
+        "macos",
         "部署",
         "安装",
         "打包"
@@ -596,8 +601,11 @@
         "win_pack.md",
         "pi_pack.md",
         ".agents/skills/dual-platform-release/**",
+        ".agents/skills/windows-installer/**",
+        ".agents/skills/macos-installer/**",
         "tests/test_release_artifacts.py",
-        "tests/test_sdd_docs_consistency.py"
+        "tests/test_sdd_docs_consistency.py",
+        "tests/test_skill_docs_consistency.py"
       ],
       "keywords": [
         "release",

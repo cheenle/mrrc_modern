@@ -89,6 +89,8 @@ Two things to know before the first launch (full guide:
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
 | `MRRC_BAUD_RATE` | backend default | Serial baud: FT-710 `38400`; all Icom models `115200`; explicit value overrides the default |
 | `MRRC_RECORDINGS_DIR` | `<runtime>/recordings` | Where recorded QSO MP3s live (packaged installs: the per-user data dir) |
+| `MRRC_CONFIG_FILE` | `<user data dir>/mrrc_modern.env` | The config file the server reads and the setup dialog writes. The launchers set it explicitly; a bare `Server` start resolves it next to `MRRC_MEM_FILE`. Since v1.24.6 a **packaged** start also loads this file into the environment before any constant is computed, so starting the server without its launcher honours the same host/port it would have — previously a bare start bound `:::8888` while the file said `MRRC_WEB_HOST=127.0.0.1`. |
+| `MRRC_NO_CONFIG_FILE` | off | Set to `1`/`true`/`yes` to stop that load. It only ever happens for a frozen build or when `MRRC_CONFIG_FILE` names a file explicitly, so source checkouts, systemd and CI are unaffected; real environment variables always win over file values (the loader only fills keys that are missing). |
 | `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate for recordings (kbps, 16 kHz mono) |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
 | `MRRC_LOG_DIR` / `MRRC_SUPPORT_URL` / `MRRC_CQ_FILE` | `static/audio/cq.wav` | Recording played by the one-touch CQ key (any 16-bit WAV; normalised to 48 kHz mono at startup, 30 s max) |

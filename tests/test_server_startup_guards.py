@@ -217,6 +217,42 @@ class WritableRuntimeDirTests(unittest.TestCase):
                     patch.dict(os.environ, {}, clear=True):
                 self.assertEqual(server._config_file_path(), user / "mrrc_modern.env")
 
+    def test_a_frozen_build_never_keeps_state_next_to_its_own_code(self):
+        """macOS: the bundle IS writable, and writing into it breaks the signature.
+
+        Measured on the frozen v1.24.6 ``.app``: a single file in
+        ``Contents/MacOS/recordings/`` turns ``codesign --verify`` into
+        "a sealed resource is missing or invalid", so recording one QSO would leave the
+        app failing signature checks on its next launch. Writability is therefore not the
+        right test for a packaged build — it goes to the per-user directory even when the
+        bundle would happily have accepted the file.
+        """
+        with _temp_dirs() as (install, user):
+            with patch.object(server.sys, "frozen", True, create=True), \
+                    patch.object(server, "_runtime_dir", return_value=install), \
+                    patch.object(server, "default_user_dir", return_value=user):
+                self.assertTrue(os.access(install, os.W_OK),
+                                "the point is that the install dir IS writable here")
+                self.assertEqual(server._writable_runtime_dir(), user)
+
+    def test_a_frozen_build_does_not_consult_writability_at_all(self):
+        with _temp_dirs() as (install, user):
+            probe = MagicMock(return_value=True)
+            with patch.object(server.sys, "frozen", True, create=True), \
+                    patch.object(server, "_runtime_dir", return_value=install), \
+                    patch.object(server, "default_user_dir", return_value=user), \
+                    patch.object(server.os, "access", probe):
+                self.assertEqual(server._writable_runtime_dir(), user)
+            probe.assert_not_called()
+
+    def test_a_source_checkout_keeps_its_files_next_to_the_code(self):
+        """The frozen rule must not reach source checkouts or the Linux/Pi install."""
+        with _temp_dirs() as (install, user):
+            with patch.object(server.sys, "frozen", False, create=True), \
+                    patch.object(server, "_runtime_dir", return_value=install), \
+                    patch.object(server, "default_user_dir", return_value=user):
+                self.assertEqual(server._writable_runtime_dir(), install)
+
 
 if __name__ == "__main__":
     unittest.main()

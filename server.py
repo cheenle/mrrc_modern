@@ -431,7 +431,27 @@ def _writable_runtime_dir() -> Path:
     C:\\Program Files\\MRRC Modern\\recordings is not writable``. So a default that lands
     in a directory this process cannot write falls back to the per-user directory, which is
     already what ``LOG_DIR``, the certificate directory and the config file use.
+
+    A packaged build goes straight to the per-user directory without even testing
+    writability, because there "writable" is not the same as "correct". Measured on the
+    frozen macOS v1.24.6 bundle: a bare start put ``recordings/`` inside
+    ``MRRC-Modern.app/Contents/MacOS/``, the owner can write it, and a single file in it
+    breaks the code signature —
+
+        dist/macos/MRRC-Modern.app: a sealed resource is missing or invalid
+        file added: .../MRRC-Modern.app/Contents/MacOS/recordings/probe.mp3
+
+    — so recording one QSO would leave the app failing signature checks on the next launch,
+    the same class of accident as v1.18.1. Windows has the mirror-image problem: an install
+    under a writable prefix would keep state that a reinstall or a roaming profile silently
+    discards. Both launchers already point ``MRRC_MEM_FILE`` and ``MRRC_RECORDINGS_DIR`` at
+    the per-user directory, so this also removes the last way for a bare start and a
+    launcher start to disagree about where the same files live.
     """
+    if getattr(sys, "frozen", False):
+        # Never keep writable state next to packaged code: on macOS that is inside a signed
+        # bundle, on Windows inside the install prefix.
+        return default_user_dir()
     base = _runtime_dir()
     try:
         if os.access(base, os.W_OK):

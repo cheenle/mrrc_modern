@@ -285,6 +285,8 @@
 <li><a href="#windows-配置与运行" id="toc-windows-配置与运行">0.6 Windows 配置与运行</a></li>
 <li><a href="#macos-安装与初始化" id="toc-macos-安装与初始化">0.7 macOS 安装与初始化</a></li>
 <li><a href="#与第三方电台软件共用串口wsjt-x-jtdx-fldigi-rumlogng-等" id="toc-与第三方电台软件共用串口wsjt-x-jtdx-fldigi-rumlogng-等">0.8 与第三方电台软件共用串口（WSJT-X / JTDX / FLDIGI / rumLogNG 等）</a></li>
+<li><a href="#接入云端cloud-hub" id="toc-接入云端cloud-hub">0.9 接入云端（Cloud Hub）</a></li>
+<li><a href="#版本与更新" id="toc-版本与更新">0.10 版本与更新</a></li>
 <li><a href="#主界面控件编号图" id="toc-主界面控件编号图">1. 主界面控件编号图</a></li>
 <li><a href="#控件速查表编号-名称-功能-操作" id="toc-控件速查表编号-名称-功能-操作">2. 控件速查表（编号 → 名称 → 功能 → 操作）</a></li>
 <li><a href="#键盘快捷键桌面端" id="toc-键盘快捷键桌面端">3. 键盘快捷键（桌面端）</a></li>
@@ -300,7 +302,7 @@
     </aside>
     <main class="guide-content">
 <blockquote class="callout-info">
-<p>适用于 MRRC Web Control（v1.16.x，2026-09 之后的界面），支持 Yaesu FT-710、Icom IC-7300 / IC-7300MK2（另含 IC-705 / IC-7610 / IC-7760 预览配置）与 Yaesu SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F（实验性、默认只收不发，<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 解锁；这些机型无真机频谱源，界面用 S 表合成频谱）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。</p>
+<p>适用于当前 MRRC Modern 界面（v1.25 一代；<strong>权威版本号是安装目录里的 <code>version.txt</code></strong> —— 菜单底部那个 <code>v1.0</code> 是前端资源串，见 §0.10）。支持 Yaesu FT-710、Icom IC-7300 / IC-7300MK2（另含 IC-705 / IC-7610 / IC-7760 预览配置）与 Yaesu SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F（实验性、默认只收不发，<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 解锁；这些机型无真机频谱源，界面用 S 表合成频谱）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。云端接入见 §0.9，版本与更新见 §0.10。</p>
 </blockquote>
 <hr />
 <h2 id="开始之前连接与登录">0. 开始之前：连接与登录</h2>
@@ -552,6 +554,14 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>改了配置没生效</td>
 <td>改完 <code>mrrc_modern.env</code> 必须<strong>重启 MRRC Modern</strong>（关掉窗口重新启动）。</td>
 </tr>
+<tr>
+<td>双击没反应 / 黑窗口一闪就没了</td>
+<td>先看 <code>launcher.log</code> 与 <code>server.log</code>，再用开始菜单里的 <strong>MRRC Modern Server</strong> 绕开启动器判断是谁的问题 —— 见 §6.1。</td>
+</tr>
+<tr>
+<td>卡在 <code>Detecting the radio on N serial port(s)</code> 不动</td>
+<td>有一个「不是电台的串口」占着号（最典型是 Intel AMT 的 Serial over LAN）。<strong>v1.25.0 起会跳过这类口、探测写入带 1 秒超时</strong>，不再卡死；老版本请先在设备管理器里禁用那个口。见 §6.1 第 4 条。</td>
+</tr>
 </tbody>
 </table></div>
 <hr />
@@ -741,6 +751,25 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <blockquote class="callout-warn">
 <p>⚠️ <strong>串口独占法则（最容易撞的坑）</strong>：同一时刻<strong>只能有一个程序</strong>打开 CAT 串口。要用 WSJT-X/JTDX/FLDIGI，先退出菜单栏的 MRRC Modern（它持有 CAT 口）；反过来 MRRC 启动时串口打不开，先关掉正在运行的其它电台软件。FT-710 的 CP2105 双口里只有 <strong>Enhanced</strong>（<code>…A0</code>）是 CAT，另一个 <code>…A1</code>（Standard）跑不了 CAT。占用排查：<code>lsof /dev/cu.usbserial-0121DB3A0</code>。</p>
 </blockquote>
+<h2 id="接入云端cloud-hub">0.9 接入云端（Cloud Hub）</h2>
+<p>给这台机器一个公网入口 <code>https://&lt;你的呼号&gt;.mrrc.vlsc.net/</code>：<strong>不需要</strong>自己有公网 IP，也<strong>不用</strong>在路由器上开端口。 应用<strong>出站</strong>连到中转（hub），入口的 TLS 在中转处终结，中转再回连本机。</p>
+<p><strong>准备</strong>：一个有效呼号；以及运维在门户里的批准 —— 或者运维直接给你一串<strong>一次性登记口令</strong>。</p>
+<p><strong>步骤</strong>（抽屉菜单 → <strong>接入云端（Cloud Hub）…</strong>）：</p>
+<ol type="1">
+<li>填 <strong>呼号</strong>（大小写不敏感；<code>BG1SB/P</code>、<code>4X/BG1SB</code> 这类便携/前缀写法会被拒绝 —— 登记的是身份， 而且标签要当 DNS 名用）。可选的 <strong>联系方式</strong> 便于运维核对；<strong>登记口令</strong> 有就直接填，不必等批准。</li>
+<li>点 <strong>申请入口 / 接入</strong>，界面随即显示状态：<strong>已提交申请</strong>（等运维批准）→ <strong>已接入</strong>。</li>
+<li><strong>批准之后什么都不用做</strong>：服务端每 30 秒自查一次（v1.25.0 起），发现批准就自己签证书、登记入口、 把隧道拉起来。想立刻问一次就点 <strong>刷新状态</strong>（它一直可以点 —— 早先版本里它看着像禁用，其实不是）。</li>
+<li>首次接入会提示 <strong>重启应用以启用新证书</strong>：TLS 上下文是在进程启动时建立的，新证书要重启才生效。 点那个按钮（或手动重启）后，入口应当返回登录页。</li>
+</ol>
+<p><strong>入口地址的规则</strong>：就是呼号本身，<strong>没有端口、没有路径、没有产品后缀</strong>（早期的 <code>:9988</code> 与 <code>/mrrc_modern/&lt;呼号&gt;/</code> 写法都已取消）。同一个呼号再次申请会<strong>复用原来的标签与端口</strong>，不会越排越多。</p>
+<p><strong>别把入口名当安全边界</strong>：呼号是公开标识、入口可枚举，所以防线在「核验通过才给访问」， 而不在「别人猜不到」；入口后面仍是本机的登录口令（§0 第 3 步）。</p>
+<p><strong>出问题</strong>：抽屉菜单 → <strong>🐞 遇到问题</strong> → 生成并上传诊断包（§6），答复发布在 <code>https://www.vlsc.net/mrrc_modern/answers/</code>。</p>
+<h2 id="版本与更新">0.10 版本与更新</h2>
+<ul>
+<li><strong>真实版本号</strong>：安装目录里的 <code>version.txt</code>（Windows 默认 <code>C:\Program Files\MRRC Modern\</code>， macOS 在 <code>MRRC Modern.app/Contents/Resources/</code>）；诊断包里也带一份。 <strong>抽屉菜单底部那行</strong>（形如 <code>FT-710 v1.0</code>）里的 <code>v1.0</code> 是<strong>前端资源串</strong>，既不是发布版本也不是电台固件版本 —— 报版本时别拿它当依据。</li>
+<li><strong>应用能查新版，但还不能自己装</strong>：服务端有只读的 <code>GET /api/update/check</code>，拿运行版本与站点上的 <code>latest.json</code> 比对，只回答「有没有更新」，<strong>不下载、不写任何文件</strong>；<strong>界面上目前没有升级按钮</strong> —— 升级器会改动它运行的机器，所以要么完整要么不做，不做半成品。</li>
+<li><strong>升级怎么做</strong>：到 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> 下载对应平台的安装包<strong>覆盖安装</strong>一次即可。 配置、证书、录音都在<strong>用户数据目录</strong>（Windows <code>%LOCALAPPDATA%\MRRC-Modern</code>， macOS <code>~/Library/Application Support/MRRC-Modern</code>），不在安装目录里，所以覆盖安装不会动它们。 想彻底重来见 §6.2。</li>
+</ul>
 <h2 id="主界面控件编号图">1. 主界面控件编号图</h2>
 <figure id="fig1">
 <img loading="lazy" decoding="async" src="../images/ui-guide-main.svg" alt="主界面控件编号图" />
@@ -1245,6 +1274,12 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>—</td>
+<td>接入云端（Cloud Hub）…</td>
+<td>打开云端接入对话框：呼号 / 联系方式 / 登记口令 → 申请或直接接入 → 刷新状态；批准后应用自己签证书、登记并起隧道</td>
+<td>单击（详见 §0.9）</td>
+</tr>
+<tr>
+<td>—</td>
 <td>录音 Recordings</td>
 <td>打开录音面板（列表 / 播放 / 下载 / 删除）</td>
 <td>单击</td>
@@ -1312,7 +1347,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tbody>
 </table></div>
 <blockquote class="callout-info">
-<p>菜单底部显示版本号 <code>FT-710 v1.0</code>（前端资源版本，非电台固件版本）。</p>
+<p>菜单底部那行里的型号来自当前后端；<code>v1.0</code> 是<strong>前端资源串</strong>，既不是发布版本也不是电台固件版本 —— 真实发布版本看安装目录的 <code>version.txt</code>（§0.10）。</p>
 </blockquote>
 <hr />
 <h2 id="键盘快捷键桌面端">3. 键盘快捷键（桌面端）</h2>

@@ -1659,5 +1659,32 @@ Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\MRRC-Modern-Patch.ps1 \
     施加后请<strong>重启应用</strong>，并在浏览器里 <strong>Ctrl-F5</strong> 强制刷新一次。
   </p>
 </div>
+
+<div class="step" id="one-click">
+  <h4>一键：双击运行（不用敲命令）</h4>
+  <p>三类小事都做成了「下载一个文件、双击」：</p>
+  <table>
+    <tr><th>要做什么</th><th>下载</th><th>双击之后</th></tr>
+    <tr>
+      <td><strong>接入云端</strong>（呼号 + 运维给的口令）</td>
+      <td><a href="downloads/MRRC-Modern-Connect.cmd">MRRC-Modern-Connect.cmd</a></td>
+      <td>问你要呼号与口令 → 自动登记证书 → 重启应用 → 打印你的入口地址</td>
+    </tr>
+    <tr>
+      <td><strong>打小补丁</strong>（界面类修复，几百 KB）</td>
+      <td><a href="downloads/MRRC-Modern-Patch.cmd">MRRC-Modern-Patch.cmd</a></td>
+      <td>自己找到适用于你版本的补丁 → 校验 SHA-256 → 备份被替换的文件 → 覆盖 → 重启应用</td>
+    </tr>
+    <tr>
+      <td><strong>彻底清理</strong>（装乱了 / 想从零开始）</td>
+      <td><a href="downloads/MRRC-Modern-Cleanup.cmd">MRRC-Modern-Cleanup.cmd</a></td>
+      <td>先把配置与证书备份到桌面 → 卸载 → 清掉环境变量与计划任务</td>
+    </tr>
+  </table>
+  <p style="color: var(--scope-text-muted)">
+    三个都会自己申请管理员权限（弹一次 UAC 即可），都会先备份再动手，都不碰与 MRRC 无关的东西。
+    想先看看会改什么：在 PowerShell 里给对应的 .ps1 加 <code>-DryRun</code>。
+  </p>
+</div>
 </body>
 </html>

@@ -1660,5 +1660,32 @@ Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\MRRC-Modern-Patch.ps1 \
     and its SHA-256. Restart the app afterwards, and press Ctrl-F5 in the browser once.
   </p>
 </div>
+
+<div class="step" id="one-click">
+  <h4>One file, one double-click</h4>
+  <p>All three chores are now "download a file, double-click it":</p>
+  <table>
+    <tr><th>Task</th><th>Download</th><th>What the double-click does</th></tr>
+    <tr>
+      <td><strong>Connect to the Cloud Hub</strong> (callsign plus the secret from the operator)</td>
+      <td><a href="downloads/MRRC-Modern-Connect.cmd">MRRC-Modern-Connect.cmd</a></td>
+      <td>Asks for both, enrols the certificate, restarts the app, prints your entry address</td>
+    </tr>
+    <tr>
+      <td><strong>Apply a small patch</strong> (UI fixes, a few hundred KB)</td>
+      <td><a href="downloads/MRRC-Modern-Patch.cmd">MRRC-Modern-Patch.cmd</a></td>
+      <td>Finds the patch for your version, verifies its SHA-256, backs up what it replaces, restarts</td>
+    </tr>
+    <tr>
+      <td><strong>Clean slate</strong> (a messy install, or start over)</td>
+      <td><a href="downloads/MRRC-Modern-Cleanup.cmd">MRRC-Modern-Cleanup.cmd</a></td>
+      <td>Backs up configuration and certificates to the desktop, uninstalls, clears environment variables and tasks</td>
+    </tr>
+  </table>
+  <p style="color: var(--scope-text-muted)">
+    Each asks for administrator rights once, backs up before changing anything, and touches nothing
+    outside MRRC. To preview what a patch would change, add <code>-DryRun</code> to the matching .ps1.
+  </p>
+</div>
 </body>
 </html>

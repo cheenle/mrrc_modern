@@ -1,0 +1,17 @@
+{
+  "name": "MRRC Web Control",
+  "short_name": "MRRC",
+  "description": "Web-based remote control for amateur radio (Yaesu FT-710, Icom IC-7300)",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

@@ -1639,5 +1639,25 @@ function toggleMobileMenu() {
 
 </script>
     <script src="../js/global-nav.js?v=5" defer data-gn="1"></script>
+
+<div class="step" id="static-patch">
+  <h4>小补丁（不整包下载）</h4>
+  <p>
+    改到"界面/资源"的修复不必重装整套：站上备了一个<strong>几百 KB 的补丁包</strong>与一个施加脚本。
+    它只替换 <code>_internal\static</code> 下的文件（网页界面与资源），<strong>不动程序逻辑</strong>——
+    所以它只适用于这类修复；改动到 Python 逻辑的修复仍然需要整包升级。
+  </p>
+  <pre><code># 管理员 PowerShell（脚本会自己校验 SHA-256 与适用版本，并先备份被替换的文件）
+Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\MRRC-Modern-Patch.ps1 \
+  https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Patch.ps1
+& $env:TEMP\MRRC-Modern-Patch.ps1 -PatchUrl \
+  https://www.vlsc.net/mrrc_modern/downloads/patches/static-1.24.7-p1.zip
+
+# 只想看看会改什么：加 -DryRun</code></pre>
+  <p style="color: var(--scope-text-muted)">
+    补丁清单：<code>downloads/patches/patch.json</code>（写明适用于哪个版本、以及每个补丁的 SHA-256）。
+    施加后请<strong>重启应用</strong>，并在浏览器里 <strong>Ctrl-F5</strong> 强制刷新一次。
+  </p>
+</div>
 </body>
 </html>

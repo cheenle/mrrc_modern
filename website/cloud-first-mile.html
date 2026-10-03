@@ -26,96 +26,255 @@
     />
     <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
     <style>
-      :root { --ink: #e8e8ea; --muted: #9a9aa2; --amber: #f59e0b; --cyan: #22d3ee; --line: #26262c; }
-      body { background: #0a0a0a; color: var(--ink); }
-      .essay { max-width: 780px; margin: 0 auto; padding: 140px 1.5rem 120px; font-size: 1.05rem; line-height: 1.85; }
-      .essay h1 { font-size: 2rem; line-height: 1.35; margin: 0 0 0.4rem; }
-      .essay .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 2.6rem; }
-      .essay h2 { font-size: 1.28rem; margin: 3rem 0 1rem; padding-left: 0.7rem; border-left: 3px solid var(--amber); }
-      .essay h3 { font-size: 1.02rem; margin: 1.8rem 0 0.5rem; color: var(--cyan); }
-      .essay p { margin: 0 0 1.05rem; }
-      .essay strong { color: #fff; font-weight: 600; }
-      .essay em { color: var(--amber); font-style: normal; }
-      .essay code { font-family: "JetBrains Mono", monospace; font-size: 0.86em; background: #16161a; border: 1px solid var(--line); border-radius: 4px; padding: 0.1em 0.35em; }
-      .essay pre { background: #0f0f12; border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; overflow-x: auto; font-size: 0.83rem; line-height: 1.6; }
-      .essay pre code { background: none; border: 0; padding: 0; }
-      .essay table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 1rem 0 1.6rem; }
-      .essay th, .essay td { text-align: left; padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-      .essay th { color: var(--muted); font-weight: 500; }
-      .essay .tag { display: inline-block; font-size: 0.74rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.6rem; margin-right: 0.4rem; }
-      .essay .foot { margin-top: 3rem; color: var(--muted); font-size: 0.88rem; }
-      .essay a { color: var(--cyan); }
-      .essay .note { background: #101014; border: 1px solid var(--line); border-radius: 8px; padding: 0.9rem 1.1rem; margin: 1.2rem 0; font-size: 0.94rem; }
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --cyan: #22d3ee;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .essay {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 140px 1.5rem 120px;
+        font-size: 1.05rem;
+        line-height: 1.85;
+      }
+      .essay h1 {
+        font-size: 2rem;
+        line-height: 1.35;
+        margin: 0 0 0.4rem;
+      }
+      .essay .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.6rem;
+      }
+      .essay h2 {
+        font-size: 1.28rem;
+        margin: 3rem 0 1rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .essay h3 {
+        font-size: 1.02rem;
+        margin: 1.8rem 0 0.5rem;
+        color: var(--cyan);
+      }
+      .essay p {
+        margin: 0 0 1.05rem;
+      }
+      .essay strong {
+        color: #fff;
+        font-weight: 600;
+      }
+      .essay em {
+        color: var(--amber);
+        font-style: normal;
+      }
+      .essay code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.86em;
+        background: #16161a;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      .essay pre {
+        background: #0f0f12;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-size: 0.83rem;
+        line-height: 1.6;
+      }
+      .essay pre code {
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+      .essay table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        margin: 1rem 0 1.6rem;
+      }
+      .essay th,
+      .essay td {
+        text-align: left;
+        padding: 0.55rem 0.6rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .essay th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .essay .tag {
+        display: inline-block;
+        font-size: 0.74rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.1rem 0.6rem;
+        margin-right: 0.4rem;
+      }
+      .essay .foot {
+        margin-top: 3rem;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .essay a {
+        color: var(--cyan);
+      }
+      .essay .note {
+        background: #101014;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.9rem 1.1rem;
+        margin: 1.2rem 0;
+        font-size: 0.94rem;
+      }
     </style>
   </head>
   <body>
     <main class="essay">
-      <p><span class="tag">Technical</span><span class="tag">Cloud Hub</span><span class="tag">2026-10-02</span></p>
-      <h1>The Cloud's First Mile<br />— Putting a Radio on the Internet, and Why It Once Showed a Black Screen</h1>
+      <p>
+        <span class="tag">Technical</span><span class="tag">Cloud Hub</span
+        ><span class="tag">2026-10-02</span>
+      </p>
+      <h1>
+        The Cloud's First Mile<br />— Putting a Radio on the Internet, and Why
+        It Once Showed a Black Screen
+      </h1>
       <p class="sub">
-        A radio amateur rarely has a public IP: carrier NAT, double NAT, no port forwarding, no UPnP.
-        Yet a radio that should be usable remotely needs an entry on the internet. This is how we gave
-        it one without asking anyone to touch their network - and why, on the first day, installing the
-        app produced a <strong>black screen</strong>.
+        A radio amateur rarely has a public IP: carrier NAT, double NAT, no port
+        forwarding, no UPnP. Yet a radio that should be usable remotely needs an
+        entry on the internet. This is how we gave it one without asking anyone
+        to touch their network - and why, on the first day, installing the app
+        produced a <strong>black screen</strong>.
       </p>
 
       <h2>1. The constraints</h2>
       <table>
-        <tr><th>Constraint</th><th>Consequence</th></tr>
-        <tr><td>No public IP, no port forwarding, no UPnP on the instance side</td><td>The entry cannot live at the client - the tunnel must be <strong>outbound</strong></td></tr>
-        <tr><td>Some networks allow only 80/443, others something else</td><td>Exactly <strong>one</strong> control port, and it must be configurable</td></tr>
-        <tr><td>The user is an operator, not a sysadmin</td><td>Connecting has to be a few clicks inside the app</td></tr>
-        <tr><td>One device belongs to one callsign</td><td>The entry <em>is</em> the callsign: <code>https://bg9aaa.mrrc.vlsc.net/</code></td></tr>
+        <tr>
+          <th>Constraint</th>
+          <th>Consequence</th>
+        </tr>
+        <tr>
+          <td>
+            No public IP, no port forwarding, no UPnP on the instance side
+          </td>
+          <td>
+            The entry cannot live at the client - the tunnel must be
+            <strong>outbound</strong>
+          </td>
+        </tr>
+        <tr>
+          <td>Some networks allow only 80/443, others something else</td>
+          <td>
+            Exactly <strong>one</strong> control port, and it must be
+            configurable
+          </td>
+        </tr>
+        <tr>
+          <td>The user is an operator, not a sysadmin</td>
+          <td>Connecting has to be a few clicks inside the app</td>
+        </tr>
+        <tr>
+          <td>One device belongs to one callsign</td>
+          <td>
+            The entry <em>is</em> the callsign:
+            <code>https://bg9aaa.mrrc.vlsc.net/</code>
+          </td>
+        </tr>
       </table>
 
       <h2>2. Four invariants</h2>
       <h3>1. The instance dials out; the hub never dials in</h3>
       <p>
-        An <code>frpc</code> on the instance connects to <code>tunnel.mrrc.vlsc.net:8989</code> - the
-        only port that stands on its own - and maps the radio's local 8888 to a private loopback port
-        on the hub (<code>127.0.0.1:18803</code>). The hub's nginx proxies
-        <code>bg9aaa.mrrc.vlsc.net</code> to that port. The client needs <strong>zero inbound
-        access</strong>, just one outbound TCP.
+        An <code>frpc</code> on the instance connects to
+        <code>tunnel.mrrc.vlsc.net:8989</code> - the only port that stands on
+        its own - and maps the radio's local 8888 to a private loopback port on
+        the hub (<code>127.0.0.1:18803</code>). The hub's nginx proxies
+        <code>bg9aaa.mrrc.vlsc.net</code> to that port. The client needs
+        <strong>zero inbound access</strong>, just one outbound TCP.
       </p>
 
       <h3>2. The hub verifies each instance against its own certificate</h3>
       <p>
-        The instance's certificate is self-signed at first run, with the entry name as its CN/SAN. The
-        hub's <code>proxy_ssl_trusted_certificate</code> points at a bundle generated from the
-        registry: system roots plus each instance's public key. Renewals need no cross-machine
-        synchronisation, and <strong>only registered instances are trusted</strong>.
+        The instance's certificate is self-signed at first run, with the entry
+        name as its CN/SAN. The hub's
+        <code>proxy_ssl_trusted_certificate</code> points at a bundle generated
+        from the registry: system roots plus each instance's public key.
+        Renewals need no cross-machine synchronisation, and
+        <strong>only registered instances are trusted</strong>.
       </p>
       <div class="note">
-        The inverse also holds: <strong>a re-signed instance certificate with a stale trust bundle
-        means a failed upstream check and a 502 at the entry.</strong> We hit it twice; regenerating
-        the bundle is now a step in the deployment script.
+        The inverse also holds:
+        <strong
+          >a re-signed instance certificate with a stale trust bundle means a
+          failed upstream check and a 502 at the entry.</strong
+        >
+        We hit it twice; regenerating the bundle is now a step in the deployment
+        script.
       </div>
 
       <h3>3. Routes are generated, not hand-written</h3>
       <p>
-        The registry <code>instances.tsv</code> holds <code>label loopback-port entry-name</code> per
-        line; one command generates nginx's map and the wildcard vhost. Adding an instance is one line
-        and a regeneration - never an edit to the site's configuration.
+        The registry <code>instances.tsv</code> holds
+        <code>label loopback-port entry-name</code> per line; one command
+        generates nginx's map and the wildcard vhost. Adding an instance is one
+        line and a regeneration - never an edit to the site's configuration.
       </p>
 
       <h3>4. The portal performs no root actions</h3>
       <p>
-        The self-service portal runs on loopback as an unprivileged service account. It can record an
-        application and sign an instance certificate, but it cannot reload nginx or change a firewall.
-        The two steps that need root are printed as commands for the operator. The privilege boundary
-        is explicit: a compromised portal gains no machine.
+        The self-service portal runs on loopback as an unprivileged service
+        account. It can record an application and sign an instance certificate,
+        but it cannot reload nginx or change a firewall. The two steps that need
+        root are printed as commands for the operator. The privilege boundary is
+        explicit: a compromised portal gains no machine.
       </p>
 
       <h2>3. Why installing produced a black screen</h2>
       <table>
-        <tr><th>Default</th><th>What happened on a customer's machine</th></tr>
+        <tr>
+          <th>Default</th>
+          <th>What happened on a customer's machine</th>
+        </tr>
         <tr>
           <td>Certificate path inside the packaged directory</td>
-          <td><code>C:\Program Files</code> is read-only for a normal user ⇒ no certificate ⇒ the server <em>quietly</em> fell back to plain HTTP while the launcher opened an <code>https://</code> URL ⇒ protocol error ⇒ <strong>a black screen</strong></td>
+          <td>
+            <code>C:\Program Files</code> is read-only for a normal user ⇒ no
+            certificate ⇒ the server <em>quietly</em> fell back to plain HTTP
+            while the launcher opened an <code>https://</code> URL ⇒ protocol
+            error ⇒ <strong>a black screen</strong>
+          </td>
         </tr>
-        <tr><td>Log directory inside the packaged directory</td><td><code>[WinError 5]</code> ⇒ no logs at all</td></tr>
-        <tr><td>Serial port defaulting to macOS's <code>/dev/cu.SLAB_USBtoUART</code></td><td>On Windows the radio was on <code>COM5</code>; the app looked for a port that cannot exist</td></tr>
-        <tr><td>Login password defaulting to the value in the source</td><td>Anyone on the LAN could log in until it was changed</td></tr>
+        <tr>
+          <td>Log directory inside the packaged directory</td>
+          <td><code>[WinError 5]</code> ⇒ no logs at all</td>
+        </tr>
+        <tr>
+          <td>
+            Serial port defaulting to macOS's
+            <code>/dev/cu.SLAB_USBtoUART</code>
+          </td>
+          <td>
+            On Windows the radio was on <code>COM5</code>; the app looked for a
+            port that cannot exist
+          </td>
+        </tr>
+        <tr>
+          <td>Login password defaulting to the value in the source</td>
+          <td>Anyone on the LAN could log in until it was changed</td>
+        </tr>
       </table>
       <p>Three structural fixes, not three resolutions to be careful:</p>
       <pre><code>1. Everything written at runtime defaults into the user's data directory
@@ -124,34 +283,59 @@
 
    def test_runtime_paths_are_outside_the_program_directory(self): ...</code></pre>
       <p>
-        The third is the most valuable thing to come out of the day: it turned "be careful" into "red
-        next time". It also caught a fifth case nobody had noticed (the memory-channels file).
+        The third is the most valuable thing to come out of the day: it turned
+        "be careful" into "red next time". It also caught a fifth case nobody
+        had noticed (the memory-channels file).
       </p>
 
       <h2>4. Two timing problems only real hardware shows</h2>
       <h3>1. A new certificate, an old process</h3>
       <p>
-        The TLS context is built once, at start-up. Connecting enrols a new certificate and writes it
-        to disk; the running process keeps serving the previous one, the hub verifies against the new
-        one, and the entry answers 502. The nastiest ordering is <em>restart first, enrol second</em>.
-        The criterion is now a fact:
+        The TLS context is built once, at start-up. Connecting enrols a new
+        certificate and writes it to disk; the running process keeps serving the
+        previous one, the hub verifies against the new one, and the entry
+        answers 502. The nastiest ordering is
+        <em>restart first, enrol second</em>. The criterion is now a fact:
       </p>
       <pre><code>certificate mtime &gt; process start time  =&gt;  a restart is required</code></pre>
 
       <h3>2. The tunnel started lazily</h3>
       <p>
-        The tunnel used to start only when the settings dialog was opened (a call to
-        <code>/api/cloud/state</code>), so after a reboot the entry answered 502 until somebody clicked.
-        Found during the end-to-end test; the app now starts the tunnel at boot (a failure is logged and
-        does not stop the server).
+        The tunnel used to start only when the settings dialog was opened (a
+        call to
+        <code>/api/cloud/state</code>), so after a reboot the entry answered 502
+        until somebody clicked. Found during the end-to-end test; the app now
+        starts the tunnel at boot (a failure is logged and does not stop the
+        server).
       </p>
 
       <h2>5. Four rules the field wrote for us</h2>
       <div class="note">
-        <p><strong>1. Do not prove a build with exit codes.</strong> Exit 0, <code>Successful compile</code> and a freshly written <code>version.txt</code> can all be true of an old package. The reliable combination is version, today's timestamp, and a hash different from the previous release - then install and actually run it.</p>
-        <p><strong>2. Never rebuild under the same version number.</strong> The upgrade channel compares version strings: anyone who installed that number will never see the new package.</p>
-        <p><strong>3. One driver per release train.</strong> Two writers in parallel overwrote a manifest into "new label, old numbers" - an updater comparing hashes that do not match the file.</p>
-        <p><strong>4. Every failure on real hardware becomes a test or an invariant that day.</strong> Otherwise it returns under another name.</p>
+        <p>
+          <strong>1. Do not prove a build with exit codes.</strong> Exit 0,
+          <code>Successful compile</code> and a freshly written
+          <code>version.txt</code> can all be true of an old package. The
+          reliable combination is version, today's timestamp, and a hash
+          different from the previous release - then install and actually run
+          it.
+        </p>
+        <p>
+          <strong>2. Never rebuild under the same version number.</strong> The
+          upgrade channel compares version strings: anyone who installed that
+          number will never see the new package.
+        </p>
+        <p>
+          <strong>3. One driver per release train.</strong> Two writers in
+          parallel overwrote a manifest into "new label, old numbers" - an
+          updater comparing hashes that do not match the file.
+        </p>
+        <p>
+          <strong
+            >4. Every failure on real hardware becomes a test or an invariant
+            that day.</strong
+          >
+          Otherwise it returns under another name.
+        </p>
       </div>
 
       <h2>6. For users: three steps</h2>
@@ -163,23 +347,29 @@
 Your entry afterwards:  https://&lt;callsign&gt;.mrrc.vlsc.net/
    - the callsign itself: no port, no path, no product suffix</code></pre>
       <p>
-        When something is wrong, the app's 🐞 button uploads a diagnosis bundle; if a machine's
-        environment has accumulated leftovers, the site offers a
-        <a href="zh/guide.html#clean-slate">cleanup script</a> that backs up your configuration and
-        certificates first and then removes every generation of it.
+        When something is wrong, the app's 🐞 button uploads a diagnosis bundle;
+        if a machine's environment has accumulated leftovers, the site offers a
+        <a href="zh/guide.html#clean-slate">cleanup script</a> that backs up
+        your configuration and certificates first and then removes every
+        generation of it.
       </p>
       <p>
-        If the launcher will not start - a black or flashing window - the server runs without it:
-        <em>MRRC Modern Server</em> in the Start Menu, then <code>http://127.0.0.1:8888/</code> in a
-        browser, with the password printed in the window. See the
-        <a href="zh/guide.html#launcher-trouble">install guide</a> for the details.
+        If the launcher will not start - a black or flashing window - the server
+        runs without it:
+        <em>MRRC Modern Server</em> in the Start Menu, then
+        <code>http://127.0.0.1:8888/</code> in a browser, with the password
+        printed in the window. See the
+        <a href="zh/guide.html#launcher-trouble">install guide</a> for the
+        details.
       </p>
 
       <p class="foot">
-        Written 2026-10-02, the day the MRRC Cloud Hub went live. Every detail comes from that day's
-        logs, commits and artifact checks. Companion essay:
-        <a href="muscle-and-mind.html">Highbrow and Lowbrow — On Muscle and Mind</a>.
-        <br />中文版：<a href="zh/cloud-first-mile.html">云端的第一公里</a>
+        Written 2026-10-02, the day the MRRC Cloud Hub went live. Every detail
+        comes from that day's logs, commits and artifact checks. Companion
+        essay:
+        <a href="muscle-and-mind.html"
+          >Highbrow and Lowbrow — On Muscle and Mind</a
+        >. <br />中文版：<a href="zh/cloud-first-mile.html">云端的第一公里</a>
       </p>
     </main>
   </body>

@@ -1639,5 +1639,26 @@ function toggleMobileMenu() {
 
 </script>
     <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
+
+<div class="step" id="static-patch">
+  <h4>Small patches (no full download)</h4>
+  <p>
+    Fixes that touch the web UI or assets do not need the whole installer: the site carries a
+    <strong>few-hundred-kilobyte patch</strong> and a script to apply it. It replaces files under
+    <code>_internal\static</code> only - never the Python logic - so it covers that class and nothing
+    else; anything in the compiled logic still needs a full upgrade.
+  </p>
+  <pre><code># elevated PowerShell (the script verifies SHA-256 and the target version, and backs up first)
+Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\MRRC-Modern-Patch.ps1 \
+  https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Patch.ps1
+& $env:TEMP\MRRC-Modern-Patch.ps1 -PatchUrl \
+  https://www.vlsc.net/mrrc_modern/downloads/patches/static-1.24.7-p1.zip
+
+# add -DryRun to see what it would change</code></pre>
+  <p style="color: var(--scope-text-muted)">
+    The patch index is <code>downloads/patches/patch.json</code>: which version each patch applies to,
+    and its SHA-256. Restart the app afterwards, and press Ctrl-F5 in the browser once.
+  </p>
+</div>
 </body>
 </html>

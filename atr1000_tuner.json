@@ -1,6 +1,6 @@
 {
   "version": "2.0",
-  "updated": "2026-10-02T15:22:17.753388",
+  "updated": "2026-10-03T08:24:25.068632",
   "records": [
     {
       "freq": 7050000,
@@ -28,14 +28,14 @@
     },
     {
       "freq": 14275000,
-      "sw": 1,
-      "ind": 6,
-      "cap": 16,
-      "swr_avg": 1.0780859374999985,
+      "sw": 0,
+      "ind": 8,
+      "cap": 47,
+      "swr_avg": 1.0734926470588224,
       "swr_min": 1.0,
       "swr_max": 1.585,
-      "sample_count": 128,
-      "last_update": 1790925737.7533839,
+      "sample_count": 136,
+      "last_update": 1790987065.068625,
       "needs_verify": false
     },
     {

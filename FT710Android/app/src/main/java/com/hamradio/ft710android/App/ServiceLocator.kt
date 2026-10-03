@@ -37,6 +37,7 @@ object ServiceLocator {
             onAudioTxText = {},
             onAtrEvent = {},
             onConnectionChange = { vm.onConnectionChange(it) },
+            onListenOnly = { vm.onListenOnly() },
         )
         vm = MainViewModel(
             authApi = authApi,

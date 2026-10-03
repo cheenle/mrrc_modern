@@ -49,6 +49,7 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
     val waterfall by vm.waterfall.collectAsState()
     val fft by vm.fft.collectAsState()
     val connected by vm.connected.collectAsState()
+    val listenOnly by vm.listenOnly.collectAsState()
     val mem by vm.memChannels.collectAsState()
     val scopeSpanHz = when (state.scopeSpan) { 0 -> 100000L; 1 -> 1000000L; 2 -> 50000L; else -> 100000L }
 
@@ -61,6 +62,9 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
             Spacer(Modifier.weight(1f))
             Text("${state.modeName} ${state.bandName}", fontSize = 12.sp)
             TextButton(onClick = onOpenSettings) { Text("设置", fontSize = 12.sp) }
+        }
+        if (listenOnly) {
+            Text("只读登录（listen-only）：发射与设备设置已被服务端禁用", fontSize = 12.sp, color = Color(0xFFE67E22))
         }
         // VFO A/B + 步进
         Row(verticalAlignment = Alignment.CenterVertically) {

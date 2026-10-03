@@ -41,6 +41,8 @@ class MainViewModel(
     val fft: StateFlow<IntArray> = _fft
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected
+    private val _listenOnly = MutableStateFlow(false)
+    val listenOnly: StateFlow<Boolean> = _listenOnly
     private val _bands = MutableStateFlow<List<String>>(emptyList())
     val bands: StateFlow<List<String>> = _bands
     private val _modes = MutableStateFlow<List<String>>(emptyList())
@@ -79,6 +81,9 @@ class MainViewModel(
     /** ConnectionManager 四路聚合状态透传（修复：此前无人写入 _connected）。 */
     fun onConnectionChange(connected: Boolean) { _connected.value = connected }
 
+    /** 只读登录（服务端以 4003 关闭 TX/ATR 通道）——隐藏发射类 UI。 */
+    fun onListenOnly() { _listenOnly.value = true }
+
     private fun onMemChannels(list: List<JsonElement?>) {
         _mem.value = MemoryChannels.parse(list)
     }
@@ -86,6 +91,7 @@ class MainViewModel(
     suspend fun connect(host: String, port: String, password: String): AuthResult {
         val api = authApi ?: return AuthResult.Failure(0, "auth not configured")
         val base = "https://$host:$port"
+        _listenOnly.value = false
         val res = api.login(base, password)
         if (res is AuthResult.Success) {
             connectionManager.start(base, res.token)
@@ -96,6 +102,7 @@ class MainViewModel(
     suspend fun logout() {
         connectionManager.stopAll()
         _connected.value = false
+        _listenOnly.value = false
     }
 
     fun sendSet(field: String, value: Any) = connectionManager.sendSet(field, value)
@@ -130,7 +137,7 @@ class MainViewModel(
         connectionManager.sendMemSave(MemoryChannels.toJson(list))
     }
 
-    fun disconnect() { connectionManager.stopAll(); _connected.value = false }
+    fun disconnect() { connectionManager.stopAll(); _connected.value = false; _listenOnly.value = false }
 
     fun setScopeSpan(span: Int) = sendSet("scope_span", span)
     fun setRfPower(w: Int) = sendSet("rf_power", w)

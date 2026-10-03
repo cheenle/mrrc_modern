@@ -43,6 +43,14 @@ class MainViewModelTest {
         assertFalse(vm.connected.value)
     }
 
+    @Test fun `listen only event flips the flow`() = runTest(UnconfinedTestDispatcher()) {
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val vm = MainViewModel(null, cm(scope), null, null, null, null, null, scope)
+        assertFalse(vm.listenOnly.value)
+        vm.onListenOnly()
+        assertTrue(vm.listenOnly.value)
+    }
+
     @Test fun `stateUpdate with tx_status feeds ptt manager`() = runTest(UnconfinedTestDispatcher()) {
         val scope = CoroutineScope(UnconfinedTestDispatcher())
         var fed = -1

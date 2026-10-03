@@ -14,6 +14,7 @@ class WebSocketConnection(
     private val onText: (String) -> Unit,
     private val onBinary: (ByteArray) -> Unit,
     private val onStateChange: (State) -> Unit,
+    private val onClosedCode: (Int) -> Unit = {},
 ) {
     enum class State { Idle, Connecting, Connected, Failed }
 
@@ -31,7 +32,11 @@ class WebSocketConnection(
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 onStateChange(State.Failed)
             }
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(code, reason)   // 完成关闭握手，确保 onClosed 到达
+            }
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                onClosedCode(code)
                 onStateChange(State.Failed)
             }
         })

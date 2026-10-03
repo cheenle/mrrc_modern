@@ -17,6 +17,7 @@ class ConnectionManager(
     private val onAudioTxText: (String) -> Unit,
     private val onAtrEvent: (String) -> Unit,
     private val onConnectionChange: (Boolean) -> Unit,
+    private val onListenOnly: () -> Unit = {},
     private val sendOverride: ((String) -> Unit)? = null,
 ) {
     private var radio: WebSocketConnection? = null
@@ -28,6 +29,7 @@ class ConnectionManager(
     private val connectedFlags = mutableSetOf<String>()
 
     @Volatile var isConnected: Boolean = false; private set
+    @Volatile var listenOnly: Boolean = false; private set
 
     private var _baseUrl: String? = null
     private var _token: String? = null
@@ -47,9 +49,9 @@ class ConnectionManager(
             onText = { onRadioEvent(parseWsEvent(it)) }, onBinary = {})
         audioRx = connect(baseUrl, "/WSaudioRX", token, onText = {}, onBinary = { onAudioRx(it) })
         audioTx = connect(baseUrl, "/WSaudioTX", token,
-            onText = { onAudioTxText(it) }, onBinary = {}) // 上行二进制由 sendTxAudioBinary 发送
+            onText = { onAudioTxText(it) }, onBinary = {}, onClosedCode = ::handleCloseCode) // 上行二进制由 sendTxAudioBinary 发送
         spectrum = connect(baseUrl, "/WSspectrum", token, onText = {}, onBinary = { onSpectrum(it) })
-        atr = connect(baseUrl, "/WSatr1000", token, onText = { onAtrEvent(it) }, onBinary = {})
+        atr = connect(baseUrl, "/WSatr1000", token, onText = { onAtrEvent(it) }, onBinary = {}, onClosedCode = ::handleCloseCode)
         heartbeat?.cancel()
         heartbeat = scope.launch { while (isActive) { sendPing(); delay(2000) } }
     }
@@ -58,7 +60,7 @@ class ConnectionManager(
         heartbeat?.cancel()
         listOfNotNull(radio, audioRx, audioTx, spectrum, atr).forEach { it.close() }
         radio = null; audioRx = null; audioTx = null; spectrum = null; atr = null
-        connectedFlags.clear(); updateConnected()
+        connectedFlags.clear(); updateConnected(); listenOnly = false
     }
 
     fun sendSet(field: String, value: Any) {
@@ -89,19 +91,35 @@ class ConnectionManager(
         token: String,
         onText: (String) -> Unit,
         onBinary: (ByteArray) -> Unit,
+        onClosedCode: (Int) -> Unit = {},
     ): WebSocketConnection {
         val url = wsUrl(baseUrl, path, token)
-        val conn = WebSocketConnection(client, url, onText, onBinary) { state ->
-            if (state == WebSocketConnection.State.Connected) connectedFlags.add(path)
-            else connectedFlags.remove(path)
-            updateConnected()
-        }
+        val conn = WebSocketConnection(
+            client, url, onText, onBinary,
+            onStateChange = { state ->
+                if (state == WebSocketConnection.State.Connected) connectedFlags.add(path)
+                else connectedFlags.remove(path)
+                updateConnected()
+            },
+            onClosedCode = onClosedCode,
+        )
         conn.connect()
         return conn
     }
 
+    private fun handleCloseCode(code: Int) {
+        if (code == 4003 && !listenOnly) {
+            listenOnly = true
+            connectedFlags.remove("/WSaudioTX")
+            updateConnected()
+            onListenOnly()
+        }
+    }
+
     private fun updateConnected() {
-        val all = setOf("/WSradio", "/WSaudioRX", "/WSaudioTX", "/WSspectrum").all { it in connectedFlags }
+        val required = if (listenOnly) setOf("/WSradio", "/WSaudioRX", "/WSspectrum")
+                       else setOf("/WSradio", "/WSaudioRX", "/WSaudioTX", "/WSspectrum")
+        val all = required.all { it in connectedFlags }
         if (all != isConnected) { isConnected = all; onConnectionChange(all) }
     }
 

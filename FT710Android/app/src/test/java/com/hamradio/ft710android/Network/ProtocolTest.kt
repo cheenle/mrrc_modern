@@ -56,4 +56,38 @@ class ProtocolTest {
         assertTrue((ev as WsEvent.FullState).bands.isEmpty())
         assertNull(ev.filterTables)
     }
+
+    @Test fun `parses recordingState`() {
+        val ev = parseWsEvent(
+            """{"type":"recordingState","recording":{"recording":true,"freq_hz":7050000,"started_at":"2026-10-03T12:00:00","duration":12.5,"name":"7050000kHz_20261003_120000.mp3","bytes":123456,"dropped":0}}"""
+        )
+        assertTrue(ev is WsEvent.RecordingState)
+        val status = (ev as WsEvent.RecordingState).status
+        assertEquals(7050000L, status.freqHz)
+        assertEquals(true, status.recording)
+        assertEquals(12.5, status.duration, 0.001)
+    }
+
+    @Test fun `parses cqState`() {
+        val ev = parseWsEvent(
+            """{"type":"cqState","cq":{"state":"calling","duration_s":6.1,"elapsed_s":2.0,"frames_total":305,"frames_sent":100,"started_by":"abc123","reason":null,"ready":true}}"""
+        )
+        assertTrue(ev is WsEvent.CqState)
+        assertEquals("calling", (ev as WsEvent.CqState).status.state)
+        assertEquals(305, ev.status.framesTotal)
+    }
+
+    @Test fun `fullState exposes recording and cq capability`() {
+        val withFeatures = parseWsEvent(
+            """{"type":"fullState","data":{},"bands":[],"modes":[],"memChannels":[],"recording":{"recording":false},"cq":{"state":"idle"},"radioModel":"ft710"}"""
+        ) as WsEvent.FullState
+        assertEquals(false, withFeatures.recording?.recording)
+        assertEquals("idle", withFeatures.cq?.state)
+        assertEquals("ft710", withFeatures.radioModel)
+        val without = parseWsEvent(
+            """{"type":"fullState","data":{},"bands":[],"modes":[],"memChannels":[]}"""
+        ) as WsEvent.FullState
+        assertNull(without.recording)
+        assertNull(without.cq)
+    }
 }

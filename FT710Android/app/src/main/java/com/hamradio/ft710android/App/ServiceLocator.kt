@@ -4,6 +4,7 @@ import com.hamradio.ft710android.Audio.RxAudioPlayer
 import com.hamradio.ft710android.Audio.TxAudioCapture
 import com.hamradio.ft710android.Network.AuthApi
 import com.hamradio.ft710android.Network.ConnectionManager
+import com.hamradio.ft710android.Network.RecordingsApi
 import com.hamradio.ft710android.PTT.PTTManager
 import com.hamradio.ft710android.Spectrum.SpectrumProcessor
 import com.hamradio.ft710android.ViewModel.MainViewModel
@@ -28,6 +29,7 @@ object ServiceLocator {
         val rx = RxAudioPlayer()
         val tx = TxAudioCapture(FT710App.instance) { bytes -> vm.connectionManager.sendTxAudioBinary(bytes) }
         val spectrum = SpectrumProcessor()
+        val recordingsApi = RecordingsApi(client)
 
         val cm = ConnectionManager(
             client, scope,
@@ -46,6 +48,7 @@ object ServiceLocator {
             txCapture = tx,
             spectrumProcessor = spectrum,
             memoryChannelsStore = null,
+            recordingsApi = recordingsApi,
             pttManager = PTTManager(
                 sendPTT = { on -> cm.sendSet("ptt", on) },
                 sendTXAudioStop = { cm.sendTxAudioText("s:") },

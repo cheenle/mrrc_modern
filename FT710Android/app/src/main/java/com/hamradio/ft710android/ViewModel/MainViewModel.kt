@@ -6,14 +6,20 @@ import com.hamradio.ft710android.Data.RadioState
 import com.hamradio.ft710android.Network.AuthApi
 import com.hamradio.ft710android.Network.AuthResult
 import com.hamradio.ft710android.Network.ConnectionManager
+import com.hamradio.ft710android.Network.CqStatusDto
+import com.hamradio.ft710android.Network.RecordingRow
+import com.hamradio.ft710android.Network.RecordingStatusDto
+import com.hamradio.ft710android.Network.RecordingsApi
 import com.hamradio.ft710android.Network.WsEvent
 import com.hamradio.ft710android.PTT.PTTManager
 import com.hamradio.ft710android.Spectrum.SpectrumProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import java.io.File
 
 /**
  * 总协调器：登录→4 路连接→事件分发→状态/音频/频谱/PTT。普通类，Compose 内 remember 创建。
@@ -28,6 +34,7 @@ class MainViewModel(
     private val memoryChannelsStore: MemoryStore?,
     val pttManager: PTTManager?,
     private val scope: CoroutineScope,
+    private val recordingsApi: RecordingsApi? = null,
 ) {
     val state = RadioState()
 
@@ -53,6 +60,18 @@ class MainViewModel(
     val atr1000Enabled: StateFlow<Boolean> = _atr
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
+    private val _recordings = MutableStateFlow<List<RecordingRow>>(emptyList())
+    val recordings: StateFlow<List<RecordingRow>> = _recordings
+    private val _recordingState = MutableStateFlow(RecordingStatusDto())
+    val recordingState: StateFlow<RecordingStatusDto> = _recordingState
+    private val _recordingsAvailable = MutableStateFlow(false)
+    val recordingsAvailable: StateFlow<Boolean> = _recordingsAvailable
+    private val _cq = MutableStateFlow<CqStatusDto?>(null)
+    val cq: StateFlow<CqStatusDto?> = _cq
+    private val _cqAvailable = MutableStateFlow(false)
+    val cqAvailable: StateFlow<Boolean> = _cqAvailable
+    private var baseUrl: String? = null
+    private var token: String? = null
 
     fun onWsEvent(ev: WsEvent) {
         when (ev) {
@@ -62,6 +81,10 @@ class MainViewModel(
                 _bands.value = ev.bands
                 _modes.value = ev.modes
                 _atr.value = ev.atr1000Enabled
+                _recordingsAvailable.value = ev.recording != null
+                _cqAvailable.value = ev.cq != null
+                ev.recording?.let { _recordingState.value = it }
+                ev.cq?.let { _cq.value = it }
                 onMemChannels(ev.memChannels)
             }
             is WsEvent.StateUpdate -> {
@@ -70,6 +93,8 @@ class MainViewModel(
                 if ("tx_status" in dirty) pttManager?.onStatusReceived(state.txStatus)
             }
             is WsEvent.MemChannels -> onMemChannels(ev.channels)
+            is WsEvent.RecordingState -> _recordingState.value = ev.status
+            is WsEvent.CqState -> _cq.value = ev.status
             is WsEvent.ErrorEvent -> _error.value = ev.message
             else -> Unit
         }
@@ -94,6 +119,7 @@ class MainViewModel(
         _listenOnly.value = false
         val res = api.login(base, password)
         if (res is AuthResult.Success) {
+            baseUrl = base; token = res.token
             connectionManager.start(base, res.token)
         }
         return res
@@ -103,6 +129,8 @@ class MainViewModel(
         connectionManager.stopAll()
         _connected.value = false
         _listenOnly.value = false
+        baseUrl = null; token = null
+        _recordingsAvailable.value = false; _cqAvailable.value = false
     }
 
     fun sendSet(field: String, value: Any) = connectionManager.sendSet(field, value)
@@ -137,10 +165,44 @@ class MainViewModel(
         connectionManager.sendMemSave(MemoryChannels.toJson(list))
     }
 
-    fun disconnect() { connectionManager.stopAll(); _connected.value = false; _listenOnly.value = false }
+    fun disconnect() {
+        connectionManager.stopAll(); _connected.value = false; _listenOnly.value = false
+        baseUrl = null; token = null
+        _recordingsAvailable.value = false; _cqAvailable.value = false
+    }
 
     fun setScopeSpan(span: Int) = sendSet("scope_span", span)
     fun setRfPower(w: Int) = sendSet("rf_power", w)
+
+    // ── 录音（AD-017）与 CQ（AD-020）───────────────────────────────
+    fun startRecording() = sendSet("recording", true)
+    fun stopRecording() = sendSet("recording", false)
+    fun startCq() = sendSet("cq", true)
+    fun abortCq() = sendSet("cq", false)
+
+    fun refreshRecordings() {
+        val api = recordingsApi ?: return
+        val base = baseUrl ?: return
+        val t = token ?: return
+        scope.launch { _recordings.value = api.list(base, t) }
+    }
+
+    fun deleteRecording(name: String) {
+        val api = recordingsApi ?: return
+        val base = baseUrl ?: return
+        val t = token ?: return
+        scope.launch { if (api.delete(base, t, name)) refreshRecordings() }
+    }
+
+    suspend fun downloadRecording(name: String, destDir: File): File? {
+        val api = recordingsApi ?: return null
+        val base = baseUrl ?: return null
+        val t = token ?: return null
+        return api.download(base, t, name, File(destDir, name))
+    }
+
+    fun showError(message: String) { _error.value = message }
+    fun clearError() { _error.value = null }
 
     // 轻量接口，便于测试注入与对音频/频谱的强类型
     interface RxPlayerLike { fun onFrame(frame: ByteArray) }

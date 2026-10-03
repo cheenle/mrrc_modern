@@ -51,6 +51,16 @@ class MainViewModelTest {
         assertTrue(vm.listenOnly.value)
     }
 
+    @Test fun `fullState with recording and cq marks them available`() = runTest(UnconfinedTestDispatcher()) {
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val vm = MainViewModel(null, cm(scope), null, null, null, null, null, scope)
+        vm.onWsEvent(parseWsEvent(
+            """{"type":"fullState","data":{},"bands":[],"modes":[],"memChannels":[],"recording":{"recording":false},"cq":{"state":"idle"}}"""
+        ))
+        assertTrue(vm.recordingsAvailable.value)
+        assertTrue(vm.cqAvailable.value)
+    }
+
     @Test fun `stateUpdate with tx_status feeds ptt manager`() = runTest(UnconfinedTestDispatcher()) {
         val scope = CoroutineScope(UnconfinedTestDispatcher())
         var fed = -1

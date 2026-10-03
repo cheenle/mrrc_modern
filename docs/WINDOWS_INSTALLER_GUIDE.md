@@ -254,7 +254,7 @@ true spectrum) FTDI libraries. The complete per-radio configurations are:
 MRRC_RADIO_MODEL=ft710
 MRRC_SERIAL_PORT=COM3          # Enhanced COM Port (lower of the two CP210x ports)
 MRRC_BAUD_RATE=38400
-MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_HOST=0.0.0.0        # 随包默认值（所有接口）；改成 127.0.0.1 则仅本机可达
 MRRC_WEB_PORT=8888
 MRRC_WEB_PASSWORD=change_this_password
 MRRC_SCOPE_PORT=               # leave empty to auto-detect the FT4222 port
@@ -391,9 +391,10 @@ TX modulation source is configured **per mode** (FT-710 Operation Manual,
 Start `MRRC Modern` from the Start Menu or desktop shortcut. The launcher:
 
 1. Reads `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`.
-2. Starts the bundled server and waits for it to answer HTTP before opening
-   `http://localhost:8888` in the default browser (up to ~15 seconds on the
-   first run).
+2. Starts the bundled server, probes it on **both** schemes (`https` first) and opens
+   whichever one actually answers in the default browser, printing the URL it chose —
+   so a scheme mismatch lands in the log instead of in an empty browser tab
+   (up to ~15 seconds on the first run).
 3. Use Ctrl-C in the launcher window for a graceful stop (audio drains and
    PTT releases first).
 

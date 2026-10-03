@@ -1029,7 +1029,8 @@ print_summary() {
 
   # Configuration
   echo -e "  ${BOLD}Configuration:${NC}"
-  echo "    Server URL:    http://localhost:${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}"
+  echo "    Server URL:    https://localhost:${MRRC_WEB_PORT:-${FT710_WEB_PORT:-8888}}"
+  echo "                   (TLS only - accept the self-signed certificate warning on first visit)"
   echo "    Login password: ${MRRC_WEB_PASSWORD:-${FT710_WEB_PASSWORD:-mrrc}}"
   echo "    Serial port:   ${MRRC_SERIAL_PORT:-${FT710_SERIAL_PORT:-auto}}"
   echo "    Config file:   $SCRIPT_DIR/.env"

@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1579 tests across 83 test modules (17 skip on Windows, 1 on macOS; totals re-read
+1583 tests across 84 test modules (17 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-03, macOS). The per-module sections below
-itemise 68 of those 83 — the support-chain, Cloud Hub and upgrade-channel modules
+itemise 69 of those 84 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1579 |
-| Passed | 1579 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1583 |
+| Passed | 1583 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -714,7 +714,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1579 tests in ~29s — can run on every commit.
+2. **Fast execution**: ~1583 tests in ~29s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.
@@ -736,3 +736,4 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_listen_default.py` | Windows 随包模板与启动器兜底都必须绑所有接口，且两者一致（曾经只有它写 `127.0.0.1`） |
 | `test_ui_api_base.py` | `basePath()` 对裸路由（`/login`、`/login/api/…`）解析为根 —— 否则 API 打到 SPA 回退拿到 HTML。**用 node 执行真函数**，不测转写 |
 | `test_static_cache_busting.py` | `index.html` 的 `?v=` 与 `sw.js` 预缓存清单必须逐项一致（SW 只在自己字节变化时重装，键不动就永远发不出新文件） |
+| `test_install_sh_url.py` | macOS 源码安装脚本交给用户的 URL 必须是 `https://` —— 它写 `MRRC_WEB_HOST=0.0.0.0` 且从不关 TLS，却一直打印 `http://localhost:8888`（v1.24.5 黑屏的缩影）；顺带守住"别哪天偷偷关掉 TLS 让这句承诺反过来变错" |

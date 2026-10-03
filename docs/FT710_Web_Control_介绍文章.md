@@ -90,7 +90,8 @@ cd FT710
 
 ```
   Configuration:
-    Server URL:    http://localhost:8888
+    Server URL:    https://localhost:8888
+                   (只监听 TLS —— 首次访问浏览器会提示自签名证书，点「继续」即可)
     Login password: a1b2c3d4e5f6g7h8
     Serial port:   /dev/cu.usbserial-0121DB3A0
 ```

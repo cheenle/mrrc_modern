@@ -60,19 +60,38 @@ def generate_password() -> str:
     return secrets.token_urlsafe(16)
 
 
+# 会“应答 open() 然后永远吞掉写入”的口。2026-10-03 实测："Intel(R) Active Management
+# Technology - SOL" 把一个 launcher 卡在 probe_ft710() 的 write 里数小时。
+# 它本身是 PCI 设备，hwid 那一关也会拦住——这里当兼保险，因为卡在这里的代价是整次安装
+# （没有服务、没有证书、没有日志、控制台全黑）。
+NEVER_PROBE_KEYWORDS = (
+    "active management technology",
+    "amt - sol",
+    "intel(r) active management",
+)
+
+
 def _candidates(ports: list) -> list:
-    """Platform filter: /dev/cu.* on macOS, all serial ports elsewhere."""
+    """平台过滤：macOS 只取 /dev/cu.*，其他平台取“值得探测”的串口。"""
     if sys.platform == "darwin":
         bogus = ("/dev/cu.Bluetooth", "/dev/cu.IRComm", "/dev/cu.debug-console")
         return [
             p for p in ports
             if p.device.startswith("/dev/cu.") and not p.device.startswith(bogus)
         ]
-    # Windows (COM*) / Linux (/dev/tty*): exclude obviously bogus entries
-    return [
-        p for p in ports
-        if p.device
-    ]
+    # Windows (COM*) / Linux (/dev/tty*)：电台一定是 USB 转串口，所以系统描述成 PCI 设备的、
+    # 或命中上面那几个“永不探测”名字的，都不是它。
+    out = []
+    for p in ports:
+        if not p.device:
+            continue
+        text = f"{p.description or ''} {p.hwid or ''}".lower()
+        if any(s in text for s in NEVER_PROBE_KEYWORDS):
+            continue
+        if (p.hwid or "").upper().startswith("PCI"):
+            continue
+        out.append(p)
+    return out
 
 
 def detect_serial_ports(comports: list | None = None) -> list[str]:
@@ -81,8 +100,14 @@ def detect_serial_ports(comports: list | None = None) -> list[str]:
     candidates = _candidates(ports)
 
     def _key(p) -> tuple[int, str]:
-        text = (p.description + " " + p.hwid).lower()
-        if any(s in text for s in ("cp210x", "slab", "usbserial", "usb serial", "usb-serial")):
+        text = ((p.description or "") + " " + (p.hwid or "")).lower()
+        # 2026-10-03 实测：电台自报的描述是 "Silicon Labs Dual CP2105 USB to UART Bridge" ——
+        # 它既不包含 "cp210x"（型号是 cp2105，末位不是 x），也不包含 "slab"
+        # （"silicon labs" 里没有 slab 这个子串），于是这里想要的“电台口优先”静默失效，
+        # 候选保持注册表顺序，**第一个被探测的就是那台机器的 Intel AMT SOL 口**。
+        radio_ish = ("cp210", "silicon labs", "slab", "usbserial", "usb serial", "usb-serial",
+                     "ftdi", "prolific", "ch340", "usb vid:pid", "usb\\vid_")
+        if any(s in text for s in radio_ish):
             return (0, p.device)
         return (1, p.device)
 
@@ -117,11 +142,20 @@ def probe_radio_model(
     port: str,
     open_func: Callable[..., Any] = serial.Serial,
     timeout: float = 1.0,
+    write_timeout: float = 1.0,
 ) -> str | None:
-    """Try FT-710 then IC-7300 on ``port``; return model or None."""
+    """Try FT-710 then IC-7300 on ``port``; return model or None.
+
+    ``write_timeout`` 不是装饰：pyserial 的默认值是 None，意思是**写入永远阻塞**。
+    2026-10-03 实测 — 一台机器的 "Intel(R) Active Management Technology - SOL" 口 open 正常、
+    但一个字节也写不进去；launcher 的首次探测就坐在那次 write 里数小时，控制台一行输出都没有
+    （所有 print 都在探测之后），launcher.log 也没有（卡住不是异常，report_fatal 不会触发）。
+    给了超时之后它会变成 SerialTimeoutException，而调用方本来就把它当“这个口不行”跳过。
+    """
     for baud, probe in ((38400, probe_ft710), (115200, probe_ic7300)):
         try:
-            ser = open_func(port=port, baudrate=baud, timeout=timeout)
+            ser = open_func(port=port, baudrate=baud, timeout=timeout,
+                            write_timeout=write_timeout)
         except Exception:
             continue
         try:
@@ -225,6 +259,10 @@ def apply_first_run(
         updates["MRRC_WEB_PASSWORD"] = pwd
         env["MRRC_AUTO_PASSWORD"] = "1"
         updates["MRRC_AUTO_PASSWORD"] = "1"
+        # 立刻落盘，而不是等最后那次批量写入。2026-10-03 实测：串口探测再也没返回，
+        # 留给运维的配置是原封不动的模板 —— 口令是空的、也没有 MRRC_FIRST_RUN_DONE，
+        # 因为那个口令只存在于内存里。
+        update_env_file(config_path, {"MRRC_WEB_PASSWORD": pwd, "MRRC_AUTO_PASSWORD": "1"})
 
     port = env.get("MRRC_SERIAL_PORT", "").strip()
     model = env.get("MRRC_RADIO_MODEL", "").strip().lower()
@@ -233,6 +271,10 @@ def apply_first_run(
 
     if port_unset or model_unset:
         ports = detect_serial_ports()
+        # 探测之前先出声：这个循环要花几秒到几十秒，而 launcher 里其他 print 全在它后面，
+        # 所以这里一卡住就是“全黑窗口、毫无线索”（现场报障的原话就是黑屏）。
+        print("Detecting the radio on %d serial port(s): %s"
+              % (len(ports), ", ".join(ports) or "(none found)"), flush=True)
         found: tuple[str, str] | None = None
         for candidate in ports:
             found_model = probe_radio_model(candidate, open_func=open_func)

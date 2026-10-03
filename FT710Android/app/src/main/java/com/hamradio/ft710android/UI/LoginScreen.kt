@@ -49,7 +49,7 @@ fun LoginScreen(vm: MainViewModel, settings: SettingsStore, onLoggedIn: () -> Un
 
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(Modifier.height(80.dp))
-        Text("FT-710 Control", style = MaterialTheme.typography.headlineMedium)
+        Text("MRRC Modern", style = MaterialTheme.typography.headlineMedium)
         Text("服务器证书未验证（自签）", style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(host, { host = it }, label = { Text("服务器") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -59,6 +59,8 @@ fun LoginScreen(vm: MainViewModel, settings: SettingsStore, onLoggedIn: () -> Un
         OutlinedTextField(password, { password = it }, label = { Text("密码") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth())
+        Text("局域网：主机 192.168.x.x / 端口 8888；云端：主机 <呼号>.mrrc.vlsc.net / 端口 443",
+            style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(24.dp))
         Button(onClick = {
             if (busy || !initialized) return@Button

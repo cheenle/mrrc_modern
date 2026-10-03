@@ -322,7 +322,7 @@
 </tr>
 <tr>
 <td>2. 打开页面</td>
-<td>手机/电脑浏览器访问 <code>https://&lt;服务器IP&gt;:8888</code>（局域网）或 <code>http://localhost:8888</code>（本机）。iPhone 上建议用 Safari 并「添加到主屏幕」以获得 PWA 全屏体验。</td>
+<td>手机/电脑浏览器访问 <code>https://&lt;服务器IP&gt;:8888</code>。<strong>两处都写 <code>https://</code></strong> —— 服务只为 TLS 监听，同一端口的明文 HTTP 不应答（v1.24.5 的”装完黑屏”正是这么来的：启动器把人送到 <code>https://</code>，而服务器退回了 <code>http://</code>）。自签名证书首次会警告一次，点「继续」即可。默认监听所有接口（<code>MRRC_WEB_HOST=0.0.0.0</code>），所以局域网内直接用 IP 就能打开；只想本机可达就把它改回 <code>127.0.0.1</code>。iPhone 上建议用 Safari 并「添加到主屏幕」以获得 PWA 全屏体验。</td>
 </tr>
 <tr>
 <td>3. 登录</td>
@@ -439,7 +439,7 @@
 <pre class="ini"><code>MRRC_RADIO_MODEL=ic7300        # 或 ic7300mk2
 MRRC_SERIAL_PORT=COM5          # 改成设备管理器里看到的 CI-V COM 口
 MRRC_BAUD_RATE=115200
-MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_HOST=0.0.0.0        # 随包默认值（所有接口）；改成 127.0.0.1 则仅本机可达
 MRRC_WEB_PORT=8888
 MRRC_WEB_PASSWORD=change_this_password
 MRRC_AUDIO_RX_DEVICE=USB Audio
@@ -477,7 +477,7 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
 <pre class="ini"><code>MRRC_RADIO_MODEL=ft710
 MRRC_SERIAL_PORT=COM3          # 改成 Enhanced COM Port（两个 CP210x 里较低编号）
 MRRC_BAUD_RATE=38400
-MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_HOST=0.0.0.0        # 随包默认值（所有接口）；改成 127.0.0.1 则仅本机可达
 MRRC_WEB_PORT=8888
 MRRC_WEB_PASSWORD=change_this_password
 MRRC_AUDIO_RX_DEVICE=USB Audio

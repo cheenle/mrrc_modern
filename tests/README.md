@@ -5,10 +5,10 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1540 tests across 77 test modules (7 pty-based Yaesu round-trip tests skip on
-Windows; totals re-read from `unittest discover` on 2026-10-02, macOS). The
-per-module sections below itemise 63 of those 77 — the support-chain, Cloud Hub
-and upgrade-channel modules predate the list and are not yet written up, so
+1579 tests across 83 test modules (17 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-03, macOS). The per-module sections below
+itemise 68 of those 83 — the support-chain, Cloud Hub and upgrade-channel modules
+predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
 ```bash
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1540 |
-| Passed | 1540 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1579 |
+| Passed | 1579 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -714,7 +714,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1461 tests in ~29s — can run on every commit.
+2. **Fast execution**: ~1579 tests in ~29s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.
@@ -727,3 +727,12 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_ws_token_transport.py` | 令牌经 cookie / Bearer / WS 握手头到达；query 形式触发弃用告警 |
 | `test_session_metrics.py` | `/api/session_metrics` 的聚合与并发计数 |
 | `test_tx_liveness.py` | PTT 活性闸门：默认关闭、心跳超时释放、复用 key-owner 仲裁 |
+
+### 本轮新增（v1.25.0 的四处守卫，2026-10-03）
+
+| 测试 | 覆盖 |
+| ------ | ------ |
+| `test_first_run_probe.py` | 首次运行的串口探测不可能卡死：探测传 `write_timeout`、吞掉写入的口被跳过、AMT/PCI 口不进候选、真实描述算作电台口（含一个"按名字排序会跑到电台前面"的判别用例）、**口令在探测前落盘**、探测前先出声 |
+| `test_listen_default.py` | Windows 随包模板与启动器兜底都必须绑所有接口，且两者一致（曾经只有它写 `127.0.0.1`） |
+| `test_ui_api_base.py` | `basePath()` 对裸路由（`/login`、`/login/api/…`）解析为根 —— 否则 API 打到 SPA 回退拿到 HTML。**用 node 执行真函数**，不测转写 |
+| `test_static_cache_busting.py` | `index.html` 的 `?v=` 与 `sw.js` 预缓存清单必须逐项一致（SW 只在自己字节变化时重装，键不动就永远发不出新文件） |

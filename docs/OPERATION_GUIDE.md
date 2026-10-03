@@ -9,7 +9,7 @@
 | 步骤 | 说明 |
 | ------ | ------ |
 | 1. 启动服务 | 在电台电脑上运行 `python server.py`（或 Windows 安装版/桌面启动器），服务默认监听 `0.0.0.0:8888`，HTTPS 优先（首次运行自动生成自签名证书）。 |
-| 2. 打开页面 | 手机/电脑浏览器访问 `https://<服务器IP>:8888`（局域网）或 `http://localhost:8888`（本机）。iPhone 上建议用 Safari 并「添加到主屏幕」以获得 PWA 全屏体验。 |
+| 2. 打开页面 | 手机/电脑浏览器访问 `https://<服务器IP>:8888`。**两处都写 `https://`** —— 服务只为 TLS 监听，同一端口的明文 HTTP 不应答（v1.24.5 的"装完黑屏"正是这么来的：启动器把人送到 `https://`，而服务器退回了 `http://`）。自签名证书首次会警告一次，点「继续」即可。默认监听所有接口（`MRRC_WEB_HOST=0.0.0.0`），所以局域网内直接用 IP 就能打开；只想本机可达就把它改回 `127.0.0.1`。iPhone 上建议用 Safari 并「添加到主屏幕」以获得 PWA 全屏体验。 |
 | 3. 登录 | 输入共享密码（服务启动时由 `MRRC_WEB_PASSWORD` 或安装向导设置），点 **Login**。成功后在 `mrrc_auth` Cookie（30 天有效）；密码错误返回 401，5 分钟内连续 5 次失败会触发 429 限流，需等待后再试。 |
 | 4. 建立连接 | 手机端：点顶栏 **⏻** 开始连接（见控件 5）；桌面端打开页面后自动连接。状态栏 ●Serial 变绿表示与电台的 CAT 串口已连通。 |
 
@@ -67,7 +67,7 @@
 MRRC_RADIO_MODEL=ic7300        # 或 ic7300mk2
 MRRC_SERIAL_PORT=COM5          # 改成设备管理器里看到的 CI-V COM 口
 MRRC_BAUD_RATE=115200
-MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_HOST=0.0.0.0        # 随包默认值（所有接口）；改成 127.0.0.1 则仅本机可达
 MRRC_WEB_PORT=8888
 MRRC_WEB_PASSWORD=change_this_password
 MRRC_AUDIO_RX_DEVICE=USB Audio
@@ -113,7 +113,7 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
 MRRC_RADIO_MODEL=ft710
 MRRC_SERIAL_PORT=COM3          # 改成 Enhanced COM Port（两个 CP210x 里较低编号）
 MRRC_BAUD_RATE=38400
-MRRC_WEB_HOST=127.0.0.1
+MRRC_WEB_HOST=0.0.0.0        # 随包默认值（所有接口）；改成 127.0.0.1 则仅本机可达
 MRRC_WEB_PORT=8888
 MRRC_WEB_PASSWORD=change_this_password
 MRRC_AUDIO_RX_DEVICE=USB Audio

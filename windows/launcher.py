@@ -51,7 +51,9 @@ def ensure_config() -> Path:
             path.write_text(default.read_text(encoding="utf-8"), encoding="utf-8")
         else:
             path.write_text(
-                "MRRC_WEB_HOST=127.0.0.1\n"
+                # Same value as windows/default.env: if that template ever goes missing, the
+                # fallback must not quietly make the app reachable from this machine only.
+                "MRRC_WEB_HOST=0.0.0.0\n"
                 "MRRC_WEB_PORT=8888\n"
                 "MRRC_SERIAL_PORT=COM3\n",
                 encoding="utf-8",

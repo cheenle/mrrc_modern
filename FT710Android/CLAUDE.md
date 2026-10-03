@@ -56,3 +56,12 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - `--no-ssl` 时 baseUrl 用 `http://`，`ConnectionManager.wsUrl` 自动转 `ws://`。
 - 后台 RX 播放未实现（v1 决策）；退后台即停 TX。44.1k 设备采集重采样留作后续增强。
 - `RadioState` 字段与 `radio_state.py:to_dict` 的 key 一一对应，新增字段两端同步。
+
+## v1.0.0 协议增量（逐字对齐 server.py）
+
+- **txhb**：控制通道 `/WSradio` 文本消息 `{"type":"txhb"}`；`PTTManager` 按键即发第一次、每 500ms 一次，`release()/forceRelease()` 停发。服务端 `server.py:1768` 以此声明活性闸门能力（`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`，只对按键方生效；TUNE 不在闸门内，客户端不接）。
+- **录音（AD-017）**：控制通道 `set recording true/false`；下行 `recordingState`；REST `GET /api/recordings`（列表）、`GET /api/recordings/{name}`（MP3，支持 Range）、`DELETE`（录制中 409）；认证 Cookie `ft710_auth`（见 `RecordingsApi`）。播放/导出先经 App 的 OkHttp 下载到本地（自签证书下平台播放器不适用）。
+- **CQ（AD-020）**：控制通道 `set cq true/false`；下行 `cqState{state,duration_s,elapsed_s,...}`；拒绝以 `type:error` 回复。
+- **fullState 顶层新键**：`recording`、`cq`、`radioModel`（客户端按存在性做能力检测，见 `WsEvent.FullState`）。
+- **只读登录**：`/WSaudioTX`、`/WSatr1000` 以 4003 关闭 → `ConnectionManager` 标记 `listenOnly`，UI 隐藏发射类入口。
+- 新文件：`Network/RecordingsApi.kt`、`UI/RecordingPanel.kt`、`UI/Format.kt`、`release.sh`；签名配置在 `app/build.gradle.kts`（缺 `keystore.properties` 时 `assembleRelease` 直接失败）。

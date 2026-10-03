@@ -56,3 +56,22 @@ cd FT710Android
 | SDK 找不到 | `ANDROID_HOME` 未设，见上 |
 | `jvmTarget 17` 报错 | `JAVA_HOME` 指向 JDK 11，改 JDK 17 |
 | NDK/CMake 报错 | `ndk;27.2.12479018` 未装，用 sdkmanager 装 |
+
+## 5. 签名与发布（v1.0.0 起）
+
+- keystore：`~/.android-keystores/mrrc-modern-release.jks`（别名 `mrrc-modern`，RSA 4096，**仓库外**）
+- 证书指纹（SHA-256）：`A0:9E:13:64:A7:DD:C0:08:EC:EE:5D:0C:5A:98:A6:09:19:73:94:25:B8:D3:F0:78:67:68:14:C4:31:44:65:0B`
+- 口令与路径：`FT710Android/keystore.properties`（gitignore，仅本机）。**丢失 keystore 将无法覆盖升级**，请单独备份文件与口令。
+  换 checkout（如 worktree 合并后）时重建该文件：
+
+```bash
+umask 077
+printf 'storeFile=%s\nstorePassword=<口令>\nkeyAlias=mrrc-modern\nkeyPassword=<口令>\n' \
+  "$HOME/.android-keystores/mrrc-modern-release.jks" > FT710Android/keystore.properties
+```
+
+- 一条命令发布（构建 → 签名核对 → 站点上传 → 线上 SHA-256 复核）：
+
+```bash
+cd FT710Android && ./release.sh            # --dry-run 只本地构建+改页面；--skip-tests 跳过单测
+```

@@ -79,6 +79,17 @@ Two things to know before the first launch (full guide:
    spectrum and PTT all work, RX plays silence, and no error is logged anywhere.
    The grant is bound to the build, so **each upgrade asks once again**.
 
+### Android App (sideload APK)
+
+Android 8.0+ (minSdk 26). The signed APK lives at a stable URL (always the latest build);
+version, size and SHA-256 are printed on the [download page](https://www.vlsc.net/mrrc_modern/zh/):
+
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Android.apk>
+
+Allow “install unknown apps” in Android settings, then open the file. The client speaks the
+same 4+1 WebSocket protocol as the browser UI; connect it to your instance over LAN, or
+through the Cloud Hub callsign entry (`<callsign>.mrrc.vlsc.net`, port 443).
+
 ### Environment Variables
 
 | Variable | Default | Description |

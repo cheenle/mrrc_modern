@@ -54,19 +54,26 @@ mkdir -p "$WEBSITE_DIR/downloads"
 cp "$APP_DIR/dist/$VERSIONED" "$WEBSITE_DIR/downloads/$VERSIONED"
 cp "$APP_DIR/dist/$STABLE" "$WEBSITE_DIR/downloads/$STABLE"
 
-update_block() {  # $1=页面文件 $2=下载链接前缀
-  python3 - "$1" "$2" "$VERSION" "$SIZE" "$SHA" <<'PY'
+update_block() {  # $1=页面文件 $2=下载链接前缀 $3=语言(zh|en)
+  python3 - "$1" "$2" "$3" "$VERSION" "$SIZE" "$SHA" <<'PY'
 import re, sys
-page, prefix, version, size, sha = sys.argv[1:6]
+page, prefix, lang, version, size, sha = sys.argv[1:7]
 html = open(page, encoding="utf-8").read()
 mb = f"{int(size) / 1048576:.1f} MB"
+if lang == "zh":
+    label = f"下载 APK v{version}（Android 8.0+）"
+    note = (f"MRRC-Modern-v{version}-Android.apk · {mb} · SHA-256 <code>{sha}</code><br>"
+            "安装：系统设置允许「安装未知应用」后点开 APK。")
+else:
+    label = f"Download APK v{version} (Android 8.0+)"
+    note = (f"MRRC-Modern-v{version}-Android.apk · {mb} · SHA-256 <code>{sha}</code><br>"
+            "Install: allow “install unknown apps”, then open the APK.")
 block = (
     "<!-- android-download:start -->\n"
     f'<p><a class="btn btn-primary btn-large" href="{prefix}MRRC-Modern-Android.apk">'
-    f"下载 APK v{version}（Android 8.0+）</a></p>\n"
+    f"{label}</a></p>\n"
     f'<p style="color: var(--scope-text-muted); font-size: 0.85rem; margin-top: .5rem;">'
-    f"MRRC-Modern-v{version}-Android.apk · {mb} · SHA-256 <code>{sha}</code><br>"
-    "安装：系统设置允许「安装未知应用」后点开 APK。</p>\n"
+    f"{note}</p>\n"
     "<!-- android-download:end -->"
 )
 pattern = re.compile(r"<!-- android-download:start -->.*?<!-- android-download:end -->", re.S)
@@ -76,8 +83,8 @@ open(page, "w", encoding="utf-8").write(pattern.sub(block, html))
 print(f"updated {page}")
 PY
 }
-update_block "$WEBSITE_DIR/zh/index.html" "../downloads/"
-update_block "$WEBSITE_DIR/index.html" "../downloads/"
+update_block "$WEBSITE_DIR/zh/index.html" "../downloads/" zh
+update_block "$WEBSITE_DIR/index.html" "downloads/" en
 
 if git -C "$WEBSITE_DIR" diff --quiet -- zh/index.html index.html; then :; else
   git -C "$WEBSITE_DIR" add zh/index.html index.html

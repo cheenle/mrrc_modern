@@ -48,14 +48,16 @@ One version → two artifacts → one website. The version's **single source of 
 **5. Deploy installers** (server-managed; `website/deploy.sh` EXCLUDES `downloads/`):
 
 ```bash
-scp <artifact> www.vlsc.net:/tmp/<name>.new        # dmg, versioned exe, generic exe (3 files)
+scp <artifact> www.vlsc.net:/var/tmp/<name>.new        # dmg, versioned exe, generic exe (3 files)
 ssh www.vlsc.net 'for f in <names>; do
-  sudo -n mv /tmp/$f.new /var/www/vlsc.net/mrrc_modern/downloads/$f
+  sudo -n mv /var/tmp/$f.new /var/www/vlsc.net/mrrc_modern/downloads/$f
   sudo -n chown www-data:www-data /var/www/vlsc.net/mrrc_modern/downloads/$f
   sudo -n chmod 644 /var/www/vlsc.net/mrrc_modern/downloads/$f; done'
 ```
 
-Old versioned installers stay as archives; only the generic `MRRC-Modern-Setup.exe` is replaced in place.
+Note: **`/var/tmp`, not `/tmp`** — the latter is a 958 MB tmpfs on `www.vlsc.net` (gotcha 1). Verify each upload's SHA **server-side, before the `mv`**, otherwise a truncated transfer gets published under a name that another machine has already been told to expect.
+
+**Update BOTH generic mirrors, not just the Windows one.** `MRRC-Modern-Setup.exe` is linked from six places; `MRRC-Modern-arm64.dmg` is the macOS counterpart and had been **two releases stale** when v1.25.0 measured it (still the v1.24.6 build). The versioned files stay as archives; the two generic names are replaced in place.
 
 **6. Deploy HTML**: `cd website && echo y | ./deploy.sh` (interactive `read -p`; backup + `nginx -t` built in).
 
@@ -72,13 +74,20 @@ curl -s https://www.vlsc.net/mrrc_modern/ | grep -c vX.Y.Z                      
 **8. Commit, tag, push**
 
 ```bash
-git add -A
+git add -A && git restore --staged atr1000_tuner.json   # stage explicitly, or unstage the runtime file
 python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged   # must exit 0
 git commit -m "release: vX.Y.Z — <headline> ..."                             # embed sizes + SHAs
-git tag vX.Y.Z
-git push origin main && git push origin vX.Y.Z                               # tag pushed EXPLICITLY
+git tag -a vX.Y.Z -F /tmp/tag_vXYZ.txt                                       # ANNOTATED (v1.24.6 onward)
+git push origin feat/hub && git push origin vX.Y.Z                           # tag pushed EXPLICITLY
+   # 分支要推**发布提交所在的那条**：本仓这些发布落在 `feat/hub`；`main` 落后 ~80 个提交，
+   # 不是这些发布的落脚处（v1.14.0–v1.25.0 均如此）。
 git ls-remote --tags origin | grep vX.Y.Z                                    # verify it landed
 ```
+
+The tag message carries the version, both artifact sizes + SHA-256 and one line of
+acceptance evidence — that is what `git show vX.Y.Z` is read for later. Annotated tags are the
+convention from v1.24.6 (v1.18–v1.21 were lightweight; that difference is why `--follow-tags`
+stays useless here and the tag must be pushed by name).
 
 ## Artifact registry — the no-omission protocol
 
@@ -166,6 +175,14 @@ governed by rules instead of trust.
 13. **Post-release operator checks stay open**: real-QSO recording acceptance on the radio; TX audio on physical Windows hardware (the KVM VM can never verify it — `windows-installer` gotcha 4). Say so in the release summary.
 14. **A byte count and an SVG colour can be the same string.** The landing pages carry `rgba(54,087,234,0.08)` — RGB(54,87,234) written zero-padded — which is *literally* `54,087,234`, the v1.24.5 installer's byte count. A global `s/54,087,234/54,109,294/` would have produced `rgba(54,109,294,…)`: an invalid channel (>255) and a recoloured site. Replace numbers **with their surrounding markup** (`51.6 MB · x64 · 54,109,294 bytes<br/>`, `<code>SHA-256 …</code>`), assert an exact hit count per replacement, and afterwards re-grep for the colour literals to prove they survived. Same class: a `"…C:\tools\"` shell string ends in an escaped quote, and an `assertNotIn` failure prints the whole container (a 50 KB source dump).
 15. **`website/deploy.sh` must run exactly once, and the deploy is not done until every URL is verified.** Two concurrent runs deleted the live `sdd/` and `images/` trees: the first run's trailing `rm -f /var/tmp/mrrc_modern_website_*.tar.gz` removed *both* packages, so the second run's prune step computed an empty manifest (`tar -tzf ""` fails, but a pipeline's exit status comes from its last command, `sort -u`, so `set -e` never fired) and `comm -23` then reported **every file on disk** as stale. The script now has a `mkdir` lock plus three prune guards (no package / empty manifest / stale ≥ shipped ⇒ refuse), and `bash -n` on the local file does **not** check the remote `<<'EOF'` blocks — extract and check each one. Afterwards, curl every published page: the downloads were fine while 16 page URLs returned 404, and the script still printed "Deployment Complete!".
+16. **The `artifact_facts` SKIP is also a blindfold: old numbers can be wrong for releases and nobody notices.** The rule can only compare a card against `dist/<platform>/…v<CURRENT>-…`, so while no build of the current version exists locally it reports "not built locally — cannot verify" and **passes**. Measured on v1.25.0, all four inside the skip window:
+
+    - the Windows card carried **v1.24.7's byte count beside v1.24.8's SHA prefix** (the previous release had bumped the SHA and left the size);
+    - the macOS **generic mirror** (`MRRC-Modern-arm64.dmg`) was still the **v1.24.6** build — two releases stale;
+    - `README.md`'s download lines were two releases stale for macOS and one for Windows (the README is only in the "review by hand" line, never machine-checked);
+    - one page carried a hand-mangled full SHA: **v1.24.7's prefix + v1.24.6's tail**, a string that matches no artifact ever built.
+
+    **Antidote when filling the new numbers:** re-derive the *previous* release's numbers from the **published files** (`curl` the versioned installers and hash them) instead of trusting what the page says, and check the three places the harness does not: both generic mirrors, `README.md`, and any full-SHA string on the landing pages. A published artifact is the authority; a card is a claim about one.
 
 ## Release-Day Checklist
 

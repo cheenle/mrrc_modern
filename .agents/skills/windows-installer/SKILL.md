@@ -113,12 +113,22 @@ with tempfile.TemporaryDirectory() as tmp:
 
 把它当**真实的跨平台 bug**，不要当 VM 怪癖。
 14. **`COPYFILE_DISABLE=1` + 排除 `._*`/`.DS_Store`，否则 macOS 元数据会进包发给用户。** spec 把 `static/`、`vendor/` **整目录**塞进 `datas`，所以 `static/.DS_Store`、`vendor/…/._ftd2xx.dll` 会真的装到用户机器上，而且 FastAPI 的静态处理器会照请求把它们发出去。解包**只覆盖不删除**，所以 VM 树上的历史垃圾要在构建前手工清一遍（本版清了 46 个）。
+    **2026-10-03 又栽一次，且这次是清得不彻底**：树里有 **53** 个（历次不带排除的源码拷贝留下的），构建把其中 **6** 个拷进了包（`_internal\static\.DS_Store`、`vendor\ftdi\windows\bin\x64\._*.dll`）⇒ 结构核对的 junk 必须为 0 ⇒ **作废整个构建**。清零后产物从 54,122,001 变成 54,115,523 字节 —— **体积差就是那 6 个文件**，可以当交叉证据用。教训：解包前的清理必须**同时覆盖旧测试和 junk**（`tests\*.py` + 递归 `._*`/`.DS_Store`），且清理后要再断言一次为 0。
+    **另一面**：若某个 exe 的 mtime 比同一批构建早，先别慌 —— PyInstaller 只重建输入变了的那些；确认 Canary 是**归档本身**：读那个被复用的 exe 的 CArchive TOC，junk 条数必须是 0（本次 launcher 就是这样被确认干净的）。
 15. **构建机上不该有任何密钥或个人数据。** 本版在 `C:\mrrc_modern` 上发现历次 tar 留下的 `certs\radio.vlsc.net.key`（+ `.orig` 备份）、含 `MRRC_WEB_PASSWORD` 的 1817 字节 `.env`、**63 个真实 QSO 录音（125.9 MB）**、运行日志、`promo\`（629.9 MB）。全部删除并核实，源码 tar 加上排除项。**事后还要在产物里查一遍**：`.pem/.key/.p12/.pfx/.env` 形状的文件数必须是 0。
 16. **fleet payload 在应用根目录，不在 `_internal\`。** `build.ps1:106` 是 `FleetDest = $AppRoot\fleet` ⇒ `dist\windows\MRRC-Modern\fleet\`（13 个文件）。在 `_internal\fleet` 找会误判"payload 丢了"。
 17. **静默安装不会拉起应用。** Inno 的 `[Run]` 带 `skipifsilent` ⇒ 装完自己起一次；隧道会在应用调 `/api/cloud/state`（打开设置对话框）时自己起来。
 18. **`_APP_MODULES` 之外新增的模块不能被热修覆盖**（见 `mrrc` 那份技能）；而 `server.py`、`windows/launcher.py` 是**冻结入口脚本**，热修通道根本覆盖不到 —— 改它们**只能重建安装包**。
 19. **看产物时间务必带年份。** 差点把 9-25 的旧 exe 当成当晚构建（只看了 `HH:mm:ss`）。用 `.ToString("yyyy-MM-dd HH:mm:ss")`。
 20. **同一版本号不能重发。** 升级通道比的是**版本串**：已经以 vX 上线的包，修好了也**永远送不到**装了同一个 vX 的机器（点"升级"只会反复重放同一版本）。修完必须**升号**。
+21. **验证脚本本身必须被验证 —— 否则它会安静地说谎。** 2026-10-03 一个小时内被自己的检查器坑了五次，每次都“看起来绿”：
+    - **PowerShell 变量名大小写不敏感**：报告列表叫 `$L`，装原始日志用了 `$l` ⇒ **报告列表被进程输出覆盖**，脚本“成功退出”而写出的是别人的 stdout，整个第 1 层的检查结果全丢。命名上要刻意区分（`$report` / `$rawOut`）。
+    - **裸 `000` 是整数 0**：`Check "http /login" 000` ⇒ 期望值变成 `0`，而 curl 返回的是字符串 `"000"` ⇒ 永远不等。**状态码一律加引号**。
+    - **时间窗要从“运行前”算起**：`find -newermt '-3 minutes'` 在构建刚结束时会把几百个产物文件全算成“被改过”（假红）；反之窗口错过就是**空跑假绿**。正确做法：运行前 `touch` 一个基线文件，运行后 `find <dir> -newer <基线>` 必须为 0。
+    - **先确认应答者是本次实例，再相信端点结果**：上一次跑留下的野实例还占着端口，于是新实例没绑上、日志只有 2 行，而 `/login` 依然 200（旧实例应的）。断言方式：**等本次实例自己写下 `starting on port <端口>`**，再往下检查。
+    - **符号走查必须用子串匹配**：`print("Detecting the radio on %d …" % (...))` 在 `co_consts` 里是**整条格式化串**，用精确集合成员查会报假 MISS。`sym in consts` 之外还要 `any(sym in c for c in consts)`。
+    - 一句话：**“检查通过”必须是可核对的事实，不是脚本自己说的。** 每次问一句：这条断言在坏输入上会不会也绿？
+22. **洁净室要跑冻结核的 *Launcher*，不只是 Server。** Server 免检不了首次运行探测那条路（它住在 `macos/first_run.py`，由启动器调用）—— 而 v1.25.0 的头号缺陷正好在那儿（探测永久卡死）。做法：给一个**隔离的 `LOCALAPPDATA`** + **预先放一份配置在空闲端口**（这道 VM 上的 8888 是常驻租户实例，不预置端口启动器会直接说"Already running"然后什么都不做）+ `$env:BROWSER='no-such-browser'`（webbrowser 静默失败，不弹窗）。然后断言三件事：**探测前那行打出来了**、配置最终settle（口令/`MRRC_FIRST_RUN_DONE=1`）、以及它真的把 server 起起来了（`https://127.0.0.1:<空闲端口>/login` = 200）。
 
 ---
 
@@ -219,6 +229,7 @@ mods = set(ZlibArchiveReader(tmp).toc.keys())   # PyInstaller 6: r.toc 是 dict�
 
 - **改完必须做变异验证**：把修复逐条改回坏行为，对应测试**必须变红**；不变红说明测试是装饰品。变异脚本的 anchor **必须唯一**（本版 `if getattr(sys, "frozen", False):` 在文件里出现 2 次，断言正确地拦住了它），并且**变异完一定要还原并 `cmp` 核对**。
 - **文档里的声明必须与实测一致，宁窄勿宽。** 本版两次在 CHANGELOG 里写过宽的声明（"端口冲突会重试并点名另一个实例"、"裸启动不再往安装目录写"），都被洁净室验收当场推翻。写声明前先问：**这条在用户实际的那条配置路径上成立吗？**
+- **改 `.agents/skills/*/SKILL.md` 之后必须跑 `tests/test_skill_docs_consistency.py`。** 实测（2026-10-03）：某个条目内部含**围栏代码块**时，保存触发的 markdown 格式化器会把该条目**之后**的编号当成一个新列表，从 1 重新编号并加前导空格 —— 于是 gotcha 10–13 变成了「 1.– 4.」，编号连续性、隐藏条目、交叉引用共 6 条测试变红。内容没丢，但引用（`gotcha 13`）全部指错。修法：用**不经格式化器**的方式改回编号（脚本直接改文件），然后重跑那套测试确认。
 - **源码级守卫用 AST，不用子串匹配。** `assertNotIn("uvicorn.run(", source)` 会命中**本文件 docstring 里解释这个缺陷时引用的那句话**，把健康的树报成坏的（而且 `assertNotIn` 会把整个源文件当容器打印出来，一次刷掉 50 KB）。
 
 ---

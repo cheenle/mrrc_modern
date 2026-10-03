@@ -79,7 +79,16 @@ block = (
 pattern = re.compile(r"<!-- android-download:start -->.*?<!-- android-download:end -->", re.S)
 if not pattern.search(html):
     sys.exit(f"marker block not found in {page}")
-open(page, "w", encoding="utf-8").write(pattern.sub(block, html))
+html = pattern.sub(block, html)
+
+# 顶部 hero 里的安卓按钮版本文字：它没有 marker，历史上忘了跟着版本走
+# （2026-10-03 实测：链接已指 1.0.1，按钮上还写着 v1.0.0）。找不到就直接失败，
+# 免得又一次静默残留旧版本号。
+hero = re.compile(r'(<i class="fab fa-android"></i>\s*[^<]*?v)\d+\.\d+\.\d+')
+if not hero.search(html):
+    sys.exit(f"hero android button not found in {page}")
+html = hero.sub(lambda m: m.group(1) + version, html)
+open(page, "w", encoding="utf-8").write(html)
 print(f"updated {page}")
 PY
 }

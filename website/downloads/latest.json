@@ -3,14 +3,14 @@
   "installer": {
     "version": "1.24.8",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.8-Windows-x64-Setup.exe",
+    "size": 54121489,
+    "sha256": "616f8b559b6a1530f2d20ec5466fb1e28d065435829b9a9589ccee76234a92ee"
+  },
+  "previous": {
+    "version": "1.24.7",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.7-Windows-x64-Setup.exe",
     "size": 54112355,
     "sha256": "4a83ab9b6443cb1a3236aa921522400ca730c1eef5369ea498672993fc000b5c"
   },
-  "previous": {
-    "version": "1.24.6",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.6-Windows-x64-Setup.exe",
-    "size": 54110069,
-    "sha256": "ed127697f2b699a87ca7b6655aaaa1673a9eca12fc80cf75123c8c7c308fea79"
-  },
-  "notes": "1.24.8"
+  "notes": "1.24.8: tunnel starts at boot; the pending panel takes the enrolment secret"
 }

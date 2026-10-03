@@ -21,6 +21,6 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
     } else if (showSettings) {
         SettingsScreen(vm, settings) { loggedIn = false; showSettings = false }
     } else {
-        MainScreen(vm)
+        MainScreen(vm, onOpenSettings = { showSettings = true })
     }
 }

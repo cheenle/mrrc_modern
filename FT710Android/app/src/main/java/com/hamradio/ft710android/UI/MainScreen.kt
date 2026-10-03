@@ -40,7 +40,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MainScreen(vm: MainViewModel) {
+fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
     // RadioState 是可变的普通类：订阅 version 版本号触发重组，随后读 vm.state.* 即拿到最新值
     vm.version.collectAsState()
     val state = vm.state
@@ -60,6 +60,7 @@ fun MainScreen(vm: MainViewModel) {
             Text(formatFreq(state.activeFrequency), fontFamily = FontFamily.Monospace, fontSize = 40.sp)
             Spacer(Modifier.weight(1f))
             Text("${state.modeName} ${state.bandName}", fontSize = 12.sp)
+            TextButton(onClick = onOpenSettings) { Text("设置", fontSize = 12.sp) }
         }
         // VFO A/B + 步进
         Row(verticalAlignment = Alignment.CenterVertically) {

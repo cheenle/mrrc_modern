@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.hamradio.ft710android.BuildConfig
 import com.hamradio.ft710android.Data.SettingsStore
 import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.launch
@@ -33,6 +34,7 @@ fun SettingsScreen(vm: MainViewModel, settings: SettingsStore, onLoggedOut: () -
 
     Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("设置", style = MaterialTheme.typography.headlineSmall)
+        Text("客户端 v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(16.dp))
         Text("RF 功率: ${state.rfPower} W")
         Slider(value = state.rfPower.toFloat(), onValueChange = { vm.setRfPower(it.toInt()) }, valueRange = 5f..100f)

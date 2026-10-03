@@ -158,13 +158,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 ## 0.7 macOS 安装与初始化
 
-本章面向 **macOS 桌面版（`MRRC-Modern-v1.24.8-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
+本章面向 **macOS 桌面版（`MRRC-Modern-v1.25.0-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
 
 > 适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是**自包含**的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。
 
 ### 0.7.1 安装（5 步）
 
-1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.24.8-arm64.dmg`（约 56 MB）。
+1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.25.0-arm64.dmg`（约 56 MB）。
 2. 双击刚下载的 `.dmg` → 弹出窗口里看到 **MRRC Modern** 图标和一个 **Applications** 文件夹。
 3. 把 **MRRC Modern** 图标**拖进 Applications** 文件夹（松手即完成安装）。
 4. **第一次启动**请右键点 Applications 里的 **MRRC Modern** → 选 **打开** → 弹窗里再点一次 **打开**（因为免费签名，系统会拦一次；只第一次需要）。
@@ -243,8 +243,8 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 | **麦克风列表里找不到 MRRC Modern** | 当前运行的包缺少权限说明键（v1.18.0 及更早）→ 换新版。 |
 | **每次升级都问一次麦克风权限** | 正常：自签名应用的授权绑定"当次构建"，新版本会被再问一次。 |
 | WSJT-X / FLDIGI 报 Port busy、打不开串口 | CAT 串口被独占了——退出菜单栏的 MRRC Modern 再开电台软件（反之 MRRC 启动失败也先关它们）。详见 §0.8；另确认用的是 `cu.` 开头而非 `tty.`。 |
-| 浏览器打开是**空白页**、或报「网址协议不受支持 / 无法访问此网站」 | 多半是**浏览器被送到了服务器没在监听的那个协议**上（启动器算的是 `https://`，而服务器退回了纯 HTTP）。**v1.24.8 起启动器会先问服务器到底在哪个地址应答**，再打开浏览器；若它提示「已切换到 `http://`」，说明证书没签出来 —— 界面能用，但请到日志（macOS `~/Library/Application Support/MRRC-Modern/logs/server.log`、Windows `%LOCALAPPDATA%\MRRC-Modern\logs\server.log`）看 `could not create a certificate` 那一行的原因，别把警告当噪音忽略。 |
-| 端口 8888 被占用 | **v1.24.8 起第二个实例会明确报错并退出**（Windows 上此前两个实例可以**同时**绑同一端口，浏览器可能落到没拿到电台那一个）。报错里会点名「另一个 MRRC Modern 还在跑」：先关掉已有窗口/菜单栏图标；确实要并行就高级用户在 `mrrc_modern.env` 里改 `MRRC_WEB_PORT`，重启生效。 |
+| 浏览器打开是**空白页**、或报「网址协议不受支持 / 无法访问此网站」 | 多半是**浏览器被送到了服务器没在监听的那个协议**上（启动器算的是 `https://`，而服务器退回了纯 HTTP）。**v1.25.0 起启动器会先问服务器到底在哪个地址应答**，再打开浏览器；若它提示「已切换到 `http://`」，说明证书没签出来 —— 界面能用，但请到日志（macOS `~/Library/Application Support/MRRC-Modern/logs/server.log`、Windows `%LOCALAPPDATA%\MRRC-Modern\logs\server.log`）看 `could not create a certificate` 那一行的原因，别把警告当噪音忽略。 |
+| 端口 8888 被占用 | **v1.25.0 起第二个实例会明确报错并退出**（Windows 上此前两个实例可以**同时**绑同一端口，浏览器可能落到没拿到电台那一个）。报错里会点名「另一个 MRRC Modern 还在跑」：先关掉已有窗口/菜单栏图标；确实要并行就高级用户在 `mrrc_modern.env` 里改 `MRRC_WEB_PORT`，重启生效。 |
 
 ---
 

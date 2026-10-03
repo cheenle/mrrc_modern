@@ -19,11 +19,13 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.hamradio.ft710android.Data.MemoryChannel
 import com.hamradio.ft710android.Spectrum.WaterfallCanvas
 import com.hamradio.ft710android.ViewModel.MainViewModel
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -56,6 +59,9 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
     val mem by vm.memChannels.collectAsState()
     val rec by vm.recordingState.collectAsState()
     val recAvailable by vm.recordingsAvailable.collectAsState()
+    val cq by vm.cq.collectAsState()
+    val cqAvailable by vm.cqAvailable.collectAsState()
+    val error by vm.error.collectAsState()
     var showRecPanel by remember { mutableStateOf(false) }
     val scopeSpanHz = when (state.scopeSpan) { 0 -> 100000L; 1 -> 1000000L; 2 -> 50000L; else -> 100000L }
 
@@ -71,6 +77,10 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
         }
         if (listenOnly) {
             Text("只读登录（listen-only）：发射与设备设置已被服务端禁用", fontSize = 12.sp, color = Color(0xFFE67E22))
+        }
+        error?.let { msg ->
+            Text(msg, color = Color(0xFFE53935), fontSize = 12.sp)
+            LaunchedEffect(msg) { delay(4000); vm.clearError() }
         }
         // VFO A/B + 步进
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -121,12 +131,27 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
                 MemCell(i, c, onClick = { vm.recallMemory(i) }, onLong = { vm.saveMemory(i) })
             }
         }
-        // 底部：TUNE + PTT
-        Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { vm.sendSet("tune", state.tunerStatus == 0) },
-                modifier = Modifier.weight(0.4f).fillMaxSize()) { Text("TUNE") }
-            Spacer(Modifier.width(8.dp))
-            vm.pttManager?.let { PTTButton(it, Modifier.weight(0.6f).fillMaxSize()) }
+        // 底部：TUNE + CQ + PTT（listen-only 时整行隐藏）
+        if (!listenOnly) {
+            Row(Modifier.fillMaxWidth().height(72.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { vm.sendSet("tune", state.tunerStatus == 0) },
+                    modifier = Modifier.weight(0.3f).fillMaxSize()) { Text("TUNE") }
+                Spacer(Modifier.width(8.dp))
+                if (cqAvailable) {
+                    val calling = cq?.state == "calling"
+                    Button(
+                        onClick = { if (calling) vm.abortCq() else vm.startCq() },
+                        modifier = Modifier.weight(0.3f).fillMaxSize(),
+                        colors = if (calling) ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                                 else ButtonDefaults.buttonColors(),
+                    ) {
+                        val s = cq
+                        Text(if (calling && s != null) "CQ %.0f/%.0fs".format(Locale.US, s.elapsedS, s.durationS) else "CQ")
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                vm.pttManager?.let { PTTButton(it, Modifier.weight(0.5f).fillMaxSize()) }
+            }
         }
     }
 }

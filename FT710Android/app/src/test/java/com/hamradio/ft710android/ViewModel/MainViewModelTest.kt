@@ -47,7 +47,7 @@ class MainViewModelTest {
         val scope = CoroutineScope(UnconfinedTestDispatcher())
         var fed = -1
         val spy = object : PTTManager(
-            sendPTT = {}, sendTXAudioStop = {}, startTxAudio = {}, stopTxAudio = {},
+            sendPTT = {}, sendTXAudioStop = {}, sendHeartbeat = {}, startTxAudio = {}, stopTxAudio = {},
             serverTXStatus = { 0 }, isCtrlConnected = { true }, onStuckTX = {},
             dispatcher = UnconfinedTestDispatcher(),
         ) {

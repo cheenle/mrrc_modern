@@ -16,6 +16,8 @@ object WsCommands {
 
     fun ping(): String = """{"type":"ping"}"""
 
+    fun txhb(): String = """{"type":"txhb"}"""
+
     fun getFullState(): String = """{"type":"get","field":"fullState"}"""
 
     fun memSaveJson(channelsJson: String): String =

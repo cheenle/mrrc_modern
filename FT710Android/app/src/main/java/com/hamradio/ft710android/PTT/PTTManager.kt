@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 open class PTTManager(
     val sendPTT: (Boolean) -> Unit,
     val sendTXAudioStop: () -> Unit,
+    val sendHeartbeat: () -> Unit,
     val startTxAudio: () -> Unit,
     val stopTxAudio: () -> Unit,
     val serverTXStatus: () -> Int,
@@ -38,6 +39,8 @@ open class PTTManager(
     private val scope = CoroutineScope(SupervisorJob() + (dispatcher ?: Dispatchers.Default))
     private var watchdogJob: Job? = null
     private var retryCount = 0
+    var heartbeatIntervalMs: Long = 500
+    private var heartbeatJob: Job? = null
 
     fun press() {
         // Idle 正常受理；Releasing（看门狗重试中）视为合法再发射——取消看门狗回 Keyed。
@@ -45,6 +48,7 @@ open class PTTManager(
         if (!isCtrlConnected()) return // 不产生任何命令
         sendPTT(true)
         startTxAudio()
+        startHeartbeat()
         watchdogJob?.cancel()
         retryCount = 0
         phase = Phase.Keyed // 乐观置位，不等回显
@@ -53,6 +57,7 @@ open class PTTManager(
     fun release() {
         if (phase == Phase.Idle) return
         sendPTT(false)
+        stopHeartbeat()
         stopTxAudio()
         sendTXAudioStop()
         phase = Phase.Releasing
@@ -61,6 +66,7 @@ open class PTTManager(
 
     fun forceRelease() {
         sendPTT(false)
+        stopHeartbeat()
         stopTxAudio()
         sendTXAudioStop()
         watchdogJob?.cancel()
@@ -94,5 +100,20 @@ open class PTTManager(
                 retryCount++
             }
         }
+    }
+
+    private fun startHeartbeat() {
+        stopHeartbeat()
+        heartbeatJob = scope.launch {
+            while (true) {
+                sendHeartbeat()               // 首发立即，声明能力（server.py:1768 语义）
+                delay(heartbeatIntervalMs)
+            }
+        }
+    }
+
+    private fun stopHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
     }
 }

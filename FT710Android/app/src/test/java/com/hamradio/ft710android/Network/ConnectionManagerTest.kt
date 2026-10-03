@@ -28,6 +28,14 @@ class ConnectionManagerTest {
         ), sent)
     }
 
+    @Test fun `sendHeartbeat routes txhb on the control channel`() {
+        val sent = mutableListOf<String>()
+        val cm = ConnectionManager(OkHttpClient(), CoroutineScope(Dispatchers.Unconfined),
+            {}, {}, {}, {}, {}, {}, sendOverride = { sent.add(it) })
+        cm.sendHeartbeat()
+        assertEquals(listOf("""{"type":"txhb"}"""), sent)
+    }
+
     @Test fun `wsUrl converts scheme`() {
         assertEquals("wss://radio.vlsc.net:8888/WSradio?token=abc",
             ConnectionManager.wsUrl("https://radio.vlsc.net:8888", "/WSradio", "abc"))

@@ -72,6 +72,7 @@ class ConnectionManager(
     }
 
     fun sendPing() = dispatch(WsCommands.ping())
+    fun sendHeartbeat() = dispatch(WsCommands.txhb())
     fun sendMemSave(channelsJson: String) = dispatch(WsCommands.memSaveJson(channelsJson))
     fun sendTxAudioBinary(data: ByteArray) { audioTx?.sendBinary(data) }
     fun sendTxAudioText(text: String) { audioTx?.sendText(text) }

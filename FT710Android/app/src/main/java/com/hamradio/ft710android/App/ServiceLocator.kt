@@ -48,6 +48,7 @@ object ServiceLocator {
             pttManager = PTTManager(
                 sendPTT = { on -> cm.sendSet("ptt", on) },
                 sendTXAudioStop = { cm.sendTxAudioText("s:") },
+                sendHeartbeat = { cm.sendHeartbeat() },
                 startTxAudio = { tx.start() },
                 stopTxAudio = { tx.stop() },
                 serverTXStatus = { vm.state.txStatus },

@@ -120,7 +120,7 @@ git status --short   # 不得出现 atr1000_tuner.json 等运行期文件的改�
 - [ ] **步骤 2：运行验证失败**
 
 ```bash
-cd FT710Android && ./gradlew test --tests '*MainViewModelTest*'
+cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*MainViewModelTest*'
 ```
 
 预期：编译失败 `unresolved reference: onConnectionChange`（红）。
@@ -232,37 +232,52 @@ git commit -m "fix(android): make Settings reachable and show the client version
 ```kotlin
     @Test fun `keying sends heartbeat immediately then every 500ms`() = runTest {
         val h = Harness(StandardTestDispatcher(testScheduler))
-        h.manager.press()
-        assertEquals(1, h.heartbeats)           // 首发不等 500ms（对齐 Web ptt_manager.js）
-        advanceTimeBy(500); runCurrent()
-        assertEquals(2, h.heartbeats)
-        advanceTimeBy(1000); runCurrent()
-        assertEquals(4, h.heartbeats)
+        try {
+            h.manager.press()
+            runCurrent()                       // 心跳协程在虚拟时间 0ms 启动即首发
+            assertEquals(1, h.heartbeats)
+            advanceTimeBy(500); runCurrent()
+            assertEquals(2, h.heartbeats)
+            advanceTimeBy(1000); runCurrent()
+            assertEquals(4, h.heartbeats)
+        } finally {
+            h.manager.forceRelease()           // 断言失败也不能把心跳留在调度器上（否则 drain 死循环）
+        }
     }
 
     @Test fun `release stops the heartbeat`() = runTest {
         val h = Harness(StandardTestDispatcher(testScheduler))
-        h.manager.press()
-        h.manager.release()
-        val after = h.heartbeats
-        advanceTimeBy(2000); runCurrent()
-        assertEquals(after, h.heartbeats)
+        try {
+            h.manager.press()
+            runCurrent()                       // 先让首发真的发生
+            assertEquals(1, h.heartbeats)
+            h.manager.release()
+            advanceTimeBy(2000); runCurrent()
+            assertEquals(1, h.heartbeats)      // 释放后不再有新的心跳
+        } finally {
+            h.manager.forceRelease()
+        }
     }
 
     @Test fun `forceRelease stops the heartbeat`() = runTest {
         val h = Harness(StandardTestDispatcher(testScheduler))
-        h.manager.press()
-        h.manager.forceRelease()
-        val after = h.heartbeats
-        advanceTimeBy(2000); runCurrent()
-        assertEquals(after, h.heartbeats)
+        try {
+            h.manager.press()
+            runCurrent()
+            assertEquals(1, h.heartbeats)
+            h.manager.forceRelease()
+            advanceTimeBy(2000); runCurrent()
+            assertEquals(1, h.heartbeats)
+        } finally {
+            h.manager.forceRelease()
+        }
     }
 ```
 
 - [ ] **步骤 2：运行验证失败**
 
 ```bash
-cd FT710Android && ./gradlew test --tests '*PTTManagerTest*'
+cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*PTTManagerTest*'
 ```
 
 预期：编译失败（`sendHeartbeat` 参数不存在）。
@@ -322,7 +337,7 @@ cd FT710Android && ./gradlew test --tests '*PTTManagerTest*'
 cd FT710Android && ./gradlew test
 ```
 
-预期：37 个测试全绿。
+预期：38 个测试全绿。
 
 - [ ] **步骤 5：ConnectionManager 路由测试**
 
@@ -338,7 +353,7 @@ cd FT710Android && ./gradlew test
     }
 ```
 
-运行 `./gradlew test --tests '*ConnectionManagerTest*'`，预期全绿。
+运行 `./gradlew :app:testDebugUnitTest --tests '*ConnectionManagerTest*'`，预期全绿。
 
 - [ ] **步骤 6：Commit**
 
@@ -394,7 +409,7 @@ git commit -m "feat(android): tx-phase liveness heartbeat (txhb) on the keying s
 - [ ] **步骤 2：运行验证失败**
 
 ```bash
-cd FT710Android && ./gradlew test --tests '*WebSocketConnectionTest*'
+cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*WebSocketConnectionTest*'
 ```
 
 预期：编译失败（`onClosedCode` 参数不存在）。
@@ -579,7 +594,7 @@ class RecordingsApiTest {
 - [ ] **步骤 2：运行验证失败**
 
 ```bash
-cd FT710Android && ./gradlew test --tests '*ProtocolTest*' --tests '*RecordingsApiTest*'
+cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*ProtocolTest*' --tests '*RecordingsApiTest*'
 ```
 
 预期：编译失败（类型不存在）。

@@ -41,6 +41,7 @@
 | `windows/launcher.py` / `macos/launcher.py` / `macos/first_run.py`（首次运行探测：串口/型号/口令；两个启动器**共用** first_run） | SDD 12.6、v1.25.0 | `test_first_run_probe.py`、`test_listen_default.py`、`test_macos_launcher.py` | `win_pack.md`/`mac_pack.md`、两份安装指南、CHANGELOG |
 | `launcher_log.py`（启动器 tee）、`MRRC_LOG_DIR` | AD-021、SDD 12.6 | `test_launcher_log.py`、`test_quiet_logging.py` | AGENTS、SDD 12.6、`mac_pack.md`/`win_pack.md`/`pi_pack.md` |
 | `upgrade_core.py` + `dev_tools/make_latest_json.py`（第 3 期 slice 1） | AD-022、SDD 12.5.2 | `test_upgrade_core.py`、`test_make_latest_json.py`、`test_support_api.py` | AGENTS 模块表、SDD 08/12、CHANGELOG |
+| `net_tls.py`（所有外发 HTTPS 的信任库）+ `vendor/ca/cacert.pem` + `dev_tools/tls_trust_gate.py` | SDD 12、v1.25.1 | `test_tls_trust_store.py`、`test_support_api.py`、`test_upgrade_core.py` | AGENTS 模块表、DEPENDENCIES（CA 来源与刷新）、CHANGELOG |
 | `support_answers.py` + `dev_tools/support_autopilot.py`（第 2 期） | AD-021 amendment、SDD 12.5.1 | `test_support_answers.py`、`test_support_autopilot.py` | AGENTS 模块表、SDD 08/12、CHANGELOG |
 | `tools/support_receiver/**` + `deploy_support_receiver.sh` | AD-021 §9 | `test_support_receiver.py` | SDD 12.5.1、CHANGELOG |
 | `packaging/**` | AD-001、SDD 12 | `test_windows_packaging_files.py`、`test_rpi_packaging.py` | `mac_pack.md` / `win_pack.md` / `pi_pack.md`、安装指南 |
@@ -63,9 +64,9 @@
 
 | 区域 | 入口 | 备注 |
 | --- | --- | --- |
-| 依赖 | `requirements.txt` / `DEPENDENCIES.md` | 支持链路**无新增依赖**（纯标准库）；新依赖要同时进 PyInstaller spec 的 `hiddenimports` |
+| 依赖 | `requirements.txt` / `DEPENDENCIES.md` | 支持链路**无新增依赖**（纯标准库）；新依赖要同时进 PyInstaller spec 的 `hiddenimports`；**随包数据文件**（如 `vendor/ca/cacert.pem`）要同时进 spec 的 `datas` 与两个 build 脚本的拷贝清单 —— 只改一处就是「本机好、打包坏」（`test_tls_trust_store.py` 与 `packaging/*/build.*` 各自守一半） |
 | 环境变量 | `config.py`（`MRRC_*`，兼容 `FT710_*`） | README 环境表 + AGENTS + SDD 12 三处同改 |
-| 测试 | `python -m unittest discover -s tests`（当前 **1579 例 / 83 模块**，2026-10-03 实测） | 新增模块要进 `tests/README.md` 的计数与清单（AGENTS.md 不复述计数） |
+| 测试 | `python -m unittest discover -s tests`（当前 **1604 例 / 86 模块**，2026-10-04 实测） | 新增模块要进 `tests/README.md` 的计数与清单（AGENTS.md 不复述计数） |
 | 打包 | `packaging/{macos,windows,rpi}/` | 见 §4 发布链 |
 | 支持链路 | `support_bundle.py`、`tools/support_receiver/`、`deploy_support_receiver.sh` | 接收端部署是幂等的；诊断包隐私契约由 `constraints.json` 的 `support-bundle-privacy` + 三个测试模块守住（AD-021） |
 | 静态检查 | `~/.pi-lens/tools/node_modules/.bin/pyright`（配 `pyrightconfig.json`）+ `biome.json` | 两个前端文件禁止被格式化（见 AGENTS） |

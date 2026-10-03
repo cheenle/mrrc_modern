@@ -106,6 +106,84 @@ def should_publish(analysis: dict) -> bool:
     return str(analysis.get("status", "")) in PUBLISHABLE_STATUSES
 
 
+# ── known-issue cards (symptom-addressed, no bundle id) ────────────────────
+# A defect the maintainer already located does not need a bundle number to be useful: the
+# operator searches for what they *see* ("接入云端报错", "频谱不对").  These cards are
+# versioned here rather than in the autopilot state, so a state reset cannot lose them, and
+# they go through the same renderer + privacy filter as an analysed bundle.  Keep the field
+# shape identical to a parsed analysis, plus `id`, `problem` (the card title) and `at`.
+KNOWN_ISSUES = (
+    {
+        "id": "known-20261004-tls",
+        "at": "2026-10-04",
+        "problem": "接入云端报 CERTIFICATE_VERIFY_FAILED（诊断包也上传不了、软件更新检查失败）",
+        "status": "needs_fix",
+        "category": "网络",
+        "verdict": "macOS 打包版（v1.25.0 及更早）没有可用的 CA 信任库：应用里所有外发 HTTPS 都无法校验",
+        "diagnosis": [
+            "报错形如 certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)，"
+            "这不是 portal 或网络的问题——同一台机器上 curl 访问 portal 是 200、证书链完整",
+            "根因：安装包把构建机的 OpenSSL 一起带走了，它的默认 CA 路径是构建机的 /opt/local/...（MacPorts），"
+            "用户机上没有这个目录，于是信任库为空；空信任库同样导致诊断包上传失败",
+            "Windows 与源码运行不受影响（Windows 用系统证书库）",
+        ],
+        "solution": [
+            "临时规避（立刻可用）：在配置文件里加一行 SSL_CERT_FILE=/etc/ssl/cert.pem，然后重启 MRRC Modern",
+            "macOS 配置文件位置：~/Library/Application Support/MRRC-Modern/mrrc_modern.env",
+            "重启后：接入云端、诊断包上传、软件更新检查应同时恢复",
+            "修复已进入源码（随包 CA + 显式信任库），随下一个安装包到达用户，无需你重装以外的任何操作",
+        ],
+        "evidence": [
+            "Support bundle upload failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] "
+            "certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)>",
+            "libcrypto.3.dylib 编译期默认 CA：/opt/local/libexec/openssl3/etc/openssl/cert.pem",
+        ],
+        "keys": ["接入云端", "portal", "证书", "CERTIFICATE_VERIFY_FAILED", "诊断包上传失败",
+                 "软件更新", "SSL_CERT_FILE"],
+        "needs_code_change": True,
+        "code_hint": "net_tls.py（信任库）+ packaging/*/build.*（随包 vendor/ca/cacert.pem）",
+    },
+    {
+        "id": "known-20261004-ftdi",
+        "at": "2026-10-04",
+        "problem": "频谱显示不对：一直是一条光滑的假曲线，看不到真实信号",
+        "status": "needs_fix",
+        "category": "产品缺陷",
+        "verdict": "macOS 打包版 v1.25.0（及 v1.18.0 起的同类构建）真频谱从未启动，界面画的是 S 表合成曲线",
+        "diagnosis": [
+            "日志特征：反复 scope_pipe exited (frames=0, connected=False) 与 "
+            "Spectrum broadcast active: S-meter fallback；真频谱成功时应有 "
+            "scope_pipe: first frame received — spectrum active",
+            "硬件、驱动、库都没问题（FT4222 在 USB 总线上、两个 dylib 在包内，手工用正确目录运行立刻出帧）",
+            "根因：应用配置里的 FTDI 库目录是相对路径 vendor/ftdi/macos，启动器把它锚到了 "
+            "Contents/MacOS/（那里什么都没有），而数据树在 Contents/Resources/ —— 于是 scope_pipe "
+            "报 FTDI libraries not found 并退出",
+        ],
+        "solution": [
+            "临时规避（立刻可用）：把配置里的 MRRC_FTDI_LIB_DIR 改成绝对路径 "
+            "/Applications/MRRC-Modern.app/Contents/Resources/vendor/ftdi/macos，然后重启应用",
+            "重启后刷新页面：频谱应变成真实底噪 + 信号（可在日志确认 first frame received — spectrum active）",
+            "修复已进入源码（启动器改为经 _internal 解析相对路径），随下一个安装包到达用户",
+        ],
+        "evidence": [
+            "2026-10-04 07:07:53 [WARNING] mrrc.backend.ft710.scope: scope_pipe exited (frames=0, connected=False)",
+            "2026-10-04 07:01:10 [INFO] mrrc: Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients",
+        ],
+        "keys": ["频谱", "瀑布", "假曲线", "S 表", "FT4222", "scope_pipe", "MRRC_FTDI_LIB_DIR",
+                 "真频谱"],
+        "needs_code_change": True,
+        "code_hint": "macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）",
+    },
+)
+
+
+def known_issue_cards() -> list[str]:
+    """Rendered known-issue cards, newest first (they carry no bundle id)."""
+    rows = sorted(KNOWN_ISSUES, key=lambda entry: str(entry.get("at", "")), reverse=True)
+    return [render_card(entry, str(entry["id"]), problem=str(entry.get("problem", "")),
+                        at=str(entry.get("at", ""))) for entry in rows]
+
+
 # ── rendering ──────────────────────────────────────────────────────────────
 def _items(items: list, css: str = "") -> str:
     if not items:
@@ -233,9 +311,20 @@ EMPTY_STATE = """  <div class="empty">
 
 
 def render_page(cards: list, generated_at: str = "") -> str:
-    """The whole answers page: newest cards first, empty state when there are none."""
+    """The whole answers page: known issues first, then newest cards, empty state last."""
     stamp = generated_at or time.strftime("%Y-%m-%d %H:%M")
-    body = "\n".join(cards) if cards else EMPTY_STATE
+    known = known_issue_cards()
+    sections: list[str] = []
+    if known:
+        sections.append('  <h2>已知问题（按现象查）</h2>')
+        sections.extend(known)
+    if cards:
+        sections.append('  <h2>按编号的答复</h2>')
+        sections.extend(cards)
+    else:
+        sections.append('  <h2>按编号的答复</h2>')
+        sections.append(EMPTY_STATE)
+    body = "\n".join(sections)
     nav = ('\n  <p class="muted">工作流看板：'
            '<a href="../board/">FDE 看板</a>'
            '（bug/需求分类 · 排期 · 后台实施结果）</p>\n')

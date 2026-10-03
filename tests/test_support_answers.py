@@ -145,7 +145,9 @@ class RenderTests(unittest.TestCase):
     def test_page_without_cards_explains_the_situation(self):
         page = sa.render_page([])
         self.assertIn("现在还没有答复", page)
-        self.assertNotIn('class="card"', page)
+        # No *analysed bundle* cards — the known-issue cards carry a `known-…` id, not a
+        # bundle number, and are always rendered (support_answers.KNOWN_ISSUES).
+        self.assertNotIn('id="2026', page)
 
     def test_rendering_escapes_html(self):
         card = sa.render_card(_analysis(verdict="<script>alert(1)</script>"), "20260917-000000-aaaa")
@@ -179,6 +181,47 @@ class StateTests(unittest.TestCase):
         sa.record_result(state, "c", _analysis(), published=True, at="2026-09-17T11:00:00")
         rows = sa.answered_cards(state)
         self.assertEqual([bid for bid, _ in rows], ["c", "a"])
+
+
+class KnownIssueCardTests(unittest.TestCase):
+    """Symptom-addressed cards (no bundle id) for defects that are already understood."""
+
+    def test_every_entry_has_the_fields_the_renderer_needs(self):
+        for entry in sa.KNOWN_ISSUES:
+            self.assertTrue(entry.get("id"), entry)
+            self.assertTrue(entry.get("problem"), entry)
+            self.assertTrue(entry.get("verdict"), entry)
+            self.assertTrue(entry.get("diagnosis"), entry)
+            # An answer without a step the operator can take is not an answer.
+            self.assertTrue(entry.get("solution"), entry)
+            self.assertIn(entry.get("status"), sa.STATUSES, entry)
+            self.assertIn(entry.get("category"), sa.CATEGORIES, entry)
+
+    def test_known_cards_render_with_their_id_and_title(self):
+        cards = sa.known_issue_cards()
+        self.assertEqual(len(sa.KNOWN_ISSUES), len(cards))
+        joined = "\n".join(cards)
+        for entry in sa.KNOWN_ISSUES:
+            self.assertIn(f'id="{entry["id"]}"', joined)
+            self.assertIn(entry["problem"][:20], joined)
+
+    def test_known_cards_go_through_the_privacy_filter(self):
+        joined = "\n".join(sa.known_issue_cards())
+        self.assertNotIn("/Users/", joined)
+        self.assertNotIn("/home/", joined)
+        self.assertEqual([], sa.privacy_hits(joined))
+
+    def test_page_shows_known_issues_with_and_without_bundle_cards(self):
+        with_known_only = sa.render_page([])
+        self.assertIn("已知问题", with_known_only)
+        self.assertIn(sa.KNOWN_ISSUES[0]["id"], with_known_only)
+        # The numbered-answer half stays honest about being empty.
+        self.assertIn("按编号的答复", with_known_only)
+        self.assertIn("现在还没有答复", with_known_only)
+
+        with_cards = sa.render_page([sa.render_card(_analysis(), "20260917-000000-aaaa")])
+        self.assertIn("20260917-000000-aaaa", with_cards)
+        self.assertIn(sa.KNOWN_ISSUES[0]["id"], with_cards)
 
 
 if __name__ == "__main__":

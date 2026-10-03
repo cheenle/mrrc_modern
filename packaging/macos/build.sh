@@ -44,20 +44,27 @@ echo "==> Tests"
 FT4222="$REPO_ROOT/vendor/ftdi/macos/libft4222.dylib"
 FTD2XX="$REPO_ROOT/vendor/ftdi/macos/libftd2xx.dylib"
 if [[ ! -f "$FT4222" || ! -f "$FTD2XX" ]]; then
-  echo "WARNING: macOS FTDI dylibs missing under vendor/ftdi/macos/." >&2
-  echo "         The app will build, but FT4222 true spectrum will fall back to S-meter." >&2
-  echo "         Missing: ${FT4222##*/}, ${FTD2XX##*/}" >&2
+	echo "WARNING: macOS FTDI dylibs missing under vendor/ftdi/macos/." >&2
+	echo "         The app will build, but FT4222 true spectrum will fall back to S-meter." >&2
+	echo "         Missing: ${FT4222##*/}, ${FTD2XX##*/}" >&2
 fi
+
+# ---- Step 2b: TLS trust gate (empty store must still verify) -------------
+# The build host is the one machine where an empty trust store is invisible — it has the
+# OpenSSL defaults the bundle inherits. The gate manufactures the user-machine condition
+# on purpose; see dev_tools/tls_trust_gate.py for the 2026-10-04 field report.
+echo "==> TLS trust gate"
+"$PYBIN" dev_tools/tls_trust_gate.py
 
 # ---- Step 3: PyInstaller x3 ---------------------------------------------
 echo "==> PyInstaller"
 rm -rf "$PYI_ROOT" "$BUILD_WORK"
 "$PYBIN" -m PyInstaller packaging/pyinstaller/scope_pipe.spec \
-    --noconfirm --distpath "$PYI_ROOT" --workpath "$BUILD_WORK"
+	--noconfirm --distpath "$PYI_ROOT" --workpath "$BUILD_WORK"
 "$PYBIN" -m PyInstaller packaging/pyinstaller/mrrc_modern_server.spec \
-    --noconfirm --distpath "$PYI_ROOT" --workpath "$BUILD_WORK"
+	--noconfirm --distpath "$PYI_ROOT" --workpath "$BUILD_WORK"
 "$PYBIN" -m PyInstaller packaging/macos/mrrc_modern_launcher.spec \
-    --noconfirm --distpath "$PYI_ROOT" --workpath "$BUILD_WORK"
+	--noconfirm --distpath "$PYI_ROOT" --workpath "$BUILD_WORK"
 
 # ---- Step 4: assemble .app (hand-built; no PyInstaller BUNDLE) ----------
 echo "==> Assemble .app"
@@ -65,11 +72,11 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_BUNDLE/Contents/Resources"
 # Info.plist with the CHANGELOG version injected.
 sed "s/__VERSION__/${VERSION}/" "$SCRIPT_DIR/Info.plist" \
-    > "$APP_BUNDLE/Contents/Info.plist"
+	>"$APP_BUNDLE/Contents/Info.plist"
 grep -q "NSMicrophoneUsageDescription" "$APP_BUNDLE/Contents/Info.plist" || {
-    echo "ERROR: Info.plist lacks NSMicrophoneUsageDescription — macOS would deny" >&2
-    echo "       audio input and RX would play silence with no error at all." >&2
-    exit 1
+	echo "ERROR: Info.plist lacks NSMicrophoneUsageDescription — macOS would deny" >&2
+	echo "       audio input and RX would play silence with no error at all." >&2
+	exit 1
 }
 
 # launcher onefile exe (the entry point named by CFBundleExecutable)
@@ -83,7 +90,7 @@ cp -R "$PYI_ROOT/MRRC-Modern-Server/." "$APP_MACOS/"
 # one-click upgrade will need).  $VERSION comes from the CHANGELOG top entry.
 # ${VERSION#v}: Windows and the Pi image write a bare triple, so all three
 # platforms agree on what version.txt contains (detect_version tolerates both).
-printf '%s\n' "${VERSION#v}" > "$APP_MACOS/version.txt"
+printf '%s\n' "${VERSION#v}" >"$APP_MACOS/version.txt"
 # scope_pipe onefile -> Contents/MacOS/
 cp "$PYI_ROOT/scope_pipe" "$APP_MACOS/scope_pipe"
 
@@ -94,9 +101,20 @@ cp "$REPO_ROOT/mem_channels.json" "$APP_MACOS/mem_channels.json"
 
 # optional FTDI dylibs
 if [[ -d "$REPO_ROOT/vendor/ftdi/macos" ]]; then
-  mkdir -p "$APP_MACOS/vendor/ftdi"
-  cp -R "$REPO_ROOT/vendor/ftdi/macos" "$APP_MACOS/vendor/ftdi/macos"
+	mkdir -p "$APP_MACOS/vendor/ftdi"
+	cp -R "$REPO_ROOT/vendor/ftdi/macos" "$APP_MACOS/vendor/ftdi/macos"
 fi
+
+# CA bundle for outbound HTTPS (see net_tls.py). A frozen bundle inherits the *build*
+# machine's OpenSSL defaults, and on this machine that is MacPorts' /opt/local path -
+# which no user has. Shipping our own bundle is what makes portal / diagnostics upload /
+# update check verify on a normal Mac (2026-10-04 field report).
+if [[ ! -f "$REPO_ROOT/vendor/ca/cacert.pem" ]]; then
+	echo "ERROR: vendor/ca/cacert.pem missing — the packaged app could not verify outbound HTTPS" >&2
+	exit 1
+fi
+mkdir -p "$APP_MACOS/vendor/ca"
+cp "$REPO_ROOT/vendor/ca/cacert.pem" "$APP_MACOS/vendor/ca/cacert.pem"
 
 # ---- Cloud Hub 接入所需的实例侧件（与 Windows 的 fleet\ 对等）----
 # 租户在一台没有装过任何东西的 Mac 上接入时，需要：frpc（隧道客户端）+ 四个脚本
@@ -107,10 +125,10 @@ fi
 PAYLOAD_SRC="$REPO_ROOT/packaging/payload/darwin-arm64"
 PAYLOAD_DST="$APP_BUNDLE/Contents/Resources/payload"
 if [ -d "$PAYLOAD_SRC" ]; then
-    mkdir -p "$PAYLOAD_DST"
-    cp -R "$PAYLOAD_SRC/." "$PAYLOAD_DST/"
-    chmod +x "$PAYLOAD_DST/frpc" "$PAYLOAD_DST"/*.sh
-    cat > "$PAYLOAD_DST/README.txt" <<'TXT'
+	mkdir -p "$PAYLOAD_DST"
+	cp -R "$PAYLOAD_SRC/." "$PAYLOAD_DST/"
+	chmod +x "$PAYLOAD_DST/frpc" "$PAYLOAD_DST"/*.sh
+	cat >"$PAYLOAD_DST/README.txt" <<'TXT'
 接入 Cloud Hub（实例侧）
   1. 先让应用运行起来（本应用）
   2. 在本目录执行：MRRC_HUB_TOKEN=<frps 令牌> MRRC_ENROLL_SECRET=<一次性登记口令> \
@@ -119,14 +137,14 @@ if [ -d "$PAYLOAD_SRC" ]; then
   3. 把脚本最后打印的那条 root 命令交给运维，在 hub 上执行
   脚本是幂等的：失败后重跑即可。
 TXT
-    echo "==> Hub payload: $(ls -1 "$PAYLOAD_DST" | tr '\n' ' ')"
+	echo "==> Hub payload: $(ls -1 "$PAYLOAD_DST" | tr '\n' ' ')"
 elif [ "${MRRC_ALLOW_MISSING_PAYLOAD:-0}" = "1" ]; then
-    echo "WARNING: hub payload missing ($PAYLOAD_SRC) - building anyway because MRRC_ALLOW_MISSING_PAYLOAD=1;" >&2
-    echo "         the app will not be able to set up a tunnel offline" >&2
+	echo "WARNING: hub payload missing ($PAYLOAD_SRC) - building anyway because MRRC_ALLOW_MISSING_PAYLOAD=1;" >&2
+	echo "         the app will not be able to set up a tunnel offline" >&2
 else
-    echo "ERROR: hub payload missing: $PAYLOAD_SRC" >&2
-    echo "       run: mrrc_hub/deploy/fetch_installer_payload.sh --out packaging/payload --platforms darwin-arm64" >&2
-    exit 1
+	echo "ERROR: hub payload missing: $PAYLOAD_SRC" >&2
+	echo "       run: mrrc_hub/deploy/fetch_installer_payload.sh --out packaging/payload --platforms darwin-arm64" >&2
+	exit 1
 fi
 
 # Bundle-mode Python/data location. PyInstaller's macOS bootloader, when a
@@ -143,9 +161,9 @@ fi
 # These runtime items move into the resource tree instead — the launchers resolve
 # them through runtime_path(), which falls back to Contents/MacOS/_internal.
 for item in macos mem_channels.json version.txt vendor; do
-    [ -e "$APP_MACOS/$item" ] || continue
-    cp -Rf "$APP_MACOS/$item" "$APP_BUNDLE/Contents/Resources/"
-    rm -rf "$APP_MACOS/$item"
+	[ -e "$APP_MACOS/$item" ] || continue
+	cp -Rf "$APP_MACOS/$item" "$APP_BUNDLE/Contents/Resources/"
+	rm -rf "$APP_MACOS/$item"
 done
 
 # Data tree -> Contents/Resources, with BOTH code locations symlinked to it.
@@ -165,7 +183,10 @@ cp -Rf "$APP_MACOS/_internal"/* "$APP_BUNDLE/Contents/Resources/"
 rm -rf "$APP_MACOS/_internal"
 ln -sfn Resources "$APP_BUNDLE/Contents/Frameworks"
 ln -sfn ../Resources "$APP_MACOS/_internal"
-[ -L "$APP_MACOS/_internal" ] || { echo "ERROR: MacOS/_internal is not a symlink" >&2; exit 1; }
+[ -L "$APP_MACOS/_internal" ] || {
+	echo "ERROR: MacOS/_internal is not a symlink" >&2
+	exit 1
+}
 
 # strip stale bytecode caches
 find "$APP_BUNDLE" -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
@@ -180,23 +201,23 @@ echo "==> Codesign (ad-hoc)"
 # exes + the root is enough to avoid the "damaged" Gatekeeper message; users
 # still right-click -> Open once (no Developer ID = "unidentified developer").
 find "$APP_BUNDLE" -type f \( -name "*.dylib" -o -name "*.so" \) \
-    -exec codesign --force --sign - {} + 2>/dev/null || true
+	-exec codesign --force --sign - {} + 2>/dev/null || true
 for exe in "$APP_MACOS/MRRC-Modern-Launcher" "$APP_MACOS/MRRC-Modern-Server" "$APP_MACOS/scope_pipe"; do
-  [[ -f "$exe" ]] && codesign --force --sign - "$exe" 2>/dev/null || true
+	[[ -f "$exe" ]] && codesign --force --sign - "$exe" 2>/dev/null || true
 done
 # A bundle whose signature cannot be produced must NOT be packaged: that silent
 # failure is what shipped "damaged" apps (2026-09-17 field report).
 codesign --force --sign - "$APP_BUNDLE" 2>&1 | tail -2
 codesign --verify --verbose=2 "$APP_BUNDLE" || {
-    echo "ERROR: signature verification failed for $APP_BUNDLE" >&2
-    echo "       (Gatekeeper would report the app as damaged)" >&2
-    exit 1
+	echo "ERROR: signature verification failed for $APP_BUNDLE" >&2
+	echo "       (Gatekeeper would report the app as damaged)" >&2
+	exit 1
 }
 codesign --verify --verbose=2 "$APP_BUNDLE" 2>&1 | tail -2
 if spctl -a -t exec "$APP_BUNDLE" 2>&1 | grep -qiE "damaged|invalid signature|not signed at all"; then
-    echo "ERROR: Gatekeeper still reports a damaged/invalid bundle" >&2
-    spctl -a -vvv -t exec "$APP_BUNDLE" >&2 || true
-    exit 1
+	echo "ERROR: Gatekeeper still reports a damaged/invalid bundle" >&2
+	spctl -a -vvv -t exec "$APP_BUNDLE" >&2 || true
+	exit 1
 fi
 
 # ---- Step 6: .dmg -------------------------------------------------------
@@ -208,11 +229,12 @@ echo "==> DMG"
 DMG="$DIST_ROOT/MRRC-Modern-${VERSION}-arm64.dmg"
 DMG_STAGING="$DIST_ROOT/_dmg"
 rm -f "$DMG"
-rm -rf "$DMG_STAGING"; mkdir -p "$DMG_STAGING"
+rm -rf "$DMG_STAGING"
+mkdir -p "$DMG_STAGING"
 ln -sf /Applications "$DMG_STAGING/Applications"
 cp -R "$APP_BUNDLE" "$DMG_STAGING/"
 hdiutil create -volname "MRRC Modern" -fs HFS+ -format UDZO \
-    -srcfolder "$DMG_STAGING" "$DMG"
+	-srcfolder "$DMG_STAGING" "$DMG"
 rm -rf "$DMG_STAGING"
 
 # ---- Step 7: checksums (for the website download table) -----------------
@@ -221,5 +243,7 @@ echo "==> Done"
 echo "App:  $APP_BUNDLE"
 echo "DMG:  $DMG"
 echo "Size: $(du -h "$DMG" | cut -f1)"
-echo -n "MD5:    "; md5 -q "$DMG"
-echo -n "SHA256: "; shasum -a 256 "$DMG" | cut -d' ' -f1
+echo -n "MD5:    "
+md5 -q "$DMG"
+echo -n "SHA256: "
+shasum -a 256 "$DMG" | cut -d' ' -f1

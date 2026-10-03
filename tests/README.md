@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1587 tests across 85 test modules (17 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-03, macOS). The per-module sections below
-itemise 70 of those 85 — the support-chain, Cloud Hub and upgrade-channel modules
+1604 tests across 86 test modules (17 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-04, macOS). The per-module sections below
+itemise 71 of those 86 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1587 |
-| Passed | 1587 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1604 |
+| Passed | 1604 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -463,7 +463,7 @@ and may be GBK/UTF-16 rather than UTF-8.
 Stage layout, both systemd units (user, EnvironmentFile, oneshot guard), the
 build/verify scripts, and `adopt_preseed()` converting a non-UTF-8 preseed.
 
-### 44. test_macos_launcher.py — macOS Menu-Bar Launcher (21 tests)
+### 44. test_macos_launcher.py — macOS Menu-Bar Launcher (24 tests)
 
 HTTPS-by-default command construction, cert/key resolution (explicit pair,
 bootstrap, `MRRC_SSL=off`, legacy `FT710_*` names), and the tolerant env
@@ -714,7 +714,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1587 tests in ~29s — can run on every commit.
+2. **Fast execution**: ~1604 tests in ~32s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.
@@ -738,3 +738,4 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_static_cache_busting.py` | `index.html` 的 `?v=` 与 `sw.js` 预缓存清单必须逐项一致（SW 只在自己字节变化时重装，键不动就永远发不出新文件） |
 | `test_install_sh_url.py` | macOS 源码安装脚本交给用户的 URL 必须是 `https://` —— 它写 `MRRC_WEB_HOST=0.0.0.0` 且从不关 TLS，却一直打印 `http://localhost:8888`（v1.24.5 黑屏的缩影）；顺带守住"别哪天偷偷关掉 TLS 让这句承诺反过来变错" |
 | `test_website_links.py` | 站点内链必须落到真锚点（曾 6 条指向指南里不存在的小节、1 条指向被生成器丢掉的 h1 锚点）；且**生成的 guide 页不得比源文档旧**（`build_guide.py` 是唯一写者，改文档不重建就是站点在描述旧行为）；顺带禁止任何页给出服务答不了的明文本地 URL |
+| `test_tls_trust_store.py` | **出站 HTTPS 必须能在「没有构建机 OpenSSL 默认路径」的机器上验通**（2026-10-04 现场：macOS 包的信任库为空 ⇒ portal 接入 / 诊断包上传 / 更新检查全报 `CERTIFICATE_VERIFY_FAILED`）。测试真的复刻空信任库，断言 `net_tls` 仍能重建（包内 `vendor/ca` → 系统 bundle）、包本身是真 CA 文件、并发告警，以及 **AST 守卫：任何直接 `urlopen` 必须带 `context=`**（否则下一个调用点会原样复发） |

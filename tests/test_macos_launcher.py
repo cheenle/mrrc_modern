@@ -61,6 +61,59 @@ class MacLauncherBuildTests(unittest.TestCase):
                 self.assertIsNone(launcher.build_command())
 
 
+class MacLauncherFtdiDirTests(unittest.TestCase):
+    """A relative MRRC_FTDI_LIB_DIR must resolve into the data tree (2026-10-04).
+
+    The shipped default.env says ``MRRC_FTDI_LIB_DIR=vendor/ftdi/macos``.  The signed
+    .app keeps that tree in Contents/Resources and only links it as Contents/MacOS/_internal,
+    so anchoring the relative value on app_dir() pointed at a directory that does not
+    exist: scope_pipe exited with "FTDI libraries not found" and the UI fell back to the
+    S-meter spectrum curve on every macOS install.
+    """
+
+    def test_relative_ftdi_dir_resolves_through_the_internal_link(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app_root = Path(tmp) / "Contents" / "MacOS"
+            data_root = Path(tmp) / "Contents" / "Resources"
+            (data_root / "vendor" / "ftdi" / "macos").mkdir(parents=True)
+            app_root.mkdir(parents=True)
+            # build.sh keeps the data tree in Resources and links it into MacOS, which is
+            # what makes the app signable; recreate that layout rather than a plain dir.
+            (app_root / "_internal").symlink_to(data_root, target_is_directory=True)
+            config = Path(tmp) / "mrrc_modern.env"
+            config.write_text("MRRC_FTDI_LIB_DIR=vendor/ftdi/macos\n", encoding="utf-8")
+            with patch.object(launcher, "app_dir", return_value=app_root):
+                env = launcher.load_env(config)
+            resolved = Path(env["MRRC_FTDI_LIB_DIR"])
+            self.assertTrue(resolved.is_dir(), f"the FTDI dir must exist: {resolved}")
+            # It goes through the link into the data tree; the pre-fix value pointed at
+            # Contents/MacOS/vendor/..., where nothing lives.
+            self.assertEqual(resolved.resolve(),
+                             (data_root / "vendor" / "ftdi" / "macos").resolve())
+            self.assertNotEqual(resolved, app_root / "vendor" / "ftdi" / "macos")
+
+    def test_relative_ftdi_dir_prefers_a_sibling_copy(self):
+        """Source checkouts and a vendor tree next to the exe still win over _internal."""
+        with tempfile.TemporaryDirectory() as tmp:
+            app_root = Path(tmp)
+            (app_root / "vendor" / "ftdi" / "macos").mkdir(parents=True)
+            config = Path(tmp) / "mrrc_modern.env"
+            config.write_text("MRRC_FTDI_LIB_DIR=vendor/ftdi/macos\n", encoding="utf-8")
+            with patch.object(launcher, "app_dir", return_value=app_root):
+                env = launcher.load_env(config)
+        self.assertEqual(Path(env["MRRC_FTDI_LIB_DIR"]),
+                         app_root / "vendor" / "ftdi" / "macos")
+
+    def test_absolute_ftdi_dir_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            chosen = Path(tmp) / "my-ca" / "ftdi"
+            config = Path(tmp) / "mrrc_modern.env"
+            config.write_text(f"MRRC_FTDI_LIB_DIR={chosen}\n", encoding="utf-8")
+            with patch.object(launcher, "app_dir", return_value=Path(tmp) / "app"):
+                env = launcher.load_env(config)
+        self.assertEqual(Path(env["MRRC_FTDI_LIB_DIR"]), chosen)
+
+
 class MacLauncherSslTests(unittest.TestCase):
     def test_local_url_secure_uses_https_and_localhost_for_dual_stack(self):
         self.assertEqual(

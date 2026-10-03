@@ -6,6 +6,7 @@ tests never touch hardware.
 """
 import asyncio
 import json
+import ssl
 import tempfile
 import unittest
 import zipfile
@@ -186,9 +187,11 @@ class SupportUploadTransportTests(unittest.TestCase):
     def test_create_then_put_with_the_zip_body(self):
         with tempfile.TemporaryDirectory() as tmp:
             calls = []
+            contexts = []
 
-            def fake_urlopen(request, timeout=None):
+            def fake_urlopen(request, data=None, timeout=None, context=None):
                 calls.append(request)
+                contexts.append(context)
                 if request.get_method() == "PUT":
                     return self._Response({"ok": True})
                 return self._Response({"ok": True, "id": "20260917-080000-abcd"})
@@ -199,6 +202,9 @@ class SupportUploadTransportTests(unittest.TestCase):
 
         self.assertEqual(remote_id, "20260917-080000-abcd")
         self.assertEqual(len(calls), 2)
+        # The upload must carry a verifying context: without one the packaged build had no
+        # trust store at all and every upload failed with CERTIFICATE_VERIFY_FAILED (2026-10-04).
+        self.assertTrue(all(isinstance(ctx, ssl.SSLContext) for ctx in contexts))
         self.assertTrue(calls[0].full_url.endswith("/support/api/create"))
         self.assertEqual(calls[0].get_method(), "POST")
         self.assertTrue(calls[1].full_url.endswith("/support/api/20260917-080000-abcd/bundle"))

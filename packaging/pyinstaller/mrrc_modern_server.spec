@@ -19,6 +19,11 @@ DIST_ROOT = ROOT / "dist" / "windows" / "_pyinstaller"
 # vendor files are non-fatal: the FT-710 spectrum falls back to S-meter and
 # Opus audio falls back to PCM/silence.
 _vendor_data = []
+# CA bundle for outbound HTTPS: net_tls.py resolves it under the resource roots, so it
+# ships exactly like the other vendor trees (and is platform-independent).
+_ca_root = ROOT / "vendor" / "ca"
+if _ca_root.exists():
+    _vendor_data.append((str(_ca_root), "vendor/ca"))
 if sys.platform == "win32":
     _ftdi_root = ROOT / "vendor" / "ftdi" / "windows"
     if _ftdi_root.exists():

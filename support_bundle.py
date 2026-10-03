@@ -234,7 +234,8 @@ _CHANGELOG_VERSION_RE = re.compile(r"^##\s*\[?v?([0-9]+\.[0-9]+\.[0-9]+)", re.M)
 VERSION_UNKNOWN = "unknown"
 
 
-def detect_version(runtime_dir: str | os.PathLike[str], resource_dir="") -> str:
+def detect_version(runtime_dir: str | os.PathLike[str],
+                  resource_dir: str | os.PathLike[str] = "") -> str:
     """version.txt (build product) -> MRRC-Modern.iss -> CHANGELOG.md -> unknown."""
     for directory in (runtime_dir, resource_dir):
         if not directory:

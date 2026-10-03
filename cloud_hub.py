@@ -29,6 +29,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import net_tls
 import ssl_bootstrap
 
 logger = logging.getLogger(__name__)
@@ -75,7 +76,7 @@ def _post_once(portal: str, route: str, payload: dict, timeout: int) -> dict:
     req = urllib.request.Request(url, data=data,
                                 headers={"Content-Type": "application/x-www-form-urlencoded"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as reply:
+        with net_tls.urlopen(req, timeout=timeout) as reply:
             return json.loads(reply.read() or b"{}")
     except urllib.error.HTTPError as exc:
         detail = ""

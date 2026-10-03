@@ -49,6 +49,7 @@ from config import (
 from backends import create_backend, known_models
 from backends.base import RadioBackend
 import cloud_hub
+import net_tls
 import ssl_bootstrap
 import support_bundle
 import upgrade_core
@@ -3386,7 +3387,7 @@ def _support_upload(zip_file) -> str:
 
     def _exchange(request) -> dict:
         """Send one request and parse its JSON body (never a raw traceback)."""
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with net_tls.urlopen(request, timeout=20) as response:
             raw = response.read().decode("utf-8", "replace")
         try:
             return json.loads(raw)

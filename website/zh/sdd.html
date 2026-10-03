@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.67 更新</a></li>
+          <li><a href="#updates">V2.68 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.67 · 2026-10-03</span>
+          <span>SDD V2.68 · 2026-10-04</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,11 +110,11 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.67</td>
+              <td>V2.68</td>
             </tr>
             <tr>
               <td>基线日期</td>
-              <td>2026-10-02</td>
+              <td>2026-10-04</td>
             </tr>
             <tr>
               <td>后端运行时</td>
@@ -144,47 +144,84 @@
         </div>
         <div class="features-grid">
           <div class="feature-card">
+            <div class="icon"><i class="fas fa-lock"></i></div>
+            <h3>
+              两个「只有构建机看不见」的打包缺陷
+              <small>（V2.68）</small>
+            </h3>
+            <p>
+              同一台 Mac 报的两件事是同一个形状：<strong
+                >构建机上有、用户机上没有的东西 被当成了常驻假设</strong
+              >。包里带着构建机的 OpenSSL，它的编译期默认 CA 路径
+              就是构建机自己的 <code>/opt/local/…</code> ——
+              于是信任库为空，接入云端、 诊断包上传、软件更新检查全部
+              <code>CERTIFICATE_VERIFY_FAILED</code>。现在 外发 HTTPS 统一走
+              <code>net_tls.py</code>（先包内 bundle、再系统 bundle），
+              并有构建期闸门<b>故意把 CA 环境打空</b
+              >后要求真握手。另一件是频谱：界面一直 画的是 S
+              表合成曲线，真频谱<strong>一次都没启动过</strong> —— 启动器把相对
+              路径的 <code>MRRC_FTDI_LIB_DIR</code> 锚到了
+              <code>Contents/MacOS</code>， 而签名后的包把数据树放在
+              <code>Contents/Resources</code>，于是采集进程 直接以 “FTDI
+              libraries not found” 退出，而原因只被记在 DEBUG 里。
+            </p>
+          </div>
+
+          <div class="feature-card">
             <div class="icon"><i class="fas fa-screwdriver-wrench"></i></div>
             <h3>
               v1.25.0 发布 —— 装完就能用
               <small>（V2.67）</small>
             </h3>
             <p>
-              三条现场报障、三个不同根因。启动器可能<strong>在起 server 之前就永久卡死</strong>：
+              三条现场报障、三个不同根因。启动器可能<strong
+                >在起 server 之前就永久卡死</strong
+              >：
               首次运行的串口探测会往每个候选口写，而电台的真实描述一个关键词都不命中
-              （CP2105 不是 "cp210x"），于是第一个被探测的是那台机器的 Intel AMT 口 ——
-              它 open 正常、却一个字节也写不进去，而写入用的是 pyserial 默认的
-              <em>无超时</em>。另一台已批准的实例停在"等待批准"：当时唯一的轮询循环住在设置
-              对话框里；现在轮询在服务端每 30 秒自查一次并报告结果。还有证书重载判据比错了
+              （CP2105 不是 "cp210x"），于是第一个被探测的是那台机器的 Intel AMT
+              口 —— 它 open 正常、却一个字节也写不进去，而写入用的是 pyserial
+              默认的
+              <em>无超时</em
+              >。另一台已批准的实例停在"等待批准"：当时唯一的轮询循环住在设置
+              对话框里；现在轮询在服务端每 30
+              秒自查一次并报告结果。还有证书重载判据比错了
               两个对象，导致登记完成的实例入口 502，而没有任何东西会去重启它。
             </p>
           </div>
 
           <div class="feature-card">
             <div class="icon"><i class="fas fa-triangle-exclamation"></i></div>
-            <h3>
-              v1.24.6 发布 — 启动器先问、再打开 <small>（V2.66）</small>
-            </h3>
+            <h3>v1.24.6 发布 — 启动器先问、再打开 <small>（V2.66）</small></h3>
             <p>
               一台装了 v1.24.5 的现场机<strong>仍然黑屏</strong>。它自己的
-              <code>server.log</code> 加上直接跑包内服务器证明：<strong>应用是健康的</strong>
+              <code>server.log</code> 加上直接跑包内服务器证明：<strong
+                >应用是健康的</strong
+              >
               —— 纯 HTTP 的 <code>/login</code> 回 200，而浏览器被送到了
               <code>https://</code>，于是显示的是协议错误空白页。根因是启动器按
-              <strong>自己</strong>能不能签出证书算 scheme，服务器按<strong>自己</strong>能加载到什么
-              决定 TLS —— 两次独立决策、一个 socket。现在两端启动器都<strong>先探</strong>
-              <code>/api/health</code>（共用 <code>launcher_net.py</code>），打开真正应答的那个
+              <strong>自己</strong>能不能签出证书算
+              scheme，服务器按<strong>自己</strong>能加载到什么 决定 TLS ——
+              两次独立决策、一个 socket。现在两端启动器都<strong>先探</strong>
+              <code>/api/health</code>（共用
+              <code>launcher_net.py</code>），打开真正应答的那个
               scheme，切换必提示、绝不静默降级。
             </p>
             <p>
               同版还修了：Windows 端口改为<strong>独占绑定</strong> —— 那里的
-              <code>SO_REUSEADDR</code> 允许第二个进程绑到<strong>正在监听</strong>的端口，于是两个
-              服务器可以同时报 <code>Server ready!</code>，浏览器可能落到没拿到电台那一个（现场日志
-              每行成对、相差 1–10&nbsp;ms）；直接启动 <code>Server</code> 不再把密码文件与
-              <code>recordings/</code> 指向<strong>只读</strong>的安装目录 —— 那意味着<strong>每次启动换一个
-              新密码且永远存不下</strong>，正是「装了新包还是登不上」的真因；裸启动现在会读用户的
-              <code>mrrc_modern.env</code>；日志不再每行写两遍；并新增标准库 AST 门禁：应用模块被
-              <code>name.attr</code> 使用却从未 import 时<strong>直接让构建失败</strong> —— 这类缺陷已经
-              进过两次发布包（v1.24.1 的 <code>cloud_hub</code>、v1.24.5 的 <code>ssl_bootstrap</code>）。
+              <code>SO_REUSEADDR</code>
+              允许第二个进程绑到<strong>正在监听</strong>的端口，于是两个
+              服务器可以同时报
+              <code>Server ready!</code
+              >，浏览器可能落到没拿到电台那一个（现场日志 每行成对、相差
+              1–10&nbsp;ms）；直接启动 <code>Server</code> 不再把密码文件与
+              <code>recordings/</code> 指向<strong>只读</strong>的安装目录 ——
+              那意味着<strong>每次启动换一个 新密码且永远存不下</strong
+              >，正是「装了新包还是登不上」的真因；裸启动现在会读用户的
+              <code>mrrc_modern.env</code>；日志不再每行写两遍；并新增标准库 AST
+              门禁：应用模块被 <code>name.attr</code> 使用却从未 import
+              时<strong>直接让构建失败</strong> —— 这类缺陷已经
+              进过两次发布包（v1.24.1 的 <code>cloud_hub</code>、v1.24.5 的
+              <code>ssl_bootstrap</code>）。
             </p>
           </div>
           <div class="feature-card">
@@ -338,16 +375,18 @@
           </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-mobile-screen"></i></div>
-            <h3>v1.21.0 发布 —— iPhone 开机锁屏竞态修复 <small>（V2.61）</small></h3>
+            <h3>
+              v1.21.0 发布 —— iPhone 开机锁屏竞态修复 <small>（V2.61）</small>
+            </h3>
             <p>
               开机时弹出的 iOS 系统麦克风权限框会释放刚拿到的屏幕锁，
-              而所有无用户手势的自动重申请都被拒绝 —— 主控界面开机后
-              约 30 秒仍会黑屏。现在权限框结束时立即重申请，并新增
-              window <code>focus</code> 兜底。收听页新增瀑布上方的
-              FFT 迹线、频率步进按钮、公网尺寸音频缓冲；公网代理后端
-              改用 DNS 名 <code>radio.vlsc.net</code>（300 秒重解析，
-              家中 IPv6 变化自愈）。macOS DMG 与 Windows
-              安装包均已发布并做了跨主机 SHA-256 校验。
+              而所有无用户手势的自动重申请都被拒绝 —— 主控界面开机后 约 30
+              秒仍会黑屏。现在权限框结束时立即重申请，并新增 window
+              <code>focus</code> 兜底。收听页新增瀑布上方的 FFT
+              迹线、频率步进按钮、公网尺寸音频缓冲；公网代理后端 改用 DNS 名
+              <code>radio.vlsc.net</code>（300 秒重解析， 家中 IPv6
+              变化自愈）。macOS DMG 与 Windows 安装包均已发布并做了跨主机
+              SHA-256 校验。
             </p>
           </div>
           <div class="feature-card">

@@ -69,13 +69,57 @@ sudo xattr -dr com.apple.quarantine "/Applications/MRRC Modern.app"
 **build.sh 已加硬门禁**：签名或校验失败即 `exit 1`，`spctl` 报 damaged/invalid 也 `exit 1`
 （此前正是这条静默警告让坏包一路发出）。
 
+## 「只有构建机看不见」的两个打包缺陷（2026-10-04 第三次上报，同一台机器）
+
+同一台 Mac 报了两件看似无关的事，根因同类：**打包机上存在、用户机上不存在的东西被当成了常驻假设**。
+
+### 1. 所有外发 HTTPS 都在失败（接入云端 / 诊断包上传 / 软件更新）
+
+报错 `certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)` —— 但 portal 完全正常
+（`curl` 200、链完整）。原因是包内 `libcrypto.3.dylib` 是**构建机的** OpenSSL，其编译期默认 CA 路径是
+构建机的 MacPorts 目录 `/opt/local/...`；用户机没有 `/opt/local` ⇒ 信任库为空。
+
+```bash
+# 包里那份 OpenSSL 到底把默认 CA 指向哪：
+strings -a /Applications/MRRC-Modern.app/Contents/Resources/libcrypto.3.dylib \
+  | grep -aE "^/(opt|usr|etc).*(openssl|cert)"
+# 本机有没有那个目录（构建机上有，用户机上没有 —— 这就是为什么它逃过了所有人）：
+ls -d /opt/local 2>&1
+```
+
+**排查/解封**：`SSL_CERT_FILE=/etc/ssl/cert.pem`（macOS 系统 bundle）—— 加进
+`~/Library/Application Support/MRRC-Modern/mrrc_modern.env` 后重启应用即可。修复见 `net_tls.py`
+
++ 随包 `vendor/ca/cacert.pem` + 构建闸门 `dev_tools/tls_trust_gate.py`（**故意打空 CA 环境**，
+未修法必须复现为空）。顺带记住：**诊断包上传失败与 portal 失败是同一个根因** —— 报告包不是
+从应用上传的，而是运维手工拿到的，这本身就说明 HTTPS 出站坏了。
+
+### 2. 真 FT4222 频谱从未启动（界面一直画 S 表合成曲线）
+
+日志 42 次 `scope_pipe exited (frames=0, connected=False)`、`Spectrum broadcast active: S-meter fallback`，
+而 `scope_pipe: first frame received — spectrum active` **一次都没有**。硬件和库都在，唯一的问题是
+`MRRC_FTDI_LIB_DIR`：随包 `default.env` 给的是相对值 `vendor/ftdi/macos`，启动器把它锚到了
+`Contents/MacOS/`，而数据树（签名后）在 `Contents/Resources/` —— 只有 `Contents/MacOS/_internal`
+这条链接通到它。
+
+```bash
+# 运行中的 server 被告知的目录，必须真实存在：
+ps eww -p $(pgrep -f MRRC-Modern-Server) | tr ' ' '\n' | grep MRRC_FTDI_LIB_DIR
+ls /Applications/MRRC-Modern.app/Contents/Resources/vendor/ftdi/macos/
+```
+
+**解封**：把绝对路径写进 `~/Library/Application Support/MRRC-Modern/mrrc_modern.env` 并重启。
+修复：`macos/launcher.py:load_env` 的相对路径改走 `runtime_path()`（回退 `_internal`）。
+**教训**：任何「随包模板里的相对路径」都必须经 `runtime_path()`/`_internal` 解析 ——
+`app_dir()` 在签名后的 .app 里不是数据树。
+
 ## Overview
 
 The macOS release is a locally-built DMG: `packaging/macos/build.sh` runs tests → 3 PyInstaller specs → hand-assembles `Contents/MacOS/` → ad-hoc codesign → `hdiutil` DMG. Version is read from the top `## [vX.Y.Z]` heading in `CHANGELOG.md` — rename/keep that heading first. Since v1.13.0 the launcher serves **HTTPS by default**: a user-supplied `MRRC_SSL_CERT`/`MRRC_SSL_KEY` wins, otherwise a self-signed cert is auto-generated (wiring: gotcha 8); `MRRC_SSL=off` reverts to plain HTTP. The cert SANs cover localhost/hostname/127.0.0.1/::1/LAN IPs; browsers warn once on first visit (click Advanced → Continue) — call this out for novice users.
 
 ## Prerequisites
 
-- Python 3.13 venv (`.venv`) with the runtime deps AND `pyinstaller==6.21.0` + `rumps` (`packaging/macos/requirements-build.txt`). From scratch:
++ Python 3.13 venv (`.venv`) with the runtime deps AND `pyinstaller==6.21.0` + `rumps` (`packaging/macos/requirements-build.txt`). From scratch:
 
   ```bash
   python3.13 -m venv .venv
@@ -84,9 +128,9 @@ The macOS release is a locally-built DMG: `packaging/macos/build.sh` runs tests 
   .venv/bin/python -m pip install -r packaging/macos/requirements-build.txt
   ```
 
-- Xcode Command Line Tools (`codesign`, `hdiutil`), `brew install portaudio` (pyaudio).
-- FTDI dylibs at `vendor/ftdi/macos/libft4222.dylib` + `libftd2xx.dylib` (universal arm64). Missing → S-meter fallback (warn only).
-- Apple Silicon only (arm64). No Developer ID → ad-hoc signed → first launch is right-click → Open once.
++ Xcode Command Line Tools (`codesign`, `hdiutil`), `brew install portaudio` (pyaudio).
++ FTDI dylibs at `vendor/ftdi/macos/libft4222.dylib` + `libftd2xx.dylib` (universal arm64). Missing → S-meter fallback (warn only).
++ Apple Silicon only (arm64). No Developer ID → ad-hoc signed → first launch is right-click → Open once.
 
 ## Build
 
@@ -229,9 +273,9 @@ Cleanup: `kill -TERM <server_pid>` then `pkill -KILL -f MRRC-Modern-Launcher`.
 
 ## Website Deploy
 
-- DMG goes to **<www.vlsc.net>** `/var/www/vlsc.net/mrrc_modern/downloads/` (sudo mv + chown www-data + chmod 644). `website/deploy.sh` EXCLUDES `downloads/` — the DMG is server-managed, never in the deploy tar; `website/downloads/*.dmg` is gitignored (untracked staging only).
-- `website/index.html` + `website/zh/index.html`: BEFORE deploying, update the version badge, the macOS download card (new size + SHA-256 printed by build.sh), and the macOS install guide track. Then `echo y | ./deploy.sh` from `website/` (uploads HTML, backs up, nginx -t). Deploy target is <www.vlsc.net> (user must confirm production deploys).
-- Keep the hero dual-platform (macOS primary + Windows) — the landing page should not favor one platform.
++ DMG goes to **<www.vlsc.net>** `/var/www/vlsc.net/mrrc_modern/downloads/` (sudo mv + chown www-data + chmod 644). `website/deploy.sh` EXCLUDES `downloads/` — the DMG is server-managed, never in the deploy tar; `website/downloads/*.dmg` is gitignored (untracked staging only).
++ `website/index.html` + `website/zh/index.html`: BEFORE deploying, update the version badge, the macOS download card (new size + SHA-256 printed by build.sh), and the macOS install guide track. Then `echo y | ./deploy.sh` from `website/` (uploads HTML, backs up, nginx -t). Deploy target is <www.vlsc.net> (user must confirm production deploys).
++ Keep the hero dual-platform (macOS primary + Windows) — the landing page should not favor one platform.
 
 ## Common Mistakes
 

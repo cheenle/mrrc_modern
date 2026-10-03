@@ -1,9 +1,9 @@
 """Update channel core (spec 2026-09-17-upgrade-channel §2–§3, slice 1).
 
-Pure logic, stdlib only, no application imports: fetch and validate the release
-manifest, compare versions, and own the `state.json` schema that makes an upgrade
-**provable**.  Nothing here downloads or installs — that is slice 2, and it must
-not exist half-built.
+Pure logic, stdlib only apart from the shared TLS trust helper (`net_tls`, which is what lets
+an installed build verify a certificate at all): fetch and validate the release manifest,
+compare versions, and own the `state.json` schema that makes an upgrade **provable**.
+Nothing here downloads or installs — that is slice 2, and it must not exist half-built.
 """
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ import re
 import time
 import urllib.request
 from pathlib import Path
+
+import net_tls
 
 DEFAULT_MANIFEST_URL = "https://www.vlsc.net/mrrc_modern/downloads/latest.json"
 STATE_STATUSES = ("checking", "available", "up_to_date", "downloading", "installing",
@@ -106,7 +108,7 @@ def parse_manifest(data) -> dict:
 def fetch_manifest(url: str = DEFAULT_MANIFEST_URL, timeout: int = 20) -> dict:
     """Download and validate the manifest (raises ManifestError / OSError)."""
     request = urllib.request.Request(url, headers={"Cache-Control": "no-cache"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with net_tls.urlopen(request, timeout=timeout) as response:
         blob = response.read()
     return parse_manifest(blob)
 

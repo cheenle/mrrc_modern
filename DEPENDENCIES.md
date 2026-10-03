@@ -15,7 +15,6 @@
 
 FT-710 true spectrum requires FTDI FT4222 libraries. IC-7300/IC-7300MK2 use CI-V `0x27` scope frames on the same USB serial port and do **not** require FTDI libraries.
 
-
 ## Python Version
 
 **Python 3.10+ required.**
@@ -25,7 +24,7 @@ and the `X | None` union syntax (`PEP 604`), all of which require Python 3.10+.
 Python 3.11+ is recommended for `asyncio` performance improvements.
 
 | OS | Install Python |
-|----|---------------|
+| ---- | --------------- |
 | macOS | `brew install python@3.12` |
 | Debian/Ubuntu | `sudo apt install python3.12 python3.12-venv` |
 | Fedora | `sudo dnf install python3.12` |
@@ -35,13 +34,12 @@ Python 3.11+ is recommended for `asyncio` performance improvements.
 
 **Note**: Python 3.9 is NOT supported due to type hint syntax requirements.
 
-
 ## Core Python Packages
 
 These are installed from `requirements.txt`:
 
 | Package | Min Version | Purpose | Notes |
-|---------|------------|---------|-------|
+| --------- | ------------ | --------- | ------- |
 | `fastapi` | ≥0.100.0 | Web framework (HTTP + WebSocket routing) | |
 | `uvicorn[standard]` | ≥0.23.0 | ASGI server (uvloop + httptools) | `[standard]` pulls in `websockets` (wsproto) and `watchfiles` |
 | `pyserial` | ≥3.5 | Serial CAT/CI-V protocol (CP210x USB-UART) | Sync API; all blocking I/O offloaded to `asyncio.to_thread()` |
@@ -52,7 +50,7 @@ These are installed from `requirements.txt`:
 ### Optional Python Packages
 
 | Package | Purpose | When Needed |
-|---------|---------|-------------|
+| --------- | --------- | ------------- |
 | `cryptography` | TLS/SSL support for HTTPS | When using `--ssl-cert`/`--ssl-key` |
 | `pyopenssl` | Alternative SSL backend | If `cryptography` is unavailable |
 | `httptools` | HTTP parser acceleration | Auto-installed by `uvicorn[standard]` |
@@ -61,12 +59,11 @@ These are installed from `requirements.txt`:
 ### Dev/Test Dependencies (`requirements-dev.txt`)
 
 | Package | Purpose |
-|---------|---------|
+| --------- | --------- |
 | `pytest` | Test runner |
 | `pytest-asyncio` | Async test support |
 | `pytest-cov` | Coverage reports |
 | `mypy` | Static type checking |
-
 
 ## System / SDK Dependencies
 
@@ -77,7 +74,7 @@ entire audio subsystem (RX/TX) is unavailable**, though basic CAT control and
 spectrum display will still work.
 
 | OS | Install Command | Package(s) |
-|----|----------------|------------|
+| ---- | ---------------- | ------------ |
 | macOS | `brew install portaudio` | `portaudio` |
 | Debian/Ubuntu | `sudo apt install portaudio19-dev libportaudio2` | `portaudio19-dev`, `libportaudio2` |
 | Fedora/RHEL | `sudo dnf install portaudio-devel` | `portaudio-devel` |
@@ -103,7 +100,7 @@ uncompressed Int16 PCM (768 kbps mono)**, which may stutter on slow/mobile
 connections.
 
 | OS | Install Command | Package(s) |
-|----|----------------|------------|
+| ---- | ---------------- | ------------ |
 | macOS | `brew install opus` | `opus` |
 | Debian/Ubuntu | `sudo apt install libopus0 libopus-dev` | `libopus0`, `libopus-dev` |
 | Fedora/RHEL | `sudo dnf install opus opus-devel` | `opus`, `opus-devel` |
@@ -131,6 +128,7 @@ export LD_LIBRARY_PATH="/usr/lib/arm-linux-gnueabihf:$LD_LIBRARY_PATH"
 ```
 
 **Verification:**
+
 ```bash
 python -c "from opus_rx import RxOpusEncoder; e = RxOpusEncoder(); print('OK')"
 ```
@@ -142,11 +140,10 @@ For SSL/TLS connections, the `uvicorn[standard]` package pulls in
 HTTPS, you also need `cryptography` (`pip install cryptography`).
 
 | OS | Package | Notes |
-|----|---------|-------|
+| ---- | --------- | ------- |
 | macOS | Built-in (LibreSSL) | Comes with macOS |
 | Linux | `libssl-dev` / `openssl-devel` | Usually pre-installed |
 | Windows | Built into Python | Schannel or bundled OpenSSL |
-
 
 ## USB / Serial Device Drivers
 
@@ -164,7 +161,6 @@ bridge). Differences that matter here:
   audible as pitch shift and `_diag_yaesu.py` reports the enumeration.
 - **FTX-1F** exposes three power configurations (Field head 6/10 W, SPA-1
   100 W); the server detects the class from the `PC` answer format.
-
 
 ### FT-710
 
@@ -202,7 +198,7 @@ the radio at all (no frequency changes, no mode changes, no PTT).
 #### macOS
 
 | macOS Version | Driver Status |
-|--------------|---------------|
+| -------------- | --------------- |
 | macOS 13 (Ventura)+ | **Built-in.** AppleUSBCDC driver handles CP210x natively. Plug and play. |
 | macOS 10.15–12 | Built-in, but the official SiLabs driver may work better |
 | macOS 10.14– | Install [SiLabs CP210x VCP Driver](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers) |
@@ -210,6 +206,7 @@ the radio at all (no frequency changes, no mode changes, no PTT).
 **Device naming:** `/dev/cu.SLAB_USBtoUART` (Enhanced) and `/dev/cu.usbserial-*` (Standard).
 
 **Verify:**
+
 ```bash
 ls /dev/cu.SLAB_USBtoUART* /dev/cu.usbserial-* 2>/dev/null
 # Should see two devices:
@@ -255,20 +252,23 @@ groups | grep -E "dialout|uucp"
 **Common serial permission scenarios:**
 
 | Permission | Owner:Group | Meaning | Fix |
-|-----------|-------------|---------|-----|
+| ----------- | ------------- | --------- | ----- |
 | `crw-rw----` | `root:dialout` | Members of `dialout` can read/write | `sudo usermod -a -G dialout $USER` |
 | `crw-r--r--` | `root:root` | No group write — udev rules missing | Install udev rules (below) |
 | `crw-rw-rw-` | `root:dialout` | World-writable (udev MODE=0666) | Already accessible ✅ |
 | `crw-------` | `root:root` | Only root can access | `sudo chmod 666 /dev/ttyUSB0` (temporary) |
 
 **udev rules (recommended):**
+
 ```
 # /etc/udev/rules.d/99-ft710.rules
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0666", SYMLINK+="ft710-cat"
 ```
+
 Then: `sudo udevadm control --reload-rules && sudo udevadm trigger`
 
 **Verify:**
+
 ```bash
 ls /dev/ttyUSB* /dev/ft710-cat 2>/dev/null
 # Should show ttyUSB0 (CAT) and ttyUSB1 (scope serial)
@@ -280,6 +280,7 @@ Download and install the **CP210x Universal Windows Driver** from
 [Silicon Labs](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers).
 
 After installation, the FT-710 will appear as two COM ports:
+
 - **COM port with lower number** → Enhanced COM Port (CAT) — use this as `FT710_SERIAL_PORT`
 - **COM port with higher number** → Standard COM Port
 
@@ -309,6 +310,7 @@ display** — still shows band activity but without true FFT resolution.
    (bundled with project, sourced from the wfview app bundle).
 
 **Setup:**
+
 ```bash
 # Install D2XX config (one-time, requires sudo)
 sudo mkdir -p /usr/local/lib
@@ -322,6 +324,7 @@ ls -l lib/libft4222.dylib lib/libftd2xx.dylib
 the FT-710 USB cable for the D2XX driver to claim the device.
 
 **Verify FT4222 connectivity:**
+
 ```bash
 # Check IORegistry for FT4222
 ioreg -p IOUSB -w0 -l | grep -A5 "FT4222"
@@ -346,6 +349,7 @@ the libraries must be cross-compiled from source (FTDI does not provide
 ARM Linux binaries for D2XX).
 
 **x86_64 Linux — obtaining libraries:**
+
 ```bash
 # Option A: Copy from wfview build directory (if you built wfview from source)
 cp /path/to/wfview/build/lib/libft4222.so lib/
@@ -365,6 +369,7 @@ ldd lib/libft4222.so | grep "not found"
 ```
 
 **Key diagnostic:**
+
 ```bash
 # Check if libft4222.so can find its dependency (libftd2xx.so)
 ldd lib/libft4222.so
@@ -381,6 +386,7 @@ nm -D lib/libftd2xx.so | grep FT_OpenEx
 ```
 
 **Environment overrides for Linux:**
+
 ```bash
 # Per-library override (preferred)
 export FT710_FT4222_LIB=/path/to/libft4222.so
@@ -395,6 +401,7 @@ The FTDI D2XX libraries must be compiled from source. FTDI does not provide
 ARM Linux binaries.
 
 **Building libftd2xx for ARM from wfview source:**
+
 ```bash
 # 1. Clone wfview
 git clone https://gitlab.com/eliggett/wfview.git
@@ -418,12 +425,14 @@ display — still functional for band activity monitoring. See
 `FT710_FT4222_CLK_DIV` env var if you need to adjust SPI timing.
 
 **udev rules for FT4222:**
+
 ```
 # /etc/udev/rules.d/99-ft710.rules (add this line)
 SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="601c", MODE="0666"
 ```
 
 **Verify FT4222 on Linux:**
+
 ```bash
 lsusb | grep "0403:601c"
 # Expected: Bus XXX Device XXX: ID 0403:601c Future Technology Devices International, Ltd FT4222
@@ -434,7 +443,7 @@ lsusb | grep "0403:601c"
 **Common Linux issues:**
 
 | Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
+| --------- | ------------- | ----- |
 | `libftd2xx.so: cannot open shared object file` | Missing file or wrong path | Copy from wfview build, or set `LD_LIBRARY_PATH` |
 | `libft4222.so` found but `libftd2xx.so` not found | Only one of two required libs present | Both libraries are needed — copy the missing one |
 | `FT_OpenEx` fails (error 1, 2, or 3) | No FT4222 device connected | Check USB cable, verify `lsusb \| grep 0403:601c` |
@@ -481,6 +490,7 @@ device by scanning PyAudio devices for names containing "FT-710", "FT710",
 (mono input, full-duplex capability) as fallbacks.
 
 **Manual override:**
+
 ```bash
 # By device index (from PyAudio enumeration at startup):
 FT710_AUDIO_RX_DEVICE=3 FT710_AUDIO_TX_DEVICE=3 python server.py
@@ -509,6 +519,7 @@ No audio input device found
 ```
 
 In this mode:
+
 - ✅ CAT control (frequency, mode, PTT, filters) — **fully functional**
 - ✅ Spectrum waterfall (S-meter fallback if no FT4222)
 - ✅ Web UI with all controls
@@ -516,11 +527,11 @@ In this mode:
 - ❌ TX audio (no audio device to play to)
 
 To suppress audio warnings on a headless server:
+
 ```bash
 # Install pyaudio but expect no device — control-only mode
 pip install pyaudio  # will import but find no devices
 ```
-
 
 ## Platform-Specific Installation Guides
 
@@ -553,6 +564,7 @@ FT710_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py
 ```
 
 **Apple Silicon (arm64) notes:**
+
 - All dependencies (Python, portaudio, opus) are natively compiled for arm64 via Homebrew
 - The FTDI `.dylib` files in `lib/` are universal binaries (arm64 + x86_64)
 - The Opus ctypes wrapper explicitly avoids `opus_encoder_ctl` (variadic C function)
@@ -560,6 +572,7 @@ FT710_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py
   `max_data_bytes` cap on `opus_encode()` to control bitrate
 
 **Intel (x86_64) notes:**
+
 - Homebrew installs to `/usr/local` instead of `/opt/homebrew`
 - FTDI libraries in `lib/` work on both architectures
 
@@ -661,6 +674,7 @@ FT710_SERIAL_PORT=/dev/ttyUSB0 python server.py
 ```
 
 **Raspberry Pi notes:**
+
 - FT4222 scope: Not available without cross-compiled FTDI libraries (ARM D2XX
   binaries are not provided by FTDI). Use S-meter fallback for spectrum display.
 - PyAudio may need ALSA configuration if the FT-710 is not the default device.
@@ -729,22 +743,24 @@ python server.py
 ```
 
 **Windows manual-mode notes:**
+
 - FT4222 true spectrum requires `FT4222.dll` and `ftd2xx.dll` in `vendor\ftdi\windows\bin\x64`, `lib\`, or a directory referenced by `FT710_FTDI_LIB_DIR`.
 - The `start.sh`/`stop.sh` scripts don't work on Windows.
 - Performance may be slightly lower due to the `asyncio` event loop using
   `ProactorEventLoop` instead of `uvloop` (Linux/macOS only).
 - Audio should work with standard PyAudio (bundled PortAudio DLL).
 
-
 ## Audio Device Configuration
 
 ### Understanding Radio USB Audio
 
 Both radios present as a **single USB Audio device** with one input and one output:
+
 - **Input (RX):** Audio FROM the radio (what you hear on the radio's speaker)
 - **Output (TX):** Audio TO the radio (microphone/modulation input)
 
 The native sample rate depends on the backend:
+
 - **FT-710:** 44,100 Hz, mono, 16-bit. The server resamples to 48,000 Hz for Opus
   encoding and back to 44.1k for TX playback.
 - **IC-7300:** 48,000 Hz (stereo input/mono output), 16-bit. No resampling is
@@ -753,6 +769,7 @@ The native sample rate depends on the backend:
 ### Troubleshooting Audio
 
 **No audio input (RX silent):**
+
 ```bash
 # Check if the FT-710 is listed as an audio device:
 python -c "
@@ -766,6 +783,7 @@ p.terminate()
 ```
 
 **Common issues:**
+
 1. **macOS Privacy:** System Preferences → Privacy → Microphone → allow Terminal/Python
 2. **Linux:** The FT-710 may not be the default ALSA device. Use `FT710_AUDIO_RX_DEVICE`
    to specify the correct device.
@@ -775,11 +793,11 @@ p.terminate()
    check the radio's AF gain setting (it affects the USB audio output level).
 
 **TX audio not modulating:**
+
 1. Check that `start_tx` is completing (server log shows "TX audio started")
 2. Verify the FT-710's modulation source is set to USB (radio menu)
 3. Check the TX audio queue log messages: if `_tx_stream is None` appears,
    the audio output stream wasn't opened successfully
-
 
 ## FTDI / Scope Troubleshooting
 
@@ -790,9 +808,11 @@ claims the FT4222 before the D2XX library can. This produces error 1000
 (`FT_DEVICE_NOT_SUPPORTED`) during `FT4222_SPIMaster_Init`.
 
 **Fix:**
+
 1. Verify `ftd2xx.cfg` is at `/usr/local/lib/ftd2xx.cfg` with `DetachKernelDriver=1`
 2. Unplug and replug the FT-710 USB cable
 3. Confirm the FT4222 is no longer claimed by Apple:
+
    ```bash
    ioreg -p IOUSB -w0 -l | grep -B2 -A5 "FT4222"
    # Should NOT show "AppleUSBFTDI" as the driver
@@ -809,6 +829,7 @@ SPI init fails on the first attempt, check the startup log for
 ### Linux: Missing ARM FTDI Libraries
 
 FTDI does not provide pre-built ARM Linux `.so` files. Options:
+
 1. **Use S-meter fallback** (set `--no-scope` to skip scope altogether)
 2. **Cross-compile from wfview source** (complex; see wfview's CMake toolchain)
 3. **Use a x86_64 Linux machine** for full scope support
@@ -830,6 +851,60 @@ vs.
 Spectrum broadcast active: FT4222, 1701 bytes/frame, 1 clients
 ```
 
+### macOS: Real Spectrum Silently Falls Back (packaged build)
+
+If the log shows `Spectrum broadcast active: S-meter fallback` while the radio clearly has an
+FT4222 (it appears in `ioreg -p IOUSB` as `FT4222`, FTDI), the usual cause on a packaged macOS
+build up to v1.25.0 is the **launcher's path to the FTDI libraries**, not the hardware:
+
+```
+scope_pipe exited (frames=0, connected=False)      # again and again, ~6 s apart
+```
+
+The bundled `macos/default.env` says `MRRC_FTDI_LIB_DIR=vendor/ftdi/macos` (relative), and the
+launcher anchored that on `Contents/MacOS/` — where nothing lives, because the signed bundle
+keeps the data tree in `Contents/Resources/` and only links it as `Contents/MacOS/_internal`.
+`scope_pipe` then died with `FTDI libraries not found`, which the parent logs only at DEBUG.
+Two checks:
+
+```bash
+# what the running server was told (should point at a directory that exists):
+ps eww -p $(pgrep -f MRRC-Modern-Server) | tr ' ' '\n' | grep MRRC_FTDI_LIB_DIR
+ls /Applications/MRRC-Modern.app/Contents/Resources/vendor/ftdi/macos/
+```
+
+Panic-time workaround (v1.25.0 and earlier): put the **absolute** path in
+`~/Library/Application Support/MRRC-Modern/mrrc_modern.env` and restart the app. Fixed in the
+launcher for the next build (`runtime_path()` resolves the relative value through `_internal`).
+
+## Outbound TLS Trust (CA bundle)
+
+A frozen bundle inherits the OpenSSL its **build host** used, and a context built without an
+explicit CA file takes its roots from that library's compiled-in path. On the macOS build host
+that path is MacPorts' (`/opt/local/libexec/openssl3/etc/openssl/cert.pem`), which no user has —
+so the trust store came up **empty** and every outbound HTTPS request failed with
+`CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate` (Cloud Hub portal enrolment,
+the 🐞 diagnostics upload, the update check; field report 2026-10-04).
+
+`net_tls.py` therefore never relies on those defaults. When the process's default store is empty
+it loads, in order: `MRRC_CA_BUNDLE` (operator override) → `vendor/ca/cacert.pem` (shipped) → the
+platform's system bundle (`/etc/ssl/cert.pem`, `/etc/ssl/certs/ca-certificates.crt`,
+`/etc/pki/tls/certs/ca-bundle.crt`, …). Windows uses the OS certificate store and needs none of
+this.
+
+**The shipped bundle** — `vendor/ca/cacert.pem`, Mozilla's CA list as distributed by curl's
+`ca-bundle` port (119 roots when last refreshed, 2026-10-04). Refresh it with:
+
+```bash
+curl -fsSL https://curl.se/ca/cacert.pem -o vendor/ca/cacert.pem   # needs outbound network
+python3 dev_tools/tls_trust_gate.py                                # gate must still pass
+```
+
+**Build gate** — both build scripts run `dev_tools/tls_trust_gate.py`, which empties the CA
+environment on purpose, asserts the *unfixed* path really is empty (a vacuous gate is worse than
+none), then requires `net_tls` to rebuild the store and complete a TLS handshake with the portal
+and the release manifest. Both build scripts also fail outright when `vendor/ca/cacert.pem` is
+missing.
 
 ## Quick Verification Checklist
 
@@ -857,10 +932,12 @@ ls -l lib/libft4222.dylib lib/libftd2xx.dylib
 # 7. D2XX config (macOS only)
 grep "DetachKernelDriver" /usr/local/lib/ftd2xx.cfg 2>/dev/null && echo "D2XX OK"
 
-# 8. Server smoke test (starts and exits cleanly)
+# 8. Outbound TLS trust (non-zero roots = portal / update / 🐞 upload can verify)
+python -c "import net_tls; print('TLS roots:', net_tls.store_size(net_tls.default_context()))"
+
+# 9. Server smoke test (starts and exits cleanly)
 timeout 5 python server.py 2>&1 | head -20 || true
 ```
-
 
 ## Dependency Graph
 

@@ -212,7 +212,13 @@ def load_env(path: Path) -> dict[str, str]:
                  str(runtime_path("vendor", "ftdi", "macos")))
     ftdi_dir = Path(_env(env, "MRRC_FTDI_LIB_DIR"))
     if not ftdi_dir.is_absolute():
-        env["MRRC_FTDI_LIB_DIR"] = str(app_dir() / ftdi_dir)
+        # The shipped default.env carries a *relative* value, so it has to be anchored
+        # here.  Anchor it on the data tree, not on app_dir(): the signed .app keeps
+        # vendor/ in Contents/Resources and only Contents/MacOS/_internal points at it, so
+        # strapping it to Contents/MacOS produced a path that does not exist — scope_pipe
+        # then died with "FTDI libraries not found" and the spectrum silently showed the
+        # S-meter curve instead of real FFT data (field report 2026-10-04).
+        env["MRRC_FTDI_LIB_DIR"] = str(runtime_path(*ftdi_dir.parts))
     return env
 
 

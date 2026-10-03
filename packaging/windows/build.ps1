@@ -46,6 +46,16 @@ if ($utExit -ne 0 -or $utBad) {
     throw "tests failed (exit $utExit) - logs: $utOut / $utErr"
 }
 
+# TLS trust gate: the packaged app must verify outbound HTTPS even on a machine that has no
+# CA bundle of its own.  The build host is the one place this failure is invisible, so the
+# gate manufactures an empty trust store on purpose (2026-10-04: macOS builds failed every
+# portal/upload/update request with CERTIFICATE_VERIFY_FAILED).
+$tlsProc = Start-Process -FilePath "python" -ArgumentList "dev_tools\tls_trust_gate.py" `
+    -NoNewWindow -Wait -PassThru
+if ($tlsProc.ExitCode -ne 0) {
+    throw "TLS trust gate failed - see dev_tools/tls_trust_gate.py"
+}
+
 $ft4222 = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\FT4222.dll"
 $d2xx = Join-Path $RepoRoot "vendor\ftdi\windows\bin\x64\ftd2xx.dll"
 $opus = Join-Path $RepoRoot "vendor\opus\windows\bin\x64\opus.dll"
@@ -88,6 +98,18 @@ if (Test-Path $VendorSource) {
     New-Item -ItemType Directory -Path (Split-Path $VendorDest) -Force | Out-Null
     Copy-Item $VendorSource $VendorDest -Recurse -Force
 }
+
+# CA bundle for outbound HTTPS (see net_tls.py). Without it an installed build can only
+# verify certificates where the host already happens to have a system bundle - on the
+# 2026-10-04 macOS report that was the difference between 接入/上传/更新 working and every
+# request failing with CERTIFICATE_VERIFY_FAILED.
+$CaSource = Join-Path $RepoRoot "vendor\ca\cacert.pem"
+if (-not (Test-Path $CaSource)) {
+    throw "vendor\ca\cacert.pem missing - the packaged app could not verify outbound HTTPS"
+}
+$CaDest = Join-Path $AppRoot "vendor\ca"
+New-Item -ItemType Directory -Path $CaDest -Force | Out-Null
+Copy-Item $CaSource $CaDest -Force
 
 $OpusSource = Join-Path $RepoRoot "vendor\opus\windows"
 if (Test-Path $OpusSource) {

@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.67</a></li>
+          <li><a href="#updates">V2.68</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.67 · 2026-10-03</span>
+          <span>SDD V2.68 · 2026-10-04</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,11 +113,11 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.67</td>
+              <td>V2.68</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
-              <td>2026-10-02</td>
+              <td>2026-10-04</td>
             </tr>
             <tr>
               <td>Runtime</td>
@@ -147,6 +147,34 @@
         </div>
         <div class="features-grid">
           <div class="feature-card">
+            <div class="icon"><i class="fas fa-lock"></i></div>
+            <h3>
+              Two Packaging Defects Only the Build Machine Cannot See
+              <small>(V2.68)</small>
+            </h3>
+            <p>
+              Two reports from one Mac had the same shape: something that exists
+              on the build machine was assumed to exist everywhere. The bundle
+              carried the builder's OpenSSL, whose compiled-in CA path is the
+              builder's own
+              <code>/opt/local/…</code> — so the trust store came up
+              <strong>empty</strong>, and portal enrolment, the diagnostics
+              upload and the update check all failed with
+              <code>CERTIFICATE_VERIFY_FAILED</code>. Outbound HTTPS now goes
+              through <code>net_tls.py</code>, which falls back to a bundle we
+              ship and then to the platform's system bundle, and a build gate
+              empties the CA environment on purpose before requiring a real
+              handshake. The same report showed a spectrum that had
+              <strong>never once been real</strong>: the launcher anchored the
+              relative <code>MRRC_FTDI_LIB_DIR</code> on
+              <code>Contents/MacOS</code> while the signed bundle keeps that
+              tree in <code>Contents/Resources</code>, so the scope worker
+              exited with "FTDI libraries not found" — and the parent logged the
+              reason at DEBUG only.
+            </p>
+          </div>
+
+          <div class="feature-card">
             <div class="icon"><i class="fas fa-screwdriver-wrench"></i></div>
             <h3>
               v1.25.0 Released — It Works After Installing
@@ -159,12 +187,13 @@
               real description matched none of the keywords meant to put it
               first (CP2105 is not "cp210x"), so the port probed first was the
               machine's Intel AMT port — one that opens and then never accepts a
-              byte, written with pyserial's default of <em>no write timeout</em>.
-              An approved instance stayed on "waiting for approval" because the
-              only poll loop lived in the settings dialog; polling now runs in
-              the server every 30 seconds and reports what it found. And the
-              certificate reload check compared the wrong two things, so an
-              enrolled instance answered 502 while nothing offered to restart it.
+              byte, written with pyserial's default of
+              <em>no write timeout</em>. An approved instance stayed on "waiting
+              for approval" because the only poll loop lived in the settings
+              dialog; polling now runs in the server every 30 seconds and
+              reports what it found. And the certificate reload check compared
+              the wrong two things, so an enrolled instance answered 502 while
+              nothing offered to restart it.
             </p>
           </div>
 
@@ -190,21 +219,22 @@
             </p>
             <p>
               Also fixed: Windows now binds the port
-              <strong>exclusively</strong> — <code>SO_REUSEADDR</code> there lets
-              a second process bind a port that is already listening, so two
-              servers could both report <code>Server ready!</code> and the
+              <strong>exclusively</strong> — <code>SO_REUSEADDR</code> there
+              lets a second process bind a port that is already listening, so
+              two servers could both report <code>Server ready!</code> and the
               browser might land on the one holding no radio (the field log
               showed every line duplicated 1–10&nbsp;ms apart); a bare
               <code>Server</code> start no longer aims its password file and
               <code>recordings/</code> at the read-only install directory, which
-              meant <strong>a new password every start that was never saved</strong>
+              meant
+              <strong>a new password every start that was never saved</strong>
               — the real cause of "I installed the new package and still cannot
               log in"; a bare start now reads the user's
-              <code>mrrc_modern.env</code>; log lines are written once instead of
-              twice; and a stdlib-AST gate fails the build when an app module is
-              used as <code>name.attr</code> without ever being imported — the
-              defect class that shipped twice (<code>cloud_hub</code> in v1.24.1,
-              <code>ssl_bootstrap</code> in v1.24.5).
+              <code>mrrc_modern.env</code>; log lines are written once instead
+              of twice; and a stdlib-AST gate fails the build when an app module
+              is used as <code>name.attr</code> without ever being imported —
+              the defect class that shipped twice (<code>cloud_hub</code> in
+              v1.24.1, <code>ssl_bootstrap</code> in v1.24.5).
             </p>
           </div>
           <div class="feature-card">
@@ -382,20 +412,21 @@
           <div class="feature-card">
             <div class="icon"><i class="fas fa-mobile-screen"></i></div>
             <h3>
-              v1.21.0 Released — iPhone Wake-Lock Race Fixed <small>(V2.61)</small>
+              v1.21.0 Released — iPhone Wake-Lock Race Fixed
+              <small>(V2.61)</small>
             </h3>
             <p>
               The iOS system mic-permission dialog shown at power-on released
-              the just-acquired screen wake lock, and every automatic
-              re-request (no user gesture) was rejected — the main UI still
-              auto-locked ~30&nbsp;s after power-on. The lock is now
-              re-acquired when the prompt settles and on window
+              the just-acquired screen wake lock, and every automatic re-request
+              (no user gesture) was rejected — the main UI still auto-locked
+              ~30&nbsp;s after power-on. The lock is now re-acquired when the
+              prompt settles and on window
               <code>focus</code>. The listen page gains an FFT trace above the
-              waterfall, frequency step buttons, WAN-sized audio buffering,
-              and the public proxy backend moved to the DNS name
+              waterfall, frequency step buttons, WAN-sized audio buffering, and
+              the public proxy backend moved to the DNS name
               <code>radio.vlsc.net</code> with a 300&nbsp;s resolver (survives
-              home IPv6 changes). macOS DMG and Windows installer published
-              with cross-host SHA-256 verification.
+              home IPv6 changes). macOS DMG and Windows installer published with
+              cross-host SHA-256 verification.
             </p>
           </div>
           <div class="feature-card">

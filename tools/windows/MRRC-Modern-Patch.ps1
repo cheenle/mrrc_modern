@@ -9,13 +9,17 @@
     the version it applies to and its SHA-256. This script verifies both, stops the app, backs up
     every file it replaces, copies the new ones in, clears the "pending" marker and restarts.
 
+    Usually you do not run this by hand: the companion MRRC-Modern-Patch.cmd downloads it and calls it
+    with no arguments, and it picks the patch itself.
+
     Usage (elevated PowerShell):
-        .\MRRC-Modern-Patch.ps1 -PatchUrl https://www.vlsc.net/mrrc_modern/downloads/patches/static-1.24.7-p1.zip
-        .\MRRC-Modern-Patch.ps1 -PatchUrl <url> -DryRun     # show what would change
+        .\MRRC-Modern-Patch.ps1                      # find and apply the patch for this version
+        .\MRRC-Modern-Patch.ps1 -DryRun               # show what would change
+        .\MRRC-Modern-Patch.ps1 -PatchUrl <url>       # apply a specific patch
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$PatchUrl,
+    [string]$PatchUrl = "",
     [string]$InstallDir = "",
     [switch]$DryRun
 )
@@ -44,6 +48,28 @@ $installed = (Get-Content (Join-Path $InstallDir "version.txt") -Raw).Trim()
 $marker = Join-Path $InstallDir "patch-pending.txt"
 Say "  install : $InstallDir"
 Say "  version : $installed"
+
+# ---------------------------------------------------------------- choose the patch
+$patchRoot = "https://www.vlsc.net/mrrc_modern/downloads/patches/"
+$manifestUrl = $patchRoot + "patch.json"
+if (-not $PatchUrl) {
+    Say "  looking for a patch that applies to version $installed ..."
+    try {
+        $m = (Invoke-WebRequest -UseBasicParsing -Uri $manifestUrl -TimeoutSec 60).Content | ConvertFrom-Json
+    } catch {
+        Fail "could not download $manifestUrl : $($_.Exception.Message)"
+    }
+    $pick = $null
+    foreach ($p in $m.patches) { if ($p.appliesTo -contains $installed) { $pick = $p; break } }
+    if (-not $pick) {
+        Say "  no patch applies to $installed - nothing to do."
+        Say "  (a full upgrade is the way forward: https://www.vlsc.net/mrrc_modern/)"
+        exit 0
+    }
+    $PatchUrl = $patchRoot + $pick.file
+    Say ("  patch    : " + $pick.file)
+    if ($pick.what) { Say ("  changes  : " + $pick.what) }
+}
 
 # ---------------------------------------------------------------- fetch manifest + patch
 $base = $PatchUrl.Substring(0, $PatchUrl.LastIndexOf("/") + 1)

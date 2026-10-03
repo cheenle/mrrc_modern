@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "note": "静态资源热修：只替换 _internal/static 下的文件（网页界面与资源），不动程序逻辑。",
+  "note": "Static-asset patches only: replaces files under _internal/static. Python logic needs a full upgrade.",
   "patches": [
     {
       "file": "static-1.24.7-p1.zip",
@@ -9,7 +9,7 @@
       ],
       "sha256": "6a29c0d5407584aa479a784cc41805889c21a736055aacaa8277daf385d089c1",
       "size": 745455,
-      "what": "设置对话框：已提交申请的用户也能看到登记口令输入框与「用登记口令直接接入」按钮",
+      "what": "Settings dialog: an already-applied user can now paste the enrolment secret and connect directly (input + button in the pending panel)",
       "requires": "施加后重启应用；浏览器 Ctrl-F5 强刷一次"
     }
   ]

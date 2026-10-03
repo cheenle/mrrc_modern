@@ -76,6 +76,9 @@ class MainViewModel(
     fun onAudioRxFrame(frame: ByteArray) { rxPlayer?.onFrame(frame) }
     fun onSpectrumFrame(frame: ByteArray) { spectrumProcessor?.onFrame(frame) }
 
+    /** ConnectionManager 四路聚合状态透传（修复：此前无人写入 _connected）。 */
+    fun onConnectionChange(connected: Boolean) { _connected.value = connected }
+
     private fun onMemChannels(list: List<JsonElement?>) {
         _mem.value = MemoryChannels.parse(list)
     }

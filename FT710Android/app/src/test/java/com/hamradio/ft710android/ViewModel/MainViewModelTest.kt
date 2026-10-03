@@ -9,6 +9,8 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -29,6 +31,16 @@ class MainViewModelTest {
         assertEquals(7050000L, vm.state.vfoAFreq)
         assertEquals(listOf("20m"), vm.bands.value)
         assertEquals(1L, vm.version.value) // apply 后版本递增，驱动 Compose 重组
+    }
+
+    @Test fun `connection change updates connected flow`() = runTest(UnconfinedTestDispatcher()) {
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val vm = MainViewModel(null, cm(scope), null, null, null, null, null, scope)
+        assertFalse(vm.connected.value)
+        vm.onConnectionChange(true)
+        assertTrue(vm.connected.value)
+        vm.onConnectionChange(false)
+        assertFalse(vm.connected.value)
     }
 
     @Test fun `stateUpdate with tx_status feeds ptt manager`() = runTest(UnconfinedTestDispatcher()) {

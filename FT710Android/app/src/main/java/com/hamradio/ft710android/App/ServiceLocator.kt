@@ -36,7 +36,7 @@ object ServiceLocator {
             onSpectrum = { vm.onSpectrumFrame(it) },
             onAudioTxText = {},
             onAtrEvent = {},
-            onConnectionChange = {},
+            onConnectionChange = { vm.onConnectionChange(it) },
         )
         vm = MainViewModel(
             authApi = authApi,

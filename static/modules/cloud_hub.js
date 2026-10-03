@@ -21,14 +21,19 @@
         };
         if (body) opts.body = JSON.stringify(body);
         return fetch(url, opts).then((r) =>
-            r.json()
+            r
+                .json()
                 .catch(() => ({
                     // 非 JSON 的响应几乎只有一种来源：这个地址被 SPA 回退用 index.html 应答了
                     // （基址算错、或未登录被 302 到登录页）。直接抛出去只会得到一句
                     // "Uncaught (in promise) SyntaxError"，既看不出是哪个地址、也看不出状态码
                     // —— 2026-10-03 就卡在这里。把地址和状态码带回界面。
                     error:
-                        '接口 ' + url + ' 返回了非 JSON（HTTP ' + r.status + '）' +
+                        '接口 ' +
+                        url +
+                        ' 返回了非 JSON（HTTP ' +
+                        r.status +
+                        '）' +
                         (r.redirected ? '，并被重定向到 ' + r.url : ''),
                 }))
                 .then((j) => ({ ok: r.ok, j: j }))

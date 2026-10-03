@@ -462,6 +462,41 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 macOS `~/Library/Application Support/MRRC-Modern/logs`）：`server.log`（轮转 2 MB × 2）与
 `server-stdout.log`（启动窗口，每次启动重建）；源码与树莓派模式写在程序目录的 `logs/` 下。
 
+### 6.1 启动器打不开（黑窗口、闪一下就没了）{#launcher-trouble}
+
+按层排查，别急着重装：
+
+1. **看日志**：同目录下的 `launcher.log` 与 `server.log`。启动器会把服务器的输出也抄一份到那里 ——
+   黑窗口里来不及看清的东西，日志里通常在。
+2. **绕开启动器**：开始菜单 → **MRRC Modern Server**（macOS：`MRRC Modern Server.app`）。
+   它直接把服务器跑起来、把地址与口令打印在窗口里，不碰浏览器 —— 用它区分"是启动器的问题"还是
+   "服务器起不来"。
+3. **端口被占**：日志里若有 `Address already in use`（或启动器提示已自动换端口），把配置文件里的
+   `MRRC_WEB_PORT` 改成别的（如 8889），或先关掉占用它的进程。
+4. **首次探测看着像卡住**：第一次启动会逐个试串口，日志里是
+   `Detecting the radio on N serial port(s): ...`。若停在这里，多半是有一个"不是电台的串口"占着号
+   （最典型的是 Intel AMT 的 Serial over LAN）。**v1.25.0 起这类口会被跳过、探测写入带 1 秒超时**，
+   不会再卡死；升级前的老版本则可能一直停住 —— 先把那个口在设备管理器里禁用即可。
+5. 还是黑屏：按下面从零开始，或按上一节给我一份诊断包。
+
+### 6.2 一键清理脚本（从零开始）{#clean-slate}
+
+Windows 用站上 **下载页 → 清理脚本**：`downloads/MRRC-Modern-Cleanup.cmd`
+（源码在仓库 `tools/windows/MRRC-Modern-Cleanup.ps1`）。它会：
+
+1. **先列出**它找到的一切：程序目录、历代用户数据目录（`%LOCALAPPDATA%\MRRC` 与 `MRRC-Modern`
+   两代名字）、开始菜单/桌面快捷方式、注册表里的卸载项；
+2. **把用户数据目录里的配置、证书、日志、fleet 复制到桌面**的 `MRRC-backup-<时间戳>\`，**再**删除；
+3. 让你确认后才动手（输入 `clean`），卸载项走静默卸载（`/VERYSILENT`）。
+
+**两件必须知道的事**：
+
+- **录音（`recordings/`）不进备份**（可能上 GB），但**会被一起删除** —— 要留就先自己拷走；
+- 清完等于全新机器：首次启动会重新探测串口、重新生成自签名证书，密码回到你安装时设的那个。
+
+macOS 没有对应脚本，手动即可：先备份 `~/Library/Application Support/MRRC-Modern/mrrc_modern.env`
+与其中的证书，再删 `~/Library/Application Support/MRRC-Modern` 与 `/Applications/MRRC Modern.app`。
+
 ---
 
 ## 附：界面元素与后台命令对照（供高级用户/排障）

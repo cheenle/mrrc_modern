@@ -205,7 +205,7 @@ FT710_SERIAL_PORT=/dev/cu.SLAB_USBtoUART python server.py
 
 看到以下日志说明启动成功：
 ```
-Uvicorn running on http://0.0.0.0:8888
+Uvicorn running on https://0.0.0.0:8888
 ```
 
 ### 第二步：打开浏览器

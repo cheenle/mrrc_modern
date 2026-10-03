@@ -131,7 +131,7 @@ and the model identity check (`ID;`, read-only) only logs.
 | Change IC-7300 CI-V address | `IC7300_CIV_ADDR=0x94 python server.py` |
 | Change password | `MRRC_WEB_PASSWORD=newpass python server.py` |
 | Change serial port | `MRRC_SERIAL_PORT=/dev/ttyUSB0 ./start.sh` |
-| View server status | `curl http://localhost:8888/api/status` (with auth cookie) |
+| View server status | `curl -k https://localhost:8888/api/status` (with auth cookie; `-k` = the first-run self-signed certificate) |
 
 ## 12.5.1 支持链路（诊断包与接收端）
 

@@ -78,7 +78,7 @@ export FT710_WEB_HOST="::"
 ### 5. Health Monitoring
 
 ```bash
-curl http://localhost:8888/api/health
+curl -k https://localhost:8888/api/health   # -k：首次运行的自签名证书
 ```
 
 Returns:

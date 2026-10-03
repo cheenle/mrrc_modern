@@ -513,7 +513,7 @@ After installing on Windows:
 | --------- | -------------- | ----- |
 | `Failed to connect to COM3: could not open port 'COM3': FileNotFoundError` | Default `COM3` does not exist on this Windows machine, or the CP210x driver is not installed | Install the Silicon Labs CP210x driver, reconnect the radio, then set `MRRC_SERIAL_PORT=COMx` to the Enhanced COM Port shown in Device Manager |
 | Browser opens but radio state does not update | Wrong COM port | Set `MRRC_SERIAL_PORT` to the Enhanced COM Port |
-| `Server did not answer within 15s` while Uvicorn says `http://[::]:8888` | Older launcher probed IPv4 loopback while the server was listening on IPv6 wildcard | Open `http://localhost:8888`, or update to a package with the launcher fix |
+| `Server did not answer within 15s` while Uvicorn says `https://[::]:8888` | Older launcher probed IPv4 loopback while the server was listening on IPv6 wildcard | Open `https://localhost:8888`, or update to a package with the launcher fix |
 | `TX Opus decoder unavailable: libopus not found` | Missing Windows `opus.dll` | Add `vendor\opus\windows\bin\x64\opus.dll` before building, or install/copy `opus.dll` next to the app |
 | App starts but FT4222 spectrum is unavailable | Missing `FT4222.dll` or `ftd2xx.dll` (or not using FT-710) | Place both DLLs in `vendor\ftdi\windows\bin\x64` before building; IC-7300 uses CI-V `0x27` and does not need FTDI |
 | Login fails | Wrong password | Check `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` |

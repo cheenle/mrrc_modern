@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1583 tests across 84 test modules (17 skip on Windows, 1 on macOS; totals re-read
+1587 tests across 85 test modules (17 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-03, macOS). The per-module sections below
-itemise 69 of those 84 — the support-chain, Cloud Hub and upgrade-channel modules
+itemise 70 of those 85 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1583 |
-| Passed | 1583 (with all optional dependencies installed; 1 skipped) |
+| Total tests | 1587 |
+| Passed | 1587 (with all optional dependencies installed; 1 skipped) |
 | Skipped | 4 certificate tests when `cryptography` is unavailable |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
@@ -714,7 +714,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1583 tests in ~29s — can run on every commit.
+2. **Fast execution**: ~1587 tests in ~29s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.
@@ -737,3 +737,4 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_ui_api_base.py` | `basePath()` 对裸路由（`/login`、`/login/api/…`）解析为根 —— 否则 API 打到 SPA 回退拿到 HTML。**用 node 执行真函数**，不测转写 |
 | `test_static_cache_busting.py` | `index.html` 的 `?v=` 与 `sw.js` 预缓存清单必须逐项一致（SW 只在自己字节变化时重装，键不动就永远发不出新文件） |
 | `test_install_sh_url.py` | macOS 源码安装脚本交给用户的 URL 必须是 `https://` —— 它写 `MRRC_WEB_HOST=0.0.0.0` 且从不关 TLS，却一直打印 `http://localhost:8888`（v1.24.5 黑屏的缩影）；顺带守住"别哪天偷偷关掉 TLS 让这句承诺反过来变错" |
+| `test_website_links.py` | 站点内链必须落到真锚点（曾 6 条指向指南里不存在的小节、1 条指向被生成器丢掉的 h1 锚点）；且**生成的 guide 页不得比源文档旧**（`build_guide.py` 是唯一写者，改文档不重建就是站点在描述旧行为）；顺带禁止任何页给出服务答不了的明文本地 URL |

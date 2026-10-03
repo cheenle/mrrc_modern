@@ -257,7 +257,7 @@
 <header class="guide-hero">
     <div class="guide-hero-inner">
         <span class="badge"><i class="fas fa-book"></i> 操作指南 · Operation Guide</span>
-        <h1>MRRC Modern Web 遥控 — 操作指南</h1>
+        <h1 id="mrrc-web-遥控-操作指南">MRRC Modern Web 遥控 — 操作指南</h1>
         <p>界面每一个按钮、滑杆、下拉框的编号图解与精确说明。琥珀色序号与正文速查表一一对应，点下方任一图直接跳转。</p>
         <div class="actions">
             <a class="btn" href="#fig1"><i class="fas fa-mobile-screen"></i> 图 1 · 主界面</a>
@@ -1415,6 +1415,28 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <p><strong>包里有什么</strong>：<code>logs/</code>（日志）、<code>state/config-redacted.env</code>（脱敏配置）、 <code>diagnostics/summary.txt</code>（<strong>先看这个</strong>：启动次数/崩溃痕迹/数据新鲜度/音频与串口事实）、 <code>diagnostics/env.json</code>（机型、串口、频谱模式、音频设备表与采样率）、<code>diagnostics/client.json</code>（浏览器侧上下文）。</p>
 <p><strong>包里绝不包含</strong>：登录密码、证书私钥、任何令牌，也不包含录音、记忆频道与天调学习值 —— 生成时按白名单裁剪 + 值替换，替换次数写在 <code>manifest.json</code> 里。</p>
 <p>日志位置：桌面安装版在用户数据目录（Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs</code>， macOS <code>~/Library/Application Support/MRRC-Modern/logs</code>）：<code>server.log</code>（轮转 2 MB × 2）与 <code>server-stdout.log</code>（启动窗口，每次启动重建）；源码与树莓派模式写在程序目录的 <code>logs/</code> 下。</p>
+<h3 id="launcher-trouble">6.1 启动器打不开（黑窗口、闪一下就没了）</h3>
+<p>按层排查，别急着重装：</p>
+<ol type="1">
+<li><strong>看日志</strong>：同目录下的 <code>launcher.log</code> 与 <code>server.log</code>。启动器会把服务器的输出也抄一份到那里 —— 黑窗口里来不及看清的东西，日志里通常在。</li>
+<li><strong>绕开启动器</strong>：开始菜单 → <strong>MRRC Modern Server</strong>（macOS：<code>MRRC Modern Server.app</code>）。 它直接把服务器跑起来、把地址与口令打印在窗口里，不碰浏览器 —— 用它区分”是启动器的问题”还是 “服务器起不来”。</li>
+<li><strong>端口被占</strong>：日志里若有 <code>Address already in use</code>（或启动器提示已自动换端口），把配置文件里的 <code>MRRC_WEB_PORT</code> 改成别的（如 8889），或先关掉占用它的进程。</li>
+<li><strong>首次探测看着像卡住</strong>：第一次启动会逐个试串口，日志里是 <code>Detecting the radio on N serial port(s): ...</code>。若停在这里，多半是有一个”不是电台的串口”占着号 （最典型的是 Intel AMT 的 Serial over LAN）。<strong>v1.25.0 起这类口会被跳过、探测写入带 1 秒超时</strong>， 不会再卡死；升级前的老版本则可能一直停住 —— 先把那个口在设备管理器里禁用即可。</li>
+<li>还是黑屏：按下面从零开始，或按上一节给我一份诊断包。</li>
+</ol>
+<h3 id="clean-slate">6.2 一键清理脚本（从零开始）</h3>
+<p>Windows 用站上 <strong>下载页 → 清理脚本</strong>：<code>downloads/MRRC-Modern-Cleanup.cmd</code> （源码在仓库 <code>tools/windows/MRRC-Modern-Cleanup.ps1</code>）。它会：</p>
+<ol type="1">
+<li><strong>先列出</strong>它找到的一切：程序目录、历代用户数据目录（<code>%LOCALAPPDATA%\MRRC</code> 与 <code>MRRC-Modern</code> 两代名字）、开始菜单/桌面快捷方式、注册表里的卸载项；</li>
+<li><strong>把用户数据目录里的配置、证书、日志、fleet 复制到桌面</strong>的 <code>MRRC-backup-&lt;时间戳&gt;\</code>，<strong>再</strong>删除；</li>
+<li>让你确认后才动手（输入 <code>clean</code>），卸载项走静默卸载（<code>/VERYSILENT</code>）。</li>
+</ol>
+<p><strong>两件必须知道的事</strong>：</p>
+<ul>
+<li><strong>录音（<code>recordings/</code>）不进备份</strong>（可能上 GB），但<strong>会被一起删除</strong> —— 要留就先自己拷走；</li>
+<li>清完等于全新机器：首次启动会重新探测串口、重新生成自签名证书，密码回到你安装时设的那个。</li>
+</ul>
+<p>macOS 没有对应脚本，手动即可：先备份 <code>~/Library/Application Support/MRRC-Modern/mrrc_modern.env</code> 与其中的证书，再删 <code>~/Library/Application Support/MRRC-Modern</code> 与 <code>/Applications/MRRC Modern.app</code>。</p>
 <hr />
 <h2 id="附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</h2>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>

@@ -320,20 +320,21 @@
       <pre><code>① 安装 MRRC Modern（Windows 安装包 / macOS DMG）
 ② 设置 → 接入云端 → 填呼号 → 申请
 ③ 运维在门户核验并批准（或运营方给你一个登记口令，填进框里即可）
+   就这三步：批准一到，应用自己接上 —— 服务端每 30 秒自查一次（v1.25.0），你不需要再点任何东西
 
 完成后你的入口是：  https://&lt;呼号&gt;.mrrc.vlsc.net/
    —— 就是呼号本身，没有端口、没有路径、没有产品后缀</code></pre>
       <p>
         出问题时：界面里点 🐞 一键带日志上报；环境乱掉了可以从站点下载
-        <a href="guide.html#clean-slate">一键清理脚本</a
-        >，它先把你配置与证书备份到桌面，再彻底清干净重来。
+        <a href="../downloads/MRRC-Modern-Cleanup.cmd">一键清理脚本</a
+        >，它先把你配置与证书备份到桌面，再彻底清干净重来（<strong>录音不进备份、但会被一起删除</strong>，脚本开始前会再提醒一次；细节见<a href="../guide.html#clean-slate">指南 §6.2</a>）。
       </p>
       <p>
         启动器万一打不开（黑屏/闪退），服务本身照样能跑：开始菜单里的
         <em>MRRC Modern Server</em> + 浏览器打开
-        <code>http://127.0.0.1:8888/</code>， 口令会打印在窗口里。详细步骤见<a
-          href="guide.html#launcher-trouble"
-          >安装指南的对应一节</a
+        <code>https://127.0.0.1:8888/</code>（自签名证书会提示一次，继续即可），口令会打印在窗口里。详细步骤见<a
+          href="../guide.html#launcher-trouble"
+          >指南 §6.1</a
         >。
       </p>
 

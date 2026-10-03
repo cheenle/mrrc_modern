@@ -33,7 +33,11 @@ def convert(md_path: Path):
     body = bm.group(1).strip() if bm else html
     body = re.sub(r'<nav id="TOC".*?</nav>', '', body, flags=re.S).strip()
 
-    # Drop the markdown h1 (title) — the hero header carries it instead.
+    # Drop the markdown h1 (title) — the hero header carries it instead. Its id has to come
+    # along: pandoc's TOC lists the title as its first entry and links to that anchor, so
+    # dropping the element without re-homing the id leaves the sidebar's first link dead.
+    hm = re.search(r'<h1[^>]*\bid="([^"]*)"', body)
+    title_id = hm.group(1) if hm else ''
     body = re.sub(r'<h1[^>]*>.*?</h1>\s*', '', body, count=1, flags=re.S)
 
     # Tag control reference tables (first header cell is '#') with a class.
@@ -70,7 +74,7 @@ def convert(md_path: Path):
         cls = "callout-warn" if "⚠️" in inner else "callout-info"
         return f'<blockquote class="{cls}">{inner}</blockquote>'
     body = re.sub(r'<blockquote>(.*?)</blockquote>', _callout, body, flags=re.S)
-    return toc, body
+    return toc, body, title_id
 
 CSS = """
         html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--gn-h, 44px) + var(--nav-h, 64px) + 12px); }
@@ -388,8 +392,9 @@ GUIDE_JS = """function toggleMobileMenu() {
 """
 
 
-def build_page(toc: str, body_html: str, lang: str) -> str:
+def build_page(toc: str, body_html: str, lang: str, title_id: str = "") -> str:
     en = lang == "en"
+    h1_id = f' id="{title_id}"' if title_id else ""
     nav = f"""<!DOCTYPE html>
 <html lang="{lang}">
 <head>
@@ -433,7 +438,7 @@ def build_page(toc: str, body_html: str, lang: str) -> str:
 <header class="guide-hero">
     <div class="guide-hero-inner">
         <span class="badge"><i class="fas fa-book"></i> 操作指南 · Operation Guide</span>
-        <h1>MRRC Modern Web 遥控 — 操作指南</h1>
+        <h1{h1_id}>MRRC Modern Web 遥控 — 操作指南</h1>
         <p>界面每一个按钮、滑杆、下拉框的编号图解与精确说明。琥珀色序号与正文速查表一一对应，点下方任一图直接跳转。</p>
         <div class="actions">
             <a class="btn" href="#fig1"><i class="fas fa-mobile-screen"></i> 图 1 · 主界面</a>
@@ -514,11 +519,11 @@ def copy_images() -> int:
 def main():
     copy_images()
     md_path = Path(__file__).resolve().parent.parent / "docs" / "OPERATION_GUIDE.md"
-    toc, body = convert(md_path)
+    toc, body, title_id = convert(md_path)
     for lang, out in (("en", "guide.html"), ("zh", "zh/guide.html")):
         dest = OUT / out
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(build_page(toc, body, lang), encoding="utf-8")
+        dest.write_text(build_page(toc, body, lang, title_id), encoding="utf-8")
         print(f"  wrote {dest}")
 
 if __name__ == "__main__":

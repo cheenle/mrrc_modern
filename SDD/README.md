@@ -56,7 +56,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Runtime | Python 3.12+, FastAPI, Uvicorn, NumPy, PyAudio |
 | Frontend | HTML5, CSS3, vanilla JavaScript, Web Audio API (no client-side MP3 encoder; CQ playback is server-side, AD-020) |
 | Transport | HTTP/WS for browser; Serial CAT (Yaesu) or USB CI-V (Icom) for radio; FT4222 SPI for FT-710 scope; recording as server-side 16 kHz MP3 (AD-017); CI-V 0x27 spectrum for the Icom family (475 bins on IC-7300/IC-7300MK2/IC-705, 689 bins on IC-7610/IC-7760) |
-| Default Entry | `http://localhost:8888` |
+| Default Entry | `https://localhost:8888` (TLS only; self-signed until a certificate is enrolled) |
 
 ## System at a Glance
 

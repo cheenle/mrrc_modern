@@ -344,22 +344,25 @@
 3. The operator approves it in the portal (or hands you a one-time enrolment
    secret that the same dialog accepts)
 
+That is the whole list: once approval lands the app connects by itself - the server
+checks every 30 seconds (v1.25.0), so there is nothing left to click.
+
 Your entry afterwards:  https://&lt;callsign&gt;.mrrc.vlsc.net/
    - the callsign itself: no port, no path, no product suffix</code></pre>
       <p>
         When something is wrong, the app's 🐞 button uploads a diagnosis bundle;
         if a machine's environment has accumulated leftovers, the site offers a
-        <a href="zh/guide.html#clean-slate">cleanup script</a> that backs up
+        <a href="downloads/MRRC-Modern-Cleanup.cmd">a cleanup script</a> that backs up
         your configuration and certificates first and then removes every
-        generation of it.
+        generation of it (what it does <em>not</em> back up: <a href="guide.html#clean-slate">guide §6.2</a>).
       </p>
       <p>
         If the launcher will not start - a black or flashing window - the server
         runs without it:
         <em>MRRC Modern Server</em> in the Start Menu, then
-        <code>http://127.0.0.1:8888/</code> in a browser, with the password
+        <code>https://127.0.0.1:8888/</code> in a browser (accept the self-signed certificate warning), with the password
         printed in the window. See the
-        <a href="zh/guide.html#launcher-trouble">install guide</a> for the
+        <a href="guide.html#launcher-trouble">install guide §6.1</a> for the
         details.
       </p>
 

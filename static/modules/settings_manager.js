@@ -108,8 +108,14 @@
     // instead of the instance.
     //
     // Derivation follows the listen page (static/listen.js URL_BASE): the
-    // directory part of the current path. A trailing slash, `/index.html` and a
-    // bare route like `/login` all resolve to the same base.
+    // directory part of the current path. A trailing slash and `/index.html`
+    // both resolve to their directory; a **bare last segment is a route, not a
+    // directory**, so it resolves to the root. Treating it as a directory is what
+    // sent every API call to /login/api/... on 2026-10-03: the SPA fallback answers
+    // any path with index.html, so JSON.parse got an HTML page — the reported
+    // "Uncaught (in promise) SyntaxError". A reverse-proxied deployment (the only
+    // reason to have a base at all) always shows up as a directory in the address
+    // bar: `/mrrc/` or `/mrrc/index.html`.
     function basePath() {
         var p = window.location.pathname || '/';
         if (p.endsWith('/')) return p.slice(0, -1);
@@ -117,7 +123,7 @@
         if (seg === '' || seg.indexOf('.') >= 0) {
             return p.slice(0, p.lastIndexOf('/'));
         }
-        return p;
+        return '';
     }
 
     function url(path) {

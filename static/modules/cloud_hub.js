@@ -20,7 +20,19 @@
             headers: { 'Content-Type': 'application/json' },
         };
         if (body) opts.body = JSON.stringify(body);
-        return fetch(url, opts).then((r) => r.json().then((j) => ({ ok: r.ok, j: j })));
+        return fetch(url, opts).then((r) =>
+            r.json()
+                .catch(() => ({
+                    // 非 JSON 的响应几乎只有一种来源：这个地址被 SPA 回退用 index.html 应答了
+                    // （基址算错、或未登录被 302 到登录页）。直接抛出去只会得到一句
+                    // "Uncaught (in promise) SyntaxError"，既看不出是哪个地址、也看不出状态码
+                    // —— 2026-10-03 就卡在这里。把地址和状态码带回界面。
+                    error:
+                        '接口 ' + url + ' 返回了非 JSON（HTTP ' + r.status + '）' +
+                        (r.redirected ? '，并被重定向到 ' + r.url : ''),
+                }))
+                .then((j) => ({ ok: r.ok, j: j }))
+        );
     }
 
     function show(msg, kind) {
@@ -100,10 +112,15 @@
                     if (rr.j && rr.j.connected) {
                         // The certificate is signed during connect, and the running process still
                         // holds the one it started with, so the entry answers 502 until a restart.
-                        show(rr.j.cert_reload_required
-                            ? '已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）'
-                            : '已接入 ✓', rr.j.cert_reload_required ? 'ok' : 'ok');
-                        if (rr.j.cert_reload_required) { el('cloud-restart').style.display = 'inline-block'; }
+                        show(
+                            rr.j.cert_reload_required
+                                ? '已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）'
+                                : '已接入 ✓',
+                            rr.j.cert_reload_required ? 'ok' : 'ok'
+                        );
+                        if (rr.j.cert_reload_required) {
+                            el('cloud-restart').style.display = 'inline-block';
+                        }
                         setTimeout(() => {
                             location.reload();
                         }, 2500);
@@ -150,24 +167,31 @@
             return;
         }
         show(secret ? '接入中…' : '提交中…');
-        api('/api/cloud/apply', { callsign: callsign, contact: contact, secret: secret }).then((r) => {
-            if (!r.ok) {
-                show((r.j && r.j.error) || '提交失败', 'error');
-                return;
+        api('/api/cloud/apply', { callsign: callsign, contact: contact, secret: secret }).then(
+            (r) => {
+                if (!r.ok) {
+                    show((r.j && r.j.error) || '提交失败', 'error');
+                    return;
+                }
+                if (r.j && r.j.connected) {
+                    show(
+                        r.j.cert_reload_required
+                            ? '已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）'
+                            : '已接入 ✓',
+                        'ok'
+                    );
+                    if (r.j.cert_reload_required) {
+                        el('cloud-restart').style.display = 'inline-block';
+                    }
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2500);
+                    return;
+                }
+                show('已提交 ✓ 等运维批准后这里会自动继续', 'ok');
+                refresh();
             }
-            if (r.j && r.j.connected) {
-                show(r.j.cert_reload_required
-                    ? '已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）'
-                    : '已接入 ✓', 'ok');
-                if (r.j.cert_reload_required) { el('cloud-restart').style.display = 'inline-block'; }
-                setTimeout(() => {
-                    location.reload();
-                }, 2500);
-                return;
-            }
-            show('已提交 ✓ 等运维批准后这里会自动继续', 'ok');
-            refresh();
-        });
+        );
     }
 
     function init() {
@@ -183,17 +207,37 @@
             // already-applied user actually sees. Without this they had a Refresh button and nowhere
             // to paste the secret - reported by a user on 1.24.7.
             var secret = (el('cloud-secret-pending').value || '').trim();
-            if (!secret) { show('请填入运维给的登记口令', 'error'); return; }
-            if (!lastState || !lastState.callsign) { show('还没提交过申请', 'error'); return; }
+            if (!secret) {
+                show('请填入运维给的登记口令', 'error');
+                return;
+            }
+            if (!lastState || !lastState.callsign) {
+                show('还没提交过申请', 'error');
+                return;
+            }
             show('接入中…');
-            api('/api/cloud/apply', { callsign: lastState.callsign, contact: '', secret: secret }).then((r) => {
-                if (!r.ok) { show((r.j && r.j.error) || '接入失败', 'error'); return; }
+            api('/api/cloud/apply', {
+                callsign: lastState.callsign,
+                contact: '',
+                secret: secret,
+            }).then((r) => {
+                if (!r.ok) {
+                    show((r.j && r.j.error) || '接入失败', 'error');
+                    return;
+                }
                 if (r.j && r.j.connected) {
-                    show(r.j.cert_reload_required
-                        ? '已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）'
-                        : '已接入 ✓', 'ok');
-                    if (r.j.cert_reload_required) { el('cloud-restart').style.display = 'inline-block'; }
-                    setTimeout(() => { location.reload(); }, 2500);
+                    show(
+                        r.j.cert_reload_required
+                            ? '已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）'
+                            : '已接入 ✓',
+                        'ok'
+                    );
+                    if (r.j.cert_reload_required) {
+                        el('cloud-restart').style.display = 'inline-block';
+                    }
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2500);
                     return;
                 }
                 show('口令已受理，状态：' + ((r.j && r.j.status) || '处理中'), 'ok');
@@ -203,7 +247,9 @@
         dialog.querySelector('#cloud-restart').addEventListener('click', () => {
             show('正在重启…页面会在几秒后自动回来');
             api('/api/cloud/restart', {}).then(() => {
-                setTimeout(() => { location.reload(); }, 6000);
+                setTimeout(() => {
+                    location.reload();
+                }, 6000);
             });
         });
         document.querySelectorAll("[data-action='cloud-hub']").forEach((elm) => {

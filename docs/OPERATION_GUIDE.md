@@ -164,7 +164,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 ### 0.7.1 安装（5 步）
 
-1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.25.0-arm64.dmg`（约 56 MB）。
+1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.25.0-arm64.dmg`（约 59 MB）。
 2. 双击刚下载的 `.dmg` → 弹出窗口里看到 **MRRC Modern** 图标和一个 **Applications** 文件夹。
 3. 把 **MRRC Modern** 图标**拖进 Applications** 文件夹（松手即完成安装）。
 4. **第一次启动**请右键点 Applications 里的 **MRRC Modern** → 选 **打开** → 弹窗里再点一次 **打开**（因为免费签名，系统会拦一次；只第一次需要）。

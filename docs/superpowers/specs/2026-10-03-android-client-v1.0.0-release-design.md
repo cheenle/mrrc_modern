@@ -44,7 +44,9 @@
 - 服务端 `server.py:1768`（`/WSradio` 控制通道消息循环）：收到 `txhb` 即把该连接加入 `_tx_hb_capable` 并刷新 `_tx_hb_last`。
 - 闸门（`server.py` `_tx_liveness_timeout`，AD-007 V2.63）：仅在 `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S > 0` 时生效；只对**按键方连接**（`_ptt_key_ws`）且**声明过能力**的连接生效——老客户端永不被误打击。
 
-**实现**：`PTTManager` 进入 Transmitting / Tune 状态时经控制通道立即发一次、其后 500ms 周期发送；`release()` / `forceRelease()` / `onStop` / 收到 `ptt_keyed_by_other` 时停发。沿用可注入 dispatcher，JVM 单测（虚拟时间）验证：0ms 首发、500ms 周期、释放即停、幂等释放。
+**实现**：`PTTManager` 进入按键（Keyed）状态时经控制通道立即发一次、其后 500ms 周期发送；`release()` / `forceRelease()` / `onStuckTX` 时停发。沿用可注入 dispatcher，JVM 单测（虚拟时间）验证：0ms 首发、500ms 周期、释放即停、幂等释放。
+
+**TUNE 不接入心跳**（规划期逐行核实）：服务端闸门只跟踪 PTT 键主（`_ptt_key_ws` 仅在 `ptt:true` 分支赋值，`tune` 分支不赋值），TUNE 本就不在闸门保护范围内；Web 的 tune 心跳对该闸门没有效果。客户端不为一个不存在的闸门增加复杂度。
 
 **验收**：服务端临时设 `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5`，按住 PTT 后断开手机 WiFi → 5 秒内电台自动回 RX。LAN 与 Hub 两侧分别验证（Hub 侧闸门状态验收日核查）。
 
@@ -64,7 +66,8 @@
 - 仪表区加「REC」入口按钮；录制中变红并显示已录时长 → 打开全屏面板
 - 面板顶部：●/■ 启停按钮 + 当前录音状态（频率 / 已录时长 / 字节数）
 - 列表：频率 + 日期时间、时长、大小；当前录音高亮且不可删
-- 点条目 = 播放/暂停（MediaPlayer + 进度条 seek）；行内「保存」= 系统 DownloadManager 存到手机 Downloads（Android 10+ 免权限）
+- 点条目 = 播放/暂停（先经 App 的 OkHttp 下载到本地缓存，再交 MediaPlayer 播放 + 进度条 seek）；行内「导出」= 下载完成后经 `FileProvider` 走系统分享（存文件 / 微信 / 发走）
+- **规划期修正**：原设想的 DownloadManager / MediaPlayer 直连 URL 在局域网自签证书下必然失败（两者都走系统 TLS 栈，不认自签）。统一改成「OkHttp（接受自签）下载 → 本地播放/导出」，LAN 与 Hub 一条代码路径
 - 长按 = 删除（确认框）；提供手动刷新按钮
 - 刷新时机：进入面板时 + 每次 `recordingState` 变化 + 手动
 - 降级：`fullState` 无 `recording` 字段（服务端 < v1.15）时 REC 入口隐藏
@@ -86,9 +89,16 @@
 
 ### 3.5 只读登录（4003）健壮性
 
-用 `MRRC_LISTEN_PASSWORD` 登录时，服务端对 `/WSaudioTX`、`/WSatr1000` 以 **4003** 关闭、写操作返回错误（WS 只放行 freq/mode/memRecall，REST 非 GET → 403）。现有 App 会对 4003 无限重连。
+用 `MRRC_LISTEN_PASSWORD` 登录时，服务端对 `/WSaudioTX`、`/WSatr1000` 以 **4003** 关闭、写操作返回错误（WS 只放行 freq/mode/memRecall，REST 非 GET → 403）。规划期核实：App **没有**自动重连（断线只置 Failed，重连仅设置页手动触发），所以问题不是重连风暴，而是**静默失败**——发射类按钮照常显示、点了没反应。
 
-**修复**：`ConnectionManager` 识别关闭码 4003 → 停止重连对应通道、标记 listen-only、隐藏发射类 UI（PTT/TUNE/CQ/录音启停）并显示提示。
+**修复**：`WebSocketConnection` 上抛关闭码；`ConnectionManager` 识别 4003 → 标记 listen-only（「已连接」判据同时剔除 TX 通道，避免只读登录永远显示未连接）；隐藏发射类 UI（PTT/TUNE/CQ/录音启停）并显示「只读登录」提示。
+
+### 3.6 顺带修复两个现有接线缺陷（规划期发现）
+
+1. **连接指示灯永远灰**：`ServiceLocator` 给 `ConnectionManager` 传的 `onConnectionChange` 是空 lambda，`MainViewModel._connected` 除置 false 外无任何写入点——`ConnDot` 永远显示未连接。修复：透传回调 + JVM 单测。
+2. **设置页不可达**：`RootScreen.showSettings` 没有任何写入点，`MainScreen` 也没有入口——设置页（含版本显示、重连、退出登录）无法打开。修复：主屏顶栏加设置入口 + `RootScreen` 接线；客户端版本号显示在设置页。
+
+两条都是真机一眼可见的问题，且第 2 条阻塞「版本号用于问题回报」的验收需求。
 
 ## 4. 发布设计
 
@@ -134,13 +144,13 @@
 
 ### 5.1 JVM 单测与构建门槛
 
-- 新增：txhb 调度（虚拟时间：0ms 首发 / 500ms 周期 / 释放即停 / 幂等）、录音与 CQ 状态解析、4003 处理、RadioState 新字段
+- 新增：txhb 调度（虚拟时间：0ms 首发 / 500ms 周期 / 释放即停 / 幂等）、连接状态透传、关闭码 4003 上抛、录音与 CQ 状态解析（含 FullState 能力检测）、RadioState 新字段
 - 门槛：`./gradlew test assembleDebug lintDebug assembleRelease` 全绿（无需真机）
 
-### 5.2 服务端侧脚本验证
+### 5.2 服务端侧验证
 
-- 脚本化 WS 客户端（复用本机实例）：按键含 txhb → 停止心跳模拟链路死亡 → 断言服务端在阈值内自动回 RX（需临时置 `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5`）
-- 验证完成后恢复运行配置
+- 服务端闸门语义已有脚本化测试：`tests/test_tx_liveness.py`（含三类「不该释放」反例——未声明能力的旧客户端、单次丢拍、旁观者超时）。实施阶段运行它作为服务端侧证据。
+- 真机端到端（按键 → 断网 → 自动回 RX）并入验收第 11 项：验收窗口内在本机实例临时置 `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5` 并重启；验完恢复或按 Hub 需要保留。
 
 ### 5.3 真机验收清单（用户执行，我待命修）
 
@@ -183,7 +193,7 @@
 
 1. 基线证明：确认现有代码在当机工具链下 `test assembleDebug` 全绿
 2. txhb 心跳 + JVM 单测
-3. 只读登录（4003）处理
+3. 只读登录（4003）处理 + 连接指示/设置页接线修复（§3.6）
 4. 录音面板
 5. CQ 一键呼叫
 6. 品牌 / 图标 / 版本 / 登录页提示

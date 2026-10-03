@@ -59,7 +59,7 @@
 
 **文件：** 无源码改动（可能改 `.gitignore`）
 
-- [ ] **步骤 1：建立隔离工作区**
+- [x] **步骤 1：建立隔离工作区**
 
 按 using-git-worktrees 技能：先检测（`git rev-parse --git-dir` 与 `--git-common-dir` 不同则已在 worktree，跳过）；否则征求用户同意后创建：
 
@@ -73,7 +73,7 @@ cd .worktrees/android-v1.0.0
 
 *用户拒绝 worktree 时：原地工作，跳过本步，任务 13 的"合并"步骤改为无操作。*
 
-- [ ] **步骤 2：证明基线（旧代码在当前工具链全绿）**
+- [x] **步骤 2：证明基线（旧代码在当前工具链全绿）**
 
 ```bash
 cd FT710Android
@@ -83,7 +83,7 @@ export JAVA_HOME=$(/usr/libexec/java_home -v 17); export ANDROID_HOME="$HOME/Lib
 
 预期：`BUILD SUCCESSFUL`；测试计数 = 33（若基线红，停下修基线并单独 commit，不得在红基线上叠加功能）。
 
-- [ ] **步骤 3：确认运行期文件未被带入暂存**
+- [x] **步骤 3：确认运行期文件未被带入暂存**
 
 ```bash
 git status --short   # 不得出现 atr1000_tuner.json 等运行期文件的改动
@@ -101,7 +101,7 @@ git status --short   # 不得出现 atr1000_tuner.json 等运行期文件的改�
 - 修改：`FT710Android/app/src/main/java/com/hamradio/ft710android/App/ServiceLocator.kt`
 - 测试：`FT710Android/app/src/test/java/com/hamradio/ft710android/ViewModel/MainViewModelTest.kt`
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 在 `MainViewModelTest.kt` 追加（并补 `import org.junit.Assert.assertFalse`、`import org.junit.Assert.assertTrue`）：
 
@@ -117,7 +117,7 @@ git status --short   # 不得出现 atr1000_tuner.json 等运行期文件的改�
     }
 ```
 
-- [ ] **步骤 2：运行验证失败**
+- [x] **步骤 2：运行验证失败**
 
 ```bash
 cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*MainViewModelTest*'
@@ -125,7 +125,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*MainViewModelTest*
 
 预期：编译失败 `unresolved reference: onConnectionChange`（红）。
 
-- [ ] **步骤 3：实现**
+- [x] **步骤 3：实现**
 
 `MainViewModel.kt` 在 `onWsEvent` 下方加：
 
@@ -136,7 +136,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*MainViewModelTest*
 
 `ServiceLocator.kt`：`onConnectionChange = {},` → `onConnectionChange = { vm.onConnectionChange(it) },`
 
-- [ ] **步骤 4：运行验证通过 + 全量测试**
+- [x] **步骤 4：运行验证通过 + 全量测试**
 
 ```bash
 cd FT710Android && ./gradlew test
@@ -144,7 +144,7 @@ cd FT710Android && ./gradlew test
 
 预期：34 个测试全绿。
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -164,7 +164,7 @@ git commit -m "fix(android): wire the connection aggregate into the UI (dot was 
 - 修改：`.../UI/SettingsScreen.kt`
 - 修改：`FT710Android/app/build.gradle.kts`
 
-- [ ] **步骤 1：MainScreen 增加设置入口**
+- [x] **步骤 1：MainScreen 增加设置入口**
 
 签名改为 `fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit)`；顶栏在模式文本后加：
 
@@ -172,11 +172,11 @@ git commit -m "fix(android): wire the connection aggregate into the UI (dot was 
             TextButton(onClick = onOpenSettings) { Text("设置", fontSize = 12.sp) }
 ```
 
-- [ ] **步骤 2：RootScreen 接线**
+- [x] **步骤 2：RootScreen 接线**
 
 `MainScreen(vm)` → `MainScreen(vm, onOpenSettings = { showSettings = true })`
 
-- [ ] **步骤 3：SettingsScreen 显示版本**
+- [x] **步骤 3：SettingsScreen 显示版本**
 
 加 import `com.hamradio.ft710android.BuildConfig`；标题下方加：
 
@@ -184,11 +184,11 @@ git commit -m "fix(android): wire the connection aggregate into the UI (dot was 
         Text("客户端 v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
 ```
 
-- [ ] **步骤 4：启用 BuildConfig 生成**
+- [x] **步骤 4：启用 BuildConfig 生成**
 
 `app/build.gradle.kts`：`buildFeatures { compose = true }` → `buildFeatures { compose = true; buildConfig = true }`
 
-- [ ] **步骤 5：构建验证**
+- [x] **步骤 5：构建验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug
@@ -196,7 +196,7 @@ cd FT710Android && ./gradlew assembleDebug
 
 预期：`BUILD SUCCESSFUL`（UI 无 JVM 测试，构建即门槛）。
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -217,7 +217,7 @@ git commit -m "fix(android): make Settings reachable and show the client version
 - 修改：`.../App/ServiceLocator.kt`
 - 测试：`.../PTT/PTTManagerTest.kt`、`.../Network/ConnectionManagerTest.kt`、`.../ViewModel/MainViewModelTest.kt`（补构造参数）
 
-- [ ] **步骤 1：写失败测试（PTTManager）**
+- [x] **步骤 1：写失败测试（PTTManager）**
 
 `PTTManagerTest.kt` 的 Harness 加计数与构造参数：
 
@@ -274,7 +274,7 @@ git commit -m "fix(android): make Settings reachable and show the client version
     }
 ```
 
-- [ ] **步骤 2：运行验证失败**
+- [x] **步骤 2：运行验证失败**
 
 ```bash
 cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*PTTManagerTest*'
@@ -282,7 +282,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*PTTManagerTest*'
 
 预期：编译失败（`sendHeartbeat` 参数不存在）。
 
-- [ ] **步骤 3：实现**
+- [x] **步骤 3：实现**
 
 `WsCommands.kt` 加：
 
@@ -331,7 +331,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*PTTManagerTest*'
 `ServiceLocator.kt` PTTManager 构造中加 `sendHeartbeat = { cm.sendHeartbeat() },`。
 `MainViewModelTest.kt` 的 PTTManager spy 构造中加 `sendHeartbeat = {},`。
 
-- [ ] **步骤 4：运行验证通过**
+- [x] **步骤 4：运行验证通过**
 
 ```bash
 cd FT710Android && ./gradlew test
@@ -339,7 +339,7 @@ cd FT710Android && ./gradlew test
 
 预期：38 个测试全绿。
 
-- [ ] **步骤 5：ConnectionManager 路由测试**
+- [x] **步骤 5：ConnectionManager 路由测试**
 
 `ConnectionManagerTest.kt` 追加：
 
@@ -355,7 +355,7 @@ cd FT710Android && ./gradlew test
 
 运行 `./gradlew :app:testDebugUnitTest --tests '*ConnectionManagerTest*'`，预期全绿。
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -377,7 +377,7 @@ git commit -m "feat(android): tx-phase liveness heartbeat (txhb) on the keying s
 - 修改：`.../UI/MainScreen.kt`
 - 测试：`.../Network/WebSocketConnectionTest.kt`、`.../ViewModel/MainViewModelTest.kt`
 
-- [ ] **步骤 1：写失败测试（关闭码上抛）**
+- [x] **步骤 1：写失败测试（关闭码上抛）**
 
 `WebSocketConnectionTest.kt` 追加：
 
@@ -406,7 +406,7 @@ git commit -m "feat(android): tx-phase liveness heartbeat (txhb) on the keying s
     }
 ```
 
-- [ ] **步骤 2：运行验证失败**
+- [x] **步骤 2：运行验证失败**
 
 ```bash
 cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*WebSocketConnectionTest*'
@@ -414,7 +414,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*WebSocketConnectio
 
 预期：编译失败（`onClosedCode` 参数不存在）。
 
-- [ ] **步骤 3：实现 WebSocketConnection**
+- [x] **步骤 3：实现 WebSocketConnection**
 
 构造参数末尾加 `private val onClosedCode: (Int) -> Unit = {},`；listener 里：
 
@@ -428,7 +428,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*WebSocketConnectio
             }
 ```
 
-- [ ] **步骤 4：实现 ConnectionManager**
+- [x] **步骤 4：实现 ConnectionManager**
 
 - 构造参数末尾加 `private val onListenOnly: () -> Unit = {},`
 - 状态区加：
@@ -462,7 +462,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*WebSocketConnectio
 
 - `stopAll()` 中 `connectedFlags.clear()` 旁加 `listenOnly = false`
 
-- [ ] **步骤 5：MainViewModel 与 ServiceLocator**
+- [x] **步骤 5：MainViewModel 与 ServiceLocator**
 
 `MainViewModel.kt` 加：
 
@@ -488,7 +488,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*WebSocketConnectio
     }
 ```
 
-- [ ] **步骤 6：UI 降级**
+- [x] **步骤 6：UI 降级**
 
 `MainScreen.kt` 读 `val listenOnly by vm.listenOnly.collectAsState()`；在顶栏下加提示条；底部 `TUNE | CQ | PTT` 整行与 REC 入口在 `listenOnly` 时隐藏：
 
@@ -500,7 +500,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*WebSocketConnectio
 
 （底部行的 if 包裹在任务 8 一并完成；本任务先做读状态与提示条。）
 
-- [ ] **步骤 7：全量测试 + 构建**
+- [x] **步骤 7：全量测试 + 构建**
 
 ```bash
 cd FT710Android && ./gradlew test assembleDebug
@@ -508,7 +508,7 @@ cd FT710Android && ./gradlew test assembleDebug
 
 预期：40 个测试全绿、`BUILD SUCCESSFUL`。
 
-- [ ] **步骤 8：Commit**
+- [x] **步骤 8：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -529,7 +529,7 @@ git commit -m "feat(android): handle listen-only 4003 closes instead of failing 
 - 修改：`.../App/ServiceLocator.kt`
 - 测试：`.../Network/ProtocolTest.kt`、`.../Network/RecordingsApiTest.kt`（新增）、`.../ViewModel/MainViewModelTest.kt`
 
-- [ ] **步骤 1：写失败测试**
+- [x] **步骤 1：写失败测试**
 
 `ProtocolTest.kt` 追加：
 
@@ -591,7 +591,7 @@ class RecordingsApiTest {
 }
 ```
 
-- [ ] **步骤 2：运行验证失败**
+- [x] **步骤 2：运行验证失败**
 
 ```bash
 cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*ProtocolTest*' --tests '*RecordingsApiTest*'
@@ -599,7 +599,7 @@ cd FT710Android && ./gradlew :app:testDebugUnitTest --tests '*ProtocolTest*' --t
 
 预期：编译失败（类型不存在）。
 
-- [ ] **步骤 3：实现 Protocol.kt**
+- [x] **步骤 3：实现 Protocol.kt**
 
 加入（顶部 import 已含所需 json 工具）：
 
@@ -662,7 +662,7 @@ data class CqStateDto(val type: String = "cqState", val cq: CqStatusDto = CqStat
         }.getOrElse { WsEvent.Unknown }
 ```
 
-- [ ] **步骤 4：实现 RecordingsApi.kt**
+- [x] **步骤 4：实现 RecordingsApi.kt**
 
 ```kotlin
 package com.hamradio.ft710android.Network
@@ -735,7 +735,7 @@ class RecordingsApi(private val client: OkHttpClient) {
 }
 ```
 
-- [ ] **步骤 5：MainViewModel 状态与动作**
+- [x] **步骤 5：MainViewModel 状态与动作**
 
 构造参数末尾（`scope` 之后）加 `private val recordingsApi: RecordingsApi? = null`。
 导入 `kotlinx.coroutines.launch`、`java.io.File`。
@@ -806,11 +806,11 @@ class RecordingsApi(private val client: OkHttpClient) {
     fun clearError() { _error.value = null }
 ```
 
-- [ ] **步骤 6：ServiceLocator 装配**
+- [x] **步骤 6：ServiceLocator 装配**
 
 `val recordingsApi = RecordingsApi(client)` 并作为 `MainViewModel(..., recordingsApi = recordingsApi)` 传入（用命名参数）。
 
-- [ ] **步骤 7：MainViewModelTest 补能力检测用例**
+- [x] **步骤 7：MainViewModelTest 补能力检测用例**
 
 ```kotlin
     @Test fun `fullState with recording and cq marks them available`() = runTest(UnconfinedTestDispatcher()) {
@@ -824,7 +824,7 @@ class RecordingsApi(private val client: OkHttpClient) {
     }
 ```
 
-- [ ] **步骤 8：运行验证通过**
+- [x] **步骤 8：运行验证通过**
 
 ```bash
 cd FT710Android && ./gradlew test
@@ -832,7 +832,7 @@ cd FT710Android && ./gradlew test
 
 预期：46 个测试全绿。
 
-- [ ] **步骤 9：Commit**
+- [x] **步骤 9：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -853,7 +853,7 @@ git commit -m "feat(android): recording/CQ protocol layer with capability detect
 - 修改：`.../AndroidManifest.xml`、新增 `res/xml/file_paths.xml`
 - 修改：`app/build.gradle.kts`、`gradle/libs.versions.toml`
 
-- [ ] **步骤 1：依赖与 FileProvider 声明**
+- [x] **步骤 1：依赖与 FileProvider 声明**
 
 `libs.versions.toml` `[versions]` 加 `coreKtx = "1.15.0"`；`[libraries]` 加：
 
@@ -886,7 +886,7 @@ androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = 
 </paths>
 ```
 
-- [ ] **步骤 2：Format.kt**
+- [x] **步骤 2：Format.kt**
 
 ```kotlin
 package com.hamradio.ft710android.UI
@@ -910,7 +910,7 @@ fun fmtStartedAt(iso: String): String = runCatching {
 }.getOrDefault(iso)
 ```
 
-- [ ] **步骤 3：RecordingPanel.kt**
+- [x] **步骤 3：RecordingPanel.kt**
 
 ```kotlin
 package com.hamradio.ft710android.UI
@@ -1105,7 +1105,7 @@ fun RecordingPanel(vm: MainViewModel, onClose: () -> Unit) {
 }
 ```
 
-- [ ] **步骤 4：MainScreen 接入**
+- [x] **步骤 4：MainScreen 接入**
 
 `MainScreen.kt` 加状态与入口：
 
@@ -1133,7 +1133,7 @@ fun RecordingPanel(vm: MainViewModel, onClose: () -> Unit) {
 
 补 import：`androidx.compose.runtime.mutableStateOf`、`remember`、`setValue`、`androidx.compose.ui.unit.sp` 已有、`RecordingPanel` 同包免 import。
 
-- [ ] **步骤 5：构建验证**
+- [x] **步骤 5：构建验证**
 
 ```bash
 cd FT710Android && ./gradlew test assembleDebug lintDebug
@@ -1141,7 +1141,7 @@ cd FT710Android && ./gradlew test assembleDebug lintDebug
 
 预期：全部通过（lint 无 error）。
 
-- [ ] **步骤 6：Commit**
+- [x] **步骤 6：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -1158,7 +1158,7 @@ git commit -m "feat(android): recording panel — list, local playback, export, 
 
 - 修改：`FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt`
 
-- [ ] **步骤 1：接线状态**
+- [x] **步骤 1：接线状态**
 
 `MainScreen.kt` 加：
 
@@ -1168,7 +1168,7 @@ git commit -m "feat(android): recording panel — list, local playback, export, 
     val error by vm.error.collectAsState()
 ```
 
-- [ ] **步骤 2：错误条（含 CQ 服务端拒绝原因）**
+- [x] **步骤 2：错误条（含 CQ 服务端拒绝原因）**
 
 顶栏下加：
 
@@ -1181,7 +1181,7 @@ git commit -m "feat(android): recording panel — list, local playback, export, 
 
 （import `kotlinx.coroutines.delay`、`androidx.compose.runtime.LaunchedEffect`。）
 
-- [ ] **步骤 3：底部行加 CQ**
+- [x] **步骤 3：底部行加 CQ**
 
 底部 Row 改为（并把整行包进 `if (!listenOnly)`）：
 
@@ -1213,7 +1213,7 @@ git commit -m "feat(android): recording panel — list, local playback, export, 
 
 （import `androidx.compose.material3.ButtonDefaults`、`java.util.Locale` 已有 `format` 是 `String.format`——`"…".format(...)` 走 Kotlin 扩展，需要 `Locale` 无关；直接用 `"CQ %.0f/%.0fs".format(s.elapsedS, s.durationS)`。）
 
-- [ ] **步骤 4：构建验证**
+- [x] **步骤 4：构建验证**
 
 ```bash
 cd FT710Android && ./gradlew assembleDebug lintDebug
@@ -1221,7 +1221,7 @@ cd FT710Android && ./gradlew assembleDebug lintDebug
 
 预期：`BUILD SUCCESSFUL`。
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -1242,12 +1242,12 @@ git commit -m "feat(android): one-touch CQ key with progress and abort"
 - 新增：`res/values/colors.xml`、`res/drawable/ic_launcher_foreground.xml`、`res/mipmap-anydpi-v26/ic_launcher.xml`、`res/mipmap-anydpi-v26/ic_launcher_round.xml`
 - 修改：`AndroidManifest.xml`
 
-- [ ] **步骤 1：字符串与版本号**
+- [x] **步骤 1：字符串与版本号**
 
 `strings.xml`：`<string name="app_name">MRRC Modern</string>`
 `app/build.gradle.kts`：`versionName = "1.0.0"`（`versionCode` 保持 1）。
 
-- [ ] **步骤 2：登录页**
+- [x] **步骤 2：登录页**
 
 `LoginScreen.kt`：
 
@@ -1259,7 +1259,7 @@ git commit -m "feat(android): one-touch CQ key with progress and abort"
             style = MaterialTheme.typography.bodySmall)
 ```
 
-- [ ] **步骤 3：自适应图标**
+- [x] **步骤 3：自适应图标**
 
 `res/values/colors.xml`：
 
@@ -1300,7 +1300,7 @@ git commit -m "feat(android): one-touch CQ key with progress and abort"
 
 `AndroidManifest.xml` `<application>` 加 `android:icon="@mipmap/ic_launcher"` 与 `android:roundIcon="@mipmap/ic_launcher_round"`。
 
-- [ ] **步骤 4：构建验证**
+- [x] **步骤 4：构建验证**
 
 ```bash
 cd FT710Android && ./gradlew test assembleDebug lintDebug
@@ -1308,7 +1308,7 @@ cd FT710Android && ./gradlew test assembleDebug lintDebug
 
 预期：全绿（lint 对图标无 error；minSdk 26 与 anydpi-v26 匹配）。
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -1328,7 +1328,7 @@ git commit -m "feat(android): rebrand to MRRC Modern, add adaptive icon, v1.0.0,
 - 新增（仓库外）：`~/.android-keystores/mrrc-modern-release.jks`
 - 新增（gitignore）：`FT710Android/keystore.properties`
 
-- [ ] **步骤 1：生成 keystore 与 properties（一次性）**
+- [x] **步骤 1：生成 keystore 与 properties（一次性）**
 
 ```bash
 mkdir -p "$HOME/.android-keystores"
@@ -1352,7 +1352,7 @@ fi
 
 ⚠️ **口令必须让用户当场记下**；`keystore.properties` 与 `.jks` 都不进 git。
 
-- [ ] **步骤 2：.gitignore**
+- [x] **步骤 2：.gitignore**
 
 `FT710Android/.gitignore` 追加：
 
@@ -1360,7 +1360,7 @@ fi
 /keystore.properties
 ```
 
-- [ ] **步骤 3：Gradle 签名配置**
+- [x] **步骤 3：Gradle 签名配置**
 
 `app/build.gradle.kts` 顶部加 `import java.util.Properties`，plugins 块后加：
 
@@ -1402,7 +1402,7 @@ tasks.named("assembleRelease") {
 }
 ```
 
-- [ ] **步骤 4：验证签名与「无密钥即失败」**
+- [x] **步骤 4：验证签名与「无密钥即失败」**
 
 ```bash
 cd FT710Android
@@ -1414,7 +1414,7 @@ mv keystore.properties keystore.properties.bak
 mv keystore.properties.bak keystore.properties
 ```
 
-- [ ] **步骤 5：Commit**
+- [x] **步骤 5：Commit**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -1435,7 +1435,7 @@ git commit -m "build(android): release signing chain with fail-without-keystore 
 - 修改：`mrrc_modern/README.md`（本仓根）
 - 修改：`FT710Android/BUILD_GUIDE.md`、`FT710Android/CLAUDE.md`
 
-- [ ] **步骤 1：站点页面一次性改造（zh）**
+- [x] **步骤 1：站点页面一次性改造（zh）**
 
 替换（唯一匹配）：
 
@@ -1459,7 +1459,7 @@ git commit -m "build(android): release signing chain with fail-without-keystore 
 标题 `<strong>早期版本——需从源码构建</strong>` → `<strong>iOS 早期版本——需从源码构建</strong>`；
 段落中 `实际按键的客户端。Android：纯逻辑（协议、PTT、频谱、记忆频道）\n已通过 <code>./gradlew test assembleDebug lintDebug</code> 的\nJVM 测试；真机射频验收待完成。` → `实际按键的客户端。`
 
-- [ ] **步骤 2：站点页面一次性改造（en）**
+- [x] **步骤 2：站点页面一次性改造（en）**
 
 替换：
 
@@ -1481,7 +1481,7 @@ git commit -m "build(android): release signing chain with fail-without-keystore 
 标题 `<strong>Early access — build from source</strong>` → `<strong>iOS early access — build from source</strong>`；
 段落 `the keying client. Android: pure logic (protocol, PTT, spectrum,\nmemory channels) is covered by JVM tests via\n<code>./gradlew test assembleDebug lintDebug</code>; on-device RF\nacceptance is pending.` → `the keying client.`
 
-- [ ] **步骤 3：README 下载区（本仓根，静态段）**
+- [x] **步骤 3：README 下载区（本仓根，静态段）**
 
 在 Windows 下载段之后加（链接指向**稳定别名**，无需随版本更新）：
 
@@ -1496,7 +1496,7 @@ Android 8.0+ (minSdk 26)。签名 APK 常驻地址（始终为最新版）：
 可连局域网实例，也可走 Cloud Hub 呼号入口。
 ```
 
-- [ ] **步骤 4：release.sh**
+- [x] **步骤 4：release.sh**
 
 ```bash
 #!/usr/bin/env bash
@@ -1602,7 +1602,7 @@ echo "== v$VERSION published & verified =="
 
 `chmod +x release.sh`。
 
-- [ ] **步骤 5：dry-run 验证脚本**
+- [x] **步骤 5：dry-run 验证脚本**
 
 ```bash
 cd FT710Android && bash -n release.sh && ./release.sh --dry-run
@@ -1610,7 +1610,7 @@ cd FT710Android && bash -n release.sh && ./release.sh --dry-run
 
 预期：构建绿、产物落 `dist/`、zh/en 两处页面标记块被替换为 v1.0.0 内容、以 `-- dry run` 结束、不触碰远端。
 
-- [ ] **步骤 6：CHANGELOG.md**
+- [x] **步骤 6：CHANGELOG.md**
 
 ```markdown
 # FT710Android Changelog
@@ -1627,7 +1627,7 @@ App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸�
 - 发布：`release.sh` 一键构建/签名/上传/线上 SHA-256 复核；keystore 仓库外保管
 ```
 
-- [ ] **步骤 7：BUILD_GUIDE.md / CLAUDE.md 文档**
+- [x] **步骤 7：BUILD_GUIDE.md / CLAUDE.md 文档**
 
 `BUILD_GUIDE.md` 末尾追加：
 
@@ -1642,7 +1642,7 @@ App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸�
 
 `CLAUDE.md` 协议事实补：txhb（控制通道，按键首发 + 500ms，停于 release/forceRelease；服务端 `server.py:1768`，闸门仅 PTT 键主）、录音（`set recording` + `recordingState` + REST `/api/recordings`，Cookie 认证）、CQ（`set cq` + `cqState`）、只读（TX 通道 4003 → listen-only）、fullState 顶层 `recording`/`cq`/`radioModel` 能力字段。新模块表加 `RecordingsApi.kt` / `RecordingPanel.kt` / `Format.kt` / `release.sh`。
 
-- [ ] **步骤 8：Commit（本仓 + 站点仓）**
+- [x] **步骤 8：Commit（本仓 + 站点仓）**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -1658,7 +1658,7 @@ git -C /Users/cheenle/HAM/website status --short   # 站点仓的页面改动已
 
 **文件：** 无改动
 
-- [ ] **步骤 1：服务端闸门测试**
+- [x] **步骤 1：服务端闸门测试**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern
@@ -1667,7 +1667,7 @@ cd /Users/cheenle/HAM/hub/mrrc_modern
 
 预期：全绿（含未声明能力不释放、单拍丢失不释放、旁观者超时不释放三类反例）。
 
-- [ ] **步骤 2：Android 全量门槛**
+- [x] **步骤 2：Android 全量门槛**
 
 ```bash
 cd FT710Android
@@ -1676,7 +1676,7 @@ cd FT710Android
 
 预期：全部 `BUILD SUCCESSFUL`；测试计数与任务 6 收尾时一致。
 
-- [ ] **步骤 3：核对没有越界改动**
+- [x] **步骤 3：核对没有越界改动**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern && git status --short   # 只应出现本任务链的文件
@@ -1687,7 +1687,7 @@ git log --oneline -10
 
 ### 任务 13：发布 v1.0.0 + 线上复核 + 交付验收清单
 
-- [ ] **步骤 1：真实发布**
+- [x] **步骤 1：真实发布**
 
 ```bash
 cd /Users/cheenle/HAM/hub/mrrc_modern/FT710Android
@@ -1696,7 +1696,7 @@ cd /Users/cheenle/HAM/hub/mrrc_modern/FT710Android
 
 预期：结尾 `== v1.0.0 published & verified ==`；截图/记录 SHA-256、大小、线上 URL。
 
-- [ ] **步骤 2：交付验收清单给用户**（原文抄送设计文档 §5.3 的 12 项，并附上本次发布的版本/大小/SHA 与三个入口：官网下载、LAN 地址、Hub 呼号入口）
+- [x] **步骤 2：交付验收清单给用户**（原文抄送设计文档 §5.3 的 12 项，并附上本次发布的版本/大小/SHA 与三个入口：官网下载、LAN 地址、Hub 呼号入口）
 
 - [ ] **步骤 3：验收窗口的服务端准备（需用户同意）**
 

@@ -32,6 +32,36 @@
 
     var lastState = null;
 
+    var AUTO_LABELS = {
+        idle: '还没申请',
+        applied: '已提交，等待运维批准',
+        verified: '已核验，等待分配入口',
+        granted: '已批准，正在接入…',
+        busy: '正在接入…',
+        connected: '已接入',
+        restarting: '已接入，正在重启以启用新证书',
+        unreachable: '联系不上 hub（会一直重试）',
+        'connect-failed': '接入失败（会一直重试）',
+    };
+
+    // 服务端自己在轮询（server.py 的 cloud-autoconnect 线程），所以这行显示的是**本机**
+    // 最后一次询问的结果，而不是这个窗口的。它存在的理由：以前"从来没去问"和"问了还没批"
+    // 在界面上完全一样，2026-10-03 实测 BG6LH 因此卡了几个小时没人能看出是哪一边在等。
+    function renderAuto(auto) {
+        var box = el('cloud-auto');
+        if (!box) return;
+        auto = auto || {};
+        var status = auto.status || 'idle';
+        var line = '自动接入：本机自己定时问 hub，不必守着这个窗口';
+        if (auto.at) {
+            var secs = Math.max(0, Math.round(Date.now() / 1000 - auto.at));
+            var when = secs < 90 ? secs + ' 秒前' : Math.round(secs / 60) + ' 分钟前';
+            line += '（上次询问 ' + when + '：' + (AUTO_LABELS[status] || status) + '）';
+        }
+        if (auto.error) line += ' — ' + auto.error;
+        box.textContent = line;
+    }
+
     function render(state) {
         lastState = state;
         var applied = !!(state.callsign && state.has_token);
@@ -41,6 +71,7 @@
         if (applied) {
             el('cloud-callsign-shown').textContent = state.callsign;
         }
+        renderAuto(state.autoconnect);
         if (state.connected) {
             var link = el('cloud-entry');
             link.href = state.entry;

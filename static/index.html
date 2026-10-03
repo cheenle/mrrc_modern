@@ -996,6 +996,9 @@
           <p style="margin: 6px 0">
             已提交申请（呼号 <b id="cloud-callsign-shown">—</b>），等待运维批准。
           </p>
+          <!-- 本机自己在问，不必守着这个窗口。这行也要能告状：
+               “从来没去问”和“问了还没批”在以前长得一模一样（2026-10-03 实测 BG6LH 卡了几小时）。 -->
+          <p id="cloud-auto" style="margin: 6px 0; font-size: 12px; color: #9ca3af; line-height: 1.5"></p>
           <button id="cloud-restart" style="display: none; margin-top: 10px; width: 100%; padding: 10px; background: #22c55e; color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer">
             重启应用以启用新证书
           </button>

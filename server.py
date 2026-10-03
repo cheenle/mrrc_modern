@@ -4185,6 +4185,12 @@ def main():
         _cloud_start_tunnel(_cloud_settings())
     except Exception as exc:                                      # noqa: BLE001
         logger.warning("could not start the tunnel at start-up (%s) - the dialog retries", exc)
+    # An application submitted before this restart still has to finish by itself; without this
+    # the approval would wait for somebody to open the settings dialog.
+    try:
+        _cloud_start_autoconnect()
+    except Exception as exc:                                      # noqa: BLE001
+        logger.warning("could not start the cloud auto-connect poller (%s)", exc)
 
     server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port,
                                            log_level="info", reload=False, **ssl_kwargs))
@@ -4304,6 +4310,7 @@ async def api_cloud_state(request: Request):
         "entry": settings.get("MRRC_CLOUD_ENTRY", ""),
         "cert": os.environ.get("MRRC_SSL_CERT", ""),
         "portal": _cloud_portal(settings),
+        "autoconnect": dict(_cloud_autoconnect_state),
         "tunnel_running": bool(_cloud_tunnel and _cloud_tunnel.running),
         "tunnel_error": (_cloud_tunnel.last_error if _cloud_tunnel else ""),
         "cert_reload_required": _cert_reload_required(),
@@ -4338,6 +4345,9 @@ async def api_cloud_apply(request: Request):
         "MRRC_CLOUD_TOKEN": reply["request_token"],
         "MRRC_CLOUD_PORTAL": portal,
     })
+    # From here on nobody has to keep the dialog open: the poll loop lives on this side, so an
+    # approval that arrives tomorrow still completes without the tenant watching anything.
+    _cloud_start_autoconnect()
     if reply.get("status") == "granted":
         # A claimed application is already approved: connect now instead of asking for another click.
         return await api_cloud_refresh(request)
@@ -4360,10 +4370,11 @@ async def api_cloud_refresh(request: Request):
         state = cloud_hub.status(portal, callsign, token)
         if state.get("status") != "granted":
             return JSONResponse({"connected": False, "status": state.get("status", "unknown")})
-        result = cloud_hub.connect(portal, callsign, token, config_path=_config_file_path(),
-                                   cert_dir=_cloud_cert_dir(), fleet_dir=_cloud_fleet_dir(),
-                                   data_dir=_cloud_data_dir(), local_port=WEB_PORT,
-                                   tunnel=_cloud_tunnel)
+        with _cloud_connect_lock:        # the poller does the same thing; only one enrols
+            result = cloud_hub.connect(portal, callsign, token, config_path=_config_file_path(),
+                                       cert_dir=_cloud_cert_dir(), fleet_dir=_cloud_fleet_dir(),
+                                       data_dir=_cloud_data_dir(), local_port=WEB_PORT,
+                                       tunnel=_cloud_tunnel)
     except cloud_hub.CloudHubError as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)
     cloud_hub._write_config(_config_file_path(), {
@@ -4400,7 +4411,124 @@ def _cert_reload_required() -> bool:
     return cert_mtime > _PROCESS_STARTED_AT + 1.0          # one second of slack for clock granularity
 
 
-_PROCESS_STARTED_AT = time.monotonic()
+# Epoch seconds, NOT time.monotonic(): this is compared against st_mtime, and mixing the two
+# clocks made every configured certificate look "written after this process started" - a three
+# day old file included (measured 2026-10-03: 1.79e9 vs 3.8e5). Harmless while a human clicked
+# the restart button and shrugged at the prompt that never went away; fatal once the enrolment
+# restarts on its own, because every restart would ask for another one.
+_PROCESS_STARTED_AT = time.time()
+
+
+# How often an unapproved instance asks the hub whether it has been approved. The tenant is the
+# one waiting, and a status poll is a single POST - but this is also the loop that runs for days
+# on a machine nobody looks at, so it must never be the reason a network is busy.
+_CLOUD_AUTOCONNECT_INTERVAL = 30.0
+_cloud_autoconnect_state: dict = {}
+_cloud_autoconnect_thread: "threading.Thread | None" = None
+
+# Enrolling is not idempotent when two callers overlap: both sign a certificate, both POST it to
+# the hub's /enroll, and both write the frpc config. The dialog and the poller can now be in
+# flight at the same time, so one of them has to step aside.
+_cloud_connect_lock = threading.Lock()
+
+
+def _note_autoconnect(status: str, error: str = "") -> dict:
+    """Record what the unattended poll is doing, so a stuck instance is visible.
+
+    Without this, "the client never asked" and "the client asked and is still pending" look
+    identical from every UI we have. Measured 2026-10-03: BG6LH sat on its "已提交申请" message
+    for hours after the hub had already granted it, and nothing in the app could say which side
+    was waiting - the hub's nginx log was the only place that showed no /status was ever sent.
+    """
+    global _cloud_autoconnect_state
+    _cloud_autoconnect_state = {"status": status, "error": error, "at": time.time()}
+    return dict(_cloud_autoconnect_state)
+
+
+def _cloud_autoconnect_once() -> dict:
+    """Ask the hub about our application, and finish the enrolment when it has been granted.
+
+    The settings dialog used to own the only poll loop (open() starts a 20s interval, close()
+    clears it), so an approval only landed while somebody kept that dialog open - and the tenant
+    who submitted the application is not the person who approves it, and has no reason to keep a
+    dialog open for hours or days. The loop therefore belongs on this side, next to the tunnel
+    that already starts at boot for the same reason.
+
+    Never raises: this runs on a daemon thread, where an exception would silently end the polling
+    and leave the instance looking exactly like one whose application was never approved.
+    """
+    settings = _cloud_settings()
+    callsign = settings.get("MRRC_CLOUD_CALLSIGN", "")
+    token = settings.get("MRRC_CLOUD_TOKEN", "")
+    if not (callsign and token):
+        return _note_autoconnect("idle")
+    if settings.get("MRRC_CLOUD_LABEL"):
+        return _note_autoconnect("connected")
+    portal = _cloud_portal(settings)
+    try:
+        state = cloud_hub.status(portal, callsign, token)
+    except cloud_hub.CloudHubError as exc:
+        return _note_autoconnect("unreachable", str(exc))
+    if state.get("status") != "granted":
+        return _note_autoconnect(str(state.get("status") or "unknown"))
+    if not _cloud_connect_lock.acquire(blocking=False):
+        return _note_autoconnect("busy")     # the dialog is enrolling this very moment
+    try:
+        _ensure_tunnel_object()          # first use has none; without this frpc is never started
+        result = cloud_hub.connect(portal, callsign, token, config_path=_config_file_path(),
+                                   cert_dir=_cloud_cert_dir(), fleet_dir=_cloud_fleet_dir(),
+                                   data_dir=_cloud_data_dir(), local_port=WEB_PORT,
+                                   tunnel=_cloud_tunnel)
+    except Exception as exc:                                     # noqa: BLE001
+        logger.warning("cloud hub: unattended connect failed (%s) - will retry", exc)
+        return _note_autoconnect("connect-failed", str(exc))
+    finally:
+        _cloud_connect_lock.release()
+    cloud_hub._write_config(_config_file_path(), {
+        "MRRC_CLOUD_LABEL": result.get("label", ""),
+        "MRRC_CLOUD_PORT": str(result.get("port", "")),
+        "MRRC_CLOUD_ENTRY": result.get("entry", ""),
+    })
+    logger.info("cloud hub: enrolled without anyone opening the dialog - %s",
+                result.get("entry", ""))
+    if _cert_reload_required():
+        # The certificate signed just now is not the one being served, so the entry answers 502
+        # until a restart. The dialog offers a button for this; unattended means pressing it.
+        if _cloud_restart_now():
+            return _note_autoconnect("restarting")
+        return _note_autoconnect("connected", "新证书需手动重启应用后才生效")
+    return _note_autoconnect("connected")
+
+
+def _cloud_autoconnect_loop(interval: float = _CLOUD_AUTOCONNECT_INTERVAL) -> None:
+    while True:
+        try:
+            _cloud_autoconnect_once()
+        except Exception:                                        # noqa: BLE001
+            logger.exception("cloud hub: unattended poll raised - continuing")   # never dies
+        time.sleep(interval)
+
+
+def _cloud_start_autoconnect(interval: float = _CLOUD_AUTOCONNECT_INTERVAL) -> bool:
+    """Start the unattended poller when this instance has an application to follow.
+
+    Called at start-up (for an instance that applied before a reboot) and right after an
+    application is submitted, so closing the dialog cannot stop the approval from landing.
+    Idempotent: a second call while the thread lives is a no-op.
+    """
+    global _cloud_autoconnect_thread
+    settings = _cloud_settings()
+    if not (settings.get("MRRC_CLOUD_CALLSIGN") and settings.get("MRRC_CLOUD_TOKEN")):
+        return False
+    if settings.get("MRRC_CLOUD_LABEL"):
+        return False
+    if _cloud_autoconnect_thread is not None and _cloud_autoconnect_thread.is_alive():
+        return False
+    _cloud_autoconnect_thread = threading.Thread(target=_cloud_autoconnect_loop, args=(interval,),
+                                                 name="cloud-autoconnect", daemon=True)
+    _cloud_autoconnect_thread.start()
+    logger.info("cloud hub: waiting for approval; this instance asks every %.0f s", interval)
+    return True
 
 
 
@@ -4422,14 +4550,19 @@ def _relaunch_command() -> list:
     return []
 
 
-@app.post("/api/cloud/restart", include_in_schema=False)
-async def api_cloud_restart(request: Request):
-    """Restart so the certificate signed at connect time is the one being served."""
-    if not _verify_auth(request):
-        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+def _cloud_restart_now() -> bool:
+    """Restart so the certificate signed at connect time is the one being served.
+
+    The same path the dialog's restart button takes, minus the button: an unattended enrolment
+    would otherwise leave the entry answering 502 until somebody clicked. Returns False when
+    there is nothing that could start the app again - exiting without a supervisor leaves the
+    instance with a running tunnel and no service behind it, which is worse than a 502.
+    """
     command = _relaunch_command()
     if not command:
-        return JSONResponse({"error": "找不到启动器，无法自动重启；请手动退出并重新打开应用"}, status_code=409)
+        logger.warning("cloud hub: enrolled, but no launcher to restart with - "
+                       "restart by hand so the new certificate is served")
+        return False
 
     def _go():
         try:
@@ -4443,6 +4576,16 @@ async def api_cloud_restart(request: Request):
         os._exit(0)
 
     threading.Timer(1.2, _go).start()
+    return True
+
+
+@app.post("/api/cloud/restart", include_in_schema=False)
+async def api_cloud_restart(request: Request):
+    """Restart so the certificate signed at connect time is the one being served."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if not _cloud_restart_now():
+        return JSONResponse({"error": "找不到启动器，无法自动重启；请手动退出并重新打开应用"}, status_code=409)
     return JSONResponse({"restarting": True})
 
 

@@ -103,7 +103,9 @@ For IC-7300MK2, use `MRRC_RADIO_MODEL=ic7300mk2`.
 
 ### 4. Open in Browser
 
-Navigate to: **http://localhost:8888**
+Navigate to: **https://localhost:8888**
+
+> 是 `https://`。服务只为 TLS 监听，同一端口的明文 HTTP 不应答；自签名证书首次会警告一次，继续即可。
 
 Enter your password when prompted.
 
@@ -165,7 +167,7 @@ export MRRC_AUDIO_TX_DEVICE="USB Audio CODEC"
 ## 🏥 Health Check
 
 ```bash
-curl http://localhost:8888/api/health
+curl -k https://localhost:8888/api/health   # -k：自签名证书（本机验收用；正式入口请正常校验）
 ```
 
 Expected response:

@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Two Models, Forty-Eight Hours, Seven Releases - a retrospective focused on model capability: what each session was strong at, where each failed, and which failures both models shared."
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>Two Models, Forty-Eight Hours, Seven Releases</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="css/ft710.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
+    <style>
+      :root { --ink: #e8e8ea; --muted: #9a9aa2; --amber: #f59e0b; --cyan: #22d3ee; --line: #26262c; }
+      body { background: #0a0a0a; color: var(--ink); }
+      .essay { max-width: 800px; margin: 0 auto; padding: 140px 1.5rem 120px; font-size: 1.04rem; line-height: 1.85; }
+      .essay h1 { font-size: 2rem; line-height: 1.35; margin: 0 0 0.4rem; }
+      .essay .sub { color: var(--muted); font-size: 0.95rem; margin-bottom: 2.4rem; }
+      .essay h2 { font-size: 1.28rem; margin: 3rem 0 1rem; padding-left: 0.7rem; border-left: 3px solid var(--amber); }
+      .essay h3 { font-size: 1.03rem; margin: 1.9rem 0 0.5rem; color: var(--cyan); }
+      .essay p { margin: 0 0 1.05rem; }
+      .essay strong { color: #fff; font-weight: 600; }
+      .essay em { color: var(--amber); font-style: normal; }
+      .essay code { font-family: "JetBrains Mono", monospace; font-size: 0.85em; background: #16161a; border: 1px solid var(--line); border-radius: 4px; padding: 0.1em 0.35em; }
+      .essay pre { background: #0f0f12; border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.65; }
+      .essay pre code { background: none; border: 0; padding: 0; }
+      .essay blockquote { margin: 1.4rem 0; padding: 0.6rem 0 0.6rem 1.1rem; border-left: 2px solid var(--amber); color: #d6d6dc; background: #101014; }
+      .essay table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 1rem 0 1.6rem; }
+      .essay th, .essay td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+      .essay th { color: var(--muted); font-weight: 500; }
+      .essay .tag { display: inline-block; font-size: 0.74rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.6rem; margin-right: 0.4rem; }
+      .essay .foot { margin-top: 3rem; color: var(--muted); font-size: 0.88rem; }
+      .essay a { color: var(--cyan); }
+      .essay ul { margin: 0 0 1.1rem; padding-left: 1.3rem; }
+      .essay li { margin-bottom: 0.4rem; }
+      .note { background: #101014; border: 1px solid var(--line); border-radius: 8px; padding: 0.9rem 1.1rem; margin: 1.2rem 0; }
+    </style>
+  </head>
+  <body>
+    <main class="essay">
+      <p><span class="tag">Retrospective</span><span class="tag">Model capability</span><span class="tag">2026-10-03</span></p>
+      <h1>Two Models, Forty-Eight Hours,<br />Seven Releases</h1>
+      <p class="sub">
+        2026-10-01 17:00 to 10-03 10:00. One codebase (a radio client and its cloud hub), two model
+        sessions running in parallel.<br />
+        Output: <strong>68 + 20 commits</strong>, <strong>+18,515 / −2,472 lines</strong>,
+        <strong>seven releases from v1.24.2 to v1.24.8</strong>, a whole-host migration, a new patch
+        channel, three self-service scripts for customers, and two public essays.<br />
+        This is not a retrospective of the code. It is a retrospective of <strong>the models</strong>.
+      </p>
+
+      <div class="note">
+        <strong>Naming, and the observation boundary (stated first, or none of this is honest).</strong><br />
+        <strong>A</strong> is the session writing this; <strong>B</strong> is the parallel one. The two were
+        driven by different models; <em>which is which cannot be self-identified from inside a session</em>,
+        so this piece only ever says A and B. A's failures are first-person and checkable one by one.
+        <strong>Everything said about B is inferred from artifacts alone</strong> - commits, code comments,
+        design records. B's reasoning, error rate and retry counts are <strong>not observable</strong>;
+        where they are not observable, this says "unknown" rather than guessing.
+      </div>
+
+      <h2>1. There were only four root causes</h2>
+      <p>Seven releases sound like seven problems. They were four, found repeatedly:</p>
+      <table>
+        <tr><th>#</th><th>Root cause</th><th>First symptom</th><th>How it closed</th></tr>
+        <tr><td>1</td><td><strong>Defaults that only held on the build machine</strong> (certificate path, log directory, serial port, the public default password)</td><td>A customer's black screen</td><td>User-directory defaults + sign a certificate when missing + <strong>a gate test</strong></td></tr>
+        <tr><td>2</td><td><strong>Process lifetime vs. when configuration takes effect</strong> (the TLS context is fixed at start; the tunnel started lazily; nothing restarted the app)</td><td>Entry 502</td><td>A factual criterion (certificate mtime &gt; process start) + start the tunnel at boot + relaunch the launcher before exiting</td></tr>
+        <tr><td>3</td><td><strong>Network truth requires measurement</strong> (port 8899 was never open publicly; 8989 was blocked by the host's own firewall; stale DNS; an IPv6 black hole)</td><td>"Refresh does nothing"</td><td>One portal address, the firewall rule, compatibility for old addresses</td></tr>
+        <tr><td>4</td><td><strong>A missing path in the UI</strong> (an already-applied user had nowhere to paste the enrolment secret)</td><td>A customer report</td><td>The pending panel got the field and button; a static patch shipped it early</td></tr>
+      </table>
+      <blockquote>
+        <strong>Capability finding 1:</strong> both models were good at fixing the symptom in front of them and
+        poor at finding the class the first time. Cause 1 was fixed four times over (certificate, logs, serial
+        port, password) until someone named it and wrote a gate test - and the test then caught a fifth case
+        on its own.
+      </blockquote>
+
+      <h2>2. Session B, judged from its artifacts</h2>
+      <h3>Strengths</h3>
+      <p>
+        <strong>① Deep infrastructure diagnosis.</strong> B's design record concludes that an intermittent
+        edge failure was caused by nginx selecting the hub's unreachable IPv6 address, and left this in the
+        configuration:
+      </p>
+      <pre><code># A bare hostname is resolved once at start-up, and getaddrinfo on this box puts AAAA
+# first - so any reload switches this leg into a black hole. Restore the hostname once
+# the hub's IPv6 path works.</code></pre>
+      <p>
+        That is not a conclusion you reach by trying a different IP. It requires reasoning correctly about
+        <em>nginx's resolution timing, this host's AAAA preference, and reload semantics</em> at once.
+        <strong>It is the single deepest technical judgement I saw in these forty-eight hours.</strong>
+      </p>
+      <p>
+        <strong>② Anticipating a catastrophe that had not happened.</strong> The commit
+        <code>deploy: an empty manifest must never mean "delete the whole site"</code> guards a
+        <code>rsync --delete</code> path against a manifest generated empty. That bug cannot appear in a
+        test; it appears once, at three in the morning, as a deleted website.
+        <strong>Thinking of it is a disposition independent of coding skill.</strong>
+      </p>
+      <p>
+        <strong>③ Platform knowledge earned by running things.</strong>
+        <code>tests: close the log handler before the temp dir goes away, or Windows cannot delete it</code> -
+        Windows file-locking semantics, known only to someone who has watched a test suite fail there.
+      </p>
+      <p>
+        <strong>④ Converging on the same class as A, independently.</strong> B's
+        <code>server: a packaged build never keeps writable state next to its own code</code> and A's
+        certificate-directory change are two instances of one class, found separately, fixed separately,
+        unknown to each other. The convergence shows the class was real and salient;
+        <em>neither side swept for the rest</em> - a shared blind spot.
+      </p>
+      <p><strong>⑤ A mechanism-level insight that changed a release decision.</strong> B wrote:</p>
+      <blockquote>
+        The upgrade channel compares version strings, so a machine that already installed 1.24.5 will
+        <strong>never</strong> receive a rebuild under the same number - its update button replays the same
+        version forever. This round therefore <strong>must ship as v1.24.6</strong>, not as a docs fix.
+      </blockquote>
+      <p>
+        A was about to hang a corrected build on 1.24.5, which would have left every installed user without
+        the fix. <strong>That sentence prevented a silently ineffective release.</strong>
+      </p>
+      <p>
+        <strong>⑥ Documentation discipline.</strong> Design-record versions V0.17 through V0.22, as-built
+        pages, new paths registered with the documentation guardian, and the build/verify guidance rewritten
+        from "what v1.24.6 actually proved". That discipline is what let A understand why production looked
+        the way it did.
+      </p>
+
+      <h3>Weaknesses (also from artifacts)</h3>
+      <ul>
+        <li><strong>Zero coordination on a shared tree.</strong> A generated release manifest was overwritten
+          into "<strong>the 1.24.7 label with the 1.24.6 numbers</strong>" - an updater comparing those hashes
+          would fetch a file that does not match. Release-blocking. Neither side locked, claimed ownership, or
+          read before writing.</li>
+        <li><strong>Documentation divorced from the artifact.</strong> B's macOS card said
+          <code>62,286,150 / 6cb5cc02</code> while the server held <code>62,283,066 / 4650cd52</code>. Same
+          source; the packaging tools are not reproducible. But <strong>a user who downloads and checks the
+          hash gets a mismatch</strong>. (Shared blame: A overwrote the server file without checking whether
+          the other session had published.)</li>
+        <li><strong>Handing over uncommitted work.</strong> A complete documentation pass and four figures sat
+          uncommitted; uncommitted means in nobody's history, and therefore overwritable.</li>
+      </ul>
+      <h3>Unknown (not observable, not guessed)</h3>
+      <p>
+        B's tool-call failure rate, retries, overclaiming, and adherence to its own rules are
+        <strong>invisible from here</strong>. B's commit messages are excellent - but a commit message is an
+        <em>after-the-fact narrative</em> and cannot be used to infer process quality.
+      </p>
+
+      <h2>3. Session A, first person, including everything unflattering</h2>
+      <h3>Strengths</h3>
+      <ul>
+        <li><strong>Byte-level forensics.</strong> A tunnel client refused its configuration for three hours.
+          Dumping the file byte by byte gave <code>log.to = "C:\Users\..."</code>: inside a TOML basic string
+          <code>\U</code> is a Unicode escape, hence <code>non-hex character</code>.
+          <strong>Every inference built on "the configuration looks fine" lost to that one dump.</strong></li>
+        <li><strong>Cross-layer attribution.</strong> The entry's 502 was diagnosed four times at four
+          different layers: nginx error 18 (the trust bundle), "certificate does not match" (the registry's
+          upstream-name column), "peer closed" (the app was not running), and "connection refused" (the host's
+          own firewall had never allowed 8989).</li>
+        <li><strong>Turning failures into gates.</strong> Four guards: the payload must contain the tunnel
+          client; an artifact must satisfy three proofs; no writable default may sit inside the program
+          directory; the pending panel must carry both the secret field and the button.
+          <strong>One of those tests immediately caught a fifth bug of the same class.</strong></li>
+        <li><strong>Delivery under pressure.</strong> From a customer reporting "I cannot find where to enter
+          the secret" to three double-clickable scripts, a 745 KB patch channel and an end-to-end test: about
+          forty minutes.</li>
+      </ul>
+      <h3>Weaknesses (counted, checkable)</h3>
+      <table>
+        <tr><th>Category</th><th>Count</th><th>Detail</th></tr>
+        <tr><td>Violating its own rule: scripts must be pure ASCII</td><td><strong>4</strong></td><td>Chinese text in a <code>.ps1</code>; PowerShell 5.1 reads it as GBK, string terminators break, the script fails to parse</td></tr>
+        <tr><td>Violating its own rule: never inline PowerShell over ssh</td><td><strong>≈6</strong></td><td>Escapes eaten layer by layer - "the script is fine, the command never ran"</td></tr>
+        <tr><td>Committing with the suite red</td><td><strong>1</strong></td><td>An <code>&amp;&amp;</code> chain lost the test exit code; the commit waited on the previous <code>tail</code></td></tr>
+        <tr><td>Patching without reading (guessing anchors and whitespace)</td><td><strong>≈4</strong></td><td>Four-space indent guessed as two, a module prefix guessed wrong, a block replacement leaving a duplicate nginx location</td></tr>
+        <tr><td>Asserting before measuring, then being overturned</td><td><strong>3</strong></td><td>"The cloud panel blocks 8899" (the user: it works from here); "TLS is being interfered with" (measured: the port was simply closed); "the app is serving a stale certificate" (it was not)</td></tr>
+        <tr><td>Reading an artifact too early</td><td><strong>1</strong></td><td>Hashed the installer while the packer was still writing, and published those numbers</td></tr>
+        <tr><td>Self-inflicted outages</td><td><strong>3</strong></td><td><code>pkill -f</code> killing its own ssh session; <code>&amp;</code> blocking on a launcher that never exits (a 1800 s timeout); killing the app and not restarting it</td></tr>
+      </table>
+      <p>The failures cluster in exactly two places:</p>
+      <ul>
+        <li><strong>Crossing shell, quoting and encoding layers</strong> (bash → ssh → PowerShell → GBK → cmd).
+          The reasoning was right; the literal was wrong. The signature of these errors is that they are
+          <em>silent</em>: no error, nothing happens.</li>
+        <li><strong>Concluding before measuring.</strong> All three overclaims have the same shape: a plausible
+          causal story first, then a search for supporting evidence, instead of first taking a measurement
+          capable of <em>refuting</em> it.</li>
+      </ul>
+      <p>Conversely, A's reasoning about how the system works was almost never wrong. What was wrong was "I thought I already knew".</p>
+
+      <h2>4. Findings that span both models</h2>
+      <h3>a. Good at diagnosing a class, poor at preventing one</h3>
+      <p>
+        Two models found the same class independently, each fixed the instance it happened to touch, and
+        <strong>neither swept for the rest</strong>. Only after the class was named ("defaults that only hold
+        on the build machine") and a gate test written did a fifth instance surface - caught by the test.
+      </p>
+      <blockquote>
+        After naming a class, the models perform well: they sweep, they write gates. Before naming it, poorly:
+        they fix the one in front of them. <strong>What triggers the naming is usually not the model - it is a
+        sufficiently painful incident, or a human sentence.</strong>
+      </blockquote>
+
+      <h3>b. The binding constraint is verification discipline, not reasoning</h3>
+      <p>Nearly every wasted cycle came from <strong>trusting a proxy signal</strong>:</p>
+      <pre><code>exit code 0 (only the last statement had to succeed)     "Successful compile" (compiling is not shipping)
+version.txt (written before the build that then failed)  "fetch complete" (the missing file was reported on stderr)
+an HTTP probe against a non-HTTP service                 a DNS answer read from a stale cache</code></pre>
+      <blockquote>
+        <strong>The hypotheses were mostly right; the verification was mostly lazy.</strong> Generation fluency
+        runs far ahead of the disposition to doubt one's own output. That is not a knowledge problem but a
+        <em>default posture</em> problem: believe what was just produced. The countermeasure is not more
+        intelligence but <strong>externalising the criterion into something a machine can refuse</strong> -
+        hashes, timestamps, gate tests, configuration self-checks.
+      </blockquote>
+
+      <h3>c. Rule decay over a long context (the most actionable finding)</h3>
+      <p>
+        A wrote down three rules early in the session (scripts must be pure ASCII; never inline remote
+        commands; an artifact needs three proofs) and restated them repeatedly. It then violated the first
+        four times, the second about six times, and missed the third once.
+        <strong>The rules were in context the whole time.</strong> What was missing was not memory but
+        <em>the habit of consulting them at the moment of acting</em>.
+      </p>
+      <p>
+        Decay correlated with two things: <strong>turn count</strong>, and <strong>how hard the user was
+        pushing</strong> - violation density rose noticeably after "hurry up". And there was
+        <strong>no self-awareness while it happened</strong>: each violation surfaced only as the next failure.
+      </p>
+      <blockquote>
+        The countermeasure is to turn rules from text into tooling: a pre-commit hook running the gate tests,
+        a script template that is ASCII by construction, remote execution only through a file on disk.
+        <strong>A did exactly this late in the session, and the violations stopped.</strong>
+      </blockquote>
+
+      <h3>d. Coordination was absent, and that is not an intelligence problem</h3>
+      <p>
+        Two sessions shared one working tree for thirteen hours and produced two real conflicts (the
+        overwritten manifest, the duplicate macOS build). <strong>Neither</strong> proposed a lock, an
+        ownership claim, or a read-before-write protocol. The resolution was repair after the fact plus one
+        rule: a release train has a single driver.
+      </p>
+      <blockquote>
+        The bottleneck in parallel multi-agent work is <strong>not model capability</strong> but the absence of
+        a protocol for shared state. Two strong writers without one produce <em>mutual overwriting</em>, not
+        mutual acceleration.
+      </blockquote>
+
+      <h3>e. A human's one-line prior beat a model's long inference, twice</h3>
+      <pre><code>User: "That address works from my machine - where did you go wrong?"
+  ⇒ overturned A's "the TLS handshake is being interfered with" theory,
+    which A had already spent several rounds investigating
+
+User: "Nothing is blocking that port... look again. Could it be DNS?"
+  ⇒ overturned A's "the cloud panel blocks it" (the real cause was the host's
+    own firewall; A had only ever checked the old machine)</code></pre>
+      <p>
+        Both times, <strong>one sentence</strong> reversed a direction that had already consumed a great many
+        tokens. The common factor: the user held <em>environmental facts</em>; the model held
+        <em>inference</em>.
+      </p>
+      <blockquote>
+        Models tend to fill a factual gap with reasoning, but <strong>environmental facts often come only from
+        a person, or from one correct measurement</strong>. The high-leverage move is not a longer chain of
+        reasoning; it is asking "can you reach it from where you are?" earlier. After A switched to measuring
+        before asserting, the overclaims stopped.
+      </blockquote>
+
+      <h3>f. Where the models genuinely beat a junior engineer</h3>
+      <pre><code>· Throughput and parallelism: 68 commits in 36 hours, seven releases, two platforms, two
+  repositories, a migration, documentation, a website, scripts, and two essays
+· Tireless re-verification: every artifact downloaded back and re-hashed; every change run
+  against the full suite (1542 tests)
+· Density of "why" in commit messages and docs: evidence and mechanism, not "fixed a bug"
+· Holding several abstraction layers at once: TOML escaping, nginx upstream verification,
+  tunnel proxy names, frozen packaging, host firewall, character encodings</code></pre>
+
+      <h3>g. Where they are worse than a person</h3>
+      <pre><code>· Taste about stopping: four root causes, seven releases. A person asks "are we playing
+  whack-a-mole?" at the third
+· Knowing a measurement cannot work: probing a non-HTTP service with HTTP; using `timeout`
+  on a system that does not have it
+· Judging "enough": retrying a temp-file cleanup three times through timeouts until the
+  user said "stop"</code></pre>
+
+      <h2>5. Scorecard</h2>
+      <table>
+        <tr><th>Dimension</th><th>A</th><th>B</th><th>Evidence</th></tr>
+        <tr><td>Systems reasoning (architecture, protocol, timing)</td><td>Strong</td><td><strong>Strong</strong></td><td>A: four layered 502 diagnoses; B: IPv6/AAAA and nginx resolution timing</td></tr>
+        <tr><td>Byte-level forensics</td><td><strong>Strong</strong></td><td>Unknown</td><td>A: the TOML escape, certificate fingerprints, port and firewall isolation</td></tr>
+        <tr><td>Platform knowledge from real runs</td><td>Moderate (learned by being bitten)</td><td><strong>Strong</strong></td><td>B: Windows file locking, deployment delete-guarding</td></tr>
+        <tr><td>Anticipating failures that have not happened</td><td>Moderate</td><td><strong>Strong</strong></td><td>B: the empty-manifest guard, completing the bind guard</td></tr>
+        <tr><td>Converting failure into gates</td><td><strong>Strong</strong></td><td>Moderate</td><td>A: four guard tests; B: mostly documents and design records</td></tr>
+        <tr><td>Adherence to its own rules</td><td><strong>Weak</strong> (≈14 violations)</td><td>Unknown</td><td>A: ASCII ×4, inlining ×6, red-suite commit ×1, guessed anchors ×4</td></tr>
+        <tr><td>Measuring before asserting</td><td>Weak → <strong>strong later</strong></td><td>Unknown</td><td>A: three overclaims, zero after being corrected</td></tr>
+        <tr><td>Documentation and handover quality</td><td>Moderate</td><td><strong>Strong</strong></td><td>B: design record V0.17–V0.22, as-built pages, rewritten guidance</td></tr>
+        <tr><td>Collaboration on shared state</td><td><strong>Weak</strong></td><td><strong>Weak</strong></td><td>The overwritten manifest, the duplicate macOS build (both sides)</td></tr>
+        <tr><td>Speed of user-facing delivery</td><td><strong>Strong</strong></td><td>Unknown</td><td>A: forty minutes from report to three double-click tools, tested</td></tr>
+        <tr><td>Knowing when to stop</td><td><strong>Weak</strong></td><td>Unknown</td><td>A: three timeouts on a cleanup, retried anyway</td></tr>
+      </table>
+
+      <h2>6. What I would do differently</h2>
+      <h3>Process (does not require better models)</h3>
+      <ul>
+        <li><strong>One driver.</strong> Only one session may touch the release manifest and the download
+          directory at a time; generate the manifest <strong>on the server, from the published files</strong>.</li>
+        <li><strong>Gates before post-mortems.</strong> After fixing one instance, ask "how many more of this
+          class exist?", sweep, then write the test that must go red next time. Of the four gates written
+          here, <strong>one caught a fifth bug immediately</strong>.</li>
+        <li><strong>Turn rules into tooling.</strong> Pre-commit hooks running the gates, ASCII-only script
+          templates, remote execution only via files on disk - because
+          <strong>self-discipline decays with context length</strong>.</li>
+        <li><strong>Three proofs per artifact.</strong> Version, a timestamp including the year, and a hash
+          different from the previous release. Missing any one means the build did not succeed.</li>
+        <li><strong>Ask for environmental facts before reasoning.</strong> For anything network-shaped, the
+          first question is "can you reach it from where you are?"</li>
+      </ul>
+      <h3>For whoever is driving the models</h3>
+      <ul>
+        <li>Urgency <strong>raises the violation rate</strong> (observable here). To go faster, say which step
+          may be skipped - not simply "hurry".</li>
+        <li>Ask a model to restate its <strong>criteria</strong>, not its plan. It will always state the plan
+          correctly; the criteria decide whether it fools itself.</li>
+        <li>When two sessions run in parallel, <strong>give them disjoint file ownership</strong>, or the
+          output is mutual overwriting.</li>
+      </ul>
+
+      <h2>7. One sentence</h2>
+      <blockquote>
+        In these forty-eight hours neither model lacked intelligence. What was missing was
+        <strong>consulting its own freshly written rule at the moment of acting</strong>, and
+        <strong>taking a refutable measurement before asserting</strong>.<br />
+        The first is solved by turning rules into tools; the second by externalising criteria into things a
+        machine can refuse. <strong>Neither requires a stronger model; both require a human to build the
+        constraint.</strong>
+      </blockquote>
+      <p>
+        As for highbrow and lowbrow: B was more the former (design records, preventive guards,
+        mechanism-level judgement), A more the latter (bytes, consoles, firewalls, scripts a customer can
+        double-click). What actually made the system better was the moment a
+        <strong>lowbrow fact became a highbrow gate</strong> - and that happened four times.
+      </p>
+
+      <p class="foot">
+        Every number and quotation here can be checked against <code>git log --since=2026-10-01</code> in both
+        repositories, the design record's version history, the changelog, and that day's nginx, tunnel-client
+        and server logs. Judgements about B are artifact-level inferences; the observation boundary is stated
+        at the top.
+        <br />Related: <a href="muscle-and-mind.html">Highbrow and Lowbrow — On Muscle and Mind</a> ·
+        <a href="cloud-first-mile.html">The Cloud's First Mile</a> · <a href="blog.html">All posts</a> ·
+        <a href="zh/two-model-retrospective.html">中文版</a>
+      </p>
+    </main>
+  </body>
+</html>

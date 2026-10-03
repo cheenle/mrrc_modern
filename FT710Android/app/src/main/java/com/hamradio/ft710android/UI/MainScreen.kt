@@ -26,6 +26,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,6 +54,9 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
     val connected by vm.connected.collectAsState()
     val listenOnly by vm.listenOnly.collectAsState()
     val mem by vm.memChannels.collectAsState()
+    val rec by vm.recordingState.collectAsState()
+    val recAvailable by vm.recordingsAvailable.collectAsState()
+    var showRecPanel by remember { mutableStateOf(false) }
     val scopeSpanHz = when (state.scopeSpan) { 0 -> 100000L; 1 -> 1000000L; 2 -> 50000L; else -> 100000L }
 
     Column(Modifier.fillMaxSize().padding(8.dp)) {
@@ -98,6 +104,17 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
         MeterRow("PWR", state.powerWatts, 100f)
         MeterRow("SWR", state.swrRatio, 3f)
         MeterRow("ALC", state.alcPct, 100f)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (recAvailable && !listenOnly) {
+                TextButton(onClick = { showRecPanel = true }) {
+                    Text(
+                        if (rec.recording) "● REC ${fmtSeconds(rec.duration)}" else "录音",
+                        color = if (rec.recording) Color(0xFFE53935) else Color.Unspecified,
+                    )
+                }
+            }
+        }
+        if (showRecPanel) RecordingPanel(vm) { showRecPanel = false }
         // 记忆频道 6 槽
         LazyVerticalGrid(GridCells.Fixed(3), modifier = Modifier.weight(1f)) {
             itemsIndexed(mem) { i, c ->

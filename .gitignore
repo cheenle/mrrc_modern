@@ -62,6 +62,8 @@ yagi_*.jpg
 # Accidental IDE workspace with backtick in name
 FT710Mobile/`.xcodeproj/
 website/downloads/*.dmg
+# Android APK：由 release.sh 上传服务器，本地镜像不入库（9 MB 二进制）
+website/downloads/*.apk
 
 # Runtime QSO recordings (server-side MP3s; AD-017 — never commit audio)
 recordings/

@@ -49,6 +49,21 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - `onStop`（`AppSetup` + `MainActivity`）→ `forceRelease()`；看门狗 500ms×3，重试耗尽 `onStuckTX`。
 - `press()` 仅 Idle/Releasing 受理且要求控制通道已连接——避免"发不出去的乐观 TX"。
 
+## UI 主题（唯一来源 = 手机端 Web）
+
+界面**必须与 Web 前端一致**，令牌唯一来源是 `static/ft710.css :root`：
+
+| 令牌 | 值 | 用途 |
+| --- | --- | --- |
+| `--bg-primary/secondary/tertiary/card` | `#1a1a1a / #242424 / #2a2a2a / #333` | 页面底 / 卡片 / 芯片 / 块 |
+| `--accent` | `#f59e0b`（淡底 `rgba(245,158,11,.2)`） | 频率、激活态、ATU、步进钮、记忆标签 |
+| `--danger` / `--success` / `--warning` | `#ef4444 / #22c55e / #eab308` | PTT / 连接点 / TUNE（黑字） |
+| 文字 / 边框 / 圆角 | `#eee·#999·#666` / `#444` / 6·10·14 | — |
+
+- 实现：`UI/Theme.kt` 的 `MrrcColors` + `AppTheme`（Material3 深色方案），**不要在页面里写死颜色**。
+- 频率格式 `fmtMhz` = `%02d.%03d.%02d`（`07.013.50`）；瀑布配色 = `ft710_ui.js` 的 `WF_PALETTES.jet`（`WaterfallCanvas.jetArgb` 逐像素复刻，有 JVM 锚点测试）；波段循环 = `DEFAULT_BAND_CYCLE`（`Data/BandCycle.kt`）。
+- Web 改动后要同步本 App，否则两边界面会分叉。
+
 ## 坑
 
 - `ConnectionManager.onRadioEvent` 已解析为 `WsEvent`，`MainViewModel.onWsEvent(ev: WsEvent)` 直接消费（别传原始文本）。

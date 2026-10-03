@@ -7,24 +7,24 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.24.7 Stable)
+## Download (v1.24.8 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.24.7-Windows-x64-Setup.exe` | 51.6 MB (54,112,355 bytes) | `4a83ab9bf2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79` |
+| `MRRC-Modern-v1.24.8-Windows-x64-Setup.exe` | 51.6 MB (54,112,355 bytes) | `4a83ab9bf2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.7-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.8-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.24.7 is the published Windows installer.** It was built from the release commit on
+**v1.24.8 is the published Windows installer.** It was built from the release commit on
 Windows 11 (the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3.
 The build gate ran **1530 tests OK (17 platform skips)**, three PyInstaller targets, and the
 installer compiled into a scratch directory and was copied in (`Successful compile
 (32.141 sec)` — Defender's real-time scan otherwise locks the freshly written exe and iscc
 fails with `Error 32`). Bundled-file inspection passed: FTDI DLLs (`ftd2xx.dll`,
 `FT4222.dll`), `opus.dll`, `static/`, `static/listen.js`, `mem_channels.json`,
-`windows\default.env`, `version.txt` = `1.24.7`, and the complete Cloud Hub fleet payload at
+`windows\default.env`, `version.txt` = `1.24.8`, and the complete Cloud Hub fleet payload at
 the **app root** under `fleet\` — 13 files: `frpc.exe` (16,708,608 B), `openssl.exe`
 (1,105,591 B), its nine DLLs, `install_instance_tunnel.ps1`, `openssl.cnf`. Cross-host
 SHA-256 matched (build VM == build Mac).
@@ -102,16 +102,16 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.24.5 package (54,087,234 bytes, SHA-256 `28ac7743…`) and v1.24.4
-(54,076,580 bytes, SHA-256 `12a828f0…`) remain downloadable as archives; v1.24.7 supersedes both.
+(54,076,580 bytes, SHA-256 `12a828f0…`) remain downloadable as archives; v1.24.8 supersedes both.
 
-> **Support note — why this release is 1.24.7 and not a rebuilt 1.24.5.** A machine that installed the
+> **Support note — why this release is 1.24.8 and not a rebuilt 1.24.5.** A machine that installed the
 > *first* 1.24.5 build (the one published before the `ssl_bootstrap` import fix) will **never** be
 > offered the rebuilt 1.24.5 package: the upgrade channel compares **version strings**, and they are
 > equal. Such a machine keeps showing the black screen until it is given a *higher* version — which is
-> exactly what v1.24.7 is. When a user reports "I already installed the fixed build and it is still
+> exactly what v1.24.8 is. When a user reports "I already installed the fixed build and it is still
 > black", check `version.txt` **and** the install timestamp, not just the version number.
 
-**What's new in v1.24.7**: **the launcher asks the server which address actually answers, instead of
+**What's new in v1.24.8**: **the launcher asks the server which address actually answers, instead of
 guessing.** A field machine (hostname `MRRC`) that had installed 1.24.5 still showed a black screen; the
 forensics — its own `server.log` plus running the packaged `MRRC-Modern-Server.exe` over SSH — showed the
 app was perfectly healthy on plain HTTP (`/login` → **200**, 1726 bytes) while the browser had been sent

@@ -556,13 +556,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </table></div>
 <hr />
 <h2 id="macos-安装与初始化">0.7 macOS 安装与初始化</h2>
-<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.24.7-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
+<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.24.8-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
 <blockquote class="callout-info">
 <p>适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是<strong>自包含</strong>的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。</p>
 </blockquote>
 <h3 id="安装5-步">0.7.1 安装（5 步）</h3>
 <ol type="1">
-<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.24.7-arm64.dmg</code>（约 56 MB）。</li>
+<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.24.8-arm64.dmg</code>（约 56 MB）。</li>
 <li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
 <li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
 <li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
@@ -691,11 +691,11 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>浏览器打开是<strong>空白页</strong>、或报「网址协议不受支持 / 无法访问此网站」</td>
-<td>多半是<strong>浏览器被送到了服务器没在监听的那个协议</strong>上（启动器算的是 <code>https://</code>，而服务器退回了纯 HTTP）。<strong>v1.24.7 起启动器会先问服务器到底在哪个地址应答</strong>，再打开浏览器；若它提示「已切换到 <code>http://</code>」，说明证书没签出来 —— 界面能用，但请到日志（macOS <code>~/Library/Application Support/MRRC-Modern/logs/server.log</code>、Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs\server.log</code>）看 <code>could not create a certificate</code> 那一行的原因，别把警告当噪音忽略。</td>
+<td>多半是<strong>浏览器被送到了服务器没在监听的那个协议</strong>上（启动器算的是 <code>https://</code>，而服务器退回了纯 HTTP）。<strong>v1.24.8 起启动器会先问服务器到底在哪个地址应答</strong>，再打开浏览器；若它提示「已切换到 <code>http://</code>」，说明证书没签出来 —— 界面能用，但请到日志（macOS <code>~/Library/Application Support/MRRC-Modern/logs/server.log</code>、Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs\server.log</code>）看 <code>could not create a certificate</code> 那一行的原因，别把警告当噪音忽略。</td>
 </tr>
 <tr>
 <td>端口 8888 被占用</td>
-<td><strong>v1.24.7 起第二个实例会明确报错并退出</strong>（Windows 上此前两个实例可以<strong>同时</strong>绑同一端口，浏览器可能落到没拿到电台那一个）。报错里会点名「另一个 MRRC Modern 还在跑」：先关掉已有窗口/菜单栏图标；确实要并行就高级用户在 <code>mrrc_modern.env</code> 里改 <code>MRRC_WEB_PORT</code>，重启生效。</td>
+<td><strong>v1.24.8 起第二个实例会明确报错并退出</strong>（Windows 上此前两个实例可以<strong>同时</strong>绑同一端口，浏览器可能落到没拿到电台那一个）。报错里会点名「另一个 MRRC Modern 还在跑」：先关掉已有窗口/菜单栏图标；确实要并行就高级用户在 <code>mrrc_modern.env</code> 里改 <code>MRRC_WEB_PORT</code>，重启生效。</td>
 </tr>
 </tbody>
 </table></div>

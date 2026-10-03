@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.25.0 · Stable</span>
+<span>v1.25.1 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -57,11 +57,11 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.0-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.25.0
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.1-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.25.1
           </a>
 <div class="dl-meta">62,298,582 bytes · SHA-256 0974703f…</div>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.25.0
+<i class="fab fa-windows"></i> Windows Installer v1.25.1
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> Explore Features
@@ -92,34 +92,35 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.25.0</strong>
+<strong> What's new in v1.25.1</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>“Black screen after install” is fixed</strong> — the launcher opened
-              <code>https://</code> while the server had already fallen back to plain HTTP, so the browser
-              showed a blank page over a perfectly healthy app. The launcher now <em>asks the server which
-              address answers</em> before opening the browser, on Windows and macOS alike, and says so out
-              loud when it has to switch schemes.
+<strong>Portal enrolment works again on macOS</strong> — the app had <em>no CA trust store</em>:
+              the bundle carried the builder's OpenSSL, whose compiled-in CA path exists only on a
+              build machine. Applying for an entry, uploading a 🐞 diagnostics bundle and the update
+              check all failed with <code>CERTIFICATE_VERIFY_FAILED</code> (that is also why a
+              report bundle had to be handed over by hand). The app ships its own CA bundle now,
+              falls back to the platform's, and a build gate <em>empties the trust store on purpose</em>
+              before a release may pass.
             </li>
 <li>
-<strong>A second instance can no longer hijack the port</strong> — on Windows two servers could both
-              report <code>Server ready!</code> on port 8888, and the browser might land on the one holding
-              no radio. Starts are now exclusive, and the launcher reuses an instance that is already
-              running instead of spawning another one.
+<strong>The spectrum is real again on macOS</strong> — the scope worker could not find the FT-4222
+              libraries: the launcher resolved the configured <em>relative</em> path against
+              <code>Contents/MacOS</code>, where nothing lives, so <code>scope_pipe</code> exited with
+              “FTDI libraries not found” and the plot silently showed the S-meter curve. Fixed, with a
+              regression test for the signed-bundle layout.
             </li>
 <li>
-<strong>No more writes into <code>Program Files</code></strong> — launching the server directly used to
-              aim its password file and <code>recordings/</code> at the (read-only) install folder: a fresh
-              password every start, and recording silently disabled. It falls back to your per-user data
-              folder now, and reads the settings you saved there.
+<strong>Known-issue cards on the answers page</strong> — problems that are already understood are
+              written up by <em>symptom</em>, so they can be found without a report number.
             </li>
 <li>
-<strong>Cloud Hub in the drawer menu (top bar ☰)</strong> (v1.24.0) — fill in a callsign, apply, and wait: once the
-              operator approves, the app signs its certificate, enrols it, writes its own configuration
-              and runs the tunnel by itself. Nothing left to click: the server checks every 30 seconds
-(v1.25.0), so approval is the last step.
+<strong>Cloud Hub in the drawer menu (top bar ☰)</strong> — fill in a callsign, apply, and wait:
+              once the operator approves, the app signs its certificate, enrols it, writes its own
+              configuration and runs the tunnel by itself. Nothing left to click: the server checks
+              every 30 seconds.
             </li>
 </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -374,30 +375,34 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.25.0 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.25.1 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
             51.6 MB · x64 · 54,115,523 bytes<br/>
 <code style="font-size: 0.76rem">SHA-256: ee6e2a30…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.25.0 is zero-config on first run: it auto-generates a web
+            v1.25.1 is zero-config on first run: it auto-generates a web
             password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
             0x19) and its serial port (COM), and the login page shows the
             auto-generated password. The web 连接设置 (Connection Settings)
             dialog changes the radio model, serial port, RX+TX audio devices,
             and password with save-and-restart — the server auto-restarts, and
             the launcher restarts on config change. CAT, audio, PTT, and scope
-            behavior is unchanged from the previous release. Physical USB, RF,
-            power-cycle, and audio-quality acceptance still requires a
-            connected radio.
+            behavior is unchanged from the previous release. v1.25.1 fixes two packaging
+            defects that only ever appeared on a user's machine: the app had no CA trust store at all
+            (portal enrolment, the 🐞 diagnostics upload and the update check failed with
+            <code>CERTIFICATE_VERIFY_FAILED</code>), and the FT-4222 scope worker could not find its
+            libraries, so the spectrum silently drew the S-meter curve instead of real FFT data.
+            Physical USB, RF, power-cycle, and audio-quality acceptance still requires a connected
+            radio.
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.25.0-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.25.0
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.25.1-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.25.1
             </a>
 <div class="dl-meta">54,115,523 bytes · SHA-256 ee6e2a30…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -415,7 +420,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.25.0-arm64.dmg — v1.25.0 Stable </strong>
+<strong> MRRC-Modern-v1.25.1-arm64.dmg — v1.25.1 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
             59.4 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,298,582 bytes<br/>
@@ -425,7 +430,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
             First run needs zero configuration: MRRC Modern auto-generates a
             web password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
             0x19) and its serial port, and bundles the FT4222 true-spectrum
-            dylibs — the FT-710 FFT waterfall works out of the box. A web
+            dylibs — the FT-710 FFT waterfall works out of the box (v1.25.1 fixed the launcher
+            path that kept the scope worker from finding them at all). A web
             连接设置 (Connection Settings) dialog lets you change the radio
             model, serial port, RX+TX audio devices, and password with
             save-and-restart. HTTPS is on by default with an auto-generated
@@ -439,7 +445,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.0-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.1-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -535,7 +541,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.25.0, 51.6 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.25.1, 51.6 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
 <code>SHA-256 ee6e2a30618cd1e51cff941c40ebd51681e0f0257b56f420bf9494d0bff09498</code>
@@ -889,9 +895,9 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </div>
 </div>
 <div class="perf-card">
-<div class="metric">1533</div>
+<div class="metric">1604</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>1533 tests on macOS / 1530 on Windows in the v1.25.0 release</small>
+              Hardware-Free Tests<br/><small>1604 tests on macOS in the v1.25.1 release</small>
 </div>
 </div>
 </div>
@@ -1073,7 +1079,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-grid">
 <div class="footer-section">
 <h4>MRRC Modern</h4>
-<p>Multi-Radio Remote Control<br/>One USB Cable, Any Device<br/>v1.25.0 Stable · GPLv3 License</p>
+<p>Multi-Radio Remote Control<br/>One USB Cable, Any Device<br/>v1.25.1 Stable · GPLv3 License</p>
 </div>
 <div class="footer-section">
 <h4>Links</h4>
@@ -1089,7 +1095,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.25.0</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.25.1</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

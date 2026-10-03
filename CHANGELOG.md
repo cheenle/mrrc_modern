@@ -2,6 +2,49 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.25.1] — 2026-10-04 — 打包版两处「只有构建机看不见」：信任库为空、真频谱找不到库
+
+同一台 Mac 报了两件事，形状一样：**构建机上有、用户机上没有的东西被当成了常驻假设**。
+两处都不影响源码运行，也不影响 Windows，因此只有「拿打包产物到别的机器上跑」才会暴露。
+
+### 修好：所有外发 HTTPS 都在失败（接入云端 / 🐞 诊断包上传 / 软件更新）
+
+现场报错 `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate (_ssl.c:1032)`，
+而 portal 侧完全正常（`curl` 200、证书链完整）。根因在包里那份 OpenSSL：它的**编译期默认 CA
+路径是构建机的 MacPorts 目录** `/opt/local/libexec/openssl3/etc/openssl/cert.pem`，用户机没有
+`/opt/local` ⇒ 信任库为空。同一个原因还让 🐞 诊断包上传失败三次（日志
+`Support bundle upload failed: …`）—— 那份报告包是人工递过来的，本身就是这个故障的证据。
+
+- 新增 `net_tls.py`：默认 store 为空时依次加载 `MRRC_CA_BUNDLE` → 随包 `vendor/ca/cacert.pem`
+  （Mozilla 派生，119 根）→ 平台系统 bundle；Windows 走系统证书库，源码运行行为不变。
+- `cloud_hub`（接入云端）、`upgrade_core`（升级检查）、诊断包上传三处统一走 `net_tls.urlopen`，
+  并有 AST 守卫：**任何直接 `urlopen` 必须带 `context=`**，否则套件红。
+- 两个 build 脚本随包 `vendor/ca/cacert.pem`（缺文件即构建失败），并跑新的构建闸门
+  `dev_tools/tls_trust_gate.py` —— 它**故意把 CA 环境打空**（构建机是唯一看不见这个故障的地方），
+  先断言未修法确实为空，再要求与 portal / `latest.json` 真握手。
+
+### 修好：真 FT4222 频谱从未启动，界面一直画 S 表合成曲线
+
+现场日志 42 次 `scope_pipe exited (frames=0, connected=False)`、`Spectrum broadcast active:
+S-meter fallback`，而 `scope_pipe: first frame received — spectrum active` **一次都没有** ⇒
+自安装起真频谱从未工作。硬件与库都没问题（FT4222 在 USB 总线上、两个 arm64 dylib 在包内，
+手工用正确目录运行立刻得到 94 帧 / 11 fps）。
+
+- 根因：`macos/launcher.py` 只放行绝对路径 —— 随包 `default.env` 的相对值 `vendor/ftdi/macos`
+  被锚到 `Contents/MacOS/`，而 v1.18.0 为可签名把数据树搬进了 `Contents/Resources/`
+  （只留 `MacOS/_internal` 链接）。同一函数上方那行 `setdefault` 用的正是会回退 `_internal`
+  的 `runtime_path()`，**只有这一处漏了** ⇒ scope_pipe 报 `FTDI libraries not found` 退出，
+  而父进程把非 `STATUS:` 的 stderr 只记 DEBUG，现场只看得到「无输出地退出」。
+- 相对值改走 `runtime_path(*parts)`，三个回归测试（`_internal` 解析 / 同级副本优先 / 绝对路径不动）。
+
+### 别的东西
+
+- 答复页新增**已知问题卡**（`support_answers.KNOWN_ISSUES`）：按现象检索、不带编号、仍过同一套
+  隐私过滤，本次两个故障各一张。
+- 套件 **1587 → 1604**（+17）；`support_bundle.detect_version()` 的 `resource_dir` 类型标注顺带修掉。
+
+**边界**：macOS 侧只随新版 DMG 到达用户（本轮修的是应用代码 + 构建闸门）；Windows 与源码运行不受影响。
+
 ## [v1.25.0] — 2026-10-03 — 装完就能用：首次探测不会再卡死，批准之后自己接入
 
 三条现场报障（装完黑屏、云入口 404、刷新按钮像禁用）各自追到根因；另外两处判据缺陷也是实测出来的。

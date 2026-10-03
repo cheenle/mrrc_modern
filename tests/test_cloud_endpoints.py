@@ -159,6 +159,63 @@ class CertificateReloadClockTests(unittest.TestCase):
                 self.assertTrue(server._cert_reload_required())
 
 
+class CertificateReloadSelectionTests(unittest.TestCase):
+    """登记写进来的证书与进程正在服务的那张**不是同一个文件**时，必须重启。
+
+    2026-10-03 实测：BG6LH 登记成功后 /api/cloud/refresh 返回 cert_reload_required=false，
+    而配置文件里已经是 certs\\fullchain.pem、进程服务的却是启动时的 certs\\server.crt。
+
+    原因是这个判据读的两处都不是"配置现在要求的那张"：
+      - `_cloud_settings()` 的键白名单 ``_CLOUD_KEYS`` 里**没有** MRRC_SSL_CERT，那一项恒为 None；
+      - 另一处是 ``os.environ`` —— 而环境是**进程启动那一刻**的，登记却发生在启动之后。
+
+    后果不是少一句提示：入口会一直 502（hub 拿登记的那张证书校验上游），界面不给重启按钮，
+    无人值守的自动接入也不会重启 —— "接入成功"和"入口能用"之间那道缝正好落在这里。
+    """
+
+    def _config(self, tmp, value):
+        env = Path(tmp) / "mrrc_modern.env"
+        env.write_text(f"MRRC_SSL_CERT={value}\n" if value else "MRRC_WEB_PORT=8888\n",
+                       encoding="utf-8")
+        return env
+
+    def test_serving_a_different_file_than_the_config_asks_for_asks_for_a_reload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            enrolled = Path(tmp) / "fullchain.pem"
+            enrolled.write_text("enrolled", encoding="utf-8")
+            old = time.time() - 3600
+            os.utime(enrolled, (old, old))          # 文件旧也没关系：服务的是**另一个**文件
+            env = self._config(tmp, enrolled)
+            with patch.object(server, "_config_file_path", return_value=env):
+                server._record_serving_cert({"ssl_certfile": str(Path(tmp) / "server.crt")})
+                self.assertTrue(server._cert_reload_required(),
+                                "登记的那张证书没被服务，却不要求重启 —— 入口会一直 502")
+
+    def test_serving_the_same_file_older_than_this_process_needs_no_reload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cert = Path(tmp) / "fullchain.pem"
+            cert.write_text("served", encoding="utf-8")
+            old = time.time() - 3600
+            os.utime(cert, (old, old))
+            env = self._config(tmp, cert)
+            with patch.object(server, "_config_file_path", return_value=env):
+                server._record_serving_cert({"ssl_certfile": str(cert)})
+                self.assertFalse(server._cert_reload_required())
+
+    def test_no_configured_certificate_means_nothing_to_reload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self._config(tmp, "")
+            with patch.object(server, "_config_file_path", return_value=env), \
+                 patch.dict(os.environ, {"MRRC_SSL_CERT": ""}):
+                server._record_serving_cert({})
+                self.assertFalse(server._cert_reload_required())
+
+    def test_the_serving_path_is_recorded_at_startup(self):
+        """实现了却没人调用 —— 这个仓库已经栽过一次（_cloud_start_tunnel 只有一个调用点）。"""
+        source = Path(server.__file__).read_text(encoding="utf-8")
+        self.assertIn("_record_serving_cert(ssl_kwargs)", source)
+
+
 class CloudAutoconnectTests(unittest.TestCase):
     """批准必须能自己走到实例上，**不需要有人开着对话框**。
 

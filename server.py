@@ -4170,6 +4170,9 @@ def main():
 
     # SSL configuration (see _resolve_ssl_kwargs for why this is not inline)
     ssl_kwargs = _resolve_ssl_kwargs(args)
+    # Remember what that answer means, so _cert_reload_required can tell whether the certificate
+    # enrolled later is the one being served.
+    _record_serving_cert(ssl_kwargs)
 
     # Pass the app object (not the "server:app" import string) so frozen
     # PyInstaller builds work — a frozen exe cannot re-import the "server"
@@ -4392,23 +4395,69 @@ async def api_cloud_refresh(request: Request):
     return JSONResponse(result)
 
 
-def _cert_reload_required() -> bool:
-    """True when the certificate on disk was written after this process started.
+def _configured_ssl_cert() -> str:
+    """The certificate path the config file asks for **now** (a fresh read).
 
-    The TLS context is built once, at start-up, so a certificate enrolled or generated afterwards is
-    not the one being served - the hub verifies the upstream against the enrolled one and the entry
-    answers 502 (measured repeatedly). Comparing the file's identity at import missed the case where
-    the app restarted before the enrolment: the file then changed while the process kept serving the
-    previous certificate. The process start time is the fact that matters.
+    This cannot go through ``_cloud_settings()``: that helper filters to ``_CLOUD_KEYS``, which
+    deliberately holds only what the settings dialog may see, and MRRC_SSL_CERT is not in it — so
+    the lookup was always None. Falling back to ``os.environ`` was worse: the environment is the one
+    this process started with, and a certificate is only ever enrolled *after* that, so the value
+    that mattered could not be seen. Measured 2026-10-03: the config asked for fullchain.pem, the
+    process served server.crt, and this said there was nothing to reload.
     """
-    configured = str(_cloud_settings().get("MRRC_SSL_CERT") or os.environ.get("MRRC_SSL_CERT") or "")
+    try:
+        for raw in _config_file_path().read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                if key.strip() == "MRRC_SSL_CERT":
+                    return value.strip()
+    except OSError:
+        pass
+    return os.environ.get("MRRC_SSL_CERT", "")
+
+
+def _same_certificate(a: str, b: str) -> bool:
+    """Whether two paths name the same file (resolving links and case where the OS does)."""
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def _cert_reload_required() -> bool:
+    """True when what this process serves is no longer what the config asks for.
+
+    The TLS context is built once, at start-up, so a certificate enrolled afterwards is not the one
+    being served - the hub verifies the upstream against the enrolled one and the entry answers 502
+    (measured repeatedly). Two ways for that to happen, and both are checked:
+
+    * the enrolment wrote a **different path** into the config (the launcher's bootstrap
+      ``certs/server.crt`` versus the enrolled ``certs/fullchain.pem``) - a difference in mtime
+      cannot see this, because the old file never changed;
+    * it rewrote the **same path** this process was started with - then only the clock can tell.
+    """
+    configured = _configured_ssl_cert()
     if not configured:
         return False
+    if _SERVING_SSL_CERT and not _same_certificate(configured, _SERVING_SSL_CERT):
+        return True
     try:
         cert_mtime = Path(configured).stat().st_mtime
     except OSError:
         return False
     return cert_mtime > _PROCESS_STARTED_AT + 1.0          # one second of slack for clock granularity
+
+
+# Which certificate this process is actually serving. Recorded from _resolve_ssl_kwargs' answer at
+# start-up, because that is the only place that knows it: the config file may name a different one
+# by the time anybody asks.
+_SERVING_SSL_CERT = ""
+
+
+def _record_serving_cert(ssl_kwargs: dict) -> None:
+    global _SERVING_SSL_CERT
+    _SERVING_SSL_CERT = str(ssl_kwargs.get("ssl_certfile") or "")
 
 
 # Epoch seconds, NOT time.monotonic(): this is compared against st_mtime, and mixing the two

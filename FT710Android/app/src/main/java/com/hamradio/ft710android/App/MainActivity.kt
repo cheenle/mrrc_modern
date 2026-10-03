@@ -4,9 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
 import com.hamradio.ft710android.Data.SettingsStore
+import com.hamradio.ft710android.UI.AppTheme
 
 class MainActivity : ComponentActivity() {
     private val holder: MainViewModelHolder by viewModels()
@@ -16,9 +15,4 @@ class MainActivity : ComponentActivity() {
         setContent { AppTheme { RootScreen(vm = holder.vm, settings = settings) } }
     }
     override fun onStop() { holder.vm.onPttRelease(); super.onStop() }
-}
-
-@Composable
-fun AppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(content = content)
 }

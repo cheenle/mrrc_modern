@@ -1,52 +1,86 @@
 package com.hamradio.ft710android.Spectrum
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import kotlin.math.abs
-import kotlin.math.max
-import kotlin.math.min
+import androidx.compose.ui.unit.IntSize
+import com.hamradio.ft710android.UI.MrrcColors
 
-/** 瀑布（每行 850 点，颜色映射对齐 Web Jet colormap）+ 顶部 FFT 折线。点击调频由外层 pointerInput 处理。 */
+/**
+ * 瀑布（每行 850 点）+ FFT 迹线 + 中心频率标记。
+ * 配色 = 手机端 Web `WF_PALETTES.jet`（static/ft710_ui.js）；逐像素一次成图（Bitmap）以避免数千次 drawRect。
+ */
 @Composable
 fun WaterfallCanvas(
     rows: List<IntArray>,
     fft: IntArray,
     modifier: Modifier = Modifier,
 ) {
+    val holder = remember { BitmapHolder() }
     Canvas(modifier) {
         if (rows.isEmpty()) return@Canvas
-        val cellH = size.height / rows.size
-        val cellW = size.width / 850f
-        for (r in rows.indices) {
-            val row = rows[r]
-            for (x in row.indices) {
-                drawRect(jetColor(row[x] / 255f),
-                    topLeft = Offset(x * cellW, r * cellH),
-                    size = Size(cellW, cellH))
-            }
+        val w = 850
+        val h = rows.size
+        val bmp = holder.bitmap(w, h)
+        val pixels = IntArray(w * h)
+        for (y in 0 until h) {
+            val row = rows[y]
+            val base = y * w
+            for (x in 0 until w) pixels[base + x] = LUT[row[x].coerceIn(0, 255)]
         }
-        // FFT 折线
+        bmp.setPixels(pixels, 0, w, 0, 0, w, h)
+        drawImage(bmp.asImageBitmap(), dstSize = IntSize(size.width.toInt(), size.height.toInt()))
+
+        // FFT 迹线（Web 青色）
         val path = Path()
         for (x in fft.indices) {
             val px = x / 850f * size.width
             val py = size.height - (fft[x] / 255f) * size.height
             if (x == 0) path.moveTo(px, py) else path.lineTo(px, py)
         }
-        drawPath(path, Color(0xFF06B6D4), style = Stroke(width = 2f))
+        drawPath(path, MrrcColors.WaterfallLine, style = Stroke(width = 2f))
+
+        // 中心频率标记（Web：红色竖线 + 底部三角）
+        val cx = size.width / 2f
+        drawLine(MrrcColors.Danger, Offset(cx, 0f), Offset(cx, size.height), strokeWidth = 1.5f)
+        val tri = Path().apply {
+            moveTo(cx - 6f, size.height); lineTo(cx + 6f, size.height); lineTo(cx, size.height - 9f); close()
+        }
+        drawPath(tri, MrrcColors.Danger)
     }
 }
 
-/** 对齐 Web Jet colormap：深蓝→青→黄→红。 */
-private fun jetColor(t: Float): Color {
-    val tt = t.coerceIn(0f, 1f)
-    val r = (255f * max(0f, min(1f, 1.5f - abs(4f * tt - 3f)))).toInt()
-    val g = (255f * max(0f, min(1f, 1.5f - abs(4f * tt - 2f)))).toInt()
-    val b = (255f * max(0f, min(1f, 1.5f - abs(4f * tt - 1f)))).toInt()
-    return Color(r, g, b)
+private class BitmapHolder {
+    private var bmp: Bitmap? = null
+
+    fun bitmap(w: Int, h: Int): Bitmap {
+        val cur = bmp
+        if (cur != null && cur.width == w && cur.height == h) return cur
+        return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { bmp = it }
+    }
+}
+
+/** Web jet 的 256 级查表：避免每帧重算颜色。 */
+private val LUT = IntArray(256) { jetArgb(it / 255f) }
+
+/** 逐段对齐 `static/ft710_ui.js:WF_PALETTES.jet`（纯函数，JVM 可测）。 */
+internal fun jetArgb(v0: Float): Int {
+    val v = v0.coerceIn(0f, 1f)
+    val r: Int
+    val g: Int
+    val b: Int
+    when {
+        v < 0.125f -> { val u = v / 0.125f; r = 0; g = 0; b = (128 + u * 127).toInt() }
+        v < 0.375f -> { val u = (v - 0.125f) / 0.25f; r = 0; g = (u * 255).toInt(); b = 255 }
+        v < 0.625f -> { val u = (v - 0.375f) / 0.25f; r = (u * 255).toInt(); g = 255; b = (255 * (1 - u)).toInt() }
+        v < 0.875f -> { val u = (v - 0.625f) / 0.25f; r = 255; g = (255 * (1 - u)).toInt(); b = 0 }
+        else -> { val u = (v - 0.875f) / 0.125f; r = (255 * (1 - u * 0.5f)).toInt(); g = 0; b = 0 }
+    }
+    return (0xFF shl 24) or (r shl 16) or (g shl 8) or b
 }

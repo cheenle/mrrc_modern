@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.66 更新</a></li>
+          <li><a href="#updates">V2.67 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.66 · 2026-10-02</span>
+          <span>SDD V2.67 · 2026-10-03</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,7 +110,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.66</td>
+              <td>V2.67</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -143,6 +143,23 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-screwdriver-wrench"></i></div>
+            <h3>
+              v1.25.0 发布 —— 装完就能用
+              <small>（V2.67）</small>
+            </h3>
+            <p>
+              三条现场报障、三个不同根因。启动器可能<strong>在起 server 之前就永久卡死</strong>：
+              首次运行的串口探测会往每个候选口写，而电台的真实描述一个关键词都不命中
+              （CP2105 不是 "cp210x"），于是第一个被探测的是那台机器的 Intel AMT 口 ——
+              它 open 正常、却一个字节也写不进去，而写入用的是 pyserial 默认的
+              <em>无超时</em>。另一台已批准的实例停在"等待批准"：当时唯一的轮询循环住在设置
+              对话框里；现在轮询在服务端每 30 秒自查一次并报告结果。还有证书重载判据比错了
+              两个对象，导致登记完成的实例入口 502，而没有任何东西会去重启它。
+            </p>
+          </div>
+
           <div class="feature-card">
             <div class="icon"><i class="fas fa-triangle-exclamation"></i></div>
             <h3>

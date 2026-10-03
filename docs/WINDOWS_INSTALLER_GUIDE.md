@@ -11,7 +11,7 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.25.0-Windows-x64-Setup.exe` | 51.6 MB (54,112,355 bytes) | `616f8b55f2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79` |
+| `MRRC-Modern-v1.25.0-Windows-x64-Setup.exe` | 51.6 MB (54,115,523 bytes) | `ee6e2a30f2b699a87ca7b6655aaa1673a9eca12fc80cf75123c8c7c308fea79` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.0-Windows-x64-Setup.exe>
@@ -101,8 +101,8 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 **TX audio still needs acceptance on real Windows hardware**; the VM also had no radio attached during
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
-The earlier v1.24.5 package (54,121,489 bytes, SHA-256 `28ac7743…`) and v1.24.4
-(54,076,580 bytes, SHA-256 `12a828f0…`) remain downloadable as archives; v1.25.0 supersedes both.
+The earlier v1.24.8 package (54,121,489 bytes, SHA-256 `616f8b55…`) and v1.24.7
+(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.25.0 supersedes both.
 
 > **Support note — why this release is 1.25.0 and not a rebuilt 1.24.5.** A machine that installed the
 > *first* 1.24.5 build (the one published before the `ssl_bootstrap` import fix) will **never** be

@@ -47,9 +47,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.66 |
-| Baseline Date | 2026-10-02 |
-| Status | v1.24.6 built and verified on both platforms (Windows Setup 54,110,069 bytes, SHA-256 `ed127697…`; macOS DMG 62,286,150 bytes, SHA-256 `6cb5cc02…`; both accepted by clean-room runs of the packaged binaries — certificate signed, HTTPS served, user config honoured, no writes into the install dir or the signed bundle, log lines written once, a second instance refused with an actionable error; rpi64 image still v1.24.0, not rebuilt) |
+| SDD Version | V2.67 |
+| Baseline Date | 2026-10-03 |
+| Status | v1.25.0 built and verified on both platforms (Windows Setup 54,115,523 bytes, SHA-256 `ee6e2a30…`; macOS DMG 62,298,582 bytes, SHA-256 `0974703f…`; both accepted by clean-room runs of the packaged binaries) |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the seven unverified models |

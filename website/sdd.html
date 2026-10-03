@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.66</a></li>
+          <li><a href="#updates">V2.67</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.66 · 2026-10-02</span>
+          <span>SDD V2.67 · 2026-10-03</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.66</td>
+              <td>V2.67</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,28 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-screwdriver-wrench"></i></div>
+            <h3>
+              v1.25.0 Released — It Works After Installing
+              <small>(V2.67)</small>
+            </h3>
+            <p>
+              Three field reports, three root causes. A launcher could
+              <strong>hang forever before it ever started a server</strong>: the
+              first-run serial probe wrote to every candidate port, the radio's
+              real description matched none of the keywords meant to put it
+              first (CP2105 is not "cp210x"), so the port probed first was the
+              machine's Intel AMT port — one that opens and then never accepts a
+              byte, written with pyserial's default of <em>no write timeout</em>.
+              An approved instance stayed on "waiting for approval" because the
+              only poll loop lived in the settings dialog; polling now runs in
+              the server every 30 seconds and reports what it found. And the
+              certificate reload check compared the wrong two things, so an
+              enrolled instance answered 502 while nothing offered to restart it.
+            </p>
+          </div>
+
           <div class="feature-card">
             <div class="icon"><i class="fas fa-triangle-exclamation"></i></div>
             <h3>

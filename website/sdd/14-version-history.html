@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.67</td>
+<td>2026-10-03</td>
+<td>pi</td>
+<td><strong>v1.25.0 发布：「装完就能用」—— 首次探测不再卡死、批准后自己接入、局域网直接可达。</strong> 现场机 <code class="scope-code">192.168.1.53</code>（主机名 <code class="scope-code">MRRC</code>）装完 1.24.8 后 launcher <strong>开着全黑窗口</strong>、无服务无日志，进程却活着并持着 COM3：实测三段根因 —— ① <code class="scope-code">_key()</code> 的电台关键词 <code class="scope-code">cp210x</code>/<code class="scope-code">slab</code> 与真实描述 <code class="scope-code">Silicon Labs Dual CP2105</code> <strong>两者都不命中</strong>，候选保持注册表顺序 COM3/COM4/COM5；② COM3 是 Intel AMT SOL：<strong>open 正常、却一个字节也写不进去</strong>（杀掉持口进程后实测写入超时）；③ <code class="scope-code">probe_ft710()</code> 用 pyserial 默认 <code class="scope-code">write_timeout=None</code> 写 <code class="scope-code">AI0;</code> = <strong>永久阻塞</strong>，而首个被探测的正是这个口。现在：探测传 <code class="scope-code">write_timeout=1.0</code>、关键词换成硬件真实字串（cp210/silicon labs/ftdi/prolific/ch340/usb vid:pid）、AMT 与 PCI 标识的口不进候选、自动口令<strong>在探测前落盘</strong>（实测那次留下的配置是原封不动的模板）、探测前先打印要探哪些口。云侧三处：<code class="scope-code">/status</code> 早已 granted 而客户端自提交后再没问过（nginx 日志实证：当天最后一条 <code class="scope-code">/status</code> 来自另一台机器），因为唯一的轮询循环住在设置对话框（<code class="scope-code">close()</code> 即清掉）⇒ 轮询搬到服务端，每 30 秒自查、批准后当场完成登记，并把 <code class="scope-code">autoconnect</code> 状态暴露给界面；<code class="scope-code">cert_reload_required</code> 原先读 <code class="scope-code">os.environ</code>（= 进程启动那一刻）⇒ 登记后入口 502 且没有任何东西会重启，改为「配置现在要求的 vs 进程正在服务的」直接比对（顺带修掉 <code class="scope-code">st_mtime</code> 的 epoch 与 <code class="scope-code">time.monotonic()</code> 混用）；<code class="scope-code">basePath()</code> 把裸路由当目录 ⇒ 页在 <code class="scope-code">/login</code> 时所有 API 打到 SPA 回退拿到 HTML，正是那句 <code class="scope-code">Uncaught (in promise) SyntaxError</code> 的真身，并给 <code class="scope-code">api()</code> 加 catch 让它带地址与状态码报错。界面与默认值：「刷新状态」不再与输入框同色（租户原话「这个是灰色的」因此没点，而该面板没有别的出路）；Windows 默认侦听 <code class="scope-code">0.0.0.0</code>（与 SDD/12、<code class="scope-code">config.py</code> 的 <code class="scope-code">::</code>、macOS/Linux 一致；实测 Mac → <code class="scope-code">192.168.1.53:8888</code> 由 refused 变通）。<strong>产物</strong>：Windows Setup <strong>54,115,523 bytes</strong> SHA-256 <code class="scope-code">ee6e2a30…</code>（VM <code class="scope-code">Get-FileHash</code> == Mac <code class="scope-code">shasum</code>）；macOS DMG <strong>62,298,582 bytes</strong> SHA-256 <code class="scope-code">0974703f…</code>。<strong>验收</strong>：套件 1579 OK（macOS，1 skip）/ 1576 OK（Windows，17 skip）；两平台洁净室全绿（<code class="scope-code">CN=127.0.0.1</code> / https 200 / 明文 000 / health 401 / 录制落在用户目录 / 安装目录 0 个文件被改 / 日志 19 行 18 不同 / 第二实例退出非零并点名端口）；Windows 构建<strong>作废一次</strong>（包内 junk 6 个：VM 源码树的历史 <code class="scope-code">.DS_Store</code>/<code class="scope-code">._*</code> 因 tar 只覆盖不删除而残留）。</td>
+</tr>
+<tr>
 <td>SDD V2.66</td>
 <td>2026-10-02</td>
 <td>pi</td>
@@ -747,7 +753,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.66 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.67 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

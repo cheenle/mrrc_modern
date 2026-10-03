@@ -562,7 +562,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </blockquote>
 <h3 id="安装5-步">0.7.1 安装（5 步）</h3>
 <ol type="1">
-<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.25.0-arm64.dmg</code>（约 56 MB）。</li>
+<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.25.0-arm64.dmg</code>（约 59 MB）。</li>
 <li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
 <li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
 <li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
@@ -1639,52 +1639,5 @@ function toggleMobileMenu() {
 
 </script>
     <script src="../js/global-nav.js?v=5" defer data-gn="1"></script>
-
-<div class="step" id="static-patch">
-  <h4>小补丁（不整包下载）</h4>
-  <p>
-    改到"界面/资源"的修复不必重装整套：站上备了一个<strong>几百 KB 的补丁包</strong>与一个施加脚本。
-    它只替换 <code>_internal\static</code> 下的文件（网页界面与资源），<strong>不动程序逻辑</strong>——
-    所以它只适用于这类修复；改动到 Python 逻辑的修复仍然需要整包升级。
-  </p>
-  <pre><code># 管理员 PowerShell（脚本会自己校验 SHA-256 与适用版本，并先备份被替换的文件）
-Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\MRRC-Modern-Patch.ps1 \
-  https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Patch.ps1
-& $env:TEMP\MRRC-Modern-Patch.ps1 -PatchUrl \
-  https://www.vlsc.net/mrrc_modern/downloads/patches/static-1.24.7-p1.zip
-
-# 只想看看会改什么：加 -DryRun</code></pre>
-  <p style="color: var(--scope-text-muted)">
-    补丁清单：<code>downloads/patches/patch.json</code>（写明适用于哪个版本、以及每个补丁的 SHA-256）。
-    施加后请<strong>重启应用</strong>，并在浏览器里 <strong>Ctrl-F5</strong> 强制刷新一次。
-  </p>
-</div>
-
-<div class="step" id="one-click">
-  <h4>一键：双击运行（不用敲命令）</h4>
-  <p>三类小事都做成了「下载一个文件、双击」：</p>
-  <table>
-    <tr><th>要做什么</th><th>下载</th><th>双击之后</th></tr>
-    <tr>
-      <td><strong>接入云端</strong>（呼号 + 运维给的口令）</td>
-      <td><a href="downloads/MRRC-Modern-Connect.cmd">MRRC-Modern-Connect.cmd</a></td>
-      <td>问你要呼号与口令 → 自动登记证书 → 重启应用 → 打印你的入口地址</td>
-    </tr>
-    <tr>
-      <td><strong>打小补丁</strong>（界面类修复，几百 KB）</td>
-      <td><a href="downloads/MRRC-Modern-Patch.cmd">MRRC-Modern-Patch.cmd</a></td>
-      <td>自己找到适用于你版本的补丁 → 校验 SHA-256 → 备份被替换的文件 → 覆盖 → 重启应用</td>
-    </tr>
-    <tr>
-      <td><strong>彻底清理</strong>（装乱了 / 想从零开始）</td>
-      <td><a href="downloads/MRRC-Modern-Cleanup.cmd">MRRC-Modern-Cleanup.cmd</a></td>
-      <td>先把配置与证书备份到桌面 → 卸载 → 清掉环境变量与计划任务</td>
-    </tr>
-  </table>
-  <p style="color: var(--scope-text-muted)">
-    三个都会自己申请管理员权限（弹一次 UAC 即可），都会先备份再动手，都不碰与 MRRC 无关的东西。
-    想先看看会改什么：在 PowerShell 里给对应的 .ps1 加 <code>-DryRun</code>。
-  </p>
-</div>
 </body>
 </html>

@@ -562,7 +562,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </blockquote>
 <h3 id="安装5-步">0.7.1 安装（5 步）</h3>
 <ol type="1">
-<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.25.0-arm64.dmg</code>（约 56 MB）。</li>
+<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.25.0-arm64.dmg</code>（约 59 MB）。</li>
 <li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
 <li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
 <li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
@@ -1639,53 +1639,5 @@ function toggleMobileMenu() {
 
 </script>
     <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
-
-<div class="step" id="static-patch">
-  <h4>Small patches (no full download)</h4>
-  <p>
-    Fixes that touch the web UI or assets do not need the whole installer: the site carries a
-    <strong>few-hundred-kilobyte patch</strong> and a script to apply it. It replaces files under
-    <code>_internal\static</code> only - never the Python logic - so it covers that class and nothing
-    else; anything in the compiled logic still needs a full upgrade.
-  </p>
-  <pre><code># elevated PowerShell (the script verifies SHA-256 and the target version, and backs up first)
-Invoke-WebRequest -UseBasicParsing -OutFile $env:TEMP\MRRC-Modern-Patch.ps1 \
-  https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Patch.ps1
-& $env:TEMP\MRRC-Modern-Patch.ps1 -PatchUrl \
-  https://www.vlsc.net/mrrc_modern/downloads/patches/static-1.24.7-p1.zip
-
-# add -DryRun to see what it would change</code></pre>
-  <p style="color: var(--scope-text-muted)">
-    The patch index is <code>downloads/patches/patch.json</code>: which version each patch applies to,
-    and its SHA-256. Restart the app afterwards, and press Ctrl-F5 in the browser once.
-  </p>
-</div>
-
-<div class="step" id="one-click">
-  <h4>One file, one double-click</h4>
-  <p>All three chores are now "download a file, double-click it":</p>
-  <table>
-    <tr><th>Task</th><th>Download</th><th>What the double-click does</th></tr>
-    <tr>
-      <td><strong>Connect to the Cloud Hub</strong> (callsign plus the secret from the operator)</td>
-      <td><a href="downloads/MRRC-Modern-Connect.cmd">MRRC-Modern-Connect.cmd</a></td>
-      <td>Asks for both, enrols the certificate, restarts the app, prints your entry address</td>
-    </tr>
-    <tr>
-      <td><strong>Apply a small patch</strong> (UI fixes, a few hundred KB)</td>
-      <td><a href="downloads/MRRC-Modern-Patch.cmd">MRRC-Modern-Patch.cmd</a></td>
-      <td>Finds the patch for your version, verifies its SHA-256, backs up what it replaces, restarts</td>
-    </tr>
-    <tr>
-      <td><strong>Clean slate</strong> (a messy install, or start over)</td>
-      <td><a href="downloads/MRRC-Modern-Cleanup.cmd">MRRC-Modern-Cleanup.cmd</a></td>
-      <td>Backs up configuration and certificates to the desktop, uninstalls, clears environment variables and tasks</td>
-    </tr>
-  </table>
-  <p style="color: var(--scope-text-muted)">
-    Each asks for administrator rights once, backs up before changing anything, and touches nothing
-    outside MRRC. To preview what a patch would change, add <code>-DryRun</code> to the matching .ps1.
-  </p>
-</div>
 </body>
 </html>

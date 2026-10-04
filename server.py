@@ -2073,6 +2073,21 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 # but there is no modulation / no RF power.
                 _claim_tx_owner_for_token(_ws_tokens.get(ws))
                 _ptt_key_ws = ws  # control-plane owner: only this socket's release is honored
+                # The key-up itself is proof this session is alive, so a
+                # capability-declared session's clock is refreshed by it. The
+                # browser sends `ptt:true` first and its key-time `txhb` second,
+                # and this handler (CAT write + start_tx, tens of ms) runs before
+                # that beat is read off the socket — so a liveness tick landing in
+                # the window would otherwise see a session that is both the owner
+                # *and* silent, and unkey the operator's own healthy press whenever
+                # the previous transmission was longer ago than the threshold
+                # (field log 2026-10-04 on a hub instance: seven such releases,
+                # 20-70 ms after a key-up, ages 9.3-654 s — each age exactly the
+                # gap since that operator's previous press). Keying is still not a
+                # capability declaration: a session that has never sent `txhb` is
+                # not added here and stays ungated.
+                if ws in _tx_hb_capable:
+                    _tx_hb_last[ws] = time.monotonic()
                 _tx_session_frames = 0
                 _tx_session_decoded = 0
                 _tx_session_decode_fail = 0

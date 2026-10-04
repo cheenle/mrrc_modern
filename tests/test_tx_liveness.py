@@ -12,9 +12,11 @@ not unkey a live operator, and a stale listener must never drop someone else's
 carrier (ch15 Layer 4 key-owner arbitration). Opt-in by default: 0 = off.
 """
 import asyncio
+import json
 import time
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import server
@@ -52,12 +54,24 @@ class _FakeClient:
         self.sent.append(text)
 
 
+class _KeyUpFakeWS:
+    """Control socket stand-in: only `send_text` is ever called on it."""
+
+    def __init__(self):
+        self.messages = []
+
+    async def send_text(self, text):
+        self.messages.append(json.loads(text))
+
+
 class _LivenessTestBase(unittest.TestCase):
     def setUp(self):
         self.cat = _FakeCat()
         self.radio = _FakeRadio()
         self.client = _FakeClient()
-        self.key_ws = object()
+        # Doubles are typed Any: the helpers are annotated with the real
+        # WebSocket type, while these tests only need object identity.
+        self.key_ws: Any = object()
         patchers = [
             patch.object(server, "cat", self.cat),
             patch.object(server, "radio", self.radio),
@@ -86,7 +100,7 @@ class _LivenessTestBase(unittest.TestCase):
                     pass
         asyncio.run(runner())
 
-    def _declare(self, ws=None, age=0.0):
+    def _declare(self, ws: Any = None, age: float = 0.0) -> Any:
         ws = ws if ws is not None else self.key_ws
         server._tx_hb_capable.add(ws)
         server._tx_hb_last[ws] = time.monotonic() - age
@@ -141,7 +155,7 @@ class NoReleaseTests(_LivenessTestBase):
     def test_stale_listener_cannot_drop_someone_elses_carrier(self):
         """The keying session never heartbeats; a *different* capable session
         went stale. Layer 4 arbitration says the listener must not unkey."""
-        listener = object()
+        listener: Any = object()
         self._declare(listener, age=5.0)
         self._run_watchdog(0.3)
         self.assertEqual(self.cat.commands, [])
@@ -171,11 +185,103 @@ class NoReleaseTests(_LivenessTestBase):
         self.assertEqual(self.cat.commands, [])
 
 
+class KeyUpRaceTests(unittest.IsolatedAsyncioTestCase):
+    """A key-up must not be read as "this session went silent".
+
+    Field log (2026-10-04, hub instance BA4EG — the first browser run of this
+    gate): seven forced releases, every one of them 20-70 ms *after* a key-up,
+    with ages of 9.3 s / 9.9 s / 81.6 s / 111 s / 234 s / 336 s / 654 s. Each
+    age is exactly the gap since *the operator's own previous transmission*, so
+    nothing was wrong with the link — the clock simply had not been refreshed
+    yet.
+
+    The browser sends `ptt:true` first and its key-time `txhb` second, and the
+    receive loop cannot read that beat until the key-up handler returns (CAT
+    write + `audio.start_tx`, tens of ms). A watchdog tick landing in that
+    window therefore sees a session that is both the key owner *and* silent —
+    and drops the carrier on the operator's own healthy press. Keying is itself
+    proof of life, so a *capable* session's clock is refreshed by it; a session
+    that never declared the heartbeat stays ungated (negative case above).
+    """
+
+    def setUp(self):
+        from radio_state import RadioState
+        self.saved = (server.cat, server.radio, server.scheduler, server.audio,
+                      server.backend, server._ptt_key_ws, server._tx_hb_capable,
+                      server._tx_hb_last, server.REMOTE_SESSION_TX_HEARTBEAT_S,
+                      server.TX_LIVENESS_TICK_S)
+        self.cat = _FakeCat()
+        server.cat = self.cat
+        server.radio = RadioState()
+        server.scheduler = None
+        server.audio = None
+        server.backend = None
+        server._ptt_key_ws = None
+        server._tx_hb_capable = set()
+        server._tx_hb_last = {}
+        server.REMOTE_SESSION_TX_HEARTBEAT_S = 5.0
+        server.TX_LIVENESS_TICK_S = 0.01
+        self.ws: Any = _KeyUpFakeWS()
+
+    def tearDown(self):
+        (server.cat, server.radio, server.scheduler, server.audio,
+         server.backend, server._ptt_key_ws, server._tx_hb_capable,
+         server._tx_hb_last, server.REMOTE_SESSION_TX_HEARTBEAT_S,
+         server.TX_LIVENESS_TICK_S) = self.saved
+
+    def _declare_capable(self, age):
+        server._tx_hb_capable.add(self.ws)
+        server._tx_hb_last[self.ws] = time.monotonic() - age
+
+    def _key_up(self):
+        asyncio.run(server._execute_set_command("ptt", True, self.ws))
+
+    def _run_watchdog(self, seconds=0.2):
+        async def runner():
+            task = asyncio.create_task(server._tx_liveness_watchdog())
+            try:
+                await asyncio.sleep(seconds)
+            finally:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        asyncio.run(runner())
+
+    def test_key_up_of_a_capable_session_is_not_a_stale_session(self):
+        """The press that follows a pause longer than the threshold (the
+        "previous QSO was a minute ago" case) must transmit — today the tick
+        lands between the key-up and its key-time beat and unkeys it."""
+        self._declare_capable(age=60.0)
+        self._key_up()                       # beat for *this* press not read yet
+        self._run_watchdog()
+        self.assertEqual(self.cat.commands, ["TX1"])   # no TX0
+        self.assertIs(server._ptt_key_ws, self.ws)
+
+    def test_capable_session_that_goes_silent_after_keying_is_still_released(self):
+        """The refresh buys one threshold, not immunity: a session that stops
+        proving life after its key-up is released exactly as before."""
+        self._declare_capable(age=60.0)
+        self._key_up()
+        server._tx_hb_last[self.ws] = time.monotonic() - 5.0   # uplink died here
+        self._run_watchdog()
+        self.assertEqual(self.cat.commands.count("TX0"), 1)
+
+    def test_key_up_does_not_declare_capability(self):
+        """Keying is not a capability declaration: an older client that never
+        sends `txhb` must stay ungated even after keying (and re-keying)."""
+        self._key_up()
+        self.assertNotIn(self.ws, server._tx_hb_capable)
+        self._run_watchdog()
+        self.assertEqual(self.cat.commands, ["TX1"])
+
+
 class DecisionTests(unittest.TestCase):
     """Unit-level boundary on the decision helper the loop calls."""
 
     def setUp(self):
-        self.ws = object()
+        self.ws: Any = object()
         patchers = [
             patch.object(server, "REMOTE_SESSION_TX_HEARTBEAT_S", 1.0),
             patch.object(server, "_ptt_key_ws", self.ws),

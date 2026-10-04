@@ -128,10 +128,10 @@ KNOWN_ISSUES = (
             "Windows 与源码运行不受影响（Windows 用系统证书库）",
         ],
         "solution": [
-            "临时规避（立刻可用）：在配置文件里加一行 SSL_CERT_FILE=/etc/ssl/cert.pem，然后重启 MRRC Modern",
+            "升级到 v1.25.1 即不再发生（随包 CA + 显式信任库；构建闸门会故意把信任库打空再要求真握手）",
+            "还在旧版本上：在配置文件里加一行 SSL_CERT_FILE=/etc/ssl/cert.pem，然后重启 MRRC Modern",
             "macOS 配置文件位置：~/Library/Application Support/MRRC-Modern/mrrc_modern.env",
             "重启后：接入云端、诊断包上传、软件更新检查应同时恢复",
-            "修复已进入源码（随包 CA + 显式信任库），随下一个安装包到达用户，无需你重装以外的任何操作",
         ],
         "evidence": [
             "Support bundle upload failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] "
@@ -160,10 +160,10 @@ KNOWN_ISSUES = (
             "报 FTDI libraries not found 并退出",
         ],
         "solution": [
-            "临时规避（立刻可用）：把配置里的 MRRC_FTDI_LIB_DIR 改成绝对路径 "
+            "升级到 v1.25.1 即不再发生（启动器改为经 _internal 解析相对路径，并补了签名包目录结构的回归测试）",
+            "还在旧版本上：把配置里的 MRRC_FTDI_LIB_DIR 改成绝对路径 "
             "/Applications/MRRC-Modern.app/Contents/Resources/vendor/ftdi/macos，然后重启应用",
             "重启后刷新页面：频谱应变成真实底噪 + 信号（可在日志确认 first frame received — spectrum active）",
-            "修复已进入源码（启动器改为经 _internal 解析相对路径），随下一个安装包到达用户",
         ],
         "evidence": [
             "2026-10-04 07:07:53 [WARNING] mrrc.backend.ft710.scope: scope_pipe exited (frames=0, connected=False)",

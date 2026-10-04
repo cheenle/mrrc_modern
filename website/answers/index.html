@@ -54,10 +54,10 @@
       </ul>
       <h4>你要做的</h4>
       <ul>
-        <li>临时规避（立刻可用）：在配置文件里加一行 SSL_CERT_FILE=/etc/ssl/cert.pem，然后重启 MRRC Modern</li>
+        <li>升级到 v1.25.1 即不再发生（随包 CA + 显式信任库；构建闸门会故意把信任库打空再要求真握手）</li>
+        <li>还在旧版本上：在配置文件里加一行 SSL_CERT_FILE=/etc/ssl/cert.pem，然后重启 MRRC Modern</li>
         <li>macOS 配置文件位置：~/Library/Application Support/MRRC-Modern/mrrc_modern.env</li>
         <li>重启后：接入云端、诊断包上传、软件更新检查应同时恢复</li>
-        <li>修复已进入源码（随包 CA + 显式信任库），随下一个安装包到达用户，无需你重装以外的任何操作</li>
       </ul>
       <details><summary>原始证据</summary>
       <ul>
@@ -83,9 +83,9 @@
       </ul>
       <h4>你要做的</h4>
       <ul>
-        <li>临时规避（立刻可用）：把配置里的 MRRC_FTDI_LIB_DIR 改成绝对路径 /Applications/MRRC-Modern.app/Contents/Resources/vendor/ftdi/macos，然后重启应用</li>
+        <li>升级到 v1.25.1 即不再发生（启动器改为经 _internal 解析相对路径，并补了签名包目录结构的回归测试）</li>
+        <li>还在旧版本上：把配置里的 MRRC_FTDI_LIB_DIR 改成绝对路径 /Applications/MRRC-Modern.app/Contents/Resources/vendor/ftdi/macos，然后重启应用</li>
         <li>重启后刷新页面：频谱应变成真实底噪 + 信号（可在日志确认 first frame received — spectrum active）</li>
-        <li>修复已进入源码（启动器改为经 _internal 解析相对路径），随下一个安装包到达用户</li>
       </ul>
       <details><summary>原始证据</summary>
       <ul>
@@ -174,7 +174,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-04 07:45（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-04 08:16（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

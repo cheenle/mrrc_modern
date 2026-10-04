@@ -49,7 +49,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Document ID | SDD-MRRC-MODERN-2026-001 |
 | SDD Version | V2.68 |
 | Baseline Date | 2026-10-04 |
-| Status | v1.25.0 built and verified on both platforms (Windows Setup 54,115,523 bytes, SHA-256 `ee6e2a30…`; macOS DMG 62,298,582 bytes, SHA-256 `0974703f…`; both accepted by clean-room runs of the packaged binaries) |
+| Status | **v1.25.1 built and verified on both platforms** (Windows Setup **54,339,580 bytes**, SHA-256 `c801d35e…`; macOS DMG **62,421,426 bytes**, SHA-256 `461a4f98…`; both accepted by clean-room runs of the packaged binaries — the clean room is what proves the shipped CA bundle makes outbound HTTPS verify inside the frozen app) |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the seven unverified models |

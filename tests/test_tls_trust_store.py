@@ -19,6 +19,7 @@ from __future__ import annotations
 import ast
 import os
 import ssl
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,13 +46,25 @@ def _empty_context() -> ssl.SSLContext:
 
 class EmptyStoreTests(unittest.TestCase):
     def test_scrubbed_environment_reproduces_the_field_failure(self):
-        """SSL_CERT_FILE/DIR pointed at nothing ⇒ empty store, and net_tls still verifies."""
+        """POSIX: SSL_CERT_FILE/DIR pointed at nothing ⇒ empty store, and net_tls still verifies.
+
+        Windows is the other half of the same fact: `create_default_context()` reads the **OS
+        certificate store** there (not SSL_CERT_FILE), which is exactly why this defect never
+        bit Windows — and why the scrub cannot empty the store on that platform.  What must
+        hold on both is that net_tls ends up with roots.
+        """
         broken = {"SSL_CERT_FILE": str(REPO_ROOT / "no-such-ca.pem"),
                   "SSL_CERT_DIR": str(REPO_ROOT / "no-such-ca-dir")}
         with patch.dict(os.environ, broken):
             os.environ.pop(net_tls.CA_BUNDLE_ENV, None)
-            self.assertEqual(0, net_tls.store_size(ssl.create_default_context()),
-                             "the scrub must actually empty the store, or this test is vacuous")
+            default_roots = net_tls.store_size(ssl.create_default_context())
+            if sys.platform == "win32":
+                self.assertGreater(default_roots, 0,
+                                   "Windows uses its own certificate store; if this is 0 the "
+                                   "OS store itself is unusable and the check below is the only one")
+            else:
+                self.assertEqual(0, default_roots,
+                                 "the scrub must actually empty the store, or this test is vacuous")
             roots = net_tls.store_size(net_tls.build_context())
         self.assertGreater(roots, 0, "net_tls must find a CA bundle when the default store is empty")
 

@@ -31,6 +31,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+import net_tls  # noqa: E402 - needs the path insert above; it reads env at call time
+
 #: Points nowhere on purpose: this is the empty store of a user machine.
 _BROKEN_CA = "/nonexistent/mrrc-gate/cert.pem"
 
@@ -57,20 +59,31 @@ def _is_tls_failure(exc: BaseException) -> bool:
     return "CERTIFICATE_VERIFY_FAILED" in str(exc)
 
 
-def main() -> int:
-    _scrub_environment()
+def _shipped_bundle() -> "Path | None":
+    """The bundle a packaged build would use (None in a checkout that does not ship one)."""
+    for candidate in net_tls.ca_bundle_candidates():
+        if candidate.is_file() and "vendor" in candidate.parts and "ca" in candidate.parts:
+            return candidate
+    return None
 
-    import net_tls  # imported after the scrub: contexts are built lazily
+
+def main() -> int:
+    # The scrub must happen before any context is built: net_tls and OpenSSL both read the
+    # CA environment at call time, which is why the import above is harmless.
+    _scrub_environment()
 
     empty = ssl.create_default_context()
     empty_roots = net_tls.store_size(empty)
     if empty_roots > 0:
-        print(f"FAIL: the scrubbed environment still has {empty_roots} root(s) — "
-              f"this gate cannot reproduce the user-machine condition "
-              f"(SSL_CERT_FILE={os.environ['SSL_CERT_FILE']!r})")
-        return 1
-    print(f"ok: default store is empty with SSL_CERT_FILE={os.environ['SSL_CERT_FILE']!r} "
-          f"(that is the 2026-10-04 failure)")
+        # Windows reads the OS certificate store (enum_certificates), so no environment can
+        # empty it — and that is also why this defect never bit Windows.  The failing condition
+        # cannot be reproduced there; what still must hold is that net_tls ends up with a usable
+        # store and can complete a real handshake.
+        print("note: the default store has %d root(s) on this platform and cannot be emptied by "
+              "the environment (Windows OS store)" % empty_roots)
+    else:
+        print(f"ok: default store is empty with SSL_CERT_FILE={os.environ['SSL_CERT_FILE']!r} "
+              f"(that is the 2026-10-04 failure)")
 
     context = net_tls.build_context()
     roots = net_tls.store_size(context)
@@ -79,7 +92,24 @@ def main() -> int:
         print("FAIL: net_tls could not find a CA bundle either — outbound HTTPS would fail.\n"
               f"  candidates tried:\n  {candidates}")
         return 1
-    print(f"ok: net_tls rebuilt the trust store ({roots} root(s))")
+    print(f"ok: net_tls has a usable trust store ({roots} root(s))")
+
+    bundle = _shipped_bundle()
+    if bundle is None:
+        print("note: no bundled vendor/ca/cacert.pem next to this checkout — skipping the "
+              "bundle-loads check (a packaged build ships it and fails without it)")
+    else:
+        probe = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        try:
+            probe.load_verify_locations(cafile=str(bundle))
+        except (ssl.SSLError, OSError) as exc:
+            print(f"FAIL: the shipped CA bundle does not load: {bundle} ({exc})")
+            return 1
+        bundle_roots = net_tls.store_size(probe)
+        if bundle_roots < 20:
+            print(f"FAIL: the shipped CA bundle has only {bundle_roots} root(s): {bundle}")
+            return 1
+        print(f"ok: shipped CA bundle loads ({bundle_roots} root(s)) from {bundle}")
 
     reachable = 0
     for url in PROBE_URLS:

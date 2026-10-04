@@ -126,6 +126,7 @@ class WindowsLauncherSslTests(unittest.TestCase):
             (app_root / "MRRC-Modern-Server.exe").write_text("x", encoding="utf-8")
             with patch.object(launcher, "app_dir", return_value=app_root):
                 cmd = launcher.build_command(None)
+            assert cmd is not None, "no cert pair does not mean no command line"
             self.assertIn("--no-ssl", cmd)
 
     def test_build_command_with_ssl_pair_passes_cert_args(self):
@@ -135,6 +136,7 @@ class WindowsLauncherSslTests(unittest.TestCase):
             pair = (Path(tmp) / "server.crt", Path(tmp) / "server.key")
             with patch.object(launcher, "app_dir", return_value=app_root):
                 cmd = launcher.build_command(pair)
+            assert cmd is not None, "a cert pair does not mean no command line"
             self.assertNotIn("--no-ssl", cmd)
             self.assertIn("--ssl-cert", cmd)
             self.assertIn("--ssl-key", cmd)
@@ -332,3 +334,47 @@ class AlreadyRunningTests(unittest.TestCase):
     def test_none_means_start_normally(self):
         with patch("launcher_net.first_answering", return_value=None):
             self.assertIsNone(launcher.running_instance_url("http://127.0.0.1:8888"))
+
+
+class SingleInstanceTests(unittest.TestCase):
+    """One launcher per session - the port probe alone cannot promise that.
+
+    Measured 2026-10-04 on a field Windows box: two launchers, two servers, six frpc.exe. The
+    probe in ``AlreadyRunningTests`` only sees a server that has *finished* starting, so two
+    starts inside its 0.4 s window both decide the port is free. The mutex closes that window,
+    and being a kernel mutex it cannot be left behind by a crash the way a pid file can.
+    """
+
+    def setUp(self):
+        self._before = launcher._single_instance_handle
+        launcher._single_instance_handle = None
+
+    def tearDown(self):
+        launcher._single_instance_handle = self._before
+
+    def test_the_first_launcher_holds_the_mutex(self):
+        with patch.object(launcher.os, "name", "nt"):
+            self.assertTrue(launcher.acquire_single_instance(create=lambda name: (7, 0)))
+        self.assertEqual(launcher._single_instance_handle, 7,
+                         "the handle has to outlive the call, or Windows frees the mutex")
+
+    def test_a_second_launcher_is_told_so(self):
+        with patch.object(launcher.os, "name", "nt"):
+            self.assertFalse(launcher.acquire_single_instance(
+                create=lambda name: (7, launcher._ERROR_ALREADY_EXISTS)))
+
+    def test_nothing_is_created_off_windows(self):
+        def never(name):
+            raise AssertionError("no mutex may be created off Windows")
+
+        with patch.object(launcher.os, "name", "posix"):
+            self.assertTrue(launcher.acquire_single_instance(create=never))
+
+    def test_a_guard_that_cannot_run_does_not_block_a_start(self):
+        """A broken check must never be the reason the app refuses to start."""
+        def boom(name):
+            raise OSError("kernel32.dll missing")
+
+        with patch.object(launcher.os, "name", "nt"):
+            self.assertTrue(launcher.acquire_single_instance(create=boom))
+            self.assertTrue(launcher.acquire_single_instance(create=lambda name: (0, 0)))

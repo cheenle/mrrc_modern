@@ -319,6 +319,55 @@ class PortalPathTests(unittest.TestCase):
 
 
 class StaleTunnelTests(unittest.TestCase):
+    """One instance must never accumulate frpc processes.
+
+    Field evidence, 2026-10-04: a Windows box that had started the app six times in two days was
+    left holding six frpc.exe processes, all naming one config. Five of them could never register
+    their proxy name, so they retried every 30 seconds - 7143 "proxy already exists" warnings on
+    the hub in a single day - and nothing on the machine said so: the cleanup below used ``wmic``,
+    which Windows 11 no longer ships, and its ``except`` swallowed the failure silently.
+    """
+
+    CONFIG = r"C:\Users\cheen\AppData\Local\MRRC-Modern\fleet\frpc-ba4eg.toml"
+
+    #: The shape ``_enumerate_frpc`` returns: pid, a tab, the command line. Two instances on one
+    #: machine, which is a supported shape - the other one must survive.
+    OUTPUT = ("4242\t\"C:\\Program Files\\MRRC Modern\\fleet\\frpc.exe\" -c " + CONFIG + "\n"
+              "1717\t\"C:\\Program Files\\MRRC Modern\\fleet\\frpc.exe\" -c "
+              "C:\\Users\\cheen\\AppData\\Local\\MRRC-Modern\\fleet\\frpc-bg9zzz.toml\n")
+
     def test_cleanup_is_a_no_op_off_windows(self):
         with mock.patch.object(cloud_hub.os, "name", "posix"):
             cloud_hub._kill_stale_frpc(Path("/tmp/nope.toml"))
+
+    def test_the_path_match_ignores_case_and_slashes(self):
+        """What this replaced was ``str(config_path) in line``: case-sensitive, so a Windows path
+        that differed only in case matched nothing and the stale process was never killed."""
+        for written in (self.CONFIG,
+                        r"c:\users\CHEEN\appdata\local\mrrc-modern\fleet\frpc-BA4EG.toml",
+                        self.CONFIG.replace("\\", "/")):
+            self.assertEqual(cloud_hub._stale_frpc_pids(self.OUTPUT, Path(written)), [4242], written)
+
+    def test_another_instances_frpc_is_left_alone(self):
+        self.assertEqual(cloud_hub._stale_frpc_pids(self.OUTPUT, Path(r"C:\x\frpc-other.toml")), [])
+        self.assertEqual(cloud_hub._stale_frpc_pids("", Path(self.CONFIG)), [])
+        self.assertEqual(cloud_hub._stale_frpc_pids("no tab and no pid\n", Path(self.CONFIG)), [])
+
+    def test_the_stale_process_is_the_only_thing_killed(self):
+        calls = []
+        with mock.patch.object(cloud_hub.os, "name", "nt"), \
+                mock.patch.object(cloud_hub, "_enumerate_frpc", lambda: self.OUTPUT), \
+                mock.patch.object(cloud_hub.subprocess, "run", lambda cmd, **kw: calls.append(cmd)):
+            cloud_hub._kill_stale_frpc(Path(self.CONFIG))
+        self.assertEqual(calls, [["taskkill", "/PID", "4242", "/F"]])
+
+    def test_a_lookup_that_fails_says_so(self):
+        """Swallowing this is what cost two days: the symptom appears on the hub, never here."""
+        def boom():
+            raise OSError("powershell: not found")
+
+        with mock.patch.object(cloud_hub.os, "name", "nt"), \
+                mock.patch.object(cloud_hub, "_enumerate_frpc", boom), \
+                self.assertLogs("cloud_hub", level="WARNING") as logged:
+            cloud_hub._kill_stale_frpc(Path(self.CONFIG))
+        self.assertIn("cannot list frpc processes", " ".join(logged.output))

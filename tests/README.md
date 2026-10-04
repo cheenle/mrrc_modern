@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1604 tests across 86 test modules (17 skip on Windows, 1 on macOS; totals re-read
+1612 tests across 86 test modules (17 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-04, macOS). The per-module sections below
 itemise 71 of those 86 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
@@ -165,14 +165,15 @@ SDD coverage: AD-005 (pipe subprocess lifecycle)
 | `ScopePipeRestartTests` | 2 | Exited pipe can restart while the previous reader task finishes |
 | `ScopePipeHeartbeatTests` | 2 | len=0 stdout heartbeat accepted silently by the server reader; scope_pipe emits the heartbeat (dead-parent EPIPE detection) |
 
-### 15. test_windows_launcher.py — Windows Launcher (28 tests)
+### 15. test_windows_launcher.py — Windows Launcher (32 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
 | Class | Tests | Covers |
-|-------|-------|--------|
+| ------- | ------- | -------- |
 | `WindowsLauncherTests` | 8 | Local browser URL selection for wildcard binds; FTDI dir absolutized; mem_channels seeding incl. PyInstaller 6 `_internal` fallback; frozen launcher never falls back to re-spawning itself |
 | `WindowsLauncherSslTests` | 7 | Launcher SSL material resolution: explicit cert/key env vars first, self-signed bootstrap fallback, `MRRC_SSL=off` HTTP escape |
+| `SingleInstanceTests` | 4 | One launcher per session: a named mutex (`Local\MRRC-Modern-Launcher`) closes the window in which two starts both probe the port before either server answers (measured 2026-10-04: two launchers, two servers and six frpc processes on one box); a guard that cannot run never blocks a start |
 
 ### 16. test_windows_packaging_files.py — Windows Packaging Files (4 tests)
 
@@ -714,7 +715,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 ## Design Principles
 
 1. **No hardware required**: All tests use mocked serial, no FT-710, no USB audio, no SPI.
-2. **Fast execution**: ~1604 tests in ~32s — can run on every commit.
+2. **Fast execution**: ~1612 tests in ~32s — can run on every commit.
 3. **Coverage by SDD**: Each test references the SDD requirement it validates.
 4. **Isolation**: Each test is self-contained; no shared mutable state.
 5. **Readable failures**: Assertion messages clearly state expected vs actual.

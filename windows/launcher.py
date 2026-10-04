@@ -110,6 +110,62 @@ def running_instance_url(preferred: str) -> str | None:
         [preferred, launcher_net.other_scheme(preferred)], timeout_s=_RUNNING_PROBE_S)
 
 
+_ERROR_ALREADY_EXISTS = 183
+
+#: One launcher per session. The port probe above catches a server that is already up, but not two
+#: launchers that both probe before either server has answered - measured 2026-10-04 on a field
+#: Windows box: two launchers, two servers, and six frpc processes fighting over one proxy name.
+#: Scoped to the session (``Local\\``) on purpose: another user's launcher is not our business.
+MUTEX_NAME = "MRRC-Modern-Launcher"
+
+#: Kept for the life of the process so the handle is not collected; the kernel releases the mutex
+#: when the process exits, which is the whole reason this is a mutex and not a pid file.
+_single_instance_handle = None
+
+
+def _create_launcher_mutex(name: str) -> tuple[int, int]:
+    """Create the named mutex; return ``(handle, GetLastError())``. Windows only.
+
+    Never raises: a guard that cannot run must read as "no answer" (handle 0), which the caller
+    treats as "carry on" rather than as a reason to refuse a start.
+    """
+    try:
+        import ctypes
+        kernel32 = ctypes.CDLL("kernel32.dll", use_last_error=True)
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        handle = kernel32.CreateMutexW(None, False, f"Local\\{name}")
+        # get_last_error is Windows-only (ctypes defines it there), hence getattr: this module is
+        # imported and unit-tested on the other platforms too.
+        last_error = getattr(ctypes, "get_last_error", None)
+        return int(handle or 0), (int(last_error()) if last_error else 0)
+    except Exception:
+        return 0, 0
+
+
+def acquire_single_instance(name: str = MUTEX_NAME,
+                            create=_create_launcher_mutex) -> bool:
+    """True when this is the only launcher running; False when one is already up.
+
+    A named mutex rather than a pid file: the kernel drops it when the process dies, so a crashed
+    launcher cannot lock the operator out of starting another one - the fix for a stuck pid file
+    would be "delete a file you cannot find". If the check itself fails this returns True: refusing
+    to start because a guard broke would be worse than the duplicate it prevents.
+    """
+    if os.name != "nt":
+        return True
+    global _single_instance_handle
+    try:
+        handle, error = create(name)
+    except Exception:
+        return True
+    if not handle:
+        return True
+    if error == _ERROR_ALREADY_EXISTS:
+        return False
+    _single_instance_handle = handle
+    return True
+
+
 def url_to_open(url: str, proc=None) -> str:
     """The URL to hand the browser: ``url``, or the other scheme if that is what answers.
 
@@ -288,6 +344,14 @@ def main() -> int:
             print("Opening that server instead of starting a second one.")
             print("If you did not start it on purpose, close its window and run this again.")
             webbrowser.open(running)
+            return 0
+        if not acquire_single_instance():
+            # The port did not answer yet, but another launcher holds the mutex: its server is
+            # still coming up. Opening its URL beats starting a second server that would then
+            # fight over the port, the certificate and the radio.
+            print("Another MRRC Modern launcher is already running.")
+            print(f"Opening {url} instead of starting a second server.")
+            webbrowser.open(url)
             return 0
         env["MRRC_CONFIG_FILE"] = str(config_path())
         command = build_command(ssl_pair)

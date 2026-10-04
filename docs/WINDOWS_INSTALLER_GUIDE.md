@@ -7,14 +7,14 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.25.1 Stable)
+## Download (v1.25.2 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.25.1-Windows-x64-Setup.exe` | 51.8 MB (54,339,580 bytes) | `c801d35ef07774c08e2c457ec0acde416eeaf050d8a36ddde58772398c5ff90b` |
+| `MRRC-Modern-v1.25.2-Windows-x64-Setup.exe` | 51.8 MB (54,339,580 bytes) | `c801d35ef07774c08e2c457ec0acde416eeaf050d8a36ddde58772398c5ff90b` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.1-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.2-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 **v1.25.1 is the published Windows installer.** It was built from the release commit on
@@ -24,7 +24,7 @@ installer compiled into a scratch directory and was copied in (`Successful compi
 (32.141 sec)` — Defender's real-time scan otherwise locks the freshly written exe and iscc
 fails with `Error 32`). Bundled-file inspection passed: FTDI DLLs (`ftd2xx.dll`,
 `FT4222.dll`), `opus.dll`, `static/`, `static/listen.js`, `mem_channels.json`,
-`windows\default.env`, `version.txt` = `1.25.1`, and the complete Cloud Hub fleet payload at
+`windows\default.env`, `version.txt` = `1.25.2`, and the complete Cloud Hub fleet payload at
 the **app root** under `fleet\` — 13 files: `frpc.exe` (16,708,608 B), `openssl.exe`
 (1,105,591 B), its nine DLLs, `install_instance_tunnel.ps1`, `openssl.cnf`. Cross-host
 SHA-256 matched (build VM == build Mac).

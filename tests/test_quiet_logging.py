@@ -77,12 +77,22 @@ class SupportLogFileTests(unittest.TestCase):
         LOG_DIR is a module constant (import time), so the env var cannot be
         patched here — the env-driven path is verified by the smoke run in the
         plan (a fresh process with MRRC_LOG_DIR set).
+
+        The root level is raised to INFO for the duration. Under pytest the root logger
+        already has handlers (its logging plugin adds them first), so server.py's import-time
+        ``basicConfig(level=INFO)`` is a **no-op** — that function returns early whenever root
+        has handlers — and root stays at WARNING. Measured 2026-10-04: root.level=20 in a bare
+        process, 30 under pytest; the test's own ``info`` record was then dropped before it
+        reached the file, so the file existed and was empty and the failure said nothing about
+        file logging. ``-p no:logging`` made it pass, which is how this was pinned down.
         """
         root = logging.getLogger()
         saved = list(root.handlers)
+        saved_level = root.level
         try:
             for handler in saved:
                 root.removeHandler(handler)
+            root.setLevel(logging.INFO)          # what the app does at import (server.py:85)
             with mock.patch.object(server, "LOG_DIR", Path(tmp)):
                 path = server._setup_file_logging()
             logging.getLogger("mrrc").info("hello from the test")
@@ -91,6 +101,7 @@ class SupportLogFileTests(unittest.TestCase):
                 if isinstance(handler, logging.handlers.RotatingFileHandler):
                     handler.close()
                     root.removeHandler(handler)
+            root.setLevel(saved_level)
             for handler in saved:
                 root.addHandler(handler)
         return path

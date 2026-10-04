@@ -61,8 +61,8 @@ Apple-silicon Macs (macOS 11+) can install the desktop package — no Python
 install required. The app lives in the menu bar (no Dock icon), starts the
 server itself, and opens the browser.
 
-**Download v1.25.1 Stable** (62,298,582 bytes, SHA-256
-`0974703f88187c32d42a6f43e6d300b33db7e223f0919c2c4d4b8370692e6fbb`):
+**Download v1.25.1 Stable** (62,421,426 bytes, SHA-256
+`461a4f98d598406b8befad5aea65aca8042fc710897fb0205d670a553abfe2e8`):
 
 - <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.1-arm64.dmg>
 

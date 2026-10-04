@@ -274,7 +274,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.68</td>
+<td>V2.69</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
@@ -282,7 +282,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Status</td>
-<td><strong>v1.25.1 built and verified on both platforms</strong> (Windows Setup <strong>54,339,580 bytes</strong>, SHA-256 <code class="scope-code">c801d35e…</code>; macOS DMG <strong>62,421,426 bytes</strong>, SHA-256 <code class="scope-code">461a4f98…</code>; both accepted by clean-room runs of the packaged binaries — the clean room is what proves the shipped CA bundle makes outbound HTTPS verify inside the frozen app)</td>
+<td><strong>v1.25.1 built and verified on both platforms</strong> (Windows Setup <strong>54,339,580 bytes</strong>, SHA-256 <code class="scope-code">c801d35e…</code>; macOS DMG <strong>62,421,426 bytes</strong>, SHA-256 <code class="scope-code">461a4f98…</code>; both accepted by clean-room runs of the packaged binaries — the clean room is what proves the shipped CA bundle makes outbound HTTPS verify inside the frozen app) —— <strong>该构建不含 V2.69 的修复</strong>（Windows 实例的 frpc 泄漏：回收代码依赖 Win11 已移除的 <code class="scope-code">wmic</code> 且失败静默，现场一台机积累到 6 个 frpc 共抢一个代理名、hub 一天刷 7143 行）；它只到源码，下一个版本号重建才到达用户</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.68 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.69 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

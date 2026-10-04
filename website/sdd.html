@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.68</a></li>
+          <li><a href="#updates">V2.69</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.68 · 2026-10-04</span>
+          <span>SDD V2.69 · 2026-10-04</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.68</td>
+              <td>V2.69</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,29 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-network-wired"></i></div>
+            <h3>
+              A Tunnel That Leaked One Process Per Start
+              <small>(V2.69)</small>
+            </h3>
+            <p>
+              The hub logged 7143 <code>proxy already exists</code> lines in a
+              single day, and the cause was on the tenant's own machine: the
+              code that sweeps a leftover <code>frpc</code> before starting a
+              new one used <code>wmic</code>, which Windows 11 no longer ships
+              — and the bare <code>except</code> turned that into a silent
+              no-op. <strong>Six</strong> processes had accumulated over two
+              days, five of them orphans, all claiming one proxy name. It now
+              enumerates with PowerShell's CIM cmdlets, compares config paths
+              the way Windows does (insensitive to case and slash), and
+              <strong>says so when the look-up fails</strong> — because a stale
+              tunnel only ever shows up in the hub's log, not in this app. The
+              launcher also holds a named mutex, so two starts can no longer
+              both find the port free.
+            </p>
+          </div>
+
           <div class="feature-card">
             <div class="icon"><i class="fas fa-lock"></i></div>
             <h3>

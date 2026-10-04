@@ -156,12 +156,12 @@
               The hub logged 7143 <code>proxy already exists</code> lines in a
               single day, and the cause was on the tenant's own machine: the
               code that sweeps a leftover <code>frpc</code> before starting a
-              new one used <code>wmic</code>, which Windows 11 no longer ships
-              — and the bare <code>except</code> turned that into a silent
-              no-op. <strong>Six</strong> processes had accumulated over two
-              days, five of them orphans, all claiming one proxy name. It now
-              enumerates with PowerShell's CIM cmdlets, compares config paths
-              the way Windows does (insensitive to case and slash), and
+              new one used <code>wmic</code>, which Windows 11 no longer ships —
+              and the bare <code>except</code> turned that into a silent no-op.
+              <strong>Six</strong> processes had accumulated over two days, five
+              of them orphans, all claiming one proxy name. It now enumerates
+              with PowerShell's CIM cmdlets, compares config paths the way
+              Windows does (insensitive to case and slash), and
               <strong>says so when the look-up fails</strong> — because a stale
               tunnel only ever shows up in the hub's log, not in this app. The
               launcher also holds a named mutex, so two starts can no longer

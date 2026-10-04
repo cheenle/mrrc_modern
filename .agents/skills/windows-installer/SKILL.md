@@ -189,7 +189,7 @@ mods = set(ZlibArchiveReader(tmp).toc.keys())   # PyInstaller 6: r.toc 是 dict�
 | --- | --- | --- |
 | 证书 | 日志有 `signed a self-signed certificate for 127.0.0.1` + `SSL enabled with a self-signed certificate just generated` | v1.24.5：模块在包里却没 import，`NameError` 被宽 `except` 吞掉后静默退回纯 HTTP |
 | 真的在服务 TLS | `https://127.0.0.1:<port>/login` → **200**；同端口明文 HTTP → **0 字节**/失败 | "黑屏" = 浏览器被送到没人监听的 scheme |
-| 证书主体 | 原始 TLS 握手报 `CN=127.0.0.1`（PS 5.1 里用 `SslStream.AuthenticateAsClient`，**不要**用 `Invoke-WebRequest`，见操作纪律） | 签给 0.0.0.0 与启动器要打开的 127.0.0.1 不匹配 |
+| 证书主体 | 原始 TLS 握手报 `CN=localhost`，而 **SAN** 里含 `IP Address=127.0.0.1`（PS 5.1 里用 `SslStream.AuthenticateAsClient`，**不要**用 `Invoke-WebRequest`，见操作纪律）。2026-10-05 实测 v1.25.2：`DNS:localhost, DNS:<主机名>, DNS:<主机名>.local, IP Address=127.0.0.1, IP Address=::1, IP Address=<LAN 地址>` | 签给 0.0.0.0、或只签了 CN 而 SAN 不含 `127.0.0.1`，就会与启动器实际打开的 `https://127.0.0.1:<port>` 不匹配（浏览器校验看 **SAN**，不看 CN —— 本行原先写「报 `CN=127.0.0.1`」，那是更早一版的证书命名，属过时断言） |
 | 读到用户配置 | 绑的是配置文件里的 host/port，不是默认 `:::8888` | 裸启动完全无视 `mrrc_modern.env` |
 | 写在哪 | `Recording ready:` 指向**用户数据目录**；安装目录/bundle 里**没有**多出 `mrrc_modern.env`、`.tmp`、`certs\`、`recordings\` | 密码存不下 ⇒ 每次启动换一个新密码（"装了新包还是登不上"）；macOS 写进签名 bundle ⇒ `a sealed resource is missing or invalid` |
 | 日志不重复 | 单实例跑，`行数 ≈ distinct 行数`（允许代码本来就打两次的那种，如 `Opening serial port`） | root logger 是进程级的，冻结包把模块当 `__main__` 和 `server` 各加载一次 ⇒ 每行写两遍 |

@@ -11,13 +11,50 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.25.2-Windows-x64-Setup.exe` | 51.8 MB (54,339,580 bytes) | `c801d35ef07774c08e2c457ec0acde416eeaf050d8a36ddde58772398c5ff90b` |
+| `MRRC-Modern-v1.25.2-Windows-x64-Setup.exe` | 51.8 MB (54,346,505 bytes) | `328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.2-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.25.1 is the published Windows installer.** It was built from the release commit on
+**v1.25.2 is the published Windows installer.** It was built from `0983c2d` in a **clean
+worktree** (so a parallel session's unfinished `server.py` / `test_tx_liveness.py` are not in the
+package) on Windows 11 (the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup
+6.7.3. The build gate ran **1609 tests OK (19 platform skips)**, three PyInstaller targets, and
+the installer compiled into a scratch directory and was copied in. Evidence taken from the
+artifact rather than from exit codes: `version.txt` = `1.25.2`, size **54,346,505 bytes** (the
+previous release was 54,339,580), mtime on the build day, and the cross-host SHA-256 matched
+(build VM == build Mac) — `328f029b…`.
+
+**Layer 3 — the new code is inside the frozen package** (a `wmic`-shaped module would have
+looked identical from outside). The PYZ is a CArchive entry, so it was extracted and walked
+(1070 modules, 1061 walked): `_enumerate_frpc`, `_stale_frpc_pids`, `_windows_norm`,
+`_kill_stale_frpc` and `_NO_WINDOW` are all present, the replacement command is a string
+constant in the package —
+`[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-CimInstance Win32_Process -Filter
+"Name='frpc.exe'" | …` — and **the string `wmic` no longer occurs anywhere in the PYZ**. The
+frozen launcher carries `acquire_single_instance`, `_create_launcher_mutex` and
+`_ERROR_ALREADY_EXISTS`.
+
+**Layer 4 — clean-room run of the packaged binaries: 12 checks, 12 passed.** An isolated
+`LOCALAPPDATA`, a pre-seeded config on a free port (18899 — the VM's own resident tenant holds
+8888) and `BROWSER=no-such-browser` (so `webbrowser` fails silently instead of opening
+something), launched the way the Start Menu shortcut does:
+
+- `/login` → **200**, and the handshake certificate's SAN is
+  `DNS:localhost, DNS:DESKTOP-SSDDF0B, …, IP Address=127.0.0.1, IP Address=::1,
+  IP Address=192.168.122.133` — the subject is `CN=localhost` while the **SAN** is what the
+  browser checks, which is why the documented expectation of `CN=127.0.0.1` was wrong (the
+  guide was corrected); plain HTTP to the same port returned **nothing usable**;
+- the **second launcher declined** ("Already running: … answers on this port") and exactly one
+  `LISTENING` row remained — the new mutex and the older port probe both hold;
+- the install directory was **163 files before and after**: no `mrrc_modern.env`, no `certs\`,
+  no `recordings\`;
+- the log held **9 lines / 9 distinct** (no duplicated handler), `Recording ready:` pointed
+  into the per-user directory, TLS was set up and logged, and the first-run probe settled
+  (`MRRC_FIRST_RUN_DONE=1`).
+
+**v1.25.1 (previous release).** It was built from the release commit on
 Windows 11 (the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3.
 The build gate ran **1601 tests OK (19 platform skips)**, three PyInstaller targets, and the
 installer compiled into a scratch directory and was copied in (`Successful compile
@@ -102,7 +139,23 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.24.8 package (54,121,489 bytes, SHA-256 `616f8b55…`) and v1.24.7
-(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.25.1 supersedes both.
+(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.25.2 supersedes them.
+
+**What's new in v1.25.2** (**Windows only — nothing changed on macOS**): **the tunnel stopped
+leaking a process per start, and two launchers can no longer start two servers.** Every launch of
+the app used to leave another `frpc.exe` behind: the sweep that clears a leftover tunnel before
+starting a new one called `wmic`, which **Windows 11 no longer ships**, and the bare `except`
+around it turned `FileNotFoundError` into a silent no-op — so six processes had accumulated over
+two days on one machine, five of them orphans, all claiming the same proxy name. The hub logged
+**7143** `proxy [ba4eg] already exists` lines in a single day, and nothing on the machine itself
+said a word. The sweep now enumerates with PowerShell's `Get-CimInstance Win32_Process` (UTF-8
+forced, no console window, a non-zero exit raised instead of ignored), compares config paths the
+way Windows does (insensitive to case and slash — the old substring test was case-sensitive),
+and **warns when the look-up itself fails**, because a stale tunnel only ever shows up in the
+hub's log. The launcher additionally holds a named mutex (`Local\MRRC-Modern-Launcher`): the port
+probe can only see a server that has *finished* starting, so two starts inside its 0.4 s window
+both found the port free — that field machine had two launchers, two servers and two tunnels. A
+guard that cannot run never blocks a start.
 
 > **Support note — why this release is 1.25.0 and not a rebuilt 1.24.5.** A machine that installed the
 > *first* 1.24.5 build (the one published before the `ssl_bootstrap` import fix) will **never** be

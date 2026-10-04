@@ -151,13 +151,19 @@
             </h3>
             <p>
               hub 的日志一天里刷了 7143 行
-              <code>proxy already exists</code>，而根因在租户自己的机器上：启动前回收旧
-              <code>frpc</code> 的那段代码用的是 <code>wmic</code>，而 Windows 11
-              已经不再自带它 —— 那个裸 <code>except</code> 把这一步变成了静默的空操作。两天里累积了
-              <strong>六个进程</strong>，其中五个是孤儿，全都在抢同一个代理名。现在改用
-              PowerShell 的 CIM 命令枚举，路径比较按 Windows 的规则（大小写不敏感、两种斜杠），
-              并且<strong>查不到时会出声告警</strong> ——
-              因为残留在 hub 的日志里才现形，这台机器自己看不到。启动器另加了一个命名互斥，
+              <code>proxy already exists</code
+              >，而根因在租户自己的机器上：启动前回收旧
+              <code>frpc</code> 的那段代码用的是 <code>wmic</code>，而 Windows
+              11 已经不再自带它 —— 那个裸
+              <code>except</code> 把这一步变成了静默的空操作。两天里累积了
+              <strong>六个进程</strong
+              >，其中五个是孤儿，全都在抢同一个代理名。现在改用 PowerShell 的
+              CIM 命令枚举，路径比较按 Windows
+              的规则（大小写不敏感、两种斜杠）， 并且<strong
+                >查不到时会出声告警</strong
+              >
+              —— 因为残留在 hub
+              的日志里才现形，这台机器自己看不到。启动器另加了一个命名互斥，
               两次启动不会再同时认为端口是空的。
             </p>
           </div>

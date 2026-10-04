@@ -58,7 +58,7 @@
 <div class="hero-actions">
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.25.2-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.25.2
           </a>
-<div class="dl-meta">62,421,426 bytes · SHA-256 461a4f98…</div>
+<div class="dl-meta">62,429,438 bytes · SHA-256 8ef9c8ce…</div>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Windows 安装包 v1.25.2
           </a>
@@ -84,12 +84,27 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.25.1 更新内容</strong>
+<strong> v1.25.2 更新内容</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>macOS 上「接入云端」又能用了</strong>——应用<strong>没有一个可用的 CA 信任库</strong>：
+<strong>Windows：隧道不再「每启动一次就漏一个进程」</strong>——以前每次启动应用都会多留一个
+              <code>frpc</code>。回收旧进程的那段代码用的是 <code>wmic</code>，而 Windows 11 已不再
+              自带它，那个裸 <code>except</code> 又把失败变成了静默的空操作：两天里累积了
+              <strong>六个</strong> 进程（五个是孤儿）、全在抢同一个入口 —— hub 一天被刷了
+              <strong>7143</strong> 行 “proxy already exists”，而这台机器自己一声不吐。现在改用
+              PowerShell 的 CIM 命令枚举，路径比较按 Windows 的规则（大小写不敏感、两种斜杠），
+              并且<em>查不到时会出声告警</em>。
+            </li>
+<li>
+<strong>两个启动器不会再各起一个服务器</strong>——原有的端口探测只看得见<em>已经启动完成</em>
+              的服务器，两次启动落在它 0.4 秒的窗口内时都会认为端口是空的（现场那台机器上正好有
+              两个 launcher、两个 server 和两条隧道）。现在启动器持有命名互斥，内核在进程退出时
+              自动释放 —— 启动器崩了也不会把你锁在外面。
+            </li>
+<li>
+<strong>上一版（v1.25.1）：macOS 上「接入云端」又能用了</strong>——应用<strong>没有一个可用的 CA 信任库</strong>：
               包里带着构建机的 OpenSSL，它的默认 CA 路径只在构建机上存在。于是申请入口、上传
               🐞 诊断包、软件更新检查全部报 <code>CERTIFICATE_VERIFY_FAILED</code>（那份报告包之所以
               要人工递过来，正是这个原因）。现在应用随包带自己的 CA、再回退系统 CA，而且构建闸门会
@@ -360,28 +375,29 @@
 <strong> MRRC-Modern-Setup.exe — v1.25.2 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.8 MB · x64 · 54,339,580 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: c801d35e…</code>
+            51.8 MB · x64 · 54,346,505 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 328f029b…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.25.1 首次运行零配置：自动生成网页密码，自动识别电台
+            v1.25.2 首次运行零配置：自动生成网页密码，自动识别电台
             （FT-710 ASCII CAT / Icom CI-V 0x19）与串口（COM），登录页
-            直接显示自动生成的密码。网页"连接设置"对话框可修改电台型号、
-            串口、RX+TX 音频设备与密码，支持保存并重启——服务自动重启，
-            启动器在配置变更后也会自动重启。CAT、音频、PTT、频谱行为与
-            上一版本完全一致。v1.25.1 修掉了两个<strong>只在用户机器上才现形</strong>的打包缺陷：应用
-            没有任何可用的 CA 信任库（接入云端、上传诊断包、软件更新检查全部报
-            <code>CERTIFICATE_VERIFY_FAILED</code>），以及 FT-4222 采集进程找不到动态库、频谱
-            一直画 S 表合成曲线。真实 USB、射频、电源循环和音频质量仍需连接电台验收。
+            直接显示自动生成的密码。网页“连接设置”对话框可修改电台型号、
+            串口、RX+TX 音频设备与密码，支持保存并重启。CAT、音频、PTT 与
+            频谱行为不变。v1.25.2 修的是<strong> Windows 侧的隧道进程泄漏</strong>：
+            以前每次启动应用都会多留一个隧道进程 —— 回收旧 <code>frpc</code> 的那段代码用的是
+            <code>wmic</code>，而 Windows 11 已不再自带它、失败时还什么都不说。一台机器上
+            因此累积到<strong>六个</strong>进程、全在抢同一个入口，hub 一天被刷了 7143 行
+            <code>proxy already exists</code>。启动器另加命名互斥，两次启动不会再各起一个服务器。
+            真实 USB、射频、电源循环和音频质量仍需连接电台验收。
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.25.2-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.25.1 版本化安装包
+<i class="fas fa-fingerprint"></i> v1.25.2 版本化安装包
             </a>
-<div class="dl-meta">54,339,580 bytes · SHA-256 c801d35e…</div>
+<div class="dl-meta">54,346,505 bytes · SHA-256 328f029b…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -400,8 +416,8 @@
 <strong> MRRC-Modern-v1.25.2-arm64.dmg — v1.25.1 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            59.5 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 62,421,426 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 461a4f98…</code>
+            59.5 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 62,429,438 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 8ef9c8ce…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
@@ -516,7 +532,7 @@
               MRRC-Modern-Setup.exe — v1.25.2，51.8 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 c801d35ef07774c08e2c457ec0acde416eeaf050d8a36ddde58772398c5ff90b</code>
+<code>SHA-256 328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>

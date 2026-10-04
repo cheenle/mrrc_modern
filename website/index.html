@@ -59,7 +59,7 @@
 <div class="hero-actions">
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.2-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.25.2
           </a>
-<div class="dl-meta">62,421,426 bytes · SHA-256 461a4f98…</div>
+<div class="dl-meta">62,429,438 bytes · SHA-256 8ef9c8ce…</div>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Windows Installer v1.25.2
           </a>
@@ -92,12 +92,30 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.25.1</strong>
+<strong> What's new in v1.25.2</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>Portal enrolment works again on macOS</strong> — the app had <em>no CA trust store</em>:
+<strong>Windows: the tunnel stops leaking a process per start</strong> — every launch of the app
+              used to leave another <code>frpc</code> behind. The sweep that clears a leftover one before
+              starting a new one called <code>wmic</code>, which Windows 11 no longer ships, and its
+              <code>except</code> turned that into a silent no-op: <strong>six</strong> processes had
+              piled up over two days, five of them orphans, all claiming one entry — and the hub logged
+              <strong>7143</strong> “proxy already exists” lines in a single day, while nothing on the
+              machine itself said a word. It now enumerates with PowerShell's CIM cmdlets, compares config
+              paths the way Windows does (insensitive to case and slash), and <em>says so when the look-up
+              fails</em>.
+            </li>
+<li>
+<strong>Two launchers can no longer start two servers</strong> — the port probe only sees a server
+              that has <em>finished</em> starting, so two starts inside its 0.4 s window both found the port
+              free (the field machine had two launchers, two servers and two tunnels). A named mutex closes
+              that window, and the kernel releases it when the process exits, so a crashed launcher cannot
+              lock you out.
+            </li>
+<li>
+<strong>Previous release (v1.25.1), Portal enrolment works again on macOS</strong> — the app had <em>no CA trust store</em>:
               the bundle carried the builder's OpenSSL, whose compiled-in CA path exists only on a
               build machine. Applying for an entry, uploading a 🐞 diagnostics bundle and the update
               check all failed with <code>CERTIFICATE_VERIFY_FAILED</code> (that is also why a
@@ -378,22 +396,22 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-Setup.exe — v1.25.2 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.8 MB · x64 · 54,339,580 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: c801d35e…</code>
+            51.8 MB · x64 · 54,346,505 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 328f029b…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.25.1 is zero-config on first run: it auto-generates a web
+            v1.25.2 is zero-config on first run: it auto-generates a web
             password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
             0x19) and its serial port (COM), and the login page shows the
-            auto-generated password. The web 连接设置 (Connection Settings)
-            dialog changes the radio model, serial port, RX+TX audio devices,
-            and password with save-and-restart — the server auto-restarts, and
-            the launcher restarts on config change. CAT, audio, PTT, and scope
-            behavior is unchanged from the previous release. v1.25.1 fixes two packaging
-            defects that only ever appeared on a user's machine: the app had no CA trust store at all
-            (portal enrolment, the 🐞 diagnostics upload and the update check failed with
-            <code>CERTIFICATE_VERIFY_FAILED</code>), and the FT-4222 scope worker could not find its
-            libraries, so the spectrum silently drew the S-meter curve instead of real FFT data.
+            auto-generated password. The web Connection Settings dialog
+            changes the radio model, serial port, RX+TX audio devices, and
+            password with save-and-restart. CAT, audio, PTT and scope behaviour
+            is unchanged. v1.25.2 fixes a <strong>Windows-only leak</strong>: every start of the app used to
+            leave another tunnel process behind, because the sweep that clears a leftover
+            <code>frpc</code> called <code>wmic</code> — which Windows 11 no longer ships — and said
+            nothing when it failed. Six of them had accumulated on one machine, all claiming the same
+            entry, and the hub logged 7143 “proxy already exists” lines in a single day. The launcher
+            also holds a named mutex now, so two starts can no longer each start a server.
             Physical USB, RF, power-cycle, and audio-quality acceptance still requires a connected
             radio.
           </p>
@@ -402,9 +420,9 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <i class="fab fa-windows"></i> Download for Windows
             </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.25.2-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.25.1
+<i class="fas fa-fingerprint"></i> Versioned v1.25.2
             </a>
-<div class="dl-meta">54,339,580 bytes · SHA-256 c801d35e…</div>
+<div class="dl-meta">54,346,505 bytes · SHA-256 328f029b…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -423,8 +441,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-v1.25.2-arm64.dmg — v1.25.1 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            59.5 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,421,426 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 461a4f98…</code>
+            59.5 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,429,438 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 8ef9c8ce…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -544,7 +562,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               MRRC-Modern-Setup.exe — v1.25.2, 51.8 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 c801d35ef07774c08e2c457ec0acde416eeaf050d8a36ddde58772398c5ff90b</code>
+<code>SHA-256 328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>

@@ -61,6 +61,7 @@ fun MainScreen(
     onOpenSettings: () -> Unit,
     fullscreen: Boolean = false,
     onToggleFullscreen: () -> Unit = {},
+    onAfVol: (Int) -> Unit = {},
 ) {
     // RadioState 是可变普通类：订阅 version 触发重组
     vm.version.collectAsState()
@@ -300,7 +301,8 @@ fun MainScreen(
             }
 
             // ── 音量 ─────────────────────────────────────────────────
-            VolumeRow(state.afGain) { vm.sendSet("af_gain", it) }
+            // ── 音量（本机播放音量，web 🔊 Vol 语义）──────────────────
+            VolumeRow(prefs.afVol, onAfVol)
 
             // ── 步进：◀◀ ◀ [100Hz] ▶ ▶▶ ──────────────────────────────
             Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {

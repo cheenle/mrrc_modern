@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +38,7 @@ import com.hamradio.ft710android.UI.SettingsScreen
 import com.hamradio.ft710android.UI.UiPrefs
 import com.hamradio.ft710android.UI.UiPrefsFlow
 import com.hamradio.ft710android.ViewModel.MainViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
@@ -45,6 +47,7 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
     var immersive by rememberSaveable { mutableStateOf(false) }
     val prefs by UiPrefsFlow(settings).collectAsState(initial = UiPrefs())
     val userOff by vm.userOff.collectAsState()
+    val scope = rememberCoroutineScope()
 
     AppSetup(keepScreenOn = prefs.keepScreenOn, onTxRelease = { vm.onPttRelease() })
     ImmersiveEffect(immersive)
@@ -53,7 +56,7 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
         if (!loggedIn) {
             LoginScreen(vm, settings) { loggedIn = true }
         } else if (showSettings) {
-            SettingsScreen(vm, settings) { loggedIn = false; showSettings = false }
+            SettingsScreen(vm, settings, prefs) { loggedIn = false; showSettings = false }
         } else {
             MainScreen(
                 vm = vm,
@@ -61,6 +64,7 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
                 onOpenSettings = { showSettings = true },
                 fullscreen = immersive,
                 onToggleFullscreen = { immersive = !immersive },
+                onAfVol = { v -> scope.launch { settings.putAfVol(v) } },
             )
         }
         if (loggedIn && userOff) DisconnectedOverlay(vm)

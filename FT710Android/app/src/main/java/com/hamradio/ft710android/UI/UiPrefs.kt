@@ -11,17 +11,22 @@ data class UiPrefs(
     val scopeCeil: Int = 220,
     val fftHeight: Int = 40,
     val wfHeight: Int = 110,
+    val afVol: Int = 128,
+    val micVol: Int = 100,
     val keepScreenOn: Boolean = true,
     val backgroundRx: Boolean = true,
 )
 
-/** 把 SettingsStore 的偏好流合成一个快照（分两层 combine，避开 5 流以上的重载限制）。 */
+/** 把 SettingsStore 的偏好流合成一个快照（逐层 combine，避开 5 流以上的重载限制）。 */
 fun UiPrefsFlow(settings: SettingsStore): Flow<UiPrefs> {
-    val scope = combine(
+    val base = combine(
         settings.scopeTheme, settings.scopeFloor, settings.scopeCeil,
         settings.fftHeight, settings.wfHeight,
     ) { theme, floor, ceil, fftH, wfH -> UiPrefs(theme, floor, ceil, fftH, wfH) }
-    return combine(scope, settings.keepScreenOn, settings.backgroundRx) { p, keepOn, bgRx ->
+    val withVol = combine(base, settings.afVol, settings.micVol) { p, af, mic ->
+        p.copy(afVol = af, micVol = mic)
+    }
+    return combine(withVol, settings.keepScreenOn, settings.backgroundRx) { p, keepOn, bgRx ->
         p.copy(keepScreenOn = keepOn, backgroundRx = bgRx)
     }
 }

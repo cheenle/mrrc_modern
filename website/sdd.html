@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.69</a></li>
+          <li><a href="#updates">V2.70</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.69 · 2026-10-04</span>
+          <span>SDD V2.70 · 2026-10-05</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,11 +113,11 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.69</td>
+              <td>V2.70</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
-              <td>2026-10-04</td>
+              <td>2026-10-05</td>
             </tr>
             <tr>
               <td>Runtime</td>
@@ -146,6 +146,30 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-heartbeat"></i></div>
+            <h3>
+              A Fresh Press Is No Longer Unkeyed By The Safety Gate
+              <small>(V2.70)</small>
+            </h3>
+            <p>
+              Cloud Hub enables the liveness gate that releases a transmitting
+              session when it stops proving it is alive. The heartbeat is sent
+              <em>at key-up</em>, but the server cannot read that beat until the
+              key-up handler returns — and a watchdog tick landing in those
+              20–70 ms saw a session that was both the owner <em>and</em>
+              silent. One field log recorded <strong>seven</strong> releases of
+              the operator's own healthy press. Keying now refreshes the
+              liveness clock, while a session that never sent
+              <code>txhb</code> stays ungated. The fix lives in the frozen
+              <code>server.py</code>, so it ships as an installer — and its
+              first build is why artifact-level checks exist: every gate was
+              green while the package still held the pre-fix bytecode, a trap
+              now closed by purging PyInstaller's workpath cache before a
+              build.
+            </p>
+          </div>
+
           <div class="feature-card">
             <div class="icon"><i class="fas fa-network-wired"></i></div>
             <h3>

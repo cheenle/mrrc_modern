@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.69 更新</a></li>
+          <li><a href="#updates">V2.70 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.69 · 2026-10-04</span>
+          <span>SDD V2.70 · 2026-10-05</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,7 +110,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.69</td>
+              <td>V2.70</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -143,6 +143,22 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-heartbeat"></i></div>
+            <h3>
+              刚按下的一键不会再被存活闸门自己放开
+              <small>（V2.70）</small>
+            </h3>
+            <p>
+              Cloud Hub 打开的存活闸门只应释放不再证明自己活着的发射会话；心跳在<em>按键时</em>发送，
+              而服务端要等按键处理返回后才能读到 —— 落在那 20–70 ms 窗口里的检查，会把刚按下的健康一键
+              当成静默会话放开（一份现场日志里记了 <strong>七次</strong>）。现在按键本身会刷新存活时钟，
+              从未发过 <code>txhb</code> 的会话依旧不被门控。修复在冻结的 <code>server.py</code> 里，
+              所以只能随安装包发布 —— 而它的第一个构建恰好说明了为什么必须查产物本身：所有门禁都是绿的，
+              包里却还是修复前的字节码；现在构建前会清掉 PyInstaller 的 workpath 缓存。
+            </p>
+          </div>
+
           <div class="feature-card">
             <div class="icon"><i class="fas fa-network-wired"></i></div>
             <h3>

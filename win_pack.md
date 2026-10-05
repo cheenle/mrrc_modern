@@ -2,7 +2,14 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> 最新构建：**v1.25.2**（2026-10-05）—— VM 门禁 **1609 项 OK（19 skip）**；洁净室真跑 **12/12**（隔离 LOCALAPPDATA + 空闲端口 + 冻结 Launcher）；构建源 `0983c2d` 的干净 worktree；产物 `MRRC-Modern-v1.25.2-Windows-x64-Setup.exe` **54,346,505 bytes**，SHA-256 `328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39`；`version.txt` = 1.25.2；Inno Setup 6.7.3、PyInstaller 6.21.0、Python 3.12.4；fleet 13 个文件在**应用根目录**；VM 与 Mac 两侧 SHA-256 逐字节一致；包内 junk **0**、私钥形状文件 **0**（除有意随包的 `vendor\ca\cacert.pem`）。**新增构建闸门** `dev_tools/tls_trust_gate.py` 在 VM 上通过（`net_tls` 29 根系统根证书 + 随包 bundle 119 根 + portal/latest.json 真握手 200）。**洁净室真跑**（隔离 `LOCALAPPDATA` + 预置空闲端口 18791 + `BROWSER=no-such-browser`）：打包 Launcher 起服务、`https /login` **200**、同端口明文 **refused**、`/api/update/check` **200**（冻结包内走 `net_tls` 取回线上 manifest）、安装目录 **0 处改动**、`server.log` 18 行 / 18 distinct（无重复日志）。
+> **最新构建：v1.25.3（2026-10-05）** —— VM 门禁 **1613 项 OK（19 skip）**；`dev_tools/tls_trust_gate.py` 通过（系统根 29 + 随包 119 根 + portal/latest.json 真握手）；产物 `MRRC-Modern-v1.25.3-Windows-x64-Setup.exe` **54,342,929 bytes**，SHA-256 `1413521cd4081d922429320106ba44f135d339e4ac805d29937b0f2d667744ec`；`version.txt` = 1.25.3；Inno Setup 6.7.3、PyInstaller 6.21.0、Python 3.12.4；fleet 13 个文件在**应用根目录**；VM 与 Mac 两侧 SHA-256 逐字节一致；包内 junk **0**、私钥形状 **0**（除有意随包的 `vendor\ca\cacert.pem`）。
+>
+> **本轮抓到一个静默失效的构建**：第一个包门禁全绿（1612 项 OK）、`version.txt`/size/SHA 全对，但 PyInstaller 复用了 `build\pyinstaller` 的缓存模块图 —— tar 保留了构建 Mac 的 mtime，修复后的 `server.py`（Oct 4 23:04）比 v1.25.2 的缓存（Oct 5 07:46）旧，于是只有 `COLLECT-00.toc` 被重写、冻进去的是**未修复的** `server.py`。符号走查发现 `_execute_set_command` 与源码差 10 条指令、const 行号 2469 vs 2484（正好是修复加的 15 行）。给 `build.ps1` 加上构建前 `Remove-Item build\pyinstaller`（配套守卫测试，变异验证变红），重建后走查逐字节一致。
+>
+> **洁净室真跑**：隔离 LOCALAPPDATA + 空闲端口 18896 + 冻结 Launcher（https /login **200**、同端口明文 refused、/api/health **401**、TLS 1.3 + SAN 含 `127.0.0.1`、首探 settle、第二启动器退出、安装目录 **163→163**、junk 0）。
+>
+> **装完真跑**：把真 `MRRC-Modern-Setup.exe` 静默装进隔离 `/DIR=`（不影响 VM 上的常驻租户）—— 165 文件、`version.txt` = 1.25.3、fleet 在、安装后的 Launcher 同样 https /login **200**、安装目录 **165→165**、卸载干净。
+
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
 - `version.txt` **必须存在于产物内且等于 CHANGELOG 顶版本**（诊断包 manifest、以及后续一键升级都读它）：

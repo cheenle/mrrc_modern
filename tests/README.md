@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1612 tests across 86 test modules (17 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-04, macOS). The per-module sections below
+1616 tests across 86 test modules (19 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-05, macOS). The per-module sections below
 itemise 71 of those 86 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
@@ -19,9 +19,9 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1604 |
-| Passed | 1604 (with all optional dependencies installed; 1 skipped) |
-| Skipped | 4 certificate tests when `cryptography` is unavailable |
+| Total tests | 1616 |
+| Passed | 1615 (1 skipped) |
+| Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 |
 | Execution time | ~15s (harness tests spawn CLI subprocesses) |
 
@@ -175,7 +175,7 @@ SDD coverage: §12.2 (Windows packaging)
 | `WindowsLauncherSslTests` | 7 | Launcher SSL material resolution: explicit cert/key env vars first, self-signed bootstrap fallback, `MRRC_SSL=off` HTTP escape |
 | `SingleInstanceTests` | 4 | One launcher per session: a named mutex (`Local\MRRC-Modern-Launcher`) closes the window in which two starts both probe the port before either server answers (measured 2026-10-04: two launchers, two servers and six frpc processes on one box); a guard that cannot run never blocks a start |
 
-### 16. test_windows_packaging_files.py — Windows Packaging Files (4 tests)
+### 16. test_windows_packaging_files.py — Windows Packaging Files (5 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 

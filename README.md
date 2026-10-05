@@ -35,8 +35,8 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.25.3 Stable** (54,346,505 bytes, SHA-256
-`328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39`):
+**Download v1.25.3 Stable** (54,342,929 bytes, SHA-256
+`1413521cd4081d922429320106ba44f135d339e4ac805d29937b0f2d667744ec`):
 
 - Fast mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.3-Windows-x64-Setup.exe>

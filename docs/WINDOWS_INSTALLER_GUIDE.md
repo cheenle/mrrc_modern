@@ -11,13 +11,50 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.25.3-Windows-x64-Setup.exe` | 51.8 MB (54,346,505 bytes) | `328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39` |
+| `MRRC-Modern-v1.25.3-Windows-x64-Setup.exe` | 51.8 MB (54,342,929 bytes) | `1413521cd4081d922429320106ba44f135d339e4ac805d29937b0f2d667744ec` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.3-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.25.2 is the published Windows installer.** It was built from `0983c2d` in a **clean
+**v1.25.3 is the published Windows installer.** It was built from `46cf1dc` on Windows 11
+(the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. The build gate
+ran **1613 tests OK (19 platform skips)**, three PyInstaller targets, and the installer compiled
+into a scratch directory and was copied in. Evidence taken from the artifact: `version.txt` =
+`1.25.3`, size **54,342,929 bytes** (v1.25.2 was 54,346,505), mtime **2026-10-05 13:45:21**, and
+the cross-host SHA-256 matched (build VM == build Mac) — **`1413521c…`**.
+
+**Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build): the
+first v1.25.3 build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —
+and still froze the **pre-fix** `server.py`. PyInstaller only re-analyzes a file whose (size, mtime)
+changed; a tree shipped as a tar keeps the build Mac's mtimes, and the fix's `server.py` mtime
+(2026-10-04 23:04) predated the v1.25.2 cache (2026-10-05 07:46), so only `COLLECT-00.toc` was
+rewritten and the old bytecode was reused. The walk caught it: `_execute_set_command` differed from
+the source by 10 instructions, its generator expression sat at line 2469 instead of 2484 (exactly
+the +15 lines the fix added), and `_tx_hb_capable` / `_tx_hb_last` were source-only names.
+`build.ps1` now removes `build\pyinstaller` before invoking PyInstaller (with a guard test), and the
+rebuilt package's walk is exact: `_execute_set_command`, `_tx_liveness_watchdog` and
+`_tx_liveness_timeout` are **byte-identical** to `server.py`, and the new membership test against
+`_tx_hb_capable` is present in the frozen entry. The launcher entry carries `launcher_net`,
+`first_run`, `ssl_material`, `acquire_single_instance` and `_create_launcher_mutex`; the PYZ carries
+`net_tls`, `cloud_hub`, `ssl_bootstrap`, `upgrade_core` and `config`, and `cloud_hub` carries
+`_enumerate_frpc`, `_stale_frpc_pids`, `_windows_norm`, `_kill_stale_frpc` and `_NO_WINDOW`.
+
+**Layer 4 — clean-room run of the packaged binaries, then the real installer.** An isolated
+`LOCALAPPDATA`, a pre-seeded config on a free port (18896 — the VM's own resident tenant holds 8888)
+and `BROWSER=no-such-browser`, launched the way the Start Menu shortcut does: the first-run probe
+settled (`MRRC_FIRST_RUN_DONE=1`, a 22-character web password written, `MRRC_SERIAL_PORT=COM1`), the
+server logged `starting on port 18896`, `https /login` → **200**, plain HTTP → **nothing usable**,
+`/api/health` → **401**, and the live handshake was **TLS 1.3** with subject `CN=localhost` and a SAN
+of `localhost, DESKTOP-SSDDF0B, DESKTOP-SSDDF0B.local, 127.0.0.1, ::1, 192.168.122.133`.
+`Recording ready:` named the per-user directory; the install directory was **163 files before and
+after**; junk 0. The second launcher declined, one `LISTENING` row remained during the run and zero
+after it was stopped. The shipped `MRRC-Modern-Setup.exe` was then installed **silently into an
+isolated `/DIR=`** (so the VM's resident tenant was never touched): 165 files, `version.txt` =
+1.25.3, fleet payload present, junk 0; the installed Launcher served `https /login` **200** and the
+install directory stayed 165→165; the uninstaller removed it cleanly.
+
+**v1.25.2 (previous release).** It was built from `0983c2d` in a **clean
 worktree** (so a parallel session's unfinished `server.py` / `test_tx_liveness.py` are not in the
 package) on Windows 11 (the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup
 6.7.3. The build gate ran **1609 tests OK (19 platform skips)**, three PyInstaller targets, and
@@ -54,7 +91,7 @@ something), launched the way the Start Menu shortcut does:
   into the per-user directory, TLS was set up and logged, and the first-run probe settled
   (`MRRC_FIRST_RUN_DONE=1`).
 
-**v1.25.1 (previous release).** It was built from the release commit on
+**v1.25.1.** It was built from the release commit on
 Windows 11 (the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3.
 The build gate ran **1601 tests OK (19 platform skips)**, three PyInstaller targets, and the
 installer compiled into a scratch directory and was copied in (`Successful compile
@@ -139,7 +176,20 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.24.8 package (54,121,489 bytes, SHA-256 `616f8b55…`) and v1.24.7
-(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.25.2 supersedes them.
+(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.25.3 supersedes them.
+
+**What's new in v1.25.3**: **a fresh press can no longer be unkeyed by the remote-session safety
+gate.** Cloud Hub enables the liveness gate that unkeys a transmitting session which stops proving
+it is alive (`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`). The heartbeat is sent at key-up, but the server
+cannot read that beat until the key-up handler returns (CAT write + audio start, tens of
+milliseconds) — and a watchdog tick landing inside that window saw a session that was both the
+owner *and* silent, so it released a healthy press that had just been made. One field log recorded
+**seven** such releases, each **20–70 ms** after keying, with gaps exactly equal to the time since
+that operator's previous transmission. `ptt:true` now refreshes the session's liveness clock when
+the session has declared the heartbeat capability — keying counts as proof of life — while a
+session that never sent `txhb` is still never gated (the V2.63 negative case is preserved). The fix
+is in `server.py`, a frozen entry script the hotfix overlay cannot reach, which is why this is an
+installer release.
 
 **What's new in v1.25.2** (**Windows only — nothing changed on macOS**): **the tunnel stopped
 leaking a process per start, and two launchers can no longer start two servers.** Every launch of

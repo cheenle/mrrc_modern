@@ -21,6 +21,7 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 - 原因：站点树（`~/HAM/website/mrrc_modern` → `/Users/cheenle/HAM/mrrc_modern/website`）与 Windows/macOS 发布波共用，全站 deploy 会把对方的下载卡片回退（实测：一次 Android 发版把线上 v1.25.3 卡片短暂刷回 v1.25.0）。
 - 下载卡片的版本文字由发布协调方跟进（另一条发布波会带上 Android 卡片）；需要改卡片时先确认没有并发发版，只改 `<!-- android-download -->` 标记块与 hero 安卓按钮，**不要自己跑 deploy**。
 - 稳定别名 `MRRC-Modern-Android.apk` 永远指向最新 APK，所以卡片文字滞后不影响下载。
+- `publish-card.sh` 上传后会 `systemctl reload nginx`：nginx 开了 `open_file_cache`（valid 60s / inactive 30s），`mv` 换文件后不 reload 会继续用旧 inode 服务最长 60 秒（实测"文件已是新版、外网仍回旧版"）。
 
 ## 架构速览
 
@@ -34,8 +35,10 @@ FT710App (Application) → ServiceLocator.assemble() 构造依赖闭环
       ├─ TxAudioCapture      (AudioRecord → Opus 编码 → WS)
       ├─ SpectrumProcessor   (1701B 帧 → 瀑布环 + FFT)
       └─ PTTManager          (安全状态机 + 看门狗)
+  └─ RxForegroundService      (后台 RX：mediaPlayback 前台服务 + 常驻通知)
 ```
-纯逻辑类（协议/PTT/频谱/记忆频道/RadioState）不依赖 Android SDK，JVM 可测。
+纯逻辑类（协议/PTT/频谱/记忆频道/RadioState/能力表/频率解析/S 表标尺/重采样/增益/调色板）不依赖 Android SDK，JVM 可测。
+关键辅助模块：`Network/ChannelFlags.kt`（通道在线标志，**必须线程安全**）、`Data/Capabilities.kt`、`Data/FreqInput.kt`、`Data/SMeter.kt`、`UI/UiPrefs.kt`、`UI/Dialogs.kt`、`UI/CloudHubDialog.kt`。
 Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.version`（`StateFlow<Long>`，每次 apply 后 +1）触发重组，随后读 `vm.state.*`。
 
 ## 协议事实（逐字对齐 server.py）
@@ -79,7 +82,41 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - `--no-ssl` 时 baseUrl 用 `http://`，`ConnectionManager.wsUrl` 自动转 `ws://`。
 - 前台服务后台 RX 已实现（`RxForegroundService`，mediaPlayback，设置页可关）；退后台仍强制释放 TX。44.1k 设备采集已做 882↔960 重采样兜底。
 - `RadioState` 字段与 `radio_state.py:to_dict` 的 key 一一对应，新增字段两端同步。
-- **音频/频谱靠连接聚合回调启停**：`MainViewModel.onConnectionChange(true)` → `rxPlayer.start()`；`/WSspectrum` 帧必须经 `onSpectrumFrame` 推到 `_waterfall/_fft` 两个流（2026-10-05 真机事故：二者都曾缺失，控制正常但没声、没瀑布——新增流/播放器时先确认有调用点）。
+- **播放器/PTT 各自只看自己的通道**：`onAudioRxChange(true/false)` 驱动 `rxPlayer.start()/stop()`（只看 `/WSaudioRX`）；`PTTManager.isCtrlConnected` 只看 `/WSradio`。**不要**再挂到"四路全齐"的聚合上（2026-10-05：聚合曾同时门控播放器与 PTT，且 `connectedFlags` 非线程安全，丢一个 add 就表现为"控制通、频谱通、无声、不键控"）。
+- **`/WSspectrum` 帧必须经 `onSpectrumFrame` 推到 `_waterfall/_fft` 两个流**，只喂 `SpectrumProcessor` 不会更新 UI（曾有整个频谱空白）。
+- **S 表语义**：`s_unit` 是字符串（`"S9"`/`"+20"`/`"+60"`）；`s_meter_dbm` 是**相对 S9 的 dB**（不是 dBm）；raw 0..255，填充 `raw/255`，刻度位置见 `Data/SMeter.kt`。
+
+## 设备侧诊断行（真机反馈的第一手证据）
+
+主屏状态行下方有一行等宽小字，每秒刷新（`MainViewModel.startStats` → `vm.diag`），用于把"安卓链路"分段：
+
+```
+A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+ TX[off mic:ok 48000 src:1997 pk:812 R:0 X:0] tx:0
+```
+
+| 字段 | 含义 | 判读 |
+| --- | --- | --- |
+| `A:on/off` | `RxAudioPlayer.running` | `off` = 播放器没启动（`/WSaudioRX` 未在线） |
+| `F:` / `D:` | 收到的音频帧 / 解码样本 | `F=0` → 帧没到；`F>0,D=0` → 解码失败 |
+| `J:` | 抖动缓冲 ms（web 水位 220/90/800） | 长期 >500 说明在丢帧追赶（`Dr` 会涨） |
+| `G:` | 当前播放增益（=min(10, vol/255×boost)，TX 时 0） | `0.00` 且非发射 → 被 TX 状态卡住 |
+| `T:` | AudioTrack `playState`（3=PLAYING，1=STOPPED，-1=未创建） | `-1/1` → 播放器没跑起来 |
+| `W:` / `E:` | 写成功 / 写失败次数 | `E` 增长 → 音频设备异常 |
+| `Dr:` / `Un:` | 超上限丢帧 / 欠载次数 | `Dr` 涨=延迟被夹住；`Un` 涨=网抖动大 |
+| `ch:` | 五路在线标志（radio/audioRX/audioTX/spectrum） | 哪个是 `-` 就是哪路没连上 |
+| `TX[...]` | 采集在跑否 / 权限 / 采样率 / `src:` 采集源 / `pk:` 本帧峰值 / `R:` 样本 / `X:` 帧 | `mic:NO`=没权限；`src:1997`=UNPROCESSED，`1`=MIC，`6`=旧 VOICE_COMMUNICATION；按 PTT 时 `pk` 应上千 |
+| `tx:` | `tx_status`（0=RX，1=TX，2=TUNE） | 按 PTT 后应到 1 |
+
+## 音频/Compose 不变量（改这块必看）
+
+- **抖动缓冲是时间水位**：冷启动 220ms、欠载恢复 90ms、**硬上限 800ms 丢最旧帧**，进入 TX 时 `flush()`。逐字对齐 `static/rx_worklet_processor.js`；无上限队列会让延迟永久增长（真机"跑一段时间比 Web 慢几秒"）。
+- **RX 播放增益** = `min(10, afVol/255 × capabilities.audio_gain_boost)`，TX/TUNE 期间 0（web `AUDIO_TX_DIM_FACTOR`）；FT-710 需要 10× 提升。
+- **TX 采集源**：优先 `UNPROCESSED` → `MIC`（Web 明确关掉 AEC/NS/AGC）；**不要用 `VOICE_COMMUNICATION`**（强制降噪把话音压小 = "功率非常小"）。48k 优先、44.1k 走 882→960。
+- **JNI 的 `frame_size` 是样本数**：`GetArrayLength(jshortArray)` 不是字节数；编码/解码都必须传 960（20ms@48k）。曾误传 `len/2` → 每包只算 10ms（RX 只播一半、TX 半速）。
+- **Compose：`collectAsState()` 的返回值必须被读出**，否则不建立快照订阅。`RadioState` 是普通可变类，靠 `MainViewModel.version` 驱动：`val v by vm.version.collectAsState()`，服务端侧取值放 `remember(v) { ... }`（设置页曾因丢弃返回值导致四个滑块"调不了"）。
+- **权限**：`RECORD_AUDIO` 必须在登录后主动申请（否则 TX 采集静默失败：电台键控但无调制 = 没功率）；`POST_NOTIFICATIONS`（13+）用于后台 RX 通知。
+- **edge-to-edge**：targetSdk 35 在 Android 15 强制全屏画到状态栏下；根布局用 `WindowInsets.safeDrawing`，状态栏/导航条图标设浅色。
+- **返回键**：设置页要有 `onBack` + `RootScreen` 的 `BackHandler`（曾出现"进了设置只能退出登录"）。
 
 ## v1.0.0 协议增量（逐字对齐 server.py）
 

@@ -70,8 +70,13 @@ printf 'storeFile=%s\nstorePassword=<口令>\nkeyAlias=mrrc-modern\nkeyPassword=
   "$HOME/.android-keystores/mrrc-modern-release.jks" > FT710Android/keystore.properties
 ```
 
-- 一条命令发布（构建 → 签名核对 → 站点上传 → 线上 SHA-256 复核）：
+- 发布是**两条命令**，边界明确（详见 `CLAUDE.md` 的"发布纪律"）：
 
 ```bash
-cd FT710Android && ./release.sh            # --dry-run 只本地构建+改页面；--skip-tests 跳过单测
+cd FT710Android
+./release.sh --apk-only        # 构建 → 签名核对 → 只上传 APK → 线上 SHA-256 复核
+./publish-card.sh              # 只改线上页面的 Android 标记块与 hero 安卓按钮，然后 reload nginx
 ```
+
+- **不要**用不带 `--apk-only` 的 `release.sh`，也不要跑站点全站 `deploy.sh`：站点树与 Windows/macOS 发布波共用，全站部署会把对方的下载卡片回退（2026-10-05 实测）。
+- `--dry-run`：只本地构建+改页面（不传服务器）；`--skip-tests` 跳过单测（门槛已单独跑过时用）。

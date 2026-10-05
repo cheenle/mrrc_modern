@@ -1,6 +1,10 @@
 package com.hamradio.ft710android.App
 
+import android.Manifest
 import android.app.Activity
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.content.ContextCompat
 import com.hamradio.ft710android.Data.SettingsStore
 import com.hamradio.ft710android.UI.LoginScreen
 import com.hamradio.ft710android.UI.MainScreen
@@ -48,6 +53,18 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
     val prefs by UiPrefsFlow(settings).collectAsState(initial = UiPrefs())
     val userOff by vm.userOff.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // Android 13+：后台 RX 的常驻通知需要运行时通知权限（登录成功后问一次）
+    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(loggedIn) {
+        if (loggedIn && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     AppSetup(keepScreenOn = prefs.keepScreenOn, onTxRelease = { vm.onPttRelease() })
     ImmersiveEffect(immersive)

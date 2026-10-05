@@ -49,6 +49,7 @@ class MainViewModel(
     private val scope: CoroutineScope,
     private val recordingsApi: RecordingsApi? = null,
     private val cloudApi: CloudApi? = null,
+    private val background: BackgroundRxController? = null,
 ) {
     val state = RadioState()
 
@@ -114,6 +115,7 @@ class MainViewModel(
     private var token: String? = null
     private var savedMicGain: Int? = null
     private var statsJob: Job? = null
+    private var backgroundRxPref = true
 
     fun onWsEvent(ev: WsEvent) {
         when (ev) {
@@ -177,10 +179,17 @@ class MainViewModel(
     fun onSpectrumFrame(frame: ByteArray) { spectrumProcessor?.onFrame(frame) }
 
     /** ConnectionManager 四路聚合状态透传（修复：此前无人写入 _connected）。 */
-    fun onConnectionChange(connected: Boolean) { _connected.value = connected }
+    fun onConnectionChange(connected: Boolean) { _connected.value = connected; syncBackground() }
 
     /** 只读登录（服务端以 4003 关闭 TX/ATR 通道）——隐藏发射类 UI。 */
-    fun onListenOnly() { _listenOnly.value = true }
+    fun onListenOnly() { _listenOnly.value = true; syncBackground() }
+
+    /** 「后台接收」开关（DataStore）；开启且连接存在时前台服务常驻。 */
+    fun setBackgroundRxPref(v: Boolean) { backgroundRxPref = v; syncBackground() }
+
+    private fun syncBackground() {
+        background?.setEnabled(_connected.value && backgroundRxPref && !_listenOnly.value)
+    }
 
     private fun onMemChannels(list: List<JsonElement?>) {
         _mem.value = MemoryChannels.parse(list)
@@ -208,6 +217,7 @@ class MainViewModel(
         _userOff.value = false
         baseUrl = null; token = null
         _recordingsAvailable.value = false; _cqAvailable.value = false
+        syncBackground()
     }
 
     /** M7 连接开关的"关"：停全部通道 + 强制释放 TX，保留 base/token 供重连。 */
@@ -217,6 +227,7 @@ class MainViewModel(
         connectionManager.disconnect()
         _connected.value = false
         _userOff.value = true
+        syncBackground()
     }
 
     /** M7 连接开关的"开"：用保存的会话重连（无会话时由登录页接管）。 */
@@ -436,4 +447,7 @@ class MainViewModel(
     }
     interface TxCaptureLike { fun start(); fun stop(); fun setMicVol(v: Int) }
     interface MemoryStore
+
+    /** 后台 RX 前台服务的可注入接口（ServiceLocator 接到 RxForegroundService）。 */
+    fun interface BackgroundRxController { fun setEnabled(on: Boolean) }
 }

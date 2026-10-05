@@ -54,6 +54,10 @@ object ServiceLocator {
             memoryChannelsStore = null,
             recordingsApi = recordingsApi,
             cloudApi = cloudApi,
+            background = MainViewModel.BackgroundRxController { on ->
+                val ctx = FT710App.instance
+                if (on) RxForegroundService.start(ctx) else RxForegroundService.stop(ctx)
+            },
             pttManager = PTTManager(
                 sendPTT = { on -> cm.sendSet("ptt", on) },
                 sendTXAudioStop = { cm.sendTxAudioText("s:") },
@@ -73,5 +77,6 @@ object ServiceLocator {
         scope.launch { settings.afVol.collect { vm.setAfVol(it) } }
         scope.launch { settings.micVol.collect { vm.setMicVol(it) } }
         scope.launch { settings.micGain.collect { vm.setSavedMicGain(it) } }
+        scope.launch { settings.backgroundRx.collect { vm.setBackgroundRxPref(it) } }
     }
 }

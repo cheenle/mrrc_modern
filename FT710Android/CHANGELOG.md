@@ -2,6 +2,14 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.1] — 2026-10-05
+
+- **修复：真机上无 RX 声音、无频谱**（控制正常）。两个 v1.0.x 遗留接线缺口，规划期与 JVM 单测都看不到（测试注入的是 null 播放器/处理器）：
+  - `RxAudioPlayer.start()` **无任何调用点**：`running=false` 时 `onFrame` 直接丢弃所有音频帧 → 永远静音。现在音频播放随连接聚合启停（`MainViewModel.onConnectionChange`），`start/stop` 自身幂等
+  - `MainViewModel._waterfall/_fft` **无任何写入点**：频谱帧只喂了 `SpectrumProcessor`，UI 流始终为空 → 瀑布/FFT 空白。现在 `onSpectrumFrame` 解析后推送两个流
+- 新增回归测试：频谱帧能到达 UI 流；音频播放器随连接聚合启停（虚拟播放器计数）
+- 测试 99 → 101 项全绿
+
 ## [1.1.0] — 2026-10-05
 
 - **修复阻断缺陷**：v1.0.1 无法解析真实 `fullState`——服务端 `bands` 是对象数组（`name/start/end/bsr/default_freq`）、`filterTables` 是 `[idx,hz]` 数对，而 DTO 写成了 `List<String>/List<Int>`，每次解码抛异常、事件被丢弃，登录后一直“连上但无状态”。现按真实形状解析并用与服务端同形的 fixture 锁死（D0）

@@ -71,6 +71,7 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - `--no-ssl` 时 baseUrl 用 `http://`，`ConnectionManager.wsUrl` 自动转 `ws://`。
 - 前台服务后台 RX 已实现（`RxForegroundService`，mediaPlayback，设置页可关）；退后台仍强制释放 TX。44.1k 设备采集已做 882↔960 重采样兜底。
 - `RadioState` 字段与 `radio_state.py:to_dict` 的 key 一一对应，新增字段两端同步。
+- **音频/频谱靠连接聚合回调启停**：`MainViewModel.onConnectionChange(true)` → `rxPlayer.start()`；`/WSspectrum` 帧必须经 `onSpectrumFrame` 推到 `_waterfall/_fft` 两个流（2026-10-05 真机事故：二者都曾缺失，控制正常但没声、没瀑布——新增流/播放器时先确认有调用点）。
 
 ## v1.0.0 协议增量（逐字对齐 server.py）
 

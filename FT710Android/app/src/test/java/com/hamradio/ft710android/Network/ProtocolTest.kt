@@ -106,8 +106,7 @@ class ProtocolTest {
         assertEquals(305, ev.status.framesTotal)
     }
 
-    @Test fun `fullState exposes recording and cq capability`() {
-        val withFeatures = parseWsEvent(
+    @Test fun `fullState exposes recording and cq capability`() {        val withFeatures = parseWsEvent(
             """{"type":"fullState","data":{},"bands":[],"modes":[],"memChannels":[],"recording":{"recording":false},"cq":{"state":"idle"},"radioModel":"ft710"}"""
         ) as WsEvent.FullState
         assertEquals(false, withFeatures.recording?.recording)
@@ -118,5 +117,32 @@ class ProtocolTest {
         ) as WsEvent.FullState
         assertNull(without.recording)
         assertNull(without.cq)
+    }
+
+    @Test fun `atr state and tune result parse`() {
+        val st = parseAtrEvent(
+            """{"type":"atrState","connected":true,"power":12.5,"swr":1.4,"sw":1,"ind":3,"cap":7,"tuning":false,"tx":false,"freq":7050000,"last_update":1.0}"""
+        ) as AtrEvent.State
+        assertEquals(12.5, st.s.power, 0.001)
+        assertEquals(1, st.s.sw)
+        assertEquals(3, st.s.ind)
+        val tr = parseAtrEvent(
+            """{"type":"atrTuneResult","phase":"auto_success","swr_before":3.2,"swr_after":1.3,"auto":true}"""
+        ) as AtrEvent.TuneResult
+        assertEquals("auto_success", tr.r.phase)
+        assertEquals(3.2, tr.r.swrBefore ?: 0.0, 0.001)
+    }
+
+    @Test fun `atr error parses and unknown ATR payload is null`() {
+        val err = parseAtrEvent("""{"type":"error","message":"ATR1000 not connected"}""")
+        assertEquals("ATR1000 not connected", (err as AtrEvent.Error).message)
+        assertNull(parseAtrEvent("""{"type":"pong"}"""))
+    }
+
+    @Test fun `atr tune text follows the web copy`() {
+        assertEquals("ATR 连续 3 次无改善，已放弃该频点自动调谐",
+            AtrText.result(AtrTuneResultDto(phase = "auto_giveup")))
+        assertEquals("ATR 调谐完成: SWR 3.2 → 1.3",
+            AtrText.result(AtrTuneResultDto(phase = "success", swrBefore = 3.2, swrAfter = 1.3)))
     }
 }

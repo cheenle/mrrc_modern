@@ -37,7 +37,7 @@ object ServiceLocator {
             onAudioRx = { vm.onAudioRxFrame(it) },
             onSpectrum = { vm.onSpectrumFrame(it) },
             onAudioTxText = {},
-            onAtrEvent = {},
+            onAtrEvent = { vm.onAtrEvent(it) },
             onConnectionChange = { vm.onConnectionChange(it) },
             onListenOnly = { vm.onListenOnly() },
         )

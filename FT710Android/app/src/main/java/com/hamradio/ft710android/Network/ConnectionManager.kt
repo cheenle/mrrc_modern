@@ -15,10 +15,11 @@ class ConnectionManager(
     private val onAudioRx: (ByteArray) -> Unit,
     private val onSpectrum: (ByteArray) -> Unit,
     private val onAudioTxText: (String) -> Unit,
-    private val onAtrEvent: (String) -> Unit,
+    private val onAtrEvent: (AtrEvent) -> Unit,
     private val onConnectionChange: (Boolean) -> Unit,
     private val onListenOnly: () -> Unit = {},
     private val sendOverride: ((String) -> Unit)? = null,
+    nowMs: () -> Long = { System.currentTimeMillis() },
 ) {
     private var radio: WebSocketConnection? = null
     private var audioRx: WebSocketConnection? = null
@@ -27,6 +28,7 @@ class ConnectionManager(
     private var atr: WebSocketConnection? = null
     private var heartbeat: Job? = null
     private val connectedFlags = mutableSetOf<String>()
+    private val stats = NetworkStats(nowMs)
 
     @Volatile var isConnected: Boolean = false; private set
     @Volatile var listenOnly: Boolean = false; private set
@@ -46,12 +48,17 @@ class ConnectionManager(
         _baseUrl = baseUrl; _token = token
         stopAll()
         radio = connect(baseUrl, "/WSradio", token,
-            onText = { onRadioEvent(parseWsEvent(it)) }, onBinary = {})
-        audioRx = connect(baseUrl, "/WSaudioRX", token, onText = {}, onBinary = { onAudioRx(it) })
+            onText = { stats.onReceived(it.length); onRadioEvent(parseWsEvent(it)) }, onBinary = {})
+        audioRx = connect(baseUrl, "/WSaudioRX", token, onText = { stats.onReceived(it.length) },
+            onBinary = { stats.onReceived(it.size); onAudioRx(it) })
         audioTx = connect(baseUrl, "/WSaudioTX", token,
-            onText = { onAudioTxText(it) }, onBinary = {}, onClosedCode = ::handleCloseCode) // 上行二进制由 sendTxAudioBinary 发送
-        spectrum = connect(baseUrl, "/WSspectrum", token, onText = {}, onBinary = { onSpectrum(it) })
-        atr = connect(baseUrl, "/WSatr1000", token, onText = { onAtrEvent(it) }, onBinary = {}, onClosedCode = ::handleCloseCode)
+            onText = { stats.onReceived(it.length); onAudioTxText(it) }, onBinary = {}, onClosedCode = ::handleCloseCode) // 上行二进制由 sendTxAudioBinary 发送
+        spectrum = connect(baseUrl, "/WSspectrum", token, onText = { stats.onReceived(it.length) },
+            onBinary = { stats.onReceived(it.size); onSpectrum(it) })
+        atr = connect(baseUrl, "/WSatr1000", token, onText = {
+            stats.onReceived(it.length)
+            parseAtrEvent(it)?.let(onAtrEvent)
+        }, onBinary = {}, onClosedCode = ::handleCloseCode)
         heartbeat?.cancel()
         heartbeat = scope.launch { while (isActive) { sendPing(); delay(2000) } }
     }
@@ -73,11 +80,28 @@ class ConnectionManager(
         dispatch(cmd)
     }
 
-    fun sendPing() = dispatch(WsCommands.ping())
+    fun sendPing() { stats.onPingSent(); dispatch(WsCommands.ping()) }
     fun sendHeartbeat() = dispatch(WsCommands.txhb())
     fun sendMemSave(channelsJson: String) = dispatch(WsCommands.memSaveJson(channelsJson))
-    fun sendTxAudioBinary(data: ByteArray) { audioTx?.sendBinary(data) }
-    fun sendTxAudioText(text: String) { audioTx?.sendText(text) }
+    fun sendTxAudioBinary(data: ByteArray) { stats.onSent(data.size); audioTx?.sendBinary(data) }
+    fun sendTxAudioText(text: String) { stats.onSent(text.length); audioTx?.sendText(text) }
+
+    /** ATR 手动调谐（服务端自带 TX2 载波 + 比对回滚）；未连接时返回 false。 */
+    fun sendAtrTune(): Boolean {
+        val cmd = """{"type":"atrTune"}"""
+        stats.onSent(cmd.length)
+        return atr?.sendText(cmd) ?: false
+    }
+
+    /** 收到 /WSradio 的 pong（由 MainViewModel 在 WsEvent.Pong 时调用）。 */
+    fun onPong() = stats.onPong()
+
+    fun lastRttMs(): Long? = stats.lastRttMs
+    fun drainRx(): Long = stats.drainRx()
+    fun drainTx(): Long = stats.drainTx()
+
+    /** M7 连接开关的"关"：停全部通道（重连由 reconnectAll）。 */
+    fun disconnect() = stopAll()
 
     fun reconnectAll() {
         val token = _token ?: return
@@ -124,6 +148,7 @@ class ConnectionManager(
     }
 
     private fun dispatch(cmd: String) {
+        stats.onSent(cmd.length)
         if (sendOverride != null) { sendOverride(cmd); return }
         radio?.sendText(cmd)
     }

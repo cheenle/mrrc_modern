@@ -167,3 +167,65 @@ fun parseWsEvent(text: String): WsEvent {
         else -> WsEvent.Unknown
     }
 }
+
+// ── ATR1000（/WSatr1000）────────────────────────────────────────────
+
+@Serializable
+data class AtrStateDto(
+    val connected: Boolean = false,
+    val power: Double = 0.0,
+    val swr: Double = 0.0,
+    val sw: Int = 0,
+    val ind: Int = 0,
+    val cap: Int = 0,
+    @SerialName("ind_uh") val indUh: Double = 0.0,
+    @SerialName("cap_pf") val capPf: Double = 0.0,
+    val tuning: Boolean = false,
+    val tx: Boolean = false,
+    val freq: Long = 0,
+    @SerialName("last_update") val lastUpdate: Double = 0.0,
+)
+
+@Serializable
+data class AtrTuneResultDto(
+    val phase: String = "",
+    @SerialName("swr_before") val swrBefore: Double? = null,
+    @SerialName("swr_after") val swrAfter: Double? = null,
+    val message: String? = null,
+    val auto: Boolean = false,
+)
+
+sealed class AtrEvent {
+    data class State(val s: AtrStateDto) : AtrEvent()
+    data class TuneResult(val r: AtrTuneResultDto) : AtrEvent()
+    data class Error(val message: String) : AtrEvent()
+}
+
+/** /WSatr1000 文本 → 事件；非 ATR 消息返回 null。 */
+fun parseAtrEvent(text: String): AtrEvent? {
+    val root = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return null
+    val type = root["type"]?.jsonPrimitive?.contentOrNull ?: return null
+    return when (type) {
+        "atrState" -> runCatching { AtrEvent.State(json.decodeFromString<AtrStateDto>(text)) }.getOrNull()
+        "atrTuneResult" -> runCatching { AtrEvent.TuneResult(json.decodeFromString<AtrTuneResultDto>(text)) }.getOrNull()
+        "error" -> AtrEvent.Error(
+            runCatching { json.decodeFromString<ServerErrorDto>(text).message }.getOrElse { "ATR error" }
+        )
+        else -> null
+    }
+}
+
+/** Web `tuneResultText` 的中文文案（跳过/成功/回滚/自动六阶段/错误回退）。 */
+object AtrText {
+    fun result(r: AtrTuneResultDto): String = when (r.phase) {
+        "skipped" -> "ATR: SWR ${r.swrBefore ?: "?"} 已达标，无需调谐"
+        "success" -> "ATR 调谐完成: SWR ${r.swrBefore} → ${r.swrAfter}"
+        "rollback" -> "ATR 调谐无改善，已回滚 (SWR ${r.swrBefore})"
+        "auto_success" -> "ATR 自动调谐完成: SWR ${r.swrBefore} → ${r.swrAfter}"
+        "auto_no_improve" -> "ATR 自动调谐无改善 (SWR ${r.swrBefore} → ${r.swrAfter})"
+        "auto_timeout" -> "ATR 自动调谐超时 (SWR ${r.swrBefore})"
+        "auto_aborted" -> "ATR 自动调谐中断: ${r.message ?: "天调断开"}"
+        "auto_giveup" -> "ATR 连续 3 次无改善，已放弃该频点自动调谐"
+        else -> "ATR 调谐失败: ${r.message ?: r.phase}"
+    }
+}

@@ -5,6 +5,9 @@ import com.hamradio.ft710android.Data.MemoryChannels
 import com.hamradio.ft710android.Data.RadioState
 import com.hamradio.ft710android.Network.AuthApi
 import com.hamradio.ft710android.Network.AuthResult
+import com.hamradio.ft710android.Network.AtrEvent
+import com.hamradio.ft710android.Network.AtrStateDto
+import com.hamradio.ft710android.Network.AtrText
 import com.hamradio.ft710android.Network.BandDto
 import com.hamradio.ft710android.Network.ConnectionManager
 import com.hamradio.ft710android.Network.CqStatusDto
@@ -57,8 +60,10 @@ class MainViewModel(
     val modes: StateFlow<List<String>> = _modes
     private val _mem = MutableStateFlow<List<MemoryChannel?>>(emptyList())
     val memChannels: StateFlow<List<MemoryChannel?>> = _mem
-    private val _atr = MutableStateFlow(false)
-    val atr1000Enabled: StateFlow<Boolean> = _atr
+    private val _atr1000Enabled = MutableStateFlow(false)
+    val atr1000Enabled: StateFlow<Boolean> = _atr1000Enabled
+    private val _atrState = MutableStateFlow<AtrStateDto?>(null)
+    val atrState: StateFlow<AtrStateDto?> = _atrState
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
     private val _recordings = MutableStateFlow<List<RecordingRow>>(emptyList())
@@ -81,7 +86,7 @@ class MainViewModel(
                 _version.value++
                 _bands.value = ev.bands
                 _modes.value = ev.modes
-                _atr.value = ev.atr1000Enabled
+                _atr1000Enabled.value = ev.atr1000Enabled
                 _recordingsAvailable.value = ev.recording != null
                 _cqAvailable.value = ev.cq != null
                 ev.recording?.let { _recordingState.value = it }
@@ -97,7 +102,17 @@ class MainViewModel(
             is WsEvent.RecordingState -> _recordingState.value = ev.status
             is WsEvent.CqState -> _cq.value = ev.status
             is WsEvent.ErrorEvent -> _error.value = ev.message
+            is WsEvent.Pong -> connectionManager.onPong()
             else -> Unit
+        }
+    }
+
+    /** /WSatr1000 事件（任务 8 再扩展 tuning/notice；这里先接上数据面）。 */
+    fun onAtrEvent(ev: AtrEvent) {
+        when (ev) {
+            is AtrEvent.State -> _atrState.value = ev.s
+            is AtrEvent.TuneResult -> _error.value = AtrText.result(ev.r)
+            is AtrEvent.Error -> _error.value = ev.message
         }
     }
 

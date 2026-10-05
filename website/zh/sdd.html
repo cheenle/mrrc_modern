@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.70 更新</a></li>
+          <li><a href="#updates">V2.71 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.70 · 2026-10-05</span>
+          <span>SDD V2.71 · 2026-10-05</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,11 +110,11 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.70</td>
+              <td>V2.71</td>
             </tr>
             <tr>
               <td>基线日期</td>
-              <td>2026-10-04</td>
+              <td>2026-10-05</td>
             </tr>
             <tr>
               <td>后端运行时</td>
@@ -143,6 +143,26 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-microphone-slash"></i></div>
+            <h3>
+              键控了的载波不会再没有声音
+              <small>（V2.71）</small>
+            </h3>
+            <p>
+              TX 上行只有一个 owner，按键时按会话令牌认领 —— 但令牌是 30 天
+              Cookie，一个浏览器会话可以同时持有多条麦克风 socket
+              （页面重载会把旧的那条留成半开几十秒，同一登录的两个标签页则干脆共用）。
+              认领原先取的是从集合里扫到的<em>第一个</em>匹配，于是可能落到那条已经死掉的
+              socket 上：电台键控了，活页面的每一帧却被当作非 owner 丢弃 （<code
+                >frames=0 non_owner_drops=236</code
+              >、<code>peak=0%</code>
+              —— 键控着的载波上是纯静默），直到 58 秒后旧 socket 被回收才自愈。
+              现在认领取该会话<strong>最后连接</strong>的那条，并且真正在送音频的同会话
+              socket
+              会在首帧接管上行；<em>异</em>会话依然既不能靠连接、也不能靠发流抢占。
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-heartbeat"></i></div>
             <h3>

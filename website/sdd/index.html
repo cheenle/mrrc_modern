@@ -274,7 +274,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.70</td>
+<td>V2.71</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
@@ -282,7 +282,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Status</td>
-<td><strong>v1.25.3 built and verified on both platforms</strong> (Windows Setup <strong>54,342,929 bytes</strong>, SHA-256 <code class="scope-code">1413521c…</code>; macOS DMG <strong>62,430,310 bytes</strong>, SHA-256 <code class="scope-code">87890593…</code>; both accepted by clean-room runs of the packaged binaries — the clean room is what proves the shipped CA bundle makes outbound HTTPS verify inside the frozen app, and on Windows this round also ran the <strong>real <code class="scope-code">Setup.exe</code></strong> silently into an isolated <code class="scope-code">/DIR=</code>; <strong>v1.25.3 carries the V2.70 fix</strong>, so the liveness gate can no longer release an operator’s own fresh press)</td>
+<td><strong>v1.25.3 built and verified on both platforms</strong> (Windows Setup <strong>54,342,929 bytes</strong>, SHA-256 <code class="scope-code">1413521c…</code>; macOS DMG <strong>62,430,310 bytes</strong>, SHA-256 <code class="scope-code">87890593…</code>; both accepted by clean-room runs of the packaged binaries — the clean room is what proves the shipped CA bundle makes outbound HTTPS verify inside the frozen app, and on Windows this round also ran the <strong>real <code class="scope-code">Setup.exe</code></strong> silently into an isolated <code class="scope-code">/DIR=</code>; <strong>v1.25.3 carries the V2.70 fix</strong>, so the liveness gate can no longer release an operator’s own fresh press) —— <strong>该构建不含 V2.71 的修复</strong>（TX 上行所有权按 token 认领，而一个 30 天 Cookie 令牌名下可以有多条 <code class="scope-code">/WSaudioTX</code>：按键认领可能落到页面重载留下的半开旧 socket 上，于是活页面的每一帧麦克风音频都被当作非 owner 丢弃 —— 电台键控、调制为零，直到旧 socket 被回收才自愈）；<code class="scope-code">server.py</code> 是冻结入口脚本、不在热修通道覆盖范围，<strong>它只到源码，下一个版本号重建才到达用户</strong></td>
 </tr>
 <tr>
 <td>Project</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.70 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.71 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

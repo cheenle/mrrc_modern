@@ -15,6 +15,7 @@ import errno
 import hashlib
 import hmac
 import html
+import itertools
 import json
 import logging
 import os
@@ -343,17 +344,30 @@ def _claim_tx_owner_for_token(token: Optional[str]):
 
     ``token`` is Optional in practice: the caller passes ``_ws_tokens.get(ws)``,
     which is None for a socket that never carried an auth token.
+
+    A token is not a socket: one browser session can hold several TX-audio
+    sockets (page reload, two tabs — the token is a 30-day cookie), so among
+    the matches the LAST connected one wins. Taking the first match scanned out
+    of a set resolved the uplink by iteration order and could hand it to a
+    half-open predecessor, keying a silent carrier (see `_tx_socket_seq`).
     """
     global _tx_owner_ws
     if not token:
         return None
+    newest = None
+    newest_seq = -1
     for tx_ws in list(audio_tx_clients):
-        if _ws_tokens.get(tx_ws) == token:
-            if tx_ws is not _tx_owner_ws:
-                _tx_owner_ws = tx_ws
-                logger.info("TX audio ownership → PTT client")
-            return tx_ws
-    return None
+        if _ws_tokens.get(tx_ws) != token:
+            continue
+        seq = _tx_socket_seq.get(tx_ws, -1)
+        if newest is None or seq > newest_seq:
+            newest, newest_seq = tx_ws, seq
+    if newest is None:
+        return None
+    if newest is not _tx_owner_ws:
+        _tx_owner_ws = newest
+        logger.info("TX audio ownership → PTT client")
+    return newest
 
 
 def _assign_tx_owner_on_connect(ws: WebSocket, token: str) -> bool:
@@ -373,6 +387,60 @@ def _assign_tx_owner_on_connect(ws: WebSocket, token: str) -> bool:
             logger.info("TX audio ownership → replacement connection")
         return True
     return False
+
+
+# Connect order per TX-audio socket. The session token is a 30-day cookie, so
+# ONE browser session can hold several /WSaudioTX sockets at once: a page
+# reload leaves its predecessor half-open for tens of seconds, and two tabs of
+# one login share the token outright. Resolving a token to a socket by
+# scanning `audio_tx_clients` (a set) therefore picked an arbitrary one —
+# field log 2026-10-05 19:05:34, a hub instance: the key-up claim landed on
+# the dead predecessor, so the radio keyed a silent carrier for 58 s while
+# every frame of the reloaded page was dropped as non-owner
+# (`frames=0 non_owner_drops=236`, `peak=0%`); TX returned only when the stale
+# socket was reaped and `_promote_tx_owner()` handed over. Last connected is
+# the live page, which is what SDD §15 Layer 4 means by "a same-session
+# replacement audio socket supersedes a half-open page-reload socket".
+_tx_socket_seq: dict = {}
+_tx_socket_counter = itertools.count()
+
+
+def _register_tx_socket(ws: WebSocket) -> int:
+    """Record a TX-audio socket's connect order (see `_tx_socket_seq`)."""
+    seq = next(_tx_socket_counter)
+    _tx_socket_seq[ws] = seq
+    return seq
+
+
+def _forget_tx_socket(ws: WebSocket) -> None:
+    """Drop a TX-audio socket's per-socket state — idempotent."""
+    _tx_socket_seq.pop(ws, None)
+
+
+def _same_session_uplink_takeover(ws: WebSocket) -> bool:
+    """Hand the uplink to a same-session socket that is actually streaming.
+
+    A shared token means one authenticated browser session, so a mic frame
+    arriving on a non-owner socket is the operator's own live page — the second
+    tab, or the reload whose predecessor still holds the claim — never a
+    stranger. Taking over on the first frame self-heals within one 20 ms frame
+    instead of muting the whole transmission, and covers the case a connect-
+    time rule cannot: two same-session sockets that are BOTH live, where the
+    operator happens to work in the one that connected first.
+
+    A *different* session still cannot steal an active uplink by streaming at
+    it — that is what the single-owner guard exists for.
+    """
+    global _tx_owner_ws
+    owner = _tx_owner_ws
+    if owner is None or owner is ws:
+        return False
+    token = _ws_tokens.get(ws)
+    if not token or _ws_tokens.get(owner) != token:
+        return False
+    _tx_owner_ws = ws
+    logger.info("TX audio ownership → same-session streaming socket")
+    return True
 
 _state_broadcast_task: asyncio.Task | None = None
 _scope_producer = None          # backends.base.ScopeProducer, created in lifespan
@@ -3780,6 +3848,7 @@ async def ws_audio_tx(ws: WebSocket):
     await ws.accept()
     audio_tx_clients.add(ws)
     _ws_tokens[ws] = token
+    _register_tx_socket(ws)
     metrics.open(_role_for_token(token), "audio_tx", token)
     # Same-token replacement fixes the "PTT keys but non_owner_drops"
     # pattern where a half-open socket hoards the uplink after page reload.
@@ -3796,13 +3865,18 @@ async def ws_audio_tx(ws: WebSocket):
             if "bytes" in msg and msg["bytes"] is not None:
                 # Only the owner's audio reaches the radio; ignore others.
                 if ws is not _tx_owner_ws:
-                    _tx_non_owner_drops += 1
-                    if _tx_non_owner_drops % 250 == 1:
-                        logger.warning(
-                            "TX audio from non-owner client ignored "
-                            "(drops=%d) — another client owns the uplink",
-                            _tx_non_owner_drops)
-                    continue
+                    # A same-session socket that is streaming IS the operator
+                    # (the token is a 30-day cookie, so one browser session can
+                    # hold several of them) — hand the uplink over rather than
+                    # mute the transmission this frame belongs to.
+                    if not _same_session_uplink_takeover(ws):
+                        _tx_non_owner_drops += 1
+                        if _tx_non_owner_drops % 250 == 1:
+                            logger.warning(
+                                "TX audio from non-owner client ignored "
+                                "(drops=%d) — another client owns the uplink",
+                                _tx_non_owner_drops)
+                        continue
                 data = msg["bytes"]
                 if len(data) < 2:
                     continue
@@ -3851,6 +3925,7 @@ async def ws_audio_tx(ws: WebSocket):
     finally:
         audio_tx_clients.discard(ws)
         _ws_tokens.pop(ws, None)
+        _forget_tx_socket(ws)
         metrics.close(_role_for_token(token), "audio_tx", token)
         if ws is _tx_owner_ws:
             _tx_owner_ws = None

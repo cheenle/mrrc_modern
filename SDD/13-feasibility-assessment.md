@@ -3,7 +3,7 @@
 ## 13.1 Feasibility Summary
 
 | Dimension | Assessment | Explanation |
-|-----------|------------|-------------|
+| ----------- | ------------ | ------------- |
 | CAT/CI-V control feasibility | High | FT-710 CAT is field-tested; IC-7300/MK2 CI-V frame construction/parsing is conformance-tested against Icom manuals, with physical-radio ACK/timing acceptance pending |
 | Spectrum feasibility | High | FT-710 FT4222 is field-tested; IC-7300/MK2 CI-V 0x27 activation, parsing, and queue behavior are software-tested, with physical waveform cadence pending |
 | RX audio feasibility | High | PyAudio capture → Opus encode → WS broadcast → browser playback (per-backend sample rate) |
@@ -15,7 +15,7 @@
 ## 13.2 Risks
 
 | ID | Risk | Probability | Impact | Mitigation |
-|----|------|-------------|--------|------------|
+| ---- | ------ | ------------- | -------- | ------------ |
 | R1 | Serial port not found or wrong port | Medium | High | Log available ports; env var configuration; clear error messages |
 | R2 | Real scope not available | Medium | Medium | Automatic S-meter fallback; scope_pipe/CI-V 0x27 exits gracefully |
 | R3 | PyAudio device not matching selected radio | Low-Medium | Medium | Per-backend name-based auto-detection; device list logging; fallback to system default |
@@ -33,7 +33,7 @@
 ## 13.3 Assumptions
 
 | ID | Assumption | Confidence | Validation |
-|----|------------|------------|------------|
+| ---- | ------------ | ------------ | ------------ |
 | A1 | Selected radio connected via USB with correct serial parameters (FT-710 Enhanced COM Port at 38400 baud; IC-7300 CI-V at explicit 115200 8N1 with USB port unlinked from [REMOTE]) | High | Backend ID response; physical-radio acceptance checklist |
 | A2 | Selected radio USB audio device recognized by OS | High | PyAudio device enumeration |
 | A3 | libopus available on server (Homebrew `opus` package) | Medium-High | ctypes find_library("opus") |
@@ -47,13 +47,13 @@
 ## 13.4 Current Issues
 
 | ID | Issue | Priority | Status | Resolution Path |
-|----|-------|----------|--------|-----------------|
+| ---- | ------- | ---------- | -------- | ----------------- |
 | I1 | iOS Safari requires HTTPS for getUserMedia (mic access) | Medium | Open | Use TLS reverse proxy (nginx) or connect via HTTPS |
 | I2 | PyAudio device index not configurable via env var | Low | Resolved (V2.6) | Implemented as `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` (index or name substring); Windows package pre-locks `USB Audio` |
 | I3 | No per-band TX power control (FT-710 uses hardware power setting) | Low | N/A | FT-710 has hardware RF POWER knob; CAT `PC;` command sets power globally |
 | I4 | No ATR-1000 / external tuner support | Low | Future | Could add via second serial port |
 | I5 | No digital mode support (CW decoder, FT8, RTTY) | Low | Future | Specialized DSP/packet decode needed |
-| I6 | No multi-client control arbitration — concurrent browsers can issue conflicting PTT/frequency commands (last-writer-wins) | Medium | **PTT half resolved 2026-09-25** (field log: two tabs produced 75 TX sessions in 5 min, 16 with zero mic frames — each tab's watchdog re-sent `ptt:false` on stale local state and unkeyed the tab that was transmitting. Fix: `_ptt_key_ws` control-plane owner — only the keying socket's release is honored while it holds the key, the ignored client gets the authoritative `tx_status` + `ptt_keyed_by_other` push so its watchdog stands down, and a keyer disconnect forces RX even with other clients connected; SDD §15 Layer 4b, `PTTControlArbitrationTests`). Frequency/mode conflicts remain last-writer-wins | Define arbitration rules for the remaining set-commands (e.g., single-controller lock or role-based gating) |
+| I6 | No multi-client control arbitration — concurrent browsers can issue conflicting PTT/frequency commands (last-writer-wins) | Medium | **PTT half resolved 2026-09-25** (field log: two tabs produced 75 TX sessions in 5 min, 16 with zero mic frames — each tab's watchdog re-sent `ptt:false` on stale local state and unkeyed the tab that was transmitting. Fix: `_ptt_key_ws` control-plane owner — only the keying socket's release is honored while it holds the key, the ignored client gets the authoritative `tx_status` + `ptt_keyed_by_other` push so its watchdog stands down, and a keyer disconnect forces RX even with other clients connected; SDD §15 Layer 4b, `PTTControlArbitrationTests`). **TX-uplink half resolved 2026-10-05** (field log: a page reload left two `/WSaudioTX` sockets under one 30-day cookie token, and the key-up claim resolved that token by taking the *first* match scanned out of a set — it landed on the half-open predecessor, so the live page's every mic frame was dropped as non-owner: `frames=0 non_owner_drops=236`, `peak=0%`, a keyed silent carrier for 58 s until the stale socket was reaped. Fix: the claim now takes the **last-connected** socket of the session (`_register_tx_socket` connect order), and a same-session socket that is actually streaming takes the uplink over on its first frame (`_same_session_uplink_takeover`); a different session still cannot steal by connecting *or* by streaming; SDD §15 Layer 4, `TXUplinkOwnershipTests`). Frequency/mode conflicts remain last-writer-wins | Define arbitration rules for the remaining set-commands (e.g., single-controller lock or role-based gating) |
 | I7 | `mem_channels.json` POST has no schema validation or backup | Low | Open | Server-side payload validation; keep `.bak` copy before overwrite |
 | I8 | `serve_static` path traversal — `STATIC_DIR / path` (server.py) builds the response path from the request URL without `resolve()` + containment check, so an authenticated non-browser client can read arbitrary server-readable files (e.g. `GET /../server.py`, cert keys). Browsers normalize `..`, so exposure is raw-HTTP clients. | High | **Resolved 2026-08-26** (`_resolve_static_path` resolves the join and rejects unless contained inside `STATIC_DIR`; traversal and absolute request paths now 404 instead of falling through to the SPA fallback; regression tests in `tests/test_server_security.py`) | ~~Resolve the joined path and reject unless `is_relative_to(STATIC_DIR)` before `FileResponse`; add a regression test~~ Done |
 | I9 | Login password compared with `!=` (non-constant-time, timing side channel) and a weak default password only logs a warning — a fresh install that skips the warning is effectively open. | Medium | **Partially resolved 2026-08-26** (`hmac.compare_digest` via `_password_matches`; `_warn_if_default_password()` fires a loud startup WARNING when the well-known default is active; login-time <12-char warning kept). Still open: first-login forced password change, shorter cookie TTL. | ~~Switch to `hmac.compare_digest`~~ Done; forced first-login change remains future work |
@@ -64,7 +64,7 @@
 ## 13.5 Dependencies
 
 | ID | Dependency | Type | Status |
-|----|------------|------|--------|
+| ---- | ------------ | ------ | -------- |
 | D1 | Python 3.12+ | Runtime | Required |
 | D2 | FastAPI + Uvicorn | Runtime | Required (pip) |
 | D3 | pyserial | Runtime | Required (pip) |

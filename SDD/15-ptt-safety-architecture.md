@@ -7,12 +7,12 @@
 The MRRC Modern PTT safety architecture provides **7 independent layers of defense** against stuck-TX scenarios for all supported radio backends, preceded by a configuration precondition (Layer 0) that decides whether the chain may key the radio at all.
 
 | Layer | Location | Mechanism | Failure Mode Caught |
-|-------|----------|-----------|---------------------|
+| ------- | ---------- | ----------- | --------------------- |
 | 0 | Server (backend, precondition) | Unverified-model transmit gate: `set_ptt(True)`/`set_tune(True)` refuse unless `MRRC_ALLOW_UNVERIFIED_TX=1`; PTT releases are never gated | Keying a radio whose CAT semantics are documentation-derived rather than measured (AD-019) |
 | 1 | Browser UX | Touch-and-hold: release on `mouseup`/`touchend`/`mouseleave`/`touchcancel` | User intentionally releasing PTT |
 | 2 | Browser → Server | `sendCommand('ptt', false)` over `/WSradio` | Normal network path |
 | 3 | Browser | PTT Watchdog: 500ms interval checks `radioState.tx_status`; up to 3 retries | TX0 command or state broadcast lost |
-| 4 | Server | Dead-man switch: force `TX0;` when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up), a same-session replacement audio socket supersedes a half-open page-reload socket, and a different session cannot steal merely by connecting; owner disconnect promotes a remaining client | Browser crash, tab close, network loss, audio socket drop, multi-client ownership |
+| 4 | Server | Dead-man switch: force `TX0;` when the last control client disconnects during TX, or when the TX-audio owner disconnects during TX. Uplink ownership follows the PTT-ing client (token-matched on key-up, and because one session token is a 30-day cookie the match is resolved to the **last-connected** socket of that session, never to an arbitrary one), a same-session replacement audio socket supersedes a half-open page-reload socket, a same-session socket that is actually streaming takes the uplink over on its first frame, and a different session cannot steal merely by connecting or by streaming; owner disconnect promotes a remaining client | Browser crash, tab close, network loss, audio socket drop, multi-client ownership |
 | 5 | Browser | `beforeunload` → `navigator.sendBeacon()` with TX0 | Tab/browser close during TX |
 | 6 | Browser | `pagehide` → `sendCommand('ptt', false)` | Mobile app switch / backgrounding |
 | 7 | Server + Browser | Stop TX audio stream; clear audio queue; `wsAudioTX.send('s:')` | Audio continuing to feed radio after release |
@@ -90,6 +90,13 @@ if not ctrl_clients and radio.is_transmitting and backend and backend.connected:
         audio.stop_tx()
 ```
 
+**Uplink ownership is per socket, but a session token is not (fixed 2026-10-05, SDD I6 uplink half):** the token is a 30-day cookie, so ONE browser session can hold several `/WSaudioTX` sockets at once — a page reload leaves its predecessor half-open for tens of seconds, and two tabs of one login share the token outright. `_claim_tx_owner_for_token()` resolved that token by taking the **first** match scanned out of `audio_tx_clients`, a set, so the key-up claim was decided by iteration order. Field log 2026-10-05 on a hub instance: the claim landed on the dead predecessor, `TX audio ownership → PTT client` was logged as usual, and the reloaded page's every mic frame was then dropped as non-owner — `frames=0 non_owner_drops=236`, `peak=0%` (a keyed carrier with no modulation) for 58 s, until the stale socket was reaped and `_promote_tx_owner()` handed the uplink to the survivor (`frames=78 written=72 peak=99%`). Two layers now:
+
+- **Deterministic claim** — `_register_tx_socket()` records each socket's connect order and the key-up claim takes the **last-connected** socket of that session, which is what "a same-session replacement audio socket supersedes a half-open page-reload socket" always meant; a first-match scan only ever satisfied it by luck.
+- **Streaming takeover** — `_same_session_uplink_takeover()` hands the uplink to a non-owner socket whose token equals the owner's, on the first frame it actually streams. This covers the case a connect-time rule cannot: two same-session sockets that are *both* live, where the operator happens to work in the one that connected first. Self-heals within one 20 ms frame instead of muting the whole transmission.
+
+A **different** session still cannot steal an active uplink — neither by connecting (`_assign_tx_owner_on_connect`) nor by streaming at it — because interleaving two microphones into one playback queue is exactly what the single-owner guard exists to prevent. Ownership moving away from a socket also keeps the dead-man switch correct: the `finally` block only forces RX when the socket that disconnects *is* the owner (`TXUplinkOwnershipTests`).
+
 **ATR1000 tune assist (server-side TX2 keying):** the optional ATR tune assist (`_atr_tune_assist()`, §9.8) keys a TX2 carrier server-side for up to 45 s (ATR_TUNE deadline). Safety: the carrier drop is guaranteed by a `finally` block on every exit path (skip/success/rollback/error); the Layer 4 last-client-disconnect dead-man switch still applies while the carrier is up; an SWR≤1.6 gate skips tuning entirely; relays roll back when SWR does not improve. All ATR I/O runs in its own asyncio task — never on the audio path.
 
 ### Layer 4b: Control-Plane PTT Arbitration (Server)
@@ -145,12 +152,14 @@ window.addEventListener('pagehide', function() {
 ### Layer 7: TX Audio Stream Stop
 
 Server-side on PTT release:
+
 ```python
 if audio:
     audio.stop_tx()
 ```
 
 Browser-side on PTT release:
+
 ```javascript
 function stopTXAudio() {
     txAudioRunning = false;
@@ -208,7 +217,7 @@ Emergency Paths:
 ## 15.4 Testing the Safety Layers
 
 | Test | Expected Behavior | Layers Tested |
-|------|-------------------|---------------|
+| ------ | ------------------- | --------------- |
 | Normal PTT press/release | TX → RX within 200ms | 1, 2 |
 | Force-close browser during TX | Radio returns to RX | 4, 5, 6 |
 | Network packet loss during release | Browser watchdog re-sends `ptt=false` (state via 500ms TX-status poll) | 3 |
@@ -240,7 +249,7 @@ Emergency Paths:
 且该兜底默认关闭（`config.py`：`_env_float("MRRC_PTT_MAX_TX_SECONDS", 0.0)`，检查粒度 1.0 s）。因此：
 
 | 失效模式 | 当前是否有本地释放路径 |
-|---|---|
+| --- | --- |
 | 关闭浏览器 / 进程退出 / TCP RST | ✅ Layer 4（立即） |
 | **拔网线 / 换 Wi-Fi / NAT 掉表 / 静默丢弃（`iptables DROP`）** | ❌ **无** —— TCP 未断，Layer 4 与 Layer 3 都不触发 |
 | 进程卡死但仍连着 | ⚠️ 仅当 `MRRC_PTT_MAX_TX_SECONDS` 非零（默认 off） |
@@ -261,7 +270,7 @@ fire-and-forget 路径（单次 `set_ptt(False)` + 清零 TX 表 + 告知控制�
 **原计划轮廓（保留作设计对照）**：
 
 | 项 | 设计 |
-|---|---|
+| --- | --- |
 | 新增配置 | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`（默认 1.0 s，0 = 关闭） |
 | 新层 | **远程会话活性层**：TX 期间会话心跳缺失 ≥1.0 s → `set_ptt(False)` + 清 TX 音频队列 |
 | 心跳节奏 | TX 期间 500 ms；隧道层连续 2 次未达（≈1.0 s）主动关流并通知（**不发 TX0**） |

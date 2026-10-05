@@ -568,9 +568,13 @@ class TXUplinkOwnershipTests(unittest.TestCase):
         self._saved_clients = set(server.audio_tx_clients)
         self._saved_tokens = dict(server._ws_tokens)
         self._saved_owner = server._tx_owner_ws
+        self._saved_seq = dict(getattr(server, "_tx_socket_seq", {}))
         server.audio_tx_clients.clear()
         server._ws_tokens.clear()
         server._tx_owner_ws = None
+        seq = getattr(server, "_tx_socket_seq", None)
+        if seq is not None:
+            seq.clear()
 
     def tearDown(self):
         s = self.server
@@ -579,6 +583,10 @@ class TXUplinkOwnershipTests(unittest.TestCase):
         s._ws_tokens.clear()
         s._ws_tokens.update(self._saved_tokens)
         s._tx_owner_ws = self._saved_owner
+        seq = getattr(s, "_tx_socket_seq", None)
+        if seq is not None:
+            seq.clear()
+            seq.update(self._saved_seq)
 
     def test_owner_disconnect_promotes_remaining_client(self):
         """After the owner drops, a remaining client must become owner —
@@ -642,6 +650,128 @@ class TXUplinkOwnershipTests(unittest.TestCase):
         s._tx_owner_ws = owner
         self.assertFalse(s._assign_tx_owner_on_connect(newcomer, "other-session"))
         self.assertIs(s._tx_owner_ws, owner)
+
+    def test_claim_prefers_the_newest_socket_of_one_session(self):
+        """One browser session = one 30-day cookie token, and a page reload
+        leaves the predecessor socket behind — so two /WSaudioTX sockets can
+        share a token. The key-up claim must pick the one that connected
+        LAST (the live page), never the half-open predecessor.
+
+        Field log 2026-10-05 19:05:34-19:06:32: the claim landed on the
+        stale socket, so every mic frame of the reloaded page was dropped
+        (`frames=0 non_owner_drops=236`, `peak=0%`) while the radio keyed a
+        silent carrier; TX came back only when the stale socket was reaped
+        58 s later and `_promote_tx_owner()` handed over.
+        """
+        s = self.server
+        foreign = _fake_socket()
+        s.audio_tx_clients.add(foreign)
+        s._ws_tokens[foreign] = "other-session"
+        s._register_tx_socket(foreign)
+        s._tx_owner_ws = foreign  # a different session owns it (owner=False)
+
+        stale = _fake_socket()  # pre-reload socket, half-open, sends nothing
+        live = _fake_socket()   # the reloaded page, mic streaming
+        for sock in (stale, live):
+            s.audio_tx_clients.add(sock)
+            s._ws_tokens[sock] = "same-browser-session"
+            s._register_tx_socket(sock)
+
+        self.assertIs(
+            s._claim_tx_owner_for_token("same-browser-session"), live)
+        self.assertIs(s._tx_owner_ws, live)
+
+    def test_claim_picks_the_live_socket_whatever_the_set_order(self):
+        """`audio_tx_clients` is a set, so a first-match scan resolves a
+        shared token by iteration order — arbitrary, and different on every
+        run. The claim must be deterministic: last connected wins."""
+        s = self.server
+        for trial in range(20):
+            s.audio_tx_clients.clear()
+            s._ws_tokens.clear()
+            seq = getattr(s, "_tx_socket_seq", None)
+            if seq is not None:
+                seq.clear()
+            stale = [_fake_socket() for _ in range(trial % 4)]
+            live = _fake_socket()
+            for sock in stale + [live]:
+                s.audio_tx_clients.add(sock)
+                s._ws_tokens[sock] = "shared-token"
+                s._register_tx_socket(sock)
+            self.assertIs(
+                s._claim_tx_owner_for_token("shared-token"), live,
+                f"trial {trial}: a stale same-session socket won the uplink")
+
+    def test_streaming_same_session_socket_takes_over_the_uplink(self):
+        """The socket that actually streams the operator's voice owns the
+        uplink — within one session. A shared token means one authenticated
+        browser session, so a frame arriving on the non-owner socket is the
+        operator's own live page (two tabs, or a reload whose predecessor
+        still holds the claim), not a stranger. Handing over on the first
+        frame self-heals in ~20 ms instead of muting the whole transmission.
+        """
+        s = self.server
+        idle, streaming = _fake_socket(), _fake_socket()
+        for sock in (idle, streaming):
+            s.audio_tx_clients.add(sock)
+            s._ws_tokens[sock] = "same-browser-session"
+        s._tx_owner_ws = idle  # claim landed on the tab nobody is using
+        self.assertTrue(s._same_session_uplink_takeover(streaming))
+        self.assertIs(s._tx_owner_ws, streaming)
+
+    def test_streaming_socket_of_another_session_cannot_take_over(self):
+        """A different session must not steal an active uplink by streaming
+        at it — that is exactly what the single-owner guard exists for
+        (two tabs of two logins interleaving mic frames into one queue)."""
+        s = self.server
+        owner, intruder = _fake_socket(), _fake_socket()
+        s.audio_tx_clients.update([owner, intruder])
+        s._ws_tokens[owner] = "owner-session"
+        s._ws_tokens[intruder] = "other-session"
+        s._tx_owner_ws = owner
+        self.assertFalse(s._same_session_uplink_takeover(intruder))
+        self.assertIs(s._tx_owner_ws, owner)
+
+    def test_takeover_is_a_noop_for_the_owner_and_for_strays(self):
+        s = self.server
+        owner = _fake_socket()
+        s.audio_tx_clients.add(owner)
+        s._ws_tokens[owner] = "owner-session"
+        s._tx_owner_ws = owner
+        self.assertFalse(s._same_session_uplink_takeover(owner))
+        self.assertIs(s._tx_owner_ws, owner)
+        # No owner at all: nothing to take over from (promotion owns that path).
+        s._tx_owner_ws = None
+        self.assertFalse(s._same_session_uplink_takeover(owner))
+        self.assertIsNone(s._tx_owner_ws)
+        # A socket that never carried a token must not become owner.
+        stray = _fake_socket()
+        s.audio_tx_clients.add(stray)
+        s._tx_owner_ws = owner
+        self.assertFalse(s._same_session_uplink_takeover(stray))
+        self.assertIs(s._tx_owner_ws, owner)
+
+    def test_forgetting_a_socket_drops_its_sequence(self):
+        """The connect-order table is per-socket state; a disconnect must
+        prune it or it grows for the lifetime of the process."""
+        s = self.server
+        sock = _fake_socket()
+        s.audio_tx_clients.add(sock)
+        s._ws_tokens[sock] = "t"
+        s._register_tx_socket(sock)
+        self.assertIn(sock, s._tx_socket_seq)
+        s._forget_tx_socket(sock)
+        self.assertNotIn(sock, s._tx_socket_seq)
+        s._forget_tx_socket(sock)  # idempotent — the finally block can repeat
+
+    def test_uplink_ownership_helpers_are_wired_into_the_endpoint(self):
+        """Guard the wiring: the helpers only help if /WSaudioTX actually
+        calls them (same pattern as test_endpoints_track_tokens)."""
+        repo_root = Path(__file__).resolve().parents[1]
+        server_source = (repo_root / "server.py").read_text(encoding="utf-8")
+        self.assertIn("_register_tx_socket(ws)", server_source)
+        self.assertIn("_forget_tx_socket(ws)", server_source)
+        self.assertIn("_same_session_uplink_takeover(ws)", server_source)
 
     def test_endpoints_track_tokens(self):
         """Both endpoints must record the auth token per socket so the PTT

@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.71</td>
+<td>2026-10-05</td>
+<td>pi</td>
+<td><strong>发射时“键控了却没有声音”：TX 上行所有权按 token 认领，而一个 token 名下可以有多条 socket。</strong> ① <strong>现场取证</strong>（hub 实例 <code class="scope-code">logs/ft710-server.log</code>，2026-10-05）：19:04:43 页面重载后出现第 3 条 <code class="scope-code">/WSaudioTX</code>（<code class="scope-code">owner=False</code>），19:05:34 按键打出 <code class="scope-code">TX audio ownership → PTT client</code>、紧接着 <code class="scope-code">TX audio from non-owner client ignored</code>，四次发射全是 <code class="scope-code">frames=0 fed=0 written=0 peak=0% non_owner_drops=190/118/102/236</code> —— 电台键控了、调制为零（<code class="scope-code">peak</code> 是调制幅度峰值，0% 即纯静默）；19:06:32 那条 socket 断开（<code class="scope-code">owner=True</code>）后 <code class="scope-code">_promote_tx_owner()</code> 顶上，立刻 <code class="scope-code">frames=78 written=72 peak=99%</code> 恢复 —— <strong>故障在僵尸 socket 被回收的瞬间自愈</strong>。<code class="scope-code">session_metrics</code> 同期报 <strong>3 个 socket / 2 个 operator session</strong>，直接证明两条 socket 共用一个 token。② <strong>根因</strong>：会话令牌是 30 天 Cookie，<strong>一个浏览器会话可以同时持有多条 <code class="scope-code">/WSaudioTX</code></strong>（重载留下的半开旧 socket、同一登录的两个标签页）；而 <code class="scope-code">_claim_tx_owner_for_token()</code> 扫描 <code class="scope-code">audio_tx_clients</code>（<strong>set，迭代顺序任意</strong>）取<strong>第一个</strong>同 token 的 socket —— 认给谁由内存顺序决定，可能正是那条已经不再送音频的旧 socket。最小复现（只读不改产品代码）：12 次试验 <strong>2 次认错</strong>，且每次都照样打印 <code class="scope-code">ownership → PTT client</code> —— <strong>这行日志因此不能当作判据</strong>。③ <strong>修法两层</strong>：<strong>确定性认领</strong> —— <code class="scope-code">_register_tx_socket()</code> 记录每条 socket 的连接序号（<code class="scope-code">_forget_tx_socket()</code> 随断开回收），按键时取该会话<strong>最后连接</strong>的那条（这才是 “a same-session replacement audio socket supersedes a half-open page-reload socket” 的本意；原先只在旧 socket 恰好是当前 owner 时才成立）；<strong>流式接管</strong> —— <code class="scope-code">_same_session_uplink_takeover()</code> 在收到第一个语音帧时把上行交给与 owner <strong>同 token</strong> 的非 owner socket（同会话即操作者自己的活页面），一帧约 20 ms 内自愈，覆盖“两条 socket 都活着、人在先连的那个标签页操作”这种连接期规则管不到的情形。④ <strong>负例保持不变</strong>：<strong>异会话</strong>既不能靠连接（<code class="scope-code">_assign_tx_owner_on_connect</code>）也不能靠发流抢占上行 —— 把两个麦克风交错塞进同一个播放队列正是单 owner 闸门要防的事；所有权从某条 socket 移走后 dead-man switch 仍然正确（<code class="scope-code">finally</code> 只在断开的正是 owner 时强制 RX）。⑤ <strong>测试</strong> 1616 → <strong>1623</strong>（+7，全在 <code class="scope-code">TXUplinkOwnershipTests</code>：最后连接者胜出、20 轮不同 set 顺序下的确定性、同会话流式接管、异会话不可抢占、owner 与无令牌 socket 的 no-op 边界、序号表随断开回收且不泄漏、端点接线守卫）。修复前 6 例 <code class="scope-code">AttributeError</code>（helper 不存在）+ 1 例接线断言红，既有 7 例仍绿；修复后 14 例全绿，重跑最小复现 <strong>40 次试验 0 次认错</strong>。⑥ <strong>边界与未做</strong>：同一晚 <strong>18:38–19:04 另有一段不同症状</strong>（<code class="scope-code">frames=0</code> 且 <code class="scope-code">drops=0</code>，当时两条 socket 都在线却一帧麦克风音频都没送到服务端）属<strong>客户端采集侧</strong>，服务端日志无法定性，<strong>本次未修也未下结论</strong>，需浏览器侧计数/告警（<code class="scope-code">sendTXAudioFrame</code> 在 socket 非 OPEN 时是静默 <code class="scope-code">return false</code>，UI 无任何提示）才能取证；本修复只在源码，<code class="scope-code">server.py</code> 是<strong>冻结入口脚本</strong>（不在热修通道覆盖范围），<strong>到达用户须重建安装包</strong>。另：套件在 HEAD 上已有一处与本改动无关的既存红灯 <code class="scope-code">test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload</code>（已用 <code class="scope-code">git stash</code> 在 HEAD 复跑确认为既有失败），本次未修。</td>
+</tr>
+<tr>
 <td>SDD V2.70</td>
 <td>2026-10-05</td>
 <td>pi</td>
@@ -771,7 +777,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.70 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.71 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

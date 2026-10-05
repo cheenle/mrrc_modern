@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1616 tests across 86 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1623 tests across 86 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-05, macOS). The per-module sections below
 itemise 71 of those 86 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
@@ -19,7 +19,7 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1616 |
+| Total tests | 1623 |
 | Passed | 1615 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 |
@@ -85,7 +85,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `CustomNameHintsTests` | 7 | Backend-provided audio device name hints (FT-710/YAESU, USB Audio CODEC/Device) |
 | `CapabilitiesAudioWiringTests` | 3 | RadioCapabilities audio fields flow into AudioHandler construction |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (71 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (82 tests)
 
 SDD coverage: §9.2, §9.6, §10.4, §15
 
@@ -95,7 +95,7 @@ SDD coverage: §9.2, §9.6, §10.4, §15
 | `WSAuthTests` | 4 | Token format (64 hex chars), valid/invalid token check, WS close code 4001 |
 | `PTTSafetyLogicTests` | 10 | TX1/TX0 commands, dead-man switch (3 conditions), watchdog retry count, sendBeacon format, tx audio stop signal, m: settings format |
 | `StateBroadcastLogicTests` | 5 | Meter logging, atomic band commands, frontend band fallback, partial-field rendering, cache-busted assets |
-| `TXUplinkOwnershipTests` | 7 | Owner-disconnect promotion, PTT-client token claim, same-token replacement takeover, cross-token isolation, per-socket token tracking |
+| `TXUplinkOwnershipTests` | 14 | Owner-disconnect promotion, PTT-client token claim resolved to the **last-connected** socket of that session (deterministic across 20 set orders), same-session streaming takeover, same-token replacement takeover, cross-token isolation (connecting *and* streaming), no-op edges (owner itself, tokenless stray, no owner), connect-order table pruned on disconnect, per-socket token tracking, endpoint wiring |
 | `CookieSettingsPersistenceTests` | 14 | Cookie persistence plus dirty-state, stale-poll, band/filter, and lazy-scope source contracts |
 | `BackendAwareSetCommandTests` | 8 | Backend-conditional set handlers (tune path, VFO-B rejection, capability gating) |
 | `BackendModeMapSurfaceTests` | 3 | Mode-name mapping surface shared with backends |

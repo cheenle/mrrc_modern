@@ -59,10 +59,23 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Android 13+：后台 RX 的常驻通知需要运行时通知权限（登录成功后问一次）
+    // 登录成功后一次性申请：
+    //  - RECORD_AUDIO：没有它 TX 采集静默失败 → 电台键控但无调制 → "出不去功率"（2026-10-05 真机事故）
+    //  - POST_NOTIFICATIONS（Android 13+）：后台 RX 常驻通知
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) {
+            vm.showNotice("未授予麦克风权限：发射没有话音（系统设置 → 应用 → MRRC Modern → 权限 → 麦克风）")
+        }
+    }
     LaunchedEffect(loggedIn) {
-        if (loggedIn && Build.VERSION.SDK_INT >= 33 &&
+        if (!loggedIn) return@LaunchedEffect
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {

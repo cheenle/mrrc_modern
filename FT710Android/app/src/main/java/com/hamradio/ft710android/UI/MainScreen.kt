@@ -67,8 +67,8 @@ fun MainScreen(
     onToggleFullscreen: () -> Unit = {},
     onAfVol: (Int) -> Unit = {},
 ) {
-    // RadioState 是可变普通类：订阅 version 触发重组
-    vm.version.collectAsState()
+    // RadioState 是可变普通类：必须读出 version 才会订阅（否则只靠瀑布流带着重组）
+    val stateVersion by vm.version.collectAsState()
     val state = vm.state
     val bands by vm.bands.collectAsState()
     val modes by vm.modes.collectAsState()
@@ -100,7 +100,7 @@ fun MainScreen(
     var showModePicker by remember { mutableStateOf(false) }
     var showMemManager by remember { mutableStateOf(false) }
     var stepHz by remember { mutableStateOf(1_000L) }
-    val spanHz = caps.spanHz(state.scopeSpan)
+    val spanHz = remember(stateVersion) { caps.spanHz(state.scopeSpan) }
 
     Column(Modifier.fillMaxSize().background(MrrcColors.BgPrimary)) {
         Column(

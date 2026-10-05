@@ -31,6 +31,7 @@ object ServiceLocator {
         lateinit var vm: MainViewModel
         val rx = RxAudioPlayer()
         val tx = TxAudioCapture(FT710App.instance) { bytes -> vm.connectionManager.sendTxAudioBinary(bytes) }
+        tx.onError = { msg -> vm.showError(msg) }   // 采集/权限失败必须可见（此前静默）
         val spectrum = SpectrumProcessor()
         val recordingsApi = RecordingsApi(client)
         val cloudApi = CloudApi(client)

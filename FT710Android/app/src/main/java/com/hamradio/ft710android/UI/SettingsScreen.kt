@@ -61,9 +61,23 @@ fun SettingsScreen(
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    // 订阅 version 版本号触发重组，然后读 vm.state.* 拿到最新值
-    vm.version.collectAsState()
+    // 必须**读出** version 才会建立快照订阅：否则 stateUpdate 不会触发重组，
+    // state.rfPower / rfGain / nrLevel / nbLevel 等永远是首次读到的旧值，
+    // 滑块松手后被旧值弹回去 = "菜单里调不了"（2026-10-05 真机事故）。
+    val stateVersion by vm.version.collectAsState()
     val state = vm.state
+    // 服务端侧取值统一在这里按版本号重算（拖动中的本地值仍由 PrefSlider 自己记住）
+    val radio = remember(stateVersion) {
+        RadioSettingsValues(
+            rfPower = state.rfPower.toFloat(),
+            rfGainPct = state.rfGain * 100f / 255f,
+            micGain = state.micGain.toFloat(),
+            nrLevel = state.nrLevel.toFloat(),
+            nbLevel = state.nbLevel.toFloat(),
+            scopeSpan = state.scopeSpan,
+            scopeSpeed = state.scopeSpeed,
+        )
+    }
     val caps by vm.caps.collectAsState()
     val displayName by vm.displayName.collectAsState()
     var showCloud by remember { mutableStateOf(false) }
@@ -101,7 +115,7 @@ fun SettingsScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             caps.spans.forEach { sp ->
                 FilterChip(
-                    selected = state.scopeSpan == sp.idx,
+                    selected = radio.scopeSpan == sp.idx,
                     onClick = { vm.setScopeSpan(sp.idx) },
                     label = { Text(sp.name, fontSize = 10.sp) },
                 )
@@ -112,7 +126,7 @@ fun SettingsScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             caps.speeds.forEachIndexed { idx, name ->
                 FilterChip(
-                    selected = state.scopeSpeed == idx,
+                    selected = radio.scopeSpeed == idx,
                     onClick = { vm.setScopeSpeed(idx) },
                     label = { Text(name, fontSize = 10.sp) },
                 )
@@ -138,14 +152,14 @@ fun SettingsScreen(
         Section("音量 / 增益")
         PrefSlider("🔊 Vol", prefs.afVol.toFloat(), 0f..255f) { scope.launch { settings.putAfVol(it) } }
         PrefSlider("🎙 Vol", prefs.micVol.toFloat(), 0f..200f) { scope.launch { settings.putMicVol(it) } }
-        PrefSlider("RF PWR", state.rfPower.toFloat(), 5f..100f) { vm.setRfPower(it) }
-        PrefSlider("RF Gain", (state.rfGain * 100f / 255f), 0f..100f) { vm.setRfGain((it * 255f / 100f).toInt()) }
-        PrefSlider("Mic Gain", state.micGain.toFloat(), 0f..100f) { g ->
+        PrefSlider("RF PWR", radio.rfPower, 5f..100f) { vm.setRfPower(it) }
+        PrefSlider("RF Gain", radio.rfGainPct, 0f..100f) { vm.setRfGain((it * 255f / 100f).toInt()) }
+        PrefSlider("Mic Gain", radio.micGain, 0f..100f) { g ->
             vm.setMicGain(g)
             scope.launch { settings.putMicGain(g) }
         }
-        PrefSlider("NR Level", state.nrLevel.toFloat(), 1f..15f) { vm.setNrLevel(it) }
-        PrefSlider("NB Level", state.nbLevel.toFloat(), 0f..10f) { vm.setNbLevel(it) }
+        PrefSlider("NR Level", radio.nrLevel, 1f..15f) { vm.setNrLevel(it) }
+        PrefSlider("NB Level", radio.nbLevel, 0f..10f) { vm.setNbLevel(it) }
 
         // ── 本地开关（M6/L1）──────────────────────────────────────
         Section("本机")
@@ -173,6 +187,17 @@ fun SettingsScreen(
 
     if (showCloud) CloudHubDialog(vm) { showCloud = false }
 }
+
+/** 按 stateVersion 重算的服务端侧取值（Compose 里普通可变对象不可观察，靠版本号驱动）。 */
+private data class RadioSettingsValues(
+    val rfPower: Float,
+    val rfGainPct: Float,
+    val micGain: Float,
+    val nrLevel: Float,
+    val nbLevel: Float,
+    val scopeSpan: Int,
+    val scopeSpeed: Int,
+)
 
 @Composable
 private fun Section(title: String) {

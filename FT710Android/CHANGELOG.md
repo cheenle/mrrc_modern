@@ -2,6 +2,23 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.9] — 2026-10-05
+
+- **修复设置页滑块"调不了"**（用户反馈：RF PWR / RF Gain / NR Level / NB Level 在菜单里拖完就弹回）：设置页写了 `vm.version.collectAsState()` 但**没有读出返回值**，Compose 因而从不因 `stateUpdate` 重组——`state.rfPower/rfGain/nrLevel/nbLevel` 永远停留在首次打开时的值，松手即被旧值弹回。现在真正订阅状态版本，并把四个服务端值放进 `remember(stateVersion)` 重算（拖动中的本地值仍由滑块自己记住）。Floor/Ceil/Vol 这些"能调"的滑块其实只是因为写 DataStore 顺带触发了整页重组，掩盖了此 bug
+- **修复发射"出不去功率"/话音极小**：`AudioSource.VOICE_COMMUNICATION` 会强制 AGC/降噪把话音压下去；Web 是明确 `echoCancellation/noiseSuppression/autoGainControl: false`。改为优先 `UNPROCESSED` → `MIC`（48k 优先、44.1k 兜底），并在诊断行加 `src:` 与 `pk:`（本帧峰值），方便看清调制度
+- **修复 RX 延迟随时间涨到秒级**：抖动缓冲改为 Web `rx_worklet_processor.js` 的时间水位（冷启动 220ms / 欠载恢复 90ms / **硬上限 800ms 丢最旧帧**），并在进入 TX 时 flush；早期实现是无上限队列，卡过一次后永远落后（到达速率=消费速率，差额再也追不回来）。诊断行加 `Dr:`（丢帧）/`Un:`（欠载）
+- 麦克风权限：登录后主动申请 `RECORD_AUDIO`（缺权限时 TX 采集静默失败 = 无调制无功率），并把采集错误接到界面错误条
+- 测试 109 项全绿
+
+## [1.1.8] — 2026-10-05
+
+- **修复"发射经常出不去功率"**（用户反馈；Web 浏览器同机正常）。根因是 **App 从未申请过 `RECORD_AUDIO` 运行时权限**，而 `TxAudioCapture.start()` 在无权限时**静默返回**、`onError` 又没接线——结果：PTT 命令发到服务端、电台键控，但一个麦克风采样都没有，SSB 无调制 = 没有功率。浏览器有麦克风权限，所以 Web 正常
+  - 登录成功后一次性申请麦克风权限（拒绝时给出可操作提示：系统设置 → 应用 → 权限 → 麦克风）
+  - `tx.onError` 接到界面错误条（采集失败不再静默）
+  - 诊断行 TX 段加权限状态：`TX[rec mic:ok 48000 R:… X:…]`，`mic:NO` 一眼可见
+- 服务端无需改动：`_claim_tx_owner_for_token` 在按键时把 TX 上行判给按键会话（浏览器 + App 并存也正确）
+- 测试 109 项全绿
+
 ## [1.1.7] — 2026-10-05
 
 - **修复 S 表显示与数字**（用户反馈），三处都对着服务端/Web 校准过：

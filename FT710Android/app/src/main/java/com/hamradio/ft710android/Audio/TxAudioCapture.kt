@@ -34,17 +34,23 @@ class TxAudioCapture(
     @Volatile var samplesRead = 0L; private set
     @Volatile var framesSent = 0L; private set
     @Volatile var activeRate = 0; private set
+    @Volatile var activeSource = 0; private set
+    @Volatile var lastPeak = 0; private set
 
     /** 诊断行：rec=采集在跑否，rate=实际采样率，R=读到的样本，X=发出去的 Opus 帧。 */
+    private fun hasMic(): Boolean =
+        context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
     override fun stats(): String =
-        "TX[${if (job != null) "rec" else "off"} ${activeRate} R:$samplesRead X:$framesSent]"
+        "TX[${if (job != null) "rec" else "off"} ${if (hasMic()) "mic:ok" else "mic:NO"} " +
+        "${activeRate} src:$activeSource pk:$lastPeak R:$samplesRead X:$framesSent]"
 
     /** 本机麦克风软件增益（0..200，web 🎙 Vol 语义）。 */
     override fun setMicVol(v: Int) { micVol = v.coerceIn(0, 200) }
 
     override fun start() {
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            onError?.invoke("Missing RECORD_AUDIO permission"); return
+            onError?.invoke("缺少麦克风权限：发射没有话音（系统设置 → 应用 → MRRC Modern → 权限 → 麦克风）"); return
         }
         if (job != null) return
         val rec = openPreferred()
@@ -69,6 +75,9 @@ class TxAudioCapture(
                     System.arraycopy(read, off, acc, have, take)
                     have += take; off += take
                     if (have == frame) {
+                        var pk = 0
+                        for (v in acc) { val a = if (v < 0) -v.toInt() else v.toInt(); if (a > pk) pk = a }
+                        lastPeak = pk
                         val pcm = TxFraming.applyMicVol(acc, micVol)
                         val pcm48 = if (rate == 44100) Resampler.resample882To960(pcm) else pcm
                         val written = OpusBridge.encoderEncode(encoder, pcm48, out)
@@ -83,22 +92,36 @@ class TxAudioCapture(
         }
     }
 
-    /** 48k 优先；getMinBufferSize 或 state 不合法时回退 44.1k；都失败返回 null。 */
+    /**
+     * 采集源与采样率组合，按 Web 语义优先"未处理"输入：
+     * 浏览器明确 echoCancellation/noiseSuppression/autoGainControl 全关；
+     * Android 的 VOICE_COMMUNICATION 会强制 AGC/降噪，把话音压得很小（真机"功率非常小"）。
+     * 顺序：UNPROCESSED@48k → MIC@48k → UNPROCESSED@44.1k → MIC@44.1k。
+     */
     private fun openPreferred(): AudioRecord? {
         // lint MissingPermission：即使 start() 已查过，构造函数所在方法也要自证
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             return null
         }
-        for (rate in intArrayOf(48000, 44100)) {
-            val minBuf = AudioRecord.getMinBufferSize(
-                rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-            if (minBuf <= 0) continue
-            val r = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                maxOf(minBuf, TxFraming.frameSamples(rate) * 2 * 4))
-            if (r.state == AudioRecord.STATE_INITIALIZED) return r
-            runCatching { r.release() }
+        val sources = if (android.os.Build.VERSION.SDK_INT >= 24) {
+            intArrayOf(MediaRecorder.AudioSource.UNPROCESSED, MediaRecorder.AudioSource.MIC)
+        } else {
+            intArrayOf(MediaRecorder.AudioSource.MIC)
+        }
+        for (source in sources) {
+            for (rate in intArrayOf(48000, 44100)) {
+                val minBuf = AudioRecord.getMinBufferSize(
+                    rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                if (minBuf <= 0) continue
+                val r = AudioRecord(
+                    source, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
+                    maxOf(minBuf, TxFraming.frameSamples(rate) * 2 * 4))
+                if (r.state == AudioRecord.STATE_INITIALIZED) {
+                    activeSource = source
+                    return r
+                }
+                runCatching { r.release() }
+            }
         }
         return null
     }

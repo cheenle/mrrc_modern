@@ -131,7 +131,11 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
                 Modifier.fillMaxWidth().height(150.dp).padding(top = 4.dp)
                     .border(1.dp, MrrcColors.Border, RoundedCornerShape(8.dp))
             ) {
-                WaterfallCanvas(rows = waterfall, fft = fft, modifier = Modifier.fillMaxSize())
+                WaterfallCanvas(
+                    rows = waterfall, fft = fft,
+                    theme = "jet", floor = 5, ceil = 220, fftFraction = 0.3f,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
             Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
                 val labels = rulerLabels(state.scopeStartFreq, spanHz)

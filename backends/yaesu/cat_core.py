@@ -414,8 +414,13 @@ class YaesuCatController:
     # ── Filter width (slot index, not Hz) ───────────────────────────
 
     async def set_filter_width(self, index: int) -> bool:
-        """`SH00NN;` with the radio's own filter slot number (2 digits)."""
-        return await self.set(f"SH00{index:02d}")
+        """`<profile prefix>NN;` — SH + P1 (main/sub) + P2 (bandwidth on).
+
+        The family prefix is ``SH00``; the FT-891 needs ``SH01`` (Hamlib
+        ``newcat.c:9658-9663``).  The read-back below is prefix-agnostic: it
+        takes the trailing two digits of the answer.
+        """
+        return await self.set(f"{self._profile.filter_width_prefix}{index:02d}")
 
     async def get_filter_width(self, timeout: Optional[float] = None) -> Optional[int]:
         resp = await self.query("SH0", timeout=timeout)

@@ -9,6 +9,7 @@ deterministically.
 import asyncio
 import errno
 import unittest
+from dataclasses import replace
 from typing import Any, Tuple
 
 import serial
@@ -252,6 +253,33 @@ class FilterTests(unittest.IsolatedAsyncioTestCase):
         ctrl, fake = _controller([])
         await ctrl.set_filter_width(3)
         self.assertEqual(fake.writes, [b"SH0003;"])
+
+    async def test_the_sh_prefix_comes_from_the_profile(self):
+        """The FT-891 needs P2=1 (Hamlib newcat.c:9658-9663, `int on = is_ft891`).
+
+        Driven through `replace()` on an existing profile so this test does not
+        depend on the ft891 registry key existing yet.
+        """
+        profile = replace(get_profile("ftdx10"), filter_width_prefix="SH01")
+        ctrl = YaesuCatController("/dev/null", baudrate=38400, profile=profile)
+        fake: Any = _FakeSerial([])
+        ctrl._ser = fake
+        ctrl._connected = True
+        await ctrl.set_filter_width(3)
+        self.assertEqual(fake.writes, [b"SH0103;"])
+
+    async def test_every_family_model_still_sends_sh00(self):
+        """Byte-identical to the pre-change behaviour, per model."""
+        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1"):
+            ctrl, fake = _controller([], model=model)
+            await ctrl.set_filter_width(3)
+            self.assertEqual(fake.writes, [b"SH0003;"], model)
+
+    async def test_get_filter_width_parses_both_prefixes(self):
+        """The read-back takes the trailing two digits, so it is prefix-agnostic."""
+        for answer in ("SH0003;", "SH0103;"):
+            ctrl, _fake = _controller([answer])
+            self.assertEqual(await ctrl.get_filter_width(), 3, answer)
 
     async def test_get_filter_width_reads_the_slot(self):
         ctrl, fake = _controller(["SH0003;"])

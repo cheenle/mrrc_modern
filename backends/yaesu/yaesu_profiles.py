@@ -102,6 +102,11 @@ class YaesuModelProfile:
     vfo_b_direct: bool
     tune_via: str                        # "tx2" | "atu"
     mode_set_leaves_memory: bool = False  # FTX-1: force leaving memory first
+    # Filter-width SET prefix = "SH" + P1 (0 = main VFO) + P2 (bandwidth on).
+    # The family is "SH00"; the FT-891 needs P2=1 (Hamlib 4.7.2
+    # rigs/yaesu/newcat.c:9658-9663, `int on = is_ft891`).  Never hardcode the
+    # 3-character "SH0NN" form — the radio silently ignores it.
+    filter_width_prefix: str = "SH00"
 
     # Meters
     s_meter_cal: MeterCal = field(

@@ -7,14 +7,14 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.25.2 Stable)
+## Download (v1.25.3 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.25.2-Windows-x64-Setup.exe` | 51.8 MB (54,346,505 bytes) | `328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39` |
+| `MRRC-Modern-v1.25.3-Windows-x64-Setup.exe` | 51.8 MB (54,346,505 bytes) | `328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.2-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.3-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 **v1.25.2 is the published Windows installer.** It was built from `0983c2d` in a **clean

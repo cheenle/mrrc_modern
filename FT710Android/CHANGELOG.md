@@ -2,6 +2,15 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.10] — 2026-10-05
+
+- **继续修发射"极微弱/没功率"**（二次真机反馈）。核对过服务端 TX 链路（`_feed_tx_from_uplink` 无软件增益）与 Web TX 链路（`_txMicGainNode` 默认 1.0=unity，上限 2×）——差异来自**采集器件电平**（手机麦比 PC 耳麦低十几 dB），不是链路丢包。三项改动：
+  - **采集源探测 + 自动回退**：每个候选先探 700ms，没数据就换下一个（`UNPROCESSED@48k → MIC@48k → UNPROCESSED@44.1k → MIC@44.1k`，**不含 VOICE_COMMUNICATION**）。某些机型 `UNPROCESSED` 能 `STATE_INITIALIZED` 却永远不给样本，旧实现会静默无声
+  - **🎙 Vol 上限 200 → 400（4×），默认 100 → 150**：手机麦需要补偿；Web 的 unity 默认在手机上就是"极微弱"
+  - **发射时状态行显示 `TX pk:N`**（本帧峰值）：按住 PTT 一眼看到调制度，现场直接调 🎙 Vol / 电台 Mic Gain
+- 诊断行 TX 段补 `vol:`（当前软件增益）
+- 测试 109 项全绿
+
 ## [1.1.9] — 2026-10-05
 
 - **修复设置页滑块"调不了"**（用户反馈：RF PWR / RF Gain / NR Level / NB Level 在菜单里拖完就弹回）：设置页写了 `vm.version.collectAsState()` 但**没有读出返回值**，Compose 因而从不因 `stateUpdate` 重组——`state.rfPower/rfGain/nrLevel/nbLevel` 永远停留在首次打开时的值，松手即被旧值弹回。现在真正订阅状态版本，并把四个服务端值放进 `remember(stateVersion)` 重算（拖动中的本地值仍由滑块自己记住）。Floor/Ceil/Vol 这些"能调"的滑块其实只是因为写 DataStore 顺带触发了整页重组，掩盖了此 bug

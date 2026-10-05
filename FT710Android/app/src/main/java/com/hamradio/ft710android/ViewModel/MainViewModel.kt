@@ -358,6 +358,9 @@ class MainViewModel(
     /** 状态行统计：RTT + 抖动缓冲（毫秒）。 */
     fun audioBufferMs(): Int = rxPlayer?.bufferMs ?: 0
 
+    /** 发射中的麦克风峰值（0..32767），状态行 TX 时显示，用来判断调制度。 */
+    fun txPeak(): Int = txCapture?.peak() ?: 0
+
     fun showNotice(message: String) { _notice.value = message }
     fun clearNotice() { _notice.value = null }
 
@@ -472,7 +475,7 @@ class MainViewModel(
         val bufferMs: Int
         fun stats(): String
     }
-    interface TxCaptureLike { fun start(); fun stop(); fun setMicVol(v: Int); fun stats(): String }
+    interface TxCaptureLike { fun start(); fun stop(); fun setMicVol(v: Int); fun stats(): String; fun peak(): Int }
     interface MemoryStore
 
     /** 后台 RX 前台服务的可注入接口（ServiceLocator 接到 RxForegroundService）。 */

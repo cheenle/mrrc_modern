@@ -12,7 +12,7 @@ data class UiPrefs(
     val fftHeight: Int = 40,
     val wfHeight: Int = 110,
     val afVol: Int = 128,
-    val micVol: Int = 100,
+    val micVol: Int = 150,
     val keepScreenOn: Boolean = true,
     val backgroundRx: Boolean = true,
 )

@@ -38,7 +38,7 @@ class SettingsStore(private val context: Context) {
     val host: Flow<String> = context.dataStore.data.map { it[Keys.host] ?: DEFAULT_HOST }
     val port: Flow<String> = context.dataStore.data.map { it[Keys.port] ?: DEFAULT_PORT }
     val afVol: Flow<Int> = context.dataStore.data.map { it[Keys.afVol] ?: 128 }
-    val micVol: Flow<Int> = context.dataStore.data.map { it[Keys.micVol] ?: 100 }
+    val micVol: Flow<Int> = context.dataStore.data.map { it[Keys.micVol] ?: 150 }
     val micGain: Flow<Int?> = context.dataStore.data.map { it[Keys.micGain] }
     val scopeTheme: Flow<String> = context.dataStore.data.map { it[Keys.scopeTheme] ?: "jet" }
     val scopeFloor: Flow<Int> = context.dataStore.data.map { it[Keys.scopeFloor] ?: 5 }
@@ -59,7 +59,7 @@ class SettingsStore(private val context: Context) {
     suspend fun clearCredentials() = withContext(Dispatchers.IO) { ks.deleteSecret("password") }
 
     suspend fun putAfVol(v: Int) = edit { it[Keys.afVol] = v.coerceIn(0, 255) }
-    suspend fun putMicVol(v: Int) = edit { it[Keys.micVol] = v.coerceIn(0, 200) }
+    suspend fun putMicVol(v: Int) = edit { it[Keys.micVol] = v.coerceIn(0, 400) }
     suspend fun putMicGain(v: Int) = edit { it[Keys.micGain] = v.coerceIn(0, 100) }
     suspend fun putScopeTheme(v: String) = edit { it[Keys.scopeTheme] = v }
     suspend fun putScopeFloor(v: Int) = edit { it[Keys.scopeFloor] = v.coerceIn(0, 200) }

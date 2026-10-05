@@ -38,8 +38,9 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 | `E:` 涨 | 写 AudioTrack 失败 |
 | `Dr:` 涨 | 延迟被 800ms 上限夹住（正常自愈）；长期 `J:`>500 才是问题 |
 | `TX[mic:NO ...]` | 麦克风权限没给（TX 采集静默失败 → 没调制 = 没功率） |
-| `TX[..., pk:0]` 按住说话 | 采集到了但全是 0：采集源/音量问题 |
-| `TX[..., pk:几十]` | 调制度太小：换 `UNPROCESSED`/调 `🎙 Vol`/电台 `mic_gain` |
+| `TX[..., pk:0]` 按住说话 | 采集到了但全是 0：采集源/音量问题（`src:` 看采集源） |
+| `TX[vol:100 ... pk:300]` | 电平偏低：调大 🎙 Vol（0..400）或电台 Mic Gain |
+| `TX[..., pk:几十]` | 调制度太小：换 `UNPROCESSED`/调 `🎙 Vol`（默认 150，可到 400）/电台 `mic_gain` |
 | `tx:1` 但没功率 | 电台在发射、缺调制（SSB 无话音 = 无功率） |
 
 ## 构建与门槛
@@ -88,7 +89,7 @@ cd FT710Android
 3. **频谱帧要推到 UI 流**：`onSpectrumFrame` 解析后写 `_waterfall/_fft`，只喂 `SpectrumProcessor` 不会更新界面。
 4. **Compose 订阅**：`collectAsState()` 的返回值**必须被读出**；`RadioState` 是普通可变类，靠 `vm.version` 驱动 → `val v by vm.version.collectAsState()`，服务端侧取值放 `remember(v) { … }`。
 5. **抖动缓冲=时间水位**：220ms 冷启动 / 90ms 欠载恢复 / **800ms 硬上限丢最旧**，进 TX `flush()`（对齐 `static/rx_worklet_processor.js`）。无上限队列会让延迟永久增长。
-6. **RX 增益** = `min(10, afVol/255 × audio_gain_boost)`，TX/TUNE 期间 0；**TX 采集源**优先 `UNPROCESSED` → `MIC`（**不要 `VOICE_COMMUNICATION`**：强制 AGC/降噪把话音压小）。
+6. **RX 增益** = `min(10, afVol/255 × audio_gain_boost)`，TX/TUNE 期间 0；**TX 采集源**优先 `UNPROCESSED` → `MIC`（**不要 `VOICE_COMMUNICATION`**：强制 AGC/降噪把话音压小），每个候选先探 700ms 无数据就换下一个；手机麦弱，`🎙 Vol` 默认 150、上限 400（4×）。
 7. **JNI `frame_size` 是样本数**：编码/解码都传 960（20ms@48k）；`GetArrayLength(jshortArray)` 不是字节数。
 8. **PTT 安全铁律不退化**：`release()` 无条件发 `ptt:false`；手势 `finally`；`onStop` → `forceRelease()`；看门狗 500ms×3；txhb 按键即发、每 500ms。
 9. **权限**：登录后申请 `RECORD_AUDIO`（+13 的 `POST_NOTIFICATIONS`）；采集错误必须接到界面（`tx.onError`），禁止静默失败。
@@ -107,6 +108,7 @@ cd FT710Android
 | 7 | 跑一段时间比 Web 延迟几秒 | 抖动缓冲无上限：卡过一次就永远落后 | Web 水位 + 800ms 丢最旧 + TX flush（v1.1.9） |
 | 8 | 设置页四个滑块"调不了" | `vm.version.collectAsState()` 返回值被丢弃 → 从不重组，松手被旧值弹回 | 读出版本 + `remember(stateVersion)` 重算（v1.1.9） |
 | 9 | 官网卡片更新了、外网仍是旧版 | nginx `open_file_cache` 仍服务旧 inode | 上传后 `systemctl reload nginx`（`publish-card.sh` 内置） |
+| 10 | 键控了但"极微弱"（二次反馈） | 链路是 unity（服务端/Web 均无增益），差在手机麦电平；且部分机型 `UNPROCESSED` 初始化后不产数据 | 采集源 700ms 探测回退；🎙 Vol 上限 4×、默认 1.5×；状态行显示 `TX pk:`（v1.1.10） |
 
 ## 改 UI 的硬规矩
 

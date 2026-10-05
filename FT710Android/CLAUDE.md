@@ -111,7 +111,8 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 - **抖动缓冲是时间水位**：冷启动 220ms、欠载恢复 90ms、**硬上限 800ms 丢最旧帧**，进入 TX 时 `flush()`。逐字对齐 `static/rx_worklet_processor.js`；无上限队列会让延迟永久增长（真机"跑一段时间比 Web 慢几秒"）。
 - **RX 播放增益** = `min(10, afVol/255 × capabilities.audio_gain_boost)`，TX/TUNE 期间 0（web `AUDIO_TX_DIM_FACTOR`）；FT-710 需要 10× 提升。
-- **TX 采集源**：优先 `UNPROCESSED` → `MIC`（Web 明确关掉 AEC/NS/AGC）；**不要用 `VOICE_COMMUNICATION`**（强制降噪把话音压小 = "功率非常小"）。48k 优先、44.1k 走 882→960。
+- **TX 采集源**：优先 `UNPROCESSED` → `MIC`（Web 明确关掉 AEC/NS/AGC）；**不要用 `VOICE_COMMUNICATION`**（强制降噪把话音压小 = "功率非常小"）。48k 优先、44.1k 走 882→960。每个候选先**探测 700ms**，没样本就换下一个（部分机型 `UNPROCESSED` 能初始化但不产数据）。
+- **TX 电平**：服务端 TX 无软件增益、Web 也只多一个 0..2× 本机增益（默认 unity）→ 差异全在采集器件；手机麦默认给 1.5×（`🎙 Vol` 上限 4×），发射时状态行显示 `TX pk:` 便于现场校准。
 - **JNI 的 `frame_size` 是样本数**：`GetArrayLength(jshortArray)` 不是字节数；编码/解码都必须传 960（20ms@48k）。曾误传 `len/2` → 每包只算 10ms（RX 只播一半、TX 半速）。
 - **Compose：`collectAsState()` 的返回值必须被读出**，否则不建立快照订阅。`RadioState` 是普通可变类，靠 `MainViewModel.version` 驱动：`val v by vm.version.collectAsState()`，服务端侧取值放 `remember(v) { ... }`（设置页曾因丢弃返回值导致四个滑块"调不了"）。
 - **权限**：`RECORD_AUDIO` 必须在登录后主动申请（否则 TX 采集静默失败：电台键控但无调制 = 没功率）；`POST_NOTIFICATIONS`（13+）用于后台 RX 通知。
@@ -136,4 +137,4 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 - **Cloud Hub REST**（认证 Cookie）：`GET /api/cloud/state`（connected/callsign/has_token/entry/cert/portal/tunnel_running/tunnel_error/cert_reload_required/autoconnect{status,at,error}）、`POST /api/cloud/apply {callsign,contact,secret}`、`POST /api/cloud/refresh`、`POST /api/cloud/restart`（返回 `{restarting:true}`，重启后需重连）。见 `Network/CloudApi.kt`、`UI/CloudHubDialog.kt`。
 - **支持页**：`<baseUrl>/support.html`（服务端静态目录，AD-021），App 只负责用系统浏览器打开。
 - **音频增益**：RX 播放增益 = `min(10, vol/255 × capabilities.audio_gain_boost)`，TX/TUNE 时 0；TX 采集 48k 优先、44.1k 时 882→960 后编码（`Audio/RxGain.kt`、`Audio/Resampler.kt`、`Audio/TxFraming.kt`）。
-- **本地偏好（DataStore）**：`afVol 0..255=128`、`micVol 0..200=100`、`micGain 0..100`（收到 fullState 且与服务端不一致时回推一次，web `_applySavedMicGain` 同义）、`scopeTheme=jet`、`scopeFloor=5`、`scopeCeil=220`、`fftHeight=40`、`wfHeight=110`、`keepScreenOn=true`、`backgroundRx=true`（`Data/SettingsStore.kt`）。
+- **本地偏好（DataStore）**：`afVol 0..255=128`、`micVol 0..400=150`、`micGain 0..100`（收到 fullState 且与服务端不一致时回推一次，web `_applySavedMicGain` 同义）、`scopeTheme=jet`、`scopeFloor=5`、`scopeCeil=220`、`fftHeight=40`、`wfHeight=110`、`keepScreenOn=true`、`backgroundRx=true`（`Data/SettingsStore.kt`）。

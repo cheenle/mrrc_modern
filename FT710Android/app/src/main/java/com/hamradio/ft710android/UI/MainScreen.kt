@@ -153,6 +153,13 @@ fun MainScreen(
                     "↓${rxKbps}K ↑${txKbps}K",
                     color = MrrcColors.TextSecondary, fontSize = 10.sp, fontFamily = MonoFont,
                 )
+                if (state.txStatus != 0) {
+                    Text(
+                        "  TX pk:${vm.txPeak()}",
+                        color = if (vm.txPeak() >= 400) MrrcColors.Success else MrrcColors.Warning,
+                        fontSize = 10.sp, fontFamily = MonoFont,
+                    )
+                }
                 Text(
                     "  RTT ${rttMs ?: "--"} J${vm.audioBufferMs()}",
                     color = MrrcColors.TextMuted, fontSize = 10.sp, fontFamily = MonoFont,

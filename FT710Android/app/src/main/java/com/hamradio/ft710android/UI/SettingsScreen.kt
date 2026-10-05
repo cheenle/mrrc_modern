@@ -151,7 +151,8 @@ fun SettingsScreen(
         // ── 音量与增益（S2/S3；全部松手提交：D3）──────────────────
         Section("音量 / 增益")
         PrefSlider("🔊 Vol", prefs.afVol.toFloat(), 0f..255f) { scope.launch { settings.putAfVol(it) } }
-        PrefSlider("🎙 Vol", prefs.micVol.toFloat(), 0f..200f) { scope.launch { settings.putMicVol(it) } }
+        // 手机麦普遍比 PC 耳麦低十几 dB：上限放到 400（4×），默认 150
+        PrefSlider("🎙 Vol", prefs.micVol.toFloat(), 0f..400f) { scope.launch { settings.putMicVol(it) } }
         PrefSlider("RF PWR", radio.rfPower, 5f..100f) { vm.setRfPower(it) }
         PrefSlider("RF Gain", radio.rfGainPct, 0f..100f) { vm.setRfGain((it * 255f / 100f).toInt()) }
         PrefSlider("Mic Gain", radio.micGain, 0f..100f) { g ->

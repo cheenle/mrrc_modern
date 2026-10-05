@@ -88,6 +88,7 @@ fun MainScreen(
     val rttMs by vm.rttMs.collectAsState()
     val rxKbps by vm.rxKbps.collectAsState()
     val txKbps by vm.txKbps.collectAsState()
+    val diag by vm.diag.collectAsState()
 
     var showRecPanel by remember { mutableStateOf(false) }
     var showFreqInput by remember { mutableStateOf(false) }
@@ -188,6 +189,11 @@ fun MainScreen(
             if (listenOnly) {
                 Text("只读登录（listen-only）：发射与设备设置已被服务端禁用",
                     color = MrrcColors.Accent, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+            // 设备侧诊断行（v1.1.2 真机无声取证；A=播放器 F=音频帧 D=解码样本 J=抖动 T=AudioTrack W/E=写）
+            if (diag.isNotEmpty()) {
+                Text(diag, color = MrrcColors.TextMuted, fontSize = 8.5.sp,
+                    fontFamily = MonoFont, maxLines = 1)
             }
             error?.let { msg ->
                 Text(msg, color = MrrcColors.Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))

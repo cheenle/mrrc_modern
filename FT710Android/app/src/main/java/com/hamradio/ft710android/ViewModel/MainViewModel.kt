@@ -91,6 +91,8 @@ class MainViewModel(
     val rxKbps: StateFlow<Long> = _rxKbps
     private val _txKbps = MutableStateFlow(0L)
     val txKbps: StateFlow<Long> = _txKbps
+    private val _diag = MutableStateFlow("")
+    val diag: StateFlow<String> = _diag
     private val _recordingsCount = MutableStateFlow(0)
     val recordingsCount: StateFlow<Int> = _recordingsCount
     private val _recordingsBytes = MutableStateFlow(0L)
@@ -263,6 +265,8 @@ class MainViewModel(
                 _rxKbps.value = connectionManager.drainRx() * 8 / 1000
                 _txKbps.value = connectionManager.drainTx() * 8 / 1000
                 _rttMs.value = connectionManager.lastRttMs()
+                // 设备侧音频链路边界（真机无声事故的取证行）
+                _diag.value = (rxPlayer?.stats() ?: "A:none") + " S:${_waterfall.value.size}"
             }
         }
     }
@@ -460,6 +464,7 @@ class MainViewModel(
         fun setBoost(b: Float)
         fun setTransmitting(t: Boolean)
         val bufferMs: Int
+        fun stats(): String
     }
     interface TxCaptureLike { fun start(); fun stop(); fun setMicVol(v: Int) }
     interface MemoryStore

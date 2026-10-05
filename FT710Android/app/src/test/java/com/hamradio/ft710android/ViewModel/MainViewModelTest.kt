@@ -168,5 +168,6 @@ class MainViewModelTest {
         override fun setBoost(b: Float) {}
         override fun setTransmitting(t: Boolean) {}
         override val bufferMs: Int get() = 0
+        override fun stats(): String = "fake"
     }
 }

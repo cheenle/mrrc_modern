@@ -28,6 +28,19 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
     @Volatile private var boost = 10f
     @Volatile private var transmitting = false
 
+    // 设备侧诊断计数（2026-10-05 真机无声事故）：把音频链路每段边界暴露给状态行
+    @Volatile var framesIn = 0L; private set
+    @Volatile var samplesOut = 0L; private set
+    @Volatile var decodeErrors = 0L; private set
+    @Volatile var trackWrites = 0L; private set
+    @Volatile var trackWriteErrors = 0L; private set
+
+    /** 一行设备侧诊断：A=播放器 A:on/off，F=收到的音频帧，D=解码样本，J=抖动缓冲，G=当前增益，T=AudioTrack 状态，W/E=写成功/失败。 */
+    override fun stats(): String =
+        "A:${if (running) "on" else "off"} F:$framesIn D:$samplesOut J:$bufferMs " +
+        "G:%.2f T:${track?.playState ?: -1} W:$trackWrites E:$trackWriteErrors".format(
+            RxGain.target(volume, boost, transmitting))
+
     private var track: AudioTrack? = null
     private var thread: Thread? = null
 
@@ -65,7 +78,8 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
 
     /** WS 帧入口：1B tag + payload。tag 0x01 Opus 解码，0x00 PCM 直通。 */
     override fun onFrame(frame: ByteArray) {
-        if (!running) return
+        if (!running || frame.isEmpty()) return
+        framesIn++
         val tag = frame[0].toInt() and 0xFF
         val payload = frame.copyOfRange(1, frame.size)
         val pcm = ShortArray(OpusBridge.FRAME_SAMPLES)
@@ -80,7 +94,12 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
             }
             else -> 0
         }
-        if (samples > 0) synchronized(jitter) { jitter.addLast(pcm.copyOf(samples)) }
+        if (samples > 0) {
+            samplesOut += samples
+            synchronized(jitter) { jitter.addLast(pcm.copyOf(samples)) }
+        } else {
+            decodeErrors++
+        }
     }
 
     private fun playLoop() {
@@ -97,7 +116,8 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
                     (buf[it] * g).roundToInt().coerceIn(-32768, 32767).toShort()
                 }
             }
-            track?.write(out, 0, out.size)
+            val w = track?.write(out, 0, out.size) ?: -1
+            if (w >= 0) trackWrites++ else trackWriteErrors++
             var sum = 0L
             for (s in buf) sum += s.toLong() * s
             rms = sqrt((sum / buf.size).toDouble() / (32768.0 * 32768.0)).toFloat()

@@ -36,13 +36,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamradio.ft710android.Data.BandCycle
 import com.hamradio.ft710android.Data.MemoryChannel
+import com.hamradio.ft710android.Data.SMeter
 import com.hamradio.ft710android.Spectrum.WaterfallCanvas
 import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.delay
@@ -409,7 +412,7 @@ fun MainScreen(
                     .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                vm.pttManager?.let { PTTButton(it, Modifier.weight(1f).height(64.dp)) }
+                vm.pttManager?.let { PTTButton(it, Modifier.weight(1f).height(96.dp)) }
                 Spacer(Modifier.width(8.dp))
                 if (cqAvailable) {
                     val calling = cq?.state == "calling"
@@ -507,35 +510,55 @@ private fun SmallChip(label: String, on: Boolean, modifier: Modifier = Modifier,
 }
 
 @Composable
-private fun SMeterBar(sMeter: Int, sUnit: Int, dbm: Double) {
-    val frac = (sMeter / 32f).coerceIn(0f, 1f)
+private fun SMeterBar(sMeter: Int, sUnit: String, levelDb: Double) {
     Column(Modifier.padding(top = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Canvas(Modifier.weight(1f).height(12.dp)) {
-                val n = 28
-                val gap = 2f
-                val w = (size.width - gap * (n - 1)) / n
-                val lit = (frac * n).toInt()
-                for (i in 0 until n) {
-                    val f = i / (n - 1f)
-                    val col = when {
-                        f < 0.5f -> MrrcColors.Success
-                        f < 0.8f -> MrrcColors.Warning
-                        else -> Color(0xFFE08A2A)
-                    }
-                    drawRect(if (i < lit) col else MrrcColors.BgTertiary,
-                        topLeft = Offset(i * (w + gap), 0f), size = Size(w, size.height))
+            Canvas(Modifier.weight(1f).height(14.dp)) {
+                val pos = SMeter.fraction(sMeter) * size.width
+                // 已填充：Web 的横向渐变（绿→黄→橙→红），按信号位置裁剪
+                if (pos > 0f) {
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            0f to Color(0xFF22C55E),
+                            0.3f to Color(0xFF22C55E),
+                            0.5f to Color(0xFFEAB308),
+                            0.7f to Color(0xFFF59E0B),
+                            1f to Color(0xFFEF4444),
+                        ),
+                        size = Size(pos, size.height),
+                    )
                 }
+                // 未填充部分（Web: rgba(255,255,255,0.05)）
+                drawRect(
+                    Color.White.copy(alpha = 0.05f),
+                    topLeft = Offset(pos, 0f),
+                    size = Size((size.width - pos).coerceAtLeast(0f), size.height),
+                )
+                // 刻度线（Web 的 marks 数组）
+                SMeter.MARKERS.forEach { m ->
+                    val x = m / SMeter.RAW_MAX.toFloat() * size.width
+                    drawLine(Color.White.copy(alpha = 0.3f), Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                }
+                drawRect(Color.White.copy(alpha = 0.15f), style = Stroke(width = 1f))
             }
             Spacer(Modifier.width(6.dp))
-            Text("S${sUnit.coerceIn(0, 9)}", color = MrrcColors.Accent, fontSize = 11.sp,
-                fontWeight = FontWeight.Bold, fontFamily = MonoFont)
-            Spacer(Modifier.width(6.dp))
-            Text("%.0f dBm".format(Locale.US, dbm), color = MrrcColors.TextSecondary, fontSize = 10.sp, fontFamily = MonoFont)
+            // 服务端 s_unit 直接就是显示串（"S9" / "+20" / "+60"）
+            Text(
+                sUnit.ifEmpty { "S0" }, color = MrrcColors.Accent, fontSize = 12.sp,
+                fontWeight = FontWeight.Bold, fontFamily = MonoFont,
+                textAlign = TextAlign.End, modifier = Modifier.width(34.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            // s_meter_dbm 是相对 S9 的 dB（S9 = 0 dB 参考），不是 dBm
+            Text(
+                "%.0f dB".format(Locale.US, levelDb), color = MrrcColors.TextSecondary,
+                fontSize = 10.sp, fontFamily = MonoFont,
+            )
         }
         Row(Modifier.fillMaxWidth()) {
-            listOf("S1", "S3", "S5", "S7", "S9", "+20", "+40").forEach { l ->
-                Text(l, color = MrrcColors.TextMuted, fontSize = 8.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            SMeter.LABELS.forEach { l ->
+                Text(l, color = MrrcColors.TextMuted, fontSize = 8.sp,
+                    textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             }
         }
     }

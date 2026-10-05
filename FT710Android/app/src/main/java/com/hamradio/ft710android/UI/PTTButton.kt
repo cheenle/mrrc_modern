@@ -39,7 +39,7 @@ fun PTTButton(manager: PTTManager, modifier: Modifier = Modifier) {
         Text(
             if (isTX) "发射中" else "PTT",
             color = Color.White,
-            fontSize = 18.sp,
+            fontSize = 22.sp,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 2.sp,
         )

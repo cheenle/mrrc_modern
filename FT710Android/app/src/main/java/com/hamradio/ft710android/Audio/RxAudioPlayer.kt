@@ -51,16 +51,16 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
     }
 
     /** 本机音量（0..255，DataStore afVol）。 */
-    fun setVolume(v: Int) { volume = v.coerceIn(0, 255) }
+    override fun setVolume(v: Int) { volume = v.coerceIn(0, 255) }
 
     /** 每种电台的 RX 播放增益（capabilities.audio_gain_boost；FT-710 = 10）。 */
-    fun setBoost(b: Float) { boost = b }
+    override fun setBoost(b: Float) { boost = b }
 
     /** TX/TUNE 时静音 RX 播放（防自噪回环）。 */
-    fun setTransmitting(t: Boolean) { transmitting = t }
+    override fun setTransmitting(t: Boolean) { transmitting = t }
 
     /** 抖动缓冲深度（毫秒），状态行 J 值。 */
-    val bufferMs: Int get() = synchronized(jitter) { jitter.size } * FRAME_MS
+    override val bufferMs: Int get() = synchronized(jitter) { jitter.size } * FRAME_MS
 
     /** WS 帧入口：1B tag + payload。tag 0x01 Opus 解码，0x00 PCM 直通。 */
     override fun onFrame(frame: ByteArray) {

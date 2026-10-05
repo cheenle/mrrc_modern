@@ -1,6 +1,7 @@
 package com.hamradio.ft710android.ViewModel
 
 import com.hamradio.ft710android.Network.ConnectionManager
+import com.hamradio.ft710android.Network.parseAtrEvent
 import com.hamradio.ft710android.Network.parseWsEvent
 import com.hamradio.ft710android.PTT.PTTManager
 import kotlinx.coroutines.CoroutineScope
@@ -75,5 +76,60 @@ class MainViewModelTest {
         val vm = MainViewModel(null, cm(scope), null, null, null, null, spy, scope)
         vm.onWsEvent(parseWsEvent("""{"type":"stateUpdate","fields":{"tx_status":1},"dirty":["tx_status"]}"""))
         assertEquals(1, fed)
+    }
+
+    @Test fun `fullState exposes capabilities and display name`() = runTest(UnconfinedTestDispatcher()) {
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val vm = MainViewModel(null, cm(scope), null, null, null, null, null, scope)
+        vm.onWsEvent(parseWsEvent(
+            """{"type":"fullState","data":{},"bands":[{"name":"40m","default_freq":7050000}],"modes":["USB"],
+                "radioDisplayName":"Yaesu FT-710","capabilities":{"scope_type":"civ27","audio_gain_boost":1.0}}"""
+        ))
+        assertEquals("Yaesu FT-710", vm.displayName.value)
+        assertEquals(1f, vm.caps.value.audioBoost)
+        assertEquals("civ27", vm.caps.value.scopeType)
+    }
+
+    @Test fun `saved mic gain is pushed back when it differs`() = runTest(UnconfinedTestDispatcher()) {
+        val sent = mutableListOf<String>()
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val cm = ConnectionManager(OkHttpClient(), scope, {}, {}, {}, {}, {}, {}, sendOverride = { sent.add(it) })
+        val vm = MainViewModel(null, cm, null, null, null, null, null, scope)
+        vm.setSavedMicGain(55)
+        vm.onWsEvent(parseWsEvent("""{"type":"fullState","data":{"mic_gain":20},"bands":[],"modes":[],"memChannels":[]}"""))
+        assertTrue(sent.any { it.contains("\"mic_gain\"") && it.contains("55") })
+    }
+
+    @Test fun `qsy targets the active vfo field`() = runTest(UnconfinedTestDispatcher()) {
+        val sent = mutableListOf<String>()
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val cm = ConnectionManager(OkHttpClient(), scope, {}, {}, {}, {}, {}, {}, sendOverride = { sent.add(it) })
+        val vm = MainViewModel(null, cm, null, null, null, null, null, scope)
+        vm.onWsEvent(parseWsEvent(
+            """{"type":"fullState","data":{"vfo_a_freq":14270000,"active_vfo":"A","scope_span":6},"bands":[],"modes":[],"memChannels":[]}"""
+        ))
+        vm.qsy(0.5f)
+        assertTrue(sent.last().contains("\"field\":\"freq\"") && sent.last().contains("14270000"))
+        vm.onWsEvent(parseWsEvent("""{"type":"stateUpdate","fields":{"active_vfo":"B"},"dirty":["active_vfo"]}"""))
+        vm.qsy(0f)
+        assertTrue(sent.last().contains("\"field\":\"vfo_b_freq\""))
+    }
+
+    @Test fun `disconnect marks the user-off state`() = runTest(UnconfinedTestDispatcher()) {
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val cm = ConnectionManager(OkHttpClient(), scope, {}, {}, {}, {}, {}, {}, sendOverride = {})
+        val vm = MainViewModel(null, cm, null, null, null, null, null, scope)
+        vm.disconnect()
+        assertTrue(vm.userOff.value)
+    }
+
+    @Test fun `atr state flows into the view model`() = runTest(UnconfinedTestDispatcher()) {
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val vm = MainViewModel(null, cm(scope), null, null, null, null, null, scope)
+        vm.onAtrEvent(parseAtrEvent(
+            """{"type":"atrState","connected":true,"power":30.0,"swr":1.2,"sw":0,"ind":5,"cap":9,"tuning":false}"""
+        )!!)
+        assertEquals(30.0, vm.atrState.value!!.power, 0.001)
+        assertEquals(5, vm.atrState.value!!.ind)
     }
 }

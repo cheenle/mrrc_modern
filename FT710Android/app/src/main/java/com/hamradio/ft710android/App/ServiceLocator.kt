@@ -2,6 +2,7 @@ package com.hamradio.ft710android.App
 
 import com.hamradio.ft710android.Audio.RxAudioPlayer
 import com.hamradio.ft710android.Audio.TxAudioCapture
+import com.hamradio.ft710android.Data.SettingsStore
 import com.hamradio.ft710android.Network.AuthApi
 import com.hamradio.ft710android.Network.ConnectionManager
 import com.hamradio.ft710android.Network.RecordingsApi
@@ -11,6 +12,7 @@ import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * 单例装配：构造依赖闭环（ConnectionManager 回调 → MainViewModel，MainViewModel 又持有 ConnectionManager）。
@@ -62,5 +64,11 @@ object ServiceLocator {
             scope = scope,
         )
         vmFactory = { vm }
+
+        // 本地偏好 → 运行时：音量/麦克风增益/回推的 mic_gain（web cookie 同义）。
+        val settings = SettingsStore(FT710App.instance)
+        scope.launch { settings.afVol.collect { vm.setAfVol(it) } }
+        scope.launch { settings.micVol.collect { vm.setMicVol(it) } }
+        scope.launch { settings.micGain.collect { vm.setSavedMicGain(it) } }
     }
 }

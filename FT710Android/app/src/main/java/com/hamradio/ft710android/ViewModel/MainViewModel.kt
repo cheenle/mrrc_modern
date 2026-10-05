@@ -1,7 +1,10 @@
 package com.hamradio.ft710android.ViewModel
 
+import com.hamradio.ft710android.Data.Capabilities
+import com.hamradio.ft710android.Data.FreqInput
 import com.hamradio.ft710android.Data.MemoryChannel
 import com.hamradio.ft710android.Data.MemoryChannels
+import com.hamradio.ft710android.Data.RadioCaps
 import com.hamradio.ft710android.Data.RadioState
 import com.hamradio.ft710android.Network.AuthApi
 import com.hamradio.ft710android.Network.AuthResult
@@ -18,8 +21,11 @@ import com.hamradio.ft710android.Network.WsEvent
 import com.hamradio.ft710android.PTT.PTTManager
 import com.hamradio.ft710android.Spectrum.SpectrumProcessor
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -64,6 +70,26 @@ class MainViewModel(
     val atr1000Enabled: StateFlow<Boolean> = _atr1000Enabled
     private val _atrState = MutableStateFlow<AtrStateDto?>(null)
     val atrState: StateFlow<AtrStateDto?> = _atrState
+    private val _atrTuning = MutableStateFlow(false)
+    val atrTuning: StateFlow<Boolean> = _atrTuning
+    private val _caps = MutableStateFlow(RadioCaps())
+    val caps: StateFlow<RadioCaps> = _caps
+    private val _displayName = MutableStateFlow("")
+    val displayName: StateFlow<String> = _displayName
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice
+    private val _userOff = MutableStateFlow(false)
+    val userOff: StateFlow<Boolean> = _userOff
+    private val _rttMs = MutableStateFlow<Long?>(null)
+    val rttMs: StateFlow<Long?> = _rttMs
+    private val _rxKbps = MutableStateFlow(0L)
+    val rxKbps: StateFlow<Long> = _rxKbps
+    private val _txKbps = MutableStateFlow(0L)
+    val txKbps: StateFlow<Long> = _txKbps
+    private val _recordingsCount = MutableStateFlow(0)
+    val recordingsCount: StateFlow<Int> = _recordingsCount
+    private val _recordingsBytes = MutableStateFlow(0L)
+    val recordingsBytes: StateFlow<Long> = _recordingsBytes
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
     private val _recordings = MutableStateFlow<List<RecordingRow>>(emptyList())
@@ -78,6 +104,8 @@ class MainViewModel(
     val cqAvailable: StateFlow<Boolean> = _cqAvailable
     private var baseUrl: String? = null
     private var token: String? = null
+    private var savedMicGain: Int? = null
+    private var statsJob: Job? = null
 
     fun onWsEvent(ev: WsEvent) {
         when (ev) {
@@ -86,17 +114,22 @@ class MainViewModel(
                 _version.value++
                 _bands.value = ev.bands
                 _modes.value = ev.modes
+                _caps.value = RadioCaps.from(ev.capabilities)
+                _displayName.value = ev.radioDisplayName ?: _caps.value.displayName
                 _atr1000Enabled.value = ev.atr1000Enabled
                 _recordingsAvailable.value = ev.recording != null
                 _cqAvailable.value = ev.cq != null
                 ev.recording?.let { _recordingState.value = it }
                 ev.cq?.let { _cq.value = it }
                 onMemChannels(ev.memChannels)
+                syncAudio()
+                applySavedMicGain()
             }
             is WsEvent.StateUpdate -> {
                 val dirty = state.apply(ev.fields)
                 _version.value++
                 if ("tx_status" in dirty) pttManager?.onStatusReceived(state.txStatus)
+                syncAudio()
             }
             is WsEvent.MemChannels -> onMemChannels(ev.channels)
             is WsEvent.RecordingState -> _recordingState.value = ev.status
@@ -107,13 +140,29 @@ class MainViewModel(
         }
     }
 
-    /** /WSatr1000 事件（任务 8 再扩展 tuning/notice；这里先接上数据面）。 */
+    /** /WSatr1000 事件：数据面 + 调谐进行中 + 结果提示（Web atr1000.js 语义）。 */
     fun onAtrEvent(ev: AtrEvent) {
         when (ev) {
             is AtrEvent.State -> _atrState.value = ev.s
-            is AtrEvent.TuneResult -> _error.value = AtrText.result(ev.r)
+            is AtrEvent.TuneResult -> {
+                _atrTuning.value = ev.r.phase == "start" || ev.r.phase == "auto_start"
+                if (!_atrTuning.value) _notice.value = AtrText.result(ev.r)
+            }
             is AtrEvent.Error -> _error.value = ev.message
         }
+    }
+
+    /** ATR 手动调谐（服务端自带 TX2 载波 + 比对回滚）；未连接时提示。 */
+    fun atrTune() {
+        if (_atrTuning.value) return
+        if (!connectionManager.sendAtrTune()) _notice.value = "ATR1000 未连接"
+        else _atrTuning.value = true
+    }
+
+    /** RX 播放增益与 TX 静音跟随电台状态（web _applyAfGainToAudioNode 语义）。 */
+    private fun syncAudio() {
+        rxPlayer?.setBoost(_caps.value.audioBoost)
+        rxPlayer?.setTransmitting(state.txStatus != 0)
     }
 
     fun onAudioRxFrame(frame: ByteArray) { rxPlayer?.onFrame(frame) }
@@ -133,20 +182,61 @@ class MainViewModel(
         val api = authApi ?: return AuthResult.Failure(0, "auth not configured")
         val base = "https://$host:$port"
         _listenOnly.value = false
+        _userOff.value = false
         val res = api.login(base, password)
         if (res is AuthResult.Success) {
             baseUrl = base; token = res.token
             connectionManager.start(base, res.token)
+            startStats()
         }
         return res
     }
 
     suspend fun logout() {
+        stopStats()
         connectionManager.stopAll()
         _connected.value = false
         _listenOnly.value = false
+        _userOff.value = false
         baseUrl = null; token = null
         _recordingsAvailable.value = false; _cqAvailable.value = false
+    }
+
+    /** M7 连接开关的"关"：停全部通道 + 强制释放 TX，保留 base/token 供重连。 */
+    fun disconnect() {
+        pttManager?.forceRelease()
+        stopStats()
+        connectionManager.disconnect()
+        _connected.value = false
+        _userOff.value = true
+    }
+
+    /** M7 连接开关的"开"：用保存的会话重连（无会话时由登录页接管）。 */
+    fun reconnect() {
+        _userOff.value = false
+        connectionManager.reconnectAll()
+        startStats()
+    }
+
+    /** 供 UI 显示/浏览器入口使用；未登录时回默认地址。 */
+    fun baseUrlForUi(): String = baseUrl
+        ?: "https://${com.hamradio.ft710android.Data.SettingsStore.DEFAULT_HOST}:${com.hamradio.ft710android.Data.SettingsStore.DEFAULT_PORT}"
+
+    private fun startStats() {
+        statsJob?.cancel()
+        statsJob = scope.launch {
+            while (isActive) {
+                delay(1000)
+                _rxKbps.value = connectionManager.drainRx() * 8 / 1000
+                _txKbps.value = connectionManager.drainTx() * 8 / 1000
+                _rttMs.value = connectionManager.lastRttMs()
+            }
+        }
+    }
+
+    private fun stopStats() {
+        statsJob?.cancel(); statsJob = null
+        _rxKbps.value = 0; _txKbps.value = 0; _rttMs.value = null
     }
 
     fun sendSet(field: String, value: Any) = connectionManager.sendSet(field, value)
@@ -155,7 +245,26 @@ class MainViewModel(
 
     fun setMode(mode: String) = sendSet("mode", mode)
     fun setBand(freqHz: Long) = sendSet("freq", freqHz)
-    fun cycleFilter() = sendSet("filter", (state.filterWidth + 1) % 23)
+    fun cycleFilter() = sendSet(
+        "filter",
+        Capabilities.nextFilter(state.filterWidth, state.modeName, null, _caps.value.filterModel),
+    )
+
+    /** 点击瀑布 QSY：按当前量程与 VFO 把 x 比例换算成目标频率。 */
+    fun qsy(fraction: Float) {
+        val hz = FreqInput.qsy(state.activeFrequency, _caps.value.spanHz(state.scopeSpan), fraction)
+        sendSet(if (state.activeVfo == "B") "vfo_b_freq" else "freq", hz)
+    }
+
+    /** 频率输入框提交（MHz）。 */
+    fun sendFreqHz(hz: Long) {
+        sendSet(if (state.activeVfo == "B") "vfo_b_freq" else "freq", hz)
+    }
+
+    /** 下一档滤波（D6）：voice/narrow 策划表 / fil123 轮转。 */
+    fun cycleFilterWith(tables: com.hamradio.ft710android.Network.FilterTables?) = sendSet(
+        "filter", Capabilities.nextFilter(state.filterWidth, state.modeName, tables, _caps.value.filterModel),
+    )
 
     fun onPttGesture() { pttManager?.press() }
     fun onPttRelease() { pttManager?.forceRelease() }
@@ -181,14 +290,33 @@ class MainViewModel(
         connectionManager.sendMemSave(MemoryChannels.toJson(list))
     }
 
-    fun disconnect() {
-        connectionManager.stopAll(); _connected.value = false; _listenOnly.value = false
-        baseUrl = null; token = null
-        _recordingsAvailable.value = false; _cqAvailable.value = false
-    }
-
     fun setScopeSpan(span: Int) = sendSet("scope_span", span)
     fun setRfPower(w: Int) = sendSet("rf_power", w)
+    fun setRfGain(raw: Int) = sendSet("rf_gain", raw)
+    fun setMicGain(v: Int) = sendSet("mic_gain", v)
+    fun setNrLevel(v: Int) = sendSet("nr_level", v)
+    fun setNbLevel(v: Int) = sendSet("nb_level", v)
+    fun setScopeSpeed(v: Int) = sendSet("scope_speed", v)
+
+    /** 本机音量（0..255，DataStore afVol 同步进来）。 */
+    fun setAfVol(v: Int) { rxPlayer?.setVolume(v) }
+
+    /** 本机麦克风增益（0..200，DataStore micVol 同步进来）。 */
+    fun setMicVol(v: Int) { txCapture?.setMicVol(v) }
+
+    /** 回退值：DataStore 里的 mic_gain；每次 fullState 与服务端不一致时回推一次。 */
+    fun setSavedMicGain(v: Int?) { savedMicGain = v; applySavedMicGain() }
+
+    private fun applySavedMicGain() {
+        val v = savedMicGain ?: return
+        if (v != state.micGain) sendSet("mic_gain", v)
+    }
+
+    /** 状态行统计：RTT + 抖动缓冲（毫秒）。 */
+    fun audioBufferMs(): Int = rxPlayer?.bufferMs ?: 0
+
+    fun showNotice(message: String) { _notice.value = message }
+    fun clearNotice() { _notice.value = null }
 
     // ── 录音（AD-017）与 CQ（AD-020）───────────────────────────────
     fun startRecording() = sendSet("recording", true)
@@ -200,7 +328,12 @@ class MainViewModel(
         val api = recordingsApi ?: return
         val base = baseUrl ?: return
         val t = token ?: return
-        scope.launch { _recordings.value = api.list(base, t) }
+        scope.launch {
+            val rows = api.list(base, t)
+            _recordings.value = rows
+            _recordingsCount.value = rows.size
+            _recordingsBytes.value = rows.sumOf { it.bytes }
+        }
     }
 
     fun deleteRecording(name: String) {
@@ -221,7 +354,13 @@ class MainViewModel(
     fun clearError() { _error.value = null }
 
     // 轻量接口，便于测试注入与对音频/频谱的强类型
-    interface RxPlayerLike { fun onFrame(frame: ByteArray) }
-    interface TxCaptureLike { fun start(); fun stop() }
+    interface RxPlayerLike {
+        fun onFrame(frame: ByteArray)
+        fun setVolume(v: Int)
+        fun setBoost(b: Float)
+        fun setTransmitting(t: Boolean)
+        val bufferMs: Int
+    }
+    interface TxCaptureLike { fun start(); fun stop(); fun setMicVol(v: Int) }
     interface MemoryStore
 }

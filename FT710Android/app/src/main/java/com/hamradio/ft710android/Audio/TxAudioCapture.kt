@@ -33,7 +33,7 @@ class TxAudioCapture(
         private set
 
     /** 本机麦克风软件增益（0..200，web 🎙 Vol 语义）。 */
-    fun setMicVol(v: Int) { micVol = v.coerceIn(0, 200) }
+    override fun setMicVol(v: Int) { micVol = v.coerceIn(0, 200) }
 
     override fun start() {
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {

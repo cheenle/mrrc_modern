@@ -348,10 +348,10 @@ class MainViewModel(
         val base = baseUrl ?: return
         val t = token ?: return
         scope.launch {
-            val rows = api.list(base, t)
-            _recordings.value = rows
-            _recordingsCount.value = rows.size
-            _recordingsBytes.value = rows.sumOf { it.bytes }
+            val summary = api.listSummary(base, t)
+            _recordings.value = summary.recordings
+            _recordingsCount.value = summary.count
+            _recordingsBytes.value = summary.totalBytes
         }
     }
 

@@ -17,6 +17,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,6 +54,8 @@ fun RecordingPanel(vm: MainViewModel, onClose: () -> Unit) {
     val rec by vm.recordingState.collectAsState()
     val rows by vm.recordings.collectAsState()
     val listenOnly by vm.listenOnly.collectAsState()
+    val count by vm.recordingsCount.collectAsState()
+    val totalBytes by vm.recordingsBytes.collectAsState()
 
     var playing by remember { mutableStateOf<String?>(null) }
     var playbackPos by remember { mutableStateOf(0) }
@@ -119,6 +122,8 @@ fun RecordingPanel(vm: MainViewModel, onClose: () -> Unit) {
                     TextButton(onClick = onClose) { Text("关闭") }
                 }
                 HorizontalDivider()
+                Text("$count 条 · 共 ${fmtBytes(totalBytes)}", fontSize = 11.sp,
+                    color = Color(0xFF6B7280), modifier = Modifier.padding(vertical = 4.dp))
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (rec.recording) {
                         Text("● 录制中 ${fmtSeconds(rec.duration)} · ${fmtBytes(rec.bytes)}", color = Color(0xFFE53935), fontSize = 13.sp)
@@ -133,14 +138,27 @@ fun RecordingPanel(vm: MainViewModel, onClose: () -> Unit) {
                     }
                 }
                 playing?.let { name ->
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("▶ ${fmtSeconds(playbackPos / 1000.0)} / ${fmtSeconds(playbackDur / 1000.0)}", fontSize = 12.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Text(name, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { if (player.isPlaying) player.pause() else player.start() }) {
-                            Text(if (player.isPlaying) "暂停" else "继续")
+                    var seekLocal by remember { mutableStateOf<Float?>(null) }
+                    Column(Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("▶ ${fmtSeconds(playbackPos / 1000.0)} / ${fmtSeconds(playbackDur / 1000.0)}", fontSize = 12.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(name, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { if (player.isPlaying) player.pause() else player.start() }) {
+                                Text(if (player.isPlaying) "暂停" else "继续")
+                            }
+                            TextButton(onClick = { stopPlayback() }) { Text("停止") }
                         }
-                        TextButton(onClick = { stopPlayback() }) { Text("停止") }
+                        val dur = playbackDur.toFloat().coerceAtLeast(1f)
+                        Slider(
+                            value = (seekLocal ?: playbackPos.toFloat()).coerceIn(0f, dur),
+                            onValueChange = { seekLocal = it },
+                            onValueChangeFinished = {
+                                seekLocal?.let { player.seekTo(it.toInt()) }
+                                seekLocal = null
+                            },
+                            valueRange = 0f..dur,
+                        )
                     }
                 }
                 if (busy) Text("处理中…", fontSize = 12.sp, color = Color(0xFFE67E22))

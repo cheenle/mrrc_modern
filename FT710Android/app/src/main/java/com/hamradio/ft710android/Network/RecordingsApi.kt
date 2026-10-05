@@ -34,16 +34,24 @@ fun parseRecordingsList(text: String): List<RecordingRow> =
     runCatching { recordingsJson.decodeFromString<RecordingsListDto>(text).recordings }
         .getOrElse { emptyList() }
 
+/** 纯解析：列表 + count/total_bytes（L3 的合计行用）。 */
+fun parseRecordingsSummary(text: String): RecordingsListDto =
+    runCatching { recordingsJson.decodeFromString<RecordingsListDto>(text) }
+        .getOrElse { RecordingsListDto() }
+
 /** 录音 REST（AD-017）：列表 / 下载 / 删除。认证用登录 Cookie（与 AuthApi.logout 一致）。 */
 class RecordingsApi(private val client: OkHttpClient) {
-    suspend fun list(baseUrl: String, token: String): List<RecordingRow> = withContext(Dispatchers.IO) {
+    suspend fun list(baseUrl: String, token: String): List<RecordingRow> = listSummary(baseUrl, token).recordings
+
+    /** 列表 + 合计（/api/recordings 的 count/total_bytes 直接来自服务端）。 */
+    suspend fun listSummary(baseUrl: String, token: String): RecordingsListDto = withContext(Dispatchers.IO) {
         val req = Request.Builder().url("$baseUrl/api/recordings")
             .header("Cookie", "ft710_auth=$token").get().build()
         runCatching {
             client.newCall(req).execute().use { resp ->
-                if (resp.code == 200) parseRecordingsList(resp.body?.string().orEmpty()) else emptyList()
+                if (resp.code == 200) parseRecordingsSummary(resp.body?.string().orEmpty()) else RecordingsListDto()
             }
-        }.getOrElse { emptyList() }
+        }.getOrElse { RecordingsListDto() }
     }
 
     suspend fun delete(baseUrl: String, token: String, name: String): Boolean = withContext(Dispatchers.IO) {

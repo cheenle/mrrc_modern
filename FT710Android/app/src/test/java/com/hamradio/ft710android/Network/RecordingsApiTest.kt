@@ -15,6 +15,15 @@ class RecordingsApiTest {
         assertEquals(488123L, rows[0].bytes)
     }
 
+    @Test fun `parses the list summary counts`() {
+        val dto = parseRecordingsSummary(
+            """{"recordings":[{"name":"a.mp3","bytes":100}],"count":7,"total_bytes":123456}"""
+        )
+        assertEquals(7, dto.count)
+        assertEquals(123456L, dto.totalBytes)
+        assertEquals(1, dto.recordings.size)
+    }
+
     @Test fun `malformed payload yields empty list`() {
         assertEquals(emptyList<RecordingRow>(), parseRecordingsList("<html>not json</html>"))
     }

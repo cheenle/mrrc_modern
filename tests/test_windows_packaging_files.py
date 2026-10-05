@@ -73,6 +73,21 @@ class WindowsPackagingFilesTests(unittest.TestCase):
         self.assertIn("MRRC-Modern-Server", text)
         self.assertIn("MRRC-Modern-Launcher", text)
 
+    def test_build_script_purges_the_pyinstaller_workpath_first(self):
+        """PyInstaller re-analyzes a module only when its (size, mtime) changed,
+        and a tree shipped as a tar keeps the build Mac's mtimes — so a CHANGED
+        file can look older than the cache. v1.25.3 froze the pre-fix server
+        entry exactly that way (only COLLECT-00.toc was rewritten; version.txt,
+        the test gate and iscc all looked green). The workpath must be removed
+        before PyInstaller runs, as packaging/macos/build.sh already does."""
+        text = (ROOT / "packaging" / "windows" / "build.ps1").read_text(
+            encoding="utf-8"
+        )
+        first_invocation = text.index("Invoke-Checked pyinstaller")
+        self.assertIn(
+            'Remove-Item "build\\pyinstaller"', text[:first_invocation]
+        )
+
     def test_build_script_aborts_on_native_command_failure(self):
         """$ErrorActionPreference does not cover native commands — the build
         must check $LASTEXITCODE so failed tests/builds abort packaging."""

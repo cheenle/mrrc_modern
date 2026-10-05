@@ -69,6 +69,16 @@ if (!(Test-Path $opus)) {
     Write-Warning "  $opus"
 }
 
+# Purge the PyInstaller workpath. The module graph is cached there and a file is
+# only re-analyzed when its (size, mtime) changed - so a source tree shipped as a
+# tar, which keeps the build Mac's mtimes, can look older than the cache and a
+# CHANGED file gets its OLD bytecode frozen into the package. Measured on v1.25.3:
+# server.py had changed, its mtime (Oct 4 23:04) predated the cache (Oct 5 07:46),
+# only COLLECT-00.toc was rewritten, and the frozen server entry was the pre-fix
+# revision while version.txt, the test gate and iscc all looked green. build.sh
+# already removes its workpath; do the same here.
+Remove-Item "build\pyinstaller" -Recurse -Force -ErrorAction SilentlyContinue
+
 Invoke-Checked pyinstaller packaging\pyinstaller\scope_pipe.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
 Invoke-Checked pyinstaller packaging\pyinstaller\mrrc_modern_server.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"
 Invoke-Checked pyinstaller packaging\pyinstaller\mrrc_modern_launcher.spec --noconfirm --distpath "$PyInstallerRoot" --workpath "build\pyinstaller"

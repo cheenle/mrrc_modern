@@ -31,6 +31,13 @@ class TxAudioCapture(
 
     @Volatile var micVol: Int = 100
         private set
+    @Volatile var samplesRead = 0L; private set
+    @Volatile var framesSent = 0L; private set
+    @Volatile var activeRate = 0; private set
+
+    /** 诊断行：rec=采集在跑否，rate=实际采样率，R=读到的样本，X=发出去的 Opus 帧。 */
+    override fun stats(): String =
+        "TX[${if (job != null) "rec" else "off"} ${activeRate} R:$samplesRead X:$framesSent]"
 
     /** 本机麦克风软件增益（0..200，web 🎙 Vol 语义）。 */
     override fun setMicVol(v: Int) { micVol = v.coerceIn(0, 200) }
@@ -44,6 +51,7 @@ class TxAudioCapture(
         if (rec == null) { onError?.invoke("无法打开麦克风（48k/44.1k 均失败）"); return }
         record = rec
         val rate = rec.sampleRate
+        activeRate = rate
         val frame = TxFraming.frameSamples(rate)
         rec.startRecording()
         job = scope.launch {
@@ -54,6 +62,7 @@ class TxAudioCapture(
             while (isActive) {
                 val n = rec.read(read, 0, read.size)
                 if (n <= 0) continue
+                samplesRead += n
                 var off = 0
                 while (off < n) {
                     val take = minOf(frame - have, n - off)
@@ -63,7 +72,10 @@ class TxAudioCapture(
                         val pcm = TxFraming.applyMicVol(acc, micVol)
                         val pcm48 = if (rate == 44100) Resampler.resample882To960(pcm) else pcm
                         val written = OpusBridge.encoderEncode(encoder, pcm48, out)
-                        if (written > 0) sendFrame(byteArrayOf(0x01) + out.copyOf(written))
+                        if (written > 0) {
+                            framesSent++
+                            sendFrame(byteArrayOf(0x01) + out.copyOf(written))
+                        }
                         have = 0
                     }
                 }

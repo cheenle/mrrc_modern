@@ -187,12 +187,16 @@ class MainViewModel(
         _fft.value = p.fft
     }
 
-    /** ConnectionManager 四路聚合状态透传（修复：此前无人写入 _connected）。
-     *  音频播放器随连接聚合启停（音频帧只在连接期间到达；没 start 就拿到帧也会被丢）。 */
+    /** ConnectionManager 四路聚合状态透传（驱动连接指示点与后台服务）。 */
     fun onConnectionChange(connected: Boolean) {
         _connected.value = connected
-        if (connected) { rxPlayer?.start(); syncAudio() } else rxPlayer?.stop()
+        if (connected) syncAudio()
         syncBackground()
+    }
+
+    /** RX 音频通道自身的在线状态：播放器只依赖它，不等四路全齐（真机 2026-10-05）。 */
+    fun onAudioRxChange(up: Boolean) {
+        if (up) { rxPlayer?.start(); syncAudio() } else rxPlayer?.stop()
     }
 
     /** 只读登录（服务端以 4003 关闭 TX/ATR 通道）——隐藏发射类 UI。 */
@@ -266,7 +270,9 @@ class MainViewModel(
                 _txKbps.value = connectionManager.drainTx() * 8 / 1000
                 _rttMs.value = connectionManager.lastRttMs()
                 // 设备侧音频链路边界（真机无声事故的取证行）
-                _diag.value = (rxPlayer?.stats() ?: "A:none") + " S:${_waterfall.value.size}"
+                _diag.value = (rxPlayer?.stats() ?: "A:none") +
+                    " S:${_waterfall.value.size} ch:${connectionManager.channelsSummary()}" +
+                    " ${txCapture?.stats() ?: "TX[off]"} tx:${state.txStatus}"
             }
         }
     }
@@ -466,7 +472,7 @@ class MainViewModel(
         val bufferMs: Int
         fun stats(): String
     }
-    interface TxCaptureLike { fun start(); fun stop(); fun setMicVol(v: Int) }
+    interface TxCaptureLike { fun start(); fun stop(); fun setMicVol(v: Int); fun stats(): String }
     interface MemoryStore
 
     /** 后台 RX 前台服务的可注入接口（ServiceLocator 接到 RxForegroundService）。 */

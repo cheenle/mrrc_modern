@@ -146,15 +146,15 @@ class MainViewModelTest {
         assertEquals(42, vm.fft.value[0])
     }
 
-    @Test fun `the audio player follows the connection aggregate`() = runTest(UnconfinedTestDispatcher()) {
+    @Test fun `the audio player follows its own channel, not the aggregate`() = runTest(UnconfinedTestDispatcher()) {
         val scope = CoroutineScope(UnconfinedTestDispatcher())
         val fake = FakeRxPlayer()
         val vm = MainViewModel(null, cm(scope), fake, null, null, null, null, scope)
-        vm.onConnectionChange(true)
+        vm.onAudioRxChange(true)
         assertEquals(1, fake.startCount)
-        vm.onConnectionChange(false)
+        vm.onAudioRxChange(false)
         assertEquals(1, fake.stopCount)
-        vm.onConnectionChange(true)
+        vm.onAudioRxChange(true)
         assertEquals(2, fake.startCount) // 重连后重新启动（RxAudioPlayer.start() 自身幂等）
     }
 

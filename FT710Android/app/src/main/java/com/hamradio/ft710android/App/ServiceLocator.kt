@@ -43,6 +43,7 @@ object ServiceLocator {
             onAudioTxText = {},
             onAtrEvent = { vm.onAtrEvent(it) },
             onConnectionChange = { vm.onConnectionChange(it) },
+            onAudioRxChange = { vm.onAudioRxChange(it) },
             onListenOnly = { vm.onListenOnly() },
         )
         vm = MainViewModel(
@@ -65,7 +66,7 @@ object ServiceLocator {
                 startTxAudio = { tx.start() },
                 stopTxAudio = { tx.stop() },
                 serverTXStatus = { vm.state.txStatus },
-                isCtrlConnected = { cm.isConnected },
+                isCtrlConnected = { cm.isRadioConnected },
                 onStuckTX = {},
             ),
             scope = scope,

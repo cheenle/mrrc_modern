@@ -2,6 +2,13 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.3] — 2026-10-05
+
+- **修复聚合闸门单点故障**（真机：控制通、频谱通，但 RX 无声且 PTT 不键控 → 无功率/无话音）：`connectedFlags` 是非线程安全的 `mutableSetOf`，被 4+1 路 OkHttp 回调线程并发 add/remove，丢一个 add 就再也不会补齐 → 四路聚合永不成立；而 `rxPlayer.start()` 与 `PTTManager.press()` 都挂在这个聚合上，频谱与控制却不挂 → 症状完全吻合。改用 `ChannelFlags`（`ConcurrentHashMap.newKeySet`）+ `@Synchronized updateConnected`
+- **拆掉单点闸门**：RX 播放只看 `/WSaudioRX` 自己的在线状态（`onAudioRxChange`）；PTT 的 `isCtrlConnected` 只看 `/WSradio`（与 Web `ptt_manager.js` 语义一致，不再等音频通道）
+- 诊断行扩展：补每路通道标志 `ch:R+ A+ T+ S+` 与 TX 侧计数 `TX[rec 48000 R:样本 X:Opus帧] tx:<tx_status>`，一条截图即可定位 RX/发射各自的断点
+- 测试 101 → 105 项全绿（新增 ChannelFlags 并发不变量 4 项）
+
 ## [1.1.2] — 2026-10-05
 
 - **修复 JNI 的 Opus 帧长错误**：`GetArrayLength` 对 `jshortArray` 返回的是**样本数**，编码/解码却都传了 `len/2` → 每包只按 10ms 处理（RX 只播一半、TX 半速）。现按 960 样本（20ms@48k）收发

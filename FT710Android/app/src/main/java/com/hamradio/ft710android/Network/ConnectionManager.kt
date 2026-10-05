@@ -17,6 +17,7 @@ class ConnectionManager(
     private val onAudioTxText: (String) -> Unit,
     private val onAtrEvent: (AtrEvent) -> Unit,
     private val onConnectionChange: (Boolean) -> Unit,
+    private val onAudioRxChange: (Boolean) -> Unit = {},
     private val onListenOnly: () -> Unit = {},
     private val sendOverride: ((String) -> Unit)? = null,
     nowMs: () -> Long = { System.currentTimeMillis() },
@@ -27,11 +28,20 @@ class ConnectionManager(
     private var spectrum: WebSocketConnection? = null
     private var atr: WebSocketConnection? = null
     private var heartbeat: Job? = null
-    private val connectedFlags = mutableSetOf<String>()
+    private val connectedFlags = ChannelFlags()
     private val stats = NetworkStats(nowMs)
 
     @Volatile var isConnected: Boolean = false; private set
     @Volatile var listenOnly: Boolean = false; private set
+
+    /** 控制通道在线（PTT 的唯一闸门：不需要等音频通道）。 */
+    val isRadioConnected: Boolean get() = connectedFlags.has("/WSradio")
+
+    /** 通道状态摘要（诊断行用）：R=radio A=audioRX T=audioTX S=spectrum。 */
+    fun channelsSummary(): String {
+        fun m(path: String) = if (connectedFlags.has(path)) "+" else "-"
+        return "R${m("/WSradio")} A${m("/WSaudioRX")} T${m("/WSaudioTX")} S${m("/WSspectrum")}"
+    }
 
     private var _baseUrl: String? = null
     private var _token: String? = null
@@ -123,6 +133,7 @@ class ConnectionManager(
             onStateChange = { state ->
                 if (state == WebSocketConnection.State.Connected) connectedFlags.add(path)
                 else connectedFlags.remove(path)
+                if (path == "/WSaudioRX") onAudioRxChange(connectedFlags.has(path))
                 updateConnected()
             },
             onClosedCode = onClosedCode,
@@ -140,10 +151,11 @@ class ConnectionManager(
         }
     }
 
+    @Synchronized
     private fun updateConnected() {
         val required = if (listenOnly) setOf("/WSradio", "/WSaudioRX", "/WSspectrum")
                        else setOf("/WSradio", "/WSaudioRX", "/WSaudioTX", "/WSspectrum")
-        val all = required.all { it in connectedFlags }
+        val all = connectedFlags.hasAll(required)
         if (all != isConnected) { isConnected = all; onConnectionChange(all) }
     }
 

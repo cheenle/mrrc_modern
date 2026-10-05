@@ -3,6 +3,7 @@ package com.hamradio.ft710android.App
 import android.Manifest
 import android.app.Activity
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -72,12 +73,17 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
     AppSetup(keepScreenOn = prefs.keepScreenOn, onTxRelease = { vm.onPttRelease() })
     ImmersiveEffect(immersive)
 
+    // 系统返回键/手势：在设置页时回主屏，而不是直接退出 App
+    BackHandler(enabled = loggedIn && showSettings) { showSettings = false }
+
     // 尊重系统窗口插入区：顶部保住状态栏、底部避开导航条/手势条（Android 15 强制 edge-to-edge）
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         if (!loggedIn) {
             LoginScreen(vm, settings) { loggedIn = true }
         } else if (showSettings) {
-            SettingsScreen(vm, settings, prefs) { loggedIn = false; showSettings = false }
+            SettingsScreen(vm, settings, prefs, onBack = { showSettings = false }) {
+                loggedIn = false; showSettings = false
+            }
         } else {
             MainScreen(
                 vm = vm,

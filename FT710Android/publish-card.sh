@@ -78,7 +78,9 @@ fi
 
 scp "$TMP/index.html" "$TMP/zh.html" "$REMOTE_USER@$REMOTE_HOST:~/"
 ssh "$REMOTE_USER@$REMOTE_HOST" \
-  "sudo mv ~/index.html $REMOTE_ROOT/index.html && sudo mv ~/zh.html $REMOTE_ROOT/zh/index.html && sudo chown www-data:www-data $REMOTE_ROOT/index.html $REMOTE_ROOT/zh/index.html && sudo chmod 644 $REMOTE_ROOT/index.html $REMOTE_ROOT/zh/index.html"
+  "sudo mv ~/index.html $REMOTE_ROOT/index.html && sudo mv ~/zh.html $REMOTE_ROOT/zh/index.html && sudo chown www-data:www-data $REMOTE_ROOT/index.html $REMOTE_ROOT/zh/index.html && sudo chmod 644 $REMOTE_ROOT/index.html $REMOTE_ROOT/zh/index.html && sudo systemctl reload nginx"
+# 为什么要 reload：nginx.conf 开了 open_file_cache（valid 60s / inactive 30s），mv 换文件后
+# nginx 会继续用旧 inode 服务最长 60 秒（2026-10-05 实测：文件已是 v1.1.5，外网仍回 v1.1.4）。
 
 # 复核：两页在线内容与补丁后逐字节一致；APK 线上 SHA 与卡片一致。
 # 注意：公网链路可能存在短时缓存（2026-10-05 实测：刚上传后复查到 15:25 的旧响应）——

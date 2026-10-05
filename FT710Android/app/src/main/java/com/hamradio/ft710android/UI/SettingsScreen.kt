@@ -2,9 +2,11 @@ package com.hamradio.ft710android.UI
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -54,6 +56,7 @@ fun SettingsScreen(
     vm: MainViewModel,
     settings: SettingsStore,
     prefs: UiPrefs,
+    onBack: () -> Unit,
     onLoggedOut: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -69,7 +72,17 @@ fun SettingsScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("设置", style = MaterialTheme.typography.headlineSmall)
+        // 返回主屏（也有系统返回键兜底，见 RootScreen.BackHandler）
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.border(1.dp, MrrcColors.Border, RoundedCornerShape(6.dp))
+                    .clickable { onBack() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) { Text("← 返回", color = MrrcColors.Accent, fontSize = 13.sp) }
+            Spacer(Modifier.width(10.dp))
+            Text("设置", style = MaterialTheme.typography.titleMedium)
+        }
+        Spacer(Modifier.height(6.dp))
         Text(
             "${displayName.ifEmpty { caps.displayName }} · 客户端 v${BuildConfig.VERSION_NAME}",
             style = MaterialTheme.typography.bodySmall,
@@ -151,6 +164,7 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(16.dp))
         TextButton(onClick = { vm.connectionManager.reconnectAll() }) { Text("重连") }
+        TextButton(onClick = { onBack() }) { Text("返回主屏") }
         Button(onClick = {
             scope.launch { vm.logout(); settings.clearCredentials(); onLoggedOut() }
         }) { Text("退出登录") }

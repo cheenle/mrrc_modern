@@ -48,13 +48,20 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 /**
- * 主屏 —— 布局与配色对齐**手机端 Web**（static/index.html + ft710.css）：
- * 顶栏(频率/VFO) → 状态行 → 瀑布+标尺 → 分段 S 表 → 仪表 → 五键行 → 芯片行 →
- * 音量 → 步进 → VFO 行 → 录音入口 → 记忆格；底部固定 PTT/CQ/TUNE。
+ * 主屏 —— 布局/交互对齐**手机端 Web**（static/index.html + ft710_ui.js）：
+ * 顶栏(频率/VFO/全屏/连接) → 状态行(波段·模式·TX/TUNE·统计·无声) → 瀑布+标尺（点击 QSY）→
+ * S 表 → 仪表（+ ATR 行）→ 五键行 → 芯片行 → 音量 → 步进 → VFO 行 → 录音入口 → 记忆格；
+ * 底部固定 PTT/CQ/TUNE。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
+fun MainScreen(
+    vm: MainViewModel,
+    prefs: UiPrefs,
+    onOpenSettings: () -> Unit,
+    fullscreen: Boolean = false,
+    onToggleFullscreen: () -> Unit = {},
+) {
     // RadioState 是可变普通类：订阅 version 触发重组
     vm.version.collectAsState()
     val state = vm.state
@@ -70,10 +77,24 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
     val cq by vm.cq.collectAsState()
     val cqAvailable by vm.cqAvailable.collectAsState()
     val error by vm.error.collectAsState()
+    val notice by vm.notice.collectAsState()
+    val userOff by vm.userOff.collectAsState()
+    val caps by vm.caps.collectAsState()
+    val displayName by vm.displayName.collectAsState()
+    val atrEnabled by vm.atr1000Enabled.collectAsState()
+    val atr by vm.atrState.collectAsState()
+    val atrTuning by vm.atrTuning.collectAsState()
+    val rttMs by vm.rttMs.collectAsState()
+    val rxKbps by vm.rxKbps.collectAsState()
+    val txKbps by vm.txKbps.collectAsState()
 
     var showRecPanel by remember { mutableStateOf(false) }
+    var showFreqInput by remember { mutableStateOf(false) }
+    var showBandPicker by remember { mutableStateOf(false) }
+    var showModePicker by remember { mutableStateOf(false) }
+    var showMemManager by remember { mutableStateOf(false) }
     var stepHz by remember { mutableStateOf(1_000L) }
-    val spanHz = when (state.scopeSpan) { 0 -> 100_000L; 1 -> 1_000_000L; 2 -> 50_000L; else -> 100_000L }
+    val spanHz = caps.spanHz(state.scopeSpan)
 
     Column(Modifier.fillMaxSize().background(MrrcColors.BgPrimary)) {
         Column(
@@ -88,8 +109,15 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
                 Text(
                     fmtMhz(state.activeFrequency),
                     color = MrrcColors.Accent, fontFamily = MonoFont, fontSize = 32.sp,
-                    maxLines = 1, modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f).clickable { showFreqInput = true },
                 )
+                PadBtn("⛶", active = fullscreen) { onToggleFullscreen() }
+                Spacer(Modifier.width(4.dp))
+                PadBtn("⏻", active = !userOff, danger = userOff) {
+                    if (userOff) vm.reconnect() else vm.disconnect()
+                }
+                Spacer(Modifier.width(4.dp))
                 PadBtn("VFO-${state.activeVfo}", active = true) {
                     vm.sendSet("vfo", if (state.activeVfo == "A") "B" else "A")
                 }
@@ -107,14 +135,53 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (state.isTransmitting) "TX" else "RX",
+                    when (state.txStatus) { 2 -> "TUNE"; 1 -> "TX"; else -> "RX" },
                     color = if (state.isTransmitting) MrrcColors.Danger else MrrcColors.TextSecondary,
                     fontSize = 11.sp, fontWeight = FontWeight.Bold,
                 )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "↓${rxKbps}K ↑${txKbps}K",
+                    color = MrrcColors.TextSecondary, fontSize = 10.sp, fontFamily = MonoFont,
+                )
+                Text(
+                    "  RTT ${rttMs ?: "--"} J${vm.audioBufferMs()}",
+                    color = MrrcColors.TextMuted, fontSize = 10.sp, fontFamily = MonoFont,
+                )
+                if (state.rxAudioSilent) {
+                    Text(
+                        " 无声", color = MrrcColors.Danger, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            vm.showNotice("RX 音频持续全零——电台 USB 音频可能卡死，请重启电台或重插 USB")
+                        },
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 Box(Modifier.size(6.dp).background(if (connected) MrrcColors.Success else MrrcColors.TextMuted, CircleShape))
                 Spacer(Modifier.width(4.dp))
                 Text("Serial", color = MrrcColors.TextSecondary, fontSize = 10.sp)
+            }
+
+            // 机型 + 未验证徽章（web applyCapabilityBadges）
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                Text(displayName, color = MrrcColors.TextMuted, fontSize = 9.sp)
+                if (!caps.verified) {
+                    Spacer(Modifier.width(6.dp))
+                    Box(
+                        Modifier.background(Color(0xFF78350F), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            "实验性", color = Color(0xFFFBBF24), fontSize = 10.sp,
+                            modifier = Modifier.clickable {
+                                vm.showNotice(
+                                    if (caps.txGated) "该机型未硬件实测 — 发射已禁用（MRRC_ALLOW_UNVERIFIED_TX=1 可放行）"
+                                    else "该机型未硬件实测 — 发射已由环境变量放行"
+                                )
+                            },
+                        )
+                    }
+                }
             }
 
             if (listenOnly) {
@@ -125,16 +192,22 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
                 Text(msg, color = MrrcColors.Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
                 LaunchedEffect(msg) { delay(4000); vm.clearError() }
             }
+            notice?.let { msg ->
+                Text(msg, color = MrrcColors.Accent, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+                LaunchedEffect(msg) { delay(5000); vm.clearNotice() }
+            }
 
             // ── 瀑布 + 频率标尺 + 中心红标 ────────────────────────────
             Box(
-                Modifier.fillMaxWidth().height(150.dp).padding(top = 4.dp)
+                Modifier.fillMaxWidth().height((prefs.fftHeight + prefs.wfHeight).dp).padding(top = 4.dp)
                     .border(1.dp, MrrcColors.Border, RoundedCornerShape(8.dp))
             ) {
                 WaterfallCanvas(
                     rows = waterfall, fft = fft,
-                    theme = "jet", floor = 5, ceil = 220, fftFraction = 0.3f,
+                    theme = prefs.scopeTheme, floor = prefs.scopeFloor, ceil = prefs.scopeCeil,
+                    fftFraction = prefs.fftHeight.toFloat() / (prefs.fftHeight + prefs.wfHeight).coerceAtLeast(1),
                     modifier = Modifier.fillMaxSize(),
+                    onQsyFraction = { vm.qsy(it) },
                 )
             }
             Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
@@ -163,19 +236,49 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 MeterCell("SWR", state.swrRatio, 3f, MrrcColors.Success, "%.1f".format(Locale.US, state.swrRatio), Modifier.weight(1f))
-                MeterCell("Id", state.idAmps, 25f, MrrcColors.Cyan, "%.1f A".format(Locale.US, state.idAmps), Modifier.weight(1f))
-                MeterCell("Vd", state.vdVolts, 16f, MrrcColors.Purple, "%.1f V".format(Locale.US, state.vdVolts), Modifier.weight(1f))
+                if (caps.hasVdIdMeters) {
+                    MeterCell("Id", state.idAmps, 25f, MrrcColors.Cyan, "%.1f A".format(Locale.US, state.idAmps), Modifier.weight(1f))
+                    MeterCell("Vd", state.vdVolts, 16f, MrrcColors.Purple, "%.1f V".format(Locale.US, state.vdVolts), Modifier.weight(1f))
+                }
+            }
+
+            // ── ATR1000 行（web atr-row；未启用时整行隐藏）───────────
+            if (atrEnabled) {
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    MeterCell("ATR", atr?.power ?: 0.0, 120f, MrrcColors.Warning,
+                        "%.0f W".format(Locale.US, atr?.power ?: 0.0), Modifier.weight(1f))
+                    MeterCell("SWR", atr?.swr ?: 0.0, 5f, MrrcColors.Success,
+                        if ((atr?.swr ?: 0.0) > 0) "%.1f".format(Locale.US, atr!!.swr) else "-", Modifier.weight(1f))
+                    Box(
+                        Modifier.weight(1f).height(26.dp)
+                            .background(MrrcColors.BgSecondary, RoundedCornerShape(6.dp))
+                            .border(1.dp, MrrcColors.Border, RoundedCornerShape(6.dp))
+                            .clickable(enabled = !atrTuning) { vm.atrTune() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(if (atrTuning) "···" else "TUNE", color = MrrcColors.Accent,
+                            fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text(
+                    if (atr == null || !atr!!.connected) "ATR 离线"
+                    else "${if (atr!!.sw == 1) "CL" else "LC"} L=${atr!!.ind} C=${atr!!.cap}${if (atr!!.tuning) " ⋯" else ""}",
+                    color = MrrcColors.TextSecondary, fontSize = 10.sp, fontFamily = MonoFont,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
 
             // ── 五键行：模式 / 波段 / 滤波 / ATT / PRE ────────────────
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                PadBtn("模式", Modifier.weight(1f)) {
+                PadBtn("模式", Modifier.weight(1f), onLongClick = { showModePicker = true }) {
                     if (modes.isNotEmpty()) {
                         val idx = modes.indexOf(state.modeName)
                         vm.setMode(modes[(idx + 1).mod(modes.size)])
                     }
                 }
-                PadBtn("波段", Modifier.weight(1f)) { vm.setBand(BandCycle.next(state.bandName).defaultFreq) }
+                PadBtn("波段", Modifier.weight(1f), onLongClick = { showBandPicker = true }) {
+                    vm.setBand(BandCycle.next(state.bandName).defaultFreq)
+                }
                 PadBtn(fmtFilter(state.filterHz), Modifier.weight(1f)) { vm.cycleFilter() }
                 PadBtn("ATT${state.attenuatorLabel}", Modifier.weight(1f)) { vm.sendSet("att", (state.attenuator + 1) % 4) }
                 PadBtn("PRE${state.preampLabel}", Modifier.weight(1f)) { vm.sendSet("preamp", (state.preamp + 1) % 3) }
@@ -185,9 +288,11 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
             Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 SmallChip("NR", state.noiseReduction, Modifier.weight(1f)) { vm.sendSet("nr", !state.noiseReduction) }
                 SmallChip("NB", state.noiseBlanker, Modifier.weight(1f)) { vm.sendSet("nb", !state.noiseBlanker) }
-                SmallChip("AN", state.autoNotch, Modifier.weight(1f)) { vm.sendSet("an", !state.autoNotch) }
+                if (caps.hasAutoNotch) {
+                    SmallChip("AN", state.autoNotch, Modifier.weight(1f)) { vm.sendSet("an", !state.autoNotch) }
+                }
                 SmallChip("COMP", state.compressor, Modifier.weight(1f)) { vm.sendSet("comp", !state.compressor) }
-                if (!listenOnly) {
+                if (!listenOnly && caps.hasAtu) {
                     SmallChip("ATU", state.tunerStatus != 0, Modifier.weight(1f)) {
                         vm.sendSet("tuner", if (state.tunerStatus == 0) 1 else 0)
                     }
@@ -243,8 +348,12 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
             }
 
             // ── 记忆频道 3×2 ─────────────────────────────────────────
-            Text("记忆频道（长按保存 · 点按调用）", color = MrrcColors.TextMuted,
-                fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp, bottom = 3.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("记忆频道（长按保存 · 点按调用）", color = MrrcColors.TextMuted, fontSize = 10.sp)
+                Spacer(Modifier.weight(1f))
+                Text("管理", color = MrrcColors.Accent, fontSize = 10.sp,
+                    modifier = Modifier.clickable { showMemManager = true }.padding(horizontal = 4.dp))
+            }
             for (row in 0..1) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     for (col in 0..2) {
@@ -262,7 +371,7 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 if (ch != null) {
-                                    Text("M${index + 1}", color = MrrcColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(ch.label.ifEmpty { "M${index + 1}" }, color = MrrcColors.Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     Text(
                                         "%.3f".format(Locale.US, ch.freq / 1e6),
                                         color = MrrcColors.TextPrimary, fontSize = 10.sp, fontFamily = MonoFont,
@@ -320,16 +429,39 @@ fun MainScreen(vm: MainViewModel, onOpenSettings: () -> Unit) {
     }
 
     if (showRecPanel) RecordingPanel(vm) { showRecPanel = false }
+    if (showFreqInput) {
+        FrequencyInputDialog(
+            currentHz = state.activeFrequency,
+            onDismiss = { showFreqInput = false },
+            onSubmit = { hz -> vm.sendFreqHz(hz); showFreqInput = false },
+        )
+    }
+    if (showBandPicker) {
+        BandPickerDialog(bands, state.bandName, onDismiss = { showBandPicker = false }) { b ->
+            vm.sendSet("freq", b.defaultFreq)
+            showBandPicker = false
+        }
+    }
+    if (showModePicker) {
+        ModePickerDialog(modes, state.modeName, onDismiss = { showModePicker = false }) { m ->
+            vm.setMode(m); showModePicker = false
+        }
+    }
+    if (showMemManager) {
+        MemoryManagerDialog(mem, onDismiss = { showMemManager = false }) { i -> vm.clearMemory(i) }
+    }
 }
 
 // ── 复用小组件（对齐 Web 的 .pad-btn / .chip / 仪表样式）────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PadBtn(
     label: String,
     modifier: Modifier = Modifier,
     active: Boolean = false,
     danger: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val border = when { danger -> MrrcColors.Danger; active -> MrrcColors.Accent; else -> MrrcColors.Border }
@@ -338,7 +470,10 @@ private fun PadBtn(
         modifier.height(32.dp)
             .background(if (danger) MrrcColors.Danger.copy(alpha = 0.15f) else MrrcColors.BgSecondary, RoundedCornerShape(6.dp))
             .border(1.dp, border, RoundedCornerShape(6.dp))
-            .clickable { onClick() },
+            .then(
+                if (onLongClick != null) Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                else Modifier.clickable { onClick() }
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)

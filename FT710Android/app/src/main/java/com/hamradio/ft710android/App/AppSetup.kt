@@ -12,16 +12,16 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
-/** 主界面装配：RX 音频焦点（切走暂停）、保持亮屏、退后台时强制释放 TX。 */
+/** 主界面装配：RX 音频焦点（切走暂停）、保持亮屏（偏好驱动）、退后台时强制释放 TX。 */
 @Composable
-fun AppSetup(rxRunning: Boolean, onTxRelease: () -> Unit) {
+fun AppSetup(keepScreenOn: Boolean = true, rxRunning: Boolean = true, onTxRelease: () -> Unit) {
     val view = LocalView.current
     val context = LocalContext.current
 
-    // 保持亮屏
-    DisposableEffect(Unit) {
+    // 保持亮屏（设置页开关，默认开）
+    DisposableEffect(keepScreenOn) {
         val prev = view.keepScreenOn
-        view.keepScreenOn = true
+        view.keepScreenOn = keepScreenOn
         onDispose { view.keepScreenOn = prev }
     }
 

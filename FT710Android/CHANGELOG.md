@@ -2,6 +2,12 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.4] — 2026-10-05
+
+- **尊重系统窗口插入区**：targetSdk 35 在 Android 15 上强制 edge-to-edge，之前顶部内容画在系统状态栏底下（用户反馈"手机/平板原来的显示没保留"）。现在根布局应用 `WindowInsets.safeDrawing`：顶部给状态栏留出空间、底部避开导航/手势条；并把状态栏/导航条图标设为浅色（深色背景上可读）
+- **主频字号翻倍**：32 → 64sp，并按可用宽度自适应（手机不溢出、平板拿满 64sp）
+- 测试 105 项全绿
+
 ## [1.1.3] — 2026-10-05
 
 - **修复聚合闸门单点故障**（真机：控制通、频谱通，但 RX 无声且 PTT 不键控 → 无功率/无话音）：`connectedFlags` 是非线程安全的 `mutableSetOf`，被 4+1 路 OkHttp 回调线程并发 add/remove，丢一个 add 就再也不会补齐 → 四路聚合永不成立；而 `rxPlayer.start()` 与 `PTTManager.press()` 都挂在这个聚合上，频谱与控制却不挂 → 症状完全吻合。改用 `ChannelFlags`（`ConcurrentHashMap.newKeySet`）+ `@Synchronized updateConnected`

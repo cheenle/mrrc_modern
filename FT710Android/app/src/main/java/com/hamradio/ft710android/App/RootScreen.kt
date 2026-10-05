@@ -11,9 +11,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,7 +72,8 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
     AppSetup(keepScreenOn = prefs.keepScreenOn, onTxRelease = { vm.onPttRelease() })
     ImmersiveEffect(immersive)
 
-    Box(Modifier.fillMaxSize()) {
+    // 尊重系统窗口插入区：顶部保住状态栏、底部避开导航条/手势条（Android 15 强制 edge-to-edge）
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
         if (!loggedIn) {
             LoginScreen(vm, settings) { loggedIn = true }
         } else if (showSettings) {

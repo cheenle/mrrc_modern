@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -108,12 +109,15 @@ fun MainScreen(
                 Text("☰", color = MrrcColors.TextSecondary, fontSize = 20.sp,
                     modifier = Modifier.clickable { onOpenSettings() }.padding(horizontal = 4.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(
-                    fmtMhz(state.activeFrequency),
-                    color = MrrcColors.Accent, fontFamily = MonoFont, fontSize = 32.sp,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f).clickable { showFreqInput = true },
-                )
+                BoxWithConstraints(Modifier.weight(1f).clickable { showFreqInput = true }) {
+                    // 频率字号翻倍（32→64sp），并按可用宽度自适应：手机不溢出，平板拿满 64sp
+                    val fit = (maxWidth.value / 10f / 0.62f).coerceAtMost(64f)
+                    Text(
+                        fmtMhz(state.activeFrequency),
+                        color = MrrcColors.Accent, fontFamily = MonoFont,
+                        fontSize = fit.sp, maxLines = 1, softWrap = false,
+                    )
+                }
                 PadBtn("⛶", active = fullscreen) { onToggleFullscreen() }
                 Spacer(Modifier.width(4.dp))
                 PadBtn("⏻", active = !userOff, danger = userOff) {

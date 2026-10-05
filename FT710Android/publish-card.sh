@@ -80,11 +80,23 @@ scp "$TMP/index.html" "$TMP/zh.html" "$REMOTE_USER@$REMOTE_HOST:~/"
 ssh "$REMOTE_USER@$REMOTE_HOST" \
   "sudo mv ~/index.html $REMOTE_ROOT/index.html && sudo mv ~/zh.html $REMOTE_ROOT/zh/index.html && sudo chown www-data:www-data $REMOTE_ROOT/index.html $REMOTE_ROOT/zh/index.html && sudo chmod 644 $REMOTE_ROOT/index.html $REMOTE_ROOT/zh/index.html"
 
-# 复核：两页在线内容与补丁后逐字节一致；APK 线上 SHA 与卡片一致
-curl -fsS -o "$TMP/live-en.html" "$BASE_URL/index.html"
-curl -fsS -o "$TMP/live-zh.html" "$BASE_URL/zh/index.html"
+# 复核：两页在线内容与补丁后逐字节一致；APK 线上 SHA 与卡片一致。
+# 注意：公网链路可能存在短时缓存（2026-10-05 实测：刚上传后复查到 15:25 的旧响应）——
+# 用时间戳查询串绕开缓存键，并重试。
+fetch_fresh() {  # $1=url $2=输出文件
+  local url="$1" out="$2" i
+  for i in 1 2 3 4 5; do
+    curl -fsS "${url}?verify=$(date +%s)-$i" -o "$out" || true
+    grep -q "android-download" "$out" && return 0
+    sleep 2
+  done
+  echo "fetch failed after retries: $url"; return 1
+}
+
+fetch_fresh "$BASE_URL/index.html" "$TMP/live-en.html"
+fetch_fresh "$BASE_URL/zh/index.html" "$TMP/live-zh.html"
 diff -q "$TMP/index.html" "$TMP/live-en.html" >/dev/null || { echo "en page mismatch"; exit 1; }
 diff -q "$TMP/zh.html" "$TMP/live-zh.html" >/dev/null || { echo "zh page mismatch"; exit 1; }
-LIVE_SHA=$(curl -fsS "$BASE_URL/downloads/MRRC-Modern-Android.apk" | shasum -a 256 | awk '{print $1}')
+LIVE_SHA=$(curl -fsS "$BASE_URL/downloads/MRRC-Modern-Android.apk?verify=$(date +%s)" | shasum -a 256 | awk '{print $1}')
 [ "$LIVE_SHA" = "$SHA" ] || { echo "APK sha mismatch: card=$SHA live=$LIVE_SHA"; exit 1; }
 echo "== Android 卡片 v$VERSION 已上线，且 APK 线上 SHA 与卡片一致（其他内容未动）=="

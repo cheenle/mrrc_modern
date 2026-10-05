@@ -31,7 +31,8 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
     private var track: AudioTrack? = null
     private var thread: Thread? = null
 
-    fun start() {
+    override fun start() {
+        if (running) return   // 幂等：重连/重复回调不得重建 AudioTrack
         running = true
         val minBuf = AudioTrack.getMinBufferSize(
             OpusBridge.SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -103,7 +104,8 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
         }
     }
 
-    fun stop() {
+    override fun stop() {
+        if (!running && track == null && thread == null) return   // 幂等
         running = false
         thread?.join(500)
         thread = null

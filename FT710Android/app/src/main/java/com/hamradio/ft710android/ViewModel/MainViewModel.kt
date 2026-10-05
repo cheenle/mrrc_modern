@@ -176,10 +176,22 @@ class MainViewModel(
     }
 
     fun onAudioRxFrame(frame: ByteArray) { rxPlayer?.onFrame(frame) }
-    fun onSpectrumFrame(frame: ByteArray) { spectrumProcessor?.onFrame(frame) }
 
-    /** ConnectionManager 四路聚合状态透传（修复：此前无人写入 _connected）。 */
-    fun onConnectionChange(connected: Boolean) { _connected.value = connected; syncBackground() }
+    /** 频谱帧 → 处理器 → 推给 UI 的瀑布/FFT 流（此前只喂了处理器，UI 永远空）。 */
+    fun onSpectrumFrame(frame: ByteArray) {
+        val p = spectrumProcessor ?: return
+        p.onFrame(frame)
+        _waterfall.value = p.waterfall
+        _fft.value = p.fft
+    }
+
+    /** ConnectionManager 四路聚合状态透传（修复：此前无人写入 _connected）。
+     *  音频播放器随连接聚合启停（音频帧只在连接期间到达；没 start 就拿到帧也会被丢）。 */
+    fun onConnectionChange(connected: Boolean) {
+        _connected.value = connected
+        if (connected) { rxPlayer?.start(); syncAudio() } else rxPlayer?.stop()
+        syncBackground()
+    }
 
     /** 只读登录（服务端以 4003 关闭 TX/ATR 通道）——隐藏发射类 UI。 */
     fun onListenOnly() { _listenOnly.value = true; syncBackground() }
@@ -211,6 +223,7 @@ class MainViewModel(
 
     suspend fun logout() {
         stopStats()
+        rxPlayer?.stop()
         connectionManager.stopAll()
         _connected.value = false
         _listenOnly.value = false
@@ -224,6 +237,7 @@ class MainViewModel(
     fun disconnect() {
         pttManager?.forceRelease()
         stopStats()
+        rxPlayer?.stop()
         connectionManager.disconnect()
         _connected.value = false
         _userOff.value = true
@@ -440,6 +454,8 @@ class MainViewModel(
     // 轻量接口，便于测试注入与对音频/频谱的强类型
     interface RxPlayerLike {
         fun onFrame(frame: ByteArray)
+        fun start()
+        fun stop()
         fun setVolume(v: Int)
         fun setBoost(b: Float)
         fun setTransmitting(t: Boolean)

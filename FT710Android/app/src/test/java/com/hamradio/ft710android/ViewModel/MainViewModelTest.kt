@@ -4,6 +4,7 @@ import com.hamradio.ft710android.Network.ConnectionManager
 import com.hamradio.ft710android.Network.parseAtrEvent
 import com.hamradio.ft710android.Network.parseWsEvent
 import com.hamradio.ft710android.PTT.PTTManager
+import com.hamradio.ft710android.Spectrum.SpectrumProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -131,5 +132,41 @@ class MainViewModelTest {
         )!!)
         assertEquals(30.0, vm.atrState.value!!.power, 0.001)
         assertEquals(5, vm.atrState.value!!.ind)
+    }
+
+    @Test fun `spectrum frames reach the waterfall and fft flows`() = runTest(UnconfinedTestDispatcher()) {
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val sp = SpectrumProcessor()
+        val vm = MainViewModel(null, cm(scope), null, null, sp, null, null, scope)
+        assertTrue(vm.waterfall.value.isEmpty())
+        val frame = ByteArray(1701).also { it[0] = 0x01; for (i in 1..850) it[i] = 42 }
+        vm.onSpectrumFrame(frame)
+        assertEquals(1, vm.waterfall.value.size)
+        assertEquals(42, vm.waterfall.value[0][0])
+        assertEquals(42, vm.fft.value[0])
+    }
+
+    @Test fun `the audio player follows the connection aggregate`() = runTest(UnconfinedTestDispatcher()) {
+        val scope = CoroutineScope(UnconfinedTestDispatcher())
+        val fake = FakeRxPlayer()
+        val vm = MainViewModel(null, cm(scope), fake, null, null, null, null, scope)
+        vm.onConnectionChange(true)
+        assertEquals(1, fake.startCount)
+        vm.onConnectionChange(false)
+        assertEquals(1, fake.stopCount)
+        vm.onConnectionChange(true)
+        assertEquals(2, fake.startCount) // 重连后重新启动（RxAudioPlayer.start() 自身幂等）
+    }
+
+    private class FakeRxPlayer : MainViewModel.RxPlayerLike {
+        var startCount = 0
+        var stopCount = 0
+        override fun onFrame(frame: ByteArray) {}
+        override fun start() { startCount++ }
+        override fun stop() { stopCount++ }
+        override fun setVolume(v: Int) {}
+        override fun setBoost(b: Float) {}
+        override fun setTransmitting(t: Boolean) {}
+        override val bufferMs: Int get() = 0
     }
 }

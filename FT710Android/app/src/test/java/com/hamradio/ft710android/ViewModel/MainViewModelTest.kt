@@ -26,10 +26,11 @@ class MainViewModelTest {
             pttManager = null, scope = scope,
         )
         vm.onWsEvent(parseWsEvent(
-            """{"type":"fullState","data":{"vfo_a_freq":7050000,"mode":1},"bands":["20m"],"modes":["USB"],"memChannels":[null,null,null,null,null,null]}"""
+            """{"type":"fullState","data":{"vfo_a_freq":7050000,"mode":1},"bands":[{"name":"20m","default_freq":14270000}],"modes":["USB"],"memChannels":[null,null,null,null,null,null]}"""
         ))
         assertEquals(7050000L, vm.state.vfoAFreq)
-        assertEquals(listOf("20m"), vm.bands.value)
+        assertEquals("20m", vm.bands.value[0].name)
+        assertEquals(14270000L, vm.bands.value[0].defaultFreq)
         assertEquals(1L, vm.version.value) // apply 后版本递增，驱动 Compose 重组
     }
 

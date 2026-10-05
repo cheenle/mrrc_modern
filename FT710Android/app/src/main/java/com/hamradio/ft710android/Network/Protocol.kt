@@ -13,10 +13,42 @@ import kotlinx.serialization.json.jsonPrimitive
 private val json = Json { ignoreUnknownKeys = true }
 
 @Serializable
+data class BandDto(
+    val name: String = "",
+    val start: Long = 0,
+    val end: Long = 0,
+    @SerialName("default_freq") val defaultFreq: Long = 0,
+)
+
+@Serializable
+data class ScopeSpanDto(val name: String = "", val freq: Long = 0)
+
+/** 服务端 capabilities（backends/base.py:RadioCapabilities.to_dict）的本轮消费子集。 */
+@Serializable
+data class CapabilitiesDto(
+    @SerialName("model_name") val modelName: String = "ft710",
+    @SerialName("display_name") val displayName: String = "Yaesu FT-710",
+    val verified: Boolean = true,
+    @SerialName("tx_gated") val txGated: Boolean = false,
+    @SerialName("has_atu") val hasAtu: Boolean = true,
+    @SerialName("has_auto_notch") val hasAutoNotch: Boolean = true,
+    @SerialName("has_vd_id_meters") val hasVdIdMeters: Boolean = true,
+    @SerialName("filter_model") val filterModel: String = "width_table",
+    @SerialName("att_steps") val attSteps: List<Int> = emptyList(),
+    @SerialName("preamp_steps") val preampSteps: List<String> = emptyList(),
+    @SerialName("scope_type") val scopeType: String = "ft4222",
+    @SerialName("scope_spans") val scopeSpans: Map<String, ScopeSpanDto> = emptyMap(),
+    @SerialName("scope_speeds") val scopeSpeeds: List<String> = emptyList(),
+    @SerialName("audio_gain_boost") val audioGainBoost: Double = 10.0,
+)
+
+@Serializable
 data class FilterTables(
-    val voice: List<Int> = emptyList(),
-    val narrow: List<Int> = emptyList(),
+    val voice: List<List<Int>> = emptyList(),
+    val narrow: List<List<Int>> = emptyList(),
     @SerialName("narrowModes") val narrowModes: List<String> = emptyList(),
+    val model: String? = null,
+    val filDefaults: Map<String, List<Int>> = emptyMap(),
 )
 
 @Serializable
@@ -46,7 +78,7 @@ data class CqStatusDto(
 data class FullStateDto(
     val type: String = "fullState",
     val data: JsonObject = JsonObject(emptyMap()),
-    val bands: List<String> = emptyList(),
+    val bands: List<BandDto> = emptyList(),
     val modes: List<String> = emptyList(),
     val memChannels: List<JsonElement?> = emptyList(),
     @SerialName("filterTables") val filterTables: FilterTables? = null,
@@ -54,6 +86,8 @@ data class FullStateDto(
     val recording: RecordingStatusDto? = null,
     val cq: CqStatusDto? = null,
     val radioModel: String? = null,
+    val radioDisplayName: String? = null,
+    val capabilities: CapabilitiesDto? = null,
 )
 
 @Serializable
@@ -81,7 +115,7 @@ data class PongDto(val type: String = "pong")
 sealed class WsEvent {
     data class FullState(
         val data: JsonObject,
-        val bands: List<String>,
+        val bands: List<BandDto>,
         val modes: List<String>,
         val memChannels: List<JsonElement?>,
         val filterTables: FilterTables?,
@@ -89,6 +123,8 @@ sealed class WsEvent {
         val recording: RecordingStatusDto?,
         val cq: CqStatusDto?,
         val radioModel: String?,
+        val radioDisplayName: String?,
+        val capabilities: CapabilitiesDto?,
     ) : WsEvent()
 
     data class StateUpdate(val fields: JsonObject, val dirty: List<String>) : WsEvent()
@@ -107,7 +143,7 @@ fun parseWsEvent(text: String): WsEvent {
         "fullState" -> runCatching {
             val d = json.decodeFromString<FullStateDto>(text)
             WsEvent.FullState(d.data, d.bands, d.modes, d.memChannels, d.filterTables, d.atr1000Enabled,
-                d.recording, d.cq, d.radioModel)
+                d.recording, d.cq, d.radioModel, d.radioDisplayName, d.capabilities)
         }.getOrElse { WsEvent.Unknown }
         "stateUpdate" -> runCatching {
             val d = json.decodeFromString<StateUpdateDto>(text)

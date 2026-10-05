@@ -5,6 +5,7 @@ import com.hamradio.ft710android.Data.MemoryChannels
 import com.hamradio.ft710android.Data.RadioState
 import com.hamradio.ft710android.Network.AuthApi
 import com.hamradio.ft710android.Network.AuthResult
+import com.hamradio.ft710android.Network.BandDto
 import com.hamradio.ft710android.Network.ConnectionManager
 import com.hamradio.ft710android.Network.CqStatusDto
 import com.hamradio.ft710android.Network.RecordingRow
@@ -50,8 +51,8 @@ class MainViewModel(
     val connected: StateFlow<Boolean> = _connected
     private val _listenOnly = MutableStateFlow(false)
     val listenOnly: StateFlow<Boolean> = _listenOnly
-    private val _bands = MutableStateFlow<List<String>>(emptyList())
-    val bands: StateFlow<List<String>> = _bands
+    private val _bands = MutableStateFlow<List<BandDto>>(emptyList())
+    val bands: StateFlow<List<BandDto>> = _bands
     private val _modes = MutableStateFlow<List<String>>(emptyList())
     val modes: StateFlow<List<String>> = _modes
     private val _mem = MutableStateFlow<List<MemoryChannel?>>(emptyList())

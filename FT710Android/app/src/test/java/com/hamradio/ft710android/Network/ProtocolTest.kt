@@ -8,23 +8,52 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProtocolTest {
-    @Test fun `fullState parsed with bands modes memChannels filterTables`() {
-        val text = """{"type":"fullState","data":{"vfo_a_freq":7050000,"mode":1},
-            "bands":["160m","80m","40m"],"modes":["LSB","USB","CW"],
-            "memChannels":[{"freq":7050000,"mode":"LSB","label":"40m 7.050"},null],
-            "filterTables":{"voice":[300,500],"narrow":[3000,5000],"narrowModes":["CW","CW-L"]},
-            "atr1000Enabled":false}"""
+    @Test fun `real fullState shape parses bands as objects and filter tables as pairs`() {
+        val text = """
+        {"type":"fullState",
+         "data":{"vfo_a_freq":7050000,"mode":2,"tx_status":0,"scope_span":6},
+         "bands":[{"name":"40m","start":7000000,"end":7300000,"bsr":3,"default_freq":7050000}],
+         "modes":["LSB","USB","CW-U"],
+         "memChannels":[{"freq":7050000,"mode":"LSB","label":"M1"},null],
+         "filterTables":{"voice":[[1,300],[2,400],[13,2400]],"narrow":[[1,50]],"narrowModes":["CW-U"]},
+         "recording":{"recording":false,"freq_hz":0,"started_at":null,"duration":0.0,"name":null,"bytes":0,"dropped":0},
+         "cq":{"state":"idle","duration_s":0.0,"elapsed_s":0.0,"frames_total":0,"frames_sent":0,"started_by":null,"reason":null,"ready":false},
+         "radioModel":"ft710","radioDisplayName":"Yaesu FT-710",
+         "capabilities":{"model_name":"ft710","display_name":"Yaesu FT-710","verified":true,"tx_gated":false,
+           "has_atu":true,"has_auto_notch":true,"has_vd_id_meters":true,"filter_model":"width_table",
+           "att_steps":[0,6,12,18],"preamp_steps":["OFF","AMP1","AMP2"],"scope_type":"ft4222",
+           "scope_spans":{"6":{"name":"100 kHz","freq":100000}},
+           "scope_speeds":["1","2","3","4","5"],"audio_gain_boost":10.0},
+         "atr1000Enabled":true}
+        """.trimIndent()
         val ev = parseWsEvent(text)
         assertTrue(ev is WsEvent.FullState)
         val f = ev as WsEvent.FullState
-        assertEquals(3, f.bands.size)
+        assertEquals(1, f.bands.size)
+        assertEquals("40m", f.bands[0].name)
+        assertEquals(7050000L, f.bands[0].defaultFreq)
         assertEquals(3, f.modes.size)
         assertEquals(2, f.memChannels.size)
         assertNull(f.memChannels[1])
-        assertEquals(listOf(300, 500), f.filterTables!!.voice)
-        assertEquals(false, f.atr1000Enabled)
+        assertEquals(listOf(listOf(1, 300), listOf(2, 400), listOf(13, 2400)), f.filterTables!!.voice)
+        assertEquals(listOf("CW-U"), f.filterTables!!.narrowModes)
+        assertEquals("Yaesu FT-710", f.radioDisplayName)
+        assertEquals("width_table", f.capabilities!!.filterModel)
+        assertEquals(listOf(0, 6, 12, 18), f.capabilities!!.attSteps)
+        assertEquals(100000L, f.capabilities!!.scopeSpans.getValue("6").freq)
+        assertTrue(f.atr1000Enabled)
         // data 原样保留，供 RadioState.apply
         assertEquals(7050000, f.data["vfo_a_freq"]!!.jsonPrimitive.int)
+    }
+
+    @Test fun `legacy payload without capabilities still parses`() {
+        val ev = parseWsEvent(
+            """{"type":"fullState","data":{"mode":1},"bands":[{"name":"20m","default_freq":14270000}]}"""
+        ) as WsEvent.FullState
+        assertEquals(1, ev.bands.size)
+        assertEquals(14270000L, ev.bands[0].defaultFreq)
+        assertNull(ev.capabilities)
+        assertNull(ev.radioDisplayName)
     }
 
     @Test fun `stateUpdate parsed with fields and dirty`() {

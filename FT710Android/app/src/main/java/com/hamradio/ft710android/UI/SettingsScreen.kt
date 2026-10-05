@@ -63,6 +63,7 @@ fun SettingsScreen(
     val state = vm.state
     val caps by vm.caps.collectAsState()
     val displayName by vm.displayName.collectAsState()
+    var showCloud by remember { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -140,6 +141,7 @@ fun SettingsScreen(
 
         // ── 入口（S7/S9）─────────────────────────────────────────
         Section("入口")
+        LinkRow("接入云端（Cloud Hub）…") { showCloud = true }
         LinkRow("连接设置（浏览器）") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.baseUrlForUi())))
         }
@@ -154,6 +156,8 @@ fun SettingsScreen(
         }) { Text("退出登录") }
         Spacer(Modifier.height(24.dp))
     }
+
+    if (showCloud) CloudHubDialog(vm) { showCloud = false }
 }
 
 @Composable

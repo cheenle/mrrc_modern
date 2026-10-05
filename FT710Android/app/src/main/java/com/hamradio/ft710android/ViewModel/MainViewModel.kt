@@ -12,6 +12,9 @@ import com.hamradio.ft710android.Network.AtrEvent
 import com.hamradio.ft710android.Network.AtrStateDto
 import com.hamradio.ft710android.Network.AtrText
 import com.hamradio.ft710android.Network.BandDto
+import com.hamradio.ft710android.Network.CloudApi
+import com.hamradio.ft710android.Network.CloudResult
+import com.hamradio.ft710android.Network.CloudStateDto
 import com.hamradio.ft710android.Network.ConnectionManager
 import com.hamradio.ft710android.Network.CqStatusDto
 import com.hamradio.ft710android.Network.RecordingRow
@@ -45,6 +48,7 @@ class MainViewModel(
     val pttManager: PTTManager?,
     private val scope: CoroutineScope,
     private val recordingsApi: RecordingsApi? = null,
+    private val cloudApi: CloudApi? = null,
 ) {
     val state = RadioState()
 
@@ -90,6 +94,10 @@ class MainViewModel(
     val recordingsCount: StateFlow<Int> = _recordingsCount
     private val _recordingsBytes = MutableStateFlow(0L)
     val recordingsBytes: StateFlow<Long> = _recordingsBytes
+    private val _cloud = MutableStateFlow<CloudStateDto?>(null)
+    val cloud: StateFlow<CloudStateDto?> = _cloud
+    private val _cloudMsg = MutableStateFlow<String?>(null)
+    val cloudMsg: StateFlow<String?> = _cloudMsg
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
     private val _recordings = MutableStateFlow<List<RecordingRow>>(emptyList())
@@ -352,6 +360,71 @@ class MainViewModel(
 
     fun showError(message: String) { _error.value = message }
     fun clearError() { _error.value = null }
+
+    // ── Cloud Hub（S6；server.py:4317+ 的四个端点）───────────────────
+    fun cloudRefresh() {
+        val api = cloudApi ?: return
+        val base = baseUrl ?: return
+        val t = token ?: return
+        scope.launch {
+            when (val r = api.state(base, t)) {
+                is CloudResult.Ok -> {
+                    _cloud.value = r.value
+                    if (r.value.hasToken && !r.value.connected) {
+                        when (val rr = api.refresh(base, t)) {
+                            is CloudResult.Ok -> {
+                                _cloud.value = rr.value
+                                if (rr.value.connected) onCloudConnected(rr.value)
+                            }
+                            is CloudResult.Err -> _cloudMsg.value = rr.message
+                        }
+                    }
+                }
+                is CloudResult.Err -> _cloudMsg.value = r.message
+            }
+        }
+    }
+
+    fun cloudApply(callsign: String, contact: String, secret: String) {
+        val api = cloudApi ?: return
+        val base = baseUrl ?: return
+        val t = token ?: return
+        if (callsign.isBlank()) { _cloudMsg.value = "请填呼号"; return }
+        _cloudMsg.value = if (secret.isBlank()) "提交中…" else "接入中…"
+        scope.launch {
+            when (val r = api.apply(base, t, callsign.trim(), contact.trim(), secret.trim())) {
+                is CloudResult.Ok -> {
+                    _cloud.value = r.value
+                    if (r.value.connected) onCloudConnected(r.value)
+                    else _cloudMsg.value = "已提交 ✓ 等运维批准后这里会自动继续"
+                }
+                is CloudResult.Err -> _cloudMsg.value = r.message
+            }
+        }
+    }
+
+    fun cloudRestart() {
+        val api = cloudApi ?: return
+        val base = baseUrl ?: return
+        val t = token ?: return
+        scope.launch {
+            when (val r = api.restart(base, t)) {
+                is CloudResult.Ok -> {
+                    _cloudMsg.value = "实例重启中，约 6 秒后自动重连…"
+                    delay(10_000)
+                    reconnect()
+                }
+                is CloudResult.Err -> _cloudMsg.value = r.message
+            }
+        }
+    }
+
+    private fun onCloudConnected(s: CloudStateDto) {
+        _cloudMsg.value = if (s.certReloadRequired)
+            "已接入 ✓ 还需重启应用以启用新证书（否则入口会 502）" else "已接入 ✓"
+    }
+
+    fun clearCloudMsg() { _cloudMsg.value = null }
 
     // 轻量接口，便于测试注入与对音频/频谱的强类型
     interface RxPlayerLike {

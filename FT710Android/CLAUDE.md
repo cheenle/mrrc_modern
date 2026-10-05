@@ -107,6 +107,11 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 | `TX[...]` | 采集在跑否 / 权限 / 采样率 / `src:` 采集源 / `pk:` 本帧峰值 / `R:` 样本 / `X:` 帧 | `mic:NO`=没权限；`src:1997`=UNPROCESSED，`1`=MIC，`6`=旧 VOICE_COMMUNICATION；按 PTT 时 `pk` 应上千 |
 | `tx:` | `tx_status`（0=RX，1=TX，2=TUNE） | 按 PTT 后应到 1 |
 
+## 频谱/标尺不变量
+
+- **绝不用 `scope_start_freq` 当显示范围**：服务端恒 CENTER 模式（EX040200），调谐后该字段滞后。范围恒为 `VFO ± span/2`（`Data/FreqScale.kt`，对齐 web `_computeFreqRange`）。点击 QSY 同样用 VFO 居中公式（`FreqInput.qsy`），两者必须同源。
+- 标尺步进/格式随 span 自适应（`FreqScale.step/label`，对齐 web `_freqStep`/`_formatFreqLabel`）；刻度按真实频率位置绘制，不做等分摆放。
+
 ## 音频/Compose 不变量（改这块必看）
 
 - **抖动缓冲是时间水位**：冷启动 220ms、欠载恢复 90ms、**硬上限 800ms 丢最旧帧**，进入 TX 时 `flush()`。逐字对齐 `static/rx_worklet_processor.js`；无上限队列会让延迟永久增长（真机"跑一段时间比 Web 慢几秒"）。

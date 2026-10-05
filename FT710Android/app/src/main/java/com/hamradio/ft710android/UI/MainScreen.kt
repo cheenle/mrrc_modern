@@ -50,6 +50,11 @@ import com.hamradio.ft710android.Spectrum.WaterfallCanvas
 import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.delay
 import java.util.Locale
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.drawText
+import com.hamradio.ft710android.Data.FreqScale
 
 /**
  * 主屏 —— 布局/交互对齐**手机端 Web**（static/index.html + ft710_ui.js）：
@@ -231,16 +236,7 @@ fun MainScreen(
                     onQsyFraction = { vm.qsy(it) },
                 )
             }
-            Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
-                val labels = rulerLabels(state.scopeStartFreq, spanHz)
-                labels.forEachIndexed { i, l ->
-                    Text(
-                        l, color = MrrcColors.Accent, fontSize = 9.sp, fontFamily = MonoFont,
-                        textAlign = when (i) { 0 -> TextAlign.Start; labels.lastIndex -> TextAlign.End; else -> TextAlign.Center },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
+            FreqScaleCanvas(state.activeFrequency, spanHz, Modifier.padding(top = 2.dp))
             Text(
                 fmtMhzShort(state.activeFrequency), color = MrrcColors.Danger,
                 fontSize = 10.sp, fontFamily = MonoFont, textAlign = TextAlign.Center,
@@ -625,9 +621,24 @@ internal fun fmtFilter(hz: Int): String =
 internal fun fmtStep(hz: Long): String =
     if (hz >= 1000) "${hz / 1000}k" else "${hz}Hz"
 
-/** 标尺 6 个刻度（含两端）。 */
-internal fun rulerLabels(startHz: Long, spanHz: Long): List<String> =
-    (0..5).map { i ->
-        val f = startHz + spanHz * i / 5
-        if (spanHz >= 500_000) "%.2f".format(Locale.US, f / 1e6) else "%.3f".format(Locale.US, f / 1e6)
+/**
+ * 频谱标尺：刻度按**真实频率位置**画（Web `renderFreqScale`），范围恒为 VFO ± span/2。
+ * 用 `scope_start_freq` 会滞后（服务端恒 CENTER 模式，该字段不跟手）。
+ */
+@Composable
+internal fun FreqScaleCanvas(vfoFreq: Long, spanHz: Long, modifier: Modifier = Modifier) {
+    if (spanHz <= 0) return
+    val measurer = rememberTextMeasurer()
+    val ticks = remember(vfoFreq, spanHz) { FreqScale.ticks(vfoFreq, spanHz) }
+    val step = remember(spanHz) { FreqScale.step(spanHz) }
+    val tickStyle = remember { TextStyle(color = MrrcColors.Accent, fontSize = 9.sp, fontFamily = MonoFont) }
+    Canvas(modifier.fillMaxWidth().height(14.dp)) {
+        val w = size.width
+        ticks.forEach { (f, frac) ->
+            val x = frac * w
+            drawLine(MrrcColors.Border, Offset(x, 0f), Offset(x, 4.dp.toPx()), 1f)
+            val layout = measurer.measure(AnnotatedString(FreqScale.label(f, step)), tickStyle)
+            drawText(layout, topLeft = Offset((x - layout.size.width / 2f).coerceIn(0f, (w - layout.size.width).coerceAtLeast(0f)), 4.dp.toPx()))
+        }
     }
+}

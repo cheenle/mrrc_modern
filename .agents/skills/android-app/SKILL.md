@@ -108,10 +108,12 @@ cd FT710Android
 | 7 | 跑一段时间比 Web 延迟几秒 | 抖动缓冲无上限：卡过一次就永远落后 | Web 水位 + 800ms 丢最旧 + TX flush（v1.1.9） |
 | 8 | 设置页四个滑块"调不了" | `vm.version.collectAsState()` 返回值被丢弃 → 从不重组，松手被旧值弹回 | 读出版本 + `remember(stateVersion)` 重算（v1.1.9） |
 | 9 | 官网卡片更新了、外网仍是旧版 | nginx `open_file_cache` 仍服务旧 inode | 上传后 `systemctl reload nginx`（`publish-card.sh` 内置） |
+| 11 | 频谱下频率标注不对 | 标尺用了滞后的 `scope_start_freq` + 固定 6 等分 + 统一 `%.3f` | `Data/FreqScale.kt`：VFO±span/2、自适应步进、按位置绘制（v1.1.11） |
 | 10 | 键控了但"极微弱"（二次反馈） | 链路是 unity（服务端/Web 均无增益），差在手机麦电平；且部分机型 `UNPROCESSED` 初始化后不产数据 | 采集源 700ms 探测回退；🎙 Vol 上限 4×、默认 1.5×；状态行显示 `TX pk:`（v1.1.10） |
 
 ## 改 UI 的硬规矩
 
+- **频谱标尺**：范围恒 `VFO ± span/2`，**绝不用 `scope_start_freq`**（服务端恒 CENTER，调谐后滞后）；步进/格式用 `Data/FreqScale.kt`（对齐 web `_freqStep`/`_formatFreqLabel`），刻度按真实位置画；QSY 必须同一公式。
 - **对齐手机端 Web，不发明**：令牌唯一来源 `static/ft710.css :root`（`UI/Theme.kt` 的 `MrrcColors`）；瀑布配色 = `WF_PALETTES`；S 表刻度 = `renderSMeter`；QSY 公式 = `wireScopeQSY`；频率输入解析 = `commitFreq`。
 - 大字号（如主频）要**按可用宽度自适应**（`BoxWithConstraints` 算 `maxWidth/字符数/0.62`），手机上不溢出、平板吃满。
 - 松手才提交的滑块：本地 `local` 值显示中、`onValueChangeFinished` 提交，服务端值由版本号驱动重算——三者缺一就会"拖完弹回"。

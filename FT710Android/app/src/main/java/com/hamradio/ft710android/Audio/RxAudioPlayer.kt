@@ -7,6 +7,7 @@ import com.hamradio.ft710android.ViewModel.MainViewModel
 import java.util.ArrayDeque
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
@@ -20,6 +21,12 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
 
     @Volatile private var running = false
     @Volatile var rms = 0f; private set
+
+    // 本机播放音量（web 🔊 Vol 语义）：0..255，再乘 capabilities.audio_gain_boost（FT-710 = 10×），
+    // TX/TUNE 期间置 0 杀死自噪回环（web AUDIO_TX_DIM_FACTOR = 0）。
+    @Volatile private var volume = 128
+    @Volatile private var boost = 10f
+    @Volatile private var transmitting = false
 
     private var track: AudioTrack? = null
     private var thread: Thread? = null
@@ -42,6 +49,18 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
         track?.play()
         thread = Thread(::playLoop, "rx-player").apply { isDaemon = true; start() }
     }
+
+    /** 本机音量（0..255，DataStore afVol）。 */
+    fun setVolume(v: Int) { volume = v.coerceIn(0, 255) }
+
+    /** 每种电台的 RX 播放增益（capabilities.audio_gain_boost；FT-710 = 10）。 */
+    fun setBoost(b: Float) { boost = b }
+
+    /** TX/TUNE 时静音 RX 播放（防自噪回环）。 */
+    fun setTransmitting(t: Boolean) { transmitting = t }
+
+    /** 抖动缓冲深度（毫秒），状态行 J 值。 */
+    val bufferMs: Int get() = synchronized(jitter) { jitter.size } * FRAME_MS
 
     /** WS 帧入口：1B tag + payload。tag 0x01 Opus 解码，0x00 PCM 直通。 */
     override fun onFrame(frame: ByteArray) {
@@ -69,7 +88,15 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
             val buf: ShortArray = synchronized(jitter) {
                 if (jitter.isNotEmpty()) jitter.removeFirst() else silence
             }
-            track?.write(buf, 0, buf.size)
+            val g = RxGain.target(volume, boost, transmitting)
+            val out = when {
+                g == 0f -> silence
+                g == 1f -> buf
+                else -> ShortArray(buf.size) {
+                    (buf[it] * g).roundToInt().coerceIn(-32768, 32767).toShort()
+                }
+            }
+            track?.write(out, 0, out.size)
             var sum = 0L
             for (s in buf) sum += s.toLong() * s
             rms = sqrt((sum / buf.size).toDouble() / (32768.0 * 32768.0)).toFloat()

@@ -14,6 +14,13 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 - 工具链安装步骤见 `BUILD_GUIDE.md`（本机已验证：JDK 17 Corretto + SDK 35 + NDK 27.2.12479018 + Gradle 8.9 wrapper）。
 - 仪器测试（`app/src/androidTest`，OpusBridge round-trip）需真机/模拟器：`./gradlew connectedDebugAndroidTest`。
 
+## 发布纪律（2026-10-05 起）
+
+- **Android 发版一律用 `./release.sh --apk-only`**：只构建/签名/上传 APK + 线上 SHA-256 复核；**不碰站点页面、不在站点仓库提交、不跑全站 `deploy.sh`**。
+- 原因：站点树（`~/HAM/website/mrrc_modern` → `/Users/cheenle/HAM/mrrc_modern/website`）与 Windows/macOS 发布波共用，全站 deploy 会把对方的下载卡片回退（实测：一次 Android 发版把线上 v1.25.3 卡片短暂刷回 v1.25.0）。
+- 下载卡片的版本文字由发布协调方跟进（另一条发布波会带上 Android 卡片）；需要改卡片时先确认没有并发发版，只改 `<!-- android-download -->` 标记块与 hero 安卓按钮，**不要自己跑 deploy**。
+- 稳定别名 `MRRC-Modern-Android.apk` 永远指向最新 APK，所以卡片文字滞后不影响下载。
+
 ## 架构速览
 
 ```

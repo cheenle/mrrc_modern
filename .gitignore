@@ -71,3 +71,6 @@ packaging/payload/
 
 # 补丁构建的暂存目录（由 website/downloads/patches/*.zip 生成，不入库）
 packaging/patch/
+
+# Cloud Hub wizard writes the signed cert/key pair + cloud token here (runtime).
+mrrc_modern.env

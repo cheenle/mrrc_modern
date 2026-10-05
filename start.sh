@@ -47,6 +47,21 @@ if [ -f "$ROOT_DIR/.env" ]; then
   set -a; source "$ROOT_DIR/.env"; set +a
 fi
 
+# ── App-managed config (Cloud Hub wizard writes here) ─────────────────
+# config._config_file_path() resolves to this file for a source run; the
+# wizard stores the certificate/key pair it signed (fullchain.pem + <label>.key)
+# and the registered port there. Load it AFTER .env so its values win, and with
+# a read loop rather than `source` (values may contain spaces).
+# Without this, a start uses config's default pair fullchain.pem + localhost.key,
+# which stopped matching the moment the wizard replaced fullchain.pem — the
+# server then dies in uvicorn with X509: KEY_VALUES_MISMATCH (field report 2026-10-05).
+if [ -f "$ROOT_DIR/mrrc_modern.env" ]; then
+  while IFS='=' read -r k v; do
+    case "$k" in ''|\#*) continue;; esac
+    export "$k=$v"
+  done < "$ROOT_DIR/mrrc_modern.env"
+fi
+
 # ═══════════════════════════════════════════════════════════════════════
 # 1. Pre-flight checks
 # ═══════════════════════════════════════════════════════════════════════

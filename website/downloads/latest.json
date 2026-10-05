@@ -1,16 +1,19 @@
 {
-  "latest": "1.24.8",
+  "latest": "1.25.3",
   "installer": {
-    "version": "1.24.8",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.8-Windows-x64-Setup.exe",
-    "size": 54121489,
-    "sha256": "616f8b559b6a1530f2d20ec5466fb1e28d065435829b9a9589ccee76234a92ee"
+    "version": "1.25.3",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe",
+    "sha256": "1413521cd4081d922429320106ba44f135d339e4ac805d29937b0f2d667744ec",
+    "size": 54342929
   },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-10-05T13:56:14",
+  "notes": "1.25.3：远端会话的 PTT 存活闸门不再把操作者刚按下的一键放开（现场日志 7 次，均在按键后 20–70 ms）；本版同时包含 1.25.2 的 Windows 隧道进程泄漏修复（回收旧 frpc 不再依赖 Windows 11 已移除的 wmic）与启动器单实例互斥。",
   "previous": {
-    "version": "1.24.7",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.24.7-Windows-x64-Setup.exe",
-    "size": 54112355,
-    "sha256": "4a83ab9b6443cb1a3236aa921522400ca730c1eef5369ea498672993fc000b5c"
-  },
-  "notes": "1.24.8: tunnel starts at boot; the pending panel takes the enrolment secret"
+    "version": "1.25.2",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.2-Windows-x64-Setup.exe",
+    "sha256": "328f029b14e929b7b6b88f1ab6e6990e8ff0379e80e57a9c0730db5f9ed4bc39",
+    "size": 54346505
+  }
 }

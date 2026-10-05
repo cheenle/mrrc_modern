@@ -39,7 +39,7 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - 频谱：`/WSspectrum` 二进制 1701B = 1B version(0x01) + 850B wf1 + 850B wf2；实际 ~5fps（`server.py:285`）。
 - 记忆频道：**6 槽** + `null` 补空，键 `label`（`MemoryChannels.parse/toJson`）。
 - ATR1000：`/WSatr1000` 可选，服务端禁用时 close 4000；用 `fullState.atr1000Enabled` 决定是否显示天调 UI。
-- **服务端录音（AD-017，v1.15.0 起）**：`{"type":"set","field":"recording","value":true/false}` 启停；下行 `recordingState`（recording/freq_hz/started_at/duration/name/bytes/dropped，录制中 1 Hz），`fullState.recording` 给快照。**本客户端没有录音 UI 与回放**（列表/可 seek 播放/下载/删除在 Web「录音」面板）。
+- **服务端录音（AD-017，v1.15.0 起）**：`{"type":"set","field":"recording","value":true/false}` 启停；下行 `recordingState`（recording/freq_hz/started_at/duration/name/bytes/dropped，录制中 1 Hz），`fullState.recording` 给快照。App 有完整录音面板（启停/列表合计/本地下载播放+seek/导出/删除）。
 - **机型 key**：`MRRC_RADIO_MODEL` 共 10 个（`ft710` `ic7300` `ic7300mk2` `ic705` `ic7610` `ic7760` `ftdx10` `ftdx101d` `ftdx101mp` `ftx1`）；后六个默认拒绝发射，需服务端 `MRRC_ALLOW_UNVERIFIED_TX=1`。机型由服务端 env 决定，客户端不选。
 
 ## 安全铁律（PTT，spec §7）
@@ -69,7 +69,7 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - `ConnectionManager.onRadioEvent` 已解析为 `WsEvent`，`MainViewModel.onWsEvent(ev: WsEvent)` 直接消费（别传原始文本）。
 - 自签 TLS：`AuthApi.selfSignedOkHttpClient()` 接受任意证书；`network_security_config.xml` 默认拒绝明文，`--no-ssl` 仅调试。
 - `--no-ssl` 时 baseUrl 用 `http://`，`ConnectionManager.wsUrl` 自动转 `ws://`。
-- 后台 RX 播放未实现（v1 决策）；退后台即停 TX。44.1k 设备采集重采样留作后续增强。
+- 前台服务后台 RX 已实现（`RxForegroundService`，mediaPlayback，设置页可关）；退后台仍强制释放 TX。44.1k 设备采集已做 882↔960 重采样兜底。
 - `RadioState` 字段与 `radio_state.py:to_dict` 的 key 一一对应，新增字段两端同步。
 
 ## v1.0.0 协议增量（逐字对齐 server.py）
@@ -80,3 +80,14 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - **fullState 顶层新键**：`recording`、`cq`、`radioModel`（客户端按存在性做能力检测，见 `WsEvent.FullState`）。
 - **只读登录**：`/WSaudioTX`、`/WSatr1000` 以 4003 关闭 → `ConnectionManager` 标记 `listenOnly`，UI 隐藏发射类入口。
 - 新文件：`Network/RecordingsApi.kt`、`UI/RecordingPanel.kt`、`UI/Format.kt`、`release.sh`；签名配置在 `app/build.gradle.kts`（缺 `keystore.properties` 时 `assembleRelease` 直接失败）。
+
+## v1.1.0 协议增量（逐字对齐 server.py）
+
+- **`fullState` 真实形状**（D0）：`bands` = `[{name,start,end,bsr,default_freq}]`；`filterTables` = `{voice:[[idx,hz]…], narrow:[[idx,hz]…], narrowModes:[…]}`（Icom 还有 `model:"fil123"`、`filDefaults:{mode:[hz,hz,hz]}`）；新增顶层 `radioDisplayName`、`capabilities`。缺键/老服务端必须仍能解析（DTO 全默认值）。
+- **`capabilities`（AD-016）消费子集**：`model_name/display_name/verified/tx_gated/has_atu/has_auto_notch/has_vd_id_meters/filter_model/att_steps/preamp_steps/scope_type/scope_spans/scope_speeds/audio_gain_boost`。量程：`civ27` 的 `freq` 是半幅，要 ×2；无 capabilities 时按 FT-710 表回退（`Data/Capabilities.kt`）。
+- **filter/ATT/PRE 循环**：`width_table` → voice `[9,13,17,20,23]`、narrow `[3,6,10,13,17,21]`（窄带集合看 `narrowModes`）；`fil123` → 1→2→3。ATT/PRE 用 `att_steps/preamp_steps` 的长度（`Capabilities.nextFilter/…`）。
+- **ATR1000（/WSatr1000）**：下行 `atrState{connected,power,swr,sw,ind,cap,ind_uh,cap_pf,tuning,tx,freq,last_update}`、`atrTuneResult{phase,swr_before,swr_after,message,auto}`（阶段：start/skipped/success/rollback/error + auto_*）；上行 `{"type":"atrTune"}`。文案见 `Network/Protocol.kt:AtrText`。
+- **Cloud Hub REST**（认证 Cookie）：`GET /api/cloud/state`（connected/callsign/has_token/entry/cert/portal/tunnel_running/tunnel_error/cert_reload_required/autoconnect{status,at,error}）、`POST /api/cloud/apply {callsign,contact,secret}`、`POST /api/cloud/refresh`、`POST /api/cloud/restart`（返回 `{restarting:true}`，重启后需重连）。见 `Network/CloudApi.kt`、`UI/CloudHubDialog.kt`。
+- **支持页**：`<baseUrl>/support.html`（服务端静态目录，AD-021），App 只负责用系统浏览器打开。
+- **音频增益**：RX 播放增益 = `min(10, vol/255 × capabilities.audio_gain_boost)`，TX/TUNE 时 0；TX 采集 48k 优先、44.1k 时 882→960 后编码（`Audio/RxGain.kt`、`Audio/Resampler.kt`、`Audio/TxFraming.kt`）。
+- **本地偏好（DataStore）**：`afVol 0..255=128`、`micVol 0..200=100`、`micGain 0..100`（收到 fullState 且与服务端不一致时回推一次，web `_applySavedMicGain` 同义）、`scopeTheme=jet`、`scopeFloor=5`、`scopeCeil=220`、`fftHeight=40`、`wfHeight=110`、`keepScreenOn=true`、`backgroundRx=true`（`Data/SettingsStore.kt`）。

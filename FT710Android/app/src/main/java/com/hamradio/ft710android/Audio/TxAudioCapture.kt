@@ -73,6 +73,10 @@ class TxAudioCapture(
 
     /** 48k 优先；getMinBufferSize 或 state 不合法时回退 44.1k；都失败返回 null。 */
     private fun openPreferred(): AudioRecord? {
+        // lint MissingPermission：即使 start() 已查过，构造函数所在方法也要自证
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            return null
+        }
         for (rate in intArrayOf(48000, 44100)) {
             val minBuf = AudioRecord.getMinBufferSize(
                 rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)

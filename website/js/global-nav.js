@@ -17,6 +17,7 @@
     if (p === '' || p === '/index.html' || /(^|\/)portal\//.test(p)) SITE = 'portal';
     else if (/\/agentic\.html/.test(p)) SITE = 'agentic';
     else if (/\/mrrc_modern\//.test(p)) SITE = 'mrrc_modern';
+    else if (/\/mrrc_hub\//.test(p)) SITE = 'mrrc_hub';
     else if (/\/mrrc\//.test(p)) SITE = 'mrrc';
     else if (/\/sunmrrc\//.test(p)) SITE = 'sunmrrc';
     else if (/\/efhw\//.test(p)) SITE = 'efhw';
@@ -36,6 +37,7 @@
     agentic: '/agentic.html',
     mrrc: '/mrrc/',
     mrrc_modern: '/mrrc_modern/',
+    mrrc_hub: '/mrrc_hub/',
     sunmrrc: '/sunmrrc/',
     efhw: '/efhw/',
     mrrc_ft8: '/mrrc_ft8/',
@@ -118,6 +120,7 @@
         siteLink('agentic', 'Agentic') +
         siteLink('mrrc', 'MRRC') +
         siteLink('mrrc_modern', 'Modern') +
+        siteLink('mrrc_hub', 'Hub') +
         siteLink('mrrc_ft8', 'FT-8') +
         siteLink('sunmrrc', 'SunMRRC') +
         siteLink('efhw', 'EFHW') +

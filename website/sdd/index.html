@@ -274,7 +274,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.73</td>
+<td>V2.74</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
@@ -282,7 +282,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>Status</td>
-<td><strong>v1.25.4 built and verified on both platforms</strong> (Windows Setup <strong>54,347,067 bytes</strong>, SHA-256 <code class="scope-code">7daebeae…</code>; macOS DMG <strong>62,440,021 bytes</strong>, SHA-256 <code class="scope-code">e823b125…</code>; both accepted by clean-room runs of the packaged binaries — the clean room is what proves the shipped CA bundle makes outbound HTTPS verify inside the frozen app, and on Windows this round also ran the <strong>real <code class="scope-code">Setup.exe</code></strong> silently into an isolated <code class="scope-code">/DIR=</code>) —— <strong>这一版是 V2.70 / V2.71 / V2.72 三条一起到达用户的那一版</strong>（V2.70 的 PTT 存活闸门——操作者自己刚按下的一键不再被闸门放开——自 v1.25.3 起就已随包到达；后两条只改了 <code class="scope-code">server.py</code>——冻结入口脚本——与 <code class="scope-code">cloud_hub.py</code>，都不在热修通道覆盖范围内，此前只在源码里）：V2.71 把 TX 上行所有权从「迭代顺序里的第一条 socket」改成按会话取<strong>最后连接</strong>的那条，修掉「键控了却没有声音」（一个 30 天 Cookie 令牌名下可以有多条 <code class="scope-code">/WSaudioTX</code>，认领可能落到页面重载留下的半开旧 socket 上，于是活页面的每一帧麦克风音频都被当作非 owner 丢弃，直到旧 socket 被回收才自愈）；V2.72 加入 FT-891（第 11 个注册键，<strong>实验性、仅接收</strong>，发信另需 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>）。这两条<strong>不是靠版本号推断的</strong>：本版构建用的源码包 <code class="scope-code">dist/mrrc_modern_src.zip</code> 里的 <code class="scope-code">server.py</code>、<code class="scope-code">cloud_hub.py</code> 与工作树<strong>逐字节相同</strong>（<code class="scope-code">_claim_tx_owner_for_token</code>、<code class="scope-code">_same_session_uplink_takeover</code> 与 FT-891 的 <code class="scope-code">backends/yaesu/yaesu_profiles.py</code> 都在包内），而构建机上把安装包内 <code class="scope-code">server</code> 入口与该源码比对，<code class="scope-code">lifespan</code> 的 <code class="scope-code">co_code</code> / <code class="scope-code">co_consts</code> / <code class="scope-code">co_firstlineno</code> 全部一致</td>
+<td><strong>v1.25.4 built and verified on both platforms</strong> (Windows Setup <strong>54,347,067 bytes</strong>, SHA-256 <code class="scope-code">7daebeae…</code>; macOS DMG <strong>62,440,021 bytes</strong>, SHA-256 <code class="scope-code">e823b125…</code>; both accepted by clean-room runs of the packaged binaries — the clean room is what proves the shipped CA bundle makes outbound HTTPS verify inside the frozen app, and on Windows this round also ran the <strong>real <code class="scope-code">Setup.exe</code></strong> silently into an isolated <code class="scope-code">/DIR=</code>) —— <strong>这一版是 V2.70 / V2.71 / V2.72 三条一起到达用户的那一版</strong>（V2.70 的 PTT 存活闸门——操作者自己刚按下的一键不再被闸门放开——自 v1.25.3 起就已随包到达；后两条只改了 <code class="scope-code">server.py</code>——冻结入口脚本——与 <code class="scope-code">cloud_hub.py</code>，都不在热修通道覆盖范围内，此前只在源码里）：V2.71 把 TX 上行所有权从「迭代顺序里的第一条 socket」改成按会话取<strong>最后连接</strong>的那条，修掉「键控了却没有声音」（一个 30 天 Cookie 令牌名下可以有多条 <code class="scope-code">/WSaudioTX</code>，认领可能落到页面重载留下的半开旧 socket 上，于是活页面的每一帧麦克风音频都被当作非 owner 丢弃，直到旧 socket 被回收才自愈）；V2.72 加入 FT-891（第 11 个注册键，<strong>实验性、仅接收</strong>，发信另需 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>）。这两条<strong>不是靠版本号推断的</strong>：本版构建用的源码包 <code class="scope-code">dist/mrrc_modern_src.zip</code> 里的 <code class="scope-code">server.py</code>、<code class="scope-code">cloud_hub.py</code> 与工作树<strong>逐字节相同</strong>（<code class="scope-code">_claim_tx_owner_for_token</code>、<code class="scope-code">_same_session_uplink_takeover</code> 与 FT-891 的 <code class="scope-code">backends/yaesu/yaesu_profiles.py</code> 都在包内），而构建机上把安装包内 <code class="scope-code">server</code> 入口与该源码比对，<code class="scope-code">lifespan</code> 的 <code class="scope-code">co_code</code> / <code class="scope-code">co_consts</code> / <code class="scope-code">co_firstlineno</code> 全部一致；<strong>SDD 的顶层现在这一行是 V2.74 的 W103D 通用电台盒子镜像</strong>（把一台 Amlogic 云电脑变成 11 机型可切换的服务端，仅部署层 —— 镜像本体尚未构建、未发版，见 <code class="scope-code">packaging/box/</code> 与 <code class="scope-code">docs/w103d_pack.md</code>）</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.73 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.74 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

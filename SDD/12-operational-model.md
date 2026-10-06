@@ -213,3 +213,73 @@ and the model identity check (`ID;`, read-only) only logs.
 | 登录限流退化 | 经隧道/反代时所有登录共享一个来源 IP（5 次失败 / 300 秒**全局**桶）。运维须知：误锁影响**全部用户**，不是单个来源 |
 
 Hub 端对应事实见 `../../mrrc_hub/SDD/12-operational-model.md` §12.8。
+
+## 12.10 W103D 镜像（Amlogic 盒子）
+
+把一个 **ZTE 云电脑 W103D**（Amlogic S905L3A / G12A，4×Cortex-A53@1.8，2GB/32GB，100M 网口，MT7663 WiFi+BT）
+变成通用电台服务端。设计与构建手册：
+`docs/superpowers/specs/2026-10-06-w103d-radio-box-design.md`、`docs/w103d_pack.md`；
+操作单：`packaging/box/README.md`。
+
+### 12.10.1 两段式部署
+
+**构建期**（macOS + Docker `--privileged`，Apple Silicon 原生 arm64，**不需要 qemu**）loop 挂载 ophub 的
+Armbian 镜像并 chroot 铺 overlay；**运行期**首启只做必须碰硬件的探测。
+
+| 阶段 | 做的事 |
+| --- | --- |
+| 构建期 | `mrrc` 用户 + `dialout,audio` 组；`/opt/mrrc_modern`（代码 + `install.sh` 建的 venv）；预置 aarch64 FTDI 库；frpc；11 份 profile；两个 systemd 单元 |
+| 首启 | `mrrc-firstboot` → 探测串口与声卡 → 生成 web 口令 → 自签 HTTPS 证书 → 启服务 |
+
+**为什么不把串口/口令也烤进去**：盲猜会产出一个「看起来能用但连不上电台」的配置，而这类错误在现场表现为"服务在跑、就是不通"。
+
+### 12.10.2 运行形态
+
+| 项 | 值 |
+| --- | --- |
+| 安装位置 | `/opt/mrrc_modern`（不是仓库目录） |
+| 服务用户 | `User=mrrc` / `Group=mrrc`，属于 `dialout`（串口）与 `audio`（USB 声卡） |
+| **两个 env 路径必须同一文件** | `EnvironmentFile=/opt/mrrc_modern/env/mrrc.env` **且** `Environment=MRRC_CONFIG_FILE=/opt/mrrc_modern/env/mrrc.env` |
+| 内核 | **只走 `armbian-update`，保持 w103d 变体**（MT7663S 依赖专属补丁 + 固件 overlay） |
+
+**为什么两个 env 路径必须钉成同一个**：`cloud_hub.connect()` 把证书路径与 `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` 写进 `server.py:_config_file_path()`，
+该函数优先读 `MRRC_CONFIG_FILE`、否则回退到 `MEM_FILE.parent/mrrc_modern.env`；而 systemd 读的是 `EnvironmentFile`。
+两者分裂时症状是**静默的**：设置页显示「已连接」，而上游 TLS 校验失败、PTT 活性闸门从未生效。
+这也解释了 Cloud Hub 为何至今只在 Windows/macOS 实例上跑过——那两边的启动器会自己设 `MRRC_CONFIG_FILE`。
+`packaging/box/verify.sh` 第 7 项把这个相等关系做成断言，防止它再次漂移。
+
+### 12.10.3 电台切换
+
+`mrrc-radio list | show | use <model> [--port DEV]`，型号集合由 `backends.known_models()` 校验，
+每型号一份 `packaging/box/profiles/<model>.env`——**只写型号**，因为波特率由后端自己的表决定、串口与声卡由首启解析。
+
+两条容易做错且已被测试钉住的规则：
+
+1. **换型号且未显式给 `--port` 时清空 `MRRC_SERIAL_PORT`**——FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留着旧值等于一条没有报错的死链路。
+2. **TX 门禁由 profile 重新断言而不是继承**——8 个未验证机型（`ic705` `ic7610` `ic7760` `ftdx10` `ftdx101d` `ftdx101mp` `ftx1` `ft891`）的 profile 显式写 `MRRC_ALLOW_UNVERIFIED_TX=0`（AD-019 / NFR-067），
+   且**任何 profile 出现 `=1` 都会被测试拦下**：镜像的首次连接若能在未经测量的表上按下发射键，正是 AD-019 要防的那件事。
+
+`mrrc-radio` **自身不做串口 I/O**（`cat-direct-serial-io`）：`--port` 取操作者给的答案，否则调用 `linux/first_run.py`
+既有的 `detect_serial_ports()` / `probe_radio_model()`（先停服务，否则端口被占着、探测问不出东西）。
+
+`mrrc-update` 是就地升级路径（拉代码 → pip → 重启），**无回滚**：`upgrade_core.py` 的自动升级切片尚未开工，
+在这里另造一套状态机只会得到一套没被测过的状态机。
+
+### 12.10.4 与树莓派镜像的关系
+
+| 项 | Pi 镜像（`packaging/rpi/`） | W103D 镜像（`packaging/box/`） |
+| --- | --- | --- |
+| 产出方式 | pi-gen 造镜像 | 在 ophub 预构建镜像上二次构建 |
+| 预置目录 | `/opt/mrrc_modern` | 同 |
+| 预置来源路径 | `/boot/firmware/mrrc.env` | `/boot/mrrc.env`（Armbian 把 boot 分区挂在 `/boot`） |
+| 绑定地址默认 | `::` | `0.0.0.0`（`AGENTS.md` 的侦听地址约定） |
+| 复制排除清单 | **权威副本** | 必须与它逐字一致，由 `tests/test_box_profiles.py::ExclusionParityTests` 强制 |
+
+排除清单现在存在于**三处**（Pi 构建器、box overlay、`mrrc_update.sh`），测试逐字比对三份。
+两份构建器对「什么该进 `/opt/mrrc_modern`」产生分歧的后果是**运行期 ImportError**，不是构建错误——所以这条应由测试守而不是由记性守。
+
+**不自建 Armbian 镜像是刻意的取舍**：W103D 的板级补丁（SDIO 路由到 SD_EMMC_B、MT7663S 传输层、原厂 N9 固件）
+活在 ophub/unifreq 的内核树里，自建等于长期跟进那套补丁栈。缓解手段是钉基底镜像的 SHA-256 并只从官方 release 取。
+
+**镜像本体尚未发布**：`MRRC-Modern-<ver>-w103d.img.gz` 的版本规则、`release-artifacts.json` 条目与网站下载卡
+留给独立的发展步骤（设计文档 §11）。

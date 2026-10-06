@@ -79,6 +79,34 @@ Two things to know before the first launch (full guide:
    spectrum and PTT all work, RX plays silence, and no error is logged anywhere.
    The grant is bound to the build, so **each upgrade asks once again**.
 
+### Radio Box Image (ZTE W103D)
+
+The same server, preinstalled on an Armbian image for a ZTE W103D (Amlogic
+S905L3A, 2 GB / 32 GB). **Not published as a download yet** — the pipeline runs
+locally and is the only supported path today:
+
+```bash
+packaging/box/build-image.sh      # needs Docker running; -> dist/w103d/MRRC-Modern-<ver>-w103d.img.gz
+```
+
+Flash the result to a USB stick and boot the box from it (`reboot update`); the
+eMMC stays untouched until you decide otherwise, so a trial costs nothing. All
+eleven registry radio models are then selectable on the box itself:
+
+```bash
+mrrc-radio list                   # verified vs experimental, per model
+mrrc-radio use ft710              # probes the serial port, writes the config, restarts
+```
+
+The eight hardware-unverified models connect **receive-only** until you set
+`MRRC_ALLOW_UNVERIFIED_TX=1` (AD-019). Cloud Hub onboarding — public
+`https://<callsign>.mrrc.vlsc.net/` entry, transmit included — runs from the
+settings page.
+
+Operator page (flashing, first boot, Cloud Hub, troubleshooting):
+[packaging/box/README.md](packaging/box/README.md). Build manual:
+[docs/w103d_pack.md](docs/w103d_pack.md).
+
 ### Environment Variables
 
 | Variable | Default | Description |

@@ -14,6 +14,7 @@ worth failing the build over:
 """
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
@@ -95,3 +96,23 @@ class ProfileSetTests(unittest.TestCase):
         derived = {m for m in icom_models() if not icom_profile(m).verified}
         derived |= {m for m, p in yaesu_profiles.items() if not p.verified}
         self.assertEqual(derived, set(UNVERIFIED))
+
+
+class ExclusionParityTests(unittest.TestCase):
+    """The box overlay must copy exactly what the Pi builder copies.
+
+    Two builders that disagree about what belongs in /opt/mrrc_modern is how a
+    file ends up in one image and missing from the other, and the symptom is a
+    runtime ImportError rather than a build error.
+    """
+
+    EXCLUDE_RE = re.compile(r'--exclude\s+"([^"]+)"')
+
+    def _excludes(self, path: Path) -> list[str]:
+        return self.EXCLUDE_RE.findall(path.read_text(encoding="utf-8"))
+
+    def test_the_two_builders_exclude_the_same_paths(self):
+        pi = self._excludes(REPO / "packaging" / "rpi" / "build-image.sh")
+        box = self._excludes(REPO / "packaging" / "box" / "box-overlay.sh")
+        self.assertTrue(pi, "the Pi builder's list came back empty — parser drift?")
+        self.assertEqual(box, pi)

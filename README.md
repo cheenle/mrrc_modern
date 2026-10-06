@@ -438,12 +438,12 @@ All WebSocket endpoints authenticate with the session token resolved in this ord
 
 ```bash
 cd mrrc_modern
-python3 -m pytest tests/ -v
-# Or with unittest:
-python3 -m unittest discover -s tests -v
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-**633 tests passing** across 31 test modules in the current local test suite. The CI-V tests prove documented frame construction/parsing, command order, and asynchronous state behavior without hardware; USB driver enumeration, radio ACK timing, real scope cadence, RF/tuner/power behavior, and RX/TX audio quality still require the physical-radio checklist in [`IC-7300_硬件验收清单.md`](IC-7300_硬件验收清单.md).
+The suite is `unittest` (pytest is not a declared dependency). Case and module counts are not
+restated here — **`tests/README.md` is the authority**; this line claimed "633 tests across 31
+modules" long after the suite had passed 1673 across 89. The CI-V tests prove documented frame construction/parsing, command order, and asynchronous state behavior without hardware; USB driver enumeration, radio ACK timing, real scope cadence, RF/tuner/power behavior, and RX/TX audio quality still require the physical-radio checklist in [`IC-7300_硬件验收清单.md`](IC-7300_硬件验收清单.md).
 
 ## Requirements
 

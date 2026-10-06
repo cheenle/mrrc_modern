@@ -69,12 +69,20 @@ sudo nano /opt/mrrc_modern/env/mrrc.env # 编辑配置
 镜像不含 FTDI Linux 库（官方按架构单独发布）：
 
 1. 到 FTDI 官网下载 **LibFT4222 Linux ARM64 (aarch64)** 包。
-2. 解出 `libft4222.so` 与 `libftd2xx.so`，拷入树莓派：
+2. 包里**只有 `libft4222.so` 一个文件**，没有 `libftd2xx.so`（`ReadMe.txt` 写明 libftd2xx 是静态
+   链进去的，`install4222.sh` 也只装那一个）。本应用要求两个名字同目录存在（`find_ftdi_libraries()`），
+   所以第二个名字要自己建，做成指向它的符号链接：
 
    ```bash
-   sudo cp libft4222.so libftd2xx.so /opt/mrrc_modern/vendor/ftdi/
+   sudo mkdir -p /opt/mrrc_modern/vendor/ftdi
+   sudo cp libft4222.so /opt/mrrc_modern/vendor/ftdi/
+   sudo ln -sf libft4222.so /opt/mrrc_modern/vendor/ftdi/libftd2xx.so
    sudo systemctl restart mrrc-modern
    ```
+
+   （W103D 盒子镜像走的就是这条路：`vendor/ftdi/libftd2xx.so` 是指向 `libft4222.so` 的符号链接。
+   这样链接不会缺符号 —— 实测该 aarch64 库导出 81 个 `FT_*` 符号，`scope_pipe` 真正调用的
+   `FT_OpenEx`/`FT_Close`/`FT_SetTimeouts`/`FT_SetLatencyTimer` 都在，`DT_NEEDED` 里没有 libftd2xx。）
 
 3. 重启后瀑布图变为真 FFT；失败自动回落 S 表频谱，不影响其他功能。
 

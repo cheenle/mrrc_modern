@@ -78,9 +78,14 @@ git add -A && git restore --staged atr1000_tuner.json   # stage explicitly, or u
 python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged   # must exit 0
 git commit -m "release: vX.Y.Z — <headline> ..."                             # embed sizes + SHAs
 git tag -a vX.Y.Z -F /tmp/tag_vXYZ.txt                                       # ANNOTATED (v1.24.6 onward)
-git push origin feat/hub && git push origin vX.Y.Z                           # tag pushed EXPLICITLY
-   # 分支要推**发布提交所在的那条**：本仓这些发布落在 `feat/hub`；`main` 落后 ~80 个提交，
-   # 不是这些发布的落脚处（v1.14.0–v1.25.0 均如此）。
+git push origin main && git push origin vX.Y.Z                                # tag pushed EXPLICITLY
+   # 分支要推**发布提交所在的那条**，推之前先核对，别照抄分支名：
+   #   git rev-list --left-right --count main...feat/hub    # 各领先/落后多少
+   #   git branch -a --contains <上一个 tag 的提交>          # 上一版落在哪条
+   # 2026-10-06（v1.25.4）实测：`main` 领先 `feat/hub` 9 个提交、落后 0；v1.25.3 的发布提交
+   # `ed816f4` 在 `origin/main` 与 `origin/feat/hub` 上都在 ⇒ 发布落在 `main`。
+   # （本节原先写「发布落在 feat/hub、main 落后 ~80 个提交」—— 那是 v1.14.0–v1.25.0 时期的情况，
+   #  v1.25.4 时不成立，已按实测改正。）
 git ls-remote --tags origin | grep vX.Y.Z                                    # verify it landed
 ```
 

@@ -45,6 +45,7 @@
 | `support_answers.py` + `dev_tools/support_autopilot.py`（第 2 期） | AD-021 amendment、SDD 12.5.1 | `test_support_answers.py`、`test_support_autopilot.py` | AGENTS 模块表、SDD 08/12、CHANGELOG |
 | `tools/support_receiver/**` + `deploy_support_receiver.sh` | AD-021 §9 | `test_support_receiver.py` | SDD 12.5.1、CHANGELOG |
 | `packaging/**` | AD-001、SDD 12 | `test_windows_packaging_files.py`、`test_rpi_packaging.py` | `mac_pack.md` / `win_pack.md` / `pi_pack.md`、安装指南 |
+| `packaging/box/**` + `linux/**`（W103D 通用电台盒子镜像 —— **只有部署层，尚未发版**） | SDD 12（部署形态）、14（V2.74） | `test_box_profiles.py`、`test_mrrc_radio.py`、`test_host_score.py` | `docs/w103d_pack.md`、`packaging/box/README.md`、AGENTS、README |
 
 ### 2.2 设计层
 
@@ -66,8 +67,8 @@
 | --- | --- | --- |
 | 依赖 | `requirements.txt` / `DEPENDENCIES.md` | 支持链路**无新增依赖**（纯标准库）；新依赖要同时进 PyInstaller spec 的 `hiddenimports`；**随包数据文件**（如 `vendor/ca/cacert.pem`）要同时进 spec 的 `datas` 与两个 build 脚本的拷贝清单 —— 只改一处就是「本机好、打包坏」（`test_tls_trust_store.py` 与 `packaging/*/build.*` 各自守一半） |
 | 环境变量 | `config.py`（`MRRC_*`，兼容 `FT710_*`） | README 环境表 + AGENTS + SDD 12 三处同改 |
-| 测试 | `python -m unittest discover -s tests`（当前 **1669 例 / 89 模块**，2026-10-06 实测） | 新增模块要进 `tests/README.md` 的计数与清单（AGENTS.md 不复述计数） |
-| 打包 | `packaging/{macos,windows,rpi}/` | 见 §4 发布链 |
+| 测试 | `python -m unittest discover -s tests`（当前 **1673 例 / 89 模块**，2026-10-06 实测） | 新增模块要进 `tests/README.md` 的计数与清单（AGENTS.md 不复述计数） |
+| 打包 | `packaging/{macos,windows,rpi,box}/` | 见 §4 发布链；`box/` 是**独立于三平台发布链**的部署形态（镜像尚未构建） |
 | 支持链路 | `support_bundle.py`、`tools/support_receiver/`、`deploy_support_receiver.sh` | 接收端部署是幂等的；诊断包隐私契约由 `constraints.json` 的 `support-bundle-privacy` + 三个测试模块守住（AD-021） |
 | 静态检查 | `~/.pi-lens/tools/node_modules/.bin/pyright`（配 `pyrightconfig.json`）+ `biome.json` | 两个前端文件禁止被格式化（见 AGENTS） |
 
@@ -93,7 +94,7 @@
 | 音频/录音参数变化 | 12、13 | README、`AGENTS.md` | `test_audio.py`、`test_recorder*.py` | — |
 | 前端行为/缓存版本 | 09.7 | AGENTS（勿格式化清单） | 前端契约测试 | — |
 | 新增 WebSocket 端点 | 05（鉴权 NFR）、10 | README、AGENTS | `test_server_security.py`、`test_server_ws_protocol.py` | — |
-| 打包/安装流程 | 12 | `mac_pack.md`/`win_pack.md`/`pi_pack.md`、安装指南 | `test_*_packaging*.py` | 规则通常已覆盖 |
+| 打包/安装流程 | 12 | `mac_pack.md`/`win_pack.md`/`pi_pack.md`、`docs/w103d_pack.md`、安装指南 | `test_*_packaging*.py` | 规则通常已覆盖 |
 | 架构/能力变化（含图） | 对应章 + 14 | `PROJECT_MAP`、相关指南 | 相关测试 + `release_check` 图规则 | `release-artifacts.json` 的 `diagrams` 段（新图或新关键词） |
 | **每次发布** | **14（新行）** | CHANGELOG、README/SDD 状态、落地页、指南 | 全套 + `release_check` | 版本/制品规则随制品变化 |
 
@@ -132,3 +133,4 @@ python3 .agents/skills/dual-platform-release/harness/release_check.py --online -
 | 未验证机型：`verified=false` + TX 门禁 + 逐表溯源 + 只读身份校验 | profile/后端测试 + NFR-067 + AD-019 |
 | 前端两个文件不被格式化工具改写 | `biome.json` overrides + `.pi-lens.json` ignore |
 | 每个注册后端都具备服务器读取的全部属性（如 `cat`） | `tests/test_yaesu_wiring.py::ServerVisibleSurfaceTests` |
+| 盒子镜像：11 份 profile 与 `known_models()` 双向相等、无 profile 出现 `=1`、三处 rsync 排除清单逐字一致、FTDI 库是 aarch64 ELF 且第二个名字指向它 | `tests/test_box_profiles.py` |

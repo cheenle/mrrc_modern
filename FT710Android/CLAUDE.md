@@ -109,6 +109,13 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 ## 频谱/标尺不变量
 
+- **UI 结构改动必须做结构 diff**（2026-10-05 事故：v1.1.14 改 ATR 行时脚本替换范围划到"录音入口"，把五键行/芯片行/音量/步进/VFO 行整段吞掉并发到官网；JVM 单测与 lint 都盖不住 UI 结构）。发版前跑：
+  ```bash
+  git show <上一个好版本>:FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt > /tmp/good.kt
+  # 比对集合：PadBtn("…") / SmallChip("…") / MeterCell("…") 标签、vm.*( 调用、state.* / prefs.* 字段、*Dialog/*Panel
+  ```
+  **少任何一项就不许发版**。大块替换优先用"精确锚点 + 重插"，不要用"从 A 注释到 B 注释整段替换"。
+- **设计令牌与表面**：颜色/圆角/表面层级只在 `UI/Theme.kt`（`MrrcColors`）与 `UI/Surfaces.kt`（`MrrcSurfaces` + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）里定义；就地写死颜色 = 以后改不动。三层表面：内凹显示屏 `Inset`（主频/频谱）< 卡片 `Panel` < 按键 `Key`。
 - **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**（主屏保持干净，用户明确要求过）；录音入口是状态行芯片、天调参数并进 ATR 行——**不要新增独占一行的小信息条**。
 - **顶栏布局（两列）**：`BoxWithConstraints` 取页面宽 → 左列（`weight(1f)`）= 主频行 + 状态行 `FlowRow`（行高 32dp 用 `StatusItem` 包裹，`☰/⛶/⏻/VFO` 都在这里，窄屏自动折行）；右列 = **S 表独立区域**，宽 = 页宽×44%（140–240dp）、高 = 宽×0.64（96–168dp）。S 表尺寸**只看屏幕**，不受主频行高限制；改动顶栏时别把按钮塞回主频行，否则主频会掉到 20sp 以下。
 - **面板 S 表**：弧是贝塞尔（`SMeter.arcX/arcY`），刻度/标签同 Web 的 `MARKERS/LABELS`；字号/线宽/COMP 条厚都由区域短边按比例算（`labelFs`/`readFs`），所以同一份代码在手机与平板都合适。标签不重叠由 `SMeterTest` 的逐标签宽度断言守着（改宽度/字号要跑它）。

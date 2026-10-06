@@ -66,7 +66,7 @@
 | --- | --- | --- |
 | 依赖 | `requirements.txt` / `DEPENDENCIES.md` | 支持链路**无新增依赖**（纯标准库）；新依赖要同时进 PyInstaller spec 的 `hiddenimports`；**随包数据文件**（如 `vendor/ca/cacert.pem`）要同时进 spec 的 `datas` 与两个 build 脚本的拷贝清单 —— 只改一处就是「本机好、打包坏」（`test_tls_trust_store.py` 与 `packaging/*/build.*` 各自守一半） |
 | 环境变量 | `config.py`（`MRRC_*`，兼容 `FT710_*`） | README 环境表 + AGENTS + SDD 12 三处同改 |
-| 测试 | `python -m unittest discover -s tests`（当前 **1604 例 / 86 模块**，2026-10-04 实测） | 新增模块要进 `tests/README.md` 的计数与清单（AGENTS.md 不复述计数） |
+| 测试 | `python -m unittest discover -s tests`（当前 **1669 例 / 89 模块**，2026-10-06 实测） | 新增模块要进 `tests/README.md` 的计数与清单（AGENTS.md 不复述计数） |
 | 打包 | `packaging/{macos,windows,rpi}/` | 见 §4 发布链 |
 | 支持链路 | `support_bundle.py`、`tools/support_receiver/`、`deploy_support_receiver.sh` | 接收端部署是幂等的；诊断包隐私契约由 `constraints.json` 的 `support-bundle-privacy` + 三个测试模块守住（AD-021） |
 | 静态检查 | `~/.pi-lens/tools/node_modules/.bin/pyright`（配 `pyrightconfig.json`）+ `biome.json` | 两个前端文件禁止被格式化（见 AGENTS） |

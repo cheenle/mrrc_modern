@@ -117,7 +117,9 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
   **少任何一项就不许发版**。大块替换优先用"精确锚点 + 重插"，不要用"从 A 注释到 B 注释整段替换"。
 - **设计令牌与表面**：颜色/圆角/表面层级只在 `UI/Theme.kt`（`MrrcColors`）与 `UI/Surfaces.kt`（`MrrcSurfaces` + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）里定义；就地写死颜色 = 以后改不动。三层表面：内凹显示屏 `Inset`（主频/频谱）< 卡片 `Panel` < 按键 `Key`。
 - **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**（主屏保持干净，用户明确要求过）；录音入口是状态行芯片、天调参数并进 ATR 行——**不要新增独占一行的小信息条**。
-- **顶栏布局（两列）**：`BoxWithConstraints` 取页面宽 → 左列（`weight(1f)`）= 主频行 + 状态行 `FlowRow`（行高 32dp 用 `StatusItem` 包裹，`☰/⛶/⏻/VFO` 都在这里，窄屏自动折行）；右列 = **S 表独立区域**，宽 = 页宽×44%（140–240dp）、高 = 宽×0.64（96–168dp）。S 表尺寸**只看屏幕**，不受主频行高限制；改动顶栏时别把按钮塞回主频行，否则主频会掉到 20sp 以下。
+- **顶栏布局**：`BoxWithConstraints` 取页面宽 → 第一行 = **主频显示屏**（`DisplayBezel`，`weight(1f)`，上沿左侧 `波段 · 模式`、右侧可点 `VFO-A/B`，中间主频 `FreqText`）+ **S 表独立区域**（宽 = 页宽×44%＝140–240dp，高 = 宽×0.64＝96–168dp），两者用 `height(IntrinsicSize.Min)` + `fillMaxHeight()` 做成等高。第二行 = **全宽状态行**（`FlowRow` 仅作兜底）：字体 8.5~9sp、`StatusItem` 行高 26dp、间距 5dp，内容为 `☰ 只读 录音 RX/TX 速率|TXpk RTT·J 状态点 ⛶ ⏻`。
+  - **状态行必须一行装下**（用户明确要求）：加新项前先估宽（当前 269dp / 页面 344dp），放不下就并进已有项或移到设置页；波段/模式/VFO 属于"读数"，归显示屏上沿，不占状态行。
+  - S 表尺寸**只看屏幕**，不受主频行高限制；别把按钮塞回主频行，否则主频掉到 20sp 以下。
 - **面板 S 表**：弧是贝塞尔（`SMeter.arcX/arcY`），刻度/标签同 Web 的 `MARKERS/LABELS`；字号/线宽/COMP 条厚都由区域短边按比例算（`labelFs`/`readFs`），所以同一份代码在手机与平板都合适。标签不重叠由 `SMeterTest` 的逐标签宽度断言守着（改宽度/字号要跑它）。
 
 - **绝不用 `scope_start_freq` 当显示范围**：服务端恒 CENTER 模式（EX040200），调谐后该字段滞后。范围恒为 `VFO ± span/2`（`Data/FreqScale.kt`，对齐 web `_computeFreqRange`）。点击 QSY 同样用 VFO 居中公式（`FreqInput.qsy`），两者必须同源。

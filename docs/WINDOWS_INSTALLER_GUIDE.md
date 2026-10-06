@@ -2,7 +2,7 @@
 
 This guide covers the Windows desktop package for MRRC Web Control
 (the Yaesu FT-710, the Icom IC-7300/IC-7300MK2 plus preview profiles for
-IC-705/IC-7610/IC-7760, and the Yaesu SDR family FTDX10/FTDX101D/FTDX101MP/FTX-1F).
+IC-705/IC-7610/IC-7760, and the Yaesu SDR family FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891).
 The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.

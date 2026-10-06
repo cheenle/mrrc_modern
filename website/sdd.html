@@ -164,21 +164,21 @@
               byte-identical commands. Filter slots are transcribed from
               Hamlib's get side (17 for CW/RTTY/PKT, 21 for SSB) and
               machine-compared against it; AM/FM carry no slots because their
-              width is set through <code>NA</code> alone. Three facts no
-              offline source carries come from a 2026-09-17 field report:
-              38400 8N1 (Hamlib's <code>stop_bits=2</code> is self-marked
+              width is set through <code>NA</code> alone. Three facts no offline
+              source carries come from a 2026-09-17 field report: 38400 8N1
+              (Hamlib's <code>stop_bits=2</code> is self-marked
               <em>assumed</em>), <strong>no USB sound card</strong> — so no
               auto-match hints, 48 kHz for an external interface, and the
               connection dialog says so — and an S reading 1–1.5 S high
               (recorded, curve deliberately unchanged). Wiring it up also
               exposed a crash latent in the whole family:
-              <code>get_preamp</code>/<code>get_attenuator</code> were called
-              by <code>initial_state_sync()</code> and the settings poll tier
-              but never defined, so the first successful connect raised
-              <code>AttributeError</code> — invisible until now because no
-              model in the family has hardware to connect to. Fixed, plus a
-              structural guard that resolves every method a poll item or the
-              sync references. Unverified throughout: TX gated,
+              <code>get_preamp</code>/<code>get_attenuator</code> were called by
+              <code>initial_state_sync()</code> and the settings poll tier but
+              never defined, so the first successful connect raised
+              <code>AttributeError</code> — invisible until now because no model
+              in the family has hardware to connect to. Fixed, plus a structural
+              guard that resolves every method a poll item or the sync
+              references. Unverified throughout: TX gated,
               <code>id_answer</code> empty, 11 <code>TODO(hw-verify)</code>.
             </p>
           </div>
@@ -576,7 +576,7 @@
           <div class="feature-card">
             <div class="icon"><i class="fas fa-radio"></i></div>
             <h3>
-              Yaesu SDR Family: FTDX10 / FTDX101D / FTDX101MP / FTX-1F
+              Yaesu SDR Family: FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891
               <small>(V2.46)</small>
             </h3>
             <p>

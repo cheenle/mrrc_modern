@@ -56,7 +56,7 @@
 | [IC-7300MK2_CI-V_Knowledge_Base.md](IC-7300MK2_CI-V_Knowledge_Base.md) / [IC-7300_硬件验收清单.md](IC-7300_硬件验收清单.md) | Icom CI-V 参考与真机验收清单 | 开发者 |
 | [backends/ft710/](backends/ft710/) | FT-710 后端（CAT、FT4222 频谱、44.1kHz 音频） | 开发者 |
 | [backends/ic7300/](backends/ic7300/) | Icom 共享 CI-V 核心 + profile（IC-7300/MK2/705/7610/7760） | 开发者 |
-| [backends/yaesu/](backends/yaesu/) | Yaesu 共享 ASCII-CAT 核心 + profile（FTDX10/101D/101MP/FTX-1F） | 开发者 |
+| [backends/yaesu/](backends/yaesu/) | Yaesu 共享 ASCII-CAT 核心 + profile（FTDX10/101D/101MP/FTX-1F/FT-891） | 开发者 |
 
 ### 🚢 发布与打包
 | 文档 | 说明 | 读者 |

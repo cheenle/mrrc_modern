@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1623 tests across 86 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1638 tests across 86 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-05, macOS). The per-module sections below
 itemise 71 of those 86 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
@@ -19,11 +19,11 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1623 |
-| Passed | 1615 (1 skipped) |
+| Total tests | 1638 |
+| Passed | 1636 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 |
-| Execution time | ~15s (harness tests spawn CLI subprocesses) |
+| Failed | 1 — **pre-existing, not from the FT-891 work**: `test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload` (reproduces on `origin/main`; deterministic) |
+| Execution time | ~35s (harness tests spawn CLI subprocesses) |
 
 ## Test Modules
 
@@ -40,7 +40,7 @@ SDD coverage: §7.2, AD-003, §9.7
 | `FT710SyncParsingTests` | 7 | FT-710 initial-sync response parsing |
 | `RadioStateConfigureTests` | 6 | Backend table injection, including IC ALC raw-120 full scale and unchanged FT raw/255 scale |
 
-### 2. test_cat_controller.py — CAT Protocol (30 tests)
+### 2. test_cat_controller.py — CAT Protocol (33 tests)
 
 SDD coverage: AD-002, §9.6, §10.4
 
@@ -62,7 +62,7 @@ SDD coverage: §7.2, §10.4, NFRs
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (91 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (106 tests)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
@@ -85,7 +85,7 @@ SDD coverage: AD-004, NFR-060–NFR-065
 | `CustomNameHintsTests` | 7 | Backend-provided audio device name hints (FT-710/YAESU, USB Audio CODEC/Device) |
 | `CapabilitiesAudioWiringTests` | 3 | RadioCapabilities audio fields flow into AudioHandler construction |
 
-### 5. test_server_ws_protocol.py — WebSocket Protocol (82 tests)
+### 5. test_server_ws_protocol.py — WebSocket Protocol (98 tests)
 
 SDD coverage: §9.2, §9.6, §10.4, §15
 
@@ -100,7 +100,7 @@ SDD coverage: §9.2, §9.6, §10.4, §15
 | `BackendAwareSetCommandTests` | 8 | Backend-conditional set handlers (tune path, VFO-B rejection, capability gating) |
 | `BackendModeMapSurfaceTests` | 3 | Mode-name mapping surface shared with backends |
 
-### 6. test_poll_scheduler.py — Poll Scheduler (17 tests)
+### 6. test_poll_scheduler.py — Poll Scheduler (19 tests)
 
 SDD coverage: AD-009, §9.6
 
@@ -126,7 +126,7 @@ SDD coverage: AD-005, AD-006, §9.5
 
 SDD coverage: §7.2 (ScopeFrame entity)
 
-### 9. test_scope_handler_fallback.py — S-Meter Fallback (1 test)
+### 9. test_scope_handler_fallback.py — S-Meter Fallback (4 tests)
 
 SDD coverage: AD-006, §9.5.2
 
@@ -149,7 +149,7 @@ SDD coverage: §10.4 (memory recall applies stored frequency + mode)
 | `MemoryRecallTests` | 2 | Recall applies frequency and mode via CAT |
 | `MemoryButtonSourceTests` | 1 | Frontend memory button contract |
 
-### 13. test_quiet_logging.py — Logging Noise Control (4 tests)
+### 13. test_quiet_logging.py — Logging Noise Control (9 tests)
 
 | Class | Tests | Covers |
 |-------|-------|--------|
@@ -175,7 +175,7 @@ SDD coverage: §12.2 (Windows packaging)
 | `WindowsLauncherSslTests` | 7 | Launcher SSL material resolution: explicit cert/key env vars first, self-signed bootstrap fallback, `MRRC_SSL=off` HTTP escape |
 | `SingleInstanceTests` | 4 | One launcher per session: a named mutex (`Local\MRRC-Modern-Launcher`) closes the window in which two starts both probe the port before either server answers (measured 2026-10-04: two launchers, two servers and six frpc processes on one box); a guard that cannot run never blocks a start |
 
-### 16. test_windows_packaging_files.py — Windows Packaging Files (5 tests)
+### 16. test_windows_packaging_files.py — Windows Packaging Files (10 tests)
 
 SDD coverage: §12.2 (Windows packaging)
 
@@ -258,7 +258,7 @@ SDD coverage: AD-005 (V2.7 amendment — stdin control channel + Windows tree ki
 | `NotifyScopePipeTxTests` | 5 | Server → pipe stdin notify: TX/RX transitions, no-write on unchanged state, force resend, dead-pipe guard |
 | `TerminateProcessTreeTests` | 2 | Windows `taskkill /PID /T /F` vs POSIX SIGTERM selection |
 
-### 23. test_ssl_bootstrap.py — Self-Signed TLS Bootstrap (6 tests)
+### 23. test_ssl_bootstrap.py — Self-Signed TLS Bootstrap (10 tests)
 
 SDD coverage: V2.10 (HTTPS-by-default launcher bootstrap)
 
@@ -291,7 +291,7 @@ SDD coverage: AD-016, §7.2
 | `ScopeTableTests` | 3 | Span codes, span Hz consistency, fixed-mode edges |
 | `PreampAttTests` | 2 | Preamp labels, attenuator steps |
 
-### 26. test_civ_codec.py — CI-V Codec (47 tests)
+### 26. test_civ_codec.py — CI-V Codec (57 tests)
 
 SDD coverage: AD-016, §9.6
 
@@ -306,7 +306,7 @@ SDD coverage: AD-016, §9.6
 | `ScopeAssemblerTests` | 7 | Waveform assembly from segments |
 | `ScaleUpsampleTests` | 6 | 475 bins → scale 160→255 → upsample 850 |
 
-### 27. test_civ_controller.py — CI-V Controller (22 tests)
+### 27. test_civ_controller.py — CI-V Controller (32 tests)
 
 SDD coverage: AD-016, §9.6
 
@@ -323,7 +323,7 @@ SDD coverage: AD-016, §9.6
 | `PriorityTests` | 2 | PTT uses priority path, send_command yields when polls cancelled |
 | `PowerCommandTests` | 4 | Official baud-dependent power-on FE preambles and standard power-off frame |
 
-### 28. test_civ_scope.py — CI-V Scope Producer (12 tests)
+### 28. test_civ_scope.py — CI-V Scope Producer (16 tests)
 
 SDD coverage: AD-016, §9.5
 
@@ -332,7 +332,7 @@ SDD coverage: AD-016, §9.5
 | `CivScopeProducerTests` | 11 | Full waveform → ScopeHandler, amplitude scaling, center/fixed metadata, on_frame once per waveform, sequence gap drops waveform, stop drains + disconnects, notify_tx no-op, callback replacement, stall watchdog warns once, idempotent start |
 | `BackendFactoryScopeProducerTests` | 1 | create_scope_producer returns the CI-V producer |
 
-### 29. test_backend_factory.py — Backend Factory + Capabilities (22 tests)
+### 29. test_backend_factory.py — Backend Factory + Capabilities (30 tests)
 
 SDD coverage: AD-016
 
@@ -401,7 +401,7 @@ SDD coverage: AD-017, §12.4
 | `RecordingsRestTests` | 8 | List / Range stream / delete routes and name containment |
 | `RecordingFailureHandlingTests` | 9 | Missing encoder, unwritable dir, failing handler answers instead of dropping the WS |
 
-### 35. test_yaesu_profiles.py — Yaesu Model Profiles (23 tests)
+### 35. test_yaesu_profiles.py — Yaesu Model Profiles (27 tests)
 
 Profile invariants (spec 2026-09-12 §5): provenance recorded for every table,
 unverified/tx-gated flags, mode registers unique with a CAT character for
@@ -409,7 +409,7 @@ each, filter slots ordered, S-meter curves monotonic and clamped, and the
 model-specific facts that differ between the four radios (including the
 FTX-1's non-hex `H`/`I` C4FM codes).
 
-### 36. test_yaesu_cat_core.py — Yaesu ASCII-CAT Transport and Commands (41 tests)
+### 36. test_yaesu_cat_core.py — Yaesu ASCII-CAT Transport and Commands (46 tests)
 
 Transport framing/prefix filtering/priority preemption/error classification
 against a scripted serial double, plus the profile-driven command layer:
@@ -417,7 +417,7 @@ frequency/VFO, int-register modes with the FTX-1 leave-memory step,
 slot-based filter width, PTT/TUNE, meters, gains and the power-format
 detection with clamping.
 
-### 37. test_yaesu_backend.py — Profile-Driven Backend, Gate and Identity (21 tests)
+### 37. test_yaesu_backend.py — Profile-Driven Backend, Gate and Identity (25 tests)
 
 Capabilities/tables/poll items derived from the profile, the transmit gate
 (refusal, release never blocked, one warning per process, opt-in switch), the
@@ -441,7 +441,7 @@ brew install socat                            # macOS; apt install socat on Linu
 Identity evaluation (match/mismatch/no expectation/silent), the two-switch
 TX-check rule and the paste-ready report formatting.
 
-### 40. test_yaesu_wiring.py — Registry, Baud and Factory Wiring (6 tests)
+### 40. test_yaesu_wiring.py — Registry, Baud and Factory Wiring (10 tests)
 
 The four registry keys, factory construction, the FT-710 path staying
 verified and untouched, and the model-aware baud table.
@@ -509,7 +509,7 @@ payload.
 Config-file path resolution, the dual-stack pre-bound socket, device listing,
 the restart chain, and the baud<->model linkage written on every save.
 
-### 52. test_release_artifacts.py — Release Completeness (15 tests)
+### 52. test_release_artifacts.py — Release Completeness (17 tests)
 
 The artifact registry rules (app/SDD version sources, ISS, both language cards,
 guides, README, Quick Facts), diagram-copy consistency, and the publish audit -
@@ -580,7 +580,7 @@ SDD coverage: AD-024, §10.2, hub AD-H07 / NFR-H020
 | `VerificationTests` | 3 | `_verify_auth` accepts all three transports, rejects unknown/empty, listen role recognised from a header |
 | `SourceGuardTests` | 5 | only the resolver touches the query param, HTTP paths share it, no frontend token URLs, login guards kept, cache-bust covers changed assets |
 
-### 59. test_tx_liveness.py — TX-Phase Liveness Gate (21 tests)
+### 59. test_tx_liveness.py — TX-Phase Liveness Gate (24 tests)
 
 SDD coverage: §15.6, AD-007 (V2.63 amendment), hub AD-H06 / NFR-H006
 

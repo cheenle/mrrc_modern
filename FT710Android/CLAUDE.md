@@ -109,6 +109,7 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 ## 频谱/标尺不变量
 
+- **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**：它们是 `SubcomposeLayout`，不支持 intrinsic 测量，布局阶段抛 `IllegalStateException` → **启动即崩**（v1.1.16 事故：顶栏用 `height(IntrinsicSize.Min)` 让显示屏与 S 表等高）。要和固定尺寸的兄弟等高，就**显式给高度**（本仓：`Row(Modifier.height(meterH))`，`meterH` 由屏宽算出）。门槛：`UiLayoutSafetyTest`（静态扫描，命中即失败）。
 - **UI 结构改动必须做结构 diff**（2026-10-05 事故：v1.1.14 改 ATR 行时脚本替换范围划到"录音入口"，把五键行/芯片行/音量/步进/VFO 行整段吞掉并发到官网；JVM 单测与 lint 都盖不住 UI 结构）。发版前跑：
   ```bash
   git show <上一个好版本>:FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt > /tmp/good.kt

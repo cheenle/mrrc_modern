@@ -19,8 +19,8 @@ android {
         applicationId = "com.hamradio.ft710android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "1.1.16"
+        versionCode = 20
+        versionName = "1.1.17"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake { arguments += listOf("-DOPUS_BUILD_SHARED_LIBRARY=0") }
@@ -88,4 +88,11 @@ tasks.matching { it.name == "assembleRelease" }.configureEach {
             )
         }
     }
+}
+
+// UiLayoutSafetyTest 直接读 src/main/java 做静态检查：源码不是测试任务的默认输入，
+// 不声明就会被 Gradle 判 UP-TO-DATE 而跳过 —— 门槛会静默失效（2026-10-05 实测踩到）。
+tasks.withType<Test>().configureEach {
+    inputs.dir(layout.projectDirectory.dir("src/main/java"))
+        .withPropertyName("mainSourceForLayoutSafety")
 }

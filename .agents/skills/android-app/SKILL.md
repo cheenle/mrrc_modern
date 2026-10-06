@@ -108,11 +108,15 @@ cd FT710Android
 | 7 | 跑一段时间比 Web 延迟几秒 | 抖动缓冲无上限：卡过一次就永远落后 | Web 水位 + 800ms 丢最旧 + TX flush（v1.1.9） |
 | 8 | 设置页四个滑块"调不了" | `vm.version.collectAsState()` 返回值被丢弃 → 从不重组，松手被旧值弹回 | 读出版本 + `remember(stateVersion)` 重算（v1.1.9） |
 | 9 | 官网卡片更新了、外网仍是旧版 | nginx `open_file_cache` 仍服务旧 inode | 上传后 `systemctl reload nginx`（`publish-card.sh` 内置） |
+| 13 | **装上打开就退出**（启动即崩） | 顶栏 `height(IntrinsicSize.Min)` 包住了含 `BoxWithConstraints` 的子项 → Compose 抛"SubcomposeLayout 不支持 intrinsic 测量" | 改显式高度 `height(meterH)`；加 `UiLayoutSafetyTest` 门槛（v1.1.17） |
 | 12 | v1.1.14 主屏控件整片消失（模式/波段/滤波/ATT/PRE、NR/NB/AN/COMP/ATU、音量、步进、VFO 行） | 脚本按"注释区间"整段替换 ATR 行，区间跨过了所有控制行；UI 结构无测试覆盖 | 从 v1.1.13 取回整段重插；此后发版前强制**结构 diff**（v1.1.15） |
 | 11 | 频谱下频率标注不对 | 标尺用了滞后的 `scope_start_freq` + 固定 6 等分 + 统一 `%.3f` | `Data/FreqScale.kt`：VFO±span/2、自适应步进、按位置绘制（v1.1.11） |
 | 10 | 键控了但"极微弱"（二次反馈） | 链路是 unity（服务端/Web 均无增益），差在手机麦电平；且部分机型 `UNPROCESSED` 初始化后不产数据 | 采集源 700ms 探测回退；🎙 Vol 上限 4×、默认 1.5×；状态行显示 `TX pk:`（v1.1.10） |
 
 ## 改 UI 的硬规矩
+
+- **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**（都是 `SubcomposeLayout`，不支持 intrinsic 测量）→ 布局阶段抛 `IllegalStateException` = **装上打开就退出**（v1.1.16 事故）。要跟固定尺寸的兄弟等高就**显式给高度**。异常原文可在 `~/.gradle/caches` 的 `ui-release.aar` 里字节级搜到（`LayoutNodeSubcompositionsState`）——**查崩溃先拿证据，别猜**。门槛：`UiLayoutSafetyTest`。
+  - 写这类源码级门槛测试有三个静默失效坑：① 提取函数体要先配对跳过参数列表（`() -> Unit = {}` 的 `{}` 会被当成整个体）；② 扫描前剥注释（否则注释里提一嘴就误报）；③ Gradle 要给 Test 任务声明 `inputs.dir("src/main/java")`，否则改源码后判 UP-TO-DATE **跳过测试**。
 
 - **发版前必做结构 diff**（血的教训：v1.1.14 用"从 A 注释到 B 注释整段替换"改 ATR 行，把五键行/芯片行/音量/步进/VFO 行整段吞掉，残缺包发上了官网；`gradlew test`+`lint` 全绿也拦不住，因为 UI 结构没有测试）。做法：`git show <上一个好版本>:…/MainScreen.kt` 取参照，比对 `PadBtn("…")`/`SmallChip("…")`/`MeterCell("…")` 标签、`vm.*(` 调用、`state.*`/`prefs.*` 字段、`*Dialog`/`*Panel` 的集合——**少任何一项就不发版**。大块改动用"精确锚点 + 重插"，别用大范围区间替换。
 - **设计令牌只在两处**：`UI/Theme.kt`（`MrrcColors`，对齐 web `ft710.css :root`）与 `UI/Surfaces.kt`（`MrrcSurfaces` 三层表面 + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）。就地写死颜色会让后续美化改不动。

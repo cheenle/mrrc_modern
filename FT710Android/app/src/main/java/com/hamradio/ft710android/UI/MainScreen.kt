@@ -71,7 +71,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.defaultMinSize
@@ -136,7 +135,9 @@ fun MainScreen(
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val meterW = (maxWidth * 0.44f).coerceIn(140.dp, 240.dp)
                 val meterH = (meterW * 0.64f).coerceIn(96.dp, 168.dp)
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                // 等高靠**显式高度**（meterH 已由屏宽算出），不能用 IntrinsicSize：
+                // 子项里的 BoxWithConstraints 是 SubcomposeLayout，问它 intrinsic 会直接抛异常（启动即崩）
+                Row(Modifier.fillMaxWidth().height(meterH)) {
                     DisplayBezel(
                         modifier = Modifier.weight(1f).fillMaxHeight().clickable { showFreqInput = true },
                     ) {

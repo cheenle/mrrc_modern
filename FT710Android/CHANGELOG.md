@@ -2,6 +2,26 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.17] — 2026-10-05
+
+### 🔴 修复：v1.1.16 启动即崩溃（装上打开就退出）
+
+- **根因**：为了把主频显示屏与 S 表做成等高，顶栏写了 `Row(Modifier.height(IntrinsicSize.Min))`，而这一行里两个子项都含 `BoxWithConstraints` —— Compose 的 `SubcomposeLayout` 家族**不支持 intrinsic 测量**，布局阶段直接抛 `IllegalStateException`：
+  > Asking for intrinsic measurements of SubcomposeLayout layouts is not supported. This includes components that are built on top of SubcomposeLayout, such as lazy lists, BoxWithConstraints, TabRow, etc.
+- **证据（不是猜）**：从 `~/.gradle/caches` 的 `ui-release.aar`（compose-ui 1.7.6）拆出 class，字节级搜到上面这条原文，出处 `LayoutNodeSubcompositionsState`
+- **修法**：等高改用**显式高度** `Row(Modifier.height(meterH))`（`meterH` 本来就由屏宽算出），删除 `IntrinsicSize`；视觉效果不变（显示屏与 S 表仍等高）
+
+### 新增门槛：`UiLayoutSafetyTest`（这类崩溃以后在构建阶段就拦住）
+
+静态扫描 `src/main/java`：某个函数体里**同时**出现 `IntrinsicSize.Min/Max/Fixed` 与 SubcomposeLayout 家族（`BoxWithConstraints` / `Lazy*` / `TabRow` / `SubcomposeLayout`）即失败。已验证：把 bug 放回去 → 测试红；改回来 → 绿。
+
+顺带修掉三个会让门槛**静默失效**的坑（都是实测踩到的）：
+1. 函数体提取必须先**配对跳过参数列表** —— `onToggleFullscreen: () -> Unit = {}` 的 `{}` 会被当成整个函数体，扫描范围变成空
+2. 扫描前**剥注释**（保持字符偏移）—— 否则我自己在代码里写的"不能用 IntrinsicSize"注释会被判违规（第一版就误报了）
+3. `app/build.gradle.kts` 给 Test 任务声明 `inputs.dir("src/main/java")` —— 否则改源码后 Gradle 判 UP-TO-DATE **直接跳过测试**，门槛等于没有
+
+测试 119 项全绿。
+
 ## [1.1.16] — 2026-10-05
 
 - **状态行改成全宽单行**（真机反馈"字体小些/最好一行能装下"）：

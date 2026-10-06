@@ -323,6 +323,30 @@ class MeterAndGainTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake.writes, [b"AG0120;", b"RG0080;",
                                             b"SQ0015;", b"MG0050;"])
 
+    async def test_preamp_and_attenuator_read_back_the_step_index(self):
+        """The two settings the poll tiers and initial_state_sync both ask for.
+
+        They were referenced by `backend.settings_poll_items()` and
+        `cat_core.initial_state_sync()` without ever existing on the
+        controller, so the first successful connect raised AttributeError —
+        invisible until then because no model in this family had hardware to
+        connect to. Answers carry the step *index* (PA01 = AMP1, RA02 = the
+        third attenuator step), which is what RadioState stores.
+        """
+        ctrl, fake = _controller(["PA01;"])
+        self.assertEqual(await ctrl.get_preamp(), 1)
+        self.assertEqual(fake.writes, [b"PA0;"])
+
+        ctrl, fake = _controller(["RA02;"])
+        self.assertEqual(await ctrl.get_attenuator(), 2)
+        self.assertEqual(fake.writes, [b"RA0;"])
+
+    async def test_preamp_and_attenuator_tolerate_a_silent_radio(self):
+        for answer in ("", "PA0X;"):
+            ctrl, _fake = _controller([answer] if answer else [])
+            self.assertIsNone(await ctrl.get_preamp(), repr(answer))
+            self.assertIsNone(await ctrl.get_attenuator(), repr(answer))
+
 
 class PowerTests(unittest.IsolatedAsyncioTestCase):
     async def test_fixed_models_send_three_digit_watts(self):

@@ -503,6 +503,17 @@ class YaesuCatController:
     async def get_rf_power(self, timeout: Optional[float] = None) -> Optional[int]:
         return await self._get_int("PC", 2, timeout)
 
+    async def get_preamp(self, timeout: Optional[float] = None) -> Optional[int]:
+        """`PA0;` → the preamp step *index* (0/1/2), what `RadioState` stores.
+
+        The dB meaning of each index is the profile's ``preamp_labels``.
+        """
+        return await self._get_int("PA0", 3, timeout)
+
+    async def get_attenuator(self, timeout: Optional[float] = None) -> Optional[int]:
+        """`RA0;` → the attenuator step *index*, mapped to dB by ``att_steps``."""
+        return await self._get_int("RA0", 3, timeout)
+
     async def set_af_gain(self, value: int) -> bool:
         return await self.set(f"AG0{value:03d}")
 

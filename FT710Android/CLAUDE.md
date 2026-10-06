@@ -109,8 +109,8 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 ## 频谱/标尺不变量
 
-- **顶栏布局**：第 1 行 = `☰` + 主频（`BoxWithConstraints` 自适应字号）+ 面板样式 S 表（`SmeterArc`，宽 `SMETER_ARC_W`=116dp）；第 2 行是 `FlowRow`（窄屏折行，行高 32dp 用 `StatusItem` 包裹）。改动顶栏时别把 `⛶/⏻/VFO` 塞回第 1 行——主频会缩到 20sp 以下。
-- **面板 S 表**：弧是贝塞尔（`SMeter.arcX/arcY`），刻度/标签同 Web 的 `MARKERS/LABELS`；标签不重叠由 `SMeterTest` 的逐标签宽度断言守着（改宽度/字号要跑它）。
+- **顶栏布局（两列）**：`BoxWithConstraints` 取页面宽 → 左列（`weight(1f)`）= 主频行 + 状态行 `FlowRow`（行高 32dp 用 `StatusItem` 包裹，`☰/⛶/⏻/VFO` 都在这里，窄屏自动折行）；右列 = **S 表独立区域**，宽 = 页宽×44%（140–240dp）、高 = 宽×0.64（96–168dp）。S 表尺寸**只看屏幕**，不受主频行高限制；改动顶栏时别把按钮塞回主频行，否则主频会掉到 20sp 以下。
+- **面板 S 表**：弧是贝塞尔（`SMeter.arcX/arcY`），刻度/标签同 Web 的 `MARKERS/LABELS`；字号/线宽/COMP 条厚都由区域短边按比例算（`labelFs`/`readFs`），所以同一份代码在手机与平板都合适。标签不重叠由 `SMeterTest` 的逐标签宽度断言守着（改宽度/字号要跑它）。
 
 - **绝不用 `scope_start_freq` 当显示范围**：服务端恒 CENTER 模式（EX040200），调谐后该字段滞后。范围恒为 `VFO ± span/2`（`Data/FreqScale.kt`，对齐 web `_computeFreqRange`）。点击 QSY 同样用 VFO 居中公式（`FreqInput.qsy`），两者必须同源。
 - 标尺步进/格式随 span 自适应（`FreqScale.step/label`，对齐 web `_freqStep`/`_formatFreqLabel`）；刻度按真实频率位置绘制，不做等分摆放。

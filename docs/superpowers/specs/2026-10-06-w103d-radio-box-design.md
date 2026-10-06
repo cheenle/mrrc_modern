@@ -72,7 +72,9 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 
 ### 2.5 服务端自身负载（实测 + 交叉验证）
 
-M2 上复现稳态热路径的实测：RX(50/s 重采样+峰值+Opus 编码) 1.03% + TX(50/s 解码+重采样) 0.20% + 频谱(30/s 解析+打包) 0.40% + 状态(10/s JSON) 0.01% = **1.64% of one core**。
+用已入库的 `dev_tools/bench_mrrc.py`（走真实模块：`resample_pcm` / `RxOpusEncoder` / `TxOpusDecoder` / `parse_scope_frame` / 1701 字节打包）在 M2 上实测：RX(50/s 重采样+峰值+Opus 编码) 0.96% + spectrum(30/s 解析+打包) 0.37% + TX(50/s 解码+重采样) 0.19% + state(10/s JSON) 0.01% = **1.53% of one core**。
+
+> 这个数字由工具定义，不由文档定义：在盒子上跑同一个脚本就能得到真实值（README 的验收清单里就是这么用的）。跑法：`.venv/bin/python dev_tools/bench_mrrc.py`（或盒子上的 `/opt/mrrc_modern/venv/bin/python`）。
 
 外推（A53@1.8 ≈ 0.57× Pi 4 单核）：Pi 4 ≈ 17% → **W103D ≈ 30%**，含真实开销（ws 逐帧 send、GIL 争用、GC）**35–45% of one core**。
 

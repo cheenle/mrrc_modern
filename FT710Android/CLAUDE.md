@@ -109,6 +109,9 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 ## 频谱/标尺不变量
 
+- **顶栏布局**：第 1 行 = `☰` + 主频（`BoxWithConstraints` 自适应字号）+ 面板样式 S 表（`SmeterArc`，宽 `SMETER_ARC_W`=116dp）；第 2 行是 `FlowRow`（窄屏折行，行高 32dp 用 `StatusItem` 包裹）。改动顶栏时别把 `⛶/⏻/VFO` 塞回第 1 行——主频会缩到 20sp 以下。
+- **面板 S 表**：弧是贝塞尔（`SMeter.arcX/arcY`），刻度/标签同 Web 的 `MARKERS/LABELS`；标签不重叠由 `SMeterTest` 的逐标签宽度断言守着（改宽度/字号要跑它）。
+
 - **绝不用 `scope_start_freq` 当显示范围**：服务端恒 CENTER 模式（EX040200），调谐后该字段滞后。范围恒为 `VFO ± span/2`（`Data/FreqScale.kt`，对齐 web `_computeFreqRange`）。点击 QSY 同样用 VFO 居中公式（`FreqInput.qsy`），两者必须同源。
 - 标尺步进/格式随 span 自适应（`FreqScale.step/label`，对齐 web `_freqStep`/`_formatFreqLabel`）；刻度按真实频率位置绘制，不做等分摆放。
 

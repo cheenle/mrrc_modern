@@ -15,4 +15,23 @@ object SMeter {
 
     /** 填充比例 = raw/255（不再是 app 早期的 raw/32）。 */
     fun fraction(raw: Int): Float = raw.coerceIn(0, RAW_MAX) / RAW_MAX.toFloat()
+
+    // ── 面板弧形 S 表的几何（FT-710 面板是弧，不是直条）────────────
+    /** 弧的贝塞尔参数：P0=(0,base) P1=(w/2,ctrl) P2=(w,base)。 */
+    fun arcX(t: Float, w: Float): Float {
+        val mt = 1f - t
+        return 2f * mt * t * (w / 2f) + t * t * w
+    }
+
+    fun arcY(t: Float, baseY: Float, ctrlY: Float): Float {
+        val mt = 1f - t
+        return mt * mt * baseY + 2f * mt * t * ctrlY + t * t * baseY
+    }
+
+    /** 8 个标签的锚点比例（偶数刻度：S1/S3/…/+60），与 Web 的 marks/labels 对应。 */
+    fun labelTValues(): List<Float> =
+        MARKERS.indices.filter { it % 2 == 0 }.map { MARKERS[it] / RAW_MAX.toFloat() }
+
+    /** 8 个标签的水平中心位置。 */
+    fun labelXPositions(w: Float): List<Float> = labelTValues().map { arcX(it, w) }
 }

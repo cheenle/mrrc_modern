@@ -78,7 +78,7 @@
     },
     {
       "id": "cat-sh-format",
-      "title": "SH set format is SH00NN",
+      "title": "SH set prefix is profile-driven (SH00NN family, SH01NN for the FT-891)",
       "severity": "block",
       "sdd_ref": "§10.4; commit a07bb49; V1.7 read-back",
       "scope": [
@@ -99,7 +99,7 @@
         "[\"']SH0\\{",
         "[\"']SH0[\"']\\s*\\+"
       ],
-      "message": "Filter width SET is SH00NN (SH + P1=0 + P2=0 + 2-digit index), e.g. f\"SH00{idx:02d}\". The SH0NN form is silently ignored by the radio. Set handlers must also read SH0 back (~150 ms) and broadcast the actual index."
+      "message": "Filter-width SET is profile-driven: YaesuModelProfile.filter_width_prefix holds \"SH\" + P1 (0 = main VFO) + P2 (bandwidth on), so the emitted form is <prefix>NN. It is \"SH00\" for the FT-710 (hardware-verified) and for ftdx10/ftdx101d/ftdx101mp/ftx1, and \"SH01\" for the FT-891 (Hamlib 4.7.2 newcat.c:9658-9663, `int on = is_ft891`). What this rule blocks is the 3-character \"SH0NN\" form — a missing P1/P2 digit, which the radio silently ignores — and a set handler that does not read \"SH0\" back (~150 ms) and broadcast the radio's actual index."
     },
     {
       "id": "cat-direct-serial-io",

@@ -4,7 +4,7 @@ import unittest
 from backends import create_backend, known_models
 from config import default_baud_for
 
-YAESU_KEYS = ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1")
+YAESU_KEYS = ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891")
 
 
 class RegistryTests(unittest.TestCase):

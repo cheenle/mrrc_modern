@@ -116,3 +116,26 @@ class ExclusionParityTests(unittest.TestCase):
         box = self._excludes(REPO / "packaging" / "box" / "box-overlay.sh")
         self.assertTrue(pi, "the Pi builder's list came back empty — parser drift?")
         self.assertEqual(box, pi)
+
+
+class VendoredFtdiTests(unittest.TestCase):
+    """The FT-710's scope libraries ship in the repo, and stay aarch64.
+
+    The architecture assertion is the point: fetching the wrong build-*
+    directory produces a file that exists, is named correctly, passes every
+    other check in this plan, and fails only on the box.
+    """
+
+    FTDI = REPO / "vendor" / "ftdi"
+
+    def test_the_real_library_is_an_aarch64_elf(self):
+        header = (self.FTDI / "libft4222.so").read_bytes()[:20]
+        self.assertEqual(header[:4], b"\x7fELF")
+        self.assertEqual(header[4], 2, "not a 64-bit ELF")
+        e_machine = int.from_bytes(header[18:20], "little")
+        self.assertEqual(e_machine, 183, "not AArch64 (183); x86-64 is 62")
+
+    def test_the_second_name_points_at_the_first(self):
+        second = self.FTDI / "libftd2xx.so"
+        self.assertTrue(second.is_symlink(), "must be a symlink, see vendor-ftdi.md")
+        self.assertEqual(second.resolve(), (self.FTDI / "libft4222.so").resolve())

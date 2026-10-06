@@ -1,0 +1,301 @@
+# W103D 通用电台服务端镜像（含 Cloud Hub 公网接入）设计
+
+> 状态：待实施
+> 日期：2026-10-06
+> 目标平台：ZTE 云电脑 W103D（Amlogic S905L3A / G12A）
+> 上游：`ophub/amlogic-s9xxx-armbian`（型号库条目 ID 307 `ZTE-W103D`）
+
+## 1. 目标与边界
+
+**目标**：把一台 W103D 做成**通用电台服务端**——11 个已注册电台型号可一键切换，经现有 Cloud Hub 暴露到公网且允许发射。
+
+**边界（刻意不做）**：
+
+- 不发明新协议、不改服务端行为、不动 CAT/音频/PTT 代码路径。本设计只做**部署层**。
+- **不自建 Armbian 镜像**。W103D 的板级补丁（SDIO→SD_EMMC_B 路由、MT7663S 传输层、固件 overlay）活在 ophub/unifreq 的内核树里；自建等于长期跟进那套补丁栈，收益不抵维护成本。依赖 ophub 是**刻意的取舍**，缓解手段是钉 SHA-256 + 只从官方 release 取。
+- 不实现 `upgrade_core.py` 的 slice 2（自动升级）。更新走最小 `mrrc-update`。
+- 不移植预建 venv。镜像自带 Python 3.11，`install.sh` 在 chroot 内自建即可。
+
+## 2. 基线事实（全部实测，非估算）
+
+### 2.1 目标镜像
+
+```
+Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
+  大小      852,336,261 B（812.9 MiB），解压后 3.4 GB
+  SHA-256   998d5244ac2274077c091050b9db620c22a8412989766fbd728b045a0fed1ae9  ✅ 已下载校验通过
+  Release   Armbian_bookworm_arm64_server_2026.10
+```
+
+文件名里四个标记都不可替换：`amlogic`（平台）、`s905l3a-w103d`（**专属板级配置**，换通用 `s905l3a` 会丢 WiFi/BT）、`bookworm`（**Python 3.11**）、`6.18.54`（MT7663S 补丁 + 原厂 N9 固件所在系列）。
+
+### 2.2 镜像内部分区与容量（实测）
+
+| 项 | 值 |
+| --- | --- |
+| 分区表 | **MBR**（`FDisk_partition_scheme`，非 GPT） |
+| p1 | FAT32，511 MiB，偏移 4,194,304，卷标 `BOOT` |
+| p2 | ext4，3000 MiB，偏移 541,065,216，卷标 `ROOTFS` |
+| rootfs 总量 / 已用 / **可用** | 3000.0 / 2036.3 / **963.7 MiB（32.1%）** |
+| inode | 58,656 / 192,000 |
+| 构建者挂载点 | `/builder/build/t`（ophub 构建主机） |
+
+### 2.3 镜像内已有的运行时（实测，决定还要装什么）
+
+| 组件 | 状态 | 结论 |
+| --- | --- | --- |
+| Python | **3.11** | 对齐 Pi 镜像，无需换发行版 |
+| systemd | 已装 | 用 systemd 管理服务 |
+| libasound.so.2 | 已装 | 无需额外装 ALSA |
+| **libportaudio** | **已装** | **无需 apt install portaudio19-dev**（仅打包 venv 时需头文件） |
+| libopus.so | **未见** | **需装 `libopus0`** |
+| NetworkManager / nmcli / wpa_supplicant | 已装 | 有线+无线配网可用 |
+| **mt7663 驱动** | **已装** | WiFi 支持的镜像内直接证据 |
+
+### 2.4 增量占用估算（对照 963.7 MiB 可用）
+
+| 项 | 大小 | 依据 |
+| --- | --- | --- |
+| 代码本体 | **175.4 MiB** | 用 `build-image.sh:38-45` 的权威排除清单实测（533 文件） |
+| venv | ≈ 90–120 MiB | 本机 venv 87 MiB（numpy 33M / cryptography 13M / pip 12M…）+ pyaudio/lameenc |
+| frpc | ≈ 10 MiB | frp 0.71.0 linux-arm64 |
+| apt 增量（libopus0 等） | ≈ 10–20 MiB | |
+| FTDI 库（可选） | ≈ 1 MiB | libft4222.so + libftd2xx.so |
+| **合计** | **≈ 290–330 MiB** | |
+
+**结论：装入后仍余 ≈ 630–670 MiB。不需要 growpart，不需要扩容镜像。**（首启后 eMMC 会自动扩到 32 GB，运行期空间另有约 29 GB。）
+
+### 2.5 服务端自身负载（实测 + 交叉验证）
+
+M2 上复现稳态热路径的实测：RX(50/s 重采样+峰值+Opus 编码) 1.03% + TX(50/s 解码+重采样) 0.20% + 频谱(30/s 解析+打包) 0.40% + 状态(10/s JSON) 0.01% = **1.64% of one core**。
+
+外推（A53@1.8 ≈ 0.57× Pi 4 单核）：Pi 4 ≈ 17% → **W103D ≈ 30%**，含真实开销（ws 逐帧 send、GIL 争用、GC）**35–45% of one core**。
+
+**交叉验证**：项目自身性能指南的 SLO 是「CPU 使用率 ~15%」，与实测外推的 17% 吻合（两个独立来源）。CPU 不是瓶颈。
+
+### 2.6 11 个已注册电台型号（`known_models()` 实测）
+
+`ft710` `ic7300` `ic7300mk2` `ic705` `ic7610` `ic7760` `ftdx10` `ftdx101d` `ftdx101mp` `ftx1` `ft891`
+
+其中 `ic705` `ic7610` `ic7760` `ftdx10` `ftdx101d` `ftdx101mp` `ftx1` `ft891` 共 **8 个是未验证型号**（`verified=false`，受 AD-019 / NFR-067 管辖）。
+
+## 3. 架构：两段式
+
+构建期把一切不需要硬件的东西烘焙进镜像；首启只做必须碰硬件的探测。
+
+```text
+【构建期】macOS（Apple M2 / arm64 → 原生 aarch64，无需 qemu）+ Docker --privileged
+  ① 下载 ophub 镜像 → 校验 SHA-256（998d5244…）
+  ② 解压 → losetup 挂载 MBR 分区（p1 BOOT / p2 ROOTFS）
+  ③ 测量并断言 rootfs 可用空间 ≥ 阈值（实测 963.7 MiB；不满足则中止并报原因）
+  ④ chroot 进 p2 铺 overlay
+  ⑤ 卸载 → 重新压缩 → 出 SHA-256
+  ⑥ 产物：MRRC-Modern-<ver>-w103d.img.gz
+
+【运行期】W103D 真机
+  首启：mrrc-firstboot → 探测串口/声卡 → 生成口令 + 自签 HTTPS 证书 → 启服务
+  然后：手机浏览器 https://<盒子IP>:8888 → 设置页 Cloud Hub apply/connect
+```
+
+### 3.1 构建期能做 / 不能做（chroot 内无硬件）
+
+| 构建期写入镜像 | 必须留到首启 |
+| --- | --- |
+| `mrrc` 用户 + `dialout,audio` 组 | 串口探测（`/dev/ttyUSB*` / `ttyACM*`） |
+| `/opt/mrrc_modern`（代码 + venv + apt/pip 依赖） | ALSA 声卡探测（电台 USB 声卡） |
+| `fleet/frpc`（v0.71.0 linux-arm64） | 生成 Web 口令 |
+| `mrrc-radio` → `/usr/local/bin` | 自签 HTTPS 证书（SAN 必须含盒子实际 IP） |
+| `mrrc-modern.service` + `mrrc-firstboot.service`（enable） | 电台型号探测 |
+| `packaging/box/profiles/*.env`（无串口、无声卡名） | |
+| `mrrc.env` 默认值：`MRRC_WEB_HOST=0.0.0.0`、`MRRC_WEB_PORT=8888`、`MRRC_PTT_MAX_TX_SECONDS=120` | |
+| **不预置** FTDI aarch64 库（见 D-9） | |
+
+## 4. 组件清单
+
+| # | 路径 | 职责 |
+| --- | --- | --- |
+| 1 | `packaging/box/build-image.sh` | 构建期总入口：下载 → 校验 → 挂载 → chroot overlay → 卸载 → 压缩 → 出 SHA |
+| 2 | `packaging/box/box-overlay.sh` | **在 chroot 内执行**的 overlay 脚本（用户/组、代码、venv、frpc、mrrc-radio、systemd、motd） |
+| 3 | `packaging/box/fetch-frpc.sh` | 取 frpc v0.71.0 linux-arm64 + 官方 checksums 校验 |
+| 4 | `packaging/box/profiles/<model>.env` | 11 份 profile |
+| 5 | `packaging/box/verify.sh` | 真机验收（10 项） |
+| 6 | `packaging/box/README.md` | 一页操作单（刷写 → 首启 → Cloud Hub → 排障） |
+| 7 | `linux/mrrc_radio.py` | `list` / `show` / `use <model> [--port <dev>]` |
+| 8 | `linux/mrrc_update.sh` | 最小更新路径（拉代码 → pip → 重启） |
+| 9 | `dev_tools/bench_mrrc.py` | 服务端热路径基准（终审 CPU 假设） |
+| 10 | `tests/test_box_profiles.py`、`tests/test_mrrc_radio.py` | 无硬件单测 |
+| 11 | `docs/w103d_pack.md` | 镜像构建手册（对标 `mac_pack.md` / `win_pack.md`） |
+| 12 | 文档同步 | `SDD/12`（新增 §12.10）、`SDD/14` 版本行、`SDD/README` Quick Facts、`AGENTS.md` 模块表、`README.md`、`tests/README.md` 计数 |
+
+**为什么放 `packaging/box/`**：与 `packaging/rpi/` 平行（rpi 造 Pi 镜像，box 在 ophub 镜像上二次构建）。根目录的 `deploy_*.sh` 是"部署到站点/Hub"，语义不同。
+
+**复用而非重写**：
+
+- `install.sh` 仍在 chroot 里被调用（`--yes`），负责依赖、Python 包、配置生成（DRY，不重写它的 10 步）
+- 源码同步**照抄** `build-image.sh:38-45` 的排除清单
+- 首启探测**复用** `linux/first_run.py` 的 `detect_serial_ports()` / `probe_radio_model()` / `update_env_file()`
+
+## 5. 数据流
+
+```text
+构建期:
+  ophub .img.gz ──校验──> .img ──losetup──> p2/rootfs
+    ├── rsync 代码（权威排除清单） ──> /opt/mrrc_modern
+    ├── install.sh --yes（chroot 内） ──> venv + 依赖 + 配置模板
+    ├── fetch-frpc.sh ──> /opt/mrrc_modern/fleet/frpc
+    ├── profiles/*.env ──> /opt/mrrc_modern/profiles/
+    ├── mrrc_radio.py ──> /opt/mrrc_modern/linux/ + /usr/local/bin/mrrc-radio
+    └── systemd units（enable mrrc-firstboot）
+
+运行期:
+  mrrc-firstboot ──> /opt/mrrc_modern/env/mrrc.env（口令 + 串口 + 声卡 + 证书路径）
+                  └─> systemctl start mrrc-modern
+
+  电台切换:
+  profiles/<model>.env ──mrrc-radio use──> env/mrrc.env ──systemd restart──> server.py
+
+  公网:
+  设置页 ──POST /api/cloud/apply──> portal ──(批准)──> /api/cloud/state → connect()
+    ├── ssl_bootstrap.sign_for("<呼号>.mrrc.vlsc.net") ──> certs/
+    ├── POST /enroll（上交公钥半）
+    ├── 写 <user_dir>/fleet/frpc-<label>.toml（ASCII 无 BOM）
+    ├── 写 env: MRRC_SSL_CERT / MRRC_SSL_KEY / MRRC_WEB_PORT / MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5
+    └── 启 frpc 子进程（fleet_dir/frpc）
+```
+
+## 6. 关键设计决策
+
+### D-1：`mrrc-radio` 不做串口 I/O（约束 `cat-direct-serial-io` [block]）
+
+`brief` 对 `linux/mrrc_radio.py` 报了 block 级约束：**所有电台串口 I/O 必须经 CatController/CivController**（AD-002）。
+
+因此 `mrrc-radio` 自身**不打开任何串口**：
+
+- 给了 `--port` → 直接写配置，零探测
+- 未给 `--port` → **调用 `linux/first_run.py` 既有函数**（既有代码，不新增裸串口访问）
+
+### D-2：profile 只写差异，不重复默认值
+
+三条刻意的"不写"：
+
+1. **不写 baud** —— `config._DEFAULT_BAUD_BY_MODEL` 已按注册表驱动（FT-710 与 Yaesu 系 38400；Icom 系 115200）
+2. **不写串口** —— 由探测或操作者提供
+3. **不写音频设备名** —— `audio_handler` 已有名字正则 + 半双工启发式自动探测
+
+profile 语法（示例）：
+
+```ini
+# ft710.env —— 唯一需要 FTDI 库的型号
+MRRC_RADIO_MODEL=ft710
+MRRC_FTDI_LIB_DIR=/opt/mrrc_modern/vendor/ftdi
+
+# ic7300.env
+MRRC_RADIO_MODEL=ic7300
+IC7300_CIV_ADDR=0x94
+
+# ftdx10.env —— 未验证型号，TX 门禁显式关闭
+MRRC_RADIO_MODEL=ftdx10
+MRRC_ALLOW_UNVERIFIED_TX=0
+```
+
+### D-3：未验证型号的 TX 门禁（AD-019 / NFR-067）
+
+- 8 个未验证型号的 profile **必须显式写 `MRRC_ALLOW_UNVERIFIED_TX=0`**
+- **任何 profile 都不得出现 `=1`**（由单测强制）
+- `mrrc-radio use` 对未验证型号**打印警告但不自动开启**门禁
+- 文档/UI 不得把这些型号呈现为已验证
+
+### D-4：PTT 双防线（SDD §12.9）
+
+`connect()` 自动写 `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5`（防线①）。防线② `MRRC_PTT_MAX_TX_SECONDS` 默认 `0.0` = 关闭，**必须显式打开**。构建期写入 `MRRC_PTT_MAX_TX_SECONDS=120`（仅当键不存在时）。
+
+### D-5：frpc 必须来自 ophub 内核 + 版本钉死
+
+- **版本钉死 `0.71.0`**：客户端比服务端新可能握手失败
+- 取法：frp 官方 release `frp_0.71.0_linux_arm64.tar.gz`，对照官方 `frp_sha256_checksums.txt` 校验（不硬编码哈希，避免与我们无法控制的上游漂移）
+- 取法与校验都是**确定性**的：URL 里含版本号，checksums 文件同样按版本钉 URL，因此结果可复现
+- 落点：`fleet_dir`（`server.py:_cloud_fleet_dir()` 依次找 `<runtime_dir>/fleet`、`<resource_dir>/payload`、`<resource_dir>/fleet`）
+- **缺失的后果是最隐蔽的坑**：`connect()` 返回 `tunnel_started: false` —— **UI 显示"已连接"，但公网入口 502**
+
+### D-6：内核变体保护
+
+W103D 的 WiFi 完全依赖专属内核补丁 + 固件 overlay（PR #3658/#3659）。模型库把其内核 tag 锁在 `stable/6.18.y`。
+
+**规则**：升级走 ophub 自己的 `armbian-update`（按 BOARD 选对内核）；**禁止**在 chroot 内 `apt upgrade` 内核，**禁止**手工替换成通用内核——换了会静默丢 WiFi。
+
+### D-7：更新路径（最小实现，YAGNI）
+
+镜像刷一次，但 MRRC 会升级。`upgrade_core.py` 只有 slice 1（只读检查），自动升级 slice 2 未开工。
+
+`linux/mrrc_update.sh` 只做三件事：拉代码（`git pull` 或 `rsync` 指定源）→ `pip install -r requirements.txt` → `systemctl restart mrrc-modern`。**不做自动回滚**。
+
+### D-8：不预置串口/口令
+
+盲猜串口会在首启产生一个"看起来能用但连不上电台"的配置。首启探测是唯一可靠来源。
+
+### D-9：FTDI 库不自动下载，由操作者手动放入
+
+FT-710 的真 FFT 需要 `libft4222.so` + `libftd2xx.so`（aarch64）。FTDI 官网的下载带跳转/许可交互，自动化脆弱且依赖我们无法控制的上游。
+
+**决定**：构建期**不**尝试自动获取；`packaging/box/README.md` 给出"从 FTDI 官网下 ARM64 包 → 解出两个 `.so` → 放入 `<runtime_dir>/vendor/ftdi/` → 重启服务"的人工步骤。
+
+**代价已知且可接受**：没有这两个库时 FT-710 回落 S 表合成频谱，其余功能（CAT/音频/PTT）不受影响——这与 `DEPENDENCIES.md` 记录的既有行为一致。
+
+> 注意：这条**只影响 FT-710**。其余 10 个型号不需要 FTDI，与 D-2 的"profile 只写差异"一致。
+
+## 7. 错误处理
+
+| 位置 | 策略 |
+| --- | --- |
+| `build-image.sh` | 每步 fail-fast，打印原因 + 修复命令，非 0 退出；**绝不"部分成功"后静默继续** |
+| rootfs 空间断言 | 铺 overlay 前断言可用空间 ≥ 400 MiB；不足则中止并给出"精简内容或扩容"两条建议 |
+| `box-overlay.sh` | chroot 内任一步失败立即退出（`set -e`），并打印是哪一步 |
+| `fetch-frpc.sh` | 校验和不符 → **拒绝使用并退出**（与 hub 侧 `install_instance_tunnel.sh` 同策略） |
+| `mrrc-radio` | 非法型号用 `known_models()` 校验后拒绝；profile 缺失报错；写 env 前备份 `.env.bak`，restart 失败时打印恢复命令 |
+| `verify.sh` | 每项独立判定、失败给排查命令，最后统一汇总（一项失败不中断其余） |
+| Cloud Hub | `tunnel_started: false` → `verify.sh` 必须报 **FAIL**（唯一能自动发现 frpc 缺失的地方） |
+
+## 8. 测试（无硬件）
+
+| 文件 | 断言 |
+| --- | --- |
+| `tests/test_box_profiles.py` | ① profile 的 `MRRC_RADIO_MODEL` 取值集合与 `known_models()` **完全相等**（多一个少一个都 FAIL）② 每份只含白名单键 ③ **任何 profile 不得出现 `MRRC_ALLOW_UNVERIFIED_TX=1`** ④ 8 个未验证型号必须显式写 `=0` ⑤ `packaging/box/box-overlay.sh` 里的 rsync 排除清单与 `packaging/rpi/build-image.sh:38-45` **逐字一致**（防止两处漂移） |
+| `tests/test_mrrc_radio.py` | 注入临时 env 文件 + fake `systemctl`：`list` 标注验证状态、`show` 只读、`use` 切换后键正确、备份存在、未验证型号不被放行、失败不破坏原 env |
+| 门禁 | `python -m unittest discover -s tests`（1369 基线不回归）+ `sdd_context.py check --staged` clean |
+
+## 9. 验收（真机 10 项）
+
+```text
+【能跑】
+ 1. ip a                             有线网口 up 且有 IP
+ 2. ls /dev/ttyUSB* /dev/ttyACM*     串口枚举（FT-710: 2×CP210x；IC-7300: ttyACM0）
+ 3. arecord -l; aplay -l             电台 USB 声卡成 ALSA card
+ 4. python3 --version                3.11
+ 5. systemctl status mrrc-modern     active (running)，日志无报错
+ 6. https://<盒子IP>:8888             能登录、状态正常、频谱在动
+【多电台】
+ 7. mrrc-radio list / use             至少 FT-710 + IC-7300 两型号切换后各自连通
+ 8. FT-710 真 FFT                     放了 FTDI 库后瀑布为真 FFT；未放则回落 S 表
+【公网】
+ 9. https://<呼号>.mrrc.vlsc.net/     公网可打开、可听、可发；tunnel_started=true
+10. 断线释放                          关闭浏览器 → PTT 在心跳超时后释放
+【性能】dev_tools/bench_mrrc.py        输出真实 % of one core
+```
+
+## 10. 风险与缓解
+
+| # | 风险 | 缓解 |
+| --- | --- | --- |
+| R1 | **Linux 上 stale frpc 无自动清理**——`_enumerate_frpc`/`_kill_stale_frpc` 是 Windows-only（PowerShell + `taskkill`）。代码注释写明后果：下次启动无法注册同名 proxy，隧道保持 down 而 UI 无提示 | **必须用 systemd 管**（默认 `KillMode=control-group`，停/重启单元时清掉整个 cgroup，连带 frpc）。runbook 明写"只用 `systemctl` 停服务，别 `kill` 进程" |
+| R2 | 这是**第一个跑 Cloud Hub 的 Linux 实例**（Pi 镜像完全不处理 Cloud Hub，`grep` 为空），Linux 路径未被验证 | 计划含"验证 Linux 路径"任务；`verify.sh` 第 9 项覆盖 |
+| R3 | 镜像二次构建破坏引导链或首启自动扩容 | 只改 p2 内容，绝不写 p1 或镜像前 4 MiB；不预先扩容；构建后校验 MBR + 分区表未变 |
+| R4 | rootfs 空间不足（已实测 963.7 MiB 可用 vs 约需 330 MiB） | R4 已降级为低风险；仍保留构建期断言（§7） |
+| R5 | Cloud Hub 登录限流退化（SDD §12.9）：经隧道时所有登录共享一个来源 IP，`5 次失败/300 秒`是**全局桶**，误锁影响**全部用户** | 写进 runbook 的运维警告；口令从一开始就用强口令降低触发概率 |
+| R6 | 依赖第三方预构建镜像（供应链） | 钉 SHA-256 + 只从官方 release 取 + 记录"这是唯一让 WiFi 工作的上游" |
+
+## 11. 不在范围内
+
+- `upgrade_core.py` slice 2（自动升级、自证、回滚）
+- 多实例/多盒子编排
+- 未验证型号的硬件验证（8 个型号的 `verified` 翻转需真机证据，属独立工作）
+- 发布注册表（`release-artifacts.json`）与网站下载卡：等到真要发布 `MRRC-Modern-<ver>-w103d.img.gz` 时按 `dual-platform-release` 技能处理

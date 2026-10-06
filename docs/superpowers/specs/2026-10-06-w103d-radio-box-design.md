@@ -205,18 +205,19 @@ M2 上复现稳态热路径的实测：RX(50/s 重采样+峰值+Opus 编码) 1.0
 profile 语法（示例）：
 
 ```ini
-# ft710.env —— 唯一需要 FTDI 库的型号
+# ft710.env —— 唯一需要 FTDI 库的型号，而库在默认搜索路径里（见 D-9），
+# 所以它和其余型号一样只写型号本身。
 MRRC_RADIO_MODEL=ft710
-MRRC_FTDI_LIB_DIR=/opt/mrrc_modern/vendor/ftdi
 
 # ic7300.env
 MRRC_RADIO_MODEL=ic7300
-IC7300_CIV_ADDR=0x94
 
 # ftdx10.env —— 未验证型号，TX 门禁显式关闭
 MRRC_RADIO_MODEL=ftdx10
 MRRC_ALLOW_UNVERIFIED_TX=0
 ```
+
+> `IC7300_CIV_ADDR` / `IC7300MK2_CIV_ADDR` 也**不写**：它们的默认值 (0x94 / 0xB6) 就是对的值，只有操作者改过电台地址时才需要覆盖。
 
 ### D-3：未验证型号的 TX 门禁（AD-019 / NFR-067）
 
@@ -268,10 +269,12 @@ FT-710 的真 FFT 需要 FTDI 库。代码要求 `find_ftdi_libraries()` 返回*
 
 | | 做法 | 评价 |
 | --- | --- | --- |
-| A | `vendor/ftdi/linux-arm64/` 放真身 `libft4222.so`，再建 `libftd2xx.so` 符号链接指向它 | 走目录扫描分支，零 env；但需要一个符号链接技巧 |
-| **B（采用）** | 同一文件，ft710 profile 里 `MRRC_FT4222_LIB` 与 `MRRC_FTD2XX_LIB` **都指向它** | 走代码的**显式路径分支**（`find_ftdi_libraries()` docstring 记录的第一优先级），最确定，无需符号链接 |
+| **A（采用）** | `vendor/ftdi/` 下放真身 `libft4222.so` + 符号链接 `libftd2xx.so` → 同一 ELF | **零 env**：命中 `get_candidate_library_dirs()` 的默认目（4）；profile 因此只需写型号（与 D-2 一致） |
+| B（备选） | 同一文件，用 `MRRC_FT4222_LIB` 与 `MRRC_FTD2XX_LIB` 两个显式变量指向它 | 走第一优先级分支，更确定；但把部署细节写进了 profile，且手动 `python server.py` 时会丢 |
 
-**决定**：构建期把本机已有的 aarch64 构建预置进镜像（来源：FTDI `libft4222-linux-1.4.4.232` 的 `build-arm-v8/`；ELF 已确认 `e_machine=183` = AArch64）。**无人工步骤，开箱真 FFT。**
+**决定（A）**：构建期把本机已有的 aarch64 构建预置进镜像的 `vendor/ftdi/`（来源：FTDI `libft4222-linux-1.4.4.232` 的 `build-arm-v8/`；ELF 已确认 `e_machine=183` = AArch64），并建一个同名指向的 `libftd2xx.so` 符号链接以满足代码的"成对"要求。**无人工步骤，开箱真 FFT。**
+
+操作者若把库搬到别处，仍然可以用既有的 `MRRC_FTDI_LIB_DIR` 这个口（B 的记录保留在此）。
 
 **与既有先例一致**：`vendor/ftdi/macos/` 与 `vendor/ftdi/windows/` 已在库内。
 
@@ -294,6 +297,29 @@ SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="601c", MODE="0666"
 **chroot 内的两个已知行为**（不阻塞，但要知道）：`sudo` 镜像里已装（§2.3），所以 `sudo tee` 可用；`udevadm control/trigger` 在 chroot 里无效，但脚本用 `2>/dev/null || true` 兜住，规则文件照样落进镜像、在真机首次插拔时生效。
 
 **一个既有局限（记录，不改）**：FT-710 的两个 CP210x **同 VID:PID**，所以 `SYMLINK+="ft710-cat"` 由枚举顺序决定归属，有歧义。这不是本设计的缺陷，也不影响正确性——`linux/first_run.py` 的 `probe_radio_model()` 才是 CAT 口的权威判据（发包探测），`mrrc-radio` 复用它（D-1）。
+
+### D-11：`MRRC_CONFIG_FILE` 必须与 systemd 的 `EnvironmentFile` 指向**同一个文件**
+
+这是本次研究里最隐蔽的一个陷阱，**不处理会让里程碑 3 静默失败**。
+
+**事实（实测）**：
+
+- Pi 镜像的单元读 `EnvironmentFile=/opt/mrrc_modern/env/mrrc.env`
+- 但 `cloud_hub.connect()` 写的是 `server.py:_config_file_path()`——它先看 `MRRC_CONFIG_FILE` 环境变量，没设就回退到 `MEM_FILE.parent / "mrrc_modern.env"`
+- `packaging/` 里**没有任何地方设 `MRRC_CONFIG_FILE`**
+
+**后果**：在镜像（WorkingDirectory=`/opt/mrrc_modern`、未设 `MRRC_MEM_FILE`）上，`_config_file_path()` 会解成 `/opt/mrrc_modern/mrrc_modern.env`，而 systemd 读的是 `/opt/mrrc_modern/env/mrrc.env`。`connect()` 写下的 `MRRC_SSL_CERT` / `MRRC_SSL_KEY` / `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` **服务端永远读不到**——公网入口证书校验失败、PTT 活性闸门不生效，而 UI 上显示"已连接"。
+
+这也解释了为什么 Cloud Hub 至今只在 Windows/macOS 实例上跑：那两边的启动器会自己设 `MRRC_CONFIG_FILE`。
+
+**决定**：box 镜像的 systemd 单元同时钉死两者——
+
+```ini
+EnvironmentFile=/opt/mrrc_modern/env/mrrc.env
+Environment=MRRC_CONFIG_FILE=/opt/mrrc_modern/env/mrrc.env
+```
+
+并在 `verify.sh` 里加一项断言（两个值相等），让它以后不能静默漂走。
 
 ## 7. 错误处理
 

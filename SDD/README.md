@@ -47,7 +47,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.72 |
+| SDD Version | V2.73 |
 | Baseline Date | 2026-10-05 |
 | Status | **v1.25.3 built and verified on both platforms** (Windows Setup **54,342,929 bytes**, SHA-256 `1413521c…`; macOS DMG **62,430,310 bytes**, SHA-256 `87890593…`; both accepted by clean-room runs of the packaged binaries — the clean room is what proves the shipped CA bundle makes outbound HTTPS verify inside the frozen app, and on Windows this round also ran the **real `Setup.exe`** silently into an isolated `/DIR=`; **v1.25.3 carries the V2.70 fix**, so the liveness gate can no longer release an operator's own fresh press) —— **该构建不含 V2.71 的修复**（TX 上行所有权按 token 认领，而一个 30 天 Cookie 令牌名下可以有多条 `/WSaudioTX`：按键认领可能落到页面重载留下的半开旧 socket 上，于是活页面的每一帧麦克风音频都被当作非 owner 丢弃 —— 电台键控、调制为零，直到旧 socket 被回收才自愈）；`server.py` 是冻结入口脚本、不在热修通道覆盖范围，**它只到源码，下一个版本号重建才到达用户** |
 | Project | MRRC Modern / `mrrc_modern` |

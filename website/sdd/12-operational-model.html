@@ -699,13 +699,126 @@ Icom IC-7300 / IC-7300MK2
 </tbody>
 </table>
 <p>Hub 端对应事实见 <code class="scope-code">../../mrrc_hub/SDD/12-operational-model.md</code> §12.8。</p>
+<h2 id="w103d-镜像amlogic-盒子">12.10 W103D 镜像（Amlogic 盒子）</h2>
+<p>把一个 <strong>ZTE 云电脑 W103D</strong>（Amlogic S905L3A / G12A，4×Cortex-A53@1.8，2GB/32GB，100M 网口，MT7663 WiFi+BT） 变成通用电台服务端。设计与构建手册： <code class="scope-code">docs/superpowers/specs/2026-10-06-w103d-radio-box-design.md</code>、<code class="scope-code">docs/w103d_pack.md</code>； 操作单：<code class="scope-code">packaging/box/README.md</code>。</p>
+<h3 id="两段式部署">12.10.1 两段式部署</h3>
+<p><strong>构建期</strong>（macOS + Docker <code class="scope-code">--privileged</code>，Apple Silicon 原生 arm64，<strong>不需要 qemu</strong>）loop 挂载 ophub 的 Armbian 镜像并 chroot 铺 overlay；<strong>运行期</strong>首启只做必须碰硬件的探测。</p>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>阶段</th>
+<th>做的事</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>构建期</td>
+<td><code class="scope-code">mrrc</code> 用户 + <code class="scope-code">dialout,audio</code> 组；<code class="scope-code">/opt/mrrc_modern</code>（代码 + <code class="scope-code">install.sh</code> 建的 venv）；预置 aarch64 FTDI 库；frpc；11 份 profile；两个 systemd 单元</td>
+</tr>
+<tr>
+<td>首启</td>
+<td><code class="scope-code">mrrc-firstboot</code> → 探测串口与声卡 → 生成 web 口令 → 自签 HTTPS 证书 → 启服务</td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么不把串口/口令也烤进去</strong>：盲猜会产出一个「看起来能用但连不上电台」的配置，而这类错误在现场表现为”服务在跑、就是不通”。</p>
+<h3 id="运行形态">12.10.2 运行形态</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>安装位置</td>
+<td><code class="scope-code">/opt/mrrc_modern</code>（不是仓库目录）</td>
+</tr>
+<tr>
+<td>服务用户</td>
+<td><code class="scope-code">User=mrrc</code> / <code class="scope-code">Group=mrrc</code>，属于 <code class="scope-code">dialout</code>（串口）与 <code class="scope-code">audio</code>（USB 声卡）</td>
+</tr>
+<tr>
+<td><strong>两个 env 路径必须同一文件</strong></td>
+<td><code class="scope-code">EnvironmentFile=/opt/mrrc_modern/env/mrrc.env</code> <strong>且</strong> <code class="scope-code">Environment=MRRC_CONFIG_FILE=/opt/mrrc_modern/env/mrrc.env</code></td>
+</tr>
+<tr>
+<td>内核</td>
+<td><strong>只走 <code class="scope-code">armbian-update</code>，保持 w103d 变体</strong>（MT7663S 依赖专属补丁 + 固件 overlay）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么两个 env 路径必须钉成同一个</strong>：<code class="scope-code">cloud_hub.connect()</code> 把证书路径与 <code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code> 写进 <code class="scope-code">server.py:_config_file_path()</code>， 该函数优先读 <code class="scope-code">MRRC_CONFIG_FILE</code>、否则回退到 <code class="scope-code">MEM_FILE.parent/mrrc_modern.env</code>；而 systemd 读的是 <code class="scope-code">EnvironmentFile</code>。 两者分裂时症状是<strong>静默的</strong>：设置页显示「已连接」，而上游 TLS 校验失败、PTT 活性闸门从未生效。 这也解释了 Cloud Hub 为何至今只在 Windows/macOS 实例上跑过——那两边的启动器会自己设 <code class="scope-code">MRRC_CONFIG_FILE</code>。 <code class="scope-code">packaging/box/verify.sh</code> 第 7 项把这个相等关系做成断言，防止它再次漂移。</p>
+<h3 id="电台切换">12.10.3 电台切换</h3>
+<p><code class="scope-code">mrrc-radio list | show | use &lt;model&gt; [--port DEV]</code>，型号集合由 <code class="scope-code">backends.known_models()</code> 校验， 每型号一份 <code class="scope-code">packaging/box/profiles/&lt;model&gt;.env</code>——<strong>只写型号</strong>，因为波特率由后端自己的表决定、串口与声卡由首启解析。</p>
+<p>两条容易做错且已被测试钉住的规则：</p>
+<ol type="1">
+<li><strong>换型号且未显式给 <code class="scope-code">--port</code> 时清空 <code class="scope-code">MRRC_SERIAL_PORT</code></strong>——FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留着旧值等于一条没有报错的死链路。</li>
+<li><strong>TX 门禁由 profile 重新断言而不是继承</strong>——8 个未验证机型（<code class="scope-code">ic705</code> <code class="scope-code">ic7610</code> <code class="scope-code">ic7760</code> <code class="scope-code">ftdx10</code> <code class="scope-code">ftdx101d</code> <code class="scope-code">ftdx101mp</code> <code class="scope-code">ftx1</code> <code class="scope-code">ft891</code>）的 profile 显式写 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=0</code>（AD-019 / NFR-067）， 且<strong>任何 profile 出现 <code class="scope-code">=1</code> 都会被测试拦下</strong>：镜像的首次连接若能在未经测量的表上按下发射键，正是 AD-019 要防的那件事。</li>
+</ol>
+<p><code class="scope-code">mrrc-radio</code> <strong>自身不做串口 I/O</strong>（<code class="scope-code">cat-direct-serial-io</code>）：<code class="scope-code">--port</code> 取操作者给的答案，否则调用 <code class="scope-code">linux/first_run.py</code> 既有的 <code class="scope-code">detect_serial_ports()</code> / <code class="scope-code">probe_radio_model()</code>（先停服务，否则端口被占着、探测问不出东西）。</p>
+<p><code class="scope-code">mrrc-update</code> 是就地升级路径（拉代码 → pip → 重启），<strong>无回滚</strong>：<code class="scope-code">upgrade_core.py</code> 的自动升级切片尚未开工， 在这里另造一套状态机只会得到一套没被测过的状态机。</p>
+<h3 id="与树莓派镜像的关系">12.10.4 与树莓派镜像的关系</h3>
+<table class="scope-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>项</th>
+<th>Pi 镜像（<code class="scope-code">packaging/rpi/</code>）</th>
+<th>W103D 镜像（<code class="scope-code">packaging/box/</code>）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>产出方式</td>
+<td>pi-gen 造镜像</td>
+<td>在 ophub 预构建镜像上二次构建</td>
+</tr>
+<tr>
+<td>预置目录</td>
+<td><code class="scope-code">/opt/mrrc_modern</code></td>
+<td>同</td>
+</tr>
+<tr>
+<td>预置来源路径</td>
+<td><code class="scope-code">/boot/firmware/mrrc.env</code></td>
+<td><code class="scope-code">/boot/mrrc.env</code>（Armbian 把 boot 分区挂在 <code class="scope-code">/boot</code>）</td>
+</tr>
+<tr>
+<td>绑定地址默认</td>
+<td><code class="scope-code">::</code></td>
+<td><code class="scope-code">0.0.0.0</code>（<code class="scope-code">AGENTS.md</code> 的侦听地址约定）</td>
+</tr>
+<tr>
+<td>复制排除清单</td>
+<td><strong>权威副本</strong></td>
+<td>必须与它逐字一致，由 <code class="scope-code">tests/test_box_profiles.py::ExclusionParityTests</code> 强制</td>
+</tr>
+</tbody>
+</table>
+<p>排除清单现在存在于<strong>三处</strong>（Pi 构建器、box overlay、<code class="scope-code">mrrc_update.sh</code>），测试逐字比对三份。 两份构建器对「什么该进 <code class="scope-code">/opt/mrrc_modern</code>」产生分歧的后果是<strong>运行期 ImportError</strong>，不是构建错误——所以这条应由测试守而不是由记性守。</p>
+<p><strong>不自建 Armbian 镜像是刻意的取舍</strong>：W103D 的板级补丁（SDIO 路由到 SD_EMMC_B、MT7663S 传输层、原厂 N9 固件） 活在 ophub/unifreq 的内核树里，自建等于长期跟进那套补丁栈。缓解手段是钉基底镜像的 SHA-256 并只从官方 release 取。</p>
+<p><strong>镜像本体尚未发布</strong>：<code class="scope-code">MRRC-Modern-&lt;ver&gt;-w103d.img.gz</code> 的版本规则、<code class="scope-code">release-artifacts.json</code> 条目与网站下载卡 留给独立的发展步骤（设计文档 §11）。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.72 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.73 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

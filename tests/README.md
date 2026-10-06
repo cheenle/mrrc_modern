@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1638 tests across 86 test modules (19 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-05, macOS). The per-module sections below
-itemise 71 of those 86 — the support-chain, Cloud Hub and upgrade-channel modules
+1658 tests across 88 test modules (19 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-06, macOS). The per-module sections below
+itemise 71 of those 88 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,10 +19,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1638 |
-| Passed | 1636 (1 skipped) |
+| Total tests | 1658 |
+| Passed | 1656 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 1 — **pre-existing, not from the FT-891 work**: `test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload` (reproduces on `origin/main`; deterministic) |
+| Failed | 1 — **pre-existing, not from the box-image work**: `test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload` (reproduces on `origin/main`; deterministic) |
 | Execution time | ~35s (harness tests spawn CLI subprocesses) |
 
 ## Test Modules
@@ -740,3 +740,12 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_install_sh_url.py` | macOS 源码安装脚本交给用户的 URL 必须是 `https://` —— 它写 `MRRC_WEB_HOST=0.0.0.0` 且从不关 TLS，却一直打印 `http://localhost:8888`（v1.24.5 黑屏的缩影）；顺带守住"别哪天偷偷关掉 TLS 让这句承诺反过来变错" |
 | `test_website_links.py` | 站点内链必须落到真锚点（曾 6 条指向指南里不存在的小节、1 条指向被生成器丢掉的 h1 锚点）；且**生成的 guide 页不得比源文档旧**（`build_guide.py` 是唯一写者，改文档不重建就是站点在描述旧行为）；顺带禁止任何页给出服务答不了的明文本地 URL |
 | `test_tls_trust_store.py` | **出站 HTTPS 必须能在「没有构建机 OpenSSL 默认路径」的机器上验通**（2026-10-04 现场：macOS 包的信任库为空 ⇒ portal 接入 / 诊断包上传 / 更新检查全报 `CERTIFICATE_VERIFY_FAILED`）。测试真的复刻空信任库，断言 `net_tls` 仍能重建（包内 `vendor/ca` → 系统 bundle）、包本身是真 CA 文件、并发告警，以及 **AST 守卫：任何直接 `urlopen` 必须带 `context=`**（否则下一个调用点会原样复发） |
+
+### 本轮新增（W103D 盒子镜像的两处守卫，2026-10-06）
+
+无需硬件，也不需要 Docker——它们只读仓库文件与一份纯函数。
+
+| 测试 | 覆盖 |
+| ------ | ------ |
+| `test_box_profiles.py` | 11 份 radio profile 与 `known_models()` **双向相等**（多一个少一个都红）；每份的 `MRRC_RADIO_MODEL` 等于文件名；只含白名单键（波特率/串口/声卡都不该写第二遍）；**任何 profile 不得出现 `MRRC_ALLOW_UNVERIFIED_TX=1`**，且 8 个未验证机型必须显式写 `=0`（AD-019 / NFR-067——镜像的首次连接若能在未经测量的表上按下发射键，就是这条要防的事）；硬编码的那 8 个集合与后端 profile 注册表**交叉校验**（防止列表漂移）；**三处 rsync 排除清单逐字一致**（Pi 构建器 / box overlay / `mrrc_update.sh`，并点名漂移的那一处）；FTDI 库是 `e_machine=183` 的 AArch64 ELF 且 `libftd2xx.so` 是指向它的符号链接（取错 `build-*` 目录会得到一个名字对、其他检查全过、只在真机上失败的库） |
+| `test_mrrc_radio.py` | `plan()` 是纯函数（无磁盘写、无重启），因此可测的是它到底会写什么：显式 `--port` 被写入；**换机型且未给端口时清空 `MRRC_SERIAL_PORT`**（FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留旧值 = 无报错的死链路）；同机型未给端口不动端口；**TX 门禁由 profile 重新断言而非继承**（从不该从上一个开着门禁的机型漏到下一个）；未知机型 `ValueError`、缺 profile `FileNotFoundError`；写入保留不属于它的键（口令、证书、Cloud Hub 状态）；留下 `.env.bak`；`--dry-run` 一个字节也不写 |

@@ -477,7 +477,7 @@ def build_page(toc: str, body_html: str, lang: str, title_id: str = "") -> str:
 <script>
 {GUIDE_JS}
 </script>
-    <script src="js/global-nav.js?v=5" defer data-gn="1"></script>
+    <script src="js/global-nav.js?v=6" defer data-gn="1"></script>
 </body>
 </html>"""
     page = nav

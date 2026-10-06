@@ -725,7 +725,7 @@
 </tr>
 <tr>
 <td>AD-018</td>
-<td>Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F); the verified FT-710 path stays separate</td>
+<td>Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F/FT-891); the verified FT-710 path stays separate</td>
 <td>Accepted (V2.46), migration deferred to phase 3</td>
 </tr>
 <tr>
@@ -774,7 +774,7 @@
 </table>
 <p><strong>Problem</strong>: 加 Yaesu 机型时最省事的做法是让每台新机继承 <code class="scope-code">FT710Backend</code>，但这会把每日在用的 FT-710 类层次拖进三台<strong>未验证</strong>机型的需求里，并把并非按共享核心设计的 <code class="scope-code">cat_controller.py</code> 事实上变成共享核心（含 FT-710 专有假设）；而「同期把 FT-710 也迁到共享核心」虽能让核心被真机验证，却让一个发布里改动用户每天通话的代码路径，爆炸半径最大。</p>
 <p><strong>Rationale</strong>: Hamlib 4.7.2 自身就是该架构的先例（<code class="scope-code">newcat.c</code> 13,048 行共享核心 + <code class="scope-code">ftdx10.c</code>/<code class="scope-code">ftdx101.c</code>/<code class="scope-code">ft710.c</code> 各 ~300 行机型表），仓库内也有已验证的同类先例（<code class="scope-code">backends/ic7300/civ_profiles.py</code>）。新核心因此坐在「被真机验证过的传输逻辑 + 数据化机型表」之上，同时 FT-710 的现场行为零风险。核心的无真机验证问题由 Hamlib 模拟器与 pty 假电台测试补偿。</p>
-<p><strong>Consequences</strong>: 短期存在两条 Yaesu 代码路径（框架/串口逻辑有少量重复），迁移列为三期：真机在手时逐命令 A/B 对比新旧实现，<code class="scope-code">MRRC_RADIO_MODEL=ft710</code> 是回滚开关。加第 5 个 Yaesu 机型只需加一张 profile 表。</p>
+<p><strong>Consequences</strong>: 短期存在两条 Yaesu 代码路径（框架/串口逻辑有少量重复），迁移列为三期：真机在手时逐命令 A/B 对比新旧实现，<code class="scope-code">MRRC_RADIO_MODEL=ft710</code> 是回滚开关。加第 5 个 Yaesu 机型只需加一张 profile 表 —— <strong>FT-891（V2.72）实测了这句话，并暴露它差一点才成立</strong>：它的滤波宽度<strong>写格式</strong>与家族不同（<code class="scope-code">SH01NN</code> vs <code class="scope-code">SH00NN</code>，Hamlib <code class="scope-code">newcat.c:9658-9663</code> 的 <code class="scope-code">int on = is_ft891</code>），纯数据表装不下「命令前缀」这类差异。修法是给 profile 加 <code class="scope-code">filter_width_prefix</code> 字段、核心 <code class="scope-code">set_filter_width</code> 改读它（对四款已发布机型字节等价），于是核心仍然零机型分支——结论修正为：加机型只需一张 profile 表，<strong>必要时给表加一个字段，但绝不在核心里写 <code class="scope-code">if model ==</code></strong>。</p>
 <h2 id="ad-019-未验证机型仅接收tx-门禁-只读身份校验-逐表溯源">AD-019: 未验证机型仅接收（TX 门禁 + 只读身份校验 + 逐表溯源）</h2>
 <table class="scope-table">
 <colgroup>
@@ -798,13 +798,13 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>四台 Yaesu 机型（以及此前的 IC-705/7610/7760）在无真机证据时：<code class="scope-code">RadioCapabilities.verified=False</code>、<code class="scope-code">tx_gated=True</code>，<code class="scope-code">set_ptt(True)</code>/<code class="scope-code">set_tune(True)</code> 直接拒绝并<strong>每进程仅告警一次</strong>（<code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> 才放行，<strong>释放永不被拦</strong>）；<code class="scope-code">ID;</code> 只读校验记录实测字节，profile 未记录期望值时仅 INFO，不符只告警<strong>绝不阻断</strong>；每张表在 <code class="scope-code">provenance</code> 里写明来源文件与符号，拿不到的数据标 <code class="scope-code">TODO(hw-verify)</code> 并进入 <code class="scope-code">unverified_meters</code>；<code class="scope-code">_diag_yaesu.py</code> 负责在有真机时闭合这些缺口。</td>
+<td>五台 Yaesu 机型（以及此前的 IC-705/7610/7760）在无真机证据时：<code class="scope-code">RadioCapabilities.verified=False</code>、<code class="scope-code">tx_gated=True</code>，<code class="scope-code">set_ptt(True)</code>/<code class="scope-code">set_tune(True)</code> 直接拒绝并<strong>每进程仅告警一次</strong>（<code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> 才放行，<strong>释放永不被拦</strong>）；<code class="scope-code">ID;</code> 只读校验记录实测字节，profile 未记录期望值时仅 INFO，不符只告警<strong>绝不阻断</strong>；每张表在 <code class="scope-code">provenance</code> 里写明来源文件与符号，拿不到的数据标 <code class="scope-code">TODO(hw-verify)</code> 并进入 <code class="scope-code">unverified_meters</code>；<code class="scope-code">_diag_yaesu.py</code> 负责在有真机时闭合这些缺口。</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Problem</strong>: 无真机的实现容易被呈现为「已验证」：表头曲线看起来一样、模式表看起来合理，一旦现场表现不同，用户无法判断是电台行为、接线还是实现猜测。更危险的是 TX——在未验证的频率/功率语义上发射可能对电台或天线系统不利。</p>
 <p><strong>Rationale</strong>: 「不确定就说不确定」比「猜一个并当作数据」成本低得多：门禁把风险最高的动作（发射）变成显式选择，溯源让每张表都可追溯、可纠正，诊断脚本把闭合缺口变成一次粘贴。</p>
-<p><strong>Consequences</strong>: 新机型首次连接只收不发（UI 显示”实验性，仅接收”），需要操作者显式开启；模式/滤波/表头在获得现场回传前都带未验证标记；<code class="scope-code">dual_rx</code>（FTDX101D/MP 与 FTX-1F 的双接收）<strong>只记录不实现</strong>，留待二期独立规格。</p>
+<p><strong>Consequences</strong>: 新机型首次连接只收不发（UI 显示”实验性，仅接收”），需要操作者显式开启；模式/滤波/表头在获得现场回传前都带未验证标记；<code class="scope-code">dual_rx</code>（FTDX101D/MP 与 FTX-1F 的双接收）<strong>只记录不实现</strong>，留待二期独立规格。<strong>FT-891（V2.72）给本决定补上了第二类证据</strong>：现场支持上报也算硬件证据，可用于关闭离线源推不出的事实（它的 38400 8N1 串口参数、无 USB 声卡、S 表偏高 1–1.5 S 三项都来自老产品 2026-09-17 的一份上报，见 §13.3 A10）。这比「无真机 ⇒ 全部只能假定」更强，但纪律不变：<strong>推论值不写成期望值</strong>——FT-891 的 <code class="scope-code">ID;</code> 应答可由 <code class="scope-code">NC_RIGID_FT891=135</code> 推出 <code class="scope-code">0135</code>，仍按操作者决定留空只记日志；另一份产品的电表观测也<strong>不</strong>用来改本仓库的曲线。</p>
 <hr />
 <h2 id="ad-020-一键-cq服务端一次性自动化发射复用-ptt-安全链路">AD-020: 一键 CQ（服务端一次性自动化发射，复用 PTT 安全链路）</h2>
 <table class="scope-table">
@@ -868,7 +868,7 @@
 </tr>
 <tr>
 <td>Decision</td>
-<td>「🐞 遇到问题」入口在<strong>浏览器</strong>（<code class="scope-code">static/support.html</code>，SPA 菜单纯 <code class="scope-code">&lt;a target="_blank"&gt;</code>，不打断 WebSocket），<strong>包由服务端构建</strong>（<code class="scope-code">support_bundle.py</code> + <code class="scope-code">POST /api/support/bundle|upload|save</code>）：日志尾部 + 按 <strong>env 键白名单</strong>裁剪的 <code class="scope-code">state/config-redacted.env</code> + 环境/电台/音频状态快照 + 浏览器侧上下文 + <code class="scope-code">diagnostics/summary.txt</code> 自动体检结论；上传到<strong>独立接收端实例</strong>（同机 systemd <code class="scope-code">support-receiver-modern</code>、端口 8098、存储 <code class="scope-code">/var/www/support-modern</code>、nginx <code class="scope-code">/mrrc_modern/support/</code>）；无网络时 <code class="scope-code">只保存到本地</code> 是等价按钮。</td>
+<td>「🐞 遇到问题」入口在<strong>浏览器</strong>（<code class="scope-code">static/support.html</code>，SPA 菜单纯 <code class="scope-code">&lt;a target="_blank"&gt;</code>，不打断 WebSocket），<strong>包由服务端构建</strong>（<code class="scope-code">support_bundle.py</code> + <code class="scope-code">POST /api/support/bundle | upload | save</code>）：日志尾部 + 按 <strong>env 键白名单</strong>裁剪的<code class="scope-code">state/config-redacted.env</code> + 环境/电台/音频状态快照 + 浏览器侧上下文 + <code class="scope-code">diagnostics/summary.txt</code> 自动体检结论；上传到<strong>独立接收端实例</strong>（同机 systemd <code class="scope-code">support-receiver-modern</code>、端口 8098、存储<code class="scope-code">/var/www/support-modern</code>、nginx<code class="scope-code">/mrrc_modern/support/</code>）；无网络时<code class="scope-code">只保存到本地</code> 是等价按钮。</td>
 </tr>
 <tr>
 <td>Alternatives</td>
@@ -1011,7 +1011,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.71 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.72 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

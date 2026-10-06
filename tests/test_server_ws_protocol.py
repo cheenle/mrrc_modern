@@ -234,7 +234,7 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn('ft710_ui.js?v=33', index_source)
 
         sw_source = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v45'", sw_source)
+        self.assertIn("const CACHE = 'mrrc-v46'", sw_source)
         self.assertIn("'/ft710_main.js?v=38'", sw_source)
         self.assertIn("'/ft710_ui.js?v=33'", sw_source)
 

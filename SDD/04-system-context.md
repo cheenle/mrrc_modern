@@ -30,7 +30,7 @@
 | CI-V Serial | Serial | USB CI-V port | Server ↔ Radio | Icom CI-V frames (115200, 8N1, default addr `0x94`) |
 | FT4222 SPI | SPI | Internal FTDI chip | Radio → Server | FT-710 850-point FFT scope data via `scope_pipe.py` subprocess |
 | CI-V 0x27 Spectrum | Serial | Same CI-V port | Radio → Server | CI-V 0x27 spectrum frames on the CI-V bus (all Icom backends) |
-| Yaesu ASCII-CAT | Serial | USB serial bridge | Server ↔ Radio | FTDX10/FTDX101D/FTDX101MP/FTX-1F: the same Yaesu ASCII CAT framing at 38400 8N1 as the FT-710; **no scope interface exists** (undocumented waveform) |
+| Yaesu ASCII-CAT | Serial | USB serial bridge | Server ↔ Radio | FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891: the same Yaesu ASCII CAT framing at 38400 8N1 as the FT-710; **no scope interface exists** (undocumented waveform) |
 | USB Audio IN | Audio | USB Audio Device | Radio → Server | RX audio capture via PyAudio |
 | USB Audio OUT | Audio | USB Audio Device | Server → Radio | TX audio playback via PyAudio |
 

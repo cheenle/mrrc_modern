@@ -3,7 +3,7 @@
 ## 10.1 Service Portfolio
 
 | Service | Type | Status | Responsibility |
-|---------|------|--------|----------------|
+| --------- | ------ | -------- | ---------------- |
 | StaticUIService | Core | Implemented | Serve mobile UI assets from `static/` with MIME types |
 | ControlService | Core | Implemented | `/WSradio` JSON command dispatch, state broadcast, memory management |
 | BackendFactoryService | Core | Implemented | `create_backend(model)` selects `ft710`/`ic7300`/`ic7300mk2` based on `MRRC_RADIO_MODEL` |
@@ -12,7 +12,7 @@
 | SpectrumService | Core | Implemented | Real scope data (FT4222 SPI or CI-V 0x27) + S-meter fallback → `/WSspectrum` binary broadcast |
 | CATSerialService | Core | Implemented | Yaesu ASCII-CAT transport (FT-710 verified path; also the basis for the `backends/yaesu/` core) over the USB Enhanced COM Port (38400, 8N1) |
 | CIVSerialService | Core | Implemented |
-| YaesuCatService | Core | Implemented | FTDX10/FTDX101D/FTDX101MP/FTX-1F: shared profile-driven ASCII-CAT core (`backends/yaesu/`) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback) | IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr `0x94`) |
+| YaesuCatService | Core | Implemented | FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891: shared profile-driven ASCII-CAT core (`backends/yaesu/`) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback) | IC-7300/MK2: CI-V protocol over USB serial (115200, 8N1, default addr `0x94`) |
 | PollingService | Core | Implemented | 7-task adaptive background polling with priority-command yield |
 | ScopePipeService | Core | Implemented | Manage scope_pipe subprocess lifecycle; read stdout/stderr |
 | MemoryChannelService | Core | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
@@ -38,7 +38,7 @@ TXAudioService
 SpectrumService
   → ScopePipeService (FT-710 FT4222 path)
   → CIVScopeService (IC-7300 0x27 path)
-  → YaesuCatService (FTDX10/FTDX101D/FTDX101MP/FTX-1F ASCII-CAT — no scope producer, so the fallback below is the only spectrum path)
+  → YaesuCatService (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891 ASCII-CAT — no scope producer, so the fallback below is the only spectrum path)
   → PollingService (S-meter fallback path)
 
 PollingService
@@ -56,7 +56,7 @@ AuthService
 ## 10.3 Service Interfaces
 
 | Service | Input | Output | Protocol |
-|---------|-------|--------|----------|
+| --------- | ------- | -------- | ---------- |
 | ControlService | JSON commands | JSON state updates | WS `/WSradio` |
 | RXAudioService | PyAudio PCM chunks | Tagged binary frames (Opus/PCM) | WS `/WSaudioRX` |
 | TXAudioService | Tagged binary frames + text control | PyAudio playback | WS `/WSaudioTX` |
@@ -83,13 +83,13 @@ AuthService
 Key commands (see `_execute_set_command` in `server.py` and the active backend for complete mapping):
 
 | Command Field | Values | CAT Command | Notes |
-|---------------|--------|-------------|-------|
+| --------------- | -------- | ------------- | ------- |
 | `freq` / `vfo_a_freq` | Hz int | `FA<9d>;` | Set VFO-A frequency |
 | `vfo_b_freq` | Hz int | `FB<9d>;` | Set VFO-B frequency |
 | `mode` | "USB","LSB",... | `MD0<X>;` | Set operating mode |
 | `ptt` | true/false | `TX1;` / `TX0;` | Priority command path; preempts poll queries |
 | `tune` | true/false | `TX2;` + `AC003;` / `AC000;` + `TX0;` | Tune carrier + tuner start/stop sequence |
-| `filter` / `filter_width` | 00–23 | `SH00<NN>;` | Filter width index (P1=0, P2=0 fixed); post-set `SH0;` read-back (~150 ms) broadcasts the radio's actual index |
+| `filter` / `filter_width` | 00–23 | `<prefix><NN>;` | Filter width index. The prefix is `YaesuModelProfile.filter_width_prefix` = `"SH"` + P1 (0 = main VFO) + P2 (bandwidth on): `SH00` for the FT-710 and the FTDX10/FTDX101/FTX-1 family, **`SH01` for the FT-891** (Hamlib `newcat.c:9658-9663`, `int on = is_ft891`). The 3-character `SH0NN` form — a missing P1/P2 digit — is silently ignored by the radio. Post-set `SH0;` read-back (~150 ms) broadcasts the radio's actual index; it takes the trailing two digits, so it parses both prefixes |
 | `af_gain` | 0–255 | `AG0<NNN>;` | AF gain |
 | `rf_gain` | 0–255 | `RG0<NNN>;` | RF gain |
 | `meter_display` | 0–5 | `MS<P1>0;` | Radio front-panel meter selection |
@@ -115,7 +115,7 @@ The table above shows the FT-710 backend mapping. The IC-7300/MK2 backend expose
 ## 10.5 Service Quality Targets
 
 | Service | Quality Target |
-|---------|----------------|
+| --------- | ---------------- |
 | ControlService | PTT/TUNE commands bypass queued polls and execute with low latency |
 | RXAudioService | Continuous playback under LAN jitter; Opus 64kbps default |
 | TXAudioService | Low-latency mic → radio path (< 500ms) |

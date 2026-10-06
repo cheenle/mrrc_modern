@@ -35,7 +35,7 @@ Icom IC-7300 / IC-7300MK2
 ```
 
 ```text
-Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (experimental)
+Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (experimental)
   → USB connection to host
   → USB serial bridge (same ASCII-CAT protocol as the FT-710; 38400 8N1)
   → No scope interface: the Yaesu scope waveform is undocumented, so the
@@ -45,7 +45,7 @@ Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (experimental)
 ```
 
 **First connection is receive-only for an unverified model** (IC-705/IC-7610/
-IC-7760 and all four Yaesu models): the startup log reports
+IC-7760 and all five Yaesu models): the startup log reports
 `Radio model <key> is NOT hardware-verified — transmit is DISABLED`, the
 connection dialog labels the model 实验性/仅接收, and `set_ptt(True)`/
 `set_tune(True)` are refused until the operator sets
@@ -57,11 +57,11 @@ and the model identity check (`ID;`, read-only) only logs.
 
 | Name | Default | Purpose |
 |------|---------|---------|
-| `MRRC_RADIO_MODEL` | `ft710` | Backend selection (registry-validated): `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1` |
+| `MRRC_RADIO_MODEL` | `ft710` | Backend selection (registry-validated): `ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891` |
 | `IC7300_CIV_ADDR` | `0x94` | IC-7300 CI-V radio address (hex) |
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V radio address (hex) |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | Radio serial port (FT-710 Enhanced COM Port or IC-7300 CI-V port) |
-| `MRRC_BAUD_RATE` | backend default | CAT/CI-V baud: FT-710 and the four Yaesu models `38400`; Icom models `115200`; an explicit value overrides the backend default |
+| `MRRC_BAUD_RATE` | backend default | CAT/CI-V baud: FT-710 and the five Yaesu models `38400`; Icom models `115200`; an explicit value overrides the backend default |
 | `MRRC_WEB_PORT` | `8888` | Uvicorn listen port |
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Web login password |
 | `MRRC_WEB_HOST` | `::` | Bind address |

@@ -149,7 +149,7 @@ macOS 把「音频输入」统一归入**麦克风权限**类（不是只有麦�
 | **FT-710** | 完整支持 | USB 插上即自动识别；**真 FFT 频谱**开箱即用 |
 | **IC-7300 / IC-7300MK2** | 完整支持 | USB 即插即用；频谱走 CI-V |
 | **IC-705 / IC-7610 / IC-7760** | 预览 | 接收可用；**发射默认被拒绝**，核对真机后设 `MRRC_ALLOW_UNVERIFIED_TX=1` |
-| **Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F** | 实验性 | 串口 ASCII-CAT（驱动同 FT-710）；默认只收不发；无真机频谱源（界面显示 S 表合成频谱） |
+| **Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891** | 实验性 | 串口 ASCII-CAT（驱动同 FT-710）；默认只收不发；无真机频谱源（界面显示 S 表合成频谱）。**FT-891 例外**：USB 口只做 CAT、无 USB 声卡（音频须外接接口到 DATA/ACC 口），且无内置天调（不显示 ATU 键） |
 
 同时插了多个串口设备时，程序优先选 CP210x/USB 串口；可在菜单栏 **Edit Configuration…** 里确认
 `MRRC_SERIAL_PORT`。

@@ -571,6 +571,8 @@
         "ftdx101mp",
         "ftx1",
         "ftx-1f",
+        "ft891",
+        "ft-891",
         "profile",
         "provenance",
         "unverified",
@@ -584,6 +586,7 @@
         "nfr:NFR-067",
         "risk:R12",
         "assumption:A9",
+        "assumption:A10",
         "sec:11",
         "ch:11",
         "ch:12"

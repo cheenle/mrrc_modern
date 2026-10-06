@@ -175,7 +175,7 @@
 <td>YaesuCatService</td>
 <td>Core</td>
 <td>Implemented</td>
-<td>FTDX10/FTDX101D/FTDX101MP/FTX-1F: shared profile-driven ASCII-CAT core (<code class="scope-code">backends/yaesu/</code>) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback)</td>
+<td>FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891: shared profile-driven ASCII-CAT core (<code class="scope-code">backends/yaesu/</code>) — transport ported from the verified FT-710 path, per-model tables with provenance; TX gated while unverified, no scope stream (S-meter fallback)</td>
 </tr>
 <tr>
 <td>PollingService</td>
@@ -241,7 +241,7 @@ TXAudioService
 SpectrumService
   → ScopePipeService (FT-710 FT4222 path)
   → CIVScopeService (IC-7300 0x27 path)
-  → YaesuCatService (FTDX10/FTDX101D/FTDX101MP/FTX-1F ASCII-CAT — no scope producer, so the fallback below is the only spectrum path)
+  → YaesuCatService (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891 ASCII-CAT — no scope producer, so the fallback below is the only spectrum path)
   → PollingService (S-meter fallback path)
 
 PollingService
@@ -401,8 +401,8 @@ AuthService
 <tr>
 <td><code class="scope-code">filter</code> / <code class="scope-code">filter_width</code></td>
 <td>00–23</td>
-<td><code class="scope-code">SH00&lt;NN&gt;;</code></td>
-<td>Filter width index (P1=0, P2=0 fixed); post-set <code class="scope-code">SH0;</code> read-back (~150 ms) broadcasts the radio’s actual index</td>
+<td><code class="scope-code">&lt;prefix&gt;&lt;NN&gt;;</code></td>
+<td>Filter width index. The prefix is <code class="scope-code">YaesuModelProfile.filter_width_prefix</code> = <code class="scope-code">"SH"</code> + P1 (0 = main VFO) + P2 (bandwidth on): <code class="scope-code">SH00</code> for the FT-710 and the FTDX10/FTDX101/FTX-1 family, <strong><code class="scope-code">SH01</code> for the FT-891</strong> (Hamlib <code class="scope-code">newcat.c:9658-9663</code>, <code class="scope-code">int on = is_ft891</code>). The 3-character <code class="scope-code">SH0NN</code> form — a missing P1/P2 digit — is silently ignored by the radio. Post-set <code class="scope-code">SH0;</code> read-back (~150 ms) broadcasts the radio’s actual index; it takes the trailing two digits, so it parses both prefixes</td>
 </tr>
 <tr>
 <td><code class="scope-code">af_gain</code></td>
@@ -566,7 +566,7 @@ AuthService
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.71 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.72 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

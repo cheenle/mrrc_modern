@@ -273,7 +273,7 @@
 | AD-015 | Priority CAT command preemption | Implemented |
 | AD-016 | Pluggable radio backend architecture (FT-710 + IC-7300) | Implemented |
 | AD-017 | Server-side QSO recording (incremental MP3, 16 kHz storage domain) | Implemented |
-| AD-018 | Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F); the verified FT-710 path stays separate | Accepted (V2.46), migration deferred to phase 3 |
+| AD-018 | Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F/FT-891); the verified FT-710 path stays separate | Accepted (V2.46), migration deferred to phase 3 |
 | AD-019 | Unverified models ship receive-only: transmit gate, read-only identity check, per-table provenance | Implemented (V2.46) |
 | AD-021 | Server-built, allow-list-redacted diagnostics bundle with a dedicated receiver (support chain 1/4) | Implemented (V2.51) |
 | AD-022 | Update channel: generated `latest.json`, self-proving `state.json`, upgrade blocked while transmitting (support chain 3/4, slice 1) | Implemented (V2.53) |
@@ -290,7 +290,7 @@
 
 **Rationale**: Hamlib 4.7.2 自身就是该架构的先例（`newcat.c` 13,048 行共享核心 + `ftdx10.c`/`ftdx101.c`/`ft710.c` 各 ~300 行机型表），仓库内也有已验证的同类先例（`backends/ic7300/civ_profiles.py`）。新核心因此坐在「被真机验证过的传输逻辑 + 数据化机型表」之上，同时 FT-710 的现场行为零风险。核心的无真机验证问题由 Hamlib 模拟器与 pty 假电台测试补偿。
 
-**Consequences**: 短期存在两条 Yaesu 代码路径（框架/串口逻辑有少量重复），迁移列为三期：真机在手时逐命令 A/B 对比新旧实现，`MRRC_RADIO_MODEL=ft710` 是回滚开关。加第 5 个 Yaesu 机型只需加一张 profile 表。
+**Consequences**: 短期存在两条 Yaesu 代码路径（框架/串口逻辑有少量重复），迁移列为三期：真机在手时逐命令 A/B 对比新旧实现，`MRRC_RADIO_MODEL=ft710` 是回滚开关。加第 5 个 Yaesu 机型只需加一张 profile 表 —— **FT-891（V2.72）实测了这句话，并暴露它差一点才成立**：它的滤波宽度**写格式**与家族不同（`SH01NN` vs `SH00NN`，Hamlib `newcat.c:9658-9663` 的 `int on = is_ft891`），纯数据表装不下「命令前缀」这类差异。修法是给 profile 加 `filter_width_prefix` 字段、核心 `set_filter_width` 改读它（对四款已发布机型字节等价），于是核心仍然零机型分支——结论修正为：加机型只需一张 profile 表，**必要时给表加一个字段，但绝不在核心里写 `if model ==`**。
 
 ## AD-019: 未验证机型仅接收（TX 门禁 + 只读身份校验 + 逐表溯源）
 
@@ -298,13 +298,13 @@
 | ----------- | ------- |
 | Type | Policy |
 | Status | Implemented (V2.46) |
-| Decision | 四台 Yaesu 机型（以及此前的 IC-705/7610/7760）在无真机证据时：`RadioCapabilities.verified=False`、`tx_gated=True`，`set_ptt(True)`/`set_tune(True)` 直接拒绝并**每进程仅告警一次**（`MRRC_ALLOW_UNVERIFIED_TX=1` 才放行，**释放永不被拦**）；`ID;` 只读校验记录实测字节，profile 未记录期望值时仅 INFO，不符只告警**绝不阻断**；每张表在 `provenance` 里写明来源文件与符号，拿不到的数据标 `TODO(hw-verify)` 并进入 `unverified_meters`；`_diag_yaesu.py` 负责在有真机时闭合这些缺口。 |
+| Decision | 五台 Yaesu 机型（以及此前的 IC-705/7610/7760）在无真机证据时：`RadioCapabilities.verified=False`、`tx_gated=True`，`set_ptt(True)`/`set_tune(True)` 直接拒绝并**每进程仅告警一次**（`MRRC_ALLOW_UNVERIFIED_TX=1` 才放行，**释放永不被拦**）；`ID;` 只读校验记录实测字节，profile 未记录期望值时仅 INFO，不符只告警**绝不阻断**；每张表在 `provenance` 里写明来源文件与符号，拿不到的数据标 `TODO(hw-verify)` 并进入 `unverified_meters`；`_diag_yaesu.py` 负责在有真机时闭合这些缺口。 |
 
 **Problem**: 无真机的实现容易被呈现为「已验证」：表头曲线看起来一样、模式表看起来合理，一旦现场表现不同，用户无法判断是电台行为、接线还是实现猜测。更危险的是 TX——在未验证的频率/功率语义上发射可能对电台或天线系统不利。
 
 **Rationale**: 「不确定就说不确定」比「猜一个并当作数据」成本低得多：门禁把风险最高的动作（发射）变成显式选择，溯源让每张表都可追溯、可纠正，诊断脚本把闭合缺口变成一次粘贴。
 
-**Consequences**: 新机型首次连接只收不发（UI 显示"实验性，仅接收"），需要操作者显式开启；模式/滤波/表头在获得现场回传前都带未验证标记；`dual_rx`（FTDX101D/MP 与 FTX-1F 的双接收）**只记录不实现**，留待二期独立规格。
+**Consequences**: 新机型首次连接只收不发（UI 显示"实验性，仅接收"），需要操作者显式开启；模式/滤波/表头在获得现场回传前都带未验证标记；`dual_rx`（FTDX101D/MP 与 FTX-1F 的双接收）**只记录不实现**，留待二期独立规格。**FT-891（V2.72）给本决定补上了第二类证据**：现场支持上报也算硬件证据，可用于关闭离线源推不出的事实（它的 38400 8N1 串口参数、无 USB 声卡、S 表偏高 1–1.5 S 三项都来自老产品 2026-09-17 的一份上报，见 §13.3 A10）。这比「无真机 ⇒ 全部只能假定」更强，但纪律不变：**推论值不写成期望值**——FT-891 的 `ID;` 应答可由 `NC_RIGID_FT891=135` 推出 `0135`，仍按操作者决定留空只记日志；另一份产品的电表观测也**不**用来改本仓库的曲线。
 
 ---
 
@@ -332,7 +332,7 @@
 | ----------- | ------- |
 | Type | Design |
 | Status | Implemented (V2.51) |
-| Decision | 「🐞 遇到问题」入口在**浏览器**（`static/support.html`，SPA 菜单纯 `<a target="_blank">`，不打断 WebSocket），**包由服务端构建**（`support_bundle.py` + `POST /api/support/bundle|upload|save`）：日志尾部 + 按 **env 键白名单**裁剪的 `state/config-redacted.env` + 环境/电台/音频状态快照 + 浏览器侧上下文 + `diagnostics/summary.txt` 自动体检结论；上传到**独立接收端实例**（同机 systemd `support-receiver-modern`、端口 8098、存储 `/var/www/support-modern`、nginx `/mrrc_modern/support/`）；无网络时 `只保存到本地` 是等价按钮。 |
+| Decision | 「🐞 遇到问题」入口在**浏览器**（`static/support.html`，SPA 菜单纯 `<a target="_blank">`，不打断 WebSocket），**包由服务端构建**（`support_bundle.py` + `POST /api/support/bundle | upload | save`）：日志尾部 + 按 **env 键白名单**裁剪的`state/config-redacted.env` + 环境/电台/音频状态快照 + 浏览器侧上下文 + `diagnostics/summary.txt` 自动体检结论；上传到**独立接收端实例**（同机 systemd `support-receiver-modern`、端口 8098、存储`/var/www/support-modern`、nginx`/mrrc_modern/support/`）；无网络时`只保存到本地` 是等价按钮。 |
 | Alternatives | ①**浏览器构建并下载**：拿不到服务端日志/设备/端口状态，且移动端无法把包送出去；②**上传第三方日志服务**：用户数据出境、无法保证脱敏；③**复用兄弟项目 `mrrc` 的接收端与答复页**：两个产品的包混在一张清单里，第 2 期自动分诊无法按产品过滤；④服务端构建 + 白名单脱敏 + 独立实例（采纳）。 |
 | Consequences | ①**日志持久化成为前置**：打包版此前只有控制台输出（没有任何日志文件），故新增 `MRRC_LOG_DIR` 下的轮转 `server.log`（3×2 MB）与启动器 tee 的 `server-stdout.log`（只在"日志系统起来之前就死了"这段窗口写，之后仅排空管道以保证子进程不会因 64 KB 管道写满而阻塞）；RPi 与 `start.sh` 的重定向改名 `server-stdout.log`，避免与会话内 handler 双写同名文件。②**版本权威**：构建脚本写入 `version.txt`（macOS `Contents/MacOS`、Windows 安装目录、rpi64 `/opt/mrrc_modern`；旧镜像的 `VERSION` 仍被识别），既是包 manifest 的版本来源，也是第 3 期一键升级的判据。③**隐私不变量**：证书私钥、`MRRC_WEB_PASSWORD`/令牌、录音、记忆频道与天调学习值**永不入包**，由负例测试守住；`redactions` 计数写进 manifest。④**接收端 create/PUT 不鉴权**（上传端无法持有服务器密钥）：靠限速 + 不可猜 ID + 清单 Basic 鉴权 + 人工删除兜底。 |
 | Status detail | 规格 `docs/superpowers/specs/2026-09-17-support-bundle-design.md`；验收：真机上传→清单可见→下载 SHA-256 与本地一致 |

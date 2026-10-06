@@ -143,8 +143,8 @@
 </tr>
 <tr>
 <td>YaesuModelProfile</td>
-<td>model_key, display_name, mode_numbers, mode_codes, filter_widths, bands, att_steps, power_format, s_meter_cal, verified, provenance</td>
-<td>Per-model Yaesu facts (spec 2026-09-12 §5): the mode <strong>register</strong> (int, the <code class="scope-code">RadioState</code> contract) and the separate CAT <strong>character</strong> (H/I are not hex digits), filter slots, bands, attenuator/preamp steps, power class, S-meter curve and the offline source of every table</td>
+<td>model_key, display_name, mode_numbers, mode_codes, filter_widths, filter_width_prefix, bands, att_steps, power_format, s_meter_cal, verified, provenance</td>
+<td>Per-model Yaesu facts (spec 2026-09-12 §5): the mode <strong>register</strong> (int, the <code class="scope-code">RadioState</code> contract) and the separate CAT <strong>character</strong> (H/I are not hex digits), filter slots, bands, attenuator/preamp steps, power class, S-meter curve and the offline source of every table. <code class="scope-code">filter_width_prefix</code> carries the <code class="scope-code">SH</code> set prefix — <code class="scope-code">"SH"</code> + P1 (main/sub) + P2 (bandwidth on) — so a model whose <strong>write format</strong> differs needs no core branch: <code class="scope-code">"SH00"</code> for the family, <code class="scope-code">"SH01"</code> for the FT-891 (Hamlib <code class="scope-code">newcat.c:9658-9663</code>)</td>
 </tr>
 <tr>
 <td>RadioCommand</td>
@@ -333,7 +333,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.71 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.72 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

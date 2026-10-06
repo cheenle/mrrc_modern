@@ -9,7 +9,7 @@ from backends.yaesu.yaesu_profiles import get_profile
 
 class CapabilityTests(unittest.TestCase):
     def test_every_model_reports_unverified_and_scope_free(self):
-        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1"):
+        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891"):
             b = yb.make_backend(model)("/dev/null")
             self.assertIsInstance(b.capabilities, RadioCapabilities)
             self.assertFalse(b.capabilities.verified, model)
@@ -24,7 +24,7 @@ class CapabilityTests(unittest.TestCase):
 
     def test_capabilities_are_json_serialisable(self):
         for cls in (yb.FTDX10Backend, yb.FTDX101DBackend,
-                    yb.FTDX101MPBackend, yb.FTX1Backend):
+                    yb.FTDX101MPBackend, yb.FTX1Backend, yb.FT891Backend):
             data = cls("/dev/null").capabilities.to_dict()
             self.assertEqual(data["model_name"], cls._profile.model_key)
             self.assertIn("audio_name_hints", data)
@@ -37,6 +37,32 @@ class CapabilityTests(unittest.TestCase):
         """Phase 2 owns dual receive; the flag is for the UI badge only."""
         self.assertTrue(yb.FTDX101DBackend("/dev/null").capabilities.dual_rx)
         self.assertFalse(yb.FTDX10Backend("/dev/null").capabilities.dual_rx)
+
+    def test_ft891_filter_lists_flatten_without_index_collisions(self):
+        """filter_tables() unions the per-mode tables into two lists and the UI
+        builds `widths[pair[0]] = pair[1]`, so a repeated index silently
+        overwrites the earlier label. The family's AM/FM entries do exactly
+        that; the FT-891 has none, so both lists stay one-to-one (design §4)."""
+        tables = yb.FT891Backend("/dev/null").filter_tables()
+        for name in ("voice", "narrow"):
+            indexes = [pair[0] for pair in tables[name]]
+            self.assertEqual(len(indexes), len(set(indexes)), name)
+        self.assertEqual(len(tables["narrow"]), 17)
+        self.assertEqual(len(tables["voice"]), 21)
+        self.assertEqual(tables["narrowModes"],
+                         ["CW-L", "CW-U", "DATA-L", "DATA-U", "RTTY-L", "RTTY-U"])
+
+    def test_ft891_reports_no_atu_and_no_usb_audio(self):
+        caps = yb.FT891Backend("/dev/null").capabilities
+        self.assertFalse(caps.has_atu)          # hidden by ft710_ui.js:1183
+        self.assertEqual(caps.tune_via, "tx2")
+        self.assertEqual(caps.audio_name_hints, ())
+        self.assertEqual(caps.audio_rx_rate, 48000)
+        self.assertEqual(caps.audio_tx_rate, 48000)
+        self.assertEqual(caps.scope_type, "none")
+        self.assertEqual(caps.filter_model, "width_table")
+        self.assertFalse(caps.verified)
+        self.assertTrue(caps.tx_gated)
 
     def test_no_scope_producer(self):
         self.assertIsNone(yb.FTDX10Backend("/dev/null").create_scope_producer())
@@ -133,6 +159,22 @@ class GateTests(unittest.IsolatedAsyncioTestCase):
             b = yb.FTDX10Backend("/dev/null")
             self.assertTrue(b._tx_allowed())
             self.assertFalse(b.capabilities.tx_gated)
+
+    async def test_ft891_ptt_is_refused_while_unverified(self):
+        b = yb.FT891Backend("/dev/null")
+        b._cat.set_ptt = AsyncMock(return_value=True)
+        b._cat.set_tune = AsyncMock(return_value=True)
+        self.assertFalse(await b.set_ptt(True))
+        b._cat.set_ptt.assert_not_awaited()
+        self.assertFalse(await b.set_tune(True))
+        b._cat.set_tune.assert_not_awaited()
+
+    async def test_ft891_ptt_release_is_never_gated(self):
+        """SC8 / ptt-release-no-verify: the release direction is never gated."""
+        b = yb.FT891Backend("/dev/null")
+        b._cat.set_ptt = AsyncMock(return_value=True)
+        self.assertTrue(await b.set_ptt(False))
+        b._cat.set_ptt.assert_awaited_once_with(False)
 
 
 class IdentityTests(unittest.IsolatedAsyncioTestCase):

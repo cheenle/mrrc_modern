@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.71 更新</a></li>
+          <li><a href="#updates">V2.72 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.71 · 2026-10-05</span>
+          <span>SDD V2.72 · 2026-10-05</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,7 +110,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.71</td>
+              <td>V2.72</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -143,6 +143,37 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-radio"></i></div>
+            <h3>
+              FT-891 加入 Yaesu 家族 —— 以及它揭出来的一个潜伏崩溃
+              <small>（V2.72）</small>
+            </h3>
+            <p>
+              第 11 个注册键、Yaesu ASCII-CAT 共享核心上的第 5 个 profile。
+              它唯一的协议差异是<em>写格式</em>：滤波宽度 SET 是
+              <code>SH01NN</code>，而不是家族的 <code>SH00NN</code>（Hamlib
+              <code>newcat.c:9658</code>，<code>int on = is_ft891</code>），
+              所以 <code>YaesuModelProfile</code> 多了一个
+              <code>filter_width_prefix</code> 字段、由核心去读它 ——
+              核心里没有任何按机型分支，四款已发布机型发出的字节也完全不变。
+              滤波档位逐档抄自 Hamlib 的 get 侧（CW/RTTY/PKT 17 档、SSB 21
+              档）并与它机器比对过；AM/FM 不给档位，因为它们的宽度只由
+              <code>NA</code> 决定。有三件离线源推不出的事实来自 2026-09-17
+              的一份现场上报：38400 8N1（Hamlib 的
+              <code>stop_bits=2</code> 自承是<em>假设值</em>）、
+              <strong>没有 USB 声卡</strong>——所以不做设备名自动匹配、外接接口按
+              48 kHz、连接对话框里直接写明——以及 S 表比机显高 1–1.5
+              S（只记录，曲线刻意不改）。接线过程还揭出一个潜伏在<em>整个家族</em>里的崩溃：
+              <code>get_preamp</code>/<code>get_attenuator</code> 被
+              <code>initial_state_sync()</code> 与设置轮询层调用，却从未定义，
+              于是首次连接成功即抛 <code>AttributeError</code> ——
+              至今没人发现，是因为这个家族没有任何真机可连。已修，并补了一个结构性守卫：
+              把每个轮询项与同步逻辑引用到的方法逐个解析一遍。全程未验证：TX
+              设闸、<code>id_answer</code> 留空、11 处
+              <code>TODO(hw-verify)</code>。
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-microphone-slash"></i></div>
             <h3>
@@ -489,7 +520,7 @@
           <div class="feature-card">
             <div class="icon"><i class="fas fa-radio"></i></div>
             <h3>
-              Yaesu SDR 家族：FTDX10 / FTDX101D / FTDX101MP / FTX-1F
+              Yaesu SDR 家族：FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891
               <small>（V2.46）</small>
             </h3>
             <p>

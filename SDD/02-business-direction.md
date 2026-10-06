@@ -2,7 +2,7 @@
 
 ## 2.1 Vision
 
-Make supported radios (Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 — both hardware-verified — plus the experimental Icom IC-705 / IC-7610 / IC-7760 and the Yaesu ASCII-CAT family FTDX10 / FTDX101D / FTDX101MP / FTX-1F) usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.
+Make supported radios (Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 — both hardware-verified — plus the experimental Icom IC-705 / IC-7610 / IC-7760 and the Yaesu ASCII-CAT family FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891) usable from any phone browser with zero app installation: open a URL, see the spectrum, hear the audio, control the radio, and safely transmit — all through a single Python process.
 
 ## 2.2 Mission
 

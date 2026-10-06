@@ -16,7 +16,10 @@ from backends.yaesu import yaesu_profiles as yp
 #   newcat.c:339 yaesu_default_str_cal   (FTDX10 S-meter curve, 11 points)
 #   ftdx101.h:164 FTDX101D_STR_CAL       (12 points)
 #   ftx1/ftx1.h:105 FTX1_STR_CAL         (16 points)
-EXPECTED_KEYS = ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1")
+#   ft891.h:88 FT891_STR_CAL             (16 points, marked /* TBC */)
+#   newcat.c:10099-10153 / 10162-10208   (FT-891 filter slots, get side)
+#   ft891.c:180,181,202-213              (FT-891 preamp/attenuator/ranges)
+EXPECTED_KEYS = ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1", "ft891")
 
 # A provenance value must name an offline source file, or be an explicit
 # TODO(hw-verify) marker — never a bare claim.
@@ -121,8 +124,16 @@ class ProfileInvariantTests(unittest.TestCase):
         for key in EXPECTED_KEYS:
             p = yp.get_profile(key)
             self.assertGreater(p.audio_rx_rate, 0, key)
-            self.assertTrue(p.audio_name_hints, key)
             self.assertGreater(p.audio_gain_boost, 0, key)
+            if key == "ft891":
+                # No USB sound card (design 2026-10-05 D3): the USB port is CAT
+                # only, so there is no radio device to auto-match. The generic
+                # USB-audio tier in audio_handler still finds an external
+                # interface, and the operator can pick a device explicitly.
+                self.assertEqual(p.audio_name_hints, (), key)
+                self.assertIn("TODO(hw-verify)", p.provenance["audio_rates"], key)
+            else:
+                self.assertTrue(p.audio_name_hints, key)
 
     def test_unverified_meters_named_but_not_invented(self):
         for key in EXPECTED_KEYS:
@@ -171,7 +182,7 @@ class ModelSpecificDataTests(unittest.TestCase):
 
     def test_ftx1_is_the_only_multi_band_and_auto_power_model(self):
         self.assertEqual(yp.get_profile("ftx1").power_format, "auto")
-        for key in ("ftdx10", "ftdx101d", "ftdx101mp"):
+        for key in ("ftdx10", "ftdx101d", "ftdx101mp", "ft891"):
             self.assertEqual(yp.get_profile(key).power_format, "PC1")
         labels = [b[0] for b in yp.get_profile("ftx1").bands]
         self.assertIn("2m", labels)
@@ -179,8 +190,10 @@ class ModelSpecificDataTests(unittest.TestCase):
 
     def test_only_explicitly_configured_models_declare_an_id(self):
         self.assertEqual(yp.get_profile("ftx1").id_answer, "0840")
-        for key in ("ftdx10", "ftdx101d", "ftdx101mp"):
-            # Unknown until real hardware answers (spec §3, §10).
+        for key in ("ftdx10", "ftdx101d", "ftdx101mp", "ft891"):
+            # Unknown until real hardware answers (spec §3, §10). The FT-891's is
+            # derivable (NC_RIGID_FT891=135) but deliberately not recorded as an
+            # expectation (design 2026-10-05 D6).
             self.assertEqual(yp.get_profile(key).id_answer, "")
 
     def test_dual_rx_is_recorded_but_not_implemented(self):
@@ -188,6 +201,90 @@ class ModelSpecificDataTests(unittest.TestCase):
         self.assertTrue(yp.get_profile("ftdx101mp").dual_rx)
         self.assertTrue(yp.get_profile("ftx1").dual_rx)
         self.assertFalse(yp.get_profile("ftdx10").dual_rx)
+        self.assertFalse(yp.get_profile("ft891").dual_rx)
+
+    def test_ft891_filter_tables_match_hamlib(self):
+        """Transcribed from the Hamlib get side, slot by slot.
+
+        newcat.c:10099-10153 (CW/RTTY/PKT, slots 1-17) and 10162-10208 (SSB,
+        slots 1-21). Slot 21 is 3200 Hz on the get side even though the set side
+        comments it as 3000 (newcat.c:8919-8920) — the get side is authoritative
+        for "what does this slot mean".
+        """
+        p = yp.get_profile("ft891")
+        narrow_expected = [50, 100, 150, 200, 250, 300, 350, 400, 450, 500,
+                           800, 1200, 1400, 1700, 2000, 2400, 3000]
+        voice_expected = [200, 400, 600, 850, 1100, 1350, 1500, 1650, 1800,
+                          1950, 2100, 2200, 2300, 2400, 2500, 2600, 2700,
+                          2800, 2900, 3000, 3200]
+        for mode in ("CW-U", "CW-L", "RTTY-U", "RTTY-L", "DATA-U", "DATA-L"):
+            self.assertEqual([i for i, _ in p.filter_widths[mode]],
+                             list(range(1, 18)), mode)
+            self.assertEqual([hz for _, hz in p.filter_widths[mode]],
+                             narrow_expected, mode)
+        for mode in ("SSB", "USB", "LSB"):
+            self.assertEqual([i for i, _ in p.filter_widths[mode]],
+                             list(range(1, 22)), mode)
+            self.assertEqual([hz for _, hz in p.filter_widths[mode]],
+                             voice_expected, mode)
+
+    def test_ft891_omits_am_fm_and_slot_zero(self):
+        """AM/FM width is set through NA only, so no SH slot exists (design D5).
+
+        newcat.c:8924-8936 sets AM/FM/PKTFM via newcat_set_narrow and never
+        writes an index; 10217-10228 returns fixed widths (AM 9000, AM-N 6000,
+        FM 16000). Slot 0 is narrow-dependent and this UI never sends it.
+        Inventing either would be data without a source.
+        """
+        p = yp.get_profile("ft891")
+        for mode in ("AM", "FM", "FM-N", "AM-N"):
+            self.assertNotIn(mode, p.filter_widths, mode)
+        for mode, widths in p.filter_widths.items():
+            self.assertNotIn(0, [i for i, _ in widths], mode)
+
+    def test_ft891_mode_set_excludes_the_modes_it_lacks(self):
+        """ft891.h:35-36 FT891_ALL_RX_MODES has no C4FM, no PKT-FM, no AM-N."""
+        p = yp.get_profile("ft891")
+        for absent in ("C4FM", "DATA-FM", "AM-N", "DATA-FM-N"):
+            self.assertNotIn(absent, p.mode_numbers, absent)
+        for present in ("LSB", "USB", "CW-U", "CW-L", "AM", "FM", "FM-N",
+                        "RTTY-U", "RTTY-L", "DATA-U", "DATA-L"):
+            self.assertIn(present, p.mode_numbers, present)
+        # The family registers are reused unchanged wherever the mode exists.
+        family = yp.get_profile("ftdx10").mode_numbers
+        for name, num in p.mode_numbers.items():
+            self.assertEqual(family[name], num, name)
+
+    def test_ft891_static_facts(self):
+        """The offline-derived capability facts, each pinned to its source."""
+        p = yp.get_profile("ft891")
+        self.assertEqual(p.display_name, "Yaesu FT-891")
+        self.assertEqual(p.default_baud, 38400)
+        self.assertEqual(p.att_steps, (0, 12))                    # ft891.c:181
+        self.assertEqual(p.preamp_labels, {0: "OFF", 1: "AMP1"})  # ft891.c:180
+        self.assertEqual(p.power_format, "PC1")
+        self.assertEqual(p.power_max_w, 100)                      # ft891.c:207-213
+        self.assertFalse(p.has_atu)                               # no internal ATU
+        self.assertEqual(p.tune_via, "tx2")
+        self.assertFalse(p.has_vd_id_meters)                      # ID_METER, no VD
+        self.assertTrue(p.vfo_b_direct)
+        self.assertEqual(p.filter_width_prefix, "SH01")            # newcat.c:9661
+        self.assertEqual(p.id_answer, "")                         # design D6
+        self.assertFalse(p.dual_rx)
+        self.assertFalse(p.verified)
+        self.assertTrue(p.tx_gated)
+        # No USB sound card (D3): nothing to auto-match, external interface 48k.
+        self.assertEqual(p.audio_name_hints, ())
+        self.assertEqual(p.audio_rx_rate, 48000)
+        self.assertEqual(p.audio_tx_rate, 48000)
+        # Bands: HF + 6 m only, no 2 m / 70 cm (ft891.c:202-213).
+        labels = [b[0] for b in p.bands]
+        self.assertEqual(labels, [b[0] for b in yp.get_profile("ftdx10").bands])
+        self.assertNotIn("2m", labels)
+        # The S curve is Hamlib's FT891_STR_CAL, point-identical to the FTX-1's.
+        self.assertEqual(p.s_meter_cal.points,
+                         yp.get_profile("ftx1").s_meter_cal.points)
+        self.assertEqual(p.s_meter_cal.value(130), 0.0)            # S9 at raw 130
 
 
 class MeterCalTests(unittest.TestCase):

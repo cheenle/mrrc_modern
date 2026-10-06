@@ -237,7 +237,7 @@ class FullStateCapabilitiesTests(unittest.TestCase):
         self.assertEqual(known_models(),
                          ("ft710", "ic7300", "ic7300mk2", "ic705",
                           "ic7610", "ic7760", "ftdx10", "ftdx101d",
-                          "ftdx101mp", "ftx1"))
+                          "ftdx101mp", "ftx1", "ft891"))
 
 
 class CapabilityVerificationFieldsTests(unittest.TestCase):

@@ -127,7 +127,8 @@ async def run(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", required=True,
-                        choices=("ftdx10", "ftdx101d", "ftdx101mp", "ftx1"))
+                        choices=("ftdx10", "ftdx101d", "ftdx101mp", "ftx1",
+                                 "ft891"))
     parser.add_argument("--port", required=True, help="CAT serial port")
     parser.add_argument("--baud", type=int, default=None,
                         help="defaults to the model profile (38400)")

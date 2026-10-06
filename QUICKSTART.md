@@ -8,7 +8,7 @@
 - **A supported radio** over one USB cable. Ten `MRRC_RADIO_MODEL` keys today:
   - Yaesu FT-710 (`ft710`)
   - Icom `ic7300` / `ic7300mk2`, plus `ic705` / `ic7610` / `ic7760` (preview profiles)
-  - Yaesu SDR family `ftdx10` / `ftdx101d` / `ftdx101mp` / `ftx1` (experimental)
+  - Yaesu SDR family `ftdx10` / `ftdx101d` / `ftdx101mp` / `ftx1` / `ft891` (experimental)
   - The last six are **receive-only until you check the radio and set
     `MRRC_ALLOW_UNVERIFIED_TX=1`**; the Yaesu SDR family has no real spectrum
     source (the UI shows the S-meter synthesised spectrum).
@@ -49,7 +49,7 @@ pip3 install -r requirements.txt
 # Select radio backend (default is ft710); 10 keys today:
 #   ft710
 #   ic7300 / ic7300mk2 / ic705 / ic7610 / ic7760   (Icom CI-V)
-#   ftdx10 / ftdx101d / ftdx101mp / ftx1          (Yaesu ASCII-CAT)
+#   ftdx10 / ftdx101d / ftdx101mp / ftx1 / ft891  (Yaesu ASCII-CAT)
 # The last six are receive-only until you check the radio and set
 # MRRC_ALLOW_UNVERIFIED_TX=1.
 export MRRC_RADIO_MODEL="ft710"

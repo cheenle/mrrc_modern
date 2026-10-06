@@ -310,7 +310,7 @@
 <tr>
 <td>NFR-032</td>
 <td>Radio firmware</td>
-<td>Protocol compatible with current vendor firmware for the selected backend: the ten registry keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code></td>
+<td>Protocol compatible with current vendor firmware for the selected backend: the eleven registry keys <code class="scope-code">ft710</code>, <code class="scope-code">ic7300</code>, <code class="scope-code">ic7300mk2</code>, <code class="scope-code">ic705</code>, <code class="scope-code">ic7610</code>, <code class="scope-code">ic7760</code>, <code class="scope-code">ftdx10</code>, <code class="scope-code">ftdx101d</code>, <code class="scope-code">ftdx101mp</code>, <code class="scope-code">ftx1</code>, <code class="scope-code">ft891</code></td>
 <td>Critical</td>
 <td>Radio connection fails with a logged error; the operator can switch models</td>
 </tr>
@@ -443,7 +443,7 @@
 <tr>
 <td>NFR-060</td>
 <td>RX sample rate</td>
-<td>FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2 and the IC-705/IC-7610/IC-7760 profiles: 48kHz native capture, no resample; the Yaesu FTDX10/FTDX101D/FTDX101MP/FTX-1F profiles assume the family 44.1kHz value (<code class="scope-code">TODO(hw-verify)</code>, per-profile <code class="scope-code">audio_rx_rate</code>)</td>
+<td>FT-710: 44.1kHz native capture, resampled to 48kHz for Opus; IC-7300/MK2 and the IC-705/IC-7610/IC-7760 profiles: 48kHz native capture, no resample; the Yaesu FTDX10/FTDX101D/FTDX101MP/FTX-1F profiles assume the family 44.1kHz value (<code class="scope-code">TODO(hw-verify)</code>, per-profile <code class="scope-code">audio_rx_rate</code>); the <strong>FT-891 profile carries 48kHz because it has no USB sound card</strong> — its USB port is CAT only, so audio comes from an external interface on the DATA/ACC port (<code class="scope-code">TODO(hw-verify)</code>; 48kHz is the normal rate for such an interface and is already the IC-7300 family’s resample-free path)</td>
 <td>Important</td>
 <td>A wrong per-model rate is audible as pitch shift and is the first thing <code class="scope-code">_diag_yaesu.py</code> reports</td>
 </tr>
@@ -492,7 +492,7 @@
 <tr>
 <td>NFR-065</td>
 <td>PyAudio device selection</td>
-<td>Auto-detect per-backend device hints (e.g., “FT-710”/“YAESU” for FT-710; “ic-7300”/“ic-705”/“ic-7610”/“ic-7760” then generic “USB Audio CODEC”/“USB Audio Device” for the Icom family), then mono/full-duplex heuristics; fallback to system default</td>
+<td>Auto-detect per-backend device hints (e.g., “FT-710”/“YAESU” for FT-710; “ic-7300”/“ic-705”/“ic-7610”/“ic-7760” then generic “USB Audio CODEC”/“USB Audio Device” for the Icom family), then mono/full-duplex heuristics; fallback to system default. The <strong>FT-891 carries no radio hints at all</strong> (<code class="scope-code">audio_name_hints=()</code>) because it has no USB codec: selection falls through to the generic USB-audio tier (which finds an external interface) or to the operator’s explicit <code class="scope-code">MRRC_AUDIO_RX_DEVICE</code>/<code class="scope-code">MRRC_AUDIO_TX_DEVICE</code>, and the connection dialog says so</td>
 <td>Medium</td>
 <td>Device enumeration log</td>
 </tr>
@@ -501,7 +501,7 @@
 <td>Verification honesty</td>
 <td>A radio model without hardware evidence must report <code class="scope-code">verified=false</code>, gate transmit behind <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>, list its unverified meters, record a provenance source per table and never be presented as verified in the UI, README or SDD (AD-019)</td>
 <td>Critical</td>
-<td>Operators cannot mistake documentation-derived tables for measured behaviour; the four Yaesu models and the three Icom experimental models follow this rule</td>
+<td>Operators cannot mistake documentation-derived tables for measured behaviour; the five Yaesu models and the three Icom experimental models follow this rule</td>
 </tr>
 <tr>
 <td>NFR-068</td>
@@ -518,7 +518,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.71 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.72 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -147,7 +147,7 @@ HTTPS, you also need `cryptography` (`pip install cryptography`).
 
 ## USB / Serial Device Drivers
 
-### Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F (experimental)
+### Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (experimental)
 
 Same ASCII-CAT family as the FT-710 (38400 8N1 over the radio's USB serial
 bridge). Differences that matter here:
@@ -156,9 +156,16 @@ bridge). Differences that matter here:
   reference (`SS` is a settings command only; Hamlib's whole Yaesu family
   contains no scope code), so these models run with the S-meter synthesiser
   and `scope_type="none"`.
-- **Audio**: enumerated as a USB audio device like the FT-710; the sample
-  rate is an **assumption (44.1 kHz, `TODO(hw-verify)`)** — a wrong rate is
-  audible as pitch shift and `_diag_yaesu.py` reports the enumeration.
+- **Audio**: the FTDX10 / FTDX101D / FTDX101MP / FTX-1F enumerate as a USB
+  audio device like the FT-710; their sample rate is an **assumption (44.1 kHz,
+  `TODO(hw-verify)`)** — a wrong rate is audible as pitch shift and
+  `_diag_yaesu.py` reports the enumeration. **The FT-891 has no USB sound card
+  at all** (its USB port is CAT only), so its audio must come from an external
+  interface on the DATA/ACC port: the profile carries no radio-specific device
+  hints (`audio_name_hints=()`), so nothing is auto-matched to the radio and
+  selection falls through to the generic USB-audio tier or to an explicit
+  `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE`; its rate is 48 kHz, the
+  normal rate for such an interface (`TODO(hw-verify)`).
 - **FTX-1F** exposes three power configurations (Field head 6/10 W, SPA-1
   100 W); the server detects the class from the `PC` answer format.
 
@@ -487,7 +494,11 @@ IC-7300 USB Audio Device:
 **Auto-detection:** The `AudioHandler` automatically finds the radio audio
 device by scanning PyAudio devices for names containing "FT-710", "FT710",
 "YAESU", "USB Audio CODEC", or "USB Audio Device". It uses heuristics
-(mono input, full-duplex capability) as fallbacks.
+(mono input, full-duplex capability) as fallbacks. The **FT-891 is the
+exception**: it has no USB sound card, so its profile supplies no radio-specific
+hints and detection falls through to the generic USB-audio tier (an external
+interface) or to the explicit `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE`
+override.
 
 **Manual override:**
 

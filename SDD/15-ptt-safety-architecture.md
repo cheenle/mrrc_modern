@@ -24,7 +24,7 @@ The MRRC Modern PTT safety architecture provides **7 independent layers of defen
 
 ## 15.2 Layer Details
 
-**Layer 0 (V2.41, extended V2.46): unverified-model transmit gate.** Before any of the layers below can key the radio, the active backend's `set_ptt(True)`/`set_tune(True)` refuse when the model profile is not hardware-verified (`IC7300Backend` for IC-705/IC-7610/IC-7760, `YaesuBackend` for FTDX10/FTDX101D/FTDX101MP/FTX-1F) unless `MRRC_ALLOW_UNVERIFIED_TX=1` is set; the refusal is logged once per process and PTT **releases are never gated**, so the layers below can always unkey. See AD-019.
+**Layer 0 (V2.41, extended V2.46): unverified-model transmit gate.** Before any of the layers below can key the radio, the active backend's `set_ptt(True)`/`set_tune(True)` refuse when the model profile is not hardware-verified (`IC7300Backend` for IC-705/IC-7610/IC-7760, `YaesuBackend` for FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) unless `MRRC_ALLOW_UNVERIFIED_TX=1` is set; the refusal is logged once per process and PTT **releases are never gated**, so the layers below can always unkey. See AD-019.
 
 ### Layer 1: Touch-and-Hold UX
 

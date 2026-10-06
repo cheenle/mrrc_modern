@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.71</a></li>
+          <li><a href="#updates">V2.72</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.71 · 2026-10-05</span>
+          <span>SDD V2.72 · 2026-10-05</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.71</td>
+              <td>V2.72</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,42 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-radio"></i></div>
+            <h3>
+              FT-891 Joins The Yaesu Family — And A Latent Crash It Uncovered
+              <small>(V2.72)</small>
+            </h3>
+            <p>
+              The eleventh registry key and the fifth profile on the shared
+              Yaesu ASCII-CAT core. Its one protocol difference is a
+              <em>write format</em>: filter-width SET is <code>SH01NN</code>,
+              not the family's <code>SH00NN</code> (Hamlib
+              <code>newcat.c:9658</code>, <code>int on = is_ft891</code>), so
+              <code>YaesuModelProfile</code> gained
+              <code>filter_width_prefix</code> and the core reads it — no
+              per-model branch, and the four shipped models still emit
+              byte-identical commands. Filter slots are transcribed from
+              Hamlib's get side (17 for CW/RTTY/PKT, 21 for SSB) and
+              machine-compared against it; AM/FM carry no slots because their
+              width is set through <code>NA</code> alone. Three facts no offline
+              source carries come from a 2026-09-17 field report: 38400 8N1
+              (Hamlib's <code>stop_bits=2</code> is self-marked
+              <em>assumed</em>), <strong>no USB sound card</strong> — so no
+              auto-match hints, 48 kHz for an external interface, and the
+              connection dialog says so — and an S reading 1–1.5 S high
+              (recorded, curve deliberately unchanged). Wiring it up also
+              exposed a crash latent in the whole family:
+              <code>get_preamp</code>/<code>get_attenuator</code> were called by
+              <code>initial_state_sync()</code> and the settings poll tier but
+              never defined, so the first successful connect raised
+              <code>AttributeError</code> — invisible until now because no model
+              in the family has hardware to connect to. Fixed, plus a structural
+              guard that resolves every method a poll item or the sync
+              references. Unverified throughout: TX gated,
+              <code>id_answer</code> empty, 11 <code>TODO(hw-verify)</code>.
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-microphone-slash"></i></div>
             <h3>
@@ -540,7 +576,7 @@
           <div class="feature-card">
             <div class="icon"><i class="fas fa-radio"></i></div>
             <h3>
-              Yaesu SDR Family: FTDX10 / FTDX101D / FTDX101MP / FTX-1F
+              Yaesu SDR Family: FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891
               <small>(V2.46)</small>
             </h3>
             <p>

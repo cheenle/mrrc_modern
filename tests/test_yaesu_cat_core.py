@@ -9,6 +9,7 @@ deterministically.
 import asyncio
 import errno
 import unittest
+from dataclasses import replace
 from typing import Any, Tuple
 
 import serial
@@ -253,6 +254,33 @@ class FilterTests(unittest.IsolatedAsyncioTestCase):
         await ctrl.set_filter_width(3)
         self.assertEqual(fake.writes, [b"SH0003;"])
 
+    async def test_the_sh_prefix_comes_from_the_profile(self):
+        """The FT-891 needs P2=1 (Hamlib newcat.c:9658-9663, `int on = is_ft891`).
+
+        Driven through `replace()` on an existing profile so this test does not
+        depend on the ft891 registry key existing yet.
+        """
+        profile = replace(get_profile("ftdx10"), filter_width_prefix="SH01")
+        ctrl = YaesuCatController("/dev/null", baudrate=38400, profile=profile)
+        fake: Any = _FakeSerial([])
+        ctrl._ser = fake
+        ctrl._connected = True
+        await ctrl.set_filter_width(3)
+        self.assertEqual(fake.writes, [b"SH0103;"])
+
+    async def test_every_family_model_still_sends_sh00(self):
+        """Byte-identical to the pre-change behaviour, per model."""
+        for model in ("ftdx10", "ftdx101d", "ftdx101mp", "ftx1"):
+            ctrl, fake = _controller([], model=model)
+            await ctrl.set_filter_width(3)
+            self.assertEqual(fake.writes, [b"SH0003;"], model)
+
+    async def test_get_filter_width_parses_both_prefixes(self):
+        """The read-back takes the trailing two digits, so it is prefix-agnostic."""
+        for answer in ("SH0003;", "SH0103;"):
+            ctrl, _fake = _controller([answer])
+            self.assertEqual(await ctrl.get_filter_width(), 3, answer)
+
     async def test_get_filter_width_reads_the_slot(self):
         ctrl, fake = _controller(["SH0003;"])
         self.assertEqual(await ctrl.get_filter_width(), 3)
@@ -294,6 +322,30 @@ class MeterAndGainTests(unittest.IsolatedAsyncioTestCase):
         await ctrl.set_mic_gain(50)
         self.assertEqual(fake.writes, [b"AG0120;", b"RG0080;",
                                             b"SQ0015;", b"MG0050;"])
+
+    async def test_preamp_and_attenuator_read_back_the_step_index(self):
+        """The two settings the poll tiers and initial_state_sync both ask for.
+
+        They were referenced by `backend.settings_poll_items()` and
+        `cat_core.initial_state_sync()` without ever existing on the
+        controller, so the first successful connect raised AttributeError —
+        invisible until then because no model in this family had hardware to
+        connect to. Answers carry the step *index* (PA01 = AMP1, RA02 = the
+        third attenuator step), which is what RadioState stores.
+        """
+        ctrl, fake = _controller(["PA01;"])
+        self.assertEqual(await ctrl.get_preamp(), 1)
+        self.assertEqual(fake.writes, [b"PA0;"])
+
+        ctrl, fake = _controller(["RA02;"])
+        self.assertEqual(await ctrl.get_attenuator(), 2)
+        self.assertEqual(fake.writes, [b"RA0;"])
+
+    async def test_preamp_and_attenuator_tolerate_a_silent_radio(self):
+        for answer in ("", "PA0X;"):
+            ctrl, _fake = _controller([answer] if answer else [])
+            self.assertIsNone(await ctrl.get_preamp(), repr(answer))
+            self.assertIsNone(await ctrl.get_attenuator(), repr(answer))
 
 
 class PowerTests(unittest.IsolatedAsyncioTestCase):

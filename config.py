@@ -228,6 +228,11 @@ _DEFAULT_BAUD_BY_MODEL = {
     "ftdx101d": 38400,
     "ftdx101mp": 38400,
     "ftx1": 38400,
+    # FT-891: field evidence, not Hamlib — the 2026-09-17 report ran this radio
+    # at 38400 8N1 (hub/mrrc/dist/support_answers/20260917-073700-14ef).
+    # Hamlib ft891.c:140 hints the manual's default rate may be 4800, so a
+    # failed connect starts at the radio's CAT RATE menu.
+    "ft891": 38400,
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 

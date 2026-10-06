@@ -99,23 +99,34 @@ class ProfileSetTests(unittest.TestCase):
 
 
 class ExclusionParityTests(unittest.TestCase):
-    """The box overlay must copy exactly what the Pi builder copies.
+    """Every copier of /opt/mrrc_modern must copy exactly the same things.
 
-    Two builders that disagree about what belongs in /opt/mrrc_modern is how a
-    file ends up in one image and missing from the other, and the symptom is a
-    runtime ImportError rather than a build error.
+    Three places now carry this list — the Pi builder, the box overlay and the
+    in-place updater. Two of them disagreeing is how a file ends up in one
+    image and missing from the other, or vanishes on the first update, and the
+    symptom is a runtime ImportError rather than a build error.
     """
 
     EXCLUDE_RE = re.compile(r'--exclude\s+"([^"]+)"')
 
-    def _excludes(self, path: Path) -> list[str]:
-        return self.EXCLUDE_RE.findall(path.read_text(encoding="utf-8"))
+    IMPLEMENTERS = (
+        ("the Pi image builder", "packaging/rpi/build-image.sh"),
+        ("the box overlay", "packaging/box/box-overlay.sh"),
+        ("the in-place updater", "linux/mrrc_update.sh"),
+    )
 
-    def test_the_two_builders_exclude_the_same_paths(self):
-        pi = self._excludes(REPO / "packaging" / "rpi" / "build-image.sh")
-        box = self._excludes(REPO / "packaging" / "box" / "box-overlay.sh")
-        self.assertTrue(pi, "the Pi builder's list came back empty — parser drift?")
-        self.assertEqual(box, pi)
+    def _excludes(self, rel: str) -> list[str]:
+        return self.EXCLUDE_RE.findall((REPO / rel).read_text(encoding="utf-8"))
+
+    def test_every_implementer_excludes_the_same_paths(self):
+        reference: list[str] = []
+        for label, rel in self.IMPLEMENTERS:
+            with self.subTest(implementer=label):
+                got = self._excludes(rel)
+                self.assertTrue(got, f"{label} returned an empty list — parser drift?")
+                if not reference:
+                    reference = got
+                self.assertEqual(got, reference, f"{label} has drifted from {rel}")
 
 
 class VendoredFtdiTests(unittest.TestCase):

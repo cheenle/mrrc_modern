@@ -116,6 +116,8 @@ cd FT710Android
 - **顶栏布局（两列）**：左列 = 主频 + 状态行 `FlowRow`（`☰/⛶/⏻/VFO` 都在状态行，行内小项包 `StatusItem` 统一 32dp 行高；窄屏自动折行）；右列 = **S 表独立区域**，宽=页宽×44%(140–240dp)、高=宽×0.64(96–168dp)。尺寸只看屏幕，**不要拿行高约束仪表**（用户明确要求过"不要受限于频率的字高度"）；按钮别塞回主频行，否则主频掉到 20sp 以下。
 - **面板 S 表示例**：弧用贝塞尔几何（`SMeter.arcX/arcY`），刻度/标签沿用 Web 的 `MARKERS/LABELS`，内部字号/线宽按区域短边比例缩放（手机与平板同一份代码）；画弧这种几何要抽纯函数并单测（`SMeterTest` 的逐标签宽度断言当场抓出 `+20/+40` 压字）。**仪表类 UI 一律按屏幕给独立区域**，不要挤在文字行高里。
 - **频谱标尺**：范围恒 `VFO ± span/2`，**绝不用 `scope_start_freq`**（服务端恒 CENTER，调谐后滞后）；步进/格式用 `Data/FreqScale.kt`（对齐 web `_freqStep`/`_formatFreqLabel`），刻度按真实位置画；QSY 必须同一公式。
+- **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**；录音入口是状态行芯片、天调参数并进 ATR 行。用户明确要求过"不要独占一行的小信息条"——新信息优先塞进状态行 FlowRow 或已有行。
+- **字号**：`☰` 15sp、模式徽章 9sp、状态行 VFO 芯片 9sp（`PadBtn(fontSize=…)`）；用户嫌顶栏字大。
 - **对齐手机端 Web，不发明**：令牌唯一来源 `static/ft710.css :root`（`UI/Theme.kt` 的 `MrrcColors`）；瀑布配色 = `WF_PALETTES`；S 表刻度 = `renderSMeter`；QSY 公式 = `wireScopeQSY`；频率输入解析 = `commitFreq`。
 - 大字号（如主频）要**按可用宽度自适应**（`BoxWithConstraints` 算 `maxWidth/字符数/0.62`），手机上不溢出、平板吃满。
 - 松手才提交的滑块：本地 `local` 值显示中、`onValueChangeFinished` 提交，服务端值由版本号驱动重算——三者缺一就会"拖完弹回"。

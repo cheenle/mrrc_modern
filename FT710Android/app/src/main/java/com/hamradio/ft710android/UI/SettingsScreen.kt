@@ -44,6 +44,8 @@ import com.hamradio.ft710android.Data.SettingsStore
 import com.hamradio.ft710android.Spectrum.Palettes
 import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import java.util.Locale
 
 /**
@@ -80,6 +82,8 @@ fun SettingsScreen(
     }
     val caps by vm.caps.collectAsState()
     val displayName by vm.displayName.collectAsState()
+    val listenOnly by vm.listenOnly.collectAsState()
+    val diag by vm.diag.collectAsState()
     var showCloud by remember { mutableStateOf(false) }
 
     Column(
@@ -176,6 +180,36 @@ fun SettingsScreen(
         LinkRow("🐞 遇到问题（浏览器）") {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.baseUrlForUi() + "/support.html")))
         }
+
+        // ── 设备信息 / 诊断（原主屏那两行挪过来：主屏保持干净）──────
+        Section("设备 / 诊断")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(displayName.ifEmpty { "—" }, color = MrrcColors.TextSecondary, fontSize = 12.sp)
+            if (!caps.verified) {
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    Modifier.background(Color(0xFF78350F), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                        .clickable {
+                            vm.showNotice(
+                                if (caps.txGated) "该机型未硬件实测 — 发射已禁用（MRRC_ALLOW_UNVERIFIED_TX=1 可放行）"
+                                else "该机型未硬件实测 — 发射已由环境变量放行"
+                            )
+                        }
+                ) { Text("实验性", color = Color(0xFFFBBF24), fontSize = 10.sp) }
+            }
+        }
+        if (listenOnly) {
+            Spacer(Modifier.height(4.dp))
+            Text("只读登录（listen-only）：发射与设备设置已被服务端禁用",
+                color = MrrcColors.Accent, fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("诊断（排查问题时把这行发给我）", color = MrrcColors.TextMuted, fontSize = 10.sp)
+        Text(
+            diag.ifEmpty { "（未连接）" },
+            color = MrrcColors.TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.Monospace,
+        )
 
         Spacer(Modifier.height(16.dp))
         TextButton(onClick = { vm.connectionManager.reconnectAll() }) { Text("重连") }

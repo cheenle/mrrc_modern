@@ -72,9 +72,13 @@ log "frpc (Cloud Hub tunnel client)"
 install -d "$MRRC_HOME/fleet"
 bash "$REPO_SRC/packaging/box/fetch-frpc.sh" "$MRRC_HOME/fleet"
 
-log "mrrc-radio and the updater"
+log "mrrc-radio, the updater, and the password helper"
 install -m 0755 "$MRRC_HOME/linux/mrrc_radio.py" /usr/local/bin/mrrc-radio
 install -m 0755 "$MRRC_HOME/linux/mrrc_update.sh" /usr/local/bin/mrrc-update
+# The Pi image's helper, unchanged: the web password lives in a 0640 root file
+# and this is how an operator reads it back after the console banner is gone.
+install -m 0755 "$REPO_SRC/packaging/rpi/pi-gen-stage4/01-deploy-mrrc/files/usr/local/bin/mrrc-show-password" \
+  /usr/local/bin/mrrc-show-password
 
 log "systemd units"
 cat > /etc/systemd/system/mrrc-modern.service <<'UNIT'

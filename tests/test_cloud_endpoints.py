@@ -146,7 +146,7 @@ class CertificateReloadClockTests(unittest.TestCase):
             cert.write_text("dummy", encoding="utf-8")
             old = time.time() - 3600                      # 一小时前，早于进程启动
             os.utime(cert, (old, old))
-            with patch.dict(os.environ, {"MRRC_SSL_CERT": str(cert)}):
+            with self._env_file_naming(tmp, cert):
                 self.assertFalse(server._cert_reload_required(),
                                  "一小时前的证书被当成刚写入的 —— 又把 epoch 和 monotonic 比了")
 
@@ -155,8 +155,22 @@ class CertificateReloadClockTests(unittest.TestCase):
             cert = Path(tmp) / "fullchain.pem"
             cert.write_text("dummy", encoding="utf-8")
             with patch.object(server, "_PROCESS_STARTED_AT", time.time() - 60), \
-                 patch.dict(os.environ, {"MRRC_SSL_CERT": str(cert)}):
+                 self._env_file_naming(tmp, cert):
                 self.assertTrue(server._cert_reload_required())
+
+    def _env_file_naming(self, tmp, cert):
+        """只让 MRRC_CONFIG_FILE 指向一个写着 *cert* 的 env 文件。
+
+        ``_configured_ssl_cert()`` **先读配置文件**，只有那个文件里没有 MRRC_SSL_CERT 时才回退
+        到 ``os.environ``。所以只 patch 环境变量的测试，判的是开发机真实的
+        ``~/Library/Application Support/MRRC-Modern/mrrc_modern.env`` —— 2026-10-06 在这台装了
+        证书的机器上实测：两条测试读的都是**那个**文件，谁也没看自己刚写下的那张证书；一条失败，
+        另一条把 ``time.monotonic()`` 那个 bug 塞回去也照样通过 —— 而拦住那个 bug 正是它存在的
+        理由。**一条不会为自己的理由失败的测试，不是证据。**
+        """
+        env_file = Path(tmp) / "mrrc_modern.env"
+        env_file.write_text(f"MRRC_SSL_CERT={cert}\n", encoding="utf-8")
+        return patch.dict(os.environ, {"MRRC_CONFIG_FILE": str(env_file)})
 
 
 class CertificateReloadSelectionTests(unittest.TestCase):
@@ -357,6 +371,25 @@ class CloudAutoconnectTests(unittest.TestCase):
         payload = json.loads(bytes(reply.body))
         self.assertIn("autoconnect", payload)
         self.assertEqual(payload["autoconnect"]["status"], "applied")
+
+class CloudTunnelShutdownTests(unittest.TestCase):
+    """frpc is this process's child, so it must not outlive it.
+
+    Measured on macOS 2026-10-06: six app starts in half an hour left six frpc orphans, each still
+    logged in to the hub and retrying for a proxy name the running instance could not register -
+    and nothing reaped them, because the sweep that clears a stale frpc only ever ran on Windows.
+    Stopping the tunnel here keeps that sweep with nothing to find; the sweep is what covers a
+    crash or a kill, where this never runs at all.
+    """
+
+    def test_the_tunnel_is_stopped_when_the_server_shuts_down(self):
+        import inspect
+        source = inspect.getsource(server.lifespan)
+        # The shutdown half specifically: startup touches the same global, so an assertion that
+        # only looked for the name somewhere in the function would pass on a startup reference.
+        shutdown = source.split("yield", 1)[1]
+        self.assertIn("_cloud_tunnel.stop()", shutdown)
+
 
 if __name__ == "__main__":
     unittest.main()

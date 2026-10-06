@@ -7,38 +7,45 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.25.3 Stable)
+## Download (v1.25.4 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.25.3-Windows-x64-Setup.exe` | 51.8 MB (54,342,929 bytes) | `1413521cd4081d922429320106ba44f135d339e4ac805d29937b0f2d667744ec` |
+| `MRRC-Modern-v1.25.4-Windows-x64-Setup.exe` | 51.8 MB (54,347,067 bytes) | `7daebeae65dccfb184be6b93553df0967e12f9fd84b9a937e3a7ae4c4c0659ab` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.3-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.4-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.25.3 is the published Windows installer.** It was built from `46cf1dc` on Windows 11
-(the KVM build VM) with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3. The build gate
-ran **1613 tests OK (19 platform skips)**, three PyInstaller targets, and the installer compiled
+**v1.25.4 is the published Windows installer.** It was built from the source pack
+`dist/mrrc_modern_src.zip` (2026-10-06 22:00) on Windows 11 (the KVM build VM) with Python 3.12.4,
+PyInstaller 6.21.0 and Inno Setup 6.7.3 — that pack is the state the release was cut from, and its
+`server.py` and `cloud_hub.py` are **byte-identical** to the working tree (same SHA-256). The build
+gate ran **1639 tests OK (19 platform skips)**, three PyInstaller targets, and the installer compiled
 into a scratch directory and was copied in. Evidence taken from the artifact: `version.txt` =
-`1.25.3`, size **54,342,929 bytes** (v1.25.2 was 54,346,505), mtime **2026-10-05 13:45:21**, and
-the cross-host SHA-256 matched (build VM == build Mac) — **`1413521c…`**.
+`1.25.4`, size **54,347,067 bytes** (v1.25.3 was 54,342,929), mtime **2026-10-06 22:15:07**, and
+the cross-host SHA-256 matched (build VM == build Mac) — **`7daebeae…`**.
 
-**Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build): the
-first v1.25.3 build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —
+**Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build in
+v1.25.3): that build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —
 and still froze the **pre-fix** `server.py`. PyInstaller only re-analyzes a file whose (size, mtime)
 changed; a tree shipped as a tar keeps the build Mac's mtimes, and the fix's `server.py` mtime
 (2026-10-04 23:04) predated the v1.25.2 cache (2026-10-05 07:46), so only `COLLECT-00.toc` was
 rewritten and the old bytecode was reused. The walk caught it: `_execute_set_command` differed from
 the source by 10 instructions, its generator expression sat at line 2469 instead of 2484 (exactly
 the +15 lines the fix added), and `_tx_hb_capable` / `_tx_hb_last` were source-only names.
-`build.ps1` now removes `build\pyinstaller` before invoking PyInstaller (with a guard test), and the
-rebuilt package's walk is exact: `_execute_set_command`, `_tx_liveness_watchdog` and
-`_tx_liveness_timeout` are **byte-identical** to `server.py`, and the new membership test against
-`_tx_hb_capable` is present in the frozen entry. The launcher entry carries `launcher_net`,
-`first_run`, `ssl_material`, `acquire_single_instance` and `_create_launcher_mutex`; the PYZ carries
-`net_tls`, `cloud_hub`, `ssl_bootstrap`, `upgrade_core` and `config`, and `cloud_hub` carries
-`_enumerate_frpc`, `_stale_frpc_pids`, `_windows_norm`, `_kill_stale_frpc` and `_NO_WINDOW`.
+`build.ps1` now removes `build\pyinstaller` before invoking PyInstaller (with a guard test).
+
+This release's walk (`dev_tools/bundle_check_v1254.py`) is exact. `server.lifespan` — the entry-script
+function this release changed — matches `server.py` in `co_code` (4874 bytes), `co_consts` and
+`co_firstlineno`; `cloud_hub`'s `_terminate`, `_kill_stale_frpc`, `_enumerate_frpc`,
+`_stale_frpc_pids` and `_windows_norm` are byte-identical too; and `signal`, `SIGTERM`, `ps`, `-eo`
+and `pid=,command=` are all present where the source puts them. The script carries a **self-control**:
+it compares two unrelated functions first and fails the run unless that comparison reports a
+difference — without it, "everything matches" can just mean the comparison is vacuous. The launcher
+entry carries `launcher_net`, `first_run`, `ssl_material`, `acquire_single_instance` and
+`_create_launcher_mutex`; the PYZ carries `net_tls`, `cloud_hub`, `ssl_bootstrap`, `upgrade_core` and
+`config`, and `cloud_hub` also carries `_NO_WINDOW`.
 
 **Layer 4 — clean-room run of the packaged binaries, then the real installer.** An isolated
 `LOCALAPPDATA`, a pre-seeded config on a free port (18896 — the VM's own resident tenant holds 8888)
@@ -51,7 +58,7 @@ of `localhost, DESKTOP-SSDDF0B, DESKTOP-SSDDF0B.local, 127.0.0.1, ::1, 192.168.1
 after**; junk 0. The second launcher declined, one `LISTENING` row remained during the run and zero
 after it was stopped. The shipped `MRRC-Modern-Setup.exe` was then installed **silently into an
 isolated `/DIR=`** (so the VM's resident tenant was never touched): 165 files, `version.txt` =
-1.25.3, fleet payload present, junk 0; the installed Launcher served `https /login` **200** and the
+1.25.4, fleet payload present, junk 0; the installed Launcher served `https /login` **200** and the
 install directory stayed 165→165; the uninstaller removed it cleanly.
 
 **v1.25.2 (previous release).** It was built from `0983c2d` in a **clean
@@ -176,7 +183,18 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.24.8 package (54,121,489 bytes, SHA-256 `616f8b55…`) and v1.24.7
-(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.25.3 supersedes them.
+(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.25.4 supersedes them.
+
+**What's new in v1.25.4** (**macOS only — Windows behaviour is unchanged**): **the macOS tunnel
+stopped leaking a process per start.** v1.25.2 fixed this leak here by changing how a leftover
+`frpc` was *enumerated* (`wmic` → `Get-CimInstance`), but the sweep still returned before doing
+anything unless the platform was Windows — so on macOS every start left one behind, forever:
+**six** starts, **six** orphans on one machine. It compounds, because the orphan holds the proxy
+name and the next instance therefore can never register itself (67 of the 86 lines in one field log
+were 33-second retries of `proxy [bg1sb] already exists`). The sweep now enumerates with `ps`,
+ends a leftover with `SIGTERM` so the entry is released at once, and shutdown stops the tunnel
+child it used to abandon. `cloud_hub.py` and `server.py` are shared code, so this installer carries
+the fix too, but nothing about Windows changes.
 
 **What's new in v1.25.3**: **a fresh press can no longer be unkeyed by the remote-session safety
 gate.** Cloud Hub enables the liveness gate that unkeys a transmitting session which stops proving

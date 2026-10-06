@@ -14,7 +14,9 @@ sessions taught:
 
 import json
 import os
+import signal
 import stat
+import subprocess
 import tempfile
 import threading
 import time
@@ -326,6 +328,11 @@ class StaleTunnelTests(unittest.TestCase):
     their proxy name, so they retried every 30 seconds - 7143 "proxy already exists" warnings on
     the hub in a single day - and nothing on the machine said so: the cleanup below used ``wmic``,
     which Windows 11 no longer ships, and its ``except`` swallowed the failure silently.
+
+    Field evidence on macOS, 2026-10-06: the same six orphans, from six app starts in half an hour,
+    all naming one config and all retrying against one proxy name. The Windows fix never reached
+    here - the sweep began with ``if os.name != "nt": return``, so there was no listing, no
+    warning, and no cleanup at all.
     """
 
     CONFIG = r"C:\Users\cheen\AppData\Local\MRRC-Modern\fleet\frpc-ba4eg.toml"
@@ -336,9 +343,85 @@ class StaleTunnelTests(unittest.TestCase):
               "1717\t\"C:\\Program Files\\MRRC Modern\\fleet\\frpc.exe\" -c "
               "C:\\Users\\cheen\\AppData\\Local\\MRRC-Modern\\fleet\\frpc-bg9zzz.toml\n")
 
-    def test_cleanup_is_a_no_op_off_windows(self):
-        with mock.patch.object(cloud_hub.os, "name", "posix"):
-            cloud_hub._kill_stale_frpc(Path("/tmp/nope.toml"))
+    #: A macOS command line: "/" separators, and the path spelled the way the filesystem has it.
+    POSIX_CONFIG = "/Users/cheen/Library/Application Support/MRRC-Modern/fleet/frpc-ba4eg.toml"
+    POSIX_OUTPUT = (
+        "4242\t/Applications/MRRC-Modern.app/Contents/Frameworks/payload/frpc -c "
+        + POSIX_CONFIG + "\n"
+        "1717\t/Applications/MRRC-Modern.app/Contents/Frameworks/payload/frpc -c "
+        "/Users/cheen/Library/Application Support/MRRC-Modern/fleet/frpc-bg9zzz.toml\n")
+
+    #: What ``ps -eo pid=,command=`` prints off Windows: a pid, then the command line, no header.
+    #: The third line is the hazard - a text editor with this instance's config open names the
+    #: config too, and the sweep must not take it for an frpc.
+    PS_OUTPUT = (
+        " 4242 /Applications/MRRC-Modern.app/Contents/Frameworks/payload/frpc -c "
+        + POSIX_CONFIG + "\n"
+        " 1717 vim " + POSIX_CONFIG + "\n"
+        " 9999 /opt/homebrew/bin/frpc -c /tmp/other.toml\n"
+        " 1234 /Applications/MRRC-Modern.app/Contents/MacOS/MRRC-Modern-Server\n")
+
+    def test_a_stale_pid_that_has_already_exited_is_not_an_error(self):
+        """The listing is a snapshot: the process can exit between the ``ps`` and the kill, and
+        ``os.kill`` raises when it has. This runs from ``TunnelProcess.__init__``, so letting that
+        out would take the tunnel setup - and the endpoint that triggers it - down with it, which
+        is a worse outcome than a sweep with nothing left to do.
+        """
+        with mock.patch.object(cloud_hub.os, "name", "posix"), \
+                mock.patch.object(cloud_hub, "_enumerate_frpc", lambda: self.POSIX_OUTPUT), \
+                mock.patch.object(cloud_hub.os, "kill",
+                                  side_effect=ProcessLookupError(3, "No such process")):
+            cloud_hub._kill_stale_frpc(Path(self.POSIX_CONFIG))
+
+    def test_a_kill_that_times_out_is_not_an_error_either(self):
+        """``taskkill`` gets 10 seconds; a loaded Windows box can take longer to answer, and
+        TimeoutExpired is a SubprocessError, not an OSError - so it would sail past a guard that
+        only caught OSError and out of ``TunnelProcess.__init__`` with the tunnel.
+        """
+        with mock.patch.object(cloud_hub.os, "name", "nt"), \
+                mock.patch.object(cloud_hub, "_enumerate_frpc", lambda: self.OUTPUT), \
+                mock.patch.object(cloud_hub.subprocess, "run",
+                                  side_effect=subprocess.TimeoutExpired("taskkill", 10)), \
+                self.assertLogs("cloud_hub", level="WARNING") as logged:
+            cloud_hub._kill_stale_frpc(Path(self.CONFIG))
+        self.assertIn("cannot terminate a stale frpc", " ".join(logged.output))
+
+    def test_process_listing_uses_ps_off_windows(self):
+        """PowerShell is the Windows half of this function and macOS does not have it, so the
+        listing - and with it the whole sweep - raised there and was swallowed by the warning
+        path, which is how the orphans went unnoticed on this machine."""
+        seen = []
+
+        def fake_run(cmd, **kwargs):
+            seen.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout=self.PS_OUTPUT, stderr="")
+
+        with mock.patch.object(cloud_hub.os, "name", "posix"), \
+                mock.patch.object(cloud_hub.subprocess, "run", fake_run):
+            listed = cloud_hub._enumerate_frpc()
+        self.assertEqual(seen, [["ps", "-eo", "pid=,command="]])
+        self.assertEqual(
+            listed,
+            "4242\t/Applications/MRRC-Modern.app/Contents/Frameworks/payload/frpc -c "
+            + self.POSIX_CONFIG + "\n"
+            "9999\t/opt/homebrew/bin/frpc -c /tmp/other.toml\n")
+
+    def test_the_stale_frpc_is_terminated_off_windows_too(self):
+        """The sweep was ``if os.name != "nt": return`` - dead code on macOS, where the tunnel moved
+        into the app itself. Measured here 2026-10-06: six frpc orphans from six app starts, all
+        naming one config, all retrying against one proxy name, and the hub's log full of
+        "proxy already exists" while nothing on this machine said so.
+
+        Only this instance's own config is touched: the other pid in the listing names a different
+        one and must survive, or a second instance would lose its tunnel to this one's sweep.
+        """
+        killed = []
+        with mock.patch.object(cloud_hub.os, "name", "posix"), \
+                mock.patch.object(cloud_hub, "_enumerate_frpc", lambda: self.POSIX_OUTPUT), \
+                mock.patch.object(cloud_hub.os, "kill",
+                                  lambda pid, sig: killed.append((pid, sig))):
+            cloud_hub._kill_stale_frpc(Path(self.POSIX_CONFIG))
+        self.assertEqual(killed, [(4242, signal.SIGTERM)])
 
     def test_the_path_match_ignores_case_and_slashes(self):
         """What this replaced was ``str(config_path) in line``: case-sensitive, so a Windows path

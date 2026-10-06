@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 330">
-  <!-- diagram-version: V2.70 -->
+  <!-- diagram-version: V2.73 -->
   <style>text{font-family:Inter,-apple-system,sans-serif}.b{fill:#e0e0e0;font-size:12px;font-weight:600}.h{fill:#f0a030;font-size:11px;font-weight:700;letter-spacing:.08em}.m{fill:#999;font-size:10px}.s{fill:#777;font-size:9px}</style>
 
   <text x="360" y="18" text-anchor="middle" class="b">Layer Architecture — MRRC Modern (V2.63)</text>
@@ -17,8 +17,8 @@
   <!-- BACKEND -->
   <rect x="20" y="138" width="680" height="60" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
   <text x="34" y="156" class="h">BACKEND</text>
-  <text x="34" y="174" class="m">backends/ registry (10 model keys) → RadioBackend ABC + RadioCapabilities</text>
-  <text x="34" y="189" class="m">ft710 (verified, own path) · ic7300 core + profiles (IC-7300/MK2 verified; IC-705/7610/7760 experimental) · yaesu core + profiles (FTDX10/FTDX101D/FTDX101MP/FTX-1F experimental)</text>
+  <text x="34" y="174" class="m">backends/ registry (11 model keys) → RadioBackend ABC + RadioCapabilities</text>
+  <text x="34" y="189" class="m">ft710 (verified, own path) · ic7300 core + profiles (IC-7300/MK2 verified; IC-705/7610/7760 experimental) · yaesu core + profiles (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891 experimental)</text>
 
   <!-- AUDIO / CODEC / RECORDING -->
   <rect x="20" y="206" width="680" height="60" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>

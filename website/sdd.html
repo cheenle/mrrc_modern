@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.72</a></li>
+          <li><a href="#updates">V2.73</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.72 · 2026-10-05</span>
+          <span>SDD V2.73 · 2026-10-06</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,11 +113,11 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.72</td>
+              <td>V2.73</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
-              <td>2026-10-05</td>
+              <td>2026-10-06</td>
             </tr>
             <tr>
               <td>Runtime</td>
@@ -146,6 +146,36 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-network-wired"></i></div>
+            <h3>
+              The Tunnel Sweep Ran On Windows Only — So macOS Never Cleaned Up
+              <small>(V2.73)</small>
+            </h3>
+            <p>
+              v1.25.2 fixed the growing pile of leftover <code>frpc</code>
+              processes by changing <em>how</em> they are enumerated
+              (<code>wmic</code> → <code>Get-CimInstance</code>) — but the sweep
+              opened with <code>if os.name != "nt": return</code>, a guard added
+              to keep a second instance on the same machine untouched. On macOS
+              that returned before doing anything, so nothing was ever swept.
+              Measured on macOS: six starts after one boot left
+              <strong>six orphans</strong> (all reparented to PID 1), and the
+              failure then feeds itself — the one clean child that finally got
+              the proxy name became the orphan that blocked the next start,
+              whose own child retried <code>already exists</code> every 33
+              seconds for the rest of the log (67 of 86 lines). The sweep now
+              enumerates with <code>ps -eo pid=,command=</code> and accepts a
+              process only when the basename of its first command word is
+              <code>frpc</code> — a <code>vim</code> holding that same
+              <code>.toml</code> has the path in its command line too — and
+              terminates with <code>SIGTERM</code> so frpc closes its control
+              connection and the hub releases the name immediately. It never
+              raises: a process may exit between the snapshot and the kill.
+              Shutdown now stops the tunnel as well, because frpc outlives the
+              server that spawned it.
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-radio"></i></div>
             <h3>

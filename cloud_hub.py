@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -191,11 +192,15 @@ _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 
 
 
 def _windows_norm(text: str) -> str:
-    """Compare two Windows paths the way Windows does: case-insensitive, either slash.
+    """Compare two paths the way the platforms this runs on spell them: case-insensitive, either
+    slash.
 
-    Deliberately not ``os.path.normcase``: that applies the *running* platform's rules, and this
-    comparison only ever happens on Windows - using it would leave the case difference below
-    untestable everywhere else, and the case difference is exactly what bit.
+    Still named for Windows, where that case difference is what bit; macOS is case-insensitive by
+    default and takes the same rule, so the name is now narrower than the job. Deliberately not
+    ``os.path.normcase``: that applies the *running* platform's rules, which would make the
+    comparison mean something different in a test than in the field, and the case difference is
+    exactly what bit. Linux is the one place it over-matches - two instances whose labels differ
+    only in case would sweep each other - which is the shape Windows already has.
     """
     return text.replace("/", "\\").lower()
 
@@ -220,15 +225,36 @@ def _stale_frpc_pids(output: str, config_path: Path) -> list[int]:
 
 
 def _enumerate_frpc() -> str:
-    """Every ``frpc.exe`` on this machine, as ``pid<TAB>command line`` lines.
+    """Every frpc on this machine, as ``pid<TAB>command line`` lines.
 
-    PowerShell's CIM cmdlets, not ``wmic``: wmic is gone from Windows 11 - measured 2026-10-04 on a
-    field Windows box, where ``Get-Command wmic`` finds nothing - and the bare ``except`` that used
-    to wrap it turned that into a silent no-op, so every app start left another frpc behind. Six
-    were still running after two days, all claiming one proxy name; the hub logged 7143
-    "proxy already exists" warnings in a single day because of it, and none of it was visible from
-    this machine. Output encoding is forced to UTF-8 so a non-ASCII path survives the pipe.
+    Windows: PowerShell's CIM cmdlets, not ``wmic``: wmic is gone from Windows 11 - measured
+    2026-10-04 on a field Windows box, where ``Get-Command wmic`` finds nothing - and the bare
+    ``except`` that used to wrap it turned that into a silent no-op, so every app start left
+    another frpc behind. Six were still running after two days, all claiming one proxy name; the
+    hub logged 7143 "proxy already exists" warnings in a single day because of it, and none of it
+    was visible from this machine. Output encoding is forced to UTF-8 so a non-ASCII path survives
+    the pipe.
+
+    Everywhere else: ``ps``. macOS is where the same leak was measured again on 2026-10-06 - six
+    orphans from six app starts in half an hour - because the sweep returned before it ever
+    reached this function. Only processes whose own name is ``frpc`` are listed: an editor holding
+    the config open names that path on its command line too, and the sweep must not take it for
+    an frpc and terminate it.
     """
+    if os.name != "nt":
+        done = subprocess.run(["ps", "-eo", "pid=,command="],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              timeout=20)
+        if done.returncode != 0:
+            raise OSError(f"ps exited {done.returncode}: {(done.stderr or '').strip()[:200]}")
+        lines = []
+        for line in done.stdout.splitlines():
+            pid, _, command = line.strip().partition(" ")
+            command = command.strip()
+            if pid.isdigit() and os.path.basename(command.split(" ", 1)[0]) == "frpc":
+                lines.append(f"{pid}\t{command}")
+        return "\n".join(lines) + "\n" if lines else ""
+
     script = ("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
               "Get-CimInstance Win32_Process -Filter \"Name='frpc.exe'\" | "
               "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }")
@@ -252,8 +278,6 @@ def _kill_stale_frpc(config_path: Path) -> None:
     failure is invisible from here (the symptom shows up in the hub's log, not in this app), which
     is how it went unnoticed for two days while the old code swallowed it.
     """
-    if os.name != "nt":
-        return
     try:
         output = _enumerate_frpc()
     except Exception as exc:                                     # noqa: BLE001 - best effort
@@ -263,8 +287,31 @@ def _kill_stale_frpc(config_path: Path) -> None:
         return
     for pid in _stale_frpc_pids(output, config_path):
         logger.info("cloud hub: clearing a stale frpc (pid %s) holding this instance's tunnel", pid)
-        subprocess.run(["taskkill", "/PID", str(pid), "/F"],
-                       capture_output=True, timeout=10, creationflags=_NO_WINDOW)
+        _terminate(pid)
+
+
+def _terminate(pid: int) -> None:
+    """End one stale frpc. Never raises.
+
+    SIGTERM off Windows so frpc can close its control connection and the hub drops the proxy name
+    there and then; ``taskkill /F`` is all Windows offers.
+
+    The listing is a snapshot, so the pid can be gone by the time we get here - a stale process is
+    the one thing on this machine most likely to exit on its own. That case is the sweep having
+    nothing left to do, not a failure. It matters that this never raises: the caller is
+    ``TunnelProcess.__init__``, and an exception there takes the tunnel setup, and the endpoint
+    that triggered it, down with it. Anything else is worth the operator's attention.
+    """
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                           capture_output=True, timeout=10, creationflags=_NO_WINDOW)
+        else:
+            os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.warning("cloud hub: cannot terminate a stale frpc (pid %s): %s", pid, exc)
 
 
 class TunnelProcess:

@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.72 更新</a></li>
+          <li><a href="#updates">V2.73 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.72 · 2026-10-05</span>
+          <span>SDD V2.73 · 2026-10-06</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,11 +110,11 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.72</td>
+              <td>V2.73</td>
             </tr>
             <tr>
               <td>基线日期</td>
-              <td>2026-10-05</td>
+              <td>2026-10-06</td>
             </tr>
             <tr>
               <td>后端运行时</td>
@@ -143,6 +143,36 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-network-wired"></i></div>
+            <h3>
+              隧道清理只跑在 Windows 上 —— 于是 macOS 从来没清理过
+              <small>（V2.73）</small>
+            </h3>
+            <p>
+              v1.25.2 修「每启动一次就多留一个 <code>frpc</code>」时改的是<em
+                >枚举方式</em
+              >（<code>wmic</code> → <code>Get-CimInstance</code>），
+              而清理函数开头那句 <code>if os.name != "nt": return</code>
+              —— 当初为「同机上第二个实例不受影响」加的 ——
+              把整段清理关进了 Windows：在 macOS 上它立刻返回，什么都没做。
+              在 macOS 上实测到同一个故障的第二个平台样本：一次开机后启动 6 次留下
+              <strong>6 个孤儿</strong>（PPID 全为 1），而且它<em>自我循环</em>
+              —— 终于拿到代理名的那一个干净子进程，正是下一次启动的拦路石；
+              新实例的子进程从那一刻起每 33 秒打一次 <code>already exists</code>
+              （86 行日志里 67 行都是这段重试）。现在枚举改走
+              <code>ps -eo pid=,command=</code>，<strong
+                >只认命令行第一个词的 basename 是 <code>frpc</code> 的进程</strong
+              >（用编辑器打开同一份 <code>.toml</code> 的 <code>vim</code>
+              命令行里也有这个路径，不能误杀），终止改走 <code>SIGTERM</code>，
+              让 frpc 自己关掉控制连接、hub 当场释放代理名；而且<strong
+                >永不抛出</strong
+              >
+              —— 快照与 kill 之间进程可能已自己退出，那是「无事可做」而不是失败。
+              关停时也会停掉隧道了：frpc 是服务进程的子进程，父进程没了它照样活着，
+              把代理名占给下一次启动。
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-radio"></i></div>
             <h3>

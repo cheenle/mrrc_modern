@@ -1,10 +1,20 @@
 # macOS 安装包打包流程（本机 Mac 直接构建）
 
-> **最新构建：v1.25.3（2026-10-05）** —— 套件 **1616 项全绿**（1 skip：可选的 Hamlib 假电台对端测试）；`release_check.py` 离线 29 ok / 0 failing；产物 `MRRC-Modern-v1.25.3-arm64.dmg` **62,430,310 bytes**，SHA-256 `878905932720268ba6d9dff3ba049b95b260523e8acb0ae33071b68d8ac419c6`，MD5 `0cade586bf88e5827e57552c9310fb1f`；`CFBundleShortVersionString` = v1.25.3、`Contents/Resources/version.txt` = 1.25.3；`codesign --verify` = `valid on disk` + `satisfies its Designated Requirement`；`Frameworks -> Resources` 与 `MacOS/_internal -> ../Resources` 两条 symlink 在位；`NSMicrophoneUsageDescription` 在；随包 `Contents/Resources/vendor/ca/cacert.pem`（119 根，出站 HTTPS 的信任库）与 `vendor/ftdi/macos` 两个 dylib；包内 macOS 元数据垃圾 **0**、私钥/env **0**（仅 CA bundle）。
+> **最新构建：v1.25.4（2026-10-06）** —— 套件 **1642 项全绿**（1 skip：可选的 Hamlib 假电台对端测试）；`release_check.py` 离线 29 ok / 0 failing；产物 `MRRC-Modern-v1.25.4-arm64.dmg` **62,440,021 bytes**，SHA-256 `e823b125c6b2bbf442de0f1bd52785ea2a68cb4c6e52a16eee4e0bc8e8ab8df4`，MD5 `2ecd35e89810b6a6fa1fe5a7db904d56`；`CFBundleShortVersionString` = v1.25.4、`Contents/Resources/version.txt` = 1.25.4；`codesign --verify` = `valid on disk` + `satisfies its Designated Requirement`；`Frameworks -> Resources` 与 `MacOS/_internal -> ../Resources` 两条 symlink 在位；`NSMicrophoneUsageDescription` 在；随包 `Contents/Resources/vendor/ca/cacert.pem`（119 根，出站 HTTPS 的信任库）与 `vendor/ftdi/macos` 两个 dylib；包内 macOS 元数据垃圾 **0**、私钥/env **0**（仅 CA bundle）。
 >
-> **冻结字节码走查**：`_execute_set_command` 与源码**逐字节一致** —— 本版修复在 `server.py`，而 PyInstaller 的 workpath 缓存曾把**未修复**的字节码冻进 Windows 包（见 `win_pack.md`），所以两端都做了这一层。
+> **冻结字节码走查**：本版修复在 `cloud_hub.py` 与 `server.py`，两处都逐字节比对过源码 ——
+> `server.lifespan` **co_code 5040 == 5040**，`cloud_hub` 的 `_terminate` / `_kill_stale_frpc` /
+> `_enumerate_frpc` / `_stale_frpc_pids` 四个函数**全部 frozen == source**，且 `signal` 在模块 co_names 里。
+> PyInstaller 的 workpath 缓存曾经把**未修复**的字节码冻进 Windows 包（见 `win_pack.md` gotcha 23），
+> 所以这一层不能省。
 >
-> **洁净室真跑**（隔离 HOME + 字段式配置 `127.0.0.1:18894` + `BROWSER` 指向不存在的命令）：https `/login` **200**、同端口明文 **000**、`/api/health` **401**、自签证书签出并记入日志、`Recording ready` 指向用户目录、日志 26 行 / 25 distinct、第二实例非零退出并点名端口、**bundle 内 0 个文件被改动**、运行后 `codesign` 仍 valid。
+> **洁净室真跑**（隔离 HOME + 字段式配置 `127.0.0.1:18893` + 不给启动器环境）：https `/login` **200**、
+> 同端口明文 **000**、`/api/health` **401**、自签证书签出并记入日志、`Recording ready` 指向用户目录、
+> 第二实例**退出码 1** 且点名端口（`Server ready` 0 次、监听者恰好 1 个）、**bundle 内 0 个文件被改动**
+> （按 mtime 实测，最新文件比开跑早 137 秒）、运行后 `codesign` 仍 `valid on disk`。
+> **日志计数注意**：本次 33 行 / 30 distinct，三条重复是 ① `Opening serial port` 按设计打两次、
+> ②③ 第二个实例（B）与 A 写同一个 log，各自记了一条自签证书的两行 —— **不是**重复 handler
+> （那会让每行都翻倍）。历史上记的 26/25 是同一次运行里不含 B 的数，不是判据本身变了。
 
 > 本文按 v1.7.0 首次打包的实际操作整理，照做即可复现。
 > 用户向的安装/使用说明见 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。

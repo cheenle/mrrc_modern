@@ -45,12 +45,17 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 | 组件 | 状态 | 结论 |
 | --- | --- | --- |
 | Python | **3.11** | 对齐 Pi 镜像，无需换发行版 |
-| systemd | 已装 | 用 systemd 管理服务 |
-| libasound.so.2 | 已装 | 无需额外装 ALSA |
-| **libportaudio** | **已装** | **无需 apt install portaudio19-dev**（仅打包 venv 时需头文件） |
-| libopus.so | **未见** | **需装 `libopus0`** |
+| systemd / **sudo** | 已装 | systemd 管服务；chroot 里 `install.sh` 的 `sudo tee` 可用 |
+| libasound.so.2 + **libasound2-dev** | 已装 | ALSA 运行时与头文件都在 |
+| **portaudio19-dev + libportaudio2** | **已装** | 无需再装 PortAudio（含头文件） |
+| **libopus0** | **已装**（dpkg 确认） | 无需再装 |
+| **python3-venv / python3-pip / python3-dev** | 已装 | 能建 venv、能装 wheel、能编 C 扩展 |
+| **gcc** | 已装 | 无 wheel 的包也能就地编译 |
+| **git / rsync** | 已装 | `mrrc_update.sh` 与镜像同步可用 |
 | NetworkManager / nmcli / wpa_supplicant | 已装 | 有线+无线配网可用 |
 | **mt7663 驱动** | **已装** | WiFi 支持的镜像内直接证据 |
+
+**结论：apt 增量几乎为零**——`install.sh` 的依赖步骤在这台镜像上基本是 no-op。（方法：在镜像 rootfs 的 dpkg 数据库里逐个查 `Package: <name>`。）
 
 ### 2.4 增量占用估算（对照 963.7 MiB 可用）
 
@@ -59,11 +64,11 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 | 代码本体 | **175.4 MiB** | 用 `build-image.sh:38-45` 的权威排除清单实测（533 文件） |
 | venv | ≈ 90–120 MiB | 本机 venv 87 MiB（numpy 33M / cryptography 13M / pip 12M…）+ pyaudio/lameenc |
 | frpc | ≈ 10 MiB | frp 0.71.0 linux-arm64 |
-| apt 增量（libopus0 等） | ≈ 10–20 MiB | |
-| FTDI 库（可选） | ≈ 1 MiB | libft4222.so + libftd2xx.so |
-| **合计** | **≈ 290–330 MiB** | |
+| **FTDI 库（aarch64）** | ≈ 1 MiB | 一个 ELF + 一个符号链接（D-9） |
+| apt 增量 | **≈ 0** | dpkg 确认依赖已齐（§2.3） |
+| **合计** | **≈ 280–310 MiB** | |
 
-**结论：装入后仍余 ≈ 630–670 MiB。不需要 growpart，不需要扩容镜像。**（首启后 eMMC 会自动扩到 32 GB，运行期空间另有约 29 GB。）
+**结论：装入后仍余 ≈ 650–680 MiB。不需要 growpart，不需要扩容镜像。**（首启后 eMMC 会自动扩到 32 GB，运行期空间另有约 29 GB。）
 
 ### 2.5 服务端自身负载（实测 + 交叉验证）
 
@@ -123,14 +128,14 @@ M2 上复现稳态热路径的实测：RX(50/s 重采样+峰值+Opus 编码) 1.0
 | `mrrc-modern.service` + `mrrc-firstboot.service`（enable） | 电台型号探测 |
 | `packaging/box/profiles/*.env`（无串口、无声卡名） | |
 | `mrrc.env` 默认值：`MRRC_WEB_HOST=0.0.0.0`、`MRRC_WEB_PORT=8888`、`MRRC_PTT_MAX_TX_SECONDS=120` | |
-| **不预置** FTDI aarch64 库（见 D-9） | |
+| **FTDI aarch64 库 + ft710 profile 的两个显式路径变量**（D-9） | |
 
 ## 4. 组件清单
 
 | # | 路径 | 职责 |
 | --- | --- | --- |
 | 1 | `packaging/box/build-image.sh` | 构建期总入口：下载 → 校验 → 挂载 → chroot overlay → 卸载 → 压缩 → 出 SHA |
-| 2 | `packaging/box/box-overlay.sh` | **在 chroot 内执行**的 overlay 脚本（用户/组、代码、venv、frpc、mrrc-radio、systemd、motd） |
+| 2 | `packaging/box/box-overlay.sh` | **在 chroot 内执行**的 overlay 脚本（用户/组、代码、venv、frpc、FTDI aarch64 库、mrrc-radio、systemd、motd） |
 | 3 | `packaging/box/fetch-frpc.sh` | 取 frpc v0.71.0 linux-arm64 + 官方 checksums 校验 |
 | 4 | `packaging/box/profiles/<model>.env` | 11 份 profile |
 | 5 | `packaging/box/verify.sh` | 真机验收（10 项） |
@@ -248,15 +253,47 @@ W103D 的 WiFi 完全依赖专属内核补丁 + 固件 overlay（PR #3658/#3659�
 
 盲猜串口会在首启产生一个"看起来能用但连不上电台"的配置。首启探测是唯一可靠来源。
 
-### D-9：FTDI 库不自动下载，由操作者手动放入
+### D-9：FTDI 库构建期预置——可做到开箱真 FFT
 
-FT-710 的真 FFT 需要 `libft4222.so` + `libftd2xx.so`（aarch64）。FTDI 官网的下载带跳转/许可交互，自动化脆弱且依赖我们无法控制的上游。
+FT-710 的真 FFT 需要 FTDI 库。代码要求 `find_ftdi_libraries()` 返回**一对**路径，而 `scope_pipe.py:213-214` 会分别 `CDLL()` 两个路径，并调用 `d2xx.FT_OpenEx` / `FT_Close` / `FT_SetTimeouts` / `FT_SetLatencyTimer` 与 `f4.FT4222_*`。
 
-**决定**：构建期**不**尝试自动获取；`packaging/box/README.md` 给出"从 FTDI 官网下 ARM64 包 → 解出两个 `.so` → 放入 `<runtime_dir>/vendor/ftdi/` → 重启服务"的人工步骤。
+**关键事实（实测）**：FTDI 的 Linux LibFT4222 包**静态链入 libftd2xx 并把它的符号全部导出**——
 
-**代价已知且可接受**：没有这两个库时 FT-710 回落 S 表合成频谱，其余功能（CAT/音频/PTT）不受影响——这与 `DEPENDENCIES.md` 记录的既有行为一致。
+- aarch64 的 `libft4222.so.1.4.4.232` 导出 **81 个 `FT_*` 符号**，`scope_pipe` 需要的 4 个（`FT_OpenEx` `FT_Close` `FT_SetTimeouts` `FT_SetLatencyTimer`）全部在内
+- 其 ELF `DT_NEEDED` 里**没有** `libftd2xx`，SONAME 为 `libft4222.so`
+- 包内 `ReadMe.txt` 明写 “The Linux version of libft4222 **includes (statically links to)** FTDI's libftd2xx”，且 `install4222.sh` 只安装 `libft4222.so`
+- 包内**不含任何 `libftd2xx.so`**（只有 `ftd2xx.h` 头文件）
 
-> 注意：这条**只影响 FT-710**。其余 10 个型号不需要 FTDI，与 D-2 的"profile 只写差异"一致。
+**因此一个 ELF 可以同时充当两个角色**。两种落法：
+
+| | 做法 | 评价 |
+| --- | --- | --- |
+| A | `vendor/ftdi/linux-arm64/` 放真身 `libft4222.so`，再建 `libftd2xx.so` 符号链接指向它 | 走目录扫描分支，零 env；但需要一个符号链接技巧 |
+| **B（采用）** | 同一文件，ft710 profile 里 `MRRC_FT4222_LIB` 与 `MRRC_FTD2XX_LIB` **都指向它** | 走代码的**显式路径分支**（`find_ftdi_libraries()` docstring 记录的第一优先级），最确定，无需符号链接 |
+
+**决定**：构建期把本机已有的 aarch64 构建预置进镜像（来源：FTDI `libft4222-linux-1.4.4.232` 的 `build-arm-v8/`；ELF 已确认 `e_machine=183` = AArch64）。**无人工步骤，开箱真 FFT。**
+
+**与既有先例一致**：`vendor/ftdi/macos/` 与 `vendor/ftdi/windows/` 已在库内。
+
+**USB 权限不由这条解决**：FT4222H 的裸 USB 访问靠 D-10 的 udev 规则。
+
+> 只影响 FT-710；其余 10 个型号不需要 FTDI（与 D-2 一致）。
+
+### D-10：udev 规则复用 `install.sh` 既有能力，不重复实现
+
+`install.sh:699-724` 已经装 `/etc/udev/rules.d/99-ft710.rules`：
+
+```
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0666", SYMLINK+="ft710-cat"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="601c", MODE="0666"
+```
+
+- `0403:601c`（FT4222H）`MODE="0666"` → **解决 D-9 那条路的裸 USB 访问**，服务以 `mrrc` 用户运行也能开设备
+- `10c4:ea60`（CP210x）`MODE="0666"` + `SYMLINK+="ft710-cat"` → 串口免 sudo
+
+**chroot 内的两个已知行为**（不阻塞，但要知道）：`sudo` 镜像里已装（§2.3），所以 `sudo tee` 可用；`udevadm control/trigger` 在 chroot 里无效，但脚本用 `2>/dev/null || true` 兜住，规则文件照样落进镜像、在真机首次插拔时生效。
+
+**一个既有局限（记录，不改）**：FT-710 的两个 CP210x **同 VID:PID**，所以 `SYMLINK+="ft710-cat"` 由枚举顺序决定归属，有歧义。这不是本设计的缺陷，也不影响正确性——`linux/first_run.py` 的 `probe_radio_model()` 才是 CAT 口的权威判据（发包探测），`mrrc-radio` 复用它（D-1）。
 
 ## 7. 错误处理
 
@@ -304,7 +341,7 @@ FT-710 的真 FFT 需要 `libft4222.so` + `libftd2xx.so`（aarch64）。FTDI 官
 | R1 | **Linux 上 stale frpc 无自动清理**——`_enumerate_frpc`/`_kill_stale_frpc` 是 Windows-only（PowerShell + `taskkill`）。代码注释写明后果：下次启动无法注册同名 proxy，隧道保持 down 而 UI 无提示 | **必须用 systemd 管**（默认 `KillMode=control-group`，停/重启单元时清掉整个 cgroup，连带 frpc）。runbook 明写"只用 `systemctl` 停服务，别 `kill` 进程" |
 | R2 | 这是**第一个跑 Cloud Hub 的 Linux 实例**（Pi 镜像完全不处理 Cloud Hub，`grep` 为空），Linux 路径未被验证 | 计划含"验证 Linux 路径"任务；`verify.sh` 第 9 项覆盖 |
 | R3 | 镜像二次构建破坏引导链或首启自动扩容 | 只改 p2 内容，绝不写 p1 或镜像前 4 MiB；不预先扩容；构建后校验 MBR + 分区表未变 |
-| R4 | rootfs 空间不足（已实测 963.7 MiB 可用 vs 约需 330 MiB） | R4 已降级为低风险；仍保留构建期断言（§7） |
+| R4 | rootfs 空间不足（已实测 963.7 MiB 可用 vs 约需 310 MiB） | R4 已降级为低风险；仍保留构建期断言（§7） |
 | R5 | Cloud Hub 登录限流退化（SDD §12.9）：经隧道时所有登录共享一个来源 IP，`5 次失败/300 秒`是**全局桶**，误锁影响**全部用户** | 写进 runbook 的运维警告；口令从一开始就用强口令降低触发概率 |
 | R6 | 依赖第三方预构建镜像（供应链） | 钉 SHA-256 + 只从官方 release 取 + 记录"这是唯一让 WiFi 工作的上游" |
 

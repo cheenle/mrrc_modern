@@ -96,6 +96,129 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261003-103644-11b2">
+      <header>
+        <span class="id">20261003-103644-11b2</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">网络 · 2026-10-03 10:44</span>
+      </header>
+      <h3>没有开蒲公英，从外网进入https://bg7zhs.mrrc.vlsc.net/网页显示无法打开，更新md文件后显示网页出错，现在又显示无法打开网页</h3>
+      <p class="verdict">服务端本机是好的（8888 已监听 + SSL 已启用 + FT-710 CAT 已连上），公网打不开是入口通道问题——用户自己说&quot;没有开蒲公英&quot;；另外电台 USB 未枚举，导致 FT4222 频谱与 USB 声卡都不可用</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>公网入口不通 ≠ 服务未运行：stdout.log 显示本次启动完整成功——`SSL enabled: [已隐去]\AppData\Local\MRRC-Modern\certs\server.crt`、`MRRC Modern Web Control starting on port 8888`、`Connected to FT-710 (ID=0650) on [已隐去]`、10:30:03 仍在 `IF poll: vfo_a=7068000 Hz (loop=0)`，env.json 亦为 `&quot;serial_connected&quot;: true`；用户在 problem.txt 里自述&quot;没有开蒲公英&quot;，所以 https://bg7zhs.mrrc.vlsc.net/ 无法打开是穿透/DNS 入口没起来，属网络环境问题</li>
+        <li>`*.mrrc.vlsc.net` 不是本产品的配置项——本仓已有同一问题的公开答复（website/answers/index.html:46-62：&quot;`*.mrrc.vlsc.net` 不是本产品的配置项——产品只认 `MRRC_WEB_HOST`/端口 8888 和 `MRRC_SSL_CERT/KEY`&quot;）；仓库全文检索 `mrrc.vlsc.net`/`bg7zhs` 只命中该答复页，代码里没有任何该域名的逻辑（公网收听入口是 www.vlsc.net/mrrc_modern/listen → 后端 radio.vlsc.net，与用户自建域名无关）</li>
+        <li>频谱回退与 Traceback/ERROR 是同一根因的下游噪声，不是崩溃：`scope_pipe: open_failed:attempt_1..5:error_2` → `spi_init_failed:all_attempts` → `fatal:cannot_open_device`（FT4222 设备枚举不到），scope_producer 按设计每 1s 自动重启管道（backends/ft710/scope_producer.py `_read_pipe` 末尾 `scope_pipe exited while active — will restart in 1s`），每次子进程退出都在 Windows Proactor 上产生 `Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)`——体检摘要里 71 条 ERROR / 71 条 Traceback / 7055 条频谱命中都由此而来；日志尾部服务仍在正常轮询，没有致命异常</li>
+        <li>电台 USB 链路缺失（环境问题）：配置的收发声卡 `麦克风 (4- USB Audio Device)` / `扬声器 (4- USB Audio Device)` 在设备列表里不存在（`Configured audio device &#x27;麦克风 (4- USB Audio Device)&#x27; not found`，随后 `Using default audio input: [0]  - Input`，即回落到 Realtek 主板声卡），FT4222 也 error_2；只有 [已隐去] 串口在——说明电台的 USB 口/线没接好，TX 时对方听到的不是电台音频</li>
+        <li>server-prev.log 里 08:27–08:33 大量 `get_meter(RM8): unparseable response &#x27;&lt;全 0/乱码&gt;&#x27;` 也是同一 USB/串口链路不稳时期的产物；10:29 重启后 CAT 已恢复正常（ID=0650、频率读取成功），故不作为独立缺陷</li>
+        <li>历史比对：`open_failed:…:error_2` / `spi_init_failed` / `cannot_open_device` / `_ProactorBasePipeTransport._call_connection_lost` / `unparseable response` 在 CHANGELOG.md 与 SDD/14-version-history.md 中均无同签名条目（无既有回归记录），按环境/网络定性</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先把内网穿透客户端（蒲公英）启动并确认状态为&quot;已连接&quot;，再刷新 https://bg7zhs.mrrc.vlsc.net/ ；穿透没起来时该地址必然打不开，与 MRRC 无关</li>
+        <li>用局域网自证服务端正常：在同一网段的电脑/手机浏览器打开 `https://&lt;这台Windows的局域网IP&gt;:8888`（自签证书会告警，点&quot;高级→继续访问&quot;）。能打开即说明服务在跑，问题只在公网入口</li>
+        <li>核对穿透映射：外网端口要指向本机 **8888**、协议选 **HTTPS/TCP**（MRRC 是 https + WebSocket，HTTP 映射会白屏）；改完映射重启穿透客户端，并用 `nslookup bg7zhs.mrrc.vlsc.net` 确认域名解析到穿透给的地址</li>
+        <li>想不依赖穿透长期使用：路由器上把 8888 端口转发到这台机器，用自己的域名 + 真实证书（设置 `MRRC_SSL_CERT`/`MRRC_SSL_KEY` 指向 fullchain/key）；局域网内则直接用 `https://&lt;本机IP&gt;:8888`</li>
+        <li>接回电台 USB：现在只有 [已隐去] 串口枚举到，FT4222（频谱）与 &quot;4- USB Audio Device&quot;（电台声卡）都不在。检查 FT-710 的 USB 线/口与电台 MENU 的 USB 设置，在 Windows 设备管理器里应同时出现 USB Audio Device 与 FT4222/FTDI 设备；然后重启 MRRC Modern，瀑布图与真实频谱才会回来</li>
+        <li>USB 声卡回来后，进&quot;设备配置&quot;把 RX/TX 音频设备重新选成实际存在的名字（当前配置项已失效并回落到 Realtek 默认设备，发射时对方听不到电台音频）；若暂时不接电台 USB，也请把配置改成现有设备名以消除启动告警</li>
+        <li>如果穿透起来后网页仍报错，请回报浏览器上的**完整错误文字/状态码**（例如 502 / 504 / ERR_TUNNEL_CONNECTION_FAILED / 证书告警）和穿透客户端日志——不同错误对应不同修法（映射端口错、后端超时、证书不受信）</li>
+        <li>顺带一提：env.json 显示 `&quot;recording&quot;: {&quot;active&quot;: true}`，若并非有意在录音，请在界面上停止录音，避免长时间占用磁盘</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: &quot;没有开蒲公英，从外网进入https://bg7zhs.mrrc.vlsc.net/网页显示无法打开，更新md文件后显示网页出错，现在又显示无法打开网页&quot;</li>
+        <li class="ev">logs/stdout.log: &quot;2026-10-03 10:29:49,785 [INFO] mrrc: SSL enabled: [已隐去]\AppData\Local\MRRC-Modern\certs\server.crt&quot;</li>
+        <li class="ev">logs/stdout.log: &quot;2026-10-03 10:29:49,851 [INFO] mrrc: MRRC Modern Web Control starting on port 8888&quot;</li>
+        <li class="ev">logs/stdout.log: &quot;2026-10-03 10:29:50,696 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0650) on [已隐去]&quot;</li>
+        <li class="ev">logs/stdout.log: &quot;2026-10-03 10:30:03,636 [INFO] mrrc.poll: IF poll: vfo_a=7068000 Hz (loop=0)&quot;</li>
+        <li class="ev">logs/server.log: &quot;2026-10-03 10:36:37,246 [INFO] mrrc.backend.ft710.scope: scope_pipe: open_failed:attempt_5:error_2&quot; / &quot;10:36:37,547 [WARNING] … spi_init_failed:all_attempts&quot; / &quot;10:36:37,548 [WARNING] … fatal:cannot_open_device&quot;</li>
+        <li class="ev">logs/server.log: &quot;2026-10-03 10:36:37,919 [WARNING] … scope_pipe exited (frames=0, connected=False)&quot; + &quot;10:36:38,036 [INFO] … scope_pipe exited while active — will restart in 1s&quot;（无限重启循环 → 7055 条频谱命中）</li>
+        <li class="ev">diagnostics/summary.txt: &quot;2026-10-03 10:32:24,096 [ERROR] asyncio: Exception in callback _ProactorBasePipeTransport._call_connection_lost(None)&quot;（71 条 ERROR / 71 条 Traceback）</li>
+        <li class="ev">diagnostics/summary.txt: &quot;[WARNING] mrrc.audio: Configured audio device &#x27;麦克风 (4- USB Audio Device)&#x27; not found&quot;</li>
+        <li class="ev">logs/stdout.log: &quot;[INFO] mrrc.audio: Using default audio input: [0]  - Input&quot;（回落到 Realtek，非电台 USB 声卡）</li>
+        <li class="ev">diagnostics/env.json: &quot;configured_rx&quot;: &quot;麦克风 (4- USB Audio Device)&quot;, &quot;configured_tx&quot;: &quot;扬声器 (4- USB Audio Device)&quot; —— 二者均不在 audio.devices.rx/tx 列表中；&quot;serial_connected&quot;: true, &quot;version&quot;: &quot;1.24.8&quot;, &quot;platform&quot;: &quot;Windows-10-10.0.19041-SP0&quot;</li>
+        <li class="ev">diagnostics/env.json: &quot;recording&quot;: {&quot;dir&quot;: &quot;C:\\Users\\Administrator\\AppData\\Local\\MRRC-Modern\\recordings&quot;, &quot;active&quot;: true}</li>
+        <li class="ev">website/answers/index.html:47: &quot;`*.mrrc.vlsc.net` 不是本产品的配置项——产品只认 `MRRC_WEB_HOST`/端口 8888 和 `MRRC_SSL_CERT/KEY`&quot;</li>
+        <li class="ev">website/answers/index.html:62: &quot;本产品不提供 `*.mrrc.vlsc.net`。局域网内直接用 `https://&lt;本机IP&gt;:8888`…想用自己的域名需自行做 DNS 解析 + 路由器端口转发 8888 + 用 `MRRC_SSL_CERT`/`MRRC_SSL_KEY` 指向真实证书&quot;</li>
+        <li class="ev">logs/server-prev.log: &quot;2026-10-03 08:27:45,773 [WARNING] mrrc.backend.ft710.cat: get_meter(RM8): unparseable response &#x27;\x00\x00…&#x27;&quot;（早期 USB/串口链路不稳，10:29 重启后已恢复）</li>
+        <li class="ev">历史检索：grep &#x27;open_failed|spi_init_failed|unparseable response|mrrc.vlsc.net|蒲公英&#x27; 与 &#x27;Proactor|_call_connection_lost|cannot_open_device&#x27; 于 CHANGELOG.md / SDD/14-version-history.md / SDD/13* → No matches found（无同签名历史记录，非回归）</li>
+      </ul>
+      </details>
+    </article>
+    <article class="card" id="20261001-161306-86db">
+      <header>
+        <span class="id">20261001-161306-86db</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">环境 · 2026-10-01 20:02</span>
+      </header>
+      <h3>how to config the *.mrrc.vlsc.net? how can I make it work?</h3>
+      <p class="verdict">这台 Windows 机器上电台并未真正接上（串口不对/无 ID 响应、FT4222 找不到、没有任何音频设备），服务器只在『仅 UI』模式运行；`*.mrrc.vlsc.net` 不是本产品的配置项——产品只认 `MRRC_WEB_HOST`/端口 8888 和 `MRRC_SSL_CERT/KEY`。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>核心不是域名配置，而是硬件没接上：日志显示串口 [已隐去] 打不开、唯一可用串口 [已隐去] 是主板通信口且无电台 ID 响应，FT4222 频谱设备、音频设备全部缺失，服务器退化为『Server will serve UI only』。</li>
+        <li>频谱签名 `scope_pipe: open_failed:attempt_N:error_2` → `spi_init_failed:all_attempts` → `fatal:cannot_open_device`：代码里 error 来自 FTDI `FT_OpenEx`，错误码 2 = FT_DEVICE_NOT_FOUND（scope_producer.py:70 注释明确提及），即 USB 上没有『FT4222 A』设备——电台 USB 线没接或驱动没装。</li>
+        <li>音频环境问题：`No audio input device found`，env.json 里 rx/tx 设备列表均为空 → 电台的 USB 声卡没枚举出来，属于环境缺失（非产品缺陷）。</li>
+        <li>串口环境问题：`Failed to connect to [已隐去]: ... FileNotFoundError`，可用端口仅 `[已隐去] (通信端口 ([已隐去]) ACPI\PNP0501\1)`；stdout.log 里 [已隐去] 能打开但 `No ID response from radio on [已隐去]` → 配置的 COM 口与电台实际口不一致或电台没接。</li>
+        <li>Traceback 均为 `ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接`，是浏览器/客户端断开 WS 的正常现象，不是崩溃。</li>
+        <li>域名方面：代码里产品域名固定为 `radio.vlsc.net`（config.py:196-199 SSL 注释与默认证书名），没有 `*.mrrc.vlsc.net` 相关逻辑；局域网访问走自签证书（ssl_bootstrap.py：为 LAN 用的 10 年自签证书，浏览器需信任一次）。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>用 USB 线把 FT-710 接到这台电脑并装好 Yaesu USB 驱动，让系统出现：电台串口（COM 口）、FTDI FT4222 设备、USB 音频设备。</li>
+        <li>在设备管理器确认电台实际枚举出的 COM 号，编辑 `[已隐去]\AppData\Local\MRRC-Modern\mrrc_modern.env`，把 `MRRC_SERIAL_PORT` 改为该 COM 号（当前日志显示配置 [已隐去] 不存在、[已隐去] 无响应），然后重启服务。</li>
+        <li>确认音频：接好线后系统出现 USB 音频设备；env 里 `MRRC_AUDIO_RX_DEVICE`/`MRRC_AUDIO_TX_DEVICE` 留空走自动检测，或填设备名。</li>
+        <li>域名访问：本产品不提供 `*.mrrc.vlsc.net`。局域网内直接用 `https://&lt;本机IP&gt;:8888`（默认绑定 `::`，可用 `MRRC_WEB_HOST` 改）；想用自己的域名需自行做 DNS 解析 + 路由器端口转发 8888 + 用 `MRRC_SSL_CERT`/`MRRC_SSL_KEY` 指向真实证书（如 Let&#x27;s Encrypt fullchain）。</li>
+        <li>浏览器首次访问自签证书会有『不受信任』警告，接受一次即可；若走真证书则不会有警告。</li>
+        <li>日志里的 WinError 10054 Traceback 可忽略，不影响使用。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">legacy-server.log: `Failed to connect to [已隐去]: could not open port &#x27;[已隐去]&#x27;: FileNotFoundError` / `Available serial ports: [已隐去] (通信端口 ([已隐去]) ACPI\PNP0501\1)`</li>
+        <li class="ev">stdout.log: `Opening serial port [已隐去] at 38400 baud` + `No ID response from radio on [已隐去]. Check connection.`</li>
+        <li class="ev">server.log: `scope_pipe: open_failed:attempt_1:error_2 ... attempt_5` + `spi_init_failed:all_attempts` + `fatal:cannot_open_device`</li>
+        <li class="ev">backends/ft710/scope_pipe.py:146-152 `s = d2xx.FT_OpenEx(...)` → `open_failed:attempt_{n}:error_{s}`；scope_producer.py:70 注释 `FT_DEVICE_NOT_FOUND`</li>
+        <li class="ev">legacy-server.log: `No audio input device found`；env.json: `audio.devices.rx=[]` `tx=[]`</li>
+        <li class="ev">config.py:194-199 `WEB_HOST=_env(&quot;MRRC_WEB_HOST&quot;, &quot;::&quot;)`、`SSL_CERTFILE`/`SSL_KEYFILE` 默认 `fullchain.pem`/`radio.vlsc.net.key`（注释 `SSL (Let&#x27;s Encrypt certs for radio.vlsc.net)`）</li>
+        <li class="ev">env.json: `version: 1.23.2`, `platform: Windows-11-10.0.26200-SP0`, `radio.serial_connected: true`（与日志矛盾——端口打开但无 ID 响应）</li>
+      </ul>
+      </details>
+    </article>
+    <article class="card" id="20260926-061400-e4dc">
+      <header>
+        <span class="id">20260926-061400-e4dc</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">环境 · 2026-10-01 20:01</span>
+      </header>
+      <h3>analysis the logs</h3>
+      <p class="verdict">FT-710 未通过 USB 正确连上电脑（CAT 串口、FT4222 频谱、USB 音频三路同时缺失），属环境/连接问题，非产品缺陷</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>频谱 FT4222 打不开：日志反复出现 `scope_pipe: open_failed:attempt_N:error_2`（N=1..5），随后 `spi_init_failed:all_attempts` + `fatal:cannot_open_device`，`scope_pipe exited (frames=0, connected=False)` 每 1s 无限重启。依据 scope_pipe.py 的 open_device()：用 `d2xx.FT_OpenEx(desc, FT_OPEN_BY_DESCRIPTION, ...)` 按描述 &quot;FT4222 A&quot; 打开设备，返回非 FT_OK 时打印 `open_failed:attempt_{N}:error_{s}`——error_2 即 D2XX 状态码 2 = FT_DEVICE_NOT_FOUND，说明 FT4222 设备根本未在 USB 上枚举到</li>
+        <li>音频缺失：`No audio input device found`，env.json 中 `audio.devices.rx: []`、`audio.devices.tx: []`，configured_rx/tx 均为空——电台的 USB 声卡也没出现</li>
+        <li>CAT 无响应：`No ID response from radio on [已隐去]. Check connection.`，串口配置为 [已隐去]@38400（[已隐去] 通常是物理/旧串口而非 FT-710 的虚拟串口），serial_connected 仅表示端口能打开，不代表电台应答</li>
+        <li>`ConnectionResetError: [WinError 10054]` 是浏览器/客户端断开连接导致的 asyncio 回调异常，非崩溃，可忽略</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>确认 FT-710 已开机，并用数据 USB 线（非仅充电线）连接到这台 Windows 电脑</li>
+        <li>打开设备管理器检查三样东西是否出现且无黄色感叹号：端口(COM 和 LPT) 下的 USB Serial、通用串行总线下的 &quot;FT4222 A&quot;、音频输入/输出下的 USB Audio CODEC；缺失则安装 FTDI D2XX/FT4222 驱动后重插</li>
+        <li>在配置文件 mrrc_modern.env（[已隐去]\AppData\Local\MRRC-Modern\mrrc_modern.env）中把串口改成电台实际占用的 COM 口（当前写的是 [已隐去]），或删掉 MRRC_SERIAL_PORT 后重开让程序重新识别</li>
+        <li>确认没有其他程序（WSJT-X、Hamlib、另一个 MRRC 实例）占用该 COM 口或 FT4222 设备</li>
+        <li>改好后重启应用；WinError 10054 只是浏览器页签断开，无需处理</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-09-25 22:13:54,972 [INFO] mrrc.backend.ft710.scope: scope_pipe: open_failed:attempt_5:error_2</li>
+        <li class="ev">2026-09-25 22:13:55,275 [WARNING] mrrc.backend.ft710.scope: scope_pipe: spi_init_failed:all_attempts</li>
+        <li class="ev">2026-09-25 22:13:55,275 [WARNING] mrrc.backend.ft710.scope: scope_pipe: fatal:cannot_open_device</li>
+        <li class="ev">2026-09-25 22:12:55,901 [WARNING] mrrc.audio: No audio input device found</li>
+        <li class="ev">2026-09-25 22:12:28,348 [WARNING] mrrc.backend.ft710.cat: No ID response from radio on [已隐去]. Check connection.</li>
+        <li class="ev">env.json: &quot;audio&quot;:{&quot;devices&quot;:{&quot;rx&quot;:[],&quot;tx&quot;:[]}}, &quot;configured_rx&quot;:&quot;&quot;, &quot;configured_tx&quot;:&quot;&quot;, &quot;serial_connected&quot;:true, radio.model=ft710, scope_type=ft4222</li>
+        <li class="ev">scope_pipe.py open_device(): s = d2xx.FT_OpenEx(desc, FT_OPEN_BY_DESCRIPTION, ...); if s != FT_OK: emit_status(f&quot;open_failed:attempt_{attempt+1}:error_{s}&quot;)</li>
+        <li class="ev">2026-09-25 22:13:32,016 [ERROR] asyncio: ... ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。</li>
+      </ul>
+      </details>
+    </article>
     <article class="card" id="20260919-085517-b3aa">
       <header>
         <span class="id">20260919-085517-b3aa</span>
@@ -174,7 +297,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-04 08:16（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-06 07:51（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

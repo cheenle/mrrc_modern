@@ -91,6 +91,47 @@ object ScreenFit {
     fun memoryRows(compact: Boolean): Int = 6 / memoryColumns(compact)
     fun memoryCellHeight(compact: Boolean): Int = if (compact) 40 else 46
 
+    /** 记忆格行末的管理入口（`⋯`）宽度。 */
+    const val MEMORY_MANAGE_W = 22
+
+    /**
+     * 单个记忆格的可用宽度（dp）。
+     * 紧凑档一行 6 格 + 一个 `⋯`，360dp 屏上只有约 47dp —— 标签字号必须按它反推，
+     * 否则长标签（`40m SSB` / 中文 / 呼号）会被裁成半个字，看着就是"变形"。
+     */
+    fun memoryCellWidth(screenWidthDp: Int, compact: Boolean): Float {
+        val content = contentWidth(screenWidthDp) - panelPadH(compact) * 2
+        val cols = memoryColumns(compact)
+        val gaps = cols * innerGap(compact)          // cells + ⋯ 之间共 cols 个间隙
+        return (content - MEMORY_MANAGE_W - gaps).toFloat() / cols
+    }
+
+    /** CJK 字符比半角宽得多（约 1.0em vs 0.62em），混排时按最宽的算，避免溢出。 */
+    private fun emPerChar(text: String): Float = if (text.any { it.code >= 0x2E80 }) 1.0f else 0.62f
+
+    /**
+     * 记忆格标签字号：**按可用宽度反推**，夹在 [MEMORY_LABEL_MIN_SP] 与档位上限之间。
+     *
+     * 到下限还放不下时由 UI 侧的 `TextOverflow.Ellipsis` 兜底（显示 `40m S…`），
+     * 绝不换行、绝不裁半个字 —— 单元格高度是固定的，换行会把整格顶变形。
+     */
+    const val MEMORY_LABEL_MIN_SP = 5.5f
+
+    fun memoryLabelFontSize(text: String, cellWidthDp: Float, compact: Boolean): Float {
+        val max = if (compact) 8.5f else 10f
+        if (text.isEmpty()) return max
+        val fit = cellWidthDp / (text.length * emPerChar(text))
+        return fit.coerceIn(MEMORY_LABEL_MIN_SP, max)
+    }
+
+    /** 记忆格频率行字号（`%.3f` 恒为 5~7 字符，按同样的宽度约束夹一下）。 */
+    fun memoryFreqFontSize(text: String, cellWidthDp: Float, compact: Boolean): Float {
+        val max = if (compact) 7.5f else 9f
+        if (text.isEmpty()) return max
+        val fit = cellWidthDp / (text.length * 0.62f)     // 等宽数字，恒半角
+        return fit.coerceIn(MEMORY_LABEL_MIN_SP, max)
+    }
+
     fun pttHeight(compact: Boolean): Int = if (compact) 74 else 96
     fun auxButtonSize(compact: Boolean): Int = if (compact) 58 else 66
 

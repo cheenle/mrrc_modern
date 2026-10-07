@@ -121,7 +121,9 @@ cd FT710Android
 - **频谱标尺**：范围恒 `VFO ± span/2`，**绝不用 `scope_start_freq`**（服务端恒 CENTER，调谐后滞后）；步进/格式用 `Data/FreqScale.kt`（对齐 web `_freqStep`/`_formatFreqLabel`），刻度按真实位置画；QSY 必须同一公式。
 - **主屏不放说明性文字**（用户 2026-10-06 两次强调）：分区标题**全档位取消**（`ScreenFit.showSectionLabels()` 恒 false）、频谱下不重复 VFO 频率（标尺已有红线+三角）、状态行只留 `☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻`（内容估宽 210dp）、PTT 无副标、音量行无 `Vol` 标签、记忆格无「空」字。诊断数字（RTT/J）进设置页诊断行，不占状态行。机型名/徽章/诊断行也都在设置页。
 - **任何入口不得藏在分区标题的 `trailing` 里**：v1.1.18 把记忆「管理」写在 `SectionLabel(trailing=…)`，紧凑档标题一隐藏 → 手机上 `MemoryManagerDialog` 彻底打不开（`showMemManager=true` 只有一个触发点）。要入口就给图标按钮（现在是记忆格行末的 `⋯`，26dp 无文字；标准档第二行用等宽 `Spacer` 保持列对齐），并在 Compose 冒烟测试里断言它存在。
-- 记忆格列数由 `m.memoryColumns` 决定（紧凑 1×6 / 标准 2×3），索引必须 `row * m.memoryColumns + col`，别写死 3。
+- **记忆格文字：按格宽反推字号 + 强制单行省略号**（用户明确要求"非常紧凑，否则就变形"）。紧凑档一行 6 格 + `⋯`，360dp 屏上每格只剩 **47dp**，而标签是用户自己存的（`40m SSB Contest`/中文/呼号）→ **绝不能写死字号、绝不能换行**（格高固定，一换行整格顶变形）。做法：`ScreenFit.memoryLabelFontSize(text, cellWidth, compact)` = `格宽/(字符数×em)`，**CJK 按 1.0em、半角 0.62em**，夹在 5.5sp~上限；配 `maxLines=1 + softWrap=false + TextOverflow.Ellipsis`。守卫两层：`ScreenFitTest` 不变量（要么放得下、要么已到下限交给省略号）+ `MainScreenComposeTest` 实测（逐格量真实文字宽度 ≤ 格宽且单行）。
+- 记忆格列数由 `m.memoryColumns` 决定（紧凑 1×6 / 标准 2×3），索引必须 `row * m.memoryColumns + col`，别写死 3。管理入口是行末 `⋯`（`ScreenFit.MEMORY_MANAGE_W`=22dp）。
+- **底部留白是有意保留的**（用户在三选一中选了"就这样"）：频谱高度是确定值，多余空间不再自动灌给任何区域，滚动列内容顶对齐。
 - **字号**：`☰` 15sp、模式徽章 9sp、状态行 VFO 芯片 9sp（`PadBtn(fontSize=…)`）；用户嫌顶栏字大。
 - **对齐手机端 Web，不发明**：令牌唯一来源 `static/ft710.css :root`（`UI/Theme.kt` 的 `MrrcColors`）；瀑布配色 = `WF_PALETTES`；S 表刻度 = `renderSMeter`；QSY 公式 = `wireScopeQSY`；频率输入解析 = `commitFreq`。
 - 大字号（如主频）要**按可用宽度自适应**（`BoxWithConstraints` 算 `maxWidth/字符数/0.62`），手机上不溢出、平板吃满。

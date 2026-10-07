@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.defaultMinSize
 import com.hamradio.ft710android.Data.ScreenFit
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Path
 
 /**
@@ -392,7 +393,7 @@ fun MainScreen(
             // ── 记忆频道 3×2 ─────────────────────────────────────────
             Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMemory") {
                 for (row in 0 until m.memoryRowsCount) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(m.memoryInnerGap)) {
                         for (col in 0 until m.memoryColumns) {
                             val index = row * m.memoryColumns + col
                             val ch = mem.getOrNull(index)
@@ -400,7 +401,7 @@ fun MainScreen(
                             val memInteraction = remember(index) { MutableInteractionSource() }
                             val memPressed by memInteraction.collectIsPressedAsState()
                             Box(
-                                Modifier.weight(1f).height(m.memoryCellHeight)
+                                Modifier.weight(1f).height(m.memoryCellHeight).testTag("memCell$index")
                                     .graphicsLayer {
                                         val k = if (memPressed) 0.97f else 1f
                                         scaleX = k; scaleY = k
@@ -424,20 +425,29 @@ fun MainScreen(
                                     ),
                                 contentAlignment = Alignment.Center,
                             ) {
+                                // 记忆格很窄（紧凑档 6 格一行，360dp 屏上约 47dp）：
+                                // 字号按格宽反推 + 强制单行 + 超长省略号。绝不换行——
+                                // 格高是固定的，一换行整格就顶变形（用户明确要求"非常紧凑"）。
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    val label = ch?.label?.ifEmpty { "M${index + 1}" } ?: "M${index + 1}"
+                                    Text(
+                                        label,
+                                        color = if (ch != null) MrrcColors.Accent else MrrcColors.TextMuted,
+                                        fontSize = m.memoryLabelFont(label).sp,
+                                        fontWeight = if (ch != null) FontWeight.Bold else FontWeight.Normal,
+                                        maxLines = 1, softWrap = false,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                     if (ch != null) {
-                                        Text(ch.label.ifEmpty { "M${index + 1}" }, color = MrrcColors.Accent,
-                                            fontSize = if (m.compact) 8.5.sp else 10.sp,
-                                            fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
+                                        val freq = "%.3f".format(Locale.US, ch.freq / 1e6)
                                         Text(
-                                            "%.3f".format(Locale.US, ch.freq / 1e6),
+                                            freq,
                                             color = MrrcColors.TextPrimary,
-                                            fontSize = if (m.compact) 7.5.sp else 9.sp,
-                                            fontFamily = MonoFont, maxLines = 1,
+                                            fontSize = m.memoryFreqFont(freq).sp,
+                                            fontFamily = MonoFont,
+                                            maxLines = 1, softWrap = false,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
-                                    } else {
-                                        Text("M${index + 1}", color = MrrcColors.TextMuted,
-                                            fontSize = if (m.compact) 8.5.sp else 10.sp, letterSpacing = 0.3.sp)
                                     }
                                 }
                             }
@@ -445,7 +455,7 @@ fun MainScreen(
                         // 记忆管理入口：图标，不占文字（原先藏在被删掉的分区标题里）
                         if (row == 0) {
                             Box(
-                                Modifier.width(26.dp).height(m.memoryCellHeight)
+                                Modifier.width(m.memoryManageWidth).height(m.memoryCellHeight)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(MrrcSurfaces.Key)
                                     .border(1.dp, MrrcSurfaces.Stroke, RoundedCornerShape(10.dp))
@@ -455,7 +465,7 @@ fun MainScreen(
                                 Text("⋯", color = MrrcColors.Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             }
                         } else {
-                            Spacer(Modifier.width(26.dp))
+                            Spacer(Modifier.width(m.memoryManageWidth))
                         }
                     }
                 }

@@ -18,6 +18,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.onChildren
+import androidx.compose.ui.test.onNodeWithTag
+import com.hamradio.ft710android.Data.ScreenFit
 import org.robolectric.annotation.Config
 
 /**
@@ -109,5 +114,60 @@ class MainScreenComposeTest {
         }
         rule.waitForIdle()
         rule.onNodeWithText("只读", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    /**
+     * 记忆格"不变形"的实测保证：
+     * 紧凑档一行 6 格、每格只有约 47dp，而标签是用户自己存的（可能是 `40m SSB Contest`、
+     * 中文、呼号）。量真实布局：①格宽与模型一致；②**文字宽度 ≤ 格宽**；③单行。
+     * 只靠字号公式不够——公式错了或者有人改了 `maxLines`，这里会红。
+     */
+    @Test
+    @Config(qualifiers = "w360dp-h728dp-xxhdpi")
+    fun `memory cell text never exceeds its cell on the narrowest supported phone`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val vm = fixtureVm(scope)
+        rule.setContent {
+            AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
+        }
+        rule.waitForIdle()
+
+        // 360dp 屏、紧凑档：模型算出每格 47dp 左右
+        val expected = ScreenFit.memoryCellWidth(360, compact = true)
+        val density = rule.density.density
+        val longLabel = "40m SSB Contest"
+
+        for (index in 0 until 6) {
+            val cell = rule.onNodeWithTag("memCell$index").fetchSemanticsNode().boundsInRoot
+            val cellW = cell.width / density
+            assertEquals("memCell$index 宽度与模型不符", expected, cellW, 1.5f)
+
+            val texts = cellChildrenTexts(index)
+            texts.forEach { (text, widthDp, lines) ->
+                assertTrue(
+                    "memCell$index 的 \"$text\" 宽 ${"%.1f".format(widthDp)}dp 超出格宽 ${"%.1f".format(cellW)}dp",
+                    widthDp <= cellW + 0.5f,
+                )
+                assertEquals("\"$text\" 必须单行（换行会顶变形）", 1, lines)
+            }
+        }
+        // 长标签确实被渲染了（且靠缩字号/省略号收在格内，不是被裁掉半个字）
+        assertTrue(rule.onAllNodesWithText(longLabel, substring = true, useUnmergedTree = true)
+            .fetchSemanticsNodes().isNotEmpty() ||
+            rule.onAllNodesWithText("40m SSB", substring = true, useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty())
+    }
+
+    /** 取某个记忆格内所有文本节点的宽度（dp）与行数。 */
+    private fun cellChildrenTexts(index: Int): List<Triple<String, Float, Int>> {
+        val density = rule.density.density
+        return rule.onNodeWithTag("memCell$index", useUnmergedTree = true)
+            .onChildren().fetchSemanticsNodes()
+            .map { n ->
+                val text = n.config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text }.orEmpty()
+                val lines = n.config.getOrNull(SemanticsProperties.Text)?.size ?: 0
+                Triple(text, n.boundsInRoot.width / density, lines)
+            }
+            .filter { it.first.isNotEmpty() }
     }
 }

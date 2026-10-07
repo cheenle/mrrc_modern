@@ -49,6 +49,11 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - 音频：帧 = 1B tag（`0x00` PCM Int16 LE / `0x01` Opus）+ payload；48k 单声道 20ms（960 样本）。TX 恒 Opus CBR 64kbps；RX 解码 Opus 或直通 PCM。TX 文本帧 `s:` 停止、`m:` 设置。
 - 频谱：`/WSspectrum` 二进制 1701B = 1B version(0x01) + 850B wf1 + 850B wf2；实际 ~5fps（`server.py:285`）。
 - 记忆频道：**6 槽** + `null` 补空，键 `label`（`MemoryChannels.parse/toJson`）。
+- **记忆格文字必须按格宽自适应**（紧凑档一行 6 格 + `⋯`，360dp 屏上每格只剩 47dp）：
+  - 字号 = `ScreenFit.memoryLabelFontSize(标签, 格宽, compact)`，公式 `格宽/(字符数×em)`，**CJK 按 1.0em、半角 0.62em**（中文标签按半角算会溢出），夹在 5.5sp ~ 档位上限
+  - 必须 `maxLines = 1` + `softWrap = false` + `TextOverflow.Ellipsis`：放不下就 `40m SSB…`，**绝不换行**（格高固定，换行会把整格顶变形）
+  - 标签是用户自己存的（`40m SSB Contest`/中文/呼号），所以**不能写死字号**
+  - 守卫：`ScreenFitTest` 的不变量（任何标签要么放得下、要么已到下限交给省略号）+ `MainScreenComposeTest` 的实测断言（逐格量真实文字宽度 ≤ 格宽且单行，360dp 最窄机）
 - ATR1000：`/WSatr1000` 可选，服务端禁用时 close 4000；用 `fullState.atr1000Enabled` 决定是否显示天调 UI。
 - **服务端录音（AD-017，v1.15.0 起）**：`{"type":"set","field":"recording","value":true/false}` 启停；下行 `recordingState`（recording/freq_hz/started_at/duration/name/bytes/dropped，录制中 1 Hz），`fullState.recording` 给快照。App 有完整录音面板（启停/列表合计/本地下载播放+seek/导出/删除）。
 - **机型 key**：`MRRC_RADIO_MODEL` 共 10 个（`ft710` `ic7300` `ic7300mk2` `ic705` `ic7610` `ic7760` `ftdx10` `ftdx101d` `ftdx101mp` `ftx1`）；后六个默认拒绝发射，需服务端 `MRRC_ALLOW_UNVERIFIED_TX=1`。机型由服务端 env 决定，客户端不选。

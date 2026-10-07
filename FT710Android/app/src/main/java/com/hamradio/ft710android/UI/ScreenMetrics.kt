@@ -36,6 +36,8 @@ class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeig
     val panelPadV: Dp get() = ScreenFit.panelPadV(compact).dp
     val gap: Dp get() = ScreenFit.gap(compact).dp
     val statusItemHeight: Dp get() = ScreenFit.STATUS_ITEM_H.dp
+    val headerIconTap: Dp get() = ScreenFit.headerIconTap(compact).dp
+    val headerIconGlyph: Dp get() = ScreenFit.headerIconGlyph(compact).dp
     val innerGap: Dp get() = ScreenFit.innerGap(compact).dp
     val bottomBarPadV: Dp get() = ScreenFit.bottomBarPadV(compact).dp
     val spectrumScale: Float get() = ScreenFit.spectrumScale(compact)

@@ -23,6 +23,9 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onNodeWithTag
 import com.hamradio.ft710android.Data.ScreenFit
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import org.robolectric.annotation.Config
 
 /**
@@ -170,5 +173,49 @@ class MainScreenComposeTest {
                 Triple(text, n.boundsInRoot.width / density, lines)
             }
             .filter { it.first.isNotEmpty() }
+    }
+
+    /**
+     * 顶栏工具行（波段·模式 ｜ 菜单/全屏/电源 ｜ VFO）：
+     * 图标是 Canvas 自绘的，没有文本节点，只能按 `contentDescription` 查。
+     * 用字体字符（`⏻`/`⛶`）时不同机型会走字体回退、渲染变形，所以改自绘——
+     * 这条测试守住"三个入口都在、且都可点"。
+     */
+    @Test
+    fun `header tool row carries menu, fullscreen and power as drawn icons`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val vm = fixtureVm(scope)
+        rule.setContent {
+            AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
+        }
+        rule.waitForIdle()
+
+        listOf("设置", "全屏", "断开电台").forEach { desc ->
+            val node = rule.onNodeWithContentDescription(desc, useUnmergedTree = true)
+            node.assertExists()
+            assertTrue("$desc 必须可点", node.fetchSemanticsNode().config.contains(SemanticsActions.OnClick))
+        }
+        // VFO 读数与波段·模式仍在同一行（VFO 可点切 A/B）。
+        // "VFO-A" 有两处：顶栏工具行的读数 + 调谐卡的 VFO-A 按钮
+        rule.onAllNodesWithText("VFO-A", useUnmergedTree = true).assertCountEquals(2)
+        rule.onNodeWithText("40m · USB", useUnmergedTree = true).assertExists()
+        // 旧的字体字符图标不该再出现
+        rule.onAllNodesWithText("☰", useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithText("⛶", useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithText("⏻", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    /** 断开状态下电源图标语义要翻过来（否则用户点下去不知道会发生什么）。 */
+    @Test
+    fun `power icon description flips when the user has disconnected`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val vm = fixtureVm(scope)
+        vm.disconnect()          // 用户主动断开 → userOff=true，电源图标语义翻转成"连接电台"
+        rule.setContent {
+            AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("连接电台", useUnmergedTree = true).assertExists()
+        rule.onAllNodesWithContentDescription("断开电台", useUnmergedTree = true).assertCountEquals(0)
     }
 }

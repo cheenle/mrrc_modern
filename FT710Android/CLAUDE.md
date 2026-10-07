@@ -160,6 +160,11 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
   - 冒烟测试用 `assertExists()` 而不是 `assertIsDisplayed()`：滚动列视口外的节点是"存在但不可见"
   - 文案可能重复：`7.117` 两处（标尺红标 + 记忆格）、`TUNE` 两处（ATR 行 + 底栏）→ 用 `assertCountEquals`
 - **发版别加 `--skip-tests`**：`release.sh` 有 `set -euo pipefail`，不带该参数时会自己跑 `./gradlew test lintDebug assembleRelease` 并在失败时中止。另外**绝不**写 `./gradlew … | grep | head && ./release.sh` —— 管道退出码取自 `head`，gradle 的失败会被吞掉（2026-10-06 就这样带着红灯把 v1.1.20 重发了一次：同版本号、不同字节 SHA）。要过滤输出就分开跑并逐个查 `$?`。
+- **绝不在同一工程并行跑两条 gradle / 发布命令**（2026-10-07 踩了三次）：
+  - 两个 `gradlew` 并发写同一个 `build/test-results/` → 报 `Could not write XML test results`，**看着像测试失败其实是构建互踩**；已写出的 XML 仍是全绿。
+  - `publish-card.sh` 与 `release.sh` 并发 → 卡片脚本读到上传前的旧页面，**卡片版本号落后一版**（v1.1.26 发完卡片还写 v1.1.25）。发布必须严格串行：`release.sh` 跑完 → 再 `publish-card.sh`。
+  - 卡片更新后 nginx `open_file_cache`（valid 60s）会让旧版本号多存活最多 60 秒 → **等 ~65 秒再 curl 复核**中英文页。
+- **文档改完必须 grep 已删符号**：脚本改文件要"改一处写一处"，且发版前 `grep` 一遍本次删除的函数/常量名，确认 CLAUDE.md 与 skill 里没有残留指向（v1.1.25 曾提交出"文档教人用已删函数"，v1.1.26 发现 CLAUDE.md 还在写崩溃用的 `IntrinsicSize.Min`）。
 - **UI 结构改动必须做结构 diff**（2026-10-05 事故：v1.1.14 改 ATR 行时脚本替换范围划到"录音入口"，把五键行/芯片行/音量/步进/VFO 行整段吞掉并发到官网；JVM 单测与 lint 都盖不住 UI 结构）。发版前跑：
   ```bash
   git show <上一个好版本>:FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt > /tmp/good.kt
@@ -169,9 +174,13 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 - **设计令牌与表面**：颜色/圆角/表面层级只在 `UI/Theme.kt`（`MrrcColors`）与 `UI/Surfaces.kt`（`MrrcSurfaces` + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）里定义；就地写死颜色 = 以后改不动。三层表面：内凹显示屏 `Inset`（主频/频谱）< 卡片 `Panel` < 按键 `Key`。
 - **主屏不放说明性文字**（用户 2026-10-06 明确要求）：分区标题全档位取消、频谱下不再重复 VFO 频率、状态行只留 `☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻`、PTT 无副标、音量行无 `Vol` 标签。**任何入口不得藏在标题的 trailing 里**（v1.1.18 的「管理」入口就是这样在紧凑档丢的）——需要入口就给图标按钮（如记忆格行末的 `⋯`）。诊断类数字（RTT/J）放设置页诊断行，不占状态行。
 - **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**（主屏保持干净，用户明确要求过）；录音入口是状态行芯片、天调参数并进 ATR 行——**不要新增独占一行的小信息条**。
-- **顶栏布局**：`BoxWithConstraints` 取页面宽 → 第一行 = **主频显示屏**（`DisplayBezel`，`weight(1f)`，上沿左侧 `波段 · 模式`、右侧可点 `VFO-A/B`，中间主频 `FreqText`）+ **S 表独立区域**（宽 = 页宽×44%＝140–240dp，高 = 宽×0.64＝96–168dp），两者用 `height(IntrinsicSize.Min)` + `fillMaxHeight()` 做成等高。第二行 = **全宽状态行**（`FlowRow` 仅作兜底）：字体 8.5~9sp、`StatusItem` 行高 26dp、间距 5dp，内容为 `☰ 只读 录音 RX/TX 速率|TXpk RTT·J 状态点 ⛶ ⏻`。
-  - **状态行必须一行装下**（用户明确要求）：加新项前先估宽（当前 269dp / 页面 344dp），放不下就并进已有项或移到设置页；波段/模式/VFO 属于"读数"，归显示屏上沿，不占状态行。
-  - S 表尺寸**只看屏幕**，不受主频行高限制；别把按钮塞回主频行，否则主频掉到 20sp 以下。
+- **顶栏布局**：`BoxWithConstraints` 取页面宽 → 第一行 = **主频显示屏**（`DisplayBezel`，`weight(1f)`）+ **S 表独立区域**（宽 = 页宽×44%＝132–240dp，高 = `ScreenFit.headerHeight`）。⚠️ 等高靠**显式 `height(meterH)`**，**绝不用 `IntrinsicSize.Min`**：S 表内部是 `BoxWithConstraints`（SubcomposeLayout），问它 intrinsic 会抛异常 = 启动即崩（v1.1.16 事故，v1.1.17 已改，别再改回去）。
+  - **显示屏上沿 = 工具行**（2026-10-07）：`波段 · 模式` ｜ `☰ ⛶ ⏻`（Canvas 自绘图标）｜ `VFO-A/B`（可点切换）。三个图标从状态行移到这里，文字统一 9sp。
+  - **图标一律 Canvas 自绘，不用字体符号**：`⏻`/`⛶` 在不少机型没有字形会走字体回退 → 粗细不一/缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算，任何 dpi/字体设置下一致；尺寸 = `ScreenFit.headerIconTap`(22/26dp 点击区) 与 `headerIconGlyph`(11/13dp 图形)。
+  - **主频字号取 `min(byWidth, byHeight)`**：上沿工具行占 22dp，只按宽度算可能超出剩余高度被裁（看着像"频率缺一截"）。`byWidth=(宽−6)/6.3`、`byHeight=(高−2)/1.32`，夹 16~58sp。
+  - 第二行 = **全宽状态行**（`FlowRow` 仅兜底）：字体 8.5~9sp、`StatusItem` 行高 26dp、间距 5dp，内容仅 `⏺ RX/TX 速率|TXpk 状态点`（+ 条件项 `只读`/`无声`）。`☰ ⛶ ⏻` 已上移到工具行，RTT·J 已移到诊断行。
+  - **状态行必须一行装下**（用户明确要求）：加新项前先估宽（当前 `STATUS_CONTENT_W=120dp` / 页面 344dp），放不下就并进已有项或移到设置页；波段/模式/VFO 属于"读数"，归显示屏上沿，不占状态行。
+  - S 表尺寸**只看屏幕**，不受主频行高限制。
 - **面板 S 表**：弧是贝塞尔（`SMeter.arcX/arcY`），刻度/标签同 Web 的 `MARKERS/LABELS`；字号/线宽/COMP 条厚都由区域短边按比例算（`labelFs`/`readFs`），所以同一份代码在手机与平板都合适。标签不重叠由 `SMeterTest` 的逐标签宽度断言守着（改宽度/字号要跑它）。
 
 - **绝不用 `scope_start_freq` 当显示范围**：服务端恒 CENTER 模式（EX040200），调谐后该字段滞后。范围恒为 `VFO ± span/2`（`Data/FreqScale.kt`，对齐 web `_computeFreqRange`）。点击 QSY 同样用 VFO 居中公式（`FreqInput.qsy`），两者必须同源。

@@ -77,6 +77,8 @@ import androidx.compose.foundation.layout.defaultMinSize
 import com.hamradio.ft710android.Data.ScreenFit
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Path
 
 /**
@@ -147,27 +149,49 @@ fun MainScreen(
                         modifier = Modifier.weight(1f).fillMaxHeight().clickable { showFreqInput = true },
                     ) {
                         Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 5.dp)) {
-                            // 显示屏上沿：波段 · 模式（左）｜VFO（右，点按切 A/B）
+                            // 显示屏上沿一行 = 工具行：波段·模式 ｜ 菜单/全屏/电源 ｜ VFO
+                            // 图标**自绘**（不用字体字符）：⏻/⛶ 这类符号在不同机型会走字体回退，
+                            // 渲染出来粗细不一、缺笔画 —— 用户报的"关闭 icon 变形"就是这个。
+                            // 文字统一 9sp 与波段·模式同级；点击区 22dp，不小于其它可点元素。
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     "${state.bandName.ifEmpty { "—" }} · ${state.modeName.ifEmpty { "—" }}",
                                     color = MrrcColors.TextMuted, fontSize = 9.sp,
-                                    letterSpacing = 0.8.sp, maxLines = 1,
+                                    letterSpacing = 0.3.sp, maxLines = 1, softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
                                 )
-                                Spacer(Modifier.weight(1f))
+                                HeaderIconButton(HeaderIconKind.MENU, "设置") { onOpenSettings() }
+                                HeaderIconButton(HeaderIconKind.FULLSCREEN, "全屏", active = fullscreen) {
+                                    onToggleFullscreen()
+                                }
+                                HeaderIconButton(
+                                    HeaderIconKind.POWER,
+                                    if (userOff) "连接电台" else "断开电台",
+                                    danger = userOff,
+                                ) { if (userOff) vm.reconnect() else vm.disconnect() }
+                                Spacer(Modifier.width(2.dp))
                                 Text(
                                     "VFO-${state.activeVfo}",
                                     color = MrrcColors.Accent, fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp,
-                                    modifier = Modifier.clickable {
-                                        vm.sendSet("vfo", if (state.activeVfo == "A") "B" else "A")
-                                    },
+                                    fontWeight = FontWeight.Bold, letterSpacing = 0.2.sp,
+                                    maxLines = 1, softWrap = false,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            vm.sendSet("vfo", if (state.activeVfo == "A") "B" else "A")
+                                        }
+                                        .padding(horizontal = 2.dp),
                                 )
                             }
                             // 主频（琥珀辉光，末两位 10Hz 淡化）
                             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                                BoxWithConstraints(Modifier.fillMaxWidth()) {
-                                    val fit = ((maxWidth.value - 6f) / 6.3f).coerceIn(18f, 58f)
+                                BoxWithConstraints(Modifier.fillMaxSize()) {
+                                    // 宽、高两头都卡：上沿工具行占了 22dp，只按宽度算
+                                    // 字号可能超出剩余高度而被裁掉（看起来像"频率缺一截"）
+                                    val byWidth = (maxWidth.value - 6f) / 6.3f
+                                    val byHeight = (maxHeight.value - 2f) / 1.32f
+                                    val fit = minOf(byWidth, byHeight).coerceIn(16f, 58f)
                                     FreqText(hz = state.activeFrequency, fitSp = fit)
                                 }
                             }
@@ -189,10 +213,6 @@ fun MainScreen(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.fillMaxWidth().padding(top = 5.dp).testTag("secStatus"),
             ) {
-                StatusItem {
-                    Text("☰", color = MrrcColors.TextSecondary, fontSize = 13.sp,
-                        modifier = Modifier.clickable { onOpenSettings() }.padding(horizontal = 3.dp))
-                }
                 if (listenOnly) {
                     StatusItem {
                         Text("只读", color = MrrcColors.Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
@@ -270,10 +290,6 @@ fun MainScreen(
                                 )
                             },
                     )
-                }
-                PadBtn("⛶", active = fullscreen, fontSize = 10.sp, btnHeight = m.statusItemHeight) { onToggleFullscreen() }
-                PadBtn("⏻", active = !userOff, danger = userOff, fontSize = 10.sp, btnHeight = m.statusItemHeight) {
-                    if (userOff) vm.reconnect() else vm.disconnect()
                 }
             }
 
@@ -672,6 +688,85 @@ private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFr
             Box(Modifier.fillMaxWidth().height(1.dp).background(MrrcSurfaces.Hairline))
             // 标尺本身就标了 VFO（红线+三角），不再重复一行频率数字
             FreqScaleCanvas(vfoFreq, spanHz, Modifier.fillMaxWidth().height(15.dp))
+        }
+    }
+}
+
+/** 顶栏工具行的图标种类。 */
+internal enum class HeaderIconKind { MENU, FULLSCREEN, POWER }
+
+/**
+ * 顶栏工具行的图标按钮：**Canvas 自绘**，不用字体字符。
+ *
+ * 为什么不用 `☰ ⛶ ⏻`：这些符号在不少机型上没有对应字形，会走字体回退，
+ * 渲染出来粗细不一、笔画缺失（用户报的"关闭 icon 变形"）。自绘的好处是
+ * 线宽随图标尺寸按比例算，任何 dpi/字体设置下都一致。
+ *
+ * 尺寸跟着屏幕档位走（[ScreenFit.headerIconTap] 点击区 / [ScreenFit.headerIconGlyph] 图形），
+ * 与同一行的 9sp 文字视觉齐平；`contentDescription` 兼顾无障碍与测试可查。
+ */
+@Composable
+private fun HeaderIconButton(
+    kind: HeaderIconKind,
+    description: String,
+    active: Boolean = false,
+    danger: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val m = LocalScreenMetrics.current
+    val color = when {
+        danger -> MrrcColors.Danger
+        active -> MrrcColors.Accent
+        else -> MrrcColors.TextSecondary
+    }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    Box(
+        Modifier.size(m.headerIconTap)
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(interactionSource = interaction, indication = ripple(), onClick = onClick)
+            .semantics { contentDescription = description }
+            .graphicsLayer { alpha = if (pressed) 0.55f else 1f },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(m.headerIconGlyph)) {
+            val g = size.width
+            // 线宽按图形尺寸的比例走：小图标不会糊成一团，大图标不会细成发丝
+            val st = (g * 0.13f).coerceAtLeast(1.1f)
+            val i = st / 2f
+            when (kind) {
+                HeaderIconKind.MENU -> {
+                    val gap = g * 0.27f
+                    for (k in -1..1) {
+                        val y = g / 2f + k * gap
+                        drawLine(color, Offset(i, y), Offset(g - i, y), strokeWidth = st, cap = StrokeCap.Round)
+                    }
+                }
+                HeaderIconKind.FULLSCREEN -> {
+                    // 四角括号（比"方框"更像全屏，且在 10dp 下不糊）
+                    val arm = g * 0.34f
+                    val l = i; val r = g - i; val t = i; val b = g - i
+                    drawLine(color, Offset(l, t), Offset(l + arm, t), st, cap = StrokeCap.Round)
+                    drawLine(color, Offset(l, t), Offset(l, t + arm), st, cap = StrokeCap.Round)
+                    drawLine(color, Offset(r, t), Offset(r - arm, t), st, cap = StrokeCap.Round)
+                    drawLine(color, Offset(r, t), Offset(r, t + arm), st, cap = StrokeCap.Round)
+                    drawLine(color, Offset(l, b), Offset(l + arm, b), st, cap = StrokeCap.Round)
+                    drawLine(color, Offset(l, b), Offset(l, b - arm), st, cap = StrokeCap.Round)
+                    drawLine(color, Offset(r, b), Offset(r - arm, b), st, cap = StrokeCap.Round)
+                    drawLine(color, Offset(r, b), Offset(r, b - arm), st, cap = StrokeCap.Round)
+                }
+                HeaderIconKind.POWER -> {
+                    // 标准电源符号：顶部留缺口的圆环 + 中间竖线
+                    // 0° = 三点钟方向、顺时针；缺口开在正上方（-120°~-60°）
+                    drawArc(
+                        color = color, startAngle = -60f, sweepAngle = 300f, useCenter = false,
+                        topLeft = Offset(i, i), size = Size(g - st, g - st),
+                        style = Stroke(width = st, cap = StrokeCap.Round),
+                    )
+                    drawLine(color, Offset(g / 2f, i * 0.6f), Offset(g / 2f, g * 0.52f),
+                        strokeWidth = st, cap = StrokeCap.Round)
+                }
+            }
         }
     }
 }

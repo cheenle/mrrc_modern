@@ -41,11 +41,17 @@ object ScreenFit {
     const val STATUS_TOP_PAD = 5
 
     /**
-     * 状态行内容估宽（dp）：☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻ + 间距。
-     * 用来估"会不会折成两行"。v1.1.21 瘦身：去掉 RTT·J（移到诊断行）、
-     * "Serial" 文字（只留状态点）、"录音"两字（改 ⏺ 图标）→ 从 269 降到 210。
+     * 状态行内容估宽（dp）：⏺ RX/TX 速率 状态点 + 间距。
+     * 用来估"会不会折成两行"。演进：269（v1.1.16）→ 210（v1.1.21 去 RTT·J / Serial / 录音二字）
+     * → **120**（v1.1.26：☰/⛶/⏻ 上移到显示屏工具行）。
      */
-    const val STATUS_CONTENT_W = 210
+    const val STATUS_CONTENT_W = 120
+
+    /** 顶栏工具行图标的点击区（不小于 22dp，保证拇指可按）。 */
+    fun headerIconTap(compact: Boolean): Int = if (compact) 22 else 26
+
+    /** 顶栏工具行图标的图形尺寸（与同行 9sp 文字视觉齐平）。 */
+    fun headerIconGlyph(compact: Boolean): Int = if (compact) 11 else 13
 
     /** 只读/无声等条件芯片的追加宽度。 */
     const val STATUS_EXTRA_CHIP_W = 30

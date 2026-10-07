@@ -115,11 +115,13 @@ class ScreenFitTest {
         assertEquals(1, ScreenFit.statusLines(412, 0))
         // 320dp 窄屏：可用 304dp 仍装得下 269dp 内容 → 一行
         assertEquals(1, ScreenFit.statusLines(320, 0))
-        // 加两个条件芯片（只读 + 无声）后，360dp 仍是一行
+        // v1.1.26：☰/⛶/⏻ 上移到显示屏工具行 → 状态行内容只剩 ⏺ RX/TX 速率 状态点 ≈120dp。
+        // 要折行得窄到 136dp 以下（没有这种真机）；220dp 也仍是一行
+        assertEquals(1, ScreenFit.statusLines(220, 0))
+        assertEquals(1, ScreenFit.statusLines(160, 0))
+        assertEquals(2, ScreenFit.statusLines(120, 0))
+        // 条件芯片（只读 / 无声）叠上去也不会折行
         assertEquals(1, ScreenFit.statusLines(360, 2))
-        // v1.1.21 瘦身（去 RTT·J / Serial 文字 / 录音二字）后内容宽 210dp：
-        // 只有窄到 226dp 以下才折行（没有这种真机；FlowRow 兜底不裁切）
-        assertEquals(2, ScreenFit.statusLines(220, 0))
     }
 
     @Test fun `memory grid is a single row of six in compact mode`() {

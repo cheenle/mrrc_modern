@@ -119,6 +119,6 @@ The table above shows the FT-710 backend mapping. The IC-7300/MK2 backend expose
 | ControlService | PTT/TUNE commands bypass queued polls and execute with low latency |
 | RXAudioService | Continuous playback under LAN jitter; Opus 64kbps default |
 | TXAudioService | Low-latency mic → radio path (< 500ms) |
-| SpectrumService | ~30fps FT4222; ~10fps fallback; identical binary format |
+| SpectrumService | Ticks 30 Hz; real scope ~11 fps, fallback ~30 fps; per-socket tier picks 1701B or 851B and the divider (AD-025); identical binary format on both paths |
 | CATSerialService | Serial lock prevents interleaved commands; timeout 3s |
 | AuthService | 30-day session; all WS endpoints gated; redirect on expiry |

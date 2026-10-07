@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1688 tests across 90 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1766 tests across 93 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-07, macOS). The per-module sections below
-itemise 71 of those 90 — the support-chain, Cloud Hub and upgrade-channel modules
+itemise 71 of those 93 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1688 |
-| Passed | 1686 (1 skipped) |
+| Total tests | 1766 |
+| Passed | 1764 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
@@ -566,7 +566,7 @@ SDD coverage: §9.2 (listen role), §5.3, I9
 | `ListenEndpointGateTests` | 8 | `/WSaudioTX` + `/WSatr1000` close 4003, RX/spectrum stay open, middleware 403 on API writes, reads + logout pass, `/listen` page served, `onlineUsers` broadcast + dead-client pruning, listen spectrum throttle gate |
 | `ListenProxyContractTests` | 6 | Prefix-aware listen.js/listen.html (relative URLs, no root-absolute bypass), iOS ScriptProcessor audio fallback present, relative login page, deploy_listen_proxy.sh nginx block markers incl. load-bearing `^~` |
 
-### 57. test_session_metrics.py — Remote-Session Metering (27 tests)
+### 57. test_session_metrics.py — Remote-Session Metering (33 tests)
 
 SDD coverage: AD-023, §12.4, hub AD-H12 / I-H1
 
@@ -578,6 +578,7 @@ SDD coverage: AD-023, §12.4, hub AD-H12 / I-H1
 | `PrivacyTests` | 2 | no session identifier in snapshot/report, stable snapshot keys |
 | `ValidationTests` | 2 | unknown role/kind rejected |
 | `SourceGuardTests` | 7 | all five WS endpoints meter open+close, control endpoint meters both cleanup paths, both fan-out byte paths metered, REST endpoint present, report loop created/cancelled, env knobs in config, singleton built from the config window |
+| `SpectrumProfileCountersTests` | 6 | per-tier frame+byte accumulation, an idle server invents no tier buckets, snapshot hands back copies, a zero-length frame still counts, an unknown tier name gets its own bucket (this module keeps zero app dependencies), an empty name is ignored |
 
 ### 58. test_ws_token_transport.py — Session-Token Transport (18 tests)
 
@@ -683,6 +684,7 @@ number while three of them were referenced from the Common Mistakes table.
 | AD-010 Memory Channels | test_server_ws_protocol (mem messages), test_memory_recall | 6 tests |
 | AD-023 Remote-Session Metering | test_session_metrics | 27 tests |
 | AD-024 Session-token transport | test_ws_token_transport | 18 tests |
+| AD-025 Spectrum bandwidth tiers | test_spectrum_profile, test_spectrum_profile_server, test_spectrum_profile_docs | 72 tests |
 | §15.6 TX-phase liveness gate | test_tx_liveness | 21 tests |
 | §7.2 RadioState Entity | test_radio_state | 46 tests |
 | §7.2 Config Tables | test_config, test_config_ic7300 | 50 tests |
@@ -776,3 +778,13 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | 测试 | 覆盖 |
 | ------ | ------ |
 | `test_host_score.py` | `dev_tools/host_score.py`（零依赖主机打分器）的分档边界；**工作负载的保真度**（两行 850 宽的水落、4096 字节帧、30/10 的每秒速率、`bands` 必须是对象数组而不是拍平的列表——形状错了会静默测成另一个负载）；参考机标定值确实存在且分项和等于总值（未标定的副本会用十足信心报错数）；工作负载真的能跑且很快；`--json` 输出可解析。**不需要硬件，也不需要 numpy**（缺 numpy 是少一行而不是失败） |
+
+### 本轮新增（频谱带宽档位 AD-025，2026-10-07）
+
+无需硬件，也不需要把服务端跑起来——三个模块分别测纯函数、服务端接线与文档真伪。
+
+| 测试 | 覆盖 |
+| ------ | ------ |
+| `test_spectrum_profile.py` | 17 项：档位表的两个正交因子（形状 × 分频）与每档 payload kbps（**助手必须含 divider**，否则 `mid` 看着像 1/2 而不是 1/4）；`frame_due(tick, 3)` 复现既有 listener 闸门的 `[3,6,9]`；短帧是全帧的**前缀切片**（同版本字节、同 wf1，因此 `scope_handler` 与 11 个 backend 一行未改）；非 1701 B 的怪帧只产出 `full` 变体，且 `variant_for` 退回全帧而**绝不返回 `None`**——静默丢帧正是本特性要避免的故障模式；caps 白名单只收 `high`/`mid`/`low`（服务端内部的 `listen` 档客户端点不到），并对垃圾输入永不抛异常（文本帧过去是被丢弃的保活，把它改坏就是改坏兼容性） |
+| `test_spectrum_profile_server.py` | 40 项：**未声明能力的 socket 永远只拿 1701 B**（兼容闸门 D-3，按线上字节陈述而不是按意图）；listener 角色默认仍是 ÷3 全帧（`test_listen_only.py:391` 那条守卫未改一字即绿）；显式 caps 覆盖角色默认；12 个 tick 上 high/mid/low = 12/6/3 帧、帧长各为 1701/851/851；计量按**实发字节**；死 socket 报给调用方剔除而其余客户端照发；**回退路径同样受分频**（30 tick 上 `low` 拿 7 帧）；`_spectrum_fanout` 的计量**在发送 `try` 之外**——否则计数器里的 `AttributeError` 会被 `except Exception` 洗成"客户端走了"，把健康 socket 静默踢出 `spectrum_clients`（本次自查出来的隐患，已钉住）；handler 保留 `_scope_producer.start()/stop()`、`metrics.close` 与 catch-all `except`（`test_server_ws_protocol.py:334` 按标记切源码块做守卫）；`_CapsWS` **真调 `ws_spectrum`** 跑完整路径：观测到 `high→mid` 的档位切换、listener 默认 `listen` 档、listener 可降档、未知档位名被忽略、未认证 `4001` 先于任何档位状态、断开后按 socket 的状态清空；遥测行含 `payload≈` 与分档帧数，且保留 `uplink spectrum` 这个既有 grep 锚点；前端契约（`onopen` 发 caps、cookie 持久化、切换即时生效、三档选项且不含 `listen`、缓存版本 39/34/v47 全部重钉、listen 页本阶段不动） |
+| `test_spectrum_profile_docs.py` | 15 项：**把"文档说的是真的"变成断言**——NFR-003 不得再把回退态当常态（`~30fps ≈ 51KB/s`）、也不得保留从未为真的 `~851 bytes/frame fallback`；§9.2.4 必须写明 v1=851 B **从未上线**、caps 协商、以及全帧**不得改标 `0x02`** 的理由（iOS `guard version == 0x01`）；分频是比例而非绝对速率（`~10 Hz` 只在回退态成立，任何提及必须同行带 `fallback` 条件；`14-version-history.md` 作为不可变日志豁免）；AD-025 记下两轴的实测依据（`permessage-deflate` 3.9× / OkHttp 不提供该扩展）；AD-023 的 408 kbps 与 86% **就地加注而不删原文**（删掉等于掩盖当时的容量决策是从什么数字做出的）；`spectrum_profile` 进 PyInstaller `hiddenimports`（v1.24.0 漏 `cloud_hub` 的前车之鉴）；`AGENTS.md` 与 `PROJECT_MAP.md` 不再引用并不存在的 `tests/test_ws_protocol.py`；`setOpusBitrate` 的每处提及都必须在邻近行标明未实现（它只存在于注释与文档里）；`tests/README.md` 的总数与 `discover` 的实际输出一致 |

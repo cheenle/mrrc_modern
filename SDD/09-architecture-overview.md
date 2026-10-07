@@ -45,10 +45,11 @@ Server captures Int16 mono from the selected radio's USB audio (44.1kHz for FT-7
 
 ### 9.2.4 /WSspectrum (binary)
 
-**v1 format:** 1-byte version (0x01) + 850 bytes wf1 = 851 bytes.
-**v2 format:** 1-byte version (0x02) + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes.
+**On the wire there is one version byte, `0x01`, and two lengths.** `full` = `0x01` + 850 bytes wf1 + 850 bytes wf2 = 1701 bytes. `wf1` = `0x01` + 850 bytes wf1 = 851 bytes. The 851-byte frame is what this section used to call "v1": it was specified here and **never shipped** — every server build sent the `0x01` byte with the 1701-byte length. The "v2" naming is retired rather than implemented, and the full frame must **not** be re-tagged `0x02`: iOS guards `version == 0x01` (`SpectrumProcessor.swift:57`) and would silently drop every frame. No client draws wf2 anyway — it is all zeros on both radio families.
 
-The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when `ScopeHandler._frame_count` advances, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick. Listen-role clients are throttled to every Nth frame (`LISTEN_SPECTRUM_DIVIDER = 3`, ~10 Hz) to cut their bandwidth by two thirds (V2.59).
+Which length a socket gets, and how often, is its **profile** (`spectrum_profile.py`, AD-025): `high` = full every tick, `mid` = wf1 every 2nd tick, `low` = wf1 every 4th. A socket declares its tier with a text frame `{"type":"spectrumCaps","profile":"mid"}`; **until it does, the server sends `high`** — byte-for-byte the pre-AD-025 stream, because the shipped Android parser rejects any length that is not 1701 (`SpectrumFrame.kt:14-15`). Listener-password sockets default to the server-internal `listen` tier (full, every 3rd tick), which is the behaviour they have had since V2.59.
+
+The broadcaster is scheduled at 30 Hz. Real scope data (FT4222 SPI for FT-710, CI-V 0x27 for the Icom family) is sent only when `ScopeHandler._frame_count` advances — **measured 11.1 fps on the FT-710**, so clients do not receive duplicate hardware frames; the S-meter fallback is regenerated on every broadcast tick (~30 fps) and passes through the same per-profile gate. A divider is a ratio, not an absolute rate: `LISTEN_SPECTRUM_DIVIDER = 3` yields ~3.7 Hz on the real-scope source and ~10 Hz in the fallback state, cutting bandwidth by two thirds either way (V2.59).
 
 ## 9.3 RX Audio Signal Chain
 

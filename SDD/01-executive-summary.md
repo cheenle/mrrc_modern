@@ -25,7 +25,7 @@ The codebase is a standalone Python FastAPI/Uvicorn service. It does not depend 
 | Control WebSocket | Implemented | `/WSradio` JSON: fullState, stateUpdate, set/get commands, auth |
 | RX audio WebSocket | Implemented | `/WSaudioRX` tagged dual-codec frames (0x00=PCM, 0x01=Opus 48kHz mono) |
 | TX audio WebSocket | Implemented | `/WSaudioTX` tagged mic frames → Opus decode → PyAudio → radio |
-| Spectrum WebSocket | Implemented | `/WSspectrum` binary: v1=851B wf1, v2=1701B wf1+wf2, ~30fps |
+| Spectrum WebSocket | Implemented | `/WSspectrum` binary: `0x01` + 850B wf1 (+850B wf2 on the full shape) = 1701B or 851B, tiered per socket by `spectrumCaps` (AD-025: high/mid/low); loop ticks 30 Hz, real scope ~11 fps |
 | Spectrum dual-mode | Implemented | Real FFT data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300) + S-meter fallback (synthetic Gaussian peaks) |
 | Serial radio protocol | Implemented | FT-710: Yaesu ASCII CAT via pyserial; IC-7300: CI-V framing via `civ_codec.py`/`civ_controller.py` |
 | Yaesu ASCII-CAT family | Experimental | `backends/yaesu/`: shared profile-driven core (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) whose transport is ported from the verified FT-710 path; per-model mode registers, filter slots, bands, meter curves and provenance; TX gated, `scope_type=none`, dual receive deferred |

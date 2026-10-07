@@ -51,6 +51,7 @@ from backends import create_backend, known_models
 from backends.base import RadioBackend
 import cloud_hub
 import net_tls
+import spectrum_profile
 import ssl_bootstrap
 import support_bundle
 import upgrade_core
@@ -146,16 +147,36 @@ audio: AudioHandler | None = None
 # Connected clients
 ctrl_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
-# Listen-role spectrum clients get every Nth frame (30 fps → ~10 fps):
-# a phone on a metered link does not need full-rate waterfall (V2.59).
+# Listen-role spectrum clients get every Nth frame — the "listen" tier below.
+# The divider is a ratio, so the delivered rate follows the frame source:
+# ~3.7 Hz on the measured 11.1 fps real scope, ~10 Hz in the 30 Hz fallback
+# state (V2.59 intent: a phone on a metered link does not need full rate).
 _listen_spectrum_clients: set[WebSocket] = set()
-LISTEN_SPECTRUM_DIVIDER = 3
+# Kept as a module attribute because tests/test_listen_only.py:397 reads it.
+LISTEN_SPECTRUM_DIVIDER = spectrum_profile.divider_for(spectrum_profile.LISTEN_PROFILE)
+
+# Tier a socket declared, keyed by the WebSocket object itself.  Absent means
+# "this socket never sent spectrumCaps" => the role default (high for an
+# operator token, listen for a listener token) => byte-for-byte today's stream.
+_spectrum_profiles: dict[WebSocket, str] = {}
+
+
+def _profile_for(ws: WebSocket) -> str:
+    """The spectrum profile in force for one socket.
+
+    Explicit caps win over the role default, and stick for the socket's life.
+    """
+    declared = _spectrum_profiles.get(ws)
+    if declared:
+        return declared
+    if ws in _listen_spectrum_clients:
+        return spectrum_profile.LISTEN_PROFILE
+    return spectrum_profile.DEFAULT_PROFILE
 
 
 def _spectrum_frame_due(ws: WebSocket, tick: int) -> bool:
     """Throttle gate for the spectrum fan-out (see above)."""
-    return (ws not in _listen_spectrum_clients
-            or tick % LISTEN_SPECTRUM_DIVIDER == 0)
+    return spectrum_profile.frame_due(tick, spectrum_profile.divider_for(_profile_for(ws)))
 audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
 # ATR1000 external tuner (optional; None = feature disabled)
@@ -251,6 +272,35 @@ async def _tx_liveness_watchdog():
         ctrl_clients.difference_update(dead)
 
 
+def _session_metrics_line(r: dict) -> str:
+    """Render one Session-metrics log line (pure, so it is testable).
+
+    The kbps figures are *payload* bytes: they are metered inside Starlette, so
+    whatever permessage-deflate does downstream is invisible here (browsers
+    negotiate it — measured 1701 B -> ~441 B on this payload — while Android's
+    OkHttp does not, so a phone really does pay the payload).  Labelling the
+    number "payload≈" is the point: it had been read as a wire figure.
+
+    The per-tier frame counts are what makes a bandwidth tier auditable from a
+    log alone — bytes tell you the total, frames tell you which tier produced it.
+    """
+    profiles = r.get("spectrum_profiles") or {}
+    by_profile = "/".join(
+        f"{name}={entry.get('frames', 0)}" for name, entry in profiles.items()
+    ) or "-"
+    listeners = r["listeners"]
+    kbps = r["kbps_since_report"]
+    return (
+        f"Session metrics: listeners {listeners['sessions']} "
+        f"(sockets {listeners['sockets']}, peak "
+        f"{int(listeners['peak_sessions_window'])}/{r['window_seconds']:.0f}s) | "
+        f"operators {r['operators']['sessions']} | payload\u2248 "
+        f"uplink spectrum {kbps['spectrum']:.1f} kbps, "
+        f"audio_rx {kbps['audio_rx']:.1f} kbps | "
+        f"spectrum frames {by_profile} | {r['elapsed_seconds']:.0f}s since last report"
+    )
+
+
 async def _session_metrics_loop():
     """One INFO line per interval with measured concurrency and uplink.
 
@@ -266,15 +316,7 @@ async def _session_metrics_loop():
         except Exception as e:      # a log line must never take the server down
             logger.debug("Session metrics report failed: %s", e)
             continue
-        logger.info(
-            "Session metrics: listeners %d (sockets %d, peak %d/%.0fs) | "
-            "operators %d | uplink spectrum %.1f kbps, audio_rx %.1f kbps | "
-            "%.0fs since last report",
-            r["listeners"]["sessions"], r["listeners"]["sockets"],
-            r["listeners"]["peak_sessions_window"], r["window_seconds"],
-            r["operators"]["sessions"],
-            r["kbps_since_report"]["spectrum"], r["kbps_since_report"]["audio_rx"],
-            r["elapsed_seconds"])
+        logger.info("%s", _session_metrics_line(r))
 
 
 _atr_storage = None           # TunerStorage shared with the client
@@ -1514,14 +1556,18 @@ async def _on_scope_frame(_scope: ScopeHandler):
 async def _broadcast_spectrum_loop():
     """Periodically send spectrum data to all spectrum WebSocket clients.
 
-    Runs at 5 fps (200ms interval) — a bandwidth/latency tradeoff for the
-    1701-byte frames over WAN links.
-    Sends binary frames: 1-byte version + 850 bytes wf1 + 850 bytes wf2.
+    Ticks at SPECTRUM_BROADCAST_FPS (30 Hz); what each socket actually receives
+    is its profile — shape x divider, see spectrum_profile (AD-025).  Frames are
+    binary: a 1-byte version (0x01) + 850 bytes wf1, plus 850 bytes wf2 on the
+    full shape (1701 B) and absent on the wf1 shape (851 B).
 
     When scope_pipe is not connected (no FT4222 data), falls back to
-    S-meter-based synthetic spectrum from the CAT polling data.
+    S-meter-based synthetic spectrum from the CAT polling data.  Real-scope
+    frames go out only when ScopeHandler._frame_count advances (measured
+    ~11.1 fps on the FT-710); the fallback regenerates one on every tick, and
+    both paths now pass through the same per-profile gate.
 
-    Idle (0 clients): sleeps 500ms instead of 200ms, cutting ~60% of
+    Idle (0 clients): sleeps 500ms instead of one tick interval, cutting ~60% of
     idle wakeups.  Synthetic Gaussian generation is also skipped.
     """
     global scope, spectrum_clients
@@ -1556,22 +1602,52 @@ async def _broadcast_spectrum_loop():
                     logger.info("Spectrum broadcast active: %s, %d bytes/frame, %d clients",
                                 mode, len(binary), len(spectrum_clients))
                     _first = False
-                dead: set[WebSocket] = set()
+                # One shared fan-out: the healthy path and the S-meter fallback
+                # path now deliver identical bytes per second for a given
+                # profile, and both meter what actually left (851 B on a wf1
+                # tier, not the 1701 B built above).
+                variants = spectrum_profile.build_variants(binary)
                 _broadcast_tick += 1
-                for ws in spectrum_clients:
-                    if not _spectrum_frame_due(ws, _broadcast_tick):
-                        continue
-                    try:
-                        await ws.send_bytes(binary)
-                        metrics.add_bytes("spectrum", len(binary))
-                    except Exception:
-                        dead.add(ws)
-                spectrum_clients -= dead
+                spectrum_clients -= await _spectrum_fanout(variants, _broadcast_tick)
         except asyncio.CancelledError:
             return
         except Exception as e:
             logger.warning("Spectrum broadcast error: %s", e)
         await asyncio.sleep(interval)
+
+
+async def _spectrum_fanout(variants: dict[str, bytes], tick: int) -> set[WebSocket]:
+    """Send this tick's frame to every spectrum client, honouring its profile.
+
+    One shared per-tick fan-out is what keeps the healthy (real-scope) path and
+    the S-meter fallback path on identical bytes-per-second: before profiles the
+    fallback regenerated a frame on every tick with no gate at all, so the broken
+    case cost more than the working one.
+
+    Returns the sockets that failed to take the frame; the caller drops them.
+    """
+    dead: set[WebSocket] = set()
+    for ws in spectrum_clients:
+        profile = _profile_for(ws)
+        # The same gate the listener throttle has always used — one source of
+        # truth for "may this socket have a frame on this tick".
+        if not _spectrum_frame_due(ws, tick):
+            continue
+        payload = spectrum_profile.variant_for(variants, profile)
+        try:
+            await ws.send_bytes(payload)
+        except Exception:
+            dead.add(ws)
+            continue
+        # Metering sits OUTSIDE the send's try on purpose: this except marks the
+        # socket dead and the caller drops it, so a bug in the counters would
+        # otherwise be laundered into "client went away" and silently stop its
+        # spectrum.  Count what actually left the radio, not the frame we built:
+        # a wf1-only tier puts 851 B on the wire, and the telemetry has to say so
+        # or the kbps numbers lie about the tier's effect.
+        metrics.add_bytes("spectrum", len(payload))
+        metrics.add_spectrum_profile_frame(profile, len(payload))
+    return dead
 
 
 # ── Audio Broadcast ────────────────────────────────────────────────────
@@ -3765,10 +3841,16 @@ async def ws_radio(ws: WebSocket):
 
 @app.websocket("/WSspectrum")
 async def ws_spectrum(ws: WebSocket):
-    """Binary spectrum data endpoint.  Sends waterfall rows at ~30 fps.
+    """Binary spectrum data endpoint.
 
-    Format: 1-byte version (0x01) + 850 bytes wf1 spectrum + 850 bytes wf2.
-    Total: 1701 bytes per frame.
+    Frame: 1-byte version (0x01) + 850 bytes wf1, plus 850 bytes wf2 on the
+    full shape (1701 B) and absent on the wf1 shape (851 B).  Which shape and
+    how often is this socket's profile — see spectrum_profile (AD-025).  The
+    loop ticks at SPECTRUM_BROADCAST_FPS (30 Hz); real scope frames go out only
+    when the hardware counter advances (~11 fps measured on the FT-710).
+
+    A socket that never sends ``spectrumCaps`` gets the full-rate 1701 B
+    stream, byte-for-byte what every client before AD-025 received.
     """
     token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
@@ -3785,8 +3867,23 @@ async def ws_spectrum(ws: WebSocket):
         await _scope_producer.start()
     try:
         while True:
-            # Keep connection alive, actual data sent by broadcast loop
-            await ws.receive_text()
+            # Keep connection alive, actual data sent by broadcast loop.
+            # Text frames used to be discarded; they now carry this socket's
+            # bandwidth tier (design §5.2).  Anything else — a ping, malformed
+            # JSON, an unknown tier name — stays as harmless as silence.
+            profile = spectrum_profile.parse_caps(await ws.receive_text())
+            if profile and _spectrum_profiles.get(ws) != profile:
+                _spectrum_profiles[ws] = profile
+                tier = spectrum_profile.PROFILES[profile]
+                frame_len = (spectrum_profile.SHORT_FRAME_BYTES
+                             if tier.shape == spectrum_profile.SHAPE_WF1
+                             else spectrum_profile.FULL_FRAME_BYTES)
+                logger.info(
+                    "Spectrum profile %s for %s socket: %s frame (%d B), divider %d",
+                    profile,
+                    "listener" if ws in _listen_spectrum_clients else "operator",
+                    tier.shape, frame_len, tier.divider,
+                )
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -3794,6 +3891,8 @@ async def ws_spectrum(ws: WebSocket):
     finally:
         spectrum_clients.discard(ws)
         _listen_spectrum_clients.discard(ws)
+        # Per-socket tier state goes with the socket — three cleanups, not two.
+        _spectrum_profiles.pop(ws, None)
         metrics.close(_role_for_token(token), "spectrum", token)
         logger.info("Spectrum client disconnected (%d remain)", len(spectrum_clients))
         if not spectrum_clients and _scope_producer is not None:

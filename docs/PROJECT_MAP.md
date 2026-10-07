@@ -36,7 +36,7 @@
 | `poll_scheduler.py` / `radio_state.py` | AD-003、AD-009、AD-012、AD-015 | `test_poll_scheduler.py`、`test_radio_state.py` | SDD 9.6 |
 | `scope_*` / `backends/*/scope_*` | AD-005、AD-006 | `test_scope_*.py` | SDD 9.5、AGENTS |
 | `atr1000_*.py` | SDD 9.8 | `test_atr1000_*.py` | SDD 9.8、README env |
-| `static/**`（前端） | SDD 9.7 | `test_ws_protocol.py` 中的前端契约测试 | AGENTS（两个勿格式化文件）、缓存版本号 |
+| `static/**`（前端） | SDD 9.7 | `test_server_ws_protocol.py` 中的前端契约测试 | AGENTS（两个勿格式化文件）、缓存版本号 |
 | `support_bundle.py` / `server.py` 的 `/api/support/*` / `static/support.html` | **AD-021**、NFR-068、SDD 12.5.1 | `test_support_bundle.py`、`test_support_api.py`、`test_support_frontend.py` | AGENTS 模块表、README env、SDD 10/12/13、CHANGELOG |
 | `windows/launcher.py` / `macos/launcher.py` / `macos/first_run.py`（首次运行探测：串口/型号/口令；两个启动器**共用** first_run） | SDD 12.6、v1.25.0 | `test_first_run_probe.py`、`test_listen_default.py`、`test_macos_launcher.py` | `win_pack.md`/`mac_pack.md`、两份安装指南、CHANGELOG |
 | `launcher_log.py`（启动器 tee）、`MRRC_LOG_DIR` | AD-021、SDD 12.6 | `test_launcher_log.py`、`test_quiet_logging.py` | AGENTS、SDD 12.6、`mac_pack.md`/`win_pack.md`/`pi_pack.md` |

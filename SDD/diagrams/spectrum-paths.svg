@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300">
-  <!-- diagram-version: V2.73 -->
+  <!-- diagram-version: V2.75 -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
@@ -19,7 +19,7 @@
   <text x="26" y="170" class="m">stdin TX:1 / TX:0 pause</text>
   <text x="26" y="186" class="m">resync = close / settle / reopen</text>
   <text x="131" y="208" text-anchor="middle" class="m">→ wf1[850] + wf2[850]</text>
-  <text x="131" y="222" text-anchor="middle" class="s">broadcast: v1 851 B · v2 1701 B</text>
+  <text x="131" y="222" text-anchor="middle" class="s">broadcast: full 1701 B · wf1 851 B</text>
 
   <!-- CI-V 0x27 -->
   <rect x="261" y="32" width="238" height="196" rx="10" fill="#5dade218" stroke="#5dade255"/>
@@ -52,6 +52,6 @@
   <!-- Shared fallback + scheduler -->
   <rect x="12" y="238" width="736" height="52" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>
   <text x="380" y="256" text-anchor="middle" class="h">SHARED · S-meter synthesiser + 30 Hz scheduler</text>
-  <text x="380" y="274" text-anchor="middle" class="m">CAT SM0; poll (~100 ms) → raw 0-255 → Gaussian peaks at band edges → same 851/1701-byte frame format → /WSspectrum</text>
+  <text x="380" y="274" text-anchor="middle" class="m">CAT SM0; poll (~100 ms) → raw 0-255 → Gaussian peaks at band edges → same 1701/851-byte frame format → /WSspectrum</text>
   <text x="380" y="288" text-anchor="middle" class="s">the scheduler sends real scope data only when the frame counter advances, so a stale radio cannot freeze the waterfall · listen-only clients get every 3rd frame (LISTEN_SPECTRUM_DIVIDER=3, 30 Hz → ~10 Hz)</text>
 </svg>

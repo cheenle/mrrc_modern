@@ -382,9 +382,9 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Status | Implemented (V2.62) |
 | Decision | 新增 `session_metrics.py`（纯标准库、不引应用模块）：按 `(role, kind)` 统计在活 WebSocket、按 token 统计**会话数**、生命期与滑动窗口并发峰值，并对两条上行扇出路径（`spectrum` / `audio_rx`）计量字节；`server.py` 在五个 WS 端点的 accept/finally 接线、在两处扇出发送点计量字节；新增 `GET /api/session_metrics` 与每 `MRRC_SESSION_METRICS_INTERVAL_S`（默认 300 s）一条 `Session metrics:` INFO 行。 |
 | Alternatives | ①**只在客户端量**（浏览器已经在算接收速率）：看不到"有几个 Listener"这件事，而并发才是扇出的触发门槛；②**把遥测上传到中心**：需要先有设备证书与用户同意，属于 Cloud Hub 的 AD-H11/AD-H13，不在本仓先做；③**只记累计值不记峰值**：典型/峰值是设计门槛的两个输入，只有累计值无法回答；④本地计数 + 峰值 + 端点（采纳）。 |
-| Consequences | ①**只记计数与字节**：token 只在模块内部作不透明键，绝不进入 `snapshot()`/`report()`，因此端点与日志可安全暴露（沿用 AD-021/NFR-068 的隐私边界）；②**双重关闭容忍**：清理既走正常返回也走异常路径，且广播可能已把 socket 移出集合，计数下溢必须不抛；③**窗口峰值不衰减**：滑动窗口内的采样是真实观测，窗口内无采样时取当前值，绝不报告低于当前值；④控制面文本帧不计量（<10 kbps，对比频谱 408 kbps），这是刻意的范围限制。 |
+| Consequences | ①**只记计数与字节**：token 只在模块内部作不透明键，绝不进入 `snapshot()`/`report()`，因此端点与日志可安全暴露（沿用 AD-021/NFR-068 的隐私边界）；②**双重关闭容忍**：清理既走正常返回也走异常路径，且广播可能已把 socket 移出集合，计数下溢必须不抛；③**窗口峰值不衰减**：滑动窗口内的采样是真实观测，窗口内无采样时取当前值，绝不报告低于当前值；④控制面文本帧不计量（<10 kbps，对比频谱 408 kbps），这是刻意的范围限制。〔**2026-10-07 校正，见 AD-025**：408 kbps 只在 S-meter 回退态成立；真频谱实测 11.1 fps ⇒ ~151 kbps payload，且自 AD-025 起频谱按档位可配（high/mid/low ≈ 151/38/19 kbps）。控制面 <10 kbps 至今仍未被计量，是估算而非读数。〕 |
 
-**Problem**: Cloud Hub（`mrrc_hub/SDD` AD-H12）明确拒绝在拿到"单实例真实 Listener 并发分布"之前建设 RX 扇出，而那个数字的原材料（`spectrum_clients` / `audio_rx_clients` / `_listen_tokens`）一直只活在内存里、随进程消失。同时实测已表明单会话带宽里**频谱占 ~86%**（1701 B/帧 × 30 fps ≈ 408 kbps，对比 RX Opus 64 kbps）—— 猜错的代价不是数字难看，而是重构错了子系统。
+**Problem**: Cloud Hub（`mrrc_hub/SDD` AD-H12）明确拒绝在拿到"单实例真实 Listener 并发分布"之前建设 RX 扇出，而那个数字的原材料（`spectrum_clients` / `audio_rx_clients` / `_listen_tokens`）一直只活在内存里、随进程消失。同时实测已表明单会话带宽里**频谱占 ~86%**（1701 B/帧 × 30 fps ≈ 408 kbps，对比 RX Opus 64 kbps）〔**2026-10-07 校正，见 AD-025**：30 fps 是 tick 率而非出帧率——真频谱只在硬件帧计数前进时发送，实测 11.1 fps ⇒ 频谱 ~151 kbps payload、占单会话 ~72%（不是 86%）；408 kbps 是 S-meter 回退态的数字。结论方向不变（频谱仍是主项），但 hub 的容量输入应以 151 kbps 与可配档位为准。〕—— 猜错的代价不是数字难看，而是重构错了子系统。
 
 **Rationale**: 把"要不要做扇出"从判断变成读数：峰值会话数回答"值不值得"，两路上行字节回答"省下多少"。同时把隐私边界写死在模块里（只有计数和字节），使这份观测可以默认开启、可以放上公网端点，而不必先谈同意书。
 
@@ -401,3 +401,17 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 **Problem**: 浏览器前端把会话令牌拼进 `?token=`，而实例跑 uvicorn 默认访问日志（含 query string），项目自己也早已知道这一点（`support_bundle.py` 的脱敏正则注释点名 "a `?token=` inside a URL"）—— 但脱敏只在导出诊断包时发生。一旦进入 Cloud Hub 的透明代理模式，中心侧每一条访问日志都会记录各实例的 30 天令牌；而浏览器侧没有自定义头能力这一"技术理由"，其实并不成立：**同源 WS 握手会自动带上 Cookie**。
 
 **Rationale**: 让凭证回到它能被系统正确保护的位置（Cookie / Header），URL 里只留资源路径。对已安装的原生客户端保留 query 兜底，是因为"安全改进"不该以现有用户的连接为代价 —— 但必须让它可观测，否则永远不会有人去改。
+
+## AD-025: 频谱带宽档位（形状 × 分频，以 caps 协商为闸门）
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Design / Bandwidth |
+| Status | Implemented (V2.75, v1.26.0) — 服务端 + Web；Android/iOS 尚未发 caps |
+| Decision | 新增 `spectrum_profile.py`（纯标准库、不引应用模块）：档位 = **两个正交因子**——`shape`（`full` = `0x01`+wf1+wf2 = 1701 B；`wf1` = `0x01`+wf1 = 851 B）× `divider`（广播 tick 的 1/2/3/4），包成具名预设 `high`(full,÷1) / `mid`(wf1,÷2) / `low`(wf1,÷4) 与服务端内部的 `listen`(full,÷3)。短帧由 `full[:851]` **切片**得到，因此 `scope_handler` 与 backends 一行未改、也不存在第二条会漂移的组帧路径。客户端在 `/WSspectrum` 上发文本帧 `{"type":"spectrumCaps","profile":"mid"}` 声明档位；**未声明则永远 `high`**（逐字节等于 AD-025 之前的流）。真频谱与 S-meter 回退两条路径共用同一个 `_spectrum_fanout`，按**实发字节**计量并分档计帧。 |
+| Alternatives | ①**只砍 wf2**：对浏览器几乎不省钱——uvicorn 0.52.1 与浏览器协商 `permessage-deflate`，实测 30 帧×1701 B 上线后只剩 13224 B（≈441 B/帧，3.9×），其中 850 字节零值的 wf2 压缩后≈1.4 B/帧；②**只降帧率**：对 Android 不够——OkHttp 4.12 不提供该扩展（dex 里带 `Request header not permitted: 'Sec-WebSocket-Extensions'` 守卫），1701 B 真的逐个走出去，而用户要的"每档减半"要在两种口径上都成立；③**850→425 点降采样**：给所有客户端加渲染复杂度，浏览器侧收益又最小，推迟；④**音频码率档**：`setOpusBitrate` 只存在于注释与 iOS 集成文档，服务端与客户端均未实现，先补命令再谈档位；⑤**新协议版本号 `0x02`**：会静默杀掉已装 iOS（`SpectrumProcessor.swift:57` 是 `guard version == 0x01`），改为把 SDD 里从未上线的 v1=851 B 落实、全帧保持 `0x01`；⑥形状×分频两因子 + caps 闸门（采纳）。 |
+| Consequences | ①**payload 轴**：high→mid→low = 151→38→19 kbps（×¼、×⅛，真频谱 11.1 fps 实测口径）；**Android 线上轴**同比例（无 deflate）；**浏览器线上轴** ≈39→20→10 kbps（deflate 已把 wf2 压掉）。两个轴差近 4 倍，引用数字必须标明口径——`Session metrics` 行因此改标 `payload≈`。②**回退态不再比健康态贵**：修好了"S-meter 回退无帧计数闸门、每 tick 重造 1701 B"这个 bug（health 11 fps vs fallback 30 fps），两条路径现在每档字节数一致。③**兼容性靠闸门而非靠客户端升级**：已装 Android 的 `SpectrumFrame.kt:14-15` 同时硬判 `size != 1701` 与 `frame[0] != 0x01`，是唯一吃不下 851 B 帧的客户端；不发 caps 就永远拿 `high`，所以本阶段**不需要**发 APK。Web 与 iOS 的解析器本来就能吃 851 B。④**多了一份按 socket 的状态**：`_spectrum_profiles` 必须在 handler 的 `finally` 里与两个 socket 集合一起回收（三个泄漏点，不是两个），已由集成测试钉住。⑤**可观测**：`session_metrics.snapshot()["spectrum_profiles"]` 分档计帧计字节，`dev_tools/spectrum_profile_probe.py` 可当场复现验收表（`--no-deflate` 切到 Android 轴，`--no-caps` 验证兼容闸门）。⑥计量刻意放在发送的 `try` **之外**：否则计数器里的 bug 会被 `except Exception` 洗成"客户端走了"而把健康 socket 静默踢出 `spectrum_clients`。⑦边界：Android/iOS 要真正省流量得等 P2/P3（发 caps + 设置项，Android 走 APK-only 通道）；跨仓 `mrrc_hub` 的 NFR-H007（0.48 Mbps）与 AD-H14（频谱占 86%）建在 30 fps 假设上，输入数据需按 151 kbps / ~72% 修正。 |
+
+**Problem**: 公网出口带宽与移动流量账单的主项是频谱，但"省带宽"这件事在本仓从来没有可动的旋钮：帧长恒为 1701 B、tick 恒为 30 Hz，唯一存在的节流是 listener 的 ÷3。而两个实测事实使任何单一手段都不够——浏览器侧 `permessage-deflate` 已经把 wf2 的 850 个零字节压到≈1.4 B/帧（砍它对网页几乎无效），Android 侧则完全没有压缩（砍它就是全部收益）。同时 SDD §9.2.4 定义的 v1=851 B **从未上过线**（全仓无任何代码发出 `0x02`，`git log -S` 零命中），文档与线上格式已经对不上；而回退路径因为没有帧计数闸门，坏消息反而比好消息贵（30 fps × 1701 B ≈ 408 kbps，对比真频谱 151 kbps）。
+
+**Rationale**: 把"省带宽"从一次性的格式决定变成**每 socket 可协商的档位**，并且让兼容性由服务端闸门保证而不是由客户端升级保证——未声明能力的连接逐字节拿到今天的流，所以老 Android 不会因为服务端先上线而黑屏。两个因子分别覆盖两个轴（形状覆盖 Android 的 payload、分频覆盖浏览器的 deflate 后线上字节），这样"每档减半"在两种口径上都成立，而不是只在其中一个上好看。短帧用切片而非新组帧路径，是为了让 `scope_handler` 与 11 个 backend 完全不动——组帧代码只有一份，就不存在两份会漂移的实现。全帧保持 `0x01` 而不是改成 `0x02`，是因为已装 iOS 客户端 `guard version == 0x01`：一个"更贴合文档"的版本号会换来一批静默丢帧的用户。

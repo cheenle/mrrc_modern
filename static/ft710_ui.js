@@ -700,6 +700,9 @@ let waterfallInitialized = false;
 let scopeFloor = parseInt(getStored('scopeFloor', '5'));
 let scopeCeil = parseInt(getStored('scopeCeil', '220'));
 let scopeTheme = getStored('scopeTheme', 'jet');
+// Spectrum bandwidth tier: sent to the server as spectrumCaps on connect and
+// re-sent on change (server-side gating, so no socket reopen is needed).
+let scopeProfile = getStored('scopeProfile', 'high');
 let fftSmooth = null;  // EMA-smoothed FFT buffer for slow decay
 
 function getStored(key, fallback) {
@@ -1135,6 +1138,8 @@ function renderScopeSettings() {
     if (speedSelect) speedSelect.value = String(radioState.scope_speed);
     const themeSelect = document.getElementById('scope-theme-select');
     if (themeSelect) themeSelect.value = scopeTheme;
+    const tierSelect = document.getElementById('scope-profile-select');
+    if (tierSelect) tierSelect.value = scopeProfile;
     const floorSlider = document.getElementById('slider-floor');
     const floorVal = document.getElementById('val-floor');
     if (floorSlider) floorSlider.value = scopeFloor;
@@ -1457,6 +1462,21 @@ function initUI() {
         scopeTheme = this.value;
         setStored('scopeTheme', scopeTheme);
     });
+
+    // Spectrum bandwidth tier (SDD AD-025): shape x frame-rate divider, applied
+    // server-side.  Full = 1701 B every frame (identical to what every client
+    // before AD-025 got), Half = 851 B every 2nd frame, Quarter = 851 B every 4th.
+    const netSelect = document.getElementById('scope-profile-select');
+    if (netSelect) {
+        netSelect.value = scopeProfile;
+        netSelect.addEventListener('change', function() {
+            scopeProfile = this.value;
+            setStored('scopeProfile', scopeProfile);
+            renderScopeSettings();
+            // Live switch: the server re-gates this socket from the next tick.
+            if (typeof sendSpectrumCaps === 'function') sendSpectrumCaps();
+        });
+    }
 
     // Floor slider: adjusts the noise-floor cutoff for the waterfall
     const floorSlider = document.getElementById('slider-floor');

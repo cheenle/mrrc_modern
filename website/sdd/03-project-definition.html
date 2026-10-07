@@ -175,7 +175,7 @@
 <li>Maintain WebSocket control channel <code class="scope-code">/WSradio</code> with JSON protocol.</li>
 <li>Maintain RX audio channel <code class="scope-code">/WSaudioRX</code> using tagged dual-codec frames (Opus 48kHz default, Int16 PCM fallback).</li>
 <li>Maintain TX audio channel <code class="scope-code">/WSaudioTX</code> for browser microphone uplink.</li>
-<li>Maintain spectrum channel <code class="scope-code">/WSspectrum</code> with binary 850/1701-byte frames at ~30 fps.</li>
+<li>Maintain spectrum channel <code class="scope-code">/WSspectrum</code> with binary frames of 1701 or 851 bytes, tiered per socket (AD-025); the loop ticks at 30 Hz and real scope frames follow the hardware (~11 fps measured).</li>
 <li>Implement dual-mode spectrum: real FFT data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300) + S-meter Gaussian fallback.</li>
 <li>Implement full radio command set for the selected backend via serial port with threaded/asynchronous I/O.</li>
 <li>7-task background polling with adaptive skip-on-command.</li>
@@ -328,7 +328,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.74 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.75 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

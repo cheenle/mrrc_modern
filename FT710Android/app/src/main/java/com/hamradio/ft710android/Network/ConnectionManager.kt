@@ -1,5 +1,6 @@
 package com.hamradio.ft710android.Network
 
+import com.hamradio.ft710android.Spectrum.SpectrumTiers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,6 +22,12 @@ class ConnectionManager(
     private val onListenOnly: () -> Unit = {},
     private val sendOverride: ((String) -> Unit)? = null,
     nowMs: () -> Long = { System.currentTimeMillis() },
+    /** 测试用：拦下频谱通道上的文本发送（caps）。
+     *
+     *  与 [sendOverride] 同一个道理：`WebSocketConnection` 是 final class、没法 fake，
+     *  而“到底往频谱通道发了什么”正是档位协商唯一可测的部分。
+     *  放在最后是为了不惊动任何按位置传参的调用点。 */
+    private val spectrumSendOverride: ((String) -> Unit)? = null,
 ) {
     private var radio: WebSocketConnection? = null
     private var audioRx: WebSocketConnection? = null
@@ -224,8 +231,13 @@ class ConnectionManager(
     // ── 频谱通道的后台暂停（省带宽）──────────────────────────────
 
     /**
-     * 后台时停掉 `/WSspectrum`：服务端按 **~30fps** 推 1701B 的瀑布帧
-     * ≈ 51 KB/s ≈ **180 MB/小时**，退到后台还在收就是纯浪费流量（也白费 CPU 解析）。
+     * 后台时停掉 `/WSspectrum`：服务端满档（high）推 1701B 的瀑布帧，广播 tick 是 30 Hz，
+     * 但真频谱只在硬件帧计数前进时才出帧 —— **实测 11.1 fps ≈ 151 kbps ≈ 68 MB/小时**；
+     * S-meter 回退态才是每 tick 重造一帧（≈408 kbps ≈ 180 MB/小时）。
+     * 旧注释写的 “~30fps ≈ 51 KB/s ≈ 180 MB/小时” 把两个态揉成了一个数字：
+     * 51 KB/s 只对回退态成立，而那个态本来就不是常态。
+     * 档位（AD-025）能把 high 降到 mid/low（≈38 / ≈19 kbps），但后台一律直接停：
+     * 省流量最狠的一档是“根本不连”。退到后台还在收就是纯浪费流量（也白费 CPU 解析）。
      * 回前台自动重连。
      *
      * 暂停期间 `/WSspectrum` **不计入连接判据**（见 [requiredChannels]），
@@ -255,7 +267,42 @@ class ConnectionManager(
         if (b.isEmpty() || t.isEmpty()) return
         spectrum = connect(b, "/WSspectrum", t, onText = { stats.onReceived(it.length) },
             onBinary = { stats.onReceived(it.size); onSpectrum(it) })
+        // 连接后立即声明档位。OkHttp 会把 onOpen 之前 send() 的消息排队，所以这里不需
+        // 等 Connected 状态；而服务端在收到 caps 之前一直发 high（1701B 满帧），
+        // 因此晚到不会丢帧，只是前几帧贵一点。不声明就永远拿 high：手机侧一点流量也省不下来
+        // （OkHttp 4.12 不提供 permessage-deflate，1701B 真的逐个走出电台）。
+        sendSpectrumText(SpectrumTiers.capsJson(spectrumProfile))
     }
+
+    /** 往频谱通道发一条文本；测试可以用 [spectrumSendOverride] 拦下（同 [dispatch]）。 */
+    private fun sendSpectrumText(text: String) {
+        if (spectrumSendOverride != null) { spectrumSendOverride(text); return }
+        spectrum?.sendText(text)
+    }
+
+    // ── 频谱带宽档位（服务端 spectrum_profile / AD-025）───────────
+
+    /** 当前声明的档位。默认 high = 服务端未收到 caps 时的行为，逐字节兼容。 */
+    private var spectrumProfile: String = SpectrumTiers.DEFAULT
+
+    /**
+     * 换频谱带宽档位（high/mid/low）。已在传就**在同一条 socket 上补发一条 caps**，
+     * 服务端下一个广播 tick 就换闸门（~33ms），不用重连。
+     *
+     * 重连是错的：它会惊动 [requiredChannels]，而后台暂停期间把 `/WSspectrum` 拉回来
+     * 正是 [setSpectrumPaused] 明确禁止的事（用户以为在收音其实断了 / 白耗流量）。
+     * 暂停时只存值，等 resume 时由 [connectSpectrum] 带上去。
+     */
+    @Synchronized
+    fun setSpectrumProfile(name: String) {
+        val normalized = SpectrumTiers.normalize(name)
+        if (spectrumProfile == normalized) return
+        spectrumProfile = normalized
+        if (!spectrumPaused) sendSpectrumText(SpectrumTiers.capsJson(normalized))
+    }
+
+    /** 诊断与测试可读。 */
+    val currentSpectrumProfile: String get() = synchronized(this) { spectrumProfile }
 
     private fun dispatch(cmd: String) {
         stats.onSent(cmd.length)

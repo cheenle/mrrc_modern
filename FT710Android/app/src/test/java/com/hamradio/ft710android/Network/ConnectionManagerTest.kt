@@ -164,4 +164,82 @@ class ConnectionManagerTest {
         )
         cm.stopAll()
     }
+
+    // ── 频谱带宽档位声明（服务端 AD-025）────────────────────
+
+    private fun spectrumCm(caps: MutableList<String>) = ConnectionManager(
+        client = OkHttpClient(),
+        scope = CoroutineScope(Dispatchers.Unconfined),
+        onRadioEvent = {}, onAudioRx = {}, onSpectrum = {}, onAudioTxText = {},
+        onAtrEvent = {}, onConnectionChange = {},
+        sendOverride = {},
+        spectrumSendOverride = { caps.add(it) },
+    )
+
+    @Test fun `the tier is declared on the spectrum channel at connect`() {
+        val caps = mutableListOf<String>()
+        val cm = spectrumCm(caps)
+        cm.start("http://127.0.0.1:1", "tok")
+        // 默认档必须主动声明：不发 caps 的话服务端永远发 high，手机一点流量也省不下来。
+        assertEquals(listOf("""{"type":"spectrumCaps","profile":"high"}"""), caps)
+        cm.stopAll()
+    }
+
+    @Test fun `changing the tier re-declares on the same socket without reconnecting`() {
+        val caps = mutableListOf<String>()
+        val cm = spectrumCm(caps)
+        cm.start("http://127.0.0.1:1", "tok")
+        cm.setSpectrumProfile("low")
+        assertEquals(listOf(
+            """{"type":"spectrumCaps","profile":"high"}""",
+            """{"type":"spectrumCaps","profile":"low"}""",
+        ), caps)
+        // 关键不变量：换档不得重连。重连会惊动 requiredChannels，
+        // 而后台暂停期间把 /WSspectrum 拉回来正是 setSpectrumPaused 禁止的事。
+        assertEquals("换档不该重连频谱通道", 1, cm.openedPaths.count { it == "/WSspectrum" })
+        cm.stopAll()
+    }
+
+    @Test fun `setting the same tier twice is idempotent`() {
+        val caps = mutableListOf<String>()
+        val cm = spectrumCm(caps)
+        cm.start("http://127.0.0.1:1", "tok")
+        cm.setSpectrumProfile("mid")
+        cm.setSpectrumProfile("mid")
+        assertEquals(2, caps.size)   // 初始 high + 一次 mid，重复设置不再发
+        assertEquals("mid", cm.currentSpectrumProfile)
+        cm.stopAll()
+    }
+
+    @Test fun `an unknown or internal tier never reaches the wire`() {
+        val caps = mutableListOf<String>()
+        val cm = spectrumCm(caps)
+        cm.start("http://127.0.0.1:1", "tok")
+        // 服务端白名单只有 high/mid/low；listen 是它给只读会话的内部默认档。
+        // 发非法值不会报错，只会被人忽略——于是 UI 显示“已省流量”而实际在拿满帧。
+        cm.setSpectrumProfile("turbo")
+        cm.setSpectrumProfile("listen")
+        cm.setSpectrumProfile("")
+        assertEquals("high", cm.currentSpectrumProfile)
+        assertEquals("""{"type":"spectrumCaps","profile":"high"}""", caps.last())
+        cm.stopAll()
+    }
+
+    @Test fun `a tier change while paused does not wake the spectrum channel`() {
+        val caps = mutableListOf<String>()
+        val cm = spectrumCm(caps)
+        cm.start("http://127.0.0.1:1", "tok")
+        cm.setSpectrumPaused(true)
+        assertEquals(1, cm.openedPaths.count { it == "/WSspectrum" })
+
+        cm.setSpectrumProfile("low")
+        assertEquals("后台改档不得重连频谱", 1, cm.openedPaths.count { it == "/WSspectrum" })
+        assertEquals("low", cm.currentSpectrumProfile)
+
+        // 回到前台：重连一次，并且带的是新档位
+        cm.setSpectrumPaused(false)
+        assertEquals(2, cm.openedPaths.count { it == "/WSspectrum" })
+        assertEquals("""{"type":"spectrumCaps","profile":"low"}""", caps.last())
+        cm.stopAll()
+    }
 }

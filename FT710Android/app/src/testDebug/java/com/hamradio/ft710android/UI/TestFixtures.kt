@@ -46,7 +46,7 @@ internal fun fixtureVm(
                "modes":["LSB","USB","CW-U","FM"],
                "memChannels":[{"freq":7116950,"mode":"USB","label":"M1"},
                               {"freq":14270000,"mode":"USB","label":"40m SSB Contest"},
-                              {"freq":3500000,"mode":"CW-U","label":"中文标签测试"},
+                              {"freq":438500000,"mode":"FM","label":"中文标签测试"},
                               null,null,null],
                "filterTables":{"voice":[[1,300],[2,500],[3,3000]],"narrow":[[1,50]],"narrowModes":["CW-U"]},
                "radioDisplayName":"Yaesu FT-710",

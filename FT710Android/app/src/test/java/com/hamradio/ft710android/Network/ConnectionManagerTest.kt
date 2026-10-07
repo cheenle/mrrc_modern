@@ -97,4 +97,71 @@ class ConnectionManagerTest {
         // 没连过 ATR → sendAtrTune 返回 false，且不抛
         assertFalse(cm.sendAtrTune())
     }
+
+    /**
+     * 连接判据是"后台停频谱"的安全带：
+     * `/WSspectrum` 一旦仍被算作必需通道，退后台暂停频谱就会让 `isConnected` 变 false，
+     * 而 VM 的 `syncBackground()` 依赖它 → **后台接收被自己关掉**，
+     * 用户以为还在收音，其实早就断了。
+     */
+    @Test fun `paused spectrum is not a required channel`() {
+        assertEquals(
+            setOf("/WSradio", "/WSaudioRX", "/WSaudioTX", "/WSspectrum"),
+            ConnectionManager.requiredChannels(listenOnly = false, spectrumPaused = false),
+        )
+        // 后台暂停频谱：判据里不能有它，否则连接会被判死
+        assertEquals(
+            setOf("/WSradio", "/WSaudioRX", "/WSaudioTX"),
+            ConnectionManager.requiredChannels(listenOnly = false, spectrumPaused = true),
+        )
+        // 只读会话本来就没有 TX 通道（服务端 4003 关闭）
+        assertEquals(
+            setOf("/WSradio", "/WSaudioRX", "/WSspectrum"),
+            ConnectionManager.requiredChannels(listenOnly = true, spectrumPaused = false),
+        )
+        // 两个条件同时成立
+        assertEquals(
+            setOf("/WSradio", "/WSaudioRX"),
+            ConnectionManager.requiredChannels(listenOnly = true, spectrumPaused = true),
+        )
+    }
+
+    @Test fun `spectrum channel is closed while paused and reopened on resume`() {
+        val cm = ConnectionManager(
+            client = OkHttpClient(),
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            onRadioEvent = {}, onAudioRx = {}, onSpectrum = {}, onAudioTxText = {},
+            onAtrEvent = {}, onConnectionChange = {},
+            sendOverride = {},
+        )
+        cm.start("http://127.0.0.1:1", "tok")
+        assertTrue("前台应当连着频谱", cm.openedPaths.contains("/WSspectrum"))
+        assertFalse(cm.isSpectrumPaused)
+
+        // 退后台 → 暂停
+        cm.setSpectrumPaused(true)
+        assertTrue(cm.isSpectrumPaused)
+        assertTrue("诊断摘要要能看出是主动暂停而不是断了", cm.channelsSummary().contains("S(p)"))
+
+        // 回前台 → 重连
+        cm.setSpectrumPaused(false)
+        assertFalse(cm.isSpectrumPaused)
+        assertEquals("恢复时应重连一次频谱", 2, cm.openedPaths.count { it == "/WSspectrum" })
+
+        // 幂等：重复设置不重复连
+        cm.setSpectrumPaused(false)
+        assertEquals(2, cm.openedPaths.count { it == "/WSspectrum" })
+
+        // 暂停状态下重连会话（网络切换等）不该把频谱又拉起来。
+        // 注意 start() 会先 stopAll()，而 stopAll() 清空 openedPaths 日志，
+        // 所以这里看的是"新会话里有没有频谱"——0 才是对的（有则说明白耗流量）。
+        cm.setSpectrumPaused(true)
+        cm.start("http://127.0.0.1:1", "tok")
+        assertEquals(
+            "后台重连不应恢复频谱（四路核心通道照连）",
+            listOf("/WSradio", "/WSaudioRX", "/WSaudioTX"),
+            cm.openedPaths,
+        )
+        cm.stopAll()
+    }
 }

@@ -204,6 +204,15 @@ class MainViewModel(
     /** 只读登录（服务端以 4003 关闭 TX/ATR 通道）——隐藏发射类 UI。 */
     fun onListenOnly() { _listenOnly.value = true; syncBackground() }
 
+    /**
+     * 应用前后台切换（`MainActivity.onStart/onStop` 调）。
+     * 退后台就停掉频谱通道：服务端 ~30fps × 1701B ≈ 51KB/s ≈ 180MB/小时，
+     * 后台看不见瀑布还一直收是纯浪费流量；回前台自动恢复。
+     */
+    fun onAppForeground(foreground: Boolean) {
+        connectionManager.setSpectrumPaused(!foreground)
+    }
+
     /** 「后台接收」开关（DataStore）；开启且连接存在时前台服务常驻。 */
     fun setBackgroundRxPref(v: Boolean) { backgroundRxPref = v; syncBackground() }
 

@@ -139,58 +139,41 @@ class ScreenFitTest {
         assertTrue("屏越宽格子越宽", ScreenFit.memoryCellWidth(432, true) > w360)
     }
 
-    @Test fun `short labels keep the full size and long ones shrink to fit`() {
+    /**
+     * 2026-10-07 起记忆格**只显示频率**（用户要求：标签太挤会变形）。
+     * 单行之后空间宽松，字号上限从 7.5sp 放开到 11sp（标准档 13sp）。
+     */
+    @Test fun `frequency text takes the full size when short and shrinks when long`() {
         val w = ScreenFit.memoryCellWidth(360, true)
-        assertEquals("两字标签拿满字号", 8.5f, ScreenFit.memoryLabelFontSize("M1", w, true), 0.001f)
-        // 7 字符标签：47 / (7×0.62) = 10.8 → 被上限夹到 8.5，仍然放得下
-        assertEquals(8.5f, ScreenFit.memoryLabelFontSize("40m SSB", w, true), 0.001f)
-        // 15 字符：47 / (15×0.62) = 5.06 → 被下限夹到 5.5，交给省略号
-        assertEquals(ScreenFit.MEMORY_LABEL_MIN_SP, ScreenFit.memoryLabelFontSize("40m SSB Contest", w, true), 0.001f)
-        // 中间长度应当真的缩小（不是恒定字号）
-        val mid = ScreenFit.memoryLabelFontSize("WWV 10MHz", w, true)
-        assertTrue("9 字符应缩到 $mid", mid < 8.5f && mid > ScreenFit.MEMORY_LABEL_MIN_SP)
+        // 空槽占位 "M1"：2 字符 → 47/(2×0.62)=37.9 → 上限 11sp
+        assertEquals(11f, ScreenFit.memoryFreqFontSize("M1", w, true), 0.001f)
+        // "7.117"：5 字符 → 47/(5×0.62)=15.2 → 上限 11sp
+        assertEquals(11f, ScreenFit.memoryFreqFontSize("7.117", w, true), 0.001f)
+        // "438.500"（UHF 7 字符）：47/(7×0.62)=10.8 → 真的缩一档
+        assertEquals(10.84f, ScreenFit.memoryFreqFontSize("438.500", w, true), 0.05f)
+        // "1234.567"（8 字符，极端）：47/(8×0.62)=9.5
+        assertTrue(ScreenFit.memoryFreqFontSize("1234.567", w, true) < 10f)
+        // 标准档格子宽得多 → 一律拿满上限 13sp
+        assertEquals(13f, ScreenFit.memoryFreqFontSize("438.500", ScreenFit.memoryCellWidth(800, false), false), 0.001f)
     }
 
-    @Test fun `cjk labels are measured as full-width so they never overflow`() {
-        val w = ScreenFit.memoryCellWidth(360, true)
-        // 中文按 1.0em 估：6 字 → 47/6 = 7.83sp
-        assertEquals(7.83f, ScreenFit.memoryLabelFontSize("中文标签测试", w, true), 0.05f)
-        // 同样的字数若按半角算会得到 12.6 → 被夹到 8.5，那就会溢出；CJK 必须更宽
-        assertTrue(
-            ScreenFit.memoryLabelFontSize("中文标签测试", w, true) <
-                ScreenFit.memoryLabelFontSize("abcdef", w, true),
-        )
-    }
-
-    @Test fun `every label either fits its cell or falls back to the ellipsis floor`() {
+    @Test fun `every memory text either fits its cell or falls back to the ellipsis floor`() {
         // 这是"不变形"的真正保证：要么放得下，要么已经到下限（此时 UI 用 Ellipsis 收尾，
         // 且 maxLines=1 + softWrap=false 保证绝不换行把固定高度的格子顶变形）
-        val labels = listOf(
-            "M1", "40m", "WWV", "7.05", "40m SSB", "Contest", "WWV 10MHz", "40m SSB Contest",
-            "中文标签测试", "JA1XYZ/1", "14.270 USB", "QSO Party 2026 Winter",
+        val texts = listOf(
+            "M1", "M6", "7.117", "14.270", "438.500", "1234.567", "0.137", "50.313",
         )
-        listOf(360 to true, 432 to true, 411 to true, 800 to false).forEach { (w, compact) ->
+        listOf(360 to true, 384 to true, 411 to true, 432 to true, 800 to false).forEach { (w, compact) ->
             val cell = ScreenFit.memoryCellWidth(w, compact)
-            labels.forEach { label ->
-                val fs = ScreenFit.memoryLabelFontSize(label, cell, compact)
-                val em = if (label.any { it.code >= 0x2E80 }) 1.0f else 0.62f
-                val need = label.length * em * fs
+            texts.forEach { text ->
+                val fs = ScreenFit.memoryFreqFontSize(text, cell, compact)
+                val need = text.length * 0.62f * fs          // 等宽数字/字母，恒半角
                 assertTrue(
-                    "${w}dp/$label：${fs}sp 需要 ${"%.1f".format(need)}dp > 格宽 ${"%.1f".format(cell)}dp",
+                    "${w}dp/$text：${fs}sp 需要 ${"%.1f".format(need)}dp > 格宽 ${"%.1f".format(cell)}dp",
                     need <= cell + 0.5f || fs <= ScreenFit.MEMORY_LABEL_MIN_SP + 0.001f,
                 )
                 assertTrue("字号不得低于下限", fs >= ScreenFit.MEMORY_LABEL_MIN_SP)
             }
         }
-    }
-
-    @Test fun `frequency line always fits since it is fixed width`() {
-        val w = ScreenFit.memoryCellWidth(360, true)
-        // "%.3f" 最长如 "1234.567"（8 字符）；正常业余频段是 5~7 字符
-        listOf("7.117", "14.270", "1234.567").forEach { f ->
-            val fs = ScreenFit.memoryFreqFontSize(f, w, true)
-            assertTrue("$f 在 ${fs}sp 下应放得下", f.length * 0.62f * fs <= w + 0.5f)
-        }
-        assertEquals(7.5f, ScreenFit.memoryFreqFontSize("7.117", w, true), 0.001f)
     }
 }

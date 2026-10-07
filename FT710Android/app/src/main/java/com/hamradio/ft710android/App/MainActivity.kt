@@ -35,5 +35,15 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    override fun onStop() { holder.vm.onPttRelease(); super.onStop() }
+    // 回前台恢复频谱；退后台停掉频谱省带宽（PTT 仍按安全铁律立即释放）
+    override fun onStart() {
+        super.onStart()
+        holder.vm.onAppForeground(true)
+    }
+
+    override fun onStop() {
+        holder.vm.onPttRelease()
+        holder.vm.onAppForeground(false)
+        super.onStop()
+    }
 }

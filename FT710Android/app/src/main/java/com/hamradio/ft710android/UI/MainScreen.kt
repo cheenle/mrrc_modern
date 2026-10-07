@@ -425,31 +425,21 @@ fun MainScreen(
                                     ),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                // 记忆格很窄（紧凑档 6 格一行，360dp 屏上约 47dp）：
-                                // 字号按格宽反推 + 强制单行 + 超长省略号。绝不换行——
-                                // 格高是固定的，一换行整格就顶变形（用户明确要求"非常紧凑"）。
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    val label = ch?.label?.ifEmpty { "M${index + 1}" } ?: "M${index + 1}"
-                                    Text(
-                                        label,
-                                        color = if (ch != null) MrrcColors.Accent else MrrcColors.TextMuted,
-                                        fontSize = m.memoryLabelFont(label).sp,
-                                        fontWeight = if (ch != null) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1, softWrap = false,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    if (ch != null) {
-                                        val freq = "%.3f".format(Locale.US, ch.freq / 1e6)
-                                        Text(
-                                            freq,
-                                            color = MrrcColors.TextPrimary,
-                                            fontSize = m.memoryFreqFont(freq).sp,
-                                            fontFamily = MonoFont,
-                                            maxLines = 1, softWrap = false,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                }
+                                // 只显示频率（用户 2026-10-07 定：标签不要了，太挤会变形）。
+                                // 单行之后每格只剩一个字符串，字号可以放开到 11sp（原来两行只有 7.5sp）。
+                                // 仍然强制 maxLines=1 + softWrap=false + Ellipsis：
+                                // 格高固定，一换行整格就顶变形。
+                                val text = if (ch != null) "%.3f".format(Locale.US, ch.freq / 1e6)
+                                             else "M${index + 1}"
+                                Text(
+                                    text,
+                                    color = if (ch != null) MrrcColors.Accent else MrrcColors.TextMuted,
+                                    fontSize = m.memoryFreqFont(text).sp,
+                                    fontFamily = MonoFont,
+                                    fontWeight = if (ch != null) FontWeight.SemiBold else FontWeight.Normal,
+                                    maxLines = 1, softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                         // 记忆管理入口：图标，不占文字（原先藏在被删掉的分区标题里）

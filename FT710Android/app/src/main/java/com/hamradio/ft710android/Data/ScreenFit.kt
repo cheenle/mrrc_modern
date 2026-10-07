@@ -89,7 +89,11 @@ object ScreenFit {
     /** 记忆格：紧凑档 6 格排一行，标准档 3×2。 */
     fun memoryColumns(compact: Boolean): Int = if (compact) 6 else 3
     fun memoryRows(compact: Boolean): Int = 6 / memoryColumns(compact)
-    fun memoryCellHeight(compact: Boolean): Int = if (compact) 40 else 46
+    /**
+     * 记忆格高度。2026-10-07 起格内**只显示一行频率**，40dp 显得空 → 压到 34dp
+     * （仍高于 PadBtn 的 32dp 点击下限，拇指好按）；标准档 46 → 40。
+     */
+    fun memoryCellHeight(compact: Boolean): Int = if (compact) 34 else 40
 
     /** 记忆格行末的管理入口（`⋯`）宽度。 */
     const val MEMORY_MANAGE_W = 22
@@ -106,27 +110,16 @@ object ScreenFit {
         return (content - MEMORY_MANAGE_W - gaps).toFloat() / cols
     }
 
-    /** CJK 字符比半角宽得多（约 1.0em vs 0.62em），混排时按最宽的算，避免溢出。 */
-    private fun emPerChar(text: String): Float = if (text.any { it.code >= 0x2E80 }) 1.0f else 0.62f
-
-    /**
-     * 记忆格标签字号：**按可用宽度反推**，夹在 [MEMORY_LABEL_MIN_SP] 与档位上限之间。
-     *
-     * 到下限还放不下时由 UI 侧的 `TextOverflow.Ellipsis` 兜底（显示 `40m S…`），
-     * 绝不换行、绝不裁半个字 —— 单元格高度是固定的，换行会把整格顶变形。
-     */
+    /** 记忆格字号下限：到下限还放不下就由 UI 的 `TextOverflow.Ellipsis` 收尾。 */
     const val MEMORY_LABEL_MIN_SP = 5.5f
 
-    fun memoryLabelFontSize(text: String, cellWidthDp: Float, compact: Boolean): Float {
-        val max = if (compact) 8.5f else 10f
-        if (text.isEmpty()) return max
-        val fit = cellWidthDp / (text.length * emPerChar(text))
-        return fit.coerceIn(MEMORY_LABEL_MIN_SP, max)
-    }
-
-    /** 记忆格频率行字号（`%.3f` 恒为 5~7 字符，按同样的宽度约束夹一下）。 */
+    /**
+     * 记忆格字号（**只显示频率**，2026-10-07 起）：`%.3f` 恒为 5~7 个半角字符，
+     * 按格宽反推后夹在 [MEMORY_LABEL_MIN_SP] 与档位上限之间。
+     * 单行之后空间宽松，上限给到 11sp（紧凑）/13sp（标准），比原来两行时的 7.5sp 好读得多。
+     */
     fun memoryFreqFontSize(text: String, cellWidthDp: Float, compact: Boolean): Float {
-        val max = if (compact) 7.5f else 9f
+        val max = if (compact) 11f else 13f
         if (text.isEmpty()) return max
         val fit = cellWidthDp / (text.length * 0.62f)     // 等宽数字，恒半角
         return fit.coerceIn(MEMORY_LABEL_MIN_SP, max)

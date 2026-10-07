@@ -117,14 +117,15 @@ class MainScreenComposeTest {
     }
 
     /**
-     * 记忆格"不变形"的实测保证：
-     * 紧凑档一行 6 格、每格只有约 47dp，而标签是用户自己存的（可能是 `40m SSB Contest`、
-     * 中文、呼号）。量真实布局：①格宽与模型一致；②**文字宽度 ≤ 格宽**；③单行。
-     * 只靠字号公式不够——公式错了或者有人改了 `maxLines`，这里会红。
+     * 记忆格"不变形"的实测保证（2026-10-07 起**只显示频率**）：
+     * 紧凑档一行 6 格、每格只有约 47dp。量真实布局：
+     * ①格宽与模型一致 ②每格**只有一个**文本节点（标签确实不显示了）
+     * ③文字宽度 ≤ 格宽 ④必须单行（格高固定，换行会顶变形）。
+     * 只靠字号公式不够——公式错了或有人改了 `maxLines`，这里会红。
      */
     @Test
     @Config(qualifiers = "w360dp-h728dp-xxhdpi")
-    fun `memory cell text never exceeds its cell on the narrowest supported phone`() {
+    fun `memory cells show only the frequency and never overflow their cell`() {
         val scope = CoroutineScope(Dispatchers.Unconfined)
         val vm = fixtureVm(scope)
         rule.setContent {
@@ -135,7 +136,8 @@ class MainScreenComposeTest {
         // 360dp 屏、紧凑档：模型算出每格 47dp 左右
         val expected = ScreenFit.memoryCellWidth(360, compact = true)
         val density = rule.density.density
-        val longLabel = "40m SSB Contest"
+        // fixture：M1=7.117  M2=14.270  M3=438.500（7 字符，最长）  M4~M6 空
+        val expectText = listOf("7.117", "14.270", "438.500", "M4", "M5", "M6")
 
         for (index in 0 until 6) {
             val cell = rule.onNodeWithTag("memCell$index").fetchSemanticsNode().boundsInRoot
@@ -143,19 +145,18 @@ class MainScreenComposeTest {
             assertEquals("memCell$index 宽度与模型不符", expected, cellW, 1.5f)
 
             val texts = cellChildrenTexts(index)
-            texts.forEach { (text, widthDp, lines) ->
-                assertTrue(
-                    "memCell$index 的 \"$text\" 宽 ${"%.1f".format(widthDp)}dp 超出格宽 ${"%.1f".format(cellW)}dp",
-                    widthDp <= cellW + 0.5f,
-                )
-                assertEquals("\"$text\" 必须单行（换行会顶变形）", 1, lines)
-            }
+            assertEquals("memCell$index 应当只有频率一行（标签不再显示）：$texts", 1, texts.size)
+            val (text, widthDp, lines) = texts[0]
+            assertEquals("memCell$index 内容不对", expectText[index], text)
+            assertTrue(
+                "memCell$index 的 \"$text\" 宽 ${"%.1f".format(widthDp)}dp 超出格宽 ${"%.1f".format(cellW)}dp",
+                widthDp <= cellW + 0.5f,
+            )
+            assertEquals("\"$text\" 必须单行（换行会顶变形）", 1, lines)
         }
-        // 长标签确实被渲染了（且靠缩字号/省略号收在格内，不是被裁掉半个字）
-        assertTrue(rule.onAllNodesWithText(longLabel, substring = true, useUnmergedTree = true)
-            .fetchSemanticsNodes().isNotEmpty() ||
-            rule.onAllNodesWithText("40m SSB", substring = true, useUnmergedTree = true)
-                .fetchSemanticsNodes().isNotEmpty())
+        // 标签（含中文）在主屏上一处都不该出现——只在记忆管理对话框里看得到
+        rule.onAllNodesWithText("40m SSB", substring = true, useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithText("中文标签测试", useUnmergedTree = true).assertCountEquals(0)
     }
 
     /** 取某个记忆格内所有文本节点的宽度（dp）与行数。 */

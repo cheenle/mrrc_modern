@@ -30,8 +30,7 @@ class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeig
     val memoryInnerGap: Dp get() = ScreenFit.innerGap(compact).dp
     val memoryManageWidth: Dp get() = ScreenFit.MEMORY_MANAGE_W.dp
 
-    /** 记忆格文字字号：按单元格宽度反推，保证单行不裁字。 */
-    fun memoryLabelFont(text: String): Float = ScreenFit.memoryLabelFontSize(text, memoryCellWidth, compact)
+    /** 记忆格字号：按单元格宽度反推，保证单行不裁字（只显示频率）。 */
     fun memoryFreqFont(text: String): Float = ScreenFit.memoryFreqFontSize(text, memoryCellWidth, compact)
     val panelPadH: Dp get() = ScreenFit.panelPadH(compact).dp
     val panelPadV: Dp get() = ScreenFit.panelPadV(compact).dp

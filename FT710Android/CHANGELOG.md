@@ -2,6 +2,31 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.25] — 2026-10-07
+
+### 记忆格只显示频率（用户定案）
+
+- 标签不再显示，格内只剩 `%.3f` 频率（空槽显示 `M1`…`M6`）；标签仍可在记忆管理对话框（行末 `⋯`）里看到
+- 单行之后空间宽松，字号上限从 **7.5sp 放开到 11sp**（标准档 13sp），仍按格宽反推 + 强制单行 + 省略号
+- 格高 **40 → 34dp**（标准档 46 → 40dp）：只剩一行字，40dp 显得空；34dp 仍高于 PadBtn 的 32dp 点击下限
+- 实测断言改为：每格**只有一个**文本节点、内容等于预期频率、宽度 ≤ 格宽、单行；并断言长标签与中文标签在主屏**一处都不出现**
+
+### 后台自动停掉频谱通道（省流量）
+
+服务端 `/WSspectrum` 按 **~30fps** 推 1701B 的瀑布帧 ≈ **51 KB/s ≈ 180 MB/小时**（server.py 该端点 docstring 原文："Sends waterfall rows at ~30 fps"）。退到后台看不见瀑布还一直收，纯属浪费流量与 CPU。
+
+- `ConnectionManager.setSpectrumPaused(Boolean)`：退后台关闭 `/WSspectrum`，回前台自动重连；幂等
+- 由 `MainActivity.onStart/onStop` 驱动（`vm.onAppForeground(...)`）
+- 🔒 **关键安全点**：暂停期间 `/WSspectrum` **不计入连接判据**（新增纯函数 `requiredChannels(listenOnly, spectrumPaused)`）。否则 `isConnected` 会变 false → VM 的 `syncBackground()` 依赖它 → **后台接收被自己关掉**，用户以为还在收音其实早断了
+- 后台期间的会话重连（网络切换等）**不会**把频谱又拉起来（`start()` 尊重暂停状态）
+- 诊断摘要区分"主动暂停"与"断了"：`ch:R+ A+ T+ S(p)`
+- 暂停不影响音频与 PTT：RX 播放只看 `/WSaudioRX`、PTT 只看 `/WSradio`（v1.1.3 的通道分离原则）
+
+### 其它
+
+- `ScreenFit.memoryLabelFontSize` 及其 CJK em 估算随之删除（已无调用点，避免死代码）
+- 测试 **debug 161 / release 147 全绿**；`OneScreenFitTest` 7 档仍全部 **0.0dp 超出**（荣耀末卡底 613 → 610dp）
+
 ## [1.1.24] — 2026-10-07
 
 - **底部留白保留**（用户在三个选项里选了 1）：滚动列内容顶对齐，多出的空间就是呼吸位，不再自动灌给频谱。

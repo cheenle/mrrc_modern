@@ -40,6 +40,9 @@ class ConnectionManager(
      */
     val openedPaths: List<String> get() = synchronized(openedPathsLog) { openedPathsLog.toList() }
     private val connectedFlags = ChannelFlags()
+
+    /** 频谱通道是否因退后台被主动暂停（不是故障）。 */
+    private var spectrumPaused = false
     private val stats = NetworkStats(nowMs)
 
     @Volatile var isConnected: Boolean = false; private set
@@ -48,16 +51,31 @@ class ConnectionManager(
     /** 控制通道在线（PTT 的唯一闸门：不需要等音频通道）。 */
     val isRadioConnected: Boolean get() = connectedFlags.has("/WSradio")
 
-    /** 通道状态摘要（诊断行用）：R=radio A=audioRX T=audioTX S=spectrum。 */
+    /** 通道状态摘要（诊断行用）：R=radio A=audioRX T=audioTX S=spectrum（`S(p)` = 后台主动暂停）。 */
     fun channelsSummary(): String {
         fun m(path: String) = if (connectedFlags.has(path)) "+" else "-"
-        return "R${m("/WSradio")} A${m("/WSaudioRX")} T${m("/WSaudioTX")} S${m("/WSspectrum")}"
+        val sMark = if (isSpectrumPaused) "(p)" else m("/WSspectrum")
+        return "R${m("/WSradio")} A${m("/WSaudioRX")} T${m("/WSaudioTX")} S$sMark"
     }
 
     private var _baseUrl: String? = null
     private var _token: String? = null
 
     companion object {
+        /**
+         * 连接判据需要哪些通道（纯函数，可 JVM 测）。
+         *
+         * - 只读会话不要求 `/WSaudioTX`（服务端以 4003 关闭）
+         * - **后台暂停频谱时不要求 `/WSspectrum`**：否则 `isConnected` 变 false，
+         *   VM 的 `syncBackground()` 会把后台接收一起关掉（用户以为在收音，其实已断）
+         */
+        fun requiredChannels(listenOnly: Boolean, spectrumPaused: Boolean): Set<String> = buildSet {
+            add("/WSradio")
+            add("/WSaudioRX")
+            if (!listenOnly) add("/WSaudioTX")
+            if (!spectrumPaused) add("/WSspectrum")
+        }
+
         fun wsUrl(baseUrl: String, path: String, token: String): String {
             val scheme = if (baseUrl.startsWith("https")) "wss" else "ws"
             val host = baseUrl.removePrefix("https://").removePrefix("http://")
@@ -74,8 +92,8 @@ class ConnectionManager(
             onBinary = { stats.onReceived(it.size); onAudioRx(it) })
         audioTx = connect(baseUrl, "/WSaudioTX", token,
             onText = { stats.onReceived(it.length); onAudioTxText(it) }, onBinary = {}, onClosedCode = ::handleCloseCode) // 上行二进制由 sendTxAudioBinary 发送
-        spectrum = connect(baseUrl, "/WSspectrum", token, onText = { stats.onReceived(it.length) },
-            onBinary = { stats.onReceived(it.size); onSpectrum(it) })
+        // 后台状态下重连（网络切换等）不要把频谱又拉起来
+        if (!spectrumPaused) connectSpectrum()
         // ATR-1000 是**可选选件**：只有服务端 fullState 说启用了才连（见 setAtrEnabled）。
         // 这里仅在重连且上一次已知启用时立即补连，冷启动时等 fullState。
         if (atrEnabled) connectAtr()
@@ -199,10 +217,44 @@ class ConnectionManager(
 
     @Synchronized
     private fun updateConnected() {
-        val required = if (listenOnly) setOf("/WSradio", "/WSaudioRX", "/WSspectrum")
-                       else setOf("/WSradio", "/WSaudioRX", "/WSaudioTX", "/WSspectrum")
-        val all = connectedFlags.hasAll(required)
+        val all = connectedFlags.hasAll(requiredChannels(listenOnly, spectrumPaused))
         if (all != isConnected) { isConnected = all; onConnectionChange(all) }
+    }
+
+    // ── 频谱通道的后台暂停（省带宽）──────────────────────────────
+
+    /**
+     * 后台时停掉 `/WSspectrum`：服务端按 **~30fps** 推 1701B 的瀑布帧
+     * ≈ 51 KB/s ≈ **180 MB/小时**，退到后台还在收就是纯浪费流量（也白费 CPU 解析）。
+     * 回前台自动重连。
+     *
+     * 暂停期间 `/WSspectrum` **不计入连接判据**（见 [requiredChannels]），
+     * 否则 `isConnected` 会变 false → VM 的 `syncBackground()` 依赖它 →
+     * 后台接收会被自己关掉，用户以为还在收音其实已经断了。
+     */
+    @Synchronized
+    fun setSpectrumPaused(paused: Boolean) {
+        if (spectrumPaused == paused) return
+        spectrumPaused = paused
+        if (paused) {
+            spectrum?.close()
+            spectrum = null
+            connectedFlags.remove("/WSspectrum")
+        } else {
+            connectSpectrum()
+        }
+        updateConnected()
+    }
+
+    /** 频谱通道是否被主动暂停（后台省电），区别于"断了"。 */
+    val isSpectrumPaused: Boolean get() = synchronized(this) { spectrumPaused }
+
+    private fun connectSpectrum() {
+        val b = _baseUrl ?: return
+        val t = _token ?: return
+        if (b.isEmpty() || t.isEmpty()) return
+        spectrum = connect(b, "/WSspectrum", t, onText = { stats.onReceived(it.length) },
+            onBinary = { stats.onReceived(it.size); onSpectrum(it) })
     }
 
     private fun dispatch(cmd: String) {

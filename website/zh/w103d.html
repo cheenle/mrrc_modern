@@ -356,6 +356,38 @@ armbian-install     # 装进 eMMC（交互式菜单）</code></pre>
 <tr><td>发射没功率</td><td>状态行的 <code>TX[... pk:...]</code></td><td>采集源/音量；FT-710 的 <code>mic_gain</code>；SSB 无话音即无功率</td></tr>
 <tr><td>延迟越来越大</td><td>状态行 <code>J:</code></td><td>正常 100–300 ms；长期 &gt;500 说明抖动缓冲在追，查网络</td></tr>
 </tbody></table></div>
+<h2 id="20-5-另一条路线-线刷-usb-burning-tool-直接写-emmc">20.5 另一条路线：线刷（USB Burning Tool，直接写 eMMC）</h2>
+<blockquote>来自网上另一个人给 W103D 做的 Armbian 桌面版。<strong>它走的是完全不同的路线</strong>：不烧 U 盘，而是用晶晨的 线刷工具<strong>直接把系统写进 eMMC</strong>（覆盖原厂安卓）。</blockquote>
+<p><strong>代价与收益</strong>：一步到位、不占 USB 口、32 GB 全用上；但<strong>原厂安卓被覆盖</strong>，回滚要靠线刷固件包 + MaskROM 短接。想先零风险试跑，走本文 §4–§5 的 U 盘路线。</p>
+<div class="table-scroll"><table>
+<thead><tr><th></th><th>U 盘路线（本文主线）</th><th>线刷路线（本节）</th></tr></thead><tbody>
+<tr><td>工具</td><td><code>dd</code> / Etcher 烧 U 盘</td><td><strong>Amlogic USB Burning Tool</strong>（导入 <code>.img</code>，<strong>不是</strong>写盘工具）</td></tr>
+<tr><td>目标</td><td>从 U 盘运行</td><td><strong>直接写 eMMC</strong></td></tr>
+<tr><td>原厂系统</td><td>保留</td><td><strong>被覆盖</strong></td></tr>
+<tr><td>进模式</td><td>update 模式（复位孔 / <code>reboot update</code>）</td><td><strong>线刷模式</strong>（见下）</td></tr>
+</tbody></table></div>
+<p><strong>进线刷模式</strong>（W103D 特有的做法）：</p>
+<ol>
+<li>用 <strong>晶晨线刷 HDMI 短接器</strong>（短接 HDMI 口内特定引脚）</li>
+<li><strong>USB 公对公线插「靠 HDMI 那个 USB 口」</strong></li>
+<li>工具识别到设备后开始刷写</li>
+</ol>
+<p><strong>工具里的擦除选项</strong>：选「擦除 flash / 普通擦除 / 擦除 bootloader」，<strong>不要选「强制全擦除」</strong>。 刷到 <strong>100% 再点停止</strong>。</p>
+<p><strong>首次启动</strong>：会建立 eMMC 启动入口并<strong>自动重启一次</strong>，然后扩容文件系统、建 swap。 <strong>给足 3–5 分钟</strong>，别以为死机了。</p>
+<p><strong>首次登录</strong>：<code>root / 1234</code> 或 <code>armbian / 1234</code> —— <strong>进去第一件事改口令</strong>（同 §7）。 SSH 主机密钥是首启新生成的，所以旧指纹会变（客户端会警告，正常）。</p>
+<h3 id="一条值得记的交叉参考-mt7663-固件">一条值得记的交叉参考：MT7663 固件</h3>
+<p>W103D 的无线是 <strong>MT7663S</strong>（WiFi 与蓝牙同一颗芯片），开源驱动是这块板最麻烦的部分； 上游适配见 ophub 的 <strong>PR #3658 / #3659</strong>。</p>
+<p>我们这份镜像带的是 ophub 默认的四个固件：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>文件</th><th>大小（字节）</th></tr></thead><tbody>
+<tr><td><code>mt7663_n9_rebb.bin</code></td><td>335,072</td></tr>
+<tr><td><code>mt7663_n9_v3.bin</code></td><td>441,688</td></tr>
+<tr><td><code>mt7663pr2h.bin</code></td><td>278,558</td></tr>
+<tr><td><code>mt7663pr2h_rebb.bin</code></td><td>209,230</td></tr>
+</tbody></table></div>
+<p>那个人的构建用的是<strong>另一个</strong>「2021 N9 固件」，SHA-256 <code>223f73f17f0f986dc4e7167daa6eef14ffb41c713f22d70f9645eb049bdec80a</code> （<strong>已核对：我们镜像里没有这个文件</strong>）。</p>
+<p><strong>用途</strong>：万一 WiFi 不稳，这个 SHA 是一个<strong>已知可用</strong>的候选固件来源，可按它去找/去换。</p>
+<p>---</p>
 <h2 id="21-打勾清单-从零到-mrrc-能干活">21. 打勾清单：从零到 "MRRC 能干活"</h2>
 <p><strong>刷机段</strong></p>
 <ul>

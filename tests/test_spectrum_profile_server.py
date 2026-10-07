@@ -340,5 +340,58 @@ class BroadcastLoopSourceTests(unittest.TestCase):
         self.assertEqual(server.SPECTRUM_BROADCAST_FPS, 30)
 
 
+class MetricsLineTests(unittest.TestCase):
+    """The telemetry line must say which axis it reports (design §6.3).
+
+    The kbps figures are metered inside Starlette, so they are *payload* bytes:
+    permessage-deflate downstream is invisible here.  Quoting 151 kbps as a wire
+    figure overstates a browser client by ~3.9x and an Android client by ~1x —
+    the label is what keeps the two apart.
+    """
+
+    def _line(self, metrics) -> str:
+        # Force a 60 s report window so the kbps math is deterministic.
+        metrics._last_report = metrics._clock() - 60.0
+        return server._session_metrics_line(metrics.take_report())
+
+    def _metered(self):
+        m = session_metrics.SessionMetrics()
+        m.open("operator", "spectrum", "tok")
+        for _ in range(12):
+            m.add_bytes("spectrum", 1701)
+            m.add_spectrum_profile_frame("high", 1701)
+        for _ in range(3):
+            m.add_bytes("spectrum", 851)
+            m.add_spectrum_profile_frame("low", 851)
+        return m
+
+    def test_line_is_labelled_payload_and_lists_tier_frames(self):
+        line = self._line(self._metered())
+        self.assertIn("Session metrics:", line)
+        self.assertIn("payload\u2248", line)
+        self.assertIn("high=12", line)
+        self.assertIn("low=3", line)
+
+    def test_line_keeps_the_fields_support_triage_greps_for(self):
+        """'uplink spectrum' is how the 150.8 kbps baseline was read out."""
+        line = self._line(self._metered())
+        for needle in ("listeners ", "operators ", "uplink spectrum ", "audio_rx ",
+                       "kbps", "since last report"):
+            self.assertIn(needle, line)
+
+    def test_line_survives_an_idle_server(self):
+        line = self._line(session_metrics.SessionMetrics())
+        self.assertIn("Session metrics:", line)
+        self.assertIn("spectrum frames -", line)
+
+    def test_report_loop_calls_the_pure_formatter(self):
+        """One renderer, no duplicated format string to drift out of sync."""
+        src = Path("server.py").read_text(encoding="utf-8")
+        loop = src.split("async def _session_metrics_loop():", 1)[1]
+        loop = loop.split("\n\n\n", 1)[0]
+        self.assertIn('logger.info("%s", _session_metrics_line(r))', loop)
+        self.assertNotIn('"Session metrics: listeners %d', loop)
+
+
 if __name__ == "__main__":
     unittest.main()

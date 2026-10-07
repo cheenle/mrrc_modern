@@ -272,6 +272,35 @@ async def _tx_liveness_watchdog():
         ctrl_clients.difference_update(dead)
 
 
+def _session_metrics_line(r: dict) -> str:
+    """Render one Session-metrics log line (pure, so it is testable).
+
+    The kbps figures are *payload* bytes: they are metered inside Starlette, so
+    whatever permessage-deflate does downstream is invisible here (browsers
+    negotiate it — measured 1701 B -> ~441 B on this payload — while Android's
+    OkHttp does not, so a phone really does pay the payload).  Labelling the
+    number "payload≈" is the point: it had been read as a wire figure.
+
+    The per-tier frame counts are what makes a bandwidth tier auditable from a
+    log alone — bytes tell you the total, frames tell you which tier produced it.
+    """
+    profiles = r.get("spectrum_profiles") or {}
+    by_profile = "/".join(
+        f"{name}={entry.get('frames', 0)}" for name, entry in profiles.items()
+    ) or "-"
+    listeners = r["listeners"]
+    kbps = r["kbps_since_report"]
+    return (
+        f"Session metrics: listeners {listeners['sessions']} "
+        f"(sockets {listeners['sockets']}, peak "
+        f"{int(listeners['peak_sessions_window'])}/{r['window_seconds']:.0f}s) | "
+        f"operators {r['operators']['sessions']} | payload\u2248 "
+        f"uplink spectrum {kbps['spectrum']:.1f} kbps, "
+        f"audio_rx {kbps['audio_rx']:.1f} kbps | "
+        f"spectrum frames {by_profile} | {r['elapsed_seconds']:.0f}s since last report"
+    )
+
+
 async def _session_metrics_loop():
     """One INFO line per interval with measured concurrency and uplink.
 
@@ -287,15 +316,7 @@ async def _session_metrics_loop():
         except Exception as e:      # a log line must never take the server down
             logger.debug("Session metrics report failed: %s", e)
             continue
-        logger.info(
-            "Session metrics: listeners %d (sockets %d, peak %d/%.0fs) | "
-            "operators %d | uplink spectrum %.1f kbps, audio_rx %.1f kbps | "
-            "%.0fs since last report",
-            r["listeners"]["sessions"], r["listeners"]["sockets"],
-            r["listeners"]["peak_sessions_window"], r["window_seconds"],
-            r["operators"]["sessions"],
-            r["kbps_since_report"]["spectrum"], r["kbps_since_report"]["audio_rx"],
-            r["elapsed_seconds"])
+        logger.info("%s", _session_metrics_line(r))
 
 
 _atr_storage = None           # TunerStorage shared with the client

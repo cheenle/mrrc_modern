@@ -145,7 +145,7 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
   - `spectrumHeight` 用 `round` 不用 `toInt`：`150 × 0.78f` 在 Float 下是 `116.99999…`，截断会白丢 1dp。
 - 改了任何高度/间距 → 跑 **`OneScreenFitTest`**（权威：Robolectric 在 7 个真机档位上真 measure/layout，读 `VerticalScrollAxisRange.maxValue`，>0 就是要滚动）+ `ScreenFitTest`（算术模型）。两者不一致时**以实测为准**，回去改 `ScreenFit` 的常量。
 - **`ScreenFit` 是模型，不是真相**：v1.1.18~v1.1.21 期间 `MainScreen` 里留着内联的 `(maxWidth*0.44f)`/`(meterW*0.64f)`，`ScreenMetrics.headerHeight` 是死代码 —— 手机上顶栏一直用标准档比例，比模型高 22~26dp，360dp 宽的机器实际超出 20dp 要滚动，而 `ScreenFitTest` 全绿（模型自己跟自己一致）。**任何尺寸都必须从 `LocalScreenMetrics` 取，禁止在 Composable 里就地算比例。**
-- 分区都带 `testTag`（`secHeader`/`secStatus`/`secSpectrum`/`secMeters`/`secControls`/`secTuning`/`secMemory`，Panel 走 `tag=` 参数），量高度靠它们。
+- 分区都带 `testTag`（`secToolRow`/`secHeader`/`secSpectrum`/`secMeters`/`secControls`/`secTuning`/`secMemory`，Panel 走 `tag=` 参数），量高度靠它们；`OneScreenFitTest` 逐区打印到 `build/screenshots/one-screen-fit.txt`。
 - 想看设计不装 APK：`./gradlew :app:testDebugUnitTest --tests "*ScreenshotTest*"` → `app/build/screenshots/main-rx-*.png`、`main-tx-*.png`（Robolectric NATIVE 渲染）。
 
 ## 频谱/标尺不变量
@@ -174,17 +174,25 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 - **设计令牌与表面**：颜色/圆角/表面层级只在 `UI/Theme.kt`（`MrrcColors`）与 `UI/Surfaces.kt`（`MrrcSurfaces` + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）里定义；就地写死颜色 = 以后改不动。三层表面：内凹显示屏 `Inset`（主频/频谱）< 卡片 `Panel` < 按键 `Key`。
 - **主屏不放说明性文字**（用户 2026-10-06 明确要求）：分区标题全档位取消、频谱下不再重复 VFO 频率、状态行只留 `☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻`、PTT 无副标、音量行无 `Vol` 标签。**任何入口不得藏在标题的 trailing 里**（v1.1.18 的「管理」入口就是这样在紧凑档丢的）——需要入口就给图标按钮（如记忆格行末的 `⋯`）。诊断类数字（RTT/J）放设置页诊断行，不占状态行。
 - **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**（主屏保持干净，用户明确要求过）；录音入口是状态行芯片、天调参数并进 ATR 行——**不要新增独占一行的小信息条**。
-- **顶栏布局**：`BoxWithConstraints` 取页面宽 → **主频显示屏**（`DisplayBezel`，`weight(1f)`）+ **S 表独立区域**（宽 = 页宽×44%＝132–240dp），两者等高 = `m.headerHeight(statusLines)`。⚠️ 等高靠**显式高度**，**绝不用 `IntrinsicSize.Min`**（S 表内部是 `BoxWithConstraints`=SubcomposeLayout，问 intrinsic 会启动即崩）。
-  - **显示屏内三行，全部在主频上方**（v1.1.27 用户定案）：
-    1. **工具行**：`☰`（**最左**）｜`波段 · 模式`（`weight(1f)`+省略号）｜`⏺ ⛶ ⏻`｜`VFO-A/B`（可点切）
-    2. **状态行**：`RX/TX · 速率|TXpk · 连接点`（+ 条件项 `只读`/`无声`/录音时长）——`FlowRow`，装不下才折行
-    3. **主频**（`weight(1f)` 居中）
-  - **图标一律 Canvas 自绘（`HeaderIconButton`），禁用字体符号**：`☰ ⛶ ⏻ ⏺`（U+2630/26F6/23FB/23FA）在不少机型没有字形会走**字体回退** → 粗细不一、缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算（`g×0.13`），任何 dpi/字体设置下一致；尺寸 = `ScreenFit.headerIconTap`(22/26dp 点击区) + `headerIconGlyph`(11/13dp 图形)；带 `contentDescription`（无障碍 + 测试可查）。
-  - **状态行折行不会挤压主频**：顶栏高度按 `statusLines` 动态长高（S 表同步等高）；主频字号取 `min(byWidth, byHeight)`（`byWidth=(宽−6)/6.3`、`byHeight=(高−2)/1.32`，夹 **13~58sp**）。
-  - **状态行估宽必须用 `bezelContentWidth`**（显示屏内容宽，360dp 屏只有 167dp），**不是页宽 344dp** —— 用页宽会严重低估折行。当前 `STATUS_CONTENT_W=85`，叠加 2 个条件芯片（145dp）仍一行装下；`StatusItem` 行高 16dp（标准档 20）。
-  - ⚠️ **状态行在 `DisplayBezel` 里，而 bezel 带 `clickable`** → 子节点语义被合并：测试里 `onNodeWithTag("secStatus")` 必须加 `useUnmergedTree = true`，否则找不到（错误信息会直接提示这一点）。
-  - S 表尺寸**只看屏幕**，不受主频行高限制。
-- **面板 S 表**：弧是贝塞尔（`SMeter.arcX/arcY`），刻度/标签同 Web 的 `MARKERS/LABELS`；字号/线宽/COMP 条厚都由区域短边按比例算（`labelFs`/`readFs`），所以同一份代码在手机与平板都合适。标签不重叠由 `SMeterTest` 的逐标签宽度断言守着（改宽度/字号要跑它）。
+- **顶栏布局（v1.1.28）**：`BoxWithConstraints` 取页面宽 →
+  1. **工具行**（全宽独立一行，`testTag("secToolRow")`，高度 = `ScreenFit.headerRowHeight` = 图标点击区 22/26dp）：
+     `☰`(最左) ｜ `波段 · 模式` ｜ `RX/TX · 速率|TXpk · 录音时长 · 只读/无声 · 串口点` ｜ `⏺ ⛶ ⏻ VFO-A/B`(右侧动作区)
+     - 用户明确要求：**频率上方只此一行**，RX/TX 紧跟波段·模式之后，所有状态图标与信息都在这一行
+     - 必须**横跨页宽**（344dp）：塞回显示屏内部只有 `bezelContentWidth`≈167dp，装不下约 246dp 内容（`TOOL_ROW_CONTENT_W`）
+     - **抗挤压**：信息组装在 `weight(1f)` 的嵌套 Row 里，组内只有"波段·模式"是 `weight(1f, fill=false)` → 挤不下时**它先出省略号**，右侧图标不会被裁
+     - 这一行**不折行**（定高 Row）→ 加项前必须先跑 `ScreenFitTest` 的宽度断言
+  2. **主频显示屏 + S 表**（等高，`m.headerHeight`，宽 = 页宽×44%＝132–240dp）
+     - ⚠️ 等高靠**显式高度**，**绝不用 `IntrinsicSize.Min`**（S 表内部是 `BoxWithConstraints`=SubcomposeLayout，问 intrinsic 会启动即崩）
+     - 显示屏里**只有主频**（`weight(1f)` 居中），字号 = `min(byWidth, byHeight)`，`byWidth=(宽−8)/6.3`、`byHeight=(高−4)/1.32`，夹 **16~62sp**
+  - **图标一律 Canvas 自绘（`HeaderIconButton`），禁用字体符号**：`☰ ⛶ ⏻ ⏺`（U+2630/26F6/23FB/23FA）在不少机型没有字形会走**字体回退** → 粗细不一、缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算（`g×0.13`），任何 dpi/字体设置下一致；尺寸 = `ScreenFit.headerIconTap`(22/26dp) + `headerIconGlyph`(11/13dp)；带 `contentDescription`（无障碍 + 测试可查）；录音态用 `filled=true` 画实心红圆。
+  - 工具行**不在** `DisplayBezel` 内 → 语义未被合并，`onNodeWithTag("secToolRow")` 不需要 `useUnmergedTree`（v1.1.27 那条坑已随之消失）。
+- **S 表**：按用户给的参考图 `smeter-s7.svg` 画（**SVG 是文本，可直接读**；PNG 截图当前模型看不了）。
+  - 弧线**两段两色**：S1–S9 近白、+20/+40/+60 用 `Danger` 红，分界 = `SMeter.MARKERS[9]`（参考图注释里的 "S9+10 mark"）
+  - 刻度从弧线**向外（向上）辐射**、两端略外倾；主刻度长且亮、次刻度短且暗；dB 区刻度红
+  - 数字 `1 3 5 7 9 +20 +40 +60` 在刻度**上方**并跟着弧度走（不是等分摆放）
+  - 指针 = 一条橘色细线从弧上当前位置垂到面板底部；**没有彩色填充带**（参考图就是静态双色刻度 + 指针）
+  - 与参考图**有意不同**（用户要求）：去掉 `S7` 的 lime 黄圆角底牌（`#c9d92b`），读数用本 App 橘色 `Accent`；参考图角落的大 `S`/`dB` 由**实际读数**取代（`S9` + `+12 dB`）
+  - 弧几何是纯函数（`SMeter.arcX/arcY`），字号/线宽按区域短边比例算（`labelFs`/`readFs`），手机与平板同一份代码；标签不重叠由 `SMeterTest` 的逐标签宽度断言守着。ALC/COMP 归仪表卡那一格，S 表不重复。
 
 - **绝不用 `scope_start_freq` 当显示范围**：服务端恒 CENTER 模式（EX040200），调谐后该字段滞后。范围恒为 `VFO ± span/2`（`Data/FreqScale.kt`，对齐 web `_computeFreqRange`）。点击 QSY 同样用 VFO 居中公式（`FreqInput.qsy`），两者必须同源。
 - 标尺步进/格式随 span 自适应（`FreqScale.step/label`，对齐 web `_freqStep`/`_formatFreqLabel`）；刻度按真实频率位置绘制，不做等分摆放。

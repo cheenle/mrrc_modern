@@ -62,13 +62,13 @@ class OneScreenFitTest {
         val viewportDp = scrollNode.boundsInRoot.height / density
         val overflowDp = range.maxValue() / density
         val lastCard = rule.onNodeWithText("⋯", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        // secStatus 住在可点击的 DisplayBezel 里 → 语义被父节点合并，必须用 unmerged tree 才找得到
-        val parts = listOf("secHeader","secSpectrum","secMeters","secControls","secTuning","secMemory")
-            .map { t ->
-                val n = rule.onNodeWithTag(t).fetchSemanticsNode().boundsInRoot
-                t.removePrefix("sec") to (n.height / density)
-            } + ("Status(顶栏内)" to (rule.onNodeWithTag("secStatus", useUnmergedTree = true)
-                .fetchSemanticsNode().boundsInRoot.height / density))
+        // 7 个分区：工具行 / 显示屏 / 频谱 / 仪表 / 控制 / 调谐 / 记忆
+        val parts = listOf(
+            "secToolRow","secHeader","secSpectrum","secMeters","secControls","secTuning","secMemory",
+        ).map { t ->
+            val n = rule.onNodeWithTag(t).fetchSemanticsNode().boundsInRoot
+            t.removePrefix("sec") to (n.height / density)
+        }
         println("PARTS $profile " + parts.joinToString(" ") { "${it.first}=${it.second.toInt()}" } +
             " 合计=${parts.sumOf { it.second.toDouble() }.toInt()}")
         val line = "%-26s 滚动视口 %.0fdp  超出 %.1fdp  末卡底 %.0fdp  %s".format(

@@ -20,6 +20,8 @@ internal fun fixtureVm(
     atrEnabled: Boolean = true,
     tx: Boolean = false,
     connected: Boolean = true,
+    /** 录音中：⏺ 图标变实心红圆，状态行显示时长（截图/断言用）。 */
+    recording: Boolean = false,
 ): MainViewModel {
     val cm = ConnectionManager(OkHttpClient(), scope, {}, {}, {}, {}, {}, {}, sendOverride = {})
     val vm = MainViewModel(
@@ -57,6 +59,11 @@ internal fun fixtureVm(
                  "scope_spans":{"0":{"name":"1 kHz","freq":1000},
                                 "6":{"name":"100 kHz","freq":100000},
                                 "9":{"name":"1 MHz","freq":1000000}}},
+               "recording":{"recording":$recording,"freq_hz":7116950,"started_at":null,
+                            "duration":${if (recording) 83.0 else 0.0},"name":null,"bytes":0,"dropped":0},
+               "cq":{"state":"${if (tx) "calling" else "idle"}","duration_s":0.0,
+                     "elapsed_s":${if (tx) 12.0 else 0.0},"frames_total":0,"frames_sent":0,
+                     "started_by":null,"reason":null,"ready":true},
                "atr1000Enabled":$atrEnabled}""".trimIndent(),
         ),
     )

@@ -1,6 +1,5 @@
 package com.hamradio.ft710android.Data
 
-import kotlin.math.ceil
 
 /**
  * 屏幕适配的**单一数据源**：尺寸档位 + 竖向空间预算（纯算术，JVM 可测）。
@@ -36,39 +35,26 @@ object ScreenFit {
     /** 频谱显示屏除瀑布外的固定开销：标尺 15 + 分隔 1（VFO 红字已删，与主频重复）。 */
     const val SPECTRUM_CHROME_DP = 16
 
-    /**
-     * 状态行行高（`StatusItem`）。v1.1.27 起状态行住进**显示屏内部**（主频上方），
-     * 不再自己占一行，所以从 26dp 压到 16dp（标准档 20dp）。
-     */
-    fun statusItemHeight(compact: Boolean): Int = if (compact) 16 else 20
-
     /** 显示屏内边距（每侧）与显示屏/S 表之间的间隙。 */
     const val BEZEL_PAD_H = 10
     const val BEZEL_GAP = 6
 
     /**
-     * 显示屏内容宽（状态行与工具行真正可用的宽度）。
-     * 状态行搬进显示屏后，可用宽从页宽 344dp 骤降到 ~167dp，
-     * 所以"会不会折行"必须拿**这个**宽度算，不能再用页宽。
+     * 显示屏内容宽（主频真正可用的宽度）。
+     * 页宽 344dp 减去 S 表与间隙后只剩 ~167dp —— 算主频字号、判断工具行能不能
+     * 放进显示屏时都必须用**这个**，用页宽会严重高估。
      */
     fun bezelContentWidth(screenWidthDp: Int): Int =
         contentWidth(screenWidthDp) - meterWidth(screenWidthDp) - BEZEL_GAP - BEZEL_PAD_H * 2
 
-    /**
-     * 状态行内容估宽（dp）：⏺ RX/TX 速率 状态点 + 间距。
-     * 演进：269（v1.1.16）→ 210（v1.1.21 去 RTT·J / Serial / 录音二字）→ 120（v1.1.26 图标上移）
-     * → 115（v1.1.27）→ **85**（v1.1.27：录音钮上移成图标，状态行只剩 RX/TX 22 + 速率 41 + 状态点 8 + 2×间距）。
-     */
-    const val STATUS_CONTENT_W = 85
-
-    /** 顶栏工具行图标的点击区（不小于 22dp，保证拇指可按）。 */
-    fun headerIconTap(compact: Boolean): Int = if (compact) 22 else 26
-
-    /** 顶栏工具行图标的图形尺寸（与同行 9sp 文字视觉齐平）。 */
-    fun headerIconGlyph(compact: Boolean): Int = if (compact) 11 else 13
-
     /** 只读/无声等条件芯片的追加宽度（含间距）。 */
     const val STATUS_EXTRA_CHIP_W = 30
+
+    /** 顶栏图标的点击区（不小于 22dp，保证拇指可按）；它也是顶栏那一行的高度。 */
+    fun headerIconTap(compact: Boolean): Int = if (compact) 22 else 26
+
+    /** 顶栏图标的图形尺寸（与同行 9sp 文字视觉齐平）。 */
+    fun headerIconGlyph(compact: Boolean): Int = if (compact) 11 else 13
 
     fun isCompact(screenHeightDp: Int): Boolean = screenHeightDp <= COMPACT_MAX_HEIGHT_DP
 
@@ -79,18 +65,28 @@ object ScreenFit {
         (contentWidth(screenWidthDp) * METER_WIDTH_RATIO).toInt().coerceIn(METER_MIN_W, METER_MAX_W)
 
     /**
-     * 顶栏高度 = S 表高度（主频显示屏与它等高）。
-     *
-     * v1.1.27 起状态行也住进显示屏（都在主频上方），所以比例从 0.50 提到 **0.58**：
-     * 内容 = 上下内边距 10 + 工具行 22 + 间距 2 + 状态行 16 + 间距 2 + 主频一行。
-     * 状态行**折行时顶栏跟着长高**（S 表同步等高），主频字号才不会被挤压或裁切。
+     * 顶栏那一行（工具 + 全部状态）的高度：由图标点击区决定。
+     * v1.1.28 起它是**全宽独立一行**，位于主频显示屏上方。
      */
-    fun headerHeight(compact: Boolean, screenWidthDp: Int, statusLines: Int = 1): Int {
+    fun headerRowHeight(compact: Boolean): Int = headerIconTap(compact)
+
+    /**
+     * 主频显示屏（= S 表）高度。显示屏里只有主频一行，所以回到 0.50 比例
+     * （v1.1.27 曾为容纳工具行+状态行提到 0.58，v1.1.28 那两行搬出去了）。
+     */
+    fun headerHeight(compact: Boolean, screenWidthDp: Int): Int {
         val w = meterWidth(screenWidthDp)
-        val base = if (compact) (w * 0.58f).toInt().coerceIn(86, 134)
-                   else (w * 0.68f).toInt().coerceIn(100, 180)
-        return base + (statusLines - 1).coerceAtLeast(0) * (statusItemHeight(compact) + 2)
+        return if (compact) (w * 0.50f).toInt().coerceIn(74, 116)
+               else (w * 0.64f).toInt().coerceIn(96, 168)
     }
+
+    /**
+     * 顶栏一行的内容估宽（dp）：☰22 + 波段·模式~44 + RX/TX22 + 速率41 + 状态点7
+     * + ⏺⛶⏻66 + VFO-A28 + 8×间距2 ≈ **246**。
+     * 这一行是**定高 Row、不折行**，所以必须断言它装得下；真挤不下时由
+     * "波段·模式"（组内唯一 `weight(fill=false)` 项）出省略号让路，其余项不被裁。
+     */
+    const val TOOL_ROW_CONTENT_W = 246
 
     /**
      * 频谱区高度比例：用户在设置里调的 Spec H / WF H 是基准，紧凑档按比例压一档。
@@ -187,22 +183,12 @@ object ScreenFit {
     fun bottomBarHeight(compact: Boolean, visible: Boolean): Int =
         if (!visible) 0 else pttHeight(compact) + bottomBarPadV(compact) * 2
 
-    /** 状态行占几行（窄屏 FlowRow 会折行）。 */
-    /**
-     * 状态行占几行。**按显示屏内容宽算**（v1.1.27 起状态行在显示屏里，
-     * 可用宽从页宽 344dp 降到 ~167dp，用页宽算会严重低估折行）。
-     */
-    fun statusLines(screenWidthDp: Int, extraChips: Int): Int {
-        val avail = bezelContentWidth(screenWidthDp)
-        val need = STATUS_CONTENT_W + extraChips * STATUS_EXTRA_CHIP_W
-        return ceil(need.toDouble() / avail.coerceAtLeast(1)).toInt().coerceAtLeast(1)
-    }
-
     /**
      * 竖向预算（dp）。`scrollArea` 是滚动列内容总高，`total` 含底部固定栏。
      * 用于测试"某机型一屏放得下"，也是给 UI 取尺寸的同一套常量。
      */
     data class Budget(
+        val toolRow: Int,
         val header: Int,
         val spectrum: Int,
         val meters: Int,
@@ -213,8 +199,9 @@ object ScreenFit {
         val pagePad: Int,
         val bottomBar: Int,
     ) {
-        // 6 个分区：顶栏（含工具行+状态行+主频）、频谱、仪表、控制、调谐、记忆
-        val scrollArea: Int get() = header + spectrum + meters + controls + tuning + memory + gaps + pagePad
+        // 7 个分区：顶栏工具行、显示屏(主频+S表)、频谱、仪表、控制、调谐、记忆
+        val scrollArea: Int get() =
+            toolRow + header + spectrum + meters + controls + tuning + memory + gaps + pagePad
         val total: Int get() = scrollArea + bottomBar
     }
 
@@ -237,7 +224,8 @@ object ScreenFit {
         fun card(items: Int, heightOf: (Int) -> Int): Int =
             padV2 + (1..items).sumOf { heightOf(it) } + (items - 1) * ig
         return Budget(
-            header = headerHeight(c, screenWidthDp, statusLines(screenWidthDp, extraStatusChips)),
+            toolRow = headerRowHeight(c),
+            header = headerHeight(c, screenWidthDp),
             // 注意：UI 是 .height(X).padding(top=6)，footprint 就是 X（padding 在里面吃掉），
             // 所以这里**不加** PAGE_PAD_V，否则模型会比真实布局多算 6dp
             spectrum = spectrumHeight(c, fftH, wfH),
@@ -249,8 +237,8 @@ object ScreenFit {
             tuning = card(3) { if (it == 1) sliderRowHeight(c) else padBtnHeight(c) },
             // 记忆卡：N 行记忆格（紧凑档 1×6，标准档 2×3）
             memory = card(memoryRows(c)) { memoryCellHeight(c) },
-            // 6 个子项之间 5 个间隔（状态行已并入顶栏，不再是独立分区）
-            gaps = gap(c) * 5,
+            // 7 个子项之间 6 个间隔（顶栏工具行 / 显示屏 / 频谱 / 仪表 / 控制 / 调谐 / 记忆）
+            gaps = gap(c) * 6,
             pagePad = PAGE_PAD_V * 2,
             bottomBar = bottomBarHeight(c, bottomBarVisible),
         )

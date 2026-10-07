@@ -66,6 +66,9 @@ class ScreenshotTest {
     @Test
     fun `capture the main screen while transmitting`() {
         val scope = CoroutineScope(Dispatchers.Unconfined)
-        shot("main-tx") { MainScreen(vm = fixtureVm(scope, tx = true), prefs = UiPrefs(), onOpenSettings = {}) }
+        // TX + 录音中：能看到 ⏺ 变实心红圆、状态行出现时长、CQ 计时、PTT 发光
+        shot("main-tx") {
+            MainScreen(vm = fixtureVm(scope, tx = true, recording = true), prefs = UiPrefs(), onOpenSettings = {})
+        }
     }
 }

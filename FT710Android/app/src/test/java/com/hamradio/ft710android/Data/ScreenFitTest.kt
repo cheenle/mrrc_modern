@@ -111,31 +111,32 @@ class ScreenFitTest {
     }
 
     /**
-     * 状态行 v1.1.27 起住在**显示屏内部**（主频上方），可用宽度是显示屏内容宽
-     * （360dp 屏 → 167dp），不是页宽 344dp —— 所以折行判断必须用 [ScreenFit.bezelContentWidth]。
+     * 顶栏那一行（工具 + 全部状态）v1.1.28 起是**全宽独立一行**，位于主频显示屏上方。
+     * 它是定高 Row、**不折行** —— 装不下就会被裁切，所以必须断言宽度够。
+     * 真挤不下时由"波段·模式"（组内唯一 `weight(fill=false)` 项）出省略号让路。
      */
-    @Test fun `status row fits one line inside the display bezel on every supported profile`() {
+    @Test fun `the one-line tool row fits every supported profile, even with two extra chips`() {
         mainland.forEach { (name, w, _) ->
-            assertTrue("$name 显示屏内容宽只有 ${ScreenFit.bezelContentWidth(w)}dp，太窄",
-                ScreenFit.bezelContentWidth(w) >= 150)
-            assertEquals("$name 常规状态应一行", 1, ScreenFit.statusLines(w, 0))
-            assertEquals("$name 叠加两个条件芯片仍应一行", 1, ScreenFit.statusLines(w, 2))
+            val avail = ScreenFit.contentWidth(w)
+            val need = ScreenFit.TOOL_ROW_CONTENT_W
+            assertTrue("$name：工具行 $need dp > 可用 $avail dp", need <= avail)
+            // 叠加两个条件项（录音时长 + 无声 / 只读 + 无声）后仍要装得下
+            val worst = need + 2 * ScreenFit.STATUS_EXTRA_CHIP_W
+            assertTrue("$name：叠加两个条件项后 $worst dp > 可用 $avail dp", worst <= avail)
         }
-        // 内容估宽：RX/TX 22 + 速率 41 + 状态点 8 + 2×间距 ≈ 85
-        assertEquals(85, ScreenFit.STATUS_CONTENT_W)
     }
 
-    @Test fun `status row wraps instead of clipping on absurdly narrow screens`() {
-        // 不支持的极窄屏（S 表宽度触到 132dp 下限后，显示屏内容宽跌破 85dp）：
-        // 折行而不是裁切；顶栏会按行数长高（headerHeight(statusLines)）
-        assertTrue("250dp 应折行，实际内容宽 ${ScreenFit.bezelContentWidth(250)}dp",
-            ScreenFit.statusLines(250, 0) >= 2)
-        // 280dp 仍是一行（内容宽 106dp ≥ 85dp）——折行只发生在远低于支持下限时
-        assertEquals(1, ScreenFit.statusLines(280, 0))
-        val one = ScreenFit.headerHeight(true, 360, 1)
-        val two = ScreenFit.headerHeight(true, 360, 2)
-        assertEquals("折一行应正好长高一行 + 间距",
-            one + ScreenFit.statusItemHeight(true) + 2, two)
+    @Test fun `tool row height is the icon tap target and the display height is separate`() {
+        // 行高由图标点击区决定（文字比它矮，垂直居中）
+        assertEquals(ScreenFit.headerIconTap(true), ScreenFit.headerRowHeight(true))
+        assertEquals(22, ScreenFit.headerRowHeight(true))
+        assertEquals(26, ScreenFit.headerRowHeight(false))
+        // 显示屏（= S 表）高度只看屏宽，与工具行无关
+        assertEquals(ScreenFit.headerHeight(true, 360), ScreenFit.headerHeight(true, 360))
+        assertTrue(ScreenFit.headerHeight(true, 360) in 74..116)
+        assertTrue(ScreenFit.headerHeight(false, 800) in 96..168)
+        // 显示屏内容宽：主频字号按它算（不是页宽）
+        assertEquals(167, ScreenFit.bezelContentWidth(360))
     }
 
     @Test fun `memory grid is a single row of six in compact mode`() {

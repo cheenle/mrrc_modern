@@ -16,12 +16,12 @@ import com.hamradio.ft710android.Data.ScreenFit
  */
 class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeightDp: Int) {
     val meterWidth: Dp get() = ScreenFit.meterWidth(screenWidthDp).dp
-    /** 顶栏（= S 表）高度；状态行折行时要传行数，顶栏会跟着长高。 */
-    fun headerHeight(statusLines: Int = 1): Dp =
-        ScreenFit.headerHeight(compact, screenWidthDp, statusLines).dp
+    /** 主频显示屏（= S 表）高度。 */
+    val headerHeight: Dp get() = ScreenFit.headerHeight(compact, screenWidthDp).dp
 
-    /** 状态行占几行（按**显示屏内容宽**算，不是页宽）。 */
-    fun statusLines(extraChips: Int): Int = ScreenFit.statusLines(screenWidthDp, extraChips)
+    /** 顶栏那一行（工具 + 全部状态）的高度。 */
+    val headerRowHeight: Dp get() = ScreenFit.headerRowHeight(compact).dp
+
     val meterCellHeight: Dp get() = ScreenFit.meterCellHeight(compact).dp
     val padBtnHeight: Dp get() = ScreenFit.padBtnHeight(compact).dp
     val chipHeight: Dp get() = ScreenFit.chipHeight(compact).dp
@@ -40,7 +40,6 @@ class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeig
     val panelPadH: Dp get() = ScreenFit.panelPadH(compact).dp
     val panelPadV: Dp get() = ScreenFit.panelPadV(compact).dp
     val gap: Dp get() = ScreenFit.gap(compact).dp
-    val statusItemHeight: Dp get() = ScreenFit.statusItemHeight(compact).dp
     val headerIconTap: Dp get() = ScreenFit.headerIconTap(compact).dp
     val headerIconGlyph: Dp get() = ScreenFit.headerIconGlyph(compact).dp
     val innerGap: Dp get() = ScreenFit.innerGap(compact).dp

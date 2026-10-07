@@ -190,7 +190,8 @@ class MainScreenComposeTest {
         }
         rule.waitForIdle()
 
-        listOf("设置", "全屏", "断开电台").forEach { desc ->
+        // 录音钮也是自绘图标（⏺ U+23FA 同样会字体回退变形）；fixture 带 recording → 它必须在
+        listOf("设置", "录音", "全屏", "断开电台").forEach { desc ->
             val node = rule.onNodeWithContentDescription(desc, useUnmergedTree = true)
             node.assertExists()
             assertTrue("$desc 必须可点", node.fetchSemanticsNode().config.contains(SemanticsActions.OnClick))
@@ -217,5 +218,20 @@ class MainScreenComposeTest {
         rule.waitForIdle()
         rule.onNodeWithContentDescription("连接电台", useUnmergedTree = true).assertExists()
         rule.onAllNodesWithContentDescription("断开电台", useUnmergedTree = true).assertCountEquals(0)
+    }
+
+    /** 录音中：⏺ 变实心（语义描述翻转）且状态行出现时长，两者都不能丢。 */
+    @Test
+    fun `recording state flips the icon semantics and shows elapsed time`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val vm = fixtureVm(scope, recording = true)
+        rule.setContent {
+            AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("停止录音（录音中）", useUnmergedTree = true).assertExists()
+        rule.onAllNodesWithContentDescription("录音", useUnmergedTree = true).assertCountEquals(0)
+        // 时长 83.0s → "1:23"（fmtSeconds），显示在状态行
+        rule.onNodeWithText("1:23", useUnmergedTree = true).assertExists()
     }
 }

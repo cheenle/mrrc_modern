@@ -91,7 +91,7 @@
 <p>而且<strong>每台盒子的口令都不一样</strong>。</p>
 <p>不一致。我把三种手段都写了，按你的机器试。</p>
 <ol>
-<li><strong>走 U 盘路线，eMMC 一个字节不动。</strong> 刷坏了拔掉 U 盘重新上电就回到原厂安卓。等全部验收通过，</li>
+<li><strong>走 U 盘路线：Android 的分区与数据不动</strong>（只写一次 u-boot 环境，见 §5）。刷坏了拔掉 U 盘重新上电就回到原厂安卓。等全部验收通过，</li>
 <li><strong>镜像里没有任何密钥。</strong> Web 口令、自签证书都在<strong>盒子首启时</strong>现生成——所以公开下载这份镜像是安全的，</li>
 <li><strong>§5（让盒子从 U 盘启动）是最容易卡住的一步</strong>，因为那一段在<strong>原厂安卓</strong>里操作，各家固件的菜单路径</li>
 </ol>

@@ -120,6 +120,8 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 - 档位：`screenHeightDp ≤ 900` = 紧凑（大陆主流直板机），否则标准（平板/折叠屏）。`screenHeightDp` 已扣除状态栏与导航栏，正好是可用高度。
 - 卡片内节奏由 `Panel(spacing=…)` 统一给，**不要**在卡内再写 `padding(top=…)`。
 - M3 的 48dp 最小交互尺寸已在根部关掉（`LocalMinimumInteractiveComponentSize provides 0.dp`），密集仪表盘按档位高度走。
+- **适配下限 = 360×728**（`ScreenFit.SUPPORTED_MIN_HEIGHT_DP`，5.5" 直板机 + 三键导航）。5" 及以下不做保证（用户 2026-10-06 明确"不用考虑"），滚动兜底。
+- **屏幕余量给频谱**：`bonus = min(可用高度 − 固定预算, 80dp)` 叠加到频谱显示屏高度（`MainScreen` 里 `m.spectrumBonus(...)` → `SpectrumPanel(bonusDp)`）。按构造不会超一屏；用户设的 Spec H / WF H 仍是基准，比例不变。
 - 改了任何高度/间距 → 跑 `ScreenFitTest`（真机档位断言），别只看截图。
 
 ## 频谱/标尺不变量

@@ -284,7 +284,16 @@ fun MainScreen(
             }
 
             // ── 频谱显示屏（独立子组件：只有它订阅 waterfall/fft）──────────
-            SpectrumPanel(vm, prefs, spanHz, state.activeFrequency)
+            // 主流机型按紧凑档算完还剩 25~145dp，与其在底栏上方留白，不如给频谱（封顶 80dp）
+            val spectrumBonus = remember(stateVersion, prefs.fftHeight, prefs.wfHeight, atrEnabled, listenOnly) {
+                m.spectrumBonus(
+                    fftH = prefs.fftHeight, wfH = prefs.wfHeight,
+                    hasAtr = atrEnabled, hasVdId = caps.hasVdIdMeters,
+                    bottomBar = !listenOnly,
+                    extraChips = (if (listenOnly) 1 else 0) + (if (state.rxAudioSilent) 1 else 0),
+                )
+            }
+            SpectrumPanel(vm, prefs, spanHz, state.activeFrequency, spectrumBonus)
 
             Panel(m.panelPadH, m.panelPadV, m.innerGap) {
                 if (m.showSectionLabels) SectionLabel("仪表")
@@ -646,13 +655,13 @@ private fun SmallChip(label: String, on: Boolean, modifier: Modifier = Modifier,
  * 中端机（荣耀）就是这么卡到把音频线程饿死的。收进子组件后每帧只重组这一块。
  */
 @Composable
-private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFreq: Long) {
+private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFreq: Long, bonusDp: Int) {
     val waterfall by vm.waterfall.collectAsState()
     val fft by vm.fft.collectAsState()
     val m = LocalScreenMetrics.current
     DisplayBezel(
         modifier = Modifier.fillMaxWidth()
-            .height(m.spectrumHeight(prefs.fftHeight, prefs.wfHeight))
+            .height(m.spectrumHeight(prefs.fftHeight, prefs.wfHeight) + bonusDp.dp)
             .padding(top = ScreenFit.PAGE_PAD_V.dp),
     ) {
         Column(Modifier.fillMaxSize()) {

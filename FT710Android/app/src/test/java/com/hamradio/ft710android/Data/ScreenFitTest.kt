@@ -60,9 +60,38 @@ class ScreenFitTest {
         assertTrue(!compact.scrollArea.let { ScreenFit.showSectionLabels(true) })
     }
 
-    @Test fun `small 5-inch screens overflow only modestly and fall back to scrolling`() {
-        val b = ScreenFit.budget(360, 584, 40, 110, true, true, true)
-        assertTrue("5\" 小屏超出太多：${b.total} vs 584", b.total <= 584 + 160)
+    /**
+     * 支持下限 = 360×728（5.5" 直板机 + 三键导航）。
+     * 5" 及以下（360×584）不在适配范围（用户 2026-10-06 明确），滚动兜底即可。
+     */
+    @Test fun `the supported floor is a 360x728 handset and it still fits`() {
+        val b = ScreenFit.budget(360, 728, 40, 110, hasAtr = true, hasVdId = true, bottomBarVisible = true)
+        assertTrue("支持下限 360×728 放不下：${b.total}", b.total <= 728)
+        assertEquals(728, ScreenFit.SUPPORTED_MIN_HEIGHT_DP)
+    }
+
+    @Test fun `leftover height goes to the spectrum instead of dead space`() {
+        // 华为 Mate 432×880：紧凑档固定预算后还剩很多 → 全部（封顶 80dp）给频谱
+        val mate = ScreenFit.budget(432, 880, 40, 110, true, true, true)
+        assertEquals(ScreenFit.SPECTRUM_BONUS_CAP_DP, mate.spectrumBonus)
+        assertTrue("给了余量后仍必须一屏：${mate.total} vs 880", mate.total <= 880)
+        // 小米/红米 360×728（三键导航）余量只有个位数 → bonus 就等于余量，绝不超
+        val tight = ScreenFit.budget(360, 728, 40, 110, true, true, true)
+        assertTrue("紧机型余量应很小：${tight.spectrumBonus}", tight.spectrumBonus <= 12)
+        assertEquals(728 - (tight.total - tight.spectrumBonus), tight.spectrumBonus)
+    }
+
+    @Test fun `spectrum bonus is clamped and never makes the screen scroll`() {
+        assertEquals(0, ScreenFit.spectrumBonus(availHeightDp = 700, fixedTotalDp = 720))
+        assertEquals(0, ScreenFit.spectrumBonus(availHeightDp = 720, fixedTotalDp = 720))
+        assertEquals(9, ScreenFit.spectrumBonus(availHeightDp = 729, fixedTotalDp = 720))
+        assertEquals(ScreenFit.SPECTRUM_BONUS_CAP_DP,
+            ScreenFit.spectrumBonus(availHeightDp = 1200, fixedTotalDp = 700))
+        // 所有主流档位：加了 bonus 之后总高仍 ≤ 可用高度
+        mainland.forEach { (_, w, h) ->
+            val b = ScreenFit.budget(w, h, 40, 110, true, true, true)
+            assertTrue("$w×$h 加余量后超出：${b.total}", b.total <= h)
+        }
     }
 
     @Test fun `meter width tracks screen width within bounds`() {

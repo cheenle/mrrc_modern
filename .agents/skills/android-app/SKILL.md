@@ -98,6 +98,8 @@ cd FT710Android
 12. **频谱流只能在子组件订阅**：`waterfall`/`fft` 每帧都变；在主屏顶层 `collectAsState()` 会让整屏（FlowRow / S 表弧 / 仪表 / 记忆格）以 20~30Hz 重组。订阅点必须在 `SpectrumPanel` 内。
 13. **音频线程要设优先级**：`playLoop()` 第一行 `Process.setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)`（必须在该线程内调用）。UI 卡顿时这是"声音出不来"的最后一道防线。draw 阶段不要分配（位图/LUT/文本 layout 全部 `remember`）。
 14. **尺寸单一数据源**：dp 只从 `Data/ScreenFit.kt` 出，经 `UI/ScreenMetrics.kt`（`LocalScreenMetrics`）下发；Composable 里不许就地写死。档位按 `Configuration.screenHeightDp ≤ 900` = 紧凑（大陆主流直板机），否则标准（平板/折叠屏）。卡片内节奏由 `Panel(spacing=…)` 统一给，卡内别再写 `padding(top=…)`。M3 的 48dp 最小交互尺寸已在根部关掉，否则音量行会吃掉预算。改任何高度/间距 → 跑 `ScreenFitTest`（真机档位断言"一屏放得下"）。
+- **适配下限 = 360×728**（`ScreenFit.SUPPORTED_MIN_HEIGHT_DP`，5.5" 直板机 + 三键导航）。**5" 及以下不适配**（用户 2026-10-06 明确"不用考虑"），滚动兜底即可；别再为它压尺寸。
+- **屏幕余量给频谱，不留白**：`bonus = min(可用高度 − 固定预算, 80dp)` 叠加到频谱高度（`m.spectrumBonus(...)` → `SpectrumPanel(bonusDp)`）。按构造不会超一屏。加新卡片/新行之前先看这张表还剩多少余量：小米三键 360×728 只剩 **0dp**，手势 360×744 剩 0dp，荣耀 400×832 剩 24dp，华为 432×880 剩 65dp —— 也就是说**紧凑档已经塞满**，再加东西就会开始滚动。
 
 ## 真机事故档案（症状 → 根因 → 修法）
 

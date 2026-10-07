@@ -7,6 +7,8 @@ import kotlin.math.ceil
  *
  * 目标机型：大陆主流直板机（小米 / 红米 / 华为 / 荣耀 / vivo / OPPO）——
  * 宽 360~440dp、高 720~960dp，挖孔屏 + 手势导航（安全区上下约 24~40dp）。
+ * **支持下限 = 360×728**（5.5" 直板机 + 三键导航）；5" 及以下（360×584）不在适配范围，
+ * 靠滚动兜底即可（用户 2026-10-06 明确"这个不用考虑"）。
  * 这些机器上走**紧凑档**：每段高度收紧，让主屏尽量不滚动就看全；
  * 平板 / 折叠屏展开态（屏高 > [COMPACT_MAX_HEIGHT_DP]）走标准档。
  *
@@ -16,6 +18,9 @@ import kotlin.math.ceil
 object ScreenFit {
     /** 屏高 ≤ 此值走紧凑档（覆盖 360×780、412×892 等主流手机）。 */
     const val COMPACT_MAX_HEIGHT_DP = 900
+
+    /** 适配下限：5.5" 直板机 + 三键导航。更小的屏（5" 及以下）不做保证，滚动兜底。 */
+    const val SUPPORTED_MIN_HEIGHT_DP = 728
 
     /** S 表占屏宽比例与上下限。 */
     const val METER_WIDTH_RATIO = 0.44f
@@ -95,6 +100,19 @@ object ScreenFit {
     /** 底部固定栏的竖直内边距（每侧）。 */
     fun bottomBarPadV(compact: Boolean): Int = if (compact) 7 else 8
 
+    /**
+     * 剩余高度给频谱的封顶（dp）。
+     *
+     * 主流机型按紧凑档算完后普遍还剩 25~145dp（华为 Mate 432×880 剩 145）——
+     * 与其在记忆卡和底栏之间留一片空白，不如把它给**频谱**（电台里最值钱的实时区域，
+     * 瀑布行数固定 120，越高每行越清楚）。封顶是为了大屏上不至于高得离谱。
+     */
+    const val SPECTRUM_BONUS_CAP_DP = 80
+
+    /** 可用高度减去固定预算后的余量，夹在 0..cap。**恒不会让总高超过可用高度。** */
+    fun spectrumBonus(availHeightDp: Int, fixedTotalDp: Int, capDp: Int = SPECTRUM_BONUS_CAP_DP): Int =
+        (availHeightDp - fixedTotalDp).coerceIn(0, capDp)
+
     /** 底部固定栏（PTT/CQ/TUNE）高度：竖直内边距 + 主按钮。 */
     fun bottomBarHeight(compact: Boolean, visible: Boolean): Int =
         if (!visible) 0 else pttHeight(compact) + bottomBarPadV(compact) * 2
@@ -124,6 +142,8 @@ object ScreenFit {
         val gaps: Int,
         val pagePad: Int,
         val bottomBar: Int,
+        /** 分给频谱的余量（0 = 没有余量，例如刚好塞满的 360×728）。 */
+        val spectrumBonus: Int = 0,
     ) {
         val scrollArea: Int get() = header + status + spectrum + meters + controls + tuning + memory + gaps + pagePad
         val total: Int get() = scrollArea + bottomBar
@@ -150,7 +170,7 @@ object ScreenFit {
             val n = items + (if (label > 0) 1 else 0)
             return padV2 + label + (1..items).sumOf { heightOf(it) } + (n - 1) * ig
         }
-        return Budget(
+        val fixed = Budget(
             header = headerHeight(c, screenWidthDp),
             status = statusHeight(c, screenWidthDp, extraStatusChips),
             spectrum = spectrumHeight(c, fftH, wfH),
@@ -167,5 +187,8 @@ object ScreenFit {
             pagePad = PAGE_PAD_V * 2,
             bottomBar = bottomBarHeight(c, bottomBarVisible),
         )
+        // 余量给频谱：bonus = min(可用 - 固定总高, 封顶) → 总高按构造不会超过可用高度
+        val bonus = spectrumBonus(screenHeightDp, fixed.total)
+        return fixed.copy(spectrum = fixed.spectrum + bonus, spectrumBonus = bonus)
     }
 }

@@ -309,5 +309,36 @@ class CapsNegotiationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(server._spectrum_profiles, {})
 
 
+class BroadcastLoopSourceTests(unittest.TestCase):
+    """The loop must hand its frame to the shared fan-out, not send inline."""
+
+    def _loop_block(self) -> str:
+        src = Path("server.py").read_text(encoding="utf-8")
+        block = src.split("async def _broadcast_spectrum_loop()", 1)[1]
+        return block.split("async def _spectrum_fanout(", 1)[0]
+
+    def test_loop_uses_the_shared_fanout(self):
+        block = self._loop_block()
+        self.assertIn("spectrum_profile.build_variants(binary)", block)
+        self.assertIn("await _spectrum_fanout(variants, _broadcast_tick)", block)
+
+    def test_no_inline_send_survives_in_the_loop(self):
+        """An inline send is exactly how the two paths drifted apart before."""
+        block = self._loop_block()
+        self.assertNotIn("await ws.send_bytes(binary)", block)
+        self.assertNotIn('metrics.add_bytes("spectrum", len(binary))', block)
+        self.assertNotIn("_spectrum_frame_due(ws, _broadcast_tick)", block)
+
+    def test_docstring_no_longer_claims_five_fps(self):
+        """It claimed 5 fps / 200 ms while the tick has been 30 Hz for years."""
+        block = self._loop_block()[:1400]
+        self.assertNotIn("Runs at 5 fps", block)
+        self.assertIn("SPECTRUM_BROADCAST_FPS", block)
+
+    def test_broadcast_fps_is_still_the_tick_source(self):
+        """A profile divides the tick rate; it never changes it."""
+        self.assertEqual(server.SPECTRUM_BROADCAST_FPS, 30)
+
+
 if __name__ == "__main__":
     unittest.main()

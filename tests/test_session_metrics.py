@@ -258,7 +258,14 @@ class SourceGuardTests(unittest.TestCase):
         self.assertEqual(body.count('metrics.close(role, "control", token)'), 2)
 
     def test_uplink_bytes_are_metered_on_both_fan_out_paths(self):
-        self.assertIn('metrics.add_bytes("spectrum", len(binary))', self.server)
+        # Both spectrum paths (real scope and S-meter fallback) hand their frame
+        # to the one shared _spectrum_fanout, and it meters what actually left:
+        # len(payload), not the len(binary) full frame it was built from, so a
+        # wf1-only tier reports 851 B instead of 1701 B (AD-025).  That the loop
+        # really calls the fan-out is pinned by
+        # tests/test_spectrum_profile_server.py::BroadcastLoopSourceTests.
+        fanout = self.server.split("async def _spectrum_fanout(", 1)[1]
+        self.assertIn('metrics.add_bytes("spectrum", len(payload))', fanout)
         self.assertIn('metrics.add_bytes("audio_rx", len(frame))', self.server)
 
     def test_rest_endpoint_exists(self):

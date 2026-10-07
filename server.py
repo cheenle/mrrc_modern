@@ -1535,14 +1535,18 @@ async def _on_scope_frame(_scope: ScopeHandler):
 async def _broadcast_spectrum_loop():
     """Periodically send spectrum data to all spectrum WebSocket clients.
 
-    Runs at 5 fps (200ms interval) — a bandwidth/latency tradeoff for the
-    1701-byte frames over WAN links.
-    Sends binary frames: 1-byte version + 850 bytes wf1 + 850 bytes wf2.
+    Ticks at SPECTRUM_BROADCAST_FPS (30 Hz); what each socket actually receives
+    is its profile — shape x divider, see spectrum_profile (AD-025).  Frames are
+    binary: a 1-byte version (0x01) + 850 bytes wf1, plus 850 bytes wf2 on the
+    full shape (1701 B) and absent on the wf1 shape (851 B).
 
     When scope_pipe is not connected (no FT4222 data), falls back to
-    S-meter-based synthetic spectrum from the CAT polling data.
+    S-meter-based synthetic spectrum from the CAT polling data.  Real-scope
+    frames go out only when ScopeHandler._frame_count advances (measured
+    ~11.1 fps on the FT-710); the fallback regenerates one on every tick, and
+    both paths now pass through the same per-profile gate.
 
-    Idle (0 clients): sleeps 500ms instead of 200ms, cutting ~60% of
+    Idle (0 clients): sleeps 500ms instead of one tick interval, cutting ~60% of
     idle wakeups.  Synthetic Gaussian generation is also skipped.
     """
     global scope, spectrum_clients
@@ -1577,17 +1581,13 @@ async def _broadcast_spectrum_loop():
                     logger.info("Spectrum broadcast active: %s, %d bytes/frame, %d clients",
                                 mode, len(binary), len(spectrum_clients))
                     _first = False
-                dead: set[WebSocket] = set()
+                # One shared fan-out: the healthy path and the S-meter fallback
+                # path now deliver identical bytes per second for a given
+                # profile, and both meter what actually left (851 B on a wf1
+                # tier, not the 1701 B built above).
+                variants = spectrum_profile.build_variants(binary)
                 _broadcast_tick += 1
-                for ws in spectrum_clients:
-                    if not _spectrum_frame_due(ws, _broadcast_tick):
-                        continue
-                    try:
-                        await ws.send_bytes(binary)
-                        metrics.add_bytes("spectrum", len(binary))
-                    except Exception:
-                        dead.add(ws)
-                spectrum_clients -= dead
+                spectrum_clients -= await _spectrum_fanout(variants, _broadcast_tick)
         except asyncio.CancelledError:
             return
         except Exception as e:

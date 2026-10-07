@@ -64,6 +64,10 @@ class SessionMetrics:
         self._sessions: Counter[tuple[str, str]] = Counter()
         self._bytes: Counter[str] = Counter()
         self._bytes_unreported: Counter[str] = Counter()
+        # Spectrum fan-out counters per bandwidth tier, e.g.
+        # {"high": {"frames": 12, "bytes": 20412}}.  Names come from the caller
+        # (spectrum_profile) so this module keeps zero app dependencies.
+        self._spectrum_profiles: dict[str, dict[str, int]] = {}
         self._peak_lifetime: dict[str, int] = {
             f"{role}_{suffix}": 0 for role in ROLES for suffix in _PEAK_SUFFIXES
         }
@@ -109,6 +113,20 @@ class SessionMetrics:
         self._bytes[kind] += nbytes
         self._bytes_unreported[kind] += nbytes
 
+    def add_spectrum_profile_frame(self, profile: str, nbytes: int) -> None:
+        """Count one spectrum frame delivered under one bandwidth tier.
+
+        This is the only place a tier's effect becomes visible: ``add_bytes``
+        reports the total but cannot say whether it came from 12 full frames or
+        24 short ones.
+        """
+        if not profile:
+            return
+        entry = self._spectrum_profiles.setdefault(profile, {"frames": 0, "bytes": 0})
+        entry["frames"] += 1
+        if nbytes > 0:
+            entry["bytes"] += nbytes
+
     # ── reads ─────────────────────────────────────────────────────────
 
     def snapshot(self) -> dict:
@@ -139,6 +157,10 @@ class SessionMetrics:
             },
             "uplink_bytes_total": {
                 kind: self._bytes[kind] for kind in METERED_KINDS
+            },
+            "spectrum_profiles": {
+                name: dict(entry)
+                for name, entry in sorted(self._spectrum_profiles.items())
             },
         }
 

@@ -51,6 +51,7 @@ from backends import create_backend, known_models
 from backends.base import RadioBackend
 import cloud_hub
 import net_tls
+import spectrum_profile
 import ssl_bootstrap
 import support_bundle
 import upgrade_core
@@ -146,16 +147,36 @@ audio: AudioHandler | None = None
 # Connected clients
 ctrl_clients: set[WebSocket] = set()
 spectrum_clients: set[WebSocket] = set()
-# Listen-role spectrum clients get every Nth frame (30 fps → ~10 fps):
-# a phone on a metered link does not need full-rate waterfall (V2.59).
+# Listen-role spectrum clients get every Nth frame — the "listen" tier below.
+# The divider is a ratio, so the delivered rate follows the frame source:
+# ~3.7 Hz on the measured 11.1 fps real scope, ~10 Hz in the 30 Hz fallback
+# state (V2.59 intent: a phone on a metered link does not need full rate).
 _listen_spectrum_clients: set[WebSocket] = set()
-LISTEN_SPECTRUM_DIVIDER = 3
+# Kept as a module attribute because tests/test_listen_only.py:397 reads it.
+LISTEN_SPECTRUM_DIVIDER = spectrum_profile.divider_for(spectrum_profile.LISTEN_PROFILE)
+
+# Tier a socket declared, keyed by the WebSocket object itself.  Absent means
+# "this socket never sent spectrumCaps" => the role default (high for an
+# operator token, listen for a listener token) => byte-for-byte today's stream.
+_spectrum_profiles: dict[WebSocket, str] = {}
+
+
+def _profile_for(ws: WebSocket) -> str:
+    """The spectrum profile in force for one socket.
+
+    Explicit caps win over the role default, and stick for the socket's life.
+    """
+    declared = _spectrum_profiles.get(ws)
+    if declared:
+        return declared
+    if ws in _listen_spectrum_clients:
+        return spectrum_profile.LISTEN_PROFILE
+    return spectrum_profile.DEFAULT_PROFILE
 
 
 def _spectrum_frame_due(ws: WebSocket, tick: int) -> bool:
     """Throttle gate for the spectrum fan-out (see above)."""
-    return (ws not in _listen_spectrum_clients
-            or tick % LISTEN_SPECTRUM_DIVIDER == 0)
+    return spectrum_profile.frame_due(tick, spectrum_profile.divider_for(_profile_for(ws)))
 audio_rx_clients: set[WebSocket] = set()
 audio_tx_clients: set[WebSocket] = set()
 # ATR1000 external tuner (optional; None = feature disabled)
@@ -1572,6 +1593,40 @@ async def _broadcast_spectrum_loop():
         except Exception as e:
             logger.warning("Spectrum broadcast error: %s", e)
         await asyncio.sleep(interval)
+
+
+async def _spectrum_fanout(variants: dict[str, bytes], tick: int) -> set[WebSocket]:
+    """Send this tick's frame to every spectrum client, honouring its profile.
+
+    One shared per-tick fan-out is what keeps the healthy (real-scope) path and
+    the S-meter fallback path on identical bytes-per-second: before profiles the
+    fallback regenerated a frame on every tick with no gate at all, so the broken
+    case cost more than the working one.
+
+    Returns the sockets that failed to take the frame; the caller drops them.
+    """
+    dead: set[WebSocket] = set()
+    for ws in spectrum_clients:
+        profile = _profile_for(ws)
+        # The same gate the listener throttle has always used — one source of
+        # truth for "may this socket have a frame on this tick".
+        if not _spectrum_frame_due(ws, tick):
+            continue
+        payload = spectrum_profile.variant_for(variants, profile)
+        try:
+            await ws.send_bytes(payload)
+        except Exception:
+            dead.add(ws)
+            continue
+        # Metering sits OUTSIDE the send's try on purpose: this except marks the
+        # socket dead and the caller drops it, so a bug in the counters would
+        # otherwise be laundered into "client went away" and silently stop its
+        # spectrum.  Count what actually left the radio, not the frame we built:
+        # a wf1-only tier puts 851 B on the wire, and the telemetry has to say so
+        # or the kbps numbers lie about the tier's effect.
+        metrics.add_bytes("spectrum", len(payload))
+        metrics.add_spectrum_profile_frame(profile, len(payload))
+    return dead
 
 
 # ── Audio Broadcast ────────────────────────────────────────────────────

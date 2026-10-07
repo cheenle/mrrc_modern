@@ -197,7 +197,7 @@ class PrivacyTests(unittest.TestCase):
         self.assertEqual(
             set(snap),
             {"uptime_seconds", "window_seconds", "listeners", "operators",
-             "sockets_by_kind", "uplink_bytes_total"},
+             "sockets_by_kind", "uplink_bytes_total", "spectrum_profiles"},
         )
         self.assertEqual(set(snap["sockets_by_kind"]), set(sm.KINDS))
         self.assertEqual(set(snap["listeners"]),
@@ -278,6 +278,50 @@ class SourceGuardTests(unittest.TestCase):
     def test_metrics_singleton_is_built_from_config_window(self):
         self.assertIn("metrics = SessionMetrics(window_seconds=SESSION_METRICS_WINDOW_S)",
                       self.server)
+
+
+class SpectrumProfileCountersTests(unittest.TestCase):
+    """Per-tier counters are how the AD-025 acceptance numbers get proven.
+
+    ``add_bytes`` can say how much spectrum went out but not whether it was 12
+    full frames or 24 short ones — and that distinction is the whole feature.
+    """
+
+    def setUp(self):
+        self.m = sm.SessionMetrics(window_seconds=60.0, clock=FakeClock())
+
+    def test_frames_and_bytes_accumulate_per_profile(self):
+        self.m.add_spectrum_profile_frame("high", 1701)
+        self.m.add_spectrum_profile_frame("high", 1701)
+        self.m.add_spectrum_profile_frame("low", 851)
+        snap = self.m.snapshot()["spectrum_profiles"]
+        self.assertEqual(snap["high"], {"frames": 2, "bytes": 3402})
+        self.assertEqual(snap["low"], {"frames": 1, "bytes": 851})
+        self.assertNotIn("mid", snap)
+
+    def test_idle_server_reports_no_tiers(self):
+        """Don't invent buckets nobody used — the log line prints them all."""
+        self.assertEqual(
+            sm.SessionMetrics(clock=FakeClock()).snapshot()["spectrum_profiles"], {})
+
+    def test_snapshot_returns_copies(self):
+        self.m.add_spectrum_profile_frame("mid", 851)
+        self.m.snapshot()["spectrum_profiles"]["mid"]["frames"] = 999
+        self.assertEqual(self.m.snapshot()["spectrum_profiles"]["mid"]["frames"], 1)
+
+    def test_non_positive_bytes_still_count_the_frame(self):
+        self.m.add_spectrum_profile_frame("high", 0)
+        self.assertEqual(self.m.snapshot()["spectrum_profiles"]["high"],
+                         {"frames": 1, "bytes": 0})
+
+    def test_unknown_profile_name_gets_its_own_bucket(self):
+        """This module keeps zero app dependencies: names come from the caller."""
+        self.m.add_spectrum_profile_frame("whatever", 10)
+        self.assertEqual(self.m.snapshot()["spectrum_profiles"]["whatever"]["frames"], 1)
+
+    def test_empty_profile_name_is_ignored(self):
+        self.m.add_spectrum_profile_frame("", 10)
+        self.assertEqual(self.m.snapshot()["spectrum_profiles"], {})
 
 
 if __name__ == "__main__":

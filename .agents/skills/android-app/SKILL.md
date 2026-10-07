@@ -94,6 +94,10 @@ cd FT710Android
 8. **PTT 安全铁律不退化**：`release()` 无条件发 `ptt:false`；手势 `finally`；`onStop` → `forceRelease()`；看门狗 500ms×3；txhb 按键即发、每 500ms。
 9. **权限**：登录后申请 `RECORD_AUDIO`（+13 的 `POST_NOTIFICATIONS`）；采集错误必须接到界面（`tx.onError`），禁止静默失败。
 10. **平台外壳**：根布局 `WindowInsets.safeDrawing`（Android 15 强制 edge-to-edge）；状态栏浅色图标；设置页要有 `onBack` + `RootScreen` 的 `BackHandler`。
+11. **瀑布必须增量绘制**：`SpectrumProcessor` 每帧 `addLast+removeFirst`（列表整体位移一格），所以"每帧重建整幅位图"= 850×120＝102,000 次查表 + 408KB 分配 + 整幅 `setPixels`，全在主线程 draw → 中端机（荣耀）卡到把音频线程饿死。用 `WaterfallRingBuffer`（环形位图只写新行）+ `WaterfallRing`（纯函数下标数学，有测试）。
+12. **频谱流只能在子组件订阅**：`waterfall`/`fft` 每帧都变；在主屏顶层 `collectAsState()` 会让整屏（FlowRow / S 表弧 / 仪表 / 记忆格）以 20~30Hz 重组。订阅点必须在 `SpectrumPanel` 内。
+13. **音频线程要设优先级**：`playLoop()` 第一行 `Process.setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)`（必须在该线程内调用）。UI 卡顿时这是"声音出不来"的最后一道防线。draw 阶段不要分配（位图/LUT/文本 layout 全部 `remember`）。
+14. **尺寸单一数据源**：dp 只从 `Data/ScreenFit.kt` 出，经 `UI/ScreenMetrics.kt`（`LocalScreenMetrics`）下发；Composable 里不许就地写死。档位按 `Configuration.screenHeightDp ≤ 900` = 紧凑（大陆主流直板机），否则标准（平板/折叠屏）。卡片内节奏由 `Panel(spacing=…)` 统一给，卡内别再写 `padding(top=…)`。M3 的 48dp 最小交互尺寸已在根部关掉，否则音量行会吃掉预算。改任何高度/间距 → 跑 `ScreenFitTest`（真机档位断言"一屏放得下"）。
 
 ## 真机事故档案（症状 → 根因 → 修法）
 
@@ -108,6 +112,7 @@ cd FT710Android
 | 7 | 跑一段时间比 Web 延迟几秒 | 抖动缓冲无上限：卡过一次就永远落后 | Web 水位 + 800ms 丢最旧 + TX flush（v1.1.9） |
 | 8 | 设置页四个滑块"调不了" | `vm.version.collectAsState()` 返回值被丢弃 → 从不重组，松手被旧值弹回 | 读出版本 + `remember(stateVersion)` 重算（v1.1.9） |
 | 9 | 官网卡片更新了、外网仍是旧版 | nginx `open_file_cache` 仍服务旧 inode | 上传后 `systemctl reload nginx`（`publish-card.sh` 内置） |
+| 14 | 荣耀等中端机**卡顿 + 声音几乎出不来** | ①瀑布每帧重建整幅位图（102,000 查表 + 408KB 分配/帧，主线程）；②`waterfall/fft` 在主屏顶层订阅 → 每帧重组整屏；③音频线程默认优先级被饿死 → AudioTrack 欠载 | 环形增量绘制（`WaterfallRing`）+ 拆 `SpectrumPanel` 订阅 + `THREAD_PRIORITY_URGENT_AUDIO`（v1.1.18） |
 | 13 | **装上打开就退出**（启动即崩） | 顶栏 `height(IntrinsicSize.Min)` 包住了含 `BoxWithConstraints` 的子项 → Compose 抛"SubcomposeLayout 不支持 intrinsic 测量" | 改显式高度 `height(meterH)`；加 `UiLayoutSafetyTest` 门槛（v1.1.17） |
 | 12 | v1.1.14 主屏控件整片消失（模式/波段/滤波/ATT/PRE、NR/NB/AN/COMP/ATU、音量、步进、VFO 行） | 脚本按"注释区间"整段替换 ATR 行，区间跨过了所有控制行；UI 结构无测试覆盖 | 从 v1.1.13 取回整段重插；此后发版前强制**结构 diff**（v1.1.15） |
 | 11 | 频谱下频率标注不对 | 标尺用了滞后的 `scope_start_freq` + 固定 6 等分 + 统一 `%.3f` | `Data/FreqScale.kt`：VFO±span/2、自适应步进、按位置绘制（v1.1.11） |

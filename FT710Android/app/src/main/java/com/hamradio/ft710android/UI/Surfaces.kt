@@ -2,6 +2,7 @@ package com.hamradio.ft710android.UI
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -56,9 +57,10 @@ object MrrcSurfaces {
 /** 卡片面板：一组控件装在一个面里（仪表 / 控制 / 调谐 / 记忆）。 */
 @Composable
 fun Panel(
+    padH: androidx.compose.ui.unit.Dp = 10.dp,
+    padV: androidx.compose.ui.unit.Dp = 9.dp,
+    spacing: androidx.compose.ui.unit.Dp = 4.dp,
     modifier: Modifier = Modifier,
-    contentPadding: androidx.compose.foundation.layout.PaddingValues =
-        androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 9.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
@@ -74,7 +76,9 @@ fun Panel(
                 MrrcSurfaces.CardRadius,
             )
             .border(1.dp, MrrcSurfaces.Stroke, MrrcSurfaces.CardRadius)
-            .padding(contentPadding),
+            .padding(horizontal = padH, vertical = padV),
+        // 卡内节奏统一由这里给：调用方**不要**再写 padding(top=…)（否则 ScreenFit 的预算就和真实布局脱节）
+        verticalArrangement = Arrangement.spacedBy(spacing),
         content = content,
     )
 }

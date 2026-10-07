@@ -19,8 +19,8 @@ android {
         applicationId = "com.hamradio.ft710android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "1.1.17"
+        versionCode = 21
+        versionName = "1.1.18"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake { arguments += listOf("-DOPUS_BUILD_SHARED_LIBRARY=0") }

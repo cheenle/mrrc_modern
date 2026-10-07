@@ -107,6 +107,21 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 | `TX[...]` | 采集在跑否 / 权限 / 采样率 / `src:` 采集源 / `pk:` 本帧峰值 / `R:` 样本 / `X:` 帧 | `mic:NO`=没权限；`src:1997`=UNPROCESSED，`1`=MIC，`6`=旧 VOICE_COMMUNICATION；按 PTT 时 `pk` 应上千 |
 | `tx:` | `tx_status`（0=RX，1=TX，2=TUNE） | 按 PTT 后应到 1 |
 
+## 性能不变量（中端机实测踩过）
+
+- **瀑布必须增量绘制**：`SpectrumProcessor` 每帧 `addLast(new)+removeFirst()`，列表整体位移一格，所以旧写法每帧重建整幅（850×120＝102,000 次查表 + 408KB 分配 + 整幅 setPixels，全在主线程 draw）→ 荣耀这类中端机卡到把音频线程饿死。现用 `WaterfallRingBuffer`（环形位图，只写新行）+ `WaterfallRing`（纯函数下标数学，有测试）。**不要改回"每帧重建"**。
+- **频谱流只能在子组件里订阅**：`waterfall`/`fft` 每帧都变，在主屏顶层 `collectAsState()` 会让整屏（FlowRow/S 表弧/仪表/记忆格）以 20~30Hz 重组。订阅点在 `SpectrumPanel` 内。
+- **音频线程必须设优先级**：`playLoop()` 第一行 `Process.setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)`（在该线程内调用才生效）。UI 卡顿时它是"声音出不来"的最后一道防线。
+- **draw 阶段不做分配**：Canvas 里别 `IntArray(...)`/`Path()` 每帧新建；位图、LUT、文本 layout 都 `remember` 住。
+
+## 屏幕适配（单一数据源）
+
+- 尺寸**只从 `Data/ScreenFit.kt` 出**，经 `UI/ScreenMetrics.kt`（`LocalScreenMetrics`）下发；Composable 里不许就地写死 dp，否则 `ScreenFitTest` 的"一屏放得下"预算就和真实布局脱节。
+- 档位：`screenHeightDp ≤ 900` = 紧凑（大陆主流直板机），否则标准（平板/折叠屏）。`screenHeightDp` 已扣除状态栏与导航栏，正好是可用高度。
+- 卡片内节奏由 `Panel(spacing=…)` 统一给，**不要**在卡内再写 `padding(top=…)`。
+- M3 的 48dp 最小交互尺寸已在根部关掉（`LocalMinimumInteractiveComponentSize provides 0.dp`），密集仪表盘按档位高度走。
+- 改了任何高度/间距 → 跑 `ScreenFitTest`（真机档位断言），别只看截图。
+
 ## 频谱/标尺不变量
 
 - **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**：它们是 `SubcomposeLayout`，不支持 intrinsic 测量，布局阶段抛 `IllegalStateException` → **启动即崩**（v1.1.16 事故：顶栏用 `height(IntrinsicSize.Min)` 让显示屏与 S 表等高）。要和固定尺寸的兄弟等高，就**显式给高度**（本仓：`Row(Modifier.height(meterH))`，`meterH` 由屏宽算出）。门槛：`UiLayoutSafetyTest`（静态扫描，命中即失败）。

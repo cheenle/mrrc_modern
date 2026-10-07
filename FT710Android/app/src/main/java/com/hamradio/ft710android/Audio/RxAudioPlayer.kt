@@ -139,6 +139,9 @@ class RxAudioPlayer : MainViewModel.RxPlayerLike {
     }
 
     private fun playLoop() {
+        // 音频线程优先级：中端机（荣耀）主线程被瀑布/重组占满时，默认优先级会被饿死
+        // → AudioTrack 欠载 → "卡顿 + 声音几乎出不来"。必须在**本线程**上设置才生效。
+        android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
         val silence = ShortArray(OpusBridge.FRAME_SAMPLES)
         while (running) {
             val buf: ShortArray = synchronized(jitter) {

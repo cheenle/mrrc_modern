@@ -2,6 +2,35 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.29] — 2026-10-07
+
+### 频谱流量档：设置页可选 Full / Half / Quarter，手机侧真的省流量（服务端 AD-025）
+
+**症状**：频谱是公网出口带宽与移动流量账单的主项，而客户端从来没有旋钮：帧长恒为 1701B、帧率恒为满速，唯一存在的节流是服务端给只读会话的 ÷3。
+
+**根因**：服务端满帧里有一半字节是 `wf2`（第二瀑布）——**它在 FT-710 与 IC-7300 两条路上都是全零，而且没有任何客户端画它**：Web 只把它存进 `window._lastWf2` 备用、iOS 直接忽略、安卓解析出来也从没读过（`SpectrumProcessor.onFrame` 只用 `wf1`）。而旧解析器 `if (frame.size != 1701) return null` 会把短帧**静默丢掉**（`onFrame` 直接 return），表现为“连上了、`ch:` 里 `S` 是 `+`、但瀑布不动”——最难分诊的那类症状。所以服务端不能先发短帧：必须等客户端声明能力。
+
+**为什么安卓侧省下来的是真钱**：OkHttp 4.12 **不提供** `permessage-deflate`（其 dex 里带着 `Request header not permitted: 'Sec-WebSocket-Extensions'` 守卫），所以 1701B 逐个走出电台。这跟浏览器不一样——浏览器协商了 deflate，实测满帧上线只剩 ≈441B，wf2 那 850 个零字节压缩后 ≈1.4B/帧，**砍 wf2 对网页几乎不省钱**，只有降帧率有效。两个因子在两端权重不同，对手机来说形状因子就是全部收益。
+
+**修法**：
+- 解析器接受 851B 与 1701B（其余长度仍一律 `null`：半截帧画进瀑布、多余字节被默默忽略，两者都会掩盖服务端的格式漂移）；`wf2` 改可空，短帧时为 `null` 而不是拿全零数组冒充（顺带省掉每帧 3.4KB 没人读的分配）。
+- 新增 `Spectrum/SpectrumTiers.kt`：档位值域/默认值/标签/caps JSON，与服务端 `spectrum_profile.CLIENT_PROFILES` 逐字对齐。非法与服务端内部档（`listen`）一律 normalize 到 `high`，**既不上线也不落盘**——服务端会静默忽略非法值，那样 UI 显示“已省流量”而实际在拿满帧。
+- `ConnectionManager` 连接后立即声明档位，换档时在**同一条 socket 上补发** caps，服务端下一个 tick（~33ms）就换闸门。**不重连**：重连会惊动 `requiredChannels`，而后台暂停期间把 `/WSspectrum` 拉回来正是 `setSpectrumPaused` 明确禁止的事。后台改档只存值，resume 时由 `connectSpectrum()` 带上去。
+- 设置页频谱区新增“流量档”一行 `FilterChip`；**偏好是唯一真相源**，由 `RootScreen` 的 `LaunchedEffect(prefs.spectrumProfile)` 统一推给连接层，所以启动、重连、用户改档三条路走同一条代码。若让设置页直接调 VM（`Mic Gain` 那种双写），重连后就会出现“UI 显示 Quarter、线上仍拿满帧”，而且是**静默**的。
+
+**省多少**（服务端 P1 实测，S-meter 回退态，payload 轴 = 安卓线上轴）：`high` 345.9 kbps → `mid` 88.0 kbps（比 0.254）→ `low` 45.1 kbps（比 0.126）。真频谱态（FT-710 + FTDI 在位，实测 11.1 fps）预期 ≈151 / 38 / 19 kbps，即 ≈68 → ≈17 → ≈9 MB/小时。
+
+**兼容性**：
+- 默认仍是 `high`，**不静默改变任何现有用户的观感**（与 Web 端一致）。想自动省流量就是把默认值改成 `mid`，但那会把瀑布刷新率静默砍半，属于产品决定。
+- **连老服务端不会坏**：caps 是一条普通文本帧，AD-025 之前的服务端把 `/WSspectrum` 的文本帧当保活直接丢弃（`await ws.receive_text()` 不解析），所以新 App 连老服务端照常工作，只是拿不到短帧。
+- 服务端在未收到 caps 前一直发 `high`（1701B 满帧），所以 caps 晚到**不会丢帧**，只是前几帧贵一点。
+
+**顺手改对的两处陈旧数字**（`CLAUDE.md` 与代码注释）：旧说法“~30fps × 1701B ≈ 51KB/s ≈ 180MB/小时”把两个态揉成了一个数字——30 Hz 是广播 tick 率，真频谱只在硬件帧计数前进时出帧（实测 11.1 fps ≈ 151 kbps ≈ 68 MB/小时），51 KB/s 只对回退态成立。同时删掉“`_broadcast_spectrum_loop` 的 docstring 写 5 fps 是陈旧的、别信 docstring”这条警告：服务端 v1.26 起那个 docstring 已经改对，警告留着会让人以为还得绕开它。
+
+**门槛**：`./gradlew test`（debug 179 / release 162，0 失败）+ `assembleDebug` + `lintDebug` + `assembleRelease` 全绿；UI 守卫逐个确认真的跑了（`OneScreenFitTest` 7 个真机档位、`MainScreenComposeTest` 7、`ScreenFitTest` 15、`UiLayoutSafetyTest` 1）。新增 `SpectrumTiersTest` 5 用例、`SpectrumFrameTest` 4→8、`ConnectionManagerTest` +5（连接即声明、换档不重连、重复设置幂等、非法值不上线、暂停时改档不唤醒频谱通道）。
+
+**未验证**：真机验收（设置页三档切换、瀑布仍滚动、退后台再回前台档位保持、连老服务端不崩）待发布后按 `android-app` 技能清单执行。
+
 ## [1.1.28] — 2026-10-07
 
 ### 频率上方合并成**一行**（用户定案：RX/TX 跟在波段·模式后面，所有状态图标与信息都在这一行）

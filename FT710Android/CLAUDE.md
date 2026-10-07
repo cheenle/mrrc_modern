@@ -51,8 +51,11 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - 控制通道 `/WSradio`（JSON）：下行 `fullState`（data+bands+modes+memChannels+filterTables+atr1000Enabled）、`stateUpdate`（fields 增量+dirty）、`memChannels`、`error`、`pong`；上行 `{"type":"set","field","value"}`、`{"type":"ping"}` 每 2s（`ConnectionManager` 心跳）、`{"type":"get","field":"fullState"}`、`{"type":"memSave","channels":[...]}`。
 - **可设字段**：`freq` `vfo_a_freq` `vfo_b_freq` `mode` `ptt` `tune` `filter`/`filter_width` `af_gain` `rf_power` `preamp` `att`/`attenuator` `nb`/`noise_blanker` `nr`/`noise_reduction` `an`/`auto_notch` `comp`/`compressor` `tuner` `vfo` `split` `power` `squelch` `mic_gain` `scope_span` `scope_speed` `scope_mode` `nb_level` `nr_level` `comp_level`/`compressor_level` `monitor` `vox` `break_in` `key_speed` `cw_pitch` `rit` `rit_freq` `xit`。字段名以 `server.py:_execute_set_command` 为准，**禁止自创**。
 - 音频：帧 = 1B tag（`0x00` PCM Int16 LE / `0x01` Opus）+ payload；48k 单声道 20ms（960 样本）。TX 恒 Opus CBR 64kbps；RX 解码 Opus 或直通 PCM。TX 文本帧 `s:` 停止、`m:` 设置。
-- 频谱：`/WSspectrum` 二进制 1701B = 1B version(0x01) + 850B wf1 + 850B wf2；**实际 30fps**（`SPECTRUM_BROADCAST_FPS = 30`，`interval = 1.0/30`，硬编码无 env 覆盖）→ ≈51KB/s ≈ **180MB/小时**。
-  - ⚠️ `_broadcast_spectrum_loop` 的 docstring 写着 "Runs at 5 fps (200ms interval)" 是**陈旧的**（常量早改成 30 了）；只读会话另有 `LISTEN_SPECTRUM_DIVIDER = 3` 降到 ~10fps。引用帧率前先读常量，别信 docstring。
+- 频谱：`/WSspectrum` 二进制帧有两种长度（服务端 AD-025 起按**档位**发）：满帧 1701B = 1B version(0x01) + 850B wf1 + 850B wf2；短帧 851B = 1B version(0x01) + 850B wf1（服务端的 `full[:851]` 切片，所以 wf1 逐元素相同）。**版本字节两种帧都是 0x01**（服务端故意不把满帧改标 0x02：iOS `guard version == 0x01`，改了会静默丢帧）。
+  - 档位 = 帧形状 × 帧率分频：`high` 1701B 每 tick、`mid` 851B 每 2 tick、`low` 851B 每 4 tick；只读会话的服务端内部默认档是 `listen`（1701B 每 3 tick）。客户端只能声明 `high`/`mid`/`low`（`SpectrumTiers.NAMES`，与服务端白名单逐字对齐）。
+  - **不发 caps 就永远拿 high**：服务端把兼容性做成了闸门而不是客户端升级。所以 App 连接后必须主动发 `{"type":"spectrumCaps","profile":"…"}`（`ConnectionManager.connectSpectrum()`），否则手机侧一点流量也省不下来。
+  - 帧率：广播 tick 是 30 Hz（`SPECTRUM_BROADCAST_FPS = 30`，硬编码无 env 覆盖），但**真频谱只在硬件帧计数前进时才出帧——实测 11.1 fps ≈ 151 kbps ≈ 68 MB/小时**（high 档）。S-meter 回退态才是每 tick 重造一帧（≈408 kbps ≈ 180 MB/小时）。旧文档写的“实际 30fps ≈ 51KB/s ≈ 180MB/小时”把两个态揉成了一个数字。
+  - ✅ `_broadcast_spectrum_loop` 的 docstring **已修对**（服务端 v1.26 起写的就是 30 Hz tick / 实测 11.1 fps / 851 与 1701 两种帧长）。旧版本它曾写着 "Runs at 5 fps (200ms interval)"，当时确实不能信；现在可以直接信，不必再绕开它去读常量。只读会话的 `LISTEN_SPECTRUM_DIVIDER = 3` 现在从服务端档位表取值（仍为 3），它是**比例**而不是绝对帧率：真频谱态 ≈3.7 Hz，回退态 ≈10 Hz。
 - 记忆频道：**6 槽** + `null` 补空，键 `label`（`MemoryChannels.parse/toJson`）。
 - **记忆格只显示频率**（2026-10-07 用户定案）：格内单个 `%.3f`（空槽 `M1`…`M6`），标签只在 `⋯` 管理对话框里看。字号上限 11sp（标准档 13sp），格高 34dp（标准档 40dp）。
 - **记忆格文字必须按格宽自适应**（紧凑档一行 6 格 + `⋯`，360dp 屏上每格只剩 47dp）：
@@ -129,7 +132,7 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 - **瀑布必须增量绘制**：`SpectrumProcessor` 每帧 `addLast(new)+removeFirst()`，列表整体位移一格，所以旧写法每帧重建整幅（850×120＝102,000 次查表 + 408KB 分配 + 整幅 setPixels，全在主线程 draw）→ 荣耀这类中端机卡到把音频线程饿死。现用 `WaterfallRingBuffer`（环形位图，只写新行）+ `WaterfallRing`（纯函数下标数学，有测试）。**不要改回"每帧重建"**。
 - **频谱流只能在子组件里订阅**：`waterfall`/`fft` 每帧都变，在主屏顶层 `collectAsState()` 会让整屏（FlowRow/S 表弧/仪表/记忆格）以 20~30Hz 重组。订阅点在 `SpectrumPanel` 内。
-- **后台必须停频谱通道**：30fps × 1701B ≈ 51KB/s ≈ **180MB/小时**，退后台看不见瀑布还一直收纯属浪费流量与 CPU。链路：`MainActivity.onStart/onStop` → `vm.onAppForeground()` → `ConnectionManager.setSpectrumPaused()`。
+- **后台必须停频谱通道**：high 档真频谱实测 ≈151 kbps ≈ **68 MB/小时**（S-meter 回退态 ≈408 kbps ≈ 180 MB/小时），退后台看不见瀑布还一直收纯属浪费流量与 CPU。链路：`MainActivity.onStart/onStop` → `vm.onAppForeground()` → `ConnectionManager.setSpectrumPaused()`。档位（AD-025）能把 high 降到 mid/low（≈38 / ≈19 kbps），**但后台一律直接停**：省流量最狠的一档是“根本不连”。
   - 🔒 **暂停期间 `/WSspectrum` 不能计入连接判据**（纯函数 `requiredChannels(listenOnly, spectrumPaused)`，有测试）：否则 `isConnected` 变 false → `syncBackground()` 依赖它 → **后台接收被自己关掉**，用户以为在收音其实早断了。
   - 后台期间的会话重连不能把频谱又拉起来（`start()` 要尊重暂停状态）；诊断摘要用 `S(p)` 区分"主动暂停"与"断了"。
   - 不影响音频与 PTT：RX 播放只看 `/WSaudioRX`、PTT 只看 `/WSradio`（通道分离原则）。

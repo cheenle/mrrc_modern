@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="ZTE W103D 电台盒子完整指南 — 从开箱刷机到 MRRC 干活">
+    <title>W103D 盒子完整指南 — MRRC Modern</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/octen.css?v=5">
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .w103d-wrap { max-width: 880px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+        .w103d-wrap h2 {
+            margin: 2.75rem 0 1rem; padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #2a2a2a);
+            color: var(--text-primary, #eee); font-size: 1.4rem;
+        }
+        .w103d-wrap h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+        .w103d-wrap h3 { margin: 2rem 0 0.75rem; color: var(--text-primary, #eee); font-size: 1.1rem; }
+        .w103d-wrap p, .w103d-wrap li { color: var(--text-secondary, #b8b8b8); line-height: 1.85; }
+        .w103d-wrap ul, .w103d-wrap ol { padding-left: 1.5rem; }
+        .w103d-wrap li { margin: 0.35rem 0; }
+        .w103d-wrap strong { color: var(--text-primary, #eee); }
+        .w103d-wrap code {
+            background: var(--bg-card, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.87em;
+        }
+        .w103d-wrap pre {
+            background: var(--bg-card, #141414); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 10px; padding: 1rem 1.15rem; overflow-x: auto; margin: 1rem 0;
+        }
+        .w103d-wrap pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.7; }
+        .w103d-wrap .table-scroll { overflow-x: auto; margin: 1.15rem 0; }
+        .w103d-wrap table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+        .w103d-wrap th, .w103d-wrap td {
+            border: 1px solid var(--border, #2a2a2a); padding: 0.55rem 0.75rem; text-align: left;
+            color: var(--text-secondary, #b8b8b8);
+        }
+        .w103d-wrap th { background: var(--bg-card, #1a1a1a); color: var(--text-primary, #eee); }
+        .w103d-wrap blockquote {
+            margin: 1.15rem 0; padding: 0.85rem 1.15rem; border-left: 3px solid var(--accent, #f0a020);
+            background: var(--bg-card, #171717); border-radius: 0 8px 8px 0;
+        }
+        .w103d-wrap blockquote p { margin: 0; }
+        .w103d-wrap input[type=checkbox] { margin-right: 0.4rem; }
+    </style>
+</head>
+<body data-site="mrrc_modern">
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html#features">Features</a></li>
+            <li><a href="index.html#download">Download</a></li>
+            <li><a href="guide.html">操作指南</a></li>
+            <li><a href="sdd.html">SDD</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i></a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../zh/w103d.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<header class="guide-hero">
+    <div class="guide-hero-inner">
+        <span class="badge"><i class="fas fa-tv"></i> W103D · 盒子完整指南</span>
+        <h1>ZTE W103D 电台盒子 — 从开箱到 MRRC 干活</h1>
+        <p>从拿到一台全新的 W103D 开始：认机器 → 下载校验 → 烧 U 盘 → 从 U 盘启动 → 接电台 → 选机型 → 验收。
+           末尾附一张从零到干活的打勾清单。</p>
+        <div class="actions">
+            <a class="btn btn-primary" href="downloads/MRRC-Modern-1.25.4-w103d.img.gz"><i class="fas fa-download"></i> 下载 W103D 镜像</a>
+            <a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" target="_blank" rel="noopener"><i class="fas fa-bolt"></i> 速查操作单</a>
+        </div>
+    </div>
+</header>
+
+<main class="w103d-wrap">
+<h1 id="w103d-盒子完整指南-从开箱到-mrrc-干活">W103D 盒子完整指南：从开箱到 MRRC 干活</h1>
+<p>面向<strong>手里刚拿到一台 W103D、什么都没做过</strong>的人。全程分两大段：<strong>先把系统刷进去</strong>（§1–§8）， <strong>再把 MRRC 配到能用</strong>（§9–§16）。最后一节是一张打勾清单。</p>
+<blockquote>速查版（已熟悉流程时看）：<code>packaging/box/README.md</code> 要自己出镜像才看：<code>docs/w103d_pack.md</code></blockquote>
+<p><strong>三条前置说明，先说清楚：</strong></p>
+<p>再决定要不要固化进 eMMC（§17）。</p>
+<p>而且<strong>每台盒子的口令都不一样</strong>。</p>
+<p>不一致。我把三种手段都写了，按你的机器试。</p>
+<ol>
+<li><strong>走 U 盘路线，eMMC 一个字节不动。</strong> 刷坏了拔掉 U 盘重新上电就回到原厂安卓。等全部验收通过，</li>
+<li><strong>镜像里没有任何密钥。</strong> Web 口令、自签证书都在<strong>盒子首启时</strong>现生成——所以公开下载这份镜像是安全的，</li>
+<li><strong>§5（让盒子从 U 盘启动）是最容易卡住的一步</strong>，因为那一段在<strong>原厂安卓</strong>里操作，各家固件的菜单路径</li>
+</ol>
+<p>---</p>
+<h2 id="1-先认清你的盒子">1. 先认清你的盒子</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>项</th><th>必须是</th></tr></thead><tbody>
+<tr><td>型号</td><td><strong>ZTE W103D</strong>（中兴云电脑 / 电视盒子）</td></tr>
+<tr><td>芯片</td><td><strong>Amlogic S905L3A</strong>（G12A 家族，4×Cortex-A53）</td></tr>
+<tr><td>内存/存储</td><td>2 GB / 32 GB eMMC</td></tr>
+<tr><td>网口</td><td><strong>100M 有线</strong>（够用：一路客户端约 60 KB/s）</td></tr>
+<tr><td>无线</td><td>MT7663S（能用，但<strong>实时音频优先走有线</strong>）</td></tr>
+</tbody></table></div>
+<p>⚠️ <strong>认准芯片</strong>。国科 GK6323、RK3566 的同名/同形盒子<strong>不适用</strong>——那份镜像的内核补丁与 WiFi 固件 是专门烘给 S905L3A-w103d 的。</p>
+<p><strong>盒子上的口要认一遍</strong>（拍照存着，接线时省事）：</p>
+<ul>
+<li>网口、HDMI、电源</li>
+<li><strong>USB 口 ≥ 2</strong>：一个插 U 盘（走 U 盘路线时），一个给电台</li>
+<li>复位孔（AV 孔里那个小按钮）——§5 的兜底手段要用</li>
+</ul>
+<h2 id="2-准备清单">2. 准备清单</h2>
+<ul>
+<li><input type="checkbox" disabled> W103D 盒子 + 原装电源</li>
+<li><input type="checkbox" disabled> <strong>≥8 GB U 盘</strong>（会被完全擦除）</li>
+<li><input type="checkbox" disabled> <strong>网线</strong>（必须——首启要联网）</li>
+<li><input type="checkbox" disabled> 电台 USB 线。<strong>FT-710 要插盒子/电台的上方 <code>Enhanced</code> 口</strong>（不是 Standard 口）</li>
+<li><input type="checkbox" disabled> 电脑（烧盘用）</li>
+<li><input type="checkbox" disabled> <strong>原厂线刷固件包</strong>（兜底；走 U 盘路线时用不到，但建议先下载好放在手边）</li>
+</ul>
+<h2 id="3-下载镜像并校验">3. 下载镜像并校验</h2>
+<pre><code class="lang-bash">mkdir -p ~/w103d &amp;&amp; cd ~/w103d
+curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.4-w103d.img.gz</code></pre>
+<p><strong>校验</strong>（这一步别跳——1.07 GB 下坏了是能下坏的）：</p>
+<pre><code class="lang-bash"># macOS
+shasum -a 256 MRRC-Modern-1.25.4-w103d.img.gz
+# Linux
+sha256sum MRRC-Modern-1.25.4-w103d.img.gz</code></pre>
+<div class="table-scroll"><table>
+<thead><tr><th></th><th></th></tr></thead><tbody>
+<tr><td>字节数</td><td><strong>1,156,345,060</strong></td></tr>
+<tr><td>SHA-256</td><td><strong>b0a20f7f4ba581540b4ee3f55f1c5cf69140ebc1e4d3cc0e4cee51493a797dd6</strong></td></tr>
+</tbody></table></div>
+<p>两者都对不上就别往下走。<strong>先确认字节数</strong>（<code>ls -l</code>）——大小不对说明下载被截断了。</p>
+<h2 id="4-烧到-u-盘">4. 烧到 U 盘</h2>
+<p><strong>认准盘符，别烧错盘。</strong>（这一步会把目标盘整个擦掉。）</p>
+<p><strong>macOS：</strong></p>
+<pre><code class="lang-bash">diskutil list                      # 找到你的 U 盘，记下 /dev/diskN（N 是数字）
+diskutil unmountDisk /dev/diskN
+gzip -dc MRRC-Modern-1.25.4-w103d.img.gz | sudo dd of=/dev/rdiskN bs=4m
+sync                               # 等它真的写完</code></pre>
+<p>⚠️ 用 <code>/dev/rdiskN</code>（<strong>裸设备</strong>）不是 <code>/dev/diskN</code>——后者慢十倍以上。</p>
+<p><strong>Windows</strong>：用 <strong>Rufus</strong> 或 <strong>balenaEtcher</strong>，选那个 <code>.img.gz</code>（两者都能直接吃 gz）。 目标是"从镜像写入"模式，<strong>不是</strong>解压后复制文件。</p>
+<p><strong>Linux：</strong></p>
+<pre><code class="lang-bash">lsblk                              # 找盘
+gzip -dc MRRC-Modern-1.25.4-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync</code></pre>
+<p>烧完把 U 盘<strong>安全弹出</strong>（macOS：<code>diskutil eject /dev/diskN</code>）。系统可能提示"此磁盘无法读取"—— <strong>那是正常的</strong>，镜像是 Linux 分区，Windows/macOS 读不懂。</p>
+<h2 id="5-让盒子从-u-盘启动-新机器最容易卡的一步">5. 让盒子从 U 盘启动（新机器最容易卡的一步）</h2>
+<p>原理：Amlogic 的引导链支持"从 USB 启动"。触发方式是<strong>让安卓以 <code>update</code> 模式重启</strong>。</p>
+<h3 id="手段一-adb-最可靠">手段一：adb（最可靠）</h3>
+<ol>
+<li>盒子接 HDMI + 网线，开机进安卓（<strong>先不要插 U 盘</strong>）。</li>
+<li>进安卓设置 → 关于 → <strong>连点"版本号"7 次</strong>打开开发者选项 → 打开 <strong>USB 调试</strong> / <strong>ADB 调试</strong>。</li>
+<li>电脑上：</li>
+</ol>
+<pre><code class="lang-bash">adb connect &lt;盒子IP&gt;:5555     # 端口可能是 5555，也可能要先在盒子上确认
+adb devices                   # 应该列出设备
+adb shell reboot update</code></pre>
+<ol>
+<li>盒子黑屏重启的一瞬间，<strong>立刻插上 U 盘</strong>（下一节说为什么要抢这个时机）。</li>
+</ol>
+<h3 id="手段二-盒子上的终端-app">手段二：盒子上的终端 App</h3>
+<p>如果安卓里已经装了终端/命令行 App，直接在盒子上敲：</p>
+<pre><code class="lang-bash">su -c 'reboot update'         # 或直接 reboot update</code></pre>
+<h3 id="手段三-复位孔-没有-adb-也没终端时">手段三：复位孔（没有 adb、也没终端时）</h3>
+<ol>
+<li><strong>先断电。</strong></li>
+<li>U 盘插好。</li>
+<li>用回形针按住<strong>复位孔里的按钮不放</strong>。</li>
+<li>通电，按住约 10 秒再松手。</li>
+</ol>
+<p>这会让机器直接进 update 模式并优先找 USB 设备。<strong>这条最不依赖原厂软件</strong>，建议第一次就用它。</p>
+<h3 id="时机为什么重要">时机为什么重要</h3>
+<p><code>reboot update</code> 之后引导链会去找 U 盘。<strong>U 盘最好在重启前就插好</strong>（手段三就是这么做的）； 手段一里插晚了就会错过，只能重来一次。</p>
+<h3 id="成功的样子">成功的样子</h3>
+<p>屏幕上是 Linux 内核滚动日志（<strong>不再有安卓的开机动画</strong>）。第一次开机要几分钟：扩 rootfs、生成 SSH 密钥。</p>
+<blockquote><strong>回滚</strong>：断电 → 拔 U 盘 → 重新上电 = 回到原厂安卓。<strong>没有任何副作用</strong>，eMMC 一字节没动。</blockquote>
+<h2 id="6-首启会自动完成什么">6. 首启会自动完成什么</h2>
+<p>镜像里已经烘好了不需要硬件的全部东西（用户、代码、venv、依赖、frpc、FTDI 库、11 份机型配置、systemd 单元）。 首启只做<strong>必须碰硬件</strong>的四件事：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>首启做</th><th>为什么不能提前做</th></tr></thead><tbody>
+<tr><td>生成 <strong>Web 登录口令</strong></td><td>每台机器应当不同；写死在镜像里等于公开口令</td></tr>
+<tr><td>生成<strong>自签证书</strong></td><td>证书要绑定本机名/IP，且私钥不该随镜像分发</td></tr>
+<tr><td>探测<strong>串口</strong>（<code>/dev/ttyUSB<em></code> / <code>ttyACM</em></code>）</td><td>端口号只有在真机上插了电台才知道</td></tr>
+<tr><td>探测<strong>声卡</strong>（电台的 USB 声卡）</td><td>同上</td></tr>
+</tbody></table></div>
+<p><strong>网线必须插着</strong>——首启要联网。开机后 <code>mrrc-firstboot.service</code> 跑完会把自己标记成"已做"， 之后不再重复。</p>
+<h2 id="7-进系统-第一件事改口令">7. 进系统，第一件事改口令</h2>
+<p>从路由器 DHCP 列表里找到盒子的 IP，然后：</p>
+<pre><code class="lang-bash">ssh root@&lt;盒子IP&gt;       # 出厂口令 1234（ophub Armbian 的默认值）</code></pre>
+<p><strong>进去第一件事就改掉它：</strong></p>
+<pre><code class="lang-bash">passwd root</code></pre>
+<p>⚠️ 出厂 <code>root/1234</code> 是公开知识，不改等于把盒子送人。</p>
+<h2 id="8-拿到-web-口令-打开界面">8. 拿到 Web 口令，打开界面</h2>
+<pre><code class="lang-bash">mrrc-show-password</code></pre>
+<p>这个命令必须用 <code>root</code> 跑——口令存在一个 <code>0640 root:root</code> 的文件里。</p>
+<p>首启时 <strong>HDMI 控制台的横幅</strong>上也会印一次；之后想不起来就用这个命令取回。</p>
+<p>浏览器打开：</p>
+<pre><code>https://&lt;盒子IP&gt;:8888</code></pre>
+<p>自签证书会警告一次 → <strong>高级 → 继续前往</strong>。</p>
+<p>⚠️ <strong>必须走 HTTPS，不要关。</strong> 手机浏览器要调用麦克风发射（PTT），而在 HTTP 下浏览器不给麦克风权限—— <strong>这是浏览器安全策略，不是我们的设置问题。</strong></p>
+<p>登录后你应该看到主界面：频率、模式、S 表、瀑布图。<strong>这时候还没有电台——下一步接上。</strong></p>
+<h2 id="9-接网络">9. 接网络</h2>
+<p><strong>有线（推荐）</strong>：网线插着就是通的。确认：</p>
+<pre><code class="lang-bash">ip a
+nmcli device status</code></pre>
+<p><strong>无线</strong>（能用，但实时音频优先有线）：</p>
+<pre><code class="lang-bash">nmcli device wifi list
+nmcli device wifi connect "&lt;SSID&gt;" password "&lt;密码&gt;"</code></pre>
+<p>如果盒子换了网络导致 IP 变了，路由器里重新找一下。</p>
+<h2 id="10-接电台">10. 接电台</h2>
+<p><strong>FT-710 的线插口别搞错</strong>：用<strong>上方 <code>Enhanced</code> 口</strong>，它同时承载 CAT 串口和 FT4222 scope。 插 Standard 口的话 CAT 可能通但<strong>没有真频谱</strong>。</p>
+<p>接好后确认三样东西都出现了：</p>
+<pre><code class="lang-bash">ls -l /dev/ttyUSB* /dev/ttyACM*     # CAT 串口
+arecord -l                          # 电台的 USB 声卡（RX）
+aplay -l                            # 播放设备（TX）</code></pre>
+<p>⚠️ 这三样<strong>一样都不能少</strong>。少串口 = 没有 CAT 控制；少声卡 = 没有声音。</p>
+<h2 id="11-选机型">11. 选机型</h2>
+<pre><code class="lang-bash">mrrc-radio list        # 11 个型号，带 ✅已验证 / ⚠实验性</code></pre>
+<p>已验证的三个：<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>。其余 8 个是实验性（默认只收不发，见下）。</p>
+<pre><code class="lang-bash">mrrc-radio use ft710                          # 自动探测串口 → 写配置 → 重启服务
+mrrc-radio use ic7300 --port /dev/ttyACM0     # 或者你直接指定端口
+mrrc-radio show                               # 核对当前生效的配置</code></pre>
+<p><code>use</code> 做了四件事：<strong>停服务 → 探测串口（真发包问电台）→ 写配置 → 起服务</strong>。 所以它需要电台是开机状态。</p>
+<blockquote><strong>换机型时旧串口会被自动清掉。</strong> FT-710 是 <code>ttyUSB0/1</code>、IC-7300 是 <code>ttyACM0</code>—— 留着上一个型号的串口等于配了一条<strong>没有报错的死链路</strong>。</blockquote>
+<h3 id="关于-8-个实验性机型-重要">关于 8 个实验性机型（重要）</h3>
+<p><code>ic705</code> <code>ic7610</code> <code>ic7760</code> <code>ftdx10</code> <code>ftdx101d</code> <code>ftdx101mp</code> <code>ftx1</code> <code>ft891</code> —— 这些机型的指令表来自 Hamlib 与设备手册，<strong>不是真机实测</strong>。默认<strong>只收不发</strong>。</p>
+<p>（在镜像里看得出来：这三个已验证机型的 profile <strong>根本不写</strong> <code>MRRC_ALLOW_UNVERIFIED_TX</code> 这一行， 而那 8 个都显式写着 <code>=0</code>——默认是安全的，要发射得主动改。）</p>
+<p>理由（AD-019）：在没有实测过的频率/功率语义上发射，对电台和天线都不好。</p>
+<p>要发射必须显式开门：</p>
+<pre><code class="lang-bash">vi /opt/mrrc_modern/env/mrrc.env      # 加一行 MRRC_ALLOW_UNVERIFIED_TX=1
+systemctl restart mrrc-modern</code></pre>
+<p><strong>换回已验证机型时这个键会自动重置为 0</strong>，不会带着开着。</p>
+<h2 id="12-验收-确认-真的能工作">12. 验收：确认"真的能工作"</h2>
+<pre><code class="lang-bash">scp packaging/box/verify.sh root@&lt;盒子IP&gt;:/tmp/
+ssh root@&lt;盒子IP&gt; 'bash /tmp/verify.sh'</code></pre>
+<p><strong>10 项，每项失败都会给出排查命令。先跑这个，再动手调别的。</strong></p>
+<div class="table-scroll"><table>
+<thead><tr><th>项</th><th>查什么</th></tr></thead><tbody>
+<tr><td>1/10</td><td><strong>有线网络</strong>（<code>nmcli device status</code>）</td></tr>
+<tr><td>2/10</td><td><strong>电台串口</strong>（<code>/dev/ttyUSB<em></code> / <code>ttyACM</em></code>）</td></tr>
+<tr><td>3/10</td><td><strong>电台 USB 声卡</strong>（<code>arecord -l</code>）</td></tr>
+<tr><td>4/10</td><td>Python 与依赖</td></tr>
+<tr><td>5/10</td><td>服务在跑</td></tr>
+<tr><td>6/10</td><td><strong>8888 上的 HTTPS</strong> 真的在应答（只看有没有应答，<strong>不看证书是否受信</strong>——自签证书本来就不受信）</td></tr>
+<tr><td>7/10</td><td><strong>配置一致性</strong>（设计 D-11：<code>EnvironmentFile</code> 与 <code>MRRC_CONFIG_FILE</code> 同一文件）</td></tr>
+<tr><td>8/10</td><td>Cloud Hub 隧道客户端（<code>fleet/frpc</code>）</td></tr>
+<tr><td>9/10</td><td>Cloud Hub 公网入口（<strong>未接入时自动跳过</strong>）</td></tr>
+<tr><td>10/10</td><td><strong>PTT 安全上限</strong>（<code>MRRC_PTT_MAX_TX_SECONDS</code> 有值）</td></tr>
+</tbody></table></div>
+<p>前 3 项就是硬件三件套。<strong>第 7 与第 10 项都是“没有报错也会出问题”的那类</strong>：第 7 项不合格时界面会显示 “已连接”而公网 TLS 校验失败；第 10 项没值时少一道防线①/② 中的第②道。</p>
+<p>然后<strong>实际用一次</strong>——打开界面，调频率、看瀑布、按 PTT 说一句。这才是真的验收。</p>
+<h2 id="13-mrrc-的全部可调项">13. MRRC 的全部可调项</h2>
+<p>配置文件：<strong><code>/opt/mrrc_modern/env/mrrc.env</code></strong>。改完 <code>systemctl restart mrrc-modern</code> 生效。</p>
+<div class="table-scroll"><table>
+<thead><tr><th>变量</th><th>作用</th></tr></thead><tbody>
+<tr><td><code>MRRC_WEB_PASSWORD</code></td><td>Web 登录口令（首启生成；想自己定就写这里）</td></tr>
+<tr><td><code>MRRC_LISTEN_PASSWORD</code></td><td><strong>收听专用口令</strong>：用它登录是只读访客（能听、能改频率/模式，不能发射、不能改设备设置）。留空=不启用</td></tr>
+<tr><td><code>MRRC_WEB_PORT</code> / <code>MRRC_WEB_HOST</code></td><td>监听端口（默认 8888）/ 绑定地址</td></tr>
+<tr><td><code>MRRC_RADIO_MODEL</code></td><td>当前机型（<strong>用 <code>mrrc-radio use</code> 改，别手改</strong>）</td></tr>
+<tr><td><code>MRRC_SERIAL_PORT</code> / <code>MRRC_BAUD_RATE</code></td><td>CAT 串口与波特率（同上，让 <code>mrrc-radio</code> 管）</td></tr>
+<tr><td><code>MRRC_ALLOW_UNVERIFIED_TX</code></td><td>未验证机型的发射门禁（§11）</td></tr>
+<tr><td><code>MRRC_PTT_MAX_TX_SECONDS</code></td><td><strong>发射时长上限</strong>（镜像默认 <code>120</code>）——防线②</td></tr>
+<tr><td><code>MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code></td><td>会话活性闸门；Cloud Hub 接入后自动写 <code>5</code>——防线①</td></tr>
+<tr><td><code>MRRC_SCOPE_PORT</code> / <code>MRRC_SCOPE_BAUD</code></td><td>FT-710 的 FT4222 scope 串口</td></tr>
+<tr><td><code>MRRC_FTDI_LIB_DIR</code></td><td>FTDI 库目录（镜像里已预置 aarch64 版本）</td></tr>
+<tr><td><code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code></td><td>指定音频设备（多声卡时有用）</td></tr>
+<tr><td><code>MRRC_RECORDINGS_DIR</code></td><td>通联录音目录（服务端存 MP3）</td></tr>
+<tr><td><code>MRRC_RECORDINGS_MAX_SESSION_MIN</code> / <code>MRRC_RECORDINGS_BITRATE</code></td><td>单次录音时长上限 / 码率</td></tr>
+<tr><td><code>MRRC_ATR1000_HOST</code> / <code>MRRC_ATR1000_PORT</code></td><td>ATR-1000 天调的地址（§15）</td></tr>
+<tr><td><code>MRRC_SESSION_METRICS_INTERVAL_S</code></td><td>会话遥测上报间隔（默认 300 秒，<code>0</code>=关）</td></tr>
+</tbody></table></div>
+<p><strong>常用场景：</strong></p>
+<pre><code class="lang-bash"># 给朋友开一个"只能听"的入口
+echo 'MRRC_LISTEN_PASSWORD=换个好记的' &gt;&gt; /opt/mrrc_modern/env/mrrc.env
+systemctl restart mrrc-modern
+# 之后访问 https://&lt;盒子IP&gt;:8888/listen 用这个口令登录
+
+# 发射时长上限调长一点
+sed -i 's/^MRRC_PTT_MAX_TX_SECONDS=.*/MRRC_PTT_MAX_TX_SECONDS=300/' /opt/mrrc_modern/env/mrrc.env
+systemctl restart mrrc-modern</code></pre>
+<h2 id="14-公网接入-cloud-hub">14. 公网接入（Cloud Hub）</h2>
+<p>让盒子在公网可用（<code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code>）。界面上 <strong>设置 → Cloud Hub</strong>：</p>
+<p>- <code>MRRC_SSL_CERT</code> / <code>MRRC_SSL_KEY</code>（这个机型的入口证书） - <code>MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5</code>（防线①：PTT 半开时自动释放）</p>
+<ol>
+<li><strong>apply</strong>：填呼号 + 联系方式，提交申请。</li>
+<li>等批准。</li>
+<li><strong>connect</strong>：自动完成——签证书、enroll、写隧道配置、起 frpc，并自动写两个配置键：</li>
+</ol>
+<p>之后用 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 访问。</p>
+<p><strong>两条 PTT 防线互相独立，都要在</strong>：防线①＝会话活性闸门（公网必经），防线②＝时长上限（<code>MRRC_PTT_MAX_TX_SECONDS</code>）。 公网路径下 NAT 掉表、换 Wi-Fi、静默丢包都不会产生"断线"，只有这两条能兜住。</p>
+<h2 id="15-天调-atr-1000-可选">15. 天调 ATR-1000（可选）</h2>
+<p>盒子支持 ATR-1000 自动天调。配好地址就能用：</p>
+<pre><code class="lang-bash">cat &gt;&gt; /opt/mrrc_modern/env/mrrc.env &lt;&lt;'EOF'
+MRRC_ATR1000_HOST=&lt;天调IP&gt;
+MRRC_ATR1000_PORT=&lt;端口&gt;
+EOF
+systemctl restart mrrc-modern</code></pre>
+<p>配好之后：<strong>发射中驻波超阈值会自己发一次完整调谐</strong>（一次，不是反复试），调谐有效才写回学习库。 它<strong>绝不自行键控电台</strong>——触发前提是操作者自己在发射。</p>
+<h2 id="16-日常运维">16. 日常运维</h2>
+<p><strong>日志：</strong></p>
+<pre><code class="lang-bash">journalctl -u mrrc-modern -n 100 --no-pager     # 服务日志
+tail -f /opt/mrrc_modern/logs/server-stdout.log # 服务 stdout</code></pre>
+<p><strong>升级：</strong></p>
+<pre><code class="lang-bash">MRRC_UPDATE_SRC=&lt;git url 或本地目录&gt; mrrc-update</code></pre>
+<p>只做三件事：拉代码 → 装依赖 → 重启。<strong>配置不会被碰。没有自动回滚</strong>——升级前先备份（下面）。</p>
+<p><strong>备份（升级前做）：</strong></p>
+<pre><code class="lang-bash">tar czf /root/w103d-backup-$(date +%F).tgz \
+  /opt/mrrc_modern/env/ /opt/mrrc_modern/mem_channels.json /var/lib/mrrc/</code></pre>
+<p>（<code>/opt/mrrc_modern/env/</code> 里有口令与 Cloud Hub 证书路径。这份备份<strong>含私钥</strong>，别乱放。）</p>
+<p><strong>手动装机内容检查：</strong></p>
+<pre><code class="lang-bash">bash /tmp/verify.sh        # §12 那份，随时可重跑</code></pre>
+<h2 id="17-写进-emmc-可选-验收通过之后再做">17. 写进 eMMC（可选，验收通过之后再做）</h2>
+<p>U 盘路线跑通、验收过了，才考虑固化。<strong>这一步会覆盖 eMMC。</strong></p>
+<pre><code class="lang-bash">armbian-ddbr        # 先把原厂安卓整盘备份出来（务必先做！）
+armbian-install     # 把 Armbian 写进 eMMC</code></pre>
+<p>之后盒子不再依赖 U 盘，32 GB eMMC 全用上。</p>
+<blockquote>⚠️ <strong>变砖兜底</strong>：Amlogic 的 <strong>MaskROM 在 SoC BootROM 里</strong>（短接可重新进刷写模式）， 加上你手上的<strong>原厂线刷固件包</strong>，就能恢复。这两样在手，这一步的风险才是可控的。</blockquote>
+<h2 id="18-退回去">18. 退回去</h2>
+<ul>
+<li><strong>U 盘路线</strong>：断电 → 拔 U 盘 → 上电 = 原厂安卓。零痕迹。</li>
+<li><strong>已写 eMMC</strong>：用原厂线刷固件包 + MaskROM 短接重刷。</li>
+</ul>
+<h2 id="19-三条红线-会踩出-没有报错的故障">19. 三条红线（会踩出"没有报错的故障"）</h2>
+<p><strong>① 停服务只用 <code>systemctl</code>，不要 <code>kill</code> 进程。</strong></p>
+<p>Linux 上 frpc 的残留清理是 Windows-only 的。一个残留的 frpc 会占住 proxy 名，导致下次启动 <strong>隧道起不来而界面毫无提示</strong>。<code>systemctl stop</code> 会连带清掉 frpc，<code>kill</code> 不会。</p>
+<p><strong>② 登录限流是全局桶，误锁影响所有人。</strong></p>
+<p>经公网访问时所有登录共享同一个来源 IP，限流是 <code>5 次失败 / 300 秒</code>，而且<strong>全局</strong>。 不是你一个人被锁 5 分钟——是<strong>所有人</strong>。</p>
+<p><strong>③ 内核升级只走 <code>armbian-update</code>，保持 <code>w103d</code> 变体。</strong></p>
+<p>W103D 的 WiFi 完全依赖专属内核补丁 + MT7663S 固件 overlay。 换成通用内核 = <strong>静默丢 WiFi</strong>：没有报错，只是连不上。</p>
+<h2 id="20-排障">20. 排障</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>症状</th><th>先看</th><th>多半是</th></tr></thead><tbody>
+<tr><td>打不开网页</td><td><code>ip a</code>；<code>systemctl status mrrc-modern</code></td><td>网线/服务；<code>journalctl -u mrrc-modern -n 50</code></td></tr>
+<tr><td>网页只转圈</td><td>换 <code>https://</code>（不是 http）</td><td>端口 8888 + 自签证书警告要放行</td></tr>
+<tr><td>手机按 PTT 没反应</td><td>地址栏是不是 <code>https://</code></td><td>HTTP 下浏览器不给麦克风权限</td></tr>
+<tr><td>没有网口地址</td><td><code>nmcli device status</code></td><td>换网线/换口；路由器 DHCP</td></tr>
+<tr><td>没有串口</td><td><code>ls /dev/ttyUSB<em> /dev/ttyACM</em></code></td><td>USB 线；<strong>FT-710 要插上方 Enhanced 口</strong>；电台菜单 <code>MOD SOURCE = USB</code></td></tr>
+<tr><td>有串口但连不上</td><td><code>mrrc-radio show</code> 的串口对不对</td><td><code>mrrc-radio use &lt;model&gt; --port /dev/ttyXXX</code></td></tr>
+<tr><td>没声音</td><td><code>arecord -l</code> 有没有电台声卡</td><td>换线/换口；服务日志里的 PyAudio 设备列表</td></tr>
+<tr><td>瀑布图是合成谱（S 表）</td><td><code>ls -l /opt/mrrc_modern/vendor/ftdi/</code></td><td>缺 FTDI 库，或没插 Enhanced 口；`cat /sys/bus/usb/devices/*/idProduct \</td><td>grep 601c`</td></tr>
+<tr><td><strong>Cloud Hub 显示"已连接"但公网 502</strong></td><td><code>verify.sh</code> 第 8、9 项</td><td>多半 <code>fleet/frpc</code> 缺失（<code>connect()</code> 会返回 <code>tunnel_started:false</code>）</td></tr>
+<tr><td>公网证书报错</td><td><code>verify.sh</code> 第 7 项</td><td><code>EnvironmentFile</code> 与 <code>MRRC_CONFIG_FILE</code> 必须指向<strong>同一个文件</strong>（设计 D-11）</td></tr>
+<tr><td>服务反复重启</td><td><code>journalctl -u mrrc-modern -n 100</code></td><td>Python traceback；核对机型与串口</td></tr>
+<tr><td>发射没功率</td><td>状态行的 <code>TX[... pk:...]</code></td><td>采集源/音量；FT-710 的 <code>mic_gain</code>；SSB 无话音即无功率</td></tr>
+<tr><td>延迟越来越大</td><td>状态行 <code>J:</code></td><td>正常 100–300 ms；长期 &gt;500 说明抖动缓冲在追，查网络</td></tr>
+</tbody></table></div>
+<h2 id="21-打勾清单-从零到-mrrc-能干活">21. 打勾清单：从零到 "MRRC 能干活"</h2>
+<p><strong>刷机段</strong></p>
+<ul>
+<li><input type="checkbox" disabled> 认准芯片是 <strong>S905L3A</strong>（不是 GK6323/RK3566）</li>
+<li><input type="checkbox" disabled> 镜像 SHA-256 = <code>b0a20f7f…</code>，字节数 = <code>1,156,345,060</code></li>
+<li><input type="checkbox" disabled> U 盘烧好、安全弹出</li>
+<li><input type="checkbox" disabled> 按复位孔（或 <code>reboot update</code>）从 U 盘启动，屏幕上是 Linux 日志不是安卓动画</li>
+<li><input type="checkbox" disabled> <code>ssh root@&lt;IP&gt;</code> 进得去，<strong>并且已经 <code>passwd root</code> 改掉 1234</strong></li>
+<li><input type="checkbox" disabled> <code>mrrc-show-password</code> 拿到 Web 口令</li>
+<li><input type="checkbox" disabled> <code>https://&lt;IP&gt;:8888</code> 打得开、登录成功</li>
+</ul>
+<p><strong>MRRC 配置段</strong></p>
+<ul>
+<li><input type="checkbox" disabled> 网线插好（<code>ip a</code> 有地址）</li>
+<li><input type="checkbox" disabled> 电台 USB 线插在<strong>上方 Enhanced 口</strong></li>
+<li><input type="checkbox" disabled> <code>/dev/ttyUSB*</code> 出现、<code>arecord -l</code> 能看到电台声卡</li>
+<li><input type="checkbox" disabled> <code>mrrc-radio use ft710</code>（或你的机型）跑通、<code>mrrc-radio show</code> 对得上</li>
+<li><input type="checkbox" disabled> 界面上频率/模式跟着电台走（CAT 通）</li>
+<li><input type="checkbox" disabled> 瀑布图是<strong>真频谱</strong>（不是 S 表合成谱）</li>
+<li><input type="checkbox" disabled> 按下 PTT 能发射、松开能收到（<strong>这一步才算真的能用</strong>）</li>
+<li><input type="checkbox" disabled> <code>verify.sh</code> 10 项全过</li>
+<li><input type="checkbox" disabled> （可选）<code>MRRC_LISTEN_PASSWORD</code> 给朋友开了收听入口</li>
+<li><input type="checkbox" disabled> （可选）Cloud Hub 接入，公网 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 打得开</li>
+<li><input type="checkbox" disabled> （可选）固化进 eMMC（<strong>先 <code>armbian-ddbr</code> 备份原厂</strong>）</li>
+</ul>
+</main>
+
+<footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">
+    <p>MRRC Modern — W103D 电台盒子指南 ·
+       <a href="index.html#download">下载页</a> ·
+       <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
+</footer>
+</body>
+</html>

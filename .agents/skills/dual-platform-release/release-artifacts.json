@@ -23,18 +23,18 @@
     {
       "id": "website-cards-en",
       "path": "website/index.html",
-      "pattern": "(?:MRRC-Modern-v|MRRC-Modern-Setup\\.exe — v?)([0-9]+\\.[0-9]+\\.[0-9]+)(?!-Android\\.apk)",
+      "pattern": "(?:MRRC-Modern-v|MRRC-Modern-Setup\\.exe — v?)([0-9]+\\.[0-9]+\\.[0-9]+)(?![0-9.])(?!-Android\\.apk)",
       "expect": "app",
       "min_count": 3,
-      "why": "Windows card, macOS card and the versioned-download links all carry the release version. The Android APK carries its own version stream (v1.1.0) and is excluded by the trailing lookahead."
+      "why": "Windows card, macOS card and the versioned-download links all carry the release version. The Android APK is released on its own version stream, independent of the desktop app, and is excluded by the trailing lookahead."
     },
     {
       "id": "website-cards-zh",
       "path": "website/zh/index.html",
-      "pattern": "(?:MRRC-Modern-v|MRRC-Modern-Setup\\.exe — v?)([0-9]+\\.[0-9]+\\.[0-9]+)(?!-Android\\.apk)",
+      "pattern": "(?:MRRC-Modern-v|MRRC-Modern-Setup\\.exe — v?)([0-9]+\\.[0-9]+\\.[0-9]+)(?![0-9.])(?!-Android\\.apk)",
       "expect": "app",
       "min_count": 3,
-      "why": "The cards carry the desktop release version. The Android APK carries its own version stream (v1.1.0) and is excluded by the trailing lookahead."
+      "why": "The cards carry the desktop release version. The Android APK is released on its own version stream, independent of the desktop app, and is excluded by the trailing lookahead."
     },
     {
       "id": "website-guide-en",

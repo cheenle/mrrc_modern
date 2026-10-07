@@ -100,11 +100,23 @@ Sec-WebSocket-Extensions: permessage-deflate; server_max_window_bits=12; client_
 
 为什么不能只做"砍 wf2"：对 Web 它只值 1.4 B/帧（§2.4），每一半都必须来自分频。为什么不做纯分频：对安卓 `high→full ÷2` 是 −50% 但白送着 wf2 的复制/压缩成本。**两个因子捆绑，才让每级对两端都 ≥ 一半。**
 
-### D-2：短帧复用版本字节 `0x01`，不引入新版本号
+### D-2：短帧用**已文档化却从未上线的 v1**，不引入新版本号
 
-`get_spectrum_binary()` 现在硬编码 `struct.pack('B', 1)`。注意 `1` 是**线上**版本，`PIPE_PAYLOAD_VERSION = 2`（`scope_frame.py:16`）是**内部管道**版本，两个命名空间，别混。
+`SDD/09-architecture-overview.md:47-48` 早已定死两种格式：
 
-内部格式里 version 1 本来就表示"wf2 可缺、缺则补零"（`scope_frame.py:162` 的 `parse_pipe_payload`），所以 `[0x01] + wf1` 语义自洽，且 iOS 那道 `guard version == 0x01` 不用改。
+```
+v1: 1B 版本(0x01) + 850B wf1                    = 851 字节
+v2: 1B 版本(0x02) + 850B wf1 + 850B wf2          = 1701 字节
+```
+
+但线上**只存在过 `0x01`**：`get_spectrum_binary()` 硬编码 `struct.pack('B', 1) + wf1 + wf2`（`scope_handler.py:437`），全仓 grep 无任何发出 `0x02` 的代码，`git log -S "struct.pack('B', 2)" -- scope_handler.py` 零命中。**今天的线上帧是"v1 的版本字节 + v2 的长度"的错配体，本设计是去补齐文档里的 v1，不是发明新格式。**
+
+由此得两条硬结论：
+
+1. **短帧就是 `[0x01] + wf1`（851 B），零新协议、零新常量**，内部格式那边 version 1 本来也表示"wf2 可缺、缺则补零"（`scope_frame.py:162`），语义自洽。
+2. **绝不能把全帧改标 `0x02`** —— 哪怕那更贴合文档。iOS `SpectrumProcessor.swift:57` 是 `guard version == 0x01 else { return }`，一旦全帧变 0x02，**已装 iOS 客户端直接静默丢帧**。这条是把文档对齐现实时最容易踩的反向陷阱，写在这里挡后来人。
+
+另注意命名空间不要混：`0x01` 是**线上**版本，`PIPE_PAYLOAD_VERSION = 2`（`scope_frame.py:16`）是**内部管道**版本。
 
 ### D-3：兼容闸门 = "没声明能力就不改一个字节"
 
@@ -115,7 +127,7 @@ Sec-WebSocket-Extensions: permessage-deflate; server_max_window_bits=12; client_
 | Web 主页 | `ft710_main.js:174` `length < 851` 才拒 | ✅ 照常渲染 |
 | Web 收听页 | `listen.js:356` 同上 | ✅ 照常渲染 |
 | iOS | `SpectrumProcessor.swift:52` `count >= binCount + 1` | ✅ 照常渲染，**无需出包** |
-| Android | `SpectrumFrame.kt:14` `if (frame.size != 1701) return null` | ❌ **静默丢帧**（频谱不动、不报错） |
+| Android | `SpectrumFrame.kt:14-15` 同时卡 `frame.size != 1701` **和** `frame[0] != 0x01` | ❌ **静默丢帧**（频谱不动、不报错）——且它是唯一违反已文档化 v1 的客户端 |
 
 ⇒ 规则一条：**服务端在收到该 socket 的能力声明之前，一律 `high`（1701 B ÷1）**。老安卓逐字节等于今天；Web/iOS 只要服务端发版就自动进入可降档状态。
 
@@ -181,7 +193,7 @@ UI 入口固定放设置页，**不放状态行**（安卓状态行只剩 269/34
 
 ## 7. 测试计划
 
-- `tests/test_ws_protocol.py` —— ⚠️ AGENTS.md 明写该文件对空白敏感，只加不改，禁止顺手格式化。
+- ⚠️ **AGENTS.md:104 与 `docs/PROJECT_MAP.md:39` 把这个文件写成 `tests/test_ws_protocol.py`，该路径不存在** —— 真名 `tests/test_server_ws_protocol.py`（内含读前端源码做契约断言的用例，如 `:280` 断言 `wsSpectrum.readyState === WebSocket.CONNECTING`、`:334` 按 `@app.websocket("/WSspectrum")` 与 `# ── Audio RX WebSocket` 两个标记切出 handler 源码块再断言）。改这个 handler 时**必须保住那两个标记串**，否则该守卫测试会以一种很难读的方式失败。顺带把这两处文件名一起修正。
 - 新增：caps 白名单解析、未知档名回退 `high`、未声明连接永不得短帧、短帧长度=851 且首字节=0x01、每档 payload 速率、合成回退受分频闸约束。
 - `tests/test_listen_only.py:397`（`LISTEN_SPECTRUM_DIVIDER`）重钉为 `listen` 预设等价。
 - `tests/test_session_metrics.py`（`:206` 断言 `METERED_KINDS` 集合）随新增字段更新。
@@ -193,8 +205,11 @@ UI 入口固定放设置页，**不放状态行**（安卓状态行只剩 269/34
 
 | 位置 | 问题 |
 |---|---|
-| SDD **NFR-003** | "1701 B/帧 @ ~30 fps ≈ 51 KB/s" 两个数都错（真频谱 11.1 fps；51 KB/s 是退化态） |
-| SDD **AD-023** 范围段 | "控制面 <10 kbps 对比频谱 408 kbps" —— 408 是回退态，需改成区间并注明两口径 |
+| SDD **§9.2.4**（`09-architecture-overview.md:47-50`） | 定义了 v1=851 / v2=1701 两种格式，但 **v2 从未上过线**（无任何代码发 `0x02`，且改了会杀 iOS）⇒ 本设计把 v1 落实，并把 v2 标为**已废弃命名**，避免后人以为可以"切到 v2" |
+| SDD **NFR-003** | 两处错：①"~1701 B @ ~30fps ≈ 51 KB/s"（真频谱实测 11.1 fps；51 KB/s 是退化态）②"~851 bytes/frame fallback" —— **回退态同样是 1701 B**（走同一个 `get_spectrum_binary()`），该数字从未为真 |
+| SDD **§9.2.4 分频段** | "listener throttled to every Nth frame (~10 Hz)、省三分之二" 只在回退态成立；真频谱 11.1 fps 下 ÷3 实际是 **3.7 Hz**，省的仍是三分之二（分频按比例，与帧源无关），但 "~10 Hz" 这个绝对值是错的 |
+| SDD **AD-023** 范围段（`08-architecture-decisions.md:385`） | "控制面 <10 kbps，对比频谱 408 kbps" —— 408 是回退态；且这是 payload 口径，非线上口径 |
+| SDD **§01 / §03 / §04** | 三处都把 `/WSspectrum` 写成 "v1=851B wf1, v2=1701B wf1+wf2" + "~30fps"，需与上面一起对齐 |
 | SDD §9.1 / §12.5.3 | 帧格式与速率描述随 shape 可选而变 |
 | `AGENTS.md` server.py 行 | 补 `/WSspectrum` 档位语义 |
 | `server.py:1517` docstring | "Runs at 5 fps" 陈旧 |
@@ -202,7 +217,8 @@ UI 入口固定放设置页，**不放状态行**（安卓状态行只剩 269/34
 | `docs/IOS_OPUS_INTEGRATION.md:64` | 同上 |
 | `scope_handler.py:434` / `listen.js` / `SpectrumProcessor.swift` 注释 | 帧长不再恒为 1701，注释要写"1701 或 851" |
 | **跨仓 `mrrc_hub`** `NFR-H007` / `AD-H14` | 单会话 0.48 Mbps、频谱占 86% 建在 30 fps 假设上；实测真频谱 151 kbps payload / 占 72%，且改为档位可配。hub 扇出门槛的输入数据本身需修正 |
-| `CHANGELOG.md` + `MRRC.iss` `MyAppVersion` | 按 mrrc-release 的权威链一起动 |
+| `CHANGELOG.md` + `packaging/windows/MRRC-Modern.iss` | 版本权威链：CHANGELOG 顶部条目是**唯一真相**（`release-artifacts.json` 的 `app_version_source`），`iss-version` / `website-cards-en` / `website-cards-zh` 三条规则要求 `.iss` 与官网中英下载卡一起动；SDD 侧 `SDD/14-version-history.md` 首行是 V 号权威，`SDD/README.md:50` 镜像它。`tests/test_release_artifacts.py` 会在套件内跑这个校验器 —— **漏一处就直接红** |
+| `AGENTS.md:104` / `docs/PROJECT_MAP.md:39` | 都引用了不存在的 `tests/test_ws_protocol.py`（真名 `test_server_ws_protocol.py`），见 §7 |
 
 ## 9. 风险与回滚
 

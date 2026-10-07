@@ -47,13 +47,15 @@ Compose 重组：`RadioState` 是可变普通类，UI 订阅 `MainViewModel.vers
 - 控制通道 `/WSradio`（JSON）：下行 `fullState`（data+bands+modes+memChannels+filterTables+atr1000Enabled）、`stateUpdate`（fields 增量+dirty）、`memChannels`、`error`、`pong`；上行 `{"type":"set","field","value"}`、`{"type":"ping"}` 每 2s（`ConnectionManager` 心跳）、`{"type":"get","field":"fullState"}`、`{"type":"memSave","channels":[...]}`。
 - **可设字段**：`freq` `vfo_a_freq` `vfo_b_freq` `mode` `ptt` `tune` `filter`/`filter_width` `af_gain` `rf_power` `preamp` `att`/`attenuator` `nb`/`noise_blanker` `nr`/`noise_reduction` `an`/`auto_notch` `comp`/`compressor` `tuner` `vfo` `split` `power` `squelch` `mic_gain` `scope_span` `scope_speed` `scope_mode` `nb_level` `nr_level` `comp_level`/`compressor_level` `monitor` `vox` `break_in` `key_speed` `cw_pitch` `rit` `rit_freq` `xit`。字段名以 `server.py:_execute_set_command` 为准，**禁止自创**。
 - 音频：帧 = 1B tag（`0x00` PCM Int16 LE / `0x01` Opus）+ payload；48k 单声道 20ms（960 样本）。TX 恒 Opus CBR 64kbps；RX 解码 Opus 或直通 PCM。TX 文本帧 `s:` 停止、`m:` 设置。
-- 频谱：`/WSspectrum` 二进制 1701B = 1B version(0x01) + 850B wf1 + 850B wf2；实际 ~5fps（`server.py:285`）。
+- 频谱：`/WSspectrum` 二进制 1701B = 1B version(0x01) + 850B wf1 + 850B wf2；**实际 30fps**（`SPECTRUM_BROADCAST_FPS = 30`，`interval = 1.0/30`，硬编码无 env 覆盖）→ ≈51KB/s ≈ **180MB/小时**。
+  - ⚠️ `_broadcast_spectrum_loop` 的 docstring 写着 "Runs at 5 fps (200ms interval)" 是**陈旧的**（常量早改成 30 了）；只读会话另有 `LISTEN_SPECTRUM_DIVIDER = 3` 降到 ~10fps。引用帧率前先读常量，别信 docstring。
 - 记忆频道：**6 槽** + `null` 补空，键 `label`（`MemoryChannels.parse/toJson`）。
+- **记忆格只显示频率**（2026-10-07 用户定案）：格内单个 `%.3f`（空槽 `M1`…`M6`），标签只在 `⋯` 管理对话框里看。字号上限 11sp（标准档 13sp），格高 34dp（标准档 40dp）。
 - **记忆格文字必须按格宽自适应**（紧凑档一行 6 格 + `⋯`，360dp 屏上每格只剩 47dp）：
-  - 字号 = `ScreenFit.memoryLabelFontSize(标签, 格宽, compact)`，公式 `格宽/(字符数×em)`，**CJK 按 1.0em、半角 0.62em**（中文标签按半角算会溢出），夹在 5.5sp ~ 档位上限
-  - 必须 `maxLines = 1` + `softWrap = false` + `TextOverflow.Ellipsis`：放不下就 `40m SSB…`，**绝不换行**（格高固定，换行会把整格顶变形）
-  - 标签是用户自己存的（`40m SSB Contest`/中文/呼号），所以**不能写死字号**
-  - 守卫：`ScreenFitTest` 的不变量（任何标签要么放得下、要么已到下限交给省略号）+ `MainScreenComposeTest` 的实测断言（逐格量真实文字宽度 ≤ 格宽且单行，360dp 最窄机）
+  - 字号 = `ScreenFit.memoryFreqFontSize(文本, 格宽, compact)`，公式 `格宽/(字符数×0.62)`（等宽数字恒半角），夹在 5.5sp ~ 档位上限
+  - 必须 `maxLines = 1` + `softWrap = false` + `TextOverflow.Ellipsis`：放不下就省略号，**绝不换行**（格高固定，换行会把整格顶变形）
+  - 守卫：`ScreenFitTest` 的不变量（要么放得下、要么已到下限交给省略号）+ `MainScreenComposeTest` 的实测断言（逐格：只有一个文本节点、内容等于预期频率、宽度 ≤ 格宽、单行；长/中文标签在主屏一处都不出现）
+  - ⚠️ 若将来恢复显示标签：`memoryLabelFontSize` 已随标签删除，需重新实现并按 **CJK 1.0em / 半角 0.62em** 估宽（中文按半角算必溢出）
 - ATR1000：`/WSatr1000` 可选，服务端禁用时 close 4000；用 `fullState.atr1000Enabled` 决定是否显示天调 UI。
 - **服务端录音（AD-017，v1.15.0 起）**：`{"type":"set","field":"recording","value":true/false}` 启停；下行 `recordingState`（recording/freq_hz/started_at/duration/name/bytes/dropped，录制中 1 Hz），`fullState.recording` 给快照。App 有完整录音面板（启停/列表合计/本地下载播放+seek/导出/删除）。
 - **机型 key**：`MRRC_RADIO_MODEL` 共 10 个（`ft710` `ic7300` `ic7300mk2` `ic705` `ic7610` `ic7760` `ftdx10` `ftdx101d` `ftdx101mp` `ftx1`）；后六个默认拒绝发射，需服务端 `MRRC_ALLOW_UNVERIFIED_TX=1`。机型由服务端 env 决定，客户端不选。
@@ -123,6 +125,10 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 - **瀑布必须增量绘制**：`SpectrumProcessor` 每帧 `addLast(new)+removeFirst()`，列表整体位移一格，所以旧写法每帧重建整幅（850×120＝102,000 次查表 + 408KB 分配 + 整幅 setPixels，全在主线程 draw）→ 荣耀这类中端机卡到把音频线程饿死。现用 `WaterfallRingBuffer`（环形位图，只写新行）+ `WaterfallRing`（纯函数下标数学，有测试）。**不要改回"每帧重建"**。
 - **频谱流只能在子组件里订阅**：`waterfall`/`fft` 每帧都变，在主屏顶层 `collectAsState()` 会让整屏（FlowRow/S 表弧/仪表/记忆格）以 20~30Hz 重组。订阅点在 `SpectrumPanel` 内。
+- **后台必须停频谱通道**：30fps × 1701B ≈ 51KB/s ≈ **180MB/小时**，退后台看不见瀑布还一直收纯属浪费流量与 CPU。链路：`MainActivity.onStart/onStop` → `vm.onAppForeground()` → `ConnectionManager.setSpectrumPaused()`。
+  - 🔒 **暂停期间 `/WSspectrum` 不能计入连接判据**（纯函数 `requiredChannels(listenOnly, spectrumPaused)`，有测试）：否则 `isConnected` 变 false → `syncBackground()` 依赖它 → **后台接收被自己关掉**，用户以为在收音其实早断了。
+  - 后台期间的会话重连不能把频谱又拉起来（`start()` 要尊重暂停状态）；诊断摘要用 `S(p)` 区分"主动暂停"与"断了"。
+  - 不影响音频与 PTT：RX 播放只看 `/WSaudioRX`、PTT 只看 `/WSradio`（通道分离原则）。
 - **音频线程必须设优先级**：`playLoop()` 第一行 `Process.setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)`（在该线程内调用才生效）。UI 卡顿时它是"声音出不来"的最后一道防线。
 - **draw 阶段不做分配**：Canvas 里别 `IntArray(...)`/`Path()` 每帧新建；位图、LUT、文本 layout 都 `remember` 住。
 

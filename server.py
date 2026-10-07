@@ -3820,10 +3820,16 @@ async def ws_radio(ws: WebSocket):
 
 @app.websocket("/WSspectrum")
 async def ws_spectrum(ws: WebSocket):
-    """Binary spectrum data endpoint.  Sends waterfall rows at ~30 fps.
+    """Binary spectrum data endpoint.
 
-    Format: 1-byte version (0x01) + 850 bytes wf1 spectrum + 850 bytes wf2.
-    Total: 1701 bytes per frame.
+    Frame: 1-byte version (0x01) + 850 bytes wf1, plus 850 bytes wf2 on the
+    full shape (1701 B) and absent on the wf1 shape (851 B).  Which shape and
+    how often is this socket's profile — see spectrum_profile (AD-025).  The
+    loop ticks at SPECTRUM_BROADCAST_FPS (30 Hz); real scope frames go out only
+    when the hardware counter advances (~11 fps measured on the FT-710).
+
+    A socket that never sends ``spectrumCaps`` gets the full-rate 1701 B
+    stream, byte-for-byte what every client before AD-025 received.
     """
     token = _token_from_ws_handshake(ws)
     if not token or token not in _auth_tokens:
@@ -3840,8 +3846,23 @@ async def ws_spectrum(ws: WebSocket):
         await _scope_producer.start()
     try:
         while True:
-            # Keep connection alive, actual data sent by broadcast loop
-            await ws.receive_text()
+            # Keep connection alive, actual data sent by broadcast loop.
+            # Text frames used to be discarded; they now carry this socket's
+            # bandwidth tier (design §5.2).  Anything else — a ping, malformed
+            # JSON, an unknown tier name — stays as harmless as silence.
+            profile = spectrum_profile.parse_caps(await ws.receive_text())
+            if profile and _spectrum_profiles.get(ws) != profile:
+                _spectrum_profiles[ws] = profile
+                tier = spectrum_profile.PROFILES[profile]
+                frame_len = (spectrum_profile.SHORT_FRAME_BYTES
+                             if tier.shape == spectrum_profile.SHAPE_WF1
+                             else spectrum_profile.FULL_FRAME_BYTES)
+                logger.info(
+                    "Spectrum profile %s for %s socket: %s frame (%d B), divider %d",
+                    profile,
+                    "listener" if ws in _listen_spectrum_clients else "operator",
+                    tier.shape, frame_len, tier.divider,
+                )
     except WebSocketDisconnect:
         pass
     except Exception:
@@ -3849,6 +3870,8 @@ async def ws_spectrum(ws: WebSocket):
     finally:
         spectrum_clients.discard(ws)
         _listen_spectrum_clients.discard(ws)
+        # Per-socket tier state goes with the socket — three cleanups, not two.
+        _spectrum_profiles.pop(ws, None)
         metrics.close(_role_for_token(token), "spectrum", token)
         logger.info("Spectrum client disconnected (%d remain)", len(spectrum_clients))
         if not spectrum_clients and _scope_producer is not None:

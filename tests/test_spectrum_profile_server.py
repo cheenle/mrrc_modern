@@ -9,6 +9,7 @@ The gate must keep two promises:
 """
 
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import server
@@ -166,6 +167,146 @@ class FallbackDividerTests(_FanoutTestBase):
             await server._spectrum_fanout(self.variants, tick)
         self.assertEqual(len(self.high.frames), 30)
         self.assertEqual(len(self.low.frames), 7)    # 4,8,...,28
+
+
+class CapsHandlingTests(unittest.TestCase):
+    """The handler's text-frame loop turns caps into a per-socket profile."""
+
+    def _handler_block(self) -> str:
+        src = Path("server.py").read_text(encoding="utf-8")
+        block = src.split('@app.websocket("/WSspectrum")', 1)[1]
+        return block.split("# ── Audio RX WebSocket", 1)[0]
+
+    def test_handler_parses_caps_into_the_profile_table(self):
+        block = self._handler_block()
+        self.assertIn("spectrum_profile.parse_caps(await ws.receive_text())", block)
+        self.assertIn("_spectrum_profiles[ws] = profile", block)
+
+    def test_handler_drops_per_socket_state_on_disconnect(self):
+        """Profile entries must go with the socket: three cleanups, not two."""
+        block = self._handler_block()
+        self.assertIn("spectrum_clients.discard(ws)", block)
+        self.assertIn("_listen_spectrum_clients.discard(ws)", block)
+        self.assertIn("_spectrum_profiles.pop(ws, None)", block)
+
+    def test_handler_keeps_the_scope_producer_guard_markers(self):
+        """tests/test_server_ws_protocol.py:334 slices on these two markers."""
+        block = self._handler_block()
+        self.assertIn("await _scope_producer.start()", block)
+        self.assertIn("await _scope_producer.stop()", block)
+
+    def test_handler_keeps_the_metrics_close_and_second_except(self):
+        """The rewrite must not lose the session close or the catch-all except."""
+        block = self._handler_block()
+        self.assertIn('metrics.close(_role_for_token(token), "spectrum", token)', block)
+        self.assertIn("except Exception:", block)
+
+    def test_handler_logs_the_negotiated_tier(self):
+        """Support triage needs to see which tier a socket ended up on."""
+        self.assertIn('"Spectrum profile %s', self._handler_block())
+
+    def test_listen_tier_is_not_client_selectable(self):
+        self.assertIsNone(sp.parse_caps('{"type":"spectrumCaps","profile":"listen"}'))
+        self.assertEqual(sp.parse_caps('{"type":"spectrumCaps","profile":"mid"}'), "mid")
+
+
+class _CapsWS:
+    """Fake upgrade socket that drives ws_spectrum for real.
+
+    Source assertions can only prove the strings exist; this proves the whole
+    path works — handshake auth, caps -> profile table, and the cleanup that
+    must happen when the socket goes away.
+    """
+
+    def __init__(self, texts: list, token: str = "op-token"):
+        self.headers = {"authorization": f"Bearer {token}"}
+        self.cookies: dict = {}
+        self.query_params: dict = {}
+        self._texts = list(texts)
+        self.accepted = False
+        self.closed_with = None
+        self.tiers_seen_while_open: list = []
+
+    async def accept(self):
+        self.accepted = True
+
+    async def close(self, code=1000, reason=None):
+        self.closed_with = (code, reason)
+
+    async def receive_text(self) -> str:
+        # Record the negotiated tier while the socket is still open: this is the
+        # only way to observe it before the finally-block pops the entry.
+        self.tiers_seen_while_open.append(server._profile_for(self))
+        if self._texts:
+            return self._texts.pop(0)
+        raise server.WebSocketDisconnect(code=1000)
+
+
+class CapsNegotiationTests(unittest.IsolatedAsyncioTestCase):
+    """End-to-end: a real call into ws_spectrum, no network."""
+
+    def setUp(self):
+        self._patches = [
+            mock.patch.object(server, "_scope_producer", None),
+            mock.patch.object(server, "metrics", session_metrics.SessionMetrics()),
+            mock.patch.object(server, "spectrum_clients", set()),
+            mock.patch.object(server, "_listen_spectrum_clients", set()),
+            mock.patch.object(server, "_spectrum_profiles", {}),
+            mock.patch.object(server, "_auth_tokens", {"op-token", "listen-token"}),
+            mock.patch.object(server, "_listen_tokens", {"listen-token"}),
+        ]
+        for p in self._patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self._patches:
+            p.stop()
+
+    async def test_caps_set_the_tier_and_disconnect_clears_it(self):
+        ws = _CapsWS(['{"type":"spectrumCaps","profile":"mid"}'])
+        await server.ws_spectrum(ws)
+
+        self.assertTrue(ws.accepted)
+        # While the socket was open the negotiated tier was in force ... (the
+        # first receive_text happens before the caps frame is processed, so the
+        # socket starts on the default and moves to mid on the next one)
+        self.assertEqual(ws.tiers_seen_while_open, ["high", "mid"])
+        # ... and after it closed nothing per-socket survived.
+        self.assertNotIn(ws, server._spectrum_profiles)
+        self.assertNotIn(ws, server.spectrum_clients)
+        self.assertNotIn(ws, server._listen_spectrum_clients)
+
+    async def test_undeclared_socket_leaves_no_tier_entry(self):
+        """No caps => no entry => the role default => today's 1701 B stream."""
+        ws = _CapsWS(["", "not json"])
+        await server.ws_spectrum(ws)
+        self.assertEqual(server._spectrum_profiles, {})
+        self.assertEqual(server._profile_for(ws), "high")
+
+    async def test_unknown_tier_name_is_ignored_not_adopted(self):
+        ws = _CapsWS(['{"type":"spectrumCaps","profile":"turbo"}'])
+        await server.ws_spectrum(ws)
+        self.assertEqual(server._spectrum_profiles, {})
+
+    async def test_listener_socket_defaults_to_the_listen_tier(self):
+        """A listener that declares nothing keeps the /3 full frames of v1.25.2."""
+        ws = _CapsWS([], token="listen-token")
+        await server.ws_spectrum(ws)
+        self.assertEqual(ws.tiers_seen_while_open, ["listen"])
+        self.assertIsNone(ws.closed_with)          # accepted, then clean disconnect
+        self.assertNotIn(ws, server._listen_spectrum_clients)
+
+    async def test_listener_can_opt_into_a_tier(self):
+        ws = _CapsWS(['{"type":"spectrumCaps","profile":"low"}'], token="listen-token")
+        await server.ws_spectrum(ws)
+        self.assertEqual(ws.tiers_seen_while_open, ["listen", "low"])
+
+    async def test_unauthenticated_socket_is_refused_before_any_tier_state(self):
+        ws = _CapsWS([], token="nope")
+        await server.ws_spectrum(ws)
+        self.assertEqual(ws.closed_with, (4001, "Unauthorized"))
+        self.assertFalse(ws.accepted)
+        self.assertEqual(server._spectrum_profiles, {})
 
 
 if __name__ == "__main__":

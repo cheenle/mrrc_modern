@@ -103,8 +103,17 @@ class MainScreenComposeTest {
         rule.onNodeWithText("07.116.95", useUnmergedTree = true).assertExists()
         // 显示屏上沿：波段 · 模式 读数（band_name + mode_name 两个字段都要有）
         rule.onNodeWithText("40m · USB", useUnmergedTree = true).assertExists()
-        // VFO 红标（7.117）与记忆格 M1 的频率同值 → 两处都在
-        rule.onAllNodesWithText("7.117", useUnmergedTree = true).assertCountEquals(2)
+        // 频谱下那行 VFO 红字已删（与主频重复）→ 7.117 只剩记忆格 M1 一处
+        rule.onAllNodesWithText("7.117", useUnmergedTree = true).assertCountEquals(1)
+        // 分区标题全部去掉（用户要求：各区域功能已知，标题白占空间）
+        rule.onAllNodesWithText("仪表", useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithText("控制", useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithText("调谐", useUnmergedTree = true).assertCountEquals(0)
+        // 记忆管理入口必须还在：v1.1.18 把它藏在分区标题的 trailing 里，
+        // 紧凑档标题一隐藏，手机上 MemoryManagerDialog 就再也打不开了
+        rule.onNodeWithText("⋯", useUnmergedTree = true).assertExists()
+        // 音量行的 "Vol" 标签也去掉了
+        rule.onAllNodesWithText("Vol", useUnmergedTree = true).assertCountEquals(0)
         // 底栏 PTT
         rule.onNodeWithText("PTT", useUnmergedTree = true).assertExists()
         // TUNE 两处：底栏那个 + ATR 行那个（本用例 atr1000Enabled=true）

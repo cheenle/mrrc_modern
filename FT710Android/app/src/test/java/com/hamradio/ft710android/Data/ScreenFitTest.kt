@@ -1,6 +1,7 @@
 package com.hamradio.ft710android.Data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,8 +57,12 @@ class ScreenFitTest {
         val compact = ScreenFit.budget(360, 744, 40, 110, true, true, true)
         // 同样内容按标准档算（假装屏高够）
         val std = ScreenFit.budget(360, 1200, 40, 110, true, true, true)
-        assertTrue("紧凑档 ${compact.total} 应明显小于标准档 ${std.total}", compact.total + 120 < std.total)
-        assertTrue(!compact.scrollArea.let { ScreenFit.showSectionLabels(true) })
+        assertTrue("紧凑档 ${compact.total} 应明显小于标准档 ${std.total}", compact.total + 100 < std.total)
+        // 分区标题全档位都不显示（用户要求：各区域功能已知，标题白占空间）
+        assertFalse(ScreenFit.showSectionLabels(true))
+        assertFalse(ScreenFit.showSectionLabels(false))
+        assertEquals(0, ScreenFit.sectionLabelH(true))
+        assertEquals(0, ScreenFit.sectionLabelH(false))
     }
 
     /**
@@ -75,9 +80,9 @@ class ScreenFitTest {
         val mate = ScreenFit.budget(432, 880, 40, 110, true, true, true)
         assertEquals(ScreenFit.SPECTRUM_BONUS_CAP_DP, mate.spectrumBonus)
         assertTrue("给了余量后仍必须一屏：${mate.total} vs 880", mate.total <= 880)
-        // 小米/红米 360×728（三键导航）余量只有个位数 → bonus 就等于余量，绝不超
+        // 小米/红米 360×728（三键导航）是支持下限：余量仍然不大，bonus 恰好等于余量、绝不超
         val tight = ScreenFit.budget(360, 728, 40, 110, true, true, true)
-        assertTrue("紧机型余量应很小：${tight.spectrumBonus}", tight.spectrumBonus <= 12)
+        assertTrue("紧机型余量应很小：${tight.spectrumBonus}", tight.spectrumBonus <= 30)
         assertEquals(728 - (tight.total - tight.spectrumBonus), tight.spectrumBonus)
     }
 
@@ -108,8 +113,9 @@ class ScreenFitTest {
         assertEquals(1, ScreenFit.statusLines(320, 0))
         // 加两个条件芯片（只读 + 无声）后，360dp 仍是一行
         assertEquals(1, ScreenFit.statusLines(360, 2))
-        // 只有窄到 285dp 以下才折行（没有这种真机；FlowRow 兜底不裁切）
-        assertEquals(2, ScreenFit.statusLines(280, 0))
+        // v1.1.21 瘦身（去 RTT·J / Serial 文字 / 录音二字）后内容宽 210dp：
+        // 只有窄到 226dp 以下才折行（没有这种真机；FlowRow 兜底不裁切）
+        assertEquals(2, ScreenFit.statusLines(220, 0))
     }
 
     @Test fun `memory grid is a single row of six in compact mode`() {

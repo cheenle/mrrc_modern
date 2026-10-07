@@ -33,18 +33,19 @@ object ScreenFit {
     /** 滚动区上下内边距（每侧）。 */
     const val PAGE_PAD_V = 6
 
-    /** 频谱显示屏除瀑布外的固定开销：标尺 15 + VFO 红字 15 + 分隔 1。 */
-    const val SPECTRUM_CHROME_DP = 31
+    /** 频谱显示屏除瀑布外的固定开销：标尺 15 + 分隔 1（VFO 红字已删，与主频重复）。 */
+    const val SPECTRUM_CHROME_DP = 16
 
     /** 状态行行高（StatusItem）与上边距。 */
     const val STATUS_ITEM_H = 26
     const val STATUS_TOP_PAD = 5
 
     /**
-     * 状态行内容估宽（dp）：☰ 录音 RX/TX 速率 RTT·J 状态点 ⛶ ⏻ + 间距。
-     * 用来估"会不会折成两行"——8.5~9sp 下实测约 269dp（见 CHANGELOG v1.1.16）。
+     * 状态行内容估宽（dp）：☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻ + 间距。
+     * 用来估"会不会折成两行"。v1.1.21 瘦身：去掉 RTT·J（移到诊断行）、
+     * "Serial" 文字（只留状态点）、"录音"两字（改 ⏺ 图标）→ 从 269 降到 210。
      */
-    const val STATUS_CONTENT_W = 269
+    const val STATUS_CONTENT_W = 210
 
     /** 只读/无声等条件芯片的追加宽度。 */
     const val STATUS_EXTRA_CHIP_W = 30
@@ -85,8 +86,12 @@ object ScreenFit {
     fun panelPadH(compact: Boolean): Int = if (compact) 8 else 10
     fun panelPadV(compact: Boolean): Int = if (compact) 7 else 9
 
-    /** 紧凑档不显示分区标题（省 4×(13+内间距)dp），靠卡片分组本身区分。 */
-    fun showSectionLabels(compact: Boolean): Boolean = !compact
+    /**
+     * 分区标题：**全档位都不显示**（用户 2026-10-06 明确要求：各区域功能用户都知道，
+     * 标题白占一行）。卡片分组 + 控件本身的文字已经足够说明用途。
+     * 保留这个函数是为了预算公式可读，以及将来若要恢复标题只需改这里。
+     */
+    fun showSectionLabels(compact: Boolean): Boolean = false
 
     /** 卡片之间的竖向节奏。 */
     fun gap(compact: Boolean): Int = if (compact) 4 else 8

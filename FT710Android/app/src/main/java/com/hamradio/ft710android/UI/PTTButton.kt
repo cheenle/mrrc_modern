@@ -25,7 +25,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamradio.ft710android.PTT.PTTManager
@@ -52,11 +51,6 @@ fun PTTButton(manager: PTTManager, modifier: Modifier = Modifier) {
         targetValue = if (isTX) Color(0xFFFF5A4E) else Color(0xFFDC2626),
         animationSpec = tween(120),
         label = "pttFace",
-    )
-    val label by animateColorAsState(
-        targetValue = if (isTX) MrrcColors.Danger else Color(0xFF9AA0A6),
-        animationSpec = tween(120),
-        label = "pttLabel",
     )
 
     Box(
@@ -99,16 +93,6 @@ fun PTTButton(manager: PTTManager, modifier: Modifier = Modifier) {
             fontSize = if (isTX) 23.sp else 22.sp,
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 2.sp,
-            textAlign = TextAlign.Center,
         )
-        if (!isTX) {
-            Text(
-                "按住说话",
-                color = label,
-                fontSize = 10.sp,
-                letterSpacing = 1.sp,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 7.dp),
-            )
-        }
     }
 }

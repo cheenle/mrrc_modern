@@ -219,10 +219,12 @@ fun MainScreen(
                                 Box(Modifier.size(5.dp).background(MrrcColors.Danger, CircleShape))
                                 Spacer(Modifier.width(4.dp))
                             }
+                            // 图标入口（省掉"录音"两个字）；录音中显示时长
                             Text(
-                                if (rec.recording) fmtSeconds(rec.duration) else "录音",
+                                if (rec.recording) fmtSeconds(rec.duration) else "⏺",
                                 color = if (rec.recording) Color(0xFFFF6B6B) else MrrcColors.TextSecondary,
-                                fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                                fontSize = if (rec.recording) 9.sp else 12.sp,
+                                fontWeight = FontWeight.SemiBold,
                             )
                         }
                     }
@@ -243,12 +245,6 @@ fun MainScreen(
                         fontSize = 8.5.sp, fontFamily = MonoFont,
                     )
                 }
-                StatusItem {
-                    Text(
-                        "RTT${rttMs ?: "--"}·J${vm.audioBufferMs()}",
-                        color = MrrcColors.TextMuted, fontSize = 8.5.sp, fontFamily = MonoFont,
-                    )
-                }
                 if (state.rxAudioSilent) {
                     StatusItem {
                         Text(
@@ -259,12 +255,16 @@ fun MainScreen(
                         )
                     }
                 }
+                // 连接状态点（点按出文字说明；不再常驻 "Serial" 三个字）
                 StatusItem {
                     Box(
-                        Modifier.size(7.dp)
+                        Modifier.size(8.dp)
                             .background(if (connected) MrrcColors.Success else MrrcColors.TextMuted, CircleShape)
                             .clickable {
-                                vm.showNotice(if (connected) "电台串口已连接" else "电台串口未连接（服务端与电台之间）")
+                                vm.showNotice(
+                                    if (connected) "电台串口已连接"
+                                    else "电台串口未连接（服务端与电台之间）"
+                                )
                             },
                     )
                 }
@@ -296,7 +296,6 @@ fun MainScreen(
             SpectrumPanel(vm, prefs, spanHz, state.activeFrequency, spectrumBonus)
 
             Panel(m.panelPadH, m.panelPadV, m.innerGap) {
-                if (m.showSectionLabels) SectionLabel("仪表")
                 // ── 仪表：PWR/ALC 两列，SWR/Id/Vd 三列 ───────────────────
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MeterCell("PWR", state.powerWatts, 100f, MrrcColors.TextPrimary, "%.1f W".format(Locale.US, state.powerWatts), Modifier.weight(1f))
@@ -340,7 +339,6 @@ fun MainScreen(
             }
 
             Panel(m.panelPadH, m.panelPadV, m.innerGap) {
-                if (m.showSectionLabels) SectionLabel("控制")
                 // ── 五键行：模式 / 波段 / 滤波 / ATT / PRE ────────────────
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     PadBtn("模式", Modifier.weight(1f), onLongClick = { showModePicker = true }) {
@@ -374,7 +372,6 @@ fun MainScreen(
             }
 
             Panel(m.panelPadH, m.panelPadV, m.innerGap) {
-                if (m.showSectionLabels) SectionLabel("调谐")
                 // ── 音量 ─────────────────────────────────────────────────
                 // ── 音量（本机播放音量，web 🔊 Vol 语义）──────────────────
                 VolumeRow(prefs.afVol, onAfVol)
@@ -401,17 +398,10 @@ fun MainScreen(
 
             // ── 记忆频道 3×2 ─────────────────────────────────────────
             Panel(m.panelPadH, m.panelPadV, m.innerGap) {
-                if (m.showSectionLabels) SectionLabel(
-                    "记忆频道 · 长按保存 / 点按调用",
-                    trailing = {
-                        Text("管理", color = MrrcColors.Accent, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { showMemManager = true }.padding(horizontal = 4.dp))
-                    },
-                )
                 for (row in 0 until m.memoryRowsCount) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         for (col in 0 until m.memoryColumns) {
-                            val index = row * 3 + col
+                            val index = row * m.memoryColumns + col
                             val ch = mem.getOrNull(index)
                             val memShape = RoundedCornerShape(10.dp)
                             val memInteraction = remember(index) { MutableInteractionSource() }
@@ -455,12 +445,24 @@ fun MainScreen(
                                     } else {
                                         Text("M${index + 1}", color = MrrcColors.TextMuted,
                                             fontSize = if (m.compact) 9.5.sp else 11.sp, letterSpacing = 0.3.sp)
-                                        if (!m.compact) {
-                                            Text("空", color = MrrcColors.TextMuted.copy(alpha = 0.7f), fontSize = 9.sp)
-                                        }
                                     }
                                 }
                             }
+                        }
+                        // 记忆管理入口：图标，不占文字（原先藏在被删掉的分区标题里）
+                        if (row == 0) {
+                            Box(
+                                Modifier.width(26.dp).height(m.memoryCellHeight)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MrrcSurfaces.Key)
+                                    .border(1.dp, MrrcSurfaces.Stroke, RoundedCornerShape(10.dp))
+                                    .clickable { showMemManager = true },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("⋯", color = MrrcColors.Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Spacer(Modifier.width(26.dp))
                         }
                     }
                 }
@@ -675,12 +677,8 @@ private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFr
                 )
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(MrrcSurfaces.Hairline))
+            // 标尺本身就标了 VFO（红线+三角），不再重复一行频率数字
             FreqScaleCanvas(vfoFreq, spanHz, Modifier.fillMaxWidth().height(15.dp))
-            Text(
-                fmtMhzShort(vfoFreq), color = MrrcColors.Danger,
-                fontSize = 10.sp, fontFamily = MonoFont, textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().height(15.dp),
-            )
         }
     }
 }
@@ -864,13 +862,12 @@ private fun VolumeRow(afGain: Int, onCommit: (Int) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().height(LocalScreenMetrics.current.sliderRowHeight),
     ) {
-        Text("Vol", color = MrrcColors.TextSecondary, fontSize = 11.sp)
         Slider(
             value = local ?: afGain.toFloat(),
             onValueChange = { local = it },
             onValueChangeFinished = { local?.let { v -> onCommit(v.toInt()) }; local = null },
             valueRange = 0f..255f,
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+            modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp),
             colors = SliderDefaults.colors(
                 thumbColor = MrrcColors.Accent,
                 activeTrackColor = MrrcColors.Accent,
@@ -920,7 +917,6 @@ private fun FreqText(hz: Long, fitSp: Float, modifier: Modifier = Modifier) {
 internal fun fmtMhz(hz: Long): String =
     "%02d.%03d.%02d".format(Locale.US, hz / 1_000_000, (hz / 1000) % 1000, (hz % 1000) / 10)
 
-internal fun fmtMhzShort(hz: Long): String = "%.3f".format(Locale.US, hz / 1e6)
 
 internal fun fmtFilter(hz: Int): String =
     if (hz >= 1000) "%.1fk".format(Locale.US, hz / 1000f) else "${hz}Hz"

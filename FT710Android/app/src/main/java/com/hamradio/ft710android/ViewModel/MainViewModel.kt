@@ -273,6 +273,7 @@ class MainViewModel(
                 _rttMs.value = connectionManager.lastRttMs()
                 // 设备侧音频链路边界（真机无声事故的取证行）
                 _diag.value = (rxPlayer?.stats() ?: "A:none") +
+                    " RTT:${_rttMs.value ?: -1}" +
                     " S:${_waterfall.value.size} ch:${connectionManager.channelsSummary()}" +
                     " ${txCapture?.stats() ?: "TX[off]"} tx:${state.txStatus}"
             }

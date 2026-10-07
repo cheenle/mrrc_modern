@@ -138,7 +138,9 @@ cd FT710Android
 - **状态行必须一行装下**（用户明确要求）：加项前先估宽——当前 269dp、页面 344dp；放不下就并进已有项（如发射时速率段换成 `TX pk:`）或移到设置页。波段/模式/VFO 是"读数"，归显示屏上沿，不占状态行。
 - **面板 S 表示例**：弧用贝塞尔几何（`SMeter.arcX/arcY`），刻度/标签沿用 Web 的 `MARKERS/LABELS`，内部字号/线宽按区域短边比例缩放（手机与平板同一份代码）；画弧这种几何要抽纯函数并单测（`SMeterTest` 的逐标签宽度断言当场抓出 `+20/+40` 压字）。**仪表类 UI 一律按屏幕给独立区域**，不要挤在文字行高里。
 - **频谱标尺**：范围恒 `VFO ± span/2`，**绝不用 `scope_start_freq`**（服务端恒 CENTER，调谐后滞后）；步进/格式用 `Data/FreqScale.kt`（对齐 web `_freqStep`/`_formatFreqLabel`），刻度按真实位置画；QSY 必须同一公式。
-- **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**；录音入口是状态行芯片、天调参数并进 ATR 行。用户明确要求过"不要独占一行的小信息条"——新信息优先塞进状态行 FlowRow 或已有行。
+- **主屏不放说明性文字**（用户 2026-10-06 两次强调）：分区标题**全档位取消**（`ScreenFit.showSectionLabels()` 恒 false）、频谱下不重复 VFO 频率（标尺已有红线+三角）、状态行只留 `☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻`（内容估宽 210dp）、PTT 无副标、音量行无 `Vol` 标签、记忆格无「空」字。诊断数字（RTT/J）进设置页诊断行，不占状态行。机型名/徽章/诊断行也都在设置页。
+- **任何入口不得藏在分区标题的 `trailing` 里**：v1.1.18 把记忆「管理」写在 `SectionLabel(trailing=…)`，紧凑档标题一隐藏 → 手机上 `MemoryManagerDialog` 彻底打不开（`showMemManager=true` 只有一个触发点）。要入口就给图标按钮（现在是记忆格行末的 `⋯`，26dp 无文字；标准档第二行用等宽 `Spacer` 保持列对齐），并在 Compose 冒烟测试里断言它存在。
+- 记忆格列数由 `m.memoryColumns` 决定（紧凑 1×6 / 标准 2×3），索引必须 `row * m.memoryColumns + col`，别写死 3。
 - **字号**：`☰` 15sp、模式徽章 9sp、状态行 VFO 芯片 9sp（`PadBtn(fontSize=…)`）；用户嫌顶栏字大。
 - **对齐手机端 Web，不发明**：令牌唯一来源 `static/ft710.css :root`（`UI/Theme.kt` 的 `MrrcColors`）；瀑布配色 = `WF_PALETTES`；S 表刻度 = `renderSMeter`；QSY 公式 = `wireScopeQSY`；频率输入解析 = `commitFreq`。
 - 大字号（如主频）要**按可用宽度自适应**（`BoxWithConstraints` 算 `maxWidth/字符数/0.62`），手机上不溢出、平板吃满。

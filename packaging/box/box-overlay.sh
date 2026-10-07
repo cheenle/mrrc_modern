@@ -6,7 +6,7 @@
 #
 # What is deliberately NOT here: anything needing hardware. The web password,
 # the serial port, the USB sound card and the self-signed certificate are all
-# resolved on the box's first boot by mrrc-firstboot (design §3.2). Baking a
+# resolved on the box's first boot by mrrc-firstboot (design §3.3). Baking a
 # guess in would produce a configuration that looks usable and cannot work.
 set -euo pipefail
 

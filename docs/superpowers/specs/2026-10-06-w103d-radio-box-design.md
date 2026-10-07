@@ -118,7 +118,7 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 | | 路线 1：U 盘试跑（先做，必须） | 路线 2：写 eMMC（验收通过后可选） |
 | --- | --- | --- |
 | 操作 | 写 U 盘/SD → 插盒子 → 盒子执行 `reboot update` | 先 `armbian-ddbr` 备份原厂整盘 → `armbian-install` |
-| eMMC | **一个字节不动** | 被覆盖，全部 32 GB 可用 |
+| eMMC | 分区与数据不动（u-boot 环境会被写，见 §3.2） | 被覆盖，全部 32 GB 可用 |
 | 回滚 | 拔 U 盘即回安卓 | 用操作者手上的**线刷固件包** + MaskROM 短接 |
 | 代价 | 占 1 个 USB 口；U 盘速度 | 无 |
 
@@ -126,7 +126,31 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 
 **变砖兜底不依赖厂商内容**：Amlogic 的 MaskROM 在 SoC BootROM 里，短接可重新进入刷写模式。
 
-### 3.2 构建期能做 / 不能做（chroot 内无硬件）
+### 3.2 U 盘启动到底改了什么（2026-10-08 从镜像里核实）
+
+镜像启动分区里的 `aml_autoscript` 是**原厂 u-boot 在 update 模式下运行**的脚本，它做的事是：
+
+```
+setenv bootcmd 'run start_autoscript; run storeboot'
+setenv start_autoscript '... SD 卡 → USB(0..3) → eMMC ...'
+setenv upgrade_step 2
+saveenv        # ← 写 u-boot 环境（在 eMMC 上）
+reboot
+```
+
+所以 **「eMMC 一个字节不动」是错的**：`saveenv` 确实会写 eMMC，写的是 **u-boot 环境变量**，不碰 Android
+的分区与数据。回滚仍然是「拔 U 盘即回安卓」（u-boot 在 U 盘上找不到脚本就走 eMMC，那条「优先 U 盘」的偏好
+没有 U 盘时无害），但性质是「改了一个无害的偏好」，不是「零写入」。
+
+随后 u-boot 从 U 盘加载 `s905_autoscript` → 读 `uEnv.txt`
+（`FDT=/dtb/amlogic/meson-g12a-w103d.dtb`、`console=ttyAML0,115200n8 console=tty0`）→ `booti` 内核。
+**控制台同时走串口与 HDMI**，所以刷机失败时接 HDMI 就能看到卡在哪。
+
+板级身份（`/etc/ophub-release` 与 ophub `model_database.conf` 一致）：`MODEL_ID=307`、
+`MODEL_NAME=ZTE-W103D`、`SOC=s905l3a`、`FDTFILE=meson-g12a-w103d.dtb`、启动器
+`u-boot-w103d.bin`（**所以 `armbian-install` 不要用 `-m yes` 换主线 u-boot**）、`BOARD=s905l3a-w103d`。
+
+### 3.3 构建期能做 / 不能做（chroot 内无硬件）
 
 | 构建期写入镜像 | 必须留到首启 |
 | --- | --- |

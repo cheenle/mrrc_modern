@@ -149,35 +149,35 @@ sync                               # 等它真的写完</code></pre>
 gzip -dc MRRC-Modern-1.25.4-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync</code></pre>
 <p>烧完把 U 盘<strong>安全弹出</strong>（macOS：<code>diskutil eject /dev/diskN</code>）。系统可能提示"此磁盘无法读取"—— <strong>那是正常的</strong>，镜像是 Linux 分区，Windows/macOS 读不懂。</p>
 <h2 id="5-让盒子从-u-盘启动-新机器最容易卡的一步">5. 让盒子从 U 盘启动（新机器最容易卡的一步）</h2>
-<p>原理：Amlogic 的引导链支持"从 USB 启动"。触发方式是<strong>让安卓以 <code>update</code> 模式重启</strong>。</p>
-<h3 id="手段一-adb-最可靠">手段一：adb（最可靠）</h3>
+<h3 id="原理-已从镜像里核实-不是猜的">原理：已从镜像里核实，不是猜的</h3>
+<p>原厂安卓的 u-boot 有一个 <strong>update 模式</strong>。进去以后它会到 U 盘上找并运行 <strong><code>aml_autoscript</code></strong>——这个脚本就在镜像的启动分区里，内容是：</p>
+<pre><code>setenv bootcmd 'run start_autoscript; run storeboot'
+setenv start_autoscript '... SD 卡 → USB(0..3) → eMMC ...'
+setenv upgrade_step 2
+saveenv        # 写入 u-boot 环境
+reboot</code></pre>
+<p><strong>它做的就是把启动顺序改成「先 U 盘/SD、再 eMMC」，存进 u-boot 环境，然后重启。</strong> 重启后 u-boot 从 U 盘加载 <code>s905_autoscript</code> → 读 <code>uEnv.txt</code>（里面写着本板的 <code>FDT=/dtb/amlogic/meson-g12a-w103d.dtb</code>）→ 引导 Linux 内核。</p>
+<p>所以整件事的关键只有一条：<strong>让原厂 u-boot 进 update 模式。</strong></p>
+<h3 id="更正一处说法">⚠️ 更正一处说法</h3>
+<p>之前写「eMMC 一个字节不动」<strong>不准确</strong>——上面的 <code>saveenv</code> <strong>确实会写 eMMC</strong>（写的是 u-boot 环境变量， 不是 Android 的分区数据）。</p>
+<p>准确的说法：<strong>不碰 Android 的分区与数据，只改 u-boot 的启动顺序偏好。</strong> 回滚依然简单（见下）。</p>
+<h3 id="三种触发方式-按独立性排">三种触发方式（按独立性排）</h3>
+<p><strong>① 复位孔（最不依赖原厂软件，第一次建议用它）</strong></p>
 <ol>
-<li>盒子接 HDMI + 网线，开机进安卓（<strong>先不要插 U 盘</strong>）。</li>
-<li>进安卓设置 → 关于 → <strong>连点"版本号"7 次</strong>打开开发者选项 → 打开 <strong>USB 调试</strong> / <strong>ADB 调试</strong>。</li>
-<li>电脑上：</li>
+<li>断电，U 盘插好</li>
+<li>用回形针按住复位孔里的按钮</li>
+<li>通电，按住约 10 秒再松手</li>
 </ol>
-<pre><code class="lang-bash">adb connect &lt;盒子IP&gt;:5555     # 端口可能是 5555，也可能要先在盒子上确认
-adb devices                   # 应该列出设备
+<p><strong>② adb（原厂安卓里打开了 USB/ADB 调试）</strong></p>
+<pre><code class="lang-bash">adb connect &lt;盒子IP&gt;:5555
 adb shell reboot update</code></pre>
-<ol>
-<li>盒子黑屏重启的一瞬间，<strong>立刻插上 U 盘</strong>（下一节说为什么要抢这个时机）。</li>
-</ol>
-<h3 id="手段二-盒子上的终端-app">手段二：盒子上的终端 App</h3>
-<p>如果安卓里已经装了终端/命令行 App，直接在盒子上敲：</p>
-<pre><code class="lang-bash">su -c 'reboot update'         # 或直接 reboot update</code></pre>
-<h3 id="手段三-复位孔-没有-adb-也没终端时">手段三：复位孔（没有 adb、也没终端时）</h3>
-<ol>
-<li><strong>先断电。</strong></li>
-<li>U 盘插好。</li>
-<li>用回形针按住<strong>复位孔里的按钮不放</strong>。</li>
-<li>通电，按住约 10 秒再松手。</li>
-</ol>
-<p>这会让机器直接进 update 模式并优先找 USB 设备。<strong>这条最不依赖原厂软件</strong>，建议第一次就用它。</p>
-<h3 id="时机为什么重要">时机为什么重要</h3>
-<p><code>reboot update</code> 之后引导链会去找 U 盘。<strong>U 盘最好在重启前就插好</strong>（手段三就是这么做的）； 手段一里插晚了就会错过，只能重来一次。</p>
+<p><strong>③ 盒子上的终端 App</strong></p>
+<pre><code class="lang-bash">su -c 'reboot update'</code></pre>
+<p><code>reboot update</code> 就是让安卓把 u-boot 的 <code>upgrade_step</code> 置位——u-boot 下次启动看到它就运行 U 盘上的 <code>aml_autoscript</code> ✅</p>
 <h3 id="成功的样子">成功的样子</h3>
-<p>屏幕上是 Linux 内核滚动日志（<strong>不再有安卓的开机动画</strong>）。第一次开机要几分钟：扩 rootfs、生成 SSH 密钥。</p>
-<blockquote><strong>回滚</strong>：断电 → 拔 U 盘 → 重新上电 = 回到原厂安卓。<strong>没有任何副作用</strong>，eMMC 一字节没动。</blockquote>
+<p><strong>HDMI 上是 Linux 内核日志</strong>（不再有安卓开机动画）。因为 <code>uEnv.txt</code> 里配的控制台是 <code>console=ttyAML0,115200n8 console=tty0</code>——<strong>串口和 HDMI 都能看</strong>，所以刷机失败时<strong>接上 HDMI 就能看到卡在哪</strong> ✅</p>
+<p>第一次开机要几分钟：扩 rootfs、生成 SSH 密钥。</p>
+<blockquote><strong>回滚</strong>：断电 → 拔 U 盘 → 上电。u-boot 在 U 盘上找不到脚本，走 eMMC → 回安卓。 （u-boot 环境里那条“优先 U 盘”的偏好还在，但没有 U 盘时它是无害的。）</blockquote>
 <h2 id="6-首启会自动完成什么">6. 首启会自动完成什么</h2>
 <p>镜像里已经烘好了不需要硬件的全部东西（用户、代码、venv、依赖、frpc、FTDI 库、11 份机型配置、systemd 单元）。 首启只做<strong>必须碰硬件</strong>的四件事：</p>
 <div class="table-scroll"><table>
@@ -315,8 +315,16 @@ tail -f /opt/mrrc_modern/logs/server-stdout.log # 服务 stdout</code></pre>
 <pre><code class="lang-bash">bash /tmp/verify.sh        # §12 那份，随时可重跑</code></pre>
 <h2 id="17-写进-emmc-可选-验收通过之后再做">17. 写进 eMMC（可选，验收通过之后再做）</h2>
 <p>U 盘路线跑通、验收过了，才考虑固化。<strong>这一步会覆盖 eMMC。</strong></p>
-<pre><code class="lang-bash">armbian-ddbr        # 先把原厂安卓整盘备份出来（务必先做！）
-armbian-install     # 把 Armbian 写进 eMMC</code></pre>
+<pre><code class="lang-bash">armbian-ddbr        # 先把原厂整盘备份出来（务必先做！）
+armbian-install     # 装进 eMMC（交互式菜单）</code></pre>
+<p><code>armbian-install</code> 的参数（摘自脚本自己的说明）：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>参数</th><th>默认</th><th>说明</th></tr></thead><tbody>
+<tr><td><code>-m yes/no</code></td><td><strong>no</strong></td><td>用<strong>主线 u-boot</strong>。<strong>本板保持默认 <code>no</code></strong> —— ophub 给 W103D 指定了专属的 <code>u-boot-w103d.bin</code></td></tr>
+<tr><td><code>-a yes/no</code></td><td>yes</td><td>用 <code>ampart</code> 调整分区表（把 eMMC 让给 Armbian）</td></tr>
+<tr><td><code>-l yes/no</code></td><td>no</td><td>先列出全部可用设备再选</td></tr>
+</tbody></table></div>
+<p>板级身份（核过镜像里的 <code>/etc/ophub-release</code> 与 ophub 的 <code>model_database.conf</code>）： <code>MODEL_ID=307</code>、<code>MODEL_NAME=ZTE-W103D</code>、<code>SOC=s905l3a</code>、<code>FDTFILE=meson-g12a-w103d.dtb</code>、 启动器 <code>u-boot-w103d.bin</code>、<code>BOARD=s905l3a-w103d</code>。</p>
 <p>之后盒子不再依赖 U 盘，32 GB eMMC 全用上。</p>
 <blockquote>⚠️ <strong>变砖兜底</strong>：Amlogic 的 <strong>MaskROM 在 SoC BootROM 里</strong>（短接可重新进刷写模式）， 加上你手上的<strong>原厂线刷固件包</strong>，就能恢复。这两样在手，这一步的风险才是可控的。</blockquote>
 <h2 id="18-退回去">18. 退回去</h2>

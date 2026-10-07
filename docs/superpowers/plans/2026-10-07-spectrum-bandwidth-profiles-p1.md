@@ -826,6 +826,7 @@ git commit -m "feat: /WSspectrum 收 spectrumCaps 声明档位——按 socket �
 **文件：**
 - 修改 `server.py:1514-1576`（`_broadcast_spectrum_loop` 的 docstring 与扇出段）
 - 追加测试到 `tests/test_spectrum_profile_server.py`
+- **重钉 `tests/test_session_metrics.py:260`**（既有守卫 `test_uplink_bytes_are_metered_on_both_fan_out_paths` 钉的是旧字面量 `add_bytes("spectrum", len(binary))`，计量改成 `len(payload)` 后它会红；把断言改成“在 `_spectrum_fanout` 函数体内”——守卫名说的就是两条路径都计量，而两条路径现在共用这一个函数，改完比原来更贴合它自己的名字）
 
 - [ ] **步骤 1：写失败测试**
 
@@ -1423,14 +1424,19 @@ design's acceptance table against a live server instead of arithmetic:
     python3 dev_tools/spectrum_profile_probe.py --no-caps --seconds 10   # legacy
 
 Token: `--token` (or `$MRRC_TOKEN`), else `--password` (or `$MRRC_PASSWORD`) is
-exchanged against `POST /api/login`, which returns `{"ok":true,"token":...}`
-(server.py:3234).  Sent as `Authorization: Bearer` (server.py:893).  The dev
+exchanged against `POST /api/auth/login` — **not** `/api/login`, which the auth
+middleware rejects with a bare 401 before the handler runs (server.py:3276,
+middleware at :2986).  Sent as `Authorization: Bearer` (server.py:893).  The dev
 server's cert is self-signed `CN=localhost`, so loopback URLs skip verification.
 
---no-deflate reproduces the *Android* wire cost: OkHttp 4.12 does not offer
-permessage-deflate, so a phone really pays the payload bytes, while a browser
-sees ~441 B per full frame.  Without the flag you are measuring the browser
-axis.  Both numbers are in the design; label whichever one you quote.
+--no-deflate turns off permessage-deflate negotiation.  Note what this tool can
+and cannot see: it counts the *decoded* message length, because the websockets
+library decompresses transparently — so every figure it prints is a **payload**
+figure, with or without the flag.  The browser's on-the-wire cost (measured
+elsewhere with a raw socket: 1701 B -> ~441 B per full frame, and the 850 zero
+bytes of wf2 -> ~1.4 B) is not observable from here.  Quote the payload axis for
+Android (OkHttp 4.12 does not offer the extension, so payload == wire) and the
+raw-socket figure for browsers.
 """
 
 import argparse
@@ -1801,7 +1807,22 @@ grep -rn "v2=1701\|v1=851\|1701B wf1\|~30fps\|30 fps\|1701 bytes" SDD/*.md
 
 > `packaging/macos/mrrc_modern_launcher.spec` 只列 launcher 自己的模块（`rumps`/`objc`/…），**不需改**；服务端模块由 `mrrc_modern_server.spec` 负责。`tests/test_windows_packaging_files.py` 没有钉 `hiddenimports` 内容，所以加这一行不会弄红任何现有测试。
 
-**3l. 版本 bump** —— 当前：`CHANGELOG.md` 顶部 = `v1.25.4`，SDD = `V2.74`。本次是新功能 ⇒ `v1.26.0` + `V2.75`。先写 CHANGELOG 新条目（标题句式跟仓内习惯：一句话说清“修了什么真问题”），再跑校验器拿到待改清单：
+**3l. 版本 bump —— 本次只动 SDD，不动 app 版本（执行期修正）**
+
+原计划要把 app 版本 bump 到 `v1.26.0`（CHANGELOG → `.iss` → 官网中英下载卡）。**执行时发现这是错的**：官网下载卡里的链接是真实产物文件名（`downloads/MRRC-Modern-v1.25.4-arm64.dmg`），在没有构建出 1.26.0 产物之前改卡片等于给用户 404。`release-artifacts.json` 的 `iss-version` / `website-cards-en` / `website-cards-zh` 三条规则会把它们绑在一起，所以"只改 CHANGELOG"也过不了校验。结论：**app 版本随下一次发布一起动**（走 mrrc-release 的构建→发布→SHA 复核流程），本任务只做 SDD 侧：
+
+- `SDD/14-version-history.md` 顶部插入 `| SDD V2.75 | 2026-10-07 | pi | … |`（表是 newest-first）
+- `SDD/README.md:50` 的 Quick Facts `| SDD Version | V2.74 |` → `V2.75`
+
+**改 SDD 版本会连带三件事**（`tests/test_sdd_docs_consistency.py` 与 `release_check.py` 都会拦）：
+
+1. `website/build_sdd.py` 必须重跑：`cd website && ../.venv/bin/python build_sdd.py`（重新生成 16 页 + 10 张图）。`test_generated_pages_use_the_current_version` 要求 `website/sdd/index.html` 与 `08-architecture-decisions.html` 含新版本号。
+2. 四个**手写**页面（不由生成器产出，历史上曾漂到 V2.27，所以有守卫）：`website/sdd.html` 与 `website/zh/sdd.html` 的 hero badge `SDD V2.74 · 2026-10-06` → `SDD V2.75 · 2026-10-07`、AD 索引标题 `AD-001 ... AD-024` → `AD-025`、并各补一个 `tech-tag`（`test_landing_pages_list_every_decision` 要求每个 AD 编号都出现在两个页面上）；`website/index.html:1094` 与 `website/zh/index.html:1037` 的 `<strong>V2.74</strong>` → `V2.75`。
+3. `SDD/diagrams/*.svg` 的 `diagram-version:` 标记必须落在"最近 `max_versions_behind + 1` = 3 个版本"窗口内（`release_check.check_diagrams`）。只 bump 一档时旧图不会立刻红，但**改过内容的图要顺手把标记提到当前版本**：本次 `spectrum-paths.svg` 的 `v1 851 B · v2 1701 B` → `full 1701 B · wf1 851 B`、`851/1701-byte` → `1701/851-byte`、标记 V2.73 → V2.75，并且**必须 `cp` 到 `website/sdd/diagrams/` 的逐字节副本**（`diagram-copies` 规则）。
+
+`.agents/skills/sdd-guardian/harness/constraints.json` 的 `sdd_version` 是 SDD 版本的镜像，长期停在 `V2.62`；一并追到 `V2.75`（改完跑 `sdd_context.py check --staged` 确认 harness 没坏）。
+
+**版本 bump（仅在真的要发布时做）** —— 当前：`CHANGELOG.md` 顶部 = `v1.25.4`，SDD = `V2.74`。本次是新功能 ⇒ `v1.26.0` + `V2.75`。先写 CHANGELOG 新条目（标题句式跟仓内习惯：一句话说清“修了什么真问题”），再跑校验器拿到待改清单：
 
 ```bash
 .venv/bin/python .agents/skills/dual-platform-release/harness/release_check.py
@@ -1843,42 +1864,87 @@ git commit -m "docs: 频谱档位落文档——SDD V2.75 / AD-025、NFR-003 与
 
 **文件：** 无代码改动；只跑验收并把结果贴回规格 §6。任何一项不过就回到对应任务，**不得降标准**。
 
-- [ ] **步骤 1：启服务端**
+- [ ] **步骤 1：启服务端（用一份临时 env，别碰用户真实配置）**
+
+`server.py` 启动时会读用户的 `~/Library/Application Support/MRRC-Modern/mrrc_modern.env`，
+里面的 `MRRC_WEB_PASSWORD` / `MRRC_WEB_PORT` 会盖掉你在 shell 里 export 的同名变量
+（`config.load_user_config_into_environ()` 用的是 `setdefault`，**文件不会覆盖已有的进程环境**，
+但如果你只在 shell 里给了 `MRRC_CONFIG_FILE` 而没给密码，密码就来自那份文件）。
+所以要指定 `MRRC_CONFIG_FILE` 指向一份自己的临时 env：
 
 ```bash
-.venv/bin/python server.py &   # 或仓内惯用的启动方式；监听 127.0.0.1:8888
-sleep 6 && tail -5 ~/Library/Application\ Support/MRRC-Modern/logs/server.log
+cat > /tmp/probe.env <<'EOF'
+MRRC_WEB_PORT=18997
+MRRC_WEB_PASSWORD=<一个强口令>
+MRRC_LISTEN_PASSWORD=<另一个强口令>
+EOF
+MRRC_CONFIG_FILE=/tmp/probe.env BROWSER=no-such-browser \
+  nohup .venv/bin/python server.py > /tmp/acc.log 2>&1 &
+sleep 14 && grep -E "Server ready|cannot listen" /tmp/acc.log | tail -2
 ```
+
+> 端口冲突时 `server.py` 会**明确拒绝启动**并提示"另一个 MRRC Modern 可能还在跑"
+> （`_bind_with_retry`）。上一轮的实例要用 `kill $(lsof -nP -iTCP:18997 -sTCP:LISTEN -t)` 收掉——
+> `pkill -f "python server.py"` 实测收不干净。
 
 - [ ] **步骤 2：拿一个 token**
 
 两种方式任选（探针两种都支持）：
 
 ```bash
-# a) 已有会话：从浏览器的 mrrc_auth cookie 里拷（DevTools → Application → Cookies）
-export MRRC_TOKEN=…
-
-# b) 直接拿密码换：POST /api/login 返回 {"ok":true,"token":…}（server.py:3234）
-export MRRC_PASSWORD='…'
+# 一次登录，把 token 交给后面所有探测复用（见下面的限流警告）
+export MRRC_TOKEN=$(curl -sk -X POST https://127.0.0.1:18997/api/auth/login \
+  -H 'Content-Type: application/json' -d '{"password":"<口令>"}' \
+  | .venv/bin/python -c "import json,sys;print(json.load(sys.stdin)['token'])")
+echo "token: ${#MRRC_TOKEN} 字符"   # 应为 64
 ```
 
-> 开发服务器用的是自签 `CN=localhost` 证书，所以探针对 loopback URL 跳过证书校验（非 loopback 仍走正常校验）。
+三个实测踩到的坑：
+- **路径是 `/api/auth/login`，不是 `/api/login`**。后者会被 `auth_middleware`（`server.py:2986`）
+  在进 handler 之前挡掉，返回一个光秃秃的 `{"error":"Unauthorized"}`——而 `api_login` 对密码错误
+  返回的是 `{"error":"Invalid password"}`。看到前者说明路径错了，不是口令错了。
+- **登录限流 5 次 / 300 s**（`_LOGIN_MAX_ATTEMPTS` / `_LOGIN_WINDOW_SECONDS`）。每跑一次探针就登录一次
+  的话，第 5 次之后全是 `429 Too Many Requests`。**登录一次、导出 token、所有探测复用**。
+- 开发服务器用自签 `CN=localhost` 证书，探针对 loopback URL 跳过校验（非 loopback 仍走正常校验）。
 
 - [ ] **步骤 3：三档 + 无 caps 各测一轮（两个轴）**
 
 ```bash
+U="--url wss://127.0.0.1:18997/WSspectrum --token $MRRC_TOKEN"
 for p in high mid low; do
-  .venv/bin/python dev_tools/spectrum_profile_probe.py --profile $p --seconds 10 --no-deflate
+  sleep 8   # 见下面第 3 条：无 FTDI 时必须留间隔
+  .venv/bin/python dev_tools/spectrum_profile_probe.py $U --profile $p --seconds 8 --no-deflate
 done
-.venv/bin/python dev_tools/spectrum_profile_probe.py --no-caps --seconds 10 --no-deflate
-.venv/bin/python dev_tools/spectrum_profile_probe.py --profile low --seconds 10   # 浏览器轴
+sleep 8
+.venv/bin/python dev_tools/spectrum_profile_probe.py $U --no-caps --seconds 8 --no-deflate
 ```
 
-必达：
-- `--no-caps` 与 `high`：**只有 1701 B 帧**，且两者 kbps 在 ±15% 内相等（真频谱态下都该≈151 kbps payload）。
-- `mid`：只有 851 B，帧数≈`high` 的 1/2，kbps 37.8 ±15%。
-- `low`：只有 851 B，帧数≈`high` 的 1/4，kbps 18.9 ±15%。
-- 浏览器轴 `low`：≈9–10 kbps（deflate 把 850 零字节压掉了，所以两个轴的数字**差很多**，引用时必须标明口径）。
+> **两次探测之间要留 ~8 s**（本机无 FTDI 硬件时）。每次 `/WSspectrum` 连接都会拉起 `scope_pipe`，
+> 而没有 FTDI 时它要做 5 次 open 尝试（≈1.6 s）才退出、1 s 后再重启；背靠背探测会撞进这个 churn，
+> 表现为 `TimeoutError: timed out while waiting for handshake response`（实测连续两轮都恰好在第 3 次连接上失败）。
+> 这与档位逻辑无关，真机（FTDI 在位）不存在该 churn。
+>
+> **探针打印的永远是 payload 字节**，`--no-deflate` 只改变服务端会不会压缩、不改变工具能不能看见压缩结果
+> （`websockets` 库透明解压，实测带与不带旗标字节数完全相同）。浏览器线上口径要用 §2 那次裸 socket 复现的数字。
+
+必达（比值是判据，绝对值随帧源变化）：
+- `--no-caps` 与 `high`：**只有 1701 B 帧**，且两者 kbps 在 ±15% 内相等。
+- `mid`：只有 851 B，**字节比 ≈0.25**（= 851/1701 × 1/2）。
+- `low`：只有 851 B，**字节比 ≈0.125**（= 851/1701 × 1/4）。
+- 每档的 `gate : PASS`，且服务端日志有对应的 `Spectrum profile <档> for operator socket: …` 行。
+
+绝对值取决于帧源，两种态都记一下（**2026-10-07 本机实测**，详见规格 §6.1）：
+
+| 档位 | 回退态（无 FTDI，~26 fps tick） | 真频谱态（FTDI 在位，~11.1 fps）预期 |
+|---|---|---|
+| `high` | 1701 B ×153，25.4 fps，**345.9 kbps** | ≈151 kbps |
+| `mid` | 851 B ×78，12.9 fps，**88.0 kbps**（比 0.254） | ≈38 kbps |
+| `low` | 851 B ×53，6.6 fps，**45.1 kbps**（比 0.126） | ≈19 kbps |
+| 不发 caps | 1701 B ×157，26.1 fps，**354.8 kbps**（与 high 差 2.5%） | ≈151 kbps |
+
+> 浏览器线上口径（deflate 后 ≈39/20/10 kbps）**不能**用这个探针测（它统计的是解压后的 payload），
+> 只能引用规格 §2 里那次裸 socket 复现：30 帧 ×1701 B = 51030 B payload → 上线 13224 B（≈441 B/帧，3.9×），
+> 其中 wf2 的 850 个零字节 30 帧只花 41 B。引用数字时必须标明是哪个轴。
 
 - [ ] **步骤 4：回退态也要分频**
 

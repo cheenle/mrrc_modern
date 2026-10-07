@@ -11,14 +11,18 @@ design's acceptance table against a live server instead of arithmetic:
     python3 dev_tools/spectrum_profile_probe.py --no-caps --seconds 10   # legacy
 
 Token: `--token` (or `$MRRC_TOKEN`), else `--password` (or `$MRRC_PASSWORD`) is
-exchanged against `POST /api/login`, which returns `{"ok":true,"token":...}`
-(server.py:3234).  Sent as `Authorization: Bearer` (server.py:893).  The dev
+exchanged against `POST /api/auth/login`, which returns `{"ok":true,"token":...}`
+(server.py:3276).  Sent as `Authorization: Bearer` (server.py:893).  The dev
 server's cert is self-signed `CN=localhost`, so loopback URLs skip verification.
 
---no-deflate reproduces the *Android* wire cost: OkHttp 4.12 does not offer
-permessage-deflate, so a phone really pays the payload bytes, while a browser
-sees ~441 B per full frame.  Without the flag you are measuring the browser
-axis.  Both numbers are in the design; label whichever one you quote.
+--no-deflate turns off permessage-deflate negotiation.  Note what this tool can
+and cannot see: it counts the *decoded* message length, because the websockets
+library decompresses transparently — so every figure it prints is a **payload**
+figure, with or without the flag.  The browser's on-the-wire cost (measured
+elsewhere with a raw socket: 1701 B -> ~441 B per full frame, and the 850 zero
+bytes of wf2 -> ~1.4 B) is not observable from here.  Quote the payload axis for
+Android (OkHttp 4.12 does not offer the extension, so payload == wire) and the
+raw-socket figure for browsers.
 """
 
 import argparse
@@ -65,9 +69,9 @@ def read_token(args) -> str:
     base = args.http_url or DEFAULT_HTTP
     ctx = ssl_context_for(urlparse(base).hostname or "")
     req = urllib.request.Request(
-        base.rstrip("/") + "/api/login",
-        data=json.dumps({"password": password}).encode("utf-8"),
-        headers={"Content-Type": "application/json"})
+        base.rstrip("/") + "/api/auth/login",   # the only login path the auth
+        data=json.dumps({"password": password}).encode("utf-8"),   # middleware
+        headers={"Content-Type": "application/json"})              # exempts
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
             return str(json.loads(resp.read())["token"])
@@ -79,7 +83,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--url", default=DEFAULT_URL)
     ap.add_argument("--http-url", default=DEFAULT_HTTP,
-                    help="base URL for the /api/login exchange")
+                    help="base URL for the /api/auth/login exchange")
     ap.add_argument("--token")
     ap.add_argument("--password", help="exchanged for a token via /api/login")
     ap.add_argument("--profile", choices=("high", "mid", "low"), default="high")
@@ -87,7 +91,10 @@ def main() -> int:
                     help="send no spectrumCaps: proves an undeclared socket "
                          "still gets the legacy 1701 B stream")
     ap.add_argument("--no-deflate", action="store_true",
-                    help="disable permessage-deflate to measure the Android axis")
+                    help="do not negotiate permessage-deflate.  The byte counts "
+                         "below are payload either way (the library "
+                         "decompresses transparently); this only changes what "
+                         "the server would put on the wire")
     ap.add_argument("--seconds", type=float, default=10.0)
     args = ap.parse_args()
 
@@ -119,7 +126,9 @@ def main() -> int:
     elapsed = max(time.monotonic() - started, 1e-6)
 
     label = "no caps (legacy)" if args.no_caps else args.profile
-    axis = "payload (no deflate)" if args.no_deflate else "browser wire (deflate on)"
+    axis = ("payload; deflate not negotiated (Android's OkHttp does not offer "
+            "it, so payload == wire)" if args.no_deflate else
+            "payload; deflate negotiated (wire cost is lower and invisible here)")
     frames = sum(lengths.values())
     want_full = args.no_caps or args.profile == "high"
     print(f"profile      : {label}")

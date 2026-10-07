@@ -191,6 +191,30 @@ UI 入口固定放设置页，**不放状态行**（安卓状态行只剩 269/34
 5. 三档切换在已连会话上即时生效（重发 caps），不需重开 socket；重连后档位保持（客户端持久化）。
 6. `updateSMeterFromSpectrum()` 在 ÷4 下仍正常工作（S 表另有 CAT 10 Hz 与 scope 合并两路，档位只影响瀑布新行数）。
 
+### 6.1 P1 实测结果（2026-10-07，服务端 + Web 已实现）
+
+环境：本机无 FTDI 硬件 ⇒ 服务端处于 **S-meter 回退态**（`Spectrum broadcast active: S-meter fallback, 1701 bytes/frame, 1 clients`，该行与改动前逐字相同）。
+工具：`dev_tools/spectrum_profile_probe.py`（每档独立连接，同一 operator token）。
+
+| 档位 | 帧长分布 | fps | payload kbps | 相对 high | 闸门 |
+|---|---|---|---|---|---|
+| `high` | 1701 B ×153 | 25.4 | 345.9 | 1 | PASS（只有 1701 B） |
+| `mid` | 851 B ×78 | 12.9 | 88.0 | **0.254** | PASS（只有 851 B） |
+| `low` | 851 B ×53 | 6.6 | 45.1 | **0.126** | PASS（只有 851 B） |
+| 不发 caps | 1701 B ×157 | 26.1 | 354.8 | 1.03 | PASS（只有 1701 B） |
+
+读法：
+- **两个因子都在生效**：`mid/high` 字节比 0.254 ≈ 851/1701 × 1/2；`low/high` 0.126 ≈ 851/1701 × 1/4。只砍 wf2 会得到 0.5，只降帧率也只会得到 0.5，这正是 §3 选择两因子的原因。
+- **兼容闸门成立**：不发 caps 的连接与 `high` 在 ±15% 内相同（实测差 2.5%），且**只出现 1701 B 帧**——已装 Android 的 `size != 1701` 硬判不会被触发。
+- **回退态同样受分频**（本次实测即在回退态）：`high` ≈26 fps（tick 30 Hz 减去循环开销），`low` 仍是它的 ≈1/4。修复前该路径无闸门，30 Hz × 1701 B 全额发出。
+- 服务端日志逐档确认协商：`Spectrum profile mid for operator socket: wf1 frame (851 B), divider 2`。
+
+两个执行期发现（已修，记录在此以免复现）：
+1. **探针的 `--no-deflate` 不能测"浏览器线上轴"**：它统计的是 `len(msg)`，而 `websockets` 库会透明解压，所以带不带该旗标打印的都是 payload 字节（实测两次 45103 B 完全相同）。浏览器线上口径（1701 B → ~441 B/帧）只能靠 §2 里那次裸 socket 复现，工具的输出与 docstring 已改为如实说明。
+2. **无硬件时背靠背连接会握手超时**：每次 `/WSspectrum` 连接都会拉起 `scope_pipe`，而本机没有 FTDI ⇒ 5 次 open 尝试（≈1.6 s）后退出、1 s 后再重启；连续探测会撞进这个 churn（第 3 次连接两次都 `timed out while waiting for handshake response`）。**在两次探测之间留 8 s 即稳定通过**，与档位逻辑无关。有真机（FTDI 在位）时不存在这个 churn。
+
+未在本轮验证的：真频谱态（需 FT-710 + FTDI 在位，预期 `high` ≈151 kbps、`mid` ≈38、`low` ≈19）；浏览器 UI 里的手动三件事（NET 选择器可见/切换后帧长与帧率变化/刷新后 cookie 保持）；已装 Android 与 iOS 的真机回归（本阶段它们不发 caps，行为应完全不变）。
+
 ## 7. 测试计划
 
 - ⚠️ **AGENTS.md:104 与 `docs/PROJECT_MAP.md:39` 把这个文件写成 `tests/test_ws_protocol.py`，该路径不存在** —— 真名 `tests/test_server_ws_protocol.py`（内含读前端源码做契约断言的用例，如 `:280` 断言 `wsSpectrum.readyState === WebSocket.CONNECTING`、`:334` 按 `@app.websocket("/WSspectrum")` 与 `# ── Audio RX WebSocket` 两个标记切出 handler 源码块再断言）。改这个 handler 时**必须保住那两个标记串**，否则该守卫测试会以一种很难读的方式失败。顺带把这两处文件名一起修正。

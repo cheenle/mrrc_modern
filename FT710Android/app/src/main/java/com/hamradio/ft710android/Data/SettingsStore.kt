@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.hamradio.ft710android.Spectrum.SpectrumTiers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -28,6 +29,9 @@ class SettingsStore(private val context: Context) {
         val scopeTheme = stringPreferencesKey("scopeTheme")
         val scopeFloor = intPreferencesKey("scopeFloor")
         val scopeCeil = intPreferencesKey("scopeCeil")
+        // 频谱带宽档位（服务端 AD-025）。键名对齐手机端 Web 的 cookie
+        // ft710_scopeProfile，值域对齐服务端白名单 high/mid/low。
+        val scopeProfile = stringPreferencesKey("scopeProfile")
         val fftHeight = intPreferencesKey("fftHeight")
         val wfHeight = intPreferencesKey("wfHeight")
         val keepScreenOn = booleanPreferencesKey("keepScreenOn")
@@ -43,6 +47,7 @@ class SettingsStore(private val context: Context) {
     val scopeTheme: Flow<String> = context.dataStore.data.map { it[Keys.scopeTheme] ?: "jet" }
     val scopeFloor: Flow<Int> = context.dataStore.data.map { it[Keys.scopeFloor] ?: 5 }
     val scopeCeil: Flow<Int> = context.dataStore.data.map { it[Keys.scopeCeil] ?: 220 }
+    val scopeProfile: Flow<String> = context.dataStore.data.map { it[Keys.scopeProfile] ?: SpectrumTiers.DEFAULT }
     val fftHeight: Flow<Int> = context.dataStore.data.map { it[Keys.fftHeight] ?: 40 }
     val wfHeight: Flow<Int> = context.dataStore.data.map { it[Keys.wfHeight] ?: 110 }
     val keepScreenOn: Flow<Boolean> = context.dataStore.data.map { it[Keys.keepScreenOn] ?: true }
@@ -64,6 +69,9 @@ class SettingsStore(private val context: Context) {
     suspend fun putScopeTheme(v: String) = edit { it[Keys.scopeTheme] = v }
     suspend fun putScopeFloor(v: Int) = edit { it[Keys.scopeFloor] = v.coerceIn(0, 200) }
     suspend fun putScopeCeil(v: Int) = edit { it[Keys.scopeCeil] = v.coerceIn(50, 255) }
+
+    /** 写入前就归一化：非法/内部档位名不落盘，否则下次启动会把垃圾值推给连接层。 */
+    suspend fun putScopeProfile(v: String) = edit { it[Keys.scopeProfile] = SpectrumTiers.normalize(v) }
     suspend fun putFftHeight(v: Int) = edit { it[Keys.fftHeight] = v.coerceIn(20, 120) }
     suspend fun putWfHeight(v: Int) = edit { it[Keys.wfHeight] = v.coerceIn(30, 200) }
     suspend fun putKeepScreenOn(v: Boolean) = edit { it[Keys.keepScreenOn] = v }

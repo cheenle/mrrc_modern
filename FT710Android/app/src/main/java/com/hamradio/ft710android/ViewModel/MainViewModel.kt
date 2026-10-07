@@ -205,9 +205,18 @@ class MainViewModel(
     fun onListenOnly() { _listenOnly.value = true; syncBackground() }
 
     /**
+     * 频谱带宽档位（服务端 AD-025）。由 RootScreen 的 LaunchedEffect 从持久化偏好推过来，
+     * 所以启动/重连/用户改档走同一条路；已在传时连接层会在同一条 socket 上补发 caps，不重连。
+     */
+    fun setSpectrumProfile(name: String) { connectionManager.setSpectrumProfile(name) }
+
+    /**
      * 应用前后台切换（`MainActivity.onStart/onStop` 调）。
-     * 退后台就停掉频谱通道：服务端 ~30fps × 1701B ≈ 51KB/s ≈ 180MB/小时，
+     * 退后台就停掉频谱通道：服务端满档推 1701B/帧，真频谱实测 11.1 fps ≈ 151 kbps
+     * ≈ 68 MB/小时（S-meter 回退态才是每 30Hz tick 重造一帧 ≈ 408 kbps ≈ 180 MB/小时），
      * 后台看不见瀑布还一直收是纯浪费流量；回前台自动恢复。
+     * 档位能把 high 降到 mid/low（≈38 / ≈19 kbps），但后台一律直接停：
+     * 省流量最狠的一档是“根本不连”。
      */
     fun onAppForeground(foreground: Boolean) {
         connectionManager.setSpectrumPaused(!foreground)

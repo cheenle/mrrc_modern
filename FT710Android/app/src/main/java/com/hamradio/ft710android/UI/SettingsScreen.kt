@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.hamradio.ft710android.BuildConfig
 import com.hamradio.ft710android.Data.SettingsStore
 import com.hamradio.ft710android.Spectrum.Palettes
+import com.hamradio.ft710android.Spectrum.SpectrumTiers
 import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
@@ -151,6 +152,20 @@ fun SettingsScreen(
         PrefSlider("Ceil", prefs.scopeCeil.toFloat(), 50f..255f) { scope.launch { settings.putScopeCeil(it) } }
         PrefSlider("Spec H", prefs.fftHeight.toFloat(), 20f..120f) { scope.launch { settings.putFftHeight(it) } }
         PrefSlider("WF H", prefs.wfHeight.toFloat(), 30f..200f) { scope.launch { settings.putWfHeight(it) } }
+
+        // 频谱带宽档位（服务端 AD-025）：形状 × 帧率分频，由服务端执行。
+        // 只写偏好，**不直接调 VM** —— 推送由 RootScreen 的 LaunchedEffect 统一做，
+        // 否则启动/重连/用户改档三条路各自为政，会出现“UI 显示 Quarter、线上仍拿满帧”。
+        Text("流量档", fontSize = 11.sp, color = MrrcColors.TextSecondary, modifier = Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            SpectrumTiers.NAMES.forEach { name ->
+                FilterChip(
+                    selected = prefs.spectrumProfile == name,
+                    onClick = { scope.launch { settings.putScopeProfile(name) } },
+                    label = { Text(SpectrumTiers.label(name), fontSize = 10.sp) },
+                )
+            }
+        }
 
         // ── 音量与增益（S2/S3；全部松手提交：D3）──────────────────
         Section("音量 / 增益")

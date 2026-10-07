@@ -55,6 +55,9 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var immersive by rememberSaveable { mutableStateOf(false) }
     val prefs by UiPrefsFlow(settings).collectAsState(initial = UiPrefs())
+    // 单一真相源：启动、重连、用户在设置里改档，三条路都只经过这里。
+    // 偏好变了就推给连接层（已在传时它会在同一条 socket 上补发 caps，不重连）。
+    LaunchedEffect(prefs.spectrumProfile) { vm.setSpectrumProfile(prefs.spectrumProfile) }
     val userOff by vm.userOff.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current

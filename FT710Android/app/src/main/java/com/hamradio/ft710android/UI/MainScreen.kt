@@ -140,20 +140,30 @@ fun MainScreen(
             // ── 顶栏：主频显示屏（上沿带波段/模式/VFO 读数）+ S 表独立区域 ────
             // S 表尺寸只看屏幕宽度（不受主频行高限制），窄屏自动缩、平板放大
             BoxWithConstraints(Modifier.fillMaxWidth()) {
-                // 尺寸全部来自 ScreenFit（单一数据源）；不要在这里就地算比例
-                val meterH = m.headerHeight
-                // 等高靠**显式高度**（meterH 已由屏宽算出），不能用 IntrinsicSize：
+                // 尺寸全部来自 ScreenFit（单一数据源）；不要在这里就地算比例。
+                // 状态行也在显示屏里 → 它折几行决定顶栏（与 S 表等高）要多高
+                val statusExtra = (if (state.rxAudioSilent) 1 else 0) +
+                    (if (listenOnly) 1 else 0) + (if (rec.recording) 1 else 0)
+                val statusLines = m.statusLines(statusExtra)
+                val meterH = m.headerHeight(statusLines)
+                // 等高靠**显式高度**（meterH 已由屏宽+状态行数算出），不能用 IntrinsicSize：
                 // 子项里的 BoxWithConstraints 是 SubcomposeLayout，问它 intrinsic 会直接抛异常（启动即崩）
                 Row(Modifier.fillMaxWidth().height(meterH).testTag("secHeader")) {
                     DisplayBezel(
                         modifier = Modifier.weight(1f).fillMaxHeight().clickable { showFreqInput = true },
                     ) {
-                        Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 5.dp)) {
-                            // 显示屏上沿一行 = 工具行：波段·模式 ｜ 菜单/全屏/电源 ｜ VFO
-                            // 图标**自绘**（不用字体字符）：⏻/⛶ 这类符号在不同机型会走字体回退，
-                            // 渲染出来粗细不一、缺笔画 —— 用户报的"关闭 icon 变形"就是这个。
-                            // 文字统一 9sp 与波段·模式同级；点击区 22dp，不小于其它可点元素。
+                        Column(
+                            Modifier.fillMaxSize().padding(
+                                horizontal = ScreenFit.BEZEL_PAD_H.dp, vertical = 5.dp,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            // ── 第 1 行 工具行：☰（最左）｜波段·模式｜⏺ ⛶ ⏻｜VFO ──
+                            // 图标一律 **Canvas 自绘**：☰ ⛶ ⏻ ⏺ 这些符号在不少机型没有字形，
+                            // 会走字体回退 → 粗细不一、缺笔画（用户报的"关闭 icon 变形"）。
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                HeaderIconButton(HeaderIconKind.MENU, "设置") { onOpenSettings() }
+                                Spacer(Modifier.width(2.dp))
                                 Text(
                                     "${state.bandName.ifEmpty { "—" }} · ${state.modeName.ifEmpty { "—" }}",
                                     color = MrrcColors.TextMuted, fontSize = 9.sp,
@@ -161,7 +171,13 @@ fun MainScreen(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
                                 )
-                                HeaderIconButton(HeaderIconKind.MENU, "设置") { onOpenSettings() }
+                                if (recAvailable && !listenOnly) {
+                                    HeaderIconButton(
+                                        HeaderIconKind.RECORD,
+                                        if (rec.recording) "停止录音（录音中）" else "录音",
+                                        danger = rec.recording, filled = rec.recording,
+                                    ) { showRecPanel = true }
+                                }
                                 HeaderIconButton(HeaderIconKind.FULLSCREEN, "全屏", active = fullscreen) {
                                     onToggleFullscreen()
                                 }
@@ -184,14 +200,79 @@ fun MainScreen(
                                         .padding(horizontal = 2.dp),
                                 )
                             }
-                            // 主频（琥珀辉光，末两位 10Hz 淡化）
+
+                            // ── 第 2 行 状态行（也在主频上方）：FlowRow，装不下才折行 ──
+                            // 折行时顶栏已按 statusLines 长高，所以主频字号不会被挤压
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("secStatus"),
+                            ) {
+                                if (rec.recording) {
+                                    StatusItem {
+                                        Text(
+                                            fmtSeconds(rec.duration),
+                                            color = Color(0xFFFF6B6B), fontSize = 9.sp,
+                                            fontFamily = MonoFont, fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+                                if (listenOnly) {
+                                    StatusItem {
+                                        Text("只读", color = MrrcColors.Accent, fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.clickable {
+                                                vm.showNotice("只读登录（listen-only）：发射与设备设置已被服务端禁用")
+                                            })
+                                    }
+                                }
+                                StatusItem {
+                                    Text(
+                                        when (state.txStatus) { 2 -> "TUNE"; 1 -> "TX"; else -> "RX" },
+                                        color = if (state.isTransmitting) MrrcColors.Danger else MrrcColors.TextSecondary,
+                                        fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
+                                    )
+                                }
+                                StatusItem {
+                                    // 发射时这一段换成麦克风峰值（RX 此时本来就没有码率）
+                                    val pk = vm.txPeak()
+                                    Text(
+                                        if (state.txStatus != 0) "TX pk:$pk" else "↓${rxKbps}↑${txKbps}",
+                                        color = if (state.txStatus != 0 && pk < 400) MrrcColors.Warning else MrrcColors.TextMuted,
+                                        fontSize = 8.5.sp, fontFamily = MonoFont,
+                                    )
+                                }
+                                if (state.rxAudioSilent) {
+                                    StatusItem {
+                                        Text("无声", color = MrrcColors.Danger, fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.clickable {
+                                                vm.showNotice("RX 音频持续全零——电台 USB 音频可能卡死，请重启电台或重插 USB")
+                                            })
+                                    }
+                                }
+                                // 连接状态点（点按出文字说明）
+                                StatusItem {
+                                    Box(
+                                        Modifier.size(7.dp)
+                                            .background(if (connected) MrrcColors.Success else MrrcColors.TextMuted, CircleShape)
+                                            .clickable {
+                                                vm.showNotice(
+                                                    if (connected) "电台串口已连接"
+                                                    else "电台串口未连接（服务端与电台之间）"
+                                                )
+                                            },
+                                    )
+                                }
+                            }
+
+                            // ── 第 3 行 主频（琥珀辉光，末两位 10Hz 淡化）──
                             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                                 BoxWithConstraints(Modifier.fillMaxSize()) {
-                                    // 宽、高两头都卡：上沿工具行占了 22dp，只按宽度算
-                                    // 字号可能超出剩余高度而被裁掉（看起来像"频率缺一截"）
+                                    // 宽、高两头都卡：上面两行吃掉一部分高度，只按宽度算会被裁
                                     val byWidth = (maxWidth.value - 6f) / 6.3f
                                     val byHeight = (maxHeight.value - 2f) / 1.32f
-                                    val fit = minOf(byWidth, byHeight).coerceIn(16f, 58f)
+                                    val fit = minOf(byWidth, byHeight).coerceIn(13f, 58f)
                                     FreqText(hz = state.activeFrequency, fitSp = fit)
                                 }
                             }
@@ -202,93 +283,6 @@ fun MainScreen(
                         raw = state.sMeter, sUnit = state.sUnit, levelDb = state.sMeterDbm,
                         alcPct = state.alcPct, transmitting = state.isTransmitting,
                         modifier = Modifier.width(m.meterWidth).height(meterH).align(Alignment.CenterVertically),
-                    )
-                }
-            }
-
-            // ── 状态行：全宽**单行**（波段/模式/VFO 已进显示屏，这里只剩状态）──
-            // 字体 8.5~9sp、行高 26dp；FlowRow 只作极窄屏兜底，正常一行装得下
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 5.dp).testTag("secStatus"),
-            ) {
-                if (listenOnly) {
-                    StatusItem {
-                        Text("只读", color = MrrcColors.Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable {
-                                vm.showNotice("只读登录（listen-only）：发射与设备设置已被服务端禁用")
-                            })
-                    }
-                }
-                if (recAvailable && !listenOnly) {
-                    StatusItem {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .background(
-                                    if (rec.recording) MrrcColors.Danger.copy(alpha = 0.15f) else MrrcSurfaces.Key,
-                                    RoundedCornerShape(percent = 50),
-                                )
-                                .border(
-                                    1.dp,
-                                    if (rec.recording) MrrcColors.Danger else MrrcSurfaces.Stroke,
-                                    RoundedCornerShape(percent = 50),
-                                )
-                                .clickable { showRecPanel = true }
-                                .padding(horizontal = 7.dp, vertical = 2.dp),
-                        ) {
-                            if (rec.recording) {
-                                Box(Modifier.size(5.dp).background(MrrcColors.Danger, CircleShape))
-                                Spacer(Modifier.width(4.dp))
-                            }
-                            // 图标入口（省掉"录音"两个字）；录音中显示时长
-                            Text(
-                                if (rec.recording) fmtSeconds(rec.duration) else "⏺",
-                                color = if (rec.recording) Color(0xFFFF6B6B) else MrrcColors.TextSecondary,
-                                fontSize = if (rec.recording) 9.sp else 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    }
-                }
-                StatusItem {
-                    Text(
-                        when (state.txStatus) { 2 -> "TUNE"; 1 -> "TX"; else -> "RX" },
-                        color = if (state.isTransmitting) MrrcColors.Danger else MrrcColors.TextSecondary,
-                        fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
-                    )
-                }
-                StatusItem {
-                    // 发射时这一段换成麦克风峰值（RX 此时本来就没有码率）
-                    val pk = vm.txPeak()
-                    Text(
-                        if (state.txStatus != 0) "TX pk:$pk" else "↓${rxKbps}↑${txKbps}",
-                        color = if (state.txStatus != 0 && pk < 400) MrrcColors.Warning else MrrcColors.TextMuted,
-                        fontSize = 8.5.sp, fontFamily = MonoFont,
-                    )
-                }
-                if (state.rxAudioSilent) {
-                    StatusItem {
-                        Text(
-                            "无声", color = MrrcColors.Danger, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                            modifier = Modifier.clickable {
-                                vm.showNotice("RX 音频持续全零——电台 USB 音频可能卡死，请重启电台或重插 USB")
-                            },
-                        )
-                    }
-                }
-                // 连接状态点（点按出文字说明；不再常驻 "Serial" 三个字）
-                StatusItem {
-                    Box(
-                        Modifier.size(8.dp)
-                            .background(if (connected) MrrcColors.Success else MrrcColors.TextMuted, CircleShape)
-                            .clickable {
-                                vm.showNotice(
-                                    if (connected) "电台串口已连接"
-                                    else "电台串口未连接（服务端与电台之间）"
-                                )
-                            },
                     )
                 }
             }
@@ -693,7 +687,7 @@ private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFr
 }
 
 /** 顶栏工具行的图标种类。 */
-internal enum class HeaderIconKind { MENU, FULLSCREEN, POWER }
+internal enum class HeaderIconKind { MENU, FULLSCREEN, POWER, RECORD }
 
 /**
  * 顶栏工具行的图标按钮：**Canvas 自绘**，不用字体字符。
@@ -711,6 +705,7 @@ private fun HeaderIconButton(
     description: String,
     active: Boolean = false,
     danger: Boolean = false,
+    filled: Boolean = false,
     onClick: () -> Unit,
 ) {
     val m = LocalScreenMetrics.current
@@ -765,6 +760,12 @@ private fun HeaderIconButton(
                     )
                     drawLine(color, Offset(g / 2f, i * 0.6f), Offset(g / 2f, g * 0.52f),
                         strokeWidth = st, cap = StrokeCap.Round)
+                }
+                HeaderIconKind.RECORD -> {
+                    // 录音：圆环（待机）→ 实心（录音中，配 danger 红色）。
+                    // 同样是自绘：`⏺`(U+23FA) 在不少机型没有字形，会走字体回退而变形
+                    drawCircle(color, radius = g * 0.34f, style = Stroke(width = st))
+                    if (filled) drawCircle(color, radius = g * 0.19f)
                 }
             }
         }

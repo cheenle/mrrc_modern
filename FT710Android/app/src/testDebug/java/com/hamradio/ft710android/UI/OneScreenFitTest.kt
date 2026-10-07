@@ -62,11 +62,13 @@ class OneScreenFitTest {
         val viewportDp = scrollNode.boundsInRoot.height / density
         val overflowDp = range.maxValue() / density
         val lastCard = rule.onNodeWithText("⋯", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        val parts = listOf("secHeader","secStatus","secSpectrum","secMeters","secControls","secTuning","secMemory")
+        // secStatus 住在可点击的 DisplayBezel 里 → 语义被父节点合并，必须用 unmerged tree 才找得到
+        val parts = listOf("secHeader","secSpectrum","secMeters","secControls","secTuning","secMemory")
             .map { t ->
                 val n = rule.onNodeWithTag(t).fetchSemanticsNode().boundsInRoot
                 t.removePrefix("sec") to (n.height / density)
-            }
+            } + ("Status(顶栏内)" to (rule.onNodeWithTag("secStatus", useUnmergedTree = true)
+                .fetchSemanticsNode().boundsInRoot.height / density))
         println("PARTS $profile " + parts.joinToString(" ") { "${it.first}=${it.second.toInt()}" } +
             " 合计=${parts.sumOf { it.second.toDouble() }.toInt()}")
         val line = "%-26s 滚动视口 %.0fdp  超出 %.1fdp  末卡底 %.0fdp  %s".format(

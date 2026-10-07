@@ -174,12 +174,15 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 - **设计令牌与表面**：颜色/圆角/表面层级只在 `UI/Theme.kt`（`MrrcColors`）与 `UI/Surfaces.kt`（`MrrcSurfaces` + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）里定义；就地写死颜色 = 以后改不动。三层表面：内凹显示屏 `Inset`（主频/频谱）< 卡片 `Panel` < 按键 `Key`。
 - **主屏不放说明性文字**（用户 2026-10-06 明确要求）：分区标题全档位取消、频谱下不再重复 VFO 频率、状态行只留 `☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻`、PTT 无副标、音量行无 `Vol` 标签。**任何入口不得藏在标题的 trailing 里**（v1.1.18 的「管理」入口就是这样在紧凑档丢的）——需要入口就给图标按钮（如记忆格行末的 `⋯`）。诊断类数字（RTT/J）放设置页诊断行，不占状态行。
 - **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**（主屏保持干净，用户明确要求过）；录音入口是状态行芯片、天调参数并进 ATR 行——**不要新增独占一行的小信息条**。
-- **顶栏布局**：`BoxWithConstraints` 取页面宽 → 第一行 = **主频显示屏**（`DisplayBezel`，`weight(1f)`）+ **S 表独立区域**（宽 = 页宽×44%＝132–240dp，高 = `ScreenFit.headerHeight`）。⚠️ 等高靠**显式 `height(meterH)`**，**绝不用 `IntrinsicSize.Min`**：S 表内部是 `BoxWithConstraints`（SubcomposeLayout），问它 intrinsic 会抛异常 = 启动即崩（v1.1.16 事故，v1.1.17 已改，别再改回去）。
-  - **显示屏上沿 = 工具行**（2026-10-07）：`波段 · 模式` ｜ `☰ ⛶ ⏻`（Canvas 自绘图标）｜ `VFO-A/B`（可点切换）。三个图标从状态行移到这里，文字统一 9sp。
-  - **图标一律 Canvas 自绘，不用字体符号**：`⏻`/`⛶` 在不少机型没有字形会走字体回退 → 粗细不一/缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算，任何 dpi/字体设置下一致；尺寸 = `ScreenFit.headerIconTap`(22/26dp 点击区) 与 `headerIconGlyph`(11/13dp 图形)。
-  - **主频字号取 `min(byWidth, byHeight)`**：上沿工具行占 22dp，只按宽度算可能超出剩余高度被裁（看着像"频率缺一截"）。`byWidth=(宽−6)/6.3`、`byHeight=(高−2)/1.32`，夹 16~58sp。
-  - 第二行 = **全宽状态行**（`FlowRow` 仅兜底）：字体 8.5~9sp、`StatusItem` 行高 26dp、间距 5dp，内容仅 `⏺ RX/TX 速率|TXpk 状态点`（+ 条件项 `只读`/`无声`）。`☰ ⛶ ⏻` 已上移到工具行，RTT·J 已移到诊断行。
-  - **状态行必须一行装下**（用户明确要求）：加新项前先估宽（当前 `STATUS_CONTENT_W=120dp` / 页面 344dp），放不下就并进已有项或移到设置页；波段/模式/VFO 属于"读数"，归显示屏上沿，不占状态行。
+- **顶栏布局**：`BoxWithConstraints` 取页面宽 → **主频显示屏**（`DisplayBezel`，`weight(1f)`）+ **S 表独立区域**（宽 = 页宽×44%＝132–240dp），两者等高 = `m.headerHeight(statusLines)`。⚠️ 等高靠**显式高度**，**绝不用 `IntrinsicSize.Min`**（S 表内部是 `BoxWithConstraints`=SubcomposeLayout，问 intrinsic 会启动即崩）。
+  - **显示屏内三行，全部在主频上方**（v1.1.27 用户定案）：
+    1. **工具行**：`☰`（**最左**）｜`波段 · 模式`（`weight(1f)`+省略号）｜`⏺ ⛶ ⏻`｜`VFO-A/B`（可点切）
+    2. **状态行**：`RX/TX · 速率|TXpk · 连接点`（+ 条件项 `只读`/`无声`/录音时长）——`FlowRow`，装不下才折行
+    3. **主频**（`weight(1f)` 居中）
+  - **图标一律 Canvas 自绘（`HeaderIconButton`），禁用字体符号**：`☰ ⛶ ⏻ ⏺`（U+2630/26F6/23FB/23FA）在不少机型没有字形会走**字体回退** → 粗细不一、缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算（`g×0.13`），任何 dpi/字体设置下一致；尺寸 = `ScreenFit.headerIconTap`(22/26dp 点击区) + `headerIconGlyph`(11/13dp 图形)；带 `contentDescription`（无障碍 + 测试可查）。
+  - **状态行折行不会挤压主频**：顶栏高度按 `statusLines` 动态长高（S 表同步等高）；主频字号取 `min(byWidth, byHeight)`（`byWidth=(宽−6)/6.3`、`byHeight=(高−2)/1.32`，夹 **13~58sp**）。
+  - **状态行估宽必须用 `bezelContentWidth`**（显示屏内容宽，360dp 屏只有 167dp），**不是页宽 344dp** —— 用页宽会严重低估折行。当前 `STATUS_CONTENT_W=85`，叠加 2 个条件芯片（145dp）仍一行装下；`StatusItem` 行高 16dp（标准档 20）。
+  - ⚠️ **状态行在 `DisplayBezel` 里，而 bezel 带 `clickable`** → 子节点语义被合并：测试里 `onNodeWithTag("secStatus")` 必须加 `useUnmergedTree = true`，否则找不到（错误信息会直接提示这一点）。
   - S 表尺寸**只看屏幕**，不受主频行高限制。
 - **面板 S 表**：弧是贝塞尔（`SMeter.arcX/arcY`），刻度/标签同 Web 的 `MARKERS/LABELS`；字号/线宽/COMP 条厚都由区域短边按比例算（`labelFs`/`readFs`），所以同一份代码在手机与平板都合适。标签不重叠由 `SMeterTest` 的逐标签宽度断言守着（改宽度/字号要跑它）。
 

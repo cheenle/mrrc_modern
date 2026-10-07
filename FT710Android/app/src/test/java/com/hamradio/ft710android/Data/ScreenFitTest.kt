@@ -110,18 +110,32 @@ class ScreenFitTest {
         assertEquals(240, ScreenFit.meterWidth(900))    // 上限
     }
 
-    @Test fun `status row is one line on mainstream widths`() {
-        assertEquals(1, ScreenFit.statusLines(360, 0))
-        assertEquals(1, ScreenFit.statusLines(412, 0))
-        // 320dp 窄屏：可用 304dp 仍装得下 269dp 内容 → 一行
-        assertEquals(1, ScreenFit.statusLines(320, 0))
-        // v1.1.26：☰/⛶/⏻ 上移到显示屏工具行 → 状态行内容只剩 ⏺ RX/TX 速率 状态点 ≈120dp。
-        // 要折行得窄到 136dp 以下（没有这种真机）；220dp 也仍是一行
-        assertEquals(1, ScreenFit.statusLines(220, 0))
-        assertEquals(1, ScreenFit.statusLines(160, 0))
-        assertEquals(2, ScreenFit.statusLines(120, 0))
-        // 条件芯片（只读 / 无声）叠上去也不会折行
-        assertEquals(1, ScreenFit.statusLines(360, 2))
+    /**
+     * 状态行 v1.1.27 起住在**显示屏内部**（主频上方），可用宽度是显示屏内容宽
+     * （360dp 屏 → 167dp），不是页宽 344dp —— 所以折行判断必须用 [ScreenFit.bezelContentWidth]。
+     */
+    @Test fun `status row fits one line inside the display bezel on every supported profile`() {
+        mainland.forEach { (name, w, _) ->
+            assertTrue("$name 显示屏内容宽只有 ${ScreenFit.bezelContentWidth(w)}dp，太窄",
+                ScreenFit.bezelContentWidth(w) >= 150)
+            assertEquals("$name 常规状态应一行", 1, ScreenFit.statusLines(w, 0))
+            assertEquals("$name 叠加两个条件芯片仍应一行", 1, ScreenFit.statusLines(w, 2))
+        }
+        // 内容估宽：RX/TX 22 + 速率 41 + 状态点 8 + 2×间距 ≈ 85
+        assertEquals(85, ScreenFit.STATUS_CONTENT_W)
+    }
+
+    @Test fun `status row wraps instead of clipping on absurdly narrow screens`() {
+        // 不支持的极窄屏（S 表宽度触到 132dp 下限后，显示屏内容宽跌破 85dp）：
+        // 折行而不是裁切；顶栏会按行数长高（headerHeight(statusLines)）
+        assertTrue("250dp 应折行，实际内容宽 ${ScreenFit.bezelContentWidth(250)}dp",
+            ScreenFit.statusLines(250, 0) >= 2)
+        // 280dp 仍是一行（内容宽 106dp ≥ 85dp）——折行只发生在远低于支持下限时
+        assertEquals(1, ScreenFit.statusLines(280, 0))
+        val one = ScreenFit.headerHeight(true, 360, 1)
+        val two = ScreenFit.headerHeight(true, 360, 2)
+        assertEquals("折一行应正好长高一行 + 间距",
+            one + ScreenFit.statusItemHeight(true) + 2, two)
     }
 
     @Test fun `memory grid is a single row of six in compact mode`() {

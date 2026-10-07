@@ -117,10 +117,10 @@ cd FT710Android
 - **设计令牌只在两处**：`UI/Theme.kt`（`MrrcColors`，对齐 web `ft710.css :root`）与 `UI/Surfaces.kt`（`MrrcSurfaces` 三层表面 + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）。就地写死颜色会让后续美化改不动。
 
 - **顶栏布局**：第一行 = 主频显示屏（`DisplayBezel`，`weight(1f)`）+ **S 表独立区域**（宽=页宽×44% 即 132–240dp，高=`ScreenFit.headerHeight`）。⚠️ 等高靠**显式 `height(meterH)`**，**绝不用 `IntrinsicSize.Min`**（S 表内部是 `BoxWithConstraints`=SubcomposeLayout，问 intrinsic 会启动即崩，v1.1.16 事故）。
-  - **显示屏上沿 = 工具行**（v1.1.26）：`波段 · 模式` ｜ `☰ ⛶ ⏻`（Canvas 自绘）｜ `VFO-A/B`（可点切），文字统一 9sp。
-  - **图标一律 Canvas 自绘、不用字体符号**：`⏻`/`⛶` 在部分机型无字形会走字体回退 → 粗细不一/缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算，任何 dpi/字体下一致；尺寸走 `ScreenFit.headerIconTap`(22/26dp) + `headerIconGlyph`(11/13dp)，并带 `contentDescription`（无障碍 + 测试可查）。
-  - **主频字号取 `min(byWidth, byHeight)`**：上沿工具行占 22dp，只按宽算会超高被裁（"频率缺一截"）。
-- **状态行必须一行装下**（用户明确要求）：内容仅 `⏺ RX/TX 速率|TXpk 状态点`（+条件项 `只读`/`无声`），估宽 `STATUS_CONTENT_W=120dp` / 页面 344dp；`☰ ⛶ ⏻` 已上移工具行、RTT·J 已移诊断行。加项放不下就并进已有项或移到设置页。波段/模式/VFO 是"读数"，归显示屏上沿。
+  - **显示屏内三行，全在主频上方**（v1.1.27 用户定案）：① 工具行 `☰`(最左) ｜ `波段 · 模式`(weight+省略号) ｜ `⏺ ⛶ ⏻` ｜ `VFO-A/B`(可点切)；② 状态行 `RX/TX · 速率|TXpk · 连接点`(+条件项 `只读`/`无声`/录音时长)，`FlowRow` 装不下才折行；③ 主频。文字统一 9sp。
+  - **图标一律 Canvas 自绘（`HeaderIconButton`）、禁用字体符号**：`☰ ⛶ ⏻ ⏺`(U+2630/26F6/23FB/23FA) 在部分机型无字形会走**字体回退** → 粗细不一/缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算（`g×0.13`），任何 dpi/字体下一致；尺寸走 `ScreenFit.headerIconTap`(22/26dp) + `headerIconGlyph`(11/13dp)，带 `contentDescription`（无障碍 + 测试可查）；录音态 `filled=true` 画实心红圆，时长移到状态行显示。
+  - **主频字号取 `min(byWidth, byHeight)`**（夹 13~58sp）：上面两行会吃掉高度，只按宽算会超高被裁（"频率缺一截"）。
+- **状态行住在显示屏里**（v1.1.27）：估宽必须用 **`ScreenFit.bezelContentWidth`**（显示屏内容宽，360dp 屏只有 **167dp**），**不是页宽 344dp** —— 用页宽会严重低估折行。当前 `STATUS_CONTENT_W=85`，叠 2 个条件芯片(145dp)仍一行；`StatusItem` 行高 16dp(标准 20)。折行时**顶栏按 `statusLines` 动态长高**（S 表同步等高），主频不受挤压。⚠️ 状态行在带 `clickable` 的 `DisplayBezel` 内 → 子节点语义被父节点**合并**，测试里 `onNodeWithTag("secStatus")` 必须加 `useUnmergedTree = true`（否则报 "unmerged tree contains 1 node"）。RTT·J 在设置页诊断行，不占状态行。
 - **面板 S 表示例**：弧用贝塞尔几何（`SMeter.arcX/arcY`），刻度/标签沿用 Web 的 `MARKERS/LABELS`，内部字号/线宽按区域短边比例缩放（手机与平板同一份代码）；画弧这种几何要抽纯函数并单测（`SMeterTest` 的逐标签宽度断言当场抓出 `+20/+40` 压字）。**仪表类 UI 一律按屏幕给独立区域**，不要挤在文字行高里。
 - **频谱标尺**：范围恒 `VFO ± span/2`，**绝不用 `scope_start_freq`**（服务端恒 CENTER，调谐后滞后）；步进/格式用 `Data/FreqScale.kt`（对齐 web `_freqStep`/`_formatFreqLabel`），刻度按真实位置画；QSY 必须同一公式。
 - **主屏不放说明性文字**（用户 2026-10-06 两次强调）：分区标题**全档位取消**（`ScreenFit.showSectionLabels()` 恒 false）、频谱下不重复 VFO 频率（标尺已有红线+三角）、状态行只留 `☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻`（内容估宽 210dp）、PTT 无副标、音量行无 `Vol` 标签、记忆格无「空」字。诊断数字（RTT/J）进设置页诊断行，不占状态行。机型名/徽章/诊断行也都在设置页。

@@ -75,6 +75,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.defaultMinSize
 import com.hamradio.ft710android.Data.ScreenFit
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Path
 
 /**
@@ -129,17 +130,18 @@ fun MainScreen(
     Column(Modifier.fillMaxSize().background(MrrcColors.BgPrimary)) {
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState())
+                .testTag("mainScroll")
                 .padding(horizontal = ScreenFit.PAGE_PAD_H.dp, vertical = ScreenFit.PAGE_PAD_V.dp),
             verticalArrangement = Arrangement.spacedBy(m.gap),
         ) {
             // ── 顶栏：主频显示屏（上沿带波段/模式/VFO 读数）+ S 表独立区域 ────
             // S 表尺寸只看屏幕宽度（不受主频行高限制），窄屏自动缩、平板放大
             BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val meterW = (maxWidth * 0.44f).coerceIn(140.dp, 240.dp)
-                val meterH = (meterW * 0.64f).coerceIn(96.dp, 168.dp)
+                // 尺寸全部来自 ScreenFit（单一数据源）；不要在这里就地算比例
+                val meterH = m.headerHeight
                 // 等高靠**显式高度**（meterH 已由屏宽算出），不能用 IntrinsicSize：
                 // 子项里的 BoxWithConstraints 是 SubcomposeLayout，问它 intrinsic 会直接抛异常（启动即崩）
-                Row(Modifier.fillMaxWidth().height(meterH)) {
+                Row(Modifier.fillMaxWidth().height(meterH).testTag("secHeader")) {
                     DisplayBezel(
                         modifier = Modifier.weight(1f).fillMaxHeight().clickable { showFreqInput = true },
                     ) {
@@ -184,7 +186,7 @@ fun MainScreen(
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 5.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 5.dp).testTag("secStatus"),
             ) {
                 StatusItem {
                     Text("☰", color = MrrcColors.TextSecondary, fontSize = 13.sp,
@@ -295,7 +297,7 @@ fun MainScreen(
             }
             SpectrumPanel(vm, prefs, spanHz, state.activeFrequency, spectrumBonus)
 
-            Panel(m.panelPadH, m.panelPadV, m.innerGap) {
+            Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMeters") {
                 // ── 仪表：PWR/ALC 两列，SWR/Id/Vd 三列 ───────────────────
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     MeterCell("PWR", state.powerWatts, 100f, MrrcColors.TextPrimary, "%.1f W".format(Locale.US, state.powerWatts), Modifier.weight(1f))
@@ -325,7 +327,7 @@ fun MainScreen(
                             )
                         }
                         Box(
-                            Modifier.weight(1f).height(30.dp)
+                            Modifier.weight(1f).height(m.meterCellHeight)
                                 .background(MrrcColors.BgSecondary, RoundedCornerShape(6.dp))
                                 .border(1.dp, MrrcColors.Border, RoundedCornerShape(6.dp))
                                 .clickable(enabled = !atrTuning) { vm.atrTune() },
@@ -338,7 +340,7 @@ fun MainScreen(
                 }
             }
 
-            Panel(m.panelPadH, m.panelPadV, m.innerGap) {
+            Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secControls") {
                 // ── 五键行：模式 / 波段 / 滤波 / ATT / PRE ────────────────
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     PadBtn("模式", Modifier.weight(1f), onLongClick = { showModePicker = true }) {
@@ -371,7 +373,7 @@ fun MainScreen(
                 }
             }
 
-            Panel(m.panelPadH, m.panelPadV, m.innerGap) {
+            Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secTuning") {
                 // ── 音量 ─────────────────────────────────────────────────
                 // ── 音量（本机播放音量，web 🔊 Vol 语义）──────────────────
                 VolumeRow(prefs.afVol, onAfVol)
@@ -397,7 +399,7 @@ fun MainScreen(
             }
 
             // ── 记忆频道 3×2 ─────────────────────────────────────────
-            Panel(m.panelPadH, m.panelPadV, m.innerGap) {
+            Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMemory") {
                 for (row in 0 until m.memoryRowsCount) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         for (col in 0 until m.memoryColumns) {
@@ -467,7 +469,6 @@ fun MainScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
         }
 
         // ── 底部固定：PTT / CQ / TUNE（listen-only 整栏隐藏）──────────
@@ -664,7 +665,8 @@ private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFr
     DisplayBezel(
         modifier = Modifier.fillMaxWidth()
             .height(m.spectrumHeight(prefs.fftHeight, prefs.wfHeight) + bonusDp.dp)
-            .padding(top = ScreenFit.PAGE_PAD_V.dp),
+            .padding(top = ScreenFit.PAGE_PAD_V.dp)
+            .testTag("secSpectrum"),
     ) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {

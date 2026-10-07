@@ -2,6 +2,38 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.22] — 2026-10-07
+
+这一版的核心是**给"一屏放得下"装上可测量的证据**，顺带修掉两个由它暴露出来的真 bug。
+
+### 新增：`OneScreenFitTest`（量真实布局，不是算模型）
+
+用 Robolectric 在 **7 个真机档位**上把主屏真正 measure/layout 一遍，读 Compose 的 `VerticalScrollAxisRange.maxValue`（= 内容高 − 视口高）：**> 0 就说明要滚动才能看全**。逐分区打 `testTag` 量高度，结果写进 `build/screenshots/one-screen-fit.txt`。
+
+| 档位 | 滚动视口 | 超出 | 结果 |
+| --- | --- | --- | --- |
+| 小米/红米 360×728（三键导航，支持下限） | 640dp | 0.0 | ✅ |
+| 小米/红米 360×744（手势导航） | 656dp | 0.0 | ✅ |
+| 中档 384×816 | 728dp | 0.0 | ✅ |
+| 荣耀 400×832 | 744dp | 0.0 | ✅ |
+| 小米12/Pixel 411×892 | 804dp | 0.0 | ✅ |
+| 华为 Mate 432×880 | 792dp | 0.0 | ✅ |
+| 平板 800×1200（标准档） | 1088dp | 0.0 | ✅ |
+
+### 🔴 它当场抓出两个真 bug（此前 4 个版本都带着）
+
+1. **顶栏 S 表在手机上一直用标准档比例**：`MainScreen` 里还留着内联的 `(maxWidth * 0.44f)` / `(meterW * 0.64f)`，`ScreenMetrics.headerHeight` 是**死代码**。原因是 v1.1.18 那次 `str.replace` 锚点没匹配上、**静默失效**，编译照过。实测 Header 97dp（0.64 比例）而模型按 75dp（紧凑档 0.50）算 → 360dp 宽的机器**内容超出 20dp、需要滚动**，与"一屏放得下"的说法不符。
+2. **ATR 行的 TUNE 按钮硬编码 `height(30.dp)`**：同一次静默失效漏改（旁边的参数框已改成档位高度），把整行撑高 4dp。
+
+### 其它
+
+- 频谱高度模型修正：UI 是 `.height(X).padding(top=6)`，**footprint 就是 X**（padding 在内部吃掉），预算里不该再加 6dp
+- 余量分配加 **10dp 安全边界**（`BONUS_SAFETY_DP`）：预算是算术模型，与真实布局可能差几 dp，宁可留白也不顶出滚动条
+- 滚动列末尾那个 `Spacer(8.dp)` 删掉（间距已由 `spacedBy` 给，它只会白增滚动范围）
+- `ScreenshotTest`：Robolectric NATIVE 模式把主屏渲染成 PNG（RX / TX 各一张，822×1784）存到 `app/build/screenshots/`，**不装 APK 就能看设计**
+- 三个 UI 测试类共用一份 `fixtureVm`（`TestFixtures.kt`）：fixture 形状写错过一次（`scope_spans` 当成数组 → fullState 被静默丢弃），只留一份就不会再分叉
+- 测试 **debug 154 / release 142 全绿**
+
 ## [1.1.21] — 2026-10-06
 
 用户要求：各区域的说明性文字占位置，功能用户都知道，去掉以节省空间。

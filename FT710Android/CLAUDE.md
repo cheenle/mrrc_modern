@@ -129,11 +129,15 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 - M3 的 48dp 最小交互尺寸已在根部关掉（`LocalMinimumInteractiveComponentSize provides 0.dp`），密集仪表盘按档位高度走。
 - **适配下限 = 360×728**（`ScreenFit.SUPPORTED_MIN_HEIGHT_DP`，5.5" 直板机 + 三键导航）。5" 及以下不做保证（用户 2026-10-06 明确"不用考虑"），滚动兜底。
 - **屏幕余量给频谱**：`bonus = min(可用高度 − 固定预算, 80dp)` 叠加到频谱显示屏高度（`MainScreen` 里 `m.spectrumBonus(...)` → `SpectrumPanel(bonusDp)`）。按构造不会超一屏；用户设的 Spec H / WF H 仍是基准，比例不变。
-- 改了任何高度/间距 → 跑 `ScreenFitTest`（真机档位断言），别只看截图。
+- 改了任何高度/间距 → 跑 **`OneScreenFitTest`**（权威：Robolectric 在 7 个真机档位上真 measure/layout，读 `VerticalScrollAxisRange.maxValue`，>0 就是要滚动）+ `ScreenFitTest`（算术模型）。两者不一致时**以实测为准**，回去改 `ScreenFit` 的常量。
+- **`ScreenFit` 是模型，不是真相**：v1.1.18~v1.1.21 期间 `MainScreen` 里留着内联的 `(maxWidth*0.44f)`/`(meterW*0.64f)`，`ScreenMetrics.headerHeight` 是死代码 —— 手机上顶栏一直用标准档比例，比模型高 22~26dp，360dp 宽的机器实际超出 20dp 要滚动，而 `ScreenFitTest` 全绿（模型自己跟自己一致）。**任何尺寸都必须从 `LocalScreenMetrics` 取，禁止在 Composable 里就地算比例。**
+- 分区都带 `testTag`（`secHeader`/`secStatus`/`secSpectrum`/`secMeters`/`secControls`/`secTuning`/`secMemory`，Panel 走 `tag=` 参数），量高度靠它们。
+- 想看设计不装 APK：`./gradlew :app:testDebugUnitTest --tests "*ScreenshotTest*"` → `app/build/screenshots/main-rx-*.png`、`main-tx-*.png`（Robolectric NATIVE 渲染）。
 
 ## 频谱/标尺不变量
 
 - **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**：它们是 `SubcomposeLayout`，不支持 intrinsic 测量，布局阶段抛 `IllegalStateException` → **启动即崩**（v1.1.16 事故：顶栏用 `height(IntrinsicSize.Min)` 让显示屏与 S 表等高）。要和固定尺寸的兄弟等高，就**显式给高度**（本仓：`Row(Modifier.height(meterH))`，`meterH` 由屏宽算出）。门槛：`UiLayoutSafetyTest`（静态扫描，命中即失败）。
+- **Python/脚本改代码后必须验证替换生效**：`str.replace` 锚点不匹配会**静默失效**，编译照过、测试照绿（本仓已踩三次：v1.1.18 的 header 内联公式、ATR 行 TUNE 的 `height(30.dp)`、测试断言更新）。脚本里一律 `assert old in s` 再 replace，改完 `grep` 复核。
 - **UI 冒烟门槛（Compose 能组合、能布局）**：`app/src/testDebug/java/.../UI/MainScreenComposeTest.kt`（Robolectric + `ui-test-junit4`）。布局期异常在 CI 上原本是隐形的，只会在真机上表现为"装完打开就退出"（v1.1.16）。踩过的坑，改这条测试时照抄：
   - `@Config(application = Application::class)` —— 否则 Robolectric 会跑真的 `FT710App.onCreate` → `ServiceLocator` → `RxAudioPlayer` → `OpusBridge.<clinit>` → `System.loadLibrary("opus_jni")` → `UnsatisfiedLinkError`
   - 测试必须放在 **`src/testDebug`**：`ui-test-manifest` 只给了 `debugImplementation`，release 变体没有那个 Activity，`./gradlew test` 会两个变体都跑 → release 变体必红

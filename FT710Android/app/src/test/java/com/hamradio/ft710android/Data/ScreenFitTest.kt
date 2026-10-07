@@ -58,11 +58,7 @@ class ScreenFitTest {
         // 同样内容按标准档算（假装屏高够）
         val std = ScreenFit.budget(360, 1200, 40, 110, true, true, true)
         assertTrue("紧凑档 ${compact.total} 应明显小于标准档 ${std.total}", compact.total + 100 < std.total)
-        // 分区标题全档位都不显示（用户要求：各区域功能已知，标题白占空间）
-        assertFalse(ScreenFit.showSectionLabels(true))
-        assertFalse(ScreenFit.showSectionLabels(false))
-        assertEquals(0, ScreenFit.sectionLabelH(true))
-        assertEquals(0, ScreenFit.sectionLabelH(false))
+        // 分区标题已整体移除：预算里不含 label 项（守卫见 MainScreenComposeTest 的标题数断言）
     }
 
     /**
@@ -80,16 +76,21 @@ class ScreenFitTest {
         val mate = ScreenFit.budget(432, 880, 40, 110, true, true, true)
         assertEquals(ScreenFit.SPECTRUM_BONUS_CAP_DP, mate.spectrumBonus)
         assertTrue("给了余量后仍必须一屏：${mate.total} vs 880", mate.total <= 880)
-        // 小米/红米 360×728（三键导航）是支持下限：余量仍然不大，bonus 恰好等于余量、绝不超
+        // 小米/红米 360×728（三键导航）是支持下限：bonus 未被封顶时，
+        // 剩下的空白应**正好等于安全边界**（既填满一屏，又留一点吸收模型误差）
         val tight = ScreenFit.budget(360, 728, 40, 110, true, true, true)
-        assertTrue("紧机型余量应很小：${tight.spectrumBonus}", tight.spectrumBonus <= 30)
-        assertEquals(728 - (tight.total - tight.spectrumBonus), tight.spectrumBonus)
+        assertTrue("紧机型 bonus 应很小：${tight.spectrumBonus}", tight.spectrumBonus <= 30)
+        assertTrue("必须一屏：${tight.total} vs 728", tight.total <= 728)
+        assertEquals("未被封顶时剩余空白 = 安全边界",
+            ScreenFit.BONUS_SAFETY_DP, 728 - tight.total)
     }
 
     @Test fun `spectrum bonus is clamped and never makes the screen scroll`() {
         assertEquals(0, ScreenFit.spectrumBonus(availHeightDp = 700, fixedTotalDp = 720))
         assertEquals(0, ScreenFit.spectrumBonus(availHeightDp = 720, fixedTotalDp = 720))
-        assertEquals(9, ScreenFit.spectrumBonus(availHeightDp = 729, fixedTotalDp = 720))
+        // 余量不足安全边界时给 0（宁可留白也不顶出滚动条）
+        assertEquals(0, ScreenFit.spectrumBonus(availHeightDp = 729, fixedTotalDp = 720))
+        assertEquals(10, ScreenFit.spectrumBonus(availHeightDp = 740, fixedTotalDp = 720))
         assertEquals(ScreenFit.SPECTRUM_BONUS_CAP_DP,
             ScreenFit.spectrumBonus(availHeightDp = 1200, fixedTotalDp = 700))
         // 所有主流档位：加了 bonus 之后总高仍 ≤ 可用高度

@@ -67,8 +67,12 @@ object ScreenFit {
     /** 频谱区高度：紧凑档把用户设的 FFT/瀑布高度按比例压一档（仍尊重设置里的滑条）。 */
     fun spectrumScale(compact: Boolean): Float = if (compact) 0.68f else 1f
 
+    /**
+     * 频谱显示屏高度 = 瀑布/FFT 高度（按档位缩放）+ 标尺等固定开销。
+     * 这就是它在页面里的**实际占位**（UI 用 `.height(X).padding(top=6)`，padding 在 X 内部）。
+     */
     fun spectrumHeight(compact: Boolean, fftH: Int, wfH: Int): Int =
-        ((fftH + wfH) * spectrumScale(compact)).toInt() + SPECTRUM_CHROME_DP + PAGE_PAD_V
+        ((fftH + wfH) * spectrumScale(compact)).toInt() + SPECTRUM_CHROME_DP
 
     fun meterCellHeight(compact: Boolean): Int = if (compact) 26 else 30
     fun padBtnHeight(compact: Boolean): Int = if (compact) 32 else 34
@@ -114,9 +118,18 @@ object ScreenFit {
      */
     const val SPECTRUM_BONUS_CAP_DP = 80
 
-    /** 可用高度减去固定预算后的余量，夹在 0..cap。**恒不会让总高超过可用高度。** */
+    /** 余量安全边界（dp）：吸收算术模型与真实布局的几 dp 误差。 */
+    const val BONUS_SAFETY_DP = 10
+
+    /**
+     * 可用高度减去固定预算后的余量，夹在 0..cap。**恒不会让总高超过可用高度。**
+     *
+     * 再扣 [BONUS_SAFETY_DP] 安全边界：预算是算术模型，与真实布局可能差几 dp
+     * （字体取整、边框、内间距），留一点余量比顶出滚动条好。真实是否一屏由
+     * `OneScreenFitTest` 量 Compose 的滚动范围来判定（那才是权威）。
+     */
     fun spectrumBonus(availHeightDp: Int, fixedTotalDp: Int, capDp: Int = SPECTRUM_BONUS_CAP_DP): Int =
-        (availHeightDp - fixedTotalDp).coerceIn(0, capDp)
+        (availHeightDp - fixedTotalDp - BONUS_SAFETY_DP).coerceIn(0, capDp)
 
     /** 底部固定栏（PTT/CQ/TUNE）高度：竖直内边距 + 主按钮。 */
     fun bottomBarHeight(compact: Boolean, visible: Boolean): Int =
@@ -165,19 +178,18 @@ object ScreenFit {
         extraStatusChips: Int = 0,
     ): Budget {
         val c = isCompact(screenHeightDp)
-        val label = sectionLabelH(c)
         val padV2 = panelPadV(c) * 2
         val ig = innerGap(c)
         val meterRows = 2 + (if (hasAtr) 1 else 0)
         val cell = meterCellHeight(c)
-        // 卡片 = 上下内边距 + [标题] + N 个子项 + (N-1) × 内间距
-        fun card(items: Int, heightOf: (Int) -> Int): Int {
-            val n = items + (if (label > 0) 1 else 0)
-            return padV2 + label + (1..items).sumOf { heightOf(it) } + (n - 1) * ig
-        }
+        // 卡片 = 上下内边距 + N 个子项 + (N-1) × 内间距（无标题）
+        fun card(items: Int, heightOf: (Int) -> Int): Int =
+            padV2 + (1..items).sumOf { heightOf(it) } + (items - 1) * ig
         val fixed = Budget(
             header = headerHeight(c, screenWidthDp),
             status = statusHeight(c, screenWidthDp, extraStatusChips),
+            // 注意：UI 是 .height(X).padding(top=6)，footprint 就是 X（padding 在里面吃掉），
+            // 所以这里**不加** PAGE_PAD_V，否则模型会比真实布局多算 6dp
             spectrum = spectrumHeight(c, fftH, wfH),
             // 仪表卡：PWR/ALC + SWR/Id/Vd (+ATR) 行
             meters = card(meterRows) { cell },

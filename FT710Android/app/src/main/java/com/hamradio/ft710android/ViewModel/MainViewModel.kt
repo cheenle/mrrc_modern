@@ -358,9 +358,6 @@ class MainViewModel(
         if (v != state.micGain) sendSet("mic_gain", v)
     }
 
-    /** 状态行统计：RTT + 抖动缓冲（毫秒）。 */
-    fun audioBufferMs(): Int = rxPlayer?.bufferMs ?: 0
-
     /** 发射中的麦克风峰值（0..32767），状态行 TX 时显示，用来判断调制度。 */
     fun txPeak(): Int = txCapture?.peak() ?: 0
 

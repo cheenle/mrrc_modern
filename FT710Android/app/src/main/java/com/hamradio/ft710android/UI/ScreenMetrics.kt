@@ -28,7 +28,6 @@ class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeig
     val memoryCellHeight: Dp get() = ScreenFit.memoryCellHeight(compact).dp
     val panelPadH: Dp get() = ScreenFit.panelPadH(compact).dp
     val panelPadV: Dp get() = ScreenFit.panelPadV(compact).dp
-    val showSectionLabels: Boolean get() = ScreenFit.showSectionLabels(compact)
     val gap: Dp get() = ScreenFit.gap(compact).dp
     val statusItemHeight: Dp get() = ScreenFit.STATUS_ITEM_H.dp
     val innerGap: Dp get() = ScreenFit.innerGap(compact).dp
@@ -36,8 +35,7 @@ class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeig
     val spectrumScale: Float get() = ScreenFit.spectrumScale(compact)
 
     /** 用户设的频谱高度按档位缩放（紧凑档压一档，仍然尊重设置里的滑条）。 */
-    fun spectrumHeight(fftH: Int, wfH: Int): Dp =
-        (ScreenFit.spectrumHeight(compact, fftH, wfH) - ScreenFit.PAGE_PAD_V).dp
+    fun spectrumHeight(fftH: Int, wfH: Int): Dp = ScreenFit.spectrumHeight(compact, fftH, wfH).dp
 
     /**
      * 屏幕余量（分给频谱，封顶 [ScreenFit.SPECTRUM_BONUS_CAP_DP]）。

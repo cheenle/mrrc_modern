@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.sp
 
 /**
@@ -61,10 +62,11 @@ fun Panel(
     padV: androidx.compose.ui.unit.Dp = 9.dp,
     spacing: androidx.compose.ui.unit.Dp = 4.dp,
     modifier: Modifier = Modifier,
+    tag: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        modifier
+        modifier.then(if (tag != null) Modifier.testTag(tag) else Modifier)
             .fillMaxWidth()
             .clip(MrrcSurfaces.CardRadius)
             .background(MrrcSurfaces.Panel)
@@ -103,31 +105,3 @@ fun DisplayBezel(
         content = content,
     )
 }
-
-/** 分区标题：小字距 + 淡化，右侧可挂操作（如"管理"）。 */
-@Composable
-fun SectionLabel(
-    text: String,
-    modifier: Modifier = Modifier,
-    trailing: (@Composable () -> Unit)? = null,
-) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text,
-            color = MrrcColors.TextMuted,
-            fontSize = 9.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.2.sp,
-        )
-        Spacer(Modifier.weight(1f))
-        trailing?.invoke()
-    }
-}
-
-/** 面板之间的统一竖向节奏。 */
-@Composable
-fun Gap(dp: androidx.compose.ui.unit.Dp = 8.dp) = Spacer(Modifier.height(dp))
-
-/** 横向间距（行内分组用）。 */
-@Composable
-fun HGap(dp: androidx.compose.ui.unit.Dp = 6.dp) = Spacer(Modifier.width(dp))

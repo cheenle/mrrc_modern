@@ -8,13 +8,9 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
-import com.hamradio.ft710android.Network.ConnectionManager
-import com.hamradio.ft710android.Network.parseWsEvent
-import com.hamradio.ft710android.PTT.PTTManager
 import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -44,52 +40,11 @@ class MainScreenComposeTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private fun ptt() = PTTManager(
-        sendPTT = {}, sendTXAudioStop = {}, sendHeartbeat = {},
-        startTxAudio = {}, stopTxAudio = {}, serverTXStatus = { 0 },
-        isCtrlConnected = { true }, onStuckTX = {}, dispatcher = Dispatchers.Unconfined,
-    )
-
-    private fun vm(scope: CoroutineScope, atrEnabled: Boolean = true): MainViewModel {
-        val cm = ConnectionManager(
-            OkHttpClient(), scope, {}, {}, {}, {}, {}, {}, sendOverride = {},
-        )
-        val vm = MainViewModel(
-            authApi = null, connectionManager = cm, rxPlayer = null, txCapture = null,
-            spectrumProcessor = null, memoryChannelsStore = null,
-            pttManager = ptt(), scope = scope,
-        )
-        // 真实 fullState：bands 是对象数组、filterTables 是 [idx,hz] 数对、s_unit 是字符串
-        vm.onWsEvent(
-            parseWsEvent(
-                """{"type":"fullState",
-                   "data":{"vfo_a_freq":7116950,"mode":1,"mode_name":"USB","tx_status":0,"scope_span":6,
-                           "s_meter":120,"s_unit":"S7","s_meter_dbm":-3,"band_name":"40m",
-                           "power_watts":0.0,"alc_pct":0.0,"swr_ratio":1.2},
-                   "bands":[{"name":"40m","start":7000000,"end":7300000,"bsr":3,"default_freq":7100000}],
-                   "modes":["LSB","USB","CW-U"],
-                   "memChannels":[{"freq":7116950,"mode":"LSB","label":"M1"},null,null,null,null,null],
-                   "filterTables":{"voice":[[1,300],[2,500]],"narrow":[[1,50]],"narrowModes":["CW-U"]},
-                   "radioDisplayName":"Yaesu FT-710",
-                   "capabilities":{"model_name":"ft710","display_name":"Yaesu FT-710","verified":true,
-                                   "has_atu":true,"has_auto_notch":true,"has_vd_id_meters":true,
-                                   "filter_model":"width_table","att_steps":[0,6,12,18],
-                                   "preamp_steps":["OFF","AMP1","AMP2"],"scope_type":"ft4222",
-                                   "audio_gain_boost":10.0,
-                                   "scope_spans":{"0":{"name":"1 kHz","freq":1000},
-                                                  "6":{"name":"100 kHz","freq":100000},
-                                                  "9":{"name":"1 MHz","freq":1000000}}},
-                   "atr1000Enabled":$atrEnabled}""".trimIndent(),
-            ),
-        )
-        return vm
-    }
-
     @Test
     fun `main screen composes and lays out without crashing`() {
         val scope = CoroutineScope(Dispatchers.Unconfined)
         // VM 必须在 setContent **外面**建：写在里面每次重组都会新建一个
-        val vm = vm(scope)
+        val vm = fixtureVm(scope)
         assertEquals("fullState 必须真的应用了", 7116950L, vm.state.vfoAFreq)
         rule.setContent {
             AppTheme {
@@ -124,7 +79,7 @@ class MainScreenComposeTest {
     fun `main screen composes when the ATR option is not configured`() {
         // 没装 ATR-1000 的部署：fullState.atr1000Enabled=false → ATR 行不渲染，且不能崩
         val scope = CoroutineScope(Dispatchers.Unconfined)
-        val vm = vm(scope, atrEnabled = false)
+        val vm = fixtureVm(scope, atrEnabled = false)
         assertFalse(vm.atr1000Enabled.value)
         rule.setContent {
             AppTheme {
@@ -142,7 +97,7 @@ class MainScreenComposeTest {
     fun `main screen composes in listen-only and on a narrow screen`() {
         // 只读登录（发射类 UI 隐藏）+ 极窄屏（FlowRow 折行）都不该崩
         val scope = CoroutineScope(Dispatchers.Unconfined)
-        val vm = vm(scope)
+        val vm = fixtureVm(scope)
         vm.onListenOnly()
         assertTrue(vm.listenOnly.value)
         rule.setContent {

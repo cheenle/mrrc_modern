@@ -113,7 +113,24 @@ rootfs free before overlay: 963 MiB
 
 `MRRC-Modern-<ver>-w103d.img.gz` 属于**发布制品**。真要发布时按 `dual-platform-release` 技能处理：
 版本号、`release-artifacts.json` 的规则、网站下载卡、以及带 SHA 的线上复核。
-本手册不重复那套流程——设计文档 §11 已说明发布留给独立变更。
+本手册不重复那套流程。
+
+**已发布（2026-10-07）**：
+
+```
+https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.4-w103d.img.gz
+1,156,345,060 bytes   SHA-256 b0a20f7f4ba581540b4ee3f55f1c5cf69140ebc1e4d3cc0e4cee51493a797dd6
+```
+
+发布路径与桌面安装包一致（`dual-platform-release` 技能第 5/6 步）：`scp` 到 `www.vlsc.net:/var/tmp/`
+（**不是 `/tmp`——那是 958 MB 的 tmpfs**）→ **服务端独立算 SHA 核对后才 `sudo -n mv`** 进
+`/var/www/vlsc.net/mrrc_modern/downloads/` → `website/deploy.sh` 部署 HTML（它**排除 `downloads/`**，
+所以镜像不会被 `rsync --delete` 清掉；HTML 部署**必须只跑一次**）。
+
+卡片写在 `website/index.html` 与 `website/zh/index.html` 的树莓派卡片之后，
+`release-artifacts.json` 的 `artifact_facts` 多了 `website-w103d-card` 一条——
+它按**字节数与 SHA 前 8 位子串**核对卡片是否描述了真正的产物，所以**重新构建后必须同时更新卡片上的两个值**，
+否则 `release_check` 会红（这正是设计意图：卡片指向的必须是真正上传的那份字节）。
 
 ## 首次真构建：九个 bug 与实测结果（2026-10-07）
 

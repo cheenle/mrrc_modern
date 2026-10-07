@@ -23,7 +23,7 @@
 - Maintain WebSocket control channel `/WSradio` with JSON protocol.
 - Maintain RX audio channel `/WSaudioRX` using tagged dual-codec frames (Opus 48kHz default, Int16 PCM fallback).
 - Maintain TX audio channel `/WSaudioTX` for browser microphone uplink.
-- Maintain spectrum channel `/WSspectrum` with binary 850/1701-byte frames at ~30 fps.
+- Maintain spectrum channel `/WSspectrum` with binary frames of 1701 or 851 bytes, tiered per socket (AD-025); the loop ticks at 30 Hz and real scope frames follow the hardware (~11 fps measured).
 - Implement dual-mode spectrum: real FFT data (FT4222 SPI for FT-710, CI-V 0x27 for IC-7300) + S-meter Gaussian fallback.
 - Implement full radio command set for the selected backend via serial port with threaded/asynchronous I/O.
 - 7-task background polling with adaptive skip-on-command.

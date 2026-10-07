@@ -64,8 +64,11 @@ MAX_PACKET_BYTES = 4000   # output buffer ceiling (never reached in practice)
 # Opus needs ≳32 kbps to even reach the high end; 48 kbps is audible-but-not-
 # transparent on music. 64 kbps mono is the sweet spot for remote WFM listening:
 # near-transparent on broadcast music yet only 1/12 the 768 kbps Int16 PCM rate,
-# so a remote link stops underrunning (the PCM stutter). Runtime-adjustable via
-# the setOpusBitrate control command (48/64/96/128 kbps presets on the client).
+# so a remote link stops underrunning (the PCM stutter).  NOT runtime-adjustable
+# today: `setOpusBitrate` appears in this comment and in
+# docs/IOS_OPUS_INTEGRATION.md, but no server or client implements it — the
+# codec's own set_bitrate() is only reachable at construction time.  Bitrate
+# tiers wait for that command to exist (AD-025 puts them out of P1 scope).
 DEFAULT_BITRATE = 64000
 MIN_BITRATE = 8000
 MAX_BITRATE = 128000

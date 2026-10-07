@@ -142,9 +142,9 @@
 <tr>
 <td>NFR-003</td>
 <td>Spectrum bandwidth</td>
-<td>~1701 bytes/frame at ~30fps (~51KB/s) real scope; ~851 bytes/frame fallback</td>
+<td>Tiered by <code class="scope-code">spectrum_profile</code> (AD-025): <code class="scope-code">high</code> = 1701 B/frame every broadcast tick, <code class="scope-code">mid</code> = 851 B every 2nd tick, <code class="scope-code">low</code> = 851 B every 4th. The loop ticks at 30 Hz but real scope frames go out only when the hardware counter advances — <strong>measured 11.1 fps on the FT-710</strong> ⇒ ~151 kbps payload for <code class="scope-code">high</code>, ~38 for <code class="scope-code">mid</code>, ~19 for <code class="scope-code">low</code>. The S-meter fallback regenerates a frame on <em>every</em> tick (~30 fps ⇒ ~408 kbps for <code class="scope-code">high</code>) and passes through the same divider. A socket that never sends <code class="scope-code">spectrumCaps</code> always gets <code class="scope-code">high</code>. These are <strong>payload</strong> figures: browsers negotiate <code class="scope-code">permessage-deflate</code> (measured 1701 B → ~441 B on the wire) while Android’s OkHttp does not, so a phone pays the payload</td>
 <td>Medium</td>
-<td>WS frame size inspection</td>
+<td><code class="scope-code">dev_tools/spectrum_profile_probe.py</code>; <code class="scope-code">session_metrics</code> <code class="scope-code">spectrum_profiles</code></td>
 </tr>
 <tr>
 <td>NFR-004</td>
@@ -518,7 +518,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.74 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.75 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

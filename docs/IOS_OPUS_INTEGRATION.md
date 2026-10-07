@@ -61,7 +61,7 @@ TX(`/WSaudioTX` 上行)与 RX(`/WSaudioRX` 下行)同构:
 | 采样率 | 48kHz 单声道(有线格式;服务端内部再 48↔44.1k 重采样给 FT-710 USB 声卡) | `opus_rx.py:50-57`;`audio_handler.py:533`(`feed_tx_audio` 无条件 `resample_48_to_441`) |
 | 帧长 | 20ms = 960 样本/帧 | `opus_rx.py:54-55`;iOS `AudioCaptureManager.swift:12-13`(累加器按 960 切帧,`:118-120`);web `tx_opus_worker.js:83`(`OpusEncoder(48000, 1, 2048, 20)`) |
 | PCM 格式 | Little-endian Int16 | iOS `floatToInt16` + 逐样本 append(`AudioCaptureManager.swift:145-154`);服务端 ctypes `c_int16` |
-| RX Opus 码率 | 默认 64kbps(运行时 `setOpusBitrate` 可调 8–128kbps,按 `max_data_bytes` 截帧实现) | `opus_rx.py:60-69`、`:197-205` |
+| RX Opus 码率 | 默认 64kbps。**`setOpusBitrate` 仅存在于文档与注释，服务端与客户端均未实现**（`opus_rx.py` 内部 `set_bitrate()` 只在构造时生效，没有运行时命令入口）；码率档位待后续阶段 | `opus_rx.py:60-69`、`:197-205` |
 | TX Opus 应用类型 | VOIP(2048)——web 与 iOS 桥一致;服务端 RX 编码器用 AUDIO(2049) | `tx_opus_worker.js:83`;`OpusBridge.c:19`;`opus_rx.py:183` |
 
 服务端对 TX 帧长容错:`TxOpusDecoder` 缓冲按 120ms(5760 样本)上限分配(`opus_rx.py:56`),单包超限才出错;但客户端应严格按 960 样本/20ms 发。

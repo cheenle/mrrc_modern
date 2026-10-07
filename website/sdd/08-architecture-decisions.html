@@ -962,11 +962,11 @@
 </tr>
 <tr>
 <td>Consequences</td>
-<td>①<strong>只记计数与字节</strong>：token 只在模块内部作不透明键，绝不进入 <code class="scope-code">snapshot()</code>/<code class="scope-code">report()</code>，因此端点与日志可安全暴露（沿用 AD-021/NFR-068 的隐私边界）；②<strong>双重关闭容忍</strong>：清理既走正常返回也走异常路径，且广播可能已把 socket 移出集合，计数下溢必须不抛；③<strong>窗口峰值不衰减</strong>：滑动窗口内的采样是真实观测，窗口内无采样时取当前值，绝不报告低于当前值；④控制面文本帧不计量（&lt;10 kbps，对比频谱 408 kbps），这是刻意的范围限制。</td>
+<td>①<strong>只记计数与字节</strong>：token 只在模块内部作不透明键，绝不进入 <code class="scope-code">snapshot()</code>/<code class="scope-code">report()</code>，因此端点与日志可安全暴露（沿用 AD-021/NFR-068 的隐私边界）；②<strong>双重关闭容忍</strong>：清理既走正常返回也走异常路径，且广播可能已把 socket 移出集合，计数下溢必须不抛；③<strong>窗口峰值不衰减</strong>：滑动窗口内的采样是真实观测，窗口内无采样时取当前值，绝不报告低于当前值；④控制面文本帧不计量（&lt;10 kbps，对比频谱 408 kbps），这是刻意的范围限制。〔<strong>2026-10-07 校正，见 AD-025</strong>：408 kbps 只在 S-meter 回退态成立；真频谱实测 11.1 fps ⇒ ~151 kbps payload，且自 AD-025 起频谱按档位可配（high/mid/low ≈ 151/38/19 kbps）。控制面 &lt;10 kbps 至今仍未被计量，是估算而非读数。〕</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Problem</strong>: Cloud Hub（<code class="scope-code">mrrc_hub/SDD</code> AD-H12）明确拒绝在拿到”单实例真实 Listener 并发分布”之前建设 RX 扇出，而那个数字的原材料（<code class="scope-code">spectrum_clients</code> / <code class="scope-code">audio_rx_clients</code> / <code class="scope-code">_listen_tokens</code>）一直只活在内存里、随进程消失。同时实测已表明单会话带宽里<strong>频谱占 ~86%</strong>（1701 B/帧 × 30 fps ≈ 408 kbps，对比 RX Opus 64 kbps）—— 猜错的代价不是数字难看，而是重构错了子系统。</p>
+<p><strong>Problem</strong>: Cloud Hub（<code class="scope-code">mrrc_hub/SDD</code> AD-H12）明确拒绝在拿到”单实例真实 Listener 并发分布”之前建设 RX 扇出，而那个数字的原材料（<code class="scope-code">spectrum_clients</code> / <code class="scope-code">audio_rx_clients</code> / <code class="scope-code">_listen_tokens</code>）一直只活在内存里、随进程消失。同时实测已表明单会话带宽里<strong>频谱占 ~86%</strong>（1701 B/帧 × 30 fps ≈ 408 kbps，对比 RX Opus 64 kbps）〔<strong>2026-10-07 校正，见 AD-025</strong>：30 fps 是 tick 率而非出帧率——真频谱只在硬件帧计数前进时发送，实测 11.1 fps ⇒ 频谱 ~151 kbps payload、占单会话 ~72%（不是 86%）；408 kbps 是 S-meter 回退态的数字。结论方向不变（频谱仍是主项），但 hub 的容量输入应以 151 kbps 与可配档位为准。〕—— 猜错的代价不是数字难看，而是重构错了子系统。</p>
 <p><strong>Rationale</strong>: 把”要不要做扇出”从判断变成读数：峰值会话数回答”值不值得”，两路上行字节回答”省下多少”。同时把隐私边界写死在模块里（只有计数和字节），使这份观测可以默认开启、可以放上公网端点，而不必先谈同意书。</p>
 <h2 id="ad-024-会话令牌传输cookie-优先header-给原生客户端query-弃用">AD-024: 会话令牌传输（Cookie 优先、Header 给原生客户端、Query 弃用）</h2>
 <table class="scope-table">
@@ -1005,13 +1005,50 @@
 </table>
 <p><strong>Problem</strong>: 浏览器前端把会话令牌拼进 <code class="scope-code">?token=</code>，而实例跑 uvicorn 默认访问日志（含 query string），项目自己也早已知道这一点（<code class="scope-code">support_bundle.py</code> 的脱敏正则注释点名 “a <code class="scope-code">?token=</code> inside a URL”）—— 但脱敏只在导出诊断包时发生。一旦进入 Cloud Hub 的透明代理模式，中心侧每一条访问日志都会记录各实例的 30 天令牌；而浏览器侧没有自定义头能力这一”技术理由”，其实并不成立：<strong>同源 WS 握手会自动带上 Cookie</strong>。</p>
 <p><strong>Rationale</strong>: 让凭证回到它能被系统正确保护的位置（Cookie / Header），URL 里只留资源路径。对已安装的原生客户端保留 query 兜底，是因为”安全改进”不该以现有用户的连接为代价 —— 但必须让它可观测，否则永远不会有人去改。</p>
+<h2 id="ad-025-频谱带宽档位形状-分频以-caps-协商为闸门">AD-025: 频谱带宽档位（形状 × 分频，以 caps 协商为闸门）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Design / Bandwidth</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V2.75, v1.26.0) — 服务端 + Web；Android/iOS 尚未发 caps</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>新增 <code class="scope-code">spectrum_profile.py</code>（纯标准库、不引应用模块）：档位 = <strong>两个正交因子</strong>——<code class="scope-code">shape</code>（<code class="scope-code">full</code> = <code class="scope-code">0x01</code>+wf1+wf2 = 1701 B；<code class="scope-code">wf1</code> = <code class="scope-code">0x01</code>+wf1 = 851 B）× <code class="scope-code">divider</code>（广播 tick 的 1/2/3/4），包成具名预设 <code class="scope-code">high</code>(full,÷1) / <code class="scope-code">mid</code>(wf1,÷2) / <code class="scope-code">low</code>(wf1,÷4) 与服务端内部的 <code class="scope-code">listen</code>(full,÷3)。短帧由 <code class="scope-code">full[:851]</code> <strong>切片</strong>得到，因此 <code class="scope-code">scope_handler</code> 与 backends 一行未改、也不存在第二条会漂移的组帧路径。客户端在 <code class="scope-code">/WSspectrum</code> 上发文本帧 <code class="scope-code">{"type":"spectrumCaps","profile":"mid"}</code> 声明档位；<strong>未声明则永远 <code class="scope-code">high</code></strong>（逐字节等于 AD-025 之前的流）。真频谱与 S-meter 回退两条路径共用同一个 <code class="scope-code">_spectrum_fanout</code>，按<strong>实发字节</strong>计量并分档计帧。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong>只砍 wf2</strong>：对浏览器几乎不省钱——uvicorn 0.52.1 与浏览器协商 <code class="scope-code">permessage-deflate</code>，实测 30 帧×1701 B 上线后只剩 13224 B（≈441 B/帧，3.9×），其中 850 字节零值的 wf2 压缩后≈1.4 B/帧；②<strong>只降帧率</strong>：对 Android 不够——OkHttp 4.12 不提供该扩展（dex 里带 <code class="scope-code">Request header not permitted: 'Sec-WebSocket-Extensions'</code> 守卫），1701 B 真的逐个走出去，而用户要的”每档减半”要在两种口径上都成立；③<strong>850→425 点降采样</strong>：给所有客户端加渲染复杂度，浏览器侧收益又最小，推迟；④<strong>音频码率档</strong>：<code class="scope-code">setOpusBitrate</code> 只存在于注释与 iOS 集成文档，服务端与客户端均未实现，先补命令再谈档位；⑤<strong>新协议版本号 <code class="scope-code">0x02</code></strong>：会静默杀掉已装 iOS（<code class="scope-code">SpectrumProcessor.swift:57</code> 是 <code class="scope-code">guard version == 0x01</code>），改为把 SDD 里从未上线的 v1=851 B 落实、全帧保持 <code class="scope-code">0x01</code>；⑥形状×分频两因子 + caps 闸门（采纳）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>payload 轴</strong>：high→mid→low = 151→38→19 kbps（×¼、×⅛，真频谱 11.1 fps 实测口径）；<strong>Android 线上轴</strong>同比例（无 deflate）；<strong>浏览器线上轴</strong> ≈39→20→10 kbps（deflate 已把 wf2 压掉）。两个轴差近 4 倍，引用数字必须标明口径——<code class="scope-code">Session metrics</code> 行因此改标 <code class="scope-code">payload≈</code>。②<strong>回退态不再比健康态贵</strong>：修好了”S-meter 回退无帧计数闸门、每 tick 重造 1701 B”这个 bug（health 11 fps vs fallback 30 fps），两条路径现在每档字节数一致。③<strong>兼容性靠闸门而非靠客户端升级</strong>：已装 Android 的 <code class="scope-code">SpectrumFrame.kt:14-15</code> 同时硬判 <code class="scope-code">size != 1701</code> 与 <code class="scope-code">frame[0] != 0x01</code>，是唯一吃不下 851 B 帧的客户端；不发 caps 就永远拿 <code class="scope-code">high</code>，所以本阶段<strong>不需要</strong>发 APK。Web 与 iOS 的解析器本来就能吃 851 B。④<strong>多了一份按 socket 的状态</strong>：<code class="scope-code">_spectrum_profiles</code> 必须在 handler 的 <code class="scope-code">finally</code> 里与两个 socket 集合一起回收（三个泄漏点，不是两个），已由集成测试钉住。⑤<strong>可观测</strong>：<code class="scope-code">session_metrics.snapshot()["spectrum_profiles"]</code> 分档计帧计字节，<code class="scope-code">dev_tools/spectrum_profile_probe.py</code> 可当场复现验收表（<code class="scope-code">--no-deflate</code> 切到 Android 轴，<code class="scope-code">--no-caps</code> 验证兼容闸门）。⑥计量刻意放在发送的 <code class="scope-code">try</code> <strong>之外</strong>：否则计数器里的 bug 会被 <code class="scope-code">except Exception</code> 洗成”客户端走了”而把健康 socket 静默踢出 <code class="scope-code">spectrum_clients</code>。⑦边界：Android/iOS 要真正省流量得等 P2/P3（发 caps + 设置项，Android 走 APK-only 通道）；跨仓 <code class="scope-code">mrrc_hub</code> 的 NFR-H007（0.48 Mbps）与 AD-H14（频谱占 86%）建在 30 fps 假设上，输入数据需按 151 kbps / ~72% 修正。</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: 公网出口带宽与移动流量账单的主项是频谱，但”省带宽”这件事在本仓从来没有可动的旋钮：帧长恒为 1701 B、tick 恒为 30 Hz，唯一存在的节流是 listener 的 ÷3。而两个实测事实使任何单一手段都不够——浏览器侧 <code class="scope-code">permessage-deflate</code> 已经把 wf2 的 850 个零字节压到≈1.4 B/帧（砍它对网页几乎无效），Android 侧则完全没有压缩（砍它就是全部收益）。同时 SDD §9.2.4 定义的 v1=851 B <strong>从未上过线</strong>（全仓无任何代码发出 <code class="scope-code">0x02</code>，<code class="scope-code">git log -S</code> 零命中），文档与线上格式已经对不上；而回退路径因为没有帧计数闸门，坏消息反而比好消息贵（30 fps × 1701 B ≈ 408 kbps，对比真频谱 151 kbps）。</p>
+<p><strong>Rationale</strong>: 把”省带宽”从一次性的格式决定变成<strong>每 socket 可协商的档位</strong>，并且让兼容性由服务端闸门保证而不是由客户端升级保证——未声明能力的连接逐字节拿到今天的流，所以老 Android 不会因为服务端先上线而黑屏。两个因子分别覆盖两个轴（形状覆盖 Android 的 payload、分频覆盖浏览器的 deflate 后线上字节），这样”每档减半”在两种口径上都成立，而不是只在其中一个上好看。短帧用切片而非新组帧路径，是为了让 <code class="scope-code">scope_handler</code> 与 11 个 backend 完全不动——组帧代码只有一份，就不存在两份会漂移的实现。全帧保持 <code class="scope-code">0x01</code> 而不是改成 <code class="scope-code">0x02</code>，是因为已装 iOS 客户端 <code class="scope-code">guard version == 0x01</code>：一个”更贴合文档”的版本号会换来一批静默丢帧的用户。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.74 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.75 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -6,7 +6,7 @@
 | ---- | ------------- | -------- | ---------- | ------------- |
 | NFR-001 | RX audio latency | < 500ms end-to-end (radio speaker → browser speaker) | Critical | Listening test |
 | NFR-002 | Control response | UI command ack within 200ms on LAN | High | WebSocket round-trip observation |
-| NFR-003 | Spectrum bandwidth | ~1701 bytes/frame at ~30fps (~51KB/s) real scope; ~851 bytes/frame fallback | Medium | WS frame size inspection |
+| NFR-003 | Spectrum bandwidth | Tiered by `spectrum_profile` (AD-025): `high` = 1701 B/frame every broadcast tick, `mid` = 851 B every 2nd tick, `low` = 851 B every 4th. The loop ticks at 30 Hz but real scope frames go out only when the hardware counter advances — **measured 11.1 fps on the FT-710** ⇒ ~151 kbps payload for `high`, ~38 for `mid`, ~19 for `low`. The S-meter fallback regenerates a frame on *every* tick (~30 fps ⇒ ~408 kbps for `high`) and passes through the same divider. A socket that never sends `spectrumCaps` always gets `high`. These are **payload** figures: browsers negotiate `permessage-deflate` (measured 1701 B → ~441 B on the wire) while Android's OkHttp does not, so a phone pays the payload | Medium | `dev_tools/spectrum_profile_probe.py`; `session_metrics` `spectrum_profiles` |
 | NFR-004 | Audio transport bandwidth | Opus ~48–64kbps at 48kHz mono; PCM ~768kbps fallback | Medium | Network monitor |
 | NFR-005 | CPU stability | No sustained overload from serial polling + audio + scope | High | Activity Monitor/top observation |
 | NFR-006 | Serial port throughput | < 300 bytes/sec polling at 38400 baud (FT-710) or 115200 baud (IC-7300), well under limit | High | Serial monitor |

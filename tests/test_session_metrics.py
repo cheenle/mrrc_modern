@@ -149,8 +149,12 @@ class ByteTests(unittest.TestCase):
         self.assertEqual(self.m.snapshot()["uplink_bytes_total"]["spectrum"], 0)
 
     def test_report_yields_a_rate_and_resets_the_delta(self):
-        """408 kbps is the measured spectrum cost (1701 B × 30 fps); the report
-        has to reproduce that from real frames, or the capacity model is fiction."""
+        """30 Hz x 1701 B = 408.2 kbps is the *S-meter fallback* rate, not the
+        measured one: real scope frames go out only when the hardware counter
+        advances (~11.1 fps measured => ~151 kbps).  This pins the byte -> kbps
+        arithmetic and that a second report does not re-count the same frames,
+        using the fallback figure because it is the round 30-frames-per-second
+        case (AD-025 / NFR-003)."""
         for _ in range(30):
             self.m.add_bytes("spectrum", 1701)
         self.clock.advance(1.0)

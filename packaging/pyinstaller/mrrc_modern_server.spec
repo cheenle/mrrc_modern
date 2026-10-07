@@ -66,6 +66,10 @@ a = Analysis(
         "cloud_hub",
         # Support diagnostics bundle (spec 2026-09-17)
         "support_bundle",
+        # Spectrum bandwidth tiers (AD-025).  server.py imports it statically so
+        # analysis would find it — named anyway after the v1.24.0 cloud_hub
+        # incident shipped a build whose import was missing.
+        "spectrum_profile",
         # Serial / audio runtime
         "serial",
         "serial.tools.list_ports",

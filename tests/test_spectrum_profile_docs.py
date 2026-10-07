@@ -160,8 +160,12 @@ class VersionConsistencyTests(unittest.TestCase):
         """The number below is the real `unittest discover` output."""
         text = _read("tests/README.md")
         self.assertNotIn("1673", text)
-        self.assertIn("1751", text)
-        self.assertIn("92 test modules", text)
+        # 1751/92 was the count before the W103D box guards and the install.sh
+        # variable scanner landed; a stale copy must not be left behind.
+        self.assertNotIn("1751", text)
+        self.assertNotIn("92 test modules", text)
+        self.assertIn("1766", text)
+        self.assertIn("93 test modules", text)
 
 
 if __name__ == "__main__":

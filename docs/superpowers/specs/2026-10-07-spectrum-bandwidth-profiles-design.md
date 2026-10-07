@@ -130,7 +130,7 @@ Sec-WebSocket-Extensions: permessage-deflate; server_max_window_bits=12; client_
 {"type":"spectrumCaps","profile":"mid"}
 ```
 
-- 该端点现有循环就是 `await ws.receive_text()` 然后丢弃（`server.py:3790`），加解析是零结构改动。
+- 该端点现有循环就是 `await ws.receive_text()` 然后丢弃（`server.py:3789`），加解析是零结构改动。
 - **profile 名走白名单**，不接受客户端自带 div/shape 数字——避免把服务端速率变成客户端可任意施加的面。
 - 记在 **per-socket** 而非 per-token：令牌是 30 天 Cookie，一个会话可同时握着多条半开 `/WSspectrum`（本仓 `_register_tx_socket` 那条教训就是"按 socket 判定"）。重连后客户端重发一次即可。
 
@@ -211,6 +211,8 @@ UI 入口固定放设置页，**不放状态行**（安卓状态行只剩 269/34
 - 回滚：删掉 caps 解析分支即回到今天形态（`high` 是逐字节兼容的默认），无需数据迁移；cookie/DataStore 里的档位键留着无害。
 
 ## 10. 分期
+
+> 接下来的第一个实现计划只覆盖 **P1**（服务端 + Web）；P2/P3 在 P1 验收后各自开新的 spec→plan 周期，不在本计划里预写。
 
 1. **P1 服务端 + Web**：形状/分频模型、caps 解析、回退封顶、双变体扇出、metrics 分档、Web 设置项与 caps 发送、测试与文档同步。发布后 Web 立即全端生效，iOS 不需出包。
 2. **P2 安卓**：`SpectrumFrame` 双长度 + caps + 设置页三档 + DataStore → `./release.sh --apk-only` → `publish-card.sh` 更新官网下载卡。**绝不跑全站 deploy。**

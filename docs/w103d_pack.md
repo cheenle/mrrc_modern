@@ -146,6 +146,10 @@ MRRC_BOX_FRP_PROXY=https://gh-proxy.com/                    # 默认；置空用
 - 产物 `dist/w103d/MRRC-Modern-<ver>-w103d.img.gz`（`<ver>` 取自 CHANGELOG 顶版本）
 - rootfs 可用 **948 MiB → 905 MiB**（净增仅 43 MiB；`/opt/mrrc_modern` 145 MiB，回收步骤收回约 100 MB 缓存）
 - 全流程耗时取决于网络（三个源都慢时最久的是 frpc；配好镜像后 apt+pip 合计约 2 分钟）
+- **产物 .gz 体积会因构建历史浮动几个百分点**（实测同内容两次构建：1.067 GB vs 1.132 GB）。差异全部来自
+  ext4 空闲块里残留数据的多少（被删掉的 apt lists / pip 缓存 / `/tmp` 留在已释放块里），**不是内容差异**——
+  两次构建挂载后 `df` 与各目录 `du` 逐项相同。要发布就发布**那一次**的产物并记下它的 SHA，别拿两次的
+  体积互相比对
 
 **产物验证**（`dist/` 里那份真产物，不是工作区）：
 

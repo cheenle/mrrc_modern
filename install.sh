@@ -46,6 +46,7 @@ YES_MODE=false
 INSTALL_DEPS=true
 INSTALL_AUDIO=true
 INSTALL_SCOPE=true
+INSTALL_DEV=false
 START_SERVICE=false
 
 OS=""; ARCH=""; PKG_MANAGER=""
@@ -54,6 +55,12 @@ DETECTED_CAT_PORT=""; DETECTED_SCOPE_PORT=""
 DETECTED_AUDIO_IN=""; DETECTED_AUDIO_OUT=""
 FTDI_LIB_OK=false; OPUS_LIB_OK=false; AUDIO_OK=false
 WARNINGS=(); ERRORS=()
+
+# `USER` is a login-shell variable, and this script runs under `set -u`. A
+# chroot has no login shell, so the variable is simply absent there — and the
+# systemd unit written in STEP 9 interpolates it, which kills the install at
+# the second-to-last step. Fill it in the way a login shell would.
+: "${USER:=$(id -un)}"
 
 # ── Help ──────────────────────────────────────────────────────────────
 usage() {
@@ -952,7 +959,8 @@ SVCEOF
       ;;
     macos)
       # ── launchd plist ───────────────────────────────────────────
-      local plist_file="$HOME/Library/LaunchAgents/com.mrrc.modern.plist"
+      local launch_agents="${HOME:?HOME must be set to install a launchd agent}/Library/LaunchAgents"
+      local plist_file="$launch_agents/com.mrrc.modern.plist"
       if [ -f "$plist_file" ]; then
         log_ok "launchd service already exists: $plist_file"
         return 0

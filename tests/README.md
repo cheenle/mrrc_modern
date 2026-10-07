@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1669 tests across 89 test modules (19 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-06, macOS). The per-module sections below
-itemise 71 of those 89 — the support-chain, Cloud Hub and upgrade-channel modules
+1683 tests across 90 test modules (19 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-07, macOS). The per-module sections below
+itemise 71 of those 90 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1669 |
-| Passed | 1667 (1 skipped) |
+| Total tests | 1683 |
+| Passed | 1681 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 1 — **pre-existing, not from the box-image work**: `test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload` (reproduces on `origin/main`; deterministic) |
 | Execution time | ~35s (harness tests spawn CLI subprocesses) |
@@ -749,6 +749,16 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | ------ | ------ |
 | `test_box_profiles.py` | 11 份 radio profile 与 `known_models()` **双向相等**（多一个少一个都红）；每份的 `MRRC_RADIO_MODEL` 等于文件名；只含白名单键（波特率/串口/声卡都不该写第二遍）；**任何 profile 不得出现 `MRRC_ALLOW_UNVERIFIED_TX=1`**，且 8 个未验证机型必须显式写 `=0`（AD-019 / NFR-067——镜像的首次连接若能在未经测量的表上按下发射键，就是这条要防的事）；硬编码的那 8 个集合与后端 profile 注册表**交叉校验**（防止列表漂移）；**三处 rsync 排除清单逐字一致**（Pi 构建器 / box overlay / `mrrc_update.sh`，并点名漂移的那一处）；FTDI 库是 `e_machine=183` 的 AArch64 ELF 且 `libftd2xx.so` 是指向它的符号链接（取错 `build-*` 目录会得到一个名字对、其他检查全过、只在真机上失败的库） |
 | `test_mrrc_radio.py` | `plan()` 是纯函数（无磁盘写、无重启），因此可测的是它到底会写什么：显式 `--port` 被写入；**换机型且未给端口时清空 `MRRC_SERIAL_PORT`**（FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留旧值 = 无报错的死链路）；同机型未给端口不动端口；**TX 门禁由 profile 重新断言而非继承**（从不该从上一个开着门禁的机型漏到下一个）；未知机型 `ValueError`、缺 profile `FileNotFoundError`；写入保留不属于它的键（口令、证书、Cloud Hub 状态）；留下 `.env.bak`；`--dry-run` 一个字节也不写 |
+
+### 本轮新增（首次真构建拓到的缺陷守卫，2026-10-07）
+
+镜像此前**从未真跑过**，一次真构建拓出九个缺陷（详见 `docs/w103d_pack.md`）。每条都配了守卫——它们共同的形态是
+“静态阅读完全看不出错”，所以断言的是**性质**而不是那一个实例。
+
+| 测试 | 覆盖 |
+| ------ | ------ |
+| `test_install_sh_vars.py` | `set -euo pipefail` 下**每个被展开的变量都必须有值**。拓到两个真 bug：`INSTALL_DEV` 只在 `--dev` 分支被赋值（任何不带 `--dev` 的 `./install.sh` 都在 STEP 4b 硬挂）、`USER` 是登录 shell 变量而 chroot 里没有（STEP 9 写 systemd 单时硬挂）。扫描器先剔除安全形式（`${VAR:-…}` 与 `\$VAR`），再断言剩下的要么被赋值、要么是 bash 自带或环境必备；旗标默认值单独再查一遗（`--flag` 分支与全局默认区隔了几百行，单看哪边都不像错）。**两个 bug 都影响所有平台的**手动安装**，不只是盒子。 |
+| `test_box_profiles.py::BoxBuildIntegrityTests` | 构建完整性六条：chroot 里用到的路径必须 bind 进 chroot（否则报一个“明明存在却 no such file”的错）；chroot 必须有可用的 resolver（rootfs 的 `resolv.conf` 是指向没跑 systemd-resolved 的悬空链接）；**建 venv 的前置包必须先于 `install.sh` 安装**（它第 2 步建 venv、第 3 步才装系统包，ensurepip 缺失就 FATAL，apt 根本没机会跑）；`libopus0` 必须被装上（缺了不会构建失败，只会让盒子**静默退回 PCM**）；镜像要带 `version.txt`（诊断包 manifest 与升级通道都要读）；产物名带 CHANGELOG 版本（`version.txt` 是构建产物，`cat` 仓库里的只会拿到 fallback）；镜像源只能改写 Debian 的两个条目、**不得碰 armbian 源**；`packaging/box/*.sh` 必须可执行（`box-overlay.sh` 曾以 0644 提交，报错是误导性的 `bad interpreter`） |
 
 ### 本轮新增（主机选型打分器，2026-10-06）
 

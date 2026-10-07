@@ -46,6 +46,25 @@ log "radio profiles"
 mkdir -p "$MRRC_HOME/profiles"
 cp "$REPO_SRC"/packaging/box/profiles/*.env "$MRRC_HOME/profiles/"
 
+log "build prerequisites the base image does not carry"
+# The design assumed this image already had python3-venv, pip, the PortAudio
+# and ALSA headers and libopus0, with apt adding "approximately nothing".
+# Measured on the pinned image, every one of them is absent (only libasound2,
+# gcc, make, rsync, git, curl and sudo are there).
+#
+# install.sh cannot repair this itself: it creates the virtualenv in STEP 2 and
+# installs system packages in STEP 3, so a missing ensurepip is fatal before apt
+# ever runs — and a venv created without it has no pip, which fails the
+# dependency install further down and ships an image that cannot start.
+#
+# libopus0 is the one that is easy to miss and expensive to miss: without it the
+# server silently falls back to PCM instead of Opus.
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+  python3.11-venv python3-dev \
+  portaudio19-dev libportaudio2 libasound2-dev \
+  libopus0 libopus-dev
+
 log "python environment (install.sh owns the dependency list)"
 cd "$MRRC_HOME"
 ./install.sh --yes --install-service --no-scope || {
@@ -133,6 +152,19 @@ install -m 0755 "$REPO_SRC/packaging/box/firstboot_wrapper.py" \
   "$MRRC_HOME/linux/firstboot_wrapper.py"
 chown -R "$MRRC_USER:$MRRC_USER" /var/lib/mrrc "$MRRC_HOME/logs"
 
+log "version stamp"
+# version.txt is what the support bundle manifest and the upgrade channel read
+# out of an installed tree, so an image without it fails those two things while
+# still looking complete. build-image.sh passes the value it read from the
+# CHANGELOG; the fallback keeps this script usable on its own.
+version="${MRRC_VERSION:-$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO_SRC/CHANGELOG.md" \
+  | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')}"
+: "${version:?Could not read a version from CHANGELOG.md}"
+printf '%s\n' "${version#v}" > "$MRRC_HOME/version.txt"
+cp "$MRRC_HOME/version.txt" "$MRRC_HOME/VERSION"
+chown "$MRRC_USER:$MRRC_USER" "$MRRC_HOME/version.txt" "$MRRC_HOME/VERSION"
+echo "version: ${version#v}"
+
 log "headless defaults (only keys that are not already set)"
 touch "$ENV_FILE"
 grep -q '^MRRC_WEB_HOST='          "$ENV_FILE" || echo 'MRRC_WEB_HOST=0.0.0.0'      >> "$ENV_FILE"
@@ -153,7 +185,10 @@ systemctl mask serial-getty@ttyFIQ0.service || true
 
 log "reclaim space (the rootfs is a 3 GB partition with ~960 MB free)"
 apt-get clean
-rm -rf /var/lib/apt/lists/* "$MRRC_HOME/venv/.cache"
+rm -rf /var/lib/apt/lists/* "$MRRC_HOME/venv/.cache" /root/.cache
+# /tmp held ~12 MiB of install.sh validation scratch when this build first ran,
+# and nothing else clears it, so it would otherwise ship inside the image.
+rm -rf /tmp/* /tmp/.[!.]* 2>/dev/null || true
 find "$MRRC_HOME" -name '__pycache__' -type d -prune -exec rm -rf {} +
 
 log "overlay done"

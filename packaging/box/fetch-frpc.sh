@@ -8,6 +8,15 @@
 # The checksum comes from frp's own release checksums file — the URL carries
 # the version, so this stays deterministic without a hash we would have to
 # remember to update.
+#
+# On a network where github.com releases crawl, set MRRC_FRP_PROXY to a prefix
+# and the same URL is fetched through it:
+#
+#   MRRC_FRP_PROXY=https://gh-proxy.com/ \
+#     https://github.com/... -> https://gh-proxy.com/https://github.com/...
+#
+# That is safe to do because the checksum is still fetched and still compared:
+# a proxy that hands back something else is rejected, not installed.
 set -euo pipefail
 
 FRP_VERSION="${MRRC_FRP_VERSION:-0.71.0}"
@@ -15,6 +24,8 @@ PLATFORM="${MRRC_FRP_PLATFORM:-linux_arm64}"
 DEST="${1:?usage: fetch-frpc.sh <dest-dir>}"
 
 BASE="${MRRC_FRP_BASE:-https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}}"
+#: Prefixed to every URL, so a mirror only has to be a URL prefix.
+SOURCE="${MRRC_FRP_PROXY:-}$BASE"
 TARBALL="frp_${FRP_VERSION}_${PLATFORM}.tar.gz"
 SUMS="frp_sha256_checksums.txt"
 
@@ -28,8 +39,29 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 echo "frpc: fetching ${TARBALL} (frp ${FRP_VERSION})"
-curl -fsSL --retry 3 -o "$tmp/$TARBALL" "$BASE/$TARBALL"
-curl -fsSL --retry 3 -o "$tmp/$SUMS"    "$BASE/$SUMS"
+
+# Explicit resuming retry loop rather than curl --retry, because the failure
+# this link produces is not an error at all: the download stalls with the
+# connection still open, and curl will wait on it forever. --speed-limit with
+# --speed-time turns "slower than 2 KB/s for 30 seconds" into something curl
+# reports, and -C - makes the next attempt continue instead of restarting a
+# 12 MiB transfer from zero. A stall that never errored was the actual first
+# failure here; --retry alone could not have caught it.
+fetch() {  # <url> <dest>
+  local url="$1" dest="$2" attempt
+  for attempt in 1 2 3 4 5; do
+    if curl -fsSL --speed-limit 2048 --speed-time 30 -C - -o "$dest" "$url"; then
+      return 0
+    fi
+    echo "frpc: attempt $attempt interrupted ($(wc -c <"$dest" 2>/dev/null || echo 0) bytes so far), resuming" >&2
+    sleep 2
+  done
+  echo "frpc: giving up on $url after $((attempt - 1)) attempts" >&2
+  return 1
+}
+
+fetch "$SOURCE/$TARBALL" "$tmp/$TARBALL"
+fetch "$SOURCE/$SUMS" "$tmp/$SUMS"
 
 want="$(awk -v f="$TARBALL" '$2 == f {print $1}' "$tmp/$SUMS" | head -1)"
 [ -n "$want" ] || { echo "frpc: $SUMS has no entry for $TARBALL — refusing" >&2; exit 1; }

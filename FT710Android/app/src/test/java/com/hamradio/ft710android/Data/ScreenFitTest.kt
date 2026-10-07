@@ -71,32 +71,35 @@ class ScreenFitTest {
         assertEquals(728, ScreenFit.SUPPORTED_MIN_HEIGHT_DP)
     }
 
-    @Test fun `leftover height goes to the spectrum instead of dead space`() {
-        // 华为 Mate 432×880：紧凑档固定预算后还剩很多 → 全部（封顶 80dp）给频谱
-        val mate = ScreenFit.budget(432, 880, 40, 110, true, true, true)
-        assertEquals(ScreenFit.SPECTRUM_BONUS_CAP_DP, mate.spectrumBonus)
-        assertTrue("给了余量后仍必须一屏：${mate.total} vs 880", mate.total <= 880)
-        // 小米/红米 360×728（三键导航）是支持下限：bonus 未被封顶时，
-        // 剩下的空白应**正好等于安全边界**（既填满一屏，又留一点吸收模型误差）
-        val tight = ScreenFit.budget(360, 728, 40, 110, true, true, true)
-        assertTrue("紧机型 bonus 应很小：${tight.spectrumBonus}", tight.spectrumBonus <= 30)
-        assertTrue("必须一屏：${tight.total} vs 728", tight.total <= 728)
-        assertEquals("未被封顶时剩余空白 = 安全边界",
-            ScreenFit.BONUS_SAFETY_DP, 728 - tight.total)
+    /**
+     * 频谱高度是**确定值**，不再自动吃掉屏幕余量。
+     *
+     * 2026-10-07 用户看过荣耀档位截图后要求"瀑布区再减小 30%"：
+     * 旧的 bonus 机制会把省下的空间立刻灌回频谱（荣耀上 118+80=198dp），
+     * 只改比例是无效的，所以整个机制被移除。现在紧凑档 = 133dp、标准档 = 166dp，
+     * 荣耀上相当于 198 → 133（**-33%**）。剩余高度就是留白（内容顶对齐，不是被裁切）。
+     */
+    @Test fun `spectrum height is deterministic, with no leftover refill`() {
+        // 紧凑档：int((40+110) * 0.78) + 16 = 117 + 16
+        assertEquals(133, ScreenFit.spectrumHeight(compact = true, fftH = 40, wfH = 110))
+        // 标准档（平板）：150 * 1.0 + 16
+        assertEquals(166, ScreenFit.spectrumHeight(compact = false, fftH = 40, wfH = 110))
+        // 预算里的频谱项就是它本身，没有任何附加
+        mainland.forEach { (name, _, h) ->
+            val b = ScreenFit.budget(360, h, 40, 110, true, true, true)
+            assertEquals("$name：预算频谱项应等于确定高度",
+                ScreenFit.spectrumHeight(ScreenFit.isCompact(h), 40, 110), b.spectrum)
+        }
+        // 用户在设置里调 Spec H / WF H 仍然生效（比例不变，绝对高度跟着走）
+        assertTrue(ScreenFit.spectrumHeight(true, 20, 200) > ScreenFit.spectrumHeight(true, 40, 110))
     }
 
-    @Test fun `spectrum bonus is clamped and never makes the screen scroll`() {
-        assertEquals(0, ScreenFit.spectrumBonus(availHeightDp = 700, fixedTotalDp = 720))
-        assertEquals(0, ScreenFit.spectrumBonus(availHeightDp = 720, fixedTotalDp = 720))
-        // 余量不足安全边界时给 0（宁可留白也不顶出滚动条）
-        assertEquals(0, ScreenFit.spectrumBonus(availHeightDp = 729, fixedTotalDp = 720))
-        assertEquals(10, ScreenFit.spectrumBonus(availHeightDp = 740, fixedTotalDp = 720))
-        assertEquals(ScreenFit.SPECTRUM_BONUS_CAP_DP,
-            ScreenFit.spectrumBonus(availHeightDp = 1200, fixedTotalDp = 700))
-        // 所有主流档位：加了 bonus 之后总高仍 ≤ 可用高度
-        mainland.forEach { (_, w, h) ->
-            val b = ScreenFit.budget(w, h, 40, 110, true, true, true)
-            assertTrue("$w×$h 加余量后超出：${b.total}", b.total <= h)
+    @Test fun `every profile fits with headroom now that the spectrum is shorter`() {
+        mainland.forEach { (name, w, h) ->
+            val b = ScreenFit.budget(w, h, 40, 110, hasAtr = true, hasVdId = true, bottomBarVisible = true)
+            assertTrue("$name：总高 ${b.total} > 可用 $h", b.total <= h)
+            // 支持下限（360×728）也应还有一点余量，不能刚好顶满
+            if (h == 728) assertTrue("支持下限余量过小：${h - b.total}", h - b.total >= 8)
         }
     }
 

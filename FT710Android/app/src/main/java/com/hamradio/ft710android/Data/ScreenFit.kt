@@ -64,15 +64,22 @@ object ScreenFit {
         return if (compact) (w * 0.50f).toInt().coerceIn(74, 116) else (w * 0.64f).toInt().coerceIn(96, 168)
     }
 
-    /** 频谱区高度：紧凑档把用户设的 FFT/瀑布高度按比例压一档（仍尊重设置里的滑条）。 */
-    fun spectrumScale(compact: Boolean): Float = if (compact) 0.68f else 1f
+    /**
+     * 频谱区高度比例：用户在设置里调的 Spec H / WF H 是基准，紧凑档按比例压一档。
+     *
+     * 0.78 是 2026-10-07 用户看过荣耀档位截图后定的（"瀑布区再减小 30%"）：
+     * 之前紧凑档是 0.68 但**屏幕余量会自动灌回频谱**（bonus 最多 80dp），
+     * 荣耀上实际是 198dp；砍掉 bonus 后用 0.78 得到 133dp ≈ 原来的 0.7 倍。
+     */
+    fun spectrumScale(compact: Boolean): Float = if (compact) 0.78f else 1f
 
     /**
      * 频谱显示屏高度 = 瀑布/FFT 高度（按档位缩放）+ 标尺等固定开销。
      * 这就是它在页面里的**实际占位**（UI 用 `.height(X).padding(top=6)`，padding 在 X 内部）。
      */
     fun spectrumHeight(compact: Boolean, fftH: Int, wfH: Int): Int =
-        ((fftH + wfH) * spectrumScale(compact)).toInt() + SPECTRUM_CHROME_DP
+        // roundToInt 而非 toInt：`150 * 0.78f` 在 Float 下是 116.99999…，截断会白丢 1dp
+        kotlin.math.round((fftH + wfH) * spectrumScale(compact)).toInt() + SPECTRUM_CHROME_DP
 
     fun meterCellHeight(compact: Boolean): Int = if (compact) 26 else 30
     fun padBtnHeight(compact: Boolean): Int = if (compact) 32 else 34
@@ -109,27 +116,10 @@ object ScreenFit {
     /** 底部固定栏的竖直内边距（每侧）。 */
     fun bottomBarPadV(compact: Boolean): Int = if (compact) 7 else 8
 
-    /**
-     * 剩余高度给频谱的封顶（dp）。
-     *
-     * 主流机型按紧凑档算完后普遍还剩 25~145dp（华为 Mate 432×880 剩 145）——
-     * 与其在记忆卡和底栏之间留一片空白，不如把它给**频谱**（电台里最值钱的实时区域，
-     * 瀑布行数固定 120，越高每行越清楚）。封顶是为了大屏上不至于高得离谱。
-     */
-    const val SPECTRUM_BONUS_CAP_DP = 80
+    // 曾经有过"屏幕余量自动灌给频谱"的机制（bonus，封顶 80dp），2026-10-07 移除：
+    // 它会让"把瀑布调矮"这个需求失效——省下来的空间立刻被填回去。
+    // 现在频谱高度是确定值，剩余高度就是留白（滚动列内容顶对齐，视觉上是有余量而非被裁切）。
 
-    /** 余量安全边界（dp）：吸收算术模型与真实布局的几 dp 误差。 */
-    const val BONUS_SAFETY_DP = 10
-
-    /**
-     * 可用高度减去固定预算后的余量，夹在 0..cap。**恒不会让总高超过可用高度。**
-     *
-     * 再扣 [BONUS_SAFETY_DP] 安全边界：预算是算术模型，与真实布局可能差几 dp
-     * （字体取整、边框、内间距），留一点余量比顶出滚动条好。真实是否一屏由
-     * `OneScreenFitTest` 量 Compose 的滚动范围来判定（那才是权威）。
-     */
-    fun spectrumBonus(availHeightDp: Int, fixedTotalDp: Int, capDp: Int = SPECTRUM_BONUS_CAP_DP): Int =
-        (availHeightDp - fixedTotalDp - BONUS_SAFETY_DP).coerceIn(0, capDp)
 
     /** 底部固定栏（PTT/CQ/TUNE）高度：竖直内边距 + 主按钮。 */
     fun bottomBarHeight(compact: Boolean, visible: Boolean): Int =
@@ -160,8 +150,6 @@ object ScreenFit {
         val gaps: Int,
         val pagePad: Int,
         val bottomBar: Int,
-        /** 分给频谱的余量（0 = 没有余量，例如刚好塞满的 360×728）。 */
-        val spectrumBonus: Int = 0,
     ) {
         val scrollArea: Int get() = header + status + spectrum + meters + controls + tuning + memory + gaps + pagePad
         val total: Int get() = scrollArea + bottomBar
@@ -185,7 +173,7 @@ object ScreenFit {
         // 卡片 = 上下内边距 + N 个子项 + (N-1) × 内间距（无标题）
         fun card(items: Int, heightOf: (Int) -> Int): Int =
             padV2 + (1..items).sumOf { heightOf(it) } + (items - 1) * ig
-        val fixed = Budget(
+        return Budget(
             header = headerHeight(c, screenWidthDp),
             status = statusHeight(c, screenWidthDp, extraStatusChips),
             // 注意：UI 是 .height(X).padding(top=6)，footprint 就是 X（padding 在里面吃掉），
@@ -204,8 +192,5 @@ object ScreenFit {
             pagePad = PAGE_PAD_V * 2,
             bottomBar = bottomBarHeight(c, bottomBarVisible),
         )
-        // 余量给频谱：bonus = min(可用 - 固定总高, 封顶) → 总高按构造不会超过可用高度
-        val bonus = spectrumBonus(screenHeightDp, fixed.total)
-        return fixed.copy(spectrum = fixed.spectrum + bonus, spectrumBonus = bonus)
     }
 }

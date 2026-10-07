@@ -48,6 +48,14 @@ class ScreenshotTest {
         println("SCREENSHOT ${out.absolutePath} (${out.length()} bytes)")
     }
 
+    /** 荣耀档位（400×832）—— 用户实际用的机器；类级 @Config 是 411×892，这里方法级覆盖。 */
+    @Test
+    @Config(qualifiers = "w400dp-h832dp-xxhdpi")
+    fun `capture the main screen at honor 400x832`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        shot("honor400x832-rx") { MainScreen(vm = fixtureVm(scope), prefs = UiPrefs(), onOpenSettings = {}) }
+    }
+
     // ComposeTestRule 每个测试只允许一次 setContent，所以一张图一个 @Test
     @Test
     fun `capture the main screen in RX`() {

@@ -37,14 +37,6 @@ class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeig
     /** 用户设的频谱高度按档位缩放（紧凑档压一档，仍然尊重设置里的滑条）。 */
     fun spectrumHeight(fftH: Int, wfH: Int): Dp = ScreenFit.spectrumHeight(compact, fftH, wfH).dp
 
-    /**
-     * 屏幕余量（分给频谱，封顶 [ScreenFit.SPECTRUM_BONUS_CAP_DP]）。
-     * 入参必须和 [ScreenFit.budget] 一致，否则预算测试就和真实布局脱节。
-     */
-    fun spectrumBonus(fftH: Int, wfH: Int, hasAtr: Boolean, hasVdId: Boolean, bottomBar: Boolean, extraChips: Int): Int =
-        ScreenFit.budget(
-            screenWidthDp, screenHeightDp, fftH, wfH, hasAtr, hasVdId, bottomBar, extraChips,
-        ).spectrumBonus
 }
 
 val LocalScreenMetrics = staticCompositionLocalOf { ScreenMetrics(false, 412, 892) }

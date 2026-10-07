@@ -286,16 +286,7 @@ fun MainScreen(
             }
 
             // ── 频谱显示屏（独立子组件：只有它订阅 waterfall/fft）──────────
-            // 主流机型按紧凑档算完还剩 25~145dp，与其在底栏上方留白，不如给频谱（封顶 80dp）
-            val spectrumBonus = remember(stateVersion, prefs.fftHeight, prefs.wfHeight, atrEnabled, listenOnly) {
-                m.spectrumBonus(
-                    fftH = prefs.fftHeight, wfH = prefs.wfHeight,
-                    hasAtr = atrEnabled, hasVdId = caps.hasVdIdMeters,
-                    bottomBar = !listenOnly,
-                    extraChips = (if (listenOnly) 1 else 0) + (if (state.rxAudioSilent) 1 else 0),
-                )
-            }
-            SpectrumPanel(vm, prefs, spanHz, state.activeFrequency, spectrumBonus)
+            SpectrumPanel(vm, prefs, spanHz, state.activeFrequency)
 
             Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMeters") {
                 // ── 仪表：PWR/ALC 两列，SWR/Id/Vd 三列 ───────────────────
@@ -436,17 +427,17 @@ fun MainScreen(
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     if (ch != null) {
                                         Text(ch.label.ifEmpty { "M${index + 1}" }, color = MrrcColors.Accent,
-                                            fontSize = if (m.compact) 9.5.sp else 11.sp,
+                                            fontSize = if (m.compact) 8.5.sp else 10.sp,
                                             fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp, maxLines = 1)
                                         Text(
                                             "%.3f".format(Locale.US, ch.freq / 1e6),
                                             color = MrrcColors.TextPrimary,
-                                            fontSize = if (m.compact) 8.5.sp else 10.sp,
+                                            fontSize = if (m.compact) 7.5.sp else 9.sp,
                                             fontFamily = MonoFont, maxLines = 1,
                                         )
                                     } else {
                                         Text("M${index + 1}", color = MrrcColors.TextMuted,
-                                            fontSize = if (m.compact) 9.5.sp else 11.sp, letterSpacing = 0.3.sp)
+                                            fontSize = if (m.compact) 8.5.sp else 10.sp, letterSpacing = 0.3.sp)
                                     }
                                 }
                             }
@@ -658,13 +649,13 @@ private fun SmallChip(label: String, on: Boolean, modifier: Modifier = Modifier,
  * 中端机（荣耀）就是这么卡到把音频线程饿死的。收进子组件后每帧只重组这一块。
  */
 @Composable
-private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFreq: Long, bonusDp: Int) {
+private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFreq: Long) {
     val waterfall by vm.waterfall.collectAsState()
     val fft by vm.fft.collectAsState()
     val m = LocalScreenMetrics.current
     DisplayBezel(
         modifier = Modifier.fillMaxWidth()
-            .height(m.spectrumHeight(prefs.fftHeight, prefs.wfHeight) + bonusDp.dp)
+            .height(m.spectrumHeight(prefs.fftHeight, prefs.wfHeight))
             .padding(top = ScreenFit.PAGE_PAD_V.dp)
             .testTag("secSpectrum"),
     ) {

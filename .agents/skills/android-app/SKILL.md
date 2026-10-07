@@ -101,31 +101,8 @@ cd FT710Android
 13. **音频线程要设优先级**：`playLoop()` 第一行 `Process.setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)`（必须在该线程内调用）。UI 卡顿时这是"声音出不来"的最后一道防线。draw 阶段不要分配（位图/LUT/文本 layout 全部 `remember`）。
 14. **尺寸单一数据源**：dp 只从 `Data/ScreenFit.kt` 出，经 `UI/ScreenMetrics.kt`（`LocalScreenMetrics`）下发；Composable 里不许就地写死。档位按 `Configuration.screenHeightDp ≤ 900` = 紧凑（大陆主流直板机），否则标准（平板/折叠屏）。卡片内节奏由 `Panel(spacing=…)` 统一给，卡内别再写 `padding(top=…)`。M3 的 48dp 最小交互尺寸已在根部关掉，否则音量行会吃掉预算。改任何高度/间距 → 跑 `ScreenFitTest`（真机档位断言"一屏放得下"）。
 - **适配下限 = 360×728**（`ScreenFit.SUPPORTED_MIN_HEIGHT_DP`，5.5" 直板机 + 三键导航）。**5" 及以下不适配**（用户 2026-10-06 明确"不用考虑"），滚动兜底即可；别再为它压尺寸。
-- **屏幕余量给频谱，不留白**：`bonus = min(可用高度 − 固定预算, 80dp)` 叠加到频谱高度（`m.spectrumBonus(...)` → `SpectrumPanel(bonusDp)`）。按构造不会超一屏。加新卡片/新行之前先看这张表还剩多少余量：小米三键 360×728 只剩 **0dp**，手势 360×744 剩 0dp，荣耀 400×832 剩 24dp，华为 432×880 剩 65dp —— 也就是说**紧凑档已经塞满**，再加东西就会开始滚动。
-
-## 真机事故档案（症状 → 根因 → 修法）
-
-| # | 症状 | 根因 | 修法 / 版本 |
-| --- | --- | --- | --- |
-| 1 | 登录后"连上但没状态" | DTO 把 `bands`/`filterTables` 按简单类型解析 → 整条 `fullState` 解码失败 | 真实形状 DTO + 真实 fixture 测试（v1.1.0） |
-| 2 | 没声音 + 没瀑布，控制正常 | `RxAudioPlayer.start()` 无调用点；`_waterfall/_fft` 无写入点 | 连接回调启停播放器；`onSpectrumFrame` 推流（v1.1.1） |
-| 3 | 无声 + PTT 不键控（控制/频谱正常） | 播放器与 PTT 都挂在"四路聚合"上，且聚合标志非线程安全 | `ChannelFlags` + 各自通道门控（v1.1.3） |
-| 4 | 设置页进得去出不来 | 无返回入口，系统返回键直接退出 App | `onBack` + `BackHandler`（v1.1.5） |
-| 5 | S 表永远 `S0`、`dBm`、一有信号就顶满 | `s_unit` 是字符串却按 Int 解析；`s_meter_dbm` 是相对 dB；填充写成 `raw/32` | 字符串直显、`X dB`、`raw/255` + Web 刻度（v1.1.7） |
-| 6 | 发射没功率 / 话音极小 | ①从未申请 `RECORD_AUDIO` 且采集错误未接线；②`VOICE_COMMUNICATION` 的 AGC/NS 压小声 | 登录申请权限 + `tx.onError` 接界面；采集源改 `UNPROCESSED/MIC`（v1.1.8/v1.1.9） |
-| 7 | 跑一段时间比 Web 延迟几秒 | 抖动缓冲无上限：卡过一次就永远落后 | Web 水位 + 800ms 丢最旧 + TX flush（v1.1.9） |
-| 8 | 设置页四个滑块"调不了" | `vm.version.collectAsState()` 返回值被丢弃 → 从不重组，松手被旧值弹回 | 读出版本 + `remember(stateVersion)` 重算（v1.1.9） |
-| 9 | 官网卡片更新了、外网仍是旧版 | nginx `open_file_cache` 仍服务旧 inode | 上传后 `systemctl reload nginx`（`publish-card.sh` 内置） |
-| 16 | `ScreenFitTest` 全绿，但 360dp 宽真机实际要滚动 20dp | 顶栏用的是内联 `(maxWidth*0.44f)/(meterW*0.64f)`，`ScreenMetrics.headerHeight` 是死代码——v1.1.18 的 `str.replace` 锚点没匹配上、静默失效；模型自洽所以测试绿 | 改用 `m.headerHeight`；新增 `OneScreenFitTest` 量真实滚动范围（7 档位全 0.0dp）；ATR 行 TUNE 的漏改 `height(30.dp)` 一并修（v1.1.22） |
-| 15 | 带着红灯发版（v1.1.20 重发一次） | `./gradlew … \| grep \| head && ./release.sh`：管道退出码取自 `head`，测试失败被吞；同时 Compose 测试放在 `src/test` 导致 release 变体必红 | 测试移到 `src/testDebug`；发版不再用 `--skip-tests`（靠 `release.sh` 的 `set -euo pipefail` 自守）；门槛命令分开跑并逐个查 `$?` |
-| 14 | 荣耀等中端机**卡顿 + 声音几乎出不来** | ①瀑布每帧重建整幅位图（102,000 查表 + 408KB 分配/帧，主线程）；②`waterfall/fft` 在主屏顶层订阅 → 每帧重组整屏；③音频线程默认优先级被饿死 → AudioTrack 欠载 | 环形增量绘制（`WaterfallRing`）+ 拆 `SpectrumPanel` 订阅 + `THREAD_PRIORITY_URGENT_AUDIO`（v1.1.18） |
-| 13 | **装上打开就退出**（启动即崩） | 顶栏 `height(IntrinsicSize.Min)` 包住了含 `BoxWithConstraints` 的子项 → Compose 抛"SubcomposeLayout 不支持 intrinsic 测量" | 改显式高度 `height(meterH)`；加 `UiLayoutSafetyTest` 门槛（v1.1.17） |
-| 12 | v1.1.14 主屏控件整片消失（模式/波段/滤波/ATT/PRE、NR/NB/AN/COMP/ATU、音量、步进、VFO 行） | 脚本按"注释区间"整段替换 ATR 行，区间跨过了所有控制行；UI 结构无测试覆盖 | 从 v1.1.13 取回整段重插；此后发版前强制**结构 diff**（v1.1.15） |
-| 11 | 频谱下频率标注不对 | 标尺用了滞后的 `scope_start_freq` + 固定 6 等分 + 统一 `%.3f` | `Data/FreqScale.kt`：VFO±span/2、自适应步进、按位置绘制（v1.1.11） |
-| 10 | 键控了但"极微弱"（二次反馈） | 链路是 unity（服务端/Web 均无增益），差在手机麦电平；且部分机型 `UNPROCESSED` 初始化后不产数据 | 采集源 700ms 探测回退；🎙 Vol 上限 4×、默认 1.5×；状态行显示 `TX pk:`（v1.1.10） |
-
-## 改 UI 的硬规矩
-
+- **频谱高度是确定值，禁止"余量自动填充"**：`round((SpecH+WfH) × spectrumScale) + 16`，紧凑档 `spectrumScale = 0.78` → 默认 **133dp**，标准档 166dp。曾有 `spectrumBonus`（余量灌给频谱，封顶 80dp），2026-10-07 移除 —— 它会让"把瀑布调矮"直接失效（省下的空间立刻被填回，荣耀上砍基准后仍是 198dp）。要调频谱高度就改 `spectrumScale`。副作用是高屏机型底部留白（荣耀 131dp / 411×892 189dp），内容顶对齐不裁切。
+- 加新卡片/新行之前先看 `build/screenshots/one-screen-fit.txt` 的实测余量：小米三键 360×728 只剩 **36dp**，中档 384×816 剩 119dp，荣耀 400×832 剩 131dp —— **下限机型几乎没有余量**，再加东西就会开始滚动。
 - **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**（都是 `SubcomposeLayout`，不支持 intrinsic 测量）→ 布局阶段抛 `IllegalStateException` = **装上打开就退出**（v1.1.16 事故）。要跟固定尺寸的兄弟等高就**显式给高度**。异常原文可在 `~/.gradle/caches` 的 `ui-release.aar` 里字节级搜到（`LayoutNodeSubcompositionsState`）——**查崩溃先拿证据，别猜**。门槛：`UiLayoutSafetyTest`。
   - 写这类源码级门槛测试有三个静默失效坑：① 提取函数体要先配对跳过参数列表（`() -> Unit = {}` 的 `{}` 会被当成整个体）；② 扫描前剥注释（否则注释里提一嘴就误报）；③ Gradle 要给 Test 任务声明 `inputs.dir("src/main/java")`，否则改源码后判 UP-TO-DATE **跳过测试**。
 

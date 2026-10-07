@@ -128,7 +128,10 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 - 卡片内节奏由 `Panel(spacing=…)` 统一给，**不要**在卡内再写 `padding(top=…)`。
 - M3 的 48dp 最小交互尺寸已在根部关掉（`LocalMinimumInteractiveComponentSize provides 0.dp`），密集仪表盘按档位高度走。
 - **适配下限 = 360×728**（`ScreenFit.SUPPORTED_MIN_HEIGHT_DP`，5.5" 直板机 + 三键导航）。5" 及以下不做保证（用户 2026-10-06 明确"不用考虑"），滚动兜底。
-- **屏幕余量给频谱**：`bonus = min(可用高度 − 固定预算, 80dp)` 叠加到频谱显示屏高度（`MainScreen` 里 `m.spectrumBonus(...)` → `SpectrumPanel(bonusDp)`）。按构造不会超一屏；用户设的 Spec H / WF H 仍是基准，比例不变。
+- **频谱高度是确定值，没有"余量自动填充"**：`round((SpecH + WfH) × spectrumScale) + 16`，紧凑档 `spectrumScale = 0.78` → 默认设置下 **133dp**；标准档（平板）`1.0` → 166dp。
+  - 曾经有过 `spectrumBonus`（把屏幕余量灌给频谱，封顶 80dp），**2026-10-07 已移除**：它会让"把瀑布调矮"这类需求失效 —— 省下的空间立刻被填回去。要改频谱高度就改 `spectrumScale`，别再引入自动填充。
+  - 副作用：高屏机型底部会留白（荣耀 400×832 约 131dp、411×892 约 189dp）。滚动列内容顶对齐，不会被裁切。
+  - `spectrumHeight` 用 `round` 不用 `toInt`：`150 × 0.78f` 在 Float 下是 `116.99999…`，截断会白丢 1dp。
 - 改了任何高度/间距 → 跑 **`OneScreenFitTest`**（权威：Robolectric 在 7 个真机档位上真 measure/layout，读 `VerticalScrollAxisRange.maxValue`，>0 就是要滚动）+ `ScreenFitTest`（算术模型）。两者不一致时**以实测为准**，回去改 `ScreenFit` 的常量。
 - **`ScreenFit` 是模型，不是真相**：v1.1.18~v1.1.21 期间 `MainScreen` 里留着内联的 `(maxWidth*0.44f)`/`(meterW*0.64f)`，`ScreenMetrics.headerHeight` 是死代码 —— 手机上顶栏一直用标准档比例，比模型高 22~26dp，360dp 宽的机器实际超出 20dp 要滚动，而 `ScreenFitTest` 全绿（模型自己跟自己一致）。**任何尺寸都必须从 `LocalScreenMetrics` 取，禁止在 Composable 里就地算比例。**
 - 分区都带 `testTag`（`secHeader`/`secStatus`/`secSpectrum`/`secMeters`/`secControls`/`secTuning`/`secMemory`，Panel 走 `tag=` 参数），量高度靠它们。

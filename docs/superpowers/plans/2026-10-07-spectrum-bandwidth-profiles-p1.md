@@ -98,10 +98,17 @@ class ProfileTableTests(unittest.TestCase):
         variants = sp.build_variants(_full_frame())
 
         def kbps(name: str) -> float:      # at 11 fps, the measured scope rate
-            return len(variants[sp.PROFILES[name].shape]) * 11 * 8 / 1000
+            p = sp.PROFILES[name]
+            return len(variants[p.shape]) * 11 / p.divider * 8 / 1000
 
         hi, mid, low = kbps("high"), kbps("mid"), kbps("low")
-        self.assertAlmostEqual(hi, 150.8, delta=0.5)
+        # 1701 B x 11 fps x 8 = 149.7 kbps; the 150.8 kbps in the server log is
+        # the same arithmetic at the measured 11.09 fps.  mid and low halve it
+        # twice over because BOTH factors apply: 851 B *and* fewer ticks —
+        # dropping the divider from this helper makes mid read as 1/2, not 1/4.
+        self.assertAlmostEqual(hi, 149.7, delta=0.5)
+        self.assertAlmostEqual(mid, 37.4, delta=0.5)
+        self.assertAlmostEqual(low, 18.7, delta=0.5)
         self.assertAlmostEqual(mid / hi, 0.25, delta=0.01)
         self.assertAlmostEqual(low / hi, 0.125, delta=0.01)
 
@@ -370,7 +377,7 @@ def parse_caps(text: str | bytes) -> str | None:
 .venv/bin/python -m unittest tests.test_spectrum_profile -v
 ```
 
-预期：`Ran 20 tests ... OK`。
+预期：`Ran 17 tests ... OK`。
 
 - [ ] **步骤 5：提交**
 
@@ -1185,7 +1192,7 @@ def _session_metrics_line(r: dict) -> str:
 .venv/bin/python -m unittest discover -s tests
 ```
 
-预期：`test_session_metrics` 全绿（含重钉键集）、`test_spectrum_profile_server` 全绿（任务 2 那个跨任务依赖至此解除）、**全量套件 `OK (skipped=1)`**，计数为 `1673 + 新增`（任务 1-5 合计 **+43 ⇒ `Ran 1716 tests`**；以实际输出为准，任务 7 把这个数写进 `tests/README.md`）。**如果全量有任何失败，先修完再进任务 6。**
+预期：`test_session_metrics` 全绿（含重钉键集）、`test_spectrum_profile_server` 全绿（任务 2 那个跨任务依赖至此解除）、**全量套件 `OK (skipped=1)`**，计数为 `1673 + 新增`（任务 1-5 合计 **+46 ⇒ `Ran 1719 tests`**；以实际输出为准，任务 7 把这个数写进 `tests/README.md`）。**如果全量有任何失败，先修完再进任务 6。**
 
 - [ ] **步骤 5：提交**
 
@@ -1646,6 +1653,13 @@ class SpectrumBandwidthClaimsTests(unittest.TestCase):
                 continue
             self.assertNotIn("~10 Hz", _read(str(path)), str(path))
 
+    def test_pyinstaller_spec_names_the_new_module(self):
+        """server.py imports it statically, so analysis would find it — name it
+        anyway: v1.24.0 shipped without the cloud_hub import and every 云端申请
+        answered 500 with NameError (see the comment in that spec)."""
+        spec = _read("packaging/pyinstaller/mrrc_modern_server.spec")
+        self.assertIn('"spectrum_profile"', spec)
+
     def test_agents_lists_the_new_module_and_the_real_test_filename(self):
         agents = _read("AGENTS.md")
         project_map = _read("docs/PROJECT_MAP.md")
@@ -1697,7 +1711,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-> `test_tests_readme_matches_the_actual_count` 的断言要改成**任务 6 步骤 4 里 `discover` 输出的真实数字**（预期 1716 + 本任务新增的 11 个 = 1727）。先写成 `self.assertIn("1727", text)`，跑完全量后用实际值修正——**不得为了绿而把断言改成通配**。
+> `test_tests_readme_matches_the_actual_count` 的断言要改成**任务 6 步骤 4 里 `discover` 输出的真实数字**（预期 1719 + 8 = 1727，再 + 本任务 12 个 = **1739**）。先写成 `self.assertIn("1739", text)`，跑完全量后用实际值修正——**不得为了绿而把断言改成通配**。
 
 - [ ] **步骤 2：运行确认失败**
 
@@ -1776,7 +1790,18 @@ grep -rn "v2=1701\|v1=851\|1701B wf1\|~30fps\|30 fps\|1701 bytes" SDD/*.md
 
 `docs/IOS_OPUS_INTEGRATION.md:64` 的“RX Opus 码率”行同理：把“默认 64kbps(运行时 `setOpusBitrate` 可调 8–128kbps,按 `max_data_bytes` 截帧实现)”改成“默认 64kbps；**`setOpusBitrate` 仅存在于文档，服务端与客户端均未实现**（`opus_rx.py` 内部 `set_bitrate()` 只在构造时生效）；码率档位待后续阶段”。只改文字，不改代码。
 
-**3k. 版本 bump** —— 当前：`CHANGELOG.md` 顶部 = `v1.25.4`，SDD = `V2.74`。本次是新功能 ⇒ `v1.26.0` + `V2.75`。先写 CHANGELOG 新条目（标题句式跟仓内习惯：一句话说清“修了什么真问题”），再跑校验器拿到待改清单：
+**3k. `packaging/pyinstaller/mrrc_modern_server.spec`** —— 在 `hiddenimports` 里 `"support_bundle"` 那组之后加一行（带一句为何要列的理由，跟仓里其他条目一致的风格）：
+
+```python
+        # Spectrum bandwidth tiers (AD-025).  server.py imports it statically so
+        # analysis would find it — named anyway after the v1.24.0 cloud_hub
+        # incident shipped a build whose import was missing.
+        "spectrum_profile",
+```
+
+> `packaging/macos/mrrc_modern_launcher.spec` 只列 launcher 自己的模块（`rumps`/`objc`/…），**不需改**；服务端模块由 `mrrc_modern_server.spec` 负责。`tests/test_windows_packaging_files.py` 没有钉 `hiddenimports` 内容，所以加这一行不会弄红任何现有测试。
+
+**3l. 版本 bump** —— 当前：`CHANGELOG.md` 顶部 = `v1.25.4`，SDD = `V2.74`。本次是新功能 ⇒ `v1.26.0` + `V2.75`。先写 CHANGELOG 新条目（标题句式跟仓内习惯：一句话说清“修了什么真问题”），再跑校验器拿到待改清单：
 
 ```bash
 .venv/bin/python .agents/skills/dual-platform-release/harness/release_check.py
@@ -1794,7 +1819,7 @@ CHANGELOG 条目必备要素（本仓的风格是拿实测数字说话）：三�
 .venv/bin/python -m unittest discover -s tests
 ```
 
-预期：文档守卫全绿；`release_check.py` 零不一致；全量套件 `OK (skipped=1)`，计数 = 任务 6 的数 + 11。
+预期：文档守卫全绿；`release_check.py` 零不一致；全量套件 `OK (skipped=1)`，计数 = 1727 + 12 = **1739**（以实际输出为准）。
 
 > `.agents/skills/sdd-guardian/harness/constraints.json` 的 `sdd_version` 字段目前写的是 `V2.62`，而 SDD 已到 `V2.74`——这个镜像早就落后了。顺手把它改成 `V2.75`；改完跑 `.venv/bin/python .agents/skills/sdd-guardian/harness/sdd_context.py check --staged` 确认没弄坏 harness（若报错就改回去，并在 commit message 里记下这个遗留项）。
 
@@ -1803,6 +1828,7 @@ CHANGELOG 条目必备要素（本仓的风格是拿实测数字说话）：三�
 ```bash
 git add tests/test_spectrum_profile_docs.py SDD/ AGENTS.md docs/PROJECT_MAP.md \
         docs/IOS_OPUS_INTEGRATION.md tests/README.md opus_rx.py \
+        packaging/pyinstaller/mrrc_modern_server.spec \
         CHANGELOG.md packaging/windows/MRRC-Modern.iss website/index.html website/zh/index.html \
         .agents/skills/sdd-guardian/harness/constraints.json
 .venv/bin/python .agents/skills/sdd-guardian/harness/sdd_context.py check --staged

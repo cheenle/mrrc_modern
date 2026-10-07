@@ -15,8 +15,8 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Callsign,
-    [Parameter(Mandatory = $true)][string]$Secret,
+    [string]$Callsign = "",
+    [string]$Secret = "",
     [int]$Port = 8888
 )
 
@@ -26,6 +26,11 @@ if (-not (Test-Path $curl)) { $curl = "curl.exe" }
 
 function Say($t) { Write-Host $t }
 function Fail($t) { Write-Host "  ERROR: $t" -ForegroundColor Red; exit 1 }
+
+# ---------------------------------------------------------------- ask if not given
+if (-not $Callsign) { $Callsign = Read-Host "  呼号 (callsign)" }
+if (-not $Secret)   { $Secret   = Read-Host "  登记口令 (the secret the operator sent)" }
+if (-not $Callsign -or -not $Secret) { Fail "callsign and secret are both required" }
 
 # ---------------------------------------------------------------- find the config
 $candidates = @(

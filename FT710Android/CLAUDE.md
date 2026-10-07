@@ -22,6 +22,10 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 - 下载卡片的版本文字由发布协调方跟进（另一条发布波会带上 Android 卡片）；需要改卡片时先确认没有并发发版，只改 `<!-- android-download -->` 标记块与 hero 安卓按钮，**不要自己跑 deploy**。
 - 稳定别名 `MRRC-Modern-Android.apk` 永远指向最新 APK，所以卡片文字滞后不影响下载。
 - `publish-card.sh` 上传后会 `systemctl reload nginx`：nginx 开了 `open_file_cache`（valid 60s / inactive 30s），`mv` 换文件后不 reload 会继续用旧 inode 服务最长 60 秒（实测"文件已是新版、外网仍回旧版"）。
+- 🔴 **对方的全站部署会删掉 Android 别名并回退卡片**（2026-10-07 23:39 实测）：APK 在 `.gitignore` 里、不在他们的 checkout，`rsync --delete` 式部署会把 `downloads/MRRC-Modern-Android.apk` **整个删掉**（下载变 404），同时把页面卡片打回他们那份的旧版本号；而我上传的版本化文件 `MRRC-Modern-vX.Y.Z-Android.apk` 反而留着。
+  - `publish-card.sh` 现在**开头自带别名自愈**：用 `ssh sha256sum` 比对线上别名与本地 dist 产物，不符就从服务器上的版本化文件 `cp -p` 回来（版本化文件也不对才从本地重传）。所以**发现被覆盖，重跑一次 `./publish-card.sh` 即可完全恢复**。
+  - ⚠️ 验证时别信 `curl` 的 200：别名被删后 nginx `open_file_cache` 仍会用**已删除文件的旧 inode** 回 200 + 旧内容（只要有人一直在访问，缓存条目就不失效）。判断真伪要用 `ssh sha256sum` 看真实文件，或 curl 后核对 SHA。
+  - 该自愈分支已做过真实演练（把别名 `mv` 走 → 跑脚本 → 自动复制回来 → 外网复核一致）。
 
 ## 架构速览
 

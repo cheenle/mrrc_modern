@@ -69,6 +69,8 @@ cd FT710Android
 
 - **绝不跑不带 `--apk-only` 的 `release.sh`，绝不跑站点全站 `deploy.sh`**：站点树（`~/HAM/website/mrrc_modern` → `/Users/cheenle/HAM/mrrc_modern/website`）与 Windows/macOS 发布波共用，全站部署会把对方的下载卡片回退（2026-10-05 实测：一次 Android 发版把线上 v1.25.3 刷回 v1.25.0）。
 - 卡片改动只允许动 `<!-- android-download:start/end -->` 标记块与 hero 的 `<i class="fab fa-android">` 版本号；`publish-card.sh` 会 diff 复核"除 Android 行外逐字节不变"。
+- 🔴 **对方的全站部署会删掉 Android 别名 + 回退卡片**（2026-10-07 23:39 实测）：APK 在 `.gitignore` 里、不在他们 checkout，`rsync --delete` 式部署把 `downloads/MRRC-Modern-Android.apk` **整个删掉**（下载 404）、页面卡片打回旧版本号，而我上传的版本化 APK 反而留着。**处置：重跑一次 `./publish-card.sh` 即可完全恢复**（它开头自带别名自愈：`ssh sha256sum` 比对，不符就从服务器上的版本化文件 `cp -p` 回来；版本化文件也不对才从本地 dist 重传）。该分支已真实演练过。
+- ⚠️ **验证别信 curl 的 200**：别名被删后 nginx `open_file_cache` 仍会用**已删除文件的旧 inode** 回 200 + 旧内容（一直被访问就一直不失效）。判真伪要用 `ssh sha256sum` 看真实文件，或 curl 下载后核对 SHA。
 - 站点 nginx 开了 `open_file_cache`（valid 60s）：换文件后**必须** `systemctl reload nginx`，否则最长 60 秒仍在服务旧 inode（表现为"服务器文件已是新版、外网还回旧版"）。
 - 稳定别名 `MRRC-Modern-Android.apk` 永远指向最新 APK，卡片文字滞后不影响下载。
 - 版本号：`app/build.gradle.kts` 的 `versionCode`/`versionName` 递增（**当前 v1.1.9 / versionCode 12**）；`CHANGELOG.md` 顶部加条目（中文，写"症状→根因→修法"）。

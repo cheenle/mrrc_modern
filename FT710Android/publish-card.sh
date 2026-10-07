@@ -34,6 +34,35 @@ APK="$APP_DIR/dist/MRRC-Modern-v${VERSION}-Android.apk"
 SIZE=$(stat -f%z "$APK")
 SHA=$(shasum -a 256 "$APK" | awk '{print $1}')
 
+# ── 0) 稳定别名自愈 ────────────────────────────────────────────────────
+# 站点树与 Windows/macOS 发布波共用：对方的全站部署会**删掉** MRRC-Modern-Android.apk
+# （APK 在 .gitignore 里，不在他们的 checkout 中），并把页面卡片打回他们那份的旧版本号。
+# 2026-10-07 23:39 实测发生过：下载链接变 404、卡片回到 v1.1.17，而版本化 APK 仍在。
+# 所以每次改卡片前先确认别名在且内容正确，缺了就从服务器上的版本化文件复制回来
+# （比重传 9MB 快，且保住已公布过的 SHA）。
+REMOTE_DL="$REMOTE_ROOT/downloads"
+VERSIONED="MRRC-Modern-v${VERSION}-Android.apk"
+STABLE="MRRC-Modern-Android.apk"
+ALIAS_SHA=$(ssh -o ConnectTimeout=10 "$REMOTE_USER@$REMOTE_HOST" \
+  "sha256sum $REMOTE_DL/$STABLE 2>/dev/null | awk '{print \$1}'" 2>/dev/null || true)
+if [ "$ALIAS_SHA" != "$SHA" ]; then
+  echo "-- 稳定别名缺失或不符（线上 ${ALIAS_SHA:-无}，应为 ${SHA:0:16}…）→ 修复"
+  VER_SHA=$(ssh -o ConnectTimeout=10 "$REMOTE_USER@$REMOTE_HOST" \
+    "sha256sum $REMOTE_DL/$VERSIONED 2>/dev/null | awk '{print \$1}'" 2>/dev/null || true)
+  if [ "$VER_SHA" = "$SHA" ]; then
+    ssh "$REMOTE_USER@$REMOTE_HOST" \
+      "cd $REMOTE_DL && sudo cp -p $VERSIONED $STABLE && sudo chown www-data:www-data $STABLE && sudo chmod 644 $STABLE"
+    echo "   已从服务器上的 $VERSIONED 复制回别名"
+  else
+    # 版本化文件也不在或不对 → 从本地 dist 重传两份（release.sh 会在 dist/ 里同时生成两个名字）
+    [ -f "$APP_DIR/dist/$STABLE" ] || cp "$APK" "$APP_DIR/dist/$STABLE"
+    scp "$APK" "$APP_DIR/dist/$STABLE" "$REMOTE_USER@$REMOTE_HOST:~/"
+    ssh "$REMOTE_USER@$REMOTE_HOST" \
+      "sudo mv ~/$VERSIONED ~/$STABLE $REMOTE_DL/ && sudo chown www-data:www-data $REMOTE_DL/$VERSIONED $REMOTE_DL/$STABLE && sudo chmod 644 $REMOTE_DL/$VERSIONED $REMOTE_DL/$STABLE"
+    echo "   已从本地 dist 重新上传（版本化 + 别名）"
+  fi
+fi
+
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 echo "== Android 卡片 v$VERSION · $(printf '%s' "$SIZE") bytes · $SHA =="

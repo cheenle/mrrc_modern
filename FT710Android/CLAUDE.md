@@ -134,6 +134,14 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 ## 频谱/标尺不变量
 
 - **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**：它们是 `SubcomposeLayout`，不支持 intrinsic 测量，布局阶段抛 `IllegalStateException` → **启动即崩**（v1.1.16 事故：顶栏用 `height(IntrinsicSize.Min)` 让显示屏与 S 表等高）。要和固定尺寸的兄弟等高，就**显式给高度**（本仓：`Row(Modifier.height(meterH))`，`meterH` 由屏宽算出）。门槛：`UiLayoutSafetyTest`（静态扫描，命中即失败）。
+- **UI 冒烟门槛（Compose 能组合、能布局）**：`app/src/testDebug/java/.../UI/MainScreenComposeTest.kt`（Robolectric + `ui-test-junit4`）。布局期异常在 CI 上原本是隐形的，只会在真机上表现为"装完打开就退出"（v1.1.16）。踩过的坑，改这条测试时照抄：
+  - `@Config(application = Application::class)` —— 否则 Robolectric 会跑真的 `FT710App.onCreate` → `ServiceLocator` → `RxAudioPlayer` → `OpusBridge.<clinit>` → `System.loadLibrary("opus_jni")` → `UnsatisfiedLinkError`
+  - 测试必须放在 **`src/testDebug`**：`ui-test-manifest` 只给了 `debugImplementation`，release 变体没有那个 Activity，`./gradlew test` 会两个变体都跑 → release 变体必红
+  - **VM 要在 `setContent { }` 外面建**：写在里面每次重组都新建一个
+  - fixture 必须用服务端**真实形状**（`scope_spans` 是键控字典 `{"6":{"name":"100 kHz","freq":100000}}` 不是数组；模式名是独立字段 `mode_name`，`mode` 只是索引）。形状不对时 `parseWsEvent` **静默**回退成 `Unknown`、整条 fullState 被丢 → 表现为"频率是 00.000.00"，很难查（`ProtocolTest` 里有一条专门的回归守护）
+  - 冒烟测试用 `assertExists()` 而不是 `assertIsDisplayed()`：滚动列视口外的节点是"存在但不可见"
+  - 文案可能重复：`7.117` 两处（标尺红标 + 记忆格）、`TUNE` 两处（ATR 行 + 底栏）→ 用 `assertCountEquals`
+- **发版别加 `--skip-tests`**：`release.sh` 有 `set -euo pipefail`，不带该参数时会自己跑 `./gradlew test lintDebug assembleRelease` 并在失败时中止。另外**绝不**写 `./gradlew … | grep | head && ./release.sh` —— 管道退出码取自 `head`，gradle 的失败会被吞掉（2026-10-06 就这样带着红灯把 v1.1.20 重发了一次：同版本号、不同字节 SHA）。要过滤输出就分开跑并逐个查 `$?`。
 - **UI 结构改动必须做结构 diff**（2026-10-05 事故：v1.1.14 改 ATR 行时脚本替换范围划到"录音入口"，把五键行/芯片行/音量/步进/VFO 行整段吞掉并发到官网；JVM 单测与 lint 都盖不住 UI 结构）。发版前跑：
   ```bash
   git show <上一个好版本>:FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt > /tmp/good.kt

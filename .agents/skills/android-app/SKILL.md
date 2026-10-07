@@ -116,6 +116,7 @@ cd FT710Android
 | 7 | 跑一段时间比 Web 延迟几秒 | 抖动缓冲无上限：卡过一次就永远落后 | Web 水位 + 800ms 丢最旧 + TX flush（v1.1.9） |
 | 8 | 设置页四个滑块"调不了" | `vm.version.collectAsState()` 返回值被丢弃 → 从不重组，松手被旧值弹回 | 读出版本 + `remember(stateVersion)` 重算（v1.1.9） |
 | 9 | 官网卡片更新了、外网仍是旧版 | nginx `open_file_cache` 仍服务旧 inode | 上传后 `systemctl reload nginx`（`publish-card.sh` 内置） |
+| 15 | 带着红灯发版（v1.1.20 重发一次） | `./gradlew … \| grep \| head && ./release.sh`：管道退出码取自 `head`，测试失败被吞；同时 Compose 测试放在 `src/test` 导致 release 变体必红 | 测试移到 `src/testDebug`；发版不再用 `--skip-tests`（靠 `release.sh` 的 `set -euo pipefail` 自守）；门槛命令分开跑并逐个查 `$?` |
 | 14 | 荣耀等中端机**卡顿 + 声音几乎出不来** | ①瀑布每帧重建整幅位图（102,000 查表 + 408KB 分配/帧，主线程）；②`waterfall/fft` 在主屏顶层订阅 → 每帧重组整屏；③音频线程默认优先级被饿死 → AudioTrack 欠载 | 环形增量绘制（`WaterfallRing`）+ 拆 `SpectrumPanel` 订阅 + `THREAD_PRIORITY_URGENT_AUDIO`（v1.1.18） |
 | 13 | **装上打开就退出**（启动即崩） | 顶栏 `height(IntrinsicSize.Min)` 包住了含 `BoxWithConstraints` 的子项 → Compose 抛"SubcomposeLayout 不支持 intrinsic 测量" | 改显式高度 `height(meterH)`；加 `UiLayoutSafetyTest` 门槛（v1.1.17） |
 | 12 | v1.1.14 主屏控件整片消失（模式/波段/滤波/ATT/PRE、NR/NB/AN/COMP/ATU、音量、步进、VFO 行） | 脚本按"注释区间"整段替换 ATR 行，区间跨过了所有控制行；UI 结构无测试覆盖 | 从 v1.1.13 取回整段重插；此后发版前强制**结构 diff**（v1.1.15） |
@@ -128,6 +129,8 @@ cd FT710Android
   - 写这类源码级门槛测试有三个静默失效坑：① 提取函数体要先配对跳过参数列表（`() -> Unit = {}` 的 `{}` 会被当成整个体）；② 扫描前剥注释（否则注释里提一嘴就误报）；③ Gradle 要给 Test 任务声明 `inputs.dir("src/main/java")`，否则改源码后判 UP-TO-DATE **跳过测试**。
 
 - **对"参数默认值里带 lambda"的函数做文本插入，必须核对插入点**：`private fun connect(..., onClosedCode: (Int) -> Unit = {})` 之后第一个 `{` 是**默认参数的 lambda**、不是函数体。脚本按"第一个 `{`"插语句会把代码塞进默认 lambda → 语义全变（只有回调触发时才执行），而**编译照样通过**。这类改动只能靠测试兜住（本次是 `openedPaths` 恒空被断言抓到）。
+- **UI 冒烟门槛**：`app/src/testDebug/…/UI/MainScreenComposeTest.kt`（Robolectric + `ui-test-junit4`）用真实 `MainViewModel` + 真实 fullState 把整屏 measure/layout 一遍，专治"build 全绿但装上打开就退出"。四条固定坑：① `@Config(application = Application::class)`，否则 `FT710App.onCreate` 会去 `loadLibrary("opus_jni")` 直接 `UnsatisfiedLinkError`；② 测试必须放 `src/testDebug`（`ui-test-manifest` 只给了 debug 变体，`gradlew test` 会连 release 变体一起跑 → 必红）；③ VM 要在 `setContent` **外面**建；④ fixture 用服务端真实形状（`scope_spans` 是键控字典、模式名是独立的 `mode_name`）——形状错了 `parseWsEvent` **静默**变 `Unknown`、整条 fullState 被丢，只表现为"频率是 00.000.00"。断言用 `assertExists`（滚动视口外的节点"存在但不可见"），重复文案（`7.117`、`TUNE`）用 `assertCountEquals`。
+- **发版别加 `--skip-tests`**：`release.sh` 有 `set -euo pipefail`，会自己跑 `test lintDebug assembleRelease` 并在失败时中止。**绝不**写 `./gradlew … | grep | head && ./release.sh`：管道退出码取自 `head`，gradle 的红灯会被吞掉（2026-10-06 就这样把 v1.1.20 带着红灯重发了一次）。要过滤输出就分开跑、逐个查 `$?`。
 - **发版前必做结构 diff**（血的教训：v1.1.14 用"从 A 注释到 B 注释整段替换"改 ATR 行，把五键行/芯片行/音量/步进/VFO 行整段吞掉，残缺包发上了官网；`gradlew test`+`lint` 全绿也拦不住，因为 UI 结构没有测试）。做法：`git show <上一个好版本>:…/MainScreen.kt` 取参照，比对 `PadBtn("…")`/`SmallChip("…")`/`MeterCell("…")` 标签、`vm.*(` 调用、`state.*`/`prefs.*` 字段、`*Dialog`/`*Panel` 的集合——**少任何一项就不发版**。大块改动用"精确锚点 + 重插"，别用大范围区间替换。
 - **设计令牌只在两处**：`UI/Theme.kt`（`MrrcColors`，对齐 web `ft710.css :root`）与 `UI/Surfaces.kt`（`MrrcSurfaces` 三层表面 + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）。就地写死颜色会让后续美化改不动。
 

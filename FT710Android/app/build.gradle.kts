@@ -53,7 +53,11 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        // Robolectric + Compose UI 测试需要 android resources
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -74,6 +78,11 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.coroutines.test)
+    // Compose UI 冒烟测试：布局期异常（如 IntrinsicSize 包 BoxWithConstraints）
+    // 只有真机能暴露成"装完打开就退出"，用 Robolectric 把它提前到 gradlew test 阶段
+    testImplementation(libs.robolectric)
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.junit)

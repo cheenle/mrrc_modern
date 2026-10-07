@@ -5,6 +5,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -166,5 +167,56 @@ class ProtocolTest {
             """{"type":"fullState","data":{"mode":1},"atr1000Enabled":true}"""
         ) as WsEvent.FullState
         assertTrue(on.atr1000Enabled)
+    }
+
+    /**
+     * capabilities 的**真实形状**（`backends/ft710/config_ft710.py:SCOPE_SPANS` 是
+     * `dict[int, dict]`，序列化成 JSON 后键是字符串）。
+     *
+     * 这条测试的来历：写 UI 冒烟测试时我把 `scope_spans` 当成 int 数组，
+     * 结果 `parseWsEvent` **静默**回退成 Unknown、整条 fullState 被丢掉（频率停在 0），
+     * 表面上只是"测试断言不匹配"，实际是 v1.1.0 那类 D0 事故的翻版。
+     * DTO 形状一旦漂移，这条会先红。
+     */
+    @Test fun `real capabilities shape parses, including scope_spans as a keyed map`() {
+        val ev = parseWsEvent(
+            """{"type":"fullState","data":{"vfo_a_freq":7116950,"mode":1,"scope_span":6},
+               "capabilities":{"model_name":"ft710","display_name":"Yaesu FT-710","verified":true,
+                 "tx_gated":false,"has_atu":true,"has_auto_notch":true,"has_vd_id_meters":true,
+                 "filter_model":"width_table","att_steps":[0,6,12,18],
+                 "preamp_steps":["OFF","AMP1","AMP2"],"scope_type":"ft4222",
+                 "scope_speeds":["SLOW1","SLOW2","MID","FAST"],
+                 "audio_gain_boost":10.0,
+                 "scope_spans":{"0":{"name":"1 kHz","freq":1000},
+                                "6":{"name":"100 kHz","freq":100000},
+                                "9":{"name":"1 MHz","freq":1000000}}},
+               "atr1000Enabled":true}""".trimIndent()
+        ) as WsEvent.FullState
+
+        val caps = ev.capabilities
+        assertNotNull("capabilities 必须解析出来（形状漂移就会是 null）", caps)
+        assertEquals("ft710", caps!!.modelName)
+        assertEquals("Yaesu FT-710", caps.displayName)
+        assertTrue(caps.hasAtu)
+        assertTrue(caps.hasVdIdMeters)
+        assertEquals(10.0, caps.audioGainBoost, 0.0001)
+        assertEquals(listOf(0, 6, 12, 18), caps.attSteps)
+        assertEquals(listOf("OFF", "AMP1", "AMP2"), caps.preampSteps)
+        // scope_spans 是键控字典，不是数组
+        assertEquals(3, caps.scopeSpans.size)
+        assertEquals(100000L, caps.scopeSpans["6"]?.freq)
+        assertEquals("100 kHz", caps.scopeSpans["6"]?.name)
+        assertTrue(ev.atr1000Enabled)
+    }
+
+    /** 形状不对时必须**明确失败**，而不是静默变成 Unknown 让人查半天。 */
+    @Test fun `a wrong scope_spans shape drops the whole fullState (regression guard)`() {
+        val bad = parseWsEvent(
+            """{"type":"fullState","data":{"vfo_a_freq":7116950},
+               "capabilities":{"scope_spans":[1000,100000]}}"""
+        )
+        // 现状：整条事件解析失败 → 不是 FullState。这就是"静默丢状态"的代价，
+        // 所以 capabilities 的 DTO 形状必须与服务端逐字对齐（见上一条测试）。
+        assertFalse("错误形状不该被当成有效 fullState", bad is WsEvent.FullState)
     }
 }

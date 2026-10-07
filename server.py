@@ -2819,6 +2819,16 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
 
+    # Stop the cloud-hub tunnel before the server it points at goes away. frpc is this process's
+    # child, and a child that outlives its parent keeps the proxy name against the next start -
+    # measured on macOS 2026-10-06: six restarts in half an hour, six orphans, each still logged
+    # in and retrying for a name the running instance could not register. A crash or a kill skips
+    # this and leaves it to the sweep at startup, which is why that sweep has to work too.
+    global _cloud_tunnel
+    if _cloud_tunnel is not None:
+        _cloud_tunnel.stop()
+        _cloud_tunnel = None
+
     # Stop audio
     if _audio_rx_task:
         _audio_rx_task.cancel()

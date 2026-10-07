@@ -37,7 +37,7 @@
 
   <!-- Yaesu family: none + fallback -->
   <rect x="510" y="32" width="238" height="196" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
-  <text x="629" y="50" text-anchor="middle" class="h">Yaesu FTDX10/101D/101MP/FTX-1F</text>
+  <text x="629" y="50" text-anchor="middle" class="h">Yaesu FTDX10/101D/101MP/FTX-1F/FT-891</text>
   <text x="629" y="68" text-anchor="middle" class="m">no scope stream exists (AD-018)</text>
   <text x="524" y="90" class="m">SS; is a settings command only</text>
   <text x="524" y="106" class="m">(span / speed / mode) — no waveform</text>

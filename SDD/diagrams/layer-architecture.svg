@@ -17,8 +17,8 @@
   <!-- BACKEND -->
   <rect x="20" y="138" width="680" height="60" rx="10" fill="#22c55e18" stroke="#22c55e55"/>
   <text x="34" y="156" class="h">BACKEND</text>
-  <text x="34" y="174" class="m">backends/ registry (10 model keys) → RadioBackend ABC + RadioCapabilities</text>
-  <text x="34" y="189" class="m">ft710 (verified, own path) · ic7300 core + profiles (IC-7300/MK2 verified; IC-705/7610/7760 experimental) · yaesu core + profiles (FTDX10/FTDX101D/FTDX101MP/FTX-1F experimental)</text>
+  <text x="34" y="174" class="m">backends/ registry (11 model keys) → RadioBackend ABC + RadioCapabilities</text>
+  <text x="34" y="189" class="m">ft710 (verified, own path) · ic7300 core + profiles (IC-7300/MK2 verified; IC-705/7610/7760 experimental) · yaesu core + profiles (FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891 experimental)</text>
 
   <!-- AUDIO / CODEC / RECORDING -->
   <rect x="20" y="206" width="680" height="60" rx="10" fill="#a78bfa18" stroke="#a78bfa55"/>

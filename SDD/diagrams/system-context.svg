@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 352">
-  <!-- diagram-version: V2.72 -->
+  <!-- diagram-version: V2.73 -->
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#888"/></marker>
   </defs>
@@ -45,7 +45,7 @@
 
   <rect x="480" y="192" width="222" height="120" rx="10" fill="#f0a03018" stroke="#f0a03055"/>
   <text x="591" y="210" text-anchor="middle" class="b">Yaesu ASCII-CAT family</text>
-  <text x="591" y="227" text-anchor="middle" class="m">FTDX10 · FTDX101D · FTDX101MP · FTX-1F</text>
+  <text x="591" y="227" text-anchor="middle" class="m">FTDX10 · FTDX101D · FTDX101MP · FTX-1F · FT-891</text>
   <text x="591" y="242" text-anchor="middle" class="m">all experimental — no unit tested (AD-018/19)</text>
   <text x="591" y="257" text-anchor="middle" class="m">ASCII CAT 38400 8N1 (shared core)</text>
   <text x="591" y="272" text-anchor="middle" class="m">scope: none documented → S-meter fallback</text>

@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.25.3 · Stable</span>
+<span>v1.25.4 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -58,14 +58,13 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.3-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.25.3
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.4-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.25.4
           </a>
-<div class="dl-meta">62,430,310 bytes · SHA-256 87890593…</div>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.25.3
+<i class="fab fa-windows"></i> Windows Installer v1.25.4
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Android.apk">
-<i class="fab fa-android"></i> Android APK v1.1.1
+<i class="fab fa-android"></i> Android APK v1.1.17
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
 <i class="fas fa-arrow-down"></i> Explore Features
@@ -96,12 +95,24 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.25.3</strong>
+<strong> What's new in v1.25.4</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>A fresh press can no longer be unkeyed by the remote-session safety gate</strong> — Cloud Hub
+<strong>The macOS tunnel stops leaking a process per start — the sweep never ran there</strong> —
+              v1.25.2 fixed this leak on Windows by changing how a leftover <code>frpc</code> was
+              <em>enumerated</em>, but the function still returned before doing anything unless the
+              platform was Windows, so on macOS every start left one behind, forever. Measured on one
+              Mac: <strong>six</strong> starts, <strong>six</strong> orphans. It compounds — the orphan
+              holds the entry name, so the <em>next</em> instance can never register itself. The sweep now
+              lists processes with <code>ps</code> (and only ones actually named <code>frpc</code>: an
+              editor holding the config open names that path on its command line too), ends them with
+              <code>SIGTERM</code> so the entry is released at once, and never raises — and shutdown now
+              stops the tunnel child it used to abandon.
+            </li>
+<li>
+<strong>Previous release (v1.25.3), a fresh press can no longer be unkeyed by the remote-session safety gate</strong> — Cloud Hub
               turns on the liveness gate that releases a transmitting session when it stops proving it is
               alive. The heartbeat is sent <em>at key-up</em>, but the server cannot read that beat until the
               key-up handler returns (CAT write + audio start, tens of milliseconds) — and a watchdog tick
@@ -190,7 +201,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <span class="section-label">Video</span>
 <h2 class="section-title">Watch the Intro</h2>
 <p class="section-subtitle">
-            A two-minute product tour of MRRC Modern (Chinese narration
+            A two-minute product tour of MRRC Modern (English narration
             and subtitles).
           </p>
 </div>
@@ -200,7 +211,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
             border-radius: 14px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
           ">
-<source src="videos/ft710_promo.mp4" type="video/mp4"/>
+<source src="videos/mrrc_modern_promo_en.mp4" type="video/mp4"/>
           Your browser does not support the video tag.
         </video>
 </div>
@@ -409,14 +420,14 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.25.3 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.25.4 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.8 MB · x64 · 54,342,929 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 1413521c…</code>
+            51.8 MB · x64 · 54,347,067 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 7daebeae…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.25.3 is zero-config on first run: it auto-generates a web
+            v1.25.4 is zero-config on first run: it auto-generates a web
             password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
             0x19) and its serial port (COM), and the login page shows the
             auto-generated password. The web Connection Settings dialog
@@ -438,10 +449,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.25.3-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.25.3
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.25.4-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.25.4
             </a>
-<div class="dl-meta">54,342,929 bytes · SHA-256 1413521c…</div>
+<div class="dl-meta">54,347,067 bytes · SHA-256 7daebeae…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -457,11 +468,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.25.3-arm64.dmg — v1.25.3 Stable </strong>
+<strong> MRRC-Modern-v1.25.4-arm64.dmg — v1.25.4 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            59.5 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,430,310 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 87890593…</code>
+            59.5 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,440,021 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: e823b125…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -482,7 +493,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.3-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.4-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -578,10 +589,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.25.3, 51.8 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.25.4, 51.8 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 1413521cd4081d922429320106ba44f135d339e4ac805d29937b0f2d667744ec</code>
+<code>SHA-256 7daebeae65dccfb184be6b93553df0967e12f9fd84b9a937e3a7ae4c4c0659ab</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -934,7 +945,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="perf-card">
 <div class="metric">1604</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>1616 tests on macOS / 1613 on Windows in the v1.25.3 release</small>
+              Hardware-Free Tests<br/><small>1642 tests on macOS / 1639 on Windows in the v1.25.4 release</small>
 </div>
 </div>
 </div>
@@ -1025,8 +1036,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <li>JVM-tested protocol &amp; PTT logic — device RF acceptance pending</li>
 </ul>
 <!-- android-download:start -->
-<p><a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Android.apk">Download APK v1.1.1 (Android 8.0+)</a></p>
-<p style="color: var(--scope-text-muted); font-size: 0.85rem; margin-top: .5rem;">MRRC-Modern-v1.1.1-Android.apk · 8.9 MB · SHA-256 <code>ce8b7ca5a52847a5595ca643f829fd2466efc136f6058bf83a7cecce44d84087</code><br>Install: allow “install unknown apps”, then open the APK.</p>
+<p><a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Android.apk">Download APK v1.1.17 (Android 8.0+)</a></p>
+<p style="color: var(--scope-text-muted); font-size: 0.85rem; margin-top: .5rem;">MRRC-Modern-v1.1.17-Android.apk · 9.0 MB · SHA-256 <code>620d65779920969c426b15f65998af376cee54e8410ce587ae5686ae07f8a432</code><br>Install: allow “install unknown apps”, then open the APK.</p>
 <!-- android-download:end -->
 </div>
 </div>
@@ -1080,7 +1091,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.73</strong> · Architecture decisions, component
+            <strong>V2.74</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>
@@ -1136,7 +1147,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.25.3</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.25.4</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

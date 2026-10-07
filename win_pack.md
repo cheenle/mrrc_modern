@@ -2,13 +2,20 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> **最新构建：v1.25.3（2026-10-05）** —— VM 门禁 **1613 项 OK（19 skip）**；`dev_tools/tls_trust_gate.py` 通过（系统根 29 + 随包 119 根 + portal/latest.json 真握手）；产物 `MRRC-Modern-v1.25.3-Windows-x64-Setup.exe` **54,342,929 bytes**，SHA-256 `1413521cd4081d922429320106ba44f135d339e4ac805d29937b0f2d667744ec`；`version.txt` = 1.25.3；Inno Setup 6.7.3、PyInstaller 6.21.0、Python 3.12.4；fleet 13 个文件在**应用根目录**；VM 与 Mac 两侧 SHA-256 逐字节一致；包内 junk **0**、私钥形状 **0**（除有意随包的 `vendor\ca\cacert.pem`）。
+> **最新构建：v1.25.4（2026-10-06）** —— VM 门禁 **1639 项 OK（19 skip）**；`dev_tools/tls_trust_gate.py` 通过（`build.ps1:53` 那道门，失败即 throw）；产物 `MRRC-Modern-v1.25.4-Windows-x64-Setup.exe` **54,347,067 bytes**，SHA-256 `7daebeae65dccfb184be6b93553df0967e12f9fd84b9a937e3a7ae4c4c0659ab`；`version.txt` = 1.25.4；mtime 2026-10-06 22:15:07；Inno Setup 6.7.3、PyInstaller 6.21.0、Python 3.12.4；fleet 13 个文件在**应用根目录**；VM 与 Mac 两侧 SHA-256 逐字节一致；包内 junk **0**、私钥形状 **0**（除有意随包的 `vendor\ca\cacert.pem`）。
 >
-> **本轮抓到一个静默失效的构建**：第一个包门禁全绿（1612 项 OK）、`version.txt`/size/SHA 全对，但 PyInstaller 复用了 `build\pyinstaller` 的缓存模块图 —— tar 保留了构建 Mac 的 mtime，修复后的 `server.py`（Oct 4 23:04）比 v1.25.2 的缓存（Oct 5 07:46）旧，于是只有 `COLLECT-00.toc` 被重写、冻进去的是**未修复的** `server.py`。符号走查发现 `_execute_set_command` 与源码差 10 条指令、const 行号 2469 vs 2484（正好是修复加的 15 行）。给 `build.ps1` 加上构建前 `Remove-Item build\pyinstaller`（配套守卫测试，变异验证变红），重建后走查逐字节一致。
+> **本轮三层证据**（缺一层就不算验过）：
+> ① **符号走查**（`dev_tools/bundle_check_v1254.py`）：`server` 入口的 `lifespan` 与源码 co_code **逐字节一致**（4874 字节）；`cloud_hub` 的 `_terminate`/`_kill_stale_frpc`/`_enumerate_frpc`/`_stale_frpc_pids`/`_windows_norm` 全部一致；`signal`/`SIGTERM` 在 co_names，`ps`/`-eo`/`pid=,command=` 在 co_consts。脚本自带**自对照**（拿两个不相干的函数比，必须报 DIFF）—— 没有它，"全部一致"可能只是比对逻辑在空转。
+> ② **洁净室真跑**（`dev_tools/cleanroom_v1254.ps1`，19 条全过）：https /login **200**、同端口明文连不上（**000**）、`/api/health` **401**、TLS **1.3**（raw=12288）、SAN 含 `IP Address=127.0.0.1`、**只绑 127.0.0.1**、banner 是 https、证书落在**用户数据目录**、安装目录 **163→163**、第二实例没起服务且监听只剩 1 个。
+> ③ **装完真跑**（`dev_tools/install_smoke_v1254.ps1`，12 条全过）：真 `Setup.exe` 静默装进隔离 `/DIR=` —— 165 文件、`version.txt` = 1.25.4、fleet 在、安装后的 Launcher https /login **200**、安装目录 **165→165**、卸载后 **0** 残留。
 >
-> **洁净室真跑**：隔离 LOCALAPPDATA + 空闲端口 18896 + 冻结 Launcher（https /login **200**、同端口明文 refused、/api/health **401**、TLS 1.3 + SAN 含 `127.0.0.1`、首探 settle、第二启动器退出、安装目录 **163→163**、junk 0）。
+> **这一轮踩到的两个坑（脚本注释里都写了，别再踩）**：
+> ① **环境变量不管用 —— 配置文件优先于 `os.environ`**。首次运行会从模板生成 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`，里面写着 `0.0.0.0:8888`，于是 `MRRC_WEB_PORT=18896` 完全不生效、服务器绑到了 8888 上。洁净室必须**先把配置写出来**。
+> ② **.ps1 必须存成 UTF-8 带 BOM**。PS 5.1 无 BOM 时按 cp936 读，中文行尾字节会和换行符配成 cp936 双字节**把换行吃掉**，下一行代码被并进注释 —— 症状是 `Set-Content -Path $cfgPath` 报 `$cfgPath` 为 null。仓库里 `build.ps1` 一直带 BOM，就是为这个。
 >
-> **装完真跑**：把真 `MRRC-Modern-Setup.exe` 静默装进隔离 `/DIR=`（不影响 VM 上的常驻租户）—— 165 文件、`version.txt` = 1.25.3、fleet 在、安装后的 Launcher 同样 https /login **200**、安装目录 **165→165**、卸载干净。
+> **两条旧断言在这轮被证伪（别再照着抄）**：走启动器这条路时**看不到** `signed a self-signed certificate` —— 证书是启动器先签好的（`windows/launcher.py:293`，签在用户数据目录），服务器拿到的是已存在的文件，只打 `SSL enabled`；第二实例的退出码**有意为 0**（`windows/launcher.py:344` 打开已有服务器后 `return 0`），"退出非零"对应的是更早一版的启动器。
+>
+> **v1.25.3 那轮抓到的静默失效（教训保留）**：第一个包门禁全绿（1612 项 OK）、`version.txt`/size/SHA 全对，但 PyInstaller 复用了 `build\pyinstaller` 的缓存模块图 —— tar 保留了构建 Mac 的 mtime，修复后的 `server.py`（Oct 4 23:04）比 v1.25.2 的缓存（Oct 5 07:46）旧，于是只有 `COLLECT-00.toc` 被重写、冻进去的是**未修复的** `server.py`。符号走查发现 `_execute_set_command` 与源码差 10 条指令、const 行号 2469 vs 2484（正好是修复加的 15 行）。修法：`build.ps1` 构建前 `Remove-Item build\pyinstaller`（配套守卫测试，变异验证变红）。
 
 > 用户向的安装/使用说明见 [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md)，本文是**打包方**的操作手册。
 
@@ -151,7 +158,7 @@ venv/bin/python -m unittest discover -s tests        # 必须全绿（当前 136
 ```bash
 mkdir -p dist && rm -f dist/mrrc_modern_src.zip
 zip -qr dist/mrrc_modern_src.zip . \
-  -x "./.git/*" "./venv/*" "./.venv/*" "./dist/*" "./build/*" "./logs/*" "./certs/*" \
+  -x "./.git/*" "./.worktrees/*" "./venv/*" "./.venv/*" "./dist/*" "./build/*" "./logs/*" "./certs/*" \
      "./FT710Mobile/*" "./lib/*" "./__pycache__/*" "./windows/__pycache__/*" \
      "./tests/__pycache__/*" "./.pytest_cache/*" "./.claude/*" "./.superpowers/*" \
      "./.agnes/*" "./*.pyc" "./.DS_Store" "./SDD/.DS_Store" \
@@ -159,6 +166,11 @@ zip -qr dist/mrrc_modern_src.zip . \
   "./website/downloads/*" "./website/videos/*" "./website/__pycache__/*" \
   "./promo/*" "./recordings/*" "./logs/*"
 ```
+
+**`./.worktrees/*` 必须排除（2026-10-06 实测）**：仓库里现在挂着 `feat/android-1.0.0` 与 `feat/w103d-box`
+两个 worktree，**合计 4.8 GB**（Gradle/构建产物）。漏掉这一条源码包是 **2.1 GB** 而不是 31 MB ——
+跨境上传必然中断。加进去之后本轮 v1.25.4 的包是 **31 MB**（此前 v1.15.0 记的 9.8 MB/22 MB 是
+worktree 出现以前的数，别再拿它当基准）。
 
 **关键**：`./.agents/*` 不能排除——`tests/test_sdd_harness.py` 依赖其中的 harness 文件，缺了会导致 VM 上 24 个测试失败。`./certs/*` 必须排除（含 TLS 私钥）。
 
@@ -354,6 +366,7 @@ curl -sI https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.15.0-Windows-
 | 测试失败但 build 继续（历史问题） | `$ErrorActionPreference` 不管原生命令 | build.ps1 已修：`Invoke-Checked` 检查 `$LASTEXITCODE` |
 | VM 上 43 个测试 UnicodeDecodeError | 虚拟机是 GBK(c936) 中文区域，测试 `read_text()` 未指定编码 | 已修：测试统一 `encoding="utf-8"`，harness 子进程设 `PYTHONIOENCODING=utf-8` |
 | VM 上 24 个 harness 测试失败 | 源码 zip 误排 `.agents/` | 见 Step 1 关键提示 |
+| 只有 VM 上 `CallSiteGuardTests.test_every_call_site_sets_a_context` 失败：`AssertionError: 50 not greater than 50` | 该闸门用 `assertGreater(scanned, 50)` 自证「确实在看出货树」，而 50 是照开发机 macOS 的 53 个模块挑的下界；按 Step 1 的排除表装到 VM 上只有 50 个（`FT710Android/`、`promo/` 被排除）。**是闸门标错了，不是代码坏了** —— 那三个文件里没有 `urlopen`（v1.25.4 实测） | 已修（v1.25.4）：阈值换成内容对照 + `_SKIP_DIRS` 与排除表对齐。**别再靠改大阈值「修」它** —— 那正好把空转扫描放回来 |
 | Step 3 删目录后 build_vm.ps1 报 `.\venv\Scripts\Activate.ps1` 找不到 | Step 3 的 `Remove-Item C:\mrrc_modern` 把 venv 一起删了（zip 不含 venv） | 重跑 §2.2 完整四条（含 `python -m venv venv`）再构建 |
 | Step 3 删除时报 `server_console.log` 被占用 | VM 上 `start_mrrc_modern.ps1` 起的 `python server.py --no-ssl` 实例持有该文件 | 先 `Stop-Process` 掉对应 python/父 powershell 再解压；构建完成后按需重新拉起 |
 | ham.vlsc.net 突然不通 | DDNS（aliddns.py）A 记录消失/更新延迟 | `dig +short ham.vlsc.net @223.5.5.5` 确认；等服务器恢复后记录自动回来 |

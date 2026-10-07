@@ -2,6 +2,78 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.25.4] — 2026-10-06 — 隧道残留修的是 Windows 那一半；macOS 这一半的清理代码从来没跑过
+
+v1.25.2 修「每启动一次就多留一个 `frpc`」时，改的是**枚举方式**（`wmic` → `Get-CimInstance`）。
+而 `_kill_stale_frpc()` 开头那句 `if os.name != "nt": return`（2026-10-02 `697d9d2`，为「同机上的
+第二个实例不受影响」加的）把整段清理关在了 Windows 之内 —— 于是 macOS 上**根本没有清理**：
+启动时它立刻返回，什么都没做。
+
+2026-10-06 在 macOS 上实测到同一个故障的第二个平台样本，而且它是**自我循环**的：一次开机之后启动
+6 次，留下 6 个孤儿 `frpc`（PPID 全为 1）；当晚 21:39 清场之后只剩一个干净子进程拿到代理名，
+21:40 应用再启动一次，新子进程**从那一刻起就再也注册不上** —— 挡住它的正是上一次留下的那个孤儿。
+现场日志 86 行里 **67 行**是 33 秒一次的重试：
+
+```
+21:39:38 [f86c288674aa3ed1] [bg1sb] start proxy success          ← 孤儿（PID 5023）拿到名字
+21:40:24 [45e8ede3fa7d80a3] [bg1sb] start error: already exists  ← 新实例从此每 33 秒重试一次
+```
+
+### 修好：macOS 上启动时真的会回收上一个隧道进程
+
+- 枚举改走 `ps -eo pid=,command=`。**只认命令行第一个词的 basename 是 `frpc` 的进程**：用编辑器
+  打开着那份 `frpc-bg1sb.toml` 的 `vim`，命令行里也有这个路径，不能把它当成 frpc 杀掉。
+- 终止改走 `SIGTERM`，让 frpc 自己关掉控制连接、hub 当场释放代理名；Windows 仍然只有 `taskkill /F`。
+- **永不抛出**：`ps` 的快照与 kill 之间进程可能已自己退出（`ProcessLookupError`），那是「无事可做」
+  而不是失败；Windows 侧 `taskkill` 超时抛的是 `SubprocessError` 而**不是** `OSError`，两种都得接住。
+  调用方是 `TunnelProcess.__init__`，异常从那里冒出去会把隧道建立、连同触发它的那个接口一起带走。
+
+### 修好：关停时停掉隧道子进程
+
+`server.py` 的 `lifespan` 关停半段从来没停过 `_cloud_tunnel`。frpc 是服务进程的**子进程**，父进程没了
+它照样活着，把代理名占给下一次启动 —— 上面那段日志就是它造成的。崩溃或被 kill 会跳过这一步，
+所以启动时那道清理必须同时成立：两层都在，缺一个故障就会回来。
+
+> 本次修复在 `cloud_hub.py`（冻结包内的 hiddenimports）与 `server.py`（**入口脚本**）：
+> 热修通道覆盖不到，只能随安装包到达用户。
+
+### 同批到达：这一个包也是 FT-891 和「键控了却没有声音」到达用户的那个包
+
+上面那句「只能随安装包到达用户」，说的就是这一次 —— `server.py` 与 `cloud_hub.py` 在此之前已经
+改过两轮，两轮都不是热修通道够得着的东西：
+
+- **FT-891**（SDD V2.72）：第 11 个注册键、Yaesu 家族第 5 个 profile。**实验性、仅接收** ——
+  `MRRC_RADIO_MODEL=ft891` 可选，无真机验证（AD-019），发信另需 `MRRC_ALLOW_UNVERIFIED_TX=1`，
+  不出频谱流。
+- **发射时「键控了却没有声音」**（SDD V2.71）：会话令牌是 30 天 Cookie，一个令牌名下可以同时有
+  多条 `/WSaudioTX`（页面重载留下的半开旧 socket、同一登录的两个标签页），而认领取的是**迭代顺序
+  里的第一条** —— 可能正是那条已经不再送音频的旧 socket。现在按会话取**最后连接**的那条，并在收到
+  第一个语音帧时把上行交给同 token 的活 socket。
+
+判据是两条链都钉住，不是靠版本号推断：本版构建用的源码包 `dist/mrrc_modern_src.zip` 里的
+`server.py`、`cloud_hub.py` 与工作树**逐字节相同**（`_claim_tx_owner_for_token`、
+`_same_session_uplink_takeover` 都在里面），`backends/yaesu/yaesu_profiles.py` 也在包里；
+构建机上再把安装包内 `server` 入口与源码比对，`lifespan` 的 `co_code`、`co_consts`、
+`co_firstlineno` 全部一致。
+
+### 测试
+
+`CertificateReloadClockTests` 那两条一直是**空转**的，`tests/README.md` 还把它记成「pre-existing 失败」。
+`_configured_ssl_cert()` 先读配置文件、只在文件里没有该键时才回退 `os.environ`，而它们只 patch 了
+环境变量 —— 判的是开发机真实的 `mrrc_modern.env`。把 `time.monotonic()` 那个 bug 塞回去，其中一条
+照样通过，而拦住它正是这条测试存在的理由。现在两条都把 `MRRC_CONFIG_FILE` 钉在临时文件上，
+只判自己写下的那张证书。套件 **1642 项全绿**（1 skip）。
+
+同一轮里还有**第二条**这样的闸门，它是被 Windows 门禁叫醒的：`CallSiteGuardTests`（v1.25.1 加的，
+拦「新加的 `urlopen` 忘了带 `context=`」）用 `assertGreater(scanned, 50)` 来证明自己「确实在看出货
+树」。那个 50 是照开发机 macOS 的 **53** 个模块挑的下界，而按 `win_pack.md` 的排除表装到构建机上
+只有 **50** 个 —— 同一份代码在 macOS 上绿、在**出货树**上红。这不是缺陷：被排除的三个文件
+（`FT710Android/` 的 meson 脚本、`promo/build.py`）里一个 `urlopen` 都没有。是闸门自己标错了，
+而它红在边界上（`50 not greater than 50`）谁也看不出真伪。改成内容对照 —— 出货树里必定存在的
+模块必须在扫描集里 —— 并让 `_SKIP_DIRS` 与源码包排除表对齐。变异验证：`REPO_ROOT` 指到空目录
+→ 红（`'server.py' not found in set()`）；往 `session_metrics.py` 塞一处裸 `urlopen` → 红
+（点名 `session_metrics.py:217`）。
+
 ## [v1.25.3] — 2026-10-05 — 按键之后的 20–70 毫秒里，自己的存活闸门可能把这次发射掐掉
 
 Cloud Hub 打开的远端会话存活闸门（V2.63，`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`）是为了兜住

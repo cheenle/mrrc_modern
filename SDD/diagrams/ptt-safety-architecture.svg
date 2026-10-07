@@ -11,7 +11,7 @@
   <!-- Layer 0 -->
   <rect x="14" y="44" width="732" height="46" rx="10" fill="#ef444418" stroke="#ef444488" stroke-dasharray="5 3"/>
   <text x="28" y="62" class="h">LAYER 0 · PRECONDITION — unverified-model TX gate (AD-019, NFR-067) + listen-only role refusal</text>
-  <text x="28" y="80" class="m">set_ptt(True) / set_tune(True) refuse on a model whose profile is not hardware-verified (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F) unless MRRC_ALLOW_UNVERIFIED_TX=1 — one warning per process, and PTT <tspan font-weight="700">releases are never gated</tspan>, so every layer below can always unkey. A listen-only session (MRRC_LISTEN_PASSWORD) never reaches a layer at all: the /WSradio role gate passes only freq/mode sets + memory recall, /WSaudioTX and /WSatr1000 close with 4003, and REST is read-only (V2.59).</text>
+  <text x="28" y="80" class="m">set_ptt(True) / set_tune(True) refuse on a model whose profile is not hardware-verified (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891) unless MRRC_ALLOW_UNVERIFIED_TX=1 — one warning per process, and PTT <tspan font-weight="700">releases are never gated</tspan>, so every layer below can always unkey. A listen-only session (MRRC_LISTEN_PASSWORD) never reaches a layer at all: the /WSradio role gate passes only freq/mode sets + memory recall, /WSaudioTX and /WSatr1000 close with 4003, and REST is read-only (V2.59).</text>
 
   <!-- Layers 1-7 -->
   <rect x="14" y="98" width="356" height="52" rx="9" fill="#f0a03018" stroke="#f0a03055"/>

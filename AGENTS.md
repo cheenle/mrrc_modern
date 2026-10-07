@@ -151,7 +151,12 @@ Python: 4-space indentation, type hints for shared state, `UPPER_CASE` for modul
 
 ## Testing Guidelines
 
-Run the full suite with `python -m unittest discover -s tests -v` (currently 1369 tests across 67 modules). At minimum: `python -m py_compile *.py`. Hardware-dependent changes should document: connecte
+Run the full suite with `python -m unittest discover -s tests -v` — the case and module counts live in
+`tests/README.md` and are **deliberately not restated here**: this line sat at 1369 tests / 67 modules long
+after the real figure had passed 1673 / 89. At minimum: `python -m py_compile *.py`. Hardware-dependent
+changes should document the connected radio model, serial port, FTDI/scope availability and audio device,
+and say what was verified on the radio versus only offline. Name tests `test_*.py`; keep
+hardware-independent logic testable without a radio.
 
 ## Commit & Pull Request Guidelines
 

@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1683 tests across 90 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1687 tests across 90 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-07, macOS). The per-module sections below
 itemise 71 of those 90 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
@@ -19,11 +19,22 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1683 |
-| Passed | 1681 (1 skipped) |
+| Total tests | 1687 |
+| Passed | 1685 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 1 — **pre-existing, not from the box-image work**: `test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload` (reproduces on `origin/main`; deterministic) |
-| Execution time | ~35s (harness tests spawn CLI subprocesses) |
+| Failed | 0 |
+| Execution time | ~34s (harness tests spawn CLI subprocesses) |
+
+The one failure this table carried through 2026-10-05 —
+`test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload`
+— was **test isolation, not a product defect**, and is fixed. `_configured_ssl_cert()` reads the
+user env file first and only then falls back to `os.environ`, so a test that patched the
+environment alone was judging the developer's real
+`~/Library/Application Support/MRRC-Modern/mrrc_modern.env`; on a machine with an enrolled
+certificate both tests in that class read *that* file and never the certificate they wrote. The
+second one failed, and the first passed with the `time.monotonic()` bug reintroduced — the exact
+defect it exists to catch. Both now pin `MRRC_CONFIG_FILE` at a temp env file naming their own
+certificate, and reintroducing that bug turns the class red.
 
 ## Test Modules
 

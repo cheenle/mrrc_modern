@@ -31,9 +31,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SHIPPED_BUNDLE = REPO_ROOT / "vendor" / "ca" / "cacert.pem"
 
 #: Directories that hold code the app never runs (tests, build tooling, dev scripts).
+#: ``FT710Android`` 与 ``promo`` 和 ``FT710Mobile`` 同理，而且 win_pack.md 的源码包排除表
+#: 也不带它们 —— 两边不一致，这个闸门就会在构建机上数出一个和 macOS 不同的模块数
+#: （2026-10-06 实测：macOS 53 / 出货树 50，阈值 ``> 50`` 正好一刀砍在出货树上）。
 _SKIP_DIRS = {"tests", "dev_tools", "tools", "packaging", "dist", "build", "venv",
               "node_modules", "__pycache__", "payload", "static", "website", "docs",
-              "SDD", "FT710Mobile"}
+              "SDD", "FT710Mobile", "FT710Android", "promo"}
 
 
 def _empty_context() -> ssl.SSLContext:
@@ -131,9 +134,12 @@ class UrlopenTests(unittest.TestCase):
 class CallSiteGuardTests(unittest.TestCase):
     """Every direct ``urlopen`` in shipped code must set a context (or go through net_tls)."""
 
-    def _offenders(self) -> tuple[list[str], int]:
+    #: 出货树里必定存在的模块 —— 扫描集里必须看得见它们。
+    _MUST_SEE = ("server.py", "cloud_hub.py", "net_tls.py", "launcher_net.py")
+
+    def _offenders(self) -> tuple[list[str], set[str]]:
         offenders: list[str] = []
-        scanned = 0
+        scanned: set[str] = set()
         for path in sorted(REPO_ROOT.rglob("*.py")):
             parts = set(path.parts)
             if parts & _SKIP_DIRS or any(part.startswith(".") for part in path.parts):
@@ -145,7 +151,7 @@ class CallSiteGuardTests(unittest.TestCase):
                 tree = ast.parse(source)
             except SyntaxError:                    # not ours to police here
                 continue
-            scanned += 1
+            scanned.add(str(path.relative_to(REPO_ROOT)))
             for node in ast.walk(tree):
                 if not isinstance(node, ast.Call):
                     continue
@@ -164,7 +170,13 @@ class CallSiteGuardTests(unittest.TestCase):
 
     def test_every_call_site_sets_a_context(self):
         offenders, scanned = self._offenders()
-        self.assertGreater(scanned, 50, "the scan must actually look at the shipped tree")
+        # 原来的 assertGreater(scanned, 50) 是个照开发机选的魔数：macOS 上 53 个模块，
+        # 源码包装到构建机上只有 50 个，于是同一份代码在 macOS 绿、在**出货树**上红
+        # （2026-10-06 实测）—— 闸门自己成了噪声。换成内容对照：名字不随模块增删漂移，
+        # 而扫描一旦空转（REPO_ROOT 指错、过滤写反）它必定失败。
+        for required in self._MUST_SEE:
+            self.assertIn(required, scanned, "the scan must actually look at the shipped tree")
+        self.assertGreater(len(scanned), 40, "the scan found almost nothing")
         self.assertEqual([], offenders,
                          "outbound urlopen without context= — use net_tls.urlopen instead "
                          "(2026-10-04: a build without a trust store failed every HTTPS call)")

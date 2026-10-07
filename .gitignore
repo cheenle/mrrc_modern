@@ -46,6 +46,8 @@ dist/
 
 # Website download payloads are deployed from verified dist artifacts, not Git.
 website/downloads/*.exe
+website/downloads/*.apk
+website/downloads/*.img.xz
 
 # Vendor binaries (fetch scripts stay tracked)
 vendor/ftdi/*.zip

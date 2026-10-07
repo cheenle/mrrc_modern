@@ -393,5 +393,69 @@ class MetricsLineTests(unittest.TestCase):
         self.assertNotIn('"Session metrics: listeners %d', loop)
 
 
+class WebClientCapsTests(unittest.TestCase):
+    """Frontend contract, source-asserted like the repo's other UI guards."""
+
+    def test_main_js_sends_caps_on_open(self):
+        src = Path("static/ft710_main.js").read_text(encoding="utf-8")
+        self.assertIn("function sendSpectrumCaps()", src)
+        self.assertIn('type: "spectrumCaps"', src)
+        # onopen must declare the tier before frames start arriving, and the
+        # existing self-heal call has to survive the rewrite.
+        block = src.split("wsSpectrum.onopen = () => {", 1)[1].split("};", 1)[0]
+        self.assertIn("sendSpectrumCaps();", block)
+        self.assertIn('subchannelConnected("spectrum");', block)
+
+    def test_main_js_reads_the_stored_tier_with_a_safe_default(self):
+        src = Path("static/ft710_main.js").read_text(encoding="utf-8")
+        self.assertIn('getStored("scopeProfile", "high")', src)
+        # ft710_ui.js may not have loaded yet (classic scripts, shared globals).
+        self.assertIn('typeof getStored === "function"', src)
+
+    def test_ui_js_persists_and_pushes_a_live_change(self):
+        src = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        self.assertIn("let scopeProfile = getStored('scopeProfile', 'high');", src)
+        self.assertIn("setStored('scopeProfile', scopeProfile);", src)
+        # Live switch: no socket reopen — the server re-gates on the next tick.
+        self.assertIn("sendSpectrumCaps();", src)
+        self.assertIn("scope-profile-select", src)
+
+    def test_index_html_offers_exactly_the_three_client_tiers(self):
+        html = Path("static/index.html").read_text(encoding="utf-8")
+        self.assertIn('id="scope-profile-select"', html)
+        for value in ("high", "mid", "low"):
+            self.assertIn(f'value="{value}"', html)
+        # The server-internal "listen" tier is not a user choice.
+        self.assertNotIn('value="listen"', html)
+
+    def test_asset_versions_were_bumped(self):
+        html = Path("static/index.html").read_text(encoding="utf-8")
+        self.assertIn("ft710_main.js?v=39", html)
+        self.assertIn("ft710_ui.js?v=34", html)
+        sw = Path("static/sw.js").read_text(encoding="utf-8")
+        self.assertIn("const CACHE = 'mrrc-v47';", sw)
+        self.assertIn("'/ft710_main.js?v=39'", sw)
+        self.assertIn("'/ft710_ui.js?v=34'", sw)
+
+    def test_no_stale_cache_pins_anywhere(self):
+        """A missed pin is how a user keeps running yesterday's bundle."""
+        for path in ("static/index.html", "static/sw.js"):
+            src = Path(path).read_text(encoding="utf-8")
+            for stale in ("ft710_main.js?v=38", "ft710_ui.js?v=33", "mrrc-v46"):
+                self.assertNotIn(stale, src, f"{path} still pins {stale}")
+
+    def test_listen_page_is_untouched_this_phase(self):
+        """P1 leaves the listen page on the server-side 'listen' tier (D-4)."""
+        src = Path("static/listen.js").read_text(encoding="utf-8")
+        self.assertNotIn("spectrumCaps", src)
+
+    def test_probe_tool_exists_and_declares_caps(self):
+        """The acceptance numbers in design §6 must be reproducible by command."""
+        src = Path("dev_tools/spectrum_profile_probe.py").read_text(encoding="utf-8")
+        self.assertIn("spectrumCaps", src)
+        self.assertIn("/WSspectrum", src)
+        self.assertIn("compression", src)   # the --no-deflate (Android) axis
+
+
 if __name__ == "__main__":
     unittest.main()

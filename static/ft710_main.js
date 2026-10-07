@@ -130,6 +130,31 @@ function connectWebSocket() {
 }
 
 // ── Spectrum WebSocket ──────────────────────────────────────────────
+// Bandwidth tier (SDD AD-025): the server streams the byte-for-byte-legacy
+// 1701 B / full-rate frames until a socket declares what it can take, so this
+// runs on every (re)connect — the subchannel self-heal rebuilds the socket and
+// the tier would otherwise silently revert to high.
+function spectrumProfile() {
+	return typeof getStored === "function"
+		? getStored("scopeProfile", "high")
+		: "high";
+}
+
+function sendSpectrumCaps() {
+	if (!wsSpectrum || wsSpectrum.readyState !== WebSocket.OPEN)
+		return;
+	try {
+		wsSpectrum.send(
+			JSON.stringify({
+				type: "spectrumCaps",
+				profile: spectrumProfile(),
+			}),
+		);
+	} catch (e) {
+		console.debug("spectrum caps send failed:", e);
+	}
+}
+
 function connectSpectrumSocket() {
 	if (
 		wsSpectrum &&
@@ -141,6 +166,7 @@ function connectSpectrumSocket() {
 	wsSpectrum = new WebSocket(url);
 	wsSpectrum.binaryType = "arraybuffer";
 	wsSpectrum.onopen = () => {
+		sendSpectrumCaps();
 		subchannelConnected("spectrum");
 	};
 	wsSpectrum.onmessage = (event) => {

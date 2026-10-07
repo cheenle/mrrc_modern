@@ -179,10 +179,10 @@ class SourceGuardTests(unittest.TestCase):
         index = Path("static/index.html").read_text(encoding="utf-8")
         sw = Path("static/sw.js").read_text(encoding="utf-8")
         listen = Path("static/listen.html").read_text(encoding="utf-8")
-        self.assertIn("ft710_main.js?v=38", index)
+        self.assertIn("ft710_main.js?v=39", index)
         self.assertIn("modules/atr1000.js?v=5", index)
-        self.assertIn("const CACHE = 'mrrc-v46'", sw)   # SW cache moves whenever an asset does
-        self.assertIn("'/ft710_main.js?v=38'", sw)
+        self.assertIn("const CACHE = 'mrrc-v47'", sw)   # SW cache moves whenever an asset does
+        self.assertIn("'/ft710_main.js?v=39'", sw)
         self.assertIn("'/modules/atr1000.js?v=5'", sw)
         self.assertIn("listen.js?v=15", listen)
 

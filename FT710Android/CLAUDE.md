@@ -107,6 +107,13 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 | `TX[...]` | 采集在跑否 / 权限 / 采样率 / `src:` 采集源 / `pk:` 本帧峰值 / `R:` 样本 / `X:` 帧 | `mic:NO`=没权限；`src:1997`=UNPROCESSED，`1`=MIC，`6`=旧 VOICE_COMMUNICATION；按 PTT 时 `pk` 应上千 |
 | `tx:` | `tx_status`（0=RX，1=TX，2=TUNE） | 按 PTT 后应到 1 |
 
+## 可选选件（ATR-1000）
+
+- **判定权在服务端配置**：`config.py` 读 `MRRC_ATR1000_HOST`（`_env` 带 legacy 回退 `FT710_*`）→ 空则 `atr = None` → `fullState.atr1000Enabled = false`。App 侧：`if (atrEnabled)` 才渲染 ATR 行，且 `setAtrEnabled()` 才连 `/WSatr1000`（未启用时服务端会 accept 后立刻以 **4000** 关闭）。
+- 未启用时**不许**去连 ATR 通道，也不许渲染 ATR 行（紧凑档一屏已塞满，一行 26dp 很贵）。
+- `ATU` 芯片是**另一回事**：电台内置天调，门控是 `caps.has_atu`（FT-710 backend 为 True，有真实 `AC`/`set_tuner` CAT 命令）。别把 ATU 和 ATR 混为一谈。
+- 加了可选通道后，用 `ConnectionManager.openedPaths` 断言"只连了该连的"。
+
 ## 性能不变量（中端机实测踩过）
 
 - **瀑布必须增量绘制**：`SpectrumProcessor` 每帧 `addLast(new)+removeFirst()`，列表整体位移一格，所以旧写法每帧重建整幅（850×120＝102,000 次查表 + 408KB 分配 + 整幅 setPixels，全在主线程 draw）→ 荣耀这类中端机卡到把音频线程饿死。现用 `WaterfallRingBuffer`（环形位图，只写新行）+ `WaterfallRing`（纯函数下标数学，有测试）。**不要改回"每帧重建"**。

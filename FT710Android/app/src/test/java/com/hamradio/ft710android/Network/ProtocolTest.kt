@@ -3,6 +3,8 @@ package com.hamradio.ft710android.Network
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -144,5 +146,25 @@ class ProtocolTest {
             AtrText.result(AtrTuneResultDto(phase = "auto_giveup")))
         assertEquals("ATR 调谐完成: SWR 3.2 → 1.3",
             AtrText.result(AtrTuneResultDto(phase = "success", swrBefore = 3.2, swrAfter = 1.3)))
+    }
+
+    /**
+     * ATR-1000 是可选选件：服务端只在配了 `MRRC_ATR1000_HOST`（或 legacy `FT710_` 前缀）时
+     * 才发 `"atr1000Enabled": true`。缺这个键时必须默认 **false**，
+     * 否则主屏会渲染出一条没用的 ATR 行（白占 26dp，紧凑档一屏都塞满了）。
+     */
+    @Test fun `atr1000Enabled defaults to false when the server omits it`() {
+        val absent = parseWsEvent("""{"type":"fullState","data":{"mode":1}}""") as WsEvent.FullState
+        assertFalse(absent.atr1000Enabled)
+
+        val off = parseWsEvent(
+            """{"type":"fullState","data":{"mode":1},"atr1000Enabled":false}"""
+        ) as WsEvent.FullState
+        assertFalse(off.atr1000Enabled)
+
+        val on = parseWsEvent(
+            """{"type":"fullState","data":{"mode":1},"atr1000Enabled":true}"""
+        ) as WsEvent.FullState
+        assertTrue(on.atr1000Enabled)
     }
 }

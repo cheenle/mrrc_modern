@@ -79,6 +79,8 @@ cd FT710Android
 - **`capabilities`**：`scope_spans` 值域决定 `scope_span`；`civ27` 的 `freq` 是半幅要 ×2；无 capabilities 时回退 FT-710 表。`filter_model` 决定滤波循环（`width_table` 策划表 / `fil123` 1→2→3），ATT/PRE 用 `att_steps/preamp_steps` 长度。
 - **S 表**：`s_unit` 是**字符串**（`"S9"`/`"+20"`/`"+60"`）；`s_meter_dbm` 是**相对 S9 的 dB**（不是 dBm）；raw 0..255。
 - **PTT 仲裁**（服务端）：按键会话成为 `_ptt_key_ws`（只有它能释放）；`_claim_tx_owner_for_token` 在按键时把 **TX 上行**判给按键会话——所以 App 与浏览器并存时，App 按键后其音频才会被采纳（多客户端本身不是故障）。
+- **可选选件（ATR-1000）判定权在服务端配置**：`config.py` 读 `MRRC_ATR1000_HOST`（`_env` 带 legacy 回退 `MRRC_*` → `FT710_*`）→ 空则 `atr = None`（server.py L162/2785/2884）→ `fullState.atr1000Enabled = atr is not None`（L3645）。App 侧两条都要门控：**渲染**（`if (atrEnabled)` 才出 ATR 行）与**连接**（`ConnectionManager.setAtrEnabled()` 由 VM 在 fullState 时调用，启用才连 `/WSatr1000`；未启用时服务端 accept 后立刻以 **4000 "ATR1000 disabled"** 关闭，白握手）。紧凑档一屏已塞满，一行 26dp 很贵，没配就别渲染。加可选通道后用 `ConnectionManager.openedPaths` 断言"只连了该连的"。
+- **ATU ≠ ATR**：`ATU` 芯片是电台**内置**天调，门控 `caps.has_atu`（FT-710 backend 为 True，有真实 `AC`/`set_tuner` CAT 命令）；ATR-1000 是**外接可选选件**。用户说"ATR"时先分清是哪一个。
 - **只读登录**：`/WSaudioTX`、`/WSatr1000` 以 **4003** 关闭 → `listenOnly`（隐藏发射类 UI，连接判据去掉 TX 通道）。
 - **ATR1000 / Cloud Hub REST**：见 `FT710Android/CLAUDE.md` 的 v1.1.0 增量一节（字段与阶段枚举逐字对齐）。
 
@@ -125,6 +127,7 @@ cd FT710Android
 - **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**（都是 `SubcomposeLayout`，不支持 intrinsic 测量）→ 布局阶段抛 `IllegalStateException` = **装上打开就退出**（v1.1.16 事故）。要跟固定尺寸的兄弟等高就**显式给高度**。异常原文可在 `~/.gradle/caches` 的 `ui-release.aar` 里字节级搜到（`LayoutNodeSubcompositionsState`）——**查崩溃先拿证据，别猜**。门槛：`UiLayoutSafetyTest`。
   - 写这类源码级门槛测试有三个静默失效坑：① 提取函数体要先配对跳过参数列表（`() -> Unit = {}` 的 `{}` 会被当成整个体）；② 扫描前剥注释（否则注释里提一嘴就误报）；③ Gradle 要给 Test 任务声明 `inputs.dir("src/main/java")`，否则改源码后判 UP-TO-DATE **跳过测试**。
 
+- **对"参数默认值里带 lambda"的函数做文本插入，必须核对插入点**：`private fun connect(..., onClosedCode: (Int) -> Unit = {})` 之后第一个 `{` 是**默认参数的 lambda**、不是函数体。脚本按"第一个 `{`"插语句会把代码塞进默认 lambda → 语义全变（只有回调触发时才执行），而**编译照样通过**。这类改动只能靠测试兜住（本次是 `openedPaths` 恒空被断言抓到）。
 - **发版前必做结构 diff**（血的教训：v1.1.14 用"从 A 注释到 B 注释整段替换"改 ATR 行，把五键行/芯片行/音量/步进/VFO 行整段吞掉，残缺包发上了官网；`gradlew test`+`lint` 全绿也拦不住，因为 UI 结构没有测试）。做法：`git show <上一个好版本>:…/MainScreen.kt` 取参照，比对 `PadBtn("…")`/`SmallChip("…")`/`MeterCell("…")` 标签、`vm.*(` 调用、`state.*`/`prefs.*` 字段、`*Dialog`/`*Panel` 的集合——**少任何一项就不发版**。大块改动用"精确锚点 + 重插"，别用大范围区间替换。
 - **设计令牌只在两处**：`UI/Theme.kt`（`MrrcColors`，对齐 web `ft710.css :root`）与 `UI/Surfaces.kt`（`MrrcSurfaces` 三层表面 + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）。就地写死颜色会让后续美化改不动。
 

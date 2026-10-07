@@ -28,6 +28,17 @@ class ConnectionManager(
     private var spectrum: WebSocketConnection? = null
     private var atr: WebSocketConnection? = null
     private var heartbeat: Job? = null
+
+    /** 服务端是否启用了 ATR-1000（来自 fullState.atr1000Enabled）。未启用就**不连** /WSatr1000。 */
+    private var atrEnabled = false
+    private val openedPathsLog = mutableListOf<String>()
+
+    /**
+     * 本次会话已请求打开的 WS 路径（诊断 + 测试断言用）。
+     * ATR 是可选选件：没配 `MRRC_ATR1000_HOST` 的部署，这里**不该**出现 `/WSatr1000`
+     * （否则每次连接都白握手一次、被服务端以 4000 立即关闭）。
+     */
+    val openedPaths: List<String> get() = synchronized(openedPathsLog) { openedPathsLog.toList() }
     private val connectedFlags = ChannelFlags()
     private val stats = NetworkStats(nowMs)
 
@@ -65,10 +76,9 @@ class ConnectionManager(
             onText = { stats.onReceived(it.length); onAudioTxText(it) }, onBinary = {}, onClosedCode = ::handleCloseCode) // 上行二进制由 sendTxAudioBinary 发送
         spectrum = connect(baseUrl, "/WSspectrum", token, onText = { stats.onReceived(it.length) },
             onBinary = { stats.onReceived(it.size); onSpectrum(it) })
-        atr = connect(baseUrl, "/WSatr1000", token, onText = {
-            stats.onReceived(it.length)
-            parseAtrEvent(it)?.let(onAtrEvent)
-        }, onBinary = {}, onClosedCode = ::handleCloseCode)
+        // ATR-1000 是**可选选件**：只有服务端 fullState 说启用了才连（见 setAtrEnabled）。
+        // 这里仅在重连且上一次已知启用时立即补连，冷启动时等 fullState。
+        if (atrEnabled) connectAtr()
         heartbeat?.cancel()
         heartbeat = scope.launch { while (isActive) { sendPing(); delay(2000) } }
     }
@@ -78,6 +88,39 @@ class ConnectionManager(
         listOfNotNull(radio, audioRx, audioTx, spectrum, atr).forEach { it.close() }
         radio = null; audioRx = null; audioTx = null; spectrum = null; atr = null
         connectedFlags.clear(); updateConnected(); listenOnly = false
+        atrEnabled = false
+        synchronized(openedPathsLog) { openedPathsLog.clear() }
+    }
+
+    /**
+     * 服务端 fullState 到达后由 VM 调用：ATR-1000 启用才开 `/WSatr1000`，禁用则关掉。
+     *
+     * 未配置的部署服务端会 `accept` 后立刻以 **4000 "ATR1000 disabled"** 关闭
+     * （只读会话是 4003），所以"不连"才是正确行为：省一次握手，也不制造无意义的关闭事件。
+     */
+    @Synchronized
+    fun setAtrEnabled(enabled: Boolean) {
+        if (atrEnabled == enabled) return
+        atrEnabled = enabled
+        if (enabled) {
+            if (atr == null) connectAtr()
+        } else {
+            atr?.close()
+            atr = null
+        }
+    }
+
+    /** ATR 是否已启用（fullState 给的，不是"是否连上"）。 */
+    val isAtrEnabled: Boolean get() = synchronized(this) { atrEnabled }
+
+    private fun connectAtr() {
+        val b = _baseUrl ?: return
+        val t = _token ?: return
+        if (b.isEmpty() || t.isEmpty()) return
+        atr = connect(b, "/WSatr1000", t, onText = {
+            stats.onReceived(it.length)
+            parseAtrEvent(it)?.let(onAtrEvent)
+        }, onBinary = {}, onClosedCode = ::handleCloseCode)
     }
 
     fun sendSet(field: String, value: Any) {
@@ -127,6 +170,9 @@ class ConnectionManager(
         onBinary: (ByteArray) -> Unit,
         onClosedCode: (Int) -> Unit = {},
     ): WebSocketConnection {
+        // 记录"本次会话请求打开过哪些通道"：诊断与测试都靠它
+        // （ATR 是可选选件，未启用时这里不该出现 /WSatr1000）
+        synchronized(openedPathsLog) { openedPathsLog.add(path) }
         val url = wsUrl(baseUrl, path, token)
         val conn = WebSocketConnection(
             client, url, onText, onBinary,

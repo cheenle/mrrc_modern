@@ -129,6 +129,8 @@ class MainViewModel(
                 _caps.value = RadioCaps.from(ev.capabilities)
                 _displayName.value = ev.radioDisplayName ?: _caps.value.displayName
                 _atr1000Enabled.value = ev.atr1000Enabled
+                // ATR-1000 是可选选件：没配就不该去连 /WSatr1000（服务端会以 4000 立即关闭）
+                connectionManager.setAtrEnabled(ev.atr1000Enabled)
                 _recordingsAvailable.value = ev.recording != null
                 _cqAvailable.value = ev.cq != null
                 ev.recording?.let { _recordingState.value = it }

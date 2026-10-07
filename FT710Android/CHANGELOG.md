@@ -2,6 +2,20 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.20] — 2026-10-06
+
+- **ATR-1000（可选选件）没配置时，App 连碰都不碰它**：
+  - 显示侧**本来就是对的**（已核实全链路）：`server.py` 里 `atr = None`（L162），只有 `if ATR1000_HOST:`（L2785）才建 `ATR1000Client`，否则保持 None（L2884）→ `fullState.atr1000Enabled = atr is not None`（L3645）→ App `if (atrEnabled)` 不渲染 ATR 行。配置读取还带 legacy 前缀回退（`config.py:_env`：`MRRC_*` → `FT710_*`）。
+  - **连接侧有漏**：`ConnectionManager.start()` 无条件连 `/WSatr1000`。没装 ATR 的部署，服务端会 `accept` 后立刻以 **4000 "ATR1000 disabled"** 关闭 —— 每次会话白握手一次，还制造无意义的关闭事件。
+  - 改为**惰性连接**：新增 `setAtrEnabled(Boolean)`（幂等、`@Synchronized`），由 VM 在 fullState 到达时调用；启用才 `connectAtr()`，禁用则关掉；`stopAll()` 清标志，新会话等 fullState 再决定（重连场景下 `start()` 只在"上次已知启用"时补连）。
+  - 新增 `openedPaths`（本次会话请求打开过的通道）作为可观测点 + 测试断言面。
+- **测试 +3 → 140 项全绿**：
+  - `ATR channel stays closed until the server says it is enabled`：四路核心通道之外不多连；`setAtrEnabled(true)` 才出现 `/WSatr1000`；重复调用**幂等**；`stopAll` 后新会话不补连
+  - `ATR tune is a no-op while the optional channel is absent`：没连 ATR 时 `sendAtrTune()` 返回 false 且不抛
+  - `atr1000Enabled defaults to false when the server omits it`：fullState 缺该键 → false（否则会渲染出一条没用的 ATR 行，白占 26dp —— 紧凑档一屏已经塞满）
+- **顺带修掉一个自己埋的坑**：给 `connect()` 加日志时，脚本把语句插进了 `onClosedCode` 的**默认 lambda**（`private fun connect(` 之后第一个 `{` 是默认参数的 lambda 而不是函数体），导致只有连接关闭时才记录、`openedPaths` 恒为空。**编译能过，是测试抓到的** —— 按参数默认值里带 lambda 的函数做文本插入时必须核对插入点。
+- 说明：本机 `.env` 里 `FT710_ATR1000_HOST=192.168.1.63` 经 legacy 回退**是生效的**，且该设备 60001 端口实测可达 → 所以你自己这台看到 ATR 行属于正确显示。要在本机隐藏，把 `.env` 那两行注释掉再重启服务端即可（运行期配置，我没动）。
+
 ## [1.1.19] — 2026-10-06
 
 - **5" 小屏（360×584）移出适配范围**（用户明确"不用考虑"）。适配下限写进代码：`ScreenFit.SUPPORTED_MIN_HEIGHT_DP = 728`（5.5" 直板机 + 三键导航），更小的屏滚动兜底；对应测试从"小屏超出可接受"改成"支持下限必须一屏放得下"。

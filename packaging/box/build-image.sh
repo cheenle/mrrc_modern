@@ -57,10 +57,11 @@ PIP_INDEX="${MRRC_BOX_PIP_INDEX-https://pypi.tuna.tsinghua.edu.cn/simple}"
 
 # Where the build fetches the frp release from, for the same reason a third
 # time: github.com served 33 KB/s here and truncated the transfer mid-stream,
-# against 2.3 MB/s through a mirror. fetch-frpc.sh still verifies frp's own
-# checksum, so a mirror serving something else is rejected rather than
-# installed. Set MRRC_BOX_FRP_PROXY= to fetch from github.com directly.
-FRP_PROXY="${MRRC_BOX_FRP_PROXY-https://gh-proxy.com/}"
+# against 2.3 MB/s through a mirror. A list, because these proxies go down — the
+# empty entry at the end means GitHub itself is the last resort. fetch-frpc.sh
+# still verifies frp's own checksum per source, so a mirror can accelerate the
+# download but cannot change what gets installed.
+FRP_PROXY="${MRRC_BOX_FRP_PROXY-https://gh-proxy.com/,https://ghfast.top/,}"
 
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1

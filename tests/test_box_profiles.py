@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -279,6 +280,42 @@ class BoxBuildIntegrityTests(unittest.TestCase):
         self.assertIn("CHANGELOG.md", script)
         self.assertNotIn('cat "$REPO/version.txt"', script)
         self.assertIn("MRRC-Modern-${VERSION#v}-w103d.img", script)
+
+    def test_the_frp_source_list_keeps_its_last_resort(self):
+        """A comma list ending in an empty entry has to yield that empty entry.
+
+        The empty entry means "and finally GitHub itself". `read -a` does not
+        produce a trailing empty field, so the first version of this list
+        quietly dropped its last resort: with every mirror down the build gave
+        up instead of falling back, which is how it behaved in practice before
+        anyone looked at the list.
+
+        The parse is lifted out of the script and executed rather than
+        restated here — a copy in the test would keep passing after the
+        original changed.
+        """
+        script = (self.BUILD.parent / "fetch-frpc.sh").read_text(encoding="utf-8")
+        self.assertNotIn(
+            "read -r -a PREFIXES", script, "read -a silently drops a trailing empty field"
+        )
+        start = script.index("PREFIXES=()")
+        parse = script[start : script.index("\ndone", start) + len("\ndone")]
+        self.assertIn("while", parse, "the parse block moved — extraction is stale")
+
+        def sources(value: str) -> list[str]:
+            result = subprocess.run(
+                ["bash", "-c", parse + '\nprintf "%s\\n" "${PREFIXES[@]}"'],
+                env={**os.environ, "MRRC_FRP_PROXY": value},
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return result.stdout.split("\n")[:-1]  # drop the trailing newline
+
+        self.assertEqual(sources("a,b,"), ["a", "b", ""], "last resort lost")
+        self.assertEqual(sources("a"), ["a"])
+        self.assertEqual(sources(""), [""], "an empty list must mean GitHub itself")
+        self.assertEqual(sources("a,,b"), ["a", "", "b"])
 
     def test_every_shell_script_here_is_executable(self):
         """box-overlay.sh shipped as 0644 and the build died on the first run.

@@ -225,6 +225,293 @@ class NmResultTests(unittest.TestCase):
         self.assertEqual(NmResult(3, "", "").detail, "exit 3")
 
 
+# `FakeNmcli` matches by substring, and both of these queries contain
+# "connection show --active", so the keys carry the `-f` column list to keep
+# them apart: `_active_uuids` asks for UUID, `active_ap_connections` for NAME,TYPE.
+ACTIVE_AP_TABLE = {
+    "-f NAME,TYPE connection show --active": NmResult(0, "Hotspot:802-11-wireless\n"),
+    "-f UUID connection show --active": NmResult(0, "aaaa-1111\n"),
+    "802-11-wireless.mode": NmResult(0, "ap\n"),
+}
+ACTIVE_STA_TABLE = {
+    "-f NAME,TYPE connection show --active": NmResult(0, "Home:802-11-wireless\n"),
+    "-f UUID connection show --active": NmResult(0, "bbbb-2222\n"),
+    "802-11-wireless.mode": NmResult(0, "infrastructure\n"),
+}
+
+
+class ApModeTests(unittest.TestCase):
+    def test_an_ap_connection_is_recognised(self):
+        run = FakeNmcli(ACTIVE_AP_TABLE)
+        self.assertEqual(net_wifi.active_ap_connections(run), ["Hotspot"])
+        self.assertTrue(net_wifi.hotspot_active(run))
+
+    def test_a_station_connection_is_not_an_ap(self):
+        """TYPE is 802-11-wireless for both; only the mode tells them apart."""
+        run = FakeNmcli(ACTIVE_STA_TABLE)
+        self.assertEqual(net_wifi.active_ap_connections(run), [])
+        self.assertFalse(net_wifi.hotspot_active(run))
+
+    def test_nothing_active(self):
+        run = FakeNmcli({"-f NAME,TYPE connection show --active": NmResult(0, "")})
+        self.assertFalse(net_wifi.hotspot_active(run))
+
+    def test_an_empty_connection_name_is_not_queried(self):
+        """A row whose NAME column is blank must not trigger a mode lookup with
+        an empty name — that asks NM for a connection called "" and fails."""
+        run = FakeNmcli({
+            "-f NAME,TYPE connection show --active": NmResult(
+                0, ":802-11-wireless\n"),
+        })
+        self.assertEqual(net_wifi.active_ap_connections(run), [])
+        self.assertEqual(run.count("802-11-wireless.mode"), 0)
+
+
+class StartHotspotTests(unittest.TestCase):
+    def test_asks_nmcli_for_an_open_hotspot(self):
+        """Design D-2: `nmcli device wifi hotspot`, and *no* password argument.
+
+        Omitting `password` is what makes the network open; passing one would
+        create a WPA network whose key nobody has been told.
+        """
+        run = FakeNmcli({
+            "-f NAME,TYPE connection show --active": NmResult(0, ""),
+            "-f UUID connection show --active": NmResult(0, ""),
+            "-f UUID,NAME connection show": NmResult(0, ""),
+            "device wifi hotspot": NmResult(0, "ok", ""),
+        })
+        result = net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
+        self.assertTrue(result.ok)
+        self.assertEqual(run.count("device wifi hotspot"), 1)
+        self.assertIn("ifname wlan0 ssid MRRC-Setup", run.joined())
+        self.assertNotIn("password", run.joined())
+
+    def test_an_already_running_hotspot_is_left_alone(self):
+        """Restarting a live AP would drop the operator mid-wizard."""
+        run = FakeNmcli(dict(ACTIVE_AP_TABLE))
+        result = net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
+        self.assertTrue(result.ok)
+        self.assertEqual(run.count("device wifi hotspot"), 0)
+
+    def test_a_stale_profile_of_the_same_name_is_removed_first(self):
+        """NM ids are not unique: without this, every raise leaves a twin behind
+        and `nmcli connection show` fills up with dead Hotspot entries."""
+        run = FakeNmcli({
+            "-f NAME,TYPE connection show --active": NmResult(0, ""),
+            "-f UUID connection show --active": NmResult(0, "live-9999\n"),
+            "-f UUID,NAME connection show": NmResult(
+                0, "aaaa-1111:Hotspot\nbbbb-2222:Hotspot\ncccc-3333:Home\n"),
+            "device wifi hotspot": NmResult(0, "ok", ""),
+        })
+        net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
+        self.assertEqual(run.count("connection delete aaaa-1111"), 1)
+        self.assertEqual(run.count("connection delete bbbb-2222"), 1)
+        self.assertEqual(run.count("connection delete cccc-3333"), 0,
+                         "only the hotspot's own id may be touched")
+
+    def test_an_active_profile_is_never_deleted(self):
+        """Deleting the profile that carries the live AP cuts the operator off.
+        The early return has to come first — and it has to come before the
+        profile listing, not merely before the delete."""
+        run = FakeNmcli(dict(ACTIVE_AP_TABLE, **{
+            "-f UUID,NAME connection show": NmResult(0, "aaaa-1111:Hotspot\n"),
+            "device wifi hotspot": NmResult(0, "ok", ""),
+        }))
+        net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
+        self.assertEqual(run.count("connection delete"), 0)
+        self.assertEqual(run.count("-f UUID,NAME connection show"), 0)
+
+    def test_a_profile_that_is_up_under_a_different_query_is_still_spared(self):
+        """Belt and braces: even if the AP check somehow missed it, a uuid that
+        `_active_uuids` reports as live is never deleted."""
+        run = FakeNmcli({
+            "-f NAME,TYPE connection show --active": NmResult(0, ""),
+            "-f UUID connection show --active": NmResult(0, "aaaa-1111\n"),
+            "-f UUID,NAME connection show": NmResult(
+                0, "aaaa-1111:Hotspot\nbbbb-2222:Hotspot\n"),
+            "device wifi hotspot": NmResult(0, "ok", ""),
+        })
+        net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
+        self.assertEqual(run.count("connection delete aaaa-1111"), 0)
+        self.assertEqual(run.count("connection delete bbbb-2222"), 1)
+
+    def test_a_failure_is_reported_not_raised(self):
+        run = FakeNmcli({
+            "-f NAME,TYPE connection show --active": NmResult(0, ""),
+            "-f UUID connection show --active": NmResult(0, ""),
+            "-f UUID,NAME connection show": NmResult(0, ""),
+            "device wifi hotspot": NmResult(
+                1, "", "Error: Device not suitable for hotspot mode"),
+        })
+        result = net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
+        self.assertFalse(result.ok)
+        self.assertIn("not suitable", result.detail)
+
+    def test_the_defaults_are_used_when_nothing_is_passed(self):
+        run = FakeNmcli({
+            "-f NAME,TYPE connection show --active": NmResult(0, ""),
+            "-f UUID connection show --active": NmResult(0, ""),
+            "-f UUID,NAME connection show": NmResult(0, ""),
+            "device wifi hotspot": NmResult(0, "ok", ""),
+        })
+        net_wifi.start_hotspot(runner=run)
+        self.assertIn(f"ifname {net_wifi.DEFAULT_IFNAME} ssid {net_wifi.DEFAULT_SSID}",
+                      run.joined())
+
+
+class StopHotspotTests(unittest.TestCase):
+    def test_takes_the_ap_down_by_name(self):
+        run = FakeNmcli(dict(ACTIVE_AP_TABLE))
+        result = net_wifi.stop_hotspot(run)
+        self.assertTrue(result.ok)
+        self.assertEqual(run.count("connection down Hotspot"), 1)
+
+    def test_nothing_up_is_success(self):
+        """Idempotent: a stop on an already-stopped AP must not look like an
+        error, or the supervisor would log a failure on every tick."""
+        run = FakeNmcli({"-f NAME,TYPE connection show --active": NmResult(0, "")})
+        self.assertTrue(net_wifi.stop_hotspot(run).ok)
+        self.assertEqual(run.count("connection down"), 0)
+
+    def test_a_station_connection_is_not_torn_down(self):
+        """Stopping the hotspot must never drop the operator's real WiFi."""
+        run = FakeNmcli(dict(ACTIVE_STA_TABLE))
+        net_wifi.stop_hotspot(run)
+        self.assertEqual(run.count("connection down"), 0)
+
+
+class ScanTests(unittest.TestCase):
+    LISTING = "\n".join([
+        r"Home\:5G:82:WPA2",     # an SSID containing a colon, escaped by nmcli
+        "Office:41:WPA2",
+        "Guest::",               # open network: empty SECURITY
+        ":60:WPA2",              # hidden network: empty SSID
+        r"Home\:5G:55:WPA2",    # the same SSID again, weaker
+    ]) + "\n"
+
+    def test_parses_dedupes_and_sorts_by_strength(self):
+        run = FakeNmcli({"device wifi list": NmResult(0, self.LISTING)})
+        found = net_wifi.scan_wifi(run)
+        self.assertEqual([n["ssid"] for n in found], ["Home:5G", "Office", "Guest"])
+        self.assertEqual(found[0]["signal"], 82,
+                         "the stronger of two beacons for one SSID wins")
+
+    def test_hidden_networks_are_dropped(self):
+        """The wizard cannot offer a network it cannot name; an empty row would
+        be a button that does nothing."""
+        run = FakeNmcli({"device wifi list": NmResult(0, self.LISTING)})
+        self.assertTrue(all(n["ssid"] for n in net_wifi.scan_wifi(run)))
+        self.assertEqual(len(net_wifi.scan_wifi(run)), 3)
+
+    def test_an_open_network_is_marked_unprotected(self):
+        run = FakeNmcli({"device wifi list": NmResult(0, self.LISTING)})
+        by_ssid = {n["ssid"]: n for n in net_wifi.scan_wifi(run)}
+        self.assertFalse(by_ssid["Guest"]["protected"])
+        self.assertTrue(by_ssid["Office"]["protected"])
+        self.assertEqual(by_ssid["Office"]["security"], "WPA2")
+
+    def test_a_scan_asks_for_a_rescan(self):
+        """The AP just came up, so NM's cache is empty; without --rescan the
+        operator sees a blank list and concludes the radio is broken."""
+        run = FakeNmcli({"device wifi list": NmResult(0, "")})
+        net_wifi.scan_wifi(run)
+        self.assertIn("--rescan yes", run.joined())
+
+    def test_a_rescan_can_be_suppressed(self):
+        run = FakeNmcli({"device wifi list": NmResult(0, "")})
+        net_wifi.scan_wifi(run, rescan=False)
+        self.assertNotIn("--rescan", run.joined())
+
+    def test_a_failure_yields_an_empty_list(self):
+        run = FakeNmcli({"device wifi list": NmResult(1, "", "no device")})
+        self.assertEqual(net_wifi.scan_wifi(run), [])
+
+
+class ConnectTests(unittest.TestCase):
+    def test_argv_carries_the_ssid_and_the_psk_exactly_once(self):
+        run = FakeNmcli({"device wifi connect": NmResult(0, "", "")})
+        net_wifi.connect_wifi("Home", "hunter2hunter2", run, ifname="wlan0")
+        joined = run.joined()
+        self.assertEqual(joined.count("hunter2hunter2"), 1)
+        self.assertIn("device wifi connect Home password hunter2hunter2", joined)
+        self.assertIn("ifname wlan0", joined)
+
+    def test_an_open_network_passes_no_password_argument(self):
+        run = FakeNmcli({"device wifi connect": NmResult(0, "", "")})
+        net_wifi.connect_wifi("Guest", "", run, ifname="wlan0")
+        self.assertNotIn("password", run.joined())
+
+    def test_a_wrong_psk_comes_back_as_a_failure_with_a_reason(self):
+        run = FakeNmcli({"device wifi connect": NmResult(
+            1, "", "Error: Connection activation failed: (7) Secrets were required")})
+        result = net_wifi.connect_wifi("Home", "wrongwrong", run)
+        self.assertFalse(result.ok)
+        self.assertIn("Secrets were required", result.detail)
+
+    def test_the_default_interface_is_used_when_none_is_given(self):
+        run = FakeNmcli({"device wifi connect": NmResult(0, "", "")})
+        net_wifi.connect_wifi("Home", "", run)
+        self.assertIn(f"ifname {net_wifi.DEFAULT_IFNAME}", run.joined())
+
+
+class AddressTests(unittest.TestCase):
+    def test_reads_the_interface_address_with_its_prefix(self):
+        run = FakeNmcli({"IP4.ADDRESS": NmResult(0, "10.42.0.1/24\n")})
+        self.assertEqual(net_wifi.ipv4_address("wlan0", run), "10.42.0.1/24")
+
+    def test_takes_the_first_line_when_several_come_back(self):
+        run = FakeNmcli({"IP4.ADDRESS": NmResult(0, "10.0.0.7/24\n10.0.0.8/24\n")})
+        self.assertEqual(net_wifi.ipv4_address("wlan0", run), "10.0.0.7/24")
+
+    def test_no_address_yet(self):
+        run = FakeNmcli({"IP4.ADDRESS": NmResult(0, "\n")})
+        self.assertEqual(net_wifi.ipv4_address("wlan0", run), "")
+
+    def test_a_failure_is_an_empty_address(self):
+        run = FakeNmcli({"IP4.ADDRESS": NmResult(1, "", "no such device")})
+        self.assertEqual(net_wifi.ipv4_address("wlan9", run), "")
+
+    def test_network_of_an_address(self):
+        self.assertEqual(net_wifi.ap_network("10.42.0.1/24"), "10.42.0.0/24")
+
+    def test_garbage_falls_back_to_the_nm_shared_subnet(self):
+        """The gate compares against this; an unparseable address must not turn
+        into an exception inside a request handler."""
+        self.assertEqual(net_wifi.ap_network(""), net_wifi.NM_SHARED_SUBNET)
+        self.assertEqual(net_wifi.ap_network("not-an-address"),
+                         net_wifi.NM_SHARED_SUBNET)
+        self.assertEqual(net_wifi.ap_network(None), net_wifi.NM_SHARED_SUBNET)
+
+    def test_setup_url_strips_the_prefix_and_defaults_the_gateway(self):
+        self.assertEqual(net_wifi.setup_url("10.42.0.1/24", 8888),
+                         "https://10.42.0.1:8888/setup")
+        self.assertEqual(net_wifi.setup_url("", 8888),
+                         f"https://{net_wifi.DEFAULT_GATEWAY}:8888/setup")
+        self.assertEqual(net_wifi.setup_url("192.168.9.1/24"),
+                         "https://192.168.9.1:8888/setup")
+
+
+class ScrubTests(unittest.TestCase):
+    def test_removes_every_occurrence_of_every_secret(self):
+        text = "tried hunter2hunter2 then failed (psk=hunter2hunter2)"
+        cleaned = net_wifi.scrub(text, "hunter2hunter2")
+        self.assertNotIn("hunter2hunter2", cleaned)
+        self.assertEqual(cleaned.count(net_wifi.REDACTED), 2)
+
+    def test_an_empty_secret_cannot_blank_the_whole_string(self):
+        """str.replace(x, "") with x == "" would rebuild the string between
+        every character; the guard is the `if secret`."""
+        self.assertEqual(net_wifi.scrub("keep me", ""), "keep me")
+
+    def test_none_is_tolerated(self):
+        self.assertEqual(net_wifi.scrub(None, "x"), "")
+
+    def test_several_secrets(self):
+        cleaned = net_wifi.scrub("a=one b=two", "one", "two")
+        self.assertNotIn("one", cleaned)
+        self.assertNotIn("two", cleaned)
+
+
 class SubprocessRunnerTests(unittest.TestCase):
     def test_a_missing_nmcli_is_a_result_not_an_exception(self):
         """macOS and Windows have no nmcli, and this module is frozen into both

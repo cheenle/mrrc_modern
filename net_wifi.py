@@ -279,3 +279,160 @@ def wifi_interface(runner: Optional[Runner] = None) -> str:
         if entry["type"] == "wifi" and entry["device"]:
             return entry["device"]
     return ""
+
+
+# ── AP lifecycle ────────────────────────────────────────────────────
+def _active_uuids(runner: Optional[Runner] = None) -> set:
+    """UUIDs of the connections that are up right now."""
+    result = nmcli(["-t", "-f", "UUID", "connection", "show", "--active"], runner)
+    if not result.ok:
+        return set()
+    return {row[0] for row in parse_rows(result.stdout) if row and row[0]}
+
+
+def _profiles_named(name: str, runner: Optional[Runner] = None) -> list:
+    """``[(uuid, name), …]`` for every profile carrying this id (ids repeat)."""
+    result = nmcli(["-t", "-f", "UUID,NAME", "connection", "show"], runner)
+    if not result.ok:
+        return []
+    return [(row[0], row[1]) for row in parse_rows(result.stdout)
+            if len(row) >= 2 and row[1] == name]
+
+
+def hotspot_active(runner: Optional[Runner] = None) -> bool:
+    """Whether an AP is up on this box right now."""
+    return bool(active_ap_connections(runner))
+
+
+def start_hotspot(ssid: Optional[str] = None, ifname: Optional[str] = None,
+                  runner: Optional[Runner] = None) -> NmResult:
+    """Raise an **open** hotspot (design D-2: ``nmcli device wifi hotspot``).
+
+    Idempotent in the two ways that matter:
+    * an AP that is already up is left alone — tearing it down and rebuilding
+      it would drop the operator in the middle of the wizard;
+    * a *stale* profile of the same id is deleted first, because NM ids are not
+      unique and every raise would otherwise leave one more twin behind. A
+      profile that is currently active is never deleted.
+
+    No ``password`` argument is passed. That omission *is* the open network:
+    there is no way to hand the operator a key they have not been told.
+    """
+    if hotspot_active(runner):
+        return NmResult(0, "already up", "")
+    live = _active_uuids(runner)
+    for uuid, _name in _profiles_named(HOTSPOT_PROFILE, runner):
+        if uuid in live:
+            continue
+        nmcli(["connection", "delete", uuid], runner)
+    return nmcli(["device", "wifi", "hotspot",
+                  "ifname", ifname or DEFAULT_IFNAME,
+                  "ssid", ssid or DEFAULT_SSID], runner)
+
+
+def stop_hotspot(runner: Optional[Runner] = None) -> NmResult:
+    """Take the AP down. Idempotent: nothing up is success, not an error.
+
+    Only AP-mode connections are considered, so this can never drop the
+    operator's real WiFi.
+    """
+    names = active_ap_connections(runner)
+    if not names:
+        return NmResult(0, "not up", "")
+    last = NmResult(0, "not up", "")
+    for name in names:
+        last = nmcli(["connection", "down", name], runner)
+    return last
+
+
+# ── station side ────────────────────────────────────────────────────
+def scan_wifi(runner: Optional[Runner] = None, rescan: bool = True) -> list:
+    """Visible networks, strongest first, one entry per SSID.
+
+    Hidden networks arrive with an empty SSID and are dropped. ``rescan`` is on
+    by default because the AP has just taken the radio over: NM's cache is
+    whatever it saw before, and an empty list reads as "the radio is broken".
+    """
+    args = ["-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"]
+    if rescan:
+        args += ["--rescan", "yes"]
+    result = nmcli(args, runner)
+    if not result.ok:
+        return []
+    best: dict = {}
+    for row in parse_rows(result.stdout):
+        if len(row) < 3 or not row[0]:
+            continue
+        entry = {
+            "ssid": row[0],
+            "signal": _int_or(row[1]),
+            "security": row[2].strip(),
+            "protected": bool(row[2].strip()),
+        }
+        previous = best.get(entry["ssid"])
+        if previous is None or entry["signal"] > previous["signal"]:
+            best[entry["ssid"]] = entry
+    return sorted(best.values(), key=lambda item: -item["signal"])
+
+
+def connect_wifi(ssid: str, password: str = "",
+                 runner: Optional[Runner] = None,
+                 ifname: Optional[str] = None) -> NmResult:
+    """Join an infrastructure network.
+
+    Single radio (design D-3): this *replaces* the hotspot, it does not run
+    beside it. The caller owns the ordering — see
+    ``server._perform_wifi_switch``.
+
+    ``password`` travels in argv and nowhere else. It is never logged, never
+    written to the env file (WiFi is NetworkManager's domain, design D-4) and
+    never written to either JSON mailbox.
+    """
+    args = ["device", "wifi", "connect", ssid]
+    if password:
+        args += ["password", password]
+    args += ["ifname", ifname or DEFAULT_IFNAME]
+    return nmcli(args, runner)
+
+
+def ipv4_address(ifname: Optional[str] = None,
+                 runner: Optional[Runner] = None) -> str:
+    """The interface's IPv4 address with its prefix, or ``""`` (10.42.0.1/24)."""
+    result = nmcli(["-t", "-g", "IP4.ADDRESS", "device", "show",
+                    ifname or DEFAULT_IFNAME], runner)
+    if not result.ok:
+        return ""
+    for line in result.stdout.splitlines():
+        cleaned = line.strip()
+        if cleaned:
+            return cleaned
+    return ""
+
+
+def ap_network(address: Optional[str]) -> str:
+    """``10.42.0.1/24`` → ``10.42.0.0/24``: the subnet the gate trusts."""
+    try:
+        return str(ipaddress.ip_network((address or "").strip(), strict=False))
+    except ValueError:
+        return NM_SHARED_SUBNET
+
+
+def setup_url(gateway: str, port: Optional[int] = None) -> str:
+    """The address to print on the HDMI console and to show on the page."""
+    host = (gateway or "").strip().split("/")[0] or DEFAULT_GATEWAY
+    return f"https://{host}:{port or DEFAULT_WEB_PORT}/setup"
+
+
+def scrub(text: Optional[str], *secrets: str) -> str:
+    """Remove every literal secret from a string that is about to be stored.
+
+    nmcli does not echo a PSK back today, but its error text is the one place a
+    credential could ride along into ``wizard.json`` and from there into a
+    support bundle — so the removal is unconditional rather than trusted
+    (SDD ``support-bundle-privacy``).
+    """
+    out = text or ""
+    for secret in secrets:
+        if secret:
+            out = out.replace(secret, REDACTED)
+    return out

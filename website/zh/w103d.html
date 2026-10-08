@@ -127,13 +127,15 @@
 <h4 id="同族的几个兄弟型号-固件通刷">同族的几个兄弟型号（<strong>固件通刷</strong>）</h4>
 <pre><code>中兴云电脑  W100D / W102D / W103D / W105D      ← 论坛实测：这几款固件通刷</code></pre>
 <div class="table-scroll"><table>
-<thead><tr><th></th><th>W105D</th><th>W103D（本指南）</th></tr></thead><tbody>
-<tr><td>芯片</td><td>晶晨 S905X2</td><td>晶晨 S905X2（=<code>s905l3a</code>）</td></tr>
-<tr><td>内存 / 存储</td><td>2 G + <strong>8 G</strong></td><td>2 G + <strong>32 G</strong></td></tr>
-<tr><td>系统</td><td>安卓 9</td><td>安卓 9</td></tr>
+<thead><tr><th></th><th>W100D（太极）</th><th>W105D（玲珑）</th><th><strong>W103D（本指南）</strong></th><th>W102D</th></tr></thead><tbody>
+<tr><td>芯片</td><td>晶晨 S905X2</td><td>晶晨 S905X2</td><td>晶晨 S905X2（=<code>s905l3a</code>）</td><td>同类</td></tr>
+<tr><td>内存 / 存储</td><td>2 G + <strong>8 G</strong></td><td>2 G + <strong>8 G</strong></td><td>2 G + <strong>32 G</strong></td><td>—</td></tr>
+<tr><td>系统</td><td>安卓 9</td><td>安卓 9</td><td>安卓 9</td><td>安卓 9</td></tr>
 </tbody></table></div>
+<p>（W100D 与 W105D 的公开配置<strong>完全一样</strong>，差别在形态与命名：W100D 属"太极"、W105D 属"玲珑"名片式。）</p>
 <p><strong>"通刷"说明硬件几乎同源</strong> ✅ 但<strong>存储差 4 倍</strong>（8 G vs 32 G）——本镜像装完约占 3 GB、载荷仅 145 MiB， 8 G 型号<strong>够用</strong> ✅</p>
-<p>⚠️ <strong>但有一处本指南无法替你确认</strong>：<strong>W105D 用的是不是同一颗 MT7663S 无线网卡</strong>（论坛资料没写）。 本镜像最难的部分正是 MT7663S 的驱动适配，<strong>这块不一样的话，WiFi 就要重新适配</strong>。 另外 ophub 的板级库里<strong>只有 W103D（<code>s905l3a-w103d</code>）</strong>，没有 W105D 的条目——同族不等于配置可直接复用。</p>
+<p><strong>关于无线网卡</strong>：论坛资料<strong>没有一款写明</strong>（四款都没写）。但"<strong>固件通刷</strong>"是一条支持性证据 —— 一份线刷包能同时驱动四款的 WiFi，说明它们<strong>多半是同一颗或兼容网卡</strong> ✅（<strong>这是推断，不是确证</strong> ⚠️）。 真要买之前，<strong>以实物为准</strong>：<code>getprop</code> 或拆机看丝印。</p>
+<p>⚠️ <strong>但有一处本指南无法替你确认</strong>：<strong>W105D/W100D 用的是不是同一颗 MT7663S 无线网卡</strong>（论坛资料没写）。 本镜像最难的部分正是 MT7663S 的驱动适配，<strong>这块不一样的话，WiFi 就要重新适配</strong>。 另外 ophub 的板级库里<strong>只有 W103D（<code>s905l3a-w103d</code>）</strong>，没有 W105D 的条目——同族不等于配置可直接复用。</p>
 <p><strong>盒子上的口要认一遍</strong>（拍照存着，接线时省事）：</p>
 <ul>
 <li>网口、HDMI、电源</li>

@@ -13,6 +13,9 @@ REMOTE_USER="cheenle"
 REMOTE_HOST="www.vlsc.net"
 REMOTE_ROOT="/var/www/vlsc.net/mrrc_modern"
 BASE_URL="https://www.vlsc.net/mrrc_modern"
+# 站点树（deploy.sh 的取源）。~/HAM/website/mrrc_modern 是**指向仓库 website/ 的符号链接**，
+# 所以它里面的 index.html 就是 git 跟踪的那一份。
+WEBSITE_DIR="${WEBSITE_DIR:-$HOME/HAM/website/mrrc_modern}"
 
 VERSION=""; DRY_RUN=0
 while [ $# -gt 0 ]; do
@@ -131,3 +134,49 @@ diff -q "$TMP/zh.html" "$TMP/live-zh.html" >/dev/null || { echo "zh page mismatc
 LIVE_SHA=$(curl -fsS "$BASE_URL/downloads/MRRC-Modern-Android.apk?verify=$(date +%s)" | shasum -a 256 | awk '{print $1}')
 [ "$LIVE_SHA" = "$SHA" ] || { echo "APK sha mismatch: card=$SHA live=$LIVE_SHA"; exit 1; }
 echo "== Android 卡片 v$VERSION 已上线，且 APK 线上 SHA 与卡片一致（其他内容未动）=="
+
+# ── 3) 回写仓库里的卡片（否则地雷会在下一次发布时重新埋上）────────────
+# 本脚本原本只补**线上**页面（故意的：避开与 Windows/macOS 发布波共用站点树的冲突），
+# 但站点树就是仓库的 website/ ⇒ 仓库里的 Android 卡片永远停在上一次有人手写的那个版本。
+# deploy.sh 的 tar 是 --overwrite 且 HTML 在包里，所以**任何一次全站部署都会把线上
+# 卡片打回仓库里那个旧版本**（2026-10-07 23:39 实测：卡片回到 v1.1.17）。
+# 所以线上核完就把仓库这一半补齐，让下一次 deploy 对 Android 变成无操作。
+# 用与上面 patch() 逐字相同的块构造，所以两边收敛到字节一致。
+if [ -f "$WEBSITE_DIR/index.html" ] && [ -f "$WEBSITE_DIR/zh/index.html" ]; then
+  python3 - "$WEBSITE_DIR" "$VERSION" "$SIZE" "$SHA" <<'PY'
+import re, sys
+site, version, size, sha = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
+mb = f"{size / 1048576:.1f} MB"
+
+def patch(path, prefix, label, install):
+    note = (f"MRRC-Modern-v{version}-Android.apk · {mb} · SHA-256 <code>{sha}</code><br>{install}")
+    block = (
+        "<!-- android-download:start -->\n"
+        f'<p><a class="btn btn-primary btn-large" href="{prefix}MRRC-Modern-Android.apk">'
+        f"{label}</a></p>\n"
+        f'<p style="color: var(--scope-text-muted); font-size: 0.85rem; margin-top: .5rem;">'
+        f"{note}</p>\n"
+        "<!-- android-download:end -->"
+    )
+    html = open(path, encoding="utf-8").read()
+    pat = re.compile(r"<!-- android-download:start -->.*?<!-- android-download:end -->", re.S)
+    if not pat.search(html):
+        sys.exit(f"marker block not found in {path}")
+    html = pat.sub(lambda _: block, html)   # lambda：不让 re 解释 SHA/文本里的反斜杠
+    hero = re.compile(r'(<i class="fab fa-android"></i>\s*[^<]*?v)\d+\.\d+\.\d+')
+    if not hero.search(html):
+        sys.exit(f"hero android button not found in {path}")
+    html = hero.sub(lambda m: m.group(1) + version, html)
+    open(path, "w", encoding="utf-8").write(html)
+    print(f"   repo synced: {path}")
+
+patch(f"{site}/index.html", "downloads/", f"Download APK v{version} (Android 8.0+)",
+      "Install: allow \u201cinstall unknown apps\u201d, then open the APK.")
+patch(f"{site}/zh/index.html", "../downloads/", f"\u4e0b\u8f7d APK v{version}\uff08Android 8.0+\uff09",
+      "\u5b89\u88c5\uff1a\u7cfb\u7edf\u8bbe\u7f6e\u5141\u8bb8\u300c\u5b89\u88c5\u672a\u77e5\u5e94\u7528\u300d\u540e\u70b9\u5f00 APK\u3002")
+PY
+  echo "-- 仓库里的两页 Android 卡片已追平 v$VERSION（记得在主仓提交这两页；"
+  echo "   不提交也不会影响线上，但下次从干净 checkout 部署就又会降级）--"
+else
+  echo "-- 找不到站点树 $WEBSITE_DIR，跳过仓库回写（线上已正确，不影响下载）--"
+fi

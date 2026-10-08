@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import tempfile
 import time
 import unittest
@@ -889,6 +890,120 @@ class WifiConnectEndpointTests(GateCase):
             with self.subTest(path=path):
                 self.assertIn(path, paths)
                 self.assertLess(paths.index(path), catch_all)
+
+class SetupPageRouteTests(GateCase):
+    def _get(self, client=HOTSPOT_CLIENT, cookies=None):
+        return asyncio.run(server.setup_page(FakeRequest(
+            path="/setup", client=client, cookies=cookies)))
+
+    def test_served_without_a_token_while_the_window_is_open(self):
+        self.open_gate()
+        self.assertEqual(self._get().status_code, 200)
+
+    def test_it_is_never_cached(self):
+        """The page renders the state of a window that closes by itself. A cached
+        copy would tell the operator the box is still reachable when it is not."""
+        self.open_gate()
+        self.assertEqual(self._get().headers["Cache-Control"], "no-store")
+
+    def test_redirects_to_login_from_anywhere_else(self):
+        self.open_gate()
+        resp = self._get(client=LAN_CLIENT)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login", resp.headers["location"])
+
+    def test_redirects_when_the_window_is_closed(self):
+        self.close_gate()
+        self.assertEqual(self._get().status_code, 302)
+
+    def test_redirects_when_the_supervisor_stopped_heartbeating(self):
+        net_wifi.write_state(net_wifi.ApState(
+            mode=net_wifi.MODE_HOTSPOT, network="10.42.0.0/24",
+            heartbeat=time.time() - 300), self.state_dir)
+        self.assertEqual(self._get().status_code, 302)
+
+    def test_an_admin_token_gets_in_without_the_gate(self):
+        """Useful over the LAN once the box is configured, and it must not depend
+        on a hotspot that no longer exists."""
+        self.close_gate()
+        token = server._make_auth_token()
+        server._auth_tokens.add(token)
+        self.addCleanup(server._auth_tokens.discard, token)
+        resp = self._get(client=LAN_CLIENT, cookies={server.AUTH_COOKIE: token})
+        self.assertEqual(resp.status_code, 200)
+
+    def test_the_route_is_registered_before_the_spa_fallback(self):
+        """/setup is not under /api/, so the existing route-order guard in
+        tests/test_cloud_endpoints.py does not cover it. Registered below the
+        catch-all it would be answered with index.html — the SPA — and the wizard
+        would be unreachable with a 200 status and no explanation."""
+        paths = [getattr(r, "path", "") for r in server.app.router.routes]
+        self.assertIn("/setup", paths)
+        self.assertLess(paths.index("/setup"), paths.index("/{path:path}"))
+
+
+class SetupPageSourceTests(unittest.TestCase):
+    """The page ships as one self-contained file; these assert that stays true."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = (Path(server.__file__).resolve().parent
+                    / "static" / "setup.html").read_text(encoding="utf-8")
+
+    def test_it_exists_and_is_a_page(self):
+        self.assertIn("<!DOCTYPE html>", self.html)
+        self.assertIn("</html>", self.html)
+
+    def test_no_external_resource_is_referenced(self):
+        """During onboarding the box has no uplink by definition, and its
+        certificate is self-signed. A CDN font or library here is a blank page on
+        a phone, with no console to read."""
+        self.assertNotIn("http://", self.html)
+        self.assertNotIn("https://cdn", self.html)
+        self.assertNotIn("//fonts.", self.html)
+        for match in re.finditer(r'(?:src|href)\s*=\s*"([^"]+)"', self.html):
+            ref = match.group(1)
+            with self.subTest(ref=ref):
+                self.assertTrue(ref.startswith("/") or ref.startswith("#"),
+                                f"{ref} is not a same-origin reference")
+
+    def test_it_talks_only_to_the_wizard_endpoints(self):
+        """The page must not reach for an endpoint the gate does not cover; that
+        would be a 401 the operator cannot do anything about."""
+        called = set(re.findall(r"""api\(\s*['"]([^'"]+)['"]""", self.html))
+        self.assertTrue(called, "the page calls no endpoint at all — parser drift?")
+        self.assertLessEqual(called, {"/api/setup/wizard",
+                                      "/api/setup/wizard/password",
+                                      "/api/setup/wizard/wifi"})
+
+    def test_it_is_a_mobile_page(self):
+        self.assertIn('name="viewport"', self.html)
+        self.assertIn("width=device-width", self.html)
+
+    def test_it_warns_about_what_happens_during_the_switch(self):
+        """The phone leaves the box mid-switch. If the page has not already said
+        so, the operator's last sight of it is a spinner that never resolves."""
+        self.assertIn("热点", self.html)
+        self.assertTrue("关闭" in self.html or "断开" in self.html)
+
+    def test_the_wifi_step_explains_why_it_is_locked(self):
+        """A greyed-out button with no reason reads as a broken page."""
+        self.assertIn("先设置", self.html)
+
+    def test_no_credential_like_literal_is_written_into_the_page(self):
+        """SDD `secrets-hardcoded`. Placeholders are prompts, not values; a real
+        password in a shipped HTML file is a credential in every image."""
+        self.assertNotIn("changeme", self.html.lower())
+        self.assertNotIn("value=\"", self.html.replace('value=""', ""))
+        for field in re.findall(r'<input[^>]+type="password"[^>]*>', self.html):
+            with self.subTest(field=field):
+                self.assertNotIn("value=", field)
+
+    def test_the_two_password_fields_are_the_same_type(self):
+        """A confirm field that is not masked invites a shoulder-surf and a typo
+        at the same time."""
+        self.assertEqual(self.html.count('type="password"'), 3,
+                         "web password, confirm, and the WiFi passphrase")
 
 if __name__ == "__main__":
     unittest.main()

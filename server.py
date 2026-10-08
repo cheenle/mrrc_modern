@@ -5227,6 +5227,26 @@ async def api_setup_wizard_wifi_connect(request: Request):
                    request.client.host if request.client else "?")
     return JSONResponse({"ok": True, "switching": True, "nonce": nonce})
 
+
+@app.get("/setup", include_in_schema=False)
+async def setup_page(request: Request):
+    """The onboarding wizard page.
+
+    Passwordless only while the box is serving its own open hotspot and the
+    request comes from that subnet; from anywhere else it is an ordinary
+    authenticated route. `no-store` because the page renders a window that closes
+    by itself — a cached copy would tell the operator the box is still reachable
+    when it is not.
+    """
+    if not _setup_access(request):
+        return RedirectResponse("/login?next=/setup", status_code=302)
+    page = STATIC_DIR / "setup.html"
+    if not page.exists():
+        return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
+    response = FileResponse(page, media_type="text/html")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route
 # defined after it is answered with index.html instead of its own handler. That is how
 # GET /api/cloud/state came back as 200 + a web page in v1.24.0 (the settings dialog could not

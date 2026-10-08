@@ -204,13 +204,35 @@ adb shell reboot update</code></pre>
 <p>⚠️ <strong>必须走 HTTPS，不要关。</strong> 手机浏览器要调用麦克风发射（PTT），而在 HTTP 下浏览器不给麦克风权限—— <strong>这是浏览器安全策略，不是我们的设置问题。</strong></p>
 <p>登录后你应该看到主界面：频率、模式、S 表、瀑布图。<strong>这时候还没有电台——下一步接上。</strong></p>
 <h2 id="9-接网络">9. 接网络</h2>
-<p><strong>有线（推荐）</strong>：网线插着就是通的。确认：</p>
-<pre><code class="lang-bash">ip a
-nmcli device status</code></pre>
-<p><strong>无线</strong>（能用，但实时音频优先有线）：</p>
-<pre><code class="lang-bash">nmcli device wifi list
-nmcli device wifi connect "&lt;SSID&gt;" password "&lt;密码&gt;"</code></pre>
-<p>如果盒子换了网络导致 IP 变了，路由器里重新找一下。</p>
+<h3 id="有线-推荐-插上就通">有线（推荐——插上就通）</h3>
+<pre><code class="lang-bash">ip a                    # 看有没有拿到地址
+nmcli device status     # eth0 应显示 connected</code></pre>
+<h3 id="无线-mt7663s">无线（MT7663S）</h3>
+<p><strong>前提：你得先能进盒子。</strong> 有网线就走网线；<strong>连网线都没有时，接 HDMI + 一个 USB 键盘</strong>， 用下面的 <code>nmtui</code>。</p>
+<h4 id="①-没有任何网络时-hdmi-控制台上用-nmtui-最省事">① 没有任何网络时：HDMI 控制台上用 <code>nmtui</code>（最省事）</h4>
+<p>登录 <code>root</code> / <code>1234</code>，然后：</p>
+<pre><code class="lang-bash">nmtui</code></pre>
+<p>方向键选「<strong>启用连接 / Activate a connection</strong>」→ 选你的 SSID → 输密码。 这是<strong>全屏文字界面</strong>，既不需要网络也不需要图形环境，所以它正是"零网络"时的入口 ✅</p>
+<h4 id="②-已经在-ssh-里-用-nmcli">② 已经在 SSH 里：用 <code>nmcli</code></h4>
+<pre><code class="lang-bash">nmcli device status                              # 先看 wlan0 在不在
+nmcli device wifi list                           # 扫（要等几秒）
+nmcli device wifi connect "你的SSID" password "你的密码"
+nmcli connection show --active                   # 确认连上了
+ip a show wlan0                                  # 拿到 IP 没</code></pre>
+<p>盒子换了网络导致 IP 变了，就去路由器里重新找一下。</p>
+<h4 id="③-万一无线起不来-按顺序查">③ 万一无线起不来：按顺序查</h4>
+<p>每一条的失败原因都不一样，别跳步：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>检查</th><th>命令</th><th>说明</th></tr></thead><tbody>
+<tr><td>硬件在不在</td><td><code>rfkill list</code></td><td>显示 <code>Soft blocked: yes</code> → <code>rfkill unblock wifi</code>；<strong>看不到 wlan0 才往下查</strong></td></tr>
+<tr><td>驱动加载没</td><td>`lsmod \</td><td>grep mt76`</td><td>应有 <code>mt7663s</code> 与 <code>mt76_sdio</code>；没有就 <code>modprobe mt7663s</code></td></tr>
+<tr><td>固件加载成功没</td><td>`dmesg \</td><td>grep -i mt76`</td><td>有 <code>firmware</code> 失败字样 = 固件没加载上（本镜像带 4 个 mt7663 固件）</td></tr>
+<tr><td>网卡认出来没</td><td><code>iw dev</code></td><td>应列出 <code>wlan0</code></td></tr>
+<tr><td>扫描有结果没</td><td><code>nmcli device wifi list</code></td><td>空列表 → 多半是天线或信道问题</td></tr>
+<tr><td>监管域</td><td><code>iw reg get</code></td><td>显示 <code>country 00</code> 时部分信道不可用；<code>iw reg set CN</code> 后重试</td></tr>
+</tbody></table></div>
+<p><strong>背景（影响你排查什么）</strong>：W103D 的无线是 <strong>MT7663S</strong>，WiFi 与<strong>蓝牙同一颗芯片</strong>，走 <strong>SDIO</strong> 而不是 USB。这块板的驱动是 ophub 专门适配的（上游 <strong>PR #3658 / #3659</strong>），所以 <strong>内核绝不能换</strong>——换通用内核 = <strong>静默丢 WiFi</strong>（见 §19 红线③）。</p>
+<p><strong>能用，但实时音频优先有线</strong>：无线抖动大，长时间听音频容易卡。只是配置用，无线够。</p>
 <h2 id="10-接电台">10. 接电台</h2>
 <p><strong>FT-710 的线插口别搞错</strong>：用<strong>上方 <code>Enhanced</code> 口</strong>，它同时承载 CAT 串口和 FT4222 scope。 插 Standard 口的话 CAT 可能通但<strong>没有真频谱</strong>。</p>
 <p>接好后确认三样东西都出现了：</p>

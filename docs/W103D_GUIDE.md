@@ -214,21 +214,59 @@ https://<盒子IP>:8888
 
 ## 9. 接网络
 
-**有线（推荐）**：网线插着就是通的。确认：
+### 有线（推荐——插上就通）
 
 ```bash
-ip a
-nmcli device status
+ip a                    # 看有没有拿到地址
+nmcli device status     # eth0 应显示 connected
 ```
 
-**无线**（能用，但实时音频优先有线）：
+### 无线（MT7663S）
+
+**前提：你得先能进盒子。** 有网线就走网线；**连网线都没有时，接 HDMI + 一个 USB 键盘**，
+用下面的 `nmtui`。
+
+#### ① 没有任何网络时：HDMI 控制台上用 `nmtui`（最省事）
+
+登录 `root` / `1234`，然后：
 
 ```bash
-nmcli device wifi list
-nmcli device wifi connect "<SSID>" password "<密码>"
+nmtui
 ```
 
-如果盒子换了网络导致 IP 变了，路由器里重新找一下。
+方向键选「**启用连接 / Activate a connection**」→ 选你的 SSID → 输密码。
+这是**全屏文字界面**，既不需要网络也不需要图形环境，所以它正是"零网络"时的入口 ✅
+
+#### ② 已经在 SSH 里：用 `nmcli`
+
+```bash
+nmcli device status                              # 先看 wlan0 在不在
+nmcli device wifi list                           # 扫（要等几秒）
+nmcli device wifi connect "你的SSID" password "你的密码"
+nmcli connection show --active                   # 确认连上了
+ip a show wlan0                                  # 拿到 IP 没
+```
+
+盒子换了网络导致 IP 变了，就去路由器里重新找一下。
+
+#### ③ 万一无线起不来：按顺序查
+
+每一条的失败原因都不一样，别跳步：
+
+| 检查 | 命令 | 说明 |
+| --- | --- | --- |
+| 硬件在不在 | `rfkill list` | 显示 `Soft blocked: yes` → `rfkill unblock wifi`；**看不到 wlan0 才往下查** |
+| 驱动加载没 | `lsmod \| grep mt76` | 应有 `mt7663s` 与 `mt76_sdio`；没有就 `modprobe mt7663s` |
+| 固件加载成功没 | `dmesg \| grep -i mt76` | 有 `firmware` 失败字样 = 固件没加载上（本镜像带 4 个 mt7663 固件） |
+| 网卡认出来没 | `iw dev` | 应列出 `wlan0` |
+| 扫描有结果没 | `nmcli device wifi list` | 空列表 → 多半是天线或信道问题 |
+| 监管域 | `iw reg get` | 显示 `country 00` 时部分信道不可用；`iw reg set CN` 后重试 |
+
+**背景（影响你排查什么）**：W103D 的无线是 **MT7663S**，WiFi 与**蓝牙同一颗芯片**，走 **SDIO**
+而不是 USB。这块板的驱动是 ophub 专门适配的（上游 **PR #3658 / #3659**），所以
+**内核绝不能换**——换通用内核 = **静默丢 WiFi**（见 §19 红线③）。
+
+**能用，但实时音频优先有线**：无线抖动大，长时间听音频容易卡。只是配置用，无线够。
 
 ## 10. 接电台
 

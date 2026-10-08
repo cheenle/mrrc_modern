@@ -29,6 +29,8 @@ App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸�
 
 **门槛**：`./gradlew test`（debug 179 / release 162，0 失败）+ `assembleDebug` + `lintDebug` + `assembleRelease` 全绿；UI 守卫逐个确认真的跑了（`OneScreenFitTest` 7 个真机档位、`MainScreenComposeTest` 7、`ScreenFitTest` 15、`UiLayoutSafetyTest` 1）。新增 `SpectrumTiersTest` 5 用例、`SpectrumFrameTest` 4→8、`ConnectionManagerTest` +5（连接即声明、换档不重连、重复设置幂等、非法值不上线、暂停时改档不唤醒频谱通道）。
 
+**发布**（`./release.sh --apk-only` → `./publish-card.sh`，严格串行，**未跑全站 deploy.sh**）：`MRRC-Modern-v1.1.29-Android.apk` **9,406,382 bytes** `a00d7cdf2abe808aa59b433d02373f43fa27564c1f1bd4d1c9639b9e35a6f1ac`（签名 `CN=MRRC Modern, OU=Amateur Radio, O=MRRC, C=CN`，证书 SHA-256 `a09e1364…`）。四步复核均通过：① 上传后 `ssh sha256sum` 看**服务器上的真实文件**（稳定别名与版本化 APK 两份都与本地逐字一致、属主 `www-data`）；② 等 68 s 过 nginx `open_file_cache`（valid 60s）窗口后拉线上页面，中英两页的 Android 标记块与 hero 按钮均为 v1.1.29、卡片上的 SHA 与线上一致；③ **别家卡片没被回退**（Windows/macOS 仍为 v1.25.4）——这正是全站 deploy 会犯的错（2026-10-05 实测把线上 v1.25.3 刷回 v1.25.0）；④ 从稳定别名真实下载 9,406,382 bytes 并重算 SHA 相符（不只信 curl 的 200：别名被删后 nginx 会用旧 inode 继续回 200 + 旧内容）。
+
 **未验证**：真机验收（设置页三档切换、瀑布仍滚动、退后台再回前台档位保持、连老服务端不崩）待发布后按 `android-app` 技能清单执行。
 
 ## [1.1.28] — 2026-10-07

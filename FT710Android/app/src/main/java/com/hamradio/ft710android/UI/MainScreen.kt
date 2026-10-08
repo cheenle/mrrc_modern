@@ -236,16 +236,21 @@ fun MainScreen(
                 // SubcomposeLayout，问它 intrinsic 会抛异常 = 启动即崩（v1.1.16 事故）
                 Row(Modifier.fillMaxWidth().height(meterH).testTag("secHeader")) {
                     DisplayBezel(
-                        modifier = Modifier.weight(1f).fillMaxHeight().clickable { showFreqInput = true },
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                            .clickable { showFreqInput = true }
+                            .testTag("freqBezel"),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        // 显示屏里现在只有主频（工具/状态都在上面那一行），字号吃满宽高两个约束
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            BoxWithConstraints(Modifier.fillMaxSize()) {
-                                val byWidth = (maxWidth.value - 8f) / 6.3f
-                                val byHeight = (maxHeight.value - 4f) / 1.32f
-                                val fit = minOf(byWidth, byHeight).coerceIn(16f, 62f)
-                                FreqText(hz = state.activeFrequency, fitSp = fit)
-                            }
+                        // 显示屏里只有主频（工具/状态都在上面那一行），字号吃满宽高两个约束。
+                        // ⚠️ `BoxWithConstraints` 的默认 contentAlignment 是 **TopStart**：
+                        // 不显式给 Center，主频就会贴在左上角（v1.1.26~28 的实际状态，
+                        // 用户报"频率上下居中"）。外面再包一层 Box(Center) 也没用——
+                        // 子项 fillMaxSize 会把它填满，居中无从生效。
+                        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            val byWidth = (maxWidth.value - 8f) / 6.3f
+                            val byHeight = (maxHeight.value - 4f) / 1.32f
+                            val fit = minOf(byWidth, byHeight).coerceIn(16f, 62f)
+                            FreqText(hz = state.activeFrequency, fitSp = fit)
                         }
                     }
                     Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))

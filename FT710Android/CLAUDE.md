@@ -166,6 +166,7 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
   - fixture 必须用服务端**真实形状**（`scope_spans` 是键控字典 `{"6":{"name":"100 kHz","freq":100000}}` 不是数组；模式名是独立字段 `mode_name`，`mode` 只是索引）。形状不对时 `parseWsEvent` **静默**回退成 `Unknown`、整条 fullState 被丢 → 表现为"频率是 00.000.00"，很难查（`ProtocolTest` 里有一条专门的回归守护）
   - 冒烟测试用 `assertExists()` 而不是 `assertIsDisplayed()`：滚动列视口外的节点是"存在但不可见"
   - 文案可能重复：`7.117` 两处（标尺红标 + 记忆格）、`TUNE` 两处（ATR 行 + 底栏）→ 用 `assertCountEquals`
+- **shell 脚本里 `$VAR` 后面紧跟中文/全角字符必须写成 `${VAR}`**：本机 `LANG=zh_CN.UTF-8` 下，`bash -u` 会把 `$VERSION（` 里全角括号的首字节 `0xEF` 当成变量名的一部分 → 报 `VERSION﹖: 未绑定的变量` 并中止（2026-10-08 实测：`publish-card.sh` 的仓库回写段因此崩溃，而线上部分已经改完，留下"线上对、仓库没回写"的半完成状态）。`LC_ALL=C` 下不复现，所以别拿 `bash -n` 或换 locale 当验证——要在真实 locale 下跑一遍。排查手法：`re.compile(rb'\$([A-Za-z_][A-Za-z0-9_]*)([\x80-\xff])')` 扫全部脚本。
 - **发版别加 `--skip-tests`**：`release.sh` 有 `set -euo pipefail`，不带该参数时会自己跑 `./gradlew test lintDebug assembleRelease` 并在失败时中止。另外**绝不**写 `./gradlew … | grep | head && ./release.sh` —— 管道退出码取自 `head`，gradle 的失败会被吞掉（2026-10-06 就这样带着红灯把 v1.1.20 重发了一次：同版本号、不同字节 SHA）。要过滤输出就分开跑并逐个查 `$?`。
 - **绝不在同一工程并行跑两条 gradle / 发布命令**（2026-10-07 踩了三次）：
   - 两个 `gradlew` 并发写同一个 `build/test-results/` → 报 `Could not write XML test results`，**看着像测试失败其实是构建互踩**；已写出的 XML 仍是全绿。

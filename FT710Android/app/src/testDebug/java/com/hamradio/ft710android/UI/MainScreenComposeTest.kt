@@ -234,4 +234,43 @@ class MainScreenComposeTest {
         // 时长 83.0s → "1:23"（fmtSeconds），显示在状态行
         rule.onNodeWithText("1:23", useUnmergedTree = true).assertExists()
     }
+
+    /**
+     * 主频必须在显示屏里**上下左右都居中**（用户 2026-10-07 要求）。
+     *
+     * 这是个真实的回归坑：`BoxWithConstraints` 的默认 `contentAlignment` 是 `TopStart`，
+     * 而外面包的 `Box(Center)` 因为子项 `fillMaxSize` 而失效 —— 主频就这样贴了三版左上角，
+     * build/lint/组合冒烟测试全绿，只有量坐标才看得出来。
+     */
+    @Test
+    fun `the main frequency is centred inside its display bezel`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val vm = fixtureVm(scope)
+        rule.setContent {
+            AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
+        }
+        rule.waitForIdle()
+
+        val density = rule.density.density
+        val bezel = rule.onNodeWithTag("freqBezel").fetchSemanticsNode().boundsInRoot
+        val freq = rule.onNodeWithText("07.116.95", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+
+        val bezelCx = (bezel.left + bezel.right) / 2f / density
+        val bezelCy = (bezel.top + bezel.bottom) / 2f / density
+        val freqCx = (freq.left + freq.right) / 2f / density
+        val freqCy = (freq.top + freq.bottom) / 2f / density
+
+        assertTrue(
+            "主频上下没居中：文字中心 ${"%.1f".format(freqCy)}dp vs 显示屏中心 ${"%.1f".format(bezelCy)}dp（差 ${"%.1f".format(freqCy - bezelCy)}dp）",
+            kotlin.math.abs(freqCy - bezelCy) <= 2f,
+        )
+        assertTrue(
+            "主频左右没居中：文字中心 ${"%.1f".format(freqCx)}dp vs 显示屏中心 ${"%.1f".format(bezelCx)}dp（差 ${"%.1f".format(freqCx - bezelCx)}dp）",
+            kotlin.math.abs(freqCx - bezelCx) <= 2f,
+        )
+        // 主频必须真的落在显示屏内（居中不能把它推出边界）
+        assertTrue("主频顶边超出显示屏", freq.top >= bezel.top - 1f)
+        assertTrue("主频底边超出显示屏", freq.bottom <= bezel.bottom + 1f)
+    }
 }

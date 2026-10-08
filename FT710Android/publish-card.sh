@@ -175,8 +175,8 @@ patch(f"{site}/index.html", "downloads/", f"Download APK v{version} (Android 8.0
 patch(f"{site}/zh/index.html", "../downloads/", f"\u4e0b\u8f7d APK v{version}\uff08Android 8.0+\uff09",
       "\u5b89\u88c5\uff1a\u7cfb\u7edf\u8bbe\u7f6e\u5141\u8bb8\u300c\u5b89\u88c5\u672a\u77e5\u5e94\u7528\u300d\u540e\u70b9\u5f00 APK\u3002")
 PY
-  echo "-- 仓库里的两页 Android 卡片已追平 v$VERSION（记得在主仓提交这两页；"
+  echo "-- 仓库里的两页 Android 卡片已追平 v${VERSION}（记得在主仓提交这两页；"
   echo "   不提交也不会影响线上，但下次从干净 checkout 部署就又会降级）--"
 else
-  echo "-- 找不到站点树 $WEBSITE_DIR，跳过仓库回写（线上已正确，不影响下载）--"
+  echo "-- 找不到站点树 ${WEBSITE_DIR}，跳过仓库回写（线上已正确，不影响下载）--"
 fi

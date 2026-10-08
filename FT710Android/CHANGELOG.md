@@ -2,6 +2,17 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.30] — 2026-10-08
+
+- **修复：主频没有居中，一直贴在显示屏左上角**（用户要求"频率上下居中"）。
+  - 根因：`BoxWithConstraints` 的默认 `contentAlignment` 是 **`TopStart`**，而调用 `FreqText` 时没传对齐；外面那层 `Box(Modifier.fillMaxSize(), contentAlignment = Center)` **完全无效**——子项 `fillMaxSize` 把它填满，居中无从生效。
+  - 实测偏差：文字中心 40.8dp vs 显示屏中心 75.0dp，**偏上 34.3dp**（v1.1.26~29 都是这个状态；build / lint / 组合冒烟测试全绿，只有量坐标才看得出来）。
+  - 修法：`BoxWithConstraints(..., contentAlignment = Alignment.Center)` + `DisplayBezel(contentAlignment = Center)`，并删掉那层无效的 Box。
+  - 新增断言 `the main frequency is centred inside its display bezel`：量 `freqBezel` 与频率文本的 `boundsInRoot`，上下/左右中心差 ≤2dp 且不得越界。**已验证能抓到旧行为**（去掉 Center 立刻红，报 −34.3dp）。
+- **为什么单独发一版**：v1.1.29 由另一条会话在同一 worktree 并发发布（频谱流量档 Full/Half/Quarter），其记录的产物 SHA `a00d7cdf` 与本会话同时刻构建的产物相同，**无法从 SHA 判定线上包是否已含本修复**。为保证线上产物无歧义，本修复单独走 1.1.30。
+- 测试 **debug 180 / release 162 全绿**（31 个类）；`OneScreenFitTest` 7 档仍全部 0.0dp 超出。
+- 说明：此前几版报告的"165 项"是**少数了** —— 统计脚本对结果目录里的 XML 求和，而带 `--tests` 过滤的运行只写被过滤类的 XML，`ScreenFitTest` 的 15 项没被计入（180−165=15；release 侧 162−148=14 = 15 − 1 条 debug-only 测试）。不是测试回归。
+
 ## [1.1.29] — 2026-10-07
 
 ### 频谱流量档：设置页可选 Full / Half / Quarter，手机侧真的省流量（服务端 AD-025）

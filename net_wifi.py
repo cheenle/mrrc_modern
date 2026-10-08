@@ -436,3 +436,290 @@ def scrub(text: Optional[str], *secrets: str) -> str:
         if secret:
             out = out.replace(secret, REDACTED)
     return out
+
+
+# ── configuration both owners must agree on ─────────────────────────
+def ap_settings(env: Optional[dict] = None) -> dict:
+    """The WiFi-domain settings, read in exactly one place.
+
+    The supervisor and the server both need the SSID and the state directory,
+    and a drift between them is silent: the server would read a state file
+    nobody writes, so the gate would stay shut and the box would look like it
+    never opened a hotspot.
+    """
+    source = os.environ if env is None else env
+    port = _int_or((source.get("MRRC_SETUP_AP_WEB_PORT") or "").strip()
+                   or (source.get("MRRC_WEB_PORT") or "").strip(),
+                   DEFAULT_WEB_PORT)
+    return {
+        "ssid": (source.get("MRRC_SETUP_AP_SSID") or "").strip() or DEFAULT_SSID,
+        "ifname": (source.get("MRRC_SETUP_AP_IFNAME") or "").strip() or DEFAULT_IFNAME,
+        "web_port": port,
+        "state_dir": Path((source.get("MRRC_SETUP_AP_STATE_DIR") or "").strip()
+                          or str(DEFAULT_STATE_DIR)),
+    }
+
+
+# ── the shared directory and its two mailboxes ──────────────────────
+def _resolve_dir(state_dir) -> Path:
+    return Path(state_dir) if state_dir is not None else DEFAULT_STATE_DIR
+
+
+def ensure_state_dir(state_dir=None) -> None:
+    """Create the directory so BOTH owners can write their own file.
+
+    The supervisor runs as root and the server as ``mrrc``, so the directory is
+    0775 with group ``mrrc``: root writes ``state.json``, ``mrrc`` writes
+    ``wizard.json``, and each is the only writer of its own file — which is why
+    there is no lock here.
+
+    Every failure is swallowed. A desktop install has no ``/run/mrrc`` and no
+    ``mrrc`` group, and the correct behaviour there is a permanently closed
+    gate, not a server that will not start.
+    """
+    directory = _resolve_dir(state_dir)
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    try:
+        os.chmod(directory, 0o775)
+    except OSError:
+        pass
+    try:
+        import grp          # POSIX-only. A deferred import is load-bearing:
+        os.chown(directory, -1, grp.getgrnam(STATE_GROUP).gr_gid)
+    except (ImportError, KeyError, OSError, AttributeError):
+        pass
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    """Atomic, world-readable JSON. Never raises.
+
+    World-readable on purpose and safe: neither file carries a secret, and that
+    is precisely what lets a root daemon and an ``mrrc`` server share one
+    directory. The chmod happens *before* the rename because ``write_text``
+    creates the temp file under the process umask — root's umask would leave a
+    0600 file the server cannot read, i.e. a gate that is permanently closed
+    and reports nothing.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                       encoding="utf-8")
+        try:
+            os.chmod(tmp, 0o644)
+        except OSError:
+            pass
+        tmp.replace(path)
+    except OSError:
+        pass
+
+
+def _read_json(path: Path):
+    """The parsed object at ``path``, or ``None`` for anything unreadable."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _pick(raw: dict, key: str, default, cast):
+    """One typed field of a JSON object; anything unparseable falls back.
+
+    A newer writer must not break an older reader (or the reverse), and a
+    truncated file must read as "gate closed" rather than raise inside a
+    request handler.
+    """
+    value = raw.get(key, default)
+    if value is None:
+        return default
+    try:
+        return cast(value)
+    except (TypeError, ValueError):
+        return default
+
+
+@dataclass(frozen=True)
+class ApState:
+    """What the supervisor last published (``state.json``).
+
+    ``mode`` is the gate's first half: only ``MODE_HOTSPOT`` can open the
+    passwordless window, so a supervisor that died, a box with a cable in it and
+    a box that finished onboarding all close it without anyone having to
+    remember to (design D-6: the window disappears *with the network*, so there
+    is no "is it configured yet" flag that could fail to be written).
+    """
+
+    mode: str = MODE_OFF
+    ssid: str = ""
+    gateway: str = ""
+    network: str = ""
+    url: str = ""
+    reason: str = ""
+    since: float = 0.0
+    heartbeat: float = 0.0
+    deadline: float = 0.0
+
+    def to_json(self) -> dict:
+        return {
+            "mode": self.mode, "ssid": self.ssid, "gateway": self.gateway,
+            "network": self.network, "url": self.url, "reason": self.reason,
+            "since": self.since, "heartbeat": self.heartbeat,
+            "deadline": self.deadline,
+        }
+
+    @classmethod
+    def from_json(cls, raw) -> "ApState":
+        if not isinstance(raw, dict):
+            return cls()
+        return cls(
+            mode=_pick(raw, "mode", MODE_OFF, str),
+            ssid=_pick(raw, "ssid", "", str),
+            gateway=_pick(raw, "gateway", "", str),
+            network=_pick(raw, "network", "", str),
+            url=_pick(raw, "url", "", str),
+            reason=_pick(raw, "reason", "", str),
+            since=_pick(raw, "since", 0.0, float),
+            heartbeat=_pick(raw, "heartbeat", 0.0, float),
+            deadline=_pick(raw, "deadline", 0.0, float),
+        )
+
+
+def read_state(state_dir=None) -> ApState:
+    """The supervisor's last word; ``ApState()`` (mode off) when there is none."""
+    return ApState.from_json(_read_json(_resolve_dir(state_dir) / STATE_NAME))
+
+
+def write_state(state: ApState, state_dir=None) -> None:
+    """Publish one heartbeat's worth of truth. Called by the supervisor only."""
+    _write_json(_resolve_dir(state_dir) / STATE_NAME, state.to_json())
+
+
+def state_is_live(state: ApState, now: float,
+                  max_age: float = HEARTBEAT_MAX_AGE_S) -> bool:
+    """Whether the supervisor is demonstrably running the hotspot *now*.
+
+    A stale file means a dead supervisor: trusting it would leave the
+    passwordless window open on a box whose hotspot is long gone, which is the
+    one failure mode D-6's "no stored flag" rule exists to prevent.
+    """
+    if state.mode != MODE_HOTSPOT:
+        return False
+    if state.heartbeat <= 0:
+        return False
+    return (now - state.heartbeat) <= max_age
+
+
+@dataclass(frozen=True)
+class WizardClaim:
+    """The server's mailbox entry (``wizard.json``).
+
+    There is deliberately **no password field**: the WiFi PSK has nowhere to be
+    written, which makes "never on disk" a property of the schema rather than a
+    promise every future caller has to remember to keep.
+    """
+
+    action: str = ""        # "connect" — the only action today
+    ssid: str = ""
+    state: str = ""         # WIZARD_SWITCHING | WIZARD_OK | WIZARD_FAILED
+    error: str = ""
+    address: str = ""
+    nonce: str = ""
+    heartbeat: float = 0.0
+
+    def to_json(self) -> dict:
+        return {
+            "action": self.action, "ssid": self.ssid, "state": self.state,
+            "error": self.error, "address": self.address,
+            "nonce": self.nonce, "heartbeat": self.heartbeat,
+        }
+
+    @classmethod
+    def from_json(cls, raw) -> "WizardClaim":
+        if not isinstance(raw, dict):
+            return cls()
+        return cls(
+            action=_pick(raw, "action", "", str),
+            ssid=_pick(raw, "ssid", "", str),
+            state=_pick(raw, "state", "", str),
+            error=_pick(raw, "error", "", str),
+            address=_pick(raw, "address", "", str),
+            nonce=_pick(raw, "nonce", "", str),
+            heartbeat=_pick(raw, "heartbeat", 0.0, float),
+        )
+
+
+def read_wizard(state_dir=None) -> WizardClaim:
+    """The server's current claim on the radio; empty when there is none."""
+    return WizardClaim.from_json(_read_json(_resolve_dir(state_dir) / WIZARD_NAME))
+
+
+def write_wizard(claim: WizardClaim, state_dir=None) -> None:
+    """Claim or report. Called by the server only."""
+    _write_json(_resolve_dir(state_dir) / WIZARD_NAME, claim.to_json())
+
+
+def claim_is_fresh(claim: WizardClaim, now: float) -> bool:
+    """Whether the supervisor should still stand down for this claim.
+
+    Two budgets, because the two situations differ. A switch *in flight*
+    heartbeats every few seconds, so 45 s means the server died mid-switch and
+    the supervisor must take the radio back — otherwise the box is left with
+    neither an AP nor an uplink and nobody to fix it. A *finished* claim needs
+    no heartbeat and stays actionable for ten minutes, which is how the
+    supervisor learns that a join failed and reopens the window.
+    """
+    if not claim.action or claim.heartbeat <= 0:
+        return False
+    age = now - claim.heartbeat
+    if claim.state == WIZARD_SWITCHING:
+        return age <= HEARTBEAT_MAX_AGE_S
+    return age <= CLAIM_MAX_AGE_S
+
+
+# ── the passwordless gate ───────────────────────────────────────────
+def client_ip(host: Optional[str]):
+    """A request's client host as an address object, or ``None``.
+
+    The IPv4-mapped unwrap is the load-bearing line. uvicorn on a dual-stack
+    socket reports an IPv4 client as ``::ffff:10.42.0.57``, and that compared
+    against a v4 network is ``False`` — so on a box bound to ``::`` the gate
+    would never open, with nothing logging why, because every check
+    "correctly" returned False.
+    """
+    try:
+        addr = ipaddress.ip_address((host or "").strip())
+    except ValueError:
+        return None
+    return getattr(addr, "ipv4_mapped", None) or addr
+
+
+def gate_is_open(state: ApState, client_host: Optional[str], now: float,
+                 max_age: float = HEARTBEAT_MAX_AGE_S) -> bool:
+    """Design D-6's rule — the only passwordless door in the product.
+
+    Both halves must hold:
+
+    * the hotspot must be demonstrably up **now** (a live heartbeat, not a
+      stored flag), and
+    * the request must arrive from **that hotspot's own subnet**.
+
+    The subnet half alone is a collision waiting to happen — 10.42.0.0/24 is a
+    perfectly ordinary LAN range. The heartbeat half alone would let any client
+    on the box's real network in. Together they give D-6's property: when the
+    hotspot goes away the subnet goes away with it, so the branch cannot be
+    left open by a flag that failed to be cleared.
+    """
+    if not state_is_live(state, now, max_age):
+        return False
+    addr = client_ip(client_host)
+    if addr is None:
+        return False
+    try:
+        network = ipaddress.ip_network(state.network or NM_SHARED_SUBNET,
+                                       strict=False)
+    except ValueError:
+        return False
+    return addr in network

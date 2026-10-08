@@ -12,7 +12,12 @@ every five seconds, forever.
 """
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import net_wifi
 from net_wifi import NmResult
@@ -510,6 +515,335 @@ class ScrubTests(unittest.TestCase):
         cleaned = net_wifi.scrub("a=one b=two", "one", "two")
         self.assertNotIn("one", cleaned)
         self.assertNotIn("two", cleaned)
+
+
+class SettingsTests(unittest.TestCase):
+    def test_defaults(self):
+        cfg = net_wifi.ap_settings({})
+        self.assertEqual(cfg["ssid"], net_wifi.DEFAULT_SSID)
+        self.assertEqual(cfg["ifname"], net_wifi.DEFAULT_IFNAME)
+        self.assertEqual(cfg["web_port"], net_wifi.DEFAULT_WEB_PORT)
+        self.assertEqual(cfg["state_dir"], net_wifi.DEFAULT_STATE_DIR)
+
+    def test_environment_overrides(self):
+        cfg = net_wifi.ap_settings({
+            "MRRC_SETUP_AP_SSID": "My-Box",
+            "MRRC_SETUP_AP_IFNAME": "wlan1",
+            "MRRC_SETUP_AP_STATE_DIR": "/tmp/x",
+            "MRRC_WEB_PORT": "9999",
+        })
+        self.assertEqual(cfg["ssid"], "My-Box")
+        self.assertEqual(cfg["ifname"], "wlan1")
+        self.assertEqual(cfg["state_dir"], Path("/tmp/x"))
+        self.assertEqual(cfg["web_port"], 9999)
+
+    def test_the_web_port_can_be_overridden_on_its_own(self):
+        cfg = net_wifi.ap_settings({"MRRC_WEB_PORT": "8888",
+                                    "MRRC_SETUP_AP_WEB_PORT": "9001"})
+        self.assertEqual(cfg["web_port"], 9001)
+
+    def test_an_empty_value_falls_back_to_the_default(self):
+        cfg = net_wifi.ap_settings({"MRRC_SETUP_AP_SSID": "   ",
+                                    "MRRC_SETUP_AP_STATE_DIR": ""})
+        self.assertEqual(cfg["ssid"], net_wifi.DEFAULT_SSID)
+        self.assertEqual(cfg["state_dir"], net_wifi.DEFAULT_STATE_DIR)
+
+    def test_a_non_numeric_port_falls_back(self):
+        self.assertEqual(net_wifi.ap_settings({"MRRC_WEB_PORT": "abc"})["web_port"],
+                         net_wifi.DEFAULT_WEB_PORT)
+
+    def test_it_reads_the_process_environment_by_default(self):
+        """The server and the supervisor both call this with no argument, so the
+        default has to be os.environ and not an empty mapping."""
+        import unittest.mock as mock
+        with mock.patch.dict(os.environ, {"MRRC_SETUP_AP_SSID": "FromEnv"},
+                             clear=False):
+            self.assertEqual(net_wifi.ap_settings()["ssid"], "FromEnv")
+
+
+class StateFileTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_round_trip(self):
+        state = net_wifi.ApState(mode=net_wifi.MODE_HOTSPOT, ssid="MRRC-Setup",
+                                 gateway="10.42.0.1/24", network="10.42.0.0/24",
+                                 url="https://10.42.0.1:8888/setup",
+                                 reason="", since=100.0, heartbeat=200.0,
+                                 deadline=300.0)
+        net_wifi.write_state(state, self.dir)
+        self.assertEqual(net_wifi.read_state(self.dir), state)
+
+    def test_a_missing_file_reads_as_off(self):
+        """No supervisor, no file ⇒ the gate must be closed, not an exception.
+        This is the state of every desktop install."""
+        state = net_wifi.read_state(self.dir / "nowhere")
+        self.assertEqual(state.mode, net_wifi.MODE_OFF)
+        self.assertFalse(net_wifi.state_is_live(state, 1.0))
+
+    def test_garbage_reads_as_off(self):
+        (self.dir / net_wifi.STATE_NAME).write_text("not json at all",
+                                                    encoding="utf-8")
+        self.assertEqual(net_wifi.read_state(self.dir).mode, net_wifi.MODE_OFF)
+
+    def test_a_list_instead_of_an_object_reads_as_off(self):
+        (self.dir / net_wifi.STATE_NAME).write_text("[1,2,3]", encoding="utf-8")
+        self.assertEqual(net_wifi.read_state(self.dir).mode, net_wifi.MODE_OFF)
+
+    def test_unknown_keys_are_ignored_and_missing_keys_defaulted(self):
+        """A newer supervisor must not break an older server (or the reverse)."""
+        (self.dir / net_wifi.STATE_NAME).write_text(
+            json.dumps({"mode": "hotspot", "a_field_from_the_future": 1}),
+            encoding="utf-8")
+        state = net_wifi.read_state(self.dir)
+        self.assertEqual(state.mode, net_wifi.MODE_HOTSPOT)
+        self.assertEqual(state.ssid, "")
+
+    def test_a_wrong_type_is_defaulted_not_raised(self):
+        (self.dir / net_wifi.STATE_NAME).write_text(
+            json.dumps({"mode": "hotspot", "heartbeat": "soon", "deadline": None}),
+            encoding="utf-8")
+        state = net_wifi.read_state(self.dir)
+        self.assertEqual(state.heartbeat, 0.0)
+        self.assertEqual(state.deadline, 0.0)
+
+    def test_the_file_is_world_readable(self):
+        """root writes it, `mrrc` reads it. A 0600 file from root's umask would
+        make the gate silently unreadable — i.e. permanently closed, with
+        nothing anywhere reporting why."""
+        net_wifi.write_state(net_wifi.ApState(mode=net_wifi.MODE_HOTSPOT), self.dir)
+        mode = os.stat(self.dir / net_wifi.STATE_NAME).st_mode & 0o777
+        self.assertEqual(mode, 0o644)
+
+    def test_the_write_is_atomic(self):
+        """A half-written state.json read by a concurrent request would be
+        garbage, and garbage reads as `off` — the gate would flicker shut."""
+        net_wifi.write_state(net_wifi.ApState(mode=net_wifi.MODE_HOTSPOT), self.dir)
+        self.assertFalse(list(self.dir.glob("*.tmp")),
+                         "the temp file must be renamed away, not left behind")
+
+    def test_an_unwritable_directory_does_not_raise(self):
+        net_wifi.write_state(net_wifi.ApState(), Path("/definitely/not/writable"))
+
+    def test_liveness_follows_the_heartbeat(self):
+        state = net_wifi.ApState(mode=net_wifi.MODE_HOTSPOT, heartbeat=100.0)
+        self.assertTrue(net_wifi.state_is_live(state, 120.0))
+        self.assertFalse(net_wifi.state_is_live(state, 100.0 + 46.0))
+
+    def test_a_dead_supervisor_is_not_live_even_though_it_says_hotspot(self):
+        state = net_wifi.ApState(mode=net_wifi.MODE_HOTSPOT, heartbeat=0.0)
+        self.assertFalse(net_wifi.state_is_live(state, 1.0))
+
+    def test_any_other_mode_is_not_live(self):
+        for mode in (net_wifi.MODE_OFF, net_wifi.MODE_STA, "nonsense", ""):
+            with self.subTest(mode=mode):
+                state = net_wifi.ApState(mode=mode, heartbeat=100.0)
+                self.assertFalse(net_wifi.state_is_live(state, 100.0))
+
+
+class WizardFileTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_round_trip(self):
+        claim = net_wifi.WizardClaim(action="connect", ssid="Home",
+                                     state=net_wifi.WIZARD_FAILED,
+                                     error="Secrets were required",
+                                     address="", nonce="abc123", heartbeat=50.0)
+        net_wifi.write_wizard(claim, self.dir)
+        self.assertEqual(net_wifi.read_wizard(self.dir), claim)
+
+    def test_the_claim_has_no_password_field(self):
+        """The PSK must have nowhere to be written, so "never on disk" is a
+        property of the schema rather than a promise every caller keeps."""
+        fields = set(net_wifi.WizardClaim.__dataclass_fields__)
+        self.assertNotIn("password", fields)
+        self.assertNotIn("psk", fields)
+        self.assertNotIn("secret", fields)
+        self.assertEqual(fields, {"action", "ssid", "state", "error", "address",
+                                  "nonce", "heartbeat"})
+
+    def test_a_missing_file_reads_as_no_claim(self):
+        claim = net_wifi.read_wizard(self.dir)
+        self.assertEqual(claim.action, "")
+        self.assertFalse(net_wifi.claim_is_fresh(claim, 1.0))
+
+    def test_garbage_reads_as_no_claim(self):
+        (self.dir / net_wifi.WIZARD_NAME).write_text("{oops", encoding="utf-8")
+        self.assertEqual(net_wifi.read_wizard(self.dir).action, "")
+
+    def test_a_switch_in_flight_is_fresh(self):
+        claim = net_wifi.WizardClaim(action="connect",
+                                     state=net_wifi.WIZARD_SWITCHING,
+                                     heartbeat=100.0)
+        self.assertTrue(net_wifi.claim_is_fresh(claim, 130.0))
+
+    def test_a_switch_that_stopped_heartbeating_goes_stale(self):
+        """The server died mid-switch; the supervisor must take the radio back
+        or the box is left with neither an AP nor an uplink, forever."""
+        claim = net_wifi.WizardClaim(action="connect",
+                                     state=net_wifi.WIZARD_SWITCHING,
+                                     heartbeat=100.0)
+        self.assertFalse(net_wifi.claim_is_fresh(claim, 100.0 + 46.0))
+
+    def test_a_finished_claim_stays_actionable_longer(self):
+        """It needs no heartbeat, and the supervisor must still see the failure
+        in order to reopen the window."""
+        claim = net_wifi.WizardClaim(action="connect",
+                                     state=net_wifi.WIZARD_FAILED,
+                                     heartbeat=100.0)
+        self.assertTrue(net_wifi.claim_is_fresh(claim, 400.0))
+        self.assertFalse(net_wifi.claim_is_fresh(claim, 100.0 + 601.0))
+
+    def test_an_empty_action_is_not_a_claim(self):
+        claim = net_wifi.WizardClaim(action="", state=net_wifi.WIZARD_OK,
+                                     heartbeat=100.0)
+        self.assertFalse(net_wifi.claim_is_fresh(claim, 100.0))
+
+
+class ClientIpTests(unittest.TestCase):
+    def test_a_plain_v4_address(self):
+        import ipaddress
+        self.assertEqual(net_wifi.client_ip("10.42.0.57"),
+                         ipaddress.ip_address("10.42.0.57"))
+
+    def test_an_ipv4_mapped_address_is_unwrapped(self):
+        """uvicorn on a dual-stack socket reports an IPv4 client as
+        `::ffff:10.42.0.57`. Compared against a v4 network that is False, so on
+        a box bound to `::` the gate would never open — and nothing would log
+        why, because every check "correctly" returned False."""
+        import ipaddress
+        self.assertEqual(net_wifi.client_ip("::ffff:10.42.0.57"),
+                         ipaddress.ip_address("10.42.0.57"))
+
+    def test_a_real_v6_address_is_preserved(self):
+        import ipaddress
+        self.assertEqual(net_wifi.client_ip("2001:db8::1"),
+                         ipaddress.ip_address("2001:db8::1"))
+
+    def test_nonsense_is_none(self):
+        for host in ("", None, "   ", "not-an-ip", "10.42.0.57:8888"):
+            with self.subTest(host=host):
+                self.assertIsNone(net_wifi.client_ip(host))
+
+
+class GateTests(unittest.TestCase):
+    """Design D-6: passwordless ⟺ live hotspot AND the request came from it."""
+
+    NOW = 1_000.0
+
+    def live_state(self, network="10.42.0.0/24"):
+        return net_wifi.ApState(mode=net_wifi.MODE_HOTSPOT, ssid="MRRC-Setup",
+                                gateway="10.42.0.1/24", network=network,
+                                heartbeat=self.NOW - 5.0)
+
+    def test_open_from_inside_the_hotspot_subnet(self):
+        self.assertTrue(net_wifi.gate_is_open(self.live_state(), "10.42.0.57",
+                                              self.NOW))
+
+    def test_open_from_the_gateway_itself(self):
+        self.assertTrue(net_wifi.gate_is_open(self.live_state(), "10.42.0.1",
+                                              self.NOW))
+
+    def test_closed_from_another_subnet(self):
+        """The case that matters: the box gets a cable plugged in while a LAN
+        client happens to be addressed 10.42.0.x."""
+        self.assertFalse(net_wifi.gate_is_open(self.live_state(), "192.168.1.50",
+                                               self.NOW))
+
+    def test_closed_from_a_sibling_subnet_of_the_same_class(self):
+        self.assertFalse(net_wifi.gate_is_open(self.live_state(), "10.43.0.57",
+                                               self.NOW))
+
+    def test_closed_when_the_supervisor_stopped_heartbeating(self):
+        state = net_wifi.ApState(mode=net_wifi.MODE_HOTSPOT,
+                                 network="10.42.0.0/24", heartbeat=self.NOW - 99.0)
+        self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
+
+    def test_closed_when_the_mode_is_not_hotspot(self):
+        for mode in (net_wifi.MODE_OFF, net_wifi.MODE_STA, ""):
+            with self.subTest(mode=mode):
+                state = net_wifi.ApState(mode=mode, network="10.42.0.0/24",
+                                         heartbeat=self.NOW)
+                self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57",
+                                                       self.NOW))
+
+    def test_closed_for_an_unknown_client(self):
+        self.assertFalse(net_wifi.gate_is_open(self.live_state(), "", self.NOW))
+        self.assertFalse(net_wifi.gate_is_open(self.live_state(), None, self.NOW))
+
+    def test_closed_for_an_ipv6_client_against_a_v4_hotspot(self):
+        """Must be False, and must not raise: `in` across versions is the kind
+        of thing that turns a gate into a 500."""
+        self.assertFalse(net_wifi.gate_is_open(self.live_state(), "2001:db8::1",
+                                               self.NOW))
+
+    def test_open_for_an_ipv4_mapped_client(self):
+        self.assertTrue(net_wifi.gate_is_open(self.live_state(),
+                                              "::ffff:10.42.0.57", self.NOW))
+
+    def test_the_network_comes_from_the_state_not_from_a_constant(self):
+        """NM hands out 10.42.0.0/24 by default but not by contract; a state
+        that says otherwise must be believed."""
+        state = self.live_state(network="10.99.0.0/24")
+        self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
+        self.assertTrue(net_wifi.gate_is_open(state, "10.99.0.7", self.NOW))
+
+    def test_a_garbage_network_closes_the_gate(self):
+        """Fail closed, not open.
+
+        `ap_network()` normalises on the write side, so a garbage `network` can
+        only mean a corrupt or hand-edited file — and malformed evidence must
+        never be the thing that opens a passwordless door. (An *empty* one is
+        different: that is a supervisor that has not read its gateway back yet,
+        and the next test covers it.)
+        """
+        state = self.live_state(network="not-a-network")
+        self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
+        self.assertFalse(net_wifi.gate_is_open(state, "10.99.0.7", self.NOW))
+
+    def test_an_unparseable_prefix_closes_the_gate(self):
+        state = self.live_state(network="10.42.0.1/99")
+        self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
+
+    def test_an_empty_network_falls_back_to_the_nm_default(self):
+        state = self.live_state(network="")
+        self.assertTrue(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
+
+    def test_a_missing_state_file_closes_the_gate(self):
+        self.assertFalse(net_wifi.gate_is_open(net_wifi.read_state(Path("/nope")),
+                                               "10.42.0.57", self.NOW))
+
+    def test_the_max_age_can_be_tightened(self):
+        state = net_wifi.ApState(mode=net_wifi.MODE_HOTSPOT,
+                                 network="10.42.0.0/24", heartbeat=self.NOW - 10.0)
+        self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW,
+                                               max_age=5.0))
+
+
+class EnsureStateDirTests(unittest.TestCase):
+    def test_creates_the_directory_group_writable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "setup-ap"
+            net_wifi.ensure_state_dir(target)
+            self.assertTrue(target.is_dir())
+            mode = os.stat(target).st_mode & 0o777
+            self.assertEqual(mode, 0o775,
+                             "root writes state.json, `mrrc` writes wizard.json")
+
+    def test_an_existing_directory_is_not_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            net_wifi.ensure_state_dir(Path(tmp))
+            net_wifi.ensure_state_dir(Path(tmp))
+
+    def test_a_directory_it_cannot_create_does_not_raise(self):
+        """A desktop install has no /run/mrrc and no `mrrc` group; the gate just
+        stays closed there rather than taking the server down."""
+        net_wifi.ensure_state_dir(Path("/definitely/not/writable"))
 
 
 class SubprocessRunnerTests(unittest.TestCase):

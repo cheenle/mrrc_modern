@@ -214,46 +214,42 @@ adb shell reboot update</code></pre>
 <p>⚠️ <strong>必须走 HTTPS，不要关。</strong> 手机浏览器要调用麦克风发射（PTT），而在 HTTP 下浏览器不给麦克风权限—— <strong>这是浏览器安全策略，不是我们的设置问题。</strong></p>
 <p>登录后你应该看到主界面：频率、模式、S 表、瀑布图。<strong>这时候还没有电台——下一步接上。</strong></p>
 <h2 id="9-接网络-有线-wi-fi">9. 接网络（有线 / Wi-Fi）</h2>
-<h3 id="三种初始化方式-按你手边有什么选">三种初始化方式，按你手边有什么选</h3>
+<blockquote><strong>目标形态</strong>：刷完盘开机，盒子自己发一个<strong>开放热点</strong>，手机连上就能完成初始化。 <strong>这一条还没实现</strong>（设计已批准，见 §9.6）。在那之前，按你手边有什么，用下面四条路之一。</blockquote>
+<h3 id="9-1-四条路-按你手边有什么选">9.1 四条路，按你手边有什么选</h3>
 <div class="table-scroll"><table>
-<thead><tr><th>你手边有</th><th>用哪种</th><th>现在能用吗</th></tr></thead><tbody>
-<tr><td><strong>一台电脑 + 读卡器</strong></td><td><strong>① 预置</strong>：刷盘前把配置写进启动分区，首启自动采纳</td><td>✅ <strong>能用</strong>（见下）</td></tr>
-<tr><td><strong>HDMI + USB 键盘</strong></td><td><strong>② <code>nmtui</code></strong>：盒子上全屏文字界面选 Wi-Fi</td><td>✅ <strong>能用</strong>（见下）</td></tr>
-<tr><td><strong>只有一台手机</strong></td><td>③ 热点引导：盒子自己发热点，手机连上配</td><td>⏳ <strong>尚未实现</strong>（设计已批准，见文末注）</td></tr>
-<tr><td><strong>一根网线</strong></td><td>④ 直接插网线（最省事）</td><td>✅ 能用</td></tr>
+<thead><tr><th>#</th><th>你手边有</th><th>方式</th><th>现在能用吗</th></tr></thead><tbody>
+<tr><td>1</td><td><strong>一根网线</strong></td><td>直接插网线（最省事）</td><td>✅ 能用 → §9.2</td></tr>
+<tr><td>2</td><td><strong>电脑 + 读卡器</strong></td><td>预置：刷盘前把配置写进启动分区</td><td>✅ 能用 → §9.3</td></tr>
+<tr><td>3</td><td><strong>HDMI + USB 键盘</strong></td><td><code>nmtui</code>：盒子上的全屏文字界面</td><td>✅ 能用 → §9.4</td></tr>
+<tr><td>4</td><td><strong>只有一台手机</strong></td><td>热点引导：盒子自己发热点</td><td>⏳ <strong>尚未实现</strong> → §9.6</td></tr>
 </tbody></table></div>
-<h3 id="①-预置-刷盘时就把配置放进去-零键盘-零网线">① 预置：刷盘时就把配置放进去（<strong>零键盘、零网线</strong>）</h3>
+<p>⚠️ <strong>先说一个限制</strong>：第 2 条（预置）<strong>只能写口令与电台设置，写不了 Wi-Fi 密码</strong>——Wi-Fi 归 NetworkManager 管，不走 env 文件。所以要连 Wi-Fi，眼下只有第 3 条（有键盘）或第 1 条（有网线）。 <strong>这正是第 4 条存在的理由。</strong></p>
+<h3 id="9-2-第-1-条-网线-推荐">9.2 第 1 条：网线（推荐）</h3>
+<p>插上就通，确认一下：</p>
+<pre><code class="lang-bash">ip a                    # 看有没有拿到地址
+nmcli device status     # eth0 应显示 connected</code></pre>
+<h3 id="9-3-第-2-条-预置-刷盘时就写进去-零键盘零网线">9.3 第 2 条：预置（刷盘时就写进去，零键盘零网线）</h3>
 <p>镜像的 <strong>FAT 启动分区</strong>会被挂到 <code>/boot</code>。往那儿放一个 <code>mrrc.env</code>，<strong>首启会自动采纳</strong>并改名成 <code>mrrc.env.applied</code>：</p>
-<pre><code class="lang-bash"># 烧完盘、还没插进盒子之前：
-#   macOS 上那个 FAT 分区叫 BOOT，直接拖文件进去即可
+<pre><code class="lang-bash"># 烧完盘、还没插进盒子之前（macOS 上那个 FAT 分区叫 BOOT，直接拖文件进去也行）
 cat &gt; /Volumes/BOOT/mrrc.env &lt;&lt;'EOF'
 MRRC_WEB_PASSWORD=你自己定一个
 MRRC_RADIO_MODEL=ft710
 MRRC_PTT_MAX_TX_SECONDS=120
 EOF</code></pre>
-<p>支持任意 <code>MRRC_*</code> 键（就是你后面能在 <code>/opt/mrrc_modern/env/mrrc.env</code> 里改的那些）✅</p>
-<p>⚠️ <strong>注意</strong>：<strong>Wi-Fi 密码不在预置范围内</strong>——Wi-Fi 归 NetworkManager 管，不走 env。所以预置能省掉 "口令 + 电台型号"这一步，但<strong>连 Wi-Fi 还是得用 ② 或 ④</strong>。</p>
-<h3 id="②-hdmi-nmtui-没有任何网络时最省事的入口">② HDMI + <code>nmtui</code>：没有任何网络时最省事的入口</h3>
-<p>见下面「无线」一节。</p>
-<blockquote><strong>注（③ 热点引导）</strong>：让盒子在完全没有网络时<strong>自己发一个开放热点</strong>，手机连上后完成初始化， 这条已在设计里定案（<code>docs/superpowers/specs/2026-10-08-w103d-setup-ap-design.md</code>）， <strong>但还没实现</strong>。在那之前，没有键盘就用 ① 预置，或插网线。</blockquote>
-<h3 id="④-有线-推荐-插上就通">④ 有线（推荐——插上就通）</h3>
-<pre><code class="lang-bash">ip a                    # 看有没有拿到地址
-nmcli device status     # eth0 应显示 connected</code></pre>
-<h3 id="无线-mt7663s">无线（MT7663S）</h3>
-<p><strong>前提：你得先能进盒子。</strong> 有网线就走网线；<strong>连网线都没有时，接 HDMI + 一个 USB 键盘</strong>， 用下面的 <code>nmtui</code>。</p>
-<h4 id="①-没有任何网络时-hdmi-控制台上用-nmtui-最省事">① 没有任何网络时：HDMI 控制台上用 <code>nmtui</code>（最省事）</h4>
-<p>登录 <code>root</code> / <code>1234</code>，然后：</p>
+<p>支持任意 <code>MRRC_*</code> 键（就是 §13 那张表里的那些）✅</p>
+<h3 id="9-4-第-3-条-hdmi-nmtui-没有任何网络时最省事">9.4 第 3 条：HDMI + <code>nmtui</code>（没有任何网络时最省事）</h3>
+<p>盒子接 HDMI + 一个 USB 键盘，登录 <code>root</code> / <code>1234</code>，然后：</p>
 <pre><code class="lang-bash">nmtui</code></pre>
-<p>方向键选「<strong>启用连接 / Activate a connection</strong>」→ 选你的 SSID → 输密码。 这是<strong>全屏文字界面</strong>，既不需要网络也不需要图形环境，所以它正是"零网络"时的入口 ✅</p>
-<h4 id="②-已经在-ssh-里-用-nmcli">② 已经在 SSH 里：用 <code>nmcli</code></h4>
+<p>方向键选「<strong>启用连接 / Activate a connection</strong>」→ 选你的 SSID → 输密码。 这是<strong>全屏文字界面</strong>，既不需要网络也不需要图形环境 ✅</p>
+<p><strong>已经在 SSH 里</strong>（有网线）就用 <code>nmcli</code>：</p>
 <pre><code class="lang-bash">nmcli device status                              # 先看 wlan0 在不在
 nmcli device wifi list                           # 扫（要等几秒）
 nmcli device wifi connect "你的SSID" password "你的密码"
 nmcli connection show --active                   # 确认连上了
 ip a show wlan0                                  # 拿到 IP 没</code></pre>
 <p>盒子换了网络导致 IP 变了，就去路由器里重新找一下。</p>
-<h4 id="③-万一无线起不来-按顺序查">③ 万一无线起不来：按顺序查</h4>
-<p>每一条的失败原因都不一样，别跳步：</p>
+<h3 id="9-5-无线起不来时-按顺序查">9.5 无线起不来时，按顺序查</h3>
+<p>每一条排除的东西都不一样，别跳步：</p>
 <div class="table-scroll"><table>
 <thead><tr><th>检查</th><th>命令</th><th>说明</th></tr></thead><tbody>
 <tr><td>硬件在不在</td><td><code>rfkill list</code></td><td>显示 <code>Soft blocked: yes</code> → <code>rfkill unblock wifi</code>；<strong>看不到 wlan0 才往下查</strong></td></tr>
@@ -263,8 +259,11 @@ ip a show wlan0                                  # 拿到 IP 没</code></pre>
 <tr><td>扫描有结果没</td><td><code>nmcli device wifi list</code></td><td>空列表 → 多半是天线或信道问题</td></tr>
 <tr><td>监管域</td><td><code>iw reg get</code></td><td>显示 <code>country 00</code> 时部分信道不可用；<code>iw reg set CN</code> 后重试</td></tr>
 </tbody></table></div>
-<p><strong>背景（影响你排查什么）</strong>：W103D 的无线是 <strong>MT7663S</strong>，WiFi 与<strong>蓝牙同一颗芯片</strong>，走 <strong>SDIO</strong> 而不是 USB。这块板的驱动是 ophub 专门适配的（上游 <strong>PR #3658 / #3659</strong>），所以 <strong>内核绝不能换</strong>——换通用内核 = <strong>静默丢 WiFi</strong>（见 §19 红线③）。</p>
+<p><strong>背景（决定你该查什么）</strong>：W103D 的无线是 <strong>MT7663S</strong>，WiFi 与<strong>蓝牙同一颗芯片</strong>，走 <strong>SDIO</strong> 而不是 USB。这块板的驱动是 ophub 专门适配的（上游 <strong>PR #3658 / #3659</strong>），所以 <strong>内核绝不能换</strong>——换通用内核 = <strong>静默丢 WiFi</strong>（见 §19 红线③）。</p>
 <p><strong>能用，但实时音频优先有线</strong>：无线抖动大，长时间听音频容易卡。只是配置用，无线够。</p>
+<h3 id="9-6-第-4-条-热点引导-尚未实现">9.6 第 4 条：热点引导（<strong>尚未实现</strong>）</h3>
+<p>目标形态：盒子在没有可用上行网络时，自己发一个<strong>开放热点</strong>；手机连上后打开页面 <strong>无需口令</strong>即可设口令、选 Wi-Fi；成功后盒子切到 STA 并<strong>关掉热点</strong>。</p>
+<p>设计已定案并批准（<code>docs/superpowers/specs/2026-10-08-w103d-setup-ap-design.md</code>）， <strong>但代码还没写</strong>，所以现在刷完盘<strong>不会</strong>有热点。在那之前，请用 §9.2–§9.4 中你能用的那条。</p>
 <h2 id="10-接电台">10. 接电台</h2>
 <p><strong>FT-710 的线插口别搞错</strong>：用<strong>上方 <code>Enhanced</code> 口</strong>，它同时承载 CAT 串口和 FT4222 scope。 插 Standard 口的话 CAT 可能通但<strong>没有真频谱</strong>。</p>
 <p>接好后确认三样东西都出现了：</p>

@@ -264,6 +264,16 @@ PAGE = """<!DOCTYPE html>
 </header>
 
 <main class="w103d-wrap">
+<figure style="margin: 0 0 2.5rem">
+    <a href="{p}images/w103d-spec-sheet.png" target="_blank" rel="noopener">
+        <img src="{p}images/w103d-spec-sheet.png"
+             alt="ZTE W103D 参数、性能与对比树莓派"
+             style="width: 100%; height: auto; display: block; border: 1px solid var(--border, #2a2a2a); border-radius: 12px">
+    </a>
+    <figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">
+        参数、性能与对比树莓派 · 点图看原尺寸（1240 × 1754）
+    </figcaption>
+</figure>
 {body}
 </main>
 

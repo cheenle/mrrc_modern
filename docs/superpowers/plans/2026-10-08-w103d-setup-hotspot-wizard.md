@@ -633,22 +633,50 @@ def wifi_interface(runner: Optional[Runner] = None) -> str:
         if entry["type"] == "wifi" and entry["device"]:
             return entry["device"]
     return ""
+
+
+def _connection_is_ap(name: str, runner: Optional[Runner] = None) -> bool:
+    """Whether one connection's ``802-11-wireless.mode`` is ``ap``."""
+    if not name:
+        return False
+    result = nmcli(["-t", "-g", "802-11-wireless.mode", "connection", "show", name],
+                   runner)
+    return result.ok and result.stdout.strip().lower() == "ap"
+
+
+def active_ap_connections(runner: Optional[Runner] = None) -> list:
+    """Names of the active connections that are access points.
+
+    ``connection show --active`` reports TYPE ``802-11-wireless`` for a station
+    and for an AP alike, so the mode has to be asked for separately. Getting
+    this wrong is what makes the box count its own hotspot as an uplink — which
+    is why this lives with the uplink decision rather than with the AP lifecycle.
+    """
+    result = nmcli(["-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
+                   runner)
+    if not result.ok:
+        return []
+    names = [row[0] for row in parse_rows(result.stdout)
+             if len(row) >= 2 and row[1].strip() == "802-11-wireless" and row[0]]
+    return [name for name in names if _connection_is_ap(name, runner)]
 ```
 
-> **注意**：`has_uplink()` 调用了任务 2 才写的 `active_ap_connections()`。任务 1 的测试之所以能过，是因为 Python 在**调用时**才解析名字，而 `FakeNmcli` 对任何 argv 都有兜底返回 —— 但 `active_ap_connections` 那时**还不存在**，会 `NameError`。所以任务 1 的这一步要**先写一个占位**：在 `wifi_interface()` 之后追加
-> ```python
-> def active_ap_connections(runner: Optional[Runner] = None) -> list:
->     """Names of the active connections that are access points (task 2)."""
->     return []
-> ```
-> 任务 2 会用**真实现替换**它。占位的意义是让任务 1 的每一步都能独立跑绿（TDD 的"最少实现"），而不是留下一个跨任务的红。
+> **执行时的更正（2026-10-08）**：本计划原先把 `_connection_is_ap` / `active_ap_connections`
+> 排在**任务 2**（"AP 生命周期"），并让任务 1 先放一个返回 `[]` 的占位。
+> **这个边界是错的**，实跑证实：占位会让任务 1 里**最重要**的那条测试
+> （`test_our_own_hotspot_is_not_an_uplink`）直接变红——因为 `has_uplink()` 减掉的
+> `ap_names` 永远是空集，自己的热点就被算成了上行。
+> "什么是上行"这个问题**本身就包含**"哪个连接是 AP"，所以这两个函数属于任务 1，
+> 任务 2 只加**剩下的** AP 生命周期与 station 侧函数。
+> 占位式的"最少实现"只有在它**不改变被测行为**时才成立；这里它恰好改变的就是被测行为。
 
 - [ ] **步骤 4：运行测试验证通过**
 
 运行：`$PY -m unittest tests.test_net_wifi -v`
-预期：`OK`（约 33 项）
+预期：`OK`（29 项）
 
-若 `test_our_own_hotspot_is_not_an_uplink` 红：说明占位的 `active_ap_connections` 没有被替换成真实现，或 `has_uplink()` 忘了减掉 `ap_names`。
+若 `test_our_own_hotspot_is_not_an_uplink` 红：说明 `has_uplink()` 忘了减掉 `ap_names`，
+或者 `active_ap_connections()` 没按 `802-11-wireless.mode` 区分 AP 与 STA。
 
 - [ ] **步骤 5：确认没有弄坏别的**
 
@@ -669,7 +697,7 @@ git commit -m "feat: net_wifi 的 nmcli 传输与上行判定——自己的热�
 ## 任务 2：`net_wifi.py` — 热点生命周期、扫描、连网、地址
 
 **文件：**
-- 修改：`net_wifi.py`（把任务 1 的 `active_ap_connections` 占位换成真实现，并在其后追加其余函数）
+- 修改：`net_wifi.py`（在任务 1 的 `active_ap_connections()` 之后追加其余函数）
 - 测试：`tests/test_net_wifi.py`（在 `SubprocessRunnerTests` **之前**追加）
 
 - [ ] **步骤 1：编写失败的测试**
@@ -965,11 +993,17 @@ class ScrubTests(unittest.TestCase):
 - [ ] **步骤 2：运行测试验证失败**
 
 运行：`$PY -m unittest tests.test_net_wifi -v 2>&1 | tail -10`
-预期：一片 FAIL/ERROR — `AttributeError: module 'net_wifi' has no attribute 'hotspot_active'`（以及 `start_hotspot` / `stop_hotspot` / `scan_wifi` / `connect_wifi` / `ipv4_address` / `ap_network` / `setup_url` / `scrub`），并且 `ApModeTests.test_an_ap_connection_is_recognised` 因为占位返回 `[]` 而红。
+预期：一片 FAIL/ERROR — `AttributeError: module 'net_wifi' has no attribute 'hotspot_active'`（以及 `start_hotspot` / `stop_hotspot` / `scan_wifi` / `connect_wifi` / `ipv4_address` / `ap_network` / `setup_url` / `scrub`）。
+
+> `ApModeTests`（认 AP / 不认 STA / 空名字不多问一次）在**任务 1 就已经绿了**，因为
+> `active_ap_connections` 已经在那里实现。把它放在任务 2 的测试文件里只是因为它是
+> "AP 生命周期"这一组语义的一部分；**不要**因为它已经绿了就删掉它——它是任务 1 那条
+> 上行判定的直接下游，两处都需要它钉着。
 
 - [ ] **步骤 3：编写实现**
 
-把任务 1 留下的 `active_ap_connections` **占位整体替换**为下面这段（位置仍在 `wifi_interface()` 之后）：
+在 `net_wifi.py` 里紧跟任务 1 的 `active_ap_connections()` 之后追加（`_connection_is_ap`
+与 `active_ap_connections` **已经在任务 1 写好了**，这里不要重写）：
 
 ```python
 # ── AP lifecycle ────────────────────────────────────────────────────
@@ -988,31 +1022,6 @@ def _profiles_named(name: str, runner: Optional[Runner] = None) -> list:
         return []
     return [(row[0], row[1]) for row in parse_rows(result.stdout)
             if len(row) >= 2 and row[1] == name]
-
-
-def _connection_is_ap(name: str, runner: Optional[Runner] = None) -> bool:
-    """Whether one connection's ``802-11-wireless.mode`` is ``ap``."""
-    if not name:
-        return False
-    result = nmcli(["-t", "-g", "802-11-wireless.mode", "connection", "show", name],
-                   runner)
-    return result.ok and result.stdout.strip().lower() == "ap"
-
-
-def active_ap_connections(runner: Optional[Runner] = None) -> list:
-    """Names of the active connections that are access points.
-
-    ``connection show --active`` reports TYPE ``802-11-wireless`` for a station
-    and for an AP alike, so the mode has to be asked for separately. Getting
-    this wrong is what makes the box count its own hotspot as an uplink.
-    """
-    result = nmcli(["-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
-                   runner)
-    if not result.ok:
-        return []
-    names = [row[0] for row in parse_rows(result.stdout)
-             if len(row) >= 2 and row[1].strip() == "802-11-wireless" and row[0]]
-    return [name for name in names if _connection_is_ap(name, runner)]
 
 
 def hotspot_active(runner: Optional[Runner] = None) -> bool:
@@ -1462,10 +1471,30 @@ class GateTests(unittest.TestCase):
         self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
         self.assertTrue(net_wifi.gate_is_open(state, "10.99.0.7", self.NOW))
 
-    def test_a_garbage_network_falls_back_to_the_nm_default(self):
+    def test_a_garbage_network_closes_the_gate(self):
+        """Fail closed, not open.
+
+        `ap_network()` normalises on the write side, so a garbage `network` can
+        only mean a corrupt or hand-edited file — and malformed evidence must
+        never be the thing that opens a passwordless door. (An *empty* one is
+        different: that is a supervisor that has not read its gateway back yet,
+        and the next test covers it.)
+        """
         state = self.live_state(network="not-a-network")
-        self.assertTrue(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
+        self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
         self.assertFalse(net_wifi.gate_is_open(state, "10.99.0.7", self.NOW))
+
+    def test_an_unparseable_prefix_closes_the_gate(self):
+        state = self.live_state(network="10.42.0.1/99")
+        self.assertFalse(net_wifi.gate_is_open(state, "10.42.0.57", self.NOW))
+
+> **执行时的更正（2026-10-08）**：本计划原先这里写的是
+> `test_a_garbage_network_falls_back_to_the_nm_default`（期望**开门**）。实跑后判定
+> **测试错了、实现对了**：`ap_network()` 已经在**写入侧**做过归一化，所以 `state.json`
+> 里出现垃圾 `network` 只可能是文件损坏或被手改——而**损坏的证据不该成为打开免口令门的理由**。
+> 因此改成 fail-closed，并补一条 `/99` 这种"能解析成字符串但不是合法前缀"的负例。
+> 注意与**空** `network` 区分开：空是"守护进程还没回读到网关"的正常状态，仍回落到 NM 默认网段
+> （下一条测试守着）。
 
     def test_an_empty_network_falls_back_to_the_nm_default(self):
         state = self.live_state(network="")
@@ -6026,8 +6055,9 @@ git commit -m "docs: W103D 热点引导的真机验收实测——<一句话结�
   任务 4 的 `settings()` **在其上加** `timeout_s/poll_s/settle_s`（不改既有键），
   任务 5 的 `_setup_ap_state_dir()` 与任务 7 的 `_perform_wifi_switch` 都只读它 ✓
 - `ensure_state_dir` / `_write_json` / `_read_json` / `_pick` / `_resolve_dir`：任务 3 ✓
-- `active_ap_connections` 在任务 1 是**占位**（返回 `[]`）、任务 2 **替换为真实现**——
-  计划里明写了这一步，不留跨任务的红 ✓
+- `_connection_is_ap` / `active_ap_connections` 定义在**任务 1**（"什么是上行"这个问题本身
+  就包含"哪个连接是 AP"），任务 2 的 `hotspot_active` / `start_hotspot` / `stop_hotspot`
+  在它们之上；任务 1 的排障说明里记了这次边界更正 ✓
 - 服务端：`SETUP_GATE_PATHS` / `SETUP_WRITABLE_KEYS` / `MIN_SETUP_PASSWORD_LEN` /
   `MIN_WIFI_PSK_LEN`（任务 5–6）、`WIFI_SWITCH_LEAD_S` / `WIFI_SWITCH_HEARTBEAT_S`（任务 7）、
   `_setup_ap_state_dir` / `_setup_gate_open` / `_setup_access`（任务 5）、

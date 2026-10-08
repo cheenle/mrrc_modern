@@ -40,7 +40,7 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 # In the image this file is /opt/mrrc_modern/linux/setup_ap.py and net_wifi.py
 # sits beside its parent — the same layout as the repository, and the same trick
@@ -77,7 +77,7 @@ def _int_or(value, default: int) -> int:
     return parsed if parsed > 0 else default
 
 
-def settings(env: Optional[dict] = None) -> dict:
+def settings(env: Optional[Mapping[str, Any]] = None) -> dict:
     """Everything this service reads, resolved in one place."""
     source = os.environ if env is None else env
     cfg = net_wifi.ap_settings(source)

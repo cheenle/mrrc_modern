@@ -48,7 +48,7 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 # ── constants ───────────────────────────────────────────────────────
 DEFAULT_IFNAME = "wlan0"
@@ -439,8 +439,12 @@ def scrub(text: Optional[str], *secrets: str) -> str:
 
 
 # ── configuration both owners must agree on ─────────────────────────
-def ap_settings(env: Optional[dict] = None) -> dict:
+def ap_settings(env: Optional[Mapping[str, Any]] = None) -> dict:
     """The WiFi-domain settings, read in exactly one place.
+
+    ``Any`` rather than ``str`` for the values because both this function and the
+    supervisor's only ever *coerce* what they read (``or ""``, ``_int_or``) — an
+    absent or None entry is a normal input, not a type error.
 
     The supervisor and the server both need the SSID and the state directory,
     and a drift between them is silent: the server would read a state file

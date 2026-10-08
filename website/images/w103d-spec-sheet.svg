@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1754" width="1240" height="1754">
+  <!-- W103D 单页规格图 · 数据来源：镜像内 /etc/ophub-release、ophub model_database.conf、dev_tools/bench_mrrc.py -->
+  <style>
+    text { font-family: "PingFang SC","Hiragino Sans GB","Heiti SC",Inter,-apple-system,sans-serif; }
+    .title { fill:#f5f5f5; font-size:44px; font-weight:700; }
+    .sub   { fill:#8a8a8a; font-size:19px; }
+    .h2    { fill:#f0a020; font-size:23px; font-weight:600; letter-spacing:1px; }
+    .k     { fill:#9a9a9a; font-size:20px; }
+    .v     { fill:#ededed; font-size:20px; font-weight:600; }
+    .t     { fill:#c8c8c8; font-size:19px; }
+    .tm    { fill:#8a8a8a; font-size:17px; }
+    .th    { fill:#f0a020; font-size:19px; font-weight:600; }
+    .good  { fill:#5fd08a; font-size:19px; font-weight:600; }
+    .warn  { fill:#f0a020; font-size:19px; font-weight:600; }
+    .bad   { fill:#e8734a; font-size:19px; font-weight:600; }
+    .note  { fill:#8a8a8a; font-size:16px; }
+    .card  { fill:#161616; stroke:#2b2b2b; stroke-width:1.5; rx:14; }
+    .rule  { stroke:#2b2b2b; stroke-width:1; }
+    .hi    { fill:#20160a; stroke:#f0a020; stroke-width:1.5; rx:12; }
+  </style>
+
+  <rect width="1240" height="1754" fill="#0d0d0d"/>
+
+  <!-- ── 标题 ── -->
+  <text class="title" x="70" y="96">ZTE W103D 电台盒子</text>
+  <text class="sub"   x="70" y="132">参数 · 性能 · 对比树莓派　　运行 MRRC Modern 服务端</text>
+  <line class="rule" x1="70" y1="164" x2="1170" y2="164"/>
+
+  <!-- ── 参数 ── -->
+  <text class="h2" x="70" y="216">参数</text>
+  <text class="note" x="180" y="216">来源：镜像内 /etc/ophub-release 与 ophub 板级数据库（读数，非估算）</text>
+  <rect class="card" x="70" y="238" width="1100" height="428"/>
+
+  <text class="k" x="100" y="284">型号</text>
+  <text class="v" x="360" y="284">ZTE-W103D（MODEL_ID 307）</text>
+  <text class="k" x="100" y="330">SoC</text>
+  <text class="v" x="360" y="330">Amlogic S905L3A · G12A · 4×Cortex-A53 @~1.8 GHz</text>
+  <text class="k" x="100" y="376">设备树</text>
+  <text class="v" x="360" y="376">meson-g12a-w103d.dtb</text>
+  <text class="warn" x="700" y="376">专属，不可用通用 s905l3a</text>
+  <text class="k" x="100" y="422">内存 / 存储</text>
+  <text class="v" x="360" y="422">2 GB / 32 GB eMMC</text>
+  <text class="k" x="100" y="468">网口</text>
+  <text class="warn" x="360" y="468">100 Mb</text>
+  <text class="tm"  x="520" y="468">一路客户端约 60 KB/s → 百兆约可带 200 路，够用</text>
+  <text class="k" x="100" y="514">无线</text>
+  <text class="v" x="360" y="514">MT7663S（WiFi + 蓝牙同一颗芯片，走 SDIO）</text>
+  <text class="k" x="100" y="560">内核</text>
+  <text class="v" x="360" y="560">6.18.54-ophub</text>
+  <text class="bad" x="620" y="560">不可更换：换通用内核 = 静默丢 WiFi</text>
+  <text class="k" x="100" y="606">待机功耗</text>
+  <text class="v" x="360" y="606">&lt; 5 W</text>
+  <text class="tm"  x="520" y="606">（来自他人实测，未自行验证）</text>
+  <text class="k" x="100" y="646">zram</text>
+  <text class="v" x="360" y="646">已配置（armbian-zram-config）</text>
+
+  <!-- ── 性能 ── -->
+  <text class="h2" x="70" y="724">性能：实测与推算分开看</text>
+  <rect class="card" x="70" y="746" width="1100" height="344"/>
+
+  <text class="tm" x="100" y="792">唯一实测（不是在 W103D 上测的）：</text>
+  <text class="t"  x="100" y="826">dev_tools/bench_mrrc.py 在 Apple M2 上 → 服务端热路径占</text>
+  <text class="v"  x="760" y="826">1.53%</text>
+  <text class="tm" x="880" y="826">单核</text>
+  <text class="tm" x="100" y="858">（rx 0.96 / spectrum 0.37 / tx 0.19 / state 0.01）</text>
+
+  <line class="rule" x1="100" y1="890" x2="1140" y2="890"/>
+
+  <text class="th" x="100" y="928">机器</text>
+  <text class="th" x="480" y="928">热路径占单核</text>
+  <text class="th" x="760" y="928">性质</text>
+  <line class="rule" x1="100" y1="946" x2="1140" y2="946"/>
+  <text class="t" x="100" y="980">Apple M2</text>
+  <text class="v" x="480" y="980">1.53%</text>
+  <text class="good" x="760" y="980">实测</text>
+  <text class="t" x="100" y="1018">ZTE W103D</text>
+  <text class="v" x="480" y="1018">≈ 30%</text>
+  <text class="warn" x="760" y="1018">推算</text>
+  <text class="t" x="100" y="1056">树莓派 4</text>
+  <text class="v" x="480" y="1056">≈ 15%</text>
+  <text class="warn" x="760" y="1056">推算</text>
+  <text class="tm"  x="100" y="1076">推算要打折看：W103D 是窄顺序核，而该模型对窄顺序核系统性偏乐观（对照实测曾把 1037U 高估约 40%）。</text>
+
+  <!-- ── 对比树莓派 ── -->
+  <text class="h2" x="70" y="1120">对比树莓派</text>
+  <rect class="card" x="70" y="1142" width="1100" height="330"/>
+  <text class="th" x="100" y="1186">　</text>
+  <text class="th" x="330" y="1186">W103D</text>
+  <text class="th" x="640" y="1186">树莓派 4</text>
+  <text class="th" x="920" y="1186">树莓派 5</text>
+  <line class="rule" x1="100" y1="1204" x2="1140" y2="1204"/>
+  <text class="k" x="100" y="1244">核心</text>
+  <text class="t" x="330" y="1244">4×A53（顺序核）</text>
+  <text class="t" x="640" y="1244">4×A72（乱序）</text>
+  <text class="t" x="920" y="1244">4×A76（乱序）</text>
+  <text class="k" x="100" y="1288">内存 / 存储</text>
+  <text class="t" x="330" y="1288">2 GB / 32 GB eMMC</text>
+  <text class="t" x="640" y="1288">1–8 GB / microSD</text>
+  <text class="t" x="920" y="1288">4–8 GB / microSD·NVMe</text>
+  <text class="k" x="100" y="1332">网口</text>
+  <text class="warn" x="330" y="1332">100 Mb</text>
+  <text class="good" x="640" y="1332">千兆</text>
+  <text class="good" x="920" y="1332">千兆</text>
+  <text class="k" x="100" y="1376">软件成熟度</text>
+  <text class="bad" x="330" y="1376">专属内核，不能升</text>
+  <text class="good" x="640" y="1376">官方镜像，生态厚</text>
+  <text class="good" x="920" y="1376">同左</text>
+  <text class="k" x="100" y="1420">功耗</text>
+  <text class="good" x="330" y="1420">&lt; 5 W</text>
+  <text class="t" x="640" y="1420">~3–7 W</text>
+  <text class="t" x="920" y="1420">~5–12 W</text>
+  <text class="tm" x="100" y="1456">未列 PassMark：树莓派 4 与 W103D 无可靠样本；Pi 5 那个只有 4 个样本，不足以排序。</text>
+
+  <!-- ── 结论 ── -->
+  <rect class="hi" x="70" y="1520" width="1100" height="150"/>
+  <text class="h2" x="100" y="1566">结论</text>
+  <text class="t" x="100" y="1604">服务端只要一个核的 15–45%，三者算力都绰绰有余。所以算力不是选它们的理由——</text>
+  <text class="t" x="100" y="1638">网口、存储形态、软件成熟度，以及你手上已经有什么，才是。</text>
+
+  <text class="note" x="70" y="1716">数据来源：dev_tools/bench_mrrc.py（实测）· 镜像内 /etc/ophub-release 与 ophub model_database.conf（读数）</text>
+  <text class="note" x="70" y="1742">把推算变实测：scp dev_tools/host_score.py &lt;机器&gt;:/tmp/ &amp;&amp; ssh &lt;机器&gt; python3 /tmp/host_score.py</text>
+</svg>

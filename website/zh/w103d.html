@@ -116,6 +116,24 @@
 <tr><td>无线</td><td>MT7663S（能用，但<strong>实时音频优先走有线</strong>）</td></tr>
 </tbody></table></div>
 <p>⚠️ <strong>认准芯片</strong>。国科 GK6323、RK3566 的同名/同形盒子<strong>不适用</strong>——那份镜像的内核补丁与 WiFi 固件 是专门烘给 S905L3A-w103d 的。</p>
+<h4 id="芯片叫法对照-别被卖家说晕">芯片叫法对照（<strong>别被卖家说晕</strong>）</h4>
+<div class="table-scroll"><table>
+<thead><tr><th>你在哪看到</th><th>名字</th></tr></thead><tbody>
+<tr><td><strong>卖家 / 线刷包 / 论坛</strong></td><td>晶晨 <strong>S905X2</strong></td></tr>
+<tr><td><strong>ophub 板级库 / 本文档</strong></td><td><strong><code>s905l3a</code></strong></td></tr>
+<tr><td><strong>设备树 / 平台</strong></td><td><code>meson-g12a</code>（G12A 家族）</td></tr>
+</tbody></table></div>
+<p><strong>三个说的是同一颗芯片的家族</strong>：<code>S905L3A</code> 属于 <strong>G12A</strong>，市面俗称 <strong>S905X2</strong>，ophub 钉的是具体变体名。 所以卖家说"S905X2"、而本文档说"S905L3A"，<strong>不矛盾</strong> ✅</p>
+<h4 id="同族的几个兄弟型号-固件通刷">同族的几个兄弟型号（<strong>固件通刷</strong>）</h4>
+<pre><code>中兴云电脑  W100D / W102D / W103D / W105D      ← 论坛实测：这几款固件通刷</code></pre>
+<div class="table-scroll"><table>
+<thead><tr><th></th><th>W105D</th><th>W103D（本指南）</th></tr></thead><tbody>
+<tr><td>芯片</td><td>晶晨 S905X2</td><td>晶晨 S905X2（=<code>s905l3a</code>）</td></tr>
+<tr><td>内存 / 存储</td><td>2 G + <strong>8 G</strong></td><td>2 G + <strong>32 G</strong></td></tr>
+<tr><td>系统</td><td>安卓 9</td><td>安卓 9</td></tr>
+</tbody></table></div>
+<p><strong>"通刷"说明硬件几乎同源</strong> ✅ 但<strong>存储差 4 倍</strong>（8 G vs 32 G）——本镜像装完约占 3 GB、载荷仅 145 MiB， 8 G 型号<strong>够用</strong> ✅</p>
+<p>⚠️ <strong>但有一处本指南无法替你确认</strong>：<strong>W105D 用的是不是同一颗 MT7663S 无线网卡</strong>（论坛资料没写）。 本镜像最难的部分正是 MT7663S 的驱动适配，<strong>这块不一样的话，WiFi 就要重新适配</strong>。 另外 ophub 的板级库里<strong>只有 W103D（<code>s905l3a-w103d</code>）</strong>，没有 W105D 的条目——同族不等于配置可直接复用。</p>
 <p><strong>盒子上的口要认一遍</strong>（拍照存着，接线时省事）：</p>
 <ul>
 <li>网口、HDMI、电源</li>

@@ -51,6 +51,7 @@ from backends import create_backend, known_models
 from backends.base import RadioBackend
 import cloud_hub
 import net_tls
+import net_wifi
 import spectrum_profile
 import ssl_bootstrap
 import support_bundle
@@ -2982,6 +2983,23 @@ PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "
 # Let the WS handler check auth and close with proper code 4001.
 WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX"}
 
+# Setup-wizard paths: the middleware lets these through *unauthenticated* and
+# the handlers decide. That split is forced — the client on the hotspot has never
+# logged in, which is the whole chicken-and-egg the wizard exists to solve
+# (design D-6). It is safe only because the set is closed, compared by equality,
+# and every handler calls _setup_access() first.
+SETUP_GATE_PATHS = frozenset({
+    "/setup",
+    "/api/setup/wizard",
+    "/api/setup/wizard/password",
+    "/api/setup/wizard/wifi",
+})
+
+# The only keys the passwordless window may write. Not a config-file path
+# (design D-7: MRRC_CONFIG_FILE is D-11's payload), not the transmit gate
+# (AD-019 / NFR-067), not a port or a serial device.
+SETUP_WRITABLE_KEYS = frozenset({"MRRC_WEB_PASSWORD", "MRRC_AUTO_PASSWORD"})
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """Protect all routes except public paths, static assets, and login."""
@@ -2998,6 +3016,14 @@ async def auth_middleware(request: Request, call_next):
     # WebSocket paths: pass through (WS handlers send code 4001 on auth failure
     # so the browser's handleAuthExpired() can act on it properly).
     if path in WS_PATHS:
+        return await call_next(request)
+
+    # Setup wizard: pass through so an unauthenticated hotspot client can reach
+    # the handlers. It must come BEFORE the auth check (that is the point) and it
+    # therefore also skips the listen-only 403 below — so _setup_access() refuses
+    # a listen token itself. Equality, not startswith: a prefix here would widen
+    # the hole to every path under it.
+    if path in SETUP_GATE_PATHS:
         return await call_next(request)
 
     # Check auth
@@ -4836,6 +4862,60 @@ async def api_cloud_restart(request: Request):
     if not _cloud_restart_now():
         return JSONResponse({"error": "找不到启动器，无法自动重启；请手动退出并重新打开应用"}, status_code=409)
     return JSONResponse({"restarting": True})
+
+
+# ── Setup access point wizard (design D-6 / D-7.5) ──────────────────
+#
+# The box opens an *open* hotspot when it has no other way to be reached, and
+# for as long as that hotspot is up a client on it may set the web password and
+# pick a WiFi network without a token. This is the only unauthenticated write
+# path in the product, so the gate is deliberately boring: it reads one small
+# JSON file that linux/setup_ap.py rewrites every few seconds, and it needs two
+# independent facts to agree before it opens.
+
+def _setup_ap_state_dir() -> Path:
+    """Where the supervisor publishes its state (shared with linux/setup_ap.py)."""
+    return net_wifi.ap_settings()["state_dir"]
+
+
+def _setup_gate_open(request: Request) -> bool:
+    """Whether this request arrives over the box's own live open hotspot.
+
+    Both halves come from net_wifi.gate_is_open: a heartbeat fresh enough to
+    prove the supervisor is running the AP *now*, and a client address inside
+    that AP's subnet. The second half is what keeps a LAN client out when
+    10.42.0.0/24 happens to be somebody's real network; the first is what closes
+    the door when the supervisor dies, without anyone having to clear a flag.
+    """
+    client = request.client.host if request.client else ""
+    return net_wifi.gate_is_open(net_wifi.read_state(_setup_ap_state_dir()),
+                                 client, time.time())
+
+
+def _setup_access(request: Request) -> bool:
+    """Gate + audit for every wizard handler (design R5).
+
+    Two ways in and only two:
+
+    * over the open hotspot — passwordless, and logged at WARNING with the
+      address it came from, because D-6's residual risk is that a neighbour
+      inside WiFi range wins the race. If that ever happens, this line is the
+      only evidence there will be;
+    * with a FULL admin token. A listen-only token is refused here rather than in
+      the middleware, because the middleware's pass-through for
+      SETUP_GATE_PATHS necessarily skips the listen-role 403 (an
+      unauthenticated hotspot client cannot be gated on a role it does not
+      have). Moving that check into the handler is what keeps the pass-through
+      from becoming a privilege escalation.
+    """
+    if _setup_gate_open(request):
+        logger.warning(
+            "setup wizard: passwordless access from %s (the open setup hotspot is "
+            "up; this window closes with it)",
+            request.client.host if request.client else "?",
+        )
+        return True
+    return _verify_auth(request) and not _is_listen_request(request)
 
 
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route

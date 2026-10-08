@@ -213,8 +213,30 @@ adb shell reboot update</code></pre>
 <p>自签证书会警告一次 → <strong>高级 → 继续前往</strong>。</p>
 <p>⚠️ <strong>必须走 HTTPS，不要关。</strong> 手机浏览器要调用麦克风发射（PTT），而在 HTTP 下浏览器不给麦克风权限—— <strong>这是浏览器安全策略，不是我们的设置问题。</strong></p>
 <p>登录后你应该看到主界面：频率、模式、S 表、瀑布图。<strong>这时候还没有电台——下一步接上。</strong></p>
-<h2 id="9-接网络">9. 接网络</h2>
-<h3 id="有线-推荐-插上就通">有线（推荐——插上就通）</h3>
+<h2 id="9-接网络-有线-wi-fi">9. 接网络（有线 / Wi-Fi）</h2>
+<h3 id="三种初始化方式-按你手边有什么选">三种初始化方式，按你手边有什么选</h3>
+<div class="table-scroll"><table>
+<thead><tr><th>你手边有</th><th>用哪种</th><th>现在能用吗</th></tr></thead><tbody>
+<tr><td><strong>一台电脑 + 读卡器</strong></td><td><strong>① 预置</strong>：刷盘前把配置写进启动分区，首启自动采纳</td><td>✅ <strong>能用</strong>（见下）</td></tr>
+<tr><td><strong>HDMI + USB 键盘</strong></td><td><strong>② <code>nmtui</code></strong>：盒子上全屏文字界面选 Wi-Fi</td><td>✅ <strong>能用</strong>（见下）</td></tr>
+<tr><td><strong>只有一台手机</strong></td><td>③ 热点引导：盒子自己发热点，手机连上配</td><td>⏳ <strong>尚未实现</strong>（设计已批准，见文末注）</td></tr>
+<tr><td><strong>一根网线</strong></td><td>④ 直接插网线（最省事）</td><td>✅ 能用</td></tr>
+</tbody></table></div>
+<h3 id="①-预置-刷盘时就把配置放进去-零键盘-零网线">① 预置：刷盘时就把配置放进去（<strong>零键盘、零网线</strong>）</h3>
+<p>镜像的 <strong>FAT 启动分区</strong>会被挂到 <code>/boot</code>。往那儿放一个 <code>mrrc.env</code>，<strong>首启会自动采纳</strong>并改名成 <code>mrrc.env.applied</code>：</p>
+<pre><code class="lang-bash"># 烧完盘、还没插进盒子之前：
+#   macOS 上那个 FAT 分区叫 BOOT，直接拖文件进去即可
+cat &gt; /Volumes/BOOT/mrrc.env &lt;&lt;'EOF'
+MRRC_WEB_PASSWORD=你自己定一个
+MRRC_RADIO_MODEL=ft710
+MRRC_PTT_MAX_TX_SECONDS=120
+EOF</code></pre>
+<p>支持任意 <code>MRRC_*</code> 键（就是你后面能在 <code>/opt/mrrc_modern/env/mrrc.env</code> 里改的那些）✅</p>
+<p>⚠️ <strong>注意</strong>：<strong>Wi-Fi 密码不在预置范围内</strong>——Wi-Fi 归 NetworkManager 管，不走 env。所以预置能省掉 "口令 + 电台型号"这一步，但<strong>连 Wi-Fi 还是得用 ② 或 ④</strong>。</p>
+<h3 id="②-hdmi-nmtui-没有任何网络时最省事的入口">② HDMI + <code>nmtui</code>：没有任何网络时最省事的入口</h3>
+<p>见下面「无线」一节。</p>
+<blockquote><strong>注（③ 热点引导）</strong>：让盒子在完全没有网络时<strong>自己发一个开放热点</strong>，手机连上后完成初始化， 这条已在设计里定案（<code>docs/superpowers/specs/2026-10-08-w103d-setup-ap-design.md</code>）， <strong>但还没实现</strong>。在那之前，没有键盘就用 ① 预置，或插网线。</blockquote>
+<h3 id="④-有线-推荐-插上就通">④ 有线（推荐——插上就通）</h3>
 <pre><code class="lang-bash">ip a                    # 看有没有拿到地址
 nmcli device status     # eth0 应显示 connected</code></pre>
 <h3 id="无线-mt7663s">无线（MT7663S）</h3>

@@ -561,5 +561,334 @@ class WizardSourceGuardTests(unittest.TestCase):
         self.assertNotIn("_write_config", wizard)
         self.assertNotIn("os.environ[\"MRRC_CONFIG_FILE\"]", wizard)
 
+class WifiScanTests(GateCase):
+    def _scan(self, client=HOTSPOT_CLIENT):
+        return asyncio.run(server.api_setup_wizard_wifi_scan(
+            FakeRequest(path="/api/setup/wizard/wifi", client=client)))
+
+    def test_401_without_the_gate_or_a_token(self):
+        self.close_gate()
+        with mock.patch.object(server, "_verify_auth", return_value=False):
+            self.assertEqual(self._scan(client=LAN_CLIENT).status_code, 401)
+
+    def test_networks_come_from_net_wifi(self):
+        self.open_gate()
+        found = [{"ssid": "Home", "signal": 80, "security": "WPA2",
+                  "protected": True}]
+        with mock.patch.object(server.net_wifi, "scan_wifi", return_value=found):
+            payload = json.loads(self._scan().body)
+        self.assertEqual(payload["networks"], found)
+
+    def test_a_scan_failure_is_an_empty_list_not_a_500(self):
+        """No WiFi device (a kernel that lost the SDIO driver — design §19 red
+        line 3) must read as 'nothing found', with the reason in the journal."""
+        self.open_gate()
+        with mock.patch.object(server.net_wifi, "scan_wifi", return_value=[]):
+            self.assertEqual(json.loads(self._scan().body)["networks"], [])
+
+    def test_the_scan_does_not_run_on_the_event_loop(self):
+        """A rescan takes seconds. On the loop it would stall the spectrum and
+        audio WebSockets of every client on the box for the duration."""
+        source = Path(server.__file__).read_text(encoding="utf-8")
+        start = source.index("async def api_setup_wizard_wifi_scan")
+        self.assertIn("asyncio.to_thread", source[start:start + 900])
+
+
+class WifiSwitchTests(GateCase):
+    """`_perform_wifi_switch`, driven directly: it is the part that runs after the
+    HTTP answer is gone, so no request object can observe it."""
+
+    PSK = "hunter2hunter2"
+
+    def runner(self, connect_ok=True, hotspot_ok=True,
+               address="192.168.1.77/24", ap_up=True):
+        """A fake nmcli that tracks whether the AP is up.
+
+        The state matters: the switch takes the AP down before joining, so by the
+        time the failure path runs, `start_hotspot` must see *no* active AP and
+        actually issue `device wifi hotspot`. A fixture that always answers "the
+        AP is up" makes the restore look like a no-op and hides the one behaviour
+        design §6 insists on.
+        """
+        calls = []
+        state = {"ap": ap_up}
+
+        def run(argv):
+            joined = " ".join(argv)
+            calls.append(joined)
+            if "device wifi connect" in joined:
+                state["ap"] = False       # the caller took it down first
+                if connect_ok:
+                    return net_wifi.NmResult(0, "successfully activated", "")
+                # nmcli echoing the PSK back is not something it does today; the
+                # fixture says it does so that the scrubbing is actually tested.
+                return net_wifi.NmResult(
+                    1, "", "Error: Connection activation failed: (7) Secrets were "
+                           f"required, but not provided (psk={self.PSK})")
+            if "-g IP4.ADDRESS device show" in joined:
+                return net_wifi.NmResult(0, address + "\n")
+            if "connection down" in joined:
+                state["ap"] = False
+                return net_wifi.NmResult(0, "deactivated", "")
+            if "device wifi hotspot" in joined:
+                if hotspot_ok:
+                    state["ap"] = True
+                    return net_wifi.NmResult(0, "activated", "")
+                return net_wifi.NmResult(1, "", "rfkill is blocking it")
+            if "-f NAME,TYPE connection show --active" in joined:
+                rows = "Hotspot:802-11-wireless\n" if state["ap"] else ""
+                return net_wifi.NmResult(0, rows)
+            if "802-11-wireless.mode" in joined:
+                return net_wifi.NmResult(0, "ap\n")
+            return net_wifi.NmResult(0, "", "")
+
+        return run, calls
+
+    def switch(self, run, ssid="Home", psk=None):
+        server._perform_wifi_switch(
+            ssid, self.PSK if psk is None else psk, "nonce-1", self.state_dir,
+            runner=run, lead_s=0.0, sleep=lambda _s: None)
+        return net_wifi.read_wizard(self.state_dir)
+
+    def test_a_successful_switch_reports_the_new_address(self):
+        run, calls = self.runner()
+        claim = self.switch(run)
+        self.assertEqual(claim.state, net_wifi.WIZARD_OK)
+        self.assertEqual(claim.address, "192.168.1.77/24")
+        self.assertEqual(claim.error, "")
+        self.assertTrue(any("device wifi connect Home password" in c for c in calls))
+
+    def test_the_hotspot_is_taken_down_before_the_join(self):
+        """One radio. Joining while the AP is still up either fails or leaves the
+        box broadcasting an open network nobody needs any more."""
+        run, calls = self.runner()
+        self.switch(run)
+        down = next(i for i, c in enumerate(calls) if "connection down" in c)
+        join = next(i for i, c in enumerate(calls) if "device wifi connect" in c)
+        self.assertLess(down, join)
+
+    def test_a_failed_join_puts_the_hotspot_back(self):
+        """Design §6, the negative case that must not be skipped: without this the
+        box is left with no AP and no uplink, and the operator's phone is sitting
+        on a network that no longer exists."""
+        run, calls = self.runner(connect_ok=False)
+        claim = self.switch(run)
+        self.assertEqual(claim.state, net_wifi.WIZARD_FAILED)
+        self.assertTrue(any("device wifi hotspot" in c for c in calls))
+
+    def test_a_failed_join_reports_why(self):
+        run, _ = self.runner(connect_ok=False)
+        self.assertIn("Secrets were required", self.switch(run).error)
+
+    def test_the_stored_reason_is_bounded(self):
+        """It ends up in a JSON file and then on a phone screen."""
+        run, _ = self.runner(connect_ok=False)
+        self.assertLessEqual(len(self.switch(run).error), 300)
+
+    def test_the_psk_is_scrubbed_out_of_the_stored_reason(self):
+        run, _ = self.runner(connect_ok=False)
+        claim = self.switch(run)
+        self.assertNotIn(self.PSK, claim.error)
+        self.assertIn(net_wifi.REDACTED, claim.error)
+
+    def test_the_psk_never_lands_on_disk(self):
+        """SDD support-bundle-privacy, asserted on the bytes rather than on the
+        code path: neither mailbox may contain the credential, whatever nmcli did
+        or whatever a future edit forwards."""
+        run, _ = self.runner(connect_ok=False)
+        self.switch(run)
+        for name in (net_wifi.STATE_NAME, net_wifi.WIZARD_NAME):
+            path = self.state_dir / name
+            with self.subTest(file=name):
+                if path.exists():
+                    self.assertNotIn(self.PSK, path.read_text(encoding="utf-8"))
+
+    def test_the_psk_never_reaches_the_log(self):
+        run, _ = self.runner(connect_ok=False)
+        with self.assertLogs("mrrc", level="DEBUG") as captured:
+            self.switch(run)
+        for line in captured.output:
+            self.assertNotIn(self.PSK, line)
+
+    def test_the_nonce_comes_back_so_one_window_can_be_granted(self):
+        """The supervisor grants exactly one fresh window per nonce (task 4); a
+        claim without one leaves the operator with no retry."""
+        run, _ = self.runner(connect_ok=False)
+        self.assertEqual(self.switch(run).nonce, "nonce-1")
+
+    def test_a_hotspot_that_will_not_come_back_is_still_reported(self):
+        """The worst case: no AP, no uplink. The claim is the only record, and it
+        must say the join failed rather than look like nothing happened."""
+        claim = self.switch(self.runner(connect_ok=False, hotspot_ok=False)[0])
+        self.assertEqual(claim.state, net_wifi.WIZARD_FAILED)
+
+    def test_a_runner_that_raises_is_a_failure_not_a_crash(self):
+        """This runs on a daemon thread: an exception here dies silently and
+        leaves the claim stuck at `switching`, which the supervisor reads as
+        'the server is still working' for 45 seconds."""
+        def explode(argv):
+            raise RuntimeError("nmcli exploded")
+
+        claim = self.switch(explode)
+        self.assertEqual(claim.state, net_wifi.WIZARD_FAILED)
+        self.assertIn("exploded", claim.error)
+
+    def test_the_claim_is_heartbeated_while_the_join_blocks(self):
+        """nmcli waits for the association, which on a slow AP is tens of seconds
+        — longer than the supervisor's 45 s staleness budget."""
+        beats = []
+        real_write = net_wifi.write_wizard
+
+        def counting_write(claim, state_dir=None):
+            beats.append(claim.state)
+            return real_write(claim, state_dir)
+
+        def slow(argv):
+            if "device wifi connect" in " ".join(argv):
+                time.sleep(0.35)
+            if "-g IP4.ADDRESS device show" in " ".join(argv):
+                return net_wifi.NmResult(0, "192.168.1.77/24\n")
+            return net_wifi.NmResult(0, "", "")
+
+        with mock.patch.object(server.net_wifi, "write_wizard", counting_write), \
+             mock.patch.object(server, "WIFI_SWITCH_HEARTBEAT_S", 0.05):
+            server._perform_wifi_switch("Home", self.PSK, "n", self.state_dir,
+                                        runner=slow, lead_s=0.0,
+                                        sleep=lambda _s: None)
+        self.assertGreaterEqual(beats.count(net_wifi.WIZARD_SWITCHING), 2,
+                                f"expected repeated heartbeats, got {beats}")
+        self.assertEqual(beats[-1], net_wifi.WIZARD_OK,
+                         "the final state must be the last write, not a heartbeat")
+
+
+class WifiConnectEndpointTests(GateCase):
+    def _post(self, body, client=HOTSPOT_CLIENT, gate=True, auto_password=""):
+        if gate:
+            self.open_gate()
+        else:
+            self.close_gate()
+        with mock.patch.dict(os.environ, {"MRRC_AUTO_PASSWORD": auto_password},
+                             clear=False), \
+             mock.patch.object(server.threading, "Thread") as thread:
+            resp = asyncio.run(server.api_setup_wizard_wifi_connect(FakeRequest(
+                path="/api/setup/wizard/wifi", method="POST", client=client,
+                body=body)))
+        return resp, thread
+
+    def test_it_answers_at_once_and_switches_on_a_thread(self):
+        """The answer has to be on the wire before the AP dies, so the switch
+        cannot be awaited."""
+        resp, thread = self._post({"ssid": "Home", "password": "hunter2hunter2"})
+        self.assertEqual(resp.status_code, 200)
+        payload = json.loads(resp.body)
+        self.assertTrue(payload["switching"])
+        self.assertTrue(payload["nonce"])
+        thread.assert_called_once()
+        thread.return_value.start.assert_called_once()
+
+    def test_the_thread_is_a_daemon(self):
+        """A non-daemon thread would hold the process open during a restart."""
+        _, thread = self._post({"ssid": "Home"})
+        self.assertTrue(thread.call_args.kwargs.get("daemon"))
+
+    def test_it_refuses_to_switch_before_a_password_is_set(self):
+        """Constraint 7: after the switch the window is gone for good, so an
+        operator who never set a password is locked out of their own box."""
+        resp, thread = self._post({"ssid": "Home"}, auto_password="1")
+        self.assertEqual(resp.status_code, 409)
+        thread.assert_not_called()
+
+    def test_the_409_explains_itself(self):
+        """A bare 409 on a phone screen is a dead end; the page shows this text."""
+        resp, _ = self._post({"ssid": "Home"}, auto_password="1")
+        payload = json.loads(resp.body)
+        self.assertEqual(payload["error"], "set a password first")
+        self.assertIn("hotspot", payload["detail"])
+
+    def test_a_password_set_earlier_in_the_same_session_unlocks_it(self):
+        """The 409 must clear without a restart, or the operator who just set a
+        password is told to set one again."""
+        self.open_gate()
+        os.environ["MRRC_AUTO_PASSWORD"] = "1"
+        self.addCleanup(os.environ.pop, "MRRC_AUTO_PASSWORD", None)
+        with mock.patch.object(server.first_run, "update_env_file"), \
+             mock.patch.object(server, "_config_file_path",
+                               return_value=self.state_dir / "mrrc.env"):
+            asyncio.run(server.api_setup_wizard_password(FakeRequest(
+                method="POST", body={"password": "a-good-long-password"})))
+        resp, thread = self._post({"ssid": "Home"})
+        self.assertEqual(resp.status_code, 200)
+        thread.assert_called_once()
+
+    def test_an_empty_ssid_is_a_400(self):
+        resp, thread = self._post({"ssid": "   ", "password": "hunter2hunter2"})
+        self.assertEqual(resp.status_code, 400)
+        thread.assert_not_called()
+
+    def test_a_short_psk_is_a_400(self):
+        """WPA-PSK is 8 characters by definition, so this is a typo check that
+        saves a 20-second round trip through 'AP down → join fails → AP up'."""
+        resp, thread = self._post({"ssid": "Home", "password": "short"})
+        self.assertEqual(resp.status_code, 400)
+        thread.assert_not_called()
+
+    def test_an_open_network_needs_no_psk(self):
+        resp, thread = self._post({"ssid": "Guest"})
+        self.assertEqual(resp.status_code, 200)
+        thread.assert_called_once()
+
+    def test_the_ssid_is_trimmed_before_it_reaches_nmcli(self):
+        _, thread = self._post({"ssid": "  Home  "})
+        self.assertEqual(thread.call_args.kwargs["args"][0], "Home")
+
+    def test_the_gate_is_required(self):
+        resp, thread = self._post({"ssid": "Home"}, client=LAN_CLIENT, gate=False)
+        self.assertEqual(resp.status_code, 401)
+        thread.assert_not_called()
+
+    def test_a_listen_only_token_is_refused(self):
+        self.close_gate()
+        token = server._make_auth_token()
+        server._auth_tokens.add(token)
+        server._listen_tokens.add(token)
+        self.addCleanup(server._auth_tokens.discard, token)
+        self.addCleanup(server._listen_tokens.discard, token)
+        resp = asyncio.run(server.api_setup_wizard_wifi_connect(FakeRequest(
+            path="/api/setup/wizard/wifi", method="POST", client=LAN_CLIENT,
+            cookies={server.AUTH_COOKIE: token}, body={"ssid": "Home"})))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_a_malformed_body_is_a_400(self):
+        self.open_gate()
+        request = FakeRequest(method="POST")
+
+        async def not_json():
+            raise ValueError("nope")
+
+        request.json = not_json
+        with mock.patch.dict(os.environ, {"MRRC_AUTO_PASSWORD": ""}, clear=False):
+            resp = asyncio.run(server.api_setup_wizard_wifi_connect(request))
+        self.assertEqual(resp.status_code, 400)
+
+    def test_the_ssid_is_logged_but_the_psk_is_not(self):
+        with self.assertLogs("mrrc", level="DEBUG") as captured:
+            self._post({"ssid": "HomeNet", "password": "hunter2hunter2"})
+        joined = "\n".join(captured.output)
+        self.assertIn("HomeNet", joined)
+        self.assertNotIn("hunter2hunter2", joined)
+
+    def test_the_existing_route_order_guard_sees_the_wizard_routes(self):
+        """tests/test_cloud_endpoints.py already asserts that no /api/ route sits
+        below the SPA fallback. This duplicates it deliberately: if the wizard
+        routes are ever moved, the failure should name them instead of looking
+        like a Cloud Hub regression."""
+        paths = [getattr(r, "path", "") for r in server.app.router.routes]
+        catch_all = paths.index("/{path:path}")
+        for path in ("/api/setup/wizard", "/api/setup/wizard/password",
+                     "/api/setup/wizard/wifi"):
+            with self.subTest(path=path):
+                self.assertIn(path, paths)
+                self.assertLess(paths.index(path), catch_all)
+
 if __name__ == "__main__":
     unittest.main()

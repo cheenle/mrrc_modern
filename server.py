@@ -5047,6 +5047,186 @@ async def api_setup_wizard_password(request: Request):
                    request.client.host if request.client else "?")
     return JSONResponse({"ok": True})
 
+
+# ── the AP → STA switch ─────────────────────────────────────────────
+# A switch takes the operator's phone off the box, so the HTTP answer has to be
+# on the wire before the radio changes hands. This long, and no longer: the
+# operator is staring at a spinner.
+WIFI_SWITCH_LEAD_S = 1.5
+# `nmcli device wifi connect` blocks until the association settles, which on a
+# slow AP is tens of seconds — past the supervisor's 45 s staleness budget. So
+# the claim is re-published on this interval while a switch is in flight.
+WIFI_SWITCH_HEARTBEAT_S = 5.0
+
+
+def _wifi_failure_reason(result, password: str) -> str:
+    """One scrubbed, bounded line from an nmcli failure.
+
+    Scrubbed because this text is stored in wizard.json and shown on a phone:
+    nmcli does not echo a PSK today, but "does not today" is not a property of
+    this code, and the file is one `support_bundle` glob away from a public
+    upload (SDD support-bundle-privacy).
+    """
+    text = net_wifi.scrub(result.detail, password)
+    return text[:300] or f"nmcli exited {result.returncode}"
+
+
+def _claim_heartbeat(publish_once, stop: threading.Event,
+                     every: Optional[float] = None) -> None:
+    """Re-publish the claim until asked to stop.
+
+    Without this the supervisor's staleness budget expires mid-switch and it
+    takes the radio back: two processes fighting over one radio, with the
+    operator's phone connected to neither.
+
+    ``every`` is resolved at call time rather than bound as a default argument:
+    a default is evaluated once, at import, so changing (or patching)
+    ``WIFI_SWITCH_HEARTBEAT_S`` afterwards would be silently ignored.
+    """
+    interval = WIFI_SWITCH_HEARTBEAT_S if every is None else every
+    while not stop.wait(interval):
+        publish_once()
+
+
+def _perform_wifi_switch(ssid: str, password: str, nonce: str, state_dir: Path,
+                         runner=None, lead_s: Optional[float] = None,
+                         sleep=time.sleep) -> None:
+    """AP → STA on one radio (design D-3). Worker thread, never the event loop.
+
+    The claim file is the only channel back, and it works in one direction only:
+    on success the hotspot is gone and the phone has already left, so nothing can
+    be delivered — the page has to have told the operator what to do *before*
+    this starts. On failure the hotspot comes back, the phone rejoins it, and the
+    page reads the reason out of this file. That asymmetry is why "failure must
+    not be silent" (§6) is implemented as "restore the AP, then explain".
+
+    The invariant this function has to keep: **leave a terminal claim state and
+    never raise**. It runs on a daemon thread, where an exception is invisible —
+    the claim would sit at `switching`, which the supervisor reads as "the server
+    is still working" and stands down for another 45 seconds.
+    """
+    settings = net_wifi.ap_settings()
+
+    def publish(state: str, error: str = "", address: str = "") -> None:
+        net_wifi.write_wizard(net_wifi.WizardClaim(
+            action="connect", ssid=ssid, state=state, error=error,
+            address=address, nonce=nonce, heartbeat=time.time()), state_dir)
+
+    # Let the HTTP answer reach the phone first; after this the AP is coming
+    # down and nothing else can be delivered over it.
+    sleep(WIFI_SWITCH_LEAD_S if lead_s is None else lead_s)
+    publish(net_wifi.WIZARD_SWITCHING)
+
+    stop = threading.Event()
+    beating = threading.Thread(target=_claim_heartbeat,
+                               args=(lambda: publish(net_wifi.WIZARD_SWITCHING),
+                                     stop),
+                               name="setup-wifi-heartbeat", daemon=True)
+    beating.start()
+    try:
+        net_wifi.stop_hotspot(runner)
+        result = net_wifi.connect_wifi(ssid, password, runner,
+                                       ifname=settings["ifname"])
+    except Exception as exc:                                 # noqa: BLE001
+        # A daemon thread that raises dies silently and leaves the claim at
+        # `switching`, which the supervisor reads as "still working".
+        result = net_wifi.NmResult(1, "", f"the switch raised: {exc}")
+    finally:
+        # Stop the heartbeat *before* the final publish, so the authoritative
+        # state is the last thing in the file and not a beat that landed after.
+        stop.set()
+        beating.join(timeout=2.0)
+
+    # Everything below runs with the heartbeat stopped, so whatever is published
+    # here is the last word in the file.
+    try:
+        if result.ok:
+            address = net_wifi.ipv4_address(settings["ifname"], runner)
+            logger.warning("setup wizard: joined %r, address %s — the hotspot "
+                           "stays down", ssid, address or "not reported")
+            publish(net_wifi.WIZARD_OK, address=address)
+            return
+        reason = _wifi_failure_reason(result, password)
+        logger.warning("setup wizard: could not join %r (%s) — reopening the "
+                       "hotspot", ssid, reason)
+        back = net_wifi.start_hotspot(settings["ssid"], settings["ifname"], runner)
+        if not back.ok:
+            logger.error("setup wizard: the hotspot would not come back either: "
+                         "%s — the box is unreachable until it is rebooted",
+                         back.detail)
+        publish(net_wifi.WIZARD_FAILED, error=reason)
+    except Exception as exc:                                 # noqa: BLE001
+        # Even the recovery path can raise (a runner that fails on every call, a
+        # read-only /run). Still publish a terminal state, and still scrub: the
+        # exception text may quote the argv it was given.
+        logger.error("setup wizard: the switch failed unexpectedly: %s", exc)
+        publish(net_wifi.WIZARD_FAILED,
+                error=net_wifi.scrub(f"the switch raised: {exc}", password))
+
+
+@app.get("/api/setup/wizard/wifi", include_in_schema=False)
+async def api_setup_wizard_wifi_scan(request: Request):
+    """Networks the box can see, strongest first, one row per SSID.
+
+    Off the event loop: a rescan takes seconds, and blocking the loop would stall
+    the spectrum and audio WebSockets of every client on the box.
+    """
+    denial = _setup_denial(request)
+    if denial is not None:
+        return denial
+    networks = await asyncio.to_thread(net_wifi.scan_wifi)
+    return JSONResponse({"networks": networks})
+
+
+@app.post("/api/setup/wizard/wifi", include_in_schema=False)
+async def api_setup_wizard_wifi_connect(request: Request):
+    """Join the operator's WiFi — and lose their phone while doing it.
+
+    The shape follows from the single radio (design D-3): answer first, switch on
+    a thread behind the answer, and make the page say what is about to happen
+    before it happens. `_perform_wifi_switch` carries the details.
+    """
+    denial = _setup_denial(request)
+    if denial is not None:
+        return denial
+    if _setup_auto_password():
+        # Constraint 7. After this switch the passwordless window is gone for
+        # good, and the password in force is one the box generated and nobody was
+        # told. Switching now would lock the operator out of their own box.
+        return JSONResponse(
+            {"error": "set a password first",
+             "detail": "This box is still using a password it generated itself. "
+                       "Once it joins your WiFi this open hotspot closes and there "
+                       "would be no way left to set one — so set your own password "
+                       "first, then come back here."},
+            status_code=409)
+    try:
+        body = await request.json()
+    except Exception:                                        # noqa: BLE001
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    ssid = str(body.get("ssid", "") or "").strip()
+    password = str(body.get("password", "") or "")
+    if not ssid:
+        return JSONResponse({"error": "ssid required"}, status_code=400)
+    if password and len(password) < MIN_WIFI_PSK_LEN:
+        return JSONResponse(
+            {"error": f"wifi password too short (min {MIN_WIFI_PSK_LEN})"},
+            status_code=400)
+
+    # One nonce per attempt: it is what lets the supervisor grant exactly one
+    # fresh window if this fails, and refuse to keep granting them if the page
+    # retries on a timer.
+    nonce = _secrets.token_hex(8)
+    threading.Thread(target=_perform_wifi_switch,
+                     args=(ssid, password, nonce, _setup_ap_state_dir()),
+                     name="setup-wifi-switch", daemon=True).start()
+    logger.warning("setup wizard: switching to WiFi %r from %s — the open hotspot "
+                   "is about to close", ssid,
+                   request.client.host if request.client else "?")
+    return JSONResponse({"ok": True, "switching": True, "nonce": nonce})
+
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route
 # defined after it is answered with index.html instead of its own handler. That is how
 # GET /api/cloud/state came back as 200 + a web page in v1.24.0 (the settings dialog could not

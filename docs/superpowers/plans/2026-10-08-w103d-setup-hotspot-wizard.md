@@ -5076,20 +5076,57 @@ class SetupApPackagingTests(unittest.TestCase):
         Slicing from the unit's name to the next "UNIT" does not work: the name
         appears on the `cat` line, whose own heredoc marker is the next thing on
         it, so the slice comes back empty and every assertion passes vacuously.
+
+        Nor does searching for the literal "UNIT\n" work: the opener is *quoted*
+        (`<<'UNIT'`), so the bytes there are `UNIT'\n` and the first bare
+        "UNIT\n" in the file is the **closer** — slicing from it finds nothing
+        and raises. Take the end of the `cat` line, then the next line that is
+        exactly UNIT.
         """
         start = self.text.index(f"/etc/systemd/system/{self.UNIT}")
-        opener = self.text.index("UNIT\n", start) + len("UNIT\n")
-        closer = self.text.index("\nUNIT", opener)
+        opener = self.text.index("\n", start) + 1
+        closer = self.text.index("\nUNIT\n", opener)
         body = self.text[opener:closer]
         self.assertIn("[Service]", body, "the slice missed the unit body")
         return body
 
+    def apt_packages(self) -> list:
+        """The package tokens of the overlay's single `apt-get install`.
+
+        Parsed as tokens rather than grepped as a substring, because a substring
+        match is satisfied by the *comment explaining why the package is there*.
+        That is not hypothetical: mutating the install list to
+        "# dnsmasq deliberately omitted" left a substring assertion green while
+        shipping an image whose hotspot hands out no addresses.
+        """
+        install = self.text[self.text.index("apt-get install"):]
+        install = install[:install.index("\n\n")]
+        packages: list = []
+        for line in install.splitlines():
+            line = line.split("#", 1)[0]              # drop trailing comments
+            for token in line.replace("\\", " ").split():
+                if token in ("DEBIAN_FRONTEND=noninteractive", "apt-get",
+                             "install", "-y", "-qq", "--no-install-recommends"):
+                    continue
+                packages.append(token)
+        return packages
+
     def test_dnsmasq_is_in_the_apt_install_list(self):
         """Design D-2. NM's shared mode hands out addresses through dnsmasq; the
         pinned base image does not carry it."""
-        install = self.text[self.text.index("apt-get install"):]
-        install = install[:install.index("\n\n")]
-        self.assertIn("dnsmasq", install)
+        self.assertIn("dnsmasq", self.apt_packages())
+
+    def test_the_package_list_is_what_the_overlay_actually_installs(self):
+        """Guard the guard: if this parser drifts, the assertion above goes
+        vacuous instead of loudly wrong."""
+        packages = self.apt_packages()
+        for expected in ("python3.11-venv", "python3-dev", "portaudio19-dev",
+                         "libportaudio2", "libasound2-dev", "libopus0",
+                         "libopus-dev", "dnsmasq"):
+            with self.subTest(package=expected):
+                self.assertIn(expected, packages)
+        self.assertNotIn("apt-get", packages)
+        self.assertTrue(all("#" not in p for p in packages), packages)
 
     def test_dnsmasq_joins_the_existing_install_rather_than_a_second_apt_run(self):
         """A second `apt-get install` in a chroot costs another resolver hit and
@@ -5107,11 +5144,29 @@ class SetupApPackagingTests(unittest.TestCase):
         self.assertIn("/opt/mrrc_modern/venv/bin/python", body)
         self.assertIn("/opt/mrrc_modern/linux/setup_ap.py", body)
 
-    def test_the_unit_does_not_wait_for_a_network(self):
-        """The whole point of this service is that there isn't one."""
+    def directives(self) -> str:
+        """The unit body with its comments stripped.
+
+        Assertions about ordering have to look at directives, not prose: the unit
+        carries a comment explaining *why* it does not wait for a network, and
+        that comment names the target. Grepping the raw body would make the
+        explanation look like the mistake it is warning against.
+        """
         body = self.unit_body()
-        self.assertNotIn("network-online.target", body)
-        self.assertIn("NetworkManager.service", body)
+        return "\n".join(line for line in body.splitlines()
+                         if not line.lstrip().startswith("#"))
+
+    def test_the_unit_does_not_wait_for_a_network(self):
+        """The whole point of this service is that there isn't one.
+
+        mrrc-modern.service does wait for network-online.target, and copying
+        those two lines here is the obvious mistake: the hotspot would then
+        appear only after NM's wait-online times out, or not at all.
+        """
+        directives = self.directives()
+        self.assertNotIn("network-online.target", directives)
+        self.assertIn("After=NetworkManager.service", directives)
+        self.assertIn("Wants=NetworkManager.service", directives)
 
     def test_the_unit_is_resident_not_oneshot(self):
         """Design §7: the wizard page — and later /manage — need to ask whether
@@ -5185,11 +5240,38 @@ class VerifyScriptTests(unittest.TestCase):
         self.assertIn("dnsmasq", self.text)
 
     def test_a_box_that_already_has_a_network_is_not_failed_for_having_no_hotspot(self):
-        """By design (D-6 fence 1) the hotspot is DOWN once the box has an
-        uplink. A check that demands it be up would fail on every healthy box."""
+        """By design (D-6 fence 1) the hotspot is DOWN once the box has an uplink.
+        A check that demands it be up fails on every healthy box, and the operator
+        reads "your image is broken" about a box that is fine.
+
+        Asserted structurally, because a substring search for a *regex* is
+        vacuous — it matches nothing, ever, and so passes no matter what the
+        script does (this test shipped that way once and caught nothing):
+        `$mode` may be **reported**, inside an assignment or an `ok`/`printf`
+        line, but must never be **tested**. A conditional on it is the bug.
+        """
         section = self.text[self.text.index("setup hotspot"):]
-        self.assertNotIn("mode.*hotspot.*bad", section)
-        self.assertIn("is-active", section)
+        section = section[:section.index("printf '\\n────")]
+        mentioning = [line.strip() for line in section.splitlines()
+                      if "$mode" in line or "mode=" in line]
+        self.assertTrue(mentioning,
+                        "the section no longer reports the mode at all — "
+                        "this guard has gone vacuous")
+        for line in mentioning:
+            with self.subTest(line=line):
+                self.assertFalse(line.startswith(("if ", "elif ", "while ", "[ ")),
+                                 "the published mode is being tested, not reported")
+                self.assertNotIn("!=", line)
+
+    def test_the_failure_branches_are_about_the_machinery_not_the_mode(self):
+        """What may legitimately fail: the unit missing, not enabled, dnsmasq
+        absent, or the daemon dead. All four are about the machinery being there,
+        which is what a post-onboarding run can still verify."""
+        section = self.text[self.text.index("setup hotspot"):]
+        for expected in ("is not installed", "not enabled", "dnsmasq is missing",
+                         "is not running"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, section)
 ```
 
 - [ ] **步骤 2：运行测试验证失败**
@@ -6068,6 +6150,13 @@ git commit -m "docs: W103D 热点引导的真机验收实测——<一句话结�
 - 测试替身：`FakeNmcli`（任务 1–3，**子串表 + 插入顺序**）与 `FakeRadio`（任务 4，
   **有状态**）是两个不同的东西，各自文件里各自定义，**不跨文件 import**
   （`tests/` 没有 `__init__.py`，跨测试模块 import 在两种运行形式下只有一种能work）✓
+
+**3.5 一条贯穿性的教训（任务 9 实跑抓到两次）**：**断言必须能变红**。
+本计划在任务 9 里写出过两条**恒真**的测试——① `assertIn("dnsmasq", install)`：一句
+`# dnsmasq deliberately omitted` 的注释就能让它绿；② `assertNotIn("mode.*hotspot.*bad", section)`：
+把**正则当字面串**去搜，永远搜不到，于是永远通过。两条都在变异验证里当场暴露。
+所以任务 12 步骤 2 的 18 条变异验证**不是形式**——它是唯一能证明"守卫在守东西"的手段。
+**写下一条断言时先问：什么样的错误代码会让它变红？答不出来就是恒真。**
 
 **4. 与既有守卫的相容性**（都已实跑核对过源码）
 - `ExclusionParityTests`：不动三份 `--exclude` 清单 ⇒ 不受影响（新增文件都是根模块或

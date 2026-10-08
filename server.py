@@ -3000,6 +3000,13 @@ SETUP_GATE_PATHS = frozenset({
 # (AD-019 / NFR-067), not a port or a serial device.
 SETUP_WRITABLE_KEYS = frozenset({"MRRC_WEB_PASSWORD", "MRRC_AUTO_PASSWORD"})
 
+# 8 is the floor the existing POST /api/setup enforces. The wizard must not be
+# the softer door into the same key.
+MIN_SETUP_PASSWORD_LEN = 8
+# A WPA-PSK shorter than 8 is not a valid passphrase, so this is a typo check
+# that saves a 20-second round trip through "AP down → join fails → AP back up".
+MIN_WIFI_PSK_LEN = 8
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """Protect all routes except public paths, static assets, and login."""
@@ -4917,6 +4924,128 @@ def _setup_access(request: Request) -> bool:
         return True
     return _verify_auth(request) and not _is_listen_request(request)
 
+
+def _setup_denial(request: Request):
+    """The refusal for a wizard request, or ``None`` when it is allowed.
+
+    403 rather than 401 for a listen-only session: that caller *is*
+    authenticated, and 401 would tell the page "your session expired, log in
+    again" — which it cannot do anything about, and which is not what is wrong.
+    This is the same split the auth middleware already makes for listen-role
+    writes; it lives here because the middleware's listen gate is skipped for
+    SETUP_GATE_PATHS (an unauthenticated hotspot client has to get through it).
+    """
+    if _setup_access(request):
+        return None
+    if _verify_auth(request):
+        return JSONResponse({"error": LISTEN_ONLY_MESSAGE}, status_code=403)
+    return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+
+def _setup_auto_password() -> bool:
+    """Whether the password in force is still one the box invented itself.
+
+    `linux/first_run.py`'s apply_first_run() and server.py's own
+    _ensure_strong_password() both set MRRC_AUTO_PASSWORD=1 when they generate a
+    password nobody has been told. That is the state a freshly flashed box is in,
+    and it is why the wizard takes a password *before* it will switch networks:
+    after the switch the hotspot — and with it the passwordless window — is gone,
+    and an operator who never set one is locked out of their own box with only
+    HDMI or `mrrc-show-password` left.
+    """
+    return os.environ.get("MRRC_AUTO_PASSWORD", "") == "1"
+
+
+@app.get("/api/setup/wizard", include_in_schema=False)
+async def api_setup_wizard(request: Request):
+    """Everything the wizard page renders: the window, the switch, the model.
+
+    The payload is a closed schema (a test asserts the exact key set) because a
+    response body is the one place a credential could leak by accident, and the
+    support-bundle redaction pass never sees it.
+    """
+    denial = _setup_denial(request)
+    if denial is not None:
+        return denial
+    state_dir = _setup_ap_state_dir()
+    state = net_wifi.read_state(state_dir)
+    claim = net_wifi.read_wizard(state_dir)
+    return JSONResponse({
+        "gate": "hotspot" if _setup_gate_open(request) else "token",
+        "hotspot": {
+            "mode": state.mode,
+            "ssid": state.ssid,
+            "url": state.url,
+            "deadline": state.deadline,
+            # Skew-free by construction: both values are the box's clock, taken
+            # in the same publish. A phone's clock can be minutes off, and
+            # `deadline - Date.now()` in the browser would then show a window
+            # that is already closed, or one that never closes.
+            "remaining_s": (max(0.0, state.deadline - state.heartbeat)
+                            if state.deadline else 0.0),
+            "reason": state.reason,
+        },
+        "switch": {
+            "state": claim.state,
+            "ssid": claim.ssid,
+            "error": claim.error,
+            "address": claim.address,
+        },
+        "auto_password": _setup_auto_password(),
+        "radio_model": RADIO_MODEL,
+        "web_port": WEB_PORT,
+    })
+
+
+@app.post("/api/setup/wizard/password", include_in_schema=False)
+async def api_setup_wizard_password(request: Request):
+    """Set the web login password from the open-hotspot window.
+
+    Writes through the SAME channel the connection dialog uses —
+    ``first_run.update_env_file(_config_file_path(), …)`` — because design D-7.5
+    established that this channel already exists and is already the writer of
+    MRRC_WEB_PASSWORD. Growing a second writer here is precisely what the
+    config-layer unification (D-8) is trying to undo.
+
+    No restart. The password is rebound in this process exactly the way
+    _ensure_strong_password does, so the operator can log in immediately, and the
+    env write is what the next boot reads. Restarting would drop them in the
+    middle of the wizard, and the next step takes the network away anyway.
+    """
+    global WEB_PASSWORD
+    denial = _setup_denial(request)
+    if denial is not None:
+        return denial
+    try:
+        body = await request.json()
+    except Exception:                                        # noqa: BLE001
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    password = str(body.get("password", "") or "").strip()
+    confirm = str(body.get("confirm", "") or "").strip()
+    if len(password) < MIN_SETUP_PASSWORD_LEN:
+        return JSONResponse(
+            {"error": f"password too short (min {MIN_SETUP_PASSWORD_LEN})"},
+            status_code=400)
+    if confirm and password != confirm:
+        return JSONResponse({"error": "passwords do not match"}, status_code=400)
+
+    updates = {"MRRC_WEB_PASSWORD": password, "MRRC_AUTO_PASSWORD": ""}
+    try:
+        first_run.update_env_file(_config_file_path(), updates)
+    except OSError as exc:
+        logger.error("setup wizard: could not write the password: %s", exc)
+        return JSONResponse({"error": "write failed"}, status_code=500)
+
+    WEB_PASSWORD = password
+    os.environ["MRRC_WEB_PASSWORD"] = password
+    os.environ["MRRC_AUTO_PASSWORD"] = ""
+    # The audit line names the address, never the credential: log files are
+    # collected into support bundles (SDD support-bundle-privacy).
+    logger.warning("setup wizard: the web password was set from %s",
+                   request.client.host if request.client else "?")
+    return JSONResponse({"ok": True})
 
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route
 # defined after it is answered with index.html instead of its own handler. That is how

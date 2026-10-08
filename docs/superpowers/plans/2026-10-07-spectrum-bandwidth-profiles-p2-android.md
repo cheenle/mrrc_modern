@@ -372,6 +372,31 @@ git commit -m "feat(android): 解析器接受 851B 短帧，wf2 改可空——�
 > 那次事故的机制。已给脚本加第 3 步：线上复核通过后回写仓库两页（验过幂等），
 > 并把仓库卡片追平到 v1.1.29、与线上逐字节一致（主仓 commit `79fe518`）。
 > 剩下的只有下面的真机验收清单。
+>
+> ### ⚠️ 发布事故：v1.1.29 是从**脏 worktree** 构建的（已查清，已由 v1.1.30 超越）
+>
+> **时间线**（文件 mtime，本机 UTC+8）：07:59:03 并行会话改 `MainScreenComposeTest.kt` →
+> 08:00:02 改 `MainScreen.kt`（主频居中修复，**未提交**）→ ~08:02:48 我的 `release.sh` 开始
+> `gradlew test lintDebug assembleRelease` → 08:04:09 产物 `dist/MRRC-Modern-v1.1.29-Android.apk`。
+> 即：**我的构建晚于他们的未提交改动**，所以那个修改被编进了我发布的包。
+>
+> **判据（不信 mtime 推断，做了字节级对照实验）**：他们那次改动新增了 `testTag("freqBezel")`，
+> 而 `isMinifyEnabled = false` ⇒ 字符串不会被裁。对 `dist/MRRC-Modern-v1.1.29-Android.apk` 的 dex
+> 做字符串比对：`secHeader` / `secSpectrum` / `secToolRow`（HEAD 里就有的 testTag）各 1 次，
+> `freqBezel` **也 1 次** ⇒ 未提交的改动确实在包里。
+>
+> **为何从 SHA 看不出来**：两个会话在同一时刻从同一棵脏树构建，得到的是**字节相同的产物**
+> （并行会话的 CHANGELOG 也独立记录了这一点：“无法从 SHA 判定线上包是否已含本修复”）。
+> 所以“SHA 两端一致”只能证明**传输**无损，**不能证明产物溯源干净**。
+>
+> **结果与补救**：并行会话主动把居中修复单独发为 **v1.1.30**（`f77382eb…`）以消除歧义，
+> 线上别名与卡片已指向它。我对**线上 v1.1.30 的 dex** 做了带负面对照的字节级校验：
+> `{"type":"spectrumCaps","profile":"` ✓、`scopeProfile` ✓、`流量档`（MUTF-8）✓、`Quarter` ✓、
+> `freqBezel` ✓，而对照串 `ZZZnope` ✗ 0 次 ⇒ **本次 P2 功能确实在线上包里**。
+> 服务器上遗留的版本化文件 `MRRC-Modern-v1.1.29-Android.apk` 仍含未归属的居中修复（卡片已不指它）。
+>
+> **教训（已写进 `android-app` 技能）**：发布前必须确认 worktree 对已跟踪文件**零修改**；
+> 验证产物要用 dex 字节级探针 + 负面对照，而不是 SHA 或“构建成功”。
 
 代码与门槛过了之后**停下来问用户是否发布**（全局约束 12）。发布与验收按技能的铁律走：
 

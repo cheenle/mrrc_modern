@@ -331,3 +331,229 @@ class BoxBuildIntegrityTests(unittest.TestCase):
                     os.access(script, os.X_OK),
                     f"{script.name} is not executable; the build runs it directly",
                 )
+
+
+class SetupApPackagingTests(unittest.TestCase):
+    """The setup hotspot's place in the image (design 2026-10-08-w103d-setup-ap).
+
+    Every one of these is invisible from reading the overlay and expensive in the
+    field, because the box being onboarded is by definition a box nobody can ssh
+    into. A missing dnsmasq means the hotspot appears and a phone joins it and
+    gets no address; a unit ordered after network-online.target means the service
+    that exists precisely to cover "there is no network" waits for one.
+    """
+
+    OVERLAY = REPO / "packaging" / "box" / "box-overlay.sh"
+    VERIFY = REPO / "packaging" / "box" / "verify.sh"
+    UNIT = "mrrc-setup-ap.service"
+
+    def setUp(self):
+        self.text = self.OVERLAY.read_text(encoding="utf-8")
+
+    def unit_body(self) -> str:
+        """The heredoc body of this unit's `cat > … <<'UNIT'` block.
+
+        Slicing from the unit's name to the next "UNIT" does not work: the name
+        appears on the `cat` line, whose own heredoc marker is the next thing on
+        it, so the slice comes back empty and every assertion passes vacuously.
+
+        Nor does searching for the literal "UNIT\\n": the opener is quoted
+        (`<<'UNIT'`), so the bytes there are `UNIT'\\n` and the first bare
+        "UNIT\\n" in the file is the *closer* — slicing from it finds nothing and
+        raises. Take the end of the `cat` line, then the next line that is
+        exactly UNIT.
+        """
+        start = self.text.index(f"/etc/systemd/system/{self.UNIT}")
+        opener = self.text.index("\n", start) + 1
+        closer = self.text.index("\nUNIT\n", opener)
+        body = self.text[opener:closer]
+        self.assertIn("[Service]", body, "the slice missed the unit body")
+        return body
+
+    def apt_packages(self) -> list:
+        """The package tokens of the overlay's single `apt-get install`.
+
+        Parsed as tokens rather than grepped as a substring, because a substring
+        match is satisfied by the *comment explaining why the package is there*.
+        That is not hypothetical: mutating the install list to
+        "# dnsmasq deliberately omitted" left a substring assertion green while
+        shipping an image whose hotspot hands out no addresses.
+        """
+        install = self.text[self.text.index("apt-get install"):]
+        install = install[:install.index("\n\n")]
+        packages: list = []
+        for line in install.splitlines():
+            line = line.split("#", 1)[0]              # drop trailing comments
+            for token in line.replace("\\", " ").split():
+                if token in ("DEBIAN_FRONTEND=noninteractive", "apt-get",
+                             "install", "-y", "-qq", "--no-install-recommends"):
+                    continue
+                packages.append(token)
+        return packages
+
+    def test_dnsmasq_is_in_the_apt_install_list(self):
+        """Design D-2. NM's shared mode hands out addresses through dnsmasq; the
+        pinned base image does not carry it."""
+        self.assertIn("dnsmasq", self.apt_packages())
+
+    def test_the_package_list_is_what_the_overlay_actually_installs(self):
+        """Guard the guard: if this parser drifts, the assertion above goes
+        vacuous instead of loudly wrong."""
+        packages = self.apt_packages()
+        for expected in ("python3.11-venv", "python3-dev", "portaudio19-dev",
+                         "libportaudio2", "libasound2-dev", "libopus0",
+                         "libopus-dev", "dnsmasq"):
+            with self.subTest(package=expected):
+                self.assertIn(expected, packages)
+        self.assertNotIn("apt-get", packages)
+        self.assertTrue(all("#" not in p for p in packages), packages)
+
+    def test_dnsmasq_joins_the_existing_install_rather_than_a_second_apt_run(self):
+        """A second `apt-get install` in a chroot costs another resolver hit and
+        another chance to stall on a slow mirror (the w103d-box skill's 坑 5)."""
+        self.assertEqual(self.text.count("apt-get install"), 1)
+
+    def test_the_unit_is_written(self):
+        self.assertIn(f"/etc/systemd/system/{self.UNIT}", self.text)
+
+    def test_the_unit_runs_the_daemon_with_the_venv_python(self):
+        """The system python has none of the dependencies, and the script's exec
+        bit is not what starts it — the w103d-box skill's 坑 4 is exactly a script
+        whose permissions the build did not set."""
+        body = self.unit_body()
+        self.assertIn("/opt/mrrc_modern/venv/bin/python", body)
+        self.assertIn("/opt/mrrc_modern/linux/setup_ap.py", body)
+
+    def directives(self) -> str:
+        """The unit body with its comments stripped.
+
+        Assertions about ordering have to look at directives, not prose: the unit
+        carries a comment explaining *why* it does not wait for a network, and
+        that comment names the target. Grepping the raw body would make the
+        explanation look like the mistake it is warning against.
+        """
+        body = self.unit_body()
+        return "\n".join(line for line in body.splitlines()
+                         if not line.lstrip().startswith("#"))
+
+    def test_the_unit_does_not_wait_for_a_network(self):
+        """The whole point of this service is that there isn't one.
+
+        mrrc-modern.service does wait for network-online.target, and copying
+        those two lines here is the obvious mistake: the hotspot would then
+        appear only after NM's wait-online times out, or not at all.
+        """
+        directives = self.directives()
+        self.assertNotIn("network-online.target", directives)
+        self.assertIn("After=NetworkManager.service", directives)
+        self.assertIn("Wants=NetworkManager.service", directives)
+
+    def test_the_comment_that_explains_the_omission_stays(self):
+        """The reasoning is the part a future editor needs. Stripping comments to
+        satisfy the assertion above must not mean deleting the explanation."""
+        self.assertIn("network-online.target", self.unit_body())
+
+    def test_the_unit_is_resident_not_oneshot(self):
+        """Design §7: the wizard page — and later /manage — need to ask whether
+        the hotspot is up and how long is left. A oneshot has exited by then."""
+        body = self.unit_body()
+        self.assertNotIn("Type=oneshot", body)
+        self.assertIn("Restart=always", body)
+
+    def test_the_unit_runs_as_root(self):
+        """nmcli needs polkit authority over system connections, and the state
+        directory under /run has to be creatable with group `mrrc` so the server
+        can leave its switch request there. `User=mrrc` here is a hotspot that
+        never comes up."""
+        self.assertNotIn("User=mrrc", self.unit_body())
+
+    def test_the_banner_reaches_the_hdmi_console(self):
+        """Design D-6's mitigation for "a neighbour wins the race": the address is
+        printed on the console too, so an operator with a monitor never needs the
+        open hotspot at all. Journal-only output does not reach the getty."""
+        self.assertIn("console", self.unit_body())
+
+    def test_the_unit_is_enabled(self):
+        enabled = [line for line in self.text.splitlines()
+                   if "systemctl enable" in line]
+        self.assertTrue(enabled, "the overlay no longer enables any service?")
+        self.assertIn(self.UNIT, enabled[-1])
+
+    def test_the_daemon_and_its_module_reach_the_image(self):
+        """Both ride the existing rsync — `linux/` and the repo root are not in the
+        exclusion list. Worth asserting because the symptom of getting it wrong is
+        a unit that fails to start on a box nobody can reach."""
+        excludes = ExclusionParityTests.EXCLUDE_RE.findall(self.text)
+        self.assertTrue(excludes, "the parser found no excludes — drift?")
+        self.assertNotIn("linux/", excludes)
+        self.assertNotIn("net_wifi.py", excludes)
+        self.assertTrue((REPO / "linux" / "setup_ap.py").is_file())
+        self.assertTrue((REPO / "net_wifi.py").is_file())
+
+    def test_the_overlay_leaves_the_env_file_alone(self):
+        """D-4: the WiFi domain has one writer and it is not the env file. Nothing
+        in the overlay may add an MRRC_SETUP_AP_* key to mrrc.env — the defaults
+        live in net_wifi.ap_settings()."""
+        for key in ("MRRC_SETUP_AP_SSID", "MRRC_SETUP_AP_STATE_DIR",
+                    "MRRC_SETUP_AP_TIMEOUT_MIN"):
+            with self.subTest(key=key):
+                self.assertNotIn(key, self.text)
+
+
+class VerifyScriptTests(unittest.TestCase):
+    """verify.sh is the only diagnostic that works on a box nobody can reach —
+    but only *after* onboarding, over the network the wizard just configured."""
+
+    SCRIPT = REPO / "packaging" / "box" / "verify.sh"
+
+    def setUp(self):
+        self.text = self.SCRIPT.read_text(encoding="utf-8")
+
+    def test_the_section_numbers_are_contiguous_and_agree_on_a_total(self):
+        """Renumbering by hand is how a script ends up printing 3/10 in a run of
+        eleven checks. The headers are the authority."""
+        heads = re.findall(r'head_ "(\d+)/(\d+) ', self.text)
+        self.assertTrue(heads, "the header shape changed — update this guard")
+        totals = {total for _, total in heads}
+        self.assertEqual(len(totals), 1, f"mixed denominators: {heads}")
+        self.assertEqual(int(totals.pop()), len(heads))
+        self.assertEqual([int(n) for n, _ in heads],
+                         list(range(1, len(heads) + 1)))
+
+    def test_it_checks_the_setup_hotspot(self):
+        self.assertIn("mrrc-setup-ap.service", self.text)
+        self.assertIn("dnsmasq", self.text)
+
+    def test_a_box_that_already_has_a_network_is_not_failed_for_having_no_hotspot(self):
+        """By design (D-6 fence 1) the hotspot is DOWN once the box has an uplink.
+        A check that demands it be up fails on every healthy box, and the operator
+        reads "your image is broken" about a box that is fine.
+
+        Asserted structurally, because a substring search for a *regex* is
+        vacuous (it matches nothing, ever, and so passes no matter what the
+        script does): `$mode` may be **reported** — inside an assignment or an
+        `ok`/`printf` line — but must never be **tested**. A conditional on it is
+        the bug.
+        """
+        section = self.text[self.text.index("setup hotspot"):]
+        section = section[:section.index("printf '\\n────")]
+        mentioning = [line.strip() for line in section.splitlines()
+                      if "$mode" in line or "mode=" in line]
+        self.assertTrue(mentioning,
+                        "the section no longer reports the mode at all — "
+                        "this guard has gone vacuous")
+        for line in mentioning:
+            with self.subTest(line=line):
+                self.assertFalse(line.startswith(("if ", "elif ", "while ", "[ ")),
+                                 "the published mode is being tested, not reported")
+                self.assertNotIn("!=", line)
+
+    def test_the_failure_branches_are_about_the_machinery_not_the_mode(self):
+        """What may legitimately fail: the unit missing, not enabled, dnsmasq
+        absent, or the daemon dead. All four are about the machinery being there,
+        which is what a post-onboarding run can still verify."""
+        section = self.text[self.text.index("setup hotspot"):]
+        for expected in ("is not installed", "not enabled", "dnsmasq is missing",
+                         "is not running"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, section)

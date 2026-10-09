@@ -1,5 +1,23 @@
 # W103D 热点 + 最小向导 实现计划
 
+> ## ⛔ 本计划已作废（2026-10-08，执行到任务 3 时发现）
+>
+> **功能早已实现，且比本计划更完整**：`linux/setup_ap.py`（371 行，含 `Supervisor`、
+> 环境变量配置、信号处理、"本次开机不重开"）+ `tests/test_setup_ap.py`(37) /
+> `tests/test_net_wifi.py`(112) / `tests/test_server_setup_wizard.py`(92) /
+> `tests/test_server_setup.py`(10) —— **251 例全绿**；服务器侧 `/setup`、
+> `/api/setup/wizard{,/password,/wifi}` 已在；`box-overlay.sh` 已装 `mrrc-setup-ap.service`
+> 并已 `systemctl enable`。
+>
+> 本计划是在**设计文档之后、实现之前**写的，写的时候没有先去查实现是否已经存在 ——
+> **这个未检查的假设就是这次重复劳动的全部原因**。已按本计划任务 1–3 写出的
+> `linux/mrrc_hotspot.py` + `tests/test_mrrc_hotspot.py` **已删除**。
+>
+> **保留本文档的原因**：其中的失败分支判据（热点起不来时不得谎报 `broadcasting`）
+> 与"闸门是网段不是标志位"的论证，仍可作为**理解与复核** `setup_ap.py` 的参考。
+> **不要执行它。**
+
+
 > **面向 AI 代理的工作者：** 必需子技能：使用 superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans 逐任务实现此计划。步骤使用复选框（`- [ ]`）语法来跟踪进度。
 
 **目标：** 刷完盘开机，盒子在没有可用上行网络时自己发一个**开放热点**；手机连上后打开 `https://<网关>:8888`

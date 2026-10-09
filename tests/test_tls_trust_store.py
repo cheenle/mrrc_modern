@@ -141,8 +141,12 @@ class CallSiteGuardTests(unittest.TestCase):
         offenders: list[str] = []
         scanned: set[str] = set()
         for path in sorted(REPO_ROOT.rglob("*.py")):
-            parts = set(path.parts)
-            if parts & _SKIP_DIRS or any(part.startswith(".") for part in path.parts):
+            # 相对 REPO_ROOT 判断：绝对路径里可能带 .worktrees（git worktree）或任何以点
+            # 开头的父目录，那与"出货树里有没有隐藏目录"无关。按绝对路径判断会让整个
+            # worktree 被跳过、scanned 为空，于是这条守卫在每个 worktree 会话里都是红的
+            # —— 而红的原因是它看不见代码，不是代码有问题。
+            relative = path.relative_to(REPO_ROOT).parts
+            if set(relative) & _SKIP_DIRS or any(part.startswith(".") for part in relative):
                 continue
             if path.name.startswith("_") or path.name.startswith("test_"):
                 continue
@@ -167,6 +171,19 @@ class CallSiteGuardTests(unittest.TestCase):
                 if not any(keyword.arg == "context" for keyword in node.keywords):
                     offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
         return offenders, scanned
+
+    def test_the_hidden_directory_filter_is_relative_to_the_repo(self):
+        """A git worktree lives under ``.worktrees/``, which starts with a dot.
+
+        Filtering on the absolute path's parts therefore skips every file in the
+        tree and the scan comes back empty. The superpowers workflow always runs
+        in a worktree, so this guard was red in every such session — and it was
+        red because it could not see the code, not because the code was wrong.
+        """
+        offenders, scanned = self._offenders()
+        self.assertIn("server.py", scanned)
+        self.assertIn("net_tls.py", scanned)
+        self.assertEqual([], offenders)
 
     def test_every_call_site_sets_a_context(self):
         offenders, scanned = self._offenders()

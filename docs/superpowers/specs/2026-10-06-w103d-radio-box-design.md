@@ -46,29 +46,36 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 | --- | --- | --- |
 | Python | **3.11** | 对齐 Pi 镜像，无需换发行版 |
 | systemd / **sudo** | 已装 | systemd 管服务；chroot 里 `install.sh` 的 `sudo tee` 可用 |
-| libasound.so.2 + **libasound2-dev** | 已装 | ALSA 运行时与头文件都在 |
-| **portaudio19-dev + libportaudio2** | **已装** | 无需再装 PortAudio（含头文件） |
-| **libopus0** | **已装**（dpkg 确认） | 无需再装 |
-| **python3-venv / python3-pip / python3-dev** | 已装 | 能建 venv、能装 wheel、能编 C 扩展 |
-| **gcc** | 已装 | 无 wheel 的包也能就地编译 |
-| **git / rsync** | 已装 | `mrrc_update.sh` 与镜像同步可用 |
+| libasound.so.2 + **libasound2-dev** | 只有运行时 | **libasound2-dev 缺** —— PyAudio 要就地编译才用得上 |
+| **portaudio19-dev + libportaudio2** | **都缺** | PyAudio 的运行时库与头文件都不在 |
+| **libopus0** | **缺** | 没有它服务端**静默退回 PCM**（带宽成倍），必须装 |
+| **python3-venv / python3-pip / python3-dev** | **都缺** | `python3 -m venv` 直接失败（没有 `ensurepip`）—— 见下方更正 |
+| **gcc / make** | 已装 | 无 wheel 的包也能就地编译 |
+| **git / rsync / curl / sudo** | 已装 | `mrrc_update.sh` 与镜像同步可用 |
 | NetworkManager / nmcli / wpa_supplicant | 已装 | 有线+无线配网可用 |
 | **mt7663 驱动** | **已装** | WiFi 支持的镜像内直接证据 |
 
-**结论：apt 增量几乎为零**——`install.sh` 的依赖步骤在这台镜像上基本是 no-op。（方法：在镜像 rootfs 的 dpkg 数据库里逐个查 `Package: <name>`。）
+> **更正（2026-10-07，首次真构建）**：上面五行原写「已装（dpkg 确认）」，**是错的**。用同一个方法（在 rootfs 的 dpkg 数据库里逐个查 `Package: <name>`）重测，实际如上表：`libopus0`、`portaudio19-dev`、`libportaudio2`、`libasound2-dev`、`python3.11-venv`、`python3-pip`、`python3-pip-whl`、`python3-setuptools-whl`、`python3-dev` **全部不存在**；在的是 `libasound2`（运行时）、`gcc`、`make`、`rsync`、`git`、`curl`、`sudo`、Python 3.11。
+>
+> **后果不是「多装几个包」，而是构建直接失败**：`install.sh` 在**第 2 步**建 venv（需要 `ensurepip`，来自 `python3.11-venv`），而系统包在**第 3 步**才装 —— venv 一失败就 FATAL 退出，apt 根本没机会跑。`libopus0` 那条更隐蔽：它不会让构建失败，只会让盒子交付后**静默退回 PCM**。
+>
+> **修法**：`box-overlay.sh` 在调 `install.sh` **之前**显式装齐 `python3.11-venv python3-dev portaudio19-dev libportaudio2 libasound2-dev libopus0 libopus-dev`，不再依赖 `install.sh` 的步骤顺序。apt 增量因此**不是 ≈0，而是约 80 MiB**（已计入 §2.4）。
 
 ### 2.4 增量占用估算（对照 963.7 MiB 可用）
 
 | 项 | 大小 | 依据 |
 | --- | --- | --- |
-| 代码本体 | **175.4 MiB** | 用 `build-image.sh:38-45` 的权威排除清单实测（533 文件） |
-| venv | ≈ 90–120 MiB | 本机 venv 87 MiB（numpy 33M / cryptography 13M / pip 12M…）+ pyaudio/lameenc |
-| frpc | ≈ 10 MiB | frp 0.71.0 linux-arm64 |
-| **FTDI 库（aarch64）** | ≈ 1 MiB | 一个 ELF + 一个符号链接（D-9） |
-| apt 增量 | **≈ 0** | dpkg 确认依赖已齐（§2.3） |
-| **合计** | **≈ 280–310 MiB** | |
+| 代码本体 | **≈ 13 MiB** | 构建产物内实测（`du`，已含 backends/ 与全部源码，533 文件的原估 **175.4 MiB 高估了约 13 倍**） |
+| venv | **≈ 115 MiB** | 产物内实测（原估 90–120 MiB，准） |
+| frpc | **≈ 15 MiB** | 产物内实测（frp 0.71.0 linux-arm64） |
+| static/（前端） | ≈ 1.5 MiB | 产物内实测 |
+| **FTDI 库（aarch64）** | ≈ 0.75 MiB | 一个 ELF + 一个符号链接（D-9） |
+| apt 增量 | **≈ 80 MiB** | 七个包（§2.3 更正） |
+| **/opt/mrrc_modern 合计** | **≈ 145 MiB** | 产物内 `du -sh` 实测 |
 
-**结论：装入后仍余 ≈ 650–680 MiB。不需要 growpart，不需要扩容镜像。**（首启后 eMMC 会自动扩到 32 GB，运行期空间另有约 29 GB。）
+**结论（2026-10-07 实测推翻原估算）**：首次真构建完成后的实测数据 —— `df` 显示 rootfs 可用空间 **948 MiB → 905 MiB**，即**净增只有 43 MiB**；`/opt/mrrc_modern` 为 **145 MiB**。两者之差来自 overlay 末尾的回收步骤（`apt-get clean` + 清 apt lists + 清 `/root/.cache` 与 `/tmp`，回收了约 100 MB 缓存）。
+
+原估「合计 280–310 MiB、装后余 650–680 MiB」**过于悲观**；实际装后余 **905 MiB**。**不需要 growpart，不需要扩容镜像**，且余量比原估多出 200 MiB 以上。（首启后 eMMC 自动扩到 32 GB，运行期空间另有约 29 GB。）
 
 ### 2.5 服务端自身负载（实测 + 交叉验证）
 
@@ -111,7 +118,7 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 | | 路线 1：U 盘试跑（先做，必须） | 路线 2：写 eMMC（验收通过后可选） |
 | --- | --- | --- |
 | 操作 | 写 U 盘/SD → 插盒子 → 盒子执行 `reboot update` | 先 `armbian-ddbr` 备份原厂整盘 → `armbian-install` |
-| eMMC | **一个字节不动** | 被覆盖，全部 32 GB 可用 |
+| eMMC | 分区与数据不动（u-boot 环境会被写，见 §3.2） | 被覆盖，全部 32 GB 可用 |
 | 回滚 | 拔 U 盘即回安卓 | 用操作者手上的**线刷固件包** + MaskROM 短接 |
 | 代价 | 占 1 个 USB 口；U 盘速度 | 无 |
 
@@ -119,7 +126,31 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 
 **变砖兜底不依赖厂商内容**：Amlogic 的 MaskROM 在 SoC BootROM 里，短接可重新进入刷写模式。
 
-### 3.2 构建期能做 / 不能做（chroot 内无硬件）
+### 3.2 U 盘启动到底改了什么（2026-10-08 从镜像里核实）
+
+镜像启动分区里的 `aml_autoscript` 是**原厂 u-boot 在 update 模式下运行**的脚本，它做的事是：
+
+```
+setenv bootcmd 'run start_autoscript; run storeboot'
+setenv start_autoscript '... SD 卡 → USB(0..3) → eMMC ...'
+setenv upgrade_step 2
+saveenv        # ← 写 u-boot 环境（在 eMMC 上）
+reboot
+```
+
+所以 **「eMMC 一个字节不动」是错的**：`saveenv` 确实会写 eMMC，写的是 **u-boot 环境变量**，不碰 Android
+的分区与数据。回滚仍然是「拔 U 盘即回安卓」（u-boot 在 U 盘上找不到脚本就走 eMMC，那条「优先 U 盘」的偏好
+没有 U 盘时无害），但性质是「改了一个无害的偏好」，不是「零写入」。
+
+随后 u-boot 从 U 盘加载 `s905_autoscript` → 读 `uEnv.txt`
+（`FDT=/dtb/amlogic/meson-g12a-w103d.dtb`、`console=ttyAML0,115200n8 console=tty0`）→ `booti` 内核。
+**控制台同时走串口与 HDMI**，所以刷机失败时接 HDMI 就能看到卡在哪。
+
+板级身份（`/etc/ophub-release` 与 ophub `model_database.conf` 一致）：`MODEL_ID=307`、
+`MODEL_NAME=ZTE-W103D`、`SOC=s905l3a`、`FDTFILE=meson-g12a-w103d.dtb`、启动器
+`u-boot-w103d.bin`（**所以 `armbian-install` 不要用 `-m yes` 换主线 u-boot**）、`BOARD=s905l3a-w103d`。
+
+### 3.3 构建期能做 / 不能做（chroot 内无硬件）
 
 | 构建期写入镜像 | 必须留到首启 |
 | --- | --- |

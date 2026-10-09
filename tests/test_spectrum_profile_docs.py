@@ -159,9 +159,22 @@ class VersionConsistencyTests(unittest.TestCase):
     def test_tests_readme_matches_the_actual_count(self):
         """The number below is the real `unittest discover` output."""
         text = _read("tests/README.md")
-        self.assertNotIn("1673", text)
-        self.assertIn("1751", text)
-        self.assertIn("92 test modules", text)
+        # One canonical statement. Appending to this list on every change
+        # produced a pair that contradicted itself — assertIn("96 test modules")
+        # beside assertNotIn("97 test modules") — which is what a guard looks
+        # like when it is updated by reflex instead of by reading it.
+        self.assertIn("2069", text)
+        # The module count is derived, not typed. It used to be a literal, and
+        # the ritual that updates these numbers changed the test total and
+        # missed the module total — so adding a test file turned this guard red
+        # on its own. Counting the files is both less work and the stronger
+        # check: it fails when the README and the tree disagree, which is what
+        # the literal only did by luck.
+        modules = len(list((Path(__file__).resolve().parent).glob("test_*.py")))
+        self.assertIn(f"{modules} test modules", text)
+        for stale in ("1673", "1751", "1766", "2024", "2029", "2033", "2036", "2042", "2065", "2053", "2046", "2034"):
+            with self.subTest(stale=stale):
+                self.assertNotIn(stale, text)
 
 
 if __name__ == "__main__":

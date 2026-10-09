@@ -51,6 +51,7 @@ from backends import create_backend, known_models
 from backends.base import RadioBackend
 import cloud_hub
 import net_tls
+import net_wifi
 import spectrum_profile
 import ssl_bootstrap
 import support_bundle
@@ -2982,6 +2983,30 @@ PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "
 # Let the WS handler check auth and close with proper code 4001.
 WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX"}
 
+# Setup-wizard paths: the middleware lets these through *unauthenticated* and
+# the handlers decide. That split is forced — the client on the hotspot has never
+# logged in, which is the whole chicken-and-egg the wizard exists to solve
+# (design D-6). It is safe only because the set is closed, compared by equality,
+# and every handler calls _setup_access() first.
+SETUP_GATE_PATHS = frozenset({
+    "/setup",
+    "/api/setup/wizard",
+    "/api/setup/wizard/password",
+    "/api/setup/wizard/wifi",
+})
+
+# The only keys the passwordless window may write. Not a config-file path
+# (design D-7: MRRC_CONFIG_FILE is D-11's payload), not the transmit gate
+# (AD-019 / NFR-067), not a port or a serial device.
+SETUP_WRITABLE_KEYS = frozenset({"MRRC_WEB_PASSWORD", "MRRC_AUTO_PASSWORD"})
+
+# 8 is the floor the existing POST /api/setup enforces. The wizard must not be
+# the softer door into the same key.
+MIN_SETUP_PASSWORD_LEN = 8
+# A WPA-PSK shorter than 8 is not a valid passphrase, so this is a typo check
+# that saves a 20-second round trip through "AP down → join fails → AP back up".
+MIN_WIFI_PSK_LEN = 8
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """Protect all routes except public paths, static assets, and login."""
@@ -2998,6 +3023,14 @@ async def auth_middleware(request: Request, call_next):
     # WebSocket paths: pass through (WS handlers send code 4001 on auth failure
     # so the browser's handleAuthExpired() can act on it properly).
     if path in WS_PATHS:
+        return await call_next(request)
+
+    # Setup wizard: pass through so an unauthenticated hotspot client can reach
+    # the handlers. It must come BEFORE the auth check (that is the point) and it
+    # therefore also skips the listen-only 403 below — so _setup_access() refuses
+    # a listen token itself. Equality, not startswith: a prefix here would widen
+    # the hole to every path under it.
+    if path in SETUP_GATE_PATHS:
         return await call_next(request)
 
     # Check auth
@@ -4836,6 +4869,451 @@ async def api_cloud_restart(request: Request):
     if not _cloud_restart_now():
         return JSONResponse({"error": "找不到启动器，无法自动重启；请手动退出并重新打开应用"}, status_code=409)
     return JSONResponse({"restarting": True})
+
+
+# ── Management page (read-only) ────────────────────────────────────────
+# Deliberately OUTSIDE the setup wizard region below. That region is scanned by
+# tests/test_server_setup_wizard.py, which asserts it never names the transmit
+# gate or the other safety keys: the wizard runs passwordless on an open hotspot,
+# and a door that open must not be able to name the things it must never touch.
+# This page runs behind login and reports those same values, so it has to live
+# somewhere the scan does not reach. Moving it into the wizard block makes that
+# guard fail, which is the guard doing its job rather than a false positive.
+
+#: The safety invariants shown on the management page. Every one is read-only:
+#: that page reports, it does not set. The notes travel with the values because a
+#: number without its consequence beside it is a number nobody respects.
+SAFETY_FIELDS = (
+    ("MRRC_ALLOW_UNVERIFIED_TX", "0",
+     "发射门禁。为 1 时允许对未验证机型发射，指令表来自 Hamlib/手册而非真机实测；"
+     "8 个未验证机型必须为 0（AD-019 / NFR-067）。改它要两步显式确认。"),
+    ("MRRC_PTT_MAX_TX_SECONDS", "0",
+     "PTT 最长连续发射秒数，0 = 关闭看门狗。调高或清空会削弱防线②。"),
+    ("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S", "",
+     "远程会话的发射心跳超时，由 Cloud Hub 写入（防线①）。本页不改。"),
+)
+
+
+def _safety_fields() -> list:
+    return [
+        {"key": key, "value": os.environ.get(key, default), "read_only": True, "note": note}
+        for key, default, note in SAFETY_FIELDS
+    ]
+
+
+@app.get("/api/manage", include_in_schema=False)
+async def api_manage(request: Request):
+    """The two things that are otherwise invisible, both read-only.
+
+    Whether the setup hotspot is up: AP mode is the one premise that could not
+    be checked without the hardware, so on the day the box arrives this is where
+    that question gets an answer. And what the safety gates are set to: those
+    are the few invariants this system has, and a web switch is the shape that
+    turns an invariant into an incident, so changing one belongs with the config
+    layer and its confirmations rather than on a status page.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    state = net_wifi.read_state(_setup_ap_state_dir())
+    # Both numbers come from the box's clock in the same publish. A phone's clock
+    # can be minutes out, and subtracting there would show a window that is
+    # already closed, or one that never closes.
+    remaining = max(0.0, state.deadline - state.heartbeat) if state.deadline else 0.0
+    return JSONResponse({
+        "hotspot": {
+            "mode": state.mode,
+            "ssid": state.ssid,
+            "url": state.url,
+            "remaining_s": remaining,
+        },
+        "safety": _safety_fields(),
+    })
+
+
+@app.get("/manage", include_in_schema=False)
+async def manage_page(request: Request):
+    """The management page (auth enforced by the middleware, as for /listen)."""
+    page = STATIC_DIR / "manage.html"
+    if not page.exists():
+        return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
+    return FileResponse(page, media_type="text/html")
+
+
+# ── Setup access point wizard (design D-6 / D-7.5) ──────────────────
+#
+# The box opens an *open* hotspot when it has no other way to be reached, and
+# for as long as that hotspot is up a client on it may set the web password and
+# pick a WiFi network without a token. This is the only unauthenticated write
+# path in the product, so the gate is deliberately boring: it reads one small
+# JSON file that linux/setup_ap.py rewrites every few seconds, and it needs two
+# independent facts to agree before it opens.
+
+def _setup_ap_state_dir() -> Path:
+    """Where the supervisor publishes its state (shared with linux/setup_ap.py)."""
+    return net_wifi.ap_settings()["state_dir"]
+
+
+def _setup_gate_open(request: Request) -> bool:
+    """Whether this request arrives over the box's own live open hotspot.
+
+    Both halves come from net_wifi.gate_is_open: a heartbeat fresh enough to
+    prove the supervisor is running the AP *now*, and a client address inside
+    that AP's subnet. The second half is what keeps a LAN client out when
+    10.42.0.0/24 happens to be somebody's real network; the first is what closes
+    the door when the supervisor dies, without anyone having to clear a flag.
+    """
+    client = request.client.host if request.client else ""
+    return net_wifi.gate_is_open(net_wifi.read_state(_setup_ap_state_dir()),
+                                 client, time.time())
+
+
+def _setup_access(request: Request) -> bool:
+    """Gate + audit for every wizard handler (design R5).
+
+    Two ways in and only two:
+
+    * over the open hotspot — passwordless, and logged at WARNING with the
+      address it came from, because D-6's residual risk is that a neighbour
+      inside WiFi range wins the race. If that ever happens, this line is the
+      only evidence there will be;
+    * with a FULL admin token. A listen-only token is refused here rather than in
+      the middleware, because the middleware's pass-through for
+      SETUP_GATE_PATHS necessarily skips the listen-role 403 (an
+      unauthenticated hotspot client cannot be gated on a role it does not
+      have). Moving that check into the handler is what keeps the pass-through
+      from becoming a privilege escalation.
+    """
+    if _setup_gate_open(request):
+        logger.warning(
+            "setup wizard: passwordless access from %s (the open setup hotspot is "
+            "up; this window closes with it)",
+            request.client.host if request.client else "?",
+        )
+        return True
+    return _verify_auth(request) and not _is_listen_request(request)
+
+
+def _setup_denial(request: Request):
+    """The refusal for a wizard request, or ``None`` when it is allowed.
+
+    403 rather than 401 for a listen-only session: that caller *is*
+    authenticated, and 401 would tell the page "your session expired, log in
+    again" — which it cannot do anything about, and which is not what is wrong.
+    This is the same split the auth middleware already makes for listen-role
+    writes; it lives here because the middleware's listen gate is skipped for
+    SETUP_GATE_PATHS (an unauthenticated hotspot client has to get through it).
+    """
+    if _setup_access(request):
+        return None
+    if _verify_auth(request):
+        return JSONResponse({"error": LISTEN_ONLY_MESSAGE}, status_code=403)
+    return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+
+def _setup_auto_password() -> bool:
+    """Whether the password in force is still one the box invented itself.
+
+    `linux/first_run.py`'s apply_first_run() and server.py's own
+    _ensure_strong_password() both set MRRC_AUTO_PASSWORD=1 when they generate a
+    password nobody has been told. That is the state a freshly flashed box is in,
+    and it is why the wizard takes a password *before* it will switch networks:
+    after the switch the hotspot — and with it the passwordless window — is gone,
+    and an operator who never set one is locked out of their own box with only
+    HDMI or `mrrc-show-password` left.
+    """
+    return os.environ.get("MRRC_AUTO_PASSWORD", "") == "1"
+
+
+@app.get("/api/setup/wizard", include_in_schema=False)
+async def api_setup_wizard(request: Request):
+    """Everything the wizard page renders: the window, the switch, the model.
+
+    The payload is a closed schema (a test asserts the exact key set) because a
+    response body is the one place a credential could leak by accident, and the
+    support-bundle redaction pass never sees it.
+    """
+    denial = _setup_denial(request)
+    if denial is not None:
+        return denial
+    state_dir = _setup_ap_state_dir()
+    state = net_wifi.read_state(state_dir)
+    claim = net_wifi.read_wizard(state_dir)
+    return JSONResponse({
+        "gate": "hotspot" if _setup_gate_open(request) else "token",
+        "hotspot": {
+            "mode": state.mode,
+            "ssid": state.ssid,
+            "url": state.url,
+            "deadline": state.deadline,
+            # Skew-free by construction: both values are the box's clock, taken
+            # in the same publish. A phone's clock can be minutes off, and
+            # `deadline - Date.now()` in the browser would then show a window
+            # that is already closed, or one that never closes.
+            "remaining_s": (max(0.0, state.deadline - state.heartbeat)
+                            if state.deadline else 0.0),
+            "reason": state.reason,
+        },
+        "switch": {
+            "state": claim.state,
+            "ssid": claim.ssid,
+            "error": claim.error,
+            "address": claim.address,
+        },
+        "auto_password": _setup_auto_password(),
+        "radio_model": RADIO_MODEL,
+        "web_port": WEB_PORT,
+    })
+
+
+@app.post("/api/setup/wizard/password", include_in_schema=False)
+async def api_setup_wizard_password(request: Request):
+    """Set the web login password from the open-hotspot window.
+
+    Writes through the SAME channel the connection dialog uses —
+    ``first_run.update_env_file(_config_file_path(), …)`` — because design D-7.5
+    established that this channel already exists and is already the writer of
+    MRRC_WEB_PASSWORD. Growing a second writer here is precisely what the
+    config-layer unification (D-8) is trying to undo.
+
+    No restart. The password is rebound in this process exactly the way
+    _ensure_strong_password does, so the operator can log in immediately, and the
+    env write is what the next boot reads. Restarting would drop them in the
+    middle of the wizard, and the next step takes the network away anyway.
+    """
+    global WEB_PASSWORD
+    denial = _setup_denial(request)
+    if denial is not None:
+        return denial
+    try:
+        body = await request.json()
+    except Exception:                                        # noqa: BLE001
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    password = str(body.get("password", "") or "").strip()
+    confirm = str(body.get("confirm", "") or "").strip()
+    if len(password) < MIN_SETUP_PASSWORD_LEN:
+        return JSONResponse(
+            {"error": f"password too short (min {MIN_SETUP_PASSWORD_LEN})"},
+            status_code=400)
+    if confirm and password != confirm:
+        return JSONResponse({"error": "passwords do not match"}, status_code=400)
+
+    updates = {"MRRC_WEB_PASSWORD": password, "MRRC_AUTO_PASSWORD": ""}
+    try:
+        first_run.update_env_file(_config_file_path(), updates)
+    except OSError as exc:
+        logger.error("setup wizard: could not write the password: %s", exc)
+        return JSONResponse({"error": "write failed"}, status_code=500)
+
+    WEB_PASSWORD = password
+    os.environ["MRRC_WEB_PASSWORD"] = password
+    os.environ["MRRC_AUTO_PASSWORD"] = ""
+    # The audit line names the address, never the credential: log files are
+    # collected into support bundles (SDD support-bundle-privacy).
+    logger.warning("setup wizard: the web password was set from %s",
+                   request.client.host if request.client else "?")
+    return JSONResponse({"ok": True})
+
+
+# ── the AP → STA switch ─────────────────────────────────────────────
+# A switch takes the operator's phone off the box, so the HTTP answer has to be
+# on the wire before the radio changes hands. This long, and no longer: the
+# operator is staring at a spinner.
+WIFI_SWITCH_LEAD_S = 1.5
+# `nmcli device wifi connect` blocks until the association settles, which on a
+# slow AP is tens of seconds — past the supervisor's 45 s staleness budget. So
+# the claim is re-published on this interval while a switch is in flight.
+WIFI_SWITCH_HEARTBEAT_S = 5.0
+
+
+def _wifi_failure_reason(result, password: str) -> str:
+    """One scrubbed, bounded line from an nmcli failure.
+
+    Scrubbed because this text is stored in wizard.json and shown on a phone:
+    nmcli does not echo a PSK today, but "does not today" is not a property of
+    this code, and the file is one `support_bundle` glob away from a public
+    upload (SDD support-bundle-privacy).
+    """
+    text = net_wifi.scrub(result.detail, password)
+    return text[:300] or f"nmcli exited {result.returncode}"
+
+
+def _claim_heartbeat(publish_once, stop: threading.Event,
+                     every: Optional[float] = None) -> None:
+    """Re-publish the claim until asked to stop.
+
+    Without this the supervisor's staleness budget expires mid-switch and it
+    takes the radio back: two processes fighting over one radio, with the
+    operator's phone connected to neither.
+
+    ``every`` is resolved at call time rather than bound as a default argument:
+    a default is evaluated once, at import, so changing (or patching)
+    ``WIFI_SWITCH_HEARTBEAT_S`` afterwards would be silently ignored.
+    """
+    interval = WIFI_SWITCH_HEARTBEAT_S if every is None else every
+    while not stop.wait(interval):
+        publish_once()
+
+
+def _perform_wifi_switch(ssid: str, password: str, nonce: str, state_dir: Path,
+                         runner=None, lead_s: Optional[float] = None,
+                         sleep=time.sleep) -> None:
+    """AP → STA on one radio (design D-3). Worker thread, never the event loop.
+
+    The claim file is the only channel back, and it works in one direction only:
+    on success the hotspot is gone and the phone has already left, so nothing can
+    be delivered — the page has to have told the operator what to do *before*
+    this starts. On failure the hotspot comes back, the phone rejoins it, and the
+    page reads the reason out of this file. That asymmetry is why "failure must
+    not be silent" (§6) is implemented as "restore the AP, then explain".
+
+    The invariant this function has to keep: **leave a terminal claim state and
+    never raise**. It runs on a daemon thread, where an exception is invisible —
+    the claim would sit at `switching`, which the supervisor reads as "the server
+    is still working" and stands down for another 45 seconds.
+    """
+    settings = net_wifi.ap_settings()
+
+    def publish(state: str, error: str = "", address: str = "") -> None:
+        net_wifi.write_wizard(net_wifi.WizardClaim(
+            action="connect", ssid=ssid, state=state, error=error,
+            address=address, nonce=nonce, heartbeat=time.time()), state_dir)
+
+    # Let the HTTP answer reach the phone first; after this the AP is coming
+    # down and nothing else can be delivered over it.
+    sleep(WIFI_SWITCH_LEAD_S if lead_s is None else lead_s)
+    publish(net_wifi.WIZARD_SWITCHING)
+
+    stop = threading.Event()
+    beating = threading.Thread(target=_claim_heartbeat,
+                               args=(lambda: publish(net_wifi.WIZARD_SWITCHING),
+                                     stop),
+                               name="setup-wifi-heartbeat", daemon=True)
+    beating.start()
+    try:
+        net_wifi.stop_hotspot(runner)
+        result = net_wifi.connect_wifi(ssid, password, runner,
+                                       ifname=settings["ifname"])
+    except Exception as exc:                                 # noqa: BLE001
+        # A daemon thread that raises dies silently and leaves the claim at
+        # `switching`, which the supervisor reads as "still working".
+        result = net_wifi.NmResult(1, "", f"the switch raised: {exc}")
+    finally:
+        # Stop the heartbeat *before* the final publish, so the authoritative
+        # state is the last thing in the file and not a beat that landed after.
+        stop.set()
+        beating.join(timeout=2.0)
+
+    # Everything below runs with the heartbeat stopped, so whatever is published
+    # here is the last word in the file.
+    try:
+        if result.ok:
+            address = net_wifi.ipv4_address(settings["ifname"], runner)
+            logger.warning("setup wizard: joined %r, address %s — the hotspot "
+                           "stays down", ssid, address or "not reported")
+            publish(net_wifi.WIZARD_OK, address=address)
+            return
+        reason = _wifi_failure_reason(result, password)
+        logger.warning("setup wizard: could not join %r (%s) — reopening the "
+                       "hotspot", ssid, reason)
+        back = net_wifi.start_hotspot(settings["ssid"], settings["ifname"], runner)
+        if not back.ok:
+            logger.error("setup wizard: the hotspot would not come back either: "
+                         "%s — the box is unreachable until it is rebooted",
+                         back.detail)
+        publish(net_wifi.WIZARD_FAILED, error=reason)
+    except Exception as exc:                                 # noqa: BLE001
+        # Even the recovery path can raise (a runner that fails on every call, a
+        # read-only /run). Still publish a terminal state, and still scrub: the
+        # exception text may quote the argv it was given.
+        logger.error("setup wizard: the switch failed unexpectedly: %s", exc)
+        publish(net_wifi.WIZARD_FAILED,
+                error=net_wifi.scrub(f"the switch raised: {exc}", password))
+
+
+@app.get("/api/setup/wizard/wifi", include_in_schema=False)
+async def api_setup_wizard_wifi_scan(request: Request):
+    """Networks the box can see, strongest first, one row per SSID.
+
+    Off the event loop: a rescan takes seconds, and blocking the loop would stall
+    the spectrum and audio WebSockets of every client on the box.
+    """
+    denial = _setup_denial(request)
+    if denial is not None:
+        return denial
+    networks = await asyncio.to_thread(net_wifi.scan_wifi)
+    return JSONResponse({"networks": networks})
+
+
+@app.post("/api/setup/wizard/wifi", include_in_schema=False)
+async def api_setup_wizard_wifi_connect(request: Request):
+    """Join the operator's WiFi — and lose their phone while doing it.
+
+    The shape follows from the single radio (design D-3): answer first, switch on
+    a thread behind the answer, and make the page say what is about to happen
+    before it happens. `_perform_wifi_switch` carries the details.
+    """
+    denial = _setup_denial(request)
+    if denial is not None:
+        return denial
+    if _setup_auto_password():
+        # Constraint 7. After this switch the passwordless window is gone for
+        # good, and the password in force is one the box generated and nobody was
+        # told. Switching now would lock the operator out of their own box.
+        return JSONResponse(
+            {"error": "set a password first",
+             "detail": "This box is still using a password it generated itself. "
+                       "Once it joins your WiFi this open hotspot closes and there "
+                       "would be no way left to set one — so set your own password "
+                       "first, then come back here."},
+            status_code=409)
+    try:
+        body = await request.json()
+    except Exception:                                        # noqa: BLE001
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    ssid = str(body.get("ssid", "") or "").strip()
+    password = str(body.get("password", "") or "")
+    if not ssid:
+        return JSONResponse({"error": "ssid required"}, status_code=400)
+    if password and len(password) < MIN_WIFI_PSK_LEN:
+        return JSONResponse(
+            {"error": f"wifi password too short (min {MIN_WIFI_PSK_LEN})"},
+            status_code=400)
+
+    # One nonce per attempt: it is what lets the supervisor grant exactly one
+    # fresh window if this fails, and refuse to keep granting them if the page
+    # retries on a timer.
+    nonce = _secrets.token_hex(8)
+    threading.Thread(target=_perform_wifi_switch,
+                     args=(ssid, password, nonce, _setup_ap_state_dir()),
+                     name="setup-wifi-switch", daemon=True).start()
+    logger.warning("setup wizard: switching to WiFi %r from %s — the open hotspot "
+                   "is about to close", ssid,
+                   request.client.host if request.client else "?")
+    return JSONResponse({"ok": True, "switching": True, "nonce": nonce})
+
+
+@app.get("/setup", include_in_schema=False)
+async def setup_page(request: Request):
+    """The onboarding wizard page.
+
+    Passwordless only while the box is serving its own open hotspot and the
+    request comes from that subnet; from anywhere else it is an ordinary
+    authenticated route. `no-store` because the page renders a window that closes
+    by itself — a cached copy would tell the operator the box is still reachable
+    when it is not.
+    """
+    if not _setup_access(request):
+        return RedirectResponse("/login?next=/setup", status_code=302)
+    page = STATIC_DIR / "setup.html"
+    if not page.exists():
+        return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
+    response = FileResponse(page, media_type="text/html")
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route

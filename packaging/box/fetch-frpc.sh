@@ -8,6 +8,19 @@
 # The checksum comes from frp's own release checksums file — the URL carries
 # the version, so this stays deterministic without a hash we would have to
 # remember to update.
+#
+# On a network where github.com releases crawl, set MRRC_FRP_PROXY to a
+# comma-separated list of URL prefixes and the same URL is fetched through them
+# in order:
+#
+#   MRRC_FRP_PROXY=https://gh-proxy.com/,https://ghfast.top/ \
+#     https://github.com/... -> https://gh-proxy.com/https://github.com/...
+#
+# Those proxies are community-run and go down, which is not an exception to
+# design around but a normal Tuesday, so a source that fails or serves the wrong
+# bytes only moves the build to the next one. Every source is verified against
+# frp's own checksum file before it is used, so a mirror can accelerate the
+# download but cannot change what gets installed.
 set -euo pipefail
 
 FRP_VERSION="${MRRC_FRP_VERSION:-0.71.0}"
@@ -15,6 +28,23 @@ PLATFORM="${MRRC_FRP_PLATFORM:-linux_arm64}"
 DEST="${1:?usage: fetch-frpc.sh <dest-dir>}"
 
 BASE="${MRRC_FRP_BASE:-https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}}"
+#: Comma-separated URL prefixes, tried in order; each is prefixed to every URL,
+#: so a mirror only has to be a URL prefix. An empty entry means GitHub itself.
+#: A community proxy going down is expected rather than exceptional — the default
+#: list therefore ends with the empty entry, so there is always a last resort.
+#:
+#: Parsed by hand rather than with `read -a`, which does not produce a trailing
+#: empty field: a list ending in a comma would quietly lose its last-resort entry
+#: and the build would give up with every mirror down instead of falling back.
+PREFIXES=()
+_frp_rest="${MRRC_FRP_PROXY-https://gh-proxy.com/,https://ghfast.top/,}"
+while :; do
+  PREFIXES+=("${_frp_rest%%,*}")
+  case "$_frp_rest" in
+    *,*) _frp_rest="${_frp_rest#*,}" ;;
+    *)   break ;;
+  esac
+done
 TARBALL="frp_${FRP_VERSION}_${PLATFORM}.tar.gz"
 SUMS="frp_sha256_checksums.txt"
 
@@ -28,19 +58,65 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 echo "frpc: fetching ${TARBALL} (frp ${FRP_VERSION})"
-curl -fsSL --retry 3 -o "$tmp/$TARBALL" "$BASE/$TARBALL"
-curl -fsSL --retry 3 -o "$tmp/$SUMS"    "$BASE/$SUMS"
 
-want="$(awk -v f="$TARBALL" '$2 == f {print $1}' "$tmp/$SUMS" | head -1)"
-[ -n "$want" ] || { echo "frpc: $SUMS has no entry for $TARBALL — refusing" >&2; exit 1; }
+# Explicit resuming retry loop rather than curl --retry, because the failure
+# this link produces is not an error at all: the download stalls with the
+# connection still open, and curl will wait on it forever. --speed-limit with
+# --speed-time turns "slower than 2 KB/s for 30 seconds" into something curl
+# reports, and -C - makes the next attempt continue instead of restarting a
+# 12 MiB transfer from zero. A stall that never errored was the actual first
+# failure here; --retry alone could not have caught it.
+fetch() {  # <url> <dest>
+  local url="$1" dest="$2" attempt size
+  for attempt in 1 2 3 4 5; do
+    if curl -fsSL --speed-limit 2048 --speed-time 30 -C - -o "$dest" "$url"; then
+      return 0
+    fi
+    size=0
+    if [ -f "$dest" ]; then size="$(wc -c <"$dest")"; fi
+    echo "frpc: attempt $attempt interrupted (${size} bytes so far), resuming" >&2
+    sleep 2
+  done
+  echo "frpc: gave up on $url after $attempt attempts" >&2
+  return 1
+}
 
-got="$(sha256_of "$tmp/$TARBALL")"
-if [ "$got" != "$want" ]; then
-  echo "frpc: checksum mismatch for $TARBALL" >&2
-  echo "      want $want" >&2
-  echo "      got  $got" >&2
+# Sources are tried in order, each one independently verified against frp's own
+# checksum, so a source that fails or serves something else just moves the
+# build along to the next. The prefix list ends with an empty entry when a
+# mirror is configured, which means "GitHub itself": slow, but the checksum
+# makes it safe to fall back to, and it is the one address that does not
+# disappear when a community proxy goes down.
+src_ok=""
+for prefix in "${PREFIXES[@]}"; do
+  src="${prefix}${BASE}"
+  rm -f "$tmp/$TARBALL" "$tmp/$SUMS"
+  echo "frpc: source $src"
+  if ! fetch "$src/$TARBALL" "$tmp/$TARBALL" || ! fetch "$src/$SUMS" "$tmp/$SUMS"; then
+    continue
+  fi
+  want="$(awk -v f="$TARBALL" '$2 == f {print $1}' "$tmp/$SUMS" | head -1)"
+  if [ -z "$want" ]; then
+    echo "frpc: $SUMS has no entry for $TARBALL — refusing" >&2
+    continue
+  fi
+  got="$(sha256_of "$tmp/$TARBALL")"
+  if [ "$got" != "$want" ]; then
+    echo "frpc: checksum mismatch for $TARBALL from $src" >&2
+    echo "      want $want" >&2
+    echo "      got  $got" >&2
+    continue
+  fi
+  src_ok="$src"
+  break
+done
+
+if [ -z "$src_ok" ]; then
+  echo "frpc: no source produced a verified $TARBALL" >&2
+  echo "      tried: ${PREFIXES[*]}" >&2
   exit 1
 fi
+echo "frpc: verified against frp's checksums"
 
 tar xzf "$tmp/$TARBALL" -C "$tmp"
 bin="$(find "$tmp" -type f -name frpc | head -1)"

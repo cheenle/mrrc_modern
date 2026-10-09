@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#141414">
+<title>MRRC Modern 初始化</title>
+<style>
+:root{
+  --bg:#141414; --card:#1e1e1e; --line:#333; --amber:#f59e0b;
+  --text:#eee; --dim:#9ca3af; --bad:#ef4444; --good:#22c55e;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",
+              "Microsoft YaHei",sans-serif;
+  font-size:16px; line-height:1.6;
+  padding:16px 14px calc(28px + env(safe-area-inset-bottom));
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:520px;margin:0 auto}
+header{text-align:center;margin:6px 0 18px}
+h1{font-size:22px;margin:0;color:var(--amber);letter-spacing:.02em}
+.sub{margin:4px 0 0;color:var(--dim);font-size:13px}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:16px;margin:0 0 14px;
+}
+.card h2{
+  font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px;
+}
+.step-no{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;background:var(--amber);
+  color:#000;font-size:13px;font-weight:700;flex:0 0 auto;
+}
+.hint{color:var(--dim);font-size:13px;margin:0 0 12px}
+label{display:block;font-size:13px;color:var(--dim);margin:12px 0 4px}
+input[type=password],input[type=text]{
+  width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
+  background:#111;color:var(--text);font-size:16px;
+}
+input:focus{outline:none;border-color:var(--amber)}
+button{
+  width:100%;padding:13px;margin-top:14px;border:none;border-radius:10px;
+  background:var(--amber);color:#000;font-size:16px;font-weight:700;cursor:pointer;
+}
+button:disabled{background:#3a3a3a;color:#777;cursor:not-allowed}
+button.ghost{background:transparent;color:var(--amber);border:1px solid var(--amber);font-weight:600}
+.msg{font-size:13px;margin-top:10px;min-height:18px}
+.msg.bad{color:var(--bad)}
+.msg.good{color:var(--good)}
+.rows{list-style:none;margin:10px 0 0;padding:0;border-top:1px solid var(--line)}
+.rows li{border-bottom:1px solid var(--line)}
+.rows button{
+  width:100%;background:transparent;color:var(--text);border:none;border-radius:0;
+  margin:0;padding:13px 4px;font-weight:400;font-size:15px;text-align:left;
+  display:flex;align-items:center;gap:10px;
+}
+.rows button:active{background:#2a2a2a}
+.ssid{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sig{color:var(--dim);font-size:12px;flex:0 0 auto;letter-spacing:1px}
+.lock{color:var(--dim);font-size:12px;flex:0 0 auto}
+.picked{background:#2a2410 !important}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:3px 0}
+.kv b{font-weight:600;color:var(--text);text-align:right;word-break:break-all}
+.kv span{color:var(--dim);flex:0 0 auto}
+.pill{
+  display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;
+  background:#2d2410;color:var(--amber);border:1px solid #6b4d0f;
+}
+.pill.good{background:#0f2d1a;color:var(--good);border-color:#166534}
+.pill.bad{background:#2d0f0f;color:var(--bad);border-color:#7f1d1d}
+.banner{
+  background:#2d2410;border:1px solid #6b4d0f;border-radius:12px;
+  padding:12px;margin:0 0 14px;font-size:13px;color:#fbbf24;
+}
+.note{font-size:12.5px;color:var(--dim)}
+.note b{color:var(--text);font-weight:600}
+.note ol{margin:6px 0 0;padding-left:20px}
+.note li{margin:4px 0}
+.locked{opacity:.55}
+.overlay{
+  position:fixed;inset:0;background:rgba(10,10,10,.97);z-index:10;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.overlay.hidden{display:none}
+.overlay .box{max-width:460px;width:100%;text-align:left}
+.spinner{
+  width:34px;height:34px;margin:0 auto 18px;border-radius:50%;
+  border:3px solid #3a3a3a;border-top-color:var(--amber);
+  animation:spin 0.9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.overlay h2{text-align:center;color:var(--amber);font-size:19px;margin:0 0 10px}
+.big{font-size:15px;margin:0 0 14px}
+code{
+  background:#111;border:1px solid var(--line);border-radius:6px;
+  padding:1px 6px;font-size:13px;word-break:break-all;
+}
+.errbox{
+  background:#2d0f0f;border:1px solid #7f1d1d;border-radius:12px;
+  padding:12px;margin:0 0 14px;font-size:13.5px;color:#fca5a5;
+}
+.hidden{display:none}
+footer{text-align:center;color:#555;font-size:11.5px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>MRRC Modern</h1>
+    <p class="sub">电台盒子初始化</p>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+  <div id="errbox" class="errbox hidden"></div>
+
+  <div class="card" id="card-status">
+    <div class="kv"><span>状态</span><b id="st-mode">读取中…</b></div>
+    <div class="kv"><span>本页来源</span><b id="st-gate">—</b></div>
+    <div class="kv hidden" id="row-ssid"><span>热点名称</span><b id="st-ssid">—</b></div>
+    <div class="kv hidden" id="row-left"><span>窗口剩余</span><b id="st-left">—</b></div>
+    <div class="kv"><span>电台型号</span><b id="st-model">—</b></div>
+    <div class="kv"><span>登录口令</span><b id="st-pass">—</b></div>
+  </div>
+
+  <section class="card" id="card-password">
+    <h2><span class="step-no">1</span>设置登录口令</h2>
+    <p class="hint">这个口令用于之后打开盒子的控制界面。至少 8 位。</p>
+    <label for="pw1">新口令</label>
+    <input id="pw1" type="password" autocomplete="new-password"
+           inputmode="text" placeholder="至少 8 位">
+    <label for="pw2">再输入一次</label>
+    <input id="pw2" type="password" autocomplete="new-password"
+           inputmode="text" placeholder="确认口令">
+    <button id="pw-btn" type="button">保存口令</button>
+    <div id="pw-msg" class="msg"></div>
+  </section>
+
+  <section class="card locked" id="card-wifi">
+    <h2><span class="step-no">2</span>连接你的 Wi-Fi</h2>
+    <p class="hint" id="wifi-lock-hint">请先设置登录口令，再连接 Wi-Fi。</p>
+    <button id="scan-btn" type="button" class="ghost" disabled>扫描附近的 Wi-Fi</button>
+    <ul class="rows" id="net-list"></ul>
+    <div id="pick" class="hidden">
+      <label for="psk">“<span id="pick-name"></span>” 的密码</label>
+      <input id="psk" type="password" autocomplete="off"
+             inputmode="text" placeholder="Wi-Fi 密码（开放网络可留空）">
+      <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
+    </div>
+    <div id="wifi-msg" class="msg"></div>
+  </section>
+
+  <section class="card">
+    <h2>接下来会发生什么</h2>
+    <div class="note">
+      <ol>
+        <li>盒子连上你的 Wi-Fi 后，<b>它自己开的热点会立刻关闭</b>，你这台手机会
+            与盒子断开。</li>
+        <li>请把手机<b>连回你原来的 Wi-Fi</b>（就是上面选的那个）。</li>
+        <li>然后在路由器后台的客户端列表里找到这台盒子，用
+            <code>https://它的IP:8888</code> 打开控制界面，用刚设的口令登录。
+            盒子的地址也会打印在它的 HDMI 控制台上。</li>
+      </ol>
+      <p style="margin-top:10px">如果 Wi-Fi 密码输错了，盒子会<b>自动把热点重新开回来</b>，
+         手机重连热点后刷新本页就能看到失败原因，可以直接重试。</p>
+      <p>本页用的是盒子自签的 HTTPS 证书，浏览器会警告一次，
+         选「继续访问」即可 —— 这是正常的。</p>
+    </div>
+  </section>
+
+  <footer>MRRC Modern · 初始化向导</footer>
+</div>
+
+<div id="overlay" class="overlay hidden">
+  <div class="box">
+    <div class="spinner"></div>
+    <h2 id="ov-title">正在切换网络…</h2>
+    <p class="big" id="ov-text"></p>
+    <div class="note">
+      <ol>
+        <li>盒子的热点<b>马上就要关闭</b>，这台手机会与盒子断开 —— 这是正常的，
+            不是失败。</li>
+        <li>请把手机连回 <b id="ov-ssid"></b>。</li>
+        <li>然后在路由器里找到盒子，用 <code>https://它的IP:8888</code> 打开界面，
+            用你刚设的口令登录。</li>
+      </ol>
+    </div>
+    <p class="note" id="ov-wait" style="margin-top:14px">
+      如果密码不对，盒子会把热点重新开回来；这个页面会自己显示失败原因。
+      请留在本页等待一会儿。</p>
+    <div id="ov-err" class="errbox hidden" style="margin-top:14px"></div>
+    <button id="ov-back" type="button" class="ghost hidden">返回重试</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+var $ = function (id) { return document.getElementById(id); };
+var state = null;          // the last /api/setup/wizard payload
+var countdown = 0;         // seconds left in the open window
+var picked = null;         // the network row the operator tapped
+var switching = false;
+
+function api(path, options) {
+  return fetch(path, options).then(function (resp) {
+    return resp.text().then(function (text) {
+      var data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+      if (!resp.ok) {
+        var why = (data && (data.detail || data.error)) ||
+                  ("请求失败（HTTP " + resp.status + "）");
+        var err = new Error(why);
+        err.status = resp.status;
+        throw err;
+      }
+      return data;
+    });
+  });
+}
+
+function setText(id, text) { $(id).textContent = text; }
+
+function show(id, on) {
+  var node = $(id);
+  if (on) { node.classList.remove("hidden"); }
+  else { node.classList.add("hidden"); }
+}
+
+function msg(id, text, kind) {
+  var node = $(id);
+  node.textContent = text || "";
+  node.className = "msg" + (kind ? " " + kind : "");
+}
+
+function fmtLeft(seconds) {
+  if (!seconds || seconds <= 0) { return "—"; }
+  var m = Math.floor(seconds / 60), s = Math.floor(seconds % 60);
+  return m + " 分 " + (s < 10 ? "0" : "") + s + " 秒";
+}
+
+function bars(signal) {
+  var n = signal >= 75 ? 4 : signal >= 55 ? 3 : signal >= 35 ? 2 : 1;
+  return "▂▄▆█".slice(0, n);
+}
+
+/* ── status ─────────────────────────────────────────────── */
+
+function render(data) {
+  state = data;
+  var hs = data.hotspot || {};
+  var viaGate = data.gate === "hotspot";
+
+  if (hs.mode === "hotspot") {
+    setText("st-mode", "初始化热点已开启");
+    show("row-ssid", true); setText("st-ssid", hs.ssid || "—");
+    show("row-left", true);
+    countdown = Math.max(0, Math.round(hs.remaining_s || 0));
+    setText("st-left", fmtLeft(countdown));
+  } else if (hs.mode === "sta") {
+    setText("st-mode", "已连上 Wi-Fi，热点已关闭");
+    show("row-ssid", false); show("row-left", false);
+  } else {
+    setText("st-mode", hs.reason === "timeout" ? "初始化窗口已超时关闭"
+                                                : "盒子已有网络，热点未开启");
+    show("row-ssid", false); show("row-left", false);
+  }
+
+  setText("st-gate", viaGate ? "开放热点（免口令）" : "已登录会话");
+  setText("st-model", data.radio_model || "—");
+  setText("st-pass", data.auto_password
+        ? "盒子自动生成（你还不知道）"
+        : "已由你设置 ✓");
+
+  var banner = $("banner");
+  if (viaGate) {
+    banner.classList.remove("hidden");
+    banner.innerHTML = "你现在是通过盒子自己开的<b>开放热点</b>访问的，" +
+      "所以这一页不需要口令。窗口会在剩余时间用完、或盒子连上 Wi-Fi 时关闭。";
+  } else {
+    banner.classList.add("hidden");
+  }
+
+  // A failed switch is reported here, because the phone has by then rejoined the
+  // hotspot and reloaded the page — this is the "must not be silent" path.
+  var sw = data["switch"] || {};
+  if (sw.state === "failed" && sw.error) {
+    $("errbox").classList.remove("hidden");
+    $("errbox").textContent = "上次连接 " + (sw.ssid || "") + " 失败：" + sw.error +
+      "。热点已重新开启，可以直接重试。";
+  }
+
+  // Step 1 is done when the password is no longer the generated one.
+  var passwordDone = !data.auto_password;
+  $("card-wifi").classList.toggle("locked", !passwordDone);
+  $("scan-btn").disabled = !passwordDone;
+  setText("wifi-lock-hint", passwordDone
+      ? "选一个 Wi-Fi，盒子会切过去并关掉自己的热点。"
+      : "请先设置登录口令，再连接 Wi-Fi。切网之后这个免口令页面就关了，" +
+        "所以必须先把口令设成你自己的 —— 否则你再也进不来。");
+  if (passwordDone) {
+    $("pw-btn").textContent = "修改口令";
+    msg("pw-msg", "", "");
+  }
+}
+
+function refresh() {
+  return api("/api/setup/wizard").then(render).catch(function (err) {
+    if (switching) { return; }        // expected: the AP is gone
+    setText("st-mode", "读不到状态：" + err.message);
+  });
+}
+
+function tick() {
+  if (!countdown || countdown <= 0) { return; }
+  countdown -= 1;
+  setText("st-left", fmtLeft(countdown));
+  if (countdown === 0) { refresh(); }
+}
+
+/* ── step 1: the password ───────────────────────────────── */
+
+function setPassword() {
+  var pw = $("pw1").value.trim();
+  var again = $("pw2").value.trim();
+  if (pw.length < 8) { msg("pw-msg", "口令至少 8 位。", "bad"); return; }
+  if (pw !== again) { msg("pw-msg", "两次输入不一致。", "bad"); return; }
+  $("pw-btn").disabled = true;
+  msg("pw-msg", "保存中…", "");
+  api("/api/setup/wizard/password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: pw, confirm: again })
+  }).then(function () {
+    $("pw1").value = ""; $("pw2").value = "";
+    msg("pw-msg", "口令已设置 ✓ 现在可以连 Wi-Fi 了。", "good");
+    $("pw-btn").disabled = false;
+    return refresh();
+  }).catch(function (err) {
+    $("pw-btn").disabled = false;
+    msg("pw-msg", err.message, "bad");
+  });
+}
+
+/* ── step 2: the network ────────────────────────────────── */
+
+function scan() {
+  $("scan-btn").disabled = true;
+  msg("wifi-msg", "扫描中，大约需要几秒…", "");
+  $("net-list").innerHTML = "";
+  show("pick", false);
+  api("/api/setup/wizard/wifi").then(function (data) {
+    $("scan-btn").disabled = false;
+    var nets = (data && data.networks) || [];
+    if (!nets.length) {
+      msg("wifi-msg", "没有扫到任何网络。天线接好了吗？（也可能是这块无线的 " +
+                      "AP 模式还没在真机上验证过 —— 见指南 §9.5）", "bad");
+      return;
+    }
+    msg("wifi-msg", "共 " + nets.length + " 个网络，点一个继续。", "");
+    renderNetworks(nets);
+  }).catch(function (err) {
+    $("scan-btn").disabled = false;
+    msg("wifi-msg", err.message, "bad");
+  });
+}
+
+function renderNetworks(nets) {
+  var list = $("net-list");
+  list.innerHTML = "";
+  nets.forEach(function (net) {
+    var li = document.createElement("li");
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.innerHTML = '<span class="sig"></span><span class="ssid"></span>' +
+                    '<span class="lock"></span>';
+    btn.querySelector(".sig").textContent = bars(net.signal || 0);
+    btn.querySelector(".ssid").textContent = net.ssid;
+    btn.querySelector(".lock").textContent = net.protected ? "🔒" : "开放";
+    btn.addEventListener("click", function () {
+      Array.prototype.forEach.call(list.querySelectorAll("button"),
+        function (b) { b.classList.remove("picked"); });
+      btn.classList.add("picked");
+      pick(net);
+    });
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+function pick(net) {
+  picked = net;
+  setText("pick-name", net.ssid);
+  show("pick", true);
+  $("psk").value = "";
+  $("psk").disabled = !net.protected;
+  $("psk").placeholder = net.protected ? "Wi-Fi 密码" : "开放网络，无需密码";
+  msg("wifi-msg", "", "");
+}
+
+function join() {
+  if (!picked) { return; }
+  var psk = $("psk").value;
+  if (psk && psk.length < 8) {
+    msg("wifi-msg", "Wi-Fi 密码至少 8 位（WPA 就是这么规定的）——大概是输错了。", "bad");
+    return;
+  }
+  $("join-btn").disabled = true;
+  api("/api/setup/wizard/wifi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ssid: picked.ssid, password: psk })
+  }).then(function (data) {
+    beginSwitch(picked.ssid);
+  }).catch(function (err) {
+    $("join-btn").disabled = false;
+    if (err.status === 409) {
+      msg("wifi-msg", err.message, "bad");
+      $("card-password").scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    msg("wifi-msg", err.message, "bad");
+  });
+}
+
+/* ── the switch ─────────────────────────────────────────── */
+
+function beginSwitch(ssid) {
+  // Everything the operator needs to know has to be on screen BEFORE the AP
+  // dies, because after that this page cannot be reached any more.
+  switching = true;
+  setText("ov-ssid", ssid);
+  setText("ov-text", "盒子正在连接 " + ssid + "，并关闭自己的热点。");
+  show("ov-err", false);
+  show("ov-back", false);
+  $("overlay").classList.remove("hidden");
+  pollSwitch(0);
+}
+
+function pollSwitch(attempt) {
+  if (attempt > 40) {          // ~2 minutes: stop asking, keep the instructions
+    setText("ov-wait", "还在等盒子的回话。如果手机已经连回了你的 Wi-Fi，" +
+      "就可以关掉本页、去路由器里找盒子了。");
+    return;
+  }
+  setTimeout(function () {
+    api("/api/setup/wizard").then(function (data) {
+      var sw = data["switch"] || {};
+      if (sw.state === "failed") {
+        // The hotspot came back, so the join did not work. Say so — design §6
+        // forbids a silent return.
+        switching = false;
+        $("overlay").classList.add("hidden");
+        $("join-btn").disabled = false;
+        $("errbox").classList.remove("hidden");
+        $("errbox").textContent = "连接 " + (sw.ssid || "") + " 失败：" +
+          (sw.error || "未知原因") + "。热点已重新开启，可以直接重试。";
+        $("errbox").scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+      if (sw.state === "ok") {
+        setText("ov-title", "已连上 " + (sw.ssid || ""));
+        setText("ov-text", "盒子的地址是 " +
+          ((sw.address || "").split("/")[0] || "（见路由器 / HDMI 控制台）") +
+          "。请把手机连回你的 Wi-Fi，然后用 https://该地址:8888 打开界面。");
+        show("ov-wait", false);
+        return;
+      }
+      pollSwitch(attempt + 1);
+    }).catch(function () {
+      pollSwitch(attempt + 1);   // expected while the AP is down
+    });
+  }, 3000);
+}
+
+/* ── wiring ─────────────────────────────────────────────── */
+
+$("pw-btn").addEventListener("click", setPassword);
+$("scan-btn").addEventListener("click", scan);
+$("join-btn").addEventListener("click", join);
+$("ov-back").addEventListener("click", function () {
+  $("overlay").classList.add("hidden");
+  switching = false;
+  $("join-btn").disabled = false;
+  refresh();
+});
+[["pw1", setPassword], ["pw2", setPassword]].forEach(function (pair) {
+  $(pair[0]).addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") { pair[1](); }
+  });
+});
+$("psk").addEventListener("keydown", function (ev) {
+  if (ev.key === "Enter") { join(); }
+});
+
+refresh();
+setInterval(refresh, 15000);
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

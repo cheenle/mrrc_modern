@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1751 tests across 92 test modules (19 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-07, macOS). The per-module sections below
-itemise 71 of those 92 — the support-chain, Cloud Hub and upgrade-channel modules
+2069 tests across 99 test modules (19 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-09, macOS). The per-module sections below
+itemise 71 of those 96 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1751 |
-| Passed | 1750 (1 skipped) |
+| Total tests | 2069 |
+| Passed | 2022 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
@@ -763,6 +763,16 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_box_profiles.py` | 11 份 radio profile 与 `known_models()` **双向相等**（多一个少一个都红）；每份的 `MRRC_RADIO_MODEL` 等于文件名；只含白名单键（波特率/串口/声卡都不该写第二遍）；**任何 profile 不得出现 `MRRC_ALLOW_UNVERIFIED_TX=1`**，且 8 个未验证机型必须显式写 `=0`（AD-019 / NFR-067——镜像的首次连接若能在未经测量的表上按下发射键，就是这条要防的事）；硬编码的那 8 个集合与后端 profile 注册表**交叉校验**（防止列表漂移）；**三处 rsync 排除清单逐字一致**（Pi 构建器 / box overlay / `mrrc_update.sh`，并点名漂移的那一处）；FTDI 库是 `e_machine=183` 的 AArch64 ELF 且 `libftd2xx.so` 是指向它的符号链接（取错 `build-*` 目录会得到一个名字对、其他检查全过、只在真机上失败的库） |
 | `test_mrrc_radio.py` | `plan()` 是纯函数（无磁盘写、无重启），因此可测的是它到底会写什么：显式 `--port` 被写入；**换机型且未给端口时清空 `MRRC_SERIAL_PORT`**（FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留旧值 = 无报错的死链路）；同机型未给端口不动端口；**TX 门禁由 profile 重新断言而非继承**（从不该从上一个开着门禁的机型漏到下一个）；未知机型 `ValueError`、缺 profile `FileNotFoundError`；写入保留不属于它的键（口令、证书、Cloud Hub 状态）；留下 `.env.bak`；`--dry-run` 一个字节也不写 |
 
+### 本轮新增（首次真构建拓到的缺陷守卫，2026-10-07）
+
+镜像此前**从未真跑过**，一次真构建拓出九个缺陷（详见 `docs/w103d_pack.md`）。每条都配了守卫——它们共同的形态是
+“静态阅读完全看不出错”，所以断言的是**性质**而不是那一个实例。
+
+| 测试 | 覆盖 |
+| ------ | ------ |
+| `test_install_sh_vars.py` | `set -euo pipefail` 下**每个被展开的变量都必须有值**。拓到两个真 bug：`INSTALL_DEV` 只在 `--dev` 分支被赋值（任何不带 `--dev` 的 `./install.sh` 都在 STEP 4b 硬挂）、`USER` 是登录 shell 变量而 chroot 里没有（STEP 9 写 systemd 单时硬挂）。扫描器先剔除安全形式（`${VAR:-…}` 与 `\$VAR`），再断言剩下的要么被赋值、要么是 bash 自带或环境必备；旗标默认值单独再查一遗（`--flag` 分支与全局默认区隔了几百行，单看哪边都不像错）。**两个 bug 都影响所有平台的**手动安装**，不只是盒子。 |
+| `test_box_profiles.py::BoxBuildIntegrityTests` | 构建完整性六条：chroot 里用到的路径必须 bind 进 chroot（否则报一个“明明存在却 no such file”的错）；chroot 必须有可用的 resolver（rootfs 的 `resolv.conf` 是指向没跑 systemd-resolved 的悬空链接）；**建 venv 的前置包必须先于 `install.sh` 安装**（它第 2 步建 venv、第 3 步才装系统包，ensurepip 缺失就 FATAL，apt 根本没机会跑）；`libopus0` 必须被装上（缺了不会构建失败，只会让盒子**静默退回 PCM**）；镜像要带 `version.txt`（诊断包 manifest 与升级通道都要读）；产物名带 CHANGELOG 版本（`version.txt` 是构建产物，`cat` 仓库里的只会拿到 fallback）；镜像源只能改写 Debian 的两个条目、**不得碰 armbian 源**；`packaging/box/*.sh` 必须可执行（`box-overlay.sh` 曾以 0644 提交，报错是误导性的 `bad interpreter`） |
+
 ### 本轮新增（主机选型打分器，2026-10-06）
 
 | 测试 | 覆盖 |
@@ -778,3 +788,24 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_spectrum_profile.py` | 17 项：档位表的两个正交因子（形状 × 分频）与每档 payload kbps（**助手必须含 divider**，否则 `mid` 看着像 1/2 而不是 1/4）；`frame_due(tick, 3)` 复现既有 listener 闸门的 `[3,6,9]`；短帧是全帧的**前缀切片**（同版本字节、同 wf1，因此 `scope_handler` 与 11 个 backend 一行未改）；非 1701 B 的怪帧只产出 `full` 变体，且 `variant_for` 退回全帧而**绝不返回 `None`**——静默丢帧正是本特性要避免的故障模式；caps 白名单只收 `high`/`mid`/`low`（服务端内部的 `listen` 档客户端点不到），并对垃圾输入永不抛异常（文本帧过去是被丢弃的保活，把它改坏就是改坏兼容性） |
 | `test_spectrum_profile_server.py` | 40 项：**未声明能力的 socket 永远只拿 1701 B**（兼容闸门 D-3，按线上字节陈述而不是按意图）；listener 角色默认仍是 ÷3 全帧（`test_listen_only.py:391` 那条守卫未改一字即绿）；显式 caps 覆盖角色默认；12 个 tick 上 high/mid/low = 12/6/3 帧、帧长各为 1701/851/851；计量按**实发字节**；死 socket 报给调用方剔除而其余客户端照发；**回退路径同样受分频**（30 tick 上 `low` 拿 7 帧）；`_spectrum_fanout` 的计量**在发送 `try` 之外**——否则计数器里的 `AttributeError` 会被 `except Exception` 洗成"客户端走了"，把健康 socket 静默踢出 `spectrum_clients`（本次自查出来的隐患，已钉住）；handler 保留 `_scope_producer.start()/stop()`、`metrics.close` 与 catch-all `except`（`test_server_ws_protocol.py:334` 按标记切源码块做守卫）；`_CapsWS` **真调 `ws_spectrum`** 跑完整路径：观测到 `high→mid` 的档位切换、listener 默认 `listen` 档、listener 可降档、未知档位名被忽略、未认证 `4001` 先于任何档位状态、断开后按 socket 的状态清空；遥测行含 `payload≈` 与分档帧数，且保留 `uplink spectrum` 这个既有 grep 锚点；前端契约（`onopen` 发 caps、cookie 持久化、切换即时生效、三档选项且不含 `listen`、缓存版本 39/34/v47 全部重钉、listen 页本阶段不动） |
 | `test_spectrum_profile_docs.py` | 15 项：**把"文档说的是真的"变成断言**——NFR-003 不得再把回退态当常态（`~30fps ≈ 51KB/s`）、也不得保留从未为真的 `~851 bytes/frame fallback`；§9.2.4 必须写明 v1=851 B **从未上线**、caps 协商、以及全帧**不得改标 `0x02`** 的理由（iOS `guard version == 0x01`）；分频是比例而非绝对速率（`~10 Hz` 只在回退态成立，任何提及必须同行带 `fallback` 条件；`14-version-history.md` 作为不可变日志豁免）；AD-025 记下两轴的实测依据（`permessage-deflate` 3.9× / OkHttp 不提供该扩展）；AD-023 的 408 kbps 与 86% **就地加注而不删原文**（删掉等于掩盖当时的容量决策是从什么数字做出的）；`spectrum_profile` 进 PyInstaller `hiddenimports`（v1.24.0 漏 `cloud_hub` 的前车之鉴）；`AGENTS.md` 与 `PROJECT_MAP.md` 不再引用并不存在的 `tests/test_ws_protocol.py`；`setOpusBitrate` 的每处提及都必须在邻近行标明未实现（它只存在于注释与文档里）；`tests/README.md` 的总数与 `discover` 的实际输出一致 |
+
+### 本轮新增（W103D 初始化热点与最小向导，2026-10-08）
+
+- **`test_net_wifi.py`** — nmcli 适配层。`-t` 输出的转义解析（SSID 里带 `:`）、
+  两套状态词汇（`connected` / `activated`，以及**不算**上行的 `connected (site only)`）、
+  **自己的热点不算上行**、AP 与 STA 靠 `802-11-wireless.mode` 区分、开放热点的幂等起停
+  （已开的不动、同名**非活动** profile 先删、活动中的绝不删）、扫描去重排序、
+  连网时 PSK 在 argv 里恰好出现一次、`scrub()`；两份 JSON 邮箱的容错读、
+  **0644** 与原子替换、心跳新鲜度、以及免口令闸门（含 **IPv4-mapped 地址必须解包**
+  这条双栈陷阱与"陈旧心跳即关门"的负例）。
+- **`test_setup_ap.py`** — 常驻守护进程。无上行才开、有网线/有 STA 就关、
+  **热点自己不算上行**、30 分钟超时后**本次开机不再重开**（断电重启才重开）、
+  重启后**领养**已在跑的热点并补一个窗口、向导切网期间**让位**且窗口按让位时长补偿、
+  失败按 **nonce 一次性**重置窗口、stale claim 被忽略、起不来的热点**每 60 s 只抱怨一次**、
+  `run()` 里 tick 抛异常不致命、以及 settle 窗口（NM 还在关联时不许下"没网"的结论）。
+- **`test_server_setup_wizard.py`** — 免口令闸门与四个端点。闸门只在
+  "活心跳 + 热点网段"同时成立时开、**中间件的放行集合是闭合的且按相等比较**、
+  **listen-only 令牌在处理函数里被拒**（中间件那条 403 对这些路径必然被跳过）、
+  设口令走**既有写入通道**且**只写两个键**、"先设口令再切网"的 409、
+  切换**先发回答再动手**、失败**必须**把热点开回来并带原因、
+  **PSK 既不落盘也不进日志**（直接断言字节）、以及 `/setup` 注册在 SPA 兜底之前。

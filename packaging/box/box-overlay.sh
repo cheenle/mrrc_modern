@@ -6,7 +6,7 @@
 #
 # What is deliberately NOT here: anything needing hardware. The web password,
 # the serial port, the USB sound card and the self-signed certificate are all
-# resolved on the box's first boot by mrrc-firstboot (design §3.2). Baking a
+# resolved on the box's first boot by mrrc-firstboot (design §3.3). Baking a
 # guess in would produce a configuration that looks usable and cannot work.
 set -euo pipefail
 
@@ -45,6 +45,31 @@ rsync -a "$REPO_SRC/" "$MRRC_HOME/" \
 log "radio profiles"
 mkdir -p "$MRRC_HOME/profiles"
 cp "$REPO_SRC"/packaging/box/profiles/*.env "$MRRC_HOME/profiles/"
+
+log "build prerequisites the base image does not carry"
+# The design assumed this image already had python3-venv, pip, the PortAudio
+# and ALSA headers and libopus0, with apt adding "approximately nothing".
+# Measured on the pinned image, every one of them is absent (only libasound2,
+# gcc, make, rsync, git, curl and sudo are there).
+#
+# install.sh cannot repair this itself: it creates the virtualenv in STEP 2 and
+# installs system packages in STEP 3, so a missing ensurepip is fatal before apt
+# ever runs — and a venv created without it has no pip, which fails the
+# dependency install further down and ships an image that cannot start.
+#
+# libopus0 is the one that is easy to miss and expensive to miss: without it the
+# server silently falls back to PCM instead of Opus.
+apt-get update -qq
+# dnsmasq is for the setup hotspot, not for DNS: NetworkManager's
+# ipv4.method=shared spawns it to hand out addresses on 10.42.0.0/24, and the
+# pinned base image does not carry it (design D-2). Without it the hotspot
+# appears, a phone associates, and gets no address — with no error anywhere,
+# which is the most confusing failure this feature can have.
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+  python3.11-venv python3-dev \
+  portaudio19-dev libportaudio2 libasound2-dev \
+  libopus0 libopus-dev \
+  dnsmasq
 
 log "python environment (install.sh owns the dependency list)"
 cd "$MRRC_HOME"
@@ -128,10 +153,57 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 UNIT
 
+cat > /etc/systemd/system/mrrc-setup-ap.service <<'UNIT'
+[Unit]
+Description=MRRC Modern setup access point (onboarding with no cable and no keyboard)
+# Deliberately no Documentation= line: it would have to point at
+# /opt/mrrc_modern/docs/W103D_GUIDE.md, and the rsync above excludes docs/ — a
+# field naming a file that is not in the image is pure misdirection.
+# Deliberately NOT network-online.target, which mrrc-modern.service does wait
+# for: this unit exists precisely because there may be no network, and ordering
+# it behind that target makes the hotspot appear only after NM's wait-online
+# times out. NetworkManager itself has to be up, because everything here is nmcli.
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+# Root, not mrrc: nmcli needs polkit authority over system connections, and the
+# state directory under /run has to be creatable with group `mrrc` so the server
+# (which runs as mrrc) can leave its switch request there.
+ExecStart=/opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/setup_ap.py
+Restart=always
+RestartSec=5
+# journal for support bundles and `journalctl -u mrrc-setup-ap`; console because
+# the banner carries the address an operator with an HDMI monitor needs, and
+# design D-6's mitigation for "a neighbour wins the race" is that they never have
+# to use the open hotspot at all. The loop only logs on transitions, so this is
+# not noise.
+StandardOutput=journal+console
+StandardError=journal+console
+SyslogIdentifier=mrrc-setup-ap
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 mkdir -p "$MRRC_HOME/linux" "$MRRC_HOME/logs" /var/lib/mrrc/certs
 install -m 0755 "$REPO_SRC/packaging/box/firstboot_wrapper.py" \
   "$MRRC_HOME/linux/firstboot_wrapper.py"
 chown -R "$MRRC_USER:$MRRC_USER" /var/lib/mrrc "$MRRC_HOME/logs"
+
+log "version stamp"
+# version.txt is what the support bundle manifest and the upgrade channel read
+# out of an installed tree, so an image without it fails those two things while
+# still looking complete. build-image.sh passes the value it read from the
+# CHANGELOG; the fallback keeps this script usable on its own.
+version="${MRRC_VERSION:-$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO_SRC/CHANGELOG.md" \
+  | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')}"
+: "${version:?Could not read a version from CHANGELOG.md}"
+printf '%s\n' "${version#v}" > "$MRRC_HOME/version.txt"
+cp "$MRRC_HOME/version.txt" "$MRRC_HOME/VERSION"
+chown "$MRRC_USER:$MRRC_USER" "$MRRC_HOME/version.txt" "$MRRC_HOME/VERSION"
+echo "version: ${version#v}"
 
 log "headless defaults (only keys that are not already set)"
 touch "$ENV_FILE"
@@ -146,14 +218,19 @@ chown "$MRRC_USER:$MRRC_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
 log "enable services"
-systemctl enable mrrc-firstboot.service mrrc-modern.service
+# mrrc-setup-ap first: it is the only way in for an operator who has a phone
+# and nothing else, and it has to be up before the box is handed to anybody.
+systemctl enable mrrc-setup-ap.service mrrc-firstboot.service mrrc-modern.service
 # Amlogic vendor images ship a getty on a vendor-only FIQ console; the mainline
 # kernel does not have it and the unit would wait 90 s per boot.
 systemctl mask serial-getty@ttyFIQ0.service || true
 
 log "reclaim space (the rootfs is a 3 GB partition with ~960 MB free)"
 apt-get clean
-rm -rf /var/lib/apt/lists/* "$MRRC_HOME/venv/.cache"
+rm -rf /var/lib/apt/lists/* "$MRRC_HOME/venv/.cache" /root/.cache
+# /tmp held ~12 MiB of install.sh validation scratch when this build first ran,
+# and nothing else clears it, so it would otherwise ship inside the image.
+rm -rf /tmp/* /tmp/.[!.]* 2>/dev/null || true
 find "$MRRC_HOME" -name '__pycache__' -type d -prune -exec rm -rf {} +
 
 log "overlay done"

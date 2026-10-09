@@ -166,10 +166,12 @@ class VersionConsistencyTests(unittest.TestCase):
         # 1766/93 was the count before the W103D setup hotspot and its minimal
         # wizard landed (net_wifi, setup_ap, the wizard routes and the box guards).
         self.assertNotIn("1766", text)
+        self.assertNotIn("2024 tests", text)
         self.assertNotIn("92 test modules", text)
         self.assertNotIn("93 test modules", text)
-        self.assertIn("2024", text)
-        self.assertIn("96 test modules", text)
+        self.assertNotIn("96 test modules", text)
+        self.assertIn("2029", text)
+        self.assertIn("97 test modules", text)
 
 
 if __name__ == "__main__":

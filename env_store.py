@@ -22,10 +22,19 @@ from __future__ import annotations
 
 import codecs
 import locale
+import os
+import stat
 import sys
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
-__all__ = ["load", "parse_env_text", "read_env_text", "render"]
+__all__ = [
+    "DEFAULT_LOCK_TIMEOUT", "EnvLockTimeout", "EnvStoreError", "EnvWriteResult",
+    "load", "parse_env_text", "read_env_text", "render", "update_env_file",
+]
 
 
 def _key_of(line: str) -> str | None:
@@ -146,3 +155,167 @@ def render(text: str, updates: dict[str, str], *, only_if_absent: bool = False) 
     # so a file that lacked a trailing newline gains one, and an empty body is a
     # single newline rather than an empty file.
     return "\n".join(out) + "\n"
+
+
+DEFAULT_LOCK_TIMEOUT = 5.0
+
+
+class EnvStoreError(Exception):
+    """Base class: every failure here is reportable, not fatal-on-boot."""
+
+
+class EnvLockTimeout(EnvStoreError):
+    """Another MRRC process held this env file's write lock for too long."""
+
+
+@dataclass(frozen=True)
+class EnvWriteResult:
+    """What one write did, so the caller can decide and report (design D-8 §3).
+
+    The layer never restarts anything: the three callers restart differently
+    (``server`` exits 42 and lets the launcher relaunch it, ``mrrc-radio`` calls
+    systemctl, firstboot has not started the service yet), so "写后按需重启" is
+    the caller's decision and this is what it decides from.
+    """
+
+    path: Path
+    changed: dict[str, str]      #: key -> new value, for keys that were already there
+    added: tuple[str, ...]       #: keys the file did not have before
+    encoding: str                #: what the file was read as ("utf-8" normally)
+    written: bool                #: False when nothing on disk needed to change
+
+
+def _acquire(fd: int) -> None:
+    """One non-blocking attempt at an exclusive lock; raises OSError when busy.
+
+    ``msvcrt`` on Windows and ``fcntl`` on POSIX — both stdlib, because the
+    Windows launcher writes this file too and the layer must not grow a
+    dependency.
+    """
+    if os.name == "nt":
+        import msvcrt
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _release(fd: int) -> None:
+    if os.name == "nt":
+        import msvcrt
+        try:
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass                      # closing the fd releases it anyway
+    else:
+        import fcntl
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+
+@contextmanager
+def _locked(path: Path, timeout: float) -> Iterator[None]:
+    """Hold ``<path>.lock`` exclusively across the read-merge-write.
+
+    A merge is only merge-safe if nobody else's write lands between this
+    process's read and its replace — that is exactly what R4 means by "并发改
+    不丢字段". A *sibling* lock file rather than the env file itself: the write
+    replaces the target by rename, so a lock on its inode would be left holding
+    a file nobody ever reads again.
+
+    A stale lock is not a failure mode worth designing around: the OS releases
+    an flock/msvcrt lock when the holding process dies, so a crashed writer
+    cannot lock the box out. The lock file itself is left on disk (deleting it
+    would race the next acquirer) and carries no configuration.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(path.with_name(path.name + ".lock")),
+                 os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        deadline = time.monotonic() + max(0.0, timeout)
+        while True:
+            try:
+                _acquire(fd)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise EnvLockTimeout(
+                        f"{path} stayed locked for {timeout:.1f}s; another MRRC "
+                        "process is writing it"
+                    ) from None
+                time.sleep(0.01)
+        yield
+    finally:
+        try:
+            _release(fd)
+        finally:
+            os.close(fd)
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Write ``text`` to ``path`` by rename, keeping the target's mode and owner.
+
+    Preserving them is the point, not a nicety: the box's env file is
+    ``0640 mrrc:mrrc`` (``box-overlay.sh`` and both firstboot wrappers set it)
+    and holds the web password, while a fresh temp file is created ``0644``
+    under the usual umask — so the plain ``tmp.replace(path)`` that
+    ``cloud_hub._write_config`` used silently widened it on the first Cloud Hub
+    connect.
+    """
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    try:
+        original = path.stat()
+    except OSError:
+        original = None
+    if original is not None:
+        os.chmod(tmp, stat.S_IMODE(original.st_mode))
+        if hasattr(os, "chown"):          # not on Windows
+            try:
+                os.chown(tmp, original.st_uid, original.st_gid)
+            except OSError:
+                pass    # not the owner (or not root): mode is the part that matters
+    os.replace(tmp, path)
+
+
+def update_env_file(
+    path: Path,
+    updates: dict[str, str],
+    *,
+    only_if_absent: bool = False,
+    lock_timeout: float = DEFAULT_LOCK_TIMEOUT,
+) -> EnvWriteResult:
+    """Merge ``updates`` into the env file at ``path`` — the only writer.
+
+    Read → merge → atomic replace, under a lock, preserving comments, the keys
+    this call does not own (the password, certificate paths, whatever Cloud Hub
+    wrote), the file's mode and its owner. Creates the file and its directory
+    when absent. Always writes UTF-8: a file that arrived from an ANSI/GBK
+    editor is normalised by the first write.
+
+    The positional signature is the one ``linux/first_run.py`` and
+    ``macos/first_run.py`` already had, so their callers (``server.py``,
+    ``linux/mrrc_radio.py``, both firstboot wrappers) and the tests that patch
+    the name keep working unchanged.
+    """
+    path = Path(path)
+    with _locked(path, lock_timeout):
+        existed = path.exists()
+        before_bytes = path.read_bytes() if existed else b""
+        text, encoding = read_env_text(path) if existed else ("", "utf-8")
+        before = parse_env_text(text)
+        body = render(text, updates, only_if_absent=only_if_absent)
+        after = parse_env_text(body)
+        after_bytes = body.encode("utf-8")
+        # Compare bytes, not text: a cp936 file whose parsed content did not
+        # change still has to be rewritten, because the promise is "any edit
+        # from MRRC normalises it to UTF-8".
+        written = after_bytes != before_bytes
+        if written:
+            _atomic_write(path, body)
+    return EnvWriteResult(
+        path=path,
+        changed={k: after[k] for k in after if k in before and after[k] != before[k]},
+        added=tuple(k for k in after if k not in before),
+        encoding=encoding,
+        written=written,
+    )

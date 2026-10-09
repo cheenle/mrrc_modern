@@ -10,7 +10,10 @@ Design: docs/superpowers/specs/2026-10-08-w103d-setup-ap-design.md §D-8
 """
 from __future__ import annotations
 
+import os
+import stat
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -165,6 +168,136 @@ class LoadTests(unittest.TestCase):
             path = Path(tmp) / "mrrc.env"
             path.write_bytes(DAMAGED)
             self.assertEqual(env_store.load(path)["MRRC_RADIO_MODEL"], "ft710")
+
+
+class UpdateEnvFileTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self._tmp.name) / "mrrc.env"
+        self.path.write_text(TEMPLATE, encoding="utf-8")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_a_merge_keeps_the_comment_the_key_sat_under(self):
+        """写入点 #3 今天会把整个文件的注释删光。"""
+        env_store.update_env_file(self.path, {"MRRC_WEB_PORT": "9000"})
+        text = self.path.read_text(encoding="utf-8")
+        self.assertIn("# ── Web Server ─", text)
+        self.assertIn("# 注释必须活下来", text)
+        self.assertIn("MRRC_WEB_PORT=9000", text)
+
+    def test_a_key_it_does_not_own_survives_on_disk(self):
+        env_store.update_env_file(self.path, {"MRRC_WEB_PORT": "9000"})
+        loaded = env_store.load(self.path)
+        self.assertEqual(loaded["MRRC_SERIAL_PORT"], "/dev/ttyUSB0")
+        self.assertEqual(loaded["MRRC_WEB_HOST"], "0.0.0.0")
+
+    def test_it_creates_the_file_and_its_parents(self):
+        target = Path(self._tmp.name) / "env" / "deep" / "mrrc.env"
+        env_store.update_env_file(target, {"MRRC_WEB_PORT": "8888"})
+        self.assertEqual(env_store.load(target)["MRRC_WEB_PORT"], "8888")
+
+    def test_a_non_utf8_file_is_healed_to_utf8_by_the_write(self):
+        self.path.write_bytes(DAMAGED)
+        env_store.update_env_file(self.path, {"MRRC_WEB_PORT": "8443"})
+        text = self.path.read_bytes().decode("utf-8")   # must not raise
+        self.assertIn("MRRC_WEB_PORT=8443", text)
+        self.assertIn("MRRC_WEB_PASSWORD=secret", text)
+
+    def test_only_if_absent_leaves_the_present_value_alone(self):
+        env_store.update_env_file(self.path, {"MRRC_WEB_PORT": "9000"},
+                                  only_if_absent=True)
+        self.assertEqual(env_store.load(self.path)["MRRC_WEB_PORT"], "8888")
+
+    def test_no_temporary_file_is_left_behind(self):
+        env_store.update_env_file(self.path, {"MRRC_WEB_PORT": "9000"})
+        leftovers = [p.name for p in Path(self._tmp.name).iterdir()
+                     if p.name.endswith(".tmp")]
+        self.assertEqual([], leftovers)
+
+    def test_the_result_reports_what_changed_and_what_was_added(self):
+        result = env_store.update_env_file(
+            self.path,
+            {"MRRC_WEB_PORT": "9000", "MRRC_ATR1000_HOST": "10.0.0.7"},
+        )
+        self.assertEqual(result.changed, {"MRRC_WEB_PORT": "9000"})
+        self.assertEqual(result.added, ("MRRC_ATR1000_HOST",))
+        self.assertEqual(result.encoding, "utf-8")
+        self.assertTrue(result.written)
+        self.assertEqual(result.path, self.path)
+
+    def test_a_write_that_changes_nothing_says_so(self):
+        """`written=False` 是调用者"要不要重启"的判据之一，不能总是 True。"""
+        result = env_store.update_env_file(self.path, {"MRRC_WEB_PORT": "8888"})
+        self.assertFalse(result.written)
+        self.assertEqual(result.changed, {})
+        self.assertEqual(result.added, ())
+
+
+class FileModeTests(unittest.TestCase):
+    """盒子的 env 文件是 `0640 mrrc:mrrc`，里面是 Web 口令。"""
+
+    def test_an_atomic_write_keeps_the_mode_of_the_file_it_replaces(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text("MRRC_WEB_PASSWORD=secret\n", encoding="utf-8")
+            os.chmod(path, 0o640)
+            env_store.update_env_file(path, {"MRRC_WEB_PORT": "8888"})
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
+
+    def test_the_mutation_that_caused_the_widening_is_caught(self):
+        """把保持 mode 的那行删掉，本用例必须红——它就是云接入今天的写法。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text("A=1\n", encoding="utf-8")
+            os.chmod(path, 0o600)
+            env_store.update_env_file(path, {"B": "2"})
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+
+class LockTests(unittest.TestCase):
+    """规格 R4：并发改不丢字段（整文件不可 last-write-wins）。"""
+
+    def test_a_second_writer_waits_rather_than_interleaving(self):
+        """确定性版本：锁真的在拦人（不依赖时序，所以不会闪红）。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text("A=1\n", encoding="utf-8")
+            with env_store._locked(path, 1.0):
+                with self.assertRaises(env_store.EnvLockTimeout):
+                    env_store.update_env_file(path, {"B": "2"}, lock_timeout=0.2)
+
+    def test_two_writers_in_parallel_lose_neither_field(self):
+        """真并发版本：两个入口各改一个字段，第三个字段没丢。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_text("MRRC_WEB_PASSWORD=keepme\n", encoding="utf-8")
+            errors: list[BaseException] = []
+            barrier = threading.Barrier(2)
+
+            def writer(key: str, value: str) -> None:
+                try:
+                    barrier.wait(timeout=5)
+                    for i in range(25):
+                        env_store.update_env_file(path, {key: f"{value}{i}"})
+                except BaseException as exc:      # noqa: BLE001 - reported below
+                    errors.append(exc)
+
+            threads = [
+                threading.Thread(target=writer, args=("MRRC_WEB_PORT", "9")),
+                threading.Thread(target=writer, args=("MRRC_SCOPE_BAUD", "1")),
+            ]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=30)
+
+            self.assertEqual([], errors)
+            loaded = env_store.load(path)
+            self.assertEqual(loaded["MRRC_WEB_PASSWORD"], "keepme")
+            self.assertTrue(loaded["MRRC_WEB_PORT"].startswith("9"))
+            self.assertTrue(loaded["MRRC_SCOPE_BAUD"].startswith("1"))
 
 
 if __name__ == "__main__":

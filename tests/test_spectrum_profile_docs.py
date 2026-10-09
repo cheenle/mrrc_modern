@@ -163,9 +163,9 @@ class VersionConsistencyTests(unittest.TestCase):
         # produced a pair that contradicted itself — assertIn("96 test modules")
         # beside assertNotIn("97 test modules") — which is what a guard looks
         # like when it is updated by reflex instead of by reading it.
-        self.assertIn("2053", text)
+        self.assertIn("2065", text)
         self.assertIn("98 test modules", text)
-        for stale in ("1673", "1751", "1766", "2024", "2029", "2033", "2036", "2042", "2046", "2034",
+        for stale in ("1673", "1751", "1766", "2024", "2029", "2033", "2036", "2042", "2053", "2046", "2034",
                       "92 test modules", "93 test modules", "96 test modules", "97 test modules"):
             with self.subTest(stale=stale):
                 self.assertNotIn(stale, text)

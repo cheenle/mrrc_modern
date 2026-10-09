@@ -318,6 +318,18 @@ class TickTests(unittest.TestCase):
         svc.tick(); svc.tick()
         self.assertEqual(events, ["start", "stop"])
 
+    def test_a_failed_start_is_not_reported_as_broadcasting(self):
+        """AP mode is the one premise that could not be checked before the
+        hardware arrived (R-1). If it fails, the box has to say so instead of
+        claiming a hotspot nobody can see — that is the difference between a
+        diagnosis and a mystery."""
+        net = self._net(Uplink(False, False), [])
+        net.start_hotspot.side_effect = RuntimeError("AP mode not supported")
+        svc = HotspotService(net, now=lambda: 0.0)
+        svc.tick()
+        self.assertFalse(svc.broadcasting)
+        self.assertIn("AP mode not supported", svc.status()["error"])
+
     def test_gives_up_after_the_window(self):
         events = []
         clock = [0.0]
@@ -350,6 +362,7 @@ class HotspotService:
         self._window = window_seconds
         self._up = False
         self._deadline = 0.0
+        self._error: str | None = None
 
     @property
     def broadcasting(self) -> bool:
@@ -364,7 +377,15 @@ class HotspotService:
             return
         if not needs_hotspot(uplink):
             return
-        self._net.start_hotspot()
+        try:
+            self._net.start_hotspot()
+        except Exception as exc:
+            # Report rather than retry invisibly: the operator's next move is
+            # the HDMI console, and they can only make it if the box says the
+            # radio refused.
+            self._error = str(exc)
+            return
+        self._error = None
         self._up = True
         self._deadline = self._now() + self._window
 
@@ -372,6 +393,7 @@ class HotspotService:
         """What /manage will show. Seconds left, not a timestamp."""
         return {
             "broadcasting": self._up,
+            "error": self._error,
             "seconds_left": max(0, int(self._deadline - self._now())) if self._up else 0,
             "ssid": "MRRC-Setup" if self._up else None,
         }
@@ -380,7 +402,7 @@ class HotspotService:
 - [ ] **步骤 4：运行测试验证通过**
 
 运行：`$PY -m unittest tests.test_mrrc_hotspot -v`
-预期：PASS（10 例）
+预期：PASS（12 例）
 
 - [ ] **步骤 5：Commit**
 

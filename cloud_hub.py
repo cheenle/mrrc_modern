@@ -30,6 +30,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import env_store
+
 import net_tls
 import ssl_bootstrap
 
@@ -145,16 +147,13 @@ def _write_config(config_path: Path, updates: dict[str, str]) -> None:
     This file is what the launcher merges over os.environ on every start, so values written here
     are honoured however the app is launched - which user-scope variables are not.
     """
-    existing: list[str] = []
-    if config_path.exists():
-        existing = [ln for ln in config_path.read_text(encoding="utf-8").splitlines()
-                    if ln.strip() and not ln.lstrip().startswith("#")
-                    and "=" in ln and ln.split("=", 1)[0].strip() not in updates]
-    lines = existing + [f"{k}={v}" for k, v in sorted(updates.items())]
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = config_path.with_suffix(config_path.suffix + ".tmp")
-    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    tmp.replace(config_path)
+    # Delegated to the one writer (design D-8). What this replaces did three
+    # things wrong at once: it dropped every comment in the file, it did not
+    # hold a lock across its own read and write, and ``tmp.replace`` does not
+    # inherit the mode of the file it replaces — so on the box, where the env
+    # file holds the web password at 0640, the first Cloud Hub connect widened
+    # it to 0644 and nothing about the file looked different afterwards.
+    env_store.update_env_file(Path(config_path), updates)
 
 
 def frpc_config_text(name: str, token: str, local_port: int, remote_port: int,

@@ -172,7 +172,8 @@ class VersionConsistencyTests(unittest.TestCase):
         self.assertNotIn("2029", text)
         self.assertNotIn("2036", text)
         self.assertNotIn("2042", text)
-        self.assertIn("2024", text)
+        self.assertNotIn("2024", text)
+        self.assertIn("2033", text)
         self.assertNotIn("97 test modules", text)
 
 

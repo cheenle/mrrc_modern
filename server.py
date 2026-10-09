@@ -4871,6 +4871,74 @@ async def api_cloud_restart(request: Request):
     return JSONResponse({"restarting": True})
 
 
+# ── Management page (read-only) ────────────────────────────────────────
+# Deliberately OUTSIDE the setup wizard region below. That region is scanned by
+# tests/test_server_setup_wizard.py, which asserts it never names the transmit
+# gate or the other safety keys: the wizard runs passwordless on an open hotspot,
+# and a door that open must not be able to name the things it must never touch.
+# This page runs behind login and reports those same values, so it has to live
+# somewhere the scan does not reach. Moving it into the wizard block makes that
+# guard fail, which is the guard doing its job rather than a false positive.
+
+#: The safety invariants shown on the management page. Every one is read-only:
+#: that page reports, it does not set. The notes travel with the values because a
+#: number without its consequence beside it is a number nobody respects.
+SAFETY_FIELDS = (
+    ("MRRC_ALLOW_UNVERIFIED_TX", "0",
+     "发射门禁。为 1 时允许对未验证机型发射，指令表来自 Hamlib/手册而非真机实测；"
+     "8 个未验证机型必须为 0（AD-019 / NFR-067）。改它要两步显式确认。"),
+    ("MRRC_PTT_MAX_TX_SECONDS", "0",
+     "PTT 最长连续发射秒数，0 = 关闭看门狗。调高或清空会削弱防线②。"),
+    ("MRRC_REMOTE_SESSION_TX_HEARTBEAT_S", "",
+     "远程会话的发射心跳超时，由 Cloud Hub 写入（防线①）。本页不改。"),
+)
+
+
+def _safety_fields() -> list:
+    return [
+        {"key": key, "value": os.environ.get(key, default), "read_only": True, "note": note}
+        for key, default, note in SAFETY_FIELDS
+    ]
+
+
+@app.get("/api/manage", include_in_schema=False)
+async def api_manage(request: Request):
+    """The two things that are otherwise invisible, both read-only.
+
+    Whether the setup hotspot is up: AP mode is the one premise that could not
+    be checked without the hardware, so on the day the box arrives this is where
+    that question gets an answer. And what the safety gates are set to: those
+    are the few invariants this system has, and a web switch is the shape that
+    turns an invariant into an incident, so changing one belongs with the config
+    layer and its confirmations rather than on a status page.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    state = net_wifi.read_state(_setup_ap_state_dir())
+    # Both numbers come from the box's clock in the same publish. A phone's clock
+    # can be minutes out, and subtracting there would show a window that is
+    # already closed, or one that never closes.
+    remaining = max(0.0, state.deadline - state.heartbeat) if state.deadline else 0.0
+    return JSONResponse({
+        "hotspot": {
+            "mode": state.mode,
+            "ssid": state.ssid,
+            "url": state.url,
+            "remaining_s": remaining,
+        },
+        "safety": _safety_fields(),
+    })
+
+
+@app.get("/manage", include_in_schema=False)
+async def manage_page(request: Request):
+    """The management page (auth enforced by the middleware, as for /listen)."""
+    page = STATIC_DIR / "manage.html"
+    if not page.exists():
+        return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
+    return FileResponse(page, media_type="text/html")
+
+
 # ── Setup access point wizard (design D-6 / D-7.5) ──────────────────
 #
 # The box opens an *open* hotspot when it has no other way to be reached, and
@@ -5246,6 +5314,7 @@ async def setup_page(request: Request):
     response = FileResponse(page, media_type="text/html")
     response.headers["Cache-Control"] = "no-store"
     return response
+
 
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route
 # defined after it is answered with index.html instead of its own handler. That is how

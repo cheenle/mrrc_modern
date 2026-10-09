@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#141414">
+<title>MRRC Modern 管理</title>
+<style>
+:root{
+  --bg:#141414; --card:#1e1e1e; --line:#333; --amber:#f59e0b;
+  --text:#eee; --dim:#9ca3af; --bad:#ef4444; --good:#22c55e;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",
+              "Microsoft YaHei",sans-serif;
+  font-size:16px; line-height:1.6;
+  padding:16px 14px calc(28px + env(safe-area-inset-bottom));
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:620px;margin:0 auto}
+header{text-align:center;margin:6px 0 18px}
+h1{font-size:22px;margin:0;color:var(--amber);letter-spacing:.02em}
+.sub{margin:4px 0 0;color:var(--dim);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 14px}
+.card h2{font-size:15px;margin:0 0 8px}
+.hint{color:var(--dim);font-size:13px;margin:0 0 10px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.k{color:var(--dim);font-size:13px;flex:0 0 auto}
+.v{font-variant-numeric:tabular-nums;text-align:right;word-break:break-all}
+.on{color:var(--good)} .off{color:var(--dim)} .warn{color:var(--bad)}
+.field{border-top:1px solid var(--line);padding:10px 0}
+.field:first-of-type{border-top:0}
+.field .k{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.field .v{text-align:left;font-size:18px;margin:2px 0 4px}
+.field .note{color:var(--dim);font-size:12.5px;margin:0}
+.tag{display:inline-block;font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--dim);margin-left:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>MRRC Modern 管理</h1>
+    <p class="sub">只读。这里显示不写任何配置。</p>
+  </header>
+
+  <div class="card">
+    <h2>初始化热点</h2>
+    <p class="hint">盒子上不了网时自己开的那个开放热点。它会在连上网络或窗口到期后自动关闭。</p>
+    <div class="row"><span class="k">状态</span><span class="v" id="hs-mode">—</span></div>
+    <div class="row"><span class="k">热点名</span><span class="v" id="hs-ssid">—</span></div>
+    <div class="row"><span class="k">地址</span><span class="v" id="hs-url">—</span></div>
+    <div class="row"><span class="k">剩余</span><span class="v" id="hs-left">—</span></div>
+  </div>
+
+  <div class="card">
+    <h2>安全门禁 <span class="tag">只读</span></h2>
+    <p class="hint">这几个值是系统里少数的安全不变量。网页开关是最容易把不变量变成事故的形态，所以这里只显示当前生效值。</p>
+    <div id="safety"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function text(mode) {
+  if (mode === "hotspot") return ["正在广播", "on"];
+  if (mode === "sta") return ["已切到 Wi-Fi", "off"];
+  if (mode === "off") return ["未广播", "off"];
+  return ["未知（" + mode + "）", "warn"];
+}
+
+function left(sec) {
+  if (!sec || sec <= 0) return "—";
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return m + " 分 " + String(s).padStart(2, "0") + " 秒后自动关闭";
+}
+
+fetch("/api/manage", {cache: "no-store"})
+  .then((r) => r.json())
+  .then((d) => {
+    const hs = d.hotspot || {};
+    const [label, cls] = text(hs.mode);
+    $("hs-mode").textContent = label;
+    $("hs-mode").className = "v " + cls;
+    $("hs-ssid").textContent = hs.ssid || "—";
+    $("hs-url").textContent = hs.url || "—";
+    $("hs-left").textContent = left(hs.remaining_s);
+    const box = $("safety");
+    box.textContent = "";
+    (d.safety || []).forEach((f) => {
+      const div = document.createElement("div");
+      div.className = "field";
+      const k = document.createElement("span"); k.className = "k"; k.textContent = f.key;
+      const v = document.createElement("div"); v.className = "v"; v.textContent = f.value === "" ? "（未设置）" : f.value;
+      const n = document.createElement("p"); n.className = "note"; n.textContent = f.note;
+      div.append(k, v, n);
+      box.append(div);
+    });
+  });
+</script>
+</body>
+</html>

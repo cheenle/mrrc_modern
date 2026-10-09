@@ -159,22 +159,16 @@ class VersionConsistencyTests(unittest.TestCase):
     def test_tests_readme_matches_the_actual_count(self):
         """The number below is the real `unittest discover` output."""
         text = _read("tests/README.md")
-        self.assertNotIn("1673", text)
-        # 1751/92 was the count before the W103D box guards and the install.sh
-        # variable scanner landed; a stale copy must not be left behind.
-        self.assertNotIn("1751", text)
-        # 1766/93 was the count before the W103D setup hotspot and its minimal
-        # wizard landed (net_wifi, setup_ap, the wizard routes and the box guards).
-        self.assertNotIn("1766", text)
-        self.assertNotIn("92 test modules", text)
-        self.assertNotIn("93 test modules", text)
-        self.assertIn("96 test modules", text)
-        self.assertNotIn("2029", text)
-        self.assertNotIn("2036", text)
-        self.assertNotIn("2042", text)
-        self.assertNotIn("2024", text)
-        self.assertIn("2033", text)
-        self.assertNotIn("97 test modules", text)
+        # One canonical statement. Appending to this list on every change
+        # produced a pair that contradicted itself — assertIn("96 test modules")
+        # beside assertNotIn("97 test modules") — which is what a guard looks
+        # like when it is updated by reflex instead of by reading it.
+        self.assertIn("2034", text)
+        self.assertIn("97 test modules", text)
+        for stale in ("1673", "1751", "1766", "2024", "2029", "2033", "2036", "2042",
+                      "92 test modules", "93 test modules", "96 test modules"):
+            with self.subTest(stale=stale):
+                self.assertNotIn(stale, text)
 
 
 if __name__ == "__main__":

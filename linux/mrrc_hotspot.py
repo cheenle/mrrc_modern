@@ -98,3 +98,60 @@ class Network:
 
     def stop_hotspot(self) -> None:
         self._run(["nmcli", "connection", "down", HOTSPOT_CONNECTION])
+
+
+DEFAULT_WINDOW_SECONDS = 30 * 60
+
+
+class HotspotService:
+    """One tick does one decision.
+
+    Time is injected so the window can be tested without waiting for it, and
+    the decisions are kept apart from the loop so that a failure to broadcast
+    is a state this class reports rather than an exception nobody reads.
+    """
+
+    def __init__(self, net: "Network", now=time.monotonic,
+                 window_seconds: int = DEFAULT_WINDOW_SECONDS):
+        self._net = net
+        self._now = now
+        self._window = window_seconds
+        self._up = False
+        self._deadline = 0.0
+        self._error: str | None = None
+
+    @property
+    def broadcasting(self) -> bool:
+        return self._up
+
+    def tick(self) -> None:
+        uplink = self._net.uplink()
+        if self._up:
+            if not needs_hotspot(uplink) or self._now() >= self._deadline:
+                self._net.stop_hotspot()
+                self._up = False
+            return
+        if not needs_hotspot(uplink):
+            return
+        try:
+            self._net.start_hotspot()
+        except Exception as exc:
+            # Report rather than retry invisibly. The AP mode of this radio is
+            # the one premise that could not be checked without the hardware,
+            # and the operator's next move is the HDMI console -- which they
+            # can only make if the box says the radio refused.
+            self._error = str(exc)
+            return
+        self._error = None
+        self._up = True
+        self._deadline = self._now() + self._window
+
+    def status(self) -> dict:
+        """What the management page shows: seconds left, not a timestamp, and
+        the radio's own words if it refused."""
+        return {
+            "broadcasting": self._up,
+            "error": self._error,
+            "seconds_left": max(0, int(self._deadline - self._now())) if self._up else 0,
+            "ssid": HOTSPOT_SSID if self._up else None,
+        }

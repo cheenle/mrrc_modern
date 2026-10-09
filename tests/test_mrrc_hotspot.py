@@ -8,9 +8,12 @@ this.
 from __future__ import annotations
 
 import unittest
+import unittest.mock
 
 from linux.mrrc_hotspot import (
     HOTSPOT_CONNECTION,
+    HOTSPOT_SSID,
+    HotspotService,
     Network,
     NmcliRunnerResult,
     Uplink,
@@ -99,3 +102,72 @@ class NmcliTests(unittest.TestCase):
         calls, runner = self._recording()
         Network(runner).stop_hotspot()
         self.assertIn("down", " ".join(calls[0]))
+
+
+class TickTests(unittest.TestCase):
+    """One tick is one decision. Time is injected, so the window is testable
+    without waiting for it, and the network is a mock, so nothing here needs a
+    radio."""
+
+    def _net(self, uplinks, events=None):
+        events = events if events is not None else []
+        net = unittest.mock.MagicMock()
+        if isinstance(uplinks, list):
+            net.uplink.side_effect = uplinks          # a scripted sequence
+        else:
+            net.uplink.return_value = uplinks          # the same answer every time
+        net.start_hotspot.side_effect = lambda: events.append("start")
+        net.stop_hotspot.side_effect = lambda: events.append("stop")
+        return net, events
+
+    def test_starts_once_and_does_not_restart_every_tick(self):
+        """A hotspot that is already up must not be torn down and rebuilt on
+        every pass: clients would be dropped every few seconds."""
+        net, events = self._net(Uplink(False, False))
+        svc = HotspotService(net, now=lambda: 0.0)
+        svc.tick(); svc.tick(); svc.tick()
+        self.assertEqual(events, ["start"])
+
+    def test_nothing_happens_while_an_uplink_exists(self):
+        net, events = self._net(Uplink(True, False))
+        HotspotService(net, now=lambda: 0.0).tick()
+        self.assertEqual(events, [])
+
+    def test_stops_when_an_uplink_appears(self):
+        net, events = self._net([Uplink(False, False), Uplink(True, False)])
+        svc = HotspotService(net, now=lambda: 0.0)
+        svc.tick(); svc.tick()
+        self.assertEqual(events, ["start", "stop"])
+
+    def test_gives_up_after_the_window(self):
+        """The window closes on its own. An AP that never closes is a
+        stander-by's way in for as long as the box is powered."""
+        clock = [0.0]
+        net, events = self._net(Uplink(False, False))
+        svc = HotspotService(net, now=lambda: clock[0], window_seconds=60)
+        svc.tick()
+        clock[0] = 61.0
+        svc.tick()
+        self.assertEqual(events, ["start", "stop"])
+
+    def test_a_failed_start_is_not_reported_as_broadcasting(self):
+        """AP mode is the one premise that could not be checked before the
+        hardware arrived (R-1). If it fails, the box has to say so instead of
+        claiming a hotspot nobody can see — that is the difference between a
+        diagnosis and a mystery."""
+        net, _events = self._net(Uplink(False, False))
+        net.start_hotspot.side_effect = RuntimeError("AP mode not supported")
+        svc = HotspotService(net, now=lambda: 0.0)
+        svc.tick()
+        self.assertFalse(svc.broadcasting)
+        self.assertIn("AP mode not supported", svc.status()["error"])
+
+    def test_status_counts_down_and_clears_on_stop(self):
+        clock = [0.0]
+        net, _events = self._net(Uplink(False, False))
+        svc = HotspotService(net, now=lambda: clock[0], window_seconds=60)
+        svc.tick()
+        clock[0] = 20.0
+        self.assertEqual(svc.status()["seconds_left"], 40)
+        self.assertEqual(svc.status()["ssid"], HOTSPOT_SSID)
+        self.assertTrue(svc.status()["broadcasting"])

@@ -10,7 +10,9 @@ Design: docs/superpowers/specs/2026-10-08-w103d-setup-ap-design.md §D-8
 """
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 import env_store
 
@@ -102,6 +104,67 @@ class ParseTests(unittest.TestCase):
     def test_render_then_parse_round_trips_the_update(self):
         body = env_store.render(TEMPLATE, {"MRRC_WEB_PORT": "9000"})
         self.assertEqual(env_store.parse_env_text(body)["MRRC_WEB_PORT"], "9000")
+
+
+#: 现场那份损坏文件：em dash `e2 80 94` 被 ANSI 编辑器写成了 `e2 80 3f`。
+DAMAGED = (b"# mrrc_modern.env \xe2\x80?MRRC Modern launcher "
+           b"configuration template.\nMRRC_WEB_PASSWORD=secret\n"
+           b"MRRC_RADIO_MODEL=ft710\n")
+
+
+class ReadEnvTextTests(unittest.TestCase):
+    """容错读：一个在运维自己的 PC 上、用他的编辑器存过的文件。"""
+
+    def _write(self, tmp: str, raw: bytes) -> Path:
+        path = Path(tmp) / "mrrc.env"
+        path.write_bytes(raw)
+        return path
+
+    def test_the_field_regression_file_is_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text, enc = env_store.read_env_text(self._write(tmp, DAMAGED))
+        self.assertIn("MRRC_WEB_PASSWORD=secret", text)
+        self.assertIn("MRRC_RADIO_MODEL=ft710", text)
+        self.assertNotEqual(enc, "utf-8")
+
+    def test_gbk_values_survive(self):
+        name = "麦克风 (USB Audio CODEC)"
+        raw = ("# 配置\nMRRC_AUDIO_RX_DEVICE=" + name + "\n").encode("cp936")
+        with tempfile.TemporaryDirectory() as tmp:
+            text, enc = env_store.read_env_text(self._write(tmp, raw))
+        self.assertNotEqual(enc, "utf-8")
+        self.assertIn(f"MRRC_AUDIO_RX_DEVICE={name}", text)
+
+    def test_utf16_saved_file_is_readable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = "MRRC_WEB_PORT=8888\r\n".encode("utf-16")
+            text, enc = env_store.read_env_text(self._write(tmp, raw))
+        self.assertIn("MRRC_WEB_PORT=8888", text)
+
+    def test_utf8_files_stay_untouched(self):
+        raw = "# 中文注释 — em dash\nMRRC_RADIO_MODEL=ic7300\n".encode("utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            text, enc = env_store.read_env_text(self._write(tmp, raw))
+        self.assertEqual(enc, "utf-8")
+        self.assertIn("中文注释 — em dash", text)
+
+    def test_a_missing_file_raises_rather_than_inventing_config(self):
+        """读不存在的文件是调用者的错（它应该先 `load()`），不是这里该吞的。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(FileNotFoundError):
+                env_store.read_env_text(Path(tmp) / "nope.env")
+
+
+class LoadTests(unittest.TestCase):
+    def test_a_missing_file_loads_as_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(env_store.load(Path(tmp) / "nope.env"), {})
+
+    def test_load_is_read_then_parse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mrrc.env"
+            path.write_bytes(DAMAGED)
+            self.assertEqual(env_store.load(path)["MRRC_RADIO_MODEL"], "ft710")
 
 
 if __name__ == "__main__":

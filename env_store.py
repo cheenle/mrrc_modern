@@ -20,7 +20,12 @@ not started the service yet), so the layer reports what it did through
 """
 from __future__ import annotations
 
-__all__ = ["parse_env_text", "render"]
+import codecs
+import locale
+import sys
+from pathlib import Path
+
+__all__ = ["load", "parse_env_text", "read_env_text", "render"]
 
 
 def _key_of(line: str) -> str | None:
@@ -35,6 +40,67 @@ def _key_of(line: str) -> str | None:
     if not stripped or stripped.startswith("#") or "=" not in line:
         return None
     return line.split("=", 1)[0].strip()
+
+
+def _bom_encodings() -> tuple[tuple[bytes, str], ...]:
+    """BOMs a text editor may have written (UTF-32 first: its BOM prefixes UTF-16's)."""
+    return (
+        (codecs.BOM_UTF32_LE, "utf-32"),
+        (codecs.BOM_UTF32_BE, "utf-32"),
+        (codecs.BOM_UTF8, "utf-8-sig"),
+        (codecs.BOM_UTF16_LE, "utf-16"),
+        (codecs.BOM_UTF16_BE, "utf-16"),
+    )
+
+
+def read_env_text(path: Path) -> tuple[str, str]:
+    """Read a user-editable text file without ever raising on its encoding.
+
+    Returns ``(text, encoding)`` where ``encoding`` is ``"utf-8"`` for a clean
+    file and the fallback that was used otherwise, so callers can say so.
+
+    On the Pi and the box this file arrives as the **preseed**: written on the
+    operator's own PC and copied onto the boot partition, so a non-UTF-8 save
+    (an ANSI/GBK editor turns the template's em-dash ``e2 80 94`` into
+    ``e2 80 3f``) is the likeliest encoding to show up. A strict UTF-8 read made
+    ``mrrc-firstboot.service`` fail on the very first boot — the same field bug
+    as the Windows/macOS launchers (2026-09-12). This is now the **only** copy:
+    ``linux/first_run.py`` and ``macos/first_run.py`` re-export it.
+    """
+    raw = path.read_bytes()
+    for bom, encoding in _bom_encodings():
+        if raw.startswith(bom):
+            return raw.decode(encoding, errors="replace"), encoding
+    try:
+        return raw.decode("utf-8"), "utf-8"
+    except UnicodeDecodeError:
+        pass
+    # Not UTF-8: prefer the local code page (so Chinese device names survive),
+    # then GBK explicitly, then a codec that cannot fail — KEY=VALUE lines are
+    # ASCII and still parse.
+    for encoding in ("cp936", locale.getpreferredencoding(False), "latin-1"):
+        try:
+            text = raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+        print(f"Warning: {path} is not valid UTF-8; reading it as {encoding}. "
+              f"Re-save it as UTF-8 (any edit from MRRC does that).",
+              file=sys.stderr)
+        return text, encoding
+    return raw.decode("utf-8", errors="replace"), "utf-8-replace"
+
+
+def load(path: Path) -> dict[str, str]:
+    """The env as it is on disk right now; empty when the file is absent.
+
+    Replaces ``mrrc_radio.current_env()`` and the ad-hoc ``read_env_text(...) →
+    parse`` pairs. Never raises on a missing file: "not configured yet" is the
+    normal state on a first boot, not an error.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return {}
+    return parse_env_text(read_env_text(path)[0])
 
 
 def parse_env_text(text: str) -> dict[str, str]:

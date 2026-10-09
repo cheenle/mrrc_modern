@@ -299,6 +299,10 @@ def check_online(registry: dict, app: str, sdd: str,
 
     # The published downloads must exist and match the shipped bytes.
     for fact in registry.get("artifact_facts", []):
+        if fact.get("optional"):
+            out.append((SKIP, f"online:{fact['id']}",
+                        fact.get("why", "optional artifact — published on its own stream")))
+            continue
         artifact = ROOT / fact["artifact"].format(app=app)
         url = f"{SITE}/downloads/{fact['artifact'].format(app=app).split('/')[-1]}"
         status, headers, body = _http(url, method="HEAD")

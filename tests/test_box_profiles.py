@@ -281,6 +281,7 @@ class BoxBuildIntegrityTests(unittest.TestCase):
         self.assertNotIn('cat "$REPO/version.txt"', script)
         self.assertIn("MRRC-Modern-${VERSION#v}-w103d.img", script)
 
+    @unittest.skipIf(os.name == "nt", "runs the box's bash parse block; Windows has no bash")
     def test_the_frp_source_list_keeps_its_last_resort(self):
         """A comma list ending in an empty entry has to yield that empty entry.
 

@@ -174,7 +174,10 @@ class UpdateEnvFileTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.path = Path(self._tmp.name) / "mrrc.env"
-        self.path.write_text(TEMPLATE, encoding="utf-8")
+        # newline="" keeps the fixture byte-identical to what `render` writes:
+        # Windows would otherwise translate \n to \r\n, and the "unchanged"
+        # byte comparison below would see a difference the fixture invented.
+        self.path.write_text(TEMPLATE, encoding="utf-8", newline="")
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -235,6 +238,7 @@ class UpdateEnvFileTests(unittest.TestCase):
         self.assertEqual(result.added, ())
 
 
+@unittest.skipIf(os.name == "nt", "POSIX file modes; Windows has no 0640/0600")
 class FileModeTests(unittest.TestCase):
     """盒子的 env 文件是 `0640 mrrc:mrrc`，里面是 Web 口令。"""
 

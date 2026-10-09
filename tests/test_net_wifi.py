@@ -609,6 +609,7 @@ class StateFileTests(unittest.TestCase):
         self.assertEqual(state.heartbeat, 0.0)
         self.assertEqual(state.deadline, 0.0)
 
+    @unittest.skipIf(os.name == "nt", "POSIX file modes; Windows has no 0644")
     def test_the_file_is_world_readable(self):
         """root writes it, `mrrc` reads it. A 0600 file from root's umask would
         make the gate silently unreadable — i.e. permanently closed, with
@@ -826,6 +827,7 @@ class GateTests(unittest.TestCase):
 
 
 class EnsureStateDirTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX file modes; Windows has no 0775")
     def test_creates_the_directory_group_writable(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "setup-ap"

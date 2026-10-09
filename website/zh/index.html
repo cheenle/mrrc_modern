@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.25.4 · 稳定版</span>
+<span>v1.25.5 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -56,10 +56,10 @@
           CAT/CI-V 控制——无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.25.4-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.25.4
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.25.5-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.25.5
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.25.4
+<i class="fab fa-windows"></i> Windows 安装包 v1.25.5
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i> 安卓 APK v1.1.30
@@ -86,12 +86,21 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.25.4 更新内容</strong>
+<strong> v1.25.5 更新内容</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>macOS 隧道不再「每启动一次就漏一个进程」——那边的清理代码从来没跑过</strong>——v1.25.2 修这个泄漏时，改的是
+<strong>快捷行回答「现在在哪」，不再是「按下去会变成什么」</strong>——<code>MODE</code> / <code>BAND</code> / <code>FILTER</code>
+              显示<em>当前</em>模式、波段与滤波带宽；<code>ATT</code> / <code>PRE</code> 显示完整当前档位
+              （<code>OFF / 6dB / 12dB / 18dB</code>、<code>OFF / AMP1 / AMP2</code>），不再是三字符缩写；
+              点击仍然轮转到下一档。同时：频谱带宽成为每连接可协商的档位（设置里选 full / mid / low，
+              payload 151 → 38 → 19 kbps，未声明能力的连接逐字节等于从前）；配置文件的写入收敛到唯一写者
+              <code>env_store.py</code>（文件锁 + 原子替换、保注释保序、不动 mode），新增只读页
+              <code>/manage</code>（热点是否在跑 + 三个安全闸门当前值及其后果）。
+            </li>
+            <li>
+<strong>上一版（v1.25.4，仅 macOS）：macOS 隧道不再「每启动一次就漏一个进程」——那边的清理代码从来没跑过</strong>——v1.25.2 修这个泄漏时，改的是
               <em>枚举方式</em>（<code>wmic</code> → <code>Get-CimInstance</code>），但那个函数在非 Windows 上
               仍然一进门就返回，于是 macOS 上每次启动都留下一个，一直如此。一台 Mac 上实测：
               <strong>6 次</strong>启动、<strong>6 个</strong>孤儿。而且它会自己滚起来 —— 孤儿占着入口名，
@@ -393,14 +402,14 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.25.4 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.25.5 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.8 MB · x64 · 54,347,067 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 7daebeae…</code>
+            51.9 MB · x64 · 54,395,338 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 1ed3fb8d…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.25.4 首次运行零配置：自动生成网页密码，自动识别电台
+            v1.25.5 首次运行零配置：自动生成网页密码，自动识别电台
             （FT-710 ASCII CAT / Icom CI-V 0x19）与串口（COM），登录页
             直接显示自动生成的密码。网页“连接设置”对话框可修改电台型号、
             串口、RX+TX 音频设备与密码，支持保存并重启。CAT、音频与频谱行为不变。
@@ -416,10 +425,10 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.25.4-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.25.4 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.25.5-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.25.5 版本化安装包
             </a>
-<div class="dl-meta">54,347,067 bytes · SHA-256 7daebeae…</div>
+<div class="dl-meta">54,395,338 bytes · SHA-256 1ed3fb8d…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -435,11 +444,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.25.4-arm64.dmg — v1.25.4 稳定版 </strong>
+<strong> MRRC-Modern-v1.25.5-arm64.dmg — v1.25.5 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            59.5 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 62,440,021 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: e823b125…</code>
+            59.6 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 62,490,425 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 58ad7481…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
@@ -457,7 +466,7 @@
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.25.4-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.25.5-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -590,10 +599,10 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.25.4，51.8 MB，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.25.5，51.9 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 7daebeae65dccfb184be6b93553df0967e12f9fd84b9a937e3a7ae4c4c0659ab</code>
+<code>SHA-256 1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -931,7 +940,7 @@
 <div class="perf-card">
 <div class="metric">1604</div>
 <div class="metric-label">
-              无硬件依赖测试<br/><small>v1.25.4 发布版实测：macOS 1642 项 / Windows 1639 项</small>
+              无硬件依赖测试<br/><small>v1.25.5 发布版实测：macOS 2070 项 / Windows 2067 项</small>
 </div>
 </div>
 </div>
@@ -1073,7 +1082,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.75</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V2.76</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>
@@ -1129,7 +1138,7 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.25.4</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.25.5</a></li>
 <li><a href="../downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

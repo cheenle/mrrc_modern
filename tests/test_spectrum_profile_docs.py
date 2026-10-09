@@ -147,14 +147,14 @@ class VersionConsistencyTests(unittest.TestCase):
 
     def test_app_version_bump_is_left_to_the_release_step(self):
         """The website download cards point at real artifact filenames
-        (MRRC-Modern-v1.25.4-arm64.dmg).  Bumping them before an installer
+        (MRRC-Modern-v1.25.5-arm64.dmg).  Bumping them before an installer
         exists would hand users a 404, so CHANGELOG/.iss/cards move together at
         release time, not when a feature lands.
         """
         top = [ln for ln in _read("CHANGELOG.md").splitlines()
                if ln.startswith("## [v")][0]
-        self.assertIn("v1.25.4", top)
-        self.assertIn('"1.25.4"', _read("packaging/windows/MRRC-Modern.iss"))
+        self.assertIn("v1.25.5", top)
+        self.assertIn('"1.25.5"', _read("packaging/windows/MRRC-Modern.iss"))
 
     def test_tests_readme_matches_the_actual_count(self):
         """The number below is the real `unittest discover` output."""

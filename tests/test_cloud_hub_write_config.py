@@ -28,6 +28,7 @@ class WriteConfigTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
+    @unittest.skipIf(os.name == "nt", "POSIX file modes; Windows has no 0640")
     def test_the_mode_of_the_file_survives_the_write(self):
         """The defect, at the call site rather than one layer down."""
         self.path.write_text("MRRC_WEB_PASSWORD=secret\n", encoding="utf-8")

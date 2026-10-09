@@ -1,19 +1,19 @@
 {
-  "latest": "1.25.4",
+  "latest": "1.25.5",
   "installer": {
-    "version": "1.25.4",
+    "version": "1.25.5",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe",
-    "sha256": "7daebeae65dccfb184be6b93553df0967e12f9fd84b9a937e3a7ae4c4c0659ab",
-    "size": 54347067
+    "sha256": "1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2",
+    "size": 54395338
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-06T22:34:35",
-  "notes": "1.25.4：修掉 macOS 上的隧道进程残留 —— 回收旧 frpc 的清理代码被一句平台判断关在 Windows 之内，启动时从不执行，一个开机周期里留下 6 个孤儿并挡住后续启动（现场日志里 67/86 行是 already exists 重试）；关停时也会停掉隧道子进程了。本版同时是 FT-891（实验性、仅接收）与「键控了却没有声音」这两条只在源码里的修复到达用户的那一版。",
+  "releasedAt": "2026-10-09T14:32:29",
+  "notes": "1.25.5：主界面快捷行从「显示下一个」改成「显示当前」—— MODE/BAND/FILTER 显示当前模式/波段/滤波带宽，ATT/PRE 显示完整档位（OFF / 6dB / 12dB / 18dB、OFF / AMP1 / AMP2），点击仍然轮转到下一档；频谱带宽成为每连接可协商的档位（设置里选 full / mid / low，payload 151→38→19 kbps，未声明能力的连接逐字节等于从前）；配置文件的写入收敛到唯一写者 env_store.py（文件锁 + 原子替换、保注释保序、不动 mode 与 owner），读取只有一个容错读者；新增只读页 /manage（热点是否在跑 + 三个安全闸门当前值与后果）。装完第一次打开若仍见旧标签，强刷一次（macOS ⌘⇧R）。",
   "previous": {
-    "version": "1.25.3",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.3-Windows-x64-Setup.exe",
-    "sha256": "1413521cd4081d922429320106ba44f135d339e4ac805d29937b0f2d667744ec",
-    "size": 54342929
+    "version": "1.25.4",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.4-Windows-x64-Setup.exe",
+    "sha256": "7daebeae65dccfb184be6b93553df0967e12f9fd84b9a937e3a7ae4c4c0659ab",
+    "size": 54347067
   }
 }

@@ -2,12 +2,12 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> **最新构建：v1.25.4（2026-10-06）** —— VM 门禁 **1639 项 OK（19 skip）**；`dev_tools/tls_trust_gate.py` 通过（`build.ps1:53` 那道门，失败即 throw）；产物 `MRRC-Modern-v1.25.4-Windows-x64-Setup.exe` **54,347,067 bytes**，SHA-256 `7daebeae65dccfb184be6b93553df0967e12f9fd84b9a937e3a7ae4c4c0659ab`；`version.txt` = 1.25.4；mtime 2026-10-06 22:15:07；Inno Setup 6.7.3、PyInstaller 6.21.0、Python 3.12.4；fleet 13 个文件在**应用根目录**；VM 与 Mac 两侧 SHA-256 逐字节一致；包内 junk **0**、私钥形状 **0**（除有意随包的 `vendor\ca\cacert.pem`）。
+> **最新构建：v1.25.5（2026-10-09）** —— VM 门禁 **2067 项 OK（25 skip）**；`dev_tools/tls_trust_gate.py` 通过（`build.ps1:53` 那道门，失败即 throw）；产物 `MRRC-Modern-v1.25.5-Windows-x64-Setup.exe` **54,395,338 bytes**，SHA-256 `1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2`；`version.txt` = 1.25.5；mtime 2026-10-09 14:32:29；Inno Setup 6.7.3、PyInstaller 6.21.0、Python 3.12.4；fleet 13 个文件在**应用根目录**；VM 与 Mac 两侧 SHA-256 逐字节一致；包内 junk **0**、私钥形状 **0**（除有意随包的 `vendor\ca\cacert.pem`）。**本轮 25 个 skip = 原有 19 + 6 个新增平台守卫**（5 处 POSIX 权限位断言 + 1 处需要 `bash` 的 box 解析用例 —— 它们此前从未在 Windows 上跑过，这一轮的门禁把它们抓了出来，已按仓库惯例用 `skipIf(os.name == "nt")` 守好）。
 >
 > **本轮三层证据**（缺一层就不算验过）：
-> ① **符号走查**（`dev_tools/bundle_check_v1254.py`）：`server` 入口的 `lifespan` 与源码 co_code **逐字节一致**（4874 字节）；`cloud_hub` 的 `_terminate`/`_kill_stale_frpc`/`_enumerate_frpc`/`_stale_frpc_pids`/`_windows_norm` 全部一致；`signal`/`SIGTERM` 在 co_names，`ps`/`-eo`/`pid=,command=` 在 co_consts。脚本自带**自对照**（拿两个不相干的函数比，必须报 DIFF）—— 没有它，"全部一致"可能只是比对逻辑在空转。
-> ② **洁净室真跑**（`dev_tools/cleanroom_v1254.ps1`，19 条全过）：https /login **200**、同端口明文连不上（**000**）、`/api/health` **401**、TLS **1.3**（raw=12288）、SAN 含 `IP Address=127.0.0.1`、**只绑 127.0.0.1**、banner 是 https、证书落在**用户数据目录**、安装目录 **163→163**、第二实例没起服务且监听只剩 1 个。
-> ③ **装完真跑**（`dev_tools/install_smoke_v1254.ps1`，12 条全过）：真 `Setup.exe` 静默装进隔离 `/DIR=` —— 165 文件、`version.txt` = 1.25.4、fleet 在、安装后的 Launcher https /login **200**、安装目录 **165→165**、卸载后 **0** 残留。
+> ① **符号走查**（`tools/bundle_check_1255.py`，用 VM 的 venv 跑）：冻结入口 `server` 里查到本版的 `spectrumCaps` / `_spectrum_fanout` / `manage.html` / `setup.html`（`co_names` 与 `co_consts` 两处都查）；PYZ（1073 个模块）里查到 `env_store` / `net_wifi` / `cloud_hub` / `config`。`grep`/`strings` 看不进压缩 PYZ —— 缺失的符号和存在的符号长得一模一样。
+> ② **洁净室真跑**（`tools/cleanroom_v1255.ps1`，19 条全过）：冻结 Launcher 在隔离 LOCALAPPDATA + 现场配置（显式 `127.0.0.1`）+ 空闲端口 18899 下起来 —— https /login **200**、同端口明文连不上（**000**）、`/api/health` **401**、TLS **raw=12288**、SAN 含 `IP Address=127.0.0.1`、**只绑 127.0.0.1**、证书落在用户数据目录、安装目录 **165→165**、日志行数 == distinct（34/34）、第二实例不服务且监听只剩 1 个。
+> ③ **装完真跑**（`tools/install_smoke_v1255.ps1`，12 条全过）：真 `Setup.exe` 静默装进隔离 `/DIR=` —— 167 文件、`version.txt` = 1.25.5、fleet 在、安装后的 Launcher https /login **200**、`/api/health` **401**、明文 **000**、安装目录 **167→167**、卸载后 **0** 残留。
 >
 > **这一轮踩到的两个坑（脚本注释里都写了，别再踩）**：
 > ① **环境变量不管用 —— 配置文件优先于 `os.environ`**。首次运行会从模板生成 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`，里面写着 `0.0.0.0:8888`，于是 `MRRC_WEB_PORT=18896` 完全不生效、服务器绑到了 8888 上。洁净室必须**先把配置写出来**。

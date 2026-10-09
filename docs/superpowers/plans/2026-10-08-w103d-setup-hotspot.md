@@ -902,7 +902,12 @@ git commit -m "server: a setup page that only exists where the hotspot is"
 运行：`$PY -m unittest discover -s tests`
 预期：失败 **1 个**（既存的那个，见全局约束 1）。**总数以实测为准**（不要照抄本计划的数字）
 
-- [ ] **步骤 2：同步三处计数**
+- [ ] **步骤 2：确认计数已同步**（**每个任务都要做，不要攒到这里**）
+
+  ⚠️ 执行时发现：把计数同步推迟到本任务会让 README **长期写着错数字**，而守卫又坚持那个错数字 ——
+  比"改两次"更糟。所以**新增测试的每个任务都在该任务内同步**：`tests/README.md` 两处
+  （概览行 + `| Total tests |` 表行）+ `tests/test_spectrum_profile_docs.py` 守卫
+  （旧值进 `assertNotIn`，新值进 `assertIn`）。本步骤只剩确认。
 
 `tests/README.md` 的总数与模块数、以及 `tests/test_spectrum_profile_docs.py` 里那两个断言
 —— **用实测数字**填 `assertIn`，并把**当前**值加进 `assertNotIn`。

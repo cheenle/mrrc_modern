@@ -212,6 +212,24 @@ class StateBroadcastLogicTests(unittest.TestCase):
         self.assertIn("const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;", main_source)
         self.assertIn("renderUpdates(changedFields);", main_source)
 
+    def test_quick_row_shows_current_values_not_next(self):
+        """2026-10-09 spec §4: the quick row shows the radio's current
+        state (Android parity); ATT/PRE use the full capability labels."""
+        ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
+        block = ui_source.split("function renderButtonLabels()", 1)[1]
+        block = block.split("function renderToggles()", 1)[0]
+        self.assertIn("setText('btn-mode', modeName);", block)
+        self.assertIn("setText('btn-band', bandName);", block)
+        self.assertIn("getFilterLabel(radioState.filter_width, modeName)", block)
+        self.assertIn("setText('btn-att', _attFullLabel(radioState.attenuator));", block)
+        self.assertIn("setText('btn-pre', _preFullLabel(radioState.preamp));", block)
+        self.assertNotIn("nextAtt", block)
+        self.assertNotIn("nextPre", block)
+        self.assertIn("function _attFullLabel(idx)", ui_source)
+        self.assertIn("function _preFullLabel(idx)", ui_source)
+        self.assertNotIn("_attShortLabel", ui_source)
+        self.assertNotIn("_preShortLabel", ui_source)
+
     def test_civ_scope_speed_selector_uses_capabilities(self):
         ui_source = Path("static/ft710_ui.js").read_text(encoding="utf-8")
         self.assertIn("c.scope_speeds", ui_source)

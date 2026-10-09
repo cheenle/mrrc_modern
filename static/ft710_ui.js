@@ -366,20 +366,21 @@ function getFilterLabel(idx, modeName) {
 
 // ATT/PRE cycle lengths come from capabilities (att_steps/preamp_steps)
 // when present; the FT-710 4-step / 3-step cycles are the fallback.
-// Derived short labels reproduce the legacy FT-710 strings exactly.
 function _attStepCount() {
     const c = _caps();
     return (c && Array.isArray(c.att_steps) && c.att_steps.length) || 4;
 }
 
-function _attShortLabel(idx) {
+// Full current-step labels for the quick row, derived from capabilities
+// so a tap renders the new value immediately (optimistic render); the
+// Android client shows the same strings from the server's *_label.
+function _attFullLabel(idx) {
     const c = _caps();
     if (c && Array.isArray(c.att_steps) && c.att_steps.length) {
         const db = c.att_steps[idx];
-        if (!db) return 'OF';
-        return db < 10 ? db + 'd' : String(db);   // ≤3 chars, legacy style
+        return db ? db + 'dB' : 'OFF';
     }
-    return {0:'OF', 1:'6d', 2:'12', 3:'18'}[idx];
+    return {0:'OFF', 1:'6dB', 2:'12dB', 3:'18dB'}[idx] || 'OFF';
 }
 
 function _preStepCount() {
@@ -387,44 +388,30 @@ function _preStepCount() {
     return (c && Array.isArray(c.preamp_steps) && c.preamp_steps.length) || 3;
 }
 
-function _preShortLabel(idx) {
+function _preFullLabel(idx) {
     const c = _caps();
     if (c && Array.isArray(c.preamp_steps) && c.preamp_steps.length) {
-        const name = String(c.preamp_steps[idx] || 'OFF');
-        if (name === 'OFF') return 'OF';
-        const m = name.match(/(\d+)/);   // AMP1 -> A1, AMP2 -> A2
-        return m ? 'A' + m[1] : name.slice(0, 3);
+        return String(c.preamp_steps[idx] || 'OFF');
     }
-    return {0:'OF', 1:'A1', 2:'A2'}[idx];
+    return {0:'OFF', 1:'AMP1', 2:'AMP2'}[idx] || 'OFF';
 }
 
 function renderButtonLabels() {
+    // The quick row shows the radio's CURRENT state (a tap cycles to the
+    // next step) — Android parity: the row answers "where am I now".
     const modeName = radioState.mode_name;
-    const nextMode = getNextMode(modeName);
-    setText('btn-mode', nextMode);
+    setText('btn-mode', modeName);
     document.getElementById('btn-mode').dataset.current = modeName;
 
     const bandName = radioState.band_name;
-    const nextBand = getNextBand(bandName);
-    if (nextBand) {
-        setText('btn-band', nextBand.name);
-        document.getElementById('btn-band').dataset.current = bandName;
-    }
+    setText('btn-band', bandName);
+    document.getElementById('btn-band').dataset.current = bandName;
 
-    const filterIdx = radioState.filter_width;
-    const nextIdx = getNextFilter(filterIdx, modeName);
-    setText('btn-filter', getFilterLabel(nextIdx, modeName));
-    document.getElementById('btn-filter').dataset.current = filterIdx;
+    setText('btn-filter', getFilterLabel(radioState.filter_width, modeName));
+    document.getElementById('btn-filter').dataset.current = radioState.filter_width;
 
-    // ATT cycle: length/labels from capabilities.att_steps when present
-    // (FT-710: OFF -> 6dB -> 12dB -> 18dB; IC-7300: OFF -> 20dB).
-    const nextAtt = (radioState.attenuator + 1) % _attStepCount();
-    setText('btn-att', _attShortLabel(nextAtt));
-
-    // PRE cycle: length/labels from capabilities.preamp_steps when
-    // present (OFF -> AMP1 -> AMP2 on both supported radios).
-    const nextPre = (radioState.preamp + 1) % _preStepCount();
-    setText('btn-pre', _preShortLabel(nextPre));
+    setText('btn-att', _attFullLabel(radioState.attenuator));
+    setText('btn-pre', _preFullLabel(radioState.preamp));
 }
 
 // ── Toggle States ───────────────────────────────────────────────────

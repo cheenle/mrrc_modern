@@ -164,9 +164,15 @@ class VersionConsistencyTests(unittest.TestCase):
         # beside assertNotIn("97 test modules") — which is what a guard looks
         # like when it is updated by reflex instead of by reading it.
         self.assertIn("2069", text)
-        self.assertIn("98 test modules", text)
-        for stale in ("1673", "1751", "1766", "2024", "2029", "2033", "2036", "2042", "2065", "2053", "2046", "2034",
-                      "92 test modules", "93 test modules", "96 test modules", "97 test modules"):
+        # The module count is derived, not typed. It used to be a literal, and
+        # the ritual that updates these numbers changed the test total and
+        # missed the module total — so adding a test file turned this guard red
+        # on its own. Counting the files is both less work and the stronger
+        # check: it fails when the README and the tree disagree, which is what
+        # the literal only did by luck.
+        modules = len(list((Path(__file__).resolve().parent).glob("test_*.py")))
+        self.assertIn(f"{modules} test modules", text)
+        for stale in ("1673", "1751", "1766", "2024", "2029", "2033", "2036", "2042", "2065", "2053", "2046", "2034"):
             with self.subTest(stale=stale):
                 self.assertNotIn(stale, text)
 

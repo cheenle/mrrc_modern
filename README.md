@@ -1,6 +1,18 @@
-# MRRC Web Control
+# MRRC Modern
 
-Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) and Icom CI-V transceivers: [IC-7300](https://www.icomjapan.com/)/IC-7300MK2 (verified) plus IC-705, IC-7610 and IC-7760, and the Yaesu ASCII-CAT family FTDX10, FTDX101D, FTDX101MP, FTX-1F and FT-891 (**experimental — implemented from offline rig data, no unit tested; transmit stays disabled until `MRRC_ALLOW_UNVERIFIED_TX=1`**; the FT-891 additionally has **no USB sound card** — its USB port is CAT only, so audio needs an external interface on the DATA/ACC port — and **no internal ATU**, so the ATU control stays hidden and TUNE is a carrier an external tuner can key on). Full browser-based control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry, PTT management, and memory channels. Mobile-first responsive UI optimized for iPhone/iOS Safari.
+**MRRC Modern Web Control Server** — 多机型业余电台远程控制：Python FastAPI 服务端 +
+浏览器 UI + 原生 iOS / Android 客户端。（旧文档里的 “MRRC Web Control” 是同一个项目；
+`server.py`、SDD 与本站页面均自称 *MRRC Modern*。）
+
+Web-based remote control server for the [Yaesu FT-710](https://www.yaesu.com/) and Icom CI-V transceivers: [IC-7300](https://www.icomjapan.com/)/IC-7300MK2 (verified) plus IC-705, IC-7610 and IC-7760, and the Yaesu ASCII-CAT family FTDX10, FTDX101D, FTDX101MP, FTX-1F and FT-891 (**experimental — implemented from offline rig data, no unit tested; transmit stays disabled until `MRRC_ALLOW_UNVERIFIED_TX=1`**; the FT-891 additionally has **no USB sound card** — its USB port is CAT only, so audio needs an external interface on the DATA/ACC port — and **no internal ATU**, so the ATU control stays hidden and TUNE is a carrier an external tuner can key on). Full control from any modern device — bidirectional audio (RX/TX) with Opus compression, real-time FFT spectrum plot + waterfall, S-meter, frequency/mode/filter control, multi-meter telemetry, PTT management, and memory channels.
+
+Three client surfaces talk to the same server over the same authenticated WebSocket protocol:
+
+| Surface | What it is | Where |
+| ------- | ---------- | ----- |
+| **Browser** | Mobile-first responsive UI (optimized for iPhone/iOS Safari), also the operator surface for every desktop OS | served by `server.py` at `http://<host>:8888` |
+| **Android** | Native Kotlin + Jetpack Compose client, signed APK, Android 8.0+ | [download](https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Android.apk) · source `FT710Android/` |
+| **iOS** | Native SwiftUI client, iOS 17+, iPhone | source `FT710Mobile/` (no public distribution yet) |
 
 The radio model is selected at server startup via `MRRC_RADIO_MODEL` (`ft710`, `ic7300`, `ic7300mk2`, `ic705`, `ic7610`, `ic7760`, `ftdx10`, `ftdx101d`, `ftdx101mp`, `ftx1`, `ft891`). The default is `ft710`.
 
@@ -79,14 +91,54 @@ Two things to know before the first launch (full guide:
    spectrum and PTT all work, RX plays silence, and no error is logged anywhere.
    The grant is bound to the build, so **each upgrade asks once again**.
 
+### Android App (sideload APK)
+
+Native client for Android 8.0+ (`minSdk 26`, Kotlin + Jetpack Compose, Opus via JNI/NDK).
+The signed APK lives at a **stable URL that always points at the latest build**; the current
+version, byte size and SHA-256 are printed on the
+[download page](https://www.vlsc.net/mrrc_modern/zh/) next to the button, so verify against
+that rather than trusting a number copied into a document:
+
+- Stable URL: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Android.apk>
+- Versioned mirror: `…/downloads/MRRC-Modern-v<version>-Android.apk`
+
+Install: allow “install unknown apps” for your browser/file manager, open the APK, then log in
+with the same `MRRC_WEB_PASSWORD` (or the listen-only password) you use in the browser — either
+straight to the radio's LAN address (`192.168.x.x:8888`) or through Cloud Hub
+(`https://<callsign>.mrrc.vlsc.net/`, port 443).
+
+The app covers the same ground as the browser UI: frequency/mode/filter/ATT/PRE, VFO A/B and
+split, memory channels (6 slots — `MEM_CHANNEL_COUNT`), NR/NB/AN/COMP/ATU, RF power and gain sliders, FFT + waterfall
+with click-to-QSY, an arc S-meter, PWR/ALC/SWR/Id/Vd meters, touch-and-hold PTT with the same
+safety interlocks as the web client, server-side recordings, the optional ATR-1000 tuner row,
+the Cloud Hub onboarding wizard, and a foreground service so RX audio keeps running in the
+background. Two client-side behaviours worth knowing:
+
+- **Spectrum bandwidth tiers** (server AD-025): the settings page offers full / mid / low
+  profiles (~151 → ~38 → ~19 kbps). The server only sends the narrower frames to clients that
+  declare the capability, so an older client is unaffected byte-for-byte.
+- **Backgrounding pauses the spectrum channel only.** `/WSspectrum` runs at ~30 fps in
+  1701-byte frames (~51 kB/s ≈ 180 MB/hour), so the app closes it when it goes to the
+  background and reopens it on return; RX audio, PTT and control are untouched, and a paused
+  spectrum is excluded from the "am I connected" predicate so background RX cannot be torn
+  down by its own power-saving.
+
+Building from source needs JDK 17, the Android SDK and the NDK (for the Opus JNI shim):
+[FT710Android/BUILD_GUIDE.md](FT710Android/BUILD_GUIDE.md). Development reference (protocol
+facts, invariants, release discipline): [FT710Android/CLAUDE.md](FT710Android/CLAUDE.md).
+
 ### Radio Box Image (ZTE W103D)
 
 The same server, preinstalled on an Armbian image for a ZTE W103D (Amlogic
-S905L3A, 2 GB / 32 GB). **Not published as a download yet** — the pipeline runs
-locally and is the only supported path today:
+S905L3A, 2 GB / 32 GB). Published as a download (~1.16 GB, version listed on the
+[download page](https://www.vlsc.net/mrrc_modern/zh/)):
+
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.4-w103d.img.gz>
+
+Rebuild it locally when you need a version that is not published yet (needs Docker running):
 
 ```bash
-packaging/box/build-image.sh      # needs Docker running; -> dist/w103d/MRRC-Modern-<ver>-w103d.img.gz
+packaging/box/build-image.sh      # -> dist/w103d/MRRC-Modern-<ver>-w103d.img.gz
 ```
 
 Flash the result to a USB stick and boot the box from it (`reboot update`); the
@@ -116,17 +168,22 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 | `IC7300MK2_CIV_ADDR` | `0xB6` | IC-7300MK2 CI-V address |
 | `MRRC_SERIAL_PORT` | `/dev/cu.SLAB_USBtoUART` | CAT/CI-V serial port (FT-710 Enhanced COM Port or IC-7300 USB CI-V port) |
 | `MRRC_BAUD_RATE` | backend default | Serial baud: FT-710 `38400`; all Icom models `115200`; explicit value overrides the default |
+| `MRRC_SERIAL_TIMEOUT` | `1.0` | Per-query serial read timeout in seconds. Bounds how long a non-responding background poll can hold the serial lock and so block a user command such as PTT; normal responses arrive in <50 ms |
 | `MRRC_RECORDINGS_DIR` | `<runtime>/recordings` | Where recorded QSO MP3s live (packaged installs: the per-user data dir) |
 | `MRRC_CONFIG_FILE` | `<user data dir>/mrrc_modern.env` | The config file the server reads and the setup dialog writes. The launchers set it explicitly; a bare `Server` start resolves it next to `MRRC_MEM_FILE`. Since v1.25.0 a **packaged** start also loads this file into the environment before any constant is computed, so starting the server without its launcher honours the same host/port it would have — previously a bare start bound `:::8888` while the file said `MRRC_WEB_HOST=127.0.0.1`. |
 | `MRRC_NO_CONFIG_FILE` | off | Set to `1`/`true`/`yes` to stop that load. It only ever happens for a frozen build or when `MRRC_CONFIG_FILE` names a file explicitly, so source checkouts, systemd and CI are unaffected; real environment variables always win over file values (the loader only fills keys that are missing). |
 | `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate for recordings (kbps, 16 kHz mono) |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
-| `MRRC_LOG_DIR` / `MRRC_SUPPORT_URL` / `MRRC_CQ_FILE` | `static/audio/cq.wav` | Recording played by the one-touch CQ key (any 16-bit WAV; normalised to 48 kHz mono at startup, 30 s max) |
+| `MRRC_LOG_DIR` | `<user data dir>/logs` | Where log files are written. The launchers set it explicitly — a bare start on a packaged install would otherwise have no logs at all |
 | `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891). Off = keying refused with an explanatory UI message; releases are never blocked |
+| `MRRC_SUPPORT_URL` | `https://www.vlsc.net/mrrc_modern/support/` | Receiver the 🐞 diagnostics flow uploads bundles to (`api/create` + PUT). The hosted endpoint is behind HTTP Basic Auth, so this default is the project's own receiver — point it at your own instance if you self-host |
+| `MRRC_CQ_FILE` | `static/audio/cq.wav` | Recording played by the one-touch CQ key (any 16-bit WAV; normalised to 48 kHz mono at startup, 30 s max) |
 | `MRRC_WEB_PORT` | `8888` | Web server port |
 | `MRRC_WEB_PASSWORD` | `changeme_please_use_strong_password!` | Login password (**must change** — startup logs a loud warning while the default is active) |
 | `MRRC_LISTEN_PASSWORD` | *(empty = off)* | Optional listen-only password: logging in with it opens `/listen` — frequency/mode tuning, memory recall, S-meter, waterfall and RX audio only. Transmit and every device setting are refused server-side (WS gate + 4003 on `/WSaudioTX`/`/WSatr1000` + read-only REST). This instance is also public at `https://www.vlsc.net/mrrc_modern/listen` via `deploy_listen_proxy.sh` (IPv6 reverse proxy) |
 | `MRRC_WEB_HOST` | `::` | Bind address (IPv6 dual-stack) |
+| `MRRC_SSL_CERT` | `<user data dir>/certs/fullchain.pem` | TLS certificate used when the server is started with `--ssl-cert`; the desktop launcher bootstraps a self-signed pair on first run |
+| `MRRC_SSL_KEY` | `<user data dir>/certs/localhost.key` | Private key matching `MRRC_SSL_CERT` |
 | `MRRC_SESSION_METRICS_INTERVAL_S` | `300` | Interval of the `Session metrics:` INFO line (listener/operator concurrency + uplink kbps); `0` disables the line, `GET /api/session_metrics` keeps working |
 | `MRRC_SESSION_METRICS_WINDOW_S` | `3600` | Window for the listener-concurrency peak reported alongside it |
 | `MRRC_PTT_MAX_TX_SECONDS` | `0` (off) | Safety watchdog: force RX after this many seconds of continuous transmit (guards zombie-but-connected clients; 0 keeps the radio never interrupting an operator's transmission) |
@@ -190,7 +247,7 @@ Yaesu FT-710 or Icom IC-7300 Radio
 | `/WSradio` | JSON text | Control commands, state updates, memory management |
 | `/WSaudioRX` | Binary tagged | RX audio: 1-byte codec tag (0x00=PCM, 0x01=Opus 48kHz) + payload |
 | `/WSaudioTX` | Binary tagged + text | TX mic uplink: tagged audio frames + text control (`s:` stop, `m:` settings) |
-| `/WSspectrum` | Binary | Spectrum frames: v1=851B (1B ver + 850B wf1), v2=1701B (+850B wf2), ~30fps |
+| `/WSspectrum` | Binary | Spectrum frames: v1=851B (1B ver + 850B wf1), v2=1701B (+850B wf2), ~30fps. Frame size is per-connection tiered — see the *Spectrum bandwidth tiers* row under **Visualizations** |
 | `/WSatr1000` | JSON text | Optional ATR1000 tuner state + tune assist (closed with code 4000 when disabled) |
 
 ### Dual-Mode Spectrum
@@ -244,51 +301,81 @@ Windows packages search `opus.dll`, `_internal\opus.dll`, and
 ## Project Structure
 
 ```
-mrrc/
-├── server.py              # FastAPI app: lifespan, auth, 4 WebSockets (+optional /WSatr1000), REST, CLI
-├── cat_controller.py      # Compatibility shim — moved to backends/ft710/cat_controller.py
-├── radio_state.py         # RadioState dataclass with dirty-field change tracking
-├── poll_scheduler.py      # Backend-agnostic adaptive background polling
-├── audio_handler.py       # PyAudio capture/playback + Opus encode + per-backend device detection
-├── opus_rx.py             # libopus ctypes wrapper (RxOpusEncoder + TxOpusDecoder)
-├── scope_handler.py       # Spectrum data container: real FFT + S-meter Gaussian fallback
-├── scope_pipe.py          # Compatibility shim — moved to backends/ft710/scope_pipe.py
-├── scope_frame.py         # Compatibility shim — moved to backends/ft710/scope_frame.py
-├── scope_libraries.py     # Compatibility shim — moved to backends/ft710/scope_libraries.py
-├── config.py              # Protocol-neutral constants + shared UI helpers
-├── requirements.txt       # fastapi, uvicorn, pyserial, websockets, pyaudio, numpy
-├── start.sh               # Start server in background
-├── stop.sh                # Stop background server
-├── backends/              # Pluggable radio backends
-│   ├── __init__.py        # create_backend(model) factory
-│   ├── base.py            # RadioBackend ABC + RadioCapabilities
-│   ├── ft710/             # Yaesu FT-710 backend (CAT, FT4222 SPI scope, 44.1kHz audio)
-│   └── ic7300/            # Icom IC-7300/MK2 backend (CI-V, 0x27 scope, 48kHz audio)
-├── lib/
-│   ├── libft4222.dylib    # FTDI FT4222 library (must match wfview version)
-│   ├── libftd2xx.dylib    # FTDI D2XX library
-│   └── ftd2xx.cfg         # D2XX config (copy to /usr/local/lib/)
-├── static/
-│   ├── index.html         # SPA shell (mobile-first responsive layout)
-│   ├── ft710.css          # Dark amber theme, iPhone safe-area support
-│   ├── ft710_main.js      # WebSocket client (4 channels), state, audio, spectrum
-│   ├── ft710_ui.js        # All UI rendering: waterfall, S-meter, meters, controls
+mrrc_modern/
+├── server.py                    # FastAPI app: lifespan, auth, 4 WebSockets (+optional /WSatr1000), REST, CLI
+├── config.py                    # Protocol-neutral constants + shared UI helpers
+├── env_store.py                 # The one writer of the config/env file (lock + atomic replace, keeps comments)
+├── radio_state.py               # RadioState dataclass with dirty-field change tracking
+├── poll_scheduler.py            # Backend-agnostic adaptive background polling
+├── session_metrics.py           # Session concurrency + uplink metering (pure logic, stdlib only)
+├── audio_handler.py             # PyAudio capture/playback + Opus encode + per-backend device detection
+├── opus_rx.py                   # libopus ctypes wrapper (RxOpusEncoder + TxOpusDecoder)
+├── audio_resample.py            # Sample-rate conversion between the radio codec rate and 48 kHz
+├── recorder.py                  # Server-side QSO recorder (MP3)
+├── cq_player.py                 # One-touch CQ playback: WAV normalisation + grant/abort state
+├── scope_handler.py             # Spectrum container: real FFT + S-meter Gaussian fallback
+├── spectrum_profile.py          # Spectrum wire-frame tiers (AD-025: full / mid / low)
+├── atr1000_client.py            # ATR-1000 tuner WebSocket client (asyncio-native)
+├── atr1000_tuner.py             # ATR-1000 LC-learning store (tuned relays per frequency)
+├── cloud_hub.py                 # Cloud Hub onboarding, driven from inside the app
+├── upgrade_core.py              # Update-channel core (manifest + patch handling)
+├── support_bundle.py            # Diagnostics bundle: collect → redact → summarise → package
+├── support_answers.py           # Answer cards for the support chain's second half
+├── support_board.py             # Field-driven-engineering loop board
+├── launcher_log.py              # Launcher-side startup tee
+├── launcher_net.py              # Ask the running server which URL the browser should get
+├── net_tls.py                   # Outbound TLS trust for the packaged app
+├── net_wifi.py                  # NetworkManager adapter for the W103D setup access point
+├── ssl_bootstrap.py             # Self-signed TLS bootstrap for the desktop launcher
+├── pi_web_proxy.py              # HTTP Basic Auth reverse proxy for pi-web
+├── ft710_power.py               # FT-710 power control straight over the serial port (no server needed)
+├── power_restart_via_ws.py      # Power-cycle the FT-710 through the running server
+├── cat_controller.py            # Compatibility shim — moved to backends/ft710/cat_controller.py
+├── scope_pipe.py                # Compatibility shim — moved to backends/ft710/scope_pipe.py
+├── scope_frame.py               # Compatibility shim — moved to backends/ft710/scope_frame.py
+├── scope_libraries.py           # Compatibility shim — moved to backends/ft710/scope_libraries.py
+├── requirements.txt             # fastapi, uvicorn, pyserial, websockets, pyaudio, numpy
+├── start.sh / stop.sh           # Start / stop the server in the background
+├── _diag_*.py _probe_*.py       # One-off bench scripts (CI-V / FT4222 / audio probes); never imported by the server
+├── backends/                    # Pluggable radio backends
+│   ├── __init__.py              # create_backend() factory + known_models() registry (11 models)
+│   ├── base.py                  # RadioBackend ABC + RadioCapabilities
+│   ├── ft710/                   # Yaesu FT-710: CAT, FT4222 SPI scope, 44.1 kHz
+│   ├── ic7300/                  # Icom CI-V family: IC-7300 / MK2 / 705 / 7610 / 7760
+│   └── yaesu/                   # Yaesu ASCII-CAT family: FTDX10 / 101D / 101MP / FTX-1F / FT-891
+├── static/                      # Browser UI (plain ES modules + PWA, no build step)
+│   ├── index.html               # Main SPA shell (mobile-first responsive)
+│   ├── listen.html / listen.js  # Listen-only UI (MRRC_LISTEN_PASSWORD)
+│   ├── setup.html               # First-run setup dialog
+│   ├── support.html             # 🐞 diagnostics + support flow
+│   ├── manage.html              # Read-only status page (/manage)
+│   ├── ft710.css                # Dark amber theme, iPhone safe-area support
+│   ├── ft710_main.js            # WebSocket client (4 channels), state, audio, spectrum
+│   ├── ft710_ui.js              # All UI rendering: waterfall, S-meter, meters, controls
 │   ├── rx_worklet_processor.js  # AudioWorklet RX playback with jitter buffer
 │   ├── tx_capture_worklet.js    # AudioWorklet mic capture
 │   ├── tx_opus_worker.js        # Web Worker Opus encoder for TX
-│   ├── manifest.json      # PWA manifest
-│   ├── sw.js              # Service worker (offline cache)
-│   └── modules/
-│       ├── ptt_manager.js       # PTT safety watchdog + dead-man switch
-│       ├── settings_manager.js  # Cookie + localStorage persistence
-│       ├── opus_codec.js        # Browser WASM Opus encoder/decoder
-│       └── opus_wasm.js         # Emscripten-compiled libopus WASM binary
-├── SDD/                   # Software Design Description (15-chapter TeamSD docs)
-├── docs/                  # Additional documentation
-├── tests/                 # Unit tests
-├── mem_channels.json      # Persistent memory channels
-├── FT710Android/          # 原生 Android 遥控客户端（Kotlin + Compose）
-└── logs/                  # Server log output
+│   ├── manifest.json / sw.js    # PWA manifest + service worker (offline cache)
+│   ├── audio/cq.wav             # Default one-touch CQ recording
+│   └── modules/                 # ptt_manager.js, settings_manager.js, opus_codec.js,
+│                                # opus_wasm.js, atr1000.js, cloud_hub.js
+├── windows/ macos/ linux/       # Per-OS launchers (first run, config file, TLS bootstrap)
+├── packaging/                   # Release pipelines
+│   ├── windows/                 # PyInstaller ×3 + Inno Setup → MRRC-Setup.exe
+│   ├── macos/                   # .app bundle
+│   ├── box/ rpi/                # W103D / Raspberry Pi images (Docker + pi-gen)
+│   ├── pyinstaller/             # Shared PyInstaller specs
+│   └── patch/                   # Hot-fix channel payloads
+├── website/                     # Source of the public site (downloads, answer pages, guide)
+├── FT710Android/                # Native Android client (Kotlin + Compose) — BUILD_GUIDE.md, CLAUDE.md
+├── FT710Mobile/                 # Native iOS client (SwiftUI, iOS 17+) — docs/, CLAUDE.md
+├── dev_tools/                   # Dev-only scripts: bench, bundle inspection, support autopilot
+├── SDD/                         # Software Design Description (15-chapter TeamSD docs)
+├── docs/                        # Additional documentation
+├── tests/                       # Unit tests — tests/README.md is the authority on scope and totals
+├── lib/                         # FTDI FT4222 / D2XX libraries
+├── mem_channels.json            # Persistent memory channels (default path; the launchers relocate it)
+└── logs/ build/ dist/ certs/    # Runtime + build outputs — not tracked in git
 ```
 
 ## Features
@@ -323,6 +410,7 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | --------- | --------------- |
 | FFT Spectrum | 33px real-time amplitude-vs-frequency polyline, cyan (#06b6d4), EMA-smoothed (α=0.30, 2× boost), horizontal + vertical grid |
 | Waterfall | 850-point real-time spectrum, 120-row history, 6 colormaps (Jet/Hot/Cold/Thermal/Night/Gray) |
+| Spectrum bandwidth tiers | Spectrum data is sent per-connection at one of three profiles — `full` / `mid` / `low` ≈ 151 / 38 / 19 kbps — chosen in the client's settings. The server only applies a narrower profile to a client that declares the capability, so a client which never declares one receives byte-identical frames to before (SDD AD-025) |
 | Frequency scale | Auto-scaled labels below waterfall + vertical grid lines on FFT plot |
 | S-Meter | Canvas horizontal bar, S1–S9+60 gradient, dBm digital readout |
 | Multi-meter | Up to 5 real-time horizontal bar meters: PWR (W), ALC, SWR, Id (A), Vd (V). IC-7300 does not report Id/Vd |
@@ -342,6 +430,19 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | --------- | --------------- |
 | Operator | Full control, authenticated with `MRRC_WEB_PASSWORD` — every control in the tables above |
 | Listen-only | A **second, independent password** (`MRRC_LISTEN_PASSWORD`, empty = off) logs into `/listen`: frequency and mode tuning, memory recall, S-meter, waterfall and RX audio with browser-side volume. Enforced **server-side**, not by hiding buttons: the `/WSradio` role gate passes only `ping`/`get`/`memLoadAll`/`memRecall` and `set` on `freq`/`vfo_a_freq`/`vfo_b_freq`/`mode`, `/WSaudioTX` and `/WSatr1000` close with 4003, and non-GET `/api/*` returns 403 (except logout). Setting both passwords to the same value grants full control. `deploy_listen_proxy.sh` publishes it on a public host (idempotent nginx block, direct IPv6 reverse proxy) |
+
+### Native Clients
+
+The browser is not the only surface — two native clients speak the same protocol and are bound by the
+same server-side rules (a listen-only login is refused identically on all three):
+
+| Client | Stack | Covers | Notes |
+| --------- | ------- | -------- | ------- |
+| **Android** — `FT710Android/` | Kotlin + Jetpack Compose, `minSdk 26` (Android 8.0+), Opus via JNI/NDK | Frequency / mode / filter / ATT / PRE, VFO A/B + split, memory channels, the DSP toggles, RF power and gain sliders, FFT + waterfall with tap-to-QSY, arc S-meter, PWR/ALC/SWR/Id/Vd meters, hold-to-talk PTT, server-side recordings, the ATR-1000 row, Cloud Hub onboarding | Runs a foreground service so RX audio survives backgrounding. Since `/WSspectrum` costs ~180 MB/hour at 30 fps, the app **closes the spectrum channel when it goes to the background** and reopens it on return — RX audio, PTT and control are untouched, and a paused spectrum is deliberately excluded from the “am I connected” predicate so background RX can never be torn down by its own power saving |
+| **iOS** — `FT710Mobile/` | SwiftUI, iOS 17+, iPhone | Same control set over the same four channels | No public distribution yet; build from source — [docs/IOS_BUILD_GUIDE.md](docs/IOS_BUILD_GUIDE.md) |
+
+Both reach the server either directly on the LAN (`http://<host>:8888`) or through Cloud Hub, and both
+authenticate with `MRRC_WEB_PASSWORD` (or the listen-only password, with the same refusals).
 
 ### Support & Diagnostics
 
@@ -442,8 +543,18 @@ cd mrrc_modern
 ```
 
 The suite is `unittest` (pytest is not a declared dependency). Case and module counts are not
-restated here — **`tests/README.md` is the authority**; this line claimed "633 tests across 31
-modules" long after the suite had passed 1673 across 89. The CI-V tests prove documented frame construction/parsing, command order, and asynchronous state behavior without hardware; USB driver enumeration, radio ACK timing, real scope cadence, RF/tuner/power behavior, and RX/TX audio quality still require the physical-radio checklist in [`IC-7300_硬件验收清单.md`](IC-7300_硬件验收清单.md).
+restated here — **`tests/README.md` is the authority**; this line once claimed "633 tests across 31
+modules" and stayed wrong long after the suite had outgrown it several times over. Quoting a total
+here only re-arms the same trap.
+
+The native Android client carries its own JVM unit suite, run with Gradle rather than unittest and
+therefore kept out of the totals above:
+
+```bash
+cd FT710Android && ./gradlew testDebugUnitTest testReleaseUnitTest
+```
+
+The CI-V tests prove documented frame construction/parsing, command order, and asynchronous state behavior without hardware; USB driver enumeration, radio ACK timing, real scope cadence, RF/tuner/power behavior, and RX/TX audio quality still require the physical-radio checklist in [`IC-7300_硬件验收清单.md`](IC-7300_硬件验收清单.md).
 
 ## Requirements
 
@@ -458,18 +569,18 @@ modules" long after the suite had passed 1673 across 89. The CI-V tests prove do
   - `libftd2xx.dylib` in `lib/`
   - `ftd2xx.cfg` installed to `/usr/local/lib/` with `DetachKernelDriver=1`
 - **Browser**: Safari 15+ (iOS), Chrome, Firefox (WebSocket + Web Audio + Canvas)
+- **Android client** (optional): Android 8.0+ (`minSdk 26`). Building it from source needs JDK 17, the Android SDK and the NDK for the Opus JNI shim — [FT710Android/BUILD_GUIDE.md](FT710Android/BUILD_GUIDE.md)
 
 ## Documentation
 
 | Document | Description |
 | ---------- | ------------- |
 | [SECURITY_GUIDE.md](SECURITY_GUIDE.md) | Security configuration, password policies, rate limiting |
-| [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 操作指南：界面每个按钮/功能的编号图解与说明（含线上版 guide.html） |
 | [QUICKSTART.md](QUICKSTART.md) | Step-by-step setup guide |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | Cross-platform dependency and driver guide |
 | [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows desktop installer, FTDI DLLs, FT4222 packaging |
 | [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS install/use guide: Gatekeeper dialogs, microphone permission, data locations, update & uninstall, troubleshooting |
-| [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | Web UI operation guide (button-by-button, Chinese) |
+| [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 操作指南：界面每个按钮/功能的编号图解与说明（button-by-button Web UI guide, Chinese; also published as `guide.html`） |
 | [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | Detailed fix documentation (v2.0.0 + TX analysis) |
 | [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) | Verification report |
 | [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | Executive summary (中文) |
@@ -485,6 +596,9 @@ modules" long after the suite had passed 1673 across 89. The CI-V tests prove do
 | [docs/superpowers/specs/2026-08-16-ft710-android-app-design.md](docs/superpowers/specs/2026-08-16-ft710-android-app-design.md) | FT710 Android App 设计 |
 | [FT710Android/CLAUDE.md](FT710Android/CLAUDE.md) | Android 客户端开发参考 |
 | [FT710Android/BUILD_GUIDE.md](FT710Android/BUILD_GUIDE.md) | Android 构建指南 |
+| [tests/README.md](tests/README.md) | Authoritative test-suite scope, totals and per-module breakdown |
+| [FT710Mobile/README.md](FT710Mobile/README.md) | iOS client (SwiftUI) — features, build and status |
+| [packaging/box/README.md](packaging/box/README.md) | W103D / Raspberry Pi image build: first boot, provisioning, eMMC install |
 | [SDD/](SDD/) | Software Design Description (15 chapters) |
 | [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) | CAT command reference |
 
@@ -492,13 +606,25 @@ modules" long after the suite had passed 1673 across 89. The CI-V tests prove do
 
 Set `MRRC_RADIO_MODEL` before starting the server:
 
-| Model | Value | Serial protocol | Scope source | USB audio rate |
-| ------- | ------- | ----------------- | -------------- | ---------------- |
-| Yaesu FT-710 | `ft710` (default) | CAT at `MRRC_SERIAL_PORT`, 38400 baud | FT4222 SPI or S-meter fallback | 44.1 kHz |
-| Icom IC-7300 | `ic7300` | CI-V at `MRRC_SERIAL_PORT`, 115200 8N1 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
-| Icom IC-7300MK2 | `ic7300mk2` | CI-V, same as IC-7300 | CI-V `0x27` frames or S-meter fallback | 48 kHz |
+All eleven entries below are registered in `backends/__init__.py`; that registry — not this table — is what the login dialog and `/api/setup` validate against.
 
-The IC-7300 address can be changed with `IC7300_CIV_ADDR` (default `0x94`); the IC-7300MK2 uses `IC7300MK2_CIV_ADDR` (default `0xB6`). The backend selects the model-specific CI-V Transceive item independently of this configurable address. Legacy `FT710_*` configuration aliases remain accepted, but new deployments should use `MRRC_*`.
+| Model | Value | CAT bus | Spectrum source | USB audio | Status |
+| ------- | ------- | --------- | ----------------- | ----------- | -------- |
+| Yaesu FT-710 | `ft710` (default) | Yaesu CAT at `MRRC_SERIAL_PORT`, 38400 | FT4222 SPI, else S-meter fallback | 44.1 kHz | hardware-verified |
+| Icom IC-7300 | `ic7300` | CI-V 115200 8N1, addr `0x94` | CI-V `0x27` frames, else S-meter fallback | 48 kHz | hardware-verified |
+| Icom IC-7300MK2 | `ic7300mk2` | CI-V 115200 8N1, addr `0xB6` | CI-V `0x27` frames, else S-meter fallback | 48 kHz | hardware-verified |
+| Icom IC-705 | `ic705` | CI-V 115200 8N1, addr `0xA4` | CI-V `0x27` frames, else S-meter fallback | 48 kHz | experimental |
+| Icom IC-7610 | `ic7610` | CI-V 115200 8N1, addr `0x98` | CI-V `0x27` frames, else S-meter fallback | 48 kHz | experimental |
+| Icom IC-7760 | `ic7760` | CI-V 115200 8N1, addr `0xB2` | CI-V `0x27` frames, else S-meter fallback | 48 kHz | experimental |
+| Yaesu FTDX10 | `ftdx10` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
+| Yaesu FTDX101D | `ftdx101d` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
+| Yaesu FTDX101MP | `ftdx101mp` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
+| Yaesu FTX-1F | `ftx1` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | 44.1 kHz | experimental |
+| Yaesu FT-891 | `ft891` | Yaesu ASCII CAT, 38400 | S-meter fallback (no scope protocol) | **none** — USB is CAT-only | experimental |
+
+**experimental** means the profile was written from offline rig data and has never been checked against the hardware: transmit is refused until `MRRC_ALLOW_UNVERIFIED_TX=1`, and every meter whose calibration is unproven is listed in the backend's `unverified_meters` and shown as such rather than presented as measured. The FT-891 additionally has **no internal ATU** (the ATU row is hidden and TUNE becomes a plain carrier an external tuner can key on) and **no USB sound card**, so its audio needs an external interface on the DATA/ACC port. Every other model exposes ATU control.
+
+CI-V addresses are configurable only for the two verified Icom models: `IC7300_CIV_ADDR` (default `0x94`) and `IC7300MK2_CIV_ADDR` (default `0xB6`); the IC-705/IC-7610/IC-7760 addresses are profile constants. The backend selects each model's CI-V Transceive item independently of the configurable address. Legacy `FT710_*` configuration aliases remain accepted, but new deployments should use `MRRC_*`.
 
 ## SDD Documentation
 

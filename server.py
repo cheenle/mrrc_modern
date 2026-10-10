@@ -31,7 +31,21 @@ from typing import Callable, Optional, Protocol
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from macos import first_run
+# The env-file writer. The desktop trees ship macos/; the Linux images
+# deliberately do not — packaging/rpi/build-image.sh's rsync exclusion list drops
+# it and packaging/box/box-overlay.sh mirrors that list — so the module the box
+# actually carries is the sibling port linux/first_run.py: the same function, and
+# the one the first-boot unit already uses. Importing macos unconditionally there
+# killed the service with ModuleNotFoundError before its logger existed (the
+# published 1.25.4 box image ships that way). Only the absence of macos itself is
+# excused: a broken import *inside* macos/ stays a loud failure.
+# tests/test_image_imports.py runs this import against the image's tree.
+try:
+    from macos import first_run
+except ModuleNotFoundError as exc:
+    if not (exc.name or "").startswith("macos"):
+        raise
+    from linux import first_run
 
 from config import (
     RADIO_MODEL, SERIAL_PORT, BAUD_RATE, WEB_PORT, WEB_HOST, WEB_PASSWORD,

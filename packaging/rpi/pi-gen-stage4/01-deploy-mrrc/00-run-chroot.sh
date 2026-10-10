@@ -26,7 +26,19 @@ systemctl enable ssh
 echo "MRRC Modern $(cat /opt/mrrc_modern/version.txt) — rpi64 image"
 
 # ── BUILD GATE: runtime imports + syntax inside the image ──
+# py_compile proves syntax only, and importing third-party dependencies proves
+# the wheelhouse. Neither touches a first-party entry point, so a module the
+# image does not carry (macos/, excluded by the rsync list above) stayed
+# invisible here and killed the service on the box with ModuleNotFoundError
+# before it could log a line (found 2026-10-10 on the box image). Import what
+# the units actually run.
 python3 -m py_compile /opt/mrrc_modern/server.py \
 	/opt/mrrc_modern/linux/first_run.py /opt/mrrc_modern/linux/firstboot_wrapper.py
 /opt/mrrc_modern/venv/bin/python -c "import fastapi, uvicorn, serial, pyaudio, numpy, cryptography; print('deps OK')"
 /opt/mrrc_modern/venv/bin/python -c "import sys; sys.path.insert(0,'/opt/mrrc_modern'); import scope_libraries; print('scope libs OK')"
+PYTHONDONTWRITEBYTECODE=1 /opt/mrrc_modern/venv/bin/python -c "
+import sys
+sys.path.insert(0, '/opt/mrrc_modern')
+sys.path.insert(0, '/opt/mrrc_modern/linux')
+import server, first_run, mrrc_radio, setup_ap
+print('entry points OK')"

@@ -98,8 +98,19 @@ install -d "$MRRC_HOME/fleet"
 bash "$REPO_SRC/packaging/box/fetch-frpc.sh" "$MRRC_HOME/fleet"
 
 log "mrrc-radio, the updater, and the password helper"
-install -m 0755 "$MRRC_HOME/linux/mrrc_radio.py" /usr/local/bin/mrrc-radio
 install -m 0755 "$MRRC_HOME/linux/mrrc_update.sh" /usr/local/bin/mrrc-update
+# mrrc-radio is a wrapper, not a copy of the module. linux/mrrc_radio.py has no
+# shebang (it is a module the tests import, and the interpreter that has pyserial
+# and the backend package is the venv, not the system python3), so installing the
+# .py itself as /usr/local/bin/mrrc-radio handed a Python file to /bin/sh —
+# "Syntax error: ( unexpected" on every invocation. A copy would also go
+# stale the moment mrrc-update replaced the tree, since it does not re-install
+# /usr/local/bin. The tree stays the single source.
+cat > /usr/local/bin/mrrc-radio <<'WRAPPER'
+#!/bin/sh
+exec /opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/mrrc_radio.py "$@"
+WRAPPER
+chmod 0755 /usr/local/bin/mrrc-radio
 # The Pi image's helper, unchanged: the web password lives in a 0640 root file
 # and this is how an operator reads it back after the console banner is gone.
 install -m 0755 "$REPO_SRC/packaging/rpi/pi-gen-stage4/01-deploy-mrrc/files/usr/local/bin/mrrc-show-password" \
@@ -224,6 +235,18 @@ systemctl enable mrrc-setup-ap.service mrrc-firstboot.service mrrc-modern.servic
 # Amlogic vendor images ship a getty on a vendor-only FIQ console; the mainline
 # kernel does not have it and the unit would wait 90 s per boot.
 systemctl mask serial-getty@ttyFIQ0.service || true
+
+log "import gate: the entry points the units run must import from THIS tree"
+# The two failure modes this catches both shipped once (2026-10-10, the 1.25.4
+# box image): server.py imported macos.first_run, which the rsync above excludes
+# on purpose, and the installed mrrc-radio resolved its tree from __file__. Both
+# die on the box before any log line; neither is visible to a syntax check. Runs
+# before the reclaim step so a stray __pycache__ is cleaned up with the rest.
+(
+  cd "$MRRC_HOME"
+  PYTHONDONTWRITEBYTECODE=1 "$VENV/bin/python" -c "import server; import sys; sys.path.insert(0, '$MRRC_HOME/linux'); import first_run, mrrc_radio, setup_ap"
+) || { echo "box-overlay: an image entry point cannot import from this tree" >&2; exit 1; }
+echo "entry points import OK"
 
 log "reclaim space (the rootfs is a 3 GB partition with ~960 MB free)"
 apt-get clean

@@ -8,11 +8,19 @@ opened transmit gate over.
 """
 from __future__ import annotations
 
+import importlib.util
+import os
+import shutil
+import sys
 import tempfile
 import unittest
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from unittest import mock
 
 from linux import mrrc_radio
+
+REPO = Path(__file__).resolve().parents[1]
 
 
 class PlanTests(unittest.TestCase):
@@ -103,3 +111,70 @@ class WriteTests(unittest.TestCase):
         before = self.env.read_text(encoding="utf-8")
         mrrc_radio.apply(self.env, {"MRRC_RADIO_MODEL": "ft710"}, dry_run=True)
         self.assertEqual(self.env.read_text(encoding="utf-8"), before)
+
+
+class InstalledCopyTests(unittest.TestCase):
+    """On the box the CLI is a copy at /usr/local/bin/mrrc-radio.
+
+    ``parents[1]`` of that path is /usr/local — not a tree — so the module has
+    to take the tree from MRRC_HOME (the variable linux/mrrc_update.sh already
+    reads) and find the profiles where the overlay puts them, at
+    ``<MRRC_HOME>/profiles`` (packaging/ is excluded from the image, so the
+    checkout's ``packaging/box/profiles`` path cannot survive). The 1.25.4 image
+    shipped with neither: the installed CLI died on ``import backends``.
+
+    Each test stages the image's tree shape under a temporary root, so it fails
+    for the same reason the box does rather than because of where the test node
+    happens to live.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.home = (root / "opt" / "mrrc_modern").resolve()
+        self.bin = root / "usr" / "local" / "bin"
+        self.bin.mkdir(parents=True)
+        self.home.mkdir(parents=True)
+        for path in REPO.glob("*.py"):
+            shutil.copy(path, self.home / path.name)
+        shutil.copytree(REPO / "backends", self.home / "backends",
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (self.home / "linux").mkdir()
+        shutil.copy(REPO / "linux" / "first_run.py",
+                    self.home / "linux" / "first_run.py")
+        shutil.copytree(REPO / "packaging" / "box" / "profiles",
+                        self.home / "profiles")
+        shutil.copy(REPO / "linux" / "mrrc_radio.py", self.bin / "mrrc-radio")
+        self._path = list(sys.path)
+
+    def tearDown(self):
+        sys.path[:] = self._path
+        self.tmp.cleanup()
+
+    def _load(self):
+        """Import the copy the way the box runs it: outside its source tree."""
+        with mock.patch.dict(os.environ, {"MRRC_HOME": str(self.home)}):
+            target = self.bin / "mrrc-radio"
+            loader = SourceFileLoader("mrrc_radio_installed", str(target))
+            spec = importlib.util.spec_from_file_location(
+                "mrrc_radio_installed", target, loader=loader)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        return mod
+
+    def test_the_installed_copy_resolves_the_image_tree(self):
+        mod = self._load()
+        self.assertEqual(mod.REPO, self.home)
+        self.assertTrue((mod.REPO / "backends").is_dir(),
+                        "REPO must be a tree that carries backends/")
+        self.assertEqual(mod.PROFILE_DIR, self.home / "profiles")
+        self.assertEqual(len(list(mod.PROFILE_DIR.glob("*.env"))), 11)
+
+    def test_the_installed_copy_reads_a_profile(self):
+        mod = self._load()
+        self.assertEqual(mod.read_profile("ft710")["MRRC_RADIO_MODEL"], "ft710")
+
+    def test_a_checkout_still_uses_the_checkout_layout(self):
+        self.assertEqual(mrrc_radio.REPO, REPO)
+        self.assertEqual(mrrc_radio.PROFILE_DIR,
+                         REPO / "packaging" / "box" / "profiles")

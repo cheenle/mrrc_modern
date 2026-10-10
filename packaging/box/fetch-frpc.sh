@@ -69,7 +69,15 @@ echo "frpc: fetching ${TARBALL} (frp ${FRP_VERSION})"
 fetch() {  # <url> <dest>
   local url="$1" dest="$2" attempt size
   for attempt in 1 2 3 4 5; do
-    if curl -fsSL --speed-limit 2048 --speed-time 30 -C - -o "$dest" "$url"; then
+    # --connect-timeout and --max-time cover the phase --speed-limit cannot: a
+    # connection that finishes its handshake and then never answers. Measured
+    # 2026-10-10 on gh-proxy.com — curl sat in attempt 1 for 15 minutes with the
+    # socket ESTABLISHED and no bytes moved, and the low-speed guard stayed
+    # silent because the transfer had not started. Without the cap the other two
+    # sources in the list are never reached; with it the attempt dies and the
+    # resume loop moves on.
+    if curl -fsSL --connect-timeout 20 --max-time 300 \
+            --speed-limit 2048 --speed-time 30 -C - -o "$dest" "$url"; then
       return 0
     fi
     size=0

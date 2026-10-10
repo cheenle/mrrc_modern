@@ -93,7 +93,14 @@ fun RootScreen(vm: MainViewModel, settings: SettingsStore) {
     BackHandler(enabled = loggedIn && showSettings) { showSettings = false }
 
     // 尊重系统窗口插入区：顶部保住状态栏、底部避开导航条/手势条（Android 15 强制 edge-to-edge）
-    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+    // 铺 App 背景色：窗口主题是 #0B0B0C（近黑），若页面自己不铺背景就会露出它，
+    // 而 Compose 文字的默认色（LocalContentColor）是**黑** → 黑字压近黑底 = 看不见
+    // （2026-10-08 登录页事故：实测对比度 1.07:1，WCAG 小字要求 4.5:1）
+    Box(
+        Modifier.fillMaxSize()
+            .background(com.hamradio.ft710android.UI.MrrcColors.BgPrimary)
+            .windowInsetsPadding(WindowInsets.safeDrawing),
+    ) {
         if (!loggedIn) {
             LoginScreen(vm, settings) { loggedIn = true }
         } else if (showSettings) {

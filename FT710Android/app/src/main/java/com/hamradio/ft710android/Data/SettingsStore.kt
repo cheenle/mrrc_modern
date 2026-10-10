@@ -19,7 +19,22 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
  * host/port 与全部本地偏好存 DataStore；password/token 用 Keystore 加密（AndroidKeyStore AES-GCM），密文存 SharedPreferences。
  * 偏好语义逐条对齐手机端 Web 的 cookie 键（ft710_afVol / ft710_micVol / scopeTheme / scopeFloor / scopeCeil / …）。
  */
-class SettingsStore(private val context: Context) {
+/**
+ * 登录页真正需要的那四样。**抽出来的唯一目的是可测性**：`SettingsStore` 一构造就会
+ * `KeyStore.getInstance("AndroidKeyStore")`，而 Robolectric 没有这个 provider
+ * （实测 `KeyStoreException: AndroidKeyStore not found`）→ 登录页在 JVM 上根本渲染不出来，
+ * 也就没法量"文字看不看得见"。登录页依赖这个窄接口后，测试可以传一个假实现。
+ *
+ * 不改生产的错误语义（不做 runCatching 吞异常），只是把依赖面收窄。
+ */
+interface LoginCredentials {
+    val host: Flow<String>
+    val port: Flow<String>
+    suspend fun savedPassword(): String?
+    suspend fun save(host: String, port: String, password: String)
+}
+
+class SettingsStore(private val context: Context) : LoginCredentials {
     private object Keys {
         val host = stringPreferencesKey("host")
         val port = stringPreferencesKey("port")
@@ -39,8 +54,8 @@ class SettingsStore(private val context: Context) {
     }
     private val ks = KeystoreCipher(context)
 
-    val host: Flow<String> = context.dataStore.data.map { it[Keys.host] ?: DEFAULT_HOST }
-    val port: Flow<String> = context.dataStore.data.map { it[Keys.port] ?: DEFAULT_PORT }
+    override val host: Flow<String> = context.dataStore.data.map { it[Keys.host] ?: DEFAULT_HOST }
+    override val port: Flow<String> = context.dataStore.data.map { it[Keys.port] ?: DEFAULT_PORT }
     val afVol: Flow<Int> = context.dataStore.data.map { it[Keys.afVol] ?: 128 }
     val micVol: Flow<Int> = context.dataStore.data.map { it[Keys.micVol] ?: 150 }
     val micGain: Flow<Int?> = context.dataStore.data.map { it[Keys.micGain] }
@@ -53,12 +68,12 @@ class SettingsStore(private val context: Context) {
     val keepScreenOn: Flow<Boolean> = context.dataStore.data.map { it[Keys.keepScreenOn] ?: true }
     val backgroundRx: Flow<Boolean> = context.dataStore.data.map { it[Keys.backgroundRx] ?: true }
 
-    suspend fun save(host: String, port: String, password: String) = withContext(Dispatchers.IO) {
+    override suspend fun save(host: String, port: String, password: String) = withContext(Dispatchers.IO) {
         context.dataStore.edit { it[Keys.host] = host; it[Keys.port] = port }
         ks.putSecret("password", password)
     }
 
-    suspend fun savedPassword(): String? = withContext(Dispatchers.IO) { ks.getSecret("password") }
+    override suspend fun savedPassword(): String? = withContext(Dispatchers.IO) { ks.getSecret("password") }
 
     /** 退出登录时清除加密凭据（不删 host/port 与本地偏好）。 */
     suspend fun clearCredentials() = withContext(Dispatchers.IO) { ks.deleteSecret("password") }

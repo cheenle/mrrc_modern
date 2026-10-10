@@ -2,6 +2,50 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.31] — 2026-10-08
+
+### 🔴 修复：登录页文字看不见（黑字压近黑底，实测对比度 1.07:1）
+
+用户反馈"好多人看不见下边的小字"。那行小字是：
+
+> 局域网：主机 192.168.x.x / 端口 8888
+> 云端：主机 <呼号>.mrrc.vlsc.net / 端口 443
+
+（另有标题下面一行 `服务器证书未验证（自签）`，同样看不见）
+
+**根因两处，都不是"背景色不够好看"**：
+
+1. `RootScreen` 的根 `Box` **没有铺任何背景** → 露出窗口主题色 `#0B0B0C`（`themes.xml` 的 `windowBackground`）
+2. `LoginScreen` 三处 `Text` 只给了 `typography.bodySmall`、**没给 `color`** → 落到 `LocalContentColor`，而 M3 的 `MaterialTheme` **不提供**它（只有 `Surface` 提供），默认值是 **`Color.Black`**
+
+→ 黑字 `#000000` 压近黑底 `#0B0B0C` = 对比度 **1.07:1**（WCAG AA 小字要求 4.5:1）。主屏没这问题，是因为它显式 `.background(BgPrimary)` 且每处文字都给了颜色。
+
+**修法**：
+- `RootScreen` 根 Box 铺 `BgPrimary`（兜底：以后任何页面忘了铺背景也不会露出窗口近黑色）
+- `LoginScreen` 三处文字显式给色：标题 `Accent` 橘 + 粗体、两行说明 `TextSecondary`（#999 压 #1A1A1A ≈ 6.1:1）、错误 `Danger`
+- 那行提示拆成两行（局域网 / 云端）+ `lineHeight = 18sp`，不再挤成一长条
+
+### 新增可读性门槛 `LoginScreenContrastTest`
+
+Robolectric `@GraphicsMode(NATIVE)` 真渲染 → 截位图 → 按**语义节点 bounds** 采样像素 → 算 WCAG 相对亮度对比度。
+
+这类"布局是对的、节点也在、就是看不见"的问题，build / lint / 组合冒烟测试**全都发现不了**，只有量像素才暴露。修复前后实测：
+
+| 文字 | 修复前 | 修复后 | 要求 |
+| --- | --- | --- | --- |
+| `MRRC Modern` | 1.07:1 | **8.10:1** | ≥3.0 ✅ |
+| `服务器证书未验证` | 1.07:1 | **6.11:1** | ≥4.5 ✅ |
+| `局域网：主机…` | 1.07:1 | **6.11:1** | ≥4.5 ✅ |
+| `连接` 按钮 | — | **8.10:1** | ≥3.0 ✅ |
+
+### 为让登录页能在 JVM 上渲染：抽出 `LoginCredentials` 接口
+
+`SettingsStore` 一构造就 `KeyStore.getInstance("AndroidKeyStore")`，Robolectric 没有该 provider（实测 `KeyStoreException: AndroidKeyStore not found`）→ 登录页在 JVM 上根本渲染不出来，也就无从量对比度。
+
+抽出登录页真正用到的四样（`host` / `port` / `savedPassword` / `save`）成窄接口，`SettingsStore` 实现它，测试传假实现。**没有为了测试去改生产的错误语义**（不加 `runCatching` 吞异常），只收窄依赖面。
+
+- 测试 **debug 181 / release 162 全绿**；`OneScreenFitTest` 7 档仍全部 0.0dp 超出
+
 ## [1.1.30] — 2026-10-08
 
 - **修复：主频没有居中，一直贴在显示屏左上角**（用户要求"频率上下居中"）。

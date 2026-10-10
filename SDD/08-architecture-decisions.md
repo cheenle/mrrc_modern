@@ -275,8 +275,13 @@
 | AD-017 | Server-side QSO recording (incremental MP3, 16 kHz storage domain) | Implemented |
 | AD-018 | Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F/FT-891); the verified FT-710 path stays separate | Accepted (V2.46), migration deferred to phase 3 |
 | AD-019 | Unverified models ship receive-only: transmit gate, read-only identity check, per-table provenance | Implemented (V2.46) |
+| AD-020 | One-touch CQ (server-side one-shot automated transmission) | Implemented |
 | AD-021 | Server-built, allow-list-redacted diagnostics bundle with a dedicated receiver (support chain 1/4) | Implemented (V2.51) |
 | AD-022 | Update channel: generated `latest.json`, self-proving `state.json`, upgrade blocked while transmitting (support chain 3/4, slice 1) | Implemented (V2.53) |
+| AD-023 | Remote-session telemetry (listener concurrency + uplink, counts without identifiers) | Implemented |
+| AD-024 | Session token transport (cookie → header for native clients; query deprecated) | Implemented |
+| AD-025 | Spectrum bandwidth tiers (shape × divider, gated by `spectrumCaps`) | Implemented |
+| AD-026 | Setup hotspot and the password-less onboarding window (opened by network path, not a flag) | Implemented (V2.76) |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -415,3 +420,30 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 **Problem**: 公网出口带宽与移动流量账单的主项是频谱，但"省带宽"这件事在本仓从来没有可动的旋钮：帧长恒为 1701 B、tick 恒为 30 Hz，唯一存在的节流是 listener 的 ÷3。而两个实测事实使任何单一手段都不够——浏览器侧 `permessage-deflate` 已经把 wf2 的 850 个零字节压到≈1.4 B/帧（砍它对网页几乎无效），Android 侧则完全没有压缩（砍它就是全部收益）。同时 SDD §9.2.4 定义的 v1=851 B **从未上过线**（全仓无任何代码发出 `0x02`，`git log -S` 零命中），文档与线上格式已经对不上；而回退路径因为没有帧计数闸门，坏消息反而比好消息贵（30 fps × 1701 B ≈ 408 kbps，对比真频谱 151 kbps）。
 
 **Rationale**: 把"省带宽"从一次性的格式决定变成**每 socket 可协商的档位**，并且让兼容性由服务端闸门保证而不是由客户端升级保证——未声明能力的连接逐字节拿到今天的流，所以老 Android 不会因为服务端先上线而黑屏。两个因子分别覆盖两个轴（形状覆盖 Android 的 payload、分频覆盖浏览器的 deflate 后线上字节），这样"每档减半"在两种口径上都成立，而不是只在其中一个上好看。短帧用切片而非新组帧路径，是为了让 `scope_handler` 与 11 个 backend 完全不动——组帧代码只有一份，就不存在两份会漂移的实现。全帧保持 `0x01` 而不是改成 `0x02`，是因为已装 iOS 客户端 `guard version == 0x01`：一个"更贴合文档"的版本号会换来一批静默丢帧的用户。
+
+
+## AD-026: 初始化热点与免口令引导窗口（按网络路径开门，不按标志位）
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Architectural / Security |
+| Status | Implemented (V2.76, v1.25.5) — 盒子侧随包提供；MT7663S 起 AP、切换后的重连体验、`10.42.0.0/24` 与既有网络冲突三项待真机 |
+| Decision | 盒子**没有可用上行网络**时由 `mrrc-setup-ap.service` 开一个**开放热点**；`/setup` 向导在该热点存续期间对**来自热点网段的请求**免口令开放（设口令 + 选 Wi-Fi），成功后切 STA 并关热点。所有 nmcli 交互集中在 `net_wifi.py`（纯标准库、零应用 import、runner 可注入）。 |
+| Alternatives | ①**独立 setup 服务器**：暴露面更小，但需要**第二套配置写入路径**，两个 UI 各写 env 文件会互相覆盖（否决）；②**按"是否首次开机"的标志位开门**：多一个会写失败的持久化状态，故障模式是永久敞开（否决）；③**永远要求口令**：买回来只有一台手机的人无法开始——首启生成的口令用户并不知道，等于把鸡生蛋换了个位置（否决）；④**网络状态判据 + 双重闸门 + 并入现有应用**（采纳）。 |
+
+**Problem**: 首次配置需要**同时**具备两样互为前提的东西：要配 Wi-Fi 得先能操作盒子，要操作盒子得先有网（SSH）或有显示器键盘。而"只发一个热点"并不解决问题：连上之后到达的仍是现有界面，它要一个操作者并不知道的口令。
+
+**Rationale**:
+1. **判据是网络状态，不是"首次开机"。** 起热点 ⟺ 无网线链路 **且** 无可连上的已保存 Wi-Fi。配好的盒子因此永不再开热点，且**不存在**"是否已配置"的标志位——也就没有"标志写失败导致永久敞开"这类故障模式。
+2. **闸门是网络路径，两半都要成立**：`state.json` 的 `mode == hotspot` **且心跳新鲜**（`_setup_gate_open`）**且**客户端 IP 在该热点网段内。网段那一半挡住"某个局域网客户端恰好是 `10.42.0.x`"（NM shared 默认网段与家用网段撞车是完全可能的）；心跳那一半挡住"守护进程死了但文件还在"。热点一关，那个网段**不复存在**，免口令分支自然失效。
+3. **页面并进现有 FastAPI 应用**（否决独立 setup 服务器）：设口令因此**复用既有通道** `first_run.update_env_file(_config_file_path(), …)`，与 `POST /api/setup` 同函数同文件；免口令窗口可写的键集被钉成**恰好两个**（`MRRC_WEB_PASSWORD`、`MRRC_AUTO_PASSWORD`），`MRRC_CONFIG_FILE`（D-11 的载荷）与 `MRRC_ALLOW_UNVERIFIED_TX`（AD-019 / NFR-067）在任何可写集合里都不出现。
+4. **单射频 ⇒ 切换而非并发**（MT7663S 的 Wi-Fi 与蓝牙同芯片、走 SDIO）。切网期间守护进程**让位**：服务端在 `wizard.json` 里声明占用，守护进程不碰射频并按让位时长**补偿**窗口。回答**先发出去**再切（手机在切换瞬间就不在盒子上了），失败则**把热点开回来**并把 nmcli 的原因留在 `wizard.json` 里给页面显示——**不许静默返回**。
+5. **两份文件、两个唯一写入者**：守护进程（root）只写 `state.json`（每 tick 重写，其心跳是闸门的一半），服务端（`mrrc`）只写 `wizard.json`（占用声明）。因此**不需要锁**。
+6. **Wi-Fi 密码永不离开 nmcli 的 argv**：`WizardClaim` **没有** password 字段（"不落盘"是 schema 的性质，而不是每个调用者要记住的承诺），nmcli 的错误文本在存下来之前过 `net_wifi.scrub(text, password)`。这是 `support-bundle-privacy`（NFR-068）在一个新写入面上的延伸。
+
+**Consequences**:
+- **中间件放行必须由处理函数补回角色检查，漏掉它就是权限提升。** `SETUP_GATE_PATHS`（`/setup`、`GET`/`POST /api/setup/wizard*`）在 auth 中间件里被**按相等**放行到处理函数，而中间件的 listen-only 403 对这些路径**必然被跳过**（未鉴权的热点客户端没有角色可判）。因此 `_setup_access()` 是唯一裁决点：热点路径（每次进入都写 **WARNING 审计**：谁、什么时候、哪个 IP）或**完整** admin 令牌；listen 令牌在这里被拒，且回 **403 而不是 401**——那个调用者是已鉴权的，401 会误导页面"会话过期"。
+- **三条围栏压住开放窗口**：① 只在无其他上行时存在；② 30 分钟（`MRRC_SETUP_AP_TIMEOUT_MIN`，可配）无人完成引导即自动关闭，且**本次开机不再重开**（闩是进程内的；持久化它等于把盒子变砖）；③ 每次免口令进入都留日志。恢复路径是**断电重启**。
+- **残留风险（诚实记录）**：热点开放期间，同一网段内的人**可以先下手设口令接管盒子**。Wi-Fi 半径十几米，公寓楼里邻居可能在里面。围栏把窗口压到"你主动插电后、且附近没有网络"的那几十分钟，但**不能消除**。缓解：地址同时打在 HDMI 控制台上（有显示器的人不必用热点）。
+- **未验证边界**：MT7663S 这颗 SDIO 变体能否真起 AP、切换时手机端的重连体验、`10.42.0.0/24` 与既有网络的冲突。设计上**不依赖它们成立**：起不来时 HDMI + `nmtui` 永远可用。
+- **镜像装机清单加 `dnsmasq`**（NM 的 `ipv4.method=shared` 靠它发 DHCP/DNS；缺它的症状是**热点出现、手机连上、拿不到地址、任何地方都不报错**）。单元**不得**排在 `network-online.target` 之后——它存在的理由就是没有网。

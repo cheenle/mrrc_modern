@@ -41,7 +41,7 @@
 - Multi-user / per-user authentication (current auth is single shared password).
 - Digital modes (CW decoder, FT8, RTTY decode).
 - Logbook / QSO logging.
-- Antenna tuner control (ATR-1000 or similar).
+- Antenna tuner **internals** — the ATR-1000's own firmware, UI and tuning algorithm. The optional *linkage* to it (discovery, tune assist, LC learning storage) **is** in scope and is documented in §9.8 and §10.
 - Hamlib/rigctld integration; this codebase uses direct CAT/CI-V protocols.
 - WDSP / advanced DSP processing (radios have their own hardware DSP).
 - SDR IQ streaming (supported radios are superheterodynes, not SDRs).

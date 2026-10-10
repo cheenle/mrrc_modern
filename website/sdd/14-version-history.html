@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.77</td>
+<td>2026-10-10</td>
+<td>pi</td>
+<td><strong>补记 AD-026（初始化热点与免口令引导窗口），修正三处过时事实与一处自相矛盾，并补上三条守卫。本次</strong>不改一行产品代码、不动任何产物<strong>——v1.25.5 的字节与哈希保持不变，这是一次</strong>文档记录<strong>修订。</strong> ① <strong>主项：AD-026 从未写进第 8 章。</strong> 该决策（<code class="scope-code">mrrc-setup-ap.service</code> 在没有可用上行时开一个开放热点；<code class="scope-code">/setup</code> 向导在热点存续期内对<strong>来自热点网段的请求</strong>免口令开放，成功后切 STA 并关热点）<strong>已在代码里</strong>（<code class="scope-code">net_wifi.py</code>、<code class="scope-code">linux/setup_ap.py</code>、<code class="scope-code">server.py</code> 的 <code class="scope-code">/setup</code> 与 <code class="scope-code">GET|POST /api/setup/wizard*</code>、<code class="scope-code">_setup_access()</code>、可写键<strong>恰好两个</strong>、<code class="scope-code">WizardClaim</code> 无 password 字段）、<strong>已随 v1.25.5 发货</strong>（V2.76 行 ⑤）、<strong>两张落地页也已在宣传它</strong>（<code class="scope-code">AD-001 ... AD-026</code> 与 AD-026 标签），但 <code class="scope-code">git log -S "AD-026" -- SDD/</code> <strong>零命中</strong>——它从未进入任何 SDD 文件。线索在 <code class="scope-code">7afe5f2</code> 的提交说明（“AD-026 was in the SDD”）：<code class="scope-code">docs/superpowers/plans/2026-10-08-w103d-setup-hotspot-wizard.md</code> 任务 11 的第 2 步（往第 8 章追加 AD）与第 4/5 步（改落地页）<strong>只做了后者</strong>；而 <code class="scope-code">test_landing_pages_list_every_decision</code> 只检查一个方向（第 8 章 → 落地页），落地页多写一条它不管，于是套件一直绿。本行按计划里作者已写好的正文补记该 AD，并把每条实质断言对<strong>实现后</strong>代码复核（<code class="scope-code">_setup_access</code> 的两条进门路径，以及”listen 令牌必须在这里被拒——中间件对 <code class="scope-code">SETUP_GATE_PATHS</code> 的按相等放行必然跳过 listen 403，漏掉它就是权限提升”；<code class="scope-code">net_wifi.scrub</code>；<code class="scope-code">state.json</code>/<code class="scope-code">wizard.json</code> 两个唯一写入者；30 分钟闩含”本次开机不再重开”），Status 记三项待真机边界，并保留”热点开放期内同网段可抢先设口令”这条残留风险。② <strong>三条守卫补上单向检查的缺口</strong>：§8.16 汇总表必须列全（该表自己缺 AD-020/023/024/025）、落地页不得宣传第 8 章没有的 AD（正是 AD-026 这类）、第 14 章索引必须列全（原缺 AD-017…AD-025 共 9 条）。三条均做<strong>变异验证</strong>（破坏不变量即红）——本仓吃过两次”空转闸门”的亏，绿着的守卫不算证据。③ <strong>三处过时事实</strong>：第 14 章 Design Baseline Notes 的机型列表停在 FT-710 + IC-7300/MK2（<code class="scope-code">git blame</code> 显示该段邻行改到 2026-08-17，只有这两行自 07-06 初版起未动，故属漏改而非有意冻结）；Auth 行写作 <code class="scope-code">ft710_auth</code>（代码 <code class="scope-code">config.py</code> 是 <code class="scope-code">mrrc_auth</code>，且缺 listen-only 角色与 AD-024 的 query 弃用）；Scope 行未提 Yaesu ASCII-CAT 家族<strong>没有频谱协议</strong>、只走合成 S 表。④ <strong>一处自相矛盾</strong>：§3.3 把 ATR-1000 列为”范围之外”，而同文档 §9.8 有功能图、§10 列 ATR1000Service 为 Implemented ⇒ 改为”调谐器<strong>内部</strong>（固件/UI/算法）在范围外，<strong>链路</strong>（发现、调谐辅助、LC 学习存储）在范围内”。⑤ <strong>网站</strong>：<code class="scope-code">python3 website/build_sdd.py</code> 重生成 16 页 + 10 图；改动只落在本次编辑的三章页面，其余逐字节不变（生成确定性）。⑥ <strong>验收</strong>：<code class="scope-code">release_check.py</code> 离线 <strong>32 ok / 0 failing</strong>；文档守卫 <strong>64 项 OK</strong>（较上版 +3）。⑦ <strong>边界与未做</strong>：仅文档 + 一处守卫文件；AD-026 的三项真机边界（MT7663S 能否起 AP、切换后手机重连体验、<code class="scope-code">10.42.0.0/24</code> 与既有网络冲突）仍待现场，W103D 计划任务 11 的勾选状态未回填；<code class="scope-code">MRRC.iss</code> 这个错误路径仍留在 V2.72 版本行里（已发布的行按规矩不可再改，此处只记录）。</td>
+</tr>
+<tr>
 <td>SDD V2.76</td>
 <td>2026-10-09</td>
 <td>pi</td>
@@ -712,11 +718,11 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 </ul>
 <h2 id="design-baseline-notes">Design Baseline Notes</h2>
 <ul>
-<li><strong>Radios</strong>: Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 superheterodyne transceivers (not SDRs). Backend selected by <code class="scope-code">MRRC_RADIO_MODEL</code>.</li>
+<li><strong>Radios</strong>: Eleven registered models, all superheterodyne transceivers (not SDRs), selected by <code class="scope-code">MRRC_RADIO_MODEL</code>: Yaesu FT-710 (verified, default); Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (profiles written from offline rig data, never checked against hardware — transmit is refused until <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code>, AD-019). The registry in <code class="scope-code">backends/__init__.py</code> is the validation source of truth.</li>
 <li><strong>Radio Protocols</strong>: Direct serial CAT (FT-710) or CI-V (IC-7300/MK2) via pyserial — no Hamlib, no rigctld, no TCI.</li>
-<li><strong>Scope</strong>: FT-710 uses FTDI FT4222 SPI chip for 850-point FFT data; IC-7300/MK2 uses CI-V 0x27 frames on the same serial port. Both fall back to synthetic S-meter Gaussian spectrum when unavailable.</li>
+<li><strong>Scope</strong>: FT-710 uses the FTDI FT4222 SPI chip for 850-point FFT data; the Icom family uses CI-V 0x27 frames on the same serial port. The Yaesu ASCII-CAT family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891) has <strong>no scope protocol at all</strong>, so it only ever shows the synthetic spectrum. Every backend falls back to the synthetic S-meter Gaussian spectrum when real data is unavailable.</li>
 <li><strong>Audio</strong>: Bidirectional through the selected radio’s built-in USB audio interface via PyAudio. FT-710: 44.1kHz native device rate; IC-7300/MK2: 48kHz native. Opus codec (RX 64kbps, TX 64kbps CBR, both 48kHz) with Int16 PCM fallback. <code class="scope-code">audio_resample.py</code> bridges the 48kHz codec domain ↔︎ 44.1kHz device domain for the FT-710 only (960↔︎882 frame-aligned).</li>
-<li><strong>Auth</strong>: Shared-password session auth (<code class="scope-code">ft710_auth</code> cookie, 30-day, <code class="scope-code">?token=</code> on WebSocket).</li>
+<li><strong>Auth</strong>: Shared-password session auth, single role split into operator / listen-only (<code class="scope-code">MRRC_LISTEN_PASSWORD</code>). Cookie <code class="scope-code">mrrc_auth</code> (30-day); transport is header → cookie → deprecated <code class="scope-code">?token=</code> (AD-024 — no frontend builds a token URL any more, and the query form exists only so already-installed native clients keep working until they ship the header path).</li>
 <li><strong>PTT Safety</strong>: Client-side PTT watchdog (500ms) + dead-man switch (WS disconnect) + pagehide handler + server-side TX status poll (0.5s). No TX0 verify loop on release (radio obeys TX0 fire-and-forget). TX audio drain=50ms. TUNE is press-and-hold.</li>
 <li><strong>Polling</strong>: 7-task adaptive scheduler: IF 0.1s (FA/MD0/SM0), VFO 0.5s (VS/FB), TX status 0.5s, TX meters 0.5s (RM3/4/5/6, TX only), settings 2s, slow 5s, connection watchdog 1s. Poll queries use 0.25s timeout and cooperate with priority-command preemption (<code class="scope-code">_cancel_polls</code>). Poll loops re-check skip state AFTER each in-flight query response and discard stale reads; filter sets are verified by a 150 ms <code class="scope-code">SH0;</code> read-back. After a successful watchdog reconnect the scheduler re-runs the scope-init CAT sequence (<code class="scope-code">EX040101</code>/<code class="scope-code">EX040200</code>) via its <code class="scope-code">on_reconnected</code> hook — a USB re-enumeration resets the radio’s scope output.</li>
 <li><strong>Meters</strong>: RM3-8 raw 0-255 values calibrated via piecewise-linear tables from FT-710.rig (Power/SWR/Vd/Id). Frontend displays watts, SWR ratio, volts, amps — not raw numbers.</li>
@@ -798,6 +804,46 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td>AD-016</td>
 <td>Pluggable radio backend architecture (FT-710 + IC-7300 via RadioBackend/Capabilities)</td>
 </tr>
+<tr>
+<td>AD-017</td>
+<td>Server-side QSO recording (incremental MP3, 16 kHz storage domain)</td>
+</tr>
+<tr>
+<td>AD-018</td>
+<td>Profile-driven Yaesu ASCII-CAT core (FTDX10/FTDX101D/MP/FTX-1F/FT-891); the verified FT-710 path stays separate</td>
+</tr>
+<tr>
+<td>AD-019</td>
+<td>Unverified models ship receive-only (transmit gate + read-only identity check + per-table provenance)</td>
+</tr>
+<tr>
+<td>AD-020</td>
+<td>One-touch CQ (server-side one-shot automated transmission reusing the PTT safety chain)</td>
+</tr>
+<tr>
+<td>AD-021</td>
+<td>Support diagnostics bundle (server-built + allow-list redaction + dedicated receiver)</td>
+</tr>
+<tr>
+<td>AD-022</td>
+<td>Upgrade channel (generated manifest + self-proving state + transmit gate)</td>
+</tr>
+<tr>
+<td>AD-023</td>
+<td>Remote-session telemetry (listener concurrency + uplink, counts without identifiers)</td>
+</tr>
+<tr>
+<td>AD-024</td>
+<td>Session token transport (cookie first, header for native clients, query deprecated)</td>
+</tr>
+<tr>
+<td>AD-025</td>
+<td>Spectrum bandwidth tiers (shape × divider, gated by <code class="scope-code">spectrumCaps</code> negotiation)</td>
+</tr>
+<tr>
+<td>AD-026</td>
+<td>Setup hotspot and the password-less onboarding window (opened by network path, not a flag)</td>
+</tr>
 </tbody>
 </table>
 <p><em>This document follows IBM Team Solution Design (TeamSD) methodology v2.3.2.</em> <em>Document ID: SDD-MRRC-MODERN-2026-001</em></p>
@@ -807,7 +853,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.76 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.77 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

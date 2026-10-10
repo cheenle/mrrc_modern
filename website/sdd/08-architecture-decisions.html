@@ -734,6 +734,11 @@
 <td>Implemented (V2.46)</td>
 </tr>
 <tr>
+<td>AD-020</td>
+<td>One-touch CQ (server-side one-shot automated transmission)</td>
+<td>Implemented</td>
+</tr>
+<tr>
 <td>AD-021</td>
 <td>Server-built, allow-list-redacted diagnostics bundle with a dedicated receiver (support chain 1/4)</td>
 <td>Implemented (V2.51)</td>
@@ -742,6 +747,26 @@
 <td>AD-022</td>
 <td>Update channel: generated <code class="scope-code">latest.json</code>, self-proving <code class="scope-code">state.json</code>, upgrade blocked while transmitting (support chain 3/4, slice 1)</td>
 <td>Implemented (V2.53)</td>
+</tr>
+<tr>
+<td>AD-023</td>
+<td>Remote-session telemetry (listener concurrency + uplink, counts without identifiers)</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-024</td>
+<td>Session token transport (cookie → header for native clients; query deprecated)</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-025</td>
+<td>Spectrum bandwidth tiers (shape × divider, gated by <code class="scope-code">spectrumCaps</code>)</td>
+<td>Implemented</td>
+</tr>
+<tr>
+<td>AD-026</td>
+<td>Setup hotspot and the password-less onboarding window (opened by network path, not a flag)</td>
+<td>Implemented (V2.76)</td>
 </tr>
 </tbody>
 </table>
@@ -1042,13 +1067,47 @@
 </table>
 <p><strong>Problem</strong>: 公网出口带宽与移动流量账单的主项是频谱，但”省带宽”这件事在本仓从来没有可动的旋钮：帧长恒为 1701 B、tick 恒为 30 Hz，唯一存在的节流是 listener 的 ÷3。而两个实测事实使任何单一手段都不够——浏览器侧 <code class="scope-code">permessage-deflate</code> 已经把 wf2 的 850 个零字节压到≈1.4 B/帧（砍它对网页几乎无效），Android 侧则完全没有压缩（砍它就是全部收益）。同时 SDD §9.2.4 定义的 v1=851 B <strong>从未上过线</strong>（全仓无任何代码发出 <code class="scope-code">0x02</code>，<code class="scope-code">git log -S</code> 零命中），文档与线上格式已经对不上；而回退路径因为没有帧计数闸门，坏消息反而比好消息贵（30 fps × 1701 B ≈ 408 kbps，对比真频谱 151 kbps）。</p>
 <p><strong>Rationale</strong>: 把”省带宽”从一次性的格式决定变成<strong>每 socket 可协商的档位</strong>，并且让兼容性由服务端闸门保证而不是由客户端升级保证——未声明能力的连接逐字节拿到今天的流，所以老 Android 不会因为服务端先上线而黑屏。两个因子分别覆盖两个轴（形状覆盖 Android 的 payload、分频覆盖浏览器的 deflate 后线上字节），这样”每档减半”在两种口径上都成立，而不是只在其中一个上好看。短帧用切片而非新组帧路径，是为了让 <code class="scope-code">scope_handler</code> 与 11 个 backend 完全不动——组帧代码只有一份，就不存在两份会漂移的实现。全帧保持 <code class="scope-code">0x01</code> 而不是改成 <code class="scope-code">0x02</code>，是因为已装 iOS 客户端 <code class="scope-code">guard version == 0x01</code>：一个”更贴合文档”的版本号会换来一批静默丢帧的用户。</p>
+<h2 id="ad-026-初始化热点与免口令引导窗口按网络路径开门不按标志位">AD-026: 初始化热点与免口令引导窗口（按网络路径开门，不按标志位）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architectural / Security</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V2.76, v1.25.5) — 盒子侧随包提供；MT7663S 起 AP、切换后的重连体验、<code class="scope-code">10.42.0.0/24</code> 与既有网络冲突三项待真机</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>盒子<strong>没有可用上行网络</strong>时由 <code class="scope-code">mrrc-setup-ap.service</code> 开一个<strong>开放热点</strong>；<code class="scope-code">/setup</code> 向导在该热点存续期间对<strong>来自热点网段的请求</strong>免口令开放（设口令 + 选 Wi-Fi），成功后切 STA 并关热点。所有 nmcli 交互集中在 <code class="scope-code">net_wifi.py</code>（纯标准库、零应用 import、runner 可注入）。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong>独立 setup 服务器</strong>：暴露面更小，但需要<strong>第二套配置写入路径</strong>，两个 UI 各写 env 文件会互相覆盖（否决）；②<strong>按”是否首次开机”的标志位开门</strong>：多一个会写失败的持久化状态，故障模式是永久敞开（否决）；③<strong>永远要求口令</strong>：买回来只有一台手机的人无法开始——首启生成的口令用户并不知道，等于把鸡生蛋换了个位置（否决）；④<strong>网络状态判据 + 双重闸门 + 并入现有应用</strong>（采纳）。</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Problem</strong>: 首次配置需要<strong>同时</strong>具备两样互为前提的东西：要配 Wi-Fi 得先能操作盒子，要操作盒子得先有网（SSH）或有显示器键盘。而”只发一个热点”并不解决问题：连上之后到达的仍是现有界面，它要一个操作者并不知道的口令。</p>
+<p><strong>Rationale</strong>: 1. <strong>判据是网络状态，不是”首次开机”。</strong> 起热点 ⟺ 无网线链路 <strong>且</strong> 无可连上的已保存 Wi-Fi。配好的盒子因此永不再开热点，且<strong>不存在</strong>”是否已配置”的标志位——也就没有”标志写失败导致永久敞开”这类故障模式。 2. <strong>闸门是网络路径，两半都要成立</strong>：<code class="scope-code">state.json</code> 的 <code class="scope-code">mode == hotspot</code> <strong>且心跳新鲜</strong>（<code class="scope-code">_setup_gate_open</code>）<strong>且</strong>客户端 IP 在该热点网段内。网段那一半挡住”某个局域网客户端恰好是 <code class="scope-code">10.42.0.x</code>“（NM shared 默认网段与家用网段撞车是完全可能的）；心跳那一半挡住”守护进程死了但文件还在”。热点一关，那个网段<strong>不复存在</strong>，免口令分支自然失效。 3. <strong>页面并进现有 FastAPI 应用</strong>（否决独立 setup 服务器）：设口令因此<strong>复用既有通道</strong> <code class="scope-code">first_run.update_env_file(_config_file_path(), …)</code>，与 <code class="scope-code">POST /api/setup</code> 同函数同文件；免口令窗口可写的键集被钉成<strong>恰好两个</strong>（<code class="scope-code">MRRC_WEB_PASSWORD</code>、<code class="scope-code">MRRC_AUTO_PASSWORD</code>），<code class="scope-code">MRRC_CONFIG_FILE</code>（D-11 的载荷）与 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX</code>（AD-019 / NFR-067）在任何可写集合里都不出现。 4. <strong>单射频 ⇒ 切换而非并发</strong>（MT7663S 的 Wi-Fi 与蓝牙同芯片、走 SDIO）。切网期间守护进程<strong>让位</strong>：服务端在 <code class="scope-code">wizard.json</code> 里声明占用，守护进程不碰射频并按让位时长<strong>补偿</strong>窗口。回答<strong>先发出去</strong>再切（手机在切换瞬间就不在盒子上了），失败则<strong>把热点开回来</strong>并把 nmcli 的原因留在 <code class="scope-code">wizard.json</code> 里给页面显示——<strong>不许静默返回</strong>。 5. <strong>两份文件、两个唯一写入者</strong>：守护进程（root）只写 <code class="scope-code">state.json</code>（每 tick 重写，其心跳是闸门的一半），服务端（<code class="scope-code">mrrc</code>）只写 <code class="scope-code">wizard.json</code>（占用声明）。因此<strong>不需要锁</strong>。 6. <strong>Wi-Fi 密码永不离开 nmcli 的 argv</strong>：<code class="scope-code">WizardClaim</code> <strong>没有</strong> password 字段（“不落盘”是 schema 的性质，而不是每个调用者要记住的承诺），nmcli 的错误文本在存下来之前过 <code class="scope-code">net_wifi.scrub(text, password)</code>。这是 <code class="scope-code">support-bundle-privacy</code>（NFR-068）在一个新写入面上的延伸。</p>
+<p><strong>Consequences</strong>: - <strong>中间件放行必须由处理函数补回角色检查，漏掉它就是权限提升。</strong> <code class="scope-code">SETUP_GATE_PATHS</code>（<code class="scope-code">/setup</code>、<code class="scope-code">GET</code>/<code class="scope-code">POST /api/setup/wizard*</code>）在 auth 中间件里被<strong>按相等</strong>放行到处理函数，而中间件的 listen-only 403 对这些路径<strong>必然被跳过</strong>（未鉴权的热点客户端没有角色可判）。因此 <code class="scope-code">_setup_access()</code> 是唯一裁决点：热点路径（每次进入都写 <strong>WARNING 审计</strong>：谁、什么时候、哪个 IP）或<strong>完整</strong> admin 令牌；listen 令牌在这里被拒，且回 <strong>403 而不是 401</strong>——那个调用者是已鉴权的，401 会误导页面”会话过期”。 - <strong>三条围栏压住开放窗口</strong>：① 只在无其他上行时存在；② 30 分钟（<code class="scope-code">MRRC_SETUP_AP_TIMEOUT_MIN</code>，可配）无人完成引导即自动关闭，且<strong>本次开机不再重开</strong>（闩是进程内的；持久化它等于把盒子变砖）；③ 每次免口令进入都留日志。恢复路径是<strong>断电重启</strong>。 - <strong>残留风险（诚实记录）</strong>：热点开放期间，同一网段内的人<strong>可以先下手设口令接管盒子</strong>。Wi-Fi 半径十几米，公寓楼里邻居可能在里面。围栏把窗口压到”你主动插电后、且附近没有网络”的那几十分钟，但<strong>不能消除</strong>。缓解：地址同时打在 HDMI 控制台上（有显示器的人不必用热点）。 - <strong>未验证边界</strong>：MT7663S 这颗 SDIO 变体能否真起 AP、切换时手机端的重连体验、<code class="scope-code">10.42.0.0/24</code> 与既有网络的冲突。设计上<strong>不依赖它们成立</strong>：起不来时 HDMI + <code class="scope-code">nmtui</code> 永远可用。 - <strong>镜像装机清单加 <code class="scope-code">dnsmasq</code></strong>（NM 的 <code class="scope-code">ipv4.method=shared</code> 靠它发 DHCP/DNS；缺它的症状是<strong>热点出现、手机连上、拿不到地址、任何地方都不报错</strong>）。单元<strong>不得</strong>排在 <code class="scope-code">network-online.target</code> 之后——它存在的理由就是没有网。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.76 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.77 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

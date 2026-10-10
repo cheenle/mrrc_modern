@@ -76,7 +76,7 @@
         <p>从拿到一台全新的 W103D 开始：认机器 → 下载校验 → 烧 U 盘 → 从 U 盘启动 → 接电台 → 选机型 → 验收。
            末尾附一张从零到干活的打勾清单。</p>
         <div class="actions">
-            <a class="btn btn-primary" href="downloads/MRRC-Modern-1.25.4-w103d.img.gz"><i class="fas fa-download"></i> 下载 W103D 镜像</a>
+            <a class="btn btn-primary" href="downloads/MRRC-Modern-1.25.5-w103d.img.gz"><i class="fas fa-download"></i> 下载 W103D 镜像</a>
             <a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" target="_blank" rel="noopener"><i class="fas fa-bolt"></i> 速查操作单</a>
         </div>
     </div>
@@ -153,16 +153,16 @@
 </ul>
 <h2 id="3-下载镜像并校验">3. 下载镜像并校验</h2>
 <pre><code class="lang-bash">mkdir -p ~/w103d &amp;&amp; cd ~/w103d
-curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.4-w103d.img.gz</code></pre>
-<p><strong>校验</strong>（这一步别跳——1.07 GB 下坏了是能下坏的）：</p>
+curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz</code></pre>
+<p><strong>校验</strong>（这一步别跳——1.19 GB 下坏了是能下坏的）：</p>
 <pre><code class="lang-bash"># macOS
-shasum -a 256 MRRC-Modern-1.25.4-w103d.img.gz
+shasum -a 256 MRRC-Modern-1.25.5-w103d.img.gz
 # Linux
-sha256sum MRRC-Modern-1.25.4-w103d.img.gz</code></pre>
+sha256sum MRRC-Modern-1.25.5-w103d.img.gz</code></pre>
 <div class="table-scroll"><table>
 <thead><tr><th></th><th></th></tr></thead><tbody>
-<tr><td>字节数</td><td><strong>1,156,345,060</strong></td></tr>
-<tr><td>SHA-256</td><td><strong>b0a20f7f4ba581540b4ee3f55f1c5cf69140ebc1e4d3cc0e4cee51493a797dd6</strong></td></tr>
+<tr><td>字节数</td><td><strong>1,280,233,862</strong></td></tr>
+<tr><td>SHA-256</td><td><strong>81cf1f9e2bfa9f13e596b764fe89150aff728a9744edf6fac65f45927a2a6ee5</strong></td></tr>
 </tbody></table></div>
 <p>两者都对不上就别往下走。<strong>先确认字节数</strong>（<code>ls -l</code>）——大小不对说明下载被截断了。</p>
 <h2 id="4-烧到-u-盘">4. 烧到 U 盘</h2>
@@ -170,13 +170,13 @@ sha256sum MRRC-Modern-1.25.4-w103d.img.gz</code></pre>
 <p><strong>macOS：</strong></p>
 <pre><code class="lang-bash">diskutil list                      # 找到你的 U 盘，记下 /dev/diskN（N 是数字）
 diskutil unmountDisk /dev/diskN
-gzip -dc MRRC-Modern-1.25.4-w103d.img.gz | sudo dd of=/dev/rdiskN bs=4m
+gzip -dc MRRC-Modern-1.25.5-w103d.img.gz | sudo dd of=/dev/rdiskN bs=4m
 sync                               # 等它真的写完</code></pre>
 <p>⚠️ 用 <code>/dev/rdiskN</code>（<strong>裸设备</strong>）不是 <code>/dev/diskN</code>——后者慢十倍以上。</p>
 <p><strong>Windows</strong>：用 <strong>Rufus</strong> 或 <strong>balenaEtcher</strong>，选那个 <code>.img.gz</code>（两者都能直接吃 gz）。 目标是"从镜像写入"模式，<strong>不是</strong>解压后复制文件。</p>
 <p><strong>Linux：</strong></p>
 <pre><code class="lang-bash">lsblk                              # 找盘
-gzip -dc MRRC-Modern-1.25.4-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync</code></pre>
+gzip -dc MRRC-Modern-1.25.5-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync</code></pre>
 <p>烧完把 U 盘<strong>安全弹出</strong>（macOS：<code>diskutil eject /dev/diskN</code>）。系统可能提示"此磁盘无法读取"—— <strong>那是正常的</strong>，镜像是 Linux 分区，Windows/macOS 读不懂。</p>
 <h2 id="5-让盒子从-u-盘启动-新机器最容易卡的一步">5. 让盒子从 U 盘启动（新机器最容易卡的一步）</h2>
 <h3 id="原理-已从镜像里核实-不是猜的">原理：已从镜像里核实，不是猜的</h3>
@@ -217,7 +217,8 @@ adb shell reboot update</code></pre>
 <tr><td>探测<strong>串口</strong>（<code>/dev/ttyUSB<em></code> / <code>ttyACM</em></code>）</td><td>端口号只有在真机上插了电台才知道</td></tr>
 <tr><td>探测<strong>声卡</strong>（电台的 USB 声卡）</td><td>同上</td></tr>
 </tbody></table></div>
-<p><strong>网线必须插着</strong>——首启要联网。开机后 <code>mrrc-firstboot.service</code> 跑完会把自己标记成"已做"， 之后不再重复。</p>
+<p><strong>首启不需要联网</strong>：上面四件事全在本机完成（生成口令、自签证书、探测串口与声卡）， 不下载任何东西。开机后 <code>mrrc-firstboot.service</code> 跑完会把自己标记成"已做"，之后不再重复。</p>
+<p><strong>既没有网线、也没有能连上的已保存 Wi-Fi 时</strong>，<code>mrrc-setup-ap.service</code> 会另外开一个 <strong>开放热点</strong>让你进去配置 —— 见 §9.6。它按<strong>网络状态</strong>判断，不按"是否首次开机"： 盒子一旦有了可用网络，热点就不存在了，那个免口令页面也随它一起消失。</p>
 <h2 id="7-进系统-第一件事改口令">7. 进系统，第一件事改口令</h2>
 <p>从路由器 DHCP 列表里找到盒子的 IP，然后：</p>
 <pre><code class="lang-bash">ssh root@&lt;盒子IP&gt;       # 出厂口令 1234（ophub Armbian 的默认值）</code></pre>
@@ -234,16 +235,16 @@ adb shell reboot update</code></pre>
 <p>⚠️ <strong>必须走 HTTPS，不要关。</strong> 手机浏览器要调用麦克风发射（PTT），而在 HTTP 下浏览器不给麦克风权限—— <strong>这是浏览器安全策略，不是我们的设置问题。</strong></p>
 <p>登录后你应该看到主界面：频率、模式、S 表、瀑布图。<strong>这时候还没有电台——下一步接上。</strong></p>
 <h2 id="9-接网络-有线-wi-fi">9. 接网络（有线 / Wi-Fi）</h2>
-<blockquote><strong>目标形态</strong>：刷完盘开机，盒子自己发一个<strong>开放热点</strong>，手机连上就能完成初始化。 <strong>这一条还没实现</strong>（设计已批准，见 §9.6）。在那之前，按你手边有什么，用下面四条路之一。</blockquote>
+<blockquote><strong>刷完盘开机，盒子自己发一个开放热点，手机连上就能完成初始化</strong> —— 这条已经实现了， 见 §9.6。<strong>只有一台手机也能把整个盒子配完。</strong> 下面另外三条路仍然可用，按你手边有什么选。</blockquote>
 <h3 id="9-1-四条路-按你手边有什么选">9.1 四条路，按你手边有什么选</h3>
 <div class="table-scroll"><table>
 <thead><tr><th>#</th><th>你手边有</th><th>方式</th><th>现在能用吗</th></tr></thead><tbody>
 <tr><td>1</td><td><strong>一根网线</strong></td><td>直接插网线（最省事）</td><td>✅ 能用 → §9.2</td></tr>
 <tr><td>2</td><td><strong>电脑 + 读卡器</strong></td><td>预置：刷盘前把配置写进启动分区</td><td>✅ 能用 → §9.3</td></tr>
 <tr><td>3</td><td><strong>HDMI + USB 键盘</strong></td><td><code>nmtui</code>：盒子上的全屏文字界面</td><td>✅ 能用 → §9.4</td></tr>
-<tr><td>4</td><td><strong>只有一台手机</strong></td><td>热点引导：盒子自己发热点</td><td>⏳ <strong>尚未实现</strong> → §9.6</td></tr>
+<tr><td>4</td><td><strong>只有一台手机</strong></td><td>热点引导：盒子自己发热点</td><td>✅ <strong>能用</strong> → §9.6</td></tr>
 </tbody></table></div>
-<p>⚠️ <strong>先说一个限制</strong>：第 2 条（预置）<strong>只能写口令与电台设置，写不了 Wi-Fi 密码</strong>——Wi-Fi 归 NetworkManager 管，不走 env 文件。所以要连 Wi-Fi，眼下只有第 3 条（有键盘）或第 1 条（有网线）。 <strong>这正是第 4 条存在的理由。</strong></p>
+<p>⚠️ <strong>一个限制</strong>：第 2 条（预置）<strong>只能写口令与电台设置，写不了 Wi-Fi 密码</strong>——Wi-Fi 归 NetworkManager 管，不走 env 文件（设计 D-4：两个域各有唯一写入者）。所以要连 Wi-Fi， 用第 4 条（<strong>一台手机，零键盘零网线</strong>）、第 3 条（有键盘）或第 1 条（有网线）。</p>
 <h3 id="9-2-第-1-条-网线-推荐">9.2 第 1 条：网线（推荐）</h3>
 <p>插上就通，确认一下：</p>
 <pre><code class="lang-bash">ip a                    # 看有没有拿到地址
@@ -281,9 +282,41 @@ ip a show wlan0                                  # 拿到 IP 没</code></pre>
 </tbody></table></div>
 <p><strong>背景（决定你该查什么）</strong>：W103D 的无线是 <strong>MT7663S</strong>，WiFi 与<strong>蓝牙同一颗芯片</strong>，走 <strong>SDIO</strong> 而不是 USB。这块板的驱动是 ophub 专门适配的（上游 <strong>PR #3658 / #3659</strong>），所以 <strong>内核绝不能换</strong>——换通用内核 = <strong>静默丢 WiFi</strong>（见 §19 红线③）。</p>
 <p><strong>能用，但实时音频优先有线</strong>：无线抖动大，长时间听音频容易卡。只是配置用，无线够。</p>
-<h3 id="9-6-第-4-条-热点引导-尚未实现">9.6 第 4 条：热点引导（<strong>尚未实现</strong>）</h3>
-<p>目标形态：盒子在没有可用上行网络时，自己发一个<strong>开放热点</strong>；手机连上后打开页面 <strong>无需口令</strong>即可设口令、选 Wi-Fi；成功后盒子切到 STA 并<strong>关掉热点</strong>。</p>
-<p>设计已定案并批准（<code>docs/superpowers/specs/2026-10-08-w103d-setup-ap-design.md</code>）， <strong>但代码还没写</strong>，所以现在刷完盘<strong>不会</strong>有热点。在那之前，请用 §9.2–§9.4 中你能用的那条。</p>
+<h3 id="9-6-第-4-条-热点引导-零键盘零网线-只要一台手机">9.6 第 4 条：热点引导（<strong>零键盘零网线，只要一台手机</strong>）</h3>
+<p>盒子上电后，如果<strong>既没有网线链路、也没有能连上的已保存 Wi-Fi</strong>，它会自己开一个 <strong>开放热点</strong>：</p>
+<div class="table-scroll"><table>
+<thead><tr><th></th><th></th></tr></thead><tbody>
+<tr><td>Wi-Fi 名</td><td><strong><code>MRRC-Setup</code></strong>（<code>MRRC_SETUP_AP_SSID</code> 可改）</td></tr>
+<tr><td>密码</td><td><strong>无</strong>（开放热点，故意的——你还没有办法被告知一个密钥）</td></tr>
+<tr><td>页面</td><td><strong><code>https://10.42.0.1:8888/setup</code></strong></td></tr>
+<tr><td>窗口</td><td><strong>30 分钟</strong>，用完自动关（<code>MRRC_SETUP_AP_TIMEOUT_MIN</code> 可改）</td></tr>
+</tbody></table></div>
+<p><strong>操作步骤：</strong></p>
+<p>手机可能提示"该网络无互联网连接"——<strong>这是对的</strong>，选「保持连接」。</p>
+<p>会先弹一次<strong>证书警告</strong>（盒子用的是自签证书）：选「高级 / 详细信息」→「继续访问」。 这一步绕不过去，也不该绕——它只出现在<strong>盒子自己开的那个热点</strong>上。</p>
+<p>- <strong>第 1 步：设置登录口令</strong>（至少 8 位）。<strong>必须先做</strong>：切网之后热点会关，这个免口令 页面也随之消失。此刻盒子里生效的口令是首启自动生成的随机值、<strong>你并不知道</strong>， 所以不先设成自己的就会被锁在盒子外面（服务端也会用 409 挡住"先切网"）。 - <strong>第 2 步：扫描并选择你的 Wi-Fi</strong>，输入密码，点「连接并切换到这个 Wi-Fi」。</p>
+<p>走 SDIO），AP 与 STA <strong>不能同时存在</strong>（设计 D-3）。页面在断开<strong>之前</strong>就把后续步骤显示 出来了，照着做：把手机连回你自己的 Wi-Fi，然后在路由器后台的客户端列表里找到盒子， 用 <code>https://它的IP:8888</code> 打开控制界面，用刚设的口令登录。</p>
+<ol>
+<li>盒子上电，等 <strong>约 15–30 秒</strong>，在手机 Wi-Fi 列表里找 <code>MRRC-Setup</code> 并连上（无密码）。</li>
+<li>浏览器打开 <strong><code>https://10.42.0.1:8888/setup</code></strong>。</li>
+<li>页面上按顺序做两件事：</li>
+<li>点下去之后<strong>手机会与盒子断开</strong>——盒子只有一颗射频（MT7663S，Wi-Fi 与蓝牙同一颗芯片，</li>
+</ol>
+<p><strong>如果 Wi-Fi 密码输错了</strong>：盒子会<strong>自动把热点重新开回来</strong>（设计上禁止静默失败，见 §6 数据流）， 手机重连 <code>MRRC-Setup</code>、刷新页面，就能看到失败原因并直接重试。一次失败还会<strong>重置那 30 分钟 窗口</strong>，所以多试几次不会把窗口耗光。</p>
+<p><strong>窗口用完了 / 错过了怎么办</strong>：<strong>断电重启</strong>。那个 30 分钟的闩是<strong>按开机次数</strong>算的，不写在 盘上——所以只要盒子还没有可用网络，每次上电都会重新给一次机会。（这是设计 D-6 的恢复路径； 把它做成持久状态就等于把盒子变砖。）</p>
+<p><strong>插上网线会怎样</strong>：热点<strong>立刻关闭</strong>，免口令页面随之失效。判据是<strong>网络状态</strong>而不是"是否配置 过"，所以一台配好的盒子永远不会再开热点。</p>
+<p><strong>有显示器的人可以完全不碰热点</strong>：<code>mrrc-setup-ap</code> 会把地址打到 <strong>HDMI 控制台</strong>上 （<code>journalctl -u mrrc-setup-ap</code> 里也有同一行）。这是设计对"开放热点期间被邻居抢先设口令" 那条<strong>残留风险</strong>的缓解手段——你不必依赖热点。</p>
+<p><strong>排查：</strong></p>
+<div class="table-scroll"><table>
+<thead><tr><th>现象</th><th>查什么</th></tr></thead><tbody>
+<tr><td>手机里看不到 <code>MRRC-Setup</code></td><td><code>journalctl -u mrrc-setup-ap -n 50 --no-pager</code>。有 <code>could not start the setup hotspot</code> ⇒ 看它后面那句 nmcli 的原因；<code>rfkill list</code> 显示软阻塞就 <code>rfkill unblock wifi</code>；再往下按 §9.5 的顺序查驱动与固件</td></tr>
+<tr><td>连上了热点但打不开页面</td><td>`nmcli device show wlan0 \</td><td>grep IP4<code>（盒子应有 </code>10.42.0.1/24<code>）；</code>command -v dnsmasq` —— <strong>缺 dnsmasq 的话手机能连上热点但拿不到地址</strong>，任何地方都不报错，这是设计 D-2 专门点名的那个坑</td></tr>
+<tr><td>打开的是 <code>/login</code> 而不是向导</td><td>免口令闸门没开。<code>cat /run/mrrc/setup-ap/state.json</code> 看 <code>mode</code> 是不是 <code>hotspot</code>、<code>heartbeat</code> 是不是最近 45 秒内的；再确认你<strong>确实</strong>是从热点网段访问的（不是从家里 Wi-Fi）</td></tr>
+<tr><td>点"连接并切换"后一直转圈</td><td>这时手机应该已经掉线了，按页面说的连回你自己的 Wi-Fi。<strong>如果手机又自动连回了 <code>MRRC-Setup</code>，说明切换失败</strong>，刷新页面看红字原因</td></tr>
+<tr><td>切过去了但找不到盒子 IP</td><td>路由器客户端列表里按主机名找；盒子自己也记了一行：`journalctl -u mrrc-setup-ap \</td><td>grep joined`</td></tr>
+<tr><td>想改热点名 / 窗口时长</td><td>编辑 <code>/opt/mrrc_modern/env/mrrc.env</code>，加 <code>MRRC_SETUP_AP_SSID=…</code> 或 <code>MRRC_SETUP_AP_TIMEOUT_MIN=…</code>，然后 <code>systemctl restart mrrc-setup-ap</code></td></tr>
+</tbody></table></div>
+<blockquote><strong>仍未在真机上验证的部分</strong>（设计 §10）：MT7663S 这颗 <strong>SDIO 变体能否真的起 AP 模式</strong>、 切换过程中手机端的重连体验、以及 <code>10.42.0.0/24</code> 与你家网络是否冲突。 上表第一行就是为第一条准备的——设计上<strong>不依赖它成立</strong>：真起不来的时候， HDMI + <code>nmtui</code>（§9.4）永远可用。</blockquote>
 <h2 id="10-接电台">10. 接电台</h2>
 <p><strong>FT-710 的线插口别搞错</strong>：用<strong>上方 <code>Enhanced</code> 口</strong>，它同时承载 CAT 串口和 FT4222 scope。 插 Standard 口的话 CAT 可能通但<strong>没有真频谱</strong>。</p>
 <p>接好后确认三样东西都出现了：</p>
@@ -310,21 +343,23 @@ systemctl restart mrrc-modern</code></pre>
 <h2 id="12-验收-确认-真的能工作">12. 验收：确认"真的能工作"</h2>
 <pre><code class="lang-bash">scp packaging/box/verify.sh root@&lt;盒子IP&gt;:/tmp/
 ssh root@&lt;盒子IP&gt; 'bash /tmp/verify.sh'</code></pre>
-<p><strong>10 项，每项失败都会给出排查命令。先跑这个，再动手调别的。</strong></p>
+<p><strong>11 项，每项失败都会给出排查命令。先跑这个，再动手调别的。</strong></p>
 <div class="table-scroll"><table>
 <thead><tr><th>项</th><th>查什么</th></tr></thead><tbody>
-<tr><td>1/10</td><td><strong>有线网络</strong>（<code>nmcli device status</code>）</td></tr>
-<tr><td>2/10</td><td><strong>电台串口</strong>（<code>/dev/ttyUSB<em></code> / <code>ttyACM</em></code>）</td></tr>
-<tr><td>3/10</td><td><strong>电台 USB 声卡</strong>（<code>arecord -l</code>）</td></tr>
-<tr><td>4/10</td><td>Python 与依赖</td></tr>
-<tr><td>5/10</td><td>服务在跑</td></tr>
-<tr><td>6/10</td><td><strong>8888 上的 HTTPS</strong> 真的在应答（只看有没有应答，<strong>不看证书是否受信</strong>——自签证书本来就不受信）</td></tr>
-<tr><td>7/10</td><td><strong>配置一致性</strong>（设计 D-11：<code>EnvironmentFile</code> 与 <code>MRRC_CONFIG_FILE</code> 同一文件）</td></tr>
-<tr><td>8/10</td><td>Cloud Hub 隧道客户端（<code>fleet/frpc</code>）</td></tr>
-<tr><td>9/10</td><td>Cloud Hub 公网入口（<strong>未接入时自动跳过</strong>）</td></tr>
-<tr><td>10/10</td><td><strong>PTT 安全上限</strong>（<code>MRRC_PTT_MAX_TX_SECONDS</code> 有值）</td></tr>
+<tr><td>1/11</td><td><strong>有线网络</strong>（<code>nmcli device status</code>）</td></tr>
+<tr><td>2/11</td><td><strong>电台串口</strong>（<code>/dev/ttyUSB<em></code> / <code>ttyACM</em></code>）</td></tr>
+<tr><td>3/11</td><td><strong>电台 USB 声卡</strong>（<code>arecord -l</code>）</td></tr>
+<tr><td>4/11</td><td>Python 与依赖</td></tr>
+<tr><td>5/11</td><td>服务在跑</td></tr>
+<tr><td>6/11</td><td><strong>8888 上的 HTTPS</strong> 真的在应答（只看有没有应答，<strong>不看证书是否受信</strong>——自签证书本来就不受信）</td></tr>
+<tr><td>7/11</td><td><strong>配置一致性</strong>（设计 D-11：<code>EnvironmentFile</code> 与 <code>MRRC_CONFIG_FILE</code> 同一文件）</td></tr>
+<tr><td>8/11</td><td>Cloud Hub 隧道客户端（<code>fleet/frpc</code>）</td></tr>
+<tr><td>9/11</td><td>Cloud Hub 公网入口（<strong>未接入时自动跳过</strong>）</td></tr>
+<tr><td>10/11</td><td><strong>PTT 安全上限</strong>（<code>MRRC_PTT_MAX_TX_SECONDS</code> 有值）</td></tr>
+<tr><td>11/11</td><td><strong>初始化热点</strong>（<code>mrrc-setup-ap.service</code> 已装且已 enable、<code>dnsmasq</code> 在、守护进程活着）</td></tr>
 </tbody></table></div>
 <p>前 3 项就是硬件三件套。<strong>第 7 与第 10 项都是“没有报错也会出问题”的那类</strong>：第 7 项不合格时界面会显示 “已连接”而公网 TLS 校验失败；第 10 项没值时少一道防线①/② 中的第②道。</p>
+<p>第 11 项<strong>不要求热点此刻是开着的</strong>——恰恰相反，一台已经有网络的盒子<strong>应该</strong>报 <code>off</code> （设计 D-6 围栏①）。它查的是"这套机器装上了、守护进程活着"，因为出问题的时刻你正好 连不上盒子、没法查。</p>
 <p>然后<strong>实际用一次</strong>——打开界面，调频率、看瀑布、按 PTT 说一句。这才是真的验收。</p>
 <h2 id="13-mrrc-的全部可调项">13. MRRC 的全部可调项</h2>
 <p>配置文件：<strong><code>/opt/mrrc_modern/env/mrrc.env</code></strong>。改完 <code>systemctl restart mrrc-modern</code> 生效。</p>
@@ -465,7 +500,7 @@ armbian-install     # 装进 eMMC（交互式菜单）</code></pre>
 <p><strong>刷机段</strong></p>
 <ul>
 <li><input type="checkbox" disabled> 认准芯片是 <strong>S905L3A</strong>（不是 GK6323/RK3566）</li>
-<li><input type="checkbox" disabled> 镜像 SHA-256 = <code>b0a20f7f…</code>，字节数 = <code>1,156,345,060</code></li>
+<li><input type="checkbox" disabled> 镜像 SHA-256 = <code>81cf1f9e…</code>，字节数 = <code>1,280,233,862</code></li>
 <li><input type="checkbox" disabled> U 盘烧好、安全弹出</li>
 <li><input type="checkbox" disabled> 按复位孔（或 <code>reboot update</code>）从 U 盘启动，屏幕上是 Linux 日志不是安卓动画</li>
 <li><input type="checkbox" disabled> <code>ssh root@&lt;IP&gt;</code> 进得去，<strong>并且已经 <code>passwd root</code> 改掉 1234</strong></li>
@@ -481,7 +516,8 @@ armbian-install     # 装进 eMMC（交互式菜单）</code></pre>
 <li><input type="checkbox" disabled> 界面上频率/模式跟着电台走（CAT 通）</li>
 <li><input type="checkbox" disabled> 瀑布图是<strong>真频谱</strong>（不是 S 表合成谱）</li>
 <li><input type="checkbox" disabled> 按下 PTT 能发射、松开能收到（<strong>这一步才算真的能用</strong>）</li>
-<li><input type="checkbox" disabled> <code>verify.sh</code> 10 项全过</li>
+<li><input type="checkbox" disabled> （没有网线时）<strong>只用手机</strong>走通 §9.6：看到 <code>MRRC-Setup</code> → 连上 → 设口令 → 选 Wi-Fi → 盒子切过去、热点关掉</li>
+<li><input type="checkbox" disabled> <code>verify.sh</code> 11 项全过</li>
 <li><input type="checkbox" disabled> （可选）<code>MRRC_LISTEN_PASSWORD</code> 给朋友开了收听入口</li>
 <li><input type="checkbox" disabled> （可选）Cloud Hub 接入，公网 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 打得开</li>
 <li><input type="checkbox" disabled> （可选）固化进 eMMC（<strong>先 <code>armbian-ddbr</code> 备份原厂</strong>）</li>

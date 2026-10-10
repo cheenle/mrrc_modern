@@ -148,7 +148,7 @@
       "size_pattern": "\\(([0-9]{1,3}(?:,[0-9]{3}){3}) bytes\\)",
       "sha_prefix": "SHA-256: ([0-9a-f]{8})",
       "artifact": "dist/w103d/MRRC-Modern-{app}-w103d.img.gz",
-      "why": "The W103D box image is published on its own stream, so its card may lag the desktop release (2026-10-09: v1.25.5 ships desktop installers only and the card stays on the last published image). The offline check still compares the card against a local build whenever one exists.",
+      "why": "The W103D box image is published on its own stream, so its card may lag the desktop release (2026-10-09: v1.25.5 shipped desktop installers only and the card stayed on 1.25.4; 2026-10-10: 1.25.5 was published for the box, so the card now matches it — the rule compares the card against a local build whenever one exists, and skips with a note when there is none).",
       "optional": true
     }
   ],

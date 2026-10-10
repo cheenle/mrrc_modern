@@ -115,12 +115,22 @@ rootfs free before overlay: 963 MiB
 版本号、`release-artifacts.json` 的规则、网站下载卡、以及带 SHA 的线上复核。
 本手册不重复那套流程。
 
-**已发布（2026-10-07）**：
+**已发布（2026-10-10）**：
 
 ```
-https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.4-w103d.img.gz
-1,156,345,060 bytes   SHA-256 b0a20f7f4ba581540b4ee3f55f1c5cf69140ebc1e4d3cc0e4cee51493a797dd6
+https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz
+1,280,233,862 bytes   SHA-256 81cf1f9e2bfa9f13e596b764fe89150aff728a9744edf6fac65f45927a2a6ee5
 ```
+
+这一版修掉三个**只有镜像布局才暴露**的缺陷（详见 commit `52820e2`）：`server.py` 在模块层
+import 被排除的 `macos/`（服务在 logger 之前就死）、`mrrc-radio` 从 `__file__` 解析树
+（装在 `/usr/local/bin` 时死在 `import backends`）、同一命令没有 shebang（被交给 `/bin/sh`）。
+
+> ⚠️ **它之前的那一版（2026-10-07，`MRRC-Modern-1.25.4-w103d.img.gz`）烧上去服务起不来** ——
+> 同第一个缺陷。线上那份文件仍在 `downloads/` 里留档（版本化文件不撤），但**不要再烧 1.25.4**。
+> 判定方法：挂载镜像后 `chroot` 里跑
+> `/opt/mrrc_modern/venv/bin/python -c "import server"` —— 1.25.4 报
+> `ModuleNotFoundError: No module named 'macos'`。
 
 发布路径与桌面安装包一致（`dual-platform-release` 技能第 5/6 步）：`scp` 到 `www.vlsc.net:/var/tmp/`
 （**不是 `/tmp`——那是 958 MB 的 tmpfs**）→ **服务端独立算 SHA 核对后才 `sudo -n mv`** 进

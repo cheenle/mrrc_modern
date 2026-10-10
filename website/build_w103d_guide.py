@@ -309,8 +309,8 @@ def main() -> int:
         return 1
 
     for prefix, guide, lang, label, dl in (
-        ("", "guide.html", "zh/w103d.html", "中文", "downloads/MRRC-Modern-1.25.4-w103d.img.gz"),
-        ("../", "../guide.html", "../w103d.html", "EN", "../downloads/MRRC-Modern-1.25.4-w103d.img.gz"),
+        ("", "guide.html", "zh/w103d.html", "中文", "downloads/MRRC-Modern-1.25.5-w103d.img.gz"),
+        ("../", "../guide.html", "../w103d.html", "EN", "../downloads/MRRC-Modern-1.25.5-w103d.img.gz"),
     ):
         path = REPO / "website" / ("" if prefix == "" else "zh/") / "w103d.html"
         path.write_text(

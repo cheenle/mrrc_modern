@@ -85,22 +85,22 @@
 
 ```bash
 mkdir -p ~/w103d && cd ~/w103d
-curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.4-w103d.img.gz
+curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz
 ```
 
-**校验**（这一步别跳——1.07 GB 下坏了是能下坏的）：
+**校验**（这一步别跳——1.19 GB 下坏了是能下坏的）：
 
 ```bash
 # macOS
-shasum -a 256 MRRC-Modern-1.25.4-w103d.img.gz
+shasum -a 256 MRRC-Modern-1.25.5-w103d.img.gz
 # Linux
-sha256sum MRRC-Modern-1.25.4-w103d.img.gz
+sha256sum MRRC-Modern-1.25.5-w103d.img.gz
 ```
 
 | | |
 | --- | --- |
-| 字节数 | **1,156,345,060** |
-| SHA-256 | **b0a20f7f4ba581540b4ee3f55f1c5cf69140ebc1e4d3cc0e4cee51493a797dd6** |
+| 字节数 | **1,280,233,862** |
+| SHA-256 | **81cf1f9e2bfa9f13e596b764fe89150aff728a9744edf6fac65f45927a2a6ee5** |
 
 两者都对不上就别往下走。**先确认字节数**（`ls -l`）——大小不对说明下载被截断了。
 
@@ -113,7 +113,7 @@ sha256sum MRRC-Modern-1.25.4-w103d.img.gz
 ```bash
 diskutil list                      # 找到你的 U 盘，记下 /dev/diskN（N 是数字）
 diskutil unmountDisk /dev/diskN
-gzip -dc MRRC-Modern-1.25.4-w103d.img.gz | sudo dd of=/dev/rdiskN bs=4m
+gzip -dc MRRC-Modern-1.25.5-w103d.img.gz | sudo dd of=/dev/rdiskN bs=4m
 sync                               # 等它真的写完
 ```
 
@@ -126,7 +126,7 @@ sync                               # 等它真的写完
 
 ```bash
 lsblk                              # 找盘
-gzip -dc MRRC-Modern-1.25.4-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+gzip -dc MRRC-Modern-1.25.5-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 烧完把 U 盘**安全弹出**（macOS：`diskutil eject /dev/diskN`）。系统可能提示"此磁盘无法读取"——
@@ -703,7 +703,7 @@ W103D 的无线是 **MT7663S**（WiFi 与蓝牙同一颗芯片），开源驱动
 **刷机段**
 
 - [ ] 认准芯片是 **S905L3A**（不是 GK6323/RK3566）
-- [ ] 镜像 SHA-256 = `b0a20f7f…`，字节数 = `1,156,345,060`
+- [ ] 镜像 SHA-256 = `81cf1f9e…`，字节数 = `1,280,233,862`
 - [ ] U 盘烧好、安全弹出
 - [ ] 按复位孔（或 `reboot update`）从 U 盘启动，屏幕上是 Linux 日志不是安卓动画
 - [ ] `ssh root@<IP>` 进得去，**并且已经 `passwd root` 改掉 1234**

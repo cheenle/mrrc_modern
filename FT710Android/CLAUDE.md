@@ -159,6 +159,9 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 - **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**：它们是 `SubcomposeLayout`，不支持 intrinsic 测量，布局阶段抛 `IllegalStateException` → **启动即崩**（v1.1.16 事故：顶栏用 `height(IntrinsicSize.Min)` 让显示屏与 S 表等高）。要和固定尺寸的兄弟等高，就**显式给高度**（本仓：`Row(Modifier.height(meterH))`，`meterH` 由屏宽算出）。门槛：`UiLayoutSafetyTest`（静态扫描，命中即失败）。
 - **Python/脚本改代码后必须验证替换生效**：`str.replace` 锚点不匹配会**静默失效**，编译照过、测试照绿（本仓已踩三次：v1.1.18 的 header 内联公式、ATR 行 TUNE 的 `height(30.dp)`、测试断言更新）。脚本里一律 `assert old in s` 再 replace，改完 `grep` 复核。
+- **文字不给 `color` 就会是黑色**：Compose 的 `Text` 默认色取自 `LocalContentColor`，而 **M3 的 `MaterialTheme` 并不提供它**（只有 `Surface` 提供），默认值是 `Color.Black`。深色 App 里这就是"黑字压深底 = 看不见"（2026-10-08 登录页事故：实测对比度 **1.07:1**，WCAG 小字要求 4.5:1）。规矩：**每个 `Text` 都显式给 `color`**；根容器也要显式 `.background(...)`（`RootScreen` 已铺 `BgPrimary` 兜底，否则露出 `themes.xml` 的 `windowBackground #0B0B0C`）。
+- **可读性门槛 `LoginScreenContrastTest`**：Robolectric `@GraphicsMode(NATIVE)` 真渲染 → 截位图 → 按语义节点 `boundsInRoot` 采样像素 → 算 WCAG 相对亮度对比度（小字 ≥4.5:1、大字 ≥3:1）。"布局对、节点在、就是看不见"这类问题 **build / lint / 组合冒烟测试全都发现不了**，只有量像素才暴露。加新的文字界面时照这个模式补一条。
+- 要让依赖 Android 专有 API 的界面能在 JVM 上渲染，就**抽窄接口**（如 `LoginCredentials` = host/port/savedPassword/save），让 `SettingsStore` 实现它、测试传假实现；**不要为了让测试跑通去改生产的错误语义**（不加 `runCatching` 吞异常）。`SettingsStore` 一构造就 `KeyStore.getInstance("AndroidKeyStore")`，Robolectric 没有该 provider。
 - **UI 冒烟门槛（Compose 能组合、能布局）**：`app/src/testDebug/java/.../UI/MainScreenComposeTest.kt`（Robolectric + `ui-test-junit4`）。布局期异常在 CI 上原本是隐形的，只会在真机上表现为"装完打开就退出"（v1.1.16）。踩过的坑，改这条测试时照抄：
   - `@Config(application = Application::class)` —— 否则 Robolectric 会跑真的 `FT710App.onCreate` → `ServiceLocator` → `RxAudioPlayer` → `OpusBridge.<clinit>` → `System.loadLibrary("opus_jni")` → `UnsatisfiedLinkError`
   - 测试必须放在 **`src/testDebug`**：`ui-test-manifest` 只给了 `debugImplementation`，release 变体没有那个 Activity，`./gradlew test` 会两个变体都跑 → release 变体必红

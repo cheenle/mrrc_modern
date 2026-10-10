@@ -21,11 +21,14 @@ Java_com_hamradio_ft710android_Audio_OpusBridge_encoderCreate(
 JNIEXPORT jint JNICALL
 Java_com_hamradio_ft710android_Audio_OpusBridge_encoderEncode(
     JNIEnv* env, jobject thiz, jlong handle, jshortArray pcm, jbyteArray out) {
-    jsize inLen = (*env)->GetArrayLength(env, pcm);
+    /* GetArrayLength 对 jshortArray 返回的是**样本数**（不是字节数）：
+       20ms@48k = 960 samples。2026-10-05 真机事故：这里曾传 inLen/2，
+       Opus 把每帧当 10ms 编，服务端收到的是半速音频。 */
+    jsize inSamples = (*env)->GetArrayLength(env, pcm);
     jsize outLen = (*env)->GetArrayLength(env, out);
     jshort* in = (*env)->GetShortArrayElements(env, pcm, NULL);
     jbyte* ob = (*env)->GetByteArrayElements(env, out, NULL);
-    int n = opus_encode(enc(handle), (const opus_int16*)in, (int)(inLen / 2),
+    int n = opus_encode(enc(handle), (const opus_int16*)in, (int)inSamples,
                         (unsigned char*)ob, (opus_int32)outLen);
     (*env)->ReleaseShortArrayElements(env, pcm, in, JNI_ABORT);
     (*env)->ReleaseByteArrayElements(env, out, ob, 0);
@@ -43,11 +46,13 @@ Java_com_hamradio_ft710android_Audio_OpusBridge_decoderCreate(
 JNIEXPORT jint JNICALL
 Java_com_hamradio_ft710android_Audio_OpusBridge_decoderDecode(
     JNIEnv* env, jobject thiz, jlong handle, jbyteArray opus, jint len, jshortArray pcm) {
-    jsize outCap = (*env)->GetArrayLength(env, pcm);
+    /* frame_size 同样是**样本数**：960 = 20ms@48k。传 480 只会解出 10ms，
+       收到 20ms 包也只播一半（真机事故同上）。 */
+    jsize outSamples = (*env)->GetArrayLength(env, pcm);
     jbyte* in = (*env)->GetByteArrayElements(env, opus, NULL);
     jshort* ob = (*env)->GetShortArrayElements(env, pcm, NULL);
     int n = opus_decode(dec(handle), (const unsigned char*)in, (opus_int32)len,
-                        (opus_int16*)ob, (int)(outCap / 2), 0);
+                        (opus_int16*)ob, (int)outSamples, 0);
     (*env)->ReleaseByteArrayElements(env, opus, in, JNI_ABORT);
     (*env)->ReleaseShortArrayElements(env, pcm, ob, 0);
     return n; /* 解码样本数，负值=错误 */

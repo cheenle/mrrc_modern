@@ -22,13 +22,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.hamradio.ft710android.Data.LoginCredentials
 import com.hamradio.ft710android.Data.SettingsStore
 import com.hamradio.ft710android.Network.AuthResult
 import com.hamradio.ft710android.ViewModel.MainViewModel
+import androidx.compose.foundation.background
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen(vm: MainViewModel, settings: SettingsStore, onLoggedIn: () -> Unit) {
+fun LoginScreen(vm: MainViewModel, settings: LoginCredentials, onLoggedIn: () -> Unit) {
     val scope = rememberCoroutineScope()
     var host by remember { mutableStateOf(SettingsStore.DEFAULT_HOST) }
     var port by remember { mutableStateOf(SettingsStore.DEFAULT_PORT) }
@@ -47,10 +51,25 @@ fun LoginScreen(vm: MainViewModel, settings: SettingsStore, onLoggedIn: () -> Un
         initialized = true
     }
 
-    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.fillMaxSize().background(MrrcColors.BgPrimary).padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Spacer(Modifier.height(80.dp))
-        Text("FT-710 Control", style = MaterialTheme.typography.headlineMedium)
-        Text("服务器证书未验证（自签）", style = MaterialTheme.typography.bodySmall)
+        // 每处都**显式给色**：不给 color 就会落到 LocalContentColor（M3 默认黑），
+        // 在深色背景上等于隐形 —— 这正是"好多人看不见下边的小字"的原因
+        Text(
+            "MRRC Modern",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MrrcColors.Accent,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp,
+        )
+        Text(
+            "服务器证书未验证（自签）",
+            style = MaterialTheme.typography.bodySmall,
+            color = MrrcColors.TextSecondary,
+        )
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(host, { host = it }, label = { Text("服务器") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
@@ -59,6 +78,13 @@ fun LoginScreen(vm: MainViewModel, settings: SettingsStore, onLoggedIn: () -> Un
         OutlinedTextField(password, { password = it }, label = { Text("密码") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth())
+        // 用户报"看不见"的就是这行；#999 压 #1A1A1A ≈ 6.3:1，过 WCAG AA（4.5:1）
+        Text(
+            "局域网：主机 192.168.x.x / 端口 8888\n云端：主机 <呼号>.mrrc.vlsc.net / 端口 443",
+            style = MaterialTheme.typography.bodySmall,
+            color = MrrcColors.TextSecondary,
+            lineHeight = 18.sp,
+        )
         Spacer(Modifier.height(24.dp))
         Button(onClick = {
             if (busy || !initialized) return@Button
@@ -80,6 +106,9 @@ fun LoginScreen(vm: MainViewModel, settings: SettingsStore, onLoggedIn: () -> Un
         }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(if (busy) "连接中…" else "连接")
         }
-        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        error?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, color = MrrcColors.Danger, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }

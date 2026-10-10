@@ -61,4 +61,27 @@ class WebSocketConnectionTest {
         conn.close()
         Thread.sleep(300) // 让 close 握手完成，否则 MockWebServer.shutdown 卡队列
     }
+
+    @Test fun `reports peer close code`() {
+        val codes = Collections.synchronizedList(mutableListOf<Int>())
+        val latch = CountDownLatch(1)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                MockResponse().withWebSocketUpgrade(object : WebSocketListener() {
+                    override fun onOpen(webSocket: WebSocket, response: Response) {
+                        webSocket.close(4003, "listen only")
+                    }
+                })
+        }
+        val conn = WebSocketConnection(
+            client = OkHttpClient(),
+            url = server.url("/WSaudioTX?token=t").toString(),
+            onText = {}, onBinary = {}, onStateChange = {},
+            onClosedCode = { codes.add(it); latch.countDown() },
+        )
+        conn.connect()
+        assertTrue(latch.await(3, TimeUnit.SECONDS))
+        assertEquals(4003, codes.first())
+        Thread.sleep(300) // 让 close 握手完成，避免 MockWebServer.shutdown 卡队列
+    }
 }

@@ -69,7 +69,7 @@ class RadioState {
     var modeDisplay: String = ""
     var bandName: String = ""
     var sMeterDbm: Double = 0.0
-    var sUnit: Int = 0
+    var sUnit: String = "S0"
     var filterHz: Int = 0
     var preampLabel: String = ""
     var attenuatorLabel: String = ""
@@ -143,7 +143,7 @@ class RadioState {
             "mode_display" -> modeDisplay = s()
             "band_name" -> bandName = s()
             "s_meter_dbm" -> sMeterDbm = d()
-            "s_unit" -> sUnit = i()
+            "s_unit" -> sUnit = s()
             "filter_hz" -> filterHz = i()
             "preamp_label" -> preampLabel = s()
             "attenuator_label" -> attenuatorLabel = s()

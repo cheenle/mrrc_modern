@@ -1,8 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
 }
 
 android {
@@ -12,8 +19,8 @@ android {
         applicationId = "com.hamradio.ft710android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 34
+        versionName = "1.1.31"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake { arguments += listOf("-DOPUS_BUILD_SHARED_LIBRARY=0") }
@@ -23,9 +30,20 @@ android {
         cmake { path = file("src/main/cpp/CMakeLists.txt") }
     }
     ndkVersion = "27.2.12479018"
+    signingConfigs {
+        create("release") {
+            if (keystorePropsFile.exists()) {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = if (keystorePropsFile.exists()) signingConfigs.getByName("release") else null
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -34,8 +52,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
-    testOptions { unitTests.isReturnDefaultValues = true }
+    buildFeatures { compose = true; buildConfig = true }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        // Robolectric + Compose UI 测试需要 android resources
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -52,10 +74,34 @@ dependencies {
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.android)
     implementation(libs.datastore)
+    implementation(libs.androidx.core.ktx)
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.coroutines.test)
+    // Compose UI 冒烟测试：布局期异常（如 IntrinsicSize 包 BoxWithConstraints）
+    // 只有真机能暴露成"装完打开就退出"，用 Robolectric 把它提前到 gradlew test 阶段
+    testImplementation(libs.robolectric)
+    testImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.junit)
+}
+
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    doFirst {
+        if (!keystorePropsFile.exists()) {
+            throw GradleException(
+                "keystore.properties missing — a signed release requires " +
+                    "~/.android-keystores/mrrc-modern-release.jks (see BUILD_GUIDE.md)"
+            )
+        }
+    }
+}
+
+// UiLayoutSafetyTest 直接读 src/main/java 做静态检查：源码不是测试任务的默认输入，
+// 不声明就会被 Gradle 判 UP-TO-DATE 而跳过 —— 门槛会静默失效（2026-10-05 实测踩到）。
+tasks.withType<Test>().configureEach {
+    inputs.dir(layout.projectDirectory.dir("src/main/java"))
+        .withPropertyName("mainSourceForLayoutSafety")
 }

@@ -16,6 +16,7 @@ class PTTManagerTest {
         var txAudioStopCalls = 0      // stopTxAudio
         var txAudioStopFrameCalls = 0 // sendTXAudioStop（'s:' 帧）
         var txAudioStartCalls = 0
+        var heartbeats = 0
         var connected = true
         var txStatus = 0
         var stuck = 0
@@ -23,6 +24,7 @@ class PTTManagerTest {
         val manager = PTTManager(
             sendPTT = { sentPTT.add(it) },
             sendTXAudioStop = { txAudioStopFrameCalls++ },
+            sendHeartbeat = { heartbeats++ },
             startTxAudio = { txAudioStartCalls++ },
             stopTxAudio = { txAudioStopCalls++ },
             serverTXStatus = { txStatus },
@@ -78,14 +80,18 @@ class PTTManagerTest {
 
     @Test fun `press during watchdog cancels retries`() = runTest {
         val h = Harness(StandardTestDispatcher(testScheduler))
-        h.manager.press(); h.txStatus = 1
-        h.manager.release()
-        advanceTimeBy(500)
-        runCurrent() // 看门狗首轮重发完成
-        h.manager.press() // Releasing → Keyed，取消看门狗
-        advanceTimeBy(2000)
-        assertEquals(PTTManager.Phase.Keyed, h.manager.phase)
-        assertEquals(0, h.stuck)
+        try {
+            h.manager.press(); h.txStatus = 1
+            h.manager.release()
+            advanceTimeBy(500)
+            runCurrent() // 看门狗首轮重发完成
+            h.manager.press() // Releasing → Keyed，取消看门狗
+            advanceTimeBy(2000)
+            assertEquals(PTTManager.Phase.Keyed, h.manager.phase)
+            assertEquals(0, h.stuck)
+        } finally {
+            h.manager.forceRelease()   // 收尾：停止心跳循环（txStatus=1 → 看门狗重试耗尽后退出）
+        }
     }
 
     @Test fun `forceRelease is idempotent from any state`() = runTest {
@@ -97,5 +103,48 @@ class PTTManagerTest {
         assertEquals(2, h.txAudioStopCalls)
         assertEquals(2, h.txAudioStopFrameCalls)
         assertEquals(PTTManager.Phase.Idle, h.manager.phase)
+    }
+
+    @Test fun `keying sends heartbeat immediately then every 500ms`() = runTest {
+        val h = Harness(StandardTestDispatcher(testScheduler))
+        try {
+            h.manager.press()
+            runCurrent()                       // 心跳协程在虚拟时间 0ms 启动即首发
+            assertEquals(1, h.heartbeats)
+            advanceTimeBy(500); runCurrent()
+            assertEquals(2, h.heartbeats)
+            advanceTimeBy(1000); runCurrent()
+            assertEquals(4, h.heartbeats)
+        } finally {
+            h.manager.forceRelease()           // 断言失败也不能把心跳留在调度器上（否则 drain 死循环）
+        }
+    }
+
+    @Test fun `release stops the heartbeat`() = runTest {
+        val h = Harness(StandardTestDispatcher(testScheduler))
+        try {
+            h.manager.press()
+            runCurrent()                       // 先让首发真的发生
+            assertEquals(1, h.heartbeats)
+            h.manager.release()
+            advanceTimeBy(2000); runCurrent()
+            assertEquals(1, h.heartbeats)      // 释放后不再有新的心跳
+        } finally {
+            h.manager.forceRelease()
+        }
+    }
+
+    @Test fun `forceRelease stops the heartbeat`() = runTest {
+        val h = Harness(StandardTestDispatcher(testScheduler))
+        try {
+            h.manager.press()
+            runCurrent()
+            assertEquals(1, h.heartbeats)
+            h.manager.forceRelease()
+            advanceTimeBy(2000); runCurrent()
+            assertEquals(1, h.heartbeats)
+        } finally {
+            h.manager.forceRelease()
+        }
     }
 }

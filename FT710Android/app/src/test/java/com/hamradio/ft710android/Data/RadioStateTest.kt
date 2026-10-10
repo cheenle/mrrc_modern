@@ -16,6 +16,18 @@ class RadioStateTest {
             pairs.joinToString(prefix = "{", postfix = "}") { (k, v) -> "\"$k\":$v" }
         ).jsonObject
 
+    @Test fun `s_unit is the server's display string, not a number`() {
+        val state = RadioState()
+        state.apply(obj(
+            "s_meter" to "150",
+            "s_unit" to "\"+20\"",
+            "s_meter_dbm" to "5.4",
+        ))
+        assertEquals("+20", state.sUnit)
+        assertEquals(5.4, state.sMeterDbm, 0.001)
+        assertEquals(150, state.sMeter)
+    }
+
     @Test fun `applyFullState populates all field types`() {
         val state = RadioState()
         state.apply(obj(

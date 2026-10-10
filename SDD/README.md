@@ -47,7 +47,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.77 |
+| SDD Version | V2.78 |
 | Baseline Date | 2026-10-10 |
 | Status | **v1.25.5 built and verified on both platforms** (Windows Setup **54,395,338 bytes**, SHA-256 `1ed3fb8d…`; macOS DMG **62,490,425 bytes**, SHA-256 `58ad7481…`; macOS suite **2070 tests OK / 1 skip**, Windows build gate **2067 OK / 25 platform skips**, `release_check.py` **0 failing**; the frozen Windows entry was walked for this release's own symbols (`spectrumCaps`, `_spectrum_fanout`, `manage.html`, `setup.html` in `server`; `env_store`, `net_wifi`, `cloud_hub` in the PYZ — `grep` cannot see into a compressed PYZ); the frozen macOS server ran in an isolated HOME (https /login **200**, plaintext **000**, `/api/health` **401**, certs and `Recording ready` in the user directory, second instance exits **1** naming the port, bundle untouched, `codesign --verify` still valid); the Windows clean room passed **19/19** and the real `Setup.exe` installed silently into an isolated `/DIR=` where the installed Launcher served `https /login` **200**, rejected plaintext (**000**), answered `/api/health` **401**, left the install directory **167 → 167**, and uninstalled cleanly) —— **这一版把 V2.75 的频谱带宽档位、V2.76 的快捷行当前值与 D-8 配置层一起送到用户**：快捷行显示当前值（ATT/PRE 用完整档位标签）、Settings 可切频谱档位 full/mid/low、`env_store.py` 成为 env 文件的唯一写者、新增只读 `/manage` 页；**W103D 盒子镜像与树莓派镜像本次不发** |
 | Project | MRRC Modern / `mrrc_modern` |

@@ -457,6 +457,14 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
 <li><code>CI-V USB Baud Rate</code> = <strong>115200</strong>，必须明确选择 115200，不能保留 <code>Auto</code>；Icom 规定 <code>27 11</code> 波形输出仅在 Unlink + 115200 下可设置。选择 <code>ic7300</code>/<code>ic7300mk2</code> 后服务端默认即为 115200；显式设置 <code>MRRC_BAUD_RATE</code> 时必须一致。</li>
 <li><code>CI-V Address</code>：IC-7300 默认 <strong>94h</strong>（<code>IC7300_CIV_ADDR</code>）；IC-7300MK2 默认 <strong>B6h</strong>（<code>IC7300MK2_CIV_ADDR</code>）。</li>
 <li>建议开启 <code>CI-V Transceive</code>（连接时服务端会按型号自动发送开启命令：IC-7300 项目 0071，MK2 项目 0089）。</li>
+<li><strong><code>SET</code> → <code>Connectors</code> → <code>MOD Input</code>（语音发射必查：这一组不对，PTT 按下只有载波、没有调制）</strong>：
+<ul>
+<li><code>DATA OFF MOD</code> = <strong><code>USB</code></strong> —— <strong>非 DATA 模式</strong>（SSB / AM / FM 语音）的调制输入源。停在 <code>MIC</code> 时对方听到的是「有发射、没声音」（FM 死载波），SSB 则表现为「功率很小或没有」（SSB 无调制＝无射频功率）。想同时保留手咪就选 <code>MIC, USB</code>。</li>
+<li><code>DATA MOD</code> = <strong><code>USB</code></strong> —— 数字 / DATA 模式的调制输入源。</li>
+<li><code>USB MOD Level</code> = <strong>50 左右</strong>（不要为 0）—— USB 调制输入电平。</li>
+</ul></li>
+<li><code>SET</code> → <code>Connectors</code> → <strong><code>USB SEND</code> 保持 <code>OFF</code></strong>（MK2 同组另有 <code>USB Keying (CW/RTTY)</code>）：它把 USB 口的 DTR/RTS 当作 PTT，一旦设为 <code>USB(A) DTR/RTS</code>，电脑打开串口就等于按下 PTT。</li>
+<li>接收侧：<code>SET</code> → <code>Connectors</code> 里的 USB 音频输出选择保持 <strong>AF</strong>（不是 IF）、输出电平不为 0，否则网页接收无声（日志出现 <code>RX audio is near-silent</code>）。</li>
 </ul>
 <p><strong>音频</strong>：IC-7300 的 USB 音频是 <strong>48 kHz 原生</strong>，服务端直接透传，<strong>无需重采样</strong>。Windows 下该声卡以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code> 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 填 <code>USB Audio</code> 即可同时匹配两种形式。启动及 RX/TX 打开日志会列出 <code>host</code>、<code>default</code>、<code>actual</code>、<code>channels</code>；IC 正常值应为 <code>actual=48000Hz</code>。</p>
 <p><strong>频谱</strong>：来自 CI-V <code>0x27</code> 帧，走 CAT 串口，<strong>不需要 FT4222</strong>。启动时依次发送 Scope Display ON（<code>27 10 01</code>）、Center、±100 kHz Span、Data Output ON（<code>27 11 01</code>）；两个 ON 开关缺一不可。分片队列最多保留 44 个片段，积压时丢弃最旧数据；WebSocket 以 30 Hz 调度且只发送新完成的真实帧。菜单 SPAN 可调跨度，SPD 对 IC 只提供 FAST/MID/SLOW。</p>
@@ -466,7 +474,7 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
 <li>频率、模式、S 表跟随电台面板变化（面板改动也会回传——Transceive）。</li>
 <li>浏览器能听到接收声音（📶 音量滑杆、状态栏无「无声」告警）。</li>
 <li>瀑布图有信号（频谱来自 CI-V <code>0x27</code>；发射期间<strong>仍会刷新</strong>，这是与 FT-710 不同之处）。</li>
-<li>长按 PTT 说话，功率/ALC 表有反应（首次发射请用小功率确认）。</li>
+<li>长按 PTT 说话，功率/ALC 表有反应（首次发射请用小功率确认）；<strong>ALC 表不动＝调制没进来</strong>，回去核对上面的 <code>MOD Input</code> 三项。</li>
 </ol>
 <h3 id="ft-710">0.6.3 FT-710</h3>
 <p><strong>驱动</strong>：</p>

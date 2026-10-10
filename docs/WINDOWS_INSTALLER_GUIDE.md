@@ -480,7 +480,7 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
   both to **16 bit, 44100 Hz (CD Quality)**, and disable audio enhancements.
 - RX loudness: Recording → the radio's USB audio device → Levels.
 
-### 4. FT-710 menu settings
+### 4. Radio menu settings (FT-710)
 
 RX audio needs no menu change — the receiver AF is always present on the
 USB audio device.
@@ -504,6 +504,31 @@ TX modulation source is configured **per mode** (FT-710 Operation Manual,
   Enhanced COM Port, not by RTS/DTR.
 - TX audio level: use the 🎙 Vol slider in the web UI; keep ALC out of the
   red zone.
+
+### 4b. Icom menu settings (IC-7300 / IC-7300MK2)
+
+RX audio needs no menu change — the receiver AF is always present on the USB
+audio device.
+
+TX modulation input is one menu group, `SET` → `Connectors` → `MOD Input`.
+When the voice-mode entry there does not include `USB`, the radio still keys
+up and transmits a **bare carrier**: FM is heard as "carrier, no voice" and
+SSB shows almost no RF power (no modulation ⇒ no power).
+
+| Menu | Setting | Value |
+| ------ | --------- | ------- |
+| `SET` → `Connectors` → `MOD Input` | `DATA OFF MOD` | **`USB`** — voice modes (SSB / AM / FM); `MIC, USB` keeps the hand mic live |
+| `SET` → `Connectors` → `MOD Input` | `DATA MOD` | **`USB`** — DATA modes |
+| `SET` → `Connectors` → `MOD Input` | `USB MOD Level` | **~50** — 0 mutes the modulator |
+
+- `SET` → `Connectors` → `USB SEND` must stay **`OFF`** (the MK2 lists
+  `USB Keying (CW/RTTY)` in the same group): it maps the USB port's DTR/RTS
+  onto PTT, so `USB(A) DTR/RTS` makes the radio transmit the moment any
+  program opens the serial port — MRRC Modern opens the CI-V port on start.
+- The USB audio output select must stay `AF` (not `IF`) with a non-zero
+  level, otherwise the browser hears nothing (`RX audio is near-silent`).
+- `USB MOD Level` is the radio-side TX input trim — raise it there before
+  pushing the web UI 🎙 Vol slider, and keep ALC out of the red zone.
 
 ### 5. Verify
 
@@ -648,6 +673,7 @@ After installing on Windows:
 | Audio device not found | Windows selected another audio device | Set `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` by name or index (see *Audio (RX/TX) Setup*) |
 | No RX audio, or RX sounds like room noise | Auto-detect picked the laptop mic instead of the FT-710's USB sound card | Lock `MRRC_AUDIO_RX_DEVICE=USB Audio` (or the index from the startup device list) |
 | PTT keys but TX audio plays through the PC speakers | Auto-detect picked the wrong output device | Lock `MRRC_AUDIO_TX_DEVICE=USB Audio` (or the index) |
-| PTT keys, correct device, but no RF modulation | Radio menu `MOD SOURCE` is `MIC` | Set `FUNC` → `RADIO SETTING` → `MODE SSB` → `MOD SOURCE` = `USB` (see *Audio (RX/TX) Setup*) |
+| PTT keys, correct device, but no RF modulation | Radio menu `MOD SOURCE` is `MIC` (FT-710) | Set `FUNC` → `RADIO SETTING` → `MODE SSB` → `MOD SOURCE` = `USB` (see *Audio (RX/TX) Setup*) |
+| PTT keys, correct device, but no RF modulation (Icom IC-7300 / MK2) | `SET` → `Connectors` → `MOD Input` → `DATA OFF MOD` does not include `USB`, so voice modes modulate from the hand mic | Set `DATA OFF MOD` = `USB` (voice), `DATA MOD` = `USB` (data), `USB MOD Level` ≈ 50 (see *Audio (RX/TX) Setup*). In SSB this reads as *no power out*; in FM as *carrier without voice* |
 | Windows/browser sounds are heard on the air during TX | The radio's USB audio device is the Windows default playback device | Set the PC speakers as the Windows default output |
 | Port 8888 already in use | Another local service is listening | Change `MRRC_WEB_PORT` |

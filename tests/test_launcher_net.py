@@ -131,6 +131,41 @@ class ServedUrlTests(unittest.TestCase):
                 preferred, launcher_net.other_scheme(preferred), timeout_s=0), preferred)
 
 
+class TlsContextFailureTests(unittest.TestCase):
+    """A transient `_ssl` import failure must not be fatal (field log 2026-10-10).
+
+    A Windows frozen bundle raised
+    ``ImportError: DLL load failed while importing _ssl: 另一个程序正在使用此文件``
+    from inside ``tls_context()`` — the previous instance still held the extracted file —
+    and it escaped the probe, so the launcher died with “MRRC Modern 启动失败” while the
+    server it was about to start would have run fine. A probe answers a question; it may
+    never end the program.
+    """
+
+    def test_the_https_probe_reports_no_answer_instead_of_raising(self):
+        with patch.object(launcher_net, "tls_context",
+                          side_effect=ImportError("DLL load failed while importing _ssl")):
+            self.assertFalse(launcher_net.answers("https://127.0.0.1:8888", timeout_s=0))
+
+    def test_the_launcher_still_reaches_the_scheme_that_answers(self):
+        """The whole point: the operator gets a working window, not a failure dialog."""
+        with patch.object(launcher_net, "tls_context",
+                          side_effect=ImportError("DLL load failed while importing _ssl")), \
+                patch("urllib.request.urlopen", _fake_urlopen({"http"})):
+            self.assertEqual(
+                launcher_net.served_url("https://127.0.0.1:8888",
+                                        "http://127.0.0.1:8888", timeout_s=0),
+                "http://127.0.0.1:8888")
+
+    def test_a_broken_tls_stack_does_not_break_the_first_answering_chain(self):
+        with patch.object(launcher_net, "tls_context", side_effect=ImportError("nope")), \
+                patch("urllib.request.urlopen", _fake_urlopen({"http"})):
+            self.assertEqual(
+                launcher_net.first_answering(
+                    ["https://127.0.0.1:8888", "http://127.0.0.1:8888"], timeout_s=0),
+                "http://127.0.0.1:8888")
+
+
 class OtherSchemeTests(unittest.TestCase):
     def test_round_trip_keeps_host_and_port(self):
         for url in ("https://127.0.0.1:8888", "http://localhost:8888"):

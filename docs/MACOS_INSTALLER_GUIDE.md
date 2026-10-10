@@ -293,7 +293,7 @@ tccutil reset Microphone net.vlsc.mrrc-modern
 | 「无法验证开发者 / 无法检查是否包含恶意软件」 | 正常，**右键 → 打开** 一次即可 |
 | 控件正常但**接收没有声音** | ① **麦克风权限**（第 4 章，最常见）；② 电台 AF 增益太低；③ 音频设备选错 → Edit Configuration… |
 | 权限已经允许，还是没声音 | 日志里若仍 `peak=0.0%`：确认选中的是电台 USB 声卡（`USB Audio Device`），并在 Edit Configuration… 里重新指定 RX 设备后 **Restart Server** |
-| **发射没有声音** | 麦克风权限（浏览器侧还需允许网页使用麦克风）；确认电台处于正确模式与功率 |
+| **发射没有声音** | 麦克风权限（浏览器侧还需允许网页使用麦克风）；确认电台处于正确模式与功率；**Icom IC-7300/MK2 另需 `SET` → `Connectors` → `MOD Input` 的 `DATA OFF MOD` / `DATA MOD` 选 `USB`**（否则只有载波没有调制，SSB 则表现为没有功率） |
 | 每次升级都问麦克风权限 | 正常（ad-hoc 签名，第 4 章） |
 | 系统设置里**找不到 MRRC Modern**（麦克风列表） | 说明当前运行的包缺少权限说明键（v1.18.0 及更早）→ 换新版 |
 | 菜单栏没有图标 | 应用没启动成功：`open -a "MRRC Modern"` 重开；仍无则查 `logs/server-stdout.log` |

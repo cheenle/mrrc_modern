@@ -96,6 +96,74 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261010-205200-6e3c">
+      <header>
+        <span class="id">20261010-205200-6e3c</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">电台 · 2026-10-10 21:12</span>
+      </header>
+      <h3>发射功率小/没有？ 你看看</h3>
+      <p class="verdict">同一条根因的 SSB 版本：电台在发射，但实测 `ALC=0`、`Po≈0`，而服务端同时在把音频写进电台 USB 声卡 —— SSB 没有调制就没有射频功率；先查电台 `MOD Input`（`DATA OFF MOD` / `DATA MOD` = `USB`）</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>「功率没有」在 SSB 下正是「没有调制」：`TX meters active: RF_PWR=56W | COMP=0 ALC=0 PWR=0 SWR=0` —— `RF_PWR=56W` 是功率设置值，`ALC` / `PWR` 才是实测。本段日志三次实测（18:05 / 20:17 / 20:46）全部 ALC=0，即调制器没有输入</li>
+        <li>同时服务端在正常送音频：本段日志里连服务端自带的 CQ 录音也完整播完（`CQ: keyed the radio` → `CQ session: written=307 write_err=0 queue_drops=0 mic_drops=0`，6.1 s 全帧），浏览器麦克风一路也有大幅值（`peak=100%`），所以不是「没送出音频」</li>
+        <li>Icom 的调制输入源由 `SET` → `Connectors` → `MOD Input` 决定：`DATA OFF MOD` 管非 DATA 模式（SSB / AM / FM 语音），不含 `USB` 时语音发射只有载波 —— FM 表现为死载波、SSB 表现为没有功率，与同批另一份报告（对方听到发射但没声音）同源</li>
+        <li>另外本次语音峰值起伏很大（`peak=1%/5%` 与 `peak=100%` 交替），手机麦克风的距离/增益也要一起调整；调制打开后 ALC 应稳定有读数但不进红区</li>
+        <li>次要观察：`queue_drops` 多次出现（10~226），这台 Windows 机器的声卡输出节拍偏慢；若调制打开后仍有断字，见最后一条</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>电台菜单 `SET` → `Connectors` → `MOD Input`：`DATA OFF MOD` = `USB`（语音模式用；想同时保留手咪就选 `MIC, USB`）、`DATA MOD` = `USB`（数据模式）、`USB MOD Level` ≈ 50（不要 0）。</li>
+        <li>同一组里 `USB SEND` 保持 `OFF`（IC-7300MK2 另见 `USB Keying (CW/RTTY)`）：它把 USB 口的 DTR/RTS 当作 PTT，设成 `USB(A) DTR/RTS` 后电脑一打开串口就等于按下 PTT。</li>
+        <li>改完按住 PTT 说话：网页面板上的 ALC 表必须动 —— 不动就是调制还是没进来；再用第二台接收机确认能听到语音。</li>
+        <li>麦克风电平：离嘴 5~10 cm 正常说话，避免长期 `peak=100%`（削波）或 1%（几乎无声）—— 本次两种极值都出现过</li>
+        <li>若仍有断字/断续：把 `MRRC_AUDIO_TX_DEVICE` 锁定为启动日志里 `default=48000Hz` 的 WASAPI 条目，或换 USB 口 / USB 线（本次 `queue_drops` 最高 226）</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-10 20:46:59 [INFO] mrrc.poll: TX meters active: RF_PWR=56W | COMP=0 ALC=0 PWR=2 SWR=0</li>
+        <li class="ev">2026-10-10 18:05:55 [INFO] mrrc.poll: TX meters active: RF_PWR=56W | COMP=0 ALC=0 PWR=0 SWR=0</li>
+        <li class="ev">2026-10-10 20:47:19 [INFO] mrrc: CQ: keyed the radio … 20:47:39 [INFO] mrrc: CQ session: written=307 write_err=0 queue_drops=0 mic_drops=0</li>
+        <li class="ev">2026-10-10 20:50:15 [INFO] mrrc: TX session: frames=1018 fed=1018 decode_fail=0 written=831 write_err=0 queue_drops=226 peak=100% non_owner_drops=0</li>
+        <li class="ev">2026-10-10 20:41:40 [INFO] mrrc: Initial state: freq=7050000 mode=USB s_meter=94</li>
+        <li class="ev">state/config-redacted.env: MRRC_RADIO_MODEL=ic7300, MRRC_AUDIO_TX_DEVICE=扬声器 (USB Audio CODEC )；diagnostics/env.json: version 1.25.4, platform Windows-10-10.0.19041-SP0</li>
+      </ul>
+      </details>
+    </article>
+    <article class="card" id="20261010-203328-9f66">
+      <header>
+        <span class="id">20261010-203328-9f66</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">电台 · 2026-10-10 21:12</span>
+      </header>
+      <h3>IC7300发射对方没有收到声音，测试用另外一台短波机收听也是听到发射但是没有声音</h3>
+      <p class="verdict">软件把语音送进了电台（52% 峰值的音频确证写进 USB 声卡），电台也真的在发射，但调制为零 —— 根因是电台侧的调制输入源没选 USB（`SET` → `Connectors` → `MOD Input`），不是音频链路故障</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>PC→电台这一段是清的：`TX audio started: [5] 扬声器 (USB Audio CODEC ) (host=MME, default=44100Hz, actual=48000Hz, channels=1)`，随后 `TX session: frames=351 fed=351 decode_fail=0 written=228 write_err=0 queue_drops=110 peak=52%` —— `peak` 是服务端解码后 PCM 的实测峰值，52% 说明语音以正常电平写进了电台的 USB 声卡</li>
+        <li>对方听到的是「有载波、无调制」：本次电台在 FM 29.6 MHz（`Initial state: freq=29600000 mode=FM s_meter=6`），FM 的调制为零就是死载波 —— 与「听得到发射、听不到声音」完全吻合</li>
+        <li>唯一剩下的断点只能在电台内部：Icom 的 `SET` → `Connectors` → `MOD Input` 决定调制输入源，`DATA OFF MOD` 管非 DATA 模式（SSB / AM / FM 语音）、`DATA MOD` 管 DATA 模式、`USB MOD Level` 是 USB 输入电平；这一组不含 `USB` 时，网页里说的话不会进入调制器（电台用它自己的手咪当输入源）</li>
+        <li>这不是产品缺陷，但产品文档此前缺了这一节：FT-710 的等价要求（`MOD SOURCE = USB`）在操作指南与安装指南里都写着，Icom 的对应三条在全仓检索为零命中。本版已补进 `docs/OPERATION_GUIDE.md` §0.6.2 与 `docs/WINDOWS_INSTALLER_GUIDE.md`，并加了守卫测试防止再漏</li>
+        <li>次要观察（不改变结论）：本次 `queue_drops=110`，说明这台 Windows 机器的声卡输出节拍也偏慢；调制打开后若仍有断续，见最后一条</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>电台菜单 `SET` → `Connectors` → `MOD Input`：`DATA OFF MOD` = `USB`（语音模式用；想同时保留手咪就选 `MIC, USB`）、`DATA MOD` = `USB`（数据模式）、`USB MOD Level` ≈ 50（不要 0）。</li>
+        <li>同一组里 `USB SEND` 保持 `OFF`（IC-7300MK2 另见 `USB Keying (CW/RTTY)`）：它把 USB 口的 DTR/RTS 当作 PTT，设成 `USB(A) DTR/RTS` 后电脑一打开串口就等于按下 PTT。</li>
+        <li>改完按住 PTT 说话：网页面板上的 ALC 表必须动 —— 不动就是调制还是没进来；再用第二台接收机确认能听到语音。</li>
+        <li>如果还有咔啦/断续：把 `MRRC_AUDIO_TX_DEVICE` 锁定为启动日志里 `default=48000Hz` 的那一条（WASAPI 条目），关掉不用的虚拟声卡（本机同时存在 ToDesk 虚拟声卡与立体声混音），或换一根 USB 线 / 另一个 USB 口 —— 本次 `queue_drops=110` 就是输出节拍跟不上的信号</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-10 20:24:08 [INFO] mrrc: TX session: frames=351 fed=351 decode_fail=0 written=228 write_err=0 queue_drops=110 peak=52% non_owner_drops=0</li>
+        <li class="ev">2026-10-10 17:48:03 [INFO] mrrc.audio: TX audio started: [5] 扬声器 (USB Audio CODEC ) (host=MME, default=44100Hz, actual=48000Hz, channels=1) (pre-buffer 60ms, cap 400ms)</li>
+        <li class="ev">2026-10-10 18:07:06 [INFO] mrrc: Initial state: freq=29600000 mode=FM s_meter=6</li>
+        <li class="ev">2026-10-10 17:49:07 [WARNING] mrrc.audio: Configured audio device &#x27;麦克风 (USB Audio CODEC)&#x27; not found → [INFO] Using radio USB audio input: [1] 麦克风 (USB Audio CODEC ) (host=MME)（设备名尾随空格差异，已按既有设计回退到可用的 MME 条目，行为正确）</li>
+        <li class="ev">diagnostics/env.json: version 1.25.5, platform Windows-10-10.0.19045-SP0, radio.model ic7300, audio.configured_tx &#x27;扬声器 (USB Audio CODEC)&#x27;</li>
+      </ul>
+      </details>
+    </article>
     <article class="card" id="20261003-103644-11b2">
       <header>
         <span class="id">20261003-103644-11b2</span>
@@ -297,7 +365,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-06 07:51（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-10 21:12（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

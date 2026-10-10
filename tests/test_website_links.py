@@ -14,6 +14,15 @@ Two kinds of drift a reader cannot distinguish from a broken site:
   without rebuilding leaves the site describing behaviour the shipped build no longer has
   — and it is the installer's access instructions that live there.
 
+* **A radio-side requirement documented for one family and not the other.** The FT-710's
+  `MOD SOURCE = USB` is in the guide and in both installer guides; the Icom equivalent
+  (`SET` → `Connectors` → `MOD Input` → `DATA OFF MOD` / `DATA MOD`) was in no file of
+  this repo until field report `20261010-203328-9f66` showed what that costs: the web UI
+  wrote 52 %-peak audio into the IC-7300's USB sound card, the radio transmitted a bare
+  carrier, and the far end reported "carrier, no voice" with nothing anywhere telling the
+  operator which menu to look at. `IcomTxModulationDocsTests` pins the phrase to every
+  page a user in that situation opens.
+
 Hardware-free: file reads, plus one pandoc invocation when pandoc is installed.
 """
 import importlib.util
@@ -65,6 +74,38 @@ class AnchorTests(unittest.TestCase):
         self.assertEqual([], offenders,
                          "the site must not hand out a URL the server cannot answer:\n  "
                          + "\n  ".join(offenders))
+
+
+class IcomTxModulationDocsTests(unittest.TestCase):
+    """The Icom modulator-input requirement must stay documented where users look.
+
+    Two failures hide behind "PTT keys but nothing is heard": the radio's `DATA OFF MOD`
+    not including `USB` (bare carrier, and in SSB *no power at all*), and a real software
+    fault (queue drops / no `TX audio started`). Only the second is ours, so the operator
+    needs the radio-side check spelled out before they file a report — which is exactly
+    what was missing for the Icom family (see the module docstring).
+    """
+
+    PHRASES = ("MOD Input", "DATA OFF MOD", "DATA MOD", "USB MOD Level")
+
+    def test_documented_in_the_guide_and_the_windows_installer_guide(self):
+        targets = (GUIDE_SOURCE,
+                   WEBSITE / "guide.html",
+                   WEBSITE / "zh" / "guide.html",
+                   ROOT / "docs" / "WINDOWS_INSTALLER_GUIDE.md",
+                   ROOT / "IC-7300_硬件验收清单.md")
+        for path in targets:
+            text = path.read_text(encoding="utf-8")
+            missing = [phrase for phrase in self.PHRASES if phrase not in text]
+            self.assertEqual(
+                [], missing,
+                f"{path.relative_to(ROOT)} 缺少 Icom 调制输入说明：{', '.join(missing)}"
+                "（现场报告 20261010-203328-9f66 的根因就是这个菜单没写进文档）")
+
+    def test_macos_troubleshooting_sends_the_user_to_that_menu(self):
+        text = (ROOT / "docs" / "MACOS_INSTALLER_GUIDE.md").read_text(encoding="utf-8")
+        self.assertIn("MOD Input", text,
+                      "macOS 指南的「发射没有声音」一行必须点名 Icom 的 MOD Input")
 
 
 class GeneratedPageTests(unittest.TestCase):

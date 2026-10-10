@@ -31,12 +31,37 @@ h1{font-size:21px;margin:0 0 4px}
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
 用户侧结论在 <a href="../answers/">答复页</a>。
-共 2 条 · 待决 0 · 已排期 0 · 已答复 2 · 已提交 0 · 最后更新 2026-09-19 11:38（自动生成，勿手改）</p>
+共 7 条 · 待决 0 · 已排期 0 · 已答复 7 · 已提交 0 · 最后更新 2026-10-10 21:12（自动生成，勿手改）</p>
 <div class="board">
 <div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>0</span></h2><p class='empty'>—</p></div>
 <div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>0</span></h2><p class='empty'>—</p></div>
 <div class='col' id='in_progress'><h2>实施中<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>2</span></h2><div class='card' id='20260918-114118-9ad3'>
+<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>7</span></h2><div class='card' id='20261010-203328-9f66'>
+<div class='tags'><span class='k k-noise'>noise</span><span class='s s-low'>low</span><code>20261010-203328-9f66</code><span class='t'>2026-10-10 21:12</span></div>
+<p class='title'>软件把语音送进了电台（52% 峰值的音频确证写进 USB 声卡），电台也真的在发射，但调制为零 —— 根因是**电台侧的调制输入源没选 USB**（`SET` → `Connectors` → `MOD Input`），不是音频链路故障</p>
+<p class='note'>决策备注：电台侧 MOD Input 未选 USB（根因非软件）；答复页已回，文档已补 + 守卫测试</p>
+</div>
+<div class='card' id='20261010-205200-6e3c'>
+<div class='tags'><span class='k k-noise'>noise</span><span class='s s-low'>low</span><code>20261010-205200-6e3c</code><span class='t'>2026-10-10 21:12</span></div>
+<p class='title'>同一条根因的 SSB 版本：电台在发射，但实测 `ALC=0`、`Po≈0`，而服务端同时在把音频写进电台 USB 声卡 —— SSB 没有调制就没有射频功率；先查电台 `MOD Input`（`DATA OFF MOD` / `DATA </p>
+<p class='note'>决策备注：电台侧 MOD Input 未选 USB（根因非软件）；答复页已回，文档已补 + 守卫测试</p>
+</div>
+<div class='card' id='20261003-103644-11b2'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261003-103644-11b2</code><span class='t'>2026-10-03 10:44</span></div>
+<p class='title'>没有开蒲公英，从外网进入https://bg7zhs.mrrc.vlsc.net/网页显示无法打开，更新md文件后显示网页出错，现在又显示无法打开网页</p>
+<p class='note'>决策备注：补记：发布者已答复（本机状态文件重建时从答复页回收，分类 网络）</p>
+</div>
+<div class='card' id='20261001-161306-86db'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261001-161306-86db</code><span class='t'>2026-10-01 20:02</span></div>
+<p class='title'>how to config the *.mrrc.vlsc.net? how can I make it work?</p>
+<p class='note'>决策备注：补记：发布者已答复（本机状态文件重建时从答复页回收，分类 环境）</p>
+</div>
+<div class='card' id='20260926-061400-e4dc'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20260926-061400-e4dc</code><span class='t'>2026-10-01 20:01</span></div>
+<p class='title'>analysis the logs</p>
+<p class='note'>决策备注：补记：发布者已答复（本机状态文件重建时从答复页回收，分类 环境）</p>
+</div>
+<div class='card' id='20260918-114118-9ad3'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20260918-114118-9ad3</code><span class='t'>2026-09-19 11:27</span></div>
 <p class='title'>录音签名与 V2.44/V2.45 修复的「写入端一次性生命周期」缺陷同签名，当前 v1.18.1 已包含修复；包内命中行全部为 2026-09-12 修复前的历史日志，9/18 当天无新录音丢弃，按回归排查（用户先做一次新录音验证），其余</p>
 <p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>

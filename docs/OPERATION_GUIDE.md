@@ -85,6 +85,12 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
 - `CI-V USB Baud Rate` = **115200**，必须明确选择 115200，不能保留 `Auto`；Icom 规定 `27 11` 波形输出仅在 Unlink + 115200 下可设置。选择 `ic7300`/`ic7300mk2` 后服务端默认即为 115200；显式设置 `MRRC_BAUD_RATE` 时必须一致。
 - `CI-V Address`：IC-7300 默认 **94h**（`IC7300_CIV_ADDR`）；IC-7300MK2 默认 **B6h**（`IC7300MK2_CIV_ADDR`）。
 - 建议开启 `CI-V Transceive`（连接时服务端会按型号自动发送开启命令：IC-7300 项目 0071，MK2 项目 0089）。
+- **`SET` → `Connectors` → `MOD Input`（语音发射必查：这一组不对，PTT 按下只有载波、没有调制）**：
+  - `DATA OFF MOD` = **`USB`** —— **非 DATA 模式**（SSB / AM / FM 语音）的调制输入源。停在 `MIC` 时对方听到的是「有发射、没声音」（FM 死载波），SSB 则表现为「功率很小或没有」（SSB 无调制＝无射频功率）。想同时保留手咪就选 `MIC, USB`。
+  - `DATA MOD` = **`USB`** —— 数字 / DATA 模式的调制输入源。
+  - `USB MOD Level` = **50 左右**（不要为 0）—— USB 调制输入电平。
+- `SET` → `Connectors` → **`USB SEND` 保持 `OFF`**（MK2 同组另有 `USB Keying (CW/RTTY)`）：它把 USB 口的 DTR/RTS 当作 PTT，一旦设为 `USB(A) DTR/RTS`，电脑打开串口就等于按下 PTT。
+- 接收侧：`SET` → `Connectors` 里的 USB 音频输出选择保持 **AF**（不是 IF）、输出电平不为 0，否则网页接收无声（日志出现 `RX audio is near-silent`）。
 
 **音频**：IC-7300 的 USB 音频是 **48 kHz 原生**，服务端直接透传，**无需重采样**。Windows 下该声卡以 `USB Audio CODEC` / `USB Audio Device` 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。`MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` 填 `USB Audio` 即可同时匹配两种形式。启动及 RX/TX 打开日志会列出 `host`、`default`、`actual`、`channels`；IC 正常值应为 `actual=48000Hz`。
 
@@ -96,7 +102,7 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
 2. 频率、模式、S 表跟随电台面板变化（面板改动也会回传——Transceive）。
 3. 浏览器能听到接收声音（📶 音量滑杆、状态栏无「无声」告警）。
 4. 瀑布图有信号（频谱来自 CI-V `0x27`；发射期间**仍会刷新**，这是与 FT-710 不同之处）。
-5. 长按 PTT 说话，功率/ALC 表有反应（首次发射请用小功率确认）。
+5. 长按 PTT 说话，功率/ALC 表有反应（首次发射请用小功率确认）；**ALC 表不动＝调制没进来**，回去核对上面的 `MOD Input` 三项。
 
 ### 0.6.3 FT-710
 

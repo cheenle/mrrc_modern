@@ -9,6 +9,9 @@ gets reported as "black screen after installing" (field log 2026-10-02: the serv
 
 So instead of guessing, probe. Shared by ``windows/launcher.py`` and ``macos/launcher.py``,
 which had the same blind ``webbrowser.open(url)``.
+
+The other half of that job is not being fatal: a probe that raises is worse than a probe
+that answers "no" (field log 2026-10-10 — see ``answers()``).
 """
 from __future__ import annotations
 
@@ -52,7 +55,16 @@ def answers(url: str, proc=None, timeout_s: float = 2.0,
     """
     if secure is None:
         secure = url.startswith("https://")
-    ctx = tls_context() if secure else None
+    try:
+        ctx = tls_context() if secure else None
+    except Exception:  # noqa: BLE001 — a probe answers a question, it never ends the program
+        # Field log 2026-10-10 (Windows frozen bundle): the import inside `tls_context()`
+        # failed with `ImportError: DLL load failed while importing _ssl` because the
+        # previous instance still held the file. It escaped this probe and the launcher
+        # quit with “启动失败” — while the server it was about to spawn would have been
+        # fine. Treat it as "this scheme did not answer", which is what sends the caller
+        # on to the other scheme instead of aborting.
+        return False
     probe = url.rstrip("/") + HEALTH_PATH
     deadline = time.monotonic() + timeout_s
     while True:

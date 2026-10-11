@@ -425,6 +425,20 @@ class AudioHandler:
                 return i
         return None
 
+    def _rx_buffer_frames(self) -> int:
+        """``frames_per_buffer`` for the capture stream.
+
+        Never smaller than one read chunk (``read_rx_chunk``'s gate) and never
+        smaller than the device's own period.  ``config.RX_HOST_BUFFER_MS``
+        explains why the Linux images ask for a deeper host buffer than the
+        desktops: with one 20 ms period of slack an overflowing capture goes
+        silent *and stays silent* on the box's ALSA/xhci path (W103D,
+        2026-10-11), while CoreAudio/WASAPI absorb the same jitter.
+        """
+        from config import RX_HOST_BUFFER_MS
+        return max(self._rx_chunk,
+                   self._rx_dev_rate * int(RX_HOST_BUFFER_MS) // 1000)
+
     def start_rx(self) -> bool:
         """Start capturing RX audio from the sound card."""
         if self._rx_running:
@@ -463,7 +477,7 @@ class AudioHandler:
                     rate=self._rx_dev_rate,
                     input=True,
                     input_device_index=dev,
-                    frames_per_buffer=self._rx_chunk,
+                    frames_per_buffer=self._rx_buffer_frames(),
                     stream_callback=None,  # We'll read in the asyncio loop
                 )
                 self._rx_running = True

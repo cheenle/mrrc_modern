@@ -456,3 +456,39 @@ class BareStartConfigFileTests(unittest.TestCase):
                 self.assertEqual(config.WEB_PORT, 8888)
             finally:
                 importlib.reload(config)
+
+
+class RxHostBufferConfigTests(unittest.TestCase):
+    """Capture host-buffer depth (MRRC_RX_BUFFER_MS).
+
+    RX_CHUNK_MS (20 ms = one Opus frame) is the *read* granularity. As the host
+    buffer it leaves the device only the ~2 periods ALSA hands a blocking input
+    stream, and on the W103D's ALSA/xhci path an overflow stops the capture
+    interface while PyAudio still reports an open, error-free stream — 4%
+    coverage and then permanent silence (measured 2026-10-11). Linux, i.e. the
+    images, therefore asks for a deeper buffer; the desktops keep the tight 20 ms
+    they have always used; MRRC_RX_BUFFER_MS overrides either.
+    """
+
+    def _read_back(self, env_value=None):
+        """RX_HOST_BUFFER_MS as a fresh config import would see it."""
+        saved = os.environ.pop("MRRC_RX_BUFFER_MS", None)
+        if env_value is not None:
+            os.environ["MRRC_RX_BUFFER_MS"] = env_value
+        try:
+            importlib.reload(config)
+            return config.RX_HOST_BUFFER_MS
+        finally:
+            if saved is None:
+                os.environ.pop("MRRC_RX_BUFFER_MS", None)
+            else:
+                os.environ["MRRC_RX_BUFFER_MS"] = saved
+            importlib.reload(config)      # restore module globals for the rest of the suite
+
+    def test_the_env_override_is_honoured(self):
+        self.assertEqual(self._read_back("250"), 250)
+
+    def test_the_default_is_at_least_one_opus_frame_and_deeper_on_linux(self):
+        self.assertGreaterEqual(self._read_back(), 20)
+        if sys.platform.startswith("linux"):
+            self.assertGreater(self._read_back(), 20)

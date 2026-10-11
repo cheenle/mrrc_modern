@@ -499,6 +499,7 @@ ssh root@<盒子IP> 'bash /tmp/verify.sh'
 | `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` | 会话活性闸门；Cloud Hub 接入后自动写 `5`——防线① |
 | `MRRC_SCOPE_PORT` / `MRRC_SCOPE_BAUD` | FT-710 的 FT4222 scope 串口 |
 | `MRRC_FTDI_LIB_DIR` | FTDI 库目录（镜像里已预置 aarch64 版本） |
+| `MRRC_RX_BUFFER_MS` | **接收音频的宿主缓冲深度**（毫秒，默认：盒子/其他 Linux `100`，macOS/Windows `20`）。见下方「声音卡顿」 |
 | `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` | 指定音频设备（多声卡时有用） |
 | `MRRC_RECORDINGS_DIR` | 通联录音目录（服务端存 MP3） |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` / `MRRC_RECORDINGS_BITRATE` | 单次录音时长上限 / 码率 |
@@ -516,6 +517,16 @@ systemctl restart mrrc-modern
 # 发射时长上限调长一点
 sed -i 's/^MRRC_PTT_MAX_TX_SECONDS=.*/MRRC_PTT_MAX_TX_SECONDS=300/' /opt/mrrc_modern/env/mrrc.env
 systemctl restart mrrc-modern
+```
+
+**`MRRC_RX_BUFFER_MS`（声音卡顿才需要动）**：接收方向的采集缓冲深度。盒子上的
+USB 声卡（ALSA）只给 1–2 个 20 ms 周期，读得稍慢就溢出；**溢出之后采集接口会静默停摆**
+（PyAudio 仍报流是开的、内核也不报错），于是声音先被切碎、随后彻底安静。镜像默认已经
+给到 `100`，调大可换稳定性、代价是延迟：
+
+```bash
+sed -i 's/^MRRC_RX_BUFFER_MS=.*/MRRC_RX_BUFFER_MS=200/' /opt/mrrc_modern/env/mrrc.env
+systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -i "capture stalled"
 ```
 
 ## 14. 公网接入（Cloud Hub）
@@ -639,7 +650,8 @@ W103D 的 WiFi 完全依赖专属内核补丁 + MT7663S 固件 overlay。
 | 没有串口 | `ls /dev/ttyUSB* /dev/ttyACM*` | USB 线；**FT-710 要插上方 Enhanced 口**；电台菜单 `MOD SOURCE = USB` |
 | 有串口但连不上 | `mrrc-radio show` 的串口对不对 | `mrrc-radio use <model> --port /dev/ttyXXX` |
 | 没声音 | `arecord -l` 有没有电台声卡 | 换线/换口；服务日志里的 PyAudio 设备列表 |
-| 瀑布图是合成谱（S 表） | `ls -l /opt/mrrc_modern/vendor/ftdi/` | 缺 FTDI 库，或没插 Enhanced 口；`cat /sys/bus/usb/devices/*/idProduct \| grep 601c` |
+| **声音卡顿/断续、听一会儿就没了** | `cat /proc/asound/card1/stream0`（看 Capture 是不是 `Status: Stop`）；`journalctl -u mrrc-modern \| grep -i "capture stalled"` | 采集缓冲溢出后**静默停摆**（本机 ALSA 只给 1–2 个 20 ms 周期）。服务会自己重开并把原因写进日志；若反复出现，把 `MRRC_RX_BUFFER_MS` 调大（§13） |
+| 瀑布图是合成谱（S 表） | `ls -l /opt/mrrc_modern/vendor/ftdi/`；`ls -l /etc/udev/rules.d/99-mrrc-ftdi.rules` | 缺 FTDI 库，或没插 Enhanced 口（`cat /sys/bus/usb/devices/*/idProduct \| grep 601c`）；**或 udev 规则缺失** —— 真 FFT 要服务用户 `mrrc` 能写那个 USB 节点，判定：`sudo -u mrrc test -w /dev/bus/usb/001/00N && echo ok` |
 | **Cloud Hub 显示"已连接"但公网 502** | `verify.sh` 第 8、9 项 | 多半 `fleet/frpc` 缺失（`connect()` 会返回 `tunnel_started:false`） |
 | 公网证书报错 | `verify.sh` 第 7 项 | `EnvironmentFile` 与 `MRRC_CONFIG_FILE` 必须指向**同一个文件**（设计 D-11） |
 | 服务反复重启 | `journalctl -u mrrc-modern -n 100` | Python traceback；核对机型与串口 |

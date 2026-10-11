@@ -274,6 +274,20 @@ POLL_TIMEOUT = 0.25
 AUDIO_RX_DEVICE = _env("MRRC_AUDIO_RX_DEVICE", "")
 AUDIO_TX_DEVICE = _env("MRRC_AUDIO_TX_DEVICE", "")
 
+# Capture host buffer in milliseconds of device samples (the ``frames_per_buffer``
+# of the RX input stream). RX_CHUNK_MS (20 ms = one Opus frame) is the *read*
+# granularity; as the host buffer it leaves the device only the ~2 periods ALSA
+# hands a blocking stream, so a read tick that lands late overflows it. On Linux an
+# overflow is not merely dropped samples: on the W103D (Amlogic S905L3A, xhci +
+# USB-audio, kernel 6.18) the capture interface stops — /proc/asound/card1/stream0
+# reads "Status: Stop" — while PyAudio keeps reporting an open, error-free stream,
+# so the loop reads nothing forever and the listener hears chopped audio and then
+# silence. Measured 2026-10-11: 4% coverage and a permanent stall at 20 ms; 100%
+# and stable at 100 ms. CoreAudio/WASAPI give the same code far more slack, which
+# is why the desktops keep the tight 20 ms. Override: MRRC_RX_BUFFER_MS.
+RX_HOST_BUFFER_MS = _env_int(
+    "MRRC_RX_BUFFER_MS", 100 if sys.platform.startswith("linux") else 20)
+
 # ── ATR1000 Antenna Tuner (optional) ───────────────────────────────
 # Networked automatic antenna tuner with a built-in WebSocket server.
 # Empty host (default) = feature fully disabled: no client, no tasks,

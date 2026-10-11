@@ -103,3 +103,45 @@ class FirstbootPreseedEncodingTests(unittest.TestCase):
         adopted, data = self._adopt(raw)
         self.assertTrue(adopted)
         self.assertIn("MRRC_WEB_PASSWORD=secret", data.decode("utf-8"))
+
+
+class FirstbootCertPermissionTests(unittest.TestCase):
+    """``ensure_cert()`` runs as root; the server does not.
+
+    ssl_bootstrap writes the key 0600 and the wrapper used to hand only the env
+    directory to ``mrrc`` — so on the first real box the service died with
+    ``PermissionError`` inside uvicorn's load_cert_chain and restarted every 3 s
+    with nothing but a traceback in server-stdout.log (2026-10-11). Both copies
+    of the wrapper must give the service user the certificate.
+    """
+
+    WRAPPERS = (
+        REPO_ROOT / "packaging" / "box" / "firstboot_wrapper.py",
+        STAGE / "01-deploy-mrrc" / "files" / "opt" / "mrrc_modern" / "linux"
+        / "firstboot_wrapper.py",
+    )
+
+    def _calls(self, path, name):
+        import importlib.util
+        import sys as _sys
+        import tempfile
+        from unittest import mock
+        from typing import Any, cast
+        _sys.path.insert(0, str(REPO_ROOT / "linux"))       # sibling first_run.py
+        spec = cast(Any, importlib.util.spec_from_file_location(name, path))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        with tempfile.TemporaryDirectory() as tmp:
+            cert_dir = Path(tmp)
+            with mock.patch.object(mod, "CERT_DIR", cert_dir), \
+                 mock.patch.object(mod.subprocess, "run") as run:
+                mod.ensure_cert()
+            return [list(call.args[0]) for call in run.call_args_list], cert_dir
+
+    def test_the_certificate_belongs_to_the_service_user(self):
+        for path in self.WRAPPERS:
+            with self.subTest(wrapper=str(path.relative_to(REPO_ROOT))):
+                calls, cert_dir = self._calls(path, f"mrrc_firstboot_{path.parent.name}")
+                self.assertIn(["chown", "-R", "mrrc:mrrc", str(cert_dir)], calls)
+                self.assertIn(["chmod", "600", str(cert_dir / "server.key")], calls)
+                self.assertIn(["chmod", "644", str(cert_dir / "server.crt")], calls)

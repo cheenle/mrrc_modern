@@ -182,7 +182,8 @@ W103D 的 WiFi 完全依赖专属内核补丁 + 固件 overlay（MT7663S）。
 | 没电台串口 | `ls /dev/ttyUSB* /dev/ttyACM*` | 电台 USB 线；FT-710 要插**上方 Enhanced 口**；电台菜单 `MOD SOURCE = USB` |
 | 有串口但连不上 | `mrrc-radio show` 里的串口对不对 | `mrrc-radio use <model> --port /dev/ttyXXX` |
 | 没声音 | `arecord -l` 有没有电台声卡 | 电台 USB 声卡没枚举 → 换线/换口；服务日志里找 PyAudio 设备列表 |
-| 瀑布是合成谱 | 见第 11 节 | FT-710：查 FTDI 库与 `0403:601c` |
+| 声音卡顿、听一会儿彻底安静 | `cat /proc/asound/card1/stream0` 的 Capture 是不是 `Status: Stop`；`journalctl -u mrrc-modern \| grep "capture stalled"` | 采集缓冲溢出后 ALSA **静默停摆**（PyAudio 不报错）—— 服务会自己重开；反复出现就把 `MRRC_RX_BUFFER_MS` 调大（镜像默认 100） |
+| 瀑布是合成谱 | 见第 11 节 | FT-710：查 FTDI 库与 `0403:601c`，**再查 `/etc/udev/rules.d/99-mrrc-ftdi.rules`**（服务用户 `mrrc` 必须能写那个 USB 节点：`sudo -u mrrc test -w /dev/bus/usb/001/00N`） |
 | **Cloud Hub 显示"已连接"但公网 502** | `verify.sh` 第 8、9 项 | 多半是 `fleet/frpc` 缺失（`connect()` 会返回 `tunnel_started:false`） |
 | 公网证书报错 | `verify.sh` 第 7 项 | `EnvironmentFile` 与 `MRRC_CONFIG_FILE` 必须指向**同一个文件**（设计 D-11） |
 | 服务反复重启 | `journalctl -u mrrc-modern -n 100` | 看 Python traceback；`mrrc-radio show` 核对型号与串口 |

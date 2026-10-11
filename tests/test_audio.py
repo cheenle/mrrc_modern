@@ -1553,3 +1553,150 @@ class TxQueueDepthTests(unittest.TestCase):
         h.feed_tx_audio(b"\x00\x00" * 480)
         h._tx_stream = None                          # device closed
         self.assertEqual(h.tx_queue_frames(), 0)
+
+
+class RxHostBufferTests(unittest.TestCase):
+    """The capture stream asks for config.RX_HOST_BUFFER_MS of host buffer.
+
+    ``frames_per_buffer`` is the *host buffer*, not the read size: the read gate
+    stays at one 20 ms chunk (RX_CHUNK_MS), but the device needs slack behind it.
+    One period of slack is what the box's ALSA/xhci path cannot survive — the
+    capture interface stops while PyAudio still reports an open, error-free
+    stream (W103D, 2026-10-11: 4% coverage, then permanent silence).
+    """
+
+    @staticmethod
+    def _handler(rx_rate=44100, name="USB Audio Device: - (hw:1,0)"):
+        import audio_handler
+        h = audio_handler.AudioHandler(rx_rate=rx_rate, tx_rate=rx_rate)
+        h._pa = _FakePyAudioOpen([_dev(name, inputs=1, outputs=0, rate=rx_rate)])
+        return h
+
+    def test_100ms_of_buffer_is_4410_frames_at_44k1(self):
+        from unittest.mock import patch
+        h = self._handler()
+        with patch("config.RX_HOST_BUFFER_MS", 100):
+            self.assertTrue(h.start_rx())
+        call = h._pa.open_calls[-1]
+        self.assertEqual(call["frames_per_buffer"], 4410)
+        self.assertEqual(call["rate"], 44100)      # the codec domain is not touched
+        self.assertEqual(call["channels"], 1)
+        h.stop_rx()
+
+    def test_a_48k_backend_scales_with_its_own_device_rate(self):
+        """The IC-7300's codec is 48 kHz end-to-end; the buffer follows it."""
+        from unittest.mock import patch
+        h = self._handler(rx_rate=48000, name="USB Audio Device")
+        with patch("config.RX_HOST_BUFFER_MS", 100):
+            self.assertTrue(h.start_rx())
+        self.assertEqual(h._pa.open_calls[-1]["frames_per_buffer"], 4800)
+        h.stop_rx()
+
+    def test_a_shallow_setting_never_goes_below_one_read_chunk(self):
+        """A buffer shallower than the read gate would starve the loop."""
+        from unittest.mock import patch
+        h = self._handler()
+        with patch("config.RX_HOST_BUFFER_MS", 5):
+            self.assertTrue(h.start_rx())
+        self.assertEqual(h._pa.open_calls[-1]["frames_per_buffer"], h._rx_chunk)
+        h.stop_rx()
+
+
+class RxStallWatchdogTests(unittest.TestCase):
+    """A capture that stops delivering must be visible and self-healing.
+
+    ``read_rx_chunk()`` returns None for "nothing yet" and for "this stream is
+    dead" alike, so before this watchdog a stalled capture was silent at both
+    ends: the loop kept its 50 Hz pace, the listener heard nothing, and no log
+    line existed. Real case: the W103D's ALSA capture stops on an overflow while
+    PyAudio still reports an open, error-free stream (2026-10-11).
+    """
+
+    def test_a_stalled_capture_is_reported_and_reopened(self):
+        import asyncio
+        import contextlib
+        import server
+
+        reopened = []
+
+        class StalledCapture:
+            _rx_running = True
+            _rx_dev_rate = 44100
+            _rx_last_peak = 0
+            opus_enabled = True
+
+            def read_rx_chunk(self):
+                return None                      # the interface stopped: no PCM, forever
+
+            def note_rx_chunk(self, pcm):
+                pass
+
+            def rx_silent_seconds(self):
+                return 0.0
+
+            def restart_rx(self):
+                reopened.append(True)
+
+        async def drive():
+            saved = (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
+                     server._rx_restart_task)
+            server.audio = StalledCapture()
+            server.audio_rx_clients = {object()}
+            server.RX_STALL_ALERT_S = 0.2
+            server._rx_restart_task = None
+            task = asyncio.create_task(server._audio_rx_loop())
+            try:
+                with self.assertLogs("mrrc", level="WARNING") as logs:
+                    await asyncio.sleep(0.7)
+                    await asyncio.sleep(0.1)   # let asyncio.to_thread finish the reopen
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
+                 server._rx_restart_task) = saved
+            return logs
+
+        logs = asyncio.run(drive())
+        self.assertTrue(any("RX capture stalled" in line for line in logs.output), logs.output)
+        self.assertTrue(reopened, "the watchdog must reopen the stalled capture")
+
+    def test_no_watchdog_without_a_listener(self):
+        """No clients means the loop idles by design — that is not a stall."""
+        import asyncio
+        import contextlib
+        import server
+
+        reopened = []
+
+        class StalledCapture:
+            _rx_running = True
+            _rx_dev_rate = 44100
+            _rx_last_peak = 0
+            opus_enabled = True
+
+            def read_rx_chunk(self):
+                return None
+
+            def note_rx_chunk(self, pcm):
+                pass
+
+            def restart_rx(self):
+                reopened.append(True)
+
+        async def drive():
+            saved = (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S)
+            server.audio = StalledCapture()
+            server.audio_rx_clients = set()
+            server.RX_STALL_ALERT_S = 0.05
+            task = asyncio.create_task(server._audio_rx_loop())
+            try:
+                await asyncio.sleep(0.4)
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S = saved
+
+        asyncio.run(drive())
+        self.assertEqual(reopened, [], "the idle path must not reopen anything")

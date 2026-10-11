@@ -59,6 +59,14 @@ def ensure_cert() -> None:
         f"ssl_bootstrap.ensure_self_signed(Path({str(CERT_DIR)!r}))"
     )
     subprocess.run([venv_py, "-c", code], check=True, cwd="/opt/mrrc_modern")
+    # This runs as root; the server does not. uvicorn loads the chain as `mrrc`
+    # and ssl_bootstrap writes the key 0600 — a root-owned 0600 key is a
+    # PermissionError restart loop whose only trace is a traceback in
+    # server-stdout.log (found on the first real box, 2026-10-11: the service
+    # restarted every 3 s and the web UI never came up).
+    subprocess.run(["chown", "-R", "mrrc:mrrc", str(CERT_DIR)], check=True)
+    subprocess.run(["chmod", "600", str(CERT_DIR / "server.key")], check=True)
+    subprocess.run(["chmod", "644", str(CERT_DIR / "server.crt")], check=True)
 
 
 def main() -> int:

@@ -579,3 +579,70 @@ class VerifyScriptTests(unittest.TestCase):
                          "is not running"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, section)
+
+
+class BoxFirstBootHardwareTests(unittest.TestCase):
+    """What the first real box proved the overlay was missing.
+
+    Every one of these is invisible on a desktop and only bites on the hardware:
+    an FT4222 the service user cannot open (no real FFT at all), the build host's
+    serial port baked into the env, a unit line systemd refuses to parse (so the
+    HDMI banner never appears), and Debian's dnsmasq unit fighting
+    systemd-resolved for port 53. Found on the W103D, 2026-10-11 — a batch of
+    hardware-session findings, each with the command that proves it.
+    """
+
+    OVERLAY = REPO / "packaging" / "box" / "box-overlay.sh"
+
+    def setUp(self):
+        self.text = self.OVERLAY.read_text(encoding="utf-8")
+
+    def test_the_service_user_gets_the_scope_interface(self):
+        """libft4222 opens the USB device as `mrrc`; root:root 0664 is FTDI error 2.
+
+        Measured: the scope pipe run as root reached spi_ready on the first
+        attempt, run as mrrc it failed every attempt — CAT and audio unaffected,
+        which is what makes it confusing.
+        """
+        self.assertIn("99-mrrc-ftdi.rules", self.text)
+        self.assertIn('ATTR{idVendor}=="0403"', self.text)
+        self.assertIn('ATTR{idProduct}=="601c"', self.text)
+        self.assertIn('GROUP="dialout"', self.text)
+
+    def test_the_build_hosts_hardware_guesses_are_stripped_from_the_env(self):
+        """install.sh's template is written on the build host: it carries that
+        machine's serial port and a password it generated there. On a box both
+        are first-boot facts (design D-3) — 2026-10-11 the box came up pointing
+        at a `/dev/cu.SLAB_USBtoUART` that only exists on the developer's Mac."""
+        self.assertIn(r"/^#\?MRRC_SERIAL_PORT=/d", self.text)
+        self.assertIn(r"/^#\?MRRC_WEB_PASSWORD=/d", self.text)
+
+    def test_no_unit_line_uses_the_bare_console_specifier(self):
+        """`StandardOutput=console` is not a systemd specifier.
+
+        systemd logs "Failed to parse output specifier, ignoring: console" and
+        the operator with only an HDMI monitor never sees the first-boot banner
+        with their web password (design D-6 relies on that banner). Valid forms:
+        `tty`, `journal`, `journal+console`.
+        """
+        units = [self.OVERLAY, *sorted((REPO / "packaging" / "rpi").rglob("*.service"))]
+        for path in units:
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line.startswith(("StandardOutput=", "StandardError=")):
+                    continue
+                spec = line.split("=", 1)[1]
+                with self.subTest(unit=path.name, line=line):
+                    self.assertNotEqual(spec, "console")
+                    if "console" in spec:
+                        self.assertEqual(spec, "journal+console")
+
+    def test_debians_dnsmasq_unit_is_masked(self):
+        """NM's shared mode spawns its own dnsmasq; the packaged unit loses port
+        53 to systemd-resolved and shows up as a failed unit on a fresh box."""
+        self.assertIn("systemctl mask dnsmasq.service", self.text)
+
+    def test_the_capture_buffer_default_is_visible_in_the_env_file(self):
+        """The code default is the same on Linux; writing it into mrrc.env makes
+        the knob discoverable for the operator who has to raise it (guide §13)."""
+        self.assertIn("MRRC_RX_BUFFER_MS=100", self.text)

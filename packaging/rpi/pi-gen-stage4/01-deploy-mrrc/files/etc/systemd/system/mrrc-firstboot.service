@@ -7,7 +7,7 @@ ConditionPathExists=!/var/lib/mrrc/firstboot-done
 [Service]
 Type=oneshot
 ExecStart=/opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/firstboot_wrapper.py
-StandardOutput=console
+StandardOutput=journal+console
 StandardError=journal
 RemainAfterExit=yes
 

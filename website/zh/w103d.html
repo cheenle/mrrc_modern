@@ -375,6 +375,7 @@ ssh root@&lt;盒子IP&gt; 'bash /tmp/verify.sh'</code></pre>
 <tr><td><code>MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code></td><td>会话活性闸门；Cloud Hub 接入后自动写 <code>5</code>——防线①</td></tr>
 <tr><td><code>MRRC_SCOPE_PORT</code> / <code>MRRC_SCOPE_BAUD</code></td><td>FT-710 的 FT4222 scope 串口</td></tr>
 <tr><td><code>MRRC_FTDI_LIB_DIR</code></td><td>FTDI 库目录（镜像里已预置 aarch64 版本）</td></tr>
+<tr><td><code>MRRC_RX_BUFFER_MS</code></td><td><strong>接收音频的宿主缓冲深度</strong>（毫秒，默认：盒子/其他 Linux <code>100</code>，macOS/Windows <code>20</code>）。见下方「声音卡顿」</td></tr>
 <tr><td><code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code></td><td>指定音频设备（多声卡时有用）</td></tr>
 <tr><td><code>MRRC_RECORDINGS_DIR</code></td><td>通联录音目录（服务端存 MP3）</td></tr>
 <tr><td><code>MRRC_RECORDINGS_MAX_SESSION_MIN</code> / <code>MRRC_RECORDINGS_BITRATE</code></td><td>单次录音时长上限 / 码率</td></tr>
@@ -390,6 +391,9 @@ systemctl restart mrrc-modern
 # 发射时长上限调长一点
 sed -i 's/^MRRC_PTT_MAX_TX_SECONDS=.*/MRRC_PTT_MAX_TX_SECONDS=300/' /opt/mrrc_modern/env/mrrc.env
 systemctl restart mrrc-modern</code></pre>
+<p><strong><code>MRRC_RX_BUFFER_MS</code>（声音卡顿才需要动）</strong>：接收方向的采集缓冲深度。盒子上的 USB 声卡（ALSA）只给 1–2 个 20 ms 周期，读得稍慢就溢出；<strong>溢出之后采集接口会静默停摆</strong> （PyAudio 仍报流是开的、内核也不报错），于是声音先被切碎、随后彻底安静。镜像默认已经 给到 <code>100</code>，调大可换稳定性、代价是延迟：</p>
+<pre><code class="lang-bash">sed -i 's/^MRRC_RX_BUFFER_MS=.*/MRRC_RX_BUFFER_MS=200/' /opt/mrrc_modern/env/mrrc.env
+systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -i "capture stalled"</code></pre>
 <h2 id="14-公网接入-cloud-hub">14. 公网接入（Cloud Hub）</h2>
 <p>让盒子在公网可用（<code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code>）。界面上 <strong>设置 → Cloud Hub</strong>：</p>
 <p>- <code>MRRC_SSL_CERT</code> / <code>MRRC_SSL_KEY</code>（这个机型的入口证书） - <code>MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5</code>（防线①：PTT 半开时自动释放）</p>
@@ -457,7 +461,8 @@ armbian-install     # 装进 eMMC（交互式菜单）</code></pre>
 <tr><td>没有串口</td><td><code>ls /dev/ttyUSB<em> /dev/ttyACM</em></code></td><td>USB 线；<strong>FT-710 要插上方 Enhanced 口</strong>；电台菜单 <code>MOD SOURCE = USB</code></td></tr>
 <tr><td>有串口但连不上</td><td><code>mrrc-radio show</code> 的串口对不对</td><td><code>mrrc-radio use &lt;model&gt; --port /dev/ttyXXX</code></td></tr>
 <tr><td>没声音</td><td><code>arecord -l</code> 有没有电台声卡</td><td>换线/换口；服务日志里的 PyAudio 设备列表</td></tr>
-<tr><td>瀑布图是合成谱（S 表）</td><td><code>ls -l /opt/mrrc_modern/vendor/ftdi/</code></td><td>缺 FTDI 库，或没插 Enhanced 口；`cat /sys/bus/usb/devices/*/idProduct \</td><td>grep 601c`</td></tr>
+<tr><td><strong>声音卡顿/断续、听一会儿就没了</strong></td><td><code>cat /proc/asound/card1/stream0</code>（看 Capture 是不是 <code>Status: Stop</code>）；`journalctl -u mrrc-modern \</td><td>grep -i "capture stalled"`</td><td>采集缓冲溢出后<strong>静默停摆</strong>（本机 ALSA 只给 1–2 个 20 ms 周期）。服务会自己重开并把原因写进日志；若反复出现，把 <code>MRRC_RX_BUFFER_MS</code> 调大（§13）</td></tr>
+<tr><td>瀑布图是合成谱（S 表）</td><td><code>ls -l /opt/mrrc_modern/vendor/ftdi/</code>；<code>ls -l /etc/udev/rules.d/99-mrrc-ftdi.rules</code></td><td>缺 FTDI 库，或没插 Enhanced 口（`cat /sys/bus/usb/devices/*/idProduct \</td><td>grep 601c<code>）；<strong>或 udev 规则缺失</strong> —— 真 FFT 要服务用户 </code>mrrc<code> 能写那个 USB 节点，判定：</code>sudo -u mrrc test -w /dev/bus/usb/001/00N &amp;&amp; echo ok`</td></tr>
 <tr><td><strong>Cloud Hub 显示"已连接"但公网 502</strong></td><td><code>verify.sh</code> 第 8、9 项</td><td>多半 <code>fleet/frpc</code> 缺失（<code>connect()</code> 会返回 <code>tunnel_started:false</code>）</td></tr>
 <tr><td>公网证书报错</td><td><code>verify.sh</code> 第 7 项</td><td><code>EnvironmentFile</code> 与 <code>MRRC_CONFIG_FILE</code> 必须指向<strong>同一个文件</strong>（设计 D-11）</td></tr>
 <tr><td>服务反复重启</td><td><code>journalctl -u mrrc-modern -n 100</code></td><td>Python traceback；核对机型与串口</td></tr>

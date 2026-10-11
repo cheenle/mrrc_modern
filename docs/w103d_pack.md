@@ -186,3 +186,28 @@ MRRC_BOX_FRP_PROXY=https://gh-proxy.com/                    # 默认；置空用
 4. **真功能**（arm64 原生 chroot，无需 qemu）：**Python 3.11.2 导入全部关键依赖成功**（fastapi / uvicorn / numpy 2.4.6 / pyaudio / lameenc / cryptography / websockets / pyserial）、`libopus.so.0` 可加载
 
 **仍未验证**（等硬件）：U 盘启动、首启口令与自签证书、FT-710 真 FFT、电台切换、Cloud Hub 公网接入、盒子上的 `bench_mrrc.py`。
+
+## 真机首启：四处镜像缺陷 + 一处音频缺陷（2026-10-11）
+
+1.25.5 镜像第一次真正跑在 W103D 上（U 盘启动、FT-710 三根 USB 接口全插），
+逐项记录在 SDD V2.79。这里只留**操作层能看到的判定方法**与新烙进镜像的设置：
+
+| 现象 | 判定（一行） | 根因 | 镜像里的修法 |
+| --- | --- | --- | --- |
+| 网页打不开，`mrrc-modern` 每 3 秒重启一次 | `sudo -u mrrc head -c 20 /var/lib/mrrc/certs/server.key` | 首启以 root 生成证书，`server.key` 是 `0600 root:root`，服务跑在 `mrrc` 下 | `firstboot_wrapper.ensure_cert()` 生成后 `chown -R mrrc:mrrc` + `chmod 600/644` |
+| 真实频谱永远起不来（CAT/音频正常） | `sudo -u mrrc test -w /dev/bus/usb/001/00N && echo ok` | FT4222 没有自己的 /dev 节点，libft4222 直接开 USB 设备，节点 `root:root 0664` | overlay 写 `/etc/udev/rules.d/99-mrrc-ftdi.rules`（`0403:601c`、`0660`、`dialout`） |
+| 声音卡顿、听一会儿彻底安静 | `cat /proc/asound/card1/stream0` 看 Capture 是否 `Status: Stop`；日志里 `capture stalled` | **宿主缓冲只有 1–2 个 20 ms 周期**，溢出后 ALSA 采集接口静默停摆（PyAudio 不报错） | `MRRC_RX_BUFFER_MS` 默认 **100**（Linux）+ `server._audio_rx_loop` 的静默看门狗（3 秒无 PCM 则重开采集流） |
+| HDMI 上看不到首启横幅（带口令） | `journalctl -u mrrc-firstboot \| grep "output specifier"` | `StandardOutput=console` **不是合法 systemd 语法** | 改成 `journal+console`（overlay + rpi stage） |
+| env 里带着构建机的串口/口令 | `grep MRRC_SERIAL_PORT /opt/mrrc_modern/env/mrrc.env` | overlay 把 `install.sh` 在构建主机上写的 `.env` 原样搬进镜像 | 搬移后 `sed` 掉 `MRRC_SERIAL_PORT` 与 `MRRC_WEB_PASSWORD`，交回首启 |
+| 新盒子上 `dnsmasq.service` 是红灯 | `systemctl --failed` | Debian 的单元与 systemd-resolved 抢 53 端口（热点用 NM 自带实例，不需要它） | `systemctl mask dnsmasq.service` |
+
+**音频那条的实测数据**（服务自己的 `AudioHandler`，服务外三组对照）：
+
+| 读法 | 覆盖 |
+| --- | --- |
+| 服务原样（20 ms tick + 882 门槛） | **4%**，约 60 秒后**永久停摆** |
+| 同代码、读得激进（有任何数据就读） | 100% |
+| 同代码、缓冲 400 ms（每秒只读 2.5 次） | 99.7% |
+| **修后（缓冲 100 ms）** | **100%，50.0 fps / 51.7 kbps，稳定 3 分钟以上** |
+
+采样率域没动：设备 44.1 kHz、Opus 48 kHz、882↔960 的 20 ms 桥一行未改。

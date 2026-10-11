@@ -512,6 +512,17 @@ _opus_tx_decoder: TxOpusDecoder | None = None
 # RX broadcast pacing/guard rails
 AUDIO_RX_SEND_TIMEOUT = 0.012          # per-frame per-client timeout (seconds)
 RX_SILENCE_ALERT_S = 20                # zero-audio watchdog: alert after this many seconds of bit-exact silence
+# Capture-stall watchdog. ``read_rx_chunk()`` returns None both for "no data yet"
+# and for "this stream is dead", so a capture that stops delivering is invisible:
+# the loop keeps its 50 Hz pace, sends nothing, and the only symptom is at the
+# listener's ear. It happens for real — the W103D's ALSA/xhci path stops the
+# capture interface on an overflow while PyAudio still reports an open, error-free
+# stream (2026-10-11: 4% coverage and then permanent silence; see
+# config.RX_HOST_BUFFER_MS for the buffer half of the fix). Alert quickly and
+# reopen the stream, but rate-limit the reopen: a dead radio must not turn this
+# into a reopen storm.
+RX_STALL_ALERT_S = 3.0                 # no PCM for this long, with a client listening, is a stall
+RX_STALL_RESTART_MIN_GAP_S = 20.0      # at most one watchdog-driven reopen per this window
 METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5
 
 # Auth: valid session tokens (server-side, cleared on restart)
@@ -1723,7 +1734,7 @@ async def _audio_rx_loop():
     of 20ms, cutting ~96% of wakeups.  On client arrival the next 20ms
     tick catches the small accumulated buffer with no perceptible delay.
     """
-    global audio, audio_rx_clients
+    global audio, audio_rx_clients, _rx_restart_task
     interval = 0.020       # 20 ms chunk interval (active)
     idle_interval = 0.500  # 500 ms deep-sleep when no listeners
     _first = True
@@ -1731,6 +1742,11 @@ async def _audio_rx_loop():
     _pcm_count = 0
     _send_count = 0
     _idle_skipped = 0
+    # Stall watchdog state (see RX_STALL_ALERT_S): a fresh timestamp rather than
+    # time.monotonic() itself, so a loop that has never seen audio still gets one
+    # alert after the window instead of firing on the first idle tick.
+    _rx_last_pcm = time.monotonic()
+    _rx_stall_restart_at = 0.0
     while True:
         try:
             _loop_count += 1
@@ -1753,6 +1769,7 @@ async def _audio_rx_loop():
                 pcm = audio.read_rx_chunk()
                 audio.note_rx_chunk(pcm)
                 if pcm:
+                    _rx_last_pcm = time.monotonic()
                     _rec_tap_rx(pcm, audio._rx_dev_rate)
                     # While recording, keep every client's duration display
                     # live without a dedicated task (20 ms tick / 50 = 1 Hz).
@@ -1800,6 +1817,25 @@ async def _audio_rx_loop():
                         if dead:
                             logger.warning("Removed %d dead/slow audio clients", len(dead))
                             audio_rx_clients -= dead
+                elif audio_rx_clients:
+                    # No PCM at all while somebody is listening: the capture
+                    # stopped delivering. Reopen it (rate-limited) instead of
+                    # leaving the client with silence until the next TX.
+                    _stalled_s = time.monotonic() - _rx_last_pcm
+                    if _stalled_s >= RX_STALL_ALERT_S:
+                        _rx_last_pcm = time.monotonic()
+                        logger.warning(
+                            "RX capture stalled: no PCM for %.0f s with %d client(s) "
+                            "listening — reopening the capture stream (check the "
+                            "radio's USB audio; the capture interface may have "
+                            "stopped while PyAudio still reports it open)",
+                            _stalled_s, len(audio_rx_clients))
+                        if (time.monotonic() >= _rx_stall_restart_at
+                                and (_rx_restart_task is None or _rx_restart_task.done())):
+                            _rx_stall_restart_at = time.monotonic() + RX_STALL_RESTART_MIN_GAP_S
+                            _rx_restart_task = asyncio.create_task(
+                                asyncio.to_thread(audio.restart_rx),
+                                name="rx_restart_stall")
             # Periodic health log
             if _loop_count % 250 == 0 and _idle_skipped == 0:  # Every ~5s when active
                 logger.debug("Audio loop: loops=%d pcm_chunks=%d sends=%d clients=%d running=%s peak=%d",

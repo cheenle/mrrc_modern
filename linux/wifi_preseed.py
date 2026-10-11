@@ -33,7 +33,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import net_wifi  # noqa: E402  # type: ignore[import-not-found]
 
-PRESEED_FILE = "/boot/mrrc-wifi.txt"
+#: The boot partition is a platform fact, not a constant: Armbian mounts it at
+#: /boot, Raspberry Pi OS at /boot/firmware. The unit passes it in, so the file this
+#: script looks for is the same one the unit's ConditionPathExists checked — a
+#: literal here would make the Pi's preseed silently dead (found 2026-10-12, the
+#: day the two image lines started sharing this service layer).
+BOOT_DIR = os.environ.get("MRRC_BOOT_DIR", "/boot")
+PRESEED_FILE = os.path.join(BOOT_DIR, "mrrc-wifi.txt")
 
 
 def log(message: str) -> None:

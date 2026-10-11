@@ -136,11 +136,21 @@ class PackagingTests(unittest.TestCase):
         self.text = self.OVERLAY.read_text(encoding="utf-8")
 
     def body(self):
+        # 切"独占一行的结尾 UNIT"，不切 "UNIT\n"：服务层的 heredoc 起点现在写成
+        # `<<UNIT`（不加引号，好让 $MRRC_BOOT_DIR 插进去），那个 "UNIT\n" 会先被匹配到。
         return self.text.split(f"/etc/systemd/system/{self.UNIT}", 1)[1] \
-            .split("UNIT\n", 1)[0]
+            .split("\nUNIT\n", 1)[0]
 
     def test_it_is_conditional_on_the_file(self):
-        self.assertIn("ConditionPathExists=/boot/mrrc-wifi.txt", self.body())
+        """路径必须是参数，不是字面量。
+
+        Armbian 的启动分区在 /boot、Raspberry Pi OS 在 /boot/firmware。写死 "/boot/…" 的
+        后果不是报错而是**静默哑掉**——ConditionPathExists 不成立，systemd 干脆不跑
+        （2026-10-12：两条镜像线共用服务层时抓到，这条能力在 Pi 上是死的）。
+        """
+        self.assertIn("ConditionPathExists=$MRRC_BOOT_DIR/mrrc-wifi.txt", self.body())
+        self.assertNotIn("ConditionPathExists=/boot/", self.body())
+        self.assertIn("Environment=MRRC_BOOT_DIR=$MRRC_BOOT_DIR", self.body())
 
     def test_it_is_oneshot(self):
         self.assertIn("Type=oneshot", self.body())
@@ -163,8 +173,10 @@ class PackagingTests(unittest.TestCase):
 
     def test_vfat_has_no_permissions_so_the_file_is_deleted(self):
         body = self.body()
-        self.assertIn("/boot/mrrc-wifi.txt", body)
+        # 预置文件所在的分区由单元传进来（理由同上：两个平台的路径不同）
+        self.assertIn("$MRRC_BOOT_DIR/mrrc-wifi.txt", body)
         source = (REPO / "linux" / "wifi_preseed.py").read_text(encoding="utf-8")
+        self.assertIn('os.environ.get("MRRC_BOOT_DIR"', source)
         self.assertIn("os.unlink", source)
 
     def test_verify_sh_reports_whether_the_unit_is_installed(self):

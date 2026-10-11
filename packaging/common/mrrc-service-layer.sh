@@ -249,14 +249,17 @@ SyslogIdentifier=mrrc-box-helper
 WantedBy=multi-user.target
 UNIT
 
-cat >/etc/systemd/system/mrrc-wifi-preseed.service <<'UNIT'
+# 未加引号的 heredoc：下面两处要把 $MRRC_BOOT_DIR 插进去。这是**有意差异 ②**的一部分
+# ——Armbian 把启动分区挂在 /boot，Raspberry Pi OS 挂在 /boot/firmware。写死路径的后果不是
+# 报错，而是 ConditionPathExists 永不成立、这条能力在 Pi 上**静默哑掉**（2026-10-12 抓到的）。
+cat >/etc/systemd/system/mrrc-wifi-preseed.service <<UNIT
 [Unit]
-Description=MRRC Modern Wi-Fi preseed (/boot/mrrc-wifi.txt, applied once)
+Description=MRRC Modern Wi-Fi preseed ($MRRC_BOOT_DIR/mrrc-wifi.txt, applied once)
 # NetworkManager, not network-online.target: joining this Wi-Fi is what brings
 # the network online, so waiting for it would be a circle (design §9.2, R-8).
 After=NetworkManager.service
 Wants=NetworkManager.service
-ConditionPathExists=/boot/mrrc-wifi.txt
+ConditionPathExists=$MRRC_BOOT_DIR/mrrc-wifi.txt
 # Before firstboot, which *does* need the network: it is what fetches nothing
 # today but is ordered on network-online.target, and it is the unit that decides
 # whether this box has ever been configured.
@@ -267,6 +270,9 @@ Type=oneshot
 # Root because it is the only thing running this early and nmcli's system
 # connections are root's until the polkit rule is loaded. The file is deleted on
 # success, so a second boot runs nothing at all.
+# Same platform fact the ConditionPathExists above uses, handed to the script so
+# the two cannot disagree about where the file is.
+Environment=MRRC_BOOT_DIR=$MRRC_BOOT_DIR
 ExecStart=/opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/wifi_preseed.py
 StandardOutput=journal+console
 StandardError=journal+console

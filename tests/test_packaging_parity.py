@@ -310,6 +310,41 @@ class ShellHygieneTests(unittest.TestCase):
                          "of the options into their own command")
 
 
+class BootPathParameterTests(unittest.TestCase):
+    """启动分区路径必须是参数，不能是字面量。
+
+    Armbian 挂在 /boot、Raspberry Pi OS 挂在 /boot/firmware。写死的后果不是报错而是
+    **静默哑掉**：systemd 的 ConditionPathExists 不成立就干脆不跑，谁也不会发现
+    （2026-10-12 抓到：服务层生成的 Wi-Fi 预置单元与 linux/wifi_preseed.py 都写死
+    /boot/mrrc-wifi.txt，于是这条能力在 Pi 上是死的）。
+    """
+
+    def test_the_preseed_unit_and_script_use_the_parameter(self):
+        layer = (COMMON / "mrrc-service-layer.sh").read_text(encoding="utf-8")
+        script = (REPO / "linux" / "wifi_preseed.py").read_text(encoding="utf-8")
+        self.assertNotIn('ConditionPathExists=/boot/mrrc-wifi.txt', layer)
+        self.assertIn('ConditionPathExists=$MRRC_BOOT_DIR/mrrc-wifi.txt', layer)
+        self.assertIn('Environment=MRRC_BOOT_DIR=$MRRC_BOOT_DIR', layer)
+        self.assertNotIn('PRESEED_FILE = "/boot/mrrc-wifi.txt"', script)
+        self.assertIn('os.environ.get("MRRC_BOOT_DIR"', script)
+
+    def test_no_shipped_file_hardcodes_the_boot_partition(self):
+        """除了参数默认值本身，任何地方都不许出现字面量的启动分区路径。"""
+        offenders = []
+        # 碰启动分区的三个文件：服务层（生成单元）、首启包装（读预置 env）、预置脚本（读 wifi）
+        targets = [COMMON / "mrrc-service-layer.sh", COMMON / "firstboot_wrapper.py",
+                   REPO / "linux" / "wifi_preseed.py"]
+        for path in targets:
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith("#") or stripped.startswith("*"):
+                    continue
+                if '"/boot/' in line or "=/boot/" in line:
+                    offenders.append(f"{path.relative_to(REPO)}:{number}")
+        self.assertEqual(offenders, [],
+                         "启动分区路径写死了 —— Pi 上的这条能力会静默不生效")
+
+
 class PackageListTests(unittest.TestCase):
     def test_libopus_is_named(self):
         """Without it the server silently falls back to PCM instead of Opus."""

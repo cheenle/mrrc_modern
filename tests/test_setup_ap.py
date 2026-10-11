@@ -92,9 +92,12 @@ class FakeRadio:
                 wifi = "disconnected:"
             return NmResult(0, f"eth0:ethernet:{eth}:\nwlan0:wifi:{wifi}\n")
 
-        if "device wifi hotspot" in joined:
+        if "connection add" in joined:
             if self.hotspot_fails:
                 return NmResult(1, "", "Error: Device not suitable for hotspot mode")
+            return NmResult(0, "Connection successfully added\n", "")
+
+        if "connection up Hotspot" in joined:
             self.ap_up = True
             self.raise_count += 1
             return NmResult(0, "Successfully activated a Hotspot network\n", "")
@@ -491,7 +494,7 @@ class FailureTests(unittest.TestCase):
             self.h.sup.tick()
             self.h.clock.advance(5)
         self.h.sup.tick()
-        self.assertEqual(self.h.radio.count("device wifi hotspot"), 4)
+        self.assertEqual(self.h.radio.count("connection add"), 4)
 
     def test_a_repeating_failure_does_not_fill_the_console(self):
         """The unit forwards to the HDMI console; five identical lines a minute

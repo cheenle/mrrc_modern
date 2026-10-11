@@ -2,6 +2,19 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — W103D 无线修复：出厂 WiFi 固件进镜像；开放热点真正开放
+
+**W103D 盒子（2026-10-11 真机定案）**
+
+- 镜像内置 **MT7663S 出厂 2021 版 N9 固件**（`vendor/mediatek/mt7663_n9_v3.bin`，SHA-256 构建期校验 +
+  `dpkg-divert` 防 linux-firmware 升级覆盖）：基底自带的 2020 版在这块板上渐进式挂死（每 ~30 秒掉线、
+  扫描楔死、~16 分钟 MCU 无响应、软重启不复位）。修复后实测 2.4G 200 包 0.5% 丢包 / 平均 6.3 ms /
+  零掉线。溯源见 `packaging/box/vendor-mt7663.md`。
+- `net_wifi.start_hotspot()` 改为显式建**无安全段**的 AP profile——NM 1.42 的 `device wifi hotspot`
+  不传密码时会**自动生成随机 WPA 密码**，「开放热点」实为加密网络。
+- 真机边界记录：MT7663S 的 AP 模式**不发信标**（初始化热点在此板不可用，首配走有线/HDMI）；
+  5GHz 可关联但数据面不可用。`verify.sh` 新增第 12 项（N9 固件钉版校验）。
+
 ## [v1.25.5] — 2026-10-09 — 快捷行回答「现在在哪」；频谱带宽成为每连接可协商的档位；配置文件的写入只剩一个作者
 
 这一版把三件互不相干的事送到用户手里：主界面那一行按钮从「按下去会变成什么」改成「电台现在在哪」；

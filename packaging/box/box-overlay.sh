@@ -110,6 +110,18 @@ install -m 0755 "$REPO_SRC/vendor/ftdi/libft4222.so" "$MRRC_HOME/vendor/ftdi/lib
 # slots can be this one file. See packaging/box/vendor-ftdi.md.
 ln -sf libft4222.so "$MRRC_HOME/vendor/ftdi/libftd2xx.so"
 
+log "MT7663S WiFi N9 firmware (vendored factory build)"
+# The base image's linux-firmware N9 is the 2020 build, which associates and
+# then progressively dies on this board (scan wedges, auth timeouts, MCU
+# mailbox -110 after ~15 min). The factory 2021 build (7663mp1827) is the one
+# the kernel port was validated against. See packaging/box/vendor-mt7663.md.
+install -m 0644 "$REPO_SRC/vendor/mediatek/mt7663_n9_v3.bin" \
+	/lib/firmware/mediatek/mt7663_n9_v3.bin
+echo "223f73f17f0f986dc4e7167daa6eef14ffb41c713f22d70f9645eb049bdec80a  /lib/firmware/mediatek/mt7663_n9_v3.bin" | sha256sum -c
+# A linux-firmware package upgrade would put the broken build back; the
+# diversion sends package writes to .distrib instead of over our file.
+dpkg-divert --add --no-rename /lib/firmware/mediatek/mt7663_n9_v3.bin
+
 log "udev rule: the FT4222 scope interface belongs to the service user"
 # libft4222 opens the USB device directly — the FT4222 has no /dev node of its
 # own — and it does so as `mrrc`. Without this rule the node is root:root 0664,

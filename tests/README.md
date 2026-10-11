@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2097 tests across 100 test modules (19 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-10, macOS). The per-module sections below
-itemise 71 of those 100 — the support-chain, Cloud Hub and upgrade-channel modules
+2000 tests across 99 test modules (19 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-11, macOS). The per-module sections below
+itemise 71 of those 99 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2097 |
-| Passed | 2096 (1 skipped) |
+| Total tests | 2000 |
+| Passed | 1998 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
@@ -760,7 +760,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 
 | 测试 | 覆盖 |
 | ------ | ------ |
-| `test_box_profiles.py` | 11 份 radio profile 与 `known_models()` **双向相等**（多一个少一个都红）；每份的 `MRRC_RADIO_MODEL` 等于文件名；只含白名单键（波特率/串口/声卡都不该写第二遍）；**任何 profile 不得出现 `MRRC_ALLOW_UNVERIFIED_TX=1`**，且 8 个未验证机型必须显式写 `=0`（AD-019 / NFR-067——镜像的首次连接若能在未经测量的表上按下发射键，就是这条要防的事）；硬编码的那 8 个集合与后端 profile 注册表**交叉校验**（防止列表漂移）；**三处 rsync 排除清单逐字一致**（Pi 构建器 / box overlay / `mrrc_update.sh`，并点名漂移的那一处）；FTDI 库是 `e_machine=183` 的 AArch64 ELF 且 `libftd2xx.so` 是指向它的符号链接（取错 `build-*` 目录会得到一个名字对、其他检查全过、只在真机上失败的库） |
+| `test_box_profiles.py` | 11 份 radio profile 与 `known_models()` **双向相等**（多一个少一个都红）；每份的 `MRRC_RADIO_MODEL` 等于文件名；只含白名单键（波特率/串口/声卡都不该写第二遍）；**任何 profile 不得出现 `MRRC_ALLOW_UNVERIFIED_TX=1`**，且 8 个未验证机型必须显式写 `=0`（AD-019 / NFR-067——镜像的首次连接若能在未经测量的表上按下发射键，就是这条要防的事）；硬编码的那 8 个集合与后端 profile 注册表**交叉校验**（防止列表漂移）；**三处 rsync 排除清单逐字一致**（Pi 构建器 / box overlay / `mrrc_update.sh`，并点名漂移的那一处）；FTDI 库是 `e_machine=183` 的 AArch64 ELF 且 `libftd2xx.so` 是指向它的符号链接（取错 `build-*` 目录会得到一个名字对、其他检查全过、只在真机上失败的库）；MT7663S N9 固件钉版（SHA `223f73f1…` 的出厂 2021 版，linux-firmware 的 2020 版在真机上渐进式挂死）且 overlay 必须安装+校验+dpkg-divert 三件套齐全 |
 | `test_mrrc_radio.py` | `plan()` 是纯函数（无磁盘写、无重启），因此可测的是它到底会写什么：显式 `--port` 被写入；**换机型且未给端口时清空 `MRRC_SERIAL_PORT`**（FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留旧值 = 无报错的死链路）；同机型未给端口不动端口；**TX 门禁由 profile 重新断言而非继承**（从不该从上一个开着门禁的机型漏到下一个）；未知机型 `ValueError`、缺 profile `FileNotFoundError`；写入保留不属于它的键（口令、证书、Cloud Hub 状态）；留下 `.env.bak`；`--dry-run` 一个字节也不写 |
 
 ### 本轮新增（首次真构建拓到的缺陷守卫，2026-10-07）

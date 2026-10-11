@@ -110,7 +110,7 @@ scp packaging/box/verify.sh root@<盒子IP>:/tmp/
 ssh root@<盒子IP> 'bash /tmp/verify.sh'
 ```
 
-11 项，每项失败都给出排查命令。**先跑这个再动手调别的**。
+12 项，每项失败都给出排查命令。**先跑这个再动手调别的**。
 
 第 11 项查的是**初始化热点**那套机器（`mrrc-setup-ap.service` 装了没、enable 了没、
 `dnsmasq` 在不在、守护进程活着没）。它**不要求热点此刻开着**——一台有网络的盒子

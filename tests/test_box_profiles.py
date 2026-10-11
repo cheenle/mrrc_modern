@@ -154,6 +154,33 @@ class VendoredFtdiTests(unittest.TestCase):
         self.assertEqual(second.resolve(), (self.FTDI / "libft4222.so").resolve())
 
 
+class VendoredMt7663Tests(unittest.TestCase):
+    """The W103D's WiFi N9 firmware ships in the repo, pinned by SHA-256.
+
+    The linux-firmware 2020 build associates and then progressively dies on
+    this board (field report 2026-10-11); the factory 2021 build is the one
+    the kernel port was validated against. A byte drift here is invisible
+    until a box's WiFi wedges in the field. See packaging/box/vendor-mt7663.md.
+    """
+
+    N9_SHA256 = "223f73f17f0f986dc4e7167daa6eef14ffb41c713f22d70f9645eb049bdec80a"
+
+    def test_the_vendored_file_is_the_pinned_factory_build(self):
+        import hashlib
+        blob = (REPO / "vendor" / "mediatek" / "mt7663_n9_v3.bin").read_bytes()
+        self.assertEqual(hashlib.sha256(blob).hexdigest(), self.N9_SHA256)
+
+    def test_the_overlay_installs_verifies_and_protects_it(self):
+        """Install without the sha256 check would ship a silent swap; without
+        the diversion the next linux-firmware upgrade puts the broken build
+        back on boxes in the field."""
+        overlay = (REPO / "packaging" / "box" / "box-overlay.sh").read_text(
+            encoding="utf-8")
+        self.assertIn("vendor/mediatek/mt7663_n9_v3.bin", overlay)
+        self.assertIn(self.N9_SHA256, overlay)
+        self.assertIn("dpkg-divert", overlay)
+
+
 class BoxBuildIntegrityTests(unittest.TestCase):
     """Three failures the first real build found, none visible from reading.
 

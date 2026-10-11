@@ -27,8 +27,8 @@ Three rules, all load-bearing
    module is testable without NetworkManager, without Linux and without a
    radio.
 
-Two nmcli facts that cost real debugging time
----------------------------------------------
+Three nmcli facts that cost real debugging time
+-----------------------------------------------
 * In ``nmcli device status`` an **AP-mode** wlan0 reports state ``connected``
   exactly like a station does, and ``connection show --active`` reports TYPE
   ``802-11-wireless`` for both. Our own hotspot is therefore *not* an uplink,
@@ -39,6 +39,12 @@ Two nmcli facts that cost real debugging time
   cable into a dead switch) — which is *not* a usable uplink. Guessing one
   spelling is how a box ends up with no hotspot when it should have one, or
   with an open hotspot when it should not.
+* ``nmcli device wifi hotspot`` with no ``password`` argument is NOT an open
+  network on bookworm's NM (1.42): it generates a random WPA-PSK nobody was
+  ever told (field-verified 2026-10-11 on the W103D — the phone never saw an
+  open network because there wasn't one). The open hotspot is an explicit
+  profile with no ``802-11-wireless-security`` section at all; see
+  ``start_hotspot()``.
 """
 from __future__ import annotations
 
@@ -59,9 +65,9 @@ DEFAULT_STATE_DIR = Path("/run/mrrc/setup-ap")
 STATE_NAME = "state.json"       # written by linux/setup_ap.py (root) only
 WIZARD_NAME = "wizard.json"     # written by server.py (user mrrc) only
 
-# The connection id `nmcli device wifi hotspot` gives the profile it creates.
-# NM ids are not unique (uuids are), so every raise would leave one more twin
-# behind; start_hotspot() removes an *inactive* profile of this name first.
+# The profile id the setup AP lives under. NM ids are not unique (uuids are),
+# so every raise deletes an *inactive* profile of this name first — otherwise
+# each raise would leave one more twin behind.
 HOTSPOT_PROFILE = "Hotspot"
 
 # NetworkManager's `ipv4.method=shared` default subnet. The gate trusts the
@@ -306,7 +312,17 @@ def hotspot_active(runner: Optional[Runner] = None) -> bool:
 
 def start_hotspot(ssid: Optional[str] = None, ifname: Optional[str] = None,
                   runner: Optional[Runner] = None) -> NmResult:
-    """Raise an **open** hotspot (design D-2: ``nmcli device wifi hotspot``).
+    """Raise an **open** hotspot (design D-2): an explicit AP profile.
+
+    This used to be one ``nmcli device wifi hotspot`` call with no
+    ``password`` argument, on the theory that omitting it leaves the network
+    open. Field report 2026-10-11 (W103D, NM 1.42): NM instead creates the
+    profile with ``802-11-wireless-security.key-mgmt = wpa-psk`` and a random
+    key — the "open" setup hotspot was a WPA network whose password nobody
+    knew. The explicit ``connection add`` below writes no security section at
+    all, which is the only way to *guarantee* an open AP; ``ipv4.method
+    shared`` is what the one-shot command did implicitly (without it there is
+    no 10.42.0.1/24 and no dnsmasq, and the wizard page never answers).
 
     Idempotent in the two ways that matter:
     * an AP that is already up is left alone — tearing it down and rebuilding
@@ -314,9 +330,6 @@ def start_hotspot(ssid: Optional[str] = None, ifname: Optional[str] = None,
     * a *stale* profile of the same id is deleted first, because NM ids are not
       unique and every raise would otherwise leave one more twin behind. A
       profile that is currently active is never deleted.
-
-    No ``password`` argument is passed. That omission *is* the open network:
-    there is no way to hand the operator a key they have not been told.
     """
     if hotspot_active(runner):
         return NmResult(0, "already up", "")
@@ -325,9 +338,15 @@ def start_hotspot(ssid: Optional[str] = None, ifname: Optional[str] = None,
         if uuid in live:
             continue
         nmcli(["connection", "delete", uuid], runner)
-    return nmcli(["device", "wifi", "hotspot",
-                  "ifname", ifname or DEFAULT_IFNAME,
-                  "ssid", ssid or DEFAULT_SSID], runner)
+    created = nmcli(["connection", "add", "type", "wifi",
+                     "ifname", ifname or DEFAULT_IFNAME,
+                     "con-name", HOTSPOT_PROFILE,
+                     "ssid", ssid or DEFAULT_SSID,
+                     "mode", "ap", "--",
+                     "ipv4.method", "shared"], runner)
+    if not created.ok:
+        return created
+    return nmcli(["connection", "up", HOTSPOT_PROFILE], runner)
 
 
 def stop_hotspot(runner: Optional[Runner] = None) -> NmResult:

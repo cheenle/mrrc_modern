@@ -274,29 +274,39 @@ class ApModeTests(unittest.TestCase):
 
 class StartHotspotTests(unittest.TestCase):
     def test_asks_nmcli_for_an_open_hotspot(self):
-        """Design D-2: `nmcli device wifi hotspot`, and *no* password argument.
+        """Design D-2: an explicit AP profile with NO security section.
 
-        Omitting `password` is what makes the network open; passing one would
-        create a WPA network whose key nobody has been told.
+        `nmcli device wifi hotspot` without a password does NOT give an open
+        network on NM 1.42 — it generates a random WPA-PSK (field report
+        2026-10-11, W103D). The open hotspot is `connection add … mode ap`
+        with no wifi-sec at all, plus `ipv4.method shared` (which the one-shot
+        command did implicitly — without it there is no 10.42.0.1/24).
         """
         run = FakeNmcli({
             "-f NAME,TYPE connection show --active": NmResult(0, ""),
             "-f UUID connection show --active": NmResult(0, ""),
             "-f UUID,NAME connection show": NmResult(0, ""),
-            "device wifi hotspot": NmResult(0, "ok", ""),
+            "connection add": NmResult(0, "ok", ""),
+            "connection up": NmResult(0, "ok", ""),
         })
         result = net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
         self.assertTrue(result.ok)
-        self.assertEqual(run.count("device wifi hotspot"), 1)
-        self.assertIn("ifname wlan0 ssid MRRC-Setup", run.joined())
-        self.assertNotIn("password", run.joined())
+        self.assertEqual(run.count("device wifi hotspot"), 0)
+        self.assertEqual(run.count("connection add"), 1)
+        self.assertEqual(run.count("connection up Hotspot"), 1)
+        joined = run.joined()
+        self.assertIn("con-name Hotspot ssid MRRC-Setup mode ap", joined)
+        self.assertIn("ipv4.method shared", joined)
+        for forbidden in ("wifi-sec", "key-mgmt", "psk", "password"):
+            self.assertNotIn(forbidden, joined)
 
     def test_an_already_running_hotspot_is_left_alone(self):
         """Restarting a live AP would drop the operator mid-wizard."""
         run = FakeNmcli(dict(ACTIVE_AP_TABLE))
         result = net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
         self.assertTrue(result.ok)
-        self.assertEqual(run.count("device wifi hotspot"), 0)
+        self.assertEqual(run.count("connection add"), 0)
+        self.assertEqual(run.count("connection up"), 0)
 
     def test_a_stale_profile_of_the_same_name_is_removed_first(self):
         """NM ids are not unique: without this, every raise leaves a twin behind
@@ -306,7 +316,8 @@ class StartHotspotTests(unittest.TestCase):
             "-f UUID connection show --active": NmResult(0, "live-9999\n"),
             "-f UUID,NAME connection show": NmResult(
                 0, "aaaa-1111:Hotspot\nbbbb-2222:Hotspot\ncccc-3333:Home\n"),
-            "device wifi hotspot": NmResult(0, "ok", ""),
+            "connection add": NmResult(0, "ok", ""),
+            "connection up": NmResult(0, "ok", ""),
         })
         net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
         self.assertEqual(run.count("connection delete aaaa-1111"), 1)
@@ -320,7 +331,8 @@ class StartHotspotTests(unittest.TestCase):
         profile listing, not merely before the delete."""
         run = FakeNmcli(dict(ACTIVE_AP_TABLE, **{
             "-f UUID,NAME connection show": NmResult(0, "aaaa-1111:Hotspot\n"),
-            "device wifi hotspot": NmResult(0, "ok", ""),
+            "connection add": NmResult(0, "ok", ""),
+            "connection up": NmResult(0, "ok", ""),
         }))
         net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
         self.assertEqual(run.count("connection delete"), 0)
@@ -334,7 +346,8 @@ class StartHotspotTests(unittest.TestCase):
             "-f UUID connection show --active": NmResult(0, "aaaa-1111\n"),
             "-f UUID,NAME connection show": NmResult(
                 0, "aaaa-1111:Hotspot\nbbbb-2222:Hotspot\n"),
-            "device wifi hotspot": NmResult(0, "ok", ""),
+            "connection add": NmResult(0, "ok", ""),
+            "connection up": NmResult(0, "ok", ""),
         })
         net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
         self.assertEqual(run.count("connection delete aaaa-1111"), 0)
@@ -345,23 +358,27 @@ class StartHotspotTests(unittest.TestCase):
             "-f NAME,TYPE connection show --active": NmResult(0, ""),
             "-f UUID connection show --active": NmResult(0, ""),
             "-f UUID,NAME connection show": NmResult(0, ""),
-            "device wifi hotspot": NmResult(
+            "connection add": NmResult(
                 1, "", "Error: Device not suitable for hotspot mode"),
         })
         result = net_wifi.start_hotspot("MRRC-Setup", "wlan0", run)
         self.assertFalse(result.ok)
         self.assertIn("not suitable", result.detail)
+        self.assertEqual(run.count("connection up"), 0,
+                         "a profile that failed to be added is never raised")
 
     def test_the_defaults_are_used_when_nothing_is_passed(self):
         run = FakeNmcli({
             "-f NAME,TYPE connection show --active": NmResult(0, ""),
             "-f UUID connection show --active": NmResult(0, ""),
             "-f UUID,NAME connection show": NmResult(0, ""),
-            "device wifi hotspot": NmResult(0, "ok", ""),
+            "connection add": NmResult(0, "ok", ""),
+            "connection up": NmResult(0, "ok", ""),
         })
         net_wifi.start_hotspot(runner=run)
-        self.assertIn(f"ifname {net_wifi.DEFAULT_IFNAME} ssid {net_wifi.DEFAULT_SSID}",
-                      run.joined())
+        joined = run.joined()
+        self.assertIn(f"ifname {net_wifi.DEFAULT_IFNAME}", joined)
+        self.assertIn(f"ssid {net_wifi.DEFAULT_SSID}", joined)
 
 
 class StopHotspotTests(unittest.TestCase):

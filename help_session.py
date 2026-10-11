@@ -34,6 +34,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+# A hard import, like cryptography in ssl_bootstrap: the four packaging lines all
+# install requirements.txt, so a missing SSH transport is a broken install — and a
+# broken install must fail at startup rather than at the moment a customer presses
+# "call help".
+import paramiko
+
 logger = logging.getLogger(__name__)
 
 #: Hard ceiling, whatever a caller asks for. No "until I say stop" option: the
@@ -220,6 +226,14 @@ class HelpSession:
                 "close_reason": self.close_reason,
             }
 
+    @property
+    def local_port(self) -> int:
+        """The loopback port the SSH server is on. Not in ``status()``: the UI has no
+        use for it (the tunnel is what matters to the supporter), but tests and log
+        lines do."""
+        with self._lock:
+            return self._local_port
+
     def password_for_display(self) -> str:
         """The one accessor for the password, named so a reader sees why it exists:
         the customer has to read it out loud, so it must be visible while open —
@@ -261,3 +275,249 @@ class HelpSession:
                 self.server.stop()
             except Exception as exc:
                 logger.warning("help: cannot stop the SSH server: %s", exc)
+
+
+#: A command that proves a session works without running anything the supporter did
+#: not ask for. Chosen to exist on all three shells.
+PROBE_MARK = "mrrc-help-ok"
+
+
+def probe_command() -> str:
+    if os.name == "nt":
+        return f"Write-Output {PROBE_MARK}"
+    return f"echo {PROBE_MARK}"
+
+
+def platform_shell() -> list[str]:
+    """The interactive shell a support session gets on this platform."""
+    if os.name == "nt":
+        return ["powershell.exe", "-NoLogo"]
+    if sys.platform == "darwin":
+        return ["zsh", "-l"]
+    return ["bash", "-l"]
+
+
+class _ServerInterface(paramiko.ServerInterface):
+    """Password only, session channels only.
+
+    The four result constants below live at paramiko module level (0/2 for auth,
+    0/1 for channel open) but paramiko 5.0 does not declare them in its type stubs,
+    hence the narrow ignores — they are read at runtime and checked by the tests in
+    tests/test_help_session.py, which drive a real client through both answers.
+
+    Deliberately not a general SSH server: one user, one password, one shell per
+    channel, and it exists for the length of one help window.
+    """
+
+    def __init__(self, owner: "SshHelpServer") -> None:
+        self._owner = owner
+
+    def check_auth_password(self, username, password):
+        if self._owner.check(username, password):
+            return paramiko.AUTH_SUCCESSFUL                 # type: ignore[attr-defined]
+        return paramiko.AUTH_FAILED                         # type: ignore[attr-defined]
+
+    def check_auth_publickey(self, username, key):
+        # 围栏 6：只允许口令。一把被授权的公钥会变成一个没有口令的后门。
+        return paramiko.AUTH_FAILED                         # type: ignore[attr-defined]
+
+    def get_allowed_auths(self, username):
+        return "password"
+
+    def check_channel_request(self, kind, chanid):
+        if kind == "session":
+            return paramiko.OPEN_SUCCEEDED                  # type: ignore[attr-defined]
+        return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED  # type: ignore[attr-defined]
+
+    def check_channel_pty_request(self, *a, **kw):
+        return True
+
+    def check_channel_shell_request(self, channel):
+        self._owner.spawn_shell(channel)
+        return True
+
+    def check_channel_exec_request(self, channel, command):
+        return self._owner.run_exec(channel, command.decode(errors="replace"))
+
+
+class SshHelpServer:
+    """The SSH door itself: bind, authenticate, hand out a shell.
+
+    One instance per help window; ``stop()`` is the only way it ends.
+    """
+
+    bind_host = BIND_HOST
+
+    def __init__(self, *, on_event: Optional[Callable[[dict], None]] = None) -> None:
+        self.on_event = on_event
+        self._user = self._pw = ""
+        self._failures = 0
+        self._sock: Optional[socket.socket] = None
+        self._thread: Optional[threading.Thread] = None
+        self._stop = threading.Event()
+        self._children: list = []
+        self._key = None
+
+    # ── lifecycle ───────────────────────────────────────────────────────
+    def start(self) -> int:
+        """Bind loopback on a kernel-chosen port and start accepting. Returns the port."""
+        self._sock = socket.socket()
+        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._sock.bind((self.bind_host, 0))     # 0 = 让内核挑一个空闲端口
+        self._sock.listen(8)
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._accept_loop,
+                                        name="mrrc-help-ssh", daemon=True)
+        self._thread.start()
+        return self._sock.getsockname()[1]
+
+    def set_credentials(self, user: str, password: str) -> None:
+        """Injected, not generated here: the session owns the pair, and this only
+        checks it. Two generators would be two things to keep in step."""
+        self._user, self._pw = user, password
+        self._failures = 0
+
+    def stop(self) -> None:
+        self._stop.set()
+        sock, self._sock = self._sock, None
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
+        for child in list(self._children):
+            try:
+                child.close()
+            except Exception:
+                pass
+        self._children.clear()
+        self._user = self._pw = ""
+
+    # ── authing ─────────────────────────────────────────────────────────
+    def check(self, username: str, password: str) -> bool:
+        ok = credentials_match(self._user, self._pw, username, password)
+        if not ok:
+            self._failures += 1
+            if self.on_event:
+                self.on_event({"event": "auth_fail", "failures": self._failures})
+        return ok
+
+    @property
+    def auth_failures(self) -> int:
+        return self._failures
+
+    # ── the shell ───────────────────────────────────────────────────────
+    def _accept_loop(self) -> None:
+        while not self._stop.is_set():
+            sock = self._sock
+            if sock is None:
+                return
+            try:
+                client, _ = sock.accept()
+            except OSError:
+                return                          # stop() 关了监听
+            transport = paramiko.Transport(client)
+            try:
+                transport.add_server_key(self._host_key())
+                transport.start_server(server=_ServerInterface(self))
+            except Exception as exc:
+                logger.warning("help: SSH handshake failed: %s", exc)
+                transport.close()
+            self._children.append(transport)
+
+    def spawn_shell(self, channel) -> None:
+        """Start the platform shell on this channel and pump both ways."""
+        import fcntl
+        import pty
+        import select
+        import struct
+        import subprocess
+        import termios
+
+        env = dict(os.environ, TERM=channel.get_terminal_type() or "xterm-256color")
+        master, slave = pty.openpty()
+        try:
+            cols, rows = channel.get_terminal_size()
+            fcntl.ioctl(slave, termios.TIOCSWINSZ,
+                        struct.pack("HHHH", rows, cols, 0, 0))
+        except Exception:
+            pass                                # 尺寸不是要紧的事
+        proc = subprocess.Popen(platform_shell(), stdin=slave, stdout=slave,
+                                stderr=slave, env=env, close_fds=True)
+        os.close(slave)
+        started = time.time()
+        try:
+            while True:
+                ready, _, _ = select.select([master, channel], [], [], 1.0)
+                if master in ready:
+                    data = os.read(master, 4096)
+                    if not data:
+                        break
+                    channel.sendall(data)
+                if channel in ready:
+                    data = channel.recv(4096)
+                    if not data:
+                        break
+                    os.write(master, data)
+        except Exception as exc:
+            logger.info("help: shell session ended: %s", exc)
+        finally:
+            for closer in (proc.terminate, lambda: os.close(master), channel.close):
+                try:
+                    closer()
+                except Exception:
+                    pass
+            if self.on_event:
+                self.on_event({"event": "disconnect",
+                               "duration_s": round(time.time() - started, 1)})
+
+    def run_exec(self, channel, command: str) -> bool:
+        """Only the probe command is allowed as exec; the supported path is a shell.
+
+        A general exec would be a second, quieter way to run things — and the one
+        nobody reviews, because the shell is the obvious path.
+        """
+        if command.strip() != probe_command().strip():
+            # Return False and say nothing else: paramiko answers CHANNEL_FAILURE
+            # and the client's exec_command raises. Sending an exit status for a
+            # request that was never accepted would be a lie about what happened.
+            return False
+        channel.sendall((PROBE_MARK + "\n").encode())
+        channel.send_exit_status(0)
+        # shutdown_write, not close: close() tears the channel down while the
+        # client is still waiting for the exec response and it raises "Channel
+        # closed" instead of returning. EOF lets it read the output and exit
+        # status, and the client closes when it is done (measured, paramiko 5.0).
+        channel.shutdown_write()
+        return True
+
+    def _host_key(self):
+        """A fresh host key per process.
+
+        The supporter will see "host key changed" on every window, and that is
+        deliberate: a pinned key is another secret to store, rotate and leak, and
+        this door exists for an hour at a time behind a password the customer just
+        read out loud.
+        """
+        if self._key is None:
+            self._key = paramiko.RSAKey.generate(2048)
+        return self._key
+
+
+def build_session(*, portal_opener: Callable[[int], int],
+                  tunnel: Callable[[int, int, bool], None],
+                  portal_closer: Optional[Callable[[], None]] = None,
+                  on_event: Optional[Callable[[dict], None]] = None) -> HelpSession:
+    """Assemble a real session: this module's SSH server is the listener.
+
+    The other three collaborators belong to the caller because they need its
+    credentials and its portal address — keeping them out of here is what makes
+    this file testable without a tunnel or a portal.
+    """
+    server = SshHelpServer(on_event=on_event)
+
+    def listener() -> int:
+        return server.start()
+
+    return HelpSession(opener=portal_opener, tunnel=tunnel, listener=listener,
+                       closer=portal_closer, on_event=on_event, server=server)

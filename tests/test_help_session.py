@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 import unittest
 
+import paramiko
+
 import help_session
 
 
@@ -268,6 +270,122 @@ class AuditTests(unittest.TestCase):
         s.note_connection(duration_s=12.5)
         self.assertEqual(s.status()["connections"], 1)
         self.assertIn("disconnect", [e["event"] for e in self.events])
+
+
+class SshServerTests(unittest.TestCase):
+    """A real paramiko client against the real server, on loopback.
+
+    No tunnel, no portal, no hardware: this is the part of the feature that must
+    work on every platform, so it runs everywhere.
+    """
+
+    def setUp(self):
+        self.events = []
+        self.server = help_session.SshHelpServer(on_event=self.events.append)
+        self.port = self.server.start()          # 绑 127.0.0.1:0，返回端口
+        self.user, self.pw = help_session.make_credentials()
+        self.server.set_credentials(self.user, self.pw)
+
+    def tearDown(self):
+        self.server.stop()
+
+    def _client(self, user=None, pw=None):
+        import paramiko
+        c = paramiko.SSHClient()
+        c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        c.connect("127.0.0.1", port=self.port, username=user or self.user,
+                  password=pw or self.pw, allow_agent=False, look_for_keys=False,
+                  timeout=5)
+        return c
+
+    def test_the_listener_is_loopback_only(self):
+        """围栏 1：不是 0.0.0.0。"""
+        self.assertEqual(self.server.bind_host, "127.0.0.1")
+        self.assertEqual(help_session.BIND_HOST, "127.0.0.1")
+
+    def test_the_password_is_what_gets_in(self):
+        self._client().close()
+
+    def test_a_wrong_password_is_refused(self):
+        import paramiko
+        with self.assertRaises(paramiko.AuthenticationException):
+            self._client(pw="wrong-password-here")
+
+    def test_a_wrong_username_is_refused(self):
+        import paramiko
+        with self.assertRaises(paramiko.AuthenticationException):
+            self._client(user="help-0000")
+
+    def test_public_key_auth_is_refused(self):
+        """围栏 6：只允许口令认证（否则一把授权的公钥就是一个后门）。"""
+        import paramiko
+        key = paramiko.RSAKey.generate(2048)   # paramiko 5 has no Ed25519Key.generate
+        c = paramiko.SSHClient()
+        c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        with self.assertRaises(paramiko.AuthenticationException):
+            c.connect("127.0.0.1", port=self.port, username=self.user,
+                      pkey=key, allow_agent=False, look_for_keys=False, timeout=5)
+
+    def test_the_probe_command_returns_its_mark(self):
+        c = self._client()
+        try:
+            chan = c.get_transport().open_session()
+            chan.exec_command(help_session.probe_command())
+            out = chan.makefile().read().decode()
+        finally:
+            c.close()
+        self.assertIn(help_session.PROBE_MARK, out)
+
+    def test_any_other_exec_command_is_refused(self):
+        """exec 只提供那条探针；真正的活是交互式 shell。"""
+        c = self._client()
+        try:
+            chan = c.get_transport().open_session()
+            # 被拒的请求在客户端就是一次异常，不是一个 exit status。
+            with self.assertRaises(paramiko.ssh_exception.SSHException):
+                chan.exec_command("echo pwned")
+        finally:
+            c.close()
+
+    def test_failed_auths_reach_the_session(self):
+        import paramiko
+        for _ in range(2):
+            with self.assertRaises(paramiko.AuthenticationException):
+                self._client(pw="wrong-password-here")
+        self.assertEqual(len([e for e in self.events if e["event"] == "auth_fail"]), 2)
+
+    def test_stop_closes_the_port(self):
+        import socket
+        self.server.stop()
+        s = socket.socket()
+        try:
+            self.assertRaises(OSError, s.connect, ("127.0.0.1", self.port))
+        finally:
+            s.close()
+
+    def test_stop_forgets_the_credentials(self):
+        self.server.stop()
+        self.assertEqual(self.server.check(self.user, self.pw), False)
+
+
+class RealListenerWiringTests(unittest.TestCase):
+    """enable() really opens a port, and close() really closes it."""
+
+    def test_the_session_owns_the_listener(self):
+        import socket
+        s = help_session.build_session(portal_opener=lambda minutes: 19000,
+                                       tunnel=lambda lp, rp, add: None)
+        s.enable(minutes=5)
+        port = s.local_port
+        self.assertGreater(port, 0)
+        probe = socket.create_connection(("127.0.0.1", port), timeout=2)
+        probe.close()
+        s.close("user")
+        s2 = socket.socket()
+        try:
+            self.assertRaises(OSError, s2.connect, ("127.0.0.1", port))
+        finally:
+            s2.close()
 
 
 if __name__ == "__main__":

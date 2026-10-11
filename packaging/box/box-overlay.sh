@@ -40,7 +40,17 @@ rsync -a "$REPO_SRC/" "$MRRC_HOME/" \
 	--exclude "tests/" --exclude ".agents/" --exclude "docs/" --exclude "SDD/" \
 	--exclude "packaging/" --exclude "macos/" --exclude "windows/" \
 	--exclude "__pycache__/" --exclude "*.pyc" --exclude ".DS_Store" \
-	--exclude "atr1000_tuner.json"
+	--exclude "atr1000_tuner.json" \
+	# Per-box state (instance identity, recordings, operator files) and dev-only
+	# material must never be shipped by an image, nor overwritten by an update.
+	# Root-anchored (/x) patterns match only the repo root — 2026-10-11.
+	--exclude "/.local/" --exclude "/.env" --exclude "/recordings/" \
+	--exclude "/mem_channels.json" --exclude "/.worktrees/" --exclude "/.superpowers/" \
+	--exclude "/.agnes/" --exclude "/.claude/" --exclude "/.pytest_cache/" \
+	--exclude "/.ruff_cache/" --exclude "/dev_tools/" --exclude "/tools/" \
+	--exclude "/support-out/" --exclude "/lib/" --exclude "/biome.json" \
+	--exclude "/build_mrrc_v1101.ps1" --exclude "/*.md" --exclude "/*.pdf" \
+	--exclude "/*.jpg" --exclude "/*.JPG" --exclude "/*.PNG" --exclude "/*.m4a"
 
 log "radio profiles"
 mkdir -p "$MRRC_HOME/profiles"

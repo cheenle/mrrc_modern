@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1969 tests across 103 test modules (19 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-11, macOS). The per-module sections below
+1974 tests across 103 test modules (19 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-12, macOS). The per-module sections below
 itemise 70 of those 103 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
@@ -19,10 +19,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1969 |
-| Passed | 1967 (1 skipped) |
+| Total tests | 1974 |
+| Passed | 1971 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 1 |
+| Failed | 2 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -44,6 +44,13 @@ whenever that card has not yet been republished (it carried bytes 1,268,146,785,
 SHA-256 prefix 5f0ae387 when this line was first recorded). Republishing the card
 is a release step outside this plan, not a test fix, so whether this one line is
 red measures the release state rather than whether the suite itself is sound.
+
+A second line,
+`test_packaging_parity.IntentionalDivergenceTests::test_the_web_bind_is_the_only_bind_divergence`,
+is red while the packaging scripts are being reworked in this same checkout — it
+scans `packaging/rpi` and `packaging/box` for `MRRC_WEB_HOST` assignments and so
+measures those scripts, not this suite. Both red lines are about artifacts this
+plan does not own; neither is a defect in the code under test here.
 
 ## Test Modules
 
@@ -872,9 +879,14 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   就是盒子拿到地址前就报成功——成功与否由**观测到的地址**决定（`ipv4_address` 轮询，第一拍
   为空就继续等，`budget` 耗尽仍无地址即回滚）。此外：口令只出现在 nmcli 的 argv 里，失败
   理由经 `scrub` 后才落进状态（`hunter2secret` 在结果对象里一处不剩）；回滚目标取自**动手
-  之前**在线的 profile，理由里念出回退到了哪个旧网络（没有旧网络也照样说清楚）；状态字段封
-  闭、`switch_state()` 的 dict 没有能落入口令的键。`sleep`/`now` 为注入，30 秒预算不花墙钟
-  （`budget=5.0` 的用例断言时钟恰走到 5.0，证明预算被真正花掉而不是被忽略）；进行中的第二次
-  切换被拒。`with target.lock` 只是一段「先占、后就位」的短声明，**在阻塞的 `connect_wifi`
-  与轮询循环之前就已释放**——server 才能用 `asyncio.to_thread` 跑它、同时让
-  `GET /api/box/wifi/status` 从事件循环里照答。
+  之前**在线的 profile；状态字段封闭、`switch_state()` 的 dict 没有能落入口令的键。
+  `sleep`/`now` 为注入，30 秒预算不花墙钟（`budget=5.0` 的用例断言时钟恰走到 5.0，证明预算
+  被真正花掉而不是被忽略）；进行中的第二次切换被拒。`with target.lock` 只是一段「先占、就
+  位」的短声明，**在阻塞的 `connect_wifi` 与轮询循环之前就已释放**——server 才能用
+  `asyncio.to_thread` 跑它、同时让 `GET /api/box/wifi/status` 从事件循环里照答。
+  两条失败路径（`connect_wifi` 返回非零、预算耗尽无地址）**共用同一段 teardown**：都对新
+  profile 写 `connection.autoconnect no`、都尝试把旧 profile 拉回来，理由是一句话前缀参数，
+  于是失败路径**不会假称超时**；而理由里只念**`connection up` 确实报成功**的那几个旧网络
+  （对一个死网络上的操作者，这句文案不能宣称一次并未发生的恢复）。`poll<=0` 在**任何 nmcli
+  调用之前**就被拒（否则注入时钟下 `poll=0` 死循环、`poll<0` 让 `time.sleep` 抛 `ValueError`
+  逃出 worker 线程），`budget<=0` 不动。

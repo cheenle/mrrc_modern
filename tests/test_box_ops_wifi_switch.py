@@ -141,6 +141,58 @@ class SwitchTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("NewNet", result["reason"])
 
+    def test_a_failed_connect_tears_down_the_same_way_a_timeout_does(self):
+        """F1: a failed activation is a failure, and the failure paths share
+        one teardown. `nmcli device wifi connect` with a bad PSK leaves the
+        profile behind, and a profile left at NetworkManager's default
+        `autoconnect=yes` retries at every boot — the retired hotspot's harm.
+        Show the argv, not "a rollback happened"."""
+        runner = Fake({
+            "device wifi connect": net_wifi.NmResult(
+                1, "", "Error: Secrets were required, but not provided."),
+            "connection show": net_wifi.NmResult(
+                0, "home:802-11-wireless:yes\n", ""),
+        })
+        result = self.run_switch(runner)
+        self.assertFalse(result["ok"])
+        self.assertIn("connection modify NewNet connection.autoconnect no",
+                      runner.joined())
+        self.assertIn("connection up home", runner.joined())
+
+    def test_a_failed_connect_does_not_claim_a_timeout(self):
+        """The reason is a parameter because the two failure paths must not say
+        the same thing — a connect that returned an error did not spend the
+        budget, and the operator reading over a dead network is owed the truth."""
+        runner = Fake({
+            "device wifi connect": net_wifi.NmResult(
+                1, "", "Error: No network with SSID 'NewNet' found."),
+            "connection show": net_wifi.NmResult(
+                0, "home:802-11-wireless:yes\n", ""),
+        })
+        result = self.run_switch(runner)
+        self.assertNotIn("秒内没有拿到地址", result["reason"])
+
+    def test_a_zero_poll_returns_instead_of_spinning(self):
+        """F2: with an injected clock, `poll=0` never advances time, so the
+        polling loop would never end. A non-positive interval is refused before
+        any poll happens; the poll count proves it did not spin."""
+        runner = Fake({"device wifi connect": net_wifi.NmResult(0, "", "")},
+                      addresses=[""])
+        result = self.run_switch(runner, poll=0)
+        self.assertIsInstance(result, dict)
+        self.assertFalse(result["ok"])
+        self.assertEqual(runner.polls, 0)
+
+    def test_a_negative_poll_is_a_dict_not_a_raise(self):
+        """`time.sleep(-1)` raises `ValueError`, which would escape the
+        always-returns-a-dict contract the `asyncio.to_thread` call site
+        depends on."""
+        runner = Fake({"device wifi connect": net_wifi.NmResult(0, "", "")},
+                      addresses=[""])
+        result = self.run_switch(runner, poll=-1.0)
+        self.assertIsInstance(result, dict)
+        self.assertFalse(result["ok"])
+
     def test_the_state_moves_through_running_to_a_terminal_phase(self):
         runner = Fake({"device wifi connect": net_wifi.NmResult(0, "", "")},
                       addresses=["192.168.1.217/24"])
@@ -228,6 +280,25 @@ class RollbackTests(unittest.TestCase):
             sleep=self.sleep, now=self.now)
         self.assertFalse(result["ok"])
         self.assertTrue(result["reason"])
+
+    def test_the_reason_names_only_the_network_that_actually_came_back(self):
+        """F3: `connection up <old>`'s result used to be ignored while the reason
+        read "已回退到 <old>". This string is what the operator reads over a dead
+        network; it may not claim a restore that did not happen."""
+        runner = Fake({
+            "device wifi connect": net_wifi.NmResult(0, "", ""),
+            "connection show": net_wifi.NmResult(
+                0, "home:802-11-wireless:yes\n"
+                   "office:802-11-wireless:yes\n", ""),
+            "connection up home": net_wifi.NmResult(
+                1, "", "Error: Connection 'home' is not available"),
+        }, addresses=[""])
+        result = box_ops.perform_wifi_switch(
+            "NewNet", "pw", runner=runner, state=box_ops.SwitchState(),
+            sleep=self.sleep, now=self.now)
+        self.assertFalse(result["ok"])
+        self.assertIn("office", result["reason"])
+        self.assertNotIn("home", result["reason"])
 
 
 if __name__ == "__main__":

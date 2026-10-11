@@ -486,22 +486,39 @@ def _finish_switch(state: SwitchState, ok: bool, reason: str,
     return {"ok": ok, "ssid": ssid, "reason": reason, "address": address}
 
 
-def _roll_back(state: SwitchState, ssid: str, previous: list, password: str,
-               budget: float, runner: Optional[Callable] = None) -> dict:
-    """Put the box back on the network it came from, then say so.
+def _roll_back(state: SwitchState, ssid: str, previous: list, reason: str,
+               password: str, runner: Optional[Callable] = None) -> dict:
+    """Leave a switch that did not take, then say which old network came back.
+
+    Both failure paths — a `connect_wifi` that returned non-zero and a budget
+    that ran out with no address — come through here, so the teardown is written
+    once. `reason` is the path-specific lead-in (a connect error, or "no address
+    in N seconds"); this function appends what actually happened to the old
+    networks, so neither path can state the other's cause.
 
     The failed profile is left in place but with `autoconnect no`, so a reboot
     does not retry a network that just failed. That is the retired hotspot's
     mistake in the other direction — its profile defaulted to yes, came up at
-    every boot, and took the board's Wi-Fi down with it.
+    every boot, and took the board's Wi-Fi down with it. `connection modify`
+    against a profile that was never created returns non-zero, and — like
+    `connection up` — that result is deliberately ignored.
+
+    The reason names only the profiles `connection up` actually reported as up:
+    this string is what the operator reads over a dead network, so it may not
+    claim a restore it never verified.
     """
     net_wifi.nmcli(["connection", "modify", ssid,
                     "connection.autoconnect", "no"], runner)
-    for name in previous:
-        net_wifi.nmcli(["connection", "up", name], runner)
-    back_to = "、".join(previous) if previous else "（没有旧网络可回退）"
-    reason = f"「{ssid}」在 {int(budget)} 秒内没有拿到地址，已回退到 {back_to}"
-    return _finish_switch(state, False, net_wifi.scrub(reason, password))
+    restored = [name for name in previous
+                if net_wifi.nmcli(["connection", "up", name], runner).ok]
+    if restored:
+        back_to = "、".join(restored)
+    elif previous:
+        back_to = "（旧网络未能恢复）"
+    else:
+        back_to = "（没有旧网络可回退）"
+    text = f"{reason}，已回退到 {back_to}"
+    return _finish_switch(state, False, net_wifi.scrub(text, password))
 
 
 def perform_wifi_switch(ssid: str, password: str = "", *,
@@ -541,13 +558,20 @@ def perform_wifi_switch(ssid: str, password: str = "", *,
         target.address = ""
         target.since = time.time()
 
+    # A non-positive interval would spin forever on an injected clock and would
+    # make ``time.sleep`` raise out of an event-loop worker thread. It is refused
+    # before any nmcli call, and after the claim above so a bad argument cannot
+    # clobber a switch that is already running.
+    if poll <= 0:
+        return _finish_switch(target, False, "轮询间隔必须为正数")
+
     previous = _active_wifi_profiles(runner)
 
     result = net_wifi.connect_wifi(ssid, password, runner=runner, ifname=ifname)
     if not result.ok:
         detail = net_wifi.scrub(result.stderr or result.stdout, password)
-        return _finish_switch(target, False,
-                              detail.strip() or f"无法连接「{ssid}」")
+        reason = detail.strip() or f"无法连接「{ssid}」"
+        return _roll_back(target, ssid, previous, reason, password, runner)
 
     address = ""
     deadline = now() + budget
@@ -559,4 +583,6 @@ def perform_wifi_switch(ssid: str, password: str = "", *,
 
     if address:
         return _finish_switch(target, True, "", address)
-    return _roll_back(target, ssid, previous, password, budget, runner)
+    return _roll_back(target, ssid, previous,
+                      f"「{ssid}」在 {int(budget)} 秒内没有拿到地址",
+                      password, runner)

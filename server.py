@@ -5062,6 +5062,35 @@ async def api_box_password(request: Request):
     return response
 
 
+@app.get("/api/box/status", include_in_schema=False)
+async def api_box_status(request: Request):
+    """Everything the settings page shows, in one read.
+
+    Four reads behind one request because the page is one screen: six panels
+    each fetching separately is six chances to be half-loaded, and the network
+    report and the identity report are both `nmcli device show` anyway.
+
+    `asyncio.to_thread` because every one of these shells out, and a blocking
+    subprocess call inside an async handler stops the whole server — including
+    the WebSocket feeds a user may be mid-QSO on.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    network, system, identity = await asyncio.gather(
+        asyncio.to_thread(box_ops.network_report),
+        asyncio.to_thread(box_ops.system_report),
+        asyncio.to_thread(box_ops.identity_report),
+    )
+    return JSONResponse({
+        "network": network,
+        "system": system,
+        "identity": identity,
+        "safety": box_ops.safety_report(),
+        "helper_available": box_ops.helper_available(),
+        "first_window_open": _first_window_open(request),
+    })
+
+
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route
 # defined after it is answered with index.html instead of its own handler. That is how
 # GET /api/cloud/state came back as 200 + a web page in v1.24.0 (the settings dialog could not

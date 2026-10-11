@@ -761,14 +761,16 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </blockquote>
 <h2 id="接入云端cloud-hub">0.9 接入云端（Cloud Hub）</h2>
 <p>给这台机器一个公网入口 <code>https://&lt;你的呼号&gt;.mrrc.vlsc.net/</code>：<strong>不需要</strong>自己有公网 IP，也<strong>不用</strong>在路由器上开端口。 应用<strong>出站</strong>连到中转（hub），入口的 TLS 在中转处终结，中转再回连本机。</p>
-<p><strong>准备</strong>：一个有效呼号；以及运维在门户里的批准 —— 或者运维直接给你一串<strong>一次性登记口令</strong>。</p>
-<p><strong>步骤</strong>（抽屉菜单 → <strong>接入云端（Cloud Hub）…</strong>）：</p>
+<p><strong>准备</strong>：一个有效呼号。门户地址 <code>https://portal.mrrc.vlsc.net/</code>（对话框顶部「服务器」一行显示的就是它）。</p>
+<p><strong>申请</strong>（两条路，进的是同一个队列）：</p>
 <ol type="1">
-<li>填 <strong>呼号</strong>（大小写不敏感；<code>BG1SB/P</code>、<code>4X/BG1SB</code> 这类便携/前缀写法会被拒绝 —— 登记的是身份， 而且标签要当 DNS 名用）。可选的 <strong>联系方式</strong> 便于运维核对；<strong>登记口令</strong> 有就直接填，不必等批准。</li>
-<li>点 <strong>申请入口 / 接入</strong>，界面随即显示状态：<strong>已提交申请</strong>（等运维批准）→ <strong>已接入</strong>。</li>
-<li><strong>批准之后什么都不用做</strong>：服务端每 30 秒自查一次（v1.25.0 起），发现批准就自己签证书、登记入口、 把隧道拉起来。想立刻问一次就点 <strong>刷新状态</strong>（它一直可以点 —— 早先版本里它看着像禁用，其实不是）。</li>
-<li>首次接入会提示 <strong>重启应用以启用新证书</strong>：TLS 上下文是在进程启动时建立的，新证书要重启才生效。 点那个按钮（或手动重启）后，入口应当返回登录页。</li>
+<li><strong>应用里申请</strong>（推荐；抽屉菜单 → <strong>接入云端（Cloud Hub）…</strong>）：填 <strong>呼号</strong>（大小写不敏感； <code>BG1SB/P</code>、<code>4X/BG1SB</code> 这类便携/前缀写法会被拒绝 —— 登记的是身份，而且标签要当 DNS 名用）， 可选的 <strong>联系方式</strong> 便于运维核对，点 <strong>申请入口 / 接入</strong>。</li>
+<li><strong>网页上申请</strong>：任何浏览器打开 <code>https://portal.mrrc.vlsc.net/</code> 提交呼号。批准后运维会给一串 <strong>登记口令</strong>；回到应用的同一个对话框，把它填进「登记口令」一栏点接入即可。为什么网页申请的 要这么绕一圈：应用只能看见<strong>它自己提交</strong>的那条申请，凭口令「认领」才能把网页上批准的那条接回来。</li>
 </ol>
+<p><strong>核验与批准</strong>：呼号命中 <strong>Club Log</strong> 呼号库（27 万余条）会<strong>当场自动核验</strong>；查不到的转人工核验。 核验通过后才由运维<strong>分配入口</strong>（标签 + 端口）—— 这一步是人工的，通常在核验后很快完成。</p>
+<p><strong>等待时</strong>：对话框中部有一行 <strong>自动接入</strong> 状态，写着本机上次询问 hub 的时间与结果 （已提交 / 已核验 / 已批准 / 已接入 / 联系不上 hub…），<strong>不必守着这个窗口</strong>。 想立刻问一次就点 <strong>刷新状态</strong>（它一直可以点 —— 早先版本里它看着像禁用，其实不是）。</p>
+<p><strong>批准之后什么都不用做</strong>：服务端每 30 秒自查一次（v1.25.0 起），发现批准就自己签证书、登记入口、 把隧道拉起来。</p>
+<p><strong>首次接入</strong>会提示 <strong>重启应用以启用新证书</strong>：TLS 上下文是在进程启动时建立的，新证书要重启才生效 （不重启入口会一直 502）。接入完成后对话框显示入口链接、证书与隧道状态。</p>
 <p><strong>入口地址的规则</strong>：就是呼号本身，<strong>没有端口、没有路径、没有产品后缀</strong>（早期的 <code>:9988</code> 与 <code>/mrrc_modern/&lt;呼号&gt;/</code> 写法都已取消）。同一个呼号再次申请会<strong>复用原来的标签与端口</strong>，不会越排越多。</p>
 <p><strong>别把入口名当安全边界</strong>：呼号是公开标识、入口可枚举，所以防线在「核验通过才给访问」， 而不在「别人猜不到」；入口后面仍是本机的登录口令（§0 第 3 步）。</p>
 <p><strong>出问题</strong>：抽屉菜单 → <strong>🐞 遇到问题</strong> → 生成并上传诊断包（§6），答复发布在 <code>https://www.vlsc.net/mrrc_modern/answers/</code>。</p>
@@ -955,31 +957,31 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>15</td>
 <td>模式按钮（如 <code>USB</code>）</td>
-<td>循环切换模式。FT-710：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L；IC-7300：依后端模式表</td>
+<td>显示<strong>当前</strong>模式（v1.25.5 起；此前显示下一个），单击循环切换。FT-710：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L；IC-7300：依后端模式表</td>
 <td>单击循环；需要精确选择时用菜单 → Mode Selection（序号 40）</td>
 </tr>
 <tr>
 <td>16</td>
 <td>波段按钮（如 <code>20m</code>）</td>
-<td>循环切换业余波段；切换后频率跳到该波段默认频率并自动选 VFO-A。FT-710 含 4m；IC-7300 可能含 70 MHz（视地区）</td>
+<td>显示当前波段，单击循环切换；切换后频率跳到该波段默认频率并自动选 VFO-A。FT-710 含 4m；IC-7300 可能含 70 MHz（视地区）</td>
 <td>单击循环；菜单 → Band Selection（序号 39）可精确选</td>
 </tr>
 <tr>
 <td>17</td>
 <td>滤波按钮（如 <code>2.4k</code>）</td>
-<td>循环切换滤波宽度。FT-710：多档语音/窄带宽度；IC-7300：FIL1 → FIL2 → FIL3</td>
+<td>显示当前滤波宽度，单击循环切换。FT-710：多档语音/窄带宽度；IC-7300：FIL1 → FIL2 → FIL3</td>
 <td>单击循环</td>
 </tr>
 <tr>
 <td>18</td>
 <td>ATT 衰减</td>
-<td>射频衰减器。FT-710：0 / 6 / 12 / 18 dB；IC-7300：开/关</td>
+<td>射频衰减器，显示当前档位（<code>OFF</code> / <code>6dB</code> / <code>12dB</code> / <code>18dB</code>）。FT-710：4 档；IC-7300：开/关</td>
 <td>单击循环</td>
 </tr>
 <tr>
 <td>19</td>
 <td>PRE 前置放大</td>
-<td>前置放大器。FT-710：3 档；IC-7300：依后端支持</td>
+<td>前置放大器，显示当前档位（<code>OFF</code> / <code>AMP1</code> / <code>AMP2</code>）。FT-710：3 档；IC-7300：依后端支持</td>
 <td>单击循环</td>
 </tr>
 </tbody>
@@ -1283,7 +1285,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>—</td>
 <td>接入云端（Cloud Hub）…</td>
-<td>打开云端接入对话框：呼号 / 联系方式 / 登记口令 → 申请或直接接入 → 刷新状态；批准后应用自己签证书、登记并起隧道</td>
+<td>打开云端接入对话框：呼号 / 联系方式 / 登记口令 → 申请或认领 → 自动接入状态行（本机上次询问 hub 的时间与结果）→ 刷新状态；批准后应用自己签证书、登记并起隧道</td>
 <td>单击（详见 §0.9）</td>
 </tr>
 <tr>
@@ -1321,6 +1323,12 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>Color 下拉</td>
 <td>瀑布图配色主题：Jet / Hot / Cold / Thermal / Night / Gray</td>
 <td>选择后本地生效并存入 Cookie（<code>scopeTheme</code>）</td>
+</tr>
+<tr>
+<td>—</td>
+<td>NET 下拉</td>
+<td>频谱带宽档位（v1.25.5 起）：<strong>Full</strong> = 完整帧 30 Hz；<strong>Half</strong> = 半帧（去掉未渲染的第二路 waterfall）15 Hz；<strong>Quarter</strong> = 半帧 7.5 Hz。弱网/热点省带宽用</td>
+<td>选择后立即作为 <code>spectrumCaps</code> 上报服务端（无需重连），并存入 Cookie（<code>scopeProfile</code>）</td>
 </tr>
 <tr>
 <td>48</td>

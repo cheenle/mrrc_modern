@@ -23,30 +23,43 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 IMG_XZ="${1:?usage: verify-image.sh <img.xz>}"
-[ -f "$IMG_XZ" ] || { echo "no such image: $IMG_XZ" >&2; exit 1; }
+[ -f "$IMG_XZ" ] || {
+	echo "no such image: $IMG_XZ" >&2
+	exit 1
+}
 IMG_XZ="$(cd "$(dirname "$IMG_XZ")" && pwd)/$(basename "$IMG_XZ")"
-OUT_DIR="$(dirname "$IMG_XZ")"
+
+# Decompress on the host, not in the container: the artifact is .xz (the box's is
+# .gz, which is where this recipe came from), the slim debian image cannot be
+# assumed to carry xz-utils, and a plain file mount keeps the inner script free
+# of archive formats. It also keeps the glob out of the container: the directory
+# holds every image ever built here, and a wildcard there picked up the previous
+# release and tried to verify that one too.
+WORK_DIR="$(mktemp -d -t mrrc-verify-XXXXXX)"
+cleanup() { rm -rf "$WORK_DIR"; }
+trap cleanup EXIT
 
 echo "==> xz integrity"
 xz -t "$IMG_XZ"
 BYTES=$(stat -f %z "$IMG_XZ" 2>/dev/null || stat -c %s "$IMG_XZ")
-(( BYTES > 200000000 && BYTES < 2000000000 )) || {
+((BYTES > 200000000 && BYTES < 2000000000)) || {
 	echo "ERROR: image size ${BYTES} outside 0.2-2.0GB" >&2
 	exit 1
 }
 echo "    ${BYTES} bytes"
 
-INNER="$(mktemp -t mrrc-verify-XXXXXX.sh)"
-trap 'rm -f "$INNER"' EXIT
-cat > "$INNER" <<'INNER_SCRIPT'
+echo "==> decompress"
+xz -dc "$IMG_XZ" > "$WORK_DIR/image.img"
+
+INNER="$WORK_DIR/verify.sh"
+cat >"$INNER" <<'INNER_SCRIPT'
 #!/bin/bash -euo pipefail
 bad=0
 ok()   { echo "  OK   $*"; }
 fail() { echo "  FAIL $*"; bad=1; }
 
-echo "== decompress and mount"
-gunzip -c /out/MRRC-Modern-*-rpi64.img.xz > /tmp/i.img
-loop=$(losetup --show -fP /tmp/i.img)
+echo "== mount the artifact"
+loop=$(losetup --show -fP /image/image.img)
 . /common/part-nodes.sh
 part_nodes "$loop"
 [ -b "${loop}p2" ] || { echo "no ${loop}p2 after the -P scan"; exit 1; }
@@ -120,7 +133,7 @@ losetup -d "$loop"
 INNER_SCRIPT
 
 docker run --rm --privileged --platform linux/arm64 \
-	-v "$OUT_DIR":/out:ro -v "$REPO":/src:ro \
+	-v "$WORK_DIR":/image:ro -v "$REPO":/src:ro \
 	-v "$REPO/packaging/common":/common:ro \
 	-v "$INNER":/verify.sh:ro \
 	debian:bookworm bash /verify.sh

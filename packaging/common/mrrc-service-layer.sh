@@ -89,11 +89,21 @@ if [ -f "$MRRC_HOME/.env" ] && [ ! -f "$ENV_FILE" ]; then
 	mv "$MRRC_HOME/.env" "$ENV_FILE"
 fi
 # install.sh's template is written on the *build* host: it carries that machine's
-# detected serial port and a password it generated there. On a device both are
-# first-boot facts (design D-3; the web password is generated on the device and
-# read back with mrrc-show-password) — strip them so first_run does its job
-# instead of trusting the build machine.
-sed -i -e '/^#\?MRRC_SERIAL_PORT=/d' -e '/^#\?MRRC_WEB_PASSWORD=/d' "$ENV_FILE"
+# detected serial port, a password it generated there, and a hard-coded
+# `MRRC_WEB_HOST=0.0.0.0`. On a device all three are wrong or premature (design
+# D-3; the web password is generated on the device and read back with
+# mrrc-show-password), and the bind address is a platform parameter — leaving the
+# template's value in place silently overrode it, which is how the first
+# refactored Pi image ended up IPv4-only while its own unit said `::` (caught by
+# the four-step artifact verification, 2026-10-11). Strip them so the defaults
+# block below is the only writer.
+#
+# Note for a re-run against a live box: this resets an operator's own
+# MRRC_WEB_HOST to the platform default. That is the same deal the other two
+# keys already make, and this script is a build-time tool rather than an updater
+# (linux/mrrc_update.sh stages the tree and never runs it).
+sed -i -e '/^#\?MRRC_SERIAL_PORT=/d' -e '/^#\?MRRC_WEB_PASSWORD=/d' \
+	-e '/^#\?MRRC_WEB_HOST=/d' "$ENV_FILE"
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 chmod 640 "$ENV_FILE" 2>/dev/null || true
 

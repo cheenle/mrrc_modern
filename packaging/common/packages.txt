@@ -1,0 +1,25 @@
+# System packages every MRRC Modern image needs. One answer to "what does the
+# server need", installed by packaging/common/mrrc-service-layer.sh on both lines.
+#
+# Measured, not assumed: on the pinned Armbian base (packaging/box/, 2026-10-11)
+# install.sh could not create its virtualenv because python3.11-venv, pip, the
+# PortAudio/ALSA headers and libopus0 were all absent — only libasound2, gcc,
+# make, rsync, git, curl and sudo were there. install.sh cannot repair that
+# itself: it creates the virtualenv in STEP 2 and installs system packages in
+# STEP 3, so a missing ensurepip is fatal before apt ever runs, and a venv made
+# without it has no pip at all.
+#
+# libopus0 is the one that is easy to miss and expensive to miss: without it the
+# server silently falls back to PCM instead of Opus.
+#
+# python3.11-venv is deliberately pinned to the base's Python (both bases are
+# bookworm / 3.11 today). A base bump must re-measure this file; apt fails loudly
+# on a package name that no longer exists, which is the outcome we want.
+python3.11-venv
+python3-dev
+portaudio19-dev
+libportaudio2
+libasound2-dev
+libopus0
+libopus-dev
+avahi-daemon

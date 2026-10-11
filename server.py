@@ -3028,7 +3028,15 @@ async def add_security_headers(request: Request, call_next):
 # ── Auth Middleware ──────────────────────────────────────────────────
 
 # Paths that don't require authentication
-PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "/sw.js"}
+#
+# box_api.js is the client script the onboarding page loads (<script
+# src="box_api.js"> resolves, from /setup, to GET /box_api.js). That page is
+# rendered *before* any session exists, so its asset has to be readable with no
+# session — the same reason favicon.png and sw.js are here. It is a fetch
+# wrapper and a cookie reader that carries no secret, and anyone who can fetch
+# it is already being served setup.html.
+PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "/sw.js",
+                "/box_api.js"}
 # WebSocket paths: must NOT be redirected — WebSocket can't follow 302.
 # Let the WS handler check auth and close with proper code 4001.
 WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX"}
@@ -4205,7 +4213,7 @@ async def serve_static(path: str, request: Request):
     matches every GET path, so anything registered after it is unreachable. Defining it here and
     registering it below all API routes is what keeps that order obvious.
     """
-    if not _verify_auth(request) and path not in ("", "login", "favicon.png", "manifest.json", "sw.js"):
+    if not _verify_auth(request) and path not in ("", "login", "favicon.png", "manifest.json", "sw.js", "box_api.js"):
         return RedirectResponse("/login")
 
     file_path = _resolve_static_path(path)
@@ -4987,6 +4995,16 @@ async def setup_page(request: Request):
     response = FileResponse(page, media_type="text/html")
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@app.get("/settings", include_in_schema=False)
+async def settings_page(request: Request):
+    """The box settings page. Behind login like everything else — the
+    middleware enforces it, and this route only has to serve the file."""
+    page = STATIC_DIR / "settings.html"
+    if not page.exists():
+        return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
+    return FileResponse(page, media_type="text/html")
 
 
 @app.get("/api/box/onboarding", include_in_schema=False)

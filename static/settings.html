@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#141414">
+<title>MRRC Modern 盒子设置</title>
+<style>
+:root{
+  --bg:#141414; --card:#1e1e1e; --line:#333; --amber:#f59e0b;
+  --text:#eee; --dim:#9ca3af; --bad:#ef4444; --good:#22c55e;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",
+              "Microsoft YaHei",sans-serif;
+  font-size:16px; line-height:1.6;
+  padding:16px 14px calc(28px + env(safe-area-inset-bottom));
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:520px;margin:0 auto}
+header{text-align:center;margin:6px 0 18px}
+h1{font-size:22px;margin:0;color:var(--amber);letter-spacing:.02em}
+.sub{margin:4px 0 0;color:var(--dim);font-size:13px}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:16px;margin:0 0 14px;
+}
+.card h2{
+  font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px;
+}
+.step-no{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;background:var(--amber);
+  color:#000;font-size:13px;font-weight:700;flex:0 0 auto;
+}
+.hint{color:var(--dim);font-size:13px;margin:0 0 12px}
+label{display:block;font-size:13px;color:var(--dim);margin:12px 0 4px}
+input[type=password],input[type=text]{
+  width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
+  background:#111;color:var(--text);font-size:16px;
+}
+input:focus{outline:none;border-color:var(--amber)}
+button{
+  width:100%;padding:13px;margin-top:14px;border:none;border-radius:10px;
+  background:var(--amber);color:#000;font-size:16px;font-weight:700;cursor:pointer;
+}
+button:disabled{background:#3a3a3a;color:#777;cursor:not-allowed}
+button.ghost{background:transparent;color:var(--amber);border:1px solid var(--amber);font-weight:600}
+.msg{font-size:13px;margin-top:10px;min-height:18px}
+.msg.bad{color:var(--bad)}
+.msg.good{color:var(--good)}
+.rows{list-style:none;margin:10px 0 0;padding:0;border-top:1px solid var(--line)}
+.rows li{border-bottom:1px solid var(--line)}
+.rows button{
+  width:100%;background:transparent;color:var(--text);border:none;border-radius:0;
+  margin:0;padding:13px 4px;font-weight:400;font-size:15px;text-align:left;
+  display:flex;align-items:center;gap:10px;
+}
+.rows button:active{background:#2a2a2a}
+.ssid{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sig{color:var(--dim);font-size:12px;flex:0 0 auto;letter-spacing:1px}
+.lock{color:var(--dim);font-size:12px;flex:0 0 auto}
+.picked{background:#2a2410 !important}
+.kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:3px 0}
+.kv b{font-weight:600;color:var(--text);text-align:right;word-break:break-all}
+.kv span{color:var(--dim);flex:0 0 auto}
+.pill{
+  display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;
+  background:#2d2410;color:var(--amber);border:1px solid #6b4d0f;
+}
+.pill.good{background:#0f2d1a;color:var(--good);border-color:#166534}
+.pill.bad{background:#2d0f0f;color:var(--bad);border-color:#7f1d1d}
+.banner{
+  background:#2d2410;border:1px solid #6b4d0f;border-radius:12px;
+  padding:12px;margin:0 0 14px;font-size:13px;color:#fbbf24;
+}
+.note{font-size:12.5px;color:var(--dim)}
+.note b{color:var(--text);font-weight:600}
+.note ol{margin:6px 0 0;padding-left:20px}
+.note li{margin:4px 0}
+.locked{opacity:.55}
+.overlay{
+  position:fixed;inset:0;background:rgba(10,10,10,.97);z-index:10;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+}
+.overlay.hidden{display:none}
+.overlay .box{max-width:460px;width:100%;text-align:left}
+.spinner{
+  width:34px;height:34px;margin:0 auto 18px;border-radius:50%;
+  border:3px solid #3a3a3a;border-top-color:var(--amber);
+  animation:spin 0.9s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.overlay h2{text-align:center;color:var(--amber);font-size:19px;margin:0 0 10px}
+.big{font-size:15px;margin:0 0 14px}
+code{
+  background:#111;border:1px solid var(--line);border-radius:6px;
+  padding:1px 6px;font-size:13px;word-break:break-all;
+}
+.errbox{
+  background:#2d0f0f;border:1px solid #7f1d1d;border-radius:12px;
+  padding:12px;margin:0 0 14px;font-size:13.5px;color:#fca5a5;
+}
+.hidden{display:none}
+footer{text-align:center;color:#555;font-size:11.5px;margin-top:18px}
+.panel{margin:0 0 14px}
+.panel h2{margin-bottom:8px}
+.grid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
+.grid .k{color:var(--dim)}
+.grid .v{text-align:right;word-break:break-all}
+.bad-text{color:var(--bad)}
+.good-text{color:var(--good)}
+select{
+  width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
+  background:#111;color:var(--text);font-size:16px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>MRRC Modern</h1>
+    <p class="sub">盒子设置</p>
+  </header>
+
+  <div id="banner" class="banner hidden">
+    <b>这台盒子还没有人设过口令。</b>在你设置之前，和它同网段的设备都能打开
+    <code>/setup</code>。请先完成 <a href="setup">初始化</a>。
+  </div>
+  <div id="errbox" class="errbox hidden"></div>
+
+  <section class="card panel">
+    <h2>盒子身份</h2>
+    <div class="grid">
+      <span class="k">名字</span><span class="v" id="id-name">—</span>
+      <span class="k">mDNS 名字</span><span class="v" id="id-mdns">—</span>
+      <span class="k">当前地址</span><span class="v" id="id-addr">—</span>
+      <span class="k">时区</span><span class="v" id="id-tz">—</span>
+      <span class="k">已开机</span><span class="v" id="id-uptime">—</span>
+    </div>
+    <label for="name-input">改名字（会影响 mDNS 地址，改完请用新名字重新打开本页）</label>
+    <input id="name-input" type="text" placeholder="MRRC-Modern" spellcheck="false">
+    <button id="name-btn" type="button">保存名字</button>
+    <div id="name-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>网络体检 <span class="pill" id="net-pill">读取中…</span></h2>
+    <div class="grid" id="net-grid"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>Wi-Fi</h2>
+    <div class="grid" id="wifi-grid"></div>
+    <button id="scan-btn" type="button" class="ghost">扫描附近的 Wi-Fi</button>
+    <ul class="rows" id="net-list"></ul>
+    <div id="pick" class="hidden">
+      <label for="psk">“<span id="pick-name"></span>” 的密码</label>
+      <input id="psk" type="password" autocomplete="off" placeholder="Wi-Fi 密码（开放网络可留空）">
+      <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
+      <p class="note" id="wifi-warn">如果你现在正是通过 Wi-Fi 访问这台盒子，
+        <b>本页会断开</b>。稍后用 <code id="warn-mdns"></code> 打开本页看结果。</p>
+    </div>
+    <div id="wifi-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>有线口</h2>
+    <p class="hint">改的如果正是你现在走的这条路，本页同样会断开。</p>
+    <label for="link-profile">连接</label>
+    <select id="link-profile"></select>
+    <label for="link-method">方式</label>
+    <select id="link-method">
+      <option value="auto">自动获取（DHCP）</option>
+      <option value="manual">静态地址</option>
+    </select>
+    <div id="link-manual" class="hidden">
+      <label for="link-address">地址/前缀</label>
+      <input id="link-address" type="text" placeholder="192.168.16.217/24" spellcheck="false">
+      <label for="link-gateway">网关（可留空）</label>
+      <input id="link-gateway" type="text" placeholder="192.168.16.1" spellcheck="false">
+    </div>
+    <button id="link-btn" type="button">应用</button>
+    <div id="link-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel" id="card-system">
+    <h2>盒子系统</h2>
+    <div class="grid" id="sys-grid"></div>
+    <div id="helper-note" class="note hidden">
+      这台设备上没有 root helper（桌面版就是这样），所以重启与改时区不可用。
+      网络相关的操作不受影响。
+    </div>
+    <label for="tz-select">时区</label>
+    <select id="tz-select"></select>
+    <button id="tz-btn" type="button">保存时区</button>
+    <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+    <button id="svc-btn" type="button" class="ghost">重启服务（MRRC Modern 自己）</button>
+    <button id="reboot-btn" type="button" class="ghost">重启盒子（整台机器）</button>
+    <div id="sys-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>登录口令</h2>
+    <label for="pw1">新口令</label>
+    <input id="pw1" type="password" autocomplete="new-password">
+    <label for="pw2">再输入一次</label>
+    <input id="pw2" type="password" autocomplete="new-password">
+    <button id="pw-btn" type="button">保存口令</button>
+    <div id="pw-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>电台</h2>
+    <p class="hint">机型与串口的配置在控制界面的设置里，本页不重复一套。</p>
+    <a href="."><button type="button" class="ghost">打开控制界面</button></a>
+  </section>
+
+  <section class="card panel">
+    <h2>安全门禁 <span class="tag">只读</span></h2>
+    <p class="hint">这里只显示、不修改。改它们要走配置层和它的两步确认。</p>
+    <div id="safety"></div>
+  </section>
+
+  <footer>MRRC Modern · 盒子设置</footer>
+</div>
+
+<script src="box_api.js?v=1"></script>
+<script>
+(function () {
+  'use strict';
+  var state = { mdns: '', picked: '', helper: false };
+
+  function kv(container, key, value, kind) {
+    var k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = key;
+    var v = document.createElement('span');
+    v.className = 'v' + (kind ? ' ' + kind : '');
+    v.textContent = value === '' || value === null || value === undefined
+      ? '（无）' : String(value);
+    container.appendChild(k);
+    container.appendChild(v);
+  }
+
+  function renderNetwork(net) {
+    var grid = document.querySelector('#net-grid');
+    grid.innerHTML = '';
+    var pill = document.querySelector('#net-pill');
+    if (!net.nm_running) {
+      pill.textContent = 'NetworkManager 没在跑';
+      pill.className = 'pill bad';
+    } else if (!net.addresses.length) {
+      pill.textContent = '没有地址';
+      pill.className = 'pill bad';
+    } else {
+      pill.textContent = '已联网';
+      pill.className = 'pill good';
+    }
+    kv(grid, '地址', net.addresses.join('、'));
+    kv(grid, '网关', net.gateways.join('、'));
+    kv(grid, 'DNS', net.dns.join('、'));
+    kv(grid, 'Wi-Fi', net.wifi.ssid
+      ? net.wifi.ssid + '  ' + Box.signalText(net.wifi.signal) : '未连接');
+    net.devices.forEach(function (device) {
+      kv(grid, '网卡 ' + device.interface,
+         device.state + (device.connection ? '  →  ' + device.connection : ''),
+         device.state === 'connected' ? 'good-text' : '');
+    });
+  }
+
+  function renderWifi(net) {
+    var grid = document.querySelector('#wifi-grid');
+    grid.innerHTML = '';
+    if (!net.wifi.ssid) {
+      kv(grid, '当前', '没有连接任何 Wi-Fi');
+    } else {
+      kv(grid, '当前', net.wifi.ssid + '  ' + Box.signalText(net.wifi.signal));
+    }
+    var saved = net.connections.filter(function (c) {
+      return c.type === '802-11-wireless' || c.type === 'wifi';
+    });
+    saved.forEach(function (c) {
+      kv(grid, '已保存', c.name + (c.autoconnect ? '（开机自动连接）' : '（不自动连接）'));
+    });
+  }
+
+  function renderLink(net) {
+    var select = document.querySelector('#link-profile');
+    var previous = select.value;
+    select.innerHTML = '';
+    net.connections.forEach(function (c) {
+      var option = document.createElement('option');
+      option.value = c.name;
+      option.textContent = c.name + '（' + c.type + '）';
+      select.appendChild(option);
+    });
+    if (previous) select.value = previous;
+  }
+
+  function renderSystem(system, helper) {
+    var grid = document.querySelector('#sys-grid');
+    grid.innerHTML = '';
+    system.services.forEach(function (service) {
+      kv(grid, service.unit, service.active ? '运行中' : '未运行',
+         service.active ? 'good-text' : 'bad-text');
+    });
+    Box.setText('#id-uptime', Box.secondsLabel(system.uptime_s));
+    Box.setText('#id-tz', system.timezone || '（未知）');
+    Box.show('#helper-note', !helper);
+    ['#name-btn', '#tz-btn', '#reboot-btn'].forEach(function (selector) {
+      Box.disabled(selector, !helper);
+    });
+  }
+
+  function renderSafety(fields) {
+    var box = document.querySelector('#safety');
+    box.innerHTML = '';
+    fields.forEach(function (field) {
+      var row = document.createElement('div');
+      row.className = 'field';
+      var key = document.createElement('div');
+      key.className = 'k';
+      key.textContent = field.key;
+      var value = document.createElement('div');
+      value.className = 'v';
+      value.textContent = field.value === '' ? '（未设置）' : field.value;
+      var note = document.createElement('div');
+      note.className = 'note';
+      note.textContent = field.note;
+      row.appendChild(key); row.appendChild(value); row.appendChild(note);
+      box.appendChild(row);
+    });
+  }
+
+  function load() {
+    Box.api('/api/box/status').then(function (data) {
+      state.mdns = data.identity.mdns || '';
+      state.helper = !!data.helper_available;
+      Box.setText('#id-name', data.identity.hostname || '—');
+      Box.setText('#id-mdns', state.mdns || '（不可用）');
+      Box.setText('#id-addr', data.identity.addresses.join('、') || '（无）');
+      var warn = document.querySelector('#warn-mdns');
+      if (warn) warn.textContent = state.mdns || ('https://' + location.hostname + ':8888');
+      var input = document.querySelector('#name-input');
+      if (input && !input.value) input.value = data.identity.hostname || '';
+      Box.show('#banner', !!data.first_window_open);
+      renderNetwork(data.network);
+      renderWifi(data.network);
+      renderLink(data.network);
+      renderSystem(data.system, state.helper);
+      renderSafety(data.safety);
+    }).catch(function (error) {
+      if (error.status === 401) {
+        location.href = '/login?next=/settings';
+        return;
+      }
+      document.querySelector('#errbox').textContent = error.message;
+      Box.show('#errbox', true);
+    });
+  }
+
+  function reload() { load(); }
+
+  Box.on('#name-btn', 'click', function () {
+    var name = document.querySelector('#name-input').value;
+    Box.message('#name-msg', '正在改名…', '');
+    Box.api('/api/box/hostname', { method: 'POST', body: { hostname: name } })
+      .then(function () {
+        Box.message('#name-msg',
+          '已改名为 ' + name + '，mDNS 也重新广播了。请用新名字重新打开本页。', 'good');
+        reload();
+      })
+      .catch(function (error) { Box.message('#name-msg', error.message, 'bad'); });
+  });
+
+  Box.on('#tz-btn', 'click', function () {
+    Box.api('/api/box/timezone', {
+      method: 'POST', body: { timezone: document.querySelector('#tz-select').value }
+    }).then(function () { Box.message('#sys-msg', '时区已保存。', 'good'); reload(); })
+      .catch(function (error) { Box.message('#sys-msg', error.message, 'bad'); });
+  });
+
+  Box.on('#scan-btn', 'click', function () {
+    Box.disabled('#scan-btn', true);
+    Box.api('/api/box/wifi').then(function (data) {
+      var list = document.querySelector('#net-list');
+      list.innerHTML = '';
+      (data.networks || []).forEach(function (net) {
+        var item = document.createElement('li');
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.innerHTML = '<span class="ssid"></span><span class="lock">'
+          + (net.protected ? '🔒' : '开放') + '</span><span class="sig">'
+          + Box.signalText(net.signal) + '</span>';
+        button.querySelector('.ssid').textContent = net.ssid;
+        button.addEventListener('click', function () {
+          state.picked = net.ssid;
+          document.querySelector('#pick-name').textContent = net.ssid;
+          Box.show('#pick', true);
+        });
+        item.appendChild(button);
+        list.appendChild(item);
+      });
+    }).catch(function (error) {
+      Box.message('#wifi-msg', error.message, 'bad');
+    }).then(function () { Box.disabled('#scan-btn', false); });
+  });
+
+  Box.on('#join-btn', 'click', function () {
+    if (!state.picked) return;
+    Box.message('#wifi-msg', '正在切换。如果本页断开，请用 ' +
+      (state.mdns || '盒子的新地址') + ' 重新打开。', '');
+    Box.api('/api/box/wifi', {
+      method: 'POST',
+      body: { ssid: state.picked, password: document.querySelector('#psk').value }
+    }).then(function () { poll(); })
+      .catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
+  });
+
+  function poll() {
+    Box.api('/api/box/wifi/status').then(function (status) {
+      if (status.phase === 'switching') {
+        setTimeout(poll, 2000);
+        return;
+      }
+      if (status.phase === 'ok') {
+        Box.message('#wifi-msg', '已连上 ' + status.ssid +
+          '，地址 ' + status.address + '。', 'good');
+      } else if (status.phase === 'failed') {
+        Box.message('#wifi-msg', status.reason, 'bad');
+      }
+      reload();
+    }).catch(function () { setTimeout(poll, 3000); });
+  }
+
+  Box.on('#link-method', 'change', function (event) {
+    Box.show('#link-manual', event.target.value === 'manual');
+  });
+
+  Box.on('#link-btn', 'click', function () {
+    Box.api('/api/box/link', {
+      method: 'POST',
+      body: {
+        profile: document.querySelector('#link-profile').value,
+        method: document.querySelector('#link-method').value,
+        address: document.querySelector('#link-address').value,
+        gateway: document.querySelector('#link-gateway').value
+      }
+    }).then(function () { Box.message('#link-msg', '已提交，正在生效…', ''); poll(); })
+      .catch(function (error) { Box.message('#link-msg', error.message, 'bad'); });
+  });
+
+  Box.on('#svc-btn', 'click', function () {
+    Box.api('/api/restart', { method: 'POST' }).then(function () {
+      Box.message('#sys-msg', '服务正在重启，几秒后刷新本页。', 'good');
+    }).catch(function (error) { Box.message('#sys-msg', error.message, 'bad'); });
+  });
+
+  Box.on('#reboot-btn', 'click', function () {
+    if (!window.confirm('重启整台盒子？所有连接都会断开，大约一分钟后才回来。')) return;
+    Box.api('/api/box/system/reboot',
+            { method: 'POST', body: { confirm: 'reboot' } })
+      .then(function () { Box.message('#sys-msg', '盒子正在重启，约一分钟后回来。', 'good'); })
+      .catch(function (error) { Box.message('#sys-msg', error.message, 'bad'); });
+  });
+
+  Box.on('#pw-btn', 'click', function () {
+    Box.api('/api/box/password', {
+      method: 'POST',
+      body: { password: document.querySelector('#pw1').value,
+              confirm: document.querySelector('#pw2').value }
+    }).then(function () { Box.message('#pw-msg', '口令已保存。', 'good'); })
+      .catch(function (error) { Box.message('#pw-msg', error.message, 'bad'); });
+  });
+
+  // The timezone list is the browser's own: no endpoint needed, and it is the
+  // list of the device the operator is holding rather than of the box.
+  (function fillTimezones() {
+    var select = document.querySelector('#tz-select');
+    var zones = [];
+    try {
+      zones = Intl.supportedValuesOf('timeZone');
+    } catch (ignored) {
+      zones = ['Asia/Shanghai', 'Asia/Tokyo', 'UTC', 'Europe/London',
+               'America/New_York', 'America/Los_Angeles'];
+    }
+    zones.forEach(function (zone) {
+      var option = document.createElement('option');
+      option.value = zone;
+      option.textContent = zone;
+      select.appendChild(option);
+    });
+    select.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  })();
+
+  load();
+})();
+</script>
+</body>
+</html>

@@ -676,3 +676,26 @@ class SetHelpProxyTests(unittest.TestCase):
             cloud_hub._write_frpc_config(conf, 'serverAddr = "x"\n')
             with self.assertRaises(cloud_hub.CloudHubError):
                 cloud_hub.set_help_proxy(conf, help_local_port=1, help_remote_port=2)
+
+
+class TunnelStartSweepTests(unittest.TestCase):
+    """构造时用的配置不一定是启动时用的那一份。
+
+    懒创建走的是占位符（`pending.toml`），而 `connect()` 会在调用 `start()` 之前把
+    真实路径塞进来。清扫若只按占位符做，前一次运行留下的 frpc 就会活着、占着代理名
+    —— 真实后果是新一轮 frpc 报 `proxy [bg1ifp] already exists`，而 hub 只看见旧的那个
+    （2026-10-12 实测：两个 frpc、两个管理端、隧道是旧的在工作）。
+    """
+
+    def test_start_sweeps_the_config_it_actually_runs(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            real = Path(tmp) / "frpc-bg1ifp.toml"
+            real.write_text("serverAddr = \"x\"\n", encoding="ascii")
+            tunnel = cloud_hub.TunnelProcess(Path("/bin/true"), Path(tmp) / "pending.toml")
+            swept = []
+            with mock.patch.object(cloud_hub, "_kill_stale_frpc", lambda p: swept.append(Path(p))):
+                tunnel.conf = real          # connect() 就是这么做的
+                tunnel.start()
+                tunnel.stop()
+            assert swept == [real], swept

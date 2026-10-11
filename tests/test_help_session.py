@@ -354,6 +354,33 @@ class SshServerTests(unittest.TestCase):
                 self._client(pw="wrong-password-here")
         self.assertEqual(len([e for e in self.events if e["event"] == "auth_fail"]), 2)
 
+    def test_an_interactive_shell_runs_a_command(self):
+        """交互式那条路（pty 请求 → 起平台 shell → 双向泵）。
+
+        这是支持者真正要用的形态，而它此前**从没被驱动过**：单元测试只走 exec 探针，
+        于是 `channel.get_terminal_type()` 这个不存在的 API 一路活到真机（2026-07-12
+        实测才暴露）。这条测试就是那次教训的守卫。
+        """
+        import time as _t
+        c = self._client()
+        try:
+            chan = c.get_transport().open_session()
+            chan.get_pty(term="xterm-256color", width=100, height=30)
+            chan.invoke_shell()
+            _t.sleep(0.8)
+            chan.send("echo SHELL-OK-$((6*7))\n")
+            out, deadline = "", _t.time() + 8
+            while _t.time() < deadline:
+                if chan.recv_ready():
+                    out += chan.recv(4096).decode(errors="replace")
+                    if "SHELL-OK-42" in out:
+                        break
+                _t.sleep(0.1)
+            self.assertIn("SHELL-OK-42", out, f"交互式 shell 没有回话：{out[:200]!r}")
+            chan.send("exit\n")
+        finally:
+            c.close()
+
     def test_stop_closes_the_port(self):
         import socket
         self.server.stop()

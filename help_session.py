@@ -372,11 +372,41 @@ class _ServerInterface(paramiko.ServerInterface):
             return paramiko.OPEN_SUCCEEDED                  # type: ignore[attr-defined]
         return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED  # type: ignore[attr-defined]
 
-    def check_channel_pty_request(self, *a, **kw):
+    def check_channel_pty_request(self, channel, term, width, height,
+                                  pixelwidth, pixelheight, modes):
+        """Remember the terminal the client asked for.
+
+        paramiko hands the term and the size to **this** callback — they are not
+        attributes of the channel (``channel.get_terminal_type()`` does not exist;
+        a guess that only showed up when an interactive session was finally driven,
+        2026-10-12). Stash them on the channel so the shell inherits the right TERM
+        and the right initial size.
+        """
+        channel.term = term.decode(errors="replace") if isinstance(term, bytes) else str(term or "")
+        channel.pty_size = (int(width or 80), int(height or 24))
+        return True
+
+    def check_channel_window_change_request(self, channel, width, height,
+                                            pixelwidth, pixelheight):
+        """Accept a resize, and for now ignore it (design §10): the initial size is
+        forwarded, live resizing is not implemented. Returning False would make the
+        client see a failed resize request, which is worse than not resizing."""
         return True
 
     def check_channel_shell_request(self, channel):
-        self._owner.spawn_shell(channel)
+        """Start the shell in its own thread and return at once.
+
+        Two reasons, both measured on a real interactive session (2026-10-12):
+
+        * this handler runs on the **transport** thread, and paramiko sends
+          CHANNEL_SUCCESS only after it returns — blocking here means the client's
+          ``invoke_shell()`` never sees its reply and the session hangs before a byte
+          moves (the first version did exactly that);
+        * with the transport thread stuck inside the pump, incoming packets are never
+          processed, so the shell could not have received a keystroke anyway.
+        """
+        threading.Thread(target=self._owner.spawn_shell, args=(channel,),
+                         name="mrrc-help-shell", daemon=True).start()
         return True
 
     def check_channel_exec_request(self, channel, command):
@@ -477,10 +507,10 @@ class SshHelpServer:
         import subprocess
         import termios
 
-        env = dict(os.environ, TERM=channel.get_terminal_type() or "xterm-256color")
+        env = dict(os.environ, TERM=getattr(channel, "term", "") or "xterm-256color")
         master, slave = pty.openpty()
         try:
-            cols, rows = channel.get_terminal_size()
+            cols, rows = getattr(channel, "pty_size", (80, 24))
             fcntl.ioctl(slave, termios.TIOCSWINSZ,
                         struct.pack("HHHH", rows, cols, 0, 0))
         except Exception:

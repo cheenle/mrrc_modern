@@ -562,6 +562,16 @@ class TunnelProcess:
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
+        # Sweep here as well as in __init__, because the config this supervisor was
+        # *constructed* with is not always the one it runs with: the lazy creator uses
+        # a placeholder (``pending.toml``) and connect() assigns the real path just
+        # before calling this. A sweep keyed to the placeholder finds nothing, so an
+        # frpc left behind by a previous run of this instance survives, keeps the proxy
+        # name, and the next one logs "proxy [bg1sb] already exists" while the hub sees
+        # only the old process. Measured on 2026-10-12: two frpc processes, two admin
+        # ports, one working tunnel, and `call help` failing because the live frpc was
+        # not the one the config described.
+        _kill_stale_frpc(self.conf)
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="cloud-hub-frpc", daemon=True)
         self._thread.start()

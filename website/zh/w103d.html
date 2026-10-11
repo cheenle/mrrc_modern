@@ -154,15 +154,15 @@
 <h2 id="3-下载镜像并校验">3. 下载镜像并校验</h2>
 <pre><code class="lang-bash">mkdir -p ~/w103d &amp;&amp; cd ~/w103d
 curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz</code></pre>
-<p><strong>校验</strong>（这一步别跳——1.19 GB 下坏了是能下坏的）：</p>
+<p><strong>校验</strong>（这一步别跳——1.07 GB 下坏了是能下坏的）：</p>
 <pre><code class="lang-bash"># macOS
 shasum -a 256 MRRC-Modern-1.25.5-w103d.img.gz
 # Linux
 sha256sum MRRC-Modern-1.25.5-w103d.img.gz</code></pre>
 <div class="table-scroll"><table>
 <thead><tr><th></th><th></th></tr></thead><tbody>
-<tr><td>字节数</td><td><strong>1,280,233,862</strong></td></tr>
-<tr><td>SHA-256</td><td><strong>81cf1f9e2bfa9f13e596b764fe89150aff728a9744edf6fac65f45927a2a6ee5</strong></td></tr>
+<tr><td>字节数</td><td><strong>1,154,545,271</strong></td></tr>
+<tr><td>SHA-256</td><td><strong>5d74f7378b64bd7ebff16528aa4b5222097de22b9f3b214fe1ccebc62dc8ffc1</strong></td></tr>
 </tbody></table></div>
 <p>两者都对不上就别往下走。<strong>先确认字节数</strong>（<code>ls -l</code>）——大小不对说明下载被截断了。</p>
 <h2 id="4-烧到-u-盘">4. 烧到 U 盘</h2>
@@ -505,7 +505,7 @@ armbian-install     # 装进 eMMC（交互式菜单）</code></pre>
 <p><strong>刷机段</strong></p>
 <ul>
 <li><input type="checkbox" disabled> 认准芯片是 <strong>S905L3A</strong>（不是 GK6323/RK3566）</li>
-<li><input type="checkbox" disabled> 镜像 SHA-256 = <code>81cf1f9e…</code>，字节数 = <code>1,280,233,862</code></li>
+<li><input type="checkbox" disabled> 镜像 SHA-256 = <code>5d74f737…</code>，字节数 = <code>1,154,545,271</code></li>
 <li><input type="checkbox" disabled> U 盘烧好、安全弹出</li>
 <li><input type="checkbox" disabled> 按复位孔（或 <code>reboot update</code>）从 U 盘启动，屏幕上是 Linux 日志不是安卓动画</li>
 <li><input type="checkbox" disabled> <code>ssh root@&lt;IP&gt;</code> 进得去，<strong>并且已经 <code>passwd root</code> 改掉 1234</strong></li>

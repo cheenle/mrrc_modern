@@ -115,16 +115,18 @@ rootfs free before overlay: 963 MiB
 版本号、`release-artifacts.json` 的规则、网站下载卡、以及带 SHA 的线上复核。
 本手册不重复那套流程。
 
-**已发布（2026-10-10）**：
+**已发布（2026-10-11，第二次构建）**：
 
 ```
 https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz
-1,280,233,862 bytes   SHA-256 81cf1f9e2bfa9f13e596b764fe89150aff728a9744edf6fac65f45927a2a6ee5
+1,154,545,271 bytes   SHA-256 5d74f7378b64bd7ebff16528aa4b5222097de22b9f3b214fe1ccebc62dc8ffc1
 ```
 
-这一版修掉三个**只有镜像布局才暴露**的缺陷（详见 commit `52820e2`）：`server.py` 在模块层
-import 被排除的 `macos/`（服务在 logger 之前就死）、`mrrc-radio` 从 `__file__` 解析树
-（装在 `/usr/local/bin` 时死在 `import backends`）、同一命令没有 shebang（被交给 `/bin/sh`）。
+这一版**重建**以纳入真机首启拓出的全部修复（SDD V2.79）：RX 采集缓冲/静默看门狗、
+首启证书归属、FT4222 udev 规则、构建机残留值剥离、`dnsmasq.service` mask、
+`journal+console`；另有三个**只有镜像布局才暴露**的缺陷（commit `52820e2`）：`server.py`
+在模块层 import 被排除的 `macos/`、`mrrc-radio` 从 `__file__` 解析树、同一命令没有 shebang。
+同名的前一版（`1,280,233,862 bytes`，SHA `81cf1f9e…`）已被本版**替换**，不要按旧 SHA 校验。
 
 > ⚠️ **它之前的那一版（2026-10-07，`MRRC-Modern-1.25.4-w103d.img.gz`）烧上去服务起不来** ——
 > 同第一个缺陷。线上那份文件仍在 `downloads/` 里留档（版本化文件不撤），但**不要再烧 1.25.4**。

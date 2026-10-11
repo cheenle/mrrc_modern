@@ -146,6 +146,42 @@ https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz
 它按**字节数与 SHA 前 8 位子串**核对卡片是否描述了真正的产物，所以**重新构建后必须同时更新卡片上的两个值**，
 否则 `release_check` 会红（这正是设计意图：卡片指向的必须是真正上传的那份字节）。
 
+## 结构统一后的真构建（2026-10-11）
+
+构建器改为"平台壳 + `packaging/common/` 服务层"之后的第一轮真跑。
+
+**结果**：从干净基底跑到底，四步产物验证 `VERIFY_OK`。
+
+```
+dist/w103d/MRRC-Modern-1.25.5-w103d.img.gz
+1,038,463,404 bytes   SHA-256 577362651eff4e20279ba5dd7ecbffd69f3f3bca84d1da05383e7cc34478f600
+```
+
+| 项 | 实测 |
+| --- | --- |
+| 总耗时 | **约 16 分钟**（23:20 → 23:36 CST），其中 gzip -9 占大半 |
+| 基底 | 缓存的 852 MB `.gz`，重新解压成 `w103d.img`（3.7 GB） |
+| apt / pip | 清华源，秒级完成（对比：上游 `deb.debian.org` 实测 65 KB/s） |
+| frpc | **最慢的一段**：gh-proxy 只有 ~27 KB/s，curl 在 300 s 上限处超时（`(28) ... 8090045 out of 12375716 bytes`），续传循环接上并跑完 |
+| 服务层 | 旧 overlay 的 17 个步骤全部执行；`/opt/mrrc_modern` 回收后 **150 MB** |
+
+**产物验证（四步）**：代码身份（`server.py`/`requirements.txt`/`static/ft710_ui.js`/`scope_handler.py` 与工作区逐字节相同）、
+装机内容（11 份 profiles、`/usr/local/bin` 三件、登录横幅、frpc 是 aarch64 ELF、FTDI 库 + 符号链接 + udev 规则、
+`mrrc` 账号、`version.txt`、`/opt/mrrc-build` 与 `__pycache__` 零残留、无被烘进镜像的口令/串口）、
+D-11（两行指向同一文件，`MRRC_BOOT_DIR=/boot`、`MRRC_WEB_HOST=0.0.0.0` 两个平台参数取值正确）、
+arm64 原生 chroot 真跑（依赖导入 + `libopus.so.0` + 五个入口点）全部 `OK`。
+
+**只有真跑才会暴露的东西（本轮两个，都在服务层重写时引入）**：
+
+1. `install SRC DST` 源与目标同路径 → `install: ... are the same file`，`set -e` 直接终止构建。
+   重写时"顺手"把源从 `$REPO_SRC/vendor/ftdi/…` 改成了 `$MRRC_HOME/vendor/ftdi/…`（因为树已经落好了），
+   但目标也是它。修法：树已经由 `stage-tree.sh` 拷好（模式一起带过来），这里只需**断言存在 + chmod**。
+2. 重写时**漏掉了 `radio profiles` 那一步** —— 11 份型号画像不会进镜像、型号切换器无数据。
+   是靠"把旧 overlay 的 `log` 步骤逐条与新服务层做机械比对"找出来的，不是靠读代码。
+
+**一处需要注意的构建期现象**：构建期间仓库工作树又落了两个提交，所以产物里的 `box_ops.py` 是构建快照那一刻的版本
+（`c8b48ba1…` = `cdb9498`），与当时的工作树不同。这类差异不是缺陷，但验证时**要按修订核对而不是默认为工作区**。
+
 ## 首次真构建：九个 bug 与实测结果（2026-10-07）
 
 在 macOS 26.3 (arm64) + Docker Desktop 24.0.6 上首次跑通 `build-image.sh`。**镜像从未真跑过**这件事本身

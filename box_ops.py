@@ -328,7 +328,7 @@ def call_helper(verb: str, *args, sender: Optional[Callable] = None,
 #: Case-open on purpose: the shipped default is `MRRC-Modern`. systemd accepts a
 #: static hostname in either case and DNS is case-insensitive, so
 #: `mrrc-modern.local` still resolves (design §8).
-HOSTNAME_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+HOSTNAME_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\Z")
 
 ZONEINFO = "/usr/share/zoneinfo"
 

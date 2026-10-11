@@ -12,10 +12,13 @@ wrong.
 """
 from __future__ import annotations
 
+import json
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "linux"))
@@ -49,6 +52,13 @@ class VerbTableTests(unittest.TestCase):
                      ["a;reboot"], ["`reboot`"], ["a\nreboot"]):
             with self.subTest(args=args):
                 self.assertIsNone(box_helper.argv_for("set-hostname", args))
+
+    def test_set_hostname_refuses_a_trailing_newline(self):
+        """Python's `$` matches *before* a final `\\n`, so a `$`-anchored regex
+        accepts `abc\\n` and would hand the verb a hostname with a newline stuck
+        to it. `\\Z` is the anchor that means end-of-string, and this is why the
+        two validators use it."""
+        self.assertIsNone(box_helper.argv_for("set-hostname", ["abc\n"]))
 
     def test_set_timezone_needs_a_real_zone(self):
         if os.path.isfile("/usr/share/zoneinfo/UTC"):
@@ -86,6 +96,23 @@ class VerbTableTests(unittest.TestCase):
 
 
 class HandleTests(unittest.TestCase):
+    """Every request in this class runs against a fake `subprocess.run`, so no
+    test here can ever execute a real command — the one that would (`reboot`)
+    included, today or when a case is added later. The fake records the argv so a
+    test can say what *would* have run instead of only that the reply looked
+    well-formed."""
+
+    def setUp(self):
+        self.run_calls = []
+
+        def fake_run(argv, **kwargs):
+            self.run_calls.append(list(argv))
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        patcher = mock.patch.object(box_helper.subprocess, "run", fake_run)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_a_malformed_request_is_refused_without_running_anything(self):
         for request in (None, [], "reboot", 7,
                         {"verb": "reboot", "args": "now"},
@@ -95,6 +122,7 @@ class HandleTests(unittest.TestCase):
                 reply = box_helper.handle(request)
                 self.assertFalse(reply["ok"])
                 self.assertTrue(reply["error"])
+        self.assertEqual(self.run_calls, [])
 
     def test_the_reply_is_always_a_dict_with_ok(self):
         for request in ({}, {"verb": "nope"}, {"verb": "reboot"}):
@@ -102,6 +130,61 @@ class HandleTests(unittest.TestCase):
                 reply = box_helper.handle(request)
                 self.assertIsInstance(reply, dict)
                 self.assertIn("ok", reply)
+
+    def test_a_reboot_runs_exactly_the_tables_argv(self):
+        """A reboot must reach `subprocess.run` as the literal argv the verb
+        table chose. Asserting the argv — not just `"ok" in reply` — is what
+        makes this a test of the table rather than of the reply's shape."""
+        reply = box_helper.handle({"verb": "reboot", "args": []})
+        self.assertTrue(reply["ok"])
+        self.assertEqual(self.run_calls, [["systemctl", "reboot"]])
+
+
+class _StreamingConn:
+    """A connection over a fixed byte payload that never reports EOF.
+
+    `recv` returns the next slice and *never* the empty bytes that mean the peer
+    closed, so a helper that kept reading would keep getting data."""
+
+    def __init__(self, payload: bytes):
+        self._payload = payload
+        self._served = 0
+        self.recv_calls = 0
+        self.sent = b""
+
+    def recv(self, size):
+        self.recv_calls += 1
+        chunk = self._payload[self._served:self._served + size]
+        self._served += len(chunk)
+        return chunk
+
+    def sendall(self, data):
+        self.sent += data
+
+
+class AnswerTests(unittest.TestCase):
+    def test_an_unbounded_stream_is_refused_and_reading_stops(self):
+        """A peer that streams without ever sending a newline must not make a
+        root process buffer without limit: MAX_LINE bytes with no newline is a
+        malformed request, and the helper stops reading rather than draining an
+        endless stream."""
+        conn = _StreamingConn(b"x" * (box_helper.MAX_LINE * 4))
+        box_helper._answer(conn)
+        reply = json.loads(conn.sent.decode("utf-8"))
+        self.assertFalse(reply["ok"])
+        self.assertEqual(reply["error"], "malformed request")
+        self.assertEqual(conn.recv_calls, 1)
+        self.assertLess(conn._served, len(conn._payload))
+
+    def test_a_normal_line_is_still_answered(self):
+        """The cap sits at MAX_LINE, far above any real request (the largest is
+        a 63-character hostname), so an ordinary one-line request still parses
+        and dispatches."""
+        payload = json.dumps({"verb": "nope", "args": []}).encode("utf-8") + b"\n"
+        conn = _StreamingConn(payload)
+        box_helper._answer(conn)
+        reply = json.loads(conn.sent.decode("utf-8"))
+        self.assertEqual(reply["error"], "refused: nope")
 
 
 class PeerTests(unittest.TestCase):

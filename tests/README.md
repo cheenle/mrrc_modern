@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1949 tests across 102 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1954 tests across 102 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-11, macOS). The per-module sections below
 itemise 70 of those 102 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
@@ -19,10 +19,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1949 |
-| Passed | 1947 (1 skipped) |
+| Total tests | 1954 |
+| Passed | 1953 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 1 |
+| Failed | 0 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -36,12 +36,12 @@ second one failed, and the first passed with the `time.monotonic()` bug reintrod
 defect it exists to catch. Both now pin `MRRC_CONFIG_FILE` at a temp env file naming their own
 certificate, and reintroducing that bug turns the class red.
 
-The failure this table carries as of 2026-10-11 is
-`test_release_artifacts.RepositoryStateTests::test_offline_release_check_is_clean`
-— the repository release checker, not the product. It is red because the W103D
-site card on `website/index.html` still advertises the previous image (bytes
-1,268,146,785, SHA-256 prefix 5f0ae387). Republishing that card is a release
-step, not a test fix, and is outside this plan.
+The failure this table carried earlier on 2026-10-11 —
+`test_release_artifacts.RepositoryStateTests::test_offline_release_check_is_clean`,
+the repository release checker rather than the product — is now fixed. It was red
+because the W103D site card on `website/index.html` still advertised the previous
+image (bytes 1,268,146,785, SHA-256 prefix 5f0ae387); the card has since been
+republished. The suite is green as of this revision.
 
 ## Test Modules
 
@@ -836,7 +836,10 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   对象的值）一律落成 `{"ok": false, "error": …}`，而不是请求处理器里的 500；
   **从不拼接命令行**——请求始终是 `{"verb", "args"}` 一个 JSON 对象，`args` 是
   argv 形状的列表。hostname 与时区在发出去之前先本地校验（被拒的值一个字节也不上
-  socket，页面因此报自己的文案），口令下限 8 位且不 trim 首尾空格。
+  socket，页面因此报自己的文案），口令下限 8 位且不 trim 首尾空格。hostname 正则用
+  `\Z` 而非 `$`（后者会匹配末尾的 `\n` 之前）——与 root helper 同一份校验；本半边先
+  strip，因此**换行在发出前就被清掉**，测试同时钉住「内部换行被拒」与「换行不会进入
+  请求的 `args`」。
 
 ### 本轮新增（box_helper 的 root 半边，2026-10-11）
 
@@ -850,4 +853,8 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   不是字符串列表的请求都回 `{"ok": false, "error": …}` 而不是抛异常；`peer_is_allowed`
   只认约定的 uid；`sync_hosts` 原地替换 `127.0.1.1` 行（systemd 240 起 `hostnamectl`
   不再管它）、没有就补一行、文件缺失只报告不致命。纯 stdlib，**import 时不建 socket**
-  （bind 只在 `serve` 内执行）——本模块会被冻进非本机的平台。
+  （bind 只在 `serve` 内执行）——本模块会被冻进非本机的平台。`handle` 的每个用例都跑在
+  **假的 `subprocess.run`** 上，并直接断言 `reboot` 收到的 argv 就是表里那一条，因此测试
+  本身永远不可能真去执行系统命令（否则在盒子上以 root 跑一遍套件就会重启机器）；`_answer`
+  对「一直不发换行、也不关闭」的客户端在 **MAX_LINE 处截断**并失败关闭，不让 root 进程的
+  缓冲区被无限撑大。

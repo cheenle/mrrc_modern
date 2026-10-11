@@ -42,7 +42,7 @@ PEER_USER = "mrrc"
 MAX_LINE = 4096
 COMMAND_TIMEOUT_S = 30
 
-HOSTNAME_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+HOSTNAME_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\Z")
 ZONEINFO = "/usr/share/zoneinfo"
 
 
@@ -180,20 +180,30 @@ def _expecting_uid() -> Optional[int]:
 
 def _answer(conn) -> None:
     chunks = []
-    while True:
-        chunk = conn.recv(MAX_LINE)
+    total = 0
+    complete = False
+    while total < MAX_LINE:
+        chunk = conn.recv(MAX_LINE - total)
         if not chunk:
             break
         chunks.append(chunk)
+        total += len(chunk)
         if b"\n" in chunk:
+            complete = True
             break
-    line = b"".join(chunks).split(b"\n", 1)[0]
-    try:
-        request = json.loads(line.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    if total >= MAX_LINE and not complete:
+        # A peer that streams without ever finishing a line is not one this
+        # socket answers. Stop reading and fail closed rather than let an
+        # unbounded buffer grow a root process out of memory.
         reply = {"ok": False, "error": "malformed request"}
     else:
-        reply = handle(request)
+        line = b"".join(chunks).split(b"\n", 1)[0]
+        try:
+            request = json.loads(line.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            reply = {"ok": False, "error": "malformed request"}
+        else:
+            reply = handle(request)
     try:
         conn.sendall((json.dumps(reply) + "\n").encode("utf-8"))
     except OSError as exc:

@@ -102,6 +102,20 @@ class HostnameValidationTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(box_ops.hostname_problem(name), name)
 
+    def test_a_newline_never_reaches_the_helper(self):
+        """`$` matches *before* a final `\\n`, so a bare regex would accept
+        `abc\\n` — which is exactly why the privileged validator anchors with
+        `\\Z`. This half strips the name before matching, so the trailing
+        newline is normalized away there; an *interior* newline is refused by
+        the regex. Either way, pin that no newline survives into the payload the
+        helper reads."""
+        self.assertTrue(box_ops.hostname_problem("ab\ncd"))
+        self.assertEqual(box_ops.hostname_problem("abc\n"), "")
+        sender = answering()
+        box_ops.set_hostname("abc\n", sender=sender)
+        self.assertEqual(sender.calls[0]["args"], ["abc"])
+        self.assertNotIn("\n", sender.calls[0]["args"][0])
+
 
 class TimezoneValidationTests(unittest.TestCase):
     def test_a_real_zone_passes(self):

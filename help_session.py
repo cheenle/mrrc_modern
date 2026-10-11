@@ -49,3 +49,33 @@ BIND_HOST = "127.0.0.1"
 
 #: States. ``closed`` exists so a caller can read the reason after the fact.
 OFF, ARMING, OPEN, CLOSED = "off", "arming", "open", "closed"
+
+
+def make_credentials() -> tuple[str, str]:
+    """(username, password), fresh for every enable.
+
+    The username is short on purpose: a human types it at a hub shell from a phone
+    call. The password is the only thing that stops somebody else on the hub (or a
+    process on this machine) from walking in, so it is long and random — and it
+    never leaves this process except through the customer's eyes.
+    """
+    return "help-" + secrets.token_hex(2), secrets.token_urlsafe(18)
+
+
+def _usable_username(name: str) -> bool:
+    """A username a human can type from a phone call: bounded, no whitespace, no
+    shell metacharacters. Not a security boundary (the password is), just hygiene."""
+    import re
+    return bool(re.fullmatch(r"[A-Za-z0-9_.\-]{3,32}", name or ""))
+
+
+def credentials_match(expected_user: str, expected_pw: str,
+                      got_user: str, got_pw: str) -> bool:
+    """Constant-time compare of both fields.
+
+    Both are always compared (never short-circuiting on the username) so a probe
+    cannot learn that the username was right by timing the answer.
+    """
+    ok_user = hmac.compare_digest(expected_user, got_user)
+    ok_pw = hmac.compare_digest(expected_pw, got_pw)
+    return ok_user and ok_pw

@@ -146,6 +146,32 @@ https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz
 它按**字节数与 SHA 前 8 位子串**核对卡片是否描述了真正的产物，所以**重新构建后必须同时更新卡片上的两个值**，
 否则 `release_check` 会红（这正是设计意图：卡片指向的必须是真正上传的那份字节）。
 
+## v1.26.0 发布构建（2026-10-12）
+
+设置页那条线落地之后的**发布态**构建：镜像里第一次同时带上局域网配置页那套（polkit 规则、
+`mrrc-box-helper.service`、Wi-Fi 预置单元、`box_helper.py`、`settings.html`/`box_api.js`）
+与远程协助那条线（`help_session.py` + `requirements.txt` 里的 paramiko，镜像 venv 内可导入 5.0.0）。
+
+```
+dist/w103d/MRRC-Modern-1.26.0-w103d.img.gz
+1,008,925,741 bytes   SHA-256 9913752e6f366f6944869b9bfc70813743aafdd819d9b9416d11ec585f4abfef
+```
+
+构建从**干净基底**重解（先删掉 `build/w103d/w103d.img`，不让上一轮的 overlay 叠上来），
+约 **6 分钟**；四步产物验证 `VERIFY_OK`（代码身份逐字节、11 份 profiles、`/usr/local/bin` 三件、
+frpc 是 aarch64 ELF、FTDI + udev 规则、`mrrc` 账号、`version.txt = 1.26.0`、`/opt/mrrc-build`
+与 `__pycache__` 零残留、D-11 两行同一文件、arm64 原生 chroot 导入通过）。
+
+**这一轮拓出并修掉的一处**（由"Pi 必须拿到盒子那套"这条要求逼出来的）：
+
+服务层生成的 `mrrc-wifi-preseed.service` 与 `linux/wifi_preseed.py` 都把启动分区**写死成
+`/boot/mrrc-wifi.txt`**。Armbian 在 `/boot`、Raspberry Pi OS 在 `/boot/firmware`——写死的后果
+不是报错，而是 systemd 的 `ConditionPathExists` 永不成立，**这条能力在 Pi 上静默哑掉**。
+这正是 `MRRC_BOOT_DIR` 参数存在的理由，而共用服务层的第一天就把它漏在了这一处。
+现在单元用 `$MRRC_BOOT_DIR`（并 `Environment=` 传给脚本）、脚本从 `MRRC_BOOT_DIR` 取路径；
+两条守卫进 `tests/test_packaging_parity.py`（预置那对文件必须用参数；碰启动分区的三个文件里
+不许出现字面量 `"/boot/…"`）。
+
 ## 结构统一后的真构建（2026-10-11）
 
 构建器改为"平台壳 + `packaging/common/` 服务层"之后的第一轮真跑。

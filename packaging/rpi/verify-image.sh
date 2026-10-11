@@ -112,6 +112,16 @@ fb=/mnt/etc/systemd/system/mrrc-firstboot.service
 grep -q "^Environment=MRRC_BOOT_DIR=/boot/firmware$" "$fb" && ok "MRRC_BOOT_DIR=/boot/firmware (Pi value)" || fail "boot dir"
 grep -q "^Environment=MRRC_WEB_HOST=::$" "$fb" && ok "MRRC_WEB_HOST=:: (Pi value)" || fail "web host"
 grep -q "^MRRC_WEB_HOST=::$" /mnt/opt/mrrc_modern/env/mrrc.env && ok "env file binds ::" || fail "env bind"
+# 启动分区那条有意差异要一路走到单元里：写死 /boot 的话 ConditionPathExists 永不成立，
+# Wi-Fi 预置在这台机器上静默哑掉（2026-10-12 抓到并修掉的那个）。
+grep -q "^ConditionPathExists=/boot/firmware/mrrc-wifi.txt$" \
+	/mnt/etc/systemd/system/mrrc-wifi-preseed.service \
+	&& ok "Wi-Fi preseed looks at /boot/firmware" \
+	|| fail "preseed unit does not point at the Pi boot partition"
+grep -q "^Environment=MRRC_BOOT_DIR=/boot/firmware$" \
+	/mnt/etc/systemd/system/mrrc-wifi-preseed.service \
+	&& ok "preseed script gets the same boot dir" \
+	|| fail "preseed script boot dir"
 grep -q "^MRRC_RX_BUFFER_MS=100$" /mnt/opt/mrrc_modern/env/mrrc.env && ok "RX buffer 100ms" || fail "RX buffer"
 grep -q "^MRRC_PTT_MAX_TX_SECONDS=120$" /mnt/opt/mrrc_modern/env/mrrc.env && ok "PTT ceiling 120s" || fail "PTT ceiling"
 

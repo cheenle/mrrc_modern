@@ -22,7 +22,11 @@ W103D 盒子（192.168.1.217）需要一个固定名字方便寻址。`~/dns/` �
 - `ip -6 route get 2400:3200::1` → `src 2409:8a00:…:96d1`；`curl -6 https://ifconfig.co` 回显同一地址
   → **内核认可的出网源地址 = 该全球地址**。
 - 操作者 Mac 在同一 `/64`（`…:1867:f61c:698e:b325`）→ **从内网无法验证公网入站可达性**（本设计范围外）。
-- 盒子已备：`curl`、`openssl`、`jq`、`python3`（均有，**无需安装任何东西**）。
+- 盒子已备：`curl`、`jq`、`python3`（均有，**无需安装任何东西**）。
+
+> **实现期修正（2026-10-11）**：签名原定用 `jq @uri` 做 RFC3986 编码，预检实测其会把 `! ' ( ) *` 留着不编码，
+> 不符合阿里云要求。改为**一次 `python3 -c` 完成编码 + HMAC-SHA1 签名**（皆为 stdlib，无新增依赖）；
+> `jq` 仍用于 JSON 解析，`openssl` 在签名路径上不再需要。
 
 ### 既有脚本被改造时暴露的缺陷（需在新脚本中修正）
 
@@ -96,8 +100,9 @@ W103D 盒子（192.168.1.217）需要一个固定名字方便寻址。`~/dns/` �
 
 ### 5.2 签名与传输
 
-- AliDNS OpenAPI 签名：参数按 key 排序 → RFC3986 编码 → `StringToSign = GET&%2F&<编码后的canonical query>`
-  → `HMAC-SHA1(secret + "&")` → Base64；`urlenc()` 用 `jq @uri`（与 RFC3986 一致），排序固定 `LC_ALL=C`。
+- AliDNS OpenAPI 签名：参数按 key 排序 → RFC3986 编码（`python3` 的 `urllib.parse.quote`，`safe=""`）
+  → `StringToSign = GET&%2F&<编码后的canonical query>` → `HMAC-SHA1(secret + "&")` → Base64；
+  编码与 HMAC 同在一次 `python3 -c` 调用内完成（见 §1 实现期修正：`jq @uri` 不符合 RFC3986）。
 - 端点 `https://alidns.aliyuncs.com/`；`curl --max-time 20 --retry 2`。
 - 响应必须是 JSON；含 `Code` 即 API 错误，连同 `Message` 打印后退出 3。
 

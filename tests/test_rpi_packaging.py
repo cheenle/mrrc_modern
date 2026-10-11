@@ -33,7 +33,7 @@ class RpiPackagingFilesTests(unittest.TestCase):
         """
         rc = (STAGE / "01-deploy-mrrc" / "00-run-chroot.sh").read_text(encoding="utf-8")
         self.assertIn("mrrc-service-layer.sh", rc)
-        self.assertIn(". /opt/mrrc-build/build.env", rc)
+        self.assertIn("build.env", rc)
         self.assertNotIn("python3 -m venv", rc,
                          "the venv belongs to install.sh, which owns the dependency list")
 

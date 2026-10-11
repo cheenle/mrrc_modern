@@ -1,1 +1,7 @@
-python3-venv python3-pip portaudio19-dev libopus0 avahi-daemon e2fsprogs
+# Platform extras only. Everything the server itself needs is in
+# packaging/common/packages.txt, installed by the shared service layer, because
+# both image lines must agree on that list — tests/test_packaging_parity.py fails
+# when a package appears in both places.
+#
+# e2fsprogs: pi-gen's export-image runs resize2fs/zerofree against this rootfs.
+e2fsprogs

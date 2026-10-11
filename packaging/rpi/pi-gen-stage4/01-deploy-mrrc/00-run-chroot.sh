@@ -1,44 +1,34 @@
 #!/bin/bash -e
-# Runs INSIDE the arm64 rootfs (pi-gen on_chroot). Host-side stage has no
-# commands — everything here must execute against the target rootfs.
-# pi-gen's on_chroot provides a sane PATH (login shell).
+# Runs INSIDE the arm64 rootfs. pi-gen feeds this file to
+# `capsh --chroot=… -- -e`, which execs /bin/bash -e with the script on stdin —
+# so the shebang above is a comment, $BASH_SOURCE is not a path, and `set -u` is
+# unsafe (a chroot has no login environment: `USER` and friends are simply absent).
+#
+# Everything that is not Raspberry-Pi-specific lives in the shared service layer;
+# this file only creates the conditions that layer assumes.
+set -eo pipefail
 
-# ── venv (build-time; first boot needs no network) ──
-python3 -m venv /opt/mrrc_modern/venv
-/opt/mrrc_modern/venv/bin/pip install --upgrade pip
-# PyPI direct first; CN mirror fallback (ham build host has flaky egress).
-/opt/mrrc_modern/venv/bin/pip install -r /opt/mrrc_modern/requirements.txt ||
-	/opt/mrrc_modern/venv/bin/pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r /opt/mrrc_modern/requirements.txt
+MRRC_HOME=/opt/mrrc_modern
+ASSETS=/opt/mrrc-build
 
-# ── groups & ownership ──
+[ -x "$ASSETS/mrrc-service-layer.sh" ] || {
+	echo "FATAL: the shared service layer is not staged at $ASSETS" >&2
+	exit 1
+}
+[ -f "$ASSETS/build.env" ] || { echo "FATAL: $ASSETS/build.env is missing" >&2; exit 1; }
+
+# Version, bind address, boot partition and the three mirrors: all generated on
+# the host by build-image.sh, because pi-gen's chroot does not inherit the host
+# environment. `set -a` exports them for pip and fetch-frpc.sh as well.
+set -a
+. "$ASSETS/build.env"
+set +a
+
+# pi-gen's FIRST_USER_NAME=mrrc created the account; the service layer assumes it
+# exists and never creates it. dialout: /dev/ttyUSB*/ttyACM*. audio: the radio's
+# USB sound card.
 usermod -aG dialout,audio mrrc
-chown -R mrrc:mrrc /opt/mrrc_modern
-mkdir -p /var/lib/mrrc/certs
-chown -R mrrc:mrrc /var/lib/mrrc
-
-# ── service & helper wiring ──
-chmod 755 /opt/mrrc_modern/linux/firstboot_wrapper.py /usr/local/bin/mrrc-show-password /etc/update-motd.d/10-mrrc
-systemctl enable mrrc-firstboot.service
-systemctl enable mrrc-modern.service
+chown -R mrrc:mrrc "$MRRC_HOME"
 systemctl enable ssh
 
-# ── version stamp (build-image.sh writes both version.txt and VERSION) ──
-echo "MRRC Modern $(cat /opt/mrrc_modern/version.txt) — rpi64 image"
-
-# ── BUILD GATE: runtime imports + syntax inside the image ──
-# py_compile proves syntax only, and importing third-party dependencies proves
-# the wheelhouse. Neither touches a first-party entry point, so a module the
-# image does not carry (macos/, excluded by the rsync list above) stayed
-# invisible here and killed the service on the box with ModuleNotFoundError
-# before it could log a line (found 2026-10-10 on the box image). Import what
-# the units actually run.
-python3 -m py_compile /opt/mrrc_modern/server.py \
-	/opt/mrrc_modern/linux/first_run.py /opt/mrrc_modern/linux/firstboot_wrapper.py
-/opt/mrrc_modern/venv/bin/python -c "import fastapi, uvicorn, serial, pyaudio, numpy, cryptography; print('deps OK')"
-/opt/mrrc_modern/venv/bin/python -c "import sys; sys.path.insert(0,'/opt/mrrc_modern'); import scope_libraries; print('scope libs OK')"
-PYTHONDONTWRITEBYTECODE=1 /opt/mrrc_modern/venv/bin/python -c "
-import sys
-sys.path.insert(0, '/opt/mrrc_modern')
-sys.path.insert(0, '/opt/mrrc_modern/linux')
-import server, first_run, mrrc_radio
-print('entry points OK')"
+exec bash "$ASSETS/mrrc-service-layer.sh"

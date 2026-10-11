@@ -22,6 +22,11 @@ RETIRED = [
                    "SETUP_WRITABLE_KEYS", "/api/manage", "wizard")),
     ("packaging/box/box-overlay.sh", ("mrrc-setup-ap",)),
     ("packaging/box/verify.sh", ("mrrc-setup-ap",)),
+    ("net_wifi.py", ("start_hotspot", "stop_hotspot", "hotspot_active", "HOTSPOT_PROFILE",
+                     "MODE_HOTSPOT", "ApState", "has_uplink", "any_device_connecting",
+                     "ap_settings", "ap_network", "setup_url", "gate_is_open",
+                     "read_wizard", "write_wizard", "WizardClaim", "NM_SHARED_SUBNET",
+                     "DEFAULT_GATEWAY")),
 ]
 
 #: Files that must be gone from the tree entirely.

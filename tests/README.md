@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1951 tests across 98 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1871 tests across 98 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-11, macOS). The per-module sections below
 itemise 70 of those 98 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
@@ -19,10 +19,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1951 |
-| Passed | 1949 (1 skipped) |
+| Total tests | 1871 |
+| Passed | 1869 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 |
+| Failed | 1 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -35,6 +35,13 @@ certificate both tests in that class read *that* file and never the certificate 
 second one failed, and the first passed with the `time.monotonic()` bug reintroduced — the exact
 defect it exists to catch. Both now pin `MRRC_CONFIG_FILE` at a temp env file naming their own
 certificate, and reintroducing that bug turns the class red.
+
+The failure this table carries as of 2026-10-11 is
+`test_release_artifacts.RepositoryStateTests::test_offline_release_check_is_clean`
+— the repository release checker, not the product. It is red because the W103D
+site card on `website/index.html` still advertises the previous image (bytes
+1,268,146,785, SHA-256 prefix 5f0ae387). Republishing that card is a release
+step, not a test fix, and is outside this plan.
 
 ## Test Modules
 
@@ -789,15 +796,12 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_spectrum_profile_server.py` | 40 项：**未声明能力的 socket 永远只拿 1701 B**（兼容闸门 D-3，按线上字节陈述而不是按意图）；listener 角色默认仍是 ÷3 全帧（`test_listen_only.py:391` 那条守卫未改一字即绿）；显式 caps 覆盖角色默认；12 个 tick 上 high/mid/low = 12/6/3 帧、帧长各为 1701/851/851；计量按**实发字节**；死 socket 报给调用方剔除而其余客户端照发；**回退路径同样受分频**（30 tick 上 `low` 拿 7 帧）；`_spectrum_fanout` 的计量**在发送 `try` 之外**——否则计数器里的 `AttributeError` 会被 `except Exception` 洗成"客户端走了"，把健康 socket 静默踢出 `spectrum_clients`（本次自查出来的隐患，已钉住）；handler 保留 `_scope_producer.start()/stop()`、`metrics.close` 与 catch-all `except`（`test_server_ws_protocol.py:334` 按标记切源码块做守卫）；`_CapsWS` **真调 `ws_spectrum`** 跑完整路径：观测到 `high→mid` 的档位切换、listener 默认 `listen` 档、listener 可降档、未知档位名被忽略、未认证 `4001` 先于任何档位状态、断开后按 socket 的状态清空；遥测行含 `payload≈` 与分档帧数，且保留 `uplink spectrum` 这个既有 grep 锚点；前端契约（`onopen` 发 caps、cookie 持久化、切换即时生效、三档选项且不含 `listen`、缓存版本 39/34/v47 全部重钉、listen 页本阶段不动） |
 | `test_spectrum_profile_docs.py` | 15 项：**把"文档说的是真的"变成断言**——NFR-003 不得再把回退态当常态（`~30fps ≈ 51KB/s`）、也不得保留从未为真的 `~851 bytes/frame fallback`；§9.2.4 必须写明 v1=851 B **从未上线**、caps 协商、以及全帧**不得改标 `0x02`** 的理由（iOS `guard version == 0x01`）；分频是比例而非绝对速率（`~10 Hz` 只在回退态成立，任何提及必须同行带 `fallback` 条件；`14-version-history.md` 作为不可变日志豁免）；AD-025 记下两轴的实测依据（`permessage-deflate` 3.9× / OkHttp 不提供该扩展）；AD-023 的 408 kbps 与 86% **就地加注而不删原文**（删掉等于掩盖当时的容量决策是从什么数字做出的）；`spectrum_profile` 进 PyInstaller `hiddenimports`（v1.24.0 漏 `cloud_hub` 的前车之鉴）；`AGENTS.md` 与 `PROJECT_MAP.md` 不再引用并不存在的 `tests/test_ws_protocol.py`；`setOpusBitrate` 的每处提及都必须在邻近行标明未实现（它只存在于注释与文档里）；`tests/README.md` 的总数与 `discover` 的实际输出一致 |
 
-### 本轮新增（W103D 初始化热点与最小向导，2026-10-08）
+### 本轮新增（W103D 的 nmcli 适配层，2026-10-08）
 
-- **`test_net_wifi.py`** — nmcli 适配层。`-t` 输出的转义解析（SSID 里带 `:`）、
-  两套状态词汇（`connected` / `activated`，以及**不算**上行的 `connected (site only)`）、
-  **自己的热点不算上行**、AP 与 STA 靠 `802-11-wireless.mode` 区分、开放热点的幂等起停
-  （已开的不动、同名**非活动** profile 先删、活动中的绝不删）、扫描去重排序、
-  连网时 PSK 在 argv 里恰好出现一次、`scrub()`；两份 JSON 邮箱的容错读、
-  **0644** 与原子替换、心跳新鲜度、以及免口令闸门（含 **IPv4-mapped 地址必须解包**
-  这条双栈陷阱与"陈旧心跳即关门"的负例）。
+- **`test_net_wifi.py`** — nmcli 适配层的 STA 半边。`-t` 输出的转义解析（SSID 里
+  带 `:`，naive 的 split 会把后面每一列挪错位）、`scan_wifi` 的去重与按信号强度排序、
+  连网时 PSK 在 argv 里恰好出现一次、`scrub()` 对错误文本里的口令做无条件剔除。
+
 ### `test_setup_retired.py`
 
 Setup 热点方案的退役守卫。热点在 2026-10-11 的真机验证里失败（板子的

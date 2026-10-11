@@ -33,6 +33,7 @@ import json
 import os
 import re
 import socket
+import threading
 import time
 from typing import Any, Callable, Optional
 
@@ -403,3 +404,159 @@ def password_problem(password: str, confirm: str) -> str:
     if password != confirm:
         return "两次输入的口令不一致"
     return ""
+
+
+# ── the Wi-Fi switch ────────────────────────────────────────────────
+PHASE_IDLE = "idle"
+PHASE_SWITCHING = "switching"
+PHASE_OK = "ok"
+PHASE_FAILED = "failed"
+
+#: How long a new network has to produce an IPv4 before we put the old one back.
+#: A first guess, to be calibrated on the real board (spec R-4).
+SWITCH_BUDGET_S = 30.0
+SWITCH_POLL_S = 1.0
+
+#: What nmcli calls a Wi-Fi connection. Older and newer builds disagree.
+WIFI_TYPES = ("802-11-wireless", "wifi")
+
+
+class SwitchState:
+    """The one switch this process is running, or the last one it ran.
+
+    In memory, not on disk. The retired design published state through a JSON
+    file because a root supervisor and the server were two processes; the switch
+    now happens inside the server, so there is no second reader. The cost is that
+    a server restart loses the progress screen, and the page says so rather than
+    pretending (design §6.2).
+
+    The field list is closed on purpose: `snapshot()` is what a page renders, and
+    a PSK must have no key it could occupy.
+    """
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.phase = PHASE_IDLE
+        self.ssid = ""
+        self.reason = ""
+        self.address = ""
+        self.since = 0.0
+
+    def snapshot(self) -> dict:
+        with self.lock:
+            return {"phase": self.phase, "ssid": self.ssid,
+                    "reason": self.reason, "address": self.address,
+                    "since": self.since}
+
+    def reset(self) -> None:
+        with self.lock:
+            self.phase = PHASE_IDLE
+            self.ssid = ""
+            self.reason = ""
+            self.address = ""
+            self.since = 0.0
+
+
+#: The process-wide instance the endpoints read. Tests build their own.
+_state = SwitchState()
+
+
+def switch_state(state: Optional[SwitchState] = None) -> dict:
+    return (state or _state).snapshot()
+
+
+def _active_wifi_profiles(runner: Optional[Callable] = None) -> list:
+    """The Wi-Fi connections that are up right now — the rollback targets."""
+    result = net_wifi.nmcli(
+        ["-t", "-f", "NAME,TYPE", "connection", "show", "--active"], runner)
+    if not result.ok:
+        return []
+    return [row[0] for row in net_wifi.parse_rows(result.stdout)
+            if len(row) >= 2 and row[1] in WIFI_TYPES]
+
+
+def _finish_switch(state: SwitchState, ok: bool, reason: str,
+                   address: str = "") -> dict:
+    with state.lock:
+        state.phase = PHASE_OK if ok else PHASE_FAILED
+        state.reason = reason
+        state.address = address
+        state.since = time.time()
+        ssid = state.ssid
+    return {"ok": ok, "ssid": ssid, "reason": reason, "address": address}
+
+
+def _roll_back(state: SwitchState, ssid: str, previous: list, password: str,
+               budget: float, runner: Optional[Callable] = None) -> dict:
+    """Put the box back on the network it came from, then say so.
+
+    The failed profile is left in place but with `autoconnect no`, so a reboot
+    does not retry a network that just failed. That is the retired hotspot's
+    mistake in the other direction — its profile defaulted to yes, came up at
+    every boot, and took the board's Wi-Fi down with it.
+    """
+    net_wifi.nmcli(["connection", "modify", ssid,
+                    "connection.autoconnect", "no"], runner)
+    for name in previous:
+        net_wifi.nmcli(["connection", "up", name], runner)
+    back_to = "、".join(previous) if previous else "（没有旧网络可回退）"
+    reason = f"「{ssid}」在 {int(budget)} 秒内没有拿到地址，已回退到 {back_to}"
+    return _finish_switch(state, False, net_wifi.scrub(reason, password))
+
+
+def perform_wifi_switch(ssid: str, password: str = "", *,
+                        runner: Optional[Callable] = None,
+                        state: Optional[SwitchState] = None,
+                        ifname: Optional[str] = None,
+                        budget: float = SWITCH_BUDGET_S,
+                        poll: float = SWITCH_POLL_S,
+                        sleep: Callable = time.sleep,
+                        now: Callable = time.monotonic) -> dict:
+    """Join `ssid`, and fall back to whatever we were on if it does not take.
+
+    The ordering, and why each step is where it is (design §6.2):
+
+    1. Note the profiles that are up *before* touching anything. They are the
+       rollback targets, and after `nmcli device wifi connect` they are no longer
+       the active ones.
+    2. Hand off to `net_wifi.connect_wifi`, which writes the new profile and
+       brings it up. The password travels in its argv and nowhere else.
+    3. Poll for an IPv4. nmcli returns once it has associated, which is well
+       before DHCP has landed — believing that return value is how a switch looks
+       successful and leaves the box with no address.
+    4. On timeout, bring the old profile back and report why, scrubbed.
+
+    Blocking on purpose: `server.py` runs this on a worker thread via
+    `asyncio.to_thread`, so the state machine stays plain synchronous Python and
+    this file keeps needing no event loop to be tested.
+    """
+    target = state or _state
+    with target.lock:
+        if target.phase == PHASE_SWITCHING:
+            return {"ok": False, "ssid": ssid,
+                    "reason": "已经有一次切换在进行中", "address": ""}
+        target.phase = PHASE_SWITCHING
+        target.ssid = ssid
+        target.reason = ""
+        target.address = ""
+        target.since = time.time()
+
+    previous = _active_wifi_profiles(runner)
+
+    result = net_wifi.connect_wifi(ssid, password, runner=runner, ifname=ifname)
+    if not result.ok:
+        detail = net_wifi.scrub(result.stderr or result.stdout, password)
+        return _finish_switch(target, False,
+                              detail.strip() or f"无法连接「{ssid}」")
+
+    address = ""
+    deadline = now() + budget
+    while now() < deadline:
+        address = net_wifi.ipv4_address(ifname, runner)
+        if address:
+            break
+        sleep(poll)
+
+    if address:
+        return _finish_switch(target, True, "", address)
+    return _roll_back(target, ssid, previous, password, budget, runner)

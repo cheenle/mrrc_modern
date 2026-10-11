@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1954 tests across 102 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1969 tests across 103 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-11, macOS). The per-module sections below
-itemise 70 of those 102 — the support-chain, Cloud Hub and upgrade-channel modules
+itemise 70 of those 103 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,10 +19,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1954 |
-| Passed | 1953 (1 skipped) |
+| Total tests | 1969 |
+| Passed | 1967 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 |
+| Failed | 1 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -36,12 +36,14 @@ second one failed, and the first passed with the `time.monotonic()` bug reintrod
 defect it exists to catch. Both now pin `MRRC_CONFIG_FILE` at a temp env file naming their own
 certificate, and reintroducing that bug turns the class red.
 
-The failure this table carried earlier on 2026-10-11 —
-`test_release_artifacts.RepositoryStateTests::test_offline_release_check_is_clean`,
-the repository release checker rather than the product — is now fixed. It was red
-because the W103D site card on `website/index.html` still advertised the previous
-image (bytes 1,268,146,785, SHA-256 prefix 5f0ae387); the card has since been
-republished. The suite is green as of this revision.
+The failure this table carries, when present, is
+`test_release_artifacts.RepositoryStateTests::test_offline_release_check_is_clean`
+— the repository release checker rather than the product. It reads the W103D site
+card on `website/index.html` and checks the image that card names, so it goes red
+whenever that card has not yet been republished (it carried bytes 1,268,146,785,
+SHA-256 prefix 5f0ae387 when this line was first recorded). Republishing the card
+is a release step outside this plan, not a test fix, so whether this one line is
+red measures the release state rather than whether the suite itself is sound.
 
 ## Test Modules
 
@@ -858,3 +860,21 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   本身永远不可能真去执行系统命令（否则在盒子上以 root 跑一遍套件就会重启机器）；`_answer`
   对「一直不发换行、也不关闭」的客户端在 **MAX_LINE 处截断**并失败关闭，不让 root 进程的
   缓冲区被无限撑大。
+
+### 本轮新增（box_ops 的 Wi-Fi 切换状态机，2026-10-11）
+
+- **`test_box_ops_wifi_switch.py`** — 整个功能里唯一能弄丢盒子的一步：单射频，加入新网络
+  是**替换**而不是新增，操作者若正**通过**这块射频访问盒子，切换会在请求途中掐掉他自己的
+  连接。文件钉住两笔在真机上付过学费的教训：**写下的 profile 必须显式声明
+  `connection.autoconnect`**（退役热点的 profile 缺省为 yes、每次开机自起、把板子的 Wi-Fi
+  一起带下线——回滚时对新 profile 显式 `connection.autoconnect no`，于是刚失败的网络不会
+  在下次开机自己回来）；**nmcli 的返回只代表「已关联」**，远早于 DHCP 落地，把返回值当成功
+  就是盒子拿到地址前就报成功——成功与否由**观测到的地址**决定（`ipv4_address` 轮询，第一拍
+  为空就继续等，`budget` 耗尽仍无地址即回滚）。此外：口令只出现在 nmcli 的 argv 里，失败
+  理由经 `scrub` 后才落进状态（`hunter2secret` 在结果对象里一处不剩）；回滚目标取自**动手
+  之前**在线的 profile，理由里念出回退到了哪个旧网络（没有旧网络也照样说清楚）；状态字段封
+  闭、`switch_state()` 的 dict 没有能落入口令的键。`sleep`/`now` 为注入，30 秒预算不花墙钟
+  （`budget=5.0` 的用例断言时钟恰走到 5.0，证明预算被真正花掉而不是被忽略）；进行中的第二次
+  切换被拒。`with target.lock` 只是一段「先占、后就位」的短声明，**在阻塞的 `connect_wifi`
+  与轮询循环之前就已释放**——server 才能用 `asyncio.to_thread` 跑它、同时让
+  `GET /api/box/wifi/status` 从事件循环里照答。

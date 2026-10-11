@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1918 tests across 100 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1949 tests across 102 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-11, macOS). The per-module sections below
-itemise 70 of those 100 — the support-chain, Cloud Hub and upgrade-channel modules
+itemise 70 of those 102 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1918 |
-| Passed | 1916 (1 skipped) |
+| Total tests | 1949 |
+| Passed | 1947 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 1 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
@@ -837,3 +837,17 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   **从不拼接命令行**——请求始终是 `{"verb", "args"}` 一个 JSON 对象，`args` 是
   argv 形状的列表。hostname 与时区在发出去之前先本地校验（被拒的值一个字节也不上
   socket，页面因此报自己的文案），口令下限 8 位且不 trim 首尾空格。
+
+### 本轮新增（box_helper 的 root 半边，2026-10-11）
+
+- **`test_box_helper.py`** — `linux/box_helper.py` 的 root 半边：四个动词（改名 / 设时区 /
+  重启 / 重载 avahi）的固定动词表，逐条校验参数后只产出 argv 数组，`argv_for` 对表外的
+  任何 verb 与任何越界参数一律返回 `None`。断言写在“性质”上而不是实例上：**没有任何
+  一个动词能走到 shell**（argv 是 list、首元素是固定程序名、不含 `sh`/`-c`）；hostname
+  只认 63 字符以内的字母数字与连字符（`MRRC-Modern` 这种大写默认名必须放行，`a/b`、
+  `..`、`$(reboot)`、反引号、换行一律拒）；时区必须真落在 `/usr/share/zoneinfo` 下且判过
+  realpath 逃逸（`../../etc/passwd` 与绝对路径都拒）。`handle` 对任何非 dict、或 `args`
+  不是字符串列表的请求都回 `{"ok": false, "error": …}` 而不是抛异常；`peer_is_allowed`
+  只认约定的 uid；`sync_hosts` 原地替换 `127.0.1.1` 行（systemd 240 起 `hostnamectl`
+  不再管它）、没有就补一行、文件缺失只报告不致命。纯 stdlib，**import 时不建 socket**
+  （bind 只在 `serve` 内执行）——本模块会被冻进非本机的平台。

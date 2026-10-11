@@ -249,6 +249,33 @@ SyslogIdentifier=mrrc-box-helper
 WantedBy=multi-user.target
 UNIT
 
+cat >/etc/systemd/system/mrrc-wifi-preseed.service <<'UNIT'
+[Unit]
+Description=MRRC Modern Wi-Fi preseed (/boot/mrrc-wifi.txt, applied once)
+# NetworkManager, not network-online.target: joining this Wi-Fi is what brings
+# the network online, so waiting for it would be a circle (design §9.2, R-8).
+After=NetworkManager.service
+Wants=NetworkManager.service
+ConditionPathExists=/boot/mrrc-wifi.txt
+# Before firstboot, which *does* need the network: it is what fetches nothing
+# today but is ordered on network-online.target, and it is the unit that decides
+# whether this box has ever been configured.
+Before=mrrc-firstboot.service
+
+[Service]
+Type=oneshot
+# Root because it is the only thing running this early and nmcli's system
+# connections are root's until the polkit rule is loaded. The file is deleted on
+# success, so a second boot runs nothing at all.
+ExecStart=/opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/wifi_preseed.py
+StandardOutput=journal+console
+StandardError=journal+console
+SyslogIdentifier=mrrc-wifi-preseed
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 mkdir -p "$MRRC_HOME/linux" "$MRRC_HOME/logs" /var/lib/mrrc/certs
 install -m 0755 "$MRRC_ASSETS/firstboot_wrapper.py" \
 	"$MRRC_HOME/linux/firstboot_wrapper.py"
@@ -310,7 +337,7 @@ chown "$MRRC_USER:$MRRC_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
 log "enable services"
-systemctl enable mrrc-box-helper.service mrrc-firstboot.service mrrc-modern.service
+systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service
 # avahi-daemon is what answers <hostname>.local. It ships enabled in the
 # package, but this image masks units by default in several places, so say it
 # out loud rather than trusting the package's postinst (design §8).
@@ -324,7 +351,7 @@ log "import gate: the entry points the units run must import from THIS tree"
 # the reclaim step so a stray __pycache__ is cleaned up with the rest.
 (
 	cd "$MRRC_HOME"
-	PYTHONDONTWRITEBYTECODE=1 "$VENV/bin/python" -c "import server; import sys; sys.path.insert(0, '$MRRC_HOME'); sys.path.insert(0, '$MRRC_HOME/linux'); import net_wifi, box_ops; import first_run, mrrc_radio"
+	PYTHONDONTWRITEBYTECODE=1 "$VENV/bin/python" -c "import server; import sys; sys.path.insert(0, '$MRRC_HOME'); sys.path.insert(0, '$MRRC_HOME/linux'); import net_wifi, box_ops; import first_run, mrrc_radio, wifi_preseed, box_helper"
 ) || {
 	echo "mrrc-service-layer: an image entry point cannot import from this tree" >&2
 	exit 1

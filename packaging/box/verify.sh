@@ -133,6 +133,12 @@ if [ ! -e /etc/polkit-1/rules.d/49-mrrc-nm.rules ]; then
 else
 	ok "polkit rule present (mrrc may reconfigure NetworkManager)"
 fi
+if ! systemctl is-enabled --quiet mrrc-wifi-preseed.service 2>/dev/null; then
+	bad "mrrc-wifi-preseed.service is not enabled" \
+		"a card preseeded with /boot/mrrc-wifi.txt would be ignored; add it to box-overlay.sh"
+else
+	ok "Wi-Fi preseed unit is installed (inactive after a successful join)"
+fi
 if ! systemctl is-active --quiet avahi-daemon; then
 	bad "avahi-daemon is not running" \
 		"<hostname>.local will not resolve; systemctl status avahi-daemon"

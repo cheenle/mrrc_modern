@@ -586,3 +586,186 @@ def perform_wifi_switch(ssid: str, password: str = "", *,
     return _roll_back(target, ssid, previous,
                       f"「{ssid}」在 {int(budget)} 秒内没有拿到地址",
                       password, runner)
+
+
+# ── the wired profile: DHCP or static ───────────────────────────────
+#: `auto` is NM's name for DHCP; `manual` is its name for a static address.
+LINK_METHODS = ("auto", "manual")
+
+
+def link_problem(method: str, address: str) -> str:
+    """Why this profile change cannot be made, or "" when it can."""
+    if method not in LINK_METHODS:
+        return "方式只能是 auto（自动获取）或 manual（静态地址）"
+    if method == "auto":
+        return ""
+    text = (address or "").strip()
+    if "/" not in text:
+        return "静态地址要写成 地址/前缀，例如 192.168.16.217/24"
+    try:
+        network = ipaddress.ip_interface(text)
+    except ValueError:
+        return "静态地址要写成 地址/前缀，例如 192.168.16.217/24"
+    if network.network.prefixlen == 0:
+        return "前缀 /0 不是一台设备能用的地址"
+    return ""
+
+
+def _profile_value(profile: str, key: str,
+                   runner: Optional[Callable] = None) -> str:
+    """One setting of one saved connection, or "" when it is unset."""
+    result = net_wifi.nmcli(
+        ["-t", "-g", key, "connection", "show", profile], runner)
+    if not result.ok:
+        return ""
+    for line in result.stdout.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def _interface_ipv4(ifname: str, runner: Optional[Callable] = None) -> str:
+    """The first live IPv4 on one interface, or "".
+
+    Scoped on purpose: the pre-change address still on the device after a
+    successful `modify` is exactly what must not read as "it landed", and an
+    address on a *sibling* device is no different. A profile with no declared
+    interface yields nothing, which turns into the rollback the caller already
+    performs for a change that cannot be seen to land.
+    """
+    if not ifname:
+        return ""
+    result = net_wifi.nmcli(
+        ["-t", "-g", "IP4.ADDRESS", "device", "show", ifname], runner)
+    if not result.ok:
+        return ""
+    for line in result.stdout.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def _address_parts(text: str) -> set:
+    """The address half of every IPv4 in a saved `ipv4.addresses` value.
+
+    nmcli prints an address as `192.168.16.217/24` and, when a gateway was set,
+    `192.168.16.217/24 192.168.16.1` — the comparison that decides "did the
+    address change" is against the address, not the prefix or the gateway.
+    """
+    parts = set()
+    for token in re.split(r"[,\s]+", (text or "").strip()):
+        if token:
+            parts.add(token.split("/")[0])
+    return parts
+
+
+def perform_link_change(profile: str, method: str, address: str = "",
+                        gateway: str = "", *,
+                        runner: Optional[Callable] = None,
+                        state: Optional[SwitchState] = None,
+                        budget: float = SWITCH_BUDGET_S,
+                        poll: float = SWITCH_POLL_S,
+                        sleep: Callable = time.sleep,
+                        now: Callable = time.monotonic) -> dict:
+    """Switch a saved connection between DHCP and a static address, with rollback.
+
+    Same hazard as the Wi-Fi switch and for the same reason (design §6.4): if the
+    operator is reaching the box over the profile being edited, the edit takes
+    their own path away. So the shape is shared — read the old values first,
+    apply, wait for the address to actually land, and restore on failure. Only
+    the middle step differs.
+
+    `nmcli connection up` is what makes the change take effect; `modify` alone
+    changes the file and leaves the running device as it was, which is why the
+    verify step can fail here even though every command returned 0.
+    """
+    problem = link_problem(method, address)
+    if problem:
+        return {"ok": False, "ssid": profile, "reason": problem, "address": ""}
+
+    target = state or _state
+    with target.lock:
+        if target.phase == PHASE_SWITCHING:
+            return {"ok": False, "ssid": profile,
+                    "reason": "已经有一次网络改动在进行中", "address": ""}
+        target.phase = PHASE_SWITCHING
+        target.ssid = profile
+        target.reason = ""
+        target.address = ""
+        target.since = time.time()
+
+    # Same F2 guard as the Wi-Fi switch: a non-positive interval spins forever
+    # on an injected clock or makes `time.sleep` raise out of a worker thread.
+    if poll <= 0:
+        return _finish_switch(target, False, "轮询间隔必须为正数")
+
+    old_method = _profile_value(profile, "ipv4.method", runner) or "auto"
+    old_addresses = _profile_value(profile, "ipv4.addresses", runner)
+    ifname = _profile_value(profile, "connection.interface-name", runner)
+
+    argv = ["connection", "modify", profile, "ipv4.method", method]
+    if method == "manual":
+        argv += ["ipv4.addresses", address.strip()]
+        if gateway:
+            argv += ["ipv4.gateway", gateway.strip()]
+    result = net_wifi.nmcli(argv, runner)
+    if not result.ok:
+        detail = (result.stderr or result.stdout).strip()
+        return _finish_switch(target, False,
+                              detail or f"改不动「{profile}」")
+
+    net_wifi.nmcli(["connection", "up", profile], runner)
+
+    expected = address.strip().split("/")[0] if method == "manual" else ""
+    landed = _expected_address(expected, ifname, old_addresses, runner,
+                               budget, poll, sleep, now)
+    if landed:
+        return _finish_switch(target, True, "", landed)
+
+    _restore_profile(profile, old_method, old_addresses, runner)
+    reason = (f"「{profile}」改了之后没拿到地址，已恢复为 {old_method}"
+              + (f" {old_addresses}" if old_addresses else ""))
+    return _finish_switch(target, False, reason)
+
+
+def _expected_address(expected: str, ifname: str, old_addresses: str,
+                      runner, budget: float, poll: float,
+                      sleep: Callable, now: Callable) -> str:
+    """Wait for the address we asked for, or a new one when we asked for DHCP.
+
+    DHCP has no expected value to compare against, so "did the interface get an
+    address it did not hold before" is the question. The read is scoped to the
+    interface the profile names — a sibling device holding the expected address
+    must not read as this one landing it (the manual branch's false positive),
+    and a device still holding its pre-change static address must not read as
+    DHCP having landed one (the auto branch's false success).
+    """
+    old_parts = _address_parts(old_addresses)
+    deadline = now() + budget
+    while now() < deadline:
+        value = _interface_ipv4(ifname, runner)
+        if value:
+            ip = value.split("/")[0]
+            if expected:
+                if ip == expected:
+                    return value
+            elif ip not in old_parts:
+                return value
+        sleep(poll)
+    return ""
+
+
+def _restore_profile(profile: str, method: str, addresses: str,
+                     runner: Optional[Callable] = None) -> None:
+    """Put the saved values back; the wired counterpart of the Wi-Fi rollback.
+
+    Not the Wi-Fi `_roll_back` — that one writes `connection.autoconnect no`,
+    the right teardown for a profile that should not come back at boot. Here the
+    profile is the box's own and the *values* changed, so the teardown is the
+    values: method and addresses, then bring it up again.
+    """
+    argv = ["connection", "modify", profile, "ipv4.method", method]
+    if method == "manual" and addresses:
+        argv += ["ipv4.addresses", addresses]
+    net_wifi.nmcli(argv, runner)
+    net_wifi.nmcli(["connection", "up", profile], runner)

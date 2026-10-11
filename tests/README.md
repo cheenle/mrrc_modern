@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1974 tests across 103 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1991 tests across 104 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-12, macOS). The per-module sections below
-itemise 70 of those 103 — the support-chain, Cloud Hub and upgrade-channel modules
+itemise 70 of those 104 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,10 +19,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1974 |
-| Passed | 1971 (1 skipped) |
+| Total tests | 1991 |
+| Passed | 1986 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 2 |
+| Failed | 4 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -49,8 +49,13 @@ A second line,
 `test_packaging_parity.IntentionalDivergenceTests::test_the_web_bind_is_the_only_bind_divergence`,
 is red while the packaging scripts are being reworked in this same checkout — it
 scans `packaging/rpi` and `packaging/box` for `MRRC_WEB_HOST` assignments and so
-measures those scripts, not this suite. Both red lines are about artifacts this
-plan does not own; neither is a defect in the code under test here.
+measures those scripts, not this suite. Two further lines,
+`test_sdd_docs_consistency.VersionConsistencyTests::test_landing_pages_show_the_current_version`
+and `…::test_main_pages_show_the_current_sdd_version`, are red while the W103D
+documentation work re-renders the site pages in this same checkout — they compare
+those pages against the current SDD version and so measure that work, not this
+suite. All of these red lines are about artifacts this plan does not own; none is
+a defect in the code under test here.
 
 ## Test Modules
 

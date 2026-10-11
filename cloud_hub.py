@@ -277,7 +277,11 @@ def reload_frpc(admin_port: int, user: str, password: str, *, timeout: float = 5
         f"http://127.0.0.1:{int(admin_port)}/api/reload", data=b"", method="POST",
         headers={"Authorization": f"Basic {cred}"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        # net_tls.urlopen, not urllib's: it is this repo's single outbound entry point
+        # (the AST guard in tests/test_tls_trust_store.py enforces it, and it caught
+        # this call). For a plain http:// loopback URL the TLS context is unused
+        # anyway — but a second, unguarded door is exactly what that guard exists for.
+        with net_tls.urlopen(req, timeout=timeout) as resp:
             if resp.status != 200:
                 raise CloudHubError(f"frpc reload returned HTTP {resp.status}")
     except urllib.error.HTTPError as exc:
@@ -286,6 +290,32 @@ def reload_frpc(admin_port: int, user: str, password: str, *, timeout: float = 5
     except OSError as exc:
         raise CloudHubError(
             f"frpc admin API unreachable on 127.0.0.1:{admin_port}: {exc}") from exc
+
+
+def help_request(portal: str, callsign: str, token: str, minutes: int,
+                 username: str = "", *, timeout: int = 15) -> dict:
+    """Ask the portal for a help port. Returns its reply (``port``, ``expires_at``).
+
+    The body carries the username and never the password: the portal has no field
+    for one, which is the point (design §4.3).
+    """
+    return _post(portal, "/help/request",
+                 {"callsign": callsign, "token": token, "minutes": int(minutes),
+                  "username": username}, timeout)
+
+
+def help_heartbeat(portal: str, callsign: str, token: str, port: int,
+                   connections: int = 0, *, timeout: int = 10) -> dict:
+    """20 s liveness, and the way a portal-side stop arrives: the reply's ``stop``."""
+    return _post(portal, "/help/heartbeat",
+                 {"callsign": callsign, "token": token, "port": int(port),
+                  "connections": int(connections)}, timeout)
+
+
+def help_close(portal: str, callsign: str, token: str, *, timeout: int = 10) -> dict:
+    """Tell the portal the window is over, whatever ended it."""
+    return _post(portal, "/help/close", {"callsign": callsign, "token": token},
+                 timeout)
 
 
 def read_tunnel_settings(conf: Path) -> dict:

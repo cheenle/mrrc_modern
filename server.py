@@ -65,6 +65,7 @@ from backends import create_backend, known_models
 from backends.base import RadioBackend
 import box_ops
 import cloud_hub
+import help_session
 import net_tls
 import spectrum_profile
 import ssl_bootstrap
@@ -2956,6 +2957,11 @@ async def lifespan(app: FastAPI):
         _cloud_tunnel.stop()
         _cloud_tunnel = None
 
+    # A help window does not survive a restart either — that is part of "not resident".
+    # Closing it here also removes the tunnel proxy, so the next start finds no stray one.
+    if _help_singleton is not None:
+        _help_singleton.close("shutdown")
+
     # Stop audio
     if _audio_rx_task:
         _audio_rx_task.cancel()
@@ -4540,6 +4546,114 @@ def _ensure_tunnel_object():
             if _cloud_tunnel is None:
                 _cloud_tunnel = cloud_hub.TunnelProcess(frpc, _cloud_data_dir() / "pending.toml")
     return _cloud_tunnel
+
+
+# ---------------------------------------------------------------------------
+# Remote help (`call help`): the customer's own door, implemented in help_session.py and
+# reachable only while they hold it open. The three collaborators this file supplies are the
+# portal (request/heartbeat/close), the tunnel (add/remove one proxy) and the clock.
+# ---------------------------------------------------------------------------
+_help_singleton: "help_session.HelpSession | None" = None
+
+
+def _help_portal_context() -> tuple:
+    """(portal, callsign, token), or a CloudHubError the UI can show verbatim."""
+    settings = _cloud_settings()
+    callsign = settings.get("MRRC_CLOUD_CALLSIGN", "")
+    token = settings.get("MRRC_CLOUD_TOKEN", "")
+    if not (callsign and token):
+        raise cloud_hub.CloudHubError(
+            "这台机器还没接入 Cloud Hub —— 远程协助需要在门户上有身份")
+    return _cloud_portal(settings), callsign, token
+
+
+def _help_conf_path() -> Path:
+    """The running tunnel's config, or the one it would use for this label."""
+    if _cloud_tunnel is not None:
+        return Path(_cloud_tunnel.conf)
+    label = _cloud_settings().get("MRRC_CLOUD_LABEL", "")
+    return _cloud_data_dir() / f"frpc-{label}.toml"
+
+
+def _help_opener(minutes: int) -> int:
+    portal, callsign, token = _help_portal_context()
+    username = (_help_singleton.status().get("username", "") if _help_singleton else "")
+    reply = cloud_hub.help_request(portal, callsign, token, minutes, username)
+    port = int(reply.get("port") or 0)
+    if not port:
+        raise cloud_hub.CloudHubError(f"门户没有分配协助端口：{reply}")
+    return port
+
+
+def _help_tunnel(local_port: int, remote_port: int, add: bool) -> None:
+    conf = _help_conf_path()
+    if add:
+        cloud_hub.set_help_proxy(conf, help_local_port=local_port,
+                                 help_remote_port=remote_port)
+    else:
+        cloud_hub.set_help_proxy(conf, remove=True)
+
+
+def _help_portal_closer() -> None:
+    portal, callsign, token = _help_portal_context()
+    cloud_hub.help_close(portal, callsign, token)
+
+
+def _help() -> help_session.HelpSession:
+    """The process's one help window (created on first use)."""
+    global _help_singleton
+    if _help_singleton is None:
+        _help_singleton = help_session.build_session(
+            portal_opener=_help_opener, tunnel=_help_tunnel,
+            portal_closer=_help_portal_closer,
+            on_event=lambda ev: logger.info("help: %s", ev))
+    return _help_singleton
+
+
+@app.post("/api/help/enable", include_in_schema=False)
+async def api_help_enable(request: Request):
+    """Open a help window. Body: {"minutes": 60, "username": "", "password": ""}.
+
+    A **local** action: whoever can use this UI is the person who decides. The
+    password is returned to that same caller and to nobody else.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        session = _help()
+        status = await asyncio.to_thread(
+            lambda: session.enable(
+                minutes=int(body.get("minutes") or help_session.DEFAULT_WINDOW_MINUTES),
+                username=str(body.get("username") or ""),
+                password=str(body.get("password") or "")))
+    except Exception as exc:
+        logger.warning("help: cannot open a session: %s", exc)
+        return JSONResponse({"ok": False, "reason": str(exc)}, status_code=400)
+    return JSONResponse(dict(status, ok=True, password=session.password_for_display()))
+
+
+@app.post("/api/help/disable", include_in_schema=False)
+async def api_help_disable(request: Request):
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    session = _help()
+    await asyncio.to_thread(session.close, "user")
+    return JSONResponse(dict(session.status(), ok=True))
+
+
+@app.get("/api/help/status", include_in_schema=False)
+async def api_help_status(request: Request):
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    session = _help()
+    status = session.status()
+    if status["state"] == help_session.OPEN:
+        status = dict(status, password=session.password_for_display())
+    return JSONResponse(status)
 
 
 #: The certificate this process was started with. The TLS context cannot be reloaded, and the path

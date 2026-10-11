@@ -138,26 +138,66 @@ class PiStageTests(unittest.TestCase):
 
 
 class IntentionalDivergenceTests(unittest.TestCase):
-    """Differences must be asserted, not forgotten. There are exactly two."""
+    """Differences must be asserted, not forgotten. There are exactly two.
+
+    Scanned over the files that *set* a platform value, not over the whole
+    directory: a verifier that checks for `MRRC_WEB_HOST=::` is not a second
+    place that decides it, and a directory-wide scan cannot tell the two apart
+    (2026-10-11: the rewritten verify-image.sh made this test fail by quoting
+    the value it asserts on).
+    """
+
+    #: The files allowed to carry a platform parameter.
+    CARRIERS = {
+        "packaging/rpi": (
+            "packaging/rpi/build-image.sh",
+            "packaging/rpi/pi-gen-stage4/prerun.sh",
+            "packaging/rpi/pi-gen-stage4/01-deploy-mrrc/00-run-chroot.sh",
+        ),
+        "packaging/box": (
+            "packaging/box/box-overlay.sh",
+            "packaging/box/build-image.sh",
+        ),
+    }
 
     def _assignments(self, root: str, key: str) -> list[tuple[str, str]]:
         out = []
-        for path in sorted((REPO / root).rglob("*")):
-            if not path.is_file() or path.suffix not in (".sh", ".env", ".py", ""):
+        for relative in self.CARRIERS[root]:
+            path = REPO / relative
+            if not path.is_file():
                 continue
-            try:
-                text = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                continue
+            text = path.read_text(encoding="utf-8")
             for match in re.finditer(rf"{key}=(?:'|\")?([^'\"\s]+)", text):
-                out.append((str(path.relative_to(REPO)), match.group(1)))
+                out.append((relative, match.group(1)))
         return out
+
+    def test_every_carrier_exists(self):
+        """A renamed builder would silently empty these tests instead of failing."""
+        for root, carriers in self.CARRIERS.items():
+            for relative in carriers:
+                with self.subTest(path=relative):
+                    self.assertTrue((REPO / relative).is_file(), root)
 
     def test_the_web_bind_is_the_only_bind_divergence(self):
         pi = dict(self._assignments("packaging/rpi", "MRRC_WEB_HOST"))
         box = dict(self._assignments("packaging/box", "MRRC_WEB_HOST"))
         self.assertEqual(set(pi.values()), {WEB_HOST["packaging/rpi"]})
         self.assertEqual(set(box.values()), {WEB_HOST["packaging/box"]})
+
+    def test_the_platform_bind_is_not_left_to_install_sh(self):
+        """install.sh's env template hard-codes ``MRRC_WEB_HOST=0.0.0.0``.
+
+        The defaults block only writes a key that is absent, so an un-stripped
+        template wins silently: the first refactored Pi image shipped bound to
+        IPv4-only while its own unit said ``::`` (caught by the four-step
+        artifact verification, 2026-10-11 — the unit had the parameter, the env
+        file did not). Two things have to stay true.
+        """
+        text = (COMMON / "mrrc-service-layer.sh").read_text(encoding="utf-8")
+        self.assertIn(r"/^#\?MRRC_WEB_HOST=/d", text,
+                      "install.sh's own MRRC_WEB_HOST must be stripped, not inherited")
+        self.assertIn('echo "MRRC_WEB_HOST=$MRRC_WEB_HOST"', text,
+                      "the platform parameter is what gets written")
 
     def test_the_boot_partition_is_the_only_path_divergence(self):
         pi = dict(self._assignments("packaging/rpi", "MRRC_BOOT_DIR"))

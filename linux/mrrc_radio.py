@@ -1,7 +1,7 @@
 """Switch the radio model this box serves, then restart onto it.
 
-One profile per registry key lives in ``packaging/box/profiles/`` — copied to
-``<MRRC_HOME>/profiles/`` inside the box image — and this command is the only
+One profile per registry key lives in ``packaging/common/profiles/`` — copied to
+``<MRRC_HOME>/profiles/`` inside the image — and this command is the only
 thing that writes the env file systemd hands the server.
 Subcommands: ``list``, ``show``, ``use <model> [--port DEV]``.
 
@@ -21,11 +21,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-# In a checkout this file sits in linux/ and the tree is its parent. On the box it
-# is a copy at /usr/local/bin/mrrc-radio (box-overlay.sh's install), where that
-# parent is /usr/local — not a tree — so the tree comes from MRRC_HOME, the same
-# variable linux/mrrc_update.sh reads. The sibling backends/ is what tells the two
-# apart: without this, the installed copy died on `import backends`.
+# In a checkout this file sits in linux/ and the tree is its parent. On the device it
+# is a copy at /usr/local/bin/mrrc-radio (the shared service layer installs it),
+# where that parent is /usr/local — not a tree — so the tree comes from MRRC_HOME,
+# the same variable linux/mrrc_update.sh reads. The sibling backends/ is what tells
+# the two apart: without this, the installed copy died on `import backends`.
 _SOURCE = Path(__file__).resolve().parents[1]
 REPO = _SOURCE if (_SOURCE / "backends").is_dir() else Path(
     os.environ.get("MRRC_HOME", "/opt/mrrc_modern"))
@@ -37,9 +37,10 @@ if str(REPO / "linux") not in sys.path:
 from backends import known_models  # noqa: E402
 from first_run import read_env_text, update_env_file  # noqa: E402
 
-# The checkout keeps them under packaging/ (which is not part of the image);
-# box-overlay.sh copies them to <MRRC_HOME>/profiles instead.
-PROFILE_DIR = REPO / "packaging" / "box" / "profiles"
+# The checkout keeps them under packaging/ (which is not part of the image); the
+# service layer copies them to <MRRC_HOME>/profiles instead. Both image lines get
+# the same set, so this is one path, not one per platform.
+PROFILE_DIR = REPO / "packaging" / "common" / "profiles"
 if not PROFILE_DIR.is_dir():
     PROFILE_DIR = REPO / "profiles"
 DEFAULT_ENV = Path("/opt/mrrc_modern/env/mrrc.env")

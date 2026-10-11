@@ -1,0 +1,6 @@
+#!/bin/sh
+# Shown at login. The hostname is asked for, not baked in: the image ships with
+# MRRC-Modern and the settings page (or the operator) can change it, so a
+# hard-coded "raspberrypi.local" would go stale the first time somebody renamed
+# the box. Both image lines install this file.
+echo "  MRRC Modern: https://$(hostname).local:8888   (web password: sudo mrrc-show-password)"

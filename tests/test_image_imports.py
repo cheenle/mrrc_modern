@@ -1,9 +1,9 @@
 """The image is the repo minus an exclusion list — the code has to survive that.
 
 The Pi and box images are not a checkout: the tree under ``/opt/mrrc_modern`` is
-whatever survives the rsync ``--exclude`` list in ``packaging/rpi/build-image.sh``
-(mirrored by ``packaging/box/box-overlay.sh`` and ``linux/mrrc_update.sh``, and
-pinned byte-identical by ``test_box_profiles.ExclusionParityTests``). Nothing
+whatever survives the exclusion list in ``packaging/common/stage-tree.sh``, one
+shared script that all three copiers call (the Pi builder on the build host, the
+box overlay inside the chroot, and ``linux/mrrc_update.sh`` on the box). Nothing
 checked the consequence until 2026-10-10:
 
 ``server.py`` imported ``macos.first_run`` at module level, the images exclude
@@ -29,9 +29,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 
-#: The authoritative exclusion list (the Pi builder's; the other two must match
-#: it — ExclusionParityTests fails otherwise).
-BUILDER = REPO / "packaging" / "rpi" / "build-image.sh"
+#: The authoritative exclusion list. It used to be the Pi builder's own rsync
+#: invocation; since 2026-10-11 it is one shared script that all three copiers
+#: call, so this points at the list itself (tests/test_packaging_parity.py fails
+#: the build if a second copy appears anywhere).
+BUILDER = REPO / "packaging" / "common" / "stage-tree.sh"
 
 #: Names the emulation must hide for it to mean anything. ``macos`` is the
 #: defect this file was written for; ``packaging`` is where the box profiles
@@ -97,7 +99,8 @@ def script(relative):
 
 
 def box_firstboot():
-    """The overlay installs packaging/box/firstboot_wrapper.py as linux/firstboot_wrapper.py.
+    """The overlay installs packaging/common/firstboot_wrapper.py as
+    linux/firstboot_wrapper.py.
 
     Its sibling import is ``first_run``, which the image has at
     ``linux/first_run.py`` — the repo keeps the two in different directories, so
@@ -108,7 +111,7 @@ def box_firstboot():
     os.makedirs(linux)
     shutil.copy(os.path.join(repo, "linux", "first_run.py"),
                 os.path.join(linux, "first_run.py"))
-    shutil.copy(os.path.join(repo, "packaging", "box", "firstboot_wrapper.py"),
+    shutil.copy(os.path.join(repo, "packaging", "common", "firstboot_wrapper.py"),
                 os.path.join(linux, "firstboot_wrapper.py"))
     runpy.run_path(os.path.join(linux, "firstboot_wrapper.py"),
                    run_name="mrrc_image_probe")

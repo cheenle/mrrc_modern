@@ -23,7 +23,11 @@ from pathlib import Path
 from backends import known_models
 
 REPO = Path(__file__).resolve().parents[1]
-PROFILE_DIR = REPO / "packaging" / "box" / "profiles"
+#: Both image lines install the same profile set: the Pi image's model switcher
+#: needs the same 11 entries the box's does, so they live in packaging/common/.
+#: They sat under packaging/box/ until 2026-10-11, which made the shared service
+#: layer reach into one platform's directory to fetch them.
+PROFILE_DIR = REPO / "packaging" / "common" / "profiles"
 
 #: Every key a profile may carry. Anything else is either derived by the
 #: backend (baud), resolved on first boot (password, serial port, audio device)
@@ -98,37 +102,6 @@ class ProfileSetTests(unittest.TestCase):
         derived = {m for m in icom_models() if not icom_profile(m).verified}
         derived |= {m for m, p in yaesu_profiles.items() if not p.verified}
         self.assertEqual(derived, set(UNVERIFIED))
-
-
-class ExclusionParityTests(unittest.TestCase):
-    """Every copier of /opt/mrrc_modern must copy exactly the same things.
-
-    Three places now carry this list — the Pi builder, the box overlay and the
-    in-place updater. Two of them disagreeing is how a file ends up in one
-    image and missing from the other, or vanishes on the first update, and the
-    symptom is a runtime ImportError rather than a build error.
-    """
-
-    EXCLUDE_RE = re.compile(r'--exclude\s+"([^"]+)"')
-
-    IMPLEMENTERS = (
-        ("the Pi image builder", "packaging/rpi/build-image.sh"),
-        ("the box overlay", "packaging/box/box-overlay.sh"),
-        ("the in-place updater", "linux/mrrc_update.sh"),
-    )
-
-    def _excludes(self, rel: str) -> list[str]:
-        return self.EXCLUDE_RE.findall((REPO / rel).read_text(encoding="utf-8"))
-
-    def test_every_implementer_excludes_the_same_paths(self):
-        reference: list[str] = []
-        for label, rel in self.IMPLEMENTERS:
-            with self.subTest(implementer=label):
-                got = self._excludes(rel)
-                self.assertTrue(got, f"{label} returned an empty list — parser drift?")
-                if not reference:
-                    reference = got
-                self.assertEqual(got, reference, f"{label} has drifted from {rel}")
 
 
 class VendoredFtdiTests(unittest.TestCase):
@@ -332,7 +305,8 @@ class BoxBuildIntegrityTests(unittest.TestCase):
         restated here — a copy in the test would keep passing after the
         original changed.
         """
-        script = (self.BUILD.parent / "fetch-frpc.sh").read_text(encoding="utf-8")
+        script = (REPO / "packaging" / "common" / "fetch-frpc.sh").read_text(
+            encoding="utf-8")
         self.assertNotIn(
             "read -r -a PREFIXES", script, "read -a silently drops a trailing empty field"
         )

@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """mrrc-firstboot.service entry point (root): preseed → auto-config → cert.
 
-Runs once on the first boot of a freshly flashed MRRC Modern Armbian box
-image (ZTE W103D / Amlogic S905L3A). Order of operations:
+Runs once on the first boot of a freshly flashed MRRC Modern image — the Armbian
+box (ZTE W103D, boot partition at ``/boot``) and the Raspberry Pi (Raspberry Pi
+OS, boot partition at ``/boot/firmware``). Both platform facts come from the unit
+as environment variables rather than from two copies of this file: the shared
+overlay writes the unit and passes the platform value, so there is one
+implementation and two configuration lines. Order of operations:
 
-1. Adopt a pre-seeded ``/boot/mrrc.env`` if the operator placed one on the
-   boot partition of the flashed medium (copied into place, original renamed
-   ``mrrc.env.applied``). Armbian mounts that partition at ``/boot``; the Pi
-   image's ``/boot/firmware`` is the one path that differs.
+1. Adopt a pre-seeded ``mrrc.env`` if the operator placed one on the boot
+   partition of the flashed medium (copied into place, original renamed
+   ``mrrc.env.applied``).
 2. Otherwise run ``linux/first_run.py`` to generate a web password and probe
    for the radio (banner goes to the HDMI console).
 3. Generate the self-signed HTTPS certificate (ssl_bootstrap).
-4. Append headless defaults (all-interfaces bind, port, cert paths) to the env
-   file, hand it to the ``mrrc`` user, stamp ``firstboot-done`` and disable
-   this unit — subsequent boots are no-ops (guard condition).
+4. Append headless defaults (bind address, port, cert paths) to the env file,
+   hand it to the ``mrrc`` user, stamp ``firstboot-done`` and disable this unit
+   — subsequent boots are no-ops (guard condition).
 """
 import os
 import shutil
@@ -29,7 +32,15 @@ from first_run import read_env_text  # noqa: E402  # type: ignore[import-not-fou
 
 ENV_DIR = Path("/opt/mrrc_modern/env")
 ENV_FILE = ENV_DIR / "mrrc.env"
-PRESEED = Path("/boot/mrrc.env")
+#: Set by mrrc-firstboot.service: /boot on Armbian, /boot/firmware on Raspberry
+#: Pi OS. A wrong value is silent — adopt_preseed() simply finds no file and
+#: auto-generates a password the operator did not ask for.
+BOOT_DIR = Path(os.environ.get("MRRC_BOOT_DIR", "/boot"))
+PRESEED = BOOT_DIR / "mrrc.env"
+#: Set by mrrc-firstboot.service from the shared service layer's MRRC_WEB_HOST
+#: (0.0.0.0 on the box, :: on the Pi). Only used when the env file has no
+#: MRRC_WEB_HOST of its own, i.e. on the preseed path.
+WEB_HOST = os.environ.get("MRRC_WEB_HOST", "0.0.0.0")
 DONE = Path("/var/lib/mrrc/firstboot-done")
 CERT_DIR = Path("/var/lib/mrrc/certs")
 
@@ -90,7 +101,7 @@ def main() -> int:
     lines = ENV_FILE.read_text(encoding="utf-8").splitlines()
     keys = {l.split("=", 1)[0] for l in lines
             if l.strip() and not l.strip().startswith("#") and "=" in l}
-    for k, v in (("MRRC_WEB_HOST", "0.0.0.0"), ("MRRC_WEB_PORT", "8888"),
+    for k, v in (("MRRC_WEB_HOST", WEB_HOST), ("MRRC_WEB_PORT", "8888"),
                  ("MRRC_SSL_CERT", str(CERT_DIR / "server.crt")),
                  ("MRRC_SSL_KEY", str(CERT_DIR / "server.key"))):
         if k not in keys:

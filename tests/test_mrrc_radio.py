@@ -120,7 +120,7 @@ class InstalledCopyTests(unittest.TestCase):
     to take the tree from MRRC_HOME (the variable linux/mrrc_update.sh already
     reads) and find the profiles where the overlay puts them, at
     ``<MRRC_HOME>/profiles`` (packaging/ is excluded from the image, so the
-    checkout's ``packaging/box/profiles`` path cannot survive). The 1.25.4 image
+    checkout's ``packaging/common/profiles`` path cannot survive). The 1.25.4 image
     shipped with neither: the installed CLI died on ``import backends``.
 
     Each test stages the image's tree shape under a temporary root, so it fails
@@ -142,7 +142,7 @@ class InstalledCopyTests(unittest.TestCase):
         (self.home / "linux").mkdir()
         shutil.copy(REPO / "linux" / "first_run.py",
                     self.home / "linux" / "first_run.py")
-        shutil.copytree(REPO / "packaging" / "box" / "profiles",
+        shutil.copytree(REPO / "packaging" / "common" / "profiles",
                         self.home / "profiles")
         shutil.copy(REPO / "linux" / "mrrc_radio.py", self.bin / "mrrc-radio")
         self._path = list(sys.path)
@@ -158,6 +158,10 @@ class InstalledCopyTests(unittest.TestCase):
             loader = SourceFileLoader("mrrc_radio_installed", str(target))
             spec = importlib.util.spec_from_file_location(
                 "mrrc_radio_installed", target, loader=loader)
+            # Both asserts are about the type checker, not the test: from a real
+            # path with a real loader this cannot be None, and narrowing here
+            # keeps the module strict everywhere else.
+            assert spec is not None and spec.loader is not None
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
         return mod
@@ -177,4 +181,4 @@ class InstalledCopyTests(unittest.TestCase):
     def test_a_checkout_still_uses_the_checkout_layout(self):
         self.assertEqual(mrrc_radio.REPO, REPO)
         self.assertEqual(mrrc_radio.PROFILE_DIR,
-                         REPO / "packaging" / "box" / "profiles")
+                         REPO / "packaging" / "common" / "profiles")

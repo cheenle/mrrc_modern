@@ -129,6 +129,9 @@ class HelpSession:
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     _beat_stop: threading.Event = field(default_factory=threading.Event, init=False,
                                         repr=False)
+    #: 只有真的起了线程才有值。测试与"这一轮到底有没有心跳"都靠它判断，
+    #: 而不是去 enumerate() 全局线程名——那是竞态的写法（关闭中的线程还能被看见）。
+    _beat_thread: Optional[threading.Thread] = field(default=None, init=False, repr=False)
 
     # ── lifecycle ──────────────────────────────────────────────────────────
     def enable(self, *, minutes: int = DEFAULT_WINDOW_MINUTES,
@@ -277,8 +280,9 @@ class HelpSession:
         if self.beat is None:
             return
         self._beat_stop.clear()
-        threading.Thread(target=self._beat_loop, name="mrrc-help-beat",
-                         daemon=True).start()
+        self._beat_thread = threading.Thread(target=self._beat_loop,
+                                             name="mrrc-help-beat", daemon=True)
+        self._beat_thread.start()
 
     def _beat_loop(self) -> None:
         """Two jobs per beat: enforce the window locally, and read the portal's stop.

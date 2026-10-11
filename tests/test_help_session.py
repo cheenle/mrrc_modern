@@ -470,7 +470,5 @@ class HeartbeatTests(unittest.TestCase):
                                      listener=lambda: 2, clock=lambda: self.now,
                                      server=_FakeServer())
         s.enable(minutes=5)
-        import threading
-        names = [th.name for th in threading.enumerate()]
-        self.assertNotIn("mrrc-help-beat", names, "没有 beat 却起了心跳线程")
+        self.assertIsNone(s._beat_thread, "没有 beat 却起了心跳线程")
         s.close("user")

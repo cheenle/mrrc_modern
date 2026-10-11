@@ -29,7 +29,9 @@ here without NetworkManager, a radio or a network.
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
+import re
 import socket
 import time
 from typing import Any, Callable, Optional
@@ -272,3 +274,132 @@ def helper_available(path: str = HELPER_SOCKET) -> bool:
     a button on a page that cannot work.
     """
     return bool(path) and os.path.exists(path)
+
+
+# ── the root helper, client side ────────────────────────────────────
+def _send_over_helper_socket(payload: dict, timeout: float) -> str:
+    """One line of JSON out, one line back, over the helper's unix socket.
+
+    The socket is 0660 root:mrrc, so the kernel refuses anyone else at connect()
+    time; the helper checks SO_PEERCRED on top of that, because a mode is a check
+    made once and the helper would rather make its own.
+    """
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        client.settimeout(timeout)
+        client.connect(HELPER_SOCKET)
+        client.sendall((json.dumps(payload) + "\n").encode("utf-8"))
+        chunks = []
+        while True:
+            chunk = client.recv(4096)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            if b"\n" in chunk:
+                break
+    return b"".join(chunks).decode("utf-8", "replace").split("\n", 1)[0]
+
+
+def call_helper(verb: str, *args, sender: Optional[Callable] = None,
+                timeout: float = 10.0) -> dict:
+    """Ask the root helper to do one of its four verbs. Never raises.
+
+    Absent helper, refused connection, an unreadable reply: all of them are
+    `{"ok": False, "error": ...}`. The settings page has to grey a panel out and
+    keep the other panels working, and it cannot do that from an exception.
+    """
+    payload = {"verb": verb, "args": [str(arg) for arg in args]}
+    if sender is None:
+        sender = _send_over_helper_socket
+    try:
+        reply_text = sender(payload, timeout)
+    except OSError as exc:
+        return {"ok": False,
+                "error": f"helper unavailable ({exc.__class__.__name__})"}
+    try:
+        reply = json.loads(reply_text)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "helper sent an unreadable reply"}
+    if not isinstance(reply, dict) or "ok" not in reply:
+        return {"ok": False, "error": "helper sent an unreadable reply"}
+    return reply
+
+
+# ── the four system verbs, validated before they are asked for ──────
+#: Case-open on purpose: the shipped default is `MRRC-Modern`. systemd accepts a
+#: static hostname in either case and DNS is case-insensitive, so
+#: `mrrc-modern.local` still resolves (design §8).
+HOSTNAME_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+
+ZONEINFO = "/usr/share/zoneinfo"
+
+
+def hostname_problem(name: str) -> str:
+    """Why this name cannot be the box's hostname, or "" when it can."""
+    text = (name or "").strip()
+    if not text:
+        return "名字不能为空"
+    if not HOSTNAME_RE.match(text):
+        return ("名字只能用字母、数字和连字符，不能以连字符开头或结尾，"
+                "最长 63 个字符")
+    return ""
+
+
+def timezone_problem(zone: str) -> str:
+    """Why this zone cannot be set, or "" when it can.
+
+    The helper checks all of this again before running anything as root. This
+    copy exists so the page reports its own wording rather than a round trip's,
+    not as a substitute for the one that guards the privileged side.
+    """
+    text = (zone or "").strip()
+    if not text or text != zone or text.startswith("/") or ".." in text:
+        return "时区名不合法"
+    if not os.path.isfile(os.path.join(ZONEINFO, text)):
+        return f"没有这个时区：{text}"
+    return ""
+
+
+def set_hostname(name: str, *, sender: Optional[Callable] = None) -> dict:
+    problem = hostname_problem(name)
+    if problem:
+        return {"ok": False, "error": problem}
+    return call_helper("set-hostname", (name or "").strip(), sender=sender)
+
+
+def set_timezone(zone: str, *, sender: Optional[Callable] = None) -> dict:
+    problem = timezone_problem(zone)
+    if problem:
+        return {"ok": False, "error": problem}
+    return call_helper("set-timezone", (zone or "").strip(), sender=sender)
+
+
+def reboot(*, sender: Optional[Callable] = None) -> dict:
+    """Restart the box, not the service. `POST /api/restart` is the other one."""
+    return call_helper("reboot", sender=sender)
+
+
+def reload_avahi(*, sender: Optional[Callable] = None) -> dict:
+    """Nudge avahi after a rename, so the new name is advertised immediately."""
+    return call_helper("avahi-reload", sender=sender)
+
+
+# ── the password ────────────────────────────────────────────────────
+#: The floor the existing POST /api/setup enforces. The onboarding page must not
+#: be the softer door into the same key.
+MIN_PASSWORD_LEN = 8
+
+
+def password_problem(password: str, confirm: str) -> str:
+    """Why this password cannot be set, or "" when it can.
+
+    Nothing is trimmed: a password is used byte-for-byte, and silently removing a
+    leading space would set a password the user did not type — which they would
+    discover at the login page.
+    """
+    if not password:
+        return "口令不能为空"
+    if len(password) < MIN_PASSWORD_LEN:
+        return f"口令至少 {MIN_PASSWORD_LEN} 位"
+    if password != confirm:
+        return "两次输入的口令不一致"
+    return ""

@@ -587,12 +587,14 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               A ready-made server image for this specific TV box. Flash it to a USB
-              stick, boot the box from it (eMMC stays untouched), and open
+              stick and boot the box from it (one u-boot boot-order write; Android's
+              partitions and data stay untouched), then open
               <code>https://&lt;box-ip&gt;:8888</code> — same zero-config first boot as
               the Pi image, including the auto-generated web password
               (<code>sudo mrrc-show-password</code>). <code>mrrc-radio</code> switches
-              between the eleven supported radio models. Deploying from USB leaves the
-              stock Android firmware in place as a fallback.
+              between the eleven supported radio models. Once you are happy with it,
+              install it onto the box's own 28.9 GB eMMC: what is left is a power
+              cable and a network cable, with the USB stick kept as the rescue copy.
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
           <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-1.25.5-w103d.img.gz">

@@ -545,11 +545,12 @@
           <code style="font-size: 0.76rem">SHA-256: 5d74f7378b64bd7ebff16528aa4b5222097de22b9f3b214fe1ccebc62dc8ffc1</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-              针对这款盒子预装好的服务端镜像。烧到 U 盘、从 U 盘启动（eMMC 一字节不动），
-              打开 <code>https://&lt;盒子IP&gt;:8888</code> —— 与树莓派镜像同样的零配置首启，
-              包括自动生成的 Web 口令（<code>sudo mrrc-show-password</code> 取回）。
-              <code>mrrc-radio</code> 在 11 个支持的机型之间切换。从 U 盘运行意味着
-              原厂安卓固件原封不动地留着，随时可以退回去。
+              针对这款盒子预装好的服务端镜像。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，
+              不碰原厂安卓的分区与数据），打开 <code>https://&lt;盒子IP&gt;:8888</code> ——
+              与树莓派镜像同样的零配置首启，包括自动生成的 Web 口令
+              （<code>sudo mrrc-show-password</code> 取回）。<code>mrrc-radio</code>
+              在 11 个支持的机型之间切换。验收通过后把系统固化进机身 eMMC ——
+              最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
           <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-1.25.5-w103d.img.gz">

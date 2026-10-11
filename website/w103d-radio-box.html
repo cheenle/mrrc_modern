@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A ¥125 second-hand cloud terminal became the FT-710's remote server: how the host was chosen, how it compares with a Raspberry Pi or a mini PC, the six defects the first real box exposed, and what the money actually bought."
+    />
+    <meta name="author" content="BG1SB" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>A ¥125 Box as My FT-710's Remote Server</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1" />
+    <link rel="stylesheet" href="css/ft710.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="js/global-nav.js?v=6" defer data-gn="1"></script>
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --cyan: #22d3ee;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .essay {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 140px 1.5rem 120px;
+        font-size: 1.05rem;
+        line-height: 1.85;
+      }
+      .essay h1 {
+        font-size: 2rem;
+        line-height: 1.35;
+        margin: 0 0 0.4rem;
+      }
+      .essay .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.6rem;
+      }
+      .essay h2 {
+        font-size: 1.28rem;
+        margin: 3rem 0 1rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .essay h3 {
+        font-size: 1.02rem;
+        margin: 1.8rem 0 0.5rem;
+        color: var(--cyan);
+      }
+      .essay p {
+        margin: 0 0 1.05rem;
+      }
+      .essay strong {
+        color: #fff;
+        font-weight: 600;
+      }
+      .essay em {
+        color: var(--amber);
+        font-style: normal;
+      }
+      .essay code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.86em;
+        background: #16161a;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      .essay pre {
+        background: #0f0f12;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font-size: 0.83rem;
+        line-height: 1.6;
+      }
+      .essay pre code {
+        background: none;
+        border: 0;
+        padding: 0;
+      }
+      .essay table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        margin: 1rem 0 1.6rem;
+      }
+      .essay th,
+      .essay td {
+        text-align: left;
+        padding: 0.55rem 0.6rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      .essay th {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .essay .tag {
+        display: inline-block;
+        font-size: 0.74rem;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.1rem 0.6rem;
+        margin-right: 0.4rem;
+      }
+      .essay .foot {
+        margin-top: 3rem;
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+      .essay a {
+        color: var(--cyan);
+      }
+      .essay .note {
+        background: #101014;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.9rem 1.1rem;
+        margin: 1.2rem 0;
+        font-size: 0.94rem;
+      }
+      .essay figure {
+        margin: 1.8rem 0;
+      }
+      .essay figure img {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        display: block;
+      }
+      .essay figcaption {
+        color: var(--muted);
+        font-size: 0.82rem;
+        margin-top: 0.55rem;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="essay">
+      <p>
+        <span class="tag">Hands-on</span><span class="tag">W103D</span
+        ><span class="tag">FT-710</span><span class="tag">2026-10-11</span>
+      </p>
+      <h1>A ¥125 Box<br />as My FT-710's Remote Server</h1>
+      <p class="sub">
+        The radio is chained to the desk because its front panel is a computer.
+        This is the whole road: what I actually wanted, what such a server
+        really needs, how it compares with a Raspberry Pi or a mini PC, why a
+        second-hand carrier cloud terminal won, the six defects the first real
+        box exposed, and what the ¥125 bought.
+      </p>
+
+      <h2>1. The idea: a radio should not be tied to the desk</h2>
+      <p>
+        An FT-710 needs nothing added: CAT, a USB sound card and a real spectrum
+        interface are all inside the case, reachable through one USB cable. What
+        it lacks is <strong>any way to use it from somewhere else</strong> — from
+        the sofa for twenty minutes on 40 m, from the balcony while adjusting an
+        antenna, or from a hotel room to check whether the band is occupied.
+      </p>
+      <p>
+        The first reflex is remote desktop or VNC. I tried it honestly and
+        dropped it, for three concrete reasons:
+      </p>
+      <ul>
+        <li>
+          <strong>The audio takes a long detour</strong>: radio → USB sound card
+          → computer → the desktop's audio channel → your ears. Every extra
+          resample and buffer multiplies latency and dropouts.
+        </li>
+        <li>
+          <strong>A remote desktop is not a front panel</strong>: you want a few
+          controls and a waterfall, not a shrunken desktop. And a waterfall
+          inside a remote desktop is just video — bad frames per second at a bad
+          bitrate.
+        </li>
+        <li>
+          <strong>It needs a computer left on</strong>: running an x86 tower
+          24/7 just to listen to a radio is the wrong shape for the power bill
+          and the noise.
+        </li>
+      </ul>
+      <p>
+        The shape I actually wanted is the other way round: <strong>the server
+        sits next to the radio, the browser is only a panel</strong>. Phone,
+        tablet, laptop — whichever is at hand opens a URL and becomes a radio
+        that can listen, show a waterfall and press PTT. That server has to hold
+        the radio's USB (serial, sound card, spectrum), encode audio, push state
+        to the browser, and run for years without heat or noise.
+      </p>
+
+      <h2>2. Research: what such a server really needs</h2>
+      <p>
+        Quantify the requirement before shopping. The server is Python
+        (<strong>there is a GIL</strong>): the hot path lives on one core, so
+        <em>core count does not help</em> — single-thread performance decides
+        everything. Item by item:
+      </p>
+      <table>
+        <tr><th>What actually decides it</th><th>Why</th></tr>
+        <tr>
+          <td><strong>Single-thread performance</strong></td>
+          <td>Python server, audio encoding and spectrum parsing share one event loop; extra cores only help other processes</td>
+        </tr>
+        <tr>
+          <td><strong>At least two USB ports</strong></td>
+          <td>One for the radio cable, one spare for a tuner, a stick or a keyboard. <strong>This is the most common way to get it wrong</strong></td>
+        </tr>
+        <tr>
+          <td><strong>A wired NIC</strong></td>
+          <td>Each client needs roughly 60 KB/s — 100 Mb is plenty. But Wi-Fi jitter turns straight into chopped audio</td>
+        </tr>
+        <tr>
+          <td><strong>24/7 power and heat</strong></td>
+          <td>It stays powered on beside the radio; fan noise and the power bill are part of the cost</td>
+        </tr>
+        <tr>
+          <td><strong>Price and availability</strong></td>
+          <td>Once the four above are satisfied, this is the one that actually decides</td>
+        </tr>
+      </table>
+      <p>
+        Then look up measured single-thread scores for the candidates (PassMark,
+        one source, fetched the same day — with sample counts, because
+        <strong>anything below a hundred samples is a hint, not a fact</strong>):
+      </p>
+      <table>
+        <tr>
+          <th>Processor</th><th>Single-thread</th><th>TDP</th><th>Samples</th><th>Server hot path ≈</th>
+        </tr>
+        <tr><td>Intel N100</td><td>1879</td><td>6 W</td><td>4111</td><td>~8%</td></tr>
+        <tr><td>AMD R1505G (HP t640)</td><td>1822</td><td>15 W</td><td>138</td><td>~8%</td></tr>
+        <tr><td>Broadcom BCM2712 (Pi 5)</td><td>1813</td><td>—</td><td>⚠️ 4</td><td>~8%</td></tr>
+        <tr><td>Intel Celeron J1900</td><td>653</td><td>10 W</td><td>881</td><td>~22%</td></tr>
+        <tr><td>Intel Atom D525</td><td>293</td><td>13 W</td><td>336</td><td>~49%</td></tr>
+      </table>
+      <p>
+        The conclusion is counter-intuitive and useful: <strong>compute is
+        almost never the selection criterion</strong>. From a 2008 Core 2 Duo
+        to today's N100, anything scoring above ~700 single-thread spends 15–45%
+        of one core, and 2 GB of RAM with a few hundred MB of storage is plenty.
+        <em>What actually blocks the project is USB port count, the NIC, power
+        draw — and whether the thing is easy to buy and easy to install.</em>
+      </p>
+
+      <h2>3. The comparison: four roads and their real price</h2>
+      <table>
+        <tr><th>Option</th><th>What is good</th><th>What it costs you</th></tr>
+        <tr>
+          <td><strong>N100 mini PC</strong> (new)</td>
+          <td>Highest single-thread, 6 W, four cores, warranty — the one tier where you never have to compute headroom</td>
+          <td>The most expensive (typically ¥500+ for a complete new machine, plus storage and PSU)</td>
+        </tr>
+        <tr>
+          <td><strong>Second-hand thin client</strong> (HP t640, Dell Wyse …)</td>
+          <td>Single-thread on par with the N100 (1822 vs 1879), 15 W, dumped in volume by enterprises, cheap</td>
+          <td>You must pick a model: USB port count, storage form factor, whether Linux installs at all; stock and condition are luck</td>
+        </tr>
+        <tr>
+          <td><strong>Raspberry Pi 4 / 5</strong></td>
+          <td>Official images, the thickest ecosystem, the most tutorials — almost zero porting</td>
+          <td>Prices and stock; you add PSU, cooling and storage; <strong>with accessories usually ¥400 and up</strong></td>
+        </tr>
+        <tr>
+          <td><strong>A carrier box</strong> (ZTE W103D)</td>
+          <td><strong>¥125</strong> second-hand, &lt;5 W, 32 GB eMMC, two USB ports and a wired NIC included</td>
+          <td><strong>You replace the OS yourself</strong>: vendor kernel, cannot be upgraded; 100 Mb NIC; Wi-Fi needs a community driver</td>
+        </tr>
+      </table>
+      <p>
+        Note the difference in the last row: the first three are
+        "buy it and install something"; this one is "buy it and
+        <strong>replace the operating system</strong>". It works here because we
+        already build a server image for MRRC Modern — and that is also the part
+        of this project that took the longest.
+      </p>
+
+      <h2>4. Why this ¥125 box</h2>
+      <p>
+        Let me be clear: <strong>it was never meant for radio amateurs</strong>.
+        It is a carrier-issued "cloud terminal" — China Mobile / ZTE W103D,
+        Android out of the box, made to drive a monitor against a cloud desktop.
+        I paid <em>¥125</em> second-hand, for a plain reason: it satisfies all
+        four requirements from section 2.
+      </p>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-box.jpg" alt="The retail box of the ZTE W103D cloud terminal" />
+        <figcaption>The box says "ZTE cloud computer W103D / cloud desktop terminal BAZ01 linux" — a terminal for cloud desktops, not radio equipment.</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-label.jpg" alt="The W103D label: model W103D, input 5V 2A" />
+        <figcaption><strong>Identifying the model is step one, and the only step you cannot skip.</strong> You need the ZTE W103D (Amlogic S905L3A). The same shells ship with GK6323 or RK3566 chips and look nearly identical — the image supports exactly one of them, so buying the wrong one is buying a brick.</figcaption>
+      </figure>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-size.jpg" alt="The W103D next to an AA battery for scale" />
+        <figcaption>Size: palm-sized, with an AA battery for scale (that one is a rechargeable eneloop). Rated 5 V/2 A; measured draw is <strong>under 5 W</strong> — a year of always-on costs less than ¥30 of electricity.</figcaption>
+      </figure>
+      <table>
+        <tr><th></th><th>ZTE W103D</th><th>Raspberry Pi 4</th><th>Raspberry Pi 5</th></tr>
+        <tr><td>SoC</td><td>S905L3A · 4×A53 (in-order)</td><td>BCM2711 · 4×A72 (out-of-order)</td><td>BCM2712 · 4×A76 (out-of-order)</td></tr>
+        <tr><td>RAM / storage</td><td>2 GB / <strong>32 GB eMMC</strong></td><td>1–8 GB / microSD</td><td>4–8 GB / microSD·NVMe</td></tr>
+        <tr><td>NIC</td><td>100 Mb</td><td>Gigabit</td><td>Gigabit</td></tr>
+        <tr><td>Power</td><td><strong>&lt; 5 W</strong></td><td>~3–7 W</td><td>~5–12 W</td></tr>
+        <tr><td>Software maturity</td><td><strong>Vendor kernel, cannot upgrade</strong></td><td>Official images, biggest ecosystem</td><td>Same</td></tr>
+      </table>
+      <div class="note">
+        <strong>The costs, stated plainly</strong>: its Wi-Fi (MT7663S) needs a
+        community driver and vendor kernel patches, so upgrading the kernel can
+        <em>silently lose Wi-Fi</em> (no error, it just never associates). The
+        NIC is 100 Mb, not gigabit. And you flash Armbian yourself (ophub's
+        <code>s905l3a-w103d</code> variant, kernel 6.18). In other words:
+        <strong>the money you save, you pay back in your own time</strong>. If
+        you are willing to spend that time, this is the cheapest option on the
+        table.
+      </div>
+
+      <h2>5. Hands-on: from unboxing to a waterfall on the phone</h2>
+      <p>
+        Five steps, needing only a network cable, a USB stick and a computer you
+        can SSH from:
+      </p>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-unbox.jpg" alt="Unboxing: the W103D and its accessories" />
+        <figcaption>Unboxing: the unit, a USB-C power supply and a cable. HDMI, the NIC and both USB ports are all there.</figcaption>
+      </figure>
+      <h3>① Write the USB stick</h3>
+      <p>Flash the image to a USB stick (<strong>check the device name twice</strong>) and plug it into the box:</p>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-usb.jpg" alt="The W103D with a USB stick plugged in" />
+        <figcaption>Stick in, cable in — ready to boot from USB.</figcaption>
+      </figure>
+      <h3>② Boot from USB (Android stays untouched)</h3>
+      <p>
+        Power the box and run <code>reboot update</code> once from Android. It
+        then boots from the stick. This <strong>writes the u-boot boot order
+        once and touches no Android partition or data</strong> — unplug the
+        stick, power-cycle, and it is the same Android box again. My favourite
+        property of this whole approach: failure is free, because nothing was
+        changed.
+      </p>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-firstboot.jpg" alt="Armbian first-boot banner on HDMI with an SSH session" />
+        <figcaption>First boot: the Armbian banner on HDMI (S905L3a / kernel 6.18.54-ophub / 50&nbsp;°C / LAN address) while SSH is already usable. <strong>First boot needs no network</strong>: password, self-signed certificate and serial probing all happen locally, and the banner prints the web password.</figcaption>
+      </figure>
+      <h3>③ Connect the radio</h3>
+      <p>
+        The FT-710 plugs into the box through its <strong>upper "Enhanced"
+        port</strong>; one cable delivers three things at once: the CAT serial
+        port (<code>/dev/ttyUSB0</code>), the USB sound card, and the FT4222
+        interface used for the real spectrum. Switch models with the bundled
+        command:
+      </p>
+      <pre><code>ssh root@&lt;box-ip&gt;
+mrrc-radio use ft710        # probes the serial port → writes config → restarts</code></pre>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-setup.jpg" alt="Connection settings in the browser: FT-710, serial port, RX/TX audio devices" />
+        <figcaption>The connection page in the browser: model, serial port, RX/TX audio devices — changes take effect immediately.</figcaption>
+      </figure>
+      <h3>④ A radio on the phone</h3>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-phone.jpg" alt="MRRC in a phone browser: spectrum, waterfall, power/SWR meters, PTT" />
+        <figcaption><strong>This is what the ¥125 bought</strong>: a real spectrum and waterfall (not the synthetic S-meter fallback), power/SWR meters, mode and filter controls, and that red PTT — in a phone browser. Transmitting from a phone requires HTTPS (browsers only grant microphone access in a secure context), so the image signs a self-signed certificate on first boot.</figcaption>
+      </figure>
+
+      <h2>6. Booting is not working: six defects the real box found</h2>
+      <p>
+        The image had been built and verified in a container — "green all the
+        way". The first evening it ran on real hardware with a real radio
+        attached, it produced six defects. Every one of them only shows up on
+        this hardware, which is why I refuse to treat "the build succeeded" as
+        evidence.
+      </p>
+      <table>
+        <tr><th>Symptom</th><th>Cause</th></tr>
+        <tr>
+          <td>The web UI never opens; the service restarts every 3 seconds</td>
+          <td>First boot generated the TLS certificate as root, so the key was <code>0600 root:root</code>, while the service runs as <code>mrrc</code> — uvicorn cannot read it</td>
+        </tr>
+        <tr>
+          <td>The real spectrum never starts (CAT and audio are fine)</td>
+          <td>The FT4222 has no <code>/dev</code> node of its own; the library opens the USB device directly and it was <code>root:root</code> — a missing udev rule. <strong>A half-failure is the hardest kind to diagnose</strong></td>
+        </tr>
+        <tr>
+          <td>The first-boot banner (with the password) never appears on HDMI</td>
+          <td>The unit asked for <code>StandardOutput=console</code> — <strong>not valid systemd syntax</strong>, which systemd silently ignores</td>
+        </tr>
+        <tr>
+          <td>The box's config carried the <strong>build host's</strong> serial port</td>
+          <td>The installer's config file was written on the build machine and copied into the image verbatim (mine had <code>/dev/cu.SLAB_USBtoUART</code>)</td>
+        </tr>
+        <tr>
+          <td>Every fresh box shows one failed unit</td>
+          <td>Debian's <code>dnsmasq.service</code> fights systemd-resolved for port 53 (the hotspot uses NetworkManager's own instance)</td>
+        </tr>
+        <tr>
+          <td>The acceptance script calls a <strong>running</strong> unit "not installed"</td>
+          <td><code>systemctl list-unit-files | grep -q</code> under <code>pipefail</code> exits 141 from SIGPIPE: grep leaves as soon as it matches, systemctl gets SIGPIPE, and "found it" is reported as "not found"</td>
+        </tr>
+      </table>
+
+      <h3>The audio fight (worth its own section)</h3>
+      <p>
+        With the radio connected, audio in the browser <strong>stuttered
+        badly</strong> — chopped first, then gone. My first guesses were the
+        network, the browser, or transmit interference. All wrong. Using the
+        server's own audio code outside the server gave three clean control runs:
+      </p>
+      <table>
+        <tr><th>How it read</th><th>Audio actually received</th></tr>
+        <tr><td>As shipped (one 20 ms period)</td><td><strong>4%</strong>, and a <strong>permanent stall</strong> after ~60 seconds</td></tr>
+        <tr><td>The same code, reading aggressively</td><td>100%</td></tr>
+        <tr><td>The same code, with a 400 ms buffer</td><td>99.7%</td></tr>
+        <tr><td><strong>Fixed (100 ms buffer)</strong></td><td><strong>100%, 50 frames/s, 20 ms spacing, stable</strong></td></tr>
+      </table>
+      <p>
+        The root cause is that this box's <strong>host audio buffer holds only
+        one or two 20 ms periods</strong>: read a little late and it overflows —
+        and here is the deceptive part — <strong>the capture interface then
+        stops silently</strong>. The system reports it stopped, while the audio
+        library still reports an open stream, raises nothing and logs nothing.
+        macOS and Windows hand the same code far more slack, so this class of
+        bug is invisible on a desktop.
+      </p>
+      <p>
+        Two fixes: set the capture buffer per platform to 100 ms
+        (<code>MRRC_RX_BUFFER_MS</code>), and add a <strong>stall
+        watchdog</strong> — if someone is listening and no audio arrives for
+        three seconds, log it and reopen the capture stream. The first stops the
+        problem from happening; the second makes it <em>visible and
+        self-healing</em> when it happens anyway.
+      </p>
+
+      <h2>7. What it is worth</h2>
+      <table>
+        <tr><th>What you get</th><th>Notes</th></tr>
+        <tr>
+          <td><strong>Every device is a front panel</strong></td>
+          <td>Phone, tablet, laptop (and the native Android client) open a URL and can listen, watch a real waterfall and press PTT; the server sits by the radio instead of on the desk</td>
+        </tr>
+        <tr>
+          <td><strong>Cost</strong></td>
+          <td>¥125 for the box, plus a USB stick I already had. A Raspberry Pi build is usually ¥400+ with PSU, cooling and storage; an N100 mini PC is ¥500+</td>
+        </tr>
+        <tr>
+          <td><strong>The price of always-on</strong></td>
+          <td>Under 5 W — less than ¥30 a year — passively cooled, so no fan noise</td>
+        </tr>
+        <tr>
+          <td><strong>It does other things too</strong></td>
+          <td>The same box drives the ATU (ATR-1000), records QSOs, and can hand a friend a <strong>listen-only password</strong></td>
+        </tr>
+        <tr>
+          <td><strong>One step further out</strong></td>
+          <td>Add Cloud Hub (outbound tunnel + per-instance certificates) and it stops being "a radio on the LAN" and becomes <strong>reachable from the internet</strong>: see <a href="cloud-first-mile.html">The Cloud's First Mile</a></td>
+        </tr>
+      </table>
+      <p>
+        The most concrete win: <strong>the radio is back where it belongs</strong>.
+        The spot on the desk now only supplies an antenna and power; who uses it
+        and from where is the browser's business. Anyone at home can be given a
+        listen-only password for an evening of shortwave, and from out of town
+        that familiar FT-710 is one URL away.
+      </p>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-desk.jpg" alt="The W103D sitting quietly on the radio desk" />
+        <figcaption>Where it ends up: beside the radio, not in front of a monitor, not in the middle of the desk, and nobody ever has to switch it off — <strong>once power and the cable are in, it is just a small box that is always there</strong>.</figcaption>
+      </figure>
+
+      <h2>8. Boundaries, and what is not done yet</h2>
+      <ul>
+        <li>
+          <strong>Not yet verified on the real radio</strong>: transmit audio
+          from the browser (needs someone at the microphone), QSO recording, and
+          the public-internet acceptance run. A green build and a working LAN
+          setup prove none of those.
+        </li>
+        <li>
+          <strong>It depends on a vendor kernel</strong>: the box's Wi-Fi needs
+          Amlogic's patched kernel and firmware. <em>Upgrade kernels only via
+          <code>armbian-update</code>, keeping the w103d variant</em> — a
+          generic kernel silently loses Wi-Fi.
+        </li>
+        <li>
+          <strong>The 100 Mb NIC</strong>: one client (a real spectrum at roughly
+          150 kbps plus Opus audio) is easy. Several listeners plus recording at
+          once is where you start counting.
+        </li>
+        <li>
+          <strong>This is not a retail product</strong>: it is one box we run
+          ourselves. The image, the build scripts and this whole diagnostic
+          record are in the repository, so anyone willing to spend an evening
+          can reproduce it. If you would rather not, the N100 or the Raspberry
+          Pi from sections 2 and 3 is your answer.
+        </li>
+      </ul>
+
+      <p class="foot">
+        Written 2026-10-11, the day this box went live. Every number comes from
+        that day's logs, commits and artifact checks (including the one-line
+        test for each of the six defects). The image is on the
+        <a href="downloads/MRRC-Modern-1.25.5-w103d.img.gz">download page</a>;
+        step-by-step operation is in the
+        <a href="w103d.html">W103D guide</a>.<br />
+        中文版：<a href="zh/w103d-radio-box.html">125 元的盒子</a>
+      </p>
+    </main>
+  </body>
+</html>

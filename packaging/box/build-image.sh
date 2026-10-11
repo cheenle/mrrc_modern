@@ -133,9 +133,12 @@ docker run --rm --platform linux/arm64 --privileged \
     loop="$(losetup --show -fP "$img")"
     trap "umount -R /mnt 2>/dev/null || true; losetup -d $loop 2>/dev/null || true" EXIT
 
-    # The kernel scans the partitions, but the /dev nodes are udev work and a
-    # container has none. Without them the mounts below fail.
-    . /src/packaging/box/part-nodes.sh
+    # sourcing part-nodes.sh, which lives in packaging/common/ — the Pi image
+    # verification container needs the same mknod trick (a container has no udev,
+    # so `losetup -P` produces partitions the kernel knows about and /dev does not).
+    # Keep prose in here free of apostrophes: this whole block is one single-quoted
+    # argument, and one of them ends it (see ShellHygieneTests.test_shell_scripts_parse).
+    . /src/packaging/common/part-nodes.sh
     part_nodes "$loop"
     [ -b "${loop}p2" ] || { echo "✗ ${loop}p2 missing after the -P scan" >&2; exit 1; }
 

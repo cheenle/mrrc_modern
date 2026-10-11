@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 import stat
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -194,6 +195,41 @@ class ShellHygieneTests(unittest.TestCase):
         text = (COMMON / "mrrc-service-layer.sh").read_text(encoding="utf-8")
         self.assertIn("rm -rf /tmp/*", text)
         self.assertIn('rm -rf "$MRRC_ASSETS"', text)
+
+    def test_every_shell_script_parses(self):
+        """`bash -n` on everything, because the other rules here cannot see this.
+
+        Prose inside a shell construct is a shape this repo got wrong twice on
+        2026-10-11: a comment inside a continued argument list ends the command
+        (the rule below), and a single apostrophe — the word "image's" — closes a
+        `bash -c '…'` block and leaves the rest of the file unparseable. Neither
+        is visible to a regex, and the second one is invisible to the eye as
+        well, so the parser gets a vote.
+        """
+        offenders = []
+        for path in self._all_shells():
+            proc = subprocess.run(["bash", "-n", str(path)],
+                                  capture_output=True, text=True)
+            if proc.returncode != 0:
+                detail = (proc.stderr.strip().splitlines() or ["parse error"])[0]
+                offenders.append(f"{path.relative_to(REPO)}: {detail}")
+        self.assertEqual(offenders, [],
+                         "a shell script in this repo does not parse: "
+                         + "; ".join(offenders))
+
+    #: Directories whose .sh files belong to somebody else (upstream clones,
+    #: vendored SDKs, virtualenvs) or to another checkout of this repo.
+    SKIP_DIRS = frozenset(("build", "dist", "website", "FT710Mobile",
+                           "FT710Android", "venv", ".venv", ".worktrees",
+                           ".git", "node_modules", "logs"))
+
+    def _all_shells(self) -> list[Path]:
+        found = []
+        for path in sorted(REPO.rglob("*.sh")):
+            if set(path.relative_to(REPO).parts[:-1]) & self.SKIP_DIRS:
+                continue
+            found.append(path)
+        return found
 
     def test_no_comment_inside_a_continued_argument_list(self):
         r"""A `#` after a line continuation ends the COMMAND, not the line.

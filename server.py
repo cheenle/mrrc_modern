@@ -5091,6 +5091,164 @@ async def api_box_status(request: Request):
     })
 
 
+async def _box_body(request: Request) -> dict:
+    """The JSON body, or an empty dict. A malformed body is a 400 from the
+    endpoint's own validation, not a 500 from the parser."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _box_busy() -> bool:
+    """Whether a network change is already in flight.
+
+    Both the Wi-Fi switch and the wired change move the box's own connectivity,
+    so they share one slot: two at once would leave the rollback of one fighting
+    the apply of the other.
+    """
+    return box_ops.switch_state()["phase"] == box_ops.PHASE_SWITCHING
+
+
+@app.get("/api/box/wifi", include_in_schema=False)
+async def api_box_wifi_scan(request: Request):
+    """Visible networks. Unprivileged: `mrrc` may read NetworkManager."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse(
+        {"networks": await asyncio.to_thread(box_ops.scan_networks)})
+
+
+@app.post("/api/box/wifi", include_in_schema=False)
+async def api_box_wifi_connect(request: Request):
+    """Order a Wi-Fi switch. Returns before the network moves, on purpose.
+
+    The request may be arriving over the very interface this takes down, so
+    waiting for the result would wait on a socket that is already gone. The page
+    polls `/api/box/wifi/status` after it reconnects (design §6.2).
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    ssid = (body.get("ssid") or "").strip()
+    password = body.get("password") or ""
+    if not ssid:
+        return JSONResponse({"ok": False, "error": "请选择一个 Wi-Fi"},
+                            status_code=400)
+    if _box_busy():
+        return JSONResponse({"ok": False, "error": "已经有一次切换在进行中"},
+                            status_code=409)
+    asyncio.create_task(asyncio.to_thread(
+        box_ops.perform_wifi_switch, ssid, password))
+    logger.warning("box: switching to WiFi %r — if the operator reached the box "
+                   "over WiFi, their own session is about to drop", ssid)
+    return JSONResponse({"ok": True, "switching": True, "ssid": ssid})
+
+
+@app.get("/api/box/wifi/status", include_in_schema=False)
+async def api_box_wifi_status(request: Request):
+    """How the switch went. Read after reconnecting, possibly from the new
+    network, possibly after a rollback."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse(box_ops.switch_state())
+
+
+@app.post("/api/box/hostname", include_in_schema=False)
+async def api_box_hostname(request: Request):
+    """Rename the box, then tell avahi before it notices on its own.
+
+    avahi-daemon reads the hostname when it starts and when it is reloaded; it
+    does not follow `hostnamectl`. Without the nudge the new name is advertised
+    at whatever moment avahi next decides to, which is not a thing to make an
+    operator wait for.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    result = await asyncio.to_thread(box_ops.set_hostname,
+                                     (body.get("hostname") or "").strip())
+    if result.get("ok"):
+        await asyncio.to_thread(box_ops.reload_avahi)
+    return JSONResponse(result,
+                        status_code=200 if result.get("ok") else 400)
+
+
+@app.post("/api/box/timezone", include_in_schema=False)
+async def api_box_timezone(request: Request):
+    """Set the box's timezone, through the helper: `timedatectl` is root's.
+
+    The zone is validated here before the helper is asked, the same shape as
+    `api_box_link`: a zone that cannot be set must be refused as a 400 without a
+    round trip to the privileged side (`box_ops.timezone_problem` is the pure
+    check, and `box_ops.set_timezone` repeats it before it touches the socket).
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    zone = (body.get("timezone") or "").strip()
+    problem = box_ops.timezone_problem(zone)
+    if problem:
+        return JSONResponse({"ok": False, "error": problem}, status_code=400)
+    result = await asyncio.to_thread(box_ops.set_timezone, zone)
+    return JSONResponse(result,
+                        status_code=200 if result.get("ok") else 400)
+
+
+@app.post("/api/box/link", include_in_schema=False)
+async def api_box_link(request: Request):
+    """Order a change to a wired profile: DHCP or a static address.
+
+    Ordered, not awaited, for the same reason as the Wi-Fi switch: the operator
+    may be reaching the box over the profile being edited (design §6.4).
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    profile = (body.get("profile") or "").strip()
+    method = (body.get("method") or "").strip()
+    address = (body.get("address") or "").strip()
+    gateway = (body.get("gateway") or "").strip()
+    if not profile:
+        return JSONResponse({"ok": False, "error": "没有指定要改的连接"},
+                            status_code=400)
+    problem = box_ops.link_problem(method, address)
+    if problem:
+        return JSONResponse({"ok": False, "error": problem}, status_code=400)
+    if _box_busy():
+        return JSONResponse({"ok": False, "error": "已经有一次网络改动在进行中"},
+                            status_code=409)
+    asyncio.create_task(asyncio.to_thread(
+        box_ops.perform_link_change, profile, method, address,
+        gateway=gateway))
+    logger.warning("box: changing %r to %s — if the operator reached the box "
+                   "over this link, their session is about to drop",
+                   profile, method)
+    return JSONResponse({"ok": True, "changing": True, "profile": profile})
+
+
+@app.post("/api/box/system/reboot", include_in_schema=False)
+async def api_box_system_reboot(request: Request):
+    """Restart the box, not the service.
+
+    `POST /api/restart` restarts the server and everything comes back; this one
+    takes the whole machine down for about a minute and drops every session on
+    it. Two buttons on one page with that much difference between them need
+    different friction, so this one takes an explicit confirmation value.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    if body.get("confirm") != "reboot":
+        return JSONResponse({"ok": False, "error": "重启盒子需要显式确认"},
+                            status_code=400)
+    result = await asyncio.to_thread(box_ops.reboot)
+    logger.warning("box: reboot requested")
+    return JSONResponse(result,
+                        status_code=200 if result.get("ok") else 400)
+
+
 # The SPA fallback is registered last on purpose: it matches every GET path, so any GET route
 # defined after it is answered with index.html instead of its own handler. That is how
 # GET /api/cloud/state came back as 200 + a web page in v1.24.0 (the settings dialog could not

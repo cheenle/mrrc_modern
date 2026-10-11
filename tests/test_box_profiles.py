@@ -168,6 +168,12 @@ class BoxBuildIntegrityTests(unittest.TestCase):
 
     BUILD = REPO / "packaging" / "box" / "build-image.sh"
     OVERLAY = REPO / "packaging" / "box" / "box-overlay.sh"
+    #: Since 2026-10-11 the overlay is a thin platform shell: the apt list, the
+    #: venv bootstrap, the version stamp and the env defaults moved into the
+    #: shared service layer, which both image lines run. These tests follow the
+    #: behaviour to its new home rather than dying with the old one.
+    SERVICE_LAYER = REPO / "packaging" / "common" / "mrrc-service-layer.sh"
+    PACKAGES = REPO / "packaging" / "common" / "packages.txt"
 
     def test_everything_the_chrooted_command_uses_is_bound_into_the_chroot(self):
         """A chrooted /src resolves to /mnt/src, and mounting is not automatic.
@@ -209,10 +215,10 @@ class BoxBuildIntegrityTests(unittest.TestCase):
         virtualenv created without it has no pip, which fails the dependency
         install further down and ships an image whose server cannot start.
         """
-        overlay = self.OVERLAY.read_text(encoding="utf-8")
-        self.assertIn("python3.11-venv", overlay)
+        overlay = self.SERVICE_LAYER.read_text(encoding="utf-8")
+        self.assertIn("python3.11-venv", self.PACKAGES.read_text(encoding="utf-8"))
         self.assertLess(
-            overlay.index("python3.11-venv"),
+            overlay.index("apt-get install"),
             overlay.index("./install.sh"),
             "the venv bootstrap must be installed before install.sh runs",
         )
@@ -222,15 +228,18 @@ class BoxBuildIntegrityTests(unittest.TestCase):
 
         The pinned image does not carry it, whatever the design note said.
         """
-        self.assertIn("libopus0", self.OVERLAY.read_text(encoding="utf-8"))
+        self.assertIn("libopus0", self.PACKAGES.read_text(encoding="utf-8"))
 
     def test_avahi_is_installed_and_dnsmasq_is_not(self):
         """`dnsmasq` was there for the hotspot's shared mode; `avahi-daemon` is
         there for <hostname>.local. Swapping them is the whole packaging change
         for the new onboarding path, and a stray `dnsmasq` would keep pulling a
         daemon that collides with systemd-resolved for port 53."""
-        text = self.OVERLAY.read_text(encoding="utf-8")
-        packages = text.split("--no-install-recommends", 1)[1].split("\n\n", 1)[0]
+        packages = {
+            line.strip()
+            for line in self.PACKAGES.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
         self.assertIn("avahi-daemon", packages)
         self.assertNotIn("dnsmasq", packages)
 
@@ -274,7 +283,7 @@ class BoxBuildIntegrityTests(unittest.TestCase):
         /opt/mrrc_modern, so an image that lacks it fails those two things while
         looking complete. The first real build did exactly that.
         """
-        overlay = self.OVERLAY.read_text(encoding="utf-8")
+        overlay = self.SERVICE_LAYER.read_text(encoding="utf-8")
         self.assertIn('"$MRRC_HOME/version.txt"', overlay)
         self.assertIn('"$MRRC_HOME/VERSION"', overlay)
         self.assertIn("CHANGELOG.md", overlay, "the version comes from the CHANGELOG")
@@ -426,10 +435,15 @@ class BoxFirstBootHardwareTests(unittest.TestCase):
     hardware-session findings, each with the command that proves it.
     """
 
-    OVERLAY = REPO / "packaging" / "box" / "box-overlay.sh"
+    #: The steps these tests are about moved into the shared service layer on
+    #: 2026-10-11 — it is what both image lines run. The mask test below is the
+    #: one that stayed in the platform shell, so it reads the shell instead.
+    SERVICE_LAYER = REPO / "packaging" / "common" / "mrrc-service-layer.sh"
+    BOX_SHELL = REPO / "packaging" / "box" / "box-overlay.sh"
 
     def setUp(self):
-        self.text = self.OVERLAY.read_text(encoding="utf-8")
+        self.text = self.SERVICE_LAYER.read_text(encoding="utf-8")
+        self.shell = self.BOX_SHELL.read_text(encoding="utf-8")
 
     def test_the_service_user_gets_the_scope_interface(self):
         """libft4222 opens the USB device as `mrrc`; root:root 0664 is FTDI error 2.
@@ -459,7 +473,8 @@ class BoxFirstBootHardwareTests(unittest.TestCase):
         with their web password (design D-6 relies on that banner). Valid forms:
         `tty`, `journal`, `journal+console`.
         """
-        units = [self.OVERLAY, *sorted((REPO / "packaging" / "rpi").rglob("*.service"))]
+        units = [self.SERVICE_LAYER, self.BOX_SHELL,
+                 *sorted((REPO / "packaging" / "rpi").rglob("*.service"))]
         for path in units:
             for line in path.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
@@ -474,7 +489,7 @@ class BoxFirstBootHardwareTests(unittest.TestCase):
     def test_debians_dnsmasq_unit_is_masked(self):
         """NM's shared mode spawns its own dnsmasq; the packaged unit loses port
         53 to systemd-resolved and shows up as a failed unit on a fresh box."""
-        self.assertIn("systemctl mask dnsmasq.service", self.text)
+        self.assertIn("systemctl mask dnsmasq.service", self.shell)
 
     def test_the_capture_buffer_default_is_visible_in_the_env_file(self):
         """The code default is the same on Linux; writing it into mrrc.env makes

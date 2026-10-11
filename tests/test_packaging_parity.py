@@ -101,7 +101,10 @@ class CallSiteTests(unittest.TestCase):
             text = (REPO / relative).read_text(encoding="utf-8")
             for needle in required:
                 with self.subTest(path=relative, needle=needle):
-                    self.assertIn(needle, text, f"{relative} does not use {needle}")
+                    # assertTrue, not assertIn: assertIn puts the whole file in the
+                    # failure message, and these files are hundreds of lines long.
+                    self.assertTrue(needle in text,
+                                    f"{relative} does not use {needle}")
 
 
 class PiStageTests(unittest.TestCase):

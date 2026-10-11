@@ -64,5 +64,211 @@ class LeakTests(unittest.TestCase):
                 self.assertNotIn(forbidden, src)
 
 
+class _FakeServer:
+    """Records the credential injection, which is the one wiring fact this file can
+    check without a socket: the session owns the pair, the server only checks it."""
+
+    def __init__(self):
+        self.installed = []
+        self.stopped = 0
+
+    def set_credentials(self, user, pw):
+        self.installed.append((user, pw))
+
+    def stop(self):
+        self.stopped += 1
+
+
+class StateMachineTests(unittest.TestCase):
+    """off → arming → open → closed, with one way out from every state.
+
+    The failure this guards is the half-cleaned one: an arming that bound a socket
+    and then failed to get a tunnel port, returning to `off` and leaving the
+    listener behind.
+    """
+
+    def setUp(self):
+        self.now = 1_000_000.0
+        self.events = []
+        self.server = _FakeServer()
+        self.opened = []
+        self.tunnel_calls = []
+        self.closed_portal = []
+
+    def _session(self, **kw):
+        params = dict(
+            opener=lambda minutes: 19000,
+            tunnel=lambda lp, rp, add: self.tunnel_calls.append((lp, rp, add)),
+            listener=lambda: 34567,
+            closer=lambda: self.closed_portal.append(self.now),
+            clock=lambda: self.now,
+            on_event=self.events.append,
+            server=self.server,
+        )
+        params.update(kw)
+        return help_session.HelpSession(**params)
+
+    def test_it_starts_off(self):
+        self.assertEqual(self._session().state, help_session.OFF)
+
+    def test_enable_opens_and_reports_what_the_ui_needs(self):
+        s = self._session()
+        st = s.enable(minutes=30)
+        self.assertEqual(s.state, help_session.OPEN)
+        self.assertEqual(st["port"], 19000)
+        self.assertEqual(st["expires_at"], self.now + 30 * 60)
+        self.assertTrue(st["username"].startswith("help-"))
+        self.assertNotIn("password", st, "the status dict has no password field")
+        self.assertEqual([t[2] for t in self.tunnel_calls], [True], "the proxy was added")
+
+    def test_the_credentials_are_injected_into_the_server(self):
+        s = self._session()
+        s.enable(minutes=30)
+        self.assertEqual(len(self.server.installed), 1)
+        user, pw = self.server.installed[0]
+        self.assertEqual(user, s.status()["username"])
+        self.assertEqual(pw, s.password_for_display())
+
+    def test_a_customer_supplied_pair_is_used_as_given(self):
+        s = self._session()
+        st = s.enable(minutes=30, username="zhang-san", password="correct horse battery")
+        self.assertEqual(st["username"], "zhang-san")
+        self.assertEqual(s.password_for_display(), "correct horse battery")
+
+    def test_a_bad_customer_username_is_refused_before_anything_is_bound(self):
+        s = self._session()
+        with self.assertRaises(ValueError):
+            s.enable(minutes=30, username="has space")
+        self.assertEqual(s.state, help_session.CLOSED, "refused, and nothing left open")
+
+    def test_a_too_short_password_is_refused(self):
+        s = self._session()
+        with self.assertRaises(ValueError):
+            s.enable(minutes=30, password="short")
+
+    def test_arming_failure_still_goes_through_close(self):
+        """绑定成功、申请隧道失败 ⇒ 必须把监听拆掉（否则留个孤儿）。"""
+        def boom(port, remote, add):
+            raise RuntimeError("reload failed")
+        s = self._session(tunnel=boom)
+        with self.assertRaises(RuntimeError):
+            s.enable(minutes=30)
+        self.assertEqual(s.state, help_session.CLOSED)
+        self.assertEqual(s.close_reason, "error")
+        self.assertGreaterEqual(self.server.stopped, 1, "the listener was torn down")
+        self.assertIn("closed", [e["event"] for e in self.events])
+
+    def test_portal_failure_before_the_tunnel_also_cleans_up(self):
+        def boom(minutes):
+            raise RuntimeError("portal unreachable")
+        s = self._session(opener=boom)
+        with self.assertRaises(RuntimeError):
+            s.enable(minutes=30)
+        self.assertEqual(s.state, help_session.CLOSED)
+        self.assertEqual(self.tunnel_calls, [], "no proxy to remove")
+        self.assertGreaterEqual(self.server.stopped, 1)
+
+    def test_expiry_closes_it(self):
+        s = self._session()
+        s.enable(minutes=30)
+        self.now += 30 * 60 + 1
+        self.assertEqual(s.tick(), "expired")
+        self.assertEqual(s.state, help_session.CLOSED)
+        self.assertEqual(self.tunnel_calls[-1][2], False, "the proxy was removed")
+
+    def test_it_does_not_auto_renew(self):
+        s = self._session()
+        s.enable(minutes=30)
+        self.now += 30 * 60 + 1
+        s.tick()
+        self.assertIsNone(s.tick())
+
+    def test_the_window_has_a_ceiling(self):
+        s = self._session()
+        st = s.enable(minutes=10_000)
+        self.assertEqual(st["expires_at"] - self.now,
+                         help_session.MAX_WINDOW_MINUTES * 60)
+
+    def test_close_is_idempotent_and_the_first_reason_wins(self):
+        s = self._session()
+        s.enable(minutes=30)
+        s.close("user")
+        s.close("portal")
+        self.assertEqual(s.close_reason, "user")
+
+    def test_a_second_enable_while_open_is_refused(self):
+        s = self._session()
+        s.enable(minutes=30)
+        with self.assertRaises(RuntimeError):
+            s.enable(minutes=30)
+
+    def test_closing_notifies_the_portal(self):
+        s = self._session()
+        s.enable(minutes=30)
+        s.close("user")
+        self.assertEqual(len(self.closed_portal), 1)
+
+    def test_a_failing_portal_notification_does_not_block_the_rest(self):
+        """关闭必须尽量走完：门户报错不能把监听留在那里。"""
+        s = self._session(closer=lambda: (_ for _ in ()).throw(RuntimeError("502")))
+        s.enable(minutes=30)
+        s.close("user")
+        self.assertEqual(s.state, help_session.CLOSED)
+        self.assertGreaterEqual(self.server.stopped, 1)
+
+    def test_close_zeroes_the_password(self):
+        s = self._session()
+        s.enable(minutes=30)
+        self.assertTrue(s.password_for_display())
+        s.close("user")
+        self.assertEqual(s.password_for_display(), "")
+
+
+class AuditTests(unittest.TestCase):
+    """What the customer can see, and what the support bundle carries."""
+
+    def setUp(self):
+        self.now = 1_000_000.0
+        self.events = []
+
+    def _session(self):
+        return help_session.HelpSession(
+            opener=lambda minutes: 19000, tunnel=lambda lp, rp, add: None,
+            listener=lambda: 34567, clock=lambda: self.now,
+            on_event=self.events.append, server=_FakeServer())
+
+    def test_open_and_close_are_recorded(self):
+        s = self._session()
+        s.enable(minutes=30)
+        s.close("user")
+        kinds = [e["event"] for e in self.events]
+        self.assertEqual(kinds, ["opened", "closed"])
+        self.assertEqual(self.events[1]["reason"], "user")
+
+    def test_no_event_carries_the_password(self):
+        s = self._session()
+        s.enable(minutes=30)
+        pw = s.password_for_display()
+        s.close("user")
+        self.assertTrue(pw)
+        self.assertNotIn(pw, repr(self.events))
+
+    def test_auth_failures_are_counted_and_evented(self):
+        s = self._session()
+        s.enable(minutes=30)
+        for _ in range(help_session.MAX_AUTH_FAILURES):
+            s.note_auth_failure()
+        self.assertEqual(s.state, help_session.CLOSED)
+        self.assertEqual(s.close_reason, "auth_failures")
+        self.assertIn("auth_fail", [e["event"] for e in self.events])
+
+    def test_a_connection_is_counted(self):
+        s = self._session()
+        s.enable(minutes=30)
+        s.note_connection(duration_s=12.5)
+        self.assertEqual(s.status()["connections"], 1)
+        self.assertIn("disconnect", [e["event"] for e in self.events])
+
+
 if __name__ == "__main__":
     unittest.main()

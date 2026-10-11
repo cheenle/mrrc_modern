@@ -7,6 +7,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
+# ── 2026-10-11 守卫：本机由 systemd 管理时，禁止用本脚本（会与 systemd 打架）──
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files mrrc-modern.service >/dev/null 2>&1; then
+	echo "✗ 本机由 systemd 管理（mrrc-modern.service）：请改用 ./restart.sh" >&2
+	echo "  stop.sh/start.sh 是 macOS 开发机脚本；在盒子上直接跑会让服务与 systemd 冲突，" >&2
+	echo "  并以 root 起一份读不到 TLS 私钥的副本（事故：2026-10-11 21:07 掉线）。" >&2
+	echo "  确需开发模式：MRRC_ALLOW_DEV_SCRIPTS=1 $0 ..." >&2
+	[ "${MRRC_ALLOW_DEV_SCRIPTS:-0}" = "1" ] || exit 1
+fi
+
 PID_FILE="$ROOT_DIR/.ft710-server.pid"
 LOG_FILE="$ROOT_DIR/logs/ft710-server.log"
 

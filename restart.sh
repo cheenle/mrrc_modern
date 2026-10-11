@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════
-# MRRC Modern — Restart Server
+# MRRC Modern — restart（平台分发）
 # ═══════════════════════════════════════════════════════════════════════
-# Thin wrapper: stop → start.  All logic lives in stop.sh / start.sh.
+# Linux 盒子 → restart_linux.sh（systemd 驱动 + 健康验证）
+# macOS/开发机 → restart_mac.sh（stop.sh + start.sh）
+#
+# 保留本文件名是因为文档与使用习惯都用 ./restart.sh。
+# ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Pass any arguments through to start.sh  (e.g. --foreground, -p PORT)
-"$SCRIPT_DIR/stop.sh"
-echo ""
-exec "$SCRIPT_DIR/start.sh" "$@"
+case "$(uname -s)" in
+Linux) exec "$DIR/restart_linux.sh" "$@" ;;
+Darwin) exec "$DIR/restart_mac.sh" "$@" ;;
+*)
+	echo "未知平台 $(uname -s)：Linux 用 ./restart_linux.sh，macOS 用 ./restart_mac.sh" >&2
+	exit 1
+	;;
+esac

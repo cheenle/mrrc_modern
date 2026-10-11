@@ -39,7 +39,14 @@ numpy>=1.24.0
 # Raspberry Pi image).
 lameenc>=1.8.0
 
-# ── TLS/SSL (HTTPS) ─────────────────────────────────────────────────────────
+# ── TLS/SSL (HTTPS) ─────────────────────────────────────────────────────
 # Used by ssl_bootstrap.py: the desktop launcher generates a self-signed
 # certificate on first run so the app starts on HTTPS by default.
 cryptography>=41.0.0
+
+# ── Remote help (Call help) ──────────────────────────────────────────────
+# The customer-initiated SSH door (help_session.py). Parameterized because the
+# four platforms must behave the same: Windows has no sshd to fall back on, so
+# the app carries the server itself. cryptography (above) does the crypto;
+# this only adds the SSH transport and channel layer.
+paramiko>=3.4.0

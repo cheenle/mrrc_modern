@@ -4,12 +4,31 @@
 # Usage: packaging/rpi/build-image.sh          (version from CHANGELOG top entry)
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 PIGEN_REF="2026-06-18-raspios-bookworm-arm64"
 WORK="${MRRC_PI_WORK:-$REPO_ROOT/build/pi-gen}"
 OUT="${MRRC_PI_OUT:-$REPO_ROOT/dist/rpi}"
 
-VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO_ROOT/CHANGELOG.md" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' )"
+# Where the build's apt fetches from. pi-gen has no mirror switch at all: stage0
+# debootstraps from deb.debian.org, which measured 65 KB/s from a container on
+# this network while domestic mirrors managed 700-830 KB/s for the same files.
+# Four upstream points are rewritten in the clone, all of them ordinary files:
+# the debootstrap URL, the Debian sources list, the Raspberry Pi archive, and the
+# container image's own apt (which runs first and is the one that would otherwise
+# stall before anything else starts). Set MRRC_PI_APT_MIRROR= (empty) to use
+# upstream.
+APT_MIRROR="${MRRC_PI_APT_MIRROR-https://mirrors.tuna.tsinghua.edu.cn}"
+# PyPI measured 37 KB/s here against 2.9 MB/s domestically. The virtualenv ships
+# inside the image, so the device itself never runs pip.
+PIP_INDEX="${MRRC_PI_PIP_INDEX-https://pypi.tuna.tsinghua.edu.cn/simple}"
+# github.com served 33 KB/s here and truncated transfers mid-stream; a list,
+# because these proxies go down — the empty entry at the end means GitHub itself
+# is the last resort. fetch-frpc.sh verifies frp's own checksum per source, so a
+# mirror can accelerate the download but cannot change what gets installed.
+FRP_PROXY="${MRRC_PI_FRP_PROXY-https://gh-proxy.com/,https://ghfast.top/,}"
+
+VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO_ROOT/CHANGELOG.md" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
 : "${VERSION:?Could not read version from CHANGELOG.md}"
 echo "==> Building MRRC Modern ${VERSION} rpi64 image"
 
@@ -31,33 +50,64 @@ else
     git clone --depth 1 --branch "$PIGEN_REF" https://github.com/RPi-Distro/pi-gen.git "$WORK"
 fi
 
-# ── stage: copy ours in, inject code tree ──
+# ── mirror rewrites (idempotent) ──
+# A substring swap per file rather than a sources.list generator: the pinned ref
+# is what makes these strings stable, and the patch says so when it finds the
+# file already pointing elsewhere. python3 rather than sed -i because macOS sed
+# and GNU sed disagree about in-place edits and about the escaping of a nested
+# quote, and this repo already requires python3 elsewhere on the build host.
+patch_text() {  # patch_text <file> <from> <to>
+    python3 - "$1" "$2" "$3" <<'PY'
+import pathlib, sys
+path, src, dst = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+text = path.read_text(encoding="utf-8")
+if src not in text:
+    print(f"    {path}: already on {dst}" if dst in text else f"    {path}: {src!r} not found")
+else:
+    path.write_text(text.replace(src, dst), encoding="utf-8")
+    print(f"    {path}: {src} -> {dst}")
+PY
+}
+
+if [ -n "$APT_MIRROR" ]; then
+    MIRROR_HOST="${APT_MIRROR#https://}"; MIRROR_HOST="${MIRROR_HOST#http://}"; MIRROR_HOST="${MIRROR_HOST%/}"
+    echo "==> apt mirror: $MIRROR_HOST"
+    patch_text "$WORK/stage0/prerun.sh" "http://deb.debian.org/debian/" "http://$MIRROR_HOST/debian/"
+    patch_text "$WORK/stage0/00-configure-apt/files/sources.list" "deb.debian.org" "$MIRROR_HOST"
+    # archive.raspberrypi.com/debian is the Raspberry Pi archive; the mirror
+    # serves it under /raspberrypi/ and without the /debian suffix.
+    patch_text "$WORK/stage0/00-configure-apt/files/raspi.list" "archive.raspberrypi.com/debian" "$MIRROR_HOST/raspberrypi"
+    patch_text "$WORK/Dockerfile" "RUN apt-get -y update" \
+        "RUN sed -i \"s|deb.debian.org|$MIRROR_HOST|g\" /etc/apt/sources.list && apt-get -y update"
+fi
+
+# ── stage: copy ours in, stage the code tree the ONE way ──
 rsync -a --delete "$REPO_ROOT/packaging/rpi/pi-gen-stage4/" "$WORK/rpi-stage4/"
 STAGE_FILES="$WORK/rpi-stage4/01-deploy-mrrc/files"
-mkdir -p "$STAGE_FILES/opt/mrrc_modern"
-rsync -a "$REPO_ROOT/" "$STAGE_FILES/opt/mrrc_modern/" \
-  --exclude ".git/" --exclude "venv/" --exclude ".venv/" --exclude "dist/" \
-  --exclude "build/" --exclude "logs/" --exclude "certs/" --exclude "promo/" \
-  --exclude "FT710Mobile/" --exclude "FT710Android/" --exclude "website/" \
-  --exclude "tests/" --exclude ".agents/" --exclude "docs/" --exclude "SDD/" \
-  --exclude "packaging/" --exclude "macos/" --exclude "windows/" \
-  --exclude "__pycache__/" --exclude "*.pyc" --exclude ".DS_Store" \
-  --exclude "atr1000_tuner.json" \
-  # Per-box state (instance identity, recordings, operator files) and dev-only
-  # material must never be shipped by an image, nor overwritten by an update.
-  # Root-anchored (/x) patterns match only the repo root — 2026-10-11.
-  --exclude "/.local/" --exclude "/.env" --exclude "/recordings/" \
-  --exclude "/mem_channels.json" --exclude "/.worktrees/" --exclude "/.superpowers/" \
-  --exclude "/.agnes/" --exclude "/.claude/" --exclude "/.pytest_cache/" \
-  --exclude "/.ruff_cache/" --exclude "/dev_tools/" --exclude "/tools/" \
-  --exclude "/support-out/" --exclude "/lib/" --exclude "/biome.json" \
-  --exclude "/build_mrrc_v1101.ps1" --exclude "/*.md" --exclude "/*.pdf" \
-  --exclude "/*.jpg" --exclude "/*.JPG" --exclude "/*.PNG" --exclude "/*.m4a"
-# version.txt is the cross-platform name (support bundle manifest + the future
-# one-click upgrade read it); VERSION is kept for operators upgrading in place.
+mkdir -p "$STAGE_FILES/opt/mrrc_modern" "$STAGE_FILES/opt/mrrc-build"
+bash "$REPO_ROOT/packaging/common/stage-tree.sh" "$REPO_ROOT" "$STAGE_FILES/opt/mrrc_modern"
+# The service layer's own assets, at the path it knows. packaging/ is dropped
+# from the installed tree by the exclusion list, so this is a second copy on
+# purpose — and it is not /tmp: pi-gen's on_chroot mounts a tmpfs over the
+# rootfs's /tmp, which would hide anything staged there.
+rsync -a "$REPO_ROOT/packaging/common/" "$STAGE_FILES/opt/mrrc-build/"
+
+# pi-gen's chroot does not inherit this shell's environment, so every platform
+# parameter travels in a file the stage script sources. Generated, not templated.
+cat > "$STAGE_FILES/opt/mrrc-build/build.env" <<EOF
+# Generated by packaging/rpi/build-image.sh — build-time only, reclaimed by the
+# service layer before the image is assembled, never part of the artifact.
+MRRC_VERSION='${VERSION}'
+MRRC_WEB_HOST='::'
+MRRC_BOOT_DIR='/boot/firmware'
+PIP_INDEX_URL='${PIP_INDEX}'
+MRRC_FRP_PROXY='${FRP_PROXY}'
+EOF
+
+# version.txt is the cross-platform name (support bundle manifest + the upgrade
+# channel read it); VERSION is kept for operators upgrading in place.
 printf '%s\n' "${VERSION#v}" > "$STAGE_FILES/opt/mrrc_modern/version.txt"
 cp "$STAGE_FILES/opt/mrrc_modern/version.txt" "$STAGE_FILES/opt/mrrc_modern/VERSION"
-mkdir -p "$STAGE_FILES/opt/mrrc_modern/vendor/ftdi"
 
 # ── export markers ──
 # Modern pi-gen: a stage exports the final image when it contains an
@@ -67,10 +117,15 @@ touch "$WORK/stage2/SKIP_IMAGES"
 touch "$WORK/rpi-stage4/EXPORT_IMAGE"
 
 # ── pi-gen config ──
+# TARGET_HOSTNAME is MRRC-Modern rather than pi-gen's default raspberrypi: the
+# settings page's identity field already defaults to that name (box_ops), so a
+# different actual hostname would be a silent divergence between what the box
+# calls itself and what mDNS answers to.
 cat > "$WORK/config" <<EOF
 IMG_NAME="MRRC-Modern-${VERSION}-rpi64"
 RELEASE=bookworm
 TARGET_ARCH=64
+TARGET_HOSTNAME=MRRC-Modern
 FIRST_USER_NAME=mrrc
 FIRST_USER_PASS=mrrc
 ENABLE_SSH=1
@@ -82,8 +137,7 @@ cd "$WORK"
 # Mount the host pi-gen dir into the container so work/ + deploy/ (multi-GB)
 # live on the WORK volume instead of Docker.raw.
 export PIGEN_DOCKER_OPTS="-v $WORK:/pi-gen"
-# PRESERVE_CONTAINER=1 keeps the pigen_work container on failure — under
-# qemu a full redo costs hours, so always preserve and resume via CONTINUE=1:
+# PRESERVE_CONTAINER=1 keeps the pigen_work container on failure. Resume with:
 #   CONTINUE=1 IGNORE_FILE_CHANGES=1 ./build-docker.sh   (after a failure)
 IGNORE_FILE_CHANGES=1 PRESERVE_CONTAINER=1 ./build-docker.sh
 

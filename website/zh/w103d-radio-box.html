@@ -294,6 +294,10 @@
         <figcaption><strong>认型号是第一步，也是唯一不能省的一步。</strong>要的是 ZTE W103D（Amlogic S905L3A）。同一批盒子里还有国科 GK6323、RK3566 等芯片的版本，外观几乎一样，而我们的镜像只认这一颗——买错了就是一块砖。</figcaption>
       </figure>
       <figure>
+        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-serial.jpg" alt="W103D 机身标签特写：型号、CMIIT ID、生产日期与序列号" />
+        <figcaption>买之前值得拍一张：标签上有型号、CMIIT ID、<strong>生产日期（2024.09）</strong>和序列号——确认手里这台到底是什么，这是最快的一条路。</figcaption>
+      </figure>
+      <figure>
         <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-size.jpg" alt="W103D 本体，旁边放了一节 5 号电池做尺寸参照" />
         <figcaption>体积：手掌大小，一节 5 号电池当参照（旁边那节是可充电的 eneloop）。额定输入 5V/2A，实测整机 <strong>&lt; 5 W</strong>——常年开着，一年电费不到 30 元。</figcaption>
       </figure>
@@ -346,6 +350,10 @@
       <pre><code>ssh root@&lt;盒子IP&gt;
 mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务</code></pre>
       <figure>
+        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-wiring.jpg" alt="W103D 侧面 USB 口插着设备" />
+        <figcaption>两个 USB 口，所有东西最后都落在这里：装系统时是 U 盘，装完之后是电台的线。</figcaption>
+      </figure>
+      <figure>
         <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-setup.jpg" alt="浏览器里的连接设置：电台型号 FT-710、串口、RX/TX 音频设备" />
         <figcaption>浏览器里的连接设置页：机型、串口、接收/发射音频设备都在这里，改完即生效。</figcaption>
       </figure>
@@ -354,6 +362,24 @@ mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务<
         <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-phone.jpg" alt="手机浏览器里的 MRRC 界面：频谱、瀑布、功率与驻波表、PTT 按钮" />
         <figcaption><strong>这是 125 元买到的东西</strong>：手机浏览器里的真频谱 + 瀑布（不是合成的 S 表回退）、功率/驻波表、模式与滤波、以及那颗红色的 PTT。手机上要能发射必须走 HTTPS（浏览器只在安全上下文里给麦克风权限），所以镜像首启就签好了自签证书。</figcaption>
       </figure>
+
+      <h3>⑤ 刷进盒子自己（然后 U 盘就可以收起来了）</h3>
+      <p>
+        前面四步都还跑在 U 盘上。最后一步让它独立：在<strong>盒子上</strong>跑 ophub 自带的安装器，
+        它把正在运行的系统克隆进机身里那 28.9 GB 的 eMMC，连引导一起处理好。
+      </p>
+      <pre><code>armbian-ddbr            # 先备份整块 eMMC 到 /ddbr/（原厂引导也一起保住）
+armbian-install         # 设备 ID 填 307（ZTE-W103D），根文件系统填 1（ext4）——不要加 -m yes
+poweroff                # 拔掉 U 盘、重新上电：从此从 eMMC 启动</code></pre>
+      <p>
+        两件值得知道的事：安装器把原厂引导<strong>逐字节</strong>保住（只有 68 字节的分区表换成新的，
+        可以用 <code>cmp</code> 验证）；它会重新生成 machine-id，所以盒子的 IPv6 接口标识会变一次——
+        按名字找它的东西（DDNS、Cloud Hub 隧道）几分钟内自己跟上。
+      </p>
+      <p>
+        剩下就是最终形态：<strong>盒子、一根电源线、一根网线</strong>——不再需要 U 盘，
+        28.9 GB 都是它自己的；而那根 U 盘留着当救砖盘（整盘备份就在里面）。
+      </p>
 
       <h2>6. 能开机 ≠ 能用：真机拓出来的六个坑</h2>
       <p>
@@ -486,12 +512,27 @@ mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务<
           <td>7×24</td>
           <td>断电搬机再上电，systemd 自己拉起来；&lt;5 W，被动散热</td>
         </tr>
+        <tr>
+          <td>它自己的存储</td>
+          <td><code>armbian-install</code> 把运行中的系统搬进了机身 <strong>28.9 GB eMMC</strong>；不插 U 盘也能启动，
+              且原厂引导<strong>逐字节</strong>核验过（<code>cmp</code> 比 [0,444) 与 [512,4 MiB) 两段，只有 68 字节分区表不同）</td>
+        </tr>
+        <tr>
+          <td><strong>公网接入</strong></td>
+          <td>已上 Cloud Hub：<code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 用 hub 签发的证书提供 HTTPS；
+              另有一个 DDNS 域名一直追着盒子的 IPv6 地址</td>
+        </tr>
       </table>
       <p>
-        <strong>还没做的一件事：公网接入（Cloud Hub）</strong>。那一步需要呼号申请与批准、
-        以及一个从外网可达的入口；这台盒子现在只在家里的局域网上服务。
-        <em>在局域网里，它是全部在干活的。</em>
+        <strong>公网接入也已经通了。</strong>Cloud Hub 给盒子一个呼号入口
+        （<code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code>，例：<code>https://bg1sb.mrrc.vlsc.net/</code>），
+        自带证书，手机界面跟着你出家门；给客人还可以单发一个只听口令。
+        <em>局域网那边没有任何变化——它依然是全部在干活的那个。</em>
       </p>
+      <figure>
+        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-hub.jpg" alt="用手机通过 Cloud Hub 入口打开 MRRC" />
+        <figcaption>公网入口，手机上打开：界面和瀑布图与局域网里一模一样。</figcaption>
+      </figure>
       <ul>
         <li>
           <strong>依赖专属内核</strong>：这台盒子的 WiFi 依赖 Amlogic 的专属内核与固件，
@@ -511,7 +552,9 @@ mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务<
       <p class="foot">
         写于 2026-10-11，就是这台盒子上线的那天；同一天里把接收、发射、频谱、录音、手机控制
         逐项实测通过（第 8 节附的就是那一天的日志数字）。文中的数据全部来自当天的日志、提交与产物校验，
-        包括那六个缺陷各自的判定命令。镜像可以从
+        包括那六个缺陷各自的判定命令。
+        <em>2026-10-12 更新：补上第五步（装进盒子自己的存储）与公网接入。</em>
+        镜像可以从
         <a href="../downloads/MRRC-Modern-1.25.5-w103d.img.gz">下载页</a>取，
         逐步操作见 <a href="w103d.html">W103D 完整指南</a>。<br />
         English: <a href="../w103d-radio-box.html">A ¥125 box as my FT-710's remote server</a>

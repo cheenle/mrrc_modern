@@ -314,6 +314,10 @@
         <figcaption><strong>Identifying the model is step one, and the only step you cannot skip.</strong> You need the ZTE W103D (Amlogic S905L3A). The same shells ship with GK6323 or RK3566 chips and look nearly identical — the image supports exactly one of them, so buying the wrong one is buying a brick.</figcaption>
       </figure>
       <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-serial.jpg" alt="The W103D label in close-up: model, CMIIT ID, production date and serial number" />
+        <figcaption>Worth photographing before you buy: the label carries the model, the CMIIT ID and the <strong>production date (2024.09)</strong> next to the serial number — the fastest way to confirm what you are actually holding.</figcaption>
+      </figure>
+      <figure>
         <img loading="lazy" decoding="async" src="images/W103D/web/w103d-size.jpg" alt="The W103D next to an AA battery for scale" />
         <figcaption>Size: palm-sized, with an AA battery for scale (that one is a rechargeable eneloop). Rated 5 V/2 A; measured draw is <strong>under 5 W</strong> — a year of always-on costs less than ¥30 of electricity.</figcaption>
       </figure>
@@ -375,6 +379,10 @@
       <pre><code>ssh root@&lt;box-ip&gt;
 mrrc-radio use ft710        # probes the serial port → writes config → restarts</code></pre>
       <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-wiring.jpg" alt="The W103D with a USB device plugged into its side port" />
+        <figcaption>Both USB ports are where everything lands: the stick while installing, the radio's cable afterwards.</figcaption>
+      </figure>
+      <figure>
         <img loading="lazy" decoding="async" src="images/W103D/web/w103d-setup.jpg" alt="Connection settings in the browser: FT-710, serial port, RX/TX audio devices" />
         <figcaption>The connection page in the browser: model, serial port, RX/TX audio devices — changes take effect immediately.</figcaption>
       </figure>
@@ -383,6 +391,29 @@ mrrc-radio use ft710        # probes the serial port → writes config → resta
         <img loading="lazy" decoding="async" src="images/W103D/web/w103d-phone.jpg" alt="MRRC in a phone browser: spectrum, waterfall, power/SWR meters, PTT" />
         <figcaption><strong>This is what the ¥125 bought</strong>: a real spectrum and waterfall (not the synthetic S-meter fallback), power/SWR meters, mode and filter controls, and that red PTT — in a phone browser. Transmitting from a phone requires HTTPS (browsers only grant microphone access in a secure context), so the image signs a self-signed certificate on first boot.</figcaption>
       </figure>
+
+      <h3>⑤ Move it onto the box itself (and retire the stick)</h3>
+      <p>
+        Everything above still ran off the USB stick. The last step makes the box
+        standalone: run ophub's installer <em>on the box</em> and it clones the
+        running system into the internal 28.9 GB eMMC, bootloader handling included.
+      </p>
+      <pre><code>armbian-ddbr            # first: back the whole eMMC up to /ddbr/ (factory bootloader included)
+armbian-install         # device ID 307 (ZTE-W103D), rootfs 1 (ext4) — never add -m yes
+poweroff                # unplug the stick, power on: it boots from eMMC from now on</code></pre>
+      <p>
+        Two things worth knowing. The installer keeps the factory bootloader
+        <strong>byte for byte</strong> — only the 68-byte partition table changes,
+        and you can prove it with <code>cmp</code>. And it regenerates the
+        machine-id, so the box's IPv6 interface identifier changes once: anything
+        that follows it by name (a DDNS updater, the Cloud Hub tunnel) catches up
+        by itself within minutes.
+      </p>
+      <p>
+        What is left is the final form: <strong>the box, one power cable, one
+        network cable</strong> — no stick, 28.9 GB of its own storage, and the
+        stick becomes the rescue copy (the full eMMC backup lives on it).
+      </p>
 
       <h2>6. Booting is not working: six defects the real box found</h2>
       <p>
@@ -525,13 +556,28 @@ mrrc-radio use ft710        # probes the serial port → writes config → resta
           <td>24/7</td>
           <td>Moved house, power cut, powered back up: systemd brings it back by itself; under 5 W, passively cooled</td>
         </tr>
+        <tr>
+          <td>Its own storage</td>
+          <td><code>armbian-install</code> moved the running system onto the internal <strong>28.9 GB eMMC</strong>; it boots with no stick attached, and the factory bootloader was verified <strong>byte for byte</strong> (<code>cmp</code> over [0,444) and [512,4 MiB) — only the 68-byte partition table differs)</td>
+        </tr>
+        <tr>
+          <td><strong>Public access</strong></td>
+          <td>Live on Cloud Hub: <code>https://&lt;callsign&gt;.mrrc.vlsc.net/</code> serves HTTPS with a hub-issued certificate; a DDNS name keeps following the box's IPv6 address</td>
+        </tr>
       </table>
       <p>
-        <strong>One thing still not done: public access (Cloud Hub).</strong>
-        That step needs a callsign application and approval, plus an entry
-        reachable from the internet; the box currently serves only the home LAN.
-        <em>On the LAN, it is doing all of the work.</em>
+        <strong>And it is reachable from the internet now.</strong>
+        Cloud Hub hands the box a callsign entry
+        (<code>https://&lt;callsign&gt;.mrrc.vlsc.net/</code>, example:
+        <code>https://bg1sb.mrrc.vlsc.net/</code>) with its own certificate, so
+        the phone UI follows you out of the house; guests can be handed a
+        listen-only password.
+        <em>On the LAN nothing changed — it is still doing all of the work.</em>
       </p>
+      <figure>
+        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-hub.jpg" alt="MRRC opened from a phone through the Cloud Hub entry" />
+        <figcaption>The public entry, opened on a phone: the same UI and the same waterfall as on the LAN.</figcaption>
+      </figure>
       <ul>
         <li>
           <strong>It depends on a vendor kernel</strong>: the box's Wi-Fi needs
@@ -558,7 +604,10 @@ mrrc-radio use ft710        # probes the serial port → writes config → resta
         transmit, spectrum, recording and phone control were each verified on the
         real hardware (the numbers are in section 8). Every figure here comes
         from that day's logs, commits and artifact checks, including the
-        one-line test for each of the six defects. The image is on the
+        one-line test for each of the six defects.
+        <em>Updated 2026-10-12: step ⑤ (install onto the box itself) and public
+        access were added the next day.</em>
+        The image is on the
         <a href="downloads/MRRC-Modern-1.25.5-w103d.img.gz">download page</a>;
         step-by-step operation is in the
         <a href="w103d.html">W103D guide</a>.<br />

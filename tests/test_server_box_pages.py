@@ -13,6 +13,7 @@ import re
 import unittest
 from pathlib import Path
 
+import net_wifi
 import server
 from tests.test_server_box_window import FakeRequest
 
@@ -75,6 +76,39 @@ class SourceTests(unittest.TestCase):
         read it before they rely on it."""
         text = (STATIC / "setup.html").read_text(encoding="utf-8")
         self.assertIn("信任的网络", text)
+
+
+class SettingsPageDeviceKeyTests(unittest.TestCase):
+    """The page and `net_wifi.devices()` must agree on a device row's keys.
+
+    The page once read `device.interface` while the producer emits the key
+    `device`, so every adapter row rendered literally `网卡 undefined: connected
+    → …`. Nothing caught it, because the page's keys and the producer's keys
+    were never compared. This parses the `device.<key>` reads out of the page's
+    own source and asserts each is a key `net_wifi.devices()` actually emits —
+    an invariant over both sides, so a rename on either side fails here.
+    """
+
+    def emitted_keys(self):
+        def runner(argv):
+            return net_wifi.NmResult(
+                0, "eth0:ethernet:connected:有线连接 2\n"
+                   "wlan0:wifi:disconnected:\n", "")
+        rows = net_wifi.devices(runner)
+        self.assertTrue(rows, "the canned listing produced no device rows")
+        return set(rows[0])
+
+    def test_the_page_reads_only_keys_the_producer_emits(self):
+        text = (STATIC / "settings.html").read_text(encoding="utf-8")
+        read = set(re.findall(r"\bdevice\.([A-Za-z_$][\w$]*)", text))
+        self.assertTrue(read, "the page reads no device fields at all")
+        self.assertEqual(read - self.emitted_keys(), set())
+
+    def test_the_error_was_the_interface_key_not_the_device_key(self):
+        """Pin the exact regression: the render now reads `device.device`."""
+        text = (STATIC / "settings.html").read_text(encoding="utf-8")
+        self.assertIn("device.device", text)
+        self.assertNotIn("device.interface", text)
 
 
 class UnauthenticatedClientScriptTests(unittest.TestCase):

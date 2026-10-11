@@ -245,6 +245,21 @@ class RealTransportTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertTrue(result["error"])
 
+    def test_an_injected_path_is_honored_by_both_halves(self):
+        """FIX-7. `helper_available(path)` and `_send_over_helper_socket` both
+        take the socket path, so the availability check and the transport agree
+        on which socket they mean. The sender once hard-coded the module
+        constant and the parameter only half-worked, so this drives the real
+        sender against an injected path with *no* constant patching: the real
+        constant points at /run/mrrc, which does not exist here, so the reply
+        can only arrive because the injected path was honored."""
+        path = os.path.join(self.directory, "injected.sock")
+        self._serve_one_line(path, json.dumps({"ok": True, "note": "injected"}))
+        self.assertTrue(box_ops.helper_available(path))
+        reply = box_ops._send_over_helper_socket(
+            {"verb": "reboot", "args": []}, 5.0, path)
+        self.assertEqual(json.loads(reply), {"ok": True, "note": "injected"})
+
 
 if __name__ == "__main__":
     unittest.main()

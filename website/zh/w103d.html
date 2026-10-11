@@ -303,7 +303,7 @@ ip a show wlan0                                  # 拿到 IP 没</code></pre>
 <blockquote><strong>首次开机请在你信任的网络里完成设置。</strong> 引导页在"盒子从未被用户设过口令"期间，对<strong>同一个 子网</strong>内的请求免口令开放（网线/预置通常发生在家里私网）。宿舍网、公司网、咖啡馆这类共享 网络存在"被同网段的人抢先设口令、接管盒子"的风险——这是为了"买回来只有一台手机的人也能 开始"而接受的<strong>明知的弱化</strong>，不是缺陷。</blockquote>
 <p>被退役的实体：<code>MRRC-Setup</code> 热点、<code>10.42.0.1</code> 地址、30 分钟窗口与它的重试行为、 <code>mrrc-setup-ap.service</code> 与 <code>linux/setup_ap.py</code>、以及 <code>/run/mrrc/setup-ap/state.json</code> 和 <code>wizard.json</code> 两个跨用户信箱。设计见 <code>docs/superpowers/specs/2026-10-11-w103d-lan-box-settings-design.md</code>。</p>
 <h3 id="9-7-盒子名字与-mdns">9.7 盒子名字与 mDNS</h3>
-<p>盒子在局域网里有一个<strong>名字</strong>，默认 <strong><code>MRRC-Modern</code></strong>（打包时用 <code>hostnamectl set-hostname</code> 落下， 否则镜像里还是 <code>armbian</code>）。于是你可以直接在浏览器里用 <strong><code>http://MRRC-Modern.local:8888</code></strong> 这样 的地址找到它，不必先去路由器后台翻 IP。</p>
+<p>盒子在局域网里有一个<strong>名字</strong>，默认 <strong><code>MRRC-Modern</code></strong>（打包时用 <code>hostnamectl set-hostname</code> 落下， 否则镜像里还是 <code>armbian</code>）。于是你可以直接在浏览器里用 <strong><code>https://MRRC-Modern.local:8888</code></strong> 这样 的地址找到它，不必先去路由器后台翻 IP。</p>
 <p><strong>自称 <code>MRRC-Modern-2.local</code></strong>。设置页 <code>/settings</code> 显示<strong>当前实际可达的那个名字</strong>；同网段有 多台盒子时，建议在页面上给它们各改一个名字。</p>
 <p><strong>Android 看机型</strong>。所以<strong>退路是 DHCP 主机名</strong>（NetworkManager 默认会把它报给路由器）：无论 什么客户端，去路由器后台的<strong>客户端列表</strong>里按主机名就能找到盒子的 IP。设置页<strong>两个都显示</strong>： mDNS 名字 + 当前 IPv4。</p>
 <p>同步 <code>/etc/hosts</code>）。</p>

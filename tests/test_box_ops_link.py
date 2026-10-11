@@ -251,6 +251,30 @@ class ChangeTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["address"], "192.168.16.50/24")
 
+    # ── the rollback clears what the attempt wrote ─────────────────
+    def test_a_failed_static_attempt_restores_auto_and_clears_the_address(self):
+        """FIX-5. The attempt to go static failed, so the rollback restores the
+        DHCP method — and must clear the address the attempt wrote. NM ignores
+        `ipv4.addresses` while the method is auto, so leaving it was latent, not
+        live: it resurfaced the moment the operator went back to manual, handing
+        them an address nobody chose."""
+        runner = FakeNmcli({
+            "ipv4.method": net_wifi.NmResult(0, "auto\n", ""),
+            "ipv4.addresses": net_wifi.NmResult(0, "\n", ""),
+            "connection.interface-name": net_wifi.NmResult(0, "eth0\n", ""),
+            "IP4.ADDRESS": net_wifi.NmResult(0, "", ""),
+            "connection up": net_wifi.NmResult(0, "", ""),
+        })
+        result = self.change(runner)   # manual, which never lands
+        self.assertFalse(result["ok"])
+        rollback = [call for call in runner.calls
+                    if "ipv4.method" in call
+                    and call[call.index("ipv4.method") + 1] == "auto"]
+        self.assertTrue(rollback, "no rollback-to-auto command was issued")
+        last = rollback[-1]
+        self.assertIn("ipv4.addresses", last)
+        self.assertEqual(last[last.index("ipv4.addresses") + 1], "")
+
     # ── F2: numeric parameters are refused, not spun on ─────────────
     def test_a_zero_poll_returns_instead_of_spinning(self):
         runner = Fake({"ipv4.method": net_wifi.NmResult(0, "auto\n", "")},
@@ -266,6 +290,27 @@ class ChangeTests(unittest.TestCase):
         result = self.auto_change(runner, poll=-1.0)
         self.assertIsInstance(result, dict)
         self.assertFalse(result["ok"])
+
+
+class RestoreProfileTests(unittest.TestCase):
+    """`_restore_profile` writes the saved values back. The subtlety is the auto
+    half: putting the method back to DHCP without clearing the address a failed
+    attempt wrote leaves stale config behind (FIX-5)."""
+
+    def test_restoring_to_manual_writes_the_saved_address(self):
+        runner = FakeNmcli({})
+        box_ops._restore_profile("有线连接 2", "manual",
+                                 "192.168.16.217/24", runner)
+        self.assertIn("ipv4.method manual", runner.joined())
+        self.assertIn("ipv4.addresses 192.168.16.217/24", runner.joined())
+
+    def test_restoring_to_auto_clears_the_address(self):
+        runner = FakeNmcli({})
+        box_ops._restore_profile("有线连接 2", "auto", "", runner)
+        self.assertIn("ipv4.method auto", runner.joined())
+        modify = runner.calls[0]
+        self.assertIn("ipv4.addresses", modify)
+        self.assertEqual(modify[modify.index("ipv4.addresses") + 1], "")
 
 
 if __name__ == "__main__":

@@ -278,16 +278,25 @@ def helper_available(path: str = HELPER_SOCKET) -> bool:
 
 
 # ── the root helper, client side ────────────────────────────────────
-def _send_over_helper_socket(payload: dict, timeout: float) -> str:
+def _send_over_helper_socket(payload: dict, timeout: float,
+                             path: Optional[str] = None) -> str:
     """One line of JSON out, one line back, over the helper's unix socket.
 
     The socket is 0660 root:mrrc, so the kernel refuses anyone else at connect()
     time; the helper checks SO_PEERCRED on top of that, because a mode is a check
     made once and the helper would rather make its own.
+
+    `path` mirrors `helper_available`'s injected path: omit it for the real
+    socket, pass one to send somewhere else. It is resolved against
+    `HELPER_SOCKET` at call time (not bound as a default argument) so that
+    pointing the module constant elsewhere — as the tests do — moves the
+    transport with it. An injected path is then honored by both halves, so the
+    availability check and the transport always agree on which socket they mean.
     """
+    socket_path = HELPER_SOCKET if path is None else path
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.settimeout(timeout)
-        client.connect(HELPER_SOCKET)
+        client.connect(socket_path)
         client.sendall((json.dumps(payload) + "\n").encode("utf-8"))
         chunks = []
         while True:
@@ -767,5 +776,12 @@ def _restore_profile(profile: str, method: str, addresses: str,
     argv = ["connection", "modify", profile, "ipv4.method", method]
     if method == "manual" and addresses:
         argv += ["ipv4.addresses", addresses]
+    elif method != "manual":
+        # Restoring to auto must clear the address the failed attempt wrote.
+        # NM ignores `ipv4.addresses` while the method is auto, so leaving it is
+        # latent rather than live — but it resurfaces the moment the operator
+        # goes back to manual, handing them an address nobody chose. Clear it
+        # with the same clause the manual branch sets it with.
+        argv += ["ipv4.addresses", ""]
     net_wifi.nmcli(argv, runner)
     net_wifi.nmcli(["connection", "up", profile], runner)

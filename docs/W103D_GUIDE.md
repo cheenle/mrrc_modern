@@ -411,7 +411,7 @@ ip a show wlan0                                  # 拿到 IP 没
 ### 9.7 盒子名字与 mDNS
 
 盒子在局域网里有一个**名字**，默认 **`MRRC-Modern`**（打包时用 `hostnamectl set-hostname` 落下，
-否则镜像里还是 `armbian`）。于是你可以直接在浏览器里用 **`http://MRRC-Modern.local:8888`** 这样
+否则镜像里还是 `armbian`）。于是你可以直接在浏览器里用 **`https://MRRC-Modern.local:8888`** 这样
 的地址找到它，不必先去路由器后台翻 IP。
 
 - **多台同网段会撞名**：avahi（Linux 上的 mDNS 实现）发现 `MRRC-Modern.local` 已被占用时，会

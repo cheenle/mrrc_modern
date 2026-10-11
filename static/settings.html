@@ -268,7 +268,7 @@ select{
     kv(grid, 'Wi-Fi', net.wifi.ssid
       ? net.wifi.ssid + '  ' + Box.signalText(net.wifi.signal) : '未连接');
     net.devices.forEach(function (device) {
-      kv(grid, '网卡 ' + device.interface,
+      kv(grid, '网卡 ' + device.device,
          device.state + (device.connection ? '  →  ' + device.connection : ''),
          device.state === 'connected' ? 'good-text' : '');
     });
@@ -294,7 +294,13 @@ select{
     var select = document.querySelector('#link-profile');
     var previous = select.value;
     select.innerHTML = '';
-    net.connections.forEach(function (c) {
+    // Wired profiles only: `net.connections` also holds the Wi-Fi profiles
+    // (the Wi-Fi panel above lists those), and a Wi-Fi name in a dropdown
+    // labelled for the wired card is a trap — picking it here tries to rewire
+    // the wrong interface.
+    net.connections.filter(function (c) {
+      return c.type.indexOf('ethernet') >= 0;
+    }).forEach(function (c) {
       var option = document.createElement('option');
       option.value = c.name;
       option.textContent = c.name + '（' + c.type + '）';

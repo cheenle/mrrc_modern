@@ -5108,7 +5108,7 @@ async def setup_page(request: Request):
     password lands — a cached copy would tell the operator the box is still
     open when it is not.
     """
-    if not _first_window_open(request):
+    if not await asyncio.to_thread(_first_window_open, request):
         if not _verify_auth(request):
             return RedirectResponse("/login?next=/setup", status_code=302)
         if _is_listen_request(request) or not _password_is_untouched():
@@ -5139,7 +5139,7 @@ async def api_box_onboarding(request: Request):
     report, the system state or the safety fields — those are a logged-in
     surface. Keeping this payload small is the point (design §5.3).
     """
-    if not _first_window_open(request):
+    if not await asyncio.to_thread(_first_window_open, request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     identity = await asyncio.to_thread(box_ops.identity_report)
     return JSONResponse({
@@ -5167,7 +5167,7 @@ async def api_box_password(request: Request):
     Success signs a session and hands it back, so the operator is not asked to
     log in with the password they just typed.
     """
-    if not _first_window_open(request):
+    if not await asyncio.to_thread(_first_window_open, request):
         if _verify_auth(request):
             if _is_listen_request(request):
                 return JSONResponse({"error": LISTEN_ONLY_MESSAGE},
@@ -5223,13 +5223,16 @@ async def api_box_status(request: Request):
         asyncio.to_thread(box_ops.system_report),
         asyncio.to_thread(box_ops.identity_report),
     )
+    # Same reason as the three above: `_first_window_open` reads the local
+    # subnets, which shells out to nmcli.
+    first_window_open = await asyncio.to_thread(_first_window_open, request)
     return JSONResponse({
         "network": network,
         "system": system,
         "identity": identity,
         "safety": box_ops.safety_report(),
         "helper_available": box_ops.helper_available(),
-        "first_window_open": _first_window_open(request),
+        "first_window_open": first_window_open,
     })
 
 

@@ -361,5 +361,68 @@ class SetupRouteTests(unittest.TestCase):
         self.assertEqual(response.headers["location"], "/login?next=/setup")
 
 
+class MiddlewarePassThroughTests(unittest.TestCase):
+    """The ordering the whole design rests on, asserted by running the real
+    middleware rather than reading the source.
+
+    The first-window paths must pass the middleware *before* the auth check
+    (that is how a session-less client reaches /setup) and *before* the
+    listen-only 403 (a listen session may not set the first password, but
+    /api/box/password sits in that same set, so the middleware must not refuse
+    it first — the handler owns that refusal). Both properties are the single
+    `if path in FIRST_WINDOW_PATHS: return await call_next(request)` in
+    server.auth_middleware, and this drives it for real: every box-endpoint test
+    elsewhere calls the handler directly with the guards mocked, which is
+    exactly the seam these go through.
+    """
+
+    SENTINEL = "passed-through"
+
+    async def call_next(self, request):
+        return self.SENTINEL
+
+    def passes_through(self, request):
+        return run(server.auth_middleware(request, self.call_next)) == self.SENTINEL
+
+    def listen_cookie(self):
+        token = server._make_auth_token()
+        server._auth_tokens.add(token)   # a listen token is also an auth token
+        server._listen_tokens.add(token)
+        self.addCleanup(server._auth_tokens.discard, token)
+        self.addCleanup(server._listen_tokens.discard, token)
+        return {server.AUTH_COOKIE: token}
+
+    def test_the_set_is_exactly_the_three_paths(self):
+        self.assertEqual(server.FIRST_WINDOW_PATHS,
+                         {"/setup", "/api/box/onboarding",
+                          "/api/box/password"})
+
+    def test_every_first_window_path_passes_with_no_session(self):
+        for path in sorted(server.FIRST_WINDOW_PATHS):
+            with self.subTest(path=path):
+                self.assertTrue(self.passes_through(
+                    FakeRequest(path=path, client=None)))
+
+    def test_a_first_window_path_passes_before_the_listen_only_403(self):
+        """A POST to /api/box/password carrying a listen-only cookie would draw
+        the middleware's 403 if the listen check ran first. It is in
+        FIRST_WINDOW_PATHS, so it passes through and the handler refuses."""
+        request = FakeRequest(path="/api/box/password", method="POST",
+                              cookies=self.listen_cookie())
+        self.assertTrue(self.passes_through(request))
+
+    def test_the_same_cookie_on_an_ordinary_path_is_the_403(self):
+        """The control: the same listen cookie on a path *not* in the set draws
+        the 403, so the pass-through above is the path set's doing and not the
+        cookie's."""
+        request = FakeRequest(path="/api/box/reboot", method="POST",
+                              cookies=self.listen_cookie())
+        response = run(server.auth_middleware(request, self.call_next))
+        self.assertNotEqual(response, self.SENTINEL)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json.loads(response.body)["error"],
+                         server.LISTEN_ONLY_MESSAGE)
+
+
 if __name__ == "__main__":
     unittest.main()

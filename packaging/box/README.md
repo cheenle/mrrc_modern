@@ -98,7 +98,7 @@ systemctl restart mrrc-modern
 3. **connect**：自动完成——签证书、enroll、写隧道配置、起 frpc，并写进配置：
    - `MRRC_SSL_CERT` / `MRRC_SSL_KEY`（这个机型的入口证书）
    - `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5`（PTT 活性闸门，防线①）
-4. 之后用 **`https://<呼号>.mrrc.vlsc.net/`** 访问。
+4. 之后用 **`https://<呼号>.mrrc.vlsc.net/`** 访问（例：`https://bg1sb.mrrc.vlsc.net/`）。
 
 防线②（时长上限）镜像里已经写好 `MRRC_PTT_MAX_TX_SECONDS=120`。
 两条防线互相独立，都要有。

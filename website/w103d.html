@@ -408,14 +408,14 @@ systemctl restart mrrc-modern</code></pre>
 <pre><code class="lang-bash">sed -i 's/^MRRC_RX_BUFFER_MS=.*/MRRC_RX_BUFFER_MS=200/' /opt/mrrc_modern/env/mrrc.env
 systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -i "capture stalled"</code></pre>
 <h2 id="14-公网接入-cloud-hub">14. 公网接入（Cloud Hub）</h2>
-<p>让盒子在公网可用（<code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code>）。界面上 <strong>设置 → Cloud Hub</strong>：</p>
+<p>让盒子在公网可用（<code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code>，例：<code>https://bg1sb.mrrc.vlsc.net/</code>）。界面上 <strong>设置 → Cloud Hub</strong>：</p>
 <p>- <code>MRRC_SSL_CERT</code> / <code>MRRC_SSL_KEY</code>（这个机型的入口证书） - <code>MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5</code>（防线①：PTT 半开时自动释放）</p>
 <ol>
 <li><strong>apply</strong>：填呼号 + 联系方式，提交申请。</li>
 <li>等批准。</li>
 <li><strong>connect</strong>：自动完成——签证书、enroll、写隧道配置、起 frpc，并自动写两个配置键：</li>
 </ol>
-<p>之后用 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 访问。</p>
+<p>之后用 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 访问（例：<code>https://bg1sb.mrrc.vlsc.net/</code>）。</p>
 <figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-hub.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-hub.jpg" alt="公网入口：手机上用呼号域名打开" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">公网入口：手机上用呼号域名打开</figcaption></figure>
 <p><strong>两条 PTT 防线互相独立，都要在</strong>：防线①＝会话活性闸门（公网必经），防线②＝时长上限（<code>MRRC_PTT_MAX_TX_SECONDS</code>）。 公网路径下 NAT 掉表、换 Wi-Fi、静默丢包都不会产生"断线"，只有这两条能兜住。</p>
 <h2 id="15-天调-atr-1000-可选">15. 天调 ATR-1000（可选）</h2>

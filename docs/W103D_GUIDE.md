@@ -570,7 +570,7 @@ systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -
 
 ## 14. 公网接入（Cloud Hub）
 
-让盒子在公网可用（`https://<呼号>.mrrc.vlsc.net/`）。界面上 **设置 → Cloud Hub**：
+让盒子在公网可用（`https://<呼号>.mrrc.vlsc.net/`，例：`https://bg1sb.mrrc.vlsc.net/`）。界面上 **设置 → Cloud Hub**：
 
 1. **apply**：填呼号 + 联系方式，提交申请。
 2. 等批准。
@@ -578,7 +578,7 @@ systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -
    - `MRRC_SSL_CERT` / `MRRC_SSL_KEY`（这个机型的入口证书）
    - `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5`（防线①：PTT 半开时自动释放）
 
-之后用 `https://<呼号>.mrrc.vlsc.net/` 访问。
+之后用 `https://<呼号>.mrrc.vlsc.net/` 访问（例：`https://bg1sb.mrrc.vlsc.net/`）。
 
 ![公网入口：手机上用呼号域名打开](../website/images/W103D/web/w103d-hub.jpg)
 

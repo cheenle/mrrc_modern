@@ -49,7 +49,7 @@ BYTES=$(stat -f %z "$IMG_XZ" 2>/dev/null || stat -c %s "$IMG_XZ")
 echo "    ${BYTES} bytes"
 
 echo "==> decompress"
-xz -dc "$IMG_XZ" > "$WORK_DIR/image.img"
+xz -dc "$IMG_XZ" >"$WORK_DIR/image.img"
 
 INNER="$WORK_DIR/verify.sh"
 cat >"$INNER" <<'INNER_SCRIPT'

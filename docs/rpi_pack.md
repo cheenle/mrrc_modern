@@ -126,5 +126,50 @@ packaging/rpi/verify-image.sh dist/rpi/MRRC-Modern-v<ver>-rpi64.img.xz
 
 ## 实跑记录
 
-每一次真构建的实测数据（耗时、镜像源实际速度、`install.sh` 通过性、四步验证输出）追加在本节——
-「只有真跑才会暴露」的东西就记在这里，而不是留在聊天记录里。
+每一次真构建的实测数据追加在本节——「只有真跑才会暴露」的东西记在这里，而不是留在聊天记录里。
+
+### 2026-10-12：结构统一后的两轮全量构建
+
+**产物**：`dist/rpi/MRRC-Modern-v1.25.5-rpi64.img.xz`
+
+| 轮次 | 耗时 | 产物字节 | SHA-256 | 四步验证 |
+| --- | --- | --- | --- | --- |
+| ①（修前） | 23:44 → 00:49，**65 分钟** | 476,978,928 | `30d159cc…` | ❌ `env bind`（真缺陷，见下） |
+| ②（修后） | 01:02 → 01:17，**15.5 分钟** | 482,166,288 | `665b7cbe…` | ✅ 四步全过（仅"工作树在动"一项） |
+
+**两轮差 4 倍，差异不在代码**：①轮要从头重建 pi-gen 的容器镜像（Dockerfile 被镜像源改写触发了那一层），而且当时机器上并行跑着别的活；②轮容器镜像已缓存、机器空闲。`xz -9` 在两轮里分别是 ~35 分钟与 ~8 分钟。**别拿两轮的耗时互相比**。
+
+**②轮的阶段耗时**（pi-gen 自己的时间戳）：stage0 4分11秒 / stage1 17 秒 / stage2 49 秒 / **rpi-stage4 4分20秒** / export-image 2分42秒 → pi-gen 共 **12分20秒**；剩下是宿主侧 `xz`。
+
+**服务层在 Pi 的 chroot 里逐步跑通**（这是本设计的主要未知项，已消除）：
+
+```
+prerun: staged 117 code files
+=== preconditions === / system packages / radio profiles /
+python environment  → [18:03:00] Creating virtual environment: /opt/mrrc_modern/venv
+=== FTDI scope libraries === / udev rule / frpc / mrrc-radio…login banner /
+systemd units / version stamp (version: 1.25.5) / headless defaults / enable services /
+import gate: entry points import OK / reclaim space / overlay done
+```
+
+- **`install.sh` 在 pi-gen 的 `on_chroot` 环境里跑通了**（设计 §10 里唯一的中等风险项）：它建了 venv、装完依赖，没报错。
+- **frpc** 走 gh-proxy，一次过并逐字节校验通过（对比：W103D 那轮同一份文件只有 27 KB/s、超时后续传）。
+- 源码注入：`stage-tree.sh` 在宿主侧落 **115 个文件**，`prerun.sh` 校验后拷入 **117 个**（多出 `version.txt`/`VERSION` 两个构建产物）。
+- `work/` 在构建结束后是**空的**（pi-gen 自己清）；容器镜像 `pi-gen:latest` 保留，是下一轮快的原因。
+
+**这一轮拓出的真缺陷（四步验证第 ③ 步拓的）**：产物里单元文件写着 `Environment=MRRC_WEB_HOST=::`，
+但 `env/mrrc.env` 里是 `MRRC_WEB_HOST=0.0.0.0` —— 服务端从 env 文件读绑定地址，于是**双栈绑定被静默丢掉**。
+根因：`install.sh` 的 `.env` 模板里写死了 `MRRC_WEB_HOST=0.0.0.0`（`install.sh:785`），
+而服务层的默认值块是"键不存在才写"。旧 Pi 线不跑 `install.sh`（首启包装写的 `::`），所以这是结构统一引入的回归。
+修法与既有那段"剥掉构建机猜测"（串口、口令）合并，并加了守卫。
+
+**验证脚本自己的两个缺陷**（都已修，供后人参考）：
+
+1. 配方抄自盒子（`.gz`）却直接用在 `.xz` 上 → `gunzip: not in gzip format`；
+2. 容器内用通配符 `MRRC-Modern-*-rpi64.img.xz` 选镜像，而 `dist/rpi/` 里还躺着上一版 `v1.14.1` → 两个都去验证了。
+
+现在改为**宿主侧解压 + 精确路径**；另：容器里**不要用 `file`**（精简的 `debian:bookworm` 没有它），判 AArch64 直接读 ELF 头的 `e_machine`（偏移 18，`183`）。
+
+**一处需要记住的构建期现象**：构建期间仓库工作树继续在动，所以产物里的 `server.py` 是构建开始那一刻的版本
+（②轮那份是 `5b1089c`，①轮那份更早），与验证时的工作树不同。这不是缺陷，但**验证要按修订核对，
+不能默认为工作区**。要一份不带这个尾巴的产物，就在工作树静止时构建。

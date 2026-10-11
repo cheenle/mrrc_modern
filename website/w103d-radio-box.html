@@ -176,9 +176,10 @@
       <p>
         An FT-710 needs nothing added: CAT, a USB sound card and a real spectrum
         interface are all inside the case, reachable through one USB cable. What
-        it lacks is <strong>any way to use it from somewhere else</strong> — from
-        the sofa for twenty minutes on 40 m, from the balcony while adjusting an
-        antenna, or from a hotel room to check whether the band is occupied.
+        it lacks is <strong>any way to use it from somewhere else</strong> —
+        from the sofa for twenty minutes on 40 m, from the balcony while
+        adjusting an antenna, or from a hotel room to check whether the band is
+        occupied.
       </p>
       <p>
         The first reflex is remote desktop or VNC. I tried it honestly and
@@ -203,95 +204,185 @@
         </li>
       </ul>
       <p>
-        The shape I actually wanted is the other way round: <strong>the server
-        sits next to the radio, the browser is only a panel</strong>. Phone,
-        tablet, laptop — whichever is at hand opens a URL and becomes a radio
-        that can listen, show a waterfall and press PTT. That server has to hold
-        the radio's USB (serial, sound card, spectrum), encode audio, push state
-        to the browser, and run for years without heat or noise.
+        The shape I actually wanted is the other way round:
+        <strong
+          >the server sits next to the radio, the browser is only a
+          panel</strong
+        >. Phone, tablet, laptop — whichever is at hand opens a URL and becomes
+        a radio that can listen, show a waterfall and press PTT. That server has
+        to hold the radio's USB (serial, sound card, spectrum), encode audio,
+        push state to the browser, and run for years without heat or noise.
       </p>
 
       <h2>2. Research: what such a server really needs</h2>
       <p>
-        Quantify the requirement before shopping. The server is Python
-        (<strong>there is a GIL</strong>): the hot path lives on one core, so
+        Quantify the requirement before shopping. The server is Python (<strong
+          >there is a GIL</strong
+        >): the hot path lives on one core, so
         <em>core count does not help</em> — single-thread performance decides
         everything. Item by item:
       </p>
       <table>
-        <tr><th>What actually decides it</th><th>Why</th></tr>
+        <tr>
+          <th>What actually decides it</th>
+          <th>Why</th>
+        </tr>
         <tr>
           <td><strong>Single-thread performance</strong></td>
-          <td>Python server, audio encoding and spectrum parsing share one event loop; extra cores only help other processes</td>
+          <td>
+            Python server, audio encoding and spectrum parsing share one event
+            loop; extra cores only help other processes
+          </td>
         </tr>
         <tr>
           <td><strong>At least two USB ports</strong></td>
-          <td>One for the radio cable, one spare for a tuner, a stick or a keyboard. <strong>This is the most common way to get it wrong</strong></td>
+          <td>
+            One for the radio cable, one spare for a tuner, a stick or a
+            keyboard.
+            <strong>This is the most common way to get it wrong</strong>
+          </td>
         </tr>
         <tr>
           <td><strong>A wired NIC</strong></td>
-          <td>Each client needs roughly 60 KB/s — 100 Mb is plenty. But Wi-Fi jitter turns straight into chopped audio</td>
+          <td>
+            Each client needs roughly 60 KB/s — 100 Mb is plenty. But Wi-Fi
+            jitter turns straight into chopped audio
+          </td>
         </tr>
         <tr>
           <td><strong>24/7 power and heat</strong></td>
-          <td>It stays powered on beside the radio; fan noise and the power bill are part of the cost</td>
+          <td>
+            It stays powered on beside the radio; fan noise and the power bill
+            are part of the cost
+          </td>
         </tr>
         <tr>
           <td><strong>Price and availability</strong></td>
-          <td>Once the four above are satisfied, this is the one that actually decides</td>
+          <td>
+            Once the four above are satisfied, this is the one that actually
+            decides
+          </td>
         </tr>
       </table>
       <p>
         Then look up measured single-thread scores for the candidates (PassMark,
         one source, fetched the same day — with sample counts, because
-        <strong>anything below a hundred samples is a hint, not a fact</strong>):
+        <strong>anything below a hundred samples is a hint, not a fact</strong
+        >):
       </p>
       <table>
         <tr>
-          <th>Processor</th><th>Single-thread</th><th>TDP</th><th>Samples</th><th>Server hot path ≈</th>
+          <th>Processor</th>
+          <th>Single-thread</th>
+          <th>TDP</th>
+          <th>Samples</th>
+          <th>Server hot path ≈</th>
         </tr>
-        <tr><td>Intel N100</td><td>1879</td><td>6 W</td><td>4111</td><td>~8%</td></tr>
-        <tr><td>AMD R1505G (HP t640)</td><td>1822</td><td>15 W</td><td>138</td><td>~8%</td></tr>
-        <tr><td>Broadcom BCM2712 (Pi 5)</td><td>1813</td><td>—</td><td>⚠️ 4</td><td>~8%</td></tr>
-        <tr><td>Intel Celeron J1900</td><td>653</td><td>10 W</td><td>881</td><td>~22%</td></tr>
-        <tr><td>Intel Atom D525</td><td>293</td><td>13 W</td><td>336</td><td>~49%</td></tr>
+        <tr>
+          <td>Intel N100</td>
+          <td>1879</td>
+          <td>6 W</td>
+          <td>4111</td>
+          <td>~8%</td>
+        </tr>
+        <tr>
+          <td>AMD R1505G (HP t640)</td>
+          <td>1822</td>
+          <td>15 W</td>
+          <td>138</td>
+          <td>~8%</td>
+        </tr>
+        <tr>
+          <td>Broadcom BCM2712 (Pi 5)</td>
+          <td>1813</td>
+          <td>—</td>
+          <td>⚠️ 4</td>
+          <td>~8%</td>
+        </tr>
+        <tr>
+          <td>Intel Celeron J1900</td>
+          <td>653</td>
+          <td>10 W</td>
+          <td>881</td>
+          <td>~22%</td>
+        </tr>
+        <tr>
+          <td>Intel Atom D525</td>
+          <td>293</td>
+          <td>13 W</td>
+          <td>336</td>
+          <td>~49%</td>
+        </tr>
       </table>
       <p>
-        The conclusion is counter-intuitive and useful: <strong>compute is
-        almost never the selection criterion</strong>. From a 2008 Core 2 Duo
-        to today's N100, anything scoring above ~700 single-thread spends 15–45%
-        of one core, and 2 GB of RAM with a few hundred MB of storage is plenty.
-        <em>What actually blocks the project is USB port count, the NIC, power
-        draw — and whether the thing is easy to buy and easy to install.</em>
+        The conclusion is counter-intuitive and useful:
+        <strong>compute is almost never the selection criterion</strong>. From a
+        2008 Core 2 Duo to today's N100, anything scoring above ~700
+        single-thread spends 15–45% of one core, and 2 GB of RAM with a few
+        hundred MB of storage is plenty.
+        <em
+          >What actually blocks the project is USB port count, the NIC, power
+          draw — and whether the thing is easy to buy and easy to install.</em
+        >
       </p>
 
       <h2>3. The comparison: four roads and their real price</h2>
       <table>
-        <tr><th>Option</th><th>What is good</th><th>What it costs you</th></tr>
         <tr>
-          <td><strong>N100 mini PC</strong> (new)</td>
-          <td>Highest single-thread, 6 W, four cores, warranty — the one tier where you never have to compute headroom</td>
-          <td>The most expensive (typically ¥500+ for a complete new machine, plus storage and PSU)</td>
+          <th>Option</th>
+          <th>What is good</th>
+          <th>What it costs you</th>
         </tr>
         <tr>
-          <td><strong>Second-hand thin client</strong> (HP t640, Dell Wyse …)</td>
-          <td>Single-thread on par with the N100 (1822 vs 1879), 15 W, dumped in volume by enterprises, cheap</td>
-          <td>You must pick a model: USB port count, storage form factor, whether Linux installs at all; stock and condition are luck</td>
+          <td><strong>N100 mini PC</strong> (new)</td>
+          <td>
+            Highest single-thread, 6 W, four cores, warranty — the one tier
+            where you never have to compute headroom
+          </td>
+          <td>
+            The most expensive (typically ¥500+ for a complete new machine, plus
+            storage and PSU)
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <strong>Second-hand thin client</strong> (HP t640, Dell Wyse …)
+          </td>
+          <td>
+            Single-thread on par with the N100 (1822 vs 1879), 15 W, dumped in
+            volume by enterprises, cheap
+          </td>
+          <td>
+            You must pick a model: USB port count, storage form factor, whether
+            Linux installs at all; stock and condition are luck
+          </td>
         </tr>
         <tr>
           <td><strong>Raspberry Pi 4 / 5</strong></td>
-          <td>Official images, the thickest ecosystem, the most tutorials — almost zero porting</td>
-          <td>Prices and stock; you add PSU, cooling and storage; <strong>with accessories usually ¥400 and up</strong></td>
+          <td>
+            Official images, the thickest ecosystem, the most tutorials — almost
+            zero porting
+          </td>
+          <td>
+            Prices and stock; you add PSU, cooling and storage;
+            <strong>with accessories usually ¥400 and up</strong>
+          </td>
         </tr>
         <tr>
           <td><strong>A carrier box</strong> (ZTE W103D)</td>
-          <td><strong>¥125</strong> second-hand, &lt;5 W, 32 GB eMMC, two USB ports and a wired NIC included</td>
-          <td><strong>You replace the OS yourself</strong>: vendor kernel, cannot be upgraded; 100 Mb NIC; Wi-Fi needs a community driver</td>
+          <td>
+            <strong>¥125</strong> second-hand, &lt;5 W, 32 GB eMMC, two USB
+            ports and a wired NIC included
+          </td>
+          <td>
+            <strong>You replace the OS yourself</strong>: vendor kernel, cannot
+            be upgraded; 100 Mb NIC; Wi-Fi needs a community driver
+          </td>
         </tr>
       </table>
       <p>
-        Note the difference in the last row: the first three are
-        "buy it and install something"; this one is "buy it and
+        Note the difference in the last row: the first three are "buy it and
+        install something"; this one is "buy it and
         <strong>replace the operating system</strong>". It works here because we
         already build a server image for MRRC Modern — and that is also the part
         of this project that took the longest.
@@ -306,28 +397,99 @@
         four requirements from section 2.
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-box.jpg" alt="The retail box of the ZTE W103D cloud terminal" />
-        <figcaption>The box says "ZTE cloud computer W103D / cloud desktop terminal BAZ01 linux" — a terminal for cloud desktops, not radio equipment.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-box.jpg"
+          alt="The retail box of the ZTE W103D cloud terminal"
+        />
+        <figcaption>
+          The box says "ZTE cloud computer W103D / cloud desktop terminal BAZ01
+          linux" — a terminal for cloud desktops, not radio equipment.
+        </figcaption>
       </figure>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-label.jpg" alt="The W103D label: model W103D, input 5V 2A" />
-        <figcaption><strong>Identifying the model is step one, and the only step you cannot skip.</strong> You need the ZTE W103D (Amlogic S905L3A). The same shells ship with GK6323 or RK3566 chips and look nearly identical — the image supports exactly one of them, so buying the wrong one is buying a brick.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-label.jpg"
+          alt="The W103D label: model W103D, input 5V 2A"
+        />
+        <figcaption>
+          <strong
+            >Identifying the model is step one, and the only step you cannot
+            skip.</strong
+          >
+          You need the ZTE W103D (Amlogic S905L3A). The same shells ship with
+          GK6323 or RK3566 chips and look nearly identical — the image supports
+          exactly one of them, so buying the wrong one is buying a brick.
+        </figcaption>
       </figure>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-serial.jpg" alt="The W103D label in close-up: model, CMIIT ID, production date and serial number" />
-        <figcaption>Worth photographing before you buy: the label carries the model, the CMIIT ID and the <strong>production date (2024.09)</strong> next to the serial number — the fastest way to confirm what you are actually holding.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-serial.jpg"
+          alt="The W103D label in close-up: model, CMIIT ID, production date and serial number"
+        />
+        <figcaption>
+          Worth photographing before you buy: the label carries the model, the
+          CMIIT ID and the <strong>production date (2024.09)</strong> next to
+          the serial number — the fastest way to confirm what you are actually
+          holding.
+        </figcaption>
       </figure>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-size.jpg" alt="The W103D next to an AA battery for scale" />
-        <figcaption>Size: palm-sized, with an AA battery for scale (that one is a rechargeable eneloop). Rated 5 V/2 A; measured draw is <strong>under 5 W</strong> — a year of always-on costs less than ¥30 of electricity.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-size.jpg"
+          alt="The W103D next to an AA battery for scale"
+        />
+        <figcaption>
+          Size: palm-sized, with an AA battery for scale (that one is a
+          rechargeable eneloop). Rated 5 V/2 A; measured draw is
+          <strong>under 5 W</strong> — a year of always-on costs less than ¥30
+          of electricity.
+        </figcaption>
       </figure>
       <table>
-        <tr><th></th><th>ZTE W103D</th><th>Raspberry Pi 4</th><th>Raspberry Pi 5</th></tr>
-        <tr><td>SoC</td><td>S905L3A · 4×A53 (in-order)</td><td>BCM2711 · 4×A72 (out-of-order)</td><td>BCM2712 · 4×A76 (out-of-order)</td></tr>
-        <tr><td>RAM / storage</td><td>2 GB / <strong>32 GB eMMC</strong></td><td>1–8 GB / microSD</td><td>4–8 GB / microSD·NVMe</td></tr>
-        <tr><td>NIC</td><td>100 Mb</td><td>Gigabit</td><td>Gigabit</td></tr>
-        <tr><td>Power</td><td><strong>&lt; 5 W</strong></td><td>~3–7 W</td><td>~5–12 W</td></tr>
-        <tr><td>Software maturity</td><td><strong>Vendor kernel, cannot upgrade</strong></td><td>Official images, biggest ecosystem</td><td>Same</td></tr>
+        <tr>
+          <th></th>
+          <th>ZTE W103D</th>
+          <th>Raspberry Pi 4</th>
+          <th>Raspberry Pi 5</th>
+        </tr>
+        <tr>
+          <td>SoC</td>
+          <td>S905L3A · 4×A53 (in-order)</td>
+          <td>BCM2711 · 4×A72 (out-of-order)</td>
+          <td>BCM2712 · 4×A76 (out-of-order)</td>
+        </tr>
+        <tr>
+          <td>RAM / storage</td>
+          <td>2 GB / <strong>32 GB eMMC</strong></td>
+          <td>1–8 GB / microSD</td>
+          <td>4–8 GB / microSD·NVMe</td>
+        </tr>
+        <tr>
+          <td>NIC</td>
+          <td>100 Mb</td>
+          <td>Gigabit</td>
+          <td>Gigabit</td>
+        </tr>
+        <tr>
+          <td>Power</td>
+          <td><strong>&lt; 5 W</strong></td>
+          <td>~3–7 W</td>
+          <td>~5–12 W</td>
+        </tr>
+        <tr>
+          <td>Software maturity</td>
+          <td><strong>Vendor kernel, cannot upgrade</strong></td>
+          <td>Official images, biggest ecosystem</td>
+          <td>Same</td>
+        </tr>
       </table>
       <div class="note">
         <strong>The costs, stated plainly</strong>: its Wi-Fi (MT7663S) needs a
@@ -346,74 +508,135 @@
         can SSH from:
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-unbox.jpg" alt="Unboxing: the W103D and its accessories" />
-        <figcaption>Unboxing: the unit, a USB-C power supply and a cable. HDMI, the NIC and both USB ports are all there.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-unbox.jpg"
+          alt="Unboxing: the W103D and its accessories"
+        />
+        <figcaption>
+          Unboxing: the unit, a USB-C power supply and a cable. HDMI, the NIC
+          and both USB ports are all there.
+        </figcaption>
       </figure>
       <h3>① Write the USB stick</h3>
-      <p>Flash the image to a USB stick (<strong>check the device name twice</strong>) and plug it into the box:</p>
+      <p>
+        Flash the image to a USB stick (<strong
+          >check the device name twice</strong
+        >) and plug it into the box:
+      </p>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-usb.jpg" alt="The W103D with a USB stick plugged in" />
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-usb.jpg"
+          alt="The W103D with a USB stick plugged in"
+        />
         <figcaption>Stick in, cable in — ready to boot from USB.</figcaption>
       </figure>
       <h3>② Boot from USB (Android stays untouched)</h3>
       <p>
         Power the box and run <code>reboot update</code> once from Android. It
-        then boots from the stick. This <strong>writes the u-boot boot order
-        once and touches no Android partition or data</strong> — unplug the
-        stick, power-cycle, and it is the same Android box again. My favourite
-        property of this whole approach: failure is free, because nothing was
-        changed.
+        then boots from the stick. This
+        <strong
+          >writes the u-boot boot order once and touches no Android partition or
+          data</strong
+        >
+        — unplug the stick, power-cycle, and it is the same Android box again.
+        My favourite property of this whole approach: failure is free, because
+        nothing was changed.
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-firstboot.jpg" alt="Armbian first-boot banner on HDMI with an SSH session" />
-        <figcaption>First boot: the Armbian banner on HDMI (S905L3a / kernel 6.18.54-ophub / 50&nbsp;°C / LAN address) while SSH is already usable. <strong>First boot needs no network</strong>: password, self-signed certificate and serial probing all happen locally, and the banner prints the web password.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-firstboot.jpg"
+          alt="Armbian first-boot banner on HDMI with an SSH session"
+        />
+        <figcaption>
+          First boot: the Armbian banner on HDMI (S905L3a / kernel 6.18.54-ophub
+          / 50&nbsp;°C / LAN address) while SSH is already usable.
+          <strong>First boot needs no network</strong>: password, self-signed
+          certificate and serial probing all happen locally, and the banner
+          prints the web password.
+        </figcaption>
       </figure>
       <h3>③ Connect the radio</h3>
       <p>
-        The FT-710 plugs into the box through its <strong>upper "Enhanced"
-        port</strong>; one cable delivers three things at once: the CAT serial
-        port (<code>/dev/ttyUSB0</code>), the USB sound card, and the FT4222
-        interface used for the real spectrum. Switch models with the bundled
-        command:
+        The FT-710 plugs into the box through its
+        <strong>upper "Enhanced" port</strong>; one cable delivers three things
+        at once: the CAT serial port (<code>/dev/ttyUSB0</code>), the USB sound
+        card, and the FT4222 interface used for the real spectrum. Switch models
+        with the bundled command:
       </p>
       <pre><code>ssh root@&lt;box-ip&gt;
 mrrc-radio use ft710        # probes the serial port → writes config → restarts</code></pre>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-wiring.jpg" alt="The W103D with a USB device plugged into its side port" />
-        <figcaption>Both USB ports are where everything lands: the stick while installing, the radio's cable afterwards.</figcaption>
-      </figure>
-      <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-setup.jpg" alt="Connection settings in the browser: FT-710, serial port, RX/TX audio devices" />
-        <figcaption>The connection page in the browser: model, serial port, RX/TX audio devices — changes take effect immediately.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-setup.jpg"
+          alt="Connection settings in the browser: FT-710, serial port, RX/TX audio devices"
+        />
+        <figcaption>
+          The connection page in the browser: model, serial port, RX/TX audio
+          devices — changes take effect immediately.
+        </figcaption>
       </figure>
       <h3>④ A radio on the phone</h3>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-phone.jpg" alt="MRRC in a phone browser: spectrum, waterfall, power/SWR meters, PTT" />
-        <figcaption><strong>This is what the ¥125 bought</strong>: a real spectrum and waterfall (not the synthetic S-meter fallback), power/SWR meters, mode and filter controls, and that red PTT — in a phone browser. Transmitting from a phone requires HTTPS (browsers only grant microphone access in a secure context), so the image signs a self-signed certificate on first boot.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-phone.jpg"
+          alt="MRRC in a phone browser: spectrum, waterfall, power/SWR meters, PTT"
+        />
+        <figcaption>
+          <strong>This is what the ¥125 bought</strong>: a real spectrum and
+          waterfall (not the synthetic S-meter fallback), power/SWR meters, mode
+          and filter controls, and that red PTT — in a phone browser.
+          Transmitting from a phone requires HTTPS (browsers only grant
+          microphone access in a secure context), so the image signs a
+          self-signed certificate on first boot.
+        </figcaption>
       </figure>
 
       <h3>⑤ Move it onto the box itself (and retire the stick)</h3>
       <p>
-        Everything above still ran off the USB stick. The last step makes the box
-        standalone: run ophub's installer <em>on the box</em> and it clones the
-        running system into the internal 28.9 GB eMMC, bootloader handling included.
+        Everything above still ran off the USB stick. The last step makes the
+        box standalone: run ophub's installer <em>on the box</em> and it clones
+        the running system into the internal 28.9 GB eMMC, bootloader handling
+        included.
       </p>
       <pre><code>armbian-ddbr            # first: back the whole eMMC up to /ddbr/ (factory bootloader included)
 armbian-install         # device ID 307 (ZTE-W103D), rootfs 1 (ext4) — never add -m yes
 poweroff                # unplug the stick, power on: it boots from eMMC from now on</code></pre>
       <p>
         Two things worth knowing. The installer keeps the factory bootloader
-        <strong>byte for byte</strong> — only the 68-byte partition table changes,
-        and you can prove it with <code>cmp</code>. And it regenerates the
-        machine-id, so the box's IPv6 interface identifier changes once: anything
-        that follows it by name (a DDNS updater, the Cloud Hub tunnel) catches up
-        by itself within minutes.
+        <strong>byte for byte</strong> — only the 68-byte partition table
+        changes, and you can prove it with <code>cmp</code>. And it regenerates
+        the machine-id, so the box's IPv6 interface identifier changes once:
+        anything that follows it by name (a DDNS updater, the Cloud Hub tunnel)
+        catches up by itself within minutes.
       </p>
       <p>
-        What is left is the final form: <strong>the box, one power cable, one
-        network cable</strong> — no stick, 28.9 GB of its own storage, and the
-        stick becomes the rescue copy (the full eMMC backup lives on it).
+        What is left is the final form:
+        <strong>the box, a power lead, and one USB lead for the radio</strong> —
+        no stick, no monitor, 28.9 GB of its own storage, and the stick becomes
+        the rescue copy (the full eMMC backup lives on it).
       </p>
+      <figure>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-final.jpg"
+          alt="The finished W103D: power in, the radio's USB lead in, no stick"
+        />
+        <figcaption>
+          The final form: power in, the radio's lead in the USB port, the network
+          arriving over Wi-Fi — and the system booting from the box's own eMMC.
+        </figcaption>
+      </figure>
 
       <h2>6. Booting is not working: six defects the real box found</h2>
       <p>
@@ -426,99 +649,189 @@ poweroff                # unplug the stick, power on: it boots from eMMC from no
         table in section 8 is what was measured item by item afterwards.
       </p>
       <table>
-        <tr><th>Symptom</th><th>Cause</th></tr>
+        <tr>
+          <th>Symptom</th>
+          <th>Cause</th>
+        </tr>
         <tr>
           <td>The web UI never opens; the service restarts every 3 seconds</td>
-          <td>First boot generated the TLS certificate as root, so the key was <code>0600 root:root</code>, while the service runs as <code>mrrc</code> — uvicorn cannot read it</td>
+          <td>
+            First boot generated the TLS certificate as root, so the key was
+            <code>0600 root:root</code>, while the service runs as
+            <code>mrrc</code> — uvicorn cannot read it
+          </td>
         </tr>
         <tr>
           <td>The real spectrum never starts (CAT and audio are fine)</td>
-          <td>The FT4222 has no <code>/dev</code> node of its own; the library opens the USB device directly and it was <code>root:root</code> — a missing udev rule. <strong>A half-failure is the hardest kind to diagnose</strong></td>
+          <td>
+            The FT4222 has no <code>/dev</code> node of its own; the library
+            opens the USB device directly and it was <code>root:root</code> — a
+            missing udev rule.
+            <strong>A half-failure is the hardest kind to diagnose</strong>
+          </td>
         </tr>
         <tr>
-          <td>The first-boot banner (with the password) never appears on HDMI</td>
-          <td>The unit asked for <code>StandardOutput=console</code> — <strong>not valid systemd syntax</strong>, which systemd silently ignores</td>
+          <td>
+            The first-boot banner (with the password) never appears on HDMI
+          </td>
+          <td>
+            The unit asked for <code>StandardOutput=console</code> —
+            <strong>not valid systemd syntax</strong>, which systemd silently
+            ignores
+          </td>
         </tr>
         <tr>
-          <td>The box's config carried the <strong>build host's</strong> serial port</td>
-          <td>The installer's config file was written on the build machine and copied into the image verbatim (mine had <code>/dev/cu.SLAB_USBtoUART</code>)</td>
+          <td>
+            The box's config carried the <strong>build host's</strong> serial
+            port
+          </td>
+          <td>
+            The installer's config file was written on the build machine and
+            copied into the image verbatim (mine had
+            <code>/dev/cu.SLAB_USBtoUART</code>)
+          </td>
         </tr>
         <tr>
           <td>Every fresh box shows one failed unit</td>
-          <td>Debian's <code>dnsmasq.service</code> fights systemd-resolved for port 53 (the hotspot uses NetworkManager's own instance)</td>
+          <td>
+            Debian's <code>dnsmasq.service</code> fights systemd-resolved for
+            port 53 (the hotspot uses NetworkManager's own instance)
+          </td>
         </tr>
         <tr>
-          <td>The acceptance script calls a <strong>running</strong> unit "not installed"</td>
-          <td><code>systemctl list-unit-files | grep -q</code> under <code>pipefail</code> exits 141 from SIGPIPE: grep leaves as soon as it matches, systemctl gets SIGPIPE, and "found it" is reported as "not found"</td>
+          <td>
+            The acceptance script calls a <strong>running</strong> unit "not
+            installed"
+          </td>
+          <td>
+            <code>systemctl list-unit-files | grep -q</code> under
+            <code>pipefail</code> exits 141 from SIGPIPE: grep leaves as soon as
+            it matches, systemctl gets SIGPIPE, and "found it" is reported as
+            "not found"
+          </td>
         </tr>
       </table>
 
       <h3>The audio fight (worth its own section)</h3>
       <p>
-        With the radio connected, audio in the browser <strong>stuttered
-        badly</strong> — chopped first, then gone. My first guesses were the
-        network, the browser, or transmit interference. All wrong. Using the
-        server's own audio code outside the server gave three clean control runs:
+        With the radio connected, audio in the browser
+        <strong>stuttered badly</strong> — chopped first, then gone. My first
+        guesses were the network, the browser, or transmit interference. All
+        wrong. Using the server's own audio code outside the server gave three
+        clean control runs:
       </p>
       <table>
-        <tr><th>How it read</th><th>Audio actually received</th></tr>
-        <tr><td>As shipped (one 20 ms period)</td><td><strong>4%</strong>, and a <strong>permanent stall</strong> after ~60 seconds</td></tr>
-        <tr><td>The same code, reading aggressively</td><td>100%</td></tr>
-        <tr><td>The same code, with a 400 ms buffer</td><td>99.7%</td></tr>
-        <tr><td><strong>Fixed (100 ms buffer)</strong></td><td><strong>100%, 50 frames/s, 20 ms spacing, stable</strong></td></tr>
+        <tr>
+          <th>How it read</th>
+          <th>Audio actually received</th>
+        </tr>
+        <tr>
+          <td>As shipped (one 20 ms period)</td>
+          <td>
+            <strong>4%</strong>, and a <strong>permanent stall</strong> after
+            ~60 seconds
+          </td>
+        </tr>
+        <tr>
+          <td>The same code, reading aggressively</td>
+          <td>100%</td>
+        </tr>
+        <tr>
+          <td>The same code, with a 400 ms buffer</td>
+          <td>99.7%</td>
+        </tr>
+        <tr>
+          <td><strong>Fixed (100 ms buffer)</strong></td>
+          <td><strong>100%, 50 frames/s, 20 ms spacing, stable</strong></td>
+        </tr>
       </table>
       <p>
-        The root cause is that this box's <strong>host audio buffer holds only
-        one or two 20 ms periods</strong>: read a little late and it overflows —
-        and here is the deceptive part — <strong>the capture interface then
-        stops silently</strong>. The system reports it stopped, while the audio
-        library still reports an open stream, raises nothing and logs nothing.
-        macOS and Windows hand the same code far more slack, so this class of
-        bug is invisible on a desktop.
+        The root cause is that this box's
+        <strong>host audio buffer holds only one or two 20 ms periods</strong>:
+        read a little late and it overflows — and here is the deceptive part —
+        <strong>the capture interface then stops silently</strong>. The system
+        reports it stopped, while the audio library still reports an open
+        stream, raises nothing and logs nothing. macOS and Windows hand the same
+        code far more slack, so this class of bug is invisible on a desktop.
       </p>
       <p>
         Two fixes: set the capture buffer per platform to 100 ms
-        (<code>MRRC_RX_BUFFER_MS</code>), and add a <strong>stall
-        watchdog</strong> — if someone is listening and no audio arrives for
-        three seconds, log it and reopen the capture stream. The first stops the
-        problem from happening; the second makes it <em>visible and
-        self-healing</em> when it happens anyway.
+        (<code>MRRC_RX_BUFFER_MS</code>), and add a
+        <strong>stall watchdog</strong> — if someone is listening and no audio
+        arrives for three seconds, log it and reopen the capture stream. The
+        first stops the problem from happening; the second makes it
+        <em>visible and self-healing</em> when it happens anyway.
       </p>
 
       <h2>7. What it is worth</h2>
       <table>
-        <tr><th>What you get</th><th>Notes</th></tr>
+        <tr>
+          <th>What you get</th>
+          <th>Notes</th>
+        </tr>
         <tr>
           <td><strong>Every device is a front panel</strong></td>
-          <td>Phone, tablet, laptop (and the native Android client) open a URL and can listen, watch a real waterfall and press PTT; the server sits by the radio instead of on the desk</td>
+          <td>
+            Phone, tablet, laptop (and the native Android client) open a URL and
+            can listen, watch a real waterfall and press PTT; the server sits by
+            the radio instead of on the desk
+          </td>
         </tr>
         <tr>
           <td><strong>Cost</strong></td>
-          <td>¥125 for the box, plus a USB stick I already had. A Raspberry Pi build is usually ¥400+ with PSU, cooling and storage; an N100 mini PC is ¥500+</td>
+          <td>
+            ¥125 for the box, plus a USB stick I already had. A Raspberry Pi
+            build is usually ¥400+ with PSU, cooling and storage; an N100 mini
+            PC is ¥500+
+          </td>
         </tr>
         <tr>
           <td><strong>The price of always-on</strong></td>
-          <td>Under 5 W — less than ¥30 a year — passively cooled, so no fan noise</td>
+          <td>
+            Under 5 W — less than ¥30 a year — passively cooled, so no fan noise
+          </td>
         </tr>
         <tr>
           <td><strong>It does other things too</strong></td>
-          <td>The same box records QSOs (<strong>verified</strong> — section 8) and drives an ATR-1000 tuner if one is connected (none here); it can also hand a friend a <strong>listen-only password</strong></td>
+          <td>
+            The same box records QSOs (<strong>verified</strong> — section 8)
+            and drives an ATR-1000 tuner if one is connected (none here); it can
+            also hand a friend a <strong>listen-only password</strong>
+          </td>
         </tr>
         <tr>
           <td><strong>One step further out</strong></td>
-          <td>Add Cloud Hub (outbound tunnel + per-instance certificates) and it stops being "a radio on the LAN" and becomes <strong>reachable from the internet</strong>: see <a href="cloud-first-mile.html">The Cloud's First Mile</a></td>
+          <td>
+            Add Cloud Hub (outbound tunnel + per-instance certificates) and it
+            stops being "a radio on the LAN" and becomes
+            <strong>reachable from the internet</strong>: see
+            <a href="cloud-first-mile.html">The Cloud's First Mile</a>
+          </td>
         </tr>
       </table>
       <p>
-        The most concrete win: <strong>the radio is back where it belongs</strong>.
-        The spot on the desk now only supplies an antenna and power; who uses it
-        and from where is the browser's business. Anyone at home can be given a
-        listen-only password for an evening of shortwave, and from out of town
-        that familiar FT-710 is one URL away.
+        The most concrete win:
+        <strong>the radio is back where it belongs</strong>. The spot on the
+        desk now only supplies an antenna and power; who uses it and from where
+        is the browser's business. Anyone at home can be given a listen-only
+        password for an evening of shortwave, and from out of town that familiar
+        FT-710 is one URL away.
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-desk.jpg" alt="The W103D sitting quietly on the radio desk" />
-        <figcaption>Where it ends up: beside the radio, not in front of a monitor, not in the middle of the desk, and nobody ever has to switch it off — <strong>once power and the cable are in, it is just a small box that is always there</strong>.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-desk.jpg"
+          alt="The W103D sitting quietly on the radio desk"
+        />
+        <figcaption>
+          Where it ends up: beside the radio, not in front of a monitor, not in
+          the middle of the desk, and nobody ever has to switch it off —
+          <strong
+            >once power and the cable are in, it is just a small box that is
+            always there</strong
+          >.
+        </figcaption>
       </figure>
 
       <h2>8. The verified list: what it does now</h2>
@@ -527,42 +840,81 @@ poweroff                # unplug the stick, power on: it boots from eMMC from no
         "it should work"; these are the numbers from the logs:
       </p>
       <table>
-        <tr><th>Capability</th><th>Evidence from the real box</th></tr>
+        <tr>
+          <th>Capability</th>
+          <th>Evidence from the real box</th>
+        </tr>
         <tr>
           <td>CAT control</td>
-          <td>Frequency, mode, filter, ATT and PRE read back live; polling steady on 40 m (7.050–7.053 MHz, LSB, 2.4 kHz)</td>
+          <td>
+            Frequency, mode, filter, ATT and PRE read back live; polling steady
+            on 40 m (7.050–7.053 MHz, LSB, 2.4 kHz)
+          </td>
         </tr>
         <tr>
           <td>Receive audio</td>
-          <td><strong>50.0 frames/s, 20 ms spacing, Opus at ~52 kbps</strong> — listened continuously in a phone browser</td>
+          <td>
+            <strong>50.0 frames/s, 20 ms spacing, Opus at ~52 kbps</strong> —
+            listened continuously in a phone browser
+          </td>
         </tr>
         <tr>
           <td><strong>Transmit</strong></td>
-          <td>Phone microphone → server → the radio's USB sound card: one session with <strong>62 frames, peak=100%</strong>, 57 frames written to the radio, <code>decode_fail=0</code>, <code>write_err=0</code>, <code>queue_drops=0</code>; the radio keyed and its TX meters (PWR/SWR/ALC) came back</td>
+          <td>
+            Phone microphone → server → the radio's USB sound card: one session
+            with <strong>62 frames, peak=100%</strong>, 57 frames written to the
+            radio, <code>decode_fail=0</code>, <code>write_err=0</code>,
+            <code>queue_drops=0</code>; the radio keyed and its TX meters
+            (PWR/SWR/ALC) came back
+          </td>
         </tr>
         <tr>
           <td>QSO recording</td>
-          <td>Two MP3s in <code>recordings/</code>: <code>07050kHz_20261011_102001.mp3</code> (<strong>134.7 s</strong>, 64 kbps) plus a short clip (199 KB)</td>
+          <td>
+            Two MP3s in <code>recordings/</code>:
+            <code>07050kHz_20261011_102001.mp3</code> (<strong>134.7 s</strong>,
+            64 kbps) plus a short clip (199 KB)
+          </td>
         </tr>
         <tr>
           <td>Real spectrum</td>
-          <td><code>first frame received — spectrum active</code> — the FT4222's real spectrum, not the synthetic S-meter fallback</td>
+          <td>
+            <code>first frame received — spectrum active</code> — the FT4222's
+            real spectrum, not the synthetic S-meter fallback
+          </td>
         </tr>
         <tr>
           <td>The web UI</td>
-          <td>HTTPS with a self-signed certificate; opened from a phone, a tablet and a laptop; guests can be handed a listen-only password</td>
+          <td>
+            HTTPS with a self-signed certificate; opened from a phone, a tablet
+            and a laptop; guests can be handed a listen-only password
+          </td>
         </tr>
         <tr>
           <td>24/7</td>
-          <td>Moved house, power cut, powered back up: systemd brings it back by itself; under 5 W, passively cooled</td>
+          <td>
+            Moved house, power cut, powered back up: systemd brings it back by
+            itself; under 5 W, passively cooled
+          </td>
         </tr>
         <tr>
           <td>Its own storage</td>
-          <td><code>armbian-install</code> moved the running system onto the internal <strong>28.9 GB eMMC</strong>; it boots with no stick attached, and the factory bootloader was verified <strong>byte for byte</strong> (<code>cmp</code> over [0,444) and [512,4 MiB) — only the 68-byte partition table differs)</td>
+          <td>
+            <code>armbian-install</code> moved the running system onto the
+            internal <strong>28.9 GB eMMC</strong>; it boots with no stick
+            attached, and the factory bootloader was verified
+            <strong>byte for byte</strong> (<code>cmp</code> over [0,444) and
+            [512,4 MiB) — only the 68-byte partition table differs)
+          </td>
         </tr>
         <tr>
           <td><strong>Public access</strong></td>
-          <td>Live on Cloud Hub: <code>https://&lt;callsign&gt;.mrrc.vlsc.net/</code> serves HTTPS with a hub-issued certificate; a DDNS name keeps following the box's IPv6 address</td>
+          <td>
+            Live on Cloud Hub:
+            <code>https://&lt;callsign&gt;.mrrc.vlsc.net/</code> serves HTTPS
+            with a hub-issued certificate; a DDNS name keeps following the box's
+            IPv6 address
+          </td>
         </tr>
       </table>
       <p>
@@ -575,20 +927,31 @@ poweroff                # unplug the stick, power on: it boots from eMMC from no
         <em>On the LAN nothing changed — it is still doing all of the work.</em>
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="images/W103D/web/w103d-hub.jpg" alt="MRRC opened from a phone through the Cloud Hub entry" />
-        <figcaption>The public entry, opened on a phone: the same UI and the same waterfall as on the LAN.</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="images/W103D/web/w103d-hub.jpg"
+          alt="MRRC opened from a phone through the Cloud Hub entry"
+        />
+        <figcaption>
+          The public entry, opened on a phone: the same UI and the same
+          waterfall as on the LAN.
+        </figcaption>
       </figure>
       <ul>
         <li>
           <strong>It depends on a vendor kernel</strong>: the box's Wi-Fi needs
-          Amlogic's patched kernel and firmware. <em>Upgrade kernels only via
-          <code>armbian-update</code>, keeping the w103d variant</em> — a
-          generic kernel silently loses Wi-Fi.
+          Amlogic's patched kernel and firmware.
+          <em
+            >Upgrade kernels only via <code>armbian-update</code>, keeping the
+            w103d variant</em
+          >
+          — a generic kernel silently loses Wi-Fi.
         </li>
         <li>
-          <strong>The 100 Mb NIC</strong>: one client (a real spectrum at roughly
-          150 kbps plus Opus audio) is easy. Several listeners plus recording at
-          once is where you start counting.
+          <strong>The 100 Mb NIC</strong>: one client (a real spectrum at
+          roughly 150 kbps plus Opus audio) is easy. Several listeners plus
+          recording at once is where you start counting.
         </li>
         <li>
           <strong>This is not a retail product</strong>: it is one box we run
@@ -601,12 +964,14 @@ poweroff                # unplug the stick, power on: it boots from eMMC from no
 
       <p class="foot">
         Written 2026-10-11, the day this box went live — and the day receive,
-        transmit, spectrum, recording and phone control were each verified on the
-        real hardware (the numbers are in section 8). Every figure here comes
-        from that day's logs, commits and artifact checks, including the
+        transmit, spectrum, recording and phone control were each verified on
+        the real hardware (the numbers are in section 8). Every figure here
+        comes from that day's logs, commits and artifact checks, including the
         one-line test for each of the six defects.
-        <em>Updated 2026-10-12: step ⑤ (install onto the box itself) and public
-        access were added the next day.</em>
+        <em
+          >Updated 2026-10-12: step ⑤ (install onto the box itself) and public
+          access were added the next day.</em
+        >
         The image is on the
         <a href="downloads/MRRC-Modern-1.25.5-w103d.img.gz">download page</a>;
         step-by-step operation is in the

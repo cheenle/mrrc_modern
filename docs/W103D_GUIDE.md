@@ -439,8 +439,6 @@ aplay -l                            # 播放设备（TX）
 
 ![台面：盒子与电台各占一角](../website/images/W103D/web/w103d-desk.jpg)
 
-![接线近景：设备插在盒子的 USB 口上](../website/images/W103D/web/w103d-wiring.jpg)
-
 ## 11. 选机型
 
 ```bash
@@ -703,6 +701,8 @@ bash /tmp/verify.sh         # §12 那份
 
 **最终形态**：盒子、一根电源线、一根网线 —— 不再需要 U 盘；28.9 GB eMMC 全是它自己的。
 那根 U 盘留着当**救砖盘**（整盘备份就在里面）。
+
+![最终形态：电源插上、电台的 USB 线插在口上，无 U 盘、无显示器](../website/images/W103D/web/w103d-final.jpg)
 
 > ⚠️ **变砖兜底**：Amlogic 的 **MaskROM 在 SoC BootROM 里**（短接可重新进刷写模式），
 > 加上你手上的**原厂线刷固件包**，就能恢复。这两样在手，这一步的风险才是可控的。

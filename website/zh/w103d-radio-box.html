@@ -167,58 +167,73 @@
       <p class="sub">
         电台被绑在书桌上，是因为它的"面板"是一台电脑。这篇文章记录一条完整的路：
         想要什么 → 一台远程电台服务端到底需要什么 → 与树莓派/小主机逐项对比 →
-        为什么是一台二手云电脑盒子 → 真机上把六个缺陷一个个摁掉（含一场从 4% 音频
-        覆盖率挖到根因的排查）→ 以及这 125 元最后买到了什么。
+        为什么是一台二手云电脑盒子 → 真机上把六个缺陷一个个摁掉（含一场从 4%
+        音频 覆盖率挖到根因的排查）→ 以及这 125 元最后买到了什么。
       </p>
 
       <h2>1. 想法：电台不该被绑在书桌上</h2>
       <p>
-        一台 FT-710 摆在书桌上，它本体什么都不缺：CAT、USB 声卡、真实频谱都在机身上，
-        插一根 USB 线全给你。缺的是<strong>你在别处的时候，怎么用上它</strong>——
-        在沙发上想听一会儿 40 米、在阳台上想调一下天线、出差在外想确认频率有没有被谁占了。
+        一台 FT-710 摆在书桌上，它本体什么都不缺：CAT、USB
+        声卡、真实频谱都在机身上， 插一根 USB
+        线全给你。缺的是<strong>你在别处的时候，怎么用上它</strong>——
+        在沙发上想听一会儿 40
+        米、在阳台上想调一下天线、出差在外想确认频率有没有被谁占了。
       </p>
-      <p>
-        第一反应是远程桌面 / VNC。我们认真试过，然后放弃了，理由都很具体：
-      </p>
+      <p>第一反应是远程桌面 / VNC。我们认真试过，然后放弃了，理由都很具体：</p>
       <ul>
         <li>
-          <strong>声音会走一条很长的路</strong>：电台 → USB 声卡 → 电脑 → 远程桌面的音频通道 →
+          <strong>声音会走一条很长的路</strong>：电台 → USB 声卡 → 电脑 →
+          远程桌面的音频通道 →
           你耳朵。多一层重采样、多一层缓冲，延迟与断续都会被放大。
         </li>
         <li>
-          <strong>手机上的远程桌面不是"面板"</strong>：你要的是几个旋钮和一条瀑布，不是一块被缩小的
+          <strong>手机上的远程桌面不是"面板"</strong
+          >：你要的是几个旋钮和一条瀑布，不是一块被缩小的
           桌面；瀑布图在远程桌面上是"视频"，帧率与码率都不划算。
         </li>
         <li>
-          <strong>它需要一台常开的电脑</strong>：为了听电台而让一台 x86 主机 7×24 转着，
-          电费与散热都不对。
+          <strong>它需要一台常开的电脑</strong>：为了听电台而让一台 x86 主机
+          7×24 转着， 电费与散热都不对。
         </li>
       </ul>
       <p>
         真正想要的形态是反过来的：<strong>服务端守在电台旁边，浏览器只是面板</strong>。
-        手机、平板、笔记本随便哪一台，打开一个网址就是一台能听、能看瀑布、能按 PTT 的电台。
-        这台服务端要：接住电台的 USB（串口 + 声卡 + 频谱）、编码音频、把状态推给浏览器、
-        常年通电而不吵不热。
+        手机、平板、笔记本随便哪一台，打开一个网址就是一台能听、能看瀑布、能按
+        PTT 的电台。 这台服务端要：接住电台的 USB（串口 + 声卡 +
+        频谱）、编码音频、把状态推给浏览器、 常年通电而不吵不热。
       </p>
 
       <h2>2. 调研：这台服务端到底需要什么</h2>
       <p>
-        先量化需求，再挑硬件。服务端是 Python（<strong>有 GIL</strong>），热路径基本跑在一个核上，
+        先量化需求，再挑硬件。服务端是 Python（<strong>有 GIL</strong
+        >），热路径基本跑在一个核上，
         所以<em>核心数帮不上忙</em>，真正决定成败的是单线程性能。逐项列出来：
       </p>
       <table>
-        <tr><th>真正决定成败的</th><th>为什么</th></tr>
+        <tr>
+          <th>真正决定成败的</th>
+          <th>为什么</th>
+        </tr>
         <tr>
           <td><strong>单线程性能</strong></td>
-          <td>Python 服务端、音频编码、频谱解析都在一个事件循环里；多核只帮到别的进程</td>
+          <td>
+            Python
+            服务端、音频编码、频谱解析都在一个事件循环里；多核只帮到别的进程
+          </td>
         </tr>
         <tr>
           <td><strong>USB 口 ≥ 2</strong></td>
-          <td>电台线一根；另一根留给天调、U 盘或键盘。<strong>这是最常见的翻车点</strong></td>
+          <td>
+            电台线一根；另一根留给天调、U 盘或键盘。<strong
+              >这是最常见的翻车点</strong
+            >
+          </td>
         </tr>
         <tr>
           <td><strong>有线网口</strong></td>
-          <td>每路客户端约 60 KB/s，百兆都富余；但 WiFi 抖动会直接变成音频断续</td>
+          <td>
+            每路客户端约 60 KB/s，百兆都富余；但 WiFi 抖动会直接变成音频断续
+          </td>
         </tr>
         <tr>
           <td><strong>7×24 的功耗与散热</strong></td>
@@ -230,29 +245,71 @@
         </tr>
       </table>
       <p>
-        然后把这些候选的 CPU 拿去查实测单线程分（PassMark，单一来源、同一天抓取，
+        然后把这些候选的 CPU
+        拿去查实测单线程分（PassMark，单一来源、同一天抓取，
         样本数一并列出——<strong>样本数少于 100 的那几行只能当参考</strong>）：
       </p>
       <table>
         <tr>
-          <th>处理器</th><th>单线程</th><th>TDP</th><th>样本数</th><th>服务端热路径 ≈</th>
+          <th>处理器</th>
+          <th>单线程</th>
+          <th>TDP</th>
+          <th>样本数</th>
+          <th>服务端热路径 ≈</th>
         </tr>
-        <tr><td>Intel N100</td><td>1879</td><td>6 W</td><td>4111</td><td>~8%</td></tr>
-        <tr><td>AMD R1505G（HP t640）</td><td>1822</td><td>15 W</td><td>138</td><td>~8%</td></tr>
-        <tr><td>Broadcom BCM2712（树莓派 5）</td><td>1813</td><td>—</td><td>⚠️ 4</td><td>~8%</td></tr>
-        <tr><td>Intel Celeron J1900</td><td>653</td><td>10 W</td><td>881</td><td>~22%</td></tr>
-        <tr><td>Intel Atom D525</td><td>293</td><td>13 W</td><td>336</td><td>~49%</td></tr>
+        <tr>
+          <td>Intel N100</td>
+          <td>1879</td>
+          <td>6 W</td>
+          <td>4111</td>
+          <td>~8%</td>
+        </tr>
+        <tr>
+          <td>AMD R1505G（HP t640）</td>
+          <td>1822</td>
+          <td>15 W</td>
+          <td>138</td>
+          <td>~8%</td>
+        </tr>
+        <tr>
+          <td>Broadcom BCM2712（树莓派 5）</td>
+          <td>1813</td>
+          <td>—</td>
+          <td>⚠️ 4</td>
+          <td>~8%</td>
+        </tr>
+        <tr>
+          <td>Intel Celeron J1900</td>
+          <td>653</td>
+          <td>10 W</td>
+          <td>881</td>
+          <td>~22%</td>
+        </tr>
+        <tr>
+          <td>Intel Atom D525</td>
+          <td>293</td>
+          <td>13 W</td>
+          <td>336</td>
+          <td>~49%</td>
+        </tr>
       </table>
       <p>
-        结论有点反直觉但很实用：<strong>算力几乎不是选型依据</strong>。从 2008 年的
-        Core 2 Duo 到今天的 N100，任何一台单线程能跑到 700 分以上的机器，都只占一个核的
-        15–45%；而 2 GB 内存、几百 MB 存储就够。
-        <em>真正把项目卡住的从来不是 CPU，而是 USB 口数、网口、功耗，以及"这东西好不好买、好不好装"。</em>
+        结论有点反直觉但很实用：<strong>算力几乎不是选型依据</strong>。从 2008
+        年的 Core 2 Duo 到今天的 N100，任何一台单线程能跑到 700
+        分以上的机器，都只占一个核的 15–45%；而 2 GB 内存、几百 MB 存储就够。
+        <em
+          >真正把项目卡住的从来不是 CPU，而是 USB
+          口数、网口、功耗，以及"这东西好不好买、好不好装"。</em
+        >
       </p>
 
       <h2>3. 对比：四条路，各自的真实代价</h2>
       <table>
-        <tr><th>方案</th><th>好在哪里</th><th>代价</th></tr>
+        <tr>
+          <th>方案</th>
+          <th>好在哪里</th>
+          <th>代价</th>
+        </tr>
         <tr>
           <td><strong>N100 小主机</strong>（新）</td>
           <td>单线程最高、6 W、四核、有保修，唯一"不用算余量"的一档</td>
@@ -261,158 +318,317 @@
         <tr>
           <td><strong>二手瘦客户机</strong>（HP t640 / Dell Wyse 一类）</td>
           <td>单线程与 N100 打平（1822 vs 1879）、15 W、企业淘汰量大、便宜</td>
-          <td>要挑型号：确认 USB 口数、存储形态、能否装 Linux；货源与成色看运气</td>
+          <td>
+            要挑型号：确认 USB 口数、存储形态、能否装 Linux；货源与成色看运气
+          </td>
         </tr>
         <tr>
           <td><strong>树莓派 4 / 5</strong></td>
           <td>官方镜像、生态最厚、教程最多，几乎零移植</td>
-          <td>涨价与缺货；要另配电源/散热/存储；<strong>加上配件通常 400 元起</strong></td>
+          <td>
+            涨价与缺货；要另配电源/散热/存储；<strong
+              >加上配件通常 400 元起</strong
+            >
+          </td>
         </tr>
         <tr>
           <td><strong>运营商盒子</strong>（ZTE W103D）</td>
-          <td><strong>125 元</strong>二手价、&lt;5 W、32 GB eMMC、自带两个 USB 与有线口</td>
-          <td><strong>要自己刷系统</strong>：专属内核，不能升；100M 网口；WiFi 依赖社区驱动</td>
+          <td>
+            <strong>125 元</strong>二手价、&lt;5 W、32 GB eMMC、自带两个 USB
+            与有线口
+          </td>
+          <td>
+            <strong>要自己刷系统</strong>：专属内核，不能升；100M 网口；WiFi
+            依赖社区驱动
+          </td>
         </tr>
       </table>
       <p>
         注意最后一行和前三条的区别：前三者是"买来就能装"，它是"<strong>买来还要把系统换成我们自己的</strong>"。
-        我们这边正好有 MRRC Modern 的服务端镜像，这件事才成立——这也是这篇文章里最花时间的部分。
+        我们这边正好有 MRRC Modern
+        的服务端镜像，这件事才成立——这也是这篇文章里最花时间的部分。
       </p>
 
       <h2>4. 为什么是这台 125 元的盒子</h2>
       <p>
         先把话说清楚：<strong>它原本不是给火腿用的设备</strong>。它是一台运营商发的"云电脑终端"——
-        中国移动/ZTE 的 W103D，出厂是安卓，用途是插上显示器当瘦客户端跑云端桌面。
-        我买它花了 <em>125 元</em>（二手），买它的理由很朴素：上面第 2 节的四条件，它全过。
+        中国移动/ZTE 的
+        W103D，出厂是安卓，用途是插上显示器当瘦客户端跑云端桌面。 我买它花了
+        <em>125 元</em>（二手），买它的理由很朴素：上面第 2 节的四条件，它全过。
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-box.jpg" alt="中兴云电脑 W103D 的包装盒" />
-        <figcaption>包装上写的是「中兴云电脑 W103D / 云桌面终端 BAZ01 linux」——一台给云桌面用的终端，不是电台设备。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-box.jpg"
+          alt="中兴云电脑 W103D 的包装盒"
+        />
+        <figcaption>
+          包装上写的是「中兴云电脑 W103D / 云桌面终端 BAZ01
+          linux」——一台给云桌面用的终端，不是电台设备。
+        </figcaption>
       </figure>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-label.jpg" alt="W103D 机身标签：产品型号 W103D，额定输入 5V 2A" />
-        <figcaption><strong>认型号是第一步，也是唯一不能省的一步。</strong>要的是 ZTE W103D（Amlogic S905L3A）。同一批盒子里还有国科 GK6323、RK3566 等芯片的版本，外观几乎一样，而我们的镜像只认这一颗——买错了就是一块砖。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-label.jpg"
+          alt="W103D 机身标签：产品型号 W103D，额定输入 5V 2A"
+        />
+        <figcaption>
+          <strong>认型号是第一步，也是唯一不能省的一步。</strong>要的是 ZTE
+          W103D（Amlogic S905L3A）。同一批盒子里还有国科 GK6323、RK3566
+          等芯片的版本，外观几乎一样，而我们的镜像只认这一颗——买错了就是一块砖。
+        </figcaption>
       </figure>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-serial.jpg" alt="W103D 机身标签特写：型号、CMIIT ID、生产日期与序列号" />
-        <figcaption>买之前值得拍一张：标签上有型号、CMIIT ID、<strong>生产日期（2024.09）</strong>和序列号——确认手里这台到底是什么，这是最快的一条路。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-serial.jpg"
+          alt="W103D 机身标签特写：型号、CMIIT ID、生产日期与序列号"
+        />
+        <figcaption>
+          买之前值得拍一张：标签上有型号、CMIIT
+          ID、<strong>生产日期（2024.09）</strong>和序列号——确认手里这台到底是什么，这是最快的一条路。
+        </figcaption>
       </figure>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-size.jpg" alt="W103D 本体，旁边放了一节 5 号电池做尺寸参照" />
-        <figcaption>体积：手掌大小，一节 5 号电池当参照（旁边那节是可充电的 eneloop）。额定输入 5V/2A，实测整机 <strong>&lt; 5 W</strong>——常年开着，一年电费不到 30 元。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-size.jpg"
+          alt="W103D 本体，旁边放了一节 5 号电池做尺寸参照"
+        />
+        <figcaption>
+          体积：手掌大小，一节 5 号电池当参照（旁边那节是可充电的
+          eneloop）。额定输入 5V/2A，实测整机
+          <strong>&lt; 5 W</strong>——常年开着，一年电费不到 30 元。
+        </figcaption>
       </figure>
       <table>
-        <tr><th></th><th>ZTE W103D</th><th>树莓派 4</th><th>树莓派 5</th></tr>
-        <tr><td>SoC</td><td>S905L3A · 4×A53（顺序核）</td><td>BCM2711 · 4×A72（乱序）</td><td>BCM2712 · 4×A76（乱序）</td></tr>
-        <tr><td>内存 / 存储</td><td>2 GB / <strong>32 GB eMMC</strong></td><td>1–8 GB / microSD</td><td>4–8 GB / microSD·NVMe</td></tr>
-        <tr><td>网口</td><td>100 Mb</td><td>千兆</td><td>千兆</td></tr>
-        <tr><td>功耗</td><td><strong>&lt; 5 W</strong></td><td>~3–7 W</td><td>~5–12 W</td></tr>
-        <tr><td>软件成熟度</td><td><strong>专属内核，不能升</strong></td><td>官方镜像，生态最厚</td><td>同左</td></tr>
+        <tr>
+          <th></th>
+          <th>ZTE W103D</th>
+          <th>树莓派 4</th>
+          <th>树莓派 5</th>
+        </tr>
+        <tr>
+          <td>SoC</td>
+          <td>S905L3A · 4×A53（顺序核）</td>
+          <td>BCM2711 · 4×A72（乱序）</td>
+          <td>BCM2712 · 4×A76（乱序）</td>
+        </tr>
+        <tr>
+          <td>内存 / 存储</td>
+          <td>2 GB / <strong>32 GB eMMC</strong></td>
+          <td>1–8 GB / microSD</td>
+          <td>4–8 GB / microSD·NVMe</td>
+        </tr>
+        <tr>
+          <td>网口</td>
+          <td>100 Mb</td>
+          <td>千兆</td>
+          <td>千兆</td>
+        </tr>
+        <tr>
+          <td>功耗</td>
+          <td><strong>&lt; 5 W</strong></td>
+          <td>~3–7 W</td>
+          <td>~5–12 W</td>
+        </tr>
+        <tr>
+          <td>软件成熟度</td>
+          <td><strong>专属内核，不能升</strong></td>
+          <td>官方镜像，生态最厚</td>
+          <td>同左</td>
+        </tr>
       </table>
       <div class="note">
-        <strong>代价要写明白</strong>：它的 WiFi（MT7663S）靠社区逆向的驱动与专属内核补丁，
-        内核一升就可能<em>静默丢 WiFi</em>（不报错，只是连不上）；100M 网口够用但不是千兆；
-        系统要自己刷成 Armbian（ophub 的 <code>s905l3a-w103d</code> 变体，内核 6.18）。
+        <strong>代价要写明白</strong>：它的
+        WiFi（MT7663S）靠社区逆向的驱动与专属内核补丁， 内核一升就可能<em
+          >静默丢 WiFi</em
+        >（不报错，只是连不上）；100M 网口够用但不是千兆； 系统要自己刷成
+        Armbian（ophub 的 <code>s905l3a-w103d</code> 变体，内核 6.18）。
         换句话说：<strong>省下的钱，是用"自己动手"换的</strong>。愿意动手，这就是全场最便宜的方案。
       </div>
 
       <h2>5. 动手：从开箱到手机上的瀑布图</h2>
       <p>整条路五步，全部只用一根网线、一个 U 盘、一台能 SSH 的电脑：</p>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-unbox.jpg" alt="开箱：盒子里是 W103D 本体与配件" />
-        <figcaption>开箱：本体 + USB-C 电源 + 线。它连 HDMI、网口、两个 USB 都是齐的。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-unbox.jpg"
+          alt="开箱：盒子里是 W103D 本体与配件"
+        />
+        <figcaption>
+          开箱：本体 + USB-C 电源 + 线。它连 HDMI、网口、两个 USB 都是齐的。
+        </figcaption>
       </figure>
       <h3>① 写 U 盘</h3>
       <p>
         把镜像写到 U 盘（<strong>认准盘符</strong>，别烧错盘），插到盒子上：
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-usb.jpg" alt="W103D 插着 U 盘启动" />
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-usb.jpg"
+          alt="W103D 插着 U 盘启动"
+        />
         <figcaption>U 盘插上、网线插上，就可以从 U 盘启动了。</figcaption>
       </figure>
       <h3>② 从 U 盘启动（安卓一字节不动）</h3>
       <p>
         盒子通电，在安卓里执行一次 <code>reboot update</code>，它就从 U 盘启动。
-        这一步<strong>只改一次 u-boot 的启动顺序，不碰安卓的分区与数据</strong>——
-        拔掉 U 盘重新上电，它还是原来那台安卓盒子。这是整个方案里我最喜欢的设计：
+        这一步<strong>只改一次 u-boot 的启动顺序，不碰安卓的分区与数据</strong
+        >—— 拔掉 U
+        盘重新上电，它还是原来那台安卓盒子。这是整个方案里我最喜欢的设计：
         失败不用负责，因为什么都没动。
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-firstboot.jpg" alt="显示器上的 Armbian 首启横幅与 SSH 会话" />
-        <figcaption>第一次开机：HDMI 上看到 Armbian 横幅（S905L3a / 内核 6.18.54-ophub / 50&nbsp;°C / 局域网 IP），同时 SSH 进去。<strong>首启不需要联网</strong>：口令、自签证书、串口探测都在本机做完，横幅上直接印出 Web 登录口令。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-firstboot.jpg"
+          alt="显示器上的 Armbian 首启横幅与 SSH 会话"
+        />
+        <figcaption>
+          第一次开机：HDMI 上看到 Armbian 横幅（S905L3a / 内核 6.18.54-ophub /
+          50&nbsp;°C / 局域网 IP），同时 SSH
+          进去。<strong>首启不需要联网</strong>：口令、自签证书、串口探测都在本机做完，横幅上直接印出
+          Web 登录口令。
+        </figcaption>
       </figure>
       <h3>③ 接电台</h3>
       <p>
-        FT-710 用<strong>上方那个 Enhanced 口</strong>接盒子，一根线一次给出三样东西：
-        CAT 串口（<code>/dev/ttyUSB0</code>）、USB 声卡、以及真频谱用的 FT4222 接口。
-        用自带的命令切换机型：
+        FT-710 用<strong>上方那个 Enhanced 口</strong
+        >接盒子，一根线一次给出三样东西： CAT
+        串口（<code>/dev/ttyUSB0</code>）、USB 声卡、以及真频谱用的 FT4222
+        接口。 用自带的命令切换机型：
       </p>
       <pre><code>ssh root@&lt;盒子IP&gt;
 mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务</code></pre>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-wiring.jpg" alt="W103D 侧面 USB 口插着设备" />
-        <figcaption>两个 USB 口，所有东西最后都落在这里：装系统时是 U 盘，装完之后是电台的线。</figcaption>
-      </figure>
-      <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-setup.jpg" alt="浏览器里的连接设置：电台型号 FT-710、串口、RX/TX 音频设备" />
-        <figcaption>浏览器里的连接设置页：机型、串口、接收/发射音频设备都在这里，改完即生效。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-setup.jpg"
+          alt="浏览器里的连接设置：电台型号 FT-710、串口、RX/TX 音频设备"
+        />
+        <figcaption>
+          浏览器里的连接设置页：机型、串口、接收/发射音频设备都在这里，改完即生效。
+        </figcaption>
       </figure>
       <h3>④ 手机上就是一台电台</h3>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-phone.jpg" alt="手机浏览器里的 MRRC 界面：频谱、瀑布、功率与驻波表、PTT 按钮" />
-        <figcaption><strong>这是 125 元买到的东西</strong>：手机浏览器里的真频谱 + 瀑布（不是合成的 S 表回退）、功率/驻波表、模式与滤波、以及那颗红色的 PTT。手机上要能发射必须走 HTTPS（浏览器只在安全上下文里给麦克风权限），所以镜像首启就签好了自签证书。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-phone.jpg"
+          alt="手机浏览器里的 MRRC 界面：频谱、瀑布、功率与驻波表、PTT 按钮"
+        />
+        <figcaption>
+          <strong>这是 125 元买到的东西</strong>：手机浏览器里的真频谱 +
+          瀑布（不是合成的 S 表回退）、功率/驻波表、模式与滤波、以及那颗红色的
+          PTT。手机上要能发射必须走
+          HTTPS（浏览器只在安全上下文里给麦克风权限），所以镜像首启就签好了自签证书。
+        </figcaption>
       </figure>
 
       <h3>⑤ 刷进盒子自己（然后 U 盘就可以收起来了）</h3>
       <p>
-        前面四步都还跑在 U 盘上。最后一步让它独立：在<strong>盒子上</strong>跑 ophub 自带的安装器，
-        它把正在运行的系统克隆进机身里那 28.9 GB 的 eMMC，连引导一起处理好。
+        前面四步都还跑在 U 盘上。最后一步让它独立：在<strong>盒子上</strong>跑
+        ophub 自带的安装器， 它把正在运行的系统克隆进机身里那 28.9 GB 的
+        eMMC，连引导一起处理好。
       </p>
       <pre><code>armbian-ddbr            # 先备份整块 eMMC 到 /ddbr/（原厂引导也一起保住）
 armbian-install         # 设备 ID 填 307（ZTE-W103D），根文件系统填 1（ext4）——不要加 -m yes
 poweroff                # 拔掉 U 盘、重新上电：从此从 eMMC 启动</code></pre>
       <p>
-        两件值得知道的事：安装器把原厂引导<strong>逐字节</strong>保住（只有 68 字节的分区表换成新的，
-        可以用 <code>cmp</code> 验证）；它会重新生成 machine-id，所以盒子的 IPv6 接口标识会变一次——
+        两件值得知道的事：安装器把原厂引导<strong>逐字节</strong>保住（只有 68
+        字节的分区表换成新的， 可以用 <code>cmp</code> 验证）；它会重新生成
+        machine-id，所以盒子的 IPv6 接口标识会变一次——
         按名字找它的东西（DDNS、Cloud Hub 隧道）几分钟内自己跟上。
       </p>
       <p>
-        剩下就是最终形态：<strong>盒子、一根电源线、一根网线</strong>——不再需要 U 盘，
-        28.9 GB 都是它自己的；而那根 U 盘留着当救砖盘（整盘备份就在里面）。
+        剩下就是最终形态：<strong>盒子、一根电源线、一根接电台的 USB
+        线</strong>——不需要 U 盘、不接显示器；28.9 GB
+        都是它自己的；而那根 U 盘留着当救砖盘（整盘备份就在里面）。
       </p>
+      <figure>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-final.jpg"
+          alt="装完之后的样子：电源插上、电台的 USB 线插在口上，没有 U 盘"
+        />
+        <figcaption>
+          最终形态：电源插上、电台的线插在 USB 口，网络走
+          Wi-Fi——系统直接跑在机身 eMMC 上。
+        </figcaption>
+      </figure>
 
       <h2>6. 能开机 ≠ 能用：真机拓出来的六个坑</h2>
       <p>
         镜像在容器里"构建成功、验收全绿"，第一次真的烧进盒子、插上电台，还是一晚上拓出六处缺陷。
         每一处都只在这套硬件上才会露头——这也是为什么我不相信"构建成功"这四个字。
-        六条后来全部改掉、加了回归守卫、并重出一版镜像（<strong>52 项验收全过</strong>）；
-        第 8 节那张表就是修好之后逐项测出来的。
+        六条后来全部改掉、加了回归守卫、并重出一版镜像（<strong
+          >52 项验收全过</strong
+        >）； 第 8 节那张表就是修好之后逐项测出来的。
       </p>
       <table>
-        <tr><th>症状</th><th>根因</th></tr>
+        <tr>
+          <th>症状</th>
+          <th>根因</th>
+        </tr>
         <tr>
           <td>网页打不开，服务每 3 秒重启一次</td>
-          <td>首启以 root 生成 TLS 证书，私钥是 <code>0600 root:root</code>，而服务跑在 <code>mrrc</code> 用户下 ⇒ uvicorn 读不了私钥</td>
+          <td>
+            首启以 root 生成 TLS 证书，私钥是
+            <code>0600 root:root</code>，而服务跑在 <code>mrrc</code> 用户下 ⇒
+            uvicorn 读不了私钥
+          </td>
         </tr>
         <tr>
           <td>真实频谱起不来（但 CAT 与声音都正常）</td>
-          <td>FT4222 没有自己的 <code>/dev</code> 节点，库直接开 USB 设备，而节点是 <code>root:root</code> ⇒ 缺一条 udev 规则。<strong>半个故障最难判</strong></td>
+          <td>
+            FT4222 没有自己的 <code>/dev</code> 节点，库直接开 USB
+            设备，而节点是 <code>root:root</code> ⇒ 缺一条 udev 规则。<strong
+              >半个故障最难判</strong
+            >
+          </td>
         </tr>
         <tr>
           <td>HDMI 上看不到首启横幅（上面有口令）</td>
-          <td>单元里写了 <code>StandardOutput=console</code>——<strong>这不是合法的 systemd 语法</strong>，systemd 只是默默忽略它</td>
+          <td>
+            单元里写了 <code>StandardOutput=console</code>——<strong
+              >这不是合法的 systemd 语法</strong
+            >，systemd 只是默默忽略它
+          </td>
         </tr>
         <tr>
           <td>盒子里的配置带着<strong>构建机</strong>的串口</td>
-          <td>安装脚本在构建主机上写的配置文件被原样搬进镜像（那台上是我 Mac 的 <code>/dev/cu.SLAB_USBtoUART</code>）</td>
+          <td>
+            安装脚本在构建主机上写的配置文件被原样搬进镜像（那台上是我 Mac 的
+            <code>/dev/cu.SLAB_USBtoUART</code>）
+          </td>
         </tr>
         <tr>
           <td>新盒子上总有一颗红灯</td>
-          <td>Debian 自带的 <code>dnsmasq.service</code> 与 systemd-resolved 抢 53 端口（热点用的是 NetworkManager 自带实例）</td>
+          <td>
+            Debian 自带的 <code>dnsmasq.service</code> 与 systemd-resolved 抢 53
+            端口（热点用的是 NetworkManager 自带实例）
+          </td>
         </tr>
         <tr>
           <td>验收脚本说一个<strong>正在运行</strong>的单元"未安装"</td>
-          <td><code>systemctl list-unit-files | grep -q</code> 在 <code>pipefail</code> 下因 SIGPIPE 返回 141：grep 命中即退出，systemctl 收到 SIGPIPE，"找到了"被判成"没找到"</td>
+          <td>
+            <code>systemctl list-unit-files | grep -q</code> 在
+            <code>pipefail</code> 下因 SIGPIPE 返回 141：grep
+            命中即退出，systemctl 收到 SIGPIPE，"找到了"被判成"没找到"
+          </td>
         </tr>
       </table>
 
@@ -423,34 +639,63 @@ poweroff                # 拔掉 U 盘、重新上电：从此从 eMMC 启动</c
         数据是这样的：
       </p>
       <table>
-        <tr><th>读法</th><th>实际拿到的音频</th></tr>
-        <tr><td>服务原样（20 ms 一个周期）</td><td><strong>4%</strong>，并且约 60 秒后<strong>永久停摆</strong></td></tr>
-        <tr><td>同一份代码，读得激进一点</td><td>100%</td></tr>
-        <tr><td>同一份代码，把缓冲加大到 400 ms</td><td>99.7%</td></tr>
-        <tr><td><strong>修好后（缓冲 100 ms）</strong></td><td><strong>100%，50 帧/秒、帧间隔 20 ms，连续稳定</strong></td></tr>
+        <tr>
+          <th>读法</th>
+          <th>实际拿到的音频</th>
+        </tr>
+        <tr>
+          <td>服务原样（20 ms 一个周期）</td>
+          <td><strong>4%</strong>，并且约 60 秒后<strong>永久停摆</strong></td>
+        </tr>
+        <tr>
+          <td>同一份代码，读得激进一点</td>
+          <td>100%</td>
+        </tr>
+        <tr>
+          <td>同一份代码，把缓冲加大到 400 ms</td>
+          <td>99.7%</td>
+        </tr>
+        <tr>
+          <td><strong>修好后（缓冲 100 ms）</strong></td>
+          <td><strong>100%，50 帧/秒、帧间隔 20 ms，连续稳定</strong></td>
+        </tr>
       </table>
       <p>
-        根因是这台盒子的<strong>宿主音频缓冲只有一两个 20 ms 周期</strong>：读得稍慢就溢出，
+        根因是这台盒子的<strong>宿主音频缓冲只有一两个 20 ms 周期</strong
+        >：读得稍慢就溢出，
         而溢出之后——最容易骗人的地方——<strong>采集接口静默停摆</strong>：系统层面显示"停止"，
-        但音频库仍然报告"流是打开的"，不抛异常，日志里一个字都没有。
-        macOS 与 Windows 的驱动层缓冲大得多，所以同一份代码在台式机上永远看不见这个坑。
+        但音频库仍然报告"流是打开的"，不抛异常，日志里一个字都没有。 macOS 与
+        Windows 的驱动层缓冲大得多，所以同一份代码在台式机上永远看不见这个坑。
       </p>
       <p>
-        修法两条：把采集缓冲按平台调到 100 ms（<code>MRRC_RX_BUFFER_MS</code>），
-        再加一个<strong>静默看门狗</strong>——有人在听却连续 3 秒读不到音频，就打日志并重开采集流。
+        修法两条：把采集缓冲按平台调到 100
+        ms（<code>MRRC_RX_BUFFER_MS</code>），
+        再加一个<strong>静默看门狗</strong>——有人在听却连续 3
+        秒读不到音频，就打日志并重开采集流。
         前者让问题不再发生，后者让它<em>下次发生时看得见、并且自愈</em>。
       </p>
 
       <h2>7. 值不值：125 元买到了什么</h2>
       <table>
-        <tr><th>买到的</th><th>说明</th></tr>
+        <tr>
+          <th>买到的</th>
+          <th>说明</th>
+        </tr>
         <tr>
           <td><strong>任何设备都是电台面板</strong></td>
-          <td>手机、平板、笔记本（连同型号的 Android 客户端）打开一个网址就能听、看真频谱、按 PTT；服务端守在电台旁边，不占书桌</td>
+          <td>
+            手机、平板、笔记本（连同型号的 Android
+            客户端）打开一个网址就能听、看真频谱、按
+            PTT；服务端守在电台旁边，不占书桌
+          </td>
         </tr>
         <tr>
           <td><strong>成本</strong></td>
-          <td>盒子 125 元 + 一个 U 盘（本来就有）；对比：树莓派方案加上电源/散热/存储通常 400 元起，N100 小主机 500 元以上</td>
+          <td>
+            盒子 125 元 + 一个 U
+            盘（本来就有）；对比：树莓派方案加上电源/散热/存储通常 400
+            元起，N100 小主机 500 元以上
+          </td>
         </tr>
         <tr>
           <td><strong>常年开着的代价</strong></td>
@@ -458,11 +703,22 @@ poweroff                # 拔掉 U 盘、重新上电：从此从 eMMC 启动</c
         </tr>
         <tr>
           <td><strong>还能顺手干别的</strong></td>
-          <td>同一台上还跑着通联录音（<strong>已实测</strong>，见第 8 节）；接了 ATR-1000 天调就能联动（本机未接）；还能给朋友开一个<strong>只听口令</strong></td>
+          <td>
+            同一台上还跑着通联录音（<strong>已实测</strong>，见第 8 节）；接了
+            ATR-1000 天调就能联动（本机未接）；还能给朋友开一个<strong
+              >只听口令</strong
+            >
+          </td>
         </tr>
         <tr>
           <td><strong>往外走一步</strong></td>
-          <td>接上 Cloud Hub（出站隧道 + 每实例证书）之后，它就从"局域网里的电台"变成<strong>公网可达</strong>的电台：<a href="cloud-first-mile.html">详见云端的第一公里</a></td>
+          <td>
+            接上 Cloud Hub（出站隧道 +
+            每实例证书）之后，它就从"局域网里的电台"变成<strong>公网可达</strong>的电台：<a
+              href="cloud-first-mile.html"
+              >详见云端的第一公里</a
+            >
+          </td>
         </tr>
       </table>
       <p>
@@ -471,42 +727,69 @@ poweroff                # 拔掉 U 盘、重新上电：从此从 eMMC 启动</c
         自己在外地，打开浏览器就是那台熟悉的 FT-710。
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-desk.jpg" alt="W103D 盒子安静地待在电台桌面上" />
-        <figcaption>它最终的位置：电台旁边，不占显示器的位置，不占书桌的中心，也不用谁去关它——<strong>接上电源和网线之后，它就只是一台"一直在"的小盒子</strong>。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-desk.jpg"
+          alt="W103D 盒子安静地待在电台桌面上"
+        />
+        <figcaption>
+          它最终的位置：电台旁边，不占显示器的位置，不占书桌的中心，也不用谁去关它——<strong>接上电源和网线之后，它就只是一台"一直在"的小盒子</strong>。
+        </figcaption>
       </figure>
 
       <h2>8. 实测清单：它现在能做到什么</h2>
-      <p>
-        上线当天把每一项都真做了一遍。下面不是"应该可以"，是日志里的数字：
-      </p>
+      <p>上线当天把每一项都真做了一遍。下面不是"应该可以"，是日志里的数字：</p>
       <table>
-        <tr><th>能力</th><th>实测证据</th></tr>
+        <tr>
+          <th>能力</th>
+          <th>实测证据</th>
+        </tr>
         <tr>
           <td>CAT 控制</td>
-          <td>频率/模式/滤波/ATT/PRE 实时回读，40 m 上轮询稳定（7.050–7.053 MHz、LSB、2.4 kHz）</td>
+          <td>
+            频率/模式/滤波/ATT/PRE 实时回读，40 m 上轮询稳定（7.050–7.053
+            MHz、LSB、2.4 kHz）
+          </td>
         </tr>
         <tr>
           <td>接收音频</td>
-          <td><strong>50.0 帧/秒、帧间隔 20 ms、Opus 约 52 kbps</strong>，手机浏览器里连续听</td>
+          <td>
+            <strong>50.0 帧/秒、帧间隔 20 ms、Opus 约 52 kbps</strong
+            >，手机浏览器里连续听
+          </td>
         </tr>
         <tr>
           <td><strong>发射</strong></td>
-          <td>手机麦克风 → 服务端 → 电台 USB 声卡：一次 <strong>62 帧、peak=100%</strong>、写入电台 57 帧，
-              <code>decode_fail=0</code>、<code>write_err=0</code>、<code>queue_drops=0</code>；
-              电台被键控并回读出 TX 表（PWR/SWR/ALC）</td>
+          <td>
+            手机麦克风 → 服务端 → 电台 USB 声卡：一次
+            <strong>62 帧、peak=100%</strong>、写入电台 57 帧，
+            <code>decode_fail=0</code
+            >、<code>write_err=0</code>、<code>queue_drops=0</code>；
+            电台被键控并回读出 TX 表（PWR/SWR/ALC）
+          </td>
         </tr>
         <tr>
           <td>通联录音</td>
-          <td><code>recordings/</code> 里留下两个 MP3：<code>07050kHz_20261011_102001.mp3</code>
-              （<strong>134.7 秒</strong>、64 kbps）与一个短片段（199 KB）</td>
+          <td>
+            <code>recordings/</code> 里留下两个 MP3：<code
+              >07050kHz_20261011_102001.mp3</code
+            >
+            （<strong>134.7 秒</strong>、64 kbps）与一个短片段（199 KB）
+          </td>
         </tr>
         <tr>
           <td>真频谱</td>
-          <td><code>first frame received — spectrum active</code>——FT4222 的真实频谱，不是 S 表合成谱</td>
+          <td>
+            <code>first frame received — spectrum active</code>——FT4222
+            的真实频谱，不是 S 表合成谱
+          </td>
         </tr>
         <tr>
           <td>Web 界面</td>
-          <td>HTTPS + 自签证书，手机/平板/笔记本都开过；访客可以给一个只听口令</td>
+          <td>
+            HTTPS + 自签证书，手机/平板/笔记本都开过；访客可以给一个只听口令
+          </td>
         </tr>
         <tr>
           <td>7×24</td>
@@ -514,13 +797,20 @@ poweroff                # 拔掉 U 盘、重新上电：从此从 eMMC 启动</c
         </tr>
         <tr>
           <td>它自己的存储</td>
-          <td><code>armbian-install</code> 把运行中的系统搬进了机身 <strong>28.9 GB eMMC</strong>；不插 U 盘也能启动，
-              且原厂引导<strong>逐字节</strong>核验过（<code>cmp</code> 比 [0,444) 与 [512,4 MiB) 两段，只有 68 字节分区表不同）</td>
+          <td>
+            <code>armbian-install</code> 把运行中的系统搬进了机身
+            <strong>28.9 GB eMMC</strong>；不插 U 盘也能启动，
+            且原厂引导<strong>逐字节</strong>核验过（<code>cmp</code> 比 [0,444)
+            与 [512,4 MiB) 两段，只有 68 字节分区表不同）
+          </td>
         </tr>
         <tr>
           <td><strong>公网接入</strong></td>
-          <td>已上 Cloud Hub：<code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 用 hub 签发的证书提供 HTTPS；
-              另有一个 DDNS 域名一直追着盒子的 IPv6 地址</td>
+          <td>
+            已上 Cloud Hub：<code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 用
+            hub 签发的证书提供 HTTPS； 另有一个 DDNS 域名一直追着盒子的 IPv6
+            地址
+          </td>
         </tr>
       </table>
       <p>
@@ -530,34 +820,49 @@ poweroff                # 拔掉 U 盘、重新上电：从此从 eMMC 启动</c
         <em>局域网那边没有任何变化——它依然是全部在干活的那个。</em>
       </p>
       <figure>
-        <img loading="lazy" decoding="async" src="../images/W103D/web/w103d-hub.jpg" alt="用手机通过 Cloud Hub 入口打开 MRRC" />
-        <figcaption>公网入口，手机上打开：界面和瀑布图与局域网里一模一样。</figcaption>
+        <img
+          loading="lazy"
+          decoding="async"
+          src="../images/W103D/web/w103d-hub.jpg"
+          alt="用手机通过 Cloud Hub 入口打开 MRRC"
+        />
+        <figcaption>
+          公网入口，手机上打开：界面和瀑布图与局域网里一模一样。
+        </figcaption>
       </figure>
       <ul>
         <li>
-          <strong>依赖专属内核</strong>：这台盒子的 WiFi 依赖 Amlogic 的专属内核与固件，
-          <em>升级内核请走 <code>armbian-update</code> 并保持 w103d 变体</em>；换通用内核 = 静默丢 WiFi。
+          <strong>依赖专属内核</strong>：这台盒子的 WiFi 依赖 Amlogic
+          的专属内核与固件，
+          <em>升级内核请走 <code>armbian-update</code> 并保持 w103d 变体</em
+          >；换通用内核 = 静默丢 WiFi。
         </li>
         <li>
-          <strong>100M 网口</strong>：一路客户端（真频谱约 150 kbps + Opus 音频）绰绰有余；
-          但要同时跑多路监听 + 录音，就要算一算。
+          <strong>100M 网口</strong>：一路客户端（真频谱约 150 kbps + Opus
+          音频）绰绰有余； 但要同时跑多路监听 + 录音，就要算一算。
         </li>
         <li>
-          <strong>它不是一个零售产品</strong>：这是我们自己在用的一台盒子。镜像、构建脚本、
+          <strong>它不是一个零售产品</strong
+          >：这是我们自己在用的一台盒子。镜像、构建脚本、
           这套排查记录都在仓库里，谁愿意动手都可以复刻；不愿意动手的话，第二、三节里的
           N100 或树莓派才是你的选项。
         </li>
       </ul>
 
       <p class="foot">
-        写于 2026-10-11，就是这台盒子上线的那天；同一天里把接收、发射、频谱、录音、手机控制
-        逐项实测通过（第 8 节附的就是那一天的日志数字）。文中的数据全部来自当天的日志、提交与产物校验，
+        写于
+        2026-10-11，就是这台盒子上线的那天；同一天里把接收、发射、频谱、录音、手机控制
+        逐项实测通过（第 8
+        节附的就是那一天的日志数字）。文中的数据全部来自当天的日志、提交与产物校验，
         包括那六个缺陷各自的判定命令。
         <em>2026-10-12 更新：补上第五步（装进盒子自己的存储）与公网接入。</em>
         镜像可以从
         <a href="../downloads/MRRC-Modern-1.25.5-w103d.img.gz">下载页</a>取，
         逐步操作见 <a href="w103d.html">W103D 完整指南</a>。<br />
-        English: <a href="../w103d-radio-box.html">A ¥125 box as my FT-710's remote server</a>
+        English:
+        <a href="../w103d-radio-box.html"
+          >A ¥125 box as my FT-710's remote server</a
+        >
       </p>
     </main>
   </body>

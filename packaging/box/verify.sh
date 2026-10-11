@@ -21,8 +21,6 @@ head_() { printf '\n%s\n' "$*"; }
 
 ENV_FILE=/opt/mrrc_modern/env/mrrc.env
 UNIT=mrrc-modern
-SETUP_UNIT=mrrc-setup-ap.service
-AP_STATE=/run/mrrc/setup-ap/state.json
 
 head_ "1/12 wired network"
 # `cmd | grep -q` inside a condition is a trap in this script: grep exits the
@@ -125,31 +123,33 @@ else
 		"a public entry needs the second PTT defence, see design D-4"
 fi
 
-head_ "11/12 setup hotspot (onboarding with no cable and no keyboard)"
-# This runs *after* onboarding, over the network the wizard just configured, so a
-# healthy box reports mode 'off' or 'sta' — the hotspot being down is design D-6
-# fence 1, not a failure. What must be true is that the machinery is installed and
-# the daemon is alive, because the alternative is a box that can never be
-# onboarded without a keyboard.
-if ! command -v systemctl >/dev/null 2>&1; then
-	bad "systemctl not found" "this is not a systemd host"
-elif ! systemctl cat "$SETUP_UNIT" >/dev/null 2>&1; then
-	bad "${SETUP_UNIT} is not installed" \
-		"this image predates the setup hotspot; rebuild it (design 2026-10-08)"
-elif ! systemctl is-enabled --quiet "$SETUP_UNIT"; then
-	bad "${SETUP_UNIT} is installed but not enabled" \
-		"systemctl enable ${SETUP_UNIT}"
-elif ! command -v dnsmasq >/dev/null 2>&1; then
-	bad "dnsmasq is missing" \
-		"the hotspot comes up but hands out no addresses (design D-2); add it to box-overlay.sh"
-elif systemctl is-active --quiet "$SETUP_UNIT"; then
-	mode="$(sed -n 's/^ *"mode": *"\([^"]*\)".*/\1/p' "$AP_STATE" 2>/dev/null | head -1)"
-	ok "service active; published mode='${mode:-none}' (off/sta is correct once the box has a network)"
-	opened="$(journalctl -u "$SETUP_UNIT" --no-pager 2>/dev/null | grep -c 'SETUP HOTSPOT OPEN' || true)"
-	printf '      (the hotspot has been opened %s time(s) in the current journal)\n' "${opened:-0}"
+head_ "11/12 box identity and the privilege channel"
+# The onboarding path is a LAN page now (design §9), so what has to be true
+# post-flash is not "a hotspot exists" but "the operator can find this box and
+# the helpers it needs are installed".
+if [ ! -e /etc/polkit-1/rules.d/49-mrrc-nm.rules ]; then
+	bad "the NetworkManager polkit rule is missing" \
+		"the web pages cannot write NM without it; add it to box-overlay.sh"
 else
-	bad "${SETUP_UNIT} is not running" \
-		"journalctl -u ${SETUP_UNIT} -n 50 --no-pager"
+	ok "polkit rule present (mrrc may reconfigure NetworkManager)"
+fi
+if ! systemctl is-active --quiet avahi-daemon; then
+	bad "avahi-daemon is not running" \
+		"<hostname>.local will not resolve; systemctl status avahi-daemon"
+elif ! command -v avahi-resolve >/dev/null 2>&1; then
+	printf '  – avahi-resolve not available; skipped the name check\n'
+elif avahi-resolve -4 -n "$(hostname).local" >/dev/null 2>&1; then
+	ok "$(hostname).local resolves"
+else
+	bad "$(hostname).local does not resolve" \
+		"avahi-daemon is up but not answering; check for a name collision in journalctl -u avahi-daemon"
+fi
+if [ ! -S /run/mrrc/box-helper.sock ]; then
+	bad "/run/mrrc/box-helper.sock is missing or not a socket" \
+		"reboot / change-name / change-timezone will be greyed out; journalctl -u mrrc-box-helper"
+else
+	mode="$(stat -c '%a %U %G' /run/mrrc/box-helper.sock 2>/dev/null)"
+	ok "box helper socket ${mode:-present}"
 fi
 
 head_ "12/12 WiFi N9 firmware (the 2020 build wedges this board)"

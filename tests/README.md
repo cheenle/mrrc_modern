@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2000 tests across 99 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1951 tests across 98 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-11, macOS). The per-module sections below
-itemise 71 of those 99 — the support-chain, Cloud Hub and upgrade-channel modules
+itemise 70 of those 98 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2000 |
-| Passed | 1998 (1 skipped) |
+| Total tests | 1951 |
+| Passed | 1949 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
@@ -798,14 +798,11 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
   连网时 PSK 在 argv 里恰好出现一次、`scrub()`；两份 JSON 邮箱的容错读、
   **0644** 与原子替换、心跳新鲜度、以及免口令闸门（含 **IPv4-mapped 地址必须解包**
   这条双栈陷阱与"陈旧心跳即关门"的负例）。
-- **`test_setup_ap.py`** — 常驻守护进程。无上行才开、有网线/有 STA 就关、
-  **热点自己不算上行**、30 分钟超时后**本次开机不再重开**（断电重启才重开）、
-  重启后**领养**已在跑的热点并补一个窗口、向导切网期间**让位**且窗口按让位时长补偿、
-  失败按 **nonce 一次性**重置窗口、stale claim 被忽略、起不来的热点**每 60 s 只抱怨一次**、
-  `run()` 里 tick 抛异常不致命、以及 settle 窗口（NM 还在关联时不许下"没网"的结论）。
-- **`test_server_setup_wizard.py`** — 免口令闸门与四个端点。闸门只在
-  "活心跳 + 热点网段"同时成立时开、**中间件的放行集合是闭合的且按相等比较**、
-  **listen-only 令牌在处理函数里被拒**（中间件那条 403 对这些路径必然被跳过）、
-  设口令走**既有写入通道**且**只写两个键**、"先设口令再切网"的 409、
-  切换**先发回答再动手**、失败**必须**把热点开回来并带原因、
-  **PSK 既不落盘也不进日志**（直接断言字节）、以及 `/setup` 注册在 SPA 兜底之前。
+### `test_setup_retired.py`
+
+Setup 热点方案的退役守卫。热点在 2026-10-11 的真机验证里失败（板子的
+MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件钉住旧词汇不再
+回来：`server.py` 不得出现 `setup_ap` / `hotspot` / `wizard` / `SETUP_GATE_PATHS`
+/ `/api/manage`，`net_wifi.py` 不得出现 `start_hotspot` / `ApState` / `has_uplink`
+/ `ap_settings`，`box-overlay.sh` 与 `verify.sh` 不得出现 `mrrc-setup-ap`。名单随每个
+退役 task 增长，`GONE` 列表里的文件必须确实不存在。

@@ -116,7 +116,6 @@ def box_firstboot():
 
 probe("server", lambda: __import__("server"))
 probe("linux/firstboot_wrapper.py", box_firstboot)
-probe("linux/setup_ap.py", lambda: script("linux/setup_ap.py"))
 probe("linux/mrrc_radio.py", lambda: script("linux/mrrc_radio.py"))
 
 for line in failures:
@@ -153,7 +152,7 @@ class ImageTreeImportTests(unittest.TestCase):
     def test_every_image_entry_point_imports_from_the_image_tree(self):
         """The commands the units and the CLI actually run, in a tree that looks
         like the image: ``server.py`` (mrrc-modern.service), the box's first-boot
-        wrapper, the setup hotspot daemon, and the ``mrrc-radio`` CLI."""
+        wrapper, and the ``mrrc-radio`` CLI."""
         proc = subprocess.run(
             [sys.executable, "-", str(REPO), ",".join(sorted(excluded_top_level_names()))],
             input=PROBE, capture_output=True, text=True, cwd=str(REPO),

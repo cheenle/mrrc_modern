@@ -70,16 +70,18 @@ log "build prerequisites the base image does not carry"
 # libopus0 is the one that is easy to miss and expensive to miss: without it the
 # server silently falls back to PCM instead of Opus.
 apt-get update -qq
-# dnsmasq is for the setup hotspot, not for DNS: NetworkManager's
-# ipv4.method=shared spawns it to hand out addresses on 10.42.0.0/24, and the
-# pinned base image does not carry it (design D-2). Without it the hotspot
-# appears, a phone associates, and gets no address — with no error anywhere,
-# which is the most confusing failure this feature can have.
+# dnsmasq (the daemon) is gone with the setup hotspot: it was there because
+# NetworkManager's ipv4.method=shared spawns it to hand out addresses, and
+# nothing uses shared mode any more. dnsmasq-base stays — that is the package
+# NM actually links against, and removing it breaks Wi-Fi.
+# avahi-daemon is new: the box now advertises <hostname>.local so it can be
+# found again after the operator switches networks (design §8). The pinned base
+# image carries only avahi-autoipd, which is 169.254 link-local and unrelated.
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
 	python3.11-venv python3-dev \
 	portaudio19-dev libportaudio2 libasound2-dev \
 	libopus0 libopus-dev \
-	dnsmasq
+	avahi-daemon
 
 log "python environment (install.sh owns the dependency list)"
 cd "$MRRC_HOME"
@@ -205,40 +207,6 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 UNIT
 
-cat >/etc/systemd/system/mrrc-setup-ap.service <<'UNIT'
-[Unit]
-Description=MRRC Modern setup access point (onboarding with no cable and no keyboard)
-# Deliberately no Documentation= line: it would have to point at
-# /opt/mrrc_modern/docs/W103D_GUIDE.md, and the rsync above excludes docs/ — a
-# field naming a file that is not in the image is pure misdirection.
-# Deliberately NOT network-online.target, which mrrc-modern.service does wait
-# for: this unit exists precisely because there may be no network, and ordering
-# it behind that target makes the hotspot appear only after NM's wait-online
-# times out. NetworkManager itself has to be up, because everything here is nmcli.
-After=NetworkManager.service
-Wants=NetworkManager.service
-
-[Service]
-Type=simple
-# Root, not mrrc: nmcli needs polkit authority over system connections, and the
-# state directory under /run has to be creatable with group `mrrc` so the server
-# (which runs as mrrc) can leave its switch request there.
-ExecStart=/opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/setup_ap.py
-Restart=always
-RestartSec=5
-# journal for support bundles and `journalctl -u mrrc-setup-ap`; console because
-# the banner carries the address an operator with an HDMI monitor needs, and
-# design D-6's mitigation for "a neighbour wins the race" is that they never have
-# to use the open hotspot at all. The loop only logs on transitions, so this is
-# not noise.
-StandardOutput=journal+console
-StandardError=journal+console
-SyslogIdentifier=mrrc-setup-ap
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
 mkdir -p "$MRRC_HOME/linux" "$MRRC_HOME/logs" /var/lib/mrrc/certs
 install -m 0755 "$REPO_SRC/packaging/box/firstboot_wrapper.py" \
 	"$MRRC_HOME/linux/firstboot_wrapper.py"
@@ -276,13 +244,12 @@ chown "$MRRC_USER:$MRRC_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
 log "enable services"
-# mrrc-setup-ap first: it is the only way in for an operator who has a phone
-# and nothing else, and it has to be up before the box is handed to anybody.
-systemctl enable mrrc-setup-ap.service mrrc-firstboot.service mrrc-modern.service
+systemctl enable mrrc-firstboot.service mrrc-modern.service
 # Debian's own dnsmasq.service is enabled by the package and collides with
 # systemd-resolved for port 53 — a failed unit on every fresh box, and harmless
-# only by luck. The hotspot does not need it: NetworkManager's ipv4.method=shared
-# spawns its own dnsmasq instance. Mask the unit so the failure cannot reappear.
+# only by luck. Nothing here runs a standalone dnsmasq any more (the hotspot's
+# shared mode is gone), but the daemon package can still be pulled in by another
+# dependency, so the mask stays as the second line of defence.
 systemctl mask dnsmasq.service || true
 # Amlogic vendor images ship a getty on a vendor-only FIQ console; the mainline
 # kernel does not have it and the unit would wait 90 s per boot.
@@ -296,7 +263,7 @@ log "import gate: the entry points the units run must import from THIS tree"
 # before the reclaim step so a stray __pycache__ is cleaned up with the rest.
 (
 	cd "$MRRC_HOME"
-	PYTHONDONTWRITEBYTECODE=1 "$VENV/bin/python" -c "import server; import sys; sys.path.insert(0, '$MRRC_HOME/linux'); import first_run, mrrc_radio, setup_ap"
+	PYTHONDONTWRITEBYTECODE=1 "$VENV/bin/python" -c "import server; import sys; sys.path.insert(0, '$MRRC_HOME/linux'); import first_run, mrrc_radio"
 ) || {
 	echo "box-overlay: an image entry point cannot import from this tree" >&2
 	exit 1

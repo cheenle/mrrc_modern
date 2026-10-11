@@ -40,5 +40,5 @@ PYTHONDONTWRITEBYTECODE=1 /opt/mrrc_modern/venv/bin/python -c "
 import sys
 sys.path.insert(0, '/opt/mrrc_modern')
 sys.path.insert(0, '/opt/mrrc_modern/linux')
-import server, first_run, mrrc_radio, setup_ap
+import server, first_run, mrrc_radio
 print('entry points OK')"

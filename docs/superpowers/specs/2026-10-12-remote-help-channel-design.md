@@ -231,12 +231,15 @@ last_heartbeat, connections, closed_reason
 隧道配置的加/删代理与 reload 的 Basic 认证、真 paramiko 客户端用真口令连入并执行命令、
 错口令被拒、关闭后端口不再接受连接。三条关闭路径各有单测（客户关/到期/portal 强制）。
 
-**需要真机确认、不放进"已完成"的边界**（逐项的前置与判据见 `docs/remote_help.md`）：
+**真机边界（2026-10-12 实测更新）**：第 1、3 条已在 macOS + 生产门户上验证通过
+（`frpc reload` 确实不让主隧道抖；`zsh -l` 的交互式会话跑通）；仍待验的是：
 
-1. `frpc reload` 在本仓库钉的 0.71.0 上是否如预期（配置里加/删代理后主隧道不抖）；
 2. Windows 上 paramiko 起 `powershell.exe` 的 pty 行为（换行、颜色、`Ctrl-C`）；
-3. macOS 上从 launchd 启动的 app 起 `zsh -l` 的环境（PATH 与会话的可交互性）；
 4. 盒子上 `mrrc` 用户跑该会话能做什么/不能做什么（预期：读写 `/opt/mrrc_modern`、看日志、重启服务；不能改系统）。这是**有意**的权限面，写进操作手册。
+
+这一轮实测拓出六个真缺陷（GET/POST、管理端口漂移、pty 的 term、泵占住 transport 线程、
+start() 按占位符清扫旧 frpc、以及一次误删），都已在提交里修掉并补了守卫；逐条见
+`docs/remote_help.md`。
 
 **真机那一步的前置**（与代码无关，但挡着验收）：portal 的本次改动要先部署到 hub；
 且实例要重新写一次隧道配置（`webServer` 管理段是本次新增的，旧配置里没有它，reload 无处可发）。

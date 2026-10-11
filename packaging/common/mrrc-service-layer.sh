@@ -161,6 +161,13 @@ install -m 0755 "$MRRC_ASSETS/mrrc-show-password" /usr/local/bin/mrrc-show-passw
 install -d /etc/update-motd.d
 install -m 0755 "$MRRC_ASSETS/motd-10-mrrc" /etc/update-motd.d/10-mrrc
 
+log "polkit: let the server user reconfigure NetworkManager (design §7.2)"
+# /etc/polkit-1/rules.d/ beats /usr/share/polkit-1/rules.d/, and a distro
+# upgrade package does not overwrite what is written there.
+install -d -m 0755 /etc/polkit-1/rules.d
+install -m 0644 "$MRRC_ASSETS/49-mrrc-nm.rules" \
+	/etc/polkit-1/rules.d/49-mrrc-nm.rules
+
 log "systemd units"
 cat >/etc/systemd/system/mrrc-modern.service <<UNIT
 [Unit]
@@ -213,6 +220,35 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 UNIT
 
+cat >/etc/systemd/system/mrrc-box-helper.service <<'UNIT'
+[Unit]
+Description=MRRC Modern box helper (the four system verbs the web pages may ask for)
+# NetworkManager first only because the pages that use this helper also use NM:
+# nothing here talks to it. No network-online.target — this must be up when
+# there is no network, which is exactly when an operator is configuring one.
+After=NetworkManager.service
+
+[Service]
+Type=simple
+# Root for hostnamectl / timedatectl / systemctl reboot. Group=mrrc is what makes
+# systemd create RuntimeDirectory=/run/mrrc owned by root:mrrc, so the socket
+# inside it can be 0660 root:mrrc without this script chowning anything — /run is
+# tmpfs, so the directory is recreated clean at every boot.
+User=root
+Group=mrrc
+RuntimeDirectory=mrrc
+RuntimeDirectoryMode=0770
+ExecStart=/opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/box_helper.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mrrc-box-helper
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 mkdir -p "$MRRC_HOME/linux" "$MRRC_HOME/logs" /var/lib/mrrc/certs
 install -m 0755 "$MRRC_ASSETS/firstboot_wrapper.py" \
 	"$MRRC_HOME/linux/firstboot_wrapper.py"
@@ -235,6 +271,26 @@ cp "$MRRC_HOME/version.txt" "$MRRC_HOME/VERSION"
 chown "$MRRC_USER:$MRRC_USER" "$MRRC_HOME/version.txt" "$MRRC_HOME/VERSION"
 echo "version: ${version#v}"
 
+log "box identity: the image must not ship as 'armbian' (design §8)"
+# static — not --pretty: the pretty hostname is the display name, the static one
+# is what avahi advertises and what DHCP option 12 carries, and only the static
+# one needs to be a legal hostname.
+#
+# Write the file first: the box builds this in a chroot with systemd not running
+# (build-image.sh), where hostnamectl is a D-Bus client and fails. The
+# hostnamectl line stays for live systems, where it also updates the pretty and
+# transient names.
+echo "MRRC-Modern" >/etc/hostname
+hostnamectl set-hostname --static MRRC-Modern || true
+# hostnamectl stopped touching /etc/hosts in systemd 240. Debian's own image
+# carries a 127.0.1.1 line naming the old hostname, and `hostname -f` (which
+# sudo and some mailers use) goes through it.
+if grep -q '^127\.0\.1\.1' /etc/hosts; then
+	sed -i 's/^127\.0\.1\.1.*/127.0.1.1\tMRRC-Modern/' /etc/hosts
+else
+	printf '127.0.1.1\tMRRC-Modern\n' >>/etc/hosts
+fi
+
 log "headless defaults (only keys that are not already set)"
 touch "$ENV_FILE"
 grep -q '^MRRC_WEB_HOST=' "$ENV_FILE" || echo "MRRC_WEB_HOST=$MRRC_WEB_HOST" >>"$ENV_FILE"
@@ -254,7 +310,11 @@ chown "$MRRC_USER:$MRRC_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
 log "enable services"
-systemctl enable mrrc-firstboot.service mrrc-modern.service
+systemctl enable mrrc-box-helper.service mrrc-firstboot.service mrrc-modern.service
+# avahi-daemon is what answers <hostname>.local. It ships enabled in the
+# package, but this image masks units by default in several places, so say it
+# out loud rather than trusting the package's postinst (design §8).
+systemctl enable avahi-daemon.service || true
 
 log "import gate: the entry points the units run must import from THIS tree"
 # The two failure modes this catches both shipped once (2026-10-10, the 1.25.4

@@ -495,3 +495,108 @@ class BoxFirstBootHardwareTests(unittest.TestCase):
         """The code default is the same on Linux; writing it into mrrc.env makes
         the knob discoverable for the operator who has to raise it (guide §13)."""
         self.assertIn("MRRC_RX_BUFFER_MS=100", self.text)
+
+
+class BoxHelperPackagingTests(unittest.TestCase):
+    """The two files that make the LAN onboarding path work on a box.
+
+    Both are invisible when they are missing: no polkit rule means the Wi-Fi
+    panel reports "Insufficient privileges", and no helper unit means the reboot
+    and rename buttons are greyed out with no explanation. Neither failure shows
+    up until an operator is standing at a box.
+    """
+
+    #: Both steps live in the shared service layer, not the platform shell — the
+    #: box overlay ends by exec'ing this, and writing it into one platform's
+    #: shell would leave the other without either file. A first draft read
+    #: box-overlay.sh and found neither.
+    OVERLAY = REPO / "packaging" / "common" / "mrrc-service-layer.sh"
+    RULE = REPO / "packaging" / "common" / "49-mrrc-nm.rules"
+    UNIT = "mrrc-box-helper.service"
+
+    def setUp(self):
+        self.text = self.OVERLAY.read_text(encoding="utf-8")
+
+    def test_the_polkit_rule_ships_and_is_installed(self):
+        self.assertTrue(self.RULE.is_file())
+        self.assertIn("49-mrrc-nm.rules", self.text)
+
+    def test_the_rule_matches_the_user_and_not_a_session(self):
+        """`subject.active` is the board's own rule, and it is exactly what a
+        systemd system service never has — copying it here would make the same
+        mistake the measured failure was made of."""
+        rule = self.RULE.read_text(encoding="utf-8")
+        self.assertIn('subject.user === "mrrc"', rule)
+        # The file's comment quotes the board's own rule by name (`subject.active`)
+        # to explain why it is the wrong test; the *code* must not match on it.
+        # Assert over the code lines, not the prose, or the guard fails on the
+        # very explanation that makes the rule auditable.
+        code = "\n".join(line for line in rule.splitlines()
+                         if not line.lstrip().startswith("//"))
+        self.assertNotIn("subject.active", code)
+
+    def test_the_rule_grants_only_networkmanager(self):
+        rule = self.RULE.read_text(encoding="utf-8")
+        self.assertIn("org.freedesktop.NetworkManager.", rule)
+        self.assertNotIn('action.id === "', rule)
+
+    def test_the_helper_unit_runs_as_root_with_the_mrrc_group(self):
+        """Root for the verbs; Group=mrrc is what makes systemd hand out
+        /run/mrrc as root:mrrc so the socket can be 0660."""
+        body = self.text.split(f"/etc/systemd/system/{self.UNIT}", 1)[1]
+        body = body.split("UNIT\n", 1)[0]
+        self.assertIn("User=root", body)
+        self.assertIn("Group=mrrc", body)
+
+    def test_the_helper_unit_does_not_wait_for_a_network(self):
+        """The helper is most needed when there is no network — it is how an
+        operator renames a box and reboots it while standing at the console."""
+        body = self.text.split(f"/etc/systemd/system/{self.UNIT}", 1)[1]
+        body = body.split("UNIT\n", 1)[0]
+        directives = "\n".join(line for line in body.splitlines()
+                               if not line.lstrip().startswith("#"))
+        self.assertNotIn("network-online.target", directives)
+
+    def test_the_helper_unit_creates_the_runtime_directory(self):
+        body = self.text.split(f"/etc/systemd/system/{self.UNIT}", 1)[1]
+        body = body.split("UNIT\n", 1)[0]
+        self.assertIn("RuntimeDirectory=mrrc", body)
+        self.assertIn("RuntimeDirectoryMode=0770", body)
+
+    def test_the_helper_is_enabled(self):
+        enabled = [line for line in self.text.splitlines()
+                   if "systemctl enable" in line]
+        self.assertTrue(enabled)
+        self.assertTrue(any(self.UNIT in line for line in enabled))
+
+    def test_the_image_does_not_ship_as_armbian(self):
+        self.assertIn("hostnamectl set-hostname --static MRRC-Modern", self.text)
+        self.assertIn("/etc/hosts", self.text)
+        # …but hostnamectl is a D-Bus client, and the box runs this in a chroot
+        # with systemd NOT running, where it fails — and the `|| true` hides it,
+        # so the line above alone ships an image that still calls itself
+        # `armbian` while looking correct. The direct write is what sets it.
+        self.assertRegex(self.text, r'echo\s+"MRRC-Modern"\s*>/etc/hostname')
+
+    def test_avahi_is_enabled_for_mdns(self):
+        self.assertIn("systemctl enable avahi-daemon.service", self.text)
+
+    def test_the_helper_script_reaches_the_image(self):
+        """It rides the existing rsync — `linux/` is not in the exclusion list.
+        Worth asserting because the symptom is a unit that dies on a box nobody
+        can reach."""
+        self.assertTrue((REPO / "linux" / "box_helper.py").is_file())
+        stage = (REPO / "packaging" / "common" / "stage-tree.sh").read_text(
+            encoding="utf-8")
+        excludes = re.findall(r'--exclude\s+"?([^"\s]+)"?', stage)
+        self.assertNotIn("linux/", excludes)
+
+
+class PolkiteRulesAreNotExecutable(unittest.TestCase):
+    """0644, not 0755: polkit reads rules, it does not run them, and an
+    executable file in rules.d is a thing an auditor has to stop and check."""
+
+    def test_the_rule_is_installed_read_only(self):
+        text = (REPO / "packaging" / "common" / "mrrc-service-layer.sh").read_text(
+            encoding="utf-8")
+        self.assertIn("install -m 0644", text)

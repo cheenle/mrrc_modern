@@ -1,0 +1,22 @@
+// Let the MRRC server reconfigure NetworkManager without a session.
+//
+// The board's own rule (/usr/share/polkit-1/rules.d/
+// org.freedesktop.NetworkManager.rules) requires `subject.local &&
+// subject.active`, and a systemd system service has no session, so
+// `subject.active` is false and adding `mrrc` to the netdev group does not help
+// (measured on the W103D 2026-10-11: `npmcli connection add` returns
+// "Insufficient privileges" for the mrrc user while `device show` works).
+//
+// Matching subject.user instead does not need a session, which is the whole
+// point. The cost is honest and worth writing down: this grants the server all
+// of NetworkManager's modify.system, not a verb whitelist. What limits the blast
+// radius is that this file is the complete, auditable list of what was granted —
+// see the design's §7.2, which rejected routing every nmcli write through the
+// root helper precisely because that would put the Wi-Fi PSK on a second
+// channel.
+polkit.addRule(function (action, subject) {
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 &&
+        subject.user === "mrrc") {
+        return polkit.Result.YES;
+    }
+});

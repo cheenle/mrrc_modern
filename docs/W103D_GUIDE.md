@@ -495,6 +495,11 @@ ssh root@<盒子IP> 'bash /tmp/verify.sh'
 当前已发布的 v1.25.5 镜像（`5d74f737…`）还是 2020 版，这一项会红——
 现场换法见 §20.5，换完必须**断电**重启（软重启芯片不复位）。
 
+> **2026-10-11 固化到 eMMC 那一轮的实测判读**（自建镜像，版本串同为 1.25.5）：第 12 项**绿**
+> （`7663mp1827`，2021 版）；第 11 项**红** —— 该镜像构建于 10-11 中午，早于 `box_helper` / NM polkit 规则 /
+> `avahi-daemon` 落地，三件都不在，**不是盒子故障**，要用上得重刷含它们的镜像；第 9 项**红**是判定偏严：
+> 公网入口未登录时返回 302（跳 `/login`）**就是正常应答**，脚本目前只认 200/401。
+
 然后**实际用一次**——打开界面，调频率、看瀑布、按 PTT 说一句。这才是真的验收。
 
 ## 13. MRRC 的全部可调项
@@ -607,24 +612,71 @@ bash /tmp/verify.sh        # §12 那份，随时可重跑
 
 ## 17. 写进 eMMC（可选，验收通过之后再做）
 
-U 盘路线跑通、验收过了，才考虑固化。**这一步会覆盖 eMMC。**
+U 盘路线跑通、验收过了，才考虑固化。**这一步会覆盖 eMMC**；做法是在跑着的 U 盘系统里执行
+ophub 自带的安装器，它把当前系统**克隆**进 eMMC 并自动处理引导 —— 不需要线刷工具、不需要重打镜像。
+
+> **2026-10-11 在真机上完整走了一遍**：盒子现在就从 eMMC 启动（`findmnt /` = `/dev/mmcblk2p2`，
+> 28 GB 全用上），原厂引导逐字节保留。下面每一步都是那一次的实操记录。
+
+### 17.1 先备份（务必先做）
 
 ```bash
-armbian-ddbr        # 先把原厂整盘备份出来（务必先做！）
-armbian-install     # 装进 eMMC（交互式菜单）
+armbian-ddbr        # 交互里选 b
 ```
 
-`armbian-install` 的参数（摘自脚本自己的说明）：
+全盘（29 GB，含原厂引导）压到 `/ddbr/BACKUP-arm-64-emmc.img.gz`（实测 2.2 GB），**留在 U 盘上别删**。
+单线程 gzip 在这块 SoC 上约 10 MiB/s（≈40 分钟）；先装 `pigz` 手动跑三线程只要 ≈9 分钟，
+产物同样是标准 gzip 流，`armbian-ddbr` 的恢复路径不变：
 
-| 参数 | 默认 | 说明 |
-| --- | --- | --- |
-| `-m yes/no` | **no** | 用**主线 u-boot**。**本板保持默认 `no`** —— ophub 给 W103D 指定了专属的 `u-boot-w103d.bin` |
-| `-a yes/no` | yes | 用 `ampart` 调整分区表（把 eMMC 让给 Armbian） |
-| `-l yes/no` | no | 先列出全部可用设备再选 |
+```bash
+apt-get install -y pigz
+mkdir -p /ddbr
+nohup sh -c 'dd if=/dev/mmcblk2 bs=4M | pigz -c -p 3 > /ddbr/BACKUP-arm-64-emmc.img.gz' >/ddbr/backup.log 2>&1 &
+# 跑完自检：pigz -t -p 3 /ddbr/BACKUP-arm-64-emmc.img.gz  → TEST-OK
+```
 
-板级身份（核过镜像里的 `/etc/ophub-release` 与 ophub 的 `model_database.conf`）：
-`MODEL_ID=307`、`MODEL_NAME=ZTE-W103D`、`SOC=s905l3a`、`FDTFILE=meson-g12a-w103d.dtb`、
-启动器 `u-boot-w103d.bin`、`BOARD=s905l3a-w103d`。
+### 17.2 安装进 eMMC
+
+```bash
+armbian-install        # 不要加 -m yes
+```
+
+交互只有两个问题：
+
+| 提示 | 答 |
+| --- | --- |
+| `Please Input ID:` | **`307`**（设备表里的 `ZTE-W103D`） |
+| `Please Input ID (1/2):` | **`1`**（ext4，与镜像一致） |
+
+它会自动完成（输出可逐步核对）：备份并回写原厂引导 → `ampart` 重建 Amlogic 分区表 →
+建 `p1`（512 MB FAT，引导）+ `p2`（其余全部，ext4）→ 拷 `/boot` 并改写 `boot.scr` / `uEnv.txt` 的
+新 UUID → `tar` 克隆整个根文件系统（约 2.5 GB）→ 提示
+`Installation completed successfully. Run [ poweroff ], remove the installation media…`。
+
+板级身份是钉死的（`/etc/ophub-release` 与 ophub `model_database.conf` 核对过）：`MODEL_ID=307`、
+`FDTFILE=meson-g12a-w103d.dtb`、启动器 `u-boot-w103d.bin`、`BOARD=s905l3a-w103d`。
+**`-m yes` 会换主线 u-boot，本板不行**。安装器还会重新生成 machine-id（写进 eMMC 那份），副作用见 17.4。
+
+### 17.3 切换：关机 → 拔 U 盘 → 上电
+
+```bash
+poweroff
+```
+
+断电，**拔掉 U 盘**，重新上电。启动顺序是 SD → USB → eMMC，没有 U 盘就落在 eMMC 上。
+
+### 17.4 起来之后核对
+
+```bash
+findmnt -no SOURCE /        # 应为 /dev/mmcblk2p2
+df -h /                     # 约 28 GB
+systemctl is-active mrrc-modern
+bash /tmp/verify.sh         # §12 那份
+```
+
+**IPv6 地址会变**：machine-id 重生成，SLAAC 的接口标识跟着变（`…c4c1:3f5e:173f:96d1` → `…e7c0:4b51:b64e:8b49`）。
+域名解析 / Cloud Hub 入口几分钟内自愈（DDNS 类脚本与隧道都会自己跟上）；IPv4 由 DHCP 按 MAC 发放，一般不变。
+口令、`env/mrrc.env`、证书、录音、`/opt` 下的附加件都随系统搬过去了。判读 verify.sh 的红项前先看 §12 的注。
 
 之后盒子不再依赖 U 盘，32 GB eMMC 全用上。
 
@@ -633,8 +685,11 @@ armbian-install     # 装进 eMMC（交互式菜单）
 
 ## 18. 退回去
 
-- **U 盘路线**：断电 → 拔 U 盘 → 上电 = 原厂安卓。零痕迹。
-- **已写 eMMC**：用原厂线刷固件包 + MaskROM 短接重刷。
+- **U 盘路线（eMMC 没写）**：断电 → 拔 U 盘 → 上电 = 原厂安卓。零痕迹。
+- **已写 eMMC**：
+  - 最省事：**把 U 盘插回去** —— u-boot 的启动偏好仍优先 U 盘，插上就从 U 盘跑（安装器回写的是原厂 u-boot，偏好没变）。
+  - 用备份恢复：从 U 盘启动后 `armbian-ddbr` 选 `r`，从 `/ddbr/BACKUP-arm-64-emmc.img.gz` 还原。
+  - 回原厂安卓：原厂线刷固件包 + MaskROM 短接重刷（§20.5）。
 
 ## 19. 三条红线（会踩出"没有报错的故障"）
 

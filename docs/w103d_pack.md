@@ -251,3 +251,23 @@ MRRC_BOX_FRP_PROXY=https://gh-proxy.com/                    # 默认；置空用
 | **修后（缓冲 100 ms）** | **100%，50.0 fps / 51.7 kbps，稳定 3 分钟以上** |
 
 采样率域没动：设备 44.1 kHz、Opus 48 kHz、882↔960 的 20 ms 桥一行未改。
+
+## 真机 eMMC 固化（2026-10-11）
+
+U 盘系统验收通过后，用 ophub 自带安装器**就地**固化进 eMMC —— 不需要线刷、不需要重打镜像。
+完整操作步骤在 `docs/W103D_GUIDE.md` §17（同款流程已沉淀为 `w103d-emmc` 技能）。这里只留构建/取证角度值得记的事实：
+
+- **备份**：`armbian-ddbr` 全盘 29 GB → 2.2 GB（`pigz -t` 通过）。单线程 gzip 实测 10 MiB/s（≈40 分钟）；
+  先装 `pigz` 用 `dd bs=4M | pigz -p 3` 只要 ≈9 分钟，产物是标准 gzip 流（恢复路径不变）。备份留在 U 盘 = 救砖盘。
+- **分区**：`ampart` dclone 成功（`data::-1:4`），前 117 MiB 保留；`p1` 512 MB FAT（LABEL `BOOT_EMMC`）
+  + `p2` 28.3 GB ext4（新 UUID，`fstab` 与 `uEnv.txt` 同源）。
+- **原厂引导**：安装器先把前 4 MiB 存到 `/usr/lib/u-boot/mybox-bootloader.img`，回写用
+  `bs=1 count=444` + `bs=512 skip=1 seek=1 count=8191` —— **故意跳过 `[444,512)`**，那 68 B 正是 MBR 分区表。
+  所以"首 4 MiB 的 md5 变了"不等于损坏：`cmp` 验证 `[0,444)` 与 `[512,4 MiB)` 与备份逐字节一致。
+- **首启**：根在 `/dev/mmcblk2p2`、`/boot` 在 `p1`；全部 systemd 单元（含 `w103d-ddns.timer` 的 enable 链接）
+  随 tar 拷贝过去；`/dev/ttyUSB0`、FTDI 库、`*:8888` 双栈、Cloud Hub 入口全部照常。
+- **副作用**：machine-id 重生成 → **IPv6 IID 漂移**（DDNS 开机 90 秒内自动跟随，权威 NS 双查确认）；
+  IPv4 由 DHCP 按 MAC 发放，不变；口令/`env/mrrc.env`/证书/录音全在原处。
+- **`verify.sh` 判读**（那一版镜像）：第 12 项**绿**（2021 版 N9 固件）；第 11 项红是**镜像版本差**
+  （构建于 10-11 中午，早于 `box_helper`/polkit 规则/`avahi-daemon` 落地）；第 9 项红是脚本判定偏严
+  （入口未登录返回 302 是正常应答，只认 200/401 待放宽）。

@@ -129,14 +129,23 @@ MRRC_UPDATE_SRC=<git url 或本地目录> mrrc-update
 
 ## 10. 写进 eMMC（可选，验收通过之后再做）
 
-U 盘路线跑通、验收过了，再考虑固化：
+U 盘路线跑通、验收过了，再考虑固化。**在跑着的盒子上就地做**（ophub 自带安装器，不需要线刷工具）：
 
 ```bash
-armbian-ddbr        # 备份原厂安卓整盘（先做这个！）
-armbian-install     # 把 Armbian 写进 eMMC
+armbian-ddbr        # 交互选 b：全盘（含原厂引导）备份到 /ddbr/，留在 U 盘上别删
+armbian-install     # 交互：设备 ID 填 307（ZTE-W103D），根文件系统填 1（ext4）；不要加 -m yes
+poweroff            # 然后拔 U 盘、重新上电 —— 从 eMMC 启动
 ```
 
-之后盒子不再依赖 U 盘，32 GB eMMC 全用上。
+- `armbian-ddbr` 单线程 gzip 约 40 分钟；先 `apt-get install -y pigz` 并用
+  `dd if=/dev/mmcblk2 bs=4M \| pigz -c -p 3 > /ddbr/BACKUP-arm-64-emmc.img.gz` 手跑可压到 ~9 分钟
+  （标准 gzip 流，`armbian-ddbr` 的恢复路径不变；跑完 `pigz -t` 自检）。
+- 安装器自动：备份并回写原厂引导（`[0,444)` 与 `[512,4 MiB)` 逐字节保留）→ ampart 重建分区
+  （前 117 MiB 保留）→ 拷 boot/rootfs → `Installation completed successfully`。
+- 起起来核对：`findmnt /` = `/dev/mmcblk2p2`、`df -h /` ≈ 28 GB、服务在跑、`verify.sh` 过关。
+- 副作用：machine-id 重生成 → **IPv6 IID 变化**（域名/隧道几分钟内自愈）；IPv4 与配置不受影响。
+
+完整步骤、判据与三档回滚见 `docs/W103D_GUIDE.md` §17–§18（2026-10-11 真机实操记录）。
 
 > ⚠️ 这一步会覆盖 eMMC。变砖兜底是 Amlogic 的 MaskROM（在 SoC BootROM 里，短接就能重进刷写模式）+
 > 你手上的原厂线刷包。
@@ -177,7 +186,7 @@ W103D 的 WiFi 完全依赖专属内核补丁 + 固件 overlay（MT7663S）。
 ## 13. 排障
 
 | 症状 | 检查 | 修 |
-|---|---|---|
+| --- | --- | --- |
 | 打不开网页 | `ip a`；`systemctl status mrrc-modern` | 网线/服务；`journalctl -u mrrc-modern -n 50` |
 | 连上了但没网口地址 | 路由器 DHCP | 换网线口；`nmcli device status` |
 | 没电台串口 | `ls /dev/ttyUSB* /dev/ttyACM*` | 电台 USB 线；FT-710 要插**上方 Enhanced 口**；电台菜单 `MOD SOURCE = USB` |

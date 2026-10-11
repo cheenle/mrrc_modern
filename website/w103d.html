@@ -362,6 +362,7 @@ ssh root@&lt;盒子IP&gt; 'bash /tmp/verify.sh'</code></pre>
 </tbody></table></div>
 <p>前 3 项就是硬件三件套。<strong>第 7 与第 10 项都是“没有报错也会出问题”的那类</strong>：第 7 项不合格时界面会显示 “已连接”而公网 TLS 校验失败；第 10 项没值时少一道防线①/② 中的第②道。</p>
 <p>第 11 项查的是"出问题时你还能不能<strong>找到这台盒子</strong>、网页还能不能<strong>写网络</strong>"—— <code>&lt;hostname&gt;.local</code> 解析、NM 授权规则、box-helper 套接字都在，LAN 引导页才玩得转； 因为出问题的时刻你正好连不上盒子、没法查。第 12 项<strong>只认出厂 2021 版 N9 固件</strong>： 当前已发布的 v1.25.5 镜像（<code>5d74f737…</code>）还是 2020 版，这一项会红—— 现场换法见 §20.5，换完必须<strong>断电</strong>重启（软重启芯片不复位）。</p>
+<blockquote><strong>2026-10-11 固化到 eMMC 那一轮的实测判读</strong>（自建镜像，版本串同为 1.25.5）：第 12 项<strong>绿</strong> （<code>7663mp1827</code>，2021 版）；第 11 项<strong>红</strong> —— 该镜像构建于 10-11 中午，早于 <code>box_helper</code> / NM polkit 规则 / <code>avahi-daemon</code> 落地，三件都不在，<strong>不是盒子故障</strong>，要用上得重刷含它们的镜像；第 9 项<strong>红</strong>是判定偏严： 公网入口未登录时返回 302（跳 <code>/login</code>）<strong>就是正常应答</strong>，脚本目前只认 200/401。</blockquote>
 <p>然后<strong>实际用一次</strong>——打开界面，调频率、看瀑布、按 PTT 说一句。这才是真的验收。</p>
 <h2 id="13-mrrc-的全部可调项">13. MRRC 的全部可调项</h2>
 <p>配置文件：<strong><code>/opt/mrrc_modern/env/mrrc.env</code></strong>。改完 <code>systemctl restart mrrc-modern</code> 生效。</p>
@@ -428,23 +429,41 @@ tail -f /opt/mrrc_modern/logs/server-stdout.log # 服务 stdout</code></pre>
 <p><strong>手动装机内容检查：</strong></p>
 <pre><code class="lang-bash">bash /tmp/verify.sh        # §12 那份，随时可重跑</code></pre>
 <h2 id="17-写进-emmc-可选-验收通过之后再做">17. 写进 eMMC（可选，验收通过之后再做）</h2>
-<p>U 盘路线跑通、验收过了，才考虑固化。<strong>这一步会覆盖 eMMC。</strong></p>
-<pre><code class="lang-bash">armbian-ddbr        # 先把原厂整盘备份出来（务必先做！）
-armbian-install     # 装进 eMMC（交互式菜单）</code></pre>
-<p><code>armbian-install</code> 的参数（摘自脚本自己的说明）：</p>
+<p>U 盘路线跑通、验收过了，才考虑固化。<strong>这一步会覆盖 eMMC</strong>；做法是在跑着的 U 盘系统里执行 ophub 自带的安装器，它把当前系统<strong>克隆</strong>进 eMMC 并自动处理引导 —— 不需要线刷工具、不需要重打镜像。</p>
+<blockquote><strong>2026-10-11 在真机上完整走了一遍</strong>：盒子现在就从 eMMC 启动（<code>findmnt /</code> = <code>/dev/mmcblk2p2</code>， 28 GB 全用上），原厂引导逐字节保留。下面每一步都是那一次的实操记录。</blockquote>
+<h3 id="17-1-先备份-务必先做">17.1 先备份（务必先做）</h3>
+<pre><code class="lang-bash">armbian-ddbr        # 交互里选 b</code></pre>
+<p>全盘（29 GB，含原厂引导）压到 <code>/ddbr/BACKUP-arm-64-emmc.img.gz</code>（实测 2.2 GB），<strong>留在 U 盘上别删</strong>。 单线程 gzip 在这块 SoC 上约 10 MiB/s（≈40 分钟）；先装 <code>pigz</code> 手动跑三线程只要 ≈9 分钟， 产物同样是标准 gzip 流，<code>armbian-ddbr</code> 的恢复路径不变：</p>
+<pre><code class="lang-bash">apt-get install -y pigz
+mkdir -p /ddbr
+nohup sh -c 'dd if=/dev/mmcblk2 bs=4M | pigz -c -p 3 &gt; /ddbr/BACKUP-arm-64-emmc.img.gz' &gt;/ddbr/backup.log 2&gt;&amp;1 &amp;
+# 跑完自检：pigz -t -p 3 /ddbr/BACKUP-arm-64-emmc.img.gz  → TEST-OK</code></pre>
+<h3 id="17-2-安装进-emmc">17.2 安装进 eMMC</h3>
+<pre><code class="lang-bash">armbian-install        # 不要加 -m yes</code></pre>
+<p>交互只有两个问题：</p>
 <div class="table-scroll"><table>
-<thead><tr><th>参数</th><th>默认</th><th>说明</th></tr></thead><tbody>
-<tr><td><code>-m yes/no</code></td><td><strong>no</strong></td><td>用<strong>主线 u-boot</strong>。<strong>本板保持默认 <code>no</code></strong> —— ophub 给 W103D 指定了专属的 <code>u-boot-w103d.bin</code></td></tr>
-<tr><td><code>-a yes/no</code></td><td>yes</td><td>用 <code>ampart</code> 调整分区表（把 eMMC 让给 Armbian）</td></tr>
-<tr><td><code>-l yes/no</code></td><td>no</td><td>先列出全部可用设备再选</td></tr>
+<thead><tr><th>提示</th><th>答</th></tr></thead><tbody>
+<tr><td><code>Please Input ID:</code></td><td><strong><code>307</code></strong>（设备表里的 <code>ZTE-W103D</code>）</td></tr>
+<tr><td><code>Please Input ID (1/2):</code></td><td><strong><code>1</code></strong>（ext4，与镜像一致）</td></tr>
 </tbody></table></div>
-<p>板级身份（核过镜像里的 <code>/etc/ophub-release</code> 与 ophub 的 <code>model_database.conf</code>）： <code>MODEL_ID=307</code>、<code>MODEL_NAME=ZTE-W103D</code>、<code>SOC=s905l3a</code>、<code>FDTFILE=meson-g12a-w103d.dtb</code>、 启动器 <code>u-boot-w103d.bin</code>、<code>BOARD=s905l3a-w103d</code>。</p>
+<p>它会自动完成（输出可逐步核对）：备份并回写原厂引导 → <code>ampart</code> 重建 Amlogic 分区表 → 建 <code>p1</code>（512 MB FAT，引导）+ <code>p2</code>（其余全部，ext4）→ 拷 <code>/boot</code> 并改写 <code>boot.scr</code> / <code>uEnv.txt</code> 的 新 UUID → <code>tar</code> 克隆整个根文件系统（约 2.5 GB）→ 提示 <code>Installation completed successfully. Run [ poweroff ], remove the installation media…</code>。</p>
+<p>板级身份是钉死的（<code>/etc/ophub-release</code> 与 ophub <code>model_database.conf</code> 核对过）：<code>MODEL_ID=307</code>、 <code>FDTFILE=meson-g12a-w103d.dtb</code>、启动器 <code>u-boot-w103d.bin</code>、<code>BOARD=s905l3a-w103d</code>。 <strong><code>-m yes</code> 会换主线 u-boot，本板不行</strong>。安装器还会重新生成 machine-id（写进 eMMC 那份），副作用见 17.4。</p>
+<h3 id="17-3-切换-关机-拔-u-盘-上电">17.3 切换：关机 → 拔 U 盘 → 上电</h3>
+<pre><code class="lang-bash">poweroff</code></pre>
+<p>断电，<strong>拔掉 U 盘</strong>，重新上电。启动顺序是 SD → USB → eMMC，没有 U 盘就落在 eMMC 上。</p>
+<h3 id="17-4-起来之后核对">17.4 起来之后核对</h3>
+<pre><code class="lang-bash">findmnt -no SOURCE /        # 应为 /dev/mmcblk2p2
+df -h /                     # 约 28 GB
+systemctl is-active mrrc-modern
+bash /tmp/verify.sh         # §12 那份</code></pre>
+<p><strong>IPv6 地址会变</strong>：machine-id 重生成，SLAAC 的接口标识跟着变（<code>…c4c1:3f5e:173f:96d1</code> → <code>…e7c0:4b51:b64e:8b49</code>）。 域名解析 / Cloud Hub 入口几分钟内自愈（DDNS 类脚本与隧道都会自己跟上）；IPv4 由 DHCP 按 MAC 发放，一般不变。 口令、<code>env/mrrc.env</code>、证书、录音、<code>/opt</code> 下的附加件都随系统搬过去了。判读 verify.sh 的红项前先看 §12 的注。</p>
 <p>之后盒子不再依赖 U 盘，32 GB eMMC 全用上。</p>
 <blockquote>⚠️ <strong>变砖兜底</strong>：Amlogic 的 <strong>MaskROM 在 SoC BootROM 里</strong>（短接可重新进刷写模式）， 加上你手上的<strong>原厂线刷固件包</strong>，就能恢复。这两样在手，这一步的风险才是可控的。</blockquote>
 <h2 id="18-退回去">18. 退回去</h2>
+<p>- 最省事：<strong>把 U 盘插回去</strong> —— u-boot 的启动偏好仍优先 U 盘，插上就从 U 盘跑（安装器回写的是原厂 u-boot，偏好没变）。 - 用备份恢复：从 U 盘启动后 <code>armbian-ddbr</code> 选 <code>r</code>，从 <code>/ddbr/BACKUP-arm-64-emmc.img.gz</code> 还原。 - 回原厂安卓：原厂线刷固件包 + MaskROM 短接重刷（§20.5）。</p>
 <ul>
-<li><strong>U 盘路线</strong>：断电 → 拔 U 盘 → 上电 = 原厂安卓。零痕迹。</li>
-<li><strong>已写 eMMC</strong>：用原厂线刷固件包 + MaskROM 短接重刷。</li>
+<li><strong>U 盘路线（eMMC 没写）</strong>：断电 → 拔 U 盘 → 上电 = 原厂安卓。零痕迹。</li>
+<li><strong>已写 eMMC</strong>：</li>
 </ul>
 <h2 id="19-三条红线-会踩出-没有报错的故障">19. 三条红线（会踩出"没有报错的故障"）</h2>
 <p><strong>① 停服务只用 <code>systemctl</code>，不要 <code>kill</code> 进程。</strong></p>

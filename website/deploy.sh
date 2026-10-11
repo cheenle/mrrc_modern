@@ -84,7 +84,7 @@ DEPLOY_PACKAGE="/tmp/mrrc_modern_website_$(date +%Y%m%d_%H%M%S).tar.gz"
 tar -czf "$DEPLOY_PACKAGE" \
 	--exclude='deploy.sh' --exclude='.DS_Store' --exclude='.__*' \
 	--exclude='downloads' --exclude='videos' --exclude='__pycache__' \
-	--exclude='build_sdd.py' --exclude='build_guide.py' \
+	--exclude='build_sdd.py' --exclude='build_guide.py' --exclude='build_w103d_guide.py' \
 	--exclude='images/W103D/IMG_*' --exclude='images/W103D/._*' \
 	-C "$LOCAL_DIR" .
 echo -e "${GREEN}✓${NC} Package created: $DEPLOY_PACKAGE"
@@ -182,7 +182,7 @@ ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
     # tar -x never deletes: the SDD/guide builders an earlier package published are
     # still served (measured 2026-09-13: /mrrc_modern/build_sdd.py and build_guide.py
     # both HTTP 200). Build-time tooling must not be in the DocumentRoot at all.
-    sudo rm -f /var/www/vlsc.net/mrrc_modern/build_sdd.py /var/www/vlsc.net/mrrc_modern/build_guide.py
+    sudo rm -f /var/www/vlsc.net/mrrc_modern/build_sdd.py /var/www/vlsc.net/mrrc_modern/build_guide.py /var/www/vlsc.net/mrrc_modern/build_w103d_guide.py
     echo "Pruned tooling that older versions of this script published."
     sudo chown -R www-data:www-data /var/www/vlsc.net/mrrc_modern
     sudo chmod -R 755 /var/www/vlsc.net/mrrc_modern

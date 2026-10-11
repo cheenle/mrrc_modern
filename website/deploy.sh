@@ -64,6 +64,13 @@ REQUIRED_FILES=(
 # Note: downloads/*.exe and videos/ are NOT shipped from the repo (gitignored,
 # ~45 MB each). They are managed on the server directly; the tar below also
 # excludes them so deploys stay small.
+#
+# images/W103D/ holds the raw source material (phone photos in HEIC/JPG and a
+# 4K .MOV) next to the web-sized copies in images/W103D/web/. Only the web/
+# copies are referenced by any page, and the raws are ~58 MB of HEIC + video:
+# excluding them keeps the package — and the server tree — at what the pages
+# actually use. macOS AppleDouble sidecars (`._IMG_*`) come along with the
+# originals, hence the second pattern.
 for file in "${REQUIRED_FILES[@]}"; do
 	if [ ! -f "$file" ]; then
 		echo -e "${RED}Error: Required file missing: $file${NC}"
@@ -78,6 +85,7 @@ tar -czf "$DEPLOY_PACKAGE" \
 	--exclude='deploy.sh' --exclude='.DS_Store' --exclude='.__*' \
 	--exclude='downloads' --exclude='videos' --exclude='__pycache__' \
 	--exclude='build_sdd.py' --exclude='build_guide.py' \
+	--exclude='images/W103D/IMG_*' --exclude='images/W103D/._*' \
 	-C "$LOCAL_DIR" .
 echo -e "${GREEN}✓${NC} Package created: $DEPLOY_PACKAGE"
 echo ""

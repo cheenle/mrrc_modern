@@ -390,7 +390,9 @@ mrrc-radio use ft710        # probes the serial port → writes config → resta
         way". The first evening it ran on real hardware with a real radio
         attached, it produced six defects. Every one of them only shows up on
         this hardware, which is why I refuse to treat "the build succeeded" as
-        evidence.
+        evidence. All six were then fixed, given regression guards, and the
+        image was rebuilt (<strong>52 acceptance checks green</strong>); the
+        table in section 8 is what was measured item by item afterwards.
       </p>
       <table>
         <tr><th>Symptom</th><th>Cause</th></tr>
@@ -469,7 +471,7 @@ mrrc-radio use ft710        # probes the serial port → writes config → resta
         </tr>
         <tr>
           <td><strong>It does other things too</strong></td>
-          <td>The same box drives the ATU (ATR-1000), records QSOs, and can hand a friend a <strong>listen-only password</strong></td>
+          <td>The same box records QSOs (<strong>verified</strong> — section 8) and drives an ATR-1000 tuner if one is connected (none here); it can also hand a friend a <strong>listen-only password</strong></td>
         </tr>
         <tr>
           <td><strong>One step further out</strong></td>
@@ -488,14 +490,49 @@ mrrc-radio use ft710        # probes the serial port → writes config → resta
         <figcaption>Where it ends up: beside the radio, not in front of a monitor, not in the middle of the desk, and nobody ever has to switch it off — <strong>once power and the cable are in, it is just a small box that is always there</strong>.</figcaption>
       </figure>
 
-      <h2>8. Boundaries, and what is not done yet</h2>
+      <h2>8. The verified list: what it does now</h2>
+      <p>
+        Everything below was actually done on the day it went live. This is not
+        "it should work"; these are the numbers from the logs:
+      </p>
+      <table>
+        <tr><th>Capability</th><th>Evidence from the real box</th></tr>
+        <tr>
+          <td>CAT control</td>
+          <td>Frequency, mode, filter, ATT and PRE read back live; polling steady on 40 m (7.050–7.053 MHz, LSB, 2.4 kHz)</td>
+        </tr>
+        <tr>
+          <td>Receive audio</td>
+          <td><strong>50.0 frames/s, 20 ms spacing, Opus at ~52 kbps</strong> — listened continuously in a phone browser</td>
+        </tr>
+        <tr>
+          <td><strong>Transmit</strong></td>
+          <td>Phone microphone → server → the radio's USB sound card: one session with <strong>62 frames, peak=100%</strong>, 57 frames written to the radio, <code>decode_fail=0</code>, <code>write_err=0</code>, <code>queue_drops=0</code>; the radio keyed and its TX meters (PWR/SWR/ALC) came back</td>
+        </tr>
+        <tr>
+          <td>QSO recording</td>
+          <td>Two MP3s in <code>recordings/</code>: <code>07050kHz_20261011_102001.mp3</code> (<strong>134.7 s</strong>, 64 kbps) plus a short clip (199 KB)</td>
+        </tr>
+        <tr>
+          <td>Real spectrum</td>
+          <td><code>first frame received — spectrum active</code> — the FT4222's real spectrum, not the synthetic S-meter fallback</td>
+        </tr>
+        <tr>
+          <td>The web UI</td>
+          <td>HTTPS with a self-signed certificate; opened from a phone, a tablet and a laptop; guests can be handed a listen-only password</td>
+        </tr>
+        <tr>
+          <td>24/7</td>
+          <td>Moved house, power cut, powered back up: systemd brings it back by itself; under 5 W, passively cooled</td>
+        </tr>
+      </table>
+      <p>
+        <strong>One thing still not done: public access (Cloud Hub).</strong>
+        That step needs a callsign application and approval, plus an entry
+        reachable from the internet; the box currently serves only the home LAN.
+        <em>On the LAN, it is doing all of the work.</em>
+      </p>
       <ul>
-        <li>
-          <strong>Not yet verified on the real radio</strong>: transmit audio
-          from the browser (needs someone at the microphone), QSO recording, and
-          the public-internet acceptance run. A green build and a working LAN
-          setup prove none of those.
-        </li>
         <li>
           <strong>It depends on a vendor kernel</strong>: the box's Wi-Fi needs
           Amlogic's patched kernel and firmware. <em>Upgrade kernels only via
@@ -517,9 +554,11 @@ mrrc-radio use ft710        # probes the serial port → writes config → resta
       </ul>
 
       <p class="foot">
-        Written 2026-10-11, the day this box went live. Every number comes from
-        that day's logs, commits and artifact checks (including the one-line
-        test for each of the six defects). The image is on the
+        Written 2026-10-11, the day this box went live — and the day receive,
+        transmit, spectrum, recording and phone control were each verified on the
+        real hardware (the numbers are in section 8). Every figure here comes
+        from that day's logs, commits and artifact checks, including the
+        one-line test for each of the six defects. The image is on the
         <a href="downloads/MRRC-Modern-1.25.5-w103d.img.gz">download page</a>;
         step-by-step operation is in the
         <a href="w103d.html">W103D guide</a>.<br />

@@ -359,6 +359,8 @@ mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务<
       <p>
         镜像在容器里"构建成功、验收全绿"，第一次真的烧进盒子、插上电台，还是一晚上拓出六处缺陷。
         每一处都只在这套硬件上才会露头——这也是为什么我不相信"构建成功"这四个字。
+        六条后来全部改掉、加了回归守卫、并重出一版镜像（<strong>52 项验收全过</strong>）；
+        第 8 节那张表就是修好之后逐项测出来的。
       </p>
       <table>
         <tr><th>症状</th><th>根因</th></tr>
@@ -430,7 +432,7 @@ mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务<
         </tr>
         <tr>
           <td><strong>还能顺手干别的</strong></td>
-          <td>同一台上跑天调控制（ATR-1000）、通联录音、以及给朋友的<strong>只听口令</strong>入口</td>
+          <td>同一台上还跑着通联录音（<strong>已实测</strong>，见第 8 节）；接了 ATR-1000 天调就能联动（本机未接）；还能给朋友开一个<strong>只听口令</strong></td>
         </tr>
         <tr>
           <td><strong>往外走一步</strong></td>
@@ -447,12 +449,50 @@ mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务<
         <figcaption>它最终的位置：电台旁边，不占显示器的位置，不占书桌的中心，也不用谁去关它——<strong>接上电源和网线之后，它就只是一台"一直在"的小盒子</strong>。</figcaption>
       </figure>
 
-      <h2>8. 边界与还没做的</h2>
+      <h2>8. 实测清单：它现在能做到什么</h2>
+      <p>
+        上线当天把每一项都真做了一遍。下面不是"应该可以"，是日志里的数字：
+      </p>
+      <table>
+        <tr><th>能力</th><th>实测证据</th></tr>
+        <tr>
+          <td>CAT 控制</td>
+          <td>频率/模式/滤波/ATT/PRE 实时回读，40 m 上轮询稳定（7.050–7.053 MHz、LSB、2.4 kHz）</td>
+        </tr>
+        <tr>
+          <td>接收音频</td>
+          <td><strong>50.0 帧/秒、帧间隔 20 ms、Opus 约 52 kbps</strong>，手机浏览器里连续听</td>
+        </tr>
+        <tr>
+          <td><strong>发射</strong></td>
+          <td>手机麦克风 → 服务端 → 电台 USB 声卡：一次 <strong>62 帧、peak=100%</strong>、写入电台 57 帧，
+              <code>decode_fail=0</code>、<code>write_err=0</code>、<code>queue_drops=0</code>；
+              电台被键控并回读出 TX 表（PWR/SWR/ALC）</td>
+        </tr>
+        <tr>
+          <td>通联录音</td>
+          <td><code>recordings/</code> 里留下两个 MP3：<code>07050kHz_20261011_102001.mp3</code>
+              （<strong>134.7 秒</strong>、64 kbps）与一个短片段（199 KB）</td>
+        </tr>
+        <tr>
+          <td>真频谱</td>
+          <td><code>first frame received — spectrum active</code>——FT4222 的真实频谱，不是 S 表合成谱</td>
+        </tr>
+        <tr>
+          <td>Web 界面</td>
+          <td>HTTPS + 自签证书，手机/平板/笔记本都开过；访客可以给一个只听口令</td>
+        </tr>
+        <tr>
+          <td>7×24</td>
+          <td>断电搬机再上电，systemd 自己拉起来；&lt;5 W，被动散热</td>
+        </tr>
+      </table>
+      <p>
+        <strong>还没做的一件事：公网接入（Cloud Hub）</strong>。那一步需要呼号申请与批准、
+        以及一个从外网可达的入口；这台盒子现在只在家里的局域网上服务。
+        <em>在局域网里，它是全部在干活的。</em>
+      </p>
       <ul>
-        <li>
-          <strong>真机上还没验的</strong>：从浏览器发射到电台的音频（需要现场对着话筒）、通联录音、
-          以及公网接入的现场验收。构建成功、局域网可用，都不等于这些成立。
-        </li>
         <li>
           <strong>依赖专属内核</strong>：这台盒子的 WiFi 依赖 Amlogic 的专属内核与固件，
           <em>升级内核请走 <code>armbian-update</code> 并保持 w103d 变体</em>；换通用内核 = 静默丢 WiFi。
@@ -469,8 +509,9 @@ mrrc-radio use ft710        # 自动探测串口 → 写配置 → 重启服务<
       </ul>
 
       <p class="foot">
-        写于 2026-10-11，就是这台盒子上线的那天。文中的数据全部来自当天的日志、提交与产物校验
-        （包括那六个缺陷各自的判定命令）。镜像可以从
+        写于 2026-10-11，就是这台盒子上线的那天；同一天里把接收、发射、频谱、录音、手机控制
+        逐项实测通过（第 8 节附的就是那一天的日志数字）。文中的数据全部来自当天的日志、提交与产物校验，
+        包括那六个缺陷各自的判定命令。镜像可以从
         <a href="../downloads/MRRC-Modern-1.25.5-w103d.img.gz">下载页</a>取，
         逐步操作见 <a href="w103d.html">W103D 完整指南</a>。<br />
         English: <a href="../w103d-radio-box.html">A ¥125 box as my FT-710's remote server</a>

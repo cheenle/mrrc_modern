@@ -115,7 +115,9 @@
 <tr><td>网口</td><td><strong>100M 有线</strong>（够用：一路客户端约 60 KB/s）</td></tr>
 <tr><td>无线</td><td>MT7663S（<strong>当前已发布镜像上不稳</strong>：2020 版 N9 固件会渐进式挂死，见 §20.5；出厂 2021 版固件已钉进仓库，<strong>下个镜像修复</strong>。<strong>实时音频优先走有线</strong>）</td></tr>
 </tbody></table></div>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-box.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-box.jpg" alt="包装正面：中兴云电脑 W103D（ZTE 与中国移动双标）" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">包装正面：中兴云电脑 W103D（ZTE 与中国移动双标）</figcaption></figure>
 <p>⚠️ <strong>认准芯片</strong>。国科 GK6323、RK3566 的同名/同形盒子<strong>不适用</strong>——那份镜像的内核补丁与 WiFi 固件 是专门烘给 S905L3A-w103d 的。</p>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-serial.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-serial.jpg" alt="机身标签：型号、CMIIT ID、生产日期与 S/N——先核对这一行" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">机身标签：型号、CMIIT ID、生产日期与 S/N——先核对这一行</figcaption></figure>
 <h4 id="芯片叫法对照-别被卖家说晕">芯片叫法对照（<strong>别被卖家说晕</strong>）</h4>
 <div class="table-scroll"><table>
 <thead><tr><th>你在哪看到</th><th>名字</th></tr></thead><tbody>
@@ -151,6 +153,8 @@
 <li><input type="checkbox" disabled> 电脑（烧盘用）</li>
 <li><input type="checkbox" disabled> <strong>原厂线刷固件包</strong>（兜底；走 U 盘路线时用不到，但建议先下载好放在手边）</li>
 </ul>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-unbox.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-unbox.jpg" alt="开箱：白色包装与内衬" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">开箱：白色包装与内衬</figcaption></figure>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-size.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-size.jpg" alt="盒内的主机与合格证" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">盒内的主机与合格证</figcaption></figure>
 <h2 id="3-下载镜像并校验">3. 下载镜像并校验</h2>
 <pre><code class="lang-bash">mkdir -p ~/w103d &amp;&amp; cd ~/w103d
 curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz</code></pre>
@@ -179,6 +183,7 @@ sync                               # 等它真的写完</code></pre>
 gzip -dc MRRC-Modern-1.25.5-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync</code></pre>
 <p>烧完把 U 盘<strong>安全弹出</strong>（macOS：<code>diskutil eject /dev/diskN</code>）。系统可能提示"此磁盘无法读取"—— <strong>那是正常的</strong>，镜像是 Linux 分区，Windows/macOS 读不懂。</p>
 <h2 id="5-让盒子从-u-盘启动-新机器最容易卡的一步">5. 让盒子从 U 盘启动（新机器最容易卡的一步）</h2>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-usb.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-usb.jpg" alt="盒子侧面的 USB 口：U 盘和电台线都插这里" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">盒子侧面的 USB 口：U 盘和电台线都插这里</figcaption></figure>
 <h3 id="原理-已从镜像里核实-不是猜的">原理：已从镜像里核实，不是猜的</h3>
 <p>原厂安卓的 u-boot 有一个 <strong>update 模式</strong>。进去以后它会到 U 盘上找并运行 <strong><code>aml_autoscript</code></strong>——这个脚本就在镜像的启动分区里，内容是：</p>
 <pre><code>setenv bootcmd 'run start_autoscript; run storeboot'
@@ -210,6 +215,7 @@ adb shell reboot update</code></pre>
 <blockquote><strong>回滚</strong>：断电 → 拔 U 盘 → 上电。u-boot 在 U 盘上找不到脚本，走 eMMC → 回安卓。 （u-boot 环境里那条“优先 U 盘”的偏好还在，但没有 U 盘时它是无害的。）</blockquote>
 <h2 id="6-首启会自动完成什么">6. 首启会自动完成什么</h2>
 <p>镜像里已经烘好了不需要硬件的全部东西（用户、代码、venv、依赖、frpc、FTDI 库、11 份机型配置、systemd 单元）。 首启只做<strong>必须碰硬件</strong>的四件事：</p>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-firstboot.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-firstboot.jpg" alt="HDMI 上的首启控制台：Armbian、本机 IP 与资源占用都在这一屏" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">HDMI 上的首启控制台：Armbian、本机 IP 与资源占用都在这一屏</figcaption></figure>
 <div class="table-scroll"><table>
 <thead><tr><th>首启做</th><th>为什么不能提前做</th></tr></thead><tbody>
 <tr><td>生成 <strong>Web 登录口令</strong></td><td>每台机器应当不同；写死在镜像里等于公开口令</td></tr>
@@ -234,6 +240,7 @@ adb shell reboot update</code></pre>
 <p>自签证书会警告一次 → <strong>高级 → 继续前往</strong>。</p>
 <p>⚠️ <strong>必须走 HTTPS，不要关。</strong> 手机浏览器要调用麦克风发射（PTT），而在 HTTP 下浏览器不给麦克风权限—— <strong>这是浏览器安全策略，不是我们的设置问题。</strong></p>
 <p>登录后你应该看到主界面：频率、模式、S 表、瀑布图。<strong>这时候还没有电台——下一步接上。</strong></p>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-phone.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-phone.jpg" alt="手机打开界面：频率、瀑布与 PTT 在一个页面里" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">手机打开界面：频率、瀑布与 PTT 在一个页面里</figcaption></figure>
 <h2 id="9-接网络-有线-wi-fi">9. 接网络（有线 / Wi-Fi）</h2>
 <blockquote>⚠️ <strong>2026-10-11 真机结论：热点引导这条路在 W103D 上目前走不通</strong> —— MT7663S 的驱动 能把 AP 模式激活（系统日志一切正常），但<strong>信标不上空</strong>，手机扫不到 <code>MRRC-Setup</code>。 <strong>首次配置请走网线（§9.2）或 HDMI（§9.4）。</strong> 第 4 条的具体说明与"驱动修好后如何恢复" 见 §9.6。</blockquote>
 <h3 id="9-1-按你手边有什么选">9.1 按你手边有什么选</h3>
@@ -325,9 +332,12 @@ ip a show wlan0                                  # 拿到 IP 没</code></pre>
 arecord -l                          # 电台的 USB 声卡（RX）
 aplay -l                            # 播放设备（TX）</code></pre>
 <p>⚠️ 这三样<strong>一样都不能少</strong>。少串口 = 没有 CAT 控制；少声卡 = 没有声音。</p>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-desk.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-desk.jpg" alt="台面：盒子与电台各占一角" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">台面：盒子与电台各占一角</figcaption></figure>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-wiring.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-wiring.jpg" alt="接线近景：设备插在盒子的 USB 口上" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">接线近景：设备插在盒子的 USB 口上</figcaption></figure>
 <h2 id="11-选机型">11. 选机型</h2>
 <pre><code class="lang-bash">mrrc-radio list        # 11 个型号，带 ✅已验证 / ⚠实验性</code></pre>
 <p>已验证的三个：<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>。其余 8 个是实验性（默认只收不发，见下）。</p>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-setup.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-setup.jpg" alt="界面上的「连接设置」：机型与收发音频设备的图形入口" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">界面上的「连接设置」：机型与收发音频设备的图形入口</figcaption></figure>
 <pre><code class="lang-bash">mrrc-radio use ft710                          # 自动探测串口 → 写配置 → 重启服务
 mrrc-radio use ic7300 --port /dev/ttyACM0     # 或者你直接指定端口
 mrrc-radio show                               # 核对当前生效的配置</code></pre>
@@ -406,6 +416,7 @@ systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -
 <li><strong>connect</strong>：自动完成——签证书、enroll、写隧道配置、起 frpc，并自动写两个配置键：</li>
 </ol>
 <p>之后用 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 访问。</p>
+<figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-hub.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-hub.jpg" alt="公网入口：手机上用呼号域名打开" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">公网入口：手机上用呼号域名打开</figcaption></figure>
 <p><strong>两条 PTT 防线互相独立，都要在</strong>：防线①＝会话活性闸门（公网必经），防线②＝时长上限（<code>MRRC_PTT_MAX_TX_SECONDS</code>）。 公网路径下 NAT 掉表、换 Wi-Fi、静默丢包都不会产生"断线"，只有这两条能兜住。</p>
 <h2 id="15-天调-atr-1000-可选">15. 天调 ATR-1000（可选）</h2>
 <p>盒子支持 ATR-1000 自动天调。配好地址就能用：</p>

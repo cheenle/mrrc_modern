@@ -4,7 +4,8 @@
 The guide is markdown so it reads on GitHub; the site is HTML so it matches
 everything else there. This converts the subset the guide actually uses —
 headings, paragraphs, bullets, numbered lists, task-list checkboxes, pipe
-tables, fenced code, inline code, bold and blockquotes — and writes one page
+tables, fenced code, inline code, bold, blockquotes and images
+(`![caption](../website/images/…)`, rendered as a figure) — and writes one page
 per site tree (website/ and website/zh/), since their asset and nav paths
 differ by exactly the ../ prefix.
 
@@ -29,7 +30,6 @@ SOURCE = REPO / "docs" / "W103D_GUIDE.md"
 #: grown past it, and rendering the page anyway would drop the text.
 UNSUPPORTED = (
     (re.compile(r"^\s*```", re.MULTILINE), 0),          # checked per-block below
-    (re.compile(r"!\["), "images"),
     (re.compile(r"^\s*[-*]\s+[-*]\s", re.MULTILINE), "a bullet nested inside a bullet"),
     (re.compile(r"\n\|.*\n\|[^|\n]*\|"), 0),            # table shapes vary; see below
 )
@@ -127,6 +127,30 @@ def convert(md: str) -> str:
             # Strip characters that would need escaping in an id, keep it readable.
             anchor = re.sub(r"[^\w\u4e00-\u9fff]+", "-", text).strip("-").lower()
             out.append(f'<h{level} id="{anchor}">{inline(text)}</h{level}>')
+            i += 1
+            continue
+
+        # An image on a line of its own becomes a figure. The guide is read on
+        # GitHub too, where the path has to climb out of docs/ into website/ —
+        # the site tree gets its own root prefixed instead, hence the marker.
+        m = re.match(r"^!\[([^\]]*)\]\(([^)]+)\)$", stripped)
+        if m:
+            flush_all()
+            alt, src = m.group(1), m.group(2)
+            if src.startswith("../website/"):
+                src = src[len("../website/"):]
+            out.append(
+                '<figure style="margin: 2rem 0">'
+                f'<a href="@@ROOT@@{src}" target="_blank" rel="noopener">'
+                f'<img src="@@ROOT@@{src}" alt="{html.escape(alt, quote=True)}" loading="lazy"'
+                ' style="max-width: 100%; max-height: 70vh; width: auto; height: auto;'
+                ' display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a);'
+                ' border-radius: 12px">'
+                "</a>"
+                '<figcaption style="text-align: center; color: var(--text-muted, #888);'
+                f' font-size: 0.82rem; margin-top: 0.65rem">{html.escape(alt)}</figcaption>'
+                "</figure>"
+            )
             i += 1
             continue
 
@@ -313,11 +337,12 @@ def main() -> int:
         ("../", "../guide.html", "../w103d.html", "EN", "../downloads/MRRC-Modern-1.25.5-w103d.img.gz"),
     ):
         path = REPO / "website" / ("" if prefix == "" else "zh/") / "w103d.html"
-        path.write_text(
-            PAGE.format(p=prefix, guide=guide, active="", lang=lang, lang_label=label,
-                        download=dl, body=body),
-            encoding="utf-8",
-        )
+        page = PAGE.format(p=prefix, guide=guide, active="", lang=lang, lang_label=label,
+                           download=dl, body=body.replace("@@ROOT@@", prefix))
+        if "@@ROOT@@" in page:
+            print("build_w103d_guide: an image path kept its @@ROOT@@ marker", file=sys.stderr)
+            return 1
+        path.write_text(page, encoding="utf-8")
         print(f"  wrote {path.relative_to(REPO)} ({len(body.splitlines())} content lines)")
     return 0
 

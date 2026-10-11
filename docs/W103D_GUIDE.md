@@ -27,8 +27,12 @@
 | 网口 | **100M 有线**（够用：一路客户端约 60 KB/s） |
 | 无线 | MT7663S（**当前已发布镜像上不稳**：2020 版 N9 固件会渐进式挂死，见 §20.5；出厂 2021 版固件已钉进仓库，**下个镜像修复**。**实时音频优先走有线**） |
 
+![包装正面：中兴云电脑 W103D（ZTE 与中国移动双标）](../website/images/W103D/web/w103d-box.jpg)
+
 ⚠️ **认准芯片**。国科 GK6323、RK3566 的同名/同形盒子**不适用**——那份镜像的内核补丁与 WiFi 固件
 是专门烘给 S905L3A-w103d 的。
+
+![机身标签：型号、CMIIT ID、生产日期与 S/N——先核对这一行](../website/images/W103D/web/w103d-serial.jpg)
 
 #### 芯片叫法对照（**别被卖家说晕**）
 
@@ -80,6 +84,10 @@
 - [ ] 电台 USB 线。**FT-710 要插盒子/电台的上方 `Enhanced` 口**（不是 Standard 口）
 - [ ] 电脑（烧盘用）
 - [ ] **原厂线刷固件包**（兜底；走 U 盘路线时用不到，但建议先下载好放在手边）
+
+![开箱：白色包装与内衬](../website/images/W103D/web/w103d-unbox.jpg)
+
+![盒内的主机与合格证](../website/images/W103D/web/w103d-size.jpg)
 
 ## 3. 下载镜像并校验
 
@@ -133,6 +141,8 @@ gzip -dc MRRC-Modern-1.25.5-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=prog
 **那是正常的**，镜像是 Linux 分区，Windows/macOS 读不懂。
 
 ## 5. 让盒子从 U 盘启动（新机器最容易卡的一步）
+
+![盒子侧面的 USB 口：U 盘和电台线都插这里](../website/images/W103D/web/w103d-usb.jpg)
 
 ### 原理：已从镜像里核实，不是猜的
 
@@ -199,6 +209,8 @@ su -c 'reboot update'
 镜像里已经烘好了不需要硬件的全部东西（用户、代码、venv、依赖、frpc、FTDI 库、11 份机型配置、systemd 单元）。
 首启只做**必须碰硬件**的四件事：
 
+![HDMI 上的首启控制台：Armbian、本机 IP 与资源占用都在这一屏](../website/images/W103D/web/w103d-firstboot.jpg)
+
 | 首启做 | 为什么不能提前做 |
 | --- | --- |
 | 生成 **Web 登录口令** | 每台机器应当不同；写死在镜像里等于公开口令 |
@@ -252,6 +264,8 @@ https://<盒子IP>:8888
 **这是浏览器安全策略，不是我们的设置问题。**
 
 登录后你应该看到主界面：频率、模式、S 表、瀑布图。**这时候还没有电台——下一步接上。**
+
+![手机打开界面：频率、瀑布与 PTT 在一个页面里](../website/images/W103D/web/w103d-phone.jpg)
 
 ## 9. 接网络（有线 / Wi-Fi）
 
@@ -423,6 +437,10 @@ aplay -l                            # 播放设备（TX）
 
 ⚠️ 这三样**一样都不能少**。少串口 = 没有 CAT 控制；少声卡 = 没有声音。
 
+![台面：盒子与电台各占一角](../website/images/W103D/web/w103d-desk.jpg)
+
+![接线近景：设备插在盒子的 USB 口上](../website/images/W103D/web/w103d-wiring.jpg)
+
 ## 11. 选机型
 
 ```bash
@@ -430,6 +448,8 @@ mrrc-radio list        # 11 个型号，带 ✅已验证 / ⚠实验性
 ```
 
 已验证的三个：`ft710`、`ic7300`、`ic7300mk2`。其余 8 个是实验性（默认只收不发，见下）。
+
+![界面上的「连接设置」：机型与收发音频设备的图形入口](../website/images/W103D/web/w103d-setup.jpg)
 
 ```bash
 mrrc-radio use ft710                          # 自动探测串口 → 写配置 → 重启服务
@@ -559,6 +579,8 @@ systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -
    - `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S=5`（防线①：PTT 半开时自动释放）
 
 之后用 `https://<呼号>.mrrc.vlsc.net/` 访问。
+
+![公网入口：手机上用呼号域名打开](../website/images/W103D/web/w103d-hub.jpg)
 
 **两条 PTT 防线互相独立，都要在**：防线①＝会话活性闸门（公网必经），防线②＝时长上限（`MRRC_PTT_MAX_TX_SECONDS`）。
 公网路径下 NAT 掉表、换 Wi-Fi、静默丢包都不会产生"断线"，只有这两条能兜住。

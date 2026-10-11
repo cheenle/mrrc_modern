@@ -74,17 +74,20 @@ class ExclusionListTests(unittest.TestCase):
         text = STAGE_TREE.read_text(encoding="utf-8")
         entries = re.findall(r'--exclude\s+"([^"]+)"', text)
         self.assertGreaterEqual(len(entries), 40, f"only {len(entries)} exclude rules")
-        for canary in ("/.env", "/recordings/", "website/", "packaging/", "tests/"):
+        for canary in ("/.env", "/recordings/", "/fleet/", "website/", "packaging/",
+                       "tests/"):
             with self.subTest(canary=canary):
                 self.assertIn(canary, entries)
 
     def test_the_exclusion_list_is_byte_identical_to_what_shipped(self):
-        """The 2026-10-11 list, frozen: the refactor moved it, it did not edit it."""
+        """The list as of 2026-10-11, frozen: the refactor moved it, and the one
+        edit since then (a root-anchored ``/fleet/``) is written down here."""
         expected = [
             ".git/", "venv/", ".venv/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
             ".agents/", "docs/", "SDD/", "packaging/", "macos/", "windows/",
             "__pycache__/", "*.pyc", ".DS_Store", "atr1000_tuner.json",
+            "/fleet/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",
             "/.worktrees/", "/.superpowers/", "/.agnes/", "/.claude/",
             "/.pytest_cache/", "/.ruff_cache/", "/dev_tools/", "/tools/",

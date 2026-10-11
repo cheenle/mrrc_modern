@@ -41,8 +41,12 @@ mkdir -p "$DST"
 # by each builder into /opt/mrrc-build.
 #
 # The root-anchored (/x) rules match only the repo root: per-box state (instance
-# identity, recordings, operator files) and dev-only material must never be
-# shipped by an image, nor overwritten by an update.
+# identity, recordings, operator files, the Cloud Hub's fleet/ directory) and
+# dev-only material must never be shipped by an image, nor overwritten by an
+# update. /fleet/ joined the list on 2026-10-11 after a build staged the
+# developer's own 14.8 MB frpc from the repo root into the image before the real
+# fetch replaced it — harmless in the end, but it is exactly the kind of
+# machine state this list exists to keep out.
 rsync -a "$SRC/" "$DST/" \
 	--exclude ".git/" --exclude "venv/" --exclude ".venv/" --exclude "dist/" \
 	--exclude "build/" --exclude "logs/" --exclude "certs/" --exclude "promo/" \
@@ -51,6 +55,7 @@ rsync -a "$SRC/" "$DST/" \
 	--exclude "packaging/" --exclude "macos/" --exclude "windows/" \
 	--exclude "__pycache__/" --exclude "*.pyc" --exclude ".DS_Store" \
 	--exclude "atr1000_tuner.json" \
+	--exclude "/fleet/" \
 	--exclude "/.local/" --exclude "/.env" --exclude "/recordings/" \
 	--exclude "/mem_channels.json" --exclude "/.worktrees/" --exclude "/.superpowers/" \
 	--exclude "/.agnes/" --exclude "/.claude/" --exclude "/.pytest_cache/" \

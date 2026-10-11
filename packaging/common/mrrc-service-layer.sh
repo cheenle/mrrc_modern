@@ -68,6 +68,14 @@ apt-get update -qq
 APT_PACKAGES="$(grep -vE '^[[:space:]]*(#|$)' "$MRRC_ASSETS/packages.txt" | tr '\n' ' ')"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $APT_PACKAGES
 
+log "radio profiles"
+# Deployment data that happens to live under packaging/: the model switcher
+# (mrrc-radio) reads <MRRC_HOME>/profiles, and both images get the same eleven.
+# The exclusion list drops packaging/ from the staged tree, so these come from
+# the assets directory instead.
+mkdir -p "$MRRC_HOME/profiles"
+cp "$MRRC_ASSETS"/profiles/*.env "$MRRC_HOME/profiles/"
+
 log "python environment (install.sh owns the dependency list)"
 cd "$MRRC_HOME"
 ./install.sh --yes --install-service --no-scope || {
@@ -90,8 +98,19 @@ chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 chmod 640 "$ENV_FILE" 2>/dev/null || true
 
 log "FTDI scope libraries (aarch64, vendored in the repo)"
-install -d "$MRRC_HOME/vendor/ftdi"
-install -m 0755 "$MRRC_HOME/vendor/ftdi/libft4222.so" "$MRRC_HOME/vendor/ftdi/libft4222.so"
+# The staged tree already carries them (vendor/ is not excluded) with the mode
+# git recorded, so this is a check plus a mode, not a copy: `install SRC DST`
+# with SRC == DST fails outright ("are the same file"), which is what a first
+# run of this layer did on 2026-10-11 — the file it was copying had already
+# been staged into place. The check is the part that matters: a repo without
+# the vendored pair must fail the build, not ship an image whose real FFT
+# silently falls back to the S-meter.
+[ -f "$MRRC_HOME/vendor/ftdi/libft4222.so" ] || {
+	echo "mrrc-service-layer: vendor/ftdi/libft4222.so missing from the tree — the" \
+		"FT-710's real FFT needs it (see packaging/box/vendor-ftdi.md)" >&2
+	exit 1
+}
+chmod 0755 "$MRRC_HOME/vendor/ftdi/libft4222.so"
 # The second name is the same ELF: FTDI's Linux libft4222 links D2XX in
 # statically and re-exports its symbols, so both of find_ftdi_libraries()'s slots
 # can be this one file. See packaging/box/vendor-ftdi.md.

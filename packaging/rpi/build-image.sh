@@ -85,8 +85,18 @@ if [ -n "$APT_MIRROR" ]; then
 	# archive.raspberrypi.com/debian is the Raspberry Pi archive; the mirror
 	# serves it under /raspberrypi/ and without the /debian suffix.
 	patch_text "$WORK/stage0/00-configure-apt/files/raspi.list" "archive.raspberrypi.com/debian" "$MIRROR_HOST/raspberrypi"
+	# The container image's own apt is the fourth upstream point and the first
+	# one to run: without it the very first build sits in
+	# `apt-get install git parted …` at 65 KB/s. Cached as a layer afterwards.
+	#
+	# Both layouts are covered on purpose: debian:bullseye (the base this
+	# Dockerfile declares) has no /etc/apt/sources.list at all — it ships the
+	# deb822 /etc/apt/sources.list.d/debian.sources, so a sed keyed on the
+	# classic path fails the whole image build in seconds (measured
+	# 2026-10-11: `sed: can't read /etc/apt/sources.list`). Which of the two
+	# exists is a property of the tag, not of this repository.
 	patch_text "$WORK/Dockerfile" "RUN apt-get -y update" \
-		"RUN sed -i \"s|deb.debian.org|$MIRROR_HOST|g\" /etc/apt/sources.list && apt-get -y update"
+		"RUN for f in /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources; do if [ -f \"\$f\" ]; then sed -i \"s|deb.debian.org|$MIRROR_HOST|g\" \"\$f\"; fi; done; apt-get -y update"
 fi
 
 # ── stage: copy ours in, stage the code tree the ONE way ──

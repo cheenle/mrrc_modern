@@ -1,54 +1,126 @@
 #!/usr/bin/env bash
-# Verify the built rpi64 image: xz integrity, size bounds, debugfs spot-checks.
-# The .img is an MBR disk image (p1 = boot FAT32, p2 = root ext4) — partition 2
-# is read via debugfs' "?offset=" file syntax.
-# Requires: e2fsprogs (brew install e2fsprogs — debugfs at e2fsprogs/sbin).
+# Four-step verification of a built rpi64 image, against the REAL artifact.
+#
+# Same recipe as docs/w103d_pack.md: the .img is an MBR disk with p1 = boot
+# FAT32 and p2 = root ext4, macOS cannot loop-mount ext4, and the image is arm64
+# like this host, so a privileged arm64 container can mount it and even chroot
+# into it natively. util-linux plus coreutils is all it needs — no apt, which
+# matters because apt is the slowest thing on this network.
+#
+#   1. code identity — the image's tree is this checkout's tree
+#   2. installed     — profiles, CLIs, frpc, FTDI libs, account, no leftovers
+#   3. D-11 wiring   — EnvironmentFile and MRRC_CONFIG_FILE are the same file
+#   4. it runs       — chroot the artifact and import every dependency + libopus
+#
+# The inner script travels as a file rather than as a `bash -c '…'` argument:
+# one apostrophe anywhere in the body (a word like "image's") closes that quoted
+# string and the rest of the script is never parsed — shipped once on
+# 2026-10-11, in packaging/box/build-image.sh.
+#
+# usage: packaging/rpi/verify-image.sh dist/rpi/MRRC-Modern-v1.25.5-rpi64.img.xz
 set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
 IMG_XZ="${1:?usage: verify-image.sh <img.xz>}"
-DEBUGFS="$(brew --prefix e2fsprogs 2>/dev/null)/sbin/debugfs"
-[ -x "$DEBUGFS" ] || DEBUGFS=debugfs
+[ -f "$IMG_XZ" ] || { echo "no such image: $IMG_XZ" >&2; exit 1; }
+IMG_XZ="$(cd "$(dirname "$IMG_XZ")" && pwd)/$(basename "$IMG_XZ")"
+OUT_DIR="$(dirname "$IMG_XZ")"
 
 echo "==> xz integrity"
 xz -t "$IMG_XZ"
-BYTES=$(stat -f %z "$IMG_XZ")
-if ((BYTES < 200000000 || BYTES > 2000000000)); then
-	echo "ERROR: image size ${BYTES} outside 0.2-2.0GB bounds"
+BYTES=$(stat -f %z "$IMG_XZ" 2>/dev/null || stat -c %s "$IMG_XZ")
+(( BYTES > 200000000 && BYTES < 2000000000 )) || {
+	echo "ERROR: image size ${BYTES} outside 0.2-2.0GB" >&2
 	exit 1
-fi
-echo "==> size OK (${BYTES} bytes)"
+}
+echo "    ${BYTES} bytes"
 
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
-echo "==> decompress (for debugfs)"
-xz -dc "$IMG_XZ" >"$TMP/root.img"
+INNER="$(mktemp -t mrrc-verify-XXXXXX.sh)"
+trap 'rm -f "$INNER"' EXIT
+cat > "$INNER" <<'INNER_SCRIPT'
+#!/bin/bash -euo pipefail
+bad=0
+ok()   { echo "  OK   $*"; }
+fail() { echo "  FAIL $*"; bad=1; }
 
-# MBR: partition-2 entry at 0x1BE+0x10; LBA start = bytes [8..11] little-endian.
-P2_LBA=$(
-	"$DEBUGFS" -R "quit" "$TMP/root.img" 2>/dev/null
-	python3 - "$TMP/root.img" <<'PY'
-import struct, sys
-with open(sys.argv[1], "rb") as f:
-    mbr = f.read(512)
-lba = struct.unpack("<I", mbr[0x1CE + 8:0x1CE + 12])[0]
-print(lba * 512)
-PY
-)
-echo "==> rootfs partition offset: ${P2_LBA} bytes"
-DEV="${TMP}/root.img?offset=${P2_LBA}"
+echo "== decompress and mount"
+gunzip -c /out/MRRC-Modern-*-rpi64.img.xz > /tmp/i.img
+loop=$(losetup --show -fP /tmp/i.img)
+. /common/part-nodes.sh
+part_nodes "$loop"
+[ -b "${loop}p2" ] || { echo "no ${loop}p2 after the -P scan"; exit 1; }
+mkdir -p /mnt
+mount -o ro "${loop}p2" /mnt
 
-for f in /opt/mrrc_modern/version.txt /opt/mrrc_modern/VERSION /etc/systemd/system/mrrc-modern.service \
-	/etc/systemd/system/mrrc-firstboot.service /usr/local/bin/mrrc-show-password; do
-	echo "--- $f ---"
-	"$DEBUGFS" -R "cat $f" "$DEV" 2>/dev/null | head -6
+echo "== step 1: code identity (artifact vs this checkout)"
+# `file` is not in the slim debian:bookworm image, and the working tree can move
+# while a build runs, so the ELF header is read directly and a mismatch names
+# both hashes for a human to settle.
+for f in server.py requirements.txt static/ft710_ui.js scope_handler.py; do
+	a=$(sha256sum "/mnt/opt/mrrc_modern/$f" | cut -d" " -f1)
+	b=$(sha256sum "/src/$f" | cut -d" " -f1)
+	[ "$a" = "$b" ] && ok "$f identical to the checkout" \
+		|| fail "$f differs: artifact=$a checkout=$b"
 done
-echo "--- scope_handler S-meter sentinel (SDD V2.39) ---"
-"$DEBUGFS" -R "cat /opt/mrrc_modern/scope_handler.py" "$DEV" 2>/dev/null | grep -m1 "s_meter: int = -1" || echo "WARNING: sentinel not found"
-echo "==> venv python present:"
-"$DEBUGFS" -R "stat /opt/mrrc_modern/venv/bin/python3" "$DEV" 2>/dev/null | head -2
-echo "--- CQ asset (AD-020: the one-touch key is dead without it) ---"
-"$DEBUGFS" -R "stat /opt/mrrc_modern/static/audio/cq.wav" "$DEV" 2>/dev/null | grep -E "Size:|Inode:" | head -2 \
-	|| echo "FAIL: static/audio/cq.wav missing from the image"
-echo "--- server.py carries the CQ wiring (AD-020) ---"
-"$DEBUGFS" -R "cat /opt/mrrc_modern/server.py" "$DEV" 2>/dev/null | grep -cE "_bind_cq_player|_cq_key" \
-	| sed 's/^/    symbol hits: /'
-echo "==> VERIFY_OK"
+
+echo "== step 2: what got installed"
+n=$(find /mnt/opt/mrrc_modern/profiles -name "*.env" 2>/dev/null | wc -l)
+[ "$n" = 11 ] && ok "11 radio profiles" || fail "profiles: $n"
+for f in mrrc-update mrrc-radio mrrc-show-password; do
+	[ -e "/mnt/usr/local/bin/$f" ] && ok "/usr/local/bin/$f" || fail "/usr/local/bin/$f missing"
+done
+[ -x /mnt/etc/update-motd.d/10-mrrc ] && ok "login banner" || fail "10-mrrc missing"
+# e_machine sits at offset 18, two bytes little-endian; 183 = AArch64.
+machine=$(od -An -tu1 -j18 -N2 /mnt/opt/mrrc_modern/fleet/frpc 2>/dev/null | tr -s " " | sed "s/^ //;s/ $//")
+[ "$machine" = "183 0" ] && ok "frpc is an aarch64 ELF (e_machine=183)" || fail "frpc e_machine=$machine"
+[ -f /mnt/opt/mrrc_modern/vendor/ftdi/libft4222.so ] && ok "FTDI libft4222.so" || fail "FTDI library missing"
+[ -L /mnt/opt/mrrc_modern/vendor/ftdi/libftd2xx.so ] && ok "libftd2xx.so symlink" || fail "libftd2xx.so is not a symlink"
+[ -f /mnt/etc/udev/rules.d/99-mrrc-ftdi.rules ] && ok "FT4222 udev rule" || fail "99-mrrc-ftdi.rules missing"
+grep -q "^mrrc:" /mnt/etc/passwd && ok "mrrc account" || fail "mrrc account missing"
+v=$(cat /mnt/opt/mrrc_modern/version.txt 2>/dev/null)
+[ -n "$v" ] && ok "version.txt = $v" || fail "version.txt missing"
+[ -f /mnt/opt/mrrc_modern/linux/firstboot_wrapper.py ] && ok "firstboot wrapper" || fail "firstboot wrapper missing"
+[ ! -e /mnt/opt/mrrc-build ] && ok "no /opt/mrrc-build" || fail "/opt/mrrc-build shipped"
+[ -z "$(find /mnt/opt/mrrc_modern -name __pycache__ -print -quit)" ] && ok "no __pycache__" || fail "__pycache__ shipped"
+grep -q "^MRRC_WEB_PASSWORD=" /mnt/opt/mrrc_modern/env/mrrc.env \
+	&& fail "a web password was baked in" || ok "no baked web password"
+grep -q "^MRRC_SERIAL_PORT=" /mnt/opt/mrrc_modern/env/mrrc.env \
+	&& fail "a serial port was baked in" || ok "no baked serial port"
+
+echo "== step 3: D-11 wiring and the platform parameters"
+unit=/mnt/etc/systemd/system/mrrc-modern.service
+grep -q "^User=mrrc$" "$unit" && ok "User=mrrc" || fail "User line"
+a=$(grep "^EnvironmentFile=" "$unit" | cut -d= -f2)
+b=$(grep "^Environment=MRRC_CONFIG_FILE=" "$unit" | cut -d= -f3)
+[ -n "$a" ] && [ "$a" = "$b" ] && ok "EnvironmentFile == MRRC_CONFIG_FILE ($a)" \
+	|| fail "split config file: $a vs $b"
+fb=/mnt/etc/systemd/system/mrrc-firstboot.service
+grep -q "^Environment=MRRC_BOOT_DIR=/boot/firmware$" "$fb" && ok "MRRC_BOOT_DIR=/boot/firmware (Pi value)" || fail "boot dir"
+grep -q "^Environment=MRRC_WEB_HOST=::$" "$fb" && ok "MRRC_WEB_HOST=:: (Pi value)" || fail "web host"
+grep -q "^MRRC_WEB_HOST=::$" /mnt/opt/mrrc_modern/env/mrrc.env && ok "env file binds ::" || fail "env bind"
+grep -q "^MRRC_RX_BUFFER_MS=100$" /mnt/opt/mrrc_modern/env/mrrc.env && ok "RX buffer 100ms" || fail "RX buffer"
+grep -q "^MRRC_PTT_MAX_TX_SECONDS=120$" /mnt/opt/mrrc_modern/env/mrrc.env && ok "PTT ceiling 120s" || fail "PTT ceiling"
+
+echo "== step 4: it runs (native arm64 chroot)"
+for d in dev proc sys; do mount --bind /$d /mnt/$d; done
+chroot /mnt /opt/mrrc_modern/venv/bin/python -c "import fastapi, numpy, pyaudio, lameenc, cryptography, serial; print('     deps import OK')" || fail "dependency import"
+chroot /mnt /opt/mrrc_modern/venv/bin/python -c "import ctypes; ctypes.CDLL('libopus.so.0'); print('     libopus loads OK')" || fail "libopus"
+chroot /mnt /opt/mrrc_modern/venv/bin/python -c "
+import sys
+sys.path.insert(0, '/opt/mrrc_modern')
+sys.path.insert(0, '/opt/mrrc_modern/linux')
+import server, net_wifi, box_ops, first_run, mrrc_radio
+print('     entry points import OK')" || fail "entry point import"
+
+umount /mnt/dev /mnt/proc /mnt/sys || true
+umount /mnt
+losetup -d "$loop"
+[ "$bad" = 0 ] && echo "== VERIFY_OK" || { echo "== VERIFY_FAILED"; exit 1; }
+INNER_SCRIPT
+
+docker run --rm --privileged --platform linux/arm64 \
+	-v "$OUT_DIR":/out:ro -v "$REPO":/src:ro \
+	-v "$REPO/packaging/common":/common:ro \
+	-v "$INNER":/verify.sh:ro \
+	debian:bookworm bash /verify.sh

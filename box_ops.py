@@ -119,7 +119,7 @@ def client_in_local_subnet(host: Optional[str],
     socket (`::ffff:192.168.16.50`) — refusing that form would close the window
     on exactly the client it was opened for.
     """
-    text = (host or "").strip()
+    text = str(host or "").strip()
     if not text:
         return False
     try:

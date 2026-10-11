@@ -39,6 +39,15 @@ class LocalSubnetTests(unittest.TestCase):
             1, "", "Error: NetworkManager is not running.")})
         self.assertEqual(box_ops.local_subnets(runner), [])
 
+    def test_a_failing_nmcli_does_not_contribute_its_stdout(self):
+        """rc != 0 with output still on stdout is the realistic failure: nmcli
+        prints what it knows and then exits non-zero. Reading that stdout anyway
+        would open the onboarding window onto a subnet the box may not hold."""
+        runner = FakeNmcli({"IP4.ADDRESS": net_wifi.NmResult(
+            10, "192.168.16.5/24\n", "Error: not authorised")})
+        self.assertEqual(box_ops.local_subnets(runner), [])
+        self.assertFalse(box_ops.client_in_local_subnet("192.168.16.9", runner))
+
     def test_junk_lines_are_skipped_not_fatal(self):
         runner = FakeNmcli({"IP4.ADDRESS": net_wifi.NmResult(
             0, "192.168.1.217/24\n\nnot-an-address\n", "")})
@@ -67,7 +76,9 @@ class ClientSubnetTests(unittest.TestCase):
             "::ffff:192.168.16.50", self.runner))
 
     def test_no_client_at_all_is_outside(self):
-        for host in ("", None, "not-an-ip", "fe80::1"):
+        # A non-string host (5) is here because "nothing raises" is a contract:
+        # a caller that hands us an int must get False, not an AttributeError.
+        for host in ("", None, "not-an-ip", "fe80::1", 5):
             with self.subTest(host=host):
                 self.assertFalse(
                     box_ops.client_in_local_subnet(host, self.runner))

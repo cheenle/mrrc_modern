@@ -22,7 +22,7 @@
 | 服务日志落盘 | `logs/server-stdout.log`（诊断包要读） | 只进 journal |
 | env 默认值 | `MRRC_PTT_MAX_TX_SECONDS=120`、`MRRC_RX_BUFFER_MS=100` | 缺（RX 缓冲是 USB 声卡在真机上实测出来的） |
 | venv 构建 | `install.sh --yes --install-service --no-scope`（依赖表单一权威） | 裸 `pip install -r requirements.txt` |
-| 导入门禁 / 回收 | 含 `net_wifi`、`box_ops`；清 `/tmp`、`__pycache__`、apt lists | 缺两项；且 stage4 里**提交了两个 `.pyc`** 和一份 `firstboot_wrapper.py` 副本 |
+| 导入门禁 / 回收 | 含 `net_wifi`、`box_ops`；清 `/tmp`、`__pycache__`、apt lists | 缺两项；且 stage4 里**躺着两个未被跟踪的 `.pyc`**（`prerun.sh` 的 `cp -a` 会连它们一起拷进镜像）和一份 `firstboot_wrapper.py` 副本 |
 | 镜像源开关 | apt / pip / GitHub 三个开关（国内实测 65 KB/s → 829 KB/s 级） | 一个也没有 |
 
 同时，两条构建线已经各自漂移出**具体的、可指认的**分歧：`firstboot_wrapper.py` 两份（只差 4 行：启动盘路径、绑定地址、文档串）、排除清单三份（Pi 构建器 / box overlay / 就地升级器，靠测试逐字节比对维持）、`mrrc-show-password` 放在 Pi 目录而 box overlay 反向去取、Pi 的 systemd 单元漏了 D-11 那一行。
@@ -228,7 +228,7 @@ pi-gen 的失败恢复沿用现状：`PRESERVE_CONTAINER=1`，失败后 `CONTINU
 
 1. **排除清单只有一处**：全仓（`packaging/`、`linux/`）匹配 `--exclude "…"` 的文件集合恰为 `{packaging/common/stage-tree.sh}`；并断言该文件里的条目数 ≥ 现状的条目数（防"删空清单让测试通过"）。
 2. **两个构建器都调用共用层**：`packaging/rpi/build-image.sh` 含 `stage-tree.sh`，`packaging/rpi/pi-gen-stage4/01-deploy-mrrc/00-run-chroot.sh` 含 `mrrc-service-layer.sh`，`packaging/box/box-overlay.sh` 两者都含。
-3. **Pi 的 `files/` 不得含服务层产物**：`packaging/rpi/pi-gen-stage4/01-deploy-mrrc/files/` 下不允许出现 `mrrc-modern.service`、`mrrc-firstboot.service`、`firstboot_wrapper.py`、`mrrc-show-password`、任何 `*.pyc` —— 这是今天两处漂移的回归闸门。
+3. **Pi 的 `files/` 不得含服务层产物**：`packaging/rpi/pi-gen-stage4/01-deploy-mrrc/files/` 下不允许出现 `mrrc-modern.service`、`mrrc-firstboot.service`、`firstboot_wrapper.py`、`mrrc-show-password`、任何 `*.pyc` —— 这是今天两处漂移的回归闸门。（断言跑在**文件系统**上而不是 git 上：那两个 `.pyc` 从未被跟踪（`.gitignore` 挡着），但 `prerun.sh` 的 `cp -a` 照样把它们拷进镜像——**能被装进去的就是要守的东西**。）
 4. **包清单唯一**：`packaging/rpi/pi-gen-stage4/00-install-packages/00-packages` 的条目必须全部在「允许的平台额外项」白名单里（当前只有 `e2fsprogs`），且不得与 `common/packages.txt` 有交集。
 5. **有意差异被断言**：`packaging/rpi/**` 与 `packaging/box/**` 中 `MRRC_WEB_HOST=` 的取值恰为 `::` 与 `0.0.0.0`；`MRRC_BOOT_DIR` 恰为 `/boot/firmware` 与 `/boot`。（等价于"§6.3 之外没有第二处平台差异"的可检查形式。）
 6. **`common/*.sh` 可执行位**（0644 陷阱，`box-overlay.sh` 犯过）。
@@ -280,8 +280,16 @@ pi-gen 的失败恢复沿用现状：`PRESERVE_CONTAINER=1`，失败后 `CONTINU
 
 ## 11. 已知遗留（不属本期，但会挡下期发布）
 
-- `release_check` 基线 1 红：英文站 W103D 卡片写 `1,154,545,271 bytes / 5d74f737…`，真产物是 `1,268,146,785 / 5f0ae387…`（2026-10-11 12:08 重建后卡片未同步）。建议本期顺手修掉（下期发布前必须绿）。
-- `AGENTS.md` 仍在描述已退役的 `linux/setup_ap.py` 与热点（2026-10-11 退役），本次一并订正。
+- **`release_check` 那条红的成因与本设计初稿的假设相反**（2026-10-11 实测）：卡片**没错** —— 线上
+  `MRRC-Modern-1.25.5-w103d.img.gz` 是 `1,154,545,271` 字节（HTTP `content-length`），卡片写的也是它；
+  错的是那条检查的前提“本地产物 = 卡片描述的那一份”。本地 `dist/w103d/` 里是 12:08 的**重建**
+  （`1,268,146,785` / `5f0ae387`，含 MT7663 固件修复，属 CHANGELOG 的 Unreleased），**从未上传**。
+  所以修法不是改卡片（那会把卡片指向一个线上不存在的文件），而是二选一：把它发上去（发布动作，
+  含卡片 + `release-artifacts.json` 同步），或留着这条红等下期正式发版时自然消失。本期选后者。
+- **SDD §12／§14 仍把排除清单描述成三份**（`SDD/12-operational-model.md` 的“复制排除清单”一节与
+  §14 的 V2.74 行）。订正它们需要一次 SDD 版本推进（新版本行 + 站点重生成 + `release-artifacts.json`
+  的 `sdd_version_source`），属于 SDD 仪式而不是代码改动，留给下一次 SDD bump 一并做。
+- `AGENTS.md` 里已退役的 `linux/setup_ap.py`／热点那一行本次已订正；同类的旧文若再发现，同样手法处理。
 
 ## 12. 明确不做（YAGNI）
 

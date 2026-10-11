@@ -15,7 +15,10 @@ ASSETS=/opt/mrrc-build
 	echo "FATAL: the shared service layer is not staged at $ASSETS" >&2
 	exit 1
 }
-[ -f "$ASSETS/build.env" ] || { echo "FATAL: $ASSETS/build.env is missing" >&2; exit 1; }
+[ -f "$ASSETS/build.env" ] || {
+	echo "FATAL: $ASSETS/build.env is missing" >&2
+	exit 1
+}
 
 # Version, bind address, boot partition and the three mirrors: all generated on
 # the host by build-image.sh, because pi-gen's chroot does not inherit the host

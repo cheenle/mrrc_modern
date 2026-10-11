@@ -29,8 +29,8 @@ IMG_URL="https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/$IMG_T
 # version, the same way packaging/rpi and packaging/macos do it, and the Pi
 # builder's comment says why it matters — the support bundle manifest and the
 # upgrade channel read it out of the installed tree.
-VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO/CHANGELOG.md" \
-  | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
+VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO/CHANGELOG.md" |
+	grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
 : "${VERSION:?Could not read a version from CHANGELOG.md}"
 OUT_IMG="MRRC-Modern-${VERSION#v}-w103d.img"
 
@@ -64,50 +64,71 @@ PIP_INDEX="${MRRC_BOX_PIP_INDEX-https://pypi.tuna.tsinghua.edu.cn/simple}"
 FRP_PROXY="${MRRC_BOX_FRP_PROXY-https://gh-proxy.com/,https://ghfast.top/,}"
 
 sha256_of() {
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
-  else shasum -a 256 "$1" | cut -d' ' -f1; fi
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$1" | cut -d' ' -f1
+	else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
 
 check() {
-  local ok=0
-  if ! docker info >/dev/null 2>&1; then
-    echo "✗ Docker daemon is not running (macOS cannot loop-mount ext4 without it)" >&2
-    ok=1
-  fi
-  [ -f "$REPO/vendor/ftdi/libft4222.so" ] || {
-    echo "✗ vendor/ftdi/libft4222.so missing" >&2; ok=1; }
-  [ -L "$REPO/vendor/ftdi/libftd2xx.so" ] || {
-    echo "✗ vendor/ftdi/libftd2xx.so is not a symlink" >&2; ok=1; }
-  [ -f "$REPO/packaging/box/profiles/ft710.env" ] || {
-    echo "✗ packaging/box/profiles/ missing" >&2; ok=1; }
-  command -v rsync >/dev/null || { echo "✗ rsync missing" >&2; ok=1; }
-  command -v curl  >/dev/null || { echo "✗ curl missing" >&2; ok=1; }
-  return $ok
+	local ok=0
+	if ! docker info >/dev/null 2>&1; then
+		echo "✗ Docker daemon is not running (macOS cannot loop-mount ext4 without it)" >&2
+		ok=1
+	fi
+	[ -f "$REPO/vendor/ftdi/libft4222.so" ] || {
+		echo "✗ vendor/ftdi/libft4222.so missing" >&2
+		ok=1
+	}
+	[ -L "$REPO/vendor/ftdi/libftd2xx.so" ] || {
+		echo "✗ vendor/ftdi/libftd2xx.so is not a symlink" >&2
+		ok=1
+	}
+	[ -f "$REPO/packaging/common/profiles/ft710.env" ] || {
+		echo "✗ packaging/common/profiles/ missing" >&2
+		ok=1
+	}
+	command -v rsync >/dev/null || {
+		echo "✗ rsync missing" >&2
+		ok=1
+	}
+	command -v curl >/dev/null || {
+		echo "✗ curl missing" >&2
+		ok=1
+	}
+	return $ok
 }
 
 if [ "${1:-}" = "--check" ]; then
-  if check; then echo "✓ prerequisites ok"; exit 0; else exit 1; fi
+	if check; then
+		echo "✓ prerequisites ok"
+		exit 0
+	else exit 1; fi
 fi
 
-check || { echo "prerequisites failed; fix the above first" >&2; exit 1; }
+check || {
+	echo "prerequisites failed; fix the above first" >&2
+	exit 1
+}
 
 mkdir -p "$WORK" "$OUT"
 
 if [ ! -f "$WORK/$IMG_NAME" ]; then
-  echo "==> fetching $IMG_NAME"
-  curl -fL --retry 3 -o "$WORK/$IMG_NAME.part" "$IMG_URL"
-  mv "$WORK/$IMG_NAME.part" "$WORK/$IMG_NAME"
+	echo "==> fetching $IMG_NAME"
+	curl -fL --retry 3 -o "$WORK/$IMG_NAME.part" "$IMG_URL"
+	mv "$WORK/$IMG_NAME.part" "$WORK/$IMG_NAME"
 fi
 
 echo "==> verifying SHA-256"
 got="$(sha256_of "$WORK/$IMG_NAME")"
 [ "$got" = "$IMG_SHA" ] || {
-  echo "✗ $IMG_NAME sha256 $got != $IMG_SHA" >&2; exit 1; }
+	echo "✗ $IMG_NAME sha256 $got != $IMG_SHA" >&2
+	exit 1
+}
 echo "    ok"
 
 if [ ! -f "$WORK/w103d.img" ]; then
-  echo "==> decompressing"
-  gunzip -c "$WORK/$IMG_NAME" > "$WORK/w103d.img"
+	echo "==> decompressing"
+	gunzip -c "$WORK/$IMG_NAME" >"$WORK/w103d.img"
 fi
 
 echo "==> building inside a privileged arm64 container"
@@ -122,13 +143,13 @@ echo "==> building inside a privileged arm64 container"
 # `apt-get update` against a mirror that is sometimes slow enough to stall the
 # build for minutes, for packages that were never invoked.
 docker run --rm --platform linux/arm64 --privileged \
-  -v "$REPO":/src:ro \
-  -v "$WORK":/work \
-  -e MRRC_BOX_APT_MIRROR="$APT_MIRROR" \
-  -e MRRC_BOX_PIP_INDEX="$PIP_INDEX" \
-  -e MRRC_BOX_FRP_PROXY="$FRP_PROXY" \
-  -e MRRC_VERSION="$VERSION" \
-  debian:bookworm bash -euo pipefail -c '
+	-v "$REPO":/src:ro \
+	-v "$WORK":/work \
+	-e MRRC_BOX_APT_MIRROR="$APT_MIRROR" \
+	-e MRRC_BOX_PIP_INDEX="$PIP_INDEX" \
+	-e MRRC_BOX_FRP_PROXY="$FRP_PROXY" \
+	-e MRRC_VERSION="$VERSION" \
+	debian:bookworm bash -euo pipefail -c '
     img=/work/w103d.img
     loop="$(losetup --show -fP "$img")"
     trap "umount -R /mnt 2>/dev/null || true; losetup -d $loop 2>/dev/null || true" EXIT
@@ -213,6 +234,7 @@ docker run --rm --platform linux/arm64 --privileged \
   '
 
 echo "==> compressing"
-gzip -9 -c "$WORK/w103d.img" > "$OUT/$OUT_IMG.gz"
+gzip -9 -c "$WORK/w103d.img" >"$OUT/$OUT_IMG.gz"
 echo "==> artifact: $OUT/$OUT_IMG.gz"
-printf '    sha256:  '; sha256_of "$OUT/$OUT_IMG.gz"
+printf '    sha256:  '
+sha256_of "$OUT/$OUT_IMG.gz"

@@ -45,7 +45,7 @@ log() { printf '\n=== %s ===\n' "$*"; }
 log "preconditions"
 id -u "$MRRC_USER" >/dev/null 2>&1 || {
 	echo "mrrc-service-layer: no '$MRRC_USER' account. The platform shell creates" \
-	     "it (adduser --system on the box, pi-gen's FIRST_USER_NAME on the Pi)." >&2
+		"it (adduser --system on the box, pi-gen's FIRST_USER_NAME on the Pi)." >&2
 	exit 1
 }
 # The tree is staged by the caller (stage-tree.sh); this is the check that turns
@@ -53,7 +53,7 @@ id -u "$MRRC_USER" >/dev/null 2>&1 || {
 # ModuleNotFoundError.
 [ -f "$MRRC_HOME/requirements.txt" ] || {
 	echo "mrrc-service-layer: no code tree at $MRRC_HOME — the caller must stage it" \
-	     "with packaging/common/stage-tree.sh first" >&2
+		"with packaging/common/stage-tree.sh first" >&2
 	exit 1
 }
 [ -f "$MRRC_ASSETS/packages.txt" ] || {
@@ -106,7 +106,7 @@ log "udev rule: the FT4222 scope interface belongs to the service user"
 # scope pipe fine, mrrc could not). dialout is the group both images put mrrc in
 # for ttyUSB*. The Pi needs this rule for the same reason the box does: the same
 # FT4222 hangs off its USB port.
-cat > /etc/udev/rules.d/99-mrrc-ftdi.rules <<'RULE'
+cat >/etc/udev/rules.d/99-mrrc-ftdi.rules <<'RULE'
 SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="601c", MODE="0660", GROUP="dialout"
 RULE
 

@@ -2,6 +2,11 @@
 
 日期：2026-09-09 · 状态：已批准 · 范围：新增打包线（服务端代码零改动）
 
+> **已被修订**（2026-10-11）：§4（FTDI 不内置）与 §8（YAGNI：不做自更新、不做 FTDI 内置）
+> 已由 `docs/superpowers/specs/2026-10-11-rpi-w103d-parity-packaging-design.md` 取代 ——
+> aarch64 的 `vendor/ftdi/libft4222.so` 后来进了仓库（含指向自己的 `libftd2xx.so` 符号链接），
+> 所以真频谱改为**开箱即得**，`mrrc-update` 也随服务层装进镜像。本文其余章节仍然成立。
+
 ## 1. 目标与产物
 
 为 MRRC Modern 提供烧录即用的树莓派系统镜像：`MRRC-Modern-v<ver>-rpi64.img.xz`。
@@ -31,6 +36,10 @@ pi-gen 标准 stage 0–2（Lite Bookworm arm64）+ 自定义 stage4（仓库内
 
 ## 4. FT-710 真频谱策略（FTDI）
 
+> **本节已被取代**（2026-10-11）：镜像现在**内置** aarch64 的 FTDI 库（`vendor/ftdi/`，
+> 由服务层安装并加 `99-mrrc-ftdi.rules` 把 FT4222 交给 `mrrc`），用户不再需要手动放库。
+> 下文保留为当时的决策记录。
+
 仓库内 `LibFT4222-v1.4.8.zip` 仅含 Windows 二进制，FTDI 官方 Linux ARM 包脚本下载被 403。因此：
 
 - 镜像**不内置** Linux FTDI 库；`/opt/mrrc_modern/vendor/ftdi/` 目录预留（`scope_libraries.py` 的 `get_candidate_library_dirs()` 已搜索该目录与 `/usr/lib/aarch64-linux-gnu`）。
@@ -52,9 +61,14 @@ pi-gen 标准 stage 0–2（Lite Bookworm arm64）+ 自定义 stage4（仓库内
 ## 7. 发布与文档
 
 - 镜像挂 `www.vlsc.net downloads/`（约 0.8–1.2GB，磁盘空闲 5.9G 足够）；网站 EN/ZH 新增树莓派下载卡片（Imager"自定义镜像"用法 + 预置密码说明）。
-- 新文档：`docs/RASPBERRY_PI_GUIDE.md`（用户向：烧录/密码/接线/两电台差异/FTDI 手动点亮）+ `pi_pack.md`（构建方：Docker/pi-gen/锁定 commit/产物校验）。
+- 新文档：`docs/RASPBERRY_PI_GUIDE.md`（用户向：烧录/密码/接线/两电台差异）+ `docs/rpi_pack.md`（构建方：Docker/pi-gen/锁定 commit/镜像源开关/产物四步校验）。
 - `dual-platform-release` skill 增补 Pi 线引用；SDD V2.36 条目与 CHANGELOG 随下次发版（镜像本身可独立于版本号立即发布，文件名带当前版本 `v1.14.1`）。
 
 ## 8. 明确不做（YAGNI）
+
+> **两条已作废**（2026-10-11）：「不做在线自更新」与「不做 FTDI 内置」已由
+> `2026-10-11-rpi-w103d-parity-packaging-design.md` 推翻 —— 两条镜像线现在共用一个
+> 服务层，Pi 与盒子拿到同一份能力（含 `mrrc-update` 与内置的 aarch64 FTDI 库）。
+> 其余各条仍然成立。
 
 - 不做在线自更新（更新 = Imager 重烧新镜像）；不做 32 位 armhf 线；不做桌面版；不做 PyInstaller 打包（Linux 直接 venv + systemd）；不改服务端 Python 代码；不做 Linux FTDI 库的自动下载。

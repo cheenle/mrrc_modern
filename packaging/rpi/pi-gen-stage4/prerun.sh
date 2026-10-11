@@ -13,8 +13,8 @@ cp -a 01-deploy-mrrc/files/. "$ROOTFS_DIR/"
 # directory fails two steps later inside the service layer with a message about
 # the wrong thing.
 for f in opt/mrrc_modern/requirements.txt opt/mrrc_modern/version.txt \
-         opt/mrrc-build/mrrc-service-layer.sh opt/mrrc-build/build.env \
-         opt/mrrc-build/packages.txt; do
+	opt/mrrc-build/mrrc-service-layer.sh opt/mrrc-build/build.env \
+	opt/mrrc-build/packages.txt; do
 	[ -e "$ROOTFS_DIR/$f" ] || {
 		echo "FATAL: $f missing — packaging/rpi/build-image.sh stages it" >&2
 		exit 1

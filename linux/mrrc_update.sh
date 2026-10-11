@@ -21,14 +21,20 @@ set -euo pipefail
 
 MRRC_HOME="${MRRC_HOME:-/opt/mrrc_modern}"
 MRRC_USER="${MRRC_USER:-mrrc}"
-SRC="${MRRC_UPDATE_SRC:-}"          # git URL, or a local directory to rsync from
+SRC="${MRRC_UPDATE_SRC:-}" # git URL, or a local directory to rsync from
 BRANCH="${MRRC_UPDATE_BRANCH:-main}"
 CLONE=""
 
-cleanup() { [ -n "$CLONE" ] && rm -rf "$CLONE"; return 0; }
+cleanup() {
+	[ -n "$CLONE" ] && rm -rf "$CLONE"
+	return 0
+}
 trap cleanup EXIT
 
-[ -n "$SRC" ] || { echo "set MRRC_UPDATE_SRC to a git URL or a local directory" >&2; exit 1; }
+[ -n "$SRC" ] || {
+	echo "set MRRC_UPDATE_SRC to a git URL or a local directory" >&2
+	exit 1
+}
 
 if [ -d "$SRC" ]; then
 	# `cd … && pwd` rather than readlink -f: this runs on the device, the path

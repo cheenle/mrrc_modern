@@ -15,7 +15,7 @@ packaging/box/build-image.sh            # 全流程
 ## 前置
 
 | 项 | 要求 | 为什么 |
-|---|---|---|
+| --- | --- | --- |
 | Docker Desktop | **必须在运行** | macOS 不能原生 loop 挂载 ext4；构建在 `--privileged` 的 arm64 容器里做 |
 | 架构 | Apple Silicon（arm64） | 目标镜像也是 arm64 → **chroot 原生，不需要 qemu-user-static**。与 `packaging/rpi/build-image.sh` 同源的理由 |
 | 空闲磁盘 | ≥12 GB | 镜像 3.4 GB（解压）+ 压缩产物（约 1 GB）+ 中间文件 |
@@ -36,7 +36,7 @@ Armbian_26.11.0_amlogic_s905l3a-w103d_bookworm_6.18.54_server_2026.10.01.img.gz
 **文件名里四个标记都不能换**：
 
 | 标记 | 换错的后果 |
-|---|---|
+| --- | --- |
 | `amlogic` | 平台 |
 | **`s905l3a-w103d`** | 下成通用 `s905l3a` → 没有这块板的 DTS 与内核补丁 → **MT7663S WiFi/蓝牙静默不工作** |
 | `bookworm` | 换 noble/trixie → Python 不是 3.11 |
@@ -56,7 +56,7 @@ ophub/unifreq 的内核树里（PR #3658 / #3659）。自建意味着长期跟�
 ## 镜像内部（实测，不是估算）
 
 | 项 | 值 |
-|---|---|
+| --- | --- |
 | 分区表 | MBR（不是 GPT——第一版设计假设过 GPT，实测纠正） |
 | p1 | FAT32，511 MiB，卷标 `BOOT`（挂到 `/boot`） |
 | p2 | ext4，3000 MiB，卷标 `ROOTFS`（挂到 `/`） |
@@ -86,7 +86,7 @@ rootfs free before overlay: 963 MiB
 ## 外部二进制
 
 | 东西 | 来源 | 校验 |
-|---|---|---|
+| --- | --- | --- |
 | frpc | frp 官方 release，**版本钉死 0.71.0**（与 hub 的 frps 对齐） | 对照官方 `frp_sha256_checksums.txt`，不符即拒、且不装任何文件 |
 | `libft4222.so`（aarch64） | FTDI `libft4222-linux-1.4.4.232`，入库到 `vendor/ftdi/` | 构建期不校验（已在仓库里）；测试断言它是 `e_machine=183` 的 ELF |
 | `libftd2xx.so` | **指向同一个 ELF 的符号链接** | 测试断言它确实是符号链接且指向 `libft4222.so` |
@@ -101,14 +101,15 @@ rootfs free before overlay: 963 MiB
 
 ## 与树莓派构建器的关系
 
-三处地方共享同一份 rsync 排除清单（Pi 构建器、box overlay、就地更新脚本），
-由 `tests/test_box_profiles.py::ExclusionParityTests` 强制逐字一致。
+两条镜像线共用 `packaging/common/`：`stage-tree.sh` 是**排除清单唯一的出处**（Pi 构建器在宿主侧调它、
+本 overlay 在 chroot 里调它、`linux/mrrc_update.sh` 在设备上调用拉下来那份），`mrrc-service-layer.sh`
+是**服务层唯一的实现**（apt 清单、venv、FTDI + udev、frpc、单元、env 默认值、导入门禁、回收）。
+平台壳只负责各自板子的事。
 
 两份构建器对"什么该进 `/opt/mrrc_modern`"产生分歧的后果是**运行期 ImportError**，不是构建错误——
-所以这条约束值得由测试来守，而不是靠记性。
-
-**要改清单时，改 `packaging/rpi/build-image.sh` 的那一份**，然后把另外两处同步过去。
-测试会告诉你漏了哪处。
+所以这条约束由 `tests/test_packaging_parity.py` 来守：清单多出第二个载体就红。
+**要改清单，改 `packaging/common/stage-tree.sh`**（早先那句"改三个地方"已作废）。
+平台差异只允许两处：`MRRC_WEB_HOST` 与 `MRRC_BOOT_DIR`，两者都被同一份测试逐字钉住。
 
 ## 构建产物与发布
 

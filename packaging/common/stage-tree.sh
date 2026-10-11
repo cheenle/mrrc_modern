@@ -18,7 +18,10 @@ set -euo pipefail
 
 SRC="${1:?usage: stage-tree.sh <src> <dst>}"
 DST="${2:?usage: stage-tree.sh <src> <dst>}"
-[ -d "$SRC" ] || { echo "stage-tree: no such source tree: $SRC" >&2; exit 1; }
+[ -d "$SRC" ] || {
+	echo "stage-tree: no such source tree: $SRC" >&2
+	exit 1
+}
 mkdir -p "$DST"
 
 # Deliberately no --delete: image builds stage into an empty directory, and the

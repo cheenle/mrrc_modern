@@ -90,6 +90,7 @@ rootfs free before overlay: 963 MiB
 | frpc | frp 官方 release，**版本钉死 0.71.0**（与 hub 的 frps 对齐） | 对照官方 `frp_sha256_checksums.txt`，不符即拒、且不装任何文件 |
 | `libft4222.so`（aarch64） | FTDI `libft4222-linux-1.4.4.232`，入库到 `vendor/ftdi/` | 构建期不校验（已在仓库里）；测试断言它是 `e_machine=183` 的 ELF |
 | `libftd2xx.so` | **指向同一个 ELF 的符号链接** | 测试断言它确实是符号链接且指向 `libft4222.so` |
+| `mt7663_n9_v3.bin`（N9 WiFi 固件） | **W103D 出厂 Android 镜像**（`WIFI_RAM_CODE_MT7663.bin`，字节未改），入库到 `vendor/mediatek/` | 构建期 `sha256sum -c` 钉死 `223f73f1…`；镜像里加 `dpkg-divert` 防 linux-firmware 升级覆盖。**不能用基底自带的 linux-firmware 2020 版**——它能初始化但会在真机上渐进式挂死（2026-10-11 现场：~30 秒一次掉线、扫描楔死、~16 分钟 MCU mailbox 全停）。溯源：`packaging/box/vendor-mt7663.md` |
 
 **frpc 为什么钉版本**：客户端比服务端新会握手失败，而症状是"隧道永远起不来"，
 不是一句版本抱怨。

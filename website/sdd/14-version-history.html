@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.80</td>
+<td>2026-10-11</td>
+<td>Kimi</td>
+<td><strong>W103D 无线根因日：盒子 WiFi 的一切怪病都来自 linux-firmware 的 2020 版 N9 固件，换成出厂 2021 版后全部消失；顺手修掉「开放热点其实是加密热点」的产品 Bug；AP 模式的真机答案是否定的。</strong> ① <strong>固件根因（一整天的症状清单都是它）</strong>：镜像里 ophub 基底带的 <code class="scope-code">mt7663_n9_v3.bin</code> 是 linux-firmware 的 2020 版（<code class="scope-code">3.1.1 / 20200604</code>），在 W103D 上表现为渐进式死亡——能连但每 ~30 秒掉线一次（reason 9）、重连扫描要 13 秒（半小时 78 次掉线）、~16 分钟后 MCU mailbox 超时（<code class="scope-code">W103D mailbox write failed: -110</code>）与 SDIO RX 报 <code class="scope-code">invalid RX packet length</code>、扫描楔死（wpa_supplicant「scan trigger already pending」）、最后 probe 失败接口消失；<strong>软重启继承挂死态，只有断电能让芯片复位</strong>。对照实验排除项：SDIO 降速 200→50 MHz 与剥掉 UHS 能力<strong>更糟</strong>（50 MHz 高速度模式下连初始化都过不去），省电/蓝牙共存/BSSID 锁定/监管域均非根因。线索来自 ophub issue #3571 的移植记录（pigeon2049 fork，其修复已被上游 6.18.52+ 吸收——我们内核自带 W103D 补丁，缺的只是固件）。<strong>修法</strong>：出厂 Android 的 <code class="scope-code">WIFI_RAM_CODE_MT7663.bin</code>（<code class="scope-code">7663mp1827 / 20210308</code>）钉版进仓 <code class="scope-code">vendor/mediatek/mt7663_n9_v3.bin</code>（SHA-256 <code class="scope-code">223f73f1…</code>，字节未改），<code class="scope-code">box-overlay.sh</code> 安装到 <code class="scope-code">/lib/firmware/mediatek/</code> + <strong>sha256sum -c 构建期校验</strong> + <strong>dpkg-divert 防 linux-firmware 升级覆盖</strong>；溯源与许可声明见 <code class="scope-code">packaging/box/vendor-mt7663.md</code>。真机验收：2.4G 下 200 包 <strong>0.5% 丢包、平均 6.3 ms、零掉线、零驱动报错</strong>（修复前 59% 丢包 / 平均 277 ms / 半小时 78 次掉线）；5 GHz 能认证关联但数据面 98% 丢包（该单元 5G 射频边际，不建议用）。② <strong>产品 Bug：「开放热点」是加密的。</strong> <code class="scope-code">nmcli device wifi hotspot</code> 不传 password 时，NM 1.42 <strong>自动生成随机 WPA-PSK</strong>（真机抓包：<code class="scope-code">key-mgmt: wpa-psk</code>，「nmcli dev wifi show-password」可读出）——设计 D-2 的开放热点从未开放过，这正是「手机搜不到 MRRC-Setup」的第一个原因。修法：<code class="scope-code">net_wifi.start_hotspot()</code> 改为显式建<strong>无 <code class="scope-code">802-11-wireless-security</code> 段</strong>的 AP profile（<code class="scope-code">connection add … mode ap -- ipv4.method shared</code>，后者原来由一键命令隐式完成，少了它就没有 10.42.0.1/24 与 dnsmasq）+ <code class="scope-code">connection up</code>；测试重写并加回归断言（argv 里不得出现 wifi-sec/key-mgmt/psk）。③ <strong>AP 模式真机答案：不发信标。</strong> 修好固件后，NM/wpa_supplicant 全程认为 AP 已激活（<code class="scope-code">mode=AP</code>、<code class="scope-code">COMPLETED</code>、10.42.0.1/24 就位、零报错），但手机与 Mac 均扫不到——<strong>AD-026 的「MT7663S 能否起 AP」边界实测为否</strong>（上游移植记录也只验证过 STA）。热点引导在当前驱动下不可用；盒子上手走有线/HDMI 路径，设计本就不依赖 AP 成立（HDMI + nmtui 兜底）。④ <strong>测试</strong> 2097→<strong>2099</strong>（<code class="scope-code">VendoredMt7663Tests</code> +2：钉版 SHA 与 overlay 安装/校验/转移三件套）；<code class="scope-code">test_net_wifi</code>/<code class="scope-code">test_setup_ap</code>/<code class="scope-code">test_server_setup_wizard</code> 的热点桩全部改吃新命令序列。全套 macOS <strong>2099 OK / 1 skip</strong>。⑤ <strong>同轮盒子侧实况</strong>：首启引导全链路真机验证通过（DHCP 拿地址、服务拉起、<code class="scope-code">/setup</code> 可答），WiFi 修复后盒子稳定挂 <code class="scope-code">CMCC-cnham</code>（ch11）。<strong>未做</strong>：热点引导页的真机验收随 AP 边界一起冻结；5G 数据面、长期挂机型稳性观察留待现场。</td>
+</tr>
+<tr>
 <td>SDD V2.79</td>
 <td>2026-10-11</td>
 <td>pi</td>
@@ -865,7 +871,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.79 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.80 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

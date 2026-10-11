@@ -126,6 +126,24 @@ packaging/rpi/verify-image.sh dist/rpi/MRRC-Modern-v<ver>-rpi64.img.xz
 
 ## 实跑记录
 
+### v1.26.0 发布构建（2026-10-12）
+
+设置页那条线落地后、与新版本号一起建的**发布态**镜像。这一次 Pi 与盒子真的拿到同一套东西：
+`=== polkit: let the server user reconfigure NetworkManager ===`、`=== box identity … ===`
+这两步在 Pi 的 chroot 里照常执行，`version: 1.26.0`、`entry points import OK`。
+
+```
+dist/rpi/MRRC-Modern-v1.26.0-rpi64.img.xz
+481,145,192 bytes   SHA-256 d431c9aa1822aa4318f08eb037c91e97be99d0c0f2a7893763bfe24e45c7908b
+```
+
+四步产物验证 `VERIFY_OK`。第 ③ 步里本版新增两条**Pi 专属**的启动分区检查，验的正是共用服务层第一天
+漏掉的那处：`mrrc-wifi-preseed.service` 的 `ConditionPathExists` 必须指向 `/boot/firmware`，
+且脚本拿到的 `MRRC_BOOT_DIR` 与它一致——写死 `/boot` 的话这条能力在 Pi 上会**静默哑掉**（systemd
+的 ConditionPathExists 不成立就干脆不跑，没有任何一行日志会说）。修法与守卫见
+`docs/w103d_pack.md` 的 v1.26.0 一节。
+
+
 每一次真构建的实测数据追加在本节——「只有真跑才会暴露」的东西记在这里，而不是留在聊天记录里。
 
 ### 2026-10-12：结构统一后的两轮全量构建

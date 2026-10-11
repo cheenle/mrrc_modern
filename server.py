@@ -63,6 +63,7 @@ from config import (
 )
 from backends import create_backend, known_models
 from backends.base import RadioBackend
+import box_ops
 import cloud_hub
 import net_tls
 import spectrum_profile
@@ -4906,15 +4907,60 @@ async def api_cloud_restart(request: Request):
     return JSONResponse({"restarting": True})
 
 
-def _first_window_open(request: Request) -> bool:
-    """Placeholder — replaced by the real predicate in Task 9.
+def _password_is_untouched() -> bool:
+    """Whether no human has ever chosen this box's web password.
 
-    Deliberately returns a constant False for now: Task 9 of this plan installs
-    the real "the box has never had a user-set password" judgement. Until then
-    this reads as *no first window*, so /setup is ordinary authenticated only —
-    the fail-closed direction, never the fail-open one.
+    The auto-password flag is the honest signal: first_run sets it when it
+    generates a password nobody was told, and every user-driven write clears it.
+    The two fallbacks catch a box where first run never happened at all.
     """
-    return False
+    if os.environ.get("MRRC_AUTO_PASSWORD") == "1":
+        return True
+    if not WEB_PASSWORD:
+        return True
+    return hmac.compare_digest(str(WEB_PASSWORD).encode("utf-8"),
+                               str(DEFAULT_WEB_PASSWORD).encode("utf-8"))
+
+
+def _first_window_open(request: Request) -> bool:
+    """Whether this request may set the box's first password with no session.
+
+    Two facts have to agree, both read live (design §5.1):
+
+    1. Nobody has set a password yet. This is why there is no flag to clear and
+       no timer to expire: the predicate *is* the state, so the window cannot be
+       left open by forgetting to close it.
+    2. The client is on a subnet this box itself holds an address on. An
+       unreadable set of local subnets closes the window rather than opening it —
+       "I cannot tell" has to read as "not you" (spec §5.4 for the residual
+       weakness this still leaves on a shared LAN).
+    """
+    if not _password_is_untouched():
+        return False
+    host = request.client.host if request.client else ""
+    return box_ops.client_in_local_subnet(host)
+
+
+def _write_password(password: str) -> bool:
+    """Persist the web password, and make it live without a restart.
+
+    The one place in server.py that clears MRRC_AUTO_PASSWORD, which is what
+    closes the onboarding window — so this is the function that closes it. The
+    restart the retired setup flow deliberately did not do is still deliberately
+    not done: the caller is mid-onboarding and the next step takes their network
+    away.
+    """
+    global WEB_PASSWORD
+    updates = {"MRRC_WEB_PASSWORD": password, "MRRC_AUTO_PASSWORD": ""}
+    try:
+        first_run.update_env_file(_config_file_path(), updates)
+    except OSError as exc:
+        logger.error("could not write the web password: %s", exc)
+        return False
+    WEB_PASSWORD = password
+    os.environ["MRRC_WEB_PASSWORD"] = password
+    os.environ["MRRC_AUTO_PASSWORD"] = ""
+    return True
 
 
 @app.get("/setup", include_in_schema=False)
@@ -4922,17 +4968,97 @@ async def setup_page(request: Request):
     """The onboarding page.
 
     Passwordless only while the box has never had a user-set password; from
-    anywhere else it is an ordinary authenticated route. `no-store` because the
-    page renders a window that closes the moment a password lands — a cached
-    copy would tell the operator the box is still open when it is not.
+    anywhere else it is an ordinary authenticated route. A box that is already
+    configured sends the operator to the settings page rather than showing them
+    a page they cannot use — and so does a listen-only session, whose token is
+    logged in but is not entitled to this page (its surface is /settings).
+    `no-store` because the window this page renders closes the moment a
+    password lands — a cached copy would tell the operator the box is still
+    open when it is not.
     """
-    if not _first_window_open(request) and not _verify_auth(request):
-        return RedirectResponse("/login?next=/setup", status_code=302)
+    if not _first_window_open(request):
+        if not _verify_auth(request):
+            return RedirectResponse("/login?next=/setup", status_code=302)
+        if _is_listen_request(request) or not _password_is_untouched():
+            return RedirectResponse("/settings", status_code=302)
     page = STATIC_DIR / "setup.html"
     if not page.exists():
         return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
     response = FileResponse(page, media_type="text/html")
     response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/box/onboarding", include_in_schema=False)
+async def api_box_onboarding(request: Request):
+    """The four things the onboarding page needs, and nothing else.
+
+    The page renders Wi-Fi and a password box; it does not get the network
+    report, the system state or the safety fields — those are a logged-in
+    surface. Keeping this payload small is the point (design §5.3).
+    """
+    if not _first_window_open(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    identity = await asyncio.to_thread(box_ops.identity_report)
+    return JSONResponse({
+        "needs_password": _password_is_untouched(),
+        "hostname": identity["hostname"],
+        "mdns": identity["mdns"],
+        "networks": await asyncio.to_thread(box_ops.scan_networks),
+        "min_password_len": box_ops.MIN_PASSWORD_LEN,
+    })
+
+
+@app.post("/api/box/password", include_in_schema=False)
+async def api_box_password(request: Request):
+    """Set the web password. The window's only write, and it is one key wide.
+
+    Two ways in: an open first window (the onboarding page), or an ordinary
+    admin session (the settings page). A listen-only session is neither: its
+    token *is* in `_auth_tokens` — that is how /api/auth/login records it — so
+    it passes the auth check, but it may never write (the middleware's
+    listen-only 403 covers the rest of /api/; this endpoint sits in
+    FIRST_WINDOW_PATHS, which the middleware passes through *before* that check,
+    so the refusal has to live here). It gets 403, not 401: the session is
+    logged in, and 401 would tell the operator their session expired.
+
+    Success signs a session and hands it back, so the operator is not asked to
+    log in with the password they just typed.
+    """
+    if not _first_window_open(request):
+        if _verify_auth(request):
+            if _is_listen_request(request):
+                return JSONResponse({"error": LISTEN_ONLY_MESSAGE},
+                                    status_code=403)
+        else:
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    password = (body or {}).get("password", "") or ""
+    confirm = (body or {}).get("confirm", password) or ""
+    problem = box_ops.password_problem(password, confirm)
+    if problem:
+        return JSONResponse({"ok": False, "error": problem}, status_code=400)
+    if not _write_password(password):
+        return JSONResponse({"ok": False, "error": "写入配置失败"},
+                            status_code=500)
+
+    identity = await asyncio.to_thread(box_ops.identity_report)
+    token = _make_auth_token()
+    _auth_tokens.add(token)
+    response = JSONResponse({"ok": True, "role": "admin", "token": token,
+                             "hostname": identity["hostname"],
+                             "mdns": identity["mdns"]})
+    response.set_cookie(
+        AUTH_COOKIE, token,
+        max_age=30 * 24 * 3600,  # 30 days, same as /api/auth/login
+        httponly=False,          # JS needs to read it for WebSocket
+        samesite="lax",
+    )
+    logger.warning("box: the web password was set — the onboarding window is "
+                   "now closed")
     return response
 
 

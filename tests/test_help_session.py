@@ -390,3 +390,87 @@ class RealListenerWiringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HeartbeatTests(unittest.TestCase):
+    """每 20 秒一跳：本地判到期 + 读门户的 stop。
+
+    两件事的顺序不能反：先 `tick()`，这样即使门户不可达，窗口也会在自己的截止时刻
+    关掉——"到期"是客户与界面都看得见的承诺，不该依赖一次网络往返。
+    """
+
+    def setUp(self):
+        self.now = 1_000_000.0
+        self.beats = []
+        self.events = []
+
+    def _session(self, reply=None, raises=False, interval=0.02):
+        def beat(port, connections):
+            self.beats.append((port, connections))
+            if raises:
+                raise RuntimeError("portal unreachable")
+            return reply if reply is not None else {"stop": False}
+
+        return help_session.HelpSession(
+            opener=lambda minutes: 19000, tunnel=lambda lp, rp, add: None,
+            listener=lambda: 34567, clock=lambda: self.now,
+            on_event=self.events.append, server=_FakeServer(),
+            beat=beat, beat_interval=interval)
+
+    def _wait_for(self, cond, timeout=2.0):
+        import time as _t
+        end = _t.time() + timeout
+        while _t.time() < end:
+            if cond():
+                return True
+            _t.sleep(0.01)
+        return False
+
+    def test_it_beats_with_the_port_and_the_connection_count(self):
+        s = self._session()
+        s.enable(minutes=30)
+        self.assertTrue(self._wait_for(lambda: len(self.beats) >= 2))
+        self.assertEqual(self.beats[0][0], 19000)
+        s.close("user")
+
+    def test_a_stop_reply_closes_it(self):
+        s = self._session(reply={"stop": True})
+        s.enable(minutes=30)
+        self.assertTrue(self._wait_for(lambda: s.state == help_session.CLOSED))
+        self.assertEqual(s.close_reason, "portal")
+
+    def test_an_unreachable_portal_does_not_close_it(self):
+        """一次网络抖动不能把人正在用的协助窗口掐掉。"""
+        s = self._session(raises=True)
+        s.enable(minutes=30)
+        self.assertTrue(self._wait_for(lambda: len(self.beats) >= 2))
+        self.assertEqual(s.state, help_session.OPEN)
+        s.close("user")
+
+    def test_expiry_closes_it_even_with_a_dead_portal(self):
+        s = self._session(raises=True)
+        s.enable(minutes=1)
+        self.now += 61
+        self.assertTrue(self._wait_for(lambda: s.state == help_session.CLOSED))
+        self.assertEqual(s.close_reason, "expired")
+
+    def test_closing_stops_the_beats(self):
+        s = self._session()
+        s.enable(minutes=30)
+        self.assertTrue(self._wait_for(lambda: len(self.beats) >= 1))
+        s.close("user")
+        count = len(self.beats)
+        import time as _t
+        _t.sleep(0.1)
+        self.assertEqual(len(self.beats), count, "关闭后不该再跳")
+
+    def test_no_beat_no_thread(self):
+        """没有 beat 协作者时（纯本地会话）不该起线程。"""
+        s = help_session.HelpSession(opener=lambda m: 1, tunnel=lambda a, b, c: None,
+                                     listener=lambda: 2, clock=lambda: self.now,
+                                     server=_FakeServer())
+        s.enable(minutes=5)
+        import threading
+        names = [th.name for th in threading.enumerate()]
+        self.assertNotIn("mrrc-help-beat", names, "没有 beat 却起了心跳线程")
+        s.close("user")

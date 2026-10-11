@@ -108,6 +108,13 @@ class HelpSession:
     clock: Callable[[], float] = time.time
     on_event: Optional[Callable[[dict], None]] = None
     server: Optional[Any] = None
+    #: Called every ``beat_interval`` seconds while open: (port, connections) -> reply.
+    #: A reply with ``stop`` closes the session ("portal"); **no reply is not a reason
+    #: to close** — the window is a local promise, and one flaky hop must not cut a
+    #: customer's support call short. Injected because a heartbeat without a portal is
+    #: still worth testing.
+    beat: Optional[Callable[[int, int], dict]] = None
+    beat_interval: float = HEARTBEAT_SECONDS
 
     state: str = field(default=OFF, init=False)
     close_reason: str = field(default="", init=False)
@@ -120,6 +127,8 @@ class HelpSession:
     _expires_at: float = field(default=0.0, init=False)
     _failures: int = field(default=0, init=False)
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
+    _beat_stop: threading.Event = field(default_factory=threading.Event, init=False,
+                                        repr=False)
 
     # ── lifecycle ──────────────────────────────────────────────────────────
     def enable(self, *, minutes: int = DEFAULT_WINDOW_MINUTES,
@@ -159,6 +168,7 @@ class HelpSession:
                 self.state = OPEN
                 self._emit("opened", user=self._user, port=self._remote_port,
                            minutes=window)
+                self._start_heartbeat()
                 return self.status()
             except BaseException:
                 # Every failure path leaves through the same door, so a bound socket
@@ -184,6 +194,7 @@ class HelpSession:
             was_open = self.state == OPEN
             self.close_reason = self.close_reason or reason
             self.state = CLOSED
+            self._beat_stop.set()             # 心跳先停，免得它回头再来碰一个正在关的会话
             local, remote = self._local_port, self._remote_port
             self._local_port = self._remote_port = 0
             if local and remote:
@@ -260,6 +271,34 @@ class HelpSession:
         with self._lock:
             self.connections += 1
             self._emit("disconnect", duration_s=round(duration_s, 1))
+
+    # ── heartbeat ─────────────────────────────────────────────────────────
+    def _start_heartbeat(self) -> None:
+        if self.beat is None:
+            return
+        self._beat_stop.clear()
+        threading.Thread(target=self._beat_loop, name="mrrc-help-beat",
+                         daemon=True).start()
+
+    def _beat_loop(self) -> None:
+        """Two jobs per beat: enforce the window locally, and read the portal's stop.
+
+        The order matters: ``tick()`` first, so an expired window is closed by its own
+        deadline even when the portal is unreachable.
+        """
+        while not self._beat_stop.wait(self.beat_interval):
+            if self.state != OPEN:
+                return
+            if self.tick() == "expired":
+                return
+            try:
+                reply = self.beat(self._remote_port, self.connections)  # type: ignore[misc]
+            except Exception as exc:
+                logger.info("help: heartbeat failed (portal unreachable?): %s", exc)
+                continue
+            if isinstance(reply, dict) and reply.get("stop"):
+                self.close("portal")
+                return
 
     # ── internals ─────────────────────────────────────────────────────────
     def _emit(self, event: str, **kv: Any) -> None:
@@ -507,6 +546,7 @@ class SshHelpServer:
 def build_session(*, portal_opener: Callable[[int], int],
                   tunnel: Callable[[int, int, bool], None],
                   portal_closer: Optional[Callable[[], None]] = None,
+                  portal_beat: Optional[Callable[[int, int], dict]] = None,
                   on_event: Optional[Callable[[dict], None]] = None) -> HelpSession:
     """Assemble a real session: this module's SSH server is the listener.
 
@@ -520,4 +560,5 @@ def build_session(*, portal_opener: Callable[[int], int],
         return server.start()
 
     return HelpSession(opener=portal_opener, tunnel=tunnel, listener=listener,
-                       closer=portal_closer, on_event=on_event, server=server)
+                       closer=portal_closer, beat=portal_beat,
+                       on_event=on_event, server=server)

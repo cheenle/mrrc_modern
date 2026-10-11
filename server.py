@@ -4599,13 +4599,23 @@ def _help_portal_closer() -> None:
     cloud_hub.help_close(portal, callsign, token)
 
 
+def _help_portal_beat(port: int, connections: int) -> dict:
+    """20 秒一次的心跳，也是"门户强制结束"到达实例的唯一通道。
+
+    失败**不抛给调用方**：help_session 把这一跳记成一次失败就继续，窗口仍然按自己的
+    截止时刻关闭（那里才是它的权威）。
+    """
+    portal, callsign, token = _help_portal_context()
+    return cloud_hub.help_heartbeat(portal, callsign, token, port, connections)
+
+
 def _help() -> help_session.HelpSession:
     """The process's one help window (created on first use)."""
     global _help_singleton
     if _help_singleton is None:
         _help_singleton = help_session.build_session(
             portal_opener=_help_opener, tunnel=_help_tunnel,
-            portal_closer=_help_portal_closer,
+            portal_closer=_help_portal_closer, portal_beat=_help_portal_beat,
             on_event=lambda ev: logger.info("help: %s", ev))
     return _help_singleton
 

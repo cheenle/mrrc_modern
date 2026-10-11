@@ -227,12 +227,19 @@ last_heartbeat, connections, closed_reason
 - **P2**：portal 网页终端（复用 P1 的端口、凭据、心跳、审计；只加"人机界面"一层：WS + xterm 或自写终端）。
 - **P3（可选）**：给已经开着系统 sshd 的 Linux 用户提供"复用系统账号"的高级模式（不做跨平台承诺）。
 
-**需要真机确认、不放进"已完成"的边界**：
+**离线已钉住**（`tests/test_help_end_to_end.py`，2026-10-12）：门户协议的字段表、
+隧道配置的加/删代理与 reload 的 Basic 认证、真 paramiko 客户端用真口令连入并执行命令、
+错口令被拒、关闭后端口不再接受连接。三条关闭路径各有单测（客户关/到期/portal 强制）。
+
+**需要真机确认、不放进"已完成"的边界**（逐项的前置与判据见 `docs/remote_help.md`）：
 
 1. `frpc reload` 在本仓库钉的 0.71.0 上是否如预期（配置里加/删代理后主隧道不抖）；
 2. Windows 上 paramiko 起 `powershell.exe` 的 pty 行为（换行、颜色、`Ctrl-C`）；
 3. macOS 上从 launchd 启动的 app 起 `zsh -l` 的环境（PATH 与会话的可交互性）；
 4. 盒子上 `mrrc` 用户跑该会话能做什么/不能做什么（预期：读写 `/opt/mrrc_modern`、看日志、重启服务；不能改系统）。这是**有意**的权限面，写进操作手册。
+
+**真机那一步的前置**（与代码无关，但挡着验收）：portal 的本次改动要先部署到 hub；
+且实例要重新写一次隧道配置（`webServer` 管理段是本次新增的，旧配置里没有它，reload 无处可发）。
 
 ---
 

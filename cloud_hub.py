@@ -258,6 +258,112 @@ def _free_loopback_port() -> int:
         return int(s.getsockname()[1])
 
 
+def reload_frpc(admin_port: int, user: str, password: str, *, timeout: float = 5.0) -> None:
+    """Ask the running frpc to re-read its config, over its admin API.
+
+    Not `frpc reload -c …`: that needs the binary on PATH and a shell, and this runs
+    inside a frozen app. Not a restart either — a restart drops the web tunnel for a
+    few seconds, and "the customer pressed a button and their own remote session
+    blipped" is not something to make routine. A failure here is raised, never
+    silently escalated to a restart (design §4.2): an invisible fallback turns a
+    diagnosable failure into an unexplained tunnel wobble.
+    """
+    import base64
+    import urllib.error
+    import urllib.request
+
+    cred = base64.b64encode(f"{user}:{password}".encode()).decode()
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{int(admin_port)}/api/reload", data=b"", method="POST",
+        headers={"Authorization": f"Basic {cred}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                raise CloudHubError(f"frpc reload returned HTTP {resp.status}")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read()[:200]
+        raise CloudHubError(f"frpc reload returned HTTP {exc.code}: {detail!r}") from exc
+    except OSError as exc:
+        raise CloudHubError(
+            f"frpc admin API unreachable on 127.0.0.1:{admin_port}: {exc}") from exc
+
+
+def read_tunnel_settings(conf: Path) -> dict:
+    """Everything the generator needs to rewrite this config, read back from it.
+
+    Parsed rather than remembered: the caller holds a path, not a set of
+    credentials, and a second copy of these values is a second thing that can go
+    stale (or leak). Returns zeros/empties for anything missing.
+    """
+    out: dict = {"server_addr": "", "server_port": 0, "token": "", "log_file": "",
+                 "admin_port": 0, "admin_user": "", "admin_password": "",
+                 "proxies": []}
+    try:
+        text = conf.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return out
+    current: dict | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line == "[[proxies]]":
+            current = {}
+            out["proxies"].append(current)
+            continue
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        key, value = key.strip(), value.strip().strip('"')
+        target = current if current is not None else out
+        if key == "serverAddr":
+            out["server_addr"] = value
+        elif key == "serverPort":
+            out["server_port"] = int(value or 0)
+        elif key == "auth.token":
+            out["token"] = value
+        elif key == "log.to":
+            out["log_file"] = value
+        elif key == "webServer.port":
+            out["admin_port"] = int(value or 0)
+        elif key == "webServer.user":
+            out["admin_user"] = value
+        elif key == "webServer.password":
+            out["admin_password"] = value
+        elif current is not None and key in ("name", "localPort", "remotePort"):
+            if key == "name":
+                current["name"] = value
+            else:
+                current[key] = int(value or 0)
+    return out
+
+
+def set_help_proxy(conf: Path, *, help_local_port: int = 0, help_remote_port: int = 0,
+                   remove: bool = False) -> None:
+    """Add (or drop) the help proxy in the tunnel config and hot-reload frpc.
+
+    Rewrites the whole file from the same generator that wrote it, so the web proxy
+    cannot be lost by an edit that only meant to add a second one. Everything else
+    (token, hub address, the web proxy's ports) comes back out of the file.
+    """
+    settings = read_tunnel_settings(conf)
+    web = [p for p in settings["proxies"]
+           if not str(p.get("name", "")).startswith("mrrc-help-")]
+    if not web:
+        raise CloudHubError(f"no tunnel proxy to preserve in {conf}")
+    main = web[0]
+    text = frpc_config_text(
+        str(main.get("name") or ""), settings["token"],
+        int(main.get("localPort") or 0), int(main.get("remotePort") or 0),
+        hub_host=settings["server_addr"] or "tunnel.mrrc.vlsc.net",
+        control_port=settings["server_port"] or 8989,
+        log_file=settings["log_file"],
+        admin_port=settings["admin_port"], admin_password=settings["admin_password"],
+        help_local_port=0 if remove else help_local_port,
+        help_remote_port=0 if remove else help_remote_port)
+    _write_frpc_config(conf, text)
+    reload_frpc(settings["admin_port"], settings["admin_user"] or "mrrc",
+                settings["admin_password"])
+
+
 #: Windows: keep the helper processes this module runs (PowerShell, taskkill) from flashing a
 #: console window in the operator's face.
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0

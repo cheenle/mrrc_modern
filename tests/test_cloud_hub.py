@@ -519,3 +519,104 @@ class HelpTunnelConfigTests(unittest.TestCase):
     def test_a_missing_config_reads_as_empty(self):
         self.assertEqual(cloud_hub.read_admin_settings(Path("/nonexistent/x.toml")),
                          (0, "", ""))
+
+
+class ReloadTests(unittest.TestCase):
+    """`frpc reload` over the admin API — no CLI, no shell, no binary on PATH."""
+
+    def _fake(self, status=200, body=b"{}"):
+        import base64
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        seen = {}
+
+        class H(BaseHTTPRequestHandler):
+            def do_POST(self):
+                seen["path"] = self.path
+                seen["auth"] = self.headers.get("Authorization", "")
+                seen["body"] = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.send_response(status)
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):
+                pass
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv, seen
+
+    def test_reload_posts_to_the_admin_api_with_basic_auth(self):
+        import base64
+        srv, seen = self._fake()
+        try:
+            cloud_hub.reload_frpc(srv.server_port, "mrrc", "s3cret", timeout=3)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+        self.assertEqual(seen["path"], "/api/reload")
+        want = base64.b64encode(b"mrrc:s3cret").decode()
+        self.assertEqual(seen["auth"], f"Basic {want}")
+
+    def test_a_non_200_is_an_error(self):
+        srv, _ = self._fake(status=500, body=b'{"error":"bad config"}')
+        try:
+            with self.assertRaises(cloud_hub.CloudHubError) as ctx:
+                cloud_hub.reload_frpc(srv.server_port, "mrrc", "s3cret", timeout=3)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+            srv.server_close()
+        self.assertIn("500", str(ctx.exception))
+        self.assertIn("bad config", str(ctx.exception))
+
+    def test_an_unreachable_admin_port_is_an_error(self):
+        """不能静默退回重启：那会把一次可诊断的失败变成一次看不见的隧道抖动。"""
+        with self.assertRaises(cloud_hub.CloudHubError) as ctx:
+            cloud_hub.reload_frpc(1, "mrrc", "s3cret", timeout=1)   # 1 号端口没人听
+        self.assertIn("unreachable", str(ctx.exception))
+
+
+class SetHelpProxyTests(unittest.TestCase):
+    """加/删协助代理：主代理必须原样活下来，reload 必须被调用。"""
+
+    def _conf(self, tmp):
+        conf = Path(tmp) / "frpc-bg7ifp.toml"
+        cloud_hub._write_frpc_config(conf, cloud_hub.frpc_config_text(
+            "bg7ifp", "TOKEN", 8888, 18802, log_file="/tmp/f.log",
+            admin_port=7400, admin_password="pw"))
+        return conf
+
+    def test_adding_keeps_the_web_proxy_and_reloads(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = self._conf(tmp)
+            with mock.patch.object(cloud_hub, "reload_frpc") as reload_mock:
+                cloud_hub.set_help_proxy(conf, help_local_port=41000, help_remote_port=18877)
+            reload_mock.assert_called_once()
+            self.assertEqual(reload_mock.call_args.args[0], 7400)
+            text = conf.read_text(encoding="ascii")
+            self.assertIn('name = "bg7ifp"', text)
+            self.assertIn('name = "mrrc-help-bg7ifp"', text)
+            self.assertIn("localPort = 8888", text)
+            self.assertIn("remotePort = 18802", text)
+            self.assertIn('auth.token = "TOKEN"', text, "token 从文件读回并写回")
+
+    def test_removing_leaves_the_web_proxy_alone(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = self._conf(tmp)
+            with mock.patch.object(cloud_hub, "reload_frpc"):
+                cloud_hub.set_help_proxy(conf, help_local_port=41000, help_remote_port=18877)
+                cloud_hub.set_help_proxy(conf, remove=True)
+            text = conf.read_text(encoding="ascii")
+            self.assertNotIn("mrrc-help-", text)
+            self.assertIn("localPort = 8888", text)
+            self.assertEqual(text.count("[[proxies]]"), 1)
+
+    def test_it_refuses_a_config_with_no_web_proxy(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "empty.toml"
+            cloud_hub._write_frpc_config(conf, 'serverAddr = "x"\n')
+            with self.assertRaises(cloud_hub.CloudHubError):
+                cloud_hub.set_help_proxy(conf, help_local_port=1, help_remote_port=2)

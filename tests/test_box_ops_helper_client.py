@@ -16,7 +16,13 @@ Two contracts this file exists for:
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import socket
+import tempfile
+import threading
 import unittest
+from unittest import mock
 
 import box_ops
 
@@ -70,7 +76,7 @@ class CallHelperTests(unittest.TestCase):
         self.assertFalse(result["ok"])
 
     def test_garbage_from_the_helper_is_a_value(self):
-        for text in ("", "not json", "[1, 2, 3]", "null", '{"ok":'):
+        for text in ("", "not json", "[1, 2, 3]", "null", '{"ok":', "[]", '"x"'):
             with self.subTest(text=text):
                 result = box_ops.call_helper(
                     "reboot", sender=answering(text=text))
@@ -105,11 +111,24 @@ class TimezoneValidationTests(unittest.TestCase):
                         "/usr/share/zoneinfo/" + zone):
                     self.assertEqual(box_ops.timezone_problem(zone), "")
 
-    def test_a_path_traversal_or_a_made_up_zone_does_not(self):
-        for zone in ("", "  ", "..", "../../etc/passwd", "/etc/passwd",
-                     "Asia/../../etc/passwd", "Not/AZone"):
+    def test_a_made_up_zone_does_not(self):
+        for zone in ("", "  ", "Not/AZone"):
             with self.subTest(zone=zone):
                 self.assertTrue(box_ops.timezone_problem(zone), zone)
+
+    def test_a_path_traversal_is_rejected_even_when_the_path_exists(self):
+        """The `..`/absolute clauses have to be the thing that rejects these.
+
+        Left unpatched, macOS's symlinked /usr/share/zoneinfo makes the isfile
+        fallback reject them for a *different* reason than the one this test
+        means to pin — so `..` could be deleted and the test would still pass.
+        Forcing isfile True leaves only the traversal clauses able to reject.
+        """
+        with mock.patch.object(box_ops.os.path, "isfile", return_value=True):
+            for zone in ("..", "../../etc/passwd", "/etc/passwd",
+                         "Asia/../../etc/passwd"):
+                with self.subTest(zone=zone):
+                    self.assertTrue(box_ops.timezone_problem(zone), zone)
 
 
 class VerbTests(unittest.TestCase):
@@ -165,6 +184,52 @@ class PasswordValidationTests(unittest.TestCase):
         password the user did not type, and they would not be able to log in."""
         self.assertTrue(
             box_ops.password_problem(" 12345678", "12345678"))
+
+
+@unittest.skipUnless(hasattr(socket, "AF_UNIX"), "no AF_UNIX on this platform")
+class RealTransportTests(unittest.TestCase):
+    """The default sender, executed for real.
+
+    Every other test injects a fake, so a bug inside `_send_over_helper_socket`
+    — a wrong path reference, a broken recv loop, `sendall` misuse — would pass
+    the whole suite and only surface on the box, where a settings action 500s or
+    hangs. This binds a real AF_UNIX socket under a temp dir (never /run/mrrc),
+    points the module constant at it, and drives the default sender end to end.
+    """
+
+    def setUp(self):
+        self.directory = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.directory, ignore_errors=True)
+
+    def _serve_one_line(self, path, reply):
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(path)
+        server.listen(1)
+        self.addCleanup(server.close)
+
+        def serve():
+            conn, _ = server.accept()
+            with conn:
+                conn.recv(4096)
+                conn.sendall((reply + "\n").encode("utf-8"))
+
+        thread = threading.Thread(target=serve, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5)
+
+    def test_the_default_sender_round_trips_a_reply(self):
+        path = os.path.join(self.directory, "helper.sock")
+        self._serve_one_line(path, json.dumps({"ok": True, "note": "done"}))
+        with mock.patch.object(box_ops, "HELPER_SOCKET", path):
+            self.assertEqual(box_ops.call_helper("reboot"),
+                             {"ok": True, "note": "done"})
+
+    def test_an_absent_helper_is_a_value_through_the_default_sender(self):
+        path = os.path.join(self.directory, "missing.sock")
+        with mock.patch.object(box_ops, "HELPER_SOCKET", path):
+            result = box_ops.call_helper("reboot")
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["error"])
 
 
 if __name__ == "__main__":

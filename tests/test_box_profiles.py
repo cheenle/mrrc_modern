@@ -549,6 +549,27 @@ class VerifyScriptTests(unittest.TestCase):
                                  "the published mode is being tested, not reported")
                 self.assertNotIn("!=", line)
 
+    def test_no_pipe_into_a_late_exiting_matcher(self):
+        """`cmd | grep -q` under `set -o pipefail` fails when it *succeeds*.
+
+        grep exits at the first match, the writer takes SIGPIPE (128+13=141) and
+        pipefail reports the whole pipeline as failed — so a check that just
+        found what it was looking for announces the opposite. Measured on the
+        first real box (2026-10-11):
+        `systemctl list-unit-files --no-legend | grep -q '^mrrc-setup-ap.service'`
+        exited 141 and the acceptance script printed "mrrc-setup-ap.service is
+        not installed" about a unit that was running.
+
+        `grep -c` is deliberately not matched: it reads to EOF, so nothing gets
+        SIGPIPE and the count is the point.
+        """
+        offenders = [line.strip() for line in self.text.splitlines()
+                     if not line.strip().startswith("#")
+                     and re.search(r"\|\s*grep\s+-[a-zA-Z]*q", line)]
+        self.assertEqual(offenders, [],
+                         "a pipe into `grep -q` fails under pipefail with SIGPIPE; "
+                         "capture the output first and match the variable")
+
     def test_the_failure_branches_are_about_the_machinery_not_the_mode(self):
         """What may legitimately fail: the unit missing, not enabled, dnsmasq
         absent, or the daemon dead. All four are about the machinery being there,

@@ -18,7 +18,11 @@ SETUP_UNIT=mrrc-setup-ap.service
 AP_STATE=/run/mrrc/setup-ap/state.json
 
 head_ "1/11 wired network"
-if ip -4 addr show scope global 2>/dev/null | grep -q 'inet '; then
+# `cmd | grep -q` inside a condition is a trap in this script: grep exits the
+# moment it matches, the writer takes SIGPIPE (141), and `set -o pipefail` turns
+# the whole pipeline into a failure — so a check that found what it looked for
+# reports the opposite. Capture first, match second.
+if grep -q 'inet ' <<<"$(ip -4 addr show scope global 2>/dev/null)"; then
   ok "$(ip -4 addr show scope global | awk '/inet /{print $2; exit}')"
 else
   bad "no global IPv4 address" "check the cable and 'nmcli device status'"
@@ -32,7 +36,7 @@ else
 fi
 
 head_ "3/11 radio USB audio"
-if arecord -l 2>/dev/null | grep -qi 'card'; then
+if grep -qi 'card' <<<"$(arecord -l 2>/dev/null)"; then
   ok "$(arecord -l | sed -n 's/^card \([0-9]*\).*\[\(.*\)\]/\1:\2/p' | tr '\n' ' ')"
 else
   bad "arecord lists no capture card" "the radio's USB sound card is not enumerated"
@@ -68,7 +72,12 @@ esac
 
 head_ "7/11 config identity (design D-11)"
 if command -v systemctl >/dev/null 2>&1; then
-  env_file="$(systemctl show -p EnvironmentFile --value "$UNIT" | tr -d '"')"
+  # systemd 252 names this property EnvironmentFiles (plural) and prints
+  # `/path (ignore_errors=no)`. The singular spelling returns an empty string, so
+  # this check reported "EnvironmentFile=''" on every healthy box — nobody had run
+  # it against a real systemd until 2026-10-11.
+  env_file="$(systemctl show -p EnvironmentFiles --value "$UNIT" \
+    | sed -e 's/ (ignore_errors=[a-z]*)$//' -e 's/^"//' -e 's/"$//')"
   cfg="$(systemctl show -p Environment --value "$UNIT" | tr ' ' '\n' | sed -n 's/^MRRC_CONFIG_FILE=//p')"
   if [ -n "$cfg" ] && [ "$env_file" = "$cfg" ]; then
     ok "EnvironmentFile == MRRC_CONFIG_FILE == $env_file"
@@ -117,7 +126,7 @@ head_ "11/11 setup hotspot (onboarding with no cable and no keyboard)"
 # onboarded without a keyboard.
 if ! command -v systemctl >/dev/null 2>&1; then
   bad "systemctl not found" "this is not a systemd host"
-elif ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^${SETUP_UNIT}[[:space:]]"; then
+elif ! systemctl cat "$SETUP_UNIT" >/dev/null 2>&1; then
   bad "${SETUP_UNIT} is not installed" \
       "this image predates the setup hotspot; rebuild it (design 2026-10-08)"
 elif ! systemctl is-enabled --quiet "$SETUP_UNIT"; then

@@ -20,6 +20,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import secrets
+import socket
 import signal
 import subprocess
 import sys
@@ -158,7 +161,9 @@ def _write_config(config_path: Path, updates: dict[str, str]) -> None:
 
 def frpc_config_text(name: str, token: str, local_port: int, remote_port: int,
                      hub_host: str = "tunnel.mrrc.vlsc.net", control_port: int = 8989,
-                     log_file: str = "") -> str:
+                     log_file: str = "", *, admin_port: int = 0,
+                     admin_password: str = "", help_local_port: int = 0,
+                     help_remote_port: int = 0) -> str:
     """The tunnel's TOML. Written as ASCII with no BOM: frpc's parser rejects a BOM outright."""
     lines = [
         f'serverAddr = "{hub_host}"',
@@ -174,6 +179,18 @@ def frpc_config_text(name: str, token: str, local_port: int, remote_port: int,
         # "C:\Users" and refuses to start, which is a silent 502 for the entry. Measured, at byte
         # level, after chasing it for a while. frpc accepts forward slashes on Windows.
         lines += [f'log.to = "{str(log_file).replace(chr(92), "/")}"', 'log.level = "info"', ""]
+    if admin_port:
+        # The admin API is where `frpc reload` lands. Loopback and Basic auth, both
+        # always: an unauthenticated frpc admin API is a local port that can add
+        # proxies. The password lives in this file, which is why the file is 0600
+        # (see _write_frpc_config).
+        lines += [
+            'webServer.addr = "127.0.0.1"',
+            f"webServer.port = {admin_port}",
+            'webServer.user = "mrrc"',
+            f'webServer.password = "{admin_password}"',
+            "",
+        ]
     lines += [
         "[[proxies]]",
         f'name = "{name}"',
@@ -182,7 +199,63 @@ def frpc_config_text(name: str, token: str, local_port: int, remote_port: int,
         f"localPort = {local_port}",
         f"remotePort = {remote_port}",
     ]
+    if help_local_port and help_remote_port:
+        # Named per instance: two instances behind one frps claiming the same proxy
+        # name is how the tunnel ends up holding a name somebody else needs
+        # (measured 2026-10-11, see docs/2026-10-11-instance-lifecycle-and-port-squatting.md).
+        lines += [
+            "",
+            "[[proxies]]",
+            f'name = "mrrc-help-{name}"',
+            'type = "tcp"',
+            'localIP = "127.0.0.1"',
+            f"localPort = {help_local_port}",
+            f"remotePort = {help_remote_port}",
+        ]
     return "\n".join(lines) + "\n"
+
+
+def _write_frpc_config(conf: Path, text: str) -> None:
+    """Write the tunnel config: ASCII, and 0600.
+
+    The file carries the frps auth token and the admin password, so the default
+    umask (usually 0644) left both readable by every local user — a tunnel can be
+    hijacked with that token. Tightened on 2026-10-12 while adding the admin block;
+    on Windows the mode is mostly decorative, but the call itself never fails the
+    build.
+    """
+    conf.parent.mkdir(parents=True, exist_ok=True)
+    conf.write_text(text, encoding="ascii")
+    try:
+        os.chmod(conf, 0o600)
+    except OSError as exc:                      # pragma: no cover - platform dependent
+        logger.warning("cloud hub: cannot tighten %s: %s", conf, exc)
+
+
+def read_admin_settings(conf: Path) -> tuple[int, str, str]:
+    """(port, user, password) of the frpc admin API as recorded in the config.
+
+    Read back from the file rather than remembered in a second place: the file is
+    the config, it is written 0600, and a second copy of a password is a second
+    thing to leak. Returns (0, "", "") when the config predates the admin block.
+    """
+    try:
+        text = conf.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return 0, "", ""
+    port = re.search(r"^webServer\.port\s*=\s*(\d+)\s*$", text, re.MULTILINE)
+    user = re.search(r'^webServer\.user\s*=\s*"([^"]*)"', text, re.MULTILINE)
+    pw = re.search(r'^webServer\.password\s*=\s*"([^"]*)"', text, re.MULTILINE)
+    return (int(port.group(1)) if port else 0,
+            user.group(1) if user else "",
+            pw.group(1) if pw else "")
+
+
+def _free_loopback_port() -> int:
+    """A port nothing is using right now, for the admin API."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return int(s.getsockname()[1])
 
 
 #: Windows: keep the helper processes this module runs (PowerShell, taskkill) from flashing a
@@ -411,9 +484,14 @@ def connect(portal: str, callsign: str, token: str, *, config_path: Path, cert_d
     conf = Path(data_dir) / f"frpc-{label}.toml"
     conf.parent.mkdir(parents=True, exist_ok=True)
     log_file = str(Path(data_dir) / f"frpc-{label}.log")
-    conf.write_text(
-        frpc_config_text(label, hub_token, local_port, port, log_file=log_file),
-        encoding="ascii",
+    # The admin API exists so `call help` can add a proxy without restarting the
+    # tunnel (which would drop the operator's own web session for a few seconds).
+    admin_port = _free_loopback_port()
+    admin_password = secrets.token_urlsafe(18)
+    _write_frpc_config(
+        conf,
+        frpc_config_text(label, hub_token, local_port, port, log_file=log_file,
+                         admin_port=admin_port, admin_password=admin_password),
     )
 
     _write_config(Path(config_path), {

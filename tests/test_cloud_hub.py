@@ -454,3 +454,68 @@ class StaleTunnelTests(unittest.TestCase):
                 self.assertLogs("cloud_hub", level="WARNING") as logged:
             cloud_hub._kill_stale_frpc(Path(self.CONFIG))
         self.assertIn("cannot list frpc processes", " ".join(logged.output))
+
+
+class HelpTunnelConfigTests(unittest.TestCase):
+    """The tunnel side of `call help`: an admin API to reload through, and a second
+    proxy for the SSH port — both added to a config that must keep working."""
+
+    def test_the_admin_block_is_loopback_and_authenticated(self):
+        text = cloud_hub.frpc_config_text("bg7ifp", "hk", 8888, 18802,
+                                          admin_port=7400, admin_password="s3cret")
+        self.assertIn('webServer.addr = "127.0.0.1"', text)
+        self.assertIn("webServer.port = 7400", text)
+        self.assertIn('webServer.user = "mrrc"', text)
+        self.assertIn('webServer.password = "s3cret"', text)
+        self.assertNotIn("0.0.0.0", text)
+
+    def test_no_admin_block_without_a_port(self):
+        """既有调用点（不传 admin_port）产生的配置必须与从前逐字一样。"""
+        text = cloud_hub.frpc_config_text("bg7ifp", "hk", 8888, 18802)
+        self.assertNotIn("webServer", text)
+        self.assertEqual(text.count("[[proxies]]"), 1)
+
+    def test_no_help_proxy_by_default(self):
+        text = cloud_hub.frpc_config_text("bg7ifp", "hk", 8888, 18802,
+                                          admin_port=7400, admin_password="x")
+        self.assertNotIn("mrrc-help-", text)
+
+    def test_the_help_proxy_is_named_per_instance(self):
+        """两个实例共用一个 frps，代理名撞了就是互相抢（2026-10-11 那次事故）。"""
+        text = cloud_hub.frpc_config_text("bg7ifp", "hk", 8888, 18802,
+                                          admin_port=7400, admin_password="x",
+                                          help_local_port=41000, help_remote_port=18877)
+        self.assertIn('name = "mrrc-help-bg7ifp"', text)
+        self.assertIn("localPort = 41000", text)
+        self.assertIn("remotePort = 18877", text)
+        self.assertEqual(text.count("[[proxies]]"), 2)
+        self.assertIn('name = "bg7ifp"', text, "主代理还在")
+
+    def test_the_config_file_is_0600(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "frpc-bg7ifp.toml"
+            cloud_hub._write_frpc_config(conf, "auth.token = \"secret\"\n")
+            self.assertEqual(stat.S_IMODE(conf.stat().st_mode), 0o600)
+
+    def test_the_admin_settings_read_back(self):
+        """reload 要用它们，而它们的唯一存放处就是这个文件。"""
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "c.toml"
+            cloud_hub._write_frpc_config(
+                conf, cloud_hub.frpc_config_text("bg7ifp", "hk", 8888, 18802,
+                                                 admin_port=7400, admin_password="p@ss"))
+            self.assertEqual(cloud_hub.read_admin_settings(conf), (7400, "mrrc", "p@ss"))
+
+    def test_a_config_without_an_admin_block_reads_as_empty(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "c.toml"
+            conf.write_text(cloud_hub.frpc_config_text("bg7ifp", "hk", 8888, 18802),
+                            encoding="ascii")
+            self.assertEqual(cloud_hub.read_admin_settings(conf), (0, "", ""))
+
+    def test_a_missing_config_reads_as_empty(self):
+        self.assertEqual(cloud_hub.read_admin_settings(Path("/nonexistent/x.toml")),
+                         (0, "", ""))

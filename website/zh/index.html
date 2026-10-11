@@ -462,7 +462,7 @@
 <strong> MRRC-Modern-rpi64.img.xz — 树莓派</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            662 MB (481,145,192 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
+            481 MB (481,145,192 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
 <code style="font-size: 0.76rem">SHA-256: d431c9aa1822aa4318f08eb037c91e97be99d0c0f2a7893763bfe24e45c7908b</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
@@ -470,8 +470,7 @@
             <code>https://raspberrypi.local:8888</code>。首启零配置：自动生成
             网页密码（HDMI 控制台 / SSH motd / <code>sudo mrrc-show-password</code>），
             或烧卡前把 <code>mrrc.env</code> 放到 boot 分区预置自己的密码。
-            电台与串口自动识别；FT-710 真 FFT 需把 FTDI aarch64 库放到
-            <code>/opt/mrrc_modern/vendor/ftdi/</code>（缺库自动回落 S 表频谱）；
+            电台与串口自动识别；FT-710 真频谱开箱即用（1.26.0 起镜像内置 aarch64 FTDI 库）；
             IC-7300 经 CI-V 开箱即用。
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">

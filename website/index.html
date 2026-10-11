@@ -493,7 +493,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-rpi64.img.xz — Raspberry Pi</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            662 MB (481,145,192 bytes) · arm64 · Pi 3B+/4/5 ·  · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
+            481 MB (481,145,192 bytes) · arm64 · Pi 3B+/4/5 ·  · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
 <code style="font-size: 0.76rem">SHA-256: d431c9aa1822aa4318f08eb037c91e97be99d0c0f2a7893763bfe24e45c7908b</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
@@ -502,9 +502,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
             an auto-generated web password (HDMI console / SSH motd /
             <code>sudo mrrc-show-password</code>) or pre-seed your own via a
             <code>mrrc.env</code> file on the boot partition. Radio and serial
-            port are auto-detected; FT-710 true FFT needs the FTDI aarch64 libs
-            dropped into <code>/opt/mrrc_modern/vendor/ftdi/</code> (S-meter
-            fallback without them); the IC-7300 works out of the box via CI-V.
+            port are auto-detected; FT-710 true FFT works out of the box (the aarch64 FTDI libs ship
+            inside the image since v1.26.0; S-meter fallback on radios without FT4222); the IC-7300 works out of the box via CI-V.
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-rpi64.img.xz">

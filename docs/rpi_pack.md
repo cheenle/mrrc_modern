@@ -120,9 +120,14 @@ packaging/rpi/verify-image.sh dist/rpi/MRRC-Modern-v<ver>-rpi64.img.xz
 `MRRC-Modern-v<ver>-rpi64.img.xz` 属于**发布制品**，走 `dual-platform-release` 技能的流程
 （版本号、`release-artifacts.json`、网站下载卡、线上 SHA 复核）。本手册不重复那套流程。
 
-**线上现状（截至 2026-10-11）**：官网树莓派卡片指向的是 **v1.14.1**（2026-09-30 构建），
-比仓库落后 11 个版本，且卡片仍写着"真频谱需手动放库"——`2026-10-11-rpi-w103d-parity-packaging-design.md`
-之后这一条不再成立。最终镜像与卡片更新排在下期（等 W103D 局域网设置页落地）。
+**线上现状（2026-10-12 已发布）**：`MRRC-Modern-v1.26.0-rpi64.img.xz`，481,145,192 字节，
+SHA-256 `d431c9aa1822aa4318f08eb037c91e97be99d0c0f2a7893763bfe24e45c7908b`；通用名
+`MRRC-Modern-rpi64.img.xz` 是指向它的符号链接（与桌面产物的做法一致），旧版（662 MB，`9a81ca4c…`）
+留档在 www 的 `/var/tmp/MRRC-Modern-rpi64.img.xz.prev-20261012` 与本地 `website/downloads/`。
+
+这一版补上了 2026-10-11 的欠账：卡片文案不再说"真频谱需手动放库"（镜像已内置 aarch64 FTDI 库，
+指南 §七 也改成"开箱即用 + 缺库时的补装附录"），卡片字节数与 SHA 与实际产物对齐。
+（此前的落后记录：截至 2026-10-11，官网卡片指向 v1.14.1，落后仓库 11 个版本。）
 
 ## 实跑记录
 

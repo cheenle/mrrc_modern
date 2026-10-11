@@ -12,7 +12,8 @@
 
 ## 二、烧卡（约 3 分钟）
 
-1. 下载树莓派镜像（本页下载卡片）：固定地址 `MRRC-Modern-rpi64.img.xz`，当前镜像是 **v1.24.0**（与本次发布同步重建）。
+1. 下载树莓派镜像（本页下载卡片）：固定地址 `MRRC-Modern-rpi64.img.xz`，当前镜像是 **v1.26.0**：
+   `MRRC-Modern-v1.26.0-rpi64.img.xz`，481,145,192 字节，SHA-256 `d431c9aa1822aa4318f08eb037c91e97be99d0c0f2a7893763bfe24e45c7908b`。
 2. 安装官方 **Raspberry Pi Imager** → `选择操作系统` → 拉到最底 **使用自定义镜像** → 选中下载的 img.xz。
 3. `选择存储卡` → 选中 SD 卡 → **下一步**。
    - 想预配 Wi-Fi / 改主机名：点右下角 **编辑设置**（可选）。
@@ -64,9 +65,17 @@ sudo mrrc-show-password                # 查看网页密码
 sudo nano /opt/mrrc_modern/env/mrrc.env # 编辑配置
 ```
 
-## 七、FT-710 真 FFT 频谱（可选进阶）
+## 七、FT-710 真 FFT 频谱
 
-镜像不含 FTDI Linux 库（官方按架构单独发布）：
+**1.26.0 起镜像已内置 aarch64 的 FTDI 库**，插上 FT-710（上方 `Enhanced` 口）就有真频谱，无需任何手工步骤。
+判断在不在、生效没：
+
+```bash
+ls -l /opt/mrrc_modern/vendor/ftdi/          # 应有 libft4222.so 与指向它的 libftd2xx.so
+journalctl -u mrrc-modern | grep -iE "ft4222|scope" | tail
+```
+
+只有在**缺库**（老镜像 / 非 aarch64）时才需要下面的手工补装：
 
 1. 到 FTDI 官网下载 **LibFT4222 Linux ARM64 (aarch64)** 包。
 2. 包里**只有 `libft4222.so` 一个文件**，没有 `libftd2xx.so`（`ReadMe.txt` 写明 libftd2xx 是静态

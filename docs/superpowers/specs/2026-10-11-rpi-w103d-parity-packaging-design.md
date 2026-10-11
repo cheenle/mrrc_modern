@@ -123,13 +123,15 @@ packaging/
 
 | 变量 | 默认 | 内容 |
 | --- | --- | --- |
-| `MRRC_ASSETS` | `/tmp/mrrc-build` | `mrrc-service-layer.sh`、`stage-tree.sh`、`packages.txt`、`fetch-frpc.sh`、`mrrc-show-password`、`firstboot_wrapper.py`、`profiles/*.env` |
+| `MRRC_ASSETS` | `/opt/mrrc-build` | `mrrc-service-layer.sh`、`stage-tree.sh`、`packages.txt`、`fetch-frpc.sh`、`mrrc-show-password`、`firstboot_wrapper.py`、`motd-10-mrrc`、`profiles/*.env` |
 
-- Pi：`build-image.sh` 在宿主侧把 `packaging/common/` 整个拷进 stage4 的 `files/tmp/mrrc-build/`（**w 与 x 位一起带**，脚本要在 chroot 里执行）。
-- box：`box-overlay.sh` 在 chroot 里 `cp -a /src/packaging/common /tmp/mrrc-build`，路径与 Pi 完全一致。
+**为什么不是 `/tmp`**：pi-gen 的 `on_chroot`（`scripts/common`）把 `${ROOTFS_DIR}/tmp` 挂成 tmpfs，而 `prerun.sh` 在挂载之前就往 `${ROOTFS_DIR}/tmp` 拷了东西——挂载一上就把它们盖住，chroot 里看不到。`/opt` 没有这个问题。
+
+- Pi：`build-image.sh` 在宿主侧把 `packaging/common/` 整个拷进 stage4 的 `files/opt/mrrc-build/`（**w 与 x 位一起带**，脚本要在 chroot 里执行）。
+- box：`box-overlay.sh` 在 chroot 里 `cp -a /src/packaging/common /opt/mrrc-build`，路径与 Pi 完全一致。
 - 装着代码的 `vendor/ftdi/`、`vendor/mediatek/` 仍在装机树里（未被排除），服务层从 `$MRRC_HOME/vendor/` 取。
 
-`/tmp` 本来就在服务层的回收清单里，所以素材不会进镜像（机械守卫见 §8.1 第 7 条，产物侧见 §8.2 步骤 3②）。
+服务层结束前 `rm -rf "$MRRC_ASSETS"`（Pi 上它是构建期临时目录，box 上是仓库的一份拷贝；两边都不允许进镜像）。
 
 ### 4.3 `stage-tree.sh` 的约束
 
@@ -163,7 +165,7 @@ pi-gen 只有 `APT_PROXY`，没有镜像开关；但四个上游点都是克隆�
 
 - `MRRC_PI_APT_MIRROR`（默认清华）
 - `MRRC_PI_PIP_INDEX`（默认清华 pypi，经服务层传给 `PIP_INDEX_URL`）
-- `MRRC_FRP_PROXY` —— 直接复用 `fetch-frpc.sh` 既有的变量名，不再造新名
+- `MRRC_FRP_PROXY` —— 在 chroot 里生效的名字，与 box 侧一致（宿主开关叫 `MRRC_PI_FRP_PROXY`，与 `MRRC_BOX_FRP_PROXY` 同形）；`fetch-frpc.sh` 已经只认 `MRRC_FRP_PROXY`。
 
 判据沿用 W103D 的实测口径：**"pip/apt 连着但零下载 = 源慢，不是代码坏"**；`gh-proxy.com` 之类只加速不换货，`fetch-frpc.sh` 仍逐字节比对官方 checksums。
 
@@ -182,7 +184,7 @@ pi-gen 的失败恢复沿用现状：`PRESERVE_CONTAINER=1`，失败后 `CONTINU
 
 - `00-packages`：**只留 `e2fsprogs`**（Pi 侧原有的一项平台额外件）。其余包进 `common/packages.txt`，由服务层统一 `apt-get install`。这样"该装哪些系统包"只有一个答案（W103D 实测的那份超集，含 `libopus0`/`libopus-dev`/`libasound2-dev`/`portaudio19-dev`/`python3-dev`/`avahi-daemon`）。
 - `prerun.sh`：拷 `files/` 进 rootfs，并 FATAL 校验 `requirements.txt` 与 `version.txt` 都在（今天只校验前者的两项中的一个）。
-- `01-deploy-mrrc/00-run-chroot.sh`：`usermod -aG dialout,audio mrrc` → `chown` → `bash /tmp/mrrc-build/mrrc-service-layer.sh`。
+- `01-deploy-mrrc/00-run-chroot.sh`：`usermod -aG dialout,audio mrrc` → `chown` → `. /opt/mrrc-build/build.env` → `bash /opt/mrrc-build/mrrc-service-layer.sh`。
 - **删掉整个 `files/` 树**（含两个 `.pyc`）。服务层产出的东西不再有第二份。
 
 ### 6.3 有意差异白名单（测试逐字断言）
@@ -206,14 +208,14 @@ pi-gen 的失败恢复沿用现状：`PRESERVE_CONTAINER=1`，失败后 `CONTINU
   ├─ 改写 pi-gen 克隆的 4 处上游源（§5，幂等）
   ├─ rsync packaging/pi-gen-stage4/ → build/pi-gen/rpi-stage4/
   ├─ stage-tree.sh <repo> rpi-stage4/01-deploy-mrrc/files/opt/mrrc_modern   ← 排除清单唯一出处
-  ├─ 拷 common/{stage-tree.sh,mrrc-service-layer.sh,packages.txt} → files/tmp/mrrc-build/
+  ├─ 拷 common/{stage-tree.sh,mrrc-service-layer.sh,packages.txt,fetch-frpc.sh,mrrc-show-password,firstboot_wrapper.py,motd-10-mrrc,profiles/} → files/opt/mrrc-build/
   ├─ version.txt / VERSION（两处，来自 CHANGELOG 顶部）
   └─ build-docker.sh（PRESERVE_CONTAINER=1）
         └─ pi-gen stage0→2 原生 arm64，stage rpi-stage4：
               prerun.sh   : files/ → rootfs（FATAL 校验）
-              00-run-chroot.sh : 组 → chown → bash /tmp/mrrc-build/mrrc-service-layer.sh
+              00-run-chroot.sh : 组 → chown → bash /opt/mrrc-build/mrrc-service-layer.sh
                     └─ apt(packages.txt + EXTRA) → install.sh 建 venv → env 默认值
-                       → 单元/CLI/udev/frpc/FTDI → 导入门禁 → 回收(/tmp, __pycache__)
+                       → 单元/CLI/udev/frpc/FTDI → 导入门禁 → 回收(/tmp, /opt/mrrc-build, __pycache__)
   ├─ xz -9 → dist/rpi/MRRC-Modern-v<ver>-rpi64.img.xz
   └─ verify-image.sh（四步）
 ```
@@ -230,7 +232,7 @@ pi-gen 的失败恢复沿用现状：`PRESERVE_CONTAINER=1`，失败后 `CONTINU
 4. **包清单唯一**：`packaging/rpi/pi-gen-stage4/00-install-packages/00-packages` 的条目必须全部在「允许的平台额外项」白名单里（当前只有 `e2fsprogs`），且不得与 `common/packages.txt` 有交集。
 5. **有意差异被断言**：`packaging/rpi/**` 与 `packaging/box/**` 中 `MRRC_WEB_HOST=` 的取值恰为 `::` 与 `0.0.0.0`；`MRRC_BOOT_DIR` 恰为 `/boot/firmware` 与 `/boot`。（等价于"§6.3 之外没有第二处平台差异"的可检查形式。）
 6. **`common/*.sh` 可执行位**（0644 陷阱，`box-overlay.sh` 犯过）。
-7. `stage-tree.sh` 禁 bash 4 语法（`declare -A` / `${x,,}` / `mapfile` / `readarray`）；且 `common/mrrc-service-layer.sh` 必须仍然含 `rm -rf /tmp/*`（素材与 install.sh 的临时文件靠它清掉，防它被后人"顺手优化"掉）。
+7. `stage-tree.sh` 禁 bash 4 语法（`declare -A` / `${x,,}` / `mapfile` / `readarray`）；且 `common/mrrc-service-layer.sh` 必须同时含 `rm -rf /tmp/*` 与 `rm -rf "$MRRC_ASSETS"`（素材与 install.sh 的临时文件靠它们清掉，防被后人"顺手优化"掉）。
 
 ### 8.2 产物四步验证（`packaging/rpi/verify-image.sh` 升级）
 
@@ -238,7 +240,7 @@ pi-gen 的失败恢复沿用现状：`PRESERVE_CONTAINER=1`，失败后 `CONTINU
 
 1. `xz -t` + 体积上下界（沿用现状）；
 2. 容器内 `losetup -P` 挂 p2（复用 `packaging/box/part-nodes.sh` 的 mknod 逻辑，容器无 udev）；
-3. ① **代码身份**：产物里的 `server.py` / `requirements.txt` 等与工作区 `sha256sum` 逐字节相同；② **装机内容**：11 份 profiles、`/usr/local/bin` 三件、`fleet/frpc` 是 aarch64 ELF、FTDI 库 + 符号链接、`mrrc` 用户存在、`/tmp` 零残留、无 `__pycache__`；③ **D-11**：单元里 `EnvironmentFile` 与 `Environment=MRRC_CONFIG_FILE` 指向同一文件且 `User=mrrc`；④ **arm64 原生 chroot 真跑**：`venv/bin/python -c "import fastapi, numpy, pyaudio, lameenc, cryptography, serial"` 与 `ctypes.CDLL("libopus.so.0")`。
+3. ① **代码身份**：产物里的 `server.py` / `requirements.txt` 等与工作区 `sha256sum` 逐字节相同；② **装机内容**：11 份 profiles、`/usr/local/bin` 三件、`fleet/frpc` 是 aarch64 ELF、FTDI 库 + 符号链接、`mrrc` 用户存在、`/tmp` 与 `/opt/mrrc-build` 零残留、无 `__pycache__`；③ **D-11**：单元里 `EnvironmentFile` 与 `Environment=MRRC_CONFIG_FILE` 指向同一文件且 `User=mrrc`；④ **arm64 原生 chroot 真跑**：`venv/bin/python -c "import fastapi, numpy, pyaudio, lameenc, cryptography, serial"` 与 `ctypes.CDLL("libopus.so.0")`。
 
 ### 8.3 真跑（本期结束证据）
 

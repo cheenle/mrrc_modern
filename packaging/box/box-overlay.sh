@@ -263,7 +263,7 @@ log "import gate: the entry points the units run must import from THIS tree"
 # before the reclaim step so a stray __pycache__ is cleaned up with the rest.
 (
 	cd "$MRRC_HOME"
-	PYTHONDONTWRITEBYTECODE=1 "$VENV/bin/python" -c "import server; import sys; sys.path.insert(0, '$MRRC_HOME/linux'); import first_run, mrrc_radio"
+	PYTHONDONTWRITEBYTECODE=1 "$VENV/bin/python" -c "import server; import sys; sys.path.insert(0, '$MRRC_HOME'); sys.path.insert(0, '$MRRC_HOME/linux'); import net_wifi, box_ops; import first_run, mrrc_radio"
 ) || {
 	echo "box-overlay: an image entry point cannot import from this tree" >&2
 	exit 1

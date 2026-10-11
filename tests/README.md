@@ -5,9 +5,9 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-1871 tests across 98 test modules (19 skip on Windows, 1 on macOS; totals re-read
+1897 tests across 99 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-11, macOS). The per-module sections below
-itemise 70 of those 98 — the support-chain, Cloud Hub and upgrade-channel modules
+itemise 70 of those 99 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for any total.
 
@@ -19,8 +19,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 1871 |
-| Passed | 1869 (1 skipped) |
+| Total tests | 1897 |
+| Passed | 1895 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 1 |
 | Execution time | ~34s (harness tests spawn CLI subprocesses) |
@@ -810,3 +810,19 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
 / `/api/manage`，`net_wifi.py` 不得出现 `start_hotspot` / `ApState` / `has_uplink`
 / `ap_settings`，`box-overlay.sh` 与 `verify.sh` 不得出现 `mrrc-setup-ap`。名单随每个
 退役 task 增长，`GONE` 列表里的文件必须确实不存在。
+
+### 本轮新增（box_ops 只读半边，2026-10-11）
+
+- **`test_box_ops_reports.py`** — `box_ops.py` 的只读半边（网络体检 / Wi-Fi 列表 /
+  系统状态 / 盒子身份 / 安全字段 / helper 可达性），`/setup` 与 `/settings` 两个页面
+  共用。三条容易看漏的性质各钉一条：**locale 无关的布尔解析**（nmcli 在 C locale 印
+  `yes`/`no`、中文 locale 印 `是`/`否`，盒子的 locale 不归我们钉，parser 只认 `yes`
+  就把用户自己的 autoconnect 开关显示成关）；**Starlette 的 IPv4-mapped 客户端地址**
+  （`::ffff:192.168.16.50` 与 `192.168.16.50` 是同一个客户端，判成"不在我的子网"就会
+  对恰好为它开的那扇窗关门）；以及 **spec R-6 的降级契约**（本模块被冻进 Windows /
+  macOS 桌面版，那里没有 nmcli、没有 helper，每个函数必须返回空/中性值而非抛异常，
+  否则就是请求处理器里的 500）。`local_subnets` 拿不到地址即空集（引导窗口因此关闭，
+  而非报错），`client_in_local_subnet` 只认 v4 且拒绝空/非法/链路本地地址，
+  `safety_report` 三个字段全 read-only 且每条自带后果说明，`helper_available` 只是
+  一次路径检查（只允许错在"说没有"这一侧）。`box-overlay.sh` 与 `test_image_imports.py`
+  同步加回 `box_ops` 的可导入性断言（根目录模块，无 nmcli 也必须能 import）。

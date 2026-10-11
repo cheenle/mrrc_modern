@@ -57,11 +57,16 @@ class _FakeFrpcAdmin(BaseHTTPRequestHandler):
 
     seen: list = []
 
-    def do_POST(self):
+    def do_GET(self):
+        """frpc's admin API wants GET; POST gets 405 (measured on 0.71.0, 2026-10-12)."""
         type(self).seen.append((self.path, self.headers.get("Authorization", "")))
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"{}")
+
+    def do_POST(self):
+        self.send_response(405)
+        self.end_headers()
 
     def log_message(self, format, *args):    # noqa: A002 — 基类就是这么命名的
         pass

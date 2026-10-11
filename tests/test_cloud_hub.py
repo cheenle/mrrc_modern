@@ -516,6 +516,22 @@ class HelpTunnelConfigTests(unittest.TestCase):
                             encoding="ascii")
             self.assertEqual(cloud_hub.read_admin_settings(conf), (0, "", ""))
 
+    def test_connect_reuses_the_admin_block_instead_of_minting_a_new_one(self):
+        """管理段只铸一次。
+
+        frpc 只在启动时读一次配置：每次 connect() 换一个端口，就等于让配置与**正在跑的**
+        frpc 分叉，reload 打到一个没人听的端口上（2026-10-12 首次真跑实测：配置写 53235，
+        活着的 frpc 在 53189）。
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "frpc-bg7ifp.toml"
+            cloud_hub._write_frpc_config(conf, cloud_hub.frpc_config_text(
+                "bg7ifp", "tok", 8888, 18802, admin_port=7400, admin_password="first"))
+            settings = cloud_hub.read_tunnel_settings(conf)
+            self.assertEqual(settings["admin_port"], 7400)
+            self.assertEqual(settings["admin_password"], "first")
+
     def test_a_missing_config_reads_as_empty(self):
         self.assertEqual(cloud_hub.read_admin_settings(Path("/nonexistent/x.toml")),
                          (0, "", ""))
@@ -525,18 +541,28 @@ class ReloadTests(unittest.TestCase):
     """`frpc reload` over the admin API — no CLI, no shell, no binary on PATH."""
 
     def _fake(self, status=200, body=b"{}"):
-        import base64
+        """A stand-in for **frpc's** admin API, not for an idea of it.
+
+        The first version implemented only do_POST — and the real frpc answers
+        `POST /api/reload` with 405, because it wants GET (measured against the
+        binary, 2026-10-12). A mock that agrees with whatever it is asked agrees
+        with a bug too, so this one implements GET and answers POST the way frpc
+        does.
+        """
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
         seen = {}
 
         class H(BaseHTTPRequestHandler):
-            def do_POST(self):
+            def do_GET(self):
                 seen["path"] = self.path
                 seen["auth"] = self.headers.get("Authorization", "")
-                seen["body"] = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 self.send_response(status)
                 self.end_headers()
                 self.wfile.write(body)
+
+            def do_POST(self):                       # frpc: 405, see the docstring
+                self.send_response(405)
+                self.end_headers()
 
             def log_message(self, *a):
                 pass
@@ -544,6 +570,36 @@ class ReloadTests(unittest.TestCase):
         srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         return srv, seen
+
+    def test_the_method_is_get_because_frpc_says_so(self):
+        """405 立即失败，不被 wait_s 拖成"慢失败"——错的方法不该被重试。"""
+        import time as _t
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        class H(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(405)
+                self.end_headers()
+
+            def do_POST(self):
+                self.send_response(405)
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            start = _t.monotonic()
+            with self.assertRaises(cloud_hub.CloudHubError) as ctx:
+                cloud_hub.reload_frpc(srv.server_port, "mrrc", "pw", timeout=3, wait_s=10)
+            elapsed = _t.monotonic() - start
+        finally:
+            srv.shutdown()
+            srv.server_close()
+        self.assertIn("405", str(ctx.exception))
+        self.assertLess(elapsed, 2.0, "405 不该被 wait_s 拖成慢失败")
 
     def test_reload_posts_to_the_admin_api_with_basic_auth(self):
         import base64

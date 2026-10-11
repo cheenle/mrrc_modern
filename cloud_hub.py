@@ -258,38 +258,59 @@ def _free_loopback_port() -> int:
         return int(s.getsockname()[1])
 
 
-def reload_frpc(admin_port: int, user: str, password: str, *, timeout: float = 5.0) -> None:
+def reload_frpc(admin_port: int, user: str, password: str, *, timeout: float = 5.0,
+                wait_s: float = 3.0) -> None:
     """Ask the running frpc to re-read its config, over its admin API.
+
+    **GET, not POST** — frp 0.71 answers `POST /api/reload` with 405 (measured against
+    the real binary on 2026-10-12; the regression test here had a fake server that
+    accepted POST, i.e. a mock that agrees with whatever it is asked. The test now
+    speaks the real shape and pins the 405).
 
     Not `frpc reload -c …`: that needs the binary on PATH and a shell, and this runs
     inside a frozen app. Not a restart either — a restart drops the web tunnel for a
     few seconds, and "the customer pressed a button and their own remote session
     blipped" is not something to make routine. A failure here is raised, never
-    silently escalated to a restart (design §4.2): an invisible fallback turns a
-    diagnosable failure into an unexplained tunnel wobble.
+    silently escalated to a restart (design §4.2).
+
+    ``wait_s`` covers the one timing fact worth waiting for: the admin listener is a
+    *local* service that may be a moment behind the config write, and a connection
+    refused right after a start is not yet a verdict. A protocol error (405 and
+    friends) is a verdict and fails immediately — retrying that would only turn a
+    wrong method into a slow wrong method.
     """
     import base64
     import urllib.error
     import urllib.request
 
     cred = base64.b64encode(f"{user}:{password}".encode()).decode()
-    req = urllib.request.Request(
-        f"http://127.0.0.1:{int(admin_port)}/api/reload", data=b"", method="POST",
-        headers={"Authorization": f"Basic {cred}"})
-    try:
-        # net_tls.urlopen, not urllib's: it is this repo's single outbound entry point
-        # (the AST guard in tests/test_tls_trust_store.py enforces it, and it caught
-        # this call). For a plain http:// loopback URL the TLS context is unused
-        # anyway — but a second, unguarded door is exactly what that guard exists for.
-        with net_tls.urlopen(req, timeout=timeout) as resp:
-            if resp.status != 200:
-                raise CloudHubError(f"frpc reload returned HTTP {resp.status}")
-    except urllib.error.HTTPError as exc:
-        detail = exc.read()[:200]
-        raise CloudHubError(f"frpc reload returned HTTP {exc.code}: {detail!r}") from exc
-    except OSError as exc:
-        raise CloudHubError(
-            f"frpc admin API unreachable on 127.0.0.1:{admin_port}: {exc}") from exc
+    url = f"http://127.0.0.1:{int(admin_port)}/api/reload"
+    deadline = time.monotonic() + max(0.0, wait_s)
+    last: Exception | None = None
+    while True:
+        req = urllib.request.Request(url, method="GET",
+                                     headers={"Authorization": f"Basic {cred}"})
+        try:
+            # net_tls.urlopen, not urllib's: it is this repo's single outbound entry
+            # point (the AST guard in tests/test_tls_trust_store.py enforces it, and it
+            # caught this call). For a plain http:// loopback URL the TLS context is
+            # unused anyway — but a second, unguarded door is what that guard is for.
+            with net_tls.urlopen(req, timeout=timeout) as resp:
+                if resp.status != 200:
+                    raise CloudHubError(f"frpc reload returned HTTP {resp.status}")
+                return
+        except urllib.error.HTTPError as exc:
+            detail = exc.read()[:200]
+            raise CloudHubError(
+                f"frpc reload returned HTTP {exc.code}: {detail!r}") from exc
+        except OSError as exc:
+            last = exc
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(0.25)
+    raise CloudHubError(
+        f"frpc admin API unreachable on 127.0.0.1:{admin_port} after {wait_s:.1f}s: "
+        f"{last}")
 
 
 def help_request(portal: str, callsign: str, token: str, minutes: int,
@@ -622,8 +643,17 @@ def connect(portal: str, callsign: str, token: str, *, config_path: Path, cert_d
     log_file = str(Path(data_dir) / f"frpc-{label}.log")
     # The admin API exists so `call help` can add a proxy without restarting the
     # tunnel (which would drop the operator's own web session for a few seconds).
-    admin_port = _free_loopback_port()
-    admin_password = secrets.token_urlsafe(18)
+    #
+    # Minted once, then reused from the file — because frpc reads its config exactly
+    # once, at startup. Picking a fresh port on every connect() rewrote the file with
+    # a port the *running* frpc had never heard of, so the reload went to a closed
+    # port and `call help` failed with "admin API unreachable" right after a
+    # successful reconnect (measured on the first real run, 2026-10-12: config said
+    # 53235 while the live frpc listened on 53189).
+    admin_port, _, admin_password = read_admin_settings(conf)
+    if not admin_port:
+        admin_port = _free_loopback_port()
+        admin_password = secrets.token_urlsafe(18)
     _write_frpc_config(
         conf,
         frpc_config_text(label, hub_token, local_port, port, log_file=log_file,

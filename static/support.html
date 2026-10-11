@@ -138,6 +138,55 @@
       <pre id="listing" style="display: none"></pre>
     </div>
 
+    <div class="card" id="help-card">
+      <h2>远程协助</h2>
+      <p class="muted">
+        需要维护者直接进来看看时，在这里开一个窗口。开启后他从 hub 连进来，用下面这对
+        用户名与口令 —— <b>口令只显示在这里，请口头或短信告诉他</b>。窗口到期自动关闭，
+        你随时可以按「停止协助」，维护者那一侧也能被强制结束。
+      </p>
+      <p class="muted">
+        SSH 只开在本机回环上、公网上没有端口，而且<b>只在窗口开着时存在</b>；窗口一关，
+        口令与监听一起消失。会话拿到的是 MRRC Modern 自己的权限，不会提权。
+      </p>
+      <div id="help-off">
+        <label class="muted"
+          >窗口
+          <select id="help-minutes">
+            <option value="30">30 分钟</option>
+            <option value="60" selected>60 分钟</option>
+            <option value="180">3 小时</option>
+          </select>
+        </label>
+        <div><button id="help-start">开启协助</button></div>
+      </div>
+      <div id="help-on" style="display: none">
+        <table style="margin: 0.4rem 0; border-collapse: collapse">
+          <tr>
+            <td class="muted" style="padding-right: 10px">用户名</td>
+            <td><code id="help-user"></code></td>
+          </tr>
+          <tr>
+            <td class="muted" style="padding-right: 10px">口令</td>
+            <td><code id="help-pw"></code></td>
+          </tr>
+          <tr>
+            <td class="muted" style="padding-right: 10px">剩余</td>
+            <td id="help-left"></td>
+          </tr>
+          <tr>
+            <td class="muted" style="padding-right: 10px">已连接</td>
+            <td id="help-conn"></td>
+          </tr>
+        </table>
+        <div>
+          <button id="help-copy">复制口令</button>
+          <button id="help-stop" style="background: #7a2b2b">停止协助</button>
+        </div>
+      </div>
+      <div id="help-msg" class="muted"></div>
+    </div>
+
     <script>
       var currentId = null;
 
@@ -293,6 +342,105 @@
           setStatus("保存失败：" + e.message, "bad");
         }
       }
+
+      // ── 远程协助 ────────────────────────────────────────────────────────
+      // 状态一律以服务端为准：页面自己倒计时会与真相漂移，而"到期/维护者结束/
+      // 口令被连续试错"这些结束原因只有服务端知道。轮询顺便把倒计时刷新对。
+      var HELP_REASONS = {
+        user: "你手动关闭",
+        expired: "窗口到期",
+        portal: "维护者结束",
+        auth_failures: "口令被连续试错，已自动关闭",
+        error: "出错关闭",
+        shutdown: "程序退出",
+      };
+
+      function helpSay(text, cls) {
+        var node = $("help-msg");
+        node.className = cls || "muted";
+        node.textContent = text;
+      }
+
+      function helpReason(code) {
+        return HELP_REASONS[code] || code || "已结束";
+      }
+
+      function renderHelp(s) {
+        var on = s.state === "open";
+        $("help-on").style.display = on ? "" : "none";
+        $("help-off").style.display = on ? "none" : "";
+        if (!on) {
+          if (s.state === "closed" && s.close_reason) {
+            helpSay("上次协助已结束（" + helpReason(s.close_reason) + "）。");
+          }
+          return;
+        }
+        $("help-user").textContent = s.username || "";
+        $("help-pw").textContent = s.password || "";
+        $("help-left").textContent =
+          Math.max(0, Math.round((s.expires_in_s || 0) / 60)) + " 分钟";
+        $("help-conn").textContent = (s.connections || 0) + " 次";
+        helpSay(s.failures ? "认证失败 " + s.failures + " 次（5 次即自动关闭）" : "");
+      }
+
+      async function refreshHelp() {
+        try {
+          var res = await fetch("/api/help/status");
+          if (res.ok) {
+            renderHelp(await res.json());
+          }
+        } catch (e) {
+          /* 离线时保持上一次显示，不要把它变成一条错误噪声 */
+        }
+      }
+
+      async function startHelp() {
+        $("help-start").disabled = true;
+        helpSay("正在开启（申请隧道端口 + 热加载 frpc）…");
+        try {
+          var data = await api("/api/help/enable", {
+            minutes: parseInt($("help-minutes").value, 10) || 60,
+          });
+          if (!data.ok) {
+            helpSay("开启失败：" + (data.reason || ""), "bad");
+          } else {
+            helpSay("");
+          }
+          renderHelp(data);
+        } catch (e) {
+          helpSay("开启失败：" + e.message, "bad");
+        } finally {
+          $("help-start").disabled = false;
+        }
+      }
+
+      async function stopHelp() {
+        $("help-stop").disabled = true;
+        try {
+          renderHelp(await api("/api/help/disable", {}));
+          helpSay("已停止。");
+        } catch (e) {
+          helpSay("停止失败：" + e.message, "bad");
+        } finally {
+          $("help-stop").disabled = false;
+        }
+      }
+
+      async function copyHelpPassword() {
+        var pw = $("help-pw").textContent || "";
+        try {
+          await navigator.clipboard.writeText(pw);
+          helpSay("口令已复制。");
+        } catch (e) {
+          helpSay("复制失败，请手动选中：" + pw, "bad");
+        }
+      }
+
+      $("help-start").addEventListener("click", startHelp);
+      $("help-stop").addEventListener("click", stopHelp);
+      $("help-copy").addEventListener("click", copyHelpPassword);
+      refreshHelp();
+      setInterval(refreshHelp, 5000);
 
       $("btn-build").addEventListener("click", buildBundle);
       $("btn-upload").addEventListener("click", uploadBundle);

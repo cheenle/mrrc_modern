@@ -118,6 +118,8 @@ class HostnameValidationTests(unittest.TestCase):
 
 
 class TimezoneValidationTests(unittest.TestCase):
+    @unittest.skipUnless(os.path.isdir("/usr/share/zoneinfo"),
+                         "本机没有系统时区库（Windows）：接受路径无从验证")
     def test_a_real_zone_passes(self):
         for zone in ("Asia/Shanghai", "UTC", "Europe/London"):
             with self.subTest(zone=zone):

@@ -341,7 +341,12 @@
 </blockquote>
 <hr />
 <h2 id="电台型号差异">0.5 电台型号差异</h2>
-<p>服务器通过 <code>MRRC_RADIO_MODEL</code>（<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>）选择后端，前端会根据后端上报的 <code>capabilities</code> 自动调整可用控件。</p>
+<p>服务器通过 <code>MRRC_RADIO_MODEL</code> 选择后端，前端会根据后端上报的 <code>capabilities</code> 自动调整可用控件。 已注册的型号键（连接设置对话框的下拉列表与之一致）：</p>
+<ul>
+<li><strong>完全支持</strong>：<code>ft710</code>（Yaesu FT-710）、<code>ic7300</code>（Icom IC-7300）、<code>ic7300mk2</code>（IC-7300MK2）</li>
+<li><strong>实验性（默认只收不发，<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 解锁）</strong>：Icom CI-V 族 <code>ic705</code> / <code>ic7610</code> / <code>ic7760</code>； Yaesu ASCII-CAT 族 <code>ftdx10</code> / <code>ftdx101d</code> / <code>ftdx101mp</code> / <code>ftx1</code>（FTX-1F）/ <code>ft891</code>（FT-891）</li>
+</ul>
+<p>下表以最常用的两台为例对比；<strong>CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列</strong> （细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同）， <strong>Yaesu ASCII-CAT 族行为大体对齐 FT-710 一列</strong>，但无 FT4222/CI-V 真频谱源，界面一律用 S-meter 合成频谱。</p>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
 <colgroup>
 <col style="width: 17%" />
@@ -388,8 +393,8 @@
 </tr>
 <tr>
 <td>ATT</td>
-<td>0 / 6 / 12 / 18 dB</td>
-<td>开/关</td>
+<td><code>OFF</code> / <code>6dB</code> / <code>12dB</code> / <code>18dB</code> 四档</td>
+<td><code>OFF</code> / <code>20dB</code> 两档（7610/7760 为 3 dB 步进 16 档）</td>
 </tr>
 <tr>
 <td>VFO-B 直接选择</td>
@@ -398,7 +403,7 @@
 </tr>
 <tr>
 <td>内置天调</td>
-<td>无（可外接 ATR1000）</td>
+<td>无（ATU 键控制外接 FC-40 类天调；也可外接 ATR1000）</td>
 <td>有</td>
 </tr>
 <tr>
@@ -428,7 +433,7 @@
 <li><strong>IC-7300</strong>：一个 COM 口（USB CI-V）。</li>
 <li><strong>FT-710</strong>：两个 Silicon Labs CP210x COM 口（较低编号通常是 CAT 用的 Enhanced COM Port）。</li>
 </ul></li>
-<li>打开 <code>mrrc_modern.env</code>，设置 <code>MRRC_RADIO_MODEL</code>（<code>ic7300</code> / <code>ic7300mk2</code> / <code>ft710</code>，见 0.6.2 / 0.6.3 的完整示例），并确保 <code>MRRC_SERIAL_PORT</code> 指向第 3 步确认的串口。</li>
+<li>打开 <code>mrrc_modern.env</code>，设置 <code>MRRC_RADIO_MODEL</code>（<code>ic7300</code> / <code>ic7300mk2</code> / <code>ft710</code>，或 §0.5 列出的其它实验性型号键），并确保 <code>MRRC_SERIAL_PORT</code> 指向第 3 步确认的串口。</li>
 <li>启动 <code>MRRC Modern</code>，浏览器自动打开登录页。输入 <code>MRRC_WEB_PASSWORD</code> 后，状态栏 ●Serial 变绿即表示 CAT 已连通。</li>
 </ol>
 <blockquote class="callout-info">
@@ -524,7 +529,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tbody>
 <tr>
 <td>我该选 <code>ft710</code>、<code>ic7300</code> 还是 <code>ic7300mk2</code>？</td>
-<td>看你手头的电台：Yaesu FT-710 用 <code>ft710</code>；Icom IC-7300 用 <code>ic7300</code>；IC-7300MK2 用 <code>ic7300mk2</code>。MK2 默认地址为 0xB6，且 Transceive 菜单项与普通 7300 不同，不能混选。</td>
+<td>看你手头的电台：Yaesu FT-710 用 <code>ft710</code>；Icom IC-7300 用 <code>ic7300</code>；IC-7300MK2 用 <code>ic7300mk2</code>。MK2 默认地址为 0xB6，且 Transceive 菜单项与普通 7300 不同，不能混选。其它型号（IC-705/7610/7760、FTDX10/101D/101MP、FTX-1F、FT-891）见 §0.5 的实验性列表 —— 默认只收不发。</td>
 </tr>
 <tr>
 <td>换了一台电台，要重装软件吗？</td>
@@ -574,13 +579,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </table></div>
 <hr />
 <h2 id="macos-安装与初始化">0.7 macOS 安装与初始化</h2>
-<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.25.5-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
+<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.26.0-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
 <blockquote class="callout-info">
 <p>适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是<strong>自包含</strong>的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。</p>
 </blockquote>
 <h3 id="安装5-步">0.7.1 安装（5 步）</h3>
 <ol type="1">
-<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.25.5-arm64.dmg</code>（约 59 MB）。</li>
+<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.26.0-arm64.dmg</code>（约 59 MB）。</li>
 <li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
 <li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
 <li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
@@ -619,7 +624,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <li>登录后点网页<strong>顶栏菜单 →「连接设置…」</strong>。</li>
 <li>在弹出的对话框里修改：
 <ul>
-<li><strong>电台型号</strong>（<code>ft710</code> / <code>ic7300</code> / <code>ic7300mk2</code>）</li>
+<li><strong>电台型号</strong>（下拉列出全部已注册型号：FT-710 / IC-7300 / IC-7300MK2 + 实验性型号，见 §0.5）</li>
 <li><strong>串口</strong>（下拉列表自动列出可用的 <code>/dev/cu.*</code>）</li>
 <li><strong>RX 音频设备</strong> / <strong>TX 音频设备</strong>（下拉列表列出本机音频设备，FT-710 一般是 <code>USB Audio Device</code>，IC-7300 一般是 <code>USB Audio Codec</code>）</li>
 <li><strong>登录密码</strong></li>
@@ -957,7 +962,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>15</td>
 <td>模式按钮（如 <code>USB</code>）</td>
-<td>显示<strong>当前</strong>模式（v1.25.5 起；此前显示下一个），单击循环切换。FT-710：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L；IC-7300：依后端模式表</td>
+<td>显示<strong>当前</strong>模式（v1.26.0 起；此前显示下一个），单击循环切换。FT-710：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L；IC-7300：依后端模式表</td>
 <td>单击循环；需要精确选择时用菜单 → Mode Selection（序号 40）</td>
 </tr>
 <tr>
@@ -975,7 +980,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>18</td>
 <td>ATT 衰减</td>
-<td>射频衰减器，显示当前档位（<code>OFF</code> / <code>6dB</code> / <code>12dB</code> / <code>18dB</code>）。FT-710：4 档；IC-7300：开/关</td>
+<td>射频衰减器，显示当前档位（FT-710：<code>OFF</code> / <code>6dB</code> / <code>12dB</code> / <code>18dB</code>）。档位表来自机型配置档（IC-7300 为 <code>OFF</code> / <code>20dB</code> 两档；IC-7610/7760 为 3 dB 步进多档）</td>
 <td>单击循环</td>
 </tr>
 <tr>
@@ -1030,7 +1035,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>24</td>
 <td>ATU</td>
-<td>内置天调开关（<code>AC000</code>/<code>AC001</code>）</td>
+<td>天调开关（<code>AC000</code>/<code>AC001</code>）。FT-710 无内置天调，此键控制<strong>外接</strong> FC-40 类天调；无内置/外接天调的机型（如 FT-891）此键按 capabilities 隐藏</td>
 <td>单击开/关</td>
 </tr>
 </tbody>
@@ -1327,7 +1332,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>—</td>
 <td>NET 下拉</td>
-<td>频谱带宽档位（v1.25.5 起）：<strong>Full</strong> = 完整帧 30 Hz；<strong>Half</strong> = 半帧（去掉未渲染的第二路 waterfall）15 Hz；<strong>Quarter</strong> = 半帧 7.5 Hz。弱网/热点省带宽用</td>
+<td>频谱带宽档位（v1.26.0 起）：<strong>Full</strong> = 完整帧 30 Hz；<strong>Half</strong> = 半帧（去掉未渲染的第二路 waterfall）15 Hz；<strong>Quarter</strong> = 半帧 7.5 Hz。弱网/热点省带宽用</td>
 <td>选择后立即作为 <code>spectrumCaps</code> 上报服务端（无需重连），并存入 Cookie（<code>scopeProfile</code>）</td>
 </tr>
 <tr>
@@ -1490,6 +1495,9 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <p>macOS 没有对应脚本，手动即可：先备份 <code>~/Library/Application Support/MRRC-Modern/mrrc_modern.env</code> 与其中的证书，再删 <code>~/Library/Application Support/MRRC-Modern</code> 与 <code>/Applications/MRRC Modern.app</code>。</p>
 <hr />
 <h2 id="附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</h2>
+<blockquote class="callout-info">
+<p>下表的 CAT 命令是 <strong>FT-710（Yaesu ASCII-CAT）</strong> 写法；IC 机型走 CI-V 帧、Yaesu SDR 族走各自的 profile 命令，同一界面元素在不同后端下的报文不同（<code>capabilities</code> 是唯一权威）。</p>
+</blockquote>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
 <colgroup>
 <col style="width: 41%" />
@@ -1498,7 +1506,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <thead>
 <tr>
 <th>界面元素</th>
-<th>后台命令/通道</th>
+<th>后台命令/通道（FT-710）</th>
 </tr>
 </thead>
 <tbody>
@@ -1552,7 +1560,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>频谱</td>
-<td><code>/WSspectrum</code>（1701B 帧）+ 电台 <code>EX040101</code>/<code>EX040200</code>（scope 初始化）</td>
+<td><code>/WSspectrum</code> + 菜单 NET 档位协商（<code>spectrumCaps</code>：Full 1701 B / Half·Quarter 851 B 帧，v1.26.0 起）；FT-710 初始化 <code>EX040101</code>/<code>EX040200</code></td>
 </tr>
 <tr>
 <td>音频</td>

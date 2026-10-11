@@ -19,7 +19,16 @@
 
 ## 0.5 电台型号差异
 
-服务器通过 `MRRC_RADIO_MODEL`（`ft710`、`ic7300`、`ic7300mk2`）选择后端，前端会根据后端上报的 `capabilities` 自动调整可用控件。
+服务器通过 `MRRC_RADIO_MODEL` 选择后端，前端会根据后端上报的 `capabilities` 自动调整可用控件。
+已注册的型号键（连接设置对话框的下拉列表与之一致）：
+
+- **完全支持**：`ft710`（Yaesu FT-710）、`ic7300`（Icom IC-7300）、`ic7300mk2`（IC-7300MK2）
+- **实验性（默认只收不发，`MRRC_ALLOW_UNVERIFIED_TX=1` 解锁）**：Icom CI-V 族 `ic705` / `ic7610` / `ic7760`；
+  Yaesu ASCII-CAT 族 `ftdx10` / `ftdx101d` / `ftdx101mp` / `ftx1`（FTX-1F）/ `ft891`（FT-891）
+
+下表以最常用的两台为例对比；**CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列**
+（细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同），
+**Yaesu ASCII-CAT 族行为大体对齐 FT-710 一列**，但无 FT4222/CI-V 真频谱源，界面一律用 S-meter 合成频谱。
 
 | 功能 | FT-710 | IC-7300 / IC-7300MK2 |
 | ------ | -------- | --------------------- |
@@ -29,9 +38,9 @@
 | AN（自动陷波） | 有 | **无**，界面隐藏 |
 | Vd / Id 仪表 | 有 | **无**，界面隐藏 |
 | 滤波器 | 多档语音/窄带宽度 | FIL1–FIL3 循环 |
-| ATT | 0 / 6 / 12 / 18 dB | 开/关 |
+| ATT | `OFF` / `6dB` / `12dB` / `18dB` 四档 | `OFF` / `20dB` 两档（7610/7760 为 3 dB 步进 16 档） |
 | VFO-B 直接选择 | 有 | 无 |
-| 内置天调 | 无（可外接 ATR1000） | 有 |
+| 内置天调 | 无（ATU 键控制外接 FC-40 类天调；也可外接 ATR1000） | 有 |
 | 70 MHz | 无 | 视地区版本而定 |
 | 发射时频谱 | 暂停并显示「频谱暂停」 | 继续显示（CI-V 频谱不受发射影响） |
 
@@ -50,7 +59,7 @@
 3. 打开 **设备管理器**，在「端口 (COM 和 LPT)」下确认电台的串口：
    - **IC-7300**：一个 COM 口（USB CI-V）。
    - **FT-710**：两个 Silicon Labs CP210x COM 口（较低编号通常是 CAT 用的 Enhanced COM Port）。
-4. 打开 `mrrc_modern.env`，设置 `MRRC_RADIO_MODEL`（`ic7300` / `ic7300mk2` / `ft710`，见 0.6.2 / 0.6.3 的完整示例），并确保 `MRRC_SERIAL_PORT` 指向第 3 步确认的串口。
+4. 打开 `mrrc_modern.env`，设置 `MRRC_RADIO_MODEL`（`ic7300` / `ic7300mk2` / `ft710`，或 §0.5 列出的其它实验性型号键），并确保 `MRRC_SERIAL_PORT` 指向第 3 步确认的串口。
 5. 启动 `MRRC Modern`，浏览器自动打开登录页。输入 `MRRC_WEB_PASSWORD` 后，状态栏 ●Serial 变绿即表示 CAT 已连通。
 
 > 换电台时**不需要重装**：改 `MRRC_RADIO_MODEL` 和串口/波特率即可，其余步骤照对应小节核对。
@@ -149,7 +158,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 | 问题 | 解答 |
 | ------ | ------ |
-| 我该选 `ft710`、`ic7300` 还是 `ic7300mk2`？ | 看你手头的电台：Yaesu FT-710 用 `ft710`；Icom IC-7300 用 `ic7300`；IC-7300MK2 用 `ic7300mk2`。MK2 默认地址为 0xB6，且 Transceive 菜单项与普通 7300 不同，不能混选。 |
+| 我该选 `ft710`、`ic7300` 还是 `ic7300mk2`？ | 看你手头的电台：Yaesu FT-710 用 `ft710`；Icom IC-7300 用 `ic7300`；IC-7300MK2 用 `ic7300mk2`。MK2 默认地址为 0xB6，且 Transceive 菜单项与普通 7300 不同，不能混选。其它型号（IC-705/7610/7760、FTDX10/101D/101MP、FTX-1F、FT-891）见 §0.5 的实验性列表 —— 默认只收不发。 |
 | 换了一台电台，要重装软件吗？ | 不用。改 `MRRC_RADIO_MODEL` 和串口/波特率，重启即可。 |
 | Serial 一直是红点 / 灰点 | CAT 未连通。逐项检查：电台开机、USB 线、`MRRC_SERIAL_PORT` 是否指向设备管理器里的正确串口、波特率（IC-7300=115200、FT-710=38400）与电台菜单一致。 |
 | IC-7300：设备管理器里没有 COM 口 | 驱动未装或 USB 线是纯充电线。换数据线，检查「端口 (COM 和 LPT)」是否有 `USB Serial Port`。 |
@@ -166,13 +175,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 ## 0.7 macOS 安装与初始化
 
-本章面向 **macOS 桌面版（`MRRC-Modern-v1.25.5-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
+本章面向 **macOS 桌面版（`MRRC-Modern-v1.26.0-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
 
 > 适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是**自包含**的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。
 
 ### 0.7.1 安装（5 步）
 
-1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.25.5-arm64.dmg`（约 59 MB）。
+1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.26.0-arm64.dmg`（约 59 MB）。
 2. 双击刚下载的 `.dmg` → 弹出窗口里看到 **MRRC Modern** 图标和一个 **Applications** 文件夹。
 3. 把 **MRRC Modern** 图标**拖进 Applications** 文件夹（松手即完成安装）。
 4. **第一次启动**请右键点 Applications 里的 **MRRC Modern** → 选 **打开** → 弹窗里再点一次 **打开**（因为免费签名，系统会拦一次；只第一次需要）。
@@ -208,7 +217,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 1. 登录后点网页**顶栏菜单 →「连接设置…」**。
 2. 在弹出的对话框里修改：
-   - **电台型号**（`ft710` / `ic7300` / `ic7300mk2`）
+   - **电台型号**（下拉列出全部已注册型号：FT-710 / IC-7300 / IC-7300MK2 + 实验性型号，见 §0.5）
    - **串口**（下拉列表自动列出可用的 `/dev/cu.*`）
    - **RX 音频设备** / **TX 音频设备**（下拉列表列出本机音频设备，FT-710 一般是 `USB Audio Device`，IC-7300 一般是 `USB Audio Codec`）
    - **登录密码**
@@ -370,10 +379,10 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 | # | 控件 | 功能 | 操作 |
 | --- | ------ | ------ | ------ |
-| 15 | 模式按钮（如 `USB`） | 显示**当前**模式（v1.25.5 起；此前显示下一个），单击循环切换。FT-710：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L；IC-7300：依后端模式表 | 单击循环；需要精确选择时用菜单 → Mode Selection（序号 40） |
+| 15 | 模式按钮（如 `USB`） | 显示**当前**模式（v1.26.0 起；此前显示下一个），单击循环切换。FT-710：LSB → USB → CW-U → AM → FM → RTTY-L → DATA-L；IC-7300：依后端模式表 | 单击循环；需要精确选择时用菜单 → Mode Selection（序号 40） |
 | 16 | 波段按钮（如 `20m`） | 显示当前波段，单击循环切换；切换后频率跳到该波段默认频率并自动选 VFO-A。FT-710 含 4m；IC-7300 可能含 70 MHz（视地区） | 单击循环；菜单 → Band Selection（序号 39）可精确选 |
 | 17 | 滤波按钮（如 `2.4k`） | 显示当前滤波宽度，单击循环切换。FT-710：多档语音/窄带宽度；IC-7300：FIL1 → FIL2 → FIL3 | 单击循环 |
-| 18 | ATT 衰减 | 射频衰减器，显示当前档位（`OFF` / `6dB` / `12dB` / `18dB`）。FT-710：4 档；IC-7300：开/关 | 单击循环 |
+| 18 | ATT 衰减 | 射频衰减器，显示当前档位（FT-710：`OFF` / `6dB` / `12dB` / `18dB`）。档位表来自机型配置档（IC-7300 为 `OFF` / `20dB` 两档；IC-7610/7760 为 3 dB 步进多档） | 单击循环 |
 | 19 | PRE 前置放大 | 前置放大器，显示当前档位（`OFF` / `AMP1` / `AMP2`）。FT-710：3 档；IC-7300：依后端支持 | 单击循环 |
 
 ### 2.5 DSP 开关区（序号 20–24）
@@ -384,7 +393,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 | 21 | NB | 噪声抑制（DBF 类脉冲抑制）开关 | 单击开/关 |
 | 22 | AN | 自动陷波（Auto Notch）开关。**IC-7300 无此功能，按钮隐藏** | 单击开/关 |
 | 23 | COMP | 语音压缩器开关（CAT `PR00`/`PR01`） | 单击开/关 |
-| 24 | ATU | 内置天调开关（`AC000`/`AC001`） | 单击开/关 |
+| 24 | ATU | 天调开关（`AC000`/`AC001`）。FT-710 无内置天调，此键控制**外接** FC-40 类天调；无内置/外接天调的机型（如 FT-891）此键按 capabilities 隐藏 | 单击开/关 |
 
 > NR/NB 的**强度**滑杆（NR Level 1–15、NB Level 0–10）保留在 DOM 中但默认隐藏（移动端空间不足）；如需调节可在浏览器开发者工具中显示或留待后续版本。
 
@@ -452,7 +461,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 | 45 | SPAN 下拉 | 频谱显示跨度：10k/20k/50k/100k/200k/500k/1M（Hz），即瀑布图横轴宽度 | 选择后立即下发电台（`scope_span`）并重绘频谱 |
 | 46 | SPD 下拉 | 频谱刷新速度。FT-710 为 1–5；IC-7300/MK2 按 CI-V `27 1A` 仅显示 FAST/MID/SLOW | 选择后立即下发 |
 | 47 | Color 下拉 | 瀑布图配色主题：Jet / Hot / Cold / Thermal / Night / Gray | 选择后本地生效并存入 Cookie（`scopeTheme`） |
-| — | NET 下拉 | 频谱带宽档位（v1.25.5 起）：**Full** = 完整帧 30 Hz；**Half** = 半帧（去掉未渲染的第二路 waterfall）15 Hz；**Quarter** = 半帧 7.5 Hz。弱网/热点省带宽用 | 选择后立即作为 `spectrumCaps` 上报服务端（无需重连），并存入 Cookie（`scopeProfile`） |
+| — | NET 下拉 | 频谱带宽档位（v1.26.0 起）：**Full** = 完整帧 30 Hz；**Half** = 半帧（去掉未渲染的第二路 waterfall）15 Hz；**Quarter** = 半帧 7.5 Hz。弱网/热点省带宽用 | 选择后立即作为 `spectrumCaps` 上报服务端（无需重连），并存入 Cookie（`scopeProfile`） |
 | 48 | Floor 滑杆 | 瀑布图噪声底限（0–200）：低于该值显示为背景色，值越高背景越黑、弱信号越不可见 | 拖动实时预览，松手存 Cookie |
 | 49 | Ceil 滑杆 | 瀑布图信号上限（50–255）：决定满刻度对应的信号强度，值越低强信号越早饱和变色 | 拖动实时预览，松手存 Cookie |
 | 50 | RF Gain 滑杆 | 电台射频增益（CAT `RG` 0–255 映射为 0–100%）：调低可防强信号过载削波 | 拖动实时显示，**松手生效**下发电台 |
@@ -564,7 +573,10 @@ macOS 没有对应脚本，手动即可：先备份 `~/Library/Application Suppo
 
 ## 附：界面元素与后台命令对照（供高级用户/排障）
 
-| 界面元素 | 后台命令/通道 |
+> 下表的 CAT 命令是 **FT-710（Yaesu ASCII-CAT）** 写法；IC 机型走 CI-V 帧、Yaesu SDR 族走各自的
+> profile 命令，同一界面元素在不同后端下的报文不同（`capabilities` 是唯一权威）。
+
+| 界面元素 | 后台命令/通道（FT-710） |
 | ---------- | -------------- |
 | 模式按钮 | `MD` / `MD0`（模式查询与设置） |
 | 波段按钮 | `BS`（波段选择，服务端 `band` 命令） |
@@ -578,7 +590,7 @@ macOS 没有对应脚本，手动即可：先备份 `~/Library/Application Suppo
 | S 表 | `SM0`（+ 频谱帧 S 值） |
 | 多路仪表 | `RM3`–`RM8`（PWR/ALC/SWR/Id/Vd） |
 | 记忆频道 | `/api/mem_channels`（GET/POST）+ `memRecall`/`memSave` WS 消息 |
-| 频谱 | `/WSspectrum`（1701B 帧）+ 电台 `EX040101`/`EX040200`（scope 初始化） |
+| 频谱 | `/WSspectrum` + 菜单 NET 档位协商（`spectrumCaps`：Full 1701 B / Half·Quarter 851 B 帧，v1.26.0 起）；FT-710 初始化 `EX040101`/`EX040200` |
 | 音频 | `/WSaudioRX`（下行 Opus 48k/PCM）、`/WSaudioTX`（上行 Opus 48k CBR 64kbps） |
 | CQ 按键 | `{"type":"set","field":"cq","value":true | false}` → 状态由 `cqState`广播（`idle/calling/complete/aborted`）；录音默认`static/audio/cq.wav`，用`MRRC_CQ_FILE` 替换 |
 | 天调（可选） | `/WSatr1000`（JSON）+ `MRRC_ATR1000_HOST` 环境变量 |

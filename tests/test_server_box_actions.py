@@ -14,6 +14,7 @@ Two things every test here is really about:
 from __future__ import annotations
 
 import asyncio
+import os
 import json
 import unittest
 from unittest import mock
@@ -146,6 +147,8 @@ class HostnameTests(unittest.TestCase):
 
 
 class TimezoneTests(unittest.TestCase):
+    @unittest.skipUnless(os.path.isdir("/usr/share/zoneinfo"),
+                         "本机没有系统时区库（Windows）：接受路径无从验证")
     def test_a_real_zone_goes_through(self):
         with authed(), mock.patch.object(box_ops, "set_timezone",
                                          return_value={"ok": True}):

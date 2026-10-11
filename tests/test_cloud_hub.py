@@ -491,6 +491,8 @@ class HelpTunnelConfigTests(unittest.TestCase):
         self.assertEqual(text.count("[[proxies]]"), 2)
         self.assertIn('name = "bg7ifp"', text, "主代理还在")
 
+    @unittest.skipUnless(os.name == "posix",
+                         "0600 是 POSIX 文件模式；Windows 的等价物是 ACL")
     def test_the_config_file_is_0600(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:

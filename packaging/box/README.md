@@ -15,7 +15,8 @@
 
 - **W103D**（Amlogic S905L3A / G12A）。认准芯片，别拿国科 GK6323 或 RK3566 的盒子。
 - **≥8 GB U 盘**（先走 U 盘路线；Android 的分区与数据不动，只写一次 u-boot 环境——见指南 §5）
-- **网线**（这台盒子默认走有线：W103D 的 WiFi 是 MT7663S，能用，但有线对实时音频更稳）
+- **网线**（这台盒子默认走有线：W103D 的 WiFi 是 MT7663S，**只连 2.4 GHz**——5 GHz 能关联但数据面不通
+  还会把芯片拖到 MCU 超时；有线对实时音频也更稳）
 - **电台 USB 线**（FT-710 用**上方 Enhanced 口**）
 - **原厂线刷固件包**（兜底；走 U 盘路线时用不到）
 - 镜像：`MRRC-Modern-<ver>-w103d.img.gz`（由 `packaging/box/build-image.sh` 产出）
@@ -32,13 +33,25 @@ sync
 
 `diskutil unmountDisk /dev/diskN` 之后再拔。
 
+**烧完把根分区扩到整盘**（镜像自带 `/root/.no_rootfs_resize`，根分区只有 2.9 GB 且**不会**自动长；
+`/ddbr` 那份 2.3 GB 的 eMMC 备份就是靠这一步才有地方放）。ext4 支持在线扩容，在**盒子上**跑：
+
+```bash
+apt-get install -y cloud-guest-utils      # growpart 不在镜像里
+growpart /dev/sda 2 && resize2fs /dev/sda2
+df -h /                                   # 2.9G → 整盘
+```
+
+（在 Linux 电脑上离线跑同一组命令也行；macOS 没有 ext4 工具，只能在盒子上做。）
+
 ## 3. 首次启动（U 盘路线，零风险）
 
 1. U 盘插盒子，**网线插上**。
 2. 盒子通电，**立刻**在安卓里执行 `reboot update`（用遥控器的终端应用，或 adb）。
    这个动作让固件从 U 盘启动；**Android 的分区与数据完全没动**（`aml_autoscript` 里的 `saveenv`
    会写一次 u-boot 启动顺序，不碰数据），拔掉 U 盘就回安卓。详见 `docs/W103D_GUIDE.md` §5。
-3. 第一次开机要几分钟：扩容 rootfs、生成 SSH 密钥。
+3. 第一次开机要几分钟：生成 SSH 密钥，首启当场生成 Web 口令与自签证书。（**根分区不会自动扩容**，
+   见第 2 节。）
 4. 登录路由器查盒子的 IP（DHCP 拿的）。
 
 > 失败回滚：断电、拔 U 盘、重新上电 = 回到原厂安卓。
@@ -50,6 +63,16 @@ ssh root@<盒子IP>        # 首次口令 1234（ophub Armbian 的出厂值）
                           # ⚠️ 第一件事就改掉它：passwd root
 mrrc-show-password       # 打印 Web 登录口令
 ```
+
+**口令一览**（完整表在指南 §7）：SSH root 出厂 `1234`（进去**第一件事** `passwd root`）；
+Web 口令首启生成、每台不同（`mrrc-show-password`，或首启 HDMI 横幅）；收听口令空＝未启用；
+Wi-Fi 没有出厂值（预置或页面里现设）。
+
+**接上网络之后就不用回控制台了**：浏览器 `https://<盒子IP>:8888/settings` 里能改盒子名字/时区、
+扫 Wi-Fi 并切换、改有线口 DHCP/静态、重启（`/setup` 只在从未设过口令时免密开放，设过就 302 跳到
+`/settings`）。**Wi-Fi 面板只从扫描结果里选，没有手输 SSID 的入口**，而且**只连 2.4 GHz**。
+
+```bash
 
 首启时 HDMI 控制台的横幅里也印了口令（`linux/first_run.py` 打的）。
 根文件是 `0640 root:root`，所以这个命令必须用 root 跑。
@@ -146,6 +169,8 @@ poweroff            # 然后拔 U 盘、重新上电 —— 从 eMMC 启动
 - 起起来核对：`findmnt /` = `/dev/mmcblk2p2`、`df -h /` ≈ 28 GB、服务在跑、`verify.sh` 过关。
 - 副作用：machine-id 重生成 → **IPv6 IID 变化**（域名/隧道几分钟内自愈）；IPv4 与配置不受影响。
 - **最终形态**：盒子 + 一根电源线 + 一根网线 —— 不再需要 U 盘；那根 U 盘留着当救砖盘（整盘备份就在里面）。
+- ⚠️ **重刷镜像会把这根盘上的 `/ddbr` 整盘备份一起冲掉**（`dd` 写整盘），而那份备份往往是全机唯一一份。
+  **重刷前先把它拷到别处**；根分区没扩容时（只有 2.9 G）它**装不下**这 2.3 G 的备份。
 
 完整步骤、判据与三档回滚见 `docs/W103D_GUIDE.md` §17–§18（2026-10-11 真机实操记录）。
 
@@ -191,6 +216,10 @@ W103D 的 WiFi 完全依赖专属内核补丁 + 固件 overlay（MT7663S）。
 | --- | --- | --- |
 | 打不开网页 | `ip a`；`systemctl status mrrc-modern` | 网线/服务；`journalctl -u mrrc-modern -n 50` |
 | 连上了但没网口地址 | 路由器 DHCP | 换网线口；`nmcli device status` |
+| 扫描列表是空的 / 页面列不出 Wi-Fi | `dmesg \| grep -c "mailbox write"` | 计数 > 0 = 无线芯片已楔死（多半连过 5 GHz）→ **重启盒子**（钉版固件下软重启 47 秒即复位；老 2020 固件需断电） |
+| Wi-Fi 连上但没网/没 IPv6 | `ip route`、`ping <网关>` | **别用 5 GHz**：能关联能拿地址但数据面不通；只连 2.4 GHz |
+| IPv6 直连打不开网页 | `ss -ltn \| grep 8888` | 盒子线的网页只绑 `0.0.0.0`（IPv4）；要听 IPv6 就把 `MRRC_WEB_HOST` 改成 `::` 再重启服务 |
+| 公网 AAAA 记录不对 | `dig +short AAAA w103d.vlsc.net @223.5.5.5` vs 盒子实际 IPv6 | 镜像里**没有** DDNS 组件（`/opt/w103d-ddns`）；重刷后 machine-id 变 → IID 变，记录就陈旧了 |
 | 没电台串口 | `ls /dev/ttyUSB* /dev/ttyACM*` | 电台 USB 线；FT-710 要插**上方 Enhanced 口**；电台菜单 `MOD SOURCE = USB` |
 | 有串口但连不上 | `mrrc-radio show` 里的串口对不对 | `mrrc-radio use <model> --port /dev/ttyXXX` |
 | 没声音 | `arecord -l` 有没有电台声卡 | 电台 USB 声卡没枚举 → 换线/换口；服务日志里找 PyAudio 设备列表 |

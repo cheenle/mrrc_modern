@@ -81,7 +81,13 @@ rootfs free before overlay: 963 MiB
 1. **精简内容**——`box-overlay.sh` 里去掉不必要的部分（比如 `install.sh --dev`），清 pip/apt 缓存。
    首选，因为首启后空间本来就有 29 GB。
 2. **扩容 p2**——loop 设备上 `growpart` + `resize2fs`，把 3000 MiB 加到 6000 MiB。
-   代价：镜像下载体积翻倍。首启的自动扩容机制不受影响，但要实测确认。
+   代价：镜像下载体积翻倍。
+
+> **运行时不会自己扩（2026-10-12 实测修正）**：镜像里带着 `/root/.no_rootfs_resize`，首启**不**做自动
+> 扩容——U 盘上根分区就停在 2.9 G，用户得自己 `apt-get install -y cloud-guest-utils && growpart /dev/sda 2
+> && resize2fs /dev/sda2`（步骤见指南 §4.1，ext4 在线可扩、UUID 不变）。**运维后果**：`/ddbr` 里那份
+> 2.3 G 的 eMMC 全盘备份在 2.9 G 的根分区上**放不下**。想改这个行为就把那个 marker 从镜像里去掉，
+> 并实测一次首启扩盘。
 
 ## 外部二进制
 
@@ -286,7 +292,7 @@ U 盘系统验收通过后，用 ophub 自带安装器**就地**固化进 eMMC �
 - **备份**：`armbian-ddbr` 全盘 29 GB → 2.2 GB（`pigz -t` 通过）。单线程 gzip 实测 10 MiB/s（≈40 分钟）；
   先装 `pigz` 用 `dd bs=4M | pigz -p 3` 只要 ≈9 分钟，产物是标准 gzip 流（恢复路径不变）。备份留在 U 盘 = 救砖盘。
 - **分区**：`ampart` dclone 成功（`data::-1:4`），前 117 MiB 保留；`p1` 512 MB FAT（LABEL `BOOT_EMMC`）
-  + `p2` 28.3 GB ext4（新 UUID，`fstab` 与 `uEnv.txt` 同源）。
+  - `p2` 28.3 GB ext4（新 UUID，`fstab` 与 `uEnv.txt` 同源）。
 - **原厂引导**：安装器先把前 4 MiB 存到 `/usr/lib/u-boot/mybox-bootloader.img`，回写用
   `bs=1 count=444` + `bs=512 skip=1 seek=1 count=8191` —— **故意跳过 `[444,512)`**，那 68 B 正是 MBR 分区表。
   所以"首 4 MiB 的 md5 变了"不等于损坏：`cmp` 验证 `[0,444)` 与 `[512,4 MiB)` 与备份逐字节一致。

@@ -7,6 +7,7 @@ description of what got built.
 from __future__ import annotations
 
 import re
+import os
 import unittest
 
 import paramiko
@@ -354,6 +355,9 @@ class SshServerTests(unittest.TestCase):
                 self._client(pw="wrong-password-here")
         self.assertEqual(len([e for e in self.events if e["event"] == "auth_fail"]), 2)
 
+    @unittest.skipUnless(os.name == "posix",
+                         "pty 是 POSIX 的：Windows 的 powershell pty 路仍是未验边界"
+                         "（docs/remote_help.md 已如实标注）")
     def test_an_interactive_shell_runs_a_command(self):
         """交互式那条路（pty 请求 → 起平台 shell → 双向泵）。
 

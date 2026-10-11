@@ -16,6 +16,8 @@ the unification cannot be quietly undone by adding "just one" platform copy.
 from __future__ import annotations
 
 import re
+import os
+import shutil
 import stat
 import subprocess
 import unittest
@@ -218,6 +220,8 @@ class ShellHygieneTests(unittest.TestCase):
         paths.append(REPO / "linux" / "mrrc_update.sh")
         return paths
 
+    @unittest.skipUnless(os.name == "posix",
+                         "NTFS 没有可执行位：这条规则在 POSIX 文件模式上有意义")
     def test_shell_scripts_are_executable(self):
         """box-overlay.sh shipped as 0644 once: "bad interpreter: Permission denied"."""
         for path in self._shells():
@@ -242,6 +246,8 @@ class ShellHygieneTests(unittest.TestCase):
         self.assertIn("rm -rf /tmp/*", text)
         self.assertIn('rm -rf "$MRRC_ASSETS"', text)
 
+    @unittest.skipUnless(shutil.which("bash"),
+                         "没有 bash 就没有解析器这一票（Windows 构建机）")
     def test_every_shell_script_parses(self):
         """`bash -n` on everything, because the other rules here cannot see this.
 

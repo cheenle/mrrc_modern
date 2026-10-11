@@ -157,9 +157,15 @@ class ImageTreeImportTests(unittest.TestCase):
         """The commands the units and the CLI actually run, in a tree that looks
         like the image: ``server.py`` (mrrc-modern.service), the box's first-boot
         wrapper, and the ``mrrc-radio`` CLI."""
+        # `-c`, not stdin: on Windows the child decodes stdin with the console code
+        # page (cp936 on the build VM), so a UTF-8 probe dies with "Non-UTF-8 code
+        # starting with '\xa1' ... in file <stdin>" — a test-harness failure that
+        # looks exactly like a broken image. argv is UTF-16 on Windows, so the
+        # source arrives intact (measured 2026-10-12, the Windows release gate).
         proc = subprocess.run(
-            [sys.executable, "-", str(REPO), ",".join(sorted(excluded_top_level_names()))],
-            input=PROBE, capture_output=True, text=True, cwd=str(REPO),
+            [sys.executable, "-c", PROBE, str(REPO),
+             ",".join(sorted(excluded_top_level_names()))],
+            capture_output=True, text=True, cwd=str(REPO),
             env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
         self.assertEqual(

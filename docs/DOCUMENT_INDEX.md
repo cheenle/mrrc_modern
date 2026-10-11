@@ -64,7 +64,7 @@
 | [.agents/skills/dual-platform-release/SKILL.md](.agents/skills/dual-platform-release/SKILL.md) | 发布日总流程（版本 bump → 构建 → 文档/站点 → 部署 → 验证 → tag） | 发布 |
 | [.agents/skills/dual-platform-release/release-artifacts.json](.agents/skills/dual-platform-release/release-artifacts.json) | 产物登记表：每个承载版本/尺寸/SHA 的文件一条规则 | 发布 |
 | [win_pack.md](win_pack.md) / [mac_pack.md](mac_pack.md) / [pi_pack.md](pi_pack.md) | 三平台打包操作手册（KVM VM / 本机 DMG / Docker pi-gen） | 发布 |
-| [docs/w103d_pack.md](docs/w103d_pack.md) / [docs/host-selection.md](docs/host-selection.md) | **W103D 通用电台盒子镜像**（Amlogic 云电脑，11 机型可切换）：构建手册与主机选型 —— **尚未构建、未发版**，不在三平台发布链内 | 发布 |
+| [docs/W103D_GUIDE.md](docs/W103D_GUIDE.md) / [docs/w103d_pack.md](docs/w103d_pack.md) / [docs/host-selection.md](docs/host-selection.md) | **W103D 通用电台盒子镜像**（Amlogic 云电脑，11 机型可切换）：**用户手册**（开箱到干活：§4.1 烧盘后扩盘 / §7 口令一览 / §9.8 局域网配网页 `/setup`+`/settings` / §20.5 无线真机记录）、构建手册、主机选型。1.25.5 已上线；1.26.0 的站点卡片已写好（`1,008,925,741 B` / `9913752e…`），**镜像本体待上传**。真机操作另见技能 `w103d-box`（构建与烧盘）/ `w103d-emmc`（固化进 eMMC） | 发布/用户 |
 
 ### 🔍 专项分析
 | 文档 | 说明 | 读者 |

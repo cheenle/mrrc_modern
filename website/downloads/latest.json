@@ -1,19 +1,19 @@
 {
-  "latest": "1.25.5",
+  "latest": "1.26.0",
   "installer": {
-    "version": "1.25.5",
+    "version": "1.26.0",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe",
-    "sha256": "1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2",
-    "size": 54395338
+    "sha256": "5fc8b192317d432eec88904d8168553d4ea874409225ca89a6999d125486b6c3",
+    "size": 55866721
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-09T14:32:29",
-  "notes": "1.25.5：主界面快捷行从「显示下一个」改成「显示当前」—— MODE/BAND/FILTER 显示当前模式/波段/滤波带宽，ATT/PRE 显示完整档位（OFF / 6dB / 12dB / 18dB、OFF / AMP1 / AMP2），点击仍然轮转到下一档；频谱带宽成为每连接可协商的档位（设置里选 full / mid / low，payload 151→38→19 kbps，未声明能力的连接逐字节等于从前）；配置文件的写入收敛到唯一写者 env_store.py（文件锁 + 原子替换、保注释保序、不动 mode 与 owner），读取只有一个容错读者；新增只读页 /manage（热点是否在跑 + 三个安全闸门当前值与后果）。装完第一次打开若仍见旧标签，强刷一次（macOS ⌘⇧R）。",
+  "releasedAt": "2026-10-12T04:11:34",
+  "notes": "1.26.0：W103D 盒子刷完机不再需要 HDMI 与键盘——接上网线，在局域网页面（/setup 与 /settings）里自己配 Wi-Fi、名字、时区并重启（引导热点那条路已在真机判死）；树莓派镜像与盒子共用同一套服务层，一次性拿到 11 型号切换、内置 aarch64 FTDI 库（开箱真频谱）、Cloud Hub 与 mrrc-update；新增客户主动开启、限时、随时可关的远程协助通道（口令只在客户手里，公网上没有 SSH 端口）。W103D 盒子请只连 2.4 GHz Wi-Fi：5 GHz 能关联但数据面不通，还会把 MT7663 芯片拖到 MCU 超时。",
   "previous": {
-    "version": "1.25.4",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.4-Windows-x64-Setup.exe",
-    "sha256": "7daebeae65dccfb184be6b93553df0967e12f9fd84b9a937e3a7ae4c4c0659ab",
-    "size": 54347067
+    "version": "1.25.5",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.5-Windows-x64-Setup.exe",
+    "sha256": "1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2",
+    "size": 54395338
   }
 }

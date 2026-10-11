@@ -87,6 +87,32 @@ All notable changes to the MRRC Web Control project.
   （`MCU initialization failed: -110`）。**AP 模式在这块板子上不成立**，一个谁也扫不到的热点比没有
   引导更糟，所以引导改走局域网页面。`net_wifi.start_hotspot()` 与相关既有条目一并作废。
 
+### 真机验收（2026-10-12，W103D 1.26.0 首次完整走查）
+
+U 盘路线从零刷到能用：刷盘 → 逐字节核对（`cmp` = `IMAGE_MATCH_OK`）→ 扩盘（`growpart` + `resize2fs`，
+2.9 G → 227 G）→ 首启 → 口令 → 局域网配网页。结论与缺口都收进文档（指南 §4.1/§7/§9.8/§20.5、
+`packaging/box/README.md`、`w103d-box` 技能的陷阱表）。
+
+- **局域网配网页全链路跑通**：`/settings` 里扫描列出 11 个网络 → 选 `CMCC-cnham` → 输密码 → 连上。
+  服务端日志 `box: switching to WiFi 'CMCC-cnham'` + `POST /api/box/wifi` 200 + 两次
+  `/api/box/wifi/status` 200；NM 落地 `CMCC-cnham.nmconnection`（**0600**、`autoconnect=yes**）
+  ——设计 D-4 的“口令只走 argv、不落日志”在产物里成立。
+- **2.4 GHz 全绿**：关联 → DHCP `192.168.1.217` → 网关与外网通 → 拿到全局 IPv6 → `NTPSynchronized=yes`；
+  全程 `mailbox 报错 0 / MCU 超时 0`。钉版固件确实生效：`N9 Firmware Version: 7663mp1827,
+  Build Time: 20210308205639`，`dpkg-divert` 记录在。
+- **5 GHz 是坑（新证据）**：连 `…-5G`（ch149）能关联、DHCP 地址也拿到，但**数据面是死的**；
+  约 100 秒后 `Message 000500c0 (seq 7) timeout` 起、随后 `W103D mailbox write … failed: -110`
+  连发，**扫描从此返回空表**。结论：**只用 2.4 GHz**。
+- **“挂死必须断电”修正为“软重启即可”**：钉版固件下 `systemctl reboot` 后 **47 秒**复位
+  （固件重载、报错归零、扫描恢复）。老结论来自 2020 版固件年代。
+- **已知缺口（记录在案，未修）**：① 盒子线 `MRRC_WEB_HOST=0.0.0.0` 让网页只听 IPv4——
+  全局 IPv6 拿得到但 `https://[<v6>]:8888` 打不开（SSH 的 `[::]:22` 正常），要 IPv6 直连网页须改 `::`；
+  ② 镜像不带 DDNS 组件，重刷后 machine-id 变 → IID 变 → `w103d.vlsc.net` 的 AAAA 陈旧；
+  ③ 扫描空表时 `/settings` 不给任何提示（空白列表）；④ Wi-Fi 面板没有手输 SSID 入口，
+  芯片挂死时只能靠 `/boot/mrrc-wifi.txt` 预置或控制台。
+- **运维教训（非代码）**：那根 U 盘上的 `/ddbr/BACKUP-arm-64-emmc.img.gz`（2.3 G，原厂 eMMC 全盘）
+  是全机唯一一份回原厂路径，而重刷镜像会把它一起冲掉——**刷前先拷走**。
+
 ## [v1.25.5] — 2026-10-09 — 快捷行回答「现在在哪」；频谱带宽成为每连接可协商的档位；配置文件的写入只剩一个作者
 
 这一版把三件互不相干的事送到用户手里：主界面那一行按钮从「按下去会变成什么」改成「电台现在在哪」；

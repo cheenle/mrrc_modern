@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.25.5 · Stable</span>
+<span>v1.26.0 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -58,10 +58,10 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.5-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.25.5
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.26.0-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.26.0
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.25.5
+<i class="fab fa-windows"></i> Windows Installer v1.26.0
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i> Android APK v1.1.31
@@ -95,7 +95,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.25.5</strong>
+<strong> What's new in v1.26.0</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -106,8 +106,29 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               <a href="blog.html" style="font-size: 0.8rem; color: var(--scope-primary)">all posts →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
+            <li>
+<strong>Someone can fix it without driving over: press one button, read out a one-time password</strong> —
+              the app can open a temporary helper account on request (Settings &rarr; Support) and shows the
+              username and password to read out over the phone; the session rides the Cloud Hub tunnel the
+              app already uses. The portal sees it arrive and can end it, and the password never reaches a
+              log, the config file, a diagnostics bundle or a portal request — it is typed once by the helper
+              and stored nowhere.
+            </li>
+            <li>
+<strong>The server image configures itself from the LAN — no monitor, no serial cable</strong> —
+              Wi-Fi scan and join, hostname, timezone, system update, reboot and service restart
+              (Settings &rarr; Box), plus a <code>/setup</code> landing page for the first visit. You can also
+              tell an image which Wi-Fi to join before the first boot by dropping a
+              <code>mrrc-wifi.txt</code> on its boot partition.
+            </li>
+            <li>
+<strong>The Raspberry Pi image caught up with the W103D box</strong> — both image lines are built from
+              one service layer now, so the Pi image ships what the box had: eleven radio profiles, the FTDI
+              aarch64 libraries, Cloud Hub, the <code>mrrc-update</code> / <code>mrrc-radio</code> helpers,
+              the login banner and the same first-boot behaviour.
+            </li>
 <li>
-<strong>The quick row answers "where am I" instead of "what happens if I press"</strong> —
+<strong>Previous release (v1.25.5): The quick row answers "where am I" instead of "what happens if I press"</strong> —
               <code>MODE</code> / <code>BAND</code> / <code>FILTER</code> show the <em>current</em>
               mode, band and filter width; <code>ATT</code> / <code>PRE</code> show the full current
               step (<code>OFF / 6dB / 12dB / 18dB</code>, <code>OFF / AMP1 / AMP2</code>) instead of
@@ -119,75 +140,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               is a read-only page showing whether the setup hotspot is up and what the three safety
               gates are set to.
             </li>
-            <li>
-<strong>Previous release (v1.25.4): the macOS tunnel stops leaking a process per start — the sweep never ran there</strong> —
-              v1.25.2 fixed this leak on Windows by changing how a leftover <code>frpc</code> was
-              <em>enumerated</em>, but the function still returned before doing anything unless the
-              platform was Windows, so on macOS every start left one behind, forever. Measured on one
-              Mac: <strong>six</strong> starts, <strong>six</strong> orphans. It compounds — the orphan
-              holds the entry name, so the <em>next</em> instance can never register itself. The sweep now
-              lists processes with <code>ps</code> (and only ones actually named <code>frpc</code>: an
-              editor holding the config open names that path on its command line too), ends them with
-              <code>SIGTERM</code> so the entry is released at once, and never raises — and shutdown now
-              stops the tunnel child it used to abandon.
-            </li>
-<li>
-<strong>Previous release (v1.25.3), a fresh press can no longer be unkeyed by the remote-session safety gate</strong> — Cloud Hub
-              turns on the liveness gate that releases a transmitting session when it stops proving it is
-              alive. The heartbeat is sent <em>at key-up</em>, but the server cannot read that beat until the
-              key-up handler returns (CAT write + audio start, tens of milliseconds) — and a watchdog tick
-              landing in that window saw a session that was both the owner <em>and</em> silent. A field log
-              recorded <strong>seven</strong> releases of the operator's own press, each <strong>20–70 ms</strong>
-              after keying, with gaps that were exactly the time since that operator's previous press. Keying
-              now refreshes the clock, while a session that never declared the heartbeat capability stays
-              ungated. The fix is in <code>server.py</code>, a frozen entry script the hotfix channel cannot
-              reach, which is why it ships as an installer.
-            </li>
-<li>
-<strong>Previous release (v1.25.2), the Windows tunnel stops leaking a process per start</strong> — every launch of the app
-              used to leave another <code>frpc</code> behind. The sweep that clears a leftover one before
-              starting a new one called <code>wmic</code>, which Windows 11 no longer ships, and its
-              <code>except</code> turned that into a silent no-op: <strong>six</strong> processes had
-              piled up over two days, five of them orphans, all claiming one entry — and the hub logged
-              <strong>7143</strong> “proxy already exists” lines in a single day, while nothing on the
-              machine itself said a word. It now enumerates with PowerShell's CIM cmdlets, compares config
-              paths the way Windows does (insensitive to case and slash), and <em>says so when the look-up
-              fails</em>.
-            </li>
-<li>
-<strong>Two launchers can no longer start two servers</strong> — the port probe only sees a server
-              that has <em>finished</em> starting, so two starts inside its 0.4 s window both found the port
-              free (the field machine had two launchers, two servers and two tunnels). A named mutex closes
-              that window, and the kernel releases it when the process exits, so a crashed launcher cannot
-              lock you out.
-            </li>
-<li>
-<strong>Previous release (v1.25.1), Portal enrolment works again on macOS</strong> — the app had <em>no CA trust store</em>:
-              the bundle carried the builder's OpenSSL, whose compiled-in CA path exists only on a
-              build machine. Applying for an entry, uploading a 🐞 diagnostics bundle and the update
-              check all failed with <code>CERTIFICATE_VERIFY_FAILED</code> (that is also why a
-              report bundle had to be handed over by hand). The app ships its own CA bundle now,
-              falls back to the platform's, and a build gate <em>empties the trust store on purpose</em>
-              before a release may pass.
-            </li>
-<li>
-<strong>The spectrum is real again on macOS</strong> — the scope worker could not find the FT-4222
-              libraries: the launcher resolved the configured <em>relative</em> path against
-              <code>Contents/MacOS</code>, where nothing lives, so <code>scope_pipe</code> exited with
-              “FTDI libraries not found” and the plot silently showed the S-meter curve. Fixed, with a
-              regression test for the signed-bundle layout.
-            </li>
-<li>
-<strong>Known-issue cards on the answers page</strong> — problems that are already understood are
-              written up by <em>symptom</em>, so they can be found without a report number.
-            </li>
-<li>
-<strong>Cloud Hub in the drawer menu (top bar ☰)</strong> — fill in a callsign, apply, and wait:
-              once the operator approves, the app signs its certificate, enrols it, writes its own
-              configuration and runs the tunnel by itself. Nothing left to click: the server checks
-              every 30 seconds.
-            </li>
-</ul>
+            </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
               Every size and SHA-256 on this page is checked against the built artifact by
               <code>release_check.py</code>, so a stale download card fails the build
@@ -440,14 +393,14 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.25.5 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.26.0 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.9 MB · x64 · 54,395,338 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 1ed3fb8d…</code>
+            53.3 MB · x64 · 55,866,721 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 5fc8b192…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.25.5 is zero-config on first run: it auto-generates a web
+            v1.26.0 is zero-config on first run: it auto-generates a web
             password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
             0x19) and its serial port (COM), and the login page shows the
             auto-generated password. The web Connection Settings dialog
@@ -469,10 +422,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.25.5-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.25.5
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.26.0-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.26.0
             </a>
-<div class="dl-meta">54,395,338 bytes · SHA-256 1ed3fb8d…</div>
+<div class="dl-meta">55,866,721 bytes · SHA-256 5fc8b192…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -488,11 +441,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.25.5-arm64.dmg — v1.25.5 Stable </strong>
+<strong> MRRC-Modern-v1.26.0-arm64.dmg — v1.26.0 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            59.6 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 62,490,425 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 58ad7481…</code>
+            60.9 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 63,876,177 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 6f504a78…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -513,7 +466,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.25.5-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.26.0-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -540,8 +493,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-rpi64.img.xz — Raspberry Pi</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            662 MB (662,225,336 bytes) · arm64 · Pi 3B+/4/5 ·  · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
-<code style="font-size: 0.76rem">SHA-256: 9a81ca4c6520811c3cba591e2848ffa52d2c5055a23f73ada76545309c147ea8</code>
+            662 MB (481,145,192 bytes) · arm64 · Pi 3B+/4/5 ·  · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
+<code style="font-size: 0.76rem">SHA-256: d431c9aa1822aa4318f08eb037c91e97be99d0c0f2a7893763bfe24e45c7908b</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             Flash with Raspberry Pi Imager ("Use custom image"), boot, and open
@@ -579,11 +532,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
           <i class="fas fa-tv" style="color: var(--scope-primary)"></i>
-          <strong> MRRC-Modern-1.25.5-w103d.img.gz — ZTE W103D</strong>
+          <strong> MRRC-Modern-1.26.0-w103d.img.gz — ZTE W103D</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.07 GB (1,154,545,271 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 5d74f7378b64bd7ebff16528aa4b5222097de22b9f3b214fe1ccebc62dc8ffc1</code>
+              1.07 GB (1,008,925,741 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: 9913752e6f366f6944869b9bfc70813743aafdd819d9b9416d11ec585f4abfef</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               A ready-made server image for this specific TV box. Flash it to a USB
@@ -597,7 +550,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               cable and a network cable, with the USB stick kept as the rescue copy.
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-          <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-1.25.5-w103d.img.gz">
+          <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-1.26.0-w103d.img.gz">
           <i class="fas fa-download"></i> Download W103D Image
               </a>
           <a class="btn btn-secondary btn-large" href="w103d.html" rel="noopener" target="_blank">
@@ -655,10 +608,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.25.5, 51.9 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.26.0, 53.3 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2</code>
+<code>SHA-256 5fc8b192317d432eec88904d8168553d4ea874409225ca89a6999d125486b6c3</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -1011,7 +964,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="perf-card">
 <div class="metric">1604</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>2070 tests on macOS / 2067 on Windows in the v1.25.5 release</small>
+              Hardware-Free Tests<br/><small>2070 tests on macOS / 2067 on Windows in the v1.26.0 release</small>
 </div>
 </div>
 </div>
@@ -1157,7 +1110,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.80</strong> · Architecture decisions, component
+            <strong>V2.81</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>
@@ -1213,7 +1166,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.25.5</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.26.0</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

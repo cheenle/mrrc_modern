@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.25.5 · 稳定版</span>
+<span>v1.26.0 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -56,10 +56,10 @@
           CAT/CI-V 控制——无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.25.5-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.25.5
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.26.0-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.26.0
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.25.5
+<i class="fab fa-windows"></i> Windows 安装包 v1.26.0
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i> 安卓 APK v1.1.31
@@ -86,7 +86,7 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.25.5 更新内容</strong>
+<strong> v1.26.0 更新内容</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -98,7 +98,24 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
-<strong>快捷行回答「现在在哪」，不再是「按下去会变成什么」</strong>——<code>MODE</code> / <code>BAND</code> / <code>FILTER</code>
+<strong>不用上门也能修：按一下，念一串口令</strong>——
+              App 里按需开一个临时协助账号（设置 → 支持），屏幕上显示用户名与一次性口令，念给电话那头的
+              支持者即可；会话走 App 本来就在用的 Cloud Hub 隧道。门户能看到它连上来、也能强制结束；而口令
+              不进日志、不进配置文件、不进诊断包、不进门户请求——只被念一次，不落盘。
+            </li>
+            <li>
+<strong>镜像自己会配网了——在局域网里配，不接显示器、不接串口线</strong>——
+              扫 Wi-Fi 并加入、改主机名、改时区、系统更新、重启、重启服务（设置 → 盒子），首访还有
+              <code>/setup</code> 引导页。也可以在烧盘前于启动分区放一个 <code>mrrc-wifi.txt</code>，
+              首次开机就会自己连上指定的 Wi-Fi。
+            </li>
+            <li>
+<strong>树莓派镜像追上了 W103D 盒子</strong>——两条镜像线现在共用同一份服务层，所以 Pi 镜像拿到了盒子
+              有的那套：11 份电台画像、FTDI aarch64 库、Cloud Hub、<code>mrrc-update</code> /
+              <code>mrrc-radio</code> 助手、登录横幅，以及同样的首启行为。
+            </li>
+<li>
+<strong>上一版（v1.25.5）：快捷行回答「现在在哪」，不再是「按下去会变成什么」</strong>——<code>MODE</code> / <code>BAND</code> / <code>FILTER</code>
               显示<em>当前</em>模式、波段与滤波带宽；<code>ATT</code> / <code>PRE</code> 显示完整当前档位
               （<code>OFF / 6dB / 12dB / 18dB</code>、<code>OFF / AMP1 / AMP2</code>），不再是三字符缩写；
               点击仍然轮转到下一档。同时：频谱带宽成为每连接可协商的档位（设置里选 full / mid / low，
@@ -106,62 +123,7 @@
               <code>env_store.py</code>（文件锁 + 原子替换、保注释保序、不动 mode），新增只读页
               <code>/manage</code>（热点是否在跑 + 三个安全闸门当前值及其后果）。
             </li>
-            <li>
-<strong>上一版（v1.25.4，仅 macOS）：macOS 隧道不再「每启动一次就漏一个进程」——那边的清理代码从来没跑过</strong>——v1.25.2 修这个泄漏时，改的是
-              <em>枚举方式</em>（<code>wmic</code> → <code>Get-CimInstance</code>），但那个函数在非 Windows 上
-              仍然一进门就返回，于是 macOS 上每次启动都留下一个，一直如此。一台 Mac 上实测：
-              <strong>6 次</strong>启动、<strong>6 个</strong>孤儿。而且它会自己滚起来 —— 孤儿占着入口名，
-              <em>下一次</em>启动的实例就再也注册不上。现在枚举改走 <code>ps</code>
-              （且只认真的叫 <code>frpc</code> 的进程：用编辑器打开着那份配置文件的 <code>vim</code>，
-              命令行里也有这个路径），终止改走 <code>SIGTERM</code>，入口当场释放，且永不抛出；
-              关停时也会停掉那个以前被丢下的隧道子进程。
-            </li>
-<li>
-<strong>上一版（v1.25.3）：刚刚按下的这一键，不会再被远端会话的存活闸门自己放开</strong>——Cloud Hub 会打开存活闸门：
-              发射中的会话一旦不再证明自己活着就释放。心跳是<em>按键时</em>发的，但服务端要等按键处理
-              （CAT 写 + 起音频，几十毫秒）返回才能读到那条心跳 —— 而落在这段窗口里的检查看到的是一个
-              「既是持键者、又已经沉默了很久」的会话。现场日志里记了 <strong>7 次</strong>误放开，
-              每次都发生在按键后 <strong>20–70 ms</strong>，间隔恰好是那位操作者上一次按键以来的时间。
-              现在<strong>按键本身就是活着的证明</strong>（刷新存活时钟）；从未声明过心跳能力的会话依旧不受门控。
-              修复在 <code>server.py</code> —— 冻结入口脚本，热修通道覆盖不到，只能随安装包到达用户。
-            </li>
-<li>
-<strong>上一版（v1.25.2）：Windows 隧道不再「每启动一次就漏一个进程」</strong>——以前每次启动应用都会多留一个
-              <code>frpc</code>。回收旧进程的那段代码用的是 <code>wmic</code>，而 Windows 11 已不再
-              自带它，那个裸 <code>except</code> 又把失败变成了静默的空操作：两天里累积了
-              <strong>六个</strong> 进程（五个是孤儿）、全在抢同一个入口 —— hub 一天被刷了
-              <strong>7143</strong> 行 “proxy already exists”，而这台机器自己一声不吐。现在改用
-              PowerShell 的 CIM 命令枚举，路径比较按 Windows 的规则（大小写不敏感、两种斜杠），
-              并且<em>查不到时会出声告警</em>。
-            </li>
-<li>
-<strong>两个启动器不会再各起一个服务器</strong>——原有的端口探测只看得见<em>已经启动完成</em>
-              的服务器，两次启动落在它 0.4 秒的窗口内时都会认为端口是空的（现场那台机器上正好有
-              两个 launcher、两个 server 和两条隧道）。现在启动器持有命名互斥，内核在进程退出时
-              自动释放 —— 启动器崩了也不会把你锁在外面。
-            </li>
-<li>
-<strong>上一版（v1.25.1）：macOS 上「接入云端」又能用了</strong>——应用<strong>没有一个可用的 CA 信任库</strong>：
-              包里带着构建机的 OpenSSL，它的默认 CA 路径只在构建机上存在。于是申请入口、上传
-              🐞 诊断包、软件更新检查全部报 <code>CERTIFICATE_VERIFY_FAILED</code>（那份报告包之所以
-              要人工递过来，正是这个原因）。现在应用随包带自己的 CA、再回退系统 CA，而且构建闸门会
-              <strong>故意把信任库打空</strong>，通不过就不许发版。
-            </li>
-<li>
-<strong>macOS 上频谱是真谱了</strong>——采集进程找不到 FT-4222 动态库：启动器把配置里的
-              <strong>相对路径</strong>解析到了 <code>Contents/MacOS</code>（那里什么都没有），
-              于是 <code>scope_pipe</code> 报 “FTDI libraries not found” 退出、界面一直画 S 表合成曲线。
-              已修，并针对签名包的目录结构补了回归测试。
-            </li>
-<li>
-<strong>答复页新增「已知问题卡」</strong>——已经查清的问题按<strong>现象</strong>成卡，
-              不用上报编号也能查到。
-            </li>
-<li>
-<strong>抽屉菜单（顶栏 ☰）里的「接入云端」</strong>——填呼号 → 申请 → 等批准；批下来后应用自己签证书、登记、
-              写配置、起隧道，全程不用终端。批准就是最后一步：服务端每 30 秒自查一次。
-            </li>
-</ul>
+            </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
               本页每个尺寸与 SHA-256 都由 <code>release_check.py</code> 对照构建产物校验 ——
               下载卡片过期会直接让构建失败，而不是发布出去。
@@ -409,14 +371,14 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.25.5 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.26.0 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            51.9 MB · x64 · 54,395,338 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 1ed3fb8d…</code>
+            53.3 MB · x64 · 55,866,721 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 5fc8b192…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.25.5 首次运行零配置：自动生成网页密码，自动识别电台
+            v1.26.0 首次运行零配置：自动生成网页密码，自动识别电台
             （FT-710 ASCII CAT / Icom CI-V 0x19）与串口（COM），登录页
             直接显示自动生成的密码。网页“连接设置”对话框可修改电台型号、
             串口、RX+TX 音频设备与密码，支持保存并重启。CAT、音频与频谱行为不变。
@@ -432,10 +394,10 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.25.5-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.25.5 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.26.0-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.26.0 版本化安装包
             </a>
-<div class="dl-meta">54,395,338 bytes · SHA-256 1ed3fb8d…</div>
+<div class="dl-meta">55,866,721 bytes · SHA-256 5fc8b192…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -451,11 +413,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.25.5-arm64.dmg — v1.25.5 稳定版 </strong>
+<strong> MRRC-Modern-v1.26.0-arm64.dmg — v1.26.0 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            59.6 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 62,490,425 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 58ad7481…</code>
+            60.9 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 63,876,177 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 6f504a78…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
@@ -473,7 +435,7 @@
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.25.5-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.26.0-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -500,8 +462,8 @@
 <strong> MRRC-Modern-rpi64.img.xz — 树莓派</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            662 MB (662,225,336 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
-<code style="font-size: 0.76rem">SHA-256: 9a81ca4c6520811c3cba591e2848ffa52d2c5055a23f73ada76545309c147ea8</code>
+            662 MB (481,145,192 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
+<code style="font-size: 0.76rem">SHA-256: d431c9aa1822aa4318f08eb037c91e97be99d0c0f2a7893763bfe24e45c7908b</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             用 Raspberry Pi Imager（"使用自定义镜像"）烧卡，上电后浏览器打开
@@ -538,11 +500,11 @@
           ">
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
           <i class="fas fa-tv" style="color: var(--scope-primary)"></i>
-          <strong> MRRC-Modern-1.25.5-w103d.img.gz — 中兴 W103D 盒子</strong>
+          <strong> MRRC-Modern-1.26.0-w103d.img.gz — 中兴 W103D 盒子</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.07 GB（1,154,545,271 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 5d74f7378b64bd7ebff16528aa4b5222097de22b9f3b214fe1ccebc62dc8ffc1</code>
+              1.07 GB（1,008,925,741 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: 9913752e6f366f6944869b9bfc70813743aafdd819d9b9416d11ec585f4abfef</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               针对这款盒子预装好的服务端镜像。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，
@@ -553,7 +515,7 @@
               最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-          <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-1.25.5-w103d.img.gz">
+          <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-1.26.0-w103d.img.gz">
           <i class="fas fa-download"></i> 下载 W103D 镜像
               </a>
           <a class="btn btn-secondary btn-large" href="w103d.html" rel="noopener" target="_blank">
@@ -610,10 +572,10 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.25.5，51.9 MB，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.26.0，53.3 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2</code>
+<code>SHA-256 5fc8b192317d432eec88904d8168553d4ea874409225ca89a6999d125486b6c3</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -951,7 +913,7 @@
 <div class="perf-card">
 <div class="metric">1604</div>
 <div class="metric-label">
-              无硬件依赖测试<br/><small>v1.25.5 发布版实测：macOS 2070 项 / Windows 2067 项</small>
+              无硬件依赖测试<br/><small>v1.26.0 发布版实测：macOS 2070 项 / Windows 2067 项</small>
 </div>
 </div>
 </div>
@@ -1093,7 +1055,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.80</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V2.81</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>
@@ -1149,7 +1111,7 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.25.5</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.26.0</a></li>
 <li><a href="../downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

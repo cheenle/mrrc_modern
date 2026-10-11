@@ -44,6 +44,51 @@
 **待做（发版时一起）**：SDD 仪式（新 AD 与 NFR：远程访问面）；客户向文档；P2 门户网页终端；
 P3"复用系统账号"高级模式。
 
+---
+
+## 门户上线清单（**已备好，未执行**；照 `mrrc_hub/deploy/README.md` 的既有顺序）
+
+现网 hub = `cheenle@www.vlsc.net`（有 NOPASSWD sudo），portal 跑在 `127.0.0.1:8890`、
+`User=mrrcportal`，代码落点 `/opt/mrrc-portal/`。
+
+```bash
+# ① 推送（注意：会带上门户仓库里已有的 17 个未推送提交，见下）
+cd /Users/cheenle/HAM/hub/mrrc_hub && git push origin main
+
+# ② 上传到 hub 的 /tmp 并两侧核哈希
+cd /Users/cheenle/HAM/hub/mrrc_hub
+tar czf /tmp/mrrc-portal-help.tgz portal tests deploy
+shasum -a 256 /tmp/mrrc-portal-help.tgz
+scp /tmp/mrrc-portal-help.tgz cheenle@www.vlsc.net:/tmp/
+ssh cheenle@www.vlsc.net 'sha256sum /tmp/mrrc-portal-help.tgz'      # 与上一行一致才继续
+
+# ③ 在生产机上、以真正的服务账号跑全套测试（全绿才动现网）
+ssh cheenle@www.vlsc.net 'cd /tmp && rm -rf mrrc-hub-check && mkdir mrrc-hub-check \
+  && tar xzf mrrc-portal-help.tgz -C mrrc-hub-check \
+  && cd mrrc-hub-check && for t in tests/test_*.py; do sudo -u mrrcportal python3 "$t" || exit 1; done'
+
+# ④ 备份 → 安装 → 重启（回滚一条命令，见下）
+ssh cheenle@www.vlsc.net 'ts=$(date +%Y%m%d-%H%M%S); echo "$ts" > /tmp/mrrc-portal-backup-ts \
+  && sudo cp -a /opt/mrrc-portal /opt/mrrc-portal.bak-$ts \
+  && sudo rsync -a --chown=mrrcportal:mrrcportal /tmp/mrrc-hub-check/portal/ /opt/mrrc-portal/portal/ \
+  && sudo systemctl restart mrrc-portal && sleep 2 && systemctl is-active mrrc-portal'
+
+# ⑤ 上线后逐项复验（这次改动的那几条）
+curl -sI https://portal.mrrc.vlsc.net/admin/static/htmx.min.js | head -1     # 200：静态资源没漏装
+curl -s  -X POST https://portal.mrrc.vlsc.net/help/request -d 'callsign=BG7IFP&token=x' | head -c 120
+#     ↑ 期望 403「申请令牌无效」——路由存在且令牌门在工作（404 说明没装上）
+ssh cheenle@www.vlsc.net 'journalctl -u mrrc-portal --since "-5 min" | tail -20'
+
+# 回滚：sudo rsync -a --delete /opt/mrrc-portal.bak-<ts>/portal/ /opt/mrrc-portal/portal/ && sudo systemctl restart mrrc-portal
+```
+
+**推送前要你点头的一件事**：`mrrc_hub` 的 `main` 比 `origin/main` 领先 **19 个提交**——
+本线 2 个，另有 **17 个是你自己的门户界面改版那一批**（`a5b2103` … `31160b1`）。
+`git push` 是整条分支，所以要么全推，要么先只推这条线（可以用一个临时分支或 `git push origin <sha>:main`）。
+
+**实例侧**（不用部署到 hub）：验收机器上要跑**含本线代码**的应用；并且要让它**重新接入一次
+Cloud Hub**，好把 `webServer` 管理段写进 `frpc-<label>.toml`（旧配置里没有它，reload 无处可发）。
+
 
 ---
 

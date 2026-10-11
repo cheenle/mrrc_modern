@@ -325,7 +325,7 @@ mrrc_modern/
 ├── launcher_log.py              # Launcher-side startup tee
 ├── launcher_net.py              # Ask the running server which URL the browser should get
 ├── net_tls.py                   # Outbound TLS trust for the packaged app
-├── net_wifi.py                  # NetworkManager adapter for the W103D setup access point
+├── net_wifi.py                  # NetworkManager adapter for the box's STA side (scan / join / address)
 ├── ssl_bootstrap.py             # Self-signed TLS bootstrap for the desktop launcher
 ├── pi_web_proxy.py              # HTTP Basic Auth reverse proxy for pi-web
 ├── ft710_power.py               # FT-710 power control straight over the serial port (no server needed)
@@ -346,9 +346,10 @@ mrrc_modern/
 ├── static/                      # Browser UI (plain ES modules + PWA, no build step)
 │   ├── index.html               # Main SPA shell (mobile-first responsive)
 │   ├── listen.html / listen.js  # Listen-only UI (MRRC_LISTEN_PASSWORD)
-│   ├── setup.html               # First-run setup dialog
+│   ├── setup.html               # 首次上线引导 (/setup)
+│   ├── settings.html            # 盒子设置页 (/settings)
+│   ├── box_api.js               # /setup 与 /settings 共用的客户端
 │   ├── support.html             # 🐞 diagnostics + support flow
-│   ├── manage.html              # Read-only status page (/manage)
 │   ├── ft710.css                # Dark amber theme, iPhone safe-area support
 │   ├── ft710_main.js            # WebSocket client (4 channels), state, audio, spectrum
 │   ├── ft710_ui.js              # All UI rendering: waterfall, S-meter, meters, controls

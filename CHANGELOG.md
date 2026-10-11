@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [Unreleased] — W103D 无线修复：出厂 WiFi 固件进镜像；开放热点真正开放
+## [Unreleased] — W103D：局域网配置页取代硬件失败的热点引导；出厂 WiFi 固件进镜像
 
 **W103D 盒子（2026-10-11 真机定案）**
 
@@ -10,10 +10,42 @@ All notable changes to the MRRC Web Control project.
   `dpkg-divert` 防 linux-firmware 升级覆盖）：基底自带的 2020 版在这块板上渐进式挂死（每 ~30 秒掉线、
   扫描楔死、~16 分钟 MCU 无响应、软重启不复位）。修复后实测 2.4G 200 包 0.5% 丢包 / 平均 6.3 ms /
   零掉线。溯源见 `packaging/box/vendor-mt7663.md`。
-- `net_wifi.start_hotspot()` 改为显式建**无安全段**的 AP profile——NM 1.42 的 `device wifi hotspot`
-  不传密码时会**自动生成随机 WPA 密码**，「开放热点」实为加密网络。
 - 真机边界记录：MT7663S 的 AP 模式**不发信标**（初始化热点在此板不可用，首配走有线/HDMI）；
   5GHz 可关联但数据面不可用。`verify.sh` 新增第 12 项（N9 固件钉版校验）。
+
+### Added
+
+- **新增了局域网配置页与两条上线路**：盒子接入你的局域网后，用任意设备打开网页即可配置盒子 OS ——
+  引导页 `/setup`（首次上线：设登录口令 + 选 Wi-Fi）与设置页 `/settings`（Wi-Fi 切换、有线口
+  DHCP/静态、盒子名字与时区、重启），共用 `static/box_api.js`。**这两条路是本次新增的，尚待下次
+  刷机验证**：eth0 能否 DHCP 到地址（R-1）与 polkit 是否真的对 `mrrc` 放行（R-2）都只能在真机闭环
+  （见 spec §13），所以本条目**不声明"两条上线路均可用"**。
+- **首次窗口只有密码一个键宽**：无密码写面只放行 `MRRC_WEB_PASSWORD`；判据是**状态**（盒子从未被
+  用户设过口令 **且** 请求来自盒子自己的任一子网），不是标志位。
+- **刷机时预置 Wi-Fi**：`/boot/mrrc-wifi.txt`（`SSID=`/`PSK=`）由独立的 `mrrc-wifi-preseed.service`
+  读一次、连上后删除。**Wi-Fi 凭据与 `MRRC_*` env 分开两个文件**——env 会被复制进 `0640` 的配置层、
+  可能进支持包，PSK 不能和配置键混在一起（设计 D-4）。
+- **盒子名字与 mDNS**：默认主机名改为 **`MRRC-Modern`**，`avahi-daemon` 进镜像并 enable，
+  `<名字>.local` 可解析（同网段撞名时 avahi 自称 `MRRC-Modern-2.local`）；DHCP 主机名作为对所有
+  客户端都有效的退路。`verify.sh` 第 11 项改为查这套身份 + 提权通道。
+- **提权通道**：polkit 规则放行 `mrrc` 用户写 NetworkManager（`packaging/common/49-mrrc-nm.rules`），
+  外加只管四个系统动词（reboot / set-hostname / set-timezone / avahi-reload）的小 root helper
+  （`linux/box_helper.py`，固定动词表、argv 数组、`SO_PEERCRED` 只认 `mrrc`）。
+
+### Changed
+
+- `net_wifi.py` 收缩为 **STA 半边**（扫描 / 连接 / 地址 / `-t` 转义解析）；其上的纯逻辑——网络体检、
+  Wi-Fi 切换状态机、有线口 DHCP/静态、密码校验、helper 客户端——归 `box_ops.py`，两个页面共用。
+  `AGENTS.md` 与 `README.md` 的静态清单同步改写。
+
+### Removed
+
+- **退役 setup 热点引导**：删掉 `linux/setup_ap.py`、`mrrc-setup-ap.service`、`static/manage.html`、
+  向导端点与 `/run/mrrc/setup-ap/{state.json,wizard.json}` 两个跨用户信箱。原因是**硬件结论**：
+  2026-10-11 真机验证**失败**——MT7663S 的驱动与 NetworkManager 都报 AP 已激活，但**信标不上空**
+  （手机与 Mac 都扫不到）；换 `prefer_offload_fw=0` 会改载 `_rebb` 固件而芯片**根本不初始化**
+  （`MCU initialization failed: -110`）。**AP 模式在这块板子上不成立**，一个谁也扫不到的热点比没有
+  引导更糟，所以引导改走局域网页面。`net_wifi.start_hotspot()` 与相关既有条目一并作废。
 
 ## [v1.25.5] — 2026-10-09 — 快捷行回答「现在在哪」；频谱带宽成为每连接可协商的档位；配置文件的写入只剩一个作者
 

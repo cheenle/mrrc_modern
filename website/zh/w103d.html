@@ -224,7 +224,7 @@ adb shell reboot update</code></pre>
 <tr><td>探测<strong>声卡</strong>（电台的 USB 声卡）</td><td>同上</td></tr>
 </tbody></table></div>
 <p><strong>首启不需要联网</strong>：上面四件事全在本机完成（生成口令、自签证书、探测串口与声卡）， 不下载任何东西。开机后 <code>mrrc-firstboot.service</code> 跑完会把自己标记成"已做"，之后不再重复。</p>
-<p><strong>既没有网线、也没有能连上的已保存 Wi-Fi 时</strong>，<code>mrrc-setup-ap.service</code> 会另外开一个 <strong>开放热点</strong>让你进去配置 —— 见 §9.6。⚠️ 但这条路在 W103D 上<strong>目前走不通</strong>（信标不上空， 见 §9.6 的真机警告）：首次配置请走<strong>网线</strong>或 <strong>HDMI</strong>。热点按<strong>网络状态</strong>判断，不按"是否首次开机"： 盒子一旦有了可用网络，热点就不存在了，那个免口令页面也随它一起消失。</p>
+<p><strong>首次上线有两条路</strong>：最省事是<strong>插网线</strong>（eth0 默认 DHCP，插上就拿地址，见 §9.2）；没有网线时， 刷盘前在 FAT 启动分区写一份 <strong><code>/boot/mrrc-wifi.txt</code></strong>（<code>SSID=</code>/<code>PSK=</code>），首启会用它把盒子连上 Wi-Fi 并删掉这个文件（见 §9.3）。两个都不可用时，接 HDMI + USB 键盘在盒子上用 <code>nmtui</code> 直接连 （§9.4）。⚠️ 曾经用于这一步的<strong>开放热点已在 W103D 上退役</strong>：MT7663S 起得来 AP 却不发信标， 手机扫不到，2026-10-11 真机验证失败（详见 §9.6）。</p>
 <h2 id="7-进系统-第一件事改口令">7. 进系统，第一件事改口令</h2>
 <p>从路由器 DHCP 列表里找到盒子的 IP，然后：</p>
 <pre><code class="lang-bash">ssh root@&lt;盒子IP&gt;       # 出厂口令 1234（ophub Armbian 的默认值）</code></pre>
@@ -242,29 +242,37 @@ adb shell reboot update</code></pre>
 <p>登录后你应该看到主界面：频率、模式、S 表、瀑布图。<strong>这时候还没有电台——下一步接上。</strong></p>
 <figure style="margin: 2rem 0"><a href="../images/W103D/web/w103d-phone.jpg" target="_blank" rel="noopener"><img src="../images/W103D/web/w103d-phone.jpg" alt="手机打开界面：频率、瀑布与 PTT 在一个页面里" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">手机打开界面：频率、瀑布与 PTT 在一个页面里</figcaption></figure>
 <h2 id="9-接网络-有线-wi-fi">9. 接网络（有线 / Wi-Fi）</h2>
-<blockquote>⚠️ <strong>2026-10-11 真机结论：热点引导这条路在 W103D 上目前走不通</strong> —— MT7663S 的驱动 能把 AP 模式激活（系统日志一切正常），但<strong>信标不上空</strong>，手机扫不到 <code>MRRC-Setup</code>。 <strong>首次配置请走网线（§9.2）或 HDMI（§9.4）。</strong> 第 4 条的具体说明与"驱动修好后如何恢复" 见 §9.6。</blockquote>
+<blockquote>⚠️ <strong>这条的第一版是「盒子自己开热点」，它在 W103D 上真机验证失败（2026-10-11）</strong> —— MT7663S 的驱动能把 AP 模式激活（系统日志一切正常），但<strong>信标不上空</strong>，手机扫不到 <code>MRRC-Setup</code>。现在的版本是<strong>「盒子接入你的局域网 → 打开网页配置盒子 OS」</strong>：首次上线走 网线（§9.2）或预置 Wi-Fi（§9.3），没有网线也没预置时用 HDMI + <code>nmtui</code>（§9.4）。热点的 退役说明见 §9.6（设计见 2026-10-11 的 LAN 盒子设置页 spec）。</blockquote>
 <h3 id="9-1-按你手边有什么选">9.1 按你手边有什么选</h3>
 <div class="table-scroll"><table>
 <thead><tr><th>#</th><th>你手边有</th><th>方式</th><th>现在能用吗</th></tr></thead><tbody>
 <tr><td>1</td><td><strong>一根网线</strong></td><td>直接插网线（最省事）</td><td>✅ 能用 → §9.2</td></tr>
 <tr><td>2</td><td><strong>电脑 + 读卡器</strong></td><td>预置：刷盘前把配置写进启动分区</td><td>✅ 能用 → §9.3</td></tr>
 <tr><td>3</td><td><strong>HDMI + USB 键盘</strong></td><td><code>nmtui</code>：盒子上的全屏文字界面</td><td>✅ 能用 → §9.4</td></tr>
-<tr><td>4</td><td><strong>只有一台手机</strong></td><td>热点引导：盒子自己发热点</td><td>❌ <strong>本板目前不可用</strong>（信标不上空，见 §9.6）</td></tr>
+<tr><td>4</td><td><strong>只有一台手机</strong></td><td>热点引导：盒子自己发热点</td><td>❌ <strong>已退役</strong>（2026-10-11 真机验证失败）；改用预置 Wi-Fi（§9.3）或网线（§9.2）</td></tr>
 </tbody></table></div>
-<p>⚠️ <strong>一个限制</strong>：第 2 条（预置）<strong>只能写口令与电台设置，写不了 Wi-Fi 密码</strong>——Wi-Fi 归 NetworkManager 管，不走 env 文件（设计 D-4：两个域各有唯一写入者）。所以要连 Wi-Fi， 用第 3 条（有键盘）或第 1 条（有网线）。（第 4 条本板暂不可用，见 §9.6。）</p>
+<p>⚠️ <strong>预置分两份文件、各写各的域</strong>：口令与电台设置走 <code>/boot/mrrc.env</code>（§9.3），Wi-Fi 凭据走 <code>/boot/mrrc-wifi.txt</code> —— Wi-Fi 归 NetworkManager 管，<strong>不写进 env 文件</strong>（设计 D-4：两个域各有 唯一写入者；env 文件会被复制进 <code>0640</code> 的配置层、可能进支持包，Wi-Fi 密码不能和配置键混在一起）。 两份都用得上时同时写即可。（第 4 条本板已退役，见 §9.6。）</p>
 <h3 id="9-2-第-1-条-网线-推荐">9.2 第 1 条：网线（推荐）</h3>
 <p>插上就通，确认一下：</p>
 <pre><code class="lang-bash">ip a                    # 看有没有拿到地址
 nmcli device status     # eth0 应显示 connected</code></pre>
 <h3 id="9-3-第-2-条-预置-刷盘时就写进去-零键盘零网线">9.3 第 2 条：预置（刷盘时就写进去，零键盘零网线）</h3>
-<p>镜像的 <strong>FAT 启动分区</strong>会被挂到 <code>/boot</code>。往那儿放一个 <code>mrrc.env</code>，<strong>首启会自动采纳</strong>并改名成 <code>mrrc.env.applied</code>：</p>
-<pre><code class="lang-bash"># 烧完盘、还没插进盒子之前（macOS 上那个 FAT 分区叫 BOOT，直接拖文件进去也行）
-cat &gt; /Volumes/BOOT/mrrc.env &lt;&lt;'EOF'
+<p>镜像的 <strong>FAT 启动分区</strong>会被挂到 <code>/boot</code>（在别的电脑上打开，macOS 上那个分区叫 <code>BOOT</code>， 直接拖文件进去也行）。这里可以放<strong>两份</strong>文件，各写各的域：</p>
+<p><strong>① 电台与口令 → <code>/boot/mrrc.env</code></strong>：首启会采纳它并改名成 <code>mrrc.env.applied</code>。支持任意 <code>MRRC_*</code> 键（就是 §13 那张表里的那些）✅</p>
+<pre><code class="lang-bash">cat &gt; /Volumes/BOOT/mrrc.env &lt;&lt;'EOF'
 MRRC_WEB_PASSWORD=你自己定一个
 MRRC_RADIO_MODEL=ft710
 MRRC_PTT_MAX_TX_SECONDS=120
 EOF</code></pre>
-<p>支持任意 <code>MRRC_*</code> 键（就是 §13 那张表里的那些）✅</p>
+<p><strong>② Wi-Fi 凭据 → <code>/boot/mrrc-wifi.txt</code></strong>：让盒子<strong>没有网线也能自己连上 Wi-Fi</strong>。两行， 键名不分大小写，值两端的空格与 Windows 编辑器留下的 <code>\r</code> 会被去掉：</p>
+<pre><code class="lang-bash">cat &gt; /Volumes/BOOT/mrrc-wifi.txt &lt;&lt;'EOF'
+SSID=我的WiFi
+PSK=密码
+EOF</code></pre>
+<p>首启时 <code>mrrc-wifi-preseed.service</code> 会读这个文件、用 <code>nmcli</code> 连上那个 Wi-Fi，然后<strong>把文件删掉</strong> （FAT 没有权限位，明文 PSK 不能一直躺在卡上）。它<strong>刻意与 <code>mrrc.env</code> 分开</strong>：Wi-Fi 是 NetworkManager 的领域，不走 <code>MRRC_*</code> 配置层——env 文件会被复制进 <code>0640</code> 的配置层、可能进支持包， 一条 Wi-Fi 密码一旦落进那儿就和配置键混在一起了（设计 D-4）。这也是文件名用 <code>.txt</code> 而不是 <code>.env</code> 的原因：别把两份文件弄混。</p>
+<p>⚠️ <strong>这条只在"镜像刷到 U 盘/SD 卡"时成立</strong>：把系统写进 eMMC 时没有用户能碰到的 FAT 分区 （§17 的 eMMC 路线不适用预置）。</p>
+<p>连上以后想确认，接 HDMI 看控制台，或 SSH 进去看：</p>
+<pre><code class="lang-bash">journalctl -u mrrc-wifi-preseed -b     # 连上后该 unit 应显示文件已删、网络已就绪</code></pre>
 <h3 id="9-4-第-3-条-hdmi-nmtui-没有任何网络时最省事">9.4 第 3 条：HDMI + <code>nmtui</code>（没有任何网络时最省事）</h3>
 <p>盒子接 HDMI + 一个 USB 键盘，登录 <code>root</code> / <code>1234</code>，然后：</p>
 <pre><code class="lang-bash">nmtui</code></pre>
@@ -289,42 +297,22 @@ ip a show wlan0                                  # 拿到 IP 没</code></pre>
 </tbody></table></div>
 <p><strong>背景（决定你该查什么）</strong>：W103D 的无线是 <strong>MT7663S</strong>，WiFi 与<strong>蓝牙同一颗芯片</strong>，走 <strong>SDIO</strong> 而不是 USB。这块板的驱动是 ophub 专门适配的（上游 <strong>PR #3658 / #3659</strong>），所以 <strong>内核绝不能换</strong>——换通用内核 = <strong>静默丢 WiFi</strong>（见 §19 红线③）。</p>
 <p><strong>设计上能用，但当前已发布镜像上不稳</strong>：这份镜像带的还是 linux-firmware 的 2020 版 N9 固件，会渐进式挂死（见 §20.5；出厂 2021 版固件已钉进仓库，<strong>下个镜像修复</strong>）。而且无论哪版， 无线抖动都大，长时间听音频容易卡。<strong>实时音频始终优先走有线</strong>，无线只用来配置。</p>
-<h3 id="9-6-第-4-条-热点引导-零键盘零网线-只要一台手机">9.6 第 4 条：热点引导（<strong>零键盘零网线，只要一台手机</strong>）</h3>
-<blockquote>⚠️ <strong>2026-10-11 真机边界：这条路在 W103D 上目前走不通。</strong> MT7663S 的驱动能把 AP 模式激活（系统日志一切正常），但<strong>信标不上空</strong>——手机扫不到 <code>MRRC-Setup</code>。 上游移植记录同样只验证过 STA 模式。首次配置请走<strong>网线</strong>（§9.2）或 <strong>HDMI + <code>nmtui</code></strong> （§9.4）。本节保留给驱动修好后的未来版本。</blockquote>
-<p>盒子上电后，如果<strong>既没有网线链路、也没有能连上的已保存 Wi-Fi</strong>，它会自己开一个 <strong>开放热点</strong>：</p>
-<div class="table-scroll"><table>
-<thead><tr><th></th><th></th></tr></thead><tbody>
-<tr><td>Wi-Fi 名</td><td><strong><code>MRRC-Setup</code></strong>（<code>MRRC_SETUP_AP_SSID</code> 可改）</td></tr>
-<tr><td>密码</td><td><strong>无</strong>（开放热点，故意的——你还没有办法被告知一个密钥）</td></tr>
-<tr><td>页面</td><td><strong><code>https://10.42.0.1:8888/setup</code></strong></td></tr>
-<tr><td>窗口</td><td><strong>30 分钟</strong>，用完自动关（<code>MRRC_SETUP_AP_TIMEOUT_MIN</code> 可改）</td></tr>
-</tbody></table></div>
-<p><strong>操作步骤：</strong></p>
-<p>手机可能提示"该网络无互联网连接"——<strong>这是对的</strong>，选「保持连接」。</p>
-<p>会先弹一次<strong>证书警告</strong>（盒子用的是自签证书）：选「高级 / 详细信息」→「继续访问」。 这一步绕不过去，也不该绕——它只出现在<strong>盒子自己开的那个热点</strong>上。</p>
-<p>- <strong>第 1 步：设置登录口令</strong>（至少 8 位）。<strong>必须先做</strong>：切网之后热点会关，这个免口令 页面也随之消失。此刻盒子里生效的口令是首启自动生成的随机值、<strong>你并不知道</strong>， 所以不先设成自己的就会被锁在盒子外面（服务端也会用 409 挡住"先切网"）。 - <strong>第 2 步：扫描并选择你的 Wi-Fi</strong>，输入密码，点「连接并切换到这个 Wi-Fi」。</p>
-<p>走 SDIO），AP 与 STA <strong>不能同时存在</strong>（设计 D-3）。页面在断开<strong>之前</strong>就把后续步骤显示 出来了，照着做：把手机连回你自己的 Wi-Fi，然后在路由器后台的客户端列表里找到盒子， 用 <code>https://它的IP:8888</code> 打开控制界面，用刚设的口令登录。</p>
-<ol>
-<li>盒子上电，等 <strong>约 15–30 秒</strong>，在手机 Wi-Fi 列表里找 <code>MRRC-Setup</code> 并连上（无密码）。</li>
-<li>浏览器打开 <strong><code>https://10.42.0.1:8888/setup</code></strong>。</li>
-<li>页面上按顺序做两件事：</li>
-<li>点下去之后<strong>手机会与盒子断开</strong>——盒子只有一颗射频（MT7663S，Wi-Fi 与蓝牙同一颗芯片，</li>
-</ol>
-<p><strong>如果 Wi-Fi 密码输错了</strong>：盒子会<strong>自动把热点重新开回来</strong>（设计上禁止静默失败，见 §6 数据流）， 手机重连 <code>MRRC-Setup</code>、刷新页面，就能看到失败原因并直接重试。一次失败还会<strong>重置那 30 分钟 窗口</strong>，所以多试几次不会把窗口耗光。</p>
-<p><strong>窗口用完了 / 错过了怎么办</strong>：<strong>断电重启</strong>。那个 30 分钟的闩是<strong>按开机次数</strong>算的，不写在 盘上——所以只要盒子还没有可用网络，每次上电都会重新给一次机会。（这是设计 D-6 的恢复路径； 把它做成持久状态就等于把盒子变砖。）</p>
-<p><strong>插上网线会怎样</strong>：热点<strong>立刻关闭</strong>，免口令页面随之失效。判据是<strong>网络状态</strong>而不是"是否配置 过"，所以一台配好的盒子永远不会再开热点。</p>
-<p><strong>有显示器的人可以完全不碰热点</strong>：<code>mrrc-setup-ap</code> 会把地址打到 <strong>HDMI 控制台</strong>上 （<code>journalctl -u mrrc-setup-ap</code> 里也有同一行）。这是设计对"开放热点期间被邻居抢先设口令" 那条<strong>残留风险</strong>的缓解手段——你不必依赖热点。</p>
-<p><strong>排查：</strong></p>
-<div class="table-scroll"><table>
-<thead><tr><th>现象</th><th>查什么</th></tr></thead><tbody>
-<tr><td>手机里看不到 <code>MRRC-Setup</code></td><td><code>journalctl -u mrrc-setup-ap -n 50 --no-pager</code>。有 <code>could not start the setup hotspot</code> ⇒ 看它后面那句 nmcli 的原因；<code>rfkill list</code> 显示软阻塞就 <code>rfkill unblock wifi</code>；再往下按 §9.5 的顺序查驱动与固件</td></tr>
-<tr><td>连上了热点但打不开页面</td><td>`nmcli device show wlan0 \</td><td>grep IP4<code>（盒子应有 </code>10.42.0.1/24<code>）；</code>command -v dnsmasq` —— <strong>缺 dnsmasq 的话手机能连上热点但拿不到地址</strong>，任何地方都不报错，这是设计 D-2 专门点名的那个坑</td></tr>
-<tr><td>打开的是 <code>/login</code> 而不是向导</td><td>免口令闸门没开。<code>cat /run/mrrc/setup-ap/state.json</code> 看 <code>mode</code> 是不是 <code>hotspot</code>、<code>heartbeat</code> 是不是最近 45 秒内的；再确认你<strong>确实</strong>是从热点网段访问的（不是从家里 Wi-Fi）</td></tr>
-<tr><td>点"连接并切换"后一直转圈</td><td>这时手机应该已经掉线了，按页面说的连回你自己的 Wi-Fi。<strong>如果手机又自动连回了 <code>MRRC-Setup</code>，说明切换失败</strong>，刷新页面看红字原因</td></tr>
-<tr><td>切过去了但找不到盒子 IP</td><td>路由器客户端列表里按主机名找；盒子自己也记了一行：`journalctl -u mrrc-setup-ap \</td><td>grep joined`</td></tr>
-<tr><td>想改热点名 / 窗口时长</td><td>编辑 <code>/opt/mrrc_modern/env/mrrc.env</code>，加 <code>MRRC_SETUP_AP_SSID=…</code> 或 <code>MRRC_SETUP_AP_TIMEOUT_MIN=…</code>，然后 <code>systemctl restart mrrc-setup-ap</code></td></tr>
-</tbody></table></div>
-<blockquote><strong>2026-10-11 已真机验证（结果是否定的）</strong>：MT7663S 这颗 <strong>SDIO 变体在这块板上起不了 AP</strong>——驱动与 NetworkManager 都报成功，但信标不上空（源码走查：<code>mt7615_ops</code> 没有 <code>start_ap</code>，mac80211 缺 op 时静默返回成功）；AP 折腾还会楔死驱动，只能断电复位。 切换体验与 <code>10.42.0.0/24</code> 网段冲突这两件事<strong>留待驱动修好后再验</strong>。设计上<strong>不依赖热点 成立</strong>：真起不来的时候，网线（§9.2）与 HDMI + <code>nmtui</code>（§9.4）永远可用。</blockquote>
+<h3 id="9-6-第-4-条-热点引导-已退役">9.6 第 4 条：热点引导（<strong>已退役</strong>）</h3>
+<blockquote>⚠️ <strong>2026-10-11 真机结论：这条路在 W103D 上走不通，已退役。</strong> 原因是<strong>硬件边界</strong>，不是 软件没写完：MT7663S 的驱动与 NetworkManager 都报 AP 已激活（<code>COMPLETED</code>、<code>10.42.0.1/24</code> 就位、零报错），但<strong>信标不上空</strong>，手机与 Mac 都扫不到 <code>MRRC-Setup</code>（源码走查：<code>mt7615_ops</code> 没有 <code>start_ap</code>，mac80211 缺 op 时静默返回成功）；折腾 AP 还会把驱动楔死，只能断电复位。 换 <code>prefer_offload_fw=0</code> 会改载 <code>_rebb</code> 固件，芯片则<strong>根本不初始化</strong>： <code>MCU initialization failed: -110</code>。上游移植记录本身也只验证过 STA 模式。</blockquote>
+<p><strong>为什么改成局域网页面</strong>：一个谁也扫不到的热点，比没有引导更糟。现在「上线」这一步交给 <strong>你自己已经在用的网络</strong>——插网线（§9.2）或刷机时预置 Wi-Fi（§9.3），然后用任意设备打开 <code>https://&lt;盒子地址&gt;:8888/</code>：未配置的盒子会落到引导页 <strong><code>/setup</code></strong>，先设登录口令，再从页面 列出的 Wi-Fi 列表里选一个连上去；之后一切在 <strong><code>/settings</code></strong> 设置页。</p>
+<blockquote><strong>首次开机请在你信任的网络里完成设置。</strong> 引导页在"盒子从未被用户设过口令"期间，对<strong>同一个 子网</strong>内的请求免口令开放（网线/预置通常发生在家里私网）。宿舍网、公司网、咖啡馆这类共享 网络存在"被同网段的人抢先设口令、接管盒子"的风险——这是为了"买回来只有一台手机的人也能 开始"而接受的<strong>明知的弱化</strong>，不是缺陷。</blockquote>
+<p>被退役的实体：<code>MRRC-Setup</code> 热点、<code>10.42.0.1</code> 地址、30 分钟窗口与它的重试行为、 <code>mrrc-setup-ap.service</code> 与 <code>linux/setup_ap.py</code>、以及 <code>/run/mrrc/setup-ap/state.json</code> 和 <code>wizard.json</code> 两个跨用户信箱。设计见 <code>docs/superpowers/specs/2026-10-11-w103d-lan-box-settings-design.md</code>。</p>
+<h3 id="9-7-盒子名字与-mdns">9.7 盒子名字与 mDNS</h3>
+<p>盒子在局域网里有一个<strong>名字</strong>，默认 <strong><code>MRRC-Modern</code></strong>（打包时用 <code>hostnamectl set-hostname</code> 落下， 否则镜像里还是 <code>armbian</code>）。于是你可以直接在浏览器里用 <strong><code>http://MRRC-Modern.local:8888</code></strong> 这样 的地址找到它，不必先去路由器后台翻 IP。</p>
+<p><strong>自称 <code>MRRC-Modern-2.local</code></strong>。设置页 <code>/settings</code> 显示<strong>当前实际可达的那个名字</strong>；同网段有 多台盒子时，建议在页面上给它们各改一个名字。</p>
+<p><strong>Android 看机型</strong>。所以<strong>退路是 DHCP 主机名</strong>（NetworkManager 默认会把它报给路由器）：无论 什么客户端，去路由器后台的<strong>客户端列表</strong>里按主机名就能找到盒子的 IP。设置页<strong>两个都显示</strong>： mDNS 名字 + 当前 IPv4。</p>
+<p>同步 <code>/etc/hosts</code>）。</p>
+<ul>
+<li><strong>多台同网段会撞名</strong>：avahi（Linux 上的 mDNS 实现）发现 <code>MRRC-Modern.local</code> 已被占用时，会</li>
+<li><strong>大小写</strong>：<code>MRRC-Modern</code> 含大写，但 DNS 名字本身大小写不敏感——<code>mrrc-modern.local</code> 一样能解析。</li>
+<li><strong><code>&lt;名字&gt;.local</code> 不是万能的</strong>：<strong>iOS / macOS 完美</strong>，<strong>Windows 需要装 Bonjour</strong>（否则解析不了），</li>
+<li><strong>改名字</strong>：<code>/settings</code> → 盒子身份，填新名字提交（走 root helper 的 <code>set-hostname</code>，会一并</li>
+</ul>
 <h2 id="10-接电台">10. 接电台</h2>
 <p><strong>FT-710 的线插口别搞错</strong>：用<strong>上方 <code>Enhanced</code> 口</strong>，它同时承载 CAT 串口和 FT4222 scope。 插 Standard 口的话 CAT 可能通但<strong>没有真频谱</strong>。</p>
 <p>接好后确认三样东西都出现了：</p>
@@ -527,7 +515,7 @@ bash /tmp/verify.sh         # §12 那份</code></pre>
 <p><strong>这份固件已经钉进仓库、随构建装入镜像</strong>（<code>vendor/mediatek/</code> → <code>/lib/firmware/mediatek/</code>， 构建期校验 SHA，<code>dpkg-divert</code> 防包升级覆盖）——<strong>下一份镜像构建起生效</strong>。⚠️ 注意区分： <strong>当前线上下载的 v1.25.5 镜像（SHA <code>5d74f737…</code>）里没有它</strong>，那份镜像的 N9 还是 2020 版， WiFi 就是会渐进式挂死（症状见上）。装好新版镜像后，现场核实方法：</p>
 <pre><code class="lang-bash">sha256sum /lib/firmware/mediatek/mt7663_n9_v3.bin   # 必须是 223f73f1 开头
 dmesg | grep "N9 Firmware"   # 必须是 7663mp1827, Build Time: 20210308205639</code></pre>
-<p>修好后实测（2.4G）：200 包 0.5% 丢包、平均 6.3 ms、零掉线。<strong>两个仍然成立的边界</strong>： 5GHz 能连上但数据面严重丢包（别用）；<strong>AP 模式不发信标</strong>（初始化热点在这块板上 起不来，首次配置走网线或 HDMI）。</p>
+<p>修好后实测（2.4G）：200 包 0.5% 丢包、平均 6.3 ms、零掉线。<strong>两个仍然成立的边界</strong>： 5GHz 能连上但数据面严重丢包（别用）；<strong>AP 模式不发信标</strong>（初始化热点在这块板上 起不来，首次配置走网线、预置 Wi-Fi 或 HDMI）。</p>
 <p><strong>老镜像（含当前已发布的 v1.25.5）现场换法</strong>：拿到钉版文件后</p>
 <pre><code class="lang-bash">cp mt7663_n9_v3.bin /lib/firmware/mediatek/mt7663_n9_v3.bin
 dpkg-divert --add --no-rename /lib/firmware/mediatek/mt7663_n9_v3.bin
@@ -553,7 +541,7 @@ dpkg-divert --add --no-rename /lib/firmware/mediatek/mt7663_n9_v3.bin
 <li><input type="checkbox" disabled> 界面上频率/模式跟着电台走（CAT 通）</li>
 <li><input type="checkbox" disabled> 瀑布图是<strong>真频谱</strong>（不是 S 表合成谱）</li>
 <li><input type="checkbox" disabled> 按下 PTT 能发射、松开能收到（<strong>这一步才算真的能用</strong>）</li>
-<li><input type="checkbox" disabled> （没有网线时）原"只用手机走通 §9.6"<strong>本板目前不可用</strong>（信标不上空）；改用 HDMI + <code>nmtui</code>（§9.4）或预置 <code>mrrc.env</code>（§9.3）</li>
+<li><input type="checkbox" disabled> （没有网线时）预置了 <code>/boot/mrrc-wifi.txt</code>（§9.3），或改用 HDMI + <code>nmtui</code>（§9.4）；原"只用手机走通 §9.6"的热点引导<strong>已退役</strong>（2026-10-11 真机验证失败）</li>
 <li><input type="checkbox" disabled> <code>verify.sh</code> 12 项全过</li>
 <li><input type="checkbox" disabled> （可选）<code>MRRC_LISTEN_PASSWORD</code> 给朋友开了收听入口</li>
 <li><input type="checkbox" disabled> （可选）Cloud Hub 接入，公网 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 打得开</li>

@@ -281,7 +281,7 @@
 | AD-023 | Remote-session telemetry (listener concurrency + uplink, counts without identifiers) | Implemented |
 | AD-024 | Session token transport (cookie → header for native clients; query deprecated) | Implemented |
 | AD-025 | Spectrum bandwidth tiers (shape × divider, gated by `spectrumCaps`) | Implemented |
-| AD-026 | Setup hotspot and the password-less onboarding window (opened by network path, not a flag) | Implemented (V2.76) |
+| AD-026 | Setup hotspot and the password-less onboarding window (opened by network path, not a flag) | Superseded (V2.80, 2026-10-11) — 真机验收失败，见正文与 2026-10-11 LAN 设计 |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -447,3 +447,16 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 - **残留风险（诚实记录）**：热点开放期间，同一网段内的人**可以先下手设口令接管盒子**。Wi-Fi 半径十几米，公寓楼里邻居可能在里面。围栏把窗口压到"你主动插电后、且附近没有网络"的那几十分钟，但**不能消除**。缓解：地址同时打在 HDMI 控制台上（有显示器的人不必用热点）。
 - **未验证边界（V2.80 真机闭环）**：**AP 模式实测不可用**——固件修复（出厂 2021 版 N9，见 V2.80）后 NM/wpa_supplicant 认为 AP 已激活（`COMPLETED`、10.42.0.1/24 就位、零报错），但信标不上空（手机与 Mac 均扫不到）；上游移植记录同样只验证过 STA。另抓到并已修复一个同链路产品 Bug：NM 1.42 的 `device wifi hotspot` 不传密码会**自动生成随机 WPA-PSK**，「开放热点」实为加密网络——`start_hotspot()` 改为显式建无 security 段的 profile。STA 模式在固件修复后达到生产质量（200 包 0.5% 丢包 / 6.3 ms / 零掉线）。盒子上手因此走有线或 HDMI 路径，设计上本就不依赖 AP 成立（HDMI + `nmtui` 兜底）。
 - **镜像装机清单加 `dnsmasq`**（NM 的 `ipv4.method=shared` 靠它发 DHCP/DNS；缺它的症状是**热点出现、手机连上、拿不到地址、任何地方都不报错**）。单元**不得**排在 `network-online.target` 之后——它存在的理由就是没有网。
+
+**接替方案（2026-10-11）**：热点这条上线路被放弃，改为「盒子接入 LAN → 打开网页
+配置盒子 OS」。设计见 `docs/superpowers/specs/2026-10-11-w103d-lan-box-settings-design.md`，
+实现见 `docs/superpowers/plans/2026-10-11-w103d-lan-box-settings.md`。
+
+沿用下来的三条：**无密码面必须只有一个键宽**（只有 `MRRC_WEB_PASSWORD`）、
+**判据是状态而不是标志**（旧的是「热点活着」，新的是「从未设过口令」）、
+**Wi-Fi 凭据只走 `net_wifi` 的 argv**（为此拒绝了「全部 nmcli 写都过 root helper」
+的路线，那会让 PSK 经第二条通道）。
+
+没有沿用的：AP 生命周期、`/run/mrrc/setup-ap/state.json` 与 `wizard.json` 两个
+跨用户信箱、`mrrc-setup-ap.service`。提权从「root supervisor 管整条热点」换成
+「polkit 放行 `mrrc` 写 NM + 只管四个系统动词的小 root helper」。

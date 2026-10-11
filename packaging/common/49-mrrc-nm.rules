@@ -4,7 +4,7 @@
 // org.freedesktop.NetworkManager.rules) requires `subject.local &&
 // subject.active`, and a systemd system service has no session, so
 // `subject.active` is false and adding `mrrc` to the netdev group does not help
-// (measured on the W103D 2026-10-11: `npmcli connection add` returns
+// (measured on the W103D 2026-10-11: `nmcli connection add` returns
 // "Insufficient privileges" for the mrrc user while `device show` works).
 //
 // Matching subject.user instead does not need a session, which is the whole

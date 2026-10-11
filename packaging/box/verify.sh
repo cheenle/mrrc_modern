@@ -129,13 +129,13 @@ head_ "11/12 box identity and the privilege channel"
 # the helpers it needs are installed".
 if [ ! -e /etc/polkit-1/rules.d/49-mrrc-nm.rules ]; then
 	bad "the NetworkManager polkit rule is missing" \
-		"the web pages cannot write NM without it; add it to box-overlay.sh"
+		"the web pages cannot write NM without it; add it to packaging/common/mrrc-service-layer.sh"
 else
 	ok "polkit rule present (mrrc may reconfigure NetworkManager)"
 fi
 if ! systemctl is-enabled --quiet mrrc-wifi-preseed.service 2>/dev/null; then
 	bad "mrrc-wifi-preseed.service is not enabled" \
-		"a card preseeded with /boot/mrrc-wifi.txt would be ignored; add it to box-overlay.sh"
+		"a card preseeded with /boot/mrrc-wifi.txt would be ignored; add it to packaging/common/mrrc-service-layer.sh"
 else
 	ok "Wi-Fi preseed unit is installed (inactive after a successful join)"
 fi

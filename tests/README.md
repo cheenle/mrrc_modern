@@ -20,9 +20,9 @@ python -m unittest discover -s tests -v
 | Metric | Value |
 | -------- | ------- |
 | Total tests | 2160 |
-| Passed | 2157 (1 skipped) |
+| Passed | 2158 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 3 |
+| Failed | 1 |
 | Execution time | ~2min (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -45,18 +45,15 @@ SHA-256 prefix 5f0ae387 when this line was first recorded). Republishing the car
 is a release step outside this plan, not a test fix, so whether this one line is
 red measures the release state rather than whether the suite itself is sound.
 
-A second line,
-`test_packaging_parity.IntentionalDivergenceTests::test_the_web_bind_is_the_only_bind_divergence`,
-goes red while the packaging scripts are being reworked in this same checkout — it
-scans `packaging/rpi` and `packaging/box` for `MRRC_WEB_HOST` assignments and so
-measures those scripts, not this suite (it was green in the run counted above).
-Two further lines,
-`test_sdd_docs_consistency.VersionConsistencyTests::test_landing_pages_show_the_current_version`
-and `…::test_main_pages_show_the_current_sdd_version`, are red while the W103D
-documentation work re-renders the site pages in this same checkout — they compare
-those pages against the current SDD version and so measure that work, not this
-suite. All of these red lines are about artifacts this plan does not own; none is
-a defect in the code under test here.
+Three lines flapped red while this checkout was mid-change, and are **green** in
+the run this table records — they measure artifacts the concurrent work owned,
+not this suite: `test_packaging_parity.IntentionalDivergenceTests::test_the_web_bind_is_the_only_bind_divergence`
+(scans `packaging/rpi` / `packaging/box` for `MRRC_WEB_HOST`), and
+`test_sdd_docs_consistency.VersionConsistencyTests::{test_landing_pages_show_the_current_version,
+test_main_pages_show_the_current_sdd_version}` (compare the generated / landing
+pages against the current SDD version). Each goes red only while those scripts or
+pages are being edited in the same working tree and no artifact has been
+republished. None is a defect in the code under test here.
 
 ## Test Modules
 

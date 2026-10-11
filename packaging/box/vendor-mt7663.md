@@ -23,6 +23,14 @@ mt76 loader, bytes unmodified). It reports `7663mp1827 / 20210308205639`.
 With it, the same board holds 200-packet pings at 0–0.5 % loss / ~6 ms RTT
 with zero disconnects.
 
+This is **factory STA firmware** — it steadies the station side only. **AP mode
+stays hardware-failed on this board**: the driver and NetworkManager both report
+the AP activated (software all green), but no beacon reaches the air (phone and
+Mac both saw nothing), and forcing `prefer_offload_fw=0` loads the `_rebb`
+firmware so the chip never initialises at all (`MCU initialization failed:
+-110`). Onboarding therefore does not depend on AP — see the LAN box-settings
+design §1 (`docs/superpowers/specs/2026-10-11-w103d-lan-box-settings-design.md`).
+
 Pinned identity:
 
 ```

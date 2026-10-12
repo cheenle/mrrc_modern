@@ -426,6 +426,9 @@ let radioDisplayName = null;
 function handleMessage(msg) {
 	switch (msg.type) {
 		case "fullState":
+			// A fresh page load lands here, not in stateUpdate: the FT8
+			// banner/lockout must be applied from the snapshot too.
+			if (typeof msg.work_mode === "string") applyWorkMode(msg.work_mode);
 			// Merge full state data
 			if (msg.data) {
 				Object.assign(radioState, msg.data);
@@ -510,21 +513,7 @@ function handleMessage(msg) {
 				Object.assign(radioState, msg.fields);
 			}
 			if (typeof msg.work_mode === "string") {
-				// FT8 owns the radio: the engine keys the transmitter, so the
-				// browser must not compete — banner + controls locked.
-				document.body.classList.toggle("ft8-mode-active", msg.work_mode === "ft8");
-				let banner = document.getElementById("ft8-mode-banner");
-				if (msg.work_mode === "ft8") {
-					if (!banner) {
-						banner = document.createElement("div");
-						banner.id = "ft8-mode-banner";
-						banner.textContent = "FT8 模式中 — 发射由 FT8 引擎控制（点此返回）";
-						banner.addEventListener("click", () => { window.location.href = "/ft8.html"; });
-						document.body.appendChild(banner);
-					}
-				} else if (banner) {
-					banner.remove();
-				}
+				applyWorkMode(msg.work_mode);
 			}
 			{
 				const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;
@@ -863,6 +852,24 @@ function decodeRxAudioFrame(data) {
 // No-op placeholder — replaced when AudioWorklet or ScriptProcessor is ready
 var __pushRxFrameNoop = (f32) => {};
 window.__pushRxFrame = __pushRxFrameNoop;
+
+// FT8 owns the radio: the engine keys the transmitter, so the browser must
+// not compete — a banner plus the TX-control lock (body class, see ft710.css).
+function applyWorkMode(mode) {
+	document.body.classList.toggle("ft8-mode-active", mode === "ft8");
+	let banner = document.getElementById("ft8-mode-banner");
+	if (mode === "ft8") {
+		if (!banner) {
+			banner = document.createElement("div");
+			banner.id = "ft8-mode-banner";
+			banner.textContent = "FT8 模式中 — 发射由 FT8 引擎控制（点此返回）";
+			banner.addEventListener("click", () => { window.location.href = "/ft8.html"; });
+			document.body.appendChild(banner);
+		}
+	} else if (banner) {
+		banner.remove();
+	}
+}
 
 // ── WebSocket event handlers ──────────────────────────────────────────
 function wsAudioRXopen() {

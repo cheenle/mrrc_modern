@@ -430,12 +430,12 @@ class WebClientCapsTests(unittest.TestCase):
 
     def test_asset_versions_were_bumped(self):
         html = Path("static/index.html").read_text(encoding="utf-8")
-        self.assertIn("ft710_main.js?v=39", html)
-        self.assertIn("ft710_ui.js?v=35", html)
+        self.assertIn("ft710_main.js?v=41", html)
+        self.assertIn("ft710_ui.js?v=36", html)
         sw = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v48';", sw)
-        self.assertIn("'/ft710_main.js?v=39'", sw)
-        self.assertIn("'/ft710_ui.js?v=35'", sw)
+        self.assertIn("const CACHE = 'mrrc-v50';", sw)
+        self.assertIn("'/ft710_main.js?v=41'", sw)
+        self.assertIn("'/ft710_ui.js?v=36'", sw)
 
     def test_no_stale_cache_pins_anywhere(self):
         """A missed pin is how a user keeps running yesterday's bundle."""

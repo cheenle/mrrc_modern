@@ -165,6 +165,20 @@ hardware-independent logic testable without a radio.
 
 Short imperative summaries. Pull requests should describe user-visible behavior, list verification steps, call out hardware requirements, and include screenshots/recordings for UI changes.
 
+## FT8 模式（feat/ft8）铁律
+
+- **`os.environ.setdefault("OMP_STACKSIZE", "10M")` 必须在导入 NumPy / 加载
+  `libwsjt_core` 之前执行**（见 `ft8/core/worker.py` 的 worker 入口与
+  `tests/ft8/dsp/conftest.py`）。WSJT-X Improved 的 `sync8var` 在线程栈上分配大型工作数组，
+  栈不足的表现是段错误而不是异常——所以这条契约由测试盯住，不能"顺手"挪动。
+- DSP 源在 `ft8/dsp/`：编译子集 `vendor/`（由 `tools/ft8/extract_wsjtx_subset.sh`
+  从 CMake 清单派生）、7 个补丁副本 `patched/`、原始基线 `vendor-refs/`；
+  `build.sh` 幂等构建 `ft8/dsp/build/libwsjt_core.*`（设备上原生编译）。
+- 移植自 MRRC-FT8（`HAM/ft8`）：`ft8/{core,engine}` 保持 verbatim，平台耦合只允许在
+  `ft8/platform/`、`ft8/web/`、`ft8/mode.py` 与 `server.py` 的接线处。
+- 规格与计划：`docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md`、
+  `docs/superpowers/plans/2026-10-12-ft8-work-mode.md`。
+
 ## Security & Configuration Tips
 
 Never commit passwords, serial-device paths, or local driver assumptions. Use environment variables for deployment-specific values. All WebSocket endpoints require a session token, resolved by `_token_from_ws_handshake()` as `Authorization: Bearer` → `mrrc_auth` cookie → deprecated `?token=` query param (AD-024). The browser sends the cookie automatically on the same-origin handshake, so the frontend never builds a token URL (a 30-day credential in a URL lands in access logs, browser history and Referer). Auth tokens cleared on server restart. Transmit safety: every release path keys off a disconnect, so a connection that dies without a TCP close (dropped NAT, Wi-Fi switch) needs `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S` (default 0 = off; the cloud hub enables it). Only sessions that send `txhb` are gated, and only the session holding the key can be released (ch15 §15.6).

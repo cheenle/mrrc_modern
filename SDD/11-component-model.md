@@ -64,6 +64,12 @@
 | 前端资源引用 | 由绝对路径改为**相对路径**，`sw.js` 预缓存保持绝对 | 断言规则见 `tests/test_path_prefix.py` |
 | TX 编码 Worker | 修复其逃逸路径前缀的加载方式 | 症状为 `frames=0`（表现为"按下不发射"） |
 
+| Ft8DspWorker | FT8 engine | `ft8/core/*` | DSP Worker 子进程（ctypes 绑定 `libwsjt_core`、Shm 协议、监督重启）；入口在 NumPy/`wsjt_core` 加载前设 `OMP_STACKSIZE=10M`（同步于 mrrc_modern 的 ft8 分支移植，源 `HAM/ft8 server/core/`） |
+| Ft8Engine | FT8 engine | `ft8/engine/*` | FT8 编排层 verbatim 移植：orchestrator（UTC 时隙）、sequencer（QSO 状态机）、safety（TX 权威链）、tx_driver、dsp_decode/encode、msgparse/qso_log/repository/dxcc/waterfall |
+| Ft8PlatformAdapters | FT8 platform | `ft8/platform/*` | 与平台的唯一耦合层：`rx_tap`（设备率→12k 流式重采样 + UtcRing）、`tx_sink`（48k 波形→`AudioHandler.feed_tx_audio`）、`cat`（`CatController`→引擎 rig 协议）、`settings`（FT8 独立设置） |
+| Ft8ModeController | FT8 platform | `ft8/mode.py` | 全局 `work_mode`（ssb/ft8）状态机：SSB 快照/恢复、引擎生命周期、失败回滚、广播 |
+| Ft8Web | FT8 platform | `ft8/web/*` | `/api/ft8/*` REST 与 `/WSft8` 事件流；认证复用平台 token，listen 只读 |
+
 ## 11.2 Backend Component Collaboration (Startup)
 
 ```text

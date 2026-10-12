@@ -1252,23 +1252,17 @@ def _work_mode_value() -> str:
     return "ft8" if _ft8_mode is not None and str(_ft8_mode.mode) == "ft8" else "ssb"
 
 
-_ft8_ws_clients: set = set()
-_ft8_ws_queue: asyncio.Queue = None
+_ft8_bus = None                 # Ft8EventBus, created in the lifespan
 
 
 def _ft8_queue_frame(frame: dict) -> None:
-    """Hand one JSON frame to the FT8 stream (no-op until the WS layer binds)."""
-    if _ft8_ws_queue is not None:
-        _ft8_ws_queue.put_nowait(frame)
+    """Hand one JSON frame to every /WSft8 subscriber."""
+    if _ft8_bus is not None:
+        _ft8_bus.publish(frame)
 
 
 async def _broadcast_ft8_json(frame: dict) -> None:
-    if _ft8_ws_queue is not None:
-        _ft8_ws_queue.put_nowait(frame)
-
-
-def _slot_started_fanout(slot_id: int) -> None:
-    """Kept for the FT8 layer's slot callback (wired when the WS layer lands)."""
+    _ft8_queue_frame(frame)
 
 
 class TxSession:
@@ -3046,7 +3040,20 @@ async def lifespan(app: FastAPI):
             my_grid=_ft8_runtime.sequencer.my_grid,
         )
         attach_ft8_router(app, ft8_state)
-        logger.info("FT8 REST mounted at /api/ft8")
+
+        from ft8.web.ft8_ws import Ft8EventBus, Ft8WsState, create_ft8_ws_router
+
+        global _ft8_bus
+        _ft8_bus = Ft8EventBus()
+        ft8_ws_state = Ft8WsState(
+            bus=_ft8_bus,
+            token_from_handshake=_token_from_ws_handshake,
+            auth_ok=lambda tok: tok in _auth_tokens,
+            mode=_work_mode_value,
+            recent_decodes=lambda: list(_ft8_runtime.recent_decodes),
+        )
+        app.include_router(create_ft8_ws_router(ft8_ws_state))
+        logger.info("FT8 REST mounted at /api/ft8 and /WSft8 open")
     except Exception:
         logger.exception("FT8 composition failed — running SSB-only")
         _ft8_mode = _ft8_runtime = _ft8_settings_store = None

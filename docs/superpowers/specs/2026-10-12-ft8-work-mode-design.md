@@ -111,10 +111,9 @@ mrrc_modern/（分支 feat/ft8）
 
 - **tap 点**：`server.py::_audio_rx_loop()` 中 `pcm = audio.read_rx_chunk()` 之后，与既有录音
   tap（`_rec_tap_rx`）并列；**仅当 `work_mode == ft8` 时**投递（SSB 模式零开销）。
-- **重采样**：44 100 → 12 000 的精确比是 147:40。实现为 `scipy.signal.upfirdn` 多相
-  流式重采样（overlap 状态保留，块边界零断裂、零重采），抗混叠截止 ≈5.4 kHz。
-  等价于把 MRRC-FT8 `RxConverter` 的 48k→12k（4:1 FIR）换成 147:40 版本；`UtcRing`、
-  `SLOT_SAMPLES = 180000` 不变。
+- **重采样**：44 100 → 12 000。用 `soxr.ResampleStream` 做**流式**重采样（专为流式设计：
+  分块处理与整段处理逐样本一致，无 polyphase 相位陷阱）。
+  替代 MRRC-FT8 `RxConverter` 的 48k→12k（4:1 FIR）；`UtcRing`、`SLOT_SAMPLES = 180000` 不变。
 - **通用比例**：目标恒为 12 kHz；源率取 `AudioHandler._rx_dev_rate`（盒子上是 44 100）。
   非 44.1k 源按 `dev_rate : 12000` 的即时有理数比例处理。
 - **UTC 锚定**：tap 按"累计样本数 + 本机时钟"给每个块附 epoch；复用 `UtcRing` 的内建
@@ -188,10 +187,10 @@ TX 权威链（`tx_driver` → `safety.transmit`）原样保留，只替换两�
     Armbian 源中，2026-10-12 核实：gfortran 12.2 / fftw 3.3.10 / cmake 3.25）
   - `ft8/dsp/vendor/` = WSJT-X 3.0.2 Improved 的 FT8 子集（约 95 个源文件 + include 闭包，
     预计 3–4 MB），带 `vendor.sha256`；7 个补丁副本（`patched/`）沿用原仓登记的差异
-  - `ft8/dsp/build.sh` 幂等：源 digest 未变则跳过；产物 `ft8/dsp/build/wsjt_core.so`
+  - `ft8/dsp/build.sh` 幂等：源 digest 未变则跳过；产物 `ft8/dsp/build/libwsjt_core.so`
     （`stage-tree.sh` 已排除 `build/`，构建产物不进同步树）
-- Python 依赖：**新增 `scipy`**（重采样与 FIR；盒子 pip 有 aarch64 wheel）；
-  numpy / fastapi / uvicorn 等平台已有。
+- Python 依赖：**新增 `scipy`（FIR/信号处理）与 `soxr`（流式重采样）**；numpy / fastapi /
+  uvicorn 等平台已有。
 
 ### 4.7 Web 层
 
@@ -243,7 +242,7 @@ TX 权威链（`tx_driver` → `safety.transmit`）原样保留，只替换两�
    （`mrrc-update` 会自动补 `requirements.txt` 新增项）。
 3. 同步代码：rsync 本地树到盒子临时目录 → `mrrc-update <dir>`（既有机制）；
    `ft8/` 随树同步，`ft8/dsp/build/` 被 `stage-tree.sh` 排除。
-4. 构建 DSP：`/opt/mrrc_modern/ft8/dsp/build.sh`（幂等）→ `ft8/dsp/build/wsjt_core.so`。
+4. 构建 DSP：`/opt/mrrc_modern/ft8/dsp/build.sh`（幂等）→ `ft8/dsp/build/libwsjt_core.so`。
 5. `systemctl restart mrrc-modern` → 登录 → 菜单切 FT8 → 按 §6 验收。
 6. 长期：分支合并后走标准发布/升级通道。**本设计不改镜像构建**（DSP 编译烘焙进镜像
    留待 §7-8 评估）。

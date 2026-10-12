@@ -154,6 +154,7 @@ class AppState:
     my_grid: str = ""
     rig: Any = None          # RigClient when wired
     mode_controller: Any = None  # Ft8ModeController when the platform wires it
+    runtime: Any = None      # Ft8Runtime (orchestrator lives there once started)
     orchestrator: Any = None  # running orchestrator when wired
     latency: Any = None      # LatencyHistogram when the DSP path is wired
     tx_driver: Any = None    # TxDriver; always wired (Null encoder without DSP)
@@ -284,7 +285,8 @@ async def require_lease(
     """
     state = get_state(request)
     role_of = getattr(state.auth, "role_of", None)
-    if role_of is not None and role_of(session.id) != "control":
+    # Platform roles: "operator" (full control) / "listener" (read-only).
+    if role_of is not None and role_of(session.id) != "operator":
         raise _HttpReject(_reject(403, REASON_FORBIDDEN))
     return session
 
@@ -375,6 +377,33 @@ def create_router(state: AppState) -> APIRouter:
             return _reject(500, "mode_switch_failed", detail=str(exc))
         state.bump()
         return _ok({"mode": str(controller.mode)})
+
+    @router.post("/radio/band")
+    async def radio_band(request: Request, session: Session = Depends(require_lease)) -> JSONResponse:
+        """Tune the dial to a band's FT8 frequency (the page's band selector).
+
+        Frequency only: the operating mode was set when FT8 mode started,
+        and re-asserting it on every tune belongs to the platform's own
+        band handling.
+        """
+        await validate_mutation(request)
+        body = await request.json()
+        try:
+            freq = int((body or {}).get("freq_hz", 0))
+        except (TypeError, ValueError):
+            freq = 0
+        if not 100_000 <= freq <= 60_000_000:
+            return _reject(422, "invalid_request", detail="freq_hz out of range")
+        if state.rig is None:
+            return _reject(409, "rig_unavailable")
+        try:
+            await state.rig.set_frequency(freq)
+        except Exception as exc:
+            log.warning("band tune failed: %s", exc)
+            return _reject(500, "rig_error", detail=str(exc))
+        state.radio_freq_hz = freq
+        state.bump()
+        return _ok({"freq_hz": freq})
 
     @router.get("/state")
     async def state_snapshot(session: Session = Depends(require_session)) -> JSONResponse:
@@ -677,8 +706,11 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
             "worked_calls": sorted(state.repository.worked_calls()),
         },
     }
-    if state.orchestrator is not None:
-        counters = state.orchestrator.counters
+    orchestrator = state.orchestrator
+    if orchestrator is None and getattr(state, "runtime", None) is not None:
+        orchestrator = state.runtime.orchestrator
+    if orchestrator is not None:
+        counters = orchestrator.counters
         snapshot["orchestrator"] = {
             "slots_started": counters.slots_started,
             "slots_skipped": counters.slots_skipped,
@@ -696,8 +728,11 @@ def _health(state: AppState) -> dict[str, Any]:
     }
     if state.latency is not None:
         health["decode_latency"] = state.latency.snapshot()
-    if state.orchestrator is not None:
-        counters = state.orchestrator.counters
+    orchestrator = state.orchestrator
+    if orchestrator is None and getattr(state, "runtime", None) is not None:
+        orchestrator = state.runtime.orchestrator
+    if orchestrator is not None:
+        counters = orchestrator.counters
         health["deadline_misses"] = counters.deadline_misses
     return health
 

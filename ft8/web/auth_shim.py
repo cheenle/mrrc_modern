@@ -65,11 +65,11 @@ class PlatformAuthAdapter:
         if not token or not self._verify(token):
             return None
         sid = session_id_for_token(token)
-        self._roles[sid] = (self._role_of_token(token) if self._role_of_token else "control")
+        self._roles[sid] = (self._role_of_token(token) if self._role_of_token else "operator")
         return Session(id=sid)
 
     def role_of(self, session_id: str | None) -> str:
-        return self._roles.get(session_id or "", "control")
+        return self._roles.get(session_id or "", "operator")
 
     def session_count(self) -> int:
         """Sessions seen since start (the health payload reports this)."""

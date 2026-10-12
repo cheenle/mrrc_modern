@@ -29,7 +29,7 @@ class FakePlayer:
         return None
 
 
-def _client(*, role: str = "control", authenticated: bool = True) -> TestClient:
+def _client(*, role: str = "operator", authenticated: bool = True) -> TestClient:
     tmp = tempfile.mkdtemp(prefix="ft8-api-")
     repository = Repository(os.path.join(tmp, "qso.db"))
     sequencer = Sequencer(my_call="BG1SB", my_grid="ON80DA")
@@ -76,14 +76,14 @@ def test_read_endpoints_are_readable():
 
 
 def test_listen_role_cannot_start_tx():
-    r = _client(role="listen").post("/api/ft8/operation/cq")
+    r = _client(role="listener").post("/api/ft8/operation/cq")
     assert r.status_code == 403
 
 
 def test_stop_allowed_for_listen_role():
     """Emergency STOP stays available to every authenticated session."""
 
-    r = _client(role="listen").post("/api/ft8/operation/stop")
+    r = _client(role="listener").post("/api/ft8/operation/stop")
     assert r.status_code in (200, 409)
 
 
@@ -113,7 +113,7 @@ class FakeMode:
         self.switch_calls.append("ssb")
 
 
-def _mode_client(mode: FakeMode, role: str = "control") -> TestClient:
+def _mode_client(mode: FakeMode, role: str = "operator") -> TestClient:
     client = _client(role=role)
     client.app.state.ft8_state.mode_controller = mode
     return client

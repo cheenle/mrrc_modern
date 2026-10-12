@@ -41,6 +41,7 @@ class RxTap:
             dev_rate, out_rate, 1, dtype="float32", quality=SOXR_QUALITY
         )
         self._base_epoch: float | None = None
+        self._logged_first = False
         self._out_count = 0           # 12 kHz samples emitted so far
         self._consumed = 0            # input samples fed so far
 
@@ -68,6 +69,10 @@ class RxTap:
             # soxr buffers a fixed overlap before its first output; nothing is
             # delivered and nothing may be timestamped.
             return block
+        if not self._logged_first:
+            self._logged_first = True
+            log.info("RX tap delivering (dev %d Hz -> %d Hz, first block %d samples @ %.3f)",
+                     self._dev_rate, self._out_rate, block.size, self._base_epoch)
         out_epoch = self._base_epoch + self._out_count / self._out_rate
         self._out_count += block.size
         if self._ring is not None:

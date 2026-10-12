@@ -1805,12 +1805,14 @@ async def _audio_rx_loop():
         try:
             _loop_count += 1
             if audio and audio._rx_running:
-                # ── Idle: no clients and no recording → skip the read ──
+                # ── Idle: no clients, no recording, no FT8 → skip the read ──
                 # PCM read + resample + Opus encode is the #1 CPU
                 # consumer when idle.  Skip everything, sleep deep — but a
-                # running recording still needs the audio, so it keeps the
-                # loop awake.
-                if not audio_rx_clients and not _rec_session.active:
+                # running recording still needs the audio, and so does the
+                # FT8 decoder (its RX tap is fed right below), so both keep
+                # the loop awake.
+                _ft8_tap_live = _ft8_runtime is not None and _ft8_runtime.rx_tap is not None
+                if not audio_rx_clients and not _rec_session.active and not _ft8_tap_live:
                     _idle_skipped += 1
                     if _loop_count % 500 == 0 and _idle_skipped > 50:
                         logger.info(
@@ -3039,22 +3041,15 @@ async def lifespan(app: FastAPI):
             my_call=_ft8_runtime.sequencer.my_call,
             my_grid=_ft8_runtime.sequencer.my_grid,
             mode_controller=_ft8_mode,
+            runtime=_ft8_runtime,
         )
-        attach_ft8_router(app, ft8_state)
-
-        from ft8.web.ft8_ws import Ft8EventBus, Ft8WsState, create_ft8_ws_router
+        from ft8.web.ft8_ws import Ft8EventBus
 
         global _ft8_bus
         _ft8_bus = Ft8EventBus()
-        ft8_ws_state = Ft8WsState(
-            bus=_ft8_bus,
-            token_from_handshake=_token_from_ws_handshake,
-            auth_ok=lambda tok: tok in _auth_tokens,
-            mode=_work_mode_value,
-            recent_decodes=lambda: list(_ft8_runtime.recent_decodes),
-        )
-        app.include_router(create_ft8_ws_router(ft8_ws_state))
-        logger.info("FT8 REST mounted at /api/ft8 and /WSft8 open")
+        _ft8_late_state.bind(ft8_state)
+        _ft8_bus_late.bind(_ft8_bus)
+        logger.info("FT8 composition bound: /api/ft8 and /WSft8 are live")
     except Exception:
         logger.exception("FT8 composition failed — running SSB-only")
         _ft8_mode = _ft8_runtime = _ft8_settings_store = None
@@ -3198,6 +3193,56 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="MRRC Modern Web Control", lifespan=lifespan)
+
+
+class _LateBound:
+    """A stand-in whose real object is bound by the lifespan.
+
+    The SPA fallback route (``/{path:path}``, registered at the end of this
+    module) matches *everything*, and Starlette matches in registration
+    order — so /api/ft8/* and /WSft8 must be mounted while the module loads,
+    not from the lifespan.  The composition root itself only exists after
+    startup, so the route handlers receive this proxy.
+    """
+
+    def __init__(self, what: str) -> None:
+        object.__setattr__(self, "_what", what)
+        object.__setattr__(self, "_impl", None)
+
+    def bind(self, impl: object) -> None:
+        object.__setattr__(self, "_impl", impl)
+
+    @property
+    def bound(self) -> bool:
+        return object.__getattribute__(self, "_impl") is not None
+
+    def __getattr__(self, name: str):
+        impl = object.__getattribute__(self, "_impl")
+        if impl is None:
+            raise RuntimeError(f"{object.__getattribute__(self, '_what')} not bound yet")
+        return getattr(impl, name)
+
+
+_ft8_late_state = _LateBound("FT8 API state")
+_ft8_bus_late = _LateBound("FT8 event bus")
+
+try:
+    from ft8.web.ft8_api import attach_ft8_router as _attach_ft8_router
+    from ft8.web.ft8_ws import Ft8WsState as _Ft8WsState, create_ft8_ws_router as _create_ft8_ws_router
+
+    _attach_ft8_router(app, _ft8_late_state)
+    app.include_router(_create_ft8_ws_router(_Ft8WsState(
+        bus=_ft8_bus_late,
+        token_from_handshake=_token_from_ws_handshake,
+        auth_ok=lambda tok: tok in _auth_tokens,
+        mode=lambda: _work_mode_value(),
+        recent_decodes=lambda: (
+            list(_ft8_runtime.recent_decodes) if _ft8_runtime is not None else []
+        ),
+    )))
+    logger.info("FT8 REST/WS routes mounted (composition root binds at startup)")
+except Exception:
+    logger.exception("FT8 route mounting failed — the page will not be served")
 
 # COOP/COEP middleware for SharedArrayBuffer (future audio worklet support)
 @app.middleware("http")

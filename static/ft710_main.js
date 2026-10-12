@@ -760,9 +760,10 @@ function bodyload() {
 document.addEventListener("keydown", (e) => {
 	if (e.repeat) return; // ignore key auto-repeat (held key)
 	if (e.target !== document.body) return; // don't steal keys from inputs
-	// Space = PTT
+	// Space = PTT (refused while FT8 owns the transmitter)
 	if (e.code === "Space") {
 		e.preventDefault();
+		if (window.__ft8ModeActive) return;
 		if (!radioState.is_transmitting) {
 			if (window.PTTManager) PTTManager.pttStart();
 			else handlePTTStart();
@@ -857,6 +858,8 @@ window.__pushRxFrame = __pushRxFrameNoop;
 // not compete — a banner plus the TX-control lock (body class, see ft710.css).
 function applyWorkMode(mode) {
 	document.body.classList.toggle("ft8-mode-active", mode === "ft8");
+	// The keyboard PTT path bypasses the DOM lock above; gate it too.
+	window.__ft8ModeActive = mode === "ft8";
 	let banner = document.getElementById("ft8-mode-banner");
 	if (mode === "ft8") {
 		if (!banner) {

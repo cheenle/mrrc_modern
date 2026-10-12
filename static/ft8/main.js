@@ -6,7 +6,8 @@ if ("serviceWorker" in navigator) {
 
 import { api } from "./api.js";
 import { applySnapshot, subscribe } from "./state.js";
-import { onModeChange, startStreams } from "./streams.js";
+import { onModeChange, onWaterfallFrame, startStreams } from "./streams.js";
+import { createWaterfall, parseFrame } from "./waterfall.js";
 import { createCandidates } from "./candidates.js";
 import { createSafetyBar } from "./safety.js";
 import { createBandSelect } from "./band.js";
@@ -22,6 +23,11 @@ async function backToSsb() {
 async function boot() {
   cockpit.hidden = false;
 
+  const waterfall = createWaterfall(document.getElementById("waterfall-canvas"));
+  onWaterfallFrame((buffer) => {
+    const frame = parseFrame(buffer);
+    if (frame) waterfall.push(frame);
+  });
   createCandidates(document.getElementById("candidate-list"));
   createSafetyBar();
   createBandSelect(document.getElementById("band-select"));

@@ -499,10 +499,31 @@ a { color: var(--accent); text-decoration: none; }
 	cursor: pointer;
 }
 
+/* Everything that changes the operating point is locked too: while FT8 owns
+   the radio, a stray tap on a memory key or the band/mode cycle silently
+   moves the station off the FT8 frequency and every decode stops. */
 body.ft8-mode-active #btn-ptt,
 body.ft8-mode-active #btn-tune,
 body.ft8-mode-active .tx-action,
-body.ft8-mode-active [data-pa="ptt"] {
+body.ft8-mode-active [data-pa="ptt"],
+body.ft8-mode-active #freq-display,
+body.ft8-mode-active .mem-btn,
+body.ft8-mode-active #btn-mode,
+body.ft8-mode-active #btn-band,
+body.ft8-mode-active #btn-filter,
+body.ft8-mode-active .tune-btn,
+body.ft8-mode-active .tune-step-btn,
+body.ft8-mode-active .vfo-btn,
+body.ft8-mode-active #btn-vfoa,
+body.ft8-mode-active #btn-vfob,
+body.ft8-mode-active #btn-ab,
+body.ft8-mode-active #btn-split,
+body.ft8-mode-active #btn-cq {
 	pointer-events: none;
 	opacity: 0.4;
+}
+
+/* The frequency readout stays readable — it shows where the FT8 engine is. */
+body.ft8-mode-active #freq-display {
+	opacity: 0.75;
 }

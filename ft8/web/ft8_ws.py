@@ -6,6 +6,10 @@ header, then cookie; the URL carries no credential).  Frames are JSON:
   {"type": "hello",   "mode": "ssb"|"ft8", "decodes": [...]}
   {"type": "decodes", "items": [...]}
   {"type": "mode",    "mode": "ssb"|"ft8"}
+  <binary>          one WF01 waterfall line (SpectrumFrame.to_bytes)
+
+Binary frames are the platform's compact spectrum format; the client tells
+them apart by WebSocket message type, not by sniffing.
 """
 from __future__ import annotations
 
@@ -89,7 +93,10 @@ def create_ft8_ws_router(state: Ft8WsState) -> APIRouter:
             })
             while True:
                 frame = await queue.get()
-                await ws.send_json(frame)
+                if isinstance(frame, (bytes, bytearray, memoryview)):
+                    await ws.send_bytes(bytes(frame))
+                else:
+                    await ws.send_json(frame)
         except WebSocketDisconnect:
             pass
         except Exception:                     # pragma: no cover - transport noise

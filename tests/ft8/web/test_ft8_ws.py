@@ -56,3 +56,13 @@ def test_bus_drops_oldest_when_full():
     for i in range(4):
         bus.publish({"n": i})
     assert [q.get_nowait()["n"], q.get_nowait()["n"]] == [2, 3]
+
+
+def test_bus_carries_binary_frames_to_subscribers():
+    """Waterfall lines travel as binary messages on the same socket."""
+
+    bus = Ft8EventBus()
+    q = bus.subscribe()
+    bus.publish(b"WF01\x00\x00\x00\x00")
+    frame = q.get_nowait()
+    assert isinstance(frame, bytes)

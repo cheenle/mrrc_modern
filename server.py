@@ -1256,6 +1256,14 @@ def _work_mode_value() -> str:
 _ft8_bus = None                 # Ft8EventBus, created in the lifespan
 
 
+def _platform_dial_hz() -> Optional[int]:
+    """The radio's real dial frequency from the platform's polled state."""
+
+    if radio is None:
+        return None
+    return radio.vfo_b_freq if radio.active_vfo == "B" else radio.vfo_a_freq
+
+
 def _ft8_queue_frame(frame: dict) -> None:
     """Hand one JSON frame to every /WSft8 subscriber."""
     if _ft8_bus is not None:
@@ -3020,6 +3028,7 @@ async def lifespan(app: FastAPI):
             data_dir=_ft8_data_dir,
             dev_rate=RX_RATE,          # the codec-domain rate of read_rx_chunk()
             on_decode=_ft8_on_decode,
+            on_waterfall=_ft8_queue_frame,
         )
         _ft8_mode = Ft8ModeController(
             snapshot_ssb=_ft8_snapshot_ssb,
@@ -3048,6 +3057,8 @@ async def lifespan(app: FastAPI):
             my_grid=_ft8_runtime.sequencer.my_grid,
             mode_controller=_ft8_mode,
             runtime=_ft8_runtime,
+            platform_dial=_platform_dial_hz,
+            settings_store=_ft8_settings_store,
         )
         from ft8.web.ft8_ws import Ft8EventBus
 

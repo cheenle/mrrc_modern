@@ -155,6 +155,8 @@ class AppState:
     rig: Any = None          # RigClient when wired
     mode_controller: Any = None  # Ft8ModeController when the platform wires it
     runtime: Any = None      # Ft8Runtime (orchestrator lives there once started)
+    settings_store: Any = None  # Ft8SettingsStore (rig mode for the band tune)
+    platform_dial: Any = None  # callable() -> int | None, the radio's real dial
     orchestrator: Any = None  # running orchestrator when wired
     latency: Any = None      # LatencyHistogram when the DSP path is wired
     tx_driver: Any = None    # TxDriver; always wired (Null encoder without DSP)
@@ -398,6 +400,17 @@ def create_router(state: AppState) -> APIRouter:
             return _reject(409, "rig_unavailable")
         try:
             await state.rig.set_frequency(freq)
+            # Re-assert the FT8 operating mode as well: a band change on the
+            # radio can restore a band-stack mode (LSB on 14 MHz, measured), and
+            # the page only ever wants the data mode.  Frequency alone leaves
+            # the station undecodable with no visible cause.
+            settings = None
+            if getattr(state, "settings_store", None) is not None:
+                settings = state.settings_store.load()
+            await state.rig.set_mode(
+                getattr(settings, "rig_mode", "DATA-U") or "DATA-U", 3000
+            )
+            await state.rig.set_filter_width(3000)
         except Exception as exc:
             log.warning("band tune failed: %s", exc)
             return _reject(500, "rig_error", detail=str(exc))
@@ -674,6 +687,19 @@ def _session_view(session: Session) -> dict[str, Any]:
     }
 
 
+def _dial_hz(state: AppState) -> int | None:
+    """The radio's real dial frequency (falls back to the cached value)."""
+
+    if getattr(state, "platform_dial", None) is not None:
+        try:
+            value = state.platform_dial()
+            if value:
+                return int(value)
+        except Exception:                     # never fail a snapshot on this
+            log.debug("platform dial unavailable", exc_info=True)
+    return state.radio_freq_hz
+
+
 def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
     lease = state.lease.current() if state.lease is not None else None
     sequencer = state.sequencer
@@ -701,7 +727,7 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
             if state.selected is None
             else {"call": state.selected.from_call, "grid": state.selected.grid}
         ),
-        "radio": {"freq_hz": state.radio_freq_hz},
+        "radio": {"freq_hz": _dial_hz(state)},
         "last_tx": state.last_tx,
         "station": {
             "my_call": state.my_call,

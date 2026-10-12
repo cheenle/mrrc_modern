@@ -41,7 +41,8 @@ class Ft8Runtime:
                  data_dir: Path | str, dev_rate: int = 44_100,
                  on_decode: Callable[[Any], None] | None = None,
                  on_event: Callable[[Any], None] | None = None,
-                 on_slot_start: Callable[[int], None] | None = None) -> None:
+                 on_slot_start: Callable[[int], None] | None = None,
+                 on_waterfall: Callable[[bytes], None] | None = None) -> None:
         self._rig = rig
         self._tx_player = tx_player
         self._sequencer_factory = sequencer_factory
@@ -50,6 +51,7 @@ class Ft8Runtime:
         self._on_decode = on_decode
         self._on_event = on_event
         self._on_slot_start = on_slot_start
+        self._on_waterfall = on_waterfall
 
         self.repository = Repository(str(self._data_dir / "qso.db"))
         # Built here (cheap, no hardware) so the REST layer can read state in
@@ -100,6 +102,10 @@ class Ft8Runtime:
         def spectrum_tap(block: Any, epoch: float) -> None:
             for frame in computer.push(block, epoch):
                 self.waterfall.publish(frame)
+                if self._on_waterfall is not None:
+                    # Compact WF01 binary (SpectrumFrame.to_bytes) — the PWA's
+                    # parseFrame/push render it unchanged.
+                    self._on_waterfall(frame.to_bytes())
 
         self.rx_tap = RxTap(self.ring, dev_rate=self._dev_rate, on_block=spectrum_tap)
         await self.safety.start()

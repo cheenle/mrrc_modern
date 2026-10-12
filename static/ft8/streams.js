@@ -13,7 +13,9 @@ let closed = false;
 let handlers = {};
 
 function setConnected(value) {
-  patch({ connected: { stream: value } });
+  // One socket carries state/decodes/waterfall; waterfall.js keys its
+  // "stale frames" dimming off connected.waterfall.
+  patch({ connected: { stream: value, state: value, decodes: value, waterfall: value } });
 }
 
 function dispatch(message) {
@@ -44,10 +46,15 @@ function open() {
     setConnected(true);
   };
   socket.onmessage = (event) => {
+    if (typeof event.data !== "string") {
+      // Binary = one WF01 waterfall line (compact spectrum frame).
+      if (event.data instanceof ArrayBuffer) handlers.onWaterfall?.(event.data);
+      return;
+    }
     try {
       dispatch(JSON.parse(event.data));
     } catch {
-      /* binary or malformed frame: ignored */
+      /* malformed frame: ignored */
     }
   };
   socket.onclose = (event) => {
@@ -69,6 +76,10 @@ function open() {
 
 export function onModeChange(fn) {
   handlers.onMode = fn;
+}
+
+export function onWaterfallFrame(fn) {
+  handlers.onWaterfall = fn;
 }
 
 export function startStreams() {

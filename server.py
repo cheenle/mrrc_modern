@@ -3028,7 +3028,25 @@ async def lifespan(app: FastAPI):
             set_browser_tx=_ft8_set_browser_tx,
             broadcast=_ft8_broadcast,
         )
-        logger.info("FT8 mode composed (dormant; switch via the menu)")
+        # REST surface: /api/ft8/* on the platform app, sharing the platform
+        # session cookie (AUTH_COOKIE) and the control/listen role split.
+        from ft8.web.auth_shim import PlatformAuthAdapter
+        from ft8.web.ft8_api import AppState as Ft8AppState, attach_ft8_router
+
+        ft8_state = Ft8AppState(
+            auth=PlatformAuthAdapter(lambda tok: tok in _auth_tokens,
+                                     role_of_token=_role_for_token),
+            lease=None,
+            safety=_ft8_runtime.safety,
+            sequencer=_ft8_runtime.sequencer,
+            repository=_ft8_runtime.repository,
+            rig=platform_rig,
+            waterfall_fanout=_ft8_runtime.waterfall,
+            my_call=_ft8_runtime.sequencer.my_call,
+            my_grid=_ft8_runtime.sequencer.my_grid,
+        )
+        attach_ft8_router(app, ft8_state)
+        logger.info("FT8 REST mounted at /api/ft8")
     except Exception:
         logger.exception("FT8 composition failed — running SSB-only")
         _ft8_mode = _ft8_runtime = _ft8_settings_store = None

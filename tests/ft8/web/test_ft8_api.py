@@ -90,3 +90,54 @@ def test_stop_allowed_for_listen_role():
 def test_control_role_reply_without_selection_is_rejected():
     r = _client().post("/api/ft8/operation/reply", json={"index": 0})
     assert r.status_code in (422, 409)
+
+
+class FakeMode:
+    def __init__(self):
+        self.value = "ssb"
+        self.switch_calls: list[str] = []
+        self.fail = False
+
+    @property
+    def mode(self):
+        return self.value
+
+    async def switch_to_ft8(self):
+        if self.fail:
+            raise RuntimeError("engine boom")
+        self.value = "ft8"
+        self.switch_calls.append("ft8")
+
+    async def switch_to_ssb(self):
+        self.value = "ssb"
+        self.switch_calls.append("ssb")
+
+
+def _mode_client(mode: FakeMode, role: str = "control") -> TestClient:
+    client = _client(role=role)
+    client.app.state.ft8_state.mode_controller = mode
+    return client
+
+
+def test_mode_switch_round_trip():
+    mode = FakeMode()
+    client = _mode_client(mode)
+    assert client.post("/api/ft8/mode", json={"mode": "ft8"}).json()["mode"] == "ft8"
+    assert client.post("/api/ft8/mode", json={"mode": "ssb"}).json()["mode"] == "ssb"
+    assert mode.switch_calls == ["ft8", "ssb"]
+
+
+def test_mode_switch_bad_value_is_422():
+    assert _mode_client(FakeMode()).post("/api/ft8/mode", json={"mode": "cw"}).status_code == 422
+
+
+def test_mode_switch_engine_failure_is_500():
+    mode = FakeMode()
+    mode.fail = True
+    r = _mode_client(mode).post("/api/ft8/mode", json={"mode": "ft8"})
+    assert r.status_code == 500
+
+
+def test_mode_switch_requires_control_role():
+    assert _mode_client(FakeMode(), role="listen").post(
+        "/api/ft8/mode", json={"mode": "ft8"}).status_code == 403

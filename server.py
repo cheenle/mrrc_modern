@@ -3038,6 +3038,7 @@ async def lifespan(app: FastAPI):
             waterfall_fanout=_ft8_runtime.waterfall,
             my_call=_ft8_runtime.sequencer.my_call,
             my_grid=_ft8_runtime.sequencer.my_grid,
+            mode_controller=_ft8_mode,
         )
         attach_ft8_router(app, ft8_state)
 

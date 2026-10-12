@@ -153,6 +153,7 @@ class AppState:
     my_call: str = ""
     my_grid: str = ""
     rig: Any = None          # RigClient when wired
+    mode_controller: Any = None  # Ft8ModeController when the platform wires it
     orchestrator: Any = None  # running orchestrator when wired
     latency: Any = None      # LatencyHistogram when the DSP path is wired
     tx_driver: Any = None    # TxDriver; always wired (Null encoder without DSP)
@@ -347,6 +348,33 @@ def create_router(state: AppState) -> APIRouter:
         return JSONResponse(body, status_code=status, headers={"x-idempotent-replay": "true"})
 
     # ---- session ---------------------------------------------------------
+
+    @router.post("/mode")
+    async def set_mode(request: Request, session: Session = Depends(require_lease)) -> JSONResponse:
+        """Switch the whole station between SSB and FT8 (global mode).
+
+        Control role only (it moves the radio and hands TX to the FT8
+        engine); the controller serializes concurrent switches and rolls
+        back to SSB if the engine fails to start.
+        """
+        await validate_mutation(request)
+        body = await request.json()
+        target = str((body or {}).get("mode", "")).lower()
+        if target not in ("ssb", "ft8"):
+            return _reject(422, "invalid_request", detail="mode must be 'ssb' or 'ft8'")
+        controller = state.mode_controller
+        if controller is None:
+            return _reject(409, "ft8_unavailable")
+        try:
+            if target == "ft8":
+                await controller.switch_to_ft8()
+            else:
+                await controller.switch_to_ssb()
+        except Exception as exc:                 # engine start failure rolls back
+            log.exception("mode switch failed")
+            return _reject(500, "mode_switch_failed", detail=str(exc))
+        state.bump()
+        return _ok({"mode": str(controller.mode)})
 
     @router.get("/state")
     async def state_snapshot(session: Session = Depends(require_session)) -> JSONResponse:

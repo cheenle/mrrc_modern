@@ -8,6 +8,12 @@
 
 **技术栈：** Python 3.11（asyncio/FastAPI）、Fortran（gfortran + OpenMP + FFTW3f，设备上原生编译）、scipy（重采样）、vanilla JS 前端。
 
+**执行前准备（本地）：** 本仓的开发环境是 `.venv/`（Python 3.13，含 pytest 9）；FT8 测试用 pytest 跑（`.venv/bin/python -m pytest tests/ft8/`），平台主套件仍用 unittest（`.venv/bin/python -m unittest discover -s tests`）。本计划在任务 7 引入 `soxr`、任务 6 引入 `scipy`：先执行
+
+```bash
+.venv/bin/pip install 'scipy>=1.12' 'soxr>=0.4'
+```
+
 **执行环境提醒：** 工作目录为 mrrc_modern 仓库根（分支 `feat/ft8`）。M1 的任务 5–6（盒子编译与基准）在 W103D 盒子上执行：`ssh root@192.168.1.217`（口令在操作者手里，用 `sshpass -e` 传入）。上游源码树在本机 `/Users/cheenle/HAM/ft8`。
 
 ---
@@ -212,7 +218,7 @@ def test_vendor_digest_matches_tree() -> None:
 
 - [ ] **步骤 4：运行测试验证失败**
 
-运行：`python3 -m pytest tests/ft8/dsp/test_vendor_completeness.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/dsp/test_vendor_completeness.py -v`
 预期：`test_every_cmake_referenced_source_is_vendored` FAIL（`ft8/dsp/cmake/` 还不存在——文件尚未移植）；其余收集报错。这是预期的（任务 2 提供 CMake 清单）。
 
 - [ ] **步骤 5：Commit**
@@ -240,6 +246,7 @@ mkdir -p ft8/dsp
 cd /Users/cheenle/HAM/ft8/dsp
 cp CMakeLists.txt toolchain.cmake wsjt_*.f90 shmem_stub.c wsjt_core.h /Users/cheenle/HAM/mrrc_modern/ft8/dsp/
 cp -r cmake patched /Users/cheenle/HAM/mrrc_modern/ft8/dsp/
+mkdir -p /Users/cheenle/HAM/mrrc_modern/tests/ft8/dsp
 cd /Users/cheenle/HAM/ft8
 cp -r tests/dsp/*.py tests/dsp/*.f90 tests/dsp/*.c tests/dsp/*.cmake /Users/cheenle/HAM/mrrc_modern/tests/ft8/dsp/
 ```
@@ -330,13 +337,13 @@ chmod +x ft8/dsp/build.sh
 运行：
 ```bash
 ./ft8/dsp/build.sh
-python3 -m pytest tests/ft8/dsp/ -x -q
+.venv/bin/python -m pytest tests/ft8/dsp/ -x -q
 ```
 预期：构建成功；测试通过（解码/编码/并发/政策回归）。若 `test_vendor_policy.py` 因 vendor 路径失败，修正其 vendor 树根常量后重跑。
 
 - [ ] **步骤 6：运行完整性测试（任务 1 的测试现在应通过）**
 
-运行：`python3 -m pytest tests/ft8/dsp/test_vendor_completeness.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/dsp/test_vendor_completeness.py -v`
 预期：3 个测试全部 PASS。
 
 - [ ] **步骤 7：Commit**
@@ -382,7 +389,7 @@ grep -rln "server\.core" . | xargs sed -i '' 's/server\.core/ft8.core/g'
 
 - [ ] **步骤 3：跑移植的 core 测试**
 
-运行：`python3 -m pytest tests/ft8/core/ -q`
+运行：`.venv/bin/python -m pytest tests/ft8/core/ -q`
 预期：全部 PASS（`test_worker.py` 会真实加载 `ft8/dsp/build/libwsjt_core.dylib`——任务 2 已构建）。
 
 - [ ] **步骤 4：核心冒烟——真实解码**
@@ -424,7 +431,7 @@ def test_worker_decodes_synthetic_slot(tmp_path):
 
 - [ ] **步骤 5：运行冒烟测试**
 
-运行：`python3 -m pytest tests/ft8/core/test_integration_decode.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/core/test_integration_decode.py -v`
 预期：PASS（或按真实接口微调后 PASS）。
 
 - [ ] **步骤 6：Commit**
@@ -675,7 +682,7 @@ cp /Users/cheenle/HAM/ft8/cty.dat ft8/data/cty.dat
 - [ ] **步骤 6：跑移植的 engine 测试**
 
 ```bash
-python3 -m pytest tests/ft8/engine/ -q
+.venv/bin/python -m pytest tests/ft8/engine/ -q
 ```
 
 预期：PASS（`test_safety.py` 用内存假 rig/player，不受协议化影响；`test_audio_rx.py`/`test_audio_tx.py` 中已删除类的用例一并删除，保留 UtcRing 与 validate 的用例）。
@@ -750,7 +757,7 @@ def test_spectrum_hook_receives_the_same_12k_blocks() -> None:
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`python3 -m pytest tests/ft8/platform/test_rx_tap.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/platform/test_rx_tap.py -v`
 预期：collection ERROR `ModuleNotFoundError: No module named 'ft8.platform.rx_tap'`。
 
 - [ ] **步骤 3：实现 `ft8/platform/rx_tap.py`**
@@ -829,7 +836,7 @@ class RxTap:
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`python3 -m pytest tests/ft8/platform/test_rx_tap.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/platform/test_rx_tap.py -v`
 预期：3 个 PASS。
 
 - [ ] **步骤 5：Commit**
@@ -978,7 +985,7 @@ def test_ptt_goes_through_the_platform_gate():
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`python3 -m pytest tests/ft8/platform/test_tx_sink.py tests/ft8/platform/test_cat.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/platform/test_tx_sink.py tests/ft8/platform/test_cat.py -v`
 预期：`ModuleNotFoundError`（两个模块未创建）。
 
 - [ ] **步骤 3：实现 `ft8/platform/tx_sink.py`**
@@ -1131,7 +1138,7 @@ class PlatformRig:
 
 - [ ] **步骤 5：运行测试验证通过**
 
-运行：`python3 -m pytest tests/ft8/platform/test_tx_sink.py tests/ft8/platform/test_cat.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/platform/test_tx_sink.py tests/ft8/platform/test_cat.py -v`
 预期：全部 PASS。
 
 - [ ] **步骤 6：Commit**
@@ -1244,7 +1251,7 @@ def test_double_switch_is_a_noop():
 
 - [ ] **步骤 2：运行测试验证失败**
 
-运行：`python3 -m pytest tests/ft8/test_mode.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/test_mode.py -v`
 预期：`ModuleNotFoundError: No module named 'ft8.mode'`。
 
 - [ ] **步骤 3：实现 `ft8/mode.py`**
@@ -1337,7 +1344,7 @@ class Ft8ModeController:
 
 - [ ] **步骤 4：运行测试验证通过**
 
-运行：`python3 -m pytest tests/ft8/test_mode.py -v`
+运行：`.venv/bin/python -m pytest tests/ft8/test_mode.py -v`
 预期：3 个 PASS。
 
 - [ ] **步骤 5：Commit**
@@ -1390,7 +1397,7 @@ def test_bad_rig_mode_is_rejected_on_save(tmp_path):
 
 - [ ] **步骤 2：实现并跑通**
 
-运行：`python3 -m pytest tests/ft8/platform/test_settings.py -v` → 先 FAIL（模块缺失），实现后 PASS。
+运行：`.venv/bin/python -m pytest tests/ft8/platform/test_settings.py -v` → 先 FAIL（模块缺失），实现后 PASS。
 
 `ft8/platform/settings.py`：
 
@@ -1653,8 +1660,8 @@ def test_work_mode_is_in_full_state_snapshot(monkeypatch):
 
 运行：
 ```bash
-python3 -m pytest tests/ft8/ -q
-python3 -m pytest tests/ -q -x --ignore=tests/ft8
+.venv/bin/python -m pytest tests/ft8/ -q
+.venv/bin/python -m unittest discover -s tests   # 平台主套件（unittest）
 ```
 预期：两组全绿（平台 113 个测试不受影响）。
 
@@ -1808,7 +1815,7 @@ def test_listen_role_cannot_reply(client_listen):
 
 - [ ] **步骤 5：跑测试**
 
-运行：`python3 -m pytest tests/ft8/web/test_ft8_api.py -q`
+运行：`.venv/bin/python -m pytest tests/ft8/web/test_ft8_api.py -q`
 预期：PASS。
 
 - [ ] **步骤 6：Commit**
@@ -1889,7 +1896,7 @@ def test_ws_hello_reports_mode(client_auth):
 - [ ] **步骤 3：跑测试 + Commit**
 
 ```bash
-python3 -m pytest tests/ft8/web/test_ft8_ws.py -q
+.venv/bin/python -m pytest tests/ft8/web/test_ft8_ws.py -q
 git add ft8/web/ft8_ws.py server.py tests/ft8/web/test_ft8_ws.py
 git commit -m "feat(ft8): /WSft8 解码与模式事件流（平台握手认证）"
 ```
@@ -1937,7 +1944,7 @@ def test_bad_mode_is_400(client_control):
 - [ ] **步骤 4：跑测试 + Commit**
 
 ```bash
-python3 -m pytest tests/ft8/ -q
+.venv/bin/python -m pytest tests/ft8/ -q
 git add ft8/web/ft8_api.py server.py tests/ft8/web/test_mode_endpoint.py
 git commit -m "feat(ft8): 模式切换端点与 work_mode 状态广播"
 ```
@@ -2241,4 +2248,4 @@ M1(1→2→3→4→5) ──► M2(6→7→8→9→10→11) ──► M3(12→13
 - 任务 1–3 在本地完成（macOS 可直接构建 DSP 并跑全部解码回归）。
 - 任务 4–5 需要盒子在线；**任务 5 的重采样链验证不通过则全线暂停**（规格 §7-2）。
 - 任务 6–11 期间盒子不参与（纯本地）。
-- 任务 12 起每次部署前在本地跑 `python3 -m pytest tests/ft8/ -q`。
+- 任务 12 起每次部署前在本地跑 `.venv/bin/python -m pytest tests/ft8/ -q`。

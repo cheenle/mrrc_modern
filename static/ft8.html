@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101418">
+  <title>MRRC FT8</title>
+  <link rel="stylesheet" href="/static/ft8/app.css">
+</head>
+<body>
+  <div id="cockpit">
+    <header id="top-bar">
+      <div id="top-left">
+        <a id="btn-back-ssb" class="icon-btn" href="/" title="Back to SSB" aria-label="Back to SSB">←</a>
+        <button id="btn-menu" class="icon-btn" title="Settings & Log" aria-label="Open settings">☰</button>
+        <span id="station-id">—</span>
+      </div>
+      <span id="slot-clock">--:--:--</span>
+      <select id="band-select" aria-label="FT8 band" title="FT8 band" hidden></select>
+      <span id="decode-counter" style="color:#3fbf6f;margin-left:8px">⏳</span>
+      <span id="mode-badge" title="Work mode">FT8</span>
+    </header>
+
+    <main id="workspace">
+      <section id="waterfall-pane" aria-label="Waterfall">
+        <canvas id="waterfall-canvas"></canvas>
+      </section>
+      <section id="candidates-pane" aria-label="Candidates">
+        <ul id="candidate-list"></ul>
+      </section>
+    </main>
+
+    <!-- Settings / Log drawer (left side) -->
+    <div id="drawer-backdrop" hidden></div>
+    <aside id="settings-drawer" aria-label="Settings and log" hidden>
+      <header id="drawer-header">
+        <strong>MRRC FT8</strong>
+        <button id="btn-drawer-close" class="icon-btn" aria-label="Close settings">✕</button>
+      </header>
+      <nav id="drawer-tabs">
+        <button class="tab" data-tab="ft8">FT8</button>
+        <button class="tab" data-tab="station">Station</button>
+        <button class="tab" data-tab="log">Log</button>
+        <button class="tab" data-tab="dxcc">DXCC</button>
+      </nav>
+      <div id="drawer-content"></div>
+    </aside>
+
+    <!-- Full-screen QSO log -->
+    <div id="log-overlay" class="log-overlay" hidden>
+      <div class="log-panel">
+        <header class="log-header">
+          <strong>QSO Log <span class="count" id="log-count"></span></strong>
+          <a class="btn adif" href="/api/ft8/logs/adif" download>Export ADIF</a>
+          <button id="btn-log-close" class="icon-btn" aria-label="Close log">✕</button>
+        </header>
+        <div id="log-list" class="log-list"></div>
+      </div>
+    </div>
+
+    <!-- Full-screen DXCC stats -->
+    <div id="dxcc-overlay" class="log-overlay" hidden>
+      <div class="log-panel">
+        <header class="log-header">
+          <strong>DXCC <span class="count" id="dxcc-count"></span></strong>
+          <button id="btn-dxcc-close" class="icon-btn" aria-label="Close DXCC">✕</button>
+        </header>
+        <div id="dxcc-content" class="log-list"></div>
+      </div>
+    </div>
+
+    <!-- Band-hunt dashboard is out of scope for the first FT8 version, but
+         settings.js still reads its elements; keep them inert. -->
+    <div id="bandhunt-overlay" class="log-overlay" hidden>
+      <div class="log-panel">
+        <header class="log-header">
+          <strong>New DXCC — nearby FT8 spots</strong>
+          <button id="btn-bandhunt-close" class="icon-btn" aria-label="Close band hunt">✕</button>
+        </header>
+        <div id="bandhunt-content" class="log-list"></div>
+      </div>
+    </div>
+
+    <div id="toast" role="status" hidden></div>
+
+    <footer id="state-bar">
+      <div id="interlocks" class="state-group">
+        <span class="lamp" id="lamp-cat" title="CAT">CAT</span>
+        <span class="lamp" id="lamp-audio" title="Audio">AUD</span>
+        <span class="lamp" id="lamp-dsp" title="DSP">DSP</span>
+        <span class="lamp" id="lamp-clock" title="Clock">CLK</span>
+      </div>
+      <div class="state-group">
+        <span id="lease-state" hidden>CONTROL</span>
+        <span id="sequencer-state">idle</span>
+        <span id="ptt-state" class="lamp">PTT</span>
+        <button id="btn-lease" class="cmd" hidden>Take control</button>
+      </div>
+      <div class="state-group actions">
+        <button id="btn-cq" class="cmd">CQ</button>
+        <button id="btn-reply" class="cmd" disabled>Reply</button>
+        <button id="btn-tx-off" class="cmd">TX off</button>
+        <button id="btn-clear-fault" class="cmd" hidden>CLEAR FAULT</button>
+        <button id="btn-stop" class="stop">STOP TX</button>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="/static/ft8/main.js"></script>
+</body>
+</html>

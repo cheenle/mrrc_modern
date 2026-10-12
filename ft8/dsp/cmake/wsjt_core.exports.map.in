@@ -1,0 +1,9 @@
+{
+    global:
+        wsjt_get_abi_info;
+        wsjt_ft8_encode;
+        wsjt_ft8_decode_standard;
+        wsjt_ft8_decode_improved;
+@WSJT_CORE_TEST_HOOK_EXPORT@    local:
+        *;
+};

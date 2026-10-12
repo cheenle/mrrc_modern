@@ -509,6 +509,23 @@ function handleMessage(msg) {
 			if (msg.fields) {
 				Object.assign(radioState, msg.fields);
 			}
+			if (typeof msg.work_mode === "string") {
+				// FT8 owns the radio: the engine keys the transmitter, so the
+				// browser must not compete — banner + controls locked.
+				document.body.classList.toggle("ft8-mode-active", msg.work_mode === "ft8");
+				let banner = document.getElementById("ft8-mode-banner");
+				if (msg.work_mode === "ft8") {
+					if (!banner) {
+						banner = document.createElement("div");
+						banner.id = "ft8-mode-banner";
+						banner.textContent = "FT8 模式中 — 发射由 FT8 引擎控制（点此返回）";
+						banner.addEventListener("click", () => { window.location.href = "/static/ft8.html"; });
+						document.body.appendChild(banner);
+					}
+				} else if (banner) {
+					banner.remove();
+				}
+			}
 			{
 				const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;
 				if (changedFields) {

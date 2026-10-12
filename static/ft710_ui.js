@@ -1968,6 +1968,26 @@ function handleMenuAction(action) {
         case 'settings':
             showSettingsPanel();
             break;
+        case 'ft8-mode':
+            // Global mode switch: the server moves the radio (DATA-U + 3 kHz),
+            // hands TX to the FT8 engine and broadcasts work_mode=ft8.
+            fetch('/api/ft8/mode', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mode: 'ft8'}),
+            }).then((response) => {
+                if (response.ok) {
+                    window.location.href = '/static/ft8.html';
+                    return null;
+                }
+                return response.json().catch(() => ({}));
+            }).then((payload) => {
+                if (payload && payload.reason) {
+                    showToast('FT8 切换失败：' + payload.reason, 4000);
+                }
+            }).catch(() => showToast('FT8 切换失败', 4000));
+            break;
         case 'logout':
             fetch('/api/auth/logout', {method:'POST'}).then(() => {
                 window.location.replace('/login');

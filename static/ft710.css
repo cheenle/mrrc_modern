@@ -481,3 +481,28 @@ a { color: var(--accent); text-decoration: none; }
     .quick-btn { padding: 8px 4px; font-size: 13px; }
     .dsp-btn { padding: 6px 0; font-size: 12px; }
 }
+
+/* ── FT8 mode banner (2026-10-12) ────────────────────────────────────
+   While the FT8 engine owns the transmitter, the SSB page shows a banner
+   and locks the TX controls: the browser must not compete for PTT. */
+#ft8-mode-banner {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 9000;
+	background: #b45309;
+	color: #fff;
+	text-align: center;
+	padding: 6px 10px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+body.ft8-mode-active #btn-ptt,
+body.ft8-mode-active #btn-tune,
+body.ft8-mode-active .tx-action,
+body.ft8-mode-active [data-pa="ptt"] {
+	pointer-events: none;
+	opacity: 0.4;
+}

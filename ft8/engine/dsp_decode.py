@@ -1,0 +1,153 @@
+"""Production SlotDecoder: exact slot → shared memory → supervised Worker.
+
+SDD §9.2 steps 5–6 and §11.4: the engine requests DSP only through the
+supervisor; exact RX arrays travel in one reusable parent-owned shared-memory
+segment described by the fixed Protocol v1 descriptor and never enter the
+control frame.  The blocking supervisor round trip runs in
+``asyncio.to_thread`` so the engine loop is never stalled by DSP.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import time
+from collections.abc import Callable
+from dataclasses import asdict
+from multiprocessing.shared_memory import SharedMemory
+from typing import Any
+
+from ft8.core.models import (
+    DecodeBatch,
+    DecodeConfig,
+    DecodePath,
+    DecodeResult,
+)
+from ft8.core.supervisor import WorkerSupervisor
+from ft8.engine.orchestrator import SLOT_SAMPLES_NBYTES
+
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
+
+
+class DecodeError(Exception):
+    """The Worker returned a sanitized application-level error frame."""
+
+    __slots__ = ("code", "detail")
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(f"{code}: {detail}")
+        self.code = code
+        self.detail = detail
+
+
+def slot_utc_hhmmss(slot_id: int, period: float = 15.0) -> int:
+    """Return the slot start's UTC time as HHMMSS for the decode config."""
+
+    seconds = int(slot_id * period) % 86_400
+    hours, remainder = divmod(seconds, 3_600)
+    minutes, secs = divmod(remainder, 60)
+    return hours * 10_000 + minutes * 100 + secs
+
+
+class SupervisorDecoder:
+    """SlotDecoder implementation backed by one WorkerSupervisor.
+
+    A single decode segment is reused across requests: the supervisor
+    serializes every request, and the Worker maps it read-only, closes it and
+    never unlinks it.  Call :meth:`close` (or use the context manager) to
+    release the segment.
+    """
+
+    def __init__(
+        self,
+        supervisor: WorkerSupervisor,
+        config: DecodeConfig | None = None,
+        *,
+        period: float = 15.0,
+        request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        monotonic: Callable[[], float] = time.monotonic,
+        histogram: Any = None,
+    ) -> None:
+        if request_timeout <= 0:
+            raise ValueError("request timeout must be positive")
+        self._supervisor = supervisor
+        self._config = config or DecodeConfig()
+        self._period = period
+        self._request_timeout = request_timeout
+        self._monotonic = monotonic
+        self._histogram = histogram
+        self._shm: SharedMemory | None = None
+
+    def _ensure_segment(self) -> SharedMemory:
+        if self._shm is None:
+            self._shm = SharedMemory(create=True, size=SLOT_SAMPLES_NBYTES)
+        return self._shm
+
+    async def decode(self, slot_id: int, samples: bytes) -> DecodeBatch:
+        """Decode one exact 12 kHz int16 slot into a native-result batch."""
+
+        if len(samples) != SLOT_SAMPLES_NBYTES:
+            raise ValueError(f"decode requires exactly {SLOT_SAMPLES_NBYTES} bytes")
+        shm = self._ensure_segment()
+        shm.buf[: len(samples)] = samples
+        config = self._config.replace(
+            utc_hhmmss=slot_utc_hhmmss(slot_id, self._period)
+        )
+        # Protocol v1 requires a plain str path (StrEnum fails its type check).
+        config_frame = {**asdict(config), "path": str(config.path)}
+        frame = {
+            "type": "decode",
+            "slot_id": slot_id,
+            "deadline_monotonic": self._monotonic() + self._request_timeout,
+            "shm": {
+                "name": shm.name,
+                "dtype": "<i2",
+                "shape": [180_000],
+                "nbytes": SLOT_SAMPLES_NBYTES,
+            },
+            "config": config_frame,
+        }
+        started = self._monotonic()
+        response = await asyncio.to_thread(
+            self._supervisor.request, frame, self._request_timeout
+        )
+        if response["type"] == "error":
+            raise DecodeError(str(response["code"]), str(response["detail"]))
+        if self._histogram is not None:
+            self._histogram.record(
+                config.profile, config.threads, self._monotonic() - started
+            )
+        return DecodeBatch(
+            slot_id=int(response["slot_id"]),  # type: ignore[arg-type]
+            path=DecodePath(str(response["path"])),
+            results=tuple(
+                DecodeResult(
+                    slot_id=int(item["slot_id"]),
+                    sync=float(item["sync"]),
+                    snr=int(item["snr"]),
+                    dt=float(item["dt"]),
+                    frequency=float(item["frequency"]),
+                    text=str(item["text"]),
+                    ap_type=int(item["ap_type"]),
+                    quality=float(item["quality"]),
+                    flags=int(item["flags"]),
+                )
+                for item in response["results"]  # type: ignore[union-attr]
+            ),
+            overflow=bool(response["overflow"]),
+            elapsed_seconds=float(response["elapsed_seconds"]),
+            deadline_missed=bool(response["deadline_missed"]),
+        )
+
+    def close(self) -> None:
+        """Close and unlink the shared decode segment; idempotent."""
+
+        if self._shm is not None:
+            shm, self._shm = self._shm, None
+            shm.close()
+            shm.unlink()
+
+    def __enter__(self) -> SupervisorDecoder:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.close()

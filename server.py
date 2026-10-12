@@ -666,6 +666,12 @@ _rec_session = RecordingSession(RECORDINGS_DIR,
 # _bind_cq_player(); before that it only knows the asset path.
 _cq_player = CQPlayer(asset_path=CQ_ASSET_PATH)
 
+# ── FT8 mode (dormant until the operator switches; see ft8/) ─────────────
+_ft8_mode = None                # Ft8ModeController (created in the lifespan)
+_ft8_runtime = None             # Ft8Runtime
+_ft8_settings_store = None      # Ft8SettingsStore
+_ft8_owns_tx = False            # True while FT8 mode owns the transmitter
+
 
 def _log_recording_readiness() -> None:
     """Report recording readiness at startup (missing deps, read-only dir).
@@ -1122,6 +1128,7 @@ async def _broadcast_state():
         "type": "stateUpdate",
         "fields": fields,
         "dirty": list(dirty),
+        "work_mode": _work_mode_value(),
     }
     data = json.dumps(update)
     dead: set[WebSocket] = set()
@@ -1240,50 +1247,100 @@ async def _broadcast_cq_state() -> None:
     ctrl_clients -= dead
 
 
-async def _cq_key(owner_token: Optional[str]) -> bool:
-    """Key the radio for a CQ call — the PTT-on sequence, ownership included.
+def _work_mode_value() -> str:
+    """The global FT8/SSB mode as a string (SSB when the engine is unbound)."""
+    return "ft8" if _ft8_mode is not None and str(_ft8_mode.mode) == "ft8" else "ssb"
 
-    Returns False (with the carrier released again) when the gate refuses or
-    the TX audio device cannot open, so the caller never reports a silent
-    dead carrier as a successful call.
+
+_ft8_ws_clients: set = set()
+_ft8_ws_queue: asyncio.Queue = None
+
+
+def _ft8_queue_frame(frame: dict) -> None:
+    """Hand one JSON frame to the FT8 stream (no-op until the WS layer binds)."""
+    if _ft8_ws_queue is not None:
+        _ft8_ws_queue.put_nowait(frame)
+
+
+async def _broadcast_ft8_json(frame: dict) -> None:
+    if _ft8_ws_queue is not None:
+        _ft8_ws_queue.put_nowait(frame)
+
+
+def _slot_started_fanout(slot_id: int) -> None:
+    """Kept for the FT8 layer's slot callback (wired when the WS layer lands)."""
+
+
+class TxSession:
+    """The platform's one TX keying sequence — CQ player and FT8 share it.
+
+    ``key()`` is the PTT-on sequence including ownership; it returns False
+    (with the carrier released again) when the backend gate refuses or the
+    TX audio device cannot open, so a caller never reports a silent dead
+    carrier as a success.  ``unkey()`` stops the audio stream first, then
+    releases PTT.  FT8's ``PlatformRig.set_ptt`` routes through here too, so
+    both TX sources cannot key the radio at once by construction.
     """
-    global _tx_cq_mic_drops
-    if backend is not None and backend.capabilities.tx_gated:
-        return False
-    _claim_tx_owner_for_token(owner_token)
-    _tx_cq_mic_drops = 0
-    try:
-        await cat.set_ptt(True)
-        radio.update(tx_status=1)
-        if audio and not await asyncio.to_thread(audio.start_tx):
-            logger.error("CQ: TX audio stream failed — unkeying radio")
-            await cat.set_ptt(False)
+
+    def __init__(self) -> None:
+        self._keyed = False
+
+    @property
+    def keyed(self) -> bool:
+        return self._keyed
+
+    async def key(self, owner_token: Optional[str] = None, *, label: str = "TX") -> bool:
+        if backend is not None and backend.capabilities.tx_gated:
+            return False
+        _claim_tx_owner_for_token(owner_token)
+        try:
+            await cat.set_ptt(True)
+            radio.update(tx_status=1)
+            if audio and not await asyncio.to_thread(audio.start_tx):
+                logger.error("%s: TX audio stream failed — unkeying radio", label)
+                await cat.set_ptt(False)
+                radio.update(tx_status=0)
+                return False
+        except Exception as e:
+            logger.error("%s: keying failed (%s) — releasing", label, e)
+            try:
+                await cat.set_ptt(False)
+            except Exception:
+                pass
             radio.update(tx_status=0)
             return False
-    except Exception as e:
-        logger.error("CQ: keying failed (%s) — releasing", e)
-        try:
-            await cat.set_ptt(False)
-        except Exception:
-            pass
-        radio.update(tx_status=0)
-        return False
-    logger.info("CQ: keyed the radio")
-    return True
+        self._keyed = True
+        logger.info("%s: keyed the radio", label)
+        return True
+
+    async def unkey(self, graceful: bool = False, *, label: str = "TX") -> None:
+        self._keyed = False
+        if audio:
+            await asyncio.to_thread(audio.stop_tx, graceful)
+        if cat is not None and cat.connected:
+            try:
+                await cat.set_ptt(False)
+            except Exception as e:
+                logger.warning("%s: unkey failed: %s", label, e)
+        radio.update(tx_status=0, power_meter=0, alc_meter=0, swr_meter=0,
+                     comp_meter=0, id_meter=0)
+        scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+
+
+_tx_session = TxSession()
+"""Shared by the CQ player, FT8 and (through them) nothing else."""
+
+
+async def _cq_key(owner_token: Optional[str]) -> bool:
+    """CQ wrapper over the shared TX session (keeps CQ's mic-drop accounting)."""
+    global _tx_cq_mic_drops
+    _tx_cq_mic_drops = 0
+    return await _tx_session.key(owner_token, label="CQ")
 
 
 async def _cq_unkey(graceful: bool) -> None:
-    """Release the carrier after a CQ call (tail drain when graceful)."""
-    if audio:
-        await asyncio.to_thread(audio.stop_tx, graceful)
-    if cat is not None and cat.connected:
-        try:
-            await cat.set_ptt(False)
-        except Exception as e:
-            logger.warning("CQ: unkey failed: %s", e)
-    radio.update(tx_status=0, power_meter=0, alc_meter=0, swr_meter=0,
-                 comp_meter=0, id_meter=0)
-    scheduler and scheduler.skip_next_poll("tx_status", 1.0)
+    """CQ wrapper over the shared TX session (keeps CQ's session log)."""
+    await _tx_session.unkey(graceful, label="CQ")
     if audio:
         st = audio.tx_stats()
         logger.info("CQ session: written=%d write_err=%d queue_drops=%d "
@@ -1298,6 +1355,8 @@ async def _feed_tx_from_uplink(pcm: bytes) -> None:
     microphone in would transmit two voices at once (spec §6).
     """
     global _tx_cq_mic_drops
+    if _ft8_owns_tx:
+        return                                   # FT8 engine is the TX source
     if _cq_player is not None and _cq_player.is_calling:
         _tx_cq_mic_drops += 1
         return
@@ -1772,6 +1831,12 @@ async def _audio_rx_loop():
                 if pcm:
                     _rx_last_pcm = time.monotonic()
                     _rec_tap_rx(pcm, audio._rx_dev_rate)
+                    # FT8 tap: same device-rate block, resampled to the
+                    # decoder domain only while FT8 mode is running.
+                    if _ft8_runtime is not None and _ft8_runtime.rx_tap is not None:
+                        _ft8_runtime.rx_tap.feed(
+                            pcm, time.time() - len(pcm) / 2 / audio._rx_dev_rate
+                        )
                     # While recording, keep every client's duration display
                     # live without a dedicated task (20 ms tick / 50 = 1 Hz).
                     if _rec_session.active and _loop_count % 50 == 0:
@@ -2882,6 +2947,92 @@ async def lifespan(app: FastAPI):
         _recording_writer_loop(_rec_queue, _rec_session), name="rec_writer")
     _log_recording_readiness()
     _bind_cq_player()
+
+    # ── FT8 mode composition (dormant until the operator switches) ──
+    # The engine is assembled here but started/stopped by the mode controller;
+    # the RX tap is fed by _audio_rx_loop (see the recording tap there).
+    global _ft8_mode, _ft8_runtime, _ft8_settings_store
+    try:
+        from ft8.engine.sequencer import Sequencer
+        from ft8.mode import Ft8ModeController
+        from ft8.platform.cat import PlatformRig
+        from ft8.platform.settings import Ft8SettingsStore
+        from ft8.platform.tx_sink import PlatformTxPlayer
+        from ft8.runtime import Ft8Runtime
+
+        _ft8_settings_store = Ft8SettingsStore(
+            _writable_runtime_dir() / "ft8" / "settings.json"
+        )
+        _ft8_data_dir = _writable_runtime_dir() / "ft8"
+        platform_rig = PlatformRig(cat, _tx_session, rig_mode="DATA-U")
+
+        async def _ft8_snapshot_ssb() -> dict:
+            """SSB operating state, restored field by field on the way back."""
+            dial = radio.vfo_b_freq if radio.active_vfo == "B" else radio.vfo_a_freq
+            return {
+                "freq": dial, "mode": radio.mode, "filter": radio.filter_width,
+                "rf_power": radio.rf_power, "attenuator": radio.attenuator,
+                "preamp": radio.preamp,
+            }
+
+        async def _ft8_apply_ft8_radio() -> None:
+            settings = _ft8_settings_store.load()
+            platform_rig._rig_mode = settings.rig_mode        # noqa: SLF001 (settings live here)
+            await platform_rig.set_mode(settings.rig_mode, 3000)
+            await platform_rig.set_filter_width(3000)
+
+        async def _ft8_restore_ssb(snap: dict) -> None:
+            if snap.get("freq"):
+                await cat.set_frequency(int(snap["freq"]))
+            if snap.get("mode") is not None:
+                await cat.set_mode(int(snap["mode"]))
+            if snap.get("filter") is not None:
+                await cat.set_filter_width(int(snap["filter"]))
+            if snap.get("rf_power") is not None:
+                await cat.set_rf_power(int(snap["rf_power"]))
+            if snap.get("attenuator") is not None:
+                await cat.set_attenuator(int(snap["attenuator"]))
+            if snap.get("preamp") is not None:
+                await cat.set_preamp(int(snap["preamp"]))
+
+        def _ft8_set_browser_tx(enabled: bool) -> None:
+            global _ft8_owns_tx
+            _ft8_owns_tx = not enabled
+
+        async def _ft8_broadcast(mode: str) -> None:
+            await _broadcast_state()
+            await _broadcast_ft8_json({"type": "mode", "mode": mode})
+
+        def _ft8_make_sequencer() -> Sequencer:
+            settings = _ft8_settings_store.load()
+            return Sequencer(my_call=settings.my_call, my_grid=settings.my_grid)
+
+        def _ft8_on_decode(batch: object) -> None:
+            for item in list(_ft8_runtime.recent_decodes)[-12:]:
+                _ft8_queue_frame({"type": "decodes", "items": [item]})
+
+        _ft8_runtime = Ft8Runtime(
+            rig=platform_rig,
+            tx_player=PlatformTxPlayer(audio, queued_frames=lambda: audio.tx_queue_frames()),
+            sequencer_factory=_ft8_make_sequencer,
+            data_dir=_ft8_data_dir,
+            dev_rate=audio._rx_dev_rate if audio is not None else 44_100,
+            on_decode=_ft8_on_decode,
+        )
+        _ft8_mode = Ft8ModeController(
+            snapshot_ssb=_ft8_snapshot_ssb,
+            apply_ft8_radio=_ft8_apply_ft8_radio,
+            restore_ssb=_ft8_restore_ssb,
+            start_engine=_ft8_runtime.start,
+            stop_engine=_ft8_runtime.stop,
+            set_browser_tx=_ft8_set_browser_tx,
+            broadcast=_ft8_broadcast,
+        )
+        logger.info("FT8 mode composed (dormant; switch via the menu)")
+    except Exception:
+        logger.exception("FT8 composition failed — running SSB-only")
+        _ft8_mode = _ft8_runtime = _ft8_settings_store = None
+
     _log_cq_readiness()
     global _max_tx_watchdog_task
     _max_tx_watchdog_task = asyncio.create_task(_max_tx_watchdog(), name="max_tx_watchdog")
@@ -3785,6 +3936,7 @@ def _full_state_message(data: dict, channels: list) -> dict:
         "data": data,
         "bands": backend.bands if backend else BANDS,
         "modes": backend.ui_modes if backend else UI_MODES,
+        "work_mode": _work_mode_value(),
         "recording": _recording_state_payload(),
         "cq": _cq_state_payload(),
         "radioModel": backend.capabilities.model_name if backend else RADIO_MODEL,

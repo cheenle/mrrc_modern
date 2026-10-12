@@ -2,6 +2,23 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [feat/ft8] — 未发布 — FT8 工作模式（W103D 盒子）
+
+**一台电台，两种用法**：主菜单多了一项「FT8 模式」——点一下，电台切到 FT8 频点与 DATA-U，
+FT8 引擎接管接收与发射；FT8 界面右上角点「←」回到 SSB，台况（频率/模式/滤波/功率/AGC/ATT/PREAMP）
+逐字段恢复。两个模式共用同一条 TX 门控，**结构上不可能同时键控**。
+
+- **复用时的一切**：FT8 用平台的声卡（RX 从既有 44.1 kHz 流分出 12 kHz，TX 波形走 CQ 播放同一条队列）、
+  平台的 CAT（`CatController`，不装 hamlib/rigctld）、平台的登录与角色（`operator` 全权 / `listener` 只读）。
+- **独立的设置**：呼号、Grid、射频模式（`DATA-U`/`USB`，默认 DATA-U）在 FT8 页面内单独设置，
+  与 Cloud Hub 呼号无关。
+- **DSP 在设备上原生编译**：`ft8/dsp/build.sh`（gfortran + FFTW3f + Boost，幂等）；
+  W103D 实测编译 2 分 02 秒、单时隙解码 2.14 秒（15 秒时隙余量 3.7 倍）。
+- **真机验收**：20m 六时隙 4 解码；SSB↔FT8 往返无 PTT 残留（`docs/ft8-m5-acceptance.md`）。
+- **首版不做**：FT4、桌面客户端、band hunter、JTDX ADIF 同步、auto-call-new-DXCC。
+- **升级注意（重要）**：≤1.25.5 镜像自带的 `mrrc-update` 会用 `--delete` 同步，
+  升级时会删掉盒子上的 `env/`、`profiles/` 与录音——升级前先替换该脚本（或先整目录备份）。
+
 ## [v1.26.0] — 2026-10-12 — 盒子会自己配网了；树莓派镜像追上 W103D；客户按一下就能叫人来修
 
 这一版把三件互不相干的事送到你手里：**W103D 盒子刷完机不再需要 HDMI 与键盘**——接上网线，在局域网里用

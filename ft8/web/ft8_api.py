@@ -402,6 +402,9 @@ def create_router(state: AppState) -> APIRouter:
             log.warning("band tune failed: %s", exc)
             return _reject(500, "rig_error", detail=str(exc))
         state.radio_freq_hz = freq
+        runtime = getattr(state, "runtime", None)
+        if runtime is not None and hasattr(runtime, "set_dial_frequency"):
+            runtime.set_dial_frequency(freq)
         state.bump()
         return _ok({"freq_hz": freq})
 

@@ -1978,7 +1978,7 @@ function handleMenuAction(action) {
                 body: JSON.stringify({mode: 'ft8'}),
             }).then((response) => {
                 if (response.ok) {
-                    window.location.href = '/static/ft8.html';
+                    window.location.href = '/ft8.html';
                     return null;
                 }
                 return response.json().catch(() => ({}));

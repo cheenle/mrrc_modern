@@ -519,7 +519,7 @@ function handleMessage(msg) {
 						banner = document.createElement("div");
 						banner.id = "ft8-mode-banner";
 						banner.textContent = "FT8 模式中 — 发射由 FT8 引擎控制（点此返回）";
-						banner.addEventListener("click", () => { window.location.href = "/static/ft8.html"; });
+						banner.addEventListener("click", () => { window.location.href = "/ft8.html"; });
 						document.body.appendChild(banner);
 					}
 				} else if (banner) {

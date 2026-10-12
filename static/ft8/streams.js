@@ -21,12 +21,10 @@ function dispatch(message) {
   switch (message.type) {
     case "hello":
       patch({ workMode: message.mode });
-      if (Array.isArray(message.decodes) && message.decodes.length) {
-        applyDecodeBatch({ items: message.decodes });
-      }
+      for (const batch of message.decodes || []) applyDecodeBatch(batch);
       break;
     case "decodes":
-      applyDecodeBatch({ items: message.items || [] });
+      applyDecodeBatch(message);
       break;
     case "mode":
       patch({ workMode: message.mode });

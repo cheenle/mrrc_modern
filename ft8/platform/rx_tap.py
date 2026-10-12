@@ -42,6 +42,8 @@ class RxTap:
         )
         self._base_epoch: float | None = None
         self._logged_first = False
+        self._rms_blocks = 0
+        self._peak_seen = 0
         self._out_count = 0           # 12 kHz samples emitted so far
         self._consumed = 0            # input samples fed so far
 
@@ -73,6 +75,13 @@ class RxTap:
             self._logged_first = True
             log.info("RX tap delivering (dev %d Hz -> %d Hz, first block %d samples @ %.3f)",
                      self._dev_rate, self._out_rate, block.size, self._base_epoch)
+        self._rms_blocks += 1
+        if self._rms_blocks % 250 == 0:          # every ~5 s of audio
+            rms = float(np.sqrt(np.mean(block.astype(np.float64) ** 2)))
+            log.info("RX tap level: rms=%.0f peak=%d (12 kHz, last block)",
+                     rms, int(np.max(np.abs(block))))
+        if block.size > self._peak_seen:
+            self._peak_seen = block.size
         out_epoch = self._base_epoch + self._out_count / self._out_rate
         self._out_count += block.size
         if self._ring is not None:

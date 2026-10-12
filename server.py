@@ -87,6 +87,7 @@ from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
 from audio_handler import AudioHandler
 from opus_rx import (
+    RX_RATE,
     RxOpusEncoder, TxOpusDecoder,
     AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, TX_RATE,
 )
@@ -1830,8 +1831,12 @@ async def _audio_rx_loop():
                     # FT8 tap: same device-rate block, resampled to the
                     # decoder domain only while FT8 mode is running.
                     if _ft8_runtime is not None and _ft8_runtime.rx_tap is not None:
+                        # read_rx_chunk() returns the 48 kHz codec domain (it
+                        # resamples the device for Opus), so the tap's rate is
+                        # RX_RATE — feeding it the device rate skews the slot
+                        # timeline and nothing ever decodes (found in the field).
                         _ft8_runtime.rx_tap.feed(
-                            pcm, time.time() - len(pcm) / 2 / audio._rx_dev_rate
+                            pcm, time.time() - len(pcm) / 2 / RX_RATE
                         )
                     # While recording, keep every client's duration display
                     # live without a dedicated task (20 ms tick / 50 = 1 Hz).
@@ -3004,15 +3009,16 @@ async def lifespan(app: FastAPI):
             return Sequencer(my_call=settings.my_call, my_grid=settings.my_grid)
 
         def _ft8_on_decode(batch: object) -> None:
-            for item in list(_ft8_runtime.recent_decodes)[-12:]:
-                _ft8_queue_frame({"type": "decodes", "items": [item]})
+            # ``batch`` is already the wire frame (slot_id/late/messages).
+            if isinstance(batch, dict) and batch.get("type") == "decodes":
+                _ft8_queue_frame(batch)
 
         _ft8_runtime = Ft8Runtime(
             rig=platform_rig,
             tx_player=PlatformTxPlayer(audio, queued_frames=lambda: audio.tx_queue_frames()),
             sequencer_factory=_ft8_make_sequencer,
             data_dir=_ft8_data_dir,
-            dev_rate=audio._rx_dev_rate if audio is not None else 44_100,
+            dev_rate=RX_RATE,          # the codec-domain rate of read_rx_chunk()
             on_decode=_ft8_on_decode,
         )
         _ft8_mode = Ft8ModeController(

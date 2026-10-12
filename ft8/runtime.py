@@ -65,8 +65,11 @@ class Ft8Runtime:
         self.ring: UtcRing | None = None
         self.rx_tap: RxTap | None = None
         self.latency = LatencyHistogram()
-        self.recent_decodes: deque[Any] = deque(maxlen=500)
-        self._decode_seq = 0
+        self.recent_decodes: deque[Any] = deque(maxlen=40)   # wire batches for replay
+        self._dial_freq_hz: int | None = None
+        self._worked: Any = None
+        self._worked_dirty = True
+        self._dumped_slots = 0
         self.waterfall = SpectrumFanout()
         self._supervisor: WorkerSupervisor | None = None
         self._task: asyncio.Task[Any] | None = None
@@ -116,21 +119,94 @@ class Ft8Runtime:
         self._task = asyncio.create_task(self.orchestrator.run(), name="ft8_orchestrator")
         log.info("FT8 engine started (profile %d, threads %d)", DEFAULT_PROFILE, auto_thread_count())
 
-    def _on_batch(self, batch: Any) -> None:
-        """Buffer the slot's decodes (web layer) and fan out to the callback."""
+    # ---- decode → wire batch (the FT8 UI's Band Activity feed) -----------
 
-        self._decode_seq += 1
-        for result in getattr(batch, "results", ()):
-            self.recent_decodes.append({
-                "seq": self._decode_seq,
-                "slot_id": getattr(batch, "slot_id", 0),
-                "text": getattr(result, "text", ""),
-                "snr": getattr(result, "snr", 0),
-                "dt": round(float(getattr(result, "dt", 0.0)), 1),
-                "freq_hz": round(float(getattr(result, "frequency", 0.0)), 1),
-            })
+    def set_dial_frequency(self, freq_hz: int | None) -> None:
+        """The platform tells the runtime where the dial is (band for DXCC)."""
+
+        self._dial_freq_hz = int(freq_hz) if freq_hz else None
+
+    def _worked_index(self):
+        """Lazily built WorkedIndex (rebuilt when the repository says dirty)."""
+
+        from ft8.engine.dxcc import get_cty_database, worked_index
+
+        if self._worked is None or self._worked_dirty:
+            try:
+                self._worked = worked_index(self.repository, get_cty_database())
+                self._worked_dirty = False
+            except Exception:
+                log.debug("worked index unavailable", exc_info=True)
+                return None
+        return self._worked
+
+    def _on_batch(self, slot_decode: Any) -> None:
+        """One SlotDecode → the ``{slot_id, messages:[…]}`` batch the UI renders.
+
+        Mirrors MRRC-FT8's ``decode_message_view`` + ``decode_highlight``:
+        call/grid/is_cq/to_me/mine for the row, DXCC entity and the JTDX-style
+        highlight category when a worked index is available.
+        """
+
+        from ft8.engine.bands import band_from_freq_hz
+        from ft8.engine.dxcc import decode_highlight, get_cty_database
+        from ft8.engine.msgparse import addressed_to, base_call
+
+        my_call = self.sequencer.my_call or ""
+        band = band_from_freq_hz(self._dial_freq_hz or 0)
+        index = self._worked_index()
+        cty = get_cty_database()
+        views: list[dict[str, Any]] = []
+        for message in getattr(slot_decode, "messages", ()):
+            parsed, result = message.parsed, message.result
+            call = getattr(parsed, "from_call", "") or ""
+            mine = bool(call) and bool(my_call) and base_call(call) == base_call(my_call)
+            entity, is_new = "", False
+            if call and not mine:
+                hit = cty.lookup(call)
+                entity = hit[0] if hit else ""
+            view = {
+                "text": result.text,
+                "snr": result.snr,
+                "dt": round(float(result.dt), 1),
+                "freq": round(float(result.frequency), 1),
+                "call": call,
+                "grid": getattr(parsed, "grid", "") or "",
+                "is_cq": bool(getattr(parsed, "is_cq", False)),
+                "to_me": addressed_to(parsed, my_call),
+                "mine": mine,
+                "is_new_dxcc": is_new,
+                "entity": entity,
+            }
+            view["highlight"] = decode_highlight(
+                call=view["call"], grid=view["grid"], entity=entity, band=band,
+                to_me=view["to_me"], mine=mine, index=index,
+            )
+            views.append(view)
+
+        if not views and self._dumped_slots < 2:
+            # Field diagnosis: keep the exact 12 kHz slot the decoder rejected.
+            try:
+                raw = self.ring.read_slot(getattr(slot_decode, "slot_id", -1)) if self.ring else None
+                if raw:
+                    path = Path(f"/tmp/ft8-slot-{getattr(slot_decode, 'slot_id', 0)}.raw")
+                    path.write_bytes(raw)
+                    self._dumped_slots += 1
+                    log.info("dumped rejected slot audio to %s (%d bytes)", path, len(raw))
+            except Exception:
+                log.debug("slot dump failed", exc_info=True)
+        log.info("slot %s: %d message(s) from %d result(s)",
+                 getattr(slot_decode, "slot_id", "?"), len(views),
+                 len(getattr(getattr(slot_decode, "batch", None), "results", ()) or ()))
+        frame = {
+            "type": "decodes",
+            "slot_id": getattr(slot_decode, "slot_id", 0),
+            "late": bool(getattr(slot_decode, "late", False)),
+            "messages": views,
+        }
+        self.recent_decodes.append(frame)
         if self._on_decode is not None:
-            self._on_decode(batch)
+            self._on_decode(frame)
 
     def _slot_started(self, slot_id: int) -> None:
         if self.tx_driver is not None:

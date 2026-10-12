@@ -71,3 +71,26 @@ def test_play_respects_queue_water_level():
     drained, result = asyncio.run(run())
     assert drained >= 1
     assert result.samples_written == 960 * 4
+
+
+def test_cancel_aborts_an_in_flight_playback():
+    """safety.stop_tx() calls cancel() synchronously (SDD §15.3)."""
+
+    class SlowAudio(FakeAudio):
+        def tx_queue_frames(self) -> int:
+            return 8                     # keep policy waiting on the water level
+
+    audio = SlowAudio()
+    player = PlatformTxPlayer(audio, queued_frames=lambda: audio.tx_queue_frames())
+
+    async def run():
+        task = asyncio.create_task(
+            player.play(np.zeros(960 * 200, dtype=np.float32)))   # 4 s of frames
+        await asyncio.sleep(0.05)
+        player.cancel()                  # synchronous, idempotent
+        player.cancel()
+        return await asyncio.wait_for(task, timeout=2.0)
+
+    result = asyncio.run(run())
+    assert result.cancelled is True
+    assert len(audio.frames) < 50        # stopped early, well before 200 frames

@@ -85,7 +85,7 @@ def create_ft8_ws_router(state: Ft8WsState) -> APIRouter:
             await ws.send_json({
                 "type": "hello",
                 "mode": state.mode(),
-                "decodes": state.recent_decodes()[-50:],
+                "decodes": state.recent_decodes()[-20:],
             })
             while True:
                 frame = await queue.get()

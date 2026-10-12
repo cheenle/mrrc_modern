@@ -38,6 +38,11 @@ async function boot() {
     if (mode === "ssb") location.href = "/";
   });
 
+  const adif = document.getElementById("btn-adif-export");
+  if (adif) adif.addEventListener("click", () => {
+    window.location.href = "/api/ft8/logs/adif";
+  });
+
   const back = document.getElementById("btn-back-ssb");
   if (back) back.addEventListener("click", (event) => {
     event.preventDefault();

@@ -461,6 +461,11 @@
 </tr>
 </tbody>
 </table>
+<div class="line-block">Ft8DspWorker | FT8 engine | <code class="scope-code">ft8/core/*</code> | DSP Worker 子进程（ctypes 绑定 <code class="scope-code">libwsjt_core</code>、Shm 协议、监督重启）；入口在 NumPy/<code class="scope-code">wsjt_core</code> 加载前设 <code class="scope-code">OMP_STACKSIZE=10M</code>（同步于 mrrc_modern 的 ft8 分支移植，源 <code class="scope-code">HAM/ft8 server/core/</code>） |<br />
+Ft8Engine | FT8 engine | <code class="scope-code">ft8/engine/*</code> | FT8 编排层 verbatim 移植：orchestrator（UTC 时隙）、sequencer（QSO 状态机）、safety（TX 权威链）、tx_driver、dsp_decode/encode、msgparse/qso_log/repository/dxcc/waterfall |<br />
+Ft8PlatformAdapters | FT8 platform | <code class="scope-code">ft8/platform/*</code> | 与平台的唯一耦合层：<code class="scope-code">rx_tap</code>（设备率→12k 流式重采样 + UtcRing）、<code class="scope-code">tx_sink</code>（48k 波形→<code class="scope-code">AudioHandler.feed_tx_audio</code>）、<code class="scope-code">cat</code>（<code class="scope-code">CatController</code>→引擎 rig 协议）、<code class="scope-code">settings</code>（FT8 独立设置） |<br />
+Ft8ModeController | FT8 platform | <code class="scope-code">ft8/mode.py</code> | 全局 <code class="scope-code">work_mode</code>（ssb/ft8）状态机：SSB 快照/恢复、引擎生命周期、失败回滚、广播 |<br />
+Ft8Web | FT8 platform | <code class="scope-code">ft8/web/*</code> | <code class="scope-code">/api/ft8/*</code> REST 与 <code class="scope-code">/WSft8</code> 事件流；认证复用平台 token，listen 只读 |</div>
 <h2 id="backend-component-collaboration-startup">11.2 Backend Component Collaboration (Startup)</h2>
 <pre class="scope-code text"><code>FastAPIApp lifespan startup:
   1. create_backend(MRRC_RADIO_MODEL) → `RadioBackend` instance + `RadioCapabilities`
@@ -513,7 +518,7 @@ PTT button touchend/mouseup:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.81 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.82 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

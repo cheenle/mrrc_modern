@@ -52,8 +52,12 @@ class Ft8Runtime:
         self._on_slot_start = on_slot_start
 
         self.repository = Repository(str(self._data_dir / "qso.db"))
-        self.sequencer: Sequencer | None = None
-        self.safety: SafetyController | None = None
+        # Built here (cheap, no hardware) so the REST layer can read state in
+        # SSB mode too; start() only brings up the worker and the orchestrator.
+        self.sequencer: Sequencer = sequencer_factory()
+        self.safety: SafetyController = SafetyController(
+            rig, tx_player, sequencer=self.sequencer, on_event=on_event
+        )
         self.decoder: SupervisorDecoder | None = None
         self.encoder: SupervisorEncoder | None = None
         self.tx_driver: TxDriver | None = None
@@ -75,11 +79,7 @@ class Ft8Runtime:
         """Start the DSP worker, the orchestrator and the RX tap."""
         if self.running:
             return
-        sequencer = self._sequencer_factory()      # a fresh Sequencer per start
-        self.sequencer = sequencer
-        self.safety = SafetyController(self._rig, self._tx_player,
-                                       sequencer=sequencer, on_event=self._on_event)
-
+        sequencer = self.sequencer
         supervisor = WorkerSupervisor()
         await asyncio.to_thread(supervisor.start)
         self._supervisor = supervisor
@@ -140,10 +140,9 @@ class Ft8Runtime:
 
     async def stop(self) -> None:
         """Stop TX first, then the orchestrator and the DSP worker."""
-        if self.safety is not None:
-            self.safety.disarm()
-            with suppress(Exception):
-                await self.safety.stop_tx("mode-switch")
+        self.safety.disarm()
+        with suppress(Exception):
+            await self.safety.stop_tx("mode-switch")
         if self.orchestrator is not None:
             with suppress(Exception):
                 self.orchestrator.stop()

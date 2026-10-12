@@ -401,8 +401,12 @@ class RXBackpressureTests(unittest.TestCase):
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         # Idle with no listeners: skip the PCM read/encode entirely.  A
         # running recording keeps the loop awake (V2.42) — otherwise a REC
-        # with nobody listening would capture silence.
-        self.assertIn("if not audio_rx_clients and not _rec_session.active:",
+        # with nobody listening would capture silence.  So does a live FT8
+        # RX tap (feat/ft8): the FT8 decoder has no browser client, and
+        # without this term it never receives audio at all.
+        self.assertIn("_ft8_tap_live = _ft8_runtime is not None and _ft8_runtime.rx_tap is not None",
+                      source)
+        self.assertIn("if not audio_rx_clients and not _rec_session.active and not _ft8_tap_live:",
                       source)
         self.assertIn("await asyncio.sleep(idle_interval)", source)
         self.assertIn("continue", source)

@@ -13,10 +13,13 @@ def test_ft8_page_exists():
 
 
 def test_page_references_resolve():
+    """Local refs resolve; they are relative by the platform's path-proxy rule."""
+
     html = (STATIC / "ft8.html").read_text()
-    refs = re.findall(r'(?:src|href)="(/static/[^"]+)"', html)
+    refs = [r for r in re.findall(r'(?:src|href)="([^"]+)"', html)
+            if not r.startswith(("http", "#", "/"))]
     assert refs, "page references no assets?"
-    missing = [r for r in refs if r.startswith("/static/ft8/") and not (STATIC / r[len("/static/"):]).is_file()]
+    missing = [r for r in refs if not (STATIC / r).is_file()]
     assert missing == []
 
 

@@ -7,6 +7,10 @@ option(MRRC_FT8_TEST_HOOKS "Build non-production DSP test hooks" OFF)
 include(${CMAKE_CURRENT_SOURCE_DIR}/toolchain.cmake)
 
 find_package(OpenMP REQUIRED COMPONENTS Fortran)
+# WSJT-X's crc13.cpp/crc14.cpp need <boost/crc.hpp> (header-only use).
+# Declared explicitly so a missing Boost fails at configure time, not as a
+# fatal compile error deep in the vendor tree.
+find_package(Boost REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
 find_library(FFTW3F_THREADS_LIBRARY NAMES fftw3f_threads REQUIRED)
@@ -35,6 +39,7 @@ target_include_directories(wsjt_core PRIVATE
     ${WSJTX_LIB}
     ${WSJTX_LIB}/ft8
     ${WSJTX_LIB}/ft8var
+    ${Boost_INCLUDE_DIRS}
 )
 target_link_libraries(wsjt_core PRIVATE
     OpenMP::OpenMP_Fortran

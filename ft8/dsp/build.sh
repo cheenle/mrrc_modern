@@ -25,6 +25,16 @@ print(h.hexdigest())
 PY
 }
 
+# A build/ dir synced from another machine (or moved tree) carries a
+# CMakeCache pinned to the old source path; cmake then refuses to configure.
+# The digest check cannot see this (CMakeCache.txt is not a build input), so
+# detect it explicitly and start clean.
+if [ -f "$BUILD/CMakeCache.txt" ] && \
+   ! grep -q "^CMAKE_HOME_DIRECTORY:INTERNAL=$HERE\$" "$BUILD/CMakeCache.txt"; then
+  echo "ft8/dsp: stale build dir from another path — rebuilding from scratch"
+  rm -rf "$BUILD"
+fi
+
 LIB="$BUILD/libwsjt_core.so"
 [ "$(uname -s)" = "Darwin" ] && LIB="$BUILD/libwsjt_core.dylib"
 
@@ -39,7 +49,7 @@ if [ -z "$FORTRAN" ]; then
     command -v "$c" >/dev/null && { FORTRAN="$c"; break; }
   done
 fi
-[ -n "$FORTRAN" ] || { echo "ft8/dsp: no gfortran found (apt install gfortran)" >&2; exit 1; }
+[ -n "$FORTRAN" ] || { echo "ft8/dsp: no gfortran found (apt install gfortran libfftw3-dev libboost-dev cmake)" >&2; exit 1; }
 
 echo "ft8/dsp: building with $FORTRAN ($JOBS jobs)"
 cmake -S "$HERE" -B "$BUILD" \

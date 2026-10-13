@@ -14,7 +14,7 @@ from ft8.engine.safety import SafetyController
 from ft8.engine.sequencer import Sequencer
 from ft8.web.auth_shim import PlatformAuthAdapter
 from ft8.platform.settings import Ft8SettingsStore
-from ft8.web.ft8_api import AppState, _engine_stats, create_app
+from ft8.web.ft8_api import AppState, _engine_stats, _health, create_app
 
 TOKEN = "test-token"
 
@@ -329,6 +329,41 @@ def test_engine_stats_includes_the_latency_histogram_when_wired() -> None:
         latency=histogram,
     )
     assert _engine_stats(state)["decode_latency"]["fast/p3/t3"]["count"] == 1
+
+
+def test_engine_stats_finds_the_histogram_through_the_runtime() -> None:
+    """真实的组装根只传 `runtime=`，从不传 `latency=`。
+
+    `server.py` 建 AppState 时给的是 `runtime=_ft8_runtime`，而这里只从
+    `state.latency` 取直方图 —— 于是解码器一直在填（`runtime.py:194` 把它接进
+    decoder）、两个端点从来不读，NFR-002 的直方图在生产里等于不存在。解析方式
+    与上面 orchestrator 那一处同形：显式接线优先，否则走 runtime。
+    """
+
+    histogram = LatencyHistogram()
+    histogram.record("deep", 3, 3, 2.4)
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters()),
+        runtime=SimpleNamespace(orchestrator=None, latency=histogram),
+        latency=None,
+    )
+    assert _engine_stats(state)["decode_latency"]["deep/p3/t3"]["count"] == 1
+
+
+def test_health_finds_the_histogram_through_the_runtime() -> None:
+    """同一个缺口也在 `_health` 上，用同一个解析补上。"""
+
+    histogram = LatencyHistogram()
+    histogram.record("deep", 3, 3, 2.4)
+    state = SimpleNamespace(
+        safety=SimpleNamespace(health={}),
+        lease=None,
+        auth=SimpleNamespace(session_count=lambda: 0),
+        orchestrator=None,
+        runtime=SimpleNamespace(orchestrator=None, latency=histogram),
+        latency=None,
+    )
+    assert _health(state)["decode_latency"]["deep/p3/t3"]["count"] == 1
 
 
 def test_engine_stats_route_requires_auth() -> None:

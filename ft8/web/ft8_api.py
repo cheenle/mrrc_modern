@@ -919,14 +919,32 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
     return snapshot
 
 
+def _latency_of(state: AppState) -> Any:
+    """The decode-latency histogram, wherever the wiring actually put it.
+
+    与上面 orchestrator 的解析同形，理由也是同一个：真实的组装根
+    （`server.py` 建 `Ft8AppState` 的那一处）只传 `runtime=`，**从不**传
+    `latency=` —— 只读 `state.latency` 就等于两个端点在生产里永远报不出
+    直方图，而解码器一直在填它（`runtime.py:194`），NFR-002 的整个存在理由
+    就是这个读数。显式接线优先，其次 runtime，都没有则 None（轻量替身、
+    引擎未起都不会因此 500）。
+    """
+
+    if state.latency is not None:
+        return state.latency
+    runtime = getattr(state, "runtime", None)
+    return getattr(runtime, "latency", None) if runtime is not None else None
+
+
 def _health(state: AppState) -> dict[str, Any]:
     health: dict[str, Any] = {
         "safety": state.safety.health,
         "lease_held": state.lease is not None and state.lease.current() is not None,
         "sessions": state.auth.session_count(),   # was a bound method upstream: not serializable
     }
-    if state.latency is not None:
-        health["decode_latency"] = state.latency.snapshot()
+    latency = _latency_of(state)
+    if latency is not None:
+        health["decode_latency"] = latency.snapshot()
     orchestrator = state.orchestrator
     if orchestrator is None and getattr(state, "runtime", None) is not None:
         orchestrator = getattr(state.runtime, "orchestrator", None)
@@ -971,8 +989,9 @@ def _engine_stats(state: AppState) -> dict[str, Any]:
             # 分母为 0 是引擎刚起来的正常状态，不是异常。
             "escalation_rate": (counters.escalations / decodes) if decodes else 0.0,
         }
-    if state.latency is not None:
-        payload["decode_latency"] = state.latency.snapshot()
+    latency = _latency_of(state)
+    if latency is not None:
+        payload["decode_latency"] = latency.snapshot()
     return payload
 
 

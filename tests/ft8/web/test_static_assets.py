@@ -19,7 +19,7 @@ def test_page_references_resolve():
     refs = [r for r in re.findall(r'(?:src|href)="([^"]+)"', html)
             if not r.startswith(("http", "#", "/"))]
     assert refs, "page references no assets?"
-    missing = [r for r in refs if not (STATIC / r).is_file()]
+    missing = [r for r in refs if not (STATIC / r.split("?", 1)[0]).is_file()]
     assert missing == []
 
 

@@ -72,6 +72,7 @@ class Ft8Runtime:
         self._worked: Any = None
         self._worked_dirty = True
         self._dumped_slots = 0
+        self._wf_logged = False
         self.waterfall = SpectrumFanout()
         self._supervisor: WorkerSupervisor | None = None
         self._task: asyncio.Task[Any] | None = None
@@ -100,12 +101,26 @@ class Ft8Runtime:
         computer = SpectrumComputer()
 
         def spectrum_tap(block: Any, epoch: float) -> None:
-            for frame in computer.push(block, epoch):
+            # Exceptions here would vanish into the RX loop's broad except;
+            # log them so a broken waterfall is diagnosable in the field.
+            try:
+                frames = computer.push(block, epoch)
+            except Exception:
+                log.exception("waterfall compute failed")
+                return
+            for frame in frames:
                 self.waterfall.publish(frame)
                 if self._on_waterfall is not None:
                     # Compact WF01 binary (SpectrumFrame.to_bytes) — the PWA's
                     # parseFrame/push render it unchanged.
-                    self._on_waterfall(frame.to_bytes())
+                    payload = frame.to_bytes()
+                    if not self._wf_logged:
+                        self._wf_logged = True
+                        log.info("waterfall forwarding (%d bytes/line)", len(payload))
+                    try:
+                        self._on_waterfall(payload)
+                    except Exception:
+                        log.exception("waterfall forward failed")
 
         self.rx_tap = RxTap(self.ring, dev_rate=self._dev_rate, on_block=spectrum_tap)
         await self.safety.start()

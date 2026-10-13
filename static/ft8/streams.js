@@ -41,10 +41,19 @@ function open() {
   if (closed) return;
   const scheme = location.protocol === "https:" ? "wss" : "ws";
   socket = new WebSocket(`${scheme}://${location.host}/WSft8`);
+  // Waterfall lines are binary messages: without this they arrive as Blob
+  // and every frame is silently dropped (found by the CDP canvas probe).
+  socket.binaryType = "arraybuffer";
   socket.onopen = () => {
     attempt = 0;
     setConnected(true);
   };
+  socket.addEventListener("message", (event) => {
+    if (typeof event.data !== "string" && !window.__ft8WfSeen) {
+      window.__ft8WfSeen = true;
+      console.log("[ft8] waterfall stream live:", event.data && event.data.byteLength, "bytes/line");
+    }
+  });
   socket.onmessage = (event) => {
     if (typeof event.data !== "string") {
       // Binary = one WF01 waterfall line (compact spectrum frame).

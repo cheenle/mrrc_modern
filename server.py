@@ -1264,10 +1264,23 @@ def _platform_dial_hz() -> Optional[int]:
     return radio.vfo_b_freq if radio.active_vfo == "B" else radio.vfo_a_freq
 
 
-def _ft8_queue_frame(frame: dict) -> None:
-    """Hand one JSON frame to every /WSft8 subscriber."""
-    if _ft8_bus is not None:
-        _ft8_bus.publish(frame)
+_ft8_pub_logged = False
+
+
+def _ft8_queue_frame(frame) -> None:
+    """Hand one frame (JSON dict or WF01 bytes) to every /WSft8 subscriber."""
+
+    global _ft8_pub_logged
+    if _ft8_bus is None:
+        if not _ft8_pub_logged:
+            _ft8_pub_logged = True
+            logger.warning("FT8 frame dropped: event bus not bound yet")
+        return
+    _ft8_bus.publish(frame)
+    if not _ft8_pub_logged:
+        _ft8_pub_logged = True
+        logger.info("FT8 bus first publish: %d subscriber(s), %r",
+                    _ft8_bus.subscriber_count, type(frame).__name__)
 
 
 async def _broadcast_ft8_json(frame: dict) -> None:

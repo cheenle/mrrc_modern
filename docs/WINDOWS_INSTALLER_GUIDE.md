@@ -11,23 +11,25 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` | 51.9 MB (54,395,338 bytes) | `1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2` |
+| `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` | 75.6 MB (79,257,177 bytes) | `ba956b19d1568ba14a57ac9ac6464a1ff30b17e056a7ba8d2f8b0a4e480f7a9d` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.27.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 **v1.27.0 is the published Windows installer.** It was built from a source pack
-(`mrrc_modern_src.tgz`, 35 MB / 850 files, made 2026-10-09 14:31) on Windows 11 (the KVM build VM)
+(`mrrc_modern_src.tgz`, 39 MB, made 2026-10-13 17:36) on Windows 11 (the KVM build VM)
 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3, extracted over the VM's tree with its
-venv kept and `tests\*.py` cleared first. The build gate ran **2067 tests OK (25 platform skips)**,
+venv kept and `tests\*.py` cleared first. The build gate ran **2197 tests OK (33 platform skips)**,
 three PyInstaller targets, and the installer compiled into a scratch directory and was copied in.
-The gate itself found this release's Windows-only reds: six POSIX-only tests (file modes in
-`env_store` / `cloud_hub_write_config` / `net_wifi`, plus one box test that pipes a `bash` parse
-block) had never run on Windows, and one `env_store` fixture wrote CRLF there — the code was right,
-the fixture was not. Evidence taken from the artifact: `version.txt` = `1.27.0`, size
-**54,395,338 bytes** (v1.25.4 was 54,347,067), mtime **2026-10-09 14:32:29**, and the cross-host
-SHA-256 matched (build VM == build Mac) — **`1ed3fb8d…`**.
+This release also **builds the FT8 native library on the VM** (MSYS2 mingw-w64: cmake + ninja →
+`wsjt_core.dll`, then the runtime DLL closure walked with `objdump -p`) and bundles it with the
+package — nine DLLs, ~16 MB, which is most of the size jump. The gate itself found this release's
+Windows-only red: `test_auth_persistence.test_store_is_owner_readable_only` asserted a POSIX `0600`
+mode, which Windows cannot have (the code was right, the test was not). Evidence taken from the
+artifact: `version.txt` = `1.27.0`, size
+**79,257,177 bytes** (v1.25.4 was 54,347,067), mtime **2026-10-13 17:46:09**, and the cross-host
+SHA-256 matched (build VM == build Mac) — **`ba956b19…`**.
 
 **Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build in
 v1.25.3): that build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —

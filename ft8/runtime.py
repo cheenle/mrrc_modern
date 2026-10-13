@@ -85,6 +85,14 @@ class Ft8Runtime:
         self._tx_player = tx_player
         self._sequencer_factory = sequencer_factory
         self._data_dir = Path(data_dir)
+        # Create it before Repository opens its database.  sqlite3 cannot create
+        # missing parent directories, and on a fresh install nothing else has:
+        # Ft8SettingsStore only mkdirs when it *saves*, so <runtime>/ft8/ does
+        # not exist on a machine that has never run FT8 — and Repository's
+        # OperationalError took the whole FT8 composition down with it (the
+        # server then ran SSB-only, silently, which is how this was found: the
+        # macOS clean-room run of the packaged app).
+        self._data_dir.mkdir(parents=True, exist_ok=True)
         self._dev_rate = dev_rate
         self._on_decode = on_decode
         self._on_event = on_event

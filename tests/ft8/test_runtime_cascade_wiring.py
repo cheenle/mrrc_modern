@@ -149,3 +149,28 @@ def test_start_builds_the_cascade_from_the_injected_policy(monkeypatch, tmp_path
             await rt.stop()
 
     asyncio.run(_run())
+
+
+def test_constructing_the_runtime_creates_a_fresh_data_dir(tmp_path) -> None:
+    """A machine that has never run FT8 has no <runtime>/ft8/ — and sqlite
+    cannot create missing parents, so Repository's first connect raised
+    ``OperationalError: unable to open database file`` and took the whole FT8
+    composition down with it (server.py catches that and runs SSB-only).
+
+    Found by the macOS clean-room run of the packaged app on 2026-10-13: the
+    box never showed it because M5's manual acceptance had already created the
+    directory.  Building the runtime must therefore create its own data dir,
+    not depend on Ft8SettingsStore.save() having run at some point.
+    """
+
+    data_dir = tmp_path / "never-used-before" / "ft8"
+    assert not data_dir.exists()
+
+    runtime_mod.Ft8Runtime(
+        rig=_FakeRig(),
+        tx_player=_FakeTxPlayer(),
+        sequencer_factory=_FakeSequencer,
+        data_dir=data_dir,
+    )
+
+    assert (data_dir / "qso.db").is_file(), "the repository must be usable"

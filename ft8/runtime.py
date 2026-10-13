@@ -16,7 +16,11 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ft8.core.models import DecodeConfig, auto_thread_count
-from ft8.engine.orchestrator import FT8_PERIOD_SECONDS
+from ft8.engine.orchestrator import (
+    DEFAULT_DECISION_CUTOFF_SECONDS,
+    FT8_PERIOD_SECONDS,
+    boundary_epoch_for_slot,
+)
 from ft8.engine.audio_rx import DECODER_SAMPLE_RATE
 
 #: How long before the nominal slot end to dispatch the decode.  An FT8
@@ -27,13 +31,14 @@ EARLY_DECODE_S = 1.2
 FT8_SLOT_SECONDS = FT8_PERIOD_SECONDS
 from ft8.core.supervisor import WorkerSupervisor
 from ft8.engine.audio_rx import UtcRing
+from ft8.engine.cascade import CascadePolicy, CascadingDecoder
 from ft8.engine.dsp_decode import SupervisorDecoder
 from ft8.engine.dsp_encode import SupervisorEncoder
 from ft8.engine.latency import LatencyHistogram
 from ft8.engine.orchestrator import Orchestrator
 from ft8.engine.repository import Repository
 from ft8.engine.safety import SafetyController
-from ft8.engine.sequencer import Sequencer
+from ft8.engine.sequencer import QSOState, Sequencer
 from ft8.engine.tx_driver import TxDriver
 from ft8.engine.waterfall import SpectrumComputer, SpectrumFanout
 from ft8.platform.rx_tap import RxTap
@@ -41,6 +46,12 @@ from ft8.platform.rx_tap import RxTap
 log = logging.getLogger("mrrc.ft8.runtime")
 
 DEFAULT_PROFILE = 3
+
+
+def _qso_progress(state: QSOState) -> int:
+    """AP 上下文只在通联进行中成立：IDLE / DONE 记 0，其余阶段都算进行中。"""
+
+    return 0 if state in (QSOState.IDLE, QSOState.DONE) else 2
 
 
 class Ft8Runtime:
@@ -73,6 +84,12 @@ class Ft8Runtime:
         self.encoder: SupervisorEncoder | None = None
         self.tx_driver: TxDriver | None = None
         self.orchestrator: Orchestrator | None = None
+        # The cascade wrapper handed to the orchestrator; ``self.decoder``
+        # stays the closable SupervisorDecoder (the cascade has no close()).
+        self._cascade: CascadingDecoder | None = None
+        # Task 14's "deep decode this slot" switch flips this; False keeps
+        # should_escalate's ``escalate_on_request and requested`` off.
+        self._deep_decode_requested = False
         self.ring: UtcRing | None = None
         self.rx_tap: RxTap | None = None
         self.latency = LatencyHistogram()
@@ -172,8 +189,27 @@ class Ft8Runtime:
         # 0.3 s and the 1.8 s post-TX chain blew straight through it — the
         # exact "no decodes after a QSO" field report.  Keep grace comfortably
         # above EARLY_DECODE_S + the measured chain offset.
-        self.orchestrator = Orchestrator(
+        # 级联解码：默认走快路径，按策略在同一时隙内升级到 WSJT-X 深路径。
+        # clock 一律不传 —— CascadingDecoder 的默认 time.time 与 orchestrator 的
+        # clock（`orchestrator.py:125`）同源，这正是 R20 要钉住的那个不变量。
+        # cutoff **必须显式传**，且必须传 orchestrator 的那一个常量：级联的预算守卫
+        # 与 orchestrator 判定 deadline miss 用的是同一条物理量，各自 2.5 只会在
+        # 有人改了 `decision_cutoff` 之后悄悄分叉（见 cascade.py 里那段注记）。
+        #
+        # 不要写成 ``self.decoder = CascadingDecoder(self.decoder, …)``：stop() 会调
+        # ``self.decoder.close()``，而 CascadingDecoder 没有 close()，那一行又裹在
+        # suppress(Exception) 里 —— worker 与共享内存段会被静默泄漏。级联对象另存
+        # ``self._cascade``，只喂给 orchestrator。
+        self._cascade = CascadingDecoder(
             self.decoder,
+            CascadePolicy(),
+            cutoff=DEFAULT_DECISION_CUTOFF_SECONDS,
+            boundary_epoch_for=boundary_epoch_for_slot,
+            ap_context=lambda: (sequencer.my_call, _qso_progress(sequencer.state)),
+            requested=lambda: self._deep_decode_requested,
+        )
+        self.orchestrator = Orchestrator(
+            self._cascade,
             read_slot,
             sequencer,
             delivery_grace=3.0,

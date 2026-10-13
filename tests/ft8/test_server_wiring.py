@@ -160,3 +160,29 @@ def test_decodes_frame_carries_completion_timing() -> None:
     assert frame["timing"]["finished_epoch"] == slot_end + 1.0
     assert frame["timing"]["finished_after_slot_end_s"] == 1.0
     assert frame["timing"]["dispatched_after_slot_end_s"] == -1.2
+
+
+def test_the_cascade_guard_shares_the_orchestrators_decision_cutoff() -> None:
+    """预算守卫的截止值必须**来自** orchestrator 的那个常量，不是另写一遍 2.5。
+
+    两个数字今天相等，所以这条用例盯的**不是值、是来源**：改了
+    ``DEFAULT_DECISION_CUTOFF_SECONDS``，守卫必须跟着动。`CascadingDecoder`
+    已经把 ``cutoff`` 设成必填（模块内没有默认值），所以唯一还能出错的地方
+    就是接线处又把 ``2.5`` 写了一遍 —— 这条就钉在那里。
+
+    为什么用源码断言而不是构造整个 `Ft8Runtime`：为了钉住一个关键字实参而把
+    backend / CAT / 音频全部搭起来，代价与收益不成比例；而「这个模块引进了
+    那个常量、并且在调用里用了它」是这两个断言真正要保证的东西。
+    与 `test_early_decode_is_wired_into_the_runtime` 同一风格（直接断言模块常量）。
+    """
+    from pathlib import Path
+
+    from ft8 import runtime as runtime_mod
+    from ft8.engine.orchestrator import DEFAULT_DECISION_CUTOFF_SECONDS
+
+    # 1) 来源是 orchestrator 的那一个，不是 runtime 自己又定义的一个同值常量。
+    assert runtime_mod.DEFAULT_DECISION_CUTOFF_SECONDS is DEFAULT_DECISION_CUTOFF_SECONDS
+
+    # 2) 它真的被用在了构造调用里（不是引进来放着）。
+    source = Path(runtime_mod.__file__).read_text(encoding="utf-8")
+    assert "cutoff=DEFAULT_DECISION_CUTOFF_SECONDS" in source

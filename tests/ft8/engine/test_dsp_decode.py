@@ -155,3 +155,68 @@ def test_timeout_and_deadline_are_forwarded() -> None:
     assert supervisor.timeouts == [12.5]
     deadline = supervisor.frames[0]["deadline_monotonic"]
     assert isinstance(deadline, float)
+
+
+# --- decode_path: the per-request path/threads override (Task 11) ----------
+#
+# ``decode`` is a thin wrapper over ``decode_path``; the cascade decoder calls
+# ``decode_path`` directly to select the fast or deep WSJT-X path and to pin
+# the deep path's thread count.  The frame's ``config`` is the whole
+# ``DecodeConfig`` expanded (``asdict``), so ``threads`` is present on every
+# request whether or not the caller overrides it — the override only decides
+# which value that field carries.
+
+
+def test_decode_path_fast_sets_the_frame_path() -> None:
+    supervisor = FakeSupervisor(decode_ok(480))
+    with SupervisorDecoder(supervisor, DecodeConfig()) as decoder:
+        run(decoder.decode_path(480, b"\x00" * 360_000, DecodePath.FAST))
+
+    config = supervisor.frames[0]["config"]
+    assert config["path"] == "fast"
+
+
+def test_decode_path_improved_with_threads_overwrites_threads() -> None:
+    supervisor = FakeSupervisor(decode_ok(480))
+    with SupervisorDecoder(supervisor, DecodeConfig()) as decoder:
+        run(
+            decoder.decode_path(
+                480, b"\x00" * 360_000, DecodePath.IMPROVED, threads=3
+            )
+        )
+
+    config = supervisor.frames[0]["config"]
+    assert config["path"] == "improved"
+    assert config["threads"] == 3
+
+
+def test_decode_path_without_threads_keeps_the_configured_value() -> None:
+    """Not passing ``threads`` leaves the configured value alone.
+
+    ``threads`` is in the frame on every request (the whole ``DecodeConfig``
+    is expanded into ``config``), so this pins the value, not the key's
+    presence: the frame must carry the ``DecodeConfig``'s own ``threads``,
+    not a hardcoded default.  The fixture uses a non-default value (7) so the
+    assertion proves pass-through rather than "happens to equal 1".
+    """
+
+    supervisor = FakeSupervisor(decode_ok(480))
+    with SupervisorDecoder(supervisor, DecodeConfig(threads=7)) as decoder:
+        run(decoder.decode_path(480, b"\x00" * 360_000, DecodePath.FAST))
+
+    config = supervisor.frames[0]["config"]
+    assert config["threads"] == 7
+
+
+def test_decode_is_a_thin_wrapper_over_decode_path() -> None:
+    """``decode`` must not change any behaviour versus the explicit path call."""
+
+    config = DecodeConfig()
+    supervisor = FakeSupervisor(decode_ok(480))
+    samples = b"\x00" * 360_000
+    with SupervisorDecoder(supervisor, config) as decoder:
+        via_decode = run(decoder.decode(480, samples))
+        via_path = run(decoder.decode_path(480, samples, config.path))
+
+    assert via_decode == via_path
+    assert supervisor.frames[0]["config"] == supervisor.frames[1]["config"]

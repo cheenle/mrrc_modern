@@ -83,15 +83,42 @@ class SupervisorDecoder:
         return self._shm
 
     async def decode(self, slot_id: int, samples: bytes) -> DecodeBatch:
-        """Decode one exact 12 kHz int16 slot into a native-result batch."""
+        """Decode one exact 12 kHz int16 slot into a native-result batch.
+
+        Thin wrapper over :meth:`decode_path` using the configured path, so the
+        two entry points can never diverge.
+        """
+
+        return await self.decode_path(slot_id, samples, self._config.path)
+
+    async def decode_path(
+        self,
+        slot_id: int,
+        samples: bytes,
+        path: DecodePath,
+        *,
+        threads: int | None = None,
+    ) -> DecodeBatch:
+        """Decode one slot, overriding the path and (optionally) the threads.
+
+        The cascade decoder selects the fast path on every request and the
+        deep WSJT-X path — at a fixed thread count — only when it escalates.
+        ``threads`` stays ``None`` by default: the frame's ``config`` is the
+        whole ``DecodeConfig`` expanded, so omitting it must leave the
+        configured ``threads`` untouched rather than substitute a default.
+        """
 
         if len(samples) != SLOT_SAMPLES_NBYTES:
             raise ValueError(f"decode requires exactly {SLOT_SAMPLES_NBYTES} bytes")
         shm = self._ensure_segment()
         shm.buf[: len(samples)] = samples
-        config = self._config.replace(
-            utc_hhmmss=slot_utc_hhmmss(slot_id, self._period)
-        )
+        changes: dict[str, object] = {
+            "utc_hhmmss": slot_utc_hhmmss(slot_id, self._period),
+            "path": path,
+        }
+        if threads is not None:
+            changes["threads"] = threads
+        config = self._config.replace(**changes)
         # Protocol v1 requires a plain str path (StrEnum fails its type check).
         config_frame = {**asdict(config), "path": str(config.path)}
         frame = {

@@ -60,6 +60,17 @@ def slot_start_epoch(slot_id: int, period: float = FT8_PERIOD_SECONDS) -> float:
     return slot_id * period
 
 
+def boundary_epoch_for_slot(slot_id: int, period: float = FT8_PERIOD_SECONDS) -> float:
+    """本时隙**结束**的 epoch —— 决策截止就是从这里往后算的。
+
+    等于下一个时隙的开始（`slot_start_epoch(slot_id + 1)`）。`_slot_ended` 的
+    `late = finished > boundary_epoch + decision_cutoff`（`:258`）用的就是这个量；
+    写成 `slot_start_epoch(slot_id)` 会早整整一个时隙（15 s），预算守卫从此永不放行。
+    """
+
+    return slot_start_epoch(slot_id + 1, period)
+
+
 def slot_parity(slot_id: int) -> int:
     """Return the even/odd TX eligibility parity of a slot (0 = even)."""
 

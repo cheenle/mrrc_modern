@@ -12,6 +12,7 @@ from ft8.engine.orchestrator import (
     FT8_PERIOD_SECONDS,
     Orchestrator,
     SlotDecode,
+    boundary_epoch_for_slot,
     slot_id_for,
     slot_parity,
     slot_start_epoch,
@@ -150,6 +151,14 @@ def test_slot_start_and_parity() -> None:
     assert slot_start_epoch(5) == 75.0
     assert slot_start_epoch(117_000_000) == 1_755_000_000.0
     assert [slot_parity(s) for s in range(4)] == [0, 1, 0, 1]
+
+
+def test_boundary_epoch_for_slot_is_the_slots_end() -> None:
+    """决策截止从时隙**结束**算起，不是从开始算起。"""
+
+    assert boundary_epoch_for_slot(100, 15.0) == slot_start_epoch(101, 15.0)
+    assert boundary_epoch_for_slot(100, 15.0) != slot_start_epoch(100, 15.0)
+    assert boundary_epoch_for_slot(100, 15.0) - boundary_epoch_for_slot(99, 15.0) == 15.0
 
 
 def test_config_validation() -> None:

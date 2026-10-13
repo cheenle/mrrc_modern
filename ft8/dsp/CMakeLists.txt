@@ -57,6 +57,14 @@ if(APPLE)
     set(WSJT_CORE_UNEXPORTED_SYMBOLS
         "${CMAKE_CURRENT_BINARY_DIR}/wsjt_core.unexports"
     )
+    # ld64 has no version script, so symbols are hidden with a deny list.  It
+    # is never complete: every new vendored source family adds names a deny
+    # list cannot anticipate.  The ft8_lib fast-path C sources (cmake/
+    # ft8lib.cmake) added ~66 of them, so their families are enumerated below.
+    # ld64 does apply glob patterns here (verified: `_ftx_*` removed all 20
+    # ftx symbols), so tight per-family globs are used where a shared prefix
+    # exists and exact names otherwise.  None of these may match the four
+    # planned `_wsjt_*` entry points.
     file(GENERATE OUTPUT "${WSJT_CORE_UNEXPORTED_SYMBOLS}" CONTENT [=[
 ___emutls_*
 ___gcc_nested_func_ptr_*
@@ -67,6 +75,29 @@ _*_
 _c_init_timer
 _crc*
 _shmem_*
+_ftx_*
+_monitor_*
+_kiss_fft*
+_kFT*
+_ldpc_*
+_bp_decode
+_ft4_*
+_ft8_*
+_trim*
+_is_*
+_append_string
+_charn
+_copy_token
+_dd_to_int
+_ends_with
+_equals
+_fmtmsg
+_in_range
+_int_to_dd
+_nchar
+_pack_basecall
+_starts_with
+_to_upper
 ]=])
     target_link_options(wsjt_core PRIVATE
         "LINKER:-unexported_symbols_list,${WSJT_CORE_UNEXPORTED_SYMBOLS}"

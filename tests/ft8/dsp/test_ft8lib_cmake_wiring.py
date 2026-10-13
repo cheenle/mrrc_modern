@@ -18,4 +18,8 @@ def test_ft8lib_cmake_included_and_sourced() -> None:
 
 def test_ft8lib_include_dir_present() -> None:
     root = (ROOT / "ft8" / "dsp" / "CMakeLists.txt").read_text(encoding="utf-8")
-    assert "vendor-ft8lib" in root
+    includes = root.split("target_include_directories(wsjt_core PRIVATE", 1)[1].split(")", 1)[0]
+    assert "${FT8LIB_LIB}" in includes
+
+    module = (ROOT / "ft8" / "dsp" / "cmake" / "ft8lib.cmake").read_text(encoding="utf-8")
+    assert 'set(FT8LIB_LIB "${CMAKE_CURRENT_SOURCE_DIR}/vendor-ft8lib")' in module

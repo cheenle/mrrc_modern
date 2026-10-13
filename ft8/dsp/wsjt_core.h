@@ -34,7 +34,11 @@ enum wsjt_flags {
     WSJT_FLAG_LOW_THRESHOLD = 2,
     WSJT_FLAG_WIDE_DX = 4,
     WSJT_FLAG_HIDE_DUPES = 8,
-    WSJT_FLAG_SNR_PROVISIONAL = 16   /* snr 字段不是 dB，见 wsjt_fast.c */
+    /* snr 字段不是 dB。快路径 2026-10-13 起改从水声图量真 dB
+       （wsjt_fast.c 的 fast_snr_db），**不再置此位**；位本身留给任何
+       未标定的 SNR 来源 —— 级联的 _snr_is_trustworthy 据此跳过峰值判据，
+       所以它必须与 ft8/engine/cascade.py 的 FLAG_SNR_PROVISIONAL 同值。 */
+    WSJT_FLAG_SNR_PROVISIONAL = 16
 };
 
 struct wsjt_abi_info {

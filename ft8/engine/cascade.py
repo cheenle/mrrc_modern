@@ -60,13 +60,21 @@ def should_escalate(
 def _snr_is_trustworthy(batch: DecodeBatch) -> bool:
     """Whether this batch's ``snr`` values are dB (so comparable to S_MIN).
 
-    The fast path has no calibrated SNR — it reports an upstream
-    score-derived estimate and marks every result with
-    ``FLAG_SNR_PROVISIONAL``.  Comparing that number against a dB threshold
-    would produce escalation decisions driven by noise, so the peak-SNR
-    criterion is skipped for such a batch and ``min_decodes`` carries the
-    weak-signal detection instead (spec D-7).  A future fast path that
-    computes a real SNR simply stops setting the flag and re-enables this.
+    Spec D-7 was written against a fast path whose ``snr`` was an upstream
+    score-derived estimate that saturated (17 for everything above -6 dB), so
+    a batch from it could not be compared against a dB threshold — the peak
+    criterion was skipped and ``min_decodes`` carried weak-signal detection
+    instead.  That is what the flag marks, and the mechanism stays: an
+    uncalibrated SNR source must still be able to say so.
+
+    **The fast path itself no longer needs it.**  Since 2026-10-13 it measures
+    the waterfall directly and emits a calibrated dB value (``wsjt_fast.c``
+    ``fast_snr_db``, aligned to the standard path by
+    ``tools/ft8/calibrate_fast_snr.py``) and therefore clears the flag — so
+    its results *are* compared against ``min_peak_snr`` again, as the
+    criterion intended.  Any future path that reports a number in some other
+    unit must set the flag; the flag is the only thing that keeps such a
+    number out of the escalation arithmetic.
     """
 
     if not batch.results:

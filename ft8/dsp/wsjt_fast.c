@@ -12,6 +12,7 @@
 #include <common/monitor.h>
 #include <ft8/constants.h>
 #include <ft8/decode.h>
+#include <ft8/encode.h>
 #include <ft8/message.h>
 
 /* 全部取上游 demo/decode_ft8.c 的默认值 —— 这是 2026-10-13 A53 spike 实测过的
@@ -28,6 +29,14 @@
 #define FAST_TIME_OSR 2
 #define FAST_FREQ_OSR 2
 
+/* 本估计与 WSJT-X 的 SNR 定义（2500 Hz 参考带宽）之间的经验残差。
+   由 tools/ft8/calibrate_fast_snr.py 在合成的 +24…−18 dB 扫频上把本函数的原始
+   输出与 standard 路径逐点相减定出来：残差中位数 0、最大 +1，输出电平先归一化到
+   0.9 满量程（不这样做，弱信号档的噪声会把时隙削成方波，量到的是限幅器 —— 见该
+   脚本的模块注释）。−18 dB 及以下两条路径会**一起**偏乐观（standard 自己也 +1），
+   那是检测门限附近的性质，不是这个常数的偏差，所以别按最弱档去调它。 */
+#define FAST_SNR_CALIBRATION_DB 1.0
+
 /* 快路径没有跨时隙的呼号哈希表：查不到就保留 <HASH> 形式，
    深度路径升级时再还原。 */
 static bool fast_lookup_hash(ftx_callsign_hash_type_t type, uint32_t hash,
@@ -43,6 +52,106 @@ static void fast_save_hash(const char *callsign, uint32_t n22)
 {
     (void)callsign;
     (void)n22;
+}
+
+/* 快路径的 SNR。
+ *
+ * 上游 ft8_lib 只在 candidate.score 里给了一个**归一化**的 Costas 同步分，
+ * 本文件原先照抄的 `score/2` 就是它。它不是"差一点的 dB"，是**饱和**：
+ * 实测（合成扫频，真实 SNR 由 standard/improved 给出）在 ≥ −6 dB 的整个
+ * 区间里它压在 17 不动，−6 dB 才 16、−12 dB 才 14。任何偏移/查表都救不
+ * 回来，因为信息在归一化时已经被丢掉了。
+ *
+ * 而这不是显示问题：orchestrator 把 snr 喂给 sequencer，sequencer 把它编进
+ * **实际发射的报文**（sequencer.py:180/234/287，REPORT / ROGER_REPORT 状态），
+ * 也就是说发到空中、写进 QSO 日志的"收你多少 dB"会是一个饱和的同步分。
+ *
+ * 信息其实一直都在：ft8_lib 存的水声图幅度**本身就是功率 dB**
+ * （WF_ELEM_MAG(x) = x*0.5 − 120，见 ft8/decode.h；写入见 monitor.c:170
+ * 的 `db = 10*log10f(1E-12f + mag2)`），而 mon.wf 就在这里 —— 不需要再加
+ * 一次 FFT。于是按 WSJT-X `ft8_snr` 的思路，在解出的 79 个音位置上量
+ * 信/噪即可：每个符号有一个信号音、七个噪声音，两者都是单音带宽 6.25 Hz，
+ * 比值再换算到 2500 Hz 参考带宽（+10*log10(2500/6.25) = +26.02 dB）。
+ *
+ * 音序由报文反推（ft8_encode），索引与 ft8_extract_symbol 完全一致：
+ * 都用 kFT8_Gray_map[tone] 取 bin，符号 s 落在 base + s*block_stride。
+ * 标定常数由 tools 下的扫频脚本对齐 standard 得出，见 FAST_SNR_CALIBRATION_DB。 */
+/* uint8 水声图幅度 → 线性功率。整幅图只算一次，之后全是查表加法；
+   直接对每个元素调 pow() 是 28 万次超越函数调用，那会把快路径变慢。 */
+static void fast_power_lut(double lut[256])
+{
+    for (int i = 0; i < 256; ++i)
+        lut[i] = pow(10.0, (double)WF_ELEM_MAG((WF_ELEM_T)i) * 0.1);
+}
+
+/* 每 6.25 Hz bin 的噪声功率 —— 整幅水声图的**中位数**，不是均值。
+   均值会被信号自己毁掉：一个符号只有一个音在响，但它是高出噪底几十 dB 的
+   强 bin；整幅图里 ~1.8% 的 bin 携带信号，就足以把均值抬高 30 dB，于是
+   ratio 被压平（实测：真实 24 dB 只读到 24 dB 的比值，而物理上应是 50）。
+   中位数对这些强 bin 免疫。uint8 值域只有 256，所以直方图一趟 O(n) 求中位数，
+   不用排序 —— 每槽只算一次，不在候选循环里。 */
+static double fast_noise_floor(const ftx_waterfall_t *wf, const double lut[256])
+{
+    const size_t total = (size_t)wf->num_blocks * (size_t)wf->block_stride;
+    if (total == 0)
+        return 0.0;
+
+    uint32_t hist[256];
+    memset(hist, 0, sizeof(hist));
+    for (size_t i = 0; i < total; ++i)
+        ++hist[wf->mag[i]];
+
+    const size_t half = total / 2;
+    size_t cumulative = 0;
+    for (int i = 0; i < 256; ++i) {
+        cumulative += hist[i];
+        if (cumulative > half)
+            return lut[i];
+    }
+    return lut[255];
+}
+
+static int32_t fast_snr_db(const ftx_waterfall_t *wf,
+                           const ftx_candidate_t *cand,
+                           const uint8_t *payload,
+                           const double lut[256],
+                           double noise_floor)
+{
+    if (noise_floor <= 0.0)
+        return 0;
+
+    uint8_t tones[FT8_NN];
+    ft8_encode(payload, tones);
+
+    /* 与 get_cand_mag()（ft8/decode.c:52）逐字相同 —— 这是水声图的索引
+       约定，写错一位就是拿隔壁频点的功率当信号。 */
+    int offset = cand->time_offset;
+    offset = (offset * wf->time_osr) + cand->time_sub;
+    offset = (offset * wf->freq_osr) + cand->freq_sub;
+    offset = (offset * wf->num_bins) + cand->freq_offset;
+    const WF_ELEM_T *base = wf->mag + offset;
+
+    double sig = 0.0;
+    int used = 0;
+
+    for (int s = 0; s < FT8_NN; ++s) {
+        const int block = cand->time_offset + s;
+        if (block < 0 || block >= wf->num_blocks)
+            continue;
+        const WF_ELEM_T *sym = base + (size_t)s * (size_t)wf->block_stride;
+        sig += lut[sym[kFT8_Gray_map[tones[s] & 0x07]]];
+        ++used;
+    }
+
+    if (used <= 0)
+        return 0;
+
+    /* 信号音功率 / 每 bin 噪声功率，再换算到 2500 Hz 参考带宽：
+       10*log10(2500/6.25) = 26.02 dB。这一步是**物理**的，不是拟合 ——
+       SNR 定义本身就是 0 dB 时该比值等于 400。 */
+    const double snr_db = 10.0 * log10((sig / (double)used) / noise_floor) -
+                          10.0 * log10(2500.0 / 6.25);
+    return (int32_t)lround(snr_db + FAST_SNR_CALIBRATION_DB);
 }
 
 static void copy_text(const char *src, char *dst, size_t dst_len)
@@ -125,6 +234,10 @@ int32_t wsjt_ft8_decode_fast(const int16_t *samples,
     int num_cand =
         ftx_find_candidates(&mon.wf, FAST_MAX_CANDIDATES, cand, FAST_MIN_SCORE);
 
+    double snr_lut[256];
+    fast_power_lut(snr_lut);
+    const double snr_noise = fast_noise_floor(&mon.wf, snr_lut);
+
     ftx_callsign_hash_interface_t hash_if = {
         .lookup_hash = fast_lookup_hash,
         .save_hash = fast_save_hash,
@@ -174,12 +287,12 @@ int32_t wsjt_ft8_decode_fast(const int16_t *samples,
         out->dt = (float)(cand[i].time_offset +
                           (float)cand[i].time_sub / mon.wf.time_osr) *
                   mon.symbol_period;
-        /* 上游**没有**可信 SNR：demo 里 score*0.5 是作者留的 TODO 估计，
-           不是 dB。这里如实照抄该估计，并置 WSJT_FLAG_SNR_PROVISIONAL，
-           好让调用方知道不能拿它当 dB 用（级联判据就据此跳过峰值判据，
-           见 spec D-7 与 Task 8）。 */
-        out->snr = (int32_t)(cand[i].score / 2);
-        out->flags = WSJT_FLAG_SNR_PROVISIONAL;
+        /* 由水声图量出的真 dB（见 fast_snr_db）。上一位作者照抄的
+           `score/2` 是同步分、会饱和，已废弃 —— 那个值会被当作"收你多少
+           dB"发到空中，所以它必须是真的。 */
+        out->snr = fast_snr_db(&mon.wf, &cand[i], message.payload, snr_lut,
+                               snr_noise);
+        out->flags = 0;
         out->ap_type = 0;
         out->quality = 0.0f;
         copy_text(text, out->text, WSJT_TEXT_BYTES);

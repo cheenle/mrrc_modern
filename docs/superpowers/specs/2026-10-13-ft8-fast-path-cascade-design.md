@@ -295,7 +295,19 @@ remaining = cutoff − (now − slot_boundary) − elapsed_fast − safety_margi
 - **D-4 深度路径必须 threads ≥ 3**：threads1 的 3.23 s 在任何级联里都超预算（§3 算术）。
 - **D-5 预算不足宁可不升级**：截止是硬约束；"升级反而迟到"是净损失。
 - **D-6 合并取并集、deep 胜出**：保证解出条数不低于纯 deep 基线（目标 3）。
-- **D-7 fast 的 SNR 不采用**：上游是 TODO 估计，不可信；只有 fast 独有条目才用。
+- **D-7 fast 的 SNR 不采用**：上游是 TODO 估计（`snr = score * 0.5f`），不可信；
+  只有 fast 独有条目才用它的值。
+  **2026-10-13 修订（现场缺陷 B）**：这个判断认错了量的性质 —— 那个估计不是"差一点的
+  dB"，而是**饱和**（合成扫频实测：≥ −6 dB 的整个区间压在 17 不动，见
+  `ft8/dsp/wsjt_fast.c` 的注释）。而且它不只是显示问题：orchestrator 把 snr 喂给
+  sequencer，sequencer 把它编进**实际发射的报文**（`sequencer.py:180/234/287`），
+  所以发到空中、写进 QSO 日志的"收你多少 dB"曾是一个饱和的同步分。修法是快路径直接
+  从 ft8_lib 的水声图（本身就是功率 dB）在解出的 79 个音位置上量信噪比；标定工具
+  `tools/ft8/calibrate_fast_snr.py`，在 −18…+24 dB 扫频上与 standard 路径**逐点 0 dB
+  残差**。因此 fast 结果**不再置** `WSJT_FLAG_SNR_PROVISIONAL`，峰值判据
+  `min_peak_snr = -26` 对 fast 批次重新生效 —— 正是 `cascade.py:_snr_is_trustworthy`
+  里"未来某天快路径算出真 SNR 就把这一条重新打开"那句注释描述的情形；位与机制保留给
+  任何未标定的 SNR 来源。原 D-7 的**合并**规则（第 3 条，同键 deep 胜出）不变。
 
 ## 13. 风险与开放问题
 

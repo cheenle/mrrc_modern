@@ -105,13 +105,15 @@ def test_provisional_flag_matches_the_c_header() -> None:
     这两处一旦漂移，`_snr_is_trustworthy` 就会恒为 True，拿 score 估计值去比 dB 阈值 ——
     正是 spec D-7 要挡掉的那个 bug，而且它会静默地重新出现（测试全绿、行为变差）。
 
-    **把数字解析出来比，不要断言子串。** 头里的行是
-    `WSJT_FLAG_SNR_PROVISIONAL = 16   /* snr 字段不是 dB … */`，写
+    **把数字解析出来比，不要断言子串。** 头里这一行原先带行尾注释
+    （`WSJT_FLAG_SNR_PROVISIONAL = 16   /* … */`），现在注释在常量上方、常量单独一行 ——
+    两种形状都躲不过下面这类漂移：写
     `f"… = {FLAG_SNR_PROVISIONAL}" in header` 看着够用，其实挡不住本用例唯一
     要挡的那类漂移：常量改成 **1**（= `WSJT_FLAG_AP` 的值，最像会手滑的写法）时，
     要找的串变成 `WSJT_FLAG_SNR_PROVISIONAL = 1`，而它**是** `… = 16` 的前缀 ——
     断言照样通过。我实测过这个变异体：`in header` 返回 True。
     解析成 int 再比，`1 != 16` 当场就红。
+    解析写成 `split("=", 1)[1].split()[0]`，所以注释挪到常量上方或留在行尾都不影响。
     """
     header = (ROOT / "ft8" / "dsp" / "wsjt_core.h").read_text(encoding="utf-8")
     line = next(

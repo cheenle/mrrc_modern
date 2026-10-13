@@ -476,7 +476,7 @@ def _native_config(config: DecodeConfig) -> _DecodeConfig:
     if not isinstance(config, DecodeConfig):
         raise ValueError("config must be a DecodeConfig")
     if not isinstance(config.path, DecodePath):
-        raise ValueError("config path must be standard or improved")
+        raise ValueError("config path must be a DecodePath")
     _require_integer("sample_rate", config.sample_rate, FT8_RX_RATE, FT8_RX_RATE)
     _require_integer("sample_count", config.sample_count, FT8_RX_SAMPLES, FT8_RX_SAMPLES)
     _require_integer("profile", config.profile, 0, 4)

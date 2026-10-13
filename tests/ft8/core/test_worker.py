@@ -354,6 +354,70 @@ def test_worker_decodes_known_cq_from_shared_memory_without_audio_in_frame(
         tx_shm.unlink()
 
 
+def test_worker_decodes_with_the_fast_path_over_the_wire(
+    running_worker: tuple[Connection, mp.Process],
+) -> None:
+    """`path="fast"` 要能穿过协议校验、worker 的 build_config、binding，一路到库，
+    并且返回帧里的 `path` 说的是 `"fast"` 而不是默认的 `"improved"`。
+
+    只测 protocol 不够：那条链上任何一环把 path 丢回默认值，都不会被
+    test_protocol.py 发现。
+    """
+    connection, _process = running_worker
+    tx_shm = SharedMemory(create=True, size=2_426_880)
+    rx_shm = SharedMemory(create=True, size=360_000)
+    try:
+        wave48 = np.ndarray((606_720,), dtype="<f4", buffer=tx_shm.buf)
+        connection.send_bytes(
+            encode_frame(
+                {
+                    "v": 1,
+                    "type": "encode",
+                    "generation": 3,
+                    "request_id": 1,
+                    "message": "CQ K1ABC FN42",
+                    "frequency": 1500.0,
+                    "sample_rate": 48_000,
+                    "shm": encode_descriptor(tx_shm),
+                }
+            )
+        )
+        assert receive(connection)["type"] == "encode_ok"
+        wave12 = resample_poly(wave48, 1, 4).astype(np.float32)
+        slot = np.zeros(180_000, dtype=np.float32)
+        slot[6_000 : 6_000 + wave12.size] = wave12
+        pcm = np.ndarray((180_000,), dtype="<i2", buffer=rx_shm.buf)
+        pcm[:] = np.clip(np.rint(slot * 24_000.0), -32768, 32767).astype(np.int16)
+
+        connection.send_bytes(
+            encode_frame(
+                {
+                    "v": 1,
+                    "type": "decode",
+                    "generation": 3,
+                    "request_id": 2,
+                    "slot_id": 11_908_800,
+                    "deadline_monotonic": 999_999_999.0,
+                    "shm": decode_descriptor(rx_shm),
+                    "config": config(path="fast"),
+                }
+            )
+        )
+        response = receive(connection)
+
+        assert response["type"] == "decode_ok"
+        assert response["path"] == "fast", "path 必须原样传到返回帧，不能回落到默认值"
+        assert any(
+            item["text"] == "CQ K1ABC FN42" for item in response["results"]  # type: ignore[index]
+        )
+        del pcm, slot, wave12, wave48
+    finally:
+        rx_shm.close()
+        rx_shm.unlink()
+        tx_shm.close()
+        tx_shm.unlink()
+
+
 def test_wrong_generation_is_rejected_before_opening_shared_memory_and_loop_continues(
     running_worker: tuple[Connection, mp.Process],
 ) -> None:

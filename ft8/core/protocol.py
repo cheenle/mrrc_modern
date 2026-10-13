@@ -293,8 +293,8 @@ def _exact_fields(
 
 
 def _decode_path(value: object, name: str) -> None:
-    if type(value) is not str or value not in {"standard", "improved"}:
-        raise FrameError(f"{name} must be standard or improved")
+    if type(value) is not str or value not in {"standard", "improved", "fast"}:
+        raise FrameError(f"{name} must be standard, improved or fast")
 
 
 def _exact_integer(value: object, name: str, expected: int) -> None:

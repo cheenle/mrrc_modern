@@ -273,7 +273,7 @@ def test_decode_config_has_every_exact_field_and_strict_scalar_types(
     elif mutation == "extra":
         config["extra"] = 1
     elif mutation == "path":
-        config["path"] = "fast"
+        config["path"] = "turbo"
     elif mutation == "bool":
         config["ap"] = 1
     elif mutation == "int":
@@ -281,6 +281,21 @@ def test_decode_config_has_every_exact_field_and_strict_scalar_types(
     else:
         config["my_call"] = 123
     assert_rejected(frame, "config")
+
+
+def test_decode_config_accepts_the_fast_path() -> None:
+    """`"fast"` 在 Task 5 之后是合法值，控制帧必须放行它并原样往返。
+
+    既有的 test_decode_config_has_every_exact_field_and_strict_scalar_types
+    用的是**反向**断言（assert_rejected），所以它只能证明「非法值被拒」，
+    证明不了「合法值被放行」—— 少了这个正向用例，把白名单整个删掉也全绿。
+    """
+    frame = valid_frames()[2]
+    config = frame["config"]
+    assert isinstance(config, dict)
+    config["path"] = "fast"
+
+    assert decode_frame(encode_frame(frame)) == frame
 
 
 def test_protocol_preserves_structurally_valid_config_for_binding_range_checks() -> None:

@@ -11,7 +11,7 @@
 | Mobile feasibility | Medium-High | Responsive UI adapts to backend `capabilities`; iOS requires HTTPS for mic (reverse proxy) |
 | Operational feasibility | High | Single-process server, backend selection via env var, start/stop scripts, PID file management |
 | Product completeness | High | All core features (control, audio, spectrum, meters, memories) implemented for both supported backends |
-| FT8 decode-latency feasibility | High | Default fast path (`ft8_lib` via `DecodePath.FAST`) measures ~0.15 s on the W103D; the adaptive cascade re-runs the deep WSJT-X path on the same slot only when a criterion fires, and a budget guard refuses the escalation rather than miss the 2.5 s decision cutoff. Field (W103D, 2026-10-13): decode completion median −0.11 s after slot end for fast-path slots and +1.23 s for escalated slots, versus +4.01 s for always-deep (`docs/ft8-w103d-decode-perf-analysis.md` §9.7). The escalation *rate* is not yet measured in the field |
+| FT8 decode-latency feasibility | High | Default fast path (`ft8_lib` via `DecodePath.FAST`) measures ~0.15 s on the W103D; the adaptive cascade re-runs the deep WSJT-X path on the same slot only when a criterion fires, and a budget guard refuses the escalation rather than miss the 4.0 s decision cutoff. Field (W103D, 2026-10-13): decode completion median −0.11 s after slot end for fast-path slots and +1.23 s for escalated slots, versus +4.01 s for always-deep (`docs/ft8-w103d-decode-perf-analysis.md` §9.7). The escalation rate is served by `GET /api/ft8/engine/stats` and shown on the FT8 page status bar (Phase A) |
 
 ## 13.2 Risks
 

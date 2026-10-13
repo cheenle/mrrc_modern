@@ -126,12 +126,12 @@ def merge_batches(fast: DecodeBatch, deep: DecodeBatch) -> DecodeBatch:
 
 logger = logging.getLogger(__name__)
 
-# **没有 `DEFAULT_CUTOFF_SECONDS`。** 决策截止这个量在 `orchestrator.py:35` 已经有
-# 唯一的定义（`DEFAULT_DECISION_CUTOFF_SECONDS = 2.5`），而 `Orchestrator(decision_cutoff=…)`
+# **没有 `DEFAULT_CUTOFF_SECONDS`。** 决策截止这个量在 `orchestrator.py` 已经有
+# 唯一的定义（`DEFAULT_DECISION_CUTOFF_SECONDS`），而 `Orchestrator(decision_cutoff=…)`
 # 是个**活跃的旋钮**（`tests/ft8/engine/test_orchestrator.py:163` 传 0.0、`:170` 传
 # 整个时隙）。在这里再放一个同值常量，就让同一条物理量有了两个来源：生产代码今天
 # 恰好两边都是默认值，所以看不出来；某天有人给 orchestrator 传了别的截止，
-# 级联的预算守卫仍在拿 2.5 算 —— 守卫被静默地重新标定，而**没有任何测试会红**。
+# 级联的预算守卫仍在拿旧值算 —— 守卫被静默地重新标定，而**没有任何测试会红**。
 # 这正是 Task 10 给 `boundary_epoch_for` 写「必填、故意不给默认值」的同一个理由，
 # 所以 `cutoff` 也照办：必填，由接线处传 orchestrator 的那一个值。
 DEFAULT_DEEP_THREADS = 3
@@ -157,7 +157,7 @@ class CascadingDecoder:
         # 必填，理由与 boundary_epoch_for 相同：决策截止的唯一来源是
         # `orchestrator.py:35` 的 DEFAULT_DECISION_CUTOFF_SECONDS（或传给
         # Orchestrator 的那个值）。本模块**不提供**自己的默认值 —— 详见上面
-        # 「没有 DEFAULT_CUTOFF_SECONDS」那段。两处各自 2.5 的生产代码今天看起来
+        # 「没有 DEFAULT_CUTOFF_SECONDS」那段。两处各自写死同值的生产代码今天看起来
         # 是对的，而守卫恰恰是在有人改了 orchestrator 之后才悄悄失准的。
         cutoff: float,
         # 默认必须是 time.time（epoch 秒）—— orchestrator.py:125 的 `clock` 与
@@ -212,8 +212,10 @@ class CascadingDecoder:
             )
         except Exception:
             # 快路径整个不可用时没有结果可退，只能在明知超预算的情况下补跑一次深路径；
-            # 但线程数仍必须是 deep_threads —— threads=1 要 3.23s，塞不进 2.5s 窗口
-            # （spec D-4），那不是"慢一点"，是必定错过截止。
+            # 但线程数仍必须是 deep_threads（spec D-4）。理由不是"塞不进窗口"——
+            # 截止抬到 4.0s 后 threads=1 的 3.23s 也塞得进了 —— 而是预算守卫的
+            # `deep_lower_bound_s` 只在 deep_threads 上量过（threads3 ≈ 2.25s →
+            # 2.3s 下界）；让它给别的线程数打分，守卫自己就先量错了尺子。
             logger.warning(
                 "fast decode path failed; running the deep path unbudgeted", exc_info=True
             )

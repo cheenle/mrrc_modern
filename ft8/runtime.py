@@ -259,7 +259,7 @@ class Ft8Runtime:
         # clock 一律不传 —— CascadingDecoder 的默认 time.time 与 orchestrator 的
         # clock（`orchestrator.py:125`）同源，这正是 R20 要钉住的那个不变量。
         # cutoff **必须显式传**，且必须传 orchestrator 的那一个常量：级联的预算守卫
-        # 与 orchestrator 判定 deadline miss 用的是同一条物理量，各自 2.5 只会在
+        # 与 orchestrator 判定 deadline miss 用的是同一条物理量，各自写死只会在
         # 有人改了 `decision_cutoff` 之后悄悄分叉（见 cascade.py 里那段注记）。
         #
         # 不要写成 ``self.decoder = CascadingDecoder(self.decoder, …)``：stop() 会调

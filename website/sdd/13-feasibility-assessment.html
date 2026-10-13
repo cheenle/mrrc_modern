@@ -159,7 +159,7 @@
 <tr>
 <td>FT8 decode-latency feasibility</td>
 <td>High</td>
-<td>Default fast path (<code class="scope-code">ft8_lib</code> via <code class="scope-code">DecodePath.FAST</code>) measures ~0.15 s on the W103D; the adaptive cascade re-runs the deep WSJT-X path on the same slot only when a criterion fires, and a budget guard refuses the escalation rather than miss the 2.5 s decision cutoff. Field (W103D, 2026-10-13): decode completion median −0.11 s after slot end for fast-path slots and +1.23 s for escalated slots, versus +4.01 s for always-deep (<code class="scope-code">docs/ft8-w103d-decode-perf-analysis.md</code> §9.7). The escalation <em>rate</em> is not yet measured in the field</td>
+<td>Default fast path (<code class="scope-code">ft8_lib</code> via <code class="scope-code">DecodePath.FAST</code>) measures ~0.15 s on the W103D; the adaptive cascade re-runs the deep WSJT-X path on the same slot only when a criterion fires, and a budget guard refuses the escalation rather than miss the 4.0 s decision cutoff. Field (W103D, 2026-10-13): decode completion median −0.11 s after slot end for fast-path slots and +1.23 s for escalated slots, versus +4.01 s for always-deep (<code class="scope-code">docs/ft8-w103d-decode-perf-analysis.md</code> §9.7). The escalation rate is served by <code class="scope-code">GET /api/ft8/engine/stats</code> and shown on the FT8 page status bar (Phase A)</td>
 </tr>
 </tbody>
 </table>
@@ -547,7 +547,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.84 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.85 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

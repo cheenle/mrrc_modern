@@ -112,9 +112,11 @@ class OrchestratorCounters:
     decodes: int = 0
     deadline_misses: int = 0
     decode_errors: int = 0
-    # 快路径**单独**解完的槽数（没有升级，或升级了但结果仍走快路径的情况见下）。
+    # 本槽的答案是快路径给出的：策略或预算拦下了升级，**也包括**深路径跑了但没
+    # 给出结果（失败、或没解出新报文）—— 那时答案仍然是快路径那一份。
     fast_decodes: int = 0
-    # 真的跑过深路径的槽数。升级率 = escalations / decodes，是判断阈值松紧的主指标。
+    # 深路径的结果真的并进了本槽（本槽为此多付了一次深解码）。升级率
+    # = escalations / decodes，是判断阈值松紧的主指标。
     escalations: int = 0
 
 

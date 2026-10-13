@@ -555,3 +555,25 @@ def test_escalated_slot_is_counted_as_escalation_not_as_fast() -> None:
     assert counters.fast_decodes == 0, (
         "升级过的槽不算 fast —— 否则 fast_decodes 失去意义，等于 decodes"
     )
+
+
+def test_fallback_slot_counts_as_neither_fast_nor_escalated() -> None:
+    """快路径全败、补跑深路径的那种批次，两个桶都不进 —— 这不是漏记，是有意的。
+
+    `fast_decodes + escalations <= decodes` 允许取不等号全靠这一条：那个批次的
+    path 是 IMPROVED（深路径跑的），但它没升级，所以算进 fast 会把「快路径单独
+    解完多少槽」抬高；算进 escalations 又等于声称本槽多付了一次深解码 —— 而它
+    付的是**唯一**那次。将来若有人把 elif 改成 else「顺手补全」，升级率就会被
+    这个桶稀释，而升级率正是判断阈值松紧的主指标。
+    """
+
+    harness = Harness(epoch=7.5)
+    harness.decoder.path = DecodePath.IMPROVED
+    harness.decoder.escalated = False
+    harness.decoder.texts = ["CQ K1ABC FN42"]
+    harness.run(decodes=2)
+
+    counters = harness.orchestrator.counters
+    assert counters.decodes == 2
+    assert counters.fast_decodes == 0
+    assert counters.escalations == 0

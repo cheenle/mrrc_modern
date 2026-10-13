@@ -80,7 +80,7 @@ def test_histogram_rejects_negative_elapsed() -> None:
 
 
 def test_supervisor_decoder_records_wall_elapsed() -> None:
-    """A successful decode adds one sample keyed by profile/threads."""
+    """A successful decode adds one sample keyed by path/profile/threads."""
 
     config = DecodeConfig(profile=3, threads=7)
     histogram = LatencyHistogram()
@@ -127,9 +127,9 @@ def test_health_exposes_latency_and_deadline_misses() -> None:
         safety=SimpleNamespace(health={"armed": False}),
         lease=None,                                     # 平台的角色取代了 FT8 lease
         auth=SimpleNamespace(session_count=lambda: 0),  # _health 只调 session_count()
-        latency=histogram,                              # 未接线的用例写 None
+        latency=histogram,                              # 已接线：直方图直接给
         orchestrator=SimpleNamespace(counters=SimpleNamespace(deadline_misses=2)),
-    )                                                   # 未接线的用例写 None
+    )
     health = _health(state)
     assert health["decode_latency"]["improved/p3/t7"]["count"] == 1
     assert health["deadline_misses"] == 2
@@ -140,9 +140,9 @@ def test_health_omits_latency_when_not_wired() -> None:
         safety=SimpleNamespace(health={"armed": False}),
         lease=None,                                     # 平台的角色取代了 FT8 lease
         auth=SimpleNamespace(session_count=lambda: 0),  # _health 只调 session_count()
-        latency=None,                                   # 未接线的用例写 None
+        latency=None,                                   # 未接线：两个键都必须缺席
         orchestrator=None,
-    )                                                   # 未接线的用例写 None
+    )
     health = _health(state)
     assert "decode_latency" not in health
     assert "deadline_misses" not in health

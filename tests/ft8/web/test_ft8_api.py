@@ -36,6 +36,10 @@ class _Runtime:
 
     def __init__(self) -> None:
         self._deep_decode_requested = False
+        self.policy_pushes: list = []   # set_cascade_policy arguments, in order
+
+    def set_cascade_policy(self, settings) -> None:
+        self.policy_pushes.append(settings)
 
 
 def _client(*, role: str = "operator", authenticated: bool = True) -> TestClient:
@@ -229,3 +233,21 @@ def test_deep_slot_sets_the_one_shot_flag():
 def test_deep_slot_requires_control_role():
     assert _client(role="listener").post(
         "/api/ft8/engine/deep-slot").status_code == 403
+
+
+def test_station_update_pushes_the_policy_to_the_live_runtime():
+    """Saving the station must push the new policy onto the running cascade.
+
+    Mutation: drop ``runtime.set_cascade_policy(updated)`` from ``station_update``
+    and this goes red.  Without it a changed threshold applies only at the next
+    engine start — the operator sees the saved value but nothing changes now.
+    """
+
+    client = _client()
+    runtime = _Runtime()
+    client.app.state.ft8_state.runtime = runtime
+
+    r = client.put("/api/ft8/station", json={"min_peak_snr": -18})
+    assert r.status_code == 200
+    assert len(runtime.policy_pushes) == 1
+    assert runtime.policy_pushes[0].min_peak_snr == -18

@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 
 from ft8 import runtime as runtime_mod
+from ft8.engine.cascade import CascadePolicy
 from ft8.engine.sequencer import QSOState
 
 
@@ -111,6 +112,40 @@ def test_the_orchestrator_actually_gets_the_cascade(monkeypatch, tmp_path) -> No
         finally:
             # start() leaves an orchestrator task running; cancel it here so
             # it cannot leak into the rest of the session.
+            await rt.stop()
+
+    asyncio.run(_run())
+
+
+def test_start_builds_the_cascade_from_the_injected_policy(monkeypatch, tmp_path) -> None:
+    """必须 1: the provider's policy object must reach the live cascade.
+
+    Mutation: revert ``policy = self._cascade_policy_provider() …`` back to
+    ``policy = CascadePolicy()`` and this must go red.  Without the fix a
+    persisted threshold change applies only until the next engine start, then
+    silently reverts to the defaults — settings the operator can see but not
+    feel.
+    """
+
+    monkeypatch.setattr(runtime_mod, "WorkerSupervisor", _FakeSupervisor)
+    sentinel = CascadePolicy(escalate_on_weak=False, min_peak_snr=-18, min_decodes=4)
+
+    rt = runtime_mod.Ft8Runtime(
+        rig=_FakeRig(),
+        tx_player=_FakeTxPlayer(),
+        sequencer_factory=_FakeSequencer,
+        data_dir=tmp_path,
+        cascade_policy_provider=lambda: sentinel,
+    )
+
+    async def _run() -> None:
+        await rt.start()
+        try:
+            assert rt._cascade._policy is sentinel, (
+                "start() must build the cascade from cascade_policy_provider, "
+                "not from the hard-coded CascadePolicy() defaults"
+            )
+        finally:
             await rt.stop()
 
     asyncio.run(_run())

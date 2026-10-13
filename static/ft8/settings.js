@@ -259,7 +259,10 @@ export function createSettingsDrawer() {
 	async function renderFt8() {
 		const s = loadSettings();
 		// Cascade escalation policy is authoritative server-side (settings.json,
-		// PUT /station) — read it back so a reload shows what was saved.
+		// PUT /station) — read it back so a reload shows what was saved.  The
+		// number fields pass no fallback on purpose: the server always reports
+		// them (its defaults are the CascadePolicy constants), so a missing key
+		// renders blank instead of a second, drift-prone copy of the number.
 		const station = await api.station();
 		const policy = (key, fallback) =>
 			station && station[key] != null ? station[key] : fallback;
@@ -313,11 +316,11 @@ export function createSettingsDrawer() {
       </label>
       <label class="setting-row">
         <span>Min decodes before trusting fast</span>
-        <input type="number" data-policy="min_decodes" min="0" max="256" value="${policy("min_decodes", 1)}">
+        <input type="number" data-policy="min_decodes" min="0" max="256" value="${policy("min_decodes") ?? ""}">
       </label>
       <label class="setting-row">
         <span>Min peak SNR (dB, ≤ 0)</span>
-        <input type="number" data-policy="min_peak_snr" min="-120" max="0" value="${policy("min_peak_snr", -26)}">
+        <input type="number" data-policy="min_peak_snr" min="-120" max="0" value="${policy("min_peak_snr") ?? ""}">
       </label>
       <label class="setting-row toggle">
         <span>Allow «deep decode this slot» <em>一次性</em></span>
@@ -351,9 +354,20 @@ export function createSettingsDrawer() {
 		for (const input of content.querySelectorAll("[data-policy]")) {
 			input.addEventListener("change", async () => {
 				const key = input.dataset.policy;
+				if (input.type === "number") {
+					// A blank (or unparsable) field must NOT be written: Number("")
+					// is 0, which is a *valid* min_peak_snr upper bound, so clearing
+					// the box would silently make nearly every slot escalate —
+					// exactly what validate()'s range exists to prevent.  Restore
+					// the stored value and change nothing.
+					const raw = input.value.trim();
+					if (raw === "" || !Number.isFinite(Number(raw))) {
+						renderFt8();
+						return;
+					}
+				}
 				const value =
 					input.type === "checkbox" ? input.checked : Number(input.value);
-				if (input.type === "number" && !Number.isFinite(value)) return;
 				const result = await api.putStation({ [key]: value });
 				if (!result.ok) {
 					showToast(

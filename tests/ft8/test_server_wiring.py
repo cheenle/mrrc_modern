@@ -162,6 +162,37 @@ def test_decodes_frame_carries_completion_timing() -> None:
     assert frame["timing"]["dispatched_after_slot_end_s"] == -1.2
 
 
+def test_on_batch_clears_the_one_shot_deep_decode_flag() -> None:
+    """「深度解码本槽」必须真的是一次性的。
+
+    Mutation: delete ``self._deep_decode_requested = False`` from ``_on_batch``
+    and this goes red.  Without it a single press escalates *every* later slot
+    (~2.2 s of deep decode each) — the "press once, permanently slower"
+    outcome the brief calls the worst this task can ship.
+    """
+
+    from types import SimpleNamespace
+
+    from ft8 import runtime as runtime_mod
+
+    rt = object.__new__(runtime_mod.Ft8Runtime)
+    rt.sequencer = SimpleNamespace(my_call="", my_grid="")
+    rt._dial_freq_hz = 14_074_000
+    rt._worked_index = lambda: None
+    rt._dumped_slots = 99
+    rt.recent_decodes = runtime_mod.deque(maxlen=50)
+    rt._on_decode = lambda frame: None
+    rt.ring = None
+    rt._deep_decode_requested = True           # a press armed the deep path
+
+    rt._on_batch(SimpleNamespace(
+        slot_id=1, late=False, dispatched_epoch=None, finished_epoch=None,
+        batch=SimpleNamespace(results=()), messages=(),
+    ))
+
+    assert rt._deep_decode_requested is False
+
+
 def test_the_cascade_guard_shares_the_orchestrators_decision_cutoff() -> None:
     """预算守卫的截止值必须**来自** orchestrator 的那个常量，不是另写一遍 2.5。
 

@@ -74,7 +74,16 @@ if (!(Test-Path $opus)) {
 # as hidden imports in the spec, and a venv built before feat/ft8 does not have
 # them - PyInstaller would silently ship a package whose FT8 engine imports fail
 # at the first mode switch. Check here, before the expensive part.
-Invoke-Checked python -c "import scipy, soxr"
+#
+# Called directly, not through Invoke-Checked: PowerShell 5.1 treats a bare
+# single-dash token (`-c`) as a parameter name when binding a *function's*
+# arguments, so the wrapper received "import scipy, soxr" as the command name
+# and the build died on 'CommandNotFoundException' (2026-10-13).  Native
+# commands are not bound that way, so `& python -c ...` is the safe form.
+& python -c "import scipy, soxr"
+if ($LASTEXITCODE -ne 0) {
+    throw "the build venv cannot import scipy and soxr - run: venv\Scripts\pip install -r requirements.txt"
+}
 
 # ---- FT8 DSP (native library + its MinGW runtime closure) ----------------
 # The FT8 engine loads wsjt_core.dll through ctypes. It is built here from the
@@ -100,14 +109,19 @@ $PkgConfig = Join-Path $MingwBin "pkg-config.exe"
 $Gfortran = (Join-Path $MingwBin "gfortran.exe").Replace("\", "/")
 $Gcc = (Join-Path $MingwBin "gcc.exe").Replace("\", "/")
 $Gxx = (Join-Path $MingwBin "g++.exe").Replace("\", "/")
-Invoke-Checked $Cmake -S "ft8/dsp" -B "ft8/dsp/build" -G Ninja `
+# Directly, not through Invoke-Checked: `-S`, `-B`, `-G` and the -D... cache
+# flags are single-dash tokens, which the wrapper's argument binding mangles on
+# PowerShell 5.1 (see the scipy check above).
+& $Cmake -S "ft8/dsp" -B "ft8/dsp/build" -G Ninja `
     -DCMAKE_BUILD_TYPE=Release `
     -DCMAKE_MAKE_PROGRAM=$Ninja `
     -DPKG_CONFIG_EXECUTABLE=$PkgConfig `
-    "-DCMAKE_Fortran_COMPILER=$Gfortran" `
-    "-DCMAKE_C_COMPILER=$Gcc" `
-    "-DCMAKE_CXX_COMPILER=$Gxx"
-Invoke-Checked $Cmake --build "ft8/dsp/build" -j 4
+    -DCMAKE_Fortran_COMPILER=$Gfortran `
+    -DCMAKE_C_COMPILER=$Gcc `
+    -DCMAKE_CXX_COMPILER=$Gxx
+if ($LASTEXITCODE -ne 0) { throw "FT8 DSP cmake configure failed ($LASTEXITCODE)" }
+& $Cmake --build "ft8/dsp/build" -j 4
+if ($LASTEXITCODE -ne 0) { throw "FT8 DSP build failed ($LASTEXITCODE)" }
 
 $Ft8Dll = Join-Path $RepoRoot "ft8\dsp\build\wsjt_core.dll"
 if (!(Test-Path $Ft8Dll)) {

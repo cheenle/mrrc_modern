@@ -5822,4 +5822,18 @@ app.add_api_route("/{path:path}", serve_static, methods=["GET"])
 
 
 if __name__ == "__main__":
+    # The FT8 DSP worker is a multiprocessing ("spawn") child, and in a frozen
+    # bundle the child is this very executable re-launched with
+    # ``--multiprocessing-fork``.  Without freeze_support() nothing intercepts
+    # those arguments, so the child ran main() instead: argparse printed its
+    # usage, exited 2, and the supervisor reported "spawn_failed: worker did not
+    # become ready" while the UI offered a mode that could never decode.  Found
+    # by the clean-room run of the packaged macOS app, 2026-10-13; the same
+    # applies to the Windows onedir build.
+    #
+    # It must be the first thing the entry point does - the bootstrap has to win
+    # before anything else looks at argv.
+    import multiprocessing
+
+    multiprocessing.freeze_support()
     main()

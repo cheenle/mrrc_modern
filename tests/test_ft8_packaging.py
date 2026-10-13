@@ -239,3 +239,45 @@ class PyInstallerSpecTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FrozenWorkerSpawnTests(unittest.TestCase):
+    """The FT8 DSP worker must be able to start inside a frozen bundle.
+
+    The worker is a ``multiprocessing`` "spawn" child.  In a PyInstaller bundle
+    the child is the *same executable* re-launched with
+    ``--multiprocessing-fork``, so the entry point has to run
+    ``multiprocessing.freeze_support()`` before anything reads argv.  Without it
+    the child ran ``main()``, argparse printed its usage and exited 2, and the
+    page offered an FT8 mode that reported "worker did not become ready" — see
+    the clean-room run of the packaged macOS app, 2026-10-13.
+    """
+
+    def test_entry_point_freezes_support_before_main(self):
+        import ast
+
+        tree = ast.parse((REPO_ROOT / "server.py").read_text(encoding="utf-8"))
+        block = None
+        for node in tree.body:
+            if not isinstance(node, ast.If):
+                continue
+            test = ast.dump(node.test)
+            if "__main__" in test and "name" in test:
+                block = node
+        self.assertIsNotNone(block, "server.py has no __main__ block")
+
+        calls: list[str] = []
+        for node in ast.walk(block):
+            if isinstance(node, ast.Call):
+                target = node.func
+                if isinstance(target, ast.Attribute):
+                    calls.append(target.attr)
+                elif isinstance(target, ast.Name):
+                    calls.append(target.id)
+        self.assertIn(
+            "freeze_support", calls,
+            "multiprocessing.freeze_support() must run in the entry point, or a "
+            "frozen bundle's DSP worker child re-enters main() and exits",
+        )
+        self.assertLess(calls.index("freeze_support"), calls.index("main"),
+                        "freeze_support() has to run before main()")

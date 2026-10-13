@@ -18,6 +18,8 @@ find_library(FFTW3F_THREADS_LIBRARY NAMES fftw3f_threads REQUIRED)
 set(WSJTX_LIB "${CMAKE_CURRENT_SOURCE_DIR}/vendor")
 include(cmake/standard-ft8.cmake)
 include(cmake/improved-ft8.cmake)
+# ft8_lib fast-path C sources (vendor-ft8lib/) — see cmake/ft8lib.cmake
+include(cmake/ft8lib.cmake)
 
 add_library(wsjt_core SHARED
     wsjt_types.f90
@@ -28,6 +30,7 @@ add_library(wsjt_core SHARED
     wsjt_core_shim.f90
     ${STANDARD_FT8_SOURCES}
     ${IMPROVED_FT8_SOURCES}
+    ${FT8LIB_SOURCES}
 )
 
 if(MRRC_FT8_TEST_HOOKS)
@@ -39,6 +42,7 @@ target_include_directories(wsjt_core PRIVATE
     ${WSJTX_LIB}
     ${WSJTX_LIB}/ft8
     ${WSJTX_LIB}/ft8var
+    ${FT8LIB_LIB}
     ${Boost_INCLUDE_DIRS}
 )
 target_link_libraries(wsjt_core PRIVATE

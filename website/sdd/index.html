@@ -274,7 +274,7 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.82</td>
+<td>V2.83</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
@@ -391,7 +391,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <tr>
 <td>Session authentication</td>
 <td>Implemented</td>
-<td>Shared-password login; <code class="scope-code">_auth_tokens</code> + <code class="scope-code">mrrc_auth</code> cookie; all WS gated. Token transport is header → cookie → deprecated <code class="scope-code">?token=</code> (AD-024); no frontend builds a token URL</td>
+<td>Shared-password login; <code class="scope-code">_auth_tokens</code> + <code class="scope-code">mrrc_auth</code> cookie, <strong>persisted</strong> in <code class="scope-code">data/auth-tokens.json</code> (0600, 30-day) so a restart keeps sessions; all WS gated. Token transport is header → cookie → deprecated <code class="scope-code">?token=</code> (AD-024); no frontend builds a token URL</td>
 </tr>
 <tr>
 <td>PTT safety</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.82 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.83 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

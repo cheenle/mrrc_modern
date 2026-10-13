@@ -27,7 +27,7 @@
 | ---- | ------------- | -------- | ---------- | ------------- |
 | NFR-020 | Session authentication | All routes and WS endpoints require valid auth token (`mrrc_auth` cookie + `?token=` query param) | High | Unauth curl test |
 | NFR-021 | Password configurable | `MRRC_WEB_PASSWORD` env var; never hardcoded in repo | Critical | Config review |
-| NFR-022 | Token lifetime | 30-day session tokens, cleared on server restart | Medium | Cookie inspection |
+| NFR-022 | Token lifetime | 30-day session tokens, **persisted across restarts** (`data/auth-tokens.json`, 0600; a routine upgrade restart must not log operators out) | Medium | Cookie inspection |
 | NFR-023 | Open redirect prevention | Login redirect validates same-origin target | High | Code review of `_auth_middleware` and `/login` |
 
 ## 5.4 Compatibility Requirements

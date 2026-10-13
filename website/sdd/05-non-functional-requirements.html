@@ -261,7 +261,7 @@
 <tr>
 <td>NFR-022</td>
 <td>Token lifetime</td>
-<td>30-day session tokens, cleared on server restart</td>
+<td>30-day session tokens, <strong>persisted across restarts</strong> (<code class="scope-code">data/auth-tokens.json</code>, 0600; a routine upgrade restart must not log operators out)</td>
 <td>Medium</td>
 <td>Cookie inspection</td>
 </tr>
@@ -518,7 +518,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.82 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.83 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

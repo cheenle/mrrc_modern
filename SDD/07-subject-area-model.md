@@ -48,6 +48,6 @@
 | Audio streams | `AudioHandler` instance | Runtime only |
 | Poll schedule | `PollScheduler` instance | Runtime only |
 | Memory channels | `/api/mem_channels` + `mem_channels.json` | Filesystem (JSON) |
-| Auth tokens | `_auth_tokens` set | Runtime only (cleared on restart) |
+| Auth tokens | `_auth_tokens` set + `auth-tokens.json` | Persisted (30-day lifetime, survives a restart) |
 | UI state | `radioState` object, DOM | Browser session/cookies |
 | Waterfall pixels | Canvas image data | Browser runtime only |

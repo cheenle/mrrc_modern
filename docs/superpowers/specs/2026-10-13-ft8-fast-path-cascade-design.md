@@ -1,0 +1,322 @@
+# FT8 快路径 + 自适应级联解码 设计
+
+- **日期**：2026-10-13
+- **状态**：待评审（本文件通过后进入实现计划）
+- **范围**：W103D 盒子（aarch64，4×Cortex-A53 @1.8 GHz）为主验收目标；代码结构保持跨平台可移植（macOS / Windows / rpi）
+- **配套**：`2026-10-12-ft8-work-mode-design.md`（FT8 工作模式本体）——本文件是其**解码路径**的增量，不覆盖、不修改它
+- **依据**：`docs/ft8-w103d-decode-perf-analysis.md` §7（反汇编）与 §8（A/B 实测）
+- **相关代码**：`ft8/core/binding.py`、`ft8/core/models.py`、`ft8/core/supervisor.py`、
+  `ft8/core/worker.py`、`ft8/engine/dsp_decode.py`、`ft8/engine/orchestrator.py`、
+  `ft8/engine/latency.py`、`ft8/dsp/`（CMake / vendor / shim）
+- **相关文档**：SDD `09-architecture-overview.md`、`12-operational-model.md`、`13-*`（性能）；
+  `docs/PROJECT_MAP.md`、`docs/DOCUMENT_INDEX.md`
+
+---
+
+## 1. 背景与动机
+
+`docs/ft8-w103d-decode-perf-analysis.md` 三轮分析得到三个**实测**结论（W103D，同机同输入）：
+
+1. **真正的闸门不是 8 s 判据，而是 2.5 s 决策截止**（`ft8/engine/orchestrator.py:35`）。
+   生产默认 profile3/threads3 实测 **2218 ms**，只剩 **~1.15×** 余量。
+2. **加核买不到时间**：3 线程比 1 线程多烧 **1.6× 总 CPU**，wall 只快 1.46×——
+   sync 阶段被每线程原样复制。
+3. **换轻量解码器能省下巨量算力**：`kgoba/ft8_lib`（C、kiss-fft、无 OSD / 无 AP / 单趟）
+   在同一台机器、同一输入上 **145 ms wall / 0.144 s CPU**，对生产配置是
+   **1/15 的 wall、约 1/41 的单核工作量**，而 ≥ −24 dB 档两者都 5/5。
+
+代价则集中在一个约 6 dB 宽的弱信号窗口（实测 −30 档：本仓 3/5，ft8_lib 0/5），
+**且 ft8_lib 没有 AP**（先验呼号辅助解码）——而后者的增益在合成信号 A/B 里**根本没被测到**
+（分析文档 §8.5 第 3 条），真实通联中损失只会更大。
+
+**结论**：全量替换不可取（砍掉弱信号 + AP，与 FT8 的存在理由相反）。
+正确做法是**自适应级联**——默认走轻量快路径，只在需要时对该时隙补跑深度路径。
+
+## 2. 目标与非目标
+
+### 目标
+
+1. **默认快路径**：每个 FT8 时隙默认只用 `ft8_lib` 完成解码，wall 目标从 ~2.2 s 降到 **≤ 0.3 s**。
+2. **按需深度**：命中升级判据时，**同一时隙**补跑现有 WSJT-X 路径，保住弱信号与 AP。
+3. **能力零回退**：任何情况下解出的条数 **不低于**"始终走深度路径"（是超集，不是近似）。
+4. **不迟到**：最坏情况（升级命中）end-to-end 仍 **≤ 2.5 s 决策截止**；预算不足时**宁可不升级**。
+5. **可关**：三个判据全关 = 纯快路径档；级联是可选能力，不是强制行为。
+
+### 非目标
+
+- 不替换、不删除现有 WSJT-X 内核；`improved` / `standard` 两条既有路径行为不变。
+- 不改 FT8 的音频链路、QSO 序列、TX 门控、日志、UI 主流程。
+- 不在本期做"把 ft8_lib 的优化搬进 WSJT-X 内核"（分析文档 §8.6 指出的另一条路线）。
+- 不改 `2.5 s` 截止本身。
+
+## 3. 既有集成面（只读勘察的事实，作为设计约束）
+
+| 事实 | 位置 |
+|---|---|
+| **唯一的 ctypes 边界**（仓库明写的不变量） | `ft8/core/binding.py:1`（"Sole locked ctypes boundary"） |
+| ABI 版本与能力掩码 | `binding.py:34` `_ABI_VERSION = 1`、`:36` `_IMPROVED_PROFILE_MASK = 0x1F` |
+| 启动期硬校验 ABI | `binding.py:322-335` `_EXPECTED_ABI`、`:356` `_validate_abi` |
+| 两条解码路径枚举 | `ft8/core/models.py:29-33` `DecodePath.STANDARD/IMPROVED`，`:45` 默认 `IMPROVED` |
+| **AP 上下文是一等公民** | `_DecodeConfig` 带 `my_call/dx_call/dx_grid/ap_width/qso_progress`（`binding.py:78-88`）；结果带 `ap_type`（`:101`） |
+| 唯一解码咽喉 | `ft8/engine/dsp_decode.py:85` `SupervisorDecoder.decode()`（shm → 一次 supervisor 往返 → `DecodeBatch`） |
+| supervisor 串行化请求、单 worker | `ft8/core/supervisor.py` |
+| 截止判定 | `ft8/engine/orchestrator.py:258` `late = finished > boundary + cutoff` |
+| C ABI 头 | `ft8/dsp/wsjt_core.h:91` `wsjt_get_abi_info`、`:99` `wsjt_ft8_decode_standard`、`:107` `wsjt_ft8_decode_improved` |
+| vendor 子集由 CMake 清单派生 + SHA-256 | `tools/ft8/extract_wsjtx_subset.sh`、`ft8/dsp/vendor.sha256`（AGENTS.md「FT8 铁律」） |
+| 测试面 | `tests/ft8/` 共 **419** 用例（core 75 / dsp 43 / engine 242 / web 26 / platform 21 / 顶层 12） |
+
+**关键算术（来自 §8.2 实测，决定级联可行性）**：
+
+- 深度路径 threads1 = **3.23 s** → 快路径 + 它 = 3.38 s，**超预算**。
+- 深度路径 threads3 = **2.22 s** → 快路径(0.15 s) + 它 = **2.37 s < 2.5 s**，余量 ~130 ms。
+
+→ 升级时必须用 **threads ≥ 3**，且必须有预算守卫。
+
+## 4. 架构
+
+三层，各守一条既有不变量：
+
+```
+engine 层  ── CascadingDecoder ──  纯 Python；级联策略在这里（可脱原生代码单测）
+                    │  (接口与 SupervisorDecoder 完全一致)
+contract 层 ── binding.py ────────  仍是唯一锁定的 ctypes 边界（不变量 #1：唯一边界）
+                    │
+native 层  ── libwsjt_core ───────  + 新 path `wsjt_ft8_decode_fast`（ft8_lib 编进同一 target）
+```
+
+- **不变量 #1（唯一 ctypes 边界）**：不新增第二个 `CDLL`。ft8_lib 的 C 编进现有 `libwsjt_core`，
+  由**同一个** `binding.py` 暴露。
+- **不变量 #2（平台耦合只在边缘）**：级联策略是**纯 Python**，不进 Fortran/C。
+  native 侧只负责"解一个时隙"，不负责"决定用哪条路径"。
+- `DecodePath` 增加 `FAST`；`_ABI_VERSION` **递增**；`wsjt_abi_info` 增加 `decode_paths` 能力掩码。
+  binding 启动时照 `_EXPECTED_ABI` 既有方式**硬校验**——旧库配新 binding 直接拒绝启动，
+  **绝不静默走错路径**。
+- 级联策略**不进** `DecodeConfig`：`DecodeConfig` 是原生请求的镜像，级联是 engine 的决定。
+  新增 `CascadePolicy` dataclass 住在 engine 层。
+
+## 5. 组件与接口
+
+### 5.1 native：新增 fast path
+
+- **源码来源**：`kgoba/ft8_lib`（钉一个 commit，记进 provenance）。
+- **vendor 化**：按本仓既有做法放入 `ft8/dsp/vendor/fast/` 编译子集，
+  由 `tools/ft8/` 下的脚本从源清单派生，并产出 **SHA-256 记录**（对齐 `vendor.sha256`）。
+  `tests/ft8/dsp/test_vendor_policy.py` 覆盖新子树。
+- **构建**：编进现有 CMake target（`ft8/dsp/CMakeLists.txt`），
+  `build.sh` 幂等构建不变；新符号进 `wsjt_core.unexports` / 导出映射，
+  `test_cmake_export_map.py` 覆盖。
+- **C ABI**：新增
+  ```c
+  int32_t wsjt_ft8_decode_fast(const int16_t *samples,
+                               const struct wsjt_decode_config *config,
+                               int64_t slot_id,
+                               struct wsjt_decode_result *results,
+                               int32_t capacity,
+                               int32_t *count,
+                               int32_t *overflow);
+  ```
+  语义与 `wsjt_ft8_decode_standard/improved` 一致：写 `results`、置 `count/overflow`、返回 `wsjt_status`。
+  输入仍是**同一** 12 kHz int16 时隙、同一个 `wsjt_decode_config`。
+- **`wsjt_abi_info` 扩展**：追加 `int32_t decode_paths`（位掩码；bit0=standard、bit1=improved、bit2=fast）。
+  结构体尾部追加字段、`struct_size` 随之变化，`_EXPECTED_ABI` 的 `struct_size` 校验天然挡住老库。
+- **OpenMP 契约**：ft8_lib 是纯 C、单线程，**不**在栈上分配大工作数组。
+  既有 `OMP_STACKSIZE` 契约（`binding.py:9`，AGENTS.md「FT8 铁律」）必须原样保留、
+  执行顺序不得改动。
+
+### 5.2 contract：`ft8/core/binding.py`
+
+- `_ABI_VERSION` 递增；`_AbiInfo` 增 `decode_paths`；`_EXPECTED_ABI` 增
+  `decode_paths`（固定为期望位掩码）。
+- `_CtypesAdapter.__init__` 绑定 `wsjt_ft8_decode_fast` 的 `argtypes/restype`。
+- `_CtypesAdapter.decode()` 的路径分派增 `DecodePath.FAST` 分支。
+- **向后兼容**：新增字段只追加不改语义；`improved`/`standard` 两条路径的调用逐字节不变。
+
+### 5.3 contract：`ft8/core/models.py`
+
+- `DecodePath` 增 `FAST`。
+- `DecodeBatch` 增两个字段：`escalated: bool = False`、`fast_elapsed_seconds: float = 0.0`
+  （`elapsed_seconds` 语义改为**两段之和**，保持"这次解码总共花了多久"）。
+- `DecodeResult` **不变**（合并后的结果仍用同一结构；`ap_type` 对 fast 结果为 0）。
+
+### 5.4 engine：`ft8/engine/dsp_decode.py` — `CascadingDecoder`
+
+```python
+class CascadingDecoder:
+    def __init__(
+        self,
+        inner: SlotDecoder,                 # 生产里就是 SupervisorDecoder
+        policy: CascadePolicy,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        cutoff: float = DEFAULT_DECISION_CUTOFF_SECONDS,   # 2.5
+        deep_threads: int = 3,              # §3 算术：deep 必须 >= 3 线程
+        deep_lower_bound_s: float = 2.3,    # 预算守卫用的实测下界
+        safety_margin_s: float = 0.05,
+    ) -> None: ...
+
+    async def decode(self, slot_id: int, samples: bytes) -> DecodeBatch: ...
+```
+
+- 接口与 `SupervisorDecoder.decode` **完全一致** → engine 无感替换。
+- `inner` 与 `clock` 均可注入 → 策略测试**不碰原生库**。
+
+```python
+@dataclass(frozen=True, slots=True)
+class CascadePolicy:
+    escalate_on_ap_context: bool = True    # 判据 (a)
+    escalate_on_weak: bool = True          # 判据 (b)
+    min_decodes: int = 1                   # K_MIN
+    min_peak_snr: int = -20                # S_MIN（默认值待 spike 回填，见 §13 开放问题）
+    escalate_on_request: bool = False      # 判据 (c) 由引擎按槽置位
+```
+
+### 5.5 engine：接线
+
+- `ft8/engine/orchestrator.py`（或现有装配点）构造 `CascadingDecoder(SupervisorDecoder(...), policy)`
+  并传给引擎；`improved`/`standard` 的既有装配路径保留。
+- 判据 (c) 的"深度解码本槽"开关走 engine 的逐槽状态，不进 `DecodeConfig`。
+
+## 6. 数据流与合并
+
+```
+slot ─▶ CascadingDecoder.decode(slot_id, samples)
+          │
+          ├─ 1. inner.decode(path=FAST)                      → batch_fast     (目标 ≤0.3 s)
+          │
+          ├─ 2. should_escalate(batch_fast, ap_ctx, remaining_budget)?
+          │        否 ─▶ return batch_fast
+          │
+          └─ 3. 是 ─▶ inner.decode(path=IMPROVED, threads=deep_threads)
+                              → batch_deep
+                              merge(batch_fast, batch_deep) ─▶ return（escalated=True）
+```
+
+**合并规则**（合并后是两批的**并集**，故"能力零回退"）：
+
+1. 以 `(frequency, dt, text)` 为键去重；**deep 胜出**（同键保留 deep 那条）。
+2. `ap_type` 取 deep（fast 恒为 0）。
+3. `snr` 取 deep —— fast 的 SNR 是上游作者的 TODO 估计（`snr = score * 0.5f`），**不可信**，
+   只有 fast 独有的条目才用它的值。
+4. `overflow` 取两批的逻辑或；`slot_id` 取被采纳者的。
+5. `path` 取**最终决定结果的那一批**：deep 非空取 `IMPROVED`；
+   deep 返回 0 条而 fast 非空时取 `FAST`（并集里全是 fast 的条目）。**任何情况下不丢条目。**
+
+## 7. 升级判据
+
+`should_escalate` 为真当**任一**成立（各自可单独关闭）：
+
+| 判据 | 条件 | 依据 |
+|---|---|---|
+| **(a) AP 上下文激活** | `my_call` 非空 **且** `qso_progress > 0` | 通联中要 AP，而 fast 路径根本没有 AP —— 这是刚需 |
+| **(b) 疑似漏解** | `len(fast) < min_decodes` **或** `peak_snr < min_peak_snr` | 弱信号场，正是 §8.3 实测 fast 掉队处 |
+| **(c) 用户显式** | 解码面板「深度解码本槽」一次性开关 | 操作者覆盖 |
+
+- (a) 的效果是**通联中自动退回深度路径**，省下的时间集中在空闲 / 扫频——这是刻意的取舍，见 §12 决策记录 D-3。
+- (b) 的两个阈值 `K_MIN`/`S_MIN` 是**可调参数**，默认保守；`S_MIN` 默认值等 spike 数字回填。
+
+## 8. 时间预算与安全
+
+升级前计算：
+
+```
+remaining = cutoff − (now − slot_boundary) − elapsed_fast − safety_margin
+```
+
+- 若 `remaining < deep_lower_bound_s` → **不升级**，返回 `batch_fast`，
+  标 `escalation_skipped = "budget"`，计一次 `deadline_risk`（**不算 error**）。
+- 理由（§3 算术）：deep 在 threads1 要 3.23 s，升级必然迟到；**宁可不升级，也不迟到**。
+- `deep_lower_bound_s` 默认 2.3 s，来源为 §8.2 实测的 threads3 = 2.22 s 加上余量；
+  它是**配置项**，随硬件/配置可调。
+- **截止判定不变**：`orchestrator.py:258` 的 `late` 逻辑照旧生效，
+  级联**不**试图绕过它，只是在它之前先做一次自保。
+
+## 9. 错误处理
+
+原则：**快路径坏了绝不少解码**。
+
+| 情形 | 处理 |
+|---|---|
+| fast 路径失败（非零状态）/ ABI 缺 `decode_paths` 位 | 记日志 + **直接回落 improved**（走既有整条路径） |
+| deep 升级失败 | 返回 `batch_fast`（已有结果不丢），记 error |
+| 超预算跳过升级 | 不算 error，计 `deadline_risk` |
+| `-ffast-math`（或任何编译开关）改变解出条数 | 直接禁用该开关 —— 正确性门，由测试盯（§11） |
+| 合并时 `(freq, dt, text)` 键冲突 | deep 胜出，fast 那条丢弃（不报错） |
+
+## 10. 观测
+
+- `ft8/engine/latency.py` 的 `LatencyHistogram` 增加维度：每条记录带
+  `path`（fast/deep/escalated）与 `escalated` 标志，使运维能看出
+  "升级率"与"升级后的尾部分布"——这是判断默认阈值是否选对的数据来源。
+- 新增轻量计数（复用 `orchestrator.counters` 风格）：
+  `fast_decodes`、`escalations`、`escalation_skipped_budget`、`deadline_risk`。
+- 与 Cloud Hub 会话打点（`session_metrics.py`）无关，**不打点**任何逐会话内容。
+
+## 11. 测试策略
+
+### 纯 Python（主体，脱原生代码）
+
+`CascadingDecoder` + fake supervisor + 注入 `clock` + 假 batch：
+
+- 判据 (a)/(b)/(c) 各自的触发与不触发边界；
+- 预算守卫：剩余不足时**不升级**且返回 `batch_fast`；
+- 合并去重：同键 deep 胜出、`snr/ap_type` 取值正确、deep 空而 fast 非空时不丢；
+- 容错：fast 失败回落、deep 失败返回 fast；
+- 三个判据全关 = 纯 fast（不调用 deep）。
+
+### 原生
+
+- ABI smoke：`wsjt_ft8_decode_fast` 存在、`decode_paths` 掩码正确、旧版本被拒。
+- **一致性**：同输入下 `FAST` path 直连 vs `decode_ft8` 参考二进制 → **同条数**。
+- 构建映射：`test_cmake_export_map.py` 覆盖新符号；`test_vendor_policy.py` 覆盖新 vendor 子树。
+
+### 端到端
+
+- 扩 I9 矩阵：断言 fast 档 headline ≤ 截止。
+- 构造触发升级的弱信号（复用分析文档 §8.3 的合成方法），
+  断言**级联最坏 case** end-to-end ≤ 2.5 s，并断言**解出条数 ≥ 始终走 deep**（零回退）。
+
+### 回归
+
+- `tests/ft8/` 现有 **419** 用例全绿；
+- `improved` / `standard` 两条既有路径行为不变（同输入同结果）。
+
+## 12. 决策记录
+
+- **D-1 分层混合而非全量替换**：全量替换会永久失去弱信号（实测 −30 档 3/5 → 0/5）
+  与 AP（未测，真实损失更大），与 FT8 的存在理由相反。
+- **D-2 单一库 + 新增 path（方案 A）**：唯一同时满足仓内两条已写死的架构不变量
+  （唯一 ctypes 边界、平台耦合只在边缘）。方案 B（两个 CDLL）与 C（策略进 Fortran）各打破其一。
+- **D-3 自适应级联；通联中无条件升级**：升级时两段**叠加**——
+  不升级 0.15 s，升级最坏 0.15 + 2.22 = **2.37 s**（仍在 2.5 s 内，余量 ~130 ms）。
+  通联时优先保 AP（判据 a），把时间收益让给空闲 / 扫频场景。
+  这是**刻意的**取舍：选它而非"上下文二选一"，是为了不依赖"能否事先判断本槽弱不弱"，
+  代价就是最坏 case 余量很薄，所以 §8 的预算守卫是**必需**而非可选。
+- **D-4 深度路径必须 threads ≥ 3**：threads1 的 3.23 s 在任何级联里都超预算（§3 算术）。
+- **D-5 预算不足宁可不升级**：截止是硬约束；"升级反而迟到"是净损失。
+- **D-6 合并取并集、deep 胜出**：保证解出条数不低于纯 deep 基线（目标 3）。
+- **D-7 fast 的 SNR 不采用**：上游是 TODO 估计，不可信；只有 fast 独有条目才用。
+
+## 13. 风险与开放问题
+
+- **开放问题 O-1**：`S_MIN`（判据 b 的 SNR 阈值）—— 暂定 **-20**，待 ft8_lib CPU 优化 spike
+  的数字与一次真实场次样本回来**校准**（spike 只回答"fast 多快"，真实阈值仍需实网数据）。
+- **开放问题 O-2**：`deep_lower_bound_s` 默认 2.3 s 是**实测 + 余量**的估计；
+  不同 SD 卡 / 负载下会漂移，首期先保守，靠 §10 的升级率观测校准。
+- **风险 R-1**：升级率若长期偏高（比如弱信号是常态），级联的净收益会缩水到"只省了 fast 那 0.15 s"。
+  → 由 §10 观测定量，阈值可调；必要时对 (b) 收紧。
+- **风险 R-2**：ft8_lib 与 WSJT-X 对**同一信号**可能给出**不同文本**（解析歧义），
+  去重键 `(freq, dt, text)` 会把它们当成两条 → 显示重复。
+  → 需在 P2 用一个真实场次样本验证；必要时对 `freq/dt` 加容差。
+- **风险 R-3**：三平台构建（macOS / Windows MinGW / aarch64）都要编过 ft8_lib 的 C；
+  Windows 上需注意 MinGW 运行时 DLL 打包（对齐现有 `binding.py:187-191` 的做法）。
+- **风险 R-4**：`decode_paths` 追加进 `wsjt_abi_info` 会改变 `struct_size`，
+  任何**外部**按旧结构体读写该 info 的消费者会失败——仓库内只有 `binding.py` 一个消费者，已确认。
+
+## 14. 文档同步（Phase 5，随实现逐期完成）
+
+- `docs/ft8-w103d-decode-perf-analysis.md`：回填 spike 数字与 final S_MIN。
+- SDD：`13-*`（性能/架构）加一条决策；`09-architecture-overview.md` 的解码路径描述更新。
+- `docs/PROJECT_MAP.md`、`docs/DOCUMENT_INDEX.md`：登记本文件。
+- `AGENTS.md`：`ft8/` 结构表增补 fast path 与 `CascadingDecoder`。
+- `tests/README.md`：用例/模块计数按实际更新。
+- commit 前 `python3 .agents/skills/sdd-guardian/harness/sdd_context.py check --staged` 必须干净。

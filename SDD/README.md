@@ -47,7 +47,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.82 |
+| SDD Version | V2.83 |
 | Baseline Date | 2026-10-11 |
 | Status | **v1.25.5 built and verified on both platforms** (Windows Setup **54,395,338 bytes**, SHA-256 `1ed3fb8d…`; macOS DMG **62,490,425 bytes**, SHA-256 `58ad7481…`; macOS suite **2070 tests OK / 1 skip**, Windows build gate **2067 OK / 25 platform skips**, `release_check.py` **0 failing**; the frozen Windows entry was walked for this release's own symbols (`spectrumCaps`, `_spectrum_fanout`, `manage.html`, `setup.html` in `server`; `env_store`, `net_wifi`, `cloud_hub` in the PYZ — `grep` cannot see into a compressed PYZ); the frozen macOS server ran in an isolated HOME (https /login **200**, plaintext **000**, `/api/health` **401**, certs and `Recording ready` in the user directory, second instance exits **1** naming the port, bundle untouched, `codesign --verify` still valid); the Windows clean room passed **19/19** and the real `Setup.exe` installed silently into an isolated `/DIR=` where the installed Launcher served `https /login` **200**, rejected plaintext (**000**), answered `/api/health` **401**, left the install directory **167 → 167**, and uninstalled cleanly) —— **这一版把 V2.75 的频谱带宽档位、V2.76 的快捷行当前值与 D-8 配置层一起送到用户**：快捷行显示当前值（ATT/PRE 用完整档位标签）、Settings 可切频谱档位 full/mid/low、`env_store.py` 成为 env 文件的唯一写者、新增只读 `/manage` 页；**W103D 盒子镜像与树莓派镜像本次不发**；**2026-10-11 真机首启（W103D 跑 1.25.5 镜像）：CAT、USB 音频、真 FFT、网页与 CLI 全部跑通，并修掉六处只有真机才暴露的缺陷 —— RX 采集缓冲/静默停摆、首启证书归属、FT4222 udev 规则、HDMI 横幅、构建机残留值、dnsmasq 冲突（见 V2.79）** |
 | Project | MRRC Modern / `mrrc_modern` |
@@ -89,7 +89,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio
 | Radio telemetry (RI) | Implemented | Hi-SWR, recorder, RX/TX, tuner, scan, squelch-open status from `RI0;` |
 | Meter display + AMC | Implemented | `MS`/`AO` commands exposed in state and control path |
 | Memory channels | Implemented | `/api/mem_channels` GET/POST with JSON persistence |
-| Session authentication | Implemented | Shared-password login; `_auth_tokens` + `mrrc_auth` cookie; all WS gated. Token transport is header → cookie → deprecated `?token=` (AD-024); no frontend builds a token URL |
+| Session authentication | Implemented | Shared-password login; `_auth_tokens` + `mrrc_auth` cookie, **persisted** in `data/auth-tokens.json` (0600, 30-day) so a restart keeps sessions; all WS gated. Token transport is header → cookie → deprecated `?token=` (AD-024); no frontend builds a token URL |
 | PTT safety | Implemented | Touch-and-hold, PTT watchdog, dead-man switch, unload beacon, **TX-phase liveness gate** (opt-in via `MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`; catches connections that die without a TCP close — §15.6) |
 | Remote-session telemetry | Implemented | `session_metrics.py` + `GET /api/session_metrics`: listener/operator concurrency (sessions + sockets), lifetime/window peaks, spectrum+audio_rx uplink bytes — counts only, no identifiers (AD-023) |
 | Scope visualization | Implemented | 850-point FFT waterfall, frequency scale, S-meter bar |

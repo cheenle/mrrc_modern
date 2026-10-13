@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2170 tests across 113 test modules (19 skip on Windows, 1 on macOS; totals re-read
+2182 tests across 114 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-12, macOS). The per-module sections below
 itemise 70 of those 113 — the support-chain, Cloud Hub and upgrade-channel modules
 predate the list and are not yet written up, so
@@ -19,7 +19,7 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2170 |
+| Total tests | 2182 |
 | Passed | 2168 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 1 |

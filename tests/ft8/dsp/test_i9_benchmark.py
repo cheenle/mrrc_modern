@@ -10,7 +10,6 @@ configuration must meet the provisional TX decision cutoff.
 
 from __future__ import annotations
 
-import ctypes as c
 import json
 import os
 import platform
@@ -24,7 +23,6 @@ os.environ.setdefault("OMP_STACKSIZE", "10M")
 
 import numpy as np
 import pytest
-from scipy.signal import resample_poly
 
 from ft8.core.models import auto_thread_count
 from ft8.core.supervisor import WorkerSupervisor
@@ -41,14 +39,6 @@ MEASURED_REPS = 3
 # the 15 s slot for decision, PTT/audio lead (I10 placeholder) and margin.
 PROVISIONAL_CUTOFF_SECONDS = 2.5
 REQUEST_TIMEOUT_SECONDS = 120.0
-
-_SIGNALS = [
-    ("CQ K1ABC FN42", 400.0),
-    ("CQ W9XYZ EM57", 900.0),
-    ("CQ JA1AAA PM95", 1500.0),
-    ("CQ DL1BBB JO62", 2100.0),
-    ("CQ VK2CCC QF56", 2700.0),
-]
 
 
 def _config(profile: int, threads: int, cycles: int) -> dict[str, object]:
@@ -78,33 +68,6 @@ def _config(profile: int, threads: int, cycles: int) -> dict[str, object]:
 
 
 @pytest.fixture(scope="session")
-def busy_slot(raw_library: c.CDLL) -> np.ndarray:
-    """Return a deterministic noisy 12 kHz int16 slot with five known CQs."""
-
-    slot = np.zeros(180_000, dtype=np.float32)
-    for message, frequency in _SIGNALS:
-        wave48 = np.zeros(606_720, dtype=np.float32)
-        written = c.c_int32()
-        status = raw_library.wsjt_ft8_encode(
-            message.encode("ascii"),
-            frequency,
-            48_000,
-            wave48.ctypes.data_as(c.POINTER(c.c_float)),
-            wave48.size,
-            c.byref(written),
-            c.create_string_buffer(38),
-        )
-        assert status == 0 and written.value == wave48.size
-        wave12 = resample_poly(wave48, 1, 4).astype(np.float32)
-        slot[6_000 : 6_000 + wave12.size] += wave12
-
-    rng = np.random.default_rng(20_260_801)
-    slot *= 4_800.0  # five signals share the former single-signal headroom
-    slot += rng.normal(0.0, 2_000.0, slot.size).astype(np.float32)
-    return np.clip(np.rint(slot), -32768, 32767).astype(np.int16)
-
-
-@pytest.fixture(scope="session")
 def benchmark_worker(
     raw_library_path: Path,
 ) -> Iterator[WorkerSupervisor]:
@@ -129,6 +92,7 @@ def test_auto_thread_policy_clamps_to_supported_bounds() -> None:
 def test_i9_latency_matrix(
     benchmark_worker: WorkerSupervisor,
     busy_slot: np.ndarray,
+    signals: list[tuple[str, float]],
     tmp_path: Path,
 ) -> None:
     shm = SharedMemory(create=True, size=360_000)
@@ -185,7 +149,7 @@ def test_i9_latency_matrix(
                     "wall_seconds": samples_wall,
                     "native_seconds": samples_native,
                     "known_decodes": sorted(
-                        text for text in (s[0] for s in _SIGNALS) if text in decoded_texts
+                        text for text in (s[0] for s in signals) if text in decoded_texts
                     ),
                 }
             )
@@ -224,7 +188,7 @@ def test_i9_latency_matrix(
             f"| {run['profile']} | {run['threads']} | {run['cycles']} "
             f"| {min(wall):.3f}/{statistics.fmean(wall):.3f}/{max(wall):.3f} "
             f"| {statistics.fmean(run['native_seconds']):.3f} "  # type: ignore[arg-type]
-            f"| {len(run['known_decodes'])}/{len(_SIGNALS)} |"
+            f"| {len(run['known_decodes'])}/{len(signals)} |"
         )
 
     for run in runs:

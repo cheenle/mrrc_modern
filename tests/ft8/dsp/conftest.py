@@ -16,6 +16,18 @@ from scipy.signal import resample_poly
 ROOT = Path(__file__).parents[3]
 SUFFIX = ".dll" if os.name == "nt" else (".dylib" if sys.platform == "darwin" else ".so")
 FORTRAN_COMPILER = "gfortran-mp-13" if sys.platform == "darwin" else "gfortran"
+
+# Shared busy-slot signal table (moved here from test_i9_benchmark.py so both the
+# I9 benchmark and the fast-path decode tests build the same fixture).
+_SIGNALS = [
+    ("CQ K1ABC FN42", 400.0),
+    ("CQ W9XYZ EM57", 900.0),
+    ("CQ JA1AAA PM95", 1500.0),
+    ("CQ DL1BBB JO62", 2100.0),
+    ("CQ VK2CCC QF56", 2700.0),
+]
+
+
 @pytest.fixture(autouse=True)
 def _windows_dsp_dll_search_path() -> None:
     """On Windows, let ctypes find the MinGW runtime DLLs next to gfortran.
@@ -115,3 +127,36 @@ def cq_slot(raw_library: c.CDLL) -> np.ndarray:
     slot = np.zeros(180_000, dtype=np.float32)
     slot[6_000 : 6_000 + wave12.size] = wave12
     return np.clip(np.rint(slot * 24_000.0), -32768, 32767).astype(np.int16)
+
+
+@pytest.fixture(scope="session")
+def signals() -> list[tuple[str, float]]:
+    """The known CQ messages/frequencies the busy slot is built from."""
+    return _SIGNALS
+
+
+@pytest.fixture(scope="session")
+def busy_slot(raw_library: c.CDLL) -> np.ndarray:
+    """Return a deterministic noisy 12 kHz int16 slot with five known CQs."""
+
+    slot = np.zeros(180_000, dtype=np.float32)
+    for message, frequency in _SIGNALS:
+        wave48 = np.zeros(606_720, dtype=np.float32)
+        written = c.c_int32()
+        status = raw_library.wsjt_ft8_encode(
+            message.encode("ascii"),
+            frequency,
+            48_000,
+            wave48.ctypes.data_as(c.POINTER(c.c_float)),
+            wave48.size,
+            c.byref(written),
+            c.create_string_buffer(38),
+        )
+        assert status == 0 and written.value == wave48.size
+        wave12 = resample_poly(wave48, 1, 4).astype(np.float32)
+        slot[6_000 : 6_000 + wave12.size] += wave12
+
+    rng = np.random.default_rng(20_260_801)
+    slot *= 4_800.0  # five signals share the former single-signal headroom
+    slot += rng.normal(0.0, 2_000.0, slot.size).astype(np.float32)
+    return np.clip(np.rint(slot), -32768, 32767).astype(np.int16)

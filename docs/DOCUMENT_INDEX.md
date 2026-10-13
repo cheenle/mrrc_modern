@@ -1,6 +1,6 @@
 # MRRC Web Control — 完整文档索引
 
-**最后更新**: 2026-10-13（登记 FT8 快路径 + 自适应级联的 spec 与 plan；前者含 2026-10-13 A53 spike 结论）  
+**最后更新**: 2026-10-13（登记 FT8 四平台打包 spec；此前同日登记快路径 + 自适应级联的 spec 与 plan 及其 A53 spike 结论）  
 **版本权威**: `CHANGELOG.md` 首条 —— 本索引**不再复述版本号**：
 复述过的那一行曾停在 v1.16.0，跨了十来个发布而无人察觉。  
 **入口**: 想知道「改了这个要同步哪些文档」→ 直接看 [PROJECT_MAP.md](PROJECT_MAP.md)
@@ -99,6 +99,7 @@
 | [SDD/](SDD/) | 软件设计说明（15 章） | 架构师/开发 |
 | [docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md](docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md) | **FT8 快路径 + 自适应级联**设计 spec（默认走 `ft8_lib` 快路径、按需补跑深路径并取并集；含 2026-10-13 A53 spike 回填） | 架构师 |
 | [docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md](docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md) | 上述 spec 的实现计划（15 个 Task） | 开发者 |
+| [docs/superpowers/specs/2026-10-13-ft8-packaging-design.md](docs/superpowers/specs/2026-10-13-ft8-packaging-design.md) | **FT8 四平台打包**设计 spec（镜像内编译 DSP 并随 `mrrc-update` 重编、Boost 头文件 vendor 化、Windows MinGW 与 macOS dylib 依赖闭包进包） | 架构师/打包 |
 
 ---
 

@@ -107,6 +107,23 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
+<strong>FT8: a second way to use the same radio</strong> —
+              the main menu switches the radio to the FT8 frequency and DATA-U, and the engine
+              decodes from the radio's own sound card while transmitting through the CQ queue —
+              so FT8 and SSB share one TX gate and can never key the radio together. Click
+              &laquo;&larr;&raquo; and every SSB field (frequency, mode, filter, power, AGC, ATT,
+              PREAMP) comes back. Decoding runs a fast C path by default and re-runs the same slot
+              through the full WSJT-X path only when it matters (a contact in progress, a
+              suspiciously short first pass, or the operator asking for it).
+            </li>
+            <li>
+<strong>And every download carries it: the box, the Pi image, the Mac and the Windows installer</strong> —
+              the native DSP library is built as part of each artifact — during the image build on
+              the box and the Pi, at packaging time for the desktop installers, always with its
+              FFTW/gfortran runtime dependencies bundled — so a fresh flash or a fresh install can
+              work FT8 immediately instead of asking you to install a compiler first.
+            </li>
+            <li>
 <strong>Someone can fix it without driving over: press one button, read out a one-time password</strong> —
               the app can open a temporary helper account on request (Settings &rarr; Support) and shows the
               username and password to read out over the phone; the session rides the Cloud Hub tunnel the
@@ -400,23 +417,16 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <code style="font-size: 0.76rem">SHA-256: 5fc8b192…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.26.0 is zero-config on first run: it auto-generates a web
-            password, auto-detects the radio (FT-710 ASCII CAT / Icom CI-V
-            0x19) and its serial port (COM), and the login page shows the
-            auto-generated password. The web Connection Settings dialog
-            changes the radio model, serial port, RX+TX audio devices, and
-            password with save-and-restart. CAT, audio and scope behaviour is
-            unchanged. This release fixes a <strong>remote-session PTT safety</strong> defect: the
-            liveness gate Cloud Hub enables releases a transmitting session that stops proving it is
-            alive — but it could also release a <em>fresh, healthy</em> press, because the key-time
-            heartbeat cannot be read until the key-up handler returns and a watchdog tick landing in
-            those 20–70 ms saw a session that was both the owner and silent (seven times in one field
-            log). Keying now refreshes the clock, so only a session that really stops beating is
-            released; a session that never declared the capability is never gated. Previous release
-            (v1.25.2) fixed a <strong>Windows-only tunnel leak</strong>, where clearing a leftover
-            <code>frpc</code> called <code>wmic</code> — which Windows 11 no longer ships — and said
-            nothing when it failed. Physical USB, RF, power-cycle, and audio-quality acceptance still requires a connected
-            radio.
+            v1.27.0 adds the <strong>FT8 work mode</strong>: the main menu switches the radio to
+            its FT8 frequency and DATA-U, the engine decodes through the sound card and keys
+            through the same TX gate as SSB — structurally impossible to key both at once — and
+            &laquo;&larr;&raquo; restores every SSB field on the way back. The native DSP library
+            ships inside the installer with its runtime dependencies, so nothing has to be
+            compiled on your machine. First run is still zero-config: the web password is
+            generated and shown on the login page, and the radio (FT-710 ASCII CAT / Icom CI-V)
+            and its COM port are detected automatically. The web Connection Settings dialog still
+            changes the radio model, serial port, RX+TX audio devices and password with
+            save-and-restart.
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
@@ -441,11 +451,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.27.0-arm64.dmg — v1.26.0 Stable </strong>
+<strong> MRRC-Modern-v1.27.0-arm64.dmg — v1.27.0 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            60.9 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 63,876,177 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 6f504a78…</code>
+            81.0 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 84,882,735 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 9d5ec531…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a

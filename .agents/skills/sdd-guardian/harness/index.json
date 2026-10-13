@@ -625,6 +625,44 @@
         "nfr:NFR-051",
         "sec:12.2"
       ]
+    },
+    {
+      "id": "ft8-work-mode",
+      "globs": [
+        "ft8/**",
+        "static/ft8.html",
+        "static/ft8/**",
+        "tests/ft8/**",
+        "tests/test_ft8_packaging.py",
+        "tools/ft8/**",
+        "docs/ft8-*.md",
+        "docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md",
+        "docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md",
+        "docs/superpowers/specs/2026-10-13-ft8-packaging-design.md"
+      ],
+      "keywords": [
+        "ft8",
+        "wsjt",
+        "ft8_lib",
+        "decode",
+        "cascade",
+        "dsp",
+        "snr",
+        "waterfall",
+        "qso",
+        "adi",
+        "呼号",
+        "网格",
+        "解码"
+      ],
+      "refs": [
+        "ch:9",
+        "ch:11",
+        "ch:15",
+        "ad:AD-001",
+        "nfr:NFR-040",
+        "nfr:NFR-041"
+      ]
     }
   ]
 }

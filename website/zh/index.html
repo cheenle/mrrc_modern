@@ -98,6 +98,20 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
 <li>
+<strong>FT8：同一台电台的第二种用法</strong>——
+              主菜单一键切到 FT8 频点与 DATA-U；引擎用电台自己的声卡解码、走 CQ 那条发射队列，
+              因此 FT8 与 SSB 共用同一条 TX 门控，**结构上不可能同时键控**。点「←」回来，
+              SSB 的频率/模式/滤波/功率/AGC/ATT/PREAMP 逐字段恢复。解码默认走 C 快路径，
+              只在真正需要时（通联中、首趟结果可疑偏少、或操作者主动要求）对同一时隙补跑
+              完整 WSJT-X 深路径。
+            </li>
+            <li>
+<strong>而且每个下载都带着它：盒子、树莓派镜像、macOS 与 Windows 安装包</strong>——
+              原生 DSP 库随产物一起构建（盒子上与树莓派在镜像构建期编译，桌面安装包在打包时编译），
+              运行期依赖（FFTW / gfortran）一起装进包——刷完机或装完包就能直接玩 FT8，
+              不必先自己装编译器。
+            </li>
+            <li>
 <strong>不用上门也能修：按一下，念一串口令</strong>——
               App 里按需开一个临时协助账号（设置 → 支持），屏幕上显示用户名与一次性口令，念给电话那头的
               支持者即可；会话走 App 本来就在用的 Cloud Hub 隧道。门户能看到它连上来、也能强制结束；而口令
@@ -378,17 +392,12 @@
 <code style="font-size: 0.76rem">SHA-256: 5fc8b192…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.26.0 首次运行零配置：自动生成网页密码，自动识别电台
-            （FT-710 ASCII CAT / Icom CI-V 0x19）与串口（COM），登录页
-            直接显示自动生成的密码。网页“连接设置”对话框可修改电台型号、
-            串口、RX+TX 音频设备与密码，支持保存并重启。CAT、音频与频谱行为不变。
-            本版修的是<strong>远端会话的 PTT 存活闸门</strong>：它本应只释放不再证明自己活着的发射会话，
-            但按键时发的心跳要等按键处理返回后才能读到，落在那 20–70 ms 窗口里的检查会把
-            <strong>刚按下的健康一键</strong>当作静默会话放开（一份现场日志里 7 次）。现在按键
-            本身会刷新存活时钟，只有真正停止发送心跳的会话才被释放；从未声明该能力的会话永不被门控。
-            上一版（v1.25.2）修的是 <strong>Windows 侧的隧道进程泄漏</strong>：回收旧 <code>frpc</code>
-            的代码用的是 <code>wmic</code>，而 Windows 11 已不再自带它、失败时还什么都不说。
-            真实 USB、射频、电源循环和音频质量仍需连接电台验收。
+            v1.27.0 带来 <strong>FT8 工作模式</strong>：主菜单一键切到 FT8 频点与 DATA-U，
+            引擎用声卡解码、与 SSB 共用同一条 TX 门控（结构上不可能同时键控），点「←」逐字段
+            恢复 SSB 台况。原生 DSP 库与它的运行期依赖一起装进安装包，你机器上不需要编译任何东西。
+            首次运行仍然是零配置：自动生成网页密码并显示在登录页，自动识别电台
+            （FT-710 ASCII CAT / Icom CI-V）与串口。网页「连接设置」依旧可以改电台型号、
+            串口、RX+TX 声卡与口令，保存后自动重启。
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
@@ -413,11 +422,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.27.0-arm64.dmg — v1.26.0 稳定版 </strong>
+<strong> MRRC-Modern-v1.27.0-arm64.dmg — v1.27.0 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            60.9 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 63,876,177 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 6f504a78…</code>
+            81.0 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 84,882,735 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 9d5ec531…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台

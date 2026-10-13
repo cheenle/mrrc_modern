@@ -82,14 +82,16 @@ class ExclusionListTests(unittest.TestCase):
                 self.assertIn(canary, entries)
 
     def test_the_exclusion_list_is_byte_identical_to_what_shipped(self):
-        """The list as of 2026-10-11, frozen: the refactor moved it, and the one
-        edit since then (a root-anchored ``/fleet/``) is written down here."""
+        """The list as of 2026-10-11, frozen: the refactor moved it, and every
+        edit since then is written down here — a root-anchored ``/fleet/``, and
+        ``/draft/`` when the Rust draft workstream landed on main (2026-10-13)."""
         expected = [
             ".git/", "venv/", ".venv/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
             ".agents/", "docs/", "SDD/", "packaging/", "macos/", "windows/",
             "__pycache__/", "*.pyc", ".DS_Store", "atr1000_tuner.json",
             "/fleet/",
+            "/draft/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",
             "/.worktrees/", "/.superpowers/", "/.agnes/", "/.claude/",
             "/.pytest_cache/", "/.ruff_cache/", "/dev_tools/", "/tools/",

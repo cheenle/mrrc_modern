@@ -55,6 +55,12 @@ static void copy_text(const char *src, char *dst, size_t dst_len)
     dst[i] = '\0';
 }
 
+/* `config->flags` 在本入口里**从不读取**：AP（WSJT_FLAG_AP）、
+ * LOW_THRESHOLD、WIDE_DX、HIDE_DUPES 在这里全是空操作，因为 ft8_lib 既没有
+ * AP 上下文也没有重复抑制 —— 那些正是快路径拿掉换时间的东西。调用方选择
+ * 走哪条路径，靠的是 `decode_paths` 位图（`wsjt_abi_info` 报出来的那个），
+ * 不是 flags。别照抄 upstream 的 `if (flags & ...)`：这个入口里没有对应实现。
+ */
 int32_t wsjt_ft8_decode_fast(const int16_t *samples,
                              const struct wsjt_decode_config *config,
                              int64_t slot_id,

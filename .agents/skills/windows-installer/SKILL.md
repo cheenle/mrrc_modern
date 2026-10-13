@@ -256,8 +256,11 @@ ssh cheenle@www.vlsc.net 'bash -s' <<'EOS'
 D=/var/www/vlsc.net/mrrc_modern/downloads
 sudo -n mv /var/tmp/win.new "$D/MRRC-Modern-v<ver>-Windows-x64-Setup.exe"
 sudo -n mv /var/tmp/mac.new "$D/MRRC-Modern-v<ver>-arm64.dmg"
-sudo -n cp "$D/MRRC-Modern-v<ver>-Windows-x64-Setup.exe" "$D/MRRC-Modern-Setup.exe"
-sudo -n cp "$D/MRRC-Modern-v<ver>-arm64.dmg"             "$D/MRRC-Modern-arm64.dmg"
+# ln -sfn, NOT cp: the generic names are symlinks, and cp FOLLOWS a symlink —
+# `cp new.exe MRRC-Modern-Setup.exe` overwrites the *previous version's archive*
+# instead of moving the link (measured 2026-10-13, three archives clobbered).
+sudo -n ln -sfn "MRRC-Modern-v<ver>-Windows-x64-Setup.exe" "$D/MRRC-Modern-Setup.exe"
+sudo -n ln -sfn "MRRC-Modern-v<ver>-arm64.dmg"             "$D/MRRC-Modern-arm64.dmg"
 sudo -n mv /var/tmp/latest.new "$D/latest.json"
 sudo -n chown www-data:www-data "$D"/MRRC-Modern*; sudo -n chmod 644 "$D"/MRRC-Modern* "$D/latest.json"
 EOS

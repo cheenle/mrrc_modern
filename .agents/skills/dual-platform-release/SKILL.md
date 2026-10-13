@@ -59,6 +59,17 @@ Note: **`/var/tmp`, not `/tmp`** — the latter is a 958 MB tmpfs on `www.vlsc.n
 
 **Update BOTH generic mirrors, not just the Windows one.** `MRRC-Modern-Setup.exe` is linked from six places; `MRRC-Modern-arm64.dmg` is the macOS counterpart and had been **two releases stale** when v1.25.0 measured it (still the v1.24.6 build). The versioned files stay as archives; the two generic names are replaced in place.
 
+**They are SYMLINKS, and `cp` follows a symlink.** On <www.vlsc.net> `MRRC-Modern-Setup.exe` → `MRRC-Modern-v<ver>-Windows-x64-Setup.exe` (same for the dmg and the Pi image). `cp new.exe MRRC-Modern-Setup.exe` therefore does not update the link — it **overwrites the target archive** with the new release's bytes, leaving the previous version sitting under its own filename (measured 2026-10-13: three archives silently replaced). Point the link instead, and re-upload any archive you clobbered from `dist/`:
+
+```bash
+ssh www.vlsc.net 'D=/var/www/vlsc.net/mrrc_modern/downloads; \
+  sudo -n ln -sfn MRRC-Modern-v<ver>-Windows-x64-Setup.exe $D/MRRC-Modern-Setup.exe; \
+  sudo -n ln -sfn MRRC-Modern-v<ver>-arm64.dmg             $D/MRRC-Modern-arm64.dmg; \
+  sudo -n ln -sfn MRRC-Modern-v<ver>-rpi64.img.xz         $D/MRRC-Modern-rpi64.img.xz'
+```
+
+Verify with `stat -Lc '%s %n'` (follows the link) — a bare `ls -la` prints the *link's* length, which is how a 29-byte "download" can look like a file. Check the resolved archive's size and SHA after every repoint.
+
 **6. Deploy HTML**: `cd website && echo y | ./deploy.sh` (interactive `read -p`; backup + `nginx -t` built in).
 
 **7. Verify (all three URLs)**
@@ -200,7 +211,7 @@ governed by rules instead of trust.
 | 3b | Code is final **before** any number is written | a fix landing after a build invalidates it: delete the artifact from `dist/` (so `artifact_facts` skips again) and rebuild **both** platforms — server code is shared. v1.24.6 discarded three builds this way |
 | 4 | Docs + website sync + `build_sdd.py` | `release_check.py` → **0 failing** (versions, cards, stale links) + `python3 -m unittest tests.test_release_artifacts tests.test_sdd_docs_consistency` green; bundle bytecode walked + launcher smoke-tested |
 | 4b | Hand-written pages + harness | `website/sdd.html`/`zh/sdd.html` badge + a card for this release + AD index extended; guardian `index.json` topic updated when new modules landed |
-| 5 | Installers on <www.vlsc.net> | upload to **`/var/tmp`** (not the tmpfs `/tmp`), hash **server-side before moving**, then `mv` into `downloads/`; versioned names + **both** generic mirrors (`MRRC-Modern-Setup.exe` is linked from six places; `MRRC-Modern-arm64.dmg` was found five releases stale); `chown www-data:www-data` + `chmod 644`; **`latest.json` goes last** so the manifest never points at a file that 404s |
+| 5 | Installers on <www.vlsc.net> | upload to **`/var/tmp`** (not the tmpfs `/tmp`), hash **server-side before moving**, then `mv` into `downloads/`; versioned names + the three generic mirrors **as symlinks** (`ln -sfn`; `cp` follows the link and clobbers the previous archive — gotcha in step 5); `chown www-data:www-data` + `chmod 644`; **`latest.json` goes last** so the manifest never points at a file that 404s |
 | 6 | HTML deploy | `cd website && echo y \| ./deploy.sh` — **once** (gotcha 15); it backs up, runs `nginx -t` and reloads. "Deployment Complete!" is not evidence: curl every page afterwards |
 | 7 | URL + hash verification | `release_check.py --online --deep` → **0 failing**, plus a **full download** of each artifact and a local `shasum -a 256` equal to the built file — `content-length` alone does not prove the bytes are intact |
 | 8 | Commit + tag + explicit push | `git ls-remote` shows tag; `check --staged` exit 0 |

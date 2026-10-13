@@ -256,8 +256,13 @@ export function createSettingsDrawer() {
 		}
 	}
 
-	function renderFt8() {
+	async function renderFt8() {
 		const s = loadSettings();
+		// Cascade escalation policy is authoritative server-side (settings.json,
+		// PUT /station) — read it back so a reload shows what was saved.
+		const station = await api.station();
+		const policy = (key, fallback) =>
+			station && station[key] != null ? station[key] : fallback;
 		content.innerHTML = `
       <h3>FT8</h3>
       <label class="setting-row">
@@ -296,7 +301,30 @@ export function createSettingsDrawer() {
         <input type="checkbox" disabled>
       </label>
       <div class="drawer-hint dim">These display preferences are stored in this
-        browser and apply immediately to the Band Activity list.</div>`;
+        browser and apply immediately to the Band Activity list.</div>
+      <h3>Cascade (deep re-decode)</h3>
+      <label class="setting-row toggle">
+        <span>Escalate during a QSO (AP context)</span>
+        <input type="checkbox" data-policy="escalate_on_ap_context" ${policy("escalate_on_ap_context", true) ? "checked" : ""}>
+      </label>
+      <label class="setting-row toggle">
+        <span>Escalate on a weak slot</span>
+        <input type="checkbox" data-policy="escalate_on_weak" ${policy("escalate_on_weak", true) ? "checked" : ""}>
+      </label>
+      <label class="setting-row">
+        <span>Min decodes before trusting fast</span>
+        <input type="number" data-policy="min_decodes" min="0" max="256" value="${policy("min_decodes", 1)}">
+      </label>
+      <label class="setting-row">
+        <span>Min peak SNR (dB, ≤ 0)</span>
+        <input type="number" data-policy="min_peak_snr" min="-120" max="0" value="${policy("min_peak_snr", -26)}">
+      </label>
+      <label class="setting-row toggle">
+        <span>Allow «deep decode this slot» <em>一次性</em></span>
+        <input type="checkbox" data-policy="escalate_on_request" ${policy("escalate_on_request", false) ? "checked" : ""}>
+      </label>
+      <div class="drawer-hint dim">升级策略在下一个时隙生效。最后一项打开后，
+        cockpit 上的「Deep slot」按钮才会对当前时隙多跑一次深度解码。</div>`;
 		for (const input of content.querySelectorAll("[data-setting]")) {
 			input.addEventListener("change", () => {
 				const value = input.type === "checkbox" ? input.checked : input.value;
@@ -315,6 +343,24 @@ export function createSettingsDrawer() {
 				}
 				// (auto_call_new_dxcc / auto_band_hunt controls are disabled in
 				// this build — their backends are not ported yet.)
+			});
+		}
+		// Cascade policy lives in settings.json via PUT /station (not the
+		// repository /settings), so it saves with putStation and takes effect on
+		// the next slot through runtime.set_cascade_policy.
+		for (const input of content.querySelectorAll("[data-policy]")) {
+			input.addEventListener("change", async () => {
+				const key = input.dataset.policy;
+				const value =
+					input.type === "checkbox" ? input.checked : Number(input.value);
+				if (input.type === "number" && !Number.isFinite(value)) return;
+				const result = await api.putStation({ [key]: value });
+				if (!result.ok) {
+					showToast(
+						`Cascade policy: ${result.reason || result.detail || result.status}`,
+					);
+					renderFt8(); // snap the field back to the stored value
+				}
 			});
 		}
 	}

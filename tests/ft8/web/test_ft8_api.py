@@ -6,6 +6,7 @@ import tempfile
 
 from fastapi.testclient import TestClient
 
+from ft8.engine.cascade import DEFAULT_MIN_PEAK_SNR
 from ft8.engine.repository import Repository
 from ft8.engine.safety import SafetyController
 from ft8.engine.sequencer import Sequencer
@@ -28,6 +29,13 @@ class FakePlayer:
 
     def cancel(self):  # pragma: no cover - safety stop path
         return None
+
+
+class _Runtime:
+    """Minimal Ft8Runtime stand-in for the one-shot deep-slot endpoint."""
+
+    def __init__(self) -> None:
+        self._deep_decode_requested = False
 
 
 def _client(*, role: str = "operator", authenticated: bool = True) -> TestClient:
@@ -183,3 +191,41 @@ def test_station_always_on_round_trip():
 
 def test_station_always_on_must_be_boolean():
     assert _client().put("/api/ft8/station", json={"engine_always_on": "yes"}).status_code == 422
+
+
+def test_station_cascade_policy_round_trip():
+    client = _client()
+    assert client.get("/api/ft8/station").json()["min_peak_snr"] == DEFAULT_MIN_PEAK_SNR
+
+    r = client.put("/api/ft8/station", json={"min_peak_snr": -18,
+                                             "escalate_on_weak": False})
+    assert r.status_code == 200
+    # PUT 的返回体也必须带上 —— 少了它前端拿返回值刷新界面就会回弹
+    assert r.json()["min_peak_snr"] == -18
+
+    after = client.get("/api/ft8/station").json()
+    assert after["min_peak_snr"] == -18
+    assert after["escalate_on_weak"] is False
+
+
+def test_station_rejects_out_of_range_cascade_policy():
+    assert _client().put("/api/ft8/station",
+                         json={"min_peak_snr": 5}).status_code == 422
+    assert _client().put("/api/ft8/station",
+                         json={"escalate_on_weak": "yes"}).status_code == 422
+
+
+def test_deep_slot_sets_the_one_shot_flag():
+    """「深度解码本槽」是一次性事件：端点置位，运行时的 _on_batch 负责清位。"""
+
+    client = _client()
+    runtime = _Runtime()
+    client.app.state.ft8_state.runtime = runtime
+    r = client.post("/api/ft8/engine/deep-slot")
+    assert r.status_code == 200
+    assert runtime._deep_decode_requested is True
+
+
+def test_deep_slot_requires_control_role():
+    assert _client(role="listener").post(
+        "/api/ft8/engine/deep-slot").status_code == 403

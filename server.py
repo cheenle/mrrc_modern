@@ -3098,7 +3098,7 @@ async def lifespan(app: FastAPI):
         from ft8.platform.cat import PlatformRig
         from ft8.platform.settings import Ft8SettingsStore
         from ft8.platform.tx_sink import PlatformTxPlayer
-        from ft8.runtime import Ft8Runtime
+        from ft8.runtime import Ft8Runtime, _policy_from_settings
 
         _ft8_settings_store = Ft8SettingsStore(
             _writable_runtime_dir() / "ft8" / "settings.json"
@@ -3184,6 +3184,13 @@ async def lifespan(app: FastAPI):
             dev_rate=RX_RATE,          # the codec-domain rate of read_rx_chunk()
             on_decode=_ft8_on_decode,
             on_waterfall=_ft8_queue_frame,
+            # The persisted escalation policy, read fresh at every engine start
+            # (Task 14).  Injecting the store here rather than letting the runtime
+            # build its own keeps ``_ft8_settings_store`` the single owner — a
+            # second Ft8SettingsStore would be a silent second source of truth.
+            cascade_policy_provider=lambda: _policy_from_settings(
+                _ft8_settings_store.load()
+            ),
         )
         def _ft8_always_on() -> bool:
             """The engine-always-on switch (settings.json; defaults to on)."""

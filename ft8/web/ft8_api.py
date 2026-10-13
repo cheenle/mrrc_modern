@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 
 from ..engine.adif import generate_adif
+from ..engine.cascade import DEFAULT_MIN_DECODES, DEFAULT_MIN_PEAK_SNR
 from ..engine.msgparse import ParsedMessage
 from ..engine.orchestrator import FT8_PERIOD_SECONDS
 from ..engine.repository import Repository, VoidWindowExpired
@@ -367,6 +368,13 @@ def create_router(state: AppState) -> APIRouter:
             "rig_mode": getattr(settings, "rig_mode", "DATA-U"),
             "tx_audio_frequency": getattr(settings, "tx_audio_frequency", 1500),
             "engine_always_on": bool(getattr(settings, "engine_always_on", True)),
+            # Cascade escalation policy (Task 14).  Missing here and the values
+            # persist but every page reload shows the defaults again.
+            "escalate_on_ap_context": bool(getattr(settings, "escalate_on_ap_context", True)),
+            "escalate_on_weak": bool(getattr(settings, "escalate_on_weak", True)),
+            "escalate_on_request": bool(getattr(settings, "escalate_on_request", False)),
+            "min_decodes": getattr(settings, "min_decodes", DEFAULT_MIN_DECODES),
+            "min_peak_snr": getattr(settings, "min_peak_snr", DEFAULT_MIN_PEAK_SNR),
         }
 
     @router.put("/station")
@@ -381,14 +389,25 @@ def create_router(state: AppState) -> APIRouter:
         if store is None:
             return _reject(409, "settings_unavailable")
         allowed = {"my_call", "my_grid", "rig_mode", "tx_audio_frequency",
-                   "engine_always_on"}
+                   "engine_always_on", "escalate_on_ap_context",
+                   "escalate_on_weak", "escalate_on_request",
+                   "min_decodes", "min_peak_snr"}
         unknown = sorted(set(body) - allowed)
         if unknown:
             return _reject(422, "invalid_setting", detail=",".join(unknown))
         current = store.load()
         changes = {key: body[key] for key in allowed if key in body}
-        if "engine_always_on" in changes and not isinstance(changes["engine_always_on"], bool):
-            return _reject(422, "invalid_setting", detail="engine_always_on")
+        for boolean in ("engine_always_on", "escalate_on_ap_context",
+                        "escalate_on_weak", "escalate_on_request"):
+            if boolean in changes and not isinstance(changes[boolean], bool):
+                return _reject(422, "invalid_setting", detail=boolean)
+        for number in ("min_decodes", "min_peak_snr"):
+            # Pin the type: ``isinstance(True, int)`` is True, so a checkbox's
+            # ``true`` must not slip through as 1 — and min_peak_snr=1 is a
+            # *positive* threshold that escalates every slot.
+            if number in changes and (isinstance(changes[number], bool)
+                                      or not isinstance(changes[number], int)):
+                return _reject(422, "invalid_setting", detail=number)
         if "tx_audio_frequency" in changes:
             try:
                 changes["tx_audio_frequency"] = int(changes["tx_audio_frequency"])
@@ -405,6 +424,10 @@ def create_router(state: AppState) -> APIRouter:
         if runtime is not None and getattr(runtime, "sequencer", None) is not None:
             runtime.sequencer.my_call = updated.my_call or ""
             runtime.sequencer.my_grid = updated.my_grid or ""
+        # Push the escalation policy to the running cascade so a threshold change
+        # applies to the very next slot instead of at the next engine start.
+        if runtime is not None and hasattr(runtime, "set_cascade_policy"):
+            runtime.set_cascade_policy(updated)
         # The always-on switch applies immediately too, so toggling it is
         # observable: start the monitor now, or stop it when idle in SSB.
         if runtime is not None and "engine_always_on" in changes:
@@ -418,11 +441,18 @@ def create_router(state: AppState) -> APIRouter:
             except Exception:
                 log.exception("applying engine_always_on failed")
         state.bump()
+        # The response must echo every persisted key the GET returns, or a client
+        # that refreshes from the PUT body snaps back to the old values.
         return _ok({
             "my_call": updated.my_call, "my_grid": updated.my_grid,
             "rig_mode": updated.rig_mode,
             "tx_audio_frequency": updated.tx_audio_frequency,
             "engine_always_on": updated.engine_always_on,
+            "escalate_on_ap_context": updated.escalate_on_ap_context,
+            "escalate_on_weak": updated.escalate_on_weak,
+            "escalate_on_request": updated.escalate_on_request,
+            "min_decodes": updated.min_decodes,
+            "min_peak_snr": updated.min_peak_snr,
         })
 
     @router.post("/mode")
@@ -451,6 +481,31 @@ def create_router(state: AppState) -> APIRouter:
             return _reject(500, "mode_switch_failed", detail=str(exc))
         state.bump()
         return _ok({"mode": str(controller.mode)})
+
+    @router.post("/engine/deep-slot")
+    async def engine_deep_slot(
+        request: Request, session: Session = Depends(require_lease)
+    ) -> JSONResponse:
+        """Arm a one-shot deep re-decode for the current slot (Task 14).
+
+        Sets the runtime flag the cascade reads through ``requested``; the flag
+        is cleared again in ``Ft8Runtime._on_batch`` once the slot's batch is
+        back, so one press costs exactly one extra deep decode instead of a
+        permanent slowdown.  It is a mutation — a press spends ~2.2 s of CPU —
+        so it carries the same control-role guard as ``station_update``.
+        """
+
+        await validate_mutation(request)
+        runtime = getattr(state, "runtime", None)
+        if runtime is None or not hasattr(runtime, "_deep_decode_requested"):
+            return _reject(409, "engine_unavailable")
+        runtime._deep_decode_requested = True
+        # Report the persistent gate so a client can explain a press that will do
+        # nothing: escalate_on_request defaults off (see Ft8Settings).
+        store = getattr(state, "settings_store", None)
+        settings = store.load() if store is not None else None
+        armed = bool(getattr(settings, "escalate_on_request", False))
+        return _ok({"deep_slot_requested": True, "escalate_on_request": armed})
 
     @router.post("/radio/band")
     async def radio_band(request: Request, session: Session = Depends(require_lease)) -> JSONResponse:

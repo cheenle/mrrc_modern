@@ -13,6 +13,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from ft8.engine.cascade import DEFAULT_MIN_DECODES, DEFAULT_MIN_PEAK_SNR
+
 log = logging.getLogger("mrrc.ft8.settings")
 
 RIG_MODES = ("DATA-U", "USB")
@@ -32,6 +34,14 @@ class Ft8Settings:
     station box can keep decoding across restarts.  Turn it off to save the
     ~5% CPU when the station is used for SSB only.
     """
+    # 级联升级策略（CascadePolicy 的可持久化子集，见 ft8/engine/cascade.py）。
+    # 默认值**引用 CascadePolicy 的默认常量**而不是各抄一份数字：抄成两份，
+    # 日后改一处就漂（test_new_policy_defaults_match_cascade_policy 盯着这一点）。
+    escalate_on_ap_context: bool = True
+    escalate_on_weak: bool = True
+    min_decodes: int = DEFAULT_MIN_DECODES
+    min_peak_snr: int = DEFAULT_MIN_PEAK_SNR
+    escalate_on_request: bool = False   # 允许「深度解码本槽」一次性按钮
     settings_revision: int = 0
 
     def validate(self) -> None:
@@ -41,6 +51,18 @@ class Ft8Settings:
             raise ValueError("tx_audio_frequency must be 200..2800 Hz")
         if not isinstance(self.engine_always_on, bool):
             raise ValueError("engine_always_on must be a boolean")
+        if not isinstance(self.escalate_on_ap_context, bool):
+            raise ValueError("escalate_on_ap_context must be a boolean")
+        if not isinstance(self.escalate_on_weak, bool):
+            raise ValueError("escalate_on_weak must be a boolean")
+        if not isinstance(self.escalate_on_request, bool):
+            raise ValueError("escalate_on_request must be a boolean")
+        if self.min_decodes < 0:
+            raise ValueError("min_decodes must not be negative")
+        # 上限 0 是刻意的：正数的 min_peak_snr 意味着「任何真实信号都算弱」，
+        # 也就是每个时隙都升级 —— 那不是策略，是 bug。
+        if not -120 <= self.min_peak_snr <= 0:
+            raise ValueError("min_peak_snr must be between -120 and 0")
 
 
 class Ft8SettingsStore:

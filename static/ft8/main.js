@@ -12,12 +12,31 @@ import { createCandidates } from "./candidates.js";
 import { createSafetyBar } from "./safety.js";
 import { createBandSelect } from "./band.js";
 import { createSettingsDrawer, loadSettings } from "./settings.js";
+import { showToast } from "./toast.js";
 
 const cockpit = document.getElementById("cockpit");
 
 async function backToSsb() {
   await api.mode("ssb");
   location.href = "/";
+}
+
+// One-shot "deep decode this slot" (Task 14).  A transient runtime event, not a
+// persisted setting, so it has its own small endpoint rather than PUT /station.
+// api.js is outside this task's file set, so the POST goes out directly: the
+// cookie rides same-origin and a dead session reloads, like api.js does.
+async function requestDeepSlot() {
+  const response = await fetch("/api/ft8/engine/deep-slot", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  if (response.status === 401) {
+    location.reload();
+    return { ok: false };
+  }
+  let payload = {};
+  try { payload = await response.json(); } catch { /* empty body */ }
+  return { status: response.status, ...payload };
 }
 
 async function boot() {
@@ -61,6 +80,29 @@ async function boot() {
     event.preventDefault();
     backToSsb();
   });
+
+  // One-shot "deep decode this slot".  Created here (rather than in ft8.html,
+  // which is outside this task's file set) and only bites when "Allow «deep
+  // decode this slot»" is enabled in the drawer (escalate_on_request).
+  const actions = document.querySelector("#state-bar .actions");
+  if (actions) {
+    const deep = document.createElement("button");
+    deep.id = "btn-deep-slot";
+    deep.className = "cmd";
+    deep.type = "button";
+    deep.textContent = "Deep slot";
+    deep.title = "对当前时隙多跑一次深度解码（一次性，需在设置里开启）";
+    deep.addEventListener("click", async () => {
+      deep.disabled = true;
+      const result = await requestDeepSlot();
+      deep.disabled = false;
+      if (!result.ok) showToast(`Deep slot: ${result.reason || result.status}`);
+      else if (!result.escalate_on_request)
+        showToast("未生效：请在设置里开启「深度解码本槽」");
+      else showToast("本时隙将执行深度解码");
+    });
+    actions.appendChild(deep);
+  }
 
   subscribe(({ station, safety, workMode, engineRunning }) => {
     // The engine is runtime-only (a restart returns the station to SSB), so

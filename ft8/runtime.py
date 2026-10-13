@@ -42,6 +42,7 @@ from ft8.engine.sequencer import QSOState, Sequencer
 from ft8.engine.tx_driver import TxDriver
 from ft8.engine.waterfall import SpectrumComputer, SpectrumFanout
 from ft8.platform.rx_tap import RxTap
+from ft8.platform.settings import Ft8Settings
 
 log = logging.getLogger("mrrc.ft8.runtime")
 
@@ -54,6 +55,22 @@ def _qso_progress(state: QSOState) -> int:
     return 0 if state in (QSOState.IDLE, QSOState.DONE) else 2
 
 
+def _policy_from_settings(settings: Ft8Settings) -> CascadePolicy:
+    """设置里的五个升级策略字段 → CascadePolicy。
+
+    逐字段显式搬运，**不做任何 getattr 兜底**：字段名写错要当场 AttributeError，
+    而不是静默用回默认值（R23 的教训 —— 一个看起来生效、其实没接上的旋钮）。
+    """
+
+    return CascadePolicy(
+        escalate_on_ap_context=settings.escalate_on_ap_context,
+        escalate_on_weak=settings.escalate_on_weak,
+        min_decodes=settings.min_decodes,
+        min_peak_snr=settings.min_peak_snr,
+        escalate_on_request=settings.escalate_on_request,
+    )
+
+
 class Ft8Runtime:
     """The FT8 engine, dormant until FT8 mode starts it."""
 
@@ -62,7 +79,8 @@ class Ft8Runtime:
                  on_decode: Callable[[Any], None] | None = None,
                  on_event: Callable[[Any], None] | None = None,
                  on_slot_start: Callable[[int], None] | None = None,
-                 on_waterfall: Callable[[bytes], None] | None = None) -> None:
+                 on_waterfall: Callable[[bytes], None] | None = None,
+                 cascade_policy_provider: Callable[[], CascadePolicy] | None = None) -> None:
         self._rig = rig
         self._tx_player = tx_player
         self._sequencer_factory = sequencer_factory
@@ -72,6 +90,10 @@ class Ft8Runtime:
         self._on_event = on_event
         self._on_slot_start = on_slot_start
         self._on_waterfall = on_waterfall
+        # 设置派生的升级策略来源（Task 14）。注入而不是在这里造第二个
+        # Ft8SettingsStore：store 的唯一所有者在 server.py，第二个实例是一条
+        # 路径今天恰好等价、明天不等的静默双源头。缺省 None → start() 用 CascadePolicy()。
+        self._cascade_policy_provider = cascade_policy_provider
 
         self.repository = Repository(str(self._data_dir / "qso.db"))
         # Built here (cheap, no hardware) so the REST layer can read state in
@@ -115,6 +137,17 @@ class Ft8Runtime:
         if cascade is None:
             return None
         return {"deadline_risk": cascade.deadline_risk}
+
+    def set_cascade_policy(self, settings: Ft8Settings) -> None:
+        """把持久设置里的升级策略推给**正在跑**的级联解码器。
+
+        ``/station`` 保存成功后调用；引擎未启动时 ``self._cascade`` 是 None，
+        此时无事可做（下一次 ``start()`` 会经 provider 拿到同一份设置）。
+        判空不能省 —— 与 ``self.decoder`` 同样的空值约定。
+        """
+
+        if self._cascade is not None:
+            self._cascade.set_policy(_policy_from_settings(settings))
 
     async def start(self) -> None:
         """Start the DSP worker, the orchestrator and the RX tap."""
@@ -209,9 +242,18 @@ class Ft8Runtime:
         # ``self.decoder.close()``，而 CascadingDecoder 没有 close()，那一行又裹在
         # suppress(Exception) 里 —— worker 与共享内存段会被静默泄漏。级联对象另存
         # ``self._cascade``，只喂给 orchestrator。
+        #
+        # 策略从注入的 provider 取（Task 14）：写死 ``CascadePolicy()`` 会让每次重启
+        # 都退回默认阈值，用户存过的策略只在本次进程内有效。provider 缺席（如
+        # tests/ft8/test_runtime_cascade_wiring.py 那种直接构造）才退回默认值。
+        policy = (
+            self._cascade_policy_provider()
+            if self._cascade_policy_provider is not None
+            else CascadePolicy()
+        )
         self._cascade = CascadingDecoder(
             self.decoder,
-            CascadePolicy(),
+            policy,
             cutoff=DEFAULT_DECISION_CUTOFF_SECONDS,
             boundary_epoch_for=boundary_epoch_for_slot,
             ap_context=lambda: (sequencer.my_call, _qso_progress(sequencer.state)),
@@ -258,6 +300,13 @@ class Ft8Runtime:
         call/grid/is_cq/to_me/mine for the row, DXCC entity and the JTDX-style
         highlight category when a worked index is available.
         """
+
+        # Task 14:「深度解码本槽」是一次性动作。批次回来就说明这一槽的 decode
+        # 已经结束，语义正好是「只对这一槽有效」，所以在这里清回 False。
+        # 不清的后果不是"多跑一次"，而是从按下那一刻起**每个时隙**都升级，
+        # 每槽稳定多付 ~2.2 s 深解码 —— 一个「按一次、此后永久变慢」的按钮。
+        # 放在函数最前面：即便下面任何一行抛异常，标志也已经清掉。
+        self._deep_decode_requested = False
 
         from ft8.engine.bands import band_from_freq_hz
         from ft8.engine.dxcc import decode_highlight, get_cty_database

@@ -78,3 +78,6 @@ packaging/patch/
 
 # Cloud Hub wizard writes the signed cert/key pair + cloud token here (runtime).
 mrrc_modern.env
+
+# Live session tokens (runtime state, never committed)
+auth-tokens.json

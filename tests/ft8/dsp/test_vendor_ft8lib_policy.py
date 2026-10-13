@@ -33,6 +33,17 @@ def test_manifest_matches_disk() -> None:
             continue
         digest, rel = line.split("  ", 1)
         recorded[rel] = digest
+
+    on_disk = {
+        str(p.relative_to(VENDOR))
+        for p in VENDOR.rglob("*")
+        if p.suffix in {".c", ".h"}
+    }
+    assert on_disk == set(recorded), (
+        f"unlisted on disk: {sorted(on_disk - set(recorded))}; "
+        f"listed but missing: {sorted(set(recorded) - on_disk)}"
+    )
+
     for rel, digest in recorded.items():
         actual = hashlib.sha256((VENDOR / rel).read_bytes()).hexdigest()
         assert actual == digest, rel
@@ -42,3 +53,5 @@ def test_readme_records_provenance() -> None:
     text = (VENDOR / "README.md").read_text(encoding="utf-8")
     assert "github.com/kgoba/ft8_lib" in text
     assert "commit" in text.lower()
+    # 钉住的 commit 短哈希必须出现在 README 里（provenance 的实质，而非仅仅出现 "commit" 一词）。
+    assert "9fec6ca" in text

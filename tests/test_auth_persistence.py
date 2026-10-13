@@ -7,6 +7,7 @@ presenting a perfectly valid cookie and were bounced to the login page anyway.
 The operator saw "it keeps asking me to log in" with no restart of the *box*.
 """
 import json
+import os
 import tempfile
 import time
 import unittest
@@ -98,6 +99,14 @@ class AuthTokenPersistenceTests(unittest.TestCase):
         server._load_auth_tokens()
         self.assertEqual(server._auth_tokens, set())
 
+    @unittest.skipIf(
+        os.name == "nt",
+        "Windows has no POSIX permission bits: os.chmod only toggles the "
+        "read-only attribute and stat() reports 0o666 for any regular file, so "
+        "this assertion can only ever fail there (the Windows build's gate "
+        "caught exactly that on 2026-10-13).  Confidentiality on Windows is "
+        "the user-profile ACL the file inherits, not a mode we set.",
+    )
     def test_store_is_owner_readable_only(self) -> None:
         server._add_auth_token("secret-token", listen=False)
         mode = self.path.stat().st_mode & 0o777

@@ -120,6 +120,7 @@ class Orchestrator:
         period: float = FT8_PERIOD_SECONDS,
         decision_cutoff: float = DEFAULT_DECISION_CUTOFF_SECONDS,
         delivery_grace: float = DELIVERY_GRACE_SECONDS,
+        early_decode_s: float = 0.0,
         slot_poll_interval: float = SLOT_POLL_SECONDS,
         clock: Callable[[], float] = time.time,
         sleep_until: Callable[[float], Awaitable[None]] | None = None,
@@ -131,6 +132,8 @@ class Orchestrator:
             raise ValueError("period and decision cutoff must be positive")
         if decision_cutoff >= period:
             raise ValueError("decision cutoff must be smaller than the slot period")
+        if not 0.0 <= early_decode_s < period:
+            raise ValueError("early_decode_s must be within [0, period)")
         if delivery_grace < 0:
             raise ValueError("delivery grace must not be negative")
         if slot_poll_interval <= 0:
@@ -141,6 +144,7 @@ class Orchestrator:
         self._period = period
         self._decision_cutoff = decision_cutoff
         self._delivery_grace = delivery_grace
+        self._early_decode_s = early_decode_s
         self._slot_poll_interval = slot_poll_interval
         self._clock = clock
         self._sleep_until = sleep_until or self._asyncio_sleep_until
@@ -168,7 +172,12 @@ class Orchestrator:
         _trace = 0
         while self._running:
             current = slot_id_for(self._clock(), self._period)
-            boundary = slot_start_epoch(current + 1, self._period)
+            # An FT8 waveform is over by 12.64 s, so the tail of the slot is
+            # silence and waiting for it is pure latency.  ``early_decode_s``
+            # stops the wait that much sooner (the slot source pads the tail);
+            # ``slot_end`` stays the *nominal* end for lateness accounting.
+            slot_end = slot_start_epoch(current + 1, self._period)
+            boundary = slot_end - self._early_decode_s
             _trace += 1
             if _trace <= 3 or _trace % 20 == 0:
                 print(f"[orch-trace] loop={_trace} now={self._clock():.3f} slot={current} "
@@ -195,7 +204,13 @@ class Orchestrator:
                 continue
             if _trace <= 3 or _trace % 20 == 0:
                 print(f"[orch-trace] slot={current} samples={len(samples)} -> decode", flush=True)
-            await self._slot_ended(current, boundary, samples)
+            await self._slot_ended(current, slot_end, samples)
+            # An early dispatch leaves the clock inside the slot we just
+            # handled (decode itself usually covers the remainder).  Consume
+            # any leftover so the next iteration advances to the NEXT slot
+            # instead of decoding this one twice.
+            if self._early_decode_s > 0 and self._clock() < slot_end:
+                await self._sleep_until(slot_end)
 
     async def _wait_for_slot(self, slot_id: int, boundary_epoch: float) -> bytes | None:
         """Return the ended slot's samples as soon as they land in the ring.

@@ -175,6 +175,31 @@ class UtcRing:
         positions = np.arange(first, first + self._slot_samples) % self._capacity
         return self._buffer[positions].tobytes()
 
+    def read_slot_partial(self, slot_id: int, min_samples: int) -> bytes | None:
+        """Return the slot zero-padded, if at least ``min_samples`` are in.
+
+        Early-decode path: an FT8 waveform ends at 12.64 s, so the tail of a
+        15 s slot is silence and waiting for it is pure latency.  A slot whose
+        tail is still in flight is served with zeros there; anything shorter
+        than ``min_samples`` (or overlapping a recorded gap) is refused so the
+        caller keeps polling the normal way.
+        """
+
+        if self._base is None:
+            return None
+        first = slot_id * self._slot_samples
+        last = first + self._slot_samples
+        landed = min(self._high_water, last) - first
+        if first < self._base or min_samples <= 0 or landed < min_samples:
+            return None
+        for gap_start, gap_end in self._gap_ranges:
+            if first < gap_end and first + landed > gap_start:
+                return None
+        out = np.zeros(self._slot_samples, dtype=self._buffer.dtype)
+        positions = np.arange(first, first + landed) % self._capacity
+        out[:landed] = self._buffer[positions]
+        return out.tobytes()
+
 
 class AudioCapture:
     """48 kHz mono input stream feeding the converter and UTC ring.

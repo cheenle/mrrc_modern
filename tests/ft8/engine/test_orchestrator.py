@@ -342,3 +342,106 @@ def test_wrong_sample_length_fails_loudly() -> None:
     )
     with pytest.raises(ValueError, match="exactly"):
         asyncio.run(bad.run())
+
+
+def test_early_decode_dispatches_before_the_nominal_slot_end() -> None:
+    """early_decode_s starts the decode before the slot's 15 s mark.
+
+    An FT8 waveform ends at 12.64 s, so the tail of the slot is silence.
+    Waiting for it is pure latency; with early_decode_s the orchestrator
+    stops waiting that much earlier and the source (which pads the tail)
+    serves the slot as soon as the waveform is in.
+    """
+
+    clock = FakeClock(7.5)
+    decoder = FakeDecoder(clock, texts=["CQ K1ABC FN42"])
+    pcm = b"\x00" * 360_000
+    events: list[SlotDecode] = []
+    orchestrator = Orchestrator(
+        decoder,
+        # Data becomes available 1.2 s BEFORE the slot's nominal end.
+        lambda slot_id: (
+            pcm if clock() >= slot_start_epoch(slot_id + 1) - 1.2 else None
+        ),
+        Sequencer("N0CALL", "FN42"),
+        clock=clock,
+        sleep_until=clock.sleep_until,
+        early_decode_s=1.2,
+        on_slot_start=lambda slot_id: None,
+        on_decode=lambda event: (
+            events.append(event),
+            orchestrator.stop() if len(events) == 2 else None,
+        ),
+    )
+    asyncio.run(orchestrator.run())
+
+    assert [call[0] for call in decoder.calls] == [0, 1]
+    assert orchestrator.counters.slots_skipped == 0
+    for event in events:
+        nominal_end = slot_start_epoch(event.slot_id + 1)
+        # Dispatched before the slot even ends — that is the whole point.
+        assert event.dispatched_epoch < nominal_end
+
+
+def test_early_decode_does_not_mark_results_late() -> None:
+    """Lateness is measured against the slot's real end, not the early edge.
+
+    The decision cutoff (default 5 s) is the TX fit window measured from the
+    slot boundary; shifting the wait must not eat into it.
+    """
+
+    clock = FakeClock(7.5)
+    decoder = FakeDecoder(clock, texts=["CQ K1ABC FN42"])
+    pcm = b"\x00" * 360_000
+    events: list[SlotDecode] = []
+    orchestrator = Orchestrator(
+        decoder,
+        lambda slot_id: (
+            pcm if clock() >= slot_start_epoch(slot_id + 1) - 1.2 else None
+        ),
+        Sequencer("N0CALL", "FN42"),
+        clock=clock,
+        sleep_until=clock.sleep_until,
+        early_decode_s=1.2,
+        on_slot_start=lambda slot_id: None,
+        on_decode=lambda event: (
+            events.append(event),
+            orchestrator.stop() if len(events) == 2 else None,
+        ),
+    )
+    asyncio.run(orchestrator.run())
+
+    # Lateness is measured against the slot's real end: finishing well before
+    # deadline (nominal end + 5 s) must not be flagged as a deadline miss.
+    assert orchestrator.counters.deadline_misses == 0
+    for event in events:
+        nominal_end = slot_start_epoch(event.slot_id + 1)
+        assert event.dispatched_epoch < nominal_end
+        assert event.dispatched_epoch < nominal_end + 5.0
+
+
+def test_early_decode_zero_preserves_upstream_behaviour() -> None:
+    """The default (0) keeps waiting for the full slot — upstream parity."""
+
+    clock = FakeClock(7.5)
+    decoder = FakeDecoder(clock, texts=["CQ K1ABC FN42"])
+    pcm = b"\x00" * 360_000
+    events: list[SlotDecode] = []
+    orchestrator = Orchestrator(
+        decoder,
+        lambda slot_id: (
+            pcm if clock() >= slot_start_epoch(slot_id + 1) else None
+        ),
+        Sequencer("N0CALL", "FN42"),
+        clock=clock,
+        sleep_until=clock.sleep_until,
+        on_slot_start=lambda slot_id: None,
+        on_decode=lambda event: (
+            events.append(event),
+            orchestrator.stop() if len(events) == 2 else None,
+        ),
+    )
+    asyncio.run(orchestrator.run())
+
+    for event in events:
+        assert event.dispatched_epoch >= slot_start_epoch(event.slot_id + 1)

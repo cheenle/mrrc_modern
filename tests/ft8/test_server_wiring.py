@@ -102,3 +102,24 @@ def test_uplink_audio_is_dropped_only_while_ft8_is_keyed(monkeypatch):
     monkeypatch.setattr(server_mod, "_ft8_transmitting", lambda: False)
     asyncio.run(server_mod._feed_tx_from_uplink(b"\x01\x01"))
     assert fed == [b"\x01\x01"]           # idle FT8: the mic goes through
+
+
+def test_early_decode_is_wired_into_the_runtime() -> None:
+    """The early-decode seam is active: shaved wait + ring padding agree.
+
+    1.2 s before the slot ends the orchestrator stops waiting, and the slot
+    source serves a slot with at least (15 - 1.2) s landed, zero-padded to
+    the full frame.  Guard > 1.16 s keeps large-dt signals inside the real
+    waveform region.
+    """
+
+    from ft8 import runtime as runtime_mod
+
+    assert runtime_mod.EARLY_DECODE_S == 1.2
+    min_samples = int(
+        (runtime_mod.FT8_SLOT_SECONDS - runtime_mod.EARLY_DECODE_S)
+        * runtime_mod.DECODER_SAMPLE_RATE
+    )
+    assert min_samples == 165_600          # 13.8 s of 12 kHz audio
+    # The padded region must stay clear of the FT8 waveform (12.64 s).
+    assert runtime_mod.FT8_SLOT_SECONDS - runtime_mod.EARLY_DECODE_S > 12.64 + 1.0

@@ -16,6 +16,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ft8.core.models import DecodeConfig, auto_thread_count
+from ft8.engine.orchestrator import FT8_PERIOD_SECONDS
+from ft8.engine.audio_rx import DECODER_SAMPLE_RATE
+
+#: How long before the nominal slot end to dispatch the decode.  An FT8
+#: waveform occupies the first 12.64 s of the 15 s slot; 1.2 s leaves a
+#: 1.16 s guard for signals with a large dt before the padded region could
+#: clip them.  0 restores the upstream (wait-for-the-whole-slot) behaviour.
+EARLY_DECODE_S = 1.2
+FT8_SLOT_SECONDS = FT8_PERIOD_SECONDS
 from ft8.core.supervisor import WorkerSupervisor
 from ft8.engine.audio_rx import UtcRing
 from ft8.engine.dsp_decode import SupervisorDecoder
@@ -132,9 +141,19 @@ class Ft8Runtime:
         self.rx_tap = RxTap(self.ring, dev_rate=self._dev_rate, on_block=spectrum_tap)
         await self.safety.start()
 
+        # Early decode: an FT8 waveform ends at 12.64 s, so the tail of the
+        # 15 s slot carries no signal and waiting for it is pure latency.
+        # The orchestrator stops waiting EARLY_DECODE_S sooner and this
+        # source serves a slot whose tail is still in flight, zero-padded by
+        # the ring.  Returns are unchanged for a slot that is already whole.
+        early_min_samples = int((FT8_SLOT_SECONDS - EARLY_DECODE_S) * DECODER_SAMPLE_RATE)
+
         def read_slot(slot_id: int) -> bytes | None:
             assert self.ring is not None
-            return self.ring.read_slot(slot_id)
+            full = self.ring.read_slot(slot_id)
+            if full is not None:
+                return full
+            return self.ring.read_slot_partial(slot_id, early_min_samples)
 
         # The upstream grace (0.4 s) assumes an ~85 ms capture chain.  On the
         # W103D the chain is guest-buffer(100 ms) + 80 ms read block + soxr
@@ -147,6 +166,7 @@ class Ft8Runtime:
             read_slot,
             sequencer,
             delivery_grace=1.5,
+            early_decode_s=EARLY_DECODE_S,
             on_decode=self._on_batch,
             on_decode_error=lambda slot_id, error: log.error("decode slot %s: %s", slot_id, error),
             on_slot_start=self._slot_started,

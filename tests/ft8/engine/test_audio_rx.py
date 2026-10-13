@@ -133,6 +133,41 @@ def test_ring_slot_content_is_unaligned_after_eviction() -> None:
     assert got == slot3.tobytes()
 
 
+def test_read_slot_partial_pads_an_in_flight_tail() -> None:
+    """Early decode: a slot whose silent tail is still in flight is served.
+
+    An FT8 waveform ends at 12.64 s, so the last ~2.4 s of the slot carry no
+    signal.  ``read_slot_partial`` accepts a slot that has at least
+    ``min_samples`` in and zero-pads the rest; anything shorter is refused so
+    the caller keeps polling.
+    """
+
+    ring = UtcRing(seconds=60.0)
+    head = (np.arange(150_000) % 251).astype("<i2")   # 12.5 s of "signal"
+    ring.write(head, 0.0)
+
+    # 12.5 s in: enough for a 12.0 s minimum, padded to the full slot.
+    got = ring.read_slot_partial(0, min_samples=144_000)
+    assert got is not None
+    assert len(got) == 360_000                        # 180,000 int16 samples
+    assert got[:300_000] == head.tobytes()
+    assert got[300_000:] == b"\x00" * 60_000          # zero-padded tail
+
+    # Below the minimum the slot is still refused (caller keeps polling).
+    assert ring.read_slot_partial(0, min_samples=150_001) is None
+    # A slot that has not started yet is refused too.
+    assert ring.read_slot_partial(1, min_samples=1) is None
+
+
+def test_read_slot_partial_refuses_gap_overlap() -> None:
+    """A gap inside the landed region must never be papered over with zeros."""
+
+    ring = UtcRing(seconds=60.0)
+    ring.write(np.full(12_000, 7, dtype="<i2"), 0.0)
+    ring.write(np.full(12_000, 8, dtype="<i2"), 5.0)   # gap: base jumps to 60,000
+    assert ring.read_slot_partial(0, min_samples=1) is None
+
+
 def test_ring_tolerates_overlapping_rewrite() -> None:
     ring = UtcRing(seconds=60.0)
     block = np.full(12_000, 5, dtype=np.int16)

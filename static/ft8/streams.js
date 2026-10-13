@@ -63,10 +63,18 @@ function open() {
       if (event.data instanceof ArrayBuffer) handlers.onWaterfall?.(event.data);
       return;
     }
+    let frame;
     try {
-      dispatch(JSON.parse(event.data));
+      frame = JSON.parse(event.data);
     } catch {
-      /* malformed frame: ignored */
+      return;                                   // not JSON (binary is handled above)
+    }
+    try {
+      dispatch(frame);
+    } catch (error) {
+      // A rendering error must be visible: silently dropping the frame is
+      // how "the list never updates" becomes undebuggable.
+      console.error("[ft8] frame failed:", frame && frame.type, error);
     }
   };
   socket.onclose = (event) => {

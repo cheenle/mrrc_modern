@@ -13,6 +13,7 @@ timebase; the ring's resync absorbs scheduling jitter).
 from __future__ import annotations
 
 import logging
+import time
 
 import numpy as np
 
@@ -40,9 +41,16 @@ class RxTap:
         self._stream = soxr.ResampleStream(
             dev_rate, out_rate, 1, dtype="float32", quality=SOXR_QUALITY
         )
-        self._base_epoch: float | None = None
+        # The output timeline is driven by an INTEGER sample index, not a
+        # float epoch accumulator: round(epoch * rate) on a ~1.79e9 epoch
+        # lands ±1 sample away from the ring's high-water mark every block,
+        # and UtcRing records each of those as a gap — which makes read_slot
+        # return None and skips two slots out of three (field finding).
+        self._next_index: int | None = None
         self._logged_first = False
         self._rms_blocks = 0
+        self._feed_count = 0
+        self._rate_mark = time.monotonic()
         self._peak_seen = 0
         self._out_count = 0           # 12 kHz samples emitted so far
         self._consumed = 0            # input samples fed so far
@@ -60,30 +68,43 @@ class RxTap:
             return np.zeros(0, dtype="<i2")
 
         self._consumed += x.size
-        if self._base_epoch is None:
+        if self._next_index is None:
             # The stream's timebase is its FIRST input block: soxr compensates
             # its own filter delay, so emitted sample n sits at
-            # base_epoch + n / out_rate.
-            self._base_epoch = block_epoch
+            # base + n / out_rate.  Anchored once as an integer.
+            self._next_index = round(block_epoch * self._out_rate)
         y = self._stream.resample_chunk(x, last=False)
         block = np.clip(y * 32767.0, -32768.0, 32767.0).astype("<i2")
         if not block.size:
             # soxr buffers a fixed overlap before its first output; nothing is
             # delivered and nothing may be timestamped.
             return block
+        out_epoch = self._next_index / self._out_rate
+        self._next_index += block.size
+        self._out_count += block.size
         if not self._logged_first:
             self._logged_first = True
             log.info("RX tap delivering (dev %d Hz -> %d Hz, first block %d samples @ %.3f)",
-                     self._dev_rate, self._out_rate, block.size, self._base_epoch)
+                     self._dev_rate, self._out_rate, block.size, out_epoch)
         self._rms_blocks += 1
+        self._feed_count += 1
+        if self._feed_count % 300 == 0:          # rate probe: blocks/second
+            now = time.monotonic()
+            rate = 300 / max(now - self._rate_mark, 0.001)
+            ring = self._ring
+            extra = ""
+            if ring is not None:
+                extra = (f" | ring base={ring.base} high={ring.high_water} "
+                         f"gaps={ring.gap_count} dropped={ring.metrics.dropped_samples}")
+            log.info("RX tap: %d blocks fed (%.1f blocks/s), %d in / %d out samples%s",
+                     self._feed_count, rate, self._consumed, self._out_count, extra)
+            self._rate_mark = now
         if self._rms_blocks % 250 == 0:          # every ~5 s of audio
             rms = float(np.sqrt(np.mean(block.astype(np.float64) ** 2)))
             log.info("RX tap level: rms=%.0f peak=%d (12 kHz, last block)",
                      rms, int(np.max(np.abs(block))))
         if block.size > self._peak_seen:
             self._peak_seen = block.size
-        out_epoch = self._base_epoch + self._out_count / self._out_rate
-        self._out_count += block.size
         if self._ring is not None:
             self._ring.write(block, out_epoch)
         if self._on_block is not None:
@@ -96,9 +117,10 @@ class RxTap:
         y = self._stream.resample_chunk(np.zeros(0, dtype=np.float32), last=True)
         block = np.clip(y * 32767.0, -32768.0, 32767.0).astype("<i2")
         if block.size:
-            if self._base_epoch is None:
-                self._base_epoch = 0.0
-            out_epoch = self._base_epoch + self._out_count / self._out_rate
+            if self._next_index is None:
+                self._next_index = 0
+            out_epoch = self._next_index / self._out_rate
+            self._next_index += block.size
             self._out_count += block.size
             if self._ring is not None:
                 self._ring.write(block, out_epoch)

@@ -1277,10 +1277,11 @@ def _ft8_queue_frame(frame) -> None:
             logger.warning("FT8 frame dropped: event bus not bound yet")
         return
     _ft8_bus.publish(frame)
-    if not _ft8_pub_logged:
-        _ft8_pub_logged = True
-        logger.info("FT8 bus first publish: %d subscriber(s), %r",
-                    _ft8_bus.subscriber_count, type(frame).__name__)
+    if not isinstance(frame, (bytes, bytearray, memoryview)):
+        # Temporary field trace: every non-waterfall frame and its fan-out
+        # width, so a broken decode path is visible in the log.
+        logger.info("FT8 bus publish %s -> %d subscriber(s)",
+                    frame.get("type", "?"), _ft8_bus.subscriber_count)
 
 
 async def _broadcast_ft8_json(frame: dict) -> None:

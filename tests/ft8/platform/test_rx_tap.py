@@ -62,3 +62,23 @@ def test_epoch_chain_is_driven_by_emitted_samples() -> None:
     assert seen[0][1] == 1000.0                # first block anchors at its input epoch
     for (size, epoch), (_, next_epoch) in zip(seen, seen[1:]):
         assert abs((next_epoch - epoch) - size / 12000) < 1e-9
+
+
+def test_epoch_timeline_has_no_rounding_gaps():
+    """Ten seconds of 20 ms blocks must produce ZERO ring gaps.
+
+    Regression (field finding 2026-10-13): the float accumulator
+    ``base + n/rate`` made ``round(epoch*rate)`` land ±1 sample away from the
+    ring's high-water on most blocks; UtcRing recorded every one of those as a
+    gap, ``read_slot`` then returned None, and two slots out of three were
+    silently skipped — the decoder looked dead while the waterfall kept
+    scrolling.
+    """
+    ring = UtcRing(seconds=20)
+    tap = RxTap(ring, dev_rate=48000)
+    block = _tone(48000, 0.02, 700.0).tobytes()
+    epoch = 1000.0
+    for i in range(500):                      # 10 s of 20 ms blocks
+        tap.feed(block, epoch + i * 0.02)
+    assert ring.gap_count == 0
+    assert (ring.high_water - (ring.base or 0)) >= 119_000

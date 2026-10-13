@@ -165,9 +165,14 @@ class Orchestrator:
         """Run the slot loop until :meth:`stop` or task cancellation."""
 
         self._running = True
+        _trace = 0
         while self._running:
             current = slot_id_for(self._clock(), self._period)
             boundary = slot_start_epoch(current + 1, self._period)
+            _trace += 1
+            if _trace <= 3 or _trace % 20 == 0:
+                print(f"[orch-trace] loop={_trace} now={self._clock():.3f} slot={current} "
+                      f"boundary={boundary:.3f} announced={self._announced_slot}", flush=True)
             if current != self._announced_slot:
                 self._announced_slot = current
                 self.counters.slots_started += 1
@@ -179,7 +184,17 @@ class Orchestrator:
             samples = await self._wait_for_slot(current, boundary)
             if samples is None:
                 self.counters.slots_skipped += 1
+                if _trace <= 6 or _trace % 20 == 0:
+                    ring = getattr(self._slot_source, "__self__", None)
+                    info = ""
+                    if ring is not None:
+                        info = (f" ring_base={ring.base} high={ring.high_water} "
+                                f"gaps={ring.gap_count} need=[{current * 180000},"
+                                f"{current * 180000 + 180000})")
+                    print(f"[orch-trace] slot={current} SKIPPED (no data within grace){info}", flush=True)
                 continue
+            if _trace <= 3 or _trace % 20 == 0:
+                print(f"[orch-trace] slot={current} samples={len(samples)} -> decode", flush=True)
             await self._slot_ended(current, boundary, samples)
 
     async def _wait_for_slot(self, slot_id: int, boundary_epoch: float) -> bytes | None:

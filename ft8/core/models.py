@@ -29,6 +29,7 @@ def auto_thread_count(cpu_count: int | None = None) -> int:
 class DecodePath(StrEnum):
     """Native FT8 decoder implementation selected for one request."""
 
+    FAST = "fast"
     STANDARD = "standard"
     IMPROVED = "improved"
 

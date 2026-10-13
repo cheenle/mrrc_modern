@@ -28,7 +28,7 @@ from ft8.core.models import (
 
 
 EXPECTED_ABI = {
-    "abi_version": 1,
+    "abi_version": 2,
     "struct_size": 48,
     "result_size": 80,
     "result_capacity": RESULT_CAPACITY,
@@ -39,7 +39,7 @@ EXPECTED_ABI = {
     "improved_profiles": 0x1F,
     "max_threads": 12,
     "max_cycles": 3,
-    "reserved": 0,
+    "decode_paths": 0b111,
 }
 
 
@@ -150,6 +150,7 @@ class FakeLibrary:
         self.wsjt_ft8_encode = FakeFunction(encode)
         self.wsjt_ft8_decode_standard = FakeFunction(decode)
         self.wsjt_ft8_decode_improved = FakeFunction(decode)
+        self.wsjt_ft8_decode_fast = FakeFunction(decode)
         self.seen_flags: list[int] = []
 
 
@@ -173,6 +174,7 @@ def assert_decode_signatures(library: FakeLibrary) -> None:
     ]
     assert library.wsjt_ft8_decode_standard.argtypes == expected
     assert library.wsjt_ft8_decode_improved.argtypes == expected
+    assert library.wsjt_ft8_decode_fast.argtypes == expected
 
 
 def unaligned_array(dtype: np.dtype[Any], count: int) -> np.ndarray:
@@ -352,7 +354,7 @@ def test_nonzero_native_status_raises(operation: str) -> None:
 @pytest.mark.parametrize(
     ("field", "bad_value"),
     [
-        ("abi_version", 2),
+        ("abi_version", 1),
         ("struct_size", 47),
         ("result_size", 79),
         ("result_capacity", 255),
@@ -363,7 +365,7 @@ def test_nonzero_native_status_raises(operation: str) -> None:
         ("improved_profiles", 0x0F),
         ("max_threads", 11),
         ("max_cycles", 2),
-        ("reserved", 1),
+        ("decode_paths", 0b010),
     ],
 )
 def test_constructor_rejects_every_abi_or_capability_mismatch(
@@ -569,6 +571,7 @@ def test_explicit_library_path_sets_all_four_signatures_and_selects_path(
         library.wsjt_ft8_encode,
         library.wsjt_ft8_decode_standard,
         library.wsjt_ft8_decode_improved,
+        library.wsjt_ft8_decode_fast,
     ]
     assert all(function.restype is ctypes.c_int32 for function in functions)
     assert library.wsjt_get_abi_info.argtypes == [
@@ -649,7 +652,7 @@ def test_ctypes_layouts_match_wsjt_core_header() -> None:
         ("improved_profiles", ctypes.c_int32),
         ("max_threads", ctypes.c_int32),
         ("max_cycles", ctypes.c_int32),
-        ("reserved", ctypes.c_int32),
+        ("decode_paths", ctypes.c_int32),
     ]
     assert binding_module._DecodeResult._fields_ == [
         ("slot_id", ctypes.c_int64),
@@ -666,12 +669,12 @@ def test_ctypes_layouts_match_wsjt_core_header() -> None:
     ]
     assert {
         name: getattr(binding_module._AbiInfo, name).offset
-        for name in ("abi_version", "result_size", "improved_profiles", "reserved")
+        for name in ("abi_version", "result_size", "improved_profiles", "decode_paths")
     } == {
         "abi_version": 0,
         "result_size": 8,
         "improved_profiles": 32,
-        "reserved": 44,
+        "decode_paths": 44,
     }
     assert {
         name: getattr(binding_module._DecodeConfig, name).offset
@@ -695,3 +698,32 @@ def test_ctypes_layouts_match_wsjt_core_header() -> None:
         "text": 40,
         "padding": 78,
     }
+
+
+def test_fast_path_is_a_valid_decode_path() -> None:
+    from ft8.core.models import DecodePath
+
+    assert DecodePath("fast") is DecodePath.FAST
+
+
+def test_validate_abi_rejects_missing_fast_bit() -> None:
+    """掩码里没有 fast 位的库必须被拒 —— 复用该文件既有的 FakeNative 夹具。"""
+    from ft8.core.binding import AbiCompatibilityError
+
+    with pytest.raises(AbiCompatibilityError, match="decode_paths"):
+        CoreBinding.for_test(FakeNative(abi_overrides={"decode_paths": 0b011}))
+
+
+def test_fast_path_selects_the_fast_native_entry_point(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    library = FakeLibrary()
+    monkeypatch.setattr(binding_module.ctypes, "CDLL", lambda _path: library)
+    binding = CoreBinding(Path("/tmp/libwsjt_core.so"))
+
+    batch = binding.decode(pcm(), DecodeConfig(path=DecodePath.FAST), 11)
+
+    assert batch.path is DecodePath.FAST
+    assert library.wsjt_ft8_decode_fast.calls == 1
+    assert library.wsjt_ft8_decode_standard.calls == 0
+    assert library.wsjt_ft8_decode_improved.calls == 0

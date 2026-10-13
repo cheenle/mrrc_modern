@@ -31,7 +31,8 @@ from ft8.core.models import (
 )
 
 
-_ABI_VERSION = 1
+_ABI_VERSION = 2
+_FAST_PATH_MASK = 0b111  # standard | improved | fast (wsjt_core_shim.f90 z'07')
 _TEXT_BYTES = 38
 _IMPROVED_PROFILE_MASK = 0x1F
 _MAX_THREADS = 12
@@ -61,7 +62,7 @@ class _AbiInfo(ctypes.Structure):
         ("improved_profiles", ctypes.c_int32),
         ("max_threads", ctypes.c_int32),
         ("max_cycles", ctypes.c_int32),
-        ("reserved", ctypes.c_int32),
+        ("decode_paths", ctypes.c_int32),
     ]
 
 
@@ -206,6 +207,18 @@ class _CtypesAdapter:
         library.wsjt_ft8_decode_standard.restype = ctypes.c_int32
         library.wsjt_ft8_decode_improved.argtypes = _DECODE_ARGTYPES
         library.wsjt_ft8_decode_improved.restype = ctypes.c_int32
+        # The fast path symbol only exists as of ABI 2.  If an older library is
+        # loaded, ctypes raises AttributeError here -- and this runs before
+        # CoreBinding._validate_abi().  Without this guard a version mismatch
+        # would escape as an AttributeError from deep inside the adapter instead
+        # of the documented AbiCompatibilityError.
+        try:
+            library.wsjt_ft8_decode_fast.argtypes = _DECODE_ARGTYPES
+            library.wsjt_ft8_decode_fast.restype = ctypes.c_int32
+        except AttributeError as exc:
+            raise AbiCompatibilityError(
+                "decode_paths mismatch: library has no wsjt_ft8_decode_fast"
+            ) from exc
         self._library = library
 
     def abi_info(self) -> tuple[int, dict[str, int]]:
@@ -223,11 +236,12 @@ class _CtypesAdapter:
         results = (_DecodeResult * RESULT_CAPACITY)()
         count = ctypes.c_int32()
         overflow = ctypes.c_int32()
-        function = (
-            self._library.wsjt_ft8_decode_standard
-            if path is DecodePath.STANDARD
-            else self._library.wsjt_ft8_decode_improved
-        )
+        if path is DecodePath.STANDARD:
+            function = self._library.wsjt_ft8_decode_standard
+        elif path is DecodePath.FAST:
+            function = self._library.wsjt_ft8_decode_fast
+        else:
+            function = self._library.wsjt_ft8_decode_improved
         status = int(
             function(
                 samples.ctypes.data_as(ctypes.POINTER(ctypes.c_int16)),
@@ -331,7 +345,7 @@ _EXPECTED_ABI = {
     "improved_profiles": _IMPROVED_PROFILE_MASK,
     "max_threads": _MAX_THREADS,
     "max_cycles": _MAX_CYCLES,
-    "reserved": 0,
+    "decode_paths": _FAST_PATH_MASK,
 }
 
 

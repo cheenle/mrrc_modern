@@ -158,14 +158,25 @@ class Ft8Runtime:
         # The upstream grace (0.4 s) assumes an ~85 ms capture chain.  On the
         # W103D the chain is guest-buffer(100 ms) + 80 ms read block + soxr
         # (~80 ms) + scheduling — measured as a STABLE +0.8 s offset between
-        # the tap's timeline and the wall clock, so a 0.4 s grace skipped two
-        # slots out of three.  1.5 s clears it with margin and still lands
-        # inside the 5 s TX decision window.
+        # the tap's timeline and the wall clock.  It does NOT stay there: after
+        # any TX the platform reopens the capture stream and the offset settles
+        # at ~+1.8 s (measured), which a 1.5 s grace cannot cover — every slot
+        # was then skipped and decoding stopped dead after a QSO.  The grace is
+        # only an upper bound (polling dispatches the instant the slot lands),
+        # so 3.0 s costs nothing when the chain is quick and covers the
+        # post-TX chain when it is not.
+        #
+        # Note the coupling with EARLY_DECODE_S: the wait now starts 1.2 s
+        # before the slot ends, so the effective budget for the capture chain
+        # is grace - EARLY_DECODE_S.  A grace of 1.5 s therefore left only
+        # 0.3 s and the 1.8 s post-TX chain blew straight through it — the
+        # exact "no decodes after a QSO" field report.  Keep grace comfortably
+        # above EARLY_DECODE_S + the measured chain offset.
         self.orchestrator = Orchestrator(
             self.decoder,
             read_slot,
             sequencer,
-            delivery_grace=1.5,
+            delivery_grace=3.0,
             early_decode_s=EARLY_DECODE_S,
             on_decode=self._on_batch,
             on_decode_error=lambda slot_id, error: log.error("decode slot %s: %s", slot_id, error),

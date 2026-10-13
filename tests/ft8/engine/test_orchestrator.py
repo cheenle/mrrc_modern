@@ -48,14 +48,18 @@ def make_result(text: str, snr: int = -10, slot_id: int = 0) -> DecodeResult:
     )
 
 
-def make_batch(slot_id: int, texts: list[str] | None = None) -> DecodeBatch:
+def make_batch(
+    slot_id: int, texts: list[str] | None = None, *,
+    path: DecodePath = DecodePath.IMPROVED, escalated: bool = False,
+) -> DecodeBatch:
     return DecodeBatch(
         slot_id=slot_id,
-        path=DecodePath.IMPROVED,
+        path=path,
         results=tuple(make_result(text, slot_id=slot_id) for text in (texts or [])),
         overflow=False,
         elapsed_seconds=0.25,
         deadline_missed=False,
+        escalated=escalated,
     )
 
 
@@ -68,12 +72,16 @@ class FakeDecoder:
         delay: float = 0.0,
         error: Exception | None = None,
         wrong_slot: bool = False,
+        path: DecodePath = DecodePath.IMPROVED,
+        escalated: bool = False,
     ) -> None:
         self.clock = clock
         self.texts = texts or []
         self.delay = delay
         self.error = error
         self.wrong_slot = wrong_slot
+        self.path = path
+        self.escalated = escalated
         self.calls: list[tuple[int, bytes]] = []
 
     async def decode(self, slot_id: int, samples: bytes) -> DecodeBatch:
@@ -82,7 +90,8 @@ class FakeDecoder:
             self.clock.advance(self.delay)
         if self.error is not None:
             raise self.error
-        return make_batch(slot_id + 1 if self.wrong_slot else slot_id, self.texts)
+        return make_batch(slot_id + 1 if self.wrong_slot else slot_id, self.texts,
+                          path=self.path, escalated=self.escalated)
 
 
 class Harness:
@@ -516,3 +525,33 @@ def test_a_sleep_that_wakes_early_does_not_decode_the_same_slot_twice() -> None:
     assert [call[0] for call in decoder.calls] == [0, 1, 2]
     assert [event.slot_id for event in events] == [0, 1, 2]
     assert orchestrator.counters.decodes == 3
+
+
+def test_counters_split_fast_from_escalated_slots() -> None:
+    """fast/escalated 必须是两个互斥的桶 —— 升级率 = escalations / decodes。"""
+
+    harness = Harness(epoch=7.5)
+    harness.decoder.path = DecodePath.FAST
+    harness.decoder.escalated = False
+    harness.decoder.texts = ["CQ K1ABC FN42"]
+    harness.run(decodes=3)
+
+    counters = harness.orchestrator.counters
+    assert counters.decodes == 3
+    assert counters.fast_decodes == 3
+    assert counters.escalations == 0
+
+
+def test_escalated_slot_is_counted_as_escalation_not_as_fast() -> None:
+    harness = Harness(epoch=7.5)
+    # 合并后的批次：path 仍是 FAST（深路径一条没多），但升级**发生过**
+    harness.decoder.path = DecodePath.FAST
+    harness.decoder.escalated = True
+    harness.decoder.texts = ["CQ K1ABC FN42"]
+    harness.run(decodes=1)
+
+    counters = harness.orchestrator.counters
+    assert counters.escalations == 1
+    assert counters.fast_decodes == 0, (
+        "升级过的槽不算 fast —— 否则 fast_decodes 失去意义，等于 decodes"
+    )

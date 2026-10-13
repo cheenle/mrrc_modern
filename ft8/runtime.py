@@ -107,6 +107,15 @@ class Ft8Runtime:
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
 
+    @property
+    def cascade_stats(self) -> dict[str, int] | None:
+        """级联解码器的运行期计数；引擎未启动时为 None。"""
+
+        cascade = getattr(self, "_cascade", None)
+        if cascade is None:
+            return None
+        return {"deadline_risk": cascade.deadline_risk}
+
     async def start(self) -> None:
         """Start the DSP worker, the orchestrator and the RX tap."""
         if self.running:

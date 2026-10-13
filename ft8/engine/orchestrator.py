@@ -25,7 +25,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from ft8.core.models import DecodeBatch, DecodeResult
+from ft8.core.models import DecodeBatch, DecodePath, DecodeResult
 from ft8.engine.msgparse import ParsedMessage, parse_message
 from ft8.engine.sequencer import Sequencer
 
@@ -112,6 +112,10 @@ class OrchestratorCounters:
     decodes: int = 0
     deadline_misses: int = 0
     decode_errors: int = 0
+    # 快路径**单独**解完的槽数（没有升级，或升级了但结果仍走快路径的情况见下）。
+    fast_decodes: int = 0
+    # 真的跑过深路径的槽数。升级率 = escalations / decodes，是判断阈值松紧的主指标。
+    escalations: int = 0
 
 
 class Orchestrator:
@@ -292,6 +296,13 @@ class Orchestrator:
             for result in batch.results
         )
         self.counters.decodes += 1
+        if batch.escalated:
+            self.counters.escalations += 1
+        elif batch.path is DecodePath.FAST:
+            # 只在**没升级且答案是快路径**时才算 fast。快路径整个失败而补跑深路径
+            # 的那种批次（CascadingDecoder 的 fallback）两者都不算 —— 它不是快路径的
+            # 功劳，也没升级，所以 fast_decodes + escalations <= decodes 是有意的。
+            self.counters.fast_decodes += 1
         if late:
             # NFR-001/NFR-009: display-only; never fed to the sequencer.
             self.counters.deadline_misses += 1

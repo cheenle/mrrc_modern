@@ -146,3 +146,45 @@ def test_health_omits_latency_when_not_wired() -> None:
     health = _health(state)
     assert "decode_latency" not in health
     assert "deadline_misses" not in health
+
+
+def test_health_exposes_cascade_counters_when_the_cascade_is_wired() -> None:
+    """预算挡下升级的次数必须能从 health 读到 —— 这正是「阈值是不是太紧」的证据。"""
+
+    state = SimpleNamespace(
+        safety=SimpleNamespace(health={"armed": False}),
+        lease=None,
+        auth=SimpleNamespace(session_count=lambda: 0),
+        latency=None,
+        orchestrator=None,
+        # **普通 dict，不是 lambda。** `_health` 用 `getattr(runtime, "cascade_stats", None)`
+        # 取值后**直接**塞进 `health["cascade"]`（见下面实现），而 `cascade_stats` 在
+        # `Ft8Runtime` 上是 `@property`。写成 lambda 的话 `_health` 原样返回一个函数对象，
+        # 断言 `["deadline_risk"]` 就变成 `TypeError: 'function' object is not subscriptable`
+        # —— 一个从第一行就注定跑不过的用例（R77 的形状）。轻量替身只需长得像**读完之后的结果**。
+        runtime=SimpleNamespace(decoder=None, cascade_stats={"deadline_risk": 4}),
+    )
+    assert _health(state)["cascade"]["deadline_risk"] == 4
+
+
+def test_cascade_stats_property_covers_both_branches() -> None:
+    """`cascade_stats` 的两个分支都要被**这个属性本身**跑到，而不是被替身绕过。
+
+    上面那条用例用的是 SimpleNamespace，证明不了 `Ft8Runtime.cascade_stats` 存在。
+    引擎未启动时 `_cascade` 还没有（`object.__new__` 构造出的实例就是这种形状，
+    `tests/ft8/test_server_wiring.py:136` 已有先例），必须返回 None 而不是抛
+    `AttributeError` —— 否则 `/api/ft8/health` 在引擎没起来时 500。
+
+    用 `getattr(self, "_cascade", None)` 而不是 `self._cascade is None` 就是为了这个：
+    Task 11 的 `__init__` 建了 `self._cascade`，但「引擎未启动」这个状态在真实运行里
+    是存在的（构造到 `start()` 之间、以及构造路径中途失败），不能只靠 `__init__` 兜。
+    """
+
+    from ft8.runtime import Ft8Runtime
+
+    unwired = object.__new__(Ft8Runtime)
+    assert unwired.cascade_stats is None
+
+    wired = object.__new__(Ft8Runtime)
+    wired._cascade = SimpleNamespace(deadline_risk=4)
+    assert wired.cascade_stats == {"deadline_risk": 4}

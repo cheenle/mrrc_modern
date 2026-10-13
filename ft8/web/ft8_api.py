@@ -843,6 +843,8 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
             "slots_skipped": counters.slots_skipped,
             "decodes": counters.decodes,
             "deadline_misses": counters.deadline_misses,
+            "fast_decodes": counters.fast_decodes,
+            "escalations": counters.escalations,
         }
     return snapshot
 
@@ -857,10 +859,14 @@ def _health(state: AppState) -> dict[str, Any]:
         health["decode_latency"] = state.latency.snapshot()
     orchestrator = state.orchestrator
     if orchestrator is None and getattr(state, "runtime", None) is not None:
-        orchestrator = state.runtime.orchestrator
+        orchestrator = getattr(state.runtime, "orchestrator", None)
     if orchestrator is not None:
         counters = orchestrator.counters
         health["deadline_misses"] = counters.deadline_misses
+    runtime = getattr(state, "runtime", None)
+    cascade_stats = getattr(runtime, "cascade_stats", None)
+    if cascade_stats is not None:
+        health["cascade"] = cascade_stats
     return health
 
 

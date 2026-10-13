@@ -345,6 +345,10 @@ export function createSettingsDrawer() {
         </select></label>
       <label class="setting-field"><span>发射音频频率 (Hz)</span>
         <input id="st-audio" type="number" min="200" max="2800" step="50"></label>
+      <label class="setting-field"><span>引擎常驻</span>
+        <input id="st-always" type="checkbox" style="flex:0 0 auto;max-width:none"></label>
+      <div class="drawer-hint dim">常驻 = 服务启动即开始接收解码与瀑布（只收不发；
+        发射仍需手动）。关掉可省约 5% CPU。</div>
       <button id="st-save" class="drawer-btn">保存</button>
       <div id="st-msg" class="drawer-hint"></div>
       <div class="drawer-hint dim">呼号与网格用于 FT8 消息（与 Cloud Hub 呼号无关）；
@@ -353,6 +357,7 @@ export function createSettingsDrawer() {
 		document.getElementById("st-grid").value = data.my_grid || "";
 		document.getElementById("st-mode").value = data.rig_mode || "DATA-U";
 		document.getElementById("st-audio").value = data.tx_audio_frequency ?? 1500;
+		document.getElementById("st-always").checked = data.engine_always_on !== false;
 
 		document.getElementById("st-save").addEventListener("click", async () => {
 			const msg = document.getElementById("st-msg");
@@ -364,6 +369,7 @@ export function createSettingsDrawer() {
 				my_grid: document.getElementById("st-grid").value.trim().toUpperCase(),
 				rig_mode: document.getElementById("st-mode").value,
 				tx_audio_frequency: Number(document.getElementById("st-audio").value) || 1500,
+				engine_always_on: document.getElementById("st-always").checked,
 			});
 			button.disabled = false;
 			if (result.ok) {

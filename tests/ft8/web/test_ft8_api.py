@@ -171,3 +171,15 @@ def test_station_rejects_bad_values():
 
 def test_station_requires_control_role():
     assert _client(role="listener").put("/api/ft8/station", json={"my_call": "X"}).status_code == 403
+
+
+def test_station_always_on_round_trip():
+    client = _client()
+    assert client.get("/api/ft8/station").json()["engine_always_on"] is True
+    r = client.put("/api/ft8/station", json={"engine_always_on": False})
+    assert r.status_code == 200 and r.json()["engine_always_on"] is False
+    assert client.get("/api/ft8/station").json()["engine_always_on"] is False
+
+
+def test_station_always_on_must_be_boolean():
+    assert _client().put("/api/ft8/station", json={"engine_always_on": "yes"}).status_code == 422

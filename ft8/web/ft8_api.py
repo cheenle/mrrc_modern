@@ -366,6 +366,7 @@ def create_router(state: AppState) -> APIRouter:
             "my_grid": getattr(settings, "my_grid", ""),
             "rig_mode": getattr(settings, "rig_mode", "DATA-U"),
             "tx_audio_frequency": getattr(settings, "tx_audio_frequency", 1500),
+            "engine_always_on": bool(getattr(settings, "engine_always_on", True)),
         }
 
     @router.put("/station")
@@ -379,12 +380,15 @@ def create_router(state: AppState) -> APIRouter:
         store = getattr(state, "settings_store", None)
         if store is None:
             return _reject(409, "settings_unavailable")
-        allowed = {"my_call", "my_grid", "rig_mode", "tx_audio_frequency"}
+        allowed = {"my_call", "my_grid", "rig_mode", "tx_audio_frequency",
+                   "engine_always_on"}
         unknown = sorted(set(body) - allowed)
         if unknown:
             return _reject(422, "invalid_setting", detail=",".join(unknown))
         current = store.load()
         changes = {key: body[key] for key in allowed if key in body}
+        if "engine_always_on" in changes and not isinstance(changes["engine_always_on"], bool):
+            return _reject(422, "invalid_setting", detail="engine_always_on")
         if "tx_audio_frequency" in changes:
             try:
                 changes["tx_audio_frequency"] = int(changes["tx_audio_frequency"])
@@ -401,11 +405,24 @@ def create_router(state: AppState) -> APIRouter:
         if runtime is not None and getattr(runtime, "sequencer", None) is not None:
             runtime.sequencer.my_call = updated.my_call or ""
             runtime.sequencer.my_grid = updated.my_grid or ""
+        # The always-on switch applies immediately too, so toggling it is
+        # observable: start the monitor now, or stop it when idle in SSB.
+        if runtime is not None and "engine_always_on" in changes:
+            mode_ctrl = getattr(state, "mode_controller", None)
+            in_ft8 = str(getattr(mode_ctrl, "mode", "ssb")) == "ft8"
+            try:
+                if updated.engine_always_on and not runtime.running:
+                    await runtime.start()
+                elif not updated.engine_always_on and runtime.running and not in_ft8:
+                    await runtime.stop()
+            except Exception:
+                log.exception("applying engine_always_on failed")
         state.bump()
         return _ok({
             "my_call": updated.my_call, "my_grid": updated.my_grid,
             "rig_mode": updated.rig_mode,
             "tx_audio_frequency": updated.tx_audio_frequency,
+            "engine_always_on": updated.engine_always_on,
         })
 
     @router.post("/mode")

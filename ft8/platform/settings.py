@@ -25,6 +25,13 @@ class Ft8Settings:
     my_grid: str = ""
     rig_mode: str = "DATA-U"
     tx_audio_frequency: int = DEFAULT_TX_AUDIO_HZ
+    engine_always_on: bool = True
+    """Run the FT8 engine (RX monitor + decoder + waterfall) at startup.
+
+    RX is read-only — TX still requires an explicit arm — so a dedicated
+    station box can keep decoding across restarts.  Turn it off to save the
+    ~5% CPU when the station is used for SSB only.
+    """
     settings_revision: int = 0
 
     def validate(self) -> None:
@@ -32,6 +39,8 @@ class Ft8Settings:
             raise ValueError(f"rig_mode must be one of {RIG_MODES}")
         if not 200 <= int(self.tx_audio_frequency) <= 2800:
             raise ValueError("tx_audio_frequency must be 200..2800 Hz")
+        if not isinstance(self.engine_always_on, bool):
+            raise ValueError("engine_always_on must be a boolean")
 
 
 class Ft8SettingsStore:

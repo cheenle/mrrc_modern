@@ -36,7 +36,7 @@ def test_module_imports_resolve():
 
 DYNAMIC_IDS = {
     # Rendered by the settings drawer into #drawer-content (settings.js).
-    "st-call", "st-grid", "st-mode", "st-audio", "st-save", "st-msg",
+    "st-call", "st-grid", "st-mode", "st-audio", "st-save", "st-msg", "st-always",
 }
 
 

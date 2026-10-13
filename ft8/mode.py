@@ -28,7 +28,8 @@ class Ft8ModeController:
                  start_engine: Callable[[], Awaitable[None]],
                  stop_engine: Callable[[], Awaitable[None]],
                  set_browser_tx: Callable[[bool], None],
-                 broadcast: Callable[[str], Awaitable[None]]) -> None:
+                 broadcast: Callable[[str], Awaitable[None]],
+                 engine_always_on: Callable[[], bool] | None = None) -> None:
         self._snapshot_ssb = snapshot_ssb
         self._apply_ft8_radio = apply_ft8_radio
         self._restore_ssb = restore_ssb
@@ -36,6 +37,9 @@ class Ft8ModeController:
         self._stop_engine = stop_engine
         self._set_browser_tx = set_browser_tx
         self._broadcast = broadcast
+        # Always-on keeps the RX monitor running in both modes (TX still
+        # needs an explicit arm), so decoding never stops across restarts.
+        self._always_on = engine_always_on or (lambda: False)
         self._mode = WorkMode.SSB
         self._lock = asyncio.Lock()
         self._snapshot: dict | None = None
@@ -52,7 +56,8 @@ class Ft8ModeController:
             self._set_browser_tx(False)
             try:
                 await self._apply_ft8_radio()
-                await self._start_engine()
+                if not self._always_on():
+                    await self._start_engine()
             except Exception:
                 log.exception("FT8 start failed; rolling back to SSB")
                 await self._safe_rollback()
@@ -64,8 +69,13 @@ class Ft8ModeController:
         async with self._lock:
             if self._mode is WorkMode.SSB:
                 return
-            # Safety first: stop TX/engine before restoring the SSB radio.
-            await self._stop_engine()
+            # Safety first: stop TX (and the engine unless it is always-on)
+            # before restoring the SSB radio.
+            if not self._always_on():
+                await self._stop_engine()
+            else:
+                # The engine keeps running; only its transmitter goes away.
+                self._set_browser_tx(True)
             if self._snapshot is not None:
                 await self._restore_ssb(self._snapshot)
             self._set_browser_tx(True)

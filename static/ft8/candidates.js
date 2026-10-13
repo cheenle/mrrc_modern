@@ -8,21 +8,6 @@ function slotUtc(slotId) {
 	return new Date(slotId * 15_000).toISOString().slice(11, 19);
 }
 
-// Wall-clock instant the decode actually finished, to 0.1 s.  Displaying
-// this (instead of the slot start) makes the end-to-end latency visible:
-// compare it against the slot start shown in the band separator.
-function finishedUtc(epoch) {
-	const d = new Date(epoch * 1000);
-	return `${d.toISOString().slice(11, 19)}.${Math.floor(d.getUTCMilliseconds() / 100)}`;
-}
-
-function latencyTag(seconds) {
-	if (seconds === null || seconds === undefined) return "";
-	const value = Number(seconds);
-	const sign = value >= 0 ? "+" : "";
-	return ` ${sign}${value.toFixed(1)}s`;
-}
-
 function rowText(c) {
 	const snr = `${c.snr > 0 ? "+" : ""}${c.snr}`.padStart(4);
 	const dt = `${c.dt >= 0 ? "+" : ""}${Number(c.dt).toFixed(1)}`.padStart(5);
@@ -30,13 +15,9 @@ function rowText(c) {
 	// Entity (DXCC country name from the server) trails the message text;
 	// empty for own echoes and unknown calls (no trailing space then).
 	const entity = c.entity ? ` ${c.entity}` : "";
-	// When the decode finished (wall clock, 0.1 s) + how far past the slot end
-	// it landed; falls back to the slot start when timing is unavailable.
-	const when =
-		typeof c.finished_epoch === "number"
-			? `${finishedUtc(c.finished_epoch)}${latencyTag(c.finished_after_slot_end_s)}`
-			: slotUtc(c.slot_id);
-	return `${when} ${snr} ${dt} ${freq} ${c.text}${entity}`;
+	// No per-row timestamp: the band separator carries the slot time (and the
+	// decode latency), and the rows are too narrow to spare the width.
+	return `${snr} ${dt} ${freq} ${c.text}${entity}`;
 }
 
 export function createCandidates(listElement) {
@@ -50,11 +31,18 @@ export function createCandidates(listElement) {
 	const DBLCLICK_MS = 600;
 	let lastClick = { key: null, t: 0 };
 
-	function separatorText(slotId, freqHz) {
+	function separatorText(slotId, freqHz, lagSeconds) {
 		const utc = slotUtc(slotId);
+		// Slot start plus how long after the slot end the decode actually
+		// landed (omitted when timing is unavailable, e.g. restored history).
+		const lag =
+			lagSeconds === null || lagSeconds === undefined
+				? ""
+				: ` (+${Number(lagSeconds).toFixed(1)}s)`;
+		const stamp = `${utc} UTC${lag}`;
 		return freqHz
-			? `── ${(freqHz / 1e6).toFixed(3)} MHz ─ ${utc} UTC ──`
-			: `── ${utc} UTC ──`;
+			? `── ${(freqHz / 1e6).toFixed(3)} MHz ─ ${stamp} ──`
+			: `── ${stamp} ──`;
 	}
 
 	// FT8 display filters (settings drawer): hide non-CQ rows, hide calls
@@ -86,7 +74,11 @@ export function createCandidates(listElement) {
 				previousSlot = candidate.slot_id;
 				const separator = document.createElement("li");
 				separator.className = "separator";
-				separator.textContent = separatorText(candidate.slot_id, freqHz);
+				separator.textContent = separatorText(
+					candidate.slot_id,
+					freqHz,
+					candidate.finished_after_slot_end_s
+				);
 				items.push(separator);
 			}
 			const item = document.createElement("li");

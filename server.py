@@ -529,6 +529,15 @@ METER_BROADCAST_LOG_INTERVAL_SECONDS = 0.5
 
 # Auth: valid session tokens (server-side, cleared on restart)
 _auth_tokens: set[str] = set()
+# When each live token was issued (epoch).  Only needed to age tokens out of
+# the on-disk store, so entries may be missing for tokens restored from a
+# file written by an older build.
+_token_issued: dict[str, float] = {}
+# Session tokens are persisted: the login cookie lives 30 days, and before
+# this store existed every restart — including the routine restarts an
+# upgrade performs — silently invalidated it, so browsers kept being bounced
+# to the login page while holding a perfectly valid cookie.
+_AUTH_TOKENS_MAX_AGE_S = 30 * 24 * 3600  # same lifetime as the cookie
 # Subset of _auth_tokens authenticated with the listen-only password
 # (MRRC_LISTEN_PASSWORD). A listen session may tune frequency and mode and
 # receive audio/spectrum, but every transmit/device-setting path is refused
@@ -615,6 +624,9 @@ def _resource_dir() -> Path:
 
 STATIC_DIR = _resource_dir() / "static"
 MEM_FILE = Path(_env("MRRC_MEM_FILE", str(_writable_runtime_dir() / "mem_channels.json")))
+# Where live session tokens are persisted (see _save_auth_tokens).
+_AUTH_TOKENS_FILE: Path = MEM_FILE.parent / "auth-tokens.json"
+
 # Recordings live in a directory of media files (mrrc layout) plus a small
 # JSON index next to the other runtime files; the launchers point
 # MRRC_RECORDINGS_DIR at the per-user data directory on packaged installs.
@@ -897,6 +909,89 @@ def _check_login_rate_limit(ip: str) -> bool:
 def _make_auth_token() -> str:
     """Generate a new random session token."""
     return _secrets.token_hex(AUTH_TOKEN_BYTES)
+
+def _load_auth_tokens() -> None:
+    """Restore persisted session tokens (best effort, never raises).
+
+    Called at import time so a restart keeps every 30-day login alive.  Tokens
+    older than the cookie lifetime and malformed entries are dropped; an
+    unreadable store simply starts empty rather than taking the server down.
+    """
+
+    try:
+        payload = json.loads(_AUTH_TOKENS_FILE.read_text(encoding="utf-8"))
+        entries = payload.get("tokens", [])
+    except FileNotFoundError:
+        return
+    except Exception as exc:                                          # noqa: BLE001
+        logger.warning("session store unreadable (%s); starting empty", exc)
+        return
+    now = time.time()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        token = entry.get("token")
+        issued = entry.get("issued_epoch")
+        issued = float(issued) if isinstance(issued, (int, float)) else now
+        if not isinstance(token, str) or not token:
+            continue
+        if now - issued > _AUTH_TOKENS_MAX_AGE_S:
+            continue
+        _auth_tokens.add(token)
+        _token_issued[token] = issued
+        if entry.get("role") == "listener":
+            _listen_tokens.add(token)
+
+
+def _save_auth_tokens() -> None:
+    """Persist the live tokens atomically, owner-readable only.
+
+    Failure is logged and ignored: losing the store costs a re-login after the
+    next restart, which must never break the login that is in progress.
+    """
+
+    payload = {
+        "tokens": [
+            {
+                "token": token,
+                "role": "listener" if token in _listen_tokens else "operator",
+                "issued_epoch": _token_issued.get(token, time.time()),
+            }
+            for token in sorted(_auth_tokens)
+        ]
+    }
+    try:
+        tmp = _AUTH_TOKENS_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        os.chmod(tmp, 0o600)
+        tmp.replace(_AUTH_TOKENS_FILE)
+    except OSError as exc:
+        logger.warning("could not persist session tokens: %s", exc)
+
+
+def _add_auth_token(token: str, *, listen: bool) -> None:
+    """Record a freshly issued session token and persist the store."""
+
+    _auth_tokens.add(token)
+    _token_issued[token] = time.time()
+    if listen:
+        _listen_tokens.add(token)
+    _save_auth_tokens()
+
+
+def _drop_auth_token(token: str) -> None:
+    """Forget a session token (logout) and persist the store."""
+
+    _auth_tokens.discard(token)
+    _listen_tokens.discard(token)
+    _token_issued.pop(token, None)
+    _save_auth_tokens()
+
+
+# Restore persisted sessions: the process may be a restart (an upgrade, a
+# crash) and browsers still hold a valid 30-day cookie.
+_load_auth_tokens()
+
 
 def _password_matches(candidate: str) -> bool:
     """Constant-time password comparison (SDD I9).
@@ -3703,9 +3798,8 @@ async def api_login(request: Request):
         logger.warning("Weak password detected! Use at least 12 characters with mixed case, numbers, and symbols.")
 
     token = _make_auth_token()
-    _auth_tokens.add(token)
+    _add_auth_token(token, listen=role == "listen")
     if role == "listen":
-        _listen_tokens.add(token)
         logger.info("Listen-only session logged in from %s", client_ip)
 
     response = JSONResponse({"ok": True, "token": token, "role": role})
@@ -3723,8 +3817,7 @@ async def api_logout(request: Request):
     """Invalidate the session token."""
     token = request.cookies.get(AUTH_COOKIE)
     if token:
-        _auth_tokens.discard(token)
-        _listen_tokens.discard(token)
+        _drop_auth_token(token)
     response = JSONResponse({"ok": True})
     response.delete_cookie(AUTH_COOKIE)
     return response
@@ -5508,7 +5601,7 @@ async def api_box_password(request: Request):
 
     identity = await asyncio.to_thread(box_ops.identity_report)
     token = _make_auth_token()
-    _auth_tokens.add(token)
+    _add_auth_token(token, listen=False)
     response = JSONResponse({"ok": True, "role": "admin", "token": token,
                              "hostname": identity["hostname"],
                              "mdns": identity["mdns"]})

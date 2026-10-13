@@ -210,6 +210,10 @@ slot ─▶ CascadingDecoder.decode(slot_id, samples)
    **deep 胜出**（同键保留 deep 那条）。**不把 `text` 当键**：快路径把没还原的呼号写成
    `<...>`、深路径还原成真呼号，同一信号的文本本来就会不同，拿文本当键等于把一条信号数两遍
    （Task 9 的 `test_hash_placeholder_is_merged_not_duplicated` 钉住了这一点）。
+   **`dt` 的帧约定（2026-10-13 终审修正）**：键里的 `dt` 是 **WSJT-X 帧** —— `dt = 0` 是
+   信号的名义起点（时隙内 0.5 s 处）。两条路径都必须先按这个基准上报 `dt`，它们的行才能被
+   合并；快路径若照 ft8_lib 的时隙起点上报，`dt` 恒差 0.62…0.68 s、合并键永远配不上
+   （`tests/ft8/dsp/test_ft8_fast_decode.py::test_fast_and_deep_dt_agree_on_the_same_slot` 钉住）。
 2. `ap_type` 取 deep（fast 恒为 0）。
 3. `snr` 取 deep —— 深路径用的是 WSJT-X 那套**标定过的**估计器，而快路径的 SNR 是更粗的
    水声图测量（见下），故同键取深路径那一条；**只有 fast 独有条目才用它的值** ——

@@ -40,6 +40,9 @@ def test_deep_wins_on_same_key_including_snr_and_ap_type() -> None:
 
 def test_hash_placeholder_is_merged_not_duplicated() -> None:
     # fast 保留 <HASH> 文本，deep 还原了呼号：同一 freq/dt 应视为同一条（Review Focus #1）
+    # 注意：两边用的是同一个合成 dt=0.2，所以本条测不出 fast/deep 的 dt 帧不一致 ——
+    # 那是 tests/ft8/dsp/test_ft8_fast_decode.py::test_fast_and_deep_dt_agree_on_the_same_slot
+    # （真解码）的职责。
     fast = _b(DecodePath.FAST, _r("CQ <...>", freq=1200.0, dt=0.2))
     deep = _b(DecodePath.IMPROVED, _r("CQ BA4EG", freq=1200.0, dt=0.2))
     merged = merge_batches(fast, deep)

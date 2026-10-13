@@ -37,6 +37,13 @@
    那是检测门限附近的性质，不是这个常数的偏差，所以别按最弱档去调它。 */
 #define FAST_SNR_CALIBRATION_DB 1.0
 
+/* WSJT-X 的 dt 基准：0 是**信号的名义起点**，即时隙内 0.5 s 处；而 ft8_lib
+   的 candidate->time_offset 是相对**时隙起点**的（vendor-ft8lib/ft8/decode.c:75
+   "relative to the captured signal"）。本仓两条路径必须同一个基准，否则
+   cascade.py 的 (freq, dt) 合并键永远配不上，升级过的时隙里每个信号都会
+   出两行。 */
+#define WSJT_DT_T0_OFFSET 0.5f
+
 /* 快路径没有跨时隙的呼号哈希表：查不到就保留 <HASH> 形式，
    深度路径升级时再还原。 */
 static bool fast_lookup_hash(ftx_callsign_hash_type_t type, uint32_t hash,
@@ -284,9 +291,21 @@ int32_t wsjt_ft8_decode_fast(const int16_t *samples,
         out->frequency = (float)(mon.min_bin + cand[i].freq_offset +
                                  (float)cand[i].freq_sub / mon.wf.freq_osr) /
                          mon.symbol_period;
+        /* dt 归一到 WSJT-X 帧（0 = 信号名义起点，时隙内 0.5 s 处），两条路径
+           的 (freq, dt) 合并键才配得上。这里扣两项：
+           - WSJT_DT_T0_OFFSET（0.5 s）：ft8_lib 的 time_offset/time_sub 相对
+             **时隙起点**（vendor-ft8lib/ft8/decode.c:75），WSJT-X 相对名义起点。
+           - mon.symbol_period：monitor 的分析窗 nfft = 4×subblock_size、每步滑
+             一个 sub-block（vendor-ft8lib/common/monitor.c:138-158），水声图第
+             (t, s) 行比 t + s/time_osr 暗示的中心**晚一个符号周期**。这一项必须
+             取 mon.symbol_period，不能写死 0.16（那是当前几何下的值）。
+           实测（400/1500/2800 Hz × 信号位置 0.0–2.0 s，0.1 s 步，63 个可比槽）：
+           修前两条路径 dt 原始差恒在 0.62…0.68 s（合并彻底失效）；修后 63/63 落在
+           0.15 s 容差内、最坏 |Δ| 0.040 s —— 3.75× 余量。 */
         out->dt = (float)(cand[i].time_offset +
                           (float)cand[i].time_sub / mon.wf.time_osr) *
-                  mon.symbol_period;
+                      mon.symbol_period
+                  - WSJT_DT_T0_OFFSET - mon.symbol_period;
         /* 由水声图量出的真 dB（见 fast_snr_db）。上一位作者照抄的
            `score/2` 是同步分、会饱和，已废弃 —— 那个值会被当作"收你多少
            dB"发到空中，所以它必须是真的。 */

@@ -18,7 +18,13 @@ def _batch(
     path: DecodePath = DecodePath.FAST,
     flags: int = FLAG_SNR_PROVISIONAL,
 ) -> DecodeBatch:
-    """默认造一批**快路径**结果 —— snr 是 score 估计值，故带上 provisional 标志。"""
+    """默认造一批带 provisional 标志的结果 —— 模拟一个**未标定 SNR 来源**。
+
+    快路径自 2026-10-13 起从水声图量真 dB、**不再置**这个标志（见
+    `ft8/engine/cascade.py` 的 `_snr_is_trustworthy`）。默认仍置上，是因为本文件
+    的用例要钉住「标志机制」本身 —— 任何未来的未标定来源仍要能靠它把自己挡在
+    峰值判据之外。
+    """
     results = tuple(
         DecodeResult(slot_id=1, sync=0.0, snr=s, dt=0.0, frequency=1500.0,
                      text="CQ TEST", ap_type=0, quality=0.0, flags=flags)
@@ -58,10 +64,11 @@ def test_escalates_when_too_few_decodes() -> None:
 
 
 def test_provisional_snr_never_drives_escalation() -> None:
-    """快路径的 snr 不是 dB —— 再"低"也不能拿它当弱信号判据。
+    """带 provisional 标志的 snr 不是 dB —— 再"低"也不能拿它当弱信号判据。
 
-    否则升级与否就由 score 的任意缩放决定了（见 spec D-7）。这些用例里
-    只有 min_decodes 该起作用：有结果就不升级。
+    这个标志的意思是「此数不可与 S_MIN 比较」（见 cascade.py 的
+    `_snr_is_trustworthy` 与 spec D-7 修订）；快路径早已不再置它，置它的只可能是
+    未来某个未标定的 SNR 来源。这些用例里只有 min_decodes 该起作用：有结果就不升级。
     """
     assert should_escalate(DEFAULT, _batch(-28, -30), my_call="", qso_progress=0,
                            requested=False) is False

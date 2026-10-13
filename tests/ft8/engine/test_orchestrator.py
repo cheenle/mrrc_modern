@@ -170,6 +170,19 @@ def test_boundary_epoch_for_slot_is_the_slots_end() -> None:
     assert boundary_epoch_for_slot(100, 15.0) - boundary_epoch_for_slot(99, 15.0) == 15.0
 
 
+def test_boundary_epoch_for_slot_uses_the_passed_period() -> None:
+    """`period` 必须真的耦合进边界：FT4 形状的调用方传 7.5，边界与预算随之缩放。
+
+    `period` 是可选参数、默认 FT8 的 15 s；若实现里忽略它、恒按 15 s 算，
+    一个 `period=7.5` 的调用方拿到的边界会是 `(slot_id + 1) * 15`，预算守卫
+    （cascade.py 的 `_remaining_budget`）于是被静默重新标定，而没有任何测试会红。
+    """
+
+    assert boundary_epoch_for_slot(0, period=7.5) == (0 + 1) * 7.5
+    assert boundary_epoch_for_slot(5, period=7.5) == (5 + 1) * 7.5
+    assert boundary_epoch_for_slot(5, period=7.5) == 45.0
+
+
 def test_config_validation() -> None:
     clock = FakeClock(0.0)
     decoder = FakeDecoder(clock)

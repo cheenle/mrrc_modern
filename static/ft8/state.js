@@ -10,6 +10,7 @@ const state = {
   station: { my_call: "", my_grid: "", worked_calls: [] },
   settings: null,
   candidates: [],
+  engineRunning: true,
   connected: { state: false, decodes: false, waterfall: false },
 };
 

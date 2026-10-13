@@ -44,6 +44,13 @@ async function boot() {
     if (mode === "ssb") location.href = "/";
   });
 
+  const start = document.getElementById("btn-ft8-start");
+  if (start) start.addEventListener("click", async () => {
+    start.disabled = true;
+    const result = await api.mode("ft8");
+    if (!result.ok) start.disabled = false;
+  });
+
   const adif = document.getElementById("btn-adif-export");
   if (adif) adif.addEventListener("click", () => {
     window.location.href = "/api/ft8/logs/adif";
@@ -55,7 +62,11 @@ async function boot() {
     backToSsb();
   });
 
-  subscribe(({ station, safety, workMode }) => {
+  subscribe(({ station, safety, workMode, engineRunning }) => {
+    // The engine is runtime-only (a restart returns the station to SSB), so
+    // say so instead of showing an empty decode list.
+    const hint = document.getElementById("ft8-engine-hint");
+    if (hint) hint.hidden = engineRunning !== false;
     document.getElementById("station-id").textContent =
       `${(station && station.my_call) || "MRRC FT8"}${safety.armed ? " — TX ARMED" : ""}`;
     const badge = document.getElementById("mode-badge");

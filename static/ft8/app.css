@@ -557,3 +557,30 @@ button.stop {
 	font-size: 14px;
 	padding: 8px 2px;
 }
+
+/* FT8 engine-not-running hint (restart returns the station to SSB). */
+#ft8-engine-hint {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	padding: 6px 12px;
+	background: #7c2d12;
+	color: #fed7aa;
+	font-size: 13px;
+}
+
+#ft8-engine-hint button {
+	background: #f59e0b;
+	color: #1a1a1a;
+	border: none;
+	border-radius: 6px;
+	padding: 3px 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+#ft8-engine-hint button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}

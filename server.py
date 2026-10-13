@@ -3023,7 +3023,13 @@ async def lifespan(app: FastAPI):
 
         async def _ft8_broadcast(mode: str) -> None:
             await _broadcast_state()
-            await _broadcast_ft8_json({"type": "mode", "mode": mode})
+            # Carry the engine state so the FT8 page can clear/show its
+            # "engine not running" hint without a page reload.
+            await _broadcast_ft8_json({
+                "type": "mode",
+                "mode": mode,
+                "engine_running": bool(_ft8_runtime is not None and _ft8_runtime.running),
+            })
 
         def _ft8_make_sequencer() -> Sequencer:
             settings = _ft8_settings_store.load()
@@ -3266,6 +3272,7 @@ try:
         token_from_handshake=_token_from_ws_handshake,
         auth_ok=lambda tok: tok in _auth_tokens,
         mode=lambda: _work_mode_value(),
+        engine_running=lambda: bool(_ft8_runtime is not None and _ft8_runtime.running),
         recent_decodes=lambda: (
             list(_ft8_runtime.recent_decodes) if _ft8_runtime is not None else []
         ),

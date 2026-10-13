@@ -687,6 +687,18 @@ def _session_view(session: Session) -> dict[str, Any]:
     }
 
 
+def _engine_running(state: AppState) -> bool:
+    """True while the FT8 engine (worker + orchestrator) is up.
+
+    The mode is runtime-only by design (a restart lands in SSB), so a page
+    opened after a restart must be able to say "the engine isn't running"
+    instead of showing a silent empty decode list.
+    """
+
+    runtime = getattr(state, "runtime", None)
+    return bool(runtime is not None and getattr(runtime, "running", False))
+
+
 def _dial_hz(state: AppState) -> int | None:
     """The radio's real dial frequency (falls back to the cached value)."""
 
@@ -728,6 +740,7 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
             else {"call": state.selected.from_call, "grid": state.selected.grid}
         ),
         "radio": {"freq_hz": _dial_hz(state)},
+        "engine_running": _engine_running(state),
         "last_tx": state.last_tx,
         "station": {
             "my_call": state.my_call,

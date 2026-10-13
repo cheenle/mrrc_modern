@@ -22,14 +22,14 @@ function dispatch(message) {
   if (!message || typeof message !== "object") return;
   switch (message.type) {
     case "hello":
-      patch({ workMode: message.mode });
+      patch({ workMode: message.mode, engineRunning: message.engine_running !== false });
       for (const batch of message.decodes || []) applyDecodeBatch(batch);
       break;
     case "decodes":
       applyDecodeBatch(message);
       break;
     case "mode":
-      patch({ workMode: message.mode });
+      patch({ workMode: message.mode, engineRunning: message.engine_running !== false });
       handlers.onMode?.(message.mode);
       break;
     default:

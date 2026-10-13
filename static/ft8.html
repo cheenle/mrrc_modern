@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101418">
   <title>MRRC FT8</title>
-  <link rel="stylesheet" href="ft8/app.css?v=1">
+  <link rel="stylesheet" href="ft8/app.css?v=2">
 </head>
 <body>
   <div id="cockpit">
@@ -20,6 +20,11 @@
       <span id="decode-counter" style="color:#3fbf6f;margin-left:8px">⏳</span>
       <span id="mode-badge" title="Work mode">FT8</span>
     </header>
+
+    <div id="ft8-engine-hint" hidden>
+      <span>FT8 引擎未运行（服务重启会回到 SSB）</span>
+      <button id="btn-ft8-start" type="button">启动 FT8</button>
+    </div>
 
     <main id="workspace">
       <section id="waterfall-pane" aria-label="Waterfall">
@@ -106,6 +111,6 @@
     </footer>
   </div>
 
-  <script type="module" src="ft8/main.js?v=1"></script>
+  <script type="module" src="ft8/main.js?v=2"></script>
 </body>
 </html>

@@ -64,12 +64,14 @@ class Ft8WsState:
                  auth_ok: Callable[[str], bool],
                  mode: Callable[[], str],
                  recent_decodes: Callable[[], list[dict]],
+                 engine_running: Callable[[], bool] | None = None,
                  control_request: Callable[[str, dict], Any] | None = None) -> None:
         self.bus = bus
         self.token_from_handshake = token_from_handshake
         self.auth_ok = auth_ok
         self.mode = mode
         self.recent_decodes = recent_decodes
+        self.engine_running = engine_running or (lambda: True)
         self.control_request = control_request
 
 
@@ -89,6 +91,7 @@ def create_ft8_ws_router(state: Ft8WsState) -> APIRouter:
             await ws.send_json({
                 "type": "hello",
                 "mode": state.mode(),
+                "engine_running": state.engine_running(),
                 "decodes": state.recent_decodes()[-20:],
             })
             while True:

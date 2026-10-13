@@ -64,7 +64,7 @@ if(APPLE)
     # ft8lib.cmake) added ~66 of them, so their families are enumerated below.
     # ld64 does apply glob patterns here (verified: `_ftx_*` removed all 20
     # ftx symbols), so tight per-family globs are used where a shared prefix
-    # exists and exact names otherwise.  None of these may match the four
+    # exists and exact names otherwise.  None of these may match the five
     # planned `_wsjt_*` entry points.
     file(GENERATE OUTPUT "${WSJT_CORE_UNEXPORTED_SYMBOLS}" CONTENT [=[
 ___emutls_*

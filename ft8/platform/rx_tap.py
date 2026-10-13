@@ -96,6 +96,10 @@ class RxTap:
             if ring is not None:
                 extra = (f" | ring base={ring.base} high={ring.high_water} "
                          f"gaps={ring.gap_count} dropped={ring.metrics.dropped_samples}")
+            # Clock-drift probe: is the tap's own timeline anchored wrong
+            # (constant offset) or advancing slower than wall clock?
+            drift = time.time() - self._next_index / self._out_rate
+            extra += f" | drift={drift:+.2f}s"
             log.info("RX tap: %d blocks fed (%.1f blocks/s), %d in / %d out samples%s",
                      self._feed_count, rate, self._consumed, self._out_count, extra)
             self._rate_mark = now

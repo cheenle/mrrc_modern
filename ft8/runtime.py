@@ -136,10 +136,17 @@ class Ft8Runtime:
             assert self.ring is not None
             return self.ring.read_slot(slot_id)
 
+        # The upstream grace (0.4 s) assumes an ~85 ms capture chain.  On the
+        # W103D the chain is guest-buffer(100 ms) + 80 ms read block + soxr
+        # (~80 ms) + scheduling — measured as a STABLE +0.8 s offset between
+        # the tap's timeline and the wall clock, so a 0.4 s grace skipped two
+        # slots out of three.  1.5 s clears it with margin and still lands
+        # inside the 5 s TX decision window.
         self.orchestrator = Orchestrator(
             self.decoder,
             read_slot,
             sequencer,
+            delivery_grace=1.5,
             on_decode=self._on_batch,
             on_decode_error=lambda slot_id, error: log.error("decode slot %s: %s", slot_id, error),
             on_slot_start=self._slot_started,

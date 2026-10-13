@@ -57,7 +57,8 @@ def test_cq_side_full_qso() -> None:
     assert record.dx_grid == "FN42"
     assert record.report_sent == -12
     assert record.report_rcvd == -5
-    assert record.started_utc == "221320"
+    # Snapped to the slot boundary (WSJT-X TIME_ON semantics).
+    assert record.started_utc == "221315"
     assert record.freq_hz == 14_074_000
     assert record.band == "20m"
 
@@ -312,7 +313,8 @@ def test_log_record_carries_start_time_and_context() -> None:
     seq.on_qso = captured.append
     drive_cq_qso(seq)
     record = captured[0]
-    assert record.started_utc == "221320"
+    # Snapped to the slot boundary: 22:13:20 is 5 s into the 22:13:15 slot.
+    assert record.started_utc == "221315"
     assert record.freq_hz == 14_074_000
     assert record.band == "20m"
 
@@ -367,3 +369,37 @@ def test_operator_clicked_reply_keeps_retrying_when_partner_turns_away() -> None
         assert seq.next_tx_message() == reply_text
     assert seq.next_tx_message() is None  # budget exhausted
     assert seq.disarm_reason == DisarmReason.RETRY_EXHAUSTED
+
+
+def run_full_qso_at(epoch: float) -> QSORecord:
+    captured: list[QSORecord] = []
+    seq = make(clock=lambda: epoch)
+    seq.on_qso = captured.append
+    seq.start_cq()
+    feed(seq, "N0CALL K1ABC FN42", snr_db=-12)
+    feed(seq, "N0CALL K1ABC R-05")
+    feed(seq, "N0CALL K1ABC 73")
+    assert captured, "QSO did not complete"
+    return captured[0]
+
+
+def test_qso_started_utc_snaps_to_the_slot_boundary() -> None:
+    """TIME_ON must be the slot boundary, matching WSJT-X semantics.
+
+    WSJT-X stores ``now - fmod(now.second(), TRperiod)`` (mainwindow.cpp
+    ``m_dateTimeQSOOn``): the start of the slot the operator was in when the
+    QSO began, not the raw wall clock, which would sit up to 14 s into the
+    slot and fail to match WSJT-X/JTDX logs for the same contact.
+    """
+
+    # 22:13:46 UTC — one second into the 22:13:45 slot.
+    record = run_full_qso_at(1_700_000_026.0)
+    assert record.started_utc == "221345"        # not "221346"
+
+
+def test_qso_started_utc_snaps_at_every_offset_in_the_slot() -> None:
+    """Any second inside a slot maps to the same TIME_ON."""
+
+    base = 1_700_000_025.0                       # 22:13:45 slot start
+    for offset in (0.0, 3.0, 7.5, 10.0, 14.9):
+        assert run_full_qso_at(base + offset).started_utc == "221345"

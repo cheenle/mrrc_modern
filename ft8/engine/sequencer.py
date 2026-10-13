@@ -24,6 +24,10 @@ from enum import StrEnum
 
 from .msgparse import ParsedMessage, addressed_to, base_call
 
+# FT8 slot length, used to snap TIME_ON to the slot boundary so logs match
+# WSJT-X/JTDX for the same contact (see finalize_qso).
+SLOT_SECONDS = 15.0
+
 # Standard-message reports are protocol-limited to -50..+50 dB (wsjtx-3.0.2
 # lib/77bit/packjt77.f90: isnr = irpt - 35 with the -50..-31 +101 wrap).
 REPORT_MIN, REPORT_MAX = -50, 50
@@ -328,8 +332,13 @@ class Sequencer:
             dx_grid=self.dx_grid,
             report_sent=self.report_sent,
             report_rcvd=self.report_rcvd,
+            # TIME_ON is the SLOT BOUNDARY of the slot the operator was in
+            # when the QSO began — matching WSJT-X, which stores
+            # ``now - fmod(now.second(), TRperiod)`` (mainwindow.cpp
+            # m_dateTimeQSOOn).  The raw wall clock sits up to 14 s into the
+            # slot and would not match WSJT-X/JTDX logs for the same contact.
             started_utc=(
-                time.strftime("%H%M%S", time.gmtime(started))
+                time.strftime("%H%M%S", time.gmtime(started - started % SLOT_SECONDS))
                 if started is not None
                 else ""
             ),

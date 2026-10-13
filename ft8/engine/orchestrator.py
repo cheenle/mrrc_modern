@@ -165,6 +165,7 @@ class Orchestrator:
         self.counters = OrchestratorCounters()
         self._running = False
         self._announced_slot: int | None = None
+        self._dispatched_slot: int | None = None
 
     async def _asyncio_sleep_until(self, epoch: float) -> None:
         delay = epoch - self._clock()
@@ -189,6 +190,26 @@ class Orchestrator:
             # ``slot_end`` stays the *nominal* end for lateness accounting.
             slot_end = slot_start_epoch(current + 1, self._period)
             boundary = slot_end - self._early_decode_s
+            if self._dispatched_slot is not None and current <= self._dispatched_slot:
+                # We are still inside a slot whose decode we already
+                # dispatched.  That is the normal state right after an early
+                # dispatch (``early_decode_s`` hands control back before the
+                # nominal slot end), and it is only safe if the clock really
+                # has crossed the boundary — which ``sleep_until`` does not
+                # promise: asyncio fires its timer up to one clock resolution
+                # early, and it sleeps on the monotonic clock while slot
+                # identity is derived from the wall clock.  When the wake-up
+                # lands a millisecond short, ``floor(clock / period)`` names
+                # the slot we just finished, the slot source already serves it
+                # instantly, and the loop decoded it a second time (field
+                # report 2026-10-13: every fast-path slot duplicated on the
+                # FT8 page).  The deep path never woke up early enough to get
+                # here, so the race stayed hidden until the fast path landed.
+                # Slot identity may only move forward; the wait is not the
+                # invariant.  ``slot_end`` is strictly ahead of the clock —
+                # ``current`` was derived from that same clock one line ago.
+                await self._sleep_until(slot_end)
+                continue
             _trace += 1
             if _trace <= 3 or _trace % 20 == 0:
                 print(f"[orch-trace] loop={_trace} now={self._clock():.3f} slot={current} "
@@ -215,13 +236,12 @@ class Orchestrator:
                 continue
             if _trace <= 3 or _trace % 20 == 0:
                 print(f"[orch-trace] slot={current} samples={len(samples)} -> decode", flush=True)
+            # Claim the slot BEFORE the decode: whatever the decode does
+            # (succeed, fail or raise), this slot is spent.  A slot whose data
+            # never landed is deliberately not claimed — the next iteration
+            # retries it while it is still the current one.
+            self._dispatched_slot = current
             await self._slot_ended(current, slot_end, samples)
-            # An early dispatch leaves the clock inside the slot we just
-            # handled (decode itself usually covers the remainder).  Consume
-            # any leftover so the next iteration advances to the NEXT slot
-            # instead of decoding this one twice.
-            if self._early_decode_s > 0 and self._clock() < slot_end:
-                await self._sleep_until(slot_end)
 
     async def _wait_for_slot(self, slot_id: int, boundary_epoch: float) -> bytes | None:
         """Return the ended slot's samples as soon as they land in the ring.

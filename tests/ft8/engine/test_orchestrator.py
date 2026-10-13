@@ -454,3 +454,65 @@ def test_early_decode_zero_preserves_upstream_behaviour() -> None:
 
     for event in events:
         assert event.dispatched_epoch >= slot_start_epoch(event.slot_id + 1)
+
+
+class EarlyWakeClock:
+    """A clock whose ``sleep_until`` wakes a tick BEFORE its target.
+
+    That is what the real one does: asyncio runs a timer whose deadline is
+    within the loop's clock resolution, so ``asyncio.sleep`` may return
+    early — and it sleeps on the monotonic clock while slot identity comes
+    from the wall clock, so the two drift apart.  Time still passes; the
+    wait just does not promise the clock reached the target.
+    """
+
+    def __init__(self, epoch: float, tick: float = 0.0005) -> None:
+        self.epoch = epoch
+        self.tick = tick
+
+    def __call__(self) -> float:
+        return self.epoch
+
+    def advance(self, seconds: float) -> None:
+        self.epoch += seconds
+
+    async def sleep_until(self, epoch: float) -> None:
+        delay = epoch - self.epoch
+        if delay <= 0:
+            return
+        self.epoch += max(delay - self.tick, self.tick)
+
+
+def test_a_sleep_that_wakes_early_does_not_decode_the_same_slot_twice() -> None:
+    """时隙身份只许前进：``sleep_until`` 早醒一次也不能重解刚才的时隙。
+
+    现场报告 2026-10-13（快路径上线当天）：FT8 页面每个时隙出现重复行，服务端
+    日志里同一个 slot_id 被解码两次。机制是早派发 —— ``early_decode_s`` 让解码在
+    时隙名义结束前就派发，回填的那次 ``sleep_until(slot_end)`` 若早返回，墙钟便
+    仍在该时隙内，``floor(clock / period)`` 于是又指回刚解完的同一个时隙，而槽源
+    此时已经能立刻供数，于是原地重解。深路径（约 4 s）总在时隙结束后才结束，
+    这条路径从来不会走到，所以它一直藏着。
+    """
+
+    clock = EarlyWakeClock(7.5)
+    decoder = FakeDecoder(clock, texts=["CQ K1ABC FN42"])
+    pcm = b"\x00" * 360_000
+    events: list[SlotDecode] = []
+    orchestrator = Orchestrator(
+        decoder,
+        lambda slot_id: pcm,
+        Sequencer("N0CALL", "FN42"),
+        clock=clock,
+        sleep_until=clock.sleep_until,
+        early_decode_s=1.2,
+        on_slot_start=lambda slot_id: None,
+        on_decode=lambda event: (
+            events.append(event),
+            orchestrator.stop() if len(events) == 3 else None,
+        ),
+    )
+    asyncio.run(orchestrator.run())
+
+    assert [call[0] for call in decoder.calls] == [0, 1, 2]
+    assert [event.slot_id for event in events] == [0, 1, 2]
+    assert orchestrator.counters.decodes == 3

@@ -11,7 +11,7 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` | 75.6 MB (79,257,177 bytes) | `ba956b19d1568ba14a57ac9ac6464a1ff30b17e056a7ba8d2f8b0a4e480f7a9d` |
+| `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` | 75.6 MB (79,263,639 bytes) | `c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.27.0-Windows-x64-Setup.exe>
@@ -28,8 +28,8 @@ package — nine DLLs, ~16 MB, which is most of the size jump. The gate itself f
 Windows-only red: `test_auth_persistence.test_store_is_owner_readable_only` asserted a POSIX `0600`
 mode, which Windows cannot have (the code was right, the test was not). Evidence taken from the
 artifact: `version.txt` = `1.27.0`, size
-**79,257,177 bytes** (v1.25.4 was 54,347,067), mtime **2026-10-13 17:46:09**, and the cross-host
-SHA-256 matched (build VM == build Mac) — **`ba956b19…`**.
+**79,263,639 bytes** (v1.25.4 was 54,347,067), mtime **2026-10-13 17:46:09**, and the cross-host
+SHA-256 matched (build VM == build Mac) — **`c0cb8225…`**.
 
 **Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build in
 v1.25.3): that build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —

@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> **最新构建：v1.27.0（2026-10-13）** —— VM 门禁 **2197 项 OK（33 skip）**；`dev_tools/tls_trust_gate.py` 通过；产物 `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` **79,257,177 bytes**，SHA-256 `ba956b19d1568ba14a57ac9ac6464a1ff30b17e056a7ba8d2f8b0a4e480f7a9d`（VM `certutil` 与 Mac `shasum` 逐字一致）。
+> **最新构建：v1.27.0（2026-10-13）** —— VM 门禁 **2197 项 OK（33 skip）**；`dev_tools/tls_trust_gate.py` 通过；产物 `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` **79,263,639 bytes**，SHA-256 `c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be`（VM `certutil` 与 Mac `shasum` 逐字一致）。
 > **FT8 进包（本版新增，也是体积从 55.9 MB 涨到 79.3 MB 的全部来源）**：`build.ps1` 先跑 MSYS2 MinGW 的 cmake+ninja 编出 `wsjt_core.dll`，再用 `objdump -p` **走出**运行期 DLL 闭包（不写死清单，MSYS2 换代多一个依赖会是构建失败而不是装完打不开）——`_internal\` 下 9 个文件：`wsjt_core` + FFTW×2 + gfortran/gomp/quadmath/gcc_s/stdc++/winpthread；`wsjt_*` 导出 43 个符号，`static\ft8.html` 与 `static\ft8\main.js` 在包内。
 >
 > **本轮三层证据**（缺一层就不算验过）：

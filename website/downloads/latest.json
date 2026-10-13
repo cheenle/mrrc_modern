@@ -1,19 +1,19 @@
 {
-  "latest": "1.26.0",
+  "latest": "1.27.0",
   "installer": {
-    "version": "1.26.0",
+    "version": "1.27.0",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe",
-    "sha256": "5fc8b192317d432eec88904d8168553d4ea874409225ca89a6999d125486b6c3",
-    "size": 55866721
+    "sha256": "c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be",
+    "size": 79263639
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-12T04:11:34",
-  "notes": "1.26.0：W103D 盒子刷完机不再需要 HDMI 与键盘——接上网线，在局域网页面（/setup 与 /settings）里自己配 Wi-Fi、名字、时区并重启（引导热点那条路已在真机判死）；树莓派镜像与盒子共用同一套服务层，一次性拿到 11 型号切换、内置 aarch64 FTDI 库（开箱真频谱）、Cloud Hub 与 mrrc-update；新增客户主动开启、限时、随时可关的远程协助通道（口令只在客户手里，公网上没有 SSH 端口）。W103D 盒子请只连 2.4 GHz Wi-Fi：5 GHz 能关联但数据面不通，还会把 MT7663 芯片拖到 MCU 超时。",
+  "releasedAt": "2026-10-13T18:38:23",
+  "notes": "1.27.0：新增 FT8 工作模式（主菜单切换，SSB↔FT8，台况逐字段恢复；解码默认走快路径、按需级联到 WSJT-X 深路径；发射与 SSB 共用同一条门控）。四个平台的产物都自带原生 DSP 库：W103D 与树莓派镜像在构建期编译，macOS 与 Windows 安装包在打包时编译并携带运行期依赖——刷机或装包后 FT8 直接可用。修复：dt 显示偏大 0.6 s 与「升级过的时隙显示两遍」。",
   "previous": {
-    "version": "1.25.5",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.25.5-Windows-x64-Setup.exe",
-    "sha256": "1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2",
-    "size": 54395338
+    "version": "1.26.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.26.0-Windows-x64-Setup.exe",
+    "sha256": "5fc8b192317d432eec88904d8168553d4ea874409225ca89a6999d125486b6c3",
+    "size": 55866721
   }
 }

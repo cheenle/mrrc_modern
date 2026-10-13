@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import pytest
 
 from ft8.core.models import DecodeBatch, DecodeConfig, DecodePath, DecodeResult
 from ft8.engine.cascade import CascadePolicy, CascadingDecoder
+from ft8.engine.orchestrator import slot_id_for, slot_start_epoch
 
 
 def _r(text: str, snr: int = -5) -> DecodeResult:
@@ -92,6 +94,34 @@ def test_budget_guard_skips_escalation_when_time_is_short() -> None:
     assert out.path is DecodePath.FAST
     assert [p for p, _t, _c in inner.seen] == [DecodePath.FAST]
     assert decoder.deadline_risk == 1, "被预算挡下的升级要计数（Task 13 依赖它）"
+
+
+def test_default_clock_is_the_epoch_base() -> None:
+    """**不传 `clock=`** —— 钉死默认值就是 `time.time`（epoch 秒）。
+
+    这是全仓库唯一能看见那个默认值的地方：其它用例都显式注入 `clock=`，
+    所以把默认改成 `time.monotonic` 时它们全绿。后果却不在测试里，在生产：
+    `clock() − boundary_epoch` 变成约 −1.7e9，`_remaining_budget` 返回一个
+    巨大的正数，**预算守卫永不触发**（守卫看着还在，实际从不生效 —— 最贵的一种错）。
+
+    判据用**量级**而非函数对象身份：两种时钟都是单调递增的，只有量级能把
+    「基准不一致」和「正常运转」分开。取真实时隙网格上的一个 epoch 尺度边界
+    （当前槽的起点），同一基准下预算在秒级（这里落在 (−12.55, 2.45]），
+    基准错位时则是约 1.7e9。边界与时钟同源自 time.time，所以无论测试落在
+    当前 15s 时隙的哪一段，断言都稳；不需要 sleep，也没有竞态。
+    """
+    decoder = CascadingDecoder(
+        PathAwareFake({}), CascadePolicy(),
+        cutoff=2.5,
+        boundary_epoch_for=slot_start_epoch,
+    )
+    slot_id = slot_id_for(time.time())
+    budget = decoder._remaining_budget(slot_id)
+    assert budget < 60.0, (
+        f"remaining budget {budget!r} is not on the seconds scale — "
+        f"the default clock is off its epoch base (clock={decoder._clock!r})"
+    )
+    assert decoder._clock is time.time
 
 
 def test_fast_failure_falls_back_to_deep() -> None:

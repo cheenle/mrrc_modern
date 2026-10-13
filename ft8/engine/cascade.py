@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ft8.core.models import DecodeBatch, DecodePath
+from ft8.core.models import DecodeBatch, DecodePath, DecodeResult
 
 # 与 ft8/dsp/wsjt_core.h 的 WSJT_FLAG_SNR_PROVISIONAL 同值（bit 4）。
 FLAG_SNR_PROVISIONAL = 16
@@ -106,6 +106,7 @@ def merge_batches(fast: DecodeBatch, deep: DecodeBatch) -> DecodeBatch:
         path=path,
         results=tuple(merged),
         overflow=fast.overflow or deep.overflow,
+        deadline_missed=fast.deadline_missed or deep.deadline_missed,
         elapsed_seconds=fast.elapsed_seconds + deep.elapsed_seconds,
         escalated=True,
         fast_elapsed_seconds=fast.elapsed_seconds,

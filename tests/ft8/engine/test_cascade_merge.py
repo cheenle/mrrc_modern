@@ -60,6 +60,25 @@ def test_overflow_is_logical_or() -> None:
     assert merge_batches(fast, deep).overflow is True
 
 
+def test_deadline_missed_is_logical_or() -> None:
+    """`deadline_missed` 是第 6 个位置字段（`elapsed_seconds` 之后）。
+
+    OR 有三个方向，`and` 只在「两边都为 True」时才同样为 True —— 所以只测一个
+    方向的用例在 `and` 下也会通过。三个方向都要钉住。
+    """
+    fast_missed = DecodeBatch(1, DecodePath.FAST, (_r("A"),), False, 0.1, True)
+    deep_ok = DecodeBatch(1, DecodePath.IMPROVED, (_r("B"),), False, 0.2)
+    assert merge_batches(fast_missed, deep_ok).deadline_missed is True
+
+    fast_ok = DecodeBatch(1, DecodePath.FAST, (_r("A"),), False, 0.1)
+    deep_missed = DecodeBatch(1, DecodePath.IMPROVED, (_r("B"),), False, 0.2, True)
+    assert merge_batches(fast_ok, deep_missed).deadline_missed is True
+
+    neither = DecodeBatch(1, DecodePath.FAST, (_r("A"),), False, 0.1)
+    also_neither = DecodeBatch(1, DecodePath.IMPROVED, (_r("B"),), False, 0.2)
+    assert merge_batches(neither, also_neither).deadline_missed is False
+
+
 def test_merging_two_different_slots_is_an_error() -> None:
     """并的是**同一个**时隙的两条路径结果 —— 不同 slot 的合并是凭空造 QSO。"""
     fast = DecodeBatch(7, DecodePath.FAST, (_r("CQ AAA"),), False, 0.1)

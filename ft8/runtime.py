@@ -253,10 +253,30 @@ class Ft8Runtime:
         log.info("slot %s: %d message(s) from %d result(s)",
                  getattr(slot_decode, "slot_id", "?"), len(views),
                  len(getattr(getattr(slot_decode, "batch", None), "results", ()) or ()))
+        slot_id = int(getattr(slot_decode, "slot_id", 0))
+        dispatched = getattr(slot_decode, "dispatched_epoch", None)
+        finished = getattr(slot_decode, "finished_epoch", None)
+        # Real-world latency accounting for the operator (and for field
+        # diagnosis): when the decode actually finished, and how long after
+        # the slot it was dispatched/finished.
+        timing = {
+            "slot_start_epoch": slot_id * 15.0,
+            "slot_end_epoch": (slot_id + 1) * 15.0,
+            "dispatched_epoch": dispatched,
+            "finished_epoch": finished,
+        }
+        if dispatched is not None:
+            timing["dispatched_after_slot_end_s"] = round(dispatched - (slot_id + 1) * 15.0, 2)
+        if finished is not None:
+            timing["finished_after_slot_end_s"] = round(finished - (slot_id + 1) * 15.0, 2)
+        for view in views:
+            view["finished_epoch"] = finished
+            view["finished_after_slot_end_s"] = timing.get("finished_after_slot_end_s")
         frame = {
             "type": "decodes",
-            "slot_id": getattr(slot_decode, "slot_id", 0),
+            "slot_id": slot_id,
             "late": bool(getattr(slot_decode, "late", False)),
+            "timing": timing,
             "messages": views,
         }
         self.recent_decodes.append(frame)

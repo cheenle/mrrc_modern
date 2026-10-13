@@ -8,6 +8,21 @@ function slotUtc(slotId) {
 	return new Date(slotId * 15_000).toISOString().slice(11, 19);
 }
 
+// Wall-clock instant the decode actually finished, to 0.1 s.  Displaying
+// this (instead of the slot start) makes the end-to-end latency visible:
+// compare it against the slot start shown in the band separator.
+function finishedUtc(epoch) {
+	const d = new Date(epoch * 1000);
+	return `${d.toISOString().slice(11, 19)}.${Math.floor(d.getUTCMilliseconds() / 100)}`;
+}
+
+function latencyTag(seconds) {
+	if (seconds === null || seconds === undefined) return "";
+	const value = Number(seconds);
+	const sign = value >= 0 ? "+" : "";
+	return ` ${sign}${value.toFixed(1)}s`;
+}
+
 function rowText(c) {
 	const snr = `${c.snr > 0 ? "+" : ""}${c.snr}`.padStart(4);
 	const dt = `${c.dt >= 0 ? "+" : ""}${Number(c.dt).toFixed(1)}`.padStart(5);
@@ -15,7 +30,13 @@ function rowText(c) {
 	// Entity (DXCC country name from the server) trails the message text;
 	// empty for own echoes and unknown calls (no trailing space then).
 	const entity = c.entity ? ` ${c.entity}` : "";
-	return `${slotUtc(c.slot_id)} ${snr} ${dt} ${freq} ${c.text}${entity}`;
+	// When the decode finished (wall clock, 0.1 s) + how far past the slot end
+	// it landed; falls back to the slot start when timing is unavailable.
+	const when =
+		typeof c.finished_epoch === "number"
+			? `${finishedUtc(c.finished_epoch)}${latencyTag(c.finished_after_slot_end_s)}`
+			: slotUtc(c.slot_id);
+	return `${when} ${snr} ${dt} ${freq} ${c.text}${entity}`;
 }
 
 export function createCandidates(listElement) {

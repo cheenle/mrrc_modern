@@ -123,3 +123,40 @@ def test_early_decode_is_wired_into_the_runtime() -> None:
     assert min_samples == 165_600          # 13.8 s of 12 kHz audio
     # The padded region must stay clear of the FT8 waveform (12.64 s).
     assert runtime_mod.FT8_SLOT_SECONDS - runtime_mod.EARLY_DECODE_S > 12.64 + 1.0
+
+
+def test_decodes_frame_carries_completion_timing() -> None:
+    """The UI can show real latency: completion instant + lag past slot end."""
+
+    from types import SimpleNamespace
+
+    from ft8 import runtime as runtime_mod
+
+    captured: list[dict] = []
+    rt = object.__new__(runtime_mod.Ft8Runtime)
+    rt.sequencer = SimpleNamespace(my_call="", my_grid="")
+    rt._dial_freq_hz = 14_074_000
+    rt._worked_index = lambda: None
+    rt._dumped_slots = 99                      # no slot dumping in this test
+    rt.recent_decodes = runtime_mod.deque(maxlen=50)
+    rt._on_decode = captured.append
+    rt.ring = None
+
+    slot_id = 119457247
+    slot_end = (slot_id + 1) * 15.0
+    decode = SimpleNamespace(
+        slot_id=slot_id,
+        late=False,
+        dispatched_epoch=slot_end - 1.2,
+        finished_epoch=slot_end + 1.0,
+        batch=SimpleNamespace(results=()),
+        messages=(),
+    )
+    rt._on_batch(decode)
+
+    frame = captured[0]
+    assert frame["timing"]["slot_start_epoch"] == slot_id * 15.0
+    assert frame["timing"]["slot_end_epoch"] == slot_end
+    assert frame["timing"]["finished_epoch"] == slot_end + 1.0
+    assert frame["timing"]["finished_after_slot_end_s"] == 1.0
+    assert frame["timing"]["dispatched_after_slot_end_s"] == -1.2

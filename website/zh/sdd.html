@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.73 更新</a></li>
+          <li><a href="#updates">V2.84 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.83 · 2026-10-11</span>
+          <span>SDD V2.84 · 2026-10-13</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,7 +110,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.83</td>
+              <td>V2.84</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -143,6 +143,27 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-satellite-dish"></i></div>
+            <h3>
+              FT8 的原生库，现在跟着每个产物一起走
+              <small>（V2.84）</small>
+            </h3>
+            <p>
+              FT8 是 Python 加一个原生库，而 v1.27.0 之前<em>没有任何产物携带它</em>——
+              只有 W103D 上那份验收时手工编译的。现在两条镜像线在镜像构建期编出
+              <code>libwsjt_core.so</code>，并由 <code>mrrc-update</code> 按源码摘要重编；
+              macOS 的 DMG 把 dylib 与它的五个 FFTW/gfortran 依赖一起收进 app（load command
+              全部改写成 <code>@loader_path</code>，还有 <code>/opt/local</code> 残留就构建失败）；
+              Windows 安装包用 MSYS2 mingw-w64 编出 <code>wsjt_core.dll</code>，并用
+              <code>objdump</code> <em>走出</em>运行期 DLL 闭包而不是信任一份写死的清单。
+              <code>&lt;boost/crc.hpp&gt;</code> 的包含闭包也已 vendor 化，四平台的构建路径上
+              不再需要装那 138 MB 的 Boost。两个<em>只有打包后才存在</em>的缺陷——全新安装没有
+              <code>&lt;runtime&gt;/ft8/</code> 目录、冻结包缺
+              <code>multiprocessing.freeze_support()</code>——都是被冻结包的洁净室真跑抓出来的，
+              套件当时是全绿的。
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-network-wired"></i></div>
             <h3>

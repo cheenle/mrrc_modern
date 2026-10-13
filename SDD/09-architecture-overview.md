@@ -114,3 +114,29 @@ FT8 decodes each 15 s slot through a **two-stage** decoder (design spec `docs/su
 2. **Adaptive cascade** — `ft8/engine/cascade.py`'s `CascadingDecoder` runs the fast path first, then re-decodes **the same slot** on the deep WSJT-X path only when a criterion fires: AP context active (`my_call` set and `qso_progress > 0`), suspected miss (`len(fast) < min_decodes` or the peak SNR below `min_peak_snr = -26`), or an operator's one-shot "deep decode this slot" request. The two batches are merged (`merge_batches`, keyed on `(frequency, dt)` within tolerance, deep wins; the union is never smaller than always-deep). A budget guard **refuses the escalation** when the time left before the 2.5 s decision cutoff is below the deep path's measured lower bound, counting a `deadline_risk` instead — never a late result.
 
 `CascadingDecoder.decode` matches `SupervisorDecoder.decode` exactly, so `Orchestrator` is unaware of which path ran and the `2.5 s` `late` rule is unchanged; the cascade just decides before it. A fast-path failure (or a missing `decode_paths` bit) falls back to the deep path, so the fast path can never decode fewer messages than before. Observability: `OrchestratorCounters` gains `fast_decodes` and `escalations` (`fast_decodes + escalations <= decodes`; a fast-path failure that falls back counts as neither), `CascadingDecoder` carries `deadline_risk`, exposed via `runtime.cascade_stats`, and `LatencyHistogram.record` gained a `path` dimension with bucket key `<path>/p<profile>/t<threads>` (`path ∈ {fast, improved}`).
+
+## 9.10 FT8 Native Library: Built Per Platform, Shipped In Every Artifact
+
+The FT8 engine is Python plus **one native library** (`libwsjt_core.so` / `libwsjt_core.dylib` /
+`wsjt_core.dll`), and since v1.27.0 that library is a component of every artifact rather than a
+hand-compiled extra (design spec `docs/superpowers/specs/2026-10-13-ft8-packaging-design.md`):
+
+| Platform | Where the library comes from | What travels with it |
+| --- | --- | --- |
+| W103D + Raspberry Pi images | built during the image build (`packaging/common/mrrc-service-layer.sh` runs `ft8/dsp/build.sh`), rebuilt by `linux/mrrc_update.sh` whenever the DSP sources' digest changes | the runtime packages (`libgfortran5`, `libgomp1`, `libfftw3-single3`) |
+| macOS DMG | `packaging/macos/build.sh` builds it and `packaging/macos/ft8_bundle.py` collects the transitive dependency closure | five dylibs (FFTW, gfortran, gomp, quadmath, libgcc_s), every load command rewritten to `@loader_path` — the build fails if any `/opt/local` reference survives |
+| Windows installer | `packaging/windows/build.ps1` builds it with MSYS2 mingw-w64 (cmake + ninja) | the runtime DLL closure, **walked with `objdump -p`** rather than hard-coded (9 files, ~16 MB) |
+
+`ft8/core/worker.py:default_library_path()` resolves the platform's own name at the PyInstaller
+`_internal` root (`app_root()`), and the binding **hard-checks the ABI** on load, so an old library
+next to new Python refuses to start instead of silently decoding differently. `<boost/crc.hpp>`'s
+include closure is vendored (`ft8/dsp/vendor-boost/`) so no platform needs Boost installed.
+
+Two defects this layering was hiding, both found by clean-room runs of the *packaged* apps
+(2026-10-13) and both fixed here:
+
+* a fresh install has no `<runtime>/ft8/` directory, and `sqlite3` cannot create missing parents —
+  `Repository` raised `OperationalError` and the composition guard silently ran SSB-only;
+* a frozen bundle must call `multiprocessing.freeze_support()`, or the DSP worker's spawn child
+  re-enters `main()`, argparse exits 2, and FT8 reports `spawn_failed`.
+

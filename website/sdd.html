@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.73</a></li>
+          <li><a href="#updates">V2.84</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.83 · 2026-10-11</span>
+          <span>SDD V2.84 · 2026-10-13</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.83</td>
+              <td>V2.84</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,33 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-satellite-dish"></i></div>
+            <h3>
+              The FT8 Library Now Travels With Every Artifact
+              <small>(V2.84)</small>
+            </h3>
+            <p>
+              The FT8 work mode is Python plus one native library, and until
+              v1.27.0 no artifact carried it: only the W103D box had one,
+              hand-compiled during acceptance. Both image lines now build
+              <code>libwsjt_core.so</code> during the image build and rebuild it
+              by source digest on every update; the macOS DMG bundles the dylib
+              with its five FFTW/gfortran dependencies (every load command
+              rewritten to <code>@loader_path</code>, and the build refuses to
+              continue if a <code>/opt/local</code> reference survives); the
+              Windows installer builds <code>wsjt_core.dll</code> with MSYS2
+              mingw-w64 and walks its runtime DLL closure with
+              <code>objdump</code> instead of trusting a hard-coded list.
+              <code>&lt;boost/crc.hpp&gt;</code>'s include closure is vendored, so
+              the 138 MB Boost installation left all four build paths. Two
+              defects that only the packaged apps had — a missing
+              <code>&lt;runtime&gt;/ft8/</code> directory on a fresh install, and
+              a frozen bundle without
+              <code>multiprocessing.freeze_support()</code> — were found by
+              clean-room runs of the frozen binaries, not by the suite.
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-network-wired"></i></div>
             <h3>

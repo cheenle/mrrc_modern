@@ -296,6 +296,7 @@
 <li><a href="#附界面元素与后台命令对照供高级用户排障" id="toc-附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</a></li>
 <li><a href="#一键-cq-呼叫服务端v1.17-起" id="toc-一键-cq-呼叫服务端v1.17-起">一键 CQ 呼叫（服务端，v1.17 起）</a></li>
 <li><a href="#qso-录音服务端v2.42-起" id="toc-qso-录音服务端v2.42-起">QSO 录音（服务端，v2.42 起）</a></li>
+<li><a href="#ft8-工作模式" id="toc-ft8-工作模式">5.5 FT8 工作模式</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -1282,6 +1283,12 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>单击</td>
 </tr>
 <tr>
+<td>—</td>
+<td>FT8 模式</td>
+<td>切到 FT8 工作界面：解码列表 / 瀑布 / TX 面板 / QSO 面板；点右上「←」回到 SSB，台况逐字段恢复</td>
+<td>单击（详见 §5.5「FT8 工作模式」）</td>
+</tr>
+<tr>
 <td>44</td>
 <td>连接设置…</td>
 <td>打开连接设置对话框（机型 / 串口 / 波特率 / 音频设备）</td>
@@ -1608,6 +1615,16 @@ venv/bin/pip install -r requirements.txt
 <h3 id="录音出现丢失-n-块怎么办">录音出现”丢失 N 块”怎么办</h3>
 <p>录制按钮提示或面板行里出现 <code>⚠ 丢失 N 块</code>，表示<strong>写入端跟不上音频输入</strong>，该录音会有空洞。服务端日志会打印首条丢弃与原因。常见原因：磁盘/网络盘写入太慢（把 <code>MRRC_RECORDINGS_DIR</code> 换成本地盘）、CPU 长时间满载。编码本身极快（实测 80 ms 音频块约 0.04 ms，约 1900 倍实时），所以几乎不会是编码器的问题。</p>
 <p><strong>整段录音全哑（能播但没声音）</strong>：若日志里 <code>Recording started</code> 之后<strong>立刻</strong>出现「正在丢弃」、丢弃数一路涨，最后以 <code>Recording queue full on stop</code> 收尾 —— 或录音面板每次都显示 <code>⚠ 丢失 N 块</code>、文件明显是静音 —— 那是 v1.16.0 的录音写入端生命周期缺陷（同一进程里从第二次录音起没有消费者）。升级到含该修复的版本并<strong>重启服务</strong>即可；判定办法：<code>REC</code> → 停止 → 从菜单「录音」播放，听第一秒有没有声音。</p>
+<h2 id="ft8-工作模式">5.5 FT8 工作模式</h2>
+<p>主菜单 → <strong>FT8 模式</strong> 打开独立的 FT8 界面（<code>/static/ft8.html</code>）：左侧是解码列表（呼号 / 网格 / SNR / 距离）， 中间是音频瀑布，右侧是 TX 面板（CQ / 呼号、Grid、射频模式设置）与 QSO 面板。</p>
+<ul>
+<li><strong>切换语义</strong>：进入 FT8 时电台切到 FT8 频点与 DATA-U，滤波 3 kHz；点右上「←」回到 SSB 时， 频率 / 模式 / 滤波 / 功率 / AGC / ATT / PREAMP <strong>逐字段恢复</strong>。两个模式共用同一条 TX 门控， <strong>结构上不可能同时键控</strong>——所以在 FT8 里发射时，SSB 页面的 PTT 不会（也不能）抢走发射。</li>
+<li><strong>解码</strong>：默认走快路径（C 解码器），命中判据（正在通联的 AP 上下文、疑似漏解、或按「深度解码本槽」） 才对<strong>同一时隙</strong>补跑 WSJT-X 深路径并取并集——解出的条数不会比纯深路径少。</li>
+<li><strong>设置</strong>：呼号 / Grid / 射频模式（<code>DATA-U</code> / <code>USB</code>）在 FT8 页面的设置抽屉里，与 Cloud Hub 呼号无关。</li>
+<li><strong>紧急停止</strong>：任意已认证会话都可以按 STOP，FT8 的发射立即中止并释放 PTT。</li>
+<li><strong>只读角色</strong>：<code>listen</code> 角色可以看解码与瀑布，不能切模式、不能发射。</li>
+</ul>
+<p>设计与验收：<code>docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md</code>、 <code>docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md</code>、<code>docs/ft8-m5-acceptance.md</code>。</p>
     </main>
 </div>
 

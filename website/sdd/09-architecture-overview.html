@@ -196,13 +196,59 @@
 <li><strong>High-SWR auto full tune</strong> — the client’s METER path runs a guard (instance state, no module globals): while the operator transmits (measured power ≥5 W) and SWR stays &gt;2.0 for ≥1.5 s, it queues ONE full-tune frame (mode=2, sent by the worker through the existing <code class="scope-code">_pending_*</code>/<code class="scope-code">_wake</code> channel). 30 s cooldown; 3 consecutive no-improvement tunes per frequency, then <code class="scope-code">auto_giveup</code> until the frequency changes or the SWR recovers; a QSY &gt;1 kHz or a fresh relay change restarts the run. After tuning clears (relay-stable &gt;5 s / same-relay confirm / TX end / 45 s timeout / device <code class="scope-code">TUNE_STATUS=0</code>), a 0.8 s-later comparison writes the relays back with <code class="scope-code">learn(force_update=True)</code> <strong>only when SWR improved ≥0.02 and the result is ≤1.8</strong> — the relays are never rolled back. Auto-tune phases reach the UI as <code class="scope-code">atrTuneResult</code> with <code class="scope-code">auto=true</code> (6 phases); a disconnect or a failed send emits the <code class="scope-code">auto_aborted</code> terminal phase. <strong>The guard never keys the radio</strong>: it acts only inside an existing transmission and sends nothing but a tuner frame (SDD ch15), which is also why learning now keys off measured power (≥3 W) instead of the server-side TX signal — panel PTT and external-software transmissions learn too.</li>
 </ol>
 <p><strong>Default-disabled isolation</strong>: <code class="scope-code">MRRC_ATR1000_HOST</code> empty (default) means no client task, no network traffic, linkage hooks short-circuit, <code class="scope-code">/WSatr1000</code> closes with code 4000, and the frontend module is never initialized. ATR data is deliberately kept out of RadioState (separate channel, same precedent as spectrum); the audio path is untouched.</p>
+<h2 id="ft8-decode-path-fast-default-adaptive-cascade">9.9 FT8 Decode Path: Fast Default + Adaptive Cascade</h2>
+<p>FT8 decodes each 15 s slot through a <strong>two-stage</strong> decoder (design spec <code class="scope-code">docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md</code>; performance analysis <code class="scope-code">docs/ft8-w103d-decode-perf-analysis.md</code> §9):</p>
+<ol type="1">
+<li><strong>Fast path (default)</strong> — <code class="scope-code">wsjt_ft8_decode_fast</code> in <code class="scope-code">ft8/dsp/wsjt_fast.c</code>, the <code class="scope-code">kgoba/ft8_lib</code> C decoder (kiss-fft, no AP, no OSD, single pass) compiled into the <strong>same</strong> <code class="scope-code">libwsjt_core</code> (so the single locked ctypes boundary is preserved) and reached through the one <code class="scope-code">ft8/core/binding.py</code>. This is <code class="scope-code">DecodePath.FAST</code>; it measures ~0.15 s on the W103D versus ~2.2 s for the WSJT-X deep path. All its knobs stay at the upstream defaults — the A53 spike (analysis §9) showed every faster setting buys time only by trading away weak-signal sensitivity, which is exactly what the cascade exists to protect.</li>
+<li><strong>Adaptive cascade</strong> — <code class="scope-code">ft8/engine/cascade.py</code>’s <code class="scope-code">CascadingDecoder</code> runs the fast path first, then re-decodes <strong>the same slot</strong> on the deep WSJT-X path only when a criterion fires: AP context active (<code class="scope-code">my_call</code> set and <code class="scope-code">qso_progress &gt; 0</code>), suspected miss (<code class="scope-code">len(fast) &lt; min_decodes</code> or the peak SNR below <code class="scope-code">min_peak_snr = -26</code>), or an operator’s one-shot “deep decode this slot” request. The two batches are merged (<code class="scope-code">merge_batches</code>, keyed on <code class="scope-code">(frequency, dt)</code> within tolerance, deep wins; the union is never smaller than always-deep). A budget guard <strong>refuses the escalation</strong> when the time left before the 2.5 s decision cutoff is below the deep path’s measured lower bound, counting a <code class="scope-code">deadline_risk</code> instead — never a late result.</li>
+</ol>
+<p><code class="scope-code">CascadingDecoder.decode</code> matches <code class="scope-code">SupervisorDecoder.decode</code> exactly, so <code class="scope-code">Orchestrator</code> is unaware of which path ran and the <code class="scope-code">2.5 s</code> <code class="scope-code">late</code> rule is unchanged; the cascade just decides before it. A fast-path failure (or a missing <code class="scope-code">decode_paths</code> bit) falls back to the deep path, so the fast path can never decode fewer messages than before. Observability: <code class="scope-code">OrchestratorCounters</code> gains <code class="scope-code">fast_decodes</code> and <code class="scope-code">escalations</code> (<code class="scope-code">fast_decodes + escalations &lt;= decodes</code>; a fast-path failure that falls back counts as neither), <code class="scope-code">CascadingDecoder</code> carries <code class="scope-code">deadline_risk</code>, exposed via <code class="scope-code">runtime.cascade_stats</code>, and <code class="scope-code">LatencyHistogram.record</code> gained a <code class="scope-code">path</code> dimension with bucket key <code class="scope-code">&lt;path&gt;/p&lt;profile&gt;/t&lt;threads&gt;</code> (<code class="scope-code">path ∈ {fast, improved}</code>).</p>
+<h2 id="ft8-native-library-built-per-platform-shipped-in-every-artifact">9.10 FT8 Native Library: Built Per Platform, Shipped In Every Artifact</h2>
+<p>The FT8 engine is Python plus <strong>one native library</strong> (<code class="scope-code">libwsjt_core.so</code> / <code class="scope-code">libwsjt_core.dylib</code> / <code class="scope-code">wsjt_core.dll</code>), and since v1.27.0 that library is a component of every artifact rather than a hand-compiled extra (design spec <code class="scope-code">docs/superpowers/specs/2026-10-13-ft8-packaging-design.md</code>):</p>
+<table class="scope-table">
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Where the library comes from</th>
+<th>What travels with it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>W103D + Raspberry Pi images</td>
+<td>built during the image build (<code class="scope-code">packaging/common/mrrc-service-layer.sh</code> runs <code class="scope-code">ft8/dsp/build.sh</code>), rebuilt by <code class="scope-code">linux/mrrc_update.sh</code> whenever the DSP sources’ digest changes</td>
+<td>the runtime packages (<code class="scope-code">libgfortran5</code>, <code class="scope-code">libgomp1</code>, <code class="scope-code">libfftw3-single3</code>)</td>
+</tr>
+<tr>
+<td>macOS DMG</td>
+<td><code class="scope-code">packaging/macos/build.sh</code> builds it and <code class="scope-code">packaging/macos/ft8_bundle.py</code> collects the transitive dependency closure</td>
+<td>five dylibs (FFTW, gfortran, gomp, quadmath, libgcc_s), every load command rewritten to <code class="scope-code">@loader_path</code> — the build fails if any <code class="scope-code">/opt/local</code> reference survives</td>
+</tr>
+<tr>
+<td>Windows installer</td>
+<td><code class="scope-code">packaging/windows/build.ps1</code> builds it with MSYS2 mingw-w64 (cmake + ninja)</td>
+<td>the runtime DLL closure, <strong>walked with <code class="scope-code">objdump -p</code></strong> rather than hard-coded (9 files, ~16 MB)</td>
+</tr>
+</tbody>
+</table>
+<p><code class="scope-code">ft8/core/worker.py:default_library_path()</code> resolves the platform’s own name at the PyInstaller <code class="scope-code">_internal</code> root (<code class="scope-code">app_root()</code>), and the binding <strong>hard-checks the ABI</strong> on load, so an old library next to new Python refuses to start instead of silently decoding differently. <code class="scope-code">&lt;boost/crc.hpp&gt;</code>’s include closure is vendored (<code class="scope-code">ft8/dsp/vendor-boost/</code>) so no platform needs Boost installed.</p>
+<p>Two defects this layering was hiding, both found by clean-room runs of the <em>packaged</em> apps (2026-10-13) and both fixed here:</p>
+<ul>
+<li>a fresh install has no <code class="scope-code">&lt;runtime&gt;/ft8/</code> directory, and <code class="scope-code">sqlite3</code> cannot create missing parents — <code class="scope-code">Repository</code> raised <code class="scope-code">OperationalError</code> and the composition guard silently ran SSB-only;</li>
+<li>a frozen bundle must call <code class="scope-code">multiprocessing.freeze_support()</code>, or the DSP worker’s spawn child re-enters <code class="scope-code">main()</code>, argparse exits 2, and FT8 reports <code class="scope-code">spawn_failed</code>.</li>
+</ul>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.83 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.84 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

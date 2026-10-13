@@ -112,13 +112,17 @@ $Gxx = (Join-Path $MingwBin "g++.exe").Replace("\", "/")
 # Directly, not through Invoke-Checked: `-S`, `-B`, `-G` and the -D... cache
 # flags are single-dash tokens, which the wrapper's argument binding mangles on
 # PowerShell 5.1 (see the scipy check above).
+# The -D...=$Var arguments are quoted on purpose.  PowerShell expands a bare
+# argument like -DCMAKE_MAKE_PROGRAM=$Ninja only in some parse contexts, and on
+# this machine it did not: CMake received the literal string '$Ninja' and died
+# with "'$Ninja' --version failed with: no such file or directory" (2026-10-13).
 & $Cmake -S "ft8/dsp" -B "ft8/dsp/build" -G Ninja `
-    -DCMAKE_BUILD_TYPE=Release `
-    -DCMAKE_MAKE_PROGRAM=$Ninja `
-    -DPKG_CONFIG_EXECUTABLE=$PkgConfig `
-    -DCMAKE_Fortran_COMPILER=$Gfortran `
-    -DCMAKE_C_COMPILER=$Gcc `
-    -DCMAKE_CXX_COMPILER=$Gxx
+    "-DCMAKE_BUILD_TYPE=Release" `
+    "-DCMAKE_MAKE_PROGRAM=$Ninja" `
+    "-DPKG_CONFIG_EXECUTABLE=$PkgConfig" `
+    "-DCMAKE_Fortran_COMPILER=$Gfortran" `
+    "-DCMAKE_C_COMPILER=$Gcc" `
+    "-DCMAKE_CXX_COMPILER=$Gxx"
 if ($LASTEXITCODE -ne 0) { throw "FT8 DSP cmake configure failed ($LASTEXITCODE)" }
 & $Cmake --build "ft8/dsp/build" -j 4
 if ($LASTEXITCODE -ne 0) { throw "FT8 DSP build failed ($LASTEXITCODE)" }

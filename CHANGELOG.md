@@ -55,7 +55,7 @@ FT8 点了就是「库缺失」。这一版把它变成产物的一个组成部�
 - **代价**：镜像安装后 +约 70 MB（构建工具链），`.img.xz` 约 +20–25 MB；Windows 安装包 +约 16 MB。
 - **验收工具同步**：盒子 `verify.sh` 与树莓派 `verify-image.sh` 都加了一项——
   不只查文件在不在，而是**真加载一次**并核对 ABI 与能力掩码。
-- **验证**：`unittest` **2200 项**（macOS 实测；FT8 另有独立的 pytest 套件 744 项）；
+- **验证**：`unittest` **2200 项**（macOS 实测；FT8 另有独立的 pytest 套件 751 项）；
   Windows VM 门禁 **2197 项 OK（33 skip）**；macOS 与 Windows 的冻结包**都做了洁净室真跑**——
   这一步抓出两个真缺陷（全新安装没有 `<runtime>/ft8/` 数据目录、冻结包缺
   `multiprocessing.freeze_support()`，后者会让 FT8 worker 永远起不来），两侧修好后日志里都能看到

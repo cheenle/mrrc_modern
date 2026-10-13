@@ -69,7 +69,7 @@ the 2200 above. Run it with:
 .venv/bin/python -m pytest tests/ft8 -q
 ```
 
-Measured 2026-10-13 (macOS): **744 passed, 2 skipped, 1 xfailed** — the DSP subset
+Measured 2026-10-13 (macOS): **751 passed, 2 skipped, 1 xfailed** — the DSP subset
 (`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
 and includes the fast-path / cascade regression the design
 (`docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`) pinned.

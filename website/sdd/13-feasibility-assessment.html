@@ -156,6 +156,11 @@
 <td>High</td>
 <td>All core features (control, audio, spectrum, meters, memories) implemented for both supported backends</td>
 </tr>
+<tr>
+<td>FT8 decode-latency feasibility</td>
+<td>High</td>
+<td>Default fast path (<code class="scope-code">ft8_lib</code> via <code class="scope-code">DecodePath.FAST</code>) measures ~0.15 s on the W103D; the adaptive cascade re-runs the deep WSJT-X path on the same slot only when a criterion fires, and a budget guard refuses the escalation rather than miss the 2.5 s decision cutoff. Field (W103D, 2026-10-13): decode completion median −0.11 s after slot end for fast-path slots and +1.23 s for escalated slots, versus +4.01 s for always-deep (<code class="scope-code">docs/ft8-w103d-decode-perf-analysis.md</code> §9.7). The escalation <em>rate</em> is not yet measured in the field</td>
+</tr>
 </tbody>
 </table>
 <h2 id="risks">13.2 Risks</h2>
@@ -267,6 +272,13 @@
 <td>Medium-High</td>
 <td>Medium</td>
 <td><code class="scope-code">verified=False</code> + <code class="scope-code">unverified_meters</code> capability list; PTT/TUNE refused at the backend boundary until <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> (release never gated); <code class="scope-code">_diag_civ.py</code> report round-trip turns each assumption into a measurement; SDD V2.41</td>
+</tr>
+<tr>
+<td>R14</td>
+<td>FT8 cascade: if the escalation-rate criterion is wrong the net gain shrinks — a busy band that escalates on most slots spends the fast path’s 0.15 s on top of the deep path, i.e. back to always-deep latency plus a little. The default <code class="scope-code">deep_lower_bound_s</code> (2.3 s) is a measured-plus-margin estimate that can drift with SD-card/load</td>
+<td>Medium</td>
+<td>Medium</td>
+<td>The escalation rate is observed directly via <code class="scope-code">OrchestratorCounters.escalations</code> (never inferred from the latency histogram); thresholds (<code class="scope-code">min_decodes</code>/<code class="scope-code">min_peak_snr</code>) and <code class="scope-code">deep_lower_bound_s</code> are configurable and persisted (<code class="scope-code">CascadePolicy</code>), so the operator can tighten without a rebuild; the budget guard makes a wrong threshold cost a skipped escalation, never a late (display-only) decode</td>
 </tr>
 </tbody>
 </table>
@@ -535,7 +547,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.83 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.84 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

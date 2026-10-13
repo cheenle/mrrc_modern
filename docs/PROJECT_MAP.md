@@ -46,6 +46,7 @@
 | `tools/support_receiver/**` + `deploy_support_receiver.sh` | AD-021 §9 | `test_support_receiver.py` | SDD 12.5.1、CHANGELOG |
 | `packaging/**` | AD-001、SDD 12 | `test_windows_packaging_files.py`、`test_rpi_packaging.py` | `mac_pack.md` / `win_pack.md` / `pi_pack.md`、安装指南 |
 | `packaging/box/**` + `linux/**`（W103D 通用电台盒子镜像 —— **只有部署层，尚未发版**） | SDD 12（部署形态）、14（V2.74） | `test_box_profiles.py`、`test_mrrc_radio.py`、`test_host_score.py` | `docs/w103d_pack.md`、`packaging/box/README.md`、AGENTS、README |
+| `ft8/**`（FT8 工作模式；解码默认走快路径 `ft8/dsp/wsjt_fast.c`，按需级联到深路径 `ft8/engine/cascade.py`） | 规格 `docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`、计划 `docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md`、SDD 09.9 / 13（R14、FT8 可行性行）、perf 分析 §9 | `tests/ft8/`（**pytest 专套件**，54 模块，`unittest discover` 收不到） | AGENTS（FT8 铁律）、`tests/README.md`（§FT8 Suite）、CHANGELOG、perf 分析 |
 
 ### 2.2 设计层
 
@@ -67,7 +68,7 @@
 | --- | --- | --- |
 | 依赖 | `requirements.txt` / `DEPENDENCIES.md` | 支持链路**无新增依赖**（纯标准库）；新依赖要同时进 PyInstaller spec 的 `hiddenimports`；**随包数据文件**（如 `vendor/ca/cacert.pem`）要同时进 spec 的 `datas` 与两个 build 脚本的拷贝清单 —— 只改一处就是「本机好、打包坏」（`test_tls_trust_store.py` 与 `packaging/*/build.*` 各自守一半） |
 | 环境变量 | `config.py`（`MRRC_*`，兼容 `FT710_*`） | README 环境表 + AGENTS + SDD 12 三处同改 |
-| 测试 | `python -m unittest discover -s tests`（当前 **1673 例 / 89 模块**，2026-10-06 实测） | 新增模块要进 `tests/README.md` 的计数与清单（AGENTS.md 不复述计数） |
+| 测试 | `python -m unittest discover -s tests`（当前 **2182 例 / 114 模块**，2026-10-13 实测；FT8 是**独立的 pytest 套件**，`unittest` 收不到，见 `tests/README.md` §FT8 Suite） | 新增模块要进 `tests/README.md` 的计数与清单（AGENTS.md 不复述计数） |
 | 打包 | `packaging/{macos,windows,rpi,box}/` | 见 §4 发布链；`box/` 是**独立于三平台发布链**的部署形态（镜像尚未构建） |
 | 支持链路 | `support_bundle.py`、`tools/support_receiver/`、`deploy_support_receiver.sh` | 接收端部署是幂等的；诊断包隐私契约由 `constraints.json` 的 `support-bundle-privacy` + 三个测试模块守住（AD-021） |
 | 静态检查 | `~/.pi-lens/tools/node_modules/.bin/pyright`（配 `pyrightconfig.json`）+ `biome.json` | 两个前端文件禁止被格式化（见 AGENTS） |

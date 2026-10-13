@@ -176,8 +176,19 @@ Short imperative summaries. Pull requests should describe user-visible behavior,
   `build.sh` 幂等构建 `ft8/dsp/build/libwsjt_core.*`（设备上原生编译）。
 - 移植自 MRRC-FT8（`HAM/ft8`）：`ft8/{core,engine}` 保持 verbatim，平台耦合只允许在
   `ft8/platform/`、`ft8/web/`、`ft8/mode.py` 与 `server.py` 的接线处。
+- **解码默认走快路径，按需级联到深路径**：`ft8/dsp/wsjt_fast.c` 是 `kgoba/ft8_lib`
+  （C、kiss-fft）编进**同一个** `libwsjt_core` 的 `wsjt_ft8_decode_fast`（无 AP / 无 OSD /
+  单趟，全部取上游默认旋钮 —— 降旋钮只换走弱信号鲁棒性，见
+  `docs/ft8-w103d-decode-perf-analysis.md` §9 的 A53 spike）；
+  `ft8/engine/cascade.py` 的 `CascadingDecoder` 在命中升级判据（AP 上下文 / 疑似漏解 /
+  用户显式请求）时对**同一时隙**补跑深路径并合并两批（`merge_batches`：键
+  `(frequency, dt)` 带容差、deep 胜出），预算不足则**宁可不升级**（计 `deadline_risk`），
+  快路径整个失败时回落 improved —— **绝不少解码**。计数在 `orchestrator.counters` 的
+  `fast_decodes`/`escalations` 与 `runtime.cascade_stats`。
 - 规格与计划：`docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md`、
-  `docs/superpowers/plans/2026-10-12-ft8-work-mode.md`。
+  `docs/superpowers/plans/2026-10-12-ft8-work-mode.md`（工作模式本体）；
+  `docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`、
+  `docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md`（快路径 + 自适应级联）。
 
 ## Security & Configuration Tips
 

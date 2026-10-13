@@ -6,10 +6,12 @@ Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
 2182 tests across 114 test modules (19 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-12, macOS). The per-module sections below
-itemise 70 of those 113 — the support-chain, Cloud Hub and upgrade-channel modules
-predate the list and are not yet written up, so
-`python -m unittest discover -s tests` is the authority for any total.
+from `unittest discover` on 2026-10-13, macOS). **That total is the `unittest`
+suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
+collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
+sections below itemise 64 of those 114 — the support-chain, Cloud Hub and
+upgrade-channel modules predate the list and are not yet written up, so
+`python -m unittest discover -s tests` is the authority for the `unittest` total.
 
 ```bash
 python -m unittest discover -s tests -v
@@ -20,10 +22,10 @@ python -m unittest discover -s tests -v
 | Metric | Value |
 | -------- | ------- |
 | Total tests | 2182 |
-| Passed | 2168 (1 skipped) |
+| Passed | 2181 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 1 |
-| Execution time | ~2min (harness tests spawn CLI subprocesses) |
+| Failed | 0 (macOS, 2026-10-13) |
+| Execution time | ~1min (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
 `test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload`
@@ -54,6 +56,23 @@ test_main_pages_show_the_current_sdd_version}` (compare the generated / landing
 pages against the current SDD version). Each goes red only while those scripts or
 pages are being edited in the same working tree and no artifact has been
 republished. None is a defect in the code under test here.
+
+## FT8 Suite (pytest)
+
+The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separate,
+pytest-only** suite of 54 modules under `tests/ft8/`. It is written in the pytest
+style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
+`python -m unittest discover -s tests` collects **none** of it and it is not part of
+the 2182 above. Run it with:
+
+```bash
+.venv/bin/python -m pytest tests/ft8 -q
+```
+
+Measured 2026-10-13 (macOS): **735 passed, 2 skipped, 1 xfailed** — the DSP subset
+(`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
+and includes the fast-path / cascade regression the design
+(`docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`) pinned.
 
 ## Test Modules
 

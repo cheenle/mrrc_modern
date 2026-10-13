@@ -1,7 +1,9 @@
 # FT8 快路径 + 自适应级联解码 设计
 
 - **日期**：2026-10-13
-- **状态**：待评审（本文件通过后进入实现计划）
+- **状态**：已实现（2026-10-13；A53 spike 结论与真机前后对照见
+  `docs/ft8-w103d-decode-perf-analysis.md` §9。正文的实现订正已回填：
+  §5.4 `clock` 基准与必填参数、§6 合并键与 SNR、§9 合并键、§10 观测维度与计数、§13 的 O-1/O-2 状态）
 - **范围**：W103D 盒子（aarch64，4×Cortex-A53 @1.8 GHz）为主验收目标；代码结构保持跨平台可移植（macOS / Windows / rpi）
 - **配套**：`2026-10-12-ft8-work-mode-design.md`（FT8 工作模式本体）——本文件是其**解码路径**的增量，不覆盖、不修改它
 - **依据**：`docs/ft8-w103d-decode-perf-analysis.md` §7（反汇编）与 §8（A/B 实测）
@@ -147,11 +149,14 @@ class CascadingDecoder:
         inner: SlotDecoder,                 # 生产里就是 SupervisorDecoder
         policy: CascadePolicy,
         *,
-        clock: Callable[[], float] = time.monotonic,
-        cutoff: float = DEFAULT_DECISION_CUTOFF_SECONDS,   # 2.5
+        boundary_epoch_for: Callable[[int], float],   # 必填：本时隙结束的 epoch（§8 预算守卫）
+        cutoff: float,                      # 必填：决策截止，唯一来源是 orchestrator 的那一个
+        clock: Callable[[], float] = time.time,       # 必须是 epoch 秒，见下
         deep_threads: int = 3,              # §3 算术：deep 必须 >= 3 线程
         deep_lower_bound_s: float = 2.3,    # 预算守卫用的实测下界
         safety_margin_s: float = 0.05,
+        ap_context: Callable[[], tuple[str, int]] | None = None,   # 判据 (a) 的输入
+        requested: Callable[[], bool] | None = None,               # 判据 (c) 的输入
     ) -> None: ...
 
     async def decode(self, slot_id: int, samples: bytes) -> DecodeBatch: ...
@@ -159,6 +164,14 @@ class CascadingDecoder:
 
 - 接口与 `SupervisorDecoder.decode` **完全一致** → engine 无感替换。
 - `inner` 与 `clock` 均可注入 → 策略测试**不碰原生库**。
+- **实现订正（Task 10）**：`clock` 默认是 **`time.time`**（epoch 秒），不是 `time.monotonic`
+  —— `orchestrator.py` 的 `clock` 与 `boundary_epoch` 都是 epoch 秒，混用会让
+  `clock() − boundary` 恒为约 −1.7e9、预算守卫的余量永远为正、**在真实运行里永不触发**。
+  `boundary_epoch_for` 与 `cutoff` 因此都改成**必填、不给默认值**：`slot * 15.0` 这种
+  "默认" 会把单调时钟和时隙号混算，忘了注入的后果是预算判断静默出错而不是报错；
+  截止值也不在本模块另设一份默认 —— `orchestrator.py` 的
+  `DEFAULT_DECISION_CUTOFF_SECONDS` 是它唯一的来源，两处各自 2.5 只会在有人改了
+  orchestrator 之后悄悄分叉（守卫被静默重新标定，且没有任何测试会红）。
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -193,10 +206,14 @@ slot ─▶ CascadingDecoder.decode(slot_id, samples)
 
 **合并规则**（合并后是两批的**并集**，故"能力零回退"）：
 
-1. 以 `(frequency, dt, text)` 为键去重；**deep 胜出**（同键保留 deep 那条）。
+1. 以 **`(frequency, dt)` 带容差**（`_FREQ_TOL=5.0` Hz / `_DT_TOL=0.15` s）为键去重；
+   **deep 胜出**（同键保留 deep 那条）。**不把 `text` 当键**：快路径把没还原的呼号写成
+   `<...>`、深路径还原成真呼号，同一信号的文本本来就会不同，拿文本当键等于把一条信号数两遍
+   （Task 9 的 `test_hash_placeholder_is_merged_not_duplicated` 钉住了这一点）。
 2. `ap_type` 取 deep（fast 恒为 0）。
-3. `snr` 取 deep —— fast 的 SNR 是上游作者的 TODO 估计（`snr = score * 0.5f`），**不可信**，
-   只有 fast 独有的条目才用它的值。
+3. `snr` 取 deep —— 深路径用的是 WSJT-X 那套**标定过的**估计器，而快路径的 SNR 是更粗的
+   水声图测量（见下），故同键取深路径那一条；**只有 fast 独有条目才用它的值** ——
+   这一句现在才真正安全（见 D-7 修订）。
 4. `overflow` 取两批的逻辑或；`slot_id` 取被采纳者的。
 5. `path` 取**最终决定结果的那一批**：deep 非空取 `IMPROVED`；
    deep 返回 0 条而 fast 非空时取 `FAST`（并集里全是 fast 的条目）。**任何情况下不丢条目。**
@@ -241,15 +258,29 @@ remaining = cutoff − (now − slot_boundary) − elapsed_fast − safety_margi
 | deep 升级失败 | 返回 `batch_fast`（已有结果不丢），记 error |
 | 超预算跳过升级 | 不算 error，计 `deadline_risk` |
 | `-ffast-math`（或任何编译开关）改变解出条数 | 直接禁用该开关 —— 正确性门，由测试盯（§11） |
-| 合并时 `(freq, dt, text)` 键冲突 | deep 胜出，fast 那条丢弃（不报错） |
+| 合并时 `(freq, dt)` 键冲突（带容差，见上 §6 规则 1） | deep 胜出，fast 那条丢弃（不报错） |
 
 ## 10. 观测
 
-- `ft8/engine/latency.py` 的 `LatencyHistogram` 增加维度：每条记录带
-  `path`（fast/deep/escalated）与 `escalated` 标志，使运维能看出
-  "升级率"与"升级后的尾部分布"——这是判断默认阈值是否选对的数据来源。
-- 新增轻量计数（复用 `orchestrator.counters` 风格）：
-  `fast_decodes`、`escalations`、`escalation_skipped_budget`、`deadline_risk`。
+- `ft8/engine/latency.py` 的 `LatencyHistogram` 增加一个 **path 维度**：
+  `record(path, profile, threads, elapsed_seconds)`，桶键 `<path>/p<profile>/t<threads>`，
+  其中 `path ∈ {fast, improved}`（`DecodePath` 的两个取值）。`path` 是必需的维度、不是修饰：
+  默认的 fast 路径约 0.15 s、深路径约 2.2 s，混在一个桶里会让快路径把深路径的尾部分布整个
+  冲淡，而 NFR-002 要回答的恰恰是深路径离 2.5 s 截止还有多远。**没有 `escalated` 维度，
+  也不该有**：直方图唯一的记录点在 `SupervisorDecoder.decode_path` 内部，跑在
+  `CascadingDecoder` **决定是否升级之前**，那一行永远不知道本槽最终升没升 —— 真按早稿的
+  写法加一个"升级"桶，它会永远空着（"看着有、从不出现"）。**升级率由另一个量回答**：
+  下面的 `escalations` 计数，不是直方图维度。
+- 新增轻量计数（复用 `orchestrator.counters` 风格）：`fast_decodes`、`escalations`；
+  `CascadingDecoder` 另带 `deadline_risk`（超预算跳过升级的次数，由 `runtime.cascade_stats`
+  暴露）。**不设 `escalation_skipped_budget`**：它与 `deadline_risk` 在当前实现里每次都是
+  同一个事件、同一个自增量，两个名字数一个数只会让读的人以为漏了一个；等真的出现第二种
+  跳过原因（例如 deep 路径超时）再拆。注意 `fast_decodes + escalations <= decodes` 是
+  **有意的**：快路径整个失败而补跑深路径的批次两者都不算，所以它们是 `decodes` 的互斥子集，
+  不是"相加等于 decodes"。
+- `escalated` 是 `DecodeBatch` 上的一个**布尔字段**（不是 path 的一种）；`DecodeBatch.elapsed_seconds`
+  是快路径 + 深路径之和、`fast_elapsed_seconds` 是升级前的快路径耗时 —— 单槽总耗时与
+  "慢在哪一段"由这两个字段回答。
 - 与 Cloud Hub 会话打点（`session_metrics.py`）无关，**不打点**任何逐会话内容。
 
 ## 11. 测试策略
@@ -318,6 +349,8 @@ remaining = cutoff − (now − slot_boundary) − elapsed_fast − safety_margi
   已被它单独覆盖）；`S_MIN` 是"宁可信其有"的补充。真实场次数据回来后可再收紧。
 - **开放问题 O-2**：`deep_lower_bound_s` 默认 2.3 s 是**实测 + 余量**的估计；
   不同 SD 卡 / 负载下会漂移，首期先保守，靠 §10 的升级率观测校准。
+  **状态**：实现已按 2.3 s 出厂（`cascade.py` 的 `DEFAULT_DEEP_LOWER_BOUND_SECONDS`），
+  仍是配置项；真实场次数据回来前不改它。
 - **结论（2026-10-13 A53 spike）—— ft8_lib 本机深度优化空间很小，且大多不可用**：
 
   | 杠杆 | 实测/估算 | 判定 |

@@ -11,6 +11,7 @@
 | Mobile feasibility | Medium-High | Responsive UI adapts to backend `capabilities`; iOS requires HTTPS for mic (reverse proxy) |
 | Operational feasibility | High | Single-process server, backend selection via env var, start/stop scripts, PID file management |
 | Product completeness | High | All core features (control, audio, spectrum, meters, memories) implemented for both supported backends |
+| FT8 decode-latency feasibility | High | Default fast path (`ft8_lib` via `DecodePath.FAST`) measures ~0.15 s on the W103D; the adaptive cascade re-runs the deep WSJT-X path on the same slot only when a criterion fires, and a budget guard refuses the escalation rather than miss the 2.5 s decision cutoff. Field (W103D, 2026-10-13): decode completion median −0.11 s after slot end for fast-path slots and +1.23 s for escalated slots, versus +4.01 s for always-deep (`docs/ft8-w103d-decode-perf-analysis.md` §9.7). The escalation *rate* is not yet measured in the field |
 
 ## 13.2 Risks
 
@@ -29,6 +30,7 @@
 | R11 | 电台 USB 串口桥在物理层反复重枚举（macOS `ENXIO`/`ENOENT`），导致 CAT 周期性中断（现场单日 171 次）；软件无法阻止，只能快速恢复 | Medium | Low | V2.43：重连不再跑 24 条全量同步（原先占串口锁约 62 秒），改由轮询分层在数秒内补齐；退避提示 + 日志静音 + ENXIO 可操作提示；硬件侧建议见运维文档（直连 USB、避免无源 HUB、检查线缆/供电） |
 | R10 | Recording disk growth is unbounded **by operator choice** — recordings are never deleted automatically; a long-running unattended server can fill the disk (the Pi image boots from an SD card) | Medium | Low-Medium | Deliberate per the V2.42 design review: the panel shows total usage, the per-session cap `MRRC_RECORDINGS_MAX_SESSION_MIN` (default 240 min) stops a forgotten recording without deleting anything, and `MRRC_RECORDINGS_DIR` can point at a bigger volume |
 | R9 | Unverified model profiles (IC-705/IC-7610/IC-7760) ship without hardware evidence — the 689-bin amplitude ceiling, the inherited+rescaled meter curves and the 48 kHz USB-audio properties are assumptions, and an unverified radio could be keyed with a frame the profile got wrong | Medium-High | Medium | `verified=False` + `unverified_meters` capability list; PTT/TUNE refused at the backend boundary until `MRRC_ALLOW_UNVERIFIED_TX=1` (release never gated); `_diag_civ.py` report round-trip turns each assumption into a measurement; SDD V2.41 |
+| R14 | FT8 cascade: if the escalation-rate criterion is wrong the net gain shrinks — a busy band that escalates on most slots spends the fast path's 0.15 s on top of the deep path, i.e. back to always-deep latency plus a little. The default `deep_lower_bound_s` (2.3 s) is a measured-plus-margin estimate that can drift with SD-card/load | Medium | Medium | The escalation rate is observed directly via `OrchestratorCounters.escalations` (never inferred from the latency histogram); thresholds (`min_decodes`/`min_peak_snr`) and `deep_lower_bound_s` are configurable and persisted (`CascadePolicy`), so the operator can tighten without a rebuild; the budget guard makes a wrong threshold cost a skipped escalation, never a late (display-only) decode |
 
 ## 13.3 Assumptions
 

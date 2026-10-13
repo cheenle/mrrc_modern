@@ -30,6 +30,7 @@ _FRAME_FIELDS = {
         "results",
         "overflow",
         "elapsed_seconds",
+        "cpu_seconds",
         "deadline_missed",
     },
     "encode": _BASE_FIELDS | {"message", "frequency", "sample_rate", "shm"},
@@ -206,6 +207,13 @@ def _validate_frame(value: object) -> None:
             _validate_result(result)
         _boolean(value["overflow"], "overflow")
         _finite_number(value["elapsed_seconds"], "elapsed_seconds", 0.0)
+        # Process CPU (all threads) burned by the decode — the wall-clock
+        # sibling ``elapsed_seconds`` cannot show fake parallelism: threads 1→3
+        # on the W103D costs 1.6x the total CPU while wall improves only 1.46x
+        # (docs/ft8-w103d-decode-perf-analysis.md §8.2).  Measured in the
+        # Worker, whose process does nothing but DSP, so the number is
+        # attributable to this decode.
+        _finite_number(value["cpu_seconds"], "cpu_seconds", 0.0)
         _boolean(value["deadline_missed"], "deadline_missed")
     elif frame_type == "encode":
         _bounded_text(value["message"], "message", 37, ascii_only=True)

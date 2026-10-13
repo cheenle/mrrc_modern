@@ -69,10 +69,21 @@ the 2200 above. Run it with:
 .venv/bin/python -m pytest tests/ft8 -q
 ```
 
-Measured 2026-10-14 (macOS): **773 passed, 2 skipped, 1 xfailed** — the DSP subset
-(`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
+Measured 2026-10-14 (macOS): **776 passed, 2 skipped, 1 xfailed** (779 collected) — the DSP
+subset (`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
 and includes the fast-path / cascade regression the design
 (`docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`) pinned.
+
+The worker's reply carries **three clocks** — the parent's wall time, the worker's own
+`elapsed_seconds`, and the worker process's `cpu_seconds` (`time.process_time()`, all
+threads). The third is the one that makes *fake parallelism* visible: on the W103D, going
+from 1 to 3 decode threads costs **1.6× the total CPU** while saving only **1.46× the
+wall** (`docs/ft8-w103d-decode-perf-analysis.md` §8.2), because `sync8var` recomputes the
+whole symbol-spectrum per thread. It is measured **inside the Worker** — the parent's
+process CPU would fold in the audio and spectrum threads, and `RUSAGE_CHILDREN` does not
+update for a child that is still alive. The opt-in I9 benchmark
+(`tests/ft8/dsp/test_i9_benchmark.py`, `MRRC_FT8_I9_BENCHMARK=1`) prints the full
+threads × CPU matrix and is the harness 第 0 梯队 of that analysis asked for.
 
 ## Test Modules
 

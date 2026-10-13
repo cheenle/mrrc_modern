@@ -440,6 +440,49 @@ def test_worker_decodes_with_the_fast_path_over_the_wire(
         tx_shm.unlink()
 
 
+def test_worker_reports_the_cpu_time_the_decode_burned(
+    running_worker: tuple[Connection, mp.Process],
+) -> None:
+    """解码必须自报它烧掉的 CPU 时间 —— wall 时间看不出假并行。
+
+    根因 A 只在 CPU 时间上可见：W103D 上 threads 1→3 的 wall 只快 1.46×，总 CPU
+    却涨 1.6×（分析 §8.2），因为 sync 阶段被每个线程原样重算。这条钉的是
+    **worker 自己量**，而不是父进程猜：父进程的 ``RUSAGE_CHILDREN`` 对还活着的
+    子进程不更新，量不到单次请求的 CPU。静音槽就够 —— 解码算法照跑，CPU 必然
+    消耗，``results`` 为空不影响这件事。
+    """
+    connection, _process = running_worker
+    shm = SharedMemory(create=True, size=360_000)
+    try:
+        pcm = np.ndarray((180_000,), dtype="<i2", buffer=shm.buf)
+        pcm[:] = 0
+        connection.send_bytes(
+            encode_frame(
+                {
+                    "v": 1,
+                    "type": "decode",
+                    "generation": 3,
+                    "request_id": 7,
+                    "slot_id": 11_908_800,
+                    "deadline_monotonic": 999_999_999.0,
+                    "shm": decode_descriptor(shm),
+                    "config": config(path="fast"),
+                }
+            )
+        )
+        response = receive(connection)
+
+        assert response["type"] == "decode_ok"
+        cpu = response["cpu_seconds"]
+        assert type(cpu) is float and cpu > 0.0, (
+            "worker 必须上报本进程为这次解码消耗的 CPU 时间"
+        )
+        del pcm
+    finally:
+        shm.close()
+        shm.unlink()
+
+
 def test_wrong_generation_is_rejected_before_opening_shared_memory_and_loop_continues(
     running_worker: tuple[Connection, mp.Process],
 ) -> None:

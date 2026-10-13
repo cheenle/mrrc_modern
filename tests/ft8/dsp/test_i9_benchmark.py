@@ -6,6 +6,13 @@ request path on one deterministic busy synthetic slot.  The run writes a JSON
 artifact (``MRRC_FT8_I9_JSON`` or the pytest tmp dir) and prints a markdown
 summary for transcription into SDD/13; the default profile-3 Auto-thread
 configuration must meet the provisional TX decision cutoff.
+
+Each run records three clocks: the parent's wall time, the Worker's own
+``elapsed_seconds``, and the Worker's process ``cpu_seconds``.  The CPU clock
+is what makes fake parallelism visible — threads 1→3 on the W103D costs 1.6x
+the total CPU for only 1.46x less wall, because ``sync8var`` recomputes the
+whole symbol-spectrum once per thread
+(``docs/ft8-w103d-decode-perf-analysis.md`` §8.2).
 """
 
 from __future__ import annotations
@@ -32,7 +39,7 @@ benchmark_only = pytest.mark.skipif(
     reason="I9 benchmark is opt-in via MRRC_FT8_I9_BENCHMARK=1",
 )
 
-THREAD_MATRIX = [1, 2, 4, 6, 8, 12]
+THREAD_MATRIX = [1, 2, 3, 4, 6, 8, 12]
 WARMUP_REPS = 1
 MEASURED_REPS = 3
 # Provisional V1.0 ceiling: decode dispatch at slot end must leave the rest of
@@ -119,6 +126,7 @@ def test_i9_latency_matrix(
         for profile, threads, cycles in matrix:
             samples_wall: list[float] = []
             samples_native: list[float] = []
+            samples_cpu: list[float] = []
             decoded_texts: set[str] = set()
             for rep in range(WARMUP_REPS + MEASURED_REPS):
                 request = {
@@ -137,6 +145,7 @@ def test_i9_latency_matrix(
                 if rep >= WARMUP_REPS:
                     samples_wall.append(wall)
                     samples_native.append(float(response["elapsed_seconds"]))
+                    samples_cpu.append(float(response["cpu_seconds"]))
                     decoded_texts.update(
                         result["text"]
                         for result in response["results"]  # type: ignore[index]
@@ -148,6 +157,7 @@ def test_i9_latency_matrix(
                     "cycles": cycles,
                     "wall_seconds": samples_wall,
                     "native_seconds": samples_native,
+                    "cpu_seconds": samples_cpu,
                     "known_decodes": sorted(
                         text for text in (s[0] for s in signals) if text in decoded_texts
                     ),
@@ -180,14 +190,26 @@ def test_i9_latency_matrix(
     output.write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
 
     print(f"\nI9 benchmark artifact: {output}")
-    print("| profile | threads | cycles | wall min/mean/max s | native mean s | known |")
-    print("|---|---|---|---|---|---|")
+    print(
+        "| profile | threads | cycles | wall min/mean/max s | native mean s "
+        "| cpu mean s | cpu/native | known |"
+    )
+    print("|---|---|---|---|---|---|---|---|")
     for run in runs:
         wall = run["wall_seconds"]  # type: ignore[assignment]
+        native_mean = statistics.fmean(run["native_seconds"])  # type: ignore[arg-type]
+        # cpu/native is the parallelism actually achieved, measured inside the
+        # Worker.  What §8.2 of the perf analysis showed with two points (threads
+        # 1 vs 3: wall 1.46x, CPU 1.6x) is the shape of this column across the
+        # matrix: for a decoder whose sync stage is recomputed per thread, the
+        # CPU column keeps climbing while the wall column flattens.
+        cpu_mean = statistics.fmean(run["cpu_seconds"])  # type: ignore[arg-type]
+        efficiency = cpu_mean / native_mean if native_mean else float("nan")
         print(
             f"| {run['profile']} | {run['threads']} | {run['cycles']} "
             f"| {min(wall):.3f}/{statistics.fmean(wall):.3f}/{max(wall):.3f} "
-            f"| {statistics.fmean(run['native_seconds']):.3f} "  # type: ignore[arg-type]
+            f"| {native_mean:.3f} "
+            f"| {cpu_mean:.3f} | {efficiency:.2f}x "
             f"| {len(run['known_decodes'])}/{len(signals)} |"
         )
 

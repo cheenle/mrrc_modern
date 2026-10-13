@@ -44,6 +44,7 @@ def _decode_ok(frame: dict[str, object], slot_id: int, generation: int) -> dict[
         "results": [],
         "overflow": False,
         "elapsed_seconds": 0.0,
+        "cpu_seconds": 0.0,
         "deadline_missed": False,
     }
 

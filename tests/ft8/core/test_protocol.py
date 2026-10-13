@@ -98,6 +98,7 @@ def valid_frames() -> list[dict[str, object]]:
             "results": [decode_result()],
             "overflow": False,
             "elapsed_seconds": 0.25,
+            "cpu_seconds": 0.75,
             "deadline_missed": False,
         },
         {
@@ -216,7 +217,8 @@ def test_nonfinite_numbers_are_rejected_on_encode_and_decode(constant: str) -> N
     raw = (
         '{"v":1,"type":"decode_ok","generation":1,"request_id":1,'
         '"slot_id":1,"path":"standard","results":[],"overflow":false,'
-        f'"elapsed_seconds":{constant},"deadline_missed":false}}'
+        f'"elapsed_seconds":{constant},"cpu_seconds":1.0,'
+        '"deadline_missed":false}}'
     ).encode()
     with pytest.raises(FrameError, match="constant|finite|JSON"):
         decode_frame(raw)
@@ -378,6 +380,8 @@ def test_error_frame_requires_stable_printable_bounded_sanitation(
         (3, "overflow", 0),
         (3, "deadline_missed", 0),
         (3, "elapsed_seconds", -0.1),
+        (3, "cpu_seconds", -0.1),
+        (3, "cpu_seconds", True),
         (4, "message", 123),
         (4, "frequency", False),
         (4, "sample_rate", True),

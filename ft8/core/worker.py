@@ -131,7 +131,15 @@ def worker_main(
                 )
             samples = np.ndarray((180_000,), dtype="<i2", buffer=shm.buf)
             samples.setflags(write=False)
+            # CPU time is measured *here*, in the Worker process, not in the
+            # parent and not in ``CoreBinding``: the Worker does nothing but
+            # DSP, so its process CPU is attributable to this one decode, while
+            # ``time.process_time()`` in the parent would fold in the audio and
+            # spectrum threads.  ``RUSAGE_CHILDREN`` is no substitute either —
+            # it does not update for a child that is still alive.
+            cpu_started = time.process_time()
             batch = binding.decode(samples, build_config(frame), frame["slot_id"])
+            cpu_seconds = time.process_time() - cpu_started
             return {
                 **response_base(frame, "decode_ok"),
                 "slot_id": batch.slot_id,
@@ -152,6 +160,7 @@ def worker_main(
                 ],
                 "overflow": batch.overflow,
                 "elapsed_seconds": batch.elapsed_seconds,
+                "cpu_seconds": cpu_seconds,
                 "deadline_missed": time.monotonic() > frame["deadline_monotonic"],
             }
         finally:

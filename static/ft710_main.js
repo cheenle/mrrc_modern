@@ -865,7 +865,7 @@ function applyWorkMode(mode) {
 		if (!banner) {
 			banner = document.createElement("div");
 			banner.id = "ft8-mode-banner";
-			banner.textContent = "FT8 模式中 — 发射由 FT8 引擎控制（点此返回）";
+			banner.textContent = "FT8 模式中 — 发射由 FT8 引擎控制；频率/波段请在 FT8 页面调整（点此进入）";
 			banner.addEventListener("click", () => { window.location.href = "/ft8.html"; });
 			document.body.appendChild(banner);
 		}

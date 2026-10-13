@@ -636,3 +636,40 @@ button.stop {
 	color: #9ca3af;
 	margin-left: 6px;
 }
+
+/* Dial frequency + tuning (FT8 top bar). */
+#dial-freq {
+	font-variant-numeric: tabular-nums;
+	font-size: 14px;
+	color: #e5e7eb;
+	margin: 0 8px;
+	padding: 2px 6px;
+	border: 1px solid #374151;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+#dial-freq:hover {
+	border-color: #f59e0b;
+}
+
+.tune-group {
+	display: inline-flex;
+	gap: 4px;
+	margin-right: 8px;
+}
+
+.tune-group button {
+	background: #1f2937;
+	color: #e5e7eb;
+	border: 1px solid #374151;
+	border-radius: 6px;
+	width: 26px;
+	height: 24px;
+	cursor: pointer;
+}
+
+.tune-group button:hover {
+	border-color: #f59e0b;
+	color: #fbbf24;
+}

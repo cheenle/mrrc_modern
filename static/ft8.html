@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#101418">
   <title>MRRC FT8</title>
-  <link rel="stylesheet" href="ft8/app.css?v=7">
+  <link rel="stylesheet" href="ft8/app.css?v=8">
 </head>
 <body>
   <div id="cockpit">
@@ -16,7 +16,12 @@
         <span id="station-id">—</span>
       </div>
       <span id="slot-clock">--:--:--</span>
-      <select id="band-select" aria-label="FT8 band" title="FT8 band" hidden></select>
+      <span id="dial-freq" title="点击输入频率（kHz）">--.---</span>
+      <span class="tune-group">
+        <button id="tune-down" type="button" title="-1 kHz">◀</button>
+        <button id="tune-up" type="button" title="+1 kHz">▶</button>
+      </span>
+      <select id="band-select" aria-label="FT8 band" title="FT8 band"></select>
       <span id="decode-counter" style="color:#3fbf6f;margin-left:8px">⏳</span>
       <span id="mode-badge" title="Work mode">FT8</span>
     </header>
@@ -111,6 +116,6 @@
     </footer>
   </div>
 
-  <script type="module" src="ft8/main.js?v=7"></script>
+  <script type="module" src="ft8/main.js?v=8"></script>
 </body>
 </html>

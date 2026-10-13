@@ -38,6 +38,52 @@ export function createBandSelect(select) {
     }
   });
 
+  // ---- dial frequency: display, ±1 kHz nudge, click-to-type --------------
+  const dial = document.getElementById("dial-freq");
+  let dialHz = 0;
+
+  function renderDial() {
+    if (!dial || !dialHz) return;
+    dial.textContent = (dialHz / 1e6).toFixed(3);
+  }
+
+  async function tuneTo(freq_hz) {
+    const result = await api.band(Math.round(freq_hz));
+    if (result.ok) {
+      dialHz = result.freq_hz;
+      renderDial();
+    } else {
+      showToast(`调谐失败：${result.reason || result.status}`);
+    }
+  }
+
+  subscribe(({ radio }) => {
+    const f = radio && radio.freq_hz;
+    if (typeof f === "number" && f > 0) {
+      dialHz = f;
+      renderDial();
+      const match = FT8_BANDS.find((b) => Math.abs(b.freq_hz - f) < MATCH_HZ);
+      select.value = match ? String(match.freq_hz) : "";
+    }
+  });
+
+  document.getElementById("tune-down")?.addEventListener("click", () => {
+    if (dialHz) void tuneTo(dialHz - 1000);
+  });
+  document.getElementById("tune-up")?.addEventListener("click", () => {
+    if (dialHz) void tuneTo(dialHz + 1000);
+  });
+  dial?.addEventListener("click", () => {
+    const typed = window.prompt("输入频率（kHz）", dialHz ? String(dialHz / 1000) : "");
+    if (!typed) return;
+    const khz = Number(typed);
+    if (!Number.isFinite(khz) || khz < 100 || khz > 60000) {
+      showToast("频率需在 100–60000 kHz 之间");
+      return;
+    }
+    void tuneTo(khz * 1000);
+  });
+
   select.addEventListener("change", async () => {
     const freq_hz = Number(select.value);
     let result = await api.band(freq_hz);

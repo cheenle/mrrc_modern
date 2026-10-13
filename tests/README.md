@@ -60,7 +60,7 @@ republished. None is a defect in the code under test here.
 ## FT8 Suite (pytest)
 
 The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separate,
-pytest-only** suite of 55 modules under `tests/ft8/`. It is written in the pytest
+pytest-only** suite of 56 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
 the 2200 above. Run it with:
@@ -69,7 +69,7 @@ the 2200 above. Run it with:
 .venv/bin/python -m pytest tests/ft8 -q
 ```
 
-Measured 2026-10-13 (macOS): **751 passed, 2 skipped, 1 xfailed** — the DSP subset
+Measured 2026-10-14 (macOS): **773 passed, 2 skipped, 1 xfailed** — the DSP subset
 (`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
 and includes the fast-path / cascade regression the design
 (`docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`) pinned.

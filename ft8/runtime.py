@@ -48,6 +48,9 @@ log = logging.getLogger("mrrc.ft8.runtime")
 
 DEFAULT_PROFILE = 3
 
+# 每多少个时隙打一行累计计数器（20 × 15 s = 5 分钟）。存在的理由见 `_log_counters`。
+_COUNTERS_EVERY_SLOTS = 20
+
 
 def _qso_progress(state: QSOState) -> int:
     """AP 上下文只在通联进行中成立：IDLE / DONE 记 0，其余阶段都算进行中。"""
@@ -128,6 +131,8 @@ class Ft8Runtime:
         self._worked: Any = None
         self._worked_dirty = True
         self._dumped_slots = 0
+        # 本进程已交付的时隙数，只用来决定累计计数器那一行的节奏。
+        self._slots_logged = 0
         self._wf_logged = False
         self.waterfall = SpectrumFanout()
         self._supervisor: WorkerSupervisor | None = None
@@ -379,9 +384,20 @@ class Ft8Runtime:
                     log.info("dumped rejected slot audio to %s (%d bytes)", path, len(raw))
             except Exception:
                 log.debug("slot dump failed", exc_info=True)
-        log.info("slot %s: %d message(s) from %d result(s)",
+        # 路径与两个标记必须进这一行：深路径**成功**的升级在 cascade.py 里一个字都不
+        # 记（那里只记拒绝），`late` 更是只活在 WebSocket 帧里。少了它们，现场就只能
+        # 从发布偏移去推「这一槽升级了吗」，而这条推断已经被证伪过两次（原生库 banner
+        # 不是深路径标记；空槽也慢，偏移本身还在漂）。
+        batch = getattr(slot_decode, "batch", None)
+        log.info("slot %s: %d message(s) from %d result(s) [%s%s%s]",
                  getattr(slot_decode, "slot_id", "?"), len(views),
-                 len(getattr(getattr(slot_decode, "batch", None), "results", ()) or ()))
+                 len(getattr(batch, "results", ()) or ()),
+                 getattr(batch, "path", "?"),
+                 " escalated" if getattr(batch, "escalated", False) else "",
+                 " late" if getattr(slot_decode, "late", False) else "")
+        self._slots_logged += 1
+        if self._slots_logged % _COUNTERS_EVERY_SLOTS == 0:
+            self._log_counters()
         slot_id = int(getattr(slot_decode, "slot_id", 0))
         dispatched = getattr(slot_decode, "dispatched_epoch", None)
         finished = getattr(slot_decode, "finished_epoch", None)
@@ -411,6 +427,30 @@ class Ft8Runtime:
         self.recent_decodes.append(frame)
         if self._on_decode is not None:
             self._on_decode(frame)
+
+    def _log_counters(self) -> None:
+        """累计计数器进日志 —— 这是 ``/api/ft8/engine/stats`` 的日志版。
+
+        2026-10-14 现场：Phase A 让深路径跑起来之后，操作员问「多少槽升级了、多少槽
+        掉出截止线」，而日志答不了 —— 升一次级没有任何日志，`late` 只在帧里。能读的
+        数字只有一个要 30 天会话 cookie 的 HTTP 接口。于是诊断只能靠推断，推错两次。
+
+        键名写成 ``k=v`` 是为了可 grep 也可断言（tests/ft8/test_runtime_slot_counters.py）。
+        引擎没起来时 ``orchestrator`` 是 None，此时静默返回 —— 与 ``cascade_stats``
+        同一约定，绝不为了打日志抛异常。
+        """
+
+        orchestrator = getattr(self, "orchestrator", None)
+        if orchestrator is None:
+            return
+        counters = orchestrator.counters
+        rate = (100.0 * counters.escalations / counters.decodes) if counters.decodes else 0.0
+        log.info(
+            "decode counters after %d slot(s): decodes=%d fast=%d "
+            "escalations=%d (%.1f%%) late=%d errors=%d",
+            self._slots_logged, counters.decodes, counters.fast_decodes,
+            counters.escalations, rate, counters.deadline_misses, counters.decode_errors,
+        )
 
     def _slot_started(self, slot_id: int) -> None:
         if self.tx_driver is not None:

@@ -1267,6 +1267,20 @@ def _platform_dial_hz() -> Optional[int]:
 _ft8_pub_logged = False
 
 
+def _ft8_transmitting() -> bool:
+    """True only while the FT8 engine has the transmitter keyed.
+
+    With the engine always-on there is no "mode switch" to arbitrate any
+    more: the station stays freely controllable, and the FT8 engine is just
+    another receiver.  The one real conflict left is electrical — two
+    sources keying the same radio — so that is what this guards.
+    """
+
+    runtime = _ft8_runtime
+    safety = getattr(runtime, "safety", None) if runtime is not None else None
+    return bool(safety is not None and safety.ptt_on)
+
+
 def _ft8_queue_frame(frame) -> None:
     """Hand one frame (JSON dict or WF01 bytes) to every /WSft8 subscriber."""
 
@@ -1372,8 +1386,8 @@ async def _feed_tx_from_uplink(pcm: bytes) -> None:
     microphone in would transmit two voices at once (spec §6).
     """
     global _tx_cq_mic_drops
-    if _ft8_owns_tx:
-        return                                   # FT8 engine is the TX source
+    if _ft8_transmitting():
+        return                                   # FT8 engine is keyed right now
     if _cq_player is not None and _cq_player.is_calling:
         _tx_cq_mic_drops += 1
         return
@@ -2332,6 +2346,14 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
 
         elif field == "ptt":
             tx = value is True or str(value).lower() == "true"
+            if tx and _ft8_transmitting():
+                # The FT8 engine is mid-waveform: a manual key-up would put a
+                # second source on the same carrier.  It releases in <=13 s.
+                await ws.send_text(json.dumps({
+                    "type": "error",
+                    "message": "FT8 引擎正在发射（约 13 秒）——稍候再按 PTT",
+                }))
+                return
             if tx and _cq_player.is_calling:
                 # The CQ player owns the carrier; a manual key-up would key a
                 # second source into the same transmission (spec §6).
@@ -3019,8 +3041,9 @@ async def lifespan(app: FastAPI):
                 await cat.set_preamp(int(snap["preamp"]))
 
         def _ft8_set_browser_tx(enabled: bool) -> None:
-            global _ft8_owns_tx
-            _ft8_owns_tx = not enabled
+            # No mode-level TX ownership any more: the SSB side stays
+            # available and _ft8_transmitting() guards the actual conflict.
+            return None
 
         async def _ft8_broadcast(mode: str) -> None:
             await _broadcast_state()

@@ -763,7 +763,6 @@ document.addEventListener("keydown", (e) => {
 	// Space = PTT (refused while FT8 owns the transmitter)
 	if (e.code === "Space") {
 		e.preventDefault();
-		if (window.__ft8ModeActive) return;
 		if (!radioState.is_transmitting) {
 			if (window.PTTManager) PTTManager.pttStart();
 			else handlePTTStart();
@@ -857,15 +856,16 @@ window.__pushRxFrame = __pushRxFrameNoop;
 // FT8 owns the radio: the engine keys the transmitter, so the browser must
 // not compete — a banner plus the TX-control lock (body class, see ft710.css).
 function applyWorkMode(mode) {
+	// Informational only: with the engine always-on as a background receiver
+	// the SSB cockpit stays fully usable, and the server refuses a manual
+	// key-up only while an FT8 waveform is actually on the air.
 	document.body.classList.toggle("ft8-mode-active", mode === "ft8");
-	// The keyboard PTT path bypasses the DOM lock above; gate it too.
-	window.__ft8ModeActive = mode === "ft8";
 	let banner = document.getElementById("ft8-mode-banner");
 	if (mode === "ft8") {
 		if (!banner) {
 			banner = document.createElement("div");
 			banner.id = "ft8-mode-banner";
-			banner.textContent = "FT8 模式中 — 发射由 FT8 引擎控制；频率/波段请在 FT8 页面调整（点此进入）";
+			banner.textContent = "FT8 后台解码中（只收不发）— 点此查看解码列表";
 			banner.addEventListener("click", () => { window.location.href = "/ft8.html"; });
 			document.body.appendChild(banner);
 		}

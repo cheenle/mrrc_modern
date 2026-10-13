@@ -90,10 +90,15 @@ def test_work_mode_reports_ft8_when_controller_says_so(monkeypatch):
     assert server_mod._work_mode_value() == "ft8"
 
 
-def test_uplink_audio_is_dropped_while_ft8_owns_tx(monkeypatch):
+def test_uplink_audio_is_dropped_only_while_ft8_is_keyed(monkeypatch):
+    """The gate is transmission-scoped: an idle always-on engine must not
+    silence the operator's microphone."""
     fed: list[bytes] = []
-    monkeypatch.setattr(server_mod, "_ft8_owns_tx", True)
     monkeypatch.setattr(server_mod, "audio", types.SimpleNamespace(
         feed_tx_audio=lambda pcm: fed.append(pcm)))
+    monkeypatch.setattr(server_mod, "_ft8_transmitting", lambda: True)
     asyncio.run(server_mod._feed_tx_from_uplink(b"\x00\x00"))
-    assert fed == []
+    assert fed == []                       # FT8 mid-waveform: dropped
+    monkeypatch.setattr(server_mod, "_ft8_transmitting", lambda: False)
+    asyncio.run(server_mod._feed_tx_from_uplink(b"\x01\x01"))
+    assert fed == [b"\x01\x01"]           # idle FT8: the mic goes through

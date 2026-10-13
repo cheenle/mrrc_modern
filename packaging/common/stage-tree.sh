@@ -54,7 +54,7 @@ rsync -a "$SRC/" "$DST/" \
 	--exclude "tests/" --exclude ".agents/" --exclude "docs/" --exclude "SDD/" \
 	--exclude "packaging/" --exclude "macos/" --exclude "windows/" \
 	--exclude "__pycache__/" --exclude "*.pyc" --exclude ".DS_Store" \
-	--exclude "atr1000_tuner.json" \
+	--exclude "atr1000_tuner.json" --exclude "qso.db" \
 	--exclude "/fleet/" \
 	--exclude "/.local/" --exclude "/.env" --exclude "/recordings/" \
 	--exclude "/mem_channels.json" --exclude "/.worktrees/" --exclude "/.superpowers/" \

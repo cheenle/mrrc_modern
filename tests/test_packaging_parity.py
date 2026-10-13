@@ -77,18 +77,36 @@ class ExclusionListTests(unittest.TestCase):
         entries = re.findall(r'--exclude\s+"([^"]+)"', text)
         self.assertGreaterEqual(len(entries), 40, f"only {len(entries)} exclude rules")
         for canary in ("/.env", "/recordings/", "/fleet/", "website/", "packaging/",
-                       "tests/"):
+                       "tests/", "qso.db"):
             with self.subTest(canary=canary):
                 self.assertIn(canary, entries)
 
+    def test_the_qso_database_is_never_staged(self):
+        """The QSO log is runtime state and must not be overwritten by an update.
+
+        The database is not in the repo, but it *is* in a developer's working tree
+        (``ft8/qso.db``), and ``mrrc-update`` explicitly supports staging from a local
+        directory — that is the documented way to get an unreleased branch onto a box.
+        ``server.py`` puts it at ``_writable_runtime_dir()/ft8/qso.db``, i.e. inside
+        ``$MRRC_HOME/ft8/``, which is exactly where the staged tree's ``ft8/`` lands.
+        So without this rule, one update from such a tree destroys the operator's QSO
+        history — silently, because nothing about the update mentions the database.
+        """
+        entries = re.findall(
+            r'--exclude\s+"([^"]+)"', STAGE_TREE.read_text(encoding="utf-8")
+        )
+        self.assertIn("qso.db", entries)
+
     def test_the_exclusion_list_is_byte_identical_to_what_shipped(self):
-        """The list as of 2026-10-11, frozen: the refactor moved it, and the one
-        edit since then (a root-anchored ``/fleet/``) is written down here."""
+        """The list as of 2026-10-11, frozen: the refactor moved it, and the two
+        edits since then (a root-anchored ``/fleet/``, then ``qso.db``) are written
+        down here."""
         expected = [
             ".git/", "venv/", ".venv/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
             ".agents/", "docs/", "SDD/", "packaging/", "macos/", "windows/",
             "__pycache__/", "*.pyc", ".DS_Store", "atr1000_tuner.json",
+            "qso.db",
             "/fleet/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",
             "/.worktrees/", "/.superpowers/", "/.agnes/", "/.claude/",

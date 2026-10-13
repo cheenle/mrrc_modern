@@ -16,6 +16,7 @@ from ft8.engine.latency import (
     LatencyHistogram,
     bucket_index,
 )
+from ft8.engine.orchestrator import DEFAULT_DECISION_CUTOFF_SECONDS
 from ft8.web.ft8_api import _health
 
 
@@ -46,7 +47,10 @@ def test_bucket_index_boundaries() -> None:
     assert bucket_index(0.499) == 0
     assert bucket_index(0.5) == 1
     assert bucket_index(2.499) == 4
-    assert bucket_index(2.5) == len(BUCKET_BOUNDS_SECONDS)  # overflow
+    # 2.5 不再是溢出：截止抬到 4.0 之后它是 <3s 桶的一员。
+    assert bucket_index(2.5) == 5
+    assert bucket_index(3.999) == len(BUCKET_BOUNDS_SECONDS) - 1
+    assert bucket_index(4.0) == len(BUCKET_BOUNDS_SECONDS)  # overflow
     assert bucket_index(60.0) == len(BUCKET_BOUNDS_SECONDS)
 
 
@@ -67,7 +71,10 @@ def test_histogram_snapshot_per_configuration() -> None:
         "<1.5s": 0,
         "<2s": 0,
         "<2.5s": 0,
-        ">=2.5s": 1,
+        "<3s": 0,
+        "<3.5s": 1,
+        "<4s": 0,
+        ">=4s": 0,
     }
     assert series["max_seconds"] == 3.1
     assert snapshot["improved/p0/t1"]["buckets"]["<1.5s"] == 1
@@ -188,3 +195,32 @@ def test_cascade_stats_property_covers_both_branches() -> None:
     wired = object.__new__(Ft8Runtime)
     wired._cascade = SimpleNamespace(deadline_risk=4)
     assert wired.cascade_stats == {"deadline_risk": 4}
+
+
+def test_bucket_bounds_track_the_decision_cutoff() -> None:
+    """直方图的量程必须**跟着截止走** —— 这正是它存在的理由。
+
+    `latency.py` 的模块 docstring 说桶对齐到 I9 决策截止，那就不能只对齐一次：
+    截止从 2.5 抬到 4.0 之后，若最后一个边界还停在 2.5，任何落在 2.5–4.0 s 的
+    解码都掉进溢出桶 —— 一个 2.6 s 与一个 3.9 s 的解码读数完全一样，而它们
+    离截止的远近截然不同。断言两个**常量**的关系，而不是写死 4.0。
+    """
+
+    assert BUCKET_BOUNDS_SECONDS[-1] == DEFAULT_DECISION_CUTOFF_SECONDS, (
+        f"latency buckets top out at {BUCKET_BOUNDS_SECONDS[-1]}s but the I9 "
+        f"decision cutoff is {DEFAULT_DECISION_CUTOFF_SECONDS}s; decodes in "
+        f"between would be indistinguishable in the overflow bucket"
+    )
+
+
+def test_elapsed_between_the_old_and_new_cutoff_is_not_overflow() -> None:
+    """2.5–4.0 s 之间的解码必须落在**正常桶**里，且彼此可分辨。"""
+
+    histogram = LatencyHistogram()
+    histogram.record("improved", 3, 3, 2.6)
+    histogram.record("improved", 3, 3, 3.9)
+
+    buckets = histogram.snapshot()["improved/p3/t3"]["buckets"]
+    overflow_label = next(label for label in buckets if label.startswith(">="))
+    assert buckets[overflow_label] == 0, f"2.6s/3.9s must not be overflow: {buckets}"
+    assert bucket_index(2.6) != bucket_index(3.9)

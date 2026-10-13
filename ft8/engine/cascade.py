@@ -6,6 +6,9 @@ library.  See docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md.
 
 from __future__ import annotations
 
+import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ft8.core.models import DecodeBatch, DecodePath, DecodeResult
@@ -111,3 +114,126 @@ def merge_batches(fast: DecodeBatch, deep: DecodeBatch) -> DecodeBatch:
         escalated=True,
         fast_elapsed_seconds=fast.elapsed_seconds,
     )
+
+
+logger = logging.getLogger(__name__)
+
+# **没有 `DEFAULT_CUTOFF_SECONDS`。** 决策截止这个量在 `orchestrator.py:35` 已经有
+# 唯一的定义（`DEFAULT_DECISION_CUTOFF_SECONDS = 2.5`），而 `Orchestrator(decision_cutoff=…)`
+# 是个**活跃的旋钮**（`tests/ft8/engine/test_orchestrator.py:163` 传 0.0、`:170` 传
+# 整个时隙）。在这里再放一个同值常量，就让同一条物理量有了两个来源：生产代码今天
+# 恰好两边都是默认值，所以看不出来；某天有人给 orchestrator 传了别的截止，
+# 级联的预算守卫仍在拿 2.5 算 —— 守卫被静默地重新标定，而**没有任何测试会红**。
+# 这正是 Task 10 给 `boundary_epoch_for` 写「必填、故意不给默认值」的同一个理由，
+# 所以 `cutoff` 也照办：必填，由接线处传 orchestrator 的那一个值。
+DEFAULT_DEEP_THREADS = 3
+DEFAULT_DEEP_LOWER_BOUND_SECONDS = 2.3
+DEFAULT_SAFETY_MARGIN_SECONDS = 0.05
+
+
+class CascadingDecoder:
+    """Run the fast path by default and escalate to the deep path on demand.
+
+    ``inner`` is a :class:`SupervisorDecoder` (or any object exposing
+    ``decode_path(slot_id, samples, path, *, threads=None)``).  Both the
+    clock and the slot-boundary mapping are injectable so the policy is
+    fully testable without the native library.
+    """
+
+    def __init__(
+        self,
+        inner: object,
+        policy: CascadePolicy,
+        *,
+        boundary_epoch_for: Callable[[int], float],
+        # 必填，理由与 boundary_epoch_for 相同：决策截止的唯一来源是
+        # `orchestrator.py:35` 的 DEFAULT_DECISION_CUTOFF_SECONDS（或传给
+        # Orchestrator 的那个值）。本模块**不提供**自己的默认值 —— 详见上面
+        # 「没有 DEFAULT_CUTOFF_SECONDS」那段。两处各自 2.5 的生产代码今天看起来
+        # 是对的，而守卫恰恰是在有人改了 orchestrator 之后才悄悄失准的。
+        cutoff: float,
+        # 默认必须是 time.time（epoch 秒）—— orchestrator.py:125 的 `clock` 与
+        # orchestrator.py:225 的 `boundary_epoch` 都是这个基准。若写成 time.monotonic，
+        # clock() − boundary 会是约 −1.7e9，预算恒为正的巨数，**守卫在真实运行里永不
+        # 触发**；而测试因为总是成对注入同一基准而全绿。时钟基准只允许有一处。
+        clock: Callable[[], float] = time.time,
+        deep_threads: int = DEFAULT_DEEP_THREADS,
+        deep_lower_bound_s: float = DEFAULT_DEEP_LOWER_BOUND_SECONDS,
+        safety_margin_s: float = DEFAULT_SAFETY_MARGIN_SECONDS,
+        ap_context: Callable[[], tuple[str, int]] | None = None,
+        requested: Callable[[], bool] | None = None,
+    ) -> None:
+        if deep_threads < 1:
+            raise ValueError("deep_threads must be positive")
+        self._inner = inner
+        self._policy = policy
+        self._clock = clock
+        self._cutoff = cutoff
+        # 必填，故意不给默认值：`slot * 15.0` 这种"默认"会把单调时钟和
+        # 时隙号混在一起算，忘了注入的后果是预算判断静默出错（该升级时不升级、
+        # 或反之），而不是报错。宁可构造时就 TypeError。
+        self._boundary_epoch_for = boundary_epoch_for
+        self._deep_threads = deep_threads
+        self._deep_lower_bound_s = deep_lower_bound_s
+        self._safety_margin_s = safety_margin_s
+        self._ap_context = ap_context or (lambda: ("", 0))
+        self._requested = requested or (lambda: False)
+        self.deadline_risk = 0
+
+    def set_policy(self, policy: CascadePolicy) -> None:
+        """替换升级策略，从下一个时隙起生效。
+
+        只换策略对象，不碰任何在跑的状态 —— 所以保存设置时可以直接推给活着的
+        解码器，不必重建它（重建会丢掉 in-flight 的时隙）。
+        """
+        self._policy = policy
+
+    def _remaining_budget(self, slot_id: int) -> float:
+        """本时隙还剩几秒可以拿去跑深路径。
+
+        只在**快路径跑完之后**调用，所以 ``clock() − boundary`` 已经把快路径的耗时
+        算进去了，不再另减 ``batch_fast.elapsed_seconds`` —— 那会把同一段时间扣两次。
+        """
+        boundary = self._boundary_epoch_for(slot_id)
+        return self._cutoff - (self._clock() - boundary) - self._safety_margin_s
+
+    async def decode(self, slot_id: int, samples: bytes) -> DecodeBatch:
+        try:
+            batch_fast = await self._inner.decode_path(
+                slot_id, samples, DecodePath.FAST
+            )
+        except Exception:
+            # 快路径整个不可用时没有结果可退，只能在明知超预算的情况下补跑一次深路径；
+            # 但线程数仍必须是 deep_threads —— threads=1 要 3.23s，塞不进 2.5s 窗口
+            # （spec D-4），那不是"慢一点"，是必定错过截止。
+            logger.warning(
+                "fast decode path failed; running the deep path unbudgeted", exc_info=True
+            )
+            return await self._inner.decode_path(
+                slot_id, samples, DecodePath.IMPROVED, threads=self._deep_threads
+            )
+
+        my_call, qso_progress = self._ap_context()
+        if not should_escalate(
+            self._policy, batch_fast, my_call=my_call,
+            qso_progress=qso_progress,
+            requested=self._requested(),
+        ):
+            return batch_fast
+
+        if self._remaining_budget(slot_id) < self._deep_lower_bound_s:
+            self.deadline_risk += 1
+            logger.info(
+                "skipping deep escalation for slot %s: budget too tight", slot_id
+            )
+            return batch_fast
+
+        try:
+            batch_deep = await self._inner.decode_path(
+                slot_id, samples, DecodePath.IMPROVED, threads=self._deep_threads
+            )
+        except Exception:
+            logger.warning("deep decode path failed; keeping the fast results", exc_info=True)
+            return batch_fast
+
+        return merge_batches(batch_fast, batch_deep)

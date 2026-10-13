@@ -560,6 +560,17 @@ def create_router(state: AppState) -> APIRouter:
     async def health(session: Session = Depends(require_session)) -> dict[str, Any]:
         return _health(state)
 
+    @router.get("/engine/stats")
+    async def engine_stats(session: Session = Depends(require_session)) -> JSONResponse:
+        """Decoder counters for the FT8 page's status bar (see ``_engine_stats``).
+
+        Read-only and session-gated like every other ``/api/ft8`` route; it
+        mutates nothing, so it takes ``require_session`` and not
+        ``require_lease``.
+        """
+
+        return _ok(_engine_stats(state))
+
     # ---- operation ----------------------------------------------------------
 
     @router.post("/operation/select")
@@ -927,6 +938,42 @@ def _health(state: AppState) -> dict[str, Any]:
     if cascade_stats is not None:
         health["cascade"] = cascade_stats
     return health
+
+
+def _engine_stats(state: AppState) -> dict[str, Any]:
+    """FT8 引擎的运行期读数；引擎未启动时 ``engine`` 为 None。
+
+    与 `_health` 分开是**受众**决定的：`_health` 答的是"活着吗"（safety / lease /
+    sessions），这里答的是"解码干得怎么样"。升级率是 2026-10-13 那次截止修正的
+    唯一验证信号 —— 修好之前它是 0，之后必须非 0。
+
+    `escalation_rate` 用浮点而不是百分比整数：一次 0.4% 的升级率显示成 0 就白测了。
+    """
+
+    orchestrator = state.orchestrator
+    if orchestrator is None and getattr(state, "runtime", None) is not None:
+        orchestrator = getattr(state.runtime, "orchestrator", None)
+    payload: dict[str, Any] = {}
+    if orchestrator is None:
+        payload["engine"] = None
+    else:
+        counters = orchestrator.counters
+        decodes = counters.decodes
+        payload["engine"] = {
+            "running": True,
+            "slots_started": counters.slots_started,
+            "slots_skipped": counters.slots_skipped,
+            "decodes": decodes,
+            "fast_decodes": counters.fast_decodes,
+            "escalations": counters.escalations,
+            "deadline_misses": counters.deadline_misses,
+            "decode_errors": counters.decode_errors,
+            # 分母为 0 是引擎刚起来的正常状态，不是异常。
+            "escalation_rate": (counters.escalations / decodes) if decodes else 0.0,
+        }
+    if state.latency is not None:
+        payload["decode_latency"] = state.latency.snapshot()
+    return payload
 
 
 def _scheduled_tx(tx_phase: int) -> dict[str, Any]:

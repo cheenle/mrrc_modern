@@ -31,8 +31,36 @@ from ft8.engine.sequencer import Sequencer
 
 FT8_PERIOD_SECONDS = 15.0
 FT4_PERIOD_SECONDS = 7.5
-# I9 (SDD §13.4): provisional TX decision cutoff, measured on Apple M2.
-DEFAULT_DECISION_CUTOFF_SECONDS = 2.5
+# I9 (SDD §13.4): decision cutoff — a batch whose decode finishes later than
+# ``boundary + this`` is display-only (see ``_slot_ended``) and never reaches
+# the sequencer, so it can never trigger a late TX (NFR-001/NFR-009).
+#
+# With the cascade this cutoff has to cover **two** decodes, not one: it must be
+# ≥ (the delay before the second path can start) + (the slowest path that may
+# run) + margin.  The fast path's result lands ``FAST_PATH_FINISH_DELAY_SECONDS``
+# after the slot boundary (below), and the deep (WSJT-X improved, threads=3)
+# path then needs ``DEFAULT_DEEP_LOWER_BOUND_SECONDS`` — so the 2.5 s this was
+# originally sized to (a single decode path, measured on an M2) never admitted
+# the cascade's own second path: ``cascade._remaining_budget`` refused every
+# policy-approved escalation ("budget too tight"; 263 refusals / 0 escalations
+# over one ~2.5 h W103D field window), silently leaving the box on the fast path
+# alone.  The value below leaves ~1.17 s of guard slack (cutoff − 0.48 − 0.05 ≈
+# 3.47 vs the 2.3 s bound) while the worst case still finishes inside the window
+# (0.48 + 2.25 ≈ 2.73 s), so an escalated slot's decodes now reach the sequencer
+# instead of being dropped as display-only.
+#
+# It stays far below the 15 s period (``Orchestrator.__init__`` rejects
+# ``decision_cutoff >= period``), and it is the TX *fit guard* — not this cutoff
+# — that prevents a late transmission (``tx_driver.py``).
+DEFAULT_DECISION_CUTOFF_SECONDS = 4.0
+# The fast path's result lands this long *after* the slot boundary, measured on
+# the W103D (2026-10-13): that slot's fast decode published at ``17:42:00,481``
+# while its boundary was ``1791884518.800`` (nominal end ``17:42:00.0``) — a
+# ~0.48 s delay.  This is the ``clock() − boundary`` term that
+# ``CascadingDecoder._remaining_budget`` subtracts before it can spend anything
+# on the deep path, so the decision cutoff has to cover it *plus* the deep
+# path's duration; the guard is in ``tests/ft8/engine/test_orchestrator.py``.
+FAST_PATH_FINISH_DELAY_SECONDS = 0.48
 # Real audio lands one block (~85 ms) plus scheduling after its sample time;
 # reading exactly at the boundary always misses the slot tail (found by the
 # foreground/launchd deployment: every slot skipped with a healthy ring).

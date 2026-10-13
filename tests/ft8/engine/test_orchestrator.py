@@ -5,9 +5,14 @@ import asyncio
 import pytest
 
 from ft8.core.models import DecodeBatch, DecodePath, DecodeResult
+from ft8.engine.cascade import (
+    DEFAULT_DEEP_LOWER_BOUND_SECONDS,
+    DEFAULT_SAFETY_MARGIN_SECONDS,
+)
 from ft8.engine.orchestrator import (
     DEFAULT_DECISION_CUTOFF_SECONDS,
     DELIVERY_GRACE_SECONDS,
+    FAST_PATH_FINISH_DELAY_SECONDS,
     FT4_PERIOD_SECONDS,
     FT8_PERIOD_SECONDS,
     Orchestrator,
@@ -180,7 +185,6 @@ def test_boundary_epoch_for_slot_uses_the_passed_period() -> None:
 
     assert boundary_epoch_for_slot(0, period=7.5) == (0 + 1) * 7.5
     assert boundary_epoch_for_slot(5, period=7.5) == (5 + 1) * 7.5
-    assert boundary_epoch_for_slot(5, period=7.5) == 45.0
 
 
 def test_config_validation() -> None:
@@ -317,6 +321,70 @@ def test_late_result_is_display_only_and_never_fed() -> None:
     assert sequencer.state == QSOState.CALLING  # no late-triggered TX state
 
 
+def test_escalated_slot_finishing_after_the_deep_path_still_reaches_the_sequencer() -> None:
+    """升级槽的结果必须能喂给 sequencer —— 这正是把截止放宽到 4.0 的理由。
+
+    现场算术（W103D）：快路径结果落在边界后 ``FAST_PATH_FINISH_DELAY_SECONDS``（~0.48 s），
+    深路径再跑 ``DEFAULT_DEEP_LOWER_BOUND_SECONDS``（~2.3 s），于是本槽的结果在边界后
+    ~2.78 s 才回来。截止仍是 2.5 s 时它被判 late、只显示、永不喂给 sequencer —— 而
+    ``escalate_on_ap_context`` 命中的恰恰是 QSO 中的时隙，于是 QSO 只能等操作员手动推进。
+
+    这里把「快路径落点 + 深路径下界」当成解码耗时，断言它**不** late 且报文真的到了
+    sequencer。耗时**全部由常量推导**（绝不写死 2.5 / 4.0）：把截止重新调错，这条与
+    ``test_late_result_is_display_only_and_never_fed``（从截止推导延迟）一起红。
+    """
+
+    deep_worst_case = FAST_PATH_FINISH_DELAY_SECONDS + DEFAULT_DEEP_LOWER_BOUND_SECONDS
+    # 前提：这个耗时必须落在截止之内 —— 否则本用例测的根本不是「级联的第二次解码能按时回来」。
+    assert deep_worst_case <= DEFAULT_DECISION_CUTOFF_SECONDS
+
+    sequencer = Sequencer("N0CALL", "FN42")
+    sequencer.start_cq()
+    harness = Harness(sequencer=sequencer)
+    harness.decoder.texts = ["N0CALL K1ABC FN42"]
+    harness.decoder.delay = deep_worst_case
+    harness.run(decodes=1)
+
+    assert len(harness.events) == 1
+    assert harness.events[0].late is False
+    assert harness.orchestrator.counters.deadline_misses == 0
+    # 结果真的进了 sequencer：QSO 推进到发报告（不是停在 CALLING 干等）。
+    assert sequencer.state == QSOState.REPORT
+    assert sequencer.dx_call == "K1ABC"
+
+
+def test_decision_cutoff_leaves_room_for_the_deep_path() -> None:
+    """决策截止必须**容得下深路径** —— 这正是当初标错的量，也是本用例存在的理由。
+
+    cascade 的预算守卫（``CascadingDecoder._remaining_budget``）在快路径跑完后才调用，
+    它算的是 ``cutoff − (clock() − boundary) − safety_margin``；而现场实测快路径结果
+    落在边界后 ``FAST_PATH_FINISH_DELAY_SECONDS``，那时 ``clock() − boundary`` 就是这个
+    值。于是守卫肯放行深路径的充要条件是：
+
+        cutoff − 快路径落点 − safety_margin ≥ 深路径下界
+
+    2.5 s 的截止在这条不等式上差 ~0.33 s，于是 W103D 上每一次策略批准的升级都被
+    「budget too tight」拒掉（一段 2.5 h 的现场日志里 263 次拒绝、零升级），页面只剩
+    快路径。这条就是当初缺的那把尺：只把截止改小（例如退回 2.5），它立刻红。
+
+    三个量全部来自**真实的**常量定义（截止在 orchestrator.py，下界与安全余量在
+    cascade.py），快路径落点也是一个具名模块常量 —— 任何一处再被标错，这里都会红。
+    """
+
+    remaining = (
+        DEFAULT_DECISION_CUTOFF_SECONDS
+        - FAST_PATH_FINISH_DELAY_SECONDS
+        - DEFAULT_SAFETY_MARGIN_SECONDS
+    )
+    assert remaining >= DEFAULT_DEEP_LOWER_BOUND_SECONDS, (
+        f"decision cutoff {DEFAULT_DECISION_CUTOFF_SECONDS}s leaves only "
+        f"{remaining:.2f}s for the deep path after the fast path finishes at "
+        f"+{FAST_PATH_FINISH_DELAY_SECONDS}s; the cascade needs "
+        f"{DEFAULT_DEEP_LOWER_BOUND_SECONDS}s, so every escalation would be "
+        f"refused by the budget guard"
+    )
+
+
 def test_slot_mismatch_is_an_error_event() -> None:
     harness = Harness()
     harness.decoder.wrong_slot = True
@@ -417,8 +485,9 @@ def test_early_decode_dispatches_before_the_nominal_slot_end() -> None:
 def test_early_decode_does_not_mark_results_late() -> None:
     """Lateness is measured against the slot's real end, not the early edge.
 
-    The decision cutoff (default 5 s) is the TX fit window measured from the
-    slot boundary; shifting the wait must not eat into it.
+    ``early_decode_s`` only shifts the *wait*; lateness is judged against
+    ``boundary_epoch + decision_cutoff`` (``DEFAULT_DECISION_CUTOFF_SECONDS``
+    by default), so starting the decode earlier must not eat into that cutoff.
     """
 
     clock = FakeClock(7.5)
@@ -442,13 +511,14 @@ def test_early_decode_does_not_mark_results_late() -> None:
     )
     asyncio.run(orchestrator.run())
 
-    # Lateness is measured against the slot's real end: finishing well before
-    # deadline (nominal end + 5 s) must not be flagged as a deadline miss.
+    # Lateness is measured against the slot's real end: a result inside the
+    # decision window (nominal end + DEFAULT_DECISION_CUTOFF_SECONDS) must not
+    # be flagged as a deadline miss.
     assert orchestrator.counters.deadline_misses == 0
     for event in events:
         nominal_end = slot_start_epoch(event.slot_id + 1)
         assert event.dispatched_epoch < nominal_end
-        assert event.dispatched_epoch < nominal_end + 5.0
+        assert event.dispatched_epoch < nominal_end + DEFAULT_DECISION_CUTOFF_SECONDS
 
 
 def test_early_decode_zero_preserves_upstream_behaviour() -> None:

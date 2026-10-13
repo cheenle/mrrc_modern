@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ft8.core.models import DecodeBatch
+from ft8.core.models import DecodeBatch, DecodePath
 
 # 与 ft8/dsp/wsjt_core.h 的 WSJT_FLAG_SNR_PROVISIONAL 同值（bit 4）。
 FLAG_SNR_PROVISIONAL = 16
@@ -69,3 +69,44 @@ def _snr_is_trustworthy(batch: DecodeBatch) -> bool:
     if not batch.results:
         return False
     return all(not (r.flags & FLAG_SNR_PROVISIONAL) for r in batch.results)
+
+
+_FREQ_TOL = 5.0     # Hz — 两条路径对同一信号的频率估计允许的偏差
+_DT_TOL = 0.15      # s  — 同上，时间偏差
+
+
+def _same_signal(a: DecodeResult, b: DecodeResult) -> bool:
+    return (
+        abs(a.frequency - b.frequency) <= _FREQ_TOL
+        and abs(a.dt - b.dt) <= _DT_TOL
+    )
+
+
+def merge_batches(fast: DecodeBatch, deep: DecodeBatch) -> DecodeBatch:
+    """Union of two batches; the deep result wins on any shared signal.
+
+    Matching is by (frequency, dt) within tolerance, **not** by text: the
+    fast path leaves hashed callsigns as ``<...>`` while the deep path
+    restores them, so identical text is not the right key (spec R-2).
+    """
+
+    if fast.slot_id != deep.slot_id:
+        raise ValueError(
+            f"cannot merge different slots: {fast.slot_id} != {deep.slot_id}"
+        )
+
+    merged = list(deep.results)
+    for candidate in fast.results:
+        if any(_same_signal(candidate, kept) for kept in merged):
+            continue
+        merged.append(candidate)
+    path = DecodePath.IMPROVED if deep.results else DecodePath.FAST
+    return DecodeBatch(
+        slot_id=deep.slot_id,
+        path=path,
+        results=tuple(merged),
+        overflow=fast.overflow or deep.overflow,
+        elapsed_seconds=fast.elapsed_seconds + deep.elapsed_seconds,
+        escalated=True,
+        fast_elapsed_seconds=fast.elapsed_seconds,
+    )

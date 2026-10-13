@@ -94,7 +94,7 @@ class DecodeResult:
 
 @dataclass(frozen=True, slots=True)
 class DecodeBatch:
-    """One completed standard or Improved decode request."""
+    """One completed decode request, possibly the merge of both paths."""
 
     slot_id: int
     path: DecodePath
@@ -102,6 +102,11 @@ class DecodeBatch:
     overflow: bool
     elapsed_seconds: float
     deadline_missed: bool = False
+    # 两条路径的结果合并时置 True —— 升级**发生过**，与「深路径多解出东西了吗」
+    # 无关（跑了两秒一条没多，恰恰是最该被看见的配置）。
+    escalated: bool = False
+    # 升级前的快路径耗时，供运维分辨「慢是慢在哪一段」。
+    fast_elapsed_seconds: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

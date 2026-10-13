@@ -116,5 +116,75 @@ class AdIndexConsistencyTests(unittest.TestCase):
         self.assertEqual(sorted(ids - index), [], "chapter 14's index is missing decisions")
 
 
+def version_history_rows() -> list[str]:
+    """The data rows of chapter 14's version table, in file order."""
+    text = (SDD / "14-version-history.md").read_text(encoding="utf-8")
+    rows: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("|"):
+            rows.append(line)
+        elif rows:
+            break  # the table ends; the AD index at the chapter's end is separate
+    return rows[2:]  # drop the header row and the |---|---| separator
+
+
+def cell_boundaries(row: str) -> int:
+    """Count the pipes pandoc will treat as column boundaries.
+
+    Pipes inside an inline code span or escaped as ``\\|`` are *text* — the
+    table already relies on this (`systemctl ... | grep -q` and
+    `GET | POST /api/setup/wizard*` are one cell each, not two). Every other
+    pipe splits the row, and pandoc **discards** cells past the header's four
+    without an error or a warning.
+    """
+
+    count, in_code, escaped = 0, False, False
+    for char in row:
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == "`":
+            in_code = not in_code
+        elif char == "|" and not in_code:
+            count += 1
+    return count
+
+
+def cells_in_row(row: str) -> int:
+    """How many cells pandoc sees in one table row.
+
+    A trailing pipe is optional (`| SDD V2.59 | … | … | …）。` is a valid
+    four-cell row with no closing pipe), so the boundary count is the cell
+    count only when the row does not close itself.
+    """
+
+    return cell_boundaries(row) - 1 if row.rstrip().endswith("|") else cell_boundaries(row)
+
+
+class VersionHistoryTableTests(unittest.TestCase):
+    def test_every_version_row_keeps_the_columns_the_header_declares(self):
+        """A stray pipe is silent data loss, not a cosmetic slip.
+
+        Adding the V2.85 row glued the V2.84 row's cells behind an extra pipe:
+        the version, the date and the author vanished and the Changes text
+        landed in a fifth cell that `website/build_sdd.py`'s pandoc pass threw
+        away — the v1.27.0 release record, four artifact sizes and their
+        SHA-256s left the generated chapter page. Every other guard stayed
+        green, because they all check that a version *is* mentioned, never
+        that a row is still parseable. This test is that missing half.
+        """
+
+        rows = version_history_rows()
+        self.assertGreater(len(rows), 1, "chapter 14 has no version table")
+        for row in rows:
+            version = row.split("|")[1].strip()
+            self.assertEqual(
+                cells_in_row(row), 4,
+                f"the SDD {version} row parses as {cells_in_row(row)} cells, "
+                f"not the header's 4 — pandoc will drop the extra ones",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

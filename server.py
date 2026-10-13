@@ -3039,6 +3039,23 @@ async def lifespan(app: FastAPI):
             # ``batch`` is already the wire frame (slot_id/late/messages).
             if isinstance(batch, dict) and batch.get("type") == "decodes":
                 _ft8_queue_frame(batch)
+            # Once per slot, refresh the page's QSO/safety panel: the
+            # sequencer moves (calling → replying → waiting) between slots
+            # and the panel would otherwise freeze on the load-time snapshot.
+            try:
+                if _ft8_runtime is not None and _ft8_runtime.sequencer is not None:
+                    seq = _ft8_runtime.sequencer
+                    _ft8_queue_frame({
+                        "type": "ft8_state",
+                        "sequencer": {
+                            "state": seq.state.value,
+                            "tx_enabled": seq.tx_enabled,
+                            "dx_call": seq.dx_call,
+                        },
+                        "safety": _ft8_runtime.safety.health,
+                    })
+            except Exception:
+                logger.debug("ft8 state frame failed", exc_info=True)
 
         _ft8_runtime = Ft8Runtime(
             rig=platform_rig,
@@ -3049,6 +3066,14 @@ async def lifespan(app: FastAPI):
             on_decode=_ft8_on_decode,
             on_waterfall=_ft8_queue_frame,
         )
+        def _ft8_always_on() -> bool:
+            """The engine-always-on switch (settings.json; defaults to on)."""
+
+            try:
+                return bool(_ft8_settings_store.load().engine_always_on)
+            except Exception:
+                return True
+
         _ft8_mode = Ft8ModeController(
             snapshot_ssb=_ft8_snapshot_ssb,
             apply_ft8_radio=_ft8_apply_ft8_radio,
@@ -3057,6 +3082,7 @@ async def lifespan(app: FastAPI):
             stop_engine=_ft8_runtime.stop,
             set_browser_tx=_ft8_set_browser_tx,
             broadcast=_ft8_broadcast,
+            engine_always_on=_ft8_always_on,
         )
         # REST surface: /api/ft8/* on the platform app, sharing the platform
         # session cookie (AUTH_COOKIE) and the control/listen role split.
@@ -3079,6 +3105,15 @@ async def lifespan(app: FastAPI):
             platform_dial=_platform_dial_hz,
             settings_store=_ft8_settings_store,
         )
+
+        # Always-on (default): the RX monitor runs from startup so the page
+        # has decodes/waterfall even before the operator switches modes.
+        if _ft8_always_on():
+            try:
+                await _ft8_runtime.start()
+                logger.info("FT8 engine started at boot (RX monitor always-on)")
+            except Exception:
+                logger.exception("FT8 always-on start failed; the page offers a manual start")
         from ft8.web.ft8_ws import Ft8EventBus
 
         global _ft8_bus

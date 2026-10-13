@@ -28,6 +28,9 @@ function dispatch(message) {
     case "decodes":
       applyDecodeBatch(message);
       break;
+    case "ft8_state":
+      patch({ sequencer: message.sequencer, safety: message.safety });
+      break;
     case "mode":
       patch({ workMode: message.mode, engineRunning: message.engine_running !== false });
       handlers.onMode?.(message.mode);

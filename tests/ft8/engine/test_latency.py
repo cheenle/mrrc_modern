@@ -224,3 +224,39 @@ def test_elapsed_between_the_old_and_new_cutoff_is_not_overflow() -> None:
     overflow_label = next(label for label in buckets if label.startswith(">="))
     assert buckets[overflow_label] == 0, f"2.6s/3.9s must not be overflow: {buckets}"
     assert bucket_index(2.6) != bucket_index(3.9)
+
+
+def test_cascade_stats_carries_the_escalation_counters_when_the_engine_runs() -> None:
+    """升级率必须能从 `cascade_stats` 读到 —— 它是本次改动唯一的验证信号。
+
+    截止修好之前现场实测 `escalations == 0`（263 次拒绝升级）；修好之后这个数必须
+    变成非 0，否则深路径仍然没跑。没有这个出口，唯一的办法是去翻日志。
+    """
+
+    from ft8.runtime import Ft8Runtime
+
+    wired = object.__new__(Ft8Runtime)
+    wired._cascade = SimpleNamespace(deadline_risk=2)
+    wired.orchestrator = SimpleNamespace(
+        counters=SimpleNamespace(escalations=7, fast_decodes=93)
+    )
+    assert wired.cascade_stats == {
+        "deadline_risk": 2,
+        "escalations": 7,
+        "fast_decodes": 93,
+    }
+
+
+def test_cascade_stats_omits_counters_when_the_orchestrator_is_not_wired() -> None:
+    """构造到 `start()` 之间的实例没有 orchestrator —— 必须少键，不能抛。
+
+    `object.__new__(Ft8Runtime)` 就是这个形状（`__init__` 没跑过），
+    `test_cascade_stats_property_covers_both_branches` 已有先例。
+    若这里抛 AttributeError，`/api/ft8/health` 在引擎没起来时 500。
+    """
+
+    from ft8.runtime import Ft8Runtime
+
+    unwired = object.__new__(Ft8Runtime)
+    unwired._cascade = SimpleNamespace(deadline_risk=4)
+    assert unwired.cascade_stats == {"deadline_risk": 4}

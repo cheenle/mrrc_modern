@@ -139,12 +139,28 @@ class Ft8Runtime:
 
     @property
     def cascade_stats(self) -> dict[str, int] | None:
-        """级联解码器的运行期计数；引擎未启动时为 None。"""
+        """级联解码器的运行期计数；引擎未启动时为 None。
+
+        `deadline_risk` 来自级联解码器本身，两个计数器来自编排器 —— 升级率
+        = `escalations / decodes`，是判断阈值松紧、以及判断深路径**有没有在跑**
+        的主指标（2026-10-13 之前现场实测恒为 0：截止 2.5 s 把每一次升级都挡在
+        预算守卫外）。
+
+        `orchestrator` 用 `getattr(..., None)` 取：构造到 `start()` 之间的实例
+        还没有它，此时少两个键而不是抛 AttributeError —— 否则 `/api/ft8/health`
+        在引擎没起来时 500。与 `_cascade` 同一约定。
+        """
 
         cascade = getattr(self, "_cascade", None)
         if cascade is None:
             return None
-        return {"deadline_risk": cascade.deadline_risk}
+        stats = {"deadline_risk": cascade.deadline_risk}
+        orchestrator = getattr(self, "orchestrator", None)
+        if orchestrator is not None:
+            counters = orchestrator.counters
+            stats["escalations"] = counters.escalations
+            stats["fast_decodes"] = counters.fast_decodes
+        return stats
 
     def set_cascade_policy(self, settings: Ft8Settings) -> None:
         """把持久设置里的升级策略推给**正在跑**的级联解码器。

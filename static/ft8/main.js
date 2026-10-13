@@ -104,6 +104,27 @@ async function boot() {
     actions.appendChild(deep);
   }
 
+  // 升级率是慢变量：30 s 一次足够，而 15 s 一次会让请求数白翻一倍。
+  // 401 由 api.js 的 request() 统一重载处理，这里不重复。
+  const engineStatsEl = document.querySelector("#engine-stats");
+  if (engineStatsEl) {
+    const renderEngineStats = async () => {
+      const { status, engine } = await api.engineStats();
+      if (status !== 200 || !engine) {
+        engineStatsEl.textContent = "—";
+        return;
+      }
+      const pct = (engine.escalation_rate * 100).toFixed(1);
+      engineStatsEl.textContent = `升级 ${pct}% · ${engine.escalations}/${engine.decodes}`;
+      engineStatsEl.title =
+        `时隙 ${engine.slots_started} · 跳过 ${engine.slots_skipped} · ` +
+        `快路径 ${engine.fast_decodes} · 升级 ${engine.escalations} · ` +
+        `超时 ${engine.deadline_misses} · 错误 ${engine.decode_errors}`;
+    };
+    renderEngineStats();
+    setInterval(renderEngineStats, 30_000);
+  }
+
   subscribe(({ station, safety, workMode, engineRunning }) => {
     // The engine is runtime-only (a restart returns the station to SSB), so
     // say so instead of showing an empty decode list.

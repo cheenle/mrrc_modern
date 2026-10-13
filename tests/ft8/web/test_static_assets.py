@@ -47,3 +47,23 @@ def test_dom_ids_used_by_js_exist_in_the_page():
     for js in (STATIC / "ft8").glob("*.js"):
         used |= set(re.findall(r'getElementById\("([^"]+)"\)', js.read_text()))
     assert sorted(used - html_ids - DYNAMIC_IDS) == []
+
+
+def test_ft8_page_declares_the_engine_stats_element() -> None:
+    """状态栏必须有承载升级率的元素，否则渲染代码无处可写。"""
+
+    html = (ROOT / "static" / "ft8.html").read_text(encoding="utf-8")
+    assert 'id="engine-stats"' in html
+
+
+def test_ft8_api_client_exposes_engine_stats() -> None:
+    """页面通过 `api.engineStats()` 取数 —— 方法名是跨文件的契约。"""
+
+    js = (ROOT / "static" / "ft8" / "api.js").read_text(encoding="utf-8")
+    assert "engineStats:" in js
+    assert '"/engine/stats"' in js
+
+
+def test_ft8_main_polls_the_engine_stats_endpoint() -> None:
+    main = (ROOT / "static" / "ft8" / "main.js").read_text(encoding="utf-8")
+    assert "engineStats()" in main

@@ -65,6 +65,24 @@ bash "$STAGER" "$SRC_TREE" "$MRRC_HOME"
 echo "==> python dependencies"
 "$MRRC_HOME/venv/bin/pip" install --upgrade -q -r "$MRRC_HOME/requirements.txt"
 
+echo "==> FT8 DSP library (rebuild only when ft8/dsp changed)"
+# ft8/dsp/build/ is a build product and excluded from the staged tree, so an
+# update that changes the DSP sources would otherwise pair the new Python with
+# the previous .so.  The ABI is hard-checked at load (an old library refuses to
+# start, loudly), but anything short of an ABI bump would be a silent mismatch
+# — and "the box silently runs two versions of one decoder" is exactly the
+# failure docs/ft8-w103d-decode-perf-analysis.md §5 warned about.  build.sh
+# stores a digest of its sources and returns immediately when nothing moved,
+# so the common case costs milliseconds.
+#
+# Deliberately NOT fatal: images released before 1.27.0 have no compiler, and
+# an update must not leave a working SSB box half-updated because its FT8
+# toolchain is missing.  A real failure is reported and FT8 alone degrades.
+if ! bash "$MRRC_HOME/ft8/dsp/build.sh"; then
+	echo "WARNING: the FT8 DSP library did not rebuild; FT8 mode will report" >&2
+	echo "         a missing library until it is built. Everything else is fine." >&2
+fi
+
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 echo "==> restarting"
 systemctl restart mrrc-modern

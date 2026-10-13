@@ -26,19 +26,30 @@ class _RequestError(Exception):
 def default_library_path() -> Path:
     """Return the DSP library path for this platform / mode.
 
-    Frozen installers bundle ``wsjt_core.dll`` and its runtime DLLs at the
-    PyInstaller ``_internal`` root; source builds keep the conventional
-    ``dsp/build`` CMake output.
+    Frozen installers bundle the shared library (and, on Windows/macOS, the
+    runtime DLLs/dylibs it links against) at the PyInstaller ``_internal``
+    root — ``app_root()`` — with the platform's own naming: ``wsjt_core.dll``
+    on Windows, ``libwsjt_core.dylib`` on macOS.  Source builds keep the
+    conventional ``dsp/build`` CMake output.
+
+    The frozen name must follow the platform rather than a single literal:
+    the macOS bundle is signed and the library is loaded through ctypes from
+    ``Contents/Resources``, so a hard-coded ``.dll`` there is a path that can
+    never exist (and did, until the FT8 packaging work made macOS a target).
     """
     if getattr(sys, "frozen", False):
         from ft8.core.paths import app_root
-        return app_root() / "wsjt_core.dll"
+        return app_root() / _library_name()
     base = Path(__file__).resolve().parents[2] / "ft8" / "dsp" / "build"
+    return base / _library_name()
+
+
+def _library_name() -> str:
     if sys.platform == "darwin":
-        return base / "libwsjt_core.dylib"
+        return "libwsjt_core.dylib"
     if sys.platform == "win32":
-        return base / "wsjt_core.dll"
-    return base / "libwsjt_core.so"
+        return "wsjt_core.dll"
+    return "libwsjt_core.so"
 
 
 def _expected_shm_size(logical_nbytes: int) -> int:

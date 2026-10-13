@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2182 tests across 114 test modules (19 skip on Windows, 1 on macOS; totals re-read
+2199 tests across 115 test modules (19 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-13, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 64 of those 114 — the support-chain, Cloud Hub and
+sections below itemise 64 of those 115 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -21,7 +21,7 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2182 |
+| Total tests | 2199 |
 | Passed | 2181 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 (macOS, 2026-10-13) |
@@ -60,16 +60,16 @@ republished. None is a defect in the code under test here.
 ## FT8 Suite (pytest)
 
 The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separate,
-pytest-only** suite of 54 modules under `tests/ft8/`. It is written in the pytest
+pytest-only** suite of 55 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2182 above. Run it with:
+the 2199 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
 ```
 
-Measured 2026-10-13 (macOS): **735 passed, 2 skipped, 1 xfailed** — the DSP subset
+Measured 2026-10-13 (macOS): **744 passed, 2 skipped, 1 xfailed** — the DSP subset
 (`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
 and includes the fast-path / cascade regression the design
 (`docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`) pinned.
@@ -705,6 +705,22 @@ Both failure modes are real: a mid-list insertion shifted `macos-installer gotch
 10` — quoted by two plan documents — onto the wrong entry, and four
 `windows-installer` items written with one leading space were unreachable by
 number while three of them were referenced from the Common Mistakes table.
+
+### 64. test_ft8_packaging.py — FT8 Packaging Across the Four Platforms (17 tests)
+
+The FT8 work mode is Python plus one native library, and the library is the only
+part of this product that has to be built per target — which makes the packaging
+the place where the feature silently disappears: a green tree and an installer
+that answers "library missing" at the first mode switch. Each class pins one
+platform's wiring, and the macOS helper's closure logic gets real unit tests.
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `LinuxImageToolchainTests` | 6 | both image lines install the DSP toolchain, build it during the build, refuse to ship without the `.so`, and rebuild on update without letting a missing compiler abort an SSB update |
+| `MacPackagingTests` | 2 | `build.sh` builds the dylib, bundles its dependency closure and stops when the build produced nothing |
+| `MacBundleHelperTests` | 5 | `otool -L` parsing, what counts as a system library, the transitive closure walk, missing-dependency and outside-the-bundle errors |
+| `WindowsPackagingTests` | 2 | the MinGW build step and the walked (not hard-coded) runtime DLL closure |
+| `PyInstallerSpecTests` | 2 | the native library is staged at the app root and `ft8`/`scipy`/`soxr` are named as hidden imports |
 
 ## Test Coverage by SDD Requirement
 

@@ -69,6 +69,83 @@ if (!(Test-Path $opus)) {
     Write-Warning "  $opus"
 }
 
+# FT8's Python dependencies must be importable by THIS venv before PyInstaller
+# runs: scipy (engine filters) and soxr (the 44.1 kHz -> 12 kHz RX tap) are named
+# as hidden imports in the spec, and a venv built before feat/ft8 does not have
+# them - PyInstaller would silently ship a package whose FT8 engine imports fail
+# at the first mode switch. Check here, before the expensive part.
+Invoke-Checked python -c "import scipy, soxr"
+
+# ---- FT8 DSP (native library + its MinGW runtime closure) ----------------
+# The FT8 engine loads wsjt_core.dll through ctypes. It is built here from the
+# source tree with MSYS2's mingw-w64 gfortran, and the DLLs IT needs at runtime
+# (libgfortran, libgomp, FFTW, ...) travel with it: the Windows build machine is
+# the only one of the four platforms where a Fortran runtime exists at all, so
+# nothing may rely on the user's machine providing one.
+$Msys2 = if ($env:MRRC_MSYS2_ROOT) { $env:MRRC_MSYS2_ROOT } else { "C:\msys64" }
+$MingwBin = Join-Path $Msys2 "mingw64\bin"
+foreach ($tool in @("gfortran.exe", "gcc.exe", "g++.exe", "cmake.exe", "ninja.exe", "pkg-config.exe", "objdump.exe")) {
+    if (!(Test-Path (Join-Path $MingwBin $tool))) {
+        throw "FT8 DSP build needs $tool in $MingwBin - install MSYS2 and its mingw-w64 packages (gcc-fortran, cmake, ninja, fftw) or set MRRC_MSYS2_ROOT"
+    }
+}
+$env:PKG_CONFIG_PATH = Join-Path $Msys2 "mingw64\lib\pkgconfig"
+# Every tool is addressed by absolute path and nothing is added to PATH: the
+# caller has the project venv first on PATH, and MSYS2 ships its own python.exe
+# and make/ninja shims - prepending mingw64\bin would silently hand PyInstaller
+# (and the rest of the build) the wrong interpreter.
+$Cmake = Join-Path $MingwBin "cmake.exe"
+$Ninja = Join-Path $MingwBin "ninja.exe"
+$PkgConfig = Join-Path $MingwBin "pkg-config.exe"
+$Gfortran = (Join-Path $MingwBin "gfortran.exe").Replace("\", "/")
+$Gcc = (Join-Path $MingwBin "gcc.exe").Replace("\", "/")
+$Gxx = (Join-Path $MingwBin "g++.exe").Replace("\", "/")
+Invoke-Checked $Cmake -S "ft8/dsp" -B "ft8/dsp/build" -G Ninja `
+    -DCMAKE_BUILD_TYPE=Release `
+    -DCMAKE_MAKE_PROGRAM=$Ninja `
+    -DPKG_CONFIG_EXECUTABLE=$PkgConfig `
+    "-DCMAKE_Fortran_COMPILER=$Gfortran" `
+    "-DCMAKE_C_COMPILER=$Gcc" `
+    "-DCMAKE_CXX_COMPILER=$Gxx"
+Invoke-Checked $Cmake --build "ft8/dsp/build" -j 4
+
+$Ft8Dll = Join-Path $RepoRoot "ft8\dsp\build\wsjt_core.dll"
+if (!(Test-Path $Ft8Dll)) {
+    throw "FT8 DSP build produced no wsjt_core.dll ($Ft8Dll)"
+}
+
+# Walk the DLL's dependency closure instead of hard-coding a list: MSYS2 is a
+# rolling distribution and a new link-time dependency (say libquadmath) would
+# otherwise ship as a package that fails to load on a machine without MSYS2.
+$Ft8Stage = Join-Path $RepoRoot "build\ft8\windows"
+Remove-Item $Ft8Stage -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path $Ft8Stage -Force | Out-Null
+
+$systemDll = "^(KERNEL32|USER32|ADVAPI32|SHELL32|WS2_32|msvcrt|api-ms-|ucrtbase|ntdll|bcrypt|ole32|OLEAUT32|WSOCK32)"
+$seen = @{}
+$queue = @($Ft8Dll)
+while ($queue.Count -gt 0) {
+    $current = $queue[0]
+    if ($queue.Count -gt 1) { $queue = $queue[1..($queue.Count - 1)] } else { $queue = @() }
+    $leaf = Split-Path $current -Leaf
+    if ($seen.ContainsKey($leaf)) { continue }
+    $seen[$leaf] = $current
+    Copy-Item $current $Ft8Stage -Force
+    $deps = & (Join-Path $MingwBin "objdump.exe") -p $current |
+        Select-String "DLL Name: (.*)" |
+        ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+    foreach ($dep in $deps) {
+        if ($dep -match $systemDll) { continue }
+        $candidate = Join-Path $MingwBin $dep
+        if (!(Test-Path $candidate)) {
+            throw "FT8 runtime dependency not found: $dep (needed by $leaf)"
+        }
+        $queue += $candidate
+    }
+}
+$ft8Files = (Get-ChildItem $Ft8Stage -File | Select-Object -ExpandProperty Name) -join ", "
+Write-Host "FT8 DSP: $ft8Files"
+
 # Purge the PyInstaller workpath. The module graph is cached there and a file is
 # only re-analyzed when its (size, mtime) changed - so a source tree shipped as a
 # tar, which keeps the build Mac's mtimes, can look older than the cache and a

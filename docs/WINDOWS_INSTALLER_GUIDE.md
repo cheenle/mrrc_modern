@@ -7,17 +7,17 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.26.0 Stable)
+## Download (v1.27.0 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.26.0-Windows-x64-Setup.exe` | 51.9 MB (54,395,338 bytes) | `1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2` |
+| `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` | 51.9 MB (54,395,338 bytes) | `1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.26.0-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.27.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.26.0 is the published Windows installer.** It was built from a source pack
+**v1.27.0 is the published Windows installer.** It was built from a source pack
 (`mrrc_modern_src.tgz`, 35 MB / 850 files, made 2026-10-09 14:31) on Windows 11 (the KVM build VM)
 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3, extracted over the VM's tree with its
 venv kept and `tests\*.py` cleared first. The build gate ran **2067 tests OK (25 platform skips)**,
@@ -25,7 +25,7 @@ three PyInstaller targets, and the installer compiled into a scratch directory a
 The gate itself found this release's Windows-only reds: six POSIX-only tests (file modes in
 `env_store` / `cloud_hub_write_config` / `net_wifi`, plus one box test that pipes a `bash` parse
 block) had never run on Windows, and one `env_store` fixture wrote CRLF there — the code was right,
-the fixture was not. Evidence taken from the artifact: `version.txt` = `1.26.0`, size
+the fixture was not. Evidence taken from the artifact: `version.txt` = `1.27.0`, size
 **54,395,338 bytes** (v1.25.4 was 54,347,067), mtime **2026-10-09 14:32:29**, and the cross-host
 SHA-256 matched (build VM == build Mac) — **`1ed3fb8d…`**.
 
@@ -61,7 +61,7 @@ of `localhost, DESKTOP-SSDDF0B, DESKTOP-SSDDF0B.local, 127.0.0.1, ::1, 192.168.1
 after**; junk 0. The second launcher declined, one `LISTENING` row remained during the run and zero
 after it was stopped. The shipped `MRRC-Modern-Setup.exe` was then installed **silently into an
 isolated `/DIR=`** (so the VM's resident tenant was never touched): 167 files, `version.txt` =
-1.26.0, fleet payload present, junk 0; the installed Launcher served `https /login` **200**,
+1.27.0, fleet payload present, junk 0; the installed Launcher served `https /login` **200**,
 rejected plaintext (**000**), answered `/api/health` **401**, and the install directory stayed
 167→167; the uninstaller removed it cleanly. This round the frozen entry was also walked for the
 release's own symbols (`spectrumCaps`, `_spectrum_fanout`, `manage.html`, `setup.html` in `server`;
@@ -190,9 +190,9 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.24.8 package (54,121,489 bytes, SHA-256 `616f8b55…`) and v1.24.7
-(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.26.0 supersedes them.
+(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.27.0 supersedes them.
 
-**What's new in v1.26.0** (**macOS only — Windows behaviour is unchanged**): **the macOS tunnel
+**What's new in v1.27.0** (**macOS only — Windows behaviour is unchanged**): **the macOS tunnel
 stopped leaking a process per start.** v1.25.2 fixed this leak here by changing how a leftover
 `frpc` was *enumerated* (`wmic` → `Get-CimInstance`), but the sweep still returned before doing
 anything unless the platform was Windows — so on macOS every start left one behind, forever:

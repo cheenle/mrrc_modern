@@ -2,19 +2,60 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [feat/ft8] — 未发布 — FT8 工作模式（W103D 盒子）
+## [v1.27.0] — 2026-10-13 — FT8 走进四个平台；解码默认走快路径、按需级联
 
 **一台电台，两种用法**：主菜单多了一项「FT8 模式」——点一下，电台切到 FT8 频点与 DATA-U，
 FT8 引擎接管接收与发射；FT8 界面右上角点「←」回到 SSB，台况（频率/模式/滤波/功率/AGC/ATT/PREAMP）
 逐字段恢复。两个模式共用同一条 TX 门控，**结构上不可能同时键控**。
 
+**四个平台都拿得到**：W103D 盒子与树莓派镜像在镜像构建期就地编译原生 DSP 库，
+macOS 与 Windows 安装包在打包时编译并把运行期依赖一起装进包里——刷机或装包之后直接用，
+不再需要登进设备手动装编译器、手动编一遍。
+
 - **复用时的一切**：FT8 用平台的声卡（RX 从既有 44.1 kHz 流分出 12 kHz，TX 波形走 CQ 播放同一条队列）、
   平台的 CAT（`CatController`，不装 hamlib/rigctld）、平台的登录与角色（`operator` 全权 / `listener` 只读）。
 - **独立的设置**：呼号、Grid、射频模式（`DATA-U`/`USB`，默认 DATA-U）在 FT8 页面内单独设置，
   与 Cloud Hub 呼号无关。
-- **DSP 在设备上原生编译**：`ft8/dsp/build.sh`（gfortran + FFTW3f + Boost，幂等）；
-  W103D 实测编译 2 分 02 秒、单时隙解码 2.14 秒（15 秒时隙余量 3.7 倍）。
 - **真机验收**：20m 六时隙 4 解码；SSB↔FT8 往返无 PTT 残留（`docs/ft8-m5-acceptance.md`）。
+- **解码默认走快路径、按需级联**：新增 `kgoba/ft8_lib` 快路径（C，无 AP/OSD/单趟，0.15 s 量级）
+  作为默认；命中升级判据（通联中「AP 上下文」/ 疑似漏解 / 手动「深度解码本槽」）时对
+  **同一时隙**补跑 WSJT-X 深路径并取并集，**解出条数不低于"始终走深路径"**，预算不足时
+  宁可不升级。W103D 真机：解码完成时刻中位从 **+4.0 s**（仅深路径）降到 **−0.1 s**
+  （快路径直出）或 **+1.2 s**（升级槽）——见 `docs/ft8-w103d-decode-perf-analysis.md` §9。
+- **快路径的信号强度是真 dB**：修掉快路径照抄上游、把归一化的 Costas 同步分当 SNR 的写法
+  （≥ −6 dB 会一直显示 +17，而它会作为「收你多少 dB」发到空中）；改为从水声图量信噪比、
+  并与深路径逐点标定（残差 0 dB）。
+- **首版不做**：FT4、桌面客户端、band hunter、JTDX ADIF 同步、auto-call-new-DXCC。
+- **升级注意（重要）**：≤1.25.5 镜像自带的 `mrrc-update` 会用 `--delete` 同步，
+  升级时会删掉盒子上的 `env/`、`profiles/` 与录音——升级前先替换该脚本（或先整目录备份）。
+
+### 打包：原生 DSP 库进入四个平台的产物
+
+以前只有 W103D 上那份**手工编译**的库能让 FT8 跑起来：镜像、安装包里都没有它，刷机或升级之后
+FT8 点了就是「库缺失」。这一版把它变成产物的一个组成部分。设计记录：
+`docs/superpowers/specs/2026-10-13-ft8-packaging-design.md`。
+
+- **两条镜像线在构建期编译**：`packaging/common/packages.txt` 增加
+  gfortran / g++ / cmake / pkg-config / libfftw3-dev；`mrrc-service-layer.sh` 编完
+  立刻断言 `libwsjt_core.so` 存在——编不出来是**构建失败**，而不是刷出一个 FT8 点了没反应的镜像。
+  实测编译 **7.7 秒**（9 核构建机；W103D 自身 2 分 02 秒）。
+- **`mrrc-update` 每次升级重编**（源码摘要未变时秒退），因此升级后不会出现「新 Python + 旧 .so」。
+  这一步**不阻断升级**：1.27.0 之前的镜像没有编译器，SSB 照常升级完，FT8 单独退化并在日志里告警。
+- **Boost 头文件 vendored**：`<boost/crc.hpp>` 是整棵树唯一的 Boost 用途，而 Debian 只把它装在
+  `libboost1.74-dev`（138 MB 头文件）里。改为把 83 个头文件的包含闭包（720 KB，带许可证）
+  落进 `ft8/dsp/vendor-boost/`：两个镜像、两台桌面构建机都不再需要装 Boost。
+- **Windows**：用 MSYS2 的 mingw-w64 编译 `wsjt_core.dll`，连同 8 个运行期 DLL（FFTW、gfortran、
+  gomp、quadmath、libstdc++、libgcc、winpthread，约 16 MB）一起进包；依赖闭包是**走出来的**
+  而不是写死的，MSYS2 换代多出一个依赖会是构建失败而不是装机后打不开。顺带修掉两处可移植性缺陷：
+  mingw-w64 根本没有 `stpcpy`（GCC 14 起隐式声明是错误，且 x64 上会截断指针），
+  以及 MinGW 默认不导出任何符号（DLL 里就找不到那 5 个 `wsjt_*` 入口）。
+- **macOS**：编译 `libwsjt_core.dylib`，把 MacPorts 的依赖（FFTW、gfortran、gomp、quadmath、
+  libgcc_s）一起收进 app，并把每个 load command 改写成 `@loader_path/`；打包前断言
+  **没有任何残留的 `/opt/local` 引用**，有就构建失败——那正是"用户机器上 `dlopen` 失败"的形状。
+- **代价**：镜像安装后 +约 70 MB（构建工具链），`.img.xz` 约 +20–25 MB；Windows 安装包 +约 16 MB。
+- **验收工具同步**：盒子 `verify.sh` 与树莓派 `verify-image.sh` 都加了一项——
+  不只查文件在不在，而是**真加载一次**并核对 ABI 与能力掩码。
+
 - **解码默认走快路径、按需级联**：新增 `kgoba/ft8_lib` 快路径（C，无 AP/OSD/单趟，0.15 s 量级）
   作为默认；命中升级判据（通联中「AP 上下文」/ 疑似漏解 / 手动「深度解码本槽」）时对
   **同一时隙**补跑 WSJT-X 深路径并取并集，**解出条数不低于"始终走深路径"**，预算不足时

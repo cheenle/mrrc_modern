@@ -37,6 +37,24 @@ elif sys.platform == "darwin":
         _vendor_data.append((str(_ftdi_root), "vendor/ftdi/macos"))
 
 
+# FT8 work mode: the native DSP library and its runtime dependencies, staged by
+# the platform build script into build/ft8/<platform>/ (the Mac build rewrites
+# its load commands to @loader_path first; Windows copies the MinGW runtime
+# DLLs next to wsjt_core.dll).  Destination "." is deliberate: it is the
+# PyInstaller _internal root, which is exactly what app_root() returns at
+# runtime — see ft8/core/worker.py:default_library_path().
+#
+# Missing is not fatal here (the same deal the vendor trees above make): the
+# server then runs SSB-only, with FT8 reporting a missing library.  Each build
+# script asserts its own staging directory exists before calling PyInstaller,
+# so a real packaging stop is caught there, not silently shipped from here.
+if sys.platform == "darwin":
+    _ft8_root = ROOT / "build" / "ft8" / "macos"
+else:
+    _ft8_root = ROOT / "build" / "ft8" / "windows"
+_ft8_data = [(str(_ft8_root), ".")] if _ft8_root.exists() else []
+
+
 # default.env: the launcher seeds the user env from the platform-appropriate
 # template (windows/ for Win, macos/ for macOS). Do not ship the other
 # platform's template.
@@ -56,6 +74,7 @@ a = Analysis(
         *_config_env_data,
         (str(ROOT / "windows" / "launcher.py"), "windows"),
         *_vendor_data,
+        *_ft8_data,
     ],
     hiddenimports=[
         # First-run auto-config (launcher + setup endpoint)
@@ -113,6 +132,31 @@ a = Analysis(
         # lameenc is a single compiled extension module (not a package) and
         # is imported lazily inside the recorder, so name it explicitly.
         "lameenc",
+        # FT8 work mode (feat/ft8).  server.py imports ft8.* statically and
+        # PyInstaller follows those, but the engine pulls scipy (filters) and
+        # soxr (the 44.1 kHz → 12 kHz RX tap resampler) from inside functions,
+        # and a lazily imported native extension is exactly the shape that has
+        # shipped missing before (cloud_hub, v1.24.0).
+        "ft8",
+        "ft8.core.binding",
+        "ft8.core.protocol",
+        "ft8.core.supervisor",
+        "ft8.core.worker",
+        "ft8.engine.orchestrator",
+        "ft8.engine.dsp_decode",
+        "ft8.engine.dsp_encode",
+        "ft8.engine.audio_rx",
+        "ft8.engine.waterfall",
+        "ft8.platform.rx_tap",
+        "ft8.platform.tx_sink",
+        "ft8.platform.cat",
+        "ft8.platform.settings",
+        "ft8.web.ft8_api",
+        "ft8.web.ft8_ws",
+        "scipy",
+        "scipy.signal",
+        "scipy.special",
+        "soxr",
     ],
     hookspath=[],
     hooksconfig={},

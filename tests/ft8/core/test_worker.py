@@ -203,6 +203,28 @@ def test_default_library_path_win32_source(monkeypatch) -> None:
     assert default_library_path().name == "wsjt_core.dll"
 
 
+def test_default_library_path_is_macos_dylib_when_frozen(monkeypatch) -> None:
+    """The frozen name follows the platform, not a single literal.
+
+    The macOS bundle is signed and the library is loaded through ctypes from
+    Contents/Resources; a hard-coded ``wsjt_core.dll`` there is a path that can
+    never exist.
+    """
+    monkeypatch.setattr("ft8.core.worker.sys.platform", "darwin")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    import ft8.core.paths as paths
+    monkeypatch.setattr(paths.sys, "_MEIPASS", "/virtual/_internal", raising=False)
+    from ft8.core.worker import default_library_path
+    assert str(default_library_path()) == str(
+        Path("/virtual/_internal") / "libwsjt_core.dylib")
+
+
+def test_default_library_path_is_so_on_linux(monkeypatch) -> None:
+    monkeypatch.setattr("ft8.core.worker.sys.platform", "linux")
+    from ft8.core.worker import default_library_path
+    assert default_library_path().name == "libwsjt_core.so"
+
+
 def test_default_library_path_frozen_uses_app_root(monkeypatch) -> None:
     monkeypatch.setattr("ft8.core.worker.sys.platform", "win32")
     monkeypatch.setattr(sys, "frozen", True, raising=False)

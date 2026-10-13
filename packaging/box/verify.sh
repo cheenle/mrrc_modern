@@ -22,7 +22,7 @@ head_() { printf '\n%s\n' "$*"; }
 ENV_FILE=/opt/mrrc_modern/env/mrrc.env
 UNIT=mrrc-modern
 
-head_ "1/12 wired network"
+head_ "1/13 wired network"
 # `cmd | grep -q` inside a condition is a trap in this script: grep exits the
 # moment it matches, the writer takes SIGPIPE (141), and `set -o pipefail` turns
 # the whole pipeline into a failure — so a check that found what it looked for
@@ -33,21 +33,21 @@ else
 	bad "no global IPv4 address" "check the cable and 'nmcli device status'"
 fi
 
-head_ "2/12 radio serial"
+head_ "2/13 radio serial"
 if compgen -G "/dev/ttyUSB*" >/dev/null || compgen -G "/dev/ttyACM*" >/dev/null; then
 	ok "$(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | tr '\n' ' ')"
 else
 	bad "no /dev/ttyUSB* or /dev/ttyACM*" "check the USB cable and the radio's own USB setting"
 fi
 
-head_ "3/12 radio USB audio"
+head_ "3/13 radio USB audio"
 if grep -qi 'card' <<<"$(arecord -l 2>/dev/null)"; then
 	ok "$(arecord -l | sed -n 's/^card \([0-9]*\).*\[\(.*\)\]/\1:\2/p' | tr '\n' ' ')"
 else
 	bad "arecord lists no capture card" "the radio's USB sound card is not enumerated"
 fi
 
-head_ "4/12 python"
+head_ "4/13 python"
 py="$(/opt/mrrc_modern/venv/bin/python -V 2>/dev/null || true)"
 case "$py" in
 *3.11*) ok "$py" ;;
@@ -55,7 +55,7 @@ case "$py" in
 *) bad "$py (expected 3.11)" "the image is not the bookworm base" ;;
 esac
 
-head_ "5/12 service"
+head_ "5/13 service"
 if ! command -v systemctl >/dev/null 2>&1; then
 	bad "systemctl not found" "this is not a systemd host — you are on the wrong machine"
 elif systemctl is-active --quiet "$UNIT"; then
@@ -64,7 +64,7 @@ else
 	bad "$UNIT is not active" "journalctl -u $UNIT -n 50 --no-pager"
 fi
 
-head_ "6/12 HTTPS on 8888"
+head_ "6/13 HTTPS on 8888"
 # Any HTTP status means the endpoint answered — the same rule launcher_net.py
 # uses (`answers()` counts a 401 as served). What must fail is no answer at all,
 # or a 5xx, which is a server that is up but broken.
@@ -75,7 +75,7 @@ case "$code" in
 	"journalctl -u $UNIT -n 50 --no-pager; ss -ltnp | grep 8888" ;;
 esac
 
-head_ "7/12 config identity (design D-11)"
+head_ "7/13 config identity (design D-11)"
 if command -v systemctl >/dev/null 2>&1; then
 	# systemd 252 names this property EnvironmentFiles (plural) and prints
 	# `/path (ignore_errors=no)`. The singular spelling returns an empty string, so
@@ -94,7 +94,7 @@ else
 	bad "cannot read the unit (no systemctl)" "run this on the box"
 fi
 
-head_ "8/12 Cloud Hub tunnel client"
+head_ "8/13 Cloud Hub tunnel client"
 if [ -x /opt/mrrc_modern/fleet/frpc ]; then
 	ok "/opt/mrrc_modern/fleet/frpc ($(/opt/mrrc_modern/fleet/frpc --version 2>&1 | head -1))"
 else
@@ -102,7 +102,7 @@ else
 		"without it connect() reports 已连接 and the public entry serves 502"
 fi
 
-head_ "9/12 Cloud Hub entry (skipped until connected)"
+head_ "9/13 Cloud Hub entry (skipped until connected)"
 if grep -q '^MRRC_CLOUD_ENTRY=' "$ENV_FILE" 2>/dev/null; then
 	entry="$(sed -n 's/^MRRC_CLOUD_ENTRY=//p' "$ENV_FILE" | head -1)"
 	code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$entry" || true)"
@@ -115,7 +115,7 @@ else
 	printf '  – not connected yet; open the settings page and run Cloud Hub apply/connect\n'
 fi
 
-head_ "10/12 PTT safety ceiling"
+head_ "10/13 PTT safety ceiling"
 if grep -q '^MRRC_PTT_MAX_TX_SECONDS=' "$ENV_FILE" 2>/dev/null; then
 	ok "$(sed -n 's/^MRRC_PTT_MAX_TX_SECONDS=//p' "$ENV_FILE" | head -1) s"
 else
@@ -123,7 +123,7 @@ else
 		"a public entry needs the second PTT defence, see design D-4"
 fi
 
-head_ "11/12 box identity and the privilege channel"
+head_ "11/13 box identity and the privilege channel"
 # The onboarding path is a LAN page now (design §9), so what has to be true
 # post-flash is not "a hotspot exists" but "the operator can find this box and
 # the helpers it needs are installed".
@@ -158,7 +158,7 @@ else
 	ok "box helper socket ${mode:-present}"
 fi
 
-head_ "12/12 WiFi N9 firmware (the 2020 build wedges this board)"
+head_ "12/13 WiFi N9 firmware (the 2020 build wedges this board)"
 # Field report 2026-10-11: the linux-firmware N9 (3.1.1 / 20200604) associates
 # and then progressively dies (drop loop, wedged scans, MCU mailbox timeouts);
 # the factory 2021 build is the validated one. See packaging/box/vendor-mt7663.md.
@@ -173,6 +173,37 @@ elif [ "$(sha256sum "$N9" | cut -d' ' -f1)" = "$N9_SHA" ]; then
 else
 	bad "N9 is NOT the pinned factory build" \
 		"copy vendor/mediatek/mt7663_n9_v3.bin over $N9, dpkg-divert it, then POWER-CYCLE (a soft reboot does not reset the chip)"
+fi
+
+head_ "13/13 FT8 DSP library"
+# The FT8 work mode is Python plus one native library; the image builds that
+# library during its own build (packaging/common/mrrc-service-layer.sh), so a
+# missing .so means the image is older than 1.27.0 or that build step failed -
+# and the symptom on the page is a mode switch that answers "library missing".
+if [ ! -f /opt/mrrc_modern/ft8/dsp/build/libwsjt_core.so ]; then
+	bad "libwsjt_core.so is missing" \
+		"FT8 mode cannot start; reflash a 1.27.0+ image or run: apt-get install -y gfortran g++ cmake pkg-config libfftw3-dev && bash /opt/mrrc_modern/ft8/dsp/build.sh"
+else
+	abi="$(/opt/mrrc_modern/venv/bin/python - <<'PY2' 2>/dev/null || true
+import ctypes
+class Abi(ctypes.Structure):
+    _fields_ = [(n, ctypes.c_int32) for n in
+                ("abi_version", "struct_size", "result_size", "result_capacity",
+                 "ft8_rx_rate", "ft8_rx_samples", "ft8_tx_rate", "ft8_tx_samples",
+                 "improved_profiles", "max_threads", "max_cycles", "decode_paths")]
+lib = ctypes.CDLL("/opt/mrrc_modern/ft8/dsp/build/libwsjt_core.so")
+info = Abi()
+if lib.wsjt_get_abi_info(ctypes.byref(info)) != 0:
+    raise SystemExit(1)
+print(f"abi={info.abi_version} decode_paths=0x{info.decode_paths:x}")
+PY2
+)"
+	if [ -n "$abi" ]; then
+		ok "$abi"
+	else
+		bad "the library exists but will not load" \
+			"ABI mismatch or a missing runtime library (ldd /opt/mrrc_modern/ft8/dsp/build/libwsjt_core.so)"
+	fi
 fi
 
 printf '\n────────────────────────────\n'

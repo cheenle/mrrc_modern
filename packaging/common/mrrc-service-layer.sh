@@ -104,6 +104,25 @@ fi
 # (linux/mrrc_update.sh stages the tree and never runs it).
 sed -i -e '/^#\?MRRC_SERIAL_PORT=/d' -e '/^#\?MRRC_WEB_PASSWORD=/d' \
 	-e '/^#\?MRRC_WEB_HOST=/d' "$ENV_FILE"
+
+log "FT8 DSP library (native, built from the tree that was just staged)"
+# The FT8 work mode reaches libwsjt_core.so through ctypes, and this is where
+# an image gets it.  Building here instead of shipping a prebuilt .so keeps the
+# library provably in step with the sources: the tree is right there, and the
+# alternative — a binary committed under vendor/ — is a second thing to keep
+# up to date by hand.
+#
+# build.sh is idempotent by source digest, so the same call is also what
+# linux/mrrc_update.sh makes after an update (no-op unless ft8/dsp moved).
+# Measured 2026-10-13: 7.7 s with 9 jobs on the build host, ~2 minutes on the
+# W103D itself (docs/ft8-m1-baseline.md).
+bash "$MRRC_HOME/ft8/dsp/build.sh"
+[ -f "$MRRC_HOME/ft8/dsp/build/libwsjt_core.so" ] || {
+	echo "mrrc-service-layer: ft8/dsp/build.sh produced no libwsjt_core.so —" \
+		"the FT8 work mode would come up as \"library missing\" on this image" >&2
+	exit 1
+}
+
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 chmod 640 "$ENV_FILE" 2>/dev/null || true
 

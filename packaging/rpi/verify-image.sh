@@ -129,6 +129,24 @@ echo "== step 4: it runs (native arm64 chroot)"
 for d in dev proc sys; do mount --bind /$d /mnt/$d; done
 chroot /mnt /opt/mrrc_modern/venv/bin/python -c "import fastapi, numpy, pyaudio, lameenc, cryptography, serial; print('     deps import OK')" || fail "dependency import"
 chroot /mnt /opt/mrrc_modern/venv/bin/python -c "import ctypes; ctypes.CDLL('libopus.so.0'); print('     libopus loads OK')" || fail "libopus"
+# FT8 mode: the native DSP library the image builds for itself (design
+# docs/superpowers/specs/2026-10-13-ft8-packaging-design.md). Presence is not
+# enough — a library built against a different ABI loads fine and then refuses
+# every call, so this asks it for its ABI and capability mask.
+chroot /mnt /opt/mrrc_modern/venv/bin/python -c "
+import ctypes
+class Abi(ctypes.Structure):
+    _fields_ = [(n, ctypes.c_int32) for n in
+                ('abi_version', 'struct_size', 'result_size', 'result_capacity',
+                 'ft8_rx_rate', 'ft8_rx_samples', 'ft8_tx_rate', 'ft8_tx_samples',
+                 'improved_profiles', 'max_threads', 'max_cycles', 'decode_paths')]
+lib = ctypes.CDLL('/opt/mrrc_modern/ft8/dsp/build/libwsjt_core.so')
+info = Abi()
+assert lib.wsjt_get_abi_info(ctypes.byref(info)) == 0
+assert info.abi_version == 2, info.abi_version
+assert info.decode_paths == 0x7, hex(info.decode_paths)
+print('     FT8 DSP loads OK (abi %d, paths 0x%x)' % (info.abi_version, info.decode_paths))" \
+	|| fail "FT8 DSP library"
 chroot /mnt /opt/mrrc_modern/venv/bin/python -c "
 import sys
 sys.path.insert(0, '/opt/mrrc_modern')

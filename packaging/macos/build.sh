@@ -56,6 +56,27 @@ fi
 echo "==> TLS trust gate"
 "$PYBIN" dev_tools/tls_trust_gate.py
 
+# ---- Step 2c: FT8 DSP library (native, plus its own dependencies) --------
+# The FT8 work mode loads libwsjt_core.dylib through ctypes.  gfortran here is
+# MacPorts', so the freshly built library points at /opt/local/lib/... — FFTW,
+# libgfortran, libgomp, libquadmath — none of which exist on a user's Mac.
+# ft8_bundle.py copies the transitive closure next to the library and rewrites
+# every load command to @loader_path, then refuses to continue if anything
+# still points outside.  The result lands in build/ft8/macos/, which is what
+# the PyInstaller spec bundles (destination '.', i.e. the _internal root, which
+# ft8/core/worker.py resolves through app_root()).
+echo "==> FT8 DSP library"
+bash "$REPO_ROOT/ft8/dsp/build.sh"
+FT8_LIB="$REPO_ROOT/ft8/dsp/build/libwsjt_core.dylib"
+[ -f "$FT8_LIB" ] || {
+	echo "ERROR: ft8/dsp/build.sh produced no libwsjt_core.dylib —" >&2
+	echo "       FT8 mode would ship as 'library missing' in this DMG." >&2
+	exit 1
+}
+FT8_DEST="$REPO_ROOT/build/ft8/macos"
+rm -rf "$FT8_DEST"
+"$PYBIN" packaging/macos/ft8_bundle.py --library "$FT8_LIB" --dest "$FT8_DEST"
+
 # ---- Step 3: PyInstaller x3 ---------------------------------------------
 echo "==> PyInstaller"
 rm -rf "$PYI_ROOT" "$BUILD_WORK"

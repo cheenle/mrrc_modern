@@ -23,3 +23,25 @@ libasound2-dev
 libopus0
 libopus-dev
 avahi-daemon
+
+# ── FT8 work mode: the native DSP library ────────────────────────────────
+# The FT8 engine loads libwsjt_core.so through ctypes, and the images build it
+# on the target during the build (packaging/common/mrrc-service-layer.sh) so a
+# prebuilt binary never has to be kept in step with the sources by hand.  This
+# toolchain is what a build needs; it stays installed because
+# linux/mrrc_update.sh re-runs ft8/dsp/build.sh after every update — its source
+# digest makes that a no-op unless ft8/dsp actually moved, and it is the only
+# thing that keeps an updated tree from pairing new Python with an old .so.
+#
+# gfortran pulls libgfortran5/libgomp1, libfftw3-dev pulls libfftw3-single3:
+# those are the runtime side, and they must not be purged as "build only".
+#
+# No libboost-dev: the two Boost headers the DSP needs are vendored under
+# ft8/dsp/vendor-boost/ (tools/ft8/vendor_boost_headers.sh).  Debian only ships
+# <boost/crc.hpp> inside libboost1.74-dev — 138 MB of headers, in both images,
+# for two files.
+gfortran
+g++
+cmake
+pkg-config
+libfftw3-dev

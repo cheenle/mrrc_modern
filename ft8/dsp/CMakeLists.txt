@@ -7,10 +7,13 @@ option(MRRC_FT8_TEST_HOOKS "Build non-production DSP test hooks" OFF)
 include(${CMAKE_CURRENT_SOURCE_DIR}/toolchain.cmake)
 
 find_package(OpenMP REQUIRED COMPONENTS Fortran)
-# WSJT-X's crc13.cpp/crc14.cpp need <boost/crc.hpp> (header-only use).
-# Declared explicitly so a missing Boost fails at configure time, not as a
-# fatal compile error deep in the vendor tree.
-find_package(Boost REQUIRED)
+# WSJT-X's crc13.cpp/crc14.cpp need <boost/crc.hpp> (header-only use).  The
+# closure of that header and boost/config.hpp is vendored under vendor-boost/
+# (tools/ft8/vendor_boost_headers.sh) so the DSP builds with no Boost
+# installation on any platform: Debian ships <boost/crc.hpp> only inside
+# libboost1.74-dev, 138 MB of headers that would otherwise sit in both
+# appliance images and in every macOS/Windows build machine.
+set(FT8_BOOST_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/vendor-boost")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
 find_library(FFTW3F_THREADS_LIBRARY NAMES fftw3f_threads REQUIRED)
@@ -44,7 +47,7 @@ target_include_directories(wsjt_core PRIVATE
     ${WSJTX_LIB}/ft8
     ${WSJTX_LIB}/ft8var
     ${FT8LIB_LIB}
-    ${Boost_INCLUDE_DIRS}
+    ${FT8_BOOST_INCLUDE}
 )
 target_link_libraries(wsjt_core PRIVATE
     OpenMP::OpenMP_Fortran
@@ -53,6 +56,27 @@ target_link_libraries(wsjt_core PRIVATE
 )
 
 set_target_properties(wsjt_core PROPERTIES OUTPUT_NAME wsjt_core)
+
+if(WIN32)
+    # Two things MinGW does not do for us.
+    #
+    # 1. stpcpy: MSYS2's mingw-w64 declares it nowhere (the MSVCRT/UCRT runtime
+    #    has no such function) while ft8_lib's message.c calls it.  Vendor code
+    #    is never patched, so win_stpcpy.h supplies a static inline definition
+    #    and is force-included into every C translation unit on Windows.
+    # 2. Symbol export: the library is loaded through ctypes, which needs the
+    #    five wsjt_* entry points in the DLL's export table.  Linux uses a
+    #    version script and macOS a deny list; Windows gets the CMake-generated
+    #    .def instead of the linker's default (which exports nothing).
+    #    The "lib" prefix is dropped so the file is wsjt_core.dll on Windows,
+    #    which is the name ft8/core/worker.py resolves on that platform.
+    target_compile_options(wsjt_core PRIVATE
+        "$<$<COMPILE_LANGUAGE:C>:-include${CMAKE_CURRENT_SOURCE_DIR}/win_stpcpy.h>")
+    set_target_properties(wsjt_core PROPERTIES
+        PREFIX ""
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+    )
+endif()
 
 if(APPLE)
     set(WSJT_CORE_UNEXPORTED_SYMBOLS

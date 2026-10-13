@@ -835,7 +835,11 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
     }
     orchestrator = state.orchestrator
     if orchestrator is None and getattr(state, "runtime", None) is not None:
-        orchestrator = state.runtime.orchestrator
+        # getattr 而非直取：与 _health 同一处查询，两处必须同形。真实的
+        # Ft8Runtime 在 __init__ 里就把 orchestrator 置成 None（runtime.py:86），
+        # 所以生产路径两者等价；轻量替身缺这个属性时，读的是「没有引擎」
+        # 而不是一个 500。
+        orchestrator = getattr(state.runtime, "orchestrator", None)
     if orchestrator is not None:
         counters = orchestrator.counters
         snapshot["orchestrator"] = {

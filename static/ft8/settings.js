@@ -287,42 +287,34 @@ export function createSettingsDrawer() {
         <span>Hide my own echoes</span>
         <input type="checkbox" data-setting="hideMine" ${s.hideMine ? "checked" : ""}>
       </label>
-      <label class="setting-row toggle">
-        <span>Auto-call new DXCC</span>
-        <input type="checkbox" data-setting="auto_call_new_dxcc" ${s.auto_call_new_dxcc ? "checked" : ""}>
+      <label class="setting-row toggle unavailable" title="本版本未启用（后台自动发射逻辑未移植）">
+        <span>Auto-call new DXCC <em>未启用</em></span>
+        <input type="checkbox" disabled>
       </label>
-      <label class="setting-row toggle">
-        <span>Auto band hunt (DXCC)</span>
-        <input type="checkbox" data-setting="auto_band_hunt" ${s.auto_band_hunt ? "checked" : ""}>
+      <label class="setting-row toggle unavailable" title="本版本未启用（需要 pskreporter 波段侦察服务）">
+        <span>Auto band hunt (DXCC) <em>未启用</em></span>
+        <input type="checkbox" disabled>
       </label>
-      <a href="#" class="setting-row" data-bandhunt-link>
-        <span>New-DXCC spots dashboard</span><span class="qso-meta">→</span>
-      </a>
       <div class="drawer-hint dim">These display preferences are stored in this
         browser and apply immediately to the Band Activity list.</div>`;
-		content
-			.querySelector("[data-bandhunt-link]")
-			?.addEventListener("click", (event) => {
-				event.preventDefault();
-				openBandHuntView();
-			});
 		for (const input of content.querySelectorAll("[data-setting]")) {
 			input.addEventListener("change", () => {
 				const value = input.type === "checkbox" ? input.checked : input.value;
 				saveSettings({ [input.dataset.setting]: value });
 				// auto_call_new_dxcc / auto_band_hunt 的权威状态在后端
 				// （无人值守自动呼叫/自动切频读它们）。
-				if (input.dataset.setting === "auto_call_new_dxcc") {
-					api.putSetting("auto_call_new_dxcc", Boolean(value)).then((res) => {
-						if (!res.ok)
-							showToast(`Auto-call setting: ${res.reason || res.status}`);
-					});
-				} else if (input.dataset.setting === "auto_band_hunt") {
-					api.putSetting("auto_band_hunt", Boolean(value)).then((res) => {
-						if (!res.ok)
-							showToast(`Band hunt setting: ${res.reason || res.status}`);
+				// Decode depth is the server-side decoder profile (0..4);
+				// Fast = 1, Deep = 3 (the measured default).  It applies when
+				// the engine next starts.
+				if (input.dataset.setting === "decodeDepth") {
+					const profile = value === "deep" ? 3 : 1;
+					api.putSetting("decoder_profile", profile).then((res) => {
+						if (!res.ok) showToast(`Decode depth: ${res.reason || res.status}`);
+						else patch({ decodeDepthNeedsRestart: true });
 					});
 				}
+				// (auto_call_new_dxcc / auto_band_hunt controls are disabled in
+				// this build — their backends are not ported yet.)
 			});
 		}
 	}

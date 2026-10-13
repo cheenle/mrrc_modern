@@ -623,3 +623,16 @@ button.stop {
 	opacity: 0.6;
 	cursor: default;
 }
+
+/* Switches whose backend is not in this build: visible for layout parity
+   with the upstream drawer, greyed so they cannot mislead. */
+.setting-row.unavailable {
+	opacity: 0.5;
+}
+
+.setting-row.unavailable em {
+	font-style: normal;
+	font-size: 11px;
+	color: #9ca3af;
+	margin-left: 6px;
+}

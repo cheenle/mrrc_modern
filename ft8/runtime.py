@@ -89,9 +89,16 @@ class Ft8Runtime:
         supervisor = WorkerSupervisor()
         await asyncio.to_thread(supervisor.start)
         self._supervisor = supervisor
+        profile = DEFAULT_PROFILE
+        try:
+            stored = self.repository.get_setting("decoder_profile")
+            if isinstance(stored, int) and 0 <= stored <= 4:
+                profile = stored
+        except Exception:
+            log.debug("decoder_profile unavailable; using %d", DEFAULT_PROFILE)
         self.decoder = SupervisorDecoder(
             supervisor,
-            DecodeConfig(profile=DEFAULT_PROFILE, threads=auto_thread_count()),
+            DecodeConfig(profile=profile, threads=auto_thread_count()),
             histogram=self.latency,
         )
         self.encoder = SupervisorEncoder(supervisor)
@@ -138,7 +145,7 @@ class Ft8Runtime:
             on_slot_start=self._slot_started,
         )
         self._task = asyncio.create_task(self.orchestrator.run(), name="ft8_orchestrator")
-        log.info("FT8 engine started (profile %d, threads %d)", DEFAULT_PROFILE, auto_thread_count())
+        log.info("FT8 engine started (profile %d, threads %d)", profile, auto_thread_count())
 
     # ---- decode → wire batch (the FT8 UI's Band Activity feed) -----------
 

@@ -743,7 +743,20 @@ def create_router(state: AppState) -> APIRouter:
             return _reject(409, REASON_TX_ACTIVE)  # §10.5: safety-impacting locked during TX
         for key, value in body.items():
             await asyncio.to_thread(state.repository.set_setting, key, value)
-        return await mutate(request, request.headers.get("idempotency-key"), 200, {"updated": sorted(body)})
+        # Decode parameters are read once when the engine starts.  With
+        # always-on the engine survives mode switches, so apply the change
+        # now by restarting it (never mid-TX: the armed/ptt guard above).
+        applied = sorted(body)
+        if "decoder_profile" in body and getattr(state, "runtime", None) is not None:
+            runtime = state.runtime
+            if getattr(runtime, "running", False):
+                try:
+                    await runtime.stop()
+                    await runtime.start()
+                    applied.append("engine_restarted")
+                except Exception:
+                    log.exception("engine restart after decoder_profile failed")
+        return await mutate(request, request.headers.get("idempotency-key"), 200, {"updated": applied})
 
     # ---- station device configuration (spec 2026-08-10) ----------------------
     return router

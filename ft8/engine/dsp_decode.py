@@ -141,7 +141,10 @@ class SupervisorDecoder:
             raise DecodeError(str(response["code"]), str(response["detail"]))
         if self._histogram is not None:
             self._histogram.record(
-                config.profile, config.threads, self._monotonic() - started
+                str(config.path),
+                config.profile,
+                config.threads,
+                self._monotonic() - started,
             )
         return DecodeBatch(
             slot_id=int(response["slot_id"]),  # type: ignore[arg-type]

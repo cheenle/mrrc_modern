@@ -16,6 +16,7 @@ from ft8.engine.latency import (
     LatencyHistogram,
     bucket_index,
 )
+from ft8.web.ft8_api import _health
 
 
 class FakeSupervisor:
@@ -51,14 +52,14 @@ def test_bucket_index_boundaries() -> None:
 
 def test_histogram_snapshot_per_configuration() -> None:
     histogram = LatencyHistogram()
-    histogram.record(3, 7, 0.2)
-    histogram.record(3, 7, 0.7)
-    histogram.record(3, 7, 3.1)
-    histogram.record(0, 1, 1.234)
+    histogram.record("improved", 3, 7, 0.2)
+    histogram.record("improved", 3, 7, 0.7)
+    histogram.record("improved", 3, 7, 3.1)
+    histogram.record("improved", 0, 1, 1.234)
 
     snapshot = histogram.snapshot()
-    assert set(snapshot) == {"p3/t7", "p0/t1"}
-    series = snapshot["p3/t7"]
+    assert set(snapshot) == {"improved/p3/t7", "improved/p0/t1"}
+    series = snapshot["improved/p3/t7"]
     assert series["count"] == 3
     assert series["buckets"] == {
         "<0.5s": 1,
@@ -69,13 +70,13 @@ def test_histogram_snapshot_per_configuration() -> None:
         ">=2.5s": 1,
     }
     assert series["max_seconds"] == 3.1
-    assert snapshot["p0/t1"]["buckets"]["<1.5s"] == 1
-    assert snapshot["p0/t1"]["max_seconds"] == 1.234
+    assert snapshot["improved/p0/t1"]["buckets"]["<1.5s"] == 1
+    assert snapshot["improved/p0/t1"]["max_seconds"] == 1.234
 
 
 def test_histogram_rejects_negative_elapsed() -> None:
     with pytest.raises(ValueError, match="negative"):
-        LatencyHistogram().record(3, 7, -0.1)
+        LatencyHistogram().record("improved", 3, 7, -0.1)
 
 
 def test_supervisor_decoder_records_wall_elapsed() -> None:
@@ -90,41 +91,58 @@ def test_supervisor_decoder_records_wall_elapsed() -> None:
         asyncio.run(decoder.decode(480, samples))
 
     snapshot = histogram.snapshot()
-    assert list(snapshot) == ["p3/t7"]
-    series = snapshot["p3/t7"]
+    assert list(snapshot) == ["improved/p3/t7"]
+    series = snapshot["improved/p3/t7"]
     assert series["count"] == 1
     assert sum(series["buckets"].values()) == 1
 
 
-@pytest.mark.skip(reason="web layer arrives with the REST移植 (task 12)")
+def test_histogram_separates_fast_from_deep() -> None:
+    """同一次运行里两条路径各自的分布必须分开，否则快路径会把深路径的水位冲淡。"""
+
+    histogram = LatencyHistogram()
+    histogram.record("fast", 3, 3, 0.15)
+    histogram.record("improved", 3, 3, 2.2)
+
+    assert set(histogram.snapshot()) == {"fast/p3/t3", "improved/p3/t3"}
+    assert histogram.snapshot()["fast/p3/t3"]["max_seconds"] == 0.15
+
+
+def test_histogram_keeps_profile_and_threads_as_dimensions() -> None:
+    """深路径调参要看得见 —— 同一个 path 下不同 profile/threads 仍是不同的桶。"""
+
+    histogram = LatencyHistogram()
+    histogram.record("improved", 3, 3, 2.2)
+    histogram.record("improved", 1, 1, 3.23)
+
+    assert set(histogram.snapshot()) == {"improved/p3/t3", "improved/p1/t1"}
+
+
 def test_health_exposes_latency_and_deadline_misses() -> None:
     """NFR-002: health carries the histogram and the deadline-miss counter."""
 
     histogram = LatencyHistogram()
-    histogram.record(3, 7, 0.4)
+    histogram.record("improved", 3, 7, 0.4)
     state = SimpleNamespace(
         safety=SimpleNamespace(health={"armed": False}),
-        lease=LeaseService(),
-        auth=AuthService(hash_password("pw")),
-        latency=histogram,
-        orchestrator=SimpleNamespace(
-            counters=SimpleNamespace(deadline_misses=2)
-        ),
-    )
+        lease=None,                                     # 平台的角色取代了 FT8 lease
+        auth=SimpleNamespace(session_count=lambda: 0),  # _health 只调 session_count()
+        latency=histogram,                              # 未接线的用例写 None
+        orchestrator=SimpleNamespace(counters=SimpleNamespace(deadline_misses=2)),
+    )                                                   # 未接线的用例写 None
     health = _health(state)
-    assert health["decode_latency"]["p3/t7"]["count"] == 1
+    assert health["decode_latency"]["improved/p3/t7"]["count"] == 1
     assert health["deadline_misses"] == 2
 
 
-@pytest.mark.skip(reason="web layer arrives with the REST移植 (task 12)")
 def test_health_omits_latency_when_not_wired() -> None:
     state = SimpleNamespace(
         safety=SimpleNamespace(health={"armed": False}),
-        lease=LeaseService(),
-        auth=AuthService(hash_password("pw")),
-        latency=None,
+        lease=None,                                     # 平台的角色取代了 FT8 lease
+        auth=SimpleNamespace(session_count=lambda: 0),  # _health 只调 session_count()
+        latency=None,                                   # 未接线的用例写 None
         orchestrator=None,
-    )
+    )                                                   # 未接线的用例写 None
     health = _health(state)
     assert "decode_latency" not in health
     assert "deadline_misses" not in health

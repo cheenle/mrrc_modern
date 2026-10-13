@@ -1,0 +1,116 @@
+"""The runtime's cascade wiring: the orchestrator must decode through it.
+
+Task 11's review ran four mutations.  Mutation (b) reverted
+``Orchestrator(self._cascade, …)`` back to ``Orchestrator(self.decoder, …)``
+— the cascade built and never used, every slot falling back to the deep path
+— and the whole suite stayed green (709 passed).  Nothing turned red because
+no test ever built a real ``Ft8Runtime``: the only wiring evidence,
+``tests/ft8/test_server_wiring.py:165``, is a source-substring assertion and
+pins that the *cutoff constant* reaches the call, not that ``_cascade``
+reaches the orchestrator.
+
+This module closes exactly that hole.  It drives the real ``start()`` path —
+the same one the server uses to bring FT8 up — and pins the single object the
+orchestrator holds for decoding.  Reverting the wiring makes it an
+``AssertionError`` (``SupervisorDecoder`` is not ``CascadingDecoder``);
+leaving it wired passes.
+
+The fakes below serve only this file, so they live here rather than in the
+shared wiring module or a conftest.
+"""
+from __future__ import annotations
+
+import asyncio
+
+from ft8 import runtime as runtime_mod
+from ft8.engine.sequencer import QSOState
+
+
+class _FakeSupervisor:
+    """Stand-in for the DSP Worker supervisor.
+
+    ``ft8/runtime.py`` hard-codes ``WorkerSupervisor()`` in ``start()``, so
+    monkeypatching the module attribute is the only injection point.  Both
+    ``start`` and ``stop`` are invoked through ``asyncio.to_thread(...)`` and
+    must therefore be plain synchronous methods — an ``async def`` would hand
+    ``to_thread`` a coroutine object that is never awaited.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        self.started = False
+        self.stopped = False
+
+    def start(self) -> None:
+        self.started = True
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
+class _FakeRig:
+    """``SafetyController.start()`` touches the rig only to drop PTT."""
+
+    def __init__(self) -> None:
+        self.ptt = True  # start() must drive it false
+
+    async def set_ptt(self, transmit: bool) -> None:
+        self.ptt = bool(transmit)
+
+
+class _FakeTxPlayer:
+    """``SafetyController`` calls ``cancel()`` on the stop path; nothing else."""
+
+    def __init__(self) -> None:
+        self.cancelled = 0
+
+    def cancel(self) -> None:
+        self.cancelled += 1
+
+
+class _FakeSequencer:
+    """Enough for ``SafetyController.start()`` (``stop``) and the cascade's
+    ``ap_context`` (``my_call`` / ``state``)."""
+
+    def __init__(self) -> None:
+        self.my_call = ""
+        self.state = QSOState.IDLE
+
+    def stop(self, *args, **kwargs) -> None:
+        pass
+
+
+def test_the_orchestrator_actually_gets_the_cascade(monkeypatch, tmp_path) -> None:
+    """The cascade must reach the orchestrator through the real ``start()``.
+
+    Mutation (b): change ``Orchestrator(self._cascade, …)`` back to
+    ``Orchestrator(self.decoder, …)`` and this test must go red.  The Task 11
+    review measured that without it, that mutation left the full suite at
+    ``709 passed`` with no failure.  ``start()`` spins up the real
+    ``Orchestrator`` with the real ``_cascade``, so the assertion below is the
+    only thing standing between "the cascade exists" and "the cascade is
+    used"; the orchestrator holds its decoder privately as ``_decoder``
+    (``orchestrator.py``, used in ``_slot_ended``).
+    """
+
+    monkeypatch.setattr(runtime_mod, "WorkerSupervisor", _FakeSupervisor)
+
+    rt = runtime_mod.Ft8Runtime(
+        rig=_FakeRig(),
+        tx_player=_FakeTxPlayer(),
+        sequencer_factory=_FakeSequencer,
+        data_dir=tmp_path,
+    )
+
+    async def _run() -> None:
+        await rt.start()
+        try:
+            assert rt.orchestrator._decoder is rt._cascade, (
+                "the orchestrator must decode through the CascadingDecoder, "
+                "not the raw SupervisorDecoder"
+            )
+        finally:
+            # start() leaves an orchestrator task running; cancel it here so
+            # it cannot leak into the rest of the session.
+            await rt.stop()
+
+    asyncio.run(_run())

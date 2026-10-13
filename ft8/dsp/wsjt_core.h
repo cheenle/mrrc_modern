@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 enum {
-    WSJT_ABI_VERSION = 1,
+    WSJT_ABI_VERSION = 2,   /* was 1: added decode_paths + wsjt_ft8_decode_fast */
     WSJT_FT8_RX_RATE = 12000,
     WSJT_FT8_RX_SAMPLES = 180000,
     WSJT_FT8_TX_RATE = 48000,
@@ -33,7 +33,8 @@ enum wsjt_flags {
     WSJT_FLAG_AP = 1,
     WSJT_FLAG_LOW_THRESHOLD = 2,
     WSJT_FLAG_WIDE_DX = 4,
-    WSJT_FLAG_HIDE_DUPES = 8
+    WSJT_FLAG_HIDE_DUPES = 8,
+    WSJT_FLAG_SNR_PROVISIONAL = 16   /* snr 字段不是 dB，见 wsjt_fast.c */
 };
 
 struct wsjt_abi_info {
@@ -48,7 +49,8 @@ struct wsjt_abi_info {
     int32_t improved_profiles;
     int32_t max_threads;
     int32_t max_cycles;
-    int32_t reserved;
+    int32_t decode_paths;   /* bit0 standard, bit1 improved, bit2 fast;
+                               replaces the unused `reserved` slot, size stays 48 */
 };
 
 struct wsjt_decode_config {
@@ -105,6 +107,14 @@ int32_t wsjt_ft8_decode_standard(
     int32_t *count,
     int32_t *overflow);
 int32_t wsjt_ft8_decode_improved(
+    const int16_t *samples,
+    const struct wsjt_decode_config *config,
+    int64_t slot_id,
+    struct wsjt_decode_result *results,
+    int32_t capacity,
+    int32_t *count,
+    int32_t *overflow);
+int32_t wsjt_ft8_decode_fast(
     const int16_t *samples,
     const struct wsjt_decode_config *config,
     int64_t slot_id,

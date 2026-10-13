@@ -3,7 +3,7 @@ module wsjt_types
   implicit none
   private
 
-  integer(c_int32_t), parameter, public :: WSJT_ABI_VERSION = 1_c_int32_t
+  integer(c_int32_t), parameter, public :: WSJT_ABI_VERSION = 2_c_int32_t
   integer(c_int32_t), parameter, public :: WSJT_FT8_RX_RATE = 12000_c_int32_t
   integer(c_int32_t), parameter, public :: WSJT_FT8_RX_SAMPLES = 180000_c_int32_t
   integer(c_int32_t), parameter, public :: WSJT_FT8_TX_RATE = 48000_c_int32_t
@@ -25,6 +25,7 @@ module wsjt_types
   integer(c_int32_t), parameter, public :: WSJT_FLAG_LOW_THRESHOLD = 2_c_int32_t
   integer(c_int32_t), parameter, public :: WSJT_FLAG_WIDE_DX = 4_c_int32_t
   integer(c_int32_t), parameter, public :: WSJT_FLAG_HIDE_DUPES = 8_c_int32_t
+  integer(c_int32_t), parameter, public :: WSJT_FLAG_SNR_PROVISIONAL = 16_c_int32_t
 
   type, bind(C), public :: wsjt_abi_info
     integer(c_int32_t) :: abi_version
@@ -38,7 +39,7 @@ module wsjt_types
     integer(c_int32_t) :: improved_profiles
     integer(c_int32_t) :: max_threads
     integer(c_int32_t) :: max_cycles
-    integer(c_int32_t) :: reserved
+    integer(c_int32_t) :: decode_paths
   end type wsjt_abi_info
 
   type, bind(C), public :: wsjt_decode_config

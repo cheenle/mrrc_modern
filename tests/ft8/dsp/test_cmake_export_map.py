@@ -10,6 +10,7 @@ PRODUCTION_EXPORTS = {
     "wsjt_ft8_encode;",
     "wsjt_ft8_decode_standard;",
     "wsjt_ft8_decode_improved;",
+    "wsjt_ft8_decode_fast;",
 }
 
 

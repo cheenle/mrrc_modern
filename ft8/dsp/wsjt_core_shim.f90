@@ -71,7 +71,7 @@ contains
     info%improved_profiles = int(z'1f', c_int32_t)
     info%max_threads = 12_c_int32_t
     info%max_cycles = 3_c_int32_t
-    info%reserved = 0_c_int32_t
+    info%decode_paths = int(z'07', c_int32_t)   ! standard | improved | fast
     status = WSJT_OK
   end function wsjt_get_abi_info
 

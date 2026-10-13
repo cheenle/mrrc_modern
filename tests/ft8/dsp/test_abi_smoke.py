@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import os
 import subprocess
 import time
@@ -19,14 +20,15 @@ pytestmark = pytest.mark.skipif(
 ROOT = Path(__file__).parents[3]
 BUILD = ROOT / "ft8" / "dsp" / "build"
 EXPECTED_CAPABILITIES = (
-    "abi=1 results=256 rx=12000/180000 "
-    "tx=48000/606720 profiles=0x1f"
+    "abi=2 results=256 rx=12000/180000 "
+    "tx=48000/606720 profiles=0x1f decode_paths=0x7"
 )
 EXPECTED_DYNAMIC_EXPORTS = {
     "wsjt_get_abi_info",
     "wsjt_ft8_encode",
     "wsjt_ft8_decode_standard",
     "wsjt_ft8_decode_improved",
+    "wsjt_ft8_decode_fast",
 }
 
 
@@ -147,3 +149,28 @@ def test_c_header_matches_fortran_abi(built_library: Path) -> None:
         f"unexpected abi_smoke stdout: {result.stdout!r}\n"
         f"stderr:\n{result.stderr}"
     )
+
+
+class _AbiInfo(ctypes.Structure):
+    # 12 个字段 —— decode_paths 占用原 reserved 的位置，sizeof 保持 48。
+    _fields_ = [
+        ("abi_version", ctypes.c_int32), ("struct_size", ctypes.c_int32),
+        ("result_size", ctypes.c_int32), ("result_capacity", ctypes.c_int32),
+        ("ft8_rx_rate", ctypes.c_int32), ("ft8_rx_samples", ctypes.c_int32),
+        ("ft8_tx_rate", ctypes.c_int32), ("ft8_tx_samples", ctypes.c_int32),
+        ("improved_profiles", ctypes.c_int32), ("max_threads", ctypes.c_int32),
+        ("max_cycles", ctypes.c_int32), ("decode_paths", ctypes.c_int32),
+    ]
+
+
+def test_abi_reports_fast_path_and_version_two(built_library) -> None:
+    library = ctypes.CDLL(str(built_library))
+    library.wsjt_get_abi_info.argtypes = [ctypes.POINTER(_AbiInfo)]
+    library.wsjt_get_abi_info.restype = ctypes.c_int32
+    info = _AbiInfo()
+    assert library.wsjt_get_abi_info(ctypes.byref(info)) == 0
+    assert info.abi_version == 2
+    assert info.decode_paths & 0b100, "fast path bit must be set"
+    assert ctypes.sizeof(_AbiInfo) == 48, "reserved 被替换而非追加，大小必须不变"
+    assert ctypes.sizeof(_AbiInfo) == info.struct_size
+    assert hasattr(library, "wsjt_ft8_decode_fast")

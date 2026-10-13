@@ -45,13 +45,14 @@ int main(void) {
         return 4;
     }
 
-    printf("abi=%d results=%d rx=%d/%d tx=%d/%d profiles=0x%x\n",
+    printf("abi=%d results=%d rx=%d/%d tx=%d/%d profiles=0x%x decode_paths=0x%x\n",
            info.abi_version,
            info.result_capacity,
            info.ft8_rx_rate,
            info.ft8_rx_samples,
            info.ft8_tx_rate,
            info.ft8_tx_samples,
-           info.improved_profiles);
+           info.improved_profiles,
+           info.decode_paths);
     return 0;
 }

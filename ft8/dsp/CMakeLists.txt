@@ -28,6 +28,7 @@ add_library(wsjt_core SHARED
     wsjt_a8_gate.f90
     wsjt_improved.f90
     wsjt_core_shim.f90
+    wsjt_fast.c
     ${STANDARD_FT8_SOURCES}
     ${IMPROVED_FT8_SOURCES}
     ${FT8LIB_SOURCES}

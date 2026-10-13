@@ -4,6 +4,7 @@
         wsjt_ft8_encode;
         wsjt_ft8_decode_standard;
         wsjt_ft8_decode_improved;
+        wsjt_ft8_decode_fast;
 @WSJT_CORE_TEST_HOOK_EXPORT@    local:
         *;
 };

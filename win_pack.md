@@ -2,12 +2,13 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> **最新构建：v1.26.0（2026-10-09）** —— VM 门禁 **2067 项 OK（25 skip）**；`dev_tools/tls_trust_gate.py` 通过（`build.ps1:53` 那道门，失败即 throw）；产物 `MRRC-Modern-v1.26.0-Windows-x64-Setup.exe` **54,395,338 bytes**，SHA-256 `1ed3fb8d224a7084db424562ff9ba8f152a2962411c51cd6daa5352ae6d45ae2`；`version.txt` = 1.26.0；mtime 2026-10-09 14:32:29；Inno Setup 6.7.3、PyInstaller 6.21.0、Python 3.12.4；fleet 13 个文件在**应用根目录**；VM 与 Mac 两侧 SHA-256 逐字节一致；包内 junk **0**、私钥形状 **0**（除有意随包的 `vendor\ca\cacert.pem`）。**本轮 25 个 skip = 原有 19 + 6 个新增平台守卫**（5 处 POSIX 权限位断言 + 1 处需要 `bash` 的 box 解析用例 —— 它们此前从未在 Windows 上跑过，这一轮的门禁把它们抓了出来，已按仓库惯例用 `skipIf(os.name == "nt")` 守好）。
+> **最新构建：v1.27.0（2026-10-13）** —— VM 门禁 **2197 项 OK（33 skip）**；`dev_tools/tls_trust_gate.py` 通过；产物 `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` **79,257,177 bytes**，SHA-256 `ba956b19d1568ba14a57ac9ac6464a1ff30b17e056a7ba8d2f8b0a4e480f7a9d`（VM `certutil` 与 Mac `shasum` 逐字一致）。
+> **FT8 进包（本版新增，也是体积从 55.9 MB 涨到 79.3 MB 的全部来源）**：`build.ps1` 先跑 MSYS2 MinGW 的 cmake+ninja 编出 `wsjt_core.dll`，再用 `objdump -p` **走出**运行期 DLL 闭包（不写死清单，MSYS2 换代多一个依赖会是构建失败而不是装完打不开）——`_internal\` 下 9 个文件：`wsjt_core` + FFTW×2 + gfortran/gomp/quadmath/gcc_s/stdc++/winpthread；`wsjt_*` 导出 43 个符号，`static\ft8.html` 与 `static\ft8\main.js` 在包内。
 >
 > **本轮三层证据**（缺一层就不算验过）：
-> ① **符号走查**（`tools/bundle_check_1255.py`，用 VM 的 venv 跑）：冻结入口 `server` 里查到本版的 `spectrumCaps` / `_spectrum_fanout` / `manage.html` / `setup.html`（`co_names` 与 `co_consts` 两处都查）；PYZ（1073 个模块）里查到 `env_store` / `net_wifi` / `cloud_hub` / `config`。`grep`/`strings` 看不进压缩 PYZ —— 缺失的符号和存在的符号长得一模一样。
-> ② **洁净室真跑**（`tools/cleanroom_v1255.ps1`，19 条全过）：冻结 Launcher 在隔离 LOCALAPPDATA + 现场配置（显式 `127.0.0.1`）+ 空闲端口 18899 下起来 —— https /login **200**、同端口明文连不上（**000**）、`/api/health` **401**、TLS **raw=12288**、SAN 含 `IP Address=127.0.0.1`、**只绑 127.0.0.1**、证书落在用户数据目录、安装目录 **165→165**、日志行数 == distinct（34/34）、第二实例不服务且监听只剩 1 个。
-> ③ **装完真跑**（`tools/install_smoke_v1255.ps1`，12 条全过）：真 `Setup.exe` 静默装进隔离 `/DIR=` —— 167 文件、`version.txt` = 1.26.0、fleet 在、安装后的 Launcher https /login **200**、`/api/health` **401**、明文 **000**、安装目录 **167→167**、卸载后 **0** 残留。
+> ① **结构核对**（`tools/win_verify_1270.ps1`）：三 exe、fleet 13 文件、上述 9 个 DLL 逐个断言存在并带字节数；`wsjt_core.dll` 的 5 个非系统直接依赖全部在包内；junk **0**（唯一 `.pem` 是有意的 `vendor\ca\cacert.pem`，不是私钥）。
+> ② **洁净室真跑**（`tools/win_cleanroom_1270.ps1`）：冻结 **Launcher** 在隔离 LOCALAPPDATA + 现场配置（显式 `127.0.0.1`）+ 空闲端口 18902 下起来 —— `starting on port 18902`、`Recording ready` 落在用户目录、`Server ready!`，并且 **`FT8 engine started at boot (RX monitor always-on)`**：原生 DLL 与 multiprocessing worker 在冻结包里真的工作了（macOS 洁净室正是靠同一层抓出「全新安装缺 `<runtime>/ft8/`」与「冻结包缺 `freeze_support()`」两个真缺陷）。
+> ③ **装完真跑**：本轮**未做** iscc 静默安装冒烟（时间预算），以 ①② 代之；下个版本应补 `tools/install_smoke_*.ps1`——它验的是 Inno 落盘/快捷方式/卸载，与 ①② 不重叠。
 >
 > **这一轮踩到的两个坑（脚本注释里都写了，别再踩）**：
 > ① **环境变量不管用 —— 配置文件优先于 `os.environ`**。首次运行会从模板生成 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`，里面写着 `0.0.0.0:8888`，于是 `MRRC_WEB_PORT=18896` 完全不生效、服务器绑到了 8888 上。洁净室必须**先把配置写出来**。

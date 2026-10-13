@@ -185,10 +185,18 @@ Short imperative summaries. Pull requests should describe user-visible behavior,
   `(frequency, dt)` 带容差、deep 胜出），预算不足则**宁可不升级**（计 `deadline_risk`），
   快路径整个失败时回落 improved —— **绝不少解码**。计数在 `orchestrator.counters` 的
   `fast_decodes`/`escalations` 与 `runtime.cascade_stats`。
+- **原生库是四个平台各自构建出来的**，不是仓库里的一份二进制：两条镜像线在镜像构建期
+  就地编译（`packaging/common/mrrc-service-layer.sh`，工具链来自 `packages.txt`；`linux/mrrc_update.sh`
+  按源码摘要重编，**失败不阻断升级**），macOS 由 `packaging/macos/ft8_bundle.py` 连 5 个依赖一起
+  收进 app（load command 全改 `@loader_path`，构建前硬门禁），Windows 用 MSYS2 MinGW 编译并把
+  运行期 DLL 闭包（走 objdump 走出来）一起进包。**改了 `ft8/dsp/` 就要重跑这四条路径。**
+  Boost 不再需要安装：`<boost/crc.hpp>` 的包含闭包 vendored 在 `ft8/dsp/vendor-boost/`
+  （`tools/ft8/vendor_boost_headers.sh` + `tests/ft8/dsp/test_vendor_boost_policy.py`）。
 - 规格与计划：`docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md`、
   `docs/superpowers/plans/2026-10-12-ft8-work-mode.md`（工作模式本体）；
   `docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`、
-  `docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md`（快路径 + 自适应级联）。
+  `docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md`（快路径 + 自适应级联）；
+  `docs/superpowers/specs/2026-10-13-ft8-packaging-design.md`（四平台打包）。
 
 ## Security & Configuration Tips
 

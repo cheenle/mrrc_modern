@@ -542,7 +542,7 @@ def test_common_boundary_accepts_exact_binary_overflow(
     assert batch.overflow is expected
 
 
-def test_explicit_library_path_sets_all_four_signatures_and_selects_path(
+def test_explicit_library_path_sets_all_five_signatures_and_selects_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     library = FakeLibrary()
@@ -594,6 +594,24 @@ def test_explicit_library_path_sets_all_four_signatures_and_selects_path(
     assert improved.results[0].slot_id == 8
     assert encoded.message == "CQ K1ABC FN42"
     assert wave[0] == pytest.approx(0.5)
+
+
+def test_constructor_rejects_a_library_without_the_fast_symbol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pre-ABI-2 library has no ``wsjt_ft8_decode_fast``.
+
+    The adapter must reject it at construction with ``AbiCompatibilityError`` — a
+    missing fast symbol has to fail closed, never silently fall through to the
+    standard/improved entry points.
+    """
+
+    library = FakeLibrary()
+    del library.wsjt_ft8_decode_fast
+    monkeypatch.setattr(binding_module.ctypes, "CDLL", lambda _path: library)
+
+    with pytest.raises(AbiCompatibilityError, match="decode_paths"):
+        CoreBinding(Path("/tmp/libwsjt_core.so"))
 
 
 def test_decode_signature_assertion_detects_int32_slot_id_mutation() -> None:

@@ -66,6 +66,9 @@ export const api = {
     }),
   cq: (loop = false) =>
     request("/operation/cq", { method: "POST", idempotencyKey: key(), body: { loop } }),
+  station: () => request("/station"),
+  putStation: (settings) =>
+    request("/station", { method: "PUT", idempotencyKey: key(), body: settings }),
   qsos: () => request("/logs/qsos"),
   dxcc: () => request("/dxcc"),
   settings: () => request("/settings"),

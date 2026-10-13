@@ -20,6 +20,7 @@ import re
 import tarfile
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -352,6 +353,60 @@ def create_router(state: AppState) -> APIRouter:
         return JSONResponse(body, status_code=status, headers={"x-idempotent-replay": "true"})
 
     # ---- session ---------------------------------------------------------
+
+    @router.get("/station")
+    async def station_view(session: Session = Depends(require_session)) -> dict[str, Any]:
+        """The operator's FT8 identity and radio preferences (independent of
+        the platform's Cloud Hub callsign)."""
+
+        store = getattr(state, "settings_store", None)
+        settings = store.load() if store is not None else None
+        return {
+            "my_call": getattr(settings, "my_call", ""),
+            "my_grid": getattr(settings, "my_grid", ""),
+            "rig_mode": getattr(settings, "rig_mode", "DATA-U"),
+            "tx_audio_frequency": getattr(settings, "tx_audio_frequency", 1500),
+        }
+
+    @router.put("/station")
+    async def station_update(request: Request, session: Session = Depends(require_lease)) -> JSONResponse:
+        """Save the FT8 station settings; call/grid apply to the live engine."""
+
+        await validate_mutation(request)
+        body = await request.json()
+        if not isinstance(body, dict) or not body:
+            return _reject(422, "invalid_request")
+        store = getattr(state, "settings_store", None)
+        if store is None:
+            return _reject(409, "settings_unavailable")
+        allowed = {"my_call", "my_grid", "rig_mode", "tx_audio_frequency"}
+        unknown = sorted(set(body) - allowed)
+        if unknown:
+            return _reject(422, "invalid_setting", detail=",".join(unknown))
+        current = store.load()
+        changes = {key: body[key] for key in allowed if key in body}
+        if "tx_audio_frequency" in changes:
+            try:
+                changes["tx_audio_frequency"] = int(changes["tx_audio_frequency"])
+            except (TypeError, ValueError):
+                return _reject(422, "invalid_setting", detail="tx_audio_frequency")
+        updated = replace(current, **changes)
+        updated = replace(updated, settings_revision=current.settings_revision + 1)
+        try:
+            store.save(updated)
+        except ValueError as exc:
+            return _reject(422, "invalid_setting", detail=str(exc))
+        # Call/grid take effect immediately: the engine reads them per message.
+        runtime = getattr(state, "runtime", None)
+        if runtime is not None and getattr(runtime, "sequencer", None) is not None:
+            runtime.sequencer.my_call = updated.my_call or ""
+            runtime.sequencer.my_grid = updated.my_grid or ""
+        state.bump()
+        return _ok({
+            "my_call": updated.my_call, "my_grid": updated.my_grid,
+            "rig_mode": updated.rig_mode,
+            "tx_audio_frequency": updated.tx_audio_frequency,
+        })
 
     @router.post("/mode")
     async def set_mode(request: Request, session: Session = Depends(require_lease)) -> JSONResponse:

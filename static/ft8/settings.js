@@ -327,19 +327,53 @@ export function createSettingsDrawer() {
 		}
 	}
 
-	function renderStation() {
-		const { station } = getState();
-		const call = station?.my_call || "—";
-		const grid = station?.my_grid || "—";
-		const worked = station?.worked_calls || [];
+	async function renderStation() {
+		content.innerHTML = "<p class='drawer-hint'>Loading station\u2026</p>";
+		const data = await api.station();
+		// Structure first; values land through the DOM API (call/grid are
+		// operator input and must never be interpolated into innerHTML).
 		content.innerHTML = `
       <h3>Station</h3>
-      <div class="setting-row"><span>Call sign</span><b>${call}</b></div>
-      <div class="setting-row"><span>Grid square</span><b>${grid}</b></div>
-      <div class="setting-row"><span>Worked calls</span><b>${worked.length}</b></div>
-      <div class="drawer-hint dim">Call &amp; grid are configured on the server
-        (MRRC_FT8_MY_CALL / MRRC_FT8_MY_GRID). Worked calls come from the QSO
-        log and drive the “hide already-worked” filter.</div>`;
+      <label class="setting-field"><span>呼号 Call</span>
+        <input id="st-call" maxlength="11" autocomplete="off" autocapitalize="characters"></label>
+      <label class="setting-field"><span>网格 Grid</span>
+        <input id="st-grid" maxlength="6" autocomplete="off" autocapitalize="characters" placeholder="PM01"></label>
+      <label class="setting-field"><span>射频模式</span>
+        <select id="st-mode">
+          <option value="DATA-U">DATA-U（推荐）</option>
+          <option value="USB">USB</option>
+        </select></label>
+      <label class="setting-field"><span>发射音频频率 (Hz)</span>
+        <input id="st-audio" type="number" min="200" max="2800" step="50"></label>
+      <button id="st-save" class="drawer-btn">保存</button>
+      <div id="st-msg" class="drawer-hint"></div>
+      <div class="drawer-hint dim">呼号与网格用于 FT8 消息（与 Cloud Hub 呼号无关）；
+        保存后立即生效。已通联呼号来自 QSO 日志，驱动“隐藏已通联”过滤。</div>`;
+		document.getElementById("st-call").value = data.my_call || "";
+		document.getElementById("st-grid").value = data.my_grid || "";
+		document.getElementById("st-mode").value = data.rig_mode || "DATA-U";
+		document.getElementById("st-audio").value = data.tx_audio_frequency ?? 1500;
+
+		document.getElementById("st-save").addEventListener("click", async () => {
+			const msg = document.getElementById("st-msg");
+			const button = document.getElementById("st-save");
+			button.disabled = true;
+			msg.textContent = "保存中…";
+			const result = await api.putStation({
+				my_call: document.getElementById("st-call").value.trim().toUpperCase(),
+				my_grid: document.getElementById("st-grid").value.trim().toUpperCase(),
+				rig_mode: document.getElementById("st-mode").value,
+				tx_audio_frequency: Number(document.getElementById("st-audio").value) || 1500,
+			});
+			button.disabled = false;
+			if (result.ok) {
+				msg.textContent = "已保存 ✓";
+				patch({ station: { ...(getState().station || {}), my_call: result.my_call, my_grid: result.my_grid } });
+				setTimeout(() => { msg.textContent = ""; }, 2500);
+			} else {
+				msg.textContent = "保存失败：" + (result.reason || result.detail || "未知错误");
+			}
+		});
 	}
 
 	// Devices: station hardware (hamlib rig + audio, spec 2026-08-10).

@@ -10,6 +10,7 @@ from ft8.engine.repository import Repository
 from ft8.engine.safety import SafetyController
 from ft8.engine.sequencer import Sequencer
 from ft8.web.auth_shim import PlatformAuthAdapter
+from ft8.platform.settings import Ft8SettingsStore
 from ft8.web.ft8_api import AppState, create_app
 
 TOKEN = "test-token"
@@ -43,6 +44,7 @@ def _client(*, role: str = "operator", authenticated: bool = True) -> TestClient
         repository=repository,
         my_call="BG1SB",
         my_grid="ON80DA",
+        settings_store=Ft8SettingsStore(os.path.join(tmp, "settings.json")),
     )
     client = TestClient(create_app(state))
     if authenticated:
@@ -141,3 +143,31 @@ def test_mode_switch_engine_failure_is_500():
 def test_mode_switch_requires_control_role():
     assert _mode_client(FakeMode(), role="listen").post(
         "/api/ft8/mode", json={"mode": "ft8"}).status_code == 403
+
+
+def test_station_round_trip(tmp_path):
+    client = _client()
+    before = client.get("/api/ft8/station").json()
+    assert before["rig_mode"] == "DATA-U"
+    saved = client.put("/api/ft8/station", json={
+        "my_call": "BA4EG", "my_grid": "PM01", "rig_mode": "USB",
+        "tx_audio_frequency": 1200,
+    })
+    assert saved.status_code == 200
+    after = client.get("/api/ft8/station").json()
+    assert after["my_call"] == "BA4EG" and after["rig_mode"] == "USB"
+    assert after["tx_audio_frequency"] == 1200
+
+
+def test_station_rejects_unknown_keys():
+    r = _client().put("/api/ft8/station", json={"nope": 1})
+    assert r.status_code == 422
+
+
+def test_station_rejects_bad_values():
+    assert _client().put("/api/ft8/station", json={"rig_mode": "FM"}).status_code == 422
+    assert _client().put("/api/ft8/station", json={"tx_audio_frequency": 9999}).status_code == 422
+
+
+def test_station_requires_control_role():
+    assert _client(role="listener").put("/api/ft8/station", json={"my_call": "X"}).status_code == 403

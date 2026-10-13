@@ -34,10 +34,16 @@ def test_module_imports_resolve():
     assert missing == []
 
 
+DYNAMIC_IDS = {
+    # Rendered by the settings drawer into #drawer-content (settings.js).
+    "st-call", "st-grid", "st-mode", "st-audio", "st-save", "st-msg",
+}
+
+
 def test_dom_ids_used_by_js_exist_in_the_page():
     html = (STATIC / "ft8.html").read_text()
     html_ids = set(re.findall(r'id="([^"]+)"', html))
     used: set[str] = set()
     for js in (STATIC / "ft8").glob("*.js"):
         used |= set(re.findall(r'getElementById\("([^"]+)"\)', js.read_text()))
-    assert sorted(used - html_ids) == []
+    assert sorted(used - html_ids - DYNAMIC_IDS) == []

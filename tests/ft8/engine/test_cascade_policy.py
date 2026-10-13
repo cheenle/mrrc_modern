@@ -122,3 +122,49 @@ def test_provisional_flag_matches_the_c_header() -> None:
     assert declared == FLAG_SNR_PROVISIONAL, (
         f"C header declares {declared}, Python has {FLAG_SNR_PROVISIONAL}"
     )
+
+
+def test_a_mixed_batch_is_not_trustworthy() -> None:
+    """一批里只要有一条 provisional，整批的 snr 就都不可信。
+
+    `_snr_is_trustworthy` 用的是 `all(not provisional)` 而不是 `any(...)`；
+    两者**只**在这种混合批次上分道扬镳 —— 而这正是本模块的核心不变量。
+    两条结果分处不同频率（1500 / 1700 Hz）以免被当成一条信号，两条的 snr
+    都低于阈值（-30 < -26），于是两种读法各自给出：
+
+    - 按 `all`：存在一条 provisional，整批判据被跳过，升级只看 min_decodes，
+      有结果 → 返回 False。这正是本用例断言的结果。
+    - 按 `any`：那条干净的（flags=0）让整批「可信」，峰值判据生效，
+      -30 < -26 → 返回 True —— 把同一批里 score 估计值拿去比了 dB 阈值，
+      也就是 spec D-7 要挡住的那个 bug。
+
+    这个 **True/False 之差**就是本用例的全部意义：删掉其中一行就没有混合
+    批次，`all` 与 `any` 再无差别，本用例也就什么都钉不住了。
+    """
+    results = (
+        DecodeResult(slot_id=1, sync=0.0, snr=-30, dt=0.0, frequency=1500.0,
+                     text="CQ TEST", ap_type=0, quality=0.0,
+                     flags=FLAG_SNR_PROVISIONAL),
+        DecodeResult(slot_id=1, sync=0.0, snr=-30, dt=0.0, frequency=1700.0,
+                     text="CQ TEST", ap_type=0, quality=0.0, flags=0),
+    )
+    batch = DecodeBatch(slot_id=1, path=DecodePath.FAST, results=results,
+                        overflow=False, elapsed_seconds=0.15)
+    assert should_escalate(DEFAULT, batch, my_call="", qso_progress=0,
+                           requested=False) is False
+
+
+def test_empty_batch_does_not_crash_when_min_decodes_is_zero() -> None:
+    """min_decodes=0 是合法设置，空批次不能因此抛 ValueError。
+
+    Task 14 的校验只拒绝**负数** min_decodes，0 是允许的。此时空批次会
+    穿过 `len(batch.results) < policy.min_decodes` 这条短路（`0 < 0` 为
+    False），落到 `_snr_is_trustworthy`。少了 `if not batch.results: return
+    False` 这道守卫，`all(...)` 在空序列上恒为 True，接着
+    `max(r.snr for r in batch.results)` 就抛
+    `ValueError: max() iterable argument is empty` —— 对任何设置里存了
+    min_decodes=0 的操作者，每个时隙都会崩在这儿。
+    """
+    policy = CascadePolicy(min_decodes=0)
+    assert should_escalate(policy, _batch(), my_call="", qso_progress=0,
+                           requested=False) is False

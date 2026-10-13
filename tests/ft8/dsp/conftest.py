@@ -160,3 +160,58 @@ def busy_slot(raw_library: c.CDLL) -> np.ndarray:
     slot *= 4_800.0  # five signals share the former single-signal headroom
     slot += rng.normal(0.0, 2_000.0, slot.size).astype(np.float32)
     return np.clip(np.rint(slot), -32768, 32767).astype(np.int16)
+
+
+class _Config(c.Structure):
+    _fields_ = [
+        ("struct_size", c.c_int32), ("sample_rate", c.c_int32),
+        ("sample_count", c.c_int32), ("profile", c.c_int32),
+        ("threads", c.c_int32), ("cycles", c.c_int32),
+        ("sensitivity", c.c_int32), ("flags", c.c_int32),
+        ("qso_progress", c.c_int32), ("rx_frequency", c.c_int32),
+        ("tx_frequency", c.c_int32), ("low_frequency", c.c_int32),
+        ("high_frequency", c.c_int32), ("ap_width", c.c_int32),
+        ("utc_hhmmss", c.c_int32), ("reserved", c.c_int32),
+        ("my_call", c.c_char * 13), ("dx_call", c.c_char * 13),
+        ("dx_grid", c.c_char * 7), ("padding", c.c_char * 3),
+    ]
+
+
+class _Result(c.Structure):
+    _fields_ = [
+        ("slot_id", c.c_int64), ("sync", c.c_float),
+        ("dt", c.c_float), ("frequency", c.c_float),
+        ("quality", c.c_float), ("snr", c.c_int32),
+        ("ap_type", c.c_int32), ("flags", c.c_int32),
+        ("reserved", c.c_int32), ("text", c.c_char * 38),
+        ("padding", c.c_char * 2),
+    ]
+
+
+@pytest.fixture
+def call_fast():
+    """Invoke ``wsjt_ft8_decode_fast`` with the shared 12 kHz / 180 000-sample config.
+
+    Shared by the fast-path unit tests (``test_ft8_fast_decode.py``) and the
+    reference-parity test (``test_ft8_fast_parity.py``) so there is a single
+    call convention: 200-3000 Hz window, capacity >= WSJT_RESULT_CAPACITY.
+    """
+
+    def _call(library, samples: np.ndarray, capacity: int = 256):
+        cfg = _Config()
+        cfg.struct_size = c.sizeof(_Config)
+        cfg.sample_rate = 12_000
+        cfg.sample_count = 180_000
+        cfg.low_frequency = 200
+        cfg.high_frequency = 3_000
+        results = (_Result * capacity)()
+        count = c.c_int32()
+        overflow = c.c_int32()
+        status = library.wsjt_ft8_decode_fast(
+            samples.ctypes.data_as(c.POINTER(c.c_int16)),
+            c.byref(cfg), 1, results, capacity,
+            c.byref(count), c.byref(overflow),
+        )
+        return status, results, count.value, overflow.value
+
+    return _call

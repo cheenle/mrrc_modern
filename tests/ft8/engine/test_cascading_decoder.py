@@ -307,3 +307,34 @@ def test_a_cloud_result_a_few_hertz_off_is_not_a_duplicate() -> None:
 
     assert [r.text for r in out.results] == ["CQ AAA"], "deep wins, no duplicate row"
     assert out.results[0].snr == -21
+
+
+def test_a_slow_cloud_failure_forfeits_the_local_retry() -> None:
+    """A failure that ate the window must not hand the slot to a local retry.
+
+    Measured 2026-10-14 in the field: a cloud attempt that failed *fast* left
+    just enough budget for the local deep path, which then finished at
+    +4.19 s and was marked late — the slot would have been on time without
+    the cloud attempt at all.  A failure that already consumed the window
+    must therefore end the slot's deep pass, not start one.
+    """
+
+    now = [100.0]
+    fast = _b(DecodePath.FAST, _r("CQ AAA"))
+    deep = _b(DecodePath.IMPROVED, _r("CQ BBB"))
+    inner = PathAwareFake({DecodePath.FAST: fast, DecodePath.IMPROVED: deep})
+
+    class SlowRemote:
+        async def decode_path(self, slot_id, samples, path, *, threads=None):
+            now[0] += 1.2  # this attempt consumed 1.2 s of the slot's window
+            raise CloudUnavailable("timeout")
+
+    decoder = _qso_cascade(inner, SlowRemote(), clock=lambda: now[0])
+    out = asyncio.run(decoder.decode(1, b"\x00" * 360_000))
+
+    assert decoder.cloud_fallback == 1
+    assert decoder.deadline_risk == 1, "the lost deep pass must be counted"
+    assert [p for p, _t, _c in inner.seen] == [DecodePath.FAST], (
+        "the local deep path must not run after a slow cloud failure"
+    )
+    assert {r.text for r in out.results} == {"CQ AAA"}

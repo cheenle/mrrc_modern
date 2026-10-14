@@ -23,6 +23,14 @@ DEFAULT_MIN_DECODES = 1
 # 而不是 -20 —— 落在 -24 只会对着一个「实测已知解码完整」的时隙每次白烧 2.2 s。
 DEFAULT_MIN_PEAK_SNR = -26
 
+# 云端**慢**失败（超时）与**快**失败（连接被拒、忙回 503）必须分开对待：
+#   * 快失败几乎没吃掉窗口，本地深路径仍可能在截止内跑完 —— 补跑是对的；
+#   * 慢失败已经把窗口吃掉大半，再补跑只会把结果推过 `boundary + cutoff`。
+# 2026-10-14 现场实测到一次：云端的快速失败之后本地补跑在 **+4.19 s** 完成、
+# 被标 `late` —— 而没有这次云端尝试它本来准时。预算守卫拦不住它：它只保证
+# 「剩余 ≥ 深路径下界（2.3 s）」，而一次快失败恰好留下刚够的预算。
+CLOUD_FALLBACK_ALLOWED_S = 0.5
+
 
 @dataclass(frozen=True, slots=True)
 class CascadePolicy:
@@ -254,10 +262,18 @@ class CascadingDecoder:
                     timeout=self._cloud_deadline_s,
                 )
             except (TimeoutError, CloudUnavailable):
-                # 云端失败是**预期内**的：断网、hub 忙、超时。它不改变本时隙的深路径
-                # 语义 —— 落回下面那条原路（含预算守卫，那里会按今天的规则计一次
-                # deadline_risk）。
+                # 云端失败是**预期内**的：断网、hub 忙、超时。只要它失败得快，
+                # 就照今天的原路走（预算守卫 + 本地深路径）；失败得慢就放弃
+                # 本槽的深路径 —— 那才是不会迟到的选择（见 CLOUD_FALLBACK_ALLOWED_S）。
                 self.cloud_fallback += 1
+                elapsed = self._clock() - started
+                if elapsed > CLOUD_FALLBACK_ALLOWED_S:
+                    self.deadline_risk += 1
+                    logger.info(
+                        "cloud escalation failed after %.2fs for slot %s; "
+                        "skipping the local retry", elapsed, slot_id,
+                    )
+                    return batch_fast
                 logger.info(
                     "cloud escalation unavailable for slot %s; using the local path", slot_id
                 )

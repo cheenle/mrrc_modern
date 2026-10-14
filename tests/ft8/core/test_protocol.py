@@ -119,6 +119,19 @@ def valid_frames() -> list[dict[str, object]]:
         {**base, "type": "error", "code": "invalid_request", "detail": "rejected"},
         {**base, "type": "shutdown"},
         {**base, "type": "stopped"},
+        {
+            # Appended, never inserted: ``test_operation_specific_scalars_are_strict``
+            # indexes this list by position, so a frame placed in the middle
+            # would silently re-point that test at different frames.  The same
+            # decode as ``decode`` with the descriptor replaced by the length of
+            # the PCM that rides beside it — a shared segment cannot cross machines.
+            **base,
+            "type": "decode_remote",
+            "slot_id": 11_908_800,
+            "deadline_monotonic": 999_999_999.0,
+            "config": decode_config(),
+            "pcm_bytes": 360_000,
+        },
     ]
 
 
@@ -395,3 +408,34 @@ def test_operation_specific_scalars_are_strict(
     frame[field] = value
     assert_rejected(frame, field)
 
+
+
+def decode_remote_frame(**changes: object) -> dict[str, object]:
+    """The valid ``decode_remote`` frame, with named fields replaced."""
+
+    frame = next(f for f in valid_frames() if f["type"] == "decode_remote")
+    return {**frame, **changes}
+
+
+@pytest.mark.parametrize("field", ["slot_id", "deadline_monotonic", "config", "pcm_bytes"])
+def test_decode_remote_requires_every_field(field: str) -> None:
+    frame = decode_remote_frame()
+    del frame[field]
+    assert_rejected(frame, "missing fields")
+
+
+def test_decode_remote_refuses_the_local_frames_shared_memory_descriptor() -> None:
+    """The descriptor is exactly the part that cannot cross machines."""
+
+    assert_rejected(decode_remote_frame(shm=decode_shm()), "frame extra fields: shm")
+
+
+@pytest.mark.parametrize("value", [0, 359_998, 360_002, "360000", True, 2**40])
+def test_decode_remote_requires_the_exact_slot_length(value: object) -> None:
+    assert_rejected(decode_remote_frame(pcm_bytes=value), "pcm_bytes")
+
+
+def test_decode_remote_validates_the_config_exactly_like_a_local_decode() -> None:
+    config = decode_config()
+    config["sample_count"] = 12_345
+    assert_rejected(decode_remote_frame(config=config))

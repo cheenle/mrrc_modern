@@ -6,12 +6,13 @@ library.  See docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ft8.core.models import DecodeBatch, DecodePath, DecodeResult
+from ft8.core.models import CloudUnavailable, DecodeBatch, DecodePath, DecodeResult
 
 # 与 ft8/dsp/wsjt_core.h 的 WSJT_FLAG_SNR_PROVISIONAL 同值（bit 4）。
 FLAG_SNR_PROVISIONAL = 16
@@ -170,6 +171,11 @@ class CascadingDecoder:
         safety_margin_s: float = DEFAULT_SAFETY_MARGIN_SECONDS,
         ap_context: Callable[[], tuple[str, int]] | None = None,
         requested: Callable[[], bool] | None = None,
+        # 云端深路径（spec 2026-10-14，A1）：一个可选 provider，接口与 inner 相同。
+        # 为 None 时本类的行为与引入它之前逐字一致 —— 那是默认值，也是每一台没配
+        # MRRC_FT8_CLOUD_DECODE_URL 的盒子的状态。
+        remote: object | None = None,
+        cloud_deadline_s: float = 2.5,
     ) -> None:
         if deep_threads < 1:
             raise ValueError("deep_threads must be positive")
@@ -186,7 +192,16 @@ class CascadingDecoder:
         self._safety_margin_s = safety_margin_s
         self._ap_context = ap_context or (lambda: ("", 0))
         self._requested = requested or (lambda: False)
+        self._remote = remote
+        self._cloud_deadline_s = float(cloud_deadline_s)
         self.deadline_risk = 0
+        # 观测：云端成功次数、落回本地次数、最近一次云端墙上耗时。与
+        # deadline_risk 并列，由 runtime.cascade_stats() 与每槽日志读出。
+        self.cloud_ok = 0
+        self.cloud_fallback = 0
+        self.cloud_seconds = 0.0
+        # 本槽的深路径是谁算的（"cloud" / "local" / 尚无），供日志行分辨。
+        self.last_deep_path = ""
 
     def set_policy(self, policy: CascadePolicy) -> None:
         """替换升级策略，从下一个时隙起生效。
@@ -231,6 +246,30 @@ class CascadingDecoder:
         ):
             return batch_fast
 
+        if self._remote is not None:
+            started = self._clock()
+            try:
+                batch_deep = await asyncio.wait_for(
+                    self._remote.decode_path(slot_id, samples, DecodePath.IMPROVED),
+                    timeout=self._cloud_deadline_s,
+                )
+            except (TimeoutError, CloudUnavailable):
+                # 云端失败是**预期内**的：断网、hub 忙、超时。它不改变本时隙的深路径
+                # 语义 —— 落回下面那条原路（含预算守卫，那里会按今天的规则计一次
+                # deadline_risk）。
+                self.cloud_fallback += 1
+                logger.info(
+                    "cloud escalation unavailable for slot %s; using the local path", slot_id
+                )
+            except Exception:
+                self.cloud_fallback += 1
+                logger.warning("cloud escalation failed for slot %s", slot_id, exc_info=True)
+            else:
+                self.cloud_ok += 1
+                self.cloud_seconds = self._clock() - started
+                self.last_deep_path = "cloud"
+                return merge_batches(batch_fast, batch_deep)
+
         if self._remaining_budget(slot_id) < self._deep_lower_bound_s:
             self.deadline_risk += 1
             logger.info(
@@ -246,4 +285,5 @@ class CascadingDecoder:
             logger.warning("deep decode path failed; keeping the fast results", exc_info=True)
             return batch_fast
 
+        self.last_deep_path = "local"
         return merge_batches(batch_fast, batch_deep)

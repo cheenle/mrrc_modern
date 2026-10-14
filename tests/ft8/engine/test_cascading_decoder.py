@@ -6,6 +6,7 @@ import time
 import pytest
 
 from ft8.core.models import DecodeBatch, DecodeConfig, DecodePath, DecodeResult
+from ft8.core.models import CloudUnavailable
 from ft8.engine.cascade import CascadePolicy, CascadingDecoder
 from ft8.engine.orchestrator import slot_id_for, slot_start_epoch
 
@@ -188,3 +189,121 @@ def test_set_policy_takes_effect_on_the_next_slot() -> None:
     out = asyncio.run(decoder.decode(1, b"\x00" * 360_000))
     assert out.path is DecodePath.IMPROVED
     assert [p for p, _t, _c in inner.seen] == [DecodePath.FAST, DecodePath.IMPROVED]
+
+
+class RemoteFake:
+    """A remote provider: a fixed batch or a raised error, plus a call count."""
+
+    def __init__(self, batch: DecodeBatch | None = None, error: Exception | None = None) -> None:
+        self.calls = 0
+        self.batch = batch
+        self.error = error
+
+    async def decode_path(self, slot_id, samples, path, *, threads=None):
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+        return self.batch
+
+
+def _qso_cascade(inner, remote, **kwargs):
+    """This file's own construction shape, with the AP context that forces an escalation."""
+
+    return CascadingDecoder(
+        inner, CascadePolicy(),
+        cutoff=2.5,
+        boundary_epoch_for=lambda s: 100.0,
+        clock=kwargs.pop("clock", lambda: 100.0),
+        ap_context=lambda: ("BA4EG", 2),
+        remote=remote,
+        **kwargs,
+    )
+
+
+def test_the_remote_provider_answers_the_escalation() -> None:
+    # 两个**不同频率**的信号：同频同 dt 的会被合并键正确地当作同一条（见
+    # test_a_cloud_result_a_few_hertz_off_is_not_a_duplicate）。
+    fast = _b(DecodePath.FAST, DecodeResult(1, 0.0, -20, 0.1, 900.0, "CQ AAA", 0, 0.0, 0))
+    deep = _b(DecodePath.IMPROVED, _r("CQ BBB"))
+    inner = PathAwareFake({DecodePath.FAST: fast, DecodePath.IMPROVED: deep})
+    remote = RemoteFake(batch=_b(DecodePath.IMPROVED, _r("CQ JA1ABC")))
+    decoder = _qso_cascade(inner, remote)
+
+    out = asyncio.run(decoder.decode(1, b"\x00" * 360_000))
+
+    assert remote.calls == 1
+    assert decoder.cloud_ok == 1 and decoder.cloud_fallback == 0
+    assert {r.text for r in out.results} == {"CQ AAA", "CQ JA1ABC"}
+    assert [p for p, _t, _c in inner.seen] == [DecodePath.FAST], (
+        "the local deep path must not run when the cloud answered"
+    )
+    assert decoder.last_deep_path == "cloud"
+
+
+def test_a_failed_remote_falls_back_to_the_local_deep_path() -> None:
+    fast = _b(DecodePath.FAST, DecodeResult(1, 0.0, -20, 0.1, 900.0, "CQ AAA", 0, 0.0, 0))
+    deep = _b(DecodePath.IMPROVED, _r("CQ BBB"))
+    inner = PathAwareFake({DecodePath.FAST: fast, DecodePath.IMPROVED: deep})
+    remote = RemoteFake(error=CloudUnavailable("hub down"))
+    decoder = _qso_cascade(inner, remote)
+
+    out = asyncio.run(decoder.decode(1, b"\x00" * 360_000))
+
+    assert remote.calls == 1
+    assert decoder.cloud_fallback == 1 and decoder.cloud_ok == 0
+    assert [p for p, _t, _c in inner.seen] == [DecodePath.FAST, DecodePath.IMPROVED]
+    assert {r.text for r in out.results} == {"CQ AAA", "CQ BBB"}
+    assert out.escalated is True
+    assert decoder.last_deep_path == "local"
+
+
+def test_a_remote_failure_lands_on_the_same_budget_guard() -> None:
+    """A remote failure means today's 'budget too tight': no local run, one count."""
+
+    fast = _b(DecodePath.FAST, _r("CQ AAA"))
+    deep = _b(DecodePath.IMPROVED, _r("CQ BBB"))
+    inner = PathAwareFake({DecodePath.FAST: fast, DecodePath.IMPROVED: deep})
+    remote = RemoteFake(error=CloudUnavailable("hub down"))
+    decoder = _qso_cascade(inner, remote, clock=lambda: 102.5)
+
+    out = asyncio.run(decoder.decode(1, b"\x00" * 360_000))
+
+    assert decoder.cloud_fallback == 1
+    assert decoder.deadline_risk == 1, (
+        "exactly once — not once for the cloud and again for the box"
+    )
+    assert [p for p, _t, _c in inner.seen] == [DecodePath.FAST]
+    assert {r.text for r in out.results} == {"CQ AAA"}
+
+
+class SleepingRemote:
+    async def decode_path(self, slot_id, samples, path, *, threads=None):
+        await asyncio.sleep(5)
+        raise AssertionError("unreachable")
+
+
+def test_a_remote_that_never_answers_is_abandoned_at_the_deadline() -> None:
+    fast = _b(DecodePath.FAST, _r("CQ AAA"))
+    deep = _b(DecodePath.IMPROVED, _r("CQ BBB"))
+    inner = PathAwareFake({DecodePath.FAST: fast, DecodePath.IMPROVED: deep})
+    decoder = _qso_cascade(inner, SleepingRemote(), cloud_deadline_s=0.05)
+
+    out = asyncio.run(decoder.decode(1, b"\x00" * 360_000))
+
+    assert decoder.cloud_fallback == 1
+    assert [p for p, _t, _c in inner.seen] == [DecodePath.FAST, DecodePath.IMPROVED]
+
+
+def test_a_cloud_result_a_few_hertz_off_is_not_a_duplicate() -> None:
+    """The same signal lands at slightly different freq/dt on the two paths."""
+
+    fast = _b(DecodePath.FAST, DecodeResult(1, 0.0, -20, 0.10, 1500.0, "CQ AAA", 0, 0.0, 0))
+    remote = RemoteFake(batch=_b(DecodePath.IMPROVED,
+                                 DecodeResult(1, 0.0, -21, 0.12, 1500.4, "CQ AAA", 0, 0.0, 0)))
+    inner = PathAwareFake({DecodePath.FAST: fast})
+    decoder = _qso_cascade(inner, remote)
+
+    out = asyncio.run(decoder.decode(1, b"\x00" * 360_000))
+
+    assert [r.text for r in out.results] == ["CQ AAA"], "deep wins, no duplicate row"
+    assert out.results[0].snr == -21

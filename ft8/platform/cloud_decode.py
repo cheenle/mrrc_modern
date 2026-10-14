@@ -24,7 +24,7 @@ import json
 import time
 from urllib.parse import urlsplit
 
-from ft8.core.models import DecodeBatch, DecodeConfig, DecodePath
+from ft8.core.models import CloudUnavailable, DecodeBatch, DecodeConfig, DecodePath
 from ft8.core.protocol import PROTOCOL_VERSION, FrameError, decode_frame
 from ft8.engine.dsp_decode import batch_from_decode_ok, decode_config_frame
 from ft8.engine.orchestrator import SLOT_SAMPLES_NBYTES
@@ -38,10 +38,6 @@ CLOUD_THREADS = 1
 DEFAULT_CYCLES = 3
 DEFAULT_DEADLINE_S = 2.5
 _SOCKET_SLACK_S = 1.0
-
-
-class CloudUnavailable(RuntimeError):
-    """The cloud deep path could not produce a batch; fall back to the box."""
 
 
 class CloudDecoder:

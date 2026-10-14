@@ -113,15 +113,18 @@ CascadingDecoder.decode()
 
 ### 5.1 协议（`ft8/core/protocol.py` 新增一个帧类型，双方共用）
 
-- **`decode_remote`**（文本帧）：`decode` 去掉 `shm`、加 `pcm_bytes`：
-  `{type, slot_id, deadline_monotonic, config, pcm_bytes}`。
-  紧随其后**一条二进制帧**，长度必须恰好等于 `pcm_bytes`（360000）。
-  校验沿用现有 `_exact_fields` 风格（缺/多字段、`pcm_bytes` 不符、超长都拒）。
-- **响应复用 `decode_ok`**（已存在、已有严格校验）—— 这样"云端批次"与"本地批次"
-  在盒子上走**同一条解析路径**。
-- `deadline_monotonic` 仍随帧发送，但**跨机无意义**：hub 不解释它（保留只为复用 schema），
-  由盒子侧用 `asyncio.wait_for` 自己兜底；这一点写进代码注释与测试。
-- **认证**：WS 握手 `Authorization: Bearer <token>`（AD-024：令牌不进 URL）。
+- **`decode_remote`**（**请求头里的 JSON**，base64 编码进 `X-MRRC-Config`）：`decode` 去掉 `shm`、加 `pcm_bytes`：
+  `{v, type, generation, request_id, slot_id, deadline_monotonic, config, pcm_bytes}`。
+  **PCM 是同一个 POST 的 body**（`Content-Type: application/octet-stream`），长度必须恰好等于
+  `pcm_bytes`（360000）。校验沿用现有 `_exact_fields` 风格（缺/多字段、`pcm_bytes` 不符、超长都拒）。
+- **信封**：`POST /mrrc-decode`，`Authorization: Bearer <token>`（AD-024：令牌不进 URL），
+  body = 12 kHz int16 整槽。响应是 `application/json` 的 **`decode_ok`** 帧
+  （已存在、已有严格校验）—— 于是"云端批次"与"本地批次"在盒子上走**同一条解析路径**。
+- 为什么不是 WSS：hub 上 `websockets` 只有 apt 的 **15.0.1**，盒子是 **17.x**（跨版本 API 面是风险）；
+  而普通 HTTPS 两端都用 **stdlib**（盒子 `http.client` + `asyncio.to_thread`，hub `ThreadingHTTPServer`），
+  不需要新依赖、不需要 WS 版本对齐，而且能用 `curl` 直接验证。
+- `deadline_monotonic` 仍随请求发送，但**跨机无意义**：hub 不解释它（保留只为复用 schema），
+  由盒子侧自己用 socket timeout + `asyncio.wait_for` 兜底；这一点写进代码注释与测试。
 
 ### 5.2 盒子侧 `CloudDecoder`（`ft8/platform/cloud_decode.py`）
 
@@ -133,8 +136,11 @@ CascadingDecoder.decode()
   hub 服务**再兜底一次** `min(threads, os.cpu_count())`（防御性，不依赖盒子端自觉）。
 - 连接：惰性建连 + keep-alive + 断线指数退避重连（1 s → 30 s 上限）。
 - **帧组装与结果解析必须与 `SupervisorDecoder` 共用同一份代码**：把 `dsp_decode.py` 里
-  「`DecodeConfig` → config dict → 帧」与「`decode_ok` → `DecodeBatch`」两段抽成共享函数，
-  两处调用。这是"两条路不会分叉"的机制保证（不是靠约定）。
+  「`DecodeConfig` → config dict」与「`decode_ok` → `DecodeBatch`」两段抽成共享函数，两处调用
+  （本地路径再包上 `shm`，云端路径再包上 `pcm_bytes`，**只有信封不同**）。
+  这是"两条路不会分叉"的机制保证（不是靠约定）。
+- 客户端：`http.client.HTTPSConnection` + `asyncio.to_thread`（与现有 `supervisor.request` 同一风格）；
+  keep-alive 复用同一连接；socket timeout 钉在 deadline 上（超时后**丢弃连接**，不复用到下一槽）。
 - 失败一律抛 `CloudUnavailable`（新异常），由级联接住并落回本地。
 
 ### 5.3 级联接线（`ft8/engine/cascade.py`）
@@ -166,12 +172,14 @@ if self._remaining_budget(slot_id) < self._deep_lower_bound_s:
 
 ### 5.4 hub 服务 `mrrc-decode`
 
-- `websockets.serve(...)`，绑 **127.0.0.1:8990**；先校验 token 再收数据。
+- `websockets.serve(...)` → **`http.server.ThreadingHTTPServer`**（stdlib），绑 **127.0.0.1:8990**；
+  先校验 `Authorization` 再读 body。`nginx` 只做 `location /mrrc-decode` 的 `proxy_pass`
+  （`client_max_body_size 1m`、`proxy_buffering off`）。
 - 部署路径：`/opt/mrrc-decode/`（同一份 `ft8/` 子树 + 已编译的 `ft8/dsp/build/libwsjt_core.so`）；
   令牌在 `/etc/mrrc-decode/token`（0600），systemd `EnvironmentFile` 注入。
 - 常驻 `WorkerSupervisor` + `SupervisorDecoder`（**复用盒子那份代码**，含共享内存）。
-- **串行执行**：一把锁 + 固定 `request_timeout`（10 s）；**忙时立即回 `error{code:"busy"}` 不排队**
-  —— 盒子有本地兜底，排队只会把"迟到"变成常态。
+- **串行执行**：一把非阻塞锁；**锁被占时立即回 `503` 不排队**（盒子有本地兜底，排队只会把"迟到"变成常态）——
+  盒子侧把任何非 200 当作 `CloudUnavailable`。
 - 日志：每请求一行（slot_id / cycles / 解码 ms / 结果数 / busy|error）。**PCM 不落盘**。
 - systemd：`CPUQuota=70%`、`Nice=10`、`Restart=always`、专用用户。
 - nginx：`location /mrrc-decode`，升级头 + `proxy_buffering off` + 覆盖解码时长的 `proxy_read_timeout`。
@@ -249,7 +257,7 @@ if self._remaining_budget(slot_id) < self._deep_lower_bound_s:
 | --- | --- | --- |
 | D-1 | 云端只执行"升级"，不改判据 | 策略已经过现场验收（4.0 s 截止 + `late=0`），换地方不换判据 |
 | D-2 | 复用 `worker.py` + `WorkerSupervisor` + 帧协议 | 语义由构造一致；崩溃隔离；不需要新 ABI、不需要改 DSP |
-| D-3 | WSS 走现有 nginx 443 | 无安全组改动、用现有证书、复用产品依赖 `websockets`、令牌走 header（AD-024） |
+| D-3 | HTTPS POST 走现有 nginx 443（不是 WSS） | 无安全组改动、用现有 LE 证书（盒子用系统 CA，无需 pin）；两端都用 stdlib，避开 hub 的 `websockets` 15.0.1 vs 盒子 17.x 的版本面；`curl` 可直接验证 |
 | D-4 | 按需上传而非常驻流 | 隐私姿态与常态带宽不变；常态零开销 |
 | D-5 | 忙时立即回绝而非排队 | 盒子有本地兜底；排队会把"迟到"变成常态 |
 | D-6 | 云端固定 `cycles=3` 起步 | 实测 1.208 s 买得起；本地 ~6.5 s 买不起 |

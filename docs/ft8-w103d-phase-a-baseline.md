@@ -72,7 +72,11 @@ A53 全矩阵，停服务测量，profile 3，cycles 1，每格 1 预热 + 3 测
 sudo grep "decode counters after" /opt/mrrc_modern/logs/server-stdout.log | tail -6
 ```
 
-拿到后填在这里：**升级率 = `escalations` / `slots`**（行内自带两个计数）。
+拿到后填在这里。**升级率的定义是 `escalations / decodes`**（不是除以槽数）——
+这一行里的 `(%.1f%%)` 就是它（`ft8/runtime.py:447`：`rate = 100 * escalations / decodes`），
+分母是解码条数：它回答的是"**解出来的报文里有多大比例是深路径挣来的**"。
+另一个有用的比值是 `escalations / slots`（这里的槽数就在行首 `after N slot(s)`）——
+那是"多少比例的时隙需要补跑深路径"，两个数在本报告里分开记，不要混用。
 
 > **采集方式与计划不同（Ruling）**：计划 Task 8 Step 1 的
 > `dev_tools/ft8_baseline.sh` 是一个 3 天 / 15 分钟一次的轮询环，需要在盒子上放一份

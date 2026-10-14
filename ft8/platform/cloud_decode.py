@@ -21,6 +21,7 @@ import asyncio
 import base64
 import http.client
 import json
+import ssl
 import time
 from urllib.parse import urlsplit
 
@@ -52,6 +53,7 @@ class CloudDecoder:
         deadline_s: float = DEFAULT_DEADLINE_S,
         config: DecodeConfig | None = None,
         allow_plain_http: bool = False,
+        ca_file: str = "",
         clock=time.monotonic,
     ) -> None:
         parts = urlsplit(url)
@@ -71,7 +73,23 @@ class CloudDecoder:
         self._clock = clock
         self.cycles = int(cycles)
         self.deadline_s = float(deadline_s)
+        # An **extra** trust anchor, not a replacement: the default context keeps
+        # the system store, so a private host can be added (a LAN decoder with a
+        # self-signed certificate) without breaking the box's other outbound TLS
+        # (portal, update checks).  Loaded lazily so a bad path becomes
+        # CloudUnavailable on the first attempt — the cascade falls back to the
+        # local deep path — rather than an exception that stops the engine.
+        self._ca_file = str(ca_file or "")
+        self._context: ssl.SSLContext | None = None
         self._connection: http.client.HTTPConnection | None = None
+
+    def _tls_context(self) -> ssl.SSLContext:
+        if self._context is None:
+            context = ssl.create_default_context()
+            if self._ca_file:
+                context.load_verify_locations(cafile=self._ca_file)
+            self._context = context
+        return self._context
 
     # -- wire --------------------------------------------------------------
 
@@ -106,7 +124,10 @@ class CloudDecoder:
                     http.client.HTTPSConnection if self._tls
                     else http.client.HTTPConnection
                 )
-                self._connection = factory(self._host, self._port, timeout=timeout)
+                self._connection = factory(
+                    self._host, self._port, timeout=timeout,
+                    **({"context": self._tls_context()} if self._tls else {}),
+                )
             connection = self._connection
             connection.timeout = timeout
             connection.request(
@@ -185,4 +206,7 @@ def cloud_decoder_from_environ(environ) -> CloudDecoder | None:
     deadline = float(
         environ.get("MRRC_FT8_CLOUD_DECODE_DEADLINE_S") or DEFAULT_DEADLINE_S
     )
-    return CloudDecoder(url, token, cycles=cycles, deadline_s=deadline)
+    ca_file = (environ.get("MRRC_FT8_CLOUD_DECODE_CA") or "").strip()
+    return CloudDecoder(
+        url, token, cycles=cycles, deadline_s=deadline, ca_file=ca_file
+    )

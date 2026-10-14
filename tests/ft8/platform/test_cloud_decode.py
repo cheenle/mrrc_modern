@@ -12,6 +12,7 @@ import asyncio
 import base64
 import http.server
 import json
+import ssl
 import threading
 from typing import Any
 
@@ -171,3 +172,69 @@ def test_the_environment_builds_a_decoder_with_the_documented_defaults() -> None
     assert decoder is not None
     assert decoder.cycles == 3
     assert decoder.deadline_s == 2.5
+
+
+class _TlsFakeHub(_FakeHub):
+    """The same loopback server, behind TLS with a self-signed certificate."""
+
+    def __init__(self, handler, cert, key):
+        super().__init__(handler)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(str(cert), str(key))
+        self._server.socket = context.wrap_socket(self._server.socket, server_side=True)
+
+    @property
+    def url(self) -> str:
+        port = self._server.server_address[1]
+        return f"https://localhost:{port}/mrrc-decode"
+
+
+@pytest.fixture(scope="module")
+def self_signed(tmp_path_factory):
+    """A certificate for ``localhost``, made by the product's own signing path."""
+
+    from ssl_bootstrap import sign_for
+
+    directory = tmp_path_factory.mktemp("tls")
+    pair = sign_for("localhost", directory)
+    if pair is None:
+        pytest.skip("cryptography is not installed")
+    return pair
+
+
+def test_a_self_signed_host_is_trusted_only_when_its_ca_is_given(self_signed) -> None:
+    """MRRC_FT8_CLOUD_DECODE_CA is how a private (LAN) decoder is trusted."""
+
+    cert, key = self_signed
+    with _TlsFakeHub(lambda: (200, _ok_body(7)), cert, key) as hub:
+        decoder = CloudDecoder(hub.url, "secret-token", cycles=3, ca_file=str(cert))
+        batch = asyncio.run(decoder.decode_path(7, SLOT, DecodePath.IMPROVED))
+        assert batch.slot_id == 7
+
+
+def test_without_the_ca_the_same_host_is_unavailable(self_signed) -> None:
+    cert, key = self_signed
+    with _TlsFakeHub(lambda: (200, _ok_body(7)), cert, key) as hub:
+        decoder = CloudDecoder(hub.url, "secret-token", cycles=3)
+        with pytest.raises(CloudUnavailable):
+            asyncio.run(decoder.decode_path(7, SLOT, DecodePath.IMPROVED))
+
+
+def test_a_bad_ca_path_is_unavailable_not_a_startup_crash() -> None:
+    """A misconfigured CA must cost the slot, not the station's FT8 engine."""
+
+    tls = CloudDecoder("https://127.0.0.1:9/mrrc-decode", "t", ca_file="/nonexistent/ca.pem")
+    with pytest.raises(CloudUnavailable):
+        asyncio.run(tls.decode_path(7, SLOT, DecodePath.IMPROVED))
+
+
+def test_the_environment_passes_the_ca_file_through(tmp_path) -> None:
+    ca = tmp_path / "ham-ca.pem"
+    ca.write_text("x")
+    decoder = cloud_decoder_from_environ({
+        "MRRC_FT8_CLOUD_DECODE_URL": "https://ham.vlsc.net:8990/mrrc-decode",
+        "MRRC_FT8_CLOUD_DECODE_TOKEN": "tok",
+        "MRRC_FT8_CLOUD_DECODE_CA": str(ca),
+    })
+    assert decoder is not None
+    assert decoder._ca_file == str(ca)

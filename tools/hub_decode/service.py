@@ -26,6 +26,8 @@ import base64
 import json
 import logging
 import os
+import socket
+import ssl
 import sys
 import threading
 import time
@@ -233,6 +235,22 @@ def make_handler(service: DecodeService):
     return Handler
 
 
+def make_server(host: str, port: int, handler):
+    """A ThreadingHTTPServer that can bind an IPv6 (dual-stack) address.
+
+    The hub deployment hides behind nginx on 127.0.0.1; a host/LAN deployment
+    (``--host ::``) terminates TLS itself, and ``HTTPServer`` is IPv4-only
+    unless the address family is set here.
+    """
+
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+    class _Server(ThreadingHTTPServer):
+        address_family = family
+
+    return _Server((host, port), handler)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="mrrc-decode: the FT8 cloud deep path")
     parser.add_argument("--host", default=DEFAULT_HOST)
@@ -242,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--app-root", default=_APP_ROOT)
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S)
     parser.add_argument("--max-threads", type=int, default=DEFAULT_MAX_THREADS)
+    parser.add_argument("--cert", default="", help="TLS certificate (PEM); needs --key")
+    parser.add_argument("--key", default="", help="TLS private key (PEM); needs --cert")
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -269,7 +289,15 @@ def main(argv: list[str] | None = None) -> int:
     service = DecodeService(
         supervisor, token=token, max_threads=args.max_threads, timeout_s=args.timeout
     )
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(service))
+    server = make_server(args.host, args.port, make_handler(service))
+    if args.cert or args.key:
+        if not (args.cert and args.key):
+            log.error("--cert and --key go together")
+            return 2
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(args.cert, args.key)
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        log.info("TLS enabled with %s", args.cert)
     log.info("listening on %s:%d (library %s)", args.host, args.port, library)
     try:
         server.serve_forever()

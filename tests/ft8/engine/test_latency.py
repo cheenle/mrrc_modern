@@ -174,6 +174,25 @@ def test_health_exposes_cascade_counters_when_the_cascade_is_wired() -> None:
     assert _health(state)["cascade"]["deadline_risk"] == 4
 
 
+def _cascade_counters(**overrides) -> SimpleNamespace:
+    """The cascade's counter surface exactly as ``Ft8Runtime.cascade_stats`` reads it.
+
+    Grew on 2026-10-14 with the cloud deep path: ``cloud_ok`` / ``cloud_fallback`` /
+    ``cloud_seconds`` join ``deadline_risk`` here, and the property reads the
+    attributes directly — a fake built with only ``deadline_risk`` now raises
+    instead of returning a short dict, which is the intended failure mode.
+    """
+
+    counters: dict[str, object] = {
+        "deadline_risk": 0,
+        "cloud_ok": 0,
+        "cloud_fallback": 0,
+        "cloud_seconds": 0.0,
+    }
+    counters.update(overrides)
+    return SimpleNamespace(**counters)
+
+
 def test_cascade_stats_property_covers_both_branches() -> None:
     """`cascade_stats` 的两个分支都要被**这个属性本身**跑到，而不是被替身绕过。
 
@@ -193,8 +212,13 @@ def test_cascade_stats_property_covers_both_branches() -> None:
     assert unwired.cascade_stats is None
 
     wired = object.__new__(Ft8Runtime)
-    wired._cascade = SimpleNamespace(deadline_risk=4)
-    assert wired.cascade_stats == {"deadline_risk": 4}
+    wired._cascade = _cascade_counters(deadline_risk=4)
+    assert wired.cascade_stats == {
+        "deadline_risk": 4,
+        "cloud_ok": 0,
+        "cloud_fallback": 0,
+        "cloud_seconds": 0.0,
+    }
 
 
 def test_bucket_bounds_track_the_decision_cutoff() -> None:
@@ -236,12 +260,15 @@ def test_cascade_stats_carries_the_escalation_counters_when_the_engine_runs() ->
     from ft8.runtime import Ft8Runtime
 
     wired = object.__new__(Ft8Runtime)
-    wired._cascade = SimpleNamespace(deadline_risk=2)
+    wired._cascade = _cascade_counters(deadline_risk=2)
     wired.orchestrator = SimpleNamespace(
         counters=SimpleNamespace(escalations=7, fast_decodes=93)
     )
     assert wired.cascade_stats == {
         "deadline_risk": 2,
+        "cloud_ok": 0,
+        "cloud_fallback": 0,
+        "cloud_seconds": 0.0,
         "escalations": 7,
         "fast_decodes": 93,
     }
@@ -258,5 +285,10 @@ def test_cascade_stats_omits_counters_when_the_orchestrator_is_not_wired() -> No
     from ft8.runtime import Ft8Runtime
 
     unwired = object.__new__(Ft8Runtime)
-    unwired._cascade = SimpleNamespace(deadline_risk=4)
-    assert unwired.cascade_stats == {"deadline_risk": 4}
+    unwired._cascade = _cascade_counters(deadline_risk=4)
+    assert unwired.cascade_stats == {
+        "deadline_risk": 4,
+        "cloud_ok": 0,
+        "cloud_fallback": 0,
+        "cloud_seconds": 0.0,
+    }

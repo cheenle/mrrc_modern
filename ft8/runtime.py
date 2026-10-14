@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections import deque
 from contextlib import suppress
 from pathlib import Path
@@ -41,6 +42,7 @@ from ft8.engine.safety import SafetyController
 from ft8.engine.sequencer import QSOState, Sequencer
 from ft8.engine.tx_driver import TxDriver
 from ft8.engine.waterfall import SpectrumComputer, SpectrumFanout
+from ft8.platform.cloud_decode import cloud_decoder_from_environ
 from ft8.platform.rx_tap import RxTap
 from ft8.platform.settings import Ft8Settings
 
@@ -159,7 +161,12 @@ class Ft8Runtime:
         cascade = getattr(self, "_cascade", None)
         if cascade is None:
             return None
-        stats = {"deadline_risk": cascade.deadline_risk}
+        stats = {
+            "deadline_risk": cascade.deadline_risk,
+            "cloud_ok": cascade.cloud_ok,
+            "cloud_fallback": cascade.cloud_fallback,
+            "cloud_seconds": cascade.cloud_seconds,
+        }
         orchestrator = getattr(self, "orchestrator", None)
         if orchestrator is not None:
             counters = orchestrator.counters
@@ -280,6 +287,11 @@ class Ft8Runtime:
             if self._cascade_policy_provider is not None
             else CascadePolicy()
         )
+        # 云端深路径（spec 2026-10-14，A1）：只在 MRRC_FT8_CLOUD_DECODE_URL 非空时
+        # 存在。默认为 None —— 那是一台没配云端（也是每一台出厂盒子）的默认行为，
+        # 级联因此与引入它之前逐字一致。
+        cloud = cloud_decoder_from_environ(os.environ)
+        self._cloud = cloud
         self._cascade = CascadingDecoder(
             self.decoder,
             policy,
@@ -287,6 +299,8 @@ class Ft8Runtime:
             boundary_epoch_for=boundary_epoch_for_slot,
             ap_context=lambda: (sequencer.my_call, _qso_progress(sequencer.state)),
             requested=lambda: self._deep_decode_requested,
+            remote=cloud,
+            cloud_deadline_s=(cloud.deadline_s if cloud is not None else 2.5),
         )
         self.orchestrator = Orchestrator(
             self._cascade,

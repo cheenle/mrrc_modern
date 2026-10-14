@@ -62,6 +62,21 @@ DEFAULT_MATRIX = (
 )
 
 
+SENSITIVITY_MATRIX = (
+    # The knob the first matrices never varied.  wsjt_improved.f90:260 sets
+    # ``subpass = sensitivity == 3``, so level 3 runs an *extra* pass inside the
+    # decoder — the same family of lever as ``cycles`` (which selects npass
+    # 3/6/9), and equally unexplored until now.
+    Config("p1c3lt-s1", "improved", 1, 3, sensitivity=1, low_threshold=True),
+    Config("p1c3lt-s2", "improved", 1, 3, sensitivity=2, low_threshold=True),
+    Config("p1c3lt-s3", "improved", 1, 3, sensitivity=3, low_threshold=True),
+    Config("p3c3-s3", "improved", 3, 3, sensitivity=3),
+    Config("p1c2lt-s3", "improved", 1, 2, sensitivity=3, low_threshold=True),
+)
+
+MATRICES = {"default": DEFAULT_MATRIX, "sensitivity": SENSITIVITY_MATRIX}
+
+
 def load_slot(path: Path) -> tuple[int, bytes]:
     path = Path(path)
     samples = path.read_bytes()
@@ -182,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=0, help="first N slots (0 = all)")
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--json", default="")
+    parser.add_argument("--matrix", default="default", choices=sorted(MATRICES))
     args = parser.parse_args(argv)
 
     paths = sorted(Path(args.slots).glob("slot_*.raw"))
@@ -192,12 +208,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print(f"corpus: {len(paths)} slot(s) from {args.slots}")
     slots = [load_slot(path) for path in paths]
-    print(f"matrix: {', '.join(c.name for c in DEFAULT_MATRIX)}")
+    matrix = MATRICES[args.matrix]
+    print(f"matrix[{args.matrix}]: {', '.join(c.name for c in matrix)}")
     started = time.monotonic()
     corpus = asyncio.run(
-        decode_corpus(slots, app_root=args.app_root, matrix=DEFAULT_MATRIX, threads=args.threads)
+        decode_corpus(slots, app_root=args.app_root, matrix=matrix, threads=args.threads)
     )
-    report = summarize(corpus, DEFAULT_MATRIX)
+    report = summarize(corpus, matrix)
     print()
     print(report)
     print(f"\ntotal {time.monotonic() - started:.1f}s")

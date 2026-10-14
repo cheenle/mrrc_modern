@@ -135,6 +135,51 @@ def clean_waveform_12k(binding: CoreBinding, message: str, frequency: float) -> 
     return filtered[:: _DECIMATION].astype(np.float32) * 32767.0
 
 
+class WaveformBank:
+    """Cache analytic FT8 waveforms so a new frequency costs a multiply, not an encode.
+
+    Generating one waveform takes ~13 ms (encode at 48 kHz plus the anti-alias
+    decimation), which was the dominant cost of building a training pair — three
+    signals per slot made data generation slower than the training step it fed.
+    An FT8 burst is a sum of tones at ``f0 + k*6.25 Hz``, so shifting it is exact
+    when done on the analytic signal (a real-valued multiply would fold a mirror
+    image back into the band).  :meth:`waveform` is checked against the encoder
+    in the tests: an accelerator that is merely *close* would move every label.
+    """
+
+    def __init__(
+        self, binding: CoreBinding, messages: tuple[str, ...], base_frequency: float = 1000.0
+    ) -> None:
+        self._base = base_frequency
+        self._waveforms: dict[str, np.ndarray] = {}
+        for message in messages:
+            raw = clean_waveform_12k(binding, message, base_frequency).astype(np.float64)
+            spectrum = np.fft.fft(raw)
+            spectrum[1 : raw.size // 2] *= 2.0  # analytic signal: double the positive half
+            spectrum[raw.size // 2 + 1 :] = 0.0
+            self._waveforms[message] = np.fft.ifft(spectrum).astype(np.complex128)
+        length = next(iter(self._waveforms.values())).size
+        self._time = np.arange(length, dtype=np.float64) / FT8_RX_RATE
+
+    def waveform(self, message: str, frequency: float) -> np.ndarray:
+        """Return the same samples :func:`clean_waveform_12k` would, at ``frequency``."""
+
+        base = self._waveforms[message]
+        if abs(frequency - self._base) < 1e-9:
+            return base.real.astype(np.float32)
+        shift = np.exp(2j * np.pi * (frequency - self._base) * self._time)
+        return (base * shift).real.astype(np.float32)
+
+
+# Bed spectra are reused across every example drawn from the same slot (a
+# training run sees the same few dozen beds thousands of times), and each
+# computation is a 180 000-point FFT — four per example, which made data
+# generation slower than the training step it fed.  Keyed by ``id`` with the
+# array kept alive by the entry itself, so an id cannot be recycled underneath.
+_POWER_CACHE: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+_POWER_CACHE_LIMIT = 256
+
+
 def _bin_powers(pcm: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Return (frequencies, per-bin power) of one slot's periodogram.
 
@@ -145,9 +190,16 @@ def _bin_powers(pcm: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     (``width / resolution``), never by bin count.
     """
 
+    key = id(pcm)
+    cached = _POWER_CACHE.get(key)
+    if cached is not None and cached[0] is pcm:
+        return cached[1], cached[2]
     spectrum = np.fft.rfft(pcm.astype(np.float64))
     frequencies = np.fft.rfftfreq(pcm.size, 1.0 / FT8_RX_RATE)
     power = 2.0 * np.abs(spectrum) ** 2 / (pcm.size**2)
+    if len(_POWER_CACHE) >= _POWER_CACHE_LIMIT:
+        _POWER_CACHE.pop(next(iter(_POWER_CACHE)))
+    _POWER_CACHE[key] = (pcm, frequencies, power)
     return frequencies, power
 
 
@@ -238,6 +290,7 @@ def synthesize(
     signals: tuple[SyntheticSignal, ...],
     *,
     allow_clipping: bool = False,
+    waves: "WaveformBank | None" = None,
 ) -> np.ndarray:
     """Mix ``signals`` into ``bed`` at their nominal SNR, returning int16 PCM.
 
@@ -250,19 +303,12 @@ def synthesize(
 
     mixed = bed.astype(np.float64).copy()
     for signal in signals:
-        waveform = clean_waveform_12k(binding, signal.message, signal.frequency)
-        noise = noise_floor_power(bed, signal.frequency)
-        if noise <= 1e-18:
-            # A silent bed has no SNR to speak of, and scaling against it would
-            # quietly multiply the signal by ~zero.  Fail loudly instead: this is
-            # the mistake that makes a whole sweep meaningless while still
-            # printing plausible percentages.
-            raise ValueError(
-                f"bed has no measurable noise near {signal.frequency:.1f} Hz "
-                f"(tone-group power {noise:.3g}); nominal SNR is undefined"
-            )
-        signal_power = float(np.mean(waveform.astype(np.float64) ** 2))
-        gain = math.sqrt(noise * 10.0 ** (signal.snr_db / 10.0) / signal_power)
+        waveform = (
+            waves.waveform(signal.message, signal.frequency)
+            if waves is not None
+            else clean_waveform_12k(binding, signal.message, signal.frequency)
+        )
+        gain = signal_gain(bed, waveform, signal)
         start = signal.offset_samples
         stop = start + waveform.size
         clipped = start < 0 or stop > mixed.size
@@ -276,6 +322,29 @@ def synthesize(
             raise ValueError(f"signal at dt {signal.dt:+.2f} lies entirely outside the slot")
         mixed[low:high] += waveform[low - start : high - start].astype(np.float64) * gain
     return np.clip(np.round(mixed), -32768.0, 32767.0).astype(np.int16)
+
+
+def signal_gain(bed: np.ndarray, waveform: np.ndarray, signal: SyntheticSignal) -> float:
+    """Return the amplitude factor that puts ``waveform`` at ``signal``'s nominal SNR.
+
+    The single source of truth for the scaling law: ``synthesize`` applies it, and
+    the ML track reuses it to build the *clean* component of a training pair
+    (same placement, same gain, no bed) without re-deriving the arithmetic — a
+    second copy is how a training target silently drifts from its input.
+    """
+
+    noise = noise_floor_power(bed, signal.frequency)
+    if noise <= 1e-18:
+        # A silent bed has no SNR to speak of, and scaling against it would
+        # quietly multiply the signal by ~zero.  Fail loudly instead: this is
+        # the mistake that makes a whole sweep meaningless while still
+        # printing plausible percentages.
+        raise ValueError(
+            f"bed has no measurable noise near {signal.frequency:.1f} Hz "
+            f"(tone-group power {noise:.3g}); nominal SNR is undefined"
+        )
+    signal_power = float(np.mean(waveform.astype(np.float64) ** 2))
+    return math.sqrt(noise * 10.0 ** (signal.snr_db / 10.0) / signal_power)
 
 
 def found(results: object, signal: SyntheticSignal) -> bool:

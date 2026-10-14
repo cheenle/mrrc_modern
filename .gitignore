@@ -81,3 +81,5 @@ mrrc_modern.env
 
 # Live session tokens (runtime state, never committed)
 auth-tokens.json
+
+.venv-ml/

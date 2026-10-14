@@ -25,17 +25,27 @@ rsync -a ./tools/hub_decode/ /opt/mrrc-decode/tools/hub_decode/
 # the toolchain — gfortran, g++, cmake, make, pkg-config, libfftw3-dev)
 (cd /opt/mrrc-decode && FT8_BUILD_JOBS=1 bash ft8/dsp/build.sh)
 
-# 2. the token
-sudo install -d -m 700 /etc/mrrc-decode
+# 2. the token.  The service user must own the *directory*: a 0700
+#    root-owned /etc/mrrc-decode means the unit cannot even open the file it
+#    is configured to read (measured on the first deploy: PermissionError, then
+#    a systemd restart loop).
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin mrrcdecode || true
+sudo install -d -m 700 -o mrrcdecode -g mrrcdecode /etc/mrrc-decode
 head -c 32 /dev/urandom | base64 | sudo tee /etc/mrrc-decode/token >/dev/null
 sudo chmod 600 /etc/mrrc-decode/token
+sudo chown mrrcdecode:mrrcdecode /etc/mrrc-decode/token
 
 # 3. the service
 sudo install -m 644 /opt/mrrc-decode/tools/hub_decode/mrrc-decode.service /etc/systemd/system/
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin mrrcdecode || true
 sudo systemctl daemon-reload && sudo systemctl enable --now mrrc-decode
 
 # 4. nginx: insert the location from tools/hub_decode/nginx-mrrc-decode.conf
+#    into the **live** file — on this hub that is /etc/nginx/sites-enabled/vlsc.net,
+#    not sites-available (they are different inodes; only enabled/* is included).
+#    Keep the backup OUTSIDE sites-enabled/: nginx loads every file there, so a
+#    .bak sibling is parsed as a second config and the next `nginx -t` dies with
+#    "duplicate listen options for 0.0.0.0:443" (measured on the first deploy).
+sudo cp /etc/nginx/sites-enabled/vlsc.net /etc/nginx/backups/vlsc.net.bak-$(date +%Y%m%d-%H%M%S)
 sudo nginx -t && sudo systemctl reload nginx
 ```
 

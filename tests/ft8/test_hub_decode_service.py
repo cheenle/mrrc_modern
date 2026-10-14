@@ -257,3 +257,41 @@ def test_over_a_socket_a_malformed_config_header_is_400() -> None:
 
     assert status == 400
     assert worker.seen == []
+
+
+def test_the_connection_survives_between_slots() -> None:
+    """The box keeps one connection open and reuses it every 15 s.
+
+    ``BaseHTTPRequestHandler`` defaults to HTTP/1.0, which closes after every
+    response; the service speaks 1.1 so the client's connection — and its TLS
+    session — survives between slots.  (This test passes either way: http.client
+    reconnects transparently when it sees the close.  It is here as the
+    behavioural contract, not as the regression that explains the 2026-10-14
+    host-deployment failures — those were a box running a tree without the CA
+    option, and the log line now carries the error text that says so.)
+    """
+
+    import http.client
+
+    worker = FakeWorker()
+    with _LiveService(_service(worker)) as live:
+        host, port = live._server.server_address[:2]
+        connection = http.client.HTTPConnection(host, port, timeout=5)
+        try:
+            for attempt in range(3):
+                connection.request(
+                    "POST", "/mrrc-decode", body=bytes(360_000),
+                    headers={
+                        "Authorization": "Bearer secret",
+                        "X-MRRC-Config": live.config_header,
+                        "Content-Type": "application/octet-stream",
+                    },
+                )
+                response = connection.getresponse()
+                body = response.read()
+                assert response.status == 200, f"request {attempt} answered {response.status}"
+                assert decode_frame(body)["type"] == "decode_ok"
+        finally:
+            connection.close()
+
+    assert len(worker.seen) == 3

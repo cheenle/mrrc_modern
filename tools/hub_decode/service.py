@@ -195,6 +195,14 @@ def make_handler(service: DecodeService):
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "mrrc-decode/1"
+        # HTTP/1.1, because the box keeps the connection open between slots and
+        # BaseHTTPRequestHandler defaults to 1.0, which closes after every
+        # response.  Behind nginx (the hub deployment) this never showed — nginx
+        # holds its own upstream connection — but a direct host deployment
+        # lost every other escalation to a socket that was already closed
+        # (measured 2026-10-14 on ham.vlsc.net: cloud, cloud, unavailable,
+        # unavailable).
+        protocol_version = "HTTP/1.1"
 
         def do_POST(self):  # noqa: N802 — BaseHTTPRequestHandler's spelling
             if self.path != PATH:

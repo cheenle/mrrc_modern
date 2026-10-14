@@ -261,10 +261,12 @@ class CascadingDecoder:
                     self._remote.decode_path(slot_id, samples, DecodePath.IMPROVED),
                     timeout=self._cloud_deadline_s,
                 )
-            except (TimeoutError, CloudUnavailable):
+            except (TimeoutError, CloudUnavailable) as error:
                 # 云端失败是**预期内**的：断网、hub 忙、超时。只要它失败得快，
                 # 就照今天的原路走（预算守卫 + 本地深路径）；失败得慢就放弃
                 # 本槽的深路径 —— 那才是不会迟到的选择（见 CLOUD_FALLBACK_ALLOWED_S）。
+                # 日志**带上异常文本**：2026-10-14 现场一次部署后发现云端全部失败，
+                # 而旧的那句只写 "unavailable"，从日志分不清是证书、令牌还是超时。
                 self.cloud_fallback += 1
                 elapsed = self._clock() - started
                 if elapsed > CLOUD_FALLBACK_ALLOWED_S:
@@ -275,7 +277,8 @@ class CascadingDecoder:
                     )
                     return batch_fast
                 logger.info(
-                    "cloud escalation unavailable for slot %s; using the local path", slot_id
+                    "cloud escalation unavailable for slot %s (%s); using the local path",
+                    slot_id, error,
                 )
             except Exception:
                 self.cloud_fallback += 1

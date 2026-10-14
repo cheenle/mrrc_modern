@@ -165,8 +165,20 @@ zip -qr dist/mrrc_modern_src.zip . \
      "./.agnes/*" "./*.pyc" "./.DS_Store" "./SDD/.DS_Store" \
   "./FT710Android/*" "./vendor/ftdi/LibFT4222-v1.4.8.zip" "./yagi_*.jpg" \
   "./website/downloads/*" "./website/videos/*" "./website/__pycache__/*" \
-  "./promo/*" "./recordings/*" "./logs/*"
+  "./promo/*" "./recordings/*" "./logs/*" \
+  "./auth-tokens.json" "./mrrc_modern.env" "./recordings.json" \
+  "./qso.db" "./ft8/qso.db" "./atr1000_tuner.json" "./ft8/settings.json"
 ```
+
+**六条运行期状态文件（2026-10-14 实测加入）**：源码包会解到构建 VM 上，而工作树里带着
+开发者自己的状态 —— `auth-tokens.json`（30 天会话凭据）、`mrrc_modern.env`
+（`MRRC_WEB_PASSWORD` 与 `MRRC_CLOUD_TOKEN`）、`recordings.json`（录制索引）、
+`qso.db`（FT8 台站日志）、`atr1000_tuner.json`（天调学习库）、`ft8/settings.json`（台站设置）。
+它们对构建没有用处（`packaging/pyinstaller/*.spec` 的 `datas` 里没有它们），却会把开发者的
+凭据与私密数据摊在另一台机器上。同一天把同一批名字加进了 `packaging/common/stage-tree.sh`
+（见 SDD/14 的 V2.85 行 ⑫，和那里的 `test_runtime_state_is_never_staged`）；
+**`mem_channels.json` 不能排除**——两个 spec 都要用它当出厂记忆种子。
+`dist/mrrc_modern_src.zip`（2026-10-06 那份）实测含前三个，是个提醒，不是模板。
 
 **`./.worktrees/*` 必须排除（2026-10-06 实测）**：仓库里现在挂着 `feat/android-1.0.0` 与 `feat/w103d-box`
 两个 worktree，**合计 4.8 GB**（Gradle/构建产物）。漏掉这一条源码包是 **2.1 GB** 而不是 31 MB ——

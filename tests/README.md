@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2202 tests across 115 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2203 tests across 115 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-14, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -21,8 +21,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2202 |
-| Passed | 2201 (1 skipped) |
+| Total tests | 2203 |
+| Passed | 2202 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 (macOS, 2026-10-14) |
 | Execution time | ~1min (harness tests spawn CLI subprocesses) |
@@ -63,13 +63,13 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2200 above. Run it with:
+the 2203 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
 ```
 
-Measured 2026-10-14 (macOS): **781 passed, 2 skipped, 1 xfailed** (784 collected) — the DSP
+Measured 2026-10-14 (macOS): **782 passed, 2 skipped, 1 xfailed** (785 collected) — the DSP
 subset (`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
 and includes the fast-path / cascade regression the design
 (`docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`) pinned.

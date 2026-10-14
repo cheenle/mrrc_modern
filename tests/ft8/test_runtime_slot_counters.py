@@ -168,6 +168,42 @@ def test_the_counters_are_logged_every_slots_marks(caplog, tmp_path) -> None:
     assert "errors=1" in line, line
 
 
+def test_the_slot_count_in_the_line_is_the_slots_the_engine_saw(caplog, tmp_path) -> None:
+    """``after N slot(s)`` has to mean slots, not decodes.
+
+    ``runtime._slots_logged`` counts ``_on_batch`` calls, and ``_on_batch`` only
+    runs for a slot that produced a decode — a skipped slot (no ring data within
+    the grace window, ``orchestrator.py:261``) or an errored one never gets
+    there.  So the cadence counter is *definitionally* ``counters.decodes``, and
+    printing it under the name "slot(s)" reports a number the operator cannot
+    use to tell "the receiver heard nothing" from "the band was empty".  That is
+    the one question this line was added to answer.
+
+    The two numbers are made to differ here on purpose: if the line goes back to
+    printing ``_slots_logged``, it prints 20 where the engine saw 23.
+    """
+
+    counters = OrchestratorCounters(
+        slots_started=23, slots_skipped=3, decodes=20, fast_decodes=15,
+        escalations=5, deadline_misses=0, decode_errors=0,
+    )
+    rt = _runtime(tmp_path, counters)
+    every = runtime_mod._COUNTERS_EVERY_SLOTS
+
+    with caplog.at_level(logging.INFO, logger=runtime_mod.log.name):
+        for i in range(every):
+            rt._on_batch(_slot(slot_id=3_000 + i))
+
+    lines = _counter_lines(caplog)
+    assert len(lines) == 1, lines
+    line = lines[0]
+    assert "after 23 slot(s)" in line, (
+        f"the line says the wrong number of slots — the engine saw 23, and a "
+        f"skipped slot is exactly what this number exists to reveal: {line}"
+    )
+    assert "skipped=3" in line, f"skipped slots are invisible: {line}"
+
+
 def test_no_counters_line_before_the_interval(caplog, tmp_path) -> None:
     """The summary must not fire on every slot — that would be the per-slot line
     again, at a fifth of the readability."""

@@ -20,6 +20,7 @@ import os
 import shutil
 import stat
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -77,7 +78,7 @@ class ExclusionListTests(unittest.TestCase):
         entries = re.findall(r'--exclude\s+"([^"]+)"', text)
         self.assertGreaterEqual(len(entries), 40, f"only {len(entries)} exclude rules")
         for canary in ("/.env", "/recordings/", "/fleet/", "website/", "packaging/",
-                       "tests/", "qso.db"):
+                       "tests/", "qso.db", "auth-tokens.json", "mrrc_modern.env"):
             with self.subTest(canary=canary):
                 self.assertIn(canary, entries)
 
@@ -97,16 +98,74 @@ class ExclusionListTests(unittest.TestCase):
         )
         self.assertIn("qso.db", entries)
 
+    def test_runtime_state_is_never_staged(self):
+        """Every file ``server.py`` writes at runtime must survive an update.
+
+        The paths are not arbitrary: ``_runtime_dir()`` is the *install directory*
+        in a packaged build, so on a box they are ``$MRRC_HOME/...`` — which is
+        exactly where the staged tree lands.  A local-directory ``mrrc-update``
+        (``MRRC_UPDATE_SRC``, the documented way to put an unreleased branch on a
+        box) stages a developer's working tree, and a developer's working tree
+        holds that developer's own state:
+
+        * ``auth-tokens.json`` (``MEM_FILE.parent``, ``server.py:628``) — live
+          30-day session tokens.  Staging it logs every operator out *and* makes
+          the developer's cookies valid on a box that can key a transmitter.
+        * ``mrrc_modern.env`` (``_config_file_path()``, ``server.py:3583``) —
+          ``MRRC_WEB_PASSWORD`` (the only door when bound to ``0.0.0.0``) and
+          ``MRRC_CLOUD_TOKEN``.  This one reaches further than the updater: the
+          list is also what both *image* builders stage, so a secret in the
+          build tree ships inside the artifact.
+        * ``recordings.json`` (``RECORDINGS_INDEX``, ``server.py:634``) — the
+          recording index; ``/recordings/`` was excluded but the file was not.
+        * ``ft8/settings.json`` (``server.py:3104``) — station settings.
+
+        The test runs the real stager rather than reading the file as text: a
+        regex over ``--exclude`` proves a rule was *written*, not that rsync
+        honours it, and a rule anchored to the wrong place fails silently.  The
+        control file is what keeps a stager that copies nothing from passing.
+        """
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        src, dst = root / "src", root / "dst"
+        src.mkdir()
+        state = (
+            "auth-tokens.json", "mem_channels.json", "mrrc_modern.env",
+            "recordings.json", "atr1000_tuner.json", "qso.db",
+            "ft8/settings.json", "ft8/qso.db", "env/mrrc.env",
+        )
+        for relative in state + ("server.py",):  # server.py = the control
+            path = src / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x", encoding="utf-8")
+        (src / "recordings").mkdir(parents=True, exist_ok=True)
+        (src / "recordings" / "qso.mp3").write_text("x", encoding="utf-8")
+
+        subprocess.run(["bash", str(STAGE_TREE), str(src), str(dst)],
+                       check=True, capture_output=True)
+
+        for relative in state:
+            with self.subTest(state=relative):
+                self.assertFalse((dst / relative).exists(),
+                                 f"{relative} was staged — it is per-box state")
+        with self.subTest(state="recordings/qso.mp3"):
+            self.assertFalse((dst / "recordings" / "qso.mp3").exists())
+        with self.subTest(control="server.py"):
+            self.assertTrue((dst / "server.py").is_file(),
+                            "the stager copied nothing — the rules above prove nothing")
+
     def test_the_exclusion_list_is_byte_identical_to_what_shipped(self):
-        """The list as of 2026-10-11, frozen: the refactor moved it, and the two
-        edits since then (a root-anchored ``/fleet/``, then ``qso.db``) are written
-        down here."""
+        """The list as of 2026-10-11, frozen: the refactor moved it, and the three
+        edits since then (a root-anchored ``/fleet/``, then ``qso.db``, then the
+        five per-box state files found leaking on 2026-10-14) are written down
+        here."""
         expected = [
             ".git/", "venv/", ".venv/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
             ".agents/", "docs/", "SDD/", "packaging/", "macos/", "windows/",
             "__pycache__/", "*.pyc", ".DS_Store", "atr1000_tuner.json",
             "qso.db",
+            "auth-tokens.json", "mrrc_modern.env", "recordings.json",
+            "ft8/settings.json", "/env/",
             "/fleet/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",
             "/.worktrees/", "/.superpowers/", "/.agnes/", "/.claude/",

@@ -395,6 +395,9 @@ class Ft8Runtime:
                  getattr(batch, "path", "?"),
                  " escalated" if getattr(batch, "escalated", False) else "",
                  " late" if getattr(slot_decode, "late", False) else "")
+        # Counts batches (= decodes), NOT slots: a skipped or errored slot never
+        # reaches this line.  It is the log cadence only — the slot total the
+        # operator reads comes from ``counters.slots_started`` (see _log_counters).
         self._slots_logged += 1
         if self._slots_logged % _COUNTERS_EVERY_SLOTS == 0:
             self._log_counters()
@@ -445,11 +448,22 @@ class Ft8Runtime:
             return
         counters = orchestrator.counters
         rate = (100.0 * counters.escalations / counters.decodes) if counters.decodes else 0.0
+        # ``slots_started``, not ``self._slots_logged``: the latter counts
+        # ``_on_batch`` calls, i.e. slots that produced a decode, so it always
+        # equals ``decodes`` — printing it as "slot(s)" reports a number that
+        # cannot answer the question this line exists for ("is the receiver
+        # hearing anything?"), because a skipped slot (no data within the grace
+        # window) never reaches ``_on_batch`` and leaves no trace.  ``skipped``
+        # is what makes that visible; 2026-10-14, a field reading of
+        # ``decodes == N`` was briefly read as "no slots were skipped", which the
+        # line could not support.  The cadence trigger stays on the batch count
+        # on purpose — it is a log cadence, not a field the operator reads.
         log.info(
             "decode counters after %d slot(s): decodes=%d fast=%d "
-            "escalations=%d (%.1f%%) late=%d errors=%d",
-            self._slots_logged, counters.decodes, counters.fast_decodes,
-            counters.escalations, rate, counters.deadline_misses, counters.decode_errors,
+            "escalations=%d (%.1f%%) late=%d errors=%d skipped=%d",
+            counters.slots_started, counters.decodes, counters.fast_decodes,
+            counters.escalations, rate, counters.deadline_misses,
+            counters.decode_errors, counters.slots_skipped,
         )
 
     def _slot_started(self, slot_id: int) -> None:

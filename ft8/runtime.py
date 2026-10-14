@@ -356,6 +356,20 @@ class Ft8Runtime:
                 return None
         return self._worked
 
+    def _escalation_was_cloud(self, batch: Any) -> bool:
+        """Whether this escalated batch was answered by the hub rather than the box.
+
+        A separate marker token rather than a suffix on ``escalated``: the field
+        greps that word and the counters line, and changing their shape would
+        break every one of those greps (the 2026-10-14 ones) for a fact that
+        only became interesting when the cloud channel existed.
+        """
+
+        if not getattr(batch, "escalated", False):
+            return False
+        cascade = getattr(self, "_cascade", None)
+        return getattr(cascade, "last_deep_path", "") == "cloud"
+
     def _on_batch(self, slot_decode: Any) -> None:
         """One SlotDecode → the ``{slot_id, messages:[…]}`` batch the UI renders.
 
@@ -423,11 +437,12 @@ class Ft8Runtime:
         # 从发布偏移去推「这一槽升级了吗」，而这条推断已经被证伪过两次（原生库 banner
         # 不是深路径标记；空槽也慢，偏移本身还在漂）。
         batch = getattr(slot_decode, "batch", None)
-        log.info("slot %s: %d message(s) from %d result(s) [%s%s%s]",
+        log.info("slot %s: %d message(s) from %d result(s) [%s%s%s%s]",
                  getattr(slot_decode, "slot_id", "?"), len(views),
                  len(getattr(batch, "results", ()) or ()),
                  getattr(batch, "path", "?"),
                  " escalated" if getattr(batch, "escalated", False) else "",
+                 " cloud" if self._escalation_was_cloud(batch) else "",
                  " late" if getattr(slot_decode, "late", False) else "")
         # Counts batches (= decodes), NOT slots: a skipped or errored slot never
         # reaches this line.  It is the log cadence only — the slot total the

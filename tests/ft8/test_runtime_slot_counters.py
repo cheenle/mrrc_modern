@@ -216,3 +216,38 @@ def test_no_counters_line_before_the_interval(caplog, tmp_path) -> None:
             rt._on_batch(_slot(slot_id=2_000 + i))
 
     assert _counter_lines(caplog) == []
+
+
+def test_a_cloud_escalation_is_marked_cloud_in_the_log(caplog, tmp_path) -> None:
+    """The field question "is the cloud path actually answering?" must be greppable.
+
+    ``cloud_ok`` lives in ``/api/ft8/engine/stats``, which needs a session
+    cookie; the log line does not.  The marker is a **separate token** so the
+    existing greps for ``escalated`` keep working unchanged.
+    """
+
+    from types import SimpleNamespace
+
+    rt = _runtime(tmp_path)
+    rt._cascade = SimpleNamespace(last_deep_path="cloud")
+
+    with caplog.at_level(logging.INFO, logger=runtime_mod.log.name):
+        rt._on_batch(_slot(escalated=True, path=DecodePath.IMPROVED))
+
+    markers = _markers(_slot_lines(caplog)[-1])
+    assert "escalated" in markers, markers
+    assert "cloud" in markers, markers
+
+
+def test_a_local_escalation_carries_no_cloud_marker(caplog, tmp_path) -> None:
+    from types import SimpleNamespace
+
+    rt = _runtime(tmp_path)
+    rt._cascade = SimpleNamespace(last_deep_path="local")
+
+    with caplog.at_level(logging.INFO, logger=runtime_mod.log.name):
+        rt._on_batch(_slot(escalated=True, path=DecodePath.IMPROVED))
+
+    markers = _markers(_slot_lines(caplog)[-1])
+    assert "escalated" in markers, markers
+    assert "cloud" not in markers, markers

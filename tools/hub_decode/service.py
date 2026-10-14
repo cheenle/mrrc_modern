@@ -95,14 +95,22 @@ class DecodeService:
 
     # -- request handling --------------------------------------------------
 
+    def authorized(self, authorization: str | None) -> bool:
+        """Whether this caller may decode at all.
+
+        Exposed separately so the HTTP layer can refuse **before** reading a
+        360 KB body: an unauthenticated client does not get to decide how much
+        this process reads.
+        """
+
+        return authorization == f"Bearer {self._token}"
+
     def handle(
         self, frame: dict[str, object], pcm: bytes, *, authorization: str | None
     ) -> tuple[int, bytes]:
         """Answer one request: ``(status, body)``; the body is empty unless 200."""
 
-        if authorization != f"Bearer {self._token}":
-            # Before anything else: an unauthenticated caller does not get to
-            # decide how much this process reads.
+        if not self.authorized(authorization):
             return 401, b""
         if len(pcm) != SLOT_PCM_BYTES:
             return 400, b""
@@ -189,6 +197,11 @@ def make_handler(service: DecodeService):
         def do_POST(self):  # noqa: N802 — BaseHTTPRequestHandler's spelling
             if self.path != PATH:
                 self.send_error(404)
+                return
+            if not service.authorized(self.headers.get("Authorization")):
+                # Before the body: see DecodeService.authorized.
+                self.close_connection = True
+                self.send_error(401)
                 return
             length = int(self.headers.get("Content-Length") or 0)
             if length != SLOT_PCM_BYTES:

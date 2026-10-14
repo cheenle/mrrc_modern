@@ -159,3 +159,101 @@ def test_a_wrong_class_of_frame_is_rejected_before_the_worker() -> None:
     )
     assert status == 400
     assert worker.seen == []
+
+
+# ── through a real socket: the handler is code too ───────────────────────
+
+
+class _LiveService:
+    """The service behind a real ThreadingHTTPServer on a loopback port."""
+
+    def __init__(self, service) -> None:
+        from http.server import ThreadingHTTPServer
+
+        self._service = service
+        self._server = ThreadingHTTPServer(
+            ("127.0.0.1", 0), _load_service().make_handler(service)
+        )
+        threading.Thread(target=self._server.serve_forever, daemon=True).start()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self._server.shutdown()
+        self._server.server_close()
+
+    def post(self, body: bytes, *, headers: dict[str, str]):
+        import http.client
+        import json as _json
+
+        host, port = self._server.server_address[:2]
+        connection = http.client.HTTPConnection(host, port, timeout=5)
+        try:
+            connection.request("POST", "/mrrc-decode", body=body, headers=headers)
+            response = connection.getresponse()
+            return response.status, response.read()
+        finally:
+            connection.close()
+
+    @property
+    def config_header(self) -> str:
+        import base64
+        import json as _json
+
+        return base64.b64encode(
+            _json.dumps(_frame()).encode("utf-8")
+        ).decode("ascii")
+
+
+def test_over_a_socket_a_valid_request_returns_decode_ok() -> None:
+    worker = FakeWorker()
+    with _LiveService(_service(worker)) as live:
+        status, body = live.post(
+            bytes(360_000),
+            headers={
+                "Authorization": "Bearer secret",
+                "X-MRRC-Config": live.config_header,
+                "Content-Type": "application/octet-stream",
+            },
+        )
+
+    assert status == 200
+    assert decode_frame(body)["type"] == "decode_ok"
+    assert worker.seen[0]["config"]["threads"] == 1
+
+
+def test_over_a_socket_no_token_is_401_even_with_a_full_body() -> None:
+    worker = FakeWorker()
+    with _LiveService(_service(worker)) as live:
+        status, _ = live.post(
+            bytes(360_000),
+            headers={"X-MRRC-Config": live.config_header},
+        )
+
+    assert status == 401
+    assert worker.seen == []
+
+
+def test_over_a_socket_a_wrong_length_is_400() -> None:
+    worker = FakeWorker()
+    with _LiveService(_service(worker)) as live:
+        status, _ = live.post(
+            bytes(10),
+            headers={"Authorization": "Bearer secret", "X-MRRC-Config": live.config_header},
+        )
+
+    assert status == 400
+    assert worker.seen == []
+
+
+def test_over_a_socket_a_malformed_config_header_is_400() -> None:
+    worker = FakeWorker()
+    with _LiveService(_service(worker)) as live:
+        status, _ = live.post(
+            bytes(360_000),
+            headers={"Authorization": "Bearer secret", "X-MRRC-Config": "not base64!"},
+        )
+
+    assert status == 400
+    assert worker.seen == []

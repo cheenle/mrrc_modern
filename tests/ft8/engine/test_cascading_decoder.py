@@ -338,3 +338,79 @@ def test_a_slow_cloud_failure_forfeits_the_local_retry() -> None:
         "the local deep path must not run after a slow cloud failure"
     )
     assert {r.text for r in out.results} == {"CQ AAA"}
+
+
+def _rf(text: str, frequency: float, snr: int = -18) -> DecodeResult:
+    """A result at its own frequency: merge keys on (freq, dt), so same-frequency
+    fixtures are one signal, whatever their text (see the merge tests above)."""
+
+    return DecodeResult(1, 0.0, snr, 0.1, frequency, text, 0, 0.0, 0)
+
+
+def test_the_fast_answer_is_published_before_the_cloud_is_asked() -> None:
+    """Two-stage publication: the operator sees the band ~1.5 s earlier.
+
+    The order is the whole point — a provisional published *after* the deep
+    answer would be a duplicate, not a latency win — so the test asserts the
+    sequence of side effects, not just their presence.
+    """
+
+    order: list[str] = []
+    fast = _b(DecodePath.FAST, _rf("CQ AAA", 900.0))
+    deep = _b(DecodePath.IMPROVED, _rf("CQ AAA", 900.0), _rf("CQ BBB", 1200.0))
+    inner = PathAwareFake({DecodePath.FAST: fast, DecodePath.IMPROVED: deep})
+
+    class Remote:
+        async def decode_path(self, slot_id, samples, path, *, threads=None):
+            order.append("cloud")
+            return _b(DecodePath.IMPROVED, _rf("CQ CCC", 1500.0))
+
+    decoder = _qso_cascade(
+        inner, Remote(),
+        provisional_sink=lambda slot_id, batch: order.append(f"provisional:{slot_id}"),
+    )
+    out = asyncio.run(decoder.decode(7, b"\x00" * 360_000))
+
+    assert order == ["provisional:7", "cloud"]
+    assert decoder.provisional_published == 1
+    # The final batch is the union of what actually ran: the fast pass and the
+    # cloud answer.  The local deep pass is skipped when the cloud answers, which
+    # is why "CQ BBB" (the local fixture) is absent.
+    assert {r.text for r in out.results} == {"CQ AAA", "CQ CCC"}
+
+
+def test_nothing_is_published_when_the_slot_does_not_escalate() -> None:
+    seen: list[str] = []
+    fast = _b(DecodePath.FAST, _r("CQ AAA", snr=-5))
+    inner = PathAwareFake({DecodePath.FAST: fast})
+    decoder = CascadingDecoder(
+        inner, CascadePolicy(escalate_on_weak=False),
+        cutoff=2.5, boundary_epoch_for=lambda s: 100.0, clock=lambda: 100.0,
+        provisional_sink=lambda slot_id, batch: seen.append(slot_id),
+    )
+    asyncio.run(decoder.decode(1, b"\x00" * 360_000))
+    assert seen == []
+
+
+def test_a_failing_sink_is_retired_instead_of_breaking_the_decode() -> None:
+    """A courtesy must never cost the job — the exact shape of the 2026-10-15 defect."""
+
+    calls: list[int] = []
+
+    def sink(slot_id, batch):
+        calls.append(slot_id)
+        raise RuntimeError("the UI is not listening")
+
+    decoder = _qso_cascade(
+        PathAwareFake({
+            DecodePath.FAST: _b(DecodePath.FAST, _rf("CQ AAA", 900.0)),
+            DecodePath.IMPROVED: _b(DecodePath.IMPROVED, _rf("CQ BBB", 1200.0)),
+        }),
+        None,
+        provisional_sink=sink,
+    )
+    out = asyncio.run(decoder.decode(1, b"\x00" * 360_000))
+
+    assert {r.text for r in out.results} == {"CQ AAA", "CQ BBB"}
+    assert calls == [1]
+    assert decoder._provisional_sink is None, "a broken sink must not be called again"

@@ -145,6 +145,9 @@ class Ft8Runtime:
         self._worked: Any = None
         self._worked_dirty = True
         self._dumped_slots = 0
+        # Fast answers published while a deep answer was still in flight.  The
+        # slot counter is untouched by design: a slot is decoded once.
+        self.provisional_published = 0
         # 本进程已交付的时隙数，只用来决定累计计数器那一行的节奏。
         self._slots_logged = 0
         self._wf_logged = False
@@ -376,7 +379,19 @@ class Ft8Runtime:
         Mirrors MRRC-FT8's ``decode_message_view`` + ``decode_highlight``:
         call/grid/is_cq/to_me/mine for the row, DXCC entity and the JTDX-style
         highlight category when a worked index is available.
+
+        A slot can arrive twice — ``provisional`` (the fast answer, published
+        while the deep answer is still in flight) and then complete.  Only the
+        complete one is counted and logged as the slot's decode, because a slot
+        is decoded once whatever it is published as.  The UI replaces rows by
+        ``slot_id`` (``state.js: applyDecodeBatch``), so the later publication is
+        a correction rather than a duplicate.
         """
+
+        if getattr(slot_decode, "provisional", False):
+            self.provisional_published += 1
+            self._publish(self._decode_frame(slot_decode))
+            return
 
         # Task 14:「深度解码本槽」是一次性动作。批次回来就说明这一槽的 decode
         # 已经结束，语义正好是「只对这一槽有效」，所以在这里清回 False。
@@ -384,6 +399,43 @@ class Ft8Runtime:
         # 每槽稳定多付 ~2.2 s 深解码 —— 一个「按一次、此后永久变慢」的按钮。
         # 放在函数最前面：即便下面任何一行抛异常，标志也已经清掉。
         self._deep_decode_requested = False
+
+        messages = getattr(slot_decode, "messages", ())
+        if not messages and self._dumped_slots < 2:
+            # Field diagnosis: keep the exact 12 kHz slot the decoder rejected.
+            try:
+                raw = self.ring.read_slot(getattr(slot_decode, "slot_id", -1)) if self.ring else None
+                if raw:
+                    path = Path(f"/tmp/ft8-slot-{getattr(slot_decode, 'slot_id', 0)}.raw")
+                    path.write_bytes(raw)
+                    self._dumped_slots += 1
+                    log.info("dumped rejected slot audio to %s (%d bytes)", path, len(raw))
+            except Exception:
+                log.debug("slot dump failed", exc_info=True)
+
+        frame = self._decode_frame(slot_decode)
+        # 路径与两个标记必须进这一行：深路径**成功**的升级在 cascade.py 里一个字都不
+        # 记（那里只记拒绝），`late` 更是只活在 WebSocket 帧里。少了它们，现场就只能
+        # 从发布偏移去推「这一槽升级了吗」，而这条推断已经被证伪过两次（原生库 banner
+        # 不是深路径标记；空槽也慢，偏移本身还在漂）。
+        batch = getattr(slot_decode, "batch", None)
+        log.info("slot %s: %d message(s) from %d result(s) [%s%s%s%s]",
+                 getattr(slot_decode, "slot_id", "?"), len(frame["messages"]),
+                 len(getattr(batch, "results", ()) or ()),
+                 getattr(batch, "path", "?"),
+                 " escalated" if getattr(batch, "escalated", False) else "",
+                 " cloud" if self._escalation_was_cloud(batch) else "",
+                 " late" if getattr(slot_decode, "late", False) else "")
+        # Counts batches (= decodes), NOT slots: a skipped or errored slot never
+        # reaches this line.  It is the log cadence only — the slot total the
+        # operator reads comes from ``counters.slots_started`` (see _log_counters).
+        self._slots_logged += 1
+        if self._slots_logged % _COUNTERS_EVERY_SLOTS == 0:
+            self._log_counters()
+        self._publish(frame)
+
+    def _decode_frame(self, slot_decode: Any) -> dict[str, Any]:
+        """Build the wire frame for one batch — shared by both publications."""
 
         from ft8.engine.bands import band_from_freq_hz
         from ft8.engine.dxcc import decode_highlight, get_cty_database
@@ -421,35 +473,6 @@ class Ft8Runtime:
             )
             views.append(view)
 
-        if not views and self._dumped_slots < 2:
-            # Field diagnosis: keep the exact 12 kHz slot the decoder rejected.
-            try:
-                raw = self.ring.read_slot(getattr(slot_decode, "slot_id", -1)) if self.ring else None
-                if raw:
-                    path = Path(f"/tmp/ft8-slot-{getattr(slot_decode, 'slot_id', 0)}.raw")
-                    path.write_bytes(raw)
-                    self._dumped_slots += 1
-                    log.info("dumped rejected slot audio to %s (%d bytes)", path, len(raw))
-            except Exception:
-                log.debug("slot dump failed", exc_info=True)
-        # 路径与两个标记必须进这一行：深路径**成功**的升级在 cascade.py 里一个字都不
-        # 记（那里只记拒绝），`late` 更是只活在 WebSocket 帧里。少了它们，现场就只能
-        # 从发布偏移去推「这一槽升级了吗」，而这条推断已经被证伪过两次（原生库 banner
-        # 不是深路径标记；空槽也慢，偏移本身还在漂）。
-        batch = getattr(slot_decode, "batch", None)
-        log.info("slot %s: %d message(s) from %d result(s) [%s%s%s%s]",
-                 getattr(slot_decode, "slot_id", "?"), len(views),
-                 len(getattr(batch, "results", ()) or ()),
-                 getattr(batch, "path", "?"),
-                 " escalated" if getattr(batch, "escalated", False) else "",
-                 " cloud" if self._escalation_was_cloud(batch) else "",
-                 " late" if getattr(slot_decode, "late", False) else "")
-        # Counts batches (= decodes), NOT slots: a skipped or errored slot never
-        # reaches this line.  It is the log cadence only — the slot total the
-        # operator reads comes from ``counters.slots_started`` (see _log_counters).
-        self._slots_logged += 1
-        if self._slots_logged % _COUNTERS_EVERY_SLOTS == 0:
-            self._log_counters()
         slot_id = int(getattr(slot_decode, "slot_id", 0))
         dispatched = getattr(slot_decode, "dispatched_epoch", None)
         finished = getattr(slot_decode, "finished_epoch", None)
@@ -469,16 +492,54 @@ class Ft8Runtime:
         for view in views:
             view["finished_epoch"] = finished
             view["finished_after_slot_end_s"] = timing.get("finished_after_slot_end_s")
-        frame = {
+        return {
             "type": "decodes",
             "slot_id": slot_id,
             "late": bool(getattr(slot_decode, "late", False)),
+            "provisional": bool(getattr(slot_decode, "provisional", False)),
             "timing": timing,
             "messages": views,
         }
+
+    def _publish(self, frame: dict[str, Any]) -> None:
+        """Hand one frame to the UI, remembering it for reconnect replay."""
+
         self.recent_decodes.append(frame)
         if self._on_decode is not None:
             self._on_decode(frame)
+
+    def set_dial_frequency(self, freq_hz: int | None) -> None:
+        """The platform tells the runtime where the dial is (band for DXCC)."""
+
+        self._dial_freq_hz = int(freq_hz) if freq_hz else None
+
+    def _worked_index(self):
+        """Lazily built WorkedIndex (rebuilt when the repository says dirty)."""
+
+        from ft8.engine.dxcc import get_cty_database, worked_index
+
+        if self._worked is None or self._worked_dirty:
+            try:
+                self._worked = worked_index(self.repository, get_cty_database())
+                self._worked_dirty = False
+            except Exception:
+                log.debug("worked index unavailable", exc_info=True)
+                return None
+        return self._worked
+
+    def _escalation_was_cloud(self, batch: Any) -> bool:
+        """Whether this escalated batch was answered by the hub rather than the box.
+
+        A separate marker token rather than a suffix on ``escalated``: the field
+        greps that word and the counters line, and changing their shape would
+        break every one of those greps (the 2026-10-14 ones) for a fact that
+        only became interesting when the cloud channel existed.
+        """
+
+        if not getattr(batch, "escalated", False):
+            return False
+        cascade = getattr(self, "_cascade", None)
+        return getattr(cascade, "last_deep_path", "") == "cloud"
 
     def _log_counters(self) -> None:
         """累计计数器进日志 —— 这是 ``/api/ft8/engine/stats`` 的日志版。

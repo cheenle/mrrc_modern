@@ -129,6 +129,11 @@ class SlotDecode:
     late: bool
     batch: DecodeBatch
     messages: tuple[SlotMessage, ...]
+    # True for the fast-path answer published while the deep answer is still in
+    # flight (spec 2026-10-15, two-stage).  The slot is published twice and the
+    # second publication replaces the first (state.js keys rows by slot_id), so
+    # the operator sees the band ~1.5 s earlier and the complete list later.
+    provisional: bool = False
 
 
 @dataclass(slots=True)
@@ -195,6 +200,13 @@ class Orchestrator:
         self._sleep_until = sleep_until or self._asyncio_sleep_until
         self._on_slot_start = on_slot_start
         self._on_decode = on_decode
+        # Two-stage publication is opt-in on the decoder: a plain SupervisorDecoder
+        # has no fast answer to publish early, and a decoder that does gets the
+        # orchestrator's own formatter (so a provisional row is identical to a
+        # final one, minus the sequencer and the counters).
+        sink = getattr(decoder, "set_provisional_sink", None)
+        if sink is not None:
+            sink(self._on_provisional)
         self._on_decode_error = on_decode_error
         self.counters = OrchestratorCounters()
         self._running = False
@@ -296,6 +308,35 @@ class Orchestrator:
             if now >= deadline:
                 return None
             await self._sleep_until(min(now + self._slot_poll_interval, deadline))
+
+    def _on_provisional(self, slot_id: int, batch: DecodeBatch) -> None:
+        """Publish the fast answer while the deep one is still running.
+
+        Deliberately *not* the full slot path: no counters (a slot is decoded
+        once, whatever it is published as) and **no sequencer** — the state
+        machine keeps seeing exactly one batch per slot, the complete one, so
+        latency improves without the sequencing logic learning a new timetable.
+        The UI replaces rows by slot_id, so the later, fuller publication is a
+        correction rather than a duplicate.
+        """
+
+        if self._on_decode is None:
+            return
+        finished = self._clock()
+        messages = tuple(
+            SlotMessage(result, parse_message(result.text)) for result in batch.results
+        )
+        self._on_decode(
+            SlotDecode(
+                slot_id=slot_id,
+                dispatched_epoch=finished,
+                finished_epoch=finished,
+                late=False,
+                batch=batch,
+                messages=messages,
+                provisional=True,
+            )
+        )
 
     async def _slot_ended(self, slot_id: int, boundary_epoch: float, samples: bytes) -> None:
         if len(samples) != SLOT_SAMPLES_NBYTES:

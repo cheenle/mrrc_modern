@@ -184,6 +184,7 @@ class CascadingDecoder:
         # MRRC_FT8_CLOUD_DECODE_URL 的盒子的状态。
         remote: object | None = None,
         cloud_deadline_s: float = 2.5,
+        provisional_sink: Callable[[int, DecodeBatch], None] | None = None,
     ) -> None:
         if deep_threads < 1:
             raise ValueError("deep_threads must be positive")
@@ -202,6 +203,8 @@ class CascadingDecoder:
         self._requested = requested or (lambda: False)
         self._remote = remote
         self._cloud_deadline_s = float(cloud_deadline_s)
+        self._provisional_sink = provisional_sink
+        self.provisional_published = 0
         self.deadline_risk = 0
         # 观测：云端成功次数、落回本地次数、最近一次云端墙上耗时。与
         # deadline_risk 并列，由 runtime.cascade_stats() 与每槽日志读出。
@@ -210,6 +213,29 @@ class CascadingDecoder:
         self.cloud_seconds = 0.0
         # 本槽的深路径是谁算的（"cloud" / "local" / 尚无），供日志行分辨。
         self.last_deep_path = ""
+
+    def set_provisional_sink(self, sink: Callable[[int, DecodeBatch], None] | None) -> None:
+        """Set (or clear) where the fast answer goes while the deep one runs."""
+
+        self._provisional_sink = sink
+
+    def _publish_provisional(self, slot_id: int, batch: DecodeBatch) -> None:
+        """Hand the fast batch to the UI early — and never let that break decoding.
+
+        The publication is a courtesy, the decode is the job: this used to be the
+        shape of a defect (a diagnostic that raised and silently downgraded every
+        slot to the local path), so the sink is guarded and a failure retires it.
+        """
+
+        sink = self._provisional_sink
+        if sink is None:
+            return
+        try:
+            sink(slot_id, batch)
+            self.provisional_published += 1
+        except Exception:  # noqa: BLE001 - see above
+            logger.warning("provisional publication failed; disabling it", exc_info=True)
+            self._provisional_sink = None
 
     def set_policy(self, policy: CascadePolicy) -> None:
         """替换升级策略，从下一个时隙起生效。
@@ -253,6 +279,11 @@ class CascadingDecoder:
             requested=self._requested(),
         ):
             return batch_fast
+
+        # The operator sees the fast answer now; the deep one replaces it when it
+        # lands (the UI keys rows by slot, so the second publication corrects the
+        # first instead of duplicating it).  ~1.5 s earlier, measured.
+        self._publish_provisional(slot_id, batch_fast)
 
         if self._remote is not None:
             started = self._clock()

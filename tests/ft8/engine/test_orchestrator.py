@@ -660,3 +660,32 @@ def test_fallback_slot_counts_as_neither_fast_nor_escalated() -> None:
     assert counters.decodes == 2
     assert counters.fast_decodes == 0
     assert counters.escalations == 0
+
+
+def test_a_provisional_batch_reaches_the_ui_but_never_the_sequencer() -> None:
+    """The fast answer is published early; the state machine keeps its timetable.
+
+    The sequencer is what keys a transmitter, and it is fed exactly one batch per
+    slot — the complete one.  A partial batch reaching it could advance a QSO on
+    half a slot's decodes, so the two-stage publication stops at the UI.
+    """
+
+    from ft8.core.models import DecodeBatch, DecodePath, DecodeResult
+
+    harness = Harness()
+    fed: list[object] = []
+    harness.orchestrator._sequencer.on_message = lambda *a, **k: fed.append(a)  # type: ignore[method-assign]
+    batch = DecodeBatch(
+        7,
+        DecodePath.FAST,
+        (DecodeResult(7, 0.0, -12, 0.2, 1200.0, "CQ W9XYZ EM57", 0, 0.0, 0),),
+        False,
+        0.2,
+    )
+
+    harness.orchestrator._on_provisional(7, batch)
+
+    assert [event.provisional for event in harness.events] == [True]
+    assert harness.events[0].slot_id == 7
+    assert [message.result.text for message in harness.events[0].messages] == ["CQ W9XYZ EM57"]
+    assert fed == [], "a provisional answer must not be able to key anything"

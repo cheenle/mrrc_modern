@@ -60,7 +60,7 @@ republished. None is a defect in the code under test here.
 ## FT8 Suite (pytest)
 
 The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separate,
-pytest-only** suite of 56 modules under `tests/ft8/`. It is written in the pytest
+pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
 the 2200 above. Run it with:
@@ -69,7 +69,7 @@ the 2200 above. Run it with:
 .venv/bin/python -m pytest tests/ft8 -q
 ```
 
-Measured 2026-10-14 (macOS): **776 passed, 2 skipped, 1 xfailed** (779 collected) — the DSP
+Measured 2026-10-14 (macOS): **781 passed, 2 skipped, 1 xfailed** (784 collected) — the DSP
 subset (`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
 and includes the fast-path / cascade regression the design
 (`docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`) pinned.
@@ -83,7 +83,14 @@ whole symbol-spectrum per thread. It is measured **inside the Worker** — the p
 process CPU would fold in the audio and spectrum threads, and `RUSAGE_CHILDREN` does not
 update for a child that is still alive. The opt-in I9 benchmark
 (`tests/ft8/dsp/test_i9_benchmark.py`, `MRRC_FT8_I9_BENCHMARK=1`) prints the full
-threads × CPU matrix and is the harness 第 0 梯队 of that analysis asked for.
+threads × CPU matrix and is the harness 第 0 梯队 of that analysis asked for. That matrix
+cannot be run **on a production box** — `packaging/common/stage-tree.sh` excludes `tests/`,
+`tools/` and `dev_tools/`, so there is neither a test tree nor pytest there — which is what
+`tools/ft8/i9_thread_matrix.py` and `tests/ft8/test_i9_field_twin.py` are for: the twin
+reproduces the benchmark from numpy plus the installed `ft8.core.*`, and the test holds it to
+production's working directory (the vendored decoder resolves `ALLCALL7.TXT` against the
+*process cwd*, `ft8/dsp/vendor/prog_args.f90:4`). Field results:
+`docs/ft8-w103d-phase-a-baseline.md`.
 
 ## Test Modules
 

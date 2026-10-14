@@ -22,11 +22,10 @@ entire symbol-spectrum per thread, so more threads means more total CPU while th
 stops falling.  `docs/ft8-w103d-decode-perf-analysis.md` 第 0 梯队 (section 4) and section 6
 ask for exactly this column.
 
-Usage (on the box, with the app root's own venv):
+Usage (on the box, with the app root's own venv — no ``cd`` needed, see ``enter_app_root``):
 
-    cd /opt/mrrc_modern
     sudo -u mrrc env OMP_STACKSIZE=10M \\
-        venv/bin/python /tmp/i9_thread_matrix.py --app-root /opt/mrrc_modern
+        /opt/mrrc_modern/venv/bin/python /tmp/i9_thread_matrix.py --app-root /opt/mrrc_modern
 
 This runs tens of decodes back to back and will peg every core of the box for the duration
 (roughly 1-3 minutes on a W103D).  Do not run it while the operator is transmitting.
@@ -210,6 +209,28 @@ def run_matrix(
     return runs
 
 
+def enter_app_root(path: str) -> str:
+    """Move the process to where production runs it, and make ``ft8`` importable from there.
+
+    The working directory is not cosmetic.  The vendored decoder resolves its callsign
+    database as ``trim(share_dir)//'/ALLCALL7.TXT'`` with ``share_dir = '.'``
+    (``ft8/dsp/vendor/prog_args.f90:4``) — relative to the **process cwd** — and the service
+    unit pins ``WorkingDirectory=$MRRC_HOME`` (``packaging/common/mrrc-service-layer.sh:200``),
+    so production always finds it.  Measured 2026-10-14: starting elsewhere costs nothing on
+    the clock (0.193 s / 0.452 s either way, profile 3, threads 3), but the decoder then runs
+    without that database and says so in one line the pytest harness never prints.  The twin's
+    claim is "the deployed decoder", so it starts where the deployed decoder starts.
+
+    A relative ``--app-root`` is resolved *before* the chdir, so ``.`` means where the operator
+    typed it rather than where a previous call left the process.
+    """
+    root = os.path.abspath(path)
+    os.chdir(root)
+    if root not in sys.path:
+        sys.path.insert(0, root)
+    return root
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--app-root", default="/opt/mrrc_modern",
@@ -223,9 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", default="", help="write the raw artifact here")
     args = parser.parse_args(argv)
 
-    app_root = os.path.abspath(args.app_root)
-    if app_root not in sys.path:
-        sys.path.insert(0, app_root)
+    app_root = enter_app_root(args.app_root)
 
     from ft8.core.binding import CoreBinding
     from ft8.core.supervisor import WorkerSupervisor

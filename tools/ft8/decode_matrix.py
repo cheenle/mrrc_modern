@@ -74,7 +74,33 @@ SENSITIVITY_MATRIX = (
     Config("p1c2lt-s3", "improved", 1, 2, sensitivity=3, low_threshold=True),
 )
 
-MATRICES = {"default": DEFAULT_MATRIX, "sensitivity": SENSITIVITY_MATRIX}
+P2A_MATRIX = (
+    # The live portfolio, plus the deepest sensitivity, in **one** matrix: the
+    # question is marginal value, and a marginal value can only be read off a
+    # single run over a single slot set (the earlier two runs used different
+    # corpora and different machine load, so their union sizes are not
+    # comparable).
+    Config("live-p1c3lt", "improved", 1, 3, low_threshold=True),
+    Config("live-p3c3", "improved", 3, 3),
+    Config("live-p3c3lt", "improved", 3, 3, low_threshold=True),
+    Config("cand-p1c3lt-s3", "improved", 1, 3, sensitivity=3, low_threshold=True),
+    Config("cand-p1c2lt-s3", "improved", 1, 2, sensitivity=3, low_threshold=True),
+)
+
+S3_ONLY_MATRIX = (
+    # One configuration, measured with nothing else running: the question is
+    # whether sensitivity=3 can replace a three-configuration portfolio (it
+    # covered 99.9% of their union) without doubling the wall time the box's
+    # deadline has to cover.
+    Config("p1c3lt-s3", "improved", 1, 3, sensitivity=3, low_threshold=True),
+)
+
+MATRICES = {
+    "default": DEFAULT_MATRIX,
+    "s3only": S3_ONLY_MATRIX,
+    "sensitivity": SENSITIVITY_MATRIX,
+    "p2a": P2A_MATRIX,
+}
 
 
 def load_slot(path: Path) -> tuple[int, bytes]:

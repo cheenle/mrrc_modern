@@ -79,10 +79,12 @@ class PortfolioEntry:
     profile: int
     cycles: int
     low_threshold: bool = False
+    sensitivity: int = 2
 
     @property
     def name(self) -> str:
-        return f"p{self.profile}c{self.cycles}{'lt' if self.low_threshold else ''}"
+        suffix = f"-s{self.sensitivity}" if self.sensitivity != 2 else ""
+        return f"p{self.profile}c{self.cycles}{'lt' if self.low_threshold else ''}{suffix}"
 
 
 def parse_portfolio(spec: str) -> tuple[PortfolioEntry, ...]:
@@ -105,14 +107,15 @@ def parse_portfolio(spec: str) -> tuple[PortfolioEntry, ...]:
         token = raw.strip().lower()
         if not token:
             continue
-        match = re.fullmatch(r"p(\d+)c(\d+)(lt)?", token)
+        match = re.fullmatch(r"p(\d+)c(\d+)(lt)?(?:-s([123]))?", token)
         if match is None:
-            raise ValueError(f"a portfolio entry looks like p1c3lt: {raw!r}")
+            raise ValueError(f"a portfolio entry looks like p1c3lt or p1c3lt-s3: {raw!r}")
         entries.append(
             PortfolioEntry(
                 profile=int(match.group(1)),
                 cycles=int(match.group(2)),
                 low_threshold=bool(match.group(3)),
+                sensitivity=int(match.group(4) or 2),
             )
         )
     if not entries:
@@ -217,6 +220,7 @@ class DecodeService:
                 profile=entry.profile,
                 cycles=entry.cycles,
                 low_threshold=entry.low_threshold,
+                sensitivity=entry.sensitivity,
             )).replace(threads=threads)
             for entry in (self._portfolio or (None,))
         ]
@@ -235,7 +239,11 @@ class DecodeService:
         log.info(
             "slot %s: %s -> %d result(s) in %.3fs (cpu %.3fs total)",
             slot_id,
-            " + ".join(f"p{c.profile}c{c.cycles}{'lt' if c.low_threshold else ''}" for c in configs),
+            " + ".join(
+                f"p{c.profile}c{c.cycles}{'lt' if c.low_threshold else ''}"
+                f"{f'-s{c.sensitivity}' if c.sensitivity != 2 else ''}"
+                for c in configs
+            ),
             len(batch.results),
             elapsed,
             cpu_seconds,

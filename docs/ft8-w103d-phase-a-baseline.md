@@ -16,14 +16,15 @@
 | 安装时刻 | 2026-10-14 12:04:06 CST（盒子本机时钟） |
 | 安装方式 | `MRRC_UPDATE_SRC=<本地目录> mrrc-update`，源为开发工作树（`feat/ft8`） |
 | 升级前版本 | `1.25.5`（回滚备份 `/opt/mrrc_modern.bak-1.25.5-20261014-0023`） |
-| 升级后 `version.txt` | **仍然是 1.25.5** —— 见下 |
+| 升级后 `version.txt` | **仍然是 1.25.5** —— 见下（**已实测**：`cat /opt/mrrc_modern/version.txt` → `1.25.5`） |
 | 生效判据 | 不用 `version.txt`：`DEFAULT_DECISION_CUTOFF_SECONDS = 4.0`、`_COUNTERS_EVERY_SLOTS = 20`、`protocol.py` 与 `worker.py` 各含 `cpu_seconds` —— 四条在**装好的树上**逐条 grep 通过 |
 | 服务 | 升级后 `active`；矩阵测量期间停约 1–3 min，由 `trap` 拉起，收尾 `active` |
 
 **版本字符串没有跟着走（照实记）。** `version.txt` 是**构建产物**，不在仓库里
 （由 `packaging/*/build-*.sh` 生成），而 `mrrc-update` 从不碰它
 （`linux/mrrc_update.sh` 里没有这个文件名）。所以用 `MRRC_UPDATE_SRC` 指向源码树做的这次
-升级，代码是新的、`version.txt` 还是 1.25.5 —— 支持包
+升级，代码是新的、`version.txt` 还是 1.25.5 —— 这一点**已由操作员在盒子上实测确认**
+（`cat /opt/mrrc_modern/version.txt` → `1.25.5`，升级后），与上面的推断一致。支持包
 （`support_bundle.detect_version()` 的第一顺位就是 `version.txt`）在这个盒子上也会一直报
 1.25.5，直到下一次镜像构建。这不是本次引入的缺陷，但它决定了**新版判据不能依赖
 `version.txt`**：Task 7 的验收因此改用内容 grep。

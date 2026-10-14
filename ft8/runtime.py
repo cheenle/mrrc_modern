@@ -44,6 +44,7 @@ from ft8.engine.tx_driver import TxDriver
 from ft8.engine.waterfall import SpectrumComputer, SpectrumFanout
 from ft8.platform.cloud_decode import cloud_decoder_from_environ
 from ft8.platform.rx_tap import RxTap
+from ft8.platform.slot_dump import SlotDumper
 from ft8.platform.settings import Ft8Settings
 
 log = logging.getLogger("mrrc.ft8.runtime")
@@ -58,6 +59,17 @@ def _qso_progress(state: QSOState) -> int:
     """AP 上下文只在通联进行中成立：IDLE / DONE 记 0，其余阶段都算进行中。"""
 
     return 0 if state in (QSOState.IDLE, QSOState.DONE) else 2
+
+
+def _dump_slot(dumper: SlotDumper | None, slot_id: int, samples: bytes | None) -> None:
+    """Hand one slot to the recall dump, if the operator asked for one.
+
+    Deliberately a free function taking ``None``: the common case (no dump
+    configured) is one branch on a local, not a method call per slot.
+    """
+
+    if dumper is not None and samples is not None:
+        dumper.write(slot_id, samples)
 
 
 def _policy_from_settings(settings: Ft8Settings) -> CascadePolicy:
@@ -247,8 +259,13 @@ class Ft8Runtime:
             assert self.ring is not None
             full = self.ring.read_slot(slot_id)
             if full is not None:
+                _dump_slot(self._slot_dump, slot_id, full)
                 return full
-            return self.ring.read_slot_partial(slot_id, early_min_samples)
+            # 提前解码走的是这一支（尾巴零补齐），所以**两条路都要落盘** ——
+            # 提前派发的那一份就是解码器实际吃进去的输入。
+            partial = self.ring.read_slot_partial(slot_id, early_min_samples)
+            _dump_slot(self._slot_dump, slot_id, partial)
+            return partial
 
         # The upstream grace (0.4 s) assumes an ~85 ms capture chain.  On the
         # W103D the chain is guest-buffer(100 ms) + 80 ms read block + soxr
@@ -292,6 +309,9 @@ class Ft8Runtime:
         # 级联因此与引入它之前逐字一致。
         cloud = cloud_decoder_from_environ(os.environ)
         self._cloud = cloud
+        # 召回测量的素材（设计 §12）：默认关闭，只在 MRRC_FT8_SLOT_DUMP_DIR
+        # 设了才存在。写的是解码器实际收到的那一份字节。
+        self._slot_dump = SlotDumper.from_environ(os.environ)
         self._cascade = CascadingDecoder(
             self.decoder,
             policy,

@@ -41,7 +41,7 @@ _APP_ROOT = os.environ.get("MRRC_DECODE_APP_ROOT", "/opt/mrrc-decode")
 if _APP_ROOT not in sys.path:
     sys.path.insert(0, _APP_ROOT)
 
-from ft8.core.models import DecodeConfig  # noqa: E402
+from ft8.core.models import MAX_DECODE_THREADS, DecodeConfig  # noqa: E402
 from ft8.core.protocol import (  # noqa: E402
     SLOT_PCM_BYTES,
     FrameError,
@@ -138,7 +138,13 @@ class DecodeService:
         except (TypeError, ValueError, KeyError) as error:
             log.info("rejected a malformed config: %s", error)
             return 400, b""
-        config = config.replace(threads=min(config.threads, self._max_threads))
+        # Clamp to the service's cap **and** to the ABI's own maximum: a caller
+        # asking for more than the decoder supports is a hint, not an error, and
+        # letting it through made the worker answer 'error' -> HTTP 500 (measured
+        # 2026-10-14: threads=16 on a 16-thread host).
+        config = config.replace(
+            threads=min(config.threads, self._max_threads, MAX_DECODE_THREADS)
+        )
         slot_id = int(frame["slot_id"])  # type: ignore[arg-type]
 
         segment = self._ensure_segment()

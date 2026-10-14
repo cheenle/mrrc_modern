@@ -295,3 +295,20 @@ def test_the_connection_survives_between_slots() -> None:
             connection.close()
 
     assert len(worker.seen) == 3
+
+
+def test_a_thread_count_beyond_the_abi_is_clamped_not_rejected() -> None:
+    """The number is a hint: asking for 16 on a 16-thread host must still decode.
+
+    Measured 2026-10-14: the worker answered 'error' for threads=16 (the ABI
+    caps at 12), the service turned that into HTTP 500, and the box fell back
+    to its local deep path — a working host refusing work over a number.
+    """
+
+    worker = FakeWorker()
+    status, _ = _service(worker, max_threads=16).handle(
+        _frame(config={**CONFIG, "threads": 16}), bytes(360_000),
+        authorization="Bearer secret",
+    )
+    assert status == 200
+    assert worker.seen[0]["config"]["threads"] == 12

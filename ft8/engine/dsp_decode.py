@@ -67,6 +67,42 @@ def decode_config_from_frame(frame: dict[str, object]) -> DecodeConfig:
     return DecodeConfig(**fields)  # type: ignore[arg-type]
 
 
+def decode_ok_frame(
+    batch: DecodeBatch, *, cpu_seconds: float = 0.0
+) -> dict[str, object]:
+    """Inverse of :func:`batch_from_decode_ok` — for callers that *compose* one.
+
+    The cloud service answers with a union of several decodes, so it cannot
+    forward a worker reply verbatim; building the frame here keeps the wire
+    shape in the one module that already owns it (``decode_ok`` is validated
+    against an exact schema, so a field missed here is a rejected answer).
+    """
+
+    return {
+        "type": "decode_ok",
+        "slot_id": batch.slot_id,
+        "path": str(batch.path),
+        "results": [
+            {
+                "slot_id": result.slot_id,
+                "sync": result.sync,
+                "snr": result.snr,
+                "dt": result.dt,
+                "frequency": result.frequency,
+                "text": result.text,
+                "ap_type": result.ap_type,
+                "quality": result.quality,
+                "flags": result.flags,
+            }
+            for result in batch.results
+        ],
+        "overflow": batch.overflow,
+        "elapsed_seconds": batch.elapsed_seconds,
+        "cpu_seconds": float(cpu_seconds),
+        "deadline_missed": batch.deadline_missed,
+    }
+
+
 def batch_from_decode_ok(response: dict[str, object]) -> DecodeBatch:
     """Copy one validated ``decode_ok`` frame into an immutable batch."""
 

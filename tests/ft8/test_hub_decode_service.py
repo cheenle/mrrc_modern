@@ -12,6 +12,7 @@ same way ``tests/ft8/test_i9_field_twin.py`` loads the field twin.
 from __future__ import annotations
 
 import importlib.util
+import sys
 import threading
 import time
 from pathlib import Path
@@ -30,6 +31,10 @@ def _load_service():
     assert TOOL.is_file(), f"the hub service moved: {TOOL}"
     spec = importlib.util.spec_from_file_location("mrrc_hub_decode", TOOL)
     module = importlib.util.module_from_spec(spec)
+    # Required, not decoration: dataclasses resolves cls.__module__ through
+    # sys.modules, so a module loaded by path without this line dies the moment
+    # it declares one (the service grew a PortfolioEntry dataclass).
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -312,3 +317,116 @@ def test_a_thread_count_beyond_the_abi_is_clamped_not_rejected() -> None:
     )
     assert status == 200
     assert worker.seen[0]["config"]["threads"] == 12
+
+
+# ── the portfolio: spend the host's idle CPU on recall ───────────────────
+
+
+class _ByConfigWorker:
+    """Answers a different set of messages per (profile, cycles)."""
+
+    def __init__(self, by_config: dict[tuple[int, int], list[tuple[str, float, float]]]) -> None:
+        self._by_config = by_config
+        self.seen: list[dict[str, object]] = []
+
+    def request(self, frame, timeout):
+        self.seen.append(frame)
+        profile = frame["config"]["profile"]
+        cycles = frame["config"]["cycles"]
+        results = [
+            {"slot_id": frame["slot_id"], "sync": 1.0, "snr": -20, "dt": dt,
+             "frequency": frequency, "text": text, "ap_type": 0, "quality": 0.0, "flags": 0}
+            for text, frequency, dt in self._by_config.get((profile, cycles), [])
+        ]
+        return {
+            "v": PROTOCOL_VERSION, "type": "decode_ok", "generation": 0, "request_id": 0,
+            "slot_id": frame["slot_id"], "path": "improved", "results": results,
+            "overflow": False, "elapsed_seconds": 0.5, "cpu_seconds": 1.0,
+            "deadline_missed": False,
+        }
+
+
+def test_the_portfolio_grammar() -> None:
+    service = _load_service()
+    assert [entry.name for entry in service.parse_portfolio("p1c3lt,p3c3")] == ["p1c3lt", "p3c3"]
+    assert service.parse_portfolio("p1c3")[0].low_threshold is False
+    with pytest.raises(ValueError, match="p1c3lt"):
+        service.parse_portfolio("garbage")
+    with pytest.raises(ValueError, match="empty"):
+        service.parse_portfolio("   ")
+
+
+def test_a_portfolio_runs_every_entry_and_unions_the_answers() -> None:
+    """Two configurations, two different signals — the caller gets both."""
+
+    service_module = _load_service()
+    worker = _ByConfigWorker({
+        (1, 3): [("CQ AAA", 1500.0, 0.10)],
+        (3, 3): [("CQ BBB", 1600.0, 0.20)],
+    })
+    service = service_module.DecodeService(
+        worker, token="secret", monotonic=lambda: 500.0,
+        portfolio=service_module.parse_portfolio("p1c3lt,p3c3"),
+    )
+
+    status, body = service.handle(_frame(), bytes(360_000), authorization="Bearer secret")
+
+    assert status == 200
+    decoded = decode_frame(body)
+    assert {r["text"] for r in decoded["results"]} == {"CQ AAA", "CQ BBB"}
+    assert decoded["cpu_seconds"] == 2.0, "the union reports what it cost"
+    assert [(f["config"]["profile"], f["config"]["low_threshold"]) for f in worker.seen] == [
+        (1, True), (3, False),
+    ]
+
+
+def test_the_union_folds_by_signal_not_by_text() -> None:
+    """The same signal at the same (freq, dt) must appear once, not twice."""
+
+    service_module = _load_service()
+    worker = _ByConfigWorker({
+        (1, 3): [("CQ AAA", 1500.0, 0.10)],
+        (3, 3): [("CQ AAA", 1500.4, 0.12)],  # 0.4 Hz / 0.02 s apart: one signal
+    })
+    service = service_module.DecodeService(
+        worker, token="secret", monotonic=lambda: 500.0,
+        portfolio=service_module.parse_portfolio("p1c3,p3c3"),
+    )
+
+    status, body = service.handle(_frame(), bytes(360_000), authorization="Bearer secret")
+
+    assert status == 200
+    assert len(decode_frame(body)["results"]) == 1
+
+
+def test_one_failing_configuration_does_not_lose_the_others() -> None:
+    """A partial answer is the whole reason for running several."""
+
+    service_module = _load_service()
+
+    class HalfBroken(_ByConfigWorker):
+        def request(self, frame, timeout):
+            if frame["config"]["profile"] == 3:   # the p3 entry dies; p1 survives
+                raise RuntimeError("this worker died")
+            return super().request(frame, timeout)
+
+    worker = HalfBroken({(1, 3): [("CQ AAA", 1500.0, 0.10)]})
+    service = service_module.DecodeService(
+        worker, token="secret", monotonic=lambda: 500.0,
+        portfolio=service_module.parse_portfolio("p1c3,p3c3"),
+    )
+
+    status, body = service.handle(_frame(), bytes(360_000), authorization="Bearer secret")
+
+    assert status == 200
+    assert [r["text"] for r in decode_frame(body)["results"]] == ["CQ AAA"]
+
+
+def test_without_a_portfolio_the_callers_config_is_used_verbatim() -> None:
+    worker = FakeWorker()
+    status, body = _service(worker).handle(
+        _frame(), bytes(360_000), authorization="Bearer secret"
+    )
+    assert status == 200
+    assert worker.seen[0]["config"]["cycles"] == 1  # the request's own cycles
+    assert worker.seen[0]["config"]["profile"] == 3

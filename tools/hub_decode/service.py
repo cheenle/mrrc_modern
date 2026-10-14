@@ -26,11 +26,14 @@ import base64
 import json
 import logging
 import os
+import re
 import socket
 import ssl
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from multiprocessing.shared_memory import SharedMemory
 from pathlib import Path
@@ -48,7 +51,13 @@ from ft8.core.protocol import (  # noqa: E402
     decode_frame,
     encode_frame,
 )
-from ft8.engine.dsp_decode import decode_config_frame, decode_config_from_frame  # noqa: E402
+from ft8.engine.dsp_decode import (  # noqa: E402
+    batch_from_decode_ok,
+    decode_config_frame,
+    decode_config_from_frame,
+    decode_ok_frame,
+)
+from ft8.engine.cascade import merge_batches  # noqa: E402
 from ft8.engine.orchestrator import SLOT_SAMPLES_NBYTES  # noqa: E402
 
 log = logging.getLogger("mrrc.hub.decode")
@@ -61,6 +70,54 @@ DEFAULT_TIMEOUT_S = 10.0
 # that forgets must not be able to oversubscribe the entry box.
 DEFAULT_MAX_THREADS = 1
 PATH = "/mrrc-decode"
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioEntry:
+    """One configuration in the service's portfolio."""
+
+    profile: int
+    cycles: int
+    low_threshold: bool = False
+
+    @property
+    def name(self) -> str:
+        return f"p{self.profile}c{self.cycles}{'lt' if self.low_threshold else ''}"
+
+
+def parse_portfolio(spec: str) -> tuple[PortfolioEntry, ...]:
+    """``p1c3lt,p3c3`` → the configurations to run for one slot, in order.
+
+    Grammar per entry: ``p<profile>c<cycles>`` with an optional ``lt`` suffix
+    (``low_threshold``).  **The first entry is the primary**: its results are
+    kept whole and the others only contribute signals it did not hear, which is
+    the same (frequency, dt) rule the box merges with (`merge_batches`).
+
+    The portfolio is a *service-side* decision on purpose: how much CPU to
+    spend per slot belongs to whoever owns the machine, and it is measured —
+    2026-10-14, on 40 real slots, a single configuration covered 96.5-97.0% of
+    what ten could find, and three diverse ones running in parallel covered
+    100% inside the wall time of the slowest.
+    """
+
+    entries: list[PortfolioEntry] = []
+    for raw in (spec or "").split(","):
+        token = raw.strip().lower()
+        if not token:
+            continue
+        match = re.fullmatch(r"p(\d+)c(\d+)(lt)?", token)
+        if match is None:
+            raise ValueError(f"a portfolio entry looks like p1c3lt: {raw!r}")
+        entries.append(
+            PortfolioEntry(
+                profile=int(match.group(1)),
+                cycles=int(match.group(2)),
+                low_threshold=bool(match.group(3)),
+            )
+        )
+    if not entries:
+        raise ValueError("an empty portfolio would decode nothing")
+    return tuple(entries)
 
 
 class DecodeService:
@@ -79,6 +136,7 @@ class DecodeService:
         max_threads: int = DEFAULT_MAX_THREADS,
         timeout_s: float = DEFAULT_TIMEOUT_S,
         monotonic=time.monotonic,
+        portfolio: tuple[PortfolioEntry, ...] = (),
     ) -> None:
         if not token:
             raise ValueError("the decode service needs a token")
@@ -86,7 +144,14 @@ class DecodeService:
             raise ValueError("max_threads must be positive")
         if timeout_s <= 0:
             raise ValueError("timeout_s must be positive")
-        self._worker = worker
+        workers = tuple(worker) if isinstance(worker, (list, tuple)) else (worker,)
+        if not workers:
+            raise ValueError("the decode service needs at least one worker")
+        self._workers = workers
+        # Empty portfolio = decode once, with exactly the configuration the
+        # caller asked for.  That is the hub's behaviour and it stays the
+        # default; a host deployment opts into spending more CPU per slot.
+        self._portfolio = tuple(portfolio)
         self._token = token
         self._max_threads = int(max_threads)
         self._timeout_s = float(timeout_s)
@@ -134,7 +199,7 @@ class DecodeService:
 
     def _decode(self, frame: dict[str, object], pcm: bytes) -> tuple[int, bytes]:
         try:
-            config = decode_config_from_frame(frame["config"])  # type: ignore[arg-type]
+            requested = decode_config_from_frame(frame["config"])  # type: ignore[arg-type]
         except (TypeError, ValueError, KeyError) as error:
             log.info("rejected a malformed config: %s", error)
             return 400, b""
@@ -142,47 +207,99 @@ class DecodeService:
         # asking for more than the decoder supports is a hint, not an error, and
         # letting it through made the worker answer 'error' -> HTTP 500 (measured
         # 2026-10-14: threads=16 on a 16-thread host).
-        config = config.replace(
-            threads=min(config.threads, self._max_threads, MAX_DECODE_THREADS)
-        )
+        threads = min(requested.threads, self._max_threads, MAX_DECODE_THREADS)
         slot_id = int(frame["slot_id"])  # type: ignore[arg-type]
 
         segment = self._ensure_segment()
         segment.buf[: len(pcm)] = pcm
-        worker_frame = {
-            "type": "decode",
-            "slot_id": slot_id,
-            # The hub's own clock — see the module docstring.
-            "deadline_monotonic": self._monotonic() + self._timeout_s,
-            "shm": {
-                "name": segment.name,
-                "dtype": "<i2",
-                "shape": [SLOT_SAMPLES_NBYTES // 2],
-                "nbytes": SLOT_SAMPLES_NBYTES,
-            },
-            "config": decode_config_frame(config),
-        }
+        configs = [
+            (requested if entry is None else requested.replace(
+                profile=entry.profile,
+                cycles=entry.cycles,
+                low_threshold=entry.low_threshold,
+            )).replace(threads=threads)
+            for entry in (self._portfolio or (None,))
+        ]
+
         started = self._monotonic()
-        try:
-            response = self._worker.request(worker_frame, self._timeout_s)
-        except Exception:  # noqa: BLE001 — a worker fault is the box's problem to solve
-            log.exception("the worker failed on slot %s", slot_id)
-            return 500, b""
+        replies = self._run(configs, slot_id, segment)
         elapsed = self._monotonic() - started
-        if not isinstance(response, dict) or response.get("type") != "decode_ok":
-            log.error("the worker answered with %r", None if not isinstance(response, dict) else response.get("type"))
+        if not replies:
+            log.error("every configuration failed for slot %s", slot_id)
             return 500, b""
+        batch = batch_from_decode_ok(replies[0])
+        cpu_seconds = float(replies[0].get("cpu_seconds") or 0.0)
+        for reply in replies[1:]:
+            batch = merge_batches(batch, batch_from_decode_ok(reply))
+            cpu_seconds += float(reply.get("cpu_seconds") or 0.0)
         log.info(
-            "slot %s: profile %d cycles %d threads %d -> %d result(s) in %.3fs (cpu %.3fs)",
+            "slot %s: %s -> %d result(s) in %.3fs (cpu %.3fs total)",
             slot_id,
-            config.profile,
-            config.cycles,
-            config.threads,
-            len(response.get("results") or []),
+            " + ".join(f"p{c.profile}c{c.cycles}{'lt' if c.low_threshold else ''}" for c in configs),
+            len(batch.results),
             elapsed,
-            float(response.get("cpu_seconds") or 0.0),
+            cpu_seconds,
         )
-        return 200, encode_frame(response)
+        # The reply's base fields (v / generation / request_id) belong to the
+        # transport, so decode_ok_frame does not invent them; echo the worker's,
+        # which is what the caller would have seen before the union existed.
+        reply_frame = decode_ok_frame(batch, cpu_seconds=cpu_seconds)
+        reply_frame.update(
+            {
+                field: replies[0][field]
+                for field in ("v", "generation", "request_id")
+                if field in replies[0]
+            }
+        )
+        return 200, encode_frame(reply_frame)
+
+    def _run(
+        self, configs: list[DecodeConfig], slot_id: int, segment: SharedMemory
+    ) -> list[dict[str, object]]:
+        """Decode the slot once per configuration, across the worker pool.
+
+        One shared segment serves every configuration: the workers map it
+        read-only and the busy lock guarantees nobody rewrites it underneath a
+        decode that is still running.  A configuration that fails is dropped
+        from the union rather than failing the request — a partial answer is
+        the whole point of running several.
+        """
+
+        def one(index: int) -> dict[str, object] | None:
+            config = configs[index]
+            worker = self._workers[index % len(self._workers)]
+            worker_frame = {
+                "type": "decode",
+                "slot_id": slot_id,
+                # The hub's own clock — the caller's is a different machine's.
+                "deadline_monotonic": self._monotonic() + self._timeout_s,
+                "shm": {
+                    "name": segment.name,
+                    "dtype": "<i2",
+                    "shape": [SLOT_SAMPLES_NBYTES // 2],
+                    "nbytes": SLOT_SAMPLES_NBYTES,
+                },
+                "config": decode_config_frame(config),
+            }
+            try:
+                reply = worker.request(worker_frame, self._timeout_s)
+            except Exception:  # noqa: BLE001 — one configuration may die; the rest still count
+                log.exception(
+                    "p%dc%d failed on slot %s", config.profile, config.cycles, slot_id
+                )
+                return None
+            if not isinstance(reply, dict) or reply.get("type") != "decode_ok":
+                log.error("p%dc%d answered %r", config.profile, config.cycles, reply)
+                return None
+            return reply
+
+        if len(configs) == 1:
+            reply = one(0)
+            return [reply] if reply is not None else []
+        with ThreadPoolExecutor(
+            max_workers=min(len(configs), len(self._workers))
+        ) as pool:
+            return [reply for reply in pool.map(one, range(len(configs))) if reply is not None]
 
     def _ensure_segment(self) -> SharedMemory:
         if self._segment is None:
@@ -276,6 +393,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-threads", type=int, default=DEFAULT_MAX_THREADS)
     parser.add_argument("--cert", default="", help="TLS certificate (PEM); needs --key")
     parser.add_argument("--key", default="", help="TLS private key (PEM); needs --cert")
+    parser.add_argument(
+        "--portfolio", default="",
+        help="e.g. p1c3lt,p3c3,p3c3lt — decode the slot with each (in parallel) and union",
+    )
+    parser.add_argument(
+        "--portfolio-workers", type=int, default=0,
+        help="workers to run the portfolio on (default: one per entry)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -298,11 +423,27 @@ def main(argv: list[str] | None = None) -> int:
     # resolves ALLCALL7.TXT relative to the cwd (prog_args.f90:4), exactly as
     # the box's service unit does.
     os.chdir(args.app_root)
-    supervisor = WorkerSupervisor(library_path=library, stop_timeout=5.0)
-    supervisor.start()
+    portfolio = parse_portfolio(args.portfolio) if args.portfolio else ()
+    worker_count = args.portfolio_workers or max(1, len(portfolio))
+    supervisors = [
+        WorkerSupervisor(library_path=library, stop_timeout=5.0)
+        for _ in range(worker_count)
+    ]
+    for supervisor in supervisors:
+        supervisor.start()
     service = DecodeService(
-        supervisor, token=token, max_threads=args.max_threads, timeout_s=args.timeout
+        supervisors if worker_count > 1 else supervisors[0],
+        token=token,
+        max_threads=args.max_threads,
+        timeout_s=args.timeout,
+        portfolio=portfolio,
     )
+    if portfolio:
+        log.info(
+            "portfolio: %s on %d worker(s)",
+            " + ".join(entry.name for entry in portfolio),
+            worker_count,
+        )
     server = make_server(args.host, args.port, make_handler(service))
     if args.cert or args.key:
         if not (args.cert and args.key):
@@ -320,7 +461,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         server.server_close()
         service.close()
-        supervisor.stop()
+        for supervisor in supervisors:
+            supervisor.stop()
     return 0
 
 

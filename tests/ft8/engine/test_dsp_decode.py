@@ -13,6 +13,7 @@ from ft8.engine.dsp_decode import (
     SupervisorDecoder,
     batch_from_decode_ok,
     decode_config_frame,
+    decode_ok_frame,
     decode_config_from_frame,
     slot_utc_hhmmss,
 )
@@ -264,3 +265,16 @@ def test_the_worker_frame_is_built_by_the_shared_serialiser() -> None:
         config.replace(utc_hhmmss=slot_utc_hhmmss(480), path=DecodePath.IMPROVED, threads=3)
     )
     assert supervisor.frames[0]["config"] == expected
+
+
+def test_the_decode_ok_frame_round_trips_through_the_batch() -> None:
+    """The service composes an answer; the box must parse it as it always did."""
+
+    response = decode_ok(42, text="CQ JA1ABC PM95")
+    response["cpu_seconds"] = 1.75
+    batch = batch_from_decode_ok(response)
+    rebuilt = decode_ok_frame(batch, cpu_seconds=1.75)
+    # The base fields belong to the transport, not to the batch.
+    for field in ("v", "generation", "request_id"):
+        rebuilt[field] = response[field]
+    assert rebuilt == response

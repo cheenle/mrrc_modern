@@ -186,6 +186,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--token", default="")
     parser.add_argument("--cycles", type=int, default=3, help="the deep cloud depth")
     parser.add_argument("--same-cycles", type=int, default=1, help="the hub's control depth")
+    # The rig is offline: it measures which messages each configuration finds, not
+    # whether they arrive in time.  A live deadline here would turn the measurement
+    # into a second, quieter test of the transport — and on a real band the hub's
+    # cycles=3 decode is ~3 s (measured 2026-10-14: cpu 2.130 s on a 22-decode slot,
+    # against 1.208 s on the synthetic five-CQ slot), i.e. well past the live
+    # deadline of 2.5 s.
+    parser.add_argument("--cloud-timeout", type=float, default=30.0)
     parser.add_argument("--threads", type=int, default=3, help="the box's production threads")
     parser.add_argument("--local-cycles", type=int, default=1)
     parser.add_argument("--json", default="")
@@ -210,8 +217,12 @@ def main(argv: list[str] | None = None) -> int:
         if not args.token:
             log.error("--hub needs --token")
             return 2
-        cloud_same = CloudDecoder(args.hub, args.token, cycles=args.same_cycles)
-        cloud_deep = CloudDecoder(args.hub, args.token, cycles=args.cycles)
+        cloud_same = CloudDecoder(
+            args.hub, args.token, cycles=args.same_cycles, deadline_s=args.cloud_timeout
+        )
+        cloud_deep = CloudDecoder(
+            args.hub, args.token, cycles=args.cycles, deadline_s=args.cloud_timeout
+        )
 
     started = time.monotonic()
     rows = asyncio.run(

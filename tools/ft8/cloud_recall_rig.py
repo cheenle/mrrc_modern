@@ -124,6 +124,30 @@ def _enter_app_root(path: str) -> str:
     return root
 
 
+async def _retryable(coro_factory, attempts: int = 3, *, sleep=asyncio.sleep):
+    """Await one cloud decode, tolerating a busy or briefly unreachable hub.
+
+    The service answers 503 rather than queue when it is already decoding —
+    correct for the live box (which has a local fallback) and wrong for this
+    rig, whose whole job is to produce a comparable set: one busy moment must
+    not turn a 30-slot run into no result at all.  Measured 2026-10-14: the
+    live box escalated while the rig was running and killed the c2 pass.
+    """
+
+    from ft8.core.models import CloudUnavailable
+
+    last: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            return await coro_factory()
+        except CloudUnavailable as error:
+            last = error
+            if attempt + 1 < attempts:
+                await sleep(1.5 * (attempt + 1))
+    assert last is not None
+    raise last
+
+
 async def run_slots(
     slots: Sequence[tuple[int, bytes]],
     *,
@@ -152,20 +176,16 @@ async def run_slots(
                 local_texts = tuple(r.text for r in batch.results)
                 same = local_texts
                 if cloud_same is not None:
-                    same = tuple(
-                        r.text
-                        for r in (
-                            await cloud_same.decode_path(slot_id, samples, DecodePath.IMPROVED)
-                        ).results
+                    batch = await _retryable(
+                        lambda: cloud_same.decode_path(slot_id, samples, DecodePath.IMPROVED)
                     )
+                    same = tuple(r.text for r in batch.results)
                 deep = same
                 if cloud_deep is not None:
-                    deep = tuple(
-                        r.text
-                        for r in (
-                            await cloud_deep.decode_path(slot_id, samples, DecodePath.IMPROVED)
-                        ).results
+                    batch = await _retryable(
+                        lambda: cloud_deep.decode_path(slot_id, samples, DecodePath.IMPROVED)
                     )
+                    deep = tuple(r.text for r in batch.results)
                 rows.append(
                     SlotRun(slot_id=slot_id, local=local_texts, hub_same=same, hub_deep=deep)
                 )

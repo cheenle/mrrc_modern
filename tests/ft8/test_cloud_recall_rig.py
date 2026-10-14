@@ -89,3 +89,48 @@ def test_a_station_heard_in_three_slots_counts_three_decodes_but_one_message() -
     ]
     text = rig.summarize(rows)
     assert "net gain (deep vs local): 2 decodes / 1 distinct" in text
+
+
+async def _no_sleep(_seconds: float) -> None:
+    return None
+
+
+def test_a_busy_hub_is_retried_rather_than_abandoning_the_run() -> None:
+    """One 503 must not turn a 30-slot comparison into no result at all.
+
+    Measured 2026-10-14: the live box escalated while the rig was running, the
+    service answered 'busy' (by design), and the whole c2 pass died.
+    """
+
+    import asyncio
+
+    from ft8.core.models import CloudUnavailable
+
+    rig = _load_rig()
+    calls: list[int] = []
+
+    async def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise CloudUnavailable("busy")
+        return "batch"
+
+    assert asyncio.run(rig._retryable(flaky, attempts=3, sleep=_no_sleep)) == "batch"
+    assert len(calls) == 3
+
+
+def test_a_hub_that_never_answers_still_fails_the_slot() -> None:
+    import asyncio
+
+    from ft8.core.models import CloudUnavailable
+
+    rig = _load_rig()
+    calls: list[int] = []
+
+    async def dead():
+        calls.append(1)
+        raise CloudUnavailable("down")
+
+    with pytest.raises(CloudUnavailable):
+        asyncio.run(rig._retryable(dead, attempts=2, sleep=_no_sleep))
+    assert len(calls) == 2

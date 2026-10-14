@@ -48,6 +48,51 @@ def slot_utc_hhmmss(slot_id: int, period: float = 15.0) -> int:
     return hours * 10_000 + minutes * 100 + secs
 
 
+def decode_config_frame(config: DecodeConfig) -> dict[str, object]:
+    """Serialise one ``DecodeConfig`` exactly as Protocol v1's ``config`` field.
+
+    One function for both callers — the local worker frame and the cloud
+    request — is the mechanism that keeps the two paths from drifting: a field
+    added to ``DecodeConfig`` cannot reach only one of them.
+    """
+
+    # Protocol v1 requires a plain str path (StrEnum fails its type check).
+    return {**asdict(config), "path": str(config.path)}
+
+
+def decode_config_from_frame(frame: dict[str, object]) -> DecodeConfig:
+    """Inverse of :func:`decode_config_frame` — the hub side of the wire."""
+
+    fields = {**frame, "path": DecodePath(str(frame["path"]))}
+    return DecodeConfig(**fields)  # type: ignore[arg-type]
+
+
+def batch_from_decode_ok(response: dict[str, object]) -> DecodeBatch:
+    """Copy one validated ``decode_ok`` frame into an immutable batch."""
+
+    return DecodeBatch(
+        slot_id=int(response["slot_id"]),  # type: ignore[arg-type]
+        path=DecodePath(str(response["path"])),
+        results=tuple(
+            DecodeResult(
+                slot_id=int(item["slot_id"]),
+                sync=float(item["sync"]),
+                snr=int(item["snr"]),
+                dt=float(item["dt"]),
+                frequency=float(item["frequency"]),
+                text=str(item["text"]),
+                ap_type=int(item["ap_type"]),
+                quality=float(item["quality"]),
+                flags=int(item["flags"]),
+            )
+            for item in response["results"]  # type: ignore[union-attr]
+        ),
+        overflow=bool(response["overflow"]),
+        elapsed_seconds=float(response["elapsed_seconds"]),
+        deadline_missed=bool(response["deadline_missed"]),
+    )
+
+
 class SupervisorDecoder:
     """SlotDecoder implementation backed by one WorkerSupervisor.
 
@@ -119,8 +164,7 @@ class SupervisorDecoder:
         if threads is not None:
             changes["threads"] = threads
         config = self._config.replace(**changes)
-        # Protocol v1 requires a plain str path (StrEnum fails its type check).
-        config_frame = {**asdict(config), "path": str(config.path)}
+        config_frame = decode_config_frame(config)
         frame = {
             "type": "decode",
             "slot_id": slot_id,
@@ -146,27 +190,7 @@ class SupervisorDecoder:
                 config.threads,
                 self._monotonic() - started,
             )
-        return DecodeBatch(
-            slot_id=int(response["slot_id"]),  # type: ignore[arg-type]
-            path=DecodePath(str(response["path"])),
-            results=tuple(
-                DecodeResult(
-                    slot_id=int(item["slot_id"]),
-                    sync=float(item["sync"]),
-                    snr=int(item["snr"]),
-                    dt=float(item["dt"]),
-                    frequency=float(item["frequency"]),
-                    text=str(item["text"]),
-                    ap_type=int(item["ap_type"]),
-                    quality=float(item["quality"]),
-                    flags=int(item["flags"]),
-                )
-                for item in response["results"]  # type: ignore[union-attr]
-            ),
-            overflow=bool(response["overflow"]),
-            elapsed_seconds=float(response["elapsed_seconds"]),
-            deadline_missed=bool(response["deadline_missed"]),
-        )
+        return batch_from_decode_ok(response)
 
     def close(self) -> None:
         """Close and unlink the shared decode segment; idempotent."""

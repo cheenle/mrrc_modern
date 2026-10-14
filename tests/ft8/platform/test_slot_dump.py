@@ -55,3 +55,31 @@ def test_a_write_failure_never_raises_into_the_decode_path(tmp_path) -> None:
     dumper.write(1, SLOT)  # must not raise
 
     assert blocker.read_text() == "x"
+
+
+def test_the_dump_keeps_only_the_newest_files(tmp_path) -> None:
+    """A research dump must not be able to fill the device it runs on.
+
+    15 s per slot at 360 KB is 2 GB a day; the box accumulated 1.3 GB in seven
+    hours before this existed.  The cap is checked by writing past it and asking
+    which files survived, not by trusting the arithmetic.
+    """
+
+    dumper = SlotDumper(tmp_path, keep=12)
+    for slot_id in range(1, 32):
+        dumper.write(slot_id, b"x" * 16)
+        if slot_id % 10 == 0:
+            dumper._prune()
+    dumper._prune()
+    remaining = sorted(path.name for path in tmp_path.glob("slot_*.raw"))
+    assert len(remaining) == 12
+    assert remaining[-1] == f"slot_{31:012d}.raw"
+    assert remaining[0] == f"slot_{20:012d}.raw"
+
+
+def test_keep_is_configurable_and_never_zero(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("MRRC_FT8_SLOT_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("MRRC_FT8_SLOT_DUMP_KEEP", "7")
+    assert SlotDumper.from_environ(__import__("os").environ)._keep == 7
+    monkeypatch.setenv("MRRC_FT8_SLOT_DUMP_KEEP", "0")
+    assert SlotDumper.from_environ(__import__("os").environ)._keep == 1

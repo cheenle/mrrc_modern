@@ -21,11 +21,14 @@ import asyncio
 import base64
 import http.client
 import json
+import logging
 import ssl
 import time
 from urllib.parse import urlsplit
 
 from ft8.core.models import CloudUnavailable, DecodeBatch, DecodeConfig, DecodePath
+log = logging.getLogger("mrrc.ft8.cloud_decode")
+
 from ft8.core.protocol import PROTOCOL_VERSION, FrameError, decode_frame
 from ft8.engine.dsp_decode import batch_from_decode_ok, decode_config_frame
 from ft8.engine.orchestrator import SLOT_SAMPLES_NBYTES
@@ -57,6 +60,7 @@ class CloudDecoder:
         allow_plain_http: bool = False,
         ca_file: str = "",
         threads: int = CLOUD_THREADS,
+        trace: bool = False,
         clock=time.monotonic,
     ) -> None:
         parts = urlsplit(url)
@@ -83,6 +87,7 @@ class CloudDecoder:
         # (portal, update checks).  Loaded lazily so a bad path becomes
         # CloudUnavailable on the first attempt — the cascade falls back to the
         # local deep path — rather than an exception that stops the engine.
+        self._tracing = bool(trace)
         self._ca_file = str(ca_file or "")
         self._context: ssl.SSLContext | None = None
         self._connection: http.client.HTTPConnection | None = None
@@ -115,6 +120,12 @@ class CloudDecoder:
         }
 
     def _post(self, slot_id: int, samples: bytes) -> dict[str, object]:
+        # Timing marks for the one question that needs them: the box's own
+        # latency budget.  Off by default — a switch, not a habit — because the
+        # interesting number (how much of a 15 s slot the host's answer costs)
+        # can only be read from inside the live process.
+        marks: dict[str, float] = {}
+        started = time.monotonic()
         frame = self._request_frame(slot_id, len(samples))
         header = base64.b64encode(
             json.dumps(
@@ -132,6 +143,7 @@ class CloudDecoder:
                     self._host, self._port, timeout=timeout,
                     **({"context": self._tls_context()} if self._tls else {}),
                 )
+                marks["connect"] = time.monotonic()
             connection = self._connection
             connection.timeout = timeout
             connection.request(
@@ -146,8 +158,11 @@ class CloudDecoder:
                     "Connection": "keep-alive",
                 },
             )
+            marks["sent"] = time.monotonic()
             response = connection.getresponse()
+            marks["first_byte"] = time.monotonic()
             payload = response.read()
+            marks["received"] = time.monotonic()
             status = response.status
         except Exception as error:  # noqa: BLE001 — every failure means "use the box"
             self._drop()  # never reuse a half-dead socket
@@ -167,7 +182,45 @@ class CloudDecoder:
             raise CloudUnavailable(f"cloud decode returned an invalid frame: {error}") from error
         if framed.get("type") != "decode_ok":
             raise CloudUnavailable(f"cloud decode returned {framed.get('type')!r}")
+        self._trace(slot_id, framed, started, marks)
         return framed
+
+    def _trace(
+        self, slot_id: int, framed: dict[str, object], started: float, marks: dict[str, float]
+    ) -> None:
+        """Report the timing marks — and never be able to break the decode.
+
+        The box fell back to its local path for an afternoon because the first
+        version of this called an undefined logger: a NameError here, a silent
+        ``cloud_unavailable`` there, and nothing in the logs to say why
+        (2026-10-15).  A diagnostic that can fail what it measures gets retired
+        on the spot.
+        """
+
+        if not self._tracing:
+            return
+        try:
+            self._trace_log(slot_id, framed, started, marks)
+        except Exception:  # noqa: BLE001 - see above
+            self._tracing = False
+
+    def _trace_log(
+        self, slot_id: int, framed: dict[str, object], started: float, marks: dict[str, float]
+    ) -> None:
+        sent = marks.get("sent", started)
+        first = marks.get("first_byte", sent)
+        received = marks.get("received", first)
+        log.info(
+            "cloud trace slot %s: connect %.0f ms, send %.0f ms, "
+            "wait %.0f ms (host decode %.0f ms), receive %.0f ms, total %.0f ms",
+            slot_id,
+            (marks.get("connect", sent) - started) * 1000.0,
+            (sent - marks.get("connect", sent)) * 1000.0,
+            (first - sent) * 1000.0,
+            float(framed.get("elapsed_seconds") or 0.0) * 1000.0,
+            (received - first) * 1000.0,
+            (received - started) * 1000.0,
+        )
 
     def _drop(self) -> None:
         connection, self._connection = self._connection, None
@@ -212,6 +265,8 @@ def cloud_decoder_from_environ(environ) -> CloudDecoder | None:
     )
     ca_file = (environ.get("MRRC_FT8_CLOUD_DECODE_CA") or "").strip()
     threads = int(environ.get("MRRC_FT8_CLOUD_DECODE_THREADS") or CLOUD_THREADS)
+    trace = (environ.get("MRRC_FT8_CLOUD_DECODE_TRACE") or "").strip() not in ("", "0", "false")
     return CloudDecoder(
-        url, token, cycles=cycles, deadline_s=deadline, ca_file=ca_file, threads=threads
+        url, token, cycles=cycles, deadline_s=deadline, ca_file=ca_file,
+        threads=threads, trace=trace,
     )

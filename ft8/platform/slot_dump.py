@@ -24,21 +24,46 @@ from pathlib import Path
 log = logging.getLogger("mrrc.ft8.slot_dump")
 
 ENV_VAR = "MRRC_FT8_SLOT_DUMP_DIR"
+KEEP_ENV_VAR = "MRRC_FT8_SLOT_DUMP_KEEP"
+
+# 15 s per slot at 360 KB each is 2 GB a day: the research dump filled 1.3 GB of
+# the box's eMMC in seven hours, and an unbounded dump on a *production* device
+# is a defect no matter how useful the data is.  Rotation keeps the newest files
+# (a corpus only needs a few thousand) and costs one directory scan per prune.
+DEFAULT_KEEP = 2000
 
 
 class SlotDumper:
     """Write one ``.raw`` file per slot into a directory, failures and all."""
 
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, keep: int = DEFAULT_KEEP) -> None:
         self._directory = Path(directory)
+        self._keep = max(1, int(keep))
         self._warned = False
+        self._written = 0
 
     @classmethod
     def from_environ(cls, environ) -> SlotDumper | None:
         """Build a dumper when the operator asked for one; ``None`` otherwise."""
 
         raw = (environ.get(ENV_VAR) or "").strip()
-        return cls(Path(raw)) if raw else None
+        if not raw:
+            return None
+        try:
+            keep = int(environ.get(KEEP_ENV_VAR) or DEFAULT_KEEP)
+        except (TypeError, ValueError):
+            keep = DEFAULT_KEEP
+        return cls(Path(raw), keep)
+
+    def _prune(self) -> None:
+        """Drop the oldest files once the directory has outgrown ``keep``."""
+
+        try:
+            files = sorted(self._directory.glob("slot_*.raw"))
+            for stale in files[: max(0, len(files) - self._keep)]:
+                stale.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     def write(self, slot_id: int, samples: bytes) -> None:
         path = self._directory / f"slot_{int(slot_id):012d}.raw"
@@ -46,6 +71,9 @@ class SlotDumper:
             return
         try:
             path.write_bytes(samples)
+            self._written += 1
+            if self._written % 200 == 0:
+                self._prune()
         except OSError as error:
             if not self._warned:
                 self._warned = True

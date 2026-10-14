@@ -238,3 +238,32 @@ def test_the_environment_passes_the_ca_file_through(tmp_path) -> None:
     })
     assert decoder is not None
     assert decoder._ca_file == str(ca)
+
+
+def test_trace_reports_the_timing_and_can_never_break_the_decode(caplog) -> None:
+    """The diagnostic switch, and the bug that motivated the guard around it.
+
+    Tracing was added to answer "where do the seconds go inside the live
+    process"; its first version called an undefined logger and raised, which the
+    cascade faithfully turned into "use the local path" — silently, for hours.
+    So: the line must appear, and a broken trace must not be able to fail a
+    decode that already succeeded.
+    """
+
+    import logging as _logging
+
+    from ft8.platform.cloud_decode import CloudDecoder
+
+    decoder = CloudDecoder("https://example.invalid/decode", "token", trace=True)
+    with caplog.at_level(_logging.INFO, logger="mrrc.ft8.cloud_decode"):
+        decoder._trace(42, {"elapsed_seconds": 1.5}, 100.0, {
+            "connect": 100.1, "sent": 100.2, "first_byte": 101.9, "received": 102.0,
+        })
+    records = [r for r in caplog.records if "cloud trace" in r.getMessage()]
+    assert records, "the trace line did not reach the logger"
+    assert "host decode 1500 ms" in records[0].getMessage()
+
+    # And a trace that raises is retired rather than propagated.
+    decoder._trace_log = lambda *_: (_ for _ in ()).throw(RuntimeError("boom"))  # type: ignore[method-assign]
+    decoder._trace(1, {}, 0.0, {})  # must not raise
+    assert decoder._tracing is False

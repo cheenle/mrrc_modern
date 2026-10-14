@@ -378,7 +378,9 @@ class _FakeHub:
 
 
 def _decoder(server: _FakeHub, **kwargs) -> CloudDecoder:
-    # http:// is accepted only by the tests: production requires https (asserted below).
+    # The fake hub speaks plain HTTP on a loopback port; production requires
+    # https (asserted below) and the flag has no other use.
+    kwargs.setdefault("allow_plain_http", True)
     return CloudDecoder(server.url, "secret-token", cycles=3, **kwargs)
 
 
@@ -418,7 +420,9 @@ def test_a_non_200_answer_is_unavailable_not_an_exception_leak(status: int) -> N
 def test_a_dead_endpoint_is_unavailable() -> None:
     import asyncio
 
-    decoder = CloudDecoder("http://127.0.0.1:9/mrrc-decode", "t", cycles=3)
+    decoder = CloudDecoder(
+        "http://127.0.0.1:9/mrrc-decode", "t", cycles=3, allow_plain_http=True
+    )
     with pytest.raises(CloudUnavailable):
         asyncio.run(decoder.decode_path(7, SLOT, DecodePath.IMPROVED))
 

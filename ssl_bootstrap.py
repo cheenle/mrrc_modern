@@ -23,6 +23,10 @@ CERT_FILENAME = "server.crt"
 KEY_FILENAME = "server.key"
 VALID_DAYS = 3650  # throwaway cert — no renewal machinery by design
 
+# A pair this close to expiry is replaced instead of reused. Ten years make it academic in
+# practice; the check exists so a certificate that is about to expire is never the one served.
+MIN_VALID_REMAINING = datetime.timedelta(days=30)
+
 
 def _lan_ips() -> list[str]:
     """Best-effort local IPv4 addresses for the certificate SAN list."""
@@ -46,17 +50,69 @@ def _lan_ips() -> list[str]:
     return sorted(ips)
 
 
+def _pair_is_usable(cert_path: Path, key_path: Path, name: str) -> bool:
+    """Whether the pair already on disk can keep serving ``name``.
+
+    Four ways it cannot, and a bare ``exists()`` would serve every one of them as-is: it names a
+    different instance (the hub verifies the upstream *by name*), it has expired, its private half
+    does not match (no TLS handshake can complete), or it is not a certificate at all.
+    """
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import serialization
+    except ImportError:
+        return False
+    try:
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
+    except Exception:  # noqa: BLE001 — anything unreadable is a pair to replace, not to serve
+        return False
+
+    names = {str(attr.value)
+             for attr in cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)}
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        pass
+    else:
+        names.update(san.get_values_for_type(x509.DNSName))
+    if name not in names:
+        return False
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if cert.not_valid_after_utc - MIN_VALID_REMAINING <= now:
+        return False
+
+    encoding, fmt = serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    return (cert.public_key().public_bytes(encoding, fmt)
+            == key.public_key().public_bytes(encoding, fmt))
+
+
 def sign_for(name: str, cert_dir: Path, filename: str = "fullchain.pem"):
-    """Generate a self-signed pair whose CN and SAN are ``name`` (an instance's entry name).
+    """Return a self-signed pair whose CN and SAN are ``name`` (an instance's entry name).
 
     The Cloud Hub verifies the instance by exactly this name (its /enroll endpoint refuses a
     certificate for any other), so the certificate the app serves when it is published through the
     hub must carry it. Same primitives as the localhost pair, different subject.
+
+    **Idempotent**: a usable pair for ``name`` is reused, not re-signed. That is a correctness
+    property rather than a saving — the hub *pins* the certificate this instance enrolled, so a
+    signature that never reaches the hub (a second connect, a retry after a failed enroll) leaves
+    the pinned and the served certificate as two different documents and the entry answers 502 for
+    good: restarting only makes the process serve the newer file again while nginx keeps checking
+    the pinned one (measured 2026-10-15 on a live Windows instance). Reusing means every later
+    enroll re-sends the same bytes and any failure on the way is harmless.
+
+    Rotating is therefore an explicit act: delete the certificate file (the shell path's
+    ``FORCE=1`` does the same thing) and the next call signs a fresh pair.
     """
     cert_dir = Path(cert_dir)
     cert_dir.mkdir(parents=True, exist_ok=True)
     cert_path = cert_dir / filename
     key_path = cert_dir / (name.split(".")[0] + ".key")
+    if _pair_is_usable(cert_path, key_path, name):
+        logger.info("reusing the certificate already signed for %s: %s", name, cert_path)
+        return cert_path, key_path
     try:
         from cryptography import x509
         from cryptography.hazmat.primitives import hashes, serialization

@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2200 tests across 115 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-13, macOS). **That total is the `unittest`
+2206 tests across 115 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-15, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
 sections below itemise 64 of those 115 — the support-chain, Cloud Hub and
@@ -21,10 +21,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2200 |
-| Passed | 2181 (1 skipped) |
+| Total tests | 2206 |
+| Passed | 2205 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 (macOS, 2026-10-13) |
+| Failed | 0 (macOS, 2026-10-15) |
 | Execution time | ~1min (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 55 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2200 above. Run it with:
+the 2206 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -307,13 +307,15 @@ SDD coverage: AD-005 (V2.7 amendment — stdin control channel + Windows tree ki
 | `NotifyScopePipeTxTests` | 5 | Server → pipe stdin notify: TX/RX transitions, no-write on unchanged state, force resend, dead-pipe guard |
 | `TerminateProcessTreeTests` | 2 | Windows `taskkill /PID /T /F` vs POSIX SIGTERM selection |
 
-### 23. test_ssl_bootstrap.py — Self-Signed TLS Bootstrap (10 tests)
+### 23. test_ssl_bootstrap.py — Self-Signed TLS Bootstrap (15 tests)
 
 SDD coverage: V2.10 (HTTPS-by-default launcher bootstrap)
 
 | Class | Tests | Covers |
 | ------- | ------- | -------- |
 | `SelfSignedCertTests` | 4 | First-run generation, PEM validity, SAN coverage (localhost/hostname/IPs), self-issued 10-year server cert, idempotent reuse |
+| `SignForReuseTests` | 5 | `sign_for` reuses a usable pair for the same name (2026-10-15 `bg7kxr` incident) and still re-signs one that names another instance, has a foreign key, is near/over expiry, or is not a certificate at all |
+| `ServerSslBootstrapTests` | 4 | `server._resolve_ssl_kwargs` signs instead of degrading to plain HTTP, signs for `localhost` on a wildcard bind, never replaces an operator/enrolled pair, and `--no-ssl` is the only plain-HTTP path |
 | `CryptoMissingTests` | 1 | Graceful None when cryptography is unavailable |
 | `LanIpTests` | 1 | LAN IP detection excludes loopback, IPv4-parseable |
 
@@ -747,11 +749,11 @@ platform's wiring, and the macOS helper's closure logic gets real unit tests.
 | §9.8 ATR1000 Tuner Linkage | test_atr1000_tuner, test_atr1000_client, test_atr1000_server | 130 tests |
 | §12.2 Power Scripts / Guards | test_power_switch, test_ft710_power | 15 tests |
 | §15 PTT Safety | test_server_ws_protocol (PTTSafetyLogicTests) | 10 tests |
-| NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests), test_ssl_bootstrap | 10 tests |
+| NFR-020–023 Auth/Security | test_server_ws_protocol (WSAuthTests), test_ssl_bootstrap | 15 tests |
 | NFR-051 Doc-sync / SDD-Guardian harness | test_sdd_harness | 31 tests |
 | NFR-060–065 Audio Quality | test_audio | 98 tests |
 | AD-016 Pluggable Backends (FT-710 + IC-7300) | test_backend_factory, test_config_ic7300, test_civ_codec, test_civ_controller, test_civ_scope, test_ic7300_runtime_reliability | 143 tests |
-| V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 13 tests |
+| V2.10 HTTPS Bootstrap | test_ssl_bootstrap, test_windows_launcher (SSL) | 18 tests |
 | AD-017 Server-Side QSO Recording | test_recorder, test_recorder_api | 66 tests |
 | AD-020 One-Touch CQ Key | test_cq_player, test_cq_server | 45 tests |
 | AD-018 Yaesu SDR Family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F) | test_yaesu_profiles, test_yaesu_cat_core, test_yaesu_backend, test_yaesu_wiring, test_yaesu_fake_radio, test_diag_yaesu | 101 tests |

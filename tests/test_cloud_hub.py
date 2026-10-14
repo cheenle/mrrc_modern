@@ -38,6 +38,7 @@ class _FakePortal(BaseHTTPRequestHandler):
         "enroll_secret": "s" * 32,
         "hub_token": "tok-frps",
         "token": "t0k",
+        "enroll_ok": True,
     }
     seen: dict = {}
 
@@ -83,6 +84,9 @@ class _FakePortal(BaseHTTPRequestHandler):
                              "request_token": "adopted-token"})
         elif self.path == "/enroll":
             _FakePortal.seen["enroll"] = fields
+            if not self.state.get("enroll_ok", True):
+                self._json(503, {"error": "portal 暂时不可用"})
+                return
             if fields.get("secret") != self.state["enroll_secret"]:
                 self._json(403, {"error": "登记口令无效或未获授权"})
                 return
@@ -146,7 +150,7 @@ class CloudHubTests(unittest.TestCase):
         cls.httpd.shutdown()
 
     def setUp(self):
-        _FakePortal.state.update({"status": "applied"})
+        _FakePortal.state.update({"status": "applied", "enroll_ok": True})
         _FakePortal.seen.clear()
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -238,6 +242,39 @@ class CloudHubTests(unittest.TestCase):
         self.assertIn('auth.token = "tok-frps"', conf_text)
         self.assertIn("remotePort = 18877", conf_text)
         self.assertIn("localPort = 8888", conf_text)
+
+    def test_a_failed_second_enroll_never_orphans_the_pinned_certificate(self):
+        """Regression (2026-10-15, live instance `bg7kxr`): the hub pins what ``/enroll`` got.
+
+        connect() used to sign a fresh certificate every time. When a second one was signed and
+        its enroll never reached the portal, the file the process serves was replaced by a
+        document the hub had never seen: nginx kept verifying against the pinned one and the
+        entry answered 502 for good — restarting only made the process serve the newer file
+        again. Measured on that machine: two signatures three seconds apart, exactly one enroll
+        POST, permanent 502. Reusing the pair makes the failure harmless, and the retry that does
+        get through re-enrolls exactly the certificate the hub already holds.
+        """
+        _FakePortal.state["status"] = "granted"
+        first = cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg,
+                                  cert_dir=self.cert_dir, fleet_dir=self.fleet,
+                                  data_dir=self.data_dir)
+        pinned = _FakePortal.seen["enroll"]["cert"]
+        cert_path = Path(first["cert"])
+
+        _FakePortal.state["enroll_ok"] = False       # the portal cannot be reached right now
+        with self.assertRaises(cloud_hub.CloudHubError):
+            cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg,
+                              cert_dir=self.cert_dir, fleet_dir=self.fleet,
+                              data_dir=self.data_dir)
+        self.assertEqual(cert_path.read_text(encoding="utf-8"), pinned,
+                         "the certificate the hub pinned was replaced by one it never saw")
+
+        _FakePortal.state["enroll_ok"] = True        # the retry, hours later
+        cloud_hub.connect(self.portal, "BG9ZZZ", "t0k", config_path=self.cfg,
+                          cert_dir=self.cert_dir, fleet_dir=self.fleet,
+                          data_dir=self.data_dir)
+        self.assertEqual(_FakePortal.seen["enroll"]["cert"], pinned,
+                         "the retry enrolled a certificate the hub can verify but nobody serves")
 
     @unittest.skipIf(os.name == "nt", "needs an executable shell script, which Windows has not")
     def test_the_supervisor_really_starts_a_process(self):

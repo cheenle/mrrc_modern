@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.86</td>
+<td>2026-10-15</td>
+<td>pi</td>
+<td><strong>Cloud Hub 的实例证书不再每次重签：<code class="scope-code">sign_for()</code> 变幂等，于是「hub 钉住的证书 ≠ 实例服务的证书」这一类入口 502 从根上消失。</strong> ① <strong>现场</strong>（<code class="scope-code">bg7kxr.mrrc.vlsc.net</code> 入口整夜 502）：nginx 报 <code class="scope-code">upstream SSL certificate verify error: (18:self-signed certificate)</code>；hub 侧取证说明它与 2026-10-11 那次记的「C 类：上游根本没有 TLS」不是同一件事（那条记录已过期）—— 隧道在线、18808 上的代理名就是 <code class="scope-code">bg7kxr</code>、实例<strong>确实</strong>出示了自签证书。决定性比对：实例服务的 <code class="scope-code">C1:13:D6:…:51:EF</code> 与 hub 钉住的 <code class="scope-code">76:43:71:…:8A:42</code> 同 CN/SAN、同 EC P-256、同 10 年有效期、<strong>只差 3 秒</strong>；对照组 bg7ifp/ba4eg 指纹一致 ⇒ 不是系统性，是这台机器上的两次签署。② <strong>时间线</strong>（<code class="scope-code">sign_for()</code> 把 <code class="scope-code">notBefore</code> 回拨 5 分钟，故真实签署时刻 = notBefore + 5 min，UTC）：13:44:51 签出 A → 13:44:53 <code class="scope-code">POST /enroll</code> 提交 A（portal 日志<strong>仅此一条</strong>）⇒ hub 钉住 A；13:44:54 <strong>又签出 B</strong> 并覆盖 <code class="scope-code">fullchain.pem</code>，B 从未登记 —— 盘上与进程服务的是 B，hub 校验的是 A。③ <strong>机理，以及为什么「重启实例」治不好</strong>：<code class="scope-code">sign_for()</code> 原先每次都新签密钥对，而 <code class="scope-code">cloud_hub.connect()</code> 只登记刚签的那一把 ⇒ 任何「签了但登记没成功」的第二次 connect（重试、双击、网络抖动；实测第二次签署发生在登记返回后 1 秒）都让服务的那把比钉住的更新，而<strong>重启只会让进程继续服务盘上那把 B</strong>。2026-10-11 的口径「指纹不等 ⇒ 实例侧进程没重启 ⇒ 去那台机器重启」只覆盖了「服务的更旧」那一半，本次订正。④ <strong>修法</strong>：<code class="scope-code">sign_for()</code> 幂等 —— 同名且证书可用（CN/SAN 匹配、距到期 &gt; 30 天、私钥与证书配对、文件可解析）即<strong>复用</strong>且<strong>不重写文件</strong>（顺带消掉每次重连都要求重启的 <code class="scope-code">cert_reload_required</code>）；轮换成为显式动作：删掉证书文件（与 shell 侧 <code class="scope-code">make_instance_cert.sh</code> 的 <code class="scope-code">FORCE=1</code> 同义）。副产物：已坏的实例点一次「连接」即可自愈 —— 重新登记盘上那把，正好等于 hub 将钉住服务的那把。⑤ <strong>测试 +6</strong>（<code class="scope-code">tests/test_ssl_bootstrap.py</code> 5 条：复用/换名/密钥不配/临近或已过期/不可解析；<code class="scope-code">tests/test_cloud_hub.py</code> 1 条端到端：第二次登记失败不得孤儿化已钉证书），套件 2200 → 2206；<strong>5 处变异逐条验证</strong>（关掉复用 ⇒ 2 红、去掉名字检查 ⇒ 1 红、去掉密钥配对检查 ⇒ 1 红、去掉到期检查 ⇒ 1 红、不可解析不再替换 ⇒ 1 红），其中名字检查那条一开始是<strong>假绿</strong>（新名字的密钥文件不存在，实际是密钥检查在生效），已改成「同一密钥 + <code class="scope-code">CN=localhost</code>」这个真实碰撞场景。⑥ <strong>边界</strong>：hub 侧「出示的证书 == 钉住的证书」健康检查<strong>未做</strong>，本次是手工取证（每实例一次 <code class="scope-code">openssl s_client</code> 对 <code class="scope-code">instance-certs/&lt;标签&gt;.pem</code>）；<code class="scope-code">ssl_bootstrap.py</code> 在冻结包（PYZ）内 ⇒ 热修通道（只覆盖 <code class="scope-code">_internal/static</code>）够不着，桌面用户须随下一次发版到达，盒子/树莓派按源码同步的升级路径不受限。⑦ <strong>当日运维（已执行）</strong>：把实例实际出示的证书写进 <code class="scope-code">/etc/mrrc-hub/instance-certs/bg7kxr.pem</code>（旧钉备份 <code class="scope-code">.bg7kxr.pem.bak-20261015-073819</code>）+ <code class="scope-code">mrrc-hub-routes.sh</code> ⇒ 入口 <code class="scope-code">/</code> 302、<code class="scope-code">/login</code> 200、<code class="scope-code">/api/health</code> 401，且 07:38 之后无新的 verify 报错。</td>
+</tr>
+<tr>
 <td>SDD V2.84</td>
 <td>2026-10-13</td>
 <td>pi</td>
@@ -895,7 +901,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.84 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.86 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -30,10 +30,12 @@ from ft8.core.protocol import PROTOCOL_VERSION, FrameError, decode_frame
 from ft8.engine.dsp_decode import batch_from_decode_ok, decode_config_frame
 from ft8.engine.orchestrator import SLOT_SAMPLES_NBYTES
 
-# The hub is a 1-vCPU box: measured 2026-10-14, one deep pass at profile 3
-# costs 0.476 s at threads=1 and 0.583 / 0.644 s at threads=2 / 3 — the box's
-# thread count was chosen for four A53 cores and is the wrong number to send
-# here.  This is the only config override the cloud path makes.
+# The default target is the 1-vCPU hub: measured 2026-10-14, one deep pass at
+# profile 3 costs 0.476 s at threads=1 and 0.583 / 0.644 s at threads=2 / 3, so
+# the box's own thread count (chosen for four A53 cores) is the wrong number to
+# send there.  A host deployment with real cores overrides it with
+# ``MRRC_FT8_CLOUD_DECODE_THREADS``; the service caps whatever arrives at its
+# own ``--max-threads``.
 CLOUD_THREADS = 1
 
 DEFAULT_CYCLES = 3
@@ -54,6 +56,7 @@ class CloudDecoder:
         config: DecodeConfig | None = None,
         allow_plain_http: bool = False,
         ca_file: str = "",
+        threads: int = CLOUD_THREADS,
         clock=time.monotonic,
     ) -> None:
         parts = urlsplit(url)
@@ -72,6 +75,7 @@ class CloudDecoder:
         self._config = config or DecodeConfig()
         self._clock = clock
         self.cycles = int(cycles)
+        self.threads = max(1, int(threads))
         self.deadline_s = float(deadline_s)
         # An **extra** trust anchor, not a replacement: the default context keeps
         # the system store, so a private host can be added (a LAN decoder with a
@@ -96,7 +100,7 @@ class CloudDecoder:
     def _request_frame(self, slot_id: int, pcm_bytes: int) -> dict[str, object]:
         config = self._config.replace(
             path=DecodePath.IMPROVED,
-            threads=CLOUD_THREADS,
+            threads=self.threads,
             cycles=self.cycles,
         )
         return {
@@ -207,6 +211,7 @@ def cloud_decoder_from_environ(environ) -> CloudDecoder | None:
         environ.get("MRRC_FT8_CLOUD_DECODE_DEADLINE_S") or DEFAULT_DEADLINE_S
     )
     ca_file = (environ.get("MRRC_FT8_CLOUD_DECODE_CA") or "").strip()
+    threads = int(environ.get("MRRC_FT8_CLOUD_DECODE_THREADS") or CLOUD_THREADS)
     return CloudDecoder(
-        url, token, cycles=cycles, deadline_s=deadline, ca_file=ca_file
+        url, token, cycles=cycles, deadline_s=deadline, ca_file=ca_file, threads=threads
     )

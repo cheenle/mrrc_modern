@@ -60,6 +60,27 @@ DEFAULT_SNR_SPAN = (-26.0, -11.0)
 DEFAULT_SIGNALS_PER_SLOT = 3
 BED_MAX_DECODES = 3
 
+# The decoder reports ~3 dB better than a nominal SNR on real beds (non-stationary
+# noise: it averages per-symbol ratios, Task 9).  A bed's own station is
+# regenerated into the clean target at its *nominal* level, which is the inverse.
+REPORTED_TO_NOMINAL_DB = -3.0
+
+
+@dataclass(frozen=True, slots=True)
+class Bed:
+    """One corpus slot used as a noise bed, split into its two roles.
+
+    ``pcm`` is the recording as it was (so the model sees real signals and learns
+    to keep them); ``noise`` is the same recording with those signals notched, so
+    the mask target has an honest denominator.  Handing the model a bed whose own
+    stations are missing taught it to suppress other people's signals — measured,
+    Task 10b: it lost 20% of what the plain copy decoded on real slots.
+    """
+
+    pcm: np.ndarray
+    noise: np.ndarray
+    signals: tuple[tuple[str, float, float, int], ...]
+
 
 def _window() -> np.ndarray:
     return np.hanning(NFFT + 1)[:-1].astype(np.float32)
@@ -185,7 +206,7 @@ def _notch(pcm: np.ndarray, frequencies_hz: tuple[tuple[float, float, float], ..
 
 def training_beds(
     corpus: Path, binding: CoreBinding, limit: int | None = None
-) -> list[np.ndarray]:
+) -> list[Bed]:
     """Return one usable noise bed per corpus slot, notched where necessary.
 
     ``quiet-beds.json`` next to the corpus caches the per-slot decode counts, so
@@ -207,17 +228,21 @@ def training_beds(
             batch = binding.decode(raw, DecodeConfig(path=DecodePath.FAST), 1)
             counts[path.name] = len(batch.results)
         cache.write_text(json.dumps({"max_decodes": BED_MAX_DECODES, "counts": counts}, indent=1))
-    beds: list[np.ndarray] = []
+    beds: list[Bed] = []
     for path in paths[:limit] if limit else paths:
         raw = np.frombuffer(path.read_bytes(), dtype=np.int16)
-        if counts.get(path.name, 0) <= BED_MAX_DECODES:
-            beds.append(raw.copy())
-            continue
         batch = binding.decode(raw, DecodeConfig(path=DecodePath.FAST), 1)
+        found = tuple(
+            (result.frequency, result.dt, result.snr) for result in batch.results
+        )
         beds.append(
-            _notch(
-                raw,
-                tuple((result.frequency, result.dt, result.snr) for result in batch.results),
+            Bed(
+                pcm=raw.copy(),
+                noise=raw.copy() if not found else _notch(raw, found),
+                signals=tuple(
+                    (result.text, result.frequency, result.dt, result.snr)
+                    for result in batch.results
+                ),
             )
         )
     return beds
@@ -225,7 +250,7 @@ def training_beds(
 
 def render_slot(
     binding: CoreBinding,
-    beds: list[np.ndarray],
+    beds: list[Bed],
     index: int,
     *,
     seed: int = 20261014,
@@ -246,7 +271,7 @@ def render_slot(
     attempts = 0
     while len(signals) < count and attempts < 40:
         attempts += 1
-        frequency = M.quiet_frequency(bed, generator)
+        frequency = M.quiet_frequency(bed.pcm, generator)
         if any(abs(frequency - other) < 60.0 for other in taken):
             continue
         taken.append(frequency)
@@ -256,17 +281,84 @@ def render_slot(
                 frequency=frequency,
                 dt=float(generator.uniform(M.DT_MIN, M.DT_MAX)),
                 snr_db=float(generator.uniform(*snr_span)),
+                # Faded, wandering, slightly drifting — an ideal burst only would
+                # be another way to teach the model that real signals are noise.
+                variant=int(generator.integers(1, 2**31 - 1)),
             )
         )
     placed = tuple(signals)
-    clean = _clean_component(binding, bed, placed, waves)
-    noisy = M.synthesize(binding, bed, placed, waves=waves)
-    return Render(index, noisy, clean, bed, placed, f"bed{bed_index:04d}")
+    clean = _mix(
+        _clean_component(binding, bed.noise, placed, waves),
+        bed_heard_clean(binding, bed, waves),
+    )
+    noisy = M.synthesize(binding, bed.pcm, placed, waves=waves)
+    return Render(index, noisy, clean, bed.noise, placed, f"bed{bed_index:04d}")
+
+
+# The bed's own stations are regenerated for every example drawn from that bed,
+# and a training run draws thousands from the same few dozen slots — which made
+# data generation (150 ms/example) the bottleneck instead of the model step
+# (60 ms).  The component depends only on the bed, so it is computed once.
+_HEARD_CACHE: dict[int, tuple[Bed, np.ndarray]] = {}
+_HEARD_CACHE_LIMIT = 256
+
+
+def bed_heard_clean(
+    binding: CoreBinding, bed: Bed, waves: "M.WaveformBank | None" = None
+) -> np.ndarray:
+    """The bed's own decoded stations, as a clean waveform — cached per bed."""
+
+    key = id(bed)
+    cached = _HEARD_CACHE.get(key)
+    if cached is not None and cached[0] is bed:
+        return cached[1]
+    heard = _heard_signals(bed)
+    component = np.zeros(FT8_RX_SAMPLES, dtype=np.float64)
+    for signal in heard:
+        waveform = M.waveform_for(binding, signal, waves)
+        try:
+            gain = M.signal_gain(bed.noise, waveform, signal)
+        except ValueError:
+            continue
+        start = signal.offset_samples
+        low, high = max(start, 0), min(start + waveform.size, component.size)
+        if high <= low:
+            continue
+        component[low:high] += waveform[low - start : high - start].astype(np.float64) * gain
+    result = np.clip(np.round(component), -32768.0, 32767.0).astype(np.int16)
+    if len(_HEARD_CACHE) >= _HEARD_CACHE_LIMIT:
+        _HEARD_CACHE.pop(next(iter(_HEARD_CACHE)))
+    _HEARD_CACHE[key] = (bed, result)
+    return result
+
+
+def _heard_signals(bed: Bed) -> tuple[M.SyntheticSignal, ...]:
+    """Regenerate a bed's own stations so the target asks for them to be kept."""
+
+    return tuple(
+        M.SyntheticSignal(
+            message=text,
+            frequency=frequency,
+            dt=dt,
+            snr_db=float(snr) + REPORTED_TO_NOMINAL_DB,
+        )
+        for text, frequency, dt, snr in bed.signals
+        if "<" not in text  # a hashed callsign cannot be re-encoded
+    )
+
+
+def _mix(*components: np.ndarray) -> np.ndarray:
+    """Sum int16 components into one int16 target (clipped once, not per addition)."""
+
+    total = np.zeros(FT8_RX_SAMPLES, dtype=np.float64)
+    for component in components:
+        total += component.astype(np.float64)
+    return np.clip(np.round(total), -32768.0, 32767.0).astype(np.int16)
 
 
 def _clean_component(
     binding: CoreBinding,
-    bed: np.ndarray,
+    reference: np.ndarray,
     signals: tuple[M.SyntheticSignal, ...],
     waves: "M.WaveformBank | None" = None,
 ) -> np.ndarray:
@@ -274,15 +366,13 @@ def _clean_component(
 
     clean = np.zeros(FT8_RX_SAMPLES, dtype=np.float64)
     for signal in signals:
-        waveform = (
-            waves.waveform(signal.message, signal.frequency)
-            if waves is not None
-            else M.clean_waveform_12k(binding, signal.message, signal.frequency)
-        )
-        gain = M.signal_gain(bed, waveform, signal)
+        waveform = M.waveform_for(binding, signal, waves)
+        gain = M.signal_gain(reference, waveform, signal)
         start = signal.offset_samples
-        stop = start + waveform.size
-        clean[start:stop] += waveform.astype(np.float64) * gain
+        low, high = max(start, 0), min(start + waveform.size, clean.size)
+        if high <= low:
+            continue
+        clean[low:high] += waveform[low - start : high - start].astype(np.float64) * gain
     return np.clip(np.round(clean), -32768.0, 32767.0).astype(np.int16)
 
 
@@ -328,8 +418,8 @@ def main(argv: list[str] | None = None) -> int:
 
     binding = CoreBinding(args.library or default_library_path())
     beds = training_beds(args.corpus, binding)
-    raw = sum(bed.astype(np.float64).__abs__().mean() for bed in beds) / max(len(beds), 1)
-    print(f"beds: {len(beds)} (slots with >{BED_MAX_DECODES} decodes are notched)  mean |x| {raw:.0f}")
+    heard = sum(len(bed.signals) for bed in beds)
+    print(f"beds: {len(beds)}  床内已解码信号（重生成进目标）{heard} 条")
     for index in range(args.sample):
         render = render_slot(binding, beds, index)
         model_input, target = features(render)

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1040" width="1440" height="1040">
+  <!-- 电台站接线拓扑 · 事实来源：docs/W103D_GUIDE.md §10/§15、config.py、atr1000_client.py -->
+  <style>
+    text { font-family: "PingFang SC","Hiragino Sans GB","Heiti SC",Inter,-apple-system,sans-serif; }
+    .title  { fill:#f5f5f5; font-size:40px; font-weight:700; }
+    .sub    { fill:#8a8a8a; font-size:17px; }
+    .dev    { fill:#161616; stroke:#2b2b2b; stroke-width:1.5; }
+    .name   { fill:#ededed; font-size:21px; font-weight:700; }
+    .dsub   { fill:#8a8a8a; font-size:13px; }
+    .lbl    { fill:#c8c8c8; font-size:13px; }
+    .sm     { fill:#8a8a8a; font-size:12.5px; }
+    .rf     { stroke:#f0a020; stroke-width:4.5; fill:none; stroke-linecap:round; }
+    .usb    { stroke:#6ba3d8; stroke-width:3; fill:none; stroke-linecap:round; }
+    .net    { stroke:#5fd08a; stroke-width:3; fill:none; stroke-linecap:round; }
+    .rule   { stroke:#2b2b2b; stroke-width:1; }
+    .note   { fill:#6b6b6b; font-size:14px; }
+    .scr    { fill:#0a0a0a; stroke:#2b2b2b; stroke-width:1; rx:4; }
+    .read   { fill:#f0a020; font-size:15px; font-weight:600; }
+  </style>
+
+  <rect width="1440" height="1040" fill="#0d0d0d"/>
+
+  <!-- ══════════ 标题 ══════════ -->
+  <text class="title" x="70" y="80">电台站接线拓扑</text>
+  <text class="sub"   x="70" y="118">FT-710 电台 · W103D 盒子 · ATR-1000 天调 · 天线　——　射频与控制/数据是两套并行的路径</text>
+  <line class="rule" x1="70" y1="144" x2="1370" y2="144"/>
+
+  <!-- ══════════ 天线 ══════════ -->
+  <text class="name" x="250" y="182" text-anchor="middle" fill="#f0a020">天线</text>
+  <line x1="250" y1="248" x2="250" y2="320" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
+  <line x1="250" y1="248" x2="212" y2="202" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
+  <line x1="250" y1="248" x2="288" y2="202" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
+  <rect x="232" y="320" width="36" height="26" rx="4" fill="#0d0d0d" stroke="#f0a020" stroke-width="2"/>
+  <text class="sm" x="226" y="362" text-anchor="end">50Ω 馈电点</text>
+
+  <!-- 射频 ① 天线 ↔ 天调 OUT -->
+  <line class="rf" x1="250" y1="346" x2="250" y2="422"/>
+  <text class="sm" x="270" y="404">馈线</text>
+
+  <!-- ══════════ ATR-1000 天调 ══════════ -->
+  <rect class="dev" x="140" y="430" width="220" height="175" rx="12"/>
+  <circle cx="250" cy="430" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
+  <circle cx="250" cy="605" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
+  <circle cx="360" cy="490" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <text class="name" x="250" y="486" text-anchor="middle">ATR-1000</text>
+  <text class="dsub" x="250" y="510" text-anchor="middle">网络天调</text>
+  <rect class="scr" x="172" y="534" width="156" height="44"/>
+  <text class="read" x="250" y="563" text-anchor="middle">SWR 1.2</text>
+  <text class="sm" x="270" y="438">OUT → 天线</text>
+  <text class="sm" x="270" y="630">IN ← 电台</text>
+  <text class="sm" x="372" y="480">网络</text>
+
+  <!-- 射频 ② 天调 IN ↔ 电台 ANT -->
+  <line class="rf" x1="250" y1="613" x2="250" y2="692"/>
+  <text class="sm" x="270" y="662">同轴</text>
+
+  <!-- ══════════ FT-710 电台 ══════════ -->
+  <rect class="dev" x="100" y="700" width="300" height="175" rx="12"/>
+  <circle cx="250" cy="700" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
+  <circle cx="400" cy="790" r="8" fill="#0d0d0d" stroke="#6ba3d8" stroke-width="2.5"/>
+  <rect class="scr" x="124" y="730" width="132" height="58"/>
+  <text class="read" x="190" y="757" text-anchor="middle">14.270.000</text>
+  <text class="sm"   x="190" y="778" text-anchor="middle">LSB　CW　USB</text>
+  <circle cx="345" cy="762" r="24" fill="#1c1c1c" stroke="#3a3a3a" stroke-width="1.5"/>
+  <circle cx="345" cy="762" r="6"  fill="#2b2b2b"/>
+  <rect x="276" y="808" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <rect x="306" y="808" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <rect x="336" y="808" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <text class="name" x="190" y="826" text-anchor="middle">FT-710</text>
+  <text class="dsub" x="190" y="850" text-anchor="middle">电台</text>
+  <text class="sm" x="268" y="726">ANT</text>
+
+  <!-- ══════════ USB：电台 ↔ 盒子 ══════════ -->
+  <line class="usb" x1="400" y1="790" x2="600" y2="790"/>
+  <text class="sm" x="500" y="828" text-anchor="middle" fill="#6ba3d8" font-weight="600">Enhanced 口</text>
+  <text class="sm" x="500" y="848" text-anchor="middle">CAT + 音频 + 频谱</text>
+
+  <!-- ══════════ W103D 盒子 ══════════ -->
+  <rect class="dev" x="600" y="700" width="260" height="175" rx="12"/>
+  <circle cx="600" cy="790" r="8" fill="#0d0d0d" stroke="#6ba3d8" stroke-width="2.5"/>
+  <circle cx="730" cy="700" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <text class="name" x="730" y="788" text-anchor="middle">W103D 盒子</text>
+  <text class="dsub" x="730" y="812" text-anchor="middle" fill="#f0a020">MRRC Modern 服务端</text>
+  <circle cx="634" cy="840" r="4" fill="#5fd08a"/>
+  <rect x="666" y="834" width="34" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <rect x="708" y="834" width="34" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <text class="sm" x="744" y="694">网络</text>
+
+  <!-- ══════════ 网络：盒子 ↔ 局域网 ══════════ -->
+  <line class="net" x1="730" y1="568" x2="730" y2="692"/>
+
+  <!-- ══════════ 局域网 / 路由器 ══════════ -->
+  <rect x="610" y="420" width="320" height="140" rx="14" fill="#0f1a14" stroke="#2a4a38" stroke-width="1.5"/>
+  <circle cx="610" cy="490" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <circle cx="930" cy="490" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <circle cx="730" cy="560" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <text x="770" y="482" text-anchor="middle" fill="#5fd08a" font-size="18" font-weight="600">局域网 / 路由器</text>
+  <text x="770" y="508" text-anchor="middle" fill="#6b8f7d" font-size="12">盒子按 IP 直连天调</text>
+
+  <!-- ══════════ 网络：天调 ↔ 局域网 ══════════ -->
+  <line class="net" x1="368" y1="490" x2="602" y2="490"/>
+
+  <!-- ══════════ 手机 / 电脑 ══════════ -->
+  <rect x="1040" y="420" width="330" height="140" rx="12" class="dev"/>
+  <rect x="1070" y="450" width="58" height="84" rx="8" fill="#0d0d0d" stroke="#9aa0a8" stroke-width="1.5"/>
+  <line x1="1088" y1="522" x2="1110" y2="522" stroke="#9aa0a8" stroke-width="1.5"/>
+  <circle cx="1040" cy="490" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <text class="name" x="1240" y="480" text-anchor="middle" font-size="18">手机 / 电脑</text>
+  <text class="dsub" x="1240" y="506" text-anchor="middle">浏览器接入 :8888</text>
+  <line class="net" x1="938" y1="490" x2="1032" y2="490"/>
+
+  <!-- ══════════ 网络链路说明卡 ══════════ -->
+  <rect x="430" y="190" width="580" height="215" rx="12" class="dev"/>
+  <text x="458" y="232" fill="#5fd08a" font-size="17" font-weight="600">这根网络线上跑什么</text>
+  <line class="rule" x1="458" y1="250" x2="982" y2="250"/>
+  <text class="lbl" x="458" y="286" fill="#f0a020">盒子 → 天调</text>
+  <text class="lbl" x="566" y="286">SYNC 轮询 · 调谐命令 · L/C 继电器参数</text>
+  <text class="sm"  x="566" y="308">还主动告知：当前频率、在不在发射</text>
+  <text class="lbl" x="458" y="344" fill="#5fd08a">天调 → 盒子</text>
+  <text class="lbl" x="566" y="344">实时功率 · SWR · 当前 L/C 继电器状态</text>
+  <line class="rule" x1="458" y1="364" x2="982" y2="364"/>
+  <text class="note" x="458" y="390">天调自己不晓得你在哪个频率 —— 是盒子一直在告诉它。</text>
+
+  <!-- ══════════ 图例 ══════════ -->
+  <line class="rule" x1="70" y1="920" x2="1370" y2="920"/>
+  <line class="rf"  x1="70" y1="962" x2="130" y2="962"/>
+  <text class="lbl" x="144" y="967">射频 50Ω</text>
+  <text class="sm"  x="144" y="986">电台 → 天调 → 天线</text>
+
+  <line class="usb" x1="400" y1="962" x2="460" y2="962"/>
+  <text class="lbl" x="474" y="967">USB（一根线三路）</text>
+  <text class="sm"  x="474" y="986">CAT 串口 · USB 声卡 · FT4222 频谱</text>
+
+  <line class="net" x1="790" y1="962" x2="850" y2="962"/>
+  <text class="lbl" x="864" y="967">网络</text>
+  <text class="sm"  x="864" y="986">WebSocket / HTTP</text>
+
+  <text class="note" x="70" y="1024">射频路径：电台 ANT → ATR-1000 IN/OUT → 天线。天调串在中间，不是旁挂。　·　识别串口与声卡：docs/W103D_GUIDE.md §10</text>
+</svg>

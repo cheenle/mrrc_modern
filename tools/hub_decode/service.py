@@ -123,6 +123,94 @@ def parse_portfolio(spec: str) -> tuple[PortfolioEntry, ...]:
     return tuple(entries)
 
 
+@dataclass(frozen=True, slots=True)
+class _Task:
+    """One decode: a configuration, the segment holding its input, and a label."""
+
+    config: DecodeConfig
+    segment: SharedMemory
+    label: str = ""
+
+
+class Enhancer:
+    """The optional ML front-end (P3): decode the slot twice, union the answers.
+
+    Deployment shape, fixed by measurement rather than taste: the mask is an
+    *extra input*, never a replacement.  The slot is decoded plain and enhanced
+    and ``merge_batches`` unions the two, so a message the mask damages costs
+    nothing — the plain copy still heard it.  On real slots at ``alpha=0.7``
+    that is +0.5-0.9% net for 2.4% lost inside the enhanced copy alone
+    (docs/superpowers/specs/2026-10-14-ft8-ml-enhancement-design.md).
+
+    Torch is optional at runtime as well as in the dependency list: a host
+    without it, or without the model file, keeps decoding exactly as it did
+    before this class existed — and says so once, in the log.
+    """
+
+    def __init__(self, model: Path, alpha: float = 0.7) -> None:
+        if not 0.0 < alpha <= 1.0:
+            raise ValueError("enhancement alpha must be in (0, 1]")
+        self._model_path = Path(model)
+        self.alpha = float(alpha)
+        self._bundle: tuple[object, object] | None = None
+        self._warned = False
+        self.enhanced_slots = 0
+
+    def _disable(self, reason: str) -> None:
+        if not self._warned:
+            self._warned = True
+            log.warning("enhancement disabled: %s", reason)
+
+    def _load(self):
+        """Load the model once; a failure disables the stage for good."""
+
+        if self._bundle is not None:
+            return self._bundle
+        try:
+            import torch
+        except ImportError as error:
+            self._disable(f"torch is not installed ({error})")
+            return None
+        if not self._model_path.exists():
+            self._disable(f"{self._model_path} does not exist")
+            return None
+        try:
+            from tools.ft8.ml_enhance import build_model
+
+            payload = torch.load(self._model_path, map_location="cpu", weights_only=False)
+            model = build_model()
+            model.load_state_dict(payload["model"])
+            model.eval()
+        except Exception as error:  # noqa: BLE001 — a broken model is not a crash
+            self._disable(f"the model could not be loaded ({error})")
+            return None
+        self._bundle = (torch, model)
+        log.info("enhancement enabled: %s at alpha=%.2f", self._model_path, self.alpha)
+        return self._bundle
+
+    def enhance(self, pcm: bytes) -> bytes | None:
+        """Return the enhanced slot, or ``None`` if the stage is unavailable."""
+
+        bundle = self._load()
+        if bundle is None:
+            return None
+        torch, model = bundle
+        try:
+            import numpy as np
+
+            from tools.ft8.ml_enhance import enhance
+
+            samples = np.frombuffer(pcm, dtype="<i2")
+            with torch.no_grad():  # type: ignore[union-attr]
+                out = enhance(samples, model, self.alpha)
+        except Exception:  # noqa: BLE001 — the plain answer still stands
+            log.exception("enhancement failed; decoding the plain slot only")
+            self._disable("the model raised")
+            return None
+        self.enhanced_slots += 1
+        return out.tobytes()
+
+
 class DecodeService:
     """The request logic, with the HTTP layer deliberately absent.
 
@@ -140,6 +228,7 @@ class DecodeService:
         timeout_s: float = DEFAULT_TIMEOUT_S,
         monotonic=time.monotonic,
         portfolio: tuple[PortfolioEntry, ...] = (),
+        enhancer: "Enhancer | None" = None,
     ) -> None:
         if not token:
             raise ValueError("the decode service needs a token")
@@ -155,13 +244,19 @@ class DecodeService:
         # caller asked for.  That is the hub's behaviour and it stays the
         # default; a host deployment opts into spending more CPU per slot.
         self._portfolio = tuple(portfolio)
+        # Optional ML front-end: an extra input beside the untouched one, never a
+        # replacement (see Enhancer).  None is today's behaviour.
+        self._enhancer = enhancer
         self._token = token
         self._max_threads = int(max_threads)
         self._timeout_s = float(timeout_s)
         self._monotonic = monotonic
         # Non-blocking: the second caller is answered "busy", never parked.
         self._busy = threading.Lock()
-        self._segment: SharedMemory | None = None
+        # One segment per input: the plain slot and (when enhancement is on) the
+        # enhanced copy.  Two, because the two decodes run *in parallel* —
+        # serialising them would cost 2x ~1.8 s and blow the box's deadline.
+        self._segments: list[SharedMemory] = []
 
     # -- request handling --------------------------------------------------
 
@@ -213,7 +308,7 @@ class DecodeService:
         threads = min(requested.threads, self._max_threads, MAX_DECODE_THREADS)
         slot_id = int(frame["slot_id"])  # type: ignore[arg-type]
 
-        segment = self._ensure_segment()
+        segment = self._ensure_segment(0)
         segment.buf[: len(pcm)] = pcm
         configs = [
             (requested if entry is None else requested.replace(
@@ -224,9 +319,16 @@ class DecodeService:
             )).replace(threads=threads)
             for entry in (self._portfolio or (None,))
         ]
+        tasks = [_Task(config, segment) for config in configs]
+        if self._enhancer is not None:
+            enhanced = self._enhancer.enhance(pcm)
+            if enhanced is not None:
+                other = self._ensure_segment(1)
+                other.buf[: len(enhanced)] = enhanced
+                tasks += [_Task(config, other, "enh") for config in configs]
 
         started = self._monotonic()
-        replies = self._run(configs, slot_id, segment)
+        replies = self._run(tasks, slot_id)
         elapsed = self._monotonic() - started
         if not replies:
             log.error("every configuration failed for slot %s", slot_id)
@@ -242,7 +344,9 @@ class DecodeService:
             " + ".join(
                 f"p{c.profile}c{c.cycles}{'lt' if c.low_threshold else ''}"
                 f"{f'-s{c.sensitivity}' if c.sensitivity != 2 else ''}"
-                for c in configs
+                f"{' enh' if t.label else ''}"
+                for t in tasks
+                for c in (t.config,)
             ),
             len(batch.results),
             elapsed,
@@ -262,19 +366,19 @@ class DecodeService:
         return 200, encode_frame(reply_frame)
 
     def _run(
-        self, configs: list[DecodeConfig], slot_id: int, segment: SharedMemory
+        self, tasks: list[_Task], slot_id: int
     ) -> list[dict[str, object]]:
-        """Decode the slot once per configuration, across the worker pool.
+        """Decode the slot once per task, across the worker pool, in parallel.
 
-        One shared segment serves every configuration: the workers map it
-        read-only and the busy lock guarantees nobody rewrites it underneath a
-        decode that is still running.  A configuration that fails is dropped
-        from the union rather than failing the request — a partial answer is
-        the whole point of running several.
+        One shared segment per input: the workers map them read-only and the busy
+        lock guarantees nobody rewrites one underneath a decode that is still
+        running.  A task that fails is dropped from the union rather than failing
+        the request — a partial answer is the whole point of running several.
         """
 
         def one(index: int) -> dict[str, object] | None:
-            config = configs[index]
+            task = tasks[index]
+            config, segment = task.config, task.segment
             worker = self._workers[index % len(self._workers)]
             worker_frame = {
                 "type": "decode",
@@ -301,22 +405,22 @@ class DecodeService:
                 return None
             return reply
 
-        if len(configs) == 1:
+        if len(tasks) == 1:
             reply = one(0)
             return [reply] if reply is not None else []
         with ThreadPoolExecutor(
-            max_workers=min(len(configs), len(self._workers))
+            max_workers=min(len(tasks), len(self._workers))
         ) as pool:
-            return [reply for reply in pool.map(one, range(len(configs))) if reply is not None]
+            return [reply for reply in pool.map(one, range(len(tasks))) if reply is not None]
 
-    def _ensure_segment(self) -> SharedMemory:
-        if self._segment is None:
-            self._segment = SharedMemory(create=True, size=SLOT_PCM_BYTES)
-        return self._segment
+    def _ensure_segment(self, index: int) -> SharedMemory:
+        while len(self._segments) <= index:
+            self._segments.append(SharedMemory(create=True, size=SLOT_PCM_BYTES))
+        return self._segments[index]
 
     def close(self) -> None:
-        segment, self._segment = self._segment, None
-        if segment is not None:
+        segments, self._segments = self._segments, []
+        for segment in segments:
             segment.close()
             segment.unlink()
 
@@ -409,6 +513,12 @@ def main(argv: list[str] | None = None) -> int:
         "--portfolio-workers", type=int, default=0,
         help="workers to run the portfolio on (default: one per entry)",
     )
+    parser.add_argument(
+        "--enhance", default="",
+        help="mask model (.pt), or model.pt:alpha, for the ML front-end: the slot is "
+             "decoded plain and enhanced, in parallel, and the answers are unioned "
+             "(default alpha 0.7; needs --portfolio-workers >= 2 to stay parallel)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(
@@ -433,6 +543,21 @@ def main(argv: list[str] | None = None) -> int:
     os.chdir(args.app_root)
     portfolio = parse_portfolio(args.portfolio) if args.portfolio else ()
     worker_count = args.portfolio_workers or max(1, len(portfolio))
+    enhancer = None
+    if args.enhance:
+        model_text, _, alpha_text = args.enhance.partition(":")
+        enhancer = Enhancer(Path(model_text), float(alpha_text) if alpha_text else 0.7)
+        # Enhancement doubles the decodes per slot, and they must run *in
+        # parallel*: serialised, the box's 3.2 s deadline is spent in a queue
+        # and the deep answer is dropped altogether — a much worse outcome than
+        # an extra worker process.
+        required = 2 * max(1, len(portfolio))
+        if worker_count < required:
+            log.info(
+                "raising the worker pool to %d: enhancement decodes each slot twice",
+                required,
+            )
+            worker_count = required
     supervisors = [
         WorkerSupervisor(library_path=library, stop_timeout=5.0)
         for _ in range(worker_count)
@@ -445,6 +570,7 @@ def main(argv: list[str] | None = None) -> int:
         max_threads=args.max_threads,
         timeout_s=args.timeout,
         portfolio=portfolio,
+        enhancer=enhancer,
     )
     if portfolio:
         log.info(

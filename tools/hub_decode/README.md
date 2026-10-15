@@ -82,3 +82,32 @@ The real end-to-end check is the box's own decode — see the plan's task 9
   from the box's clock.  The hub bounds each request with `--timeout`.
 - **One decode at a time** by design (one core, and the entry path shares it).
   `max_threads` caps whatever the caller asks for; the box already sends 1.
+
+## Optional: the ML front-end (`--enhance`)
+
+Decodes each slot **twice** — the untouched PCM and a mask-enhanced copy — in
+parallel, and unions the answers, so a message the mask damages costs nothing.
+Measured on real slots at `alpha=0.7`: **+0.5-0.9%** net, with 2.4% lost inside
+the enhanced copy alone.  (See `docs/superpowers/specs/2026-10-14-ft8-ml-enhancement-design.md`.)
+
+```sh
+python3 -m venv /opt/mrrc-decode/.venv
+/opt/mrrc-decode/.venv/bin/pip install numpy torch \
+    --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+# a model, trained from the slot corpus (see tools/ft8/ml_enhance.py train):
+install -m 644 mask-v2.pt /opt/mrrc-decode/models/mask-v2.pt
+```
+
+Add to the unit (the CLI raises the worker pool to `2 x portfolio` on its own,
+with a log line, because the two decodes must not serialise):
+
+```ini
+ExecStart=/opt/mrrc-decode/.venv/bin/python /opt/mrrc-decode/tools/hub_decode/service.py \
+    --portfolio p1c3lt-s3 --portfolio-workers 2 \
+    --enhance /opt/mrrc-decode/models/mask-v2.pt:0.7 \
+```
+
+Without torch, without the model, or with a model that raises, the service
+decodes once and warns once — the exact behaviour it had before this flag
+existed.  Drop `--enhance` to go back.
+

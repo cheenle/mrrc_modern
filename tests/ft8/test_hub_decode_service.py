@@ -430,3 +430,97 @@ def test_without_a_portfolio_the_callers_config_is_used_verbatim() -> None:
     assert status == 200
     assert worker.seen[0]["config"]["cycles"] == 1  # the request's own cycles
     assert worker.seen[0]["config"]["profile"] == 3
+
+
+class FakeEnhancer:
+    """Stands in for the mask model: returns a distinguishable slot, or nothing."""
+
+    def __init__(self, produces: bool = True) -> None:
+        self.produces = produces
+        self.calls = 0
+
+    def enhance(self, pcm: bytes) -> bytes | None:
+        self.calls += 1
+        return b"\x01\x00" * 180_000 if self.produces else None
+
+
+def test_enhancement_decodes_the_slot_twice_and_unions_the_answers() -> None:
+    """The mask is an extra input, never a replacement.
+
+    Two decodes of the same slot, and the answer is their union — which is what
+    makes a mask that damages a message cost nothing: the plain copy still heard
+    it.  (Measured on real slots at alpha=0.7: +0.5-0.9% net with 2.4% lost
+    inside the enhanced copy alone.)
+    """
+
+    module = _load_service()
+
+    class Worker:
+        def __init__(self) -> None:
+            self.seen: list[dict[str, object]] = []
+
+        def request(self, frame, timeout):
+            self.seen.append(frame)
+            text = "CQ AAA" if len(self.seen) == 1 else "CQ BBB"
+            return {
+                "v": PROTOCOL_VERSION, "type": "decode_ok", "generation": 0,
+                "request_id": 0, "slot_id": frame["slot_id"],
+                "path": frame["config"]["path"], "overflow": False,
+                "elapsed_seconds": 0.5, "cpu_seconds": 0.5, "deadline_missed": False,
+                "results": [
+                    {"slot_id": frame["slot_id"], "sync": 0.9, "snr": -10, "dt": 0.1,
+                     "frequency": 1000.0 + (0.0 if text == "CQ AAA" else 500.0),
+                     "text": text, "ap_type": 0, "quality": 1.0, "flags": 0}
+                ],
+            }
+
+    worker = Worker()
+    enhancer = FakeEnhancer()
+    service = module.DecodeService(
+        worker, token="secret", monotonic=lambda: 500.0, enhancer=enhancer
+    )
+    status, body = service.handle(_frame(), bytes(360_000), authorization="Bearer secret")
+
+    assert status == 200
+    texts = {result["text"] for result in decode_frame(body)["results"]}
+    assert texts == {"CQ AAA", "CQ BBB"}, "the answer must be the union of both decodes"
+    assert enhancer.calls == 1
+    assert len(worker.seen) == 2
+    # Two different segments: the workers run in parallel, so neither may be
+    # overwritten while the other is still decoding.
+    assert worker.seen[0]["shm"]["name"] != worker.seen[1]["shm"]["name"]
+
+
+def test_a_failed_enhancement_still_answers_from_the_plain_decode() -> None:
+    module = _load_service()
+    worker = FakeWorker()
+    enhancer = FakeEnhancer(produces=False)
+    status, body = _service(worker, enhancer=enhancer).handle(
+        _frame(), bytes(360_000), authorization="Bearer secret"
+    )
+
+    assert status == 200
+    assert decode_frame(body)["type"] == "decode_ok"
+    assert enhancer.calls == 1
+    assert len(worker.seen) == 1, "an unavailable mask means one decode, as before"
+
+
+def test_the_enhancer_is_disabled_once_when_its_model_is_missing(tmp_path, caplog) -> None:
+    """No torch, no model: the host keeps decoding, and says so exactly once."""
+
+    import logging as _logging
+
+    module = _load_service()
+    enhancer = module.Enhancer(tmp_path / "absent.pt", 0.7)
+    with caplog.at_level(_logging.WARNING, logger="mrrc.hub.decode"):
+        assert enhancer.enhance(bytes(360_000)) is None
+        assert enhancer.enhance(bytes(360_000)) is None
+    warnings = [r for r in caplog.records if "enhancement disabled" in r.getMessage()]
+    assert len(warnings) == 1
+
+
+def test_enhancement_requires_a_plausible_alpha(tmp_path) -> None:
+    module = _load_service()
+    for alpha in (0.0, -0.5, 1.5):
+        with pytest.raises(ValueError):
+            module.Enhancer(tmp_path / "model.pt", alpha)

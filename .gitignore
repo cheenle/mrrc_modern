@@ -82,4 +82,10 @@ mrrc_modern.env
 # Live session tokens (runtime state, never committed)
 auth-tokens.json
 
+# Cloud Hub tunnel binary, fetched at build time by packaging/common/fetch-frpc.sh
+# (14.8 MB). stage-tree.sh has excluded /fleet/ since 2026-10-11 after a build
+# staged a developer's own copy into an image; ignoring it here stops the same
+# machine state from reaching git via `git add -A`.
+fleet/
+
 .venv-ml/

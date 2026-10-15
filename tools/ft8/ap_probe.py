@@ -33,15 +33,25 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+# Runnable both as `python tools/ft8/ap_probe.py` and `python -m tools.ft8.ap_probe`
+# (the same bootstrap ml_detr.py uses): a direct script run puts tools/ft8 on
+# sys.path, not the repo root, so `import ft8` would fail.
+_APP_ROOT = Path(__file__).resolve().parents[2]
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))
 
 from ft8.core.binding import CoreBinding
 from ft8.core.models import DecodeConfig, DecodePath
 from ft8.core.worker import default_library_path
 
-from .ml_simulate import (  # noqa: F401  (re-exported for callers)
+from tools.ft8.ml_simulate import (  # noqa: F401  (re-exported for callers)
     DT_MAX,
     DT_MIN,
+    DT_TOLERANCE,
+    FREQUENCY_TOLERANCE,
     SyntheticSignal,
     quiet_frequency,
     slot_pcm,
@@ -102,17 +112,43 @@ def _decode(binding: CoreBinding, pcm, config: DecodeConfig, slot_id: int):
 
 
 def _hit(batch, signal: SyntheticSignal) -> tuple[bool, int, float]:
-    """Return (found, ap_type, quality) for the synthesized signal's slot."""
+    """Return (found, ap_type, quality) for a decode that *is* the synthesized signal.
+
+    The truth is known here, so the criterion is the text, not the neighbourhood:
+    a real bed holds other stations, and a hand-written 25 Hz / 1.5 s window
+    credited their decodes to our signal (that is how the first paired run
+    reported an impossible 4/20 at -30 dB).  Tolerances come from ml_simulate,
+    which is where they were validated against the decoder's own estimates.
+    """
 
     for result in batch.results:
         if (
-            abs(result.frequency - signal.frequency) <= 25.0
-            and abs(result.dt - signal.dt) <= 1.5
+            abs(result.frequency - signal.frequency) <= FREQUENCY_TOLERANCE
+            and abs(result.dt - signal.dt) <= DT_TOLERANCE
+            and str(result.text).strip() == signal.message
         ):
             return True, int(getattr(result, "ap_type", 0) or 0), float(
                 getattr(result, "quality", 1.0) or 1.0
             )
     return False, 0, 0.0
+
+
+def _wrong_text_at_signal(batch, signal: SyntheticSignal) -> str:
+    """Return the text of a decode sitting on our (freq, dt) that is *not* our message.
+
+    This is the AP false-decode detector: a8 picks the best of ~127 hypotheses,
+    so it can return a neighbouring report value that still passes CRC.  An
+    empty string means nothing wrong was produced at our location.
+    """
+
+    for result in batch.results:
+        if (
+            abs(result.frequency - signal.frequency) <= FREQUENCY_TOLERANCE
+            and abs(result.dt - signal.dt) <= DT_TOLERANCE
+            and str(result.text).strip() != signal.message
+        ):
+            return str(result.text).strip()
+    return ""
 
 
 def _invented(batch, signal: SyntheticSignal) -> str | None:
@@ -123,7 +159,10 @@ def _invented(batch, signal: SyntheticSignal) -> str | None:
     """
 
     for result in batch.results:
-        if abs(result.frequency - signal.frequency) <= 25.0:
+        if (
+            abs(result.frequency - signal.frequency) <= FREQUENCY_TOLERANCE
+            and abs(result.dt - signal.dt) <= DT_TOLERANCE
+        ):
             return str(result.text)
     return None
 
@@ -220,6 +259,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--trials", type=int, default=4)
     parser.add_argument("--snr", default="-26,-24,-22")
     parser.add_argument("--progress", default="0,1,2,3,4,5")
+    parser.add_argument(
+        "--paired",
+        action="store_true",
+        help="P5 measurement: same PCM decoded AP-off then AP-fed, dt inside a8's reach",
+    )
+    parser.add_argument("--paired-progress", type=int, default=2)
     parser.add_argument("--json", type=Path, default=None)
     parser.add_argument("--library", default=None)
     args = parser.parse_args(argv)
@@ -231,8 +276,22 @@ def main(argv: list[str] | None = None) -> int:
 
     binding = CoreBinding(args.library or default_library_path())
     snr_values = tuple(float(part) for part in args.snr.split(","))
-    progress_values = tuple(int(part) for part in args.progress.split(","))
     print(f"beds: {len(beds)} slots   my={MY_CALL} dx={DX_CALL} grid={DX_GRID}")
+
+    if args.paired:
+        report = paired_probe(
+            binding,
+            beds,
+            snr_values=snr_values,
+            trials=args.trials,
+            progress=args.paired_progress,
+        )
+        if args.json:
+            args.json.write_text(json.dumps(report, indent=1, sort_keys=True))
+            print(f"\nwrote {args.json}")
+        return 0
+
+    progress_values = tuple(int(part) for part in args.progress.split(","))
 
     report = probe(
         binding,
@@ -245,6 +304,135 @@ def main(argv: list[str] | None = None) -> int:
         args.json.write_text(json.dumps(report, indent=1, sort_keys=True))
         print(f"\nwrote {args.json}")
     return 0
+
+
+
+# ---------------------------------------------------------------------------
+# P5: the paired measurement
+# ---------------------------------------------------------------------------
+#
+# The first probe (above) scattered dt uniformly over [DT_MIN, DT_MAX] = [0, 2.5]
+# and found no AP gain.  Reading ft8_a8d explains why that measurement could not
+# have seen anything: a8 searches lag in [-200, +200] at its 200 Hz internal rate
+# with `j = i + lag + 100`, i.e. it only reaches dt in [-0.5, +1.5] s.  Roughly
+# 40% of those trials placed the signal outside the one AP path able to find a
+# *new* message.
+#
+# getmsg() (vendor/ft8/ft8_a7.f90:377) also bounds the hypothesis space: base
+# "mycall hiscall" plus RRR/RR73/73, "CQ hiscall hisgrid", "mycall hiscall grid",
+# and reports isnr = -50 + (i-7)/2 for i = 7..206 with `abs(isnr) > 30` dropped
+# -- about 127 live messages, log2(127) ~ 7.0 bits.  That is the arithmetic of
+# docs/ft8-dl-speculative-notes.md section 2, read off the source instead of
+# estimated.
+#
+# This second measurement is paired: the *same* PCM is decoded AP-off and then
+# AP-fed, so the comparison cannot be confounded by which bed a trial drew.  It
+# also checks the decoded TEXT, because a8 picks the best of ~127 hypotheses and
+# can therefore return a *different* report value that still passes CRC -- the
+# one failure mode that would make AP dangerous rather than merely useless.
+A8_MESSAGE = "BA4EG JA1VAT -12"  # getmsg i=83: isnr = -50 + (83-7)/2 = -12
+A8_DT_MAX = 1.4  # inside a8's [-0.5, +1.5] s reach, with margin
+
+
+def paired_probe(
+    binding: CoreBinding,
+    beds: list[Path],
+    *,
+    snr_values: tuple[float, ...],
+    trials: int,
+    progress: int = 2,
+    seed: int = 20261016,
+) -> dict[str, object]:
+    """Decode each slot twice -- AP off, then AP fed -- and report the pairing.
+
+    The number that matters is ``gained / ap_off_missed``: a8 is suppressed by
+    ``clear_a8_near_rx`` whenever anything decodes within 3 Hz of rx_frequency,
+    so it can only ever help on the slots the classical path missed.  Measuring
+    it over all slots dilutes the effect by the classical path's own success
+    rate, which is what the first probe did.
+    """
+
+    import numpy as np
+
+    generator = np.random.default_rng(seed)
+    report: dict[str, object] = {
+        "message": A8_MESSAGE,
+        "dt_max": A8_DT_MAX,
+        "progress": progress,
+        "trials": trials,
+        "by_snr": {},
+    }
+
+    print(f"paired probe: {A8_MESSAGE!r}  dt<= {A8_DT_MAX}  progress={progress}")
+    for snr in snr_values:
+        both = only_off = only_fed = neither = 0
+        ap8 = 0
+        wrong_text = 0
+        gained_texts: list[str] = []
+        for trial in range(trials):
+            bed = beds[(trial * 7 + int(snr)) % len(beds)]
+            pcm_bed = slot_pcm(bed)
+            frequency = quiet_frequency(pcm_bed, generator)
+            dt = float(generator.uniform(DT_MIN, A8_DT_MAX))
+            signal = SyntheticSignal(
+                message=A8_MESSAGE, frequency=frequency, dt=dt, snr_db=snr
+            )
+            pcm = synthesize(binding, pcm_bed, (signal,))
+            slot_id = abs(hash((snr, trial))) % 90_000
+
+            off = _hit(
+                _decode(binding, pcm, _config(ap=False), slot_id), signal
+            )
+            fed_batch = _decode(
+                binding,
+                pcm,
+                _config(
+                    ap=True,
+                    my_call=MY_CALL,
+                    dx_call=DX_CALL,
+                    dx_grid=DX_GRID,
+                    qso_progress=progress,
+                    rx_frequency=int(round(frequency)),
+                    tx_frequency=int(round(frequency)),
+                ),
+                slot_id + 1,
+            )
+            fed = _hit(fed_batch, signal)
+
+            both += int(off[0] and fed[0])
+            only_off += int(off[0] and not fed[0])
+            only_fed += int(fed[0] and not off[0])
+            neither += int(not off[0] and not fed[0])
+            if fed[1] == 8:
+                ap8 += 1
+            # Precision: a8 chooses the best of ~127 hypotheses, so a neighbouring
+            # report ("-14" for "-12") still passes CRC.  Count those separately
+            # from the gains, and keep the offending text for inspection.
+            bad = _wrong_text_at_signal(fed_batch, signal)
+            if bad:
+                wrong_text += 1
+                gained_texts.append(bad if not off[0] else f"(off also had it) {bad}")
+
+        missed = only_fed + neither
+        print(
+            f"  {snr:+5.0f} dB   both {both:>3}  only_off {only_off:>3}  "
+            f"only_fed {only_fed:>3}  neither {neither:>3}   "
+            f"ap_type=8: {ap8:>3}   wrong_text: {wrong_text:>3}"
+            + (f"   [{', '.join(gained_texts[:3])}]" if gained_texts else ""),
+            flush=True,
+        )
+        report["by_snr"][f"{snr:+.0f}"] = {  # type: ignore[index]
+            "both": both,
+            "only_off": only_off,
+            "only_fed": only_fed,
+            "neither": neither,
+            "ap8": ap8,
+            "wrong_text": wrong_text,
+            "gained_over_missed": f"{only_fed}/{missed}",
+            "gained_texts": gained_texts,
+        }
+
+    return report
 
 
 if __name__ == "__main__":

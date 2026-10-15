@@ -18,10 +18,13 @@ pure enough to test here:
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 from ft8.core.models import DecodeConfig
 from ft8.core.protocol import _CONFIG_FIELDS, _RESULT_FIELDS
 from tools.ft8 import ap_probe
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class ApProbeArmTests(unittest.TestCase):
@@ -130,3 +133,192 @@ class ApResultSchemaTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class A8HypothesisSpaceTests(unittest.TestCase):
+    """Mirror of getmsg() (vendor/ft8/ft8_a7.f90:377) and a8's lag window.
+
+    The first probe found no AP gain, and reading the source explained why: it
+    scattered dt over [0, 2.5] s while ft8_a8d only searches lag in [-200, +200]
+    at its internal 200 Hz rate with ``j = i + lag + 100`` -- a reach of
+    dt in [-0.5, +1.5] s.  These tests keep the paired probe inside a8's actual
+    hypothesis space, so a null result can no longer be explained by the probe
+    asking a question a8 was never able to answer.
+    """
+
+    @staticmethod
+    def getmsg(i: int, mycall: str, hiscall: str, hisgrid: str) -> str:
+        """Python mirror of the Fortran getmsg, including the abs(isnr)>30 drop.
+
+        Fortran ``write(msg(j0:j0+2),'(i3.2)') isnr`` renders -12 as "-12" and +5
+        as " 05", whose leading space the next line turns into "+05".  The even
+        indices get the same three characters behind an "R".
+        """
+
+        base = f"{mycall} {hiscall}"
+        if i == 1:
+            return base
+        if i == 2:
+            return f"{base} RRR"
+        if i == 3:
+            return f"{base} RR73"
+        if i == 4:
+            return f"{base} 73"
+        if i == 5:
+            return f"CQ {hiscall} {hisgrid[:4]}"
+        if i == 6:
+            return f"{base} {hisgrid[:4]}"
+        if 7 <= i <= 206:
+            isnr = -50 + (i - 7) // 2  # Fortran integer division
+            if abs(isnr) > 30:
+                return ""
+            report = f"{'+' if isnr >= 0 else '-'}{abs(isnr):02d}"
+            return f"{base} {report}" if i % 2 == 1 else f"{base} R{report}"
+        return base
+
+    def test_the_probed_message_is_in_a8_hypothesis_space(self) -> None:
+        """The probe must synthesize a message a8 is actually able to return."""
+
+        generated = {
+            self.getmsg(i, ap_probe.MY_CALL, ap_probe.DX_CALL, ap_probe.DX_GRID)
+            for i in range(1, 207)
+        }
+        generated.discard("")
+        self.assertIn(ap_probe.A8_MESSAGE, generated)
+
+    def test_the_hypothesis_space_is_about_seven_bits(self) -> None:
+        """log2(~127) ~ 7.0 bits -- the number the speculative notes cite."""
+
+        import math
+
+        generated = {
+            self.getmsg(i, ap_probe.MY_CALL, ap_probe.DX_CALL, ap_probe.DX_GRID)
+            for i in range(1, 207)
+        }
+        generated.discard("")
+        self.assertGreater(len(generated), 100, "expected the report ladder to dominate")
+        self.assertLess(len(generated), 207, "abs(isnr)>30 must drop part of the ladder")
+        self.assertAlmostEqual(math.log2(len(generated)), 7.0, delta=0.4)
+
+    def test_the_probe_stays_inside_a8_lag_window(self) -> None:
+        """lag in [-200, +200] at 200 Hz with a +100 sample offset => dt in [-0.5, +1.5]."""
+
+        low = (-200 + 100) / 200.0
+        high = (200 + 100) / 200.0
+        self.assertAlmostEqual(low, -0.5)
+        self.assertAlmostEqual(high, 1.5)
+        self.assertLessEqual(ap_probe.A8_DT_MAX, high)
+        self.assertGreaterEqual(ap_probe.A8_DT_MAX, 1.0, "keep most of the window usable")
+
+    def test_the_first_probe_was_blind_to_part_of_its_own_trials(self) -> None:
+        """Document the flaw this mode exists to fix: DT_MAX exceeds a8's reach."""
+
+        from tools.ft8.ml_simulate import DT_MAX
+
+        self.assertGreater(DT_MAX, 1.5, "the unpaired probe could place dt outside a8")
+
+
+class ApProbeCliTests(unittest.TestCase):
+    """The CLI has to be importable *and* runnable -- the tests above only prove the first.
+
+    A real failure this catches: appending a new function below the
+    ``if __name__ == "__main__"`` guard makes every unit test pass while the
+    script itself dies with NameError, because the guard runs before the
+    definition is executed.  ``--help`` exercises the same top-to-bottom path
+    without needing a corpus or the native library.
+    """
+
+    def test_the_script_runs_standalone(self) -> None:
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [sys.executable, "tools/ft8/ap_probe.py", "--help"],
+            capture_output=True,
+            text=True,
+            cwd=str(REPO_ROOT),
+            timeout=120,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr[-800:])
+        self.assertIn("--paired", result.stdout)
+
+    def test_the_main_guard_is_the_last_statement(self) -> None:
+        source = (REPO_ROOT / "tools" / "ft8" / "ap_probe.py").read_text()
+        self.assertTrue(
+            source.rstrip().endswith('if __name__ == "__main__":\n    raise SystemExit(main())'),
+            "the main guard must stay at the end, or appended helpers are undefined at run time",
+        )
+
+
+class ProbeMatchingTests(unittest.TestCase):
+    """A hit means *this* signal, not merely something in its neighbourhood.
+
+    The first paired run reported 4/20 recovered at -30 dB, which is impossible
+    for a signal that deep: the probe had hand-written a 25 Hz / 1.5 s window
+    (ml_simulate validates 15 Hz / 0.25 s), so other stations in the real bed
+    were credited to the synthesized signal.  These tests pin the criterion to
+    the text, using a fake batch -- no radio, no corpus, no native library.
+    """
+
+    class _Result:
+        def __init__(self, text, frequency=1000.0, dt=0.5, ap_type=0, quality=1.0):
+            self.text = text
+            self.frequency = frequency
+            self.dt = dt
+            self.ap_type = ap_type
+            self.quality = quality
+
+    class _Batch:
+        def __init__(self, *results):
+            self.results = list(results)
+
+    def setUp(self):
+        self.signal = ap_probe.SyntheticSignal(
+            message=ap_probe.A8_MESSAGE, frequency=1000.0, dt=0.5, snr_db=-26.0
+        )
+
+    def test_exact_text_at_the_right_place_is_a_hit(self) -> None:
+        hit, ap_type, _ = ap_probe._hit(
+            self._Batch(self._Result(ap_probe.A8_MESSAGE, ap_type=8)), self.signal
+        )
+        self.assertTrue(hit)
+        self.assertEqual(ap_type, 8)
+
+    def test_a_neighbouring_report_is_not_a_hit(self) -> None:
+        """a8 can return "-14" for "-12" and still pass CRC -- that is not a decode."""
+
+        hit, _, _ = ap_probe._hit(
+            self._Batch(self._Result("BA4EG JA1VAT -14", ap_type=8)), self.signal
+        )
+        self.assertFalse(hit)
+
+    def test_another_station_in_the_window_is_not_a_hit(self) -> None:
+        hit, _, _ = ap_probe._hit(
+            self._Batch(self._Result("CQ VK3ABC QF22", frequency=1005.0, dt=0.6)),
+            self.signal,
+        )
+        self.assertFalse(hit)
+
+    def test_the_wrong_text_detector_names_the_offender(self) -> None:
+        bad = ap_probe._wrong_text_at_signal(
+            self._Batch(self._Result("BA4EG JA1VAT -14", ap_type=8)), self.signal
+        )
+        self.assertEqual(bad, "BA4EG JA1VAT -14")
+
+    def test_the_wrong_text_detector_is_quiet_on_a_clean_slot(self) -> None:
+        self.assertEqual(
+            ap_probe._wrong_text_at_signal(self._Batch(self._Result(ap_probe.A8_MESSAGE)), self.signal),
+            "",
+        )
+
+    def test_tolerances_come_from_the_validated_module(self) -> None:
+        """Never hand-write these again: 1.5 s against a validated 0.25 s is 6x too loose."""
+
+        from tools.ft8.ml_simulate import DT_TOLERANCE, FREQUENCY_TOLERANCE
+
+        self.assertEqual(ap_probe.DT_TOLERANCE, DT_TOLERANCE)
+        self.assertEqual(ap_probe.FREQUENCY_TOLERANCE, FREQUENCY_TOLERANCE)
+        self.assertLessEqual(DT_TOLERANCE, 0.25)
+        source = (REPO_ROOT / "tools" / "ft8" / "ap_probe.py").read_text()
+        self.assertNotIn("<= 25.0", source, "hand-written frequency tolerance is back")
+        self.assertNotIn("<= 1.5\n", source, "hand-written dt tolerance is back")

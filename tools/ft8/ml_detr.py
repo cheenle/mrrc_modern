@@ -24,6 +24,7 @@ instrument as P3 — the recall-vs-SNR curve — decides.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -115,14 +116,26 @@ def tones_from_codeword(codeword: np.ndarray) -> np.ndarray:
     return tones
 
 
+# Encoding a waveform and reading its tones back is ~20-40 ms, and a training
+# run asks for the same handful of messages millions of times.  The label of a
+# message does not depend on the slot, so it is computed once.
+_CODEWORD_CACHE: dict[tuple[str, float], np.ndarray] = {}
+
+
 def codeword_for(binding: CoreBinding, message: str, frequency: float = 1000.0) -> np.ndarray:
     """Return the 174-bit codeword the encoder transmits for ``message``."""
 
+    key = (message, frequency)
+    cached = _CODEWORD_CACHE.get(key)
+    if cached is not None:
+        return cached
     waveform = M.clean_waveform_12k(binding, message, frequency)
     tones = tones_from_waveform(waveform, frequency)
     if not np.array_equal(tones_from_codeword(codeword_from_tones(tones)), tones):
         raise AssertionError(f"tone/codeword mapping is not invertible for {message!r}")
-    return codeword_from_tones(tones)
+    codeword = codeword_from_tones(tones)
+    _CODEWORD_CACHE[key] = codeword
+    return codeword
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +165,7 @@ class DetrSample:
     features: np.ndarray  # [3, F, T]: log magnitude + unit phase (cos, sin)
     targets: tuple[Target, ...]
     bed: str
+    pcm: np.ndarray = None  # type: ignore[assignment]  # the slot itself, for A/B
 
 
 def features(pcm: np.ndarray) -> np.ndarray:
@@ -226,7 +240,7 @@ def sample_for(
             )
         )
     pcm = M.synthesize(binding, bed.pcm, tuple(signals), waves=waves)
-    return DetrSample(index, features(pcm), tuple(targets), f"bed{bed_index:04d}")
+    return DetrSample(index, features(pcm), tuple(targets), f"bed{bed_index:04d}", pcm)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -440,3 +454,729 @@ def train_probe(
         torch.save({"model": model.state_dict(), "history": history}, out)
         print(f"wrote {out}")
     return {"device": device, "history": history}
+
+
+# --- S2: the training loop, with the CPU work kept off the critical path ---
+#
+# Measured before this existed: data generation 46 ms/sample single-threaded
+# against a 161 ms MPS step for a batch of 16 — the CPU was 4.5x the model, so a
+# rented GPU would have idled.  A thread pool is enough here (no fork, no
+# pickling of ctypes handles) because every heavy call releases the GIL: the
+# encoder through ctypes, the rest through numpy.
+
+
+def prefetch(build, index_batches, *, window: int = 4, workers: int = 8):
+    """Yield ``build(indices)`` results in order, generated on ``workers`` threads."""
+
+    from collections import deque
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        pending: deque = deque()
+        for indices in index_batches:
+            pending.append(pool.submit(build, indices))
+            if len(pending) > window:
+                yield pending.popleft().result()
+        while pending:
+            yield pending.popleft().result()
+
+
+# The SNR schedule: start where the decoder is comfortable and walk down.  A
+# model trained only at the cliff has nothing to learn from (nearly every label
+# is wrong and the gradient says nothing); one trained only at 0 dB never sees
+# the regime it exists for.
+def snr_schedule(steps: int, *, easy: float = -4.0, hard: float = -22.0) -> list[tuple[float, float]]:
+    """A per-step (low, high) SNR draw that anneals from easy to the cliff."""
+
+    schedule = []
+    for step in range(steps):
+        centre = easy + (hard - easy) * min(1.0, step / max(1, steps * 0.7))
+        schedule.append((centre - 2.0, centre + 2.0))
+    return schedule
+
+
+def _codeword_logits(data_logits, device):
+    """Scatter the per-symbol (58 x 3) logits back into 174-bit codeword order.
+
+    The model predicts only the data symbols (the 21 sync symbols are known a
+    priori), so the syndrome — which is defined over the whole codeword — needs
+    the sync bits filled in before it means anything.
+    """
+
+    import torch
+
+    batch = data_logits.shape[0]
+    codeword = torch.zeros(batch, CODEWORD_BITS, device=device, dtype=data_logits.dtype)
+    flattened = data_logits.reshape(batch, -1)
+    # The k-th *data* symbol carries codeword bits 3k..3k+2 — its position among
+    # the 79 symbols is a different number, and conflating them is how you get an
+    # index out of bounds (or, worse, a silent mis-mapping).
+    positions = torch.from_numpy(
+        np.array([bit for k in range(len(DATA_POSITIONS)) for bit in range(3 * k, 3 * k + 3)])
+    ).to(device)
+    return codeword.index_copy(1, positions, flattened)
+
+
+def train_decoder(
+    binding: CoreBinding,
+    beds: list[D.Bed],
+    waves: "M.WaveformBank",
+    *,
+    steps: int,
+    batch: int = 16,
+    lr: float = 3e-4,
+    seed: int = 2026,
+    workers: int = 8,
+    window: int = 6,
+    save_every: int = 200,
+    log_every: int = 50,
+    out: Path | None = None,
+    resume: Path | None = None,
+    device: str | None = None,
+    amp: bool = True,
+    syndrome_weight: float = 0.0,
+) -> dict[str, object]:
+    """Train the probe, checkpointing so a session can be stopped and resumed.
+
+    Two objectives exist and the default is the one that trains: the bit
+    cross-entropy (the demodulator) — and a syndrome term, **off by default**,
+    because both forms tried here had gradients that vanish exactly where the
+    term matters.  Measured: a sign/magnitude soft-XOR returned 1e-19 for random
+    logits and exactly 0.0 for a confidently wrong codeword; the LDPC tanh rule
+    (values correct: 0.005 for a valid codeword, 2.9 for a one-bit flip) also
+    returned 0.0 once the logits were saturated at +/-12.  The coding gain is
+    therefore left to a separate decoder stage — the classical LDPC or a learned
+    one — which is also how the literature splits demapping from decoding.
+
+    ``soft_syndrome_loss`` stays because the *verification* use is sound and is
+    what the deployment gate will call: a predicted codeword must satisfy
+    ``H c = 0`` before anything is published.
+    """
+
+    import torch
+
+    global DATA_POSITIONS_TENSOR
+    if DATA_POSITIONS_TENSOR is None:
+        DATA_POSITIONS_TENSOR = torch.from_numpy(data_positions_tensor())
+    device = device or ("mps" if torch.backends.mps.is_available() else "cpu")
+    model = build_probe_model().to(device)
+    optimiser = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    schedule = snr_schedule(steps)
+    generator = np.random.default_rng(seed)
+    start_step = 0
+    history: list[dict[str, float]] = []
+    if resume is not None and Path(resume).exists():
+        payload = torch.load(resume, map_location="cpu", weights_only=False)
+        model.load_state_dict(payload["model"])
+        optimiser.load_state_dict(payload["optimiser"])
+        start_step = int(payload.get("step", 0))
+        history = list(payload.get("history", []))
+        generator = np.random.default_rng(payload.get("rng", seed))
+        print(f"resumed {resume} at step {start_step}", flush=True)
+
+    def build(indices: tuple[list[int], tuple[float, float]]):
+        chunks, span = indices
+        return probe_batch(binding, beds, waves, chunks, seed=seed, snr_span=span)
+
+    def batches():
+        for step in range(start_step, steps):
+            span = schedule[min(step, len(schedule) - 1)]
+            indices = [int(value) for value in generator.integers(0, 10**7, batch)]
+            # The RNG advances in the main thread, so the order is reproducible
+            # however many workers happen to be generating.
+            yield (indices, span)
+
+    def save(step: int) -> None:
+        if out is None:
+            return
+        torch.save(
+            {
+                "model": model.state_dict(),
+                "optimiser": optimiser.state_dict(),
+                "step": step,
+                "history": history,
+                "rng": int(generator.integers(0, 2**31 - 1)),
+            },
+            out,
+        )
+
+    use_amp = amp and device in ("mps", "cuda")
+    autocast = (
+        torch.autocast(device_type=device, dtype=torch.bfloat16) if use_amp else torch.autocast("cpu", enabled=False)
+    )
+    model.train()
+    step = start_step
+    for (inputs, targets) in prefetch(build, batches(), window=window, workers=workers):
+        step += 1
+        x = torch.from_numpy(inputs).to(device)
+        y = torch.from_numpy(targets).to(device)
+        with autocast:
+            logits = model(x)[:, DATA_POSITIONS_TENSOR.to(device), :]
+            bit_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits.float(), y)
+        # The syndrome term is skipped, not multiplied by zero: 0 * NaN is NaN,
+        # and the term's own numerics are unforgiving (see its docstring).  When
+        # it is off it must not exist at all.
+        if syndrome_weight:
+            syndrome_loss = soft_syndrome_loss(_codeword_logits(logits.float(), device))
+            loss = bit_loss + syndrome_weight * syndrome_loss
+        else:
+            syndrome_loss = torch.zeros((), device=bit_loss.device)
+            loss = bit_loss
+        optimiser.zero_grad(set_to_none=True)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+        optimiser.step()
+        if step % log_every == 0 or step == steps:
+            with torch.no_grad():
+                predicted = (logits.float() > 0)
+                bit_accuracy = float((predicted == y.bool()).float().mean())
+                exact = float(
+                    (predicted == y.bool()).reshape(predicted.shape[0], -1).all(dim=1).float().mean()
+                )
+            history.append(
+                {"step": step, "loss": float(loss.detach().cpu()),
+                 "bit_loss": float(bit_loss.detach().cpu()),
+                 "syndrome_loss": float(syndrome_loss.detach().cpu()),
+                 "bit_accuracy": bit_accuracy, "exact_rate": exact}
+            )
+            span = schedule[min(step - 1, len(schedule) - 1)]
+            print(
+                f"  step {step:>6}/{steps}  loss {float(loss.detach().cpu()):.4f} "
+                f"(比特 {float(bit_loss.detach().cpu()):.4f} + syndrome "
+                f"{float(syndrome_loss.detach().cpu()):.3f})  "
+                f"比特准确 {bit_accuracy:.4f}  整码字 {exact:.3f}  SNR [{span[0]:+.0f},{span[1]:+.0f}] dB",
+                flush=True,
+            )
+        if out is not None and step % save_every == 0:
+            save(step)
+    save(step)
+    if out is not None:
+        print(f"wrote {out}")
+    return {"device": device, "steps": step, "history": history}
+
+
+def evaluate_vs_classical(
+    binding: CoreBinding,
+    model,
+    beds: list[D.Bed],
+    waves: "M.WaveformBank",
+    *,
+    snr_values: tuple[float, ...],
+    trials: int,
+    seed: int = 909,
+    threads: int = 4,
+) -> dict[str, object]:
+    """The S2 gate: the model and the classical chain on the *same* slot.
+
+    Ground truth is exact (we placed the signal) and the classical side runs the
+    live configuration, so the question is not "does the model look good" but
+    "does it do what the thing it would have to accompany already does".  Below
+    the classical chain it is not a candidate; at parity it is worth pushing into
+    the tail; above it, Slice 3 has something to measure on real slots.
+    """
+
+    import torch
+
+    global DATA_POSITIONS_TENSOR
+    if DATA_POSITIONS_TENSOR is None:
+        DATA_POSITIONS_TENSOR = torch.from_numpy(data_positions_tensor())
+    device = next(iter(model.parameters())).device
+    classical = DecodeConfig(
+        path=DecodePath.IMPROVED, profile=1, cycles=3, threads=threads,
+        sensitivity=3, low_threshold=True,
+    )
+    positions = DATA_POSITIONS_TENSOR.to(device)
+    model.eval()
+    report: dict[str, object] = {"trials": trials, "by_snr": {}}
+    for snr in snr_values:
+        model_hits = classical_hits = 0
+        bit_scores: list[float] = []
+        for trial in range(trials):
+            sample = sample_for(binding, beds, 5000 + trial, seed=seed, count=1,
+                                snr_span=(snr, snr), waves=waves)
+            target = sample.targets[0]
+            window = crop(sample.features, target.frequency, target.dt)
+            with torch.no_grad():
+                logits = model(torch.from_numpy(window)[None].to(device))[0]
+                predicted = (logits[positions] > 0).cpu().numpy()
+            truth = data_bit_targets(target.codeword).astype(bool)
+            bit_scores.append(float((predicted == truth).mean()))
+            model_hits += int(bool((predicted == truth).all()))
+            batch = binding.decode(sample.pcm, classical, 70_000 + trial)
+            classical_hits += int(M.found(batch.results, target))
+        report["by_snr"][f"{snr:+.0f}"] = {
+            "model_exact": model_hits,
+            "classical_hits": classical_hits,
+            "trials": trials,
+            "mean_bit_accuracy": float(np.mean(bit_scores)) if bit_scores else 0.0,
+        }
+        print(
+            f"  {snr:+5.0f} dB   模型整码字 {model_hits:>3}/{trials}（比特 {np.mean(bit_scores):.4f}）"
+            f"   经典解码器 {classical_hits:>3}/{trials}",
+            flush=True,
+        )
+    return report
+
+
+# --- the code's own structure, as a training signal ------------------------
+#
+# A per-bit objective can only ever learn the demodulator: at 95% bit accuracy
+# the chance that all 174 bits are right is 0.95**174, i.e. none.  The classical
+# chain gets its low-SNR performance from the LDPC constraints, so the model
+# needs a term that measures the same thing — the *syndrome*.  H comes straight
+# from the encoder's own generator (ldpc_174_91_c_generator.f90: 83 rows of 23
+# hex digits), and the code is systematic, so H = [G | I].
+
+GENERATOR_SOURCE = Path(__file__).resolve().parents[2] / "ft8" / "dsp" / "vendor" / "ft8" / "ldpc_174_91_c_generator.f90"
+GENERATOR_ROWS = 83
+
+
+def _generator_hex() -> list[str]:
+    """Read the generator matrix from the file the encoder was compiled from.
+
+    Not a transcribed copy: a second copy of the standard is exactly how a
+    training target drifts away from what is on the air (and the first attempt
+    here proved it — a hand-typed list came to 33 rows out of 83).
+    """
+
+    text = GENERATOR_SOURCE.read_text(encoding="utf-8", errors="ignore")
+    # The file's only 23-character hex strings are the generator rows.
+    rows = re.findall(r'"([0-9a-fA-F]{23})"', text)
+    if len(rows) != GENERATOR_ROWS:
+        raise RuntimeError(
+            f"{GENERATOR_SOURCE.name}: expected {GENERATOR_ROWS} generator rows, found {len(rows)}"
+        )
+    return rows
+
+
+def generator_rows(rows: list[str] | None = None) -> np.ndarray:
+    """The parity generator, ``[83, 91]`` — each hex digit is four message bits."""
+
+    rows = _generator_hex() if rows is None else rows
+    matrix = np.zeros((len(rows), INFO_BITS), dtype=np.uint8)
+    for index, text in enumerate(rows):
+        digits = [int(char, 16) for char in text]
+        for position, digit in enumerate(digits):
+            # encode174_91.f90: ibmax=4, but 3 for the last digit — and the bits
+            # taken are always the top ones (btest(istr, 4-jj) with jj=1..ibmax,
+            # i.e. bits 3,2,1 for the short digit).  Reading it as "the low three
+            # bits" shifts the last 3 columns of every row and makes H reject the
+            # encoder's own codewords.
+            width = 3 if position == len(digits) - 1 else 4
+            for offset in range(width):
+                column = position * 4 + offset
+                if column < INFO_BITS and (digit >> (4 - 1 - offset)) & 1:
+                    matrix[index, column] = 1
+    return matrix
+
+
+def parity_check() -> np.ndarray:
+    """``H = [G | I]``, ``[83, 174]`` — because the code is systematic."""
+
+    generator = generator_rows()
+    rows, info = generator.shape
+    check = np.zeros((rows, CODEWORD_BITS), dtype=np.uint8)
+    check[:, :info] = generator
+    check[:, info:] = np.eye(rows, dtype=np.uint8)
+    return check
+
+
+_PARITY_CHECK: np.ndarray | None = None
+
+
+def parity_check_matrix() -> np.ndarray:
+    global _PARITY_CHECK
+    if _PARITY_CHECK is None:
+        _PARITY_CHECK = parity_check()
+    return _PARITY_CHECK
+
+
+def syndrome(codeword: np.ndarray) -> np.ndarray:
+    """``H c mod 2`` — all zeros for a valid codeword."""
+
+    bits = np.asarray(codeword, dtype=np.uint8).reshape(-1)
+    if bits.size != CODEWORD_BITS:
+        raise ValueError(f"a codeword is {CODEWORD_BITS} bits, got {bits.size}")
+    return (parity_check_matrix() @ bits) % 2
+
+
+def soft_syndrome_loss(logits):
+    """Differentiable "every check is satisfied" — the LDPC tanh rule.
+
+    A check is the XOR of the bits it touches, so with bits mapped to ±1 its soft
+    value is ``prod tanh(L/2)``: +1 when the parity is even, -1 when odd (this is
+    the same quantity belief propagation passes along the graph).  The loss is 0
+    when every check is satisfied.
+
+    A sign/magnitude form of the same quantity is *numerically* correct and
+    useless: measured, it returned gradients of 1e-19 and exactly 0.0 for a
+    confidently wrong codeword — a large loss with nothing to descend.  The tanh
+    rule saturates gracefully instead of collapsing to a plateau.
+
+    Penalising the checks rather than the bits is what gives the model a route to
+    a valid codeword instead of 174 independent guesses: at 95% bit accuracy the
+    chance all 174 bits are right is 0.95**174, i.e. none.
+    """
+
+    import torch
+
+    check = torch.from_numpy(parity_check_matrix().astype(np.float32))
+    indices = check.to(logits.device).nonzero(as_tuple=False)
+    rows, columns = indices[:, 0], indices[:, 1]
+    # Clamped to +/-6, not +/-30: tanh(15) is 1 - 1e-13, so a confidently wrong
+    # codeword (the case the term exists for) had a gradient of exactly 0.0 —
+    # measured.  The clamp makes this a *guide* rather than a hard constraint;
+    # the hard check is the real syndrome, applied at inference.
+    per_edge = torch.tanh(logits.index_select(1, columns).clamp(-6.0, 6.0) / 2.0)
+    # A product over a check's edges: the sign is the parity, the magnitude the
+    # confidence.  Summing logs would lose the sign; a scatter-add of logs with a
+    # separate sign is what vanished above, so the product is taken in two halves
+    # (sum of logs of |value| plus the parity of negatives) — kept as a product
+    # here because the edges per check are few (~45) and the magnitudes are < 1.
+    logs = torch.log(per_edge.abs().clamp_min(1e-12))
+    totals = torch.zeros(logits.shape[0], check.shape[0], device=logits.device)
+    totals = totals.index_add(1, rows, logs)
+    negatives = torch.zeros_like(totals).index_add(
+        1, rows, (per_edge < 0).to(totals.dtype)
+    )
+    soft = torch.pow(-1.0, negatives.remainder(2.0)) * torch.exp(totals)
+    return ((1.0 - soft) / 2.0).mean()
+
+
+def _codeword_logits(data_logits, device):
+    """Scatter the per-symbol (58 x 3) logits back into 174-bit codeword order.
+
+    The model predicts only the data symbols (the 21 sync symbols are known a
+    priori), so the syndrome — which is defined over the whole codeword — needs
+    the sync bits filled in before it means anything.
+    """
+
+    import torch
+
+    batch = data_logits.shape[0]
+    codeword = torch.zeros(batch, CODEWORD_BITS, device=device, dtype=data_logits.dtype)
+    flattened = data_logits.reshape(batch, -1)
+    # The k-th *data* symbol carries codeword bits 3k..3k+2 — its position among
+    # the 79 symbols is a different number, and conflating them is how you get an
+    # index out of bounds (or, worse, a silent mis-mapping).
+    positions = torch.from_numpy(
+        np.array([bit for k in range(len(DATA_POSITIONS)) for bit in range(3 * k, 3 * k + 3)])
+    ).to(device)
+    return codeword.index_copy(1, positions, flattened)
+
+
+def train_decoder(
+    binding: CoreBinding,
+    beds: list[D.Bed],
+    waves: "M.WaveformBank",
+    *,
+    steps: int,
+    batch: int = 16,
+    lr: float = 3e-4,
+    seed: int = 2026,
+    workers: int = 8,
+    window: int = 6,
+    save_every: int = 200,
+    log_every: int = 50,
+    out: Path | None = None,
+    resume: Path | None = None,
+    device: str | None = None,
+    amp: bool = True,
+    syndrome_weight: float = 0.0,
+) -> dict[str, object]:
+    """Train the probe, checkpointing so a session can be stopped and resumed.
+
+    Two objectives exist and the default is the one that trains: the bit
+    cross-entropy (the demodulator) — and a syndrome term, **off by default**,
+    because both forms tried here had gradients that vanish exactly where the
+    term matters.  Measured: a sign/magnitude soft-XOR returned 1e-19 for random
+    logits and exactly 0.0 for a confidently wrong codeword; the LDPC tanh rule
+    (values correct: 0.005 for a valid codeword, 2.9 for a one-bit flip) also
+    returned 0.0 once the logits were saturated at +/-12.  The coding gain is
+    therefore left to a separate decoder stage — the classical LDPC or a learned
+    one — which is also how the literature splits demapping from decoding.
+
+    ``soft_syndrome_loss`` stays because the *verification* use is sound and is
+    what the deployment gate will call: a predicted codeword must satisfy
+    ``H c = 0`` before anything is published.
+    """
+
+    import torch
+
+    global DATA_POSITIONS_TENSOR
+    if DATA_POSITIONS_TENSOR is None:
+        DATA_POSITIONS_TENSOR = torch.from_numpy(data_positions_tensor())
+    device = device or ("mps" if torch.backends.mps.is_available() else "cpu")
+    model = build_probe_model().to(device)
+    optimiser = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    schedule = snr_schedule(steps)
+    generator = np.random.default_rng(seed)
+    start_step = 0
+    history: list[dict[str, float]] = []
+    if resume is not None and Path(resume).exists():
+        payload = torch.load(resume, map_location="cpu", weights_only=False)
+        model.load_state_dict(payload["model"])
+        optimiser.load_state_dict(payload["optimiser"])
+        start_step = int(payload.get("step", 0))
+        history = list(payload.get("history", []))
+        generator = np.random.default_rng(payload.get("rng", seed))
+        print(f"resumed {resume} at step {start_step}", flush=True)
+
+    def build(indices: tuple[list[int], tuple[float, float]]):
+        chunks, span = indices
+        return probe_batch(binding, beds, waves, chunks, seed=seed, snr_span=span)
+
+    def batches():
+        for step in range(start_step, steps):
+            span = schedule[min(step, len(schedule) - 1)]
+            indices = [int(value) for value in generator.integers(0, 10**7, batch)]
+            # The RNG advances in the main thread, so the order is reproducible
+            # however many workers happen to be generating.
+            yield (indices, span)
+
+    def save(step: int) -> None:
+        if out is None:
+            return
+        torch.save(
+            {
+                "model": model.state_dict(),
+                "optimiser": optimiser.state_dict(),
+                "step": step,
+                "history": history,
+                "rng": int(generator.integers(0, 2**31 - 1)),
+            },
+            out,
+        )
+
+    use_amp = amp and device in ("mps", "cuda")
+    autocast = (
+        torch.autocast(device_type=device, dtype=torch.bfloat16) if use_amp else torch.autocast("cpu", enabled=False)
+    )
+    model.train()
+    step = start_step
+    for (inputs, targets) in prefetch(build, batches(), window=window, workers=workers):
+        step += 1
+        x = torch.from_numpy(inputs).to(device)
+        y = torch.from_numpy(targets).to(device)
+        with autocast:
+            logits = model(x)[:, DATA_POSITIONS_TENSOR.to(device), :]
+            bit_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits.float(), y)
+        # The syndrome term is skipped, not multiplied by zero: 0 * NaN is NaN,
+        # and the term's own numerics are unforgiving (see its docstring).  When
+        # it is off it must not exist at all.
+        if syndrome_weight:
+            syndrome_loss = soft_syndrome_loss(_codeword_logits(logits.float(), device))
+            loss = bit_loss + syndrome_weight * syndrome_loss
+        else:
+            syndrome_loss = torch.zeros((), device=bit_loss.device)
+            loss = bit_loss
+        optimiser.zero_grad(set_to_none=True)
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
+        optimiser.step()
+        if step % log_every == 0 or step == steps:
+            with torch.no_grad():
+                predicted = (logits.float() > 0)
+                bit_accuracy = float((predicted == y.bool()).float().mean())
+                exact = float(
+                    (predicted == y.bool()).reshape(predicted.shape[0], -1).all(dim=1).float().mean()
+                )
+            history.append(
+                {"step": step, "loss": float(loss.detach().cpu()),
+                 "bit_loss": float(bit_loss.detach().cpu()),
+                 "syndrome_loss": float(syndrome_loss.detach().cpu()),
+                 "bit_accuracy": bit_accuracy, "exact_rate": exact}
+            )
+            span = schedule[min(step - 1, len(schedule) - 1)]
+            print(
+                f"  step {step:>6}/{steps}  loss {float(loss.detach().cpu()):.4f} "
+                f"(比特 {float(bit_loss.detach().cpu()):.4f} + syndrome "
+                f"{float(syndrome_loss.detach().cpu()):.3f})  "
+                f"比特准确 {bit_accuracy:.4f}  整码字 {exact:.3f}  SNR [{span[0]:+.0f},{span[1]:+.0f}] dB",
+                flush=True,
+            )
+        if out is not None and step % save_every == 0:
+            save(step)
+    save(step)
+    if out is not None:
+        print(f"wrote {out}")
+    return {"device": device, "steps": step, "history": history}
+
+
+def evaluate_vs_classical(
+    binding: CoreBinding,
+    model,
+    beds: list[D.Bed],
+    waves: "M.WaveformBank",
+    *,
+    snr_values: tuple[float, ...],
+    trials: int,
+    seed: int = 909,
+    threads: int = 4,
+) -> dict[str, object]:
+    """The S2 gate: the model and the classical chain on the *same* slot.
+
+    Ground truth is exact (we placed the signal) and the classical side runs the
+    live configuration, so the question is not "does the model look good" but
+    "does it do what the thing it would have to accompany already does".  Below
+    the classical chain it is not a candidate; at parity it is worth pushing into
+    the tail; above it, Slice 3 has something to measure on real slots.
+    """
+
+    import torch
+
+    global DATA_POSITIONS_TENSOR
+    if DATA_POSITIONS_TENSOR is None:
+        DATA_POSITIONS_TENSOR = torch.from_numpy(data_positions_tensor())
+    device = next(iter(model.parameters())).device
+    classical = DecodeConfig(
+        path=DecodePath.IMPROVED, profile=1, cycles=3, threads=threads,
+        sensitivity=3, low_threshold=True,
+    )
+    positions = DATA_POSITIONS_TENSOR.to(device)
+    model.eval()
+    report: dict[str, object] = {"trials": trials, "by_snr": {}}
+    for snr in snr_values:
+        model_hits = classical_hits = 0
+        bit_scores: list[float] = []
+        for trial in range(trials):
+            sample = sample_for(binding, beds, 5000 + trial, seed=seed, count=1,
+                                snr_span=(snr, snr), waves=waves)
+            target = sample.targets[0]
+            window = crop(sample.features, target.frequency, target.dt)
+            with torch.no_grad():
+                logits = model(torch.from_numpy(window)[None].to(device))[0]
+                predicted = (logits[positions] > 0).cpu().numpy()
+            truth = data_bit_targets(target.codeword).astype(bool)
+            bit_scores.append(float((predicted == truth).mean()))
+            model_hits += int(bool((predicted == truth).all()))
+            batch = binding.decode(sample.pcm, classical, 70_000 + trial)
+            classical_hits += int(M.found(batch.results, target))
+        report["by_snr"][f"{snr:+.0f}"] = {
+            "model_exact": model_hits,
+            "classical_hits": classical_hits,
+            "trials": trials,
+            "mean_bit_accuracy": float(np.mean(bit_scores)) if bit_scores else 0.0,
+        }
+        print(
+            f"  {snr:+5.0f} dB   模型整码字 {model_hits:>3}/{trials}（比特 {np.mean(bit_scores):.4f}）"
+            f"   经典解码器 {classical_hits:>3}/{trials}",
+            flush=True,
+        )
+    return report
+
+
+# --- the code's own structure, as a training signal ------------------------
+#
+# A per-bit objective can only ever learn the demodulator: at 95% bit accuracy
+# the chance that all 174 bits are right is 0.95**174, i.e. none.  The classical
+# chain gets its low-SNR performance from the LDPC constraints, so the model
+# needs a term that measures the same thing — the *syndrome*.  H comes straight
+# from the encoder's own generator (ldpc_174_91_c_generator.f90: 83 rows of 23
+# hex digits), and the code is systematic, so H = [G | I].
+
+GENERATOR_SOURCE = Path(__file__).resolve().parents[2] / "ft8" / "dsp" / "vendor" / "ft8" / "ldpc_174_91_c_generator.f90"
+GENERATOR_ROWS = 83
+
+
+def _generator_hex() -> list[str]:
+    """Read the generator matrix from the file the encoder was compiled from.
+
+    Not a transcribed copy: a second copy of the standard is exactly how a
+    training target drifts away from what is on the air (and the first attempt
+    here proved it — a hand-typed list came to 33 rows out of 83).
+    """
+
+    text = GENERATOR_SOURCE.read_text(encoding="utf-8", errors="ignore")
+    # The file's only 23-character hex strings are the generator rows.
+    rows = re.findall(r'"([0-9a-fA-F]{23})"', text)
+    if len(rows) != GENERATOR_ROWS:
+        raise RuntimeError(
+            f"{GENERATOR_SOURCE.name}: expected {GENERATOR_ROWS} generator rows, found {len(rows)}"
+        )
+    return rows
+
+
+def generator_rows(rows: list[str] | None = None) -> np.ndarray:
+    """The parity generator, ``[83, 91]`` — each hex digit is four message bits."""
+
+    rows = _generator_hex() if rows is None else rows
+    matrix = np.zeros((len(rows), INFO_BITS), dtype=np.uint8)
+    for index, text in enumerate(rows):
+        digits = [int(char, 16) for char in text]
+        for position, digit in enumerate(digits):
+            # encode174_91.f90: ibmax=4, but 3 for the last digit — and the bits
+            # taken are always the top ones (btest(istr, 4-jj) with jj=1..ibmax,
+            # i.e. bits 3,2,1 for the short digit).  Reading it as "the low three
+            # bits" shifts the last 3 columns of every row and makes H reject the
+            # encoder's own codewords.
+            width = 3 if position == len(digits) - 1 else 4
+            for offset in range(width):
+                column = position * 4 + offset
+                if column < INFO_BITS and (digit >> (4 - 1 - offset)) & 1:
+                    matrix[index, column] = 1
+    return matrix
+
+
+def parity_check() -> np.ndarray:
+    """``H = [G | I]``, ``[83, 174]`` — because the code is systematic."""
+
+    generator = generator_rows()
+    rows, info = generator.shape
+    check = np.zeros((rows, CODEWORD_BITS), dtype=np.uint8)
+    check[:, :info] = generator
+    check[:, info:] = np.eye(rows, dtype=np.uint8)
+    return check
+
+
+_PARITY_CHECK: np.ndarray | None = None
+
+
+def parity_check_matrix() -> np.ndarray:
+    global _PARITY_CHECK
+    if _PARITY_CHECK is None:
+        _PARITY_CHECK = parity_check()
+    return _PARITY_CHECK
+
+
+def syndrome(codeword: np.ndarray) -> np.ndarray:
+    """``H c mod 2`` — all zeros for a valid codeword."""
+
+    bits = np.asarray(codeword, dtype=np.uint8).reshape(-1)
+    if bits.size != CODEWORD_BITS:
+        raise ValueError(f"a codeword is {CODEWORD_BITS} bits, got {bits.size}")
+    return (parity_check_matrix() @ bits) % 2
+
+
+def soft_syndrome_loss(probabilities):
+    """Differentiable "every check is satisfied".
+
+    A check is the XOR of the bits it touches, whose probability of being 1 is
+    ``(1 - prod(1 - 2p)) / 2``.  The product is evaluated in sign/magnitude form
+    because individual factors are negative whenever ``p > 0.5`` — a plain
+    ``log`` of the product is NaN exactly where the model is most confident, and
+    that is where the loss matters most.
+
+    Penalising the *checks* rather than the bits is what gives the model a route
+    to a valid codeword instead of 174 independent guesses: at 95% bit accuracy
+    the chance all 174 bits are right is 0.95**174, i.e. none.
+    """
+
+    import torch
+
+    check = torch.from_numpy(parity_check_matrix().astype(np.float32))
+    indices = check.to(probabilities.device).nonzero(as_tuple=False)
+    rows, columns = indices[:, 0], indices[:, 1]
+    selected = probabilities.index_select(1, columns).clamp(1e-4, 1 - 1e-4)
+    signed = 1.0 - 2.0 * selected
+    log_abs = torch.log(signed.abs())
+    negative = (signed < 0).to(probabilities.dtype)
+    batch = probabilities.shape[0]
+    total_log = torch.zeros(batch, check.shape[0], device=probabilities.device)
+    total_log = total_log.index_add(1, rows, log_abs)
+    total_neg = torch.zeros(batch, check.shape[0], device=probabilities.device)
+    total_neg = total_neg.index_add(1, rows, negative)
+    product = torch.pow(-1.0, total_neg) * torch.exp(total_log)
+    probability_of_one = (1.0 - product) / 2.0
+    # Want every check to be 0 (even parity).
+    return -torch.log((1.0 - probability_of_one).clamp_min(1e-12)).mean()

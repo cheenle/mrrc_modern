@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1040" width="1440" height="1040">
-  <!-- 电台站接线拓扑 · 事实来源：docs/W103D_GUIDE.md §10/§15、config.py、atr1000_client.py -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1180" width="1600" height="1180">
+  <!-- 电台站接线拓扑 · 事实来源：docs/W103D_GUIDE.md、config.py、atr1000_client.py、cloud_hub.py -->
   <style>
     text { font-family: "PingFang SC","Hiragino Sans GB","Heiti SC",Inter,-apple-system,sans-serif; }
     .title  { fill:#f5f5f5; font-size:40px; font-weight:700; }
@@ -9,132 +9,164 @@
     .name   { fill:#ededed; font-size:21px; font-weight:700; }
     .dsub   { fill:#8a8a8a; font-size:13px; }
     .lbl    { fill:#c8c8c8; font-size:13px; }
-    .sm     { fill:#8a8a8a; font-size:12.5px; }
+    .sm     { fill:#8a8a8a; font-size:12px; }
     .rf     { stroke:#f0a020; stroke-width:4.5; fill:none; stroke-linecap:round; }
     .usb    { stroke:#6ba3d8; stroke-width:3; fill:none; stroke-linecap:round; }
     .net    { stroke:#5fd08a; stroke-width:3; fill:none; stroke-linecap:round; }
+    .tun    { stroke:#a78bfa; stroke-width:3; fill:none; stroke-linecap:round; }
     .rule   { stroke:#2b2b2b; stroke-width:1; }
     .note   { fill:#6b6b6b; font-size:14px; }
     .scr    { fill:#0a0a0a; stroke:#2b2b2b; stroke-width:1; rx:4; }
     .read   { fill:#f0a020; font-size:15px; font-weight:600; }
   </style>
 
-  <rect width="1440" height="1040" fill="#0d0d0d"/>
+  <rect width="1600" height="1180" fill="#0d0d0d"/>
 
   <!-- ══════════ 标题 ══════════ -->
-  <text class="title" x="70" y="80">电台站接线拓扑</text>
-  <text class="sub"   x="70" y="118">FT-710 电台 · W103D 盒子 · ATR-1000 天调 · 天线　——　射频与控制/数据是两套并行的路径</text>
-  <line class="rule" x1="70" y1="144" x2="1370" y2="144"/>
+  <text class="title" x="70" y="78">电台站接线拓扑</text>
+  <text class="sub"   x="70" y="116">FT-710 电台 · W103D 盒子 · ATR-1000 天调 · 天线 · Cloud Hub　——　射频链 + 两条接入路径（局域网 / 公网隧道）</text>
+  <line class="rule" x1="70" y1="142" x2="1530" y2="142"/>
 
   <!-- ══════════ 天线 ══════════ -->
-  <text class="name" x="250" y="182" text-anchor="middle" fill="#f0a020">天线</text>
-  <line x1="250" y1="248" x2="250" y2="320" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
-  <line x1="250" y1="248" x2="212" y2="202" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
-  <line x1="250" y1="248" x2="288" y2="202" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
-  <rect x="232" y="320" width="36" height="26" rx="4" fill="#0d0d0d" stroke="#f0a020" stroke-width="2"/>
-  <text class="sm" x="226" y="362" text-anchor="end">50Ω 馈电点</text>
+  <text class="name" x="165" y="252" text-anchor="middle" fill="#f0a020">天线</text>
+  <line x1="165" y1="320" x2="165" y2="396" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
+  <line x1="165" y1="320" x2="127" y2="274" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
+  <line x1="165" y1="320" x2="203" y2="274" stroke="#f0a020" stroke-width="3" stroke-linecap="round"/>
+  <rect x="147" y="396" width="36" height="26" rx="4" fill="#0d0d0d" stroke="#f0a020" stroke-width="2"/>
+  <text class="sm" x="165" y="452" text-anchor="middle">50Ω 馈电点</text>
 
   <!-- 射频 ① 天线 ↔ 天调 OUT -->
-  <line class="rf" x1="250" y1="346" x2="250" y2="422"/>
-  <text class="sm" x="270" y="404">馈线</text>
+  <line class="rf" x1="183" y1="409" x2="320" y2="409"/>
+  <text class="sm" x="250" y="396" text-anchor="middle">馈线</text>
 
   <!-- ══════════ ATR-1000 天调 ══════════ -->
-  <rect class="dev" x="140" y="430" width="220" height="175" rx="12"/>
-  <circle cx="250" cy="430" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
-  <circle cx="250" cy="605" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
-  <circle cx="360" cy="490" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
-  <text class="name" x="250" y="486" text-anchor="middle">ATR-1000</text>
-  <text class="dsub" x="250" y="510" text-anchor="middle">网络天调</text>
-  <rect class="scr" x="172" y="534" width="156" height="44"/>
-  <text class="read" x="250" y="563" text-anchor="middle">SWR 1.2</text>
-  <text class="sm" x="270" y="438">OUT → 天线</text>
-  <text class="sm" x="270" y="630">IN ← 电台</text>
-  <text class="sm" x="372" y="480">网络</text>
+  <rect class="dev" x="320" y="280" width="250" height="200" rx="12"/>
+  <circle cx="320" cy="409" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
+  <circle cx="570" cy="409" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
+  <circle cx="445" cy="480" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <text class="name" x="445" y="348" text-anchor="middle">ATR-1000</text>
+  <text class="dsub" x="445" y="372" text-anchor="middle">网络天调</text>
+  <rect class="scr" x="370" y="396" width="150" height="52"/>
+  <text class="read" x="445" y="429" text-anchor="middle">SWR 1.2</text>
+  <text class="sm" x="332" y="400">OUT</text>
+  <text class="sm" x="558" y="400" text-anchor="end">IN</text>
+  <text class="sm" x="459" y="508">网络</text>
 
   <!-- 射频 ② 天调 IN ↔ 电台 ANT -->
-  <line class="rf" x1="250" y1="613" x2="250" y2="692"/>
-  <text class="sm" x="270" y="662">同轴</text>
+  <line class="rf" x1="570" y1="409" x2="650" y2="409"/>
+  <text class="sm" x="610" y="396" text-anchor="middle">同轴</text>
 
   <!-- ══════════ FT-710 电台 ══════════ -->
-  <rect class="dev" x="100" y="700" width="300" height="175" rx="12"/>
-  <circle cx="250" cy="700" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
-  <circle cx="400" cy="790" r="8" fill="#0d0d0d" stroke="#6ba3d8" stroke-width="2.5"/>
-  <rect class="scr" x="124" y="730" width="132" height="58"/>
-  <text class="read" x="190" y="757" text-anchor="middle">14.270.000</text>
-  <text class="sm"   x="190" y="778" text-anchor="middle">LSB　CW　USB</text>
-  <circle cx="345" cy="762" r="24" fill="#1c1c1c" stroke="#3a3a3a" stroke-width="1.5"/>
-  <circle cx="345" cy="762" r="6"  fill="#2b2b2b"/>
-  <rect x="276" y="808" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
-  <rect x="306" y="808" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
-  <rect x="336" y="808" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
-  <text class="name" x="190" y="826" text-anchor="middle">FT-710</text>
-  <text class="dsub" x="190" y="850" text-anchor="middle">电台</text>
-  <text class="sm" x="268" y="726">ANT</text>
+  <rect class="dev" x="650" y="280" width="270" height="200" rx="12"/>
+  <circle cx="650" cy="409" r="8" fill="#0d0d0d" stroke="#f0a020" stroke-width="2.5"/>
+  <circle cx="920" cy="409" r="8" fill="#0d0d0d" stroke="#6ba3d8" stroke-width="2.5"/>
+  <rect class="scr" x="676" y="308" width="140" height="58"/>
+  <text class="read" x="746" y="337" text-anchor="middle">14.270.000</text>
+  <text class="sm"   x="746" y="358" text-anchor="middle">LSB　CW　USB</text>
+  <circle cx="880" cy="337" r="24" fill="#1c1c1c" stroke="#3a3a3a" stroke-width="1.5"/>
+  <circle cx="880" cy="337" r="6"  fill="#2b2b2b"/>
+  <rect x="748" y="452" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <rect x="778" y="452" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <rect x="808" y="452" width="22" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <text class="name" x="785" y="414" text-anchor="middle">FT-710</text>
+  <text class="dsub" x="785" y="438" text-anchor="middle">电台</text>
+  <text class="sm" x="662" y="402">ANT</text>
 
   <!-- ══════════ USB：电台 ↔ 盒子 ══════════ -->
-  <line class="usb" x1="400" y1="790" x2="600" y2="790"/>
-  <text class="sm" x="500" y="828" text-anchor="middle" fill="#6ba3d8" font-weight="600">Enhanced 口</text>
-  <text class="sm" x="500" y="848" text-anchor="middle">CAT + 音频 + 频谱</text>
+  <line class="usb" x1="920" y1="409" x2="1060" y2="409"/>
+  <text class="sm" x="990" y="390" text-anchor="middle" fill="#6ba3d8" font-weight="600">Enhanced 口</text>
+  <text class="sm" x="990" y="430" text-anchor="middle">CAT + 音频 + 频谱</text>
 
   <!-- ══════════ W103D 盒子 ══════════ -->
-  <rect class="dev" x="600" y="700" width="260" height="175" rx="12"/>
-  <circle cx="600" cy="790" r="8" fill="#0d0d0d" stroke="#6ba3d8" stroke-width="2.5"/>
-  <circle cx="730" cy="700" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
-  <text class="name" x="730" y="788" text-anchor="middle">W103D 盒子</text>
-  <text class="dsub" x="730" y="812" text-anchor="middle" fill="#f0a020">MRRC Modern 服务端</text>
-  <circle cx="634" cy="840" r="4" fill="#5fd08a"/>
-  <rect x="666" y="834" width="34" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
-  <rect x="708" y="834" width="34" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
-  <text class="sm" x="744" y="694">网络</text>
+  <rect class="dev" x="1060" y="280" width="270" height="200" rx="12"/>
+  <circle cx="1060" cy="409" r="8" fill="#0d0d0d" stroke="#6ba3d8" stroke-width="2.5"/>
+  <circle cx="1130" cy="480" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <circle cx="1260" cy="480" r="8" fill="#0d0d0d" stroke="#a78bfa" stroke-width="2.5"/>
+  <text class="name" x="1195" y="400" text-anchor="middle">W103D 盒子</text>
+  <text class="dsub" x="1195" y="424" text-anchor="middle" fill="#f0a020">MRRC Modern 服务端</text>
+  <circle cx="1100" cy="450" r="4" fill="#5fd08a"/>
+  <rect x="1130" y="444" width="34" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
+  <rect x="1172" y="444" width="34" height="12" rx="2" fill="#1f1f1f" stroke="#3a3a3a"/>
 
-  <!-- ══════════ 网络：盒子 ↔ 局域网 ══════════ -->
-  <line class="net" x1="730" y1="568" x2="730" y2="692"/>
+  <!-- ══════════ 盒子 → 局域网 ══════════ -->
+  <polyline class="net" points="1130,488 1130,530 850,530 850,572"/>
+  <text class="sm" x="900" y="522" text-anchor="middle">局域网</text>
+
+  <!-- ══════════ 盒子 → Cloud Hub（隧道） -->
+  <polyline class="tun" points="1260,488 1260,572"/>
+  <text class="sm" x="1276" y="524" fill="#a78bfa" font-weight="600">frp 隧道</text>
+  <text class="sm" x="1276" y="544">盒子主动拨出 · 公网无需端口映射</text>
+
+  <!-- ══════════ 天调 → 局域网 ══════════ -->
+  <polyline class="net" points="445,488 445,665 700,665"/>
 
   <!-- ══════════ 局域网 / 路由器 ══════════ -->
-  <rect x="610" y="420" width="320" height="140" rx="14" fill="#0f1a14" stroke="#2a4a38" stroke-width="1.5"/>
-  <circle cx="610" cy="490" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
-  <circle cx="930" cy="490" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
-  <circle cx="730" cy="560" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
-  <text x="770" y="482" text-anchor="middle" fill="#5fd08a" font-size="18" font-weight="600">局域网 / 路由器</text>
-  <text x="770" y="508" text-anchor="middle" fill="#6b8f7d" font-size="12">盒子按 IP 直连天调</text>
+  <rect x="700" y="580" width="300" height="170" rx="14" fill="#0f1a14" stroke="#2a4a38" stroke-width="1.5"/>
+  <circle cx="850" cy="580" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <circle cx="700" cy="665" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <circle cx="850" cy="750" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <text x="850" y="650" text-anchor="middle" fill="#5fd08a" font-size="18" font-weight="600">局域网 / 路由器</text>
+  <text x="850" y="676" text-anchor="middle" fill="#6b8f7d" font-size="12">盒子与天调同网段</text>
 
-  <!-- ══════════ 网络：天调 ↔ 局域网 ══════════ -->
-  <line class="net" x1="368" y1="490" x2="602" y2="490"/>
+  <!-- ══════════ Cloud Hub ══════════ -->
+  <rect x="1080" y="580" width="370" height="170" rx="14" fill="#151228" stroke="#3a3060" stroke-width="1.5"/>
+  <circle cx="1260" cy="580" r="8" fill="#0d0d0d" stroke="#a78bfa" stroke-width="2.5"/>
+  <circle cx="1265" cy="750" r="8" fill="#0d0d0d" stroke="#a78bfa" stroke-width="2.5"/>
+  <text x="1265" y="632" text-anchor="middle" fill="#a78bfa" font-size="18" font-weight="600">Cloud Hub</text>
+  <text x="1265" y="658" text-anchor="middle" fill="#8a8a8a" font-size="12">tunnel.mrrc.vlsc.net:8989</text>
+  <text x="1265" y="682" text-anchor="middle" fill="#8a8a8a" font-size="12">portal.mrrc.vlsc.net</text>
+  <text x="1265" y="710" text-anchor="middle" fill="#6b6b6b" font-size="12">盒子自签证书 · hub 验签</text>
 
-  <!-- ══════════ 手机 / 电脑 ══════════ -->
-  <rect x="1040" y="420" width="330" height="140" rx="12" class="dev"/>
-  <rect x="1070" y="450" width="58" height="84" rx="8" fill="#0d0d0d" stroke="#9aa0a8" stroke-width="1.5"/>
-  <line x1="1088" y1="522" x2="1110" y2="522" stroke="#9aa0a8" stroke-width="1.5"/>
-  <circle cx="1040" cy="490" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
-  <text class="name" x="1240" y="480" text-anchor="middle" font-size="18">手机 / 电脑</text>
-  <text class="dsub" x="1240" y="506" text-anchor="middle">浏览器接入 :8888</text>
-  <line class="net" x1="938" y1="490" x2="1032" y2="490"/>
+  <!-- ══════════ 客户端：局域网直连 ══════════ -->
+  <line class="net" x1="850" y1="758" x2="850" y2="842"/>
+  <rect x="700" y="850" width="300" height="130" rx="12" class="dev"/>
+  <rect x="728" y="880" width="48" height="76" rx="8" fill="#0d0d0d" stroke="#9aa0a8" stroke-width="1.5"/>
+  <line x1="742" y1="944" x2="762" y2="944" stroke="#9aa0a8" stroke-width="1.5"/>
+  <circle cx="850" cy="850" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
+  <text class="name" x="905" y="908" text-anchor="middle" font-size="17">手机 / 电脑</text>
+  <text class="dsub" x="905" y="932" text-anchor="middle">局域网直连 :8888</text>
 
-  <!-- ══════════ 网络链路说明卡 ══════════ -->
-  <rect x="430" y="190" width="580" height="215" rx="12" class="dev"/>
-  <text x="458" y="232" fill="#5fd08a" font-size="17" font-weight="600">这根网络线上跑什么</text>
-  <line class="rule" x1="458" y1="250" x2="982" y2="250"/>
-  <text class="lbl" x="458" y="286" fill="#f0a020">盒子 → 天调</text>
-  <text class="lbl" x="566" y="286">SYNC 轮询 · 调谐命令 · L/C 继电器参数</text>
-  <text class="sm"  x="566" y="308">还主动告知：当前频率、在不在发射</text>
-  <text class="lbl" x="458" y="344" fill="#5fd08a">天调 → 盒子</text>
-  <text class="lbl" x="566" y="344">实时功率 · SWR · 当前 L/C 继电器状态</text>
-  <line class="rule" x1="458" y1="364" x2="982" y2="364"/>
-  <text class="note" x="458" y="390">天调自己不晓得你在哪个频率 —— 是盒子一直在告诉它。</text>
+  <!-- ══════════ 客户端：公网入口 ══════════ -->
+  <line class="tun" x1="1265" y1="758" x2="1265" y2="842"/>
+  <rect x="1080" y="850" width="370" height="130" rx="12" class="dev"/>
+  <circle cx="1265" cy="850" r="8" fill="#0d0d0d" stroke="#a78bfa" stroke-width="2.5"/>
+  <text class="name" x="1265" y="908" text-anchor="middle" font-size="17">手机 / 电脑</text>
+  <text class="dsub" x="1265" y="932" text-anchor="middle">https://{呼号}.mrrc.vlsc.net</text>
+
+  <!-- ══════════ 盒子 ⇄ 天调 链路说明 ══════════ -->
+  <rect x="90" y="580" width="340" height="370" rx="12" class="dev"/>
+  <text x="114" y="622" fill="#5fd08a" font-size="16" font-weight="600">绿线：盒子 ⇄ 天调</text>
+  <line class="rule" x1="114" y1="640" x2="406" y2="640"/>
+  <text class="lbl" x="114" y="674" fill="#f0a020" font-size="12.5">盒子 → 天调</text>
+  <text class="sm"  x="114" y="698">SYNC 轮询 · 调谐命令</text>
+  <text class="sm"  x="114" y="718">L/C 继电器参数</text>
+  <text class="sm"  x="114" y="744">还主动告知：当前频率、</text>
+  <text class="sm"  x="114" y="764">在不在发射</text>
+  <text class="lbl" x="114" y="800" fill="#5fd08a" font-size="12.5">天调 → 盒子</text>
+  <text class="sm"  x="114" y="824">实时功率 · SWR</text>
+  <text class="sm"  x="114" y="844">当前 L/C 继电器状态</text>
+  <line class="rule" x1="114" y1="870" x2="406" y2="870"/>
+  <text class="note" x="114" y="900">天调自己不晓得你在哪个频率</text>
+  <text class="note" x="114" y="922">—— 是盒子一直在告诉它。</text>
 
   <!-- ══════════ 图例 ══════════ -->
-  <line class="rule" x1="70" y1="920" x2="1370" y2="920"/>
-  <line class="rf"  x1="70" y1="962" x2="130" y2="962"/>
-  <text class="lbl" x="144" y="967">射频 50Ω</text>
-  <text class="sm"  x="144" y="986">电台 → 天调 → 天线</text>
+  <line class="rule" x1="70" y1="1020" x2="1530" y2="1020"/>
 
-  <line class="usb" x1="400" y1="962" x2="460" y2="962"/>
-  <text class="lbl" x="474" y="967">USB（一根线三路）</text>
-  <text class="sm"  x="474" y="986">CAT 串口 · USB 声卡 · FT4222 频谱</text>
+  <line class="rf"  x1="70" y1="1062" x2="130" y2="1062"/>
+  <text class="lbl" x="144" y="1067">射频 50Ω</text>
+  <text class="sm"  x="144" y="1086">天线 → 天调 → 电台</text>
 
-  <line class="net" x1="790" y1="962" x2="850" y2="962"/>
-  <text class="lbl" x="864" y="967">网络</text>
-  <text class="sm"  x="864" y="986">WebSocket / HTTP</text>
+  <line class="usb" x1="450" y1="1062" x2="510" y2="1062"/>
+  <text class="lbl" x="524" y="1067">USB（一根线三路）</text>
+  <text class="sm"  x="524" y="1086">CAT 串口 · USB 声卡 · FT4222 频谱</text>
 
-  <text class="note" x="70" y="1024">射频路径：电台 ANT → ATR-1000 IN/OUT → 天线。天调串在中间，不是旁挂。　·　识别串口与声卡：docs/W103D_GUIDE.md §10</text>
+  <line class="net" x1="890" y1="1062" x2="950" y2="1062"/>
+  <text class="lbl" x="964" y="1067">局域网网络</text>
+  <text class="sm"  x="964" y="1086">WebSocket / HTTP（同一网段）</text>
+
+  <line class="tun" x1="1270" y1="1062" x2="1330" y2="1062"/>
+  <text class="lbl" x="1344" y="1067">frp 隧道</text>
+  <text class="sm"  x="1344" y="1086">盒子主动拨出，无需端口映射</text>
+
+  <text class="note" x="70" y="1150">射频路径：电台 ANT → ATR-1000 IN/OUT → 天线，天调串在中间。　·　经 Cloud Hub 接入会自动启用 TX 心跳（5 秒），远端会话失联即释放发射。</text>
 </svg>

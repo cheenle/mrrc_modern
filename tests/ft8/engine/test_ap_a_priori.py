@@ -35,7 +35,12 @@ from ft8.core.protocol import encode_frame
 from ft8.engine.dsp_decode import SupervisorDecoder, decode_config_frame
 from ft8.engine.sequencer import QSOState, Sequencer
 from ft8.platform.cloud_decode import CloudDecoder
-from ft8.runtime import AP_A_PRIORI_ENV, _ap_a_priori_enabled, _ap_context_for
+from ft8.runtime import (
+    AP_A_PRIORI_ENV,
+    _ap_a_priori_enabled,
+    _ap_context_for,
+    _qso_progress,
+)
 
 SAMPLES = np.arange(180_000, dtype=np.int16).tobytes()
 
@@ -283,3 +288,63 @@ def test_the_host_gets_the_same_a_priori() -> None:
     assert config["qso_progress"] == 2
     # The host's own knobs still win.
     assert config["path"] == DecodePath.IMPROVED.value
+
+
+# --------------------------------------------------------------------------
+# qso_progress → WSJT-X nQSOProgress rows
+# --------------------------------------------------------------------------
+
+
+def test_every_phase_maps_to_its_own_tx_row() -> None:
+    """ft8bvar selects its AP masks by row, and the row comments name the Tx stage.
+
+    Collapsing every late phase onto row 2 (what this function used to do) meant
+    rows 3 and 4 -- the only ones carrying iaptype 6/5/4, i.e. RR73 / 73 / RRR --
+    were never selected, so the decoder never tried the hypotheses most likely at
+    the end of a QSO.
+    """
+
+    assert _qso_progress(QSOState.REPLYING) == 1       # Tx1: DX MY GRID
+    assert _qso_progress(QSOState.REPORT) == 2         # Tx2: DX MY -nn
+    assert _qso_progress(QSOState.ROGER_REPORT) == 3   # Tx3: DX MY R-nn
+    assert _qso_progress(QSOState.ROGERS) == 4         # Tx4: DX MY RR73
+    assert _qso_progress(QSOState.SIGNOFF) == 5        # Tx5: DX MY 73
+
+
+def test_no_qso_in_progress_maps_to_the_cq_row() -> None:
+    assert _qso_progress(QSOState.IDLE) == 0
+    assert _qso_progress(QSOState.CALLING) == 0
+    assert _qso_progress(QSOState.DONE) == 0
+
+
+def test_every_state_has_a_row_and_no_row_is_out_of_range() -> None:
+    """The Fortran tables are dimensioned (0:5, 1:27); a 6 would read out of bounds."""
+
+    for state in QSOState:
+        row = _qso_progress(state)
+        assert 0 <= row <= 5, (state, row)
+
+
+def test_the_cascade_escalation_test_is_unchanged() -> None:
+    """Blast radius: cascade.py:58 escalates on ``my_call and qso_progress > 0``.
+
+    A faithful row mapping must keep that predicate exactly as it was -- in a QSO
+    it escalates, with no QSO it does not.  This is the reason IDLE/CALLING/DONE
+    all map to 0 rather than to some "unknown" row.
+    """
+
+    in_qso = [s for s in QSOState if s not in (QSOState.IDLE, QSOState.CALLING, QSOState.DONE)]
+    assert in_qso, "the enum changed; re-read this test"
+    for state in in_qso:
+        assert _qso_progress(state) > 0, state
+    for state in (QSOState.IDLE, QSOState.CALLING, QSOState.DONE):
+        assert _qso_progress(state) == 0, state
+
+
+def test_the_provider_carries_the_row_of_the_current_phase() -> None:
+    """End to end: the sequencer's phase, not a constant, reaches the frame."""
+
+    sequencer = _sequencer(state=QSOState.ROGERS, dx_call="JA1VAT", dx_grid="QN06")
+    assert _ap_context_for(sequencer)()["qso_progress"] == 4
+    sequencer.state = QSOState.REPLYING
+    assert _ap_context_for(sequencer)()["qso_progress"] == 1

@@ -383,6 +383,15 @@ def paired_probe(
         ap8 = 0
         wrong_text = 0
         gained_texts: list[str] = []
+        # P5b instrumentation.  §4.2 could only say "13 gains, 3 of them carry
+        # ap_type=8, so at least 10 came from something else" -- inferring a
+        # mechanism by subtraction is not evidence.  Record the actual ap_type
+        # and quality of every gained decode, because the two questions that
+        # decide what to do next both need them: which AP path does the work
+        # (notes §6.1), and is `quality` usable as a gate (§7.1 criterion 3).
+        gained_ap_types: dict[int, int] = {}
+        gained_qualities: list[list[float]] = []
+        both_ap_types: dict[int, int] = {}
         for trial in range(trials):
             bed = beds[(trial * 7 + int(snr)) % len(beds)]
             pcm_bed = slot_pcm(bed)
@@ -419,6 +428,11 @@ def paired_probe(
             neither += int(not off[0] and not fed[0])
             if fed[1] == 8:
                 ap8 += 1
+            if fed[0]:
+                bucket = gained_ap_types if not off[0] else both_ap_types
+                bucket[fed[1]] = bucket.get(fed[1], 0) + 1
+                if not off[0]:
+                    gained_qualities.append([float(fed[1]), round(float(fed[2]), 4)])
             # Precision: a8 chooses the best of ~127 hypotheses, so a neighbouring
             # report ("-14" for "-12") still passes CRC.  Count those separately
             # from the gains, and keep the offending text for inspection.
@@ -428,11 +442,15 @@ def paired_probe(
                 gained_texts.append(bad if not off[0] else f"(off also had it) {bad}")
 
         missed = only_fed + neither
+        types = ", ".join(f"ap{k}:{v}" for k, v in sorted(gained_ap_types.items()))
         print(
             f"  {snr:+5.0f} dB   both {both:>3}  only_off {only_off:>3}  "
             f"only_fed {only_fed:>3}  neither {neither:>3}   "
             f"ap_type=8: {ap8:>3}   wrong_text: {wrong_text:>3}"
-            + (f"   [{', '.join(gained_texts[:3])}]" if gained_texts else ""),
+            + (f"   [{', '.join(gained_texts[:3])}]" if gained_texts else "")
+            + (f"\n{'':11}赚到的 ap_type 分布: {types or '—'}"
+               f"   both 的分布: "
+               f"{', '.join(f'ap{k}:{v}' for k, v in sorted(both_ap_types.items())) or '—'}"),
             flush=True,
         )
         report["by_snr"][f"{snr:+.0f}"] = {  # type: ignore[index]
@@ -444,6 +462,9 @@ def paired_probe(
             "wrong_text": wrong_text,
             "gained_over_missed": f"{only_fed}/{missed}",
             "gained_texts": gained_texts,
+            "gained_ap_types": gained_ap_types,
+            "gained_ap_type_quality": gained_qualities,
+            "both_ap_types": both_ap_types,
         }
 
     return report

@@ -56,9 +56,43 @@ _COUNTERS_EVERY_SLOTS = 20
 
 
 def _qso_progress(state: QSOState) -> int:
-    """AP 上下文只在通联进行中成立：IDLE / DONE 记 0，其余阶段都算进行中。"""
+    """Map the sequencer's phase onto WSJT-X's ``nQSOProgress`` rows 0–5.
 
-    return 0 if state in (QSOState.IDLE, QSOState.DONE) else 2
+    ``ft8bvar.f90`` selects its a-priori masks from four tables indexed by
+    ``(nQSOProgress, extra decoding pass)`` — ``naptypes`` / ``nmycnsaptypes`` /
+    ``ndxnsaptypes`` / ``nhaptypes`` — and the row comments name the Tx stage:
+    ``0`` = Tx6 CQ, ``1`` = Tx1 Grid, ``2`` = Tx2 Report, ``3`` = Tx3 RRreport,
+    ``4`` = Tx4 RRR/RR73, ``5`` = Tx5 73.  ``QSOState``'s own docstring says it
+    "maps to WSJT-X Tx1–Tx5 message kinds", so the correspondence is 1:1 and
+    this function only has to not throw it away.
+
+    It used to return just 0 or 2.  Rows 3 and 4 are the only ones carrying
+    iaptype 6/5/4 (RR73 / 73 / RRR), so collapsing every late phase onto row 2
+    meant the decoder never tried the hypotheses most likely at the *end* of a
+    QSO.  Measured effect so far: none — every row starts ``3,3,3``, and the
+    gains in notes §4.2 came from those first three passes (iaptype 3) plus a8,
+    so the rows only differ in later subpasses.  Worth fixing regardless: it
+    costs nothing and stops discarding state the sequencer already tracks.
+
+    IDLE/DONE → 0 keeps ``should_escalate``'s ``qso_progress > 0`` test
+    (cascade.py:58) exactly as it was: a station with no QSO in progress still
+    does not escalate on AP context.
+    """
+
+    return _QSO_PROGRESS_BY_STATE.get(state, 0)
+
+
+# WSJT-X nQSOProgress rows; see _qso_progress for the source of each number.
+_QSO_PROGRESS_BY_STATE: dict[QSOState, int] = {
+    QSOState.IDLE: 0,       # Tx6 CQ / idle
+    QSOState.CALLING: 0,    # repeating CQ
+    QSOState.REPLYING: 1,   # Tx1: DX MY GRID
+    QSOState.REPORT: 2,     # Tx2: DX MY -nn
+    QSOState.ROGER_REPORT: 3,  # Tx3: DX MY R-nn
+    QSOState.ROGERS: 4,     # Tx4: DX MY RR73
+    QSOState.SIGNOFF: 5,    # Tx5: DX MY 73
+    QSOState.DONE: 0,       # logged and disarmed
+}
 
 
 AP_A_PRIORI_ENV = "MRRC_FT8_AP_A_PRIORI"

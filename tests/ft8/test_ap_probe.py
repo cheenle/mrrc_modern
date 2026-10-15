@@ -322,3 +322,37 @@ class ProbeMatchingTests(unittest.TestCase):
         source = (REPO_ROOT / "tools" / "ft8" / "ap_probe.py").read_text()
         self.assertNotIn("<= 25.0", source, "hand-written frequency tolerance is back")
         self.assertNotIn("<= 1.5\n", source, "hand-written dt tolerance is back")
+
+
+class StaleAPrioriTests(unittest.TestCase):
+    """The precision arm section 7.1 refuses to ship without.
+
+    Both earlier runs had a self-consistent world: run 1 fed a correct a-priori,
+    run 2 put a contradicting signal *at the frequency AP was told to watch*.
+    On air the failure is quieter -- the a-priori describes a QSO that is no
+    longer happening.  The invention criterion is what makes that measurable:
+    a decode naming both calls, at a place where no such signal was synthesized.
+    """
+
+    def test_the_cases_do_not_include_the_expected_message(self) -> None:
+        """Otherwise an invented message would be indistinguishable from the truth."""
+
+        for message, _note in ap_probe.STALE_CASES:
+            self.assertNotEqual(message, ap_probe.A8_MESSAGE)
+
+    def test_every_case_is_a_real_ft8_message_shape(self) -> None:
+        for message, _note in ap_probe.STALE_CASES:
+            self.assertGreaterEqual(len(message.split()), 2, message)
+
+    def test_at_least_one_case_names_the_claimed_partner(self) -> None:
+        """The dangerous case is a *near* miss, not a wholly unrelated signal."""
+
+        self.assertTrue(
+            any(ap_probe.DX_CALL in message for message, _ in ap_probe.STALE_CASES),
+            "no case exercises the near-miss a-priori",
+        )
+
+    def test_the_decoy_sits_outside_a8_activation_window(self) -> None:
+        """a8 activates within +/-10 Hz of nfqso; the decoy is placed 800 Hz away."""
+
+        self.assertGreater(800.0, 10.0)

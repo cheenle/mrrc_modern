@@ -265,6 +265,11 @@ def main(argv: list[str] | None = None) -> int:
         help="P5 measurement: same PCM decoded AP-off then AP-fed, dt inside a8's reach",
     )
     parser.add_argument("--paired-progress", type=int, default=2)
+    parser.add_argument(
+        "--stale",
+        action="store_true",
+        help="precision arm: feed a QSO a-priori while the air carries something else",
+    )
     parser.add_argument("--json", type=Path, default=None)
     parser.add_argument("--library", default=None)
     args = parser.parse_args(argv)
@@ -278,14 +283,23 @@ def main(argv: list[str] | None = None) -> int:
     snr_values = tuple(float(part) for part in args.snr.split(","))
     print(f"beds: {len(beds)} slots   my={MY_CALL} dx={DX_CALL} grid={DX_GRID}")
 
-    if args.paired:
-        report = paired_probe(
-            binding,
-            beds,
-            snr_values=snr_values,
-            trials=args.trials,
-            progress=args.paired_progress,
-        )
+    if args.paired or args.stale:
+        if args.stale:
+            report = stale_probe(
+                binding,
+                beds,
+                snr_values=snr_values,
+                trials=args.trials,
+                progress=args.paired_progress,
+            )
+        else:
+            report = paired_probe(
+                binding,
+                beds,
+                snr_values=snr_values,
+                trials=args.trials,
+                progress=args.paired_progress,
+            )
         if args.json:
             args.json.write_text(json.dumps(report, indent=1, sort_keys=True))
             print(f"\nwrote {args.json}")
@@ -431,6 +445,116 @@ def paired_probe(
             "gained_over_missed": f"{only_fed}/{missed}",
             "gained_texts": gained_texts,
         }
+
+    return report
+
+
+
+# ---------------------------------------------------------------------------
+# P5 precision arm: what happens when the a-priori is stale
+# ---------------------------------------------------------------------------
+#
+# docs/ft8-dl-speculative-notes.md section 7.1 refuses to ship AP until this is
+# measured, and section 8 lists it as the biggest untested gap.  The two earlier
+# runs both had a *consistent* a-priori (run 1) or a *contradicting signal*
+# (run 2: the air carried somebody else's CQ).  Neither covers the case that
+# actually happens on air: the a-priori is correct for a QSO that is no longer
+# happening -- the partner changed frequency, the QSO ended, or the grid came
+# from a decode many slots old.
+#
+# So: synthesize an UNRELATED message at an unrelated frequency, while feeding
+# the decoder my_call/dx_call/dx_grid as if a QSO were in progress.  The
+# question is not "does AP decode the unrelated message" (it should, it is a
+# normal decode) but "does AP ALSO invent the expected QSO message?" -- because
+# an invented message enters the sequencer, and the sequencer keys the radio.
+STALE_CASES = (
+    # (what is actually on the air, what the a-priori claims)
+    ("CQ VK3ABC QF22", "an unrelated CQ from another station"),
+    ("JA1VAT BA4EG R-09", "the partner, but a *later* QSO stage than claimed"),
+    ("BA4EG JA1VAT QN06", "the partner's grid message, not the report we expect"),
+)
+
+
+def stale_probe(
+    binding: CoreBinding,
+    beds: list[Path],
+    *,
+    snr_values: tuple[float, ...],
+    trials: int,
+    progress: int = 2,
+    seed: int = 20261017,
+) -> dict[str, object]:
+    """Feed a QSO a-priori while the air carries something else, and count inventions.
+
+    An invention is a decode whose text is one of a8's 128 hypotheses (i.e. it
+    names MY_CALL and DX_CALL) at a place where no such signal was synthesized.
+    That is the failure mode that matters: it is a message nobody sent, produced
+    because we told the decoder to expect it.
+    """
+
+    import numpy as np
+
+    generator = np.random.default_rng(seed)
+    report: dict[str, object] = {"progress": progress, "trials": trials, "cases": {}}
+
+    for message, note in STALE_CASES:
+        print(f"\n── stale a-priori: air carries {message!r}  ({note})", flush=True)
+        case: dict[str, object] = {"note": note}
+        for snr in snr_values:
+            truth_hits = inventions = ap8 = 0
+            invented_texts: list[str] = []
+            for trial in range(trials):
+                bed = beds[(trial * 7 + int(snr)) % len(beds)]
+                pcm_bed = slot_pcm(bed)
+                # The real signal sits somewhere AP was NOT told to look, so any
+                # decode naming both calls is an invention rather than a lucky hit.
+                frequency = quiet_frequency(pcm_bed, generator)
+                decoy = frequency + 800.0 if frequency < 2000.0 else frequency - 800.0
+                dt = float(generator.uniform(DT_MIN, A8_DT_MAX))
+                signal = SyntheticSignal(
+                    message=message, frequency=decoy, dt=dt, snr_db=snr
+                )
+                pcm = synthesize(binding, pcm_bed, (signal,))
+                slot_id = abs(hash((message, snr, trial))) % 90_000
+                batch = _decode(
+                    binding,
+                    pcm,
+                    _config(
+                        ap=True,
+                        my_call=MY_CALL,
+                        dx_call=DX_CALL,
+                        dx_grid=DX_GRID,
+                        qso_progress=progress,
+                        rx_frequency=int(round(frequency)),
+                        tx_frequency=int(round(frequency)),
+                    ),
+                    slot_id,
+                )
+                if _hit(batch, signal)[0]:
+                    truth_hits += 1
+                for result in batch.results:
+                    if getattr(result, "ap_type", 0) == 8:
+                        ap8 += 1
+                    text = str(result.text).strip()
+                    # An invention names both calls but was never synthesized.
+                    if MY_CALL in text and DX_CALL in text and text != message:
+                        inventions += 1
+                        if text not in invented_texts:
+                            invented_texts.append(text)
+                        break
+            print(
+                f"  {snr:+5.0f} dB   truth {truth_hits:>2}/{trials}   "
+                f"inventions {inventions:>2}   ap_type=8 {ap8:>2}"
+                + (f"   {invented_texts[:2]}" if invented_texts else ""),
+                flush=True,
+            )
+            case[f"{snr:+.0f}"] = {  # type: ignore[index]
+                "truth_hits": truth_hits,
+                "inventions": inventions,
+                "ap8": ap8,
+                "invented_texts": invented_texts,
+            }
+        report["cases"][message] = case  # type: ignore[index]
 
     return report
 

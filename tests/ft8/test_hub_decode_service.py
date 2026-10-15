@@ -26,6 +26,11 @@ from ft8.engine.dsp_decode import decode_config_frame
 REPO = Path(__file__).resolve().parents[2]
 TOOL = REPO / "tools" / "hub_decode" / "service.py"
 
+# Reported by _LiveService.post when the server refused the request and closed
+# the socket before this client finished writing the body -- a legitimate
+# refusal (the handler answers before reading 360 KB), not a transport failure.
+CONNECTION_CLOSED_BEFORE_RESPONSE = -1
+
 
 def _load_service():
     assert TOOL.is_file(), f"the hub service moved: {TOOL}"
@@ -198,6 +203,17 @@ class _LiveService:
             connection.request("POST", "/mrrc-decode", body=body, headers=headers)
             response = connection.getresponse()
             return response.status, response.read()
+        except (BrokenPipeError, ConnectionResetError):
+            # The handler refuses an unauthorized (or wrong-length) request
+            # *before reading the body* -- deliberately, so a 360 KB upload is
+            # not drained just to answer "no".  It then closes the socket, and
+            # whether this client is still inside sendall() at that moment is a
+            # race: the loser sees a reset instead of the status line.  Both
+            # outcomes are the same refusal, so report it as its own status and
+            # let the caller assert the property that actually matters (the
+            # worker never saw the request).  Treating the reset as a failure
+            # made this suite flaky ~1 run in 6.
+            return CONNECTION_CLOSED_BEFORE_RESPONSE, b""
         finally:
             connection.close()
 
@@ -236,7 +252,10 @@ def test_over_a_socket_no_token_is_401_even_with_a_full_body() -> None:
             headers={"X-MRRC-Config": live.config_header},
         )
 
-    assert status == 401
+    # 401 when the client finishes writing first; a closed connection when the
+    # server's refusal wins the race.  The security property is the second
+    # assert: the request never reaches the decoder either way.
+    assert status in (401, CONNECTION_CLOSED_BEFORE_RESPONSE)
     assert worker.seen == []
 
 

@@ -25,6 +25,13 @@ from ft8.core.models import (
 from ft8.core.supervisor import WorkerSupervisor
 from ft8.engine.orchestrator import SLOT_SAMPLES_NBYTES
 
+#: Supplies the a-priori fields a decode should carry *this slot* — keys are
+#: ``DecodeConfig`` field names.  A provider, not a value: ``dx_call``/``dx_grid``
+#: change mid-QSO, so anything resolved once at startup would go stale (and a
+#: stale a-priori is exactly the case docs/ft8-dl-speculative-notes.md §4.3
+#: measures).
+ApContextProvider = Callable[[], dict[str, object]]
+
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 
 
@@ -147,6 +154,7 @@ class SupervisorDecoder:
         request_timeout: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
         monotonic: Callable[[], float] = time.monotonic,
         histogram: Any = None,
+        ap_context: ApContextProvider | None = None,
     ) -> None:
         if request_timeout <= 0:
             raise ValueError("request timeout must be positive")
@@ -156,6 +164,7 @@ class SupervisorDecoder:
         self._request_timeout = request_timeout
         self._monotonic = monotonic
         self._histogram = histogram
+        self._ap_context = ap_context
         self._shm: SharedMemory | None = None
 
     def _ensure_segment(self) -> SharedMemory:
@@ -199,6 +208,12 @@ class SupervisorDecoder:
         }
         if threads is not None:
             changes["threads"] = threads
+        if self._ap_context is not None:
+            # Consulted per slot, never cached: the partner and the QSO stage
+            # change while the engine runs.  ``None`` (the default, and every
+            # box without MRRC_FT8_AP_A_PRIORI) leaves the frame exactly as
+            # before — AP stays enabled-but-starved, which is today's behaviour.
+            changes.update(self._ap_context())
         config = self._config.replace(**changes)
         config_frame = decode_config_frame(config)
         frame = {

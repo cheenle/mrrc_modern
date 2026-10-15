@@ -33,7 +33,7 @@ FT8_SLOT_SECONDS = FT8_PERIOD_SECONDS
 from ft8.core.supervisor import WorkerSupervisor
 from ft8.engine.audio_rx import UtcRing
 from ft8.engine.cascade import CascadePolicy, CascadingDecoder
-from ft8.engine.dsp_decode import SupervisorDecoder
+from ft8.engine.dsp_decode import ApContextProvider, SupervisorDecoder
 from ft8.engine.dsp_encode import SupervisorEncoder
 from ft8.engine.latency import LatencyHistogram
 from ft8.engine.orchestrator import Orchestrator
@@ -59,6 +59,54 @@ def _qso_progress(state: QSOState) -> int:
     """AP 上下文只在通联进行中成立：IDLE / DONE 记 0，其余阶段都算进行中。"""
 
     return 0 if state in (QSOState.IDLE, QSOState.DONE) else 2
+
+
+AP_A_PRIORI_ENV = "MRRC_FT8_AP_A_PRIORI"
+
+
+def _ap_a_priori_enabled(environ) -> bool:
+    """Whether to feed the decoder the QSO a-priori.  Off unless asked for."""
+
+    return (environ.get(AP_A_PRIORI_ENV) or "").strip() not in ("", "0", "false")
+
+
+def _ap_context_for(sequencer: Sequencer) -> ApContextProvider:
+    """The a-priori the decoder was always entitled to but never received.
+
+    ``DecodeConfig.ap`` defaults to ``True``, so AP has been *on* all along —
+    merely starved: ``my_call``/``dx_call``/``dx_grid`` empty and
+    ``rx_frequency`` at its 1500 default, which leaves the native arming
+    condition ``ltry_a8 = ap_enabled .and. len_trim(hiscall)>=3 .and.
+    len_trim(hisgrid4)>=4`` permanently false.
+    ``docs/ft8-dl-speculative-notes.md`` §3–§4 measures what feeding it buys:
+    13/100 extra decodes at the recall cliff, 0 lost, and 0 invented across 316
+    trials including a stale-a-priori arm.
+
+    Two deliberate omissions:
+
+    * ``rx_frequency`` is left at its default.  a8 activates only within ±10 Hz
+      of it, so a wrong value is worse than not arming a8 at all — and a8
+      produced 3 of those 13 gains.  The other 10 came from the symbol-mask AP
+      inside the main loop, which needs only the calls.  Unlocking a8 is a
+      separate step that first has to answer "which frequency is the QSO on".
+    * Nothing is filled unless it is known, so an idle station sends the same
+      frame it sends today.
+    """
+
+    def provider() -> dict[str, object]:
+        fields: dict[str, object] = {"qso_progress": _qso_progress(sequencer.state)}
+        my_call = (sequencer.my_call or "").strip()
+        if my_call:
+            fields["my_call"] = my_call
+        dx_call = (sequencer.dx_call or "").strip()
+        if dx_call:
+            fields["dx_call"] = dx_call
+            dx_grid = (sequencer.dx_grid or "").strip()
+            if dx_grid:
+                fields["dx_grid"] = dx_grid
+        return fields
+
+    return provider
 
 
 def _dump_slot(dumper: SlotDumper | None, slot_id: int, samples: bytes | None) -> None:
@@ -215,10 +263,22 @@ class Ft8Runtime:
                 profile = stored
         except Exception:
             log.debug("decoder_profile unavailable; using %d", DEFAULT_PROFILE)
+        # 同一个 provider 喂本地与云端两条路径：主机跑的是同一个原生解码器，
+        # 同一份先验在那边同样有效，而且配置本来就随每个请求整份发过去。
+        ap_context = (
+            _ap_context_for(sequencer) if _ap_a_priori_enabled(os.environ) else None
+        )
+        if ap_context is not None:
+            log.info(
+                "AP a-priori enabled (%s): feeding my_call/dx_call/dx_grid/qso_progress "
+                "to both decode paths",
+                AP_A_PRIORI_ENV,
+            )
         self.decoder = SupervisorDecoder(
             supervisor,
             DecodeConfig(profile=profile, threads=auto_thread_count()),
             histogram=self.latency,
+            ap_context=ap_context,
         )
         self.encoder = SupervisorEncoder(supervisor)
         self.tx_driver = TxDriver(sequencer, self.encoder, self.safety)
@@ -310,7 +370,7 @@ class Ft8Runtime:
         # 云端深路径（spec 2026-10-14，A1）：只在 MRRC_FT8_CLOUD_DECODE_URL 非空时
         # 存在。默认为 None —— 那是一台没配云端（也是每一台出厂盒子）的默认行为，
         # 级联因此与引入它之前逐字一致。
-        cloud = cloud_decoder_from_environ(os.environ)
+        cloud = cloud_decoder_from_environ(os.environ, ap_context=ap_context)
         self._cloud = cloud
         # 召回测量的素材（设计 §12）：默认关闭，只在 MRRC_FT8_SLOT_DUMP_DIR
         # 设了才存在。写的是解码器实际收到的那一份字节。

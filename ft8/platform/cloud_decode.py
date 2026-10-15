@@ -30,7 +30,11 @@ from ft8.core.models import CloudUnavailable, DecodeBatch, DecodeConfig, DecodeP
 log = logging.getLogger("mrrc.ft8.cloud_decode")
 
 from ft8.core.protocol import PROTOCOL_VERSION, FrameError, decode_frame
-from ft8.engine.dsp_decode import batch_from_decode_ok, decode_config_frame
+from ft8.engine.dsp_decode import (
+    ApContextProvider,
+    batch_from_decode_ok,
+    decode_config_frame,
+)
 from ft8.engine.orchestrator import SLOT_SAMPLES_NBYTES
 
 # The default target is the 1-vCPU hub: measured 2026-10-14, one deep pass at
@@ -62,6 +66,7 @@ class CloudDecoder:
         threads: int = CLOUD_THREADS,
         trace: bool = False,
         clock=time.monotonic,
+        ap_context: ApContextProvider | None = None,
     ) -> None:
         parts = urlsplit(url)
         secure = parts.scheme == "https"
@@ -89,6 +94,7 @@ class CloudDecoder:
         # local deep path — rather than an exception that stops the engine.
         self._tracing = bool(trace)
         self._ca_file = str(ca_file or "")
+        self._ap_context = ap_context
         self._context: ssl.SSLContext | None = None
         self._connection: http.client.HTTPConnection | None = None
 
@@ -103,11 +109,17 @@ class CloudDecoder:
     # -- wire --------------------------------------------------------------
 
     def _request_frame(self, slot_id: int, pcm_bytes: int) -> dict[str, object]:
-        config = self._config.replace(
-            path=DecodePath.IMPROVED,
-            threads=self.threads,
-            cycles=self.cycles,
-        )
+        changes: dict[str, object] = {
+            "path": DecodePath.IMPROVED,
+            "threads": self.threads,
+            "cycles": self.cycles,
+        }
+        if self._ap_context is not None:
+            # The host runs the same native decoder, so the same a-priori helps
+            # there too -- and it costs nothing extra on the wire: the config is
+            # already sent in full with every request.
+            changes.update(self._ap_context())
+        config = self._config.replace(**changes)
         return {
             "v": PROTOCOL_VERSION,
             "type": "decode_remote",
@@ -246,7 +258,9 @@ class CloudDecoder:
         self._drop()
 
 
-def cloud_decoder_from_environ(environ) -> CloudDecoder | None:
+def cloud_decoder_from_environ(
+    environ, ap_context: "ApContextProvider | None" = None
+) -> CloudDecoder | None:
     """Build a decoder from ``MRRC_FT8_CLOUD_DECODE_*``; ``None`` when disabled.
 
     An empty or absent URL means the feature does not exist — which is the
@@ -268,5 +282,5 @@ def cloud_decoder_from_environ(environ) -> CloudDecoder | None:
     trace = (environ.get("MRRC_FT8_CLOUD_DECODE_TRACE") or "").strip() not in ("", "0", "false")
     return CloudDecoder(
         url, token, cycles=cycles, deadline_s=deadline, ca_file=ca_file,
-        threads=threads, trace=trace,
+        threads=threads, trace=trace, ap_context=ap_context,
     )

@@ -36,7 +36,7 @@ if str(_APP_ROOT) not in sys.path:
     sys.path.insert(0, str(_APP_ROOT))
 
 from ft8.core.binding import CoreBinding
-from ft8.core.models import FT8_RX_RATE, FT8_RX_SAMPLES
+from ft8.core.models import DecodeConfig, DecodePath, FT8_RX_RATE, FT8_RX_SAMPLES
 from ft8.core.worker import default_library_path
 
 from tools.ft8 import ml_dataset as D

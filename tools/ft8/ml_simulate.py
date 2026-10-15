@@ -148,27 +148,62 @@ class WaveformBank:
     """
 
     def __init__(
-        self, binding: CoreBinding, messages: tuple[str, ...], base_frequency: float = 1000.0
+        self,
+        binding: CoreBinding,
+        messages: tuple[str, ...],
+        base_frequency: float = 1000.0,
+        capacity: int = 192,
     ) -> None:
+        self._binding = binding
         self._base = base_frequency
+        self._capacity = capacity
         self._waveforms: dict[str, np.ndarray] = {}
         for message in messages:
-            raw = clean_waveform_12k(binding, message, base_frequency).astype(np.float64)
-            spectrum = np.fft.fft(raw)
-            spectrum[1 : raw.size // 2] *= 2.0  # analytic signal: double the positive half
-            spectrum[raw.size // 2 + 1 :] = 0.0
-            self._waveforms[message] = np.fft.ifft(spectrum).astype(np.complex128)
-        length = next(iter(self._waveforms.values())).size
-        self._time = np.arange(length, dtype=np.float64) / FT8_RX_RATE
+            self._waveforms[message] = self._encode(message)
+        self._time = np.arange(FT8_TX_SAMPLES // _DECIMATION, dtype=np.float64) / FT8_RX_RATE
+
+    def _encode(self, message: str) -> np.ndarray:
+        """Encode one message at the base frequency as an analytic signal."""
+
+        raw = clean_waveform_12k(self._binding, message, self._base).astype(np.float64)
+        spectrum = np.fft.fft(raw)
+        spectrum[1 : raw.size // 2] *= 2.0  # analytic: double the positive half
+        spectrum[raw.size // 2 + 1 :] = 0.0
+        return np.fft.ifft(spectrum).astype(np.complex128)
+
+    def _lookup(self, message: str) -> np.ndarray:
+        """Return the cached waveform, encoding on demand and evicting the oldest.
+
+        On demand because a training bed carries *real* stations (arbitrary
+        callsigns, thousands of them across a corpus); bounded because each
+        analytic waveform is 2.4 MB and a corpus has far more messages than fit
+        in memory.  The beds are revisited cyclically, so an LRU far smaller than
+        the corpus keeps the hit rate high.
+        """
+
+        cached = self._waveforms.get(message)
+        if cached is not None:
+            self._waveforms[message] = self._waveforms.pop(message)
+            return cached
+        waveform = self._encode(message)
+        self._waveforms[message] = waveform
+        if len(self._waveforms) > self._capacity:
+            self._waveforms.pop(next(iter(self._waveforms)))
+        return waveform
+
+    def analytic(self, message: str, frequency: float) -> np.ndarray:
+        """Return the complex analytic waveform (needed to shift or to fade)."""
+
+        base = self._lookup(message)
+        if abs(frequency - self._base) < 1e-9:
+            return base
+        shift = np.exp(2j * np.pi * (frequency - self._base) * self._time[: base.size])
+        return base * shift
 
     def waveform(self, message: str, frequency: float) -> np.ndarray:
         """Return the same samples :func:`clean_waveform_12k` would, at ``frequency``."""
 
-        base = self._waveforms[message]
-        if abs(frequency - self._base) < 1e-9:
-            return base.real.astype(np.float32)
-        shift = np.exp(2j * np.pi * (frequency - self._base) * self._time)
-        return (base * shift).real.astype(np.float32)
+        return self.analytic(message, frequency).real.astype(np.float32)
 
 
 # Bed spectra are reused across every example drawn from the same slot (a
@@ -178,6 +213,36 @@ class WaveformBank:
 # array kept alive by the entry itself, so an id cannot be recycled underneath.
 _POWER_CACHE: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
 _POWER_CACHE_LIMIT = 256
+
+
+def waveform_for(
+    binding: CoreBinding, signal: "SyntheticSignal", waves: "WaveformBank | None" = None
+) -> np.ndarray:
+    """Return the waveform for ``signal``, perturbations included.
+
+    Both the mix and the clean target go through here, so a faded signal cannot
+    end up in one and an ideal one in the other — the drift a second copy would
+    introduce is exactly what a training target must not have.
+    """
+
+    if waves is not None:
+        analytic = waves.analytic(signal.message, signal.frequency)
+    else:
+        raw = clean_waveform_12k(binding, signal.message, signal.frequency).astype(np.float64)
+        spectrum = np.fft.fft(raw)
+        spectrum[1 : raw.size // 2] *= 2.0
+        spectrum[raw.size // 2 + 1 :] = 0.0
+        analytic = np.fft.ifft(spectrum)
+    if not signal.variant:
+        return analytic.real.astype(np.float32)
+    generator = np.random.default_rng(signal.variant)
+    depth = float(generator.uniform(0.0, 0.4))          # fading depth
+    fade_hz = float(generator.uniform(0.02, 0.6))       # fade rate
+    phase = float(generator.uniform(0.0, 2 * np.pi))
+    drift_hz = float(generator.uniform(-0.6, 0.6))      # oscillator / Doppler
+    time = np.arange(analytic.size, dtype=np.float64) / FT8_RX_RATE
+    envelope = 1.0 - depth * (1.0 - np.cos(2 * np.pi * fade_hz * time + phase)) / 2.0
+    return (analytic * envelope * np.exp(2j * np.pi * drift_hz * time)).real.astype(np.float32)
 
 
 def _bin_powers(pcm: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -268,6 +333,12 @@ class SyntheticSignal:
     frequency: float
     dt: float
     snr_db: float
+    # 0 means "the ideal waveform the encoder produces".  Anything else applies a
+    # deterministic propagation-like perturbation (fading, phase wander, a
+    # fraction of a Hz of drift) derived from this value — training on ideal
+    # bursts only is what taught the first model to treat real, faded signals as
+    # noise (Task 10b).
+    variant: int = 0
 
     @property
     def offset_samples(self) -> int:
@@ -303,11 +374,7 @@ def synthesize(
 
     mixed = bed.astype(np.float64).copy()
     for signal in signals:
-        waveform = (
-            waves.waveform(signal.message, signal.frequency)
-            if waves is not None
-            else clean_waveform_12k(binding, signal.message, signal.frequency)
-        )
+        waveform = waveform_for(binding, signal, waves)
         gain = signal_gain(bed, waveform, signal)
         start = signal.offset_samples
         stop = start + waveform.size

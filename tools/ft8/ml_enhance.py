@@ -132,7 +132,7 @@ def build_model(base: int = BASE_CHANNELS, depth: int = DEPTH):
 
 def render_batch(
     binding: CoreBinding,
-    beds: list[np.ndarray],
+    beds: list[D.Bed],
     bank: M.WaveformBank,
     indices: list[int],
     *,
@@ -205,7 +205,7 @@ def pick_device() -> str:
 
 def train(
     binding: CoreBinding,
-    beds: list[np.ndarray],
+    beds: list[D.Bed],
     bank: M.WaveformBank,
     *,
     steps: int,
@@ -273,7 +273,7 @@ def _reconstruct(noisy: np.ndarray, band_mask: np.ndarray) -> np.ndarray:
 def simulate_recall(
     binding: CoreBinding,
     model,
-    beds: list[np.ndarray],
+    beds: list[D.Bed],
     bank: M.WaveformBank,
     *,
     snr_values: tuple[float, ...],
@@ -311,14 +311,14 @@ def simulate_recall(
         plain_hits = enhanced_hits = 0
         for trial in range(trials):
             bed = beds[int(generator.integers(0, len(beds)))]
-            frequency = M.quiet_frequency(bed, generator)
+            frequency = M.quiet_frequency(bed.noise, generator)
             signal = M.SyntheticSignal(
                 message=str(generator.choice(D._messages())),
                 frequency=frequency,
                 dt=float(generator.uniform(M.DT_MIN, M.DT_MAX)),
                 snr_db=float(snr),
             )
-            pcm = M.synthesize(binding, bed, (signal,), waves=bank)
+            pcm = M.synthesize(binding, bed.noise, (signal,), waves=bank)
             model.eval()
             with torch.no_grad():
                 enhanced = enhance(pcm, model, alpha)

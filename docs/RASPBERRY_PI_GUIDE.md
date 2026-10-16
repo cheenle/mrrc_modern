@@ -13,7 +13,7 @@
 ## 二、烧卡（约 3 分钟）
 
 1. 下载树莓派镜像（本页下载卡片）：固定地址 `MRRC-Modern-rpi64.img.xz`，当前镜像是 **v1.28.0**：
-   `MRRC-Modern-v1.28.0-rpi64.img.xz`，515,831,640 字节，SHA-256 `bb7127c7d343e80433680c0dfbda23b03272bfe1b53488dfcec95c2639e14677`。
+   `MRRC-Modern-v1.28.0-rpi64.img.xz`，519,284,304 字节，SHA-256 `77ae09b75c98b6faa02c00cd1b6ecca77e45d5d7dc0ee9b91ad29d63d073bf4c`。
 2. 安装官方 **Raspberry Pi Imager** → `选择操作系统` → 拉到最底 **使用自定义镜像** → 选中下载的 img.xz。
 3. `选择存储卡` → 选中 SD 卡 → **下一步**。
    - 想预配 Wi-Fi / 改主机名：点右下角 **编辑设置**（可选）。

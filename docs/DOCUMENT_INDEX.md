@@ -111,7 +111,8 @@
 | [docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md](docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md) | **FT8 快路径 + 自适应级联**设计 spec（默认走 `ft8_lib` 快路径、按需补跑深路径并取并集；含 2026-10-13 A53 spike 回填） | 架构师 |
 | [docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md](docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md) | 上述 spec 的实现计划（15 个 Task） | 开发者 |
 | [docs/superpowers/specs/2026-10-13-ft8-packaging-design.md](docs/superpowers/specs/2026-10-13-ft8-packaging-design.md) | **FT8 四平台打包**设计 spec（镜像内编译 DSP 并随 `mrrc-update` 重编、Boost 头文件 vendor 化、Windows MinGW 与 macOS dylib 依赖闭包进包） | 架构师/打包 |
-| [docs/superpowers/specs/2026-10-17-w103d-preflash-design.md](docs/superpowers/specs/2026-10-17-w103d-preflash-design.md) | **W103D 发货版（预置）镜像**设计 spec（`--preflash` 开关：固定三条口令 + 时区/locale 预置 + 可选 Wi-Fi 预置走 U 盘 `/boot` 克隆 + 设置页手输 SSID 与明文密码 + 首启探测改成“跑到定型为止”） | 架构师/打包 |
+| [docs/superpowers/specs/2026-10-17-w103d-preflash-design.md](docs/superpowers/specs/2026-10-17-w103d-preflash-design.md) | **W103D 发货版（预置）镜像**设计 spec（`--preflash` 开关：固定三条口令 + 时区/locale 预置 + 设置页手输 SSID 与明文密码 + 设置页填呼号向 portal 申请公网入口 + 首启探测改成“跑到定型为止”） | 架构师/打包 |
+| [docs/superpowers/plans/2026-10-17-w103d-preflash.md](docs/superpowers/plans/2026-10-17-w103d-preflash.md) | 上述 spec 的实现计划（9 个任务：预置脚本与开关 · 设置页两面板 · 探测自愈 · 文档与产物验证） | 开发者 |
 
 ---
 

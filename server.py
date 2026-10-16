@@ -26,6 +26,7 @@ import subprocess
 import threading
 import time
 from contextlib import asynccontextmanager
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Callable, Optional, Protocol
 
@@ -4843,12 +4844,59 @@ def _resolve_static_path(path: str):
     return resolved if contained else None
 
 
+# 静态件的缓存语义：两层同一套值 —— hub 边缘（`../mrrc_hub/deploy/nginx/mrrc-instances.vhost`）
+# 发同样的两个常量。实例侧这一份不是重复，而是覆盖公网边缘之外的所有路径：
+# 局域网直连、B2/B3 退化入口、别的反代，以及边缘缓存还没建立时的第一个用户。
+CACHE_CONTROL_DOC = "no-cache"                # HTML / JSON / sw.js：每次都重新校验
+CACHE_CONTROL_ASSET = "public, max-age=3600"  # 其余静态件：1 小时
+
+
+def _cache_control_for(path: Path) -> str:
+    """文档类每次都重新校验，其余静态件 1 小时。
+
+    1 小时而不是 ``immutable``：`index.html` 里的 ``?v=`` 是**手工** bump 的，漏 bump 时
+    1 小时是用户最长踩到旧代码的窗口；``immutable`` 会把这个代价放大成一年。
+    部署后新版能立刻看到，靠的是文档类 ``no-cache`` 加 `index.html` 换 ``?v=`` 新号。
+    """
+    if path.suffix.lower() in (".html", ".htm", ".json") or path.name == "sw.js":
+        return CACHE_CONTROL_DOC
+    return CACHE_CONTROL_ASSET
+
+
+def _not_modified(request: Request, headers) -> bool:
+    """条件请求是否命中（命中则回 304，不重传文件）。
+
+    RFC 7232：带了 ``If-None-Match`` 就不再按 ``If-Modified-Since`` 判断。
+    日期报文解析不了时当作“没带条件”—— 宁可多发一次文件，也不要错误地发 304。
+    """
+    etag = headers.get("etag")
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match is not None:
+        if not etag:
+            return False
+        candidates = {token.strip() for token in if_none_match.split(",")}
+        return etag in candidates or f"W/{etag}" in candidates
+    if_modified_since = request.headers.get("if-modified-since")
+    last_modified = headers.get("last-modified")
+    if if_modified_since and last_modified:
+        try:
+            return parsedate_to_datetime(if_modified_since) >= parsedate_to_datetime(last_modified)
+        except (TypeError, ValueError):
+            return False
+    return False
+
+
 async def serve_static(path: str, request: Request):
     """Serve static files.  Index.html is served for SPA routes.
 
     Registered with ``app.add_api_route`` at the **end** of this module, not here: this handler
     matches every GET path, so anything registered after it is unreachable. Defining it here and
     registering it below all API routes is what keeps that order obvious.
+
+    Caching (2026-10-17): every response carries a ``Cache-Control`` and honours
+    ``If-None-Match``/``If-Modified-Since``. Before this, an installed browser revalidated on every
+    reload and got the whole file back — ``If-None-Match`` on ``modules/opus_wasm.js`` (534 KB)
+    returned 200 with the full body, so "reload" meant "push 534 KB through the tunnel again".
     """
     if not _verify_auth(request) and path not in ("", "login", "favicon.png", "manifest.json", "sw.js", "box_api.js"):
         return RedirectResponse("/login")
@@ -4859,22 +4907,38 @@ async def serve_static(path: str, request: Request):
         # through to the SPA fallback for these.
         return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
 
-    if file_path.is_file():
-        # Determine content type
-        ext = file_path.suffix.lower()
-        content_types = {
-            ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
-            ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml",
-            ".ico": "image/x-icon", ".wav": "audio/wav", ".mp3": "audio/mpeg",
-        }
-        media_type = content_types.get(ext, "application/octet-stream")
-        return FileResponse(file_path, media_type=media_type)
+    if not file_path.is_file():
+        # A file name that is not on disk is a 404, not the SPA fallback: `/favicon.png`
+        # (referenced by index.html and manifest.json) does not exist, and the fallback
+        # answered it with 40 KB of HTML that the browser kept as if it were the icon.
+        # Only extension-less paths are SPA routes (/settings, /ft8, a deep link).
+        if Path(path).suffix:
+            return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
+        file_path = STATIC_DIR / "index.html"
+        if not file_path.exists():
+            return HTMLResponse("<h1>MRRC Modern</h1><p>Static files not found.</p>", status_code=404)
 
-    # Fallback to index.html for SPA routes
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path, media_type="text/html")
-    return HTMLResponse("<h1>MRRC Modern</h1><p>Static files not found.</p>", status_code=404)
+    ext = file_path.suffix.lower()
+    content_types = {
+        ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
+        ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml",
+        ".ico": "image/x-icon", ".wav": "audio/wav", ".mp3": "audio/mpeg",
+    }
+    media_type = content_types.get(ext, "application/octet-stream")
+    response = FileResponse(
+        file_path,
+        media_type=media_type,
+        # stat passed in on purpose: Starlette 1.3's FileResponse only stats the file
+        # when it is sent, and the conditional check below has to run *before* that.
+        stat_result=file_path.stat(),
+    )
+    response.headers["Cache-Control"] = _cache_control_for(file_path)
+    if _not_modified(request, response.headers):
+        headers = {name: response.headers[name]
+                   for name in ("etag", "last-modified", "cache-control")
+                   if name in response.headers}
+        return Response(status_code=304, headers=headers)
+    return response
 
 
 # ── Entry Point ─────────────────────────────────────────────────────

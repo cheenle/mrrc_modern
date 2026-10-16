@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2280 tests across 118 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-16, macOS). **That total is the `unittest`
+2294 tests across 119 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
 sections below itemise 88 of those 118 — the support-chain, Cloud Hub and
@@ -21,10 +21,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2280 |
-| Passed | 2279 (1 skipped) |
+| Total tests | 2294 |
+| Passed | 2293 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 (macOS, 2026-10-16) |
+| Failed | 0 (macOS, 2026-10-17) |
 | Execution time | ~1min (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2280 above. Run it with:
+the 2294 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -739,6 +739,24 @@ platform's wiring, and the macOS helper's closure logic gets real unit tests.
 | `MacBundleHelperTests` | 5 | `otool -L` parsing, what counts as a system library, the transitive closure walk, missing-dependency and outside-the-bundle errors |
 | `WindowsPackagingTests` | 2 | the MinGW build step and the walked (not hard-coded) runtime DLL closure |
 | `PyInstallerSpecTests` | 2 | the native library is staged at the app root and `ft8`/`scipy`/`soxr` are named as hidden imports |
+
+### 65. test_static_cache_headers.py — 静态资源缓存契约 (14 tests)
+
+SDD coverage: §3.3 of `docs/superpowers/specs/2026-10-17-static-asset-delivery-design.md`
+（hub 侧的对偶在 `../mrrc_hub/deploy/nginx/`）
+
+实例此前只发 `ETag`/`Last-Modified`、不实现条件 GET —— 实测带 `If-None-Match` 仍返回
+200 与完整 534 KB，于是每次重新加载都等于重新穿一遍隧道。这些断言钉住三件事：
+文档类 `no-cache`、其余静态件 `public, max-age=3600`（刻意不写 `immutable`：`?v=` 是
+手工 bump 的）、条件请求回 304、有扩展名的缺失路径回 404（`/favicon.png` 曾经拿到
+40 KB 的 `index.html` 被浏览器当图标收下）。
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `CacheControlTests` | 4 | 文档/入口脚本 `no-cache`；静态件 1 小时；判定按扩展名（不依赖文件存在）；不出现 `immutable` |
+| `ConditionalRequestTests` | 6 | `If-None-Match` 命中 → 304 且无 body；陈旧 ETag → 200；`W/` 弱校验也命中；`If-Modified-Since` ≥ mtime → 304；坏日期忽略；`If-None-Match` 优先于 `If-Modified-Since` |
+| `MissingAssetTests` | 3 | 有扩展名的缺失路径 → 404；无扩展名仍回落 `index.html` 且带 `no-cache`；路径穿越先于回落规则被拒 |
+| `AuthOrderTests` | 1 | 不带令牌取静态件仍是跳登录页（缓存头没有改变鉴权顺序） |
 
 ## Test Coverage by SDD Requirement
 

@@ -1,4 +1,5 @@
 """Tests for linux/first_run.py — Pi first-boot auto-configuration."""
+import inspect
 import sys
 import tempfile
 import unittest
@@ -72,7 +73,101 @@ class FirstRunFlowTests(unittest.TestCase):
     def test_needs_first_run_false_when_settled(self):
         env = {"MRRC_WEB_PASSWORD": "s3cret-pass", "MRRC_RADIO_MODEL": "ic7300",
                "MRRC_SERIAL_PORT": "/dev/ttyUSB0", "MRRC_PORT_CONFIRMED": "1"}
-        self.assertFalse(first_run.needs_first_run(env))
+        # 注入“设备节点在不在”：needs_first_run 现在会查一次文件系统，测试不能依赖
+        # 开发机上真有 /dev/ttyUSB0。
+        self.assertFalse(first_run.needs_first_run(env, port_exists=lambda port: True))
+
+
+class ProbeSettlementTests(unittest.TestCase):
+    """规格 D-8：定型 = 口令非默认 + 型号有效 + 串口已确认 + **那个节点此刻在**。"""
+
+    BASE = {"MRRC_WEB_PASSWORD": "s3cret-pass", "MRRC_RADIO_MODEL": "ic7300",
+            "MRRC_SERIAL_PORT": "/dev/ttyUSB0", "MRRC_PORT_CONFIRMED": "1"}
+
+    def test_a_recorded_port_that_is_not_here_is_not_settled(self):
+        self.assertFalse(first_run.needs_first_run(self.BASE,
+                                                   port_exists=lambda port: True))
+        self.assertTrue(first_run.needs_first_run(self.BASE,
+                                                  port_exists=lambda port: False))
+
+    def test_an_empty_port_is_never_settled(self):
+        env = {**self.BASE, "MRRC_SERIAL_PORT": ""}
+        # 不注入：空白串口由真的 port_node_exists 判定（它不碰文件系统，确定性）。
+        self.assertTrue(first_run.needs_first_run(env))
+
+    def test_a_windows_port_name_is_not_a_path(self):
+        """“COM5”永远不是文件；把“我说不准”读成“不在”，Windows 每次启动都会重探。"""
+        self.assertTrue(first_run.port_node_exists("COM5"))
+        self.assertFalse(first_run.port_node_exists(""))
+        self.assertFalse(first_run.port_node_exists("/dev/definitely-not-here-1234"))
+
+    def test_a_preseeded_env_is_still_probed_but_keeps_its_password(self):
+        cfg = Path(tempfile.mkdtemp()) / "mrrc.env"
+        cfg.write_text("MRRC_WEB_PASSWORD=preseed-pass\nMRRC_SERIAL_PORT=\n"
+                       "MRRC_RADIO_MODEL=\n", encoding="utf-8")
+
+        def open_func(port, baudrate, timeout):
+            ser = MagicMock()
+            ser.read.side_effect = lambda n: b"ID" if baudrate == 38400 else b""
+            return ser
+
+        env = {"MRRC_WEB_PASSWORD": "preseed-pass", "MRRC_SERIAL_PORT": "",
+               "MRRC_RADIO_MODEL": ""}
+        with unittest.mock.patch.object(first_run, "detect_serial_ports",
+                                        return_value=["/dev/ttyUSB1"]):
+            out = first_run.apply_first_run(env, cfg, preseeded=True, open_func=open_func)
+
+        self.assertEqual(out["MRRC_WEB_PASSWORD"], "preseed-pass")
+        self.assertNotIn("MRRC_AUTO_PASSWORD", out, "预置通道不许发明口令")
+        self.assertEqual(out["MRRC_SERIAL_PORT"], "/dev/ttyUSB1")
+        self.assertEqual(out["MRRC_PORT_CONFIRMED"], "1")
+
+
+class PasswordBeforeProbeTests(unittest.TestCase):
+    """macOS 那份在 2026-10-03 现场修过两条，Linux 移植时漏了 —— 2026-10-17 补齐。
+
+    ①口令必须在探测**之前**落盘（探测再也回不来时，留给运维的不是一个空口令的模板）；
+    ②探测循环之前必须先出声（首启横幅在它后面，卡住时 HDMI 全黑）。
+    """
+
+    def test_the_generated_password_is_on_disk_before_any_port_is_probed(self):
+        cfg = Path(tempfile.mkdtemp()) / "mrrc.env"
+        cfg.write_text("MRRC_WEB_PASSWORD=\nMRRC_SERIAL_PORT=\nMRRC_RADIO_MODEL=\n",
+                       encoding="utf-8")
+        seen_at_probe = {}
+
+        def probe(port, open_func=None):
+            seen_at_probe["line"] = [ln for ln in cfg.read_text(encoding="utf-8").splitlines()
+                                     if ln.startswith("MRRC_WEB_PASSWORD=")][0]
+            return None
+
+        with unittest.mock.patch.object(first_run, "probe_radio_model", side_effect=probe), \
+             unittest.mock.patch.object(first_run, "detect_serial_ports",
+                                        return_value=["/dev/ttyUSB0"]):
+            first_run.apply_first_run({"MRRC_WEB_PASSWORD": "", "MRRC_SERIAL_PORT": "",
+                                       "MRRC_RADIO_MODEL": ""}, cfg)
+
+        self.assertTrue(seen_at_probe.get("line"), "探测根本没被调用 —— 这个测试就白跑了")
+        self.assertTrue(seen_at_probe["line"].split("=", 1)[1],
+                        "探测发生时口令还没落盘 —— 一旦这一步卡住，用户既没有口令也没有日志")
+
+    def test_the_console_says_something_before_it_probes(self):
+        # 只看这个函数本身（用 inspect 而不是 __file__：后者在类型上可能是 None，
+        # 而这里的断言本来就只关心探测循环之前那几行）。
+        source = inspect.getsource(first_run.apply_first_run)
+        probe_at = source.index("probe_radio_model(candidate")
+        self.assertIn("print(", source[:probe_at],
+                      "探测循环之前没有输出 ⇒ 卡住时 HDMI 全黑")
+
+    def test_a_preseeded_run_never_invents_a_password(self):
+        cfg = Path(tempfile.mkdtemp()) / "mrrc.env"
+        cfg.write_text("MRRC_WEB_PASSWORD=preseed-pass\n", encoding="utf-8")
+        with unittest.mock.patch.object(first_run, "detect_serial_ports", return_value=[]):
+            first_run.apply_first_run({"MRRC_WEB_PASSWORD": "preseed-pass"}, cfg,
+                                      preseeded=True)
+        written = cfg.read_text(encoding="utf-8")
+        self.assertIn("MRRC_WEB_PASSWORD=preseed-pass", written)
+        self.assertNotIn("MRRC_AUTO_PASSWORD", written)
 
 
 class EnvFileEncodingTests(unittest.TestCase):

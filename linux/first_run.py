@@ -26,17 +26,24 @@ RADIO_MODEL_FALLBACK = "ft710"
 VALID_MODELS = frozenset({"ft710", "ic7300", "ic7300mk2"})
 
 
-def needs_first_run(env: dict[str, str]) -> bool:
+def needs_first_run(env: dict[str, str], port_exists=None) -> bool:
     """True when first-launch auto-config should run.
 
     Returns False (no re-probe) only when the config is genuinely settled:
-    a non-default password, a valid radio model, and either the port was
-    confirmed by a live probe (``MRRC_PORT_CONFIRMED=1``) or the port is a
-    real non-default device name. Otherwise the launcher re-runs auto-config.
+    a non-default password, a valid radio model, either the port was confirmed
+    by a live probe (``MRRC_PORT_CONFIRMED=1``) or it is a real non-default
+    device name, **and the device that name points at is on this machine right
+    now**. That last clause is what makes a shipped box self-heal: the seller's
+    bench and the customer's desk enumerate the FT-710's two CP210x ports in
+    their own order, so a recorded name alone is not evidence.
+
+    ``port_exists`` is injectable because this function is otherwise pure and
+    the tests must not depend on a /dev node being present on the build host.
     """
     pwd = env.get("MRRC_WEB_PASSWORD", "")
     port = env.get("MRRC_SERIAL_PORT", "").strip()
     model = env.get("MRRC_RADIO_MODEL", "").strip().lower()
+    exists = port_exists or port_node_exists
     configured = (
         pwd and pwd != DEFAULT_WEB_PASSWORD
         and model in VALID_MODELS
@@ -44,8 +51,24 @@ def needs_first_run(env: dict[str, str]) -> bool:
             env.get("MRRC_PORT_CONFIRMED") == "1"
             or (port and port not in DEFAULT_SERIAL_PORTS)
         )
+        and exists(port)
     )
     return not configured
+
+
+def port_node_exists(port: str) -> bool:
+    """Whether this machine currently has the device the port name points at.
+
+    Only POSIX device paths are ever *claimed absent*. A Windows port name
+    ("COM5") is not a filesystem path at all, and "I cannot tell" has to read as
+    present here — reading it as absent would make every Windows launch re-probe
+    the radio and rewrite the env file.
+    """
+    if not port:
+        return False
+    if not port.startswith("/"):
+        return True
+    return os.path.exists(port)
 
 
 def generate_password() -> str:
@@ -197,17 +220,28 @@ def apply_first_run(
     config_path: Path,
     *,
     open_func=serial.Serial,
+    preseeded: bool = False,
 ) -> dict[str, str]:
-    """Fill password/serial/model, persist, mark done. Returns updated env."""
+    """Fill password/serial/model, persist, mark done. Returns updated env.
+
+    ``preseeded`` (MRRC_PRESEED=1) keeps the password decision outside this
+    function — the operator or the image already made it. Everything else still
+    runs: the probe is the one thing only this machine can do.
+    """
     updates: dict[str, str] = {}
 
     pwd = env.get("MRRC_WEB_PASSWORD", "")
-    if not pwd or pwd == DEFAULT_WEB_PASSWORD:
+    if not preseeded and (not pwd or pwd == DEFAULT_WEB_PASSWORD):
         pwd = generate_password()
         env["MRRC_WEB_PASSWORD"] = pwd
         updates["MRRC_WEB_PASSWORD"] = pwd
         env["MRRC_AUTO_PASSWORD"] = "1"
         updates["MRRC_AUTO_PASSWORD"] = "1"
+        # 立刻落盘，而不是等最后那次批量写入。2026-10-03 实测（macOS launcher）：
+        # 串口探测再也没返回，留给运维的配置是原封不动的模板 —— 口令只在内存里，
+        # 随后一起消失。Linux 这一份是它的移植，当初没带上这一步；2026-10-17 补齐，
+        # 因为盒子正是最容易碰上“某个串口桥只吃写、不回话”的那台机器。
+        update_env_file(config_path, {"MRRC_WEB_PASSWORD": pwd, "MRRC_AUTO_PASSWORD": "1"})
 
     port = env.get("MRRC_SERIAL_PORT", "").strip()
     model = env.get("MRRC_RADIO_MODEL", "").strip().lower()
@@ -216,14 +250,18 @@ def apply_first_run(
 
     if port_unset or model_unset:
         ports = detect_serial_ports()
-        found_port, found_model = None, None
+        # 探测之前先出声：这个循环要几秒到几十秒，而首启横幅在它后面 —— 卡住时
+        # HDMI 上就是全部黑的，现场没有任何线索（macOS 那边的原话就是“黑屏”）。
+        print("Detecting the radio on %d serial port(s): %s"
+              % (len(ports), ", ".join(ports) or "(none found)"), flush=True)
+        found: tuple[str, str] | None = None
         for candidate in ports:
             found_model = probe_radio_model(candidate, open_func=open_func)
             if found_model:
-                found_port = candidate
+                found = (candidate, found_model)
                 break
-        if found_model:
-            port, model = found_port, found_model
+        if found is not None:
+            port, model = found
             env["MRRC_PORT_CONFIRMED"] = "1"
             updates["MRRC_PORT_CONFIRMED"] = "1"
         else:
@@ -244,10 +282,17 @@ def apply_first_run(
 
 
 def main() -> int:
-    """Entry point for mrrc-firstboot.service (runs as root)."""
+    """Entry point for mrrc-firstboot.service (runs as root).
+
+    ``MRRC_PRESEED=1`` means "this env file is authoritative — do not invent a
+    password", and nothing more. It used to return before the probe, and the
+    wrapper passes it on every image whose env file exists (i.e. every image
+    install.sh built) — so the serial probe never ran on a real box (2026-10-17
+    artifact check: env/mrrc.env present, no MRRC_WEB_PASSWORD, no
+    MRRC_SERIAL_PORT, no firstboot-done).
+    """
     env_path = Path(os.environ.get("MRRC_ENV_FILE", "/opt/mrrc_modern/env/mrrc.env"))
-    if os.environ.get("MRRC_PRESEED") == "1":
-        return 0  # preseed handled by the wrapper; nothing to generate
+    preseeded = os.environ.get("MRRC_PRESEED") == "1"
     env = dict(
         line.split("=", 1) for line in read_env_text(env_path)[0].splitlines()
         if line.strip() and not line.strip().startswith("#") and "=" in line
@@ -255,7 +300,14 @@ def main() -> int:
     if not needs_first_run(env):
         print("[mrrc-firstboot] config settled; skipping auto-config")
         return 0
-    env = apply_first_run(env, env_path)
+    before = env.get("MRRC_WEB_PASSWORD", "")
+    env = apply_first_run(env, env_path, preseeded=preseeded)
+    if env.get("MRRC_WEB_PASSWORD", "") == before:
+        # 预置口令的镜像：控制台只报探测结果，不重复口令（它本来就是随镜像公开的，
+        # 但那是随镜像公开的，不是这条日志的功劳）。
+        print(f"[mrrc-firstboot] radio probe: model {env['MRRC_RADIO_MODEL']} "
+              f"port {env['MRRC_SERIAL_PORT'] or '(none found)'}")
+        return 0
     print("=" * 56)
     print("  MRRC Modern 首次配置完成")
     print(f"  网页密码: {env['MRRC_WEB_PASSWORD']}")

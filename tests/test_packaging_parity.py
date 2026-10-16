@@ -78,7 +78,7 @@ class ExclusionListTests(unittest.TestCase):
         entries = re.findall(r'--exclude\s+"([^"]+)"', text)
         self.assertGreaterEqual(len(entries), 40, f"only {len(entries)} exclude rules")
         for canary in ("/.env", "/recordings/", "/fleet/", "website/", "packaging/",
-                       "tests/", "qso.db", "auth-tokens.json", "mrrc_modern.env"):
+                       "tests/", "qso.db", "auth-tokens.json*", "mrrc_modern.env"):
             with self.subTest(canary=canary):
                 self.assertIn(canary, entries)
 
@@ -132,7 +132,8 @@ class ExclusionListTests(unittest.TestCase):
         src, dst = root / "src", root / "dst"
         src.mkdir()
         state = (
-            "auth-tokens.json", "mem_channels.json", "mrrc_modern.env",
+            "auth-tokens.json", "auth-tokens.json.invalidated-20261017-0035",
+            "mem_channels.json", "mrrc_modern.env",
             "recordings.json", "atr1000_tuner.json", "qso.db",
             "ft8/settings.json", "ft8/qso.db", "env/mrrc.env",
         )
@@ -195,17 +196,21 @@ class ExclusionListTests(unittest.TestCase):
         edit since then is written down here — a root-anchored ``/fleet/``,
         ``/draft/`` when the Rust draft workstream landed on main
         (2026-10-13), then ``qso.db`` and the five per-box state files found
-        leaking on 2026-10-14, and ``.venv*/`` on 2026-10-16 (a parallel
+        leaking on 2026-10-14, ``.venv*/`` on 2026-10-16 (a parallel
         session's ``.venv-ml`` — a macOS venv carrying 596 MB of torch — was
         being staged into the ARM image; the exact-name rules missed it, and
-        it is also what exhausted the box image's rootfs)."""
+        it is also what exhausted the box image's rootfs), and
+        ``auth-tokens.json*`` on 2026-10-17 (the same failure one name over:
+        the working tree's copy had been retired to
+        ``auth-tokens.json.invalidated-<ts>`` and the exact-name rule staged it
+        into the v1.28.1 box image)."""
         expected = [
             ".git/", "venv/", ".venv*/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
             ".agents/", "docs/", "SDD/", "packaging/", "macos/", "windows/",
             "__pycache__/", "*.pyc", ".DS_Store", "atr1000_tuner.json",
             "qso.db",
-            "auth-tokens.json", "mrrc_modern.env", "recordings.json",
+            "auth-tokens.json*", "mrrc_modern.env", "recordings.json",
             "ft8/settings.json", "/env/",
             "/fleet/",
             "/draft/",

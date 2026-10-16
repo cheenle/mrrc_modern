@@ -48,6 +48,24 @@ def _error(text: str) -> dict:
     return {"type": "error", "message": text}
 
 
+class ScenarioSelectionTests(unittest.TestCase):
+    """`--scenario V7` 必须真的跑 V7。
+
+    实测事故：`set("V7")` 把字符串拆成字符，`"V7" in want` 恒假 —— 脚本跑完、报告空白、
+    退出码 0，看起来一切正常。这一条就是那次事故的回归测试。
+    """
+
+    def test_a_single_scenario_is_selected(self):
+        self.assertEqual({"V7"}, pa.scenario_set("V7"))
+
+    def test_a_list_is_selected_and_normalised(self):
+        self.assertEqual({"V1", "V2", "V7"}, pa.scenario_set("v1, V2 ,v7"))
+
+    def test_empty_text_selects_nothing(self):
+        self.assertEqual(set(), pa.scenario_set(""))
+        self.assertEqual(set(), pa.scenario_set("  ,  "))
+
+
 class JudgeOffTests(unittest.TestCase):
     def test_accepts_a_confirmed_off(self):
         rec = _rec((1.0, _state_update(False)))
@@ -107,6 +125,12 @@ class JudgeCancelTests(unittest.TestCase):
                    (2.1, _state_update(False)))
         ok, why = pa.judge_cancel(rec, cancelled_at=1.5)
         self.assertTrue(ok, why)
+
+    def test_frames_from_the_previous_scenario_do_not_count(self):
+        """V3 曾经拿 V2 一分钟前留下的帧当自己的结果（实测），since 就是为此。"""
+        rec = _rec((1.0, _rescue("running", 1)), (5.0, _rescue("woke", 1)))
+        self.assertEqual([], pa.rescue_events(rec, since=10.0))
+        self.assertEqual(2, len(pa.rescue_events(rec, since=0.0)))
 
     def test_a_wake_after_the_cancel_is_a_failure(self):
         rec = _rec((1.0, _rescue("running", 1)), (2.0, _rescue("cancelled", 1)),

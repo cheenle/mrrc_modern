@@ -39,13 +39,18 @@ from pathlib import Path
 
 # 判据里要认的那两句服务端文案（改文案就会让判据红，这是有意的：
 # 文案是操作员唯一的解释来源，规格 §7 把它写进了契约）。
+#: 启动窗口的客户端等待：服务端不给客户端看 `_power_boot_until`，所以每个要"干净起点"的
+#: 场景先静默这么久，确保上一次 PS1 的 15 秒保护窗口已经过期。
+WINDOW_SETTLE_S = 20.0
+
 WINDOW_REFUSAL = "秒后再关机"
 LISTEN_REFUSAL = "Listen-only"
 TX_REFUSAL = "发射中不能关机"
 
 __all__ = [
-    "WINDOW_REFUSAL", "LISTEN_REFUSAL", "TX_REFUSAL",
-    "Recorder", "power_state", "rescue_events", "judge_off", "judge_restart",
+    "WINDOW_REFUSAL", "LISTEN_REFUSAL", "TX_REFUSAL", "scenario_set",
+    "Recorder", "power_state", "rescue_events", "trust_context",
+    "judge_off", "judge_restart",
     "judge_cancel", "judge_window_refusal", "judge_listen_refusal", "render_report",
 ]
 
@@ -77,6 +82,16 @@ class Recorder:
         return out
 
 
+def scenario_set(text: str) -> set[str]:
+    """`"V1,V2,V7"` → `{"V1", "V2", "V7"}`.
+
+    这条单独成函数是因为它出过一次真错：`set("V7")` 把**字符串**拆成字符（`{"V", "7"}`），
+    于是 `"V7" in want` 永远为假 —— 脚本一路跑完、报告里一行都没有，而它看起来"成功"
+    （失败项 0）。判据纯函数化只保护了判据，这一层同样需要钉住。
+    """
+    return {item.strip().upper() for item in str(text or "").split(",") if item.strip()}
+
+
 def power_state(rec: Recorder) -> bool | None:
     """Last known radio power state from stateUpdate / fullState frames."""
     state = None
@@ -92,10 +107,16 @@ def power_state(rec: Recorder) -> bool | None:
     return state
 
 
-def rescue_events(rec: Recorder) -> list[tuple[float, str, int]]:
-    """`[(when, state, attempt)]` for every powerRescue frame, in order."""
+def rescue_events(rec: Recorder, since: float = 0.0) -> list[tuple[float, str, int]]:
+    """`[(when, state, attempt)]` for the powerRescue frames after `since`.
+
+    `since` matters: without it a scenario would happily match a frame from the
+    *previous* one and call it its own result — measured 2026-10-16: V3 and V4
+    both "failed" against frames V2 had produced a minute earlier.
+    """
     return [(when, str(msg.get("state", "")), int(msg.get("attempt") or 0))
-            for when, msg in rec.frames if msg.get("type") == "powerRescue"]
+            for when, msg in rec.frames
+            if msg.get("type") == "powerRescue" and when >= since]
 
 
 def judge_off(rec: Recorder, sent_at: float) -> tuple[bool, str]:
@@ -211,17 +232,26 @@ def render_report(rows: list[tuple[str, str, str, str, str]], raw: Recorder,
 
 # ── I/O（唯一碰网络/串口之外东西的地方） ──────────────────────────────
 
-def login(host: str, port: int, password: str) -> str:
+def trust_context(insecure: bool, ssl_module):
+    """客户端信任：默认与服务器同源（`net_tls`），`--insecure` 时接受自签证书。
+
+    局域网盒子用自签证书（`ssl_bootstrap` 生成的 localhost 那张），所以对着盒子跑必须
+    能放开校验；`--insecure` 只影响这个脚本，不改服务端任何策略。
+    """
+    if insecure:
+        return ssl_module._create_unverified_context()      # noqa: SLF001 - 显式选择
+    try:
+        import net_tls                      # 与服务器同一个信任策略
+        return net_tls.default_context()
+    except Exception:                       # noqa: BLE001 - 源码无关紧要，回退默认
+        return None
+
+
+def login(host: str, port: int, password: str, context=None) -> str:
     """POST /api/auth/login → token（Bearer，AD-024 的首选路径；绝不把令牌塞 URL）。"""
     body = json.dumps({"password": password}).encode()
     req = urllib.request.Request(f"https://{host}:{port}/api/auth/login", data=body,
                                 headers={"Content-Type": "application/json"})
-    context = None
-    try:
-        import net_tls                      # 与服务器同一个信任策略
-        context = net_tls.default_context()
-    except Exception:                       # noqa: BLE001 - 源码无关紧要，回退默认
-        pass
     with urllib.request.urlopen(req, timeout=10, context=context) as reply:
         payload = json.loads(reply.read() or b"{}")
     token = payload.get("token") or ""
@@ -233,19 +263,21 @@ def login(host: str, port: int, password: str) -> str:
 class Session:
     """一条 /WSradio 连接：后台收帧进 Recorder，前台发命令。"""
 
-    def __init__(self, recorder: Recorder):
+    def __init__(self, recorder: Recorder, ssl_context=None):
         self.recorder = recorder
+        self.ssl_context = ssl_context
         self.ws = None
         self._reader = None
 
     async def connect(self, url: str, token: str):
         import websockets                     # 服务器自身的依赖，随环境就有
+        headers = {"Authorization": f"Bearer {token}"}
         try:
             self.ws = await websockets.connect(
-                url, additional_headers={"Authorization": f"Bearer {token}"})
+                url, additional_headers=headers, ssl=self.ssl_context)
         except TypeError:                     # websockets < 13 叫 extra_headers
             self.ws = await websockets.connect(
-                url, extra_headers={"Authorization": f"Bearer {token}"})
+                url, extra_headers=headers, ssl=self.ssl_context)
         self._reader = asyncio.create_task(self._read_loop())
 
     async def _read_loop(self):
@@ -263,8 +295,8 @@ class Session:
         await self.ws.send(json.dumps({"type": "set", "field": "power", "value": value}))
         return sent_at
 
-    async def wait_for(self, predicate, timeout: float) -> bool:
-        """等一个判据成立（轮询记录器，不碰网络）。"""
+    async def wait_for(self, predicate, timeout: float, since: float = 0.0) -> bool:
+        """等一个判据成立（轮询记录器，不碰网络）。`since` 只允许本场景自己的帧。"""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if predicate(self.recorder):
@@ -279,20 +311,33 @@ class Session:
             await self.ws.close()
 
 
+async def ensure_on(session: "Session", rec: Recorder, timeout: float = 60.0) -> bool:
+    """把电台拉起来（单次 PS1 + 回读），供"需要干净起点"的场景用。"""
+    if power_state(rec) is True:
+        return True
+    sent = await session.send_power(True)
+    await session.wait_for(lambda r: power_state(r) is True, timeout, since=sent)
+    return power_state(rec) is True
+
+
 async def run_scenarios(args, out_path: Path) -> int:
     rec = Recorder()
     rows: list[tuple[str, str, str, str, str]] = []
     base = f"https://{args.host}:{args.port}"
 
-    token = login(args.host, args.port, args.password)
-    session = Session(rec)
+    import ssl as _ssl
+    context = trust_context(args.insecure, _ssl)
+    # 每轮都重新登录会撞上服务端的登录限流（实测 429）——现场连跑多轮时用 --token 复用会话。
+    token = args.token or login(args.host, args.port, args.password, context)
+    session = Session(rec, context)
     await session.connect(f"wss://{args.host}:{args.port}/WSradio", token)
     await asyncio.sleep(1.0)                  # 让 fullState 落地
 
-    want = set(args.scenario)
+    want = scenario_set(args.scenario)
     failures = 0
 
     if "V1" in want:
+        await ensure_on(session, rec)
         sent = await session.send_power(False)
         await session.wait_for(lambda r: power_state(r) is False, 15)
         ok, why = judge_off(rec, sent)
@@ -308,26 +353,38 @@ async def run_scenarios(args, out_path: Path) -> int:
         failures += 0 if ok else 1
 
     if "V3" in want:
-        await session.send_power("restart")
+        await ensure_on(session, rec)
+        await asyncio.sleep(WINDOW_SETTLE_S)        # 上一次 PS1 的保护窗口过期
+        started = await session.send_power("restart")
+        # 等 attempt=0（救援已起、第一轮 PS1 还没发出去）就取消，这样"取消"这个动作
+        # 一定落在"救援进行中"，而不是落在"它已经自己醒了"之后（实测过：5 秒就醒）。
         await session.wait_for(
-            lambda r: any(s == "running" for _, s, _ in rescue_events(r)), 20)
+            lambda r: any(s == "running" and a == 0 for _, s, a in rescue_events(r, started)), 20)
         cancelled_at = await session.send_power("cancelRescue")
         await session.wait_for(
-            lambda r: any(s == "cancelled" for _, s, _ in rescue_events(r)), 20)
+            lambda r: any(s == "cancelled" for _, s, _ in rescue_events(r, cancelled_at)), 20,
+            since=cancelled_at)
         ok, why = judge_cancel(rec, cancelled_at)
         rows.append(("V3 取消救援", "停手且不上电", why, why, "✅" if ok else "❌"))
         failures += 0 if ok else 1
 
     if "V4" in want:
-        await session.send_power("restart")
+        await ensure_on(session, rec)
+        await asyncio.sleep(WINDOW_SETTLE_S)        # 干净起点：上一次 PS1 的窗口过期
+        started = await session.send_power("restart")
+        # attempt>=1 只说明"这一轮开始了"，PS1 是在那条广播**之后**才写出去的，所以还要等
+        # 一小会儿让窗口真的武装。窗口有 15 秒（POWER_BOOT_WINDOW_S），第 3 秒一定落在里面；
+        # 就算电台快到自己先醒了，窗口也在校验成功时被重新武装 —— 两种时序都会被拒。
         await session.wait_for(
-            lambda r: any(s == "running" for _, s, _ in rescue_events(r)), 20)
+            lambda r: any(s == "running" and a >= 1 for _, s, a in rescue_events(r, started)), 25)
+        await asyncio.sleep(3.0)
         sent = await session.send_power(False)
         await session.wait_for(lambda r: rec.errors(after=sent), 6)
         ok, why = judge_window_refusal(rec, sent)
         rows.append(("V4 救援中关机", "启动窗口内被拒（带剩余秒数）", why, why, "✅" if ok else "❌"))
         failures += 0 if ok else 1
         await session.send_power("cancelRescue")
+        await asyncio.sleep(WINDOW_SETTLE_S)
         await asyncio.sleep(2)
         sent = await session.send_power(False)          # 窗口过后应当能关
         await session.wait_for(lambda r: power_state(r) is False, 15)
@@ -357,8 +414,8 @@ async def run_scenarios(args, out_path: Path) -> int:
             failures += 1
 
     if "V7" in want and args.listen_password:
-        session2 = Session(rec)
-        token2 = login(args.host, args.port, args.listen_password)
+        session2 = Session(rec, context)
+        token2 = login(args.host, args.port, args.listen_password, context)   # listen 会话自成一档
         await session2.connect(f"wss://{args.host}:{args.port}/WSradio", token2)
         await asyncio.sleep(1.0)
         sent = rec.mark()
@@ -389,11 +446,16 @@ def main(argv=None) -> int:
     ap.add_argument("--manual", action="store_true", help="加上需要人动手的 V5/V6")
     ap.add_argument("--v2-wait", type=float, default=960.0, help="等 V2 结论的秒数上限")
     ap.add_argument("--v6-wait", type=float, default=960.0, help="等 V6 结论的秒数上限")
+    ap.add_argument("--token", default="",
+                    help="已登录过就直接用这个会话令牌（跳过登录：现场连跑多轮时避免撞登录限流）")
+    ap.add_argument("--insecure", action="store_true",
+                    help="接受自签证书（局域网盒子用；不改服务端策略）")
     ap.add_argument("--out", default="")
     args = ap.parse_args(argv)
 
-    if not args.password:
-        print("需要 --password 或 MRRC_WEB_PASSWORD（网页登录口令）", file=sys.stderr)
+    if not args.password and not args.token:
+        print("需要 --password（或 MRRC_WEB_PASSWORD），或者用 --token 复用已有会话",
+              file=sys.stderr)
         return 2
     out = Path(args.out) if args.out else Path(f"power-acceptance-{time.strftime('%Y%m%d-%H%M%S')}.md")
     return asyncio.run(run_scenarios(args, out))

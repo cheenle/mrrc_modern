@@ -185,6 +185,22 @@ POWER_RESTART_SETTLE_MAX_S = 15.0# 或等到串口消失为止（先到者为准
 | V6 | 失败路径（把电台电源物理断开后点「重启」） | 15 分钟后必须给出"需要现场按面板"，**不得**报成功 |
 | V7 | listen 角色 | 菜单里看不到；直接发 WS `set power` 被拒 |
 
+**实测（2026-10-16 当晚，真机 W103D + FT-710）：**
+
+| # | 场景 | 实测（2026-10-16，真机：W103D 盒子 + FT-710，干净室实例 + `/dev/serial/by-id/…`） | 结论 |
+| --- | --- | --- | --- |
+| V1 | 关机 | `power_on=false`，电台熄灭 | ✅ |
+| **V2** | **重开** | **第 1 轮醒来，耗时 4–8 秒**（日志 `Power rescue woke the radio on round 1 after 5 s`）；三次独立运行全部第 1 轮 | ✅ |
+| V3 | 救援中取消 | `cancelled`，之后未再唤醒、未上电 | ✅ |
+| V4 | 救援中点「关机」 | 被拒：`电台正在启动，请 15 秒后再关机`（正是防 CAT MCU 卡死的那条守卫） | ✅ |
+| V4b | 窗口过后关机 | 能关掉（`power_on=false`） | ✅ |
+| V5 | TX / FT8 发射中 | 未测（没抓到发射窗口） | — |
+| V6 | 拔电后重开 | 未测（没有拔电；但运行期间电台 USB 真的重新枚举过一次，服务端按设计等端口回来才发 `PS1`） | — |
+| V7 | listen 角色 | `power` 的四个取值全部被角色门拒绝（日志 `Listen-only client refused set power` ×4） | ✅ |
+| 附加 | 单次开机（`true`） | `Power-on verified (PS1 attempt 1)` —— `FA;` 回读路径在真机上通 | ✅ |
+
+结论：逃生舱**未触发**（V2 三次都是第 1 轮醒来），两个真机缺陷已修并补了测试。
+
 **逃生舱的落地步骤（若触发，照抄即可，三步）**：
 
 1. `static/index.html`：删掉 `data-action="power-restart"` 那一个 `<li>`（`status-power` 与 `power-off` 保留）；

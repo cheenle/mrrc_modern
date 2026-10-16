@@ -2319,6 +2319,13 @@ async def _power_on_radio(cat, backend=None) -> bool:
                 # Re-arm from the actual boot moment — a slow boot must
                 # not eat the whole protection window.
                 _power_boot_until = time.monotonic() + POWER_BOOT_WINDOW_S
+                # And mute the next power_on poll: a radio that answers a
+                # frequency read can still report PS0 for a moment (measured
+                # 2026-10-16 on the W103D — a fresh PS; read flipped the
+                # verified "on" straight back to off, and the UI showed a
+                # radio that was demonstrably running as off).
+                if scheduler is not None:
+                    scheduler.skip_next_poll("power_on", 25.0)
                 return True
         logger.warning("PS1 attempt %d: radio not answering", attempt)
     return False
@@ -2454,6 +2461,13 @@ async def _power_rescue() -> str:
             await _broadcast_power_rescue("running")
             if await _power_on_radio(cat_now, backend_now):
                 _power_rescue_state = "woke"
+                # The single-shot path updates the state itself; the rescue must
+                # do it too, or a radio that is demonstrably running keeps being
+                # reported as off until the next poll (measured on the W103D
+                # 2026-10-16: "woke on round 1" in the log, power_on=False in
+                # fullState).
+                if radio is not None:
+                    radio.update(power_on=True)
                 logger.info("Power rescue woke the radio on round %d after %.0f s",
                             _power_rescue_attempts, time.monotonic() - _power_rescue_started)
                 await _broadcast_power_rescue("woke")

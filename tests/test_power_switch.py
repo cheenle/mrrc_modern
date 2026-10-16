@@ -118,6 +118,30 @@ class PowerOnRadioTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertEqual(calls, [0.4])
 
+    def test_a_verified_wake_mutes_the_power_poll(self):
+        """回读确认开机之后必须跳过一次 power_on 轮询（2026-10-16 现场）。
+
+        现场读数：电台明明已经起来并答了 FA，紧接着的一次 PS; 却回 PS0，于是服务端状态
+        被改回关机、界面显示一台正在工作的电台是"关"。单次开机那条路径本来就跳过一次
+        轮询，救援路径漏了 —— 所以这一条钉在 _power_on_radio（两条路径共用的那层）。
+        """
+        cat = _FakeCat(fa_answer=True)
+        skips = []
+
+        class _Scheduler:
+            def skip_next_poll(self, field, duration=0.0):
+                skips.append((field, duration))
+
+        old = server.scheduler
+        server.scheduler = _Scheduler()
+        try:
+            ok = asyncio.run(server._power_on_radio(cat))
+        finally:
+            server.scheduler = old
+        self.assertTrue(ok)
+        self.assertTrue(skips, "verified wake must skip the next power_on poll")
+        self.assertEqual("power_on", skips[0][0])
+
     def test_icom_backend_boot_verify_queries_civ_read(self):
         from backends.ic7300.backend import IC7300Backend
         backend = IC7300Backend("/dev/fake")
@@ -286,6 +310,23 @@ class PowerRescueTests(unittest.TestCase):
         self.assertEqual(server._power_rescue_state, "woke")
         self.assertEqual(self.cat.power_calls.count(True), 3)
         self.assertFalse(server._power_rescue_running())
+
+    def test_a_verified_wake_updates_the_radio_state(self):
+        """救援路径唤醒成功后必须更新状态（2026-10-16 现场：日志说醒了、状态还是关）。
+
+        单次开机那条路径在自己的分支里更新，救援路径漏了 —— 于是界面把一台正在工作的
+        电台显示成关，直到下一次 PS; 轮询才自愈。
+        """
+        self.cat._fa_answer, self.cat._fa_after = True, 1
+        old_radio = server.radio
+        server.radio = server.RadioState()
+        server.radio.update(power_on=False)
+        try:
+            result = asyncio.run(server._power_rescue())
+            self.assertTrue(server.radio.power_on)
+        finally:
+            server.radio = old_radio
+        self.assertEqual(result, "woke")
 
     def test_timeout_when_the_radio_stays_silent(self):
         self.cat._fa_answer = False

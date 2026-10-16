@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2230 tests across 116 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2245 tests across 117 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-16, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -21,8 +21,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2230 |
-| Passed | 2229 (1 skipped) |
+| Total tests | 2245 |
+| Passed | 2244 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 (macOS, 2026-10-16) |
 | Execution time | ~1min (harness tests spawn CLI subprocesses) |
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2230 above. Run it with:
+the 2245 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -335,9 +335,9 @@ SDD coverage: V2.10 (HTTPS-by-default launcher bootstrap)
 | `CryptoMissingTests` | 1 | Graceful None when cryptography is unavailable |
 | `LanIpTests` | 1 | LAN IP detection excludes loopback, IPv4-parseable |
 
-### 24. test_power_switch.py — Radio Power Command Guards (11 tests)
+### 24. test_power_switch.py — Radio Power Command Guards (29 tests)
 
-SDD coverage: V2.11 (header power switch), V2.12 (boot-window guard + PS1 verify, 2026-07-27 CAT-MCU wedge incident)
+SDD coverage: V2.11 (header power switch), V2.12 (boot-window guard + PS1 verify, 2026-07-27 CAT-MCU wedge incident), V2.86（菜单两项：重启电台 = 有界可取消的持续唤醒 / 关机 = 保持关闭；守卫 3 + 救援 6 + 协议接线 3 + 前端守卫 6，另在 `test_listen_only.py` 里把 `power` 的四个取值钉进禁止项）
 
 | Class | Tests | Covers |
 |-------|-------|--------|
@@ -824,6 +824,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_static_cache_busting.py` | `index.html` 的 `?v=` 与 `sw.js` 预缓存清单必须逐项一致（SW 只在自己字节变化时重装，键不动就永远发不出新文件） |
 | `test_install_sh_url.py` | macOS 源码安装脚本交给用户的 URL 必须是 `https://` —— 它写 `MRRC_WEB_HOST=0.0.0.0` 且从不关 TLS，却一直打印 `http://localhost:8888`（v1.24.5 黑屏的缩影）；顺带守住"别哪天偷偷关掉 TLS 让这句承诺反过来变错" |
 | `test_website_links.py` | 站点内链必须落到真锚点（曾 6 条指向指南里不存在的小节、1 条指向被生成器丢掉的 h1 锚点）；且**生成的 guide 页不得比源文档旧**（`build_guide.py` 是唯一写者，改文档不重建就是站点在描述旧行为）；顺带禁止任何页给出服务答不了的明文本地 URL |
+| `test_power_acceptance.py` | **现场验收的判据必须能在没有电台的机器上测**：V1–V7（`tools/power/power_acceptance.py`）里唯一只有真机能测的是「`PS1;` 到底能不能唤醒」与「唤不醒时应用会不会承认」，而它决定「重开电台」这一项是否发布。测试把服务器真实广播的帧形状喂给纯判据（含反向用例：永不醒来的唤醒、取消后又上电、本该被拒的 listen 会话），并断言报告里同时有结论表与原始帧 |
 | `test_tls_trust_store.py` | **出站 HTTPS 必须能在「没有构建机 OpenSSL 默认路径」的机器上验通**（2026-10-04 现场：macOS 包的信任库为空 ⇒ portal 接入 / 诊断包上传 / 更新检查全报 `CERTIFICATE_VERIFY_FAILED`）。测试真的复刻空信任库，断言 `net_tls` 仍能重建（包内 `vendor/ca` → 系统 bundle）、包本身是真 CA 文件、并发告警，以及 **AST 守卫：任何直接 `urlopen` 必须带 `context=`**（否则下一个调用点会原样复发）；2026-10-16 增补：**受污染的本机库不得影响我们的判定** —— 合成 PKI（同名同密钥的过期中间证书）配**真握手**，受污染库那一侧必须真的以 `expired` 失败（反向对照），`net_tls` 构造的上下文必须成功，并断言结果里的根数等于我们 bundle 的条数 |
 
 ### 本轮新增（W103D 盒子镜像的两处守卫，2026-10-06）

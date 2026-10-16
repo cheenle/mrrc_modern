@@ -173,6 +173,8 @@ POWER_RESTART_SETTLE_MAX_S = 15.0# 或等到串口消失为止（先到者为准
 
 **真机（必须在真 FT-710 上跑，本节全部为验收门）**：
 
+（记录器：`python3 tools/power/power_acceptance.py --password … [--manual]` —— 它自己登录、发命令、按时间戳记录 `powerRescue`/`power_on`/`error`，跑完写一份可直接贴进本节表格的 Markdown；判据是纯函数，`tests/test_power_acceptance.py` 覆盖。V5/V6 要人配合，故默认跳过。）
+
 | # | 场景 | 判据 |
 | --- | --- | --- |
 | V1 | 关机 | 电台熄灭、`power_on` 回读为假、界面 `PWR 关` |

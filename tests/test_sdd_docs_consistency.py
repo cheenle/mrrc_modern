@@ -116,5 +116,29 @@ class AdIndexConsistencyTests(unittest.TestCase):
         self.assertEqual(sorted(ids - index), [], "chapter 14's index is missing decisions")
 
 
+class DocumentIndexTests(unittest.TestCase):
+    """Every document in ``docs/`` is findable from the index.
+
+    The index is hand-maintained, and its failure mode is silent: the file
+    exists, nobody can find it, and the index still looks complete. When this
+    guard was written the W103D guide and the hardware matrix were both missing
+    from it, and both are documents users are handed.
+
+    Deliberately loose about *how* a document is linked (``docs/name.md`` or a
+    bare ``name.md``): the check is "does the index mention it", not "does it
+    match one link style".
+    """
+
+    def test_every_doc_is_mentioned_in_the_index(self):
+        index = (ROOT / "docs" / "DOCUMENT_INDEX.md").read_text(encoding="utf-8")
+        missing = sorted(
+            path.name for path in (ROOT / "docs").glob("*.md")
+            if path.name != "DOCUMENT_INDEX.md" and path.name not in index
+        )
+        self.assertEqual(
+            [], missing,
+            "these documents exist but docs/DOCUMENT_INDEX.md never names them",
+        )
+
 if __name__ == "__main__":
     unittest.main()

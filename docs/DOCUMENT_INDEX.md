@@ -34,6 +34,7 @@
 ### 📊 项目状态
 | 文档 | 说明 | 读者 |
 |------|------|------|
+| [docs/NEXT-VERSION.md](docs/NEXT-VERSION.md) | **下一版 backlog**：已想清楚、只差做；每条都带验收标准 | 所有人 |
 | [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | 执行摘要（中文） | 管理层 |
 | [COMPLETION_REPORT.md](COMPLETION_REPORT.md) | 完成报告（中文） | 项目经理 |
 | [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) | 验证报告 | QA/测试 |
@@ -42,6 +43,7 @@
 ### 👤 使用手册（按平台）
 | 文档 | 说明 | 读者 |
 |------|------|------|
+| [docs/remote_help.md](docs/remote_help.md) | **远程协助（Call help）操作手册**：客户主动开启的应用内 SSH | 运维 |
 | [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 桌面版完整操作指南（每个按钮/滑杆/菜单 + 服务端录音 + 故障排查） | 用户 |
 | [docs/RASPBERRY_PI_GUIDE.md](docs/RASPBERRY_PI_GUIDE.md) | 树莓派镜像：烧卡、首启、电台接入、真 FFT 库 | 用户 |
 | [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows 安装包说明（含下载表与校验） | 用户 |
@@ -61,14 +63,21 @@
 ### 🚢 发布与打包
 | 文档 | 说明 | 读者 |
 |------|------|------|
+| [docs/rpi_pack.md](docs/rpi_pack.md) | **树莓派镜像构建手册**（与 W103D 共用服务层） | 发布 |
 | [.agents/skills/dual-platform-release/SKILL.md](.agents/skills/dual-platform-release/SKILL.md) | 发布日总流程（版本 bump → 构建 → 文档/站点 → 部署 → 验证 → tag） | 发布 |
 | [.agents/skills/dual-platform-release/release-artifacts.json](.agents/skills/dual-platform-release/release-artifacts.json) | 产物登记表：每个承载版本/尺寸/SHA 的文件一条规则 | 发布 |
 | [win_pack.md](win_pack.md) / [mac_pack.md](mac_pack.md) / [pi_pack.md](pi_pack.md) | 三平台打包操作手册（KVM VM / 本机 DMG / Docker pi-gen） | 发布 |
-| [docs/W103D_GUIDE.md](docs/W103D_GUIDE.md) / [docs/w103d_pack.md](docs/w103d_pack.md) / [docs/host-selection.md](docs/host-selection.md) | **W103D 通用电台盒子镜像**（Amlogic 云电脑，11 机型可切换）：**用户手册**（开箱到干活：§4.1 烧盘后扩盘 / §7 口令一览 / §9.8 局域网配网页 `/setup`+`/settings` / §20.5 无线真机记录）、构建手册、主机选型。1.25.5 已上线；1.26.0 的站点卡片已写好（`1,008,925,741 B` / `9913752e…`），**镜像本体待上传**。真机操作另见技能 `w103d-box`（构建与烧盘）/ `w103d-emmc`（固化进 eMMC） | 发布/用户 |
+| [docs/W103D_GUIDE.md](docs/W103D_GUIDE.md) / [docs/w103d_pack.md](docs/w103d_pack.md) / [docs/host-selection.md](docs/host-selection.md) / [docs/hardware-matrix.md](docs/hardware-matrix.md) | **W103D 通用电台盒子镜像**（Amlogic 云电脑，11 机型可切换）：**用户手册**（开箱到干活：§4.1 烧盘后扩盘 / §7 口令一览 / §9.8 局域网配网页 `/setup`+`/settings` / §20.5 无线真机记录）、构建手册、主机选型。1.25.5 已上线；1.26.0 的站点卡片已写好（`1,008,925,741 B` / `9913752e…`），**镜像本体待上传**。真机操作另见技能 `w103d-box`（构建与烧盘）/ `w103d-emmc`（固化进 eMMC） | 发布/用户 |
 
 ### 🔍 专项分析
 | 文档 | 说明 | 读者 |
 |------|------|------|
+| [docs/2026-10-03-two-model-retrospective.md](docs/2026-10-03-two-model-retrospective.md) | **两个模型、48 小时、七个版本**的复盘（以模型能力为重点） | 开发者/代理 |
+| [docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md](docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md) | **Cloud Hub 实例生命周期**：应用侧发现（2026-10-11 的 502） | 开发者 |
+| [docs/FDE.md](docs/FDE.md) | **FDE：Echo → Delta → Product** —— 现场部署工程的做法与原则 | 开发者 |
+| [docs/ft8-m1-baseline.md](docs/ft8-m1-baseline.md) | **FT8 M1 盒子基线**（W103D × FT-710）：aarch64 编译、重采样链与性能 | 开发者 |
+| [docs/ft8-m5-acceptance.md](docs/ft8-m5-acceptance.md) | **FT8 M5 真机验收**（W103D 盒子 + FT-710） | 开发者 |
+| [docs/ft8-w103d-decode-perf-analysis.md](docs/ft8-w103d-decode-perf-analysis.md) | **FT8 解码在 W103D 上的深度优化分析** | 开发者 |
 | [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX 音频链路深度分析 | 架构师/高级开发 |
 | [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) / [docs/DOCUMENT_UPDATE_COMPLETION.md](docs/DOCUMENT_UPDATE_COMPLETION.md) | **历史报告（2026-08-17，多电台后端那轮）** —— 不是当前状态，现状看 [PROJECT_MAP.md](PROJECT_MAP.md) | 文档维护者 |
 

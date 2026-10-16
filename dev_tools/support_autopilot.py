@@ -56,6 +56,10 @@ CRON_MARK = "# MRRC Modern support autopilot"
 REMOTE_HOST = os.environ.get("MRRC_SUPPORT_DEPLOY_HOST", "cheenle@www.vlsc.net")
 REMOTE_PAGE = "/var/www/vlsc.net/mrrc_modern/answers/index.html"
 MAX_PER_RUN = 2
+# 失败重试上限：pi 的一次临时故障（退出码 1、输出不合契约）不该让一份上报永远消失；
+# 坏包（模型怎么都输出不成）也不能无限霸占队列。
+MAX_ATTEMPTS = 3
+LOCK_FILE = REPO / "dist" / "support_autopilot" / "autopilot.lock"
 # Env override keeps the smoke run and cron tuning cheap (cron uses the default).
 def _pi_timeout() -> int:
     raw = os.environ.get("MRRC_AUTOPILOT_PI_TIMEOUT", "540")
@@ -133,6 +137,60 @@ def log(message: str) -> None:
             fh.write(line + "\n")
     except OSError:
         pass
+
+
+def _attempts(record: dict) -> int:
+    """A hand-edited or corrupt state must not crash the whole round."""
+    try:
+        return int(record.get("attempts", 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _needs_processing(state: dict, bundle_id: str) -> bool:
+    """New bundle, or a failure that still has retries left."""
+    record = state.get(bundle_id)
+    if record is None:
+        return True
+    return (record.get("status") == "failed"
+            and _attempts(record) < MAX_ATTEMPTS)
+
+
+def _record_failure(state: dict, bundle_id: str) -> None:
+    """Count the failed attempt so a later round can retry it (bounded).
+
+    A single flaky `pi` call used to drop the bundle for good —
+    20261007-083527-6536 died at 21:40 with `pi 退出码 1` and nothing but a
+    manual `--force` could bring it back (`run_once` skips anything already in
+    the state).  Counting attempts keeps the retry honest in both directions.
+    """
+    attempts = _attempts(state.get(bundle_id) or {}) + 1
+    answers.record_result(state, bundle_id, {"status": "failed"}, published=False)
+    state[bundle_id]["attempts"] = attempts
+    answers.save_state(STATE_FILE, state)
+
+
+def acquire_single_flight_lock():
+    """One autopilot at a time; None when another instance holds the lock.
+
+    A round can outlast the 10-minute cron interval (2 bundles × 9-minute pi
+    timeout), and two overlapping runs read-modify-write the same state.json —
+    the later save silently drops the other's entry.  Measured 2026-10-16: the
+    manual `--force 20261016-083453-9d80` record was overwritten two minutes
+    later by the cron run that had loaded its state before that write.
+    """
+    import fcntl                         # POSIX only, and so is this autopilot
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = open(LOCK_FILE, "w", encoding="utf-8")
+    except OSError:
+        return None          # 锁文件都建不起来，宁可跳过一轮，也不能冒并发风险
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return None
+    return handle
 
 
 # ── receiver access ────────────────────────────────────────────────────────
@@ -532,8 +590,7 @@ def process_one(bundle_id: str, publish_it: bool, model: str = "", push: bool = 
             analysis = run_pi(digest, bundle_id, model=model)
         except ValueError as e:
             log(f"[{bundle_id}] 模型输出不合契约：{e}")
-            state = answers.record_result(state, bundle_id, {"status": "failed"}, published=False)
-            answers.save_state(STATE_FILE, state)
+            _record_failure(state, bundle_id)
             return "failed"
         # FDE board: classify + record every finished analysis (best-effort —
         # board problems must never take down the support loop itself).
@@ -557,13 +614,14 @@ def process_one(bundle_id: str, publish_it: bool, model: str = "", push: bool = 
         return "published"
     except Exception as e:                    # one bad bundle never ends the batch
         log(f"[{bundle_id}] 处理失败：{type(e).__name__}: {e}")
+        _record_failure(state, bundle_id)
         return "failed"
 
 
 def run_once(publish_it: bool, model: str = "", limit: int = MAX_PER_RUN,
              push: bool = False) -> list[tuple[str, str]]:
     state = answers.load_state(STATE_FILE)
-    pending = [bid for bid in list_bundles() if bid not in state]
+    pending = [bid for bid in list_bundles() if _needs_processing(state, bid)]
     results = []
     for bundle_id in pending[:max(0, limit)]:
         results.append((bundle_id, process_one(bundle_id, publish_it, model=model,
@@ -672,12 +730,19 @@ def main(argv=None) -> int:
     # days (2026-10-10→10-16, run.log 1728 lines with no "没有新包").  The once
     # branch already runs the implementation sweep below.
     if args.once:
-        results = run_once(args.publish, model=args.model, limit=args.limit, push=args.push)
-        for bundle_id, result in results:
-            print(f"{bundle_id}: {result}")
-        impl = run_implementations(model=args.model)
-        for bundle_id, result in impl:
-            print(f"{bundle_id}: implement → {result}")
+        lock = acquire_single_flight_lock()
+        if lock is None:
+            log("另一个实例正在处理，本轮跳过")
+            return 0
+        try:
+            results = run_once(args.publish, model=args.model, limit=args.limit, push=args.push)
+            for bundle_id, result in results:
+                print(f"{bundle_id}: {result}")
+            impl = run_implementations(model=args.model)
+            for bundle_id, result in impl:
+                print(f"{bundle_id}: implement → {result}")
+        finally:
+            lock.close()
         return 0
     if args.implement:
         if args.implement == "ALL":

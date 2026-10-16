@@ -56,6 +56,7 @@ class AutopilotFixture(unittest.TestCase):
             mock.patch.object(autopilot, "DRAFTS", root / "drafts"),
             mock.patch.object(autopilot, "ANSWERS_PAGE", root / "answers" / "index.html"),
             mock.patch.object(autopilot, "RUN_LOG", root / "run.log"),
+            mock.patch.object(autopilot, "LOCK_FILE", root / "autopilot.lock"),
             # 2026-09-19 leak: patching only the local paths still shipped
             # fixture pages to the live server (the rsync/ssh targets were
             # unpatched).  The ship itself is now a single patchable seam.
@@ -249,6 +250,48 @@ class PiInvocationTests(AutopilotFixture):
         self.assertIn("--tools", captured["cmd"])
         self.assertIn("read,grep,find,ls", captured["cmd"])
         self.assertTrue(captured["cmd"][-1].startswith("你是 MRRC Modern 的支持工程师"))
+
+
+class RetryTests(AutopilotFixture):
+    """Bounded retry + single-flight: the two silent-loss shapes found while
+    draining the 6-day backlog (2026-10-16)."""
+
+    def test_a_flaky_pi_call_is_retried_next_round(self):
+        # 20261007-083527-6536 died with `pi 退出码 1` and only a manual --force
+        # brought it back; one bad call must not retire a bundle forever.
+        with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
+                ["20260917-072530-ab12"])), \
+             mock.patch.object(autopilot, "run_pi",
+                               side_effect=ValueError("模型输出里没有 JSON 对象")):
+            first = autopilot.run_once(publish_it=True)
+        self.assertEqual(first, [("20260917-072530-ab12", "failed")])
+        with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
+                ["20260917-072530-ab12"])), \
+             mock.patch.object(autopilot, "run_pi", return_value=ANALYSIS):
+            second = autopilot.run_once(publish_it=False)
+        self.assertEqual(second, [("20260917-072530-ab12", "drafted")])
+
+    def test_retries_stop_at_the_attempt_limit(self):
+        for _ in range(autopilot.MAX_ATTEMPTS):
+            with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
+                    ["20260917-072530-ab12"])), \
+                 mock.patch.object(autopilot, "run_pi",
+                                   side_effect=ValueError("模型输出里没有 JSON 对象")):
+                autopilot.run_once(publish_it=True)
+        with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
+                ["20260917-072530-ab12"])), \
+             mock.patch.object(autopilot, "run_pi", return_value=ANALYSIS) as pi:
+            result = autopilot.run_once(publish_it=False)
+        self.assertEqual(result, [])
+        self.assertEqual(pi.call_count, 0)
+
+    def test_a_second_instance_skips_the_round(self):
+        held = autopilot.acquire_single_flight_lock()
+        self.assertIsNotNone(held)
+        try:
+            self.assertIsNone(autopilot.acquire_single_flight_lock())
+        finally:
+            held.close()
 
 
 class CronTests(AutopilotFixture):

@@ -128,6 +128,46 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261010-220406-5793">
+      <header>
+        <span class="id">20261010-220406-5793</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">电台 · 2026-10-16 21:50</span>
+      </header>
+      <h3>手机端发射声音太小</h3>
+      <p class="verdict">与 SDD V2.78（同日 2026-10-10、同为 v1.25.4 + IC-7300 的发射声音问题）同签名：软件链路清白，根因在电台侧调制输入源（Icom MOD Input / USB MOD Level），非产品缺陷。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>软件链路是清的：TX 声卡选中正确且命中 USB 声卡 —— `TX audio started: [4] 扬声器 (USB Audio CODEC ) (host=MME, default=44100Hz, actual=48000Hz, channels=1)`；`env.json` 里 `configured_tx=&quot;扬声器 (USB Audio CODEC )&quot;`、`radio.model=&quot;ic7300&quot;`、`device_rates.tx=48000`。</li>
+        <li>服务端确实把语音写进了电台：`TX session: frames=85 fed=85 decode_fail=0 written=83 write_err=0 queue_drops=0 peak=21%` 与 `frames=121 fed=121 written=112 peak=0%`。`peak` 是服务端解码后 PCM 实测峰值（SDD V2.71 定义，`server.py:2740`），写入无差错、无丢帧。</li>
+        <li>电台也确实在发射且有调制：`TX meters active: RF_PWR=100W | COMP=0 ALC=101 PWR=52 SWR=15` —— `ALC` 非零说明电台当时收到了调制信号（对照 V2.78：ALC=0/PWR≈0 才是「调制没进来」）。</li>
+        <li>因此「声音太小」是**电平**问题而非通路问题：peak=21% 偏低（V2.78 的已知良好现场是 peak=52%），而多次 `peak=0%` / `frames=0 fed=0` 的发射是手机端当次根本没送音频（按键但未采集到声音）。</li>
+        <li>本仓历史同签名：SDD V2.78（2026-10-10，同日同版本 v1.25.4、同为 IC-7300）把两份上报的根因定为**电台侧调制输入源**（Icom `SET → Connectors → MOD Input`：`DATA OFF MOD` 未选 USB 时，FM 是死载波、SSB 表现为「功率很小或没有」），并明确『不是产品缺陷』；产品侧只补了文档，无代码修复可回归。当前日志与该结论一致（本包即 `20261010-220406-5793`，与 V2.78 记的 `20261010-205200-6e3c` 同批）。</li>
+        <li>噪音（非本问题）：233 条 Traceback / 249 条 ERROR 全是 `ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接` —— 手机端 WebSocket 非正常断开，属客户端网络抖动；`scope_pipe: fatal:cannot_open_device` 来自早前的 FT-710 会话（14 次启动时间跨度 10-09→10-10），当前 `radio.scope_type=&quot;civ27&quot;` 的 IC-7300 不走 FT4222；`cloud hub: cannot run frpc: [WinError 5]` 与发射音质无关。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>在 IC-7300 面板上核对 `SET → Connectors → MOD Input` 三项（这是本类问题的第一处）：`DATA OFF MOD = USB`（想同时留手咪就选 `MIC, USB`）、`DATA MOD = USB`、`USB MOD Level ≈ 50`（不要为 0）。</li>
+        <li>同组确认 `USB SEND = OFF`（MK2 同组另有 `USB Keying (CW/RTTY)` 也保持 OFF）。</li>
+        <li>说话时看电台 ALC 表是否摆动 —— 不动＝调制没进来，回去改 `MOD Input`（对应 `docs/OPERATION_GUIDE.md` §0.6.2 验证清单第 5 条）。</li>
+        <li>网页端把设备侧麦克风增益 `🎙 Vol` 滑杆往上调（0–200 → 0–2×，100 = 原值；见 CHANGELOG「Device-side mic gain」条），目标让服务端日志 `TX session ... peak=` 稳定在 40% 以上。</li>
+        <li>手机侧：确认浏览器已获麦克风权限、系统媒体音量非静音、不要按住麦克风孔、尽量用耳机麦克风贴近说话；若日志里某次发射是 `frames=0 fed=0`，说明那一下手机没采到音（重新授权/换浏览器重试）。</li>
+        <li>若上述都到位而对方仍觉小，把电台 `USB MOD Level` 从 50 逐步上调（如 70–80）再试，注意别过载（ALC 顶格反而失真）。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: 手机端发射声音太小</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.25.4&quot;, &quot;radio&quot;: {&quot;model&quot;: &quot;ic7300&quot;, &quot;scope_type&quot;: &quot;civ27&quot;, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">env.json: &quot;configured_tx&quot;: &quot;扬声器 (USB Audio CODEC )&quot;, &quot;device_rates&quot;: {&quot;rx&quot;: 48000, &quot;tx&quot;: 48000}</li>
+        <li class="ev">logs/server.log: mrrc.audio: TX audio started: [4] 扬声器 (USB Audio CODEC ) (host=MME, default=44100Hz, actual=48000Hz, channels=1) (pre-buffer 60ms, cap 400ms)</li>
+        <li class="ev">logs/server.log: mrrc: TX session: frames=85 fed=85 decode_fail=0 written=83 write_err=0 queue_drops=0 peak=21% non_owner_drops=0</li>
+        <li class="ev">logs/server.log: mrrc: TX session: frames=121 fed=121 decode_fail=0 written=112 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">logs/server.log: mrrc.poll: TX meters active: RF_PWR=100W | COMP=0 ALC=101 PWR=52 SWR=15</li>
+        <li class="ev">SDD/14-version-history.md (V2.78): 两份 IC-7300 现场上报的根因在**电台侧调制输入源** … 20261010-205200-6e3c（v1.25.4，「发射功率小/没有」，SSB 7.05 MHz）… 三项不含 USB 时语音发射永远只有载波 —— **不是产品缺陷**</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>无代码缺陷；用户指引见 docs/OPERATION_GUIDE.md §0.6.2（IC-7300 MOD Input）与 static/modules 的 🎙 Vol 设备侧麦克风增益</code></p>
+    </article>
     <article class="card" id="20261007-203517-f40d">
       <header>
         <span class="id">20261007-203517-f40d</span>
@@ -471,7 +511,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-16 21:42（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-16 21:50（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

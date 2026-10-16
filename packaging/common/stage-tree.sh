@@ -43,7 +43,9 @@ mkdir -p "$DST"
 # The root-anchored (/x) rules match only the repo root: per-box state (instance
 # identity, recordings, operator files, the Cloud Hub's fleet/ directory) and
 # dev-only material must never be shipped by an image, nor overwritten by an
-# update. /fleet/ joined the list on 2026-10-11 after a build staged the
+# update.  /draft/ joined the list on 2026-10-13 with the Rust rewrite draft
+# workstream: a crate skeleton plus a draft SDD that nothing in the product
+# imports, and without this rule it would be staged into both images. /fleet/ joined the list on 2026-10-11 after a build staged the
 # developer's own 14.8 MB frpc from the repo root into the image before the real
 # fetch replaced it — harmless in the end, but it is exactly the kind of
 # machine state this list exists to keep out.
@@ -74,6 +76,7 @@ rsync -a "$SRC/" "$DST/" \
 	--exclude "recordings.json" --exclude "ft8/settings.json" \
 	--exclude "/env/" \
 	--exclude "/fleet/" \
+	--exclude "/draft/" \
 	--exclude "/.local/" --exclude "/.env" --exclude "/recordings/" \
 	--exclude "/mem_channels.json" --exclude "/.worktrees/" --exclude "/.superpowers/" \
 	--exclude "/.agnes/" --exclude "/.claude/" --exclude "/.pytest_cache/" \

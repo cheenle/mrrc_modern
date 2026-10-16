@@ -16,6 +16,7 @@
 		2B271D21C0EA52DEE9081A1D /* VFOButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA661AE6EF4CA39417357B46 /* VFOButtons.swift */; };
 		2F3801A2B935E53821F2F8B5 /* PTTButtonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC324FD8D979748BADC1C40B /* PTTButtonView.swift */; };
 		2FB0F597540EA56D90C06C89 /* WaterfallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCF414FDEC6980A57582ACBD /* WaterfallView.swift */; };
+		351AB4C6F66FB12678C6BD14 /* PTTManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030DDC6205E8AF0D7CD8EFF /* PTTManager.swift */; };
 		353ABF0B86F00182614C23F0 /* MainRXView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B213691E8629DDB947FFC82C /* MainRXView.swift */; };
 		40B0A078D2B2E0EF4DA20AE5 /* MemoryChannelsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF987F7D69693580D861684F /* MemoryChannelsManager.swift */; };
 		5329F94F27C447A715A7CD11 /* MemoryChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1966D9EFC41E35228B8B7C83 /* MemoryChannelsView.swift */; };
@@ -24,6 +25,7 @@
 		801DEF3F460117D1284A1B3D /* FilterSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA7F707392BC5E4B981E6AFE /* FilterSelectorView.swift */; };
 		81D6FE36922533D348B8AF93 /* DSPPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C383D9A97FCEC5E407A668BD /* DSPPanelView.swift */; };
 		8219B49AE37B490BC45417E3 /* DSPQuickButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC161307F2311893A0593949 /* DSPQuickButtons.swift */; };
+		8C2CAA286B69F0ADA95FF33F /* PTTManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2030DDC6205E8AF0D7CD8EFF /* PTTManager.swift */; };
 		981EFFF44A66747BDACCEEBD /* TuningControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E17C98D145A8D70258962D6 /* TuningControls.swift */; };
 		9F47D93C40841C1E30625DF1 /* PTTFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0772FFB0145D0BC1F9B601 /* PTTFooter.swift */; };
 		A0D5064F92F5B75ED0FA32AA /* OpusEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF74DEA1C9A60039A4A0FB54 /* OpusEncoder.swift */; };
@@ -46,6 +48,7 @@
 		DEBBE844CE134AD603F196FB /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A6BD94BCEF0DBF26311355 /* Colors.swift */; };
 		E413B58732338DA6F1405581 /* ErrorAlertView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241EDD210F3B482D105688BB /* ErrorAlertView.swift */; };
 		E5330CF62CD88CD132708D12 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A3B8FD0CC31411814FB37E /* ContentView.swift */; };
+		F175F65CFE7A42BE4FC00205 /* PTTManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D67E345007A6E8392C7E0916 /* PTTManagerTests.swift */; };
 		F3C4641C77ECF03BBF0537C9 /* MeterBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 902B42102F8B88B3287DC547 /* MeterBarView.swift */; };
 /* End PBXBuildFile section */
 
@@ -58,9 +61,11 @@
 		1966D9EFC41E35228B8B7C83 /* MemoryChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryChannelsView.swift; sourceTree = "<group>"; };
 		1A206EC58D51F49CAEF76658 /* FrequencyDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrequencyDisplay.swift; sourceTree = "<group>"; };
 		1E17C98D145A8D70258962D6 /* TuningControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TuningControls.swift; sourceTree = "<group>"; };
+		2030DDC6205E8AF0D7CD8EFF /* PTTManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTTManager.swift; sourceTree = "<group>"; };
 		241EDD210F3B482D105688BB /* ErrorAlertView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorAlertView.swift; sourceTree = "<group>"; };
 		25941872CAA06326CD9DCA88 /* AudioSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioSessionManager.swift; sourceTree = "<group>"; };
 		2DD67DEBFDB29969EAA9B3F1 /* FT710MobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FT710MobileApp.swift; sourceTree = "<group>"; };
+		3273421CA5472E1B8540A9D8 /* PTTManagerTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = PTTManagerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		32918148C5CBA08CB773375B /* ModeSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeSelectorView.swift; sourceTree = "<group>"; };
 		339927CA5FEABE608B6E67F6 /* SpectrumProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpectrumProcessor.swift; sourceTree = "<group>"; };
 		35E8FD877710A13844411D09 /* opus_projection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_projection.h; sourceTree = "<group>"; };
@@ -76,7 +81,7 @@
 		7749903EC42A6EF6AA18E574 /* BandSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BandSelectorView.swift; sourceTree = "<group>"; };
 		77D0287AA65811A1995AA8CB /* HeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderView.swift; sourceTree = "<group>"; };
 		79F849B007EFCA1C1B25D92F /* RadioState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioState.swift; sourceTree = "<group>"; };
-		7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FT710Mobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FT710Mobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BE7D45C1A9D7E4DA1F012B9 /* QuickControlsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickControlsRow.swift; sourceTree = "<group>"; };
 		902B42102F8B88B3287DC547 /* MeterBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeterBarView.swift; sourceTree = "<group>"; };
 		92BE87E2DF877D617B8867B3 /* opus_defines.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_defines.h; sourceTree = "<group>"; };
@@ -92,6 +97,7 @@
 		D025F6543B9AF46530AD8497 /* OpusBridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = OpusBridge.c; sourceTree = "<group>"; };
 		D19A5C7B47FBF5B9FEA52E12 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D62CC7E6BFD3E507CB2FB9DB /* RadioViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadioViewModel.swift; sourceTree = "<group>"; };
+		D67E345007A6E8392C7E0916 /* PTTManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTTManagerTests.swift; sourceTree = "<group>"; };
 		DA7F707392BC5E4B981E6AFE /* FilterSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterSelectorView.swift; sourceTree = "<group>"; };
 		DC324FD8D979748BADC1C40B /* PTTButtonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PTTButtonView.swift; sourceTree = "<group>"; };
 		E0547D2B4B7DA3E5DD5068C8 /* opus_custom.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = opus_custom.h; sourceTree = "<group>"; };
@@ -120,6 +126,14 @@
 				826DC92E5D3A38B813222F05 /* opus-ios */,
 			);
 			path = Audio;
+			sourceTree = "<group>";
+		};
+		35473BFB10AD40646FF1C789 /* PTT */ = {
+			isa = PBXGroup;
+			children = (
+				2030DDC6205E8AF0D7CD8EFF /* PTTManager.swift */,
+			);
+			path = PTT;
 			sourceTree = "<group>";
 		};
 		35B3F1E9E5230EE3BA8FC5A6 /* Spectrum */ = {
@@ -175,6 +189,7 @@
 				100A63DC1EBF34C14BEFF4AF /* Audio */,
 				C4450643ED38BCF1E7301A73 /* Model */,
 				B13AD3A56FFAE08921C814B9 /* Networking */,
+				35473BFB10AD40646FF1C789 /* PTT */,
 				35B3F1E9E5230EE3BA8FC5A6 /* Spectrum */,
 				EC8C6CDBD66D20F0FEC158BE /* UI */,
 				819C24A1DB1E5347344249F2 /* ViewModel */,
@@ -186,8 +201,17 @@
 			isa = PBXGroup;
 			children = (
 				7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */,
+				3273421CA5472E1B8540A9D8 /* PTTManagerTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		916E1BB80BEA8CA3854B6EC4 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				E4885AF016DDD079FF254DE1 /* FT710MobileTests */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 		A032974F0E686CE1679590F5 /* include */ = {
@@ -235,8 +259,17 @@
 			isa = PBXGroup;
 			children = (
 				8BF512FC5B2488D852CD90B0 /* Sources */,
+				916E1BB80BEA8CA3854B6EC4 /* Tests */,
 				9165CD5CA971B9BAC294E28E /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		E4885AF016DDD079FF254DE1 /* FT710MobileTests */ = {
+			isa = PBXGroup;
+			children = (
+				D67E345007A6E8392C7E0916 /* PTTManagerTests.swift */,
+			);
+			path = FT710MobileTests;
 			sourceTree = "<group>";
 		};
 		EC8C6CDBD66D20F0FEC158BE /* UI */ = {
@@ -292,6 +325,23 @@
 			productReference = 7EDFB07C9535CB0D110B9863 /* FT710Mobile.app */;
 			productType = "com.apple.product-type.application";
 		};
+		8B88D1034DE4819B52C12F7E /* PTTManagerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0782AC2983D74449FE693246 /* Build configuration list for PBXNativeTarget "PTTManagerTests" */;
+			buildPhases = (
+				2B84194E6DCE3CDCB1F92A09 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PTTManagerTests;
+			packageProductDependencies = (
+			);
+			productName = PTTManagerTests;
+			productReference = 3273421CA5472E1B8540A9D8 /* PTTManagerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -302,7 +352,11 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					11D3029027139DF36CFFB79A = {
+						DevelopmentTeam = VQ89MM7935;
 						ProvisioningStyle = Automatic;
+					};
+					8B88D1034DE4819B52C12F7E = {
+						DevelopmentTeam = VQ89MM7935;
 					};
 				};
 			};
@@ -321,6 +375,7 @@
 			projectRoot = "";
 			targets = (
 				11D3029027139DF36CFFB79A /* FT710Mobile */,
+				8B88D1034DE4819B52C12F7E /* PTTManagerTests */,
 			);
 		};
 /* End PBXProject section */
@@ -337,6 +392,15 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2B84194E6DCE3CDCB1F92A09 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8C2CAA286B69F0ADA95FF33F /* PTTManager.swift in Sources */,
+				F175F65CFE7A42BE4FC00205 /* PTTManagerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		556CE73C16CDEF53F938A533 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -368,6 +432,7 @@
 				A0D5064F92F5B75ED0FA32AA /* OpusEncoder.swift in Sources */,
 				2F3801A2B935E53821F2F8B5 /* PTTButtonView.swift in Sources */,
 				9F47D93C40841C1E30625DF1 /* PTTFooter.swift in Sources */,
+				351AB4C6F66FB12678C6BD14 /* PTTManager.swift in Sources */,
 				C9D0B8E8C3C8FD0DD4AF6F68 /* PerformanceMonitorView.swift in Sources */,
 				A71929F7722A72CCBA789B10 /* QuickControlsRow.swift in Sources */,
 				AC77ECA6664A3DFE3949E426 /* RadioState.swift in Sources */,
@@ -392,7 +457,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5R985TLXG2;
+				DEVELOPMENT_TEAM = VQ89MM7935;
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/Audio/opus-ios/include";
 				INFOPLIST_FILE = Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -474,13 +539,30 @@
 			};
 			name = Debug;
 		};
+		81E229174C8F6B48A41F25B9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hamradio.ft710mobile.pttmanagertests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		9A723C5F9255944AC3BBFF79 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5R985TLXG2;
+				DEVELOPMENT_TEAM = VQ89MM7935;
 				HEADER_SEARCH_PATHS = "$(SRCROOT)/Sources/Audio/opus-ios/include";
 				INFOPLIST_FILE = Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -555,9 +637,35 @@
 			};
 			name = Release;
 		};
+		FD859BBAE6BCEC22CAF5320F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.hamradio.ft710mobile.pttmanagertests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0782AC2983D74449FE693246 /* Build configuration list for PBXNativeTarget "PTTManagerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FD859BBAE6BCEC22CAF5320F /* Debug */,
+				81E229174C8F6B48A41F25B9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		426C9EE0583D768B08FED690 /* Build configuration list for PBXNativeTarget "FT710Mobile" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -154,10 +154,11 @@ class ExclusionListTests(unittest.TestCase):
                             "the stager copied nothing — the rules above prove nothing")
 
     def test_the_exclusion_list_is_byte_identical_to_what_shipped(self):
-        """The list as of 2026-10-11, frozen: the refactor moved it, and the three
-        edits since then (a root-anchored ``/fleet/``, then ``qso.db``, then the
-        five per-box state files found leaking on 2026-10-14) are written down
-        here."""
+        """The list as of 2026-10-11, frozen: the refactor moved it, and every
+        edit since then is written down here — a root-anchored ``/fleet/``,
+        ``/draft/`` when the Rust draft workstream landed on main
+        (2026-10-13), then ``qso.db`` and the five per-box state files found
+        leaking on 2026-10-14."""
         expected = [
             ".git/", "venv/", ".venv/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
@@ -167,6 +168,7 @@ class ExclusionListTests(unittest.TestCase):
             "auth-tokens.json", "mrrc_modern.env", "recordings.json",
             "ft8/settings.json", "/env/",
             "/fleet/",
+            "/draft/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",
             "/.worktrees/", "/.superpowers/", "/.agnes/", "/.claude/",
             "/.pytest_cache/", "/.ruff_cache/", "/dev_tools/", "/tools/",

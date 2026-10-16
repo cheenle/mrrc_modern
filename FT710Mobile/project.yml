@@ -20,6 +20,14 @@ schemes:
       config: Debug
     test:
       config: Debug
+  PTTManagerTests:
+    build:
+      targets:
+        PTTManagerTests: all
+    test:
+      config: Debug
+      targets:
+        - PTTManagerTests
 
 targets:
   FT710Mobile:
@@ -41,3 +49,14 @@ targets:
         HEADER_SEARCH_PATHS: "$(SRCROOT)/Sources/Audio/opus-ios/include"
         LIBRARY_SEARCH_PATHS: "$(SRCROOT)/Sources/Audio/opus-ios/lib"
         OTHER_LDFLAGS: "-lopus"
+  PTTManagerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Sources/PTT
+      - path: Tests/FT710MobileTests/PTTManagerTests.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hamradio.ft710mobile.pttmanagertests
+        SWIFT_VERSION: "5.9"
+        GENERATE_INFOPLIST: YES

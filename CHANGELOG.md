@@ -51,7 +51,7 @@ hub 边缘（`mrrc_hub` V0.37）按同一套值加了 gzip 与 1 小时边缘缓
 时穿透回源。实测 `opus_wasm.js` 534,520 → 170,402 B（gzip），第二次起由边缘 304 作答。
 
 设计：`docs/superpowers/specs/2026-10-17-static-asset-delivery-design.md`。
-套件 2280 → **2294**（新模块 `tests/test_static_cache_headers.py`）。
+套件 2280 → **2296**（新模块 `tests/test_static_cache_headers.py`）。
 
 ### Installers
 

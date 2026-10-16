@@ -128,6 +128,48 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261011-134820-f54e">
+      <header>
+        <span class="id">20261011-134820-f54e</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">音频 · 2026-10-16 21:53</span>
+      </header>
+      <h3>偶尔重启系统和APP发射有声音大部分还是发射没有语音输出，用CQ键发射能听到CQ CQ CQ…的呼叫，IC7300/29.6FM</h3>
+      <p class="verdict">服务端收到 0 帧麦克风上行（frames=0/peak=0%，CQ 走服务端注入却正常），与仓库 V2.71 记录并修复过的「键控了却没有声音」同签名，而现场 1.25.5 已包含该修复，按回归排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>现场版本 1.25.5（env.json.version），而 v1.25.4 的 CHANGELOG「同批到达：这一个包也是 FT-891 和『键控了却没有声音』到达用户的那个包」段明确该修复（SDD V2.71）随安装包发布，源码包内含 `_claim_tx_owner_for_token`/`_same_session_uplink_takeover`（CHANGELOG.md:389-404）⇒ 当前版本应已包含该修复。</li>
+        <li>失败签名与历史逐字吻合：多次 `TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0`；V2.71 现场取证正是「四次发射全是 frames=0 fed=0 written=0 peak=0%，电台键控了、调制为零」（SDD/14-version-history.md 的 V2.71 行）。</li>
+        <li>日志同时出现多条 /WSaudioTX 与 non-owner 丢弃：`Audio TX client connected (2 total, owner=False)`、`TX audio from non-owner client ignored (drops=1) — another client owns the uplink`、其后 `Audio TX client disconnected (1 remain, owner=True)` —— 正是 V2.71 描述的多 socket 上行认领场景。</li>
+        <li>CQ 键能听到呼叫（problem.txt）：CQ 由服务端 cq_player/TxSession 直接灌入 TX 队列，证明电台键控、TX 输出设备与电台调制输入通路均正常；因此故障只在上行（浏览器/App → 服务端）。</li>
+        <li>服务端音频设备另有环境噪声但不解释本症状：`TX audio started: [5] 扬声器 (USB Audio CODEC ) ... actual=48000Hz, channels=1` 成功、CQ 也走该设备；而同批 `Configured audio device &#x27;麦克风 (USB Audio CODEC)&#x27; not found`（配置名末缺一个空格）、`Found configured audio output: [27] ... (WDM-KS)` 后 `TX open failed x3 ([Errno -9999] Unanticipated host error) — re-initializing PortAudio`、`Multiple USB audio outputs: [5]/[13]/[18] — using [5]` 属 USB 重枚举/设备名与设备索引漂移，影响的是设备选择而非帧数。</li>
+        <li>summary 的 Traceback 均为 `_ProactorBasePipeTransport._call_connection_lost`（Windows asyncio 断连噪声），与无语音无关；`scope_pipe open_failed/fatal:cannot_open_device` 早于本次发射（12:26），且 13:43:40 已有 `ic7300.scope: CI-V scope: first complete waveform — spectrum active (bins=475)`，频谱非本症状原因。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>只保留一个发射客户端：关闭其它浏览器标签页、另一台设备或另一个 App 的登录（日志显示同时有 2 条 /WSaudioTX 与一条 non-owner 丢弃）—— 上行同一时刻只归一条会话，多余的麦会互相压制。</li>
+        <li>在发射用的那个浏览器里确认麦克风权限与输入设备：站点设置→麦克风=允许，且输入不是 ToDesk Virtual Audio 等无信号虚拟声卡（被拒或选错设备时浏览器会一帧都不发，正是 frames=0）。</li>
+        <li>完全退出浏览器/App 再重开并重新登录一次后发射（清掉页面重载留下的半开旧 socket，避免认领落在不再送音频的旧连接上）。</li>
+        <li>升级到 1.25.5 之后的最新安装包（现行仓库侧为 1.27.x），重装后先只用单个客户端做一次发射验证。</li>
+        <li>排查环境时把音频设备写死为启动设备清单里的 MME 条目（如 MRRC_AUDIO_RX_DEVICE=1、MRRC_AUDIO_TX_DEVICE=5，或核对设备名结尾空格），避免 [27]/[28] WDM-KS 条目反复 -9999 打不开；改完重启服务再试。</li>
+        <li>自检判据：发射时看日志 `TX session` 行，`frames`/`written` 应 &gt;0、`peak` 非 0%、`non_owner_drops`=0；若仍 frames=0，说明发射端浏览器/App 根本没送音频，按上面客户端侧继续排除。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.25.5&quot;</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:41:43,219 [INFO] mrrc: TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:43:05,004 [INFO] mrrc: Audio TX client connected (2 total, owner=False)</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:43:07,055 [WARNING] mrrc: TX audio from non-owner client ignored (drops=1) — another client owns the uplink</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:43:27,536 [INFO] mrrc: Audio TX client disconnected (1 remain, owner=True)</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:42:06,628 [WARNING] mrrc.audio: TX open failed x3 ([Errno -9999] Unanticipated host error) — re-initializing PortAudio (USB re-enumeration?)</li>
+        <li class="ev">logs/stdout.log: 2026-10-11 13:36:39,397 [WARNING] mrrc.audio: Configured audio device &#x27;麦克风 (USB Audio CODEC)&#x27; not found</li>
+        <li class="ev">problem.txt: 用CQ键发射能听到CQ CQ CQ…的呼叫，IC7300/29.6FM</li>
+        <li class="ev">CHANGELOG.md:397-400 发射时「键控了却没有声音」（SDD V2.71）… 现在按会话取最后连接的那条，并在收到第一个语音帧时把上行交给同 token 的活 socket</li>
+        <li class="ev">SDD/14-version-history.md V2.71: 四次发射全是 frames=0 fed=0 written=0 peak=0% non_owner_drops=190/118/102/236</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_claim_tx_owner_for_token / _same_session_uplink_takeover / _assign_tx_owner_on_connect（TX 上行认领）；static/ft710_main.js + tx_capture_worklet.js（浏览器麦采集是否出帧）</code></p>
+    </article>
     <article class="card" id="20261010-220406-5793">
       <header>
         <span class="id">20261010-220406-5793</span>
@@ -511,7 +553,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-16 21:50（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-16 21:53（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.27.0 · Stable</span>
+<span>v1.28.0 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -58,10 +58,10 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.27.0-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.27.0
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.0-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.28.0
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.27.0
+<i class="fab fa-windows"></i> Windows Installer v1.28.0
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i> Android APK v1.1.31
@@ -95,7 +95,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.27.0</strong>
+<strong> What's new in v1.28.0</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -107,55 +107,35 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-<strong>FT8: a second way to use the same radio</strong> —
-              the main menu switches the radio to the FT8 frequency and DATA-U, and the engine
-              decodes from the radio's own sound card while transmitting through the CQ queue —
-              so FT8 and SSB share one TX gate and can never key the radio together. Click
-              &laquo;&larr;&raquo; and every SSB field (frequency, mode, filter, power, AGC, ATT,
-              PREAMP) comes back. Decoding runs a fast C path by default and re-runs the same slot
-              through the full WSJT-X path only when it matters (a contact in progress, a
-              suspiciously short first pass, or the operator asking for it).
+<strong>The radio's power switch is back in the menu — with the two intents kept apart</strong> —
+              「重开电台」turns the radio off and then keeps trying to wake it (every 30 seconds, up to
+              15 minutes, cancellable from the <code>PWR</code> cell in the header); 「关机」only turns it
+              off, never powers it back up, and says so before it does. The guards are the ones the
+              2026-07 withdrawal demanded: refused while transmitting (FT8 included), refused inside the
+              window right after a power-on, and a wake round writes nothing until the serial port is back
+              — the radio's USB re-enumerates while it is off, so the node name it had before is not the
+              one it comes back on. Verified on the real radio: woke on round 1 after 4–8 s, three runs in
+              a row (2026-07's 「PS1 wake-up is unreliable」 did not reproduce).
             </li>
             <li>
-<strong>And every download carries it: the box, the Pi image, the Mac and the Windows installer</strong> —
-              the native DSP library is built as part of each artifact — during the image build on
-              the box and the Pi, at packaging time for the desktop installers, always with its
-              FFTW/gfortran runtime dependencies bundled — so a fresh flash or a fresh install can
-              work FT8 immediately instead of asking you to install a compiler first.
+<strong>Outbound HTTPS trusts our own root bundle, not the machine's store</strong> —
+              a Windows box failed every portal and tunnel call with
+              <code>certificate verify failed</code> while the browser on that same box opened the same
+              portal fine: its certificate store held an expired, same-name copy of a chain element, and
+              OpenSSL built the chain through it. The app now builds its trust from the bundle it ships
+              (<code>MRRC_CA_BUNDLE</code> overrides it) and only falls back to the platform store when
+              there is no usable bundle. Reproduced offline in the test suite with a real handshake
+              against a deliberately poisoned store.
             </li>
             <li>
-<strong>Someone can fix it without driving over: press one button, read out a one-time password</strong> —
-              the app can open a temporary helper account on request (Settings &rarr; Support) and shows the
-              username and password to read out over the phone; the session rides the Cloud Hub tunnel the
-              app already uses. The portal sees it arrive and can end it, and the password never reaches a
-              log, the config file, a diagnostics bundle or a portal request — it is typed once by the helper
-              and stored nowhere.
-            </li>
-            <li>
-<strong>The server image configures itself from the LAN — no monitor, no serial cable</strong> —
-              Wi-Fi scan and join, hostname, timezone, system update, reboot and service restart
-              (Settings &rarr; Box), plus a <code>/setup</code> landing page for the first visit. You can also
-              tell an image which Wi-Fi to join before the first boot by dropping a
-              <code>mrrc-wifi.txt</code> on its boot partition.
-            </li>
-            <li>
-<strong>The Raspberry Pi image caught up with the W103D box</strong> — both image lines are built from
-              one service layer now, so the Pi image ships what the box had: eleven radio profiles, the FTDI
-              aarch64 libraries, Cloud Hub, the <code>mrrc-update</code> / <code>mrrc-radio</code> helpers,
-              the login banner and the same first-boot behaviour.
-            </li>
-<li>
-<strong>Previous release (v1.25.5): The quick row answers "where am I" instead of "what happens if I press"</strong> —
-              <code>MODE</code> / <code>BAND</code> / <code>FILTER</code> show the <em>current</em>
-              mode, band and filter width; <code>ATT</code> / <code>PRE</code> show the full current
-              step (<code>OFF / 6dB / 12dB / 18dB</code>, <code>OFF / AMP1 / AMP2</code>) instead of
-              three-character abbreviations; a tap still rotates to the next step. Spectrum bandwidth
-              becomes a per-connection tier (Settings → full / mid / low; payload 151 → 38 → 19 kbps;
-              a connection that does not declare the capability gets the byte-for-byte stream it got
-              before). The env file gets a single writer (<code>env_store.py</code>: lock + atomic
-              replace, comments and foreign keys preserved, mode never widened) and <code>/manage</code>
-              is a read-only page showing whether the setup hotspot is up and what the three safety
-              gates are set to.
+<strong>Previous release (v1.27.0): FT8 — a second way to use the same radio, on all four platforms</strong> —
+              the main menu switches the radio to the FT8 frequency and DATA-U, and the engine decodes
+              from the radio's own sound card while transmitting through the CQ queue — so FT8 and SSB
+              share one TX gate and can never key the radio together. Decoding runs a fast C path by
+              default and re-runs the same slot through the full WSJT-X path only when it matters. The
+              native DSP library is built as part of each artifact — during the image build on the box and
+              the Pi, at packaging time for the desktop installers — so a fresh flash or a fresh install
+              can work FT8 immediately.
             </li>
             </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -410,30 +390,29 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.27.0 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.28.0 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
             75.6 MB · x64 · 79,263,639 bytes<br/>
 <code style="font-size: 0.76rem">SHA-256: c0cb8225…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.27.0 adds the <strong>FT8 work mode</strong>: the main menu switches the radio to
-            its FT8 frequency and DATA-U, the engine decodes through the sound card and keys
-            through the same TX gate as SSB — structurally impossible to key both at once — and
-            &laquo;&larr;&raquo; restores every SSB field on the way back. The native DSP library
-            ships inside the installer with its runtime dependencies, so nothing has to be
-            compiled on your machine. First run is still zero-config: the web password is
-            generated and shown on the login page, and the radio (FT-710 ASCII CAT / Icom CI-V)
-            and its COM port are detected automatically. The web Connection Settings dialog still
-            changes the radio model, serial port, RX+TX audio devices and password with
-            save-and-restart.
+            The ☰ menu now carries the radio's own power switch (restart = off, then a bounded,
+            cancellable wake-up loop; off = off for good), and the version you are running is printed in
+            the menu footer. Outbound HTTPS (portal, tunnel, diagnostics upload) trusts the CA bundle
+            shipped inside the installer instead of the machine's certificate store. The native DSP
+            library still ships inside the installer with its runtime dependencies, so nothing has to be
+            compiled on your machine. First run is still zero-config: the web password is generated and
+            shown on the login page, and the radio (FT-710 ASCII CAT / Icom CI-V) and its COM port are
+            detected automatically. The web Connection Settings dialog still changes the radio model,
+            serial port, RX+TX audio devices and password with save-and-restart.
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.27.0-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.27.0
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.28.0-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.28.0
             </a>
 <div class="dl-meta">79,263,639 bytes · SHA-256 c0cb8225…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -451,7 +430,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.27.0-arm64.dmg — v1.27.0 Stable </strong>
+<strong> MRRC-Modern-v1.28.0-arm64.dmg — v1.28.0 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
             81.0 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 84,862,308 bytes<br/>
@@ -476,7 +455,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.27.0-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.0-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -541,7 +520,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
           <i class="fas fa-tv" style="color: var(--scope-primary)"></i>
-          <strong> MRRC-Modern-1.27.0-w103d.img.gz — ZTE W103D</strong>
+          <strong> MRRC-Modern-1.28.0-w103d.img.gz — ZTE W103D</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
               1.18 GB (1,183,256,818 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
@@ -559,7 +538,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               cable and a network cable, with the USB stick kept as the rescue copy.
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-          <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-1.27.0-w103d.img.gz">
+          <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-1.28.0-w103d.img.gz">
           <i class="fas fa-download"></i> Download W103D Image
               </a>
           <a class="btn btn-secondary btn-large" href="w103d.html" rel="noopener" target="_blank">
@@ -617,7 +596,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.27.0, 75.6 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.28.0, 75.6 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
 <code>SHA-256 c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be</code>
@@ -1175,7 +1154,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.27.0</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.28.0</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

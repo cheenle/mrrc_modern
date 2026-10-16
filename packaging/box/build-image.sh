@@ -9,6 +9,21 @@
 #   ./build-image.sh --check    # prerequisites only, changes nothing
 set -euo pipefail
 
+# Arguments. --preflash is the ship-ready variant (design 2026-10-17): fixed
+# factory credentials plus the system half (time zone/locale) baked in. Off by
+# default — the default image keeps generating a per-box password on first boot,
+# and tests/test_preflash.py pins that default rather than trusting this comment.
+CHECK_ONLY=0
+PREFLASH=0
+for arg in "$@"; do
+	case "$arg" in
+		--check) CHECK_ONLY=1 ;;
+		--preflash) PREFLASH=1 ;;
+		-*) echo "unknown option: $arg" >&2; exit 2 ;;
+		*) echo "unknown argument: $arg" >&2; exit 2 ;;
+	esac
+done
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 WORK="${MRRC_BOX_WORK:-$REPO/build/w103d}"
@@ -98,7 +113,7 @@ check() {
 	return $ok
 }
 
-if [ "${1:-}" = "--check" ]; then
+if [ "$CHECK_ONLY" = "1" ]; then
 	if check; then
 		echo "✓ prerequisites ok"
 		exit 0
@@ -132,6 +147,9 @@ if [ ! -f "$WORK/w103d.img" ]; then
 fi
 
 echo "==> building inside a privileged arm64 container"
+if [ "$PREFLASH" = "1" ]; then
+	echo "==> preflash: factory credentials will be baked in (root/user/web + TZ/locale)"
+fi
 # --privileged is for losetup/mount; /dev is needed for the loop devices.
 # The container only mounts, overlays and unmounts. Compression happens on the
 # host afterwards, which avoids copying a 3.4 GB image inside the work volume.
@@ -149,6 +167,7 @@ docker run --rm --platform linux/arm64 --privileged \
 	-e MRRC_BOX_PIP_INDEX="$PIP_INDEX" \
 	-e MRRC_BOX_FRP_PROXY="$FRP_PROXY" \
 	-e MRRC_VERSION="$VERSION" \
+	-e MRRC_PREFLASH="$PREFLASH" \
 	debian:bookworm bash -euo pipefail -c '
     img=/work/w103d.img
     loop="$(losetup --show -fP "$img")"
@@ -220,6 +239,12 @@ docker run --rm --platform linux/arm64 --privileged \
       export MRRC_FRP_PROXY="$MRRC_BOX_FRP_PROXY"
       echo "==> frp via: $MRRC_BOX_FRP_PROXY"
     fi
+
+    # Ship-ready variant. One flag, one writer: the shared service layer acts on
+    # it only when it is exactly 1, and preflash.sh refuses to write anything
+    # otherwise (both are pinned by tests/test_preflash.py).
+    export MRRC_PREFLASH="${MRRC_PREFLASH:-0}"
+    echo "==> preflash: $MRRC_PREFLASH"
 
     chroot /mnt /bin/bash -c "REPO_SRC=/src /src/packaging/box/box-overlay.sh"
 

@@ -361,6 +361,17 @@ grep -q '^MRRC_SSL_KEY=' "$ENV_FILE" || echo 'MRRC_SSL_KEY=/var/lib/mrrc/certs/s
 chown "$MRRC_USER:$MRRC_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
+log "factory preflash (--preflash)"
+# 出厂预置：固定口令 + 系统层（时区/区域）。默认关 —— 不传 --preflash 的镜像里
+# 这段只打印一行。放在这里而不是平台壳里：写口令/时区/locale 与板子无关，而
+# "服务层只有一份"是本仓库的硬规矩（tests/test_packaging_parity.py 会报红）。
+# 也刻意排在 headless 默认值之后，让预置口令成为 env 文件里那个键的最后一个写者。
+if [ "${MRRC_PREFLASH:-0}" = "1" ]; then
+	bash "$MRRC_ASSETS/preflash.sh" "$ENV_FILE"
+else
+	echo "preflash: off (build with --preflash for the ship-ready values)"
+fi
+
 log "enable services"
 systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service
 # avahi-daemon is what answers <hostname>.local. It ships enabled in the

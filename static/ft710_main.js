@@ -421,6 +421,9 @@ const memChannels = new Array(6).fill(null);
 let radioCapabilities = null;
 let radioModel = null;
 let radioDisplayName = null;
+// Installed server version from fullState, shown in the menu footer.
+// null = legacy server: the footer keeps whatever the markup shipped.
+let serverVersion = null;
 
 // ── Message Handler ─────────────────────────────────────────────────
 function handleMessage(msg) {
@@ -456,6 +459,7 @@ function handleMessage(msg) {
 			radioCapabilities = msg.capabilities || null;
 			radioModel = msg.radioModel || null;
 			radioDisplayName = msg.radioDisplayName || null;
+			serverVersion = msg.version || null;
 			_applyRadioBranding();
 			// RX playback boost comes from capabilities when the server
 			// provides it (Icom USB audio is much hotter than the FT-710's);
@@ -602,7 +606,7 @@ function _applyRadioBranding() {
 	const menuTitle = document.getElementById("menu-title");
 	if (menuTitle) menuTitle.textContent = name + " Menu";
 	const version = document.getElementById("menu-version");
-	if (version) version.textContent = name + " v1.0";
+	if (version) version.textContent = name + (serverVersion ? " v" + serverVersion : "");
 	const appleMeta = document.querySelector(
 		'meta[name="apple-mobile-web-app-title"]',
 	);

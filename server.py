@@ -4384,6 +4384,12 @@ def _full_state_message(data: dict, channels: list) -> dict:
         "radioDisplayName": (backend.capabilities.display_name
                              if backend else "Yaesu FT-710"),
         "capabilities": backend.capabilities.to_dict() if backend else {},
+        # The installed version, for the menu footer.  Same detector the
+        # support bundle and the update check use (version.txt in a build
+        # product, then the .iss, then the CHANGELOG) so the number shown in
+        # the UI is the number those two report — a hardcoded literal here
+        # would be a fifth copy to keep in sync.
+        "version": support_bundle.detect_version(_runtime_dir(), _resource_dir()),
         "memChannels": channels,
         # Server-authoritative filter tables so the frontend stops
         # hardcoding its own (drifting) copies.

@@ -433,7 +433,7 @@ class WebClientCapsTests(unittest.TestCase):
         self.assertIn("ft710_main.js?v=44", html)
         self.assertIn("ft710_ui.js?v=37", html)
         sw = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v53';", sw)
+        self.assertIn("const CACHE = 'mrrc-v54';", sw)
         self.assertIn("'/ft710_main.js?v=44'", sw)
         self.assertIn("'/ft710_ui.js?v=37'", sw)
 

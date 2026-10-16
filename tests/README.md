@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2255 tests across 117 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2266 tests across 118 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-16, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 64 of those 116 — the support-chain, Cloud Hub and
+sections below itemise 88 of those 118 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -21,8 +21,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2255 |
-| Passed | 2254 (1 skipped) |
+| Total tests | 2266 |
+| Passed | 2265 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 (macOS, 2026-10-16) |
 | Execution time | ~1min (harness tests spawn CLI subprocesses) |
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2255 above. Run it with:
+the 2266 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -947,3 +947,19 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   （对一个死网络上的操作者，这句文案不能宣称一次并未发生的恢复）。`poll<=0` 在**任何 nmcli
   调用之前**就被拒（否则注入时钟下 `poll=0` 死循环、`poll<0` 让 `time.sleep` 抛 `ValueError`
   逃出 worker 线程），`budget<=0` 不动。
+
+### 本轮新增（菜单页脚的版本号，2026-10-16）
+
+- **`test_menu_version.py`** — ☰ 菜单最下边那行版本号。它从第一版起就是个字面量
+  （`MRRC Modern v1.0`），v1.14 到 v1.27 没有一个版本更新过它 —— 打开菜单的人一直看到
+  "v1.0"。修法不是把字面量换成新字面量（那只是把同一个错误推迟到下一次发版），而是让号
+  从 **support bundle manifest 与更新检查已经在用的那个检测器**来
+  （`support_bundle.detect_version`：产物里的 version.txt → `.iss` → CHANGELOG），随
+  `fullState` 一帧下发。文件按号经过的地方逐段钉：① 载荷里有它、且可 JSON 序列化（走的是
+  页面**已经**收到的那条帧，没有新端点、没有新的鉴权面）；② 载荷的值确实来自检测器 ——
+  给检测器打桩必须让载荷跟着变，字段若是字面量这条就红，也就是 v1.0 那个缺陷的形状；
+  ③ 源码运行时报的就是 CHANGELOG 顶条（源码树没有 version.txt，轮到 `.iss` 回答）；
+  ④ 标记里 `#menu-version` 仍在菜单页脚、且未连上服务端前**不声称**任何版本；⑤
+  `ft710_main.js` 写 `msg.version`，老服务端不发这个字段时也不打印 undefined；⑥ 资产缓存
+  随这次改动前移 —— `index.html` 是 cache-first，`sw.js` 自己没变的话，已装用户永远看不到
+  新页脚（这正是 V2.72 记下的那个形状）。

@@ -356,3 +356,31 @@ class StaleAPrioriTests(unittest.TestCase):
         """a8 activates within +/-10 Hz of nfqso; the decoy is placed 800 Hz away."""
 
         self.assertGreater(800.0, 10.0)
+
+
+class TrialDeterminismTests(unittest.TestCase):
+    """One cell must be reproducible on its own, whatever else you asked for.
+
+    The probe used to draw from one shared random stream, so the number of SNR
+    levels on the command line shifted every later draw: a 2-level run and a
+    4-level run were not measuring the same trials.  That silently invalidated a
+    cross-run comparison (notes §4.5) and would have made the isolated-process
+    check in §6(a) meaningless.  These assert the source no longer allows it.
+    """
+
+    def test_no_probe_shares_one_random_stream_across_trials(self) -> None:
+        source = (REPO_ROOT / "tools" / "ft8" / "ap_probe.py").read_text()
+        self.assertNotIn(
+            "quiet_frequency(pcm_bed, generator)",
+            source,
+            "a shared generator makes --snr change which beds/frequencies are drawn",
+        )
+        self.assertNotIn("generator.uniform(", source)
+
+    def test_every_probe_derives_its_seed_from_snr_and_trial(self) -> None:
+        source = (REPO_ROOT / "tools" / "ft8" / "ap_probe.py").read_text()
+        self.assertEqual(
+            source.count("np.random.default_rng([seed, int(snr) + 1_000, trial])"),
+            3,
+            "probe / paired_probe / stale_probe must all derive per-trial seeds",
+        )

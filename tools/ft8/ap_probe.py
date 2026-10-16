@@ -195,11 +195,14 @@ def probe(
         for trial in range(trials):
             bed = beds[(trial * 7 + int(snr)) % len(beds)]
             pcm_bed = slot_pcm(bed)
-            frequency = quiet_frequency(pcm_bed, generator)
+            # Per-trial generator; see the note in paired_probe for why a shared
+            # stream makes runs with different --snr lists incomparable.
+            rng = np.random.default_rng([seed, int(snr) + 1_000, trial])
+            frequency = quiet_frequency(pcm_bed, rng)
             # DT_MIN/DT_MAX come from the simulator, not from a literal here: a
             # hand-written range produced dt=-0.98, which synthesize correctly
             # rejects because the signal would start before the slot.
-            dt = float(generator.uniform(DT_MIN, DT_MAX))
+            dt = float(rng.uniform(DT_MIN, DT_MAX))
             signal = SyntheticSignal(
                 message=message, frequency=frequency, dt=dt, snr_db=snr
             )
@@ -368,7 +371,6 @@ def paired_probe(
 
     import numpy as np
 
-    generator = np.random.default_rng(seed)
     report: dict[str, object] = {
         "message": A8_MESSAGE,
         "dt_max": A8_DT_MAX,
@@ -393,10 +395,18 @@ def paired_probe(
         gained_qualities: list[list[float]] = []
         both_ap_types: dict[int, int] = {}
         for trial in range(trials):
+            # A fresh generator per (snr, trial), not one shared stream.  With a
+            # shared stream, *how many SNR levels you ask for* shifts every later
+            # draw -- so a 2-level run and a 4-level run sample different beds and
+            # cannot be compared (that is exactly what made the progress scan in
+            # notes §4.5 non-comparable to the run above it).  Deriving the seed
+            # from (seed, snr, trial) makes one cell reproducible on its own,
+            # which is what the isolated-process check in §6(a) needs.
+            rng = np.random.default_rng([seed, int(snr) + 1_000, trial])
             bed = beds[(trial * 7 + int(snr)) % len(beds)]
             pcm_bed = slot_pcm(bed)
-            frequency = quiet_frequency(pcm_bed, generator)
-            dt = float(generator.uniform(DT_MIN, A8_DT_MAX))
+            frequency = quiet_frequency(pcm_bed, rng)
+            dt = float(rng.uniform(DT_MIN, A8_DT_MAX))
             signal = SyntheticSignal(
                 message=A8_MESSAGE, frequency=frequency, dt=dt, snr_db=snr
             )
@@ -529,9 +539,10 @@ def stale_probe(
                 pcm_bed = slot_pcm(bed)
                 # The real signal sits somewhere AP was NOT told to look, so any
                 # decode naming both calls is an invention rather than a lucky hit.
-                frequency = quiet_frequency(pcm_bed, generator)
+                rng = np.random.default_rng([seed, int(snr) + 1_000, trial])
+                frequency = quiet_frequency(pcm_bed, rng)
                 decoy = frequency + 800.0 if frequency < 2000.0 else frequency - 800.0
-                dt = float(generator.uniform(DT_MIN, A8_DT_MAX))
+                dt = float(rng.uniform(DT_MIN, A8_DT_MAX))
                 signal = SyntheticSignal(
                     message=message, frequency=decoy, dt=dt, snr_db=snr
                 )

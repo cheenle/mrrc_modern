@@ -183,6 +183,16 @@ POWER_RESTART_SETTLE_MAX_S = 15.0# 或等到串口消失为止（先到者为准
 | V6 | 失败路径（把电台电源物理断开后点「重启」） | 15 分钟后必须给出"需要现场按面板"，**不得**报成功 |
 | V7 | listen 角色 | 菜单里看不到；直接发 WS `set power` 被拒 |
 
+**逃生舱的落地步骤（若触发，照抄即可，三步）**：
+
+1. `static/index.html`：删掉 `data-action="power-restart"` 那一个 `<li>`（`status-power` 与 `power-off` 保留）；
+2. `static/modules/power_switch.js`：删掉 `askRestart()` 与它的绑定；`renderPowerRescue()` **保留**
+   （服务端仍会广播，只是不会再起救援）；
+3. 测试：删掉 `test_menu_offers_both_intents` 的 `power-restart` 断言、
+   `test_module_sends_the_three_power_values` 的 `'restart'` 断言、两条 `test_restart_*`；
+   `tests/test_listen_only.py` 里 `power` 的三个新取值**继续保留** —— 服务端能力不删，只是界面不给。
+   文档：`OPERATION_GUIDE` §2.11 删「重开电台」一行并改写那段说明；`SDD/10` 的 `power` 行保留 `"restart"`。
+
 **逃生舱（先写进规格，不许事后改口径）**：若 V2/V6 证明 `PS1` 在真机上**根本唤不醒**
 （即排除了端口重新枚举这一层之后仍然失败），则**只发布「关机…」一项**、文案写"开机需
 现场按面板"，**不把未验证的能力摆在界面上** —— 这是 V2.13 那次撤回的直接延续。

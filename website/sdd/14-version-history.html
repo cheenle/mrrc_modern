@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V2.87</td>
+<td>2026-10-16</td>
+<td>pi</td>
+<td><strong>出站 HTTPS 不再采信本机证书库 —— 同一个缺陷的第二张脸，以及它的离线复刻。</strong> ① <strong>现场（同日）</strong>：应用报 <code class="scope-code">certificate verify failed: certificate has expired</code>，而同一台机器的浏览器打开同一个门户完全正常；门户侧证书链有效、日志里没有来自该实例的任何请求 —— 说明 DNS/TCP/握手/证书交换都成功，是<strong>客户端自己</strong>拒绝了。② <strong>根因</strong>：本机证书库里有与被服务链条<strong>同名同密钥、却已过期</strong>的副本（Windows 会缓存见过的中间证书，Let’s Encrypt 的中间证书换代重签，缓存那份到期后正是这个形态）；OpenSSL 把库里那张放进链里判 expired，并且<strong>不会</strong>回退到服务器送来的有效副本。③ <strong>旧策略是错的那一半</strong>：<code class="scope-code">net_tls.build_context()</code> 只在默认库为空时才装随包 CA（<code class="scope-code">store_size() &gt; 0</code> 提前返回），也就是把「库非空」当成了「库可用」—— 与 2026-10-04 那次（macOS 库为空）是<strong>同一个缺陷的两张脸：把信任判定外包给机器</strong>。④ <strong>修法</strong>：<code class="scope-code">_bundled_roots()</code> 从零构造上下文（不经 <code class="scope-code">create_default_context()</code>、不读 <code class="scope-code">SSL_CERT_FILE/DIR</code>），<strong>只信</strong> <code class="scope-code">MRRC_CA_BUNDLE</code> → 随包 <code class="scope-code">vendor/ca/cacert.pem</code>；只有在没有可用 bundle 时才回退平台库并告警（精简安装仍可用）。部署在 TLS 解密环境里的运维用 <code class="scope-code">MRRC_CA_BUNDLE</code> 指自己的 bundle。⑤ <strong>证据（本地可复现）</strong>：<code class="scope-code">tests/test_tls_trust_store.py</code> 新增合成 PKI + <strong>真握手</strong>：受污染库那一侧必须真的以 expired 失败（反向对照，证明测试能变红），而我们构造的上下文必须握手成功；另有策略断言（结果里的根数 = 我们 bundle 的条数，机器库一条都不进来）。测试 11 → <strong>13</strong> 项，套件 2228 → <strong>2230</strong> 全绿。⑥ <strong>用户侧</strong>：未升级的机器仍用同日的 <code class="scope-code">MRRC-CertDoctor.zip</code>（免安装体检/修复工具）；答复页那张卡同步说明应用侧已改。⑦ <strong>同步</strong>：AGENTS.md 的 <code class="scope-code">net_tls</code> 行、DEPENDENCIES.md、CHANGELOG、tests/README 计数与模块说明、SDD/README V2.87 与站点徽章/示意图标记。</td>
+</tr>
+<tr>
 <td>SDD V2.86</td>
 <td>2026-10-16</td>
 <td>pi</td>
@@ -907,7 +913,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.86 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.87 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

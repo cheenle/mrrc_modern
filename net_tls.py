@@ -1,6 +1,8 @@
 """Outbound TLS trust for the packaged app.
 
-Why this module exists (2026-10-04 field report, macOS v1.25.0)
+Why this module exists (two field reports, one defect)
+------------------------------------------------------
+**2026-10-04, macOS v1.25.0: the trust store was empty.**
 --------------------------------------------------------------
 A frozen macOS bundle carries the OpenSSL the *build* machine used, and a freshly
 built ``SSLContext`` with no explicit CA file takes its trust store from that
@@ -15,12 +17,27 @@ certificate``:
   path instead of uploading itself,
 * the update check (``upgrade_core``).
 
-Nothing about the radio, the portal or the network was wrong; the app had no roots
-to verify with.  So this module builds the context explicitly rather than trusting
-whatever the frozen OpenSSL was compiled with: when the process's default store is
-empty it loads our own bundle (``vendor/ca/cacert.pem``, shipped) or the platform's
-system bundle.  Every outbound HTTPS request in the shipped code goes through
-:func:`urlopen`; ``tests/test_tls_trust_store.py`` keeps it that way.
+**2026-10-16, Windows: the trust store was there, and poisoned.**  The portal
+rejected one machine with ``certificate verify failed: certificate has expired``
+while its own browser opened the same page.  The machine's certificate store held
+an **expired, same-name, same-key** copy of a chain element (Windows caches
+intermediates it has seen; Let's Encrypt re-issues them, and the cached copy later
+expires).  OpenSSL builds the chain through *that* copy instead of the valid one
+the server sent, and reports the expiry — reproduced offline, byte for byte, in
+``tests/test_tls_trust_store.py``.  There was nothing on the machine to fix: the
+server's chain was valid and the browser was right; our client was the one asking
+a stranger's opinion.
+
+Same defect, two faces: **we were outsourcing the trust decision to whatever the
+machine happened to have.**  So this module does not consult the machine at all any
+more.  It builds a context that trusts exactly one thing — ``MRRC_CA_BUNDLE`` if the
+deployment sets one, else the shipped ``vendor/ca/cacert.pem`` — which makes the
+verdict reproducible across machines and removes both faces at once.  A deployment
+behind TLS inspection points ``MRRC_CA_BUNDLE`` at its own bundle.  Only when no
+bundle is usable at all does it fall back to the platform's default store, with a
+warning, so a stripped install can still reach something.  Every outbound HTTPS
+request in the shipped code goes through :func:`urlopen`;
+``tests/test_tls_trust_store.py`` keeps it that way.
 
 Stdlib only, no application imports beyond the env helper — it is imported by the
 server, the launcher and the support/upgrade paths alike.
@@ -107,20 +124,20 @@ def store_size(context: ssl.SSLContext) -> int:
         return -1                          # unknown: let the caller keep going
 
 
-def build_context(*, base: ssl.SSLContext | None = None,
-                  candidates: list[Path] | None = None) -> ssl.SSLContext:
-    """A verifying client context whose trust store is actually populated.
+def _bundled_roots(candidates: list[Path] | None = None) -> tuple[ssl.SSLContext, Path] | None:
+    """A context trusting exactly one bundle of ours, or ``None`` if none is usable.
 
-    ``base``/``candidates`` exist for tests: the shipped path is the no-argument call.
+    Built from scratch rather than from ``ssl.create_default_context()`` on purpose:
+    that call loads the platform's store (and, on POSIX, honours ``SSL_CERT_FILE`` /
+    ``SSL_CERT_DIR``), and an ambient store is precisely what produced both field
+    reports — empty on macOS, poisoned on Windows.
     """
-    context = base if base is not None else ssl.create_default_context()
-    if store_size(context) > 0:
-        return context                     # the system store works (Windows store, normal hosts)
-
-    tried = ca_bundle_candidates() if candidates is None else candidates
-    for path in tried:
+    for path in (ca_bundle_candidates() if candidates is None else candidates):
         if not path.is_file():
             continue
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.check_hostname = True
         try:
             context.load_verify_locations(cafile=str(path))
         except (ssl.SSLError, OSError) as exc:
@@ -128,14 +145,29 @@ def build_context(*, base: ssl.SSLContext | None = None,
             continue
         loaded = store_size(context)
         if loaded > 0:
-            logger.info("TLS: default trust store was empty — loaded %d root(s) from %s",
-                        loaded, path)
-            return context
+            return context, path
+    return None
 
-    logger.warning("TLS: no usable CA bundle (default store empty, %d candidate(s) unusable) — "
-                   "outbound HTTPS will fail with CERTIFICATE_VERIFY_FAILED; "
-                   "set %s to a PEM bundle", len(tried), CA_BUNDLE_ENV)
-    return context
+
+def build_context(*, base: ssl.SSLContext | None = None,
+                  candidates: list[Path] | None = None) -> ssl.SSLContext:
+    """A verifying client context whose trust store is *ours*, not the machine's.
+
+    ``base`` / ``candidates`` exist for tests: the shipped path is the no-argument
+    call.  ``base`` is only ever returned when no bundle of ours is usable at all.
+    """
+    own = _bundled_roots(candidates)
+    if own is not None:
+        context, path = own
+        logger.info("TLS: trusting only %s (%d root(s)) — the machine's certificate "
+                    "store is not consulted", path, store_size(context))
+        return context
+
+    tried = len(ca_bundle_candidates() if candidates is None else candidates)
+    logger.warning("TLS: no usable CA bundle (%d candidate(s) unusable) — falling back to the "
+                   "platform trust store, which is *not* reproducible across machines; "
+                   "set %s to a PEM bundle", tried, CA_BUNDLE_ENV)
+    return base if base is not None else ssl.create_default_context()
 
 
 _context: ssl.SSLContext | None = None

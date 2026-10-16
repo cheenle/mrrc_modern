@@ -52,7 +52,7 @@
         <li>行号 _ssl.c:1000 是 Python 版本指纹：3.11=1016（盒子）、3.12=1000（Windows 安装包）、3.13=1032（macOS 安装包）—— 据此可确认失败的是 Windows 安装版。</li>
         <li>机制：Windows 会把见过的中间证书缓存进本机 CA 存储（Let&#x27;s Encrypt 的中间证书会换代重签，缓存那份到期后正是这个形态）。OpenSSL 会把库里那份过期证书放进链里并判 expired，而且不会回退到服务器送来的那张有效证书（2026-10-16 在构建 VM 上用同一份 openssl 逐条复现）。</li>
         <li>浏览器（Chrome/Edge）用自己那套根与链构建，不吃本机 CA 缓存，所以表现为「浏览器能上、应用不能」。</li>
-        <li>应用这一层属产品缺陷：net_tls.py 只在本机库为空时才启用随包 CA，也就是把「库非空」当成了「库可用」。</li>
+        <li>应用这一层属产品缺陷：net_tls.py 只在本机库为空时才启用随包 CA，也就是把「库非空」当成了「库可用」；**已修** —— 现在只信随包的根证书，不再采信本机证书库（随下一个版本到达用户）。</li>
       </ul>
       <h4>你要做的</h4>
       <ul>
@@ -397,7 +397,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-16 15:14（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-16 21:05（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

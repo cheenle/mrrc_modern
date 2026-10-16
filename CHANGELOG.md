@@ -2,6 +2,22 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [未发布] — 出站 HTTPS 只信随包的根证书：一个持续了一个夏天的缺陷的另一张脸
+
+接入云端在一台 Windows 上报 `certificate verify failed: certificate has expired`，而同一台机器的浏览器打开同一个门户完全正常。
+真相不在门户、也不在网络：**这台机器的证书库里有一份与被服务链条同名同密钥、却已经过期的副本**（Windows 会缓存见过的中间证书，
+Let's Encrypt 的中间证书换代重签，缓存那份到期后正是这个形态）。OpenSSL 把库里那张放进链里判它过期，**不会**回退到服务器送来的有效副本；
+浏览器用自己那套根，所以照常能开。
+
+应用侧的错误是**把信任判定外包给了机器**：`net_tls` 只在本机库**为空**时才装随包 CA —— 与 2026-10-04 那次（macOS 库为空、
+所有外发 HTTPS 全挂）是同一个缺陷的两张脸。现在改成**只信我们自己的根**（`MRRC_CA_BUNDLE` → 随包 `vendor/ca/cacert.pem`），
+不再读本机库、也不读 `SSL_CERT_FILE/DIR`；只有在没有可用 bundle 时才回退平台库并告警。部署在 TLS 解密环境里的运维用
+`MRRC_CA_BUNDLE` 指自己的 bundle。
+
+**证据**：`tests/test_tls_trust_store.py` 用合成 PKI + **真握手**把这个场景离线复刻 —— 受污染的库那一侧必须真的以 expired 失败
+（反向对照），我们构造的上下文必须握手成功；另加一条策略断言（结果里的根数 = 我们 bundle 的条数）。
+未升级的机器继续用 `MRRC-CertDoctor.zip`（同日的免安装体检/修复工具）自救。
+
 ## [未发布] — 电台电源回到界面：菜单里的「重开电台…」与「关机…」
 
 顶栏 **⏻** 依旧只管 Web 连接；电台电源放在 ☰ 菜单里，而且**分成两种意图**——

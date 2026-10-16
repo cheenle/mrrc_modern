@@ -228,6 +228,35 @@ class PyInstallerSpecTests(unittest.TestCase):
         self.assertIn('"build" / "ft8"', text)
         self.assertIn('"."', text)
 
+    def test_spec_bundles_the_ft8_assets_read_through_app_root(self):
+        """cty.dat is read via app_root(); frozen that is _MEIPASS, not the repo.
+
+        The native-library staging dir carries only the .dylib/.so/.dll, so
+        without a datas entry of its own the DXCC database resolved to a path
+        that does not exist inside the bundle — every packaged build, v1.27.0
+        included, logged `cty.dat unreadable` with a traceback and ran with an
+        empty database (no entity names, no new-DXCC highlight, and a scary
+        traceback in the user's log for a feature that simply degrades).
+        """
+        spec = self._spec()
+        self.assertIn('_ft8_assets = [(str(ROOT / "ft8" / "data"), "ft8/data")]', spec)
+        # Merely *defining* the list is not shipping it — the spread has to be
+        # inside datas=[.  (A first version of this test asserted only the two
+        # strings above, and kept passing with the spread deleted: reverse
+        # validation caught that, which is the whole point of doing it.)
+        datas = spec.split("datas=[", 1)[1].split("],", 1)[0]
+        self.assertIn("*_ft8_assets,", datas,
+                      "the cty.dat entry must be spread into datas=")
+        self.assertNotIn("restart.ps1", datas)   # dead path, see device_config.py
+        # ...and the reader agrees with the destination the spec uses.
+        dxcc = (REPO_ROOT / "ft8" / "engine" / "dxcc.py").read_text(encoding="utf-8")
+        self.assertIn('app_root() / "ft8" / "data" / "cty.dat"', dxcc)
+        self.assertTrue((REPO_ROOT / "ft8" / "data" / "cty.dat").is_file(),
+                        "the spec points at a directory that has to exist")
+
+    def _spec(self) -> str:
+        return SPEC.read_text(encoding="utf-8")
+
     def test_spec_names_the_ft8_python_dependencies(self):
         text = SPEC.read_text(encoding="utf-8")
         for module in ("ft8", "scipy", "soxr", "ft8.core.worker", "ft8.engine.orchestrator"):

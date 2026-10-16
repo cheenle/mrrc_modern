@@ -31,9 +31,14 @@ h1{font-size:21px;margin:0 0 4px}
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
 用户侧结论在 <a href="../answers/">答复页</a>。
-共 17 条 · 待决 5 · 已排期 1 · 已答复 11 · 已提交 0 · 最后更新 2026-10-16 22:12（自动生成，勿手改）</p>
+共 18 条 · 待决 6 · 已排期 1 · 已答复 11 · 已提交 0 · 最后更新 2026-10-17 07:30（自动生成，勿手改）</p>
 <div class="board">
-<div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>5</span></h2><div class='card' id='20261016-131815-b273'>
+<div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>6</span></h2><div class='card' id='20261016-230940-40c1'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261016-230940-40c1</code><span class='t'>2026-10-16 23:22</span></div>
+<p class='title'>诊断包确认了 FT8 DSP worker 每个时隙都崩溃、FT8 全程 0 解码，但用户报告的「服务器进程消失 + 电台卡在发射」那一刻的日志并未进包（无 PTT/unkey 行、无主进程致命 traceback），因此卡键根因证据不足，</p>
+<p class='hint'>候选待确认：ft8/core/worker.py:handle_decode（原生 binding.decode 崩溃使 worker 每时隙死亡）与 ft8/core/supervisor.py:_roundtrip_locked（报出 worker_exit）；主进程消失路径未定位</p>
+</div>
+<div class='card' id='20261016-131815-b273'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261016-131815-b273</code><span class='t'>2026-10-16 22:12</span></div>
 <p class='title'>现象指向控制链路/子进程在与电台通信期间异常中断（半开或服务异常退出），但包内日志不含 PTT 卡键那一小段，无法定因；先按安全闸门与 USB 链路两条可执行路径处理，并补齐事故日志。</p>
 <p class='hint'>server.py:_ptt_key_ws 与 _tx_liveness_watchdog（PTT 键控/存活闸门，默认关闭，待事故日志确认是否回归）；config.py:MRRC_REMOTE_SESSION_TX_HEARTBEAT_S / MRRC_PTT_MAX_TX_SECONDS</p>

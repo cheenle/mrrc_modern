@@ -114,6 +114,53 @@ def should_publish(analysis: dict) -> bool:
 # shape identical to a parsed analysis, plus `id`, `problem` (the card title) and `at`.
 KNOWN_ISSUES = (
     {
+        "id": "known-20261016-win-cert",
+        "at": "2026-10-16",
+        "problem": "Windows 上接入云端报 certificate has expired（浏览器却打得开门户）",
+        "status": "needs_fix",
+        "category": "网络",
+        "verdict": "不是门户、也不是网络：这台机器的证书库里有一份与被服务链条同名同密钥、却已过期的证书，"
+                   "应用（Python/OpenSSL）只认本机证书库，于是把库里那张放进链里判它过期；"
+                   "浏览器用自己那套根与链构建，所以同一台机器、同一条链，浏览器照常能开",
+        "diagnosis": [
+            "报错原文形如 certificate verify failed: certificate has expired (_ssl.c:1000)。"
+            "这句话本身就说明 DNS/TCP/握手都通了 —— 是应用拿到证书之后自己拒绝的，不是门户没应答；"
+            "门户侧同时刻实测证书链完整、有效期到 2026-12-29，且日志里没有来自该实例的任何请求。",
+            "行号 _ssl.c:1000 是 Python 版本指纹：3.11=1016（盒子）、3.12=1000（Windows 安装包）、"
+            "3.13=1032（macOS 安装包）—— 据此可确认失败的是 Windows 安装版。",
+            "机制：Windows 会把见过的中间证书缓存进本机 CA 存储（Let's Encrypt 的中间证书会换代重签，"
+            "缓存那份到期后正是这个形态）。OpenSSL 会把库里那份过期证书放进链里并判 expired，"
+            "而且不会回退到服务器送来的那张有效证书（2026-10-16 在构建 VM 上用同一份 openssl 逐条复现）。",
+            "浏览器（Chrome/Edge）用自己那套根与链构建，不吃本机 CA 缓存，所以表现为「浏览器能上、应用不能」。",
+            "应用这一层属产品缺陷：net_tls.py 只在本机库为空时才启用随包 CA，"
+            "也就是把「库非空」当成了「库可用」。",
+        ],
+        "solution": [
+            "下载证书体检工具并**整个解压**后双击运行（默认只读体检，不改任何东西）："
+            "https://www.vlsc.net/mrrc_modern/downloads/MRRC-CertDoctor.zip",
+            "它会用本机证书库对「门户下发的那条链」复现应用的判定，指出是哪一张证书、在哪个库里；"
+            "确认后运行 MRRC-CertDoctor.cmd -Fix：把能证明是它的过期证书备份后删掉，"
+            "必要时再问你是否导入当前的两张 Let's Encrypt 根证书。",
+            "修好后：从托盘退出 MRRC Modern，再启动它，然后 ☰ -> 接入云端 (Cloud Hub) -> "
+            "呼号 + 运维给的一次性口令 -> 申请入口/接入。",
+            "工具修不好时：桌面会留下 MRRC-CertDoctor-<时间>.zip，把它发给我们。"
+            "注意诊断包上传与软件更新检查走的是同一条 HTTPS 路径，会一起坏 —— 属同一个原因。",
+        ],
+        "evidence": [
+            "portal did not answer (https://portal.mrrc.vlsc.net): cannot reach the portal (URLError: "
+            "<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+            "certificate has expired (_ssl.c:1000)>)",
+            "同一台机器的 Edge 在 10:13 打开实例入口成功（nginx 记录 Windows NT 10.0 / Edg/155）："
+            "浏览器侧完全正常，只有应用那条 Python/OpenSSL 路径失败",
+            "门户日志（2026-10-16）里没有该实例的任何 /claim、/status、/enroll —— 请求从未到达门户",
+        ],
+        "keys": ["接入云端", "certificate has expired", "CERTIFICATE_VERIFY_FAILED", "Windows",
+                 "证书", "证书库", "certutil", "MRRC-CertDoctor", "软件更新", "诊断包上传"],
+        "needs_code_change": True,
+        "code_hint": "net_tls.py（不要把自己的信任判定外包给本机证书库）+ "
+                     "tools/windows/MRRC-CertDoctor.ps1（用户侧体检与修复）",
+    },
+    {
         "id": "known-20261004-tls",
         "at": "2026-10-04",
         "problem": "接入云端报 CERTIFICATE_VERIFY_FAILED（诊断包也上传不了、软件更新检查失败）",
@@ -125,7 +172,8 @@ KNOWN_ISSUES = (
             "这不是 portal 或网络的问题——同一台机器上 curl 访问 portal 是 200、证书链完整",
             "根因：安装包把构建机的 OpenSSL 一起带走了，它的默认 CA 路径是构建机的 /opt/local/...（MacPorts），"
             "用户机上没有这个目录，于是信任库为空；空信任库同样导致诊断包上传失败",
-            "Windows 与源码运行不受影响（Windows 用系统证书库）",
+            "Windows 与源码运行不受影响（Windows 用系统证书库）—— 前提是那套库健全；"
+            "反过来，库里有过期/陈旧证书时 Windows 也会失败，见上面 2026-10-16 那一条",
         ],
         "solution": [
             "升级到 v1.25.1 即不再发生（随包 CA + 显式信任库；构建闸门会故意把信任库打空再要求真握手）",

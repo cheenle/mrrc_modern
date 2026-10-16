@@ -570,6 +570,40 @@ Windows 用站上 **下载页 → 清理脚本**：`downloads/MRRC-Modern-Cleanu
 macOS 没有对应脚本，手动即可：先备份 `~/Library/Application Support/MRRC-Modern/mrrc_modern.env`
 与其中的证书，再删 `~/Library/Application Support/MRRC-Modern` 与 `/Applications/MRRC Modern.app`。
 
+### 6.3 接入云端报 certificate has expired（Windows）{#cloud-cert}
+
+**现象**：设置里点「申请入口 / 接入」，界面报这么一句，但**同一个浏览器**打开
+`https://portal.mrrc.vlsc.net/` 却一切正常：
+
+```
+portal did not answer (https://portal.mrrc.vlsc.net): cannot reach the portal
+(URLError: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
+certificate has expired (_ssl.c:1000)>)
+```
+
+**这不是门户、也不是网络的问题**：这句话本身就说明 DNS、TCP、TLS 握手都已打通 —— 是应用在
+**拿到证书之后自己拒绝**的。原因是这台 Windows 的**本机证书库**里留着一份与被服务链条同名同密钥、
+却已经过期的证书（Windows 会把见过的中间证书缓存进 CA 存储；Let's Encrypt 的中间证书会换代重签，
+缓存那份到期后正是这个形态）。应用走的那条 Python/OpenSSL 路径只认本机证书库，于是把库里那张
+放进链里判它过期 —— 而**浏览器用自己那套根与链构建，不吃本机 CA 缓存**，所以照常能开。
+「浏览器能上、应用不能」正是这个故障最好认的特征。
+
+**处理办法**：下载 [MRRC-CertDoctor.zip](downloads/MRRC-CertDoctor.zip)（约 4.6 MB，**整个解压**后
+双击 `MRRC-CertDoctor.cmd`；源码在仓库 `tools/windows/MRRC-CertDoctor.ps1`）。它只做三件事：
+
+1. **体检（默认只读，不改任何东西）**：时钟/校时、代理设置、DNS 与 TCP、应用日志里那条报错原文、
+   门户实际下发的证书链、本机四张证书库里 Let's Encrypt / ISRG 家族的清单；
+2. **判定**：把本机证书库导出成 PEM，用随包自带的 openssl 对那条链做 `verify` —— 给出的判词与
+   应用那条路径一致（这就是它自带 openssl 的原因：换别处的 openssl，判词就不可比了）；
+3. **修复（`MRRC-CertDoctor.cmd -Fix`）**：把能证明是它的过期证书**备份后**删掉；删完若变成
+   「找不到签发者」，再问你是否导入当前的两张 Let's Encrypt 根证书。每删一张都先备份，
+   报告里写着 `certutil` 恢复命令。
+
+结束后桌面会多出 `MRRC-CertDoctor-<时间>\report.txt` 与同名 `.zip`：修好了就退出应用、重启它，
+再点一次接入；**修不好就把那个 zip 发给我们** —— 报告里已经包含继续判断所需的全部事实。
+另外注意：**诊断包上传与软件更新检查走的是同一条 HTTPS 路径**，会一起坏，属同一个原因
+（所以那时也没法自己升级，得手工装新包）。
+
 ---
 
 ## 附：界面元素与后台命令对照（供高级用户/排障）

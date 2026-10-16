@@ -112,3 +112,92 @@ class ConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FindPairsTests(unittest.TestCase):
+    """``find_pairs`` runs on a cache, so it needs no radio and no corpus.
+
+    It decides *whose* a-priori the experiment adopts, so its convention is worth
+    pinning: FT8 text is ``<addressee> <sender> <info>``, and a8's ``getmsg``
+    builds ``mycall hiscall <info>`` -- so ``my_call`` must be the **addressee**
+    of the partner's transmissions.  Getting that backwards would aim the whole
+    hypothesis list at a message nobody sends.
+    """
+
+    @staticmethod
+    def _cache(*entries: tuple[int, str]) -> dict:
+        cache: dict = {}
+        for slot_id, text in entries:
+            cache.setdefault(slot_id, []).append(
+                ap_real.Sighting(slot_id, text, 1500.0, -10, 0, 1.0)
+            )
+        return cache
+
+    def test_only_mutual_pairs_qualify(self) -> None:
+        """One station calling CQ into a crowd is not a QSO."""
+
+        cache = self._cache(
+            (1, "ZL3BT JE2NRP PM95"),
+            (2, "ZL3BT JE2NRP R-12"),
+        )
+        mutual, _directed, _grids = ap_real.find_pairs(cache)
+        self.assertEqual(mutual, [], "no reply in the other direction was ever heard")
+
+    def test_a_mutual_pair_is_ranked_by_message_count(self) -> None:
+        cache = self._cache(
+            (1, "ZL3BT JE2NRP PM95"), (2, "JE2NRP ZL3BT R-12"),
+            (3, "ZL3BT JE2NRP R-12"), (4, "JE2NRP ZL3BT RR73"),
+            (5, "VK3ABC ZL3BT PM95"), (6, "ZL3BT VK3ABC R-09"),
+        )
+        mutual, _directed, _grids = ap_real.find_pairs(cache)
+        self.assertEqual([(c, a, b) for c, a, b in mutual][0][0], 4)
+        self.assertEqual(len(mutual), 2)
+
+    def test_cq_messages_are_not_pairs_but_do_supply_grids(self) -> None:
+        cache = self._cache((1, "CQ JE2NRP PM95"), (2, "ZL3BT JE2NRP R-12"),
+                            (3, "JE2NRP ZL3BT RR73"))
+        mutual, _directed, grids = ap_real.find_pairs(cache)
+        self.assertEqual(grids.get("JE2NRP"), "PM95")
+        self.assertEqual(len(mutual), 1)
+
+    def test_the_adopted_identity_matches_what_a8_would_synthesize(self) -> None:
+        """``directed[(a, b)]`` holds messages *b sent to a* ⇒ my_call=a, dx_call=b.
+
+        Verified against the parser rather than assumed: for the text the partner
+        really transmits, to_call is the addressee and from_call the sender.
+        """
+
+        from ft8.engine.msgparse import parse_message
+
+        text = "ZL3BT JE2NRP PM95"
+        parsed = parse_message(text)
+        self.assertEqual(parsed.to_call, "ZL3BT")
+        self.assertEqual(parsed.from_call, "JE2NRP")
+
+        cache = self._cache((1, text), (2, "JE2NRP ZL3BT R-12"))
+        _mutual, directed, _grids = ap_real.find_pairs(cache)
+        my_call, dx_call = ("ZL3BT", "JE2NRP")
+        self.assertIn((my_call, dx_call), directed)
+        # a8's getmsg builds "mycall hiscall <info>"; the real text has that shape.
+        self.assertTrue(text.startswith(f"{my_call} {dx_call}"))
+
+
+class SampleSlotsTests(unittest.TestCase):
+    """The budget cap must sample across a QSO, not from its start."""
+
+    def test_under_the_limit_everything_is_kept(self) -> None:
+        self.assertEqual(ap_real.sample_slots([1, 2, 3], 10), [1, 2, 3])
+
+    def test_over_the_limit_it_spreads_rather_than_taking_the_head(self) -> None:
+        picked = ap_real.sample_slots(list(range(100)), 10)
+        self.assertEqual(len(picked), 10)
+        self.assertNotEqual(picked, list(range(10)), "must not just take the first N")
+        self.assertGreater(max(picked), 80, "the tail of the QSO must be represented")
+
+    def test_it_is_deterministic(self) -> None:
+        items = list(range(50))
+        self.assertEqual(ap_real.sample_slots(items, 12), ap_real.sample_slots(items, 12))
+
+    def test_zero_budget_and_empty_input(self) -> None:
+        self.assertEqual(ap_real.sample_slots([], 5), [])
+        self.assertEqual(ap_real.sample_slots([1, 2, 3], 0), [])

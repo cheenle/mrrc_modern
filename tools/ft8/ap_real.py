@@ -109,44 +109,101 @@ def decode_slot(binding: CoreBinding, pcm: np.ndarray, slot_id: int, **ap: objec
 # ---------------------------------------------------------------------------
 
 
-def survey(binding: CoreBinding, slots: list[tuple[int, Path]]) -> dict[str, object]:
-    """List the real QSO pairs in this corpus that an AP test could adopt."""
+def sample_slots(items: list[int], limit: int) -> list[int]:
+    """Take up to ``limit`` slots, spread across the range rather than from the start.
 
-    pairs: dict[tuple[str, str], list[Sighting]] = defaultdict(list)
+    Deterministic, so two runs pick the same slots.  Taking the first N would bias
+    the sample toward the beginning of a QSO, where the a-priori is thinnest (the
+    grid may not have been sent yet) and the partner's frequency least established.
+    """
+
+    if limit <= 0 or not items:
+        return []
+    if len(items) <= limit:
+        return list(items)
+    step = len(items) / limit
+    return [items[int(i * step)] for i in range(limit)]
+
+
+def collect(
+    binding: CoreBinding, slots: list[tuple[int, Path]]
+) -> dict[int, list[Sighting]]:
+    """One AP-off decode pass over the whole corpus, cached for every later use.
+
+    This is the expensive part (a deep decode is ~2 s per slot) and it does not
+    depend on which pair is under test -- so it runs **once** and every pair reads
+    the same cache.  Without that, testing twelve pairs meant re-decoding the
+    corpus twelve times, which is what made the first multi-pair run take over an
+    hour before it was killed.
+    """
+
+    cache: dict[int, list[Sighting]] = {}
+    for index, (slot_id, path) in enumerate(slots):
+        cache[slot_id] = [
+            Sighting(slot_id, r.text, float(r.frequency), int(r.snr),
+                     int(r.ap_type), float(r.quality))
+            for r in decode_slot(binding, load_pcm(path), slot_id).results
+        ]
+        if (index + 1) % 25 == 0:
+            print(f"  pass 1: {index + 1}/{len(slots)} 槽", flush=True)
+    return cache
+
+
+def find_pairs(
+    cache: dict[int, list[Sighting]],
+) -> tuple[list[tuple[int, str, str]], dict[tuple[str, str], list[Sighting]], dict[str, str]]:
+    """Rank the mutual pairs; return ``(ranked, directed, grids)``.
+
+    A pair qualifies only when *both* directions were heard -- that is what makes
+    it a real QSO rather than one station calling CQ into a crowd.  Ranked by
+    message count, because the parity argument needs enough sightings to be
+    trustworthy: a pair seen twice can be "seen twice on odd slots" by accident.
+    """
+
+    directed: dict[tuple[str, str], list[Sighting]] = defaultdict(list)
     grids: dict[str, str] = {}
-    total = 0
-    for slot_id, path in slots:
-        for result in decode_slot(binding, load_pcm(path), slot_id).results:
-            total += 1
-            parsed = parse_message(result.text)
+    for slot_id in sorted(cache):
+        for row in cache[slot_id]:
+            parsed = parse_message(row.text)
             if parsed.from_call and parsed.grid:
                 grids.setdefault(parsed.from_call, parsed.grid)
             if parsed.is_cq or not parsed.to_call or not parsed.from_call:
                 continue
-            pairs[(parsed.to_call, parsed.from_call)].append(
-                Sighting(slot_id, result.text, float(result.frequency), int(result.snr),
-                         int(result.ap_type), float(result.quality))
-            )
+            directed[(parsed.to_call, parsed.from_call)].append(row)
 
     by_pair: Counter = Counter()
-    for (a, b), rows in pairs.items():
+    for (a, b), rows in directed.items():
         by_pair[frozenset((a, b))] += len(rows)
     mutual = []
     for key, count in by_pair.items():
         a, b = tuple(key)
-        if (a, b) in pairs and (b, a) in pairs:
+        if (a, b) in directed and (b, a) in directed:
             mutual.append((count, a, b))
     mutual.sort(reverse=True)
+    return mutual, directed, grids
+
+
+def survey(binding: CoreBinding, slots: list[tuple[int, Path]]) -> dict[str, object]:
+    """List the real QSO pairs in this corpus that an AP test could adopt."""
+
+    cache = collect(binding, slots)
+    mutual, directed, grids = find_pairs(cache)
+    total = sum(len(rows) for rows in cache.values())
 
     print(f"扫描 {len(slots)} 槽，报文 {total} 条；双向互答的对 {len(mutual)} 个\n")
     for count, a, b in mutual[:12]:
-        rows = sorted(pairs[(a, b)] + pairs[(b, a)], key=lambda s: s.slot_id)
+        rows = sorted(directed[(a, b)] + directed[(b, a)], key=lambda s: s.slot_id)
         parities = sorted({s.slot_id % 2 for s in rows if a in s.text and b in s.text})
         print(f"  {a} <-> {b}   {count} 条   grid({b})={grids.get(b, '?')} "
-              f"grid({a})={grids.get(a, '?')}   发射奇偶={parities}")
+              f"grid({a})={grids.get(a, '?')}   发射奇偶={parities}", flush=True)
         for row in rows[:4]:
             print(f"      slot {row.slot_id}  {row.text!r}  f={row.frequency:.1f} snr={row.snr}")
-    return {"slots": len(slots), "messages": total, "mutual_pairs": len(mutual)}
+    return {
+        "slots": len(slots),
+        "messages": total,
+        "mutual_pairs": len(mutual),
+        "pairs": [{"count": c, "a": a, "b": b} for c, a, b in mutual],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -157,58 +214,66 @@ def survey(binding: CoreBinding, slots: list[tuple[int, Path]]) -> dict[str, obj
 def run_pair(
     binding: CoreBinding,
     slots: list[tuple[int, Path]],
+    cache: dict[int, list[Sighting]],
     *,
     my_call: str,
     dx_call: str,
     dx_grid: str,
     progress: int = 2,
-    corroborate_slots: int = 6,
+    verbose: bool = True,
+    max_slots_per_pair: int = 32,
 ) -> dict[str, object]:
     """Measure AP-off vs AP-fed on the slots where ``dx_call`` was transmitting.
 
-    Two passes.  First pass decodes everything AP-off and collects where the
-    partner was heard; from that we infer the partner's transmit parity, which
-    tells us *every* slot they transmitted in -- including the ones nobody
-    decoded.  Second pass re-decodes only those slots, AP-off and AP-fed, with
-    the a-priori that ``my_call`` would legitimately have had.
+    ``cache`` is :func:`collect`'s AP-off pass over the corpus, shared by every
+    pair.  From it we infer the partner's transmit parity, which tells us *which*
+    slots they transmitted in -- including the ones nobody decoded.  Those slots
+    are then decoded once more, AP-fed, with the a-priori ``my_call`` would
+    legitimately have had.
     """
 
-    # Pass 1: where was the partner heard, and on which parity?
-    sightings: dict[int, list[Sighting]] = {}
-    partner: list[Sighting] = []
-    cache: dict[int, list[Sighting]] = {}
-    for slot_id, path in slots:
-        rows = [
-            Sighting(slot_id, r.text, float(r.frequency), int(r.snr),
-                     int(r.ap_type), float(r.quality))
-            for r in decode_slot(binding, load_pcm(path), slot_id).results
-        ]
-        cache[slot_id] = rows
-        sightings[slot_id] = rows
-        for row in rows:
-            parsed = parse_message(row.text)
-            if parsed.from_call.upper() == dx_call.upper():
-                partner.append(row)
+    partner: list[Sighting] = [
+        row for slot_id in sorted(cache) for row in cache[slot_id]
+        if parse_message(row.text).from_call.upper() == dx_call.upper()
+    ]
 
     if not partner:
-        print(f"{dx_call} 从未在这 {len(slots)} 槽里被解出 —— 换一对")
+        if verbose:
+            print(f"{dx_call} 从未在这 {len(slots)} 槽里被解出 —— 换一对")
         return {"error": "partner never decoded"}
 
     parities = Counter(s.slot_id % 2 for s in partner)
     parity, parity_count = parities.most_common(1)[0]
-    print(f"{dx_call} 被解出 {len(partner)} 次，发射奇偶 = {parity}"
-          f"（{parity_count}/{len(partner)} 一致）")
+    if verbose:
+        print(f"{dx_call} 被解出 {len(partner)} 次，发射奇偶 = {parity}"
+              f"（{parity_count}/{len(partner)} 一致）", flush=True)
 
-    # The slots the partner transmitted in, whether or not anyone decoded them.
-    expected = [s for s, _p in slots if s % 2 == parity]
-    print(f"⇒ 按奇偶推断 {dx_call} 在 {len(expected)} 个槽里发过"
-          f"（其中只有 {len({s.slot_id for s in partner})} 个被解出过）\n")
+    # Restrict to the QSO window -- first sighting to last.  Parity alone says
+    # "they transmit on odd slots", which is true of the whole recording and false
+    # of the QSO: the first version of this tool counted 50 expected slots when
+    # the exchange only spanned 15, so most "neither" cells were silence rather
+    # than misses and the recall question lost its denominator (§4.6).
+    window_lo = min(s.slot_id for s in partner)
+    window_hi = max(s.slot_id for s in partner)
+    expected = [s for s, _p in slots
+                if s % 2 == parity and window_lo <= s <= window_hi]
+    heard = {s.slot_id for s in partner}
+    if verbose:
+        print(f"⇒ QSO 窗口 {window_lo}..{window_hi}，按奇偶推断 {dx_call} 在 "
+              f"{len(expected)} 个槽里发过（其中 {len(heard & set(expected))} 个被解出过，"
+              f"{len(expected) - len(heard & set(expected))} 个没有）", flush=True)
 
     path_by_slot = dict(slots)
     gained: list[dict[str, object]] = []
     lost: list[dict[str, object]] = []
     both_hits = off_only = neither = 0
     ap_types: Counter = Counter()
+    # Whether AP fired *at all*, over every fed decode rather than only the gained
+    # ones.  Without it a null result is uninterpretable: "0 gained" could mean AP
+    # found nothing, or that it never ran (§4.4 made exactly that mistake).
+    fed_ap_decodes = 0
+    fed_ap_types: Counter = Counter()
+    slots_measured = 0
 
     # Every text ever seen anywhere in this corpus, for corroboration.
     all_texts: Counter = Counter()
@@ -216,7 +281,28 @@ def run_pair(
         for row in rows:
             all_texts[row.text.strip()] += 1
 
-    for slot_id in expected:
+    # Pass 2 decodes **only the AP-fed arm**.  The AP-off arm *is* the cache:
+    # pass 1 ran BASE with no a-priori fields, i.e. today's production
+    # configuration, and §4.6 verified on these very slots that a starved AP is
+    # indistinguishable from ap=False (33/33, 29/29, 23/23 decodes, zero unique to
+    # either arm).  Re-decoding it would double the cost to measure one thing twice.
+    #
+    # The budget keeps both kinds of slot in view: the ones the classical path
+    # missed (where AP can gain) and the ones it caught (where AP must not lose).
+    opportunities = [s for s in expected if s not in heard]
+    already_decoded = [s for s in expected if s in heard]
+    half = max(1, max_slots_per_pair // 2)
+    take_opp = min(half, len(opportunities))
+    chosen = sorted(
+        sample_slots(opportunities, half)
+        + sample_slots(already_decoded, max_slots_per_pair - take_opp)
+    )
+    if verbose:
+        print(f"  应发槽 {len(expected)} = 机会槽 {len(opportunities)} + 已解出 "
+              f"{len(already_decoded)}；按预算取 {len(chosen)} 槽配对"
+              f"（机会 {take_opp} / 已解出 {len(chosen) - take_opp}）", flush=True)
+
+    for slot_id in chosen:
         path = path_by_slot[slot_id]
         pcm = load_pcm(path)
         # The a-priori my_call would have had: the partner's call, their grid
@@ -231,7 +317,6 @@ def run_pair(
         )
         rx_frequency = int(round(last.frequency))
 
-        off = decode_slot(binding, pcm, slot_id)
         fed = decode_slot(
             binding, pcm, slot_id,
             ap=True, my_call=my_call, dx_call=dx_call, dx_grid=grid,
@@ -246,7 +331,17 @@ def run_pair(
                 if parse_message(r.text).from_call.upper() == dx_call.upper()
             }
 
-        off_set, fed_set = partner_texts(off), partner_texts(fed)
+        off_set = {
+            row.text.strip() for row in cache.get(slot_id, ())
+            if parse_message(row.text).from_call.upper() == dx_call.upper()
+        }
+        fed_set = partner_texts(fed)
+        slots_measured += 1
+        for row in fed.results:
+            if row.ap_type:
+                fed_ap_decodes += 1
+                fed_ap_types[int(row.ap_type)] += 1
+
         both_hits += int(bool(off_set) and bool(fed_set))
         off_only += int(bool(off_set) and not fed_set)
         neither += int(not off_set and not fed_set)
@@ -268,28 +363,120 @@ def run_pair(
                 "corpus_wide_count": all_texts.get(text, 0),
             })
         for text in sorted(off_set - fed_set):
-            row = next(r for r in off.results if r.text.strip() == text)
+            row = next(r for r in cache.get(slot_id, ()) if r.text.strip() == text)
             lost.append({"slot_id": slot_id, "text": text, "snr": int(row.snr)})
 
     corroborated = sum(1 for g in gained if g["seen_in_other_slots"] > 0)
-    print(f"配对槽数 {len([s for s in expected if any(p.slot_id < s for p in partner)])}"
-          f"   两臂都解出 {both_hits}   只有 AP-off {len(lost)}   只有 AP-fed {len(gained)}"
-          f"   都没解出 {neither}")
-    print(f"AP-fed 独有的报文里，**在其他槽也出现过**（=真实重发，可信）: "
-          f"{corroborated}/{len(gained)}")
-    print(f"增益的 ap_type 分布: {dict(sorted(ap_types.items())) or '—'}")
-    for item in gained:
-        flag = "可信" if item["seen_in_other_slots"] else "**无旁证**"
-        print(f"  slot {item['slot_id']}  ap{item['ap_type']}  q={item['quality']:<6} "
-              f"snr={item['snr']:>3}  f={item['frequency']:<7} {flag}  {item['text']!r}")
-    for item in lost:
-        print(f"  [丢失] slot {item['slot_id']}  snr={item['snr']}  {item['text']!r}")
+    if verbose:
+        print(f"配对槽数 {slots_measured}   两臂都解出 {both_hits}   只有 AP-off {off_only}"
+              f"   只有 AP-fed {len(gained)}   都没解出 {neither}")
+        print(f"AP 是否开火：fed 臂里 ap_type != 0 的报文 {fed_ap_decodes} 条"
+              f"   分布 {dict(sorted(fed_ap_types.items())) or '—'}")
+        print(f"AP-fed 独有的报文里，**在其他槽也出现过**（=真实重发，可信）: "
+              f"{corroborated}/{len(gained)}")
+        print(f"增益的 ap_type 分布: {dict(sorted(ap_types.items())) or '—'}")
+        for item in gained:
+            flag = "可信" if item["seen_in_other_slots"] else "**无旁证**"
+            print(f"  slot {item['slot_id']}  ap{item['ap_type']}  q={item['quality']:<6} "
+                  f"snr={item['snr']:>3}  f={item['frequency']:<7} {flag}  {item['text']!r}")
+        for item in lost:
+            print(f"  [丢失] slot {item['slot_id']}  snr={item['snr']}  {item['text']!r}")
 
     return {
         "my_call": my_call, "dx_call": dx_call, "dx_grid": dx_grid,
         "parity": parity, "expected_slots": len(expected),
+        "window": [window_lo, window_hi],
+        "opportunities": len(opportunities), "already_decoded": len(already_decoded),
+        "slots_measured": slots_measured, "max_slots_per_pair": max_slots_per_pair,
         "both": both_hits, "off_only": lost, "fed_only": gained, "neither": neither,
         "corroborated": corroborated, "ap_types": dict(ap_types),
+        "fed_ap_decodes": fed_ap_decodes, "fed_ap_types": dict(fed_ap_types),
+    }
+
+
+def run_auto(
+    binding: CoreBinding,
+    slots: list[tuple[int, Path]],
+    *,
+    pairs: int,
+    progress: int = 2,
+    min_messages: int = 6,
+    max_slots_per_pair: int = 32,
+) -> dict[str, object]:
+    """Run the N most active pairs and report one aggregate number.
+
+    One pair proves the mechanism can fire on real audio; it does not say how
+    often.  A single AP-off pass feeds every pair, so the cost is one corpus
+    decode plus the paired re-decodes, not N corpus decodes.
+    """
+
+    cache = collect(binding, slots)
+    mutual, directed, grids = find_pairs(cache)
+    usable = [(count, a, b) for count, a, b in mutual if count >= min_messages]
+    print(f"\n双向互答的对 {len(mutual)} 个，其中 ≥{min_messages} 条报文的 {len(usable)} 个；"
+          f"取前 {pairs} 个\n", flush=True)
+
+    results: list[dict[str, object]] = []
+    for count, a, b in usable[:pairs]:
+        # Adopt the receiving side: a8's getmsg builds "mycall hiscall <info>", so
+        # my_call must be the *addressee* of the partner's transmissions.  For
+        # directed[(a, b)] the messages are "a b <info>", i.e. b sent to a.
+        my_call, dx_call = a, b
+        grid = grids.get(dx_call, "")
+        print(f"── {my_call} ← {dx_call}  ({count} 条, grid={grid or '?'})", flush=True)
+        outcome = run_pair(
+            binding, slots, cache,
+            my_call=my_call, dx_call=dx_call, dx_grid=grid,
+            progress=progress, verbose=True, max_slots_per_pair=max_slots_per_pair,
+        )
+        if "error" not in outcome:
+            outcome["pair"] = f"{my_call}/{dx_call}"
+            outcome["sightings"] = count
+            results.append(outcome)
+        print(flush=True)
+
+    gained = [g for r in results for g in r.get("fed_only", [])]
+    lost = [g for r in results for g in r.get("off_only", [])]
+    corroborated = [g for g in gained if g.get("seen_in_other_slots")]
+    unexplained = [g for g in gained if not g.get("seen_in_other_slots")]
+    ap_types: Counter = Counter()
+    for g in gained:
+        ap_types[int(g.get("ap_type", 0))] += 1
+    windows = sum(int(r.get("slots_measured", 0)) for r in results)
+    fired = sum(int(r.get("fed_ap_decodes", 0)) for r in results)
+    opportunities = sum(int(r.get("opportunities", 0)) for r in results)
+
+    print("=" * 72)
+    print(f"汇总：{len(results)} 对，配对槽 {windows} 个，窗口内机会槽共 {opportunities} 个")
+    print(f"  AP-fed 独有（增益）  {len(gained)}   其中旁证成立 {len(corroborated)}，"
+          f"无旁证 {len(unexplained)}")
+    print(f"  AP-off 独有（丢失）  {len(lost)}")
+    print(f"  fed 臂 ap_type != 0 共 {fired} 条   增益的 ap_type 分布 "
+          f"{dict(sorted(ap_types.items())) or '—'}")
+    for g in gained:
+        flag = "可信" if g.get("seen_in_other_slots") else "**无旁证**"
+        print(f"    {g.get('slot_id')}  ap{g.get('ap_type')}  q={g.get('quality')}  "
+              f"snr={g.get('snr')}  {flag}  {g.get('text')!r}")
+    for g in lost:
+        print(f"    [丢失] {g.get('slot_id')}  snr={g.get('snr')}  {g.get('text')!r}")
+
+    return {
+        "pairs_run": len(results),
+        "slots_measured": windows,
+        "opportunities": opportunities,
+        "gained": gained,
+        "lost": lost,
+        "corroborated": len(corroborated),
+        "unexplained": len(unexplained),
+        "fed_ap_decodes": fired,
+        "ap_types": dict(ap_types),
+        "per_pair": [
+            {k: r.get(k) for k in ("pair", "sightings", "window", "expected_slots",
+                                   "opportunities", "already_decoded",
+                                   "slots_measured", "both", "neither",
+                                   "fed_ap_decodes", "corroborated")}
+            for r in results
+        ],
     }
 
 
@@ -302,6 +489,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dx-call", default="")
     parser.add_argument("--dx-grid", default="")
     parser.add_argument("--progress", type=int, default=2)
+    parser.add_argument(
+        "--auto", type=int, default=0,
+        help="run the N most active mutual pairs and aggregate (one corpus decode)",
+    )
+    parser.add_argument(
+        "--min-messages", type=int, default=6,
+        help="a pair with fewer sightings cannot support the parity inference",
+    )
+    parser.add_argument(
+        "--max-slots", type=int, default=32,
+        help="paired slots per pair (budget cap; spread-sampled, not head-sampled)",
+    )
     parser.add_argument("--json", type=Path, default=None)
     parser.add_argument("--library", default=None)
     args = parser.parse_args(argv)
@@ -314,13 +513,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.survey:
         report: object = survey(binding, slots)
+    elif args.auto:
+        report = run_auto(
+            binding, slots, pairs=args.auto, progress=args.progress,
+            min_messages=args.min_messages, max_slots_per_pair=args.max_slots,
+        )
     elif args.my_call and args.dx_call:
+        cache = collect(binding, slots)
         report = run_pair(
-            binding, slots, my_call=args.my_call, dx_call=args.dx_call,
+            binding, slots, cache, my_call=args.my_call, dx_call=args.dx_call,
             dx_grid=args.dx_grid, progress=args.progress,
+            max_slots_per_pair=args.max_slots,
         )
     else:
-        print("需要 --survey，或 --my-call 与 --dx-call 两者")
+        print("需要 --survey、--auto N，或 --my-call 与 --dx-call 两者")
         return 2
 
     if args.json:

@@ -38,6 +38,38 @@
   <input id="search" type="search" placeholder="编号 / 关键词（如 录音、-9996、CI-V）" autocomplete="off">
   <p class="muted" id="count"></p>
   <h2>已知问题（按现象查）</h2>
+    <article class="card" id="known-20261016-win-cert">
+      <header>
+        <span class="id">known-20261016-win-cert</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">网络 · 2026-10-16</span>
+      </header>
+      <h3>Windows 上接入云端报 certificate has expired（浏览器却打得开门户）</h3>
+      <p class="verdict">不是门户、也不是网络：这台机器的证书库里有一份与被服务链条同名同密钥、却已过期的证书，应用（Python/OpenSSL）只认本机证书库，于是把库里那张放进链里判它过期；浏览器用自己那套根与链构建，所以同一台机器、同一条链，浏览器照常能开</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>报错原文形如 certificate verify failed: certificate has expired (_ssl.c:1000)。这句话本身就说明 DNS/TCP/握手都通了 —— 是应用拿到证书之后自己拒绝的，不是门户没应答；门户侧同时刻实测证书链完整、有效期到 2026-12-29，且日志里没有来自该实例的任何请求。</li>
+        <li>行号 _ssl.c:1000 是 Python 版本指纹：3.11=1016（盒子）、3.12=1000（Windows 安装包）、3.13=1032（macOS 安装包）—— 据此可确认失败的是 Windows 安装版。</li>
+        <li>机制：Windows 会把见过的中间证书缓存进本机 CA 存储（Let&#x27;s Encrypt 的中间证书会换代重签，缓存那份到期后正是这个形态）。OpenSSL 会把库里那份过期证书放进链里并判 expired，而且不会回退到服务器送来的那张有效证书（2026-10-16 在构建 VM 上用同一份 openssl 逐条复现）。</li>
+        <li>浏览器（Chrome/Edge）用自己那套根与链构建，不吃本机 CA 缓存，所以表现为「浏览器能上、应用不能」。</li>
+        <li>应用这一层属产品缺陷：net_tls.py 只在本机库为空时才启用随包 CA，也就是把「库非空」当成了「库可用」。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>下载证书体检工具并**整个解压**后双击运行（默认只读体检，不改任何东西）：https://www.vlsc.net/mrrc_modern/downloads/MRRC-CertDoctor.zip</li>
+        <li>它会用本机证书库对「门户下发的那条链」复现应用的判定，指出是哪一张证书、在哪个库里；确认后运行 MRRC-CertDoctor.cmd -Fix：把能证明是它的过期证书备份后删掉，必要时再问你是否导入当前的两张 Let&#x27;s Encrypt 根证书。</li>
+        <li>修好后：从托盘退出 MRRC Modern，再启动它，然后 ☰ -&gt; 接入云端 (Cloud Hub) -&gt; 呼号 + 运维给的一次性口令 -&gt; 申请入口/接入。</li>
+        <li>工具修不好时：桌面会留下 MRRC-CertDoctor-&lt;时间&gt;.zip，把它发给我们。注意诊断包上传与软件更新检查走的是同一条 HTTPS 路径，会一起坏 —— 属同一个原因。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">portal did not answer (https://portal.mrrc.vlsc.net): cannot reach the portal (URLError: &lt;urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired (_ssl.c:1000)&gt;)</li>
+        <li class="ev">同一台机器的 Edge 在 10:13 打开实例入口成功（nginx 记录 Windows NT 10.0 / Edg/155）：浏览器侧完全正常，只有应用那条 Python/OpenSSL 路径失败</li>
+        <li class="ev">门户日志（2026-10-16）里没有该实例的任何 /claim、/status、/enroll —— 请求从未到达门户</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>net_tls.py（不要把自己的信任判定外包给本机证书库）+ tools/windows/MRRC-CertDoctor.ps1（用户侧体检与修复）</code></p>
+    </article>
     <article class="card" id="known-20261004-tls">
       <header>
         <span class="id">known-20261004-tls</span>
@@ -50,7 +82,7 @@
       <ul>
         <li>报错形如 certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)，这不是 portal 或网络的问题——同一台机器上 curl 访问 portal 是 200、证书链完整</li>
         <li>根因：安装包把构建机的 OpenSSL 一起带走了，它的默认 CA 路径是构建机的 /opt/local/...（MacPorts），用户机上没有这个目录，于是信任库为空；空信任库同样导致诊断包上传失败</li>
-        <li>Windows 与源码运行不受影响（Windows 用系统证书库）</li>
+        <li>Windows 与源码运行不受影响（Windows 用系统证书库）—— 前提是那套库健全；反过来，库里有过期/陈旧证书时 Windows 也会失败，见上面 2026-10-16 那一条</li>
       </ul>
       <h4>你要做的</h4>
       <ul>
@@ -102,7 +134,7 @@
         <span class="badge ok">已答复</span>
         <span class="muted">电台 · 2026-10-10 21:12</span>
       </header>
-      <h3>发射功率小/没有？你看看</h3>
+      <h3>发射功率小/没有？ 你看看</h3>
       <p class="verdict">同一条根因的 SSB 版本：电台在发射，但实测 `ALC=0`、`Po≈0`，而服务端同时在把音频写进电台 USB 声卡 —— SSB 没有调制就没有射频功率；先查电台 `MOD Input`（`DATA OFF MOD` / `DATA MOD` = `USB`）</p>
       <h4>诊断</h4>
       <ul>
@@ -365,7 +397,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-10 21:12（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-16 15:14（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

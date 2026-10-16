@@ -16,9 +16,12 @@ import asyncio
 import json
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import server
+
+STATIC = Path(__file__).resolve().parents[1] / "static"
 
 _REAL_SLEEP = asyncio.sleep
 
@@ -405,6 +408,53 @@ class PowerCommandWiringTests(unittest.TestCase):
             server.cat = None
         self.assertEqual(cat.power_calls, [])
         self.assertNotEqual(server._power_rescue_state, "running")
+
+
+class PowerMenuFrontendTests(unittest.TestCase):
+    """菜单两项、顶栏一格、模块接线与缓存版本 —— 缺一个就是用户点不到或点错。
+
+    The server is the only execution point (see the listen-role test in
+    `tests/test_listen_only.py`); what these pin is that the *surface* exists,
+    is labelled with its consequence, and is actually shipped to the browser
+    (a module nobody loads, or a stale `?v=`, looks exactly like "no button").
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.index = (STATIC / "index.html").read_text(encoding="utf-8")
+        cls.sw = (STATIC / "sw.js").read_text(encoding="utf-8")
+        cls.module = (STATIC / "modules" / "power_switch.js").read_text(encoding="utf-8")
+
+    def test_menu_offers_both_intents(self):
+        self.assertIn('data-action="power-restart"', self.index)
+        self.assertIn('data-action="power-off"', self.index)
+
+    def test_header_shows_the_power_state(self):
+        self.assertIn('id="status-power"', self.index)
+
+    def test_module_is_loaded_and_precached(self):
+        self.assertIn("modules/power_switch.js?v=1", self.index)
+        self.assertIn("'/modules/power_switch.js?v=1'", self.sw)
+
+    def test_module_sends_the_three_power_values(self):
+        self.assertIn("send('power', 'restart')", self.module)
+        self.assertIn("send('power', false)", self.module)
+        self.assertIn("send('power', 'cancelRescue')", self.module)
+
+    def test_module_renders_rescue_states(self):
+        for needle in ("renderPowerRescue", "renderPowerState",
+                       "'timeout'", "'cancelled'", "'woke'"):
+            self.assertIn(needle, self.module)
+
+    def test_off_confirmation_warns_that_remote_is_lost(self):
+        """关机是不可撤销的远程自锁：确认框必须写明只能到现场开机。
+
+        The withdrawn 2026-07 switch failed on this exact point — a remote
+        off that cannot be undone leaves the operator locked out.
+        """
+        confirm_off = self.module.split("function askOff()")[1].split("function ")[0]
+        self.assertIn("现场", confirm_off)
+        self.assertIn("不会自动唤醒", confirm_off)
 
 
 if __name__ == "__main__":

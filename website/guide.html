@@ -338,7 +338,7 @@
 </tbody>
 </table></div>
 <blockquote class="callout-warn">
-<p>⚠️ 电台硬件电源开关<strong>不在</strong>本界面内——⏻ 只控制浏览器与服务器的 Web 连接，不控制电台电源（V2.13 已撤回电台电源软开关功能）。</p>
+<p>⚠️ 顶栏 <strong>⏻</strong> 只控制浏览器与服务器的 Web 连接，<strong>不是</strong>电台电源开关。电台电源在 ☰ 菜单里， 分成「重开电台…」与「关机…」两项（见 §2.11 末尾）——为什么要分成两项、以及为什么开机不保证成功，那里写清楚了。 页头状态栏的 <code>PWR 开/关</code>（救援期间显示 <code>PWR 唤醒中 N</code>，点一下可取消）反映的是电台真实的电源状态。</p>
 </blockquote>
 <hr />
 <h2 id="电台型号差异">0.5 电台型号差异</h2>
@@ -843,7 +843,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>5</td>
 <td>⏻ 连接开关</td>
-<td>启动 / 停止 Web 客户端连接（4 路 WebSocket：控制/收音频/发音频/频谱）。<strong>不是电台电源开关</strong></td>
+<td>启动 / 停止 Web 客户端连接（4 路 WebSocket：控制/收音频/发音频/频谱）。<strong>不是电台电源开关</strong>（电台电源在 ☰ 菜单，见 §2.11）</td>
 <td>单击：断开时点击开始连接，连接中点击断开并停止自动重连</td>
 </tr>
 <tr>
@@ -1302,6 +1302,18 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>—</td>
+<td>重开电台（关闭后自动尝试唤醒）…</td>
+<td>先关闭电台，随后<strong>持续尝试唤醒</strong>：每 30 秒一轮，最多 15 分钟；期间顶栏显示 <code>PWR 唤醒中 N</code>，点它可取消</td>
+<td>单击 → 确认</td>
+</tr>
+<tr>
+<td>—</td>
+<td>关机（保持关闭）…</td>
+<td>只关闭电台，<strong>不会</strong>自己上电 —— 要再开机只能到现场按面板</td>
+<td>单击 → 确认</td>
+</tr>
+<tr>
+<td>—</td>
 <td>录音 Recordings</td>
 <td>打开录音面板（列表 / 播放 / 下载 / 删除）</td>
 <td>单击</td>
@@ -1374,6 +1386,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 </tbody>
 </table></div>
+<p><strong>电台电源那两项</strong>（v1.27.x 起）刻意分成两种意图，因为「开机」在 FT-710 上<strong>不保证成功</strong>： 实测（2026-07-27/28）<code>PS1;</code> 唤醒在健康电台上也常常被忽略，而且 <code>PS0;</code> 若落在 <code>PS1;</code> 之后十几秒的启动窗口内 会把电台的 CAT 单片机卡死（要拔电才能救）——当年的做法是把整个电源键撤掉。现在的做法是把守卫做进服务端， 并让两种意图互不混淆：</p>
+<ul>
+<li><strong>重开电台</strong>：关机之后每 30 秒再试一次，直到电台回话（用 <code>FA;</code> / CI-V 回读确认，不是「我发过命令」）、 或 15 分钟用尽、或你点顶栏 PWR 取消。每轮都会重新武装那条 15 秒保护窗口，所以<strong>救援期间点「关机」会被拒</strong> （消息里带剩余秒数）——想停下来请用「取消」，它不发任何电台命令。</li>
+<li><strong>关机</strong>：先取消可能在跑的救援，然后只发关机命令，<strong>绝不</strong>自己上电。确认框里写明了「远程将不可用」。</li>
+<li>两种动作在<strong>发射中（含 FT8 正在发射）都会被拒绝</strong>；<code>PS0</code> 连发两次（第一次偶发丢失）；关机前会跳过一次电源轮询。</li>
+<li>如果 15 分钟没醒，界面会明说「需要到现场按面板开机」——这是诚实的结论，不是失败重试的提示。</li>
+</ul>
 <blockquote class="callout-info">
 <p>菜单底部那行里的型号来自当前后端；<code>v1.0</code> 是<strong>前端资源串</strong>，既不是发布版本也不是电台固件版本 —— 真实发布版本看安装目录的 <code>version.txt</code>（§0.10）。</p>
 </blockquote>

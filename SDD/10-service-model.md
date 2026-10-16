@@ -104,7 +104,7 @@ Key commands (see `_execute_set_command` in `server.py` and the active backend f
 | `tuner` | 0,1,2 | `AC000;` / `AC001;` / `AC003;` | ATU OFF/ON/TUNE start; mapping differs from Hamlib (`AC010`/`AC011`) — see gap-analysis §1.1 note |
 | `vfo` | "A","B" | `VS0;` / `VS1;` | Active VFO switch |
 | `split` | true/false | `ST<0/1>;` | Split operation |
-| `power` | true/false | `PS1;` / `PS0;` | Maintenance-script path only — NO web UI (V2.13: PS1 wake unreliable, mid-boot PS0 wedges the CAT MCU). Guards: 15 s boot window after `PS1` rejects `PS0`; `PS1` retried ≤3× and verified by `FA;` read-back; `PS0` sent twice; refused while TX. `PS;` polled in Tier 3 for `power_on` state |
+| `power` | `true` / `false` / `"restart"` / `"cancelRescue"` | `PS1;` / `PS0;` | `false` = 关机并**保持关闭**（先取消任何救援，绝不发 `PS1`）；`"restart"` = 关机后由 `_power_rescue()` 持续尝试唤醒（每 30 s 一轮、上限 15 min、可取消，每轮复用 `_power_on_radio()`）；`"cancelRescue"` = 只停救援、不碰电台；`true` = 单次开机尝试（维护脚本/老客户端，语义未变）。Guards（V2.13 的实测结论，逐条保留）：`PS1` 后 15 s 启动窗口内拒绝 `PS0`（带剩余秒数）；`PS1` ≤3 次并由 `FA;` / CI-V 回读校验；`PS0` 双发；**发射中拒绝（`radio.is_transmitting` 或 FT8 的 `_ft8_transmitting()`）**；端口未连接时救援不写、等 watchdog 重连。`PS;` 仍在 Tier 3 轮询供 `power_on` |
 | `band` | "20m","40m",... | `BS<NN>;` | Band stacking register |
 | `scope_span` | 0–9 | `SS05<NN>;` | Scope span index |
 | `scope_speed` | 0–5 | `SS00<NN>;` | Scope sweep speed |

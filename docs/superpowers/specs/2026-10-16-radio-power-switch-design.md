@@ -139,7 +139,9 @@ POWER_RESTART_SETTLE_MAX_S = 15.0# 或等到串口消失为止（先到者为准
   `renderPowerRescue(msg)`（更新 `status-power` 文案与可点状态）、`status-power` 的点击处理。
 - `static/ft710_main.js`：`onmessage` 增加 `powerRescue` 分支（沿用该文件既有的
   tab 缩进 / 双引号风格，**不重排、不"格式化"**）。
-- listen 角色：`role === 'listen'` 时不渲染这两项（执行点仍是服务端门，见 §5 第 7 条）。
+- listen 角色：**不做前端渲染分支** —— 主界面（index.html）没有 role 概念，用收听口令登录会被登录接口
+  重定向到 `/listen`，而执行点本来就是服务端 WS 门（§5 第 7 条）。`tests/test_listen_only.py` 把
+  `power` 的四个取值都钉进「禁止项」，所以即使有人拿着 listen token 直接开主界面，电台也不会被碰。
 
 ## 7. 失败处理与文案
 

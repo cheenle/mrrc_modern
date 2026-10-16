@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" data-diagram-version="V2.60" viewBox="0 0 470 840" width="470" height="840" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
-  <!-- diagram-version: V2.85 -->
+  <!-- diagram-version: V2.86 -->
   <defs>
     <style>
       .phone { fill:#111418; stroke:#3a3f47; stroke-width:3; }
@@ -42,7 +42,7 @@
 
   <!-- ===== Status bar ===== -->
   <rect x="42" y="92" width="386" height="22" fill="#17191c"/>
-  <text x="50" y="106" class="txt-sm" font-size="9.5">20m USB RX ●Serial ↓0↑0 RTT-- J--</text>
+  <text x="50" y="106" class="txt-sm" font-size="9.5">20m USB RX ●Serial PWR开 ↓0↑0 RTT-- J--</text>
 
   <!-- ===== Spectrum ===== -->
   <rect class="panel" x="46" y="120" width="378" height="26" rx="3"/>

@@ -448,6 +448,9 @@ function handleMessage(msg) {
 			if (msg.filterTables) {
 				window.filterTables = msg.filterTables;
 			}
+			if (typeof window.renderPowerState === "function") {
+				window.renderPowerState(radioState.power_on);
+			}
 			// Per-radio capabilities/model drive the adaptive UI in
 			// ft710_ui.js (applyRadioCapabilities) and the audio boost below.
 			radioCapabilities = msg.capabilities || null;
@@ -519,6 +522,11 @@ function handleMessage(msg) {
 				const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;
 				if (changedFields) {
 					renderUpdates(changedFields);
+					// 顶栏 PWR 一格由 power_switch.js 负责（电源不在 renderUpdates
+					// 的字段表里：它没有可编辑控件，只有状态与服务端的救援进度）。
+					if (typeof window.renderPowerState === "function") {
+						window.renderPowerState(radioState.power_on);
+					}
 					// NOTE: server af_gain no longer drives the playback gain
 					// node — the volume slider is browser-local (cookie).
 				}
@@ -559,6 +567,13 @@ function handleMessage(msg) {
 			radioState.recording = msg.recording || { recording: false };
 			if (typeof renderRecordingState === "function") renderRecordingState();
 			if (typeof refreshRecordingsPanel === "function") refreshRecordingsPanel();
+			break;
+
+		case "powerRescue":
+			// 服务端唤醒循环的进度（running / woke / timeout / cancelled）。
+			if (typeof window.renderPowerRescue === "function") {
+				window.renderPowerRescue(msg);
+			}
 			break;
 
 		case "pong":

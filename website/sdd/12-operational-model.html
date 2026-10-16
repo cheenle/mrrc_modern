@@ -143,7 +143,7 @@ Icom IC-7300 / IC-7300MK2
     server keeps broadcasting the S-meter synthesiser instead
   → USB Audio interface (sample rate per profile, family default 44.1kHz,
     TODO(hw-verify))</code></pre>
-<p><strong>First connection is receive-only for an unverified model</strong> (IC-705/IC-7610/ IC-7760 and all five Yaesu models): the startup log reports <code class="scope-code">Radio model &lt;key&gt; is NOT hardware-verified — transmit is DISABLED</code>, the connection dialog labels the model 实验性/仅接收， and <code class="scope-code">set_ptt(True)</code>/ <code class="scope-code">set_tune(True)</code> are refused until the operator sets <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> and restarts. PTT <strong>releases are never gated</strong>, and the model identity check (<code class="scope-code">ID;</code>, read-only) only logs.</p>
+<p><strong>First connection is receive-only for an unverified model</strong> (IC-705/IC-7610/ IC-7760 and all five Yaesu models): the startup log reports <code class="scope-code">Radio model &lt;key&gt; is NOT hardware-verified — transmit is DISABLED</code>, the connection dialog labels the model 实验性/仅接收, and <code class="scope-code">set_ptt(True)</code>/ <code class="scope-code">set_tune(True)</code> are refused until the operator sets <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=1</code> and restarts. PTT <strong>releases are never gated</strong>, and the model identity check (<code class="scope-code">ID;</code>, read-only) only logs.</p>
 <h2 id="configuration">12.2 Configuration</h2>
 <table class="scope-table">
 <colgroup>
@@ -514,7 +514,7 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 <tr>
 <td>Verify CQ key</td>
-<td>Press CQ: the button shows STOP, <code class="scope-code">cqState</code> broadcasts <code class="scope-code">calling</code> with <code class="scope-code">frames_sent</code> rising at 50/s, and the radio keys for the length of the recording (~6 s) then drops back to RX. Log: <code class="scope-code">CQ: keyed the radio</code> …<code class="scope-code">CQ complete after 307/307 frames</code> …<code class="scope-code">CQ session: written=… write_err=0 queue_drops=0</code>. Pressing CQ again mid-call shows <code class="scope-code">aborted</code>/<code class="scope-code">aborted_by_user</code> and unkeys immediately.</td>
+<td>Press CQ: the button shows STOP, <code class="scope-code">cqState</code> broadcasts <code class="scope-code">calling</code> with <code class="scope-code">frames_sent</code> rising at 50/s, and the radio keys for the length of the recording (~6 s) then drops back to RX. Log: <code class="scope-code">CQ: keyed the radio</code> … <code class="scope-code">CQ complete after 307/307 frames</code> … <code class="scope-code">CQ session: written=… write_err=0 queue_drops=0</code>. Pressing CQ again mid-call shows <code class="scope-code">aborted</code>/<code class="scope-code">aborted_by_user</code> and unkeys immediately.</td>
 </tr>
 <tr>
 <td>Replace the CQ recording</td>
@@ -544,22 +544,22 @@ Icom IC-7300 / IC-7300MK2
 </table>
 <h2 id="支持链路诊断包与接收端">12.5.1 支持链路（诊断包与接收端）</h2>
 <ol type="1">
-<li><strong>部署接收端</strong>（维护者，幂等）：<code class="scope-code">./deploy_support_receiver.sh</code>。它会创建 systemd unit <code class="scope-code">support-receiver-modern</code>（端口 8098）、存储目录 <code class="scope-code">/var/www/support-modern</code>（<code class="scope-code">www-data</code>，<strong>不在 docroot</strong>）、口令文件 <code class="scope-code">/etc/mrrc-modern-support.env</code>（0600 root）、nginx 路径 <code class="scope-code">/mrrc_modern/support/</code>，并打印两条自检：本地与公网的 <code class="scope-code">/api/list</code>无口令时必须 <strong>401</strong>。</li>
-<li><strong>读一个诊断包</strong>：先看 <code class="scope-code">diagnostics/summary.txt</code>（启动次数 vs <code class="scope-code">Traceback</code>、数据新鲜度、音频/串口/频谱事实、TX 门禁、录音写盘告警），再按需看 <code class="scope-code">logs/</code>、<code class="scope-code">state/config-redacted.env</code>、<code class="scope-code">diagnostics/env.json</code>。<code class="scope-code">manifest.json</code>记有每个文件的 sha256、脱敏计数与告警。</li>
-<li><strong>收包</strong>：<code class="scope-code">https://www.vlsc.net/mrrc_modern/support/api/list</code>（Basic 口令见维护者的口令文件），编号形如 <code class="scope-code">20260917-072530-ab12</code>。</li>
-<li><strong>排查未复现的问题</strong>：包内 <code class="scope-code">warnings</code>里”日志可能过旧”意味着这不是现场；<code class="scope-code">summary.txt</code>会显式写出。</li>
-<li><strong>答复怎么产生</strong>：<code class="scope-code">dev_tools/support_autopilot.py</code>（crontab 每 10 分钟，<code class="scope-code">--once --publish</code>）轮询接收端 → 解包 → <code class="scope-code">pi</code>只读分析（提示词带探查预算：≤5 次检索 / ≤6 个文件）→ 按 JSON 契约渲染答复卡 → 仅当 <code class="scope-code">status</code>为 <code class="scope-code">answered</code>/<code class="scope-code">needs_fix</code>时更新 <code class="scope-code">website/answers/index.html</code>、commit 并 rsync 单文件上线。人工预检用 <code class="scope-code">--inspect &lt;编号&gt;</code>（不调模型）；<code class="scope-code">--status</code>看已处理清单；<code class="scope-code">--force &lt;编号&gt;</code>重跑。草稿永远留在 <code class="scope-code">dist/support_answers/</code>，即使发布失败也不丢结论。</li>
+<li><strong>部署接收端</strong>（维护者，幂等）：<code class="scope-code">./deploy_support_receiver.sh</code>。它会创建 systemd unit <code class="scope-code">support-receiver-modern</code>（端口 8098）、存储目录 <code class="scope-code">/var/www/support-modern</code>（<code class="scope-code">www-data</code>，<strong>不在 docroot</strong>）、 口令文件 <code class="scope-code">/etc/mrrc-modern-support.env</code>（0600 root）、nginx 路径 <code class="scope-code">/mrrc_modern/support/</code>， 并打印两条自检：本地与公网的 <code class="scope-code">/api/list</code> 无口令时必须 <strong>401</strong>。</li>
+<li><strong>读一个诊断包</strong>：先看 <code class="scope-code">diagnostics/summary.txt</code>（启动次数 vs <code class="scope-code">Traceback</code>、数据新鲜度、 音频/串口/频谱事实、TX 门禁、录音写盘告警），再按需看 <code class="scope-code">logs/</code>、<code class="scope-code">state/config-redacted.env</code>、 <code class="scope-code">diagnostics/env.json</code>。<code class="scope-code">manifest.json</code> 记有每个文件的 sha256、脱敏计数与告警。</li>
+<li><strong>收包</strong>：<code class="scope-code">https://www.vlsc.net/mrrc_modern/support/api/list</code>（Basic 口令见维护者的口令文件）， 编号形如 <code class="scope-code">20260917-072530-ab12</code>。</li>
+<li><strong>排查未复现的问题</strong>：包内 <code class="scope-code">warnings</code> 里”日志可能过旧”意味着这不是现场；<code class="scope-code">summary.txt</code> 会显式写出。</li>
+<li><strong>答复怎么产生</strong>：<code class="scope-code">dev_tools/support_autopilot.py</code>（crontab 每 10 分钟，<code class="scope-code">--once --publish</code>）轮询接收端 → 解包 → <code class="scope-code">pi</code> 只读分析（提示词带探查预算：≤5 次检索 / ≤6 个文件）→ 按 JSON 契约渲染答复卡 → 仅当 <code class="scope-code">status</code> 为 <code class="scope-code">answered</code>/<code class="scope-code">needs_fix</code> 时更新 <code class="scope-code">website/answers/index.html</code>、commit 并 rsync 单文件上线。 人工预检用 <code class="scope-code">--inspect &lt;编号&gt;</code>（不调模型）；<code class="scope-code">--status</code> 看已处理清单；<code class="scope-code">--force &lt;编号&gt;</code> 重跑。 草稿永远留在 <code class="scope-code">dist/support_answers/</code>，即使发布失败也不丢结论。</li>
 </ol>
 <h2 id="更新通道slice-1只读检查">12.5.2 更新通道（slice 1：只读检查）</h2>
 <ol type="1">
-<li><strong>发布侧</strong>：<code class="scope-code">python3 dev_tools/make_latest_json.py --installer &lt;版本&gt; &lt;URL&gt; &lt;本地安装包&gt; [--previous …]</code> —— size/SHA-256 从文件本身算出，版本必须等于 CHANGELOG 顶版本，<code class="scope-code">previous</code>必须更旧；缺任一条件<strong>拒绝生成</strong>。产物 <code class="scope-code">website/downloads/latest.json</code>随站点部署。</li>
-<li><strong>客户端侧</strong>：<code class="scope-code">GET /api/update/check</code>（需登录）返回 <code class="scope-code">{available, current, latest, url, sha256, size, mandatory, notes}</code>；清单拉取失败只返回 <code class="scope-code">{available: false, reason}</code>，不会让服务端返回 500。</li>
-<li><strong>成功判据（slice 2）</strong>：<code class="scope-code">&lt;data dir&gt;/updates/state.json</code>的 <code class="scope-code">lastResult.status == ok</code>，由<strong>新版本启动时</strong>写入；<code class="scope-code">installing</code>只表示已拉起安装器。</li>
+<li><strong>发布侧</strong>：<code class="scope-code">python3 dev_tools/make_latest_json.py --installer &lt;版本&gt; &lt;URL&gt; &lt;本地安装包&gt; [--previous …]</code> —— size/SHA-256 从文件本身算出，版本必须等于 CHANGELOG 顶版本，<code class="scope-code">previous</code> 必须更旧；缺任一条件<strong>拒绝生成</strong>。 产物 <code class="scope-code">website/downloads/latest.json</code> 随站点部署。</li>
+<li><strong>客户端侧</strong>：<code class="scope-code">GET /api/update/check</code>（需登录）返回 <code class="scope-code">{available, current, latest, url, sha256, size, mandatory, notes}</code>； 清单拉取失败只返回 <code class="scope-code">{available: false, reason}</code>，不会让服务端返回 500。</li>
+<li><strong>成功判据（slice 2）</strong>：<code class="scope-code">&lt;data dir&gt;/updates/state.json</code> 的 <code class="scope-code">lastResult.status == ok</code>，由<strong>新版本启动时</strong>写入； <code class="scope-code">installing</code> 只表示已拉起安装器。</li>
 <li><strong>门禁</strong>：发射或录音期间升级请求返回 <strong>423</strong>（slice 2 在交接前复查）。</li>
 </ol>
 <h2 id="远程会话遥测ad-023">12.5.3 远程会话遥测（AD-023）</h2>
-<p><code class="scope-code">GET /api/session_metrics</code>返回实测并发与上行（仅计数与字节，无标识）：<code class="scope-code">listeners</code>/<code class="scope-code">operators</code>的 会话数与 socket 数、生命期峰值与滑动窗口峰值、<code class="scope-code">sockets_by_kind</code>，以及 <code class="scope-code">spectrum</code>/<code class="scope-code">audio_rx</code>两路上行 的累计字节。每 <code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S</code>（默认 300 s）另输出一条 <code class="scope-code">Session metrics:</code> INFO 行，含该区间的平均 kbps —— 它就是 Cloud Hub 判断”要不要做 RX 扇出”的输入（<code class="scope-code">mrrc_hub/SDD</code> AD-H12 / I-H1）。</p>
-<p><code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S=0</code>关闭周期行，端点照常可用；<code class="scope-code">MRRC_SESSION_METRICS_WINDOW_S</code> （默认 3600 s）决定窗口峰值的宽度。</p>
+<p><code class="scope-code">GET /api/session_metrics</code> 返回实测并发与上行（仅计数与字节，无标识）：<code class="scope-code">listeners</code>/<code class="scope-code">operators</code> 的 会话数与 socket 数、生命期峰值与滑动窗口峰值、<code class="scope-code">sockets_by_kind</code>，以及 <code class="scope-code">spectrum</code>/<code class="scope-code">audio_rx</code> 两路上行 的累计字节。每 <code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S</code>（默认 300 s）另输出一条 <code class="scope-code">Session metrics:</code> INFO 行， 含该区间的平均 kbps —— 它就是 Cloud Hub 判断”要不要做 RX 扇出”的输入（<code class="scope-code">mrrc_hub/SDD</code> AD-H12 / I-H1）。</p>
+<p><code class="scope-code">MRRC_SESSION_METRICS_INTERVAL_S=0</code> 关闭周期行，端点照常可用；<code class="scope-code">MRRC_SESSION_METRICS_WINDOW_S</code> （默认 3600 s）决定窗口峰值的宽度。</p>
 <h2 id="logs-and-artifacts">12.6 Logs and Artifacts</h2>
 <table class="scope-table">
 <colgroup>
@@ -678,7 +678,7 @@ Icom IC-7300 / IC-7300MK2
 <tbody>
 <tr>
 <td>路径前缀</td>
-<td>由 <code class="scope-code">FT710Settings.basePath</code> / <code class="scope-code">.url</code>驱动，服务端与前端（含 TX 编码 Worker）均已前缀安全；由 <code class="scope-code">tests/test_path_prefix.py</code>守</td>
+<td>由 <code class="scope-code">FT710Settings.basePath</code> / <code class="scope-code">.url</code> 驱动，服务端与前端（含 TX 编码 Worker）均已前缀安全；由 <code class="scope-code">tests/test_path_prefix.py</code> 守</td>
 </tr>
 <tr>
 <td>令牌传输</td>
@@ -686,11 +686,11 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 <tr>
 <td>PTT 活性闸门</td>
-<td><code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>（默认 <code class="scope-code">0</code> = 关闭）。Hub 模式下建议 3–5 秒：客户端失联即释放 PTT，与 <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code>构成两条独立防线</td>
+<td><code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>（默认 <code class="scope-code">0</code> = 关闭）。Hub 模式下建议 3–5 秒：客户端失联即释放 PTT，与 <code class="scope-code">MRRC_PTT_MAX_TX_SECONDS</code> 构成两条独立防线</td>
 </tr>
 <tr>
 <td>会话遥测</td>
-<td><code class="scope-code">GET /api/session_metrics</code>与周期日志；用于判断 Listener 并发与上行占用（支撑 AD-H12 的扇出决策）</td>
+<td><code class="scope-code">GET /api/session_metrics</code> 与周期日志；用于判断 Listener 并发与上行占用（支撑 AD-H12 的扇出决策）</td>
 </tr>
 <tr>
 <td>登录限流退化</td>
@@ -700,7 +700,7 @@ Icom IC-7300 / IC-7300MK2
 </table>
 <p>Hub 端对应事实见 <code class="scope-code">../../mrrc_hub/SDD/12-operational-model.md</code> §12.8。</p>
 <h2 id="w103d-镜像amlogic-盒子">12.10 W103D 镜像（Amlogic 盒子）</h2>
-<p>把一个 <strong>ZTE 云电脑 W103D</strong>（Amlogic S905L3A / G12A，4×Cortex-A53@1.8，2GB/32GB，100M 网口，MT7663 WiFi+BT）变成通用电台服务端。设计与构建手册：<code class="scope-code">docs/superpowers/specs/2026-10-06-w103d-radio-box-design.md</code>、<code class="scope-code">docs/w103d_pack.md</code>；操作单：<code class="scope-code">packaging/box/README.md</code>。</p>
+<p>把一个 <strong>ZTE 云电脑 W103D</strong>（Amlogic S905L3A / G12A，4×Cortex-A53@1.8，2GB/32GB，100M 网口，MT7663 WiFi+BT） 变成通用电台服务端。设计与构建手册： <code class="scope-code">docs/superpowers/specs/2026-10-06-w103d-radio-box-design.md</code>、<code class="scope-code">docs/w103d_pack.md</code>； 操作单：<code class="scope-code">packaging/box/README.md</code>。</p>
 <h3 id="两段式部署">12.10.1 两段式部署</h3>
 <p><strong>构建期</strong>（macOS + Docker <code class="scope-code">--privileged</code>，Apple Silicon 原生 arm64，<strong>不需要 qemu</strong>）loop 挂载 ophub 的 Armbian 镜像并 chroot 铺 overlay；<strong>运行期</strong>首启只做必须碰硬件的探测。</p>
 <table class="scope-table">
@@ -717,7 +717,7 @@ Icom IC-7300 / IC-7300MK2
 <tbody>
 <tr>
 <td>构建期</td>
-<td><code class="scope-code">mrrc</code>用户 + <code class="scope-code">dialout,audio</code>组；<code class="scope-code">/opt/mrrc_modern</code>（代码 + <code class="scope-code">install.sh</code>建的 venv）；预置 aarch64 FTDI 库；frpc；11 份 profile；两个 systemd 单元</td>
+<td><code class="scope-code">mrrc</code> 用户 + <code class="scope-code">dialout,audio</code> 组；<code class="scope-code">/opt/mrrc_modern</code>（代码 + <code class="scope-code">install.sh</code> 建的 venv）；预置 aarch64 FTDI 库；frpc；11 份 profile；两个 systemd 单元</td>
 </tr>
 <tr>
 <td>首启</td>
@@ -757,16 +757,16 @@ Icom IC-7300 / IC-7300MK2
 </tr>
 </tbody>
 </table>
-<p><strong>为什么两个 env 路径必须钉成同一个</strong>：<code class="scope-code">cloud_hub.connect()</code>把证书路径与 <code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code>写进 <code class="scope-code">server.py:_config_file_path()</code>，该函数优先读 <code class="scope-code">MRRC_CONFIG_FILE</code>、否则回退到 <code class="scope-code">MEM_FILE.parent/mrrc_modern.env</code>；而 systemd 读的是 <code class="scope-code">EnvironmentFile</code>。两者分裂时症状是<strong>静默的</strong>：设置页显示「已连接」，而上游 TLS 校验失败、PTT 活性闸门从未生效。这也解释了 Cloud Hub 为何至今只在 Windows/macOS 实例上跑过——那两边的启动器会自己设 <code class="scope-code">MRRC_CONFIG_FILE</code>。<code class="scope-code">packaging/box/verify.sh</code>第 7 项把这个相等关系做成断言，防止它再次漂移。</p>
+<p><strong>为什么两个 env 路径必须钉成同一个</strong>：<code class="scope-code">cloud_hub.connect()</code> 把证书路径与 <code class="scope-code">MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code> 写进 <code class="scope-code">server.py:_config_file_path()</code>， 该函数优先读 <code class="scope-code">MRRC_CONFIG_FILE</code>、否则回退到 <code class="scope-code">MEM_FILE.parent/mrrc_modern.env</code>；而 systemd 读的是 <code class="scope-code">EnvironmentFile</code>。 两者分裂时症状是<strong>静默的</strong>：设置页显示「已连接」，而上游 TLS 校验失败、PTT 活性闸门从未生效。 这也解释了 Cloud Hub 为何至今只在 Windows/macOS 实例上跑过——那两边的启动器会自己设 <code class="scope-code">MRRC_CONFIG_FILE</code>。 <code class="scope-code">packaging/box/verify.sh</code> 第 7 项把这个相等关系做成断言，防止它再次漂移。</p>
 <h3 id="电台切换">12.10.3 电台切换</h3>
-<p><code class="scope-code">mrrc-radio list | show | use &lt;model&gt; [--port DEV]</code>，型号集合由 <code class="scope-code">backends.known_models()</code>校验，每型号一份 <code class="scope-code">packaging/box/profiles/&lt;model&gt;.env</code>——<strong>只写型号</strong>，因为波特率由后端自己的表决定、串口与声卡由首启解析。</p>
+<p><code class="scope-code">mrrc-radio list | show | use &lt;model&gt; [--port DEV]</code>，型号集合由 <code class="scope-code">backends.known_models()</code> 校验， 每型号一份 <code class="scope-code">packaging/box/profiles/&lt;model&gt;.env</code>——<strong>只写型号</strong>，因为波特率由后端自己的表决定、串口与声卡由首启解析。</p>
 <p>两条容易做错且已被测试钉住的规则：</p>
 <ol type="1">
-<li><strong>换型号且未显式给 <code class="scope-code">--port</code>时清空 <code class="scope-code">MRRC_SERIAL_PORT</code></strong>——FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留着旧值等于一条没有报错的死链路。</li>
-<li><strong>TX 门禁由 profile 重新断言而不是继承</strong>——8 个未验证机型（<code class="scope-code">ic705</code> <code class="scope-code">ic7610</code> <code class="scope-code">ic7760</code> <code class="scope-code">ftdx10</code> <code class="scope-code">ftdx101d</code> <code class="scope-code">ftdx101mp</code> <code class="scope-code">ftx1</code> <code class="scope-code">ft891</code>）的 profile 显式写 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=0</code>（AD-019 / NFR-067），且<strong>任何 profile 出现 <code class="scope-code">=1</code>都会被测试拦下</strong>：镜像的首次连接若能在未经测量的表上按下发射键，正是 AD-019 要防的那件事。</li>
+<li><strong>换型号且未显式给 <code class="scope-code">--port</code> 时清空 <code class="scope-code">MRRC_SERIAL_PORT</code></strong>——FT-710 是 ttyUSB0/1、IC-7300 是 ttyACM0，留着旧值等于一条没有报错的死链路。</li>
+<li><strong>TX 门禁由 profile 重新断言而不是继承</strong>——8 个未验证机型（<code class="scope-code">ic705</code> <code class="scope-code">ic7610</code> <code class="scope-code">ic7760</code> <code class="scope-code">ftdx10</code> <code class="scope-code">ftdx101d</code> <code class="scope-code">ftdx101mp</code> <code class="scope-code">ftx1</code> <code class="scope-code">ft891</code>）的 profile 显式写 <code class="scope-code">MRRC_ALLOW_UNVERIFIED_TX=0</code>（AD-019 / NFR-067）， 且<strong>任何 profile 出现 <code class="scope-code">=1</code> 都会被测试拦下</strong>：镜像的首次连接若能在未经测量的表上按下发射键，正是 AD-019 要防的那件事。</li>
 </ol>
-<p><code class="scope-code">mrrc-radio</code> <strong>自身不做串口 I/O</strong>（<code class="scope-code">cat-direct-serial-io</code>）：<code class="scope-code">--port</code>取操作者给的答案，否则调用 <code class="scope-code">linux/first_run.py</code>既有的 <code class="scope-code">detect_serial_ports()</code> / <code class="scope-code">probe_radio_model()</code>（先停服务，否则端口被占着、探测问不出东西）。</p>
-<p><code class="scope-code">mrrc-update</code>是就地升级路径（拉代码 → pip → 重启），<strong>无回滚</strong>：<code class="scope-code">upgrade_core.py</code>的自动升级切片尚未开工，在这里另造一套状态机只会得到一套没被测过的状态机。</p>
+<p><code class="scope-code">mrrc-radio</code> <strong>自身不做串口 I/O</strong>（<code class="scope-code">cat-direct-serial-io</code>）：<code class="scope-code">--port</code> 取操作者给的答案，否则调用 <code class="scope-code">linux/first_run.py</code> 既有的 <code class="scope-code">detect_serial_ports()</code> / <code class="scope-code">probe_radio_model()</code>（先停服务，否则端口被占着、探测问不出东西）。</p>
+<p><code class="scope-code">mrrc-update</code> 是就地升级路径（拉代码 → pip → 重启），<strong>无回滚</strong>：<code class="scope-code">upgrade_core.py</code> 的自动升级切片尚未开工， 在这里另造一套状态机只会得到一套没被测过的状态机。</p>
 <h3 id="与树莓派镜像的关系">12.10.4 与树莓派镜像的关系</h3>
 <table class="scope-table">
 <colgroup>
@@ -800,25 +800,25 @@ Icom IC-7300 / IC-7300MK2
 <tr>
 <td>绑定地址默认</td>
 <td><code class="scope-code">::</code></td>
-<td><code class="scope-code">0.0.0.0</code>（<code class="scope-code">AGENTS.md</code>的侦听地址约定）</td>
+<td><code class="scope-code">0.0.0.0</code>（<code class="scope-code">AGENTS.md</code> 的侦听地址约定）</td>
 </tr>
 <tr>
 <td>复制排除清单</td>
 <td><strong>权威副本</strong></td>
-<td>必须与它逐字一致，由 <code class="scope-code">tests/test_box_profiles.py::ExclusionParityTests</code>强制</td>
+<td>必须与它逐字一致，由 <code class="scope-code">tests/test_box_profiles.py::ExclusionParityTests</code> 强制</td>
 </tr>
 </tbody>
 </table>
-<p>排除清单现在存在于<strong>三处</strong>（Pi 构建器、box overlay、<code class="scope-code">mrrc_update.sh</code>），测试逐字比对三份。两份构建器对「什么该进 <code class="scope-code">/opt/mrrc_modern</code>」产生分歧的后果是<strong>运行期 ImportError</strong>，不是构建错误——所以这条应由测试守而不是由记性守。</p>
-<p><strong>不自建 Armbian 镜像是刻意的取舍</strong>：W103D 的板级补丁（SDIO 路由到 SD_EMMC_B、MT7663S 传输层、原厂 N9 固件）活在 ophub/unifreq 的内核树里，自建等于长期跟进那套补丁栈。缓解手段是钉基底镜像的 SHA-256 并只从官方 release 取。</p>
-<p><strong>镜像本体尚未发布</strong>：<code class="scope-code">MRRC-Modern-&lt;ver&gt;-w103d.img.gz</code>的版本规则、<code class="scope-code">release-artifacts.json</code>条目与网站下载卡 留给独立的发展步骤（设计文档 §11）。</p>
+<p>排除清单现在存在于<strong>三处</strong>（Pi 构建器、box overlay、<code class="scope-code">mrrc_update.sh</code>），测试逐字比对三份。 两份构建器对「什么该进 <code class="scope-code">/opt/mrrc_modern</code>」产生分歧的后果是<strong>运行期 ImportError</strong>，不是构建错误——所以这条应由测试守而不是由记性守。</p>
+<p><strong>不自建 Armbian 镜像是刻意的取舍</strong>：W103D 的板级补丁（SDIO 路由到 SD_EMMC_B、MT7663S 传输层、原厂 N9 固件） 活在 ophub/unifreq 的内核树里，自建等于长期跟进那套补丁栈。缓解手段是钉基底镜像的 SHA-256 并只从官方 release 取。</p>
+<p><strong>镜像本体尚未发布</strong>：<code class="scope-code">MRRC-Modern-&lt;ver&gt;-w103d.img.gz</code> 的版本规则、<code class="scope-code">release-artifacts.json</code> 条目与网站下载卡 留给独立的发展步骤（设计文档 §11）。</p>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.85 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.86 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

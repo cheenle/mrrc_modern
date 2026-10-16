@@ -128,6 +128,49 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261007-083527-6536">
+      <header>
+        <span class="id">20261007-083527-6536</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">网络 · 2026-10-16 21:56</span>
+      </header>
+      <h3>关闭蒲公英VPN还是无法进入电台所在网络，打开bg7zhs.mrrc.vlsc.net网页显示502bad gateway电台所在网络使用了花生壳P5路由器。</h3>
+      <p class="verdict">本机服务与电台一切正常（启动完整、[已隐去] 已连、频谱/发射正常），502 出现在云端入口→本机隧道的链路；这与本仓记录过的『入口 502 而租户侧一切看起来正常』同签名，1.25.3 应已包含相关修复 → 按回归排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>本机侧健康：stdout.log 显示 `SSL enabled`、`Connected to FT-710 (ID=0650) on [已隐去]`、scope-init 完成、`Poll scheduler started (7 tasks)`，radio.serial_connected=true —— 应用不是崩溃/未启动状态，因此 502 不是本机服务没跑起来。</li>
+        <li>电台在正常工作：server.log 尾部 `Session metrics: listeners 0 | operators 2 | uplink spectrum 293.0 kbps` 与 `TX session: frames=210 fed=210 written=205 write_err=0 peak=45%` —— 收/发链路在跑，租户侧看起来一切正常，正是历史条目描述的 502 画面。</li>
+        <li>云端隧道是本实例配置的一部分：stdout.log 有 `cloud_hub: cloud hub: clearing a stale frpc (pid 7424) holding this instance&#x27;s tunnel` —— 说明本实例已接入 MRRC 云（bg7zhs.mrrc.vlsc.net 走 hub→frpc 回连），且 v1.25.2 的残留 frpc 清理在运行。</li>
+        <li>用户报 `打开 bg7zhs.mrrc.vlsc.net 显示 502 Bad Gateway`：与 CHANGELOG v1.24.2『隧道从界面接入时永远不启动 —— 入口一直 502，而租户侧看起来一切都对』、v1.24.7『入口 502 却没人提示重启』、v1.24.8『一台已接入的机器重启之后，入口会一直 502，直到有人点一下设置』、v1.25.0『hub 拿登记证书校验上游，入口会一直 502 而没有任何东西会去重启』完全同签名。</li>
+        <li>版本判据：env.json version=1.25.3（frozen, Windows），而上述 502/隧道生命周期修复在 v1.24.7 / v1.24.8 / v1.25.0，均已包含在当前版本中 ⇒ 不是『版本早于修复』，按回归排查；v1.25.4（V2.73）只补了 macOS 的 frpc 清理那一半，对 Windows 无影响。</li>
+        <li>环境提示（不能仅据此判环境）：problem.txt 里用户提到 蒲公英 VPN 与 花生壳 P5 —— frpc 是出站连接、本不需要同网段/VPN，这两层叠加可能干扰，但历史签名的优先级高于环境推断，故仍需按隧道链路排查。</li>
+        <li>次要异常（与本 502 无直接因果，供参考）：server.log 通篇为 `get_meter(RM8): unparseable response`（RM8 回读全是二进制垃圾），可能只是 RM8 度量解析噪声，也可能是串口被第二个进程占用，需在真机确认只有一个实例持 [已隐去]。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>打开应用「设置 → 接入云端」，查看入口地址与状态：若显示「还需重启应用以启用新证书」(cert_reload_required)，点重启按钮让新证书生效——老证书会过不了 hub 的上游校验，表现为入口一直 502。</li>
+        <li>完全退出 MRRC Modern（含托盘/任务栏，确认没有第二个 server/frpc 进程）后重新启动：应用启动时会把已接入的隧道自动拉起；随后到 `logs/stdout.log` 确认出现 frpc 的 `login to server success` 与 `start proxy success`（只有这两行出现，入口才会通）。</li>
+        <li>确认网络路径：蒲公英 VPN 已关（已做）；frpc 只需本机能出公网，不需要与电台同网段。若 花生壳 P5 开启了『内网穿透/VPN 叠加/DNS 劫持』类功能，先按普通 NAT 放行或关掉其叠加功能，避免与 frpc 的出站长连接冲突，然后重启应用。</li>
+        <li>确认没有重复实例：启动日志里 `Sending scope-init CAT commands...` 只应出现一次、`MRRC-Modern`/`frpc` 进程各只有一个；出现成对日志或两个 frpc 就是重复实例在抢 [已隐去] 和隧道代理名，先全部关掉再单开一个。</li>
+        <li>若以上仍 502：在「接入云端」重新刷新，或撤销后重新申请以重建端口路由（v1.24.3 起同呼号复用原端口，避免路由指向空端口）；并把最新版（≥1.25.4）装上后重试，同时保留 logs/stdout.log（含 frpc 输出）与 hub 侧 frps 日志供回归定位。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-06 20:54:19,437 [INFO] mrrc: SSL enabled: C:\\Users\\Administrator\\AppData\\Local\\MRRC-Modern\\certs\\fullchain.pem</li>
+        <li class="ev">2026-10-06 20:54:20,730 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0650) on [已隐去]</li>
+        <li class="ev">2026-10-06 20:54:32,302 [INFO] mrrc.poll: Poll scheduler started (7 tasks)</li>
+        <li class="ev">2026-10-06 20:54:19,778 [INFO] cloud_hub: cloud hub: clearing a stale frpc (pid 7424) holding this instance&#x27;s tunnel</li>
+        <li class="ev">2026-10-07 08:29:31,882 [INFO] mrrc: Session metrics: listeners 0 (sockets 0, peak 0/3600s) | operators 2 | uplink spectrum 293.0 kbps, audio_rx 99.5 kbps</li>
+        <li class="ev">2026-10-07 08:29:53,712 [INFO] mrrc: TX session: frames=210 fed=210 decode_fail=0 written=205 write_err=0 queue_drops=0 peak=45% non_owner_drops=0</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.25.3&quot;, &quot;frozen&quot;: true, &quot;platform&quot;: &quot;Windows-10-10.0.19041-SP0&quot;</li>
+        <li class="ev">problem.txt: 关闭蒲公英VPN还是无法进入电台所在网络，打开bg7zhs.mrrc.vlsc.net网页显示502 bad gateway</li>
+        <li class="ev">CHANGELOG.md v1.24.2: 隧道从界面接入时永远不启动 …… 入口一直 502，而租户侧看起来一切都对</li>
+        <li class="ev">CHANGELOG.md v1.24.8: 一台已接入的机器重启之后，入口会一直 502，直到有人点一下设置</li>
+        <li class="ev">CHANGELOG.md v1.25.0: hub 拿登记证书校验上游，入口会一直 502 而没有任何东西会去重启</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>cloud_hub.py:TunnelProcess（隧道启动/注册）+ server.py:_cloud_start_tunnel（启动时自拉隧道、证书判据）</code></p>
+    </article>
     <article class="card" id="20261011-134820-f54e">
       <header>
         <span class="id">20261011-134820-f54e</span>
@@ -553,7 +596,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-16 21:53（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-16 21:56（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.90</a></li>
+          <li><a href="#updates">V2.91</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.90 · 2026-10-16</span>
+          <span>SDD V2.91 · 2026-10-17</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.90</td>
+              <td>V2.91</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,28 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-bolt"></i></div>
+            <h3>
+              Reloading Stops Re-Downloading the Big Files
+              <small>(V2.91)</small>
+            </h3>
+            <p>
+              The instance sent <code>ETag</code>/<code>Last-Modified</code> but never answered a
+              conditional request — telling it "I already have this file" still returned the
+              <em>whole</em> 534 KB, and the edge compressed HTML only, so every reload pushed
+              816 KB of JS/CSS back through the tunnel. The instance now classifies
+              <code>Cache-Control</code> (documents revalidate every time; everything else holds
+              for an hour — deliberately <em>not</em> <code>immutable</code>, because the
+              <code>?v=</code> numbers are bumped by hand), answers
+              <code>If-None-Match</code>/<code>If-Modified-Since</code> with <strong>304</strong>,
+              and returns 404 for a file name that is not there instead of 40 KB of HTML
+              (<code>/favicon.png</code> was being swallowed as if it were the icon). The hub edge
+              adds gzip plus a one-hour cache that only ever stores 200 — and a hard refresh still
+              reaches the instance. Measured on a live instance: <code>opus_wasm.js</code>
+              534,520 → <strong>170,402 bytes</strong>, and nothing at all after that.
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
             <h3>

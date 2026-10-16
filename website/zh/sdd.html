@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.90 更新</a></li>
+          <li><a href="#updates">V2.91 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.90 · 2026-10-16</span>
+          <span>SDD V2.91 · 2026-10-17</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -109,7 +109,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.90</td>
+              <td>V2.91</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -142,6 +142,25 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-bolt"></i></div>
+            <h3>
+              重新加载不再把大文件重下一遍
+              <small>（V2.91）</small>
+            </h3>
+            <p>
+              实例会发 <code>ETag</code>/<code>Last-Modified</code>，却从不回答条件请求——
+              告诉它「这个文件我有了」，它仍把<em>完整</em>的 534 KB 重发一遍；而边缘只压 HTML，
+              于是每次重新加载都把 816 KB 的 JS/CSS 重新推过隧道。现在实例按类型发
+              <code>Cache-Control</code>（文档类每次都重新校验，其余静态件缓存一小时——<strong>刻意不用</strong>
+              <code>immutable</code>，因为 <code>?v=</code> 是手工 bump 的），对
+              <code>If-None-Match</code>/<code>If-Modified-Since</code> 回 <strong>304</strong>；
+              文件名不存在时回 404，而不是 40 KB 的 HTML（<code>/favicon.png</code> 以前就是这样被浏览器
+              当成图标收下的）。hub 边缘再补 gzip 与一小时缓存，且<strong>只缓存 200</strong>——
+              未登录的重定向一旦被缓存，已登录的人会在一小时内反复被打回登录页；硬刷新仍然直达实例。
+              线上实测：<code>opus_wasm.js</code> 534,520 → <strong>170,402 字节</strong>，第二次起一个字节都不传。
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
             <h3>

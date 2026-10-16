@@ -33,6 +33,26 @@ DSP worker 自己的 stdout/stderr 现在落到有界的 `logs/ft8-worker.log`�
 一句 `status None`）；诊断包新增收集这个文件（含上一代 `.1`）。`worker_exit` 的日志同时带上
 **第几代 + 重启次数**，崩溃循环不再看起来像一次偶发。
 
+### 静态资源：不再每次重新加载（实例 `Cache-Control` + 条件请求；hub 边缘 gzip + 缓存）
+
+实例此前只发 `ETag`/`Last-Modified`、**不实现条件 GET**：带 `If-None-Match` 仍返回 200 与**完整
+534 KB** 的 `modules/opus_wasm.js`，所以"重新加载"等于"把 534 KB 重新推过一遍隧道"；而 hub 边缘
+只压 `text/html`（nginx 默认），首屏 13 个引用合计 816 KB 原样过隧道。现在：
+
+- 文档类（HTML/JSON/`sw.js`）`Cache-Control: no-cache` —— 部署后新版必须立刻可见；
+- 其余静态件 `public, max-age=3600` —— `?v=` 是手工 bump 的，1 小时是漏 bump 的最长窗口；
+  **刻意不写 `immutable`**，那会把这个代价放大成一年；
+- `If-None-Match`（含 `W/` 弱校验）与 `If-Modified-Since` 命中回 **304**，不再重传文件；
+- 有扩展名但文件不存在 → **404**（`/favicon.png` 此前拿到 40 KB 的 `index.html`，浏览器把它当图标
+  收下），无扩展名的 SPA 路由仍回落 `index.html`。
+
+hub 边缘（`mrrc_hub` V0.37）按同一套值加了 gzip 与 1 小时边缘缓存：只缓存 200（未登录的重定向
+一旦带上 `max-age`，已登录用户会在一小时内反复被打回登录页），硬刷新带 `Cache-Control: no-cache`
+时穿透回源。实测 `opus_wasm.js` 534,520 → 170,402 B（gzip），第二次起由边缘 304 作答。
+
+设计：`docs/superpowers/specs/2026-10-17-static-asset-delivery-design.md`。
+套件 2280 → **2294**（新模块 `tests/test_static_cache_headers.py`）。
+
 ### Installers
 
 - 版本号、`version.txt`、下载页与指南全部对齐 v1.28.1。

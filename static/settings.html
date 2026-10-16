@@ -227,6 +227,18 @@ select{
   </section>
 
   <section class="card panel">
+    <h2>公网入口 <span class="pill" id="cloud-pill">读取中…</span></h2>
+    <p class="hint">填上你的呼号，向门户申请一个公网入口（<code id="cloud-portal">—</code>）。
+      批准由运维在门户完成；<b>不用守着本页</b>，盒子会自己每 30 秒查一次。</p>
+    <div class="grid" id="cloud-grid"></div>
+    <label for="cloud-callsign">呼号</label>
+    <input id="cloud-callsign" type="text" spellcheck="false" autocomplete="off"
+           placeholder="例如 BG1SB（改呼号 = 重新申请，旧入口不会自动迁移）">
+    <button id="cloud-apply" type="button">申请公网入口</button>
+    <div id="cloud-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
     <h2>电台</h2>
     <p class="hint">机型与串口的配置在控制界面的设置里，本页不重复一套。</p>
     <a href="."><button type="button" class="ghost">打开控制界面</button></a>
@@ -261,7 +273,7 @@ select{
 
   function renderNetwork(net) {
     var grid = document.querySelector('#net-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
     var pill = document.querySelector('#net-pill');
     if (!net.nm_running) {
       pill.textContent = 'NetworkManager 没在跑';
@@ -287,7 +299,7 @@ select{
 
   function renderWifi(net) {
     var grid = document.querySelector('#wifi-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
     if (!net.wifi.ssid) {
       kv(grid, '当前', '没有连接任何 Wi-Fi');
     } else {
@@ -304,7 +316,7 @@ select{
   function renderLink(net) {
     var select = document.querySelector('#link-profile');
     var previous = select.value;
-    select.innerHTML = '';
+    select.replaceChildren();
     // Wired profiles only: `net.connections` also holds the Wi-Fi profiles
     // (the Wi-Fi panel above lists those), and a Wi-Fi name in a dropdown
     // labelled for the wired card is a trap — picking it here tries to rewire
@@ -322,7 +334,7 @@ select{
 
   function renderSystem(system, helper) {
     var grid = document.querySelector('#sys-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
     system.services.forEach(function (service) {
       kv(grid, service.unit, service.active ? '运行中' : '未运行',
          service.active ? 'good-text' : 'bad-text');
@@ -337,7 +349,7 @@ select{
 
   function renderSafety(fields) {
     var box = document.querySelector('#safety');
-    box.innerHTML = '';
+    box.replaceChildren();
     fields.forEach(function (field) {
       var row = document.createElement('div');
       row.className = 'field';
@@ -354,6 +366,95 @@ select{
       box.appendChild(row);
     });
   }
+
+  // 401 只有一个出口：回登录、并带上回来的路。两处调用点共用它（多写一遍
+  // 就是多一个拼错路径的地方）。
+  function bounceToLogin() {
+    location.href = '/login?next=/settings';
+  }
+
+  // 公网入口：最小闭环。三个端点都是既有的 —— 只读状态、提交申请、查一次。
+  // “批准后自己接通”是服务端的事（_cloud_start_autoconnect 每 30 s 轮一次），
+  // 所以本页不需要一直开着；页面在这只是让状态不用刷新就变绿。
+  function renderCloud(cloud) {
+    var grid = document.querySelector('#cloud-grid');
+    var pill = document.querySelector('#cloud-pill');
+    grid.replaceChildren();
+    Box.setText('#cloud-portal', cloud.portal || '—');
+    if (cloud.entry) {
+      pill.textContent = '已接通';
+      pill.className = 'pill good';
+      kv(grid, '呼号', cloud.callsign || '—');
+      kv(grid, '入口', cloud.entry);
+      if (cloud.cert_reload_required) {
+        kv(grid, '提示', '证书刚换 —— 重启盒子后入口才生效', 'bad-text');
+      }
+    } else if (cloud.has_token) {
+      pill.textContent = '等待批准';
+      pill.className = 'pill';
+      kv(grid, '呼号', cloud.callsign || '—');
+      kv(grid, '状态', '已提交，等待运维在门户批准');
+    } else {
+      pill.textContent = '未申请';
+      pill.className = 'pill';
+    }
+    if (cloud.tunnel_error) kv(grid, '隧道', cloud.tunnel_error, 'bad-text');
+    var input = document.querySelector('#cloud-callsign');
+    if (input && !input.value && cloud.callsign) input.value = cloud.callsign;
+    Box.setText('#cloud-apply', cloud.has_token ? '查询状态' : '申请公网入口');
+  }
+
+  function loadCloud() {
+    return Box.api('/api/cloud/state').then(function (cloud) {
+      renderCloud(cloud);
+      if (cloud.has_token && !cloud.entry) setTimeout(pollCloud, 30000);
+    }).catch(function (error) {
+      if (error.status === 401) { bounceToLogin(); return; }
+      Box.message('#cloud-msg', error.message, 'bad');
+    });
+  }
+
+  function refreshCloud() {
+    return Box.api('/api/cloud/refresh', { method: 'POST' }).then(function (state) {
+      if (state.connected) {
+        Box.message('#cloud-msg', '已接通：' + (state.entry || ''), 'good');
+      } else if (state.status === 'rejected') {
+        Box.message('#cloud-msg', '门户没有通过这条申请 —— 请联系运维（可以换一个呼号）。', 'bad');
+      } else {
+        Box.message('#cloud-msg', '还没批准（' + (state.status || 'applied') + '）。', '');
+      }
+      return loadCloud();
+    });
+  }
+
+  function pollCloud() {
+    Box.api('/api/cloud/state').then(function (cloud) {
+      renderCloud(cloud);
+      if (cloud.has_token && !cloud.entry) setTimeout(pollCloud, 30000);
+    }).catch(function () {});
+  }
+
+  Box.on('#cloud-apply', 'click', function () {
+    var callsign = (document.querySelector('#cloud-callsign').value || '').trim().toUpperCase();
+    if (!callsign) {
+      Box.message('#cloud-msg', '请先填呼号', 'bad');
+      return;
+    }
+    Box.disabled('#cloud-apply', true);
+    Box.api('/api/cloud/state').then(function (cloud) {
+      // 已经有令牌就不再申请：门户对同一呼号的重复申请是查重拒绍的
+      // （portal 的 store.apply），重提只会把“已存在申请”糊到用户脸上。
+      if (cloud.has_token) return refreshCloud();
+      return Box.api('/api/cloud/apply', { method: 'POST', body: { callsign: callsign } })
+        .then(function (reply) {
+          Box.message('#cloud-msg', '已提交（' + (reply.status || 'applied')
+            + '）。等运维在门户批准，盒子会自己接通。', 'good');
+          return loadCloud();
+        });
+    }).catch(function (error) {
+      Box.message('#cloud-msg', error.message, 'bad');
+    }).then(function () { Box.disabled('#cloud-apply', false); });
+  });
 
   function load() {
     Box.api('/api/box/status').then(function (data) {
@@ -372,9 +473,10 @@ select{
       renderLink(data.network);
       renderSystem(data.system, state.helper);
       renderSafety(data.safety);
+      loadCloud();
     }).catch(function (error) {
       if (error.status === 401) {
-        location.href = '/login?next=/settings';
+        bounceToLogin();
         return;
       }
       document.querySelector('#errbox').textContent = error.message;
@@ -415,15 +517,23 @@ select{
     Box.api('/api/box/wifi').then(function (data) {
       var list = document.querySelector('#net-list');
       var networks = data.networks || [];
-      list.innerHTML = '';
+      list.replaceChildren();
       networks.forEach(function (net) {
         var item = document.createElement('li');
         var button = document.createElement('button');
         button.type = 'button';
-        button.innerHTML = '<span class="ssid"></span><span class="lock">'
-          + (net.protected ? '🔒' : '开放') + '</span><span class="sig">'
-          + Box.signalText(net.signal) + '</span>';
-        button.querySelector('.ssid').textContent = net.ssid;
+        var ssid = document.createElement('span');
+        ssid.className = 'ssid';
+        ssid.textContent = net.ssid;
+        var lock = document.createElement('span');
+        lock.className = 'lock';
+        lock.textContent = net.protected ? '🔒' : '开放';
+        var sig = document.createElement('span');
+        sig.className = 'sig';
+        sig.textContent = Box.signalText(net.signal);
+        button.appendChild(ssid);
+        button.appendChild(lock);
+        button.appendChild(sig);
         button.addEventListener('click', function () {
           state.picked = net.ssid;
           document.querySelector('#ssid-input').value = net.ssid;

@@ -11,6 +11,19 @@ from typing import NoReturn
 
 from ft8.core.protocol import MAX_CONTROL_FRAME, decode_frame, encode_frame
 
+#: Bounded file the Worker's own stdout/stderr is duplicated onto.
+#:
+#: The Fortran DSP aborts its **host process** on several conditions the Python
+#: side cannot catch (``error stop`` / ``stop`` in wsjt_improved.f90, four2avar
+#: and packjt).  On Windows the Worker inherits the server's std handles, and the
+#: launcher's startup tee stops writing to a file once the server answers HTTP
+#: (``launcher_log.StartupTee.stop``), so the single line that says *why* the
+#: Worker died reached no log at all — the field bundle of 2026-10-16 carried
+#: only ``worker_exit: worker process exited with status None`` per slot.  This
+#: file is where that line now lands; ``support_bundle`` collects it.
+WORKER_LOG_NAME = "ft8-worker.log"
+WORKER_LOG_MAX_BYTES = 2 * 1024 * 1024
+
 
 class _RequestError(Exception):
     """Expected request failure safe to report without exception disclosure."""
@@ -52,6 +65,67 @@ def _library_name() -> str:
     return "libwsjt_core.so"
 
 
+def _worker_log_path() -> Path | None:
+    """Where to duplicate the Worker's stdout/stderr, or None to leave it alone.
+
+    ``MRRC_LOG_DIR`` is what the desktop launchers and systemd set, and it is
+    what ``server.py`` builds ``LOG_DIR`` from — resolved from the environment
+    here on purpose: ``ft8/core`` must not import the application modules, and
+    a missing/read-only directory is not worth failing a decode over.
+    """
+    base = os.environ.get("MRRC_LOG_DIR")
+    if not base:
+        return None
+    try:
+        path = Path(base) / WORKER_LOG_NAME
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    return path
+
+
+def _rotate_worker_log(path: Path, max_bytes: int = WORKER_LOG_MAX_BYTES) -> None:
+    """Keep one previous generation once the file grows past `max_bytes`."""
+    try:
+        if path.stat().st_size <= max_bytes:
+            return
+    except OSError:
+        return
+    try:
+        os.replace(path, path.with_name(path.name + ".1"))
+    except OSError:
+        pass
+
+
+def _redirect_worker_output() -> None:
+    """Send the Worker's own fd 1/fd 2 to a bounded file (best effort).
+
+    Only fd numbers matter to the native code: the Fortran runtime writes
+    through fd 2, so replacing ``sys.stderr`` would capture nothing.  Failure
+    is silently ignored — losing the log must never lose a decode.
+    """
+    path = _worker_log_path()
+    if path is None:
+        return
+    _rotate_worker_log(path)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    except OSError:
+        return
+    try:
+        for target in (1, 2):
+            try:
+                os.dup2(fd, target)
+            except OSError:
+                pass
+    finally:
+        if fd not in (1, 2):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+
 def _expected_shm_size(logical_nbytes: int) -> int:
     """Return the observable segment size for an exact logical allocation.
 
@@ -72,6 +146,7 @@ def worker_main(
     library_path: str | os.PathLike[str] | None,
 ) -> None:
     os.environ.setdefault("OMP_STACKSIZE", "10M")
+    _redirect_worker_output()
     import numpy as np
     from ft8.core.binding import CoreBinding, DspStatusError
     from ft8.core.models import DecodeConfig, DecodePath
@@ -223,7 +298,12 @@ def worker_main(
             send_error(frame, "shared_memory_unavailable", "shared memory is unavailable")
         except ValueError:
             send_error(frame, "invalid_request", "DSP request validation failed")
-        except DspStatusError:
-            send_error(frame, "dsp_error", "DSP operation failed")
+        except DspStatusError as error:
+            # Sanitized, but not silent: the status is what says *which* native
+            # check failed (wsjt_improved.f90 now returns one instead of
+            # aborting the Worker), and it is the only reason the operator sees
+            # a DecodeError here rather than a vanished process.
+            send_error(frame, "dsp_error",
+                       f"DSP operation failed (status {error.status})")
         else:
             connection.send_bytes(encode_frame(response))  # type: ignore[attr-defined]

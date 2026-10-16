@@ -203,6 +203,18 @@ class WorkerSupervisor:
         self._next_request_id += 1
         return self._next_request_id
 
+    def _exit_detail(self, process: "mp.Process", generation: int) -> str:
+        """Why the Worker is gone, plus how often it has gone.
+
+        ``process.exitcode`` is usually ``None`` here: this is raised from a
+        failed send/recv, before the Process has been reaped, so the exit code
+        is often the least useful part of the message.  The generation and the
+        restart count are what tell an operator this is a *loop* — one per FT8
+        slot in the 2026-10-16 field report — rather than a one-off crash.
+        """
+        return (f"worker process exited with status {process.exitcode} "
+                f"(generation {generation}, restarts {self._restart_count})")
+
     def _ensure_ready_locked(self) -> None:
         if self._state == SupervisorState.READY:
             return
@@ -222,7 +234,7 @@ class WorkerSupervisor:
         if not process.is_alive():
             raise WorkerFault(
                 "worker_exit",
-                f"worker process exited with status {process.exitcode}",
+                self._exit_detail(process, generation),
                 generation,
             )
         try:
@@ -230,7 +242,7 @@ class WorkerSupervisor:
         except (OSError, EOFError):
             raise WorkerFault(
                 "worker_exit",
-                f"worker process exited with status {process.exitcode}",
+                self._exit_detail(process, generation),
                 generation,
             ) from None
         if not connection.poll(timeout):
@@ -244,7 +256,7 @@ class WorkerSupervisor:
         except (OSError, EOFError):
             raise WorkerFault(
                 "worker_exit",
-                f"worker process exited with status {process.exitcode}",
+                self._exit_detail(process, generation),
                 generation,
             ) from None
         try:

@@ -65,7 +65,8 @@ class CollectableTests(unittest.TestCase):
 
     def test_logs_and_diagnostics_are_allowed(self):
         for path in ("logs/server.log", "logs/server-stdout.log",
-                     "logs/launcher.log", "diagnostics/env.json"):
+                     "logs/launcher.log", "diagnostics/env.json",
+                     "logs/ft8-worker.log", "logs/ft8-worker.log.1"):
             self.assertTrue(sb.is_collectable(path), path)
 
     def test_windows_separators_are_normalised(self):
@@ -108,11 +109,15 @@ class ResolveLogFilesTests(unittest.TestCase):
             (data / "logs" / "server.log").write_text("s", encoding="utf-8")
             (data / "logs" / "server-stdout.log").write_text("o", encoding="utf-8")
             (data / "logs" / "server.log.1").write_text("p", encoding="utf-8")
+            (data / "logs" / "ft8-worker.log").write_text("w", encoding="utf-8")
+            (data / "logs" / "ft8-worker.log.1").write_text("v", encoding="utf-8")
             (data / "launcher.log").write_text("l", encoding="utf-8")
             found = sb.resolve_log_files(data / "logs", data)
         self.assertEqual(Path(found["server"]).name, "server.log")
         self.assertEqual(Path(found["server-prev"]).name, "server.log.1")
         self.assertEqual(Path(found["stdout"]).name, "server-stdout.log")
+        self.assertEqual(Path(found["ft8-worker"]).name, "ft8-worker.log")
+        self.assertEqual(Path(found["ft8-worker-prev"]).name, "ft8-worker.log.1")
         self.assertEqual(Path(found["launcher"]).name, "launcher.log")
 
     def test_only_existing_files_are_returned(self):

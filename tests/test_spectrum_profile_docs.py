@@ -163,7 +163,7 @@ class VersionConsistencyTests(unittest.TestCase):
         # produced a pair that contradicted itself — assertIn("96 test modules")
         # beside assertNotIn("97 test modules") — which is what a guard looks
         # like when it is updated by reflex instead of by reading it.
-        self.assertIn("2273", text)
+        self.assertIn("2274", text)
         # The module count is derived, not typed. It used to be a literal, and
         # the ritual that updates these numbers changed the test total and
         # missed the module total — so adding a test file turned this guard red

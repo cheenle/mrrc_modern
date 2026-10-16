@@ -111,6 +111,29 @@ class MissingAssetTests(unittest.TestCase):
         self.assertEqual(_serve("../server.py").status_code, 404)
 
 
+class PageRouteTests(unittest.TestCase):
+    """`/listen` 与 `/settings` 不经 serve_static —— 它们各自也要发文档类缓存头。
+
+    `/setup` 是例外且必须保持例外：那个页面会显示自动生成的口令横幅，它发 `no-store`。
+    """
+
+    def test_page_routes_revalidate(self):
+        for route, path in ((server.listen_page, "/listen"), (server.settings_page, "/settings")):
+            with self.subTest(path=path):
+                response = asyncio.run(route(_request(path)))
+                self.assertEqual(response.status_code, 200, path)
+                self.assertEqual(response.headers["cache-control"], "no-cache", path)
+
+    def test_the_onboarding_page_still_refuses_to_be_cached_at_all(self):
+        with patch.object(server, "_verify_auth", return_value=True):
+            with patch.object(server, "_first_window_open", return_value=True):
+                response = asyncio.run(server.setup_page(_request("/setup")))
+        if response.status_code == 200:
+            self.assertEqual(response.headers["cache-control"], "no-store")
+        else:                      # 已配置的盒子会 302 去 /settings —— 那也是对的
+            self.assertIn(response.status_code, (302, 307))
+
+
 class AuthOrderTests(unittest.TestCase):
     def test_static_assets_still_need_auth(self):
         """缓存头不得改变鉴权顺序：没带令牌取资源仍然是跳登录页。"""

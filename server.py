@@ -4055,7 +4055,7 @@ async def listen_page(request: Request):
     """
     page = STATIC_DIR / "listen.html"
     if page.exists():
-        return FileResponse(page, media_type="text/html")
+        return _html_page(page)
     return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
 
 
@@ -4861,6 +4861,17 @@ def _cache_control_for(path: Path) -> str:
     if path.suffix.lower() in (".html", ".htm", ".json") or path.name == "sw.js":
         return CACHE_CONTROL_DOC
     return CACHE_CONTROL_ASSET
+
+
+def _html_page(page: Path) -> FileResponse:
+    """一个 HTML 页面响应：文档类语义（每次重新校验）。
+
+    `/listen` 与 `/settings` 走这里（它们不经 `serve_static`）。`/setup` **刻意不走**：
+    那个页面会显示自动生成的口令横幅，所以它自己发 `no-store`，比 no-cache 更严。
+    """
+    response = FileResponse(page, media_type="text/html")
+    response.headers["Cache-Control"] = _cache_control_for(page)
+    return response
 
 
 def _not_modified(request: Request, headers) -> bool:
@@ -5823,7 +5834,7 @@ async def settings_page(request: Request):
     page = STATIC_DIR / "settings.html"
     if not page.exists():
         return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
-    return FileResponse(page, media_type="text/html")
+    return _html_page(page)
 
 
 @app.get("/api/box/onboarding", include_in_schema=False)

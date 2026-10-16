@@ -394,6 +394,94 @@ def run_pair(
     }
 
 
+def run_absent(
+    binding: CoreBinding,
+    slots: list[tuple[int, Path]],
+    cache: dict[int, list[Sighting]],
+    *,
+    absent_call: str,
+    absent_grid: str,
+    my_call: str,
+    slots_to_try: int = 40,
+    progress: int = 2,
+) -> dict[str, object]:
+    """Feed the a-priori of a station who is NOT transmitting, and count inventions.
+
+    §2.5 is why this arm exists.  When ``dx_grid`` is supplied, iaptype 31 pins all
+    77 payload bits with ``apmag = maxval(abs(llra)) * 1.01`` -- stronger than any
+    received soft value -- and the CRC-14 is a function of those 77 bits, so **if the
+    prior wins, the CRC passes by construction**.  A repeated CQ then corroborates
+    *itself*: an invented "CQ X grid" in one slot looks legitimate because the real X
+    sent it in another.  So "seen elsewhere" cannot settle the precision question,
+    and this arm settles it a different way -- pick a station who never appears in
+    the corpus at all, so any decode naming them can only have been invented.
+
+    ``absent_call`` must be verified absent by the caller (this function does not
+    re-check); everything else about the a-priori is realistic, including pointing
+    ``rx_frequency`` at a real, busy part of the band so the candidate gate at nfqso
+    (``sync8var``: ±3 Hz, sync >= 1.1) has something to promote.
+    """
+
+    # Aim at real activity: pick frequencies where the classical path *did* decode
+    # something, so the sync gate is satisfied and AP has a candidate to work on.
+    # Aiming at an empty frequency would make the arm trivially pass.
+    busy = [
+        (slot_id, rows[0].frequency)
+        for slot_id, rows in cache.items()
+        if rows
+    ]
+    busy.sort()
+    chosen = sample_slots([s for s, _f in busy], slots_to_try)
+    freq_of = dict(busy)
+
+    invented: list[dict[str, object]] = []
+    ap_fired = 0
+    ap_types: Counter = Counter()
+    measured = 0
+
+    print(f"缺席先验臂：my={my_call}  dx={absent_call}  grid={absent_grid}  "
+          f"（该呼号在全语料 0 次出现）")
+    print(f"  在 {len(chosen)} 个有真实活动的槽上试，rx_frequency 指向该槽已有的解码频率")
+
+    for slot_id in chosen:
+        path = dict(slots)[slot_id]
+        rx_frequency = int(round(freq_of[slot_id]))
+        fed = decode_slot(
+            binding, load_pcm(path), slot_id,
+            ap=True, my_call=my_call, dx_call=absent_call, dx_grid=absent_grid,
+            qso_progress=progress, rx_frequency=rx_frequency,
+            tx_frequency=rx_frequency,
+        )
+        measured += 1
+        for row in fed.results:
+            if row.ap_type:
+                ap_fired += 1
+                ap_types[int(row.ap_type)] += 1
+            parsed = parse_message(row.text)
+            names_absent = absent_call.upper() in (
+                parsed.from_call.upper(), parsed.to_call.upper()
+            ) or absent_call.upper() in row.text.upper()
+            if names_absent:
+                invented.append({
+                    "slot_id": slot_id, "text": row.text.strip(),
+                    "ap_type": int(row.ap_type), "quality": round(float(row.quality), 4),
+                    "snr": int(row.snr), "frequency": round(float(row.frequency), 1),
+                })
+
+    print(f"  配对槽 {measured}   fed 臂 ap_type != 0 共 {ap_fired} 条   "
+          f"分布 {dict(sorted(ap_types.items())) or '—'}")
+    print(f"  **点名缺席呼号的解码：{len(invented)} 条**")
+    for item in invented:
+        print(f"    slot {item['slot_id']}  ap{item['ap_type']}  q={item['quality']}  "
+              f"snr={item['snr']}  f={item['frequency']}  {item['text']!r}")
+
+    return {
+        "absent_call": absent_call, "absent_grid": absent_grid, "my_call": my_call,
+        "slots_measured": measured, "fed_ap_decodes": ap_fired,
+        "ap_types": dict(ap_types), "invented": invented,
+    }
+
+
 def run_auto(
     binding: CoreBinding,
     slots: list[tuple[int, Path]],
@@ -498,6 +586,12 @@ def main(argv: list[str] | None = None) -> int:
         help="a pair with fewer sightings cannot support the parity inference",
     )
     parser.add_argument(
+        "--absent", default="",
+        help="precision arm: feed this (never-heard) call's a-priori and count inventions",
+    )
+    parser.add_argument("--absent-grid", default="QN06")
+    parser.add_argument("--absent-slots", type=int, default=40)
+    parser.add_argument(
         "--max-slots", type=int, default=32,
         help="paired slots per pair (budget cap; spread-sampled, not head-sampled)",
     )
@@ -517,6 +611,24 @@ def main(argv: list[str] | None = None) -> int:
         report = run_auto(
             binding, slots, pairs=args.auto, progress=args.progress,
             min_messages=args.min_messages, max_slots_per_pair=args.max_slots,
+        )
+    elif args.absent:
+        cache = collect(binding, slots)
+        seen = {
+            parse_message(row.text).from_call.upper()
+            for rows in cache.values() for row in rows
+        } | {
+            parse_message(row.text).to_call.upper()
+            for rows in cache.values() for row in rows
+        }
+        if args.absent.upper() in seen:
+            print(f"{args.absent} 出现在语料里 —— 缺席臂需要一个从未出现的呼号")
+            return 2
+        report = run_absent(
+            binding, slots, cache,
+            absent_call=args.absent, absent_grid=args.absent_grid,
+            my_call=args.my_call or "N0CALL", slots_to_try=args.absent_slots,
+            progress=args.progress,
         )
     elif args.my_call and args.dx_call:
         cache = collect(binding, slots)

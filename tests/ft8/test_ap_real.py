@@ -14,10 +14,13 @@ Two of these already caused a real failure, which is why they are pinned:
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 
 import numpy as np
 
 from tools.ft8 import ap_real
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class SlotPathTests(unittest.TestCase):
@@ -201,3 +204,43 @@ class SampleSlotsTests(unittest.TestCase):
     def test_zero_budget_and_empty_input(self) -> None:
         self.assertEqual(ap_real.sample_slots([], 5), [])
         self.assertEqual(ap_real.sample_slots([1, 2, 3], 0), [])
+
+
+class AbsentArmTests(unittest.TestCase):
+    """The precision arm's one non-obvious design choice, pinned.
+
+    §2.5: feeding dx_grid pins all 77 payload bits at apmag = 1.01 * max|LLR|, and
+    the CRC-14 is a function of those bits -- so if the prior wins, the CRC passes
+    by construction.  A repeated CQ then corroborates *itself*, which is why
+    "seen in another slot" cannot settle the precision question and this arm uses a
+    call that never appears at all.
+
+    The arm is only meaningful if AP gets a candidate to work on: sync8var promotes
+    candidates within ±3 Hz of nfqso at a lowered sync threshold, so aiming at an
+    empty frequency would make it pass trivially.  It must aim at real activity.
+    """
+
+    def test_it_aims_at_slots_that_already_have_decodes(self) -> None:
+        source = (REPO_ROOT / "tools" / "ft8" / "ap_real.py").read_text()
+        self.assertIn("busy = [", source)
+        self.assertIn("if rows", source, "must only pick slots that actually decoded something")
+        self.assertIn("rx_frequency = int(round(freq_of[slot_id]))", source)
+
+    def test_it_counts_any_decode_naming_the_absent_call(self) -> None:
+        source = (REPO_ROOT / "tools" / "ft8" / "ap_real.py").read_text()
+        self.assertIn("names_absent", source)
+        self.assertIn("invented.append", source)
+
+    def test_the_cli_refuses_a_call_that_actually_appears(self) -> None:
+        """Otherwise the arm would count real decodes as inventions."""
+
+        source = (REPO_ROOT / "tools" / "ft8" / "ap_real.py").read_text()
+        self.assertIn("出现在语料里", source)
+        self.assertIn("if args.absent.upper() in seen:", source)
+
+    def test_sample_slots_is_what_picks_the_busy_slots(self) -> None:
+        """Spread-sampled, so the arm is not concentrated in one quiet stretch."""
+
+        picked = ap_real.sample_slots(list(range(200)), 40)
+        self.assertEqual(len(picked), 40)
+        self.assertGreater(max(picked), 150)

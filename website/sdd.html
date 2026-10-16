@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.88</a></li>
+          <li><a href="#updates">V2.89</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.88 · 2026-10-13</span>
+          <span>SDD V2.89 · 2026-10-16</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.88</td>
+              <td>V2.89</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,41 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
+            <h3>
+              The Radio's Power Switch, With Its Two Intents Kept Apart
+              <small>(V2.89)</small>
+            </h3>
+            <p>
+              The header's ⏻ still means the <em>web</em> connection; the
+              radio's own power moved into the ☰ menu as two separate actions —
+              <strong>restart</strong> (off, then a bounded, cancellable wake-up
+              loop: every 30 s for up to 15 minutes) and <strong>off</strong>
+              (off for good, and it says so before it does it). The guards the
+              2026-07 withdrawal demanded are all back and tested: refused while
+              transmitting (FT8 included), refused inside the window right after
+              a power-on, and a wake round writes nothing until the serial port
+              returns — the radio's USB re-enumerates while it is off, so the
+              node name it had before is not the one it comes back on. Verified
+              on the real radio: woke on round 1 after 4–8 s, three runs in a
+              row, and the 2026-07 「<code>PS1</code> wake-up is unreliable」
+              report did not reproduce. This release also prints the running
+              version in the menu footer — a number that had been hardcoded to
+              <code>v1.0</code> since v1.14. Two more things landed with it:
+              <strong>outbound HTTPS now trusts our own root bundle only</strong>
+              (a Windows machine with an expired, same-name copy of a chain
+              element in its store failed every portal call while its browser was
+              fine — the failure is reproduced offline with a real handshake),
+              and the FT8 cascade's decision cutoff was arithmetically too small,
+              so <strong>the deep decode path had never once run in production</strong>
+              (263 rejections, 0 escalations, invisible because nothing reported
+              the escalation rate). The cutoff is 4.0 s now, with a guard test
+              that fails if the margin drops below the measured deep-path cost,
+              a counter line in the log, and a read-only
+              <code>/api/ft8/engine/stats</code> the FT8 page polls every 30 s.
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-satellite-dish"></i></div>
             <h3>

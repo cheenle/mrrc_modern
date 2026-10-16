@@ -35,6 +35,9 @@ cd <repo> && export COPYFILE_DISABLE=1 && tar czf /tmp/src.tgz \
   --exclude='./website/videos' --exclude='./website/downloads/*.exe' \
   --exclude='./website/downloads/*.dmg' --exclude='./website/downloads/*.xz' \
   --exclude='./.DS_Store' --exclude='._*' .
+# 2026-10-16 补两条（这一轮实测 425 MB → 72 MB，前者只是"能传完"而已）：
+#   --exclude='./.venv-ml'              # 并行会话的 ML venv：torch 一家 368 MB
+#   --exclude='./website/downloads/*.apk' --exclude='./website/images/*.MOV'
 
 # ② 打完必须自查：关键文件在、隐私目录不在、体积合理（855 MB → 36.6 MB 是这一版的实测差）
 tar tzf /tmp/src.tgz | grep -c "\._\|DS_Store"          # 必须 0

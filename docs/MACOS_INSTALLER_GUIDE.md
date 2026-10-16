@@ -36,7 +36,7 @@
 | 权限 | **麦克风**（= 音频输入，必需）；局域网访问时还需要 macOS 防火墙放行 |
 
 下载地址：<https://www.vlsc.net/mrrc_modern/> → **Download macOS**，文件名为
-`MRRC-Modern-v1.28.0-arm64.dmg`（85,038,564 bytes，SHA-256 `4c9f2d3c…`）。
+`MRRC-Modern-v1.28.0-arm64.dmg`（85,044,185 bytes，SHA-256 `8d3564d4…`）。
 
 **校验下载完整性（可选，命令行）**：
 

@@ -2,7 +2,7 @@
 
 > 用途：在 ham.vlsc.net 上的 Win11 KVM 虚拟机中构建并冒烟验证 `MRRC-Modern-Setup.exe`。软件/安装器验证不等同于真实射频验收；TX 话音质量仍需带 FT-710 USB 音频和监听接收机的物理链路确认。
 > 本文按 2026-07-25 首次成功打包（v1.6.3）的实际操作整理，照做即可复现。
-> **最新构建：v1.27.0（2026-10-13）** —— VM 门禁 **2197 项 OK（33 skip）**；`dev_tools/tls_trust_gate.py` 通过；产物 `MRRC-Modern-v1.27.0-Windows-x64-Setup.exe` **79,263,639 bytes**，SHA-256 `c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be`（VM `certutil` 与 Mac `shasum` 逐字一致）。
+> **最新构建：v1.28.0（2026-10-16）** —— VM 门禁 **2271 项 OK（37 platform skips）**；`dev_tools/tls_trust_gate.py` 通过（本机信任库置空仍握手 200）；产物 `MRRC-Modern-v1.28.0-Windows-x64-Setup.exe` **79,370,813 bytes**，SHA-256 `cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea`（VM `Get-FileHash` 与 Mac `shasum` 逐字一致）；`version.txt` = 1.28.0；`fleet/`（frpc + openssl + 9 DLL）在 app 根；`_internalt8\data\cty.dat`（354,405 B）**本版才进包** —— 此前打包版的 DXCC 库解析到一个不存在的路径，每台机器的日志都会在第一次解码时留下 `cty.dat unreadable` 回溯。洁净室（冻结 server，隔离 data/log/recordings + 现场配置 + 端口 18899）：https /login **200**、https `/api/health` **401**、明文 http 被拒（`RemoteDisconnected`）、`FT8 engine started at boot` ×1、`cty.dat unreadable` **0**、Traceback **0**，并**用 /WSradio 从运行中的冻结包读到 `fullState.version = 1.28.0`**（菜单页脚那个号因此是行为验证过的，不只是源码里写着）；运行后包体新改动文件 0。门禁本版抓到的红：三条只在本机 POSIX 上成立的测试（autopilot 的 `fcntl` 单飞锁、stage-tree 的 bash+rsync）此前没在 Windows 上跑过 —— 已按仓库既有惯例加平台 skip。
 > **FT8 进包（本版新增，也是体积从 55.9 MB 涨到 79.3 MB 的全部来源）**：`build.ps1` 先跑 MSYS2 MinGW 的 cmake+ninja 编出 `wsjt_core.dll`，再用 `objdump -p` **走出**运行期 DLL 闭包（不写死清单，MSYS2 换代多一个依赖会是构建失败而不是装完打不开）——`_internal\` 下 9 个文件：`wsjt_core` + FFTW×2 + gfortran/gomp/quadmath/gcc_s/stdc++/winpthread；`wsjt_*` 导出 43 个符号，`static\ft8.html` 与 `static\ft8\main.js` 在包内。
 >
 > **本轮三层证据**（缺一层就不算验过）：

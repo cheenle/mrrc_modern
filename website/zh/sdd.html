@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.88 更新</a></li>
+          <li><a href="#updates">V2.89 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.88 · 2026-10-13</span>
+          <span>SDD V2.89 · 2026-10-16</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -109,7 +109,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.88</td>
+              <td>V2.89</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -142,6 +142,27 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
+            <h3>
+              电台电源回到菜单，而且两种意图分得清清楚楚
+              <small>（V2.89）</small>
+            </h3>
+            <p>
+              顶栏 ⏻ 依旧只管<em>网页</em>连接；电台自己的电源放进 ☰ 菜单，而且是两件事——
+              <strong>重开电台</strong>（先关机，之后每 30 秒再试一次唤醒，最多 15 分钟、随时可取消）与
+              <strong>关机</strong>（关掉就不再来电，动手之前先把这句话说明白）。2026-07 撤回它时列下的守卫
+              一条不少：发射中（含 FT8）拒绝、刚上过电的窗口内拒绝、端口没回来之前一轮都不写——电台关着的时候
+              USB 会重新枚举，它原来的节点名不是它回来时的那个。真机验收：第 1 轮醒来、4–8 秒，三次运行皆然，
+              2026-07 那条「<code>PS1</code> 唤醒不可靠」不复现。这一版还把<strong>正在跑的版本号</strong>印在菜单最下边
+              —— 那个号从 v1.14 起一直写死成 <code>v1.0</code>。同批还落了两件事：
+              <strong>出站 HTTPS 只信随包的根证书</strong>（一台 Windows 的证书库里有份过期同名中间证书，
+              浏览器正常而应用每次访问门户都失败；该场景在测试里用真握手离线复刻），以及
+              FT8 级联的决策截止<strong>算术上偏小</strong>，以致<strong>深路径在生产里一次都没跑过</strong>
+              （263 次拒绝、0 次升级，而升级率当时没有任何出口）；截止改为 4.0 s，配一条「余量低于实测深路径成本就变红」的
+              守卫测试、一行日志计数，以及 FT8 页面每 30 秒轮询的只读 <code>/api/ft8/engine/stats</code>。
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-satellite-dish"></i></div>
             <h3>

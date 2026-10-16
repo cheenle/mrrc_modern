@@ -65,7 +65,7 @@ mkdir -p "$DST"
 # landed; the guard that runs the stager rather than reading this text is
 # ExclusionListTests.test_runtime_state_is_never_staged.
 rsync -a "$SRC/" "$DST/" \
-	--exclude ".git/" --exclude "venv/" --exclude ".venv/" --exclude "dist/" \
+	--exclude ".git/" --exclude "venv/" --exclude ".venv*/" --exclude "dist/" \
 	--exclude "build/" --exclude "logs/" --exclude "certs/" --exclude "promo/" \
 	--exclude "FT710Mobile/" --exclude "FT710Android/" --exclude "website/" \
 	--exclude "tests/" --exclude ".agents/" --exclude "docs/" --exclude "SDD/" \

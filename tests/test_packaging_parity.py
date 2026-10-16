@@ -98,6 +98,9 @@ class ExclusionListTests(unittest.TestCase):
         )
         self.assertIn("qso.db", entries)
 
+    @unittest.skipUnless(os.name == "posix" and shutil.which("bash") and shutil.which("rsync"),
+                         "stage-tree.sh 是 bash + rsync 的脚本，只在 POSIX 主机上跑"
+                         "（两条镜像线与盒子升级都用它）")
     def test_runtime_state_is_never_staged(self):
         """Every file ``server.py`` writes at runtime must survive an update.
 
@@ -153,14 +156,51 @@ class ExclusionListTests(unittest.TestCase):
             self.assertTrue((dst / "server.py").is_file(),
                             "the stager copied nothing — the rules above prove nothing")
 
+    @unittest.skipUnless(os.name == "posix" and shutil.which("bash") and shutil.which("rsync"),
+                         "stage-tree.sh 是 bash + rsync 的脚本，只在 POSIX 主机上跑"
+                         "（两条镜像线与盒子升级都用它）")
+    def test_a_sibling_virtualenv_is_never_staged(self):
+        """``.venv*`` —— 任一兄弟 venv，不只是有人记得的那两个名字。
+
+        2026-10-16：并行会话的 ``.venv-ml``（macOS venv，带 596 MB torch）被整棵
+        拷进了 ARM 镜像 —— 清单里只有 ``venv/`` 与 ``.venv/``。后果有两层：产物里
+        多一份没人要的**异平台**载荷，而且它是盒子镜像根分区被塞满的直接原因
+        （`frpc: Cannot write: No space left on device`，而日志里一个字没提空间）。
+        实测：修前 16,352 个文件 / 619 MB，修后 430 个 / 23 MB。
+        """
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        src, dst = root / "src", root / "dst"
+        src.mkdir()
+        siblings = (
+            ".venv-ml/torch/lib/libtorch_cpu.dylib",
+            ".venv/bin/python",
+            ".venv-ft8/lib/python3.11/site-packages/x.py",
+        )
+        for relative in siblings:
+            path = src / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x", encoding="utf-8")
+        (src / "server.py").write_text("x", encoding="utf-8")   # the control
+        subprocess.run(["bash", str(STAGE_TREE), str(src), str(dst)],
+                       check=True, capture_output=True)
+        for relative in siblings:
+            with self.subTest(path=relative):
+                self.assertFalse((dst / relative).exists(),
+                                 f"{relative} was staged — it is another venv")
+        self.assertTrue((dst / "server.py").is_file(),
+                        "the stager copied nothing — the rule above proves nothing")
+
     def test_the_exclusion_list_is_byte_identical_to_what_shipped(self):
         """The list as of 2026-10-11, frozen: the refactor moved it, and every
         edit since then is written down here — a root-anchored ``/fleet/``,
         ``/draft/`` when the Rust draft workstream landed on main
         (2026-10-13), then ``qso.db`` and the five per-box state files found
-        leaking on 2026-10-14."""
+        leaking on 2026-10-14, and ``.venv*/`` on 2026-10-16 (a parallel
+        session's ``.venv-ml`` — a macOS venv carrying 596 MB of torch — was
+        being staged into the ARM image; the exact-name rules missed it, and
+        it is also what exhausted the box image's rootfs)."""
         expected = [
-            ".git/", "venv/", ".venv/", "dist/", "build/", "logs/", "certs/",
+            ".git/", "venv/", ".venv*/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
             ".agents/", "docs/", "SDD/", "packaging/", "macos/", "windows/",
             "__pycache__/", "*.pyc", ".DS_Store", "atr1000_tuner.json",

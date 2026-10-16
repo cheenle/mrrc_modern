@@ -5,6 +5,7 @@ these tests run anywhere.  Loaded by path because dev_tools is not a package.
 """
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -285,6 +286,9 @@ class RetryTests(AutopilotFixture):
         self.assertEqual(result, [])
         self.assertEqual(pi.call_count, 0)
 
+    @unittest.skipUnless(os.name == "posix",
+                         "单飞锁是 fcntl.flock —— autopilot 本身只在 POSIX 上跑（"
+                         "降级成假锁就等于放回它修的那个并发覆写）")
     def test_a_second_instance_skips_the_round(self):
         held = autopilot.acquire_single_flight_lock()
         self.assertIsNotNone(held)
@@ -303,6 +307,9 @@ class CronTests(AutopilotFixture):
         self.assertIn("/opt/homebrew/bin", line)          # cron PATH is nearly empty
         self.assertIn(str(autopilot.RUN_LOG), line)
 
+    @unittest.skipUnless(os.name == "posix",
+                         "单飞锁是 fcntl.flock —— autopilot 本身只在 POSIX 上跑（"
+                         "降级成假锁就等于放回它修的那个并发覆写）")
     def test_cron_command_still_polls_the_receiver(self):
         """2026-10-10→10-16 outage: a bare `--implement` in the cron command is
         truthy (argparse const="ALL"), so `main()` took the implement branch and

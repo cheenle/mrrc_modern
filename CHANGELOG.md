@@ -111,6 +111,50 @@ Let's Encrypt 的中间证书换代重签，缓存那份到期后正是这个形
 `--implement`、PATH 必须含系统目录、发货失败不许写「已发布」。事故当场撤回被误标的 `20261001-192738-30c2`，
 其余积压交给修好的 cron 逐轮消化。
 
+### 按发射之后进程消失、电台永远停在发射 —— PortAudio 重初始化不得在 RX 流仍开着时 terminate
+
+现场（诊断包 `20261016-230940-40c1`，Windows 11 + FT-710）：**手机上按发射，电台一直发射不再停下来，同时服务端进程消失**。
+两件事互为因果 —— 进程死了，而**所有放键路径都在进程里**：没有谁能再去写那个 `TX1;`。
+
+根因是音频侧的进程级崩溃：TX→RX 转换要重建采集流（全双工 codec 恢复），而重建时的 PortAudio
+`terminate`/`initialize` 与**仍在读的 RX 流**撞在一起 ⇒ 原生访问违例，Python 层没有异常可捕获，
+进程直接消失。修法是把重初始化的时机收进一条不变量：**RX 流仍在被读取时不得 terminate PortAudio**
+（先停读、再重初始化、再重开），并把这条不变量钉进测试（`tests/test_audio.py` +95 行，
+另加 `tests/test_server_setup.py` 的接线守卫）。详见 SDD V2.88。
+
+**发版当天落进来的修复，因此两个桌面产物重建过**：盒子镜像在它之后暂存，而 macOS 与 Windows 的
+第一次构建在它之前 —— 四份产物最终出自同一修订（`124fb63`），并逐文件核对过镜像内的
+`audio_handler.py` / `server.py` 与工作区一致。
+
+
+### 打包：发版当天在产物里抓到并修掉的三个缺陷
+
+三条都是**产物**里抓出来的，不是源码评审能发现的 —— 这正是「洁净室真跑」和「构建门禁」存在的理由。
+
+- **干净安装里的 DXCC 库一直是空的。** 冻结包第一次真跑就在日志里留下 `cty.dat unreadable` 的回溯：
+  `get_cty_database()` 走 `app_root()`（源码树是仓库根，冻结后是 `_MEIPASS`），而 PyInstaller 的
+  datas 只装了 FT8 的**原生库**，没有 `ft8/data` —— 打包版的数据库因此解析到一个不存在的位置，
+  loader 记一条带回溯的 ERROR 后降级为空库：**国家名与「新 DXCC」高亮静默失效**。挂载 v1.27.0 的 DMG
+  复核，同样的树、同样的缺失 ⇒ 既存缺口。修法是一行 datas；守卫把 spec 的目的地与
+  `dxcc.py` 里那句 `app_root() / "ft8" / "data" / "cty.dat"` 钉在一起（**反向验证**：删掉那行必须变红）。
+- **镜像差点把并行会话的 venv 一起装进去。** 盒子镜像构建在 `frpc: Cannot write: No space left on device`
+  处死掉，日志里一个字没提空间：暂存树里多了一份 `.venv-ml`（并行会话的 macOS venv，torch 一家 596 MB）
+  —— 排除清单只有 `venv/` 与 `.venv/` 两个**名字**。修法：`.venv*/`（任一兄弟 venv），并加一条**真跑
+  stager** 的守卫（临时源里放三个 `.venv*`，断言一个都没进目标树；反向验证过）。实测暂存树
+  16,352 文件 / 619 MB → **430 文件 / 23 MB**。顺带记一条操作纪律：`build/w103d/w103d.img` 是**上一版叠过的树**，
+  为发布构建前必须删掉，否则是在上一版之上再叠一遍（实测根分区只剩 638 MiB，`apt-get update` 当场以
+  `GPG error … Splitting up … signature failed` 死掉，且不提空间）。
+- **三条只在本机 POSIX 上成立的测试从未在 Windows 上跑过。** VM 门禁 3 红，全是
+  `ModuleNotFoundError: No module named 'fcntl'`（autopilot 的单飞锁）与缺 bash/rsync（stage-tree 的
+  真跑测试）。生产代码是**按设计**只在 POSIX 上跑（autopilot 是维护者在接收端用的工具，注释就写在
+  `import fcntl` 旁），所以修的是测试：按仓库既有惯例加平台 skip（VM 上 33 → 36 个 skip），
+  而不是把锁降级成假锁 —— 那等于放回它修掉的并发覆写。
+
+**产物（四平台，2026-10-16）**：macOS `MRRC-Modern-v1.28.0-arm64.dmg` **85,038,564 bytes** `4c9f2d3c…`；
+Windows `MRRC-Modern-v1.28.0-Windows-x64-Setup.exe` **79,373,225 bytes** `e27021e8…`；
+W103D `MRRC-Modern-1.28.0-w103d.img.gz` **1,205,181,718 bytes** `c90dbcf1…`。
+
+
 ## [v1.27.0] — 2026-10-13 — FT8 走进四个平台；解码默认走快路径、按需级联
 
 **一台电台，两种用法**：主菜单多了一项「FT8 模式」——点一下，电台切到 FT8 频点与 DATA-U，

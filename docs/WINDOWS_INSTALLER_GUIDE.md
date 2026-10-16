@@ -11,25 +11,29 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.28.0-Windows-x64-Setup.exe` | 75.6 MB (79,263,639 bytes) | `c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be` |
+| `MRRC-Modern-v1.28.0-Windows-x64-Setup.exe` | 75.7 MB (79,370,813 bytes) | `cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.0-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.27.0 is the published Windows installer.** It was built from a source pack
-(`mrrc_modern_src.tgz`, 39 MB, made 2026-10-13 17:36) on Windows 11 (the KVM build VM)
+**v1.28.0 is the published Windows installer.** It was built from a source pack
+(`src1280.tgz`, 72 MB, made 2026-10-16 23:06) on Windows 11 (the KVM build VM)
 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3, extracted over the VM's tree with its
-venv kept and `tests\*.py` cleared first. The build gate ran **2197 tests OK (33 platform skips)**,
-three PyInstaller targets, and the installer compiled into a scratch directory and was copied in.
-This release also **builds the FT8 native library on the VM** (MSYS2 mingw-w64: cmake + ninja →
-`wsjt_core.dll`, then the runtime DLL closure walked with `objdump -p`) and bundles it with the
-package — nine DLLs, ~16 MB, which is most of the size jump. The gate itself found this release's
-Windows-only red: `test_auth_persistence.test_store_is_owner_readable_only` asserted a POSIX `0600`
-mode, which Windows cannot have (the code was right, the test was not). Evidence taken from the
-artifact: `version.txt` = `1.27.0`, size
-**79,263,639 bytes** (v1.25.4 was 54,347,067), mtime **2026-10-13 17:46:09**, and the cross-host
-SHA-256 matched (build VM == build Mac) — **`c0cb8225…`**.
+venv kept and `tests\*.py` cleared first. The build gate ran **2271 tests OK (37 platform skips)**,
+three PyInstaller targets, `dev_tools/tls_trust_gate.py` (it empties the CA environment on purpose
+and still requires a live handshake — measured 200 against the portal and the download manifest),
+and the installer compiled into a scratch directory before being copied in. The gate found this
+release's Windows-only red the same way the previous one did: **three tests that only make sense on
+a POSIX host** (the support autopilot's `fcntl.flock` single-flight lock, and the stager test that
+needs bash + rsync) had never been collected on Windows — now skipped there, with the reason in the
+decorator. The FT8 native library is still built on the VM (MSYS2 mingw-w64 → `wsjt_core.dll`, the
+runtime DLL closure walked with `objdump -p`) and bundled at `_internal\`. **This release also
+ships `_internal\ft8\data\cty.dat`** — the DXCC database v1.27.0 and every earlier packaged build
+were missing, so those builds logged a `cty.dat unreadable` traceback on the first decode and ran
+with an empty database (see SDD V2.88). Evidence taken from the artifact: `version.txt` = `1.28.0`,
+size **79,370,813 bytes** (v1.27.0 was 79,257,177), mtime **2026-10-17 00:24:46**, and the
+cross-host SHA-256 matched (build VM == build Mac) — **`cc8cc4fb…`**.
 
 **Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build in
 v1.25.3): that build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —
@@ -192,7 +196,7 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.24.8 package (54,121,489 bytes, SHA-256 `616f8b55…`) and v1.24.7
-(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.27.0 supersedes them.
+(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.28.0 supersedes them.
 
 **What's new in v1.27.0** (**macOS only — Windows behaviour is unchanged**): **the macOS tunnel
 stopped leaking a process per start.** v1.25.2 fixed this leak here by changing how a leftover

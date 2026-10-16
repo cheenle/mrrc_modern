@@ -47,9 +47,9 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.88 |
-| Baseline Date | 2026-10-13 |
-| Status | **v1.27.0 四平台发布：FT8 工作模式（含快路径 + 自适应级联）与「原生 DSP 库随产物构建」** —— macOS DMG **84,882,735 bytes** `9d5ec531…`；Windows Setup **79,257,177 bytes** `ba956b19…`；W103D 镜像 **1,107,381,643 bytes** `2e7452f8…`；树莓派镜像 **489,496,576 bytes** `bb7127c7…`。`unittest` **2200 项**（macOS，另 1 skip）+ FT8 pytest **744 项**；Windows 构建门禁 **2197 项 OK（33 platform skips）**；`release_check.py` 离线 **32 ok / 0 failing**；两条镜像线各跑四步产物验证（含 chroot 内 `ctypes.CDLL` 载入 `libwsjt_core.so` 并核对 `abi=2` / `decode_paths=0x7`）；macOS 与 Windows 冻结包各跑洁净室真跑，日志出现 `FT8 engine started at boot` —— 这一步抓出并修掉两个真缺陷（全新安装缺 `<runtime>/ft8/` 数据目录、冻结包缺 `multiprocessing.freeze_support()`），运行后包体零改动、`codesign --verify` 仍有效。设计与取舍见 SDD §9.10 与 `docs/superpowers/specs/2026-10-13-ft8-packaging-design.md`。 |
+| SDD Version | V2.89 |
+| Baseline Date | 2026-10-16 |
+| Status | **v1.28.0 四平台发布：电台电源回到菜单（两种意图分开、唤醒有界可取消）；出站 HTTPS 只信随包的根证书；FT8 级联的深路径第一次真正跑起来；外加三个只在产物里现形的缺陷（cty.dat 不在 PyInstaller datas 里、`.venv-ml` 被装进 ARM 镜像、三条 POSIX-only 测试从未在 Windows 收集）** —— macOS DMG **85,044,185 bytes** `8d3564d4…`；Windows Setup **79,370,813 bytes** `cc8cc4fb…`；W103D 镜像 **1,205,181,718 bytes** `c90dbcf1…`；树莓派镜像 **PENDING-PI**。`unittest` **2274 项**（macOS，1 skip）；Windows 构建门禁 **2271 项 OK（37 platform skips）**；`release_check.py` 离线 **32 ok / 0 failing**；盒子镜像跑四步产物验证（代码身份 / 装机内容 / D-11 双指向 / chroot 内载入 `libwsjt_core.so` 并核对 `abi=2` / `decode_paths=0x7`），并新增两条断言：镜像内**不得出现**运行期状态（v1.27.0 曾漏 `mrrc_modern.env` 与 `auth-tokens.json`）与兄弟 venv；macOS 与 Windows 冻结包各跑洁净室真跑，日志出现 `FT8 engine started at boot` 且零 `cty.dat unreadable` 回溯 —— 后者正是本版修掉的既存缺口。设计与取舍见 SDD §9.10、SDD/15 与 `docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md`。 |
 | Project | MRRC Modern / `mrrc_modern` |
 | Primary Radios | Yaesu FT-710 and Icom IC-7300 / IC-7300MK2 (verified); Icom IC-705 / IC-7610 / IC-7760 and Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891 (profiles without hardware verification, TX gated, no scope stream for the Yaesu family) — all selectable via backend |
 | Backend Selection | `MRRC_RADIO_MODEL=ft710\|ic7300\|ic7300mk2\|ic705\|ic7610\|ic7760\|ftdx10\|ftdx101d\|ftdx101mp\|ftx1\|ft891` (default `ft710`); `MRRC_ALLOW_UNVERIFIED_TX=1` unlocks transmit on the eight unverified models |

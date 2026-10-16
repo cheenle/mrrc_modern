@@ -81,6 +81,7 @@ mrrc_modern.env
 
 # Live session tokens (runtime state, never committed)
 auth-tokens.json
+auth-tokens.json.invalidated-*
 
 # Cloud Hub tunnel binary, fetched at build time by packaging/common/fetch-frpc.sh
 # (14.8 MB). stage-tree.sh has excluded /fleet/ since 2026-10-11 after a build

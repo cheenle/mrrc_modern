@@ -2,6 +2,41 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [v1.28.1] — 2026-10-17 — Claude Hub 云证书不再被孤儿化；FT8 的 DSP worker 不再自己杀掉自己
+
+两个都是**已经落地但从未到达用户**的修复：云证书那一笔在 10-15 就写完并验证，却一直躺在
+未合并的分支上；FT8 那一笔是上一包发完当天才定位到的。
+
+### Claude Hub：实例证书不会再有第二把（`ssl_bootstrap.sign_for()` 变幂等）
+
+登记流程原先**每次重签一把一次性密钥对**，而 `connect()` 只登记刚签的那一把。只要
+第二次签署之后登记没成功（重试、双击「连接」、网络抖动），hub 钉住的与服务的就是两份
+不同的证书——而且**重启治不好**，进程只会继续服务盘上那份更新的。现场
+`https://bg7kxr.mrrc.vlsc.net/` 整夜 502 就是这个形态，nginx 报
+`upstream SSL certificate verify error: (18:self-signed certificate)`。
+
+现在同名且证书可用（CN/SAN 匹配、距到期 > 30 天、私钥与证书配对、文件可解析）就**复用且不重写文件**：
+「签了但登记没成功」变成无害，之后每一次登记发的都是同一份字节。轮换成了显式动作（删掉证书
+文件）。**已经坏掉的实例点一次「连接」即可自愈**——它会重新登记盘上那把，正好等于 hub 将钉住的。
+
+### FT8：DSP worker 不再被 Fortran 的 `stop` 当场杀掉
+
+FT8 深路径（WSJT-X Improved）每个时隙都以 `worker_exit: worker process exited with status None`
+收场，快路径的结果保住了、深路径一次也没落地。根因是原生代码里有三处 Fortran `stop` 会直接
+终止**宿主进程**，而 worker 是服务器的子进程：
+
+- `wsjt_improved.f90` 的 FFTW 线程初始化 `error stop` → 改为返回 `WSJT_E_INTERNAL`，**绝不 abort**；
+- 另两处（`four2avar.f90`、`packjt.f90`）仍在，但现在**能看见**了：
+
+DSP worker 自己的 stdout/stderr 现在落到有界的 `logs/ft8-worker.log`（此前 launcher 的启动 tee
+在服务器答 HTTP 后就不再写盘，Fortran 的死亡信息与未捕获 traceback 一律被丢弃，诊断包里只剩
+一句 `status None`）；诊断包新增收集这个文件（含上一代 `.1`）。`worker_exit` 的日志同时带上
+**第几代 + 重启次数**，崩溃循环不再看起来像一次偶发。
+
+### Installers
+
+- 版本号、`version.txt`、下载页与指南全部对齐 v1.28.1。
+
 ## [v1.28.0] — 2026-10-16 — 电台电源回到菜单；出站 HTTPS 只信随包的根；FT8 的深路径第一次真正跑起来
 
 四条各自已经落地、又各自值得单独写下来的工作合成这一次发布：**电台电源**回到 ☰ 菜单
@@ -126,7 +161,6 @@ Let's Encrypt 的中间证书换代重签，缓存那份到期后正是这个形
 第一次构建在它之前 —— 四份产物最终出自同一修订（`124fb63`），并逐文件核对过镜像内的
 `audio_handler.py` / `server.py` 与工作区一致。
 
-
 ### 打包：发版当天在产物里抓到并修掉的三个缺陷
 
 三条都是**产物**里抓出来的，不是源码评审能发现的 —— 这正是「洁净室真跑」和「构建门禁」存在的理由。
@@ -153,7 +187,6 @@ Let's Encrypt 的中间证书换代重签，缓存那份到期后正是这个形
 **产物（四平台，2026-10-16）**：macOS `MRRC-Modern-v1.28.0-arm64.dmg` **85,038,564 bytes** `4c9f2d3c…`；
 Windows `MRRC-Modern-v1.28.0-Windows-x64-Setup.exe` **79,373,225 bytes** `e27021e8…`；
 W103D `MRRC-Modern-1.28.0-w103d.img.gz` **1,205,181,718 bytes** `c90dbcf1…`。
-
 
 ## [v1.27.0] — 2026-10-13 — FT8 走进四个平台；解码默认走快路径、按需级联
 

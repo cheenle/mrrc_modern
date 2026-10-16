@@ -47,11 +47,11 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.28.0 Stable** (79,370,813 bytes, SHA-256
+**Download v1.28.1 Stable** (79,370,813 bytes, SHA-256
 `cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea`):
 
 - Fast mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.0-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 After install, edit `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` (Start Menu →
@@ -73,10 +73,10 @@ Apple-silicon Macs (macOS 11+) can install the desktop package — no Python
 install required. The app lives in the menu bar (no Dock icon), starts the
 server itself, and opens the browser.
 
-**Download v1.28.0 Stable** (85,044,185 bytes, SHA-256
+**Download v1.28.1 Stable** (85,044,185 bytes, SHA-256
 `8d3564d4f3bc2af6153f3bf77b38bf60ecf4db0e71f7f4780f4cb852bdd1c4f2`):
 
-- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.0-arm64.dmg>
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.1-arm64.dmg>
 
 Two things to know before the first launch (full guide:
 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)):
@@ -133,7 +133,7 @@ The same server, preinstalled on an Armbian image for a ZTE W103D (Amlogic
 S905L3A, 2 GB / 32 GB). Published as a download (~1.16 GB, version listed on the
 [download page](https://www.vlsc.net/mrrc_modern/zh/)):
 
-- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.0-w103d.img.gz>
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.1-w103d.img.gz>
 
 Rebuild it locally when you need a version that is not published yet (needs Docker running):
 

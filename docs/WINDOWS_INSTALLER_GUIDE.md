@@ -7,17 +7,17 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.28.0 Stable)
+## Download (v1.28.1 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.28.0-Windows-x64-Setup.exe` | 75.7 MB (79,370,813 bytes) | `cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea` |
+| `MRRC-Modern-v1.28.1-Windows-x64-Setup.exe` | 75.7 MB (79,370,813 bytes) | `cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.0-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.28.0 is the published Windows installer.** It was built from a source pack
+**v1.28.1 is the published Windows installer.** It was built from a source pack
 (`src1280.tgz`, 72 MB, made 2026-10-16 23:06) on Windows 11 (the KVM build VM)
 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3, extracted over the VM's tree with its
 venv kept and `tests\*.py` cleared first. The build gate ran **2271 tests OK (37 platform skips)**,
@@ -31,7 +31,7 @@ decorator. The FT8 native library is still built on the VM (MSYS2 mingw-w64 → 
 runtime DLL closure walked with `objdump -p`) and bundled at `_internal\`. **This release also
 ships `_internal\ft8\data\cty.dat`** — the DXCC database v1.27.0 and every earlier packaged build
 were missing, so those builds logged a `cty.dat unreadable` traceback on the first decode and ran
-with an empty database (see SDD V2.88). Evidence taken from the artifact: `version.txt` = `1.28.0`,
+with an empty database (see SDD V2.88). Evidence taken from the artifact: `version.txt` = `1.28.1`,
 size **79,370,813 bytes** (v1.27.0 was 79,257,177), mtime **2026-10-17 00:24:46**, and the
 cross-host SHA-256 matched (build VM == build Mac) — **`cc8cc4fb…`**.
 
@@ -196,7 +196,7 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.24.8 package (54,121,489 bytes, SHA-256 `616f8b55…`) and v1.24.7
-(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.28.0 supersedes them.
+(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.28.1 supersedes them.
 
 **What's new in v1.27.0** (**macOS only — Windows behaviour is unchanged**): **the macOS tunnel
 stopped leaking a process per start.** v1.25.2 fixed this leak here by changing how a leftover

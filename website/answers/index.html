@@ -128,6 +128,44 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261001-192738-30c2">
+      <header>
+        <span class="id">20261001-192738-30c2</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">升级 · 2026-10-16 21:30</span>
+      </header>
+      <h3>云端申请500</h3>
+      <p class="verdict">「云端申请500」与 v1.24.0 引入云端接入时那个未导入 cloud_hub 的缺陷完全同签名，当前版本（1.24.0）早于修复版本，升级到 v1.24.1 及以上即可解决。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>症状与你上报的完全一致：CHANGELOG v1.24.1 条目标题即「接入云端第一次真按就 500：那个模块谁也没导入」，正文写明「v1.24.0 把接入搬进了设置菜单，但真按『申请』只会得到一个 500」（CHANGELOG.md:707、709）。</li>
+        <li>根因是打包版 server.py 从未 `import cloud_hub`，导致申请端点在运行时报 NameError 并返回 500：现场堆栈 `File &quot;server.py&quot;, line 4035, in api_cloud_apply` → `File &quot;server.py&quot;, line 3987, in _cloud_portal` → `NameError: name &#x27;cloud_hub&#x27; is not defined`（CHANGELOG.md:711-713；SDD/14-version-history.md 的 V2.64 同款记录）。</li>
+        <li>你的包版本恰是出问题的那个：env.json 报 `&quot;version&quot;: &quot;1.24.0&quot;`、`&quot;frozen&quot;: true`（打包版），而修复在 v1.24.1；也就是说 1.24.0 完全不含该修复，任何一次「申请」都必然 500。</li>
+        <li>当前仓库 HEAD 已含修复：server.py:67 有 `import cloud_hub`，_cloud_portal（server.py:5114）与 api_cloud_apply（server.py:5304）都正常引用 —— 证明这是已修复的旧版回归，不需要新改代码。</li>
+        <li>包内其余迹象（18:59 的 [已隐去] `PermissionError(13, &#x27;拒绝访问&#x27;)`/`FileNotFoundError`、更早的 `Configured audio device &#x27;USB Audio&#x27; not found`、频谱一时走 S 表回退）都属于串口被占用/设备名不符的瞬时环境问题，且日志显示 19:22 重启后串口已连上（`Connected to FT-710 (ID=0800) on [已隐去]`）、真频谱已 `first frame received`，与你上报的云端申请 500 不是同一件事。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>将 MRRC Modern 升级到 v1.24.1 或更高版本（v1.24.0 是首次加入云端接入、申请按钮必 500 的版本）：从 www.vlsc.net 下载最新安装包覆盖安装，或在应用内用「检查更新」。</li>
+        <li>升级并重启应用后，再打开「设置 / ☰ → 接入云端」填呼号提交申请，此版本起申请才可能返回正常结果。</li>
+        <li>若升级后申请仍报 500，请立刻用 🐞 生成新的诊断包发回，并附上点击「申请」的确切时间点。</li>
+        <li>本次包内另有两处环境提示可顺手排除：18:59 前后 [已隐去] 曾被其它进程占用（PermissionError/端口不存在），请确认没有第二个程序（如串口调试工具、另一个实例）占着 [已隐去]；音频设备名配置为 &#x27;USB Audio&#x27; 而实际设备名是 &#x27;USB Audio Device&#x27;，可在设置里选实际设备后重试。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: 云端申请500</li>
+        <li class="ev">diagnostics/env.json: &quot;version&quot;: &quot;1.24.0&quot;, &quot;frozen&quot;: true</li>
+        <li class="ev">CHANGELOG.md:707: ## [v1.24.1] — 2026-10-02 — 接入云端第一次真按就 500：那个模块谁也没导入</li>
+        <li class="ev">CHANGELOG.md:709: v1.24.0 把接入搬进了设置菜单，但**真按「申请」只会得到一个 500**。现场（打包版）的日志：</li>
+        <li class="ev">CHANGELOG.md:711-713: File &quot;server.py&quot;, line 4035, in api_cloud_apply / File &quot;server.py&quot;, line 3987, in _cloud_portal / NameError: name &#x27;cloud_hub&#x27; is not defined</li>
+        <li class="ev">CHANGELOG.md:719-720: 新增 tests/test_cloud_endpoints.py…并把 cloud_hub 写进 mrrc_modern_server.spec 的 hiddenimports</li>
+        <li class="ev">SDD/14-version-history.md (V2.64): ① 客户端 server.py 从未导入 cloud_hub…⇒ 打包版按下「申请」即 500 NameError</li>
+        <li class="ev">server.py:67: import cloud_hub（当前 HEAD 已含该修复）</li>
+        <li class="ev">logs/server.log: 2026-10-01 19:22:32,817 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0800) on [已隐去]（重启后串口已恢复，非本次云端问题）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:api_cloud_apply / server.py:_cloud_portal（1.24.0 缺 `import cloud_hub`；修复见 server.py:67 的 import 与 v1.24.1）</code></p>
+    </article>
     <article class="card" id="20261010-205200-6e3c">
       <header>
         <span class="id">20261010-205200-6e3c</span>
@@ -397,7 +435,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-16 21:05（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-16 21:30（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

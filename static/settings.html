@@ -61,6 +61,10 @@ button.ghost{background:transparent;color:var(--amber);border:1px solid var(--am
   display:flex;align-items:center;gap:10px;
 }
 .rows button:active{background:#2a2a2a}
+.row{display:flex;gap:8px;align-items:stretch}
+.row input{flex:1 1 auto;min-width:0}
+.row button{width:auto;flex:0 0 auto;margin-top:0;padding:12px 16px;background:transparent;
+  color:var(--amber);border:1px solid var(--amber);font-weight:600;font-size:14px}
 .ssid{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sig{color:var(--dim);font-size:12px;flex:0 0 auto;letter-spacing:1px}
 .lock{color:var(--dim);font-size:12px;flex:0 0 auto}
@@ -155,17 +159,24 @@ select{
   </section>
 
   <section class="card panel">
-    <h2>Wi-Fi</h2>
+    <h2>Wi-Fi <span class="note">（这台盒子只支持 2.4 GHz）</span></h2>
     <div class="grid" id="wifi-grid"></div>
+
+    <label for="ssid-input">网络名（SSID）</label>
+    <input id="ssid-input" type="text" spellcheck="false" autocomplete="off"
+           placeholder="点下面的扫描结果带入，或直接手输（隐藏网络只能手输）">
+    <label for="psk">密码</label>
+    <div class="row">
+      <input id="psk" type="password" autocomplete="off"
+             placeholder="Wi-Fi 密码（开放网络可留空）">
+      <button id="psk-toggle" type="button" class="ghost">显示</button>
+    </div>
+    <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
+    <p class="note">如果现在正是通过 Wi-Fi 访问这台盒子，<b>本页会断开</b>。
+      稍后用 <code id="warn-mdns"></code> 重新打开本页看结果。</p>
+
     <button id="scan-btn" type="button" class="ghost">扫描附近的 Wi-Fi</button>
     <ul class="rows" id="net-list"></ul>
-    <div id="pick" class="hidden">
-      <label for="psk">“<span id="pick-name"></span>” 的密码</label>
-      <input id="psk" type="password" autocomplete="off" placeholder="Wi-Fi 密码（开放网络可留空）">
-      <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
-      <p class="note" id="wifi-warn">如果你现在正是通过 Wi-Fi 访问这台盒子，
-        <b>本页会断开</b>。稍后用 <code id="warn-mdns"></code> 打开本页看结果。</p>
-    </div>
     <div id="wifi-msg" class="msg"></div>
   </section>
 
@@ -392,12 +403,20 @@ select{
       .catch(function (error) { Box.message('#sys-msg', error.message, 'bad'); });
   });
 
+  Box.on('#psk-toggle', 'click', function () {
+    var field = document.querySelector('#psk');
+    var shown = field.type === 'text';
+    field.type = shown ? 'password' : 'text';
+    Box.setText('#psk-toggle', shown ? '显示' : '隐藏');
+  });
+
   Box.on('#scan-btn', 'click', function () {
     Box.disabled('#scan-btn', true);
     Box.api('/api/box/wifi').then(function (data) {
       var list = document.querySelector('#net-list');
+      var networks = data.networks || [];
       list.innerHTML = '';
-      (data.networks || []).forEach(function (net) {
+      networks.forEach(function (net) {
         var item = document.createElement('li');
         var button = document.createElement('button');
         button.type = 'button';
@@ -407,24 +426,35 @@ select{
         button.querySelector('.ssid').textContent = net.ssid;
         button.addEventListener('click', function () {
           state.picked = net.ssid;
-          document.querySelector('#pick-name').textContent = net.ssid;
-          Box.show('#pick', true);
+          document.querySelector('#ssid-input').value = net.ssid;
+          Array.prototype.forEach.call(list.querySelectorAll('button'), function (other) {
+            other.classList.toggle('picked', other === button);
+          });
         });
         item.appendChild(button);
         list.appendChild(item);
       });
+      if (!networks.length) {
+        Box.message('#wifi-msg',
+          '没有扫到任何 Wi-Fi。隐藏网络（或芯片刚重启过）扫不到是正常的 —— '
+          + '直接把网络名手输到上面的框里再点连接。', '');
+      }
     }).catch(function (error) {
       Box.message('#wifi-msg', error.message, 'bad');
     }).then(function () { Box.disabled('#scan-btn', false); });
   });
 
   Box.on('#join-btn', 'click', function () {
-    if (!state.picked) return;
+    var ssid = (document.querySelector('#ssid-input').value || '').trim();
+    if (!ssid) {
+      Box.message('#wifi-msg', '请先填 Wi-Fi 名称（或点一次扫描，从结果里选一个）', 'bad');
+      return;
+    }
     Box.message('#wifi-msg', '正在切换。如果本页断开，请用 ' +
       (state.mdns || '盒子的新地址') + ' 重新打开。', '');
     Box.api('/api/box/wifi', {
       method: 'POST',
-      body: { ssid: state.picked, password: document.querySelector('#psk').value }
+      body: { ssid: ssid, password: document.querySelector('#psk').value }
     }).then(function () { poll(); })
       .catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
   });

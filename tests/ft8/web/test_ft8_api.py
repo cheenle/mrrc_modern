@@ -256,7 +256,20 @@ def test_station_update_pushes_the_policy_to_the_live_runtime():
 
 
 def _counters(**overrides):
-    base = dict(
+    """Stand-in for ``OrchestratorCounters``, seeded from the real dataclass.
+
+    Deriving the field list instead of hand-writing it is the point: a new
+    counter (``ap_decodes``, ``ap_low_quality``) used to break every test here
+    with an AttributeError, because the double silently went stale.  Now the
+    double can't miss a field the real class has.
+    """
+
+    import dataclasses
+
+    from ft8.engine.orchestrator import OrchestratorCounters
+
+    base = {field.name: 0 for field in dataclasses.fields(OrchestratorCounters)}
+    base.update(
         slots_started=100,
         slots_skipped=3,
         decodes=97,
@@ -379,3 +392,32 @@ def test_engine_stats_route_is_readable() -> None:
     assert r.status_code == 200
     assert r.json()["ok"] is True
     assert "engine" in r.json()
+
+
+def test_engine_stats_exposes_the_ap_counters() -> None:
+    """AP 产出要能在状态栏读到，否则打开 MRRC_FT8_AP_A_PRIORI 之后无从判断它有没有起作用。
+
+    计数器只写不读等于没写（设计笔记 §7.1 判据 3 的前提）。
+    """
+
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters(ap_decodes=12, ap_low_quality=3)),
+        runtime=None,
+        latency=None,
+    )
+    engine = _engine_stats(state)["engine"]
+    assert engine["ap_decodes"] == 12
+    assert engine["ap_low_quality"] == 3
+
+
+def test_engine_stats_ap_counters_default_to_zero() -> None:
+    """默认关闭 AP 的机器上，状态栏这两个数必须一直是 0。"""
+
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters()),
+        runtime=None,
+        latency=None,
+    )
+    engine = _engine_stats(state)["engine"]
+    assert engine["ap_decodes"] == 0
+    assert engine["ap_low_quality"] == 0

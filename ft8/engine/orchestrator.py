@@ -75,6 +75,13 @@ DELIVERY_GRACE_SECONDS = 0.4
 SLOT_POLL_SECONDS = 0.025
 SLOT_SAMPLES_NBYTES = 360_000  # exact 12 kHz int16 mono slot (AD-004)
 
+# AP（先验）解码的 quality 分界，用于把 ap_low_quality 计数与 ap_decodes 分开。
+# 取值依据来自解码器自己的语义而不是拍脑袋：ft8_a8d 在 plog < -147 时把 qual
+# 降到 0.16（PLOG_MIN = -160），而实测里 iaptype 3 那一路散布在 0.07-0.83
+# （docs/ft8-dl-speculative-notes.md §4.4）。0.5 正好落在「a8 的高置信 1.0」与
+# 「a8 自己认为可疑的 0.16」之间，所以它数的是「解码器自己都没把握的那部分」。
+AP_LOW_QUALITY = 0.5
+
 
 def slot_id_for(epoch: float, period: float = FT8_PERIOD_SECONDS) -> int:
     """Return the UTC slot identity ``floor(epoch / period)`` (AD-006)."""
@@ -151,6 +158,14 @@ class OrchestratorCounters:
     # 深路径的结果真的并进了本槽（本槽为此多付了一次深解码）。升级率
     # = escalations / decodes，是判断阈值松紧的主指标。
     escalations: int = 0
+    # AP（先验）解码产出：本槽最终批次里 ap_type != 0 的报文数。
+    # 必须能被数出来，否则打开了 MRRC_FT8_AP_A_PRIORI 也无从判断它到底有没有
+    # 起作用——§4.4 的 20/120 是在合成信号上量的，线上只有这两个数。
+    ap_decodes: int = 0
+    # 其中 quality < AP_LOW_QUALITY 的条数。§4.4 量到 a8 的 quality 全是 1.0，
+    # 而 iaptype 3 那一路散布在 0.07–0.83，所以「AP 解出的东西有多 shaky」是
+    # 上线后第一个要看的数（设计笔记 §7.1 判据 3）。
+    ap_low_quality: int = 0
 
 
 class Orchestrator:
@@ -367,6 +382,11 @@ class Orchestrator:
             for result in batch.results
         )
         self.counters.decodes += 1
+        for message in messages:
+            if message.result.ap_type:
+                self.counters.ap_decodes += 1
+                if message.result.quality < AP_LOW_QUALITY:
+                    self.counters.ap_low_quality += 1
         if batch.escalated:
             self.counters.escalations += 1
         elif batch.path is DecodePath.FAST:

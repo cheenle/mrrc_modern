@@ -39,7 +39,14 @@ class FakeClock:
         self.epoch = max(self.epoch, epoch)
 
 
-def make_result(text: str, snr: int = -10, slot_id: int = 0) -> DecodeResult:
+def make_result(
+    text: str,
+    snr: int = -10,
+    slot_id: int = 0,
+    *,
+    ap_type: int = 0,
+    quality: float = 1.0,
+) -> DecodeResult:
     return DecodeResult(
         slot_id=slot_id,
         sync=1.5,
@@ -47,8 +54,8 @@ def make_result(text: str, snr: int = -10, slot_id: int = 0) -> DecodeResult:
         dt=0.0,
         frequency=1500.0,
         text=text,
-        ap_type=0,
-        quality=1.0,
+        ap_type=ap_type,
+        quality=quality,
         flags=0,
     )
 
@@ -56,11 +63,21 @@ def make_result(text: str, snr: int = -10, slot_id: int = 0) -> DecodeResult:
 def make_batch(
     slot_id: int, texts: list[str] | None = None, *,
     path: DecodePath = DecodePath.IMPROVED, escalated: bool = False,
+    ap_types: list[int] | None = None,
+    qualities: list[float] | None = None,
 ) -> DecodeBatch:
+    texts = texts or []
+    ap_types = ap_types or [0] * len(texts)
+    qualities = qualities or [1.0] * len(texts)
     return DecodeBatch(
         slot_id=slot_id,
         path=path,
-        results=tuple(make_result(text, slot_id=slot_id) for text in (texts or [])),
+        results=tuple(
+            make_result(
+                text, slot_id=slot_id, ap_type=ap_types[i], quality=qualities[i]
+            )
+            for i, text in enumerate(texts)
+        ),
         overflow=False,
         elapsed_seconds=0.25,
         deadline_missed=False,
@@ -79,6 +96,8 @@ class FakeDecoder:
         wrong_slot: bool = False,
         path: DecodePath = DecodePath.IMPROVED,
         escalated: bool = False,
+        ap_types: list[int] | None = None,
+        qualities: list[float] | None = None,
     ) -> None:
         self.clock = clock
         self.texts = texts or []
@@ -87,6 +106,8 @@ class FakeDecoder:
         self.wrong_slot = wrong_slot
         self.path = path
         self.escalated = escalated
+        self.ap_types = ap_types
+        self.qualities = qualities
         self.calls: list[tuple[int, bytes]] = []
 
     async def decode(self, slot_id: int, samples: bytes) -> DecodeBatch:
@@ -96,7 +117,8 @@ class FakeDecoder:
         if self.error is not None:
             raise self.error
         return make_batch(slot_id + 1 if self.wrong_slot else slot_id, self.texts,
-                          path=self.path, escalated=self.escalated)
+                          path=self.path, escalated=self.escalated,
+                          ap_types=self.ap_types, qualities=self.qualities)
 
 
 class Harness:
@@ -689,3 +711,71 @@ def test_a_provisional_batch_reaches_the_ui_but_never_the_sequencer() -> None:
     assert harness.events[0].slot_id == 7
     assert [message.result.text for message in harness.events[0].messages] == ["CQ W9XYZ EM57"]
     assert fed == [], "a provisional answer must not be able to key anything"
+
+
+# ---------------------------------------------------------------------------
+# AP 产出的可见性（设计笔记 §7.1 判据 3 的前提）
+# ---------------------------------------------------------------------------
+
+
+def test_ap_decodes_are_counted() -> None:
+    """AP 产出必须能被数出来，否则打开 MRRC_FT8_AP_A_PRIORI 也无从判断它有没有起作用。
+
+    §4.4 的 20/120 是在合成信号上量的；线上唯一能回答"AP 今天解出了几条"的
+    就是这两个计数器。
+    """
+
+    harness = Harness(epoch=7.5)
+    harness.decoder.texts = ["CQ K1ABC FN42", "BA4EG JA1VAT -12", "JA1VAT BA4EG R-09"]
+    harness.decoder.ap_types = [0, 8, 3]
+    harness.decoder.qualities = [1.0, 1.0, 0.42]
+    harness.run(decodes=2)
+
+    counters = harness.orchestrator.counters
+    assert counters.decodes == 2
+    # 每槽 2 条 AP 报文（ap_type 8 与 3），共 2 槽
+    assert counters.ap_decodes == 4
+    assert counters.ap_low_quality == 2, "quality 0.42 < AP_LOW_QUALITY 应计入低质量"
+
+
+def test_plain_decodes_do_not_touch_the_ap_counters() -> None:
+    """默认关闭 AP 的机器上，这两个数必须一直是 0 —— 否则它们不再是证据。"""
+
+    harness = Harness(epoch=7.5)
+    harness.decoder.texts = ["CQ K1ABC FN42", "BA4EG JA1VAT -12"]
+    harness.run(decodes=3)
+
+    counters = harness.orchestrator.counters
+    assert counters.decodes == 3
+    assert counters.ap_decodes == 0
+    assert counters.ap_low_quality == 0
+
+
+def test_the_low_quality_threshold_splits_a8_from_the_symbol_mask_path() -> None:
+    """0.5 这个界不是随手取的：a8 给 1.0（plog<-147 时才降到 0.16），
+    符号掩码那一路实测散布在 0.07-0.83（§4.4）。"""
+
+    from ft8.engine.orchestrator import AP_LOW_QUALITY
+
+    assert 0.16 < AP_LOW_QUALITY < 1.0
+    harness = Harness(epoch=7.5)
+    harness.decoder.texts = ["A B -12", "C D R-09", "E F 73", "G H RR73"]
+    harness.decoder.ap_types = [8, 8, 3, 3]
+    harness.decoder.qualities = [1.0, 0.16, 0.83, 0.07]
+    harness.run(decodes=1)
+
+    counters = harness.orchestrator.counters
+    assert counters.ap_decodes == 4
+    assert counters.ap_low_quality == 2, "a8 的 0.16 与 iaptype3 的 0.07 都算低质量"
+
+
+def test_ap_counters_are_exposed_in_both_api_snapshots() -> None:
+    """计数器只写不读等于没写：状态栏与 engine payload 两处都要能拿到。"""
+
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[3] / "ft8" / "web" / "ft8_api.py"
+    ).read_text()
+    assert source.count('"ap_decodes": counters.ap_decodes') == 2
+    assert source.count('"ap_low_quality": counters.ap_low_quality') == 2

@@ -915,6 +915,8 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
             "deadline_misses": counters.deadline_misses,
             "fast_decodes": counters.fast_decodes,
             "escalations": counters.escalations,
+            "ap_decodes": counters.ap_decodes,
+            "ap_low_quality": counters.ap_low_quality,
         }
     return snapshot
 
@@ -984,6 +986,8 @@ def _engine_stats(state: AppState) -> dict[str, Any]:
             "decodes": decodes,
             "fast_decodes": counters.fast_decodes,
             "escalations": counters.escalations,
+            "ap_decodes": counters.ap_decodes,
+            "ap_low_quality": counters.ap_low_quality,
             "deadline_misses": counters.deadline_misses,
             "decode_errors": counters.decode_errors,
             # 分母为 0 是引擎刚起来的正常状态，不是异常。

@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2267 tests across 118 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2273 tests across 118 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-16, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -21,8 +21,8 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2267 |
-| Passed | 2266 (1 skipped) |
+| Total tests | 2273 |
+| Passed | 2272 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 (macOS, 2026-10-16) |
 | Execution time | ~1min (harness tests spawn CLI subprocesses) |
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2267 above. Run it with:
+the 2273 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -129,7 +129,7 @@ SDD coverage: §7.2, §10.4, NFRs
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (106 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (115 tests)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
@@ -571,7 +571,7 @@ verdict and never a blocked session.
 The loopback-only auto-password banner and the `/api/setup` first-run status
 payload.
 
-### 51. test_server_setup.py — Connection Settings and Restart (10 tests)
+### 51. test_server_setup.py — Connection Settings and Restart (12 tests)
 
 Config-file path resolution, the dual-stack pre-bound socket, device listing,
 the restart chain, and the baud<->model linkage written on every save.

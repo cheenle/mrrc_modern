@@ -47,7 +47,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.87 |
+| SDD Version | V2.88 |
 | Baseline Date | 2026-10-13 |
 | Status | **v1.27.0 四平台发布：FT8 工作模式（含快路径 + 自适应级联）与「原生 DSP 库随产物构建」** —— macOS DMG **84,882,735 bytes** `9d5ec531…`；Windows Setup **79,257,177 bytes** `ba956b19…`；W103D 镜像 **1,107,381,643 bytes** `2e7452f8…`；树莓派镜像 **489,496,576 bytes** `bb7127c7…`。`unittest` **2200 项**（macOS，另 1 skip）+ FT8 pytest **744 项**；Windows 构建门禁 **2197 项 OK（33 platform skips）**；`release_check.py` 离线 **32 ok / 0 failing**；两条镜像线各跑四步产物验证（含 chroot 内 `ctypes.CDLL` 载入 `libwsjt_core.so` 并核对 `abi=2` / `decode_paths=0x7`）；macOS 与 Windows 冻结包各跑洁净室真跑，日志出现 `FT8 engine started at boot` —— 这一步抓出并修掉两个真缺陷（全新安装缺 `<runtime>/ft8/` 数据目录、冻结包缺 `multiprocessing.freeze_support()`），运行后包体零改动、`codesign --verify` 仍有效。设计与取舍见 SDD §9.10 与 `docs/superpowers/specs/2026-10-13-ft8-packaging-design.md`。 |
 | Project | MRRC Modern / `mrrc_modern` |

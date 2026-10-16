@@ -987,6 +987,101 @@ class PortAudioReinitTests(unittest.TestCase):
         h._rx_running = False
         return h
 
+    def test_reinit_closes_live_rx_stream_before_terminate(self):
+        """Pa_Terminate must never run while the RX stream is still open.
+
+        Field report 2026-10-16 (bundle 20261016-230940-40c1): terminating
+        PortAudio underneath the RX reader killed the process natively — no
+        Python traceback — and the radio, keyed first, never got its TX0.
+        """
+        events = []
+
+        class _Stream:
+            def stop_stream(self):
+                events.append("rx.stop")
+
+            def close(self):
+                events.append("rx.close")
+
+        class _PA:
+            def terminate(self):
+                events.append("pa.terminate")
+
+        h = self._make_handler(_PA())
+        h._rx_stream = _Stream()
+        h._rx_running = True
+        h._init_pyaudio = lambda: events.append("pa.init")
+
+        h._reinit_pyaudio()
+
+        self.assertIn("rx.close", events)
+        self.assertLess(events.index("rx.close"), events.index("pa.terminate"))
+        self.assertIsNone(h._rx_stream)
+        # RX stays marked running so _audio_rx_loop's stall watchdog rebuilds it.
+        self.assertTrue(h._rx_running)
+
+    def test_reinit_closes_live_tx_stream_before_terminate(self):
+        events = []
+
+        class _Stream:
+            def stop_stream(self):
+                events.append("tx.stop")
+
+            def close(self):
+                events.append("tx.close")
+
+        class _PA:
+            def terminate(self):
+                events.append("pa.terminate")
+
+        h = self._make_handler(_PA())
+        h._tx_stream = _Stream()
+        h._init_pyaudio = lambda: events.append("pa.init")
+
+        h._reinit_pyaudio()
+
+        self.assertLess(events.index("tx.close"), events.index("pa.terminate"))
+        self.assertIsNone(h._tx_stream)
+
+    def test_read_rx_chunk_skips_while_rebuild_holds_the_lock(self):
+        """A rebuild in flight yields no audio, not a read on a dying stream."""
+
+        class _Boom:
+            def get_read_available(self):
+                raise AssertionError("read raced a stream rebuild")
+
+        h = self._make_handler(object())
+        h._rx_stream = _Boom()
+        h._rx_running = True
+        h._rx_chunk = 960
+
+        lock = h._stream_lock()
+        lock.acquire()
+        try:
+            self.assertIsNone(h.read_rx_chunk())
+        finally:
+            lock.release()
+
+    def test_stop_rx_closes_stream_and_nulls_it(self):
+        closed = []
+
+        class _Stream:
+            def stop_stream(self):
+                pass
+
+            def close(self):
+                closed.append(1)
+
+        h = self._make_handler(object())
+        h._rx_stream = _Stream()
+        h._rx_running = True
+
+        h.stop_rx()
+
+        self.assertEqual(closed, [1])
+        self.assertIsNone(h._rx_stream)
+        self.assertFalse(h._rx_running)
+
     def test_start_tx_reinits_pyaudio_then_succeeds(self):
         self._patch_devices_empty()
         try:

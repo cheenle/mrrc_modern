@@ -2680,7 +2680,15 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 await cat.set_ptt(True)
                 radio.update(tx_status=1)
                 if audio:
-                    ok = await asyncio.to_thread(audio.start_tx)
+                    try:
+                        ok = await asyncio.to_thread(audio.start_tx)
+                    except Exception as e:
+                        # A RAISED open (not just a False return) must still
+                        # release the carrier: the keying above already
+                        # happened, so an escaping exception here would leave
+                        # the radio transmitting with no unkey.
+                        logger.error("PTT: TX audio open raised (%s) — unkeying radio", e)
+                        ok = False
                     if not ok:
                         # Audio path failed to open — the radio is keyed but
                         # has no modulation.  Drop PTT immediately so the
@@ -3830,8 +3838,32 @@ def _list_devices() -> dict:
 
 
 def _schedule_restart() -> None:
-    """Exit with RESTART_EXIT_CODE shortly so the launcher restarts the server."""
-    threading.Timer(1.2, lambda: os._exit(RESTART_EXIT_CODE)).start()
+    """Exit with RESTART_EXIT_CODE shortly so the launcher restarts the server.
+
+    ``os._exit`` skips the lifespan shutdown, and with it the Force-RX safety
+    write — a restart requested while the radio was keyed used to leave the
+    carrier up with no process left to send TX0.  Release PTT on the running
+    loop first (bounded), then exit.
+    """
+    try:
+        loop: Optional[asyncio.AbstractEventLoop] = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    def _exit() -> None:
+        c = cat
+        r = radio
+        if (loop is not None and c is not None and r is not None
+                and c.connected and r.is_transmitting):
+            try:
+                fut = asyncio.run_coroutine_threadsafe(c.set_ptt(False), loop)
+                fut.result(timeout=1.5)
+                logger.warning("Restart: released PTT before exit")
+            except Exception as e:
+                logger.error("Restart: could not release PTT before exit: %s", e)
+        os._exit(RESTART_EXIT_CODE)
+
+    threading.Timer(1.2, _exit).start()
 
 
 @app.get("/api/devices", include_in_schema=False)

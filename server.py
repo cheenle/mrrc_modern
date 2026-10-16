@@ -2260,14 +2260,32 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
 # NOTE: PS0 (off) is reliable, but PS1 (on) is NOT — field testing
 # (2026-07-27/28) showed the radio often ignores PS1 in standby, and a
 # PS0 landing mid-boot can wedge the CAT MCU until a physical power
-# cycle.  The web UI therefore has NO power switch; the "power" set
-# command remains only for the maintenance scripts (_power_cycle*.py).
+# cycle.  The header switch stayed withdrawn (SDD V2.13); what the menu
+# offers instead (2026-10-16) keeps the two intents apart:
+#   * 重开电台…  → off, then keep trying to wake it (bounded + cancellable)
+#   * 关机…      → off, and stay off (never re-applies power)
+# The "power" set command and these guards remain the single execution
+# point for both the UI and the maintenance scripts (_power_cycle*.py).
 POWER_BOOT_WINDOW_S = 15.0   # PS0 rejected for this long after a PS1
 POWER_ON_ATTEMPTS = 3        # PS1 retries before declaring failure
 POWER_ON_VERIFY_S = 12.0     # per-attempt wait for the radio to answer FA
                              # (a cold radio took ~25 s to answer in field
                              # testing — 3x12 s covers that with margin)
 _power_boot_until: float = 0.0
+
+# ── Wake-up rescue loop（「重开电台…」那一半） ──────────────────────
+# One round is the already-tested _power_on_radio(): PS1 x<=3, FA read-back
+# verification, boot window re-armed on every write.  This layer adds only
+# the budget, the cancellation and the reporting — plus the one thing the
+# 36-second single shot could not do: keep trying while the radio's USB
+# re-enumerates (the maintenance script's own comment: "10 attempts in case
+# port is re-enumerating after power-off").
+POWER_RESCUE_INTERVAL_S = 30.0   # minimum gap between two rounds
+POWER_RESCUE_MAX_S = 900.0       # hard stop after 15 minutes
+_power_rescue_task: "asyncio.Task | None" = None
+_power_rescue_state: str = ""    # "" | running | woke | timeout | cancelled
+_power_rescue_attempts: int = 0
+_power_rescue_started: float = 0.0
 
 
 async def _power_on_radio(cat, backend=None) -> bool:
@@ -2304,6 +2322,151 @@ async def _power_on_radio(cat, backend=None) -> bool:
                 return True
         logger.warning("PS1 attempt %d: radio not answering", attempt)
     return False
+
+
+async def _power_off(cat_obj, radio_obj, scheduler_obj=None) -> str:
+    """Turn the radio off.  Returns "" on success, else the user-facing refusal.
+
+    Three guards, each bought with an incident (SDD V2.13):
+      * never while transmitting — including FT8, whose carrier is its own
+        ``_ft8_transmitting()``; the original branch predates FT8 and only
+        looked at ``radio.is_transmitting``, which is a real hole now;
+      * never inside ``POWER_BOOT_WINDOW_S`` of a PS1 — a PS0 landing
+        mid-boot wedged the FT-710's CAT MCU (2026-07-27) and needed a
+        physical power cycle to clear;
+      * send PS0 twice — the first write is occasionally lost.
+    """
+    if radio_obj is not None and radio_obj.is_transmitting:
+        return "发射中不能关机"
+    if _ft8_transmitting():
+        return "FT8 正在发射，不能关机"
+    if time.monotonic() < _power_boot_until:
+        remain = int(_power_boot_until - time.monotonic()) + 1
+        return f"电台正在启动，请 {remain} 秒后再关机"
+    if scheduler_obj is not None:
+        scheduler_obj.skip_next_poll("power_on", 10.0)
+    await cat_obj.set_power(False)
+    await asyncio.sleep(0.5)
+    await cat_obj.set_power(False)
+    if radio_obj is not None:
+        radio_obj.update(power_on=False)
+    return ""
+
+
+def _power_rescue_running() -> bool:
+    return _power_rescue_state == "running"
+
+
+def _power_rescue_payload(state: str) -> dict:
+    elapsed = 0.0 if not _power_rescue_started else time.monotonic() - _power_rescue_started
+    return {
+        "type": "powerRescue",
+        "state": state,                 # running | woke | timeout | cancelled
+        "attempt": _power_rescue_attempts,
+        "elapsed": round(elapsed, 1),
+        "maxSeconds": int(POWER_RESCUE_MAX_S),
+    }
+
+
+async def _broadcast_power_rescue(state: str) -> None:
+    """Push the rescue snapshot to every control client (recordingState pattern)."""
+    global ctrl_clients
+    if not ctrl_clients:
+        return
+    payload = json.dumps(_power_rescue_payload(state))
+    dead = set()
+    for ws in list(ctrl_clients):
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            dead.add(ws)
+    ctrl_clients.difference_update(dead)
+
+
+def _power_rescue_stop_task() -> bool:
+    """Cancel the running rescue task.  Returns True if one was running.
+
+    Sends **nothing** to the radio: cancelling a wake-up attempt must never
+    turn into a second PS1 (or a PS0) by itself.
+    """
+    global _power_rescue_state
+    was_running = _power_rescue_state == "running"
+    task = _power_rescue_task
+    if task is not None and not task.done():
+        task.cancel()
+    if was_running:
+        _power_rescue_state = "cancelled"
+    return was_running
+
+
+async def _power_rescue_cancel() -> bool:
+    """Stop a rescue and tell the clients.  Used by 「取消」与「关机」 alike."""
+    was_running = _power_rescue_stop_task()
+    task = _power_rescue_task
+    if task is not None and not task.done():
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    if was_running:
+        await _broadcast_power_rescue("cancelled")
+    return was_running
+
+
+def _power_rescue_start() -> "asyncio.Task":
+    """Begin the wake-up loop.  The caller has already turned the radio off."""
+    global _power_rescue_task
+    _power_rescue_stop_task()
+    _power_rescue_task = asyncio.create_task(_power_rescue(), name="power_rescue")
+    return _power_rescue_task
+
+
+async def _power_rescue() -> str:
+    """Keep trying to wake the radio until it answers, the budget runs out, or it is cancelled.
+
+    Every round re-reads the module-level ``cat`` / ``backend``: a USB
+    re-enumeration (which is exactly what a power cycle causes) rebuilds the
+    serial handle, and the round must use whatever is current.  While the
+    port is absent we wait — the connection watchdog owns reopening it, and
+    this loop must never touch the serial object itself.
+    """
+    global _power_rescue_state, _power_rescue_attempts, _power_rescue_started
+    _power_rescue_state = "running"
+    _power_rescue_attempts = 0
+    _power_rescue_started = time.monotonic()
+    await _broadcast_power_rescue("running")
+    try:
+        while True:
+            if time.monotonic() - _power_rescue_started >= POWER_RESCUE_MAX_S:
+                _power_rescue_state = "timeout"
+                logger.warning(
+                    "Power rescue gave up after %d round(s) / %.0f s — the radio is "
+                    "still off; someone has to press its front panel",
+                    _power_rescue_attempts, time.monotonic() - _power_rescue_started)
+                await _broadcast_power_rescue("timeout")
+                return "timeout"
+            cat_now, backend_now = cat, backend
+            if cat_now is None or not getattr(cat_now, "connected", False):
+                # Radio's USB is gone (that is what a power-off looks like).
+                await asyncio.sleep(2.0)
+                continue
+            _power_rescue_attempts += 1
+            await _broadcast_power_rescue("running")
+            if await _power_on_radio(cat_now, backend_now):
+                _power_rescue_state = "woke"
+                logger.info("Power rescue woke the radio on round %d after %.0f s",
+                            _power_rescue_attempts, time.monotonic() - _power_rescue_started)
+                await _broadcast_power_rescue("woke")
+                return "woke"
+            await asyncio.sleep(POWER_RESCUE_INTERVAL_S)
+    except asyncio.CancelledError:
+        # Cancelled from _power_rescue_cancel / _power_rescue_stop_task; they
+        # own the state and the broadcast, so just stop touching the radio.
+        logger.info("Power rescue cancelled after %d round(s)", _power_rescue_attempts)
+        raise
+    finally:
+        if _power_rescue_state == "running":
+            _power_rescue_state = "cancelled"
 
 
 async def _execute_set_command(field: str, value, ws: WebSocket):
@@ -2707,8 +2870,19 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             radio.update(split=on)
 
         elif field == "power":
-            on = value is True or str(value).lower() in ("true", "1")
-            if on:
+            token = str(value).strip().lower()
+            if token == "restart":
+                # Restart = off, then keep trying to wake it until it answers.
+                # The two intents must never blur: "off" (below) does not
+                # re-apply power by itself, this one does.
+                refusal = await _power_off(cat, radio, scheduler)
+                if refusal:
+                    await ws.send_text(json.dumps({"type": "error", "message": refusal}))
+                else:
+                    _power_rescue_start()
+            elif token == "cancelrescue":
+                await _power_rescue_cancel()
+            elif value is True or token in ("true", "1"):
                 scheduler and scheduler.skip_next_poll("power_on", 25.0)
                 if await _power_on_radio(cat, backend):
                     radio.update(power_on=True)
@@ -2719,26 +2893,12 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         "message": "电台开机无响应——请检查电台并手动开机",
                     }))
             else:
-                if radio.is_transmitting:
-                    await ws.send_text(json.dumps({
-                        "type": "error",
-                        "message": "发射中不能关机",
-                    }))
-                elif time.monotonic() < _power_boot_until:
-                    # A PS0 landing mid-boot can wedge the radio's CAT MCU
-                    # (2026-07-27 incident) — make the user retry instead.
-                    remain = int(_power_boot_until - time.monotonic()) + 1
-                    await ws.send_text(json.dumps({
-                        "type": "error",
-                        "message": f"电台正在启动，请 {remain} 秒后再关机",
-                    }))
-                else:
-                    scheduler and scheduler.skip_next_poll("power_on", 10.0)
-                    await cat.set_power(False)
-                    await asyncio.sleep(0.5)
-                    # First PS0 write is occasionally lost — send it twice.
-                    await cat.set_power(False)
-                    radio.update(power_on=False)
+                # "Off" always means stay off: cancel any rescue first, and
+                # let _power_off apply the guards (it never sends a PS1).
+                await _power_rescue_cancel()
+                refusal = await _power_off(cat, radio, scheduler)
+                if refusal:
+                    await ws.send_text(json.dumps({"type": "error", "message": refusal}))
 
         elif field == "squelch":
             v = max(0, min(100, int(value)))

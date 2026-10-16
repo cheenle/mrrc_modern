@@ -166,5 +166,73 @@ class RouteTests(unittest.TestCase):
                 self.assertNotIn("manage.html", text)
 
 
+class SettingsWifiPanelTests(unittest.TestCase):
+    """手输 SSID 与“输入时明文”的形态 —— 以及它没有变成回显。"""
+
+    def setUp(self):
+        self.text = (STATIC / "settings.html").read_text(encoding="utf-8")
+
+    def test_the_ssid_can_be_typed_by_hand(self):
+        # 隐藏网络与“扫描返回空表”都只能手输；点扫描结果只是把它**填入**这个框。
+        self.assertIn('id="ssid-input"', self.text)
+        self.assertIn("document.querySelector('#ssid-input').value", self.text)
+
+    def test_the_password_is_masked_until_the_operator_asks(self):
+        self.assertIn('id="psk" type="password"', self.text)
+        self.assertIn("field.type = shown ? 'password' : 'text'", self.text)
+
+    def test_an_empty_scan_explains_itself(self):
+        """空白列表看起来像“没点对”——它其实是芯片刚重启或网络是隐藏的。"""
+        self.assertIn("没有扫到任何 Wi-Fi", self.text)
+
+
+class SettingsPageMarkupTests(unittest.TestCase):
+    """本页不再用 innerHTML 拼或清 DOM（2026-10-17 收敛后钉住）。"""
+
+    def test_no_markup_is_built_with_innerHTML(self):
+        text = (STATIC / "settings.html").read_text(encoding="utf-8")
+        self.assertNotIn("innerHTML", text)
+
+
+class WifiSecretNeverComesBackTests(unittest.TestCase):
+    """NFR-068 / AD-021：Wi-Fi 密码只进 nmcli 的 argv，不回显、不落盘。"""
+
+    PAGES = ("settings.html", "setup.html", "box_api.js", "sw.js")
+    MODULES = ("net_wifi.py", "box_ops.py", "server.py")
+
+    def test_no_page_reads_a_stored_psk_back(self):
+        for name in self.PAGES:
+            text = (STATIC / name).read_text(encoding="utf-8")
+            with self.subTest(page=name):
+                self.assertNotIn("show-secrets", text)
+                self.assertNotIn("wireless-security.psk", text)
+
+    def test_the_server_never_asks_nm_for_a_secret(self):
+        for name in self.MODULES:
+            text = (ROOT / name).read_text(encoding="utf-8")
+            with self.subTest(module=name):
+                self.assertNotIn("show-secrets", text)
+                self.assertNotIn("wireless-security.psk", text)
+
+
+class CloudPanelTests(unittest.TestCase):
+    """公网入口面板只允许用既有的三个端点（不新增写入路径）。"""
+
+    def setUp(self):
+        self.text = (STATIC / "settings.html").read_text(encoding="utf-8")
+
+    def test_the_panel_uses_exactly_the_three_existing_endpoints(self):
+        used = set(re.findall(r"/api/cloud/[a-z_]+", self.text))
+        self.assertEqual(used, {"/api/cloud/state", "/api/cloud/apply",
+                                "/api/cloud/refresh"})
+
+    def test_a_box_that_already_has_a_token_does_not_apply_again(self):
+        """门户对同一呼号的重复申请是查重拒绍的；重提只会把“已存在申请”糊到脸上。"""
+        self.assertIn("if (cloud.has_token) return refreshCloud();", self.text)
+
+    def test_the_callsign_field_says_what_changing_it_means(self):
+        self.assertIn("旧入口不会自动迁移", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()

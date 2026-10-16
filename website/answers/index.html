@@ -128,6 +128,42 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261007-203517-f40d">
+      <header>
+        <span class="id">20261007-203517-f40d</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-16 21:42</span>
+      </header>
+      <h3>FT-7300开机就发射</h3>
+      <p class="verdict">日志签名 `TX session: frames=0 … written=0 … peak=0%`（键控了却没有声音）与 v1.25.4 修复的「同一 30 天令牌下多条 /WSaudioTX 上行归属错误」同签名，而当前版本正是 1.25.4（应已含该修复）→ 按回归排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>日志反复出现 `TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0` —— 键控确实发生，但一帧上行音频都没到服务端，正是 v1.25.4 CHANGELOG 记的「键控了却没有声音」现象。</li>
+        <li>包内可确认**同一会话存在多条 /WSaudioTX**：`20:34:14,608 [WARNING] mrrc: TX audio owner disconnected during TX! Forcing RX` 之后紧跟 `20:34:14,675 TX audio ownership promoted to remaining client (1 total)` 与 `20:34:14,676 Audio TX client disconnected (1 remain, owner=True)` —— 与 v1.25.4 描述的「页面重载留下的半开旧 socket / 同一登录的两个标签页」场景一致。</li>
+        <li>当前版本 = 1.25.4（`diagnostics/env.json` &quot;version&quot;: &quot;1.25.4&quot;，`manifest.json` &quot;version&quot;: &quot;1.25.4&quot;），而 CHANGELOG v1.25.4 明说该包已含修复：`_claim_tx_owner_for_token`、`_same_session_uplink_takeover` 都在里面（源码包逐字节核对）。因此这不是「版本太旧」，而是修复未生效的回归。</li>
+        <li>服务端 `is_transmitting` 由 CI-V 读回驱动（`radio_state.py` 中 `tx_status` → 派生 `is_transmitting`；`civ_controller.py` 的 `_try(&quot;tx_status&quot;, self.get_ptt)`），所以电台确实处于发射态；结合 frames=0，用户看到的「开机就发射」就是「电台被一条不再送音频的 socket 键控着、却无声」。</li>
+        <li>次要环境噪声不构成 frames=0 的判据：`[Errno -9999]`、`Configured audio device &#x27;麦克风 (USB Audio CODEC)&#x27; not found`（实际设备名多一个尾空格）影响的是服务端↔电台的声卡，而不是浏览器上行帧计数；Windows 的 `_ProactorBasePipeTransport._call_connection_lost` 是已知良性噪音。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先排除多 socket 干扰：把所有打开该网页的标签页/窗口全部关闭（尤其 ToDesk 远端里和本机各开的一个），然后**只开一个**页面重新登录再试发射，同一账号不要同时开两个标签页。</li>
+        <li>检查浏览器麦克风权限与输入设备：该机存在 `麦克风 (ToDesk Virtual Audio)`，请把系统默认输入改为 `麦克风 (USB Audio CODEC )`，并允许浏览器使用麦克风后再按键。</li>
+        <li>若单一标签页下仍无声：按回归上报——打开 🐞 页面生成本次诊断包（含 `diagnostics/client.json`，本次包内该文件内容缺失），在答复里注明「1.25.4 上仍复现 frames=0」并附新的 `#编号`。</li>
+        <li>临时规避：发射前先松开再重新按下 PTT，并观察该次 TX 会话的 frames 是否仍为 0，以确认是否为上行归属问题；确认期间可用功率/SWR 表判断电台是否真在发信。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-07 20:32:24,301 [INFO] mrrc: TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">2026-10-07 20:34:14,608 [WARNING] mrrc: TX audio owner disconnected during TX! Forcing RX.</li>
+        <li class="ev">2026-10-07 20:34:14,675 [INFO] mrrc: TX audio ownership promoted to remaining client (1 total)</li>
+        <li class="ev">2026-10-07 20:34:14,676 [INFO] mrrc: Audio TX client disconnected (1 remain, owner=True)</li>
+        <li class="ev">2026-10-07 20:32:46,729 [WARNING] mrrc.poll: TX meter poll: all queries returned None (missed=[&#x27;COMP&#x27;], is_transmitting=True, connected=True)</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.25.4&quot;；manifest.json: &quot;version&quot;: &quot;1.25.4&quot;,  &quot;problem&quot;: &quot;FT-7300开机就发射&quot;</li>
+        <li class="ev">CHANGELOG.md v1.25.4 — 「发射时『键控了却没有声音』… 一个令牌名下可以同时有多条 /WSaudioTX … 现在按会话取最后连接的那条，并在收到第一个语音帧时把上行交给同 token 的活 socket」</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_claim_tx_owner_for_token / server.py:_same_session_uplink_takeover（TX 上行归属；配套 _register_tx_socket/_forget_tx_socket）</code></p>
+    </article>
     <article class="card" id="20261001-192738-30c2">
       <header>
         <span class="id">20261001-192738-30c2</span>
@@ -435,7 +471,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-16 21:30（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-16 21:42（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

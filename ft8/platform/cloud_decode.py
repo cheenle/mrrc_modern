@@ -118,7 +118,7 @@ class CloudDecoder:
             # The host runs the same native decoder, so the same a-priori helps
             # there too -- and it costs nothing extra on the wire: the config is
             # already sent in full with every request.
-            changes.update(self._ap_context())
+            changes.update(self._ap_context(slot_id))
         config = self._config.replace(**changes)
         return {
             "v": PROTOCOL_VERSION,

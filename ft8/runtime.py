@@ -13,6 +13,7 @@ import logging
 import os
 from collections import deque
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -104,7 +105,64 @@ def _ap_a_priori_enabled(environ) -> bool:
     return (environ.get(AP_A_PRIORI_ENV) or "").strip() not in ("", "0", "false")
 
 
-def _ap_context_for(sequencer: Sequencer) -> ApContextProvider:
+# Slots per 15 s day (86400 / 15); used for wrap-safe "how many slots ago".
+_SLOTS_PER_DAY = 5_760
+
+#: How many slots a remembered partner frequency stays usable for a8.  Partners
+#: transmit on alternate slots, so 6 slots (~90 s) tolerates one missed decode
+#: plus margin.  The window errs generous on purpose: aiming a8 at an empty
+#: frequency measured **zero inventions in 180 trials** (notes §4.3), while too
+#: tight a window simply forgoes the largest measured gain mechanism
+#: (a8 = 11 of 20 gains, notes §4.4).
+AP_DX_FREQUENCY_FRESH_SLOTS = 6
+
+
+@dataclass
+class DxFrequency:
+    """Where the current partner was last heard, and when.
+
+    a8 activates only within ±10 Hz of ``nfqso`` (= ``DecodeConfig.rx_frequency``),
+    so a stale frequency is worse than none: it sends the list decoder to an
+    empty part of the band to try 128 hypotheses.
+
+    ``sequencer.tx_frequency`` cannot serve as that frequency, however much its
+    docstring suggests otherwise: ``start_cq()`` sets it to *our own* CQ offset
+    (``cq_loop.py`` → ``pick_frequency()``), ``reply_to()`` sets it from the row
+    the operator clicked, and ``on_message(msg, snr_db)`` carries no frequency —
+    so it is frozen at selection time while the partner drifts.  The partner's
+    own decoded frequency is what ``nfqso`` means, and the decode callback
+    already has it (``SlotMessage.result.frequency``).
+    """
+
+    call: str = ""
+    frequency: float = 0.0
+    slot_id: int = -1
+
+    def note(self, slot_id: int, call: str, frequency: float) -> None:
+        """Remember one sighting of ``call`` at ``frequency`` in ``slot_id``."""
+
+        if not call:
+            return
+        self.call = call
+        self.frequency = float(frequency)
+        self.slot_id = int(slot_id)
+
+    def fresh_for(self, call: str, slot_id: int) -> float | None:
+        """The remembered frequency, or ``None`` if stale or another station's.
+
+        The call comparison matters as much as the age: after the operator
+        switches partners, the previous partner's frequency must not be aimed at.
+        """
+
+        if not call or self.call != call or self.slot_id < 0:
+            return None
+        age = (int(slot_id) - self.slot_id) % _SLOTS_PER_DAY
+        return self.frequency if age <= AP_DX_FREQUENCY_FRESH_SLOTS else None
+
+
+def _ap_context_for(
+    sequencer: Sequencer, dx_frequency: DxFrequency | None = None
+) -> ApContextProvider:
     """The a-priori the decoder was always entitled to but never received.
 
     ``DecodeConfig.ap`` defaults to ``True``, so AP has been *on* all along —
@@ -127,7 +185,7 @@ def _ap_context_for(sequencer: Sequencer) -> ApContextProvider:
       frame it sends today.
     """
 
-    def provider() -> dict[str, object]:
+    def provider(slot_id: int) -> dict[str, object]:
         fields: dict[str, object] = {"qso_progress": _qso_progress(sequencer.state)}
         my_call = (sequencer.my_call or "").strip()
         if my_call:
@@ -138,6 +196,17 @@ def _ap_context_for(sequencer: Sequencer) -> ApContextProvider:
             dx_grid = (sequencer.dx_grid or "").strip()
             if dx_grid:
                 fields["dx_grid"] = dx_grid
+            # P5c: unlock a8, the largest measured gain mechanism (11/20), by
+            # pointing nfqso at where the partner actually was -- but only while
+            # that sighting is fresh and still belongs to this partner.
+            if dx_frequency is not None:
+                frequency = dx_frequency.fresh_for(dx_call, slot_id)
+                if frequency is not None:
+                    fields["rx_frequency"] = int(round(frequency))
+        # tx_frequency (nftx) is deliberately left at its default.  The probe
+        # set it to the signal frequency, which is not what nftx means (it is
+        # *our* transmit offset), so filling it from sequencer.tx_frequency
+        # would be a different, unmeasured configuration.
         return fields
 
     return provider
@@ -210,6 +279,9 @@ class Ft8Runtime:
             rig, tx_player, sequencer=self.sequencer, on_event=on_event
         )
         self.decoder: SupervisorDecoder | None = None
+        # P5c: where the current partner was last heard (see DxFrequency).
+        self._ap_a_priori = False
+        self._dx_frequency: DxFrequency | None = None
         self.encoder: SupervisorEncoder | None = None
         self.tx_driver: TxDriver | None = None
         self.orchestrator: Orchestrator | None = None
@@ -299,13 +371,17 @@ class Ft8Runtime:
             log.debug("decoder_profile unavailable; using %d", DEFAULT_PROFILE)
         # 同一个 provider 喂本地与云端两条路径：主机跑的是同一个原生解码器，
         # 同一份先验在那边同样有效，而且配置本来就随每个请求整份发过去。
+        # Only exists when the gate is on, so "off" means off: no extra work per
+        # slot and no possibility of a stale field reaching a frame.
+        self._ap_a_priori = _ap_a_priori_enabled(os.environ)
+        self._dx_frequency = DxFrequency() if self._ap_a_priori else None
         ap_context = (
-            _ap_context_for(sequencer) if _ap_a_priori_enabled(os.environ) else None
+            _ap_context_for(sequencer, self._dx_frequency) if self._ap_a_priori else None
         )
         if ap_context is not None:
             log.info(
                 "AP a-priori enabled (%s): feeding my_call/dx_call/dx_grid/qso_progress "
-                "to both decode paths",
+                "(and a fresh partner frequency for a8) to both decode paths",
                 AP_A_PRIORI_ENV,
             )
         self.decoder = SupervisorDecoder(
@@ -467,6 +543,45 @@ class Ft8Runtime:
         cascade = getattr(self, "_cascade", None)
         return getattr(cascade, "last_deep_path", "") == "cloud"
 
+    def _note_partner_frequency(self, slot_decode: Any) -> None:
+        """Remember where the current partner was last heard, for a8's ``nfqso``.
+
+        Fed from both the provisional and the complete batch — the partner's
+        message often appears in the fast answer first, and a fresher sighting is
+        the whole point.  Late batches are skipped: NFR-001/NFR-009 keep them
+        display-only, and the orchestrator likewise never feeds them to the
+        sequencer.  No addressee filter — where the partner *is* does not depend
+        on who they were calling.
+        """
+
+        # ``getattr``, not ``self._dx_frequency``: this runs on every batch of a
+        # live decode path, and an optional feature must never be able to break
+        # the path it rides on (the same contract as MRRC_FT8_CLOUD_DECODE_TRACE,
+        # which retires itself on failure).  It also keeps the existing
+        # source-pinned tests working -- they build the runtime with
+        # ``object.__new__`` so ``__init__`` never runs.
+        tracker = getattr(self, "_dx_frequency", None)
+        if tracker is None or getattr(slot_decode, "late", False):
+            return
+        # Same reason: a stand-in sequencer may not carry the partner fields.
+        dx_call = (getattr(self.sequencer, "dx_call", "") or "").strip()
+        if not dx_call:
+            return
+        slot_id = int(getattr(slot_decode, "slot_id", 0))
+        for message in getattr(slot_decode, "messages", ()) or ():
+            parsed = getattr(message, "parsed", None)
+            if (getattr(parsed, "from_call", "") or "").strip() != dx_call:
+                continue
+            frequency = getattr(getattr(message, "result", None), "frequency", None)
+            if frequency is None:
+                continue
+            try:
+                tracker.note(slot_id, dx_call, float(frequency))
+            except (TypeError, ValueError):
+                # A malformed frequency must not take the decode path down with
+                # it; the next sighting simply overwrites nothing.
+                log.debug("ignoring an unusable partner frequency: %r", frequency)
+
     def _on_batch(self, slot_decode: Any) -> None:
         """One SlotDecode → the ``{slot_id, messages:[…]}`` batch the UI renders.
 
@@ -481,6 +596,8 @@ class Ft8Runtime:
         ``slot_id`` (``state.js: applyDecodeBatch``), so the later publication is
         a correction rather than a duplicate.
         """
+
+        self._note_partner_frequency(slot_decode)
 
         if getattr(slot_decode, "provisional", False):
             self.provisional_published += 1

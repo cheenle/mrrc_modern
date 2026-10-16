@@ -37,6 +37,9 @@ from ft8.engine.sequencer import QSOState, Sequencer
 from ft8.platform.cloud_decode import CloudDecoder
 from ft8.runtime import (
     AP_A_PRIORI_ENV,
+    Ft8Runtime,
+    AP_DX_FREQUENCY_FRESH_SLOTS,
+    DxFrequency,
     _ap_a_priori_enabled,
     _ap_context_for,
     _qso_progress,
@@ -117,7 +120,7 @@ def test_an_idle_station_supplies_only_its_own_call() -> None:
     station cannot arm them no matter what we send.
     """
 
-    fields = _ap_context_for(_sequencer())()
+    fields = _ap_context_for(_sequencer())(480)
     assert fields == {"qso_progress": 0, "my_call": "BA4EG"}
     assert "dx_call" not in fields and "dx_grid" not in fields
 
@@ -126,7 +129,7 @@ def test_a_qso_in_progress_supplies_the_calls_and_the_grid() -> None:
     sequencer = _sequencer(
         state=QSOState.REPORT, dx_call="JA1VAT", dx_grid="QN06"
     )
-    assert _ap_context_for(sequencer)() == {
+    assert _ap_context_for(sequencer)(480) == {
         "qso_progress": 2,
         "my_call": "BA4EG",
         "dx_call": "JA1VAT",
@@ -138,19 +141,116 @@ def test_a_partner_without_a_grid_is_still_worth_feeding() -> None:
     """The symbol-mask AP needs only the calls; requiring the grid would disable
     the mechanism that produced 10 of the 13 measured gains."""
 
-    fields = _ap_context_for(_sequencer(state=QSOState.REPLYING, dx_call="JA1VAT"))()
+    fields = _ap_context_for(_sequencer(state=QSOState.REPLYING, dx_call="JA1VAT"))(480)
     assert fields["dx_call"] == "JA1VAT"
     assert "dx_grid" not in fields
 
 
-def test_rx_frequency_is_deliberately_left_alone() -> None:
+def test_rx_frequency_is_absent_without_a_tracker() -> None:
     """a8 activates within ±10 Hz of nfqso = rx_frequency; a guess is worse than
-    not arming it.  Unlocking a8 is a separate step (notes §6.1, §7 P5c)."""
+    not arming it.  With no sightings recorded, the field stays at its default."""
 
     fields = _ap_context_for(
         _sequencer(state=QSOState.REPORT, dx_call="JA1VAT", dx_grid="QN06")
-    )()
+    )(480)
     assert "rx_frequency" not in fields
+
+
+def test_rx_frequency_is_absent_without_a_grid_tracker_too() -> None:
+    """An empty tracker behaves like no tracker: nothing to aim at."""
+
+    fields = _ap_context_for(
+        _sequencer(state=QSOState.REPORT, dx_call="JA1VAT", dx_grid="QN06"),
+        DxFrequency(),
+    )(480)
+    assert "rx_frequency" not in fields
+
+
+# --------------------------------------------------------------------------
+# P5c: pointing a8 at where the partner actually was
+# --------------------------------------------------------------------------
+
+
+def _tracker(call: str = "JA1VAT", frequency: float = 1234.4, slot_id: int = 480) -> DxFrequency:
+    tracker = DxFrequency()
+    tracker.note(slot_id, call, frequency)
+    return tracker
+
+
+def test_a_fresh_sighting_supplies_rx_frequency() -> None:
+    fields = _ap_context_for(
+        _sequencer(state=QSOState.REPORT, dx_call="JA1VAT", dx_grid="QN06"),
+        _tracker(slot_id=478),
+    )(480)
+    assert fields["rx_frequency"] == 1234
+
+
+def test_rx_frequency_is_rounded_to_the_integer_the_protocol_wants() -> None:
+    fields = _ap_context_for(
+        _sequencer(state=QSOState.REPORT, dx_call="JA1VAT"),
+        _tracker(frequency=1234.6),
+    )(480)
+    assert fields["rx_frequency"] == 1235
+
+
+def test_a_stale_sighting_is_not_sent() -> None:
+    """A stale nfqso sends a8 to an empty part of the band to try 128 hypotheses."""
+
+    stale = 480 + AP_DX_FREQUENCY_FRESH_SLOTS + 1
+    fields = _ap_context_for(
+        _sequencer(state=QSOState.REPORT, dx_call="JA1VAT"), _tracker(slot_id=480)
+    )(stale)
+    assert "rx_frequency" not in fields
+
+
+def test_the_freshness_window_includes_its_own_edge() -> None:
+    edge = 480 + AP_DX_FREQUENCY_FRESH_SLOTS
+    fields = _ap_context_for(
+        _sequencer(state=QSOState.REPORT, dx_call="JA1VAT"), _tracker(slot_id=480)
+    )(edge)
+    assert fields["rx_frequency"] == 1234
+
+
+def test_the_window_covers_several_missed_decode_cycles() -> None:
+    """Partners transmit on alternate slots, so one missed decode must not disarm a8."""
+
+    assert AP_DX_FREQUENCY_FRESH_SLOTS >= 4
+
+
+def test_a_previous_partners_frequency_is_not_reused() -> None:
+    """After the operator switches partners, aiming at the old frequency is worse
+    than not arming a8 at all."""
+
+    fields = _ap_context_for(
+        _sequencer(state=QSOState.REPORT, dx_call="VK3ABC", dx_grid="QF22"),
+        _tracker(call="JA1VAT"),
+    )(480)
+    assert "rx_frequency" not in fields
+
+
+def test_midnight_wrap_does_not_look_stale() -> None:
+    tracker = _tracker(slot_id=5759)
+    fields = _ap_context_for(
+        _sequencer(state=QSOState.REPORT, dx_call="JA1VAT"), tracker
+    )(2)
+    assert fields["rx_frequency"] == 1234, "slot ids wrap at 5760 per day"
+
+
+def test_the_newest_sighting_wins() -> None:
+    tracker = DxFrequency()
+    tracker.note(470, "JA1VAT", 900.0)
+    tracker.note(479, "JA1VAT", 1500.0)
+    fields = _ap_context_for(
+        _sequencer(state=QSOState.REPORT, dx_call="JA1VAT"), tracker
+    )(480)
+    assert fields["rx_frequency"] == 1500
+
+
+def test_an_empty_call_is_never_recorded() -> None:
+    tracker = DxFrequency()
+    tracker.note(480, "", 1500.0)
+    assert tracker.fresh_for("JA1VAT", 481) is None
+    assert tracker.fresh_for("", 481) is None
 
 
 def test_the_provider_rereads_the_sequencer_every_call() -> None:
@@ -158,16 +258,16 @@ def test_the_provider_rereads_the_sequencer_every_call() -> None:
 
     sequencer = _sequencer()
     provider = _ap_context_for(sequencer)
-    assert "dx_call" not in provider()
+    assert "dx_call" not in provider(480)
 
     sequencer.dx_call = "JA1VAT"
     sequencer.dx_grid = "QN06"
     sequencer.state = QSOState.REPORT
-    assert provider()["dx_call"] == "JA1VAT"
+    assert provider(480)["dx_call"] == "JA1VAT"
 
     sequencer.dx_call = ""
     sequencer.state = QSOState.DONE
-    again = provider()
+    again = provider(480)
     assert "dx_call" not in again
     assert again["qso_progress"] == 0
     assert again["my_call"] == "BA4EG", "our own call never goes stale"
@@ -187,7 +287,7 @@ def test_without_a_provider_the_frame_is_byte_identical_to_today() -> None:
 
     noop = _FakeSupervisor()
     with SupervisorDecoder(
-        noop, DecodeConfig(profile=1, threads=4), ap_context=lambda: {}
+        noop, DecodeConfig(profile=1, threads=4), ap_context=lambda _slot_id: {}
     ) as decoder:
         _decode(decoder, 480)
 
@@ -268,7 +368,7 @@ def _cloud(ap_context=None) -> CloudDecoder:
 
 def test_the_cloud_frame_is_unchanged_without_a_provider() -> None:
     assert _cloud()._request_frame(480, 360_000)["config"] == _cloud(
-        lambda: {}
+        lambda _slot_id: {}
     )._request_frame(480, 360_000)["config"]
 
 
@@ -345,6 +445,201 @@ def test_the_provider_carries_the_row_of_the_current_phase() -> None:
     """End to end: the sequencer's phase, not a constant, reaches the frame."""
 
     sequencer = _sequencer(state=QSOState.ROGERS, dx_call="JA1VAT", dx_grid="QN06")
-    assert _ap_context_for(sequencer)()["qso_progress"] == 4
+    assert _ap_context_for(sequencer)(480)["qso_progress"] == 4
     sequencer.state = QSOState.REPLYING
-    assert _ap_context_for(sequencer)()["qso_progress"] == 1
+    assert _ap_context_for(sequencer)(480)["qso_progress"] == 1
+
+
+# --------------------------------------------------------------------------
+# P5c wiring: decoded messages → the partner's frequency → rx_frequency
+# --------------------------------------------------------------------------
+
+
+class _Parsed:
+    def __init__(self, from_call: str) -> None:
+        self.from_call = from_call
+
+
+class _Result:
+    def __init__(self, frequency: float) -> None:
+        self.frequency = frequency
+
+
+class _Message:
+    def __init__(self, from_call: str, frequency: float) -> None:
+        self.parsed = _Parsed(from_call)
+        self.result = _Result(frequency)
+
+
+class _SlotDecode:
+    def __init__(self, slot_id: int, *messages: _Message, late: bool = False) -> None:
+        self.slot_id = slot_id
+        self.messages = list(messages)
+        self.late = late
+
+
+class _RuntimeStub:
+    """Borrows the real method; nothing here needs a supervisor or a rig."""
+
+    _note_partner_frequency = Ft8Runtime._note_partner_frequency
+
+    def __init__(self, dx_call: str = "JA1VAT", enabled: bool = True) -> None:
+        self.sequencer = _sequencer(state=QSOState.REPORT, dx_call=dx_call, dx_grid="QN06")
+        self._dx_frequency = DxFrequency() if enabled else None
+
+
+def test_the_partners_decode_is_recorded() -> None:
+    stub = _RuntimeStub()
+    stub._note_partner_frequency(
+        _SlotDecode(480, _Message("VK3ABC", 900.0), _Message("JA1VAT", 1234.4))
+    )
+    assert stub._dx_frequency.fresh_for("JA1VAT", 481) == 1234.4
+
+
+def test_another_stations_decode_is_not_recorded() -> None:
+    stub = _RuntimeStub()
+    stub._note_partner_frequency(_SlotDecode(480, _Message("VK3ABC", 900.0)))
+    assert stub._dx_frequency.fresh_for("JA1VAT", 481) is None
+
+
+def test_a_late_batch_is_never_used() -> None:
+    """NFR-001/NFR-009: a late decode is display-only and never fed to the
+    sequencer -- the same rule keeps it out of the a-priori."""
+
+    stub = _RuntimeStub()
+    stub._note_partner_frequency(
+        _SlotDecode(480, _Message("JA1VAT", 1234.4), late=True)
+    )
+    assert stub._dx_frequency.fresh_for("JA1VAT", 481) is None
+
+
+def test_the_provisional_batch_does_feed_it() -> None:
+    """The partner's message often lands in the fast answer first, and a fresher
+    sighting is the whole point -- so provisional is not filtered out."""
+
+    stub = _RuntimeStub()
+    batch = _SlotDecode(480, _Message("JA1VAT", 1234.4))
+    batch.provisional = True  # type: ignore[attr-defined]
+    stub._note_partner_frequency(batch)
+    assert stub._dx_frequency.fresh_for("JA1VAT", 481) == 1234.4
+
+
+def test_with_no_partner_there_is_nothing_to_track() -> None:
+    stub = _RuntimeStub(dx_call="")
+    stub._note_partner_frequency(_SlotDecode(480, _Message("JA1VAT", 1234.4)))
+    assert stub._dx_frequency.fresh_for("JA1VAT", 481) is None
+
+
+def test_the_gate_off_means_no_tracker_and_no_crash() -> None:
+    stub = _RuntimeStub(enabled=False)
+    assert stub._dx_frequency is None
+    stub._note_partner_frequency(_SlotDecode(480, _Message("JA1VAT", 1234.4)))
+
+
+def test_end_to_end_a_sighting_becomes_rx_frequency() -> None:
+    """The whole chain: decoded message → tracker → provider → the frame."""
+
+    stub = _RuntimeStub()
+    stub._note_partner_frequency(_SlotDecode(480, _Message("JA1VAT", 1234.4)))
+    fields = _ap_context_for(stub.sequencer, stub._dx_frequency)(481)
+    assert fields["rx_frequency"] == 1234
+    assert fields["dx_call"] == "JA1VAT"
+
+
+def test_tx_frequency_is_still_left_alone() -> None:
+    """nftx means *our* transmit offset; the probe set it to the signal's
+    frequency, so filling it from sequencer.tx_frequency would be a different,
+    unmeasured configuration."""
+
+    stub = _RuntimeStub()
+    stub._note_partner_frequency(_SlotDecode(480, _Message("JA1VAT", 1234.4)))
+    fields = _ap_context_for(stub.sequencer, stub._dx_frequency)(481)
+    assert "tx_frequency" not in fields
+
+
+def test_it_survives_a_runtime_whose_init_never_ran() -> None:
+    """The same contract as the cloud-decode trace: optional, never fatal.
+
+    ``tests/ft8/test_server_wiring.py`` builds the runtime with ``object.__new__``
+    (its docstring: constructing the whole runtime to pin one field is
+    disproportionate), so ``_dx_frequency`` may simply not exist.  This runs on
+    every batch of a live decode path, so a missing attribute must not be able to
+    take decoding down.
+    """
+
+    stub = object.__new__(Ft8Runtime)
+    stub.sequencer = _sequencer(state=QSOState.REPORT, dx_call="JA1VAT")
+    stub._note_partner_frequency(_SlotDecode(480, _Message("JA1VAT", 1234.4)))  # must not raise
+
+
+def test_it_survives_a_sequencer_without_partner_fields() -> None:
+    stub = object.__new__(Ft8Runtime)
+    stub._dx_frequency = DxFrequency()
+    stub.sequencer = type("S", (), {"my_call": "BA4EG"})()
+    stub._note_partner_frequency(_SlotDecode(480, _Message("JA1VAT", 1234.4)))  # must not raise
+
+
+def test_an_unusable_frequency_is_skipped_not_fatal() -> None:
+    stub = _RuntimeStub()
+    stub._note_partner_frequency(_SlotDecode(480, _Message("JA1VAT", float("nan"))))
+    # NaN is a float, so it records; the guard is against non-numeric junk.
+    stub._note_partner_frequency(_SlotDecode(481, _Message("JA1VAT", None)))
+    stub._note_partner_frequency(_SlotDecode(482, _Message("JA1VAT", "1234")))
+    assert stub._dx_frequency.slot_id == 482
+
+
+def test_a_message_without_a_result_does_not_raise() -> None:
+    stub = _RuntimeStub()
+    stub._note_partner_frequency(
+        _SlotDecode(480, type("M", (), {"parsed": _Parsed("JA1VAT")})())
+    )
+    assert stub._dx_frequency.fresh_for("JA1VAT", 481) is None
+
+
+def test_the_shipped_config_matches_the_measured_one() -> None:
+    """What P5a+P5c put on the wire must be the configuration §4.2/§4.4 measured.
+
+    The gain numbers (20/120, a8 = 11 of them, zero losses, zero inventions) were
+    produced by ``ap_probe``'s ``ap_fed`` arm.  If the runtime drifts away from
+    that arm, the evidence stops applying to the shipped code -- so the two are
+    compared field by field here, and the one deliberate difference
+    (``tx_frequency``) is named rather than left implicit.
+    """
+
+    from tools.ft8 import ap_probe
+
+    sequencer = _sequencer(state=QSOState.REPORT, dx_call="JA1VAT", dx_grid="QN06")
+    tracker = DxFrequency()
+    tracker.note(479, "JA1VAT", 1234.4)
+    # Same base the probe uses: the production deep config (profile 1, cycles 3,
+    # sensitivity 3, low_threshold), not a bare DecodeConfig -- otherwise the
+    # comparison would "pass" against a configuration nobody ships.
+    base = {k: v for k, v in ap_probe.BASE.items() if k != "path"}
+    shipped = DecodeConfig(**base).replace(  # type: ignore[arg-type]
+        utc_hhmmss=20_000, **_ap_context_for(sequencer, tracker)(480)
+    )
+
+    measured = ap_probe._config(
+        ap=True,
+        my_call=ap_probe.MY_CALL,
+        dx_call=ap_probe.DX_CALL,
+        dx_grid=ap_probe.DX_GRID,
+        qso_progress=2,
+        rx_frequency=1234,
+        tx_frequency=1234,
+    )
+
+    differences = {
+        field: (getattr(shipped, field), getattr(measured, field))
+        for field in shipped.__dataclass_fields__
+        if getattr(shipped, field) != getattr(measured, field)
+    }
+    assert set(differences) <= {"tx_frequency", "utc_hhmmss"}, differences
+    assert "tx_frequency" in differences, (
+        "the probe set tx_frequency to the signal frequency; production must not "
+        "(nftx means *our* transmit offset) -- if this ever matches, the "
+        "deliberate omission in _ap_context_for has been undone"
+    )
+    # The four fields that arm the native AP paths must agree exactly.
+    for field in ("ap", "my_call", "dx_call", "dx_grid", "qso_progress", "rx_frequency"):
+        assert getattr(shipped, field) == getattr(measured, field), field

@@ -26,11 +26,12 @@ from ft8.core.supervisor import WorkerSupervisor
 from ft8.engine.orchestrator import SLOT_SAMPLES_NBYTES
 
 #: Supplies the a-priori fields a decode should carry *this slot* — keys are
-#: ``DecodeConfig`` field names.  A provider, not a value: ``dx_call``/``dx_grid``
-#: change mid-QSO, so anything resolved once at startup would go stale (and a
-#: stale a-priori is exactly the case docs/ft8-dl-speculative-notes.md §4.3
-#: measures).
-ApContextProvider = Callable[[], dict[str, object]]
+#: ``DecodeConfig`` field names, and the argument is the slot being decoded.
+#: A provider, not a value: ``dx_call``/``dx_grid`` change mid-QSO, and a
+#: remembered partner frequency goes stale, so anything resolved once at
+#: startup would eventually feed the decoder a lie — and a stale a-priori is
+#: exactly the case docs/ft8-dl-speculative-notes.md §4.3 measures.
+ApContextProvider = Callable[[int], dict[str, object]]
 
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 30.0
 
@@ -213,7 +214,7 @@ class SupervisorDecoder:
             # change while the engine runs.  ``None`` (the default, and every
             # box without MRRC_FT8_AP_A_PRIORI) leaves the frame exactly as
             # before — AP stays enabled-but-starved, which is today's behaviour.
-            changes.update(self._ap_context())
+            changes.update(self._ap_context(slot_id))
         config = self._config.replace(**changes)
         config_frame = decode_config_frame(config)
         frame = {

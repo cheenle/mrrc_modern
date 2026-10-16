@@ -142,6 +142,21 @@ class PublishGateTests(AutopilotFixture):
         self.assertIn("20260917-072530-ab12", page)
         self.assertIn("已定位，待修复", page)
 
+    def test_a_failed_ship_is_not_recorded_as_published(self):
+        """A card that never reached the server must stay pending.  The first
+        cron run after the 6-day outage lost 20261001-192738-30c2 exactly this
+        way: state said "published", the live page had nothing, and `run_once`
+        skips any id already in the state.
+        """
+        analysis = dict(ANALYSIS, status="answered")
+        with mock.patch.object(autopilot, "git_commit", return_value=True), \
+             mock.patch.object(autopilot, "rsync_page", return_value=False), \
+             mock.patch.object(autopilot, "rebuild_board_page"):
+            ok = autopilot.publish("20260917-072530-ab12", analysis, "问题", {})
+        self.assertFalse(ok)
+        state = json.loads(autopilot.STATE_FILE.read_text(encoding="utf-8"))
+        self.assertNotIn("20260917-072530-ab12", state)   # next run retries it
+
     def test_bad_model_output_is_recorded_and_publishes_nothing(self):
         with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
                 ["20260917-072530-ab12"])), \
@@ -244,6 +259,31 @@ class CronTests(AutopilotFixture):
         self.assertIn("--once --publish", line)
         self.assertIn("/opt/homebrew/bin", line)          # cron PATH is nearly empty
         self.assertIn(str(autopilot.RUN_LOG), line)
+
+    def test_cron_command_still_polls_the_receiver(self):
+        """2026-10-10→10-16 outage: a bare `--implement` in the cron command is
+        truthy (argparse const="ALL"), so `main()` took the implement branch and
+        returned before `--once` — the receiver was polled zero times for six
+        days (run.log: 1728 lines, not one "没有新包").  Pin the order.
+        """
+        with mock.patch.object(autopilot, "run_once", return_value=[]) as poll, \
+             mock.patch.object(autopilot, "run_implementations", return_value=[]):
+            autopilot.main(["--once", "--publish", "--implement"])
+        poll.assert_called_once()
+
+    def test_cron_line_does_not_shadow_once(self):
+        # `--once` already runs the implementation sweep; a bare `--implement`
+        # alongside it can only ever steal the branch again.
+        self.assertNotIn("--implement", autopilot.cron_line())
+
+    def test_cron_line_path_contains_the_system_bins(self):
+        """git/rsync/ssh live in /usr/bin.  A PATH without it made every cron
+        publish fail (2026-10-16 21:20: `FileNotFoundError: 'git'`) while the
+        state still said "published" — the card that reached nobody.
+        """
+        path = autopilot.cron_line().split("PATH=", 1)[1].split(" ", 1)[0]
+        for directory in ("/usr/bin", "/bin", "/usr/sbin", "/sbin"):
+            self.assertIn(directory, path.split(":"))
 
     def test_install_replaces_its_own_line_idempotently(self):
         existing = "5 4 * * * /usr/bin/true\n" + autopilot.cron_line() + "\n"

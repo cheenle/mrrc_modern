@@ -291,7 +291,9 @@ def git_commit(bundle_id: str) -> bool:
                         f"support(answers): 自动答复 {bundle_id}（support autopilot）"],
                        cwd=str(REPO), check=True)
         return True
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, OSError) as e:
+        # OSError matters as much as a non-zero exit: cron's PATH once had no
+        # /usr/bin, so `git` did not exist at all (FileNotFoundError).
         log(f"[{bundle_id}] git commit 失败：{e}")
         return False
 
@@ -330,7 +332,14 @@ def rsync_page() -> bool:
 
 
 def publish(bundle_id: str, analysis: dict, problem: str, state: dict, push: bool = False) -> bool:
-    """Write the card, rebuild the page, commit, rsync.  Draft-only on refusal."""
+    """Write the card, rebuild the page, commit, rsync.  Draft-only on refusal.
+
+    Shipping is what makes a card ``published``: if the commit or the rsync does
+    not land, the state entry is withdrawn so the next poll processes the bundle
+    again.  Lost this way on 2026-10-16: 20261001-192738-30c2 was recorded
+    published while the live page got nothing, and `run_once` skips any id
+    already in the state — a card nobody could ever see.
+    """
     card_path = write_draft(bundle_id, analysis, problem)
     state = answers.record_result(state, bundle_id, analysis, published=True)
     answers.save_state(STATE_FILE, state)
@@ -342,9 +351,16 @@ def publish(bundle_id: str, analysis: dict, problem: str, state: dict, push: boo
             subprocess.run(["git", "push", "origin", "main"], cwd=str(REPO), check=True)
         except (OSError, subprocess.CalledProcessError) as e:
             log(f"[{bundle_id}] git push 失败（本地 commit 已保留）：{e}")
-    rsync_page()
+    shipped = rsync_page()
+    if not (committed and shipped):
+        state = answers.load_state(STATE_FILE)
+        state.pop(bundle_id, None)
+        answers.save_state(STATE_FILE, state)
+        log(f"[{bundle_id}] 发布未成功（commit={committed} ship={shipped}）："
+            "已撤回发布标记，下一轮重试")
+        return False
     log(f"[{bundle_id}] 已发布答复（草稿 {card_path.name}）")
-    return committed
+    return True
 
 
 # ── one bundle ─────────────────────────────────────────────────────────────
@@ -536,7 +552,8 @@ def process_one(bundle_id: str, publish_it: bool, model: str = "", push: bool = 
             answers.save_state(STATE_FILE, state)
             log(f"[{bundle_id}] {analysis['status']}：不发布，草稿留在本地")
             return "need_more_info"
-        publish(bundle_id, analysis, problem, state, push=push)
+        if not publish(bundle_id, analysis, problem, state, push=push):
+            return "failed"        # 没 shipp 成功：标记已撤回，下轮重试
         return "published"
     except Exception as e:                    # one bad bundle never ends the batch
         log(f"[{bundle_id}] 处理失败：{type(e).__name__}: {e}")
@@ -590,9 +607,14 @@ def show_status() -> int:
 
 
 def cron_line() -> str:
-    """Absolute paths + explicit PATH: cron's environment is nearly empty."""
-    return (f"*/10 * * * * PATH=/opt/homebrew/bin:/usr/local/bin:{Path.home()}/.hermes/node/bin "
-            f"{sys.executable} {REPO / 'dev_tools' / 'support_autopilot.py'} --once --publish --implement "
+    """Absolute paths + explicit PATH: cron's environment is nearly empty.
+
+    No `--implement` here: `--once` already runs the implementation sweep, and a
+    bare `--implement` in this line is what shadowed the poll (see main()).
+    """
+    return (f"*/10 * * * * PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:"
+            f"{Path.home()}/.hermes/node/bin "
+            f"{sys.executable} {REPO / 'dev_tools' / 'support_autopilot.py'} --once --publish "
             f">> {RUN_LOG} 2>&1 {CRON_MARK}")
 
 
@@ -645,6 +667,18 @@ def main(argv=None) -> int:
         result = process_one(args.force, args.publish, model=args.model, push=args.push)
         print(f"{args.force}: {result}")
         return 0 if result != "failed" else 1
+    # `--once` MUST be tested before `--implement`: a bare `--implement` parses as
+    # "ALL" (truthy), so the reverse order silently skipped the whole poll for six
+    # days (2026-10-10→10-16, run.log 1728 lines with no "没有新包").  The once
+    # branch already runs the implementation sweep below.
+    if args.once:
+        results = run_once(args.publish, model=args.model, limit=args.limit, push=args.push)
+        for bundle_id, result in results:
+            print(f"{bundle_id}: {result}")
+        impl = run_implementations(model=args.model)
+        for bundle_id, result in impl:
+            print(f"{bundle_id}: implement → {result}")
+        return 0
     if args.implement:
         if args.implement == "ALL":
             results = run_implementations(model=args.model)
@@ -656,14 +690,6 @@ def main(argv=None) -> int:
             print(f"{bundle_id}: {result}")
         return 0 if all(r in ("committed", "rejected", "not_scheduled",
                                "skipped_dirty") for _, r in results) else 1
-    if args.once:
-        results = run_once(args.publish, model=args.model, limit=args.limit, push=args.push)
-        for bundle_id, result in results:
-            print(f"{bundle_id}: {result}")
-        impl = run_implementations(model=args.model)
-        for bundle_id, result in impl:
-            print(f"{bundle_id}: implement → {result}")
-        return 0
     parser.print_help()
     return 0
 

@@ -2,6 +2,29 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [未发布] — 自动分诊停摆六天：轮询被一个参数短路，发布失败还被记成「已发布」
+
+答复页从 10-11 起不再更新，用户点 `#编号` 直达只看到空白。两个静默失效叠在一起，各自都能让这条链停摆。
+
+**轮询从未执行。** cron 每 10 分钟都在跑，但命令行里那个裸 `--implement` 在 argparse 里取 `const="ALL"`——真值。
+`main()` 的分支顺序把它排在 `--once` 前面，于是每轮都在「实施看板」分支直接 `return`，接收端一次都没被轮询。
+`dist/support_autopilot/run.log` 从 10-10 21:20 到 10-16 21:10 共 1728 行，**没有一行**「没有新包」或「处理中」。
+这六天里的五份上报（10-10 22:04、10-11、10-13、10-16 两份）全部原地堆积；再往前的 10-01、10-02、10-04、10-07
+四天五份也没进过 state —— 这条链在更早的时候就已经不稳。
+
+**发布失败被记成成功。** 修好轮询后的第一轮 cron 立刻撞上第二张脸：`cron_line()` 的 PATH 里没有 `/usr/bin`，
+而 `git`／`rsync`／`ssh` 都住在那里（现场报 `FileNotFoundError: 'git'`）。更糟的是 `publish()` 先写 state 再发货——
+卡片没上线，state 已是 `published=True`，而 `run_once` 只按「编号在不在 state 里」取新包，这条于是永远不会重试。
+第一轮就吃掉一条：`20261001-192738-30c2` 有结论、有草稿、本地页面也写了，线上什么也没有。
+
+**修法**：`main()` 里 `--once` 先于 `--implement` 判定（原地留注释说明为什么不能换回来）；cron 命令行删掉多余的
+`--implement`；`cron_line()` 的 PATH 补回 `/usr/bin:/bin:/usr/sbin:/sbin`；`publish()` 改为发货不成功就撤回 state
+记录、下一轮重试；`git_commit()` 连 `OSError`（二进制根本不在）一起当失败。
+
+**守卫**：`tests/test_support_autopilot.py` 新增四条 —— cron 命令必须仍调用 `run_once`、cron 行不许出现裸
+`--implement`、PATH 必须含系统目录、发货失败不许写「已发布」。事故当场撤回被误标的 `20261001-192738-30c2`，
+其余积压交给修好的 cron 逐轮消化。
+
 ## [未发布] — 出站 HTTPS 只信随包的根证书：一个持续了一个夏天的缺陷的另一张脸
 
 接入云端在一台 Windows 上报 `certificate verify failed: certificate has expired`，而同一台机器的浏览器打开同一个门户完全正常。

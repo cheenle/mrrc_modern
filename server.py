@@ -2016,19 +2016,27 @@ async def _audio_rx_loop():
                         if dead:
                             logger.warning("Removed %d dead/slow audio clients", len(dead))
                             audio_rx_clients -= dead
-                elif audio_rx_clients:
-                    # No PCM at all while somebody is listening: the capture
+                elif audio_rx_clients or _ft8_tap_live or _rec_session.active:
+                    # No PCM at all while somebody needs the audio: the capture
                     # stopped delivering. Reopen it (rate-limited) instead of
-                    # leaving the client with silence until the next TX.
+                    # leaving the consumer with silence until the next TX.
+                    # Two consumers are not WebSockets: the FT8 decoder's RX tap
+                    # (whose page never opens /WSaudioRX) and a server-side
+                    # recording.  Gating this branch on ``audio_rx_clients``
+                    # alone starved the decoder through a 113 s USB
+                    # re-enumeration on 2026-10-17: the operator was on the FT8
+                    # page, so nothing reopened the stream and every slot was
+                    # skipped for the rest of the process.
                     _stalled_s = time.monotonic() - _rx_last_pcm
                     if _stalled_s >= RX_STALL_ALERT_S:
                         _rx_last_pcm = time.monotonic()
                         logger.warning(
-                            "RX capture stalled: no PCM for %.0f s with %d client(s) "
-                            "listening — reopening the capture stream (check the "
-                            "radio's USB audio; the capture interface may have "
-                            "stopped while PyAudio still reports it open)",
-                            _stalled_s, len(audio_rx_clients))
+                            "RX capture stalled: no PCM for %.0f s (audio clients=%d, "
+                            "FT8 tap=%s, recording=%s) — reopening the capture stream "
+                            "(check the radio's USB audio; the capture interface may "
+                            "have stopped while PyAudio still reports it open)",
+                            _stalled_s, len(audio_rx_clients), _ft8_tap_live,
+                            _rec_session.active)
                         if (time.monotonic() >= _rx_stall_restart_at
                                 and (_rx_restart_task is None or _rx_restart_task.done())):
                             _rx_stall_restart_at = time.monotonic() + RX_STALL_RESTART_MIN_GAP_S
@@ -6006,6 +6014,64 @@ async def api_box_wifi_status(request: Request):
     return JSONResponse(box_ops.switch_state())
 
 
+@app.post("/api/box/wifi/save", include_in_schema=False)
+async def api_box_wifi_save(request: Request):
+    """Save (or replace) a Wi-Fi profile **without** switching to it.
+
+    The switch endpoint has to bring the profile up immediately, which is 25 s of
+    waiting and a rollback when the access point is not in range. That is the
+    wrong tool for preparing a box for someone else's home — the AP is never here
+    — so this one only writes the profile. The active connection is untouched.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    ssid = (body.get("ssid") or "").strip()
+    password = body.get("password") or ""
+    autoconnect = bool(body.get("autoconnect", True))
+    problem = box_ops.ssid_problem(ssid) or box_ops.psk_problem(password)
+    if problem:
+        return JSONResponse({"ok": False, "error": problem}, status_code=400)
+    result = await asyncio.to_thread(
+        box_ops.save_wifi, ssid, password, autoconnect)
+    # The SSID is fine to log; the password never is (design D-4 / NFR-068).
+    logger.warning("box: saved Wi-Fi %r (autoconnect=%s)", ssid, autoconnect)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
+@app.post("/api/box/wifi/forget", include_in_schema=False)
+async def api_box_wifi_forget(request: Request):
+    """Forget one saved Wi-Fi profile."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    ssid = (body.get("ssid") or "").strip()
+    if not ssid:
+        return JSONResponse({"ok": False, "error": "没有指定要删的 Wi-Fi"},
+                            status_code=400)
+    result = await asyncio.to_thread(box_ops.forget_wifi, ssid)
+    logger.warning("box: forgot Wi-Fi %r", ssid)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
+@app.post("/api/box/wifi/autoconnect", include_in_schema=False)
+async def api_box_wifi_autoconnect(request: Request):
+    """Arm or disarm a saved profile: "connect whenever it is in range, from now
+    on" versus "keep it, but do not use it by itself"."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    ssid = (body.get("ssid") or "").strip()
+    if not ssid:
+        return JSONResponse({"ok": False, "error": "没有指定 Wi-Fi"},
+                            status_code=400)
+    enabled = bool(body.get("enabled", True))
+    result = await asyncio.to_thread(
+        box_ops.set_wifi_autoconnect, ssid, enabled)
+    logger.warning("box: Wi-Fi %r autoconnect=%s", ssid, enabled)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
 @app.post("/api/box/hostname", include_in_schema=False)
 async def api_box_hostname(request: Request):
     """Rename the box, then tell avahi before it notices on its own.
@@ -6077,6 +6143,29 @@ async def api_box_link(request: Request):
                    "over this link, their session is about to drop",
                    profile, method)
     return JSONResponse({"ok": True, "changing": True, "profile": profile})
+
+
+@app.post("/api/box/system-password", include_in_schema=False)
+async def api_box_system_password(request: Request):
+    """Change the password of root / mrrc / rescue.
+
+    Separate from `/api/box/password` (the web login) on purpose: these are the
+    accounts an operator reaches over SSH or HDMI, and getting them wrong locks
+    people out of the console — hence the strict account allowlist and the
+    sentence-level validation before anything reaches a root process.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    user = (body.get("user") or "").strip()
+    password = body.get("password") or ""
+    problem = box_ops.system_password_problem(user, password)
+    if problem:
+        return JSONResponse({"ok": False, "error": problem}, status_code=400)
+    result = await asyncio.to_thread(box_ops.set_system_password, user, password)
+    # The account is worth a line; the password never is (design D-4 / NFR-068).
+    logger.warning("box: system password changed for %r", user)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
 
 
 @app.post("/api/box/system/reboot", include_in_schema=False)

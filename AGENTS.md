@@ -183,6 +183,14 @@ Short imperative summaries. Pull requests should describe user-visible behavior,
   `build.sh` 幂等构建 `ft8/dsp/build/libwsjt_core.*`（设备上原生编译）。
 - 移植自 MRRC-FT8（`HAM/ft8`）：`ft8/{core,engine}` 保持 verbatim，平台耦合只允许在
   `ft8/platform/`、`ft8/web/`、`ft8/mode.py` 与 `server.py` 的接线处。
+- **RX tap 的时间轴会在采集中断后重新锚定（`RESYNC_AFTER_S` = 0.5 s）**：`ft8/platform/rx_tap.py`
+  的 12 kHz 环只在**第一个**块上锚定 epoch，之后只按已投递样本数前进 —— 采集一旦停
+  （USB 重枚举、TX 后的 `restart_rx()`、ALSA 卡死），它就永久落后墙钟，而时隙网格由墙钟
+  派生，于是每一槽都是 `SKIPPED (no data within grace)`（2026-10-17 现场：113 s 中断 →
+  `drift=+118 s` → `slots_skipped` 66/67、`decodes=0`）。`feed()` 现在拿调用方本来就传的块
+  epoch 与自身时间轴比，超阈值就重锚并且 `UtcRing` 把空洞记成 gap。同时**采集停滞的恢复
+  不能只认浏览器**：`_audio_rx_loop` 的恢复门是「有人在用这段音频」（浏览器 / FT8 tap /
+  录音）—— FT8 页面从不订阅 `/WSaudioRX`，只认 `audio_rx_clients` 会让解码器无限期饿死。
 - **解码默认走快路径，按需级联到深路径**：`ft8/dsp/wsjt_fast.c` 是 `kgoba/ft8_lib`
   （C、kiss-fft）编进**同一个** `libwsjt_core` 的 `wsjt_ft8_decode_fast`（无 AP / 无 OSD /
   单趟，全部取上游默认旋钮 —— 降旋钮只换走弱信号鲁棒性，见

@@ -107,35 +107,21 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-<strong>The radio's power switch is back in the menu — with the two intents kept apart</strong> —
-              「重开电台」turns the radio off and then keeps trying to wake it (every 30 seconds, up to
-              15 minutes, cancellable from the <code>PWR</code> cell in the header); 「关机」only turns it
-              off, never powers it back up, and says so before it does. The guards are the ones the
-              2026-07 withdrawal demanded: refused while transmitting (FT8 included), refused inside the
-              window right after a power-on, and a wake round writes nothing until the serial port is back
-              — the radio's USB re-enumerates while it is off, so the node name it had before is not the
-              one it comes back on. Verified on the real radio: woke on round 1 after 4–8 s, three runs in
-              a row (2026-07's 「PS1 wake-up is unreliable」 did not reproduce).
+              <strong>v1.28.1 — the hub can no longer pin a certificate the instance has replaced, and the FT8 decoder stops killing its own worker</strong> —
+              <code>sign_for()</code> is idempotent now: a usable pair for the same name is reused byte-for-byte
+              instead of re-signed, so a failed enrolment cannot leave the hub pinning one certificate while the
+              instance serves another (the all-night 502 on a live entry). A broken instance heals by clicking
+              Connect once. And the FT8 deep path no longer takes the server's DSP worker down with it: a Fortran
+              <code>stop</code> in the native decoder terminated the child process on every slot — silently,
+              because the launcher's startup tee stops writing to a file once the server answers HTTP. The worker's
+              own stdout/stderr now lands in <code>logs/ft8-worker.log</code>, the diagnostic bundle collects it,
+              and the FFTW thread initialisation returns a status instead of aborting.
             </li>
             <li>
-<strong>Outbound HTTPS trusts our own root bundle, not the machine's store</strong> —
-              a Windows box failed every portal and tunnel call with
-              <code>certificate verify failed</code> while the browser on that same box opened the same
-              portal fine: its certificate store held an expired, same-name copy of a chain element, and
-              OpenSSL built the chain through it. The app now builds its trust from the bundle it ships
-              (<code>MRRC_CA_BUNDLE</code> overrides it) and only falls back to the platform store when
-              there is no usable bundle. Reproduced offline in the test suite with a real handshake
-              against a deliberately poisoned store.
-            </li>
-            <li>
-<strong>Previous release (v1.27.0): FT8 — a second way to use the same radio, on all four platforms</strong> —
-              the main menu switches the radio to the FT8 frequency and DATA-U, and the engine decodes
-              from the radio's own sound card while transmitting through the CQ queue — so FT8 and SSB
-              share one TX gate and can never key the radio together. Decoding runs a fast C path by
-              default and re-runs the same slot through the full WSJT-X path only when it matters. The
-              native DSP library is built as part of each artifact — during the image build on the box and
-              the Pi, at packaging time for the desktop installers — so a fresh flash or a fresh install
-              can work FT8 immediately.
+              <strong>Previous release (v1.28.0) — the radio's power switch is back in the ☰ menu with its two intents kept apart, outbound HTTPS trusts our own root bundle instead of the machine's store, and the FT8 cascade's deep path runs for the first time</strong> —
+              plus three defects that only the built artifacts showed (a missing <code>cty.dat</code> in the frozen
+              packages, a sibling virtualenv staged into the ARM image, three POSIX-only tests never collected on
+              Windows).
             </li>
             </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -393,8 +379,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-Setup.exe — v1.28.1 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            75.7 MB · x64 · 79,370,813 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: cc8cc4fb…</code>
+            75.7 MB · x64 · 79,386,940 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: cfbeacc7…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             The ☰ menu now carries the radio's own power switch (restart = off, then a bounded,
@@ -414,7 +400,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe">
 <i class="fas fa-fingerprint"></i> Versioned v1.28.1
             </a>
-<div class="dl-meta">79,370,813 bytes · SHA-256 cc8cc4fb…</div>
+<div class="dl-meta">79,386,940 bytes · SHA-256 cfbeacc7…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -433,8 +419,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-v1.28.1-arm64.dmg — v1.28.1 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            81.1 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 85,060,334 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 1dfb0d18…</code>
+            81.1 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 85,064,796 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 1c9ba24e…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -482,8 +468,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <strong> MRRC-Modern-rpi64.img.xz — Raspberry Pi</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            495 MB (519,284,304 bytes) · arm64 · Pi 3B+/4/5 ·  · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
-<code style="font-size: 0.76rem">SHA-256: 77ae09b75c98b6faa02c00cd1b6ecca77e45d5d7dc0ee9b91ad29d63d073bf4c</code>
+            531 MB (530,820,848 bytes) · arm64 · Pi 3B+/4/5 ·  · Raspberry Pi OS Lite 64-bit (Bookworm)<br/>
+<code style="font-size: 0.76rem">SHA-256: a00ab22897bf3e3565fcb5b50eff9585b2885c7b831dd2ae594672d62475e5be</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             Flash with Raspberry Pi Imager ("Use custom image"), boot, and open
@@ -523,8 +509,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           <strong> MRRC-Modern-1.28.1-w103d.img.gz — ZTE W103D</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.18 GB (1,175,109,159 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 8db47db2a18f1ce20de0cae8479b23c222935ea51d2bd86e7e5c3feb3dd5990d</code>
+              1.17 GB (1,170,343,847 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: 749e442ab2888eaec6713919e6157039b0156b5ff88d6ba4bfc8d20217e9caff</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               A ready-made server image for this specific TV box. Flash it to a USB
@@ -599,7 +585,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               MRRC-Modern-Setup.exe — v1.28.1, 75.7 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea</code>
+<code>SHA-256 cfbeacc75e899ed1ff04a6a9da5a9d37d3f0200d89b77440215266eddde33938</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -1098,7 +1084,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <h2 class="section-title">Software Design Description</h2>
 <p class="section-subtitle">
             IBM TeamSD methodology · 15 chapters ·
-            <strong>V2.92</strong> · Architecture decisions, component
+            <strong>V2.93</strong> · Architecture decisions, component
             model, PTT safety, and full version history.
           </p>
 </div>

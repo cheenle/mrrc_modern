@@ -11,7 +11,7 @@ with an embedded Python runtime; users do not need to install Python manually.
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.28.1-Windows-x64-Setup.exe` | 75.7 MB (79,370,813 bytes) | `cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea` |
+| `MRRC-Modern-v1.28.1-Windows-x64-Setup.exe` | 75.7 MB (79,386,940 bytes) | `cfbeacc75e899ed1ff04a6a9da5a9d37d3f0200d89b77440215266eddde33938` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
 - Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe>
@@ -32,8 +32,8 @@ runtime DLL closure walked with `objdump -p`) and bundled at `_internal\`. **Thi
 ships `_internal\ft8\data\cty.dat`** — the DXCC database v1.27.0 and every earlier packaged build
 were missing, so those builds logged a `cty.dat unreadable` traceback on the first decode and ran
 with an empty database (see SDD V2.88). Evidence taken from the artifact: `version.txt` = `1.28.1`,
-size **79,370,813 bytes** (v1.27.0 was 79,257,177), mtime **2026-10-17 00:24:46**, and the
-cross-host SHA-256 matched (build VM == build Mac) — **`cc8cc4fb…`**.
+size **79,386,940 bytes** (v1.27.0 was 79,257,177), mtime **2026-10-17 00:24:46**, and the
+cross-host SHA-256 matched (build VM == build Mac) — **`cfbeacc7…`**.
 
 **Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build in
 v1.25.3): that build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —

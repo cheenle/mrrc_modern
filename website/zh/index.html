@@ -93,24 +93,18 @@
 <strong>博客新文</strong>：<a href="w103d-radio-box.html" style="color: var(--scope-primary)">125 元的盒子：把 FT-710 变成随时能用的远程电台</a>。一台远程电台服务端到底需要什么、与树莓派/小主机怎么比，以及真机拓出的六个坑。<a href="blog.html" style="font-size: 0.8rem; color: var(--scope-primary)">全部文章 →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
-<li>
-<strong>电台电源回到菜单，而且两种意图分得清清楚楚</strong>。「重开电台」先关机、之后每 30 秒再试一次唤醒（最多 15 分钟，随时可在顶栏
-              <code>PWR</code> 上取消）；「关机」只关机、绝不自己上电，动手之前就把这句话说明白。守卫正是 2026-07 撤回它时列下的那几条：
-              发射中（含 FT8）拒绝、刚上过电的窗口内拒绝、端口没回来之前一轮都不写 —— 电台关着的时候 USB 会重新枚举，它原来的节点名
-              不是它回来时的那个。真机验收：第 1 轮醒来、4–8 秒，三次运行皆然（2026-07 那条「<code>PS1</code> 唤醒不可靠」不复现）。
+            <li>
+              <strong>v1.28.1 — hub 再也不会钉住一把实例已经换掉的证书；FT8 解码器不再杀掉自己的 worker</strong> —
+              <code>sign_for()</code> 现在幂等：同名且证书可用就逐字节复用、不重签，于是「签了但登记没成功」不会再让
+              hub 钉住的与实例服务的成为两把（现场入口整夜 502 就是这个形态）；已经坏掉的实例点一次「连接」即自愈。
+              FT8 深路径也不再带走服务器进程的 DSP worker：原生解码器里的 Fortran <code>stop</code> 此前每个时隙都
+              终止子进程，而且是无声的 —— launcher 的启动 tee 在服务器答 HTTP 后就不再写盘。worker 自己的
+              stdout/stderr 现在落到 <code>logs/ft8-worker.log</code>（诊断包收集），FFTW 线程初始化改为返回状态码
+              而不再 abort。
             </li>
             <li>
-<strong>出站 HTTPS 只信随包的根证书，不再问本机证书库</strong>。一台 Windows 上所有门户与隧道请求都报
-              <code>certificate verify failed</code>，而同一台机器的浏览器打开同一个门户完全正常：它的证书库里有一份与被服务链条同名同密钥、
-              却已经过期的副本，OpenSSL 就顺着那一张把链建起来了。应用现在只用**随包**的根证书建信任
-              （<code>MRRC_CA_BUNDLE</code> 可覆盖），只有在没有可用 bundle 时才退回平台库。这个场景在测试里用真握手离线复刻
-              （受污染的库那一侧必须真的失败）。
-            </li>
-            <li>
-<strong>上一版（v1.27.0）：FT8 —— 同一台电台的第二种用法，四个平台都拿得到</strong>。主菜单一键切到 FT8 频点与 DATA-U；
-              引擎用电台自己的声卡解码、走 CQ 那条发射队列，因此 FT8 与 SSB 共用同一条 TX 门控，**结构上不可能同时键控**。
-              解码默认走 C 快路径，只在真正需要时对同一时隙补跑完整 WSJT-X 深路径。原生 DSP 库随每个产物一起构建
-              （盒子上与树莓派在镜像构建期编译，桌面安装包在打包时编译），刷完机或装完包就能直接玩 FT8。
+              <strong>上一版（v1.28.0）—— 电台电源回到 ☰ 菜单且两种意图分开；出站 HTTPS 只信随包的根证书而不是本机证书库；FT8 级联的深路径第一次真正跑起来</strong> —
+              外加三个只在产物里现形的缺陷（冻结包缺 <code>cty.dat</code>、兄弟 venv 被装进 ARM 镜像、三条 POSIX-only 测试在 Windows 上从未被收集）。
             </li>
             </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -350,8 +344,8 @@
 <strong> MRRC-Modern-Setup.exe — v1.28.1 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            75.7 MB · x64 · 79,370,813 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: cc8cc4fb…</code>
+            75.7 MB · x64 · 79,386,940 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: cfbeacc7…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             ☰ 菜单里现在有电台自己的电源开关（「重开」= 关机后按有界、可取消的循环持续唤醒；「关机」= 关掉就不
@@ -367,7 +361,7 @@
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe">
 <i class="fas fa-fingerprint"></i> v1.28.1 版本化安装包
             </a>
-<div class="dl-meta">79,370,813 bytes · SHA-256 cc8cc4fb…</div>
+<div class="dl-meta">79,386,940 bytes · SHA-256 cfbeacc7…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -386,8 +380,8 @@
 <strong> MRRC-Modern-v1.28.1-arm64.dmg — v1.28.1 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            81.1 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 85,060,334 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 1dfb0d18…</code>
+            81.1 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 85,064,796 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 1c9ba24e…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台（FT-710 ASCII CAT / Icom CI-V 0x19）与串口，并内置 FT4222 真频谱
@@ -429,8 +423,8 @@
 <strong> MRRC-Modern-rpi64.img.xz — 树莓派</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            495 MB (519,284,304 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
-<code style="font-size: 0.76rem">SHA-256: 77ae09b75c98b6faa02c00cd1b6ecca77e45d5d7dc0ee9b91ad29d63d073bf4c</code>
+            531 MB (530,820,848 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
+<code style="font-size: 0.76rem">SHA-256: a00ab22897bf3e3565fcb5b50eff9585b2885c7b831dd2ae594672d62475e5be</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             用 Raspberry Pi Imager（「使用自定义镜像」）烧卡，上电后浏览器打开
@@ -467,8 +461,8 @@
           <strong> MRRC-Modern-1.28.1-w103d.img.gz — 中兴 W103D 盒子</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.18 GB（1,175,109,159 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 8db47db2a18f1ce20de0cae8479b23c222935ea51d2bd86e7e5c3feb3dd5990d</code>
+              1.18 GB（1,170,343,847 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: 749e442ab2888eaec6713919e6157039b0156b5ff88d6ba4bfc8d20217e9caff</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               针对这款盒子预装好的服务端镜像。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，不碰原厂安卓的分区与数据），打开 <code>https://&lt;盒子IP&gt;:8888</code> ：与树莓派镜像同样的零配置首启，包括自动生成的 Web 口令（<code>sudo mrrc-show-password</code>取回）。<code>mrrc-radio</code>在 11 个支持的机型之间切换。验收通过后把系统固化进机身 eMMC，最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
@@ -530,7 +524,7 @@
               MRRC-Modern-Setup.exe — v1.28.1，75.7 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea</code>
+<code>SHA-256 cfbeacc75e899ed1ff04a6a9da5a9d37d3f0200d89b77440215266eddde33938</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -998,7 +992,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.92</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V2.93</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>

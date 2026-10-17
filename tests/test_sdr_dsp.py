@@ -15,19 +15,32 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "sdr_dsp.c")
 
 _lib = None
+_path = None
 
 
-def build_lib():
-    """把 sdr_dsp.c 编成临时共享库并加载；无编译器时返回 None。"""
-    global _lib
-    if _lib is not None:
-        return _lib
+def build_lib_path():
+    """把 sdr_dsp.c 编成临时共享库，返回路径；无编译器时返回 None。"""
+    global _path
+    if _path is not None:
+        return _path
     cc = shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
     if not cc:
         return None
     out = os.path.join(tempfile.mkdtemp(prefix="sdrdsp"), "libsdr_dsp.so")
     cmd = [cc, "-O2", "-fPIC", "-shared", "-o", out, SRC, "-lm"]
     subprocess.run(cmd, check=True, capture_output=True)
+    _path = out
+    return _path
+
+
+def build_lib():
+    """加载 build_lib_path()；无编译器时返回 None。"""
+    global _lib
+    if _lib is not None:
+        return _lib
+    out = build_lib_path()
+    if out is None:
+        return None
     lib = ctypes.CDLL(out)
     lib.sdr_dsp_create.restype = ctypes.c_void_p
     lib.sdr_dsp_create.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_int]
@@ -161,6 +174,35 @@ class SdrDspTests(unittest.TestCase):
         spec = np.abs(np.fft.rfft(audio * np.hanning(len(audio))))
         f = np.fft.rfftfreq(len(audio), 1 / self.OUT)
         self.assertAlmostEqual(f[int(np.argmax(spec))], 750, delta=60)
+
+    def test_wfm_wideband(self):
+        """WFM：75 kHz 频偏的 1 kHz 单音，先鉴频再抽音频应恢复 1 kHz。"""
+        n_all = self.BLK * 50
+        t = np.arange(n_all) / self.FS
+        phase = 2 * np.pi * 75000 * np.cumsum(np.sin(2 * np.pi * 1000 * t)) / self.FS
+        z = 12000 * np.exp(1j * phase)
+        iq_all = np.empty(n_all * 2, np.int16)
+        iq_all[0::2] = z.real.astype(np.int16)
+        iq_all[1::2] = z.imag.astype(np.int16)
+        lib = self.lib
+        d = lib.sdr_dsp_create(self.FS, self.OUT, 4)
+        self.assertIsNotNone(d)
+        self.assertEqual(lib.sdr_dsp_set_channel(d, 0, 0.0, 5, 200000.0), 0)
+        out_n = ctypes.c_int(0)
+        rms = (ctypes.c_float * 4)()
+        out = (ctypes.c_short * 8192)()
+        chunks = []
+        for b in range(50):
+            seg = iq_all[b * self.BLK * 2:(b + 1) * self.BLK * 2]
+            c_iq = (ctypes.c_short * len(seg))(*seg)
+            self.assertEqual(lib.sdr_dsp_process(d, c_iq, self.BLK, 1, out, 8192,
+                                                 ctypes.byref(out_n), rms), 0)
+            chunks.append(np.array(out[:out_n.value], np.int16))
+        lib.sdr_dsp_destroy(d)
+        audio = np.concatenate(chunks).astype(np.float64)[2400:]
+        spec = np.abs(np.fft.rfft(audio * np.hanning(len(audio))))
+        f = np.fft.rfftfreq(len(audio), 1 / self.OUT)
+        self.assertAlmostEqual(f[int(np.argmax(spec))], 1000, delta=60)
 
     def test_bad_arguments_are_rejected(self):
         """非法参数必须返回 -1，不许崩。"""

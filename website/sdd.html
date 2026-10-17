@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.91</a></li>
+          <li><a href="#updates">V2.92</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.91 · 2026-10-17</span>
+          <span>SDD V2.92 · 2026-10-17</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.91</td>
+              <td>V2.92</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,25 @@
           <h2 class="section-title">What's New Since V2.20</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-bolt"></i></div>
+            <h3>
+              A Shipped Box Needs No Setup: Fixed Credentials, Wi-Fi and the Public Entry from One Page
+              <small>(V2.92)</small>
+            </h3>
+            <p>
+              The flash-and-ship image (<code>build-image.sh --preflash</code>, off by default) bakes in
+              the three credentials, <code>Asia/Shanghai</code> and <code>zh_CN.UTF-8</code>, so a box
+              goes from power-on to a logged-in browser with nothing in between. Wi-Fi grew a
+              <em>typed</em> SSID field (scan results only prefill it) plus a show/hide password toggle —
+              hidden networks and an empty scan list used to be dead ends — and a new public-entry panel
+              takes a callsign, applies to the portal and reports the entry address. The same pass fixed
+              a real gap: <strong>the first-boot probe had never run on any image</strong> (the wrapper's
+              <code>MRRC_PRESEED=1</code> call short-circuited before it), so a radio plugged in later was
+              never found; the probe now runs and repeats each boot until the config settles.
+            </p>
+            <p class="feature-metric">AD-027 · NFR-069 · first-boot probe now actually runs</p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-bolt"></i></div>
             <h3>
@@ -809,7 +828,7 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">Architecture Decisions</span>
-          <h2 class="section-title">AD-001 ... AD-026</h2>
+          <h2 class="section-title">AD-001 ... AD-027</h2>
         </div>
         <div class="tech-stack">
           <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -837,6 +856,7 @@
           <span class="tech-tag">AD-024 Session-Token Transport</span>
           <span class="tech-tag">AD-025 Spectrum Bandwidth Tiers</span>
             <span class="tech-tag">AD-026 Setup Hotspot and the Password-less Window</span>
+            <span class="tech-tag">AD-027 Factory-Preset (Ship-Ready) Image</span>
         </div>
       </div>
     </section>

@@ -282,6 +282,7 @@
 | AD-024 | Session token transport (cookie → header for native clients; query deprecated) | Implemented |
 | AD-025 | Spectrum bandwidth tiers (shape × divider, gated by `spectrumCaps`) | Implemented |
 | AD-026 | Setup hotspot and the password-less onboarding window (opened by network path, not a flag) | Superseded (V2.80, 2026-10-11) — 真机验收失败，见正文与 2026-10-11 LAN 设计 |
+| AD-027 | Factory-preset (ship-ready) box image: `--preflash`, off by default; fixed credentials + system half; Wi-Fi and the public entry are configured from `/settings` | Implemented (V2.92) |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -460,3 +461,13 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 没有沿用的：AP 生命周期、`/run/mrrc/setup-ap/state.json` 与 `wizard.json` 两个
 跨用户信箱、`mrrc-setup-ap.service`。提权从「root supervisor 管整条热点」换成
 「polkit 放行 `mrrc` 写 NM + 只管四个系统动词的小 root helper」。
+
+## AD-027: 出厂预置（发货版）镜像 —— 固定口令 + 系统层预置，Wi-Fi 与公网入口都从设置页配
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Deployment / Security |
+| Status | Implemented (V2.92, 2026-10-17) |
+| Decision | 盒子线新增构建开关 `--preflash`（**默认关**）。打开时共享服务层调用 `packaging/common/preflash.sh`：env 里写 `MRRC_WEB_PASSWORD`（并把 `MRRC_AUTO_PASSWORD` 显式清空）、`chpasswd` 设 `root`/`mrrc` 口令、时区 `Asia/Shanghai`、区域 `zh_CN.UTF-8`。按批次可用 `MRRC_PREFLASH_*` 覆盖，不预置电台型号/串口。Wi-Fi 与公网入口（Cloud Hub 申请）都在 `/settings` 页面上做，服务端不加新写入路径。 |
+| Alternatives | ①**另起后处理脚本**（挂载镜像改口令再打包）：多出一条会漂移的第二条构建线，以后每次改服务层都要同步（否决）；②**不加开关、直接把盒子线默认做成发货版**：镜像从此不再"每台口令不同"，也给不出自用/开发用的标准镜像（否决）；③**每台在 `/boot` 写 `mrrc.env` 预置**：eMMC 路线下用户碰不到那个 FAT 分区，且两个口令/时区/locale 都要人写（否决，能力保留但不作为发货流程）。 |
+| Consequences | ①**默认关是安全属性，不是选项**：`preflash.sh` 自己在 `MRRC_PREFLASH != 1` 时拒绝写任何东西，`--preflash` 默认 0，两者都有测试钉住；不传开关的镜像与今天逐字一致（口令照旧由服务在启动时生成）。②**与 2026-10-06 设计 D-3 的边界**：D-3 禁止"烘焙**猜测**"（串口、声卡、证书），出厂口令是**声明过的值**——它由卖家选择、写在文档里、且三条都能改（NFR-069）。③**与 NFR-068 / AD-021 的关系**：设置页新增的 Wi-Fi 手输与显示/隐藏只影响**输入**，已保存的 PSK 仍不回显（那需要向 NetworkManager 索要明文，等于新增一条凭据通道）。④**公网入口面板复用既有三个端点**（`/api/cloud/{state,apply,refresh}`），不复制 Cloud Hub 状态机；"批准后自己接通"仍由服务端轮询负责。⑤**首启探测的完成判据同批改掉**（`needs_first_run` 为假且串口节点在场）：没探到电台的盒子每次开机重探——否则卖家工作台上那次开机（U 盘、无电台）会把"已完成"克隆进用户家的 eMMC。 |

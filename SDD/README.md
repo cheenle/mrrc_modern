@@ -47,7 +47,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.91 |
+| SDD Version | V2.92 |
 | Baseline Date | 2026-10-16 |
 | Status | **v1.28.0 四平台发布：电台电源回到菜单（两种意图分开、唤醒有界可取消）；出站 HTTPS 只信随包的根证书；FT8 级联的深路径第一次真正跑起来；外加三个只在产物里现形的缺陷（cty.dat 不在 PyInstaller datas 里、`.venv-ml` 被装进 ARM 镜像、三条 POSIX-only 测试从未在 Windows 收集）** —— macOS DMG **85,044,185 bytes** `8d3564d4…`；Windows Setup **79,370,813 bytes** `cc8cc4fb…`；W103D 镜像 **1,205,181,718 bytes** `c90dbcf1…`；树莓派镜像 **519,284,304 bytes** `77ae09b7…`。`unittest` **2274 项**（macOS，1 skip）；Windows 构建门禁 **2271 项 OK（37 platform skips）**；`release_check.py` 离线 **32 ok / 0 failing**；盒子镜像跑四步产物验证（代码身份 / 装机内容 / D-11 双指向 / chroot 内载入 `libwsjt_core.so` 并核对 `abi=2` / `decode_paths=0x7`），并新增两条断言：镜像内**不得出现**运行期状态（v1.27.0 曾漏 `mrrc_modern.env` 与 `auth-tokens.json`）与兄弟 venv；macOS 与 Windows 冻结包各跑洁净室真跑，日志出现 `FT8 engine started at boot` 且零 `cty.dat unreadable` 回溯 —— 后者正是本版修掉的既存缺口。设计与取舍见 SDD §9.10、SDD/15 与 `docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md`。 |
 | Project | MRRC Modern / `mrrc_modern` |

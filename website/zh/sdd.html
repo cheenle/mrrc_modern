@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.91 更新</a></li>
+          <li><a href="#updates">V2.92 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.91 · 2026-10-17</span>
+          <span>SDD V2.92 · 2026-10-17</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -109,7 +109,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.91</td>
+              <td>V2.92</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -142,6 +142,23 @@
           <h2 class="section-title">V2.20 之后的变更重点</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-open"></i></div>
+            <h3>
+              发货版盒子不需要初始化：固定口令、Wi-Fi 与公网入口都在同一个页面
+              <small>（V2.92）</small>
+            </h3>
+            <p>
+              「刷好就发」的镜像（<code>build-image.sh --preflash</code>，<strong>默认关</strong>）把三条口令、
+              <code>Asia/Shanghai</code> 与 <code>zh_CN.UTF-8</code> 烤进去，于是一台盒子从插电到浏览器里登录
+              中间不需要任何步骤。Wi-Fi 面板多了一个<em>可手输</em>的 SSID 框（点扫描结果只是把它带入）与
+              显示/隐藏密码的按钮——隐藏网络和「扫描返回空表」以前都是死路；新增的「公网入口」面板收一个呼号、
+              向门户提出申请、并回报入口地址。<strong>同一批还修掉一处真缺口：首启探测在此前所有镜像上从未运行过</strong>
+              （包装器带着 <code>MRRC_PRESEED=1</code> 调它，而那个键第一行就返回了），于是「电台比盒子晚插上」
+              永远不会被发现；现在探测真的会跑，而且每次开机重探到配置定型为止。
+            </p>
+            <p class="feature-metric">AD-027 · NFR-069 · 首启探测这才真的会跑</p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-bolt"></i></div>
             <h3>
@@ -673,7 +690,7 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">架构决策</span>
-          <h2 class="section-title">AD-001 ... AD-026</h2>
+          <h2 class="section-title">AD-001 ... AD-027</h2>
         </div>
         <div class="tech-stack">
           <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -701,6 +718,7 @@
           <span class="tech-tag">AD-024 会话令牌传输</span>
           <span class="tech-tag">AD-025 频谱带宽档位</span>
             <span class="tech-tag">AD-026 初始化热点与免口令引导窗口</span>
+            <span class="tech-tag">AD-027 出厂预置（发货版）镜像</span>
         </div>
       </div>
     </section>

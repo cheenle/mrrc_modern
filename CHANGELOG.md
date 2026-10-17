@@ -8,6 +8,18 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 热升级装不上单元，这一条写进指南
+
+- 真机（盒子 `.217`）把 1.25.5 升到 1.28.1 之后，`/api/box/status` 仍报 `helper_available: false`：
+  `mrrc-update` 只换代码，**systemd 单元与系统集成只在镜像构建时装**（`mrrc-box-helper` /
+  `mrrc-localctl` / `mrrc-cpufreq` / `mrrc-logrotate.timer`）。表现是设置页那几个按钮是灰的、
+  蓝牙遥控器不来、CPU 不锁频、日志无轮转 —— 都不会报错，只是「新版本没有新能力」。
+- `docs/W103D_GUIDE.md` 的「升级」小节写清楚了这条边界，以及补装时要连
+  `RuntimeDirectory=mrrc` 一起加（否则 `/run/mrrc` 建不出来，两个套接字无处安放）。
+- 实测（`.217`）：三个单元 + polkit 规则装上后重启，`helper_available: true`、写动词通
+  （`/api/box/timezone` 幂等提交）、governor `schedutil → performance`、`/run/mrrc` 两个套接字
+  权限正确、云入口 302、电台与频谱都在。
+
 ### 热升级不再留下旧版本号（`mrrc-update`）
 
 - 盒子上「热升级」走的是 `linux/mrrc_update.sh`：stage 树 → pip → 重编 FT8 → 重启。

@@ -758,7 +758,15 @@ tail -f /opt/mrrc_modern/logs/server-stdout.log # 服务 stdout
 MRRC_UPDATE_SRC=<git url 或本地目录> mrrc-update
 ```
 
-只做三件事：拉代码 → 装依赖 → 重启。**配置不会被碰。没有自动回滚**——升级前先备份（下面）。
+只做四件事：拉代码 → 装依赖 → 盖版本号（`version.txt`/`VERSION`）→ 重启。**配置不会被碰。没有自动回滚**——升级前先备份（下面）。
+
+> **热升级只换代码，不装 systemd 单元。** 服务层（`mrrc-service-layer.sh`）里的单元和
+> 系统集成只有镜像构建时装：`mrrc-box-helper`（设置页的 Wi-Fi/系统面板）、`mrrc-localctl`
+> （蓝牙遥控器）、`mrrc-cpufreq`（锁频）、`mrrc-logrotate.timer`（日志轮转）。升级前就
+> 没有它们的盒子，升级后仍然没有 —— 表现是 `/api/box/status` 报 `helper_available: false`、
+> 设置页那几个按钮是灰的。要补就按 `packaging/common/mrrc-service-layer.sh` 里的单元原文
+> 手装一次（并把 `RuntimeDirectory=mrrc` 加进 `mrrc-modern.service`，否则 `/run/mrrc` 建不出来），
+> 然后 `daemon-reload` + `enable --now`。
 
 **备份（升级前做）：**
 

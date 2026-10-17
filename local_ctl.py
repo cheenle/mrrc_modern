@@ -11,9 +11,11 @@ Two layers, deliberately separated:
 
 * **pure logic** (no I/O, unit-testable): ``InputEvent`` decoding, ``KeyMap``,
   ``NumericEntry`` and ``Controller`` — a key press in, radio commands out.
-* **I/O** (``LocalCtl.run``): open the evdev node, read events, keep a
-  WebSocket to the server's ``/WSradio`` and speak the browser protocol
-  (``{"type":"set","field":...,"value":...}``).
+* **I/O** (``LocalCtl.run``): open the evdev node and write one JSON line per
+  command to the server's local control socket (``/run/mrrc/localctl.sock``,
+  0600, same user as the server).  The socket's permission *is* the
+  authentication: a physical button has no web password, and making the daemon
+  log in instead tripped the server's five-logins-per-five-minutes guard.
 
 Safety rules that are *not* negotiable (they mirror the browser's PTT rules,
 SDD ch15 §15.6):
@@ -48,11 +50,11 @@ import json
 import logging
 import os
 import signal
-import ssl
 import struct
 import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Iterable, Iterator, Optional
 
 log = logging.getLogger("mrrc.localctl")
@@ -281,19 +283,45 @@ class Controller:
     step_index: int = 1
     volume: int = 50
     numeric: NumericEntry = field(default_factory=NumericEntry)
+    _repeat_at: dict = field(default_factory=dict, repr=False)
     modes: tuple[str, ...] = MODE_CYCLE
     ptt_held: bool = False
+    #: Actions where holding the key should keep going.  Everything else is
+    #: edge-triggered on purpose: repeating 设置 would spin through modes, and
+    #: repeating a digit would turn a mistyped key into a wrong frequency.
+    REPEATABLE = frozenset({"freq_up", "freq_down", "vol_up", "vol_down"})
+    #: The measured remote repeats every ~44 ms (~23/s).  A 50 ms floor dropped
+    #: every single repeat and made holding the key look dead; 40 ms lets them
+    #: through, and the control socket's reply (the server answers after the CAT
+    #: write) paces anything faster.
+    REPEAT_MIN_INTERVAL_S = 0.04
 
     @property
     def step_hz(self) -> int:
         return STEP_LADDER_HZ[clamp_step(self.step_index)]
 
-    def on_key(self, ids: Iterable[str], pressed: bool, now: Optional[float] = None) -> list[dict]:
-        """Translate one key event into protocol messages (possibly none)."""
+    def on_key(self, ids: Iterable[str], pressed: bool, now: Optional[float] = None,
+               repeat: bool = False) -> list[dict]:
+        """Translate one key event into protocol messages (possibly none).
+
+        ``repeat`` marks an autorepeat event (the key is being held).  Only the
+        continuous actions act on it, and no faster than REPEAT_MIN_INTERVAL_S.
+        """
         action = self.keymap.action_for(ids)
         if not action:
             return []
         now = time.monotonic() if now is None else now
+        if repeat:
+            # An autorepeat arrives with pressed=False (evdev value 2), so
+            # "held" is exactly what repeat means; requiring pressed=True here
+            # threw away every repeat and made a held key look dead.
+            if action not in self.REPEATABLE:
+                return []
+            last = self._repeat_at.get(action)
+            if last is not None and now - last < self.REPEAT_MIN_INTERVAL_S:
+                return []
+            self._repeat_at[action] = now
+            pressed = True
 
         if action.startswith("digit:"):
             if pressed:
@@ -386,67 +414,90 @@ def find_device(match: str = "Voice_Remote",
 
 
 class LocalCtl:
-    """Reads the remote and keeps the radio in step over /WSradio."""
+    """Reads the remote and drives the radio over the local control socket.
+
+    The socket is a 0600 Unix socket owned by the same user as the server: the
+    operating system's permission *is* the authentication.  A physical button
+    has no web password, and giving it one (a login per reconnect) tripped the
+    server's five-logins-per-five-minutes guard instead of doing anything.
+    """
 
     def __init__(self, controller: Controller, device: Optional[str] = None,
-                 match: str = "Voice_Remote", host: str = "127.0.0.1",
-                 port: int = 8888, password: str = ""):
+                 match: str = "Voice_Remote", socket_path: Optional[str] = None):
         self.controller = controller
         self.device = device
         self.match = match
-        self.host = host
-        self.port = port or int(os.environ.get("MRRC_WEB_PORT", "8888") or 8888)
-        self.password = password or os.environ.get("MRRC_WEB_PASSWORD", "")
-        self._ws = None
+        self.socket_path = socket_path or os.environ.get(
+            "MRRC_LOCALCTL_SOCKET", "/run/mrrc/localctl.sock")
+        self._reader: Optional[asyncio.StreamReader] = None
+        self._writer: Optional[asyncio.StreamWriter] = None
         self._stop = asyncio.Event()
 
     @property
     def keymap(self) -> KeyMap:
         return self.controller.keymap
 
-    # -- server link --------------------------------------------------------
-    def _ssl(self) -> ssl.SSLContext:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE   # loopback, self-signed by design
-        return ctx
-
-    async def _token(self) -> Optional[str]:
-        import urllib.request
-        url = f"https://{self.host}:{self.port}/api/auth/login"
-        body = json.dumps({"password": self.password}).encode()
-        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    # -- control socket -----------------------------------------------------
+    async def _connect(self) -> bool:
+        if self._writer is not None and not self._writer.is_closing():
+            return True
         try:
-            with urllib.request.urlopen(req, context=self._ssl(), timeout=8) as resp:
-                payload = json.loads(resp.read().decode())
-            return payload.get("token")
-        except Exception as exc:                        # noqa: BLE001 - logged
-            log.error("login failed: %s", exc)
-            return None
+            self._reader, self._writer = await asyncio.open_unix_connection(self.socket_path)
+        except OSError as exc:
+            log.debug("control socket %r unavailable: %s", self.socket_path, exc)
+            return False
+        log.info("control socket connected: %s", self.socket_path)
+        try:
+            line = await asyncio.wait_for(self._reader.readline(), timeout=5)
+        except (asyncio.TimeoutError, OSError):
+            return True
+        if line:
+            try:
+                self._absorb(json.loads(line.decode()))
+            except (ValueError, UnicodeDecodeError):
+                pass
+        return True
 
-    async def _connect(self) -> None:
-        import websockets
-        token = await self._token()
-        if not token:
+    def _absorb(self, msg: dict) -> None:
+        """Follow the radio's own state so a step starts from where it is."""
+        if not isinstance(msg, dict):
             return
-        url = f"wss://{self.host}:{self.port}/WSradio"
-        self._ws = await websockets.connect(
-            url, ssl=self._ssl(), additional_headers={"Authorization": f"Bearer {token}"},
-            ping_interval=20, ping_timeout=20,
-        )
-        log.info("connected to %s", url)
+        if msg.get("type") == "state":
+            freq = msg.get("freq")
+            if isinstance(freq, int) and freq > 0:
+                self.controller.freq_hz = freq
+            mode = msg.get("mode")
+            if isinstance(mode, str) and mode:
+                self.controller.mode = mode.upper()
+
+    def _drop(self) -> None:
+        writer, self._writer, self._reader = self._writer, None, None
+        if writer is not None:
+            try:
+                writer.close()
+            except Exception:                           # noqa: BLE001
+                pass
 
     async def send(self, messages: Iterable[dict]) -> None:
         for msg in messages:
-            if self._ws is None:
-                await self._connect()
-            if self._ws is None:
-                return
+            if not await self._connect():
+                return                    # server not up yet; keep reading keys
+            line = json.dumps({"field": msg.get("field"), "value": msg.get("value")})
             try:
-                await self._ws.send(json.dumps(msg))
-            except Exception as exc:                    # noqa: BLE001 - drop link
-                log.warning("send failed: %s", exc)
-                self._ws = None
+                self._writer.write(line.encode() + b"\n")
+                await self._writer.drain()
+                reply = await asyncio.wait_for(self._reader.readline(), timeout=5)
+            except Exception as exc:                    # noqa: BLE001 - drop the link
+                log.warning("control socket send failed: %s", exc)
+                self._drop()
+                return
+            if reply:
+                try:
+                    answer = json.loads(reply.decode())
+                except (ValueError, UnicodeDecodeError):
+                    continue
+                if not answer.get("ok", True):
+                    log.info("%s refused: %s", msg.get("field"), answer.get("error"))
 
     # -- input -------------------------------------------------------------
     async def _pump(self) -> None:
@@ -490,14 +541,16 @@ class LocalCtl:
                 if ev.type == EV_MSC and ev.code == MSC_SCAN:
                     scan = ev.value
                     continue
-                if ev.type != EV_KEY or ev.value == KEY_REPEAT:
+                if ev.type != EV_KEY:
                     continue
                 ids = key_ids(scan, ev.code)
                 scan = None
-                action = self.keymap.action_for(ids)
-                msgs = self.controller.on_key(ids, ev.value == KEY_PRESS)
-                if action or msgs:
-                    log.info("key %s → %s %s", ids[0], action or "-", msgs)
+                pressed = ev.value == KEY_PRESS
+                repeat = ev.value == KEY_REPEAT
+                msgs = self.controller.on_key(ids, pressed, repeat=repeat)
+                if msgs or (repeat and self.controller.keymap.action_for(ids)):
+                    log.info("key %s → %s %s", ids[0],
+                             self.keymap.action_for(ids) or "-", msgs)
                 await self.send(msgs)
 
     # -- lifecycle ---------------------------------------------------------
@@ -511,12 +564,7 @@ class LocalCtl:
         finally:
             pump.cancel()
             await self.send(self.controller.release_ptt())
-            if self._ws is not None:
-                try:
-                    await self._ws.close()
-                except Exception:                       # noqa: BLE001
-                    pass
-                self._ws = None
+            self._drop()
 
 
 def main(argv: Optional[list[str]] = None) -> int:

@@ -198,6 +198,11 @@ Wants=network-online.target
 User=$MRRC_USER
 Group=$MRRC_USER
 WorkingDirectory=$MRRC_HOME
+# /run/mrrc holds the local control socket (AD-028).  Shared with
+# mrrc-box-helper, whose unit also declares it — systemd creates it once,
+# owned by the first unit to start, and both run as the same user anyway.
+RuntimeDirectory=mrrc
+RuntimeDirectoryMode=0770
 EnvironmentFile=$ENV_FILE
 # Same file, so Cloud Hub's connect() writes where the service will read
 # (design D-11): it persists the certificate paths and the TX heartbeat, and a

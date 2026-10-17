@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2404 tests across 122 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2420 tests across 123 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 89 of those 122 — the support-chain, Cloud Hub and
+sections below itemise 90 of those 123 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -995,3 +995,15 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   `release_ptt()` 的幂等性——遥控器没电、蓝牙掉线、进程收到 SIGTERM 时，这一条是电台能不能
   停止发射的分界线。调谐算术按**波段内卷绕**断言（7.300 MHz 再上一个 1 kHz 步进回到 7.000），
   跨波段跳跃保持相对位置（40 m 中段 → 30 m 中段）。
+
+### 本轮新增（本地控制 socket，AD-028）
+
+- **`test_local_control_socket.py`** — 服务端那一侧的**本机控制通道**。物理遥控器不走网页
+  鉴权：守护进程与服务同一用户，靠一条 0600 的 Unix socket 通信，**权限即认证**。六条断言
+  钉住这条通道的性质而不是实现细节：① 放行的字段真的进到**和浏览器同一条**
+  `_execute_set_command`（不是第二条会漂移的命令通道）；② 字段白名单之外的一律拒（socket
+  不是"什么都能干"的门，`power` 明确不在表内）；③ 连上先给一行 `state`（频率 + 模式名），
+  守护进程据此从**电台当前的位置**开始步进，而不是自己的默认值；④ 坏 JSON 只回错、不断线；
+  ⑤ 命令被服务端拒绝时回 `ok:false` 并带上原因；⑥ 白名单覆盖遥控器真正会用的六个字段。
+  这些用例跑在**真的 `start_unix_server`** 上（临时目录里的 socket），只把
+  `_execute_set_command` 打桩，因此连的是真实的握手/读行/回包路径。

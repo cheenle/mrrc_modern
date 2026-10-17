@@ -13,8 +13,12 @@ All notable changes to the MRRC Web Control project.
 现场操作员站在盒子旁边，用一支普通蓝牙遥控器调频、切模式、按住语音键发射。
 
 - 新模块 `local_ctl.py` + systemd 单元 `mrrc-localctl`（`User=mrrc`）：读遥控器的
-  `/dev/input/eventN`，按 **HID 扫描码**查键位表，经本机 `wss://127.0.0.1:<port>/WSradio`
-  发浏览器同款协议。没有遥控器时它空转等待；蓝牙断开后节点消失会自动重开。
+  `/dev/input/eventN`，按 **HID 扫描码**查键位表，把命令写成一行 JSON 发给服务端的
+  **本机控制 socket** `/run/mrrc/localctl.sock`（0600，与服务同一用户，字段白名单）。
+  **socket 的权限就是认证**：物理按键没有网页口令。最初那版让守护进程走网页登录，
+  几分钟就把「5 次 / 5 分钟」的登录闸门撞成 429 并彻底失联；换成 socket 后没有登录、
+  没有令牌、没有 TLS，命令与浏览器走同一条执行路径。没有遥控器时它空转等待；
+  蓝牙断开后节点消失会自动重开。
 - **键位**（W103D 上实测：中国移动语音遥控器 `CMCC_Voice_Remote`）：语音键 = 按住发射；
   ▲▼ = 频率 ± 步进；◀▶ = 步进档；频道 ± = 波段上下；数字 0–9 + 确定 = 直接输入 kHz；
   设置 = 模式循环；菜单/返回 = 取消输入；音量 ± = AF 增益；电源 = 交给我们（不再关机）。
@@ -23,7 +27,10 @@ All notable changes to the MRRC Web Control project.
   `Encryption: Enabled with AES-CCM`，输入设备立刻出现。运维步骤写进 `docs/W103D_USER_GUIDE.md`。
 - 电源键：`/etc/systemd/logind.conf` 的 `HandlePowerKey` 由服务层改为 `ignore`
   （此前按一下就真的关机，现场看起来像"盒子自己重启了"）。
-- 测试 2369 → **2404**（`tests/test_local_ctl.py` 35 项，无硬件）。
+- **按住不放要真的连续**：遥控器按住时发 `value 2`，而 evdev 里重复事件的 `pressed`
+  是 `False`——最初的重复分支要求 `pressed=True`，于是所有重复被自己丢掉，按住只有
+  第一下生效（"不灵敏"的真因，日志里 `key … []` 一串）。
+- 测试 2369 → **2410**（`tests/test_local_ctl.py` 45 项 + `tests/test_local_control_socket.py` 6 项，无硬件）。
 - **未做**：遥控器麦克风（厂商私有 BLE 通道 + 服务端目前没有"本地麦 → TX"通路）；
   红外（这块板注册了 `meson-ir`，但两次抓取 0 脉冲——接收头没焊）。
 - 文档：新增 **`docs/W103D_REMOTE_GUIDE.md`《W103D 盒子遥控器指南》**（配对、按键表、

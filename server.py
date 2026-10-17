@@ -2103,6 +2103,103 @@ async def _audio_tx_drain_loop():
 
 # ── Command Handler ─────────────────────────────────────────────────
 
+# ── local control socket (AD-028) ──────────────────────────────────────────
+# The physical remote belongs to the box, not to a browser session.  The daemon
+# that reads it runs as the same user as this server and talks over a Unix
+# socket whose mode is the authentication: no password, no token, no rate
+# limiter.  A web login for a hardware button was the wrong shape — it tripped
+# the five-logins-per-five-minutes guard within minutes.
+LOCAL_CONTROL_FIELDS = frozenset({
+    "freq", "vfo_a_freq", "vfo_b_freq", "mode", "ptt", "af_gain",
+})
+
+
+def _local_socket_path() -> str:
+    return _env("MRRC_LOCALCTL_SOCKET", "/run/mrrc/localctl.sock")
+
+
+class _LocalControlClient:
+    """The little a ``set`` command needs from a client: a place to reply."""
+
+    client = ("localctl", 0)
+
+    def __init__(self) -> None:
+        self.sent: list[str] = []
+
+    async def send_text(self, text: str) -> None:
+        self.sent.append(text)
+
+
+def _local_control_state() -> str:
+    """One line the daemon uses to start from where the radio actually is."""
+    name = {num: label for label, num in _mode_name_to_num().items()}.get(radio.mode, "")
+    return json.dumps({"type": "state", "freq": radio.vfo_a_freq, "mode": name}) + "\n"
+
+
+async def _local_control_handle(reader: asyncio.StreamReader,
+                                writer: asyncio.StreamWriter) -> None:
+    peer = _LocalControlClient()
+    try:
+        writer.write(_local_control_state().encode())
+        await writer.drain()
+        while True:
+            line = await asyncio.wait_for(reader.readline(), timeout=3600)
+            if not line:
+                break
+            try:
+                msg = json.loads(line.decode())
+            except (ValueError, UnicodeDecodeError):
+                writer.write(b'{"ok":false,"error":"bad json"}\n')
+                await writer.drain()
+                continue
+            field = str(msg.get("field") or "")
+            if field not in LOCAL_CONTROL_FIELDS:
+                writer.write(json.dumps({"ok": False, "error": f"field not allowed: {field}"}).encode() + b"\n")
+                await writer.drain()
+                continue
+            peer.sent.clear()
+            try:
+                await _execute_set_command(field, msg.get("value"), peer)
+            except Exception as exc:                    # noqa: BLE001 - report, never drop the link
+                logger.warning("local control %s failed: %s", field, exc)
+                writer.write(json.dumps({"ok": False, "error": str(exc)}).encode() + b"\n")
+                await writer.drain()
+                continue
+            errors = [m for m in peer.sent if '"error"' in m]
+            reply = {"ok": not errors}
+            if errors:
+                reply["error"] = errors[-1]
+            writer.write(json.dumps(reply).encode() + b"\n")
+            await writer.drain()
+    except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
+        pass
+    finally:
+        try:
+            writer.close()
+        except Exception:                               # noqa: BLE001
+            pass
+
+
+async def _local_control_server() -> None:
+    """Serve the Unix socket; a platform without one simply skips it."""
+    path = _local_socket_path()
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if os.path.exists(path):
+            os.unlink(path)
+        server = await asyncio.start_unix_server(_local_control_handle, path=path)
+        os.chmod(path, 0o600)
+    except (AttributeError, NotImplementedError, OSError) as exc:
+        logger.info("Local control socket not started (%s)", exc)
+        return
+    logger.info("Local control socket listening at %s", path)
+    try:
+        async with server:
+            await server.serve_forever()
+    except asyncio.CancelledError:
+        pass
+
+
 def _mode_name_to_num() -> dict:
     """Mode-name → register-number map of the active backend.
 
@@ -3269,6 +3366,8 @@ async def lifespan(app: FastAPI):
         logger.warning("TX Opus decoder unavailable: %s", e)
         _opus_tx_decoder = None
 
+    _local_ctl_task = asyncio.create_task(_local_control_server(), name="localctl")
+
     # Start audio tasks (skip if audio init failed)
     if _audio_ok:
         _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
@@ -3495,6 +3594,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # ── Shutdown ──
+    _local_ctl_task.cancel()
     if _cq_player is not None and _cq_player.is_calling:
         await _cq_player.abort("shutdown")
     logger.info("Shutting down...")

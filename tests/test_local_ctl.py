@@ -58,6 +58,10 @@ class TestKeyMap(unittest.TestCase):
         self.assertEqual(lc.KeyMap().action_for(("u:0xc0041", "k:353")), "enter")
         self.assertEqual(lc.KeyMap().action_for(("u:0xdead", "k:353")), "enter")
 
+    def test_volume_uses_are_measured_consumer_codes(self):
+        self.assertEqual(lc.KeyMap().action_for(("u:0xc00e9", "k:115")), "vol_up")
+        self.assertEqual(lc.KeyMap().action_for(("u:0xc00ea", "k:114")), "vol_down")
+
     def test_keycode_fallback_for_unknown_usage(self):
         self.assertEqual(lc.KeyMap().action_for(("u:0xffff", "k:115")), "vol_up")
 
@@ -209,6 +213,36 @@ class TestController(unittest.TestCase):
         self.assertEqual(ctl.on_key(("u:0xc0041",), True, now=1.2), [])
         self.assertEqual(ctl.freq_hz, 7_000_000)
 
+    def test_holding_the_dial_key_keeps_stepping(self):
+        # the field report "不太灵敏": a held key's autorepeat was thrown away,
+        # so only the first step ever happened.
+        ctl = self._ctl(freq_hz=7_050_000, step_index=0)
+        first = ctl.on_key(("u:0x70052",), True, now=1.00)
+        second = ctl.on_key(("u:0x70052",), False, now=1.10, repeat=True)
+        self.assertEqual(first, [{"type": "set", "field": "freq", "value": 7_050_100}])
+        self.assertEqual(second, [{"type": "set", "field": "freq", "value": 7_050_200}])
+
+    def test_repeat_is_rate_limited_but_the_measured_rate_passes(self):
+        # the field remote repeats every ~44 ms; a 50 ms floor swallowed every
+        # repeat and holding the key did nothing at all
+        ctl = self._ctl(step_index=0)
+        ctl.on_key(("u:0x70052",), False, now=1.00, repeat=True)
+        self.assertEqual(len(ctl.on_key(("u:0x70052",), False, now=1.044, repeat=True)), 1)
+        self.assertEqual(ctl.on_key(("u:0x70052",), False, now=1.050, repeat=True), [])
+
+    def test_only_continuous_actions_repeat(self):
+        ctl = self._ctl()
+        self.assertEqual(ctl.on_key(("u:0xc00eb",), False, now=1.0, repeat=True), [])   # 设置
+        self.assertEqual(ctl.on_key(("u:0x7003e",), False, now=1.0, repeat=True), [])   # 语音
+        self.assertEqual(ctl.on_key(digit("7"), False, now=1.0, repeat=True), [])        # 数字
+        self.assertEqual(ctl.on_key(("u:0x7004f",), False, now=1.0, repeat=True), [])   # 步进
+
+    def test_repeat_never_unkeys(self):
+        ctl = self._ctl()
+        ctl.on_key(("u:0x7003e",), True)                       # keyed
+        ctl.on_key(("u:0x7003e",), False, repeat=True)         # held: nothing
+        self.assertTrue(ctl.ptt_held)
+
     def test_unknown_key_is_inert(self):
         self.assertEqual(self._ctl().on_key(("u:0x0",), True), [])
 
@@ -222,10 +256,96 @@ class TestIOLayerAttributes(unittest.TestCase):
         io = lc.LocalCtl(ctl)
         self.assertIs(io.keymap, ctl.keymap)
 
-    def test_defaults_resolve_from_environment(self):
+    def test_socket_path_has_a_default(self):
         io = lc.LocalCtl(lc.Controller())
-        self.assertTrue(io.host)
-        self.assertGreater(io.port, 0)
+        self.assertTrue(io.socket_path.endswith(".sock"))
+
+
+class TestStateAbsorption(unittest.TestCase):
+    """The daemon must follow the radio, not a stale default: the operator may
+    be tuning from the web at the same time.  The server sends one ``state``
+    line when the control socket opens."""
+
+    def test_state_line_moves_the_dial(self):
+        ctl = lc.Controller(freq_hz=7_000_000, mode="USB")
+        lc.LocalCtl(ctl)._absorb({"type": "state", "freq": 14_074_000, "mode": "cw"})
+        self.assertEqual(ctl.freq_hz, 14_074_000)
+        self.assertEqual(ctl.mode, "CW")
+
+    def test_junk_is_ignored(self):
+        ctl = lc.Controller(freq_hz=7_000_000)
+        io = lc.LocalCtl(ctl)
+        for msg in ({"type": "state"}, {"type": "state", "freq": "x"},
+                    {"type": "other", "freq": 1}, None, []):
+            io._absorb(msg) if isinstance(msg, dict) else None
+        self.assertEqual(ctl.freq_hz, 7_000_000)
+
+
+class TestControlSocket(unittest.TestCase):
+    """End-to-end over a real Unix socket: what the box actually does."""
+
+    def _serve(self, path, received, reply=b'{"ok":true}\n'):
+        async def handler(reader, writer):
+            writer.write(b'{"type":"state","freq":14070000,"mode":"USB"}\n')
+            await writer.drain()
+            while True:
+                line = await reader.readline()
+                if not line:
+                    break
+                received.append(json.loads(line.decode()))
+                writer.write(reply)
+                await writer.drain()
+            writer.close()
+
+        async def serve():
+            server = await lc.asyncio.start_unix_server(handler, path=path)
+            return server
+        return serve
+
+    def test_commands_go_over_the_socket_as_json_lines(self):
+        import asyncio
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "ctl.sock")
+            received: list = []
+
+            async def run():
+                server = await self._serve(path, received)()
+                ctl = lc.Controller(freq_hz=7_000_000)
+                io = lc.LocalCtl(ctl, socket_path=path)
+                await io.send([{"type": "set", "field": "freq", "value": 7_051_000}])
+                await io.send([{"type": "set", "field": "ptt", "value": True}])
+                io._drop()
+                server.close()
+                await server.wait_closed()
+
+            asyncio.run(run())
+            self.assertEqual(received, [{"field": "freq", "value": 7_051_000},
+                                        {"field": "ptt", "value": True}])
+
+    def test_state_line_is_absorbed_on_connect(self):
+        import asyncio
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "ctl.sock")
+            received: list = []
+
+            async def run():
+                server = await self._serve(path, received)()
+                ctl = lc.Controller(freq_hz=7_000_000)
+                io = lc.LocalCtl(ctl, socket_path=path)
+                await io._connect()
+                io._drop()
+                server.close()
+                await server.wait_closed()
+                return ctl
+
+            ctl = asyncio.run(run())
+            self.assertEqual(ctl.freq_hz, 14_070_000)
+            self.assertEqual(ctl.mode, "USB")
+
+    def test_missing_socket_is_not_fatal(self):
+        import asyncio
+        io = lc.LocalCtl(lc.Controller(), socket_path="/nonexistent/ctl.sock")
+        asyncio.run(io.send([{"type": "set", "field": "freq", "value": 1}]))  # no raise
 
 
 class TestDeviceLookup(unittest.TestCase):

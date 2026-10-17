@@ -29,21 +29,24 @@ from typing import Callable, Optional
 
 #: A socket belongs to exactly one role. `listener` means the session
 #: authenticated with MRRC_LISTEN_PASSWORD (see server._listen_tokens).
-ROLES = ("operator", "listener")
+ROLES = ("operator", "listener", "sdr")
 
 #: One entry per WebSocket endpoint, since the endpoints differ in cost:
 #: `spectrum` and `audio_rx` fan out to every client (that is the uplink),
 #: `control` / `audio_tx` / `atr` are per-session.
-KINDS = ("control", "spectrum", "audio_rx", "audio_tx", "atr")
+KINDS = ("control", "spectrum", "audio_rx", "audio_tx", "atr", "sdr")
 
 #: Kinds whose byte counters are meaningful as an uplink measure.
-METERED_KINDS = ("spectrum", "audio_rx")
+METERED_KINDS = ("spectrum", "audio_rx", "sdr")
 
 _PEAK_SUFFIXES = ("sessions", "sockets")
 
 
 class SessionMetrics:
     """Tracks live sockets per (role, kind), distinct sessions, and uplink bytes.
+
+    The ``sdr`` role is the independent public receiver (AD-029): a separate
+    password, a separate cookie, and no path into the radio control surface.
 
     A *socket* is one WebSocket connection; a *session* is one auth token, which
     may own several sockets (the browser opens control + spectrum + audio_rx for

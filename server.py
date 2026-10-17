@@ -21,6 +21,7 @@ import logging
 import os
 import secrets as _secrets
 import socket
+import struct
 import sys
 import subprocess
 import threading
@@ -70,6 +71,8 @@ import cloud_hub
 import help_session
 import net_tls
 import spectrum_profile
+import sdr_frames
+from sdr_hub import SdrCapacityError, SdrChannelFull, SdrHub
 import ssl_bootstrap
 import support_bundle
 import upgrade_core
@@ -95,7 +98,7 @@ from opus_rx import (
     AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, TX_RATE,
 )
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import (
     HTMLResponse, JSONResponse, RedirectResponse, FileResponse, Response,
 )
@@ -546,6 +549,9 @@ _AUTH_TOKENS_MAX_AGE_S = 30 * 24 * 3600  # same lifetime as the cookie
 # receive audio/spectrum, but every transmit/device-setting path is refused
 # server-side (the browser UI being hidden is never the enforcement).
 _listen_tokens: set[str] = set()
+# SDR 接收机（AD-029）的独立口令角色：这些 token 只能进 /sdr 与 /WSsdr，
+# 反过来 operator/listen token 也进不来 —— 两条入口互不通用。
+_sdr_tokens: set[str] = set()
 # /WSradio "set" fields a listen-only session may use. memRecall is allowed
 # separately — it only ever writes frequency + mode.
 LISTEN_ALLOWED_SET_FIELDS = frozenset({"freq", "vfo_a_freq", "vfo_b_freq", "mode"})
@@ -970,6 +976,10 @@ def _load_auth_tokens() -> None:
             continue
         if now - issued > _AUTH_TOKENS_MAX_AGE_S:
             continue
+        if entry.get("role") == "sdr":
+            _sdr_tokens.add(token)
+            _token_issued[token] = issued
+            continue
         _auth_tokens.add(token)
         _token_issued[token] = issued
         if entry.get("role") == "listener":
@@ -987,10 +997,12 @@ def _save_auth_tokens() -> None:
         "tokens": [
             {
                 "token": token,
-                "role": "listener" if token in _listen_tokens else "operator",
+                "role": ("sdr" if token in _sdr_tokens
+                         else "listener" if token in _listen_tokens
+                         else "operator"),
                 "issued_epoch": _token_issued.get(token, time.time()),
             }
-            for token in sorted(_auth_tokens)
+            for token in sorted(_auth_tokens | _sdr_tokens)
         ]
     }
     try:
@@ -1017,6 +1029,7 @@ def _drop_auth_token(token: str) -> None:
 
     _auth_tokens.discard(token)
     _listen_tokens.discard(token)
+    _sdr_tokens.discard(token)
     _token_issued.pop(token, None)
     _save_auth_tokens()
 
@@ -1124,7 +1137,7 @@ def _warn_query_token_once() -> None:
         "clients should send 'Authorization: Bearer <token>'.", AUTH_COOKIE)
 
 
-def _token_from_ws_handshake(ws: WebSocket) -> str:
+def _token_from_ws_handshake(ws: WebSocket, cookie_name: str = AUTH_COOKIE) -> str:
     """Session token for a WebSocket upgrade: header, cookie, then query param.
 
     The browser sends the auth cookie automatically on the same-origin
@@ -1135,7 +1148,7 @@ def _token_from_ws_handshake(ws: WebSocket) -> str:
     token = _bearer_token(ws.headers.get("authorization"))
     if token:
         return token
-    token = ws.cookies.get(AUTH_COOKIE) or ""
+    token = ws.cookies.get(cookie_name) or ""
     if token:
         return token
     token = ws.query_params.get("token", "") or ""
@@ -1144,12 +1157,12 @@ def _token_from_ws_handshake(ws: WebSocket) -> str:
     return token
 
 
-def _token_from_request(request: Request) -> str:
+def _token_from_request(request: Request, cookie_name: str = AUTH_COOKIE) -> str:
     """Same resolution order as _token_from_ws_handshake, for HTTP requests."""
     token = _bearer_token(request.headers.get("authorization"))
     if token:
         return token
-    token = request.cookies.get(AUTH_COOKIE) or ""
+    token = request.cookies.get(cookie_name) or ""
     if token:
         return token
     token = request.query_params.get("token", "") or ""
@@ -3828,7 +3841,9 @@ PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "
                 "/box_api.js"}
 # WebSocket paths: must NOT be redirected — WebSocket can't follow 302.
 # Let the WS handler check auth and close with proper code 4001.
-WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX"}
+WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX", "/WSsdr"}
+# SDR 入口用独立的 mrrc_sdr cookie（与主站口令隔离），handler 自己鉴权。
+SDR_PATHS = frozenset({"/sdr", "/api/sdr/login"})
 
 # The passwordless onboarding window is judged per-request by
 # _first_window_open(), not by a path set: /setup plus two /api/box endpoints
@@ -3856,6 +3871,11 @@ async def auth_middleware(request: Request, call_next):
     # WebSocket paths: pass through (WS handlers send code 4001 on auth failure
     # so the browser's handleAuthExpired() can act on it properly).
     if path in WS_PATHS:
+        return await call_next(request)
+
+    # SDR 页面与它的登录端点：口令是 MRRC_SDR_PASSWORD，不是主站口令，
+    # 所以在这里放行、由 handler 自己比对（与 FIRST_WINDOW_PATHS 同一形状）。
+    if path in SDR_PATHS:
         return await call_next(request)
 
     # The onboarding window: pass through so a client that has never logged in
@@ -4954,6 +4974,390 @@ async def ws_audio_tx(ws: WebSocket):
                             "(%d total)", len(audio_tx_clients))
         logger.info("Audio TX client disconnected (%d remain, owner=%s)",
                     len(audio_tx_clients), _tx_owner_ws is not None)
+
+
+# ── SDR receiver (AD-029) ───────────────────────────────────────────
+#
+# 一条独立的入口：自己的口令（MRRC_SDR_PASSWORD）、自己的 cookie（mrrc_sdr）、
+# 自己的页面（/sdr）。与无线电控制面零耦合 —— 这里没有任何 CAT/PTT 通路，
+# 页面与接口也不返回电台状态。
+#
+# 设备由 sdr_pipe.py 独占（一个进程一个设备），本文件只做三件事：
+# 仲裁/池/容量（SdrHub）、把订阅者接到 WebSocket、把 pipe 的帧扇出去。
+
+SDR_PASSWORD = os.environ.get("MRRC_SDR_PASSWORD", "")
+SDR_ENABLED = (os.environ.get("MRRC_SDR", "on") or "on").strip().lower() not in (
+    "off", "0", "false", "no")
+SDR_COOKIE = "mrrc_sdr"
+SDR_MAX_CLIENTS = max(1, int(os.environ.get("MRRC_SDR_MAX_CLIENTS", "50") or 50))
+SDR_MAX_CHANNELS = max(1, min(16, int(os.environ.get("MRRC_SDR_MAX_CHANNELS", "8") or 8)))
+SDR_SAMPLE_RATE = float(os.environ.get("MRRC_SDR_SAMPLE_RATE", "2400000") or 2400000)
+
+_sdr_hub: Optional[SdrHub] = None
+_sdr_runner: Optional["SdrPipeRunner"] = None
+_sdr_sid = 0
+
+
+def _sdr_login_enabled() -> bool:
+    """有口令且没被 MRRC_SDR=off 关掉，才有这条入口。"""
+    return bool(SDR_ENABLED and SDR_PASSWORD)
+
+
+def _sdr_password_matches(candidate: str) -> bool:
+    """常量时间比较（I9 的既有教训，别在新入口重犯）。"""
+    return bool(SDR_PASSWORD) and hmac.compare_digest(str(candidate), SDR_PASSWORD)
+
+
+def _sdr_token_from_request(request: Request) -> str:
+    """SDR 入口的令牌：同一套解析顺序，只换 cookie 名（AD-024 的弃用 query 仍走共享处）。"""
+    return _token_from_request(request, SDR_COOKIE)
+
+
+def _sdr_token_from_ws(ws: WebSocket) -> str:
+    return _token_from_ws_handshake(ws, SDR_COOKIE)
+
+
+def _sdr_repo_file(name: str) -> Optional[str]:
+    for cand in (Path(__file__).parent / name, Path("/usr/local/lib") / name,
+                 Path("/usr/lib") / name):
+        if cand.exists():
+            return str(cand)
+    return None
+
+
+class SdrPipeRunner:
+    """持有 sdr_pipe 子进程；把 SdrHub 的调用翻译成 C1 命令帧。
+
+    进程退出（设备被拔、崩溃）→ 广播不可用 → 1/2/5/10 s 退避重启。
+    """
+
+    BACKOFF = (1.0, 2.0, 5.0, 10.0)
+
+    def __init__(self, hub: "SdrHub", script: Path, fs: float, max_ch: int):
+        self.hub = hub
+        self.script = script
+        self.fs = fs
+        self.max_ch = max_ch
+        self._proc: Optional[asyncio.subprocess.Process] = None
+        self._tasks: list[asyncio.Task] = []
+        self._backoff_i = 0
+        self._stopping = False
+        self.last_error = ""
+
+    @property
+    def running(self) -> bool:
+        return self._proc is not None and self._proc.returncode is None
+
+    async def ensure_started(self) -> None:
+        if self.running or self._stopping:
+            return
+        await self._spawn()
+
+    async def _spawn(self) -> None:
+        env = dict(os.environ)
+        shim = os.environ.get("MRRC_SDR_SHIM") or _sdr_repo_file("libsdr_api_shim.so")
+        dsp = os.environ.get("MRRC_SDR_DSP_LIB") or _sdr_repo_file("libsdr_dsp.so")
+        if not shim or not dsp:
+            self.hub.set_available(False, "native libraries not installed")
+            return
+        env["MRRC_SDR_SHIM"] = shim
+        env["MRRC_SDR_DSP_LIB"] = dsp
+        try:
+            self._proc = await asyncio.create_subprocess_exec(
+                sys.executable, str(self.script), "--device",
+                "--fs", str(self.fs), "--max-channels", str(self.max_ch),
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE, env=env)
+        except Exception as exc:                                  # noqa: BLE001
+            self.hub.set_available(False, f"pipe spawn failed: {exc}")
+            return
+        self._tasks = [asyncio.create_task(self._read_loop(self._proc)),
+                       asyncio.create_task(self._stderr_loop(self._proc)),
+                       asyncio.create_task(self._monitor(self._proc))]
+
+    async def _read_loop(self, proc) -> None:
+        parser = sdr_frames.FrameParser()
+        while True:
+            data = await proc.stdout.read(65536)
+            if not data:
+                return
+            for frame in parser.feed(data):
+                self._dispatch(frame)
+
+    async def _stderr_loop(self, proc) -> None:
+        while True:
+            line = await proc.stderr.readline()
+            if not line:
+                return
+            text = line.decode(errors="replace").strip()
+            if text:
+                self.last_error = text
+                logger.info("sdr_pipe: %s", text)
+
+    async def _monitor(self, proc) -> None:
+        rc = await proc.wait()
+        if self._stopping:
+            return
+        reason = f"sdr_pipe exited ({rc})"
+        if self.last_error:
+            reason += f": {self.last_error}"
+        self.hub.set_available(False, reason)
+        logger.warning("SDR pipe stopped: %s", reason)
+        delay = self.BACKOFF[min(self._backoff_i, len(self.BACKOFF) - 1)]
+        self._backoff_i += 1
+        await asyncio.sleep(delay)
+        if not self._stopping:
+            await self._spawn()
+
+    def _dispatch(self, frame: tuple) -> None:
+        kind = frame[0]
+        if kind == "status":
+            obj = frame[1]
+            if obj.get("error"):
+                self.hub.set_available(False, str(obj["error"]))
+                return
+            self.hub.set_available(True)
+            self._backoff_i = 0
+            if "center_hz" in obj:
+                self.hub.center_hz = int(obj["center_hz"])
+        elif kind == "spectrum":
+            _, seq, bins = frame
+            self.hub.on_spectrum(seq, bins)
+        elif kind == "audio":
+            _, chid, seq, level, payload = frame
+            self.hub.on_audio(chid, seq, level, payload)
+
+    def _send(self, obj: dict) -> None:
+        proc = self._proc
+        if proc is None or proc.stdin is None or not self.running:
+            return
+        try:
+            proc.stdin.write(sdr_frames.encode_command(obj))
+        except Exception:                                          # noqa: BLE001
+            pass
+
+    # -- SdrHub 的 PipeLike 接口 -----------------------------------------
+    def tune(self, hz: float) -> None:
+        self._send({"cmd": "tune", "hz": int(hz)})
+
+    def set_channel(self, chid: int, offset_hz: float, mode: int, bw_hz: float) -> None:
+        self._send({"cmd": "channel", "chid": chid, "offset_hz": offset_hz,
+                    "mode": mode, "bw_hz": bw_hz})
+
+    def clear_channel(self, chid: int) -> None:
+        self._send({"cmd": "clear", "chid": chid})
+
+    async def stop(self) -> None:
+        self._stopping = True
+        proc = self._proc
+        if proc is not None and proc.returncode is None:
+            self._send({"cmd": "quit"})
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=3.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+        for task in self._tasks:
+            task.cancel()
+        self._tasks = []
+
+
+def _sdr_ensure_hub() -> "SdrHub":
+    global _sdr_hub, _sdr_runner
+    if _sdr_hub is None:
+        _sdr_hub = SdrHub(clock=time.monotonic, max_clients=SDR_MAX_CLIENTS,
+                          max_channels=SDR_MAX_CHANNELS, span_hz=SDR_SAMPLE_RATE)
+        _sdr_runner = SdrPipeRunner(_sdr_hub, Path(__file__).parent / "sdr_pipe.py",
+                                    SDR_SAMPLE_RATE, SDR_MAX_CHANNELS)
+        _sdr_hub._pipe = _sdr_runner          # SdrHub 的 PipeLike
+    return _sdr_hub
+
+
+def _sdr_ws_encode(frame: tuple) -> tuple[str, object]:
+    """SdrHub 的帧 → (kind, payload)：binary 走字节，其余走 JSON 文本。"""
+    kind = frame[0]
+    if kind == "spectrum":
+        _, seq, bins = frame
+        return "bytes", b"\x01" + struct.pack("<HH", seq & 0xFFFF, len(bins)) + bins
+    if kind == "audio":
+        _, chid, seq, level, payload = frame
+        return "bytes", (b"\x02" + struct.pack("<BBHH", chid, seq & 0xFFFF,
+                                               max(0, min(255, int(level * 255))),
+                                               len(payload)) + payload)
+    return "text", json.dumps({"event_type": kind, "value": frame[1]})
+
+
+@app.post("/api/sdr/login")
+async def api_sdr_login(request: Request):
+    """SDR 入口的登录：口令是 MRRC_SDR_PASSWORD，cookie 与主站分开。"""
+    if not _sdr_login_enabled():
+        return JSONResponse({"error": "SDR receiver is not enabled"}, status_code=404)
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_login_rate_limit(client_ip):
+        return JSONResponse({"error": "Too many login attempts."}, status_code=429)
+    try:
+        body = await request.json()
+        password = body.get("password", "")
+    except Exception:                                             # noqa: BLE001
+        password = ""
+    if not _sdr_password_matches(password):
+        logger.warning("SDR login failed from %s", client_ip)
+        return JSONResponse({"error": "Invalid password"}, status_code=401)
+    token = _make_auth_token()
+    _sdr_tokens.add(token)
+    _token_issued[token] = time.time()
+    _save_auth_tokens()
+    logger.info("SDR receiver login from %s", client_ip)
+    response = JSONResponse({"ok": True})
+    response.set_cookie(SDR_COOKIE, token, max_age=30 * 24 * 3600,
+                        httponly=False, samesite="lax")
+    return response
+
+
+@app.get("/sdr", include_in_schema=False)
+async def sdr_page(request: Request):
+    """SDR 接收机页面。没有 sdr cookie 时给一张自己的登录表单。"""
+    if not _sdr_login_enabled():
+        raise HTTPException(status_code=404, detail="SDR receiver is not enabled")
+    token = _sdr_token_from_request(request)
+    if token not in _sdr_tokens:
+        return HTMLResponse(_SDR_LOGIN_HTML, status_code=200)
+    page = STATIC_DIR / "sdr.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="sdr.html missing")
+    response = FileResponse(page, media_type="text/html")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+_SDR_LOGIN_HTML = """<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SDR 接收机</title>
+<style>body{font-family:-apple-system,system-ui,sans-serif;background:#12120f;color:#e8e2d4;
+display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+form{background:#1d1c17;padding:2rem;border-radius:14px;width:min(88vw,320px);
+box-shadow:0 8px 30px rgba(0,0,0,.5)}
+h1{margin:0 0 1rem;font-size:1.1rem;color:#f5a623;text-align:center;letter-spacing:.08em}
+input{width:100%;padding:12px;border:1px solid #3a382f;border-radius:8px;background:#12120f;
+color:#fff;font-size:16px;box-sizing:border-box}
+button{width:100%;padding:12px;margin-top:12px;background:#f5a623;color:#12120f;border:0;
+border-radius:8px;font-size:16px;font-weight:700;cursor:pointer}
+.err{color:#ff6b6b;margin-top:10px;font-size:.9rem;text-align:center;min-height:1.2em}</style>
+</head><body><form id="f"><h1>SDR 接收机</h1>
+<input type="password" id="p" placeholder="口令" autofocus required>
+<button type="submit">进入</button><div class="err" id="e"></div></form>
+<script>
+document.getElementById('f').onsubmit = async function (ev) {
+  ev.preventDefault();
+  var e = document.getElementById('e');
+  try {
+    var r = await fetch('api/sdr/login', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password: document.getElementById('p').value})});
+    if (r.ok) { location.reload(); } else { e.textContent = '口令不对'; }
+  } catch (err) { e.textContent = '连接失败'; }
+};
+</script></body></html>"""
+
+
+def _next_sdr_sid() -> int:
+    global _sdr_sid
+    _sdr_sid += 1
+    return _sdr_sid
+
+
+@app.websocket("/WSsdr")
+async def ws_sdr(ws: WebSocket):
+    """SDR 接收机通道：文本帧发命令，二进制帧收频谱与音频。"""
+    token = _sdr_token_from_ws(ws)
+    if not token or token not in _sdr_tokens:
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+    if not _sdr_login_enabled():
+        await ws.close(code=4003, reason="SDR receiver is not enabled")
+        return
+
+    await ws.accept()
+    hub = _sdr_ensure_hub()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=256)
+    sid = _next_sdr_sid()
+    try:
+        sub = hub.attach(sid)
+    except SdrCapacityError as exc:
+        await ws.close(code=4003, reason=str(exc))
+        return
+
+    def _push(frame: tuple) -> None:
+        try:
+            queue.put_nowait(frame)
+        except asyncio.QueueFull:
+            hub.dropped_frames += 1
+
+    sub.send = _push
+    metrics.open("sdr", "sdr", token)
+    await _sdr_runner.ensure_started()
+    await ws.send_text(json.dumps({
+        "event_type": "hello",
+        "value": {
+            "modes": ["AM", "USB", "LSB", "CW", "NFM", "WFM"],
+            "max_clients": SDR_MAX_CLIENTS,
+            "max_channels": SDR_MAX_CHANNELS,
+            "sample_rate": SDR_SAMPLE_RATE,
+        },
+    }))
+
+    async def pump() -> None:
+        while True:
+            frame = await queue.get()
+            kind, payload = _sdr_ws_encode(frame)
+            if kind == "bytes":
+                await ws.send_bytes(payload)
+                metrics.add_bytes("sdr", len(payload))
+            else:
+                await ws.send_text(payload)
+
+    pump_task = asyncio.create_task(pump())
+    try:
+        while True:
+            text = await ws.receive_text()
+            try:
+                obj = json.loads(text)
+            except Exception:                                     # noqa: BLE001
+                continue
+            event = obj.get("event_type")
+            if event == "tune":
+                ok, wait = hub.tune(sub, int(obj.get("value", 0)))
+                if not ok:
+                    await ws.send_text(json.dumps({
+                        "event_type": "error", "code": "locked",
+                        "value": {"retry_after": round(wait, 1)}}))
+                hub.broadcast_state()
+            elif event == "channel":
+                val = obj.get("value") or {}
+                try:
+                    chid = hub.subscribe_channel(sub, int(val.get("mode", 0)),
+                                                 int(val.get("bw_hz", 3000)))
+                except SdrChannelFull as exc:
+                    await ws.send_text(json.dumps({
+                        "event_type": "error", "code": "channel_full",
+                        "value": {"reason": str(exc)}}))
+                    continue
+                await ws.send_text(json.dumps({
+                    "event_type": "channel_ack", "value": {"chid": chid}}))
+            elif event == "squelch":
+                hub.set_squelch(sub, float(obj.get("value", 0)))
+            elif event == "volume":
+                hub.set_volume(sub, float(obj.get("value", 1)))
+            elif event == "state":
+                hub.broadcast_state()
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:                                      # noqa: BLE001
+        logger.debug("SDR socket closed: %s", exc)
+    finally:
+        pump_task.cancel()
+        hub.detach(sub)
+        metrics.close("sdr", "sdr", token)
+        hub.broadcast_state()
 
 
 # ── ATR1000 Tuner WebSocket (optional) ──────────────────────────────

@@ -128,6 +128,51 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261017-225339-c737">
+      <header>
+        <span class="id">20261017-225339-c737</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-17 23:01</span>
+      </header>
+      <h3>软件启动后电台选择FTX-1保存重启又变成FT-710</h3>
+      <p class="verdict">1.28.1 的启动器首启探测仍用硬编码三机型白名单（ft710/ic7300/ic7300mk2）判定型号，FTX-1（ftx1）被视为「未设置」，于是每次启动都重新探测并回写成 ft710 —— 这是产品缺陷，不是用户操作问题。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>启动器把「型号不在硬编码白名单」当成首启未配置：`macos/first_run.py` 的 `VALID_MODELS = frozenset({&quot;ft710&quot;,&quot;ic7300&quot;,&quot;ic7300mk2&quot;})`，而 `needs_first_run()` 的 `configured` 条件要求 `model in VALID_MODELS`。FTX-1 的注册键是 `ftx1`（backends/__init__ 注册表、CHANGELOG v1.16.0「MRRC_RADIO_MODEL=ftx1」），永远不满足，于是**每次启动 launcher 都会重跑自动配置**，`MRRC_PORT_CONFIRMED=1`/`MRRC_FIRST_RUN_DONE=1` 都拦不住。</li>
+        <li>`apply_first_run()` 里同一份白名单决定了回写值：`model_unset = model not in VALID_MODELS` → 为 True 就重新探测串口；探测函数 `probe_radio_model()` 只会返回 `ft710`/`ic7300`（FTX-1 也答 Yaesu ASCII `ID;`，因此被认成 ft710），探测不到则 `model = RADIO_MODEL_FALLBACK`（`&quot;ft710&quot;`），最后 `updates[&quot;MRRC_RADIO_MODEL&quot;] = model` 覆盖写回配置文件 —— 用户「保存的 FTX-1」被启动器改写掉。</li>
+        <li>Windows 走的正是这条路：`windows/launcher.py` 第 14 行 `from macos import first_run`，`main()` 里 `env = ensure_first_run()` 调用的就是上面这套逻辑；rc==42 的配置重启虽会 `load_env(config_path())` 重读文件，但用户「关掉再开」的那一刻会重新过 `ensure_first_run()`，于是又变回 ft710。</li>
+        <li>包内证据一致：`env.json` 的 `radio.model=ft710`、`stdout.log`「Radio model: ft710, serial port: [已隐去] @ 38400 baud」、`Connected to FT-710 (ID=0840) on [已隐去]`，而 summary 显示 1 小时内 8 次启动 —— 与「每次启动都重新探测并回写」吻合。</li>
+        <li>同类缺陷在服务端已经修过、启动器这一份被漏掉：`server.py` 的 `/api/setup` 用 `known_models()` 并注明「Registry-derived: …instead of being rejected by a hardcoded tuple (which is how ic705/ic7610/ic7760 would have been unreachable from the connection dialog)」；`macos/first_run.py` 仍留着手写三元组，所以 v1.16.0 之后新增的 ftx1/ftdx10/ftdx101d/ftdx101mp/ft891/ic705/ic7610/ic7760 全部会被回退成 ft710。与 CHANGELOG:1635（V2.33「连接设置保存与首启探测…曾静默覆盖型号默认值」）同属「首启探测覆盖用户选择」这一类，只是那次修的是波特率分支、型号分支从未修。</li>
+        <li>包内其它报错不是本问题：`scope_pipe: open_failed:attempt_N:error_2` + `fatal:cannot_open_device` 表示这台机器上没有可打开的 FT4222 设备（FTX-1/非 FT-710 本来就没有 FT4222 波形源，v1.16.0 明确「没有真机频谱数据源，UI 用 S 表合成，不伪造瀑布」）；`asyncio … ConnectionResetError [WinError 10054]` 是浏览器/客户端断连的噪声；`ft8-worker.log` 的 `BrokenPipeError … EOFError` 是进程退出时 worker 被回收。这三类不解释型号回退。</li>
+        <li>需要注意的一点：日志里电台以 `ID=0840`、FT-710 的 CAT 应答；如果现场实际接的是 FT-710，那么选 FTX-1 本身也不可用（FTX-1 模式码 H/I 与滤波 SH 前缀都不同）。型号回写是缺陷，但「该选哪个型号」要以机身上的机器为准。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先彻底退出 MRRC Modern（托盘/黑色命令窗口都要关，任务管理器确认没有 MRRC-Modern.exe / MRRC-Modern-Server.exe 残留），否则下一次启动仍会被探测覆盖。</li>
+        <li>用记事本打开 %LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env，把 `MRRC_RADIO_MODEL=` 改成 `ftx1`（若真要把 FTX-1 当发射机，再补一行 `MRRC_ALLOW_UNVERIFIED_TX=1`，否则 PTT/TUNE 会被未验证机型门禁拒绝）；顺手确认 `MRRC_SERIAL_PORT=[已隐去]`。</li>
+        <li>**不要用桌面/开始菜单里的「MRRC Modern」图标启动**（那是 launcher，会重新探测并把型号写回 ft710）。改用安装目录下的 `MRRC-Modern-Server.exe`，或开始菜单里的「MRRC Modern Server」快捷方式，再在浏览器打开 https://127.0.0.1:8888。</li>
+        <li>启动后到日志里核对一行：应出现 `Radio model: ftx1`（不是 ft710）；若仍是 ft710，说明 launcher 又跑了一次，按其托盘菜单完全退出后再用上面的 Server 入口启动。</li>
+        <li>如果只想稳定使用：把型号设回实际电台（例如 FT-710 → `ft710`），并在修复版发布前不要再在「连接设置…」里切换到 ft710/ic7300/ic7300mk2 以外的机型。</li>
+        <li>顺便清理环境噪声：这台机器没有可用的 FT4222 设备，FT-710 的真频谱需要 FTDI 驱动/设备（`FT4222.dll`+`ftd2xx.dll` 已加载但 `error_2` 打不开）；若确实是 FT-710 且要真频谱，请插好 USB 波形口并确认驱动，否则瀑布会一直是 S 表合成。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">macos/first_run.py: `VALID_MODELS = frozenset({&quot;ft710&quot;, &quot;ic7300&quot;, &quot;ic7300mk2&quot;})`</li>
+        <li class="ev">macos/first_run.py: `configured = (pwd and pwd != DEFAULT_WEB_PASSWORD and model in VALID_MODELS and (...))` → `return not configured`</li>
+        <li class="ev">macos/first_run.py: `model_unset = model not in VALID_MODELS` … `model = RADIO_MODEL_FALLBACK`（&quot;ft710&quot;）… `updates[&quot;MRRC_RADIO_MODEL&quot;] = model`</li>
+        <li class="ev">macos/first_run.py: `for baud, probe in ((38400, probe_ft710), (115200, probe_ic7300)): ... return &quot;ft710&quot; if probe is probe_ft710 else &quot;ic7300&quot;`</li>
+        <li class="ev">windows/launcher.py: `from macos import first_run` / `main(): env = ensure_first_run()`</li>
+        <li class="ev">server.py /api/setup: `if radio_model not in known_models(): ... # Registry-derived: ... instead of being rejected by a hardcoded tuple`</li>
+        <li class="ev">stdout.log: `2026-10-17 22:49:24,029 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud`</li>
+        <li class="ev">stdout.log: `2026-10-17 22:49:24,809 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0840) on [已隐去]`</li>
+        <li class="ev">state/env.json: `&quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;display_name&quot;: &quot;Yaesu FT-710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;}`</li>
+        <li class="ev">diagnostics/summary.txt: `启动次数：8 次，时间跨度 2026-10-17 21:57:45 → 2026-10-17 22:49:37`</li>
+        <li class="ev">logs/server.log: `scope_pipe: open_failed:attempt_5:error_2` / `scope_pipe: fatal:cannot_open_device`</li>
+        <li class="ev">CHANGELOG.md:1635 (V2.33): `连接设置保存与首启探测现在自动按型号…38400 曾静默覆盖型号默认值`</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>macos/first_run.py:needs_first_run()/apply_first_run()（VALID_MODELS 硬编码三键 → 应由 backends.known_models() 派生，探测失败时保留用户已选的型号而不是回写 ft710）</code></p>
+    </article>
     <article class="card" id="20261007-083527-6536">
       <header>
         <span class="id">20261007-083527-6536</span>
@@ -596,7 +641,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-16 21:56（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-17 23:01（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

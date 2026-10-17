@@ -8,6 +8,19 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 盒子本地的耳朵：RX 音频进蓝牙耳机（AD-028 续）
+
+- 新模块 `local_speaker.py`：把服务端已经在编码的 RX 音频再分一路给本机 ALSA 设备，
+  队列有界、满了就丢（计数），播放走 `aplay` 子进程（蓝牙设备是 **ALSA PCM 名**
+  而不是 PortAudio 的枚举索引），设备掉线自动重启子进程。
+- 配置 `MRRC_LOCAL_SPEAKER_DEVICE`（ALSA 设备名）、`_RATE`、`_CHANNELS`，默认关闭；
+  关着时浏览器路径逐字节不变。RX 循环的空闲门把本地扬声器算作「有人在听」
+  （FT8 tap 已经上过这一课）。
+- **实测（W103D + 荣耀亲选耳机X5e）**：A2DP 48 kHz 立体声**可用**，电台的 RX 音频
+  稳定进耳机；**HFP/SCO 两条都不通** —— 播放无声音、采集 0 字节（`hfpag/source`
+  打开后不送数据）。所以耳机麦克风在这颗 MT7663 上用不了，发射的本地音源要走 USB 麦克风。
+- 测试 2420 → **2430**（`tests/test_local_speaker.py` 10 项）。
+
 ### 本地操作台：蓝牙遥控器直接调电台（AD-028）
 
 现场操作员站在盒子旁边，用一支普通蓝牙遥控器调频、切模式、按住语音键发射。

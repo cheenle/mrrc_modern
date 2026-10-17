@@ -406,8 +406,10 @@ class RXBackpressureTests(unittest.TestCase):
         # without this term it never receives audio at all.
         self.assertIn("_ft8_tap_live = _ft8_runtime is not None and _ft8_runtime.rx_tap is not None",
                       source)
-        self.assertIn("if not audio_rx_clients and not _rec_session.active and not _ft8_tap_live:",
-                      source)
+        # The local speaker (AD-028) is a listener with no browser client too,
+        # so it joins the FT8 tap in the idle gate.
+        self.assertIn("_speaker_live = _local_speaker is not None and _local_speaker.active", source)
+        self.assertIn("and not _ft8_tap_live and not _speaker_live)", source)
         self.assertIn("await asyncio.sleep(idle_interval)", source)
         self.assertIn("continue", source)
 

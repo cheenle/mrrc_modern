@@ -78,6 +78,7 @@ from backends.ft710.config_ft710 import (
 )
 from backends.ft710.cat_controller import CatController
 from radio_state import RadioState
+from local_speaker import LocalSpeaker
 from recorder import (
     RecorderError, RecordingSession, encoder_available,
     list_recordings, load_index, parse_recording_name, save_index,
@@ -1911,6 +1912,9 @@ def _audio_permission_hint() -> str:
     return ""
 
 
+_local_speaker: Optional[LocalSpeaker] = None
+
+
 async def _audio_rx_loop():
     """Capture RX audio from the sound card and broadcast to clients.
 
@@ -1945,7 +1949,12 @@ async def _audio_rx_loop():
                 # FT8 decoder (its RX tap is fed right below), so both keep
                 # the loop awake.
                 _ft8_tap_live = _ft8_runtime is not None and _ft8_runtime.rx_tap is not None
-                if not audio_rx_clients and not _rec_session.active and not _ft8_tap_live:
+                # The local speaker is a listener too (AD-028): an operator
+                # standing next to the box with a headset opens no browser, and
+                # the FT8 tap already taught this lesson once.
+                _speaker_live = _local_speaker is not None and _local_speaker.active
+                if (not audio_rx_clients and not _rec_session.active
+                        and not _ft8_tap_live and not _speaker_live):
                     _idle_skipped += 1
                     if _loop_count % 500 == 0 and _idle_skipped > 50:
                         logger.info(
@@ -1957,6 +1966,8 @@ async def _audio_rx_loop():
 
                 pcm = audio.read_rx_chunk()
                 audio.note_rx_chunk(pcm)
+                if pcm and _local_speaker is not None:
+                    _local_speaker.feed(pcm)
                 if pcm:
                     _rx_last_pcm = time.monotonic()
                     _rec_tap_rx(pcm, audio._rx_dev_rate)
@@ -2016,7 +2027,7 @@ async def _audio_rx_loop():
                         if dead:
                             logger.warning("Removed %d dead/slow audio clients", len(dead))
                             audio_rx_clients -= dead
-                elif audio_rx_clients or _ft8_tap_live or _rec_session.active:
+                elif audio_rx_clients or _ft8_tap_live or _rec_session.active or _speaker_live:
                     # No PCM at all while somebody needs the audio: the capture
                     # stopped delivering. Reopen it (rate-limited) instead of
                     # leaving the consumer with silence until the next TX.
@@ -3368,6 +3379,21 @@ async def lifespan(app: FastAPI):
 
     _local_ctl_task = asyncio.create_task(_local_control_server(), name="localctl")
 
+    # Local speaker (AD-028): the radio's audio on a device beside the box.
+    global _local_speaker
+    _speaker_device = _env("MRRC_LOCAL_SPEAKER_DEVICE", "")
+    if _speaker_device:
+        try:
+            _local_speaker = LocalSpeaker(
+                _speaker_device,
+                rate=int(_env("MRRC_LOCAL_SPEAKER_RATE", "8000") or 8000),
+                channels=int(_env("MRRC_LOCAL_SPEAKER_CHANNELS", "1") or 1),
+            )
+            _local_speaker.start()
+        except Exception as exc:                        # noqa: BLE001 - never fatal
+            logger.warning("Local speaker unavailable: %s", exc)
+            _local_speaker = None
+
     # Start audio tasks (skip if audio init failed)
     if _audio_ok:
         _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
@@ -3595,6 +3621,8 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ──
     _local_ctl_task.cancel()
+    if _local_speaker is not None:
+        _local_speaker.stop()
     if _cq_player is not None and _cq_player.is_calling:
         await _cq_player.abort("shutdown")
     logger.info("Shutting down...")

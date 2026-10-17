@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2420 tests across 123 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2430 tests across 124 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 90 of those 123 — the support-chain, Cloud Hub and
+sections below itemise 91 of those 124 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -1007,3 +1007,12 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   ⑤ 命令被服务端拒绝时回 `ok:false` 并带上原因；⑥ 白名单覆盖遥控器真正会用的六个字段。
   这些用例跑在**真的 `start_unix_server`** 上（临时目录里的 socket），只把
   `_execute_set_command` 打桩，因此连的是真实的握手/读行/回包路径。
+
+### 本轮新增（本地扬声器，AD-028 续）
+
+- **`test_local_speaker.py`** — RX 音频分一路给本机设备（蓝牙耳机）这一层。钉住三件会伤到
+  RX 循环的事：**feed 永不阻塞**（设备慢就丢帧并计数，队列满的用例断言调用在 2 秒内返回）；
+  **设备消失不是错误**（`aplay` 子进程被杀后必须重启，失败计数一次）；**A2DP 模式不做抽取**
+  （48 kHz 立体声原样播，单声道样本复制到两个声道），而 8 kHz 设备走既有抽取器。
+  另有三条服务端源码守卫：RX 循环把本地扬声器算作「有人在听」（否则没有浏览器时整条
+  音频链就睡了）、循环里确实 feed 了、且由环境变量构建并随关机停止。

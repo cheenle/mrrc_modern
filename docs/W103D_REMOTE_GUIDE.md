@@ -20,19 +20,25 @@
 
 ## 2. 配对（只做一次）
 
-1. 让遥控器进入配对模式。中国移动这支是**同时长按「OK」和「返回」约 5 秒**，
-   指示灯开始快闪。
-2. 在盒子上配对。有两条路，效果一样：
-   - 用面板：浏览器打开 `/settings`，蓝牙一节里搜索并配对；
-   - 用命令行：SSH 进盒子（`root` / 出厂口令），`bluetoothctl` 里 `scan on`，
-     看到 `CMCC_Voice_Remote` 后 `pair <地址>`、`trust <地址>`。
-3. 按一下遥控器的任意键，确认它连上了：
+1. 让遥控器进入配对模式：**同时长按「OK + 返回」约 5 秒**，指示灯开始快闪。
+2. 浏览器打开盒子的 `/settings`，找到「**遥控器**」，点「搜索附近的遥控器」（约 12 秒）。
+3. 列表里出现 `CMCC_Voice_Remote` 后点「**配对**」。
+
+看到页面写 **「已配对，按键可用 ✓」** 就成了，按一下方向键验证。
+
+> 页面判断的是「键盘设备有没有真的建出来」，不是「蓝牙说配上了」。这两件事不一样，
+> 原因见下面那节。
+
+### 没有网页的时候（命令行）
+
+SSH 进盒子（`root` 或 `mrrc`）后：
 
 ```
-bluetoothctl info 0C:F3:CE:B0:88:75
+bluetoothctl --timeout 20 scan bredr          # 遥控器是经典蓝牙
+bluetoothctl --timeout 25 pair  <地址>
+bluetoothctl trust <地址>
+bluetoothctl info <地址> | grep -E "Paired|Bonded|Connected"
 ```
-
-看到 `Paired: yes`、`Bonded: yes` 就配好了。**配对状态会保存，重启不掉。**
 
 ### 配好了但按键没反应？看这一条
 

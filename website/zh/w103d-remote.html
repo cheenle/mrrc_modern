@@ -102,15 +102,19 @@
 <li><strong>遥控器自带的麦克风用不了。</strong> 它的语音走的是厂商自己的一条蓝牙通道，不是标准</li>
 </ul>
 <h2 id="2-配对-只做一次">2. 配对（只做一次）</h2>
-<p>指示灯开始快闪。</p>
-<p>- 用面板：浏览器打开 <code>/settings</code>，蓝牙一节里搜索并配对； - 用命令行：SSH 进盒子（<code>root</code> / 出厂口令），<code>bluetoothctl</code> 里 <code>scan on</code>， 看到 <code>CMCC_Voice_Remote</code> 后 <code>pair &lt;地址&gt;</code>、<code>trust &lt;地址&gt;</code>。</p>
 <ol>
-<li>让遥控器进入配对模式。中国移动这支是<strong>同时长按「OK」和「返回」约 5 秒</strong>，</li>
-<li>在盒子上配对。有两条路，效果一样：</li>
-<li>按一下遥控器的任意键，确认它连上了：</li>
+<li>让遥控器进入配对模式：<strong>同时长按「OK + 返回」约 5 秒</strong>，指示灯开始快闪。</li>
+<li>浏览器打开盒子的 <code>/settings</code>，找到「<strong>遥控器</strong>」，点「搜索附近的遥控器」（约 12 秒）。</li>
+<li>列表里出现 <code>CMCC_Voice_Remote</code> 后点「<strong>配对</strong>」。</li>
 </ol>
-<pre><code>bluetoothctl info 0C:F3:CE:B0:88:75</code></pre>
-<p>看到 <code>Paired: yes</code>、<code>Bonded: yes</code> 就配好了。<strong>配对状态会保存，重启不掉。</strong></p>
+<p>看到页面写 <strong>「已配对，按键可用 ✓」</strong> 就成了，按一下方向键验证。</p>
+<blockquote>页面判断的是「键盘设备有没有真的建出来」，不是「蓝牙说配上了」。这两件事不一样， 原因见下面那节。</blockquote>
+<h3 id="没有网页的时候-命令行">没有网页的时候（命令行）</h3>
+<p>SSH 进盒子（<code>root</code> 或 <code>mrrc</code>）后：</p>
+<pre><code>bluetoothctl --timeout 20 scan bredr          # 遥控器是经典蓝牙
+bluetoothctl --timeout 25 pair  &lt;地址&gt;
+bluetoothctl trust &lt;地址&gt;
+bluetoothctl info &lt;地址&gt; | grep -E "Paired|Bonded|Connected"</code></pre>
 <h3 id="配好了但按键没反应-看这一条">配好了但按键没反应？看这一条</h3>
 <p>蓝牙有个容易踩的坑：<strong>报告「配对成功」不等于链路加密成功</strong>。</p>
 <p>第一版就是这么翻车的：<code>bluetoothctl</code> 说 <code>Paired: yes</code>，但按键一个都不来。抓空口报文 才看见真相：</p>

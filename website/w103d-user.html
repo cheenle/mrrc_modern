@@ -237,16 +237,16 @@ systemctl restart mrrc-modern</code></pre>
 <h3 id="9-12-用蓝牙遥控器操作电台">9.12 用蓝牙遥控器操作电台</h3>
 <p>完整的按键表、配对失败的排查步骤和换遥控器的方法，见 <a href="w103d-remote.html">遥控器指南</a>。</p>
 <p>盒子接上一支蓝牙遥控器（实测：中国移动的语音遥控器 <code>CMCC_Voice_Remote</code>）， 人站在盒子旁边就能调频、切模式、按住语音键发射，不用开手机或电脑。</p>
-<h3 id="配对-一次性">配对（一次性）</h3>
-<p><code>Paired: yes</code>、<code>Bonded: yes</code>。</p>
+<h3 id="配对-一次性-全在网页上">配对（一次性，全在网页上）</h3>
 <ol>
-<li><code>/settings</code> 打开蓝牙，或 SSH 进盒子；</li>
-<li>让遥控器进入配对模式（同时长按 <strong>OK + 返回</strong> 约 5 秒，指示灯快闪）；</li>
-<li>配好之后按任意键，遥控器就连上；<code>bluetoothctl info &lt;地址&gt;</code> 应显示</li>
+<li>打开 <code>/settings</code> 页面，找到「<strong>遥控器</strong>」；</li>
+<li>让遥控器进入配对模式：<strong>同时长按「OK + 返回」约 5 秒</strong>，指示灯快闪；</li>
+<li>点「<strong>搜索附近的遥控器</strong>」（约 12 秒），列表里出现 <code>CMCC_Voice_Remote</code> 后点「配对」。</li>
 </ol>
-<p><strong>关键一步：链路必须加密才算配上。</strong> 曾经出现过「配对成功但按键全无反应」： 日志里每一次属性读都报 <code>unlikely error</code>，<code>btmon</code> 里 <code>LE Start Encryption</code> 后面跟着 <code>Encryption: Disabled</code> —— 明文链路上遥控器一个字都不给。修法是 <strong>删掉设备、把蓝牙控制器上下电、重新配一次</strong>，直到看到：</p>
-<pre><code>Encryption: Enabled with AES-CCM</code></pre>
-<p>这时内核会立刻创建 <code>CMCC_Voice_Remote Keyboard</code>，按键才开始上报。</p>
+<p>配对成功时页面显示 <strong>「已配对，按键可用 ✓」</strong>。看到这一句就可以用了：按一下遥控器的 方向键，电台的频率会跟着动。</p>
+<p><strong>页面说「已配对，但按键还没反应」怎么办？</strong> 点旁边的「<strong>重配</strong>」按钮，它会清掉旧配对 并给蓝牙控制器上下电；等提示出来，让遥控器重新进入配对模式，再点一次「配对」。</p>
+<p>这一句判据不是随便写的：蓝牙这里有个坑，<strong>「配对成功」不等于「能用」</strong>——旧配对密钥会让 链路停在未加密状态，遥控器于是拒绝一切属性读写，系统建不出键盘设备，按什么键都没有反应。 页面判断的是「有没有真的建成键盘设备」，所以它说可用就是可用。</p>
+<p>（另一半：如果换了一支遥控器，它的按键对不上，见 <a href="w103d-remote.html">遥控器指南</a> §6。）</p>
 <h3 id="按键">按键</h3>
 <div class="table-scroll"><table>
 <thead><tr><th>键</th><th>作用</th></tr></thead><tbody>

@@ -18,11 +18,15 @@ All notable changes to the MRRC Web Control project.
   不认新端口）。新增 `cloud_hub.ensure_admin_segment()`：在**启动隧道之前**补一段——frpc 只在
   启动时读一次配置，那是唯一安全的时机——并在 `set_help_proxy()` 遇到无管理段时给一句能行动的话
   （「重启一次应用就会自动补上」），而不是拿 0 号端口去重试 3 秒。
-- **「已连接」永远是 0。** `HelpSession.note_connection()` 没有任何调用者：SSH 门
+- **「已连接」永远是 0；「连错 5 次自动关闭」也从未发生。** 同一形状的两条死接线： `HelpSession.note_connection()` 没有任何调用者：SSH 门
   （`SshHelpServer`）只发 `on_event`，而计数住在会话上，两边从来没接线。单测直接调
   `note_connection()`，所以这个洞一路活着。现在门在会话结束时回调 `on_disconnect`，
   `build_session()` 把它接到 `note_connection()`；新增的测试**走接线本身**（真 paramiko shell
-  会话 → `connections == 1`，探针 exec 不计数），去掉那行接线它立刻变红。
+  会话 → `connections == 1`，探针 exec 不计数），去掉那行接线它立刻变红。口令失败那条更严重：
+  门的 `check()` 自己数失败次数，而决定关窗的 `HelpSession.note_auth_failure()` 没有调用者，于是
+  「连续试错 5 次自动关闭」是一句没有实现的承诺。现在 `on_auth_failure` 接上，两条测试钉住
+  （错一次 → `failures: 1`；第五次 → `closed / auth_failures`）。**OpenSSH 默认一次连接试 3 遍口令**，
+  所以一次 typo 会吃掉 3 次预算 —— 支持者用 `-o NumberOfPasswordPrompts=1`。
 - 真机验收（盒子，2026-10-17）：开窗 → 从 hub `ssh -p 18818` 交互式登入，`id -un` = **`mrrc`**
   （不提权）→ `connections: 1` → 客户「停止协助」→ hub 端口释放、配置里的协助代理摘掉、主入口
   全程 302 不抖。记录与排障表更新在 `docs/remote_help.md`。

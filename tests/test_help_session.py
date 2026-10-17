@@ -569,3 +569,47 @@ class ConnectionCountingTests(unittest.TestCase):
         finally:
             client.close()
         self.assertEqual(self._await_connections(1, timeout=1.0), 0)
+
+
+class AuthFailureWiringTests(unittest.TestCase):
+    """「连续试错 5 次自动关闭」必须是**真的**，而不只是 `note_auth_failure()` 的语义。
+
+    2026-10-17 真机（盒子 .217）：连错 3 次口令，`/api/help/status` 的 `failures` 仍是 0，
+    窗口照开 —— 因为门（`SshHelpServer.check`）自己数自己的，而决定关窗的
+    `HelpSession.note_auth_failure()` 没有任何调用者。和 `note_connection()` 是同一个形状：
+    单测直接调那个函数，所以一直绿。
+    """
+
+    def setUp(self):
+        self.session = help_session.build_session(
+            portal_opener=lambda minutes: 18877,
+            tunnel=lambda local_port, remote_port, add: None)
+        self.status = self.session.enable(minutes=30, username="help-ab12",
+                                          password="pw-1234567890")
+
+    def tearDown(self):
+        self.session.close("user")
+
+    def _wrong(self):
+        import paramiko
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            with self.assertRaises(paramiko.AuthenticationException):
+                client.connect("127.0.0.1", port=self.session.local_port,
+                               username=self.status["username"],
+                               password="definitely-not-it",
+                               allow_agent=False, look_for_keys=False, timeout=5)
+        finally:
+            client.close()
+
+    def test_a_wrong_password_reaches_the_window(self):
+        self._wrong()
+        self.assertEqual(self.session.status()["failures"], 1)
+
+    def test_the_fifth_wrong_password_closes_the_window(self):
+        for _ in range(help_session.MAX_AUTH_FAILURES):
+            self._wrong()
+        self.assertEqual(self.session.state, help_session.CLOSED)
+        self.assertEqual(self.session.close_reason, "auth_failures")
+        self.assertEqual(self.session.password_for_display(), "")

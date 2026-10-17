@@ -422,7 +422,8 @@ class SshHelpServer:
     bind_host = BIND_HOST
 
     def __init__(self, *, on_event: Optional[Callable[[dict], None]] = None,
-                 on_disconnect: Optional[Callable[[float], None]] = None) -> None:
+                 on_disconnect: Optional[Callable[[float], None]] = None,
+                 on_auth_failure: Optional[Callable[[], None]] = None) -> None:
         self.on_event = on_event
         #: 一次 shell 会话结束时回调（秒）。它存在的原因：**计数住在 HelpSession 上，
         #: 而这扇门只拥有 on_event** —— 接线之前 `note_connection()` 没有任何调用者，
@@ -430,6 +431,11 @@ class SshHelpServer:
         #: `/api/help/status` 仍然报 `connections: 0`），界面上的「已连接」与门户心跳
         #: 里的连接数一起死掉；而单测直接调 `note_connection()`，所以看不见。
         self.on_disconnect = on_disconnect
+        #: 一次口令失败的回调。理由同 on_disconnect：**计数与自动关闭住在 HelpSession 上**
+        #: （`note_auth_failure()` 数到 5 就关窗），而这扇门只知道自己数了几次。接线之前
+        #: 那句「连续试错 5 次自动关闭」从来没发生过（2026-10-17 真机：连错 3 次，`failures`
+        #: 仍是 0，窗口照开），而单测直接调 `note_auth_failure()`，所以看不见。
+        self.on_auth_failure = on_auth_failure
         self._user = self._pw = ""
         self._failures = 0
         self._sock: Optional[socket.socket] = None
@@ -478,7 +484,10 @@ class SshHelpServer:
         ok = credentials_match(self._user, self._pw, username, password)
         if not ok:
             self._failures += 1
-            if self.on_event:
+            if self.on_auth_failure is not None:
+                # 会话那一半数到 5 就关窗（`note_auth_failure`），它也是唯一的事件源。
+                self.on_auth_failure()
+            elif self.on_event:
                 self.on_event({"event": "auth_fail", "failures": self._failures})
         return ok
 
@@ -612,4 +621,6 @@ def build_session(*, portal_opener: Callable[[int], int],
     # 门与计数分住在两半，这是它们之间那条线：没有它，「已连接」永远是 0
     # （门只有 on_event，而计数住在 HelpSession 上）。
     server.on_disconnect = lambda duration_s: session.note_connection(duration_s=duration_s)
+    # 同一形状的第二条线：门的计数器必须能关掉这个窗口（「连续试错 5 次」的防线）。
+    server.on_auth_failure = session.note_auth_failure
     return session

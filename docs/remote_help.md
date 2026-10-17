@@ -50,6 +50,7 @@ ssh -p <协助端口> <用户名>@127.0.0.1     # 端口在 portal 的实例详�
 | 界面报「没有管理段（webServer）」 | 隧道配置里有没有 `webServer.port` | 实例是在管理段进生成器（2026-10-12）**之前**入网的，配置文件里从来没有这一段。**重启一次应用**即可自动补上（`cloud_hub.ensure_admin_segment` 在启动隧道前铸一个），然后再点一次「开启协助」 |
 | 界面报 frpc 相关错误（且日志里是 `127.0.0.1:0`） | 同上 | 端口 **0** 不是网络问题，是「这份配置没有 `webServer` 段」的标记；按上一行处理 |
 | 连进去了，「已连接」却一直是 0 | `/api/help/status` 的 `connections` | 2026-10-17 前的构建有这个缺陷：计数函数没有任何调用者（门只有事件，计数住在会话上）。已修（`SshHelpServer.on_disconnect` → `note_connection`），旧构建需要更新 `help_session.py` |
+| 连错口令但 `failures` 一直是 0、窗口也不会自己关 | `/api/help/status` 的 `failures` | 同形状的第二个死接线（2026-10-17）：门的 `check()` 自己数，`HelpSession.note_auth_failure()` 没有调用者，于是「连续试错 5 次自动关闭」从未发生过。已修（`SshHelpServer.on_auth_failure` → `note_auth_failure`）。**注意 OpenSSH 默认一次连接试 3 遍口令**，所以一个手抖的 typo 会吃掉 3 次预算 —— 用 `-o NumberOfPasswordPrompts=1` |
 | portal 上看不到「进行中」 | portal 的实例详情页刷新；应用日志心跳 | 心跳没到 portal（网络/portal 未部署） |
 | `ssh` 连不上 | `ssh -p <端口> 127.0.0.1`（确认在 **hub** 上敲） | 端口填错；或窗口已到期/被强制结束 |
 | 连上但口令不对 | 客户重新读一遍口令 | 他可能改过；口令区分大小写 |
@@ -66,6 +67,7 @@ ssh -p <协助端口> <用户名>@127.0.0.1     # 端口在 portal 的实例详�
 | 3 | 主入口不抖 | ✅ 协助全程 `https://ba4eg.mrrc.vlsc.net/` 稳定 302 |
 | 4 | 客户停止 → 两端释放 | ✅ `close_reason: user`，hub 端端口不再监听，配置里的协助代理被摘掉，主代理保留 |
 | 5 | 「已连接」计数 | ✅ `connections: 1`（修之前是 0，见下） |
+| 6 | 错口令计数与自动关闭 | ✅ 一次错口令 = `failures: 1`；第 5 次窗口自关（`auth_failures`）——修之前恒为 0、永不关闭 |
 
 **这一轮在真机上拓出并修掉的两个缺陷（都不是协议问题，是接线与既有状态）：**
 
@@ -75,11 +77,13 @@ ssh -p <协助端口> <用户名>@127.0.0.1     # 端口在 portal 的实例详�
    `frpc admin API unreachable on 127.0.0.1:0 after 3.0s` —— 端口 **0** 才是线索。
    修法：`cloud_hub.ensure_admin_segment()` 在**启动隧道之前**补一段（那是唯一安全的时机，
    frpc 只在启动时读配置），`set_help_proxy()` 遇到没有管理段时给一句能行动的话而不是去连 0 号端口。
-2. **「已连接」永远是 0**。`HelpSession.note_connection()` 没有调用者：SSH 门（`SshHelpServer`）
+2. **「已连接」永远是 0，且「连错 5 次自动关闭」从未发生**（同一形状的两条死接线）。`HelpSession.note_connection()` 没有调用者：SSH 门（`SshHelpServer`）
    只有 `on_event`，计数却住在会话上，两边没有接线；单测直接调 `note_connection()`，所以看不见。
    修法：门在会话结束时回调 `on_disconnect` → `build_session()` 把它接到 `note_connection()`，
    并补一条**走接线本身**的测试（真 paramiko shell 会话 → `status()["connections"] == 1`，
-   探针 exec 不计）。
+   探针 exec 不计）。同样的接线缺失让 `note_auth_failure()` 也没有调用者：门的 `check()` 数自己的，
+   窗口永不因试错关闭。现在门在口令失败时回调 `on_auth_failure`；两条测试覆盖（错一次 → `failures: 1`，
+   第五次 → `closed / auth_failures`）。
 
 ## 真机验收（**2026-10-12 已执行**）
 

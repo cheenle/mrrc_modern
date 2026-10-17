@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2465 tests across 127 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2467 tests across 127 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2465 above. Run it with:
+the 2467 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -1055,6 +1055,9 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   `HelpSession.note_connection()`，而它原先**没有任何调用者**（SSH 门只发 `on_event`），单测直接调
   它所以看不见。两条测试都走 `build_session()` 拼出来的真实组合：真 paramiko shell 会话结束时
   `connections == 1`，而探针 `exec` 不算连接。
+- **`test_help_session.py` 的 `AuthFailureWiringTests`** — 同一形状的第二条死接线：「连续试错 5 次自动关闭」
+  从来没发生过（门的 `check()` 自己数，`HelpSession.note_auth_failure()` 没有调用者；真机连错 3 次，
+  `failures` 仍是 0）。两条测试走接线本身：错一次 → `failures: 1`；第五次 → `closed / auth_failures`。
 - **`test_cloud_hub.py` 的 `SetHelpProxyTests` 两项 + `ensure_admin_segment`** — 老实例的隧道配置
   没有 `webServer` 段（入网早于 2026-10-12）时，「开启协助」拿到的是
   `admin API unreachable on 127.0.0.1:0`；实测盒子 `.217` 每次必失败。现在配置缺失时报一句能行动的

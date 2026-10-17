@@ -503,3 +503,69 @@ class HeartbeatTests(unittest.TestCase):
         s.enable(minutes=5)
         self.assertIsNone(s._beat_thread, "没有 beat 却起了心跳线程")
         s.close("user")
+
+
+class ConnectionCountingTests(unittest.TestCase):
+    """「已连接」这一个数字：真开一次 shell 会话，它必须变成 1。
+
+    2026-10-17 真机（盒子 .217 / v1.25.5）：从 hub 用真口令登进去跑完三条命令，
+    `/api/help/status` 仍然报 `connections: 0`，门户心跳里的连接数也一直是 0。原因是
+    **接线**而不是逻辑 —— 计数住在 `HelpSession.note_connection()`，而它原先没有任何
+    调用者：门（`SshHelpServer`）只有 `on_event`。单测直接调 `note_connection()`，
+    于是这个洞一路活着。下面两条走的都是 `build_session()` 拼出来的真实组合，
+    所以断线的是接线本身。
+    """
+
+    def setUp(self):
+        self.events = []
+        self.session = help_session.build_session(
+            portal_opener=lambda minutes: 18877,
+            tunnel=lambda local_port, remote_port, add: None,
+            on_event=self.events.append)
+        self.status = self.session.enable(minutes=30, username="help-ab12",
+                                          password="pw-1234567890")
+
+    def tearDown(self):
+        self.session.close("user")
+
+    def _client(self):
+        import paramiko
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect("127.0.0.1", port=self.session.local_port,
+                       username=self.status["username"], password="pw-1234567890",
+                       allow_agent=False, look_for_keys=False, timeout=5)
+        return client
+
+    def _await_connections(self, wanted: int, timeout: float = 6.0) -> int:
+        import time as _t
+        deadline = _t.time() + timeout
+        while _t.time() < deadline:
+            if self.session.status()["connections"] >= wanted:
+                break
+            _t.sleep(0.05)
+        return self.session.status()["connections"]
+
+    def test_a_shell_session_is_counted_when_it_ends(self):
+        client = self._client()
+        try:
+            channel = client.get_transport().open_session()
+            channel.get_pty(term="xterm-256color", width=100, height=30)
+            channel.invoke_shell()
+            channel.send("exit\n")
+        finally:
+            client.close()
+        self.assertEqual(self._await_connections(1), 1,
+                         "一次真的 shell 会话没有被记进「已连接」")
+        self.assertIn("disconnect", [e["event"] for e in self.events])
+
+    def test_the_probe_is_not_a_connection(self):
+        """探针是链路自检（`echo mrrc-help-ok`），不是人进来了，不该计数。"""
+        client = self._client()
+        try:
+            channel = client.get_transport().open_session()
+            channel.exec_command(help_session.probe_command())
+            channel.makefile().read()
+        finally:
+            client.close()
+        self.assertEqual(self._await_connections(1, timeout=1.0), 0)

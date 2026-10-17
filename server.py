@@ -5581,6 +5581,9 @@ def _cloud_start_tunnel(settings: dict) -> None:
         return
     with _cloud_lock:
         if _cloud_tunnel is None:
+            # 老实例的配置（管理段进生成器之前写的）没有 webServer：这里补上，
+            # 因为 frpc 只在启动时读配置 —— 这是唯一安全的时机（见 cloud_hub.ensure_admin_segment）。
+            cloud_hub.ensure_admin_segment(conf)
             _cloud_tunnel = cloud_hub.TunnelProcess(frpc, conf)
             _cloud_tunnel.start()
 

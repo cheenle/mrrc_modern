@@ -421,8 +421,15 @@ class SshHelpServer:
 
     bind_host = BIND_HOST
 
-    def __init__(self, *, on_event: Optional[Callable[[dict], None]] = None) -> None:
+    def __init__(self, *, on_event: Optional[Callable[[dict], None]] = None,
+                 on_disconnect: Optional[Callable[[float], None]] = None) -> None:
         self.on_event = on_event
+        #: 一次 shell 会话结束时回调（秒）。它存在的原因：**计数住在 HelpSession 上，
+        #: 而这扇门只拥有 on_event** —— 接线之前 `note_connection()` 没有任何调用者，
+        #: 于是 `connections` 永远是 0（2026-10-17 真机：从 hub 登进去跑完三条命令，
+        #: `/api/help/status` 仍然报 `connections: 0`），界面上的「已连接」与门户心跳
+        #: 里的连接数一起死掉；而单测直接调 `note_connection()`，所以看不见。
+        self.on_disconnect = on_disconnect
         self._user = self._pw = ""
         self._failures = 0
         self._sock: Optional[socket.socket] = None
@@ -540,9 +547,15 @@ class SshHelpServer:
                     closer()
                 except Exception:
                     pass
-            if self.on_event:
+            duration = time.time() - started
+            if self.on_disconnect is not None:
+                try:
+                    self.on_disconnect(duration)      # 唯一的计数点（见 __init__）
+                except Exception:
+                    pass
+            elif self.on_event:
                 self.on_event({"event": "disconnect",
-                               "duration_s": round(time.time() - started, 1)})
+                               "duration_s": round(duration, 1)})
 
     def run_exec(self, channel, command: str) -> bool:
         """Only the probe command is allowed as exec; the supported path is a shell.
@@ -593,6 +606,10 @@ def build_session(*, portal_opener: Callable[[int], int],
     def listener() -> int:
         return server.start()
 
-    return HelpSession(opener=portal_opener, tunnel=tunnel, listener=listener,
-                       closer=portal_closer, beat=portal_beat,
-                       on_event=on_event, server=server)
+    session = HelpSession(opener=portal_opener, tunnel=tunnel, listener=listener,
+                          closer=portal_closer, beat=portal_beat,
+                          on_event=on_event, server=server)
+    # 门与计数分住在两半，这是它们之间那条线：没有它，「已连接」永远是 0
+    # （门只有 on_event，而计数住在 HelpSession 上）。
+    server.on_disconnect = lambda duration_s: session.note_connection(duration_s=duration_s)
+    return session

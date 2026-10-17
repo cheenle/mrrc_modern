@@ -8,6 +8,25 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 远程协助在盒子上接通：两个真缺陷，一个在配置里、一个在接线里
+
+用盒子 `192.168.1.217`（v1.25.5，Cloud Hub `ba4eg`）跑完整条链路时拓出来的，两个都不是协议问题：
+
+- **「开启协助」每次都失败，报 `frpc admin API unreachable on 127.0.0.1:0`。** 端口 **0** 是线索：
+  它表示这份隧道配置里**没有 `webServer` 段**。实例是在管理段进入生成器（2026-10-12）之前入网的，
+  而 `connect()` 不会为已入网的实例重写配置、`set_help_proxy()` 也不敢擅自铸一个（跑着的 frpc
+  不认新端口）。新增 `cloud_hub.ensure_admin_segment()`：在**启动隧道之前**补一段——frpc 只在
+  启动时读一次配置，那是唯一安全的时机——并在 `set_help_proxy()` 遇到无管理段时给一句能行动的话
+  （「重启一次应用就会自动补上」），而不是拿 0 号端口去重试 3 秒。
+- **「已连接」永远是 0。** `HelpSession.note_connection()` 没有任何调用者：SSH 门
+  （`SshHelpServer`）只发 `on_event`，而计数住在会话上，两边从来没接线。单测直接调
+  `note_connection()`，所以这个洞一路活着。现在门在会话结束时回调 `on_disconnect`，
+  `build_session()` 把它接到 `note_connection()`；新增的测试**走接线本身**（真 paramiko shell
+  会话 → `connections == 1`，探针 exec 不计数），去掉那行接线它立刻变红。
+- 真机验收（盒子，2026-10-17）：开窗 → 从 hub `ssh -p 18818` 交互式登入，`id -un` = **`mrrc`**
+  （不提权）→ `connections: 1` → 客户「停止协助」→ hub 端口释放、配置里的协助代理摘掉、主入口
+  全程 302 不抖。记录与排障表更新在 `docs/remote_help.md`。
+
 ### 硬盘不会被日志写满：轮转、journald 上限、录音拒写
 
 - **触发它的是一次实测**：盒子上的 `local_speaker.py` 是旧版（缺「一条警告一条 streak」

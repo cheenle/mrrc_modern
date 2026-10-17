@@ -716,6 +716,48 @@ class SetHelpProxyTests(unittest.TestCase):
             with self.assertRaises(cloud_hub.CloudHubError):
                 cloud_hub.set_help_proxy(conf, help_local_port=1, help_remote_port=2)
 
+    def test_a_config_without_the_admin_segment_says_so(self):
+        """端口 0 才是线索：它是「这份配置没有 webServer 段」，不是网络问题。
+
+        2026-10-17 盒子 .217（v1.25.5，入网早于管理段进生成器）上每次「开启协助」都
+        倒在这里，报回来的却是 `admin API unreachable on 127.0.0.1:0` —— 一句既不像
+        配置问题、也没告诉人下一步做什么的话。
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "old.toml"
+            cloud_hub._write_frpc_config(conf, cloud_hub.frpc_config_text(
+                "bg7ifp", "TOKEN", 8888, 18802))          # 没有 admin_port
+            with self.assertRaises(cloud_hub.CloudHubError) as ctx:
+                cloud_hub.set_help_proxy(conf, help_local_port=1, help_remote_port=2)
+        self.assertIn("管理段", str(ctx.exception))
+        self.assertNotIn("127.0.0.1:0", str(ctx.exception))
+
+    def test_ensure_admin_segment_mints_one_and_keeps_everything_else(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = Path(tmp) / "old.toml"
+            cloud_hub._write_frpc_config(conf, cloud_hub.frpc_config_text(
+                "bg7ifp", "TOKEN", 8888, 18802, log_file="/tmp/f.log"))
+            port = cloud_hub.ensure_admin_segment(conf)
+            self.assertTrue(port)
+            text = conf.read_text(encoding="ascii")
+            self.assertIn(f"webServer.port = {port}", text)
+            self.assertIn('webServer.user = "mrrc"', text)
+            self.assertIn('auth.token = "TOKEN"', text)
+            self.assertIn('log.to = "/tmp/f.log"', text)
+            self.assertIn("remotePort = 18802", text)
+            # 幂等：第二次不再铸新端口（frpc 只在启动时读一次配置）
+            self.assertEqual(cloud_hub.ensure_admin_segment(conf), port)
+
+    def test_ensure_admin_segment_leaves_a_good_config_alone(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            conf = self._conf(tmp)                       # 已经有 7400
+            before = conf.read_text(encoding="ascii")
+            self.assertEqual(cloud_hub.ensure_admin_segment(conf), 7400)
+            self.assertEqual(conf.read_text(encoding="ascii"), before)
+
 
 class TunnelStartSweepTests(unittest.TestCase):
     """构造时用的配置不一定是启动时用的那一份。

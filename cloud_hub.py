@@ -387,6 +387,46 @@ def read_tunnel_settings(conf: Path) -> dict:
     return out
 
 
+def ensure_admin_segment(conf: Path) -> int:
+    """Make sure the tunnel config has an admin API; return its port (0 = cannot).
+
+    frpc reads its config **once, at startup**, so this may only run on the way to
+    starting a tunnel — never while one is live (a minted port would be a port the
+    running frpc has never heard of; that is the 2026-10-12 defect this whole
+    segment exists to avoid).
+
+    Why an instance can be missing it at all: the admin segment entered the
+    generator on 2026-10-12, and nothing rewrites the config of an instance that
+    is already enrolled — `connect()` is not called again, and `set_help_proxy()`
+    refuses to invent one because the live frpc would not know it. The measured
+    result (2026-10-17, box .217, v1.25.5): every 「开启协助」 answered
+    "frpc admin API unreachable on 127.0.0.1:0", and the 0 is the tell — it is the
+    parser reporting that the file has no `webServer.port`.
+    """
+    admin_port, _user, _pw = read_admin_settings(conf)
+    if admin_port:
+        return admin_port
+    settings = read_tunnel_settings(conf)
+    web = [p for p in settings["proxies"]
+           if not str(p.get("name", "")).startswith("mrrc-help-")]
+    if not web:
+        return 0                     # 不是一条能重建的隧道配置，别去改它
+    main = web[0]
+    admin_port = _free_loopback_port()
+    password = secrets.token_urlsafe(18)
+    _write_frpc_config(conf, frpc_config_text(
+        str(main.get("name") or ""), settings["token"],
+        int(main.get("localPort") or 0), int(main.get("remotePort") or 0),
+        hub_host=settings["server_addr"] or "tunnel.mrrc.vlsc.net",
+        control_port=settings["server_port"] or 8989,
+        log_file=settings["log_file"],
+        admin_port=admin_port, admin_password=password))
+    logger.warning(
+        "cloud hub: %s 没有管理段（早于 2026-10-12 的配置）—— 在 127.0.0.1:%d 补一个，"
+        "否则「开启协助」无法热加载", conf.name, admin_port)
+    return admin_port
+
+
 def set_help_proxy(conf: Path, *, help_local_port: int = 0, help_remote_port: int = 0,
                    remove: bool = False) -> None:
     """Add (or drop) the help proxy in the tunnel config and hot-reload frpc.
@@ -400,6 +440,16 @@ def set_help_proxy(conf: Path, *, help_local_port: int = 0, help_remote_port: in
            if not str(p.get("name", "")).startswith("mrrc-help-")]
     if not web:
         raise CloudHubError(f"no tunnel proxy to preserve in {conf}")
+    if not settings["admin_port"]:
+        # 0 就是“这份配置里没有 webServer 段”的标记（`read_admin_settings` 的文档说的）。
+        # 不先拦下来的话，`reload_frpc(0, …)` 会去连 127.0.0.1:0 并重试 3 秒，最后报回一句
+        # “admin API unreachable on 127.0.0.1:0”—— 端口 0 本身才是线索，却不是能行动的话。
+        # 这个状态是真实的：2026-10-17 盒子 .217（v1.25.5，入网早于管理段进生成器）
+        # 上每一次「开启协助」都倒在这里。修法是重启一次应用（启动时会补上），见
+        # `ensure_admin_segment`。
+        raise CloudHubError(
+            "这条隧道的配置里没有管理段（webServer）—— 远程协助无法热加载。"
+            "重启一次应用就会自动补上，再试一次即可。")
     main = web[0]
     text = frpc_config_text(
         str(main.get("name") or ""), settings["token"],

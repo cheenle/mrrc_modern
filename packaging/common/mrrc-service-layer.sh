@@ -382,11 +382,13 @@ UNIT
 
 cat >/etc/systemd/system/mrrc-logrotate.timer <<'UNIT'
 [Unit]
-Description=Rotate MRRC Modern logs daily
+Description=Rotate MRRC Modern logs (hourly; maxsize decides)
 
 [Timer]
 OnBootSec=10min
-OnCalendar=daily
+# 每小时，不是每天：`maxsize 5M` 只在 logrotate **跑的时候**才被看见，日更等于把上限
+# 变成「一天里能涨多少」。oneshot 在没到尺寸时是毫秒级空转。
+OnCalendar=hourly
 Persistent=true
 
 [Install]

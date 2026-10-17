@@ -8,6 +8,20 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 热升级不再留下旧版本号（`mrrc-update`）
+
+- 盒子上「热升级」走的是 `linux/mrrc_update.sh`：stage 树 → pip → 重编 FT8 → 重启。
+  它**从来没写过 `version.txt`**，所以 1.25.5 的盒子升到 1.28.1 的树之后，诊断包
+  manifest、`/api/update/check` 的「当前版本」和 ☰ 菜单页脚仍然说 1.25.5 ——
+  「升级了但行为没变」这类报告因此无从分辨（2026-10-17 实测，盒子 `.217`）。
+- 现在 updater 会盖版本号：`MRRC_UPDATE_VERSION` → 源树 `CHANGELOG.md` 的第一条
+  `## [vX.Y.Z]` → 源树 `version.txt`，三个来源按可信度排；第二个在**喂一棵已 stage
+  过的树**时不存在（`stage-tree.sh` 的 `/*.md` 排除），第三个就是为那种情况留的。
+  `version.txt` 与 `VERSION` 一起写，和镜像同一条规则。
+- 同一轮还发现：`maxsize 5M` 只在 logrotate **跑的时候**才被看见，日更等于把上限变成
+  「一天里能涨多少」。`mrrc-logrotate.timer` 改成**每小时**（`OnCalendar=hourly`，
+  `Persistent=true`），没到尺寸时是一次毫秒级空转。
+
 ### 远程协助在盒子上接通：两个真缺陷，一个在配置里、一个在接线里
 
 用盒子 `192.168.1.217`（v1.25.5，Cloud Hub `ba4eg`）跑完整条链路时拓出来的，两个都不是协议问题：

@@ -84,6 +84,28 @@ class LinuxImageToolchainTests(unittest.TestCase):
                       "an update that changes ft8/dsp must rebuild the .so, or the box "
                       "runs new Python against the previous library")
 
+    def test_updater_stamps_the_version_it_installed(self):
+        """热升级之后版本号必须跟着走，否则「升级了但没变」无从分辨。
+
+        2026-10-17 实测：1.25.5 的盒子被升到 1.28.1 的树，`version.txt` 仍是 1.25.5 ——
+        诊断包 manifest、`/api/update/check` 的当前版本、☰ 菜单页脚读的都是这个文件。
+        """
+        text = UPDATE_SH.read_text(encoding="utf-8")
+        self.assertIn('>\"$MRRC_HOME/version.txt\"', text,
+                      "the updater installs a tree but never says which version it is")
+        self.assertIn('## \\[v[0-9]+', text,
+                      "the version has to come from the source tree's CHANGELOG, the "
+                      "same rule the image build uses")
+        self.assertIn("MRRC_UPDATE_VERSION", text,
+                      "a staged source tree has no CHANGELOG.md (the stager drops /*.md), "
+                      "so an explicit override has to be possible")
+        self.assertIn("$SRC_TREE/version.txt", text,
+                      "and an already-stamped tree should be able to hand its own "
+                      "version.txt over rather than being silently left at the old number")
+        self.assertIn('cp \"$MRRC_HOME/version.txt\" \"$MRRC_HOME/VERSION\"', text,
+                      "the image writes both version.txt and VERSION; an update that "
+                      "writes one leaves the other lying")
+
     def test_updater_does_not_let_a_broken_dsp_kill_the_update(self):
         """Images before 1.27.0 have no compiler; SSB must still update."""
         text = UPDATE_SH.read_text(encoding="utf-8")

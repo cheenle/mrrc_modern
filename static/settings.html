@@ -127,6 +127,11 @@ select{
   width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
   background:#111;color:var(--text);font-size:16px;
 }
+.bt-row{display:flex;gap:10px;align-items:center;justify-content:space-between;
+  padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.bt-row>span:first-child{font-family:ui-monospace,Menlo,monospace;font-size:13px;
+  word-break:break-all}
+.bt-meta{color:var(--dim);font-size:13px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -802,12 +807,30 @@ select{
     msg.className = 'msg' + (cls ? ' ' + cls : '');
   }
 
+  // 信号强弱：列表按它排序，也是唯一能让操作员在二十几个设备里认出
+  // 手里那台遥控器的东西（实测 2026-10-17：BR/EDR 扫出 23 个，页面只给地址和名字）。
+  function signalText(cand) {
+    if (typeof cand.rssi !== 'number') { return ''; }
+    var bars = cand.rssi >= -60 ? '▮▮▮▮'
+      : cand.rssi >= -70 ? '▮▮▮'
+      : cand.rssi >= -80 ? '▮▮' : '▮';
+    return bars + ' ' + cand.rssi + ' dBm';
+  }
+
   function row(cand) {
     var line = document.createElement('div');
     line.className = 'bt-row';
     var name = document.createElement('span');
-    name.textContent = (cand.name || cand.address) + (cand.name ? ' · ' + cand.address : '');
+    name.textContent = (cand.name || '（无名字）') + ' · ' + cand.address;
     line.appendChild(name);
+
+    var meta = document.createElement('span');
+    meta.className = 'bt-meta';
+    // 遥控器那一行直接写出来：bluez 知道它是个键盘（input-keyboard），
+    // 这比名字还硬 —— 名字可以是空的，列表里就只剩一串地址。
+    var kind = (cand.icon || '').indexOf('input-') === 0 ? '遥控器/键盘' : (cand.type || '');
+    meta.textContent = [kind, signalText(cand)].filter(Boolean).join(' · ');
+    if (meta.textContent) { line.appendChild(meta); }
 
     var pair = document.createElement('button');
     pair.type = 'button';
@@ -868,7 +891,8 @@ select{
       .then(function (payload) {
         var devices = (payload && payload.devices) || [];
         if (!devices.length) { say('没找到设备。遥控器在配对模式吗？', 'bad'); return; }
-        say('找到 ' + devices.length + ' 个设备，选一个点「配对」。');
+        say('找到 ' + devices.length + ' 个设备，按信号强弱排（遥控器贴着盒子时通常在'
+          + ' -40 ~ -60 dBm，排在最上面几个），选一个点「配对」。');
         devices.forEach(function (d) { list.appendChild(row(d)); });
       })
       .catch(function () { say('搜索失败', 'bad'); })

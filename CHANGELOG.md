@@ -8,6 +8,21 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 遥控器面板：给信号强度，让它能被找出来
+
+- 现场（盒子 `.217`）：BR/EDR 扫出 **23 个**设备，页面只给「地址 + 名字」——操作员没法判断
+  该点哪一个（绝大部分是无名 LE 信标，而且 `bluetoothctl` 还会重放 bluez 的**缓存**）。
+- 三处改动：① 扫描改用 `btmgmt find -l`（有 RSSI 与地址类型），服务器没有 CAP_NET_ADMIN 时
+  退回 `bluetoothctl`，并从它的 `[CHG] … RSSI:` 行里取信号强度；② 既没名字也没信号强度的条目
+  直接丢掉（那是缓存回声），列表按「像遥控器的在前 → 当场扫到的在前、强的在前」排序；
+  ③ 每个设备查一次 `bluetoothctl info` 取 `Icon`，`input-*` 的直接在页面上写「遥控器/键盘」。
+  实测结果是遥控器排在第一行，带 `input-keyboard` 标记。
+- 两个解析陷阱（都是实测出来的）：`bluetoothctl` 给每个彩色 token 套了 `\x01`/`\x02` 字节，
+  只剥 ANSI 会让 `^[(NEW|CHG|DEL)]` 全部匹配失败（18 行 RSSI 解析出 0 个）；`[CHG]` 行是属性流，
+  把它的尾部当名字会让设备**被叫做** `TxPower: 7`。名字只从 `[NEW]` 取，RSSI 只从 `[CHG]` 取。
+- 测试 2468 → 2477（`tests/test_net_bt.py` +9：信号强度解析/去重取最强/排序/缓存回声丢弃/
+  加粗字节与 `input-*` 排序）。
+
 ### 热升级装不上单元，这一条写进指南
 
 - 真机（盒子 `.217`）把 1.25.5 升到 1.28.1 之后，`/api/box/status` 仍报 `helper_available: false`：

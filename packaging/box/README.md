@@ -111,6 +111,28 @@ bash packaging/box/build-image.sh --preflash     # 固定口令 + 时区/区域�
 > 不建议用预置文件（`/boot/mrrc-wifi.txt`，§9.3 指南）走发货路径：eMMC 路线下用户碰不到那个 FAT 分区，
 > 而且预置文件会被 U 盘系统自己消费掉。能力仍在，流程不用它。
 
+### 本批产物（2026-10-17 真构建 + 产物四步验证）
+
+| | 字节数 | SHA-256 |
+| --- | --- | --- |
+| **发货版**（`--preflash`） | 1,212,223,182 | `17f3fe797a3d6a8dabaae0d5612dfcff2305aa3f9397c05c258bfac3c744adc5` |
+| 标准版（不带开关，对照） | 1,191,513,586 | `8f743cf30a214ed20cdc5f8b14b6f8f023c98dd37ca87be75867daf288268a0b` |
+
+两份都过了四步验证：代码身份逐字节一致（`server.py` / `linux/first_run.py` / `firstboot_wrapper.py` /
+`static/settings.html`）、11 份 profile、`/tmp` 零残留、D-11 的单元身份（`EnvironmentFile` ==
+`Environment=MRRC_CONFIG_FILE`）、chroot 真跑入口导入（含 `libopus`）。本版新增的断言也全绿：
+发货版写入了固定口令与 `Asia/Shanghai` + `zh_CN.UTF-8`（用 `crypt` 复算 root/mrrc 口令为 `True`）、
+**不预置型号与串口**、NTP 单元随基底（chrony）保持 enable；对照版全部相反（时区 `Etc/UTC`、
+locale `en_US`、shadow 不符）。两版都在产物里真跑了一次首启包装器：**没插电台 ⇒ 不盖章**
+（下次开机再探），但自签证书照生成、网页照起。
+
+⚠️ **产物不留在 `dist/`**：仓库的发布一致性检查会把 `dist/w103d/` 里的镜像与官网下载卡逐字段比对，
+留在这里就是常驻红；更重要的是——**发货版镜像不该上传到下载页**，它带的是公开的固定口令
+（`root`/`mrrc`/Web 三条），公开下载等于把同批盒子的口令发给所有人。
+
+⚠️ 本机没有真机验收：指南 §9.8 的 A1–A8（浏览器登录 / 三条口令 / `/setup` 302 / 手输 SSID /
+呼号申请与批准 / 重探 / `timedatectl`）仍须在盒子上跑一遍，读数回填指南与 SDD。
+
 ## 5. 接电台
 
 ```bash

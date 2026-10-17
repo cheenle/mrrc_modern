@@ -119,6 +119,7 @@ def box_firstboot():
 
 probe("server", lambda: __import__("server"))
 probe("box_ops", lambda: importlib.import_module("box_ops"))
+probe("net_bt", lambda: importlib.import_module("net_bt"))
 probe("linux/firstboot_wrapper.py", box_firstboot)
 probe("linux/mrrc_radio.py", lambda: script("linux/mrrc_radio.py"))
 

@@ -65,6 +65,7 @@ from config import (
 from backends import create_backend, known_models
 from backends.base import RadioBackend
 import box_ops
+import net_bt
 import cloud_hub
 import help_session
 import net_tls
@@ -6171,6 +6172,64 @@ async def api_box_wifi_save(request: Request):
     # The SSID is fine to log; the password never is (design D-4 / NFR-068).
     logger.warning("box: saved Wi-Fi %r (autoconnect=%s)", ssid, autoconnect)
     return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
+@app.get("/api/box/bt/scan", include_in_schema=False)
+async def api_box_bt_scan(request: Request):
+    """Look for nearby remotes (BR/EDR).  Slow on purpose: an inquiry needs ~10 s."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    devices = await asyncio.to_thread(net_bt.scan)
+    return JSONResponse({"devices": devices}, status_code=200)
+
+
+@app.get("/api/box/bt/state", include_in_schema=False)
+async def api_box_bt_state(request: Request):
+    """One address's pairing flags plus the verdict that matters: do keys work?"""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    address = (request.query_params.get("address") or "").strip()
+    if not address:
+        return JSONResponse({"ok": False, "error": "没有指定设备"}, status_code=400)
+    return JSONResponse(await asyncio.to_thread(net_bt.state, address), status_code=200)
+
+
+@app.post("/api/box/bt/pair", include_in_schema=False)
+async def api_box_bt_pair(request: Request):
+    """Pair + trust a remote, then report whether its keys actually arrive.
+
+    ``keys_work`` is the field the page acts on: a remote can be ``paired`` and
+    ``bonded`` while its link stayed unencrypted, in which case bluez builds no
+    input device and every button is dead (docs/W103D_REMOTE_GUIDE.md §2).
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    address = (body.get("address") or "").strip()
+    if not address:
+        return JSONResponse({"ok": False, "error": "没有指定设备"}, status_code=400)
+    result = await asyncio.to_thread(net_bt.pair, address)
+    state = await asyncio.to_thread(net_bt.state, address)
+    logger.warning("box: paired remote %s (keys_work=%s)",
+                   address, state.get("keys_work"))
+    state["ok"] = bool(state.get("paired"))
+    return JSONResponse(state, status_code=200 if state["ok"] else 400)
+
+
+@app.post("/api/box/bt/forget", include_in_schema=False)
+async def api_box_bt_forget(request: Request):
+    """Drop a bonding (and power-cycle the controller: bluez caches link keys)."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    address = (body.get("address") or "").strip()
+    if not address:
+        return JSONResponse({"ok": False, "error": "没有指定设备"}, status_code=400)
+    await asyncio.to_thread(net_bt.remove, address)
+    if body.get("power_cycle"):
+        await asyncio.to_thread(net_bt.power_cycle)
+    logger.warning("box: forgot remote %s", address)
+    return JSONResponse({"ok": True}, status_code=200)
 
 
 @app.post("/api/box/wifi/forget", include_in_schema=False)

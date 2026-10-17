@@ -189,6 +189,17 @@ select{
   </section>
 
   <section class="card panel">
+    <h2>遥控器 <span class="note">（蓝牙；按键直接调电台）</span></h2>
+    <button id="bt-scan" type="button">搜索附近的遥控器</button>
+    <div id="bt-list" class="bt-list"></div>
+    <div id="bt-msg" class="msg"></div>
+    <p class="note">
+      遥控器先进入配对模式：<b>同时长按「OK + 返回」约 5 秒</b>，指示灯快闪。
+      配对后按任意键就能用；不用 SSH。
+    </p>
+  </section>
+
+  <section class="card panel">
     <h2>有线口</h2>
     <p class="hint">改的如果正是你现在走的这条路，本页同样会断开。</p>
     <label for="link-profile">连接</label>
@@ -776,6 +787,93 @@ select{
   })();
 
   load();
+})();
+</script>
+
+<script>
+(function () {
+  var scanBtn = document.getElementById('bt-scan');
+  var list = document.getElementById('bt-list');
+  var msg = document.getElementById('bt-msg');
+  if (!scanBtn || !list || !msg) return;
+
+  function say(text, cls) {
+    msg.textContent = text;
+    msg.className = 'msg' + (cls ? ' ' + cls : '');
+  }
+
+  function row(cand) {
+    var line = document.createElement('div');
+    line.className = 'bt-row';
+    var name = document.createElement('span');
+    name.textContent = (cand.name || cand.address) + (cand.name ? ' · ' + cand.address : '');
+    line.appendChild(name);
+
+    var pair = document.createElement('button');
+    pair.type = 'button';
+    pair.textContent = '配对';
+    pair.addEventListener('click', function () {
+      pair.disabled = true;
+      say('正在配对 ' + (cand.name || cand.address) + ' …（最多 25 秒）');
+      fetch('/api/box/bt/pair', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: cand.address }),
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+        .then(function (res) { verdict(cand, res.body); })
+        .catch(function () { say('配对请求失败', 'bad'); })
+        .finally(function () { pair.disabled = false; });
+    });
+    line.appendChild(pair);
+    return line;
+  }
+
+  function verdict(cand, state) {
+    if (state && state.paired && state.keys_work) {
+      say('已配对，按键可用 ✓ 现在就能用遥控器调频', 'good');
+      return;
+    }
+    if (state && state.paired) {
+      // The measured trap: paired and bonded while the link stayed
+      // unencrypted — bluez then builds no keyboard device and every key dies.
+      say('已配对，但按键还没反应。点「重配」再试一次（这一步会清掉旧配对并重启蓝牙）。', 'warn');
+      var again = document.createElement('button');
+      again.type = 'button';
+      again.textContent = '重配';
+      again.addEventListener('click', function () {
+        say('正在清除旧配对并重启蓝牙…');
+        fetch('/api/box/bt/forget', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: cand.address, power_cycle: true }),
+        }).then(function () {
+          say('已清除。请让遥控器重新进入配对模式，再点一次「配对」。', 'warn');
+        }).catch(function () { say('重配失败', 'bad'); });
+      });
+      msg.appendChild(document.createElement('br'));
+      msg.appendChild(again);
+      return;
+    }
+    say('没有配上。确认遥控器在配对模式（指示灯快闪）后再试。', 'bad');
+  }
+
+  scanBtn.addEventListener('click', function () {
+    scanBtn.disabled = true;
+    list.replaceChildren();
+    say('正在搜索…（约 12 秒，遥控器保持配对模式）');
+    fetch('/api/box/bt/scan', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        var devices = (payload && payload.devices) || [];
+        if (!devices.length) { say('没找到设备。遥控器在配对模式吗？', 'bad'); return; }
+        say('找到 ' + devices.length + ' 个设备，选一个点「配对」。');
+        devices.forEach(function (d) { list.appendChild(row(d)); });
+      })
+      .catch(function () { say('搜索失败', 'bad'); })
+      .finally(function () { scanBtn.disabled = false; });
+  });
 })();
 </script>
 </body>

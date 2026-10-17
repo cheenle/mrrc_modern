@@ -8,6 +8,21 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 设置页配对遥控器（客户手里没有 SSH）
+
+- `/settings` 新增「遥控器」面板：**搜索附近设备 → 选中 → 配对**，全程网页完成。
+  遥控器侧只需同时长按「OK + 返回」5 秒进入配对模式。
+- 新模块 `net_bt.py`（与 `net_wifi` 同一个套路：stdlib only、每次调用可注入 runner、
+  测试不需要控制器也不需要 root）。三个端点：
+  `GET /api/box/bt/scan`（BR/EDR 搜索，约 12 秒）、`GET /api/box/bt/state`、
+  `POST /api/box/bt/pair`、`POST /api/box/bt/forget`（可选同时给控制器上下电）。
+- **页面显示的判据是"按键能用"，不是"bluez 说配上了"**：现场那次 `Paired: yes` 但链路
+  没加密、bluez 建不出键盘设备、每个键都是死的。`state()` 的 `keys_work` 来自
+  `/proc/bus/input/devices` 里有没有该地址的键盘设备；配对标志只做诊断。没通时页面直接
+  给「重配」按钮（清旧配对 + 蓝牙上下电），这就是文档里那条修法。
+- 实测（W103D）：`{"paired":true,"bonded":true,"connected":true,"keys_work":true}`。
+- 测试 2437 → **2449**（`tests/test_net_bt.py` 12 项）；`net_bt` 进镜像导入门禁。
+
 ### 省 CPU 两处：锁频调速器 + 只给扬声器时不编码 Opus
 
 - **调速器 `schedutil → performance`**（服务层新增 `mrrc-cpufreq.service`）：这台的负载是

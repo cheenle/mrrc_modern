@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2437 tests across 125 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2449 tests across 126 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 92 of those 125 — the support-chain, Cloud Hub and
+sections below itemise 93 of those 126 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -1024,3 +1024,12 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   状态读 `/api/ft8/station` 的 `engine_always_on`（服务端已有的持久化设置），点击走
   `PUT /api/ft8/station`（同一个设置路径，落盘同时启停 runtime，不再有第二条命令通道）；
   既有的单向「切到 FT8」菜单项保持原样（它要移动电台并跳转，回答的是另一个问题）。
+
+### 本轮新增（遥控器配对页面，AD-028 续）
+
+- **`test_net_bt.py`** — 盒子上唯一与 bluez 打交道的层，服务的是 `/settings` 的「遥控器」面板
+  （客户手里没有 SSH）。两条性质：① 页面上的**判据是"按键能用"而不是 bluez 说配上了** ——
+  现场那次是 `Paired: yes` 但链路没加密、bluez 建不出键盘设备、每个键都是死的，所以
+  `state()` 的 `keys_work` 来自 `/proc/bus/input/devices` 里有没有该地址的键盘设备，配对标志
+  只用于诊断；② 每一次 bluez 调用都走可注入的 runner，整套测试不需要控制器、不需要 root。
+  另外守住面板本身：三个钩子存在、调的是这三个端点、页面仍然没有 `innerHTML`。

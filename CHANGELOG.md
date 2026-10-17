@@ -8,6 +8,32 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 硬盘不会被日志写满：轮转、journald 上限、录音拒写
+
+- **触发它的是一次实测**：盒子上的 `local_speaker.py` 是旧版（缺「一条警告一条 streak」
+  的修复），蓝牙耳机不在线时每 20 ms 写一条 `Local speaker write failed` —— 5 小时
+  **14.5 万条 / 17 MB**。修掉刷屏后，这个问题还在：`logs/server-stdout.log` 是 systemd
+  `StandardOutput=append:` 写的，**systemd 不轮转 `append:` 目标，服务端也不轮转它**，
+  它是整个镜像里唯一没有上限的文件（`server.log` 2 MB × 2 代、`ft8-worker.log` 2 MB、
+  support bundle 留 5 份，其余都有界）。6.5 GB 的根分区，一个慢一点的缺陷就能走完。
+- **服务层新增 `/etc/logrotate.d/mrrc`**：`server-stdout.log` 满 5 MB 触发、留 3 代、
+  压缩，**`copytruncate`**——systemd 持有 fd，rename 会把后续写入留在一个已 unlink 的
+  inode 上：目录看着转了，硬盘继续涨，比不轮转更糟（它把增长藏起来）。
+- **scheduler 是自己的**：`mrrc-logrotate.timer`（`OnBootSec=10min`、`OnCalendar=daily`、
+  `Persistent=true`）。不押注镜像里 cron 有没有被 mask，也不押注 Debian 的
+  `logrotate.timer` 在不在——两者都可能无声地不跑。
+- **journald 上限**：默认是根分区 10%（这台 650 MB，整机的六分之一）。新增
+  `/etc/systemd/journald.conf.d/50-mrrc-size.conf`：`SystemMaxUse=128M`、
+  `SystemKeepFree=256M`。
+- **录音**：新增 `MRRC_RECORDINGS_MIN_FREE_MB`（默认 200）。开始录音前测一次剩余空间，
+  不够就**拒绝并在界面上说明**，**绝不删除任何一段录音**——删除是破坏性的，产品不做。
+  64 kbps / 16 kHz mono ≈ **29 MB/小时**，客户自己触发的录音是这台机器上唯一无界的写入方，
+  而磁盘写满不是「录音停了」：PTT、音频、配置写入一起坏。
+- 测试 2449 → **2460**：`tests/test_log_rotation.py` 6 项（轮转的文件名 == 单元的
+  `append:` 目标、`copytruncate`、大小触发 + 代数 + 压缩、自带 timer 并 enable、
+  `packages.txt` 里有 `logrotate`、journald 有上限）；`tests/test_recorder_api.py` +5
+  （够了 / 不够 / 测不出 / 关掉 / 命令层在会话创建之前就拒绝）。
+
 ### 设置页配对遥控器（客户手里没有 SSH）
 
 - `/settings` 新增「遥控器」面板：**搜索附近设备 → 选中 → 配对**，全程网页完成。

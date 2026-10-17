@@ -337,6 +337,74 @@ install -m 0755 "$MRRC_ASSETS/firstboot_wrapper.py" \
 	"$MRRC_HOME/linux/firstboot_wrapper.py"
 chown -R "$MRRC_USER:$MRRC_USER" /var/lib/mrrc "$MRRC_HOME/logs"
 
+log "log growth is bounded (an unattended box runs for months)"
+# `StandardOutput=append:` above buys the plain-text witness of the window
+# before the server's own logging exists — and systemd will append to that file
+# forever: neither systemd nor the server rotates an `append:` target. Measured
+# 2026-10-17: a defect that logged one warning per 20 ms audio frame wrote 17 MB
+# in five hours on a 6.5 GB root. Nothing about that mechanism is
+# self-limiting; a smaller defect is only slower. Every other log an image ships
+# already has a ceiling (server.log is a RotatingFileHandler capped at 2 MB + 1,
+# ft8-worker.log rotates at 2 MB, support bundles keep the newest 5) — this was
+# the one file that could grow until the disk said stop.
+#
+# copytruncate, not a rename: systemd holds the descriptor open, so moving the
+# name would leave it appending to an unlinked inode — the directory would look
+# rotated while the disk kept filling. compress+delaycompress keeps the last
+# three generations around 5 MB each, compressed.
+install -d -m 0755 /etc/logrotate.d
+cat >/etc/logrotate.d/mrrc <<ROTATE
+$MRRC_HOME/logs/server-stdout.log {
+	weekly
+	maxsize 5M
+	rotate 3
+	compress
+	delaycompress
+	missingok
+	notifempty
+	copytruncate
+}
+ROTATE
+
+# The scheduler is ours, not the distro's: Debian runs logrotate from a
+# cron.daily hook *and* ships a timer, and a base image that masks either one
+# would make this config a file nobody ever executes. A systemd timer is part of
+# the platform this image already depends on. Persistent=true means a box that
+# was off at the scheduled moment still rotates on the next boot.
+cat >/etc/systemd/system/mrrc-logrotate.service <<'UNIT'
+[Unit]
+Description=MRRC Modern log rotation (the server's stdout file has no size bound of its own)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/logrotate --state /var/lib/mrrc/logrotate.state /etc/logrotate.d/mrrc
+UNIT
+
+cat >/etc/systemd/system/mrrc-logrotate.timer <<'UNIT'
+[Unit]
+Description=Rotate MRRC Modern logs daily
+
+[Timer]
+OnBootSec=10min
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+# journald keeps every unit but the server, and its own default cap is 10% of
+# the root filesystem — 650 MB on this 6.5 GB disk, a sixth of the machine for
+# logs nobody reads. 128 MB still holds weeks of boots; SystemKeepFree is the
+# second fence, because a full disk breaks PTT and audio long before it breaks
+# logging.
+install -d -m 0755 /etc/systemd/journald.conf.d
+cat >/etc/systemd/journald.conf.d/50-mrrc-size.conf <<'JOURNAL'
+[Journal]
+SystemMaxUse=128M
+SystemKeepFree=256M
+JOURNAL
+
 log "version stamp"
 # version.txt is what the support bundle manifest and the upgrade channel read
 # out of an installed tree, so an image without it fails those two things while
@@ -428,7 +496,7 @@ UNIT
 # into a power-off — mid-QSO, from a key that belongs to the operator (AD-028).
 # Ignore it here; local_ctl decides what that key does.
 sed -i 's/^#\?HandlePowerKey=.*/HandlePowerKey=ignore/' /etc/systemd/logind.conf
-systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service mrrc-localctl.service mrrc-cpufreq.service
+systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service mrrc-localctl.service mrrc-cpufreq.service mrrc-logrotate.timer
 # avahi-daemon is what answers <hostname>.local. It ships enabled in the
 # package, but this image masks units by default in several places, so say it
 # out loud rather than trusting the package's postinst (design §8).

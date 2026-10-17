@@ -684,6 +684,7 @@ ssh root@<盒子IP> 'bash /tmp/verify.sh'
 | `MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` | 指定音频设备（多声卡时有用） |
 | `MRRC_RECORDINGS_DIR` | 通联录音目录（服务端存 MP3） |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` / `MRRC_RECORDINGS_BITRATE` | 单次录音时长上限 / 码率 |
+| `MRRC_RECORDINGS_MIN_FREE_MB` | 剩余空间低于此值（默认 200）**拒绝开始**录音；`0` 关闭。只拒绝、从不删除已有录音 |
 | `MRRC_ATR1000_HOST` / `MRRC_ATR1000_PORT` | ATR-1000 天调的地址（§15） |
 | `MRRC_SESSION_METRICS_INTERVAL_S` | 会话遥测上报间隔（默认 300 秒，`0`=关） |
 

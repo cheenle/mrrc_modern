@@ -56,7 +56,7 @@ from config import (
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT,
     UI_MODES, NARROW_MODES,
     ATR1000_HOST, ATR1000_PORT,
-    RECORDINGS_BITRATE, RECORDINGS_MAX_SESSION_MIN,
+    RECORDINGS_BITRATE, RECORDINGS_MAX_SESSION_MIN, RECORDINGS_MIN_FREE_MB,
     CQ_ASSET_PATH,
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     REMOTE_SESSION_TX_HEARTBEAT_S,
@@ -738,6 +738,36 @@ def _recording_should_capture_rx() -> bool:
     would double the timeline (the sibling mrrc project uses the same rule).
     """
     return not (radio is not None and radio.tx_status)
+
+
+def _recording_space_problem() -> str:
+    """Why a new recording must not start right now (`""` = there is room).
+
+    The recorded stream is the one unbounded writer an operator can switch on —
+    16 kHz mono MP3 at the default 64 kbps is ~29 MB per hour — and a disk that
+    fills does not fail politely: the recording dies mid-QSO and the config
+    writes, the DB and everything else that needs a byte go with it. Refusing to
+    start is the *non-destructive* half of a retention policy: pruning old QSOs
+    would be the destructive half, and this deliberately does not do it.
+
+    Unmeasurable is not a refusal (spec 2026-09-17 §11 spirit): a platform where
+    ``disk_usage`` throws must not lose a feature over a diagnostic.
+    """
+    if RECORDINGS_MIN_FREE_MB <= 0:
+        return ""
+    import shutil
+
+    try:
+        free_mb = shutil.disk_usage(str(RECORDINGS_DIR)).free // (1024 * 1024)
+    except OSError:
+        return ""
+    if free_mb >= RECORDINGS_MIN_FREE_MB:
+        return ""
+    logger.warning("Recording refused: %d MB free, %d MB required",
+                   free_mb, RECORDINGS_MIN_FREE_MB)
+    return (f"磁盘剩余空间不足（{free_mb} MB，至少需要 "
+            f"{RECORDINGS_MIN_FREE_MB} MB），录音未开始。"
+            f"请先删除一些旧录音（☰ → 录音）再试。")
 
 
 def _ensure_rec_writer() -> None:
@@ -2620,6 +2650,13 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
     if field == "recording":
         on = value is True or str(value).lower() == "true"
         if on:
+            problem = _recording_space_problem()
+            if problem:
+                # Refuse *before* a session exists: a started-then-failed
+                # recording leaves a corrupt MP3 and a UI that says REC.
+                await ws.send_text(json.dumps({"type": "error",
+                                               "message": problem}))
+                return
             freq_hz = radio.active_freq if radio is not None else 0
             try:
                 started = _rec_session.start(freq_hz=freq_hz)

@@ -201,6 +201,14 @@ RAW_TO_METER_TABLES = {
 # the session and never deletes a recording.
 RECORDINGS_BITRATE = _env_int("MRRC_RECORDINGS_BITRATE", 64)
 RECORDINGS_MAX_SESSION_MIN = _env_int("MRRC_RECORDINGS_MAX_SESSION_MIN", 240)
+#: Free space below which a new recording is refused instead of started. The
+#: recorded stream is the one writer a customer controls, and it is unbounded:
+#: 16 kHz mono MP3 at 64 kbps is ~29 MB per hour, so a box left recording a few
+#: hours a day fills its ~4 GB of free space within months — and a full disk does
+#: not stop recording politely, it takes PTT, audio and the config writes with
+#: it. Refusing is the non-destructive half of a retention policy: nothing the
+#: operator recorded is ever deleted by the product. 0 disables the guard.
+RECORDINGS_MIN_FREE_MB = _env_int("MRRC_RECORDINGS_MIN_FREE_MB", 200)
 
 # ── CQ key (spec 2026-09-13) ──────────────────────────────────────
 #: CQ recording played by the CQ key.  MRRC_CQ_FILE overrides it (any

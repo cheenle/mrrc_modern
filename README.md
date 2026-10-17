@@ -178,6 +178,7 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 | `MRRC_NO_CONFIG_FILE` | off | Set to `1`/`true`/`yes` to stop that load. It only ever happens for a frozen build or when `MRRC_CONFIG_FILE` names a file explicitly, so source checkouts, systemd and CI are unaffected; real environment variables always win over file values (the loader only fills keys that are missing). |
 | `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate for recordings (kbps, 16 kHz mono) |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
+| `MRRC_RECORDINGS_MIN_FREE_MB` | `200` | Refuse a new recording below this much free disk (0 = off; never deletes recordings) |
 | `MRRC_LOG_DIR` | `<user data dir>/logs` | Where log files are written. The launchers set it explicitly — a bare start on a packaged install would otherwise have no logs at all |
 | `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891). Off = keying refused with an explanatory UI message; releases are never blocked |
 | `MRRC_SUPPORT_URL` | `https://www.vlsc.net/mrrc_modern/support/` | Receiver the 🐞 diagnostics flow uploads bundles to (`api/create` + PUT). The hosted endpoint is behind HTTP Basic Auth, so this default is the project's own receiver — point it at your own instance if you self-host |

@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2481 tests across 127 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2488 tests across 128 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -879,6 +879,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | ------ | ------ |
 | `test_spectrum_profile.py` | 17 项：档位表的两个正交因子（形状 × 分频）与每档 payload kbps（**助手必须含 divider**，否则 `mid` 看着像 1/2 而不是 1/4）；`frame_due(tick, 3)` 复现既有 listener 闸门的 `[3,6,9]`；短帧是全帧的**前缀切片**（同版本字节、同 wf1，因此 `scope_handler` 与 11 个 backend 一行未改）；非 1701 B 的怪帧只产出 `full` 变体，且 `variant_for` 退回全帧而**绝不返回 `None`**——静默丢帧正是本特性要避免的故障模式；caps 白名单只收 `high`/`mid`/`low`（服务端内部的 `listen` 档客户端点不到），并对垃圾输入永不抛异常（文本帧过去是被丢弃的保活，把它改坏就是改坏兼容性） |
 | `test_spectrum_profile_server.py` | 40 项：**未声明能力的 socket 永远只拿 1701 B**（兼容闸门 D-3，按线上字节陈述而不是按意图）；listener 角色默认仍是 ÷3 全帧（`test_listen_only.py:391` 那条守卫未改一字即绿）；显式 caps 覆盖角色默认；12 个 tick 上 high/mid/low = 12/6/3 帧、帧长各为 1701/851/851；计量按**实发字节**；死 socket 报给调用方剔除而其余客户端照发；**回退路径同样受分频**（30 tick 上 `low` 拿 7 帧）；`_spectrum_fanout` 的计量**在发送 `try` 之外**——否则计数器里的 `AttributeError` 会被 `except Exception` 洗成"客户端走了"，把健康 socket 静默踢出 `spectrum_clients`（本次自查出来的隐患，已钉住）；handler 保留 `_scope_producer.start()/stop()`、`metrics.close` 与 catch-all `except`（`test_server_ws_protocol.py:334` 按标记切源码块做守卫）；`_CapsWS` **真调 `ws_spectrum`** 跑完整路径：观测到 `high→mid` 的档位切换、listener 默认 `listen` 档、listener 可降档、未知档位名被忽略、未认证 `4001` 先于任何档位状态、断开后按 socket 的状态清空；遥测行含 `payload≈` 与分档帧数，且保留 `uplink spectrum` 这个既有 grep 锚点；前端契约（`onopen` 发 caps、cookie 持久化、切换即时生效、三档选项且不含 `listen`、缓存版本 39/34/v47 全部重钉、listen 页本阶段不动） |
+| `test_sdr_dsp.py` | 6 项：**原生信道化 + 解调**（`sdr_dsp.c`，无硬件）——AM 的目标音必须出现在正确频率上且输出非静音；**抗混叠**用 47 kHz 的强干扰（50 倍抽取后正好折回 1 kHz）；**USB 边带抑制**（+1 kHz 通过、−1 kHz 至少低 40 dB，钉住第二级必须是单边复数滤波而不是对称低通）；NFM 鉴频用连续流（每块重复同一段 2 ms 信号会在块长倒数处造出假谱线，这正是 750 Hz 被测成 500 Hz 的原因）；非法参数（模式越界 / 带宽 0 / 带宽 ≥ 输出率 / 通道越界）一律返回 −1 而不是崩。文件首次运行时用 `cc -shared` 把 C 源编到临时目录再 ctypes 加载，没有编译器就整体 skip |
 | `test_spectrum_profile_docs.py` | 15 项：**把"文档说的是真的"变成断言**——NFR-003 不得再把回退态当常态（`~30fps ≈ 51KB/s`）、也不得保留从未为真的 `~851 bytes/frame fallback`；§9.2.4 必须写明 v1=851 B **从未上线**、caps 协商、以及全帧**不得改标 `0x02`** 的理由（iOS `guard version == 0x01`）；分频是比例而非绝对速率（`~10 Hz` 只在回退态成立，任何提及必须同行带 `fallback` 条件；`14-version-history.md` 作为不可变日志豁免）；AD-025 记下两轴的实测依据（`permessage-deflate` 3.9× / OkHttp 不提供该扩展）；AD-023 的 408 kbps 与 86% **就地加注而不删原文**（删掉等于掩盖当时的容量决策是从什么数字做出的）；`spectrum_profile` 进 PyInstaller `hiddenimports`（v1.24.0 漏 `cloud_hub` 的前车之鉴）；`AGENTS.md` 与 `PROJECT_MAP.md` 不再引用并不存在的 `tests/test_ws_protocol.py`；`setOpusBitrate` 的每处提及都必须在邻近行标明未实现（它只存在于注释与文档里）；`tests/README.md` 的总数与 `discover` 的实际输出一致 |
 
 ### 本轮新增（W103D 的 nmcli 适配层，2026-10-08）

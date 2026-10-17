@@ -8,6 +8,20 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### ☰ 菜单里的 FT8 引擎开关（省 CPU）
+
+- FT8 引擎设计上**开机就在后台解码**，在小盒子上那是实打实的一个核（那个
+  `multiprocessing.spawn` 的 DSP worker）。设置区现在有一个开关：关掉 → 引擎停、
+  DSP worker 退出、RX tap 释放；开回来 → 立刻恢复解码。
+- 走的是**已有的**设置路径 `PUT /api/ft8/station {"engine_always_on": …}`
+  （它本来就落盘并启停 runtime），没有第二条命令通道；开关状态读 `GET /api/ft8/station`。
+  既有的单向「切到 FT8」菜单项不动——它要移动电台并跳转，回答的是另一个问题。
+- 实测（W103D）：关 → `engine_always_on:false`，DSP worker 2 → **1**；开 → 回到 2。
+- `ft710_ui.js?v=37 → 38`（否则已装用户的浏览器不会重新拉）。
+- 测试：pytest `tests/ft8/web/test_ft8_api.py` +2（开关驱动 runtime、状态可读）；
+  unittest `tests/test_ft8_engine_switch.py` 6 项（菜单位置、绑定的端点、状态来源、
+  不劫持单向入口）；计数 2430 → **2436**。
+
 ### 盒子本地的耳朵：RX 音频进蓝牙耳机（AD-028 续）
 
 - 新模块 `local_speaker.py`：把服务端已经在编码的 RX 音频再分一路给本机 ALSA 设备，

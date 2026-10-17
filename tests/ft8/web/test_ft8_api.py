@@ -44,7 +44,8 @@ class _Runtime:
         self.policy_pushes.append(settings)
 
 
-def _client(*, role: str = "operator", authenticated: bool = True) -> TestClient:
+def _client(*, role: str = "operator", authenticated: bool = True,
+            runtime=None) -> TestClient:
     tmp = tempfile.mkdtemp(prefix="ft8-api-")
     repository = Repository(os.path.join(tmp, "qso.db"))
     sequencer = Sequencer(my_call="BG1SB", my_grid="ON80DA")
@@ -59,6 +60,7 @@ def _client(*, role: str = "operator", authenticated: bool = True) -> TestClient
         my_call="BG1SB",
         my_grid="ON80DA",
         settings_store=Ft8SettingsStore(os.path.join(tmp, "settings.json")),
+        runtime=runtime,
     )
     client = TestClient(create_app(state))
     if authenticated:
@@ -421,3 +423,39 @@ def test_engine_stats_ap_counters_default_to_zero() -> None:
     engine = _engine_stats(state)["engine"]
     assert engine["ap_decodes"] == 0
     assert engine["ap_low_quality"] == 0
+
+
+class FakeEngine:
+    """Stands in for Ft8Runtime's start/stop pair (the DSP worker's lifetime)."""
+
+    def __init__(self) -> None:
+        self.running = False
+        self.calls: list[str] = []
+
+    async def start(self) -> None:
+        self.running = True
+        self.calls.append("start")
+
+    async def stop(self) -> None:
+        self.running = False
+        self.calls.append("stop")
+
+
+def test_engine_setting_turns_the_worker_off_and_on():
+    """The menu switch reuses the settings path (engine_always_on), which is
+    already persisted and already drives the runtime."""
+    engine = FakeEngine()
+    engine.running = True
+    client = _client(runtime=engine)
+    r = client.put("/api/ft8/station", json={"engine_always_on": False})
+    assert r.status_code == 200, r.text
+    assert engine.calls == ["stop"] and not engine.running
+    r = client.put("/api/ft8/station", json={"engine_always_on": True})
+    assert r.status_code == 200, r.text
+    assert engine.calls == ["stop", "start"] and engine.running
+
+
+def test_engine_state_is_reported_for_the_menu_switch():
+    engine = FakeEngine()
+    client = _client(runtime=engine)
+    assert client.get("/api/ft8/state").json()["engine"]["enabled"] is False

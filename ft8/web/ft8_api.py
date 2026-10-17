@@ -868,6 +868,9 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
     sequencer = state.sequencer
     snapshot: dict[str, Any] = {
         "revision": state.revision,
+        # The menu switch needs the engine's own state, not the on-air mode:
+        # the engine runs in the background even while the station is on SSB.
+        "engine": {"enabled": bool(state.runtime is not None and state.runtime.running)},
         "lease": {
             "held": lease is not None,
             "mine": session is not None

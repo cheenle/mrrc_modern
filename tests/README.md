@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2430 tests across 124 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2436 tests across 125 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 91 of those 124 — the support-chain, Cloud Hub and
+sections below itemise 92 of those 125 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -1016,3 +1016,11 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   （48 kHz 立体声原样播，单声道样本复制到两个声道），而 8 kHz 设备走既有抽取器。
   另有三条服务端源码守卫：RX 循环把本地扬声器算作「有人在听」（否则没有浏览器时整条
   音频链就睡了）、循环里确实 feed 了、且由环境变量构建并随关机停止。
+
+### 本轮新增（FT8 引擎开关，AD-028 续）
+
+- **`test_ft8_engine_switch.py`** — ☰ 菜单「设置」里的 FT8 引擎开关。它必须与**在空中的模式**
+  分开：`work_mode` 只表示"有没有 FT8 波形在发"，而引擎是从开机就在后台解码的，所以开关的
+  状态读 `/api/ft8/station` 的 `engine_always_on`（服务端已有的持久化设置），点击走
+  `PUT /api/ft8/station`（同一个设置路径，落盘同时启停 runtime，不再有第二条命令通道）；
+  既有的单向「切到 FT8」菜单项保持原样（它要移动电台并跳转，回答的是另一个问题）。

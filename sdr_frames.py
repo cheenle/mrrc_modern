@@ -5,7 +5,7 @@
 
     P1 <u32 len> <json>            pipe → server  状态
     S1 <u16 seq> <u16 n> <u8*n>    pipe → server  频谱
-    A1 <u8 chid> <u16 seq> <u16 len> <opus>   pipe → server  音频
+    A1 <u8 chid> <u16 seq> <u8 rms> <u16 len> <opus>   pipe → server  音频（rms 供静噪/电平）
     C1 <u32 len> <json>            server → pipe  命令
 
 解析器是流式的：喂任意切片，凑够一帧就吐一帧。
@@ -35,12 +35,13 @@ def encode_spectrum(seq: int, bins: bytes) -> bytes:
     return TAG_SPECTRUM + struct.pack("<HH", seq & 0xFFFF, len(bins)) + bins
 
 
-def encode_audio(chid: int, seq: int, payload: bytes) -> bytes:
+def encode_audio(chid: int, seq: int, payload: bytes, rms: float = 0.0) -> bytes:
     if not 0 <= chid <= 0xFF:
         raise ValueError("chid out of range")
     if len(payload) > 0xFFFF:
         raise ValueError("audio payload too large")
-    return TAG_AUDIO + struct.pack("<BHH", chid, seq & 0xFFFF, len(payload)) + payload
+    level = max(0, min(255, int(round(float(rms) * 255.0))))
+    return TAG_AUDIO + struct.pack("<BBHH", chid, seq & 0xFFFF, level, len(payload)) + payload
 
 
 def encode_command(obj: dict) -> bytes:
@@ -100,14 +101,14 @@ class FrameParser:
             return ("spectrum", seq, bins)
 
         if tag == TAG_AUDIO:
-            if len(buf) < 7:
+            if len(buf) < 8:
                 return None
-            chid, seq, ln = struct.unpack_from("<BHH", buf, 2)
-            if len(buf) < 7 + ln:
+            chid, seq, level, ln = struct.unpack_from("<BBHH", buf, 2)
+            if len(buf) < 8 + ln:
                 return None
-            payload = bytes(buf[7:7 + ln])
-            del buf[:7 + ln]
-            return ("audio", chid, seq, payload)
+            payload = bytes(buf[8:8 + ln])
+            del buf[:8 + ln]
+            return ("audio", chid, seq, level / 255.0, payload)
 
         # 未知标签：丢一个字节重新对齐（与 scope_pipe 的容错一致）
         self.errors += 1

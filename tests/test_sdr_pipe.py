@@ -78,24 +78,27 @@ class FrameCodecTests(unittest.TestCase):
         p = F.FrameParser()
         blob = (F.encode_status({"center_hz": 7_074_000})
                 + F.encode_spectrum(7, bytes(range(16)))
-                + F.encode_audio(3, 9, b"opus-packet")
+                + F.encode_audio(3, 9, b"opus-packet", 0.42)
                 + F.encode_command({"cmd": "tune", "hz": 1}))
         frames = p.feed(blob)
         self.assertEqual([f[0] for f in frames], ["status", "spectrum", "audio", "command"])
         self.assertEqual(frames[0][1]["center_hz"], 7_074_000)
         self.assertEqual(frames[1][1:], (7, bytes(range(16))))
-        self.assertEqual(frames[2][1:], (3, 9, b"opus-packet"))
+        self.assertEqual(frames[2][1:3], (3, 9))
+        self.assertAlmostEqual(frames[2][3], 0.42, delta=0.01)
+        self.assertEqual(frames[2][4], b"opus-packet")
         self.assertEqual(frames[3][1]["cmd"], "tune")
         self.assertEqual(p.errors, 0)
 
     def test_partial_feeds_are_buffered(self):
         p = F.FrameParser()
-        blob = F.encode_audio(1, 2, b"abcdef")
+        blob = F.encode_audio(1, 2, b"abcdef", 0.5)
         got = []
         for i in range(len(blob)):
             got += p.feed(blob[i:i + 1])
         self.assertEqual(len(got), 1)
-        self.assertEqual(got[0][1:], (1, 2, b"abcdef"))
+        self.assertEqual(got[0][1:3], (1, 2))
+        self.assertEqual(got[0][4], b"abcdef")
 
     def test_unknown_tag_resyncs(self):
         p = F.FrameParser()

@@ -141,6 +141,7 @@ class SdrPipe:
             data = pcm[chid]
             if not data:
                 continue
+            level = rms[chid] if chid < len(rms) else 0.0
             enc = self._encoder_for(chid)
             if enc is None:
                 continue
@@ -151,7 +152,7 @@ class SdrPipe:
             seq = self._seq_a.get(chid, 0)
             for pkt in packets:
                 seq = (seq + 1) & 0xFFFF
-                self.out.write(F.encode_audio(chid, seq, pkt))
+                self.out.write(F.encode_audio(chid, seq, pkt, level))
             self._seq_a[chid] = seq
         self.out.flush()
 

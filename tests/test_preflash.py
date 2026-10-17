@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -39,6 +40,16 @@ def key_count(text: str, key: str) -> int:
 
 
 class PreflashEnvTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # The script under test is POSIX shell, and the release gate runs this
+        # suite on Windows too (2026-10-17: the Windows build gate collected
+        # this class for the first time and got 8 FileNotFoundError on `bash`).
+        # BuildWiringTests stays platform-independent on purpose — it reads the
+        # sources, so it must run everywhere.
+        if shutil.which("bash") is None:
+            raise unittest.SkipTest("preflash.sh needs a POSIX shell (bash)")
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

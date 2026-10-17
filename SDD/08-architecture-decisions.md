@@ -283,6 +283,7 @@
 | AD-025 | Spectrum bandwidth tiers (shape × divider, gated by `spectrumCaps`) | Implemented |
 | AD-026 | Setup hotspot and the password-less onboarding window (opened by network path, not a flag) | Superseded (V2.80, 2026-10-11) — 真机验收失败，见正文与 2026-10-11 LAN 设计 |
 | AD-027 | Factory-preset (ship-ready) box image: `--preflash`, off by default; fixed credentials + system half; Wi-Fi and the public entry are configured from `/settings` | Implemented (V2.92) |
+| AD-028 | Local control surface: a Bluetooth HID remote drives the radio on-box (`local_ctl.py` + `mrrc-localctl`), keyed on HID usages, speaking the browser protocol over loopback; `HandlePowerKey=ignore` returns the 电源 key to the operator | Implemented (V2.97) |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 
@@ -471,3 +472,13 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Decision | 盒子线新增构建开关 `--preflash`（**默认关**）。打开时共享服务层调用 `packaging/common/preflash.sh`：env 里写 `MRRC_WEB_PASSWORD`（并把 `MRRC_AUTO_PASSWORD` 显式清空）、`chpasswd` 设 `root`/`mrrc` 口令、时区 `Asia/Shanghai`、区域 `zh_CN.UTF-8`。按批次可用 `MRRC_PREFLASH_*` 覆盖，不预置电台型号/串口。Wi-Fi 与公网入口（Cloud Hub 申请）都在 `/settings` 页面上做，服务端不加新写入路径。 |
 | Alternatives | ①**另起后处理脚本**（挂载镜像改口令再打包）：多出一条会漂移的第二条构建线，以后每次改服务层都要同步（否决）；②**不加开关、直接把盒子线默认做成发货版**：镜像从此不再"每台口令不同"，也给不出自用/开发用的标准镜像（否决）；③**每台在 `/boot` 写 `mrrc.env` 预置**：eMMC 路线下用户碰不到那个 FAT 分区，且两个口令/时区/locale 都要人写（否决，能力保留但不作为发货流程）。 |
 | Consequences | ①**默认关是安全属性，不是选项**：`preflash.sh` 自己在 `MRRC_PREFLASH != 1` 时拒绝写任何东西，`--preflash` 默认 0，两者都有测试钉住；不传开关的镜像与今天逐字一致（口令照旧由服务在启动时生成）。②**与 2026-10-06 设计 D-3 的边界**：D-3 禁止"烘焙**猜测**"（串口、声卡、证书），出厂口令是**声明过的值**——它由卖家选择、写在文档里、且三条都能改（NFR-069）。③**与 NFR-068 / AD-021 的关系**：设置页新增的 Wi-Fi 手输与显示/隐藏只影响**输入**，已保存的 PSK 仍不回显（那需要向 NetworkManager 索要明文，等于新增一条凭据通道）。④**公网入口面板复用既有三个端点**（`/api/cloud/{state,apply,refresh}`），不复制 Cloud Hub 状态机；"批准后自己接通"仍由服务端轮询负责。⑤**首启探测的完成判据同批改掉**（`needs_first_run` 为假且串口节点在场）：没探到电台的盒子每次开机重探——否则卖家工作台上那次开机（U 盘、无电台）会把"已完成"克隆进用户家的 eMMC。 |
+
+## AD-028: 本地控制面 —— 蓝牙遥控器直接驱动电台（PTT / 调谐 / 数字输入）
+
+| Attribute | Value |
+| ----------- | ------- |
+| Type | Product / Operability |
+| Status | Implemented (V2.97, 2026-10-17) |
+| Decision | 新增独立守护进程 `local_ctl.py`（systemd 单元 `mrrc-localctl`，`User=mrrc`）：读蓝牙 HID 遥控器的 `/dev/input/eventN`，按**HID 扫描码**查键位表，通过 `wss://127.0.0.1:<port>/WSradio` 发浏览器同款协议（`{"type":"set","field":…}`）。纯逻辑层（事件解码 / 键位表 / 数字输入状态机 / 调谐算术）与 I/O 层分离，前者无硬件可测。`/etc/systemd/logind.conf` 的 `HandlePowerKey` 由服务层改为 `ignore`。 |
+| Alternatives | ①**在 `server.py` 里直接读 evdev**：把设备 I/O 塞进事件循环，且服务重启会切断"松开即停发"的释放路径（否决）；②**只做网页端按键**：本地操作员手上没有浏览器，这正是要解决的场景（否决）；③**走 lirc / `ir-keytable` 的红外解码**：这块板（`JC-S905L3A`/W103D）虽然注册了 `meson-ir`，但实测两次抓取（移动遥控 + 电视遥控）脉冲行数为 **0** —— 接收头没焊，硬件上不成立（否决，解析层仍留在模块内可复用于有红外的板）；④**把遥控器当蓝牙音频设备（HFP）采麦克风**：它的麦克风走厂商私有 BLE 服务（`00006287…`/`0000d0ff…`），不是标准 HFP/HSP（否决，见下 Consequences ④）。 |
+| Consequences | ①**按键身份必须用扫描码**：实测那支中国移动语音遥控器上 `设置`/`M`/`#` 三个键都报 keycode 240（`KEY_UNKNOWN`），只看 `KEY_*` 会把它们并成一个键；`key_ids()` 先给 `u:0x…` 再退回 `k:…`。②**配对成功 ≠ 链路加密**：第一次配对报了 `Paired: yes`，但 `btmon` 显示 `LE Start Encryption` → `Encryption Change: Disabled`，于是遥控器对**每一个** GATT 属性读都回 ATT `0x0E`，bluez 的 `hog` 插件因此建不出 HID 设备（日志 `info_read_cb/proto_mode_read_cb/report_reference_cb … unlikely error`）。删设备 + `bluetoothctl power off/on` 后重配，`Encryption: Enabled with AES-CCM` 一出现，`CMCC_Voice_Remote Keyboard` 立即被创建 —— 这是运维知识，写进 `docs/W103D_USER_GUIDE.md`。③**电源键属于操作员，不属于 logind**：遥控器 `电源` 报 `KEY_POWER`，systemd-logind 默认拿它关机（现场表现为"盒子自己重启了"，日志只有 2 秒）。服务层把 `HandlePowerKey` 改成 `ignore`，该键交给本模块。④**麦克风不在本 AD 范围**：遥控器的麦是厂商私有 BLE 通道，且 `audio_handler` 的 TX 音频只从浏览器来（`LOCAL_MIC` 全仓零命中）——本地麦需要独立的"本地麦克风 → TX 队列"能力，留作下一步。⑤**MT7663 的 BT 与 Wi-Fi 共用 SDIO**：HID 活跃期间 Wi-Fi 出现过一次瞬断（ping 恢复在数秒内），本地操作台的告警与重连必须容忍这一点。 |

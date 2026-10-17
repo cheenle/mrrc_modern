@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2369 tests across 121 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2404 tests across 122 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 88 of those 121 — the support-chain, Cloud Hub and
+sections below itemise 89 of those 122 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -982,3 +982,16 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   `ft710_main.js` 写 `msg.version`，老服务端不发这个字段时也不打印 undefined；⑥ 资产缓存
   随这次改动前移 —— `index.html` 是 cache-first，`sw.js` 自己没变的话，已装用户永远看不到
   新页脚（这正是 V2.72 记下的那个形状）。
+
+### 本轮新增（本地遥控器控制面 AD-026，2026-10-17）
+
+- **`test_local_ctl.py`** — `local_ctl.py` 的纯逻辑半边（读事件、键位表、数字输入状态机、
+  调谐算术），W103D 上实测过的那支中国移动语音遥控器是基准。文件钉的是**只有这一层能钉住
+  的三件事**：① **`input_event` 的线格式**（64 位 Linux 上 24 字节，且尾部残包必须忽略——
+  读到的字节数是 24 的整数倍这件事来自内核，不是来自我们的假设）；② **键的身份是 HID 扫描码
+  而不是键码** —— 实测那支遥控器上 `设置` / `M` / `#` 三个键都报 `KEY_UNKNOWN`(240)，只看键码
+  会把它们混成一个键，因此 `key_ids()` 先给 `u:0x…` 再退回 `k:…`，`KeyMap` 也按这个顺序查；
+  ③ **PTT 的边沿语义**（按下发一次 `true`、自动重复不发、松开发一次 `false`）与
+  `release_ptt()` 的幂等性——遥控器没电、蓝牙掉线、进程收到 SIGTERM 时，这一条是电台能不能
+  停止发射的分界线。调谐算术按**波段内卷绕**断言（7.300 MHz 再上一个 1 kHz 步进回到 7.000），
+  跨波段跳跃保持相对位置（40 m 中段 → 30 m 中段）。

@@ -47,7 +47,7 @@ Runtime facts are derived from `server.py`, `backends/*`, `audio_handler.py`, `r
 | Attribute | Value |
 | ----------- | ------- |
 | Document ID | SDD-MRRC-MODERN-2026-001 |
-| SDD Version | V2.93 |
+| SDD Version | V2.97 |
 | Baseline Date | 2026-10-17 |
 | Status | **v1.28.1（2026-10-17）**：hub 再也不会钉住一把实例已经换掉的证书（`ssl_bootstrap.sign_for()` 幂等，已坏实例点一次「连接」自愈）；FT8 深路径不再每个时隙杀掉服务器的 DSP worker（FFTW 线程初始化改为返回状态码，worker 自己的 stdio 落到 `logs/ft8-worker.log`，诊断包收集）。上一版 **v1.28.0（2026-10-16）**：电台电源回到 ☰ 菜单且两种意图分开、出站 HTTPS 只信随包的根证书、FT8 级联的深路径第一次真正跑起来，外加三个只在产物里现形的缺陷。四份产物（同一修订 `66b6930`）：macOS DMG **85,064,796 bytes** `1c9ba24e…`；Windows Setup **79,386,940 bytes** `cfbeacc7…`（VM `certutil` == Mac `shasum`）；W103D **1,170,343,847 bytes** `749e442a…`；rpi64 **530,820,848 bytes** `a00ab228…`。`unittest` **2327 项**（macOS，1 skip）；Windows 门禁 **2324 项 OK**；`release_check.py` 离线 **32 ok / 0 failing**；两条镜像线各跑四步产物验证（代码身份逐字节一致 / 装机内容 / D-11 双指向 / chroot 内载入 `libwsjt_core.so` 并核对 `abi=2` 与 `decode_paths=0x7`）。 |
 | Project | MRRC Modern / `mrrc_modern` |

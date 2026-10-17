@@ -773,6 +773,11 @@
 <td>Factory-preset (ship-ready) box image: <code class="scope-code">--preflash</code>, off by default; fixed credentials + system half; Wi-Fi and the public entry are configured from <code class="scope-code">/settings</code></td>
 <td>Implemented (V2.92)</td>
 </tr>
+<tr>
+<td>AD-028</td>
+<td>Local control surface: a Bluetooth HID remote drives the radio on-box (<code class="scope-code">local_ctl.py</code> + <code class="scope-code">mrrc-localctl</code>), keyed on HID usages, speaking the browser protocol over loopback; <code class="scope-code">HandlePowerKey=ignore</code> returns the 电源 key to the operator</td>
+<td>Implemented (V2.97)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1144,13 +1149,48 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-028-本地控制面-蓝牙遥控器直接驱动电台ptt-调谐-数字输入">AD-028: 本地控制面 —— 蓝牙遥控器直接驱动电台（PTT / 调谐 / 数字输入）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Product / Operability</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V2.97, 2026-10-17)</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>新增独立守护进程 <code class="scope-code">local_ctl.py</code>（systemd 单元 <code class="scope-code">mrrc-localctl</code>，<code class="scope-code">User=mrrc</code>）：读蓝牙 HID 遥控器的 <code class="scope-code">/dev/input/eventN</code>，按<strong>HID 扫描码</strong>查键位表，通过 <code class="scope-code">wss://127.0.0.1:&lt;port&gt;/WSradio</code> 发浏览器同款协议（<code class="scope-code">{"type":"set","field":…}</code>）。纯逻辑层（事件解码 / 键位表 / 数字输入状态机 / 调谐算术）与 I/O 层分离，前者无硬件可测。<code class="scope-code">/etc/systemd/logind.conf</code> 的 <code class="scope-code">HandlePowerKey</code> 由服务层改为 <code class="scope-code">ignore</code>。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong>在 <code class="scope-code">server.py</code> 里直接读 evdev</strong>：把设备 I/O 塞进事件循环，且服务重启会切断”松开即停发”的释放路径（否决）；②<strong>只做网页端按键</strong>：本地操作员手上没有浏览器，这正是要解决的场景（否决）；③<strong>走 lirc / <code class="scope-code">ir-keytable</code> 的红外解码</strong>：这块板（<code class="scope-code">JC-S905L3A</code>/W103D）虽然注册了 <code class="scope-code">meson-ir</code>，但实测两次抓取（移动遥控 + 电视遥控）脉冲行数为 <strong>0</strong> —— 接收头没焊，硬件上不成立（否决，解析层仍留在模块内可复用于有红外的板）；④<strong>把遥控器当蓝牙音频设备（HFP）采麦克风</strong>：它的麦克风走厂商私有 BLE 服务（<code class="scope-code">00006287…</code>/<code class="scope-code">0000d0ff…</code>），不是标准 HFP/HSP（否决，见下 Consequences ④）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>按键身份必须用扫描码</strong>：实测那支中国移动语音遥控器上 <code class="scope-code">设置</code>/<code class="scope-code">M</code>/<code class="scope-code">#</code> 三个键都报 keycode 240（<code class="scope-code">KEY_UNKNOWN</code>），只看 <code class="scope-code">KEY_*</code> 会把它们并成一个键；<code class="scope-code">key_ids()</code> 先给 <code class="scope-code">u:0x…</code> 再退回 <code class="scope-code">k:…</code>。②<strong>配对成功 ≠ 链路加密</strong>：第一次配对报了 <code class="scope-code">Paired: yes</code>，但 <code class="scope-code">btmon</code> 显示 <code class="scope-code">LE Start Encryption</code> → <code class="scope-code">Encryption Change: Disabled</code>，于是遥控器对<strong>每一个</strong> GATT 属性读都回 ATT <code class="scope-code">0x0E</code>，bluez 的 <code class="scope-code">hog</code> 插件因此建不出 HID 设备（日志 <code class="scope-code">info_read_cb/proto_mode_read_cb/report_reference_cb … unlikely error</code>）。删设备 + <code class="scope-code">bluetoothctl power off/on</code> 后重配，<code class="scope-code">Encryption: Enabled with AES-CCM</code> 一出现，<code class="scope-code">CMCC_Voice_Remote Keyboard</code> 立即被创建 —— 这是运维知识，写进 <code class="scope-code">docs/W103D_USER_GUIDE.md</code>。③<strong>电源键属于操作员，不属于 logind</strong>：遥控器 <code class="scope-code">电源</code> 报 <code class="scope-code">KEY_POWER</code>，systemd-logind 默认拿它关机（现场表现为”盒子自己重启了”，日志只有 2 秒）。服务层把 <code class="scope-code">HandlePowerKey</code> 改成 <code class="scope-code">ignore</code>，该键交给本模块。④<strong>麦克风不在本 AD 范围</strong>：遥控器的麦是厂商私有 BLE 通道，且 <code class="scope-code">audio_handler</code> 的 TX 音频只从浏览器来（<code class="scope-code">LOCAL_MIC</code> 全仓零命中）——本地麦需要独立的”本地麦克风 → TX 队列”能力，留作下一步。⑤<strong>MT7663 的 BT 与 Wi-Fi 共用 SDIO</strong>：HID 活跃期间 Wi-Fi 出现过一次瞬断（ping 恢复在数秒内），本地操作台的告警与重连必须容忍这一点。</td>
+</tr>
+</tbody>
+</table>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.93 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V2.97 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

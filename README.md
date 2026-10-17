@@ -155,6 +155,10 @@ The eight hardware-unverified models connect **receive-only** until you set
 `https://<callsign>.mrrc.vlsc.net/` entry, transmit included — runs from the
 settings page.
 
+**Got a box that is already flashed (a seller-prepared / OEM unit)?** Start at
+[docs/W103D_USER_GUIDE.md](docs/W103D_USER_GUIDE.md): what is in the box, the factory
+passwords, the five-minute acceptance, and troubleshooting.
+
 Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 [packaging/box/README.md](packaging/box/README.md). Build manual:
 [docs/w103d_pack.md](docs/w103d_pack.md).

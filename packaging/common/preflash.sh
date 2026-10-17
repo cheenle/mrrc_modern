@@ -7,6 +7,8 @@
 #
 #   bash preflash.sh /opt/mrrc_modern/env/mrrc.env      # 全量（要 root）
 #   bash preflash.sh --env-only /tmp/mrrc.env           # 只写 env（单测真跑用，不需要 root）
+#   bash preflash.sh --wifi-only                        # 只写救急 Wi-Fi（同上；目录可用
+#                                                       # MRRC_PREFLASH_WIFI_DIR 指到临时目录）
 #
 # 幂等：重跑只覆盖同一批键，不动别的任何一行。
 set -euo pipefail
@@ -25,18 +27,86 @@ WEB_PASSWORD="${MRRC_PREFLASH_WEB_PASSWORD:-abcd!1234}"
 TIMEZONE="${MRRC_PREFLASH_TIMEZONE:-Asia/Shanghai}"
 LOCALE_NAME="${MRRC_PREFLASH_LOCALE:-zh_CN.UTF-8}"
 MRRC_USER="${MRRC_USER:-mrrc}"
+#: 救急 Wi-Fi：盒子当**客户端**去连一个叫这个名字的热点（手机热点即可）。
+RESCUE_SSID="${MRRC_PREFLASH_RESCUE_SSID:-rescue}"
+RESCUE_PSK="${MRRC_PREFLASH_RESCUE_PSK:-abcd1234}"
 
 ENV_ONLY=0
+WIFI_ONLY=0
 POSITIONAL=()
 for arg in "$@"; do
 	case "$arg" in
 	--env-only) ENV_ONLY=1 ;;
+	--wifi-only) WIFI_ONLY=1 ;;
 	*) POSITIONAL+=("$arg") ;;
 	esac
 done
 ENV_FILE="${POSITIONAL[0]:-/opt/mrrc_modern/env/mrrc.env}"
 
 log() { printf '\n=== preflash: %s ===\n' "$*"; }
+
+# ── 救急 Wi-Fi（盒子当客户端，不是 AP）───────────────────────────────
+# 一个实现、两个调用点：`--wifi-only`（单测真跑用）与完整发货流程。
+write_rescue_wifi() {
+	log "rescue wifi: $RESCUE_SSID"
+	case "$RESCUE_SSID$RESCUE_PSK" in
+	*$'\n'* | *$'\r'*)
+		echo "preflash: the rescue SSID/PSK may not contain a newline" >&2
+		exit 1
+		;;
+	esac
+	if [ "${#RESCUE_SSID}" -lt 1 ] || [ "${#RESCUE_SSID}" -gt 32 ]; then
+		echo "preflash: the rescue SSID must be 1..32 bytes" >&2
+		exit 1
+	fi
+	if [ "${#RESCUE_PSK}" -lt 8 ] || [ "${#RESCUE_PSK}" -gt 63 ]; then
+		echo "preflash: the rescue PSK must be 8..63 characters (WPA2-PSK)" >&2
+		exit 1
+	fi
+	RESCUE_DIR="${MRRC_PREFLASH_WIFI_DIR:-/etc/NetworkManager/system-connections}"
+	install -d -m 0755 "$RESCUE_DIR"
+	RESCUE_UUID=$(python3 -c 'import uuid; print(uuid.uuid4())')
+	# printf 而不是 heredoc：口令里可能有 $ 或反引号，未加引号的 heredoc 会把它们展开。
+	printf '%s\n' \
+		'[connection]' \
+		'id=mrrc-rescue' \
+		"uuid=$RESCUE_UUID" \
+		'type=wifi' \
+		'autoconnect=true' \
+		'autoconnect-priority=-10' \
+		'autoconnect-retries=0' \
+		'interface-name=wlan0' \
+		'' \
+		'[wifi]' \
+		'mode=infrastructure' \
+		"ssid=$RESCUE_SSID" \
+		'hidden=true' \
+		'band=bg' \
+		'' \
+		'[wifi-security]' \
+		'key-mgmt=wpa-psk' \
+		"psk=$RESCUE_PSK" \
+		'' \
+		'[ipv4]' \
+		'method=auto' \
+		'' \
+		'[ipv6]' \
+		'method=auto' \
+		>"$RESCUE_DIR/mrrc-rescue.nmconnection"
+	chmod 600 "$RESCUE_DIR/mrrc-rescue.nmconnection"
+
+	if [ "$WIFI_ONLY" = "1" ]; then
+		echo "preflash: wifi-only — 只写了救急 Wi-Fi profile"
+		exit 0
+	fi
+}
+
+if [ "$WIFI_ONLY" = "1" ]; then
+	write_rescue_wifi
+	echo "preflash: wifi-only — 只写了救急 Wi-Fi profile"
+	exit 0
+fi
+
 
 # ── env 文件：Web 口令（唯一的写者）────────────────────────────────────
 # 服务层的 sed 已经把 install.sh 在**构建主机**上猜出来的口令剥掉了，所以正常
@@ -71,6 +141,8 @@ if [ "$ENV_ONLY" = "1" ]; then
 	echo "preflash: env-only — 系统层（账号口令/时区/locale）跳过"
 	exit 0
 fi
+
+write_rescue_wifi
 
 # ── 账号口令 ─────────────────────────────────────────────────────────
 # 账号由平台壳先建好（盒子的 adduser --system mrrc / Pi 的 FIRST_USER_NAME），

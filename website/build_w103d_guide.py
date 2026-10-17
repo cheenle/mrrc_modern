@@ -208,8 +208,8 @@ PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="ZTE W103D \u7535\u53f0\u76d2\u5b50\u5b8c\u6574\u6307\u5357 \u2014 \u4ece\u5f00\u7bb1\u5237\u673a\u5230 MRRC \u5e72\u6d3b">
-    <title>W103D \u76d2\u5b50\u5b8c\u6574\u6307\u5357 \u2014 MRRC Modern</title>
+    <meta name="description" content="{description}">
+    <title>{title}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -274,18 +274,7 @@ PAGE = """<!DOCTYPE html>
     </div>
 </nav>
 
-<header class="guide-hero">
-    <div class="guide-hero-inner">
-        <span class="badge"><i class="fas fa-tv"></i> W103D \u00b7 \u76d2\u5b50\u5b8c\u6574\u6307\u5357</span>
-        <h1>ZTE W103D \u7535\u53f0\u76d2\u5b50 \u2014 \u4ece\u5f00\u7bb1\u5230 MRRC \u5e72\u6d3b</h1>
-        <p>\u4ece\u62ff\u5230\u4e00\u53f0\u5168\u65b0\u7684 W103D \u5f00\u59cb\uff1a\u8ba4\u673a\u5668 \u2192 \u4e0b\u8f7d\u6821\u9a8c \u2192 \u70e7 U \u76d8 \u2192 \u4ece U \u76d8\u542f\u52a8 \u2192 \u63a5\u7535\u53f0 \u2192 \u9009\u673a\u578b \u2192 \u9a8c\u6536\u3002
-           \u672b\u5c3e\u9644\u4e00\u5f20\u4ece\u96f6\u5230\u5e72\u6d3b\u7684\u6253\u52fe\u6e05\u5355\u3002</p>
-        <div class="actions">
-            <a class="btn btn-primary" href="{download}"><i class="fas fa-download"></i> \u4e0b\u8f7d W103D \u955c\u50cf</a>
-            <a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" target="_blank" rel="noopener"><i class="fas fa-bolt"></i> \u901f\u67e5\u64cd\u4f5c\u5355</a>
-        </div>
-    </div>
-</header>
+{hero}
 
 <main class="w103d-wrap">
 <figure style="margin: 0 0 2.5rem">
@@ -311,39 +300,125 @@ PAGE = """<!DOCTYPE html>
 """
 
 
+#: One entry per page this generator writes. Two documents share the template
+#: because they differ only in front matter: the complete guide is for someone
+#: building the box from a downloaded image, the user guide is for the person
+#: who received a box the seller already flashed.
+PAGES = (
+    {
+        "source": "docs/W103D_GUIDE.md",
+        "out": "w103d.html",
+        "title": "W103D 盒子完整指南 — MRRC Modern",
+        "description": "ZTE W103D 电台盒子完整指南 — 从开箱刷机到 MRRC 干活",
+        "badge": 'W103D · 盒子完整指南',
+        "icon": "fa-tv",
+        "h1": "ZTE W103D 电台盒子 — 从开箱到 MRRC 干活",
+        "lead": ("从拿到一台全新的 W103D 开始：认机器 → 下载校验 → 烧 U 盘 → 从 U 盘启动 → 接电台 → "
+                 "选机型 → 验收。末尾附一张从零到干活的打勾清单。"),
+        "actions": (
+            '<a class="btn btn-primary" href="{p}downloads/MRRC-Modern-1.25.5-w103d.img.gz">'
+            '<i class="fas fa-download"></i> 下载 W103D 镜像</a>'
+            '<a class="btn" href="{p}w103d-user.html"><i class="fas fa-box-open"></i> 盒子已刷好？看用户指南</a>'
+            '<a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" '
+            'target="_blank" rel="noopener"><i class="fas fa-bolt"></i> 速查操作单</a>'),
+        # The markdown links the sibling document by file name; the site spells
+        # it as a page, so the built HTML would otherwise point at a .md file.
+        "links": (("W103D_USER_GUIDE.md", "w103d-user.html"),),
+        "figure": True,
+    },
+    {
+        "source": "docs/W103D_USER_GUIDE.md",
+        "out": "w103d-user.html",
+        "title": "发货版 W103D 用户指南 — MRRC Modern",
+        "description": "拿到卖家刷好的 W103D 之后：出厂口令、Wi-Fi、接电台、五分钟验收与排障",
+        "badge": "W103D · 用户指南",
+        "icon": "fa-box-open",
+        "h1": "拿到盒子之后：发货版 W103D 用户指南",
+        "lead": ("系统已经写进 eMMC，口令、时区、Wi-Fi 卖家都设好了：插电、用浏览器登录就能干活。"
+                 "这页讲清楚出厂设了什么、电台怎么接、验收看哪几项，以及出了问题先自己查什么。"),
+        "actions": (
+            '<a class="btn btn-primary" href="{p}w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a>'
+            '<a class="btn" href="{p}index.html#download"><i class="fas fa-download"></i> 下载页</a>'),
+        "links": (("W103D_GUIDE.md", "w103d.html"),),
+        "figure": False,
+    },
+)
+
+
+def hero(spec) -> str:
+    return f"""<header class="guide-hero">
+    <div class="guide-hero-inner">
+        <span class="badge"><i class="fas {spec['icon']}"></i> {spec['badge']}</span>
+        <h1>{spec['h1']}</h1>
+        <p>{spec['lead']}</p>
+        <div class="actions">{spec['actions']}</div>
+    </div>
+</header>"""
+
+
+#: The spec sheet image only illustrates the complete guide.
+SPEC_FIGURE = """<figure style="margin: 0 0 2.5rem">
+    <a href="{p}images/w103d-spec-sheet.png" target="_blank" rel="noopener">
+        <img src="{p}images/w103d-spec-sheet.png"
+             alt="ZTE W103D 参数、性能与对比树莓派"
+             style="width: 100%; height: auto; display: block; border: 1px solid var(--border, #2a2a2a); border-radius: 12px">
+    </a>
+    <figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">
+        参数、性能与对比树莓派 · 点图看原尺寸（1240 × 1754）
+    </figcaption>
+</figure>
+"""
+
+
 def main() -> int:
-    md = SOURCE.read_text(encoding="utf-8")
+    for spec in PAGES:
+        source = REPO / spec["source"]
+        md = source.read_text(encoding="utf-8")
 
-    # Refuse rather than silently drop. Each of these would render as literal
-    # text or vanish, and nobody would notice until someone read the page.
-    for pattern, what in UNSUPPORTED:
-        if what and pattern.search(md):
-            print(f"build_w103d_guide: the guide now uses {what}, which this "
-                  f"converter does not render — extend it first", file=sys.stderr)
+        # Refuse rather than silently drop. Each of these would render as literal
+        # text or vanish, and nobody would notice until someone read the page.
+        for pattern, what in UNSUPPORTED:
+            if what and pattern.search(md):
+                print(f"build_w103d_guide: {spec['source']} now uses {what}, which this "
+                      f"converter does not render — extend it first", file=sys.stderr)
+                return 1
+        if md.count("```") % 2:
+            print(f"build_w103d_guide: {spec['source']} has an odd number of code fences",
+                  file=sys.stderr)
             return 1
-    if md.count("```") % 2:
-        print("build_w103d_guide: odd number of code fences", file=sys.stderr)
-        return 1
 
-    body = convert(md)
-    # A converter that left markdown behind would ship visible asterisks and pipes.
-    leftovers = [tok for tok in ("**", "```") if tok in body]
-    if leftovers:
-        print(f"build_w103d_guide: markdown survived conversion: {leftovers}", file=sys.stderr)
-        return 1
-
-    for prefix, guide, lang, label, dl in (
-        ("", "guide.html", "zh/w103d.html", "中文", "downloads/MRRC-Modern-1.25.5-w103d.img.gz"),
-        ("../", "../guide.html", "../w103d.html", "EN", "../downloads/MRRC-Modern-1.25.5-w103d.img.gz"),
-    ):
-        path = REPO / "website" / ("" if prefix == "" else "zh/") / "w103d.html"
-        page = PAGE.format(p=prefix, guide=guide, active="", lang=lang, lang_label=label,
-                           download=dl, body=body.replace("@@ROOT@@", prefix))
-        if "@@ROOT@@" in page:
-            print("build_w103d_guide: an image path kept its @@ROOT@@ marker", file=sys.stderr)
+        body = convert(md)
+        # A converter that left markdown behind would ship visible asterisks and pipes.
+        # Fenced code is emitted verbatim on purpose, so prose is the only thing
+        # this may judge — a `#` comment inside a shell block legitimately carries
+        # `**` (found 2026-10-17: the check had been failing on the complete guide
+        # too, and nobody had re-run the generator since that line landed).
+        prose = re.sub(r"<pre>.*?</pre>", "", body, flags=re.S)
+        leftovers = [tok for tok in ("**", "```") if tok in prose]
+        if leftovers:
+            print(f"build_w103d_guide: markdown survived conversion: {leftovers}", file=sys.stderr)
             return 1
-        path.write_text(page, encoding="utf-8")
-        print(f"  wrote {path.relative_to(REPO)} ({len(body.splitlines())} content lines)")
+
+        for prefix, lang, label in (
+            ("", "zh/w103d.html", "中文"),
+            ("../", "../w103d.html", "EN"),
+        ):
+            out = REPO / "website" / ("" if prefix == "" else "zh/") / spec["out"]
+            page_body = body.replace("@@ROOT@@", prefix)
+            for md_name, page in spec["links"]:
+                page_body = page_body.replace(f'href="{md_name}"', f'href="{page}"')
+            hero_html = hero({**spec, "actions": spec["actions"].format(p=prefix)})
+            figure = SPEC_FIGURE.format(p=prefix) if spec.get("figure") else ""
+            page_html = PAGE.format(
+                p=prefix, guide=("guide.html" if prefix == "" else "../guide.html"),
+                active="", lang=lang, lang_label=label,
+                title=spec["title"], description=spec["description"],
+                hero=hero_html, body=figure + page_body)
+            if "@@ROOT@@" in page_html:
+                print("build_w103d_guide: an image path kept its @@ROOT@@ marker", file=sys.stderr)
+                return 1
+            out.write_text(page_html, encoding="utf-8")
+            print(f"  wrote {out.relative_to(REPO)} ({len(page_body.splitlines())} content lines)")
     return 0
 
 

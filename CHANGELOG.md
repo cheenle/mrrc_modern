@@ -8,6 +8,25 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 本地操作台：蓝牙遥控器直接调电台（AD-028）
+
+现场操作员站在盒子旁边，用一支普通蓝牙遥控器调频、切模式、按住语音键发射。
+
+- 新模块 `local_ctl.py` + systemd 单元 `mrrc-localctl`（`User=mrrc`）：读遥控器的
+  `/dev/input/eventN`，按 **HID 扫描码**查键位表，经本机 `wss://127.0.0.1:<port>/WSradio`
+  发浏览器同款协议。没有遥控器时它空转等待；蓝牙断开后节点消失会自动重开。
+- **键位**（W103D 上实测：中国移动语音遥控器 `CMCC_Voice_Remote`）：语音键 = 按住发射；
+  ▲▼ = 频率 ± 步进；◀▶ = 步进档；频道 ± = 波段上下；数字 0–9 + 确定 = 直接输入 kHz；
+  设置 = 模式循环；菜单/返回 = 取消输入；音量 ± = AF 增益；电源 = 交给我们（不再关机）。
+- **必须先加密才认键**：那次配对报了成功，但 `btmon` 显示链路未加密，遥控器于是拒绝
+  所有 GATT 读、bluez 建不出 HID 设备。删除设备 + 控制器上下电重配后
+  `Encryption: Enabled with AES-CCM`，输入设备立刻出现。运维步骤写进 `docs/W103D_USER_GUIDE.md`。
+- 电源键：`/etc/systemd/logind.conf` 的 `HandlePowerKey` 由服务层改为 `ignore`
+  （此前按一下就真的关机，现场看起来像"盒子自己重启了"）。
+- 测试 2369 → **2404**（`tests/test_local_ctl.py` 35 项，无硬件）。
+- **未做**：遥控器麦克风（厂商私有 BLE 通道 + 服务端目前没有"本地麦 → TX"通路）；
+  红外（这块板注册了 `meson-ir`，但两次抓取 0 脉冲——接收头没焊）。
+
 ### 出厂预置：`build-image.sh --preflash`（默认关）
 
 - 新脚本 `packaging/common/preflash.sh`：env 里写固定 Web 口令（默认 `abcd!1234`）并显式清空
@@ -69,6 +88,65 @@ All notable changes to the MRRC Web Control project.
   插上电台后重探、`timedatectl` 同步 —— 本机没有盒子，读数必须回填指南与 SDD，不得以"应该可以"代替。
 - **无 AP 兜底**：用户既没网线、也没人替他配 Wi-Fi、盒子又连不上他家 Wi-Fi 时，盒子够不着。
 - **发货版镜像不上传下载页**：它带的是公开固定口令，公开下载等于把同批盒子的口令发给所有人。
+
+### Wi-Fi 加入不再依赖扫描：AP 不在场也能预置（`net_wifi.connect_wifi`）
+
+给客户代刷盒子时，客户的 AP 在工作台上**必然扫不到**，而这一点正好把旧实现打穿：`connect_wifi` 一直在发
+`nmcli device wifi connect <SSID> password <PSK>`，而 nmcli 这条快捷方式是**基于扫描**的——SSID 不在列表里
+就报「未发现 SSID 为 … 的网络」并**一个 profile 都不写**。实测（1.28.1 / nmcli 1.42.4，真机）：
+
+```
+$ nmcli device wifi connect ZZZ-NOT-VISIBLE-9871 password testpass123 ifname wlan0
+错误：未发现 SSID 为 "ZZZ-NOT-VISIBLE-9871" 的网络。
+profile 数：5 -> 5
+```
+
+同一句判断也解释了第二个症状：**隐藏 AP 永远不在扫描列表里**，哪怕它就在隔壁。`linux/wifi_preseed.py`
+（开机从 `/boot/mrrc-wifi.txt` 连网）形状相同——它的全部目的就是「在看不见的时候连上」。
+
+改为**写 profile 再 up**：`connection add` + `connection modify`（`802-11-wireless.hidden yes`、
+`802-11-wireless.band bg`、`connection.autoconnect yes`、`connection.autoconnect-retries 0`）+ `-w 25 connection up`。
+`hidden yes` 对广播 AP 无损（真机实测：同形态 profile **5 秒内**连上可见 AP，`freq 2422`），对隐藏 AP 是唯一出路；
+`band bg` 把 2.4 GHz 钉死（MT7663S 连 5 GHz 会「关联成功但数据面不通」，~100 s 后固件不再应答扫描）；
+`autoconnect-retries 0` 是 nmcli 的「无限重试」，让「AP 以后才出现」这件事成立；`-w 25` 是有界的——SSID 不在场时
+nmcli 会等它自己 90 s 的默认值，而 `perform_wifi_switch` 后面只有 30 s 的 DHCP 预算。
+
+顺带把一条既有守卫的语义钉紧：`test_the_server_never_asks_nm_for_a_secret` 原先按字面量禁掉整个
+`wireless-security.psk`，于是**一个合法的写入**撞红了它。现在禁的是**读**的四种形状（`--show-secrets`、
+`-g` 查 psk、`connection export`、直接读 NM 的 keyfile 目录），并把「密码只在 join 里写一次」做成断言。
+
+测试 2327 → **2336**（`test_net_wifi.ConnectTests` 4 → 13：不碰扫描、先删后建、hidden/band/autoconnect/retries
+四个字段、密码只出现一次、开放网络不写安全、`add`/`modify` 失败不下到设备、`up` 有界、失败带原因、默认接口；
+`test_box_ops_wifi_switch` 的 17 处桩键由 `device wifi connect` 改为 `connection up NewNet`，语义不变）。
+**真机验证**（W103D，eMMC 固化后）：同形态 profile 冷启动 5 秒自连可见 AP；客户 AP（扫不到）的 `con up`
+报错落在「SSID 找不到」而不是「属性无效」——即 profile 合法、只缺那个 AP。
+
+**还有下半段（同日第二次现场）**：面板能把「扫不到的 AP」存下来了，却**立刻把它禁用**——
+`box_ops._roll_back()` 在切换失败时无条件写 `connection.autoconnect no`（旧 Hotspot 的教训：失败的网络
+不该每次开机重试）。于是操作员看到的是「已保存 HG888（不自动连接）」：到了客户家里它永远不会连。
+现在按**失败类别**分开：「不在范围内」（超时 / 未发现 SSID）→ 保留 `autoconnect=yes`，并把提示改成
+「已保存，这个网络出现在范围内时自动连接」；「凭据被拒」（`Secrets were required`）→ 仍然禁用，因为重试
+一万次也不会成功。判断只有一处出处：`net_wifi.access_point_absent()`。面板也不再把这个结果染成红色：`/api/box/wifi/status` 多一个布尔 `saved`，页面据此用绿色显示「已保存…自动连接」，而不是一条失败红。测试 +7，2327 → **2343**。
+
+### 进不去之后还能救回来：面板改系统口令 + 预置救急 Wi-Fi
+
+两件都是"客户把盒子弄到一个进不去的状态"之后的退路。
+
+**系统口令可以在面板里改**（`/settings` →「系统账号口令」）：root 与 `mrrc` 两条 SSH/HDMI 口令，
+走 root helper 的新动词 `set-password`（允许表里只有这两个账号，自由用户名会让这个套接字变成"变成任何人"）。
+口令**只走 `chpasswd` 的 stdin**——不进 argv（`/proc/<pid>/cmdline` 全世界可读）、不进日志、不进状态字典。
+真机验证：面板改完立刻用新口令 SSH 登录成功，再改回去；短口令被 400 拦在前面；
+`journalctl -u mrrc-box-helper` 里只有 `set-password ok for 'root'`，没有口令本身。
+
+**预置一条救急 Wi-Fi**（`preflash.sh`，发货通道）：SSID `rescue` / 口令 `abcd1234`
+（`MRRC_PREFLASH_RESCUE_SSID` / `MRRC_PREFLASH_RESCUE_PSK` 可按批覆盖），
+`autoconnect=true`、`priority=-10`、`retries=0`、`hidden=true`、`band=bg`。
+**方向是盒子当客户端**——这块 MT7663S 做不了 AP（2026-10-11 真机：软件能开、信标发不出去，
+手机与 Mac 都扫不到，`tx_packets` 60 秒 +2），所以救急只能是"客户用手机开一个叫 `rescue` 的热点，
+盒子自己连上去"。优先级 -10 保证客户家里的网在的时候它绝不抢。
+
+`--wifi-only` 是给单测**真跑**用的入口（配 `MRRC_PREFLASH_WIFI_DIR` 指到临时目录）：keyfile 内容、
+0600 权限、口令长度与换行的拒绝，都是真跑一次脚本验出来的，不是在源码上 grep。
 
 ## [v1.28.1] — 2026-10-17 — Claude Hub 云证书不再被孤儿化；FT8 的 DSP worker 不再自己杀掉自己
 

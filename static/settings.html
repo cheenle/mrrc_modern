@@ -53,6 +53,11 @@ button.ghost{background:transparent;color:var(--amber);border:1px solid var(--am
 .msg{font-size:13px;margin-top:10px;min-height:18px}
 .msg.bad{color:var(--bad)}
 .msg.good{color:var(--good)}
+.saved{list-style:none;margin:10px 0 0;padding:0;border-top:1px solid var(--line)}
+.saved li.saved-row{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.saved .saved-name{flex:1 1 40%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.saved button{width:auto;margin:0;padding:8px 10px;font-size:13px}
+.saved button.on{color:var(--good);border-color:var(--good)}
 .rows{list-style:none;margin:10px 0 0;padding:0;border-top:1px solid var(--line)}
 .rows li{border-bottom:1px solid var(--line)}
 .rows button{
@@ -172,9 +177,12 @@ select{
       <button id="psk-toggle" type="button" class="ghost">显示</button>
     </div>
     <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
+    <button id="save-btn" type="button" class="ghost">仅保存（不切换）</button>
     <p class="note">如果现在正是通过 Wi-Fi 访问这台盒子，<b>本页会断开</b>。
       稍后用 <code id="warn-mdns"></code> 重新打开本页看结果。</p>
 
+    <label>已保存的网络</label>
+    <ul class="saved" id="saved-list"></ul>
     <button id="scan-btn" type="button" class="ghost">扫描附近的 Wi-Fi</button>
     <ul class="rows" id="net-list"></ul>
     <div id="wifi-msg" class="msg"></div>
@@ -224,6 +232,24 @@ select{
     <input id="pw2" type="password" autocomplete="new-password">
     <button id="pw-btn" type="button">保存口令</button>
     <div id="pw-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>系统账号口令 <span class="note">（SSH / HDMI 登录用）</span></h2>
+    <label for="sysuser">账号</label>
+    <select id="sysuser">
+      <option value="root">root（最高权限）</option>
+      <option value="mrrc">mrrc（服务账号）</option>
+    </select>
+    <label for="syspass">新口令</label>
+    <input id="syspass" type="password" autocomplete="new-password"
+           placeholder="至少 8 位">
+    <label for="syspass2">再输入一次</label>
+    <input id="syspass2" type="password" autocomplete="new-password">
+    <button id="syspass-btn" type="button">改这个账号的口令</button>
+    <p class="note">上一节是<b>网页</b>口令；这里是 SSH 或 HDMI 控制台用的系统账号，
+      改完立刻生效，页面上不会回显。</p>
+    <div id="syspass-msg" class="msg"></div>
   </section>
 
   <section class="card panel">
@@ -305,12 +331,75 @@ select{
     } else {
       kv(grid, '当前', net.wifi.ssid + '  ' + Box.signalText(net.wifi.signal));
     }
+    renderSaved(net);
+  }
+
+  // 已保存的 Wi-Fi：改密码（填回上面的表单）、忘记、开/关自动连接。
+  // 全部按 DOM 节点构造 —— 这个页面禁止把 HTML 拼成字符串（守卫测试盯着）。
+  function renderSaved(net) {
+    var list = document.querySelector('#saved-list');
+    list.replaceChildren();
     var saved = net.connections.filter(function (c) {
       return c.type === '802-11-wireless' || c.type === 'wifi';
     });
+    if (!saved.length) {
+      var empty = document.createElement('li');
+      empty.className = 'note';
+      empty.textContent = '还没有保存的 Wi-Fi。可以扫描后点选，也可以直接填名称保存'
+        + '（客户家的网络就手输）。';
+      list.appendChild(empty);
+      return;
+    }
     saved.forEach(function (c) {
-      kv(grid, '已保存', c.name + (c.autoconnect ? '（开机自动连接）' : '（不自动连接）'));
+      var row = document.createElement('li');
+      row.className = 'saved-row';
+
+      var name = document.createElement('span');
+      name.className = 'saved-name';
+      name.title = c.name;
+      name.textContent = c.name;
+      row.appendChild(name);
+
+      var auto = document.createElement('button');
+      auto.type = 'button';
+      auto.className = 'ghost' + (c.autoconnect ? ' on' : '');
+      auto.textContent = c.autoconnect ? '自动连接：开' : '自动连接：关';
+      auto.addEventListener('click', function () {
+        postWifi('/api/box/wifi/autoconnect',
+                 { ssid: c.name, enabled: !c.autoconnect },
+                 (c.autoconnect ? '已关掉「' : '已打开「') + c.name + '」的自动连接');
+      });
+      row.appendChild(auto);
+
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'ghost';
+      edit.textContent = '改密码';
+      edit.addEventListener('click', function () {
+        document.querySelector('#ssid-input').value = c.name;
+        document.querySelector('#psk').value = '';
+        document.querySelector('#psk').focus();
+        Box.message('#wifi-msg', '改好密码后点「仅保存（不切换）」', '');
+      });
+      row.appendChild(edit);
+
+      var forget = document.createElement('button');
+      forget.type = 'button';
+      forget.className = 'ghost';
+      forget.textContent = '忘记';
+      forget.addEventListener('click', function () {
+        postWifi('/api/box/wifi/forget', { ssid: c.name }, '已忘记「' + c.name + '」');
+      });
+      row.appendChild(forget);
+
+      list.appendChild(row);
     });
+  }
+
+  function postWifi(path, body, okText) {
+    Box.api(path, { method: 'POST', body: body })
+      .then(function () { Box.message('#wifi-msg', okText, 'good'); reload(); })
+      .catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
   }
 
   function renderLink(net) {
@@ -569,6 +658,24 @@ select{
       .catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
   });
 
+  // 只写 profile、不切换：客户家的 AP 此刻不在范围内时，这是唯一正确的动作。
+  Box.on('#save-btn', 'click', function () {
+    var ssid = (document.querySelector('#ssid-input').value || '').trim();
+    if (!ssid) {
+      Box.message('#wifi-msg', '请先填 Wi-Fi 名称（或点一次扫描，从结果里选一个）', 'bad');
+      return;
+    }
+    Box.api('/api/box/wifi/save', {
+      method: 'POST',
+      body: { ssid: ssid, password: document.querySelector('#psk').value }
+    }).then(function () {
+      Box.message('#wifi-msg',
+        '已保存「' + ssid + '」，它出现在范围内时会自动连接', 'good');
+      document.querySelector('#psk').value = '';
+      reload();
+    }).catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
+  });
+
   function poll() {
     Box.api('/api/box/wifi/status').then(function (status) {
       if (status.phase === 'switching') {
@@ -579,7 +686,8 @@ select{
         Box.message('#wifi-msg', '已连上 ' + status.ssid +
           '，地址 ' + status.address + '。', 'good');
       } else if (status.phase === 'failed') {
-        Box.message('#wifi-msg', status.reason, 'bad');
+        // `saved` 为真：AP 不在范围内，配置已经存下并保持启用——那不是失败。
+        Box.message('#wifi-msg', status.reason, status.saved ? 'good' : 'bad');
       }
       reload();
     }).catch(function () { setTimeout(poll, 3000); });
@@ -623,6 +731,28 @@ select{
               confirm: document.querySelector('#pw2').value }
     }).then(function () { Box.message('#pw-msg', '口令已保存。', 'good'); })
       .catch(function (error) { Box.message('#pw-msg', error.message, 'bad'); });
+  });
+
+  Box.on('#syspass-btn', 'click', function () {
+    var user = document.querySelector('#sysuser').value;
+    var pass = document.querySelector('#syspass').value;
+    if (pass !== document.querySelector('#syspass2').value) {
+      Box.message('#syspass-msg', '两次输入不一致', 'bad');
+      return;
+    }
+    if (pass.length < 8) {
+      Box.message('#syspass-msg', '口令至少 8 位', 'bad');
+      return;
+    }
+    Box.api('/api/box/system-password', {
+      method: 'POST', body: { user: user, password: pass }
+    }).then(function () {
+      Box.message('#syspass-msg', '已改 ' + user + ' 的口令', 'good');
+      document.querySelector('#syspass').value = '';
+      document.querySelector('#syspass2').value = '';
+    }).catch(function (error) {
+      Box.message('#syspass-msg', error.message, 'bad');
+    });
   });
 
   // The timezone list is the browser's own: no endpoint needed, and it is the

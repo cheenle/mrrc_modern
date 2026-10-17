@@ -208,11 +208,35 @@ class WifiSecretNeverComesBackTests(unittest.TestCase):
                 self.assertNotIn("wireless-security.psk", text)
 
     def test_the_server_never_asks_nm_for_a_secret(self):
+        """NFR-068 / AD-021：Wi-Fi 密码只被**写入** profile，绝不读回来。
+
+        写入只有一处：`net_wifi.connect_wifi` 的 join argv（`connection
+        modify … psk`）。读回来的形状有四种，四种都在这里被拒：
+        `--show-secrets`、`-g`/`--get-values` 查 psk 字段、`connection export`、
+        以及直接读 NetworkManager 的 keyfile 目录。
+
+        2026-10-17 这条守卫在原位红过一次：join 从 `device wifi connect …
+        password` 改成「写 profile 再 up」（AP 不在扫描列表里也得能配），
+        于是一个**合法的写入**撞上了原先按字面量切的断言。按形状钉住
+        “读”，比按字面量封死整个 key 更接近要保护的东西。
+        """
         for name in self.MODULES:
             text = (ROOT / name).read_text(encoding="utf-8")
             with self.subTest(module=name):
                 self.assertNotIn("show-secrets", text)
-                self.assertNotIn("wireless-security.psk", text)
+                self.assertNotIn("connection export", text)
+                self.assertNotIn("system-connections", text)
+                self.assertIsNone(
+                    re.search(r"(?:-g|--get-values)[^\n]*psk", text,
+                              re.IGNORECASE),
+                    f"{name} queries nmcli for the psk")
+
+        # 密码只在 join 里写一次，且必须与它所属的安全类型同处一行上下文。
+        source = (ROOT / "net_wifi.py").read_text(encoding="utf-8")
+        mentions = [line.strip() for line in source.splitlines()
+                    if "wireless-security.psk" in line]
+        self.assertEqual(len(mentions), 1, mentions)
+        self.assertIn('"wpa-psk"', source)
 
 
 class CloudPanelTests(unittest.TestCase):

@@ -148,3 +148,84 @@ class BuildWiringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RescueWifiTests(unittest.TestCase):
+    """救急 Wi-Fi：什么网都不通时，客户用手机开个同名热点，盒子自己连上去。
+
+    方向是**客户端**而不是 AP：这块 MT7663S 软件能开 AP、信标发不出去
+    （2026-10-11 真机：手机与 Mac 都扫不到，tx_packets 60 秒 +2），所以救急只能
+    反过来——盒子连手机。`--wifi-only` 存在的理由就是让这些断言真跑一次脚本。
+    """
+
+    def run_wifi(self, *, extra=None, flag="1"):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "MRRC_PREFLASH_WIFI_DIR": tmp, **(extra or {})}
+            env.pop("MRRC_PREFLASH", None)
+            if flag is not None:
+                env["MRRC_PREFLASH"] = flag
+            proc = subprocess.run(["bash", str(SCRIPT), "--wifi-only"],
+                                  capture_output=True, text=True, env=env)
+            path = Path(tmp) / "mrrc-rescue.nmconnection"
+            text = path.read_text(encoding="utf-8") if path.exists() else ""
+            # 目录在 with 里就被删了，所以权限位要在这里读出来带回去。
+            mode = (path.stat().st_mode & 0o777) if path.exists() else 0
+            return proc, text, mode
+
+    def test_it_writes_a_client_profile_not_an_access_point(self):
+        proc, text, _ = self.run_wifi()
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("mode=infrastructure", text)
+        self.assertNotIn("mode=ap", text)
+
+    def test_the_default_name_and_password_are_the_documented_ones(self):
+        _, text, _ = self.run_wifi()
+        self.assertIn("ssid=rescue", text)
+        self.assertIn("psk=abcd1234", text)
+
+    def test_it_is_armed_but_never_outranks_the_customers_own_network(self):
+        """优先级 -10：家里网在的时候救急 profile 不抢（NM 取可用的最高优先级）。"""
+        _, text, _ = self.run_wifi()
+        self.assertIn("autoconnect=true", text)
+        self.assertIn("autoconnect-priority=-10", text)
+        self.assertIn("autoconnect-retries=0", text)
+
+    def test_it_is_2_4ghz_and_hidden(self):
+        """手机热点几乎都在 2.4 GHz；hidden 让广播的和不广播的都认。"""
+        _, text, _ = self.run_wifi()
+        self.assertIn("band=bg", text)
+        self.assertIn("hidden=true", text)
+
+    def test_the_keyfile_is_not_world_readable(self):
+        _, _, mode = self.run_wifi()
+        self.assertEqual(mode, 0o600)
+
+    def test_a_batch_can_change_the_name_and_the_password(self):
+        _, text, _ = self.run_wifi(extra={
+            "MRRC_PREFLASH_RESCUE_SSID": "clinic",
+            "MRRC_PREFLASH_RESCUE_PSK": "longerpassword"})
+        self.assertIn("ssid=clinic", text)
+        self.assertIn("psk=longerpassword", text)
+
+    def test_a_password_that_wpa2_cannot_take_is_refused(self):
+        proc, text, _ = self.run_wifi(extra={"MRRC_PREFLASH_RESCUE_PSK": "1234567"})
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(text, "")
+
+    def test_a_newline_in_the_name_is_refused(self):
+        proc, _, _ = self.run_wifi(extra={"MRRC_PREFLASH_RESCUE_SSID": "a\nb"})
+        self.assertNotEqual(proc.returncode, 0)
+
+    def test_the_flag_still_gates_it(self):
+        proc, text, _ = self.run_wifi(flag=None)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(text, "")
+
+    def test_env_only_does_not_write_a_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {**os.environ, "MRRC_PREFLASH": "1",
+                   "MRRC_PREFLASH_WIFI_DIR": tmp}
+            subprocess.run(["bash", str(SCRIPT), "--env-only", str(Path(tmp) / "x.env")],
+                           capture_output=True, text=True, env=env)
+            self.assertFalse((Path(tmp) / "mrrc-rescue.nmconnection").exists())
+

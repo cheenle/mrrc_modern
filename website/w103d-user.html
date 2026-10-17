@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="拿到卖家刷好的 W103D 之后：出厂口令、Wi-Fi、接电台、五分钟验收与排障">
+    <title>发货版 W103D 用户指南 — MRRC Modern</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/octen.css?v=5">
+    <link rel="stylesheet" href="css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .w103d-wrap { max-width: 880px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+        .w103d-wrap h2 {
+            margin: 2.75rem 0 1rem; padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #2a2a2a);
+            color: var(--text-primary, #eee); font-size: 1.4rem;
+        }
+        .w103d-wrap h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+        .w103d-wrap h3 { margin: 2rem 0 0.75rem; color: var(--text-primary, #eee); font-size: 1.1rem; }
+        .w103d-wrap p, .w103d-wrap li { color: var(--text-secondary, #b8b8b8); line-height: 1.85; }
+        .w103d-wrap ul, .w103d-wrap ol { padding-left: 1.5rem; }
+        .w103d-wrap li { margin: 0.35rem 0; }
+        .w103d-wrap strong { color: var(--text-primary, #eee); }
+        .w103d-wrap code {
+            background: var(--bg-card, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.87em;
+        }
+        .w103d-wrap pre {
+            background: var(--bg-card, #141414); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 10px; padding: 1rem 1.15rem; overflow-x: auto; margin: 1rem 0;
+        }
+        .w103d-wrap pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.7; }
+        .w103d-wrap .table-scroll { overflow-x: auto; margin: 1.15rem 0; }
+        .w103d-wrap table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+        .w103d-wrap th, .w103d-wrap td {
+            border: 1px solid var(--border, #2a2a2a); padding: 0.55rem 0.75rem; text-align: left;
+            color: var(--text-secondary, #b8b8b8);
+        }
+        .w103d-wrap th { background: var(--bg-card, #1a1a1a); color: var(--text-primary, #eee); }
+        .w103d-wrap blockquote {
+            margin: 1.15rem 0; padding: 0.85rem 1.15rem; border-left: 3px solid var(--accent, #f0a020);
+            background: var(--bg-card, #171717); border-radius: 0 8px 8px 0;
+        }
+        .w103d-wrap blockquote p { margin: 0; }
+        .w103d-wrap input[type=checkbox] { margin-right: 0.4rem; }
+    </style>
+</head>
+<body data-site="mrrc_modern">
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="index.html#features">Features</a></li>
+            <li><a href="index.html#download">Download</a></li>
+            <li><a href="guide.html">操作指南</a></li>
+            <li><a href="sdd.html">SDD</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i></a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="zh/w103d.html" class="lang-btn">中文</a>
+        </div>
+    </div>
+</nav>
+
+<header class="guide-hero">
+    <div class="guide-hero-inner">
+        <span class="badge"><i class="fas fa-box-open"></i> W103D · 用户指南</span>
+        <h1>拿到盒子之后：发货版 W103D 用户指南</h1>
+        <p>系统已经写进 eMMC，口令、时区、Wi-Fi 卖家都设好了：插电、用浏览器登录就能干活。这页讲清楚出厂设了什么、电台怎么接、验收看哪几项，以及出了问题先自己查什么。</p>
+        <div class="actions"><a class="btn btn-primary" href="w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a><a class="btn" href="index.html#download"><i class="fas fa-download"></i> 下载页</a></div>
+    </div>
+</header>
+
+<main class="w103d-wrap">
+<figure style="margin: 0 0 2.5rem">
+    <a href="images/w103d-spec-sheet.png" target="_blank" rel="noopener">
+        <img src="images/w103d-spec-sheet.png"
+             alt="ZTE W103D 参数、性能与对比树莓派"
+             style="width: 100%; height: auto; display: block; border: 1px solid var(--border, #2a2a2a); border-radius: 12px">
+    </a>
+    <figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">
+        参数、性能与对比树莓派 · 点图看原尺寸（1240 × 1754）
+    </figcaption>
+</figure>
+<h1 id="拿到盒子之后-发货版盒子用户指南-w102d-w105d">拿到盒子之后：发货版盒子用户指南（W102D / W105D）</h1>
+<p>这台盒子的系统已经写进 eMMC，口令、时区、Wi-Fi 卖家都替你设好了。插电、用浏览器登录，就能开始干活——不需要 U 盘，不需要显示器，也不需要键盘。</p>
+<blockquote>想自己从镜像刷，看 <a href="w103d.html"><code>W103D_GUIDE.md</code></a>。那是另一条路线，从这里上手不必读。</blockquote>
+<p>---</p>
+<h2 id="1-你拿到的是什么">1. 你拿到的是什么</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>项</th><th>说明</th></tr></thead><tbody>
+<tr><td>主机</td><td>中兴云电脑 <strong>W102D / W105D</strong>（Amlogic S905L3A，4×Cortex-A53，2 GB 内存，<strong>eMMC 8 GB</strong>）</td></tr>
+<tr><td>系统</td><td><strong>MRRC Modern 1.28.1</strong>，已固化进 eMMC</td></tr>
+<tr><td>网口</td><td><strong>机身自带 RJ45，100M 有线</strong>（箱里<strong>不带</strong> USB 网卡——那是卖家刷机用的工具，不是配件）</td></tr>
+<tr><td>无线</td><td>MT7663S，<strong>只支持 2.4 GHz</strong>（原因见 §10）</td></tr>
+<tr><td>它能做的事</td><td>把电台的频率、模式、滤波、功率，收发音频和频谱瀑布搬到浏览器和手机上；局域网里直接用，也可以申请一个公网入口从外面用</td></tr>
+</tbody></table></div>
+<p>盒子里<strong>没有</strong>电台、天线、馈线和网线，也<strong>不带 USB 网卡</strong>；有这些需要的话自己备。机身自带 RJ45，一根普通网线就能连。随附的电源适配器直接用就行。</p>
+<blockquote><strong>关于型号</strong>：W102D、W103D、W105D 是同一个家族（同一颗 S905L3A、同一套板级补丁）， 固件通用，本机烧的是按 <strong>W103D 板型</strong>（<code>MODEL_ID=307</code> / <code>meson-g12a-w103d.dtb</code>）编的那一套。 所以你会在文档、日志、镜像文件名里反复看到 "W103D" —— 指固件家族，不是说外壳上那个型号。</blockquote>
+<p>---</p>
+<h2 id="2-出厂已经设好的东西">2. 出厂已经设好的东西</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>项</th><th>出厂值</th><th>怎么改</th></tr></thead><tbody>
+<tr><td>SSH 用户 <code>root</code></td><td><code>abcd1234</code></td><td>设置页「系统账号口令」，或 SSH/HDMI 里 <code>passwd root</code></td></tr>
+<tr><td>系统用户 <code>mrrc</code></td><td><code>abcd!1234</code></td><td>设置页「系统账号口令」，或 <code>passwd mrrc</code></td></tr>
+<tr><td><strong>网页登录口令</strong></td><td><code>abcd!1234</code></td><td>界面 ☰ →「设置」→「登录口令」</td></tr>
+<tr><td>时区 / 语言</td><td><code>Asia/Shanghai</code> / <code>zh_CN.UTF-8</code></td><td>设置页「盒子身份」</td></tr>
+<tr><td>Wi-Fi</td><td><strong>按你提供的名称和密码预置好了</strong>（2.4 GHz；隐藏网络也认）</td><td>设置页「Wi-Fi」</td></tr>
+<tr><td>天调 ATR-1000</td><td>存了一条它的热点配置，但<strong>不会自动连</strong>（一块无线只能顾一头）</td><td>—</td></tr>
+<tr><td>电台型号 / 串口</td><td><strong>没有预置</strong>，插上电台再选一次</td><td>界面 ☰ →「连接设置」</td></tr>
+<tr><td>救急 Wi-Fi</td><td>预置了 <code>rescue</code> / <code>abcd1234</code>（见 §9.10）</td><td>设置页「Wi-Fi」里可以直接改</td></tr>
+<tr><td>主机名</td><td><code>MRRC-Modern</code></td><td>设置页「盒子身份」</td></tr>
+<tr><td>HTTPS 证书</td><td>自签，首启动时在这台机器上生成</td><td>不用改，浏览器会警告一次</td></tr>
+</tbody></table></div>
+<p>⚠️ <strong>三条固定口令是同一批盒子共用的公开值。</strong> 拿到其中任意一台，就知道整批的口令。登录之后第一件事就是把三条都换掉——设置页里就能改：网页那条在「登录口令」，root 与 mrrc 在「系统账号口令」。</p>
+<p>---</p>
+<h2 id="3-第一次通电">3. 第一次通电</h2>
+<p>- 路由器后台的 DHCP 客户端列表里找主机名 <code>MRRC-Modern</code>； - 接上 HDMI 和键盘，登录后敲 <code>ip -4 addr</code>； - 在同一个路由器的电脑上试 <code>https://MRRC-Modern:8888</code>（有的路由器不做这个名字解析，那就用前两个办法）。</p>
+<ol>
+<li><strong>接电。</strong> Wi-Fi 已经代配好了，网线可以不插；想更稳就插上——有线优先，音频延迟也更低。</li>
+<li><strong>等一分钟。</strong> 盒子自己连 Wi-Fi、起服务，全程不需要人管。</li>
+<li><strong>找到它的地址。</strong> 三个办法任选一个：</li>
+</ol>
+<p>---</p>
+<h2 id="4-打开网页-改口令">4. 打开网页，改口令</h2>
+<p>浏览器访问 <code>https://&lt;盒子地址&gt;:8888</code>。</p>
+<p><strong>第一次会弹「证书不安全」。</strong> 这是自签证书的正常现象：盒子的证书是它自己签的，没有交给任何一家 CA。点「高级」→「继续前往」，以后就记住了。用 <code>abcd!1234</code> 登录，然后进 ☰ →「设置」→「登录口令」把它改掉。</p>
+<p>---</p>
+<h2 id="5-管-wi-fi">5. 管 Wi-Fi</h2>
+<p>设置页的 Wi-Fi 区不只是一次性的「连一下」，它是一张网络清单：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>想做什么</th><th>怎么做</th></tr></thead><tbody>
+<tr><td><strong>提前存一个网</strong>（现在还连不上也行）</td><td>填 SSID 与密码 → 点「<strong>仅保存（不切换）</strong>」。它会被存下来并保持「自动连接」，等这个网络出现时自己连上去</td></tr>
+<tr><td><strong>换某个网的密码</strong></td><td>已保存列表里点「改密码」→ 表单会带入 SSID → 输新密码 → 再点「仅保存（不切换）」</td></tr>
+<tr><td><strong>暂时不用某个网</strong></td><td>点该行「自动连接：开/关」</td></tr>
+<tr><td><strong>删掉一个网</strong></td><td>点该行「忘记」</td></tr>
+</tbody></table></div>
+<p>几点说明：</p>
+<p>这时页面报的是绿字「已保存」，不是失败；</p>
+<ul>
+<li>「连接并切换」会<strong>立刻</strong>切过去。这个网不在范围内时，二十五秒后回落，但<strong>配置照样存下来了</strong>——</li>
+<li>盒子只支持 <strong>2.4 GHz</strong>，5 GHz 的网存了也连不上；</li>
+<li>每个已保存的网都带着明文密码，所以别在别人家的盒子上留自己的网——不用的就「忘记」；</li>
+<li>「自动连接」关掉只是不主动连，手动点「连接并切换」仍然能用。</li>
+</ul>
+<h3 id="5-1-顺手给盒子起个名字">5.1 顺手给盒子起个名字</h3>
+<p>设置页 →「盒子身份」→ 改名字。名字决定两件事：局域网里的 mDNS 地址（<code>&lt;名字&gt;.local</code>），以及以后申请公网入口时的实例名。</p>
+<p><strong>两台同名的盒子放在同一个网络里会互相打架</strong>，所以每台都该有自己的名字，一般就用呼号。</p>
+<h2 id="6-接电台">6. 接电台</h2>
+<p>一根 USB 线就够：CAT 控制和收发音频都走它。</p>
+<div class="table-scroll"><table>
+<thead><tr><th>电台</th><th>怎么插</th></tr></thead><tbody>
+<tr><td>Yaesu FT-710</td><td>机身<strong>上方那个 <code>Enhanced</code> 口</strong>。插 <code>Standard</code> 口可能只有控制、没有真频谱</td></tr>
+<tr><td>Icom IC-7300 / IC-7300MK2</td><td>任意 USB 口（CI-V 与声卡同一条线）</td></tr>
+<tr><td>其它型号</td><td>见 §10.4，其中 8 个是实验性机型，默认只收不发</td></tr>
+</tbody></table></div>
+<p>插好后在界面 ☰ →「连接设置」里选<strong>电台型号</strong>和<strong>串口</strong>，保存。服务会自己重启一次。</p>
+<blockquote>这一步是<strong>真的往串口发包问电台</strong>，所以电台要开着、USB 要连着，否则问不出结果。</blockquote>
+<p>---</p>
+<h2 id="7-五分钟验收">7. 五分钟验收</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>看什么</th><th>应该是什么样</th></tr></thead><tbody>
+<tr><td>频率</td><td>界面数字跟着电台面板走；拨一下面板，界面一秒内跟上</td></tr>
+<tr><td>频谱</td><td>瀑布有噪声纹理，不是一条光滑的假曲线（假曲线 = 没接上真频谱，见 §10.5）</td></tr>
+<tr><td>S 表</td><td>有信号时指针会动</td></tr>
+<tr><td>声音</td><td>点开 RX 音频，能听到电台底噪</td></tr>
+<tr><td>发射</td><td><strong>先短按一下 PTT</strong>（三秒以内），确认功率表有指示，再正常用</td></tr>
+</tbody></table></div>
+<p>---</p>
+<h2 id="8-手机上用">8. 手机上用</h2>
+<p>手机连同一个路由器（或同一个 Wi-Fi），浏览器打开同一个地址即可。界面是按手机做的，横屏更舒服。 iPhone 和 Android 都能「添加到主屏幕」，用起来和 App 差不多。盒子功耗低、不发热，可以常年不关。要重启就用设置页的「重启」，别直接拔电。</p>
+<p>---</p>
+<h2 id="9-出问题怎么办">9. 出问题怎么办</h2>
+<p><strong>先换一个浏览器，或者换一台设备再试。</strong> 一半的「打不开」是浏览器缓存或代理造成的，不在盒子上。</p>
+<div class="table-scroll"><table>
+<thead><tr><th>现象</th><th>最可能的原因</th><th>怎么办</th></tr></thead><tbody>
+<tr><td>找不到盒子的地址</td><td>路由器换了网段，或 Wi-Fi 没连上</td><td>插网线（最省事）；或 §9.10 的手机热点；或接 HDMI 敲 <code>ip -4 addr</code></td></tr>
+<tr><td>Wi-Fi 连不上</td><td>你家 Wi-Fi 只有 5 GHz、密码改过、名字变了</td><td>插网线进设置页 →「Wi-Fi」重填（<strong>只支持 2.4 GHz</strong>）；没有网线就用 §9.10 的手机热点</td></tr>
+<tr><td>网页打不开，但能 ping 通</td><td>用了 <code>http://</code></td><td>必须写 <code>https://…:8888</code></td></tr>
+<tr><td>证书警告</td><td>自签证书</td><td>「高级」→「继续前往」，一次即可</td></tr>
+<tr><td>登录说口令错</td><td>口令被改过</td><td>SSH 进去敲 <code>mrrc-show-password</code>，看当前网页口令</td></tr>
+<tr><td>电台没反应</td><td>线、电源、串口</td><td>见 §10.4</td></tr>
+<tr><td>有频谱，却是光滑的假曲线</td><td>FT-710 插错口</td><td>换到 <code>Enhanced</code> 口，见 §10.5</td></tr>
+<tr><td>没有声音</td><td>音量、声卡，或浏览器拦了自动播放</td><td>见 §10.6</td></tr>
+<tr><td>PTT 按下去没反应</td><td>机型在 8 个实验性之列</td><td>见 §10.7</td></tr>
+<tr><td>时间不对</td><td>没联网，NTP 没同步</td><td>联网后一分钟内自愈，<code>timedatectl</code> 看 <code>synchronized: yes</code></td></tr>
+<tr><td>忘了 root 口令</td><td>—</td><td>只能重刷（找卖家），或者接 HDMI 进单用户模式改——所以第一件事就改掉并记住</td></tr>
+</tbody></table></div>
+<h3 id="9-4-电台没反应">9.4 电台没反应</h3>
+<p>SSH 进去看三样东西在不在（缺一样就是缺一样的功能）：</p>
+<pre><code class="lang-bash">ls /dev/ttyUSB* /dev/ttyACM*   # 控制串口
+arecord -l                     # 电台的 USB 声卡（RX）
+aplay -l                       # 播放设备（TX）</code></pre>
+<p>三样都没有：换一根 USB 线、确认电台是开着的、换一个 USB 口。只有串口没有声卡：多半是插错了口（FT-710 用 <code>Enhanced</code>），或者电台菜单里 USB 音频被关掉了。选完机型后如果串口还是空，<code>mrrc-radio show</code> 看一眼当前生效的配置，<code>mrrc-radio use &lt;型号&gt;</code> 可以重选。</p>
+<h3 id="9-5-频谱是一条光滑的假曲线">9.5 频谱是一条光滑的假曲线</h3>
+<p>那说明频谱走的是 S 表合成的回退路径，不是真数据。FT-710 最常见的原因是插在 <code>Standard</code> 口—— 换到上方的 <code>Enhanced</code> 口，它同时承载 CAT 和频谱。Icom 机型则由 CI-V 的 <code>0x27</code> 送频谱，不需要额外的线；如果仍是假曲线，看一眼设置页的「盒子系统」有没有报错。</p>
+<h3 id="9-6-没有声音">9.6 没有声音</h3>
+<p><code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code>，把它们清空让程序自己找。</p>
+<ol>
+<li>浏览器先拦住自动播放是常态：先在页面上点一下，再开音频；</li>
+<li>手机的话，检查是不是开了静音开关；</li>
+<li>盒子侧确认声卡选对了——<code>arecord -l</code> 里应该能看到电台的 USB 声卡；</li>
+<li>实在不行在 SSH 里看 <code>/opt/mrrc_modern/env/mrrc.env</code> 的两行设备名：</li>
+</ol>
+<h3 id="9-7-ptt-按下去没反应">9.7 PTT 按下去没反应</h3>
+<p>MRRC 支持十一个型号，但<strong>只有三个是逐条真机验证过的</strong>：<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>。其余八个（<code>ic705</code> <code>ic7610</code> <code>ic7760</code> <code>ftdx10</code> <code>ftdx101d</code> <code>ftdx101mp</code> <code>ftx1</code> <code>ft891</code>）的指令来自 设备手册和 Hamlib，没有实测，<strong>默认只收不发</strong>。要在这八个上发射，得显式开门：</p>
+<pre><code class="lang-bash">vi /opt/mrrc_modern/env/mrrc.env     # 加一行 MRRC_ALLOW_UNVERIFIED_TX=1
+systemctl restart mrrc-modern</code></pre>
+<p>在没验证过的语义上按键，对电台和天线都不算友好，所以这条默认是关的。</p>
+<h3 id="9-8-把问题交出去">9.8 把问题交出去</h3>
+<p>界面右下角（☰ 菜单里）有一个 <strong>「🐞 遇到问题」</strong> 页面：填一句现象，点「生成诊断包」，它会自动收集日志、配置（口令已打码）和版本号，然后上传给维护者。不想上传也行，可以只保存到本地再自己发出去。</p>
+<h3 id="9-9-回到出厂状态">9.9 回到出厂状态</h3>
+<p>两件事别混：</p>
+<ul>
+<li><strong>只想清掉配错的网络/口令</strong>：在设置页里改回去就行，不用重刷。</li>
+<li><strong>想要一台干净的盒子</strong>：重刷镜像（找卖家，或者按 <code>W103D_GUIDE.md</code> 自己刷）。注意重刷会把盒子上的录音和配置一起清掉，先备份。</li>
+</ul>
+<p>---</p>
+<h3 id="9-10-盒子连不上任何网络了">9.10 盒子连不上任何网络了</h3>
+<p>这是唯一需要"在外面救"的情形。盒子出厂时预置了一条<strong>救急 Wi-Fi</strong>：</p>
+<div class="table-scroll"><table>
+<thead><tr><th></th><th></th></tr></thead><tbody>
+<tr><td>热点名（SSID）</td><td><code>rescue</code></td></tr>
+<tr><td>密码</td><td><code>abcd1234</code></td></tr>
+</tbody></table></div>
+<p><strong>做法</strong>：用手机开一个<strong>个人热点</strong>，把热点名改成 <code>rescue</code>、密码设成 <code>abcd1234</code>，然后让盒子断电重开。几十秒内它会自己连上你的手机（这条 profile 的优先级是 -10，只在你<strong>别的网都不通</strong>时才用）。然后在手机上看热点里的已连设备，找到盒子的地址，用浏览器打开 <code>https://&lt;那个地址&gt;:8888</code>；忘了网页口令就 SSH（<code>root</code> / <code>mrrc</code>）进去跑 <code>mrrc-show-password</code>。</p>
+<blockquote>热点名和密码必须<strong>一字不差</strong>，错了就连不上。手机热点一般只发 2.4 GHz，正好对上。</blockquote>
+<h3 id="9-11-改-root-mrrc-的口令">9.11 改 root / mrrc 的口令</h3>
+<p>设置页 →「系统账号口令」，选账号、输两遍、保存即可（不用 SSH）。改完立刻生效。改了又忘、连 SSH 也进不去，就只能重刷或寄回。</p>
+<h3 id="9-12-用蓝牙遥控器操作电台">9.12 用蓝牙遥控器操作电台</h3>
+<p>盒子接上一支蓝牙遥控器（实测：中国移动的语音遥控器 <code>CMCC_Voice_Remote</code>）， 人站在盒子旁边就能调频、切模式、按住语音键发射，不用开手机或电脑。</p>
+<h3 id="配对-一次性">配对（一次性）</h3>
+<p><code>Paired: yes</code>、<code>Bonded: yes</code>。</p>
+<ol>
+<li><code>/settings</code> 打开蓝牙，或 SSH 进盒子；</li>
+<li>让遥控器进入配对模式（同时长按 <strong>OK + 返回</strong> 约 5 秒，指示灯快闪）；</li>
+<li>配好之后按任意键，遥控器就连上；<code>bluetoothctl info &lt;地址&gt;</code> 应显示</li>
+</ol>
+<p><strong>关键一步：链路必须加密才算配上。</strong> 曾经出现过「配对成功但按键全无反应」： 日志里每一次属性读都报 <code>unlikely error</code>，<code>btmon</code> 里 <code>LE Start Encryption</code> 后面跟着 <code>Encryption: Disabled</code> —— 明文链路上遥控器一个字都不给。修法是 <strong>删掉设备、把蓝牙控制器上下电、重新配一次</strong>，直到看到：</p>
+<pre><code>Encryption: Enabled with AES-CCM</code></pre>
+<p>这时内核会立刻创建 <code>CMCC_Voice_Remote Keyboard</code>，按键才开始上报。</p>
+<h3 id="按键">按键</h3>
+<div class="table-scroll"><table>
+<thead><tr><th>键</th><th>作用</th></tr></thead><tbody>
+<tr><td>语音（按住）</td><td>发射，松开即停</td></tr>
+<tr><td>▲ / ▼</td><td>频率 ± 当前步进</td></tr>
+<tr><td>◀ / ▶</td><td>步进档（100 Hz … 100 kHz）</td></tr>
+<tr><td>频道 + / −</td><td>波段上下</td></tr>
+<tr><td>数字 0–9 → 确定</td><td>直接输入频率（<strong>kHz</strong>，例如 <code>7 0 5 0</code> = 7.050 MHz、<code>1 4 0 7 0</code> = 14.070 MHz）</td></tr>
+<tr><td>设置</td><td>模式循环</td></tr>
+<tr><td>返回</td><td>取消半途的数字输入</td></tr>
+<tr><td>音量 + / −</td><td>音量</td></tr>
+<tr><td>电源</td><td>留给本地控制（不再关盒子）</td></tr>
+</tbody></table></div>
+<p><code>电视</code> 键不发蓝牙 —— 那类按键只发红外去控电视，盒子收不到。</p>
+<h3 id="看不到按键时">看不到按键时</h3>
+<p>按顺序查：<code>bluetoothctl info &lt;地址&gt;</code> 是否 <code>Paired: yes</code>；<code>journalctl -u bluetooth -n 40</code> 里有没有 <code>unlikely error</code>（有 ⇒ 回到配对那一节重配）； <code>systemctl status mrrc-localctl</code> 与 <code>journalctl -u mrrc-localctl</code> 是否在跑。 <code>power</code> 键如果仍然关机，说明服务层的 <code>HandlePowerKey=ignore</code> 没生效 （<code>grep HandlePowerKey /etc/systemd/logind.conf</code>）。</p>
+<h2 id="10-三条红线">10. 三条红线</h2>
+<p>的公网入口（☰ →「公网入口」），它是一条出站隧道，不开放任何入站端口。</p>
+<ol>
+<li><strong>只用 2.4 GHz。</strong> 这块无线网卡连 5 GHz 会「关联成功但数据不通」，一百秒后连扫描都失效，只能重启。路由器的双频合并（同一个名字）会踩这个坑，建议把 2.4 G 和 5 G 分开命名。</li>
+<li><strong>别把 8888 端口直接映射到公网。</strong> 那是一条明文暴露的控制入口。要在外面用，走 Cloud Hub</li>
+<li><strong>PTT 按下去是真发射。</strong> 天线或假负载接好再按；发射时长上限默认 120 秒，是保护不是限制。</li>
+</ol>
+<p>---</p>
+<h2 id="11-想再往前一步">11. 想再往前一步</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>想要</th><th>怎么做</th></tr></thead><tbody>
+<tr><td>在外面也能用</td><td>☰ →「公网入口」，填呼号申请，维护者批准后自动接通</td></tr>
+<tr><td>给朋友一个只能听的入口</td><td>SSH 里写 <code>MRRC_LISTEN_PASSWORD</code>，之后开 <code>/listen</code></td></tr>
+<tr><td>录一段通联</td><td>☰ →「录音」，服务端直接存 MP3</td></tr>
+<tr><td>接天调 ATR-1000</td><td>设置页「Wi-Fi」里连它自己的热点（连上之后盒子没有外网，是正常的）</td></tr>
+<tr><td>换电台型号</td><td>☰ →「连接设置」，或 SSH 里 <code>mrrc-radio use &lt;型号&gt;</code></td></tr>
+<tr><td>升级系统</td><td>SSH 里 <code>mrrc-update</code>（不重刷镜像），或找卖家要新镜像</td></tr>
+<tr><td>看系统状态</td><td>设置页「网络体检」「盒子系统」，或 SSH 里 <code>systemctl status mrrc-modern</code> —</td></tr>
+</tbody></table></div>
+</main>
+
+<footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">
+    <p>MRRC Modern — W103D 电台盒子指南 ·
+       <a href="index.html#download">下载页</a> ·
+       <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
+</footer>
+</body>
+</html>

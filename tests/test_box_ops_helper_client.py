@@ -265,3 +265,37 @@ class RealTransportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SystemPasswordTests(unittest.TestCase):
+    """面板改 root / mrrc 的 SSH 口令，走的是同一个 root helper。
+
+    两条硬要求：**秘密不进 argv**（helper 那边用 stdin 喂 chpasswd），
+    以及账号只能是发货镜像里那两个 —— 否则这个套接字就变成"变成任何人"。
+    """
+
+    def test_only_the_two_shipped_accounts_are_accepted(self):
+        self.assertEqual(box_ops.system_password_problem("root", "abcd1234"), "")
+        self.assertEqual(box_ops.system_password_problem("mrrc", "abcd!1234"), "")
+        self.assertNotEqual(box_ops.system_password_problem("rescue", "abcd1234"), "")
+        self.assertNotEqual(box_ops.system_password_problem("nobody", "abcd1234"), "")
+
+    def test_a_short_password_is_refused_before_any_root_process(self):
+        self.assertNotEqual(box_ops.system_password_problem("root", "1234567"), "")
+
+    def test_a_newline_is_refused(self):
+        self.assertNotEqual(box_ops.system_password_problem("root", "abcd1234\nx"), "")
+
+    def test_it_asks_the_helper_for_the_password_verb(self):
+        sender = answering({"ok": True, "user": "root"})
+        result = box_ops.set_system_password("root", "abcd1234", sender=sender)
+        self.assertTrue(result["ok"])
+        self.assertEqual(sender.calls[0]["verb"], "set-password")
+        self.assertEqual(sender.calls[0]["args"], ["root", "abcd1234"])
+
+    def test_an_invalid_request_never_reaches_the_helper(self):
+        sender = answering({"ok": True})
+        result = box_ops.set_system_password("nobody", "abcd1234", sender=sender)
+        self.assertFalse(result["ok"])
+        self.assertEqual(sender.calls, [])
+

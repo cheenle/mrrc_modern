@@ -222,3 +222,50 @@ class RebootTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SystemPasswordEndpointTests(unittest.TestCase):
+    """`POST /api/box/system-password`：改 root / mrrc 的 SSH 口令。
+
+    与网页口令那个端点分开：这些账号是 SSH/HDMI 用的，改错了人就进不了控制台，
+    所以账号走白名单、口令先做句子级校验，再进 root 进程。
+    """
+
+    def post(self, body, authed_=True):
+        request = FakeRequest(body=body)
+        patcher = authed() if authed_ else mock.patch.object(
+            server, "_verify_auth", return_value=False)
+        with patcher:
+            return run(server.api_box_system_password(request))
+
+    def test_it_needs_a_session(self):
+        response = self.post({"user": "root", "password": "abcd1234"},
+                             authed_=False)
+        self.assertEqual(response.status_code, 401)
+
+    def test_a_short_password_is_a_400_and_never_reaches_the_helper(self):
+        with mock.patch.object(box_ops, "set_system_password") as call:
+            response = self.post({"user": "root", "password": "1234567"})
+        self.assertEqual(response.status_code, 400)
+        call.assert_not_called()
+
+    def test_an_unknown_account_is_a_400(self):
+        with mock.patch.object(box_ops, "set_system_password") as call:
+            response = self.post({"user": "nobody", "password": "abcd1234"})
+        self.assertEqual(response.status_code, 400)
+        call.assert_not_called()
+
+    def test_a_good_request_changes_the_password(self):
+        with mock.patch.object(box_ops, "set_system_password",
+                               return_value={"ok": True, "user": "root"}) as call:
+            response = self.post({"user": "root", "password": "abcd1234"})
+        self.assertEqual(response.status_code, 200)
+        call.assert_called_once_with("root", "abcd1234")
+
+    def test_the_password_never_comes_back_in_the_body(self):
+        with mock.patch.object(box_ops, "set_system_password",
+                               return_value={"ok": True, "user": "root"}):
+            payload = json.loads(self.post(
+                {"user": "root", "password": "s3cret-passphrase"}).body)
+        self.assertNotIn("s3cret-passphrase", json.dumps(payload))
+

@@ -268,6 +268,32 @@ SyslogIdentifier=mrrc-box-helper
 WantedBy=multi-user.target
 UNIT
 
+cat >/etc/systemd/system/mrrc-localctl.service <<UNIT
+[Unit]
+Description=MRRC Modern local control surface (remote keys -> radio, AD-028)
+# bluez must have built the HID input node first.  There is no dependency on the
+# remote itself: with no remote paired the daemon waits for the node and re-opens
+# it whenever bluez tears it down (a BLE HID remote reconnects on its own key
+# press), so an unpaired box idles instead of failing.
+After=bluetooth.service mrrc-modern.service
+Wants=bluetooth.service
+
+[Service]
+User=$MRRC_USER
+Group=$MRRC_USER
+WorkingDirectory=$MRRC_HOME
+EnvironmentFile=$ENV_FILE
+ExecStart=$VENV/bin/python $MRRC_HOME/local_ctl.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mrrc-localctl
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 # 未加引号的 heredoc：下面两处要把 $MRRC_BOOT_DIR 插进去。这是**有意差异 ②**的一部分
 # ——Armbian 把启动分区挂在 /boot，Raspberry Pi OS 挂在 /boot/firmware。写死路径的后果不是
 # 报错，而是 ConditionPathExists 永不成立、这条能力在 Pi 上**静默哑掉**（2026-10-12 抓到的）。
@@ -373,7 +399,11 @@ else
 fi
 
 log "enable services"
-systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service
+# The remote's 电源 button reports KEY_POWER, which systemd-logind would turn
+# into a power-off — mid-QSO, from a key that belongs to the operator (AD-028).
+# Ignore it here; local_ctl decides what that key does.
+sed -i 's/^#\?HandlePowerKey=.*/HandlePowerKey=ignore/' /etc/systemd/logind.conf
+systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service mrrc-localctl.service
 # avahi-daemon is what answers <hostname>.local. It ships enabled in the
 # package, but this image masks units by default in several places, so say it
 # out loud rather than trusting the package's postinst (design §8).

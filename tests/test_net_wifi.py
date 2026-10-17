@@ -164,30 +164,145 @@ class ScanTests(unittest.TestCase):
 
 
 class ConnectTests(unittest.TestCase):
-    def test_argv_carries_the_ssid_and_the_psk_exactly_once(self):
-        run = FakeNmcli({"device wifi connect": NmResult(0, "", "")})
-        net_wifi.connect_wifi("Home", "hunter2hunter2", run, ifname="wlan0")
-        joined = run.joined()
-        self.assertEqual(joined.count("hunter2hunter2"), 1)
-        self.assertIn("device wifi connect Home password hunter2hunter2", joined)
-        self.assertIn("ifname wlan0", joined)
+    """Joining must not require *seeing* the network.
 
-    def test_an_open_network_passes_no_password_argument(self):
-        run = FakeNmcli({"device wifi connect": NmResult(0, "", "")})
-        net_wifi.connect_wifi("Guest", "", run, ifname="wlan0")
-        self.assertNotIn("password", run.joined())
+    The body used to be `nmcli device wifi connect <SSID>`, which is a scan
+    shortcut: nmcli looks the SSID up in the scan list, refuses when it is absent
+    ("no network with SSID …") and writes **no profile at all**. Both jobs this
+    function has fail on that — pre-configuring the Wi-Fi of a box that is going
+    to someone else, whose AP is only at their home, and joining a hidden AP — so
+    the profile is written and brought up instead (2026-10-17, first real-box
+    preparation for a customer).
+
+    Measured on W103D hardware: the old body against an unseen SSID printed
+    `未发现 SSID 为 … 的网络` and left the profile count unchanged; the class of
+    profile these tests build joined a visible AP in ~5 s with `hidden=yes` set,
+    so the flag covers both cases instead of choosing one.
+    """
+
+    def join(self, ssid="Home", password="hunter2hunter2", **kwargs):
+        run = FakeNmcli()
+        return run, net_wifi.connect_wifi(ssid, password, run, **kwargs)
+
+    def test_never_asks_the_scan_for_the_network(self):
+        """The regression itself: an SSID that is not in range still configures."""
+        run, result = self.join()
+        joined = run.joined()
+        self.assertNotIn("device wifi connect", joined)
+        self.assertNotIn("device wifi list", joined)
+        self.assertTrue(result.ok)
+
+    def test_writes_the_profile_then_brings_it_up(self):
+        run, _ = self.join(ifname="wlan0")
+        joined = run.joined()
+        self.assertIn("connection add type wifi con-name Home ifname wlan0 "
+                      "ssid Home", joined)
+        self.assertIn("connection up Home", joined)
+
+    def test_a_stale_profile_of_the_same_name_is_removed_first(self):
+        """Idempotence: a retry must not inherit half-written fields, and
+        `connection add` refuses a name that already exists."""
+        run, _ = self.join()
+        joined = run.joined()
+        self.assertIn("connection delete Home", joined)
+        self.assertLess(joined.index("connection delete Home"),
+                        joined.index("connection add type wifi"))
+
+    def test_the_profile_is_marked_hidden(self):
+        """A hidden AP is never in a scan list, and this flag is harmless for one
+        that broadcasts — that is what makes a single saved profile work at the
+        customer's site either way."""
+        run, _ = self.join()
+        self.assertIn("802-11-wireless.hidden yes", run.joined())
+
+    def test_the_band_is_pinned_to_2_4_ghz(self):
+        """5 GHz associates on this chip and then wedges it; the page already
+        promises 2.4 GHz only."""
+        run, _ = self.join()
+        self.assertIn("802-11-wireless.band bg", run.joined())
+
+    def test_autoconnect_is_stated_and_retries_are_unlimited(self):
+        """An explicit `autoconnect yes` (the retired hotspot's profile defaulted
+        to yes by accident, and 'by default' is not a design), and 0 = nmcli's
+        'unlimited' so a network that appears later is still picked up."""
+        run, _ = self.join()
+        joined = run.joined()
+        self.assertIn("connection.autoconnect yes", joined)
+        self.assertIn("connection.autoconnect-retries 0", joined)
+
+    def test_the_psk_rides_in_exactly_one_argument(self):
+        run, _ = self.join()
+        self.assertEqual(run.joined().count("hunter2hunter2"), 1)
+        self.assertIn("802-11-wireless-security.psk hunter2hunter2",
+                      run.joined())
+
+    def test_an_open_network_declares_no_security(self):
+        run, _ = self.join(password="")
+        joined = run.joined()
+        self.assertNotIn("psk", joined)
+        self.assertNotIn("key-mgmt", joined)
+
+    def test_a_refused_profile_never_reaches_the_device(self):
+        run = FakeNmcli({"connection add": NmResult(1, "", "Error: bad ssid")})
+        result = net_wifi.connect_wifi("Home", "hunter2hunter2", run)
+        self.assertFalse(result.ok)
+        self.assertNotIn("connection up", run.joined())
+
+    def test_a_refused_modify_never_reaches_the_device(self):
+        run = FakeNmcli({"connection modify": NmResult(
+            1, "", "Error: invalid property")})
+        result = net_wifi.connect_wifi("Home", "hunter2hunter2", run)
+        self.assertFalse(result.ok)
+        self.assertNotIn("connection up", run.joined())
+
+    def test_the_up_is_bounded(self):
+        """An absent SSID makes `connection up` wait out nmcli's own 90 s default;
+        the switch has a 30 s address budget behind this call."""
+        run, _ = self.join()
+        ups = [call for call in run.calls if call[-2:] == ["up", "Home"]]
+        self.assertEqual(len(ups), 1)
+        self.assertIn("-w", ups[0])
+        self.assertEqual(ups[0][ups[0].index("-w") + 1],
+                         str(net_wifi.NM_CONNECT_WAIT_S))
 
     def test_a_wrong_psk_comes_back_as_a_failure_with_a_reason(self):
-        run = FakeNmcli({"device wifi connect": NmResult(
+        run = FakeNmcli({"connection up": NmResult(
             1, "", "Error: Connection activation failed: (7) Secrets were required")})
         result = net_wifi.connect_wifi("Home", "wrongwrong", run)
         self.assertFalse(result.ok)
         self.assertIn("Secrets were required", result.detail)
 
     def test_the_default_interface_is_used_when_none_is_given(self):
-        run = FakeNmcli({"device wifi connect": NmResult(0, "", "")})
-        net_wifi.connect_wifi("Home", "", run)
+        run, _ = self.join(password="")
         self.assertIn(f"ifname {net_wifi.DEFAULT_IFNAME}", run.joined())
+
+
+class AccessPointAbsentTests(unittest.TestCase):
+    """「这个 AP 不在范围内」与「密码被拒」必须分得开。
+
+    前者是给客户预置时的**正常结果**——她的 AP 只在她家里；后者重试一万次也不会成功。
+    `box_ops._roll_back` 按这个判断要不要把刚落地的 profile 停用（2026-10-17）。
+    """
+
+    def test_a_wait_that_expires_means_absent(self):
+        self.assertTrue(net_wifi.access_point_absent("错误：超时时间已到（25 秒）"))
+
+    def test_the_english_timeout_means_absent(self):
+        self.assertTrue(net_wifi.access_point_absent("Error: Timeout was reached"))
+
+    def test_no_network_with_that_ssid_means_absent(self):
+        self.assertTrue(net_wifi.access_point_absent(
+            "Error: No network with SSID 'Clinic-WiFi' found."))
+        self.assertTrue(net_wifi.access_point_absent(
+            '错误：未发现 SSID 为 "Clinic-WiFi" 的网络。'))
+
+    def test_a_rejected_secret_is_not_absent(self):
+        self.assertFalse(net_wifi.access_point_absent(
+            "Error: Connection activation failed: (7) Secrets were required"))
+
+    def test_nothing_to_read_is_not_absent(self):
+        self.assertFalse(net_wifi.access_point_absent(""))
+        self.assertFalse(net_wifi.access_point_absent(None))
 
 
 class AddressTests(unittest.TestCase):

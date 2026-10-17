@@ -95,6 +95,12 @@ bash packaging/box/build-image.sh --preflash     # 固定口令 + 时区/区域�
 | Web 登录 | `abcd!1234` | `/settings` 的「登录口令」 |
 
 外加 `Asia/Shanghai` + `zh_CN.UTF-8`。**不传 `--preflash` 时一字不改**（口令照旧每台现生成）。
+**救急 Wi-Fi**（`MRRC_PREFLASH_RESCUE_SSID` / `MRRC_PREFLASH_RESCUE_PSK`，默认 `rescue` / `abcd1234`）：
+镜像里预先存了一条 **STA** profile（`autoconnect=true`、优先级 `-10`、`hidden`、2.4 GHz、无限重试）。
+什么网都不通的时候，让客户用手机开一个同名的热点，盒子自己连上去 —— 人就能在手机热点网段里找到它。
+**方向必须是这个方向**：这块 MT7663S 做不了 AP（2026-10-11 真机实测：能开、信标发不出去），
+所以别去找"盒子开热点"的做法。
+
 **固定口令就是公开知识** —— 拿到镜像或任何一台同批盒子的人能进同批所有盒子。
 
 发货流程（五步）：

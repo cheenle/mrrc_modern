@@ -52,6 +52,20 @@ DEFAULT_IFNAME = "wlan0"
 NMCLI_TIMEOUT_S = 60.0
 REDACTED = "<redacted>"
 
+#: How long `connection up` may block. A network that is in range activates in a
+#: couple of seconds; an SSID that is *not* in range makes nmcli sit on its own
+#: 90 s default, and `box_ops.perform_wifi_switch` has a 30 s DHCP budget behind
+#: this call — so this bound is what keeps a typo'd SSID from holding the page for
+#: minutes.
+NM_CONNECT_WAIT_S = 25
+
+#: 2.4 GHz only, deliberately. This board's MT7663S associates on 5 GHz and then
+#: fails to move data, and ~100 s later its firmware stops answering scans
+#: altogether (`w103d-box` §陷阱, measured twice). The LAN page has always said
+#: "only 2.4 GHz"; pinning the band here is what makes that statement true
+#: instead of a hope.
+WIFI_BAND = "bg"
+
 
 # ── the nmcli transport ─────────────────────────────────────────────
 @dataclass(frozen=True)
@@ -77,6 +91,31 @@ class NmResult:
 
 
 Runner = Callable[[list], NmResult]
+
+#: How nmcli words "the access point is not here", as opposed to "the credential
+#: is wrong". A switch that fails this way is not a bad configuration — it is a
+#: network nobody has reached yet, which is exactly the case of a box being
+#: prepared for someone else: their AP only exists at *their* home.
+#: Lower-cased, because `access_point_absent` lower-cases the text it is given —
+#: "未发现 SSID" would otherwise stop matching its own string.
+ABSENT_MARKERS = (
+    "未发现 ssid",           # `device wifi connect` with nothing in the scan list
+    "no network with ssid",   # the same, in an English build
+    "超时",                   # `-w` expiry: nothing answered during the whole wait
+    "timeout",
+)
+
+
+def access_point_absent(text: Optional[str]) -> bool:
+    """Whether an nmcli failure means "not in range" rather than "wrong key".
+
+    Read by `box_ops._roll_back`: a failed switch normally disables the profile it
+    just wrote (`autoconnect no`, so a reboot does not keep retrying a network that
+    failed), but doing that to a network that simply was not around yet throws
+    away the one thing the operator was trying to set up.
+    """
+    lowered = (text or "").lower()
+    return any(marker in lowered for marker in ABSENT_MARKERS)
 
 
 def subprocess_runner(argv: list) -> NmResult:
@@ -207,21 +246,88 @@ def scan_wifi(runner: Optional[Runner] = None, rescan: bool = True) -> list:
 def connect_wifi(ssid: str, password: str = "",
                  runner: Optional[Runner] = None,
                  ifname: Optional[str] = None) -> NmResult:
-    """Join an infrastructure network.
+    """Join an infrastructure network — including one that is not in range yet.
 
     Single radio: this replaces whatever the interface was doing, it does not run
     beside it. The caller owns the ordering — see ``box_ops.perform_wifi_switch``,
     which is also where rollback lives.
 
+    This used to be ``nmcli device wifi connect <SSID>``, which is a *scan-based*
+    shortcut: nmcli looks the SSID up in the scan list and refuses with "no
+    network with SSID …" when it is not there, writing no profile at all. Two
+    things the box is used for break on that (2026-10-17, found while preparing a
+    box for a customer): pre-configuring the Wi-Fi of someone whose AP only
+    exists at *their* home — the one case where the AP is never visible on the
+    workbench — and joining a hidden AP, which is never in a scan list even when
+    it is the local network. ``linux/wifi_preseed.py`` has the same shape: its
+    whole purpose is to join a network before anyone can see it.
+
+    Writing the profile and bringing it up needs no scan. ``hidden yes`` costs
+    nothing when the network broadcasts — measured on a W103D: a hidden=yes
+    profile still joins a visible AP within seconds — and it is what makes a
+    non-broadcasting AP (or one that only appears later, at the customer's site)
+    connectable. ``band bg`` keeps the radio off 5 GHz, where this chip wedges.
+
+    The profile is named after the SSID because that is what the callers already
+    assume: ``box_ops._roll_back`` turns ``autoconnect`` off by that name, and
+    ``linux/wifi_preseed.py`` sets it by that name. A pre-existing profile with
+    that name is deleted first, so a retry cannot inherit half-written fields.
+
     ``password`` travels in argv and nowhere else. It is never logged, never
     written to the env file (WiFi is NetworkManager's domain, design D-4) and is
     removed from any error text that goes back to a page, by ``scrub()``.
     """
-    args = ["device", "wifi", "connect", ssid]
+    written = write_profile(ssid, password, runner=runner, ifname=ifname)
+    if not written.ok:
+        return written
+    return nmcli(["-w", str(NM_CONNECT_WAIT_S), "connection", "up", ssid], runner)
+
+
+def write_profile(ssid: str, password: str = "",
+                  runner: Optional[Runner] = None,
+                  ifname: Optional[str] = None) -> NmResult:
+    """Write (or replace) the saved profile for `ssid` — without activating it.
+
+    Split out of `connect_wifi` so the box can *pre-configure* a network instead
+    of switching to it: the settings page lets an operator save the Wi-Fi of a
+    customer whose AP only exists at their home, and that must not depend on
+    anything being in range right now (2026-10-17).
+    """
+    target_if = ifname or DEFAULT_IFNAME
+    # A profile of this name may already exist (an edit, or a retry). Deleting
+    # first makes the write idempotent; "there was nothing to delete" is the
+    # normal case and is not an error.
+    nmcli(["connection", "delete", ssid], runner)
+    created = nmcli(["connection", "add", "type", "wifi", "con-name", ssid,
+                     "ifname", target_if, "ssid", ssid], runner)
+    if not created.ok:
+        return created
+    args = ["connection", "modify", ssid,
+            "802-11-wireless.hidden", "yes",
+            "802-11-wireless.band", WIFI_BAND,
+            # Stated explicitly rather than left to the default: the retired
+            # hotspot's profile defaulted to yes *by accident*, and "by default"
+            # is not a design.
+            "connection.autoconnect", "yes",
+            # 0 is nmcli's "unlimited": a network that is not here yet must keep
+            # being retried, not give up after four scans (its default).
+            "connection.autoconnect-retries", "0"]
     if password:
-        args += ["password", password]
-    args += ["ifname", ifname or DEFAULT_IFNAME]
+        args += ["802-11-wireless-security.key-mgmt", "wpa-psk",
+                 "802-11-wireless-security.psk", password]
     return nmcli(args, runner)
+
+
+def forget(ssid: str, runner: Optional[Runner] = None) -> NmResult:
+    """Delete a saved profile. Nothing else about the box changes."""
+    return nmcli(["connection", "delete", ssid], runner)
+
+
+def set_autoconnect(ssid: str, enabled: bool,
+                    runner: Optional[Runner] = None) -> NmResult:
+    """Arm or disarm a saved profile for the next scan (and the next boot)."""
+    return nmcli(["connection", "modify", ssid,
+                  "connection.autoconnect", "yes" if enabled else "no"], runner)
 
 
 def ipv4_address(ifname: Optional[str] = None,

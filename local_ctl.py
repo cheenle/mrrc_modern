@@ -73,8 +73,8 @@ DEFAULT_KEYMAP: dict[str, str] = {
     "u:0x70066": "power",      # 电源 ── KEY_POWER
     "u:0x70052": "freq_up",    # ▲
     "u:0x70051": "freq_down",  # ▼
-    "u:0x70050": "step_down",  # ◀  (coarser step)
-    "u:0x7004f": "step_up",    # ▶  (finer step)
+    "u:0x70050": "step_down",  # ◀  finer step (index −1)
+    "u:0x7004f": "step_up",    # ▶  coarser step (index +1)
     "u:0xc0041": "enter",      # 确定 (consumer page; the measured remote sends this, not 0x70058)
     "u:0xc0223": "home",       # 首页
     "u:0xc0224": "cancel",     # 返回

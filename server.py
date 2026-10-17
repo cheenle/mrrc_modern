@@ -5343,6 +5343,9 @@ async def ws_sdr(ws: WebSocket):
                     continue
                 await ws.send_text(json.dumps({
                     "event_type": "channel_ack", "value": {"chid": chid}}))
+            elif event == "cursor":
+                hub.set_cursor(sub, float(obj.get("value", 0)))
+                hub.broadcast_state()
             elif event == "squelch":
                 hub.set_squelch(sub, float(obj.get("value", 0)))
             elif event == "volume":

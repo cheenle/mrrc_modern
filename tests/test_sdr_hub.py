@@ -231,3 +231,33 @@ class FanoutTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CursorTests(unittest.TestCase):
+    def test_cursor_is_stored_as_an_absolute_frequency(self):
+        hub, _, _ = make()
+        a = hub.attach(1)
+        hub.set_cursor(a, +12_000)
+        self.assertEqual(a.abs_freq, hub.center_hz + 12_000)
+        hub.tune(a, hub.center_hz + 100_000)
+        self.assertEqual(a.abs_freq, 7_074_000 + 12_000)   # 中心变了，绝对频率不变
+
+    def test_cursor_is_clamped_to_the_span(self):
+        hub, _, _ = make()
+        a = hub.attach(1)
+        hub.set_cursor(a, 9_000_000)
+        self.assertEqual(abs(a.abs_freq - hub.center_hz), hub._span // 2 - 1000)
+
+    def test_state_frame_is_per_subscriber(self):
+        hub, _, _ = make()
+        a = hub.attach(1)
+        b = hub.attach(2)
+        got_a, got_b = [], []
+        a.send = lambda f, g=got_a: g.append(f)
+        b.send = lambda f, g=got_b: g.append(f)
+        hub.set_cursor(a, 1000)
+        hub.set_cursor(b, -1000)
+        hub.broadcast_state()
+        self.assertEqual(got_a[-1][1]["abs_freq"], hub.center_hz + 1000)
+        self.assertEqual(got_b[-1][1]["abs_freq"], hub.center_hz - 1000)
+        self.assertEqual(got_a[-1][1]["center_hz"], got_b[-1][1]["center_hz"])

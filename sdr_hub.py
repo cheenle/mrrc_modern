@@ -162,6 +162,13 @@ class SdrHub:
         key = ChannelKey(int(offset), int(mode), int(bw_hz))
         return self._assign(sub, key)
 
+    def set_cursor(self, sub: Subscriber, offset_hz: float) -> int:
+        """听众点瀑布选的解调点：存成**绝对频率**，改中心频率时才不会被带走。"""
+        half = self._span // 2 - 1000
+        offset = int(max(-half, min(half, int(offset_hz))))
+        sub.abs_freq = self.center_hz + offset
+        return sub.abs_freq
+
     def set_squelch(self, sub: Subscriber, value: float) -> None:
         sub.squelch = max(0.0, min(1.0, float(value)))
 
@@ -252,6 +259,10 @@ class SdrHub:
             sub.send(("audio", chid, seq, level, payload))
 
     def broadcast_state(self) -> None:
-        snap = self.snapshot()
+        """每人一份：中心频率是共享的，`abs_freq`/`chid` 是各自的。"""
+        base = self.snapshot()
         for sub in list(self._subs.values()):
+            snap = dict(base)
+            snap["abs_freq"] = sub.abs_freq
+            snap["chid"] = sub.chid
             sub.send(("state", snap))

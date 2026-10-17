@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="用蓝牙遥控器操作盒子上的电台：配对、按键表、kHz 输入与排障">
+    <title>W103D 遥控器指南 — MRRC Modern</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css?v=5">
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .w103d-wrap { max-width: 880px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+        .w103d-wrap h2 {
+            margin: 2.75rem 0 1rem; padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #2a2a2a);
+            color: var(--text-primary, #eee); font-size: 1.4rem;
+        }
+        .w103d-wrap h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+        .w103d-wrap h3 { margin: 2rem 0 0.75rem; color: var(--text-primary, #eee); font-size: 1.1rem; }
+        .w103d-wrap p, .w103d-wrap li { color: var(--text-secondary, #b8b8b8); line-height: 1.85; }
+        .w103d-wrap ul, .w103d-wrap ol { padding-left: 1.5rem; }
+        .w103d-wrap li { margin: 0.35rem 0; }
+        .w103d-wrap strong { color: var(--text-primary, #eee); }
+        .w103d-wrap code {
+            background: var(--bg-card, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.87em;
+        }
+        .w103d-wrap pre {
+            background: var(--bg-card, #141414); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 10px; padding: 1rem 1.15rem; overflow-x: auto; margin: 1rem 0;
+        }
+        .w103d-wrap pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.7; }
+        .w103d-wrap .table-scroll { overflow-x: auto; margin: 1.15rem 0; }
+        .w103d-wrap table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+        .w103d-wrap th, .w103d-wrap td {
+            border: 1px solid var(--border, #2a2a2a); padding: 0.55rem 0.75rem; text-align: left;
+            color: var(--text-secondary, #b8b8b8);
+        }
+        .w103d-wrap th { background: var(--bg-card, #1a1a1a); color: var(--text-primary, #eee); }
+        .w103d-wrap blockquote {
+            margin: 1.15rem 0; padding: 0.85rem 1.15rem; border-left: 3px solid var(--accent, #f0a020);
+            background: var(--bg-card, #171717); border-radius: 0 8px 8px 0;
+        }
+        .w103d-wrap blockquote p { margin: 0; }
+        .w103d-wrap input[type=checkbox] { margin-right: 0.4rem; }
+    </style>
+</head>
+<body data-site="mrrc_modern">
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#download">Download</a></li>
+            <li><a href="../guide.html">操作指南</a></li>
+            <li><a href="../sdd.html">SDD</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i></a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../w103d.html" class="lang-btn">EN</a>
+        </div>
+    </div>
+</nav>
+
+<header class="guide-hero">
+    <div class="guide-hero-inner">
+        <span class="badge"><i class="fas fa-gamepad"></i> W103D · 遥控器指南</span>
+        <h1>一支遥控器，站着把电台调好</h1>
+        <p>配对一次，之后按着语音键就能发射，方向键调频率，数字键直接输入。这页是遥控器的全部：每一个键的作用、配对时那个必须满足的条件，以及按键不灵时按顺序查哪几条。</p>
+        <div class="actions"><a class="btn btn-primary" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a><a class="btn" href="../w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a></div>
+    </div>
+</header>
+
+<main class="w103d-wrap">
+<figure style="margin: 0 0 2.5rem">
+    <a href="../images/w103d-spec-sheet.png" target="_blank" rel="noopener">
+        <img src="../images/w103d-spec-sheet.png"
+             alt="ZTE W103D 参数、性能与对比树莓派"
+             style="width: 100%; height: auto; display: block; border: 1px solid var(--border, #2a2a2a); border-radius: 12px">
+    </a>
+    <figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">
+        参数、性能与对比树莓派 · 点图看原尺寸（1240 × 1754）
+    </figcaption>
+</figure>
+<h1 id="w103d-盒子遥控器指南">W103D 盒子遥控器指南</h1>
+<p>一台盒子、一支蓝牙遥控器，人站着就能把电台调好、按下去就能说话。这份指南只说遥控器： 怎么配对、每个键干什么、不好用时先查哪一条。</p>
+<h2 id="1-能用的遥控器">1. 能用的遥控器</h2>
+<p>盒子认的是<strong>标准的蓝牙 HID 遥控器</strong>（就是能和手机、电视配对的这一类）。配好之后， 内核会多出一个叫 <code>&lt;遥控器名字&gt; Keyboard</code> 的输入设备，按键从这里进来。</p>
+<p>已经实测通过的一支：中国移动的语音遥控器，蓝牙名 <code>CMCC_Voice_Remote</code>。</p>
+<p>两件目前<strong>不行</strong>的事，先说明白，省得白折腾：</p>
+<p>板子上没有焊接收头，对着盒子按键收不到任何波形。我们试过两支遥控器，<code>/dev/lirc0</code> 一直是空的。</p>
+<p>蓝牙耳机那种音频协议，盒子读不出来。</p>
+<ul>
+<li><strong>红外遥控器不行。</strong> 盒子在设备树里注册了红外接收器（<code>meson-ir</code>），但这一批</li>
+<li><strong>遥控器自带的麦克风用不了。</strong> 它的语音走的是厂商自己的一条蓝牙通道，不是标准</li>
+</ul>
+<h2 id="2-配对-只做一次">2. 配对（只做一次）</h2>
+<p>指示灯开始快闪。</p>
+<p>- 用面板：浏览器打开 <code>/settings</code>，蓝牙一节里搜索并配对； - 用命令行：SSH 进盒子（<code>root</code> / 出厂口令），<code>bluetoothctl</code> 里 <code>scan on</code>， 看到 <code>CMCC_Voice_Remote</code> 后 <code>pair &lt;地址&gt;</code>、<code>trust &lt;地址&gt;</code>。</p>
+<ol>
+<li>让遥控器进入配对模式。中国移动这支是<strong>同时长按「OK」和「返回」约 5 秒</strong>，</li>
+<li>在盒子上配对。有两条路，效果一样：</li>
+<li>按一下遥控器的任意键，确认它连上了：</li>
+</ol>
+<pre><code>bluetoothctl info 0C:F3:CE:B0:88:75</code></pre>
+<p>看到 <code>Paired: yes</code>、<code>Bonded: yes</code> 就配好了。<strong>配对状态会保存，重启不掉。</strong></p>
+<h3 id="配好了但按键没反应-看这一条">配好了但按键没反应？看这一条</h3>
+<p>蓝牙有个容易踩的坑：<strong>报告「配对成功」不等于链路加密成功</strong>。</p>
+<p>第一版就是这么翻车的：<code>bluetoothctl</code> 说 <code>Paired: yes</code>，但按键一个都不来。抓空口报文 才看见真相：</p>
+<pre><code>LE Start Encryption
+Encryption Change ... Encryption: Disabled      ← 加密没建立起来</code></pre>
+<p>链路是明文，遥控器就把所有属性读取都拒掉（日志里 <code>unlikely error</code> 一串）， 系统因此拼不出键盘设备。<strong>修法是重配一次：</strong></p>
+<pre><code>bluetoothctl remove 0C:F3:CE:B0:88:75
+bluetoothctl power off ; sleep 2 ; bluetoothctl power on
+# 遥控器重新进配对模式，再 pair 一次</code></pre>
+<p>这次要看到这一行才算成：</p>
+<pre><code>Encryption: Enabled with AES-CCM</code></pre>
+<p>加密一通，<code>/proc/bus/input/devices</code> 里立刻出现 <code>CMCC_Voice_Remote Keyboard</code>， 按键开始上报。</p>
+<h2 id="3-按键表">3. 按键表</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>按键</th><th>作用</th></tr></thead><tbody>
+<tr><td><strong>语音</strong>（按住）</td><td><strong>发射</strong>，松开就停</td></tr>
+<tr><td><strong>▲ / ▼</strong></td><td>频率加上/减去当前步进</td></tr>
+<tr><td><strong>◀ / ▶</strong></td><td>换步进档位（100 Hz / 1 k / 5 k / 10 k / 100 k）</td></tr>
+<tr><td><strong>频道 + / −</strong></td><td>换波段（160 m → 80 m → … → 6 m）</td></tr>
+<tr><td><strong>数字 0–9</strong></td><td>直接输入频率，见下一节</td></tr>
+<tr><td><strong>确定</strong>（方向键中间）</td><td>提交输入的数字</td></tr>
+<tr><td><strong>设置</strong></td><td>模式循环（LSB / USB / CW / AM / FM / FT8）</td></tr>
+<tr><td><strong>返回</strong></td><td>取消还没提交的数字输入</td></tr>
+<tr><td><strong>音量 + / −</strong></td><td>音量</td></tr>
+<tr><td><strong>电源</strong></td><td>交给遥控服务处理，<strong>不会</strong>再把盒子关掉</td></tr>
+<tr><td>首页 / 菜单 / M / <code>*</code> / <code>#</code></td><td>预留，暂时没有动作</td></tr>
+<tr><td><strong>电视</strong></td><td>不发蓝牙。这类键只发红外去控电视，盒子收不到</td></tr>
+</tbody></table></div>
+<p>发射有三重保护，和网页上一样：松手就停、遥控器掉线也停、单次发射有上限。</p>
+<h2 id="4-直接输入频率">4. 直接输入频率</h2>
+<p>数字按 <strong>kHz</strong> 算，按「确定」生效。举例：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>想去的频率</th><th>按</th></tr></thead><tbody>
+<tr><td>7.050 MHz</td><td><code>7</code> <code>0</code> <code>5</code> <code>0</code> → 确定</td></tr>
+<tr><td>14.070 MHz</td><td><code>1</code> <code>4</code> <code>0</code> <code>7</code> <code>0</code> → 确定</td></tr>
+<tr><td>3.573 MHz</td><td><code>3</code> <code>5</code> <code>7</code> <code>3</code> → 确定</td></tr>
+</tbody></table></div>
+<p>按错了不要紧：按「返回」清掉，或者等 3 秒不管它，输入框自己作废。 输入途中按 ▲▼ 也会把没提交的数字丢掉，直接调频。</p>
+<h2 id="5-出问题先查这几条">5. 出问题先查这几条</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>现象</th><th>先看什么</th></tr></thead><tbody>
+<tr><td>按键完全没反应</td><td><code>bluetoothctl info &lt;地址&gt;</code> 是否 <code>Paired: yes</code>；<code>journalctl -u bluetooth -n 40</code> 里有没有 <code>unlikely error</code>（有就按 §2 重配）</td></tr>
+<tr><td>只有部分键有用</td><td>按键表按<strong>扫描码</strong>认键。这类遥控器上「设置」「M」「#」三个键的键码都是 240，只看键码会混成一个。换遥控器要改键位表，见 §6</td></tr>
+<tr><td>按电源把盒子关了</td><td><code>grep HandlePowerKey /etc/systemd/logind.conf</code> 应该是 <code>ignore</code>；不是就改掉再 <code>systemctl restart systemd-logind</code></td></tr>
+<tr><td>遥控器连上又断，反复</td><td>BLE 遥控器空闲时会自己断开、按键时再连，这是正常的；只要按键有效就不必管</td></tr>
+<tr><td>Wi-Fi 偶尔卡一下</td><td>这颗芯片的蓝牙和 Wi-Fi 共用一路 SDIO，遥控器连续操作时 Wi-Fi 可能短暂抖动，几秒内自愈</td></tr>
+<tr><td>服务没在跑</td><td><code>systemctl status mrrc-localctl</code>，日志 <code>journalctl -u mrrc-localctl</code></td></tr>
+</tbody></table></div>
+<h2 id="6-换一支遥控器">6. 换一支遥控器</h2>
+<p>按键和动作的对应关系在 <code>local_ctl.py</code> 的 <code>DEFAULT_KEYMAP</code> 里，一张 「扫描码 → 动作」的表。换遥控器的步骤：</p>
+<p>扫描码（比如 <code>value 70052</code>），下一行是键码；</p>
+<ol>
+<li>先认出它发什么：<code>evtest /dev/input/eventN</code> 里每个键有两行，<code>MSC_SCAN</code> 的值就是</li>
+<li>在表里加一条，扫描码写成 <code>"u:0x70052": "freq_up"</code>；</li>
+<li>不想改代码就写一份 JSON 覆盖文件，用环境变量指过去：</li>
+</ol>
+<pre><code class="lang-json">{ "u:0x70052": "freq_up", "u:0x70051": "freq_down" }</code></pre>
+<pre><code># /etc/systemd/system/mrrc-localctl.service 里加上
+Environment=MRRC_LOCALCTL_KEYMAP=/opt/mrrc_modern/env/keymap.json</code></pre>
+<p>可用的动作名：<code>ptt</code>、<code>freq_up</code>、<code>freq_down</code>、<code>step_up</code>、<code>step_down</code>、<code>band_up</code>、 <code>band_down</code>、<code>enter</code>、<code>cancel</code>、<code>menu</code>、<code>mode_next</code>、<code>vol_up</code>、<code>vol_down</code>、 <code>digit:0</code> … <code>digit:9</code>。</p>
+<h2 id="7-它到底怎么连起来的">7. 它到底怎么连起来的</h2>
+<pre><code>遥控器  ──蓝牙──&gt;  盒子内核（HID 键盘）
+                      │
+                      ▼
+              mrrc-localctl（读按键、查表）
+                      │  本机 wss://127.0.0.1:8888/WSradio
+                      ▼
+                 电台服务（和网页发的是同一套命令）</code></pre>
+<p>这条链路只走本机回环，不经过局域网，也不经过云端。遥控器配在盒子上，就只对这台盒子有效。</p>
+</main>
+
+<footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">
+    <p>MRRC Modern — W103D 电台盒子指南 ·
+       <a href="../index.html#download">下载页</a> ·
+       <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
+</footer>
+</body>
+</html>

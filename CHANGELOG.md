@@ -26,6 +26,9 @@ All notable changes to the MRRC Web Control project.
 - 测试 2369 → **2404**（`tests/test_local_ctl.py` 35 项，无硬件）。
 - **未做**：遥控器麦克风（厂商私有 BLE 通道 + 服务端目前没有"本地麦 → TX"通路）；
   红外（这块板注册了 `meson-ir`，但两次抓取 0 脉冲——接收头没焊）。
+- 文档：新增 **`docs/W103D_REMOTE_GUIDE.md`《W103D 盒子遥控器指南》**（配对、按键表、
+  kHz 输入、排障、换遥控器），站点页 `w103d-remote.html` 由 `build_w103d_guide.py` 生成，
+  用户指南 §9.12 链过去。
 
 ### 出厂预置：`build-image.sh --preflash`（默认关）
 

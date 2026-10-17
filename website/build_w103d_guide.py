@@ -339,7 +339,25 @@ PAGES = (
         "actions": (
             '<a class="btn btn-primary" href="{p}w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a>'
             '<a class="btn" href="{p}index.html#download"><i class="fas fa-download"></i> 下载页</a>'),
-        "links": (("W103D_GUIDE.md", "w103d.html"),),
+        "links": (("W103D_GUIDE.md", "w103d.html"),
+                  ("W103D_REMOTE_GUIDE.md", "w103d-remote.html")),
+        "figure": False,
+    },
+    {
+        "source": "docs/W103D_REMOTE_GUIDE.md",
+        "out": "w103d-remote.html",
+        "title": "W103D 遥控器指南 — MRRC Modern",
+        "description": "用蓝牙遥控器操作盒子上的电台：配对、按键表、kHz 输入与排障",
+        "badge": "W103D · 遥控器指南",
+        "icon": "fa-gamepad",
+        "h1": "一支遥控器，站着把电台调好",
+        "lead": ("配对一次，之后按着语音键就能发射，方向键调频率，数字键直接输入。"
+                 "这页是遥控器的全部：每一个键的作用、配对时那个必须满足的条件，"
+                 "以及按键不灵时按顺序查哪几条。"),
+        "actions": (
+            '<a class="btn btn-primary" href="{p}w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a>'
+            '<a class="btn" href="{p}w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a>'),
+        "links": (("W103D_USER_GUIDE.md", "w103d-user.html"),),
         "figure": False,
     },
 )

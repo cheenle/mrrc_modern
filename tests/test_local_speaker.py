@@ -141,11 +141,29 @@ class TapTests(unittest.TestCase):
         sp = ls.LocalSpeaker("bluealsa:test", spawn=spawn)
         sp.start()
         self.addCleanup(sp.stop)
-        for _ in range(5):
+        # a failed write now backs off 1 s before respawning (the field defect
+        # was a warning per frame), so the window has to outlast that
+        deadline = time.time() + 3.0
+        while time.time() < deadline and len(calls) < 2:
             sp.feed(b"\x00\x00" * 4800)
             time.sleep(0.05)
         self.assertGreaterEqual(sp.status()["failures"], 1)
         self.assertGreaterEqual(len(calls), 2, "a dead device must be respawned")
+
+    def test_a_dead_device_does_not_log_per_frame(self):
+        """A missing headset used to write one warning per 20 ms frame."""
+        import logging
+
+        proc = _fake_proc(fail=True)
+        sp = ls.LocalSpeaker("bluealsa:test", spawn=lambda: proc)
+        with self.assertLogs("mrrc.localspeaker", level="WARNING") as captured:
+            sp.start()
+            for _ in range(40):
+                sp.feed(b"\x00\x00" * 4800)
+                time.sleep(0.02)
+            sp.stop()
+        writes = [m for m in captured.output if "write failed" in m]
+        self.assertLessEqual(len(writes), 2, f"log flood: {len(writes)} warnings")
 
     def test_a2dp_mode_passes_the_codec_domain_and_duplicates_to_stereo(self):
         # A2DP is 44.1/48 kHz stereo while the radio's RX is 48 kHz mono: no

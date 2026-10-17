@@ -139,9 +139,15 @@ class LocalSpeaker:
             except Exception as exc:                    # noqa: BLE001 - device gone
                 self._failures += 1
                 self._last_error = str(exc)
-                log.warning("Local speaker write failed: %s", exc)
+                # One unplugged headset must not write a warning per frame (it
+                # did, 20 times a second, until this was fixed): say it once per
+                # streak and back off before the next respawn.
+                if self._failures == 1 or self._failures % 50 == 0:
+                    log.warning("Local speaker write failed (%d so far): %s",
+                                self._failures, exc)
                 self._kill(proc)
                 proc = None
+                self._stop.wait(1.0)
         if proc is not None:
             self._kill(proc)
 

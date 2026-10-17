@@ -14,9 +14,9 @@ set -euo pipefail
 # 开关闸门：默认关是"预置"这件事的安全属性，不是可选项 —— 一次误调用就会把
 # 公开口令装进一台本来每台口令不同的镜像里。
 if [ "${MRRC_PREFLASH:-0}" != "1" ]; then
- echo "preflash: MRRC_PREFLASH is not 1 — refusing to write anything." >&2
- echo "preflash: 这是出厂预置通道；要手动跑请显式 MRRC_PREFLASH=1 …" >&2
- exit 1
+	echo "preflash: MRRC_PREFLASH is not 1 — refusing to write anything." >&2
+	echo "preflash: 这是出厂预置通道；要手动跑请显式 MRRC_PREFLASH=1 …" >&2
+	exit 1
 fi
 
 ROOT_PASSWORD="${MRRC_PREFLASH_ROOT_PASSWORD:-abcd1234}"
@@ -29,10 +29,10 @@ MRRC_USER="${MRRC_USER:-mrrc}"
 ENV_ONLY=0
 POSITIONAL=()
 for arg in "$@"; do
- case "$arg" in
-  --env-only) ENV_ONLY=1 ;;
-  *) POSITIONAL+=("$arg") ;;
- esac
+	case "$arg" in
+	--env-only) ENV_ONLY=1 ;;
+	*) POSITIONAL+=("$arg") ;;
+	esac
 done
 ENV_FILE="${POSITIONAL[0]:-/opt/mrrc_modern/env/mrrc.env}"
 
@@ -68,8 +68,8 @@ path.write_text("\n".join(out) + "\n", encoding="utf-8")
 PY
 
 if [ "$ENV_ONLY" = "1" ]; then
- echo "preflash: env-only — 系统层（账号口令/时区/locale）跳过"
- exit 0
+	echo "preflash: env-only — 系统层（账号口令/时区/locale）跳过"
+	exit 0
 fi
 
 # ── 账号口令 ─────────────────────────────────────────────────────────
@@ -77,8 +77,8 @@ fi
 # 服务层的前置断言已经保证它在。不在这里建账号：那是平台的事。
 log "accounts: fixed passwords"
 id -u "$MRRC_USER" >/dev/null 2>&1 || {
- echo "preflash: no '$MRRC_USER' account — the platform shell must create it" >&2
- exit 1
+	echo "preflash: no '$MRRC_USER' account — the platform shell must create it" >&2
+	exit 1
 }
 printf 'root:%s\n%s:%s\n' "$ROOT_PASSWORD" "$MRRC_USER" "$USER_PASSWORD" | chpasswd
 
@@ -87,8 +87,8 @@ printf 'root:%s\n%s:%s\n' "$ROOT_PASSWORD" "$MRRC_USER" "$USER_PASSWORD" | chpas
 # （与 hostname 同样的道理，见 mrrc-service-layer.sh）。
 log "time zone: $TIMEZONE"
 [ -f "/usr/share/zoneinfo/$TIMEZONE" ] || {
- echo "preflash: /usr/share/zoneinfo/$TIMEZONE is missing" >&2
- exit 1
+	echo "preflash: /usr/share/zoneinfo/$TIMEZONE is missing" >&2
+	exit 1
 }
 ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
 printf '%s\n' "$TIMEZONE" >/etc/timezone
@@ -97,18 +97,18 @@ timedatectl set-timezone "$TIMEZONE" 2>/dev/null || true
 # ── 区域/语言 ────────────────────────────────────────────────────────
 log "locale: $LOCALE_NAME"
 [ -f /etc/locale.gen ] || {
- echo "preflash: /etc/locale.gen is missing (the locales package?)" >&2
- exit 1
+	echo "preflash: /etc/locale.gen is missing (the locales package?)" >&2
+	exit 1
 }
 # 基底可能带一份被裁过的 locale.gen（pi-gen 会裁）：缺就补一行，别失败 ——
 # 这条脚本存在的理由是"装出能用的镜像"，不是"验基底的清单"。
 if ! grep -q "^${LOCALE_NAME} " /etc/locale.gen; then
- if grep -q "^# *${LOCALE_NAME} " /etc/locale.gen; then
-  sed -i "s|^# *${LOCALE_NAME} |${LOCALE_NAME} |" /etc/locale.gen
- else
-  echo "preflash: appending ${LOCALE_NAME} to /etc/locale.gen (not present)"
-  printf '%s UTF-8\n' "$LOCALE_NAME" >>/etc/locale.gen
- fi
+	if grep -q "^# *${LOCALE_NAME} " /etc/locale.gen; then
+		sed -i "s|^# *${LOCALE_NAME} |${LOCALE_NAME} |" /etc/locale.gen
+	else
+		echo "preflash: appending ${LOCALE_NAME} to /etc/locale.gen (not present)"
+		printf '%s UTF-8\n' "$LOCALE_NAME" >>/etc/locale.gen
+	fi
 fi
 locale-gen
 printf 'LANG=%s\n' "$LOCALE_NAME" >/etc/default/locale
@@ -121,13 +121,13 @@ printf 'LANG=%s\n' "$LOCALE_NAME" >/etc/default/locale
 # 真判据在机器上：`timedatectl` 的 System clock synchronized（指南验收项 A7）。
 ntp_units=""
 for unit in systemd-timesyncd.service chrony.service ntpsec.service ntp.service openntpd.service; do
- if [ -f "/lib/systemd/system/$unit" ] || [ -f "/usr/lib/systemd/system/$unit" ]; then
-  ntp_units="$ntp_units $unit"
- fi
+	if [ -f "/lib/systemd/system/$unit" ] || [ -f "/usr/lib/systemd/system/$unit" ]; then
+		ntp_units="$ntp_units $unit"
+	fi
 done
 [ -n "$ntp_units" ] || {
- echo "preflash: no NTP unit in this base image — the box could ship with a wrong clock" >&2
- exit 1
+	echo "preflash: no NTP unit in this base image — the box could ship with a wrong clock" >&2
+	exit 1
 }
 echo "preflash: NTP unit(s) in the base image:$ntp_units (left exactly as the base image ships them)"
 

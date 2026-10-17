@@ -410,6 +410,12 @@ class RXBackpressureTests(unittest.TestCase):
         # so it joins the FT8 tap in the idle gate.
         self.assertIn("_speaker_live = _local_speaker is not None and _local_speaker.active", source)
         self.assertIn("and not _ft8_tap_live and not _speaker_live)", source)
+        # Opus is only for browsers: recording, the FT8 tap and the local
+        # speaker consume the PCM directly, so a speaker-only box must not
+        # burn a core encoding frames that nobody reads.
+        self.assertIn("_needs_frames = (bool(audio_rx_clients) or _rec_session.active", source)
+        self.assertIn("or not _needs_frames", source)
+
         self.assertIn("await asyncio.sleep(idle_interval)", source)
         self.assertIn("continue", source)
 
@@ -421,7 +427,7 @@ class RXBackpressureTests(unittest.TestCase):
         the recording tap and the silence watchdog stay live."""
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("_radio_txing = (radio is not None", source)
-        self.assertIn("None if _radio_txing", source)
+        self.assertIn("None if (_radio_txing or not _needs_frames)", source)
         self.assertIn("else audio.encode_rx_audio(pcm)", source)
         # The recording tap must stay BEFORE the guard (always fed).
         tap_idx = source.index("_rec_tap_rx(pcm")

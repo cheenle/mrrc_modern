@@ -1997,7 +1997,13 @@ async def _audio_rx_loop():
                     # skipped.
                     _radio_txing = (radio is not None
                                     and radio.is_transmitting)
-                    frames = (None if _radio_txing
+                    # Opus is only for clients: recording, the FT8 tap and the
+                    # local speaker all take the PCM as it is.  Encoding for a
+                    # speaker-only box burned a few percent of a core every
+                    # 20 ms for frames that were then thrown away.
+                    _needs_frames = (bool(audio_rx_clients) or _rec_session.active
+                                     or _ft8_tap_live)
+                    frames = (None if (_radio_txing or not _needs_frames)
                               else audio.encode_rx_audio(pcm))
 
                     if frames:

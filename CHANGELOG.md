@@ -8,6 +8,18 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 省 CPU 两处：锁频调速器 + 只给扬声器时不编码 Opus
+
+- **调速器 `schedutil → performance`**（服务层新增 `mrrc-cpufreq.service`）：这台的负载是
+  碎而密的（音频 50 Hz、频谱 30 Hz、FT8 时隙），`schedutil` 一直在变频，每次都要付延迟和
+  governor 自身的开销（`sugov:0` 累计占一核的 17.8%）。实测（W103D，vmstat 5 s ×3，三次复现）：
+  整机忙 **27% → 14%**，**SoC 温度 48.2–48.4 °C 完全不变**。盒子是市电供电，"降频省电"在这里
+  换不来什么，反而赔掉半个核。
+- **没有浏览器时不编码 Opus**：录音、FT8 tap、本地扬声器要的都是 **PCM**，而 RX 循环原来
+  只要有"人"在听就编码。现在编码门只认 `audio_rx_clients / 录音 / FT8 tap`，纯扬声器盒子
+  不再每 20 ms 白烧一次 numpy + libopus。
+- 测试：`test_audio` 的两条源码守卫随之更新（编码门 + `None if (_radio_txing or not _needs_frames)`）。
+
 ### ☰ 菜单里的 FT8 引擎开关（省 CPU）
 
 - FT8 引擎设计上**开机就在后台解码**，在小盒子上那是实打实的一个核（那个

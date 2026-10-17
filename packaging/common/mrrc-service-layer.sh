@@ -404,11 +404,31 @@ else
 fi
 
 log "enable services"
+# The governor matters more than it looks: this workload is bursty (audio at
+# 50 Hz, spectrum at 30 Hz, FT8 slots), and schedutil spends its time ramping —
+# measured on a W103D, pinning at the top frequency took the machine from 27%
+# busy to 14% with no change in SoC temperature (48 °C either way).  The box is
+# mains-powered, so the usual reason to scale down does not apply.
+cat >/etc/systemd/system/mrrc-cpufreq.service <<'UNIT'
+[Unit]
+Description=MRRC Modern CPU governor (pin at the top OPP)
+DefaultDependencies=no
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor >/dev/null'
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 # The remote's 电源 button reports KEY_POWER, which systemd-logind would turn
 # into a power-off — mid-QSO, from a key that belongs to the operator (AD-028).
 # Ignore it here; local_ctl decides what that key does.
 sed -i 's/^#\?HandlePowerKey=.*/HandlePowerKey=ignore/' /etc/systemd/logind.conf
-systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service mrrc-localctl.service
+systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service mrrc-localctl.service mrrc-cpufreq.service
 # avahi-daemon is what answers <hostname>.local. It ships enabled in the
 # package, but this image masks units by default in several places, so say it
 # out loud rather than trusting the package's postinst (design §8).

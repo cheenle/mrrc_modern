@@ -128,6 +128,51 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261017-225430-d996">
+      <header>
+        <span class="id">20261017-225430-d996</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-17 23:11</span>
+      </header>
+      <h3>软件启动后电台选择FTX-1保存重启又变成FT-710，网页也看不到频谱</h3>
+      <p class="verdict">Launcher 的首启探测白名单 `VALID_MODELS` 只含 ft710/ic7300/ic7300mk2，所选 ftx1 因此每次启动都被判为「未配置」，探测到 Yaesu 应答后把型号改写成 ft710 —— 于是续跑成 FT-710 后端（去找 FT4222 频谱芯片，找不到就退成 S 表合成）</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>型号回退的根因在 launcher 的首启逻辑，不在配置写入：`macos/first_run.py` 里 `VALID_MODELS = frozenset({&quot;ft710&quot;, &quot;ic7300&quot;, &quot;ic7300mk2&quot;})`，而 `apply_first_run` 用 `model_unset = model not in VALID_MODELS` 判断；`needs_first_run()` 也要求 `model in VALID_MODELS`，所以保存成 `ftx1` 后配置永远被当作「没定下来」，每次冷启动都重跑一次探测。</li>
+        <li>探测必然把它改回 FT-710：`probe_radio_model()` 只区分两种协议——`return &quot;ft710&quot; if probe is probe_ft710 else &quot;ic7300&quot;`，FTX-1 与 FT-710 同属八重洲 ASCII CAT（`ID;` 会应答，见 CHANGELOG v1.16.0「传输层是移植而非新写」），所以一律判成 ft710；随后 `if model_unset: model = RADIO_MODEL_FALLBACK`（`RADIO_MODEL_FALLBACK = &quot;ft710&quot;`）并 `update_env_file(config_path, updates)` 把 ft710 写回 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`。</li>
+        <li>现场日志正是这条链路的结果：`2026-10-17 22:49:24,029 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud`、`Connected to FT-710 (ID=0840) on [已隐去]`，env.json 里 `&quot;model&quot;: &quot;ft710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;` —— 型号已被改写，而不是保存失败。</li>
+        <li>频谱空白是型号错误的后果，不是第二个故障：FT-710 后端走 FT4222 真实频谱，而机器上没有这个设备，`scope_pipe` 每轮 5 次 `open_failed:attempt_N:error_2` → `spi_init_failed:all_attempts` → `fatal:cannot_open_device` → `scope_pipe exited (frames=0, connected=False)`，约每 5 秒重启一次（日志里 22:54:01→22:54:26 反复出现）；summary 因此判「出现 S 表合成回退 —— 真实频谱未工作」。</li>
+        <li>另外，Yaesu 家族在 `backends/yaesu/backend.py` 是 `scope_type=&quot;none&quot;`（AGENTS.md 记载：由现有 S 表合成器覆盖 UI），所以就算型号正确选成 FTX-1，也不会有真实瀑布——这一点是机型能力的边界，不是坏件。</li>
+        <li>同一白名单还挡住 ftdx10 / ftdx101d / ftdx101mp / ft891 / ic705 / ic7610 / ic7760 等全部 7 个非(ft710/ic7300/ic7300mk2)型号；CHANGELOG v1.16.0 只新增了机型与 profile，`first_run.VALID_MODELS` 与 `probe_radio_model()` 的映射从未随之扩展（SDD/14 的 V2.46、V2.72、V2.92 都无同签名记录），所以 1.28.1 仍带此缺陷。</li>
+        <li>`2026-10-17 21:58:15,988 [WARNING] mrrc.audio: Configured audio device &#x27;USB Audio&#x27; not found` 属另一件事且已自愈：同一份 stdout 里 22:49:35 `Found configured audio input: [1] 麦克风 (USB Audio Device)` 并成功 `RX audio started`，与本问题无关。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>每次开机/关掉程序重新打开后，进 ☰ 菜单的「连接设置…」，把电台型号重新选成 FTX-1 并保存：保存会写盘并让服务以 FTX-1 重启（这次运行内生效，不必再关程序）。这是当前版本的可用绕过，重启一次就得重来一次。</li>
+        <li>不要在选好 FTX-1 后再「关闭程序重新打开」——那一步正是首启探测把型号改回 FT-710 的时机；要切配置请用连接设置里的保存/重启路径。</li>
+        <li>关于频谱：FTX-1 在本产品里只有 S 表合成，没有真实瀑布（Yaesu 家族的 `scope_type=&quot;none&quot;`），这与 FT-710 的 FT4222 频谱不是一回事；需要真实瀑布请使用带 FT4222 的机型（FT-710 / FTDX10 / FTDX101 等）。</li>
+        <li>FTX-1 同时属实验性机型（v1.16.0 起「仅接收」）：若切到 FTX-1 后按 PTT 无反应属预期 TX 门禁，需要时在 `mrrc_modern.env` 里设 `MRRC_ALLOW_UNVERIFIED_TX=1` 后再保存重启（发射行为未在真机验证，请谨慎）。</li>
+        <li>想让设置永久保留：把配置副本另存一份（`[已隐去]\AppData\Local\MRRC-Modern\mrrc_modern.env`），每次启动后若发现型号又被改成 ft710，用副本里的 `MRRC_RADIO_MODEL=ftx1` 覆盖并在连接设置里保存一次；根治需要新版 launcher，但它自动覆盖这个键，用户侧无法绕过。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-17 22:49:24,029 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud</li>
+        <li class="ev">2026-10-17 22:49:24,809 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0840) on [已隐去]</li>
+        <li class="ev">env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">macos/first_run.py:34 `VALID_MODELS = frozenset({&quot;ft710&quot;, &quot;ic7300&quot;, &quot;ic7300mk2&quot;})`</li>
+        <li class="ev">macos/first_run.py `needs_first_run`: `configured = (pwd and pwd != DEFAULT_WEB_PASSWORD and model in VALID_MODELS and (...))`</li>
+        <li class="ev">macos/first_run.py `apply_first_run`: `model_unset = model not in VALID_MODELS` / `if port_unset or model_unset:` → 探测 → `if model_unset: model = RADIO_MODEL_FALLBACK`</li>
+        <li class="ev">macos/first_run.py `probe_radio_model`: `return &quot;ft710&quot; if probe is probe_ft710 else &quot;ic7300&quot;`</li>
+        <li class="ev">2026-10-17 22:54:27,979 [INFO] mrrc.backend.ft710.scope: scope_pipe: open_failed:attempt_1:error_2</li>
+        <li class="ev">2026-10-17 22:54:24,788 [WARNING] mrrc.backend.ft710.scope: scope_pipe: spi_init_failed:all_attempts</li>
+        <li class="ev">2026-10-17 22:54:24,789 [WARNING] mrrc.backend.ft710.scope: scope_pipe: fatal:cannot_open_device</li>
+        <li class="ev">2026-10-17 22:54:25,137 [WARNING] mrrc.backend.ft710.scope: scope_pipe exited (frames=0, connected=False)</li>
+        <li class="ev">summary.txt: 频谱：出现 S 表合成回退 —— 真实频谱（FT4222 / CI-V 0x27）未工作</li>
+        <li class="ev">CHANGELOG.md v1.16.0: 「四款新机型：`MRRC_RADIO_MODEL=ftdx10 | ftdx101d | ftdx101mp | ftx1`」</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>macos/first_run.py:VALID_MODELS / needs_first_run / apply_first_run / probe_radio_model（应由 backends.known_models() 派生白名单，并让 probe 返回 &quot;ftx1&quot; 而非 &quot;ft710&quot;）</code></p>
+    </article>
     <article class="card" id="20261017-225416-0570">
       <header>
         <span class="id">20261017-225416-0570</span>
@@ -692,7 +737,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-17 23:02（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-17 23:11（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

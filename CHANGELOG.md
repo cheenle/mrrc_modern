@@ -8,6 +8,21 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 遥控器面板：发现就直接配，失败要说出原因
+
+- 现场（盒子 `.217`，00:10–00:16）：操作员连点三次「配对」，服务端三次
+  `POST /api/box/bt/pair → 400`，日志只有 `keys_work=false`；其中两次打的是
+  `44:3E:8A:10:DB:F8`（一个叫 `CASL 39982` 的 LE 信标）。真正的原因——遥控器已经退出
+  配对模式——只出现在终端里，页面上一个字都没有。
+- **不再点第二次**：扫描结束后，如果只有**一台**「bluez 认得出是 HID 输入设备
+  （`input-*`）**且**这次扫描有信号强度（= 它正在广播，也就是在配对模式）」的设备，
+  页面直接调用配对，并说明「找到遥控器「X」，正在配对…」。多于一台、或一台都没有时
+  仍然列出清单，不替操作员猜。
+- **失败要说出原因**：`net_bt.pair()` 现在把 `bluetoothctl` 的那一行带回来
+  （`Failed to pair: …` / `Device … not available` / `Authentication*` / `org.bluez.Error.*`），
+  页面显示「没有配上：`<原话>`」。上一版对任何原因都只说「确认遥控器在配对模式」。
+- 测试 2477 → 2481（`tests/test_net_bt.py` +4：自动配对判据、错误原话提取、成功无错误）。
+
 ### 遥控器面板：给信号强度，让它能被找出来
 
 - 现场（盒子 `.217`）：BR/EDR 扫出 **23 个**设备，页面只给「地址 + 名字」——操作员没法判断

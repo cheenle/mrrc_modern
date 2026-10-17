@@ -215,6 +215,35 @@ class PairTests(unittest.TestCase):
         self.assertEqual([call[2] for call in run.calls], ["off", "on"])
 
 
+class PairErrorTests(unittest.TestCase):
+    """配对失败要带上 bluez 的原话 —— 「没配上」本身没法行动。"""
+
+    def test_the_reason_reaches_the_caller(self):
+        def run(argv):
+            if argv[0] == "bluetoothctl" and argv[1:3] == ["--timeout", "25"]:
+                return 1, "Failed to pair: org.bluez.Error.AuthenticationFailed\n", ""
+            return 0, "", ""
+
+        state = net_bt.pair("0C:F3:CE:B0:88:75", runner=run)
+        self.assertEqual(state["error"], "Failed to pair: org.bluez.Error.AuthenticationFailed")
+
+    def test_not_available_is_explained(self):
+        self.assertEqual(net_bt.pair_error("Device 0C:F3:CE:B0:88:75 not available"),
+                         "Device 0C:F3:CE:B0:88:75 not available")
+
+    def test_a_successful_pair_has_no_error(self):
+        def run(argv):
+            if argv[0] == "bluetoothctl" and argv[1:3] == ["--timeout", "25"]:
+                return 0, "Pairing successful\n", ""
+            if argv[0] == "bluetoothctl" and argv[1] == "info":
+                return 0, INFO_OUT, ""
+            return 0, "", ""
+
+        state = net_bt.pair("0C:F3:CE:B0:88:75", runner=run)
+        self.assertTrue(state["paired"])
+        self.assertEqual(state["error"], "")
+
+
 class VerdictTests(unittest.TestCase):
     """The judgement the page acts on: do the keys arrive?"""
 
@@ -268,6 +297,19 @@ class SettingsPageTests(unittest.TestCase):
 
     def test_the_page_still_avoids_innerhtml(self):
         self.assertNotIn("innerHTML", self.html)
+
+    def test_it_pairs_a_single_broadcasting_remote_without_a_second_click(self):
+        """只发现一台正在广播的遥控器时直接配。
+
+        现场（2026-10-17）：扫描要 12 秒、配对要 25 秒，操作员还要在二十几个条目里
+        挑一台 —— 而他手里那台正贴着盒子、灯在快闪。
+        """
+        self.assertIn("looksLikeRemote", self.html)
+        self.assertIn("pairNow", self.html)
+        self.assertIn("candidates.length === 1", self.html)
+        # 判据是「bluez 说是输入设备」+「这次扫描有信号强度」，不是随便一台有名字的
+        self.assertIn("indexOf('input-') === 0", self.html)
+        self.assertIn("typeof cand.rssi === 'number'", self.html)
 
 
 if __name__ == "__main__":

@@ -242,11 +242,39 @@ def info(address: str, runner: Optional[Runner] = None) -> dict:
     return parse_info(out)
 
 
+#: What bluez says when a pair attempt fails, and what the operator needs to see.
+#: Swallowing it left the page saying "没有配上，确认遥控器在配对模式" for every
+#: possible cause — including "Device not available" (the remote stopped
+#: advertising) and "AuthenticationFailed" (it left pairing mode mid-handshake).
+_PAIR_ERROR = re.compile(
+    r"(Failed to pair[^\n]*"
+    r"|Device .* not available"
+    r"|Authentication(Canceled|Failed|Timeout|Rejected)"
+    r"|org\.bluez\.Error\.\w+"
+    r"|Connection attempt failed[^\n]*)")
+
+
+def pair_error(text: str) -> str:
+    """The one line worth showing an operator, or ``""`` when it worked."""
+    for raw in _clean(text).splitlines():
+        match = _PAIR_ERROR.search(raw)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
 def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None) -> dict:
-    """Pair + trust.  Returns the resulting ``info()`` (empty on failure)."""
-    _run(["bluetoothctl", "--timeout", str(seconds), "pair", address], runner)
+    """Pair + trust.  Returns the resulting ``info()``, plus ``error`` on failure.
+
+    The error is surfaced on purpose: "没有配上" with no reason is the message an
+    operator can do nothing with (2026-10-17: three failed attempts on a box, and
+    the reason — the remote had left pairing mode — was only in the terminal).
+    """
+    _rc, out, err = _run(["bluetoothctl", "--timeout", str(seconds), "pair", address], runner)
     _run(["bluetoothctl", "trust", address], runner)
-    return info(address, runner)
+    state = info(address, runner)
+    state["error"] = "" if state.get("paired") else pair_error(out + "\n" + err)
+    return state
 
 
 def remove(address: str, runner: Optional[Runner] = None) -> None:

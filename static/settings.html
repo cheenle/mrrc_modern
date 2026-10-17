@@ -835,21 +835,30 @@ select{
     var pair = document.createElement('button');
     pair.type = 'button';
     pair.textContent = '配对';
-    pair.addEventListener('click', function () {
-      pair.disabled = true;
-      say('正在配对 ' + (cand.name || cand.address) + ' …（最多 25 秒）');
-      fetch('/api/box/bt/pair', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: cand.address }),
-      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
-        .then(function (res) { verdict(cand, res.body); })
-        .catch(function () { say('配对请求失败', 'bad'); })
-        .finally(function () { pair.disabled = false; });
-    });
+    pair.addEventListener('click', function () { pairNow(cand, pair); });
     line.appendChild(pair);
     return line;
+  }
+
+  // 「当场在广播的遥控器」：bluez 认得出它是 HID 输入设备（input-*），而且这次扫描
+  // 有信号强度（说明它现在就在广播 —— 也就是在配对模式）。两个条件都满足才自动配对；
+  // 一台都没满足就退回手动，绝不替操作员猜。
+  function looksLikeRemote(cand) {
+    return (cand.icon || '').indexOf('input-') === 0 && typeof cand.rssi === 'number';
+  }
+
+  function pairNow(cand, button) {
+    if (button) { button.disabled = true; }
+    say('正在配对 ' + (cand.name || cand.address) + ' …（最多 25 秒）');
+    fetch('/api/box/bt/pair', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: cand.address }),
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+      .then(function (res) { verdict(cand, res.body); })
+      .catch(function () { say('配对请求失败', 'bad'); })
+      .finally(function () { if (button) { button.disabled = false; } });
   }
 
   function verdict(cand, state) {
@@ -879,7 +888,10 @@ select{
       msg.appendChild(again);
       return;
     }
-    say('没有配上。确认遥控器在配对模式（指示灯快闪）后再试。', 'bad');
+    // 把 bluez 的原话放出来：「没配上」本身没法行动（2026-10-17 现场，三次配对
+    // 失败，真正的原因——遥控器已经退出配对模式——只出现在终端里）。
+    say('没有配上' + (state && state.error ? '：' + state.error : '')
+      + '。确认遥控器在配对模式（指示灯快闪）后再试。', 'bad');
   }
 
   scanBtn.addEventListener('click', function () {
@@ -891,9 +903,19 @@ select{
       .then(function (payload) {
         var devices = (payload && payload.devices) || [];
         if (!devices.length) { say('没找到设备。遥控器在配对模式吗？', 'bad'); return; }
-        say('找到 ' + devices.length + ' 个设备，按信号强弱排（遥控器贴着盒子时通常在'
-          + ' -40 ~ -60 dBm，排在最上面几个），选一个点「配对」。');
         devices.forEach(function (d) { list.appendChild(row(d)); });
+        var candidates = devices.filter(looksLikeRemote);
+        if (candidates.length === 1) {
+          // 只发现一台正在广播的遥控器：直接配，不再让操作员点第二次。
+          say('找到遥控器「' + (candidates[0].name || candidates[0].address)
+            + '」，正在配对…（不用再点）');
+          pairNow(candidates[0], null);
+          return;
+        }
+        say('找到 ' + devices.length + ' 个设备，按信号强弱排（遥控器贴着盒子时通常在'
+          + ' -40 ~ -60 dBm）。没有自动配对：'
+          + (candidates.length ? '有 ' + candidates.length + ' 台像遥控器，请点一下要哪台。'
+                               : '没看到正在广播的遥控器 —— 先让它进配对模式（灯快闪）再扫。'));
       })
       .catch(function () { say('搜索失败', 'bad'); })
       .finally(function () { scanBtn.disabled = false; });

@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.98</a></li>
+          <li><a href="#updates">V2.99</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.98 · 2026-10-17</span>
+          <span>SDD V2.99 · 2026-10-17</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.98</td>
+              <td>V2.99</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -146,6 +146,38 @@
           <h2 class="section-title">What's New</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-hard-drive"></i></div>
+            <h3>
+              An Unattended Box Cannot Fill Its Disk: Log Rotation, a Journald
+              Cap, and a Recording That Refuses Instead of Filling
+              <small>(V2.99)</small>
+            </h3>
+            <p>
+              <code>logs/server-stdout.log</code> is systemd's
+              <code>StandardOutput=append:</code> target, and neither systemd nor
+              the server rotates an <code>append:</code> target — which made it
+              the one file in an image with no ceiling. Measured: a defect that
+              logged one warning per 20&nbsp;ms audio frame wrote 17&nbsp;MB in
+              five hours on a 6.5&nbsp;GB root. The service layer now ships
+              <code>/etc/logrotate.d/mrrc</code> (5&nbsp;MB trigger, three
+              generations, compressed, <code>copytruncate</code> because systemd
+              holds the descriptor) with its own
+              <code>mrrc-logrotate.timer</code> — it does not trust cron or the
+              distro's timer to be running — and caps journald at 128&nbsp;MB
+              (the default is 10% of the filesystem).
+            </p>
+            <p>
+              Recordings got the non-destructive half of a retention policy:
+              below <code>MRRC_RECORDINGS_MIN_FREE_MB</code> (200&nbsp;MB, about
+              seven hours at the default bitrate) a new recording is
+              <em>refused, with the numbers</em>, and never started. Nothing the
+              operator recorded is deleted to make room.
+            </p>
+            <p class="feature-metric">
+              one bounded file · one bounded journal · refusals, never deletions
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-shield-halved"></i></div>
             <h3>

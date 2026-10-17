@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.98 更新</a></li>
+          <li><a href="#updates">V2.99 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.98 · 2026-10-17</span>
+          <span>SDD V2.99 · 2026-10-17</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
@@ -110,7 +110,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.98</td>
+              <td>V2.99</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -143,6 +143,33 @@
           <h2 class="section-title">最新更新</h2>
         </div>
         <div class="features-grid">
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-hard-drive"></i></div>
+            <h3>
+              无人值守的盒子不会被日志写满：轮转、journald 上限、录音拒写
+              <small>（V2.99）</small>
+            </h3>
+            <p>
+              <code>logs/server-stdout.log</code> 是 systemd 的
+              <code>StandardOutput=append:</code> 目标，而 systemd 与服务端都不轮转
+              <code>append:</code> 目标——它因此是整个镜像里唯一没有上限的文件。实测：一个每
+              20&nbsp;ms 写一条警告的缺陷，在 6.5&nbsp;GB 的根分区上五小时写了
+              17&nbsp;MB。服务层现在安装 <code>/etc/logrotate.d/mrrc</code>（5&nbsp;MB
+              触发、留三代、压缩，<code>copytruncate</code>——systemd
+              持有文件描述符），并自带 <code>mrrc-logrotate.timer</code>：不押注 cron
+              或发行版的 timer 在跑；journald 上限 128&nbsp;MB（默认是文件系统的
+              10%）。
+            </p>
+            <p>
+              录音拿到的是保留策略里<em>不破坏</em>的那一半：剩余空间低于
+              <code>MRRC_RECORDINGS_MIN_FREE_MB</code>（200&nbsp;MB，按默认码率约七小时）
+              时，新录音会被<em>拒绝并给出两个数字</em>，绝不会先开始。
+              操作员录下的东西，产品不会为了腾地方删掉。
+            </p>
+            <p class="feature-metric">
+              一个有界的文件 · 一个有界的 journal · 只拒绝，不删除
+            </p>
+          </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-shield-halved"></i></div>
             <h3>

@@ -1033,3 +1033,17 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   `state()` 的 `keys_work` 来自 `/proc/bus/input/devices` 里有没有该地址的键盘设备，配对标志
   只用于诊断；② 每一次 bluez 调用都走可注入的 runner，整套测试不需要控制器、不需要 root。
   另外守住面板本身：三个钩子存在、调的是这三个端点、页面仍然没有 `innerHTML`。
+
+### 本轮新增（日志与磁盘的上限，2026-10-17）
+
+- **`test_log_rotation.py`** — 镜像里唯一没有上限的文件是 `logs/server-stdout.log`：它是单元的
+  `StandardOutput=append:$MRRC_HOME/logs/server-stdout.log`，而 systemd 不轮转 `append:` 目标。
+  实测扳机：盒子上旧版 `local_speaker.py` 每 20 ms 一条 WARNING，五小时 17 MB。守卫的核心是
+  **把轮转的文件名钉到单元的 append 目标上** —— 一侧改名不会报错，只是从此不再轮转，而
+  `missingok` 连"匹配不到"都吞掉；另有 `copytruncate`（systemd 持有 fd）、大小触发 + 代数 +
+  压缩、`mrrc-logrotate.timer` **被 enable**（不押注 cron 有没有被 mask）、`packages.txt` 里有
+  `logrotate`，以及 journald 的 `SystemMaxUse` / `SystemKeepFree`。
+- **`test_recorder_api.py` 的 `RecordingSpaceGuardTests`** — 录音是客户自己能打开的唯一无界写入方
+  （≈29 MB/小时）。剩余空间低于 `MRRC_RECORDINGS_MIN_FREE_MB` 时**在会话创建之前**拒绝，并报出
+  两个数字；测不出（`OSError`）不算拒绝；`0` 关闭。刻意没有"自动删旧录音"的测试，因为产品
+  不做这件事。

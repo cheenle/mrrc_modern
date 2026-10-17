@@ -319,11 +319,13 @@ PAGES = (
             '<a class="btn btn-primary" href="{p}downloads/MRRC-Modern-1.25.5-w103d.img.gz">'
             '<i class="fas fa-download"></i> 下载 W103D 镜像</a>'
             '<a class="btn" href="{p}w103d-user.html"><i class="fas fa-box-open"></i> 盒子已刷好？看用户指南</a>'
+            '<a class="btn" href="{p}w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a>'
             '<a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" '
             'target="_blank" rel="noopener"><i class="fas fa-bolt"></i> 速查操作单</a>'),
         # The markdown links the sibling document by file name; the site spells
         # it as a page, so the built HTML would otherwise point at a .md file.
-        "links": (("W103D_USER_GUIDE.md", "w103d-user.html"),),
+        "links": (("W103D_USER_GUIDE.md", "w103d-user.html"),
+                  ("W103D_REMOTE_GUIDE.md", "w103d-remote.html")),
         "figure": True,
     },
     {
@@ -338,6 +340,7 @@ PAGES = (
                  "这页讲清楚出厂设了什么、电台怎么接、验收看哪几项，以及出了问题先自己查什么。"),
         "actions": (
             '<a class="btn btn-primary" href="{p}w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a>'
+            '<a class="btn" href="{p}w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a>'
             '<a class="btn" href="{p}index.html#download"><i class="fas fa-download"></i> 下载页</a>'),
         "links": (("W103D_GUIDE.md", "w103d.html"),
                   ("W103D_REMOTE_GUIDE.md", "w103d-remote.html")),

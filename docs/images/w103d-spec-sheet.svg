@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1500" viewBox="0 0 1240 1500" font-family="PingFang SC, Noto Sans CJK SC, Helvetica, sans-serif">
   <rect width="1240" height="1500" fill="#121212"/>
   <text x="64" y="96" font-size="46" font-weight="700" fill="#f2f2f2">ZTE W103D 电台盒子</text>
-  <text x="64" y="140" font-size="22" fill="#9a9a9a">参数 · 实测 · 对比树莓派　｜　运行 MRRC Modern 服务端</text>
+  <text x="64" y="140" font-size="22" fill="#9a9a9a">参数 · 实测负载 · 蓝牙结论　｜　运行 MRRC Modern 服务端</text>
   <line x1="64" y1="172" x2="1176" y2="172" stroke="#2c2c2c" stroke-width="2"/>
 
   <text x="64" y="228" font-size="30" font-weight="700" fill="#f5b13d">参数</text>
@@ -20,15 +20,27 @@
     <text x="96" y="688" fill="#9a9a9a">zram</text><text x="290" y="688" fill="#f2f2f2">已配置（armbian-zram-config）</text>
   </g>
 
-  <text x="64" y="790" font-size="30" font-weight="700" fill="#f5b13d">实测与推算分开看</text>
+  <text x="64" y="790" font-size="30" font-weight="700" fill="#f5b13d">实测负载（这台盒子，2026-10-17）</text>
+  <text x="560" y="790" font-size="18" fill="#7d7d7d">vmstat 5 秒 ×3 平均 · 4 核 · 无浏览器客户端</text>
   <rect x="64" y="814" width="1112" height="250" rx="12" fill="#1b1b1b" stroke="#2c2c2c"/>
   <g font-size="21">
-    <text x="96" y="862" fill="#9a9a9a">唯一实测（不在 W103D 上做的）：</text>
-    <text x="96" y="900" fill="#f2f2f2">dev_tools/bench_mrrc.py 在 Apple M2 上 → 服务端热路径占单核</text>
-    <text x="1030" y="900" fill="#4ade80">1.53%</text>
-    <text x="96" y="946" fill="#9a9a9a">rx 0.96 / spectrum 0.37 / tx 0.19 / state 0.01</text>
-    <text x="96" y="1000" fill="#f2f2f2">W103D 推算 ≈ 30%（顺序核 + 无乱序）　｜　树莓派 4 ≈ 15%</text>
-    <text x="96" y="1040" fill="#7d7d7d">推算要打折看：该模型对顺序核系统性偏乐观（对照实测曾把 1037U 高估约 40%）。</text>
+    <text x="96" y="866" fill="#9a9a9a">状态</text>
+    <text x="300" y="866" fill="#9a9a9a">整机忙</text>
+    <text x="470" y="866" fill="#9a9a9a">空闲</text>
+    <text x="640" y="866" fill="#9a9a9a">用户 / 系统</text>
+    <text x="900" y="866" fill="#9a9a9a">load</text>
+    <text x="96" y="916" fill="#f2f2f2">FT8 引擎开</text>
+    <text x="300" y="916" fill="#f5b13d">≈ 27%</text>
+    <text x="470" y="916" fill="#f2f2f2">73%</text>
+    <text x="640" y="916" fill="#f2f2f2">34% / 7%</text>
+    <text x="900" y="916" fill="#f2f2f2">1.69</text>
+    <text x="96" y="966" fill="#f2f2f2">FT8 引擎关</text>
+    <text x="300" y="966" fill="#4ade80">≈ 17%</text>
+    <text x="470" y="966" fill="#f2f2f2">83%</text>
+    <text x="640" y="966" fill="#f2f2f2">8% / 11%</text>
+    <text x="900" y="966" fill="#f2f2f2">1.30</text>
+    <text x="96" y="1016" fill="#9a9a9a">内存 402 / 1931 MB（≈21%，含 zram）　｜　FT8 的 CPU 在 DSP 子进程里，不在主服务上</text>
+    <text x="96" y="1052" fill="#7d7d7d">早先的 M2 推算（热路径占单核 1.53%）只用来估模型，已被上面这组实测取代。</text>
   </g>
 
   <text x="64" y="1130" font-size="30" font-weight="700" fill="#f5b13d">蓝牙实测（2026-10-17）</text>

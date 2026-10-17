@@ -108,6 +108,19 @@ class PreflashEnvTests(unittest.TestCase):
 class BuildWiringTests(unittest.TestCase):
     """构建侧的两条纪律：默认关，且系统层的几行只在开关里执行。"""
 
+    def test_the_ntp_step_does_not_assume_an_implementation(self):
+        """基底用哪个 NTP 服务不由我们决定（Armbian 是 chrony，没有 systemd-timesyncd）。
+
+        第一版无条件 `systemctl enable systemd-timesyncd.service`，在盒子上必然失败，
+        留给构日志的只是一句“check the base image”的废话。现在的形状是“不挑实现、
+        但必须有一个、否则构建失败”——而这一条守卫就是防止那句 enable 回来。
+        """
+        text = SCRIPT.read_text(encoding="utf-8")
+        # 只看代码（注释里提到那个错误写法是有价值的，不该被守卫逼着删掉）。
+        code = "\n".join(l for l in text.splitlines() if not l.strip().startswith("#"))
+        self.assertNotIn("enable systemd-timesyncd", code)
+        self.assertIn("no NTP unit in this base image", code)
+
     def test_the_build_flag_defaults_to_off(self):
         text = (REPO / "packaging" / "box" / "build-image.sh").read_text(encoding="utf-8")
         self.assertIn("--preflash", text)

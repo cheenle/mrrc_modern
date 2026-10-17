@@ -113,9 +113,22 @@ fi
 locale-gen
 printf 'LANG=%s\n' "$LOCALE_NAME" >/etc/default/locale
 
-# NTP：Armbian 默认已启用 systemd-timesyncd，这里只做显式声明；真判据在机器上
-# （`timedatectl` 的 System clock synchronized）而不是构建期。
-systemctl enable systemd-timesyncd.service 2>/dev/null || \
- echo "preflash: systemd-timesyncd was not enabled (check the base image)"
+# NTP：**不在这里挑实现**。基底（ophub Armbian）是 chrony 且已 enable；早先那版无条件
+# `systemctl enable systemd-timesyncd.service` 在盒子上必然失败（没有那个单元），只在构建日志里
+# 留一行“check the base image”的废话 —— 真实原因是我们对基底的实现做了假定。
+# 这里只回答一个问题：基底里到底有没有一个 NTP 服务？
+# 没有就让构建**失败**：时间不准会直接毁掉 FT8 的时隙对齐，而这种坏法在页面上看不出来。
+# 真判据在机器上：`timedatectl` 的 System clock synchronized（指南验收项 A7）。
+ntp_units=""
+for unit in systemd-timesyncd.service chrony.service ntpsec.service ntp.service openntpd.service; do
+ if [ -f "/lib/systemd/system/$unit" ] || [ -f "/usr/lib/systemd/system/$unit" ]; then
+  ntp_units="$ntp_units $unit"
+ fi
+done
+[ -n "$ntp_units" ] || {
+ echo "preflash: no NTP unit in this base image — the box could ship with a wrong clock" >&2
+ exit 1
+}
+echo "preflash: NTP unit(s) in the base image:$ntp_units (left exactly as the base image ships them)"
 
 echo "preflash: done"

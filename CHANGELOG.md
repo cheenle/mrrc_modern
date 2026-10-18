@@ -8,6 +8,30 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 遥控器配对必须在 pty 里跑：`No bonding` 是配不上的真正原因
+
+- 现场（盒子 `.217`，蓝牙遥控器 `CMCC_Voice_Remote`）：配对**看起来**成功过，`btmon` 却给出
+  `SMP: Pairing Request … Authentication requirement: No bonding … (0x28)` →
+  `SMP: Pairing Failed: Invalid parameters (0x0a)`；链路上来了、属性全拒（`hog-lib.c: HID
+  Information read failed`，ATT `0x0E`），HID 设备建不出来，`keys_work` 永远是 false。
+- 根因不是遥控器：**一次性 `bluetoothctl --timeout N pair` 不注册配对 agent**，bluez 于是请求
+  「不绑定」；而 BLE HID 遥控器必须存一把密钥才能重连，只能回 `Invalid parameters`。
+  把同一串命令打进 **pty**（`--agent NoInputNoOutput`）后请求变成 `Bonding (0x29)`，
+  `Pairing successful`，bluez 随后建出 `CMCC_Voice_Remote Keyboard`，键立刻能调频。
+- `net_bt.pair()` 现在跑交互式会话（`pty` + 脚本：`power on` → `scan on` → `pair` → `trust`），
+  没有 pty 的平台退回一次性调用。面板文案改成「先扫 12 秒再配，全程约 30–45 秒」。
+- **顺带补上第三个缺口**：`mrrc` 不在 `input` 组。`/dev/input/eventN` 是 `root:input 0660`，
+  缺组时 `mrrc-localctl` 每次 open 都是 `Permission denied`，而界面上没有任何地方会报
+  「缺组」——遥控器看着配好了、按键却毫无反应。两条镜像线（`packaging/box/box-overlay.sh`、
+  pi-gen 的 `00-run-chroot.sh`）都加上 `input`，并有一条 parity 测试钉住。
+- **按名字配对，不认 MAC**：`CMCC_Voice_Remote`（可用 `MRRC_BT_REMOTE_NAME` 改，逗号分隔）
+  的名字对上一台就配一台，对上几台就配几台（串行，最后给「N/M 台成功」的汇总）。
+  来料批次会换地址，而「这台叫什么」是能一眼看见的事实；多配一台的代价远小于「这台不认」。
+- **固化进镜像，新盒子不再逐个适配**：`packages.txt` 加 `bluez`（缺它时面板永远扫到
+  0 个设备，界面上却只说「遥控器在配对模式吗？」）、服务层 `enable bluetooth.service`、
+  两条镜像线把 `mrrc` 加进 `input` 组、配对走 pty+agent。四条都有测试钉住。
+- 测试 +3（配对脚本顺序与等待上限、镜像 `input` 组）。
+
 ### 遥控器面板：发现就直接配，失败要说出原因
 
 - 现场（盒子 `.217`，00:10–00:16）：操作员连点三次「配对」，服务端三次

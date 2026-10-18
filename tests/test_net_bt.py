@@ -129,16 +129,29 @@ class SignalStrengthTests(unittest.TestCase):
     def test_scan_prefers_btmgmt_and_falls_back_to_bluetoothctl(self):
         run = runner_for(BTMGMT_OUT)
         net_bt.scan(seconds=3, runner=run)
-        self.assertEqual(run.calls[0][:2], ["timeout", "3"])
+        self.assertEqual(run.calls[0][0], "timeout")   # 每半轮至少 4 秒
         self.assertIn("btmgmt", run.calls[0])
 
         fell_back = runner_for(SCAN_OUT, rc=0)
         devices = net_bt.scan(seconds=3, runner=fell_back)
-        self.assertEqual(fell_back.calls[0][:2], ["timeout", "3"])
-        self.assertEqual(fell_back.calls[1][:2], ["bluetoothctl", "--timeout"])
+        self.assertEqual(fell_back.calls[0][0], "timeout")
+        bluetoothctl_calls = [c for c in fell_back.calls if c[0] == "bluetoothctl"]
+        self.assertEqual(bluetoothctl_calls[0][:2], ["bluetoothctl", "--timeout"])
         self.assertEqual(devices[0]["rssi"], -63,
                          "bluetoothctl 自己会发 [CHG] … RSSI: -63，这条路也得把它带出来")
         self.assertEqual(devices[0]["type"], "", "bluetoothctl 不给地址类型")
+
+    def test_the_rich_scan_asks_for_both_radio_kinds(self):
+        """``btmgmt find -l`` 是 **LE only**，不是"全部"。
+
+        实测（2026-10-17，盒子 .217）：`find -l` 一轮 58 个 LE、**0 个 BR/EDR**；
+        `find -b` 才看得见经典蓝牙设备。遥控器是经典蓝牙，只传 `-l` 等于永远扫不到它。
+        """
+        run = runner_for(BTMGMT_OUT)
+        net_bt.scan(seconds=3, runner=run)
+        flags = [c[-1] for c in run.calls if c[0] == "timeout"]
+        self.assertEqual(flags[:2], ["-b", "-l"],
+                         "`find` 的 -b/-l 互斥，必须各扫一轮（只扫一种就会漏掉另一类遥控器）")
 
     def test_the_panel_shows_signal_strength(self):
         page = (Path(__file__).resolve().parents[1] / "static" / "settings.html").read_text(
@@ -213,6 +226,63 @@ class PairTests(unittest.TestCase):
         run = runner_for()
         net_bt.power_cycle(runner=run)
         self.assertEqual([call[2] for call in run.calls], ["off", "on"])
+
+
+class NameMatchingTests(unittest.TestCase):
+    """按**名字**认遥控器，不按 MAC。
+
+    来料批次会换地址，而"这台遥控器叫什么"是能一眼看见的事实；名字对上几台就配几台
+    （多配一台的代价远小于"这台不认"）。`MRRC_BT_REMOTE_NAME` 可改，逗号分隔。
+    """
+
+    def test_the_default_is_the_measured_remote(self):
+        self.assertIn("CMCC_Voice_Remote", net_bt.remote_name_patterns())
+
+    def test_matching_is_case_insensitive_and_substring(self):
+        self.assertTrue(net_bt.matches_remote("CMCC_Voice_Remote"))
+        self.assertTrue(net_bt.matches_remote("cmcc_voice_remote"))
+        self.assertTrue(net_bt.matches_remote("CMCC_Voice_Remote (2)"))
+        self.assertFalse(net_bt.matches_remote("CASL 39982"))
+        self.assertFalse(net_bt.matches_remote(""))
+
+    def test_the_pattern_list_can_be_overridden(self):
+        import os
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"MRRC_BT_REMOTE_NAME": "Foo, Bar "}):
+            self.assertEqual(net_bt.remote_name_patterns(), ("Foo", "Bar"))
+            self.assertTrue(net_bt.matches_remote("the-bar-remote"))
+            self.assertFalse(net_bt.matches_remote("CMCC_Voice_Remote"))
+
+    def test_the_panel_pairs_every_name_match(self):
+        page = (Path(__file__).resolve().parents[1] / "static" / "settings.html").read_text(
+            encoding="utf-8")
+        self.assertIn("remoteNames", page)
+        self.assertIn("pairInTurn", page)
+        self.assertIn("nameMatches", page)
+
+
+class PairScriptTests(unittest.TestCase):
+    """配对必须走交互式会话（pty）——这条是现场一步步试出来的。
+
+    一次性 `bluetoothctl --timeout 25 pair` 不注册 agent，bluez 发出的
+    Pairing Request 里 bonding 位是 0（`0x28`），BLE HID 遥控器直接回
+    SMP `Invalid parameters`（0x0a）；同样的命令打进 pty 就是 `0x29`，
+    `Pairing successful`，随后 bluez 建出 `CMCC_Voice_Remote Keyboard`。
+    """
+
+    def test_the_script_scans_then_pairs_then_trusts(self):
+        lines = [line for line, _ in net_bt.pair_script("0C:F3:CE:B0:88:75", 25)]
+        self.assertEqual(lines[0], "power on")
+        self.assertIn("scan on", lines)
+        self.assertLess(lines.index("scan on"), lines.index("pair 0C:F3:CE:B0:88:75"),
+                        "要先发现，才轮得到配对")
+        self.assertIn("trust 0C:F3:CE:B0:88:75", lines)
+        self.assertEqual(lines[-1], "quit")
+
+    def test_the_pair_wait_is_bounded_but_not_zero(self):
+        waits = dict(net_bt.pair_script("X", 25))
+        self.assertGreater(waits["pair X"], 0)
+        self.assertLessEqual(waits["pair X"], 60)
 
 
 class PairErrorTests(unittest.TestCase):

@@ -20,6 +20,10 @@
 
 ## 2. 配对（只做一次）
 
+> **前提（镜像已带）**：服务账号 `mrrc` 要在 `input` 组里 —— `/dev/input/eventN` 是
+> `root:input 0660`。缺了它，遥控器配得再好，`mrrc-localctl` 每次打开都是
+> `Permission denied`，而界面上没有任何地方会说「缺组」。查：`id mrrc` 里有没有 `input`。
+
 1. 让遥控器进入配对模式：**同时长按「OK + 返回」约 5 秒**，指示灯开始快闪。
 2. 浏览器打开盒子的 `/settings`，找到「**遥控器**」，点「搜索附近的遥控器」（约 12 秒）。
 3. 列表里出现 `CMCC_Voice_Remote` 后点「**配对**」。
@@ -30,6 +34,13 @@
 > 「像遥控器的在前 → 当场扫到的在前（强的在前）→ 只有缓存名字的在后」，所以
 > 遥控器在配对模式时必然在最上面。没有信号强度的那几行是 bluez 记得、但此刻没在广播的
 > 设备（灯不闪了就是这样）。
+
+**配对为什么要这么久、为什么必须由浏览器点。** 盒子上跑的是交互式 `bluetoothctl`
+（pty + `--agent NoInputNoOutput`）。这不是花活：一次性 `bluetoothctl pair` 不注册配对
+agent，bluez 发出的 Pairing Request 里**绑定位是 0**，而 BLE HID 遥控器必须存一把密钥才能
+重连，它会直接回 SMP `Invalid parameters`（`0x0a`）——链路建起来了，配对被一句话否掉。
+进了 pty 之后请求变成 `Bonding (0x29)`，一次就成，bluez 随后建出
+`CMCC_Voice_Remote Keyboard`。
 
 **只发现一台正在广播的遥控器时，页面会自己配对**（不用再点「配对」）——扫描结束直接
 开始配，配上就写「已配对，按键可用 ✓」。没配上时页面会把 bluez 的原话贴出来

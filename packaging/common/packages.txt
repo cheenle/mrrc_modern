@@ -24,6 +24,12 @@ libopus0
 libopus-dev
 avahi-daemon
 
+# bluez: 蓝牙遥控器（AD-028）。缺它的表现不是"报错"，而是配对面板永远扫到 0 个设备
+# —— `net_bt` 走 `bluetoothctl` / `btmgmt`，两个都在这个包里。2026-10-18 在盒子上
+# 实测：内核的 hci0 早就在，用户态没人管，于是「没找到设备。遥控器在配对模式吗？」
+# 这句提示把一个缺包问题伪装成了操作问题。
+bluez
+
 # logrotate: server-stdout.log is written by systemd's `append:` target and has
 # no size bound of its own (a unit cannot express one). The daemon runs on the
 # mrrc-logrotate.timer that mrrc-service-layer.sh installs; without this package

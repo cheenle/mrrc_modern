@@ -847,15 +847,43 @@ select{
     return (cand.icon || '').indexOf('input-') === 0 && typeof cand.rssi === 'number';
   }
 
-  function pairNow(cand, button) {
-    if (button) { button.disabled = true; }
-    say('正在配对 ' + (cand.name || cand.address) + ' …（最多 25 秒）');
-    fetch('/api/box/bt/pair', {
+  // 串行配对：bluez 同时只处理一个配对请求，并行会互相打断。
+  // 名字对上的都配（多配一台的代价远小于"这台不认"），最后给一句汇总。
+  function pairInTurn(list) {
+    var i = 0;
+    var paired = 0;
+    (function next() {
+      if (i >= list.length) {
+        say('自动配对完成：' + paired + '/' + list.length + ' 台成功。'
+          + (paired ? '按一下遥控器的方向键试试。'
+                    : '确认遥控器在配对模式（指示灯快闪）后再点一次搜索。'),
+          paired ? 'good' : 'bad');
+        return;
+      }
+      var cand = list[i++];
+      say('正在配对 ' + (cand.name || cand.address) + ' …（第 ' + i + '/' + list.length
+        + ' 台，每台约 30～45 秒）');
+      pairPromise(cand).then(function (res) {
+        if (res.body && res.body.paired) { paired++; }
+        return next();
+      }).catch(function () { return next(); });
+    })();
+  }
+
+  function pairPromise(cand) {
+    return fetch('/api/box/bt/pair', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ address: cand.address }),
-    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); });
+  }
+
+  function pairNow(cand, button) {
+    if (button) { button.disabled = true; }
+    say('正在配对 ' + (cand.name || cand.address)
+      + ' …（先扫 12 秒再配，全程约 30～45 秒，鼠标别急）');
+    pairPromise(cand)
       .then(function (res) { verdict(cand, res.body); })
       .catch(function () { say('配对请求失败', 'bad'); })
       .finally(function () { if (button) { button.disabled = false; } });
@@ -904,10 +932,24 @@ select{
         var devices = (payload && payload.devices) || [];
         if (!devices.length) { say('没找到设备。遥控器在配对模式吗？', 'bad'); return; }
         devices.forEach(function (d) { list.appendChild(row(d)); });
-        var candidates = devices.filter(looksLikeRemote);
+        // 先按**名字**找（不认 MAC：来料批次会换地址）；名字对上几台就配几台。
+        var names = (payload && payload.remoteNames) || ['CMCC_Voice_Remote'];
+        function nameMatches(d) {
+          if (!d.name) { return false; }
+          var n = d.name.toLowerCase();
+          return names.some(function (p) { return n.indexOf(String(p).toLowerCase()) >= 0; });
+        }
+        var byName = devices.filter(nameMatches);
+        var candidates = byName.length ? byName : devices.filter(looksLikeRemote);
+        if (byName.length) {
+          say('找到遥控器「' + byName.map(function (d) { return d.name; }).join('、')
+            + '」，正在配对…（不用再点，配几台都行）');
+          pairInTurn(byName);
+          return;
+        }
         if (candidates.length === 1) {
-          // 只发现一台正在广播的遥控器：直接配，不再让操作员点第二次。
-          say('找到遥控器「' + (candidates[0].name || candidates[0].address)
+          // 名字不认识、但刚好有一台正在广播的 HID 输入设备：也直接配。
+          say('找到一台正在广播的输入设备「' + (candidates[0].name || candidates[0].address)
             + '」，正在配对…（不用再点）');
           pairNow(candidates[0], null);
           return;

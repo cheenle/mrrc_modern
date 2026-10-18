@@ -364,6 +364,34 @@ class ShellHygieneTests(unittest.TestCase):
             self.assertIsNone(re.search(r"\$\{[A-Za-z_][A-Za-z0-9_]*,,\}", text),
                               path.name + " uses a bash-4 lower-case expansion on a variable")
 
+    def test_bluez_is_in_the_image(self):
+        """没有 bluez，配对面板永远扫到 0 个设备（2026-10-18 真机）。
+
+        内核的 hci0 早就在，用户态没人管 —— 于是界面上那句「没找到设备。遥控器在
+        配对模式吗？」把一个缺包问题伪装成了操作问题。
+        """
+        packages = [
+            line.strip() for line in (COMMON / "packages.txt").read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        self.assertIn("bluez", packages)
+        layer = (COMMON / "mrrc-service-layer.sh").read_text(encoding="utf-8")
+        self.assertIn("systemctl enable bluetooth.service", layer)
+
+
+    def test_the_service_user_can_read_the_bluetooth_remote(self):
+        """`mrrc` 必须在 `input` 组里，否则遥控器的键一个都读不到。
+
+        /dev/input/eventN 是 root:input 0660；2026-10-18 在盒子上实测：遥控器配好了、
+        HID 设备节点也建出来了，mrrc-localctl 却每次 open 都 "Permission denied"，
+        而界面上没有任何地方会说"缺组"。
+        """
+        box = (REPO / "packaging" / "box" / "box-overlay.sh").read_text(encoding="utf-8")
+        pi = (REPO / "packaging" / "rpi" / "pi-gen-stage4" / "01-deploy-mrrc"
+              / "00-run-chroot.sh").read_text(encoding="utf-8")
+        self.assertIn("for g in dialout audio input; do", box)
+        self.assertIn("usermod -aG dialout,audio,input mrrc", pi)
+
     def test_the_service_layer_still_reclaims_its_scratch(self):
         """Both directories hold build scratch; either one left behind ships."""
         text = (COMMON / "mrrc-service-layer.sh").read_text(encoding="utf-8")

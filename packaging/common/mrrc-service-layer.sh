@@ -574,6 +574,10 @@ systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboo
 # package, but this image masks units by default in several places, so say it
 # out loud rather than trusting the package's postinst (design §8).
 systemctl enable avahi-daemon.service || true
+# The Bluetooth remote belongs to the box (AD-028): mrrc-localctl has
+# Wants=bluetooth.service, and enabling it here means a box whose remote was
+# paired on the bench still finds it after a power cycle.
+systemctl enable bluetooth.service || true
 
 log "import gate: the entry points the units run must import from THIS tree"
 # The two failure modes this catches both shipped once (2026-10-10, the 1.25.4

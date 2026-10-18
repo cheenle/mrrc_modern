@@ -6663,7 +6663,11 @@ async def api_box_bt_scan(request: Request):
     if not _verify_auth(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     devices = await asyncio.to_thread(net_bt.scan)
-    return JSONResponse({"devices": devices}, status_code=200)
+    # 页面按**名字**自动配对（不认 MAC：来料批次会换地址）。名字表从这里下发，
+    # 部署侧可以用 MRRC_BT_REMOTE_NAME 改，不必改页面。
+    return JSONResponse({"devices": devices,
+                         "remoteNames": list(net_bt.remote_name_patterns())},
+                        status_code=200)
 
 
 @app.get("/api/box/bt/state", include_in_schema=False)

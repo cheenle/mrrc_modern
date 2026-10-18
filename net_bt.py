@@ -16,6 +16,7 @@ so the whole module is testable without bluez.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from typing import Callable, Optional
@@ -25,6 +26,30 @@ Runner = Callable[[list], tuple]
 #: How long a scan listens.  A remote in pairing mode advertises continuously,
 #: so this only needs to outlast the inquiry cycle (~10 s).
 SCAN_SECONDS = 12
+
+#: 遥控器的**名字**（子串匹配，大小写不敏感），逗号分隔可用
+#: ``MRRC_BT_REMOTE_NAME`` 覆盖。按名字认，不按 MAC：来料批次会换地址，而
+#: 贴在盒子上的那台遥控器叫什么，是能一眼看见的事实（2026-10-18 现场要求）。
+#: 名字对上几台就配几台 —— 多配一台的代价远小于"这台不认"。
+DEFAULT_REMOTE_NAMES = ("CMCC_Voice_Remote",)
+
+
+def remote_name_patterns() -> tuple[str, ...]:
+    """The name patterns an auto-pair will accept, from the environment."""
+    raw = (os.environ.get("MRRC_BT_REMOTE_NAME") or "").strip()
+    if not raw:
+        return DEFAULT_REMOTE_NAMES
+    parts = tuple(part.strip() for part in raw.split(",") if part.strip())
+    return parts or DEFAULT_REMOTE_NAMES
+
+
+def matches_remote(name: str, patterns: Optional[tuple] = None) -> bool:
+    """Is this the remote we are supposed to bond? Substring, case-insensitive."""
+    if not name:
+        return False
+    lowered = name.casefold()
+    return any(p.casefold() in lowered for p in (patterns or remote_name_patterns()))
+
 
 #: ``btmgmt find -l`` prints one line per sighting:
 #:   hci0 dev_found: 0C:F3:CE:B0:88:75 type BR/EDR rssi -54 flags 0x0000
@@ -193,10 +218,19 @@ def scan(seconds: int = SCAN_SECONDS, runner: Optional[Runner] = None) -> list[d
     dropped — that is the old cache echo that drowned the remote in a 24-item
     list (2026-10-17).
     """
-    _rc, out, _err = _run(["timeout", str(seconds), "btmgmt", "find", "-l"], runner)
-    devices = parse_btmgmt(out)
+    # `-l` is LE and `-b` is BR/EDR; they are **mutually exclusive** (`find [-l|-b]`),
+    # and neither means "both".  `-l` alone is how a classic remote stays invisible
+    # (measured 2026-10-17: `find -l` → 58 LE findings, 0 BR/EDR), so the two scans
+    # run one after the other and are merged.  A cheap remote can be either kind —
+    # the measured one is a BLE HID device that only shows up in an LE scan.
+    half = max(4, int(seconds) // 2)
+    devices: list[dict] = []
+    for flag in ("-b", "-l"):
+        _rc, out, _err = _run(["timeout", str(half), "btmgmt", "find", flag], runner)
+        devices.extend(parse_btmgmt(out))
     if devices:
-        return devices
+        return sorted(devices, key=lambda d: (-(d["rssi"] or -999), not d["name"],
+                                              d["name"] or d["address"]))
 
     _rc, out, _err = _run(["bluetoothctl", "--timeout", str(seconds), "scan", "bredr"], runner)
     live = {d["address"]: d for d in parse_devices(out)}
@@ -263,15 +297,101 @@ def pair_error(text: str) -> str:
     return ""
 
 
+def pair_script(address: str, seconds: int = 25) -> list[tuple[str, float]]:
+    """The lines to type at an interactive ``bluetoothctl``, and how long to wait.
+
+    Order matters: discovery first (a remote only starts advertising when it is
+    put in pairing mode, and it may take a few seconds), then the pairing itself.
+    """
+    scan = min(12, max(6, seconds // 2))
+    return [
+        ("power on", 1.0),
+        ("scan on", float(scan)),
+        (f"pair {address}", float(seconds)),
+        (f"trust {address}", 3.0),
+        ("scan off", 0.5),
+        ("quit", 1.0),
+    ]
+
+
+def _pty_session(lines: list[tuple[str, float]], argv: Optional[list] = None) -> str:
+    """Run ``bluetoothctl`` on a real pty and type `lines` into it.
+
+    The pty is not cosmetic: **without an interactive session bluez registers no
+    pairing agent**, so it sends a Pairing Request whose bonding bit is 0 — and a
+    BLE HID remote answers SMP ``Invalid parameters``, because a remote must store
+    a key to reconnect at all.  Measured on the box: one-shot
+    ``bluetoothctl --timeout 25 pair X`` →
+    ``Authentication requirement: No bonding … (0x28)`` → ``Pairing Failed:
+    Invalid parameters (0x0a)``; the same command typed into a pty →
+    ``Bonding … (0x29)`` → ``Pairing successful``, and bluez then builds
+    ``CMCC_Voice_Remote Keyboard``.
+    """
+    import os
+    import pty
+    import select
+    import subprocess
+    import time
+
+    master, slave = pty.openpty()
+    proc = subprocess.Popen(list(argv or ["bluetoothctl", "--agent", "NoInputNoOutput"]),
+                            stdin=slave, stdout=slave, stderr=slave, close_fds=True)
+    os.close(slave)
+    chunks: list[str] = []
+    try:
+        for line, wait in lines:
+            try:
+                os.write(master, (line + "\n").encode())
+            except OSError:
+                break
+            deadline = time.monotonic() + wait
+            while time.monotonic() < deadline:
+                ready, _, _ = select.select([master], [], [], 0.2)
+                if master not in ready:
+                    continue
+                try:
+                    data = os.read(master, 4096)
+                except OSError:
+                    data = b""
+                if not data:
+                    break
+                chunks.append(data.decode(errors="replace"))
+    finally:
+        for closer in (proc.terminate, proc.wait, proc.kill):
+            try:
+                closer()
+            except Exception:
+                pass
+        try:
+            os.close(master)
+        except OSError:
+            pass
+    return "".join(chunks)
+
+
 def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None) -> dict:
     """Pair + trust.  Returns the resulting ``info()``, plus ``error`` on failure.
 
     The error is surfaced on purpose: "没有配上" with no reason is the message an
     operator can do nothing with (2026-10-17: three failed attempts on a box, and
     the reason — the remote had left pairing mode — was only in the terminal).
+
+    A ``runner`` (tests) keeps the one-shot shape; the real path drives an
+    interactive session because that is the only way bluez requests bonding.
     """
-    _rc, out, err = _run(["bluetoothctl", "--timeout", str(seconds), "pair", address], runner)
-    _run(["bluetoothctl", "trust", address], runner)
+    if runner is not None:
+        _rc, out, err = _run(["bluetoothctl", "--timeout", str(seconds),
+                              "pair", address], runner)
+        _run(["bluetoothctl", "trust", address], runner)
+    else:
+        out, err = "", ""
+        try:
+            out = _pty_session(pair_script(address, seconds))
+        except (ImportError, OSError):
+            # 没有 pty 的平台退回一次性调用：配不上的概率更高，但至少有条路。
+            _rc, out, err = _run(["bluetoothctl", "--timeout", str(seconds),
+                                  "pair", address])
+            _run(["bluetoothctl", "trust", address])
     state = info(address, runner)
     state["error"] = "" if state.get("paired") else pair_error(out + "\n" + err)
     return state

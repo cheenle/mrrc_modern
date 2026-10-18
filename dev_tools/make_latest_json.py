@@ -55,7 +55,8 @@ def digest_of(path: Path) -> tuple[str, int]:
 
 def build_manifest(installer: tuple, previous: tuple | None = None, notes: str = "",
                    mandatory: bool = False, min_supported: str = "",
-                   released_at: str = "", expect_app: str = "") -> dict:
+                   released_at: str = "", expect_app: str = "",
+                   box: tuple | None = None) -> dict:
     """`installer`/`previous` are `(version, url, file_path)` triples."""
     version, url, path = installer
     if expect_app and up.compare_versions(version, expect_app) != 0:
@@ -76,6 +77,15 @@ def build_manifest(installer: tuple, previous: tuple | None = None, notes: str =
         prev_sha, prev_size = digest_of(Path(prev_path).expanduser())
         manifest["previous"] = {"version": prev_version, "url": prev_url,
                                 "sha256": prev_sha, "size": prev_size}
+    if box:
+        # 盒子是源码树：它的更新包是一份 stage 过的 tar.gz。版本必须与 latest 一致
+        # （网页上「最新」只有一个），大小与 SHA 同样来自真实文件。
+        box_version, box_url, box_path = box
+        if up.compare_versions(box_version, version) != 0:
+            raise BuildError(f"box 版本 {box_version} 与 latest {version} 不一致")
+        box_sha, box_size = digest_of(Path(box_path).expanduser())
+        manifest["box"] = {"version": box_version, "url": box_url,
+                           "sha256": box_sha, "size": box_size}
     # The same validation the clients run, so a bad manifest can never be published.
     up.parse_manifest(manifest)
     return manifest
@@ -89,6 +99,8 @@ def main(argv=None) -> int:
     parser.add_argument("--mandatory", action="store_true")
     parser.add_argument("--min-supported", default="")
     parser.add_argument("--released-at", default="")
+    parser.add_argument("--box", nargs=3, metavar=("VERSION", "URL", "FILE"),
+                        help="盒子用的源码包（dev_tools/make_box_source.py 产出）")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -97,7 +109,8 @@ def main(argv=None) -> int:
         manifest = build_manifest(tuple(args.installer), tuple(args.previous) if args.previous else None,
                                   notes=args.notes, mandatory=args.mandatory,
                                   min_supported=args.min_supported, released_at=args.released_at,
-                                  expect_app=changelog_version())
+                                  expect_app=changelog_version(),
+                                  box=tuple(args.box) if args.box else None)
     except BuildError as e:
         print(f"拒绝生成：{e}", file=sys.stderr)
         return 2

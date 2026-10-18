@@ -8,6 +8,31 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 盒子自更新：`/settings` 里点一次就升级（失败自动回滚）
+
+用户没有桌面、没有 SSH、也没有 Linux 能力 —— 所以升级必须是一页里的一个按钮，而不是
+`ssh` + `mrrc-update`。新的 `box_update.py` 把这件事做成一条链路，全部在盒子本地判断：
+
+- **检查**：`GET /api/update/check` 现在认清单里的 `box` 段（盒子跑的是源码树，不是安装包）；
+  没有这一段就退回原来的桌面语义，页面不用分叉。
+- **升级**：`POST /api/update/apply` → 下载 tar.gz → **校验 size + sha256** → 解包（拒绝绝对
+  路径与 `..`）→ 备份当前树 → 覆盖（**不删任何文件**，`venv`/`logs`/`env`/`.local` 一概不碰）
+  → 写 `version.txt`/`VERSION` → 重启服务。
+- **三道闸门在动手之前**：发射中（`radio.tx_status` 非零，PTT/TUNE/CQ/FT8 都算）、磁盘不足
+  400 MB、已有一次在跑。它们的语义是「不能开始」，不是「开始了再失败」。
+- **失败能自己退回去**：覆盖前把旧树打成 `rollback-<ver>.tar.gz`；重启前拉起一个**脱离进程**
+  的看门狗（90 秒后探 `/api/health`，探不到就还原 + 重启）。重启用 `pkill` 自己，不需要 root ——
+  服务的单元是 `Restart=on-failure`，所以这条链路上**没有给服务端加任何提权通道**。
+- **页面**：`/settings` 新增「软件更新」卡片（当前/可升级版本、说明、进度、失败原因），
+  重启阶段自动重载页面。
+- **发布侧**：`dev_tools/make_box_source.py` 产出 `mrrc-modern-src-<ver>.tar.gz` 并打印
+  可直接贴进 `latest.json` 的 `box` 片段；`dev_tools/make_latest_json.py` 加 `--box`，
+  版本必须等于 `latest`（网页上「最新」只有一个）。
+- 真机（`.217`）：跑通整条链路 —— 下载/校验/解包/备份/覆盖/写版本号，`version.txt` 变成包里的值，
+  回滚包可解出旧树；`/api/update/state` 与 `/api/update/check` 都按预期回答。
+- 测试 **+19**（`tests/test_box_update.py`：清单 `box` 段、size/SHA、越界路径、不覆盖 env/venv、
+  不删文件、版本号来源、整链路 + 坏哈希不动手、看门狗命令）。
+
 ### 刷机镜像改为对外下载版：预置（`--preflash`）即发布
 
 - 操作员决策（2026-10-18）：老的公开镜像要先走一遍首启引导（生成 Web 口令、探测串口与声卡、

@@ -17,6 +17,7 @@ from unittest import mock
 from starlette.requests import Request
 
 import server
+import upgrade_core
 import support_bundle
 
 
@@ -138,21 +139,43 @@ class UpdateCheckTests(unittest.TestCase):
     def _call(self):
         return asyncio.run(server.api_update_check(_req({})))
 
+    MANIFEST = {
+        "latest": "1.18.0",
+        "installer": {"version": "1.18.0", "url": "https://example.invalid/setup.exe",
+                      "sha256": "a" * 64, "size": 4242},
+        "notes": "说明", "releasedAt": "2026-10-01T10:00:00",
+    }
+
     def test_reports_a_newer_release(self):
-        result = {"available": True, "current": "1.17.0", "latest": "1.18.0",
-                  "url": "https://example.invalid/setup.exe", "sha256": "a" * 64, "size": 4242,
-                  "mandatory": False, "notes": "说明", "releasedAt": "2026-10-01T10:00:00"}
+        manifest = upgrade_core.parse_manifest(self.MANIFEST)
         with mock.patch.object(server, "_verify_auth", return_value=True), \
-             mock.patch.object(server.upgrade_core, "check_quietly", return_value=result) as check:
+             mock.patch.object(server.support_bundle, "detect_version", return_value="1.17.0"), \
+             mock.patch.object(server.upgrade_core, "fetch_manifest", return_value=manifest):
             payload = _payload(self._call())
         self.assertTrue(payload["available"])
         self.assertEqual(payload["latest"], "1.18.0")
-        self.assertEqual(check.call_count, 1)
+
+    def test_a_box_manifest_is_what_a_box_upgrades_to(self):
+        """盒子上跑的是源码树，所以它比的是清单里的 `box` 段，不是桌面安装包。"""
+        manifest = upgrade_core.parse_manifest(dict(
+            self.MANIFEST,
+            box={"version": "1.18.0", "url": "https://example.invalid/tree.tar.gz",
+                 "sha256": "b" * 64, "size": 1234}))
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server.support_bundle, "detect_version", return_value="1.17.0"), \
+             mock.patch.object(server.upgrade_core, "fetch_manifest", return_value=manifest):
+            payload = _payload(self._call())
+        self.assertTrue(payload["available"])
+        self.assertEqual(payload["url"], "https://example.invalid/tree.tar.gz")
+        self.assertEqual(payload["size"], 1234)
 
     def test_unreachable_manifest_reports_a_reason_not_a_500(self):
         with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server.upgrade_core, "fetch_manifest",
+                               side_effect=OSError("timed out")), \
              mock.patch.object(server.upgrade_core, "check_quietly",
-                               return_value={"available": False, "reason": "URLError: timed out"}):
+                               return_value={"available": False,
+                                             "reason": "URLError: timed out"}):
             payload = _payload(self._call())
         self.assertFalse(payload["available"])
         self.assertIn("timed out", payload["reason"])

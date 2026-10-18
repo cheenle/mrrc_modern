@@ -66,6 +66,7 @@ from config import (
 from backends import create_backend, known_models
 from backends.base import RadioBackend
 import box_ops
+import box_update
 import net_bt
 import cloud_hub
 import help_session
@@ -653,6 +654,7 @@ RECORDINGS_INDEX = _writable_runtime_dir() / "recordings.json"
 # "File logging disabled ([WinError 5] 拒绝访问 : 'C:\Program Files\MRRC Modern\logs')".
 LOG_DIR = Path(_env("MRRC_LOG_DIR", str(default_user_dir() / "logs")))
 SUPPORT_OUT_DIR = LOG_DIR.parent / "support-out"
+_update_lock = threading.Lock()
 SUPPORT_URL = _env("MRRC_SUPPORT_URL", "https://www.vlsc.net/mrrc_modern/support/")
 UPDATE_MANIFEST_URL = _env("MRRC_UPDATE_MANIFEST_URL", upgrade_core.DEFAULT_MANIFEST_URL)
 # Attach the file handler now that LOG_DIR exists (it needs the constant).
@@ -4532,10 +4534,94 @@ async def api_update_check(request: Request):
     """Compare the running version with the published manifest."""
     if not _verify_auth(request):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    result = await asyncio.to_thread(upgrade_core.check_quietly,
-                                     support_bundle.detect_version(_runtime_dir(), _resource_dir()),
-                                     UPDATE_MANIFEST_URL)
+    current = support_bundle.detect_version(_runtime_dir(), _resource_dir())
+
+    def _check() -> dict:
+        # 盒子上「升级」指的是这颗源码树（`box` 段），桌面上指的是安装包
+        # （`installer` 段）。两者都返回同一套字段，页面才不用分叉。
+        try:
+            manifest = upgrade_core.fetch_manifest(UPDATE_MANIFEST_URL)
+        except Exception:                                          # noqa: BLE001
+            # 拿不到清单就交给 check_quietly：它把失败翻译成一句 reason，
+            # 而不是让页面吃一个 500（2026-09-17 的教训）。
+            return upgrade_core.check_quietly(current, UPDATE_MANIFEST_URL)
+        if manifest.get("box"):
+            return upgrade_core.check_box(current, manifest)
+        return upgrade_core.check(current, manifest)
+
+    result = await asyncio.to_thread(_check)
     return JSONResponse(result)
+
+
+@app.post("/api/update/apply", include_in_schema=False)
+async def api_update_apply(request: Request):
+    """盒子自更新：下载 → 校验 → 覆盖 → 重启（需要时自动回滚）。
+
+    三条闸门在**动手之前**：正在发射（PTT / TUNE / CQ / FT8 发波）、磁盘不够、
+    已经有一次在跑。它们都是「不能开始」的理由，不是「开始了再失败」的理由 ——
+    这条链路的终点是重启服务，把发射掐断在一个客户看不见的时刻。
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if not _update_lock.acquire(blocking=False):
+        return JSONResponse({"ok": False, "reason": "已经有一次升级在进行中",
+                             "state": box_update.state()}, status_code=409)
+    try:
+        live = box_update.state()
+        if live["state"] not in (box_update.STATE_IDLE, box_update.STATE_DONE,
+                                 box_update.STATE_FAILED):
+            return JSONResponse({"ok": False, "reason": "已经有一次升级在进行中",
+                                 "state": live}, status_code=409)
+        current = support_bundle.detect_version(_runtime_dir(), _resource_dir())
+        manifest = await asyncio.to_thread(upgrade_core.fetch_manifest,
+                                           UPDATE_MANIFEST_URL)
+        plan = upgrade_core.check_box(current, manifest)
+        if not plan.get("available"):
+            return JSONResponse({"ok": False, "reason": "已经是最新版本",
+                                 "state": box_update.state()}, status_code=400)
+        problem = _update_refusal()
+        if problem:
+            return JSONResponse({"ok": False, "reason": problem}, status_code=409)
+        box_update.reset()
+        asyncio.create_task(asyncio.to_thread(
+            box_update.apply, plan, _runtime_dir(),
+            runner=_schedule_restart))
+        logger.warning("update: applying %s from %s", plan.get("latest"), plan.get("url"))
+        return JSONResponse({"ok": True, "applying": plan.get("latest"),
+                             "state": box_update.state()})
+    except Exception as exc:                                       # noqa: BLE001
+        logger.warning("update: cannot start: %s", exc)
+        return JSONResponse({"ok": False, "reason": str(exc)}, status_code=400)
+    finally:
+        _update_lock.release()
+
+
+@app.get("/api/update/state", include_in_schema=False)
+async def api_update_state(request: Request):
+    """What the update card polls while it works."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse(box_update.state())
+
+
+def _update_refusal() -> str:
+    """Why this box must not start an update right now ("" = it may)."""
+    if radio is not None and getattr(radio, "tx_status", 0):
+        return "电台正在发射 —— 发射时不能升级（重启会掐断这一波）"
+    if _cq_player is not None and _cq_player.is_calling:
+        return "CQ 呼叫正在进行 —— 等它结束再升级"
+    # FT8 发波不需要单独的判断：它和 PTT / TUNE / CQ 一样会把 `radio.tx_status`
+    # 顶起来，上面那条已经拦住了。而「引擎在后台听」不能拦 —— 它是常开的。
+    import shutil
+
+    try:
+        free_mb = shutil.disk_usage(str(_runtime_dir())).free // (1024 * 1024)
+    except OSError:
+        free_mb = 0
+    if free_mb < box_update.MIN_FREE_MB:
+        return (f"磁盘剩余不足（{free_mb} MB，至少要 {box_update.MIN_FREE_MB} MB）"
+                "—— 先删一些录音")
+    return ""
 
 
 @app.post("/api/support/bundle", include_in_schema=False)

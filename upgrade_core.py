@@ -82,6 +82,22 @@ def parse_manifest(data) -> dict:
     size = installer.get("size")
     if not isinstance(size, int) or size <= 0:
         raise ManifestError(f"installer.size 不是正整数：{size!r}")
+    box = data.get("box")
+    if box is not None:
+        # 盒子（源码树）的更新包：W103D 上没有安装器，只有一份 stage 过的 tar.gz。
+        if not isinstance(box, dict):
+            raise ManifestError("box 不是对象")
+        if _require_version(box, "version") != latest:
+            raise ManifestError("box.version 与 latest 不一致")
+        box_url = str(box.get("url", "") or "")
+        if not box_url.startswith("https://"):
+            raise ManifestError(f"box.url 必须是 https：{box_url!r}")
+        box_sha = str(box.get("sha256", "") or "").lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", box_sha):
+            raise ManifestError("box.sha256 不是 64 位十六进制")
+        box_size = box.get("size")
+        if not isinstance(box_size, int) or box_size <= 0:
+            raise ManifestError(f"box.size 不是正整数：{box_size!r}")
     previous = data.get("previous")
     if previous is not None:
         if not isinstance(previous, dict):
@@ -98,6 +114,9 @@ def parse_manifest(data) -> dict:
                       "url": str(previous.get("url", "")),
                       "sha256": str(previous.get("sha256", "")).lower(),
                       "size": previous.get("size")} if isinstance(previous, dict) else None),
+        "box": ({"version": str(box["version"]), "url": str(box["url"]),
+                 "sha256": str(box["sha256"]).lower(), "size": int(box["size"])}
+                if isinstance(box, dict) else None),
         "minSupported": str(data.get("minSupported", "") or ""),
         "mandatory": bool(data.get("mandatory", False)),
         "releasedAt": str(data.get("releasedAt", "") or ""),
@@ -131,6 +150,32 @@ def check(current: str, manifest: dict) -> dict:
         "url": manifest["installer"]["url"],
         "sha256": manifest["installer"]["sha256"],
         "size": manifest["installer"]["size"],
+    }
+
+
+def check_box(current: str, manifest: dict) -> dict:
+    """Compare an installed **box** version against the manifest's `box` entry.
+
+    The box runs a source tree, not an installer, so its update is a tarball
+    (`box`) rather than the desktop `installer` entry. Returning the same shape
+    as `check()` keeps the caller honest: one page, one meaning per field.
+    """
+    box = manifest.get("box")
+    if not box:
+        return {"available": False, "current": current, "latest": manifest.get("latest", ""),
+                "reason": "清单里没有盒子的更新包", "url": "", "sha256": "", "size": 0,
+                "notes": manifest.get("notes", "")}
+    latest = box["version"]
+    return {
+        "available": compare_versions(current, latest) < 0,
+        "current": current,
+        "latest": latest,
+        "mandatory": bool(manifest.get("mandatory", False)),
+        "releasedAt": manifest.get("releasedAt", ""),
+        "notes": manifest.get("notes", ""),
+        "url": box["url"],
+        "sha256": box["sha256"],
+        "size": box["size"],
     }
 
 

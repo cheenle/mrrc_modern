@@ -258,48 +258,8 @@
           </div>
         </section>
 
-        <!-- NR/NB Level Sliders (hidden - not enough space) -->
-        <section class="slider-section" id="dsp-sliders" style="display: none">
-          <div class="slider-row">
-            <span class="slider-label">NR Level</span>
-            <input
-              type="range"
-              id="slider-nrlevel"
-              min="1"
-              max="15"
-              value="8"
-              class="ft-slider"
-            />
-            <span class="slider-val" id="val-nrlevel">8</span>
-          </div>
-          <div class="slider-row">
-            <span class="slider-label">NB Level</span>
-            <input
-              type="range"
-              id="slider-nblevel"
-              min="0"
-              max="10"
-              value="5"
-              class="ft-slider"
-            />
-            <span class="slider-val" id="val-nblevel">5</span>
-          </div>
-        </section>
-
         <!-- AF Gain / Mic Gain Sliders -->
         <section class="slider-section">
-          <div class="slider-row" id="slider-rfpower-row" style="display: none">
-            <span class="slider-label">RF PWR</span>
-            <input
-              type="range"
-              id="slider-rfpower"
-              min="5"
-              max="100"
-              value="100"
-              class="ft-slider"
-            />
-            <span class="slider-val" id="val-rfpower">100</span>
-          </div>
           <div class="slider-row">
             <span class="slider-label">🔊 Vol</span>
             <input
@@ -387,54 +347,71 @@
       </div>
       <div class="menu-content">
         <ul class="menu-list">
-          <li>
-            <a href="#" class="menu-item" data-action="band-select"
-              >Band Selection</a
-            >
-          </li>
-          <li>
-            <a href="#" class="menu-item" data-action="mode-select"
-              >Mode Selection</a
-            >
-          </li>
+          <!-- 主界面上已有的东西（波段/模式/滤波器/ATT/PRE/NR/NB/AN/COMP/ATU、
+               VFO、调谐、音量、RF 功率）不在这里重复出现。 -->
           <li>
             <a href="#" class="menu-item" data-action="memory-manage"
-              >Memory Manager</a
-            >
-          </li>
-          <li>
-            <a href="#" class="menu-item" data-action="settings"
-              >Advanced Settings</a
+              >记忆频道</a
             >
           </li>
           <li>
             <a href="#" class="menu-item" data-action="ft8-mode"
-              >FT8 模式（切到 FT8 界面）…</a
+              >FT8 模式</a
             >
           </li>
           <li>
             <a href="#" class="menu-item" data-action="conn-settings"
-              >连接设置…</a
+              >连接设置</a
             >
           </li>
           <li>
             <a href="#" class="menu-item" data-action="cloud-hub"
-              >接入云端（Cloud Hub）…</a
+              >云端接入</a
             >
           </li>
           <li>
             <a href="#" class="menu-item" data-action="power-restart"
-              >重开电台（关闭后自动尝试唤醒）…</a
+              >重开电台</a
             >
           </li>
           <li>
             <a href="#" class="menu-item" data-action="power-off"
-              >关机（保持关闭）…</a
+              >关机</a
             >
           </li>
           <li>
             <a href="#" class="menu-item" data-action="recordings"
-              >录音 Recordings</a
+              >录音</a
+            >
+          </li>
+
+          <!-- 电台内部的旋钮：NR/NB 电平、功率、增益这些，日常操作碰不到，
+               全放进一个弹窗里，菜单只留一个入口。 -->
+          <li class="menu-group-title">高级设置</li>
+          <li>
+            <a href="#" class="menu-item" data-action="settings"
+              >电台参数</a
+            >
+          </li>
+
+          <!-- 另一个页面/站外的东西集中在这里，一个入口都不散落。 -->
+          <li class="menu-group-title">链接</li>
+          <li>
+            <a
+              href="settings.html"
+              target="_blank"
+              rel="noopener"
+              class="menu-item"
+              >盒子设置</a
+            >
+          </li>
+          <li>
+            <a
+              href="settings.html#card-update"
+              target="_blank"
+              rel="noopener"
+              class="menu-item"
+              >软件更新</a
             >
           </li>
           <li>
@@ -443,10 +420,10 @@
               target="_blank"
               rel="noopener"
               class="menu-item"
-              >🐞 遇到问题</a
+              >遇到问题</a
             >
           </li>
-          <li><a href="#" class="menu-item" data-action="logout">Logout</a></li>
+          <li><a href="#" class="menu-item" data-action="logout">退出</a></li>
         </ul>
         <!-- Menu Settings -->
         <div class="menu-scope-settings">
@@ -558,43 +535,7 @@
             />
             <span class="menu-slider-val" id="val-wfheight">45</span>
           </div>
-          <div class="menu-slider-row">
-            <span class="menu-slider-label">RF Gain</span>
-            <input
-              type="range"
-              id="slider-rfgain"
-              min="0"
-              max="100"
-              value="100"
-              class="menu-slider"
-            />
-            <span class="menu-slider-val" id="val-rfgain">100</span>
-          </div>
-          <div class="menu-slider-row">
-            <span class="menu-slider-label">Mic</span>
-            <input
-              type="range"
-              id="slider-micgain"
-              min="0"
-              max="100"
-              value="50"
-              class="menu-slider"
-            />
-            <span class="menu-slider-val" id="val-micgain">50</span>
-          </div>
-          <div class="menu-slider-row">
-            <span class="menu-slider-label">🎙 Vol</span>
-            <input
-              type="range"
-              id="slider-micvol"
-              min="0"
-              max="200"
-              value="100"
-              class="menu-slider"
-            />
-            <span class="menu-slider-val" id="val-micvol">100</span>
-          </div>
-        </div>
+                                      </div>
         <div class="menu-footer">
           <span class="version-text" id="menu-version">MRRC Modern</span>
         </div>

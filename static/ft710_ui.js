@@ -1590,11 +1590,13 @@ function initUI() {
         nbSlider.addEventListener('change', function() { sendCommand('nb_level', parseInt(this.value)); });
     }
 
-    // Sliders
-    document.getElementById('slider-rfpower').addEventListener('input', function() {
+    // Sliders. RF PWR 从主界面搬进了「电台高级设置」弹窗（它在手机上一直是隐藏行），
+    // 所以这里可能找不到那个元素 —— 找不到就跳过，弹窗自己接。
+    const rfPwrSlider = document.getElementById('slider-rfpower');
+    if (rfPwrSlider) rfPwrSlider.addEventListener('input', function() {
         setText('val-rfpower', this.value);
     });
-    document.getElementById('slider-rfpower').addEventListener('change', function() {
+    if (rfPwrSlider) rfPwrSlider.addEventListener('change', function() {
         const v = parseInt(this.value);
         sendCommand('rf_power', v);
         radioState.rf_power = v;
@@ -2186,7 +2188,6 @@ function showSettingsPanel() {
     const existing = document.querySelector('.modal-overlay');
     if (existing) existing.remove();
 
-    const initVal = radioState.rf_power || 100;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     const content = document.createElement('div');
@@ -2194,32 +2195,95 @@ function showSettingsPanel() {
 
     const title = document.createElement('div');
     title.className = 'modal-title';
-    title.textContent = 'Radio Settings';
+    title.textContent = '电台高级设置';
     content.appendChild(title);
 
-    const row = document.createElement('div');
-    row.className = 'slider-row';
-    const lbl = document.createElement('span');
-    lbl.className = 'slider-label';
-    lbl.textContent = 'RF PWR';
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.id = 'slider-rfpower-p';
-    slider.className = 'ft-slider';
-    slider.min = '5';
-    slider.max = '100';
-    slider.value = String(initVal);
-    const val = document.createElement('span');
-    val.className = 'slider-val';
-    val.id = 'val-rfpower-p';
-    val.textContent = String(initVal);
-    row.append(lbl, slider, val);
-    content.appendChild(row);
+    const blurb = document.createElement('div');
+    blurb.style.cssText = 'font-size:12px;color:#9ca3af;margin:0 2px 10px;';
+    blurb.textContent = '日常操作之外的东西都在这里：降噪/消噪电平、发射功率、增益。';
+    content.appendChild(blurb);
 
-    const hint = document.createElement('div');
-    hint.style.cssText = 'font-size:11px;color:#999;margin:6px 2px 10px;';
-    hint.textContent = 'FT-710: watts (5-100 W) · IC-7300: percent';
-    content.appendChild(hint);
+    // 一行滑块：id 沿用主界面那一套，这样 radioState 的同步（setSlider / setText）
+    // 在弹窗打开时照样生效。
+    function addSlider(id, valId, label, min, max, value, hint, onCommit) {
+        const row = document.createElement('div');
+        row.className = 'slider-row';
+        const lbl = document.createElement('span');
+        lbl.className = 'slider-label';
+        lbl.textContent = label;
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.id = id;
+        slider.className = 'ft-slider';
+        slider.min = String(min);
+        slider.max = String(max);
+        slider.value = String(value);
+        const val = document.createElement('span');
+        val.className = 'slider-val';
+        val.id = valId;
+        val.textContent = String(value);
+        row.append(lbl, slider, val);
+        content.appendChild(row);
+        if (hint) {
+            const note = document.createElement('div');
+            note.style.cssText = 'font-size:11px;color:#999;margin:-2px 2px 8px;';
+            note.textContent = hint;
+            content.appendChild(note);
+        }
+        slider.addEventListener('input', function() { setText(valId, this.value); });
+        slider.addEventListener('change', function() { onCommit(parseInt(this.value, 10)); });
+        return slider;
+    }
+
+    const rfGainPct = Math.round((radioState.rf_gain == null ? 255 : radioState.rf_gain) / 255 * 100);
+    let micVolPct = 100;
+    try {
+        const stored = FT710Settings.getCookie('ft710_micVol');
+        if (stored !== null && !isNaN(parseInt(stored, 10))) micVolPct = parseInt(stored, 10);
+    } catch (e) { /* cookie 坏掉就用 100 */ }
+
+    addSlider('slider-rfpower-p', 'val-rfpower-p', 'RF PWR', 5, 100,
+              radioState.rf_power || 100,
+              radioState.power_meter !== undefined ? 'FT-710: 瓦特（5-100 W）· IC-7300: 百分比' : '',
+              function(v) {
+                  sendCommand('rf_power', v);
+                  radioState.rf_power = v;   // optimistic; next poll corrects if needed
+              });
+
+    // 标签就叫 NR Level：FT-710 这条 CAT 命令是 `RL`（NR 等级，1-15），而 Yaesu 的
+    // "DNR" 是 FTDX10/101 那代面板上的叫法 —— 在 FT-710 上 `DN` 根本不查降噪，
+    // 它是"当前 VFO 往下走一步"，发出去会把频率挪走（cat_controller 里明令禁止）。
+    addSlider('slider-nrlevel', 'val-nrlevel', 'NR Level', 1, 15,
+              radioState.nr_level || 8,
+              '数字降噪强度（NR 打开后生效）。有些 Yaesu 机型面板上叫 DNR，是同一个东西',
+              function(v) { sendCommand('nr_level', v); radioState.nr_level = v; });
+
+    addSlider('slider-nblevel', 'val-nblevel', 'NB Level', 0, 10,
+              radioState.nb_level || 5, '噪声消除的强度（NB 打开后生效）',
+              function(v) { sendCommand('nb_level', v); radioState.nb_level = v; });
+
+    addSlider('slider-rfgain', 'val-rfgain', 'RF Gain', 0, 100, rfGainPct,
+              '接收前端增益（100% = 电台最大值）',
+              function(pct) {
+                  const raw = Math.round(pct * 255 / 100);
+                  sendCommand('rf_gain', raw);
+                  radioState.rf_gain = raw;
+              });
+
+    addSlider('slider-micgain', 'val-micgain', 'Mic Gain', 0, 100,
+              radioState.mic_gain || 50, '电台侧话筒增益',
+              function(v) {
+                  sendCommand('mic_gain', v);
+                  radioState.mic_gain = v;
+                  FT710Settings.setCookie('ft710_micGain', String(v));
+              });
+
+    addSlider('slider-micvol', 'val-micvol', 'Mic Vol', 0, 200, micVolPct,
+              '这台设备上的软件增益（只影响本浏览器发出的音频）',
+              function(v) {
+                  FT710Settings.setCookie('ft710_micVol', String(v));
+                  if (typeof _setDeviceMicGain === 'function') _setDeviceMicGain(v / 100);
+              });
 
     const close = document.createElement('button');
     close.className = 'modal-close';
@@ -2230,18 +2294,6 @@ function showSettingsPanel() {
     overlay.appendChild(content);
     document.body.appendChild(overlay);
 
-    slider.dataset.dragging = '0';
-    slider.addEventListener('input', function() {
-        slider.dataset.dragging = '1';
-        setText('val-rfpower-p', this.value);
-    });
-    slider.addEventListener('change', function() {
-        slider.dataset.dragging = '0';
-        setText('val-rfpower-p', this.value);
-        const v = parseInt(this.value, 10);
-        sendCommand('rf_power', v);
-        radioState.rf_power = v;   // optimistic; next poll (3 s skip) corrects if needed
-    });
     document.getElementById('rsp-close').addEventListener('click', () => { overlay.remove(); });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }

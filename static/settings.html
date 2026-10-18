@@ -240,6 +240,18 @@ select{
     <div id="sys-msg" class="msg"></div>
   </section>
 
+  <section class="card panel" id="card-update">
+    <h2>软件更新 <span class="pill" id="up-pill">读取中…</span></h2>
+    <p class="muted">
+      这台盒子跑的就是它自己那份源码树，所以「更新」是把新版本下载下来、校验、
+      覆盖、重启——不需要重刷镜像，也不需要 SSH。升级中会短暂断线（约十几秒）。
+    </p>
+    <div id="up-info" class="muted"></div>
+    <button id="up-check" type="button" class="ghost">检查更新</button>
+    <button id="up-apply" type="button" style="display:none">立即升级</button>
+    <div id="up-msg" class="msg"></div>
+  </section>
+
   <section class="card panel">
     <h2>登录口令</h2>
     <label for="pw1">新口令</label>
@@ -963,6 +975,99 @@ select{
       .finally(function () { scanBtn.disabled = false; });
   });
 })();
+
+  // ── 软件更新 ──────────────────────────────────────────────────────────
+  (function () {
+    var info = document.getElementById("up-info"), pill = document.getElementById("up-pill"), msg = document.getElementById("up-msg");
+    var checkBtn = document.getElementById("up-check"), applyBtn = document.getElementById("up-apply");
+    if (!checkBtn) { return; }
+
+    function show(node, text, cls) {
+      node.textContent = text;
+      if (node === pill) { node.className = "pill" + (cls ? " " + cls : ""); }
+      else { node.className = (node === msg ? "msg" : "") + (cls ? " " + cls : ""); }
+    }
+
+    function label(state) {
+      var map = { idle: ["就绪", ""], downloading: ["下载中", "warn"],
+                  verifying: ["校验中", "warn"], applying: ["写入中", "warn"],
+                  restarting: ["重启中", "warn"], done: ["完成", "good"],
+                  failed: ["失败", "bad"] };
+      return map[state] || [state, ""];
+    }
+
+    function poll() {
+      Box.api("/api/update/state").then(function (s) {
+        var pair = label(s.state);
+        show(pill, pair[0], pair[1]);
+        if (s.detail) { show(msg, s.detail, s.state === "failed" ? "bad" : ""); }
+        if (s.state === "restarting") {
+          show(msg, "服务正在重启，10 秒后页面自动刷新…", "warn");
+          setTimeout(function () { location.reload(); }, 12000);
+          return;
+        }
+        if (s.state === "downloading" || s.state === "verifying" ||
+            s.state === "applying") {
+          setTimeout(poll, 1500);
+        } else {
+          checkBtn.disabled = false;
+          applyBtn.disabled = false;
+        }
+      }).catch(function () { setTimeout(poll, 2500); });
+    }
+
+    function stamp() {
+      var d = new Date();
+      function pad(n) { return (n < 10 ? "0" : "") + n; }
+      return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    }
+
+    function check() {
+      checkBtn.disabled = true;
+      show(info, "正在查询…");
+      Box.api("/api/update/check").then(function (r) {
+        if (r.available) {
+          show(info, "当前 " + r.current + " → 可升级到 " + r.latest, "");
+          if (r.notes) { show(msg, r.notes, ""); }
+          applyBtn.style.display = "";
+          applyBtn.textContent = "升级到 " + r.latest;
+          show(pill, "有新版本", "warn");
+        } else {
+          // 「点了没反应」= 没有可看的证据：把这次查询的时间和线上版本一起写出来。
+          show(info, "当前 " + r.current + " 已是最新" +
+            (r.latest ? "（线上 " + r.latest + "）" : "") +
+            " · 检查于 " + stamp());
+          applyBtn.style.display = "none";
+          show(pill, "最新", "good");
+        }
+      }).catch(function () {
+        show(info, "查询失败：网络不通或服务端没有清单");
+        show(pill, "未知", "bad");
+      }).finally(function () { checkBtn.disabled = false; });
+    }
+
+    Box.on("#up-check", "click", check);
+    Box.on("#up-apply", "click", function () {
+      if (!window.confirm("升级会重启服务，断线约十几秒。发射中会被拒绝。现在升级吗？")) {
+        return;
+      }
+      applyBtn.disabled = true;
+      Box.api("/api/update/apply", { method: "POST" }).then(function (r) {
+        if (!r.ok) {
+          show(msg, r.reason || "升级没有开始", "bad");
+          applyBtn.disabled = false;
+          return;
+        }
+        show(msg, "已开始，正在下载…");
+        poll();
+      }).catch(function () {
+        show(msg, "升级请求失败（接口不可用）", "bad");
+        applyBtn.disabled = false;
+      });
+    });
+
+    check();
+  })();
 </script>
 </body>
 </html>

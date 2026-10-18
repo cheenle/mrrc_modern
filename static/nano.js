@@ -310,6 +310,27 @@ function nearestIndex(freqs, f) {
     return Math.abs(freqs[lo] - f) <= Math.abs(freqs[hi] - f) ? lo : hi;
 }
 
+function showTip(ev, index) {
+    const tip = document.getElementById('tip');
+    const s = state.sweep;
+    if (!s || index < 0) { tip.style.display = 'none'; return; }
+    const z = s.z[index] || [0, 0];
+    let text = fmtHz(s.freqs[index]) + '\nSWR ' + s.swr[index].toFixed(2)
+        + '\nZ ' + fmtOhm(z[0]) + (z[1] >= 0 ? ' +j' : ' −j') + fmtOhm(Math.abs(z[1]));
+    if (state.overlay) {
+        const i = nearestIndex(state.overlay.freqs, s.freqs[index]);
+        const d = s.swr[index] - state.overlay.swr[i];
+        text += '\nΔ ' + (d >= 0 ? '+' : '') + d.toFixed(2);
+    }
+    tip.textContent = text;
+    tip.style.display = 'block';
+    const x = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+    const y = (ev.touches ? ev.touches[0].clientY : ev.clientY);
+    const w = tip.offsetWidth || 120;
+    tip.style.left = Math.min(window.innerWidth - w - 8, x + 14) + 'px';
+    tip.style.top = Math.max(8, y - 64) + 'px';
+}
+
 function bindHover() {
     const canvas = document.getElementById('plot');
     const handler = ev => {
@@ -322,9 +343,17 @@ function bindHover() {
         const l = pad.l, r = rect.width - pad.r;
         const frac = Math.min(1, Math.max(0, (x - l) / (r - l)));
         const f = Math.pow(10, Math.log10(f0) + frac * (Math.log10(f1) - Math.log10(f0)));
-        readoutAt(nearestIndex(s.freqs, f));
+        const idx = nearestIndex(s.freqs, f);
+        readoutAt(idx);
+        showTip(ev, idx);
     };
     canvas.addEventListener('mousemove', handler);
+    canvas.addEventListener('mouseleave', () => {
+        document.getElementById('tip').style.display = 'none';
+    });
+    canvas.addEventListener('touchend', () => {
+        setTimeout(() => { document.getElementById('tip').style.display = 'none'; }, 1500);
+    });
     canvas.addEventListener('touchstart', handler, { passive: true });
     canvas.addEventListener('touchmove', handler, { passive: true });
 }
@@ -339,6 +368,7 @@ async function refreshStatus(full) {
         state.device = st;
         renderDevice(st);
         if (st.settings) renderSettings(st.settings);
+        if (st.flags !== undefined) renderFlags();
         // 顺序是判据：忙 ≠ 掉线。旧版先看 !connected，扫描期间服务端如实报
         // busy 时页面却喊"设备掉线"——自己吓自己。
         if (st.tx) banner('电台在发射，已锁定扫描', 'warn');
@@ -416,6 +446,36 @@ async function applySetting(name, value) {
     }
 }
 
+const FLAG_LABELS = {
+    grid: '网格显示数值', dot: '网格用点线', flip: '翻转屏幕',
+    bk: '记住关机前状态', auto: '文件自动命名', mode: '标记搜索取最小',
+    avg: '平滑取算术平均', separator: '小数分隔符用逗号',
+};
+
+function renderFlags() {
+    const box = document.getElementById('flags');
+    const flags = (state.device && state.device.flags) || {};
+    box.innerHTML = Object.keys(FLAG_LABELS).map(k =>
+        '<div class="setting"><label>' + FLAG_LABELS[k] + '</label>'
+        + '<input type="checkbox" data-flag="' + k + '"'
+        + (flags[k] ? ' checked' : '') + '></div>').join('');
+    box.querySelectorAll('input[data-flag]').forEach(el => {
+        el.onchange = () => applySetting('cfg_' + el.getAttribute('data-flag'), el.checked ? 1 : 0);
+    });
+}
+
+async function saveToDevice() {
+    try {
+        const res = await api('settings', {method: 'POST', body: {name: 'saveconfig', value: 1}});
+        const body = await readJson(res);
+        banner(res.ok ? '已写入设备 flash（含标定）' : (body.detail || '保存失败'),
+               res.ok ? '' : 'warn');
+        if (res.ok) setTimeout(() => banner(''), 2500);
+    } catch (e) {
+        banner('保存失败：' + e, 'warn');
+    }
+}
+
 function renderCal() {
     const box = document.getElementById('cal');
     box.innerHTML = '';
@@ -460,9 +520,29 @@ async function calAction(action, slot, confirm) {
 
 // ── 扫描与存盘 ──────────────────────────────────────────────────────
 
+function currentRange() {
+    const center = parseFloat(document.getElementById('center').value);
+    const span = parseFloat(document.getElementById('span').value);
+    if (!isNaN(center) && !isNaN(span) && span > 0) {
+        let start = Math.round((center - span / 2) * 1e6);
+        let stop = Math.round((center + span / 2) * 1e6);
+        start = Math.max(50000, start);
+        stop = Math.min(900000000, stop);
+        if (stop > start) return [start, stop];
+    }
+    const sel = document.getElementById('preset').value.split('-').map(Number);
+    return sel;
+}
+
+function syncCenterSpan() {
+    const [start, stop] = document.getElementById('preset').value.split('-').map(Number);
+    document.getElementById('center').value = ((start + stop) / 2e6).toFixed(3);
+    document.getElementById('span').value = ((stop - start) / 1e6).toFixed(3);
+}
+
 async function scanOnce() {
     const btn = document.getElementById('scan');
-    const [start, stop] = document.getElementById('preset').value.split('-').map(Number);
+    const [start, stop] = currentRange();
     const points = parseInt(document.getElementById('points').value, 10);
     const out = document.getElementById('readout');
     btn.disabled = true;
@@ -667,6 +747,14 @@ function boot() {
     document.getElementById('exportCsv').onclick = () => exportSweep('csv');
     document.getElementById('exportS1p').onclick = () => exportSweep('s1p');
     document.getElementById('refresh').onclick = () => refreshStatus(true);
+    document.getElementById('apply-freq').onclick = () => {
+        const [start, stop] = currentRange();
+        document.getElementById('readout').textContent =
+            '待扫：' + fmtHz(start) + ' – ' + fmtHz(stop);
+    };
+    document.getElementById('preset').onchange = syncCenterSpan;
+    document.getElementById('saveconfig').onclick = saveToDevice;
+    syncCenterSpan();
     renderCal();
     bindHover();
     window.addEventListener('resize', draw);

@@ -10,7 +10,8 @@
 """
 from nano.analysis import (SWR_CAP, Z0, analyse, compare, resonances, suspect_points,
                            swr, to_csv, to_s1p, to_z)
-from nano.vna import (DFU_VID_PID, NANO_VID_PID, DeviceInfo, FrameError, NanoError,
+from nano.vna import (CONFIG_FLAGS, DFU_VID_PID, NANO_VID_PID, DeviceInfo,
+                      FrameError, NanoError,
                       NanoVna, PortConflict, Sweep, discover_port, parse_info,
                       parse_scan_bin, scan_command)
 

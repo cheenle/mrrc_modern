@@ -51,6 +51,21 @@ SETTING_LIMITS = {
 }
 POWER_AUTO = 255
 
+# `config <flag> <0|1>` 改的是设备上的显示/行为开关（固件 VNA_MODE 位）。
+# **`connection` 永久排除**：它把 shell 切到串口控制台，USB 侧当场失联，只能
+# 到设备上按回来 —— 这是唯一一个"从网页上按一下就再见"的开关。
+CONFIG_FLAGS = {
+    "auto": "文件自动命名",
+    "avg": "平滑取算术平均（否则几何平均）",
+    "mode": "标记搜索：最大 / 最小",
+    "grid": "网格显示数值",
+    "dot": "网格用点线",
+    "bk": "记住关机前状态",
+    "flip": "翻转屏幕",
+    "separator": "小数分隔符（逗号 / 点）",
+}
+FORBIDDEN_CONFIG_FLAGS = {"connection", "tif"}
+
 
 class NanoError(Exception):
     """NanoVNA 通信或协议层的失败。"""
@@ -436,6 +451,22 @@ class NanoVna:
             self._ask(fmt % (name, v))
             return
         raise ValueError("setting not allowed: %r" % (name,))
+
+    def set_config_flag(self, name: str, on) -> None:
+        """设备显示开关（`config <flag> <0|1>`）。
+
+        这些开关**读不回来**（固件没有对应查询命令），所以页面显示的是我们自己
+        记下的意图，实际效果以设备屏幕为准。
+        """
+        if name in FORBIDDEN_CONFIG_FLAGS:
+            raise ValueError("config flag not allowed: %r" % (name,))
+        if name not in CONFIG_FLAGS:
+            raise ValueError("unknown config flag: %r" % (name,))
+        self._ask("config %s %d" % (name, 1 if on else 0))
+
+    def save_config(self) -> None:
+        """把当前设置（含标定）写进设备 flash —— 不写就只是 RAM 里的临时状态。"""
+        self._ask("saveconfig", timeout=6.0)
 
     # 标定槽 ------------------------------------------------------
     def save_cal(self, slot: int) -> None:

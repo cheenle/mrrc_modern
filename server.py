@@ -5858,6 +5858,7 @@ async def api_nano_status(request: Request, full: int = 0):
         "tx": _nano_tx_active(),
         "busy": _nano_lock.locked(),
         "device_sweep": _nano_read_state(),
+        "flags": _nano_config().get("flags") or {},
         "last_sweep": (None if _nano_last_sweep is None else {
             "start_hz": _nano_last_sweep["start_hz"],
             "stop_hz": _nano_last_sweep["stop_hz"],
@@ -5952,8 +5953,19 @@ async def api_nano_settings(request: Request):
     async with _nano_lock:
         try:
             dev = await asyncio.to_thread(_nano_require_device)
-            await asyncio.to_thread(dev.set_setting, name, value)
-            settings = await asyncio.to_thread(dev.read_settings)
+            if name.startswith("cfg_"):
+                flag = name[4:]
+                await asyncio.to_thread(dev.set_config_flag, flag, bool(value))
+                flags = _nano_config().get("flags") or {}
+                flags[flag] = bool(value)
+                _nano_config_update(flags=flags)
+                settings = await asyncio.to_thread(dev.read_settings)
+            elif name == "saveconfig":
+                await asyncio.to_thread(dev.save_config)
+                settings = await asyncio.to_thread(dev.read_settings)
+            else:
+                await asyncio.to_thread(dev.set_setting, name, value)
+                settings = await asyncio.to_thread(dev.read_settings)
         except ValueError as exc:
             return JSONResponse({"error": "bad_setting", "detail": str(exc)},
                                 status_code=400)

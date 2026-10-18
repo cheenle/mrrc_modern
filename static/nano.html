@@ -62,6 +62,10 @@ button.primary{
   padding:9px 18px; font-weight:700; font-size:14px;
 }
 button.primary:disabled{opacity:.5}
+#tip{position:fixed; pointer-events:none; z-index:50; display:none;
+  background:rgba(20,20,18,.94); border:1px solid var(--accent); border-radius:8px;
+  padding:6px 9px; font-family:var(--mono); font-size:11px; line-height:1.5;
+  color:var(--text-primary); white-space:pre; box-shadow:0 4px 16px rgba(0,0,0,.5)}
 #readout{font-family:var(--mono); font-size:12px; color:var(--text-secondary);
   min-height:3.2em; white-space:pre-line; margin-bottom:10px}
 h2{font-size:13px; color:var(--accent); letter-spacing:.06em; margin:18px 0 8px;
@@ -96,6 +100,7 @@ h2{font-size:13px; color:var(--accent); letter-spacing:.06em; margin:18px 0 8px;
 </header>
 <div id="banner"></div>
 
+<div id="tip"></div>
 <main>
   <canvas id="plot" height="280"></canvas>
   <div class="tabs" id="tabs">
@@ -119,6 +124,13 @@ h2{font-size:13px; color:var(--accent); letter-spacing:.06em; margin:18px 0 8px;
       <option value="28000000-29700000">10m</option>
       <option value="50000000-54000000">6m</option>
     </select>
+    <label>中心</label><input type="number" id="center" step="0.1" min="0.05" max="900"
+      placeholder="MHz" style="width:84px">
+    <label>带宽</label><input type="number" id="span" step="0.1" min="0.01" max="899"
+      placeholder="MHz" style="width:84px">
+    <button id="apply-freq">应用</button>
+  </div>
+  <div class="row">
     <select id="points">
       <option value="101">101 点</option>
       <option value="201">201 点</option>
@@ -133,8 +145,15 @@ h2{font-size:13px; color:var(--accent); letter-spacing:.06em; margin:18px 0 8px;
   <dl class="kv" id="devinfo"><dt>状态</dt><dd>—</dd></dl>
   <p class="hint">测的是插在 CH0 上的那根东西。ATR-1000 若在线，测到的是天调的端口而不是天线本身。</p>
 
-  <h2>设置</h2>
+  <h2>测量设置</h2>
   <div id="settings"><p class="hint">连上设备后可改。</p></div>
+
+  <h2>设备显示</h2>
+  <div id="flags"><p class="hint">读取中…</p></div>
+  <p class="hint">这些开关在固件里**没有查询命令**，所以显示的是我们记下的状态，
+    实际以设备屏幕为准（按一下就立刻能看到变化）。</p>
+  <div class="row"><button id="saveconfig">保存到设备 flash</button></div>
+  <p class="hint">设备上的设置只存在 RAM，断电就回默认——改完点这里才真正写进去（含标定）。</p>
 
   <h2>标定槽</h2>
   <div class="cals" id="cal"></div>

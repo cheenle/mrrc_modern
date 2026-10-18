@@ -74,6 +74,14 @@ class FakeDevice:
             raise ValueError("setting not allowed: 'tcxo'")
         self.sent.append((name, value))
 
+    def set_config_flag(self, name, on):
+        if name in ("connection", "tif"):
+            raise ValueError("config flag not allowed: %r" % (name,))
+        self.sent.append((name, bool(on)))
+
+    def save_config(self):
+        self.sent.append(("saveconfig",))
+
     def save_cal(self, slot):
         self.sent.append(("save", slot))
 
@@ -229,6 +237,37 @@ class SettingsAndCalTest(unittest.TestCase):
                 self._req({"name": "smooth", "value": 3})))
         self.assertEqual(r.status_code, 200)
         self.assertEqual(dev.sent, [("smooth", 3)])
+
+    def test_display_flag_is_applied_and_remembered(self):
+        dev = FakeDevice()
+        with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_require_device", return_value=dev), \
+             mock.patch.object(server, "_nano_config", return_value={}), \
+             mock.patch.object(server, "_nano_config_update") as upd:
+            r = asyncio.run(server.api_nano_settings(
+                self._req({"name": "cfg_grid", "value": 1})))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(dev.sent, [("grid", True)])
+        upd.assert_called_once()
+
+    def test_connection_flag_is_refused(self):
+        """`connection` 会把 shell 切到串口控制台，USB 侧当场失联 —— 永久禁区。"""
+        dev = FakeDevice()
+        with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_require_device", return_value=dev):
+            r = asyncio.run(server.api_nano_settings(
+                self._req({"name": "cfg_connection", "value": 1})))
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("not allowed", json.loads(r.body)["detail"])
+
+    def test_saveconfig_writes_the_device_flash(self):
+        dev = FakeDevice()
+        with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_require_device", return_value=dev):
+            r = asyncio.run(server.api_nano_settings(
+                self._req({"name": "saveconfig", "value": 1})))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(dev.sent, [("saveconfig",)])
 
     def test_cal_save_requires_typed_confirmation(self):
         with mock.patch.object(server, "_nano_tx_active", return_value=False):
@@ -456,6 +495,15 @@ class PageAssetsTest(unittest.TestCase):
         self.assertIn("nano.js?v=", html)
         self.assertNotIn("ft710_main.js", html)
         self.assertNotIn("ft710_ui.js", html)
+
+    def test_page_has_tooltip_center_span_and_display_flags(self):
+        html = (Path(server.__file__).parent / "static" / "nano.html").read_text(encoding="utf-8")
+        js = (Path(server.__file__).parent / "static" / "nano.js").read_text(encoding="utf-8")
+        for marker in ('id="tip"', 'id="center"', 'id="span"', 'id="flags"'):
+            self.assertIn(marker, html)
+        self.assertIn("showTip", js)
+        self.assertIn("currentRange", js)
+        self.assertIn("renderFlags", js)
 
     def test_canvas_height_is_css_so_redraw_cannot_grow_the_page(self):
         """真机教训：JS 把 canvas.height 设成 280×dpr（位图）。没有 CSS 高度规则时

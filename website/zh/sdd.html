@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">总览</a></li>
-          <li><a href="#updates">V2.84 更新</a></li>
+          <li><a href="#updates">V3.00 更新</a></li>
           <li><a href="#chapters">章节目录</a></li>
           <li><a href="#decisions">AD 索引</a></li>
           <li>
@@ -63,21 +63,21 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.84 · 2026-10-13</span>
+          <span>SDD V3.00 · 2026-10-18</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient">软件设计说明书</span>
         </h1>
         <p class="hero-subtitle">
-          用于记录多电台（FT-710 / IC-7300 / IC-7300MK2）网页控制系统的架构、
-          接口、运行模型与版本演进，作为实现与设计的一致性基线文档。
+          用于记录多电台（FT-710 / IC-7300 /
+          IC-7300MK2）网页控制系统的架构、接口、运行模型与版本演进，作为实现与设计的一致性基线文档。
         </p>
         <div class="hero-actions">
           <a href="../sdd/index.html" class="btn btn-primary btn-large">
             <i class="fas fa-book"></i> 浏览 SDD 章节
           </a>
           <a href="index.html" class="btn btn-secondary btn-large">
-            <i class="fas fa-arrow-left"></i> 返回产品页面
+            <i class="fas fa-arrow-left"></i>返回产品页面
           </a>
         </div>
       </div>
@@ -110,7 +110,7 @@
             </tr>
             <tr>
               <td>版本</td>
-              <td>V2.84</td>
+              <td>V3.00</td>
             </tr>
             <tr>
               <td>基线日期</td>
@@ -140,446 +140,91 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">最新更新</span>
-          <h2 class="section-title">V2.20 之后的变更重点</h2>
+          <h2 class="section-title">最新更新</h2>
         </div>
         <div class="features-grid">
           <div class="feature-card">
-            <div class="icon"><i class="fas fa-satellite-dish"></i></div>
+            <div class="icon"><i class="fas fa-hard-drive"></i></div>
             <h3>
-              FT8 的原生库，现在跟着每个产物一起走
-              <small>（V2.84）</small>
+              无人值守的盒子不会被日志写满：轮转、journald 上限、录音拒写
+              <small>（V2.99）</small>
             </h3>
             <p>
-              FT8 是 Python 加一个原生库，而 v1.27.0 之前<em>没有任何产物携带它</em>——
-              只有 W103D 上那份验收时手工编译的。现在两条镜像线在镜像构建期编出
-              <code>libwsjt_core.so</code>，并由 <code>mrrc-update</code> 按源码摘要重编；
-              macOS 的 DMG 把 dylib 与它的五个 FFTW/gfortran 依赖一起收进 app（load command
-              全部改写成 <code>@loader_path</code>，还有 <code>/opt/local</code> 残留就构建失败）；
-              Windows 安装包用 MSYS2 mingw-w64 编出 <code>wsjt_core.dll</code>，并用
-              <code>objdump</code> <em>走出</em>运行期 DLL 闭包而不是信任一份写死的清单。
-              <code>&lt;boost/crc.hpp&gt;</code> 的包含闭包也已 vendor 化，四平台的构建路径上
-              不再需要装那 138 MB 的 Boost。两个<em>只有打包后才存在</em>的缺陷——全新安装没有
-              <code>&lt;runtime&gt;/ft8/</code> 目录、冻结包缺
-              <code>multiprocessing.freeze_support()</code>——都是被冻结包的洁净室真跑抓出来的，
-              套件当时是全绿的。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-network-wired"></i></div>
-            <h3>
-              隧道清理只跑在 Windows 上 —— 于是 macOS 从来没清理过
-              <small>（V2.73）</small>
-            </h3>
-            <p>
-              v1.25.2 修「每启动一次就多留一个 <code>frpc</code>」时改的是<em
-                >枚举方式</em
-              >（<code>wmic</code> → <code>Get-CimInstance</code>），
-              而清理函数开头那句 <code>if os.name != "nt": return</code>
-              —— 当初为「同机上第二个实例不受影响」加的 ——
-              把整段清理关进了 Windows：在 macOS 上它立刻返回，什么都没做。
-              在 macOS 上实测到同一个故障的第二个平台样本：一次开机后启动 6 次留下
-              <strong>6 个孤儿</strong>（PPID 全为 1），而且它<em>自我循环</em>
-              —— 终于拿到代理名的那一个干净子进程，正是下一次启动的拦路石；
-              新实例的子进程从那一刻起每 33 秒打一次 <code>already exists</code>
-              （86 行日志里 67 行都是这段重试）。现在枚举改走
-              <code>ps -eo pid=,command=</code>，<strong
-                >只认命令行第一个词的 basename 是 <code>frpc</code> 的进程</strong
-              >（用编辑器打开同一份 <code>.toml</code> 的 <code>vim</code>
-              命令行里也有这个路径，不能误杀），终止改走 <code>SIGTERM</code>，
-              让 frpc 自己关掉控制连接、hub 当场释放代理名；而且<strong
-                >永不抛出</strong
-              >
-              —— 快照与 kill 之间进程可能已自己退出，那是「无事可做」而不是失败。
-              关停时也会停掉隧道了：frpc 是服务进程的子进程，父进程没了它照样活着，
-              把代理名占给下一次启动。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-radio"></i></div>
-            <h3>
-              FT-891 加入 Yaesu 家族 —— 以及它揭出来的一个潜伏崩溃
-              <small>（V2.72）</small>
-            </h3>
-            <p>
-              第 11 个注册键、Yaesu ASCII-CAT 共享核心上的第 5 个 profile。
-              它唯一的协议差异是<em>写格式</em>：滤波宽度 SET 是
-              <code>SH01NN</code>，而不是家族的 <code>SH00NN</code>（Hamlib
-              <code>newcat.c:9658</code>，<code>int on = is_ft891</code>），
-              所以 <code>YaesuModelProfile</code> 多了一个
-              <code>filter_width_prefix</code> 字段、由核心去读它 ——
-              核心里没有任何按机型分支，四款已发布机型发出的字节也完全不变。
-              滤波档位逐档抄自 Hamlib 的 get 侧（CW/RTTY/PKT 17 档、SSB 21
-              档）并与它机器比对过；AM/FM 不给档位，因为它们的宽度只由
-              <code>NA</code> 决定。有三件离线源推不出的事实来自 2026-09-17
-              的一份现场上报：38400 8N1（Hamlib 的
-              <code>stop_bits=2</code> 自承是<em>假设值</em>）、
-              <strong>没有 USB 声卡</strong>——所以不做设备名自动匹配、外接接口按
-              48 kHz、连接对话框里直接写明——以及 S 表比机显高 1–1.5
-              S（只记录，曲线刻意不改）。接线过程还揭出一个潜伏在<em>整个家族</em>里的崩溃：
-              <code>get_preamp</code>/<code>get_attenuator</code> 被
-              <code>initial_state_sync()</code> 与设置轮询层调用，却从未定义，
-              于是首次连接成功即抛 <code>AttributeError</code> ——
-              至今没人发现，是因为这个家族没有任何真机可连。已修，并补了一个结构性守卫：
-              把每个轮询项与同步逻辑引用到的方法逐个解析一遍。全程未验证：TX
-              设闸、<code>id_answer</code> 留空、11 处
-              <code>TODO(hw-verify)</code>。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-microphone-slash"></i></div>
-            <h3>
-              键控了的载波不会再没有声音
-              <small>（V2.71）</small>
-            </h3>
-            <p>
-              TX 上行只有一个 owner，按键时按会话令牌认领 —— 但令牌是 30 天
-              Cookie，一个浏览器会话可以同时持有多条麦克风 socket
-              （页面重载会把旧的那条留成半开几十秒，同一登录的两个标签页则干脆共用）。
-              认领原先取的是从集合里扫到的<em>第一个</em>匹配，于是可能落到那条已经死掉的
-              socket 上：电台键控了，活页面的每一帧却被当作非 owner 丢弃 （<code
-                >frames=0 non_owner_drops=236</code
-              >、<code>peak=0%</code>
-              —— 键控着的载波上是纯静默），直到 58 秒后旧 socket 被回收才自愈。
-              现在认领取该会话<strong>最后连接</strong>的那条，并且真正在送音频的同会话
-              socket
-              会在首帧接管上行；<em>异</em>会话依然既不能靠连接、也不能靠发流抢占。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-heartbeat"></i></div>
-            <h3>
-              刚按下的一键不会再被存活闸门自己放开
-              <small>（V2.70）</small>
-            </h3>
-            <p>
-              Cloud Hub
-              打开的存活闸门只应释放不再证明自己活着的发射会话；心跳在<em>按键时</em>发送，
-              而服务端要等按键处理返回后才能读到 —— 落在那 20–70 ms
-              窗口里的检查，会把刚按下的健康一键
-              当成静默会话放开（一份现场日志里记了
-              <strong>七次</strong>）。现在按键本身会刷新存活时钟， 从未发过
-              <code>txhb</code> 的会话依旧不被门控。修复在冻结的
-              <code>server.py</code> 里， 所以只能随安装包发布 ——
-              而它的第一个构建恰好说明了为什么必须查产物本身：所有门禁都是绿的，
-              包里却还是修复前的字节码；现在构建前会清掉 PyInstaller 的 workpath
-              缓存。
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-network-wired"></i></div>
-            <h3>
-              一条每启动一次就漏一个进程的隧道
-              <small>（V2.69）</small>
-            </h3>
-            <p>
-              hub 的日志一天里刷了 7143 行
-              <code>proxy already exists</code
-              >，而根因在租户自己的机器上：启动前回收旧
-              <code>frpc</code> 的那段代码用的是 <code>wmic</code>，而 Windows
-              11 已经不再自带它 —— 那个裸
-              <code>except</code> 把这一步变成了静默的空操作。两天里累积了
-              <strong>六个进程</strong
-              >，其中五个是孤儿，全都在抢同一个代理名。现在改用 PowerShell 的
-              CIM 命令枚举，路径比较按 Windows
-              的规则（大小写不敏感、两种斜杠）， 并且<strong
-                >查不到时会出声告警</strong
-              >
-              —— 因为残留在 hub
-              的日志里才现形，这台机器自己看不到。启动器另加了一个命名互斥，
-              两次启动不会再同时认为端口是空的。
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-lock"></i></div>
-            <h3>
-              两个「只有构建机看不见」的打包缺陷
-              <small>（V2.68）</small>
-            </h3>
-            <p>
-              同一台 Mac 报的两件事是同一个形状：<strong
-                >构建机上有、用户机上没有的东西 被当成了常驻假设</strong
-              >。包里带着构建机的 OpenSSL，它的编译期默认 CA 路径
-              就是构建机自己的 <code>/opt/local/…</code> ——
-              于是信任库为空，接入云端、 诊断包上传、软件更新检查全部
-              <code>CERTIFICATE_VERIFY_FAILED</code>。现在 外发 HTTPS 统一走
-              <code>net_tls.py</code>（先包内 bundle、再系统 bundle），
-              并有构建期闸门<b>故意把 CA 环境打空</b
-              >后要求真握手。另一件是频谱：界面一直 画的是 S
-              表合成曲线，真频谱<strong>一次都没启动过</strong> —— 启动器把相对
-              路径的 <code>MRRC_FTDI_LIB_DIR</code> 锚到了
-              <code>Contents/MacOS</code>， 而签名后的包把数据树放在
-              <code>Contents/Resources</code>，于是采集进程 直接以 “FTDI
-              libraries not found” 退出，而原因只被记在 DEBUG 里。
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-screwdriver-wrench"></i></div>
-            <h3>
-              v1.25.0 发布 —— 装完就能用
-              <small>（V2.67）</small>
-            </h3>
-            <p>
-              三条现场报障、三个不同根因。启动器可能<strong
-                >在起 server 之前就永久卡死</strong
-              >：
-              首次运行的串口探测会往每个候选口写，而电台的真实描述一个关键词都不命中
-              （CP2105 不是 "cp210x"），于是第一个被探测的是那台机器的 Intel AMT
-              口 —— 它 open 正常、却一个字节也写不进去，而写入用的是 pyserial
-              默认的
-              <em>无超时</em
-              >。另一台已批准的实例停在"等待批准"：当时唯一的轮询循环住在设置
-              对话框里；现在轮询在服务端每 30
-              秒自查一次并报告结果。还有证书重载判据比错了
-              两个对象，导致登记完成的实例入口 502，而没有任何东西会去重启它。
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-triangle-exclamation"></i></div>
-            <h3>v1.24.6 发布 — 启动器先问、再打开 <small>（V2.66）</small></h3>
-            <p>
-              一台装了 v1.24.5 的现场机<strong>仍然黑屏</strong>。它自己的
-              <code>server.log</code> 加上直接跑包内服务器证明：<strong
-                >应用是健康的</strong
-              >
-              —— 纯 HTTP 的 <code>/login</code> 回 200，而浏览器被送到了
-              <code>https://</code>，于是显示的是协议错误空白页。根因是启动器按
-              <strong>自己</strong>能不能签出证书算
-              scheme，服务器按<strong>自己</strong>能加载到什么 决定 TLS ——
-              两次独立决策、一个 socket。现在两端启动器都<strong>先探</strong>
-              <code>/api/health</code>（共用
-              <code>launcher_net.py</code>），打开真正应答的那个
-              scheme，切换必提示、绝不静默降级。
+              <code>logs/server-stdout.log</code> 是 systemd 的
+              <code>StandardOutput=append:</code> 目标，而 systemd 与服务端都不轮转
+              <code>append:</code> 目标——它因此是整个镜像里唯一没有上限的文件。实测：一个每
+              20&nbsp;ms 写一条警告的缺陷，在 6.5&nbsp;GB 的根分区上五小时写了
+              17&nbsp;MB。服务层现在安装 <code>/etc/logrotate.d/mrrc</code>（5&nbsp;MB
+              触发、留三代、压缩，<code>copytruncate</code>——systemd
+              持有文件描述符），并自带 <code>mrrc-logrotate.timer</code>：不押注 cron
+              或发行版的 timer 在跑；journald 上限 128&nbsp;MB（默认是文件系统的
+              10%）。
             </p>
             <p>
-              同版还修了：Windows 端口改为<strong>独占绑定</strong> —— 那里的
-              <code>SO_REUSEADDR</code>
-              允许第二个进程绑到<strong>正在监听</strong>的端口，于是两个
-              服务器可以同时报
-              <code>Server ready!</code
-              >，浏览器可能落到没拿到电台那一个（现场日志 每行成对、相差
-              1–10&nbsp;ms）；直接启动 <code>Server</code> 不再把密码文件与
-              <code>recordings/</code> 指向<strong>只读</strong>的安装目录 ——
-              那意味着<strong>每次启动换一个 新密码且永远存不下</strong
-              >，正是「装了新包还是登不上」的真因；裸启动现在会读用户的
-              <code>mrrc_modern.env</code>；日志不再每行写两遍；并新增标准库 AST
-              门禁：应用模块被 <code>name.attr</code> 使用却从未 import
-              时<strong>直接让构建失败</strong> —— 这类缺陷已经
-              进过两次发布包（v1.24.1 的 <code>cloud_hub</code>、v1.24.5 的
-              <code>ssl_bootstrap</code>）。
+              录音拿到的是保留策略里<em>不破坏</em>的那一半：剩余空间低于
+              <code>MRRC_RECORDINGS_MIN_FREE_MB</code>（200&nbsp;MB，按默认码率约七小时）
+              时，新录音会被<em>拒绝并给出两个数字</em>，绝不会先开始。
+              操作员录下的东西，产品不会为了腾地方删掉。
             </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
-            <h3>MRRC 品牌统一 + 环境变量迁移 <small>（V2.21–V2.22）</small></h3>
-            <p>
-              <code>FT710_*</code> 环境变量更名为
-              <code>MRRC_*</code> 并自动兼容旧前缀；启动器、认证 Cookie
-              与日志命名统一为 MRRC Modern；启动配置模板暴露
-              <code>MRRC_RADIO_MODEL</code>。
+            <p class="feature-metric">
+              一个有界的文件 · 一个有界的 journal · 只拒绝，不删除
             </p>
           </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-shield-halved"></i></div>
-            <h3>IC-7300/MK2 运行可靠性 <small>（V2.24）</small></h3>
-            <p>
-              按后端选择串口默认波特率（FT-710 38400；IC-7300/MK2 115200）；CI-V
-              0x27 分路队列上限 44
-              段、积压丢最旧，防止暂停后回放陈旧波形；频谱以 30 Hz
-              广播且只发送新完成的真实帧。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-file-contract"></i></div>
-            <h3>官方 CI-V 一致性对齐 <small>（V2.25–V2.26）</small></h3>
-            <p>
-              频谱启动同时开启显示（27 10 01）与波形输出（27 11 01）；SCROLL-C
-              解码为下/上边缘；按型号选择 Transceive 菜单项（IC-7300 0071 / MK2
-              0089）；改用文档化的 03 在线探测；ALC 采用官方 raw 120
-              满刻度。全仓审计记录了开放问题 I8–I11。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-box-archive"></i></div>
-            <h3>v1.12.0 Windows 稳定版发布 <small>（V2.27）</small></h3>
-            <p>
-              经 macOS 与 Windows 11 双端 633/633 测试、三个 PyInstaller
-              目标、Inno Setup 编译与跨主机 SHA-256 校验后发布。FT-710 的
-              CAT、音频、PTT 与频谱行为保持不变。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-tower-cell"></i></div>
             <h3>
-              ICOM SDR 机型：IC-705 / IC-7610 / IC-7760 <small>（V2.41）</small>
+              hub 再也不会钉住一把实例已经换掉的证书；FT8 解码器不再杀掉自己的
+              worker
+              <small>（V2.98）</small>
             </h3>
             <p>
-              再添三台 CI-V 机型，采用 profile
-              驱动核心并带显式未验证边界：能力位、发射门禁（<code
-                >MRRC_ALLOW_UNVERIFIED_TX=1</code
+              <code>sign_for()</code>
+              现在一个名字只签一次：同名且证书可用（CN/SAN 匹配、距到期 30
+              天以上、
+              私钥与证书配对、文件可解析）就复用，而且<em>不重写文件</em>——于是「签了但登记没成功」不会再让
+              hub 钉住一把、实例服务另一把（现场入口整夜
+              <code>502</code> 就是这个形态）。轮换成了显式动作（删证书
+              文件），已经坏掉的实例点一次「连接」即自愈。
+            </p>
+            <p>
+              FT8 深路径此前<em>每个时隙</em>都杀掉服务器的 DSP
+              worker：原生解码器里的 Fortran
+              <code>stop</code> 会终止它的宿主进程，而 launcher 的启动 tee
+              在服务器答 HTTP 之后就不再写盘——于是死因一个字都没进日志，
+              只剩一句 <code>worker_exit</code>。现在 worker 自己的
+              stdout/stderr 落到
+              <code>logs/ft8-worker.log</code>（诊断包收集），FFTW
+              线程初始化改为返回状态码而不再 abort，
+              <code>worker_exit</code> 还会写明第几代、重启过几次。
+            </p>
+            <p class="feature-metric">
+              AD-021 · 登记幂等 · worker 的死因现在可见
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="icon"><i class="fas fa-box-open"></i></div>
+            <h3>
+              发货版盒子不需要初始化：固定口令、Wi-Fi 与公网入口都在同一个页面
+              <small>（V2.92）</small>
+            </h3>
+            <p>
+              「刷好就发」的镜像（<code>build-image.sh --preflash</code
+              >，<strong>默认关</strong>）把三条口令、
+              <code>Asia/Shanghai</code> 与
+              <code>zh_CN.UTF-8</code> 烤进去，于是一台盒子从插电到浏览器里登录
+              中间不需要任何步骤。Wi-Fi 面板多了一个<em>可手输</em>的 SSID
+              框（点扫描结果只是把它带入）与
+              显示/隐藏密码的按钮——隐藏网络和「扫描返回空表」以前都是死路；新增的「公网入口」面板收一个呼号、
+              向门户提出申请、并回报入口地址。<strong
+                >同一批还修掉一处真缺口：首启探测在此前所有镜像上从未运行过</strong
               >
-              显式开启）与只读
-              <code>19 00</code> 型号身份校验。三台均无真机，因此不声称已验证。
+              （包装器带着
+              <code>MRRC_PRESEED=1</code>
+              调它，而那个键第一行就返回了），于是「电台比盒子晚插上」
+              永远不会被发现；现在探测真的会跑，而且每次开机重探到配置定型为止。
             </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-microphone-lines"></i></div>
-            <h3>服务端 QSO 录音 <small>（V2.42–V2.45）</small></h3>
-            <p>
-              边录边落的 16 kHz 单声道 MP3（lameenc），RX/TX
-              落在同一条单调时间轴上；录音面板支持列表/拖动定位/下载/删除；浏览器端编码器退役。写入端生命周期修复终结了"同一进程第二次录音静音"。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-plug-circle-check"></i></div>
-            <h3>CAT 掉线恢复成本 <small>（V2.43）</small></h3>
-            <p>
-              USB 串口重枚举后不再重放 24
-              条全量状态同步（轮询分层本已覆盖所有字段），原先约 62 秒的 CAT
-              死区降为秒级恢复；重试日志分级并给出 ENXIO 可操作提示。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-box-archive"></i></div>
-            <h3>v1.15.0 发布 <small>（V2.44–V2.45）</small></h3>
-            <p>
-              macOS DMG、Windows 安装包与 rpi64 镜像发布，跨主机 SHA-256
-              校验一致，含上述录音功能与掉线恢复修复。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-box-archive"></i></div>
-            <div class="card">
-              <h3>v1.18.1 发布 <small>(V2.54)</small></h3>
-              <p>
-                一个让 macOS
-                包真正可用的补丁：此前每个包的应用<strong>签名都没成功</strong>（该步骤静默失败），
-                Gatekeeper
-                因此报「已损坏，无法打开」；同时包内没有任何音频输入权限说明键，而
-                macOS 对此的回应是 <em>让捕获流打开成功、却把缓冲填零</em> ——
-                于是 RX 完全无声、不报错，日志还把矛头指向电台。
-                两者都在打包层面修掉，且签名失败现在会直接中止构建。
-              </p>
-            </div>
-            <h3>v1.18.0 发布 <small>（V2.54）</small></h3>
-            <p>
-              macOS DMG 与 Windows 安装包由同一提交构建并各自验证：macOS
-              冻结版能启动、支持端点齐备、**首次真的写出服务端日志**；VM 内 1261
-              项测试 + Inno Setup 出包。<code>latest.json</code> 已上线，1.17.0
-              客户端检查即得「有新版本」。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
-            <h3>更新通道（只读检查） <small>（V2.54）</small></h3>
-            <p>
-              生成式 <code>latest.json</code>（size/SHA-256
-              取自产物本身）回答“有没有新版本”；<code
-                >GET /api/update/check</code
-              >
-              只读上报。成功被定义为**只有新版本能写下的事实**（<code>state.json.lastResult</code>），“已拉起安装器”明确不算成功；下载/安装是
-              slice 2（AD-022）。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-robot"></i></div>
-            <h3>自动分诊与答复页 <small>（V2.52）</small></h3>
-            <p>
-              维护者侧的 autopilot 每 10 分钟轮询接收端，用只读 agent
-              把日志现象对到代码位置，产出结论卡并发布到答复页；默认只出草稿，证据不足时判「需要更多信息」且不发布。公开页过滤邮箱/手机号/设备路径/内网地址。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-bug"></i></div>
-            <h3>诊断包与上报闭环 <small>（V2.51）</small></h3>
-            <p>
-              菜单新增 <b>🐞 遇到问题</b>：一键生成脱敏诊断包（日志 + 配置 +
-              环境/电台/音频快照 +
-              自动体检结论）并上传到本项目专属接收端；无网络时可只保存到本地。包内<b>不含</b>密码、证书私钥、令牌、录音与记忆频道（AD-021）。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-box-archive"></i></div>
-            <h3>v1.17.0 发布：三平台同步 <small>（V2.50）</small></h3>
-            <p>
-              macOS DMG、Windows 安装包与 rpi64
-              镜像由同一提交构建，发布前各自验证：macOS 冻结包无头 HTTPS
-              冒烟、Windows PYZ 走查 + 包内资产核对、树莓派镜像 debugfs 抽查（含
-              <code>static/audio/cq.wav</code>）。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-bullhorn"></i></div>
-            <h3>一键 CQ 按键 <small>（V2.48–V2.50）</small></h3>
-            <p>
-              由服务端键控电台、播送打包的 CQ 录音并松键 ——
-              发射内容不经过网络，因此不受抖动影响。呼叫期间麦克风帧被丢弃，PTT/TUNE
-              被拒绝，发起端断开即切断载波（<code>MRRC_CQ_FILE</code>
-              可替换录音；AD-020）。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-mobile-screen"></i></div>
-            <h3>
-              v1.21.0 发布 —— iPhone 开机锁屏竞态修复 <small>（V2.61）</small>
-            </h3>
-            <p>
-              开机时弹出的 iOS 系统麦克风权限框会释放刚拿到的屏幕锁，
-              而所有无用户手势的自动重申请都被拒绝 —— 主控界面开机后 约 30
-              秒仍会黑屏。现在权限框结束时立即重申请，并新增 window
-              <code>focus</code> 兜底。收听页新增瀑布上方的 FFT
-              迹线、频率步进按钮、公网尺寸音频缓冲；公网代理后端 改用 DNS 名
-              <code>radio.vlsc.net</code>（300 秒重解析， 家中 IPv6
-              变化自愈）。macOS DMG 与 Windows 安装包均已发布并做了跨主机
-              SHA-256 校验。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-headphones"></i></div>
-            <h3>v1.20.0 发布 —— 收听专用界面 <small>（V2.59）</small></h3>
-            <p>
-              用另一个独立密码（<code>MRRC_LISTEN_PASSWORD</code>）可进入
-              <code>/listen</code>：调频率与模式、 调用记忆频道、看 S
-              表与瀑布、听 RX 音频（浏览器端音量）。管控<b>全在服务端</b>——<code
-                >/WSradio</code
-              >
-              角色门只放行频率/模式与记忆调用，TX 与天调通道直接
-              <code>4003</code> 断开，REST 只读——因此发射、录音与
-              设备设置从页面根本到不了。同一版还修掉 iPhone
-              主控界面自动锁屏（Wake Lock 改由真实用户手势发起），
-              并在开机时激活 iOS 音频会话。macOS DMG 与 Windows
-              安装包均已发布并做了跨主机 SHA-256 校验。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
-            <h3>
-              v1.19.0 发布 —— ATR-1000 自己动手调谐 <small>(V2.57–V2.58)</small>
-            </h3>
-            <p>
-              接了可选网络天调后，发射中驻波超过 2.0 会自动做一次完整调谐：30 s
-              冷却、同频最多 3 次，
-              调好且匹配改善时把继电器值写回学习库。<strong>它绝不自行键控电台</strong>——只在你已经发射时动手
-              （实测功率 ≥ 5 W），学习门限也改为跟随实测功率（≥ 3 W），因此面板
-              PTT 与外部软件的发射同样会被学习。 macOS DMG 与 Windows
-              安装包均已发布并做了跨主机 SHA-256 校验。
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-radio"></i></div>
-            <h3>
-              Yaesu SDR 家族：FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891
-              <small>（V2.46）</small>
-            </h3>
-            <p>
-              profile 驱动的共享 ASCII-CAT
-              核心（<code>backends/yaesu/</code>），传输层移植自已验证的 FT-710
-              路径，每机型表均带溯源。四台均无真机：发射默认拒绝、Yaesu
-              频谱波形无文档（瀑布走 S 表回退）、双接收留二期；已验证的 FT-710
-              路径刻意不动（AD-018/AD-019）。
+            <p class="feature-metric">
+              AD-027 · NFR-069 · 首启探测这才真的会跑
             </p>
           </div>
         </div>
@@ -668,7 +313,7 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">架构决策</span>
-          <h2 class="section-title">AD-001 ... AD-026</h2>
+          <h2 class="section-title">AD-001 ... AD-029</h2>
         </div>
         <div class="tech-stack">
           <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -690,12 +335,15 @@
           <span class="tech-tag">AD-017 服务端录音</span>
           <span class="tech-tag">AD-018 Profile 驱动的 Yaesu 核心</span>
           <span class="tech-tag">AD-019 未验证机型策略</span>
+          <span class="tech-tag">AD-020 一键 CQ 呼叫</span>
           <span class="tech-tag">AD-021 诊断包与上报闭环</span>
           <span class="tech-tag">AD-022 更新通道</span>
           <span class="tech-tag">AD-023 远程会话遥测</span>
           <span class="tech-tag">AD-024 会话令牌传输</span>
           <span class="tech-tag">AD-025 频谱带宽档位</span>
-            <span class="tech-tag">AD-026 初始化热点与免口令引导窗口</span>
+          <span class="tech-tag">AD-026 初始化热点与免口令引导窗口</span>
+          <span class="tech-tag">AD-027 出厂预置（发货版）镜像</span>
+          <span class="tech-tag">AD-028 本地操作台（蓝牙遥控器）</span>
         </div>
       </div>
     </section>

@@ -15,6 +15,17 @@ RESULT_CAPACITY = 256
 MAX_DECODE_THREADS = 12
 
 
+class CloudUnavailable(RuntimeError):
+    """A decode provider outside this process could not produce a batch.
+
+    Raised by whatever answers ``decode_path`` remotely (today
+    ``ft8/platform/cloud_decode.py``) and caught by the cascade, whose answer
+    to it is the local deep path.  It lives in the shared vocabulary rather
+    than in the platform module so the engine does not have to import a
+    platform-coupled module just to name the condition it handles.
+    """
+
+
 def auto_thread_count(cpu_count: int | None = None) -> int:
     """I9 Auto thread policy: logical CPUs minus one reserved core, 1-12.
 

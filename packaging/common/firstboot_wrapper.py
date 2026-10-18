@@ -28,7 +28,7 @@ from pathlib import Path
 # tolerant env reader (BOM/UTF-8/cp936/latin-1) that keeps a preseed saved by
 # an ANSI editor from killing the very first boot.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from first_run import read_env_text  # noqa: E402  # type: ignore[import-not-found]
+from first_run import needs_first_run, read_env_text  # noqa: E402  # type: ignore[import-not-found]
 
 ENV_DIR = Path("/opt/mrrc_modern/env")
 ENV_FILE = ENV_DIR / "mrrc.env"
@@ -80,6 +80,24 @@ def ensure_cert() -> None:
     subprocess.run(["chmod", "644", str(CERT_DIR / "server.crt")], check=True)
 
 
+def env_from_file() -> dict[str, str]:
+    """The env file as a dict; a missing file is an empty dict (⇒ unsettled).
+
+    The same tolerant reader the preseed path uses: this file is edited by
+    operators (and on a preseed, by their computers), so it may not be UTF-8.
+    """
+    if not ENV_FILE.exists():
+        return {}
+    text, _ = read_env_text(ENV_FILE)
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            out[key.strip()] = value
+    return out
+
+
 def main() -> int:
     if DONE.exists():
         return 0
@@ -110,6 +128,13 @@ def main() -> int:
     subprocess.run(["chown", "-R", "mrrc:mrrc", str(ENV_DIR)], check=True)
     subprocess.run(["chmod", "640", str(ENV_FILE)], check=True)
     DONE.parent.mkdir(parents=True, exist_ok=True)
+    if needs_first_run(env_from_file()):
+        # 没定型：没有电台应答，或者记下来的那个串口节点现在不在。
+        # **不盖章** ⇒ 下次开机再探一次（单元的 ConditionPathExists 看的就是这个文件）。
+        # 卖家工作台上那次开机（U 盘、没插电台）正是为它存在的：那次“未定型”会被
+        # 克隆进用户家的 eMMC，用户插上电台开机时才定型。
+        print("[mrrc-firstboot] 还没定型（没有电台应答）—— 下次开机再试")
+        return 0
     DONE.write_text("ok\n", encoding="utf-8")
     subprocess.run(["systemctl", "disable", "mrrc-firstboot.service"], check=False)
     return 0

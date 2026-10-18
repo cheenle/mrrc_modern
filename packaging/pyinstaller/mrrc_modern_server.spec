@@ -54,6 +54,15 @@ else:
     _ft8_root = ROOT / "build" / "ft8" / "windows"
 _ft8_data = [(str(_ft8_root), ".")] if _ft8_root.exists() else []
 
+# ft8/data/cty.dat (the DXCC database) is read through ft8.core.paths.app_root()
+# — "repo root, or _MEIPASS when frozen" — and the staging directory above
+# carries only the **native libraries**.  Without this entry a packaged build
+# resolves the database to a path that does not exist inside the bundle: the
+# loader logs the traceback and degrades to an empty db, so entity names and
+# the new-DXCC highlight are dead for every user of an installer.  v1.27.0
+# shipped that way, which is why it is written down instead of inferred.
+_ft8_assets = [(str(ROOT / "ft8" / "data"), "ft8/data")]
+
 
 # default.env: the launcher seeds the user env from the platform-appropriate
 # template (windows/ for Win, macos/ for macOS). Do not ship the other
@@ -75,6 +84,7 @@ a = Analysis(
         (str(ROOT / "windows" / "launcher.py"), "windows"),
         *_vendor_data,
         *_ft8_data,
+        *_ft8_assets,
     ],
     hiddenimports=[
         # First-run auto-config (launcher + setup endpoint)

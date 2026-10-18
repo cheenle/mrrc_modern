@@ -274,15 +274,15 @@ IBM Team Solution Design (TeamSD) v2.3.2 aligned documentation set</p>
 </tr>
 <tr>
 <td>SDD Version</td>
-<td>V2.84</td>
+<td>V3.00</td>
 </tr>
 <tr>
 <td>Baseline Date</td>
-<td>2026-10-13</td>
+<td>2026-10-17</td>
 </tr>
 <tr>
 <td>Status</td>
-<td><strong>v1.27.0 四平台发布：FT8 工作模式（含快路径 + 自适应级联）与「原生 DSP 库随产物构建」</strong> —— macOS DMG <strong>84,882,735 bytes</strong> <code class="scope-code">9d5ec531…</code>；Windows Setup <strong>79,257,177 bytes</strong> <code class="scope-code">ba956b19…</code>；W103D 镜像 <strong>1,107,381,643 bytes</strong> <code class="scope-code">2e7452f8…</code>；树莓派镜像 <strong>489,496,576 bytes</strong> <code class="scope-code">bb7127c7…</code>。<code class="scope-code">unittest</code> <strong>2200 项</strong>（macOS，另 1 skip）+ FT8 pytest <strong>744 项</strong>；Windows 构建门禁 <strong>2197 项 OK（33 platform skips）</strong>；<code class="scope-code">release_check.py</code> 离线 <strong>32 ok / 0 failing</strong>；两条镜像线各跑四步产物验证（含 chroot 内 <code class="scope-code">ctypes.CDLL</code> 载入 <code class="scope-code">libwsjt_core.so</code> 并核对 <code class="scope-code">abi=2</code> / <code class="scope-code">decode_paths=0x7</code>）；macOS 与 Windows 冻结包各跑洁净室真跑，日志出现 <code class="scope-code">FT8 engine started at boot</code> —— 这一步抓出并修掉两个真缺陷（全新安装缺 <code class="scope-code">&lt;runtime&gt;/ft8/</code> 数据目录、冻结包缺 <code class="scope-code">multiprocessing.freeze_support()</code>），运行后包体零改动、<code class="scope-code">codesign --verify</code> 仍有效。设计与取舍见 SDD §9.10 与 <code class="scope-code">docs/superpowers/specs/2026-10-13-ft8-packaging-design.md</code>。</td>
+<td><strong>v1.28.1（2026-10-17）</strong>：hub 再也不会钉住一把实例已经换掉的证书（<code class="scope-code">ssl_bootstrap.sign_for()</code> 幂等，已坏实例点一次「连接」自愈）；FT8 深路径不再每个时隙杀掉服务器的 DSP worker（FFTW 线程初始化改为返回状态码，worker 自己的 stdio 落到 <code class="scope-code">logs/ft8-worker.log</code>，诊断包收集）。上一版 <strong>v1.28.0（2026-10-16）</strong>：电台电源回到 ☰ 菜单且两种意图分开、出站 HTTPS 只信随包的根证书、FT8 级联的深路径第一次真正跑起来，外加三个只在产物里现形的缺陷。四份产物（同一修订 <code class="scope-code">66b6930</code>）：macOS DMG <strong>85,064,796 bytes</strong> <code class="scope-code">1c9ba24e…</code>；Windows Setup <strong>79,386,940 bytes</strong> <code class="scope-code">cfbeacc7…</code>（VM <code class="scope-code">certutil</code> == Mac <code class="scope-code">shasum</code>）；W103D <strong>1,170,343,847 bytes</strong> <code class="scope-code">749e442a…</code>；rpi64 <strong>530,820,848 bytes</strong> <code class="scope-code">a00ab228…</code>。<code class="scope-code">unittest</code> <strong>2327 项</strong>（macOS，1 skip）；Windows 门禁 <strong>2324 项 OK</strong>；<code class="scope-code">release_check.py</code> 离线 <strong>32 ok / 0 failing</strong>；两条镜像线各跑四步产物验证（代码身份逐字节一致 / 装机内容 / D-11 双指向 / chroot 内载入 <code class="scope-code">libwsjt_core.so</code> 并核对 <code class="scope-code">abi=2</code> 与 <code class="scope-code">decode_paths=0x7</code>）。</td>
 </tr>
 <tr>
 <td>Project</td>
@@ -416,7 +416,7 @@ Yaesu FT-710 or Icom IC-7300 / IC-7300MK2 Radio</code></pre>
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.84 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.00 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -1321,6 +1321,61 @@ function handleTuneEnd() {
 }
 
 // ── Event Wiring ────────────────────────────────────────────────────
+// ── FT8 engine switch (menu → Settings) ─────────────────────────────
+// The engine runs in the background from boot so the FT8 page has data before
+// anyone switches modes; on a small box that costs a core of DSP, so the menu
+// can stop it.  State comes from /api/ft8/state (snapshot.engine.enabled), not
+// from work_mode: the station can be on SSB while the engine decodes.
+function applyFt8EngineState(enabled) {
+    const btn = document.getElementById('menu-ft8-engine');
+    if (!btn) return;
+    const on = !!enabled;
+    btn.dataset.enabled = on ? 'true' : 'false';
+    btn.textContent = on ? 'ON' : 'OFF';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.classList.toggle('is-off', !on);
+}
+
+function refreshFt8EngineState() {
+    fetch(basePath() + '/api/ft8/station', {credentials: 'same-origin'})
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload) => {
+            const settings = payload && payload.settings ? payload.settings : payload;
+            if (settings && typeof settings.engine_always_on === 'boolean') {
+                applyFt8EngineState(settings.engine_always_on);
+            }
+        })
+        .catch(() => {});      // the switch just keeps its last known state
+}
+
+function initFt8EngineSwitch() {
+    const btn = document.getElementById('menu-ft8-engine');
+    if (!btn || btn.dataset.bound === '1') return;
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', () => {
+        const next = btn.dataset.enabled !== 'true';
+        btn.disabled = true;
+        // Existing settings path: it persists engine_always_on and starts or
+        // stops the runtime in the same call, so the switch survives a reboot.
+        fetch(basePath() + '/api/ft8/station', {
+            method: 'PUT',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({engine_always_on: next}),
+        }).then((response) => {
+            if (!response.ok) throw new Error('engine switch failed');
+            applyFt8EngineState(next);
+            showToast(next ? 'FT8 引擎已启动' : 'FT8 引擎已停止（DSP 已释放）', 2500);
+        }).catch(() => {
+            showToast('FT8 引擎切换失败', 3000);
+            refreshFt8EngineState();
+        }).finally(() => {
+            btn.disabled = false;
+        });
+    });
+    refreshFt8EngineState();
+}
+
 function initUI() {
     // Mode button: cycles to next mode
     document.getElementById('btn-mode').addEventListener('click', () => {
@@ -2264,6 +2319,7 @@ function initFreqInput() {
 
 // ── Initialize ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    initFt8EngineSwitch();
     initUI();
     initFreqInput();
 });

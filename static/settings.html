@@ -53,6 +53,11 @@ button.ghost{background:transparent;color:var(--amber);border:1px solid var(--am
 .msg{font-size:13px;margin-top:10px;min-height:18px}
 .msg.bad{color:var(--bad)}
 .msg.good{color:var(--good)}
+.saved{list-style:none;margin:10px 0 0;padding:0;border-top:1px solid var(--line)}
+.saved li.saved-row{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.saved .saved-name{flex:1 1 40%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.saved button{width:auto;margin:0;padding:8px 10px;font-size:13px}
+.saved button.on{color:var(--good);border-color:var(--good)}
 .rows{list-style:none;margin:10px 0 0;padding:0;border-top:1px solid var(--line)}
 .rows li{border-bottom:1px solid var(--line)}
 .rows button{
@@ -61,6 +66,10 @@ button.ghost{background:transparent;color:var(--amber);border:1px solid var(--am
   display:flex;align-items:center;gap:10px;
 }
 .rows button:active{background:#2a2a2a}
+.row{display:flex;gap:8px;align-items:stretch}
+.row input{flex:1 1 auto;min-width:0}
+.row button{width:auto;flex:0 0 auto;margin-top:0;padding:12px 16px;background:transparent;
+  color:var(--amber);border:1px solid var(--amber);font-weight:600;font-size:14px}
 .ssid{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sig{color:var(--dim);font-size:12px;flex:0 0 auto;letter-spacing:1px}
 .lock{color:var(--dim);font-size:12px;flex:0 0 auto}
@@ -118,6 +127,11 @@ select{
   width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
   background:#111;color:var(--text);font-size:16px;
 }
+.bt-row{display:flex;gap:10px;align-items:center;justify-content:space-between;
+  padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+.bt-row>span:first-child{font-family:ui-monospace,Menlo,monospace;font-size:13px;
+  word-break:break-all}
+.bt-meta{color:var(--dim);font-size:13px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -155,18 +169,39 @@ select{
   </section>
 
   <section class="card panel">
-    <h2>Wi-Fi</h2>
+    <h2>Wi-Fi <span class="note">（这台盒子只支持 2.4 GHz）</span></h2>
     <div class="grid" id="wifi-grid"></div>
+
+    <label for="ssid-input">网络名（SSID）</label>
+    <input id="ssid-input" type="text" spellcheck="false" autocomplete="off"
+           placeholder="点下面的扫描结果带入，或直接手输（隐藏网络只能手输）">
+    <label for="psk">密码</label>
+    <div class="row">
+      <input id="psk" type="password" autocomplete="off"
+             placeholder="Wi-Fi 密码（开放网络可留空）">
+      <button id="psk-toggle" type="button" class="ghost">显示</button>
+    </div>
+    <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
+    <button id="save-btn" type="button" class="ghost">仅保存（不切换）</button>
+    <p class="note">如果现在正是通过 Wi-Fi 访问这台盒子，<b>本页会断开</b>。
+      稍后用 <code id="warn-mdns"></code> 重新打开本页看结果。</p>
+
+    <label>已保存的网络</label>
+    <ul class="saved" id="saved-list"></ul>
     <button id="scan-btn" type="button" class="ghost">扫描附近的 Wi-Fi</button>
     <ul class="rows" id="net-list"></ul>
-    <div id="pick" class="hidden">
-      <label for="psk">“<span id="pick-name"></span>” 的密码</label>
-      <input id="psk" type="password" autocomplete="off" placeholder="Wi-Fi 密码（开放网络可留空）">
-      <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
-      <p class="note" id="wifi-warn">如果你现在正是通过 Wi-Fi 访问这台盒子，
-        <b>本页会断开</b>。稍后用 <code id="warn-mdns"></code> 打开本页看结果。</p>
-    </div>
     <div id="wifi-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>遥控器 <span class="note">（蓝牙；按键直接调电台）</span></h2>
+    <button id="bt-scan" type="button">搜索附近的遥控器</button>
+    <div id="bt-list" class="bt-list"></div>
+    <div id="bt-msg" class="msg"></div>
+    <p class="note">
+      遥控器先进入配对模式：<b>同时长按「OK + 返回」约 5 秒</b>，指示灯快闪。
+      配对后按任意键就能用；不用 SSH。
+    </p>
   </section>
 
   <section class="card panel">
@@ -216,6 +251,36 @@ select{
   </section>
 
   <section class="card panel">
+    <h2>系统账号口令 <span class="note">（SSH / HDMI 登录用）</span></h2>
+    <label for="sysuser">账号</label>
+    <select id="sysuser">
+      <option value="root">root（最高权限）</option>
+      <option value="mrrc">mrrc（服务账号）</option>
+    </select>
+    <label for="syspass">新口令</label>
+    <input id="syspass" type="password" autocomplete="new-password"
+           placeholder="至少 8 位">
+    <label for="syspass2">再输入一次</label>
+    <input id="syspass2" type="password" autocomplete="new-password">
+    <button id="syspass-btn" type="button">改这个账号的口令</button>
+    <p class="note">上一节是<b>网页</b>口令；这里是 SSH 或 HDMI 控制台用的系统账号，
+      改完立刻生效，页面上不会回显。</p>
+    <div id="syspass-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
+    <h2>公网入口 <span class="pill" id="cloud-pill">读取中…</span></h2>
+    <p class="hint">填上你的呼号，向门户申请一个公网入口（<code id="cloud-portal">—</code>）。
+      批准由运维在门户完成；<b>不用守着本页</b>，盒子会自己每 30 秒查一次。</p>
+    <div class="grid" id="cloud-grid"></div>
+    <label for="cloud-callsign">呼号</label>
+    <input id="cloud-callsign" type="text" spellcheck="false" autocomplete="off"
+           placeholder="例如 BG1SB（改呼号 = 重新申请，旧入口不会自动迁移）">
+    <button id="cloud-apply" type="button">申请公网入口</button>
+    <div id="cloud-msg" class="msg"></div>
+  </section>
+
+  <section class="card panel">
     <h2>电台</h2>
     <p class="hint">机型与串口的配置在控制界面的设置里，本页不重复一套。</p>
     <a href="."><button type="button" class="ghost">打开控制界面</button></a>
@@ -250,7 +315,7 @@ select{
 
   function renderNetwork(net) {
     var grid = document.querySelector('#net-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
     var pill = document.querySelector('#net-pill');
     if (!net.nm_running) {
       pill.textContent = 'NetworkManager 没在跑';
@@ -276,24 +341,87 @@ select{
 
   function renderWifi(net) {
     var grid = document.querySelector('#wifi-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
     if (!net.wifi.ssid) {
       kv(grid, '当前', '没有连接任何 Wi-Fi');
     } else {
       kv(grid, '当前', net.wifi.ssid + '  ' + Box.signalText(net.wifi.signal));
     }
+    renderSaved(net);
+  }
+
+  // 已保存的 Wi-Fi：改密码（填回上面的表单）、忘记、开/关自动连接。
+  // 全部按 DOM 节点构造 —— 这个页面禁止把 HTML 拼成字符串（守卫测试盯着）。
+  function renderSaved(net) {
+    var list = document.querySelector('#saved-list');
+    list.replaceChildren();
     var saved = net.connections.filter(function (c) {
       return c.type === '802-11-wireless' || c.type === 'wifi';
     });
+    if (!saved.length) {
+      var empty = document.createElement('li');
+      empty.className = 'note';
+      empty.textContent = '还没有保存的 Wi-Fi。可以扫描后点选，也可以直接填名称保存'
+        + '（客户家的网络就手输）。';
+      list.appendChild(empty);
+      return;
+    }
     saved.forEach(function (c) {
-      kv(grid, '已保存', c.name + (c.autoconnect ? '（开机自动连接）' : '（不自动连接）'));
+      var row = document.createElement('li');
+      row.className = 'saved-row';
+
+      var name = document.createElement('span');
+      name.className = 'saved-name';
+      name.title = c.name;
+      name.textContent = c.name;
+      row.appendChild(name);
+
+      var auto = document.createElement('button');
+      auto.type = 'button';
+      auto.className = 'ghost' + (c.autoconnect ? ' on' : '');
+      auto.textContent = c.autoconnect ? '自动连接：开' : '自动连接：关';
+      auto.addEventListener('click', function () {
+        postWifi('/api/box/wifi/autoconnect',
+                 { ssid: c.name, enabled: !c.autoconnect },
+                 (c.autoconnect ? '已关掉「' : '已打开「') + c.name + '」的自动连接');
+      });
+      row.appendChild(auto);
+
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'ghost';
+      edit.textContent = '改密码';
+      edit.addEventListener('click', function () {
+        document.querySelector('#ssid-input').value = c.name;
+        document.querySelector('#psk').value = '';
+        document.querySelector('#psk').focus();
+        Box.message('#wifi-msg', '改好密码后点「仅保存（不切换）」', '');
+      });
+      row.appendChild(edit);
+
+      var forget = document.createElement('button');
+      forget.type = 'button';
+      forget.className = 'ghost';
+      forget.textContent = '忘记';
+      forget.addEventListener('click', function () {
+        postWifi('/api/box/wifi/forget', { ssid: c.name }, '已忘记「' + c.name + '」');
+      });
+      row.appendChild(forget);
+
+      list.appendChild(row);
     });
+  }
+
+  function postWifi(path, body, okText) {
+    Box.api(path, { method: 'POST', body: body })
+      .then(function () { Box.message('#wifi-msg', okText, 'good'); reload(); })
+      .catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
   }
 
   function renderLink(net) {
     var select = document.querySelector('#link-profile');
     var previous = select.value;
-    select.innerHTML = '';
+    select.replaceChildren();
     // Wired profiles only: `net.connections` also holds the Wi-Fi profiles
     // (the Wi-Fi panel above lists those), and a Wi-Fi name in a dropdown
     // labelled for the wired card is a trap — picking it here tries to rewire
@@ -311,7 +439,7 @@ select{
 
   function renderSystem(system, helper) {
     var grid = document.querySelector('#sys-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
     system.services.forEach(function (service) {
       kv(grid, service.unit, service.active ? '运行中' : '未运行',
          service.active ? 'good-text' : 'bad-text');
@@ -326,7 +454,7 @@ select{
 
   function renderSafety(fields) {
     var box = document.querySelector('#safety');
-    box.innerHTML = '';
+    box.replaceChildren();
     fields.forEach(function (field) {
       var row = document.createElement('div');
       row.className = 'field';
@@ -343,6 +471,95 @@ select{
       box.appendChild(row);
     });
   }
+
+  // 401 只有一个出口：回登录、并带上回来的路。两处调用点共用它（多写一遍
+  // 就是多一个拼错路径的地方）。
+  function bounceToLogin() {
+    location.href = '/login?next=/settings';
+  }
+
+  // 公网入口：最小闭环。三个端点都是既有的 —— 只读状态、提交申请、查一次。
+  // “批准后自己接通”是服务端的事（_cloud_start_autoconnect 每 30 s 轮一次），
+  // 所以本页不需要一直开着；页面在这只是让状态不用刷新就变绿。
+  function renderCloud(cloud) {
+    var grid = document.querySelector('#cloud-grid');
+    var pill = document.querySelector('#cloud-pill');
+    grid.replaceChildren();
+    Box.setText('#cloud-portal', cloud.portal || '—');
+    if (cloud.entry) {
+      pill.textContent = '已接通';
+      pill.className = 'pill good';
+      kv(grid, '呼号', cloud.callsign || '—');
+      kv(grid, '入口', cloud.entry);
+      if (cloud.cert_reload_required) {
+        kv(grid, '提示', '证书刚换 —— 重启盒子后入口才生效', 'bad-text');
+      }
+    } else if (cloud.has_token) {
+      pill.textContent = '等待批准';
+      pill.className = 'pill';
+      kv(grid, '呼号', cloud.callsign || '—');
+      kv(grid, '状态', '已提交，等待运维在门户批准');
+    } else {
+      pill.textContent = '未申请';
+      pill.className = 'pill';
+    }
+    if (cloud.tunnel_error) kv(grid, '隧道', cloud.tunnel_error, 'bad-text');
+    var input = document.querySelector('#cloud-callsign');
+    if (input && !input.value && cloud.callsign) input.value = cloud.callsign;
+    Box.setText('#cloud-apply', cloud.has_token ? '查询状态' : '申请公网入口');
+  }
+
+  function loadCloud() {
+    return Box.api('/api/cloud/state').then(function (cloud) {
+      renderCloud(cloud);
+      if (cloud.has_token && !cloud.entry) setTimeout(pollCloud, 30000);
+    }).catch(function (error) {
+      if (error.status === 401) { bounceToLogin(); return; }
+      Box.message('#cloud-msg', error.message, 'bad');
+    });
+  }
+
+  function refreshCloud() {
+    return Box.api('/api/cloud/refresh', { method: 'POST' }).then(function (state) {
+      if (state.connected) {
+        Box.message('#cloud-msg', '已接通：' + (state.entry || ''), 'good');
+      } else if (state.status === 'rejected') {
+        Box.message('#cloud-msg', '门户没有通过这条申请 —— 请联系运维（可以换一个呼号）。', 'bad');
+      } else {
+        Box.message('#cloud-msg', '还没批准（' + (state.status || 'applied') + '）。', '');
+      }
+      return loadCloud();
+    });
+  }
+
+  function pollCloud() {
+    Box.api('/api/cloud/state').then(function (cloud) {
+      renderCloud(cloud);
+      if (cloud.has_token && !cloud.entry) setTimeout(pollCloud, 30000);
+    }).catch(function () {});
+  }
+
+  Box.on('#cloud-apply', 'click', function () {
+    var callsign = (document.querySelector('#cloud-callsign').value || '').trim().toUpperCase();
+    if (!callsign) {
+      Box.message('#cloud-msg', '请先填呼号', 'bad');
+      return;
+    }
+    Box.disabled('#cloud-apply', true);
+    Box.api('/api/cloud/state').then(function (cloud) {
+      // 已经有令牌就不再申请：门户对同一呼号的重复申请是查重拒绍的
+      // （portal 的 store.apply），重提只会把“已存在申请”糊到用户脸上。
+      if (cloud.has_token) return refreshCloud();
+      return Box.api('/api/cloud/apply', { method: 'POST', body: { callsign: callsign } })
+        .then(function (reply) {
+          Box.message('#cloud-msg', '已提交（' + (reply.status || 'applied')
+            + '）。等运维在门户批准，盒子会自己接通。', 'good');
+          return loadCloud();
+        });
+    }).catch(function (error) {
+      Box.message('#cloud-msg', error.message, 'bad');
+    }).then(function () { Box.disabled('#cloud-apply', false); });
+  });
 
   function load() {
     Box.api('/api/box/status').then(function (data) {
@@ -361,9 +578,10 @@ select{
       renderLink(data.network);
       renderSystem(data.system, state.helper);
       renderSafety(data.safety);
+      loadCloud();
     }).catch(function (error) {
       if (error.status === 401) {
-        location.href = '/login?next=/settings';
+        bounceToLogin();
         return;
       }
       document.querySelector('#errbox').textContent = error.message;
@@ -392,41 +610,86 @@ select{
       .catch(function (error) { Box.message('#sys-msg', error.message, 'bad'); });
   });
 
+  Box.on('#psk-toggle', 'click', function () {
+    var field = document.querySelector('#psk');
+    var shown = field.type === 'text';
+    field.type = shown ? 'password' : 'text';
+    Box.setText('#psk-toggle', shown ? '显示' : '隐藏');
+  });
+
   Box.on('#scan-btn', 'click', function () {
     Box.disabled('#scan-btn', true);
     Box.api('/api/box/wifi').then(function (data) {
       var list = document.querySelector('#net-list');
-      list.innerHTML = '';
-      (data.networks || []).forEach(function (net) {
+      var networks = data.networks || [];
+      list.replaceChildren();
+      networks.forEach(function (net) {
         var item = document.createElement('li');
         var button = document.createElement('button');
         button.type = 'button';
-        button.innerHTML = '<span class="ssid"></span><span class="lock">'
-          + (net.protected ? '🔒' : '开放') + '</span><span class="sig">'
-          + Box.signalText(net.signal) + '</span>';
-        button.querySelector('.ssid').textContent = net.ssid;
+        var ssid = document.createElement('span');
+        ssid.className = 'ssid';
+        ssid.textContent = net.ssid;
+        var lock = document.createElement('span');
+        lock.className = 'lock';
+        lock.textContent = net.protected ? '🔒' : '开放';
+        var sig = document.createElement('span');
+        sig.className = 'sig';
+        sig.textContent = Box.signalText(net.signal);
+        button.appendChild(ssid);
+        button.appendChild(lock);
+        button.appendChild(sig);
         button.addEventListener('click', function () {
           state.picked = net.ssid;
-          document.querySelector('#pick-name').textContent = net.ssid;
-          Box.show('#pick', true);
+          document.querySelector('#ssid-input').value = net.ssid;
+          Array.prototype.forEach.call(list.querySelectorAll('button'), function (other) {
+            other.classList.toggle('picked', other === button);
+          });
         });
         item.appendChild(button);
         list.appendChild(item);
       });
+      if (!networks.length) {
+        Box.message('#wifi-msg',
+          '没有扫到任何 Wi-Fi。隐藏网络（或芯片刚重启过）扫不到是正常的 —— '
+          + '直接把网络名手输到上面的框里再点连接。', '');
+      }
     }).catch(function (error) {
       Box.message('#wifi-msg', error.message, 'bad');
     }).then(function () { Box.disabled('#scan-btn', false); });
   });
 
   Box.on('#join-btn', 'click', function () {
-    if (!state.picked) return;
+    var ssid = (document.querySelector('#ssid-input').value || '').trim();
+    if (!ssid) {
+      Box.message('#wifi-msg', '请先填 Wi-Fi 名称（或点一次扫描，从结果里选一个）', 'bad');
+      return;
+    }
     Box.message('#wifi-msg', '正在切换。如果本页断开，请用 ' +
       (state.mdns || '盒子的新地址') + ' 重新打开。', '');
     Box.api('/api/box/wifi', {
       method: 'POST',
-      body: { ssid: state.picked, password: document.querySelector('#psk').value }
+      body: { ssid: ssid, password: document.querySelector('#psk').value }
     }).then(function () { poll(); })
       .catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
+  });
+
+  // 只写 profile、不切换：客户家的 AP 此刻不在范围内时，这是唯一正确的动作。
+  Box.on('#save-btn', 'click', function () {
+    var ssid = (document.querySelector('#ssid-input').value || '').trim();
+    if (!ssid) {
+      Box.message('#wifi-msg', '请先填 Wi-Fi 名称（或点一次扫描，从结果里选一个）', 'bad');
+      return;
+    }
+    Box.api('/api/box/wifi/save', {
+      method: 'POST',
+      body: { ssid: ssid, password: document.querySelector('#psk').value }
+    }).then(function () {
+      Box.message('#wifi-msg',
+        '已保存「' + ssid + '」，它出现在范围内时会自动连接', 'good');
+      document.querySelector('#psk').value = '';
+      reload();
+    }).catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
   });
 
   function poll() {
@@ -439,7 +702,8 @@ select{
         Box.message('#wifi-msg', '已连上 ' + status.ssid +
           '，地址 ' + status.address + '。', 'good');
       } else if (status.phase === 'failed') {
-        Box.message('#wifi-msg', status.reason, 'bad');
+        // `saved` 为真：AP 不在范围内，配置已经存下并保持启用——那不是失败。
+        Box.message('#wifi-msg', status.reason, status.saved ? 'good' : 'bad');
       }
       reload();
     }).catch(function () { setTimeout(poll, 3000); });
@@ -485,6 +749,28 @@ select{
       .catch(function (error) { Box.message('#pw-msg', error.message, 'bad'); });
   });
 
+  Box.on('#syspass-btn', 'click', function () {
+    var user = document.querySelector('#sysuser').value;
+    var pass = document.querySelector('#syspass').value;
+    if (pass !== document.querySelector('#syspass2').value) {
+      Box.message('#syspass-msg', '两次输入不一致', 'bad');
+      return;
+    }
+    if (pass.length < 8) {
+      Box.message('#syspass-msg', '口令至少 8 位', 'bad');
+      return;
+    }
+    Box.api('/api/box/system-password', {
+      method: 'POST', body: { user: user, password: pass }
+    }).then(function () {
+      Box.message('#syspass-msg', '已改 ' + user + ' 的口令', 'good');
+      document.querySelector('#syspass').value = '';
+      document.querySelector('#syspass2').value = '';
+    }).catch(function (error) {
+      Box.message('#syspass-msg', error.message, 'bad');
+    });
+  });
+
   // The timezone list is the browser's own: no endpoint needed, and it is the
   // list of the device the operator is holding rather than of the box.
   (function fillTimezones() {
@@ -506,6 +792,176 @@ select{
   })();
 
   load();
+})();
+</script>
+
+<script>
+(function () {
+  var scanBtn = document.getElementById('bt-scan');
+  var list = document.getElementById('bt-list');
+  var msg = document.getElementById('bt-msg');
+  if (!scanBtn || !list || !msg) return;
+
+  function say(text, cls) {
+    msg.textContent = text;
+    msg.className = 'msg' + (cls ? ' ' + cls : '');
+  }
+
+  // 信号强弱：列表按它排序，也是唯一能让操作员在二十几个设备里认出
+  // 手里那台遥控器的东西（实测 2026-10-17：BR/EDR 扫出 23 个，页面只给地址和名字）。
+  function signalText(cand) {
+    if (typeof cand.rssi !== 'number') { return ''; }
+    var bars = cand.rssi >= -60 ? '▮▮▮▮'
+      : cand.rssi >= -70 ? '▮▮▮'
+      : cand.rssi >= -80 ? '▮▮' : '▮';
+    return bars + ' ' + cand.rssi + ' dBm';
+  }
+
+  function row(cand) {
+    var line = document.createElement('div');
+    line.className = 'bt-row';
+    var name = document.createElement('span');
+    name.textContent = (cand.name || '（无名字）') + ' · ' + cand.address;
+    line.appendChild(name);
+
+    var meta = document.createElement('span');
+    meta.className = 'bt-meta';
+    // 遥控器那一行直接写出来：bluez 知道它是个键盘（input-keyboard），
+    // 这比名字还硬 —— 名字可以是空的，列表里就只剩一串地址。
+    var kind = (cand.icon || '').indexOf('input-') === 0 ? '遥控器/键盘' : (cand.type || '');
+    meta.textContent = [kind, signalText(cand)].filter(Boolean).join(' · ');
+    if (meta.textContent) { line.appendChild(meta); }
+
+    var pair = document.createElement('button');
+    pair.type = 'button';
+    pair.textContent = '配对';
+    pair.addEventListener('click', function () { pairNow(cand, pair); });
+    line.appendChild(pair);
+    return line;
+  }
+
+  // 「当场在广播的遥控器」：bluez 认得出它是 HID 输入设备（input-*），而且这次扫描
+  // 有信号强度（说明它现在就在广播 —— 也就是在配对模式）。两个条件都满足才自动配对；
+  // 一台都没满足就退回手动，绝不替操作员猜。
+  function looksLikeRemote(cand) {
+    return (cand.icon || '').indexOf('input-') === 0 && typeof cand.rssi === 'number';
+  }
+
+  // 串行配对：bluez 同时只处理一个配对请求，并行会互相打断。
+  // 名字对上的都配（多配一台的代价远小于"这台不认"），最后给一句汇总。
+  function pairInTurn(list) {
+    var i = 0;
+    var paired = 0;
+    (function next() {
+      if (i >= list.length) {
+        say('自动配对完成：' + paired + '/' + list.length + ' 台成功。'
+          + (paired ? '按一下遥控器的方向键试试。'
+                    : '确认遥控器在配对模式（指示灯快闪）后再点一次搜索。'),
+          paired ? 'good' : 'bad');
+        return;
+      }
+      var cand = list[i++];
+      say('正在配对 ' + (cand.name || cand.address) + ' …（第 ' + i + '/' + list.length
+        + ' 台，每台约 30～45 秒）');
+      pairPromise(cand).then(function (res) {
+        if (res.body && res.body.paired) { paired++; }
+        return next();
+      }).catch(function () { return next(); });
+    })();
+  }
+
+  function pairPromise(cand) {
+    return fetch('/api/box/bt/pair', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: cand.address }),
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); });
+  }
+
+  function pairNow(cand, button) {
+    if (button) { button.disabled = true; }
+    say('正在配对 ' + (cand.name || cand.address)
+      + ' …（先扫 12 秒再配，全程约 30～45 秒，鼠标别急）');
+    pairPromise(cand)
+      .then(function (res) { verdict(cand, res.body); })
+      .catch(function () { say('配对请求失败', 'bad'); })
+      .finally(function () { if (button) { button.disabled = false; } });
+  }
+
+  function verdict(cand, state) {
+    if (state && state.paired && state.keys_work) {
+      say('已配对，按键可用 ✓ 现在就能用遥控器调频', 'good');
+      return;
+    }
+    if (state && state.paired) {
+      // The measured trap: paired and bonded while the link stayed
+      // unencrypted — bluez then builds no keyboard device and every key dies.
+      say('已配对，但按键还没反应。点「重配」再试一次（这一步会清掉旧配对并重启蓝牙）。', 'warn');
+      var again = document.createElement('button');
+      again.type = 'button';
+      again.textContent = '重配';
+      again.addEventListener('click', function () {
+        say('正在清除旧配对并重启蓝牙…');
+        fetch('/api/box/bt/forget', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: cand.address, power_cycle: true }),
+        }).then(function () {
+          say('已清除。请让遥控器重新进入配对模式，再点一次「配对」。', 'warn');
+        }).catch(function () { say('重配失败', 'bad'); });
+      });
+      msg.appendChild(document.createElement('br'));
+      msg.appendChild(again);
+      return;
+    }
+    // 把 bluez 的原话放出来：「没配上」本身没法行动（2026-10-17 现场，三次配对
+    // 失败，真正的原因——遥控器已经退出配对模式——只出现在终端里）。
+    say('没有配上' + (state && state.error ? '：' + state.error : '')
+      + '。确认遥控器在配对模式（指示灯快闪）后再试。', 'bad');
+  }
+
+  scanBtn.addEventListener('click', function () {
+    scanBtn.disabled = true;
+    list.replaceChildren();
+    say('正在搜索…（约 12 秒，遥控器保持配对模式）');
+    fetch('/api/box/bt/scan', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        var devices = (payload && payload.devices) || [];
+        if (!devices.length) { say('没找到设备。遥控器在配对模式吗？', 'bad'); return; }
+        devices.forEach(function (d) { list.appendChild(row(d)); });
+        // 先按**名字**找（不认 MAC：来料批次会换地址）；名字对上几台就配几台。
+        var names = (payload && payload.remoteNames) || ['CMCC_Voice_Remote'];
+        function nameMatches(d) {
+          if (!d.name) { return false; }
+          var n = d.name.toLowerCase();
+          return names.some(function (p) { return n.indexOf(String(p).toLowerCase()) >= 0; });
+        }
+        var byName = devices.filter(nameMatches);
+        var candidates = byName.length ? byName : devices.filter(looksLikeRemote);
+        if (byName.length) {
+          say('找到遥控器「' + byName.map(function (d) { return d.name; }).join('、')
+            + '」，正在配对…（不用再点，配几台都行）');
+          pairInTurn(byName);
+          return;
+        }
+        if (candidates.length === 1) {
+          // 名字不认识、但刚好有一台正在广播的 HID 输入设备：也直接配。
+          say('找到一台正在广播的输入设备「' + (candidates[0].name || candidates[0].address)
+            + '」，正在配对…（不用再点）');
+          pairNow(candidates[0], null);
+          return;
+        }
+        say('找到 ' + devices.length + ' 个设备，按信号强弱排（遥控器贴着盒子时通常在'
+          + ' -40 ~ -60 dBm）。没有自动配对：'
+          + (candidates.length ? '有 ' + candidates.length + ' 台像遥控器，请点一下要哪台。'
+                               : '没看到正在广播的遥控器 —— 先让它进配对模式（灯快闪）再扫。'));
+      })
+      .catch(function () { say('搜索失败', 'bad'); })
+      .finally(function () { scanBtn.disabled = false; });
+  });
 })();
 </script>
 </body>

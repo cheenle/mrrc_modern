@@ -897,11 +897,12 @@ so the trust store came up **empty** and every outbound HTTPS request failed wit
 `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate` (Cloud Hub portal enrolment,
 the 🐞 diagnostics upload, the update check; field report 2026-10-04).
 
-`net_tls.py` therefore never relies on those defaults. When the process's default store is empty
-it loads, in order: `MRRC_CA_BUNDLE` (operator override) → `vendor/ca/cacert.pem` (shipped) → the
-platform's system bundle (`/etc/ssl/cert.pem`, `/etc/ssl/certs/ca-certificates.crt`,
-`/etc/pki/tls/certs/ca-bundle.crt`, …). Windows uses the OS certificate store and needs none of
-this.
+`net_tls.py` therefore never relies on those defaults — and since 2026-10-16 it does not consult the
+machine's store at all: the context trusts only `MRRC_CA_BUNDLE` (deployment override) or the shipped
+`vendor/ca/cacert.pem`. A store that *exists* is not a store that can verify a chain: an expired,
+same-name intermediate in a Windows store made OpenSSL report `certificate has expired` while the
+browser was happy (reproduced in `tests/test_tls_trust_store.py`). The platform store is a last-resort
+fallback, with a warning.
 
 **The shipped bundle** — `vendor/ca/cacert.pem`, Mozilla's CA list as distributed by curl's
 `ca-bundle` port (119 roots when last refreshed, 2026-10-04). Refresh it with:

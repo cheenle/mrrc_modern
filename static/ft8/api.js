@@ -33,6 +33,7 @@ export function key() {
 
 export const api = {
   state: () => request("/state"),
+  engineStats: () => request("/engine/stats"),
 
   select: (candidate) =>
     request("/operation/select", {

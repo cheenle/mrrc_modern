@@ -21,11 +21,13 @@ import logging
 import os
 import secrets as _secrets
 import socket
+import struct
 import sys
 import subprocess
 import threading
 import time
 from contextlib import asynccontextmanager
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Callable, Optional, Protocol
 
@@ -55,7 +57,7 @@ from config import (
     AUTH_COOKIE, AUTH_TOKEN_BYTES, MEM_CHANNEL_COUNT,
     UI_MODES, NARROW_MODES,
     ATR1000_HOST, ATR1000_PORT,
-    RECORDINGS_BITRATE, RECORDINGS_MAX_SESSION_MIN,
+    RECORDINGS_BITRATE, RECORDINGS_MAX_SESSION_MIN, RECORDINGS_MIN_FREE_MB,
     CQ_ASSET_PATH,
     SESSION_METRICS_INTERVAL_S, SESSION_METRICS_WINDOW_S,
     REMOTE_SESSION_TX_HEARTBEAT_S,
@@ -64,10 +66,13 @@ from config import (
 from backends import create_backend, known_models
 from backends.base import RadioBackend
 import box_ops
+import net_bt
 import cloud_hub
 import help_session
 import net_tls
 import spectrum_profile
+import sdr_frames
+from sdr_hub import SdrCapacityError, SdrChannelFull, SdrHub
 import ssl_bootstrap
 import support_bundle
 import upgrade_core
@@ -77,6 +82,7 @@ from backends.ft710.config_ft710 import (
 )
 from backends.ft710.cat_controller import CatController
 from radio_state import RadioState
+from local_speaker import LocalSpeaker
 from recorder import (
     RecorderError, RecordingSession, encoder_available,
     list_recordings, load_index, parse_recording_name, save_index,
@@ -92,7 +98,7 @@ from opus_rx import (
     AUDIO_TAG_PCM, AUDIO_TAG_OPUS, DEFAULT_BITRATE, TX_RATE,
 )
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import (
     HTMLResponse, JSONResponse, RedirectResponse, FileResponse, Response,
 )
@@ -543,6 +549,9 @@ _AUTH_TOKENS_MAX_AGE_S = 30 * 24 * 3600  # same lifetime as the cookie
 # receive audio/spectrum, but every transmit/device-setting path is refused
 # server-side (the browser UI being hidden is never the enforcement).
 _listen_tokens: set[str] = set()
+# SDR 接收机（AD-029）的独立口令角色：这些 token 只能进 /sdr 与 /WSsdr，
+# 反过来 operator/listen token 也进不来 —— 两条入口互不通用。
+_sdr_tokens: set[str] = set()
 # /WSradio "set" fields a listen-only session may use. memRecall is allowed
 # separately — it only ever writes frequency + mode.
 LISTEN_ALLOWED_SET_FIELDS = frozenset({"freq", "vfo_a_freq", "vfo_b_freq", "mode"})
@@ -735,6 +744,36 @@ def _recording_should_capture_rx() -> bool:
     would double the timeline (the sibling mrrc project uses the same rule).
     """
     return not (radio is not None and radio.tx_status)
+
+
+def _recording_space_problem() -> str:
+    """Why a new recording must not start right now (`""` = there is room).
+
+    The recorded stream is the one unbounded writer an operator can switch on —
+    16 kHz mono MP3 at the default 64 kbps is ~29 MB per hour — and a disk that
+    fills does not fail politely: the recording dies mid-QSO and the config
+    writes, the DB and everything else that needs a byte go with it. Refusing to
+    start is the *non-destructive* half of a retention policy: pruning old QSOs
+    would be the destructive half, and this deliberately does not do it.
+
+    Unmeasurable is not a refusal (spec 2026-09-17 §11 spirit): a platform where
+    ``disk_usage`` throws must not lose a feature over a diagnostic.
+    """
+    if RECORDINGS_MIN_FREE_MB <= 0:
+        return ""
+    import shutil
+
+    try:
+        free_mb = shutil.disk_usage(str(RECORDINGS_DIR)).free // (1024 * 1024)
+    except OSError:
+        return ""
+    if free_mb >= RECORDINGS_MIN_FREE_MB:
+        return ""
+    logger.warning("Recording refused: %d MB free, %d MB required",
+                   free_mb, RECORDINGS_MIN_FREE_MB)
+    return (f"磁盘剩余空间不足（{free_mb} MB，至少需要 "
+            f"{RECORDINGS_MIN_FREE_MB} MB），录音未开始。"
+            f"请先删除一些旧录音（☰ → 录音）再试。")
 
 
 def _ensure_rec_writer() -> None:
@@ -937,6 +976,10 @@ def _load_auth_tokens() -> None:
             continue
         if now - issued > _AUTH_TOKENS_MAX_AGE_S:
             continue
+        if entry.get("role") == "sdr":
+            _sdr_tokens.add(token)
+            _token_issued[token] = issued
+            continue
         _auth_tokens.add(token)
         _token_issued[token] = issued
         if entry.get("role") == "listener":
@@ -954,10 +997,12 @@ def _save_auth_tokens() -> None:
         "tokens": [
             {
                 "token": token,
-                "role": "listener" if token in _listen_tokens else "operator",
+                "role": ("sdr" if token in _sdr_tokens
+                         else "listener" if token in _listen_tokens
+                         else "operator"),
                 "issued_epoch": _token_issued.get(token, time.time()),
             }
-            for token in sorted(_auth_tokens)
+            for token in sorted(_auth_tokens | _sdr_tokens)
         ]
     }
     try:
@@ -984,6 +1029,7 @@ def _drop_auth_token(token: str) -> None:
 
     _auth_tokens.discard(token)
     _listen_tokens.discard(token)
+    _sdr_tokens.discard(token)
     _token_issued.pop(token, None)
     _save_auth_tokens()
 
@@ -1091,7 +1137,7 @@ def _warn_query_token_once() -> None:
         "clients should send 'Authorization: Bearer <token>'.", AUTH_COOKIE)
 
 
-def _token_from_ws_handshake(ws: WebSocket) -> str:
+def _token_from_ws_handshake(ws: WebSocket, cookie_name: str = AUTH_COOKIE) -> str:
     """Session token for a WebSocket upgrade: header, cookie, then query param.
 
     The browser sends the auth cookie automatically on the same-origin
@@ -1102,7 +1148,7 @@ def _token_from_ws_handshake(ws: WebSocket) -> str:
     token = _bearer_token(ws.headers.get("authorization"))
     if token:
         return token
-    token = ws.cookies.get(AUTH_COOKIE) or ""
+    token = ws.cookies.get(cookie_name) or ""
     if token:
         return token
     token = ws.query_params.get("token", "") or ""
@@ -1111,12 +1157,12 @@ def _token_from_ws_handshake(ws: WebSocket) -> str:
     return token
 
 
-def _token_from_request(request: Request) -> str:
+def _token_from_request(request: Request, cookie_name: str = AUTH_COOKIE) -> str:
     """Same resolution order as _token_from_ws_handshake, for HTTP requests."""
     token = _bearer_token(request.headers.get("authorization"))
     if token:
         return token
-    token = request.cookies.get(AUTH_COOKIE) or ""
+    token = request.cookies.get(cookie_name) or ""
     if token:
         return token
     token = request.query_params.get("token", "") or ""
@@ -1910,6 +1956,9 @@ def _audio_permission_hint() -> str:
     return ""
 
 
+_local_speaker: Optional[LocalSpeaker] = None
+
+
 async def _audio_rx_loop():
     """Capture RX audio from the sound card and broadcast to clients.
 
@@ -1944,7 +1993,12 @@ async def _audio_rx_loop():
                 # FT8 decoder (its RX tap is fed right below), so both keep
                 # the loop awake.
                 _ft8_tap_live = _ft8_runtime is not None and _ft8_runtime.rx_tap is not None
-                if not audio_rx_clients and not _rec_session.active and not _ft8_tap_live:
+                # The local speaker is a listener too (AD-028): an operator
+                # standing next to the box with a headset opens no browser, and
+                # the FT8 tap already taught this lesson once.
+                _speaker_live = _local_speaker is not None and _local_speaker.active
+                if (not audio_rx_clients and not _rec_session.active
+                        and not _ft8_tap_live and not _speaker_live):
                     _idle_skipped += 1
                     if _loop_count % 500 == 0 and _idle_skipped > 50:
                         logger.info(
@@ -1956,6 +2010,8 @@ async def _audio_rx_loop():
 
                 pcm = audio.read_rx_chunk()
                 audio.note_rx_chunk(pcm)
+                if pcm and _local_speaker is not None:
+                    _local_speaker.feed(pcm)
                 if pcm:
                     _rx_last_pcm = time.monotonic()
                     _rec_tap_rx(pcm, audio._rx_dev_rate)
@@ -1985,7 +2041,13 @@ async def _audio_rx_loop():
                     # skipped.
                     _radio_txing = (radio is not None
                                     and radio.is_transmitting)
-                    frames = (None if _radio_txing
+                    # Opus is only for clients: recording, the FT8 tap and the
+                    # local speaker all take the PCM as it is.  Encoding for a
+                    # speaker-only box burned a few percent of a core every
+                    # 20 ms for frames that were then thrown away.
+                    _needs_frames = (bool(audio_rx_clients) or _rec_session.active
+                                     or _ft8_tap_live)
+                    frames = (None if (_radio_txing or not _needs_frames)
                               else audio.encode_rx_audio(pcm))
 
                     if frames:
@@ -2015,19 +2077,27 @@ async def _audio_rx_loop():
                         if dead:
                             logger.warning("Removed %d dead/slow audio clients", len(dead))
                             audio_rx_clients -= dead
-                elif audio_rx_clients:
-                    # No PCM at all while somebody is listening: the capture
+                elif audio_rx_clients or _ft8_tap_live or _rec_session.active or _speaker_live:
+                    # No PCM at all while somebody needs the audio: the capture
                     # stopped delivering. Reopen it (rate-limited) instead of
-                    # leaving the client with silence until the next TX.
+                    # leaving the consumer with silence until the next TX.
+                    # Two consumers are not WebSockets: the FT8 decoder's RX tap
+                    # (whose page never opens /WSaudioRX) and a server-side
+                    # recording.  Gating this branch on ``audio_rx_clients``
+                    # alone starved the decoder through a 113 s USB
+                    # re-enumeration on 2026-10-17: the operator was on the FT8
+                    # page, so nothing reopened the stream and every slot was
+                    # skipped for the rest of the process.
                     _stalled_s = time.monotonic() - _rx_last_pcm
                     if _stalled_s >= RX_STALL_ALERT_S:
                         _rx_last_pcm = time.monotonic()
                         logger.warning(
-                            "RX capture stalled: no PCM for %.0f s with %d client(s) "
-                            "listening — reopening the capture stream (check the "
-                            "radio's USB audio; the capture interface may have "
-                            "stopped while PyAudio still reports it open)",
-                            _stalled_s, len(audio_rx_clients))
+                            "RX capture stalled: no PCM for %.0f s (audio clients=%d, "
+                            "FT8 tap=%s, recording=%s) — reopening the capture stream "
+                            "(check the radio's USB audio; the capture interface may "
+                            "have stopped while PyAudio still reports it open)",
+                            _stalled_s, len(audio_rx_clients), _ft8_tap_live,
+                            _rec_session.active)
                         if (time.monotonic() >= _rx_stall_restart_at
                                 and (_rx_restart_task is None or _rx_restart_task.done())):
                             _rx_stall_restart_at = time.monotonic() + RX_STALL_RESTART_MIN_GAP_S
@@ -2093,6 +2163,116 @@ async def _audio_tx_drain_loop():
 
 
 # ── Command Handler ─────────────────────────────────────────────────
+
+# ── local control socket (AD-028) ──────────────────────────────────────────
+# The physical remote belongs to the box, not to a browser session.  The daemon
+# that reads it runs as the same user as this server and talks over a Unix
+# socket whose mode is the authentication: no password, no token, no rate
+# limiter.  A web login for a hardware button was the wrong shape — it tripped
+# the five-logins-per-five-minutes guard within minutes.
+LOCAL_CONTROL_FIELDS = frozenset({
+    "freq", "vfo_a_freq", "vfo_b_freq", "mode", "ptt", "af_gain",
+})
+
+
+def _local_socket_path() -> str:
+    return _env("MRRC_LOCALCTL_SOCKET", "/run/mrrc/localctl.sock")
+
+
+class _LocalControlClient:
+    """The little a ``set`` command needs from a client: a place to reply."""
+
+    client = ("localctl", 0)
+
+    def __init__(self) -> None:
+        self.sent: list[str] = []
+
+    async def send_text(self, text: str) -> None:
+        self.sent.append(text)
+
+
+def _local_af_gain() -> int:
+    """The radio's AF gain in its own 0-255 domain (clamped for the wire)."""
+    return max(0, min(255, int(radio.af_gain or 0)))
+
+
+def _local_control_state() -> str:
+    """One line the daemon uses to start from where the radio actually is."""
+    name = {num: label for label, num in _mode_name_to_num().items()}.get(radio.mode, "")
+    # ``af_gain`` rides along in the radio's own 0-255 domain: without it the
+    # daemon starts at its 50 % default and the first 音量 press steps *down*
+    # from whatever the operator had set (2026-10-18).
+    return json.dumps({"type": "state", "freq": radio.vfo_a_freq, "mode": name,
+                       "af_gain": _local_af_gain()}) + "\n"
+
+
+async def _local_control_handle(reader: asyncio.StreamReader,
+                                writer: asyncio.StreamWriter) -> None:
+    peer = _LocalControlClient()
+    try:
+        writer.write(_local_control_state().encode())
+        await writer.drain()
+        while True:
+            line = await asyncio.wait_for(reader.readline(), timeout=3600)
+            if not line:
+                break
+            try:
+                msg = json.loads(line.decode())
+            except (ValueError, UnicodeDecodeError):
+                writer.write(b'{"ok":false,"error":"bad json"}\n')
+                await writer.drain()
+                continue
+            field = str(msg.get("field") or "")
+            if field not in LOCAL_CONTROL_FIELDS:
+                writer.write(json.dumps({"ok": False, "error": f"field not allowed: {field}"}).encode() + b"\n")
+                await writer.drain()
+                continue
+            peer.sent.clear()
+            try:
+                await _execute_set_command(field, msg.get("value"), peer)
+            except Exception as exc:                    # noqa: BLE001 - report, never drop the link
+                logger.warning("local control %s failed: %s", field, exc)
+                writer.write(json.dumps({"ok": False, "error": str(exc)}).encode() + b"\n")
+                await writer.drain()
+                continue
+            errors = [m for m in peer.sent if '"error"' in m]
+            reply = {"ok": not errors}
+            if errors:
+                reply["error"] = errors[-1]
+            # Every reply carries the gain: the operator can also turn the knob
+            # on the radio itself, and a daemon stepping from a stale percentage
+            # would jump instead of nudging.
+            reply["af_gain"] = _local_af_gain()
+            writer.write(json.dumps(reply).encode() + b"\n")
+            await writer.drain()
+    except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):
+        pass
+    finally:
+        try:
+            writer.close()
+        except Exception:                               # noqa: BLE001
+            pass
+
+
+async def _local_control_server() -> None:
+    """Serve the Unix socket; a platform without one simply skips it."""
+    path = _local_socket_path()
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        if os.path.exists(path):
+            os.unlink(path)
+        server = await asyncio.start_unix_server(_local_control_handle, path=path)
+        os.chmod(path, 0o600)
+    except (AttributeError, NotImplementedError, OSError) as exc:
+        logger.info("Local control socket not started (%s)", exc)
+        return
+    logger.info("Local control socket listening at %s", path)
+    try:
+        async with server:
+            await server.serve_forever()
+    except asyncio.CancelledError:
+        pass
+
 
 def _mode_name_to_num() -> dict:
     """Mode-name → register-number map of the active backend.
@@ -2260,14 +2440,32 @@ async def _handle_ws_message(ws: WebSocket, msg_str: str):
 # NOTE: PS0 (off) is reliable, but PS1 (on) is NOT — field testing
 # (2026-07-27/28) showed the radio often ignores PS1 in standby, and a
 # PS0 landing mid-boot can wedge the CAT MCU until a physical power
-# cycle.  The web UI therefore has NO power switch; the "power" set
-# command remains only for the maintenance scripts (_power_cycle*.py).
+# cycle.  The header switch stayed withdrawn (SDD V2.13); what the menu
+# offers instead (2026-10-16) keeps the two intents apart:
+#   * 重开电台…  → off, then keep trying to wake it (bounded + cancellable)
+#   * 关机…      → off, and stay off (never re-applies power)
+# The "power" set command and these guards remain the single execution
+# point for both the UI and the maintenance scripts (_power_cycle*.py).
 POWER_BOOT_WINDOW_S = 15.0   # PS0 rejected for this long after a PS1
 POWER_ON_ATTEMPTS = 3        # PS1 retries before declaring failure
 POWER_ON_VERIFY_S = 12.0     # per-attempt wait for the radio to answer FA
                              # (a cold radio took ~25 s to answer in field
                              # testing — 3x12 s covers that with margin)
 _power_boot_until: float = 0.0
+
+# ── Wake-up rescue loop（「重开电台…」那一半） ──────────────────────
+# One round is the already-tested _power_on_radio(): PS1 x<=3, FA read-back
+# verification, boot window re-armed on every write.  This layer adds only
+# the budget, the cancellation and the reporting — plus the one thing the
+# 36-second single shot could not do: keep trying while the radio's USB
+# re-enumerates (the maintenance script's own comment: "10 attempts in case
+# port is re-enumerating after power-off").
+POWER_RESCUE_INTERVAL_S = 30.0   # minimum gap between two rounds
+POWER_RESCUE_MAX_S = 900.0       # hard stop after 15 minutes
+_power_rescue_task: "asyncio.Task | None" = None
+_power_rescue_state: str = ""    # "" | running | woke | timeout | cancelled
+_power_rescue_attempts: int = 0
+_power_rescue_started: float = 0.0
 
 
 async def _power_on_radio(cat, backend=None) -> bool:
@@ -2301,9 +2499,168 @@ async def _power_on_radio(cat, backend=None) -> bool:
                 # Re-arm from the actual boot moment — a slow boot must
                 # not eat the whole protection window.
                 _power_boot_until = time.monotonic() + POWER_BOOT_WINDOW_S
+                # And mute the next power_on poll: a radio that answers a
+                # frequency read can still report PS0 for a moment (measured
+                # 2026-10-16 on the W103D — a fresh PS; read flipped the
+                # verified "on" straight back to off, and the UI showed a
+                # radio that was demonstrably running as off).
+                if scheduler is not None:
+                    scheduler.skip_next_poll("power_on", 25.0)
                 return True
         logger.warning("PS1 attempt %d: radio not answering", attempt)
     return False
+
+
+async def _power_off(cat_obj, radio_obj, scheduler_obj=None) -> str:
+    """Turn the radio off.  Returns "" on success, else the user-facing refusal.
+
+    Three guards, each bought with an incident (SDD V2.13):
+      * never while transmitting — including FT8, whose carrier is its own
+        ``_ft8_transmitting()``; the original branch predates FT8 and only
+        looked at ``radio.is_transmitting``, which is a real hole now;
+      * never inside ``POWER_BOOT_WINDOW_S`` of a PS1 — a PS0 landing
+        mid-boot wedged the FT-710's CAT MCU (2026-07-27) and needed a
+        physical power cycle to clear;
+      * send PS0 twice — the first write is occasionally lost.
+    """
+    if radio_obj is not None and radio_obj.is_transmitting:
+        return "发射中不能关机"
+    if _ft8_transmitting():
+        return "FT8 正在发射，不能关机"
+    if time.monotonic() < _power_boot_until:
+        remain = int(_power_boot_until - time.monotonic()) + 1
+        return f"电台正在启动，请 {remain} 秒后再关机"
+    if scheduler_obj is not None:
+        scheduler_obj.skip_next_poll("power_on", 10.0)
+    await cat_obj.set_power(False)
+    await asyncio.sleep(0.5)
+    await cat_obj.set_power(False)
+    if radio_obj is not None:
+        radio_obj.update(power_on=False)
+    return ""
+
+
+def _power_rescue_running() -> bool:
+    return _power_rescue_state == "running"
+
+
+def _power_rescue_payload(state: str) -> dict:
+    elapsed = 0.0 if not _power_rescue_started else time.monotonic() - _power_rescue_started
+    return {
+        "type": "powerRescue",
+        "state": state,                 # running | woke | timeout | cancelled
+        "attempt": _power_rescue_attempts,
+        "elapsed": round(elapsed, 1),
+        "maxSeconds": int(POWER_RESCUE_MAX_S),
+    }
+
+
+async def _broadcast_power_rescue(state: str) -> None:
+    """Push the rescue snapshot to every control client (recordingState pattern)."""
+    global ctrl_clients
+    if not ctrl_clients:
+        return
+    payload = json.dumps(_power_rescue_payload(state))
+    dead = set()
+    for ws in list(ctrl_clients):
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            dead.add(ws)
+    ctrl_clients.difference_update(dead)
+
+
+def _power_rescue_stop_task() -> bool:
+    """Cancel the running rescue task.  Returns True if one was running.
+
+    Sends **nothing** to the radio: cancelling a wake-up attempt must never
+    turn into a second PS1 (or a PS0) by itself.
+    """
+    global _power_rescue_state
+    was_running = _power_rescue_state == "running"
+    task = _power_rescue_task
+    if task is not None and not task.done():
+        task.cancel()
+    if was_running:
+        _power_rescue_state = "cancelled"
+    return was_running
+
+
+async def _power_rescue_cancel() -> bool:
+    """Stop a rescue and tell the clients.  Used by 「取消」与「关机」 alike."""
+    was_running = _power_rescue_stop_task()
+    task = _power_rescue_task
+    if task is not None and not task.done():
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+    if was_running:
+        await _broadcast_power_rescue("cancelled")
+    return was_running
+
+
+def _power_rescue_start() -> "asyncio.Task":
+    """Begin the wake-up loop.  The caller has already turned the radio off."""
+    global _power_rescue_task
+    _power_rescue_stop_task()
+    _power_rescue_task = asyncio.create_task(_power_rescue(), name="power_rescue")
+    return _power_rescue_task
+
+
+async def _power_rescue() -> str:
+    """Keep trying to wake the radio until it answers, the budget runs out, or it is cancelled.
+
+    Every round re-reads the module-level ``cat`` / ``backend``: a USB
+    re-enumeration (which is exactly what a power cycle causes) rebuilds the
+    serial handle, and the round must use whatever is current.  While the
+    port is absent we wait — the connection watchdog owns reopening it, and
+    this loop must never touch the serial object itself.
+    """
+    global _power_rescue_state, _power_rescue_attempts, _power_rescue_started
+    _power_rescue_state = "running"
+    _power_rescue_attempts = 0
+    _power_rescue_started = time.monotonic()
+    await _broadcast_power_rescue("running")
+    try:
+        while True:
+            if time.monotonic() - _power_rescue_started >= POWER_RESCUE_MAX_S:
+                _power_rescue_state = "timeout"
+                logger.warning(
+                    "Power rescue gave up after %d round(s) / %.0f s — the radio is "
+                    "still off; someone has to press its front panel",
+                    _power_rescue_attempts, time.monotonic() - _power_rescue_started)
+                await _broadcast_power_rescue("timeout")
+                return "timeout"
+            cat_now, backend_now = cat, backend
+            if cat_now is None or not getattr(cat_now, "connected", False):
+                # Radio's USB is gone (that is what a power-off looks like).
+                await asyncio.sleep(2.0)
+                continue
+            _power_rescue_attempts += 1
+            await _broadcast_power_rescue("running")
+            if await _power_on_radio(cat_now, backend_now):
+                _power_rescue_state = "woke"
+                # The single-shot path updates the state itself; the rescue must
+                # do it too, or a radio that is demonstrably running keeps being
+                # reported as off until the next poll (measured on the W103D
+                # 2026-10-16: "woke on round 1" in the log, power_on=False in
+                # fullState).
+                if radio is not None:
+                    radio.update(power_on=True)
+                logger.info("Power rescue woke the radio on round %d after %.0f s",
+                            _power_rescue_attempts, time.monotonic() - _power_rescue_started)
+                await _broadcast_power_rescue("woke")
+                return "woke"
+            await asyncio.sleep(POWER_RESCUE_INTERVAL_S)
+    except asyncio.CancelledError:
+        # Cancelled from _power_rescue_cancel / _power_rescue_stop_task; they
+        # own the state and the broadcast, so just stop touching the radio.
+        logger.info("Power rescue cancelled after %d round(s)", _power_rescue_attempts)
+        raise
+    finally:
+        if _power_rescue_state == "running":
+            _power_rescue_state = "cancelled"
 
 
 async def _execute_set_command(field: str, value, ws: WebSocket):
@@ -2319,6 +2676,13 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
     if field == "recording":
         on = value is True or str(value).lower() == "true"
         if on:
+            problem = _recording_space_problem()
+            if problem:
+                # Refuse *before* a session exists: a started-then-failed
+                # recording leaves a corrupt MP3 and a UI that says REC.
+                await ws.send_text(json.dumps({"type": "error",
+                                               "message": problem}))
+                return
             freq_hz = radio.active_freq if radio is not None else 0
             try:
                 started = _rec_session.start(freq_hz=freq_hz)
@@ -2503,7 +2867,15 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                 await cat.set_ptt(True)
                 radio.update(tx_status=1)
                 if audio:
-                    ok = await asyncio.to_thread(audio.start_tx)
+                    try:
+                        ok = await asyncio.to_thread(audio.start_tx)
+                    except Exception as e:
+                        # A RAISED open (not just a False return) must still
+                        # release the carrier: the keying above already
+                        # happened, so an escaping exception here would leave
+                        # the radio transmitting with no unkey.
+                        logger.error("PTT: TX audio open raised (%s) — unkeying radio", e)
+                        ok = False
                     if not ok:
                         # Audio path failed to open — the radio is keyed but
                         # has no modulation.  Drop PTT immediately so the
@@ -2707,8 +3079,19 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
             radio.update(split=on)
 
         elif field == "power":
-            on = value is True or str(value).lower() in ("true", "1")
-            if on:
+            token = str(value).strip().lower()
+            if token == "restart":
+                # Restart = off, then keep trying to wake it until it answers.
+                # The two intents must never blur: "off" (below) does not
+                # re-apply power by itself, this one does.
+                refusal = await _power_off(cat, radio, scheduler)
+                if refusal:
+                    await ws.send_text(json.dumps({"type": "error", "message": refusal}))
+                else:
+                    _power_rescue_start()
+            elif token == "cancelrescue":
+                await _power_rescue_cancel()
+            elif value is True or token in ("true", "1"):
                 scheduler and scheduler.skip_next_poll("power_on", 25.0)
                 if await _power_on_radio(cat, backend):
                     radio.update(power_on=True)
@@ -2719,26 +3102,12 @@ async def _execute_set_command(field: str, value, ws: WebSocket):
                         "message": "电台开机无响应——请检查电台并手动开机",
                     }))
             else:
-                if radio.is_transmitting:
-                    await ws.send_text(json.dumps({
-                        "type": "error",
-                        "message": "发射中不能关机",
-                    }))
-                elif time.monotonic() < _power_boot_until:
-                    # A PS0 landing mid-boot can wedge the radio's CAT MCU
-                    # (2026-07-27 incident) — make the user retry instead.
-                    remain = int(_power_boot_until - time.monotonic()) + 1
-                    await ws.send_text(json.dumps({
-                        "type": "error",
-                        "message": f"电台正在启动，请 {remain} 秒后再关机",
-                    }))
-                else:
-                    scheduler and scheduler.skip_next_poll("power_on", 10.0)
-                    await cat.set_power(False)
-                    await asyncio.sleep(0.5)
-                    # First PS0 write is occasionally lost — send it twice.
-                    await cat.set_power(False)
-                    radio.update(power_on=False)
+                # "Off" always means stay off: cancel any rescue first, and
+                # let _power_off apply the guards (it never sends a PS1).
+                await _power_rescue_cancel()
+                refusal = await _power_off(cat, radio, scheduler)
+                if refusal:
+                    await ws.send_text(json.dumps({"type": "error", "message": refusal}))
 
         elif field == "squelch":
             v = max(0, min(100, int(value)))
@@ -3078,6 +3447,23 @@ async def lifespan(app: FastAPI):
         logger.warning("TX Opus decoder unavailable: %s", e)
         _opus_tx_decoder = None
 
+    _local_ctl_task = asyncio.create_task(_local_control_server(), name="localctl")
+
+    # Local speaker (AD-028): the radio's audio on a device beside the box.
+    global _local_speaker
+    _speaker_device = _env("MRRC_LOCAL_SPEAKER_DEVICE", "")
+    if _speaker_device:
+        try:
+            _local_speaker = LocalSpeaker(
+                _speaker_device,
+                rate=int(_env("MRRC_LOCAL_SPEAKER_RATE", "8000") or 8000),
+                channels=int(_env("MRRC_LOCAL_SPEAKER_CHANNELS", "1") or 1),
+            )
+            _local_speaker.start()
+        except Exception as exc:                        # noqa: BLE001 - never fatal
+            logger.warning("Local speaker unavailable: %s", exc)
+            _local_speaker = None
+
     # Start audio tasks (skip if audio init failed)
     if _audio_ok:
         _audio_rx_task = asyncio.create_task(_audio_rx_loop(), name="audio_rx")
@@ -3304,6 +3690,9 @@ async def lifespan(app: FastAPI):
     yield
 
     # ── Shutdown ──
+    _local_ctl_task.cancel()
+    if _local_speaker is not None:
+        _local_speaker.stop()
     if _cq_player is not None and _cq_player.is_calling:
         await _cq_player.abort("shutdown")
     logger.info("Shutting down...")
@@ -3465,7 +3854,12 @@ PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "
                 "/box_api.js"}
 # WebSocket paths: must NOT be redirected — WebSocket can't follow 302.
 # Let the WS handler check auth and close with proper code 4001.
-WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX"}
+WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX", "/WSsdr"}
+# SDR 入口用独立的 mrrc_sdr cookie（与主站口令隔离），handler 自己鉴权。
+SDR_PATHS = frozenset({"/sdr", "/api/sdr/login"})
+# sdr.html 引用的四个资源（根相对路径）：只有已认证的 SDR 会话能取。
+SDR_STATIC_PATHS = frozenset({"sdr.js", "rx_worklet_processor.js",
+                              "modules/opus_wasm.js", "modules/opus_codec.js"})
 
 # The passwordless onboarding window is judged per-request by
 # _first_window_open(), not by a path set: /setup plus two /api/box endpoints
@@ -3493,6 +3887,17 @@ async def auth_middleware(request: Request, call_next):
     # WebSocket paths: pass through (WS handlers send code 4001 on auth failure
     # so the browser's handleAuthExpired() can act on it properly).
     if path in WS_PATHS:
+        return await call_next(request)
+
+    # SDR 页面与它的登录端点：口令是 MRRC_SDR_PASSWORD，不是主站口令，
+    # 所以在这里放行、由 handler 自己比对（与 FIRST_WINDOW_PATHS 同一形状）。
+    if path in SDR_PATHS:
+        return await call_next(request)
+
+    # SDR 页面自己的四个资源：已认证的 SDR 会话放行，别的会话照旧回登录页。
+    # 中间件先于 serve_static 运行，两边用同一个判定（现场：会话已登录却
+    # 连自己的 sdr.js 都拿不到，中间件给了 302 /login?next=/sdr.js）。
+    if path.lstrip("/") in SDR_STATIC_PATHS and _sdr_static_allowed(request, path):
         return await call_next(request)
 
     # The onboarding window: pass through so a client that has never logged in
@@ -3656,8 +4061,32 @@ def _list_devices() -> dict:
 
 
 def _schedule_restart() -> None:
-    """Exit with RESTART_EXIT_CODE shortly so the launcher restarts the server."""
-    threading.Timer(1.2, lambda: os._exit(RESTART_EXIT_CODE)).start()
+    """Exit with RESTART_EXIT_CODE shortly so the launcher restarts the server.
+
+    ``os._exit`` skips the lifespan shutdown, and with it the Force-RX safety
+    write — a restart requested while the radio was keyed used to leave the
+    carrier up with no process left to send TX0.  Release PTT on the running
+    loop first (bounded), then exit.
+    """
+    try:
+        loop: Optional[asyncio.AbstractEventLoop] = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    def _exit() -> None:
+        c = cat
+        r = radio
+        if (loop is not None and c is not None and r is not None
+                and c.connected and r.is_transmitting):
+            try:
+                fut = asyncio.run_coroutine_threadsafe(c.set_ptt(False), loop)
+                fut.result(timeout=1.5)
+                logger.warning("Restart: released PTT before exit")
+            except Exception as e:
+                logger.error("Restart: could not release PTT before exit: %s", e)
+        os._exit(RESTART_EXIT_CODE)
+
+    threading.Timer(1.2, _exit).start()
 
 
 @app.get("/api/devices", include_in_schema=False)
@@ -3848,7 +4277,7 @@ async def listen_page(request: Request):
     """
     page = STATIC_DIR / "listen.html"
     if page.exists():
-        return FileResponse(page, media_type="text/html")
+        return _html_page(page)
     return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
 
 
@@ -4210,6 +4639,12 @@ def _full_state_message(data: dict, channels: list) -> dict:
         "radioDisplayName": (backend.capabilities.display_name
                              if backend else "Yaesu FT-710"),
         "capabilities": backend.capabilities.to_dict() if backend else {},
+        # The installed version, for the menu footer.  Same detector the
+        # support bundle and the update check use (version.txt in a build
+        # product, then the .iss, then the CHANGELOG) so the number shown in
+        # the UI is the number those two report — a hardcoded literal here
+        # would be a fifth copy to keep in sync.
+        "version": support_bundle.detect_version(_runtime_dir(), _resource_dir()),
         "memChannels": channels,
         # Server-authoritative filter tables so the frontend stops
         # hardcoding its own (drifting) copies.
@@ -4563,6 +4998,416 @@ async def ws_audio_tx(ws: WebSocket):
                     len(audio_tx_clients), _tx_owner_ws is not None)
 
 
+# ── SDR receiver (AD-029) ───────────────────────────────────────────
+#
+# 一条独立的入口：自己的口令（MRRC_SDR_PASSWORD）、自己的 cookie（mrrc_sdr）、
+# 自己的页面（/sdr）。与无线电控制面零耦合 —— 这里没有任何 CAT/PTT 通路，
+# 页面与接口也不返回电台状态。
+#
+# 设备由 sdr_pipe.py 独占（一个进程一个设备），本文件只做三件事：
+# 仲裁/池/容量（SdrHub）、把订阅者接到 WebSocket、把 pipe 的帧扇出去。
+
+SDR_PASSWORD = os.environ.get("MRRC_SDR_PASSWORD", "")
+SDR_ENABLED = (os.environ.get("MRRC_SDR", "on") or "on").strip().lower() not in (
+    "off", "0", "false", "no")
+SDR_COOKIE = "mrrc_sdr"
+SDR_MAX_CLIENTS = max(1, int(os.environ.get("MRRC_SDR_MAX_CLIENTS", "50") or 50))
+SDR_MAX_CHANNELS = max(1, min(16, int(os.environ.get("MRRC_SDR_MAX_CHANNELS", "8") or 8)))
+SDR_SAMPLE_RATE = float(os.environ.get("MRRC_SDR_SAMPLE_RATE", "2400000") or 2400000)
+SDR_GAIN_DB = int(os.environ.get("MRRC_SDR_GAIN_DB", "40") or 40)
+SDR_LNA = int(os.environ.get("MRRC_SDR_LNA", "2") or 2)
+
+_sdr_hub: Optional[SdrHub] = None
+_sdr_runner: Optional["SdrPipeRunner"] = None
+_sdr_sid = 0
+
+
+def _sdr_login_enabled() -> bool:
+    """有口令且没被 MRRC_SDR=off 关掉，才有这条入口。"""
+    return bool(SDR_ENABLED and SDR_PASSWORD)
+
+
+def _sdr_password_matches(candidate: str) -> bool:
+    """常量时间比较（I9 的既有教训，别在新入口重犯）。"""
+    return bool(SDR_PASSWORD) and hmac.compare_digest(str(candidate), SDR_PASSWORD)
+
+
+def _sdr_static_allowed(request: Request, path: str) -> bool:
+    """SDR 页面自己的四个资源：只有已认证的 SDR 会话能取。
+
+    中间件与 ``serve_static`` 各判一次 —— 前者先于后者运行，两边必须用同一份
+    白名单，否则会话已登录却连自己的 JS 都拿不到（现场：302 /login?next=/sdr.js）。
+    """
+    return (_sdr_login_enabled()
+            and path.lstrip("/") in SDR_STATIC_PATHS
+            and _sdr_token_from_request(request) in _sdr_tokens)
+
+
+def _sdr_token_from_request(request: Request) -> str:
+    """SDR 入口的令牌：同一套解析顺序，只换 cookie 名（AD-024 的弃用 query 仍走共享处）。"""
+    return _token_from_request(request, SDR_COOKIE)
+
+
+def _sdr_token_from_ws(ws: WebSocket) -> str:
+    return _token_from_ws_handshake(ws, SDR_COOKIE)
+
+
+def _sdr_repo_file(name: str) -> Optional[str]:
+    for cand in (Path(__file__).parent / name, Path("/usr/local/lib") / name,
+                 Path("/usr/lib") / name):
+        if cand.exists():
+            return str(cand)
+    return None
+
+
+class SdrPipeRunner:
+    """持有 sdr_pipe 子进程；把 SdrHub 的调用翻译成 C1 命令帧。
+
+    进程退出（设备被拔、崩溃）→ 广播不可用 → 1/2/5/10 s 退避重启。
+    """
+
+    BACKOFF = (1.0, 2.0, 5.0, 10.0)
+
+    def __init__(self, hub: "SdrHub", script: Path, fs: float, max_ch: int):
+        self.hub = hub
+        self.script = script
+        self.fs = fs
+        self.max_ch = max_ch
+        self._proc: Optional[asyncio.subprocess.Process] = None
+        self._tasks: list[asyncio.Task] = []
+        self._backoff_i = 0
+        self._stopping = False
+        self.last_error = ""
+
+    @property
+    def running(self) -> bool:
+        return self._proc is not None and self._proc.returncode is None
+
+    async def ensure_started(self) -> None:
+        if self.running or self._stopping:
+            return
+        await self._spawn()
+
+    async def _spawn(self) -> None:
+        env = dict(os.environ)
+        shim = os.environ.get("MRRC_SDR_SHIM") or _sdr_repo_file("libsdr_api_shim.so")
+        dsp = os.environ.get("MRRC_SDR_DSP_LIB") or _sdr_repo_file("libsdr_dsp.so")
+        if not shim or not dsp:
+            self.hub.set_available(False, "native libraries not installed")
+            return
+        env["MRRC_SDR_SHIM"] = shim
+        env["MRRC_SDR_DSP_LIB"] = dsp
+        try:
+            self._proc = await asyncio.create_subprocess_exec(
+                sys.executable, str(self.script), "--device",
+                "--fs", str(self.fs), "--max-channels", str(self.max_ch),
+                "--gain", str(SDR_GAIN_DB), "--lna", str(SDR_LNA),
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE, env=env)
+        except Exception as exc:                                  # noqa: BLE001
+            self.hub.set_available(False, f"pipe spawn failed: {exc}")
+            return
+        self._tasks = [asyncio.create_task(self._read_loop(self._proc)),
+                       asyncio.create_task(self._stderr_loop(self._proc)),
+                       asyncio.create_task(self._monitor(self._proc))]
+
+    async def _read_loop(self, proc) -> None:
+        parser = sdr_frames.FrameParser()
+        while True:
+            data = await proc.stdout.read(65536)
+            if not data:
+                return
+            for frame in parser.feed(data):
+                self._dispatch(frame)
+
+    async def _stderr_loop(self, proc) -> None:
+        while True:
+            line = await proc.stderr.readline()
+            if not line:
+                return
+            text = line.decode(errors="replace").strip()
+            if text:
+                self.last_error = text
+                logger.info("sdr_pipe: %s", text)
+
+    async def _monitor(self, proc) -> None:
+        rc = await proc.wait()
+        if self._stopping:
+            return
+        reason = f"sdr_pipe exited ({rc})"
+        if self.last_error:
+            reason += f": {self.last_error}"
+        self.hub.set_available(False, reason)
+        self.hub.broadcast_state()
+        logger.warning("SDR pipe stopped: %s", reason)
+        delay = self.BACKOFF[min(self._backoff_i, len(self.BACKOFF) - 1)]
+        self._backoff_i += 1
+        await asyncio.sleep(delay)
+        if not self._stopping:
+            await self._spawn()
+
+    def _dispatch(self, frame: tuple) -> None:
+        kind = frame[0]
+        if kind == "status":
+            obj = frame[1]
+            if obj.get("error"):
+                if self.hub.available:
+                    self.hub.set_available(False, str(obj["error"]))
+                    self.hub.broadcast_state()
+                return
+            if not self.hub.available:
+                self.hub.set_available(True)
+                self.hub.broadcast_state()
+            self._backoff_i = 0
+            if "center_hz" in obj:
+                self.hub.center_hz = int(obj["center_hz"])
+        elif kind == "spectrum":
+            _, seq, bins = frame
+            self.hub.on_spectrum(seq, bins)
+        elif kind == "audio":
+            _, chid, seq, level, payload = frame
+            self.hub.on_audio(chid, seq, level, payload)
+
+    def _send(self, obj: dict) -> None:
+        proc = self._proc
+        if proc is None or proc.stdin is None or not self.running:
+            return
+        try:
+            proc.stdin.write(sdr_frames.encode_command(obj))
+        except Exception:                                          # noqa: BLE001
+            pass
+
+    # -- SdrHub 的 PipeLike 接口 -----------------------------------------
+    def tune(self, hz: float) -> None:
+        self._send({"cmd": "tune", "hz": int(hz)})
+
+    def set_channel(self, chid: int, offset_hz: float, mode: int, bw_hz: float) -> None:
+        self._send({"cmd": "channel", "chid": chid, "offset_hz": offset_hz,
+                    "mode": mode, "bw_hz": bw_hz})
+
+    def clear_channel(self, chid: int) -> None:
+        self._send({"cmd": "clear", "chid": chid})
+
+    async def stop(self) -> None:
+        self._stopping = True
+        proc = self._proc
+        if proc is not None and proc.returncode is None:
+            self._send({"cmd": "quit"})
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=3.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+        for task in self._tasks:
+            task.cancel()
+        self._tasks = []
+
+
+def _sdr_ensure_hub() -> "SdrHub":
+    global _sdr_hub, _sdr_runner
+    if _sdr_hub is None:
+        _sdr_hub = SdrHub(clock=time.monotonic, max_clients=SDR_MAX_CLIENTS,
+                          max_channels=SDR_MAX_CHANNELS, span_hz=SDR_SAMPLE_RATE)
+        _sdr_runner = SdrPipeRunner(_sdr_hub, Path(__file__).parent / "sdr_pipe.py",
+                                    SDR_SAMPLE_RATE, SDR_MAX_CHANNELS)
+        _sdr_hub._pipe = _sdr_runner          # SdrHub 的 PipeLike
+    return _sdr_hub
+
+
+def _sdr_ws_encode(frame: tuple) -> tuple[str, object]:
+    """SdrHub 的帧 → (kind, payload)：binary 走字节，其余走 JSON 文本。"""
+    kind = frame[0]
+    if kind == "spectrum":
+        _, seq, bins = frame
+        return "bytes", b"\x01" + struct.pack("<HH", seq & 0xFFFF, len(bins)) + bins
+    if kind == "audio":
+        _, chid, seq, level, payload = frame
+        return "bytes", (b"\x02" + struct.pack("<BHBH", chid, seq & 0xFFFF,
+                                               max(0, min(255, int(level * 255))),
+                                               len(payload)) + payload)
+    return "text", json.dumps({"event_type": kind, "value": frame[1]})
+
+
+@app.post("/api/sdr/login")
+async def api_sdr_login(request: Request):
+    """SDR 入口的登录：口令是 MRRC_SDR_PASSWORD，cookie 与主站分开。"""
+    if not _sdr_login_enabled():
+        return JSONResponse({"error": "SDR receiver is not enabled"}, status_code=404)
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_login_rate_limit(client_ip):
+        return JSONResponse({"error": "Too many login attempts."}, status_code=429)
+    try:
+        body = await request.json()
+        password = body.get("password", "")
+    except Exception:                                             # noqa: BLE001
+        password = ""
+    if not _sdr_password_matches(password):
+        logger.warning("SDR login failed from %s", client_ip)
+        return JSONResponse({"error": "Invalid password"}, status_code=401)
+    token = _make_auth_token()
+    _sdr_tokens.add(token)
+    _token_issued[token] = time.time()
+    _save_auth_tokens()
+    logger.info("SDR receiver login from %s", client_ip)
+    response = JSONResponse({"ok": True})
+    response.set_cookie(SDR_COOKIE, token, max_age=30 * 24 * 3600,
+                        httponly=False, samesite="lax")
+    return response
+
+
+@app.get("/sdr", include_in_schema=False)
+async def sdr_page(request: Request):
+    """SDR 接收机页面。没有 sdr cookie 时给一张自己的登录表单。"""
+    if not _sdr_login_enabled():
+        raise HTTPException(status_code=404, detail="SDR receiver is not enabled")
+    token = _sdr_token_from_request(request)
+    if token not in _sdr_tokens:
+        return HTMLResponse(_SDR_LOGIN_HTML, status_code=200)
+    page = STATIC_DIR / "sdr.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="sdr.html missing")
+    response = FileResponse(page, media_type="text/html")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+_SDR_LOGIN_HTML = """<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SDR 接收机</title>
+<style>body{font-family:-apple-system,system-ui,sans-serif;background:#12120f;color:#e8e2d4;
+display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+form{background:#1d1c17;padding:2rem;border-radius:14px;width:min(88vw,320px);
+box-shadow:0 8px 30px rgba(0,0,0,.5)}
+h1{margin:0 0 1rem;font-size:1.1rem;color:#f5a623;text-align:center;letter-spacing:.08em}
+input{width:100%;padding:12px;border:1px solid #3a382f;border-radius:8px;background:#12120f;
+color:#fff;font-size:16px;box-sizing:border-box}
+button{width:100%;padding:12px;margin-top:12px;background:#f5a623;color:#12120f;border:0;
+border-radius:8px;font-size:16px;font-weight:700;cursor:pointer}
+.err{color:#ff6b6b;margin-top:10px;font-size:.9rem;text-align:center;min-height:1.2em}</style>
+</head><body><form id="f"><h1>SDR 接收机</h1>
+<input type="password" id="p" placeholder="口令" autofocus required>
+<button type="submit">进入</button><div class="err" id="e"></div></form>
+<script>
+document.getElementById('f').onsubmit = async function (ev) {
+  ev.preventDefault();
+  var e = document.getElementById('e');
+  try {
+    var r = await fetch('api/sdr/login', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password: document.getElementById('p').value})});
+    if (r.ok) { location.reload(); } else { e.textContent = '口令不对'; }
+  } catch (err) { e.textContent = '连接失败'; }
+};
+</script></body></html>"""
+
+
+def _next_sdr_sid() -> int:
+    global _sdr_sid
+    _sdr_sid += 1
+    return _sdr_sid
+
+
+@app.websocket("/WSsdr")
+async def ws_sdr(ws: WebSocket):
+    """SDR 接收机通道：文本帧发命令，二进制帧收频谱与音频。"""
+    token = _sdr_token_from_ws(ws)
+    if not token or token not in _sdr_tokens:
+        await ws.close(code=4001, reason="Unauthorized")
+        return
+    if not _sdr_login_enabled():
+        await ws.close(code=4003, reason="SDR receiver is not enabled")
+        return
+
+    await ws.accept()
+    hub = _sdr_ensure_hub()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=256)
+    sid = _next_sdr_sid()
+    try:
+        sub = hub.attach(sid)
+    except SdrCapacityError as exc:
+        await ws.close(code=4003, reason=str(exc))
+        return
+
+    def _push(frame: tuple) -> None:
+        try:
+            queue.put_nowait(frame)
+        except asyncio.QueueFull:
+            hub.dropped_frames += 1
+
+    sub.send = _push
+    logger.info("SDR socket connected (%d listener(s), %d demod(s))",
+                hub.listener_count + 1, hub.channel_count)
+    metrics.open("sdr", "sdr", token)
+    await _sdr_runner.ensure_started()
+    await ws.send_text(json.dumps({
+        "event_type": "hello",
+        "value": {
+            "modes": ["AM", "USB", "LSB", "CW", "NFM", "WFM"],
+            "max_clients": SDR_MAX_CLIENTS,
+            "max_channels": SDR_MAX_CHANNELS,
+            "sample_rate": SDR_SAMPLE_RATE,
+        },
+    }))
+
+    async def pump() -> None:
+        while True:
+            frame = await queue.get()
+            kind, payload = _sdr_ws_encode(frame)
+            if kind == "bytes":
+                await ws.send_bytes(payload)
+                metrics.add_bytes("sdr", len(payload))
+            else:
+                await ws.send_text(payload)
+
+    pump_task = asyncio.create_task(pump())
+    try:
+        while True:
+            text = await ws.receive_text()
+            try:
+                obj = json.loads(text)
+            except Exception:                                     # noqa: BLE001
+                continue
+            event = obj.get("event_type")
+            if event == "tune":
+                ok, wait = hub.tune(sub, int(obj.get("value", 0)))
+                if not ok:
+                    await ws.send_text(json.dumps({
+                        "event_type": "error", "code": "locked",
+                        "value": {"retry_after": round(wait, 1)}}))
+                hub.broadcast_state()
+            elif event == "channel":
+                val = obj.get("value") or {}
+                try:
+                    chid = hub.subscribe_channel(sub, int(val.get("mode", 0)),
+                                                 int(val.get("bw_hz", 3000)))
+                except SdrChannelFull as exc:
+                    await ws.send_text(json.dumps({
+                        "event_type": "error", "code": "channel_full",
+                        "value": {"reason": str(exc)}}))
+                    continue
+                await ws.send_text(json.dumps({
+                    "event_type": "channel_ack", "value": {"chid": chid}}))
+            elif event == "cursor":
+                hub.set_cursor(sub, float(obj.get("value", 0)))
+                hub.broadcast_state()
+            elif event == "squelch":
+                hub.set_squelch(sub, float(obj.get("value", 0)))
+            elif event == "volume":
+                hub.set_volume(sub, float(obj.get("value", 1)))
+            elif event == "state":
+                hub.broadcast_state()
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:                                      # noqa: BLE001
+        logger.debug("SDR socket closed: %s", exc)
+    finally:
+        pump_task.cancel()
+        hub.detach(sub)
+        metrics.close("sdr", "sdr", token)
+        logger.info("SDR socket disconnected (%d remain, %d demod(s), dropped=%d)",
+                    hub.listener_count, hub.channel_count, hub.dropped_frames)
+        hub.broadcast_state()
+
+
 # ── ATR1000 Tuner WebSocket (optional) ──────────────────────────────
 
 @app.websocket("/WSatr1000")
@@ -4631,15 +5476,77 @@ def _resolve_static_path(path: str):
     return resolved if contained else None
 
 
+# 静态件的缓存语义：两层同一套值 —— hub 边缘（`../mrrc_hub/deploy/nginx/mrrc-instances.vhost`）
+# 发同样的两个常量。实例侧这一份不是重复，而是覆盖公网边缘之外的所有路径：
+# 局域网直连、B2/B3 退化入口、别的反代，以及边缘缓存还没建立时的第一个用户。
+CACHE_CONTROL_DOC = "no-cache"                # HTML / JSON / sw.js：每次都重新校验
+CACHE_CONTROL_ASSET = "public, max-age=3600"  # 其余静态件：1 小时
+
+
+def _cache_control_for(path: Path) -> str:
+    """文档类每次都重新校验，其余静态件 1 小时。
+
+    1 小时而不是 ``immutable``：`index.html` 里的 ``?v=`` 是**手工** bump 的，漏 bump 时
+    1 小时是用户最长踩到旧代码的窗口；``immutable`` 会把这个代价放大成一年。
+    部署后新版能立刻看到，靠的是文档类 ``no-cache`` 加 `index.html` 换 ``?v=`` 新号。
+    """
+    if path.suffix.lower() in (".html", ".htm", ".json") or path.name == "sw.js":
+        return CACHE_CONTROL_DOC
+    return CACHE_CONTROL_ASSET
+
+
+def _html_page(page: Path) -> FileResponse:
+    """一个 HTML 页面响应：文档类语义（每次重新校验）。
+
+    `/listen` 与 `/settings` 走这里（它们不经 `serve_static`）。`/setup` **刻意不走**：
+    那个页面会显示自动生成的口令横幅，所以它自己发 `no-store`，比 no-cache 更严。
+    """
+    response = FileResponse(page, media_type="text/html")
+    response.headers["Cache-Control"] = _cache_control_for(page)
+    return response
+
+
+def _not_modified(request: Request, headers) -> bool:
+    """条件请求是否命中（命中则回 304，不重传文件）。
+
+    RFC 7232：带了 ``If-None-Match`` 就不再按 ``If-Modified-Since`` 判断。
+    日期报文解析不了时当作“没带条件”—— 宁可多发一次文件，也不要错误地发 304。
+    """
+    etag = headers.get("etag")
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match is not None:
+        if not etag:
+            return False
+        candidates = {token.strip() for token in if_none_match.split(",")}
+        return etag in candidates or f"W/{etag}" in candidates
+    if_modified_since = request.headers.get("if-modified-since")
+    last_modified = headers.get("last-modified")
+    if if_modified_since and last_modified:
+        try:
+            return parsedate_to_datetime(if_modified_since) >= parsedate_to_datetime(last_modified)
+        except (TypeError, ValueError):
+            return False
+    return False
+
+
 async def serve_static(path: str, request: Request):
     """Serve static files.  Index.html is served for SPA routes.
 
     Registered with ``app.add_api_route`` at the **end** of this module, not here: this handler
     matches every GET path, so anything registered after it is unreachable. Defining it here and
     registering it below all API routes is what keeps that order obvious.
+
+    Caching (2026-10-17): every response carries a ``Cache-Control`` and honours
+    ``If-None-Match``/``If-Modified-Since``. Before this, an installed browser revalidated on every
+    reload and got the whole file back — ``If-None-Match`` on ``modules/opus_wasm.js`` (534 KB)
+    returned 200 with the full body, so "reload" meant "push 534 KB through the tunnel again".
     """
-    if not _verify_auth(request) and path not in ("", "login", "favicon.png", "manifest.json", "sw.js", "box_api.js"):
-        return RedirectResponse("/login")
+    if not _verify_auth(request):
+        # 已登录的 SDR 会话要能取它自己页面的资源（sdr.html 用根相对路径，
+        # 与 index.html 同一套约定）；除此之外仍旧回登录页。
+        if not _sdr_static_allowed(request, path):
+            if path not in ("", "login", "favicon.png", "manifest.json", "sw.js", "box_api.js"):
+                return RedirectResponse("/login")
 
     file_path = _resolve_static_path(path)
     if file_path is None:
@@ -4647,22 +5554,38 @@ async def serve_static(path: str, request: Request):
         # through to the SPA fallback for these.
         return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
 
-    if file_path.is_file():
-        # Determine content type
-        ext = file_path.suffix.lower()
-        content_types = {
-            ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
-            ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml",
-            ".ico": "image/x-icon", ".wav": "audio/wav", ".mp3": "audio/mpeg",
-        }
-        media_type = content_types.get(ext, "application/octet-stream")
-        return FileResponse(file_path, media_type=media_type)
+    if not file_path.is_file():
+        # A file name that is not on disk is a 404, not the SPA fallback: `/favicon.png`
+        # (referenced by index.html and manifest.json) does not exist, and the fallback
+        # answered it with 40 KB of HTML that the browser kept as if it were the icon.
+        # Only extension-less paths are SPA routes (/settings, /ft8, a deep link).
+        if Path(path).suffix:
+            return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
+        file_path = STATIC_DIR / "index.html"
+        if not file_path.exists():
+            return HTMLResponse("<h1>MRRC Modern</h1><p>Static files not found.</p>", status_code=404)
 
-    # Fallback to index.html for SPA routes
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path, media_type="text/html")
-    return HTMLResponse("<h1>MRRC Modern</h1><p>Static files not found.</p>", status_code=404)
+    ext = file_path.suffix.lower()
+    content_types = {
+        ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
+        ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml",
+        ".ico": "image/x-icon", ".wav": "audio/wav", ".mp3": "audio/mpeg",
+    }
+    media_type = content_types.get(ext, "application/octet-stream")
+    response = FileResponse(
+        file_path,
+        media_type=media_type,
+        # stat passed in on purpose: Starlette 1.3's FileResponse only stats the file
+        # when it is sent, and the conditional check below has to run *before* that.
+        stat_result=file_path.stat(),
+    )
+    response.headers["Cache-Control"] = _cache_control_for(file_path)
+    if _not_modified(request, response.headers):
+        headers = {name: response.headers[name]
+                   for name in ("etag", "last-modified", "cache-control")
+                   if name in response.headers}
+        return Response(status_code=304, headers=headers)
+    return response
 
 
 # ── Entry Point ─────────────────────────────────────────────────────
@@ -5114,6 +6037,9 @@ def _cloud_start_tunnel(settings: dict) -> None:
         return
     with _cloud_lock:
         if _cloud_tunnel is None:
+            # 老实例的配置（管理段进生成器之前写的）没有 webServer：这里补上，
+            # 因为 frpc 只在启动时读配置 —— 这是唯一安全的时机（见 cloud_hub.ensure_admin_segment）。
+            cloud_hub.ensure_admin_segment(conf)
             _cloud_tunnel = cloud_hub.TunnelProcess(frpc, conf)
             _cloud_tunnel.start()
 
@@ -5547,7 +6473,7 @@ async def settings_page(request: Request):
     page = STATIC_DIR / "settings.html"
     if not page.exists():
         return HTMLResponse("<h1>404 Not Found</h1>", status_code=404)
-    return FileResponse(page, media_type="text/html")
+    return _html_page(page)
 
 
 @app.get("/api/box/onboarding", include_in_schema=False)
@@ -5719,6 +6645,126 @@ async def api_box_wifi_status(request: Request):
     return JSONResponse(box_ops.switch_state())
 
 
+@app.post("/api/box/wifi/save", include_in_schema=False)
+async def api_box_wifi_save(request: Request):
+    """Save (or replace) a Wi-Fi profile **without** switching to it.
+
+    The switch endpoint has to bring the profile up immediately, which is 25 s of
+    waiting and a rollback when the access point is not in range. That is the
+    wrong tool for preparing a box for someone else's home — the AP is never here
+    — so this one only writes the profile. The active connection is untouched.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    ssid = (body.get("ssid") or "").strip()
+    password = body.get("password") or ""
+    autoconnect = bool(body.get("autoconnect", True))
+    problem = box_ops.ssid_problem(ssid) or box_ops.psk_problem(password)
+    if problem:
+        return JSONResponse({"ok": False, "error": problem}, status_code=400)
+    result = await asyncio.to_thread(
+        box_ops.save_wifi, ssid, password, autoconnect)
+    # The SSID is fine to log; the password never is (design D-4 / NFR-068).
+    logger.warning("box: saved Wi-Fi %r (autoconnect=%s)", ssid, autoconnect)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
+@app.get("/api/box/bt/scan", include_in_schema=False)
+async def api_box_bt_scan(request: Request):
+    """Look for nearby remotes (BR/EDR).  Slow on purpose: an inquiry needs ~10 s."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    devices = await asyncio.to_thread(net_bt.scan)
+    # 页面按**名字**自动配对（不认 MAC：来料批次会换地址）。名字表从这里下发，
+    # 部署侧可以用 MRRC_BT_REMOTE_NAME 改，不必改页面。
+    return JSONResponse({"devices": devices,
+                         "remoteNames": list(net_bt.remote_name_patterns())},
+                        status_code=200)
+
+
+@app.get("/api/box/bt/state", include_in_schema=False)
+async def api_box_bt_state(request: Request):
+    """One address's pairing flags plus the verdict that matters: do keys work?"""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    address = (request.query_params.get("address") or "").strip()
+    if not address:
+        return JSONResponse({"ok": False, "error": "没有指定设备"}, status_code=400)
+    return JSONResponse(await asyncio.to_thread(net_bt.state, address), status_code=200)
+
+
+@app.post("/api/box/bt/pair", include_in_schema=False)
+async def api_box_bt_pair(request: Request):
+    """Pair + trust a remote, then report whether its keys actually arrive.
+
+    ``keys_work`` is the field the page acts on: a remote can be ``paired`` and
+    ``bonded`` while its link stayed unencrypted, in which case bluez builds no
+    input device and every button is dead (docs/W103D_REMOTE_GUIDE.md §2).
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    address = (body.get("address") or "").strip()
+    if not address:
+        return JSONResponse({"ok": False, "error": "没有指定设备"}, status_code=400)
+    result = await asyncio.to_thread(net_bt.pair, address)
+    state = await asyncio.to_thread(net_bt.state, address)
+    logger.warning("box: paired remote %s (keys_work=%s)",
+                   address, state.get("keys_work"))
+    state["ok"] = bool(state.get("paired"))
+    return JSONResponse(state, status_code=200 if state["ok"] else 400)
+
+
+@app.post("/api/box/bt/forget", include_in_schema=False)
+async def api_box_bt_forget(request: Request):
+    """Drop a bonding (and power-cycle the controller: bluez caches link keys)."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    address = (body.get("address") or "").strip()
+    if not address:
+        return JSONResponse({"ok": False, "error": "没有指定设备"}, status_code=400)
+    await asyncio.to_thread(net_bt.remove, address)
+    if body.get("power_cycle"):
+        await asyncio.to_thread(net_bt.power_cycle)
+    logger.warning("box: forgot remote %s", address)
+    return JSONResponse({"ok": True}, status_code=200)
+
+
+@app.post("/api/box/wifi/forget", include_in_schema=False)
+async def api_box_wifi_forget(request: Request):
+    """Forget one saved Wi-Fi profile."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    ssid = (body.get("ssid") or "").strip()
+    if not ssid:
+        return JSONResponse({"ok": False, "error": "没有指定要删的 Wi-Fi"},
+                            status_code=400)
+    result = await asyncio.to_thread(box_ops.forget_wifi, ssid)
+    logger.warning("box: forgot Wi-Fi %r", ssid)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
+@app.post("/api/box/wifi/autoconnect", include_in_schema=False)
+async def api_box_wifi_autoconnect(request: Request):
+    """Arm or disarm a saved profile: "connect whenever it is in range, from now
+    on" versus "keep it, but do not use it by itself"."""
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    ssid = (body.get("ssid") or "").strip()
+    if not ssid:
+        return JSONResponse({"ok": False, "error": "没有指定 Wi-Fi"},
+                            status_code=400)
+    enabled = bool(body.get("enabled", True))
+    result = await asyncio.to_thread(
+        box_ops.set_wifi_autoconnect, ssid, enabled)
+    logger.warning("box: Wi-Fi %r autoconnect=%s", ssid, enabled)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
+
+
 @app.post("/api/box/hostname", include_in_schema=False)
 async def api_box_hostname(request: Request):
     """Rename the box, then tell avahi before it notices on its own.
@@ -5790,6 +6836,29 @@ async def api_box_link(request: Request):
                    "over this link, their session is about to drop",
                    profile, method)
     return JSONResponse({"ok": True, "changing": True, "profile": profile})
+
+
+@app.post("/api/box/system-password", include_in_schema=False)
+async def api_box_system_password(request: Request):
+    """Change the password of root / mrrc / rescue.
+
+    Separate from `/api/box/password` (the web login) on purpose: these are the
+    accounts an operator reaches over SSH or HDMI, and getting them wrong locks
+    people out of the console — hence the strict account allowlist and the
+    sentence-level validation before anything reaches a root process.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = await _box_body(request)
+    user = (body.get("user") or "").strip()
+    password = body.get("password") or ""
+    problem = box_ops.system_password_problem(user, password)
+    if problem:
+        return JSONResponse({"ok": False, "error": problem}, status_code=400)
+    result = await asyncio.to_thread(box_ops.set_system_password, user, password)
+    # The account is worth a line; the password never is (design D-4 / NFR-068).
+    logger.warning("box: system password changed for %r", user)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
 
 
 @app.post("/api/box/system/reboot", include_in_schema=False)

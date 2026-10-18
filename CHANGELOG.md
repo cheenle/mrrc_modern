@@ -2,6 +2,585 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — W103D 发货版（预置）镜像：固定口令、零初始化、Wi-Fi 与公网入口都在设置页
+
+卖家代刷一批 W103D 快递给用户，「开箱即用」这条链上的三处硬拦一次拆掉（设计
+`docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
+`docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
+
+### 刷机镜像改为对外下载版：预置（`--preflash`）即发布
+
+- 操作员决策（2026-10-18）：老的公开镜像要先走一遍首启引导（生成 Web 口令、探测串口与声卡、
+  `/setup`），对大多数用户**太复杂**；而代刷发货用的预置版开机即可登录。于是**对外下载的
+  就是预置版**：Web `abcd!1234`、`root` `abcd1234`、`mrrc` `abcd1234`，时区 `Asia/Shanghai`、
+  区域 `zh_CN.UTF-8`，不需要任何初始化。
+- 代价写清楚：下载页上每一份都是同一组**公开口令**，且镜像的 `sshd` 默认允许 root 口令登录。
+  两张下载卡都改成「**第一件事是改掉这三个口令**」并链到用户指南；`packaging/box/README.md`
+  的发布说明同步改写（原来那句「发货版不该上传下载页」作废，理由与替代约束写在同一段）。
+- 产物（本机真构建 + 四步验证全绿）：`MRRC-Modern-1.28.1-w103d.img.gz`，
+  **1,221,443,860 B**，SHA-256 `ee1fba1e…`。验证含：代码身份逐字节、`bluez` 已装、
+  `input:x:102:mrrc`、五个 systemd 单元 + logrotate 配置、11 份 profile、frpc 是 aarch64 ELF、
+  SDRplay API/`libsdr_dsp`/udev 规则在位、`/tmp` 零残留、D-11 双指向、chroot 真跑导入
+  （含 `paramiko` 与 `sdr_frames/sdr_hub/net_bt`）。
+
+### 遥控器配对必须在 pty 里跑：`No bonding` 是配不上的真正原因
+
+- 现场（盒子 `.217`，蓝牙遥控器 `CMCC_Voice_Remote`）：配对**看起来**成功过，`btmon` 却给出
+  `SMP: Pairing Request … Authentication requirement: No bonding … (0x28)` →
+  `SMP: Pairing Failed: Invalid parameters (0x0a)`；链路上来了、属性全拒（`hog-lib.c: HID
+  Information read failed`，ATT `0x0E`），HID 设备建不出来，`keys_work` 永远是 false。
+- 根因不是遥控器：**一次性 `bluetoothctl --timeout N pair` 不注册配对 agent**，bluez 于是请求
+  「不绑定」；而 BLE HID 遥控器必须存一把密钥才能重连，只能回 `Invalid parameters`。
+  把同一串命令打进 **pty**（`--agent NoInputNoOutput`）后请求变成 `Bonding (0x29)`，
+  `Pairing successful`，bluez 随后建出 `CMCC_Voice_Remote Keyboard`，键立刻能调频。
+- `net_bt.pair()` 现在跑交互式会话（`pty` + 脚本：`power on` → `scan on` → `pair` → `trust`），
+  没有 pty 的平台退回一次性调用。面板文案改成「先扫 12 秒再配，全程约 30–45 秒」。
+- **顺带补上第三个缺口**：`mrrc` 不在 `input` 组。`/dev/input/eventN` 是 `root:input 0660`，
+  缺组时 `mrrc-localctl` 每次 open 都是 `Permission denied`，而界面上没有任何地方会报
+  「缺组」——遥控器看着配好了、按键却毫无反应。两条镜像线（`packaging/box/box-overlay.sh`、
+  pi-gen 的 `00-run-chroot.sh`）都加上 `input`，并有一条 parity 测试钉住。
+- **按名字配对，不认 MAC**：`CMCC_Voice_Remote`（可用 `MRRC_BT_REMOTE_NAME` 改，逗号分隔）
+  的名字对上一台就配一台，对上几台就配几台（串行，最后给「N/M 台成功」的汇总）。
+  来料批次会换地址，而「这台叫什么」是能一眼看见的事实；多配一台的代价远小于「这台不认」。
+- **固化进镜像，新盒子不再逐个适配**：`packages.txt` 加 `bluez`（缺它时面板永远扫到
+  0 个设备，界面上却只说「遥控器在配对模式吗？」）、服务层 `enable bluetooth.service`、
+  两条镜像线把 `mrrc` 加进 `input` 组、配对走 pty+agent。四条都有测试钉住。
+- 测试 +3（配对脚本顺序与等待上限、镜像 `input` 组）。
+
+### 遥控器音量键只能推到 39 %：百分比当成了 0–255 的寄存器
+
+- 现象：按住「音量 +」到底，声音仍然不够大。
+- 根因是一个**单位错**，和配对无关：`local_ctl.Controller.volume` 是 **0–100 百分比**，
+  却被原样写进 `af_gain`，而电台的 AF 增益是 **0–255 寄存器**（`radio_state.af_gain`、
+  Yaesu `AG0xxx`、Icom `LVL_AF`；网页上同一个量就是 0–255，`ft710_ui.js` 用
+  `/255*100` 显示百分比）。满格只到 `100/255` ≈ **39 %**。
+- 现在按 `round(pct / 100 * 255)` 换算（`gain_from_volume` / `volume_from_gain`），
+  每次按键仍是 5 %（≈13 个寄存器台阶），第 20 下就是 255。
+- **同一个面上的第二个缺陷**：服务器的 `state` 首行只带 `freq`/`mode`，守护进程的音量
+  从自己的 50 起算——第一次按「音量 +」会把电台从 200 直接改成 55（往下走）。现在
+  `state` 带 `af_gain`，**每条命令的回复也带回当前增益**（操作员也可能直接拧电台旋钮），
+  `_absorb_gain` 回读成百分比，按键从电台当前值开始加减。
+- `linux/mrrc_update.sh` 现在还会 `systemctl try-restart mrrc-localctl`：那个守护进程
+  跑的是**自己进程里**的 `local_ctl.py`，只重启 `mrrc-modern` 会让改好的换算一直躺在
+  `/opt` 里不生效（`try-restart`：没装这个 unit 的老盒子不会让升级失败）。
+- 测试 2560 → 2568（满量程 / 步进百分比 / 到底静音 / `state` 回读 / 回复回读 /
+  脏值忽略 / 两边 `af_gain` 在场 / 热升级重启遥控守护进程）。
+
+### 遥控器面板：发现就直接配，失败要说出原因
+
+- 现场（盒子 `.217`，00:10–00:16）：操作员连点三次「配对」，服务端三次
+  `POST /api/box/bt/pair → 400`，日志只有 `keys_work=false`；其中两次打的是
+  `44:3E:8A:10:DB:F8`（一个叫 `CASL 39982` 的 LE 信标）。真正的原因——遥控器已经退出
+  配对模式——只出现在终端里，页面上一个字都没有。
+- **不再点第二次**：扫描结束后，如果只有**一台**「bluez 认得出是 HID 输入设备
+  （`input-*`）**且**这次扫描有信号强度（= 它正在广播，也就是在配对模式）」的设备，
+  页面直接调用配对，并说明「找到遥控器「X」，正在配对…」。多于一台、或一台都没有时
+  仍然列出清单，不替操作员猜。
+- **失败要说出原因**：`net_bt.pair()` 现在把 `bluetoothctl` 的那一行带回来
+  （`Failed to pair: …` / `Device … not available` / `Authentication*` / `org.bluez.Error.*`），
+  页面显示「没有配上：`<原话>`」。上一版对任何原因都只说「确认遥控器在配对模式」。
+- 测试 2477 → 2481（`tests/test_net_bt.py` +4：自动配对判据、错误原话提取、成功无错误）。
+
+### 遥控器面板：给信号强度，让它能被找出来
+
+- 现场（盒子 `.217`）：BR/EDR 扫出 **23 个**设备，页面只给「地址 + 名字」——操作员没法判断
+  该点哪一个（绝大部分是无名 LE 信标，而且 `bluetoothctl` 还会重放 bluez 的**缓存**）。
+- 三处改动：① 扫描改用 `btmgmt find -l`（有 RSSI 与地址类型），服务器没有 CAP_NET_ADMIN 时
+  退回 `bluetoothctl`，并从它的 `[CHG] … RSSI:` 行里取信号强度；② 既没名字也没信号强度的条目
+  直接丢掉（那是缓存回声），列表按「像遥控器的在前 → 当场扫到的在前、强的在前」排序；
+  ③ 每个设备查一次 `bluetoothctl info` 取 `Icon`，`input-*` 的直接在页面上写「遥控器/键盘」。
+  实测结果是遥控器排在第一行，带 `input-keyboard` 标记。
+- 两个解析陷阱（都是实测出来的）：`bluetoothctl` 给每个彩色 token 套了 `\x01`/`\x02` 字节，
+  只剥 ANSI 会让 `^[(NEW|CHG|DEL)]` 全部匹配失败（18 行 RSSI 解析出 0 个）；`[CHG]` 行是属性流，
+  把它的尾部当名字会让设备**被叫做** `TxPower: 7`。名字只从 `[NEW]` 取，RSSI 只从 `[CHG]` 取。
+- 测试 2468 → 2477（`tests/test_net_bt.py` +9：信号强度解析/去重取最强/排序/缓存回声丢弃/
+  加粗字节与 `input-*` 排序）。
+
+### 热升级装不上单元，这一条写进指南
+
+- 真机（盒子 `.217`）把 1.25.5 升到 1.28.1 之后，`/api/box/status` 仍报 `helper_available: false`：
+  `mrrc-update` 只换代码，**systemd 单元与系统集成只在镜像构建时装**（`mrrc-box-helper` /
+  `mrrc-localctl` / `mrrc-cpufreq` / `mrrc-logrotate.timer`）。表现是设置页那几个按钮是灰的、
+  蓝牙遥控器不来、CPU 不锁频、日志无轮转 —— 都不会报错，只是「新版本没有新能力」。
+- `docs/W103D_GUIDE.md` 的「升级」小节写清楚了这条边界，以及补装时要连
+  `RuntimeDirectory=mrrc` 一起加（否则 `/run/mrrc` 建不出来，两个套接字无处安放）。
+- 实测（`.217`）：三个单元 + polkit 规则装上后重启，`helper_available: true`、写动词通
+  （`/api/box/timezone` 幂等提交）、governor `schedutil → performance`、`/run/mrrc` 两个套接字
+  权限正确、云入口 302、电台与频谱都在。
+
+### 热升级不再留下旧版本号（`mrrc-update`）
+
+- 盒子上「热升级」走的是 `linux/mrrc_update.sh`：stage 树 → pip → 重编 FT8 → 重启。
+  它**从来没写过 `version.txt`**，所以 1.25.5 的盒子升到 1.28.1 的树之后，诊断包
+  manifest、`/api/update/check` 的「当前版本」和 ☰ 菜单页脚仍然说 1.25.5 ——
+  「升级了但行为没变」这类报告因此无从分辨（2026-10-17 实测，盒子 `.217`）。
+- 现在 updater 会盖版本号：`MRRC_UPDATE_VERSION` → 源树 `CHANGELOG.md` 的第一条
+  `## [vX.Y.Z]` → 源树 `version.txt`，三个来源按可信度排；第二个在**喂一棵已 stage
+  过的树**时不存在（`stage-tree.sh` 的 `/*.md` 排除），第三个就是为那种情况留的。
+  `version.txt` 与 `VERSION` 一起写，和镜像同一条规则。
+- 同一轮还发现：`maxsize 5M` 只在 logrotate **跑的时候**才被看见，日更等于把上限变成
+  「一天里能涨多少」。`mrrc-logrotate.timer` 改成**每小时**（`OnCalendar=hourly`，
+  `Persistent=true`），没到尺寸时是一次毫秒级空转。
+
+### 远程协助在盒子上接通：两个真缺陷，一个在配置里、一个在接线里
+
+用盒子 `192.168.1.217`（v1.25.5，Cloud Hub `ba4eg`）跑完整条链路时拓出来的，两个都不是协议问题：
+
+- **「开启协助」每次都失败，报 `frpc admin API unreachable on 127.0.0.1:0`。** 端口 **0** 是线索：
+  它表示这份隧道配置里**没有 `webServer` 段**。实例是在管理段进入生成器（2026-10-12）之前入网的，
+  而 `connect()` 不会为已入网的实例重写配置、`set_help_proxy()` 也不敢擅自铸一个（跑着的 frpc
+  不认新端口）。新增 `cloud_hub.ensure_admin_segment()`：在**启动隧道之前**补一段——frpc 只在
+  启动时读一次配置，那是唯一安全的时机——并在 `set_help_proxy()` 遇到无管理段时给一句能行动的话
+  （「重启一次应用就会自动补上」），而不是拿 0 号端口去重试 3 秒。
+- **「已连接」永远是 0；「连错 5 次自动关闭」也从未发生。** 同一形状的两条死接线： `HelpSession.note_connection()` 没有任何调用者：SSH 门
+  （`SshHelpServer`）只发 `on_event`，而计数住在会话上，两边从来没接线。单测直接调
+  `note_connection()`，所以这个洞一路活着。现在门在会话结束时回调 `on_disconnect`，
+  `build_session()` 把它接到 `note_connection()`；新增的测试**走接线本身**（真 paramiko shell
+  会话 → `connections == 1`，探针 exec 不计数），去掉那行接线它立刻变红。口令失败那条更严重：
+  门的 `check()` 自己数失败次数，而决定关窗的 `HelpSession.note_auth_failure()` 没有调用者，于是
+  「连续试错 5 次自动关闭」是一句没有实现的承诺。现在 `on_auth_failure` 接上，两条测试钉住
+  （错一次 → `failures: 1`；第五次 → `closed / auth_failures`）。**OpenSSH 默认一次连接试 3 遍口令**，
+  所以一次 typo 会吃掉 3 次预算 —— 支持者用 `-o NumberOfPasswordPrompts=1`。
+- 真机验收（盒子，2026-10-17）：开窗 → 从 hub `ssh -p 18818` 交互式登入，`id -un` = **`mrrc`**
+  （不提权）→ `connections: 1` → 客户「停止协助」→ hub 端口释放、配置里的协助代理摘掉、主入口
+  全程 302 不抖。记录与排障表更新在 `docs/remote_help.md`。
+
+### 硬盘不会被日志写满：轮转、journald 上限、录音拒写
+
+- **触发它的是一次实测**：盒子上的 `local_speaker.py` 是旧版（缺「一条警告一条 streak」
+  的修复），蓝牙耳机不在线时每 20 ms 写一条 `Local speaker write failed` —— 5 小时
+  **14.5 万条 / 17 MB**。修掉刷屏后，这个问题还在：`logs/server-stdout.log` 是 systemd
+  `StandardOutput=append:` 写的，**systemd 不轮转 `append:` 目标，服务端也不轮转它**，
+  它是整个镜像里唯一没有上限的文件（`server.log` 2 MB × 2 代、`ft8-worker.log` 2 MB、
+  support bundle 留 5 份，其余都有界）。6.5 GB 的根分区，一个慢一点的缺陷就能走完。
+- **服务层新增 `/etc/logrotate.d/mrrc`**：`server-stdout.log` 满 5 MB 触发、留 3 代、
+  压缩，**`copytruncate`**——systemd 持有 fd，rename 会把后续写入留在一个已 unlink 的
+  inode 上：目录看着转了，硬盘继续涨，比不轮转更糟（它把增长藏起来）。
+- **scheduler 是自己的**：`mrrc-logrotate.timer`（`OnBootSec=10min`、`OnCalendar=daily`、
+  `Persistent=true`）。不押注镜像里 cron 有没有被 mask，也不押注 Debian 的
+  `logrotate.timer` 在不在——两者都可能无声地不跑。
+- **journald 上限**：默认是根分区 10%（这台 650 MB，整机的六分之一）。新增
+  `/etc/systemd/journald.conf.d/50-mrrc-size.conf`：`SystemMaxUse=128M`、
+  `SystemKeepFree=256M`。
+- **录音**：新增 `MRRC_RECORDINGS_MIN_FREE_MB`（默认 200）。开始录音前测一次剩余空间，
+  不够就**拒绝并在界面上说明**，**绝不删除任何一段录音**——删除是破坏性的，产品不做。
+  64 kbps / 16 kHz mono ≈ **29 MB/小时**，客户自己触发的录音是这台机器上唯一无界的写入方，
+  而磁盘写满不是「录音停了」：PTT、音频、配置写入一起坏。
+- 测试 2449 → **2460**：`tests/test_log_rotation.py` 6 项（轮转的文件名 == 单元的
+  `append:` 目标、`copytruncate`、大小触发 + 代数 + 压缩、自带 timer 并 enable、
+  `packages.txt` 里有 `logrotate`、journald 有上限）；`tests/test_recorder_api.py` +5
+  （够了 / 不够 / 测不出 / 关掉 / 命令层在会话创建之前就拒绝）。
+
+### 设置页配对遥控器（客户手里没有 SSH）
+
+- `/settings` 新增「遥控器」面板：**搜索附近设备 → 选中 → 配对**，全程网页完成。
+  遥控器侧只需同时长按「OK + 返回」5 秒进入配对模式。
+- 新模块 `net_bt.py`（与 `net_wifi` 同一个套路：stdlib only、每次调用可注入 runner、
+  测试不需要控制器也不需要 root）。三个端点：
+  `GET /api/box/bt/scan`（BR/EDR 搜索，约 12 秒）、`GET /api/box/bt/state`、
+  `POST /api/box/bt/pair`、`POST /api/box/bt/forget`（可选同时给控制器上下电）。
+- **页面显示的判据是"按键能用"，不是"bluez 说配上了"**：现场那次 `Paired: yes` 但链路
+  没加密、bluez 建不出键盘设备、每个键都是死的。`state()` 的 `keys_work` 来自
+  `/proc/bus/input/devices` 里有没有该地址的键盘设备；配对标志只做诊断。没通时页面直接
+  给「重配」按钮（清旧配对 + 蓝牙上下电），这就是文档里那条修法。
+- 实测（W103D）：`{"paired":true,"bonded":true,"connected":true,"keys_work":true}`。
+- 测试 2437 → **2449**（`tests/test_net_bt.py` 12 项）；`net_bt` 进镜像导入门禁。
+
+### 省 CPU 两处：锁频调速器 + 只给扬声器时不编码 Opus
+
+- **调速器 `schedutil → performance`**（服务层新增 `mrrc-cpufreq.service`）：这台的负载是
+  碎而密的（音频 50 Hz、频谱 30 Hz、FT8 时隙），`schedutil` 一直在变频，每次都要付延迟和
+  governor 自身的开销（`sugov:0` 累计占一核的 17.8%）。实测（W103D，vmstat 5 s ×3，三次复现）：
+  整机忙 **27% → 14%**，**SoC 温度 48.2–48.4 °C 完全不变**。盒子是市电供电，"降频省电"在这里
+  换不来什么，反而赔掉半个核。
+- **没有浏览器时不编码 Opus**：录音、FT8 tap、本地扬声器要的都是 **PCM**，而 RX 循环原来
+  只要有"人"在听就编码。现在编码门只认 `audio_rx_clients / 录音 / FT8 tap`，纯扬声器盒子
+  不再每 20 ms 白烧一次 numpy + libopus。
+- 测试：`test_audio` 的两条源码守卫随之更新（编码门 + `None if (_radio_txing or not _needs_frames)`）。
+
+### ☰ 菜单里的 FT8 引擎开关（省 CPU）
+
+- FT8 引擎设计上**开机就在后台解码**，在小盒子上那是实打实的一个核（那个
+  `multiprocessing.spawn` 的 DSP worker）。设置区现在有一个开关：关掉 → 引擎停、
+  DSP worker 退出、RX tap 释放；开回来 → 立刻恢复解码。
+- 走的是**已有的**设置路径 `PUT /api/ft8/station {"engine_always_on": …}`
+  （它本来就落盘并启停 runtime），没有第二条命令通道；开关状态读 `GET /api/ft8/station`。
+  既有的单向「切到 FT8」菜单项不动——它要移动电台并跳转，回答的是另一个问题。
+- 实测（W103D）：关 → `engine_always_on:false`，DSP worker 2 → **1**；开 → 回到 2。
+- `ft710_ui.js?v=37 → 38`（否则已装用户的浏览器不会重新拉）。
+- 测试：pytest `tests/ft8/web/test_ft8_api.py` +2（开关驱动 runtime、状态可读）；
+  unittest `tests/test_ft8_engine_switch.py` 6 项（菜单位置、绑定的端点、状态来源、
+  不劫持单向入口）；计数 2430 → **2436**。
+
+### 盒子本地的耳朵：RX 音频进蓝牙耳机（AD-028 续）
+
+- 新模块 `local_speaker.py`：把服务端已经在编码的 RX 音频再分一路给本机 ALSA 设备，
+  队列有界、满了就丢（计数），播放走 `aplay` 子进程（蓝牙设备是 **ALSA PCM 名**
+  而不是 PortAudio 的枚举索引），设备掉线自动重启子进程。
+- 配置 `MRRC_LOCAL_SPEAKER_DEVICE`（ALSA 设备名）、`_RATE`、`_CHANNELS`，默认关闭；
+  关着时浏览器路径逐字节不变。RX 循环的空闲门把本地扬声器算作「有人在听」
+  （FT8 tap 已经上过这一课）。
+- **实测（W103D + 荣耀亲选耳机X5e）**：A2DP 48 kHz 立体声**可用**，电台的 RX 音频
+  稳定进耳机；**HFP/SCO 两条都不通** —— 播放无声音、采集 0 字节（`hfpag/source`
+  打开后不送数据）。所以耳机麦克风在这颗 MT7663 上用不了，发射的本地音源要走 USB 麦克风。
+- 测试 2420 → **2430**（`tests/test_local_speaker.py` 10 项）。
+
+### 本地操作台：蓝牙遥控器直接调电台（AD-028）
+
+现场操作员站在盒子旁边，用一支普通蓝牙遥控器调频、切模式、按住语音键发射。
+
+- 新模块 `local_ctl.py` + systemd 单元 `mrrc-localctl`（`User=mrrc`）：读遥控器的
+  `/dev/input/eventN`，按 **HID 扫描码**查键位表，把命令写成一行 JSON 发给服务端的
+  **本机控制 socket** `/run/mrrc/localctl.sock`（0600，与服务同一用户，字段白名单）。
+  **socket 的权限就是认证**：物理按键没有网页口令。最初那版让守护进程走网页登录，
+  几分钟就把「5 次 / 5 分钟」的登录闸门撞成 429 并彻底失联；换成 socket 后没有登录、
+  没有令牌、没有 TLS，命令与浏览器走同一条执行路径。没有遥控器时它空转等待；
+  蓝牙断开后节点消失会自动重开。
+- **键位**（W103D 上实测：中国移动语音遥控器 `CMCC_Voice_Remote`）：语音键 = 按住发射；
+  ▲▼ = 频率 ± 步进；◀▶ = 步进档；频道 ± = 波段上下；数字 0–9 + 确定 = 直接输入 kHz；
+  设置 = 模式循环；菜单/返回 = 取消输入；音量 ± = AF 增益；电源 = 交给我们（不再关机）。
+- **必须先加密才认键**：那次配对报了成功，但 `btmon` 显示链路未加密，遥控器于是拒绝
+  所有 GATT 读、bluez 建不出 HID 设备。删除设备 + 控制器上下电重配后
+  `Encryption: Enabled with AES-CCM`，输入设备立刻出现。运维步骤写进 `docs/W103D_USER_GUIDE.md`。
+- 电源键：`/etc/systemd/logind.conf` 的 `HandlePowerKey` 由服务层改为 `ignore`
+  （此前按一下就真的关机，现场看起来像"盒子自己重启了"）。
+- **按住不放要真的连续**：遥控器按住时发 `value 2`，而 evdev 里重复事件的 `pressed`
+  是 `False`——最初的重复分支要求 `pressed=True`，于是所有重复被自己丢掉，按住只有
+  第一下生效（"不灵敏"的真因，日志里 `key … []` 一串）。
+- 测试 2369 → **2410**（`tests/test_local_ctl.py` 45 项 + `tests/test_local_control_socket.py` 6 项，无硬件）。
+- **未做**：遥控器麦克风（厂商私有 BLE 通道 + 服务端目前没有"本地麦 → TX"通路）；
+  红外（这块板注册了 `meson-ir`，但两次抓取 0 脉冲——接收头没焊）。
+- 文档：新增 **`docs/W103D_REMOTE_GUIDE.md`《W103D 盒子遥控器指南》**（配对、按键表、
+  kHz 输入、排障、换遥控器），站点页 `w103d-remote.html` 由 `build_w103d_guide.py` 生成，
+  用户指南 §9.12 链过去。
+
+### 出厂预置：`build-image.sh --preflash`（默认关）
+
+- 新脚本 `packaging/common/preflash.sh`：env 里写固定 Web 口令（默认 `abcd!1234`）并显式清空
+  `MRRC_AUTO_PASSWORD`、`chpasswd` 设 `root`（`abcd1234`）/ `mrrc`（`abcd!1234`）、时区 `Asia/Shanghai`、
+  区域 `zh_CN.UTF-8`。按批次可用 `MRRC_PREFLASH_*` 覆盖。**不预置电台型号/串口**。
+- **不传开关的镜像逐字不变**（口令照旧每台现生成）；`preflash.sh` 自己还有一道「开关没置 1 就拒绝写入」的闸门。
+- 于是发货版**不需要任何初始化**：上电 → 浏览器用固定口令登录 → 完事。代价写进指南 §7：
+  **固定口令就是公开知识**（Web 可在页面改，root/mrrc 需 SSH/HDMI）。
+
+### 设置页：Wi-Fi 可手输、公网入口可申请
+
+- Wi-Fi 面板：SSID 变成可手输的文本框（点扫描结果只是把它**带入**这个框）—— 隐藏网络与「芯片刚重启、
+  扫描返回空表」这两种情况从此有出路；密码框加显示/隐藏（默认仍掩码）；空表时给一句可读提示；面板写明
+  只支持 2.4 GHz。
+- 新增「公网入口」面板：填呼号 → 申请 → 状态（等批准 / 已接通 + 入口地址 / 被拒绝），只调既有三个
+  `/api/cloud/*` 端点；**已有令牌时按钮变「查询状态」**（门户对同呼号重复申请是查重拒绝的）。
+- 已保存的 Wi-Fi 密码仍然**不回显**（NFR-068 / AD-021 不动）；该页 7 处 `innerHTML` 清空换成
+  `replaceChildren()`、扫描行改 `createElement`，该页不再有 innerHTML。
+
+### 首启探测：从「跑过一次」改成「跑到定型为止」
+
+- `MRRC_PRESEED=1` 不再短路：它只表示「别发明口令」。**2026-10-17 对 1.28.1 产物的只读检查证实：
+  镜像上的串口/声卡探测从未运行过**（口令是服务启动时生成的），`/setup` 的免密引导窗口也因此从未打开过 ——
+  后者不在本次范围，已在指南 §6/§9.8 标注现状。
+- 完成判据改成「配置已定型」（`needs_first_run` 为假 **且** 记下的串口节点此刻在场）：没探到电台的盒子
+  每次开机再探一次。卖家工作台上那次开机（U 盘、没电台）因此不会把「已完成」克隆给用户。
+- 顺带补齐 `linux/first_run.py` 相对 macOS 那份漏掉的两条：口令在探测**之前**落盘、探测循环之前先打印
+  一行（卡住时 HDMI 不再全黑）。
+
+### 记录在案的现状（本次不改）
+
+- **`/setup` 的免密引导窗口在镜像上从未打开过**（`MRRC_AUTO_PASSWORD` 永远为空）：改它等于重新开一个
+  免口令窗口，是安全决策，需要单独一次设计与验收。
+
+### 真构建与产物验证（2026-10-17 实测）
+
+两份镜像都真构建并跑了四步验证（预置版与对照版）：
+
+| | 字节数 | SHA-256 |
+| --- | --- | --- |
+| **发货版**（`--preflash`） | 1,212,223,182 | `17f3fe797a3d6a8dabaae0d5612dfcff2305aa3f9397c05c258bfac3c744adc5` |
+| 标准版（不带开关） | 1,191,513,586 | `8f743cf30a214ed20cdc5f8b14b6f8f023c98dd37ca87be75867daf288268a0b` |
+
+预置版：固定口令 + `Asia/Shanghai` + `zh_CN.UTF-8` 均落入产物（`crypt` 复算 root/mrrc 口令为 `True`）、
+型号/串口**未被预置**、D-11 单元身份、11 份 profile、`/tmp` 零残留、chroot 导入门禁全绿；
+对照版全部相反（时区 `Etc/UTC`、locale `en_US`、shadow 不符）。两版都在产物里真跑了一次首启包装器：
+**无电台 ⇒ 不盖 `firstboot-done`**（下次开机再探）而证书照生成。两份产物的 `gzip -t` 通过、
+`gzip -dc` 的内容哈希等于各自构建树的哈希（产物与树互证）。
+
+构建过程中被产出的两个真缺陷：
+① **脚本对基底的 NTP 实现做了假定**（无条件 `systemctl enable systemd-timesyncd`，而基底是 chrony
+且已 enable）—— 改成"不挑实现、但没有 NTP 单元就构建失败"（`d7af424`）；
+② **两个会话并发构建同一个产物路径**，交错写入产生 `trailing garbage` 的坏包 —— 本次把验收门
+加严为"`gzip -t` 通过 **且** 日志 SHA == 文件 SHA"，并只保留一份干净构建。
+
+### 未验/边界
+
+- **真机验收（指南 A1–A8）待做**：三条口令实测登录、`/setup` 302、手输 SSID、呼号申请与审批、
+  插上电台后重探、`timedatectl` 同步 —— 本机没有盒子，读数必须回填指南与 SDD，不得以"应该可以"代替。
+- **无 AP 兜底**：用户既没网线、也没人替他配 Wi-Fi、盒子又连不上他家 Wi-Fi 时，盒子够不着。
+- **发货版镜像不上传下载页**：它带的是公开固定口令，公开下载等于把同批盒子的口令发给所有人。
+
+### Wi-Fi 加入不再依赖扫描：AP 不在场也能预置（`net_wifi.connect_wifi`）
+
+给客户代刷盒子时，客户的 AP 在工作台上**必然扫不到**，而这一点正好把旧实现打穿：`connect_wifi` 一直在发
+`nmcli device wifi connect <SSID> password <PSK>`，而 nmcli 这条快捷方式是**基于扫描**的——SSID 不在列表里
+就报「未发现 SSID 为 … 的网络」并**一个 profile 都不写**。实测（1.28.1 / nmcli 1.42.4，真机）：
+
+```
+$ nmcli device wifi connect ZZZ-NOT-VISIBLE-9871 password testpass123 ifname wlan0
+错误：未发现 SSID 为 "ZZZ-NOT-VISIBLE-9871" 的网络。
+profile 数：5 -> 5
+```
+
+同一句判断也解释了第二个症状：**隐藏 AP 永远不在扫描列表里**，哪怕它就在隔壁。`linux/wifi_preseed.py`
+（开机从 `/boot/mrrc-wifi.txt` 连网）形状相同——它的全部目的就是「在看不见的时候连上」。
+
+改为**写 profile 再 up**：`connection add` + `connection modify`（`802-11-wireless.hidden yes`、
+`802-11-wireless.band bg`、`connection.autoconnect yes`、`connection.autoconnect-retries 0`）+ `-w 25 connection up`。
+`hidden yes` 对广播 AP 无损（真机实测：同形态 profile **5 秒内**连上可见 AP，`freq 2422`），对隐藏 AP 是唯一出路；
+`band bg` 把 2.4 GHz 钉死（MT7663S 连 5 GHz 会「关联成功但数据面不通」，~100 s 后固件不再应答扫描）；
+`autoconnect-retries 0` 是 nmcli 的「无限重试」，让「AP 以后才出现」这件事成立；`-w 25` 是有界的——SSID 不在场时
+nmcli 会等它自己 90 s 的默认值，而 `perform_wifi_switch` 后面只有 30 s 的 DHCP 预算。
+
+顺带把一条既有守卫的语义钉紧：`test_the_server_never_asks_nm_for_a_secret` 原先按字面量禁掉整个
+`wireless-security.psk`，于是**一个合法的写入**撞红了它。现在禁的是**读**的四种形状（`--show-secrets`、
+`-g` 查 psk、`connection export`、直接读 NM 的 keyfile 目录），并把「密码只在 join 里写一次」做成断言。
+
+测试 2327 → **2336**（`test_net_wifi.ConnectTests` 4 → 13：不碰扫描、先删后建、hidden/band/autoconnect/retries
+四个字段、密码只出现一次、开放网络不写安全、`add`/`modify` 失败不下到设备、`up` 有界、失败带原因、默认接口；
+`test_box_ops_wifi_switch` 的 17 处桩键由 `device wifi connect` 改为 `connection up NewNet`，语义不变）。
+**真机验证**（W103D，eMMC 固化后）：同形态 profile 冷启动 5 秒自连可见 AP；客户 AP（扫不到）的 `con up`
+报错落在「SSID 找不到」而不是「属性无效」——即 profile 合法、只缺那个 AP。
+
+**还有下半段（同日第二次现场）**：面板能把「扫不到的 AP」存下来了，却**立刻把它禁用**——
+`box_ops._roll_back()` 在切换失败时无条件写 `connection.autoconnect no`（旧 Hotspot 的教训：失败的网络
+不该每次开机重试）。于是操作员看到的是「已保存 HG888（不自动连接）」：到了客户家里它永远不会连。
+现在按**失败类别**分开：「不在范围内」（超时 / 未发现 SSID）→ 保留 `autoconnect=yes`，并把提示改成
+「已保存，这个网络出现在范围内时自动连接」；「凭据被拒」（`Secrets were required`）→ 仍然禁用，因为重试
+一万次也不会成功。判断只有一处出处：`net_wifi.access_point_absent()`。面板也不再把这个结果染成红色：`/api/box/wifi/status` 多一个布尔 `saved`，页面据此用绿色显示「已保存…自动连接」，而不是一条失败红。测试 +7，2327 → **2343**。
+
+### 进不去之后还能救回来：面板改系统口令 + 预置救急 Wi-Fi
+
+两件都是"客户把盒子弄到一个进不去的状态"之后的退路。
+
+**系统口令可以在面板里改**（`/settings` →「系统账号口令」）：root 与 `mrrc` 两条 SSH/HDMI 口令，
+走 root helper 的新动词 `set-password`（允许表里只有这两个账号，自由用户名会让这个套接字变成"变成任何人"）。
+口令**只走 `chpasswd` 的 stdin**——不进 argv（`/proc/<pid>/cmdline` 全世界可读）、不进日志、不进状态字典。
+真机验证：面板改完立刻用新口令 SSH 登录成功，再改回去；短口令被 400 拦在前面；
+`journalctl -u mrrc-box-helper` 里只有 `set-password ok for 'root'`，没有口令本身。
+
+**预置一条救急 Wi-Fi**（`preflash.sh`，发货通道）：SSID `rescue` / 口令 `abcd1234`
+（`MRRC_PREFLASH_RESCUE_SSID` / `MRRC_PREFLASH_RESCUE_PSK` 可按批覆盖），
+`autoconnect=true`、`priority=-10`、`retries=0`、`hidden=true`、`band=bg`。
+**方向是盒子当客户端**——这块 MT7663S 做不了 AP（2026-10-11 真机：软件能开、信标发不出去，
+手机与 Mac 都扫不到，`tx_packets` 60 秒 +2），所以救急只能是"客户用手机开一个叫 `rescue` 的热点，
+盒子自己连上去"。优先级 -10 保证客户家里的网在的时候它绝不抢。
+
+`--wifi-only` 是给单测**真跑**用的入口（配 `MRRC_PREFLASH_WIFI_DIR` 指到临时目录）：keyfile 内容、
+0600 权限、口令长度与换行的拒绝，都是真跑一次脚本验出来的，不是在源码上 grep。
+
+## [v1.28.1] — 2026-10-17 — Claude Hub 云证书不再被孤儿化；FT8 的 DSP worker 不再自己杀掉自己
+
+两个都是**已经落地但从未到达用户**的修复：云证书那一笔在 10-15 就写完并验证，却一直躺在
+未合并的分支上；FT8 那一笔是上一包发完当天才定位到的。
+
+### Claude Hub：实例证书不会再有第二把（`ssl_bootstrap.sign_for()` 变幂等）
+
+登记流程原先**每次重签一把一次性密钥对**，而 `connect()` 只登记刚签的那一把。只要
+第二次签署之后登记没成功（重试、双击「连接」、网络抖动），hub 钉住的与服务的就是两份
+不同的证书——而且**重启治不好**，进程只会继续服务盘上那份更新的。现场
+`https://bg7kxr.mrrc.vlsc.net/` 整夜 502 就是这个形态，nginx 报
+`upstream SSL certificate verify error: (18:self-signed certificate)`。
+
+现在同名且证书可用（CN/SAN 匹配、距到期 > 30 天、私钥与证书配对、文件可解析）就**复用且不重写文件**：
+「签了但登记没成功」变成无害，之后每一次登记发的都是同一份字节。轮换成了显式动作（删掉证书
+文件）。**已经坏掉的实例点一次「连接」即可自愈**——它会重新登记盘上那把，正好等于 hub 将钉住的。
+
+### FT8：DSP worker 不再被 Fortran 的 `stop` 当场杀掉
+
+FT8 深路径（WSJT-X Improved）每个时隙都以 `worker_exit: worker process exited with status None`
+收场，快路径的结果保住了、深路径一次也没落地。根因是原生代码里有三处 Fortran `stop` 会直接
+终止**宿主进程**，而 worker 是服务器的子进程：
+
+- `wsjt_improved.f90` 的 FFTW 线程初始化 `error stop` → 改为返回 `WSJT_E_INTERNAL`，**绝不 abort**；
+- 另两处（`four2avar.f90`、`packjt.f90`）仍在，但现在**能看见**了：
+
+DSP worker 自己的 stdout/stderr 现在落到有界的 `logs/ft8-worker.log`（此前 launcher 的启动 tee
+在服务器答 HTTP 后就不再写盘，Fortran 的死亡信息与未捕获 traceback 一律被丢弃，诊断包里只剩
+一句 `status None`）；诊断包新增收集这个文件（含上一代 `.1`）。`worker_exit` 的日志同时带上
+**第几代 + 重启次数**，崩溃循环不再看起来像一次偶发。
+
+### 静态资源：不再每次重新加载（实例 `Cache-Control` + 条件请求；hub 边缘 gzip + 缓存）
+
+实例此前只发 `ETag`/`Last-Modified`、**不实现条件 GET**：带 `If-None-Match` 仍返回 200 与**完整
+534 KB** 的 `modules/opus_wasm.js`，所以"重新加载"等于"把 534 KB 重新推过一遍隧道"；而 hub 边缘
+只压 `text/html`（nginx 默认），首屏 13 个引用合计 816 KB 原样过隧道。现在：
+
+- 文档类（HTML/JSON/`sw.js`）`Cache-Control: no-cache` —— 部署后新版必须立刻可见；
+- 其余静态件 `public, max-age=3600` —— `?v=` 是手工 bump 的，1 小时是漏 bump 的最长窗口；
+  **刻意不写 `immutable`**，那会把这个代价放大成一年；
+- `If-None-Match`（含 `W/` 弱校验）与 `If-Modified-Since` 命中回 **304**，不再重传文件；
+- 有扩展名但文件不存在 → **404**（`/favicon.png` 此前拿到 40 KB 的 `index.html`，浏览器把它当图标
+  收下），无扩展名的 SPA 路由仍回落 `index.html`。
+
+hub 边缘（`mrrc_hub` V0.37）按同一套值加了 gzip 与 1 小时边缘缓存：只缓存 200（未登录的重定向
+一旦带上 `max-age`，已登录用户会在一小时内反复被打回登录页），硬刷新带 `Cache-Control: no-cache`
+时穿透回源。实测 `opus_wasm.js` 534,520 → 170,402 B（gzip），第二次起由边缘 304 作答。
+
+设计：`docs/superpowers/specs/2026-10-17-static-asset-delivery-design.md`。
+套件 2280 → **2296**（新模块 `tests/test_static_cache_headers.py`）。
+
+### Installers
+
+- 版本号、`version.txt`、下载页与指南全部对齐 v1.28.1。
+
+## [v1.28.0] — 2026-10-16 — 电台电源回到菜单；出站 HTTPS 只信随包的根；FT8 的深路径第一次真正跑起来
+
+四条各自已经落地、又各自值得单独写下来的工作合成这一次发布：**电台电源**回到 ☰ 菜单
+（「重开」与「关机」是两种不可混淆的意图，唤醒改成有界可取消的持续尝试，真机 7 场景验收）；
+**出站 HTTPS** 不再把信任判定外包给本机证书库；**FT8 级联**的决策截止算术错误修掉 ——
+在那之前深路径在生产里一次也没跑过；以及**支持流水线**停摆六天的两个静默失效。
+
+### 电台电源回到界面：菜单里的「重开电台…」与「关机…」
+
+顶栏 **⏻** 依旧只管 Web 连接；电台电源放在 ☰ 菜单里，而且**分成两种意图**——
+`重启电台（关闭后自动尝试唤醒）…` 关机后每 30 秒再试一次（最多 15 分钟、随时可在顶栏 `PWR` 上取消）；
+`关机（保持关闭）…` 先取消救援，然后只关机、**绝不**自己上电（确认框写明远程将不可用、需到现场开机）。
+
+这条路径 2026-07 被撤回过一次（`PS1;` 唤醒不可靠、`PS0;` 落启动窗口会把 FT-710 的 CAT MCU 卡死），
+所以守卫一条不少：发射中（**含 FT8 正在发射**——原分支只查 `radio.is_transmitting`，是本次补掉的真空档）拒绝、
+`PS1` 后 15 秒内拒绝 `PS0`（带剩余秒数）、`PS0` 双发、端口未连时一轮都不写。
+唤醒改成有界可取消的持续尝试（每轮复用原有的 `PS1`≤3 + `FA;`/CI-V 回读校验），15 分钟没醒就明说
+「需要到现场按面板开机」。协议向后兼容：`power` 的 `true|false` 语义未变，新增 `"restart"` 与 `"cancelRescue"`。
+
+**真机验收（2026-10-16，W103D 盒子 + FT-710）**：
+
+| # | 场景 | 实测（2026-10-16，真机：W103D 盒子 + FT-710，干净室实例 + `/dev/serial/by-id/…`） | 结论 |
+| --- | --- | --- | --- |
+| V1 | 关机 | `power_on=false`，电台熄灭 | ✅ |
+| **V2** | **重开** | **第 1 轮醒来，耗时 4–8 秒**（日志 `Power rescue woke the radio on round 1 after 5 s`）；三次独立运行全部第 1 轮 | ✅ |
+| V3 | 救援中取消 | `cancelled`，之后未再唤醒、未上电 | ✅ |
+| V4 | 救援中点「关机」 | 被拒：`电台正在启动，请 15 秒后再关机`（正是防 CAT MCU 卡死的那条守卫） | ✅ |
+| V4b | 窗口过后关机 | 能关掉（`power_on=false`） | ✅ |
+| V5 | TX / FT8 发射中 | 未测（没抓到发射窗口） | — |
+| V6 | 拔电后重开 | 未测（没有拔电；但运行期间电台 USB 真的重新枚举过一次，服务端按设计等端口回来才发 `PS1`） | — |
+| V7 | listen 角色 | `power` 的四个取值全部被角色门拒绝（日志 `Listen-only client refused set power` ×4） | ✅ |
+| 附加 | 单次开机（`true`） | `Power-on verified (PS1 attempt 1)` —— `FA;` 回读路径在真机上通 | ✅ |
+
+**结论：2026-07 那条「`PS1` 唤醒不可靠（3 次/36 秒全失败）」在真机上不复现** —— 第 1 轮、4–8 秒就醒，三次运行皆然。最可能的解释正是设计时那条待复核的怀疑：旧脚本拿一个过期的 `/dev/ttyUSB*` 路径去发 `PS1`，而电台关机后 USB 会重新枚举、节点名会变；救援循环改成「等端口回来再写」，所以第一次写就落在活着的端口上。逃生舱**未触发**，两项都发布。
+
+**真机跑出来的两个真缺陷（已修 + 测试）**：① 救援路径唤醒成功后没有更新状态 —— 日志说醒了，界面还是「关」；② `_power_on_radio` 回读确认后没有跳过一次 `power_on` 轮询，紧跟其后的 `PS;` 会把已确认的开机读回成关（单次开机那条路径本来就跳过，救援路径漏了）。
+
+**顺带一段现场事实（与本功能无关，但设备侧值得记住）**：测试期间电台 USB 重新枚举了一次，CP2105 从 `ttyUSB0/1` 变成 `ttyUSB1/2` —— 固定写 `MRRC_SERIAL_PORT=/dev/ttyUSB0` 的生产配置当场失效（CAT 永久不通，直到改配置或重启）。已把该盒子的串口改成 by-id 稳定路径（`/dev/serial/by-id/usb-Silicon_Labs_CP2105_…-if00-port0`），并确认云入口恢复 401。
+
+### 出站 HTTPS 只信随包的根证书：一个持续了一个夏天的缺陷的另一张脸
+
+接入云端在一台 Windows 上报 `certificate verify failed: certificate has expired`，而同一台机器的浏览器打开同一个门户完全正常。
+真相不在门户、也不在网络：**这台机器的证书库里有一份与被服务链条同名同密钥、却已经过期的副本**（Windows 会缓存见过的中间证书，
+Let's Encrypt 的中间证书换代重签，缓存那份到期后正是这个形态）。OpenSSL 把库里那张放进链里判它过期，**不会**回退到服务器送来的有效副本；
+浏览器用自己那套根，所以照常能开。
+
+应用侧的错误是**把信任判定外包给了机器**：`net_tls` 只在本机库**为空**时才装随包 CA —— 与 2026-10-04 那次（macOS 库为空、
+所有外发 HTTPS 全挂）是同一个缺陷的两张脸。现在改成**只信我们自己的根**（`MRRC_CA_BUNDLE` → 随包 `vendor/ca/cacert.pem`），
+不再读本机库、也不读 `SSL_CERT_FILE/DIR`；只有在没有可用 bundle 时才回退平台库并告警。部署在 TLS 解密环境里的运维用
+`MRRC_CA_BUNDLE` 指自己的 bundle。
+
+**证据**：`tests/test_tls_trust_store.py` 用合成 PKI + **真握手**把这个场景离线复刻 —— 受污染的库那一侧必须真的以 expired 失败
+（反向对照），我们构造的上下文必须握手成功；另加一条策略断言（结果里的根数 = 我们 bundle 的条数）。
+未升级的机器继续用 `MRRC-CertDoctor.zip`（同日的免安装体检/修复工具）自救。
+
+### FT8 级联的深路径此前从未运行过：决策截止的算术错误
+
+**修一个让功能整体空转的算术错误**：级联解码器按策略判据升级到深路径的那条路，
+在生产里**一次也没走通过** —— 决策截止 `DEFAULT_DECISION_CUTOFF_SECONDS` 是照着
+**单条**解码路径量的 2.5 s，而级联需要它覆盖「快路径结果落地延迟 + 最深那条路径的
+耗时」。预算守卫实际拿到的余额是 2.5 − 0.48 − 0.05 = **1.97 s**，低于深路径下界
+**2.3 s** ⇒ 每一次升级都被拒绝。现场一个约 2.5 小时的窗口里累计 **263 次 `deadline_risk`、
+0 次升级**，盒子一直只跑快路径；而升级率当时没有任何出口，界面上完全看不出来。
+
+- **截止 2.5 → 4.0 s**，并把守卫减掉的那一项（快路径结果落地 **+0.48 s**）从注释里的
+  散文提成具名常量 `FAST_PATH_FINISH_DELAY_SECONDS`。新增守卫测试断言
+  `截止 − 快路径落地 − 安全余量 ≥ 深路径实测下界`，并做反向验证：把截止改回 2.5
+  必须让守卫变红（不是装饰性断言）。
+- **顺带修掉一处同源的不一致**：`LatencyHistogram` 自称桶对齐决策截止，但最后一个
+  边界停在 2.5 —— 截止抬到 4.0 之后，2.5~4.0 s 的解码全掉进溢出桶、彼此不可分辨
+  （一个 2.6 s 与一个 3.9 s 的读数完全一样，而它们离截止的远近截然不同）。边界只在
+  **尾部**增长到 4.0（0.5…2.5 不动，历史分桶语义不变），并用「常量对常量」的测试
+  把桶边界与截止钉在一起，下次改截止不会再漏。
+- **观测**：新增只读 `GET /api/ft8/engine/stats`（与其它 `/api/ft8` 同一道会话门，
+  只读所以不占 lease），FT8 页面状态栏每 30 s 轮询显示**升级率**与计数
+  （时隙/跳过/快路径/升级/超时/错误）。升级率是判断这次修复有没有生效的**唯一**读数：
+  修之前恒为 0，修之后必须非 0。用浮点而不是百分比整数 —— 0.4% 的升级率显示成 0
+  就白测了。`runtime.cascade_stats` 同时增 `escalations`/`fast_decodes`。
+- **文档同步**：截止的 2.5 逐字写在 `SDD/09`、`SDD/13`、级联 spec 与由它生成的网站上，
+  四处全部改为 4.0 并注明理由；`SDD/09:104` 与版本历史里同名但无关的 2.5
+  （ATR1000 的 meter wait）刻意不动。
+- **测试**：`tests/ft8` 754 → **770** 项（767 passed / 2 skipped / 1 xfailed）。
+
+**本次未包含**：Phase B（把 `ft8_lib` 的快路径内核按 ROI 顺序增量移植：参数 → OSD →
+多趟+减除 → 精修）。它的优先级由 Phase A 的现场基线决定，计划另开。
+
+### 自动分诊停摆六天：轮询被一个参数短路，发布失败还被记成「已发布」
+
+答复页从 10-11 起不再更新，用户点 `#编号` 直达只看到空白。两个静默失效叠在一起，各自都能让这条链停摆。
+
+**轮询从未执行。** cron 每 10 分钟都在跑，但命令行里那个裸 `--implement` 在 argparse 里取 `const="ALL"`——真值。
+`main()` 的分支顺序把它排在 `--once` 前面，于是每轮都在「实施看板」分支直接 `return`，接收端一次都没被轮询。
+`dist/support_autopilot/run.log` 从 10-10 21:20 到 10-16 21:10 共 1728 行，**没有一行**「没有新包」或「处理中」。
+这六天里的五份上报（10-10 22:04、10-11、10-13、10-16 两份）全部原地堆积；再往前的 10-01、10-02、10-04、10-07
+四天五份也没进过 state —— 这条链在更早的时候就已经不稳。
+
+**发布失败被记成成功。** 修好轮询后的第一轮 cron 立刻撞上第二张脸：`cron_line()` 的 PATH 里没有 `/usr/bin`，
+而 `git`／`rsync`／`ssh` 都住在那里（现场报 `FileNotFoundError: 'git'`）。更糟的是 `publish()` 先写 state 再发货——
+卡片没上线，state 已是 `published=True`，而 `run_once` 只按「编号在不在 state 里」取新包，这条于是永远不会重试。
+第一轮就吃掉一条：`20261001-192738-30c2` 有结论、有草稿、本地页面也写了，线上什么也没有。
+
+**修法**：`main()` 里 `--once` 先于 `--implement` 判定（原地留注释说明为什么不能换回来）；cron 命令行删掉多余的
+`--implement`；`cron_line()` 的 PATH 补回 `/usr/bin:/bin:/usr/sbin:/sbin`；`publish()` 改为发货不成功就撤回 state
+记录、下一轮重试；`git_commit()` 连 `OSError`（二进制根本不在）一起当失败。
+
+**守卫**：`tests/test_support_autopilot.py` 新增四条 —— cron 命令必须仍调用 `run_once`、cron 行不许出现裸
+`--implement`、PATH 必须含系统目录、发货失败不许写「已发布」。事故当场撤回被误标的 `20261001-192738-30c2`，
+其余积压交给修好的 cron 逐轮消化。
+
+### 按发射之后进程消失、电台永远停在发射 —— PortAudio 重初始化不得在 RX 流仍开着时 terminate
+
+现场（诊断包 `20261016-230940-40c1`，Windows 11 + FT-710）：**手机上按发射，电台一直发射不再停下来，同时服务端进程消失**。
+两件事互为因果 —— 进程死了，而**所有放键路径都在进程里**：没有谁能再去写那个 `TX1;`。
+
+根因是音频侧的进程级崩溃：TX→RX 转换要重建采集流（全双工 codec 恢复），而重建时的 PortAudio
+`terminate`/`initialize` 与**仍在读的 RX 流**撞在一起 ⇒ 原生访问违例，Python 层没有异常可捕获，
+进程直接消失。修法是把重初始化的时机收进一条不变量：**RX 流仍在被读取时不得 terminate PortAudio**
+（先停读、再重初始化、再重开），并把这条不变量钉进测试（`tests/test_audio.py` +95 行，
+另加 `tests/test_server_setup.py` 的接线守卫）。详见 SDD V2.88。
+
+**发版当天落进来的修复，因此两个桌面产物重建过**：盒子镜像在它之后暂存，而 macOS 与 Windows 的
+第一次构建在它之前 —— 四份产物最终出自同一修订（`124fb63`），并逐文件核对过镜像内的
+`audio_handler.py` / `server.py` 与工作区一致。
+
+### 打包：发版当天在产物里抓到并修掉的三个缺陷
+
+三条都是**产物**里抓出来的，不是源码评审能发现的 —— 这正是「洁净室真跑」和「构建门禁」存在的理由。
+
+- **干净安装里的 DXCC 库一直是空的。** 冻结包第一次真跑就在日志里留下 `cty.dat unreadable` 的回溯：
+  `get_cty_database()` 走 `app_root()`（源码树是仓库根，冻结后是 `_MEIPASS`），而 PyInstaller 的
+  datas 只装了 FT8 的**原生库**，没有 `ft8/data` —— 打包版的数据库因此解析到一个不存在的位置，
+  loader 记一条带回溯的 ERROR 后降级为空库：**国家名与「新 DXCC」高亮静默失效**。挂载 v1.27.0 的 DMG
+  复核，同样的树、同样的缺失 ⇒ 既存缺口。修法是一行 datas；守卫把 spec 的目的地与
+  `dxcc.py` 里那句 `app_root() / "ft8" / "data" / "cty.dat"` 钉在一起（**反向验证**：删掉那行必须变红）。
+- **镜像差点把并行会话的 venv 一起装进去。** 盒子镜像构建在 `frpc: Cannot write: No space left on device`
+  处死掉，日志里一个字没提空间：暂存树里多了一份 `.venv-ml`（并行会话的 macOS venv，torch 一家 596 MB）
+  —— 排除清单只有 `venv/` 与 `.venv/` 两个**名字**。修法：`.venv*/`（任一兄弟 venv），并加一条**真跑
+  stager** 的守卫（临时源里放三个 `.venv*`，断言一个都没进目标树；反向验证过）。实测暂存树
+  16,352 文件 / 619 MB → **430 文件 / 23 MB**。顺带记一条操作纪律：`build/w103d/w103d.img` 是**上一版叠过的树**，
+  为发布构建前必须删掉，否则是在上一版之上再叠一遍（实测根分区只剩 638 MiB，`apt-get update` 当场以
+  `GPG error … Splitting up … signature failed` 死掉，且不提空间）。
+- **三条只在本机 POSIX 上成立的测试从未在 Windows 上跑过。** VM 门禁 3 红，全是
+  `ModuleNotFoundError: No module named 'fcntl'`（autopilot 的单飞锁）与缺 bash/rsync（stage-tree 的
+  真跑测试）。生产代码是**按设计**只在 POSIX 上跑（autopilot 是维护者在接收端用的工具，注释就写在
+  `import fcntl` 旁），所以修的是测试：按仓库既有惯例加平台 skip（VM 上 33 → 36 个 skip），
+  而不是把锁降级成假锁 —— 那等于放回它修掉的并发覆写。
+
+**产物（四平台，2026-10-16）**：macOS `MRRC-Modern-v1.28.0-arm64.dmg` **85,038,564 bytes** `4c9f2d3c…`；
+Windows `MRRC-Modern-v1.28.0-Windows-x64-Setup.exe` **79,373,225 bytes** `e27021e8…`；
+W103D `MRRC-Modern-1.28.0-w103d.img.gz` **1,205,181,718 bytes** `c90dbcf1…`。
+
 ## [v1.27.0] — 2026-10-13 — FT8 走进四个平台；解码默认走快路径、按需级联
 
 **一台电台，两种用法**：主菜单多了一项「FT8 模式」——点一下，电台切到 FT8 频点与 DATA-U，

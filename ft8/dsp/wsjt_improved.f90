@@ -46,7 +46,8 @@ contains
     integer :: improved_pass
 
     status = WSJT_OK
-    call initialize_algorithm_tables()
+    call initialize_algorithm_tables(status)
+    if (status /= WSJT_OK) return
     call initialize_request_state(config)
 
     select case (config%profile)
@@ -68,12 +69,25 @@ contains
     call run_improved_pass(samples, config, improved_pass, status)
   end subroutine run_improved_profile
 
-  subroutine initialize_algorithm_tables()
+  subroutine initialize_algorithm_tables(status)
+    integer(c_int32_t), intent(inout) :: status
     integer(c_int) :: threads_status
 
     if (tables_ready) return
     threads_status = fftwf_init_threads()
-    if (threads_status == 0_c_int) error stop 'FFTW thread initialization failed'
+    if (threads_status == 0_c_int) then
+      ! Never abort the host process here.  This used to be
+      ! `error stop 'FFTW thread initialization failed'`, which kills the
+      ! whole Worker outright -- and the Worker is the server's child, so the
+      ! radio-side effect is a per-slot crash/respawn loop with every fast-path
+      ! result kept but no deep decode ever landing (field report 2026-10-16:
+      ! one `worker_exit` per FT8 slot, `status None`, nothing else in the log).
+      ! Returning a status instead lets the Worker answer with `dsp_error` and
+      ! stay alive; the line on stderr lands in `ft8-worker.log`.
+      write(0,'(a)') 'wsjt_improved: FFTW thread initialization failed'
+      status = WSJT_E_INTERNAL
+      return
+    end if
     call cwfilter(.true.)
     tables_ready = .true.
   end subroutine initialize_algorithm_tables

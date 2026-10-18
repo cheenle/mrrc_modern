@@ -3,16 +3,18 @@ from __future__ import annotations
 
 import os
 import tempfile
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
 from ft8.engine.cascade import DEFAULT_MIN_PEAK_SNR
+from ft8.engine.latency import LatencyHistogram
 from ft8.engine.repository import Repository
 from ft8.engine.safety import SafetyController
 from ft8.engine.sequencer import Sequencer
 from ft8.web.auth_shim import PlatformAuthAdapter
 from ft8.platform.settings import Ft8SettingsStore
-from ft8.web.ft8_api import AppState, create_app
+from ft8.web.ft8_api import AppState, _engine_stats, _health, create_app
 
 TOKEN = "test-token"
 
@@ -42,7 +44,8 @@ class _Runtime:
         self.policy_pushes.append(settings)
 
 
-def _client(*, role: str = "operator", authenticated: bool = True) -> TestClient:
+def _client(*, role: str = "operator", authenticated: bool = True,
+            runtime=None) -> TestClient:
     tmp = tempfile.mkdtemp(prefix="ft8-api-")
     repository = Repository(os.path.join(tmp, "qso.db"))
     sequencer = Sequencer(my_call="BG1SB", my_grid="ON80DA")
@@ -57,6 +60,7 @@ def _client(*, role: str = "operator", authenticated: bool = True) -> TestClient
         my_call="BG1SB",
         my_grid="ON80DA",
         settings_store=Ft8SettingsStore(os.path.join(tmp, "settings.json")),
+        runtime=runtime,
     )
     client = TestClient(create_app(state))
     if authenticated:
@@ -251,3 +255,207 @@ def test_station_update_pushes_the_policy_to_the_live_runtime():
     assert r.status_code == 200
     assert len(runtime.policy_pushes) == 1
     assert runtime.policy_pushes[0].min_peak_snr == -18
+
+
+def _counters(**overrides):
+    """Stand-in for ``OrchestratorCounters``, seeded from the real dataclass.
+
+    Deriving the field list instead of hand-writing it is the point: a new
+    counter (``ap_decodes``, ``ap_low_quality``) used to break every test here
+    with an AttributeError, because the double silently went stale.  Now the
+    double can't miss a field the real class has.
+    """
+
+    import dataclasses
+
+    from ft8.engine.orchestrator import OrchestratorCounters
+
+    base = {field.name: 0 for field in dataclasses.fields(OrchestratorCounters)}
+    base.update(
+        slots_started=100,
+        slots_skipped=3,
+        decodes=97,
+        fast_decodes=90,
+        escalations=7,
+        deadline_misses=1,
+        decode_errors=0,
+    )
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def test_engine_stats_reports_the_escalation_rate() -> None:
+    """升级率 = escalations / decodes —— 判断截止修好没修好的唯一读数。"""
+
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters()),
+        runtime=None,
+        latency=None,
+    )
+    engine = _engine_stats(state)["engine"]
+    assert engine["escalations"] == 7
+    assert engine["fast_decodes"] == 90
+    assert engine["decodes"] == 97
+    assert engine["slots_started"] == 100
+    assert engine["slots_skipped"] == 3
+    assert engine["deadline_misses"] == 1
+    assert engine["decode_errors"] == 0
+    # 7/97 —— 不做四舍五入到整数，否则一次 0.4% 的升级率会显示成 0。
+    assert round(engine["escalation_rate"], 6) == round(7 / 97, 6)
+
+
+def test_engine_stats_escalation_rate_is_zero_when_nothing_decoded() -> None:
+    """decodes == 0 时不能除零 —— 引擎刚起来就是这个状态。"""
+
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters(decodes=0, fast_decodes=0, escalations=0)),
+        runtime=None,
+        latency=None,
+    )
+    assert _engine_stats(state)["engine"]["escalation_rate"] == 0.0
+
+
+def test_engine_stats_degrades_when_the_engine_is_not_wired() -> None:
+    """引擎未启动 → 合法的空载荷，不是 500（也没有 AttributeError）。"""
+
+    state = SimpleNamespace(orchestrator=None, runtime=None, latency=None)
+    payload = _engine_stats(state)
+    assert payload["engine"] is None
+    assert "decode_latency" not in payload
+
+
+def test_engine_stats_finds_the_orchestrator_through_the_runtime() -> None:
+    """与 `_health` 同一套解析：state.orchestrator 优先，否则走 state.runtime。"""
+
+    state = SimpleNamespace(
+        orchestrator=None,
+        runtime=SimpleNamespace(orchestrator=SimpleNamespace(counters=_counters(escalations=1))),
+        latency=None,
+    )
+    assert _engine_stats(state)["engine"]["escalations"] == 1
+
+
+def test_engine_stats_includes_the_latency_histogram_when_wired() -> None:
+    histogram = LatencyHistogram()
+    histogram.record("fast", 3, 3, 0.15)
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters()),
+        runtime=None,
+        latency=histogram,
+    )
+    assert _engine_stats(state)["decode_latency"]["fast/p3/t3"]["count"] == 1
+
+
+def test_engine_stats_finds_the_histogram_through_the_runtime() -> None:
+    """真实的组装根只传 `runtime=`，从不传 `latency=`。
+
+    `server.py` 建 AppState 时给的是 `runtime=_ft8_runtime`，而这里只从
+    `state.latency` 取直方图 —— 于是解码器一直在填（`runtime.py:194` 把它接进
+    decoder）、两个端点从来不读，NFR-002 的直方图在生产里等于不存在。解析方式
+    与上面 orchestrator 那一处同形：显式接线优先，否则走 runtime。
+    """
+
+    histogram = LatencyHistogram()
+    histogram.record("deep", 3, 3, 2.4)
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters()),
+        runtime=SimpleNamespace(orchestrator=None, latency=histogram),
+        latency=None,
+    )
+    assert _engine_stats(state)["decode_latency"]["deep/p3/t3"]["count"] == 1
+
+
+def test_health_finds_the_histogram_through_the_runtime() -> None:
+    """同一个缺口也在 `_health` 上，用同一个解析补上。"""
+
+    histogram = LatencyHistogram()
+    histogram.record("deep", 3, 3, 2.4)
+    state = SimpleNamespace(
+        safety=SimpleNamespace(health={}),
+        lease=None,
+        auth=SimpleNamespace(session_count=lambda: 0),
+        orchestrator=None,
+        runtime=SimpleNamespace(orchestrator=None, latency=histogram),
+        latency=None,
+    )
+    assert _health(state)["decode_latency"]["deep/p3/t3"]["count"] == 1
+
+
+def test_engine_stats_route_requires_auth() -> None:
+    """新路由与其它 `/api/ft8` 路由同一道门 —— 无 cookie → 401。"""
+
+    assert _client(authenticated=False).get("/api/ft8/engine/stats").status_code == 401
+
+
+def test_engine_stats_route_is_readable() -> None:
+    """路由真的挂上了，且未起引擎时是一个合法的空载荷（不是 500）。"""
+
+    r = _client().get("/api/ft8/engine/stats")
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    assert "engine" in r.json()
+
+
+def test_engine_stats_exposes_the_ap_counters() -> None:
+    """AP 产出要能在状态栏读到，否则打开 MRRC_FT8_AP_A_PRIORI 之后无从判断它有没有起作用。
+
+    计数器只写不读等于没写（设计笔记 §7.1 判据 3 的前提）。
+    """
+
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters(ap_decodes=12, ap_low_quality=3)),
+        runtime=None,
+        latency=None,
+    )
+    engine = _engine_stats(state)["engine"]
+    assert engine["ap_decodes"] == 12
+    assert engine["ap_low_quality"] == 3
+
+
+def test_engine_stats_ap_counters_default_to_zero() -> None:
+    """默认关闭 AP 的机器上，状态栏这两个数必须一直是 0。"""
+
+    state = SimpleNamespace(
+        orchestrator=SimpleNamespace(counters=_counters()),
+        runtime=None,
+        latency=None,
+    )
+    engine = _engine_stats(state)["engine"]
+    assert engine["ap_decodes"] == 0
+    assert engine["ap_low_quality"] == 0
+
+
+class FakeEngine:
+    """Stands in for Ft8Runtime's start/stop pair (the DSP worker's lifetime)."""
+
+    def __init__(self) -> None:
+        self.running = False
+        self.calls: list[str] = []
+
+    async def start(self) -> None:
+        self.running = True
+        self.calls.append("start")
+
+    async def stop(self) -> None:
+        self.running = False
+        self.calls.append("stop")
+
+
+def test_engine_setting_turns_the_worker_off_and_on():
+    """The menu switch reuses the settings path (engine_always_on), which is
+    already persisted and already drives the runtime."""
+    engine = FakeEngine()
+    engine.running = True
+    client = _client(runtime=engine)
+    r = client.put("/api/ft8/station", json={"engine_always_on": False})
+    assert r.status_code == 200, r.text
+    assert engine.calls == ["stop"] and not engine.running
+    r = client.put("/api/ft8/station", json={"engine_always_on": True})
+    assert r.status_code == 200, r.text
+    assert engine.calls == ["stop", "start"] and engine.running
+
+
+def test_engine_state_is_reported_for_the_menu_switch():
+    engine = FakeEngine()
+    client = _client(runtime=engine)
+    assert client.get("/api/ft8/state").json()["engine"]["enabled"] is False

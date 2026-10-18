@@ -174,3 +174,63 @@ def test_constructing_the_runtime_creates_a_fresh_data_dir(tmp_path) -> None:
     )
 
     assert (data_dir / "qso.db").is_file(), "the repository must be usable"
+
+
+def _cloud_runtime(monkeypatch, tmp_path, **env):
+    """This file's own construction shape, plus a controlled cloud environment."""
+
+    monkeypatch.setattr(runtime_mod, "WorkerSupervisor", _FakeSupervisor)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    return runtime_mod.Ft8Runtime(
+        rig=_FakeRig(),
+        tx_player=_FakeTxPlayer(),
+        sequencer_factory=_FakeSequencer,
+        data_dir=tmp_path,
+    )
+
+
+def test_a_configured_hub_reaches_the_live_cascade(monkeypatch, tmp_path) -> None:
+    runtime = _cloud_runtime(
+        monkeypatch, tmp_path,
+        MRRC_FT8_CLOUD_DECODE_URL="https://www.vlsc.net/mrrc-decode",
+        MRRC_FT8_CLOUD_DECODE_TOKEN="tok",
+    )
+
+    async def _run() -> None:
+        await runtime.start()
+        try:
+            assert runtime._cascade._remote is not None
+            assert runtime._cascade._cloud_deadline_s == 2.5
+        finally:
+            await runtime.stop()
+
+    asyncio.run(_run())
+
+
+def test_no_url_means_no_cloud_path(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("MRRC_FT8_CLOUD_DECODE_URL", raising=False)
+    runtime = _cloud_runtime(monkeypatch, tmp_path)
+
+    async def _run() -> None:
+        await runtime.start()
+        try:
+            assert runtime._cascade._remote is None
+        finally:
+            await runtime.stop()
+
+    asyncio.run(_run())
+
+
+def test_the_cascade_stats_carry_the_cloud_counters(monkeypatch, tmp_path) -> None:
+    runtime = _cloud_runtime(monkeypatch, tmp_path)
+
+    async def _run() -> None:
+        await runtime.start()
+        try:
+            stats = runtime.cascade_stats          # a property, not a method
+            assert {"cloud_ok", "cloud_fallback", "cloud_seconds"} <= set(stats)
+        finally:
+            await runtime.stop()
+
+    asyncio.run(_run())

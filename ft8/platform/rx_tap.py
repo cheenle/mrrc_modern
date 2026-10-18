@@ -23,6 +23,17 @@ log = logging.getLogger("mrrc.ft8.rx_tap")
 
 SOXR_QUALITY = "HQ"
 
+#: Wall-clock vs. sample-index divergence that means *lost audio*, not jitter.
+#: The sample-index timeline is the right timebase for a continuous stream, but
+#: it stops advancing whenever the capture does — a USB re-enumeration, the
+#: platform's post-TX ``restart_rx()``, an ALSA stall — while the wall clock does
+#: not.  Left alone the ring then lags the slot grid forever and every slot is
+#: refused (field 2026-10-17: 113 s outage -> drift +118 s -> ``slots_skipped``
+#: 66/67, ``decodes`` 0).  0.5 s is two orders of magnitude above the block /
+#: scheduling noise the chain shows (±20 ms) and far below a 15 s slot, so a
+#: re-anchor costs at most the one slot that straddles the hole.
+RESYNC_AFTER_S = 0.5
+
 
 class RxTap:
     """Device-rate int16 in → 12 kHz int16 out (ring + optional hook)."""
@@ -68,11 +79,26 @@ class RxTap:
             return np.zeros(0, dtype="<i2")
 
         self._consumed += x.size
+        expected = round(block_epoch * self._out_rate)
         if self._next_index is None:
             # The stream's timebase is its FIRST input block: soxr compensates
             # its own filter delay, so emitted sample n sits at
             # base + n / out_rate.  Anchored once as an integer.
-            self._next_index = round(block_epoch * self._out_rate)
+            self._next_index = expected
+        else:
+            # The caller knows when this block arrived; the sample counter only
+            # knows how much audio was delivered.  When the two disagree by more
+            # than jitter, audio went missing and the counter is the wrong
+            # timebase — snap it back onto the block's own epoch.  UtcRing then
+            # records the hole as a gap, so a slot straddling it is skipped
+            # instead of being decoded from spliced audio.
+            lag = expected - self._next_index
+            if abs(lag) > RESYNC_AFTER_S * self._out_rate:
+                log.warning(
+                    "RX tap timeline lost the wall clock by %+.2f s "
+                    "(capture outage or restart); re-anchoring 12 kHz ring",
+                    lag / self._out_rate)
+                self._next_index = expected
         y = self._stream.resample_chunk(x, last=False)
         block = np.clip(y * 32767.0, -32768.0, 32767.0).astype("<i2")
         if not block.size:

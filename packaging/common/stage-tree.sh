@@ -49,14 +49,38 @@ mkdir -p "$DST"
 # developer's own 14.8 MB frpc from the repo root into the image before the real
 # fetch replaced it — harmless in the end, but it is exactly the kind of
 # machine state this list exists to keep out.
+#
+# Five more joined on 2026-10-14 (auth-tokens.json, mrrc_modern.env,
+# recordings.json, ft8/settings.json, /env/), and two of them are the reason the
+# 2026-10-14 `qso.db` rule was not enough on its own. `_runtime_dir()` is the
+# *install directory* in a packaged build, so every file server.py writes at
+# runtime lands in $MRRC_HOME — the same place this script stages into. A
+# developer's working tree therefore holds that developer's live state:
+# auth-tokens.json is a 30-day session credential (staging it logs every
+# operator out and makes the developer's cookies valid on a box that can key a
+# transmitter), and mrrc_modern.env carries MRRC_WEB_PASSWORD — the only door
+# when bound to 0.0.0.0 — and MRRC_CLOUD_TOKEN. That second one reaches past the
+# updater to the *image* builders, so a secret in the build tree ships inside the
+# artifact. All four verified present in a real working tree before the rule
+# landed; the guard that runs the stager rather than reading this text is
+# ExclusionListTests.test_runtime_state_is_never_staged.
+#
+# 2026-10-17: that rule matched the exact name only, and the working tree's copy
+# had been renamed to auth-tokens.json.invalidated-<ts> (what the runtime writes
+# when it retires an unreadable store), so it was baked into the v1.28.1 box
+# image -- caught by step 2 of the artifact verification, not by any guard.
+# The rule is now auth-tokens.json* and the stager test carries that real name.
 rsync -a "$SRC/" "$DST/" \
-	--exclude ".git/" --exclude "venv/" --exclude ".venv/" --exclude "dist/" \
+	--exclude ".git/" --exclude "venv/" --exclude ".venv*/" --exclude "dist/" \
 	--exclude "build/" --exclude "logs/" --exclude "certs/" --exclude "promo/" \
 	--exclude "FT710Mobile/" --exclude "FT710Android/" --exclude "website/" \
 	--exclude "tests/" --exclude ".agents/" --exclude "docs/" --exclude "SDD/" \
 	--exclude "packaging/" --exclude "macos/" --exclude "windows/" \
 	--exclude "__pycache__/" --exclude "*.pyc" --exclude ".DS_Store" \
-	--exclude "atr1000_tuner.json" \
+	--exclude "atr1000_tuner.json" --exclude "qso.db" \
+	--exclude "auth-tokens.json*" --exclude "mrrc_modern.env" \
+	--exclude "recordings.json" --exclude "ft8/settings.json" \
+	--exclude "/env/" \
 	--exclude "/fleet/" \
 	--exclude "/draft/" \
 	--exclude "/.local/" --exclude "/.env" --exclude "/recordings/" \

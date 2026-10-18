@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.27.0 · 稳定版</span>
+<span>v1.28.1 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -50,22 +50,21 @@
 <p class="hero-subtitle">
           十一款 HF/50MHz 机型的浏览器远程控制：八重洲 FT-710 与 SDR
           机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891，Icom IC-7300 /
-          IC-7300MK2，另含 IC-705 / IC-7610 / IC-7760 预览配置。
-          实时 FFT 频谱图 + 瀑布图（FT4222 SPI 或 CI-V）、双向 Opus 48kHz
+          IC-7300MK2，另含 IC-705 / IC-7610 / IC-7760 预览配置。实时 FFT 频谱图 + 瀑布图（FT4222 SPI 或 CI-V）、双向 Opus 48kHz
           音频、服务端 QSO 录音（直接落 MP3）、4+1 路 WebSocket 全功能
-          CAT/CI-V 控制——无需 200 美元的硬件盒子。
+          CAT/CI-V 控制，无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.27.0-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.27.0
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.1-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.28.1
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.27.0
+<i class="fab fa-windows"></i> Windows 安装包 v1.28.1
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Android.apk">
-<i class="fab fa-android"></i> 安卓 APK v1.1.31
+<i class="fab fa-android"></i>安卓 APK v1.1.31
           </a>
 <a class="btn btn-secondary btn-large" href="#features">
-<i class="fas fa-arrow-down"></i> 了解功能
+<i class="fas fa-arrow-down"></i>了解功能
           </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub
@@ -86,70 +85,37 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.27.0 更新内容</strong>
+<strong> v1.28.1 更新内容</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
 <i class="fas fa-pen-nib" style="color: var(--scope-primary)"></i>
-<strong>博客新文</strong>：
-              <a href="w103d-radio-box.html" style="color: var(--scope-primary)">125 元的盒子 —— 把 FT-710 变成随时能用的远程电台</a>
-              —— 一台远程电台服务端到底需要什么、与树莓派/小主机怎么比，以及真机拓出的六个坑。
-              <a href="blog.html" style="font-size: 0.8rem; color: var(--scope-primary)">全部文章 →</a>
+<strong>博客新文</strong>：<a href="w103d-radio-box.html" style="color: var(--scope-primary)">125 元的盒子：把 FT-710 变成随时能用的远程电台</a>。一台远程电台服务端到底需要什么、与树莓派/小主机怎么比，以及真机拓出的六个坑。<a href="blog.html" style="font-size: 0.8rem; color: var(--scope-primary)">全部文章 →</a>
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
-<li>
-<strong>FT8：同一台电台的第二种用法</strong>——
-              主菜单一键切到 FT8 频点与 DATA-U；引擎用电台自己的声卡解码、走 CQ 那条发射队列，
-              因此 FT8 与 SSB 共用同一条 TX 门控，**结构上不可能同时键控**。点「←」回来，
-              SSB 的频率/模式/滤波/功率/AGC/ATT/PREAMP 逐字段恢复。解码默认走 C 快路径，
-              只在真正需要时（通联中、首趟结果可疑偏少、或操作者主动要求）对同一时隙补跑
-              完整 WSJT-X 深路径。
+            <li>
+              <strong>v1.28.1 — hub 再也不会钉住一把实例已经换掉的证书；FT8 解码器不再杀掉自己的 worker</strong> —
+              <code>sign_for()</code> 现在幂等：同名且证书可用就逐字节复用、不重签，于是「签了但登记没成功」不会再让
+              hub 钉住的与实例服务的成为两把（现场入口整夜 502 就是这个形态）；已经坏掉的实例点一次「连接」即自愈。
+              FT8 深路径也不再带走服务器进程的 DSP worker：原生解码器里的 Fortran <code>stop</code> 此前每个时隙都
+              终止子进程，而且是无声的 —— launcher 的启动 tee 在服务器答 HTTP 后就不再写盘。worker 自己的
+              stdout/stderr 现在落到 <code>logs/ft8-worker.log</code>（诊断包收集），FFTW 线程初始化改为返回状态码
+              而不再 abort。
             </li>
             <li>
-<strong>而且每个下载都带着它：盒子、树莓派镜像、macOS 与 Windows 安装包</strong>——
-              原生 DSP 库随产物一起构建（盒子上与树莓派在镜像构建期编译，桌面安装包在打包时编译），
-              运行期依赖（FFTW / gfortran）一起装进包——刷完机或装完包就能直接玩 FT8，
-              不必先自己装编译器。
-            </li>
-            <li>
-<strong>不用上门也能修：按一下，念一串口令</strong>——
-              App 里按需开一个临时协助账号（设置 → 支持），屏幕上显示用户名与一次性口令，念给电话那头的
-              支持者即可；会话走 App 本来就在用的 Cloud Hub 隧道。门户能看到它连上来、也能强制结束；而口令
-              不进日志、不进配置文件、不进诊断包、不进门户请求——只被念一次，不落盘。
-            </li>
-            <li>
-<strong>镜像自己会配网了——在局域网里配，不接显示器、不接串口线</strong>——
-              扫 Wi-Fi 并加入、改主机名、改时区、系统更新、重启、重启服务（设置 → 盒子），首访还有
-              <code>/setup</code> 引导页。也可以在烧盘前于启动分区放一个 <code>mrrc-wifi.txt</code>，
-              首次开机就会自己连上指定的 Wi-Fi。
-            </li>
-            <li>
-<strong>树莓派镜像追上了 W103D 盒子</strong>——两条镜像线现在共用同一份服务层，所以 Pi 镜像拿到了盒子
-              有的那套：11 份电台画像、FTDI aarch64 库、Cloud Hub、<code>mrrc-update</code> /
-              <code>mrrc-radio</code> 助手、登录横幅，以及同样的首启行为。
-            </li>
-<li>
-<strong>上一版（v1.25.5）：快捷行回答「现在在哪」，不再是「按下去会变成什么」</strong>——<code>MODE</code> / <code>BAND</code> / <code>FILTER</code>
-              显示<em>当前</em>模式、波段与滤波带宽；<code>ATT</code> / <code>PRE</code> 显示完整当前档位
-              （<code>OFF / 6dB / 12dB / 18dB</code>、<code>OFF / AMP1 / AMP2</code>），不再是三字符缩写；
-              点击仍然轮转到下一档。同时：频谱带宽成为每连接可协商的档位（设置里选 full / mid / low，
-              payload 151 → 38 → 19 kbps，未声明能力的连接逐字节等于从前）；配置文件的写入收敛到唯一写者
-              <code>env_store.py</code>（文件锁 + 原子替换、保注释保序、不动 mode），新增只读页
-              <code>/manage</code>（热点是否在跑 + 三个安全闸门当前值及其后果）。
+              <strong>上一版（v1.28.0）—— 电台电源回到 ☰ 菜单且两种意图分开；出站 HTTPS 只信随包的根证书而不是本机证书库；FT8 级联的深路径第一次真正跑起来</strong> —
+              外加三个只在产物里现形的缺陷（冻结包缺 <code>cty.dat</code>、兄弟 venv 被装进 ARM 镜像、三条 POSIX-only 测试在 Windows 上从未被收集）。
             </li>
             </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
-              本页每个尺寸与 SHA-256 都由 <code>release_check.py</code> 对照构建产物校验 ——
-              下载卡片过期会直接让构建失败，而不是发布出去。
+              本页每个尺寸与 SHA-256 都由 <code>release_check.py</code>对照构建产物校验：下载卡片过期会直接让构建失败，而不是发布出去。
             </p>
 </div>
 </div>
 </section>
 <p style="margin: 1rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
-<strong>macOS 首次启动：</strong>右键 → <em>打开</em>（应用为自签名）；并在系统询问 <strong>麦克风</strong> 时点
-<strong>「允许」</strong> —— 这项权限承载的正是电台的音频输入，缺了它接收会<strong>静音且不报任何错误</strong>。
-若看到的是「<em>已损坏，无法打开</em>」，说明下载的是 v1.18.1 之前的包（其签名从未成功），请用本版本。
-详见 <a href="../guide.html#macos-安装与初始化">macOS 使用指南</a>。
+<strong>macOS 首次启动：</strong>右键 → <em>打开</em>（应用为自签名）；并在系统询问 <strong>麦克风</strong>时点
+<strong>「允许」</strong>。这项权限承载的正是电台的音频输入，缺了它接收会<strong>静音且不报任何错误</strong>。若看到的是「<em>已损坏，无法打开</em>」，说明下载的是 v1.18.1 之前的包（其签名从未成功），请用本版本。详见 <a href="../guide.html#macos-安装与初始化">macOS 使用指南</a>。
 </p>
 <!-- 截图 -->
 <section class="scope-section" style="background: var(--scope-bg); padding: 2rem 0">
@@ -197,10 +163,8 @@
 <span class="section-label">功能特性</span>
 <h2 class="section-title">完整的多电台远程控制</h2>
 <p class="section-subtitle">
-            真实频谱（FT4222 SPI 或 CI-V）、双向 Opus 音频、服务端 QSO 录音、
-            全功能 CAT/CI-V 控制与多层 PTT 安全——<strong>十一款可插拔机型</strong>：
-            FT-710、IC-7300/IC-7300MK2，IC-705 / IC-7610 / IC-7760 预览配置，
-            以及 Yaesu SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F，全链路零中间件。
+            真实频谱（FT4222 SPI 或 CI-V）、双向 Opus 音频、服务端 QSO 录音、全功能 CAT/CI-V 控制与多层 PTT 安全<strong>十一款可插拔机型</strong>：
+            FT-710、IC-7300/IC-7300MK2，IC-705 / IC-7610 / IC-7760 预览配置，以及 Yaesu SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F，全链路零中间件。
           </p>
 </div>
 <div class="features-grid">
@@ -216,7 +180,7 @@
 <ul>
 <li>FT4222 SPI 直读（libft4222 + libftd2xx）</li>
 <li>CI-V 0x27 频谱复用同一 USB 串口</li>
-<li>发射感知暂停——告别 PTT 后频谱错乱</li>
+<li>发射感知暂停：告别 PTT 后频谱错乱</li>
 </ul>
 </div>
 <div class="feature-card animate">
@@ -229,7 +193,7 @@
 <ul>
 <li>约 30 fps S 表回退保持瀑布不断流</li>
 <li>点击 QSY，带滚动手势拖拽保护</li>
-<li>发射时明确显示"TX 发射中 — 频谱暂停"</li>
+<li>发射时明确显示「TX 发射中 — 频谱暂停」</li>
 </ul>
 </div>
 <div class="feature-card animate">
@@ -243,22 +207,20 @@
               重采样。
             </p>
 <ul>
-<li>64kbps Opus——比裸 PCM 小 12 倍</li>
+<li>64kbps Opus：比裸 PCM 小 12 倍</li>
 <li>零音频看门狗，声卡卡死即时告警</li>
-<li>PTT 优雅释放——完整保留话音尾音</li>
+<li>PTT 优雅释放：完整保留话音尾音</li>
 </ul>
 </div>
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-sliders-h"></i></div>
 <h3>全功能 CAT / CI-V 控制</h3>
 <p>
-              FT-710：Enhanced COM 口 38400 波特直连串口 CAT（频率、模式、
-              滤波、VFO A/B、分频、前置放大、衰减、NR/NB/AN、压缩器、天调、
-              增益）。IC-7300/MK2：USB CI-V 115200 8N1（地址 0x94），按
+              FT-710：Enhanced COM 口 38400 波特直连串口 CAT（频率、模式、滤波、VFO A/B、分频、前置放大、衰减、NR/NB/AN、压缩器、天调、增益）。IC-7300/MK2：USB CI-V 115200 8N1（地址 0x94），按
               Icom 模式/波段/滤波表并由能力驱动的前端自适应界面。
             </p>
 <ul>
-<li>无 Hamlib / wfview / 中间件——串口直连</li>
+<li>无 Hamlib / wfview / 中间件：串口直连</li>
 <li>脏字段追踪，最小化 WebSocket 流量</li>
 <li>滤波带宽设置后读回验证</li>
 </ul>
@@ -293,15 +255,14 @@
 <div class="icon"><i class="fas fa-record-vinyl"></i></div>
 <h3>服务端 QSO 录音</h3>
 <p>
-              浏览器上点 REC，整段通联在<strong>服务端</strong>录制：刷新页面、
-              关标签页、甚至 CAT 断线都不会中断。收发音落在同一条单调
-              16 kHz 时间轴上，边到边编码为 MP3——服务器中途崩溃，磁盘上
+              浏览器上点 REC，整段通联在<strong>服务端</strong>录制：刷新页面、关标签页、甚至 CAT 断线都不会中断。收发音落在同一条单调
+              16 kHz 时间轴上，边到边编码为 MP3；服务器中途崩溃，磁盘上
               也留有可播放的前缀。
             </p>
 <ul>
 <li>「录音」面板：列表、可拖动进度播放、下载、删除</li>
 <li>16 kHz 单声道 MP3 @64 kbps（约 29 MB/小时），不再下发客户端编码器</li>
-<li>不自动删除；<code>MRRC_RECORDINGS_MAX_SESSION_MIN</code> 只停不删</li>
+<li>不自动删除；<code>MRRC_RECORDINGS_MAX_SESSION_MIN</code>只停不删</li>
 </ul>
 </div>
 <div class="feature-card animate">
@@ -309,11 +270,10 @@
 <h3>ATR1000 天调联动</h3>
 <p>
               可选的联网 ATR1000 天线调谐器：学习到的 LC 继电器值随每次频率
-              变化自动应用；服务端调谐辅助自动执行"载波—测量—保留或回滚"
-              全流程。
+              变化自动应用；服务端调谐辅助自动执行「载波—测量—保留或回滚」全流程。
             </p>
 <ul>
-<li>默认关闭——无硬件时零影响</li>
+<li>默认关闭：无硬件时零影响</li>
 <li>学习门限 SWR 1.0–1.8，±5kHz 就近匹配</li>
 </ul>
 </div>
@@ -321,15 +281,12 @@
 <div class="icon"><i class="fas fa-bug"></i></div>
 <h3>遇到问题，拿到答复</h3>
 <p>
-              菜单里的 <strong>🐞 遇到问题</strong> 由服务端生成脱敏诊断包 —— 日志、配置快照、
-              电台/音频状态与自动体检结论 —— 上传到本项目自己的接收端;没有网络时可只保存到本地。
-              结论发布在<a href="answers/">答复页</a>,可按编号或关键词搜索;
-              结论背后的工程回路 —— bug/需求/环境自动分类、排期与无人值守修复 —— 在
+              菜单里的 <strong>🐞 遇到问题</strong>由服务端生成脱敏诊断包（日志、配置快照、电台/音频状态与自动体检结论），上传到本项目自己的接收端；没有网络时可只保存到本地。结论发布在<a href="answers/">答复页</a>,可按编号或关键词搜索；结论背后的工程回路（bug/需求/环境自动分类、排期与无人值守修复）在
               <a href="board/">FDE 看板</a>。
             </p>
 <ul>
 <li>包内绝不含密码、证书私钥、令牌、录音与记忆频道</li>
-<li>打包版现在会保留轮转日志 —— 上报从「描述」变成可诊断</li>
+<li>打包版现在会保留轮转日志：上报从「描述」变成可诊断</li>
 <li>答复前 autopilot 会把证据对到真实代码位置（并查本仓事故史）</li>
 </ul>
 </div>
@@ -338,11 +295,10 @@
 <h3>多层 PTT 安全</h3>
 <p>
               按住发射、松手即停。Fire-and-forget TX0 + 500ms 发射状态轮询 +
-              浏览器看门狗。最后一个客户端——或 TX 音频属主——断开时服务端
-              强制切回接收。
+              浏览器看门狗。最后一个客户端（或 TX 音频属主）断开时，服务端强制切回接收。
             </p>
 <ul>
-<li>7 层独立释放机制——无单点故障</li>
+<li>7 层独立释放机制：无单点故障</li>
 <li>TX 上行属主跟随实际按 PTT 的客户端</li>
 <li>断 RF 前优雅排空 TX 音频</li>
 </ul>
@@ -371,7 +327,7 @@
 <span class="section-label">下载</span>
 <h2 class="section-title">Windows 桌面安装包</h2>
 <p class="section-subtitle">
-            Windows 11/12 x64——内嵌 Python 3.12 运行时，无需手动安装
+            Windows 11/12 x64：内嵌 Python 3.12 运行时，无需手动安装
             Python。开始菜单启动器，用户配置存于 %LOCALAPPDATA%。
           </p>
 </div>
@@ -385,28 +341,27 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.27.0 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.28.1 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            75.6 MB · x64 · 79,263,639 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: c0cb8225…</code>
+            75.7 MB · x64 · 79,386,940 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: cfbeacc7…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            v1.27.0 带来 <strong>FT8 工作模式</strong>：主菜单一键切到 FT8 频点与 DATA-U，
-            引擎用声卡解码、与 SSB 共用同一条 TX 门控（结构上不可能同时键控），点「←」逐字段
-            恢复 SSB 台况。原生 DSP 库与它的运行期依赖一起装进安装包，你机器上不需要编译任何东西。
-            首次运行仍然是零配置：自动生成网页密码并显示在登录页，自动识别电台
-            （FT-710 ASCII CAT / Icom CI-V）与串口。网页「连接设置」依旧可以改电台型号、
-            串口、RX+TX 声卡与口令，保存后自动重启。
+            ☰ 菜单里现在有电台自己的电源开关（「重开」= 关机后按有界、可取消的循环持续唤醒；「关机」= 关掉就不
+            再上电），菜单最下边还会显示你正在跑的版本号。出站 HTTPS（门户、隧道、诊断包上传）只信安装包里随包的根证书，
+            不再采信本机的证书库。原生 DSP 库与它的运行期依赖依旧一起装进安装包，你机器上不需要编译任何东西。首次运行
+            仍然是零配置：自动生成网页密码并显示在登录页，自动识别电台（FT-710 ASCII CAT / Icom CI-V）与串口。网页「连接设置」
+            依旧可以改电台型号、串口、RX+TX 声卡与口令，保存后自动重启。
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.27.0-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.27.0 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.28.1 版本化安装包
             </a>
-<div class="dl-meta">79,263,639 bytes · SHA-256 c0cb8225…</div>
+<div class="dl-meta">79,386,940 bytes · SHA-256 cfbeacc7…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -422,29 +377,26 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.27.0-arm64.dmg — v1.27.0 稳定版 </strong>
+<strong> MRRC-Modern-v1.28.1-arm64.dmg — v1.28.1 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            81.0 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 84,862,308 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: b1387ee3…</code>
+            81.1 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 85,064,796 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: 1c9ba24e…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台
-            （FT-710 ASCII CAT / Icom CI-V 0x19）与串口，并内置 FT4222 真频谱
-            动态库——FT-710 的 FFT 瀑布图开箱即用（v1.25.1 修好了启动器路径，此前采集进程根本
-            找不到这些动态库）。网页"连接设置"对话框可修改
+            首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台（FT-710 ASCII CAT / Icom CI-V 0x19）与串口，并内置 FT4222 真频谱
+            动态库，FT-710 的 FFT 瀑布图开箱即用（v1.25.1 修好了启动器路径，此前采集进程根本
+            找不到这些动态库）。网页「连接设置」对话框可修改
             电台型号、串口、RX+TX 音频设备与密码，支持保存并重启。默认启用
-            HTTPS（自动生成自签名证书），服务端绑定 <code>::</code> 双栈
-            （IPv4+IPv6），局域网设备可访问
+            HTTPS（自动生成自签名证书），服务端绑定 <code>::</code>双栈（IPv4+IPv6），局域网设备可访问
             <code>https://&lt;mac-ip&gt;:8888</code>（浏览器首次会提示证书不受
-            信任，点"高级 → 继续访问"即可）。DMG 为 ad-hoc 签名——首次启动请
-            右键 → 打开。
+            信任，点「高级 → 继续访问」即可）。DMG 为 ad-hoc 签名，首次启动请右键打开。
           </p>
 <p style="margin-top: 0.5rem">
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.27.0-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.1-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -471,15 +423,13 @@
 <strong> MRRC-Modern-rpi64.img.xz — 树莓派</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            492 MB (515,831,640 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
-<code style="font-size: 0.76rem">SHA-256: bb7127c7d343e80433680c0dfbda23b03272bfe1b53488dfcec95c2639e14677</code>
+            531 MB (530,820,848 bytes) · arm64 · Pi 3B+/4/5 · Raspberry Pi OS Lite 64-bit（Bookworm）<br/>
+<code style="font-size: 0.76rem">SHA-256: a00ab22897bf3e3565fcb5b50eff9585b2885c7b831dd2ae594672d62475e5be</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-            用 Raspberry Pi Imager（"使用自定义镜像"）烧卡，上电后浏览器打开
+            用 Raspberry Pi Imager（「使用自定义镜像」）烧卡，上电后浏览器打开
             <code>https://raspberrypi.local:8888</code>。首启零配置：自动生成
-            网页密码（HDMI 控制台 / SSH motd / <code>sudo mrrc-show-password</code>），
-            或烧卡前把 <code>mrrc.env</code> 放到 boot 分区预置自己的密码。
-            电台与串口自动识别；FT-710 真频谱开箱即用（1.26.0 起镜像内置 aarch64 FTDI 库）；
+            网页密码（HDMI 控制台 / SSH motd / <code>sudo mrrc-show-password</code>），或烧卡前把 <code>mrrc.env</code>放到 boot 分区预置自己的密码。电台与串口自动识别；FT-710 真频谱开箱即用（1.26.0 起镜像内置 aarch64 FTDI 库）；
             IC-7300 经 CI-V 开箱即用。
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
@@ -487,7 +437,7 @@
 <i class="fab fa-raspberry-pi"></i> 下载树莓派镜像
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/blob/main/docs/RASPBERRY_PI_GUIDE.md" rel="noopener" target="_blank">
-<i class="fas fa-book"></i> 树莓派安装指南
+<i class="fas fa-book"></i>树莓派安装指南
             </a>
 </div>
 </div>
@@ -508,29 +458,30 @@
           ">
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
           <i class="fas fa-tv" style="color: var(--scope-primary)"></i>
-          <strong> MRRC-Modern-1.27.0-w103d.img.gz — 中兴 W103D 盒子</strong>
+          <strong> MRRC-Modern-1.28.1-w103d.img.gz — 中兴 W103D 盒子</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.18 GB（1,183,256,818 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 3e193b894ad008ac13d03fe2fa41a16d8a545ae1166df80e2102ad86fce67e99</code>
+              1.22 GB（1,221,443,860 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: ee1fba1e5e5057eed7603e636547299ae5cf82bd321d0202e72ad9a8e0cde473</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-              针对这款盒子预装好的服务端镜像。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，
-              不碰原厂安卓的分区与数据），打开 <code>https://&lt;盒子IP&gt;:8888</code> ——
-              与树莓派镜像同样的零配置首启，包括自动生成的 Web 口令
-              （<code>sudo mrrc-show-password</code> 取回）。<code>mrrc-radio</code>
-              在 11 个支持的机型之间切换。验收通过后把系统固化进机身 eMMC ——
-              最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
+              针对这款盒子预装好的服务端镜像，出厂即用、不需要任何初始化：网页口令与系统账号 <code>root</code>／<code>mrrc</code> 已分别是 <code>abcd!1234</code> 与 <code>abcd1234</code>，时区 <code>Asia/Shanghai</code>、区域 <code>zh_CN.UTF-8</code>。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，不碰原厂安卓的分区与数据），打开 <code>https://&lt;盒子IP&gt;:8888</code> 就能登录。<strong>第一件事是把这三个口令改掉</strong>，用户指南里有步骤。<code>mrrc-radio</code> 在 11 个支持的机型之间切换。验收通过后把系统固化进机身 eMMC，最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-          <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-1.27.0-w103d.img.gz">
+          <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-1.28.1-w103d.img.gz">
           <i class="fas fa-download"></i> 下载 W103D 镜像
               </a>
           <a class="btn btn-secondary btn-large" href="w103d.html" rel="noopener" target="_blank">
           <i class="fas fa-book"></i> W103D 完整指南
               </a>
+          <a class="btn btn-secondary btn-large" href="w103d-user.html">
+          <i class="fas fa-box-open"></i> 已刷好的盒子？用户指南
+              </a>
+          <a class="btn btn-secondary btn-large" href="w103d-remote.html">
+          <i class="fas fa-gamepad"></i> 遥控器指南
+              </a>
           <a class="btn btn-secondary btn-large" href="w103d-radio-box.html">
-          <i class="fas fa-pen-nib"></i> 它是怎么来的（博客）
+          <i class="fas fa-pen-nib"></i>它是怎么来的（博客）
               </a>
           </div>
           </div>
@@ -541,8 +492,7 @@
             font-size: 0.85rem;
             margin-top: 1.25rem;
           ">
-          缺少 FTDI DLL 时 FT-710 后端自动回退到 S 表合成频谱——CAT 控制与
-          音频不受影响（IC-7300 后端完全不需要 FTDI）。macOS / Windows：请使用
+          缺少 FTDI DLL 时 FT-710 后端自动回退到 S 表合成频谱，CAT 控制与音频不受影响（IC-7300 后端完全不需要 FTDI）。macOS / Windows：请使用
           上方安装包。树莓派：烧录上方镜像。通用 Linux：从源码运行（见下方
           快速上手）。
         </p>
@@ -555,8 +505,7 @@
 <span class="section-label">快速上手</span>
 <h2 class="section-title">五分钟跑起来</h2>
 <p class="section-subtitle">
-            Windows 与 macOS 用户走安装包路线；Linux / 树莓派从源码运行。
-            殊途同归，都是同一个浏览器界面。
+            Windows 与 macOS 用户走安装包路线；Linux / 树莓派从源码运行。殊途同归，都是同一个浏览器界面。
           </p>
 </div>
 <h3 style="
@@ -571,24 +520,22 @@
 <div class="step">
 <h4>1 · 安装驱动</h4>
 <p>
-              FT-710：为 Enhanced COM 口安装 Silicon Labs CP210x VCP 驱动；
-              需要 FT4222 真频谱时再装 FTDI D2XX。IC-7300：无需额外驱动——
-              单根 USB 线即带串口驱动。
+              FT-710：为 Enhanced COM 口安装 Silicon Labs CP210x VCP 驱动；需要 FT4222 真频谱时再装 FTDI D2XX。IC-7300：无需额外驱动，单根 USB 线即带串口驱动。
             </p>
 <code>设备管理器 → 端口 (COM 和 LPT) → Enhanced COM Port</code>
 </div>
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.27.0，75.6 MB，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.28.1，75.7 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be</code>
+<code>SHA-256 cfbeacc75e899ed1ff04a6a9da5a9d37d3f0200d89b77440215266eddde33938</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
 <p>
-              首次运行自动识别电台与密码。网页"连接设置"对话框可设置电台
+              首次运行自动识别电台与密码。网页「连接设置」对话框可设置电台
               型号、串口、RX+TX 音频设备与密码，支持保存并重启。
             </p>
 <code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>
@@ -599,7 +546,7 @@
 <div class="step">
 <h4>4 · 启动</h4>
 <p>
-              开始菜单 → MRRC Modern——启动器自动拉起服务并打开浏览器。
+              开始菜单 → MRRC Modern：启动器自动拉起服务并打开浏览器。
             </p>
 <code>https://127.0.0.1:8888 → 登录 → 完整控制</code>
 </div>
@@ -617,28 +564,26 @@
 <h4>1 · 安装</h4>
 <p>
               拖动 <code>MRRC-Modern-arm64.dmg</code> → 双击挂载 →
-              将 <strong>MRRC Modern</strong> 拖入"应用程序"。首次启动请右键
+              将 <strong>MRRC Modern</strong>拖入「应用程序」。首次启动请右键
               应用 → 打开 → 打开（一次性绕过 Gatekeeper 的 ad-hoc 签名）。
             </p>
 </div>
 <div class="step">
 <h4>2 · USB 驱动（通常无需安装）</h4>
 <p>
-              macOS 11.3+ 已内置 CP210x 支持——FT-710 串口免驱（macOS 15.3
-              实测）。仅 <strong>macOS 10.11–11.2</strong> 需先装 Silicon Labs
-              CP210x VCP 驱动 v6.0.3：
-              <a href="../downloads/SiLabsUSBDriverDisk.dmg" style="color: var(--scope-primary)">SiLabsUSBDriverDisk.dmg</a>
+              macOS 11.3+ 已内置 CP210x 支持，FT-710 串口免驱（macOS 15.3
+              实测）。仅 <strong>macOS 10.11–11.2</strong>需先装 Silicon Labs
+              CP210x VCP 驱动 v6.0.3：<a href="../downloads/SiLabsUSBDriverDisk.dmg" style="color: var(--scope-primary)">SiLabsUSBDriverDisk.dmg</a>
               （挂载 → 双击安装器 → 系统设置批准内核扩展；Apple Silicon 需先
               把启动安全性降到「允许用户管理内核扩展」）。FT4222 真频谱库已
-              随应用打包——无需另装 D2XX。
+              随应用打包，无需另装 D2XX。
             </p>
 <code>ls /dev/cu.usbserial-*</code>
 </div>
 <div class="step">
 <h4>3 · 启动</h4>
 <p>
-              菜单栏出现 <code>MRRC Modern :8888</code> 图标，浏览器自动打开
-              （走 HTTPS，首次会提示"连接不安全"，点高级 → 继续访问），登录页
+              菜单栏出现 <code>MRRC Modern :8888</code>图标，浏览器自动打开（走 HTTPS，首次会提示「连接不安全」，点高级 → 继续访问），登录页
               显示自动生成的密码。
             </p>
 </div>
@@ -659,11 +604,10 @@
 </div>
 </div>
 <p style="margin-top: 0.5rem; text-align: center">
-          可选驱动——一般不用装（macOS 自带支持）：
-          <a href="https://www.vlsc.net/mrrc_modern/downloads/D2XX1.4.35.dmg">FTDI D2XX</a>
+          可选驱动（一般不用装，macOS 自带支持）：<a href="https://www.vlsc.net/mrrc_modern/downloads/D2XX1.4.35.dmg">FTDI D2XX</a>
           （FT-710 频谱兑底）·
           <a href="https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg">SiLabs CP210x</a>
-          （串口兑底）——前置动作与安装步骤见<a href="../guide.html#macos-安装与初始化">指南 §0.7</a>。
+          （串口兜底）：前置动作与安装步骤见<a href="../guide.html#macos-安装与初始化">指南 §0.7</a>。
         </p>
 <h3 style="
             color: var(--scope-text);
@@ -691,7 +635,7 @@
 </div>
 <div class="step">
 <h4>4 · 打开浏览器</h4>
-<p>网络内任意设备——手机、平板、电脑。对外暴露前务必设置强密码。</p>
+<p>网络内任意设备：手机、平板、电脑。对外暴露前务必设置强密码。</p>
 <code>https://服务器IP:8888 → 登录 → 完整控制</code>
 </div>
 </div>
@@ -711,9 +655,9 @@
 <span class="tech-tag"><i class="fas fa-flask"></i> Yaesu FTDX10 / FTDX101D / FTDX101MP / FTX-1F（实验性）</span>
 <span class="tech-tag"><i class="fas fa-usb"></i> USB 线（A→B 或 C→B）</span>
 <span class="tech-tag"><i class="fab fa-windows"></i> Windows 安装包（内置 Python）</span>
-<span class="tech-tag"><i class="fab fa-python"></i> 或源码运行 Python 3.12+</span>
+<span class="tech-tag"><i class="fab fa-python"></i>或源码运行 Python 3.12+</span>
 <span class="tech-tag"><i class="fas fa-server"></i> Windows / macOS / Linux / 树莓派</span>
-<span class="tech-tag"><i class="fas fa-globe"></i> 现代浏览器</span>
+<span class="tech-tag"><i class="fas fa-globe"></i>现代浏览器</span>
 <span class="tech-tag"><i class="fas fa-microchip"></i> FTDI 库（仅 FT-710 频谱）</span>
 </div>
 <p style="
@@ -734,8 +678,7 @@
 <span class="section-label">架构</span>
 <h2 class="section-title">一个进程，可插拔后端</h2>
 <p class="section-subtitle">
-            4+1 条 WebSocket 连接（可选 ATR1000 天调链路），零外部中间件依赖，
-            完全基于 Python
+            4+1 条 WebSocket 连接（可选 ATR1000 天调链路），零外部中间件依赖，完全基于 Python
             异步框架构建。用 MRRC_RADIO_MODEL 选择电台。
           </p>
 </div>
@@ -759,8 +702,7 @@
 <text fill="#f0a030" font-family="inherit" font-size="15" font-weight="700" text-anchor="middle" x="125" y="44">
               浏览器
             </text>
-<text fill="#8899aa" font-family="inherit" font-size="12" text-anchor="middle" x="125" y="66">
-              手机 / 平板 / 桌面
+<text fill="#8899aa" font-family="inherit" font-size="12" text-anchor="middle" x="125" y="66">手机 / 平板 / 桌面
             </text>
 <text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="125" y="88">
               AudioWorklet · Canvas
@@ -775,8 +717,7 @@
 <text fill="#8899aa" font-family="inherit" font-size="12" text-anchor="middle" x="575" y="66">
               FastAPI + Uvicorn
             </text>
-<text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="575" y="88">
-              单 Python 进程
+<text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="575" y="88">单 Python 进程
             </text>
 <text fill="#5c6370" font-family="inherit" font-size="11" text-anchor="middle" x="575" y="107">
               Windows / macOS / Linux / RPi
@@ -859,7 +800,7 @@
             </div>
 <div class="endpoint">FT4222 SPI · CI-V 0x27</div>
 <div class="dir">ctypes → libft4222 / CI-V 频谱</div>
-<div class="payload">4096 字节数据块, 850 点 FFT 瀑布图</div>
+<div class="payload">4096 字节数据块， 850 点 FFT 瀑布图</div>
 </div>
 <div class="arch-card">
 <div class="label"><i class="fas fa-volume-up"></i> USB 音频</div>
@@ -885,7 +826,7 @@
 <div class="container">
 <div class="section-header">
 <span class="section-label">关键数字</span>
-<h2 class="section-title">频谱、音频、串口——用数字说话</h2>
+<h2 class="section-title">频谱、音频、串口：用数字说话</h2>
 </div>
 <div class="perf-grid">
 <div class="perf-card">
@@ -955,8 +896,7 @@
 <span class="section-label">移动应用</span>
 <h2 class="section-title">原生 iOS 与 Android 客户端</h2>
 <p class="section-subtitle">
-            SwiftUI（iOS 17+）与 Kotlin/Compose（Android）配套应用——与浏览器
-            共用同一套 4+1 通道 WebSocket 协议，为单手移动操作优化。
+            SwiftUI（iOS 17+）与 Kotlin/Compose（Android）配套应用，与浏览器共用同一套 4+1 通道 WebSocket 协议，为单手移动操作优化。
           </p>
 </div>
 <div class="features-grid">
@@ -964,9 +904,7 @@
 <div class="icon"><i class="fas fa-broadcast-tower"></i></div>
 <h3>完整电台控制</h3>
 <p>
-              频率（直接输入 / 步进 / 波段跳转）、VFO A/B、模式、滤波带宽、
-              前置放大/衰减、AGC、NB/NR/ANotch、射频功率、麦克风增益、
-              静噪——全部在 iPhone 上完成。
+              频率（直接输入 / 步进 / 波段跳转）、VFO A/B、模式、滤波带宽、前置放大/衰减、AGC、NB/NR/ANotch、射频功率、麦克风增益、静噪，全部在 iPhone 上完成。
             </p>
 <ul>
 <li>4 路加密 WebSocket 通道（wss）</li>
@@ -990,7 +928,7 @@
 <h3>Opus 语音收发</h3>
 <p>
               RX：Opus 48kHz 解码并从机身扬声器播放。TX：48kHz 麦克风采集、
-              20ms PCM 帧——按住 PTT 即讲话。
+              20ms PCM 帧，按住 PTT 即讲话。
             </p>
 <ul>
 <li>libopus 真机构建（arm64）</li>
@@ -1007,7 +945,7 @@
             </p>
 <ul>
 <li>PTT 状态机从第一版就是一等公民</li>
-<li>纯逻辑（协议 / PTT / 频谱）已过 JVM 测试——真机射频验收待完成</li>
+<li>纯逻辑（协议 / PTT / 频谱）已过 JVM 测试，真机射频验收待完成</li>
 </ul>
 <!-- android-download:start -->
 <p><a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Android.apk">下载 APK v1.1.31（Android 8.0+）</a></p>
@@ -1024,14 +962,11 @@
           ">
 <p style="color: var(--scope-text); margin: 0 0 0.5rem">
 <i class="fas fa-triangle-exclamation" style="color: #e67e22"></i>
-<strong>早期版本——需从源码构建</strong>
+<strong>早期版本：需从源码构建</strong>
 </p>
 <p style="color: var(--scope-text-muted); font-size: 0.9rem; margin: 0">
-            iOS 构建需要实体 iPhone（模拟器不支持——内置 libopus 仅限 arm64
-            真机）、iOS 17+、Xcode 15 + XcodeGen，以及启用 TLS 的服务端。
-            2026-07-20 审计发现的 P0 PTT 安全问题已解决——TX 上行属主跟随
-            实际按键的客户端。Android：纯逻辑（协议、PTT、频谱、记忆频道）
-            已通过 <code>./gradlew test assembleDebug lintDebug</code> 的
+            iOS 构建需要实体 iPhone（模拟器不支持，内置 libopus 仅限 arm64 真机）、iOS 17+、Xcode 15 + XcodeGen，以及启用 TLS 的服务端。
+            2026-07-20 审计发现的 P0 PTT 安全问题已解决：TX 上行属主跟随实际按键的客户端。Android：纯逻辑（协议、PTT、频谱、记忆频道）已通过 <code>./gradlew test assembleDebug lintDebug</code>的
             JVM 测试；真机射频验收待完成。
           </p>
 </div>
@@ -1063,7 +998,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V2.84</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V3.00</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>
@@ -1077,7 +1012,7 @@
 <i class="fas fa-book"></i> 浏览 SDD
           </a>
 <a class="btn btn-secondary btn-large" href="../sdd/index.html">
-<i class="fas fa-list"></i> 全部章节
+<i class="fas fa-list"></i>全部章节
           </a>
 </div>
 <div class="tech-stack" style="margin-top: 1.5rem">
@@ -1089,8 +1024,7 @@
             个用例</span>
 <span class="tech-tag"><i class="fas fa-check-circle" style="color: var(--scope-primary)"></i>
             7 层 PTT 安全</span>
-<span class="tech-tag"><i class="fas fa-check-circle" style="color: var(--scope-primary)"></i>
-            可行性评估</span>
+<span class="tech-tag"><i class="fas fa-check-circle" style="color: var(--scope-primary)"></i>可行性评估</span>
 </div>
 </div>
 </section>
@@ -1119,7 +1053,7 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.27.0</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.28.1</a></li>
 <li><a href="../downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>
@@ -1132,11 +1066,11 @@
 </div>
 </div>
 <div class="footer-bottom">
-<p>© 2026 MRRC Modern 项目。基于 GPLv3 许可证开源。 · FT-710 与 Yaesu 是 <a href="https://www.yaesu.com/">八重洲株式会社</a> 的商标；IC-7300 与 Icom 是 Icom Inc. 的商标。</p>
+<p>© 2026 MRRC Modern 项目。基于 GPLv3 许可证开源。 · FT-710 与 Yaesu 是 <a href="https://www.yaesu.com/">八重洲株式会社</a>的商标；IC-7300 与 Icom 是 Icom Inc. 的商标。</p>
 </div>
 </div>
 </footer><script defer="" src="../js/scope.js?v=3"></script><p style="color: var(--scope-text-muted); font-size: 0.85rem">升级后行为异常、或想从零开始：<a href="../downloads/MRRC-Modern-Cleanup.cmd">下载清理脚本</a>（说明与注意事项见<a href="../guide.html#clean-slate">指南 §6.2</a>），一键卸载并清掉历史残留（会先备份到桌面）。</p>
-<p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔：<a href="zh/muscle-and-mind.html">阳春白雪与下里巴人 —— 论肌肉与思维</a>（48 小时、两个模型、六个版本之后的复盘）</p>
-<p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔与技术：<a href="blog.html">博客</a> —— 电台怎么接上云端，以及上线首日学到了什么。</p>
+<p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔：<a href="zh/muscle-and-mind.html">阳春白雪与下里巴人：论肌肉与思维</a>（48 小时、两个模型、六个版本之后的复盘）</p>
+<p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔与技术：<a href="blog.html">博客</a>，电台怎么接上云端，以及上线首日学到了什么。</p>
 </body>
 </html>

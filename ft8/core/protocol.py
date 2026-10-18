@@ -11,9 +11,17 @@ import json
 import math
 import re
 
+from ft8.core.models import FT8_RX_SAMPLES
+
 
 PROTOCOL_VERSION = 1
 MAX_CONTROL_FRAME = 65_536
+
+# The one payload a remote decode may carry: the exact 12 kHz int16 slot.  A
+# ``decode_remote`` frame has no shared-memory descriptor (a segment cannot
+# cross machines), so the length is the only thing that can bind the frame to
+# the PCM travelling beside it.
+SLOT_PCM_BYTES = FT8_RX_SAMPLES * 2
 
 _MAX_ID = 2**63 - 1
 _MAX_ERROR_DETAIL = 512
@@ -23,6 +31,11 @@ _FRAME_FIELDS = {
     "pong": _BASE_FIELDS,
     "decode": _BASE_FIELDS
     | {"slot_id", "deadline_monotonic", "shm", "config"},
+    # The same decode with the descriptor replaced by the length of the PCM that
+    # rides beside it: a local shm segment cannot cross a machine boundary, so
+    # the transport is the only difference between this frame and ``decode``.
+    "decode_remote": _BASE_FIELDS
+    | {"slot_id", "deadline_monotonic", "config", "pcm_bytes"},
     "decode_ok": _BASE_FIELDS
     | {
         "slot_id",
@@ -30,6 +43,7 @@ _FRAME_FIELDS = {
         "results",
         "overflow",
         "elapsed_seconds",
+        "cpu_seconds",
         "deadline_missed",
     },
     "encode": _BASE_FIELDS | {"message", "frequency", "sample_rate", "shm"},
@@ -194,6 +208,13 @@ def _validate_frame(value: object) -> None:
         _finite_number(value["deadline_monotonic"], "deadline_monotonic", 0.0)
         _validate_shm(value["shm"], "decode")
         _validate_config(value["config"])
+    elif frame_type == "decode_remote":
+        _nonnegative_int64(value["slot_id"], "slot_id")
+        _finite_number(value["deadline_monotonic"], "deadline_monotonic", 0.0)
+        _validate_config(value["config"])
+        pcm_bytes = value["pcm_bytes"]
+        if type(pcm_bytes) is not int or pcm_bytes != SLOT_PCM_BYTES:
+            raise FrameError(f"pcm_bytes must be exactly {SLOT_PCM_BYTES}")
     elif frame_type == "decode_ok":
         _nonnegative_int64(value["slot_id"], "slot_id")
         _decode_path(value["path"], "path")
@@ -206,6 +227,13 @@ def _validate_frame(value: object) -> None:
             _validate_result(result)
         _boolean(value["overflow"], "overflow")
         _finite_number(value["elapsed_seconds"], "elapsed_seconds", 0.0)
+        # Process CPU (all threads) burned by the decode — the wall-clock
+        # sibling ``elapsed_seconds`` cannot show fake parallelism: threads 1→3
+        # on the W103D costs 1.6x the total CPU while wall improves only 1.46x
+        # (docs/ft8-w103d-decode-perf-analysis.md §8.2).  Measured in the
+        # Worker, whose process does nothing but DSP, so the number is
+        # attributable to this decode.
+        _finite_number(value["cpu_seconds"], "cpu_seconds", 0.0)
         _boolean(value["deadline_missed"], "deadline_missed")
     elif frame_type == "encode":
         _bounded_text(value["message"], "message", 37, ascii_only=True)

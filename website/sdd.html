@@ -38,7 +38,7 @@
         </a>
         <ul class="nav-links">
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#updates">V2.84</a></li>
+          <li><a href="#updates">V3.00</a></li>
           <li><a href="#chapters">Chapters</a></li>
           <li><a href="#decisions">AD Index</a></li>
           <li>
@@ -63,7 +63,7 @@
       <div class="hero-content">
         <div class="hero-badge">
           <i class="fas fa-book"></i>
-          <span>SDD V2.84 · 2026-10-13</span>
+          <span>SDD V3.00 · 2026-10-18</span>
         </div>
         <h1 class="hero-title">
           MRRC Modern<br /><span class="gradient"
@@ -113,7 +113,7 @@
             </tr>
             <tr>
               <td>Version</td>
-              <td>V2.84</td>
+              <td>V3.00</td>
             </tr>
             <tr>
               <td>Baseline Date</td>
@@ -143,507 +143,99 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">Latest Updates</span>
-          <h2 class="section-title">What's New Since V2.20</h2>
+          <h2 class="section-title">What's New</h2>
         </div>
         <div class="features-grid">
           <div class="feature-card">
-            <div class="icon"><i class="fas fa-satellite-dish"></i></div>
+            <div class="icon"><i class="fas fa-hard-drive"></i></div>
             <h3>
-              The FT8 Library Now Travels With Every Artifact
-              <small>(V2.84)</small>
+              An Unattended Box Cannot Fill Its Disk: Log Rotation, a Journald
+              Cap, and a Recording That Refuses Instead of Filling
+              <small>(V2.99)</small>
             </h3>
             <p>
-              The FT8 work mode is Python plus one native library, and until
-              v1.27.0 no artifact carried it: only the W103D box had one,
-              hand-compiled during acceptance. Both image lines now build
-              <code>libwsjt_core.so</code> during the image build and rebuild it
-              by source digest on every update; the macOS DMG bundles the dylib
-              with its five FFTW/gfortran dependencies (every load command
-              rewritten to <code>@loader_path</code>, and the build refuses to
-              continue if a <code>/opt/local</code> reference survives); the
-              Windows installer builds <code>wsjt_core.dll</code> with MSYS2
-              mingw-w64 and walks its runtime DLL closure with
-              <code>objdump</code> instead of trusting a hard-coded list.
-              <code>&lt;boost/crc.hpp&gt;</code>'s include closure is vendored, so
-              the 138 MB Boost installation left all four build paths. Two
-              defects that only the packaged apps had — a missing
-              <code>&lt;runtime&gt;/ft8/</code> directory on a fresh install, and
-              a frozen bundle without
-              <code>multiprocessing.freeze_support()</code> — were found by
-              clean-room runs of the frozen binaries, not by the suite.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-network-wired"></i></div>
-            <h3>
-              The Tunnel Sweep Ran On Windows Only — So macOS Never Cleaned Up
-              <small>(V2.73)</small>
-            </h3>
-            <p>
-              v1.25.2 fixed the growing pile of leftover <code>frpc</code>
-              processes by changing <em>how</em> they are enumerated
-              (<code>wmic</code> → <code>Get-CimInstance</code>) — but the sweep
-              opened with <code>if os.name != "nt": return</code>, a guard added
-              to keep a second instance on the same machine untouched. On macOS
-              that returned before doing anything, so nothing was ever swept.
-              Measured on macOS: six starts after one boot left
-              <strong>six orphans</strong> (all reparented to PID 1), and the
-              failure then feeds itself — the one clean child that finally got
-              the proxy name became the orphan that blocked the next start,
-              whose own child retried <code>already exists</code> every 33
-              seconds for the rest of the log (67 of 86 lines). The sweep now
-              enumerates with <code>ps -eo pid=,command=</code> and accepts a
-              process only when the basename of its first command word is
-              <code>frpc</code> — a <code>vim</code> holding that same
-              <code>.toml</code> has the path in its command line too — and
-              terminates with <code>SIGTERM</code> so frpc closes its control
-              connection and the hub releases the name immediately. It never
-              raises: a process may exit between the snapshot and the kill.
-              Shutdown now stops the tunnel as well, because frpc outlives the
-              server that spawned it.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-radio"></i></div>
-            <h3>
-              FT-891 Joins The Yaesu Family — And A Latent Crash It Uncovered
-              <small>(V2.72)</small>
-            </h3>
-            <p>
-              The eleventh registry key and the fifth profile on the shared
-              Yaesu ASCII-CAT core. Its one protocol difference is a
-              <em>write format</em>: filter-width SET is <code>SH01NN</code>,
-              not the family's <code>SH00NN</code> (Hamlib
-              <code>newcat.c:9658</code>, <code>int on = is_ft891</code>), so
-              <code>YaesuModelProfile</code> gained
-              <code>filter_width_prefix</code> and the core reads it — no
-              per-model branch, and the four shipped models still emit
-              byte-identical commands. Filter slots are transcribed from
-              Hamlib's get side (17 for CW/RTTY/PKT, 21 for SSB) and
-              machine-compared against it; AM/FM carry no slots because their
-              width is set through <code>NA</code> alone. Three facts no offline
-              source carries come from a 2026-09-17 field report: 38400 8N1
-              (Hamlib's <code>stop_bits=2</code> is self-marked
-              <em>assumed</em>), <strong>no USB sound card</strong> — so no
-              auto-match hints, 48 kHz for an external interface, and the
-              connection dialog says so — and an S reading 1–1.5 S high
-              (recorded, curve deliberately unchanged). Wiring it up also
-              exposed a crash latent in the whole family:
-              <code>get_preamp</code>/<code>get_attenuator</code> were called by
-              <code>initial_state_sync()</code> and the settings poll tier but
-              never defined, so the first successful connect raised
-              <code>AttributeError</code> — invisible until now because no model
-              in the family has hardware to connect to. Fixed, plus a structural
-              guard that resolves every method a poll item or the sync
-              references. Unverified throughout: TX gated,
-              <code>id_answer</code> empty, 11 <code>TODO(hw-verify)</code>.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-microphone-slash"></i></div>
-            <h3>
-              A Keyed Carrier Is No Longer Sent Without Voice
-              <small>(V2.71)</small>
-            </h3>
-            <p>
-              The TX uplink has a single owner, and a key-up claims it by
-              session token — but the token is a 30-day cookie, so one browser
-              session can hold several mic sockets at once (a reload leaves its
-              predecessor half-open for tens of seconds; two tabs of one login
-              share it outright). The claim took the <em>first</em> match
-              scanned out of a set, so it could land on the dead socket: the
-              radio keyed and every frame of the live page was dropped as
-              non-owner (<code>frames=0 non_owner_drops=236</code>,
-              <code>peak=0%</code> — silence on a keyed carrier) until the stale
-              socket was reaped 58 s later. The claim now takes the
-              <strong>last-connected</strong>
-              socket of that session, and a same-session socket that is actually
-              streaming takes the uplink over on its first frame. A
-              <em>different</em> session still cannot steal it, neither by
-              connecting nor by streaming.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-heartbeat"></i></div>
-            <h3>
-              A Fresh Press Is No Longer Unkeyed By The Safety Gate
-              <small>(V2.70)</small>
-            </h3>
-            <p>
-              Cloud Hub enables the liveness gate that releases a transmitting
-              session when it stops proving it is alive. The heartbeat is sent
-              <em>at key-up</em>, but the server cannot read that beat until the
-              key-up handler returns — and a watchdog tick landing in those
-              20–70 ms saw a session that was both the owner
-              <em>and</em> silent. One field log recorded
-              <strong>seven</strong> releases of the operator's own healthy
-              press. Keying now refreshes the liveness clock, while a session
-              that never sent <code>txhb</code> stays ungated. The fix lives in
-              the frozen <code>server.py</code>, so it ships as an installer —
-              and its first build is why artifact-level checks exist: every gate
-              was green while the package still held the pre-fix bytecode, a
-              trap now closed by purging PyInstaller's workpath cache before a
-              build.
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-network-wired"></i></div>
-            <h3>
-              A Tunnel That Leaked One Process Per Start
-              <small>(V2.69)</small>
-            </h3>
-            <p>
-              The hub logged 7143 <code>proxy already exists</code> lines in a
-              single day, and the cause was on the tenant's own machine: the
-              code that sweeps a leftover <code>frpc</code> before starting a
-              new one used <code>wmic</code>, which Windows 11 no longer ships —
-              and the bare <code>except</code> turned that into a silent no-op.
-              <strong>Six</strong> processes had accumulated over two days, five
-              of them orphans, all claiming one proxy name. It now enumerates
-              with PowerShell's CIM cmdlets, compares config paths the way
-              Windows does (insensitive to case and slash), and
-              <strong>says so when the look-up fails</strong> — because a stale
-              tunnel only ever shows up in the hub's log, not in this app. The
-              launcher also holds a named mutex, so two starts can no longer
-              both find the port free.
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-lock"></i></div>
-            <h3>
-              Two Packaging Defects Only the Build Machine Cannot See
-              <small>(V2.68)</small>
-            </h3>
-            <p>
-              Two reports from one Mac had the same shape: something that exists
-              on the build machine was assumed to exist everywhere. The bundle
-              carried the builder's OpenSSL, whose compiled-in CA path is the
-              builder's own
-              <code>/opt/local/…</code> — so the trust store came up
-              <strong>empty</strong>, and portal enrolment, the diagnostics
-              upload and the update check all failed with
-              <code>CERTIFICATE_VERIFY_FAILED</code>. Outbound HTTPS now goes
-              through <code>net_tls.py</code>, which falls back to a bundle we
-              ship and then to the platform's system bundle, and a build gate
-              empties the CA environment on purpose before requiring a real
-              handshake. The same report showed a spectrum that had
-              <strong>never once been real</strong>: the launcher anchored the
-              relative <code>MRRC_FTDI_LIB_DIR</code> on
-              <code>Contents/MacOS</code> while the signed bundle keeps that
-              tree in <code>Contents/Resources</code>, so the scope worker
-              exited with "FTDI libraries not found" — and the parent logged the
-              reason at DEBUG only.
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-screwdriver-wrench"></i></div>
-            <h3>
-              v1.25.0 Released — It Works After Installing
-              <small>(V2.67)</small>
-            </h3>
-            <p>
-              Three field reports, three root causes. A launcher could
-              <strong>hang forever before it ever started a server</strong>: the
-              first-run serial probe wrote to every candidate port, the radio's
-              real description matched none of the keywords meant to put it
-              first (CP2105 is not "cp210x"), so the port probed first was the
-              machine's Intel AMT port — one that opens and then never accepts a
-              byte, written with pyserial's default of
-              <em>no write timeout</em>. An approved instance stayed on "waiting
-              for approval" because the only poll loop lived in the settings
-              dialog; polling now runs in the server every 30 seconds and
-              reports what it found. And the certificate reload check compared
-              the wrong two things, so an enrolled instance answered 502 while
-              nothing offered to restart it.
-            </p>
-          </div>
-
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-triangle-exclamation"></i></div>
-            <h3>
-              v1.24.6 Released — The Launcher Asks Before It Opens
-              <small>(V2.66)</small>
-            </h3>
-            <p>
-              A field machine that had installed v1.24.5
-              <strong>still showed a black screen</strong>. Its own
-              <code>server.log</code> plus a run of the packaged server proved
-              the app was healthy on plain HTTP (<code>/login</code> → 200)
-              while the browser had been sent to <code>https://</code> — a
-              protocol error rendered as a blank page. The launcher derived the
-              scheme from <em>its own</em> ability to produce a certificate
-              while the server derived TLS from <em>its own</em> ability to load
-              one: two independent decisions, one socket. Both launchers now
-              probe <code>/api/health</code> first (shared
-              <code>launcher_net.py</code>) and open whichever scheme actually
-              answers, announcing any switch instead of degrading silently.
+              <code>logs/server-stdout.log</code> is systemd's
+              <code>StandardOutput=append:</code> target, and neither systemd nor
+              the server rotates an <code>append:</code> target — which made it
+              the one file in an image with no ceiling. Measured: a defect that
+              logged one warning per 20&nbsp;ms audio frame wrote 17&nbsp;MB in
+              five hours on a 6.5&nbsp;GB root. The service layer now ships
+              <code>/etc/logrotate.d/mrrc</code> (5&nbsp;MB trigger, three
+              generations, compressed, <code>copytruncate</code> because systemd
+              holds the descriptor) with its own
+              <code>mrrc-logrotate.timer</code> — it does not trust cron or the
+              distro's timer to be running — and caps journald at 128&nbsp;MB
+              (the default is 10% of the filesystem).
             </p>
             <p>
-              Also fixed: Windows now binds the port
-              <strong>exclusively</strong> — <code>SO_REUSEADDR</code> there
-              lets a second process bind a port that is already listening, so
-              two servers could both report <code>Server ready!</code> and the
-              browser might land on the one holding no radio (the field log
-              showed every line duplicated 1–10&nbsp;ms apart); a bare
-              <code>Server</code> start no longer aims its password file and
-              <code>recordings/</code> at the read-only install directory, which
-              meant
-              <strong>a new password every start that was never saved</strong>
-              — the real cause of "I installed the new package and still cannot
-              log in"; a bare start now reads the user's
-              <code>mrrc_modern.env</code>; log lines are written once instead
-              of twice; and a stdlib-AST gate fails the build when an app module
-              is used as <code>name.attr</code> without ever being imported —
-              the defect class that shipped twice (<code>cloud_hub</code> in
-              v1.24.1, <code>ssl_bootstrap</code> in v1.24.5).
+              Recordings got the non-destructive half of a retention policy:
+              below <code>MRRC_RECORDINGS_MIN_FREE_MB</code> (200&nbsp;MB, about
+              seven hours at the default bitrate) a new recording is
+              <em>refused, with the numbers</em>, and never started. Nothing the
+              operator recorded is deleted to make room.
             </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-plug-circle-bolt"></i></div>
-            <h3>MRRC Rebrand + Env Migration <small>(V2.21–V2.22)</small></h3>
-            <p>
-              <code>FT710_*</code> environment variables renamed to
-              <code>MRRC_*</code> with automatic legacy fallback; launchers,
-              auth cookie, and logging rebranded to MRRC Modern; launcher config
-              template exposes <code>MRRC_RADIO_MODEL</code>.
+            <p class="feature-metric">
+              one bounded file · one bounded journal · refusals, never deletions
             </p>
           </div>
           <div class="feature-card">
             <div class="icon"><i class="fas fa-shield-halved"></i></div>
-            <h3>IC-7300/MK2 Runtime Reliability <small>(V2.24)</small></h3>
-            <p>
-              Backend-aware serial baud defaults (FT-710 38400; IC-7300/MK2
-              115200), CI-V 0x27 demux queue bounded at 44 segments dropping
-              oldest on overflow, and 30 Hz spectrum broadcasting that only
-              emits newly completed real frames.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-file-contract"></i></div>
-            <h3>Official CI-V Conformance <small>(V2.25–V2.26)</small></h3>
-            <p>
-              Scope startup enables display (27 10 01) + waveform output (27 11
-              01); SCROLL-C decoded as lower/upper edges; per-model Transceive
-              items (IC-7300 0071 / MK2 0089); documented 03 liveness polling;
-              official raw-120 ALC full scale. Full-repo audit recorded open
-              issues I8–I11.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-box-archive"></i></div>
-            <h3>v1.12.0 Windows Stable <small>(V2.27)</small></h3>
-            <p>
-              Published after 633/633 tests on macOS and Windows 11, three
-              PyInstaller targets, Inno Setup compilation, and cross-host
-              SHA-256 verification. FT-710 CAT, audio, PTT, and spectrum
-              behavior unchanged.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-tower-cell"></i></div>
             <h3>
-              ICOM SDR Models: IC-705 / IC-7610 / IC-7760 <small>(V2.41)</small>
+              The Hub Can No Longer Pin a Certificate the Instance Has Replaced,
+              and the FT8 Decoder Stops Killing Its Own Worker
+              <small>(V2.98)</small>
             </h3>
             <p>
-              Three more CI-V radios behind a profile-driven core, with an
-              explicit unverified boundary: capability flags, a transmit gate
-              (<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> to opt in) and a
-              read-only <code>19 00</code> model identity check. No unit of any
-              of the three was available, so nothing is presented as verified.
+              <code>sign_for()</code> now signs once per name: a usable pair
+              (CN/SAN match, more than 30 days to expiry, key and certificate
+              paired, parseable) is reused and <em>not</em> rewritten, so
+              "signed but the enrolment failed" can no longer leave the hub
+              pinning one certificate while the instance serves another — the
+              shape of an all-night <code>502</code> on a live entry. Rotating
+              is an explicit act (delete the file), and a broken instance heals
+              by clicking Connect once.
             </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-microphone-lines"></i></div>
-            <h3>Server-Side QSO Recording <small>(V2.42–V2.45)</small></h3>
             <p>
-              16 kHz mono MP3 written incrementally while recording (lameenc),
-              with RX/TX placed on one monotonic timeline; recordings panel with
-              list/seek/download/delete; the browser encoder was retired. A
-              writer-liveness fix ended the silent second recording in the same
-              process.
+              The FT8 deep path used to kill the server's DSP worker on
+              <em>every</em> slot: a Fortran <code>stop</code> in the native
+              decoder terminates its host process, and the launcher's startup
+              tee stops writing to a file once the server answers HTTP — so the
+              reason reached no log at all, only a bare
+              <code>worker_exit</code>. The worker now writes its own
+              <code>logs/ft8-worker.log</code> (the diagnostic bundle collects
+              it), the FFTW thread initialisation returns a status instead of
+              aborting, and <code>worker_exit</code> names the generation and
+              the restart count.
+            </p>
+            <p class="feature-metric">
+              AD-021 · idempotent enrolment · a worker's death is now
+              diagnosable
             </p>
           </div>
           <div class="feature-card">
-            <div class="icon"><i class="fas fa-plug-circle-check"></i></div>
-            <h3>CAT Reconnect Recovery <small>(V2.43)</small></h3>
-            <p>
-              A USB serial re-enumeration no longer replays the 24-query full
-              state sync on reconnect — the poll tiers already cover every field
-              — so a link that used to cost ~62 s of dead CAT recovers in
-              seconds, with per-attempt log discipline and an actionable ENXIO
-              hint.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-box-archive"></i></div>
-            <h3>v1.15.0 Released <small>(V2.44–V2.45)</small></h3>
-            <p>
-              macOS DMG, Windows installer and the rpi64 image published with
-              cross-host SHA-256 verification, including the recording feature
-              above and the reconnect fix.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-box-archive"></i></div>
-            <div class="card">
-              <h3>v1.18.1 Released <small>(V2.54)</small></h3>
-              <p>
-                A patch that makes the macOS download usable at all: every
-                earlier bundle carried a <strong>failed signature</strong> (the
-                step failed silently), so Gatekeeper refused it with "is damaged
-                and can't be opened" — and it declared no audio-input permission
-                key, which macOS answers by opening the capture stream and
-                filling it with zeros, i.e. RX plays silence with no error and a
-                log line that blames the radio. Both are fixed at the packaging
-                layer, and a failed signature now aborts the build.
-              </p>
-            </div>
-            <h3>v1.18.0 Released <small>(V2.54)</small></h3>
-            <p>
-              macOS DMG and Windows installer built from one commit and verified
-              before publication: the frozen macOS server boots with the new
-              support endpoints and finally writes a server log; the VM ran 1261
-              tests and Inno Setup produced the installer.
-              <code>latest.json</code> is live, so 1.17.0 installs now see the
-              update.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-cloud-arrow-down"></i></div>
-            <h3>Update Channel <small>(V2.54)</small></h3>
-            <p>
-              A generated <code>latest.json</code> says whether a newer release
-              exists and carries the installer's size and SHA-256 taken from the
-              artifact itself; <code>GET /api/update/check</code> reports it
-              read-only. Success is defined as a fact only the new version can
-              write (<code>state.json.lastResult</code>) — "installer launched"
-              is explicitly not success. Download/install is slice 2 (AD-022).
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-robot"></i></div>
-            <h3>Autopilot Triage &amp; Answers <small>(V2.52)</small></h3>
-            <p>
-              A maintainer-side autopilot polls the receiver every 10 minutes,
-              has a read-only agent map the log evidence onto real code
-              positions, and publishes the resulting answer card. Drafts by
-              default; “needs more info” never publishes. The public page
-              filters operator identifiers.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-bug"></i></div>
-            <h3>Diagnostics Bundle &amp; Report Loop <small>(V2.51)</small></h3>
-            <p>
-              The menu gains <b>🐞 Report a problem</b>: one press builds a
-              redacted bundle (logs + config + environment/radio/audio snapshot
-              + auto-triage summary) and uploads it to this project's own
-              receiver; without a network it can be saved locally instead. No
-              passwords, keys, tokens, recordings or memory channels are ever
-              included (AD-021).
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-box-archive"></i></div>
+            <div class="icon"><i class="fas fa-bolt"></i></div>
             <h3>
-              v1.17.0 Released — CQ key on all three platforms
-              <small>(V2.50)</small>
+              A Shipped Box Needs No Setup: Fixed Credentials, Wi-Fi and the
+              Public Entry from One Page
+              <small>(V2.92)</small>
             </h3>
             <p>
-              macOS DMG, Windows installer and the rpi64 image built from one
-              commit and each verified before publication: frozen HTTPS smoke on
-              macOS, PYZ walk plus in-package asset check on Windows, debugfs
-              spot-check (incl. <code>static/audio/cq.wav</code>) on the Pi
-              image.
+              The flash-and-ship image (<code>build-image.sh --preflash</code>,
+              off by default) bakes in the three credentials,
+              <code>Asia/Shanghai</code> and <code>zh_CN.UTF-8</code>, so a box
+              goes from power-on to a logged-in browser with nothing in between.
+              Wi-Fi grew a <em>typed</em> SSID field (scan results only prefill
+              it) plus a show/hide password toggle — hidden networks and an
+              empty scan list used to be dead ends — and a new public-entry
+              panel takes a callsign, applies to the portal and reports the
+              entry address. The same pass fixed a real gap:
+              <strong>the first-boot probe had never run on any image</strong>
+              (the wrapper's <code>MRRC_PRESEED=1</code> call short-circuited
+              before it), so a radio plugged in later was never found; the probe
+              now runs and repeats each boot until the config settles.
             </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-bullhorn"></i></div>
-            <h3>One-Touch CQ Key <small>(V2.48–V2.50)</small></h3>
-            <p>
-              The server keys the radio, plays the packaged CQ recording once
-              and unkeys — no microphone, no network timing in the transmitted
-              audio. Mic frames are dropped while the call runs, PTT/TUNE are
-              refused, and the initiator disconnecting cuts the carrier (<code
-                >MRRC_CQ_FILE</code
-              >
-              replaces the recording; AD-020).
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-mobile-screen"></i></div>
-            <h3>
-              v1.21.0 Released — iPhone Wake-Lock Race Fixed
-              <small>(V2.61)</small>
-            </h3>
-            <p>
-              The iOS system mic-permission dialog shown at power-on released
-              the just-acquired screen wake lock, and every automatic re-request
-              (no user gesture) was rejected — the main UI still auto-locked
-              ~30&nbsp;s after power-on. The lock is now re-acquired when the
-              prompt settles and on window
-              <code>focus</code>. The listen page gains an FFT trace above the
-              waterfall, frequency step buttons, WAN-sized audio buffering, and
-              the public proxy backend moved to the DNS name
-              <code>radio.vlsc.net</code> with a 300&nbsp;s resolver (survives
-              home IPv6 changes). macOS DMG and Windows installer published with
-              cross-host SHA-256 verification.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-headphones"></i></div>
-            <h3>
-              v1.20.0 Released — Listen-Only Interface <small>(V2.59)</small>
-            </h3>
-            <p>
-              A second, separate password (<code>MRRC_LISTEN_PASSWORD</code>)
-              opens <code>/listen</code>: frequency and mode tuning, memory
-              recall, S-meter, waterfall and RX audio with browser-side volume.
-              The role is enforced <strong>on the server</strong> — the
-              <code>/WSradio</code> gate passes only frequency/mode sets and
-              memory recall, the TX and tuner channels close with
-              <code>4003</code>, and REST is read-only — so transmit, recording
-              and every device setting are unreachable from the page. The same
-              release fixes the iPhone main-UI auto-lock (Wake Lock from a real
-              user gesture) and activates the iOS audio session at power-on.
-              macOS DMG and Windows installer published with cross-host SHA-256
-              verification.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-tower-broadcast"></i></div>
-            <h3>
-              v1.19.0 Released — ATR-1000 Tunes Itself
-              <small>(V2.57–V2.58)</small>
-            </h3>
-            <p>
-              With the optional networked tuner, a transmission into SWR &gt;
-              2.0 starts one full tune by itself — 30 s cooldown, three tries
-              per frequency, and the tuned relays are stored when the match
-              improves. <strong>It never keys the radio</strong>: it acts only
-              inside a transmission you started (measured power ≥ 5 W), and
-              learning follows measured power (≥ 3 W) so panel and
-              external-software transmissions are learned too. macOS DMG and
-              Windows installer published with cross-host SHA-256 verification.
-            </p>
-          </div>
-          <div class="feature-card">
-            <div class="icon"><i class="fas fa-radio"></i></div>
-            <h3>
-              Yaesu SDR Family: FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891
-              <small>(V2.46)</small>
-            </h3>
-            <p>
-              Profile-driven shared ASCII-CAT core
-              (<code>backends/yaesu/</code>) whose transport is ported from the
-              verified FT-710 path, with per-model tables and provenance. No
-              unit tested: transmit is gated, the Yaesu scope waveform is
-              undocumented (S-meter fallback covers the waterfall), dual receive
-              is deferred. The verified FT-710 backend is deliberately untouched
-              (AD-018/AD-019).
+            <p class="feature-metric">
+              AD-027 · NFR-069 · first-boot probe now actually runs
             </p>
           </div>
         </div>
@@ -752,7 +344,7 @@
       <div class="container">
         <div class="section-header">
           <span class="section-label">Architecture Decisions</span>
-          <h2 class="section-title">AD-001 ... AD-026</h2>
+          <h2 class="section-title">AD-001 ... AD-029</h2>
         </div>
         <div class="tech-stack">
           <span class="tech-tag">AD-001 FastAPI/Uvicorn</span>
@@ -774,12 +366,17 @@
           <span class="tech-tag">AD-017 Server-Side Recording</span>
           <span class="tech-tag">AD-018 Profile-Driven Yaesu Core</span>
           <span class="tech-tag">AD-019 Unverified-Model Policy</span>
+          <span class="tech-tag">AD-020 One-Touch CQ Call</span>
           <span class="tech-tag">AD-021 Diagnostics Bundle</span>
           <span class="tech-tag">AD-022 Update Channel</span>
           <span class="tech-tag">AD-023 Remote-Session Metering</span>
           <span class="tech-tag">AD-024 Session-Token Transport</span>
           <span class="tech-tag">AD-025 Spectrum Bandwidth Tiers</span>
-            <span class="tech-tag">AD-026 Setup Hotspot and the Password-less Window</span>
+          <span class="tech-tag"
+            >AD-026 Setup Hotspot and the Password-less Window</span
+          >
+          <span class="tech-tag">AD-027 Factory-Preset (Ship-Ready) Image</span>
+          <span class="tech-tag">AD-028 Local Control Surface (Bluetooth Remote)</span>
         </div>
       </div>
     </section>

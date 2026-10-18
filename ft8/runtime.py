@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections import deque
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -32,7 +34,7 @@ FT8_SLOT_SECONDS = FT8_PERIOD_SECONDS
 from ft8.core.supervisor import WorkerSupervisor
 from ft8.engine.audio_rx import UtcRing
 from ft8.engine.cascade import CascadePolicy, CascadingDecoder
-from ft8.engine.dsp_decode import SupervisorDecoder
+from ft8.engine.dsp_decode import ApContextProvider, SupervisorDecoder
 from ft8.engine.dsp_encode import SupervisorEncoder
 from ft8.engine.latency import LatencyHistogram
 from ft8.engine.orchestrator import Orchestrator
@@ -41,18 +43,184 @@ from ft8.engine.safety import SafetyController
 from ft8.engine.sequencer import QSOState, Sequencer
 from ft8.engine.tx_driver import TxDriver
 from ft8.engine.waterfall import SpectrumComputer, SpectrumFanout
+from ft8.platform.cloud_decode import cloud_decoder_from_environ
 from ft8.platform.rx_tap import RxTap
+from ft8.platform.slot_dump import SlotDumper
 from ft8.platform.settings import Ft8Settings
 
 log = logging.getLogger("mrrc.ft8.runtime")
 
 DEFAULT_PROFILE = 3
 
+# 每多少个时隙打一行累计计数器（20 × 15 s = 5 分钟）。存在的理由见 `_log_counters`。
+_COUNTERS_EVERY_SLOTS = 20
+
 
 def _qso_progress(state: QSOState) -> int:
-    """AP 上下文只在通联进行中成立：IDLE / DONE 记 0，其余阶段都算进行中。"""
+    """Map the sequencer's phase onto WSJT-X's ``nQSOProgress`` rows 0–5.
 
-    return 0 if state in (QSOState.IDLE, QSOState.DONE) else 2
+    ``ft8bvar.f90`` selects its a-priori masks from four tables indexed by
+    ``(nQSOProgress, extra decoding pass)`` — ``naptypes`` / ``nmycnsaptypes`` /
+    ``ndxnsaptypes`` / ``nhaptypes`` — and the row comments name the Tx stage:
+    ``0`` = Tx6 CQ, ``1`` = Tx1 Grid, ``2`` = Tx2 Report, ``3`` = Tx3 RRreport,
+    ``4`` = Tx4 RRR/RR73, ``5`` = Tx5 73.  ``QSOState``'s own docstring says it
+    "maps to WSJT-X Tx1–Tx5 message kinds", so the correspondence is 1:1 and
+    this function only has to not throw it away.
+
+    It used to return just 0 or 2.  Rows 3 and 4 are the only ones carrying
+    iaptype 6/5/4 (RR73 / 73 / RRR), so collapsing every late phase onto row 2
+    meant the decoder never tried the hypotheses most likely at the *end* of a
+    QSO.  Measured effect so far: none — every row starts ``3,3,3``, and the
+    gains in notes §4.2 came from those first three passes (iaptype 3) plus a8,
+    so the rows only differ in later subpasses.  Worth fixing regardless: it
+    costs nothing and stops discarding state the sequencer already tracks.
+
+    IDLE/DONE → 0 keeps ``should_escalate``'s ``qso_progress > 0`` test
+    (cascade.py:58) exactly as it was: a station with no QSO in progress still
+    does not escalate on AP context.
+    """
+
+    return _QSO_PROGRESS_BY_STATE.get(state, 0)
+
+
+# WSJT-X nQSOProgress rows; see _qso_progress for the source of each number.
+_QSO_PROGRESS_BY_STATE: dict[QSOState, int] = {
+    QSOState.IDLE: 0,       # Tx6 CQ / idle
+    QSOState.CALLING: 0,    # repeating CQ
+    QSOState.REPLYING: 1,   # Tx1: DX MY GRID
+    QSOState.REPORT: 2,     # Tx2: DX MY -nn
+    QSOState.ROGER_REPORT: 3,  # Tx3: DX MY R-nn
+    QSOState.ROGERS: 4,     # Tx4: DX MY RR73
+    QSOState.SIGNOFF: 5,    # Tx5: DX MY 73
+    QSOState.DONE: 0,       # logged and disarmed
+}
+
+
+AP_A_PRIORI_ENV = "MRRC_FT8_AP_A_PRIORI"
+
+
+def _ap_a_priori_enabled(environ) -> bool:
+    """Whether to feed the decoder the QSO a-priori.  Off unless asked for."""
+
+    return (environ.get(AP_A_PRIORI_ENV) or "").strip() not in ("", "0", "false")
+
+
+# Slots per 15 s day (86400 / 15); used for wrap-safe "how many slots ago".
+_SLOTS_PER_DAY = 5_760
+
+#: How many slots a remembered partner frequency stays usable for a8.  Partners
+#: transmit on alternate slots, so 6 slots (~90 s) tolerates one missed decode
+#: plus margin.  The window errs generous on purpose: aiming a8 at an empty
+#: frequency measured **zero inventions in 180 trials** (notes §4.3), while too
+#: tight a window simply forgoes the largest measured gain mechanism
+#: (a8 = 11 of 20 gains, notes §4.4).
+AP_DX_FREQUENCY_FRESH_SLOTS = 6
+
+
+@dataclass
+class DxFrequency:
+    """Where the current partner was last heard, and when.
+
+    a8 activates only within ±10 Hz of ``nfqso`` (= ``DecodeConfig.rx_frequency``),
+    so a stale frequency is worse than none: it sends the list decoder to an
+    empty part of the band to try 128 hypotheses.
+
+    ``sequencer.tx_frequency`` cannot serve as that frequency, however much its
+    docstring suggests otherwise: ``start_cq()`` sets it to *our own* CQ offset
+    (``cq_loop.py`` → ``pick_frequency()``), ``reply_to()`` sets it from the row
+    the operator clicked, and ``on_message(msg, snr_db)`` carries no frequency —
+    so it is frozen at selection time while the partner drifts.  The partner's
+    own decoded frequency is what ``nfqso`` means, and the decode callback
+    already has it (``SlotMessage.result.frequency``).
+    """
+
+    call: str = ""
+    frequency: float = 0.0
+    slot_id: int = -1
+
+    def note(self, slot_id: int, call: str, frequency: float) -> None:
+        """Remember one sighting of ``call`` at ``frequency`` in ``slot_id``."""
+
+        if not call:
+            return
+        self.call = call
+        self.frequency = float(frequency)
+        self.slot_id = int(slot_id)
+
+    def fresh_for(self, call: str, slot_id: int) -> float | None:
+        """The remembered frequency, or ``None`` if stale or another station's.
+
+        The call comparison matters as much as the age: after the operator
+        switches partners, the previous partner's frequency must not be aimed at.
+        """
+
+        if not call or self.call != call or self.slot_id < 0:
+            return None
+        age = (int(slot_id) - self.slot_id) % _SLOTS_PER_DAY
+        return self.frequency if age <= AP_DX_FREQUENCY_FRESH_SLOTS else None
+
+
+def _ap_context_for(
+    sequencer: Sequencer, dx_frequency: DxFrequency | None = None
+) -> ApContextProvider:
+    """The a-priori the decoder was always entitled to but never received.
+
+    ``DecodeConfig.ap`` defaults to ``True``, so AP has been *on* all along —
+    merely starved: ``my_call``/``dx_call``/``dx_grid`` empty and
+    ``rx_frequency`` at its 1500 default, which leaves the native arming
+    condition ``ltry_a8 = ap_enabled .and. len_trim(hiscall)>=3 .and.
+    len_trim(hisgrid4)>=4`` permanently false.
+    ``docs/ft8-dl-speculative-notes.md`` §3–§4 measures what feeding it buys:
+    13/100 extra decodes at the recall cliff, 0 lost, and 0 invented across 316
+    trials including a stale-a-priori arm.
+
+    Two deliberate omissions:
+
+    * ``rx_frequency`` is left at its default.  a8 activates only within ±10 Hz
+      of it, so a wrong value is worse than not arming a8 at all — and a8
+      produced 3 of those 13 gains.  The other 10 came from the symbol-mask AP
+      inside the main loop, which needs only the calls.  Unlocking a8 is a
+      separate step that first has to answer "which frequency is the QSO on".
+    * Nothing is filled unless it is known, so an idle station sends the same
+      frame it sends today.
+    """
+
+    def provider(slot_id: int) -> dict[str, object]:
+        fields: dict[str, object] = {"qso_progress": _qso_progress(sequencer.state)}
+        my_call = (sequencer.my_call or "").strip()
+        if my_call:
+            fields["my_call"] = my_call
+        dx_call = (sequencer.dx_call or "").strip()
+        if dx_call:
+            fields["dx_call"] = dx_call
+            dx_grid = (sequencer.dx_grid or "").strip()
+            if dx_grid:
+                fields["dx_grid"] = dx_grid
+            # P5c: unlock a8, the largest measured gain mechanism (11/20), by
+            # pointing nfqso at where the partner actually was -- but only while
+            # that sighting is fresh and still belongs to this partner.
+            if dx_frequency is not None:
+                frequency = dx_frequency.fresh_for(dx_call, slot_id)
+                if frequency is not None:
+                    fields["rx_frequency"] = int(round(frequency))
+        # tx_frequency (nftx) is deliberately left at its default.  The probe
+        # set it to the signal frequency, which is not what nftx means (it is
+        # *our* transmit offset), so filling it from sequencer.tx_frequency
+        # would be a different, unmeasured configuration.
+        return fields
+
+    return provider
+
+
+def _dump_slot(dumper: SlotDumper | None, slot_id: int, samples: bytes | None) -> None:
+    """Hand one slot to the recall dump, if the operator asked for one.
+
+    Deliberately a free function taking ``None``: the common case (no dump
+    configured) is one branch on a local, not a method call per slot.
+    """
+
+    if dumper is not None and samples is not None:
+        dumper.write(slot_id, samples)
 
 
 def _policy_from_settings(settings: Ft8Settings) -> CascadePolicy:
@@ -111,6 +279,9 @@ class Ft8Runtime:
             rig, tx_player, sequencer=self.sequencer, on_event=on_event
         )
         self.decoder: SupervisorDecoder | None = None
+        # P5c: where the current partner was last heard (see DxFrequency).
+        self._ap_a_priori = False
+        self._dx_frequency: DxFrequency | None = None
         self.encoder: SupervisorEncoder | None = None
         self.tx_driver: TxDriver | None = None
         self.orchestrator: Orchestrator | None = None
@@ -128,6 +299,11 @@ class Ft8Runtime:
         self._worked: Any = None
         self._worked_dirty = True
         self._dumped_slots = 0
+        # Fast answers published while a deep answer was still in flight.  The
+        # slot counter is untouched by design: a slot is decoded once.
+        self.provisional_published = 0
+        # 本进程已交付的时隙数，只用来决定累计计数器那一行的节奏。
+        self._slots_logged = 0
         self._wf_logged = False
         self.waterfall = SpectrumFanout()
         self._supervisor: WorkerSupervisor | None = None
@@ -139,12 +315,33 @@ class Ft8Runtime:
 
     @property
     def cascade_stats(self) -> dict[str, int] | None:
-        """级联解码器的运行期计数；引擎未启动时为 None。"""
+        """级联解码器的运行期计数；引擎未启动时为 None。
+
+        `deadline_risk` 来自级联解码器本身，两个计数器来自编排器 —— 升级率
+        = `escalations / decodes`，是判断阈值松紧、以及判断深路径**有没有在跑**
+        的主指标（2026-10-13 之前现场实测恒为 0：截止 2.5 s 把每一次升级都挡在
+        预算守卫外）。
+
+        `orchestrator` 用 `getattr(..., None)` 取：构造到 `start()` 之间的实例
+        还没有它，此时少两个键而不是抛 AttributeError —— 否则 `/api/ft8/health`
+        在引擎没起来时 500。与 `_cascade` 同一约定。
+        """
 
         cascade = getattr(self, "_cascade", None)
         if cascade is None:
             return None
-        return {"deadline_risk": cascade.deadline_risk}
+        stats = {
+            "deadline_risk": cascade.deadline_risk,
+            "cloud_ok": cascade.cloud_ok,
+            "cloud_fallback": cascade.cloud_fallback,
+            "cloud_seconds": cascade.cloud_seconds,
+        }
+        orchestrator = getattr(self, "orchestrator", None)
+        if orchestrator is not None:
+            counters = orchestrator.counters
+            stats["escalations"] = counters.escalations
+            stats["fast_decodes"] = counters.fast_decodes
+        return stats
 
     def set_cascade_policy(self, settings: Ft8Settings) -> None:
         """把持久设置里的升级策略推给**正在跑**的级联解码器。
@@ -172,10 +369,26 @@ class Ft8Runtime:
                 profile = stored
         except Exception:
             log.debug("decoder_profile unavailable; using %d", DEFAULT_PROFILE)
+        # 同一个 provider 喂本地与云端两条路径：主机跑的是同一个原生解码器，
+        # 同一份先验在那边同样有效，而且配置本来就随每个请求整份发过去。
+        # Only exists when the gate is on, so "off" means off: no extra work per
+        # slot and no possibility of a stale field reaching a frame.
+        self._ap_a_priori = _ap_a_priori_enabled(os.environ)
+        self._dx_frequency = DxFrequency() if self._ap_a_priori else None
+        ap_context = (
+            _ap_context_for(sequencer, self._dx_frequency) if self._ap_a_priori else None
+        )
+        if ap_context is not None:
+            log.info(
+                "AP a-priori enabled (%s): feeding my_call/dx_call/dx_grid/qso_progress "
+                "(and a fresh partner frequency for a8) to both decode paths",
+                AP_A_PRIORI_ENV,
+            )
         self.decoder = SupervisorDecoder(
             supervisor,
             DecodeConfig(profile=profile, threads=auto_thread_count()),
             histogram=self.latency,
+            ap_context=ap_context,
         )
         self.encoder = SupervisorEncoder(supervisor)
         self.tx_driver = TxDriver(sequencer, self.encoder, self.safety)
@@ -219,8 +432,13 @@ class Ft8Runtime:
             assert self.ring is not None
             full = self.ring.read_slot(slot_id)
             if full is not None:
+                _dump_slot(self._slot_dump, slot_id, full)
                 return full
-            return self.ring.read_slot_partial(slot_id, early_min_samples)
+            # 提前解码走的是这一支（尾巴零补齐），所以**两条路都要落盘** ——
+            # 提前派发的那一份就是解码器实际吃进去的输入。
+            partial = self.ring.read_slot_partial(slot_id, early_min_samples)
+            _dump_slot(self._slot_dump, slot_id, partial)
+            return partial
 
         # The upstream grace (0.4 s) assumes an ~85 ms capture chain.  On the
         # W103D the chain is guest-buffer(100 ms) + 80 ms read block + soxr
@@ -243,7 +461,7 @@ class Ft8Runtime:
         # clock 一律不传 —— CascadingDecoder 的默认 time.time 与 orchestrator 的
         # clock（`orchestrator.py:125`）同源，这正是 R20 要钉住的那个不变量。
         # cutoff **必须显式传**，且必须传 orchestrator 的那一个常量：级联的预算守卫
-        # 与 orchestrator 判定 deadline miss 用的是同一条物理量，各自 2.5 只会在
+        # 与 orchestrator 判定 deadline miss 用的是同一条物理量，各自写死只会在
         # 有人改了 `decision_cutoff` 之后悄悄分叉（见 cascade.py 里那段注记）。
         #
         # 不要写成 ``self.decoder = CascadingDecoder(self.decoder, …)``：stop() 会调
@@ -259,6 +477,14 @@ class Ft8Runtime:
             if self._cascade_policy_provider is not None
             else CascadePolicy()
         )
+        # 云端深路径（spec 2026-10-14，A1）：只在 MRRC_FT8_CLOUD_DECODE_URL 非空时
+        # 存在。默认为 None —— 那是一台没配云端（也是每一台出厂盒子）的默认行为，
+        # 级联因此与引入它之前逐字一致。
+        cloud = cloud_decoder_from_environ(os.environ, ap_context=ap_context)
+        self._cloud = cloud
+        # 召回测量的素材（设计 §12）：默认关闭，只在 MRRC_FT8_SLOT_DUMP_DIR
+        # 设了才存在。写的是解码器实际收到的那一份字节。
+        self._slot_dump = SlotDumper.from_environ(os.environ)
         self._cascade = CascadingDecoder(
             self.decoder,
             policy,
@@ -266,6 +492,8 @@ class Ft8Runtime:
             boundary_epoch_for=boundary_epoch_for_slot,
             ap_context=lambda: (sequencer.my_call, _qso_progress(sequencer.state)),
             requested=lambda: self._deep_decode_requested,
+            remote=cloud,
+            cloud_deadline_s=(cloud.deadline_s if cloud is not None else 2.5),
         )
         self.orchestrator = Orchestrator(
             self._cascade,
@@ -301,13 +529,80 @@ class Ft8Runtime:
                 return None
         return self._worked
 
+    def _escalation_was_cloud(self, batch: Any) -> bool:
+        """Whether this escalated batch was answered by the hub rather than the box.
+
+        A separate marker token rather than a suffix on ``escalated``: the field
+        greps that word and the counters line, and changing their shape would
+        break every one of those greps (the 2026-10-14 ones) for a fact that
+        only became interesting when the cloud channel existed.
+        """
+
+        if not getattr(batch, "escalated", False):
+            return False
+        cascade = getattr(self, "_cascade", None)
+        return getattr(cascade, "last_deep_path", "") == "cloud"
+
+    def _note_partner_frequency(self, slot_decode: Any) -> None:
+        """Remember where the current partner was last heard, for a8's ``nfqso``.
+
+        Fed from both the provisional and the complete batch — the partner's
+        message often appears in the fast answer first, and a fresher sighting is
+        the whole point.  Late batches are skipped: NFR-001/NFR-009 keep them
+        display-only, and the orchestrator likewise never feeds them to the
+        sequencer.  No addressee filter — where the partner *is* does not depend
+        on who they were calling.
+        """
+
+        # ``getattr``, not ``self._dx_frequency``: this runs on every batch of a
+        # live decode path, and an optional feature must never be able to break
+        # the path it rides on (the same contract as MRRC_FT8_CLOUD_DECODE_TRACE,
+        # which retires itself on failure).  It also keeps the existing
+        # source-pinned tests working -- they build the runtime with
+        # ``object.__new__`` so ``__init__`` never runs.
+        tracker = getattr(self, "_dx_frequency", None)
+        if tracker is None or getattr(slot_decode, "late", False):
+            return
+        # Same reason: a stand-in sequencer may not carry the partner fields.
+        dx_call = (getattr(self.sequencer, "dx_call", "") or "").strip()
+        if not dx_call:
+            return
+        slot_id = int(getattr(slot_decode, "slot_id", 0))
+        for message in getattr(slot_decode, "messages", ()) or ():
+            parsed = getattr(message, "parsed", None)
+            if (getattr(parsed, "from_call", "") or "").strip() != dx_call:
+                continue
+            frequency = getattr(getattr(message, "result", None), "frequency", None)
+            if frequency is None:
+                continue
+            try:
+                tracker.note(slot_id, dx_call, float(frequency))
+            except (TypeError, ValueError):
+                # A malformed frequency must not take the decode path down with
+                # it; the next sighting simply overwrites nothing.
+                log.debug("ignoring an unusable partner frequency: %r", frequency)
+
     def _on_batch(self, slot_decode: Any) -> None:
         """One SlotDecode → the ``{slot_id, messages:[…]}`` batch the UI renders.
 
         Mirrors MRRC-FT8's ``decode_message_view`` + ``decode_highlight``:
         call/grid/is_cq/to_me/mine for the row, DXCC entity and the JTDX-style
         highlight category when a worked index is available.
+
+        A slot can arrive twice — ``provisional`` (the fast answer, published
+        while the deep answer is still in flight) and then complete.  Only the
+        complete one is counted and logged as the slot's decode, because a slot
+        is decoded once whatever it is published as.  The UI replaces rows by
+        ``slot_id`` (``state.js: applyDecodeBatch``), so the later publication is
+        a correction rather than a duplicate.
         """
+
+        self._note_partner_frequency(slot_decode)
+
+        if getattr(slot_decode, "provisional", False):
+            self.provisional_published += 1
+            self._publish(self._decode_frame(slot_decode))
+            return
 
         # Task 14:「深度解码本槽」是一次性动作。批次回来就说明这一槽的 decode
         # 已经结束，语义正好是「只对这一槽有效」，所以在这里清回 False。
@@ -315,6 +610,43 @@ class Ft8Runtime:
         # 每槽稳定多付 ~2.2 s 深解码 —— 一个「按一次、此后永久变慢」的按钮。
         # 放在函数最前面：即便下面任何一行抛异常，标志也已经清掉。
         self._deep_decode_requested = False
+
+        messages = getattr(slot_decode, "messages", ())
+        if not messages and self._dumped_slots < 2:
+            # Field diagnosis: keep the exact 12 kHz slot the decoder rejected.
+            try:
+                raw = self.ring.read_slot(getattr(slot_decode, "slot_id", -1)) if self.ring else None
+                if raw:
+                    path = Path(f"/tmp/ft8-slot-{getattr(slot_decode, 'slot_id', 0)}.raw")
+                    path.write_bytes(raw)
+                    self._dumped_slots += 1
+                    log.info("dumped rejected slot audio to %s (%d bytes)", path, len(raw))
+            except Exception:
+                log.debug("slot dump failed", exc_info=True)
+
+        frame = self._decode_frame(slot_decode)
+        # 路径与两个标记必须进这一行：深路径**成功**的升级在 cascade.py 里一个字都不
+        # 记（那里只记拒绝），`late` 更是只活在 WebSocket 帧里。少了它们，现场就只能
+        # 从发布偏移去推「这一槽升级了吗」，而这条推断已经被证伪过两次（原生库 banner
+        # 不是深路径标记；空槽也慢，偏移本身还在漂）。
+        batch = getattr(slot_decode, "batch", None)
+        log.info("slot %s: %d message(s) from %d result(s) [%s%s%s%s]",
+                 getattr(slot_decode, "slot_id", "?"), len(frame["messages"]),
+                 len(getattr(batch, "results", ()) or ()),
+                 getattr(batch, "path", "?"),
+                 " escalated" if getattr(batch, "escalated", False) else "",
+                 " cloud" if self._escalation_was_cloud(batch) else "",
+                 " late" if getattr(slot_decode, "late", False) else "")
+        # Counts batches (= decodes), NOT slots: a skipped or errored slot never
+        # reaches this line.  It is the log cadence only — the slot total the
+        # operator reads comes from ``counters.slots_started`` (see _log_counters).
+        self._slots_logged += 1
+        if self._slots_logged % _COUNTERS_EVERY_SLOTS == 0:
+            self._log_counters()
+        self._publish(frame)
+
+    def _decode_frame(self, slot_decode: Any) -> dict[str, Any]:
+        """Build the wire frame for one batch — shared by both publications."""
 
         from ft8.engine.bands import band_from_freq_hz
         from ft8.engine.dxcc import decode_highlight, get_cty_database
@@ -352,20 +684,6 @@ class Ft8Runtime:
             )
             views.append(view)
 
-        if not views and self._dumped_slots < 2:
-            # Field diagnosis: keep the exact 12 kHz slot the decoder rejected.
-            try:
-                raw = self.ring.read_slot(getattr(slot_decode, "slot_id", -1)) if self.ring else None
-                if raw:
-                    path = Path(f"/tmp/ft8-slot-{getattr(slot_decode, 'slot_id', 0)}.raw")
-                    path.write_bytes(raw)
-                    self._dumped_slots += 1
-                    log.info("dumped rejected slot audio to %s (%d bytes)", path, len(raw))
-            except Exception:
-                log.debug("slot dump failed", exc_info=True)
-        log.info("slot %s: %d message(s) from %d result(s)",
-                 getattr(slot_decode, "slot_id", "?"), len(views),
-                 len(getattr(getattr(slot_decode, "batch", None), "results", ()) or ()))
         slot_id = int(getattr(slot_decode, "slot_id", 0))
         dispatched = getattr(slot_decode, "dispatched_epoch", None)
         finished = getattr(slot_decode, "finished_epoch", None)
@@ -385,16 +703,89 @@ class Ft8Runtime:
         for view in views:
             view["finished_epoch"] = finished
             view["finished_after_slot_end_s"] = timing.get("finished_after_slot_end_s")
-        frame = {
+        return {
             "type": "decodes",
             "slot_id": slot_id,
             "late": bool(getattr(slot_decode, "late", False)),
+            "provisional": bool(getattr(slot_decode, "provisional", False)),
             "timing": timing,
             "messages": views,
         }
+
+    def _publish(self, frame: dict[str, Any]) -> None:
+        """Hand one frame to the UI, remembering it for reconnect replay."""
+
         self.recent_decodes.append(frame)
         if self._on_decode is not None:
             self._on_decode(frame)
+
+    def set_dial_frequency(self, freq_hz: int | None) -> None:
+        """The platform tells the runtime where the dial is (band for DXCC)."""
+
+        self._dial_freq_hz = int(freq_hz) if freq_hz else None
+
+    def _worked_index(self):
+        """Lazily built WorkedIndex (rebuilt when the repository says dirty)."""
+
+        from ft8.engine.dxcc import get_cty_database, worked_index
+
+        if self._worked is None or self._worked_dirty:
+            try:
+                self._worked = worked_index(self.repository, get_cty_database())
+                self._worked_dirty = False
+            except Exception:
+                log.debug("worked index unavailable", exc_info=True)
+                return None
+        return self._worked
+
+    def _escalation_was_cloud(self, batch: Any) -> bool:
+        """Whether this escalated batch was answered by the hub rather than the box.
+
+        A separate marker token rather than a suffix on ``escalated``: the field
+        greps that word and the counters line, and changing their shape would
+        break every one of those greps (the 2026-10-14 ones) for a fact that
+        only became interesting when the cloud channel existed.
+        """
+
+        if not getattr(batch, "escalated", False):
+            return False
+        cascade = getattr(self, "_cascade", None)
+        return getattr(cascade, "last_deep_path", "") == "cloud"
+
+    def _log_counters(self) -> None:
+        """累计计数器进日志 —— 这是 ``/api/ft8/engine/stats`` 的日志版。
+
+        2026-10-14 现场：Phase A 让深路径跑起来之后，操作员问「多少槽升级了、多少槽
+        掉出截止线」，而日志答不了 —— 升一次级没有任何日志，`late` 只在帧里。能读的
+        数字只有一个要 30 天会话 cookie 的 HTTP 接口。于是诊断只能靠推断，推错两次。
+
+        键名写成 ``k=v`` 是为了可 grep 也可断言（tests/ft8/test_runtime_slot_counters.py）。
+        引擎没起来时 ``orchestrator`` 是 None，此时静默返回 —— 与 ``cascade_stats``
+        同一约定，绝不为了打日志抛异常。
+        """
+
+        orchestrator = getattr(self, "orchestrator", None)
+        if orchestrator is None:
+            return
+        counters = orchestrator.counters
+        rate = (100.0 * counters.escalations / counters.decodes) if counters.decodes else 0.0
+        # ``slots_started``, not ``self._slots_logged``: the latter counts
+        # ``_on_batch`` calls, i.e. slots that produced a decode, so it always
+        # equals ``decodes`` — printing it as "slot(s)" reports a number that
+        # cannot answer the question this line exists for ("is the receiver
+        # hearing anything?"), because a skipped slot (no data within the grace
+        # window) never reaches ``_on_batch`` and leaves no trace.  ``skipped``
+        # is what makes that visible; 2026-10-14, a field reading of
+        # ``decodes == N`` was briefly read as "no slots were skipped", which the
+        # line could not support.  The cadence trigger stays on the batch count
+        # on purpose — it is a log cadence, not a field the operator reads.
+        log.info(
+            "decode counters after %d slot(s): decodes=%d fast=%d "
+            "escalations=%d (%.1f%%) late=%d errors=%d skipped=%d",
+            counters.slots_started, counters.decodes, counters.fast_decodes,
+            counters.escalations, rate, counters.deadline_misses,
+            counters.decode_errors, counters.slots_skipped,
+        )
 
     def _slot_started(self, slot_id: int) -> None:
         if self.tx_driver is not None:

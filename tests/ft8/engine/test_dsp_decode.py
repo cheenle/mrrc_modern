@@ -11,6 +11,10 @@ from ft8.core.protocol import encode_frame
 from ft8.engine.dsp_decode import (
     DecodeError,
     SupervisorDecoder,
+    batch_from_decode_ok,
+    decode_config_frame,
+    decode_ok_frame,
+    decode_config_from_frame,
     slot_utc_hhmmss,
 )
 
@@ -220,3 +224,57 @@ def test_decode_is_a_thin_wrapper_over_decode_path() -> None:
 
     assert via_decode == via_path
     assert supervisor.frames[0]["config"] == supervisor.frames[1]["config"]
+
+
+def test_the_config_frame_round_trips_through_the_wire_form() -> None:
+    """One serialiser for both transports — a field cannot reach only one of them."""
+
+    config = DecodeConfig(
+        path=DecodePath.IMPROVED, profile=3, threads=3, cycles=3,
+        my_call="BG7ZHS", dx_call="JA1ABC", dx_grid="PM95", qso_progress=2,
+    )
+    frame = decode_config_frame(config)
+    # Protocol v1 requires a plain str path (StrEnum fails its type check).
+    assert frame["path"] == "improved"
+    assert decode_config_from_frame(frame) == config
+
+
+def test_batch_from_decode_ok_copies_every_field_the_worker_reports() -> None:
+    batch = batch_from_decode_ok(decode_ok(42, text="CQ JA1ABC PM95"))
+
+    assert (batch.slot_id, batch.path, batch.overflow, batch.deadline_missed) == (
+        42, DecodePath.IMPROVED, False, False,
+    )
+    assert batch.elapsed_seconds == 0.25
+    result = batch.results[0]
+    assert (result.text, result.snr, result.dt, result.frequency) == (
+        "CQ JA1ABC PM95", -12, 0.1, 1500.0,
+    )
+    assert (result.sync, result.ap_type, result.quality, result.flags) == (1.5, 1, 0.9, 0)
+
+
+def test_the_worker_frame_is_built_by_the_shared_serialiser() -> None:
+    """Pin the mechanism: the local path must use the very builder the cloud does."""
+
+    config = DecodeConfig(profile=2, threads=3, cycles=1)
+    supervisor = FakeSupervisor(decode_ok(480))
+    with SupervisorDecoder(supervisor, config) as decoder:
+        run(decoder.decode_path(480, b"\x00" * 360_000, DecodePath.IMPROVED, threads=3))
+
+    expected = decode_config_frame(
+        config.replace(utc_hhmmss=slot_utc_hhmmss(480), path=DecodePath.IMPROVED, threads=3)
+    )
+    assert supervisor.frames[0]["config"] == expected
+
+
+def test_the_decode_ok_frame_round_trips_through_the_batch() -> None:
+    """The service composes an answer; the box must parse it as it always did."""
+
+    response = decode_ok(42, text="CQ JA1ABC PM95")
+    response["cpu_seconds"] = 1.75
+    batch = batch_from_decode_ok(response)
+    rebuilt = decode_ok_frame(batch, cpu_seconds=1.75)
+    # The base fields belong to the transport, not to the batch.
+    for field in ("v", "generation", "request_id"):
+        rebuilt[field] = response[field]
+    assert rebuilt == response

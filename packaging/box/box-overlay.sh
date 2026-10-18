@@ -30,8 +30,12 @@ log "user and groups"
 if ! id -u "$MRRC_USER" >/dev/null 2>&1; then
 	adduser --system --group --home "$MRRC_HOME" --shell /bin/bash "$MRRC_USER"
 fi
-# dialout: /dev/ttyUSB* and /dev/ttyACM*; audio: the radio's USB sound card.
-for g in dialout audio; do
+# dialout: /dev/ttyUSB* and /dev/ttyACM*; audio: the radio's USB sound card;
+# input: the Bluetooth remote's HID node (/dev/input/eventN, root:input 0660) —
+# without it mrrc-localctl cannot read a single key, and the failure is a
+# per-attempt "Permission denied: /dev/input/event3" in its journal, long after
+# the remote looks paired (2026-10-18).
+for g in dialout audio input; do
 	getent group "$g" >/dev/null 2>&1 || groupadd --system "$g"
 	adduser "$MRRC_USER" "$g" >/dev/null
 done

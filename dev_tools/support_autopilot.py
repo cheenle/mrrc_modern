@@ -56,6 +56,10 @@ CRON_MARK = "# MRRC Modern support autopilot"
 REMOTE_HOST = os.environ.get("MRRC_SUPPORT_DEPLOY_HOST", "cheenle@www.vlsc.net")
 REMOTE_PAGE = "/var/www/vlsc.net/mrrc_modern/answers/index.html"
 MAX_PER_RUN = 2
+# 失败重试上限：pi 的一次临时故障（退出码 1、输出不合契约）不该让一份上报永远消失；
+# 坏包（模型怎么都输出不成）也不能无限霸占队列。
+MAX_ATTEMPTS = 3
+LOCK_FILE = REPO / "dist" / "support_autopilot" / "autopilot.lock"
 # Env override keeps the smoke run and cron tuning cheap (cron uses the default).
 def _pi_timeout() -> int:
     raw = os.environ.get("MRRC_AUTOPILOT_PI_TIMEOUT", "540")
@@ -133,6 +137,60 @@ def log(message: str) -> None:
             fh.write(line + "\n")
     except OSError:
         pass
+
+
+def _attempts(record: dict) -> int:
+    """A hand-edited or corrupt state must not crash the whole round."""
+    try:
+        return int(record.get("attempts", 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _needs_processing(state: dict, bundle_id: str) -> bool:
+    """New bundle, or a failure that still has retries left."""
+    record = state.get(bundle_id)
+    if record is None:
+        return True
+    return (record.get("status") == "failed"
+            and _attempts(record) < MAX_ATTEMPTS)
+
+
+def _record_failure(state: dict, bundle_id: str) -> None:
+    """Count the failed attempt so a later round can retry it (bounded).
+
+    A single flaky `pi` call used to drop the bundle for good —
+    20261007-083527-6536 died at 21:40 with `pi 退出码 1` and nothing but a
+    manual `--force` could bring it back (`run_once` skips anything already in
+    the state).  Counting attempts keeps the retry honest in both directions.
+    """
+    attempts = _attempts(state.get(bundle_id) or {}) + 1
+    answers.record_result(state, bundle_id, {"status": "failed"}, published=False)
+    state[bundle_id]["attempts"] = attempts
+    answers.save_state(STATE_FILE, state)
+
+
+def acquire_single_flight_lock():
+    """One autopilot at a time; None when another instance holds the lock.
+
+    A round can outlast the 10-minute cron interval (2 bundles × 9-minute pi
+    timeout), and two overlapping runs read-modify-write the same state.json —
+    the later save silently drops the other's entry.  Measured 2026-10-16: the
+    manual `--force 20261016-083453-9d80` record was overwritten two minutes
+    later by the cron run that had loaded its state before that write.
+    """
+    import fcntl                         # POSIX only, and so is this autopilot
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        handle = open(LOCK_FILE, "w", encoding="utf-8")
+    except OSError:
+        return None          # 锁文件都建不起来，宁可跳过一轮，也不能冒并发风险
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return None
+    return handle
 
 
 # ── receiver access ────────────────────────────────────────────────────────
@@ -291,7 +349,9 @@ def git_commit(bundle_id: str) -> bool:
                         f"support(answers): 自动答复 {bundle_id}（support autopilot）"],
                        cwd=str(REPO), check=True)
         return True
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, OSError) as e:
+        # OSError matters as much as a non-zero exit: cron's PATH once had no
+        # /usr/bin, so `git` did not exist at all (FileNotFoundError).
         log(f"[{bundle_id}] git commit 失败：{e}")
         return False
 
@@ -330,7 +390,14 @@ def rsync_page() -> bool:
 
 
 def publish(bundle_id: str, analysis: dict, problem: str, state: dict, push: bool = False) -> bool:
-    """Write the card, rebuild the page, commit, rsync.  Draft-only on refusal."""
+    """Write the card, rebuild the page, commit, rsync.  Draft-only on refusal.
+
+    Shipping is what makes a card ``published``: if the commit or the rsync does
+    not land, the state entry is withdrawn so the next poll processes the bundle
+    again.  Lost this way on 2026-10-16: 20261001-192738-30c2 was recorded
+    published while the live page got nothing, and `run_once` skips any id
+    already in the state — a card nobody could ever see.
+    """
     card_path = write_draft(bundle_id, analysis, problem)
     state = answers.record_result(state, bundle_id, analysis, published=True)
     answers.save_state(STATE_FILE, state)
@@ -342,9 +409,16 @@ def publish(bundle_id: str, analysis: dict, problem: str, state: dict, push: boo
             subprocess.run(["git", "push", "origin", "main"], cwd=str(REPO), check=True)
         except (OSError, subprocess.CalledProcessError) as e:
             log(f"[{bundle_id}] git push 失败（本地 commit 已保留）：{e}")
-    rsync_page()
+    shipped = rsync_page()
+    if not (committed and shipped):
+        state = answers.load_state(STATE_FILE)
+        state.pop(bundle_id, None)
+        answers.save_state(STATE_FILE, state)
+        log(f"[{bundle_id}] 发布未成功（commit={committed} ship={shipped}）："
+            "已撤回发布标记，下一轮重试")
+        return False
     log(f"[{bundle_id}] 已发布答复（草稿 {card_path.name}）")
-    return committed
+    return True
 
 
 # ── one bundle ─────────────────────────────────────────────────────────────
@@ -516,8 +590,7 @@ def process_one(bundle_id: str, publish_it: bool, model: str = "", push: bool = 
             analysis = run_pi(digest, bundle_id, model=model)
         except ValueError as e:
             log(f"[{bundle_id}] 模型输出不合契约：{e}")
-            state = answers.record_result(state, bundle_id, {"status": "failed"}, published=False)
-            answers.save_state(STATE_FILE, state)
+            _record_failure(state, bundle_id)
             return "failed"
         # FDE board: classify + record every finished analysis (best-effort —
         # board problems must never take down the support loop itself).
@@ -536,17 +609,19 @@ def process_one(bundle_id: str, publish_it: bool, model: str = "", push: bool = 
             answers.save_state(STATE_FILE, state)
             log(f"[{bundle_id}] {analysis['status']}：不发布，草稿留在本地")
             return "need_more_info"
-        publish(bundle_id, analysis, problem, state, push=push)
+        if not publish(bundle_id, analysis, problem, state, push=push):
+            return "failed"        # 没 shipp 成功：标记已撤回，下轮重试
         return "published"
     except Exception as e:                    # one bad bundle never ends the batch
         log(f"[{bundle_id}] 处理失败：{type(e).__name__}: {e}")
+        _record_failure(state, bundle_id)
         return "failed"
 
 
 def run_once(publish_it: bool, model: str = "", limit: int = MAX_PER_RUN,
              push: bool = False) -> list[tuple[str, str]]:
     state = answers.load_state(STATE_FILE)
-    pending = [bid for bid in list_bundles() if bid not in state]
+    pending = [bid for bid in list_bundles() if _needs_processing(state, bid)]
     results = []
     for bundle_id in pending[:max(0, limit)]:
         results.append((bundle_id, process_one(bundle_id, publish_it, model=model,
@@ -590,9 +665,14 @@ def show_status() -> int:
 
 
 def cron_line() -> str:
-    """Absolute paths + explicit PATH: cron's environment is nearly empty."""
-    return (f"*/10 * * * * PATH=/opt/homebrew/bin:/usr/local/bin:{Path.home()}/.hermes/node/bin "
-            f"{sys.executable} {REPO / 'dev_tools' / 'support_autopilot.py'} --once --publish --implement "
+    """Absolute paths + explicit PATH: cron's environment is nearly empty.
+
+    No `--implement` here: `--once` already runs the implementation sweep, and a
+    bare `--implement` in this line is what shadowed the poll (see main()).
+    """
+    return (f"*/10 * * * * PATH=/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:"
+            f"{Path.home()}/.hermes/node/bin "
+            f"{sys.executable} {REPO / 'dev_tools' / 'support_autopilot.py'} --once --publish "
             f">> {RUN_LOG} 2>&1 {CRON_MARK}")
 
 
@@ -645,6 +725,25 @@ def main(argv=None) -> int:
         result = process_one(args.force, args.publish, model=args.model, push=args.push)
         print(f"{args.force}: {result}")
         return 0 if result != "failed" else 1
+    # `--once` MUST be tested before `--implement`: a bare `--implement` parses as
+    # "ALL" (truthy), so the reverse order silently skipped the whole poll for six
+    # days (2026-10-10→10-16, run.log 1728 lines with no "没有新包").  The once
+    # branch already runs the implementation sweep below.
+    if args.once:
+        lock = acquire_single_flight_lock()
+        if lock is None:
+            log("另一个实例正在处理，本轮跳过")
+            return 0
+        try:
+            results = run_once(args.publish, model=args.model, limit=args.limit, push=args.push)
+            for bundle_id, result in results:
+                print(f"{bundle_id}: {result}")
+            impl = run_implementations(model=args.model)
+            for bundle_id, result in impl:
+                print(f"{bundle_id}: implement → {result}")
+        finally:
+            lock.close()
+        return 0
     if args.implement:
         if args.implement == "ALL":
             results = run_implementations(model=args.model)
@@ -656,14 +755,6 @@ def main(argv=None) -> int:
             print(f"{bundle_id}: {result}")
         return 0 if all(r in ("committed", "rejected", "not_scheduled",
                                "skipped_dirty") for _, r in results) else 1
-    if args.once:
-        results = run_once(args.publish, model=args.model, limit=args.limit, push=args.push)
-        for bundle_id, result in results:
-            print(f"{bundle_id}: {result}")
-        impl = run_implementations(model=args.model)
-        for bundle_id, result in impl:
-            print(f"{bundle_id}: implement → {result}")
-        return 0
     parser.print_help()
     return 0
 

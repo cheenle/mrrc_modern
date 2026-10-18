@@ -20,6 +20,7 @@ import os
 import shutil
 import stat
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -77,19 +78,140 @@ class ExclusionListTests(unittest.TestCase):
         entries = re.findall(r'--exclude\s+"([^"]+)"', text)
         self.assertGreaterEqual(len(entries), 40, f"only {len(entries)} exclude rules")
         for canary in ("/.env", "/recordings/", "/fleet/", "website/", "packaging/",
-                       "tests/"):
+                       "tests/", "qso.db", "auth-tokens.json*", "mrrc_modern.env"):
             with self.subTest(canary=canary):
                 self.assertIn(canary, entries)
 
+    def test_the_qso_database_is_never_staged(self):
+        """The QSO log is runtime state and must not be overwritten by an update.
+
+        The database is not in the repo, but it *is* in a developer's working tree
+        (``ft8/qso.db``), and ``mrrc-update`` explicitly supports staging from a local
+        directory — that is the documented way to get an unreleased branch onto a box.
+        ``server.py`` puts it at ``_writable_runtime_dir()/ft8/qso.db``, i.e. inside
+        ``$MRRC_HOME/ft8/``, which is exactly where the staged tree's ``ft8/`` lands.
+        So without this rule, one update from such a tree destroys the operator's QSO
+        history — silently, because nothing about the update mentions the database.
+        """
+        entries = re.findall(
+            r'--exclude\s+"([^"]+)"', STAGE_TREE.read_text(encoding="utf-8")
+        )
+        self.assertIn("qso.db", entries)
+
+    @unittest.skipUnless(os.name == "posix" and shutil.which("bash") and shutil.which("rsync"),
+                         "stage-tree.sh 是 bash + rsync 的脚本，只在 POSIX 主机上跑"
+                         "（两条镜像线与盒子升级都用它）")
+    def test_runtime_state_is_never_staged(self):
+        """Every file ``server.py`` writes at runtime must survive an update.
+
+        The paths are not arbitrary: ``_runtime_dir()`` is the *install directory*
+        in a packaged build, so on a box they are ``$MRRC_HOME/...`` — which is
+        exactly where the staged tree lands.  A local-directory ``mrrc-update``
+        (``MRRC_UPDATE_SRC``, the documented way to put an unreleased branch on a
+        box) stages a developer's working tree, and a developer's working tree
+        holds that developer's own state:
+
+        * ``auth-tokens.json`` (``MEM_FILE.parent``, ``server.py:628``) — live
+          30-day session tokens.  Staging it logs every operator out *and* makes
+          the developer's cookies valid on a box that can key a transmitter.
+        * ``mrrc_modern.env`` (``_config_file_path()``, ``server.py:3583``) —
+          ``MRRC_WEB_PASSWORD`` (the only door when bound to ``0.0.0.0``) and
+          ``MRRC_CLOUD_TOKEN``.  This one reaches further than the updater: the
+          list is also what both *image* builders stage, so a secret in the
+          build tree ships inside the artifact.
+        * ``recordings.json`` (``RECORDINGS_INDEX``, ``server.py:634``) — the
+          recording index; ``/recordings/`` was excluded but the file was not.
+        * ``ft8/settings.json`` (``server.py:3104``) — station settings.
+
+        The test runs the real stager rather than reading the file as text: a
+        regex over ``--exclude`` proves a rule was *written*, not that rsync
+        honours it, and a rule anchored to the wrong place fails silently.  The
+        control file is what keeps a stager that copies nothing from passing.
+        """
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        src, dst = root / "src", root / "dst"
+        src.mkdir()
+        state = (
+            "auth-tokens.json", "auth-tokens.json.invalidated-20261017-0035",
+            "mem_channels.json", "mrrc_modern.env",
+            "recordings.json", "atr1000_tuner.json", "qso.db",
+            "ft8/settings.json", "ft8/qso.db", "env/mrrc.env",
+        )
+        for relative in state + ("server.py",):  # server.py = the control
+            path = src / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x", encoding="utf-8")
+        (src / "recordings").mkdir(parents=True, exist_ok=True)
+        (src / "recordings" / "qso.mp3").write_text("x", encoding="utf-8")
+
+        subprocess.run(["bash", str(STAGE_TREE), str(src), str(dst)],
+                       check=True, capture_output=True)
+
+        for relative in state:
+            with self.subTest(state=relative):
+                self.assertFalse((dst / relative).exists(),
+                                 f"{relative} was staged — it is per-box state")
+        with self.subTest(state="recordings/qso.mp3"):
+            self.assertFalse((dst / "recordings" / "qso.mp3").exists())
+        with self.subTest(control="server.py"):
+            self.assertTrue((dst / "server.py").is_file(),
+                            "the stager copied nothing — the rules above prove nothing")
+
+    @unittest.skipUnless(os.name == "posix" and shutil.which("bash") and shutil.which("rsync"),
+                         "stage-tree.sh 是 bash + rsync 的脚本，只在 POSIX 主机上跑"
+                         "（两条镜像线与盒子升级都用它）")
+    def test_a_sibling_virtualenv_is_never_staged(self):
+        """``.venv*`` —— 任一兄弟 venv，不只是有人记得的那两个名字。
+
+        2026-10-16：并行会话的 ``.venv-ml``（macOS venv，带 596 MB torch）被整棵
+        拷进了 ARM 镜像 —— 清单里只有 ``venv/`` 与 ``.venv/``。后果有两层：产物里
+        多一份没人要的**异平台**载荷，而且它是盒子镜像根分区被塞满的直接原因
+        （`frpc: Cannot write: No space left on device`，而日志里一个字没提空间）。
+        实测：修前 16,352 个文件 / 619 MB，修后 430 个 / 23 MB。
+        """
+        root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        src, dst = root / "src", root / "dst"
+        src.mkdir()
+        siblings = (
+            ".venv-ml/torch/lib/libtorch_cpu.dylib",
+            ".venv/bin/python",
+            ".venv-ft8/lib/python3.11/site-packages/x.py",
+        )
+        for relative in siblings:
+            path = src / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x", encoding="utf-8")
+        (src / "server.py").write_text("x", encoding="utf-8")   # the control
+        subprocess.run(["bash", str(STAGE_TREE), str(src), str(dst)],
+                       check=True, capture_output=True)
+        for relative in siblings:
+            with self.subTest(path=relative):
+                self.assertFalse((dst / relative).exists(),
+                                 f"{relative} was staged — it is another venv")
+        self.assertTrue((dst / "server.py").is_file(),
+                        "the stager copied nothing — the rule above proves nothing")
+
     def test_the_exclusion_list_is_byte_identical_to_what_shipped(self):
         """The list as of 2026-10-11, frozen: the refactor moved it, and every
-        edit since then is written down here — a root-anchored ``/fleet/``, and
-        ``/draft/`` when the Rust draft workstream landed on main (2026-10-13)."""
+        edit since then is written down here — a root-anchored ``/fleet/``,
+        ``/draft/`` when the Rust draft workstream landed on main
+        (2026-10-13), then ``qso.db`` and the five per-box state files found
+        leaking on 2026-10-14, ``.venv*/`` on 2026-10-16 (a parallel
+        session's ``.venv-ml`` — a macOS venv carrying 596 MB of torch — was
+        being staged into the ARM image; the exact-name rules missed it, and
+        it is also what exhausted the box image's rootfs), and
+        ``auth-tokens.json*`` on 2026-10-17 (the same failure one name over:
+        the working tree's copy had been retired to
+        ``auth-tokens.json.invalidated-<ts>`` and the exact-name rule staged it
+        into the v1.28.1 box image)."""
         expected = [
-            ".git/", "venv/", ".venv/", "dist/", "build/", "logs/", "certs/",
+            ".git/", "venv/", ".venv*/", "dist/", "build/", "logs/", "certs/",
             "promo/", "FT710Mobile/", "FT710Android/", "website/", "tests/",
             ".agents/", "docs/", "SDD/", "packaging/", "macos/", "windows/",
             "__pycache__/", "*.pyc", ".DS_Store", "atr1000_tuner.json",
+            "qso.db",
+            "auth-tokens.json*", "mrrc_modern.env", "recordings.json",
+            "ft8/settings.json", "/env/",
             "/fleet/",
             "/draft/",
             "/.local/", "/.env", "/recordings/", "/mem_channels.json",
@@ -241,6 +363,44 @@ class ShellHygieneTests(unittest.TestCase):
                     self.assertNotIn(needle, text)
             self.assertIsNone(re.search(r"\$\{[A-Za-z_][A-Za-z0-9_]*,,\}", text),
                               path.name + " uses a bash-4 lower-case expansion on a variable")
+
+    def test_bluez_is_in_the_image(self):
+        """没有 bluez，配对面板永远扫到 0 个设备（2026-10-18 真机）。
+
+        内核的 hci0 早就在，用户态没人管 —— 于是界面上那句「没找到设备。遥控器在
+        配对模式吗？」把一个缺包问题伪装成了操作问题。
+        """
+        packages = [
+            line.strip() for line in (COMMON / "packages.txt").read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        self.assertIn("bluez", packages)
+        layer = (COMMON / "mrrc-service-layer.sh").read_text(encoding="utf-8")
+        self.assertIn("systemctl enable bluetooth.service", layer)
+
+
+    def test_the_service_user_can_read_the_bluetooth_remote(self):
+        """`mrrc` 必须在 `input` 组里，否则遥控器的键一个都读不到。
+
+        /dev/input/eventN 是 root:input 0660；2026-10-18 在盒子上实测：遥控器配好了、
+        HID 设备节点也建出来了，mrrc-localctl 却每次 open 都 "Permission denied"，
+        而界面上没有任何地方会说"缺组"。
+        """
+        box = (REPO / "packaging" / "box" / "box-overlay.sh").read_text(encoding="utf-8")
+        pi = (REPO / "packaging" / "rpi" / "pi-gen-stage4" / "01-deploy-mrrc"
+              / "00-run-chroot.sh").read_text(encoding="utf-8")
+        self.assertIn("for g in dialout audio input; do", box)
+        self.assertIn("usermod -aG dialout,audio,input mrrc", pi)
+
+    def test_hot_update_restarts_the_remote_daemon(self):
+        """`mrrc-localctl` 跑的是自己进程里的 `local_ctl.py`：只重启服务端，
+        改好的键位/音量换算会一直躺在 /opt 里不生效（2026-10-18）。
+
+        `try-restart` 而不是 `restart`：没装这个 unit 的老盒子（热升级装不了单元）
+        不能让升级脚本在这里失败。
+        """
+        update = (REPO / "linux" / "mrrc_update.sh").read_text(encoding="utf-8")
+        self.assertIn("systemctl try-restart mrrc-localctl", update)
 
     def test_the_service_layer_still_reclaims_its_scratch(self):
         """Both directories hold build scratch; either one left behind ships."""

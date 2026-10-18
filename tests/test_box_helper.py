@@ -230,3 +230,41 @@ class SyncHostsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SetPasswordTests(unittest.TestCase):
+    """root / mrrc 的口令可以从面板改，但秘密只能走 stdin。
+
+    `chpasswd` 读的是 `user:password` 行，所以换行会被读成第二行（口令注入），
+    而 argv 是全世界可读的（/proc/<pid>/cmdline）——两件事都在这里钉住。
+    """
+
+    def test_the_two_accounts_the_image_ships_are_allowed(self):
+        for user in ("root", "mrrc"):
+            self.assertEqual(box_helper.password_problem(user, "abcd1234"), "")
+
+    def test_an_arbitrary_user_name_is_refused(self):
+        self.assertNotEqual(box_helper.password_problem("nobody", "abcd1234"), "")
+        self.assertNotEqual(box_helper.password_problem("", "abcd1234"), "")
+
+    def test_a_short_password_is_refused(self):
+        self.assertNotEqual(box_helper.password_problem("root", "1234567"), "")
+
+    def test_a_newline_is_refused_because_chpasswd_reads_lines(self):
+        self.assertNotEqual(box_helper.password_problem("root", "abcd1234\nroot:x"), "")
+
+    def test_the_secret_reaches_chpasswd_on_stdin_and_never_in_argv(self):
+        seen = {}
+
+        def fake_run(argv, **kwargs):
+            seen["argv"] = argv
+            seen["input"] = kwargs.get("input")
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        with mock.patch.object(box_helper.subprocess, "run", fake_run):
+            result = box_helper.do_set_password(["root", "abcd1234"])
+        self.assertTrue(result["ok"])
+        self.assertEqual(seen["argv"], ["chpasswd"])
+        self.assertEqual(seen["input"], "root:abcd1234\n")
+        self.assertNotIn("abcd1234", " ".join(seen["argv"]))
+

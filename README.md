@@ -47,11 +47,11 @@ Windows 11/12 users can install the desktop package — no Python install
 required. The installer runs a user-launched desktop app with an embedded
 Python runtime; closing the launcher window stops the server.
 
-**Download v1.27.0 Stable** (79,263,639 bytes, SHA-256
-`c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be`):
+**Download v1.28.1 Stable** (79,386,940 bytes, SHA-256
+`cfbeacc75e899ed1ff04a6a9da5a9d37d3f0200d89b77440215266eddde33938`):
 
 - Fast mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.27.0-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
 After install, edit `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` (Start Menu →
@@ -73,10 +73,10 @@ Apple-silicon Macs (macOS 11+) can install the desktop package — no Python
 install required. The app lives in the menu bar (no Dock icon), starts the
 server itself, and opens the browser.
 
-**Download v1.27.0 Stable** (84,862,308 bytes, SHA-256
-`b1387ee37c24ae7ccf227fd36e4bd694b6e5f92dcf55ce359ffd2e50b904ba03`):
+**Download v1.28.1 Stable** (85,064,796 bytes, SHA-256
+`1c9ba24e7ff5a6230e04a2471507a059a91a540a02347a806500e686cb4ec9d7`):
 
-- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.27.0-arm64.dmg>
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.1-arm64.dmg>
 
 Two things to know before the first launch (full guide:
 [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md)):
@@ -133,7 +133,7 @@ The same server, preinstalled on an Armbian image for a ZTE W103D (Amlogic
 S905L3A, 2 GB / 32 GB). Published as a download (~1.16 GB, version listed on the
 [download page](https://www.vlsc.net/mrrc_modern/zh/)):
 
-- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.4-w103d.img.gz>
+- <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.1-w103d.img.gz>
 
 Rebuild it locally when you need a version that is not published yet (needs Docker running):
 
@@ -155,6 +155,10 @@ The eight hardware-unverified models connect **receive-only** until you set
 `https://<callsign>.mrrc.vlsc.net/` entry, transmit included — runs from the
 settings page.
 
+**Got a box that is already flashed (a seller-prepared / OEM unit)?** Start at
+[docs/W103D_USER_GUIDE.md](docs/W103D_USER_GUIDE.md): what is in the box, the factory
+passwords, the five-minute acceptance, and troubleshooting.
+
 Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 [packaging/box/README.md](packaging/box/README.md). Build manual:
 [docs/w103d_pack.md](docs/w103d_pack.md).
@@ -174,6 +178,7 @@ Operator page (flashing, first boot, Cloud Hub, troubleshooting):
 | `MRRC_NO_CONFIG_FILE` | off | Set to `1`/`true`/`yes` to stop that load. It only ever happens for a frozen build or when `MRRC_CONFIG_FILE` names a file explicitly, so source checkouts, systemd and CI are unaffected; real environment variables always win over file values (the loader only fills keys that are missing). |
 | `MRRC_RECORDINGS_BITRATE` | `64` | MP3 bitrate for recordings (kbps, 16 kHz mono) |
 | `MRRC_RECORDINGS_MAX_SESSION_MIN` | `240` | Stop a forgotten recording after N minutes (0 = unlimited; never deletes files) |
+| `MRRC_RECORDINGS_MIN_FREE_MB` | `200` | Refuse a new recording below this much free disk (0 = off; never deletes recordings) |
 | `MRRC_LOG_DIR` | `<user data dir>/logs` | Where log files are written. The launchers set it explicitly — a bare start on a packaged install would otherwise have no logs at all |
 | `MRRC_ALLOW_UNVERIFIED_TX` | off | Enable transmit on hardware-unverified models (IC-705/IC-7610/IC-7760, FTDX10/FTDX101D/FTDX101MP/FTX-1F/FT-891). Off = keying refused with an explanatory UI message; releases are never blocked |
 | `MRRC_SUPPORT_URL` | `https://www.vlsc.net/mrrc_modern/support/` | Receiver the 🐞 diagnostics flow uploads bundles to (`api/create` + PUT). The hosted endpoint is behind HTTP Basic Auth, so this default is the project's own receiver — point it at your own instance if you self-host |
@@ -431,6 +436,27 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | --------- | --------------- |
 | Operator | Full control, authenticated with `MRRC_WEB_PASSWORD` — every control in the tables above |
 | Listen-only | A **second, independent password** (`MRRC_LISTEN_PASSWORD`, empty = off) logs into `/listen`: frequency and mode tuning, memory recall, S-meter, waterfall and RX audio with browser-side volume. Enforced **server-side**, not by hiding buttons: the `/WSradio` role gate passes only `ping`/`get`/`memLoadAll`/`memRecall` and `set` on `freq`/`vfo_a_freq`/`vfo_b_freq`/`mode`, `/WSaudioTX` and `/WSatr1000` close with 4003, and non-GET `/api/*` returns 403 (except logout). Setting both passwords to the same value grants full control. `deploy_listen_proxy.sh` publishes it on a public host (idempotent nginx block, direct IPv6 reverse proxy) |
+
+### SDR Receiver (box only, AD-029)
+
+A public web receiver on the box, completely separate from radio control: its own password, its own
+cookie, its own page. Nothing about the radio (frequency, mode, PTT) is visible from it, and it keeps
+running while you transmit.
+
+| Feature | Implementation |
+| --------- | --------------- |
+| Hardware | SDRplay **RSP1** on the box (`1df7:2500`), through the vendor Hardware API 3.15 — the ARM64 build that ships inside `Hardware API Linux`. SDRconnect is **not** an option: SDRplay confirmed the original RSP1 is unsupported there (measured: `valid_devices` = `"IQ File"` only) |
+| Range | 10 kHz – 2 GHz, one 2.4 MHz window at a time (tunable to 4.8 MHz), 1 Hz resolution |
+| Sharing | Anyone may retune the centre; a **30 s hold** makes the last tuner's choice stick, and everyone keeps their own demod offset. Listeners on the same `(offset, mode, bandwidth)` **share one demodulator** — ten people on 7.074 USB cost one |
+| Demodulation | AM / USB / LSB / CW / NFM / WFM, native two-stage channelizer (`sdr_dsp.c`, 0.086–0.151 core per channel measured on the W103D) |
+| Audio | 32 kbps Opus, played through the same `rx_worklet_processor.js` as the radio |
+| Capacity | 50 listeners / 8 demodulators by default; spectrum drops 1024 → 512 bins past 12 listeners |
+| Knobs | `MRRC_SDR` (on/off), `MRRC_SDR_PASSWORD`, `MRRC_SDR_MAX_CLIENTS`, `MRRC_SDR_MAX_CHANNELS`, `MRRC_SDR_SAMPLE_RATE`, `MRRC_SDR_GAIN_DB`, `MRRC_SDR_LNA` |
+
+Install prerequisites on the box (the image does this): `blacklist msi2500/msi001` (the kernel DVB
+driver otherwise claims the dongle and its SDR path is broken — tuning pinned at 15 MHz, samples ~all
+zero), the `66-sdrplay.rules` udev rule, and `sdrplay.service`. Operator manual:
+[`docs/sdr_receiver.md`](docs/sdr_receiver.md).
 
 ### Native Clients
 

@@ -233,6 +233,31 @@ class AudioHandler:
             logger.error("PyAudio init failed: %s", e)
             self._pa = None
 
+    def _stream_lock(self):
+        """Lifecycle lock guarding ``_pa`` / ``_rx_stream`` / ``_tx_stream``.
+
+        Created lazily: tests and subclasses build the handler with
+        ``__new__`` and only set the attributes they exercise, so this lock
+        cannot be assumed to exist yet.
+        """
+        lock = getattr(self, "_pa_stream_lock", None)
+        if lock is None:
+            lock = threading.RLock()
+            self._pa_stream_lock = lock
+        return lock
+
+    def _close_streams_locked(self) -> None:
+        """Close both PortAudio streams (caller holds ``_stream_lock()``)."""
+        for attr in ("_rx_stream", "_tx_stream"):
+            stream = getattr(self, attr, None)
+            if stream is not None:
+                try:
+                    stream.stop_stream()
+                    stream.close()
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+
     def _reinit_pyaudio(self):
         """Tear down and re-create the PortAudio context.
 
@@ -243,13 +268,25 @@ class AudioHandler:
         -9999 (paUnanticipatedHostError) until PortAudio is re-initialized.
         Device indices are NOT stable across re-enumeration, so callers
         must re-run _find_*_device afterwards.
+
+        PortAudio must never be terminated while one of its streams is still
+        open: the RX reader runs on the event-loop thread and would read from
+        a stream whose backing context has been freed — a native access
+        violation, which kills the process with no Python traceback and
+        leaves a keyed radio with nobody left to send TX0 (field report
+        2026-10-16, bundle 20261016-230940-40c1).  Both streams are closed
+        first, under the lifecycle lock; ``_rx_running`` deliberately stays
+        True so the capture-stall watchdog in ``_audio_rx_loop`` rebuilds RX
+        on the fresh context.
         """
-        try:
-            if self._pa is not None:
-                self._pa.terminate()
-        except Exception:
-            pass
-        self._pa = None
+        with self._stream_lock():
+            self._close_streams_locked()
+            try:
+                if self._pa is not None:
+                    self._pa.terminate()
+            except Exception:
+                pass
+            self._pa = None
         self._init_pyaudio()
 
     # ── RX: Capture from sound card → Opus frames ──────────────────
@@ -519,15 +556,22 @@ class AudioHandler:
         return False
 
     def stop_rx(self):
-        """Stop RX audio capture."""
+        """Stop RX audio capture.
+
+        Closing the stream under the lifecycle lock is what keeps a
+        concurrent ``read_rx_chunk()`` (event-loop thread) from reading a
+        handle this call is closing underneath it.
+        """
         self._rx_running = False
-        if self._rx_stream:
-            try:
-                self._rx_stream.stop_stream()
-                self._rx_stream.close()
-            except Exception:
-                pass
+        with self._stream_lock():
+            stream = self._rx_stream
             self._rx_stream = None
+            if stream is not None:
+                try:
+                    stream.stop_stream()
+                    stream.close()
+                except Exception:
+                    pass
 
     def restart_rx(self):
         """Close and reopen the RX capture stream after TX→RX.
@@ -553,35 +597,50 @@ class AudioHandler:
     def read_rx_chunk(self) -> Optional[bytes]:
         """Read one chunk of int16 PCM audio from the RX stream.
         Non-blocking — uses get_read_available() to check before read.
-        Returns None if not enough data is available."""
-        if not self._rx_running or self._rx_stream is None:
+        Returns None if not enough data is available.
+
+        The lifecycle lock is taken with a NON-blocking acquire: while a
+        PortAudio re-init / stream rebuild holds it, this tick simply has no
+        stream to read and returns None, instead of blocking the event loop
+        or touching a stream that is being closed underneath it.
+        """
+        if not self._rx_running:
+            return None
+        lock = self._stream_lock()
+        if not lock.acquire(blocking=False):
             return None
         try:
-            # Use get_read_available to check, then read what's there
-            count = self._rx_stream.get_read_available()
-            if count >= self._rx_chunk:
-                # Read one chunk's worth, or at most 4 chunks to prevent lag
-                to_read = min(count, self._rx_chunk * 4)
-                data = self._rx_stream.read(to_read, exception_on_overflow=False)
-                if data and len(data) >= 2:
-                    # Device already at the 48 kHz Opus wire rate (IC-7300):
-                    # passthrough, no resampling needed.
-                    if self._rx_dev_rate == RX_RATE:
-                        return data
-                    return resample_pcm(data, self._rx_dev_rate, RX_RATE)
-        except OSError as e:
-            if "Stream not open" in str(e) or "No such device" in str(e):
-                logger.warning("RX stream lost — attempting restart")
-                self._rx_running = False
-                try: self.stop_rx()
-                except Exception: pass
-                time.sleep(0.5)
-                self.start_rx()
-            else:
+            stream = self._rx_stream
+            if stream is None:
+                return None
+            try:
+                # Use get_read_available to check, then read what's there
+                count = stream.get_read_available()
+                if count >= self._rx_chunk:
+                    # Read one chunk's worth, or at most 4 chunks to prevent lag
+                    to_read = min(count, self._rx_chunk * 4)
+                    data = stream.read(to_read, exception_on_overflow=False)
+                    if data and len(data) >= 2:
+                        # Device already at the 48 kHz Opus wire rate (IC-7300):
+                        # passthrough, no resampling needed.
+                        if self._rx_dev_rate == RX_RATE:
+                            return data
+                        return resample_pcm(data, self._rx_dev_rate, RX_RATE)
+            except OSError as e:
+                if "Stream not open" in str(e) or "No such device" in str(e):
+                    logger.warning("RX stream lost — attempting restart")
+                    self._rx_running = False
+                    try: self.stop_rx()
+                    except Exception: pass
+                    time.sleep(0.5)
+                    self.start_rx()
+                else:
+                    logger.debug("RX read error: %s", e)
+            except Exception as e:
                 logger.debug("RX read error: %s", e)
-        except Exception as e:
-            logger.debug("RX read error: %s", e)
-        return None
+            return None
+        finally:
+            lock.release()
 
     def note_rx_chunk(self, pcm: Optional[bytes]):
         """Feed the RX-silence watchdog: record the chunk peak and the start

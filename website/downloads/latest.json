@@ -1,19 +1,19 @@
 {
-  "latest": "1.27.0",
+  "latest": "1.28.0",
   "installer": {
-    "version": "1.27.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe",
-    "sha256": "c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be",
-    "size": 79263639
+    "version": "1.28.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.0-Windows-x64-Setup.exe",
+    "sha256": "cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea",
+    "size": 79370813
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-13T18:38:23",
-  "notes": "1.27.0：新增 FT8 工作模式（主菜单切换，SSB↔FT8，台况逐字段恢复；解码默认走快路径、按需级联到 WSJT-X 深路径；发射与 SSB 共用同一条门控）。四个平台的产物都自带原生 DSP 库：W103D 与树莓派镜像在构建期编译，macOS 与 Windows 安装包在打包时编译并携带运行期依赖——刷机或装包后 FT8 直接可用。修复：dt 显示偏大 0.6 s 与「升级过的时隙显示两遍」。",
+  "releasedAt": "2026-10-17T00:35:51",
+  "notes": "1.28.0：电台电源回到 ☰ 菜单（「重开电台」关机后每 30 秒再试唤醒，最多 15 分钟、随时可取消；「关机」只关机、绝不上电）；菜单最下边显示当前版本号；出站 HTTPS 只信随包根证书，不再采信本机证书库；FT8 级联的决策截止 2.5→4.0 s —— 此前深路径在生产里一次也没跑过，现在日志与 FT8 页面都能看到升级率。修复：按发射后进程消失、电台卡在发射（PortAudio 重初始化不得在 RX 流仍开着时 terminate）；打包版 FT8 缺 cty.dat 导致 DXCC 国家名静默失效。",
   "previous": {
-    "version": "1.26.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.26.0-Windows-x64-Setup.exe",
-    "sha256": "5fc8b192317d432eec88904d8168553d4ea874409225ca89a6999d125486b6c3",
-    "size": 55866721
+    "version": "1.27.0",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.27.0-Windows-x64-Setup.exe",
+    "sha256": "c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be",
+    "size": 79263639
   }
 }

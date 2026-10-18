@@ -510,6 +510,13 @@
 <td>AD-021, <code class="scope-code">tests/test_support_bundle.py</code>, <code class="scope-code">tests/test_support_api.py</code></td>
 <td></td>
 </tr>
+<tr>
+<td>NFR-069</td>
+<td>Factory-preset disclosure</td>
+<td>A ship-ready (<code class="scope-code">--preflash</code>) image’s three credentials (root / service user / web) are public knowledge by construction: they are documented in <code class="scope-code">docs/W103D_GUIDE.md</code> §7 and <code class="scope-code">packaging/box/README.md</code>, all three can be changed on the box, and the guide states the trade-off (one image, one batch, one password) rather than presenting them as secrets</td>
+<td>High</td>
+<td>Docs carry the values and the trade-off; a build without <code class="scope-code">--preflash</code> has no fixed values at all (<code class="scope-code">tests/test_preflash.py</code>, artifact check §8.2 of the 2026-10-17 design)</td>
+</tr>
 </tbody>
 </table>
     </main>
@@ -518,7 +525,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.84 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.00 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

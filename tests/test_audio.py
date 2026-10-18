@@ -148,7 +148,7 @@ class TxFrontendContractTests(unittest.TestCase):
         self.assertIn("tx_opus_worker.js?v=tx-audio-4", main_source)
         self.assertIn("tx_capture_worklet.js?v=tx-audio-4", main_source)
         self.assertIn("opus_codec.js?v=tx-audio-4", worker_source)
-        self.assertIn("mrrc-v52", sw_source)
+        self.assertIn("mrrc-v54", sw_source)
 
     def test_tx_debug_tone_bypasses_microphone_capture(self):
         main_source = (REPO_ROOT / "static" / "ft710_main.js").read_text(encoding="utf-8")
@@ -406,8 +406,16 @@ class RXBackpressureTests(unittest.TestCase):
         # without this term it never receives audio at all.
         self.assertIn("_ft8_tap_live = _ft8_runtime is not None and _ft8_runtime.rx_tap is not None",
                       source)
-        self.assertIn("if not audio_rx_clients and not _rec_session.active and not _ft8_tap_live:",
-                      source)
+        # The local speaker (AD-028) is a listener with no browser client too,
+        # so it joins the FT8 tap in the idle gate.
+        self.assertIn("_speaker_live = _local_speaker is not None and _local_speaker.active", source)
+        self.assertIn("and not _ft8_tap_live and not _speaker_live)", source)
+        # Opus is only for browsers: recording, the FT8 tap and the local
+        # speaker consume the PCM directly, so a speaker-only box must not
+        # burn a core encoding frames that nobody reads.
+        self.assertIn("_needs_frames = (bool(audio_rx_clients) or _rec_session.active", source)
+        self.assertIn("or not _needs_frames", source)
+
         self.assertIn("await asyncio.sleep(idle_interval)", source)
         self.assertIn("continue", source)
 
@@ -419,7 +427,7 @@ class RXBackpressureTests(unittest.TestCase):
         the recording tap and the silence watchdog stay live."""
         source = (REPO_ROOT / "server.py").read_text(encoding="utf-8")
         self.assertIn("_radio_txing = (radio is not None", source)
-        self.assertIn("None if _radio_txing", source)
+        self.assertIn("None if (_radio_txing or not _needs_frames)", source)
         self.assertIn("else audio.encode_rx_audio(pcm)", source)
         # The recording tap must stay BEFORE the guard (always fed).
         tap_idx = source.index("_rec_tap_rx(pcm")
@@ -986,6 +994,101 @@ class PortAudioReinitTests(unittest.TestCase):
         h._rx_stream = None
         h._rx_running = False
         return h
+
+    def test_reinit_closes_live_rx_stream_before_terminate(self):
+        """Pa_Terminate must never run while the RX stream is still open.
+
+        Field report 2026-10-16 (bundle 20261016-230940-40c1): terminating
+        PortAudio underneath the RX reader killed the process natively — no
+        Python traceback — and the radio, keyed first, never got its TX0.
+        """
+        events = []
+
+        class _Stream:
+            def stop_stream(self):
+                events.append("rx.stop")
+
+            def close(self):
+                events.append("rx.close")
+
+        class _PA:
+            def terminate(self):
+                events.append("pa.terminate")
+
+        h = self._make_handler(_PA())
+        h._rx_stream = _Stream()
+        h._rx_running = True
+        h._init_pyaudio = lambda: events.append("pa.init")
+
+        h._reinit_pyaudio()
+
+        self.assertIn("rx.close", events)
+        self.assertLess(events.index("rx.close"), events.index("pa.terminate"))
+        self.assertIsNone(h._rx_stream)
+        # RX stays marked running so _audio_rx_loop's stall watchdog rebuilds it.
+        self.assertTrue(h._rx_running)
+
+    def test_reinit_closes_live_tx_stream_before_terminate(self):
+        events = []
+
+        class _Stream:
+            def stop_stream(self):
+                events.append("tx.stop")
+
+            def close(self):
+                events.append("tx.close")
+
+        class _PA:
+            def terminate(self):
+                events.append("pa.terminate")
+
+        h = self._make_handler(_PA())
+        h._tx_stream = _Stream()
+        h._init_pyaudio = lambda: events.append("pa.init")
+
+        h._reinit_pyaudio()
+
+        self.assertLess(events.index("tx.close"), events.index("pa.terminate"))
+        self.assertIsNone(h._tx_stream)
+
+    def test_read_rx_chunk_skips_while_rebuild_holds_the_lock(self):
+        """A rebuild in flight yields no audio, not a read on a dying stream."""
+
+        class _Boom:
+            def get_read_available(self):
+                raise AssertionError("read raced a stream rebuild")
+
+        h = self._make_handler(object())
+        h._rx_stream = _Boom()
+        h._rx_running = True
+        h._rx_chunk = 960
+
+        lock = h._stream_lock()
+        lock.acquire()
+        try:
+            self.assertIsNone(h.read_rx_chunk())
+        finally:
+            lock.release()
+
+    def test_stop_rx_closes_stream_and_nulls_it(self):
+        closed = []
+
+        class _Stream:
+            def stop_stream(self):
+                pass
+
+            def close(self):
+                closed.append(1)
+
+        h = self._make_handler(object())
+        h._rx_stream = _Stream()
+        h._rx_running = True
+
+        h.stop_rx()
+
+        self.assertEqual(closed, [1])
+        self.assertIsNone(h._rx_stream)
+        self.assertFalse(h._rx_running)
 
     def test_start_tx_reinits_pyaudio_then_succeeds(self):
         self._patch_devices_empty()
@@ -1666,7 +1769,12 @@ class RxStallWatchdogTests(unittest.TestCase):
         self.assertTrue(reopened, "the watchdog must reopen the stalled capture")
 
     def test_no_watchdog_without_a_listener(self):
-        """No clients means the loop idles by design — that is not a stall."""
+        """No consumer at all means the loop idles by design — not a stall.
+
+        The rule is "somebody needs the audio" (a browser, the FT8 tap, a
+        recording), not "a WebSocket is open"; see
+        ``test_the_ft8_tap_counts_as_a_listener``.
+        """
         import asyncio
         import contextlib
         import server
@@ -1704,3 +1812,60 @@ class RxStallWatchdogTests(unittest.TestCase):
 
         asyncio.run(drive())
         self.assertEqual(reopened, [], "the idle path must not reopen anything")
+
+    def test_the_ft8_tap_counts_as_a_listener(self):
+        """A stalled capture is reopened for the FT8 tap, not only for browsers.
+
+        Field 2026-10-17 (W103D 192.168.1.220): the USB tree re-enumerated at
+        13:31:39 and the ALSA capture went silent.  The operator was on the FT8
+        page, which never opens ``/WSaudioRX``, so ``audio_rx_clients`` was
+        empty and the watchdog refused to reopen — the decoder starved for the
+        rest of the process (``slots_skipped=66/67, decodes=0``).  A consumer of
+        the audio, not a WebSocket, is what makes a stall recoverable.
+        """
+        import asyncio
+        import contextlib
+        import types
+        import server
+
+        reopened = []
+
+        class StalledCapture:
+            _rx_running = True
+            _rx_dev_rate = 44100
+            _rx_last_peak = 0
+            opus_enabled = True
+
+            def read_rx_chunk(self):
+                return None
+
+            def note_rx_chunk(self, pcm):
+                pass
+
+            def restart_rx(self):
+                reopened.append(True)
+
+        async def drive():
+            saved = (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
+                     server._rx_restart_task, server._ft8_runtime)
+            server.audio = StalledCapture()
+            server.audio_rx_clients = set()
+            server.RX_STALL_ALERT_S = 0.05
+            server._rx_restart_task = None
+            server._ft8_runtime = types.SimpleNamespace(rx_tap=object())
+            task = asyncio.create_task(server._audio_rx_loop())
+            try:
+                with self.assertLogs("mrrc", level="WARNING") as logs:
+                    await asyncio.sleep(0.3)
+                    await asyncio.sleep(0.1)   # let asyncio.to_thread finish
+            finally:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+                (server.audio, server.audio_rx_clients, server.RX_STALL_ALERT_S,
+                 server._rx_restart_task, server._ft8_runtime) = saved
+            return logs
+
+        logs = asyncio.run(drive())
+        self.assertTrue(any("RX capture stalled" in line for line in logs.output), logs.output)
+        self.assertTrue(reopened, "the FT8 tap keeps the capture alive; it must be reopened")

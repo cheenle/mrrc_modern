@@ -490,9 +490,9 @@ AuthService
 </tr>
 <tr>
 <td><code class="scope-code">power</code></td>
-<td>true/false</td>
+<td><code class="scope-code">true</code> / <code class="scope-code">false</code> / <code class="scope-code">"restart"</code> / <code class="scope-code">"cancelRescue"</code></td>
 <td><code class="scope-code">PS1;</code> / <code class="scope-code">PS0;</code></td>
-<td>Maintenance-script path only — NO web UI (V2.13: PS1 wake unreliable, mid-boot PS0 wedges the CAT MCU). Guards: 15 s boot window after <code class="scope-code">PS1</code> rejects <code class="scope-code">PS0</code>; <code class="scope-code">PS1</code> retried ≤3× and verified by <code class="scope-code">FA;</code> read-back; <code class="scope-code">PS0</code> sent twice; refused while TX. <code class="scope-code">PS;</code> polled in Tier 3 for <code class="scope-code">power_on</code> state</td>
+<td><code class="scope-code">false</code> = 关机并<strong>保持关闭</strong>（先取消任何救援，绝不发 <code class="scope-code">PS1</code>）；<code class="scope-code">"restart"</code> = 关机后由 <code class="scope-code">_power_rescue()</code> 持续尝试唤醒（每 30 s 一轮、上限 15 min、可取消，每轮复用 <code class="scope-code">_power_on_radio()</code>）；<code class="scope-code">"cancelRescue"</code> = 只停救援、不碰电台；<code class="scope-code">true</code> = 单次开机尝试（维护脚本/老客户端，语义未变）。Guards（V2.13 的实测结论，逐条保留）：<code class="scope-code">PS1</code> 后 15 s 启动窗口内拒绝 <code class="scope-code">PS0</code>（带剩余秒数）；<code class="scope-code">PS1</code> ≤3 次并由 <code class="scope-code">FA;</code> / CI-V 回读校验；<code class="scope-code">PS0</code> 双发；<strong>发射中拒绝（<code class="scope-code">radio.is_transmitting</code> 或 FT8 的 <code class="scope-code">_ft8_transmitting()</code>）</strong>；端口未连接时救援不写、等 watchdog 重连。<code class="scope-code">PS;</code> 仍在 Tier 3 轮询供 <code class="scope-code">power_on</code></td>
 </tr>
 <tr>
 <td><code class="scope-code">band</code></td>
@@ -566,7 +566,7 @@ AuthService
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.84 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.00 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

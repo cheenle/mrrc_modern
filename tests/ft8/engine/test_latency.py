@@ -16,6 +16,7 @@ from ft8.engine.latency import (
     LatencyHistogram,
     bucket_index,
 )
+from ft8.engine.orchestrator import DEFAULT_DECISION_CUTOFF_SECONDS
 from ft8.web.ft8_api import _health
 
 
@@ -46,7 +47,10 @@ def test_bucket_index_boundaries() -> None:
     assert bucket_index(0.499) == 0
     assert bucket_index(0.5) == 1
     assert bucket_index(2.499) == 4
-    assert bucket_index(2.5) == len(BUCKET_BOUNDS_SECONDS)  # overflow
+    # 2.5 不再是溢出：截止抬到 4.0 之后它是 <3s 桶的一员。
+    assert bucket_index(2.5) == 5
+    assert bucket_index(3.999) == len(BUCKET_BOUNDS_SECONDS) - 1
+    assert bucket_index(4.0) == len(BUCKET_BOUNDS_SECONDS)  # overflow
     assert bucket_index(60.0) == len(BUCKET_BOUNDS_SECONDS)
 
 
@@ -67,7 +71,10 @@ def test_histogram_snapshot_per_configuration() -> None:
         "<1.5s": 0,
         "<2s": 0,
         "<2.5s": 0,
-        ">=2.5s": 1,
+        "<3s": 0,
+        "<3.5s": 1,
+        "<4s": 0,
+        ">=4s": 0,
     }
     assert series["max_seconds"] == 3.1
     assert snapshot["improved/p0/t1"]["buckets"]["<1.5s"] == 1
@@ -167,6 +174,25 @@ def test_health_exposes_cascade_counters_when_the_cascade_is_wired() -> None:
     assert _health(state)["cascade"]["deadline_risk"] == 4
 
 
+def _cascade_counters(**overrides) -> SimpleNamespace:
+    """The cascade's counter surface exactly as ``Ft8Runtime.cascade_stats`` reads it.
+
+    Grew on 2026-10-14 with the cloud deep path: ``cloud_ok`` / ``cloud_fallback`` /
+    ``cloud_seconds`` join ``deadline_risk`` here, and the property reads the
+    attributes directly — a fake built with only ``deadline_risk`` now raises
+    instead of returning a short dict, which is the intended failure mode.
+    """
+
+    counters: dict[str, object] = {
+        "deadline_risk": 0,
+        "cloud_ok": 0,
+        "cloud_fallback": 0,
+        "cloud_seconds": 0.0,
+    }
+    counters.update(overrides)
+    return SimpleNamespace(**counters)
+
+
 def test_cascade_stats_property_covers_both_branches() -> None:
     """`cascade_stats` 的两个分支都要被**这个属性本身**跑到，而不是被替身绕过。
 
@@ -186,5 +212,83 @@ def test_cascade_stats_property_covers_both_branches() -> None:
     assert unwired.cascade_stats is None
 
     wired = object.__new__(Ft8Runtime)
-    wired._cascade = SimpleNamespace(deadline_risk=4)
-    assert wired.cascade_stats == {"deadline_risk": 4}
+    wired._cascade = _cascade_counters(deadline_risk=4)
+    assert wired.cascade_stats == {
+        "deadline_risk": 4,
+        "cloud_ok": 0,
+        "cloud_fallback": 0,
+        "cloud_seconds": 0.0,
+    }
+
+
+def test_bucket_bounds_track_the_decision_cutoff() -> None:
+    """直方图的量程必须**跟着截止走** —— 这正是它存在的理由。
+
+    `latency.py` 的模块 docstring 说桶对齐到 I9 决策截止，那就不能只对齐一次：
+    截止从 2.5 抬到 4.0 之后，若最后一个边界还停在 2.5，任何落在 2.5–4.0 s 的
+    解码都掉进溢出桶 —— 一个 2.6 s 与一个 3.9 s 的解码读数完全一样，而它们
+    离截止的远近截然不同。断言两个**常量**的关系，而不是写死 4.0。
+    """
+
+    assert BUCKET_BOUNDS_SECONDS[-1] == DEFAULT_DECISION_CUTOFF_SECONDS, (
+        f"latency buckets top out at {BUCKET_BOUNDS_SECONDS[-1]}s but the I9 "
+        f"decision cutoff is {DEFAULT_DECISION_CUTOFF_SECONDS}s; decodes in "
+        f"between would be indistinguishable in the overflow bucket"
+    )
+
+
+def test_elapsed_between_the_old_and_new_cutoff_is_not_overflow() -> None:
+    """2.5–4.0 s 之间的解码必须落在**正常桶**里，且彼此可分辨。"""
+
+    histogram = LatencyHistogram()
+    histogram.record("improved", 3, 3, 2.6)
+    histogram.record("improved", 3, 3, 3.9)
+
+    buckets = histogram.snapshot()["improved/p3/t3"]["buckets"]
+    overflow_label = next(label for label in buckets if label.startswith(">="))
+    assert buckets[overflow_label] == 0, f"2.6s/3.9s must not be overflow: {buckets}"
+    assert bucket_index(2.6) != bucket_index(3.9)
+
+
+def test_cascade_stats_carries_the_escalation_counters_when_the_engine_runs() -> None:
+    """升级率必须能从 `cascade_stats` 读到 —— 它是本次改动唯一的验证信号。
+
+    截止修好之前现场实测 `escalations == 0`（263 次拒绝升级）；修好之后这个数必须
+    变成非 0，否则深路径仍然没跑。没有这个出口，唯一的办法是去翻日志。
+    """
+
+    from ft8.runtime import Ft8Runtime
+
+    wired = object.__new__(Ft8Runtime)
+    wired._cascade = _cascade_counters(deadline_risk=2)
+    wired.orchestrator = SimpleNamespace(
+        counters=SimpleNamespace(escalations=7, fast_decodes=93)
+    )
+    assert wired.cascade_stats == {
+        "deadline_risk": 2,
+        "cloud_ok": 0,
+        "cloud_fallback": 0,
+        "cloud_seconds": 0.0,
+        "escalations": 7,
+        "fast_decodes": 93,
+    }
+
+
+def test_cascade_stats_omits_counters_when_the_orchestrator_is_not_wired() -> None:
+    """构造到 `start()` 之间的实例没有 orchestrator —— 必须少键，不能抛。
+
+    `object.__new__(Ft8Runtime)` 就是这个形状（`__init__` 没跑过），
+    `test_cascade_stats_property_covers_both_branches` 已有先例。
+    若这里抛 AttributeError，`/api/ft8/health` 在引擎没起来时 500。
+    """
+
+    from ft8.runtime import Ft8Runtime
+
+    unwired = object.__new__(Ft8Runtime)
+    unwired._cascade = _cascade_counters(deadline_risk=4)
+    assert unwired.cascade_stats == {
+        "deadline_risk": 4,
+        "cloud_ok": 0,
+        "cloud_fallback": 0,
+        "cloud_seconds": 0.0,
+    }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The four system verbs the web pages may ask for, and nothing else.
+"""The five system verbs the web pages may ask for, and nothing else.
 
 Why a separate root process (design §7.3): `mrrc` may *read* NetworkManager, but
 `hostnamectl`, `timedatectl` and `systemctl reboot` are root's. Shrinking that
@@ -88,6 +88,61 @@ def argv_for(verb: str, args: list) -> Optional[list]:
     return None
 
 
+#: The only accounts `set-password` will touch: the two a shipping image sets.
+#: A free-form user name here would turn this socket into "become anyone", which
+#: is not a verb table any more.
+PASSWORD_USERS = ("root", "mrrc")
+PASSWORD_MIN, PASSWORD_MAX = 8, 128
+
+
+def password_problem(user: str, password: str) -> str:
+    """Why this password change cannot be made, or "" when it can."""
+    if user not in PASSWORD_USERS:
+        return "只能改这几个账号：" + "、".join(PASSWORD_USERS)
+    if len(password) < PASSWORD_MIN:
+        return f"口令至少 {PASSWORD_MIN} 位"
+    if len(password) > PASSWORD_MAX:
+        return f"口令最多 {PASSWORD_MAX} 位"
+    # `chpasswd` reads `user:password` per *line*: a newline in the password is a
+    # second line, and a NUL truncates. Nothing else is restricted — a passphrase
+    # with spaces or punctuation is a good password.
+    if any(ch in password for ch in "\r\n\x00"):
+        return "口令里不能有换行或 NUL"
+    return ""
+
+
+def do_set_password(args: list) -> dict:
+    """Change one account's password. The secret goes in on stdin, never argv.
+
+    Deliberately not an `argv_for` verb: an argument is world-readable in
+    `/proc/<pid>/cmdline`, and a password belongs in a pipe rather than in a
+    process list. That is also why the password is the one thing this process
+    never logs — the log lines below name the account and nothing else.
+    """
+    if len(args) != 2:
+        log("refused set-password with a wrong argument count")
+        return {"ok": False, "error": "refused: set-password"}
+    user, password = args
+    problem = password_problem(user, password)
+    if problem:
+        log(f"refused set-password for {user!r}: {problem}")
+        return {"ok": False, "error": problem}
+    try:
+        completed = subprocess.run(["chpasswd"],
+                                   input=f"{user}:{password}\n",
+                                   capture_output=True, text=True,
+                                   timeout=COMMAND_TIMEOUT_S)
+    except (OSError, subprocess.SubprocessError) as exc:
+        log(f"set-password: {exc}")
+        return {"ok": False, "error": "chpasswd could not run"}
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        log(f"set-password failed ({completed.returncode}) for {user!r}: {detail}")
+        return {"ok": False, "error": detail or "chpasswd failed"}
+    log(f"set-password ok for {user!r}")
+    return {"ok": True, "user": user}
+
+
 def sync_hosts(name: str, path: str = "/etc/hosts") -> bool:
     """Keep the 127.0.1.1 line in step with the hostname.
 
@@ -134,6 +189,8 @@ def handle(request) -> dict:
     if not isinstance(verb, str) or not isinstance(args, list) \
             or not all(isinstance(arg, str) for arg in args):
         return {"ok": False, "error": "malformed request"}
+    if verb == "set-password":
+        return do_set_password(args)
     argv = argv_for(verb, args)
     if argv is None:
         log(f"refused verb {verb!r} with {len(args)} argument(s)")

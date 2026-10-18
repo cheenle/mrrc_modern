@@ -29,8 +29,10 @@ set +a
 
 # pi-gen's FIRST_USER_NAME=mrrc created the account; the service layer assumes it
 # exists and never creates it. dialout: /dev/ttyUSB*/ttyACM*. audio: the radio's
-# USB sound card.
-usermod -aG dialout,audio mrrc
+# USB sound card. input: the Bluetooth remote's HID node (mrrc-localctl reads it,
+# and /dev/input/eventN is root:input 0660) — missing it means every key press is
+# a "Permission denied" that nothing reports as a failure.
+usermod -aG dialout,audio,input mrrc
 chown -R mrrc:mrrc "$MRRC_HOME"
 systemctl enable ssh
 

@@ -383,6 +383,42 @@ def set_timezone(zone: str, *, sender: Optional[Callable] = None) -> dict:
     return call_helper("set-timezone", (zone or "").strip(), sender=sender)
 
 
+#: The accounts the box page may change a password for: the two a shipping
+#: image sets (root and the service user).
+SYSTEM_PASSWORD_USERS = ("root", "mrrc")
+SYSTEM_PASSWORD_MIN = 8
+
+
+def system_password_problem(user: str, password: str) -> str:
+    """Why this password change cannot be made, or "" when it can.
+
+    The helper validates the same thing and is the authority (it is the one that
+    runs `chpasswd`); this mirror exists so the page gets a 400 with a sentence
+    instead of a round trip to a root process for a typo.
+    """
+    if user not in SYSTEM_PASSWORD_USERS:
+        return "只能改这几个账号：" + "、".join(SYSTEM_PASSWORD_USERS)
+    if len(password or "") < SYSTEM_PASSWORD_MIN:
+        return f"口令至少 {SYSTEM_PASSWORD_MIN} 位"
+    if any(ch in password for ch in "\r\n\x00"):
+        return "口令里不能有换行或 NUL"
+    return ""
+
+
+def set_system_password(user: str, password: str, *,
+                        sender: Optional[Callable] = None) -> dict:
+    """Change root / mrrc / rescue's password through the root helper.
+
+    The secret travels as a helper argument over a 0660 root:mrrc Unix socket
+    (peer-checked by SO_PEERCRED) and into `chpasswd` on stdin — never into argv,
+    never into a log line, never into a status dict.
+    """
+    problem = system_password_problem(user, password)
+    if problem:
+        return {"ok": False, "error": problem}
+    return call_helper("set-password", user, password, sender=sender)
+
+
 def reboot(*, sender: Optional[Callable] = None) -> dict:
     """Restart the box, not the service. `POST /api/restart` is the other one."""
     return call_helper("reboot", sender=sender)
@@ -450,12 +486,16 @@ class SwitchState:
         self.reason = ""
         self.address = ""
         self.since = 0.0
+        #: A failed switch that nonetheless left a usable profile behind (the
+        #: access point was simply out of range). Booleans only: the field list is
+        #: closed so a PSK has no key it could occupy.
+        self.saved = False
 
     def snapshot(self) -> dict:
         with self.lock:
             return {"phase": self.phase, "ssid": self.ssid,
                     "reason": self.reason, "address": self.address,
-                    "since": self.since}
+                    "since": self.since, "saved": self.saved}
 
     def reset(self) -> None:
         with self.lock:
@@ -464,6 +504,7 @@ class SwitchState:
             self.reason = ""
             self.address = ""
             self.since = 0.0
+            self.saved = False
 
 
 #: The process-wide instance the endpoints read. Tests build their own.
@@ -485,18 +526,21 @@ def _active_wifi_profiles(runner: Optional[Callable] = None) -> list:
 
 
 def _finish_switch(state: SwitchState, ok: bool, reason: str,
-                   address: str = "") -> dict:
+                   address: str = "", saved: bool = False) -> dict:
     with state.lock:
         state.phase = PHASE_OK if ok else PHASE_FAILED
         state.reason = reason
+        state.saved = saved
         state.address = address
         state.since = time.time()
         ssid = state.ssid
-    return {"ok": ok, "ssid": ssid, "reason": reason, "address": address}
+    return {"ok": ok, "ssid": ssid, "reason": reason, "address": address,
+            "saved": saved}
 
 
 def _roll_back(state: SwitchState, ssid: str, previous: list, reason: str,
-               password: str, runner: Optional[Callable] = None) -> dict:
+               password: str, runner: Optional[Callable] = None,
+               keep_autoconnect: bool = False) -> dict:
     """Leave a switch that did not take, then say which old network came back.
 
     Both failure paths — a `connect_wifi` that returned non-zero and a budget
@@ -505,19 +549,28 @@ def _roll_back(state: SwitchState, ssid: str, previous: list, reason: str,
     in N seconds"); this function appends what actually happened to the old
     networks, so neither path can state the other's cause.
 
-    The failed profile is left in place but with `autoconnect no`, so a reboot
+    A failed profile is normally left in place with `autoconnect no`, so a reboot
     does not retry a network that just failed. That is the retired hotspot's
     mistake in the other direction — its profile defaulted to yes, came up at
     every boot, and took the board's Wi-Fi down with it. `connection modify`
     against a profile that was never created returns non-zero, and — like
     `connection up` — that result is deliberately ignored.
 
+    `keep_autoconnect` is the other half of that lesson (2026-10-17). When the
+    switch failed because **the access point is not in range** — measured on a
+    box prepared for a customer, whose AP only exists at their home — disabling
+    the profile throws away the whole point of the operator's typing: the saved
+    network has to be armed so it connects the first time it *is* in range.
+    A rejected credential is different and keeps the old behaviour: retrying that
+    at every boot can never succeed.
+
     The reason names only the profiles `connection up` actually reported as up:
     this string is what the operator reads over a dead network, so it may not
     claim a restore it never verified.
     """
-    net_wifi.nmcli(["connection", "modify", ssid,
-                    "connection.autoconnect", "no"], runner)
+    if not keep_autoconnect:
+        net_wifi.nmcli(["connection", "modify", ssid,
+                        "connection.autoconnect", "no"], runner)
     restored = [name for name in previous
                 if net_wifi.nmcli(["connection", "up", name], runner).ok]
     if restored:
@@ -526,8 +579,16 @@ def _roll_back(state: SwitchState, ssid: str, previous: list, reason: str,
         back_to = "（旧网络未能恢复）"
     else:
         back_to = "（没有旧网络可回退）"
-    text = f"{reason}，已回退到 {back_to}"
-    return _finish_switch(state, False, net_wifi.scrub(text, password))
+    if keep_autoconnect:
+        text = f"{reason}；「{ssid}」已保存，这个网络出现在范围内时自动连接"
+        if previous:
+            # The operator may be reading this over a Wi-Fi link that just went
+            # away, so what happened to the old network is not a detail.
+            text += f"（旧网络：{back_to}）"
+    else:
+        text = f"{reason}，已回退到 {back_to}"
+    return _finish_switch(state, False, net_wifi.scrub(text, password),
+                          saved=keep_autoconnect)
 
 
 def perform_wifi_switch(ssid: str, password: str = "", *,
@@ -580,7 +641,10 @@ def perform_wifi_switch(ssid: str, password: str = "", *,
     if not result.ok:
         detail = net_wifi.scrub(result.stderr or result.stdout, password)
         reason = detail.strip() or f"无法连接「{ssid}」"
-        return _roll_back(target, ssid, previous, reason, password, runner)
+        # "The AP is not here" is not a bad configuration — it is the normal
+        # result of pre-configuring a network for someone else. Keep it armed.
+        return _roll_back(target, ssid, previous, reason, password, runner,
+                          keep_autoconnect=net_wifi.access_point_absent(detail))
 
     address = ""
     deadline = now() + budget
@@ -595,6 +659,83 @@ def perform_wifi_switch(ssid: str, password: str = "", *,
     return _roll_back(target, ssid, previous,
                       f"「{ssid}」在 {int(budget)} 秒内没有拿到地址",
                       password, runner)
+
+
+# ── saved Wi-Fi profiles: add / edit / forget / arm ─────────────────
+#: 802.11 caps an SSID at 32 octets (bytes, not characters: 中文 counts 3 each).
+SSID_MAX_LEN = 32
+#: WPA2-PSK is 8..63 characters. An empty password is an open network, which is
+#: allowed on purpose — the operator gets exactly what they typed, and the
+#: saved profile says so, instead of a silent "no security" surprise.
+PSK_MIN_LEN, PSK_MAX_LEN = 8, 63
+
+
+def ssid_problem(name: str) -> str:
+    """Why this SSID cannot be saved, or "" when it can."""
+    text = name or ""
+    if not text.strip():
+        return "请填 Wi-Fi 名称"
+    if len(text.encode("utf-8")) > SSID_MAX_LEN:
+        return f"Wi-Fi 名称最多 {SSID_MAX_LEN} 个字节（802.11 的规定，中文一个字占 3 个）"
+    if any(ch in text for ch in "\r\n\t"):
+        return "Wi-Fi 名称里不能有换行或制表符"
+    return ""
+
+
+def psk_problem(password: str) -> str:
+    """Why this password cannot be saved, or "" (empty = open network)."""
+    if not password:
+        return ""
+    length = len(password)
+    if length < PSK_MIN_LEN or length > PSK_MAX_LEN:
+        return (f"密码长度要在 {PSK_MIN_LEN}–{PSK_MAX_LEN} 之间（WPA2-PSK 的规矩），"
+                f"现在是 {length}")
+    return ""
+
+
+def save_wifi(ssid: str, password: str = "", autoconnect: bool = True, *,
+              runner: Optional[Callable] = None) -> dict:
+    """Write (or replace) a saved Wi-Fi profile — **without** switching to it.
+
+    The switch endpoint cannot do this job: it brings the profile up right away,
+    which means waiting out the connect bound and rolling back when the AP is not
+    in range — exactly the case of preparing a box for someone else's home
+    (2026-10-17). Saving therefore never touches the active connection, and the
+    PSK only ever reaches nmcli's argv (`scrub` covers its error text).
+    """
+    problem = ssid_problem(ssid) or psk_problem(password)
+    if problem:
+        return {"ok": False, "error": problem}
+    written = net_wifi.write_profile(ssid, password, runner=runner)
+    if not written.ok:
+        detail = net_wifi.scrub(written.stderr or written.stdout, password)
+        return {"ok": False, "error": detail.strip() or f"无法保存「{ssid}」"}
+    if not autoconnect:
+        net_wifi.set_autoconnect(ssid, False, runner=runner)
+    return {"ok": True, "ssid": ssid, "autoconnect": bool(autoconnect)}
+
+
+def forget_wifi(ssid: str, *, runner: Optional[Callable] = None) -> dict:
+    """Delete one saved profile. The network stays connected until it drops."""
+    if not (ssid or "").strip():
+        return {"ok": False, "error": "没有指定要删的 Wi-Fi"}
+    result = net_wifi.forget(ssid, runner)
+    if not result.ok:
+        detail = net_wifi.scrub(result.stderr or result.stdout)
+        return {"ok": False, "error": detail.strip() or f"没有找到「{ssid}」"}
+    return {"ok": True, "ssid": ssid}
+
+
+def set_wifi_autoconnect(ssid: str, enabled: bool, *,
+                         runner: Optional[Callable] = None) -> dict:
+    """Arm or disarm a saved profile — the difference between "今天连" and "以后连"."""
+    if not (ssid or "").strip():
+        return {"ok": False, "error": "没有指定 Wi-Fi"}
+    result = net_wifi.set_autoconnect(ssid, bool(enabled), runner)
+    if not result.ok:
+        detail = net_wifi.scrub(result.stderr or result.stdout)
+        return {"ok": False, "error": detail.strip() or f"改不了「{ssid}」"}
+    return {"ok": True, "ssid": ssid, "autoconnect": bool(enabled)}
 
 
 # ── the wired profile: DHCP or static ───────────────────────────────

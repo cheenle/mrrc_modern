@@ -66,6 +66,63 @@ class ScheduleRestartTests(unittest.TestCase):
             fn()
         exit_mock.assert_called_once_with(42)
 
+    def test_releases_ptt_before_exit_when_transmitting(self):
+        """os._exit skips the lifespan Force-RX, so the restart path must
+        drop the carrier itself — a keyed restart used to leave the radio
+        transmitting with no process left to send TX0."""
+        class _Cat:
+            connected = True
+
+            async def set_ptt(self, tx):
+                pass
+
+        class _Radio:
+            is_transmitting = True
+
+        made = []
+
+        def fake_run_coro(coro, loop):
+            made.append(coro)
+            coro.close()
+
+            class _F:
+                def result(self, timeout=None):
+                    return None
+
+            return _F()
+
+        with mock.patch.object(server, "cat", _Cat()), \
+             mock.patch.object(server, "radio", _Radio()), \
+             mock.patch("asyncio.get_running_loop", return_value=object()), \
+             mock.patch("asyncio.run_coroutine_threadsafe",
+                        side_effect=fake_run_coro), \
+             mock.patch("threading.Timer") as timer:
+            server._schedule_restart()
+            fn = timer.call_args[0][1]
+            with mock.patch("os._exit") as exit_mock:
+                fn()
+        self.assertEqual(len(made), 1, "restart must release PTT before exiting")
+        exit_mock.assert_called_once_with(42)
+
+    def test_does_not_release_when_not_transmitting(self):
+        class _Cat:
+            connected = True
+
+        class _Radio:
+            is_transmitting = False
+
+        with mock.patch.object(server, "cat", _Cat()), \
+             mock.patch.object(server, "radio", _Radio()), \
+             mock.patch("asyncio.get_running_loop", return_value=object()), \
+             mock.patch("asyncio.run_coroutine_threadsafe") as rct, \
+             mock.patch("threading.Timer") as timer:
+            server._schedule_restart()
+            fn = timer.call_args[0][1]
+            with mock.patch("os._exit") as exit_mock:
+                fn()
+        rct.assert_not_called()
+        exit_mock.assert_called_once_with(42)
+
 
 class DualStackSocketTests(unittest.TestCase):
     def test_dual_stack_accepts_ipv4_and_ipv6(self):

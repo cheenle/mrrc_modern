@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2201 tests across 115 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-13, macOS). **That total is the `unittest`
+2569 tests across 134 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 64 of those 115 — the support-chain, Cloud Hub and
+sections below itemise 93 of those 126 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -21,10 +21,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2201 |
-| Passed | 2181 (1 skipped) |
+| Total tests | 2369 |
+| Passed | 2368 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 (macOS, 2026-10-13) |
+| Failed | 0 (macOS, 2026-10-17) |
 | Execution time | ~1min (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -60,19 +60,37 @@ republished. None is a defect in the code under test here.
 ## FT8 Suite (pytest)
 
 The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separate,
-pytest-only** suite of 55 modules under `tests/ft8/`. It is written in the pytest
+pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2201 above. Run it with:
+the 2481 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
 ```
 
-Measured 2026-10-13 (macOS): **751 passed, 2 skipped, 1 xfailed** — the DSP subset
-(`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
+Measured 2026-10-14 (macOS): **782 passed, 2 skipped, 1 xfailed** (785 collected) — the DSP
+subset (`tests/ft8/dsp/`) needs the freshly built `libwsjt_core` (see `ft8/dsp/build.sh`)
 and includes the fast-path / cascade regression the design
 (`docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md`) pinned.
+
+The worker's reply carries **three clocks** — the parent's wall time, the worker's own
+`elapsed_seconds`, and the worker process's `cpu_seconds` (`time.process_time()`, all
+threads). The third is the one that makes *fake parallelism* visible: on the W103D, going
+from 1 to 3 decode threads costs **1.6× the total CPU** while saving only **1.46× the
+wall** (`docs/ft8-w103d-decode-perf-analysis.md` §8.2), because `sync8var` recomputes the
+whole symbol-spectrum per thread. It is measured **inside the Worker** — the parent's
+process CPU would fold in the audio and spectrum threads, and `RUSAGE_CHILDREN` does not
+update for a child that is still alive. The opt-in I9 benchmark
+(`tests/ft8/dsp/test_i9_benchmark.py`, `MRRC_FT8_I9_BENCHMARK=1`) prints the full
+threads × CPU matrix and is the harness 第 0 梯队 of that analysis asked for. That matrix
+cannot be run **on a production box** — `packaging/common/stage-tree.sh` excludes `tests/`,
+`tools/` and `dev_tools/`, so there is neither a test tree nor pytest there — which is what
+`tools/ft8/i9_thread_matrix.py` and `tests/ft8/test_i9_field_twin.py` are for: the twin
+reproduces the benchmark from numpy plus the installed `ft8.core.*`, and the test holds it to
+production's working directory (the vendored decoder resolves `ALLCALL7.TXT` against the
+*process cwd*, `ft8/dsp/vendor/prog_args.f90:4`). Field results:
+`docs/ft8-w103d-phase-a-baseline.md`.
 
 ## Test Modules
 
@@ -111,7 +129,7 @@ SDD coverage: §7.2, §10.4, NFRs
 | `SMeterCalibrationTests` | 4 | raw_to_dbm monotonic, raw_to_s_unit labels (S0–S9, +10–+60) |
 | `ConfigConstantsTests` | 5 | PREAMP_LABELS, ATTENUATOR_LABELS, SCOPE_SPANS, MEM_CHANNEL_COUNT, AUTH_CONFIG |
 
-### 4. test_audio.py — Audio Handler + Opus Codec (106 tests)
+### 4. test_audio.py — Audio Handler + Opus Codec (115 tests)
 
 SDD coverage: AD-004, NFR-060–NFR-065
 
@@ -307,7 +325,7 @@ SDD coverage: AD-005 (V2.7 amendment — stdin control channel + Windows tree ki
 | `NotifyScopePipeTxTests` | 5 | Server → pipe stdin notify: TX/RX transitions, no-write on unchanged state, force resend, dead-pipe guard |
 | `TerminateProcessTreeTests` | 2 | Windows `taskkill /PID /T /F` vs POSIX SIGTERM selection |
 
-### 23. test_ssl_bootstrap.py — Self-Signed TLS Bootstrap (10 tests)
+### 23. test_ssl_bootstrap.py — Self-Signed TLS Bootstrap (15 tests)
 
 SDD coverage: V2.10 (HTTPS-by-default launcher bootstrap)
 
@@ -317,9 +335,9 @@ SDD coverage: V2.10 (HTTPS-by-default launcher bootstrap)
 | `CryptoMissingTests` | 1 | Graceful None when cryptography is unavailable |
 | `LanIpTests` | 1 | LAN IP detection excludes loopback, IPv4-parseable |
 
-### 24. test_power_switch.py — Radio Power Command Guards (11 tests)
+### 24. test_power_switch.py — Radio Power Command Guards (31 tests)
 
-SDD coverage: V2.11 (header power switch), V2.12 (boot-window guard + PS1 verify, 2026-07-27 CAT-MCU wedge incident)
+SDD coverage: V2.11 (header power switch), V2.12 (boot-window guard + PS1 verify, 2026-07-27 CAT-MCU wedge incident), V2.86（菜单两项：重启电台 = 有界可取消的持续唤醒 / 关机 = 保持关闭；守卫 3 + 救援 6 + 协议接线 3 + 前端守卫 6，另在 `test_listen_only.py` 里把 `power` 的四个取值钉进禁止项）
 
 | Class | Tests | Covers |
 |-------|-------|--------|
@@ -553,7 +571,7 @@ verdict and never a blocked session.
 The loopback-only auto-password banner and the `/api/setup` first-run status
 payload.
 
-### 51. test_server_setup.py — Connection Settings and Restart (10 tests)
+### 51. test_server_setup.py — Connection Settings and Restart (12 tests)
 
 Config-file path resolution, the dual-stack pre-bound socket, device listing,
 the restart chain, and the baud<->model linkage written on every save.
@@ -722,6 +740,25 @@ platform's wiring, and the macOS helper's closure logic gets real unit tests.
 | `WindowsPackagingTests` | 2 | the MinGW build step and the walked (not hard-coded) runtime DLL closure |
 | `PyInstallerSpecTests` | 2 | the native library is staged at the app root and `ft8`/`scipy`/`soxr` are named as hidden imports |
 
+### 65. test_static_cache_headers.py — 静态资源缓存契约 (16 tests)
+
+SDD coverage: §3.3 of `docs/superpowers/specs/2026-10-17-static-asset-delivery-design.md`
+（hub 侧的对偶在 `../mrrc_hub/deploy/nginx/`）
+
+实例此前只发 `ETag`/`Last-Modified`、不实现条件 GET —— 实测带 `If-None-Match` 仍返回
+200 与完整 534 KB，于是每次重新加载都等于重新穿一遍隧道。这些断言钉住三件事：
+文档类 `no-cache`、其余静态件 `public, max-age=3600`（刻意不写 `immutable`：`?v=` 是
+手工 bump 的）、条件请求回 304、有扩展名的缺失路径回 404（`/favicon.png` 曾经拿到
+40 KB 的 `index.html` 被浏览器当图标收下）。
+
+| Class | Tests | Covers |
+| ------- | ------- | -------- |
+| `CacheControlTests` | 4 | 文档/入口脚本 `no-cache`；静态件 1 小时；判定按扩展名（不依赖文件存在）；不出现 `immutable` |
+| `ConditionalRequestTests` | 6 | `If-None-Match` 命中 → 304 且无 body；陈旧 ETag → 200；`W/` 弱校验也命中；`If-Modified-Since` ≥ mtime → 304；坏日期忽略；`If-None-Match` 优先于 `If-Modified-Since` |
+| `MissingAssetTests` | 3 | 有扩展名的缺失路径 → 404；无扩展名仍回落 `index.html` 且带 `no-cache`；路径穿越先于回落规则被拒 |
+| `AuthOrderTests` | 1 | 不带令牌取静态件仍是跳登录页（缓存头没有改变鉴权顺序） |
+| `PageRouteTests` | 2 | `/listen` 与 `/settings` 不经 `serve_static`，各自也要发 `no-cache`；`/setup` 必须保持 `no-store`（它会显示自动生成的口令横幅） |
+
 ## Test Coverage by SDD Requirement
 
 | SDD Section | Test Module(s) | Status |
@@ -806,7 +843,8 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_static_cache_busting.py` | `index.html` 的 `?v=` 与 `sw.js` 预缓存清单必须逐项一致（SW 只在自己字节变化时重装，键不动就永远发不出新文件） |
 | `test_install_sh_url.py` | macOS 源码安装脚本交给用户的 URL 必须是 `https://` —— 它写 `MRRC_WEB_HOST=0.0.0.0` 且从不关 TLS，却一直打印 `http://localhost:8888`（v1.24.5 黑屏的缩影）；顺带守住"别哪天偷偷关掉 TLS 让这句承诺反过来变错" |
 | `test_website_links.py` | 站点内链必须落到真锚点（曾 6 条指向指南里不存在的小节、1 条指向被生成器丢掉的 h1 锚点）；且**生成的 guide 页不得比源文档旧**（`build_guide.py` 是唯一写者，改文档不重建就是站点在描述旧行为）；顺带禁止任何页给出服务答不了的明文本地 URL |
-| `test_tls_trust_store.py` | **出站 HTTPS 必须能在「没有构建机 OpenSSL 默认路径」的机器上验通**（2026-10-04 现场：macOS 包的信任库为空 ⇒ portal 接入 / 诊断包上传 / 更新检查全报 `CERTIFICATE_VERIFY_FAILED`）。测试真的复刻空信任库，断言 `net_tls` 仍能重建（包内 `vendor/ca` → 系统 bundle）、包本身是真 CA 文件、并发告警，以及 **AST 守卫：任何直接 `urlopen` 必须带 `context=`**（否则下一个调用点会原样复发） |
+| `test_power_acceptance.py` | **现场验收的判据必须能在没有电台的机器上测**：V1–V7（`tools/power/power_acceptance.py`）里唯一只有真机能测的是「`PS1;` 到底能不能唤醒」与「唤不醒时应用会不会承认」，而它决定「重开电台」这一项是否发布。测试把服务器真实广播的帧形状喂给纯判据（含反向用例：永不醒来的唤醒、取消后又上电、本该被拒的 listen 会话），并断言报告里同时有结论表与原始帧 |
+| `test_tls_trust_store.py` | **出站 HTTPS 必须能在「没有构建机 OpenSSL 默认路径」的机器上验通**（2026-10-04 现场：macOS 包的信任库为空 ⇒ portal 接入 / 诊断包上传 / 更新检查全报 `CERTIFICATE_VERIFY_FAILED`）。测试真的复刻空信任库，断言 `net_tls` 仍能重建（包内 `vendor/ca` → 系统 bundle）、包本身是真 CA 文件、并发告警，以及 **AST 守卫：任何直接 `urlopen` 必须带 `context=`**（否则下一个调用点会原样复发）；2026-10-16 增补：**受污染的本机库不得影响我们的判定** —— 合成 PKI（同名同密钥的过期中间证书）配**真握手**，受污染库那一侧必须真的以 `expired` 失败（反向对照），`net_tls` 构造的上下文必须成功，并断言结果里的根数等于我们 bundle 的条数 |
 
 ### 本轮新增（W103D 盒子镜像的两处守卫，2026-10-06）
 
@@ -841,6 +879,13 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | ------ | ------ |
 | `test_spectrum_profile.py` | 17 项：档位表的两个正交因子（形状 × 分频）与每档 payload kbps（**助手必须含 divider**，否则 `mid` 看着像 1/2 而不是 1/4）；`frame_due(tick, 3)` 复现既有 listener 闸门的 `[3,6,9]`；短帧是全帧的**前缀切片**（同版本字节、同 wf1，因此 `scope_handler` 与 11 个 backend 一行未改）；非 1701 B 的怪帧只产出 `full` 变体，且 `variant_for` 退回全帧而**绝不返回 `None`**——静默丢帧正是本特性要避免的故障模式；caps 白名单只收 `high`/`mid`/`low`（服务端内部的 `listen` 档客户端点不到），并对垃圾输入永不抛异常（文本帧过去是被丢弃的保活，把它改坏就是改坏兼容性） |
 | `test_spectrum_profile_server.py` | 40 项：**未声明能力的 socket 永远只拿 1701 B**（兼容闸门 D-3，按线上字节陈述而不是按意图）；listener 角色默认仍是 ÷3 全帧（`test_listen_only.py:391` 那条守卫未改一字即绿）；显式 caps 覆盖角色默认；12 个 tick 上 high/mid/low = 12/6/3 帧、帧长各为 1701/851/851；计量按**实发字节**；死 socket 报给调用方剔除而其余客户端照发；**回退路径同样受分频**（30 tick 上 `low` 拿 7 帧）；`_spectrum_fanout` 的计量**在发送 `try` 之外**——否则计数器里的 `AttributeError` 会被 `except Exception` 洗成"客户端走了"，把健康 socket 静默踢出 `spectrum_clients`（本次自查出来的隐患，已钉住）；handler 保留 `_scope_producer.start()/stop()`、`metrics.close` 与 catch-all `except`（`test_server_ws_protocol.py:334` 按标记切源码块做守卫）；`_CapsWS` **真调 `ws_spectrum`** 跑完整路径：观测到 `high→mid` 的档位切换、listener 默认 `listen` 档、listener 可降档、未知档位名被忽略、未认证 `4001` 先于任何档位状态、断开后按 socket 的状态清空；遥测行含 `payload≈` 与分档帧数，且保留 `uplink spectrum` 这个既有 grep 锚点；前端契约（`onopen` 发 caps、cookie 持久化、切换即时生效、三档选项且不含 `listen`、缓存版本 39/34/v47 全部重钉、listen 页本阶段不动） |
+| `test_sdr_dsp.py` | 7 项：**原生信道化 + 解调**（`sdr_dsp.c`，无硬件）——AM 的目标音必须出现在正确频率上且输出非静音；**抗混叠**用 47 kHz 的强干扰（50 倍抽取后正好折回 1 kHz）；**USB 边带抑制**（+1 kHz 通过、−1 kHz 至少低 40 dB，钉住第二级必须是单边复数滤波而不是对称低通）；NFM 鉴频用连续流（每块重复同一段 2 ms 信号会在块长倒数处造出假谱线，这正是 750 Hz 被测成 500 Hz 的原因）；WFM 走第三条管线（先在中间速率鉴频、再抽音频，200 kHz 信道装不进 96 kHz 中间速率）；非法参数（模式越界 / 带宽 0 / 带宽 ≥ 输出率 / 通道越界）一律返回 −1 而不是崩。文件首次运行时用 `cc -shared` 把 C 源编到临时目录再 ctypes 加载，没有编译器就整体 skip |
+| `test_sdr_packaging.py` | 6 项：服务层必须装齐六件（两个本项目 .so、厂商库、守护进程、udev、blacklist）；`MRRC_SDR=off` 时那一支里**一个都不出现**；厂商 API 走 `vendor/sdrplay/`（构建期不下载）；fetch 脚本钉了 SHA-256 与 `--check`；`mrrc_update.sh` 只重建两个 .so、**不碰**厂商栈（升级不能给一台没 SDR 的盒子偷偷装 root 守护进程） |
+| `test_sdr_frontend.py` | 8 项：SDR 页面的契约——16 个控件 id 必须存在；复用既有音频栈（`opus_wasm.js` + `opus_codec.js` + `rx_worklet_processor.js`，`new OpusDecoder(48000, 1)`）；**不加载** `ft710_main.js`/`ft710_ui.js`（受保护文件）；说的是文档里那五个事件与两种二进制帧；**URL 里没有 `token=`**；所有资源相对路径（页面可能挂在 `/mrrc_modern/<call>/sdr`）；没有大段内联脚本；viewport + safe-area（移动优先） |
+| `test_server_sdr.py` | 14 项：**SDR 入口的接线段**——没有 `MRRC_SDR_PASSWORD` 或 `MRRC_SDR=off` 时整条入口不存在（页面 404）、口令错不下发 cookie、登录只发 `mrrc_sdr` 且该 token **不进 `_auth_tokens`**（拿着它也开不了电台控制面）、没有 cookie 时页面给的是它自己的登录表单、电台 token 连 `/WSsdr` 被 4001 拒、sdr token 收到 `hello`、超并发是 4003 + 原因而不是静默挂断、二进制帧的布局（`0x01` 频谱 / `0x02` 音频带 rms 字节）。SDR 会话能取它自己页面的四个资源、匿名与电台 token **不能**（现场：中间件先于 serve_static 运行，只改后者时页面 200 而 sdr.js 302）；**令牌存储必须指向临时文件**（`_AUTH_TOKENS_FILE`），否则这个文件的登录会写进真实的 `data/auth-tokens.json`，让下一个跑持久化断言的用例红 —— 第一版就是这么红的 |
+| `test_sdr_hub.py` | 18 项：**调谐仲裁与解调池的纯逻辑**（FakeClock/FakePipe，无 sleep、无硬件）——首个 tune 成功、别人在 30 s 内被拒且倒计时正确、持有者可连续改、持有者断开立刻释放；改中心频率后**绝对频率不变**（offset 重算）且越界被钳到窗边；同一 (offset,mode,bw) 复用同一路解调器且只向 pipe 下发一次 set_channel、最后一个订阅者走了才拆；带宽不同就算不同解调器；通道满抛 `SdrChannelFull`（**拒该请求而不是踢人**）；客户端上限抛 `SdrCapacityError`、断线让出席位；12→13 人时频谱自动从 1024 降到 512 bin；频谱广播到所有人、音频只到该通道的订阅者、静噪按 rms 过滤；状态帧带快照 |
+| `test_sdr_pipe.py` | 9 项：**进程边界**——离线模式跑完整条链路（IQ 文件 → 状态/频谱/音频帧，`--channels` 为空时不出音频）；频谱恒为 1024 bin 且不是全零；分帧器四种帧的往返、**逐字节喂入**（网络/管道会任意切片）、未知标签重对齐（丢一个字节后**同一轮**继续解析，而不是等下一次 feed —— 第一版就是那样，坏字节后的好帧要等到下一个数据块才出来）；**A1 帧布局的回归**（真机抓到的：seq 曾被按 u8 打包，序号过 255 就 struct.error、整条 pipe 退出、接收机变不可用）——现在钉住 seq=65000 往返、level 钳位、以及服务端 WS 帧用的是同一套 `<BHBH` |
+| `test_sdr_dsp_binding.py` | 5 项：ctypes 绑定——库定位（`MRRC_SDR_DSP_LIB` 优先，缺失时 `locate()` 返回 None 而不是抛异常，桌面版 `MRRC_SDR=off` 走这条路）；`process()` 返回每通道 PCM 与 RMS，块长稳定在 48 kHz/2 ms；非法带宽被拒；非整数抽取率的构造直接抛 ValueError |
 | `test_spectrum_profile_docs.py` | 15 项：**把"文档说的是真的"变成断言**——NFR-003 不得再把回退态当常态（`~30fps ≈ 51KB/s`）、也不得保留从未为真的 `~851 bytes/frame fallback`；§9.2.4 必须写明 v1=851 B **从未上线**、caps 协商、以及全帧**不得改标 `0x02`** 的理由（iOS `guard version == 0x01`）；分频是比例而非绝对速率（`~10 Hz` 只在回退态成立，任何提及必须同行带 `fallback` 条件；`14-version-history.md` 作为不可变日志豁免）；AD-025 记下两轴的实测依据（`permessage-deflate` 3.9× / OkHttp 不提供该扩展）；AD-023 的 408 kbps 与 86% **就地加注而不删原文**（删掉等于掩盖当时的容量决策是从什么数字做出的）；`spectrum_profile` 进 PyInstaller `hiddenimports`（v1.24.0 漏 `cloud_hub` 的前车之鉴）；`AGENTS.md` 与 `PROJECT_MAP.md` 不再引用并不存在的 `tests/test_ws_protocol.py`；`setOpusBitrate` 的每处提及都必须在邻近行标明未实现（它只存在于注释与文档里）；`tests/README.md` 的总数与 `discover` 的实际输出一致 |
 
 ### 本轮新增（W103D 的 nmcli 适配层，2026-10-08）
@@ -928,3 +973,99 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   （对一个死网络上的操作者，这句文案不能宣称一次并未发生的恢复）。`poll<=0` 在**任何 nmcli
   调用之前**就被拒（否则注入时钟下 `poll=0` 死循环、`poll<0` 让 `time.sleep` 抛 `ValueError`
   逃出 worker 线程），`budget<=0` 不动。
+
+### 本轮新增（菜单页脚的版本号，2026-10-16）
+
+- **`test_menu_version.py`** — ☰ 菜单最下边那行版本号。它从第一版起就是个字面量
+  （`MRRC Modern v1.0`），v1.14 到 v1.27 没有一个版本更新过它 —— 打开菜单的人一直看到
+  "v1.0"。修法不是把字面量换成新字面量（那只是把同一个错误推迟到下一次发版），而是让号
+  从 **support bundle manifest 与更新检查已经在用的那个检测器**来
+  （`support_bundle.detect_version`：产物里的 version.txt → `.iss` → CHANGELOG），随
+  `fullState` 一帧下发。文件按号经过的地方逐段钉：① 载荷里有它、且可 JSON 序列化（走的是
+  页面**已经**收到的那条帧，没有新端点、没有新的鉴权面）；② 载荷的值确实来自检测器 ——
+  给检测器打桩必须让载荷跟着变，字段若是字面量这条就红，也就是 v1.0 那个缺陷的形状；
+  ③ 源码运行时报的就是 CHANGELOG 顶条（源码树没有 version.txt，轮到 `.iss` 回答）；
+  ④ 标记里 `#menu-version` 仍在菜单页脚、且未连上服务端前**不声称**任何版本；⑤
+  `ft710_main.js` 写 `msg.version`，老服务端不发这个字段时也不打印 undefined；⑥ 资产缓存
+  随这次改动前移 —— `index.html` 是 cache-first，`sw.js` 自己没变的话，已装用户永远看不到
+  新页脚（这正是 V2.72 记下的那个形状）。
+
+### 本轮新增（本地遥控器控制面 AD-026，2026-10-17）
+
+- **`test_local_ctl.py`** — `local_ctl.py` 的纯逻辑半边（读事件、键位表、数字输入状态机、
+  调谐算术），W103D 上实测过的那支中国移动语音遥控器是基准。文件钉的是**只有这一层能钉住
+  的三件事**：① **`input_event` 的线格式**（64 位 Linux 上 24 字节，且尾部残包必须忽略——
+  读到的字节数是 24 的整数倍这件事来自内核，不是来自我们的假设）；② **键的身份是 HID 扫描码
+  而不是键码** —— 实测那支遥控器上 `设置` / `M` / `#` 三个键都报 `KEY_UNKNOWN`(240)，只看键码
+  会把它们混成一个键，因此 `key_ids()` 先给 `u:0x…` 再退回 `k:…`，`KeyMap` 也按这个顺序查；
+  ③ **PTT 的边沿语义**（按下发一次 `true`、自动重复不发、松开发一次 `false`）与
+  `release_ptt()` 的幂等性——遥控器没电、蓝牙掉线、进程收到 SIGTERM 时，这一条是电台能不能
+  停止发射的分界线。调谐算术按**波段内卷绕**断言（7.300 MHz 再上一个 1 kHz 步进回到 7.000），
+  跨波段跳跃保持相对位置（40 m 中段 → 30 m 中段）。
+
+### 本轮新增（本地控制 socket，AD-028）
+
+- **`test_local_control_socket.py`** — 服务端那一侧的**本机控制通道**。物理遥控器不走网页
+  鉴权：守护进程与服务同一用户，靠一条 0600 的 Unix socket 通信，**权限即认证**。六条断言
+  钉住这条通道的性质而不是实现细节：① 放行的字段真的进到**和浏览器同一条**
+  `_execute_set_command`（不是第二条会漂移的命令通道）；② 字段白名单之外的一律拒（socket
+  不是"什么都能干"的门，`power` 明确不在表内）；③ 连上先给一行 `state`（频率 + 模式名），
+  守护进程据此从**电台当前的位置**开始步进，而不是自己的默认值；④ 坏 JSON 只回错、不断线；
+  ⑤ 命令被服务端拒绝时回 `ok:false` 并带上原因；⑥ 白名单覆盖遥控器真正会用的六个字段。
+  这些用例跑在**真的 `start_unix_server`** 上（临时目录里的 socket），只把
+  `_execute_set_command` 打桩，因此连的是真实的握手/读行/回包路径。
+
+### 本轮新增（本地扬声器，AD-028 续）
+
+- **`test_local_speaker.py`** — RX 音频分一路给本机设备（蓝牙耳机）这一层。钉住三件会伤到
+  RX 循环的事：**feed 永不阻塞**（设备慢就丢帧并计数，队列满的用例断言调用在 2 秒内返回）；
+  **设备消失不是错误**（`aplay` 子进程被杀后必须重启，失败计数一次）；**A2DP 模式不做抽取**
+  （48 kHz 立体声原样播，单声道样本复制到两个声道），而 8 kHz 设备走既有抽取器。
+  另有三条服务端源码守卫：RX 循环把本地扬声器算作「有人在听」（否则没有浏览器时整条
+  音频链就睡了）、循环里确实 feed 了、且由环境变量构建并随关机停止。
+
+### 本轮新增（FT8 引擎开关，AD-028 续）
+
+- **`test_ft8_engine_switch.py`** — ☰ 菜单「设置」里的 FT8 引擎开关。它必须与**在空中的模式**
+  分开：`work_mode` 只表示"有没有 FT8 波形在发"，而引擎是从开机就在后台解码的，所以开关的
+  状态读 `/api/ft8/station` 的 `engine_always_on`（服务端已有的持久化设置），点击走
+  `PUT /api/ft8/station`（同一个设置路径，落盘同时启停 runtime，不再有第二条命令通道）；
+  既有的单向「切到 FT8」菜单项保持原样（它要移动电台并跳转，回答的是另一个问题）。
+
+### 本轮新增（遥控器配对页面，AD-028 续）
+
+- **`test_net_bt.py`** — 盒子上唯一与 bluez 打交道的层，服务的是 `/settings` 的「遥控器」面板
+  （客户手里没有 SSH）。两条性质：① 页面上的**判据是"按键能用"而不是 bluez 说配上了** ——
+  现场那次是 `Paired: yes` 但链路没加密、bluez 建不出键盘设备、每个键都是死的，所以
+  `state()` 的 `keys_work` 来自 `/proc/bus/input/devices` 里有没有该地址的键盘设备，配对标志
+  只用于诊断；② 每一次 bluez 调用都走可注入的 runner，整套测试不需要控制器、不需要 root。
+  另外守住面板本身：三个钩子存在、调的是这三个端点、页面仍然没有 `innerHTML`。
+
+### 本轮新增（日志与磁盘的上限，2026-10-17）
+
+- **`test_log_rotation.py`** — 镜像里唯一没有上限的文件是 `logs/server-stdout.log`：它是单元的
+  `StandardOutput=append:$MRRC_HOME/logs/server-stdout.log`，而 systemd 不轮转 `append:` 目标。
+  实测扳机：盒子上旧版 `local_speaker.py` 每 20 ms 一条 WARNING，五小时 17 MB。守卫的核心是
+  **把轮转的文件名钉到单元的 append 目标上** —— 一侧改名不会报错，只是从此不再轮转，而
+  `missingok` 连"匹配不到"都吞掉；另有 `copytruncate`（systemd 持有 fd）、大小触发 + 代数 +
+  压缩、`mrrc-logrotate.timer` **被 enable**（不押注 cron 有没有被 mask）、`packages.txt` 里有
+  `logrotate`，以及 journald 的 `SystemMaxUse` / `SystemKeepFree`。
+- **`test_recorder_api.py` 的 `RecordingSpaceGuardTests`** — 录音是客户自己能打开的唯一无界写入方
+  （≈29 MB/小时）。剩余空间低于 `MRRC_RECORDINGS_MIN_FREE_MB` 时**在会话创建之前**拒绝，并报出
+  两个数字；测不出（`OSError`）不算拒绝；`0` 关闭。刻意没有"自动删旧录音"的测试，因为产品
+  不做这件事。
+
+### 本轮新增（远程协助的计数接线，2026-10-17）
+
+- **`test_help_session.py` 的 `ConnectionCountingTests`** — 「已连接」那一个数字。2026-10-17 真机
+  （盒子 `.217`）从 hub 登进去跑完命令，`/api/help/status` 仍报 `connections: 0`：计数住在
+  `HelpSession.note_connection()`，而它原先**没有任何调用者**（SSH 门只发 `on_event`），单测直接调
+  它所以看不见。两条测试都走 `build_session()` 拼出来的真实组合：真 paramiko shell 会话结束时
+  `connections == 1`，而探针 `exec` 不算连接。
+- **`test_help_session.py` 的 `AuthFailureWiringTests`** — 同一形状的第二条死接线：「连续试错 5 次自动关闭」
+  从来没发生过（门的 `check()` 自己数，`HelpSession.note_auth_failure()` 没有调用者；真机连错 3 次，
+  `failures` 仍是 0）。两条测试走接线本身：错一次 → `failures: 1`；第五次 → `closed / auth_failures`。
+- **`test_cloud_hub.py` 的 `SetHelpProxyTests` 两项 + `ensure_admin_segment`** — 老实例的隧道配置
+  没有 `webServer` 段（入网早于 2026-10-12）时，「开启协助」拿到的是
+  `admin API unreachable on 127.0.0.1:0`；实测盒子 `.217` 每次必失败。现在配置缺失时报一句能行动的
+  话，并且启动隧道前会把管理段补上（幂等，已有则一字不动）。

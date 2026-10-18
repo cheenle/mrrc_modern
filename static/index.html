@@ -115,6 +115,12 @@
           <span class="status-item" id="status-band">20m</span>
           <span class="status-item mode-badge" id="status-mode">USB</span>
           <span class="status-item" id="status-tx">RX</span>
+          <span
+            class="status-item"
+            id="status-power"
+            title="电台电源：--"
+            >PWR --</span
+          >
           <span class="status-item" id="status-serial">
             <span class="status-dot"></span>Serial
           </span>
@@ -417,6 +423,16 @@
             >
           </li>
           <li>
+            <a href="#" class="menu-item" data-action="power-restart"
+              >重开电台（关闭后自动尝试唤醒）…</a
+            >
+          </li>
+          <li>
+            <a href="#" class="menu-item" data-action="power-off"
+              >关机（保持关闭）…</a
+            >
+          </li>
+          <li>
             <a href="#" class="menu-item" data-action="recordings"
               >录音 Recordings</a
             >
@@ -435,6 +451,18 @@
         <!-- Menu Settings -->
         <div class="menu-scope-settings">
           <h3 class="menu-section-title">Settings</h3>
+          <div class="menu-scope-row">
+            <span class="menu-scope-label">FT8</span>
+            <button
+              id="menu-ft8-engine"
+              class="menu-engine-btn"
+              type="button"
+              data-enabled="true"
+              aria-pressed="true"
+            >
+              ON
+            </button>
+          </div>
           <div class="menu-scope-row">
             <span class="menu-scope-label">SPAN</span>
             <select id="scope-span-select" class="scope-select">
@@ -568,7 +596,7 @@
           </div>
         </div>
         <div class="menu-footer">
-          <span class="version-text" id="menu-version">MRRC Modern v1.0</span>
+          <span class="version-text" id="menu-version">MRRC Modern</span>
         </div>
       </div>
     </div>
@@ -580,11 +608,12 @@
     <script src="modules/settings_manager.js?v=16"></script>
     <script src="modules/opus_wasm.js"></script>
     <script src="modules/opus_codec.js"></script>
-    <script src="ft710_main.js?v=43"></script>
+    <script src="ft710_main.js?v=44"></script>
     <script src="modules/ptt_manager.js?v=17"></script>
-    <script src="ft710_ui.js?v=36"></script>
+    <script src="ft710_ui.js?v=38"></script>
     <script src="modules/atr1000.js?v=5"></script>
     <script src="modules/cloud_hub.js?v=3"></script>
+    <script src="modules/power_switch.js?v=1"></script>
     <script>
       // Raised-path deployments prefix every local URL (see settings_manager.js
       // basePath); at the root this is a no-op.

@@ -82,3 +82,38 @@ def test_epoch_timeline_has_no_rounding_gaps():
         tap.feed(block, epoch + i * 0.02)
     assert ring.gap_count == 0
     assert (ring.high_water - (ring.base or 0)) >= 119_000
+
+
+def test_feed_reanchors_after_a_capture_outage():
+    """A capture outage must not leave the tap permanently behind the clock.
+
+    Field 2026-10-17 (W103D, 192.168.1.220): the whole USB tree re-enumerated,
+    the ALSA capture delivered no PCM for 113 s, and when it came back the tap
+    kept its old sample-index timebase.  ``drift`` stayed at +118 s for the rest
+    of the process, ``read_slot`` could never reach the requested window, and
+    the FT8 page decoded nothing: ``slots_started=67, slots_skipped=66,
+    decodes=0``.  The caller passes a wall-clock epoch for every block, so a
+    divergence that large is a lost-audio hole, not jitter — the tap has to
+    re-anchor on it.
+    """
+    seen: list[float] = []
+    ring = UtcRing(seconds=30)
+    tap = RxTap(ring, dev_rate=48000, on_block=lambda s, e: seen.append(e))
+    block = _tone(48000, 0.02, 700.0).tobytes()
+
+    epoch = 1000.0
+    for i in range(50):                        # 1 s delivered, contiguous
+        tap.feed(block, epoch + i * 0.02)
+
+    resumed = epoch + 1.0 + 120.0              # 120 s of audio never arrived
+    for i in range(50):
+        tap.feed(block, resumed + i * 0.02)
+
+    # The tail of the second run must sit on the wall clock, not 120 s behind.
+    assert ring.high_water >= round((resumed + 0.9) * 12000) - 400, (
+        f"tap is still {((resumed + 1.0) - ring.high_water / 12000):.1f}s behind "
+        f"after the outage")
+    # …and the hole is recorded as a gap, so the ring never serves a slot that
+    # straddles it as if it were contiguous audio.
+    assert ring.gap_count >= 1
+    assert seen[-1] >= resumed

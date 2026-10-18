@@ -1,0 +1,36 @@
+[Unit]
+Description=MRRC decode service (FT8 cloud deep path, design A1)
+Documentation=https://www.vlsc.net/mrrc_modern/guides/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mrrcdecode
+Group=mrrcdecode
+WorkingDirectory=/opt/mrrc-decode
+Environment=MRRC_DECODE_APP_ROOT=/opt/mrrc-decode
+Environment=OMP_STACKSIZE=10M
+ExecStart=/usr/bin/python3 /opt/mrrc-decode/tools/hub_decode/service.py \
+    --app-root /opt/mrrc-decode \
+    --token-file /etc/mrrc-decode/token \
+    --host 127.0.0.1 --port 8990
+Restart=always
+RestartSec=2
+
+# This box is the public entry for every instance, and it has one core.  A
+# decode must never win a fight with nginx: measured 2026-10-14, one
+# cycles=3 decode is 1.2 s of a full core, which at nice 0 would sit in
+# front of TLS handshakes.
+Nice=10
+CPUQuota=70%
+
+# The decode needs to write one shared-memory segment and nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/dev/shm
+
+[Install]
+WantedBy=multi-user.target

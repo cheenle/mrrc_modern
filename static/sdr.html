@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12120f">
+<title>SDR 接收机</title>
+<style>
+  :root {
+    --bg: #12120f;
+    --panel: #1a1915;
+    --panel-2: #22201a;
+    --line: #2f2c24;
+    --text: #e8e2d4;
+    --muted: #8f8879;
+    --amber: #f5a623;
+    --amber-dim: #a8761a;
+    --good: #5bd18b;
+    --bad: #ff6b6b;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; overflow: hidden; }
+
+  header { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: linear-gradient(#1d1c17, #16150f); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 13px; letter-spacing: .16em; font-weight: 700; margin: 0;
+    color: var(--amber); text-transform: uppercase; white-space: nowrap; }
+  .chips { display: flex; gap: 6px; margin-left: auto; align-items: center; flex-wrap: wrap;
+    justify-content: flex-end; }
+  .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--panel-2);
+    border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+  .chip.on { color: var(--good); border-color: #28503a; }
+  .chip.warn { color: var(--amber); border-color: #4a3a17; }
+  .chip.bad { color: var(--bad); border-color: #55292a; }
+  .level { width: 54px; height: 6px; border-radius: 3px; background: #2a2820; overflow: hidden; }
+  .level > i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, #3f7, #dd3); }
+
+  #banner { display: none; padding: 8px 12px; background: #341a1a; color: #ffb4b4;
+    font-size: 12px; border-bottom: 1px solid #55292a; }
+  #banner.show { display: block; }
+
+  /* ---- 瀑布 ---- */
+  .scope { position: relative; flex: 1 1 auto; min-height: 160px; background: #05070c; }
+  #ruler { position: absolute; inset: 0 0 auto 0; height: 26px; width: 100%; display: block; }
+  #wf { position: absolute; inset: 26px 0 0 0; width: 100%; height: calc(100% - 26px);
+    display: block; touch-action: none; cursor: crosshair; }
+  #cursorLabel { position: absolute; top: 30px; transform: translateX(-50%);
+    font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #000a;
+    border: 1px solid var(--amber-dim); color: var(--amber); pointer-events: none;
+    white-space: nowrap; }
+
+  /* ---- 频率与电平 ---- */
+  .readout { display: flex; align-items: baseline; gap: 14px; padding: 8px 12px 4px;
+    background: var(--panel); border-top: 1px solid var(--line); }
+  .freq { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .freq.center { font-size: 22px; font-weight: 700; color: var(--amber); }
+  .freq.cursor { font-size: 15px; color: var(--text); }
+  .freq small { font-size: 10px; color: var(--muted); font-weight: 400; margin-right: 4px;
+    letter-spacing: .1em; text-transform: uppercase; }
+  #diag { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #edit { background: #0d0d0a; border: 1px solid var(--amber-dim); color: var(--amber);
+    font: 600 20px/1.2 ui-monospace, monospace; padding: 4px 8px; border-radius: 6px;
+    width: 11ch; display: none; }
+  .spacer { margin-left: auto; }
+
+  /* ---- 预设 ---- */
+  .presets { display: flex; gap: 6px; padding: 6px 12px; overflow-x: auto;
+    background: var(--panel); border-bottom: 1px solid var(--line); scrollbar-width: none; }
+  .presets::-webkit-scrollbar { display: none; }
+  .presets button { flex: 0 0 auto; padding: 6px 11px; border-radius: 8px; font-size: 12px;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    cursor: pointer; white-space: nowrap; }
+  .presets button:active { background: #2e2b22; }
+  .presets button.active { border-color: var(--amber); color: var(--amber); }
+
+  /* ---- 控件 ---- */
+  .controls { display: grid; grid-template-columns: 1fr auto; gap: 10px 16px;
+    padding: 10px 12px calc(10px + var(--safe-b)); background: var(--panel);
+    border-top: 1px solid var(--line); }
+  .modes { display: flex; gap: 4px; flex-wrap: wrap; }
+  .modes button { padding: 7px 11px; font-size: 12px; font-weight: 600; border-radius: 8px;
+    background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+    cursor: pointer; }
+  .modes button.on { background: #3a2f12; border-color: var(--amber); color: var(--amber); }
+  .sliders { display: flex; gap: 14px; align-items: center; grid-column: 1 / -1; }
+  .sliders label { display: flex; align-items: center; gap: 8px; font-size: 11px;
+    color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px;
+    background: #2f2c24; outline: none; width: 120px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--amber); border: 0; }
+  select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+  #toast { position: fixed; left: 50%; bottom: calc(96px + var(--safe-b)); transform: translateX(-50%);
+    background: #000c; border: 1px solid var(--line); color: var(--text); font-size: 12px;
+    padding: 8px 14px; border-radius: 999px; opacity: 0; transition: opacity .18s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  @media (max-width: 620px) {
+    .freq.center { font-size: 19px; }
+    .controls { grid-template-columns: 1fr; }
+    .modes { justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>SDR</h1>
+  <div class="chips">
+    <span class="chip" id="cListeners">0 人</span>
+    <span class="chip" id="cLock">—</span>
+    <span class="chip" id="cState">连接中</span>
+    <div class="level"><i id="levelBar"></i></div>
+  </div>
+</header>
+<div id="banner"></div>
+
+<div class="scope">
+  <canvas id="ruler"></canvas>
+  <canvas id="wf"></canvas>
+  <div id="cursorLabel"></div>
+</div>
+
+<div class="readout">
+  <div class="freq center"><small>中心</small><span id="center">—</span></div>
+  <input id="edit" inputmode="decimal" autocomplete="off">
+  <div class="freq cursor"><small>解调</small><span id="cursor">—</span></div>
+  <div class="spacer"></div>
+  <div class="freq cursor" id="diag" title="频谱帧率 · 音频帧率 · 画布尺寸"></div>
+  <div class="freq cursor" id="offset"></div>
+</div>
+
+<div class="presets" id="presets"></div>
+
+<div class="controls">
+  <div class="modes" id="modes"></div>
+  <select id="bw" title="带宽"></select>
+  <div class="sliders">
+    <label>静噪 <input type="range" id="squelch" min="0" max="100" value="0"></label>
+    <label>音量 <input type="range" id="volume" min="0" max="100" value="70"></label>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="modules/opus_wasm.js"></script>
+<script src="modules/opus_codec.js"></script>
+<script src="sdr.js?v=5"></script>
+</body>
+</html>

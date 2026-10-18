@@ -38,6 +38,38 @@
   <input id="search" type="search" placeholder="编号 / 关键词（如 录音、-9996、CI-V）" autocomplete="off">
   <p class="muted" id="count"></p>
   <h2>已知问题（按现象查）</h2>
+    <article class="card" id="known-20261016-win-cert">
+      <header>
+        <span class="id">known-20261016-win-cert</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">网络 · 2026-10-16</span>
+      </header>
+      <h3>Windows 上接入云端报 certificate has expired（浏览器却打得开门户）</h3>
+      <p class="verdict">不是门户、也不是网络：这台机器的证书库里有一份与被服务链条同名同密钥、却已过期的证书，应用（Python/OpenSSL）只认本机证书库，于是把库里那张放进链里判它过期；浏览器用自己那套根与链构建，所以同一台机器、同一条链，浏览器照常能开</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>报错原文形如 certificate verify failed: certificate has expired (_ssl.c:1000)。这句话本身就说明 DNS/TCP/握手都通了 —— 是应用拿到证书之后自己拒绝的，不是门户没应答；门户侧同时刻实测证书链完整、有效期到 2026-12-29，且日志里没有来自该实例的任何请求。</li>
+        <li>行号 _ssl.c:1000 是 Python 版本指纹：3.11=1016（盒子）、3.12=1000（Windows 安装包）、3.13=1032（macOS 安装包）—— 据此可确认失败的是 Windows 安装版。</li>
+        <li>机制：Windows 会把见过的中间证书缓存进本机 CA 存储（Let&#x27;s Encrypt 的中间证书会换代重签，缓存那份到期后正是这个形态）。OpenSSL 会把库里那份过期证书放进链里并判 expired，而且不会回退到服务器送来的那张有效证书（2026-10-16 在构建 VM 上用同一份 openssl 逐条复现）。</li>
+        <li>浏览器（Chrome/Edge）用自己那套根与链构建，不吃本机 CA 缓存，所以表现为「浏览器能上、应用不能」。</li>
+        <li>应用这一层属产品缺陷：net_tls.py 只在本机库为空时才启用随包 CA，也就是把「库非空」当成了「库可用」；**已修** —— 现在只信随包的根证书，不再采信本机证书库（随下一个版本到达用户）。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>下载证书体检工具并**整个解压**后双击运行（默认只读体检，不改任何东西）：https://www.vlsc.net/mrrc_modern/downloads/MRRC-CertDoctor.zip</li>
+        <li>它会用本机证书库对「门户下发的那条链」复现应用的判定，指出是哪一张证书、在哪个库里；确认后运行 MRRC-CertDoctor.cmd -Fix：把能证明是它的过期证书备份后删掉，必要时再问你是否导入当前的两张 Let&#x27;s Encrypt 根证书。</li>
+        <li>修好后：从托盘退出 MRRC Modern，再启动它，然后 ☰ -&gt; 接入云端 (Cloud Hub) -&gt; 呼号 + 运维给的一次性口令 -&gt; 申请入口/接入。</li>
+        <li>工具修不好时：桌面会留下 MRRC-CertDoctor-&lt;时间&gt;.zip，把它发给我们。注意诊断包上传与软件更新检查走的是同一条 HTTPS 路径，会一起坏 —— 属同一个原因。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">portal did not answer (https://portal.mrrc.vlsc.net): cannot reach the portal (URLError: &lt;urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired (_ssl.c:1000)&gt;)</li>
+        <li class="ev">同一台机器的 Edge 在 10:13 打开实例入口成功（nginx 记录 Windows NT 10.0 / Edg/155）：浏览器侧完全正常，只有应用那条 Python/OpenSSL 路径失败</li>
+        <li class="ev">门户日志（2026-10-16）里没有该实例的任何 /claim、/status、/enroll —— 请求从未到达门户</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>net_tls.py（不要把自己的信任判定外包给本机证书库）+ tools/windows/MRRC-CertDoctor.ps1（用户侧体检与修复）</code></p>
+    </article>
     <article class="card" id="known-20261004-tls">
       <header>
         <span class="id">known-20261004-tls</span>
@@ -50,7 +82,7 @@
       <ul>
         <li>报错形如 certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)，这不是 portal 或网络的问题——同一台机器上 curl 访问 portal 是 200、证书链完整</li>
         <li>根因：安装包把构建机的 OpenSSL 一起带走了，它的默认 CA 路径是构建机的 /opt/local/...（MacPorts），用户机上没有这个目录，于是信任库为空；空信任库同样导致诊断包上传失败</li>
-        <li>Windows 与源码运行不受影响（Windows 用系统证书库）</li>
+        <li>Windows 与源码运行不受影响（Windows 用系统证书库）—— 前提是那套库健全；反过来，库里有过期/陈旧证书时 Windows 也会失败，见上面 2026-10-16 那一条</li>
       </ul>
       <h4>你要做的</h4>
       <ul>
@@ -96,6 +128,346 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261017-225430-d996">
+      <header>
+        <span class="id">20261017-225430-d996</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-17 23:11</span>
+      </header>
+      <h3>软件启动后电台选择FTX-1保存重启又变成FT-710，网页也看不到频谱</h3>
+      <p class="verdict">Launcher 的首启探测白名单 `VALID_MODELS` 只含 ft710/ic7300/ic7300mk2，所选 ftx1 因此每次启动都被判为「未配置」，探测到 Yaesu 应答后把型号改写成 ft710 —— 于是续跑成 FT-710 后端（去找 FT4222 频谱芯片，找不到就退成 S 表合成）</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>型号回退的根因在 launcher 的首启逻辑，不在配置写入：`macos/first_run.py` 里 `VALID_MODELS = frozenset({&quot;ft710&quot;, &quot;ic7300&quot;, &quot;ic7300mk2&quot;})`，而 `apply_first_run` 用 `model_unset = model not in VALID_MODELS` 判断；`needs_first_run()` 也要求 `model in VALID_MODELS`，所以保存成 `ftx1` 后配置永远被当作「没定下来」，每次冷启动都重跑一次探测。</li>
+        <li>探测必然把它改回 FT-710：`probe_radio_model()` 只区分两种协议——`return &quot;ft710&quot; if probe is probe_ft710 else &quot;ic7300&quot;`，FTX-1 与 FT-710 同属八重洲 ASCII CAT（`ID;` 会应答，见 CHANGELOG v1.16.0「传输层是移植而非新写」），所以一律判成 ft710；随后 `if model_unset: model = RADIO_MODEL_FALLBACK`（`RADIO_MODEL_FALLBACK = &quot;ft710&quot;`）并 `update_env_file(config_path, updates)` 把 ft710 写回 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env`。</li>
+        <li>现场日志正是这条链路的结果：`2026-10-17 22:49:24,029 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud`、`Connected to FT-710 (ID=0840) on [已隐去]`，env.json 里 `&quot;model&quot;: &quot;ft710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;` —— 型号已被改写，而不是保存失败。</li>
+        <li>频谱空白是型号错误的后果，不是第二个故障：FT-710 后端走 FT4222 真实频谱，而机器上没有这个设备，`scope_pipe` 每轮 5 次 `open_failed:attempt_N:error_2` → `spi_init_failed:all_attempts` → `fatal:cannot_open_device` → `scope_pipe exited (frames=0, connected=False)`，约每 5 秒重启一次（日志里 22:54:01→22:54:26 反复出现）；summary 因此判「出现 S 表合成回退 —— 真实频谱未工作」。</li>
+        <li>另外，Yaesu 家族在 `backends/yaesu/backend.py` 是 `scope_type=&quot;none&quot;`（AGENTS.md 记载：由现有 S 表合成器覆盖 UI），所以就算型号正确选成 FTX-1，也不会有真实瀑布——这一点是机型能力的边界，不是坏件。</li>
+        <li>同一白名单还挡住 ftdx10 / ftdx101d / ftdx101mp / ft891 / ic705 / ic7610 / ic7760 等全部 7 个非(ft710/ic7300/ic7300mk2)型号；CHANGELOG v1.16.0 只新增了机型与 profile，`first_run.VALID_MODELS` 与 `probe_radio_model()` 的映射从未随之扩展（SDD/14 的 V2.46、V2.72、V2.92 都无同签名记录），所以 1.28.1 仍带此缺陷。</li>
+        <li>`2026-10-17 21:58:15,988 [WARNING] mrrc.audio: Configured audio device &#x27;USB Audio&#x27; not found` 属另一件事且已自愈：同一份 stdout 里 22:49:35 `Found configured audio input: [1] 麦克风 (USB Audio Device)` 并成功 `RX audio started`，与本问题无关。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>每次开机/关掉程序重新打开后，进 ☰ 菜单的「连接设置…」，把电台型号重新选成 FTX-1 并保存：保存会写盘并让服务以 FTX-1 重启（这次运行内生效，不必再关程序）。这是当前版本的可用绕过，重启一次就得重来一次。</li>
+        <li>不要在选好 FTX-1 后再「关闭程序重新打开」——那一步正是首启探测把型号改回 FT-710 的时机；要切配置请用连接设置里的保存/重启路径。</li>
+        <li>关于频谱：FTX-1 在本产品里只有 S 表合成，没有真实瀑布（Yaesu 家族的 `scope_type=&quot;none&quot;`），这与 FT-710 的 FT4222 频谱不是一回事；需要真实瀑布请使用带 FT4222 的机型（FT-710 / FTDX10 / FTDX101 等）。</li>
+        <li>FTX-1 同时属实验性机型（v1.16.0 起「仅接收」）：若切到 FTX-1 后按 PTT 无反应属预期 TX 门禁，需要时在 `mrrc_modern.env` 里设 `MRRC_ALLOW_UNVERIFIED_TX=1` 后再保存重启（发射行为未在真机验证，请谨慎）。</li>
+        <li>想让设置永久保留：把配置副本另存一份（`[已隐去]\AppData\Local\MRRC-Modern\mrrc_modern.env`），每次启动后若发现型号又被改成 ft710，用副本里的 `MRRC_RADIO_MODEL=ftx1` 覆盖并在连接设置里保存一次；根治需要新版 launcher，但它自动覆盖这个键，用户侧无法绕过。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-17 22:49:24,029 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud</li>
+        <li class="ev">2026-10-17 22:49:24,809 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0840) on [已隐去]</li>
+        <li class="ev">env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">macos/first_run.py:34 `VALID_MODELS = frozenset({&quot;ft710&quot;, &quot;ic7300&quot;, &quot;ic7300mk2&quot;})`</li>
+        <li class="ev">macos/first_run.py `needs_first_run`: `configured = (pwd and pwd != DEFAULT_WEB_PASSWORD and model in VALID_MODELS and (...))`</li>
+        <li class="ev">macos/first_run.py `apply_first_run`: `model_unset = model not in VALID_MODELS` / `if port_unset or model_unset:` → 探测 → `if model_unset: model = RADIO_MODEL_FALLBACK`</li>
+        <li class="ev">macos/first_run.py `probe_radio_model`: `return &quot;ft710&quot; if probe is probe_ft710 else &quot;ic7300&quot;`</li>
+        <li class="ev">2026-10-17 22:54:27,979 [INFO] mrrc.backend.ft710.scope: scope_pipe: open_failed:attempt_1:error_2</li>
+        <li class="ev">2026-10-17 22:54:24,788 [WARNING] mrrc.backend.ft710.scope: scope_pipe: spi_init_failed:all_attempts</li>
+        <li class="ev">2026-10-17 22:54:24,789 [WARNING] mrrc.backend.ft710.scope: scope_pipe: fatal:cannot_open_device</li>
+        <li class="ev">2026-10-17 22:54:25,137 [WARNING] mrrc.backend.ft710.scope: scope_pipe exited (frames=0, connected=False)</li>
+        <li class="ev">summary.txt: 频谱：出现 S 表合成回退 —— 真实频谱（FT4222 / CI-V 0x27）未工作</li>
+        <li class="ev">CHANGELOG.md v1.16.0: 「四款新机型：`MRRC_RADIO_MODEL=ftdx10 | ftdx101d | ftdx101mp | ftx1`」</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>macos/first_run.py:VALID_MODELS / needs_first_run / apply_first_run / probe_radio_model（应由 backends.known_models() 派生白名单，并让 probe 返回 &quot;ftx1&quot; 而非 &quot;ft710&quot;）</code></p>
+    </article>
+    <article class="card" id="20261017-225416-0570">
+      <header>
+        <span class="id">20261017-225416-0570</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-17 23:02</span>
+      </header>
+      <h3>软件启动后电台选择FTX-1保存重启又变成FT-710</h3>
+      <p class="verdict">启动器首次自检不认 FTX-1：它把 ftx1 当作“机型未设置”，每次启动都重新探测串口、把机型改写成 ft710 存回配置 —— 不是用户选错，也不是电台的问题</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>现象与包内运行时状态一致：problem.txt「软件启动后电台选择FTX-1保存重启又变成FT-710」；env.json 里 radio.model=ft710，stdout.log 22:49:24 明确写着「Radio model: ft710, serial port: [已隐去] @ 38400 baud」，随后「Connected to FT-710 (ID=0840) on [已隐去]」——服务端根本没见过 ftx1。</li>
+        <li>UI 确实提供 FTX-1，POST /api/setup 也接受它：static/index.html:708 `&lt;option value=&quot;ftx1&quot;&gt;Yaesu FTX-1F（实验性，仅接收）&lt;/option&gt;`；server.py:4073 用注册表校验 `if radio_model not in known_models()`，而 backends/__init__.py 的 _BACKENDS 里确有 &quot;ftx1&quot;。也就是说保存这一步是成功的（env 里写进了 MRRC_RADIO_MODEL=ftx1）。</li>
+        <li>改写发生在服务端之前、启动器里：macos/first_run.py 是「Runs in the launcher (macOS menu-bar app, Windows tray app) BEFORE the server starts」，第 36 行 `VALID_MODELS = frozenset({&quot;ft710&quot;, &quot;ic7300&quot;, &quot;ic7300mk2&quot;})` —— 一份写死且陈旧的机型白名单，v1.16.0 加入的 ftdx10/ftdx101d/ftdx101mp/ftx1 与 ft891、以及 ic705/ic7610/ic7760 全都不在里面。</li>
+        <li>因此 needs_first_run() 对 ftx1 恒为 True：其判据是 `configured = pwd and pwd != DEFAULT_WEB_PASSWORD and model in VALID_MODELS and (MRRC_PORT_CONFIRMED==1 or 端口非默认)`，model=&quot;ftx1&quot; 不在白名单 ⇒ 配置被判定为“未完成” ⇒ 每次启动（含 保存+重启）都走 apply_first_run()。</li>
+        <li>apply_first_run() 接着把机型覆盖掉：`model_unset = model not in VALID_MODELS` ⇒ True，于是重新探测串口，探测成功后 `env[&quot;MRRC_RADIO_MODEL&quot;] = model; updates[&quot;MRRC_RADIO_MODEL&quot;] = model`，再 `update_env_file(config_path, updates)` 写盘 —— 服务端重启后读到的就是 ft710。</li>
+        <li>探测本身也无法区分 Yaesu 家族：probe_radio_model() 结尾 `return &quot;ft710&quot; if probe is probe_ft710 else &quot;ic7300&quot;`，对任何用 ASCII `ID;` 应答的八重洲机器一律返回 &quot;ft710&quot;（probe_ft710 只判 `ser.read(64).startswith(b&quot;ID&quot;)`），所以 FTX-1 被“认成” FT-710 而不是探测失败。</li>
+        <li>与「8 次启动 / 时间跨度 21:57:45 → 22:49:37」吻合：用户反复「选 FTX-1 → 保存 → 自动重启」，每次重启都被启动器改回 ft710，于是再次进入连接设置看到 FT-710。</li>
+        <li>历史检索（`grep FTX-1|ftx1|radio_model|update_env_file CHANGELOG.md`、SDD/14 相关条目）里没有同签名记录：CHANGELOG v1.16.0 只加了机型与 profile（`MRRC_RADIO_MODEL=ftdx10 | ftdx101d | ftdx101mp | ftx1`），SDD/14 V2.22 只说明启动器模板暴露了 MRRC_RADIO_MODEL（默认 ft710），没有任何一条修过“启动器白名单不含新机型” —— 属新缺陷，不是回归。同一类缺陷在 /api/setup 已经修过（server.py:4073 的注释：「a hardcoded tuple (which is how ic705/ic7610/ic7760 would have been unreachable from the connection dialog)」），启动器这一份被漏掉了。</li>
+        <li>副带现象均为“跑错后端”的次生结果，不必单独追：scope_pipe `open_failed:attempt_N:error_2` → `spi_init_failed:all_attempts` → `fatal:cannot_open_device` 无限重启（FT-710 才有 FT4222 SPI，FTX-1 的 profile 是 scope_type=none，走 S 表合成）；summary 中「频谱：S 表合成回退」同源。音频那条 `Configured audio device &#x27;USB Audio&#x27; not found`（21:58:15）在 22:49 已自愈 —— 22:49:35 日志显示 `Found configured audio input: [1] 麦克风 (USB Audio Device)`，不构成本问题。</li>
+        <li>风险提示：在机型被写成 ft710 的情况下用 FT-710 后端操作 FTX-1，不只是标签错 —— 模式/滤波表与 CAT 字符表按机型不同（CHANGELOG v1.16.0），且 ft710 不设未验证机型发射闸（FTX-1 本应 tx_gated），会对一台未验证机型按 FT-710 假设发 PTT。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先确认是“被改写”而不是“没点到”：连接设置里选 Yaesu FTX-1F → 保存并重启，然后看 `%LOCALAPPDATA%\MRRC-Modern\logs\server.log` 是否仍是 `Radio model: ft710`。若仍是 ft710，即为启动器改写（1.28.1 已确认）。</li>
+        <li>临时绕过启动器：关掉托盘的 MRRC Modern 启动器，直接运行安装目录里的服务端入口（安装菜单中的「MRRC Modern Server」快捷方式），并确保配置文件 `%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env` 里有一行 `MRRC_RADIO_MODEL=ftx1`（手改时把已有的那行 ft710 改掉，别写成两行）。不带启动器启动时不会再被改回 ft710。</li>
+        <li>同一份 env 里把串口/波特率写死成实际值（本包是 `MRRC_SERIAL_PORT=[已隐去]`、`MRRC_BAUD_RATE=38400`），这样即使某次仍走了自检，也不会因探测顺序变化换口。</li>
+        <li>FTX-1 属未真机验证机型：只做接收不用管；确需发射时在 env 里加 `MRRC_ALLOW_UNVERIFIED_TX=1`（默认拒发），首次发射请小功率、确认频段与驻波。</li>
+        <li>在机型稳定为 ftx1 之前不要用当前（ft710 后端）实例发射 —— 模式/滤波表按 FT-710 下发，且不带未验证闸。接收与频谱（S 表合成）不受影响。</li>
+        <li>顺手把 `%LOCALAPPDATA%\MRRC-Modern\launcher.log` 一起附在下次报告里：它能直接看到启动器那次 `Detecting the radio on N serial port(s)` 的探测与写回，便于确认改写来源；升级到修复启动器机型白名单（改为读取 backends.known_models()）的版本后，就可以恢复用启动器、在连接设置里选 FTX-1F 并持久生效。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: 软件启动后电台选择FTX-1保存重启又变成FT-710</li>
+        <li class="ev">diagnostics/env.json: &quot;version&quot;: &quot;1.28.1&quot;, &quot;platform&quot;: &quot;Windows-10-10.0.19045-SP0&quot;, &quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;display_name&quot;: &quot;Yaesu FT-710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;}</li>
+        <li class="ev">logs/stdout.log: 2026-10-17 22:49:24,029 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud</li>
+        <li class="ev">logs/stdout.log: 2026-10-17 22:49:24,809 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0840) on [已隐去]</li>
+        <li class="ev">diagnostics/summary.txt: 启动次数：8 次，时间跨度 2026-10-17 21:57:45 → 2026-10-17 22:49:37</li>
+        <li class="ev">logs/server.log: 2026-10-17 22:53:31,308 [WARNING] mrrc.backend.ft710.scope: scope_pipe: spi_init_failed:all_attempts</li>
+        <li class="ev">logs/stdout.log: 2026-10-17 22:49:35,650 [INFO] mrrc.audio: Found configured audio input: [1] 麦克风 (USB Audio Device) (host=MME)</li>
+        <li class="ev">static/index.html:708 &lt;option value=&quot;ftx1&quot;&gt;Yaesu FTX-1F（实验性，仅接收）&lt;/option&gt;</li>
+        <li class="ev">server.py:4073 if radio_model not in known_models():  # registry-derived（连接对话框接受 ftx1）</li>
+        <li class="ev">backends/__init__.py: &quot;ftx1&quot;: (&quot;backends.yaesu.backend&quot;, &quot;FTX1Backend&quot;),</li>
+        <li class="ev">macos/first_run.py:36 VALID_MODELS = frozenset({&quot;ft710&quot;, &quot;ic7300&quot;, &quot;ic7300mk2&quot;})</li>
+        <li class="ev">macos/first_run.py: model_unset = model not in VALID_MODELS  # → True for &quot;ftx1&quot;</li>
+        <li class="ev">macos/first_run.py: updates[&quot;MRRC_RADIO_MODEL&quot;] = model  # 探测结果（八重洲 ID; ⇒ &quot;ft710&quot;）写回 env 文件</li>
+        <li class="ev">macos/first_run.py: return &quot;ft710&quot; if probe is probe_ft710 else &quot;ic7300&quot;</li>
+        <li class="ev">CHANGELOG.md:1498 - **四款新机型**：`MRRC_RADIO_MODEL=ftdx10 | ftdx101d | ftdx101mp | ftx1`（v1.16.0，仅加 backend/profile，未触及启动器白名单）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>macos/first_run.py:VALID_MODELS / needs_first_run() / apply_first_run() / probe_radio_model()（白名单应改为 backends.known_models()，探测需返回真实机型或保留用户已选机型，不得把 ftx1/ic705/ic7610/ic7760/ftdx10/ftdx101d/ftdx101mp/ft891 判为“未设置”）</code></p>
+    </article>
+    <article class="card" id="20261017-225339-c737">
+      <header>
+        <span class="id">20261017-225339-c737</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-17 23:01</span>
+      </header>
+      <h3>软件启动后电台选择FTX-1保存重启又变成FT-710</h3>
+      <p class="verdict">1.28.1 的启动器首启探测仍用硬编码三机型白名单（ft710/ic7300/ic7300mk2）判定型号，FTX-1（ftx1）被视为「未设置」，于是每次启动都重新探测并回写成 ft710 —— 这是产品缺陷，不是用户操作问题。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>启动器把「型号不在硬编码白名单」当成首启未配置：`macos/first_run.py` 的 `VALID_MODELS = frozenset({&quot;ft710&quot;,&quot;ic7300&quot;,&quot;ic7300mk2&quot;})`，而 `needs_first_run()` 的 `configured` 条件要求 `model in VALID_MODELS`。FTX-1 的注册键是 `ftx1`（backends/__init__ 注册表、CHANGELOG v1.16.0「MRRC_RADIO_MODEL=ftx1」），永远不满足，于是**每次启动 launcher 都会重跑自动配置**，`MRRC_PORT_CONFIRMED=1`/`MRRC_FIRST_RUN_DONE=1` 都拦不住。</li>
+        <li>`apply_first_run()` 里同一份白名单决定了回写值：`model_unset = model not in VALID_MODELS` → 为 True 就重新探测串口；探测函数 `probe_radio_model()` 只会返回 `ft710`/`ic7300`（FTX-1 也答 Yaesu ASCII `ID;`，因此被认成 ft710），探测不到则 `model = RADIO_MODEL_FALLBACK`（`&quot;ft710&quot;`），最后 `updates[&quot;MRRC_RADIO_MODEL&quot;] = model` 覆盖写回配置文件 —— 用户「保存的 FTX-1」被启动器改写掉。</li>
+        <li>Windows 走的正是这条路：`windows/launcher.py` 第 14 行 `from macos import first_run`，`main()` 里 `env = ensure_first_run()` 调用的就是上面这套逻辑；rc==42 的配置重启虽会 `load_env(config_path())` 重读文件，但用户「关掉再开」的那一刻会重新过 `ensure_first_run()`，于是又变回 ft710。</li>
+        <li>包内证据一致：`env.json` 的 `radio.model=ft710`、`stdout.log`「Radio model: ft710, serial port: [已隐去] @ 38400 baud」、`Connected to FT-710 (ID=0840) on [已隐去]`，而 summary 显示 1 小时内 8 次启动 —— 与「每次启动都重新探测并回写」吻合。</li>
+        <li>同类缺陷在服务端已经修过、启动器这一份被漏掉：`server.py` 的 `/api/setup` 用 `known_models()` 并注明「Registry-derived: …instead of being rejected by a hardcoded tuple (which is how ic705/ic7610/ic7760 would have been unreachable from the connection dialog)」；`macos/first_run.py` 仍留着手写三元组，所以 v1.16.0 之后新增的 ftx1/ftdx10/ftdx101d/ftdx101mp/ft891/ic705/ic7610/ic7760 全部会被回退成 ft710。与 CHANGELOG:1635（V2.33「连接设置保存与首启探测…曾静默覆盖型号默认值」）同属「首启探测覆盖用户选择」这一类，只是那次修的是波特率分支、型号分支从未修。</li>
+        <li>包内其它报错不是本问题：`scope_pipe: open_failed:attempt_N:error_2` + `fatal:cannot_open_device` 表示这台机器上没有可打开的 FT4222 设备（FTX-1/非 FT-710 本来就没有 FT4222 波形源，v1.16.0 明确「没有真机频谱数据源，UI 用 S 表合成，不伪造瀑布」）；`asyncio … ConnectionResetError [WinError 10054]` 是浏览器/客户端断连的噪声；`ft8-worker.log` 的 `BrokenPipeError … EOFError` 是进程退出时 worker 被回收。这三类不解释型号回退。</li>
+        <li>需要注意的一点：日志里电台以 `ID=0840`、FT-710 的 CAT 应答；如果现场实际接的是 FT-710，那么选 FTX-1 本身也不可用（FTX-1 模式码 H/I 与滤波 SH 前缀都不同）。型号回写是缺陷，但「该选哪个型号」要以机身上的机器为准。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先彻底退出 MRRC Modern（托盘/黑色命令窗口都要关，任务管理器确认没有 MRRC-Modern.exe / MRRC-Modern-Server.exe 残留），否则下一次启动仍会被探测覆盖。</li>
+        <li>用记事本打开 %LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env，把 `MRRC_RADIO_MODEL=` 改成 `ftx1`（若真要把 FTX-1 当发射机，再补一行 `MRRC_ALLOW_UNVERIFIED_TX=1`，否则 PTT/TUNE 会被未验证机型门禁拒绝）；顺手确认 `MRRC_SERIAL_PORT=[已隐去]`。</li>
+        <li>**不要用桌面/开始菜单里的「MRRC Modern」图标启动**（那是 launcher，会重新探测并把型号写回 ft710）。改用安装目录下的 `MRRC-Modern-Server.exe`，或开始菜单里的「MRRC Modern Server」快捷方式，再在浏览器打开 https://127.0.0.1:8888。</li>
+        <li>启动后到日志里核对一行：应出现 `Radio model: ftx1`（不是 ft710）；若仍是 ft710，说明 launcher 又跑了一次，按其托盘菜单完全退出后再用上面的 Server 入口启动。</li>
+        <li>如果只想稳定使用：把型号设回实际电台（例如 FT-710 → `ft710`），并在修复版发布前不要再在「连接设置…」里切换到 ft710/ic7300/ic7300mk2 以外的机型。</li>
+        <li>顺便清理环境噪声：这台机器没有可用的 FT4222 设备，FT-710 的真频谱需要 FTDI 驱动/设备（`FT4222.dll`+`ftd2xx.dll` 已加载但 `error_2` 打不开）；若确实是 FT-710 且要真频谱，请插好 USB 波形口并确认驱动，否则瀑布会一直是 S 表合成。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">macos/first_run.py: `VALID_MODELS = frozenset({&quot;ft710&quot;, &quot;ic7300&quot;, &quot;ic7300mk2&quot;})`</li>
+        <li class="ev">macos/first_run.py: `configured = (pwd and pwd != DEFAULT_WEB_PASSWORD and model in VALID_MODELS and (...))` → `return not configured`</li>
+        <li class="ev">macos/first_run.py: `model_unset = model not in VALID_MODELS` … `model = RADIO_MODEL_FALLBACK`（&quot;ft710&quot;）… `updates[&quot;MRRC_RADIO_MODEL&quot;] = model`</li>
+        <li class="ev">macos/first_run.py: `for baud, probe in ((38400, probe_ft710), (115200, probe_ic7300)): ... return &quot;ft710&quot; if probe is probe_ft710 else &quot;ic7300&quot;`</li>
+        <li class="ev">windows/launcher.py: `from macos import first_run` / `main(): env = ensure_first_run()`</li>
+        <li class="ev">server.py /api/setup: `if radio_model not in known_models(): ... # Registry-derived: ... instead of being rejected by a hardcoded tuple`</li>
+        <li class="ev">stdout.log: `2026-10-17 22:49:24,029 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud`</li>
+        <li class="ev">stdout.log: `2026-10-17 22:49:24,809 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0840) on [已隐去]`</li>
+        <li class="ev">state/env.json: `&quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;display_name&quot;: &quot;Yaesu FT-710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;}`</li>
+        <li class="ev">diagnostics/summary.txt: `启动次数：8 次，时间跨度 2026-10-17 21:57:45 → 2026-10-17 22:49:37`</li>
+        <li class="ev">logs/server.log: `scope_pipe: open_failed:attempt_5:error_2` / `scope_pipe: fatal:cannot_open_device`</li>
+        <li class="ev">CHANGELOG.md:1635 (V2.33): `连接设置保存与首启探测现在自动按型号…38400 曾静默覆盖型号默认值`</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>macos/first_run.py:needs_first_run()/apply_first_run()（VALID_MODELS 硬编码三键 → 应由 backends.known_models() 派生，探测失败时保留用户已选的型号而不是回写 ft710）</code></p>
+    </article>
+    <article class="card" id="20261007-083527-6536">
+      <header>
+        <span class="id">20261007-083527-6536</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">网络 · 2026-10-16 21:56</span>
+      </header>
+      <h3>关闭蒲公英VPN还是无法进入电台所在网络，打开bg7zhs.mrrc.vlsc.net网页显示502bad gateway电台所在网络使用了花生壳P5路由器。</h3>
+      <p class="verdict">本机服务与电台一切正常（启动完整、[已隐去] 已连、频谱/发射正常），502 出现在云端入口→本机隧道的链路；这与本仓记录过的『入口 502 而租户侧一切看起来正常』同签名，1.25.3 应已包含相关修复 → 按回归排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>本机侧健康：stdout.log 显示 `SSL enabled`、`Connected to FT-710 (ID=0650) on [已隐去]`、scope-init 完成、`Poll scheduler started (7 tasks)`，radio.serial_connected=true —— 应用不是崩溃/未启动状态，因此 502 不是本机服务没跑起来。</li>
+        <li>电台在正常工作：server.log 尾部 `Session metrics: listeners 0 | operators 2 | uplink spectrum 293.0 kbps` 与 `TX session: frames=210 fed=210 written=205 write_err=0 peak=45%` —— 收/发链路在跑，租户侧看起来一切正常，正是历史条目描述的 502 画面。</li>
+        <li>云端隧道是本实例配置的一部分：stdout.log 有 `cloud_hub: cloud hub: clearing a stale frpc (pid 7424) holding this instance&#x27;s tunnel` —— 说明本实例已接入 MRRC 云（bg7zhs.mrrc.vlsc.net 走 hub→frpc 回连），且 v1.25.2 的残留 frpc 清理在运行。</li>
+        <li>用户报 `打开 bg7zhs.mrrc.vlsc.net 显示 502 Bad Gateway`：与 CHANGELOG v1.24.2『隧道从界面接入时永远不启动 —— 入口一直 502，而租户侧看起来一切都对』、v1.24.7『入口 502 却没人提示重启』、v1.24.8『一台已接入的机器重启之后，入口会一直 502，直到有人点一下设置』、v1.25.0『hub 拿登记证书校验上游，入口会一直 502 而没有任何东西会去重启』完全同签名。</li>
+        <li>版本判据：env.json version=1.25.3（frozen, Windows），而上述 502/隧道生命周期修复在 v1.24.7 / v1.24.8 / v1.25.0，均已包含在当前版本中 ⇒ 不是『版本早于修复』，按回归排查；v1.25.4（V2.73）只补了 macOS 的 frpc 清理那一半，对 Windows 无影响。</li>
+        <li>环境提示（不能仅据此判环境）：problem.txt 里用户提到 蒲公英 VPN 与 花生壳 P5 —— frpc 是出站连接、本不需要同网段/VPN，这两层叠加可能干扰，但历史签名的优先级高于环境推断，故仍需按隧道链路排查。</li>
+        <li>次要异常（与本 502 无直接因果，供参考）：server.log 通篇为 `get_meter(RM8): unparseable response`（RM8 回读全是二进制垃圾），可能只是 RM8 度量解析噪声，也可能是串口被第二个进程占用，需在真机确认只有一个实例持 [已隐去]。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>打开应用「设置 → 接入云端」，查看入口地址与状态：若显示「还需重启应用以启用新证书」(cert_reload_required)，点重启按钮让新证书生效——老证书会过不了 hub 的上游校验，表现为入口一直 502。</li>
+        <li>完全退出 MRRC Modern（含托盘/任务栏，确认没有第二个 server/frpc 进程）后重新启动：应用启动时会把已接入的隧道自动拉起；随后到 `logs/stdout.log` 确认出现 frpc 的 `login to server success` 与 `start proxy success`（只有这两行出现，入口才会通）。</li>
+        <li>确认网络路径：蒲公英 VPN 已关（已做）；frpc 只需本机能出公网，不需要与电台同网段。若 花生壳 P5 开启了『内网穿透/VPN 叠加/DNS 劫持』类功能，先按普通 NAT 放行或关掉其叠加功能，避免与 frpc 的出站长连接冲突，然后重启应用。</li>
+        <li>确认没有重复实例：启动日志里 `Sending scope-init CAT commands...` 只应出现一次、`MRRC-Modern`/`frpc` 进程各只有一个；出现成对日志或两个 frpc 就是重复实例在抢 [已隐去] 和隧道代理名，先全部关掉再单开一个。</li>
+        <li>若以上仍 502：在「接入云端」重新刷新，或撤销后重新申请以重建端口路由（v1.24.3 起同呼号复用原端口，避免路由指向空端口）；并把最新版（≥1.25.4）装上后重试，同时保留 logs/stdout.log（含 frpc 输出）与 hub 侧 frps 日志供回归定位。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-06 20:54:19,437 [INFO] mrrc: SSL enabled: C:\\Users\\Administrator\\AppData\\Local\\MRRC-Modern\\certs\\fullchain.pem</li>
+        <li class="ev">2026-10-06 20:54:20,730 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0650) on [已隐去]</li>
+        <li class="ev">2026-10-06 20:54:32,302 [INFO] mrrc.poll: Poll scheduler started (7 tasks)</li>
+        <li class="ev">2026-10-06 20:54:19,778 [INFO] cloud_hub: cloud hub: clearing a stale frpc (pid 7424) holding this instance&#x27;s tunnel</li>
+        <li class="ev">2026-10-07 08:29:31,882 [INFO] mrrc: Session metrics: listeners 0 (sockets 0, peak 0/3600s) | operators 2 | uplink spectrum 293.0 kbps, audio_rx 99.5 kbps</li>
+        <li class="ev">2026-10-07 08:29:53,712 [INFO] mrrc: TX session: frames=210 fed=210 decode_fail=0 written=205 write_err=0 queue_drops=0 peak=45% non_owner_drops=0</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.25.3&quot;, &quot;frozen&quot;: true, &quot;platform&quot;: &quot;Windows-10-10.0.19041-SP0&quot;</li>
+        <li class="ev">problem.txt: 关闭蒲公英VPN还是无法进入电台所在网络，打开bg7zhs.mrrc.vlsc.net网页显示502 bad gateway</li>
+        <li class="ev">CHANGELOG.md v1.24.2: 隧道从界面接入时永远不启动 …… 入口一直 502，而租户侧看起来一切都对</li>
+        <li class="ev">CHANGELOG.md v1.24.8: 一台已接入的机器重启之后，入口会一直 502，直到有人点一下设置</li>
+        <li class="ev">CHANGELOG.md v1.25.0: hub 拿登记证书校验上游，入口会一直 502 而没有任何东西会去重启</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>cloud_hub.py:TunnelProcess（隧道启动/注册）+ server.py:_cloud_start_tunnel（启动时自拉隧道、证书判据）</code></p>
+    </article>
+    <article class="card" id="20261011-134820-f54e">
+      <header>
+        <span class="id">20261011-134820-f54e</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">音频 · 2026-10-16 21:53</span>
+      </header>
+      <h3>偶尔重启系统和APP发射有声音大部分还是发射没有语音输出，用CQ键发射能听到CQ CQ CQ…的呼叫，IC7300/29.6FM</h3>
+      <p class="verdict">服务端收到 0 帧麦克风上行（frames=0/peak=0%，CQ 走服务端注入却正常），与仓库 V2.71 记录并修复过的「键控了却没有声音」同签名，而现场 1.25.5 已包含该修复，按回归排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>现场版本 1.25.5（env.json.version），而 v1.25.4 的 CHANGELOG「同批到达：这一个包也是 FT-891 和『键控了却没有声音』到达用户的那个包」段明确该修复（SDD V2.71）随安装包发布，源码包内含 `_claim_tx_owner_for_token`/`_same_session_uplink_takeover`（CHANGELOG.md:389-404）⇒ 当前版本应已包含该修复。</li>
+        <li>失败签名与历史逐字吻合：多次 `TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0`；V2.71 现场取证正是「四次发射全是 frames=0 fed=0 written=0 peak=0%，电台键控了、调制为零」（SDD/14-version-history.md 的 V2.71 行）。</li>
+        <li>日志同时出现多条 /WSaudioTX 与 non-owner 丢弃：`Audio TX client connected (2 total, owner=False)`、`TX audio from non-owner client ignored (drops=1) — another client owns the uplink`、其后 `Audio TX client disconnected (1 remain, owner=True)` —— 正是 V2.71 描述的多 socket 上行认领场景。</li>
+        <li>CQ 键能听到呼叫（problem.txt）：CQ 由服务端 cq_player/TxSession 直接灌入 TX 队列，证明电台键控、TX 输出设备与电台调制输入通路均正常；因此故障只在上行（浏览器/App → 服务端）。</li>
+        <li>服务端音频设备另有环境噪声但不解释本症状：`TX audio started: [5] 扬声器 (USB Audio CODEC ) ... actual=48000Hz, channels=1` 成功、CQ 也走该设备；而同批 `Configured audio device &#x27;麦克风 (USB Audio CODEC)&#x27; not found`（配置名末缺一个空格）、`Found configured audio output: [27] ... (WDM-KS)` 后 `TX open failed x3 ([Errno -9999] Unanticipated host error) — re-initializing PortAudio`、`Multiple USB audio outputs: [5]/[13]/[18] — using [5]` 属 USB 重枚举/设备名与设备索引漂移，影响的是设备选择而非帧数。</li>
+        <li>summary 的 Traceback 均为 `_ProactorBasePipeTransport._call_connection_lost`（Windows asyncio 断连噪声），与无语音无关；`scope_pipe open_failed/fatal:cannot_open_device` 早于本次发射（12:26），且 13:43:40 已有 `ic7300.scope: CI-V scope: first complete waveform — spectrum active (bins=475)`，频谱非本症状原因。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>只保留一个发射客户端：关闭其它浏览器标签页、另一台设备或另一个 App 的登录（日志显示同时有 2 条 /WSaudioTX 与一条 non-owner 丢弃）—— 上行同一时刻只归一条会话，多余的麦会互相压制。</li>
+        <li>在发射用的那个浏览器里确认麦克风权限与输入设备：站点设置→麦克风=允许，且输入不是 ToDesk Virtual Audio 等无信号虚拟声卡（被拒或选错设备时浏览器会一帧都不发，正是 frames=0）。</li>
+        <li>完全退出浏览器/App 再重开并重新登录一次后发射（清掉页面重载留下的半开旧 socket，避免认领落在不再送音频的旧连接上）。</li>
+        <li>升级到 1.25.5 之后的最新安装包（现行仓库侧为 1.27.x），重装后先只用单个客户端做一次发射验证。</li>
+        <li>排查环境时把音频设备写死为启动设备清单里的 MME 条目（如 MRRC_AUDIO_RX_DEVICE=1、MRRC_AUDIO_TX_DEVICE=5，或核对设备名结尾空格），避免 [27]/[28] WDM-KS 条目反复 -9999 打不开；改完重启服务再试。</li>
+        <li>自检判据：发射时看日志 `TX session` 行，`frames`/`written` 应 &gt;0、`peak` 非 0%、`non_owner_drops`=0；若仍 frames=0，说明发射端浏览器/App 根本没送音频，按上面客户端侧继续排除。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.25.5&quot;</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:41:43,219 [INFO] mrrc: TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:43:05,004 [INFO] mrrc: Audio TX client connected (2 total, owner=False)</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:43:07,055 [WARNING] mrrc: TX audio from non-owner client ignored (drops=1) — another client owns the uplink</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:43:27,536 [INFO] mrrc: Audio TX client disconnected (1 remain, owner=True)</li>
+        <li class="ev">logs/server.log: 2026-10-11 13:42:06,628 [WARNING] mrrc.audio: TX open failed x3 ([Errno -9999] Unanticipated host error) — re-initializing PortAudio (USB re-enumeration?)</li>
+        <li class="ev">logs/stdout.log: 2026-10-11 13:36:39,397 [WARNING] mrrc.audio: Configured audio device &#x27;麦克风 (USB Audio CODEC)&#x27; not found</li>
+        <li class="ev">problem.txt: 用CQ键发射能听到CQ CQ CQ…的呼叫，IC7300/29.6FM</li>
+        <li class="ev">CHANGELOG.md:397-400 发射时「键控了却没有声音」（SDD V2.71）… 现在按会话取最后连接的那条，并在收到第一个语音帧时把上行交给同 token 的活 socket</li>
+        <li class="ev">SDD/14-version-history.md V2.71: 四次发射全是 frames=0 fed=0 written=0 peak=0% non_owner_drops=190/118/102/236</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_claim_tx_owner_for_token / _same_session_uplink_takeover / _assign_tx_owner_on_connect（TX 上行认领）；static/ft710_main.js + tx_capture_worklet.js（浏览器麦采集是否出帧）</code></p>
+    </article>
+    <article class="card" id="20261010-220406-5793">
+      <header>
+        <span class="id">20261010-220406-5793</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">电台 · 2026-10-16 21:50</span>
+      </header>
+      <h3>手机端发射声音太小</h3>
+      <p class="verdict">与 SDD V2.78（同日 2026-10-10、同为 v1.25.4 + IC-7300 的发射声音问题）同签名：软件链路清白，根因在电台侧调制输入源（Icom MOD Input / USB MOD Level），非产品缺陷。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>软件链路是清的：TX 声卡选中正确且命中 USB 声卡 —— `TX audio started: [4] 扬声器 (USB Audio CODEC ) (host=MME, default=44100Hz, actual=48000Hz, channels=1)`；`env.json` 里 `configured_tx=&quot;扬声器 (USB Audio CODEC )&quot;`、`radio.model=&quot;ic7300&quot;`、`device_rates.tx=48000`。</li>
+        <li>服务端确实把语音写进了电台：`TX session: frames=85 fed=85 decode_fail=0 written=83 write_err=0 queue_drops=0 peak=21%` 与 `frames=121 fed=121 written=112 peak=0%`。`peak` 是服务端解码后 PCM 实测峰值（SDD V2.71 定义，`server.py:2740`），写入无差错、无丢帧。</li>
+        <li>电台也确实在发射且有调制：`TX meters active: RF_PWR=100W | COMP=0 ALC=101 PWR=52 SWR=15` —— `ALC` 非零说明电台当时收到了调制信号（对照 V2.78：ALC=0/PWR≈0 才是「调制没进来」）。</li>
+        <li>因此「声音太小」是**电平**问题而非通路问题：peak=21% 偏低（V2.78 的已知良好现场是 peak=52%），而多次 `peak=0%` / `frames=0 fed=0` 的发射是手机端当次根本没送音频（按键但未采集到声音）。</li>
+        <li>本仓历史同签名：SDD V2.78（2026-10-10，同日同版本 v1.25.4、同为 IC-7300）把两份上报的根因定为**电台侧调制输入源**（Icom `SET → Connectors → MOD Input`：`DATA OFF MOD` 未选 USB 时，FM 是死载波、SSB 表现为「功率很小或没有」），并明确『不是产品缺陷』；产品侧只补了文档，无代码修复可回归。当前日志与该结论一致（本包即 `20261010-220406-5793`，与 V2.78 记的 `20261010-205200-6e3c` 同批）。</li>
+        <li>噪音（非本问题）：233 条 Traceback / 249 条 ERROR 全是 `ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接` —— 手机端 WebSocket 非正常断开，属客户端网络抖动；`scope_pipe: fatal:cannot_open_device` 来自早前的 FT-710 会话（14 次启动时间跨度 10-09→10-10），当前 `radio.scope_type=&quot;civ27&quot;` 的 IC-7300 不走 FT4222；`cloud hub: cannot run frpc: [WinError 5]` 与发射音质无关。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>在 IC-7300 面板上核对 `SET → Connectors → MOD Input` 三项（这是本类问题的第一处）：`DATA OFF MOD = USB`（想同时留手咪就选 `MIC, USB`）、`DATA MOD = USB`、`USB MOD Level ≈ 50`（不要为 0）。</li>
+        <li>同组确认 `USB SEND = OFF`（MK2 同组另有 `USB Keying (CW/RTTY)` 也保持 OFF）。</li>
+        <li>说话时看电台 ALC 表是否摆动 —— 不动＝调制没进来，回去改 `MOD Input`（对应 `docs/OPERATION_GUIDE.md` §0.6.2 验证清单第 5 条）。</li>
+        <li>网页端把设备侧麦克风增益 `🎙 Vol` 滑杆往上调（0–200 → 0–2×，100 = 原值；见 CHANGELOG「Device-side mic gain」条），目标让服务端日志 `TX session ... peak=` 稳定在 40% 以上。</li>
+        <li>手机侧：确认浏览器已获麦克风权限、系统媒体音量非静音、不要按住麦克风孔、尽量用耳机麦克风贴近说话；若日志里某次发射是 `frames=0 fed=0`，说明那一下手机没采到音（重新授权/换浏览器重试）。</li>
+        <li>若上述都到位而对方仍觉小，把电台 `USB MOD Level` 从 50 逐步上调（如 70–80）再试，注意别过载（ALC 顶格反而失真）。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: 手机端发射声音太小</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.25.4&quot;, &quot;radio&quot;: {&quot;model&quot;: &quot;ic7300&quot;, &quot;scope_type&quot;: &quot;civ27&quot;, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">env.json: &quot;configured_tx&quot;: &quot;扬声器 (USB Audio CODEC )&quot;, &quot;device_rates&quot;: {&quot;rx&quot;: 48000, &quot;tx&quot;: 48000}</li>
+        <li class="ev">logs/server.log: mrrc.audio: TX audio started: [4] 扬声器 (USB Audio CODEC ) (host=MME, default=44100Hz, actual=48000Hz, channels=1) (pre-buffer 60ms, cap 400ms)</li>
+        <li class="ev">logs/server.log: mrrc: TX session: frames=85 fed=85 decode_fail=0 written=83 write_err=0 queue_drops=0 peak=21% non_owner_drops=0</li>
+        <li class="ev">logs/server.log: mrrc: TX session: frames=121 fed=121 decode_fail=0 written=112 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">logs/server.log: mrrc.poll: TX meters active: RF_PWR=100W | COMP=0 ALC=101 PWR=52 SWR=15</li>
+        <li class="ev">SDD/14-version-history.md (V2.78): 两份 IC-7300 现场上报的根因在**电台侧调制输入源** … 20261010-205200-6e3c（v1.25.4，「发射功率小/没有」，SSB 7.05 MHz）… 三项不含 USB 时语音发射永远只有载波 —— **不是产品缺陷**</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>无代码缺陷；用户指引见 docs/OPERATION_GUIDE.md §0.6.2（IC-7300 MOD Input）与 static/modules 的 🎙 Vol 设备侧麦克风增益</code></p>
+    </article>
+    <article class="card" id="20261007-203517-f40d">
+      <header>
+        <span class="id">20261007-203517-f40d</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">产品缺陷 · 2026-10-16 21:42</span>
+      </header>
+      <h3>FT-7300开机就发射</h3>
+      <p class="verdict">日志签名 `TX session: frames=0 … written=0 … peak=0%`（键控了却没有声音）与 v1.25.4 修复的「同一 30 天令牌下多条 /WSaudioTX 上行归属错误」同签名，而当前版本正是 1.25.4（应已含该修复）→ 按回归排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>日志反复出现 `TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0` —— 键控确实发生，但一帧上行音频都没到服务端，正是 v1.25.4 CHANGELOG 记的「键控了却没有声音」现象。</li>
+        <li>包内可确认**同一会话存在多条 /WSaudioTX**：`20:34:14,608 [WARNING] mrrc: TX audio owner disconnected during TX! Forcing RX` 之后紧跟 `20:34:14,675 TX audio ownership promoted to remaining client (1 total)` 与 `20:34:14,676 Audio TX client disconnected (1 remain, owner=True)` —— 与 v1.25.4 描述的「页面重载留下的半开旧 socket / 同一登录的两个标签页」场景一致。</li>
+        <li>当前版本 = 1.25.4（`diagnostics/env.json` &quot;version&quot;: &quot;1.25.4&quot;，`manifest.json` &quot;version&quot;: &quot;1.25.4&quot;），而 CHANGELOG v1.25.4 明说该包已含修复：`_claim_tx_owner_for_token`、`_same_session_uplink_takeover` 都在里面（源码包逐字节核对）。因此这不是「版本太旧」，而是修复未生效的回归。</li>
+        <li>服务端 `is_transmitting` 由 CI-V 读回驱动（`radio_state.py` 中 `tx_status` → 派生 `is_transmitting`；`civ_controller.py` 的 `_try(&quot;tx_status&quot;, self.get_ptt)`），所以电台确实处于发射态；结合 frames=0，用户看到的「开机就发射」就是「电台被一条不再送音频的 socket 键控着、却无声」。</li>
+        <li>次要环境噪声不构成 frames=0 的判据：`[Errno -9999]`、`Configured audio device &#x27;麦克风 (USB Audio CODEC)&#x27; not found`（实际设备名多一个尾空格）影响的是服务端↔电台的声卡，而不是浏览器上行帧计数；Windows 的 `_ProactorBasePipeTransport._call_connection_lost` 是已知良性噪音。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先排除多 socket 干扰：把所有打开该网页的标签页/窗口全部关闭（尤其 ToDesk 远端里和本机各开的一个），然后**只开一个**页面重新登录再试发射，同一账号不要同时开两个标签页。</li>
+        <li>检查浏览器麦克风权限与输入设备：该机存在 `麦克风 (ToDesk Virtual Audio)`，请把系统默认输入改为 `麦克风 (USB Audio CODEC )`，并允许浏览器使用麦克风后再按键。</li>
+        <li>若单一标签页下仍无声：按回归上报——打开 🐞 页面生成本次诊断包（含 `diagnostics/client.json`，本次包内该文件内容缺失），在答复里注明「1.25.4 上仍复现 frames=0」并附新的 `#编号`。</li>
+        <li>临时规避：发射前先松开再重新按下 PTT，并观察该次 TX 会话的 frames 是否仍为 0，以确认是否为上行归属问题；确认期间可用功率/SWR 表判断电台是否真在发信。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-07 20:32:24,301 [INFO] mrrc: TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">2026-10-07 20:34:14,608 [WARNING] mrrc: TX audio owner disconnected during TX! Forcing RX.</li>
+        <li class="ev">2026-10-07 20:34:14,675 [INFO] mrrc: TX audio ownership promoted to remaining client (1 total)</li>
+        <li class="ev">2026-10-07 20:34:14,676 [INFO] mrrc: Audio TX client disconnected (1 remain, owner=True)</li>
+        <li class="ev">2026-10-07 20:32:46,729 [WARNING] mrrc.poll: TX meter poll: all queries returned None (missed=[&#x27;COMP&#x27;], is_transmitting=True, connected=True)</li>
+        <li class="ev">env.json: &quot;version&quot;: &quot;1.25.4&quot;；manifest.json: &quot;version&quot;: &quot;1.25.4&quot;,  &quot;problem&quot;: &quot;FT-7300开机就发射&quot;</li>
+        <li class="ev">CHANGELOG.md v1.25.4 — 「发射时『键控了却没有声音』… 一个令牌名下可以同时有多条 /WSaudioTX … 现在按会话取最后连接的那条，并在收到第一个语音帧时把上行交给同 token 的活 socket」</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:_claim_tx_owner_for_token / server.py:_same_session_uplink_takeover（TX 上行归属；配套 _register_tx_socket/_forget_tx_socket）</code></p>
+    </article>
+    <article class="card" id="20261001-192738-30c2">
+      <header>
+        <span class="id">20261001-192738-30c2</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">升级 · 2026-10-16 21:30</span>
+      </header>
+      <h3>云端申请500</h3>
+      <p class="verdict">「云端申请500」与 v1.24.0 引入云端接入时那个未导入 cloud_hub 的缺陷完全同签名，当前版本（1.24.0）早于修复版本，升级到 v1.24.1 及以上即可解决。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>症状与你上报的完全一致：CHANGELOG v1.24.1 条目标题即「接入云端第一次真按就 500：那个模块谁也没导入」，正文写明「v1.24.0 把接入搬进了设置菜单，但真按『申请』只会得到一个 500」（CHANGELOG.md:707、709）。</li>
+        <li>根因是打包版 server.py 从未 `import cloud_hub`，导致申请端点在运行时报 NameError 并返回 500：现场堆栈 `File &quot;server.py&quot;, line 4035, in api_cloud_apply` → `File &quot;server.py&quot;, line 3987, in _cloud_portal` → `NameError: name &#x27;cloud_hub&#x27; is not defined`（CHANGELOG.md:711-713；SDD/14-version-history.md 的 V2.64 同款记录）。</li>
+        <li>你的包版本恰是出问题的那个：env.json 报 `&quot;version&quot;: &quot;1.24.0&quot;`、`&quot;frozen&quot;: true`（打包版），而修复在 v1.24.1；也就是说 1.24.0 完全不含该修复，任何一次「申请」都必然 500。</li>
+        <li>当前仓库 HEAD 已含修复：server.py:67 有 `import cloud_hub`，_cloud_portal（server.py:5114）与 api_cloud_apply（server.py:5304）都正常引用 —— 证明这是已修复的旧版回归，不需要新改代码。</li>
+        <li>包内其余迹象（18:59 的 [已隐去] `PermissionError(13, &#x27;拒绝访问&#x27;)`/`FileNotFoundError`、更早的 `Configured audio device &#x27;USB Audio&#x27; not found`、频谱一时走 S 表回退）都属于串口被占用/设备名不符的瞬时环境问题，且日志显示 19:22 重启后串口已连上（`Connected to FT-710 (ID=0800) on [已隐去]`）、真频谱已 `first frame received`，与你上报的云端申请 500 不是同一件事。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>将 MRRC Modern 升级到 v1.24.1 或更高版本（v1.24.0 是首次加入云端接入、申请按钮必 500 的版本）：从 www.vlsc.net 下载最新安装包覆盖安装，或在应用内用「检查更新」。</li>
+        <li>升级并重启应用后，再打开「设置 / ☰ → 接入云端」填呼号提交申请，此版本起申请才可能返回正常结果。</li>
+        <li>若升级后申请仍报 500，请立刻用 🐞 生成新的诊断包发回，并附上点击「申请」的确切时间点。</li>
+        <li>本次包内另有两处环境提示可顺手排除：18:59 前后 [已隐去] 曾被其它进程占用（PermissionError/端口不存在），请确认没有第二个程序（如串口调试工具、另一个实例）占着 [已隐去]；音频设备名配置为 &#x27;USB Audio&#x27; 而实际设备名是 &#x27;USB Audio Device&#x27;，可在设置里选实际设备后重试。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">problem.txt: 云端申请500</li>
+        <li class="ev">diagnostics/env.json: &quot;version&quot;: &quot;1.24.0&quot;, &quot;frozen&quot;: true</li>
+        <li class="ev">CHANGELOG.md:707: ## [v1.24.1] — 2026-10-02 — 接入云端第一次真按就 500：那个模块谁也没导入</li>
+        <li class="ev">CHANGELOG.md:709: v1.24.0 把接入搬进了设置菜单，但**真按「申请」只会得到一个 500**。现场（打包版）的日志：</li>
+        <li class="ev">CHANGELOG.md:711-713: File &quot;server.py&quot;, line 4035, in api_cloud_apply / File &quot;server.py&quot;, line 3987, in _cloud_portal / NameError: name &#x27;cloud_hub&#x27; is not defined</li>
+        <li class="ev">CHANGELOG.md:719-720: 新增 tests/test_cloud_endpoints.py…并把 cloud_hub 写进 mrrc_modern_server.spec 的 hiddenimports</li>
+        <li class="ev">SDD/14-version-history.md (V2.64): ① 客户端 server.py 从未导入 cloud_hub…⇒ 打包版按下「申请」即 500 NameError</li>
+        <li class="ev">server.py:67: import cloud_hub（当前 HEAD 已含该修复）</li>
+        <li class="ev">logs/server.log: 2026-10-01 19:22:32,817 [INFO] mrrc.backend.ft710.cat: Connected to FT-710 (ID=0800) on [已隐去]（重启后串口已恢复，非本次云端问题）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>server.py:api_cloud_apply / server.py:_cloud_portal（1.24.0 缺 `import cloud_hub`；修复见 server.py:67 的 import 与 v1.24.1）</code></p>
+    </article>
     <article class="card" id="20261010-205200-6e3c">
       <header>
         <span class="id">20261010-205200-6e3c</span>
@@ -365,7 +737,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-10 21:12（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-17 23:11（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1500" viewBox="0 0 1240 1500" font-family="PingFang SC, Noto Sans CJK SC, Helvetica, sans-serif">
+  <rect width="1240" height="1500" fill="#121212"/>
+  <text x="64" y="96" font-size="46" font-weight="700" fill="#f2f2f2">ZTE W103D 电台盒子</text>
+  <text x="64" y="140" font-size="22" fill="#9a9a9a">参数 · 实测负载 · 蓝牙结论　｜　运行 MRRC Modern 服务端</text>
+  <line x1="64" y1="172" x2="1176" y2="172" stroke="#2c2c2c" stroke-width="2"/>
+
+  <text x="64" y="228" font-size="30" font-weight="700" fill="#f5b13d">参数</text>
+  <text x="190" y="228" font-size="18" fill="#7d7d7d">来源：镜像内 /etc/ophub-release、设备树与实物实测</text>
+  <rect x="64" y="252" width="1112" height="470" rx="12" fill="#1b1b1b" stroke="#2c2c2c"/>
+
+  <g font-size="22">
+    <text x="96" y="304" fill="#9a9a9a">型号</text><text x="290" y="304" fill="#f2f2f2">ZTE-W103D（ophub MODEL_ID 307）</text>
+    <text x="96" y="352" fill="#9a9a9a">SoC</text><text x="290" y="352" fill="#f2f2f2">Amlogic S905L3A · G12A · 4×Cortex-A53 @~1.8 GHz</text>
+    <text x="96" y="400" fill="#9a9a9a">设备树</text><text x="290" y="400" fill="#f2f2f2">meson-g12a-w103d.dtb</text><text x="700" y="400" fill="#f5b13d">专属，不可用通用 s905l3a</text>
+    <text x="96" y="448" fill="#9a9a9a">内存</text><text x="290" y="448" fill="#f2f2f2">2 GB</text>
+    <text x="96" y="496" fill="#9a9a9a">存储</text><text x="290" y="496" fill="#f2f2f2">eMMC · 8 GB 或 32 GB 两种</text><text x="700" y="496" fill="#f5b13d">以实物为准（实测 7.3 / 28.9 GB）</text>
+    <text x="96" y="544" fill="#9a9a9a">网口</text><text x="290" y="544" fill="#f2f2f2">100 Mb</text><text x="470" y="544" fill="#7d7d7d">一路客户端约 60 KB/s → 百兆约可带 200 路</text>
+    <text x="96" y="592" fill="#9a9a9a">无线</text><text x="290" y="592" fill="#f2f2f2">MT7663S（Wi-Fi + 蓝牙同一颗，走 SDIO）</text>
+    <text x="96" y="640" fill="#9a9a9a">内核</text><text x="290" y="640" fill="#f2f2f2">6.18.54-ophub</text><text x="640" y="640" fill="#ff6b6b">不可换：换通用内核 = 静默丢 Wi-Fi</text>
+    <text x="96" y="688" fill="#9a9a9a">zram</text><text x="290" y="688" fill="#f2f2f2">已配置（armbian-zram-config）</text>
+  </g>
+
+  <text x="64" y="790" font-size="30" font-weight="700" fill="#f5b13d">实测负载（这台盒子，2026-10-17）</text>
+  <text x="560" y="790" font-size="18" fill="#7d7d7d">vmstat 5 秒 ×3 平均 · 4 核 · 无浏览器客户端</text>
+  <rect x="64" y="814" width="1112" height="250" rx="12" fill="#1b1b1b" stroke="#2c2c2c"/>
+  <g font-size="21">
+    <text x="96" y="866" fill="#9a9a9a">状态</text>
+    <text x="300" y="866" fill="#9a9a9a">整机忙</text>
+    <text x="470" y="866" fill="#9a9a9a">空闲</text>
+    <text x="640" y="866" fill="#9a9a9a">用户 / 系统</text>
+    <text x="900" y="866" fill="#9a9a9a">load</text>
+    <text x="96" y="916" fill="#f2f2f2">FT8 引擎开</text>
+    <text x="300" y="916" fill="#f5b13d">≈ 27%</text>
+    <text x="470" y="916" fill="#f2f2f2">73%</text>
+    <text x="640" y="916" fill="#f2f2f2">34% / 7%</text>
+    <text x="900" y="916" fill="#f2f2f2">1.69</text>
+    <text x="96" y="966" fill="#f2f2f2">FT8 引擎关</text>
+    <text x="300" y="966" fill="#4ade80">≈ 17%</text>
+    <text x="470" y="966" fill="#f2f2f2">83%</text>
+    <text x="640" y="966" fill="#f2f2f2">8% / 11%</text>
+    <text x="900" y="966" fill="#f2f2f2">1.30</text>
+    <text x="96" y="1016" fill="#9a9a9a">内存 402 / 1931 MB（≈21%，含 zram）　｜　FT8 的 CPU 在 DSP 子进程里，不在主服务上</text>
+    <text x="96" y="1052" fill="#7d7d7d">早先的 M2 推算（热路径占单核 1.53%）只用来估模型，已被上面这组实测取代。</text>
+  </g>
+
+  <text x="64" y="1130" font-size="30" font-weight="700" fill="#f5b13d">蓝牙实测（2026-10-17）</text>
+  <rect x="64" y="1154" width="1112" height="180" rx="12" fill="#1b1b1b" stroke="#2c2c2c"/>
+  <g font-size="21">
+    <text x="96" y="1202" fill="#4ade80">可用</text>
+    <text x="190" y="1202" fill="#f2f2f2">BLE 遥控器（HID：按键全部可用）· A2DP 音频输出（电台 RX 音频进耳机）</text>
+    <text x="96" y="1250" fill="#ff6b6b">不可用</text>
+    <text x="190" y="1250" fill="#f2f2f2">HFP / SCO 语音通道：链路能建立，两个方向都不送数据（芯片声明支持，板级未引出）</text>
+    <text x="190" y="1292" fill="#9a9a9a">后果：蓝牙耳机的麦克风用不了；本地发射音源需 USB 麦克风</text>
+  </g>
+
+  <rect x="64" y="1370" width="1112" height="88" rx="12" fill="#1e1a10" stroke="#5a4520"/>
+  <text x="96" y="1424" font-size="23" fill="#f2f2f2">结论：服务端只要一个核的 15–45%，算力不是选它的理由；网口、存储形态、软件成熟度才是。</text>
+</svg>

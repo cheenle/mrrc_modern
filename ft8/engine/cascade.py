@@ -6,12 +6,13 @@ library.  See docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ft8.core.models import DecodeBatch, DecodePath, DecodeResult
+from ft8.core.models import CloudUnavailable, DecodeBatch, DecodePath, DecodeResult
 
 # 与 ft8/dsp/wsjt_core.h 的 WSJT_FLAG_SNR_PROVISIONAL 同值（bit 4）。
 FLAG_SNR_PROVISIONAL = 16
@@ -21,6 +22,14 @@ DEFAULT_MIN_DECODES = 1
 # 深路径同为 5/5，到 -30 dB 才塌成 0/5。所以峰 SNR 判据要卡在这道崖的上方一点点、
 # 而不是 -20 —— 落在 -24 只会对着一个「实测已知解码完整」的时隙每次白烧 2.2 s。
 DEFAULT_MIN_PEAK_SNR = -26
+
+# 云端**慢**失败（超时）与**快**失败（连接被拒、忙回 503）必须分开对待：
+#   * 快失败几乎没吃掉窗口，本地深路径仍可能在截止内跑完 —— 补跑是对的；
+#   * 慢失败已经把窗口吃掉大半，再补跑只会把结果推过 `boundary + cutoff`。
+# 2026-10-14 现场实测到一次：云端的快速失败之后本地补跑在 **+4.19 s** 完成、
+# 被标 `late` —— 而没有这次云端尝试它本来准时。预算守卫拦不住它：它只保证
+# 「剩余 ≥ 深路径下界（2.3 s）」，而一次快失败恰好留下刚够的预算。
+CLOUD_FALLBACK_ALLOWED_S = 0.5
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,12 +135,12 @@ def merge_batches(fast: DecodeBatch, deep: DecodeBatch) -> DecodeBatch:
 
 logger = logging.getLogger(__name__)
 
-# **没有 `DEFAULT_CUTOFF_SECONDS`。** 决策截止这个量在 `orchestrator.py:35` 已经有
-# 唯一的定义（`DEFAULT_DECISION_CUTOFF_SECONDS = 2.5`），而 `Orchestrator(decision_cutoff=…)`
+# **没有 `DEFAULT_CUTOFF_SECONDS`。** 决策截止这个量在 `orchestrator.py` 已经有
+# 唯一的定义（`DEFAULT_DECISION_CUTOFF_SECONDS`），而 `Orchestrator(decision_cutoff=…)`
 # 是个**活跃的旋钮**（`tests/ft8/engine/test_orchestrator.py:163` 传 0.0、`:170` 传
 # 整个时隙）。在这里再放一个同值常量，就让同一条物理量有了两个来源：生产代码今天
 # 恰好两边都是默认值，所以看不出来；某天有人给 orchestrator 传了别的截止，
-# 级联的预算守卫仍在拿 2.5 算 —— 守卫被静默地重新标定，而**没有任何测试会红**。
+# 级联的预算守卫仍在拿旧值算 —— 守卫被静默地重新标定，而**没有任何测试会红**。
 # 这正是 Task 10 给 `boundary_epoch_for` 写「必填、故意不给默认值」的同一个理由，
 # 所以 `cutoff` 也照办：必填，由接线处传 orchestrator 的那一个值。
 DEFAULT_DEEP_THREADS = 3
@@ -157,7 +166,7 @@ class CascadingDecoder:
         # 必填，理由与 boundary_epoch_for 相同：决策截止的唯一来源是
         # `orchestrator.py:35` 的 DEFAULT_DECISION_CUTOFF_SECONDS（或传给
         # Orchestrator 的那个值）。本模块**不提供**自己的默认值 —— 详见上面
-        # 「没有 DEFAULT_CUTOFF_SECONDS」那段。两处各自 2.5 的生产代码今天看起来
+        # 「没有 DEFAULT_CUTOFF_SECONDS」那段。两处各自写死同值的生产代码今天看起来
         # 是对的，而守卫恰恰是在有人改了 orchestrator 之后才悄悄失准的。
         cutoff: float,
         # 默认必须是 time.time（epoch 秒）—— orchestrator.py:125 的 `clock` 与
@@ -170,6 +179,12 @@ class CascadingDecoder:
         safety_margin_s: float = DEFAULT_SAFETY_MARGIN_SECONDS,
         ap_context: Callable[[], tuple[str, int]] | None = None,
         requested: Callable[[], bool] | None = None,
+        # 云端深路径（spec 2026-10-14，A1）：一个可选 provider，接口与 inner 相同。
+        # 为 None 时本类的行为与引入它之前逐字一致 —— 那是默认值，也是每一台没配
+        # MRRC_FT8_CLOUD_DECODE_URL 的盒子的状态。
+        remote: object | None = None,
+        cloud_deadline_s: float = 2.5,
+        provisional_sink: Callable[[int, DecodeBatch], None] | None = None,
     ) -> None:
         if deep_threads < 1:
             raise ValueError("deep_threads must be positive")
@@ -186,7 +201,41 @@ class CascadingDecoder:
         self._safety_margin_s = safety_margin_s
         self._ap_context = ap_context or (lambda: ("", 0))
         self._requested = requested or (lambda: False)
+        self._remote = remote
+        self._cloud_deadline_s = float(cloud_deadline_s)
+        self._provisional_sink = provisional_sink
+        self.provisional_published = 0
         self.deadline_risk = 0
+        # 观测：云端成功次数、落回本地次数、最近一次云端墙上耗时。与
+        # deadline_risk 并列，由 runtime.cascade_stats() 与每槽日志读出。
+        self.cloud_ok = 0
+        self.cloud_fallback = 0
+        self.cloud_seconds = 0.0
+        # 本槽的深路径是谁算的（"cloud" / "local" / 尚无），供日志行分辨。
+        self.last_deep_path = ""
+
+    def set_provisional_sink(self, sink: Callable[[int, DecodeBatch], None] | None) -> None:
+        """Set (or clear) where the fast answer goes while the deep one runs."""
+
+        self._provisional_sink = sink
+
+    def _publish_provisional(self, slot_id: int, batch: DecodeBatch) -> None:
+        """Hand the fast batch to the UI early — and never let that break decoding.
+
+        The publication is a courtesy, the decode is the job: this used to be the
+        shape of a defect (a diagnostic that raised and silently downgraded every
+        slot to the local path), so the sink is guarded and a failure retires it.
+        """
+
+        sink = self._provisional_sink
+        if sink is None:
+            return
+        try:
+            sink(slot_id, batch)
+            self.provisional_published += 1
+        except Exception:  # noqa: BLE001 - see above
+            logger.warning("provisional publication failed; disabling it", exc_info=True)
+            self._provisional_sink = None
 
     def set_policy(self, policy: CascadePolicy) -> None:
         """替换升级策略，从下一个时隙起生效。
@@ -212,8 +261,10 @@ class CascadingDecoder:
             )
         except Exception:
             # 快路径整个不可用时没有结果可退，只能在明知超预算的情况下补跑一次深路径；
-            # 但线程数仍必须是 deep_threads —— threads=1 要 3.23s，塞不进 2.5s 窗口
-            # （spec D-4），那不是"慢一点"，是必定错过截止。
+            # 但线程数仍必须是 deep_threads（spec D-4）。理由不是"塞不进窗口"——
+            # 截止抬到 4.0s 后 threads=1 的 3.23s 也塞得进了 —— 而是预算守卫的
+            # `deep_lower_bound_s` 只在 deep_threads 上量过（threads3 ≈ 2.25s →
+            # 2.3s 下界）；让它给别的线程数打分，守卫自己就先量错了尺子。
             logger.warning(
                 "fast decode path failed; running the deep path unbudgeted", exc_info=True
             )
@@ -228,6 +279,46 @@ class CascadingDecoder:
             requested=self._requested(),
         ):
             return batch_fast
+
+        # The operator sees the fast answer now; the deep one replaces it when it
+        # lands (the UI keys rows by slot, so the second publication corrects the
+        # first instead of duplicating it).  ~1.5 s earlier, measured.
+        self._publish_provisional(slot_id, batch_fast)
+
+        if self._remote is not None:
+            started = self._clock()
+            try:
+                batch_deep = await asyncio.wait_for(
+                    self._remote.decode_path(slot_id, samples, DecodePath.IMPROVED),
+                    timeout=self._cloud_deadline_s,
+                )
+            except (TimeoutError, CloudUnavailable) as error:
+                # 云端失败是**预期内**的：断网、hub 忙、超时。只要它失败得快，
+                # 就照今天的原路走（预算守卫 + 本地深路径）；失败得慢就放弃
+                # 本槽的深路径 —— 那才是不会迟到的选择（见 CLOUD_FALLBACK_ALLOWED_S）。
+                # 日志**带上异常文本**：2026-10-14 现场一次部署后发现云端全部失败，
+                # 而旧的那句只写 "unavailable"，从日志分不清是证书、令牌还是超时。
+                self.cloud_fallback += 1
+                elapsed = self._clock() - started
+                if elapsed > CLOUD_FALLBACK_ALLOWED_S:
+                    self.deadline_risk += 1
+                    logger.info(
+                        "cloud escalation failed after %.2fs for slot %s; "
+                        "skipping the local retry", elapsed, slot_id,
+                    )
+                    return batch_fast
+                logger.info(
+                    "cloud escalation unavailable for slot %s (%s); using the local path",
+                    slot_id, error,
+                )
+            except Exception:
+                self.cloud_fallback += 1
+                logger.warning("cloud escalation failed for slot %s", slot_id, exc_info=True)
+            else:
+                self.cloud_ok += 1
+                self.cloud_seconds = self._clock() - started
+                self.last_deep_path = "cloud"
+                return merge_batches(batch_fast, batch_deep)
 
         if self._remaining_budget(slot_id) < self._deep_lower_bound_s:
             self.deadline_risk += 1
@@ -244,4 +335,5 @@ class CascadingDecoder:
             logger.warning("deep decode path failed; keeping the fast results", exc_info=True)
             return batch_fast
 
+        self.last_deep_path = "local"
         return merge_batches(batch_fast, batch_deep)

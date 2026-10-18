@@ -106,10 +106,14 @@ def resolve_log_files(log_dir: str | os.PathLike[str],
                       install_dir: str | os.PathLike[str] = "") -> dict:
     """Map bundle role -> existing log file (spec §5).
 
-    Roles: server / server-prev / stdout / stdout-prev / launcher / legacy.
+    Roles: server / server-prev / stdout / stdout-prev / ft8-worker /
+    ft8-worker-prev / launcher / legacy.
     The desktop launcher puts logs under the user data dir; systemd and
     `start.sh` write into the install dir, which is also where a hand-started
-    server writes when MRRC_LOG_DIR is unset.
+    server writes when MRRC_LOG_DIR is unset.  `ft8-worker.log` is written by
+    the DSP Worker child itself — the only place its own native death message
+    (Fortran `stop`/`error stop`) is persisted; the launcher's startup tee stops
+    writing to a file once the server answers HTTP.
     """
     log_dir = Path(log_dir)
     candidates = [
@@ -117,6 +121,8 @@ def resolve_log_files(log_dir: str | os.PathLike[str],
         ("server-prev", log_dir / "server.log.1"),
         ("stdout", log_dir / "server-stdout.log"),
         ("stdout-prev", log_dir / "server-stdout.log.1"),
+        ("ft8-worker", log_dir / "ft8-worker.log"),
+        ("ft8-worker-prev", log_dir / "ft8-worker.log.1"),
     ]
     if data_dir:
         candidates.append(("launcher", Path(data_dir) / "launcher.log"))

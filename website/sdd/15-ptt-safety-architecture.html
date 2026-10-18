@@ -181,8 +181,15 @@
 <td>One-shot CQ call (AD-020): server-side player keys, plays the packaged recording once, then drains and unkeys (<code class="scope-code">stop_tx(graceful=True)</code> → <code class="scope-code">set_ptt(False)</code>). Aborts immediately on <code class="scope-code">cq:false</code>, initiator disconnect, last-client disconnect, external unkey (watchdog/TUNE), or shutdown</td>
 <td>Automated transmission with no operator finger on PTT — every call has a definite end</td>
 </tr>
+<tr>
+<td>9</td>
+<td>Server (restart path)</td>
+<td><code class="scope-code">_schedule_restart()</code> releases PTT — <code class="scope-code">run_coroutine_threadsafe(cat.set_ptt(False))</code>, 1.5 s bounded — before <code class="scope-code">os._exit(RESTART_EXIT_CODE)</code>, which by design skips the lifespan shutdown and its Force-RX write</td>
+<td>Restarting the app (connection-settings save, cloud-certificate enrolment) while the radio is keyed (field report 2026-10-16)</td>
+</tr>
 </tbody>
 </table>
+<p><strong>The release layers are not the whole story — the process must survive to run them (2026-10-16).</strong> Every layer above assumes a live server process. A field report (<code class="scope-code">按发射 → 电台一直发射 → MODERN SERVER 进程消失</code>, Windows 11 + FT-710) showed how the two interact: <code class="scope-code">ptt:true</code> keys the radio <strong>before</strong> the TX audio stream is opened, and <code class="scope-code">audio_handler.start_tx()</code>’s USB-re-enumeration recovery (<code class="scope-code">_reinit_pyaudio()</code>) called <code class="scope-code">Pa_Terminate()</code> while the RX capture stream was still being read on the event-loop thread — a use-after-free, i.e. a native access violation that kills the process with <strong>no Python traceback</strong>, so none of Layers 2–9 ever runs and the radio stays keyed. The fix is to close both streams under a lifecycle lock (<code class="scope-code">_stream_lock()</code>) before terminating PortAudio, to take that lock non-blockingly in <code class="scope-code">read_rx_chunk()</code>, and to treat a <em>raised</em> <code class="scope-code">start_tx()</code> as a release trigger in the <code class="scope-code">ptt:true</code> handler. The operational lesson stands regardless: when the process itself can die, the radio’s own Time-Out Timer (TOT) is the only layer that survives it.</p>
 <p><strong>Removed layer — Triple TX0 Verify (removed in V1.2, 2026-07-08):</strong> earlier releases queried <code class="scope-code">TX;</code> three times at 200ms intervals after every release and re-sent <code class="scope-code">TX0;</code> on non-zero. This added ~600ms to every release, and field observation showed the radio obeys <code class="scope-code">TX0;</code> on the first write (fire-and-forget). Stuck-keyup detection is now covered by the server-side TX-status poll (500ms) feeding the browser PTT watchdog (Layer 3).</p>
 <figure>
 <img src="diagrams/ptt-safety-architecture.svg" alt="PTT Safety Layers" />
@@ -468,7 +475,7 @@ Emergency Paths:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.84 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.00 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

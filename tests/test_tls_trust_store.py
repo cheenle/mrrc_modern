@@ -17,10 +17,13 @@ someone remembers to pass a context is the same bug one file later.
 from __future__ import annotations
 
 import ast
+import datetime
 import os
+import socket
 import ssl
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -86,11 +89,26 @@ class EmptyStoreTests(unittest.TestCase):
         self.assertEqual(0, net_tls.store_size(context))
         self.assertIn(net_tls.CA_BUNDLE_ENV, "\n".join(logs.output))
 
-    def test_a_healthy_store_is_left_alone(self):
-        healthy = ssl.create_default_context()
-        healthy.load_verify_locations(cafile=str(SHIPPED_BUNDLE))
+    def test_the_machine_store_is_never_consulted(self):
+        """策略反转（2026-10-16）："机器库非空"不再等于"可以信它"。
+
+        旧的契约是"store 非空 ⇒ 原样使用"（等价于 store_size() 就是判据），Windows
+        现场证明它是错的：库里那张过期的同名中间证书会被 OpenSSL 选中，于是服务器
+        送来的有效链条被判 certificate has expired。现在的契约是"只信我们自己那份
+        bundle"——于是 base（=机器库）一条根都不该进结果。
+
+        用计数做判据，而不是"同一对象"：机器库 1 条 + 我们的 bundle -> 结果必须只有
+        bundle 的条数，多一条就说明又合并了机器库。
+        """
+        machine = _empty_context()
+        machine.load_verify_locations(cafile=str(SHIPPED_BUNDLE))
         bogus = Path("/nonexistent/bogus.pem")
-        self.assertIs(healthy, net_tls.build_context(base=healthy, candidates=[bogus]))
+        context = net_tls.build_context(base=machine, candidates=[bogus, SHIPPED_BUNDLE])
+        only_bundle = _empty_context()
+        only_bundle.load_verify_locations(cafile=str(SHIPPED_BUNDLE))
+        self.assertEqual(net_tls.store_size(only_bundle), net_tls.store_size(context))
+        self.assertIsNot(machine, context,
+                         "the machine's context must not be handed back as-is any more")
 
 
 class BundleTests(unittest.TestCase):
@@ -113,6 +131,144 @@ class BundleTests(unittest.TestCase):
         self.assertIn(SHIPPED_BUNDLE, candidates)
         for system_file in net_tls.SYSTEM_CA_FILES:
             self.assertIn(Path(system_file), candidates)
+
+
+def _synthetic_pki(directory: Path) -> dict:
+    """root + 有效中间证书 + 它的**过期重新签发**（同密钥同主题）+ leaf。
+
+    最后那一张就是 Windows 现场那张：同名同密钥、但已经过期。它足以让 OpenSSL 把链
+    建到它上面并报 certificate has expired —— 而服务器送来的那张有效副本就在手边。
+    """
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    def make_name(cn):
+        return x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
+
+    def now():
+        return datetime.datetime.now(datetime.timezone.utc)
+
+    def issue(subject, issuer_cert, issuer_key, public_key, *, ca, san=None,
+              valid_from=None, valid_to=None):
+        builder = (x509.CertificateBuilder()
+                   .subject_name(subject).issuer_name(issuer_cert.subject)
+                   .public_key(public_key)
+                   .serial_number(x509.random_serial_number())
+                   .not_valid_before(valid_from or now() - datetime.timedelta(days=1))
+                   .not_valid_after(valid_to or now() + datetime.timedelta(days=3650))
+                   .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True))
+        if ca:
+            builder = builder.add_extension(
+                x509.KeyUsage(digital_signature=False, content_commitment=False,
+                              key_encipherment=False, data_encipherment=False,
+                              key_agreement=False, key_cert_sign=True, crl_sign=True,
+                              encipher_only=False, decipher_only=False), critical=True)
+        if san:
+            builder = builder.add_extension(
+                x509.SubjectAlternativeName([x509.DNSName(san)]), critical=False)
+        return builder.sign(issuer_key, hashes.SHA256())
+
+    root_key = ec.generate_private_key(ec.SECP256R1())
+    # 自签根：issuer 必须是自己
+    root_cn = make_name("MRRC Test Root")
+    root = (x509.CertificateBuilder()
+            .subject_name(root_cn).issuer_name(root_cn).public_key(root_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now() - datetime.timedelta(days=1))
+            .not_valid_after(now() + datetime.timedelta(days=3650))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .sign(root_key, hashes.SHA256()))
+
+    inter_key = ec.generate_private_key(ec.SECP256R1())
+    inter_name = make_name("MRRC Test Intermediate")
+    valid_inter = issue(inter_name, root, root_key, inter_key.public_key(), ca=True)
+    expired_clone = issue(inter_name, root, root_key, inter_key.public_key(), ca=True,
+                          valid_from=now() - datetime.timedelta(days=1000),
+                          valid_to=now() - datetime.timedelta(days=900))
+
+    leaf_key = ec.generate_private_key(ec.SECP256R1())
+    leaf = issue(make_name("portal.example.test"), valid_inter, inter_key,
+                 leaf_key.public_key(), ca=False, san="portal.example.test")
+
+    def dump(path, *certs):
+        path.write_bytes(b"".join(c.public_bytes(serialization.Encoding.PEM) for c in certs))
+        return path
+
+    pki = {
+        "root": dump(directory / "root.pem", root),
+        "poisoned_store": dump(directory / "poisoned-store.pem", root, expired_clone),
+        "chain": dump(directory / "chain.pem", leaf, valid_inter),
+        "key": directory / "chain.key",
+    }
+    pki["key"].write_bytes(leaf_key.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption()))
+    return pki
+
+
+def _handshake(ca_file: Path, pki: dict, context=None) -> None:
+    """对一台临时本地 TLS 服务器做**真握手**；验不过就抛 SSLCertVerificationError。"""
+    server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_ctx.load_cert_chain(str(pki["chain"]), str(pki["key"]))
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+    port = listener.getsockname()[1]
+
+    def serve():
+        try:
+            conn, _ = listener.accept()
+            try:
+                server_ctx.wrap_socket(conn, server_side=True).close()
+            except Exception:                      # 客户端拒了这张链，服务器侧只看到 alert
+                pass
+        finally:
+            listener.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    if context is None:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.check_hostname = True
+        context.load_verify_locations(cafile=str(ca_file))
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as raw:
+            context.wrap_socket(raw, server_hostname="portal.example.test").close()
+    finally:
+        thread.join(5)
+
+
+class PoisonedMachineStoreTests(unittest.TestCase):
+    """2026-10-16 现场复刻：库里那张过期的同名中间证书，是应用报错、浏览器正常的全部原因。
+
+    这个类有两半，缺一不可：
+      * **反向对照**：拿"被污染的机器库"当信任源时，握手必须真的失败，且失败原因就是
+        `certificate has expired` —— 否则下面的通过是空的（测试自证能变红）；
+      * **新策略**：同一个链，用 `net_tls.build_context()`"只信我们的 bundle"握手，必须过。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            import cryptography          # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("cryptography is not installed here (VM venv lacks it)")
+
+    def test_the_poisoned_store_really_does_break_a_handshake(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pki = _synthetic_pki(Path(tmp))
+            with self.assertRaises(ssl.SSLCertVerificationError) as caught:
+                _handshake(pki["poisoned_store"], pki)
+        self.assertIn("expired", str(caught.exception).lower())
+
+    def test_our_context_is_immune_to_that_store(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pki = _synthetic_pki(Path(tmp))
+            context = net_tls.build_context(candidates=[pki["root"]])
+            _handshake(pki["root"], pki, context=context)      # must not raise
 
 
 class UrlopenTests(unittest.TestCase):

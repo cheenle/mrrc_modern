@@ -13,45 +13,54 @@
 > 检查（`tests/test_release_artifacts.py` 在套件内强制执行）；本索引只负责「哪份文档讲什么」。
 
 ### 🧭 从这里开始
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [docs/PROJECT_MAP.md](docs/PROJECT_MAP.md) | **改动 → 必更文档** 的映射、图层与发布日命令链 | 所有人 |
 | [AGENTS.md](AGENTS.md) | 仓库结构、模块表、构建/测试、约定（面向编码代理） | 开发者/代理 |
 | [.agents/skills/](.agents/skills/) | 工程护栏与流程技能：`sdd-guardian`（SDD 约束/文档同步）、`dual-platform-release`（发布日全流程 + 产物登记表）、`macos-installer`、`windows-installer` | 开发者/发布 |
 
 ### 🚀 快速开始
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [README.md](README.md) | 项目概述、架构、快速启动 | 所有人 |
 | [QUICKSTART.md](QUICKSTART.md) | 5 分钟上手指南 | 新用户 |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 跨平台依赖安装 | 开发者 |
 
 ### 🔒 安全配置
+
 | 文档 | 说明 | 读者 |
 |------|------|------|
 | [SECURITY_GUIDE.md](SECURITY_GUIDE.md) | 安全配置、密码策略、速率限制 | 运维/安全 |
 
 ### 📊 项目状态
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [docs/NEXT-VERSION.md](docs/NEXT-VERSION.md) | **下一版 backlog**：已想清楚、只差做；每条都带验收标准 | 所有人 |
 | [EXECUTIVE_SUMMARY.md](EXECUTIVE_SUMMARY.md) | 执行摘要（中文） | 管理层 |
 | [COMPLETION_REPORT.md](COMPLETION_REPORT.md) | 完成报告（中文） | 项目经理 |
 | [FINAL_VERIFICATION.md](FINAL_VERIFICATION.md) | 验证报告 | QA/测试 |
+| [docs/FDE.md](docs/FDE.md) | **Forward Deployed Engineering**：Echo → Delta → Product 的方法论与案例 | 所有人 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更历史 | 所有人 |
 
 ### 👤 使用手册（按平台）
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [docs/remote_help.md](docs/remote_help.md) | **远程协助（Call help）操作手册**：客户主动开启的应用内 SSH | 运维 |
 | [docs/OPERATION_GUIDE.md](docs/OPERATION_GUIDE.md) | 桌面版完整操作指南（每个按钮/滑杆/菜单 + 服务端录音 + 故障排查） | 用户 |
 | [docs/RASPBERRY_PI_GUIDE.md](docs/RASPBERRY_PI_GUIDE.md) | 树莓派镜像：烧卡、首启、电台接入、真 FFT 库 | 用户 |
 | [docs/WINDOWS_INSTALLER_GUIDE.md](docs/WINDOWS_INSTALLER_GUIDE.md) | Windows 安装包说明（含下载表与校验） | 用户 |
 | [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS 安装与使用指南：两种 Gatekeeper 弹窗、麦克风权限（RX 无声）、数据位置、升级/卸载、故障排查表 | 用户 |
+| [docs/W103D_USER_GUIDE.md](docs/W103D_USER_GUIDE.md) | 发货版 W103D 用户指南：出厂口令、Wi-Fi、接电台、五分钟验收与排障 | 用户 |
+| [docs/W103D_REMOTE_GUIDE.md](docs/W103D_REMOTE_GUIDE.md) | 蓝牙遥控器指南：配对（pty + agent）、按键表、kHz 输入、排障 | 用户 |
 
 ### 🔧 技术细节
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [DEPENDENCIES.md](DEPENDENCIES.md) | 跨平台依赖与各机型 USB/驱动要求（含 Yaesu SDR 四款） | 开发者 |
 | [FIXES_SUMMARY.md](FIXES_SUMMARY.md) | 历史修复说明（含 TX 分析） | 开发者 |
 | [FT-710_CAT_Knowledge_Base.md](FT-710_CAT_Knowledge_Base.md) / [FT-710_CAT.md](FT-710_CAT.md) | FT-710 CAT 命令参考 | 开发者 |
@@ -61,8 +70,9 @@
 | [backends/yaesu/](backends/yaesu/) | Yaesu 共享 ASCII-CAT 核心 + profile（FTDX10/101D/101MP/FTX-1F/FT-891） | 开发者 |
 
 ### 🚢 发布与打包
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [docs/rpi_pack.md](docs/rpi_pack.md) | **树莓派镜像构建手册**（与 W103D 共用服务层） | 发布 |
 | [.agents/skills/dual-platform-release/SKILL.md](.agents/skills/dual-platform-release/SKILL.md) | 发布日总流程（版本 bump → 构建 → 文档/站点 → 部署 → 验证 → tag） | 发布 |
 | [.agents/skills/dual-platform-release/release-artifacts.json](.agents/skills/dual-platform-release/release-artifacts.json) | 产物登记表：每个承载版本/尺寸/SHA 的文件一条规则 | 发布 |
@@ -70,20 +80,26 @@
 | [docs/W103D_GUIDE.md](docs/W103D_GUIDE.md) / [docs/w103d_pack.md](docs/w103d_pack.md) / [docs/host-selection.md](docs/host-selection.md) / [docs/hardware-matrix.md](docs/hardware-matrix.md) | **W103D 通用电台盒子镜像**（Amlogic 云电脑，11 机型可切换）：**用户手册**（开箱到干活：§4.1 烧盘后扩盘 / §7 口令一览 / §9.8 局域网配网页 `/setup`+`/settings` / §20.5 无线真机记录）、构建手册、主机选型。1.25.5 已上线；1.26.0 的站点卡片已写好（`1,008,925,741 B` / `9913752e…`），**镜像本体待上传**。真机操作另见技能 `w103d-box`（构建与烧盘）/ `w103d-emmc`（固化进 eMMC） | 发布/用户 |
 
 ### 🔍 专项分析
+
 | 文档 | 说明 | 读者 |
 |------|------|------|
-| [docs/2026-10-03-two-model-retrospective.md](docs/2026-10-03-two-model-retrospective.md) | **两个模型、48 小时、七个版本**的复盘（以模型能力为重点） | 开发者/代理 |
-| [docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md](docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md) | **Cloud Hub 实例生命周期**：应用侧发现（2026-10-11 的 502） | 开发者 |
-| [docs/FDE.md](docs/FDE.md) | **FDE：Echo → Delta → Product** —— 现场部署工程的做法与原则 | 开发者 |
-| [docs/ft8-m1-baseline.md](docs/ft8-m1-baseline.md) | **FT8 M1 盒子基线**（W103D × FT-710）：aarch64 编译、重采样链与性能 | 开发者 |
-| [docs/ft8-m5-acceptance.md](docs/ft8-m5-acceptance.md) | **FT8 M5 真机验收**（W103D 盒子 + FT-710） | 开发者 |
-| [docs/ft8-w103d-decode-perf-analysis.md](docs/ft8-w103d-decode-perf-analysis.md) | **FT8 解码在 W103D 上的深度优化分析** | 开发者 |
 | [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX 音频链路深度分析 | 架构师/高级开发 |
+| [docs/sdr_receiver.md](docs/sdr_receiver.md) | 独立 SDR 接收机（AD-029）：设备、信道化、容量与页面 | 开发者 |
+| [docs/ft8-m1-baseline.md](docs/ft8-m1-baseline.md) | FT8 M1 基线：W103D 上的实测数字 | 开发者 |
+| [docs/ft8-m5-acceptance.md](docs/ft8-m5-acceptance.md) | FT8 M5 验收记录（真机 W103D） | QA/开发者 |
+| [docs/ft8-w103d-decode-perf-analysis.md](docs/ft8-w103d-decode-perf-analysis.md) | FT8 解码性能分析（A53 实测与快/深路径取舍） | 架构师 |
+| [docs/ft8-w103d-phase-a-baseline.md](docs/ft8-w103d-phase-a-baseline.md) | FT8 Phase A 基线测量 | 开发者 |
+| [docs/ft8-deep-learning-research-brief.md](docs/ft8-deep-learning-research-brief.md) | FT8 深度学习研究简报 | 研究/架构师 |
+| [docs/ft8-dl-speculative-notes.md](docs/ft8-dl-speculative-notes.md) | FT8 深度学习推测性笔记 | 研究 |
+| [docs/ft8-dl-technical-review-packet.md](docs/ft8-dl-technical-review-packet.md) | FT8 深度学习技术评审包 | 架构师 |
+| [docs/2026-10-03-two-model-retrospective.md](docs/2026-10-03-two-model-retrospective.md) | 两款机型接入的复盘 | 所有人 |
+| [docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md](docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md) | Cloud Hub 实例生命周期实况发现 | 运维/架构师 |
 | [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) / [docs/DOCUMENT_UPDATE_COMPLETION.md](docs/DOCUMENT_UPDATE_COMPLETION.md) | **历史报告（2026-08-17，多电台后端那轮）** —— 不是当前状态，现状看 [PROJECT_MAP.md](PROJECT_MAP.md) | 文档维护者 |
 
 ### 📱 iOS App (FT710Mobile/)
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [FT710Mobile/README.md](FT710Mobile/README.md) | iOS app 简介与构建运行 | 所有人 |
 | [FT710Mobile/CLAUDE.md](FT710Mobile/CLAUDE.md) | iOS 工程指南(面向编码代理) | 开发者/代理 |
 | [FT710Mobile/docs/ARCHITECTURE.md](FT710Mobile/docs/ARCHITECTURE.md) | iOS 架构设计 | 架构师/高级开发 |
@@ -96,27 +112,33 @@
 | [docs/IOS_TESTING_GUIDE.md](docs/IOS_TESTING_GUIDE.md) | iOS 测试指南 | 开发者/QA |
 
 ### 🤖 Android App (FT710Android/)
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [FT710Android/CLAUDE.md](FT710Android/CLAUDE.md) | 协议事实、PTT 安全铁律、构建与测试 | 开发者/代理 |
 | [FT710Android/BUILD_GUIDE.md](FT710Android/BUILD_GUIDE.md) | 工具链与构建步骤 | 开发者 |
 | [docs/superpowers/specs/2026-08-16-ft710-android-app-design.md](docs/superpowers/specs/2026-08-16-ft710-android-app-design.md) | Android 设计 spec | 架构师 |
 
 ### 📐 设计规范
+
 | 文档 | 说明 | 读者 |
-|------|------|------|
+| ------ | ------ | ------ |
 | [SDD/](SDD/) | 软件设计说明（15 章） | 架构师/开发 |
 | [docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md](docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md) | **FT8 快路径 + 自适应级联**设计 spec（默认走 `ft8_lib` 快路径、按需补跑深路径并取并集；含 2026-10-13 A53 spike 回填） | 架构师 |
 | [docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md](docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md) | 上述 spec 的实现计划（15 个 Task） | 开发者 |
 | [docs/superpowers/specs/2026-10-13-ft8-packaging-design.md](docs/superpowers/specs/2026-10-13-ft8-packaging-design.md) | **FT8 四平台打包**设计 spec（镜像内编译 DSP 并随 `mrrc-update` 重编、Boost 头文件 vendor 化、Windows MinGW 与 macOS dylib 依赖闭包进包） | 架构师/打包 |
+| [docs/superpowers/specs/2026-10-17-w103d-preflash-design.md](docs/superpowers/specs/2026-10-17-w103d-preflash-design.md) | **W103D 发货版（预置）镜像**设计 spec（`--preflash` 开关：固定三条口令 + 时区/locale 预置 + 设置页手输 SSID 与明文密码 + 设置页填呼号向 portal 申请公网入口 + 首启探测改成“跑到定型为止”） | 架构师/打包 |
+| [docs/superpowers/plans/2026-10-17-w103d-preflash.md](docs/superpowers/plans/2026-10-17-w103d-preflash.md) | 上述 spec 的实现计划（9 个任务：预置脚本与开关 · 设置页两面板 · 探测自愈 · 文档与产物验证） | 开发者 |
 
 ---
 
 ## 📖 文档详细说明
 
 ### README.md (16KB)
+
 **位置**: 根目录  
 **内容**:
+
 - 项目简介与功能特性（FT-710 / IC-7300 / IC-7300MK2 多电台）
 - 系统要求（Python 3.10+）
 - 快速启动步骤（含后端选择）
@@ -131,8 +153,10 @@
 ---
 
 ### QUICKSTART.md (2.9KB)
+
 **位置**: 根目录  
 **内容**:
+
 - 5 分钟快速启动指南
 - 环境准备清单
 - 一键启动命令
@@ -144,8 +168,10 @@
 ---
 
 ### DEPENDENCIES.md (28KB)
+
 **位置**: 根目录  
 **内容**:
+
 - Python 版本要求（3.10+）
 - 操作系统支持（Windows/macOS/Linux）
 - 串口驱动安装（FTDI/CP210x / Icom USB CI-V）
@@ -160,8 +186,10 @@
 ---
 
 ### SECURITY_GUIDE.md (3.3KB)
+
 **位置**: 根目录  
 **内容**:
+
 - 认证机制（Token 验证）
 - 密码策略（强度要求、默认密码）
 - 速率限制（5 次/5 分钟/IP）
@@ -175,8 +203,10 @@
 ---
 
 ### EXECUTIVE_SUMMARY.md (3.6KB)
+
 **位置**: 根目录  
 **内容**（中文）:
+
 - 项目目标达成状态
 - 核心成果（技术修复、安全增强、稳定性提升）
 - 测试验证结果（206/206 通过）
@@ -189,8 +219,10 @@
 ---
 
 ### COMPLETION_REPORT.md (3.8KB)
+
 **位置**: 根目录  
 **内容**（中文）:
+
 - 项目目标达成状态
 - 完成指标（代码质量、安全加固、性能优化、稳定性修复）
 - 交付物清单（源代码修复 8 个文件，文档 10 个文件）
@@ -203,8 +235,10 @@
 ---
 
 ### FINAL_VERIFICATION.md (3.9KB)
+
 **位置**: 根目录  
 **内容**:
+
 - 测试套件验证（206/206 通过）
 - 代码质量检查
 - 安全功能验证
@@ -218,8 +252,10 @@
 ---
 
 ### CHANGELOG.md (4.1KB)
+
 **位置**: 根目录  
 **内容**:
+
 - v2.1.0 — TX 链路分析完成
 - v2.0.0 — 稳定性与安全加固
   - 安全增强（速率限制、强密码、健康检查）
@@ -236,8 +272,10 @@
 ---
 
 ### FIXES_SUMMARY.md (9.1KB)
+
 **位置**: 根目录  
 **内容**:
+
 - v2.0.0 关键修复（3 个）
   - Python 3.10+ 兼容性
   - `_cancel_polls` 竞态条件
@@ -267,8 +305,10 @@
 ---
 
 ### FT-710_CAT_Knowledge_Base.md (15KB)
+
 **位置**: 根目录  
 **内容**:
+
 - CAT 协议基础
 - 命令格式说明
 - 常用命令参考
@@ -283,8 +323,10 @@
 ---
 
 ### AGENTS.md (3.7KB)
+
 **位置**: 根目录  
 **内容**:
+
 - Agnes 代理配置
 - 技能定义
 - 工具集成
@@ -295,8 +337,10 @@
 ---
 
 ### docs/TX_LINK_ANALYSIS.md (7.6KB)
+
 **位置**: `docs/` 目录  
 **内容**:
+
 - TX 链路架构概览
 - 问题识别（8 个）
   - 高风险：PTT 控制路径不一致、TX 仪表轮询条件错误
@@ -312,8 +356,10 @@
 ---
 
 ### docs/DOCUMENT_UPDATE_SUMMARY.md (4.6KB)
+
 **位置**: `docs/` 目录  
 **内容**:
+
 - 更新目的与范围
 - 新增文档列表
 - 更新文档详情
@@ -328,8 +374,10 @@
 ---
 
 ### SDD/ (15 章)
+
 **位置**: `SDD/` 目录  
 **内容**:
+
 1. 执行摘要
 2. 业务方向
 3. 项目定义
@@ -353,11 +401,13 @@
 ## 🎯 按角色推荐文档
 
 ### 新用户/体验用户
+
 1. README.md
 2. QUICKSTART.md
 3. SECURITY_GUIDE.md
 
 ### 开发者
+
 1. README.md
 2. DEPENDENCIES.md
 3. FIXES_SUMMARY.md
@@ -365,23 +415,27 @@
 5. docs/TX_LINK_ANALYSIS.md
 
 ### 运维/安全
+
 1. SECURITY_GUIDE.md
 2. FINAL_VERIFICATION.md
 3. CHANGELOG.md
 
 ### 项目经理
+
 1. EXECUTIVE_SUMMARY.md
 2. COMPLETION_REPORT.md
 3. FINAL_VERIFICATION.md
 4. CHANGELOG.md
 
 ### 架构师
+
 1. README.md（架构部分）
 2. SDD/（全部）
 3. docs/TX_LINK_ANALYSIS.md
 4. FIXES_SUMMARY.md
 
 ### QA/测试
+
 1. FINAL_VERIFICATION.md
 2. FIXES_SUMMARY.md
 3. docs/TX_LINK_ANALYSIS.md（测试部分）
@@ -391,7 +445,7 @@
 ## 📈 文档统计
 
 | 类别 | 数量 | 总大小 |
-|------|------|--------|
+| ------ | ------ | -------- |
 | 核心文档 | 7 | ~75KB |
 | 技术文档 | 6 | ~28KB |
 | 分析文档 | 4 | ~25KB |
@@ -433,6 +487,7 @@ README.md
 ## 📝 文档维护指南
 
 ### 更新频率
+
 - **CHANGELOG.md**: 每个版本发布时
 - **FIXES_SUMMARY.md**: 每次重要修复后
 - **FINAL_VERIFICATION.md**: 每次验证后
@@ -441,6 +496,7 @@ README.md
 - **docs/TX_LINK_ANALYSIS.md**: TX 链路重大变更后
 
 ### 更新流程
+
 1. 修改代码/功能
 2. 更新相关技术文档
 3. 运行测试验证
@@ -451,6 +507,7 @@ README.md
 8. 提交 PR
 
 ### 文档质量标准
+
 - ✅ 准确反映当前代码状态
 - ✅ 包含必要的代码示例
 - ✅ 提供清晰的步骤说明
@@ -468,7 +525,7 @@ README.md
 ## Cloud Hub 相关（2026-09-30 新增）
 
 | 文档 | 内容 |
-|------|------|
+| ------ | ------ |
 | `../SDD/15-ptt-safety-architecture.md` | PTT 半开与 Hub 模式安全（活性闸门） |
 | `../SDD/08-architecture-decisions.md` | AD-023（会话遥测）、AD-024（令牌传输） |
 | `../SDD/12-operational-model.md` §12.9 | Hub 模式运维要点（前缀/心跳/遥测/限流退化） |

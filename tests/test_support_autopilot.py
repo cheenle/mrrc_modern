@@ -5,6 +5,7 @@ these tests run anywhere.  Loaded by path because dev_tools is not a package.
 """
 import importlib.util
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -56,6 +57,7 @@ class AutopilotFixture(unittest.TestCase):
             mock.patch.object(autopilot, "DRAFTS", root / "drafts"),
             mock.patch.object(autopilot, "ANSWERS_PAGE", root / "answers" / "index.html"),
             mock.patch.object(autopilot, "RUN_LOG", root / "run.log"),
+            mock.patch.object(autopilot, "LOCK_FILE", root / "autopilot.lock"),
             # 2026-09-19 leak: patching only the local paths still shipped
             # fixture pages to the live server (the rsync/ssh targets were
             # unpatched).  The ship itself is now a single patchable seam.
@@ -141,6 +143,21 @@ class PublishGateTests(AutopilotFixture):
         page = autopilot.ANSWERS_PAGE.read_text(encoding="utf-8")
         self.assertIn("20260917-072530-ab12", page)
         self.assertIn("已定位，待修复", page)
+
+    def test_a_failed_ship_is_not_recorded_as_published(self):
+        """A card that never reached the server must stay pending.  The first
+        cron run after the 6-day outage lost 20261001-192738-30c2 exactly this
+        way: state said "published", the live page had nothing, and `run_once`
+        skips any id already in the state.
+        """
+        analysis = dict(ANALYSIS, status="answered")
+        with mock.patch.object(autopilot, "git_commit", return_value=True), \
+             mock.patch.object(autopilot, "rsync_page", return_value=False), \
+             mock.patch.object(autopilot, "rebuild_board_page"):
+            ok = autopilot.publish("20260917-072530-ab12", analysis, "问题", {})
+        self.assertFalse(ok)
+        state = json.loads(autopilot.STATE_FILE.read_text(encoding="utf-8"))
+        self.assertNotIn("20260917-072530-ab12", state)   # next run retries it
 
     def test_bad_model_output_is_recorded_and_publishes_nothing(self):
         with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
@@ -236,6 +253,51 @@ class PiInvocationTests(AutopilotFixture):
         self.assertTrue(captured["cmd"][-1].startswith("你是 MRRC Modern 的支持工程师"))
 
 
+class RetryTests(AutopilotFixture):
+    """Bounded retry + single-flight: the two silent-loss shapes found while
+    draining the 6-day backlog (2026-10-16)."""
+
+    def test_a_flaky_pi_call_is_retried_next_round(self):
+        # 20261007-083527-6536 died with `pi 退出码 1` and only a manual --force
+        # brought it back; one bad call must not retire a bundle forever.
+        with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
+                ["20260917-072530-ab12"])), \
+             mock.patch.object(autopilot, "run_pi",
+                               side_effect=ValueError("模型输出里没有 JSON 对象")):
+            first = autopilot.run_once(publish_it=True)
+        self.assertEqual(first, [("20260917-072530-ab12", "failed")])
+        with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
+                ["20260917-072530-ab12"])), \
+             mock.patch.object(autopilot, "run_pi", return_value=ANALYSIS):
+            second = autopilot.run_once(publish_it=False)
+        self.assertEqual(second, [("20260917-072530-ab12", "drafted")])
+
+    def test_retries_stop_at_the_attempt_limit(self):
+        for _ in range(autopilot.MAX_ATTEMPTS):
+            with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
+                    ["20260917-072530-ab12"])), \
+                 mock.patch.object(autopilot, "run_pi",
+                                   side_effect=ValueError("模型输出里没有 JSON 对象")):
+                autopilot.run_once(publish_it=True)
+        with mock.patch.object(autopilot, "http_get", side_effect=self._fake_http(
+                ["20260917-072530-ab12"])), \
+             mock.patch.object(autopilot, "run_pi", return_value=ANALYSIS) as pi:
+            result = autopilot.run_once(publish_it=False)
+        self.assertEqual(result, [])
+        self.assertEqual(pi.call_count, 0)
+
+    @unittest.skipUnless(os.name == "posix",
+                         "单飞锁是 fcntl.flock —— autopilot 本身只在 POSIX 上跑（"
+                         "降级成假锁就等于放回它修的那个并发覆写）")
+    def test_a_second_instance_skips_the_round(self):
+        held = autopilot.acquire_single_flight_lock()
+        self.assertIsNotNone(held)
+        try:
+            self.assertIsNone(autopilot.acquire_single_flight_lock())
+        finally:
+            held.close()
+
+
 class CronTests(AutopilotFixture):
     def test_cron_line_has_absolute_paths_and_the_marker(self):
         line = autopilot.cron_line()
@@ -244,6 +306,34 @@ class CronTests(AutopilotFixture):
         self.assertIn("--once --publish", line)
         self.assertIn("/opt/homebrew/bin", line)          # cron PATH is nearly empty
         self.assertIn(str(autopilot.RUN_LOG), line)
+
+    @unittest.skipUnless(os.name == "posix",
+                         "单飞锁是 fcntl.flock —— autopilot 本身只在 POSIX 上跑（"
+                         "降级成假锁就等于放回它修的那个并发覆写）")
+    def test_cron_command_still_polls_the_receiver(self):
+        """2026-10-10→10-16 outage: a bare `--implement` in the cron command is
+        truthy (argparse const="ALL"), so `main()` took the implement branch and
+        returned before `--once` — the receiver was polled zero times for six
+        days (run.log: 1728 lines, not one "没有新包").  Pin the order.
+        """
+        with mock.patch.object(autopilot, "run_once", return_value=[]) as poll, \
+             mock.patch.object(autopilot, "run_implementations", return_value=[]):
+            autopilot.main(["--once", "--publish", "--implement"])
+        poll.assert_called_once()
+
+    def test_cron_line_does_not_shadow_once(self):
+        # `--once` already runs the implementation sweep; a bare `--implement`
+        # alongside it can only ever steal the branch again.
+        self.assertNotIn("--implement", autopilot.cron_line())
+
+    def test_cron_line_path_contains_the_system_bins(self):
+        """git/rsync/ssh live in /usr/bin.  A PATH without it made every cron
+        publish fail (2026-10-16 21:20: `FileNotFoundError: 'git'`) while the
+        state still said "published" — the card that reached nobody.
+        """
+        path = autopilot.cron_line().split("PATH=", 1)[1].split(" ", 1)[0]
+        for directory in ("/usr/bin", "/bin", "/usr/sbin", "/sbin"):
+            self.assertIn(directory, path.split(":"))
 
     def test_install_replaces_its_own_line_idempotently(self):
         existing = "5 4 * * * /usr/bin/true\n" + autopilot.cron_line() + "\n"

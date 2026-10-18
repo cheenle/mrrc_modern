@@ -31,8 +31,36 @@ from ft8.engine.sequencer import Sequencer
 
 FT8_PERIOD_SECONDS = 15.0
 FT4_PERIOD_SECONDS = 7.5
-# I9 (SDD §13.4): provisional TX decision cutoff, measured on Apple M2.
-DEFAULT_DECISION_CUTOFF_SECONDS = 2.5
+# I9 (SDD §13.4): decision cutoff — a batch whose decode finishes later than
+# ``boundary + this`` is display-only (see ``_slot_ended``) and never reaches
+# the sequencer, so it can never trigger a late TX (NFR-001/NFR-009).
+#
+# With the cascade this cutoff has to cover **two** decodes, not one: it must be
+# ≥ (the delay before the second path can start) + (the slowest path that may
+# run) + margin.  The fast path's result lands ``FAST_PATH_FINISH_DELAY_SECONDS``
+# after the slot boundary (below), and the deep (WSJT-X improved, threads=3)
+# path then needs ``DEFAULT_DEEP_LOWER_BOUND_SECONDS`` — so the 2.5 s this was
+# originally sized to (a single decode path, measured on an M2) never admitted
+# the cascade's own second path: ``cascade._remaining_budget`` refused every
+# policy-approved escalation ("budget too tight"; 263 refusals / 0 escalations
+# over one ~2.5 h W103D field window), silently leaving the box on the fast path
+# alone.  The value below leaves ~1.17 s of guard slack (cutoff − 0.48 − 0.05 ≈
+# 3.47 vs the 2.3 s bound) while the worst case still finishes inside the window
+# (0.48 + 2.25 ≈ 2.73 s), so an escalated slot's decodes now reach the sequencer
+# instead of being dropped as display-only.
+#
+# It stays far below the 15 s period (``Orchestrator.__init__`` rejects
+# ``decision_cutoff >= period``), and it is the TX *fit guard* — not this cutoff
+# — that prevents a late transmission (``tx_driver.py``).
+DEFAULT_DECISION_CUTOFF_SECONDS = 4.0
+# The fast path's result lands this long *after* the slot boundary, measured on
+# the W103D (2026-10-13): that slot's fast decode published at ``17:42:00,481``
+# while its boundary was ``1791884518.800`` (nominal end ``17:42:00.0``) — a
+# ~0.48 s delay.  This is the ``clock() − boundary`` term that
+# ``CascadingDecoder._remaining_budget`` subtracts before it can spend anything
+# on the deep path, so the decision cutoff has to cover it *plus* the deep
+# path's duration; the guard is in ``tests/ft8/engine/test_orchestrator.py``.
+FAST_PATH_FINISH_DELAY_SECONDS = 0.48
 # Real audio lands one block (~85 ms) plus scheduling after its sample time;
 # reading exactly at the boundary always misses the slot tail (found by the
 # foreground/launchd deployment: every slot skipped with a healthy ring).
@@ -46,6 +74,13 @@ DELIVERY_GRACE_SECONDS = 0.4
 # Poll cadence while waiting for the slot's last block to land in the ring.
 SLOT_POLL_SECONDS = 0.025
 SLOT_SAMPLES_NBYTES = 360_000  # exact 12 kHz int16 mono slot (AD-004)
+
+# AP（先验）解码的 quality 分界，用于把 ap_low_quality 计数与 ap_decodes 分开。
+# 取值依据来自解码器自己的语义而不是拍脑袋：ft8_a8d 在 plog < -147 时把 qual
+# 降到 0.16（PLOG_MIN = -160），而实测里 iaptype 3 那一路散布在 0.07-0.83
+# （docs/ft8-dl-speculative-notes.md §4.4）。0.5 正好落在「a8 的高置信 1.0」与
+# 「a8 自己认为可疑的 0.16」之间，所以它数的是「解码器自己都没把握的那部分」。
+AP_LOW_QUALITY = 0.5
 
 
 def slot_id_for(epoch: float, period: float = FT8_PERIOD_SECONDS) -> int:
@@ -101,6 +136,11 @@ class SlotDecode:
     late: bool
     batch: DecodeBatch
     messages: tuple[SlotMessage, ...]
+    # True for the fast-path answer published while the deep answer is still in
+    # flight (spec 2026-10-15, two-stage).  The slot is published twice and the
+    # second publication replaces the first (state.js keys rows by slot_id), so
+    # the operator sees the band ~1.5 s earlier and the complete list later.
+    provisional: bool = False
 
 
 @dataclass(slots=True)
@@ -118,6 +158,14 @@ class OrchestratorCounters:
     # 深路径的结果真的并进了本槽（本槽为此多付了一次深解码）。升级率
     # = escalations / decodes，是判断阈值松紧的主指标。
     escalations: int = 0
+    # AP（先验）解码产出：本槽最终批次里 ap_type != 0 的报文数。
+    # 必须能被数出来，否则打开了 MRRC_FT8_AP_A_PRIORI 也无从判断它到底有没有
+    # 起作用——§4.4 的 20/120 是在合成信号上量的，线上只有这两个数。
+    ap_decodes: int = 0
+    # 其中 quality < AP_LOW_QUALITY 的条数。§4.4 量到 a8 的 quality 全是 1.0，
+    # 而 iaptype 3 那一路散布在 0.07–0.83，所以「AP 解出的东西有多 shaky」是
+    # 上线后第一个要看的数（设计笔记 §7.1 判据 3）。
+    ap_low_quality: int = 0
 
 
 class Orchestrator:
@@ -167,6 +215,13 @@ class Orchestrator:
         self._sleep_until = sleep_until or self._asyncio_sleep_until
         self._on_slot_start = on_slot_start
         self._on_decode = on_decode
+        # Two-stage publication is opt-in on the decoder: a plain SupervisorDecoder
+        # has no fast answer to publish early, and a decoder that does gets the
+        # orchestrator's own formatter (so a provisional row is identical to a
+        # final one, minus the sequencer and the counters).
+        sink = getattr(decoder, "set_provisional_sink", None)
+        if sink is not None:
+            sink(self._on_provisional)
         self._on_decode_error = on_decode_error
         self.counters = OrchestratorCounters()
         self._running = False
@@ -269,6 +324,35 @@ class Orchestrator:
                 return None
             await self._sleep_until(min(now + self._slot_poll_interval, deadline))
 
+    def _on_provisional(self, slot_id: int, batch: DecodeBatch) -> None:
+        """Publish the fast answer while the deep one is still running.
+
+        Deliberately *not* the full slot path: no counters (a slot is decoded
+        once, whatever it is published as) and **no sequencer** — the state
+        machine keeps seeing exactly one batch per slot, the complete one, so
+        latency improves without the sequencing logic learning a new timetable.
+        The UI replaces rows by slot_id, so the later, fuller publication is a
+        correction rather than a duplicate.
+        """
+
+        if self._on_decode is None:
+            return
+        finished = self._clock()
+        messages = tuple(
+            SlotMessage(result, parse_message(result.text)) for result in batch.results
+        )
+        self._on_decode(
+            SlotDecode(
+                slot_id=slot_id,
+                dispatched_epoch=finished,
+                finished_epoch=finished,
+                late=False,
+                batch=batch,
+                messages=messages,
+                provisional=True,
+            )
+        )
+
     async def _slot_ended(self, slot_id: int, boundary_epoch: float, samples: bytes) -> None:
         if len(samples) != SLOT_SAMPLES_NBYTES:
             raise ValueError(
@@ -298,6 +382,11 @@ class Orchestrator:
             for result in batch.results
         )
         self.counters.decodes += 1
+        for message in messages:
+            if message.result.ap_type:
+                self.counters.ap_decodes += 1
+                if message.result.quality < AP_LOW_QUALITY:
+                    self.counters.ap_low_quality += 1
         if batch.escalated:
             self.counters.escalations += 1
         elif batch.path is DecodePath.FAST:

@@ -123,6 +123,77 @@ bash "$MRRC_HOME/ft8/dsp/build.sh"
 	exit 1
 }
 
+log "SDR receiver (AD-029): native channelizer + the vendor API"
+# Two .so this project owns, plus the closed-source SDRplay stack it stands on.
+#
+# MRRC_SDR=off removes the whole feature: no libraries, no daemon, no udev
+# rule, no blacklist.  A box that has no SDR must not carry a root daemon
+# (sdrplay_apiService) it will never use.
+if [ "${MRRC_SDR:-on}" = "off" ]; then
+	echo "  MRRC_SDR=off — SDR receiver not installed"
+else
+	CC=${CC:-cc}
+	"$CC" -O3 -ffast-math -fPIC -shared -o /usr/local/lib/libsdr_dsp.so \
+		"$MRRC_HOME/sdr_dsp.c" -lm
+	[ -f /usr/local/lib/libsdr_dsp.so ] || {
+		echo "mrrc-service-layer: libsdr_dsp.so was not built" >&2; exit 1; }
+
+	VENDOR="$MRRC_HOME/vendor/sdrplay"
+	[ -f "$VENDOR/arm64/libsdrplay_api.so.3.15" ] || {
+		echo "mrrc-service-layer: vendor/sdrplay is missing — run" \
+		     "tools/sdr/fetch_sdrplay_api.sh on the build host first" >&2; exit 1; }
+
+	install -d -m 755 /opt/sdrplay_api /usr/local/include
+	install -m 644 "$VENDOR/arm64/libsdrplay_api.so.3.15" /usr/local/lib/
+	ln -sf /usr/local/lib/libsdrplay_api.so.3.15 /usr/local/lib/libsdrplay_api.so.3
+	ln -sf /usr/local/lib/libsdrplay_api.so.3    /usr/local/lib/libsdrplay_api.so
+	install -m 755 "$VENDOR/arm64/sdrplay_apiService" /opt/sdrplay_api/
+	install -m 644 "$VENDOR"/inc/sdrplay_api*.h /usr/local/include/
+	install -m 644 "$VENDOR/sdrplay_license.txt" /opt/sdrplay_api/
+	ldconfig
+
+	# The shim is compiled against the vendor headers, so it must come after
+	# they are installed (and after libsdrplay_api.so.3 resolves).
+	"$CC" -O2 -fPIC -shared -o /usr/local/lib/libsdr_api_shim.so \
+		"$MRRC_HOME/sdr_api_shim.c" -I/usr/local/include -lsdrplay_api -lm
+	[ -f /usr/local/lib/libsdr_api_shim.so ] || {
+		echo "mrrc-service-layer: libsdr_api_shim.so was not built" >&2; exit 1; }
+
+	# udev: the API opens /dev/bus/usb nodes; the service runs as $MRRC_USER.
+	cat >/etc/udev/rules.d/66-sdrplay.rules <<'RULE'
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="1df7", MODE:="0666"
+RULE
+	chmod 644 /etc/udev/rules.d/66-sdrplay.rules
+
+	# The kernel's msi2500 driver claims 1df7:2500 and its own SDR path is
+	# broken on this device (tuning pinned at 15 MHz, samples ~all zero —
+	# measured 2026-10-18); blacklisting it is what makes the API see the RSP1.
+	cat >/etc/modprobe.d/mrrc-sdrplay.conf <<'MODS'
+blacklist msi2500
+blacklist msi001
+MODS
+	chmod 644 /etc/modprobe.d/mrrc-sdrplay.conf
+
+	cat >/etc/systemd/system/sdrplay.service <<'UNIT'
+[Unit]
+Description=SDRplay API Service
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=1
+User=root
+ExecStart=/opt/sdrplay_api/sdrplay_apiService
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+	chmod 644 /etc/systemd/system/sdrplay.service
+	systemctl enable sdrplay.service
+fi
+
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 chmod 640 "$ENV_FILE" 2>/dev/null || true
 
@@ -198,6 +269,11 @@ Wants=network-online.target
 User=$MRRC_USER
 Group=$MRRC_USER
 WorkingDirectory=$MRRC_HOME
+# /run/mrrc holds the local control socket (AD-028).  Shared with
+# mrrc-box-helper, whose unit also declares it — systemd creates it once,
+# owned by the first unit to start, and both run as the same user anyway.
+RuntimeDirectory=mrrc
+RuntimeDirectoryMode=0770
 EnvironmentFile=$ENV_FILE
 # Same file, so Cloud Hub's connect() writes where the service will read
 # (design D-11): it persists the certificate paths and the TX heartbeat, and a
@@ -268,6 +344,32 @@ SyslogIdentifier=mrrc-box-helper
 WantedBy=multi-user.target
 UNIT
 
+cat >/etc/systemd/system/mrrc-localctl.service <<UNIT
+[Unit]
+Description=MRRC Modern local control surface (remote keys -> radio, AD-028)
+# bluez must have built the HID input node first.  There is no dependency on the
+# remote itself: with no remote paired the daemon waits for the node and re-opens
+# it whenever bluez tears it down (a BLE HID remote reconnects on its own key
+# press), so an unpaired box idles instead of failing.
+After=bluetooth.service mrrc-modern.service
+Wants=bluetooth.service
+
+[Service]
+User=$MRRC_USER
+Group=$MRRC_USER
+WorkingDirectory=$MRRC_HOME
+EnvironmentFile=$ENV_FILE
+ExecStart=$VENV/bin/python $MRRC_HOME/local_ctl.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mrrc-localctl
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
 # 未加引号的 heredoc：下面两处要把 $MRRC_BOOT_DIR 插进去。这是**有意差异 ②**的一部分
 # ——Armbian 把启动分区挂在 /boot，Raspberry Pi OS 挂在 /boot/firmware。写死路径的后果不是
 # 报错，而是 ConditionPathExists 永不成立、这条能力在 Pi 上**静默哑掉**（2026-10-12 抓到的）。
@@ -305,6 +407,76 @@ mkdir -p "$MRRC_HOME/linux" "$MRRC_HOME/logs" /var/lib/mrrc/certs
 install -m 0755 "$MRRC_ASSETS/firstboot_wrapper.py" \
 	"$MRRC_HOME/linux/firstboot_wrapper.py"
 chown -R "$MRRC_USER:$MRRC_USER" /var/lib/mrrc "$MRRC_HOME/logs"
+
+log "log growth is bounded (an unattended box runs for months)"
+# `StandardOutput=append:` above buys the plain-text witness of the window
+# before the server's own logging exists — and systemd will append to that file
+# forever: neither systemd nor the server rotates an `append:` target. Measured
+# 2026-10-17: a defect that logged one warning per 20 ms audio frame wrote 17 MB
+# in five hours on a 6.5 GB root. Nothing about that mechanism is
+# self-limiting; a smaller defect is only slower. Every other log an image ships
+# already has a ceiling (server.log is a RotatingFileHandler capped at 2 MB + 1,
+# ft8-worker.log rotates at 2 MB, support bundles keep the newest 5) — this was
+# the one file that could grow until the disk said stop.
+#
+# copytruncate, not a rename: systemd holds the descriptor open, so moving the
+# name would leave it appending to an unlinked inode — the directory would look
+# rotated while the disk kept filling. compress+delaycompress keeps the last
+# three generations around 5 MB each, compressed.
+install -d -m 0755 /etc/logrotate.d
+cat >/etc/logrotate.d/mrrc <<ROTATE
+$MRRC_HOME/logs/server-stdout.log {
+	weekly
+	maxsize 5M
+	rotate 3
+	compress
+	delaycompress
+	missingok
+	notifempty
+	copytruncate
+}
+ROTATE
+
+# The scheduler is ours, not the distro's: Debian runs logrotate from a
+# cron.daily hook *and* ships a timer, and a base image that masks either one
+# would make this config a file nobody ever executes. A systemd timer is part of
+# the platform this image already depends on. Persistent=true means a box that
+# was off at the scheduled moment still rotates on the next boot.
+cat >/etc/systemd/system/mrrc-logrotate.service <<'UNIT'
+[Unit]
+Description=MRRC Modern log rotation (the server's stdout file has no size bound of its own)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/logrotate --state /var/lib/mrrc/logrotate.state /etc/logrotate.d/mrrc
+UNIT
+
+cat >/etc/systemd/system/mrrc-logrotate.timer <<'UNIT'
+[Unit]
+Description=Rotate MRRC Modern logs (hourly; maxsize decides)
+
+[Timer]
+OnBootSec=10min
+# 每小时，不是每天：`maxsize 5M` 只在 logrotate **跑的时候**才被看见，日更等于把上限
+# 变成「一天里能涨多少」。oneshot 在没到尺寸时是毫秒级空转。
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+# journald keeps every unit but the server, and its own default cap is 10% of
+# the root filesystem — 650 MB on this 6.5 GB disk, a sixth of the machine for
+# logs nobody reads. 128 MB still holds weeks of boots; SystemKeepFree is the
+# second fence, because a full disk breaks PTT and audio long before it breaks
+# logging.
+install -d -m 0755 /etc/systemd/journald.conf.d
+cat >/etc/systemd/journald.conf.d/50-mrrc-size.conf <<'JOURNAL'
+[Journal]
+SystemMaxUse=128M
+SystemKeepFree=256M
+JOURNAL
 
 log "version stamp"
 # version.txt is what the support bundle manifest and the upgrade channel read
@@ -361,12 +533,51 @@ grep -q '^MRRC_SSL_KEY=' "$ENV_FILE" || echo 'MRRC_SSL_KEY=/var/lib/mrrc/certs/s
 chown "$MRRC_USER:$MRRC_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
+log "factory preflash (--preflash)"
+# 出厂预置：固定口令 + 系统层（时区/区域）。默认关 —— 不传 --preflash 的镜像里
+# 这段只打印一行。放在这里而不是平台壳里：写口令/时区/locale 与板子无关，而
+# "服务层只有一份"是本仓库的硬规矩（tests/test_packaging_parity.py 会报红）。
+# 也刻意排在 headless 默认值之后，让预置口令成为 env 文件里那个键的最后一个写者。
+if [ "${MRRC_PREFLASH:-0}" = "1" ]; then
+	bash "$MRRC_ASSETS/preflash.sh" "$ENV_FILE"
+else
+	echo "preflash: off (build with --preflash for the ship-ready values)"
+fi
+
 log "enable services"
-systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service
+# The governor matters more than it looks: this workload is bursty (audio at
+# 50 Hz, spectrum at 30 Hz, FT8 slots), and schedutil spends its time ramping —
+# measured on a W103D, pinning at the top frequency took the machine from 27%
+# busy to 14% with no change in SoC temperature (48 °C either way).  The box is
+# mains-powered, so the usual reason to scale down does not apply.
+cat >/etc/systemd/system/mrrc-cpufreq.service <<'UNIT'
+[Unit]
+Description=MRRC Modern CPU governor (pin at the top OPP)
+DefaultDependencies=no
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor >/dev/null'
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+# The remote's 电源 button reports KEY_POWER, which systemd-logind would turn
+# into a power-off — mid-QSO, from a key that belongs to the operator (AD-028).
+# Ignore it here; local_ctl decides what that key does.
+sed -i 's/^#\?HandlePowerKey=.*/HandlePowerKey=ignore/' /etc/systemd/logind.conf
+systemctl enable mrrc-box-helper.service mrrc-wifi-preseed.service mrrc-firstboot.service mrrc-modern.service mrrc-localctl.service mrrc-cpufreq.service mrrc-logrotate.timer
 # avahi-daemon is what answers <hostname>.local. It ships enabled in the
 # package, but this image masks units by default in several places, so say it
 # out loud rather than trusting the package's postinst (design §8).
 systemctl enable avahi-daemon.service || true
+# The Bluetooth remote belongs to the box (AD-028): mrrc-localctl has
+# Wants=bluetooth.service, and enabling it here means a box whose remote was
+# paired on the bench still finds it after a power cycle.
+systemctl enable bluetooth.service || true
 
 log "import gate: the entry points the units run must import from THIS tree"
 # The two failure modes this catches both shipped once (2026-10-10, the 1.25.4

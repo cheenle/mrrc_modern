@@ -421,6 +421,9 @@ const memChannels = new Array(6).fill(null);
 let radioCapabilities = null;
 let radioModel = null;
 let radioDisplayName = null;
+// Installed server version from fullState, shown in the menu footer.
+// null = legacy server: the footer keeps whatever the markup shipped.
+let serverVersion = null;
 
 // ── Message Handler ─────────────────────────────────────────────────
 function handleMessage(msg) {
@@ -448,11 +451,15 @@ function handleMessage(msg) {
 			if (msg.filterTables) {
 				window.filterTables = msg.filterTables;
 			}
+			if (typeof window.renderPowerState === "function") {
+				window.renderPowerState(radioState.power_on);
+			}
 			// Per-radio capabilities/model drive the adaptive UI in
 			// ft710_ui.js (applyRadioCapabilities) and the audio boost below.
 			radioCapabilities = msg.capabilities || null;
 			radioModel = msg.radioModel || null;
 			radioDisplayName = msg.radioDisplayName || null;
+			serverVersion = msg.version || null;
 			_applyRadioBranding();
 			// RX playback boost comes from capabilities when the server
 			// provides it (Icom USB audio is much hotter than the FT-710's);
@@ -519,6 +526,11 @@ function handleMessage(msg) {
 				const changedFields = msg.fields ? Object.keys(msg.fields) : msg.dirty;
 				if (changedFields) {
 					renderUpdates(changedFields);
+					// 顶栏 PWR 一格由 power_switch.js 负责（电源不在 renderUpdates
+					// 的字段表里：它没有可编辑控件，只有状态与服务端的救援进度）。
+					if (typeof window.renderPowerState === "function") {
+						window.renderPowerState(radioState.power_on);
+					}
 					// NOTE: server af_gain no longer drives the playback gain
 					// node — the volume slider is browser-local (cookie).
 				}
@@ -561,6 +573,13 @@ function handleMessage(msg) {
 			if (typeof refreshRecordingsPanel === "function") refreshRecordingsPanel();
 			break;
 
+		case "powerRescue":
+			// 服务端唤醒循环的进度（running / woke / timeout / cancelled）。
+			if (typeof window.renderPowerRescue === "function") {
+				window.renderPowerRescue(msg);
+			}
+			break;
+
 		case "pong":
 			if (window.__pingSent) {
 				window.__lastRtt = Math.round(performance.now() - window.__pingSent);
@@ -587,7 +606,7 @@ function _applyRadioBranding() {
 	const menuTitle = document.getElementById("menu-title");
 	if (menuTitle) menuTitle.textContent = name + " Menu";
 	const version = document.getElementById("menu-version");
-	if (version) version.textContent = name + " v1.0";
+	if (version) version.textContent = name + (serverVersion ? " v" + serverVersion : "");
 	const appleMeta = document.querySelector(
 		'meta[name="apple-mobile-web-app-title"]',
 	);

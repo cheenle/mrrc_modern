@@ -8,6 +8,7 @@ import asyncio
 import tempfile
 import time
 import unittest
+from collections import namedtuple
 from pathlib import Path
 from typing import Any, cast
 from unittest import mock
@@ -591,6 +592,56 @@ class RecordingFailureHandlingTests(unittest.IsolatedAsyncioTestCase):
         # tear down the control channel (the 1006 loop of 2026-09-12).
         guarded = source.index("try:", source.index("await ws.receive_text()"))
         self.assertIn("_handle_ws_message", source[guarded:guarded + 400])
+
+
+class RecordingSpaceGuardTests(unittest.IsolatedAsyncioTestCase):
+    """A full disk must stop one thing: the next recording (2026-10-17).
+
+    The recorded stream is the only unbounded writer an operator controls —
+    ~29 MB per hour at the default bitrate — and a disk that fills does not stop
+    the recording politely, it takes PTT, audio and the config writes with it.
+    The product therefore refuses to *start* one and never deletes one: the
+    destructive half of a retention policy is deliberately not implemented.
+    """
+
+    _Usage = namedtuple("usage", "total used free")
+
+    def _free(self, mb: int):
+        return self._Usage(total=8 << 30, used=0, free=mb << 20)
+
+    def test_room_is_reported_as_no_problem(self):
+        with mock.patch("shutil.disk_usage",
+                        return_value=self._free(server.RECORDINGS_MIN_FREE_MB)):
+            self.assertEqual(server._recording_space_problem(), "")
+
+    def test_a_nearly_full_disk_reports_the_numbers(self):
+        with mock.patch("shutil.disk_usage", return_value=self._free(7)):
+            problem = server._recording_space_problem()
+        self.assertIn("7 MB", problem)
+        self.assertIn(str(server.RECORDINGS_MIN_FREE_MB), problem)
+
+    def test_unmeasurable_is_not_a_refusal(self):
+        """A platform where disk_usage throws must not lose the feature."""
+        with mock.patch("shutil.disk_usage", side_effect=OSError("nope")):
+            self.assertEqual(server._recording_space_problem(), "")
+
+    def test_zero_disables_the_guard(self):
+        with mock.patch.object(server, "RECORDINGS_MIN_FREE_MB", 0):
+            with mock.patch("shutil.disk_usage", return_value=self._free(0)):
+                self.assertEqual(server._recording_space_problem(), "")
+
+    async def test_the_command_refuses_before_a_session_exists(self):
+        """Refusing here leaves no half-written MP3 and no REC light.
+
+        `_rec_session.start()` would create the file first and fail on the first
+        write, which is exactly the state a later `stop()` pads with silence.
+        """
+        ws = _FakeWS()
+        before = server._rec_session.active
+        with mock.patch("shutil.disk_usage", return_value=self._free(3)):
+            await server._execute_set_command("recording", True, cast(Any, ws))
+        self.assertTrue(ws.errors(), "the operator was not told why REC did nothing")
+        self.assertEqual(server._rec_session.active, before)
 
 
 if __name__ == "__main__":

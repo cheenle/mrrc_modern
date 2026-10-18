@@ -560,6 +560,17 @@ def create_router(state: AppState) -> APIRouter:
     async def health(session: Session = Depends(require_session)) -> dict[str, Any]:
         return _health(state)
 
+    @router.get("/engine/stats")
+    async def engine_stats(session: Session = Depends(require_session)) -> JSONResponse:
+        """Decoder counters for the FT8 page's status bar (see ``_engine_stats``).
+
+        Read-only and session-gated like every other ``/api/ft8`` route; it
+        mutates nothing, so it takes ``require_session`` and not
+        ``require_lease``.
+        """
+
+        return _ok(_engine_stats(state))
+
     # ---- operation ----------------------------------------------------------
 
     @router.post("/operation/select")
@@ -857,6 +868,9 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
     sequencer = state.sequencer
     snapshot: dict[str, Any] = {
         "revision": state.revision,
+        # The menu switch needs the engine's own state, not the on-air mode:
+        # the engine runs in the background even while the station is on SSB.
+        "engine": {"enabled": bool(state.runtime is not None and state.runtime.running)},
         "lease": {
             "held": lease is not None,
             "mine": session is not None
@@ -904,8 +918,27 @@ def _snapshot(state: AppState, session: Session | None) -> dict[str, Any]:
             "deadline_misses": counters.deadline_misses,
             "fast_decodes": counters.fast_decodes,
             "escalations": counters.escalations,
+            "ap_decodes": counters.ap_decodes,
+            "ap_low_quality": counters.ap_low_quality,
         }
     return snapshot
+
+
+def _latency_of(state: AppState) -> Any:
+    """The decode-latency histogram, wherever the wiring actually put it.
+
+    与上面 orchestrator 的解析同形，理由也是同一个：真实的组装根
+    （`server.py` 建 `Ft8AppState` 的那一处）只传 `runtime=`，**从不**传
+    `latency=` —— 只读 `state.latency` 就等于两个端点在生产里永远报不出
+    直方图，而解码器一直在填它（`runtime.py:194`），NFR-002 的整个存在理由
+    就是这个读数。显式接线优先，其次 runtime，都没有则 None（轻量替身、
+    引擎未起都不会因此 500）。
+    """
+
+    if state.latency is not None:
+        return state.latency
+    runtime = getattr(state, "runtime", None)
+    return getattr(runtime, "latency", None) if runtime is not None else None
 
 
 def _health(state: AppState) -> dict[str, Any]:
@@ -914,8 +947,9 @@ def _health(state: AppState) -> dict[str, Any]:
         "lease_held": state.lease is not None and state.lease.current() is not None,
         "sessions": state.auth.session_count(),   # was a bound method upstream: not serializable
     }
-    if state.latency is not None:
-        health["decode_latency"] = state.latency.snapshot()
+    latency = _latency_of(state)
+    if latency is not None:
+        health["decode_latency"] = latency.snapshot()
     orchestrator = state.orchestrator
     if orchestrator is None and getattr(state, "runtime", None) is not None:
         orchestrator = getattr(state.runtime, "orchestrator", None)
@@ -927,6 +961,45 @@ def _health(state: AppState) -> dict[str, Any]:
     if cascade_stats is not None:
         health["cascade"] = cascade_stats
     return health
+
+
+def _engine_stats(state: AppState) -> dict[str, Any]:
+    """FT8 引擎的运行期读数；引擎未启动时 ``engine`` 为 None。
+
+    与 `_health` 分开是**受众**决定的：`_health` 答的是"活着吗"（safety / lease /
+    sessions），这里答的是"解码干得怎么样"。升级率是 2026-10-13 那次截止修正的
+    唯一验证信号 —— 修好之前它是 0，之后必须非 0。
+
+    `escalation_rate` 用浮点而不是百分比整数：一次 0.4% 的升级率显示成 0 就白测了。
+    """
+
+    orchestrator = state.orchestrator
+    if orchestrator is None and getattr(state, "runtime", None) is not None:
+        orchestrator = getattr(state.runtime, "orchestrator", None)
+    payload: dict[str, Any] = {}
+    if orchestrator is None:
+        payload["engine"] = None
+    else:
+        counters = orchestrator.counters
+        decodes = counters.decodes
+        payload["engine"] = {
+            "running": True,
+            "slots_started": counters.slots_started,
+            "slots_skipped": counters.slots_skipped,
+            "decodes": decodes,
+            "fast_decodes": counters.fast_decodes,
+            "escalations": counters.escalations,
+            "ap_decodes": counters.ap_decodes,
+            "ap_low_quality": counters.ap_low_quality,
+            "deadline_misses": counters.deadline_misses,
+            "decode_errors": counters.decode_errors,
+            # 分母为 0 是引擎刚起来的正常状态，不是异常。
+            "escalation_rate": (counters.escalations / decodes) if decodes else 0.0,
+        }
+    latency = _latency_of(state)
+    if latency is not None:
+        payload["decode_latency"] = latency.snapshot()
+    return payload
 
 
 def _scheduled_tx(tx_phase: int) -> dict[str, Any]:

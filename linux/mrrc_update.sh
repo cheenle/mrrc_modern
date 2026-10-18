@@ -78,13 +78,69 @@ echo "==> FT8 DSP library (rebuild only when ft8/dsp changed)"
 # Deliberately NOT fatal: images released before 1.27.0 have no compiler, and
 # an update must not leave a working SSB box half-updated because its FT8
 # toolchain is missing.  A real failure is reported and FT8 alone degrades.
+echo "==> version stamp"
+# 版本号必须跟着树走。它不写的话，热升级后的盒子会一直声称自己跑着旧版本 —— 诊断包
+# 的 manifest、`/api/update/check` 的“当前版本”与 ☰ 菜单页脚读的都是这个文件，
+# 于是「升级了但行为没变」这类报告根本无从分辨（2026-10-17 实测：1.25.5 的树被升到
+# 1.28.1 之后，version.txt 仍然写着 1.25.5）。
+#
+# 取值与镜像构建同一条规则：CHANGELOG 顶部的第一个 `## [vX.Y.Z]`。它是 `[Unreleased]`
+# 之后的第一条，也就是即将发/刚发的那个版本号。
+# 三个来源，按可信度排：显式给的值 → 源树的 CHANGELOG → 源树的 version.txt。
+# 第二个在**喂一棵已 stage 过的树**时不存在（`stage-tree.sh` 的 `/*.md` 排除），
+# 而那是把本地目录当 MRRC_UPDATE_SRC 时最自然的做法 —— 2026-10-17 就这么吃过一次：
+# 升级成功，版本号仍写 1.25.5。
+if [ -n "${MRRC_UPDATE_VERSION:-}" ]; then
+	version="$MRRC_UPDATE_VERSION"
+elif [ -f "$SRC_TREE/CHANGELOG.md" ]; then
+	version="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$SRC_TREE/CHANGELOG.md" \
+		2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)"
+elif [ -s "$SRC_TREE/version.txt" ]; then
+	version="$(head -1 "$SRC_TREE/version.txt" | tr -d '[:space:]')"
+else
+	version=""
+fi
+if [ -n "$version" ]; then
+	printf '%s\n' "$version" >"$MRRC_HOME/version.txt"
+	cp "$MRRC_HOME/version.txt" "$MRRC_HOME/VERSION"
+	chown "$MRRC_USER:$MRRC_USER" "$MRRC_HOME/version.txt" "$MRRC_HOME/VERSION"
+	echo "    $version"
+else
+	echo "WARNING: 源树里没有 CHANGELOG.md 的版本行；version.txt 仍是" \
+		"$(cat "$MRRC_HOME/version.txt" 2>/dev/null || echo '?')，升级后的盒子会报错版本" >&2
+fi
+
 if ! bash "$MRRC_HOME/ft8/dsp/build.sh"; then
 	echo "WARNING: the FT8 DSP library did not rebuild; FT8 mode will report" >&2
 	echo "         a missing library until it is built. Everything else is fine." >&2
 fi
 
+# SDR receiver (AD-029): rebuild the two libs this project owns. The vendor
+# stack (libsdrplay_api + sdrplay_apiService + udev + blacklist) is installed
+# by the image build, not here — an update must not silently add a root daemon
+# to a box that shipped without one. Failure is a warning, never a blocker.
+if [ -f "$MRRC_HOME/sdr_dsp.c" ] && [ "${MRRC_SDR:-on}" != "off" ]; then
+	if ! cc -O3 -ffast-math -fPIC -shared -o /usr/local/lib/libsdr_dsp.so \
+			"$MRRC_HOME/sdr_dsp.c" -lm; then
+		echo "WARNING: libsdr_dsp.so did not rebuild; the SDR receiver will" >&2
+		echo "         report a missing library until it is built." >&2
+	fi
+	if [ -f /usr/local/lib/libsdrplay_api.so.3 ] && \
+	   cc -O2 -fPIC -shared -o /usr/local/lib/libsdr_api_shim.so \
+			"$MRRC_HOME/sdr_api_shim.c" -I/usr/local/include -lsdrplay_api -lm; then
+		ldconfig
+	else
+		echo "WARNING: libsdr_api_shim.so did not rebuild (vendor API absent?)" >&2
+	fi
+fi
+
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 echo "==> restarting"
 systemctl restart mrrc-modern
+# The remote daemon is its own process running its own copy of local_ctl.py, so
+# restarting the server alone leaves the old key map / volume scaling in memory
+# and a fix sits unused in /opt until the box is power-cycled.  try-restart is a
+# no-op on a box whose unit was never installed (the pre-2026-10-18 case).
+systemctl try-restart mrrc-localctl 2>/dev/null || true
 systemctl --no-pager --lines=5 status mrrc-modern || true
 echo "==> done; env file left untouched at $MRRC_HOME/env/mrrc.env"

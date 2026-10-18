@@ -141,6 +141,7 @@ def test_decodes_frame_carries_completion_timing() -> None:
     rt.recent_decodes = runtime_mod.deque(maxlen=50)
     rt._on_decode = captured.append
     rt.ring = None
+    rt._slots_logged = 0                       # __init__ never ran; _on_batch counts deliveries
 
     slot_id = 119457247
     slot_end = (slot_id + 1) * 15.0
@@ -183,6 +184,7 @@ def test_on_batch_clears_the_one_shot_deep_decode_flag() -> None:
     rt.recent_decodes = runtime_mod.deque(maxlen=50)
     rt._on_decode = lambda frame: None
     rt.ring = None
+    rt._slots_logged = 0                       # __init__ never ran; _on_batch counts deliveries
     rt._deep_decode_requested = True           # a press armed the deep path
 
     rt._on_batch(SimpleNamespace(

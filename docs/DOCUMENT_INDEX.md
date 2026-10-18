@@ -84,6 +84,7 @@
 | 文档 | 说明 | 读者 |
 |------|------|------|
 | [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX 音频链路深度分析 | 架构师/高级开发 |
+| [docs/nano_vna.md](docs/nano_vna.md) | **NanoVNA 天线诊断台 `/Nano` 操作手册**：判定卡与修剪建议、标定（OPEN/SHORT/LOAD 命令行步骤与验证）、野外独立使用（一键配置 + SAVE 槽 4）、基准配置对比、固件升级（三种进 DFU 的方式 / 变体看标签 / 刷后重做标定）、排障表 | 操作员 |
 | [docs/sdr_receiver.md](docs/sdr_receiver.md) | 独立 SDR 接收机（AD-029）：设备、信道化、容量与页面 | 开发者 |
 | [docs/ft8-m1-baseline.md](docs/ft8-m1-baseline.md) | FT8 M1 基线：W103D 上的实测数字 | 开发者 |
 | [docs/ft8-m5-acceptance.md](docs/ft8-m5-acceptance.md) | FT8 M5 验收记录（真机 W103D） | QA/开发者 |

@@ -292,6 +292,58 @@
 </ul>
 </div>
 <div class="feature-card animate">
+<div class="icon"><i class="fas fa-satellite-dish"></i></div>
+<h3>内置 FT8</h3>
+<p>
+              FT8 收发就在同一个服务端里 —— 解码跑在独立的工作进程，所以一通 SSB 和一个
+              弱信号时隙可以共用这台电台。
+            </p>
+<ul>
+<li>WSJT-X Improved 的 DSP：快路径，外加按需升级的深路径级联</li>
+<li>瀑布图、候选列表、QSO 时序、CQ 循环与本地日志</li>
+<li>原生库按平台各自构建（两条镜像线、macOS、Windows）</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-broadcast-tower"></i></div>
+<h3>SDR 接收机（仅盒子）</h3>
+<p>
+              盒子上的 SDRplay RSP1 变成一台公开的 Web 接收器 <code>/sdr</code>：
+              10 kHz – 2 GHz，自己的口令与页面，与电台控制面零耦合。
+            </p>
+<ul>
+<li>AM / USB / LSB / CW / NFM / WFM，同 <code>(偏移, 模式, 带宽)</code> 的解调器共享</li>
+<li>30 秒调谐持有锁，默认 50 位听众同时收听</li>
+<li>你发射的时候它照收不误</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-gamepad"></i></div>
+<h3>蓝牙遥控器（仅盒子）</h3>
+<p>
+              盒子配对一支蓝牙 HID 遥控器，直接驱动电台 —— 不用浏览器、不用登录：
+              操作员站在天线旁边，用手柄就能调。
+            </p>
+<ul>
+<li>发射、调谐、记忆步进、kHz 直输，全用按键</li>
+<li>权限即那条 0600 的 socket（同一用户）—— 物理按键从不走网页登录</li>
+<li>每条释放路径都发 <code>ptt:false</code>；电源键刻意忽略</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-headset"></i></div>
+<h3>远程协助窗口</h3>
+<p>
+              真需要第二双眼睛时，盒子可以临时对支持方开一扇限时 SSH 窗 —— 你不点，
+              它就一直不存在。
+            </p>
+<ul>
+<li>一次性口令显示在你的面板里，只在窗口打开期间有效</li>
+<li>连错 5 次自动关闭，你也可以随时停止</li>
+<li>反方向走的是脱敏的诊断包</li>
+</ul>
+</div>
+<div class="feature-card animate">
 <div class="icon"><i class="fas fa-bug"></i></div>
 <h3>遇到问题，拿到答复</h3>
 <p>

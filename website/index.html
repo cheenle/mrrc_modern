@@ -321,6 +321,58 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </ul>
 </div>
 <div class="feature-card animate">
+<div class="icon"><i class="fas fa-satellite-dish"></i></div>
+<h3>Built-in FT8</h3>
+<p>
+              FT8 receive and transmit inside the same server — decoding runs in its own
+              worker process, so an SSB contact and a weak-signal slot can share the radio.
+            </p>
+<ul>
+<li>WSJT-X Improved DSP with a fast path plus an adaptive deep-path cascade</li>
+<li>Waterfall, candidate list, QSO sequencing, CQ loop and a local log</li>
+<li>Native library built for each platform (Linux images, macOS, Windows)</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-broadcast-tower"></i></div>
+<h3>SDR Receiver (box only)</h3>
+<p>
+              An SDRplay RSP1 on the box becomes a public web receiver at <code>/sdr</code>:
+              10 kHz – 2 GHz, its own password and page, in no way coupled to radio control.
+            </p>
+<ul>
+<li>AM / USB / LSB / CW / NFM / WFM, shared demodulators by <code>(offset, mode, bandwidth)</code></li>
+<li>30 s tuning hold keeps the last band choice; 50 listeners by default</li>
+<li>Keeps receiving while you transmit</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-gamepad"></i></div>
+<h3>Bluetooth Remote (box only)</h3>
+<p>
+              The box pairs a Bluetooth HID remote and drives the radio directly — no browser,
+              no login: the operator stands next to the antenna and tunes with the handset.
+            </p>
+<ul>
+<li>PTT, tune, memory step and kHz entry straight from the keys</li>
+<li>Permission is the socket (0600, same user) — a physical button never goes through the web login</li>
+<li>Every release path sends <code>ptt:false</code>; the power key is ignored on purpose</li>
+</ul>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-headset"></i></div>
+<h3>Remote help session</h3>
+<p>
+              When something needs a second pair of eyes, the box can open a timed SSH window
+              to us — nothing permanent, nothing open until you ask for it.
+            </p>
+<ul>
+<li>One-time password shown in your panel, valid only while the window is open</li>
+<li>Read-only awareness: it closes itself after 5 failed attempts or when you stop it</li>
+<li>Anonymous redacted diagnostics bundle travels the other way</li>
+</ul>
+</div>
+<div class="feature-card animate">
 <div class="icon"><i class="fas fa-bug"></i></div>
 <h3>Report a problem &amp; get an answer</h3>
 <p>

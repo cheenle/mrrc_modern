@@ -412,6 +412,30 @@
 <td>Web Worker: Opus encoder (48kHz, 960-sample frames, 64kbps CBR, complexity=5); frames arrive via postMessage (SAB path dormant); posts to main thread for WS send (transferable buffers)</td>
 </tr>
 <tr>
+<td>NanoVna</td>
+<td>Instrument (Nano, AD-030)</td>
+<td><code class="scope-code">nano/vna.py</code></td>
+<td>The only module that touches the analyzer’s serial port: port discovery (env → <code class="scope-code">by-id</code> → <code class="scope-code">cu.usbmodem*</code> → <code class="scope-code">ttyACM*</code>, never the CAT port), <code class="scope-code">scan_bin</code> binary frame with <strong>exact-length validation</strong>, prompt sync before every write, device sweep set/restore, trace &amp; marker control, SAVE/RECALL slots, <code class="scope-code">saveconfig</code>, <code class="scope-code">reset dfu</code></td>
+</tr>
+<tr>
+<td>NanoAnalysis</td>
+<td>Instrument (Nano)</td>
+<td><code class="scope-code">nano/analysis.py</code></td>
+<td>Pure math with no I/O: Γ → SWR / Z ± jX, resonance plateaus, isolated-1.00 suspect points, band table, CSV and Touchstone <code class="scope-code">s1p</code> export, two-sweep comparison</td>
+</tr>
+<tr>
+<td>NanoFlash</td>
+<td>Instrument (Nano)</td>
+<td><code class="scope-code">nano/flash.py</code></td>
+<td>Firmware upgrade as a state machine: official release asset by variant (MS/SI/ZK), SHA-256 verification, ROM-DFU entry, <code class="scope-code">dfu-util</code> argv, <strong>version read-back as the success criterion</strong>, upgrade proof record; every side effect injectable</td>
+</tr>
+<tr>
+<td>NanoPages</td>
+<td>Frontend (Nano)</td>
+<td><code class="scope-code">static/nano.html</code>, <code class="scope-code">static/nano.js</code></td>
+<td>Field-oriented antenna bench at <code class="scope-code">/Nano</code>: verdict card (band max SWR + trim advice), SWR/Smith/</td>
+</tr>
+<tr>
 <td>ServiceWorker</td>
 <td>Frontend support</td>
 <td><code class="scope-code">static/sw.js</code></td>
@@ -518,7 +542,7 @@ PTT button touchend/mouseup:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.02 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.03 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

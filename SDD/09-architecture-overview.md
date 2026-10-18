@@ -140,3 +140,40 @@ Two defects this layering was hiding, both found by clean-room runs of the *pack
 * a frozen bundle must call `multiprocessing.freeze_support()`, or the DSP worker's spawn child
   re-enters `main()`, argparse exits 2, and FT8 reports `spawn_failed`.
 
+## 9.11 NanoVNA Antenna Bench (AD-030)
+
+A second **serial instrument** on the box, deliberately outside the radio's CAT path
+(design spec `docs/superpowers/specs/2026-10-18-nano-vna-design.md`, operator manual
+`docs/nano_vna.md`):
+
+```
+browser ──REST /api/nano/*──> server.py（守卫 + 一把 asyncio.Lock）
+                                └── asyncio.to_thread ──> nano/vna.py ──> /dev/ttyACM*
+                                                          nano/analysis.py（纯数学）
+                                                          nano/flash.py（ROM DFU）
+```
+
+- **Data path**: one command, one frame. `scan_bin <start> <stop> <points> <mask>` returns
+  `u16 mask, u16 points` followed by `u32 freq` + `f32 re/im` per enabled array; the frame
+  length must equal `4 + points × (4 + 8×(1+s21))` or the **whole frame is discarded and
+  rescanned** — half a frame draws a plausible fake curve, which is worse than an error.
+  Measured: 401 points 1.0–1.3 s, 101 points 0.32 s.
+- **Three field-found transport defects** (2026-10-18, real hardware): a command written right
+  after `reset_input_buffer()` is dropped (device still talking — measured as `scan_bin`
+  answering nothing at all), a quiet-period frame terminator truncates a 401-point sweep
+  between segments, and stripping only the CRLF of the echo line leaves `data 0` as a "data"
+  row. Hence: sync to `ch> ` before writing (`in_waiting` first), read **exactly** the frame
+  length, drop the echo line whole.
+- **Why `scan_bin` and not `data`**: after `sweep`, `data 0` still holds the **previous**
+  array (the device sweeps asynchronously) — measured 1.0 apart at 54 MHz. `scan_bin` carries
+  frequency and data from the same sweep, so the race cannot exist.
+- **Four guards**: refuse everything while transmitting (CH0 sits on the antenna — tens of
+  watts is a burnt front end), one operation at a time, never steal the CAT port, and
+  `listen`/`sdr` sessions are refused. Status polling shares the same lock as scans (concurrent
+  readers on one pyserial handle steal frame bytes) and reports `busy` separately from
+  `connected` — conflating them made the page report "device offline" during every scan.
+- **Device state**: every scan restores the device's on-screen sweep. Display state (trace
+  format, scale, marker) and the sweep live **outside** `config`, so `saveconfig` alone cannot
+  persist them; the field preset therefore also writes a SAVE/RECALL slot (slot 4), which is
+  what makes the box usable standalone in the field.
+

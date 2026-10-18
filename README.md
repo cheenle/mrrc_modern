@@ -449,7 +449,10 @@ shows up at `/Nano` (logged in with the normal password; listen-only and SDR ses
 | Traces | SWR vs frequency (log axis), Smith chart, `\|Z\|`, `R+jX`; resonance plateaus marked, an isolated 1.00 flagged red as a reading glitch rather than a match |
 | Data | Raw complex S11 only (everything else is derived), saved as JSON with atomic writes; overlays for dry/wet comparison; CSV and Touchstone `s1p` export |
 | Safety | Refused while the radio transmits (the VNA sees the antenna), one operation at a time, device sweep restored after every scan, `tcxo`/destructive commands kept out of the page |
-| Knobs | `MRRC_NANO` (on/off), `MRRC_NANO_PORT`, `MRRC_NANO_DIR`; firmware flashing (`dfu-util` + `0483:df11`) is phase 2 and locked behind `MRRC_NANO_ALLOW_FLASH=1` |
+| Field use | One click configures the device **itself** for standalone work: 1–54 MHz / 401 points, a single S11 SWR trace (1.0 per division), grid values, marker mid-span — then writes SAVE slot 4, so on the antenna you power up and `RECALL 4`. Trace format and sweep live outside `config`, so only `save`/`recall` survives a power cycle |
+| Baseline | `docs/nano/field-baseline.json` is a captured known-good state; *Compare with baseline* lists every drift (sweep, trace, marker, measurement settings) |
+| Knobs | `MRRC_NANO` (on/off), `MRRC_NANO_PORT`, `MRRC_NANO_DIR`, `MRRC_NANO_ALLOW_FLASH` (web firmware upgrade, off by default) |
+| Manual | [`docs/nano_vna.md`](docs/nano_vna.md) — calibration steps, field preset, baseline, the three ways into DFU, troubleshooting |
 
 ### SDR Receiver (box only, AD-029)
 

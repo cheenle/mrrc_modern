@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.03</td>
+<td>2026-10-18</td>
+<td>pi</td>
+<td><strong>天线诊断台落地为野外工具：判定卡、修剪建议、野外配置与基准，外加真机上挖出的六个缺陷。</strong> ① <strong>页面按用途重做</strong>（原来是仪表盘）：判定卡给段内最高 SWR 与四档结论（≤1.5 免调 / ≤2.0 天调可修 / ≤3.0 勉强 / &gt;3.0 不建议），并按「谐振频率与波段中心的相对偏差 ≈ 振子长度的相对偏差」直接给修剪量（每 10 m 剪/加多少 cm）；曲线带波段窗口、1.5/2.0 判定线、谐振点竖线、光标悬浮读数，<strong>点曲线即把设备屏幕上的 marker 移过去</strong>。② <strong>野外独立使用</strong>：一键把设备配成「1–54 MHz / 401 点、只留一条 S11 的 SWR 迹线（1.0/格、参考 0）、网格数值、marker 在中点」并写 SAVE 槽 4。<strong>关键事实（真机实测）</strong>：迹线格式<strong>不在</strong> <code class="scope-code">config</code> 里——<code class="scope-code">saveconfig</code> 甚至固件的「记住关机前状态」都留不住它（改完重启回 LOGMAG），只有 <code class="scope-code">save</code>/<code class="scope-code">recall</code> 槽存的是整套状态（扫描范围+迹线+标记+标定），所以拔下来开机要 <code class="scope-code">RECALL 4</code>。③ <strong>基准配置</strong>：<code class="scope-code">docs/nano/field-baseline.json</code> 从真机倒出（可读部分），<code class="scope-code">GET /api/nano/baseline?compare=1</code> 与现场逐项比对，页面列出所有偏离（扫描范围/迹线/标记/测量设置）；固件没有查询命令的 <code class="scope-code">config</code> 开关不在其中，页面显示的是本页记下的意图。④ <strong>真机挖出的六个缺陷</strong>：(a) <code class="scope-code">marker</code> 命令是 <strong>1 基</strong>的，传 0 固件不报错也不动——「命令成功但标记没动」；(b) 状态轮询与扫描并发读写同一个 pyserial 句柄会抢帧字节，且忙时 <code class="scope-code">connected</code> 报 False，页面每扫一次就喊一次「设备掉线」（忙 ≠ 掉线）；(c) 死句柄装「在线」直到下次扫描才炸，现在设备不应答立刻丢弃、下轮轮询自愈；(d) <code class="scope-code">fitCanvas</code> 把 <code class="scope-code">canvas.height</code> 设成 280×dpr 而 CSS 无高度规则，Retina 屏每刷新一次画布翻倍；(e) <code class="scope-code">server.py</code> 的日志器叫 <code class="scope-code">logger</code> 而 nano 块写了 <code class="scope-code">log.</code>，<strong>只有真连上设备时</strong>才 <code class="scope-code">NameError</code>（单测全打桩，一次没跑到）；(f) <code class="scope-code">disable_all_traces</code> 在 main 上只有调用没有定义。⑤ <strong>手册与文档</strong>：新增 <code class="scope-code">docs/nano_vna.md</code>（11 节操作手册：接线、判定卡、标定命令与验证判据、野外独立使用、基准、固件升级三种进 DFU 的方式、排障表），SDD/09 增 §9.11、SDD/11 增四个组件、<code class="scope-code">AGENTS.md</code>/<code class="scope-code">README.md</code>/<code class="scope-code">DOCUMENT_INDEX</code> 同步。⑥ <strong>网站</strong>：产品首页新增 Cloud Hub 章节（零入站 / 一呼号一门 / PTT 归本地 / 逐跳验签 + 拓扑图），并按 <code class="scope-code">chinese-prose</code> 量具重写文案（破折号 9.8‰→0、四字格 26→47‰）；补 FT8 / SDR / 蓝牙遥控 / 远程协助四张功能卡；拓扑图标注「路由器也可以是 Wi-Fi AP」，三份副本逐字一致，hub 站已发布。⑦ <strong>测试 2657 → 2716</strong>（139 模块）。</td>
+</tr>
+<tr>
 <td>SDD V3.02</td>
 <td>2026-10-18</td>
 <td>pi</td>
@@ -1019,7 +1025,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.02 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.03 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

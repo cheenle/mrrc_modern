@@ -794,5 +794,7 @@ venv/bin/pip install -r requirements.txt
 | W103D 盒子：烧镜像 / 刷机验收 | `docs/W103D_GUIDE.md` |
 | W103D 盒子：出厂设置、Wi-Fi、系统口令、公网入口 | `docs/W103D_USER_GUIDE.md` |
 | 蓝牙遥控器（不离座操作电台） | `docs/W103D_REMOTE_GUIDE.md` |
+| 独立 SDR 接收机（`/sdr`，盒子上的 RSP1，10 kHz–2 GHz） | `docs/sdr_receiver.md` |
+| 天线诊断台（`/Nano`，NanoVNA 测驻波与阻抗、修剪建议、标定、固件升级） | `docs/nano_vna.md` |
 | 维护者侧的远程协助（SSH 进去看） | `docs/remote_help.md` |
 | 设计记录（全部决策 / 需求 / 风险） | `SDD/README.md` |

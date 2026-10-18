@@ -52,6 +52,10 @@
 | RxWorklet | Frontend audio | `static/rx_worklet_processor.js` | AudioWorklet: queue-based playback with time-based jitter buffer (prebuffer 220ms, recovery 90ms, max 800ms) |
 | TxCaptureWorklet | Frontend audio | `static/tx_capture_worklet.js` | AudioWorklet: mic capture → 48kHz float32 resample → 20ms frames via postMessage (SAB ring code present but currently unwired) |
 | TxOpusWorker | Frontend audio | `static/tx_opus_worker.js` | Web Worker: Opus encoder (48kHz, 960-sample frames, 64kbps CBR, complexity=5); frames arrive via postMessage (SAB path dormant); posts to main thread for WS send (transferable buffers) |
+| NanoVna | Instrument (Nano, AD-030) | `nano/vna.py` | The only module that touches the analyzer's serial port: port discovery (env → `by-id` → `cu.usbmodem*` → `ttyACM*`, never the CAT port), `scan_bin` binary frame with **exact-length validation**, prompt sync before every write, device sweep set/restore, trace & marker control, SAVE/RECALL slots, `saveconfig`, `reset dfu` |
+| NanoAnalysis | Instrument (Nano) | `nano/analysis.py` | Pure math with no I/O: Γ → SWR / Z ± jX, resonance plateaus, isolated-1.00 suspect points, band table, CSV and Touchstone `s1p` export, two-sweep comparison |
+| NanoFlash | Instrument (Nano) | `nano/flash.py` | Firmware upgrade as a state machine: official release asset by variant (MS/SI/ZK), SHA-256 verification, ROM-DFU entry, `dfu-util` argv, **version read-back as the success criterion**, upgrade proof record; every side effect injectable |
+| NanoPages | Frontend (Nano) | `static/nano.html`, `static/nano.js` | Field-oriented antenna bench at `/Nano`: verdict card (band max SWR + trim advice), SWR/Smith/|Z|/R+jX plots, cursor tooltip, click-to-move marker, one-click field preset, baseline diff, device drawer |
 | ServiceWorker | Frontend support | `static/sw.js` | Cache static assets; bypass JS/HTML to prevent stale cache |
 
 ### 11.1.1 Cloud Hub 前置能力新增/变更的组件（2026-09-30）

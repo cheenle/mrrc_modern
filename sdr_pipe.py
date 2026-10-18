@@ -226,6 +226,8 @@ def run_device(pipe: SdrPipe, shim_path: str, max_seconds: float = 0.0) -> int:
     lib.sdrshim_config.argtypes = [ctypes.c_double, ctypes.c_double, ctypes.c_int, ctypes.c_int]
     lib.sdrshim_read.argtypes = [ctypes.POINTER(ctypes.c_short), ctypes.c_long, ctypes.c_int]
     lib.sdrshim_read.restype = ctypes.c_long
+    lib.sdrshim_set_gain.argtypes = [ctypes.c_int, ctypes.c_int]
+    lib.sdrshim_set_gain.restype = ctypes.c_int
     lib.sdrshim_overloads.restype = ctypes.c_int
     lib.sdrshim_removed.restype = ctypes.c_int
 
@@ -268,6 +270,7 @@ def run_device(pipe: SdrPipe, shim_path: str, max_seconds: float = 0.0) -> int:
                     if obj.get("cmd") == "gain":
                         applied["grdb"] = pipe.gain
                         applied["lna"] = pipe.lna
+                        lib.sdrshim_set_gain(pipe.gain, pipe.lna)
             n = lib.sdrshim_read(buf, pipe.block, 100)
             if n > 0:
                 iq = np.frombuffer(buf, dtype=np.int16, count=n * 2)
@@ -294,11 +297,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-channels", type=int, default=8)
     ap.add_argument("--seconds", type=float, default=0.0, help="stop after N seconds (0 = forever)")
     ap.add_argument("--no-rt", action="store_true", help="offline: do not pace at real time")
+    ap.add_argument("--gain", type=int, default=int(os.environ.get("MRRC_SDR_GAIN_DB", "40")))
+    ap.add_argument("--lna", type=int, default=int(os.environ.get("MRRC_SDR_LNA", "2")))
     ap.add_argument("--channels", default="0:0:0:6000",
                     help="initial channels chid:offset:mode:bw, comma separated (offline/headless tests)")
     args = ap.parse_args(argv)
 
     pipe = SdrPipe(args.fs, sys.stdout.buffer, max_ch=args.max_channels)
+    pipe.gain = max(20, min(59, args.gain))
+    pipe.lna = max(0, min(3, args.lna))       # RSP1 只有 0..3，越界 Init 会失败
     for spec in [c for c in args.channels.split(",") if c]:
         try:
             chid, off, mode, bw = (int(float(v)) for v in spec.split(":"))

@@ -4992,6 +4992,8 @@ SDR_COOKIE = "mrrc_sdr"
 SDR_MAX_CLIENTS = max(1, int(os.environ.get("MRRC_SDR_MAX_CLIENTS", "50") or 50))
 SDR_MAX_CHANNELS = max(1, min(16, int(os.environ.get("MRRC_SDR_MAX_CHANNELS", "8") or 8)))
 SDR_SAMPLE_RATE = float(os.environ.get("MRRC_SDR_SAMPLE_RATE", "2400000") or 2400000)
+SDR_GAIN_DB = int(os.environ.get("MRRC_SDR_GAIN_DB", "40") or 40)
+SDR_LNA = int(os.environ.get("MRRC_SDR_LNA", "2") or 2)
 
 _sdr_hub: Optional[SdrHub] = None
 _sdr_runner: Optional["SdrPipeRunner"] = None
@@ -5066,6 +5068,7 @@ class SdrPipeRunner:
             self._proc = await asyncio.create_subprocess_exec(
                 sys.executable, str(self.script), "--device",
                 "--fs", str(self.fs), "--max-channels", str(self.max_ch),
+                "--gain", str(SDR_GAIN_DB), "--lna", str(SDR_LNA),
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE, env=env)
         except Exception as exc:                                  # noqa: BLE001

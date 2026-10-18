@@ -175,6 +175,23 @@ long sdrshim_read(short *dst, long max_samples, int timeout_ms)
     return got;
 }
 
+/* 运行期改增益：Init 之后必须走 sdrplay_api_Update，光改 params 不会生效。 */
+int sdrshim_set_gain(int grdb, int lna)
+{
+    if (!g_params || !g_handle) return -1;
+    g_params->rxChannelA->tunerParams.gain.gRdB = grdb;
+    g_params->rxChannelA->tunerParams.gain.LNAstate = (unsigned char)lna;
+    g_params->rxChannelA->tunerParams.gain.syncUpdate = 0;
+    sdrplay_api_ErrT err = sdrplay_api_Update(g_handle, sdrplay_api_Tuner_A,
+                                              sdrplay_api_Update_Tuner_Gr,
+                                              sdrplay_api_Update_Ext1_None);
+    if (err != sdrplay_api_Success) {
+        snprintf(g_info, sizeof(g_info), "set gain: %s", err_name(err));
+        return -1;
+    }
+    return 0;
+}
+
 int  sdrshim_overloads(void) { return g_overloads; }
 int  sdrshim_removed(void)   { return g_removed; }
 const char *sdrshim_info(void) { return g_info; }

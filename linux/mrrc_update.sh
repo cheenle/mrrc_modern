@@ -115,6 +115,25 @@ if ! bash "$MRRC_HOME/ft8/dsp/build.sh"; then
 	echo "         a missing library until it is built. Everything else is fine." >&2
 fi
 
+# SDR receiver (AD-029): rebuild the two libs this project owns. The vendor
+# stack (libsdrplay_api + sdrplay_apiService + udev + blacklist) is installed
+# by the image build, not here — an update must not silently add a root daemon
+# to a box that shipped without one. Failure is a warning, never a blocker.
+if [ -f "$MRRC_HOME/sdr_dsp.c" ] && [ "${MRRC_SDR:-on}" != "off" ]; then
+	if ! cc -O3 -ffast-math -fPIC -shared -o /usr/local/lib/libsdr_dsp.so \
+			"$MRRC_HOME/sdr_dsp.c" -lm; then
+		echo "WARNING: libsdr_dsp.so did not rebuild; the SDR receiver will" >&2
+		echo "         report a missing library until it is built." >&2
+	fi
+	if [ -f /usr/local/lib/libsdrplay_api.so.3 ] && \
+	   cc -O2 -fPIC -shared -o /usr/local/lib/libsdr_api_shim.so \
+			"$MRRC_HOME/sdr_api_shim.c" -I/usr/local/include -lsdrplay_api -lm; then
+		ldconfig
+	else
+		echo "WARNING: libsdr_api_shim.so did not rebuild (vendor API absent?)" >&2
+	fi
+fi
+
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 echo "==> restarting"
 systemctl restart mrrc-modern

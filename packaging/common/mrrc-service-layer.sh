@@ -123,6 +123,77 @@ bash "$MRRC_HOME/ft8/dsp/build.sh"
 	exit 1
 }
 
+log "SDR receiver (AD-029): native channelizer + the vendor API"
+# Two .so this project owns, plus the closed-source SDRplay stack it stands on.
+#
+# MRRC_SDR=off removes the whole feature: no libraries, no daemon, no udev
+# rule, no blacklist.  A box that has no SDR must not carry a root daemon
+# (sdrplay_apiService) it will never use.
+if [ "${MRRC_SDR:-on}" = "off" ]; then
+	echo "  MRRC_SDR=off — SDR receiver not installed"
+else
+	CC=${CC:-cc}
+	"$CC" -O3 -ffast-math -fPIC -shared -o /usr/local/lib/libsdr_dsp.so \
+		"$MRRC_HOME/sdr_dsp.c" -lm
+	[ -f /usr/local/lib/libsdr_dsp.so ] || {
+		echo "mrrc-service-layer: libsdr_dsp.so was not built" >&2; exit 1; }
+
+	VENDOR="$MRRC_HOME/vendor/sdrplay"
+	[ -f "$VENDOR/arm64/libsdrplay_api.so.3.15" ] || {
+		echo "mrrc-service-layer: vendor/sdrplay is missing — run" \
+		     "tools/sdr/fetch_sdrplay_api.sh on the build host first" >&2; exit 1; }
+
+	install -d -m 755 /opt/sdrplay_api /usr/local/include
+	install -m 644 "$VENDOR/arm64/libsdrplay_api.so.3.15" /usr/local/lib/
+	ln -sf /usr/local/lib/libsdrplay_api.so.3.15 /usr/local/lib/libsdrplay_api.so.3
+	ln -sf /usr/local/lib/libsdrplay_api.so.3    /usr/local/lib/libsdrplay_api.so
+	install -m 755 "$VENDOR/arm64/sdrplay_apiService" /opt/sdrplay_api/
+	install -m 644 "$VENDOR"/inc/sdrplay_api*.h /usr/local/include/
+	install -m 644 "$VENDOR/sdrplay_license.txt" /opt/sdrplay_api/
+	ldconfig
+
+	# The shim is compiled against the vendor headers, so it must come after
+	# they are installed (and after libsdrplay_api.so.3 resolves).
+	"$CC" -O2 -fPIC -shared -o /usr/local/lib/libsdr_api_shim.so \
+		"$MRRC_HOME/sdr_api_shim.c" -I/usr/local/include -lsdrplay_api -lm
+	[ -f /usr/local/lib/libsdr_api_shim.so ] || {
+		echo "mrrc-service-layer: libsdr_api_shim.so was not built" >&2; exit 1; }
+
+	# udev: the API opens /dev/bus/usb nodes; the service runs as $MRRC_USER.
+	cat >/etc/udev/rules.d/66-sdrplay.rules <<'RULE'
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTRS{idVendor}=="1df7", MODE:="0666"
+RULE
+	chmod 644 /etc/udev/rules.d/66-sdrplay.rules
+
+	# The kernel's msi2500 driver claims 1df7:2500 and its own SDR path is
+	# broken on this device (tuning pinned at 15 MHz, samples ~all zero —
+	# measured 2026-10-18); blacklisting it is what makes the API see the RSP1.
+	cat >/etc/modprobe.d/mrrc-sdrplay.conf <<'MODS'
+blacklist msi2500
+blacklist msi001
+MODS
+	chmod 644 /etc/modprobe.d/mrrc-sdrplay.conf
+
+	cat >/etc/systemd/system/sdrplay.service <<'UNIT'
+[Unit]
+Description=SDRplay API Service
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=1
+User=root
+ExecStart=/opt/sdrplay_api/sdrplay_apiService
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+	chmod 644 /etc/systemd/system/sdrplay.service
+	systemctl enable sdrplay.service
+fi
+
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 chmod 640 "$ENV_FILE" 2>/dev/null || true
 

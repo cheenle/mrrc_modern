@@ -551,6 +551,88 @@ function exportSweep(kind) {
     location.href = URL_BASE + '/api/nano/sweeps/' + state.lastSavedId + '?format=' + kind;
 }
 
+// ── 固件升级 ────────────────────────────────────────────────────────
+
+async function loadFirmware() {
+    const box = document.getElementById('firmware');
+    let fw;
+    try {
+        const res = await api('firmware');
+        if (!res.ok) { box.innerHTML = '<p class="hint">读不到版本信息</p>'; return; }
+        fw = await res.json();
+    } catch (e) {
+        box.innerHTML = '<p class="hint">读不到版本信息</p>';
+        return;
+    }
+    state.firmware = fw;
+    if (!fw.enabled) {
+        box.innerHTML = '<p class="hint">升级入口已上锁：在盒子上设置 '
+            + '<code>MRRC_NANO_ALLOW_FLASH=1</code> 并重启服务后出现。'
+            + '当前固件：' + (fw.installed_version || '未知') + '</p>';
+        return;
+    }
+    const variants = Object.entries(fw.variants || {})
+        .map(([key, label]) => '<option value="' + key + '"'
+            + (fw.variant === key ? ' selected' : '') + '>' + label + '</option>').join('');
+    const releases = (fw.releases || []).map(r =>
+        '<option value="' + r.tag + '">' + r.tag + ' · ' + (r.published || '').slice(0, 10)
+        + '</option>').join('');
+    box.innerHTML =
+        '<dl class="kv"><dt>当前固件</dt><dd>' + (fw.installed_version || '未知') + '</dd>'
+        + '<dt>已记住变体</dt><dd>' + (fw.variant || '未选') + '</dd></dl>'
+        + '<div class="setting"><label>变体</label><select id="fw-variant">' + variants + '</select></div>'
+        + '<div class="setting"><label>目标版本</label><select id="fw-tag">' + releases + '</select></div>'
+        + '<div class="setting"><label>确认字</label>'
+        + '<input type="text" id="fw-confirm" placeholder="输入 FLASH" style="flex:1"></div>'
+        + '<div class="setting"><label>CH0 现在开路</label>'
+        + '<input type="checkbox" id="fw-open" checked></div>'
+        + '<div class="row"><button class="primary" id="fw-go">开始升级</button></div>'
+        + '<p class="hint" id="fw-status"></p>';
+    document.getElementById('fw-go').onclick = startFlash;
+}
+
+async function startFlash() {
+    const variant = document.getElementById('fw-variant').value;
+    const tag = document.getElementById('fw-tag').value;
+    const confirm = document.getElementById('fw-confirm').value.trim();
+    const ch0_open = document.getElementById('fw-open').checked;
+    const status = document.getElementById('fw-status');
+    if (confirm !== 'FLASH') { status.textContent = '确认字不对：请输入 FLASH'; return; }
+    try {
+        const res = await api('flash', {method: 'POST',
+            body: {tag: tag, variant: variant, confirm: confirm, ch0_open: ch0_open}});
+        const body = await res.json();
+        if (!res.ok) { status.textContent = body.detail || body.error || '启动失败'; return; }
+        status.textContent = '开始了：' + tag + ' (' + variant + ')';
+        waitFlash();
+    } catch (e) {
+        status.textContent = '启动失败：' + e;
+    }
+}
+
+async function waitFlash() {
+    const status = document.getElementById('fw-status');
+    const deadline = Date.now() + 6 * 60 * 1000;
+    while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 1500));
+        let st;
+        try {
+            const res = await api('flash/status');
+            if (!res.ok) continue;
+            st = await res.json();
+        } catch (e) { continue; }
+        status.textContent = st.state + (st.detail ? ' — ' + st.detail : '')
+            + (st.after_version ? '（' + st.before_version + ' → ' + st.after_version + '）' : '');
+        if (!st.running && ['done', 'failed', 'variant_mismatch'].includes(st.state)) {
+            if (st.state === 'done') status.textContent += ' ✅';
+            loadFirmware();
+            refreshStatus(true);
+            return;
+        }
+    }
+    status.textContent = '等了 6 分钟还没结束 —— 看盒子日志';
+}
+
 // ── 启动 ────────────────────────────────────────────────────────────
 
 function boot() {
@@ -572,6 +654,7 @@ function boot() {
     window.addEventListener('resize', draw);
     refreshStatus(true);
     loadSweeps();
+    loadFirmware();
     setInterval(() => refreshStatus(false), 5000);
 }
 

@@ -92,6 +92,7 @@ from recorder import (
 )
 from cq_player import CQPlayer, CQUnavailable
 from session_metrics import SessionMetrics
+import nano.flash as nano_flash
 from nano import (NanoError, NanoVna, analyse, discover_port, scan_command,
                   to_csv, to_s1p)
 from poll_scheduler import PollScheduler
@@ -6092,6 +6093,261 @@ def _nano_sweep_freqs(data: dict) -> list[int]:
         return []
     return [start + int(round((stop - start) * i / (points - 1))) for i in range(points)]
 
+# ── NanoVNA 固件升级（spec §4.10 / AD-030，U3：默认上锁）────────────────
+#
+# `reset dfu` 跳进 STM32 系统存储区里的 ROM bootloader —— 那段代码不可擦写，所以
+# 刷坏只会停在 DFU、再刷即恢复，不会变砖。但 H/H4 有 MS/SI/ZK 三个**编译期**变体，
+# 运行时读不出来，所以变体必须人来选、记住，成功判据是刷后设备自报的版本。
+#
+# 默认上锁：`MRRC_NANO_ALLOW_FLASH=1` 才出现升级入口。
+NANO_FIRMWARE_DIR = NANO_DIR / "firmware"
+NANO_FIRMWARE_STATE = NANO_DIR / "firmware-state.json"
+NANO_CONFIG_FILE = NANO_DIR / "config.json"
+NANO_RELEASES_CACHE = NANO_DIR / "releases.json"
+NANO_RELEASES_TTL_S = 6 * 3600
+
+_nano_flash_state: dict = {"state": "idle", "detail": ""}
+_nano_flash_task: Optional[asyncio.Task] = None
+
+
+def _nano_config() -> dict:
+    try:
+        return json.loads(NANO_CONFIG_FILE.read_text(encoding="utf-8"))
+    except Exception:                                              # noqa: BLE001
+        return {}
+
+
+def _nano_config_update(**kw) -> dict:
+    cfg = _nano_config()
+    cfg.update(kw)
+    try:
+        _nano_write_json(NANO_CONFIG_FILE, cfg)
+    except OSError as exc:
+        log.info("nano: cannot persist config (%s)", exc)
+    return cfg
+
+
+def _nano_flash_gate(request: Request) -> Optional[JSONResponse]:
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if not NANO_ALLOW_FLASH:
+        return JSONResponse({"error": "flash_disabled",
+                             "detail": "设置 MRRC_NANO_ALLOW_FLASH=1 并重启服务后才能升级固件"},
+                            status_code=403)
+    return None
+
+
+def _nano_releases(force: bool = False) -> list:
+    """官方 releases（6 小时缓存）。任何失败都退化成缓存，不假装网络一定在。"""
+    if not force:
+        try:
+            cached = json.loads(NANO_RELEASES_CACHE.read_text(encoding="utf-8"))
+            if time.time() - float(cached.get("fetched", 0)) < NANO_RELEASES_TTL_S:
+                return nano_flash.parse_releases(cached.get("releases"))
+        except Exception:                                          # noqa: BLE001
+            pass
+    try:
+        import net_tls
+        with net_tls.urlopen(nano_flash.RELEASES_URL, timeout=20) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:                                       # noqa: BLE001
+        log.info("nano: release list unavailable (%s)", exc)
+        try:
+            cached = json.loads(NANO_RELEASES_CACHE.read_text(encoding="utf-8"))
+            return nano_flash.parse_releases(cached.get("releases"))
+        except Exception:                                          # noqa: BLE001
+            return []
+    try:
+        _nano_write_json(NANO_RELEASES_CACHE,
+                         {"fetched": time.time(), "releases": payload})
+    except OSError:
+        pass
+    return nano_flash.parse_releases(payload)
+
+
+def _nano_self_check(dev, points: int = 101) -> dict:
+    """刷后自检：开路端口的三点扫描。**建议值，不是判据**。"""
+    sweep = dev.scan(1_000_000, 54_000_000, points)
+    import math
+    mags = [math.hypot(re, im) for re, im in sweep.s11]
+    idx = [min(range(len(sweep.freqs)), key=lambda i: abs(sweep.freqs[i] - f))
+           for f in (3_500_000, 14_000_000, 50_000_000)]
+    return {"s11_abs": [round(mags[i], 3) for i in idx],
+            "freqs": [sweep.freqs[i] for i in idx]}
+
+
+def _nano_flash_blocking(spec: dict) -> None:
+    """跑一次升级（在线程里）。结束时把快照留在 `_nano_flash_state`。"""
+    global _nano_flash_state
+    variant = spec["variant"]
+    release = None
+    for rel in _nano_releases():                     # 网络部分放在线程里
+        if rel.tag == spec["tag"]:
+            release = rel
+            break
+    if release is None:
+        _nano_flash_state = {"state": "failed",
+                             "detail": "找不到版本 %s 的发布" % spec["tag"]}
+        return
+    asset = nano_flash.pick_asset(release, variant)
+    if asset is None:
+        _nano_flash_state = {"state": "failed",
+                             "detail": "该发布里没有变体 %s 的镜像" % variant}
+        return
+    try:
+        image = nano_flash.download_asset(asset, NANO_FIRMWARE_DIR)
+    except Exception as exc:                                       # noqa: BLE001
+        _nano_flash_state = {"state": "failed", "detail": "取镜像失败：%s" % exc}
+        return
+
+    dev = _nano_connect()
+    if dev is None:
+        _nano_flash_state = {"state": "failed", "detail": "设备不在线"}
+        return
+
+    def enter_dfu() -> None:
+        dev.enter_dfu()
+        _nano_forget("entering DFU")
+
+    def read_version() -> str:
+        fresh = _nano_connect()
+        if fresh is None:
+            raise nano_flash.FlashError("设备没有回到应用模式")
+        return fresh.version()
+
+    def self_check() -> dict:
+        fresh = _nano_connect()
+        if fresh is None:
+            raise nano_flash.FlashError("设备不在线")
+        result = _nano_self_check(fresh)
+        if spec.get("ch0_open"):
+            worst = min(result["s11_abs"]) if result["s11_abs"] else 1.0
+            result["variant_suspect"] = worst < 0.7
+            result["ch0_open"] = True
+        return result
+
+    hooks = nano_flash.FlashHooks(
+        enter_dfu=enter_dfu,
+        wait_dfu=lambda: nano_flash.wait_for_usb(*nano_flash.DFU_VID_PID),
+        run_dfu=lambda img: nano_flash.run_dfu(img),
+        wait_app=lambda: nano_flash.wait_for_usb(*nano_flash.NANO_VID_PID,
+                                                 timeout=nano_flash.APP_RETURN_S),
+        read_version=read_version,
+        self_check=self_check,
+    )
+    job = nano_flash.FlashJob(image=image, expected_version=release.tag, hooks=hooks)
+    job.state = "checking"
+    _nano_flash_state = job.snapshot()
+    snap = job.run()
+    _nano_flash_state = snap
+    try:
+        nano_flash.record(NANO_FIRMWARE_STATE, snap, variant=variant,
+                          tag=release.tag, sha256=asset.sha256)
+    except OSError as exc:
+        log.info("nano: cannot write flash proof (%s)", exc)
+    _nano_forget("after flashing")                   # 下次按需重连，拿到新固件
+
+
+async def _nano_flash_worker(spec: dict) -> None:
+    global _nano_flash_state
+    try:
+        async with _nano_lock:
+            await asyncio.to_thread(_nano_flash_blocking, spec)
+    except Exception as exc:                                       # noqa: BLE001
+        log.exception("nano flash: worker crashed")
+        _nano_flash_state = {"state": "failed", "detail": str(exc)}
+
+
+@app.get("/api/nano/firmware")
+async def api_nano_firmware(request: Request, refresh: int = 0):
+    """可用版本 + 本地镜像 + 变体记忆。读操作，不需要 flash 开关。"""
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    releases = await asyncio.to_thread(_nano_releases, bool(refresh))
+    cfg = _nano_config()
+    installed = None
+    if _nano_device is not None:
+        try:
+            installed = _nano_device.version()
+        except Exception:                                          # noqa: BLE001
+            installed = None
+    local = []
+    if NANO_FIRMWARE_DIR.is_dir():
+        local = sorted(p.name for p in NANO_FIRMWARE_DIR.glob("*"))
+    return JSONResponse({
+        "enabled": NANO_ALLOW_FLASH,
+        "variant": cfg.get("variant"),
+        "variants": {k: v["label"] for k, v in nano_flash.VARIANTS.items()},
+        "installed_version": installed,
+        "releases": [{"tag": r.tag, "published": r.published,
+                      "assets": [a.name for a in r.assets]} for r in releases[:8]],
+        "local_images": local,
+        "job": _nano_flash_state,
+    })
+
+
+@app.post("/api/nano/firmware/variant")
+async def api_nano_variant(request: Request):
+    gate = _nano_flash_gate(request)
+    if gate is not None:
+        return gate
+    try:
+        body = await request.json()
+        variant = str(body["variant"])
+    except (KeyError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+    if variant not in nano_flash.VARIANTS:
+        return JSONResponse({"error": "bad_request", "detail": "unknown variant"},
+                            status_code=400)
+    _nano_config_update(variant=variant)
+    return JSONResponse({"ok": True, "variant": variant})
+
+
+@app.post("/api/nano/flash")
+async def api_nano_flash(request: Request):
+    """启动一次升级。确认字必须真的打出来 —— 这不是一个可以误触的按钮。"""
+    global _nano_flash_task, _nano_flash_state
+    gate = _nano_flash_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_tx_active():
+        return JSONResponse({"error": "tx_active",
+                             "detail": "电台在发射，先停下来"}, status_code=409)
+    if _nano_flash_task is not None and not _nano_flash_task.done():
+        return JSONResponse({"error": "busy", "detail": "已经有一次升级在进行"},
+                            status_code=409)
+    try:
+        body = await request.json()
+        tag = str(body["tag"]).strip()
+        variant = str(body["variant"]).strip()
+        confirm = str(body.get("confirm") or "")
+        ch0_open = bool(body.get("ch0_open"))
+    except (KeyError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+    if variant not in nano_flash.VARIANTS:
+        return JSONResponse({"error": "bad_request", "detail": "unknown variant"},
+                            status_code=400)
+    if confirm != "FLASH":
+        return JSONResponse({"error": "confirm_required",
+                             "detail": "升级会重启设备，请输入 FLASH 确认"}, status_code=400)
+    _nano_config_update(variant=variant)
+    _nano_flash_state = {"state": "checking", "detail": "准备 %s (%s)" % (tag, variant)}
+    _nano_flash_task = asyncio.create_task(
+        _nano_flash_worker({"tag": tag, "variant": variant, "ch0_open": ch0_open}))
+    return JSONResponse({"ok": True, "state": "checking", "tag": tag, "variant": variant})
+
+
+@app.get("/api/nano/flash/status")
+async def api_nano_flash_status(request: Request):
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    payload = dict(_nano_flash_state)
+    payload["enabled"] = NANO_ALLOW_FLASH
+    payload["running"] = bool(_nano_flash_task and not _nano_flash_task.done())
+    return JSONResponse(payload)
 
 async def serve_static(path: str, request: Request):
     """Serve static files.  Index.html is served for SPA routes.

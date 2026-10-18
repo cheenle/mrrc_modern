@@ -229,6 +229,17 @@ cat >/etc/udev/rules.d/99-mrrc-ftdi.rules <<'RULE'
 SUBSYSTEM=="usb", ATTR{idVendor}=="0403", ATTR{idProduct}=="601c", MODE="0660", GROUP="dialout"
 RULE
 
+# NanoVNA-H (AD-030). Two ids, two reasons: 0483:5740 is the application's CDC-ACM
+# port (the ttyACM node is already root:dialout, so this is belt-and-braces), and
+# 0483:df11 is the STM32 ROM bootloader — a raw USB device with **no /dev node at
+# all**, which dfu-util opens directly as `mrrc`. Without this line the upgrade
+# fails with "Cannot open DFU device 0483:df11 ... LIBUSB_ERROR_ACCESS", which
+# reads like a hardware fault.
+cat >/etc/udev/rules.d/99-mrrc-nanovna.rules <<'RULE'
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="5740", MODE="0660", GROUP="dialout"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="df11", MODE="0660", GROUP="dialout"
+RULE
+
 log "frpc (Cloud Hub tunnel client)"
 install -d "$MRRC_HOME/fleet"
 bash "$MRRC_ASSETS/fetch-frpc.sh" "$MRRC_HOME/fleet"

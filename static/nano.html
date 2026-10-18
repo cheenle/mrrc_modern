@@ -150,8 +150,21 @@ h2{font-size:13px; color:var(--accent); letter-spacing:.06em; margin:18px 0 8px;
 
   <h2>固件升级</h2>
   <div id="firmware"><p class="hint">读取中…</p></div>
-  <p class="hint">升级会重启设备、屏幕短暂变黑。ROM bootloader 不可擦写，刷坏只需再刷一次；
-    但 MS/SI/ZK 是编译期变体，选错不会砖——测出来会不对，换一个再刷即可。</p>
+  <p class="hint" style="color:var(--warning)">升级会整片擦除 flash：<b>标定槽与设置全部清空</b>，
+    升级后要在设备上重做 OPEN/SHORT/LOAD 标定；行为异常就 CONFIG → RESET AND CLEAR。
+    变体别猜：<b>看机器标签，硬件版本以 MS / SI / ZK 结尾</b>（官方 1.2.43 说明）。</p>
+  <details class="hint">
+    <summary>不放心网页升级？手动路径（Mac + dfu-util，官方标准流程）</summary>
+    <p>① 按标签定变体，下载对应 <code>.bin</code>（上面的目标版本选的就是官方 release）；<br>
+    ② 把 NanoVNA 插到 Mac，进 DFU：设备菜单 CONFIG 里有 DFU 项，或终端
+    <code>printf 'reset dfu\r' &gt; /dev/cu.usbmodem*</code>（屏幕会提示 DFU 模式）；<br>
+    ③ <code>brew install dfu-util</code>（如果没有），然后
+    <code>dfu-util -a 0 -s 0x08000000:leave -D NanoVNA-H4-MS_20260516.bin</code>；<br>
+    ④ 刷完拔插一次，开机看 <code>info</code> 的版本号；SI/MS 选错可在
+    CONFIG → EXPERT SETTINGS → MORE → MODE 里切换，只有 ZK 是真硬件区别；<br>
+    ⑤ 重做标定（设备上 CONFIG → CALIBRATE）。网页路径与这条用的是同一个 ROM bootloader，
+    刷坏只会停在 DFU，再刷一次即恢复。</p>
+  </details>
 
   <h2>历史</h2>
   <ul id="sweeps"><li>—</li></ul>

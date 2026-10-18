@@ -3844,6 +3844,9 @@ PUBLIC_PATHS = {"/login", "/api/auth/login", "/favicon.png", "/manifest.json", "
 WS_PATHS = {"/WSradio", "/WSspectrum", "/WSaudioRX", "/WSaudioTX", "/WSsdr"}
 # SDR 入口用独立的 mrrc_sdr cookie（与主站口令隔离），handler 自己鉴权。
 SDR_PATHS = frozenset({"/sdr", "/api/sdr/login"})
+# sdr.html 引用的四个资源（根相对路径）：只有已认证的 SDR 会话能取。
+SDR_STATIC_PATHS = frozenset({"sdr.js", "rx_worklet_processor.js",
+                              "modules/opus_wasm.js", "modules/opus_codec.js"})
 
 # The passwordless onboarding window is judged per-request by
 # _first_window_open(), not by a path set: /setup plus two /api/box endpoints
@@ -3876,6 +3879,12 @@ async def auth_middleware(request: Request, call_next):
     # SDR 页面与它的登录端点：口令是 MRRC_SDR_PASSWORD，不是主站口令，
     # 所以在这里放行、由 handler 自己比对（与 FIRST_WINDOW_PATHS 同一形状）。
     if path in SDR_PATHS:
+        return await call_next(request)
+
+    # SDR 页面自己的四个资源：已认证的 SDR 会话放行，别的会话照旧回登录页。
+    # 中间件先于 serve_static 运行，两边用同一个判定（现场：会话已登录却
+    # 连自己的 sdr.js 都拿不到，中间件给了 302 /login?next=/sdr.js）。
+    if path.lstrip("/") in SDR_STATIC_PATHS and _sdr_static_allowed(request, path):
         return await call_next(request)
 
     # The onboarding window: pass through so a client that has never logged in
@@ -5010,6 +5019,17 @@ def _sdr_password_matches(candidate: str) -> bool:
     return bool(SDR_PASSWORD) and hmac.compare_digest(str(candidate), SDR_PASSWORD)
 
 
+def _sdr_static_allowed(request: Request, path: str) -> bool:
+    """SDR 页面自己的四个资源：只有已认证的 SDR 会话能取。
+
+    中间件与 ``serve_static`` 各判一次 —— 前者先于后者运行，两边必须用同一份
+    白名单，否则会话已登录却连自己的 JS 都拿不到（现场：302 /login?next=/sdr.js）。
+    """
+    return (_sdr_login_enabled()
+            and path.lstrip("/") in SDR_STATIC_PATHS
+            and _sdr_token_from_request(request) in _sdr_tokens)
+
+
 def _sdr_token_from_request(request: Request) -> str:
     """SDR 入口的令牌：同一套解析顺序，只换 cookie 名（AD-024 的弃用 query 仍走共享处）。"""
     return _token_from_request(request, SDR_COOKIE)
@@ -5504,8 +5524,12 @@ async def serve_static(path: str, request: Request):
     reload and got the whole file back — ``If-None-Match`` on ``modules/opus_wasm.js`` (534 KB)
     returned 200 with the full body, so "reload" meant "push 534 KB through the tunnel again".
     """
-    if not _verify_auth(request) and path not in ("", "login", "favicon.png", "manifest.json", "sw.js", "box_api.js"):
-        return RedirectResponse("/login")
+    if not _verify_auth(request):
+        # 已登录的 SDR 会话要能取它自己页面的资源（sdr.html 用根相对路径，
+        # 与 index.html 同一套约定）；除此之外仍旧回登录页。
+        if not _sdr_static_allowed(request, path):
+            if path not in ("", "login", "favicon.png", "manifest.json", "sw.js", "box_api.js"):
+                return RedirectResponse("/login")
 
     file_path = _resolve_static_path(path)
     if file_path is None:

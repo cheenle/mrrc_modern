@@ -172,6 +172,30 @@ class SdrWiringTests(unittest.TestCase):
         self.assertEqual(ws.close_code, 4003)
         self.assertIn("listeners", ws.close_reason)
 
+    def test_sdr_session_may_fetch_its_own_assets(self):
+        """sdr.html 用根相对路径引四个资源；中间件与 serve_static 都要放行。
+
+        现场抓到过：会话已登录，页面 200，但 sdr.js / WASM 全 302 回登录页 ——
+        中间件先于 serve_static 运行，只改了后者等于没改。
+        """
+        token = "sdr-static"
+        server._sdr_tokens.add(token)
+        req = FakeRequest(path="/sdr.js", cookies={"mrrc_sdr": token})
+        for path in ("/sdr.js", "/rx_worklet_processor.js",
+                     "/modules/opus_wasm.js", "/modules/opus_codec.js"):
+            with self.subTest(path=path):
+                self.assertTrue(server._sdr_static_allowed(req, path))
+        self.assertFalse(server._sdr_static_allowed(req, "/ft710_main.js"))
+        anonymous = FakeRequest(path="/sdr.js")
+        self.assertFalse(server._sdr_static_allowed(anonymous, "/sdr.js"))
+
+    def test_radio_token_cannot_fetch_the_sdr_assets(self):
+        radio = "radio-token-static"
+        server._auth_tokens.add(radio)
+        self.addCleanup(server._auth_tokens.discard, radio)
+        req = FakeRequest(path="/sdr.js", cookies={"mrrc_sdr": radio})
+        self.assertFalse(server._sdr_static_allowed(req, "/sdr.js"))
+
     def test_ws_frames_have_the_documented_layout(self):
         kind, payload = server._sdr_ws_encode(("spectrum", 5, b"\x01\x02\x03"))
         self.assertEqual(kind, "bytes")

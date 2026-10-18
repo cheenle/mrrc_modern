@@ -90,3 +90,8 @@ auth-tokens.json.invalidated-*
 fleet/
 
 .venv-ml/
+
+# SDRplay 的闭源二进制（Hardware API 3.15）不入库：许可只允许随硬件使用，
+# 而且它是 1.2 MB 的厂商产物。构建前跑一次 tools/sdr/fetch_sdrplay_api.sh，
+# 服务层在 vendor/sdrplay 缺失时会直接让构建失败（不会静默出一个没有 API 的镜像）。
+/vendor/sdrplay/

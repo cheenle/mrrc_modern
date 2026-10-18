@@ -978,8 +978,8 @@ select{
 
   // ── 软件更新 ──────────────────────────────────────────────────────────
   (function () {
-    var info = $("up-info"), pill = $("up-pill"), msg = $("up-msg");
-    var checkBtn = $("up-check"), applyBtn = $("up-apply");
+    var info = document.getElementById("up-info"), pill = document.getElementById("up-pill"), msg = document.getElementById("up-msg");
+    var checkBtn = document.getElementById("up-check"), applyBtn = document.getElementById("up-apply");
     if (!checkBtn) { return; }
 
     function show(node, text, cls) {
@@ -1016,6 +1016,12 @@ select{
       }).catch(function () { setTimeout(poll, 2500); });
     }
 
+    function stamp() {
+      var d = new Date();
+      function pad(n) { return (n < 10 ? "0" : "") + n; }
+      return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    }
+
     function check() {
       checkBtn.disabled = true;
       show(info, "正在查询…");
@@ -1027,8 +1033,10 @@ select{
           applyBtn.textContent = "升级到 " + r.latest;
           show(pill, "有新版本", "warn");
         } else {
+          // 「点了没反应」= 没有可看的证据：把这次查询的时间和线上版本一起写出来。
           show(info, "当前 " + r.current + " 已是最新" +
-            (r.latest ? "（线上 " + r.latest + "）" : ""));
+            (r.latest ? "（线上 " + r.latest + "）" : "") +
+            " · 检查于 " + stamp());
           applyBtn.style.display = "none";
           show(pill, "最新", "good");
         }

@@ -196,6 +196,18 @@ class DiscoverabilityTests(unittest.TestCase):
         self.assertIn('target="_blank"', block)
         self.assertNotIn("data-action", block, "它必须是普通链接，不是 JS 菜单项")
 
+    def test_the_update_block_does_not_use_undefined_helpers(self):
+        """`$` 是 support.html 的助手，settings.html 里**没有** —— 用了就是白屏。
+
+        2026-10-18 现场：卡片一直「读取中…」，检查按钮毫无反应，因为那一块
+        第一行 `$("up-info")` 就抛 ReferenceError，整段逻辑根本没跑。
+        """
+        page = (self.ROOT / "static" / "settings.html").read_text(encoding="utf-8")
+        start = page.index("// ── 软件更新")
+        block = page[start:page.index("})();", start)]
+        self.assertNotIn("$(", block, "settings.html 里没有 $ 助手")
+        self.assertIn("document.getElementById", block)
+
     def test_the_settings_page_has_the_card(self):
         page = (self.ROOT / "static" / "settings.html").read_text(encoding="utf-8")
         for hook in ('id="card-update"', 'id="up-check"', 'id="up-apply"',

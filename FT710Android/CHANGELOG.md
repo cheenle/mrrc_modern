@@ -2,6 +2,37 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.32] — 2026-10-18
+
+### 🔧 录音键改成手机网页版的摆位：底栏 `PTT ｜ CQ · TUNE · REC`
+
+用户要求："安卓的录音功能参考手机移动网页版的摆放"。
+
+**网页怎么摆的**（`static/index.html` + `ft710.css` + `ft710_ui.js`）：
+
+- `.ptt-footer` 里一行 `PTT`（`flex:1`）｜ 右侧 `.ptt-side` 的 `CQ` / `TUNE` / `REC` 三个等宽小键（`min-width/min-height: 60px`）
+- `REC` **单击直通开关**：`recordBtn.click → sendCommand('recording', !rec.recording)`，录音中键面变 `STOP` + `.record-active` 红底，时长只在 tooltip 里给
+- 录音**列表**在 ☰ 菜单 → 录音，面板里只有播放/下载/删除，**没有**开始按钮
+
+**安卓原来**：⏺ 在顶栏工具行（`HeaderIconKind.RECORD`），点开 `RecordingPanel`——面板里开始/停止与列表混在一起；底栏只有 PTT / CQ / TUNE。跟网页的摆位是两套。
+
+**修法**：
+
+- 底栏加第三个等宽键 **REC**（`testTag("btnRec")`，尺寸走 `m.auxButtonSize`），位置在 TUNE 右侧，与网页同序
+- **单击直通开关**（`vm.startRecording()/stopRecording()`）：待机键面 `REC`（暗底描边），录音中红底白字 `STOP`——对齐网页 `.record-button` / `.record-active`
+- **长按**开 `RecordingPanel`（列表/回放拖动/导出/删除）：网页把它放在 ☰ 菜单里，这里用 App 既有的长按惯例承载，于是顶栏不必再挂一个图标
+- 顶栏 `⏺` 撤掉：`HeaderIconKind.RECORD` 与 `HeaderIconButton(filled=…)` 一并删除（**有意移除**，不是被脚本吞掉）
+- `RecordingPanel` 删掉"开始录音/停止"按钮（开关只留 REC 一处，避免两处入口打架），只留状态行 + "主屏底栏 REC 键开关录音" 提示
+- 录音时长仍显示在工具行——网页只在 tooltip 里给，安卓多给一项更实用
+
+**尺寸代价**：360dp 下限机上底栏 = `340 − 24(三个 8dp 间隙) − 174(58×3)` → PTT 仍有 **142dp**，仍是底栏最宽的一块（网页 `.ptt-button` 同为 `flex:1`）。`OneScreenFitTest` 七个真机档位仍全部一屏（底栏高度不变，取 `pttHeight`）。
+
+**门槛测试**：
+
+- 新增 `rec key lives in the bottom bar beside PTT, CQ and TUNE`：REC 落在 `secPtt` 内、与 TUNE 同排、在 TUNE 右侧、不溢出页宽、PTT 比它宽；`OnClick` 与 `OnLongClick` 两个语义都在（"录音打不开"就是这里红）
+- 改写 `recording state turns the bottom bar REC key into STOP…`：录音中键面是 `STOP`、`REC` 一处不剩、工具行仍显示 `1:23`
+- 顶栏用例改为断言**任何位置都没有 ⏺ 的语义**（`录音` / `停止录音（录音中）` 计数 0）——防止以后又把图标挂回顶栏
+
 ## [1.1.31] — 2026-10-08
 
 ### 🔴 修复：登录页文字看不见（黑字压近黑底，实测对比度 1.07:1）

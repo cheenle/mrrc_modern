@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -53,7 +52,6 @@ fun RecordingPanel(vm: MainViewModel, onClose: () -> Unit) {
     vm.version.collectAsState()
     val rec by vm.recordingState.collectAsState()
     val rows by vm.recordings.collectAsState()
-    val listenOnly by vm.listenOnly.collectAsState()
     val count by vm.recordingsCount.collectAsState()
     val totalBytes by vm.recordingsBytes.collectAsState()
 
@@ -131,10 +129,10 @@ fun RecordingPanel(vm: MainViewModel, onClose: () -> Unit) {
                         Text("未在录音", fontSize = 13.sp)
                     }
                     Spacer(Modifier.weight(1f))
-                    if (!listenOnly) {
-                        Button(onClick = { if (rec.recording) vm.stopRecording() else vm.startRecording() }) {
-                            Text(if (rec.recording) "停止" else "开始录音")
-                        }
+                    // 开关只有一处：主屏底栏的 REC 键（对齐手机网页版——网页的
+                    // `.record-button` 在底栏，录音面板里只有列表与回放，没有开始按钮）。
+                    if (!rec.recording) {
+                        Text("主屏底栏 REC 键开关录音", fontSize = 11.sp, color = Color(0xFF6B7280))
                     }
                 }
                 playing?.let { name ->

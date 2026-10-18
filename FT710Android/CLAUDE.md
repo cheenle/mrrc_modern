@@ -183,11 +183,12 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
   ```
   **少任何一项就不许发版**。大块替换优先用"精确锚点 + 重插"，不要用"从 A 注释到 B 注释整段替换"。
 - **设计令牌与表面**：颜色/圆角/表面层级只在 `UI/Theme.kt`（`MrrcColors`）与 `UI/Surfaces.kt`（`MrrcSurfaces` + `Panel`/`DisplayBezel`/`SectionLabel`/`Gap`）里定义；就地写死颜色 = 以后改不动。三层表面：内凹显示屏 `Inset`（主频/频谱）< 卡片 `Panel` < 按键 `Key`。
-- **主屏不放说明性文字**（用户 2026-10-06 明确要求）：分区标题全档位取消、频谱下不再重复 VFO 频率、状态行只留 `☰ ⏺ RX/TX 速率 状态点 ⛶ ⏻`、PTT 无副标、音量行无 `Vol` 标签。**任何入口不得藏在标题的 trailing 里**（v1.1.18 的「管理」入口就是这样在紧凑档丢的）——需要入口就给图标按钮（如记忆格行末的 `⋯`）。诊断类数字（RTT/J）放设置页诊断行，不占状态行。
-- **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**（主屏保持干净，用户明确要求过）；录音入口是状态行芯片、天调参数并进 ATR 行——**不要新增独占一行的小信息条**。
+- **主屏不放说明性文字**（用户 2026-10-06 明确要求）：分区标题全档位取消、频谱下不再重复 VFO 频率、工具行只留 `☰ 波段·模式 RX/TX 速率 状态点 ⛶ ⏻ VFO`、PTT 无副标、音量行无 `Vol` 标签。**任何入口不得藏在标题的 trailing 里**（v1.1.18 的「管理」入口就是这样在紧凑档丢的）——需要入口就给图标按钮（如记忆格行末的 `⋯`）。诊断类数字（RTT/J）放设置页诊断行，不占状态行。
+- **主屏只放操作**：机型名/「实验性」徽章/设备诊断行都在**设置页「设备 / 诊断」**（主屏保持干净，用户明确要求过）；录音开关是**底栏 REC 键**（对齐网页 `#btn-record`）、天调参数并进 ATR 行——**不要新增独占一行的小信息条**。
 - **顶栏布局（v1.1.28）**：`BoxWithConstraints` 取页面宽 →
   1. **工具行**（全宽独立一行，`testTag("secToolRow")`，高度 = `ScreenFit.headerRowHeight` = 图标点击区 22/26dp）：
-     `☰`(最左) ｜ `波段 · 模式` ｜ `RX/TX · 速率|TXpk · 录音时长 · 只读/无声 · 串口点` ｜ `⏺ ⛶ ⏻ VFO-A/B`(右侧动作区)
+     `☰`(最左) ｜ `波段 · 模式` ｜ `RX/TX · 速率|TXpk · 录音时长 · 只读/无声 · 串口点` ｜ `⛶ ⏻ VFO-A/B`(右侧动作区)
+     ⚠️ **录音不在这一行**（v1.1.32 起）：REC 键在底栏，见下面的「底栏」一条
      - 用户明确要求：**频率上方只此一行**，RX/TX 紧跟波段·模式之后，所有状态图标与信息都在这一行
      - 必须**横跨页宽**（344dp）：塞回显示屏内部只有 `bezelContentWidth`≈167dp，装不下约 246dp 内容（`TOOL_ROW_CONTENT_W`）
      - **抗挤压**：信息组装在 `weight(1f)` 的嵌套 Row 里，组内只有"波段·模式"是 `weight(1f, fill=false)` → 挤不下时**它先出省略号**，右侧图标不会被裁
@@ -195,8 +196,13 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
   2. **主频显示屏 + S 表**（等高，`m.headerHeight`，宽 = 页宽×44%＝132–240dp）
      - ⚠️ 等高靠**显式高度**，**绝不用 `IntrinsicSize.Min`**（S 表内部是 `BoxWithConstraints`=SubcomposeLayout，问 intrinsic 会启动即崩）
      - 显示屏里**只有主频**（`weight(1f)` 居中），字号 = `min(byWidth, byHeight)`，`byWidth=(宽−8)/6.3`、`byHeight=(高−4)/1.32`，夹 **16~62sp**
-  - **图标一律 Canvas 自绘（`HeaderIconButton`），禁用字体符号**：`☰ ⛶ ⏻ ⏺`（U+2630/26F6/23FB/23FA）在不少机型没有字形会走**字体回退** → 粗细不一、缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算（`g×0.13`），任何 dpi/字体设置下一致；尺寸 = `ScreenFit.headerIconTap`(22/26dp) + `headerIconGlyph`(11/13dp)；带 `contentDescription`（无障碍 + 测试可查）；录音态用 `filled=true` 画实心红圆。
+  - **图标一律 Canvas 自绘（`HeaderIconButton`），禁用字体符号**：`☰ ⛶ ⏻`（U+2630/26F6/23FB）在不少机型没有字形会走**字体回退** → 粗细不一、缺笔画（用户报的"关闭 icon 变形"）。自绘线宽按图形尺寸比例算（`g×0.13`），任何 dpi/字体设置下一致；尺寸 = `ScreenFit.headerIconTap`(22/26dp) + `headerIconGlyph`(11/13dp)；带 `contentDescription`（无障碍 + 测试可查）。
   - 工具行**不在** `DisplayBezel` 内 → 语义未被合并，`onNodeWithTag("secToolRow")` 不需要 `useUnmergedTree`（v1.1.27 那条坑已随之消失）。
+- **底栏（v1.1.32，摆位照抄手机网页版）**：`PTT(flex:1) ｜ CQ · TUNE · REC`，对应网页 `index.html` 的 `.ptt-row` / `.ptt-side` 与 `ft710.css` 的 `.ptt-button`/`.record-button`；容器 `testTag("secPtt")`，PTT 是 `btnPtt`，REC 是 `btnRec`。
+  - **REC 单击直通开关**（网页 `recordBtn.click → sendCommand('recording', !rec.recording)` 同一语义），键面 `REC` ↔ `STOP`（录音中红底白字，同网页 `.record-active`）；**长按**开 `RecordingPanel`（列表/回放拖动/导出/删除）——网页把列表放在 ☰ 菜单里，这里用 App 既有的长按惯例承载，于是顶栏不必再挂一个 ⏺。
+  - `RecordingPanel` **没有开始/停止按钮**（开关只留 REC 一处）；面板里的 `REC` 状态与时长来自服务端广播的 `recording` 快照，不是本地计时器。
+  - 录音时长仍显示在工具行（网页只在 tooltip 里给，安卓多给一项）；`recording.available=false` 时 REC 键整个不渲染；listen-only 整条底栏不渲染。
+  - 加键要重量三件事：360dp 下限机上 PTT 仍有 142dp（`340 − 24 − 58×3`）、`OneScreenFitTest` 七个档位仍一屏、`MainScreenComposeTest` 的 `rec key…` 用例（同排/在 TUNE 右侧/不溢出页宽/PTT 最宽）。
 - **S 表**：按用户给的参考图 `smeter-s7.svg` 画（**SVG 是文本，可直接读**；PNG 截图当前模型看不了）。
   - 弧线**两段两色**：S1–S9 近白、+20/+40/+60 用 `Danger` 红，分界 = `SMeter.MARKERS[9]`（参考图注释里的 "S9+10 mark"）
   - 刻度从弧线**向外（向上）辐射**、两端略外倾；主刻度长且亮、次刻度短且暗；dB 区刻度红

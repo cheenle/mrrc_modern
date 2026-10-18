@@ -180,6 +180,8 @@ class MainScreenComposeTest {
      * 图标是 Canvas 自绘的，没有文本节点，只能按 `contentDescription` 查。
      * 用字体字符（`⏻`/`⛶`）时不同机型会走字体回退、渲染变形，所以改自绘——
      * 这条测试守住"三个入口都在、且都可点"。
+     *
+     * ⚠️ 录音**不在**这行（2026-10-18 起对齐手机网页版，REC 键在底栏 PTT 旁）。
      */
     @Test
     fun `header tool row carries menu, fullscreen and power as drawn icons`() {
@@ -190,12 +192,14 @@ class MainScreenComposeTest {
         }
         rule.waitForIdle()
 
-        // 录音钮也是自绘图标（⏺ U+23FA 同样会字体回退变形）；fixture 带 recording → 它必须在
-        listOf("设置", "录音", "全屏", "断开电台").forEach { desc ->
+        listOf("设置", "全屏", "断开电台").forEach { desc ->
             val node = rule.onNodeWithContentDescription(desc, useUnmergedTree = true)
             node.assertExists()
             assertTrue("$desc 必须可点", node.fetchSemanticsNode().config.contains(SemanticsActions.OnClick))
         }
+        // 录音图标已撤出顶栏：它现在在底栏（见 rec key… 用例），任何位置都不该再有 ⏺ 的语义
+        rule.onAllNodesWithContentDescription("录音", useUnmergedTree = true).assertCountEquals(0)
+        rule.onAllNodesWithContentDescription("停止录音（录音中）", useUnmergedTree = true).assertCountEquals(0)
         // VFO 读数与波段·模式仍在同一行（VFO 可点切 A/B）。
         // "VFO-A" 有两处：顶栏工具行的读数 + 调谐卡的 VFO-A 按钮
         rule.onAllNodesWithText("VFO-A", useUnmergedTree = true).assertCountEquals(2)
@@ -205,6 +209,56 @@ class MainScreenComposeTest {
         rule.onAllNodesWithText("⛶", useUnmergedTree = true).assertCountEquals(0)
         rule.onAllNodesWithText("⏻", useUnmergedTree = true).assertCountEquals(0)
     }
+
+    /**
+     * 录音键按**手机网页版**摆位：底栏 `PTT ｜ CQ · TUNE · REC`（对应 `ft710.css` 的
+     * `.record-button`、`index.html` 的 `.ptt-side`），不在顶栏。
+     * 单击直通开关、长按开列表——两者都必须可点，否则"录音打不开"。
+     */
+    @Test
+    fun `rec key lives in the bottom bar beside PTT, CQ and TUNE`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val vm = fixtureVm(scope)
+        rule.setContent {
+            AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
+        }
+        rule.waitForIdle()
+
+        val rec = rule.onNodeWithTag("btnRec", useUnmergedTree = true)
+        rec.assertExists()
+        val cfg = rec.fetchSemanticsNode().config
+        assertTrue("REC 必须可单击（开关录音）", cfg.contains(SemanticsActions.OnClick))
+        assertTrue("REC 必须可长按（打开录音列表）", cfg.contains(SemanticsActions.OnLongClick))
+        assertEquals("待机时键面是 REC", "REC", labelOf("btnRec"))
+
+        // 摆位：必须落在底栏容器里，且在同一行（与 CQ / TUNE 的竖直中心一致）
+        val density = rule.density.density
+        val bar = rule.onNodeWithTag("secPtt").fetchSemanticsNode().boundsInRoot
+        val recBox = rule.onNodeWithTag("btnRec", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("REC 不在底栏内", recBox.top >= bar.top - 1f && recBox.bottom <= bar.bottom + 1f)
+        // 底栏那个 TUNE（ATR 行也有一个同名键，所以按"在底栏内"筛）
+        val tune = rule.onAllNodesWithText("TUNE", useUnmergedTree = true).fetchSemanticsNodes()
+            .map { it.boundsInRoot }
+            .first { it.top >= bar.top - 1f }
+        assertEquals(
+            "REC 与 TUNE 不在同一行",
+            (tune.top + tune.bottom) / 2f / density, (recBox.top + recBox.bottom) / 2f / density, 2f,
+        )
+        assertTrue("REC 应该在 TUNE 右边（网页顺序 CQ · TUNE · REC）", recBox.left > tune.right - 1f)
+        // PTT 仍是底栏最宽的一块（网页 `.ptt-button` 是 flex:1）
+        val ptt = rule.onNodeWithTag("btnPtt", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue("PTT 应比 REC 宽（网页 .ptt-button 是 flex:1）", ptt.width > recBox.width)
+        assertTrue("底栏内容不得溢出页宽", recBox.right <= bar.right + 1f)
+    }
+
+    /** 语音识别/测试用：取某个 testTag 节点里的按键文字（子节点，未合并树）。 */
+    private fun labelOf(tag: String): String =
+        rule.onNodeWithTag(tag, useUnmergedTree = true).onChildren().fetchSemanticsNodes()
+            .mapNotNull { n ->
+                n.config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text }
+            }
+            .firstOrNull().orEmpty()
 
     /** 断开状态下电源图标语义要翻过来（否则用户点下去不知道会发生什么）。 */
     @Test
@@ -220,19 +274,24 @@ class MainScreenComposeTest {
         rule.onAllNodesWithContentDescription("断开电台", useUnmergedTree = true).assertCountEquals(0)
     }
 
-    /** 录音中：⏺ 变实心（语义描述翻转）且状态行出现时长，两者都不能丢。 */
+    /**
+     * 录音中：底栏 REC 键面翻成 **STOP**（网页 `recordBtn.textContent = 'STOP'` + 红底），
+     * 状态行同时给出已录时长——两处都不能丢（时长是安卓比网页多给的一项）。
+     */
     @Test
-    fun `recording state flips the icon semantics and shows elapsed time`() {
+    fun `recording state turns the bottom bar REC key into STOP and shows elapsed time`() {
         val scope = CoroutineScope(Dispatchers.Unconfined)
         val vm = fixtureVm(scope, recording = true)
         rule.setContent {
             AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
         }
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("停止录音（录音中）", useUnmergedTree = true).assertExists()
-        rule.onAllNodesWithContentDescription("录音", useUnmergedTree = true).assertCountEquals(0)
+        assertEquals("录音中键面应为 STOP", "STOP", labelOf("btnRec"))
+        rule.onAllNodesWithText("REC", useUnmergedTree = true).assertCountEquals(0)
         // 时长 83.0s → "1:23"（fmtSeconds），显示在状态行
         rule.onNodeWithText("1:23", useUnmergedTree = true).assertExists()
+        // 顶栏不再有录音图标的语义
+        rule.onAllNodesWithContentDescription("录音", useUnmergedTree = true).assertCountEquals(0)
     }
 
     /**

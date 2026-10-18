@@ -81,8 +81,9 @@ import androidx.compose.ui.graphics.Path
 /**
  * 主屏 —— 布局/交互对齐**手机端 Web**（static/index.html + ft710_ui.js）：
  * 顶栏(频率/VFO/全屏/连接) → 状态行(波段·模式·TX/TUNE·统计·无声) → 瀑布+标尺（点击 QSY）→
- * S 表 → 仪表（+ ATR 行）→ 五键行 → 芯片行 → 音量 → 步进 → VFO 行 → 录音入口 → 记忆格；
- * 底部固定 PTT/CQ/TUNE。
+ * S 表 → 仪表（+ ATR 行）→ 五键行 → 芯片行 → 音量 → 步进 → VFO 行 → 记忆格；
+ * 底部固定 PTT/CQ/TUNE/REC——**REC 在底栏**，与手机网页版 `#btn-record` 同一摆位
+ * （网页底栏也是 `PTT ｜ CQ · TUNE · REC`，顶栏从来没有录音入口）。
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -202,14 +203,9 @@ fun MainScreen(
                             },
                     )
                 }
-                // 右侧动作区：录音 / 全屏 / 电源（全部 Canvas 自绘）+ VFO 读数
-                if (recAvailable && !listenOnly) {
-                    HeaderIconButton(
-                        HeaderIconKind.RECORD,
-                        if (rec.recording) "停止录音（录音中）" else "录音",
-                        danger = rec.recording, filled = rec.recording,
-                    ) { showRecPanel = true }
-                }
+                // 右侧动作区：全屏 / 电源（Canvas 自绘）+ VFO 读数。
+                // ⚠️ 录音**不在这行**：对齐手机网页版，REC 键在底栏 PTT 旁（见文件底部），
+                // 顶栏没有录音图标——网页的 `#btn-record` 也在 `.ptt-footer` 里（2026-10-18）。
                 HeaderIconButton(HeaderIconKind.FULLSCREEN, "全屏", active = fullscreen) {
                     onToggleFullscreen()
                 }
@@ -446,10 +442,11 @@ fun MainScreen(
             }
         }
 
-        // ── 底部固定：PTT / CQ / TUNE（listen-only 整栏隐藏）──────────
+        // ── 底部固定：PTT / CQ / TUNE / REC（listen-only 整栏隐藏）────
         if (!listenOnly) {
             Column(
                 Modifier.fillMaxWidth()
+                    .testTag("secPtt")
                     .background(Brush.verticalGradient(listOf(Color(0xFF232323), MrrcColors.BgSecondary)))
                     .drawWithContent {
                         drawContent()
@@ -461,7 +458,7 @@ fun MainScreen(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                vm.pttManager?.let { PTTButton(it, Modifier.weight(1f).height(m.pttHeight)) }
+                vm.pttManager?.let { PTTButton(it, Modifier.weight(1f).height(m.pttHeight).testTag("btnPtt")) }
                 Spacer(Modifier.width(8.dp))
                 if (cqAvailable) {
                     val calling = cq?.state == "calling"
@@ -509,6 +506,48 @@ fun MainScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text("TUNE", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                // REC —— 摆位照抄手机网页版底栏（`PTT ｜ CQ · TUNE · REC`，见 ft710.css
+                // 的 `.record-button`）：单击**直通**开关录音，长按才开列表。
+                // 网页一侧是 `recordBtn.click → sendCommand('recording', !rec.recording)`，
+                // 列表在 ☰ 菜单 → 录音；这里用 App 既有的长按惯例承载列表入口（`⋯`/记忆格
+                // 长按删除同一套手势），于是顶栏不必再挂一个 ⏺。快捷键的语义描述仍由服务端
+                // 广播的 `recording` 快照驱动（两台设备看到的状态一致，不是本地计时器）。
+                if (recAvailable) {
+                    Spacer(Modifier.width(8.dp))
+                    val recShape = RoundedCornerShape(14.dp)
+                    val recInteraction = remember { MutableInteractionSource() }
+                    val recPressed by recInteraction.collectIsPressedAsState()
+                    val recording = rec.recording
+                    Box(
+                        Modifier.width(m.auxButtonSize).height(m.auxButtonSize)
+                            .testTag("btnRec")
+                            .graphicsLayer {
+                                val k = if (recPressed) 0.95f else 1f
+                                scaleX = k; scaleY = k
+                            }
+                            .clip(recShape)
+                            .background(
+                                if (recording) Brush.verticalGradient(listOf(MrrcColors.Danger, Color(0xFFB91C1C)))
+                                else Brush.verticalGradient(listOf(MrrcSurfaces.Key, MrrcSurfaces.Panel)),
+                                recShape,
+                            )
+                            .border(1.dp, if (recording) MrrcColors.Danger else MrrcSurfaces.Hairline, recShape)
+                            .combinedClickable(
+                                interactionSource = recInteraction,
+                                indication = ripple(),
+                                onClick = { if (recording) vm.stopRecording() else vm.startRecording() },
+                                onLongClick = { showRecPanel = true },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (recording) "STOP" else "REC",
+                            color = if (recording) Color.White else MrrcColors.TextPrimary,
+                            fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center, maxLines = 1,
+                        )
+                    }
                 }
             }
             }
@@ -660,8 +699,8 @@ private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFr
     }
 }
 
-/** 顶栏工具行的图标种类。 */
-internal enum class HeaderIconKind { MENU, FULLSCREEN, POWER, RECORD }
+/** 顶栏工具行的图标种类（录音不在其中：REC 键在底栏，对齐网页版）。 */
+internal enum class HeaderIconKind { MENU, FULLSCREEN, POWER }
 
 /**
  * 顶栏工具行的图标按钮：**Canvas 自绘**，不用字体字符。
@@ -679,7 +718,6 @@ private fun HeaderIconButton(
     description: String,
     active: Boolean = false,
     danger: Boolean = false,
-    filled: Boolean = false,
     onClick: () -> Unit,
 ) {
     val m = LocalScreenMetrics.current
@@ -734,12 +772,6 @@ private fun HeaderIconButton(
                     )
                     drawLine(color, Offset(g / 2f, i * 0.6f), Offset(g / 2f, g * 0.52f),
                         strokeWidth = st, cap = StrokeCap.Round)
-                }
-                HeaderIconKind.RECORD -> {
-                    // 录音：圆环（待机）→ 实心（录音中，配 danger 红色）。
-                    // 同样是自绘：`⏺`(U+23FA) 在不少机型没有字形，会走字体回退而变形
-                    drawCircle(color, radius = g * 0.34f, style = Stroke(width = st))
-                    if (filled) drawCircle(color, radius = g * 0.19f)
                 }
             }
         }

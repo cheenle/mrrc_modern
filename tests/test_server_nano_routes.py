@@ -428,6 +428,15 @@ class PageAssetsTest(unittest.TestCase):
         self.assertNotIn("ft710_main.js", html)
         self.assertNotIn("ft710_ui.js", html)
 
+    def test_canvas_height_is_css_so_redraw_cannot_grow_the_page(self):
+        """真机教训：JS 把 canvas.height 设成 280×dpr（位图）。没有 CSS 高度规则时
+        属性同时是布局高度，每次重绘画布翻一倍——"刷新一次页面高一次"。"""
+        html = (Path(server.__file__).parent / "static" / "nano.html").read_text(encoding="utf-8")
+        js = (Path(server.__file__).parent / "static" / "nano.js").read_text(encoding="utf-8")
+        self.assertIn("height:280px", html)
+        self.assertIn("getBoundingClientRect", js)
+        self.assertNotIn("parseInt(canvas.getAttribute('height')", js)
+
 
 class FrequencyRebuildTest(unittest.TestCase):
     def test_linear_rebuild_matches_device_grid(self):

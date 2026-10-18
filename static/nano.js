@@ -73,9 +73,13 @@ function fmtOhm(v) {
 // ── 画布 ────────────────────────────────────────────────────────────
 
 function fitCanvas(canvas) {
+    // CSS 尺寸以布局为准（getBoundingClientRect），位图按 dpr 放大。canvas.height
+    // 只能当位图高度用 —— 没有 CSS height 规则时它同时是布局高度，每次重绘都会
+    // 把画布撑高一倍（Retina 屏第一次刷新就露馅）。
     const dpr = window.devicePixelRatio || 1;
-    const cssW = canvas.clientWidth || 320;
-    const cssH = parseInt(canvas.getAttribute('height'), 10) || 280;
+    const rect = canvas.getBoundingClientRect();
+    const cssW = Math.max(1, Math.round(rect.width));
+    const cssH = Math.max(1, Math.round(rect.height));
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
     const ctx = canvas.getContext('2d');

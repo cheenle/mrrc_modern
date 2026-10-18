@@ -509,6 +509,10 @@ class NanoVna:
     def disable_trace(self, n: int) -> None:
         self._ask("trace %d off" % int(n))
 
+    def disable_all_traces(self) -> None:
+        """`trace all off` —— 野外只留一条 S11，其余全是噪声。"""
+        self._ask("trace all off")
+
     def read_markers(self) -> list:
         out = []
         for line in self._ask("marker").splitlines():

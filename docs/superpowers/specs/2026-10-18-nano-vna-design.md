@@ -255,7 +255,7 @@ sweep = vna.scan(start_hz, stop_hz, points)   # 默认 s21=False
 
 ### 4.9 存储
 
-`MRRC_NANO_DIR`（默认 `<可写运行目录>/nano`），原子写。**一个基目录，四个用途**，
+`MRRC_NANO_DIR`（默认 `<可写运行目录>/nano-data`，**不是 `nano/`——那是代码包目录**），原子写。**一个基目录，四个用途**，
 不再有第二处路径：
 
 ```

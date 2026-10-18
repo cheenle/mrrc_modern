@@ -82,6 +82,20 @@ class FakeDevice:
     def save_config(self):
         self.sent.append(("saveconfig",))
 
+    def set_marker_index(self, n, index):
+        self.sent.append(("marker", n, index))
+
+    def read_traces(self):
+        return [{"id": 0, "type": "swr", "channel": "S11", "scale": 10.0, "refpos": 7.0}]
+
+    def read_markers(self):
+        return [{"id": 1, "index": 50, "freq_hz": 7100000}]
+
+    def set_trace_type(self, n, type_name, src=0):
+        if type_name not in server.nano_vna_types():
+            raise ValueError("unknown trace type: %r" % (type_name,))
+        self.sent.append(("trace", n, type_name, src))
+
     def save_cal(self, slot):
         self.sent.append(("save", slot))
 
@@ -481,6 +495,52 @@ class ConnectPathTest(unittest.TestCase):
             self.assertIsNone(server._nano_connect())
 
 
+class ViewAndMarkerTest(unittest.TestCase):
+    """野外最实用的两个动作：点曲线移动设备上的标记、切设备屏幕的迹线格式。"""
+
+    def setUp(self):
+        self.token = "nano-view-token"
+        server._auth_tokens.add(self.token)
+        self.addCleanup(lambda: server._auth_tokens.discard(self.token))
+        self.addCleanup(lambda: setattr(server, "_nano_lock", asyncio.Lock()))
+
+    def _req(self, body=None):
+        return FakeRequest(cookies={"mrrc_auth": self.token}, body=body or {})
+
+    def test_marker_moves_on_click(self):
+        dev = FakeDevice()
+        with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_require_device", return_value=dev):
+            r = asyncio.run(server.api_nano_marker(self._req({"index": 123})))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(dev.sent, [("marker", 0, 123)])
+
+    def test_marker_index_is_range_checked(self):
+        with mock.patch.object(server, "_nano_tx_active", return_value=False):
+            r = asyncio.run(server.api_nano_marker(self._req({"index": 9999})))
+        self.assertEqual(r.status_code, 400)
+
+    def test_view_reports_traces_and_markers(self):
+        dev = FakeDevice()
+        with mock.patch.object(server, "_nano_require_device", return_value=dev):
+            r = asyncio.run(server.api_nano_view(self._req()))
+        self.assertEqual(r.status_code, 200)
+        payload = json.loads(r.body)
+        self.assertEqual(payload["traces"][0]["type"], "swr")
+        self.assertEqual(payload["markers"][0]["freq_hz"], 7100000)
+        self.assertIn("logmag", payload["types"])
+
+    def test_trace_type_is_set_and_unknown_rejected(self):
+        dev = FakeDevice()
+        with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_require_device", return_value=dev):
+            ok = asyncio.run(server.api_nano_trace(self._req({"type": "smith", "src": 0, "id": 0})))
+            bad = asyncio.run(server.api_nano_trace(self._req({"type": "nonsense"})))
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(dev.sent, [("trace", 0, "smith", 0)])
+
+
 class PageAssetsTest(unittest.TestCase):
     """前缀安全：接口地址只能从页面自己的 location 推出来（tests/test_path_prefix.py 的规矩）。"""
 
@@ -499,18 +559,22 @@ class PageAssetsTest(unittest.TestCase):
     def test_page_has_tooltip_center_span_and_display_flags(self):
         html = (Path(server.__file__).parent / "static" / "nano.html").read_text(encoding="utf-8")
         js = (Path(server.__file__).parent / "static" / "nano.js").read_text(encoding="utf-8")
-        for marker in ('id="tip"', 'id="center"', 'id="span"', 'id="flags"'):
+        for marker in ('id="tip"', 'id="center"', 'id="span"', 'id="flags"',
+                       'id="view"', 'id="verdict"'):
             self.assertIn(marker, html)
         self.assertIn("showTip", js)
         self.assertIn("currentRange", js)
         self.assertIn("renderFlags", js)
+        self.assertIn("renderVerdict", js)
+        self.assertIn("renderView", js)
 
     def test_canvas_height_is_css_so_redraw_cannot_grow_the_page(self):
         """真机教训：JS 把 canvas.height 设成 280×dpr（位图）。没有 CSS 高度规则时
         属性同时是布局高度，每次重绘画布翻一倍——"刷新一次页面高一次"。"""
         html = (Path(server.__file__).parent / "static" / "nano.html").read_text(encoding="utf-8")
         js = (Path(server.__file__).parent / "static" / "nano.js").read_text(encoding="utf-8")
-        self.assertIn("height:280px", html)
+        import re
+        self.assertRegex(html, r"canvas\{[^}]*height:\s*\d+px")
         self.assertIn("getBoundingClientRect", js)
         self.assertNotIn("parseInt(canvas.getAttribute('height')", js)
 

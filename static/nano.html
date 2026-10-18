@@ -3,192 +3,186 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1a1a1a">
-<title>NanoVNA 天线诊断台</title>
+<meta name="theme-color" content="#12120f">
+<title>天线诊断 · NanoVNA</title>
 <style>
 :root{
-  --bg-primary:#1a1a1a; --bg-secondary:#242424; --bg-card:#2a2a2a;
-  --text-primary:#eee; --text-secondary:#999; --text-muted:#666;
-  --accent:#f59e0b; --accent-dim:rgba(245,158,11,.2);
-  --danger:#ef4444; --success:#22c55e; --warning:#eab308;
-  --border:#3a3a3a; --radius:10px;
+  --bg:#12120f; --bg2:#1c1b17; --card:#26241e;
+  --fg:#f2eee2; --dim:#a49c8a; --muted:#6f695c;
+  --accent:#f5a623; --ok:#2fbf5f; --warn:#e8b529; --bad:#e8563f;
+  --line:#3a382f; --r:14px;
   --mono:'SF Mono',Menlo,Monaco,monospace;
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html,body{margin:0}
 body{
-  background:var(--bg-primary); color:var(--text-primary);
+  background:var(--bg); color:var(--fg);
   font-family:-apple-system,system-ui,'PingFang SC','Microsoft YaHei',sans-serif;
-  font-size:14px; -webkit-text-size-adjust:100%;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  -webkit-text-size-adjust:100%;
 }
 header{
-  display:flex; align-items:center; gap:8px; padding:10px 12px;
-  background:var(--bg-secondary); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  background:var(--bg2); border-bottom:1px solid var(--line);
   position:sticky; top:0; z-index:10;
 }
-header .name{font-weight:600; letter-spacing:.04em}
-header .meta{font-family:var(--mono); font-size:11px; color:var(--text-secondary);
-  flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-header button{
-  background:transparent; color:var(--accent); border:1px solid var(--border);
-  border-radius:6px; padding:6px 10px; font-size:12px;
-}
-#banner{
-  display:none; padding:8px 12px; font-size:12px; text-align:center;
-  background:var(--danger); color:#fff; font-weight:600;
-}
-#banner.warn{background:var(--warning); color:#1a1a1a}
+header .t{font-weight:700; letter-spacing:.05em}
+header .meta{font-family:var(--mono); font-size:11px; color:var(--dim);
+  flex:1; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+#banner{display:none; padding:9px 14px; font-size:13px; text-align:center; font-weight:700}
 #banner.show{display:block}
-main{padding:10px 12px 40px; max-width:1000px; margin:0 auto}
-canvas{width:100%; height:280px; display:block; background:var(--bg-secondary);
-  border:1px solid var(--border); border-radius:var(--radius); margin-bottom:8px}
-/* height 必须在 CSS 里：JS 会把 canvas.height 设成 280×dpr（位图），没有这条
-   规则时属性同时是布局高度 —— 每刷新一次画布翻一倍（2026-10-18 真机） */
-.tabs{display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap}
-.tabs button{
-  flex:1; min-width:64px; padding:7px 4px; font-size:12px; border-radius:6px;
-  border:1px solid var(--border); background:var(--bg-card); color:var(--text-secondary);
-}
-.tabs button.on{background:var(--accent-dim); border-color:var(--accent); color:var(--accent)}
-.row{display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap}
-.row label{font-size:12px; color:var(--text-secondary)}
-select,input[type=number],input[type=text]{
-  background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border);
-  border-radius:6px; padding:7px 8px; font-size:13px; font-family:var(--mono);
-}
-button.primary{
-  background:var(--accent); color:#1a1a1a; border:0; border-radius:8px;
-  padding:9px 18px; font-weight:700; font-size:14px;
-}
-button.primary:disabled{opacity:.5}
+#banner.warn{background:var(--warn); color:#1a1a1a}
+#banner.bad{background:var(--bad); color:#fff}
+main{padding:12px 14px 48px; max-width:760px; margin:0 auto}
+
+/* 判定卡：野外一眼看完 */
+.verdict{background:var(--card); border-radius:var(--r); padding:16px 16px 14px;
+  border:1px solid var(--line); margin-bottom:12px}
+.verdict .band{display:flex; align-items:baseline; gap:10px}
+.verdict .band b{font-size:20px; letter-spacing:.04em}
+.verdict .chip{margin-left:auto; font-size:13px; font-weight:800; padding:5px 12px;
+  border-radius:999px; background:#3a382f; color:var(--fg)}
+.chip.ok{background:rgba(47,191,95,.18); color:var(--ok); border:1px solid var(--ok)}
+.chip.warn{background:rgba(232,181,41,.18); color:var(--warn); border:1px solid var(--warn)}
+.chip.bad{background:rgba(232,86,63,.18); color:var(--bad); border:1px solid var(--bad)}
+.big{display:flex; gap:18px; margin-top:10px; align-items:flex-end; flex-wrap:wrap}
+.big .item small{display:block; font-size:11px; color:var(--muted); letter-spacing:.08em}
+.big .item span{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.big .swr span{font-size:46px; line-height:1; font-weight:800}
+.big .z span{font-size:22px; line-height:1.2}
+.big .f span{font-size:16px}
+.trim{margin-top:12px; padding:10px 12px; border-radius:10px; font-size:14px;
+  line-height:1.6; background:rgba(245,166,35,.10); border:1px solid rgba(245,166,35,.35)}
+.trim b{color:var(--accent)}
+.trim.crit{background:rgba(232,86,63,.10); border-color:rgba(232,86,63,.4)}
+
+canvas{width:100%; height:260px; display:block; background:var(--bg2);
+  border:1px solid var(--line); border-radius:var(--r); margin-bottom:10px}
 #tip{position:fixed; pointer-events:none; z-index:50; display:none;
-  background:rgba(20,20,18,.94); border:1px solid var(--accent); border-radius:8px;
-  padding:6px 9px; font-family:var(--mono); font-size:11px; line-height:1.5;
-  color:var(--text-primary); white-space:pre; box-shadow:0 4px 16px rgba(0,0,0,.5)}
-#readout{font-family:var(--mono); font-size:12px; color:var(--text-secondary);
-  min-height:3.2em; white-space:pre-line; margin-bottom:10px}
-h2{font-size:13px; color:var(--accent); letter-spacing:.06em; margin:18px 0 8px;
-  padding-bottom:6px; border-bottom:1px solid var(--border)}
-.kv{display:grid; grid-template-columns:auto 1fr; gap:4px 12px;
-  font-family:var(--mono); font-size:12px}
-.kv dt{color:var(--text-secondary)}
-.kv dd{margin:0; text-align:right; overflow:hidden; text-overflow:ellipsis}
-.setting{display:flex; align-items:center; gap:8px; margin-bottom:8px}
-.setting label{flex:1; font-size:12px; color:var(--text-secondary)}
-.setting input[type=range]{flex:1.2}
-.setting .val{font-family:var(--mono); font-size:12px; color:var(--accent); min-width:3.5em;
-  text-align:right}
-.cals{display:flex; gap:6px; flex-wrap:wrap}
-.cals button{background:var(--bg-card); color:var(--text-primary); border:1px solid var(--border);
-  border-radius:6px; padding:8px 12px; font-family:var(--mono); font-size:12px}
-#sweeps{list-style:none; padding:0; margin:0}
-#sweeps li{display:flex; align-items:center; gap:8px; padding:8px 0;
-  border-bottom:1px solid var(--border); font-size:12px}
+  background:rgba(18,18,15,.96); border:1px solid var(--accent); border-radius:9px;
+  padding:7px 10px; font-family:var(--mono); font-size:12px; line-height:1.55;
+  color:var(--fg); white-space:pre; box-shadow:0 6px 20px rgba(0,0,0,.6)}
+
+.bands{display:flex; gap:8px; overflow-x:auto; padding:2px 0 10px; -webkit-overflow-scrolling:touch}
+.bands button{
+  flex:0 0 auto; min-width:66px; padding:12px 14px; font-size:15px; font-weight:700;
+  border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--dim);
+}
+.bands button.on{background:var(--accent); border-color:var(--accent); color:#161512}
+.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
+button.primary{
+  flex:1; min-width:140px; padding:16px; font-size:17px; font-weight:800;
+  border:0; border-radius:12px; background:var(--accent); color:#161512;
+}
+button.primary:disabled{opacity:.45}
+button.ghost{background:var(--card); color:var(--fg); border:1px solid var(--line);
+  border-radius:10px; padding:12px 14px; font-size:14px}
+#readout{font-family:var(--mono); font-size:12px; color:var(--dim);
+  white-space:pre-line; min-height:2.4em; margin-bottom:6px}
+details{background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+  margin-top:12px; padding:0 14px}
+details>summary{padding:13px 0; font-size:14px; color:var(--dim); cursor:pointer; list-style:none}
+details>summary::-webkit-details-marker{display:none}
+details>summary:before{content:'▸ '; color:var(--accent)}
+details[open]>summary:before{content:'▾ '}
+h3{font-size:12px; color:var(--accent); letter-spacing:.08em; margin:16px 0 8px}
+.kv{display:grid; grid-template-columns:auto 1fr; gap:5px 12px;
+  font-family:var(--mono); font-size:12px; padding-bottom:10px}
+.kv dt{color:var(--dim)} .kv dd{margin:0; text-align:right}
+.setting{display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:13px}
+.setting label{flex:1; color:var(--dim)}
+select,input[type=number],input[type=text]{
+  background:var(--bg2); color:var(--fg); border:1px solid var(--line);
+  border-radius:8px; padding:9px 10px; font-size:14px; font-family:var(--mono);
+}
+.hint{font-size:11px; color:var(--muted); line-height:1.7; margin:8px 0}
+#sweeps{list-style:none; padding:0; margin:0 0 12px}
+#sweeps li{display:flex; align-items:center; gap:8px; padding:10px 0;
+  border-bottom:1px solid var(--line); font-size:12px}
 #sweeps li .lbl{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-#sweeps li button{background:transparent; border:1px solid var(--border); color:var(--text-secondary);
-  border-radius:5px; padding:4px 8px; font-size:11px}
-.hint{font-size:11px; color:var(--text-muted); line-height:1.6; margin:6px 0 0}
-.sw{display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:middle}
+#sweeps li button{background:transparent; border:1px solid var(--line);
+  color:var(--dim); border-radius:6px; padding:6px 10px; font-size:11px}
 </style>
 </head>
 <body>
 <header>
-  <span class="name">NanoVNA</span>
+  <span class="t">天线诊断</span>
   <span class="meta" id="meta">连接中…</span>
-  <button id="refresh">刷新</button>
 </header>
 <div id="banner"></div>
-
 <div id="tip"></div>
+
 <main>
-  <canvas id="plot" height="280"></canvas>
-  <div class="tabs" id="tabs">
-    <button data-tab="swr" class="on">SWR</button>
-    <button data-tab="smith">Smith</button>
-    <button data-tab="z">|Z|</button>
-    <button data-tab="rx">R+jX</button>
+  <div class="verdict" id="verdict">
+    <div class="band"><b id="v-band">—</b>
+      <span class="chip" id="v-chip">未扫描</span></div>
+    <div class="big">
+      <div class="item swr"><small>驻波 SWR</small><span id="v-swr">—</span></div>
+      <div class="item z"><small>阻抗 Z</small><span id="v-z">—</span></div>
+      <div class="item f"><small>谐振点</small><span id="v-f">—</span></div>
+    </div>
+    <div class="trim" id="v-trim">选一个波段，按「扫描」——1 秒出结果。</div>
   </div>
 
+  <canvas id="plot" height="260"></canvas>
+
+  <div class="bands" id="bands"></div>
+
   <div class="row">
-    <select id="preset">
-      <option value="1000000-54000000">1–54 MHz 全段</option>
-      <option value="1800000-30000000">1.8–30 MHz HF</option>
-      <option value="3500000-4000000">80m</option>
-      <option value="7000000-7300000">40m</option>
-      <option value="10100000-10150000">30m</option>
-      <option value="14000000-14350000">20m</option>
-      <option value="18068000-18168000">17m</option>
-      <option value="21000000-21450000">15m</option>
-      <option value="24890000-24990000">12m</option>
-      <option value="28000000-29700000">10m</option>
-      <option value="50000000-54000000">6m</option>
-    </select>
-    <label>中心</label><input type="number" id="center" step="0.1" min="0.05" max="900"
-      placeholder="MHz" style="width:84px">
-    <label>带宽</label><input type="number" id="span" step="0.1" min="0.01" max="899"
-      placeholder="MHz" style="width:84px">
-    <button id="apply-freq">应用</button>
-  </div>
-  <div class="row">
-    <select id="points">
-      <option value="101">101 点</option>
-      <option value="201">201 点</option>
-      <option value="401" selected>401 点</option>
-    </select>
     <button class="primary" id="scan">扫描</button>
+    <button class="ghost" id="baseline">存为基准</button>
   </div>
+  <div id="readout">驻波 ≤1.5 免调可用 · ≤2.0 天调可修 · &gt;3.0 不建议用</div>
 
-  <div id="readout">按「扫描」测一次。401 点约 1.3 秒。</div>
-
-  <h2>设备</h2>
-  <dl class="kv" id="devinfo"><dt>状态</dt><dd>—</dd></dl>
-  <p class="hint">测的是插在 CH0 上的那根东西。ATR-1000 若在线，测到的是天调的端口而不是天线本身。</p>
-
-  <h2>测量设置</h2>
-  <div id="settings"><p class="hint">连上设备后可改。</p></div>
-
-  <h2>设备显示</h2>
-  <div id="flags"><p class="hint">读取中…</p></div>
-  <p class="hint">这些开关在固件里**没有查询命令**，所以显示的是我们记下的状态，
-    实际以设备屏幕为准（按一下就立刻能看到变化）。</p>
-  <div class="row"><button id="saveconfig">保存到设备 flash</button></div>
-  <p class="hint">设备上的设置只存在 RAM，断电就回默认——改完点这里才真正写进去（含标定）。</p>
-
-  <h2>标定槽</h2>
-  <div class="cals" id="cal"></div>
-  <p class="hint">recall 立即生效；save 会覆盖设备里那一组，需要确认。</p>
-
-  <h2>这次扫描</h2>
-  <div class="row">
-    <input type="text" id="label" placeholder="标签，例如 40m 雨前" style="flex:1">
-    <button id="save">保存</button>
-    <button id="exportCsv">CSV</button>
-    <button id="exportS1p">s1p</button>
-  </div>
-
-  <h2>固件升级</h2>
-  <div id="firmware"><p class="hint">读取中…</p></div>
-  <p class="hint" style="color:var(--warning)">升级会整片擦除 flash：<b>标定槽与设置全部清空</b>，
-    升级后要在设备上重做 OPEN/SHORT/LOAD 标定；行为异常就 CONFIG → RESET AND CLEAR。
-    变体别猜：<b>看机器标签，硬件版本以 MS / SI / ZK 结尾</b>（官方 1.2.43 说明）。</p>
-  <details class="hint">
-    <summary>不放心网页升级？手动路径（Mac + dfu-util，官方标准流程）</summary>
-    <p>① 按标签定变体，下载对应 <code>.bin</code>（上面的目标版本选的就是官方 release）；<br>
-    ② 把 NanoVNA 插到 Mac，进 DFU：设备菜单 CONFIG 里有 DFU 项，或终端
-    <code>printf 'reset dfu\r' &gt; /dev/cu.usbmodem*</code>（屏幕会提示 DFU 模式）；<br>
-    ③ <code>brew install dfu-util</code>（如果没有），然后
-    <code>dfu-util -a 0 -s 0x08000000:leave -D NanoVNA-H4-MS_20260516.bin</code>；<br>
-    ④ 刷完拔插一次，开机看 <code>info</code> 的版本号；SI/MS 选错可在
-    CONFIG → EXPERT SETTINGS → MORE → MODE 里切换，只有 ZK 是真硬件区别；<br>
-    ⑤ 重做标定（设备上 CONFIG → CALIBRATE）。网页路径与这条用的是同一个 ROM bootloader，
-    刷坏只会停在 DFU，再刷一次即恢复。</p>
+  <details>
+    <summary>自定义频段 / 扫描点数</summary>
+    <div class="row">
+      <label>中心</label><input type="number" id="center" step="0.01" placeholder="MHz" style="width:92px">
+      <label>带宽</label><input type="number" id="span" step="0.01" placeholder="MHz" style="width:92px">
+      <button class="ghost" id="apply-freq">应用</button>
+    </div>
+    <div class="row">
+      <label>点数</label>
+      <select id="points">
+        <option value="101">101（0.3 秒）</option>
+        <option value="201">201（0.6 秒）</option>
+        <option value="401" selected>401（1.0 秒）</option>
+      </select>
+    </div>
   </details>
 
-  <h2>历史</h2>
-  <ul id="sweeps"><li>—</li></ul>
+  <details>
+    <summary>保存的扫描（对比修剪前后）</summary>
+    <div class="row">
+      <input type="text" id="label" placeholder="标签，如「修剪前」" style="flex:1">
+      <button class="ghost" id="save">保存</button>
+    </div>
+    <ul id="sweeps"><li>还没有存过扫描</li></ul>
+    <div class="row">
+      <button class="ghost" id="exportCsv">导出 CSV</button>
+      <button class="ghost" id="exportS1p">导出 s1p</button>
+    </div>
+  </details>
+
+  <details>
+    <summary>设备</summary>
+    <dl class="kv" id="devinfo"><dt>状态</dt><dd>—</dd></dl>
+    <h3>测量</h3>
+    <div id="settings"><p class="hint">连上设备后可改。</p></div>
+    <h3>设备屏幕</h3>
+    <div id="view"><p class="hint">读取中…</p></div>
+    <div id="flags"><p class="hint">读取中…</p></div>
+    <p class="hint">这些开关在固件里没有查询命令，显示的是本页记下的状态，实际以设备屏幕为准。</p>
+    <div class="row"><button class="ghost" id="saveconfig">写入设备 flash</button></div>
+    <p class="hint">设备上的设置只存在 RAM，断电回默认——改完点这里才真正保存（含标定）。</p>
+    <h3>标定</h3>
+    <div class="row" id="cal"></div>
+    <p class="hint">recall 立即生效；save 会覆盖设备里那一组，需要确认。</p>
+    <h3>固件升级</h3>
+    <div id="firmware"><p class="hint">读取中…</p></div>
+  </details>
 </main>
 
-<script src="nano.js?v=2"></script>
+<script src="nano.js?v=3"></script>
 </body>
 </html>

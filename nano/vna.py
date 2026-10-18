@@ -66,6 +66,13 @@ CONFIG_FLAGS = {
 }
 FORBIDDEN_CONFIG_FLAGS = {"connection", "tif"}
 
+# `trace <n> <type>` 接受的格式名（固件 cmd_type_list 原文）。
+TRACE_TYPES = (
+    "logmag", "phase", "delay", "smith", "polar", "linear", "swr", "real",
+    "imag", "r", "x", "z", "zp", "g", "b", "y", "rp", "xp", "cs", "ls",
+    "cp", "lp", "q", "rser", "xser", "zser", "rsh", "xsh", "zsh", "q21",
+)
+
 
 class NanoError(Exception):
     """NanoVNA 通信或协议层的失败。"""
@@ -463,6 +470,51 @@ class NanoVna:
         if name not in CONFIG_FLAGS:
             raise ValueError("unknown config flag: %r" % (name,))
         self._ask("config %s %d" % (name, 1 if on else 0))
+
+    # 屏幕上画什么 --------------------------------------------------
+    # `trace` 是固件里唯一"可读可写"的显示设置：格式、通道、刻度、参考位置。
+    # 30 种格式里常用的那几个在这里就够了，其余照原样接受（页面按名字下发）。
+    def read_traces(self) -> list:
+        out = []
+        for line in self._ask("trace").splitlines():
+            parts = line.split()
+            if len(parts) >= 3:
+                out.append({"id": int(parts[0]), "type": parts[1],
+                            "channel": parts[2],
+                            "scale": float(parts[3]) if len(parts) > 3 else None,
+                            "refpos": float(parts[4]) if len(parts) > 4 else None})
+        return out
+
+    def set_trace_type(self, n: int, type_name: str, src: int = 0) -> None:
+        if type_name not in TRACE_TYPES:
+            raise ValueError("unknown trace type: %r" % (type_name,))
+        if src not in (0, 1):
+            raise ValueError("src must be 0 (S11) or 1 (S21)")
+        self._ask("trace %d %s %d" % (int(n), type_name, int(src)))
+
+    def set_trace_param(self, n: int, param: str, value: float) -> None:
+        if param not in ("scale", "refpos"):
+            raise ValueError("param must be scale|refpos")
+        self._ask("trace %d %s %g" % (int(n), param, float(value)))
+
+    def disable_trace(self, n: int) -> None:
+        self._ask("trace %d off" % int(n))
+
+    def read_markers(self) -> list:
+        out = []
+        for line in self._ask("marker").splitlines():
+            parts = line.split()
+            if len(parts) >= 3:
+                out.append({"id": int(parts[0]), "index": int(parts[1]),
+                            "freq_hz": int(parts[2])})
+        return out
+
+    def set_marker(self, on: bool) -> None:
+        self._ask("marker %s" % ("on" if on else "off"))
+
+    def set_marker_index(self, n: int, index: int) -> None:
+        """把第 n 个标记移到扫描点 ``index``（屏幕上立刻可见）。"""
+        self._ask("marker %d %d" % (int(n), int(index)))
 
     def save_config(self) -> None:
         """把当前设置（含标定）写进设备 flash —— 不写就只是 RAM 里的临时状态。"""

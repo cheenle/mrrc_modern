@@ -5935,6 +5935,91 @@ async def api_nano_scan(request: Request):
     return JSONResponse(payload)
 
 
+@app.post("/api/nano/marker")
+async def api_nano_marker(request: Request):
+    """把 1 号标记挪到第 N 个扫描点 —— 图上点一下，设备屏幕上跟着动。"""
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_tx_active():
+        return JSONResponse({"error": "tx_active"}, status_code=409)
+    try:
+        body = await request.json()
+        index = int(body["index"])
+    except (KeyError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+    if index < 0 or index > 400:
+        return JSONResponse({"error": "bad_request", "detail": "index out of range"},
+                            status_code=400)
+    if _nano_lock.locked():
+        return JSONResponse({"error": "busy"}, status_code=409)
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            await asyncio.to_thread(dev.set_marker_index, 0, index)
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+    return JSONResponse({"ok": True, "index": index})
+
+
+@app.get("/api/nano/view")
+async def api_nano_view(request: Request):
+    """设备屏幕上正在画什么（迹线格式 + 标记）—— 固件里唯一可读回的显示状态。"""
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_lock.locked():
+        return JSONResponse({"busy": True, "traces": [], "markers": []})
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            traces = await asyncio.to_thread(dev.read_traces)
+            markers = await asyncio.to_thread(dev.read_markers)
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+    return JSONResponse({"traces": traces, "markers": markers,
+                         "types": list(nano_vna_types())})
+
+
+def nano_vna_types() -> tuple:
+    from nano.vna import TRACE_TYPES
+    return TRACE_TYPES
+
+
+@app.post("/api/nano/trace")
+async def api_nano_trace(request: Request):
+    """改设备屏幕上的迹线格式/通道（logmag、swr、smith、phase…）。"""
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_tx_active():
+        return JSONResponse({"error": "tx_active"}, status_code=409)
+    try:
+        body = await request.json()
+        type_name = str(body["type"])
+        src = int(body.get("src", 0))
+        trace_id = int(body.get("id", 0))
+    except (KeyError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+    if _nano_lock.locked():
+        return JSONResponse({"error": "busy"}, status_code=409)
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            await asyncio.to_thread(dev.set_trace_type, trace_id, type_name, src)
+        except ValueError as exc:
+            return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+    return JSONResponse({"ok": True})
+
+
 @app.post("/api/nano/settings")
 async def api_nano_settings(request: Request):
     gate = _nano_gate(request)

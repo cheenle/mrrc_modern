@@ -73,9 +73,18 @@ curl -fsS -o "$TMP/index.html" "$BASE_URL/index.html"
 curl -fsS -o "$TMP/zh.html"    "$BASE_URL/zh/index.html"
 
 python3 - "$TMP" "$VERSION" "$SIZE" "$SHA" <<'PY'
+import os
 import re, sys
 tmp, version, size, sha = sys.argv[1:5]
 mb = f"{int(size) / 1048576:.1f} MB"
+
+# 可选的本版额外提醒（例：2026-10-18 换签名密钥，已装旧版必须卸载重装）。
+# 用环境变量传，空则不加；下一版不带该变量，卡片自动回到标准文案。
+NOTE_EXTRA_EN = os.environ.get("CARD_NOTE_EN", "").strip()
+NOTE_EXTRA_ZH = os.environ.get("CARD_NOTE_ZH", "").strip()
+
+def with_extra(note, extra):
+    return f"{note}<br>{extra}" if extra else note
 
 def patch(path, prefix, label, note):
     html = open(path, encoding="utf-8").read()
@@ -98,9 +107,9 @@ def patch(path, prefix, label, note):
     open(path, "w", encoding="utf-8").write(html)
 
 patch(f"{tmp}/index.html", "downloads/", f"Download APK v{version} (Android 8.0+)",
-      "Install: allow “install unknown apps”, then open the APK.")
+      with_extra("Install: allow “install unknown apps”, then open the APK.", NOTE_EXTRA_EN))
 patch(f"{tmp}/zh.html", "../downloads/", f"下载 APK v{version}（Android 8.0+）",
-      "安装：系统设置允许「安装未知应用」后点开 APK。")
+      with_extra("安装：系统设置允许「安装未知应用」后点开 APK。", NOTE_EXTRA_ZH))
 print("patched (只有 Android 行被改写)")
 PY
 
@@ -144,11 +153,17 @@ echo "== Android 卡片 v$VERSION 已上线，且 APK 线上 SHA 与卡片一致
 # 用与上面 patch() 逐字相同的块构造，所以两边收敛到字节一致。
 if [ -f "$WEBSITE_DIR/index.html" ] && [ -f "$WEBSITE_DIR/zh/index.html" ]; then
   python3 - "$WEBSITE_DIR" "$VERSION" "$SIZE" "$SHA" <<'PY'
+import os
 import re, sys
 site, version, size, sha = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 mb = f"{size / 1048576:.1f} MB"
+NOTE_EXTRA_EN = os.environ.get("CARD_NOTE_EN", "").strip()
+NOTE_EXTRA_ZH = os.environ.get("CARD_NOTE_ZH", "").strip()
 
 def patch(path, prefix, label, install):
+    extra = NOTE_EXTRA_EN if prefix == "downloads/" else NOTE_EXTRA_ZH
+    if extra:
+        install = f"{install}<br>{extra}"
     note = (f"MRRC-Modern-v{version}-Android.apk · {mb} · SHA-256 <code>{sha}</code><br>{install}")
     block = (
         "<!-- android-download:start -->\n"

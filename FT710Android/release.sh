@@ -70,6 +70,7 @@ fi
 
 update_block() {  # $1=页面文件 $2=下载链接前缀 $3=语言(zh|en)
   python3 - "$1" "$2" "$3" "$VERSION" "$SIZE" "$SHA" <<'PY'
+import os
 import re, sys
 page, prefix, lang, version, size, sha = sys.argv[1:7]
 html = open(page, encoding="utf-8").read()
@@ -82,6 +83,10 @@ else:
     label = f"Download APK v{version} (Android 8.0+)"
     note = (f"MRRC-Modern-v{version}-Android.apk · {mb} · SHA-256 <code>{sha}</code><br>"
             "Install: allow “install unknown apps”, then open the APK.")
+# 可选的本版额外提醒（同 publish-card.sh：换签名密钥这类只对这一版成立的告知）
+extra = os.environ.get("CARD_NOTE_ZH" if lang == "zh" else "CARD_NOTE_EN", "").strip()
+if extra:
+    note = note + "<br>" + extra
 block = (
     "<!-- android-download:start -->\n"
     f'<p><a class="btn btn-primary btn-large" href="{prefix}MRRC-Modern-Android.apk">'

@@ -60,15 +60,24 @@ cd FT710Android
 ## 5. 签名与发布（v1.0.0 起）
 
 - keystore：`~/.android-keystores/mrrc-modern-release.jks`（别名 `mrrc-modern`，RSA 4096，**仓库外**）
-- 证书指纹（SHA-256）：`A0:9E:13:64:A7:DD:C0:08:EC:EE:5D:0C:5A:98:A6:09:19:73:94:25:B8:D3:F0:78:67:68:14:C4:31:44:65:0B`
-- 口令与路径：`FT710Android/keystore.properties`（gitignore，仅本机）。**丢失 keystore 将无法覆盖升级**，请单独备份文件与口令。
-  换 checkout（如 worktree 合并后）时重建该文件：
+- 证书指纹（SHA-256）：`78:35:3A:40:EC:C1:56:55:D0:04:0F:F1:75:6F:1C:13:33:90:12:30:0C:34:E6:51:BC:5F:D8:04:9D:8A:54:99`（2026-10-18 起；旧密钥 `mrrc-modern-release.legacy-20261003.jks` 指纹 `A0:9E:13:64:…:65:0B`，口令已丢失，仅作留档）
+- 口令：**三份**——`FT710Android/keystore.properties`（gitignore，0600，构建读的那份）、`~/.android-keystores/mrrc-modern-release.properties`（0600，仓库外备份）、macOS 钥匙串 `security find-generic-password -s mrrc-modern-android-keystore -w`。
+
+  > ⚠ 历史：v1.0.0~v1.1.31 用的旧 keystore 口令是生成时随机打的，只打印过一次，后来**真丢了**（2026-10-18：`keystore.properties` 被换 checkout 清掉，全盘 find / shell 历史 / 钥匙串 / `~/.gradle` 都没有，`app/build.gradle.kts` 也没有 env 回退）。所以现在口令存三份，且 `keystore.properties` 丢了照下面重建。
+
+  > `app/build.gradle.kts` **刻意**没有环境变量回退：文件缺失就让 `assembleRelease` 失败，绝不静默产出 debug 签名的“正式版”。
+
+  换 checkout（如 worktree 合并后）时从备份重建该文件：
 
 ```bash
 umask 077
-printf 'storeFile=%s\nstorePassword=<口令>\nkeyAlias=mrrc-modern\nkeyPassword=<口令>\n' \
-  "$HOME/.android-keystores/mrrc-modern-release.jks" > FT710Android/keystore.properties
+cp ~/.android-keystores/mrrc-modern-release.properties FT710Android/keystore.properties
+# 或手工：printf 'storeFile=%s\nstorePassword=<口令>\nkeyAlias=mrrc-modern\nkeyPassword=<口令>\n' \
+#   "$HOME/.android-keystores/mrrc-modern-release.jks" > FT710Android/keystore.properties
 ```
+
+- **2026-10-18 换过签名密钥（v1.1.32 起）**：签名变了 ⇒ 已装旧版的手机**不能覆盖升级**（Android 报“应用未安装”），必须先卸载 App 再装新包；卸载会清掉 `SettingsStore` 里的服务器地址/口令/云端凭据（需要重新登录、重新接入云端）。官网 Android 卡片同期打了一行提醒（`CARD_NOTE_ZH`/`CARD_NOTE_EN`，见下），下一版不带该变量即自动消失。
+- 今后换密钥、改 `versionCode` 方向**只能往上**；真要换密钥请先按上面三点把旧口令确认在手，否则就是这一次的下场。
 
 - 发布是**两条命令**，边界明确（详见 `CLAUDE.md` 的"发布纪律"）：
 

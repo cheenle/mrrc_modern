@@ -33,6 +33,24 @@ App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸�
 - 改写 `recording state turns the bottom bar REC key into STOP…`：录音中键面是 `STOP`、`REC` 一处不剩、工具行仍显示 `1:23`
 - 顶栏用例改为断言**任何位置都没有 ⏺ 的语义**（`录音` / `停止录音（录音中）` 计数 0）——防止以后又把图标挂回顶栏
 
+### ⚠ 换了签名密钥：已装旧版必须**先卸载**再安装
+
+发布时 `keystore.properties` 不在这台机器上（gitignore，换 checkout 时丢了），而旧 keystore 的口令是
+2026-10-03 随机生成、只向用户打印过一次：全盘 find / shell 历史 / macOS 钥匙串 / `~/.gradle`
+都没有留存（`app/build.gradle.kts` 刻意没有 env 回退）—— **旧密钥已不可用**，只能换新的。
+
+用户侧后果：
+
+- 已装 v1.1.31 及更早版本的手机会报**「应用未安装」**：Android 不允许换签名覆盖升级
+- 必须先**卸载**旧 App 再装新包；卸载会清掉 `SettingsStore`（服务器地址/口令/云端凭据）→ 需重新登录/重接云端
+
+防复发：
+
+- 新口令存三份：`FT710Android/keystore.properties`（0600）、`~/.android-keystores/mrrc-modern-release.properties`（0600）、
+  macOS 钥匙串 `mrrc-modern-android-keystore`
+- 新指纹（SHA-256）记入 `BUILD_GUIDE.md` §5；旧 keystore 留档 `mrrc-modern-release.legacy-20261003.jks`
+- 官网 Android 卡片这一版额外带一行卸载提醒（`CARD_NOTE_ZH`/`CARD_NOTE_EN`，下一版不带该变量即自动消失）
+
 ## [1.1.31] — 2026-10-08
 
 ### 🔴 修复：登录页文字看不见（黑字压近黑底，实测对比度 1.07:1）

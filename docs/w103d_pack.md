@@ -123,7 +123,15 @@ rootfs free before overlay: 963 MiB
 版本号、`release-artifacts.json` 的规则、网站下载卡、以及带 SHA 的线上复核。
 本手册不重复那套流程。
 
-**已发布（2026-10-11，第二次构建）**：
+**当前对外发布（2026-10-18）**：`MRRC-Modern-1.28.1-w103d.img.gz`，**预置（`--preflash`）即发布**——
+三条口令固定、时区与区域已设，用户开箱不需要任何初始化（见 `W103D_GUIDE.md` §7）。
+
+```
+https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.1-w103d.img.gz
+1,221,443,860 bytes   SHA-256 ee1fba1e5e5057eed7603e636547299ae5cf82bd321d0202e72ad9a8e0cde473
+```
+
+**历史记录（2026-10-11，第二次构建，已下架）**：
 
 ```
 https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.25.5-w103d.img.gz

@@ -491,9 +491,17 @@ def build_page(toc: str, body_html: str, lang: str, title_id: str = "") -> str:
         page = page.replace('href="css/', 'href="../css/')
         page = page.replace('src="js/global-nav.js', 'src="../js/global-nav.js')
         page = page.replace('src="images/', 'src="../images/')
+        page = page.replace('href="downloads/', 'href="../downloads/')
+        page = page.replace('src="downloads/', 'src="../downloads/')
         page = page.replace('href="guide.html"', 'href="../guide.html"')
+        page = page.replace('class="lang-btn">中文', 'class="lang-btn">EN')
         # sidebar links in the zh copy must keep same-page anchors
         page = page.replace('class="guide-toc"', 'class="guide-toc"')
+    else:
+        # The nav template is shared and carries the zh page's language link;
+        # the en copy lives at the site root, so `../zh/guide.html` resolved to
+        # /zh/guide.html (404). Point it at the sibling directory instead.
+        page = page.replace('href="../zh/guide.html"', 'href="zh/guide.html"')
     return page
 
 ROOT = Path(__file__).resolve().parent.parent

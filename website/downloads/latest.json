@@ -1,19 +1,13 @@
 {
-  "latest": "1.28.0",
+  "latest": "1.28.1",
   "installer": {
-    "version": "1.28.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.0-Windows-x64-Setup.exe",
-    "sha256": "cc8cc4fb36289a4efc6719981b993f3d63b59d7d27e17ef62149b401239d9bea",
-    "size": 79370813
+    "version": "1.28.1",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe",
+    "sha256": "cfbeacc75e899ed1ff04a6a9da5a9d37d3f0200d89b77440215266eddde33938",
+    "size": 79386940
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-17T00:35:51",
-  "notes": "1.28.0：电台电源回到 ☰ 菜单（「重开电台」关机后每 30 秒再试唤醒，最多 15 分钟、随时可取消；「关机」只关机、绝不上电）；菜单最下边显示当前版本号；出站 HTTPS 只信随包根证书，不再采信本机证书库；FT8 级联的决策截止 2.5→4.0 s —— 此前深路径在生产里一次也没跑过，现在日志与 FT8 页面都能看到升级率。修复：按发射后进程消失、电台卡在发射（PortAudio 重初始化不得在 RX 流仍开着时 terminate）；打包版 FT8 缺 cty.dat 导致 DXCC 国家名静默失效。",
-  "previous": {
-    "version": "1.27.0",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.27.0-Windows-x64-Setup.exe",
-    "sha256": "c0cb82251511df40c4fae3d359bc0e298c73e92d75298b6f0d6182d3d6e755be",
-    "size": 79263639
-  }
+  "releasedAt": "2026-10-18T17:45:00",
+  "notes": "1.28.1：云入口不会再把实例证书孤儿化——同名且可用的证书会被逐字节复用，重建入口页后点一次「连接」即可自愈（现场整夜 502 的根因）；FT8 深路径的 DSP worker 不再被原生 Fortran 的 stop 当场杀掉，worker 自己的日志落到 logs/ft8-worker.log 并被诊断包收集；静态资源实现条件 GET（304）与分层缓存，首屏不再每次重传 534 KB 的 WASM。修复：带扩展名的缺失静态文件回 404（此前会拿到 40 KB 的首页并被当成图标）。"
 }

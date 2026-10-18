@@ -955,13 +955,68 @@ poweroff                # unplug the stick, power on: it boots from eMMC from no
           recording at once is where you start counting.
         </li>
         <li>
-          <strong>This is not a retail product</strong>: it is one box we run
-          ourselves. The image, the build scripts and this whole diagnostic
-          record are in the repository, so anyone willing to spend an evening
-          can reproduce it. If you would rather not, the N100 or the Raspberry
-          Pi from sections 2 and 3 is your answer.
+          <strong>It is not a mass-market product</strong>: it is one box we run
+          ourselves, now shipped pre-flashed to a handful of people. The image,
+          the build scripts and this whole diagnostic record are in the
+          repository, so anyone willing to spend an evening can reproduce it.
+          If you would rather not, the N100 or the Raspberry Pi from sections 2
+          and 3 is your answer.
         </li>
       </ul>
+
+      <h2>9. Ten days later: what the same box grew into</h2>
+      <p>
+        This article was written on 2026-10-11. What changed since is not the
+        box — the ¥125 box is the same box — but the software around it. Five of
+        those changes matter to anyone who reads this and wants one:
+      </p>
+      <ul>
+        <li>
+          <strong>The downloadable image is now the ship-ready one.</strong>
+          <code>MRRC-Modern-1.28.1-w103d.img.gz</code> comes pre-configured:
+          the three passwords are fixed, timezone and locale are set, so the
+          box is usable the moment it boots. Change those passwords first —
+          they are public knowledge for everyone who has the same image.
+        </li>
+        <li>
+          <strong>The box has its own settings page.</strong>
+          <code>/settings</code> covers
+          Wi-Fi (scan, or type the SSID by hand), the wired port, the hostname,
+          a network check-up, the system account passwords, and the Cloud Hub
+          entry request — that last one used to be buried three dialogs deep in
+          the radio UI.
+        </li>
+        <li>
+          <strong>A Bluetooth remote drives the radio directly.</strong> Pair
+          it in <code>/settings</code>, then tune, change mode, set AF gain and
+          key PTT from the sofa. The key map and the one trap that makes a
+          paired remote look dead are in the
+          <a href="w103d-remote.html">remote guide</a>.
+        </li>
+        <li>
+          <strong>The server took on more radio work.</strong> FT8 as a
+          work mode (decoding on the box, one slot at a time, about a fifth
+          of the box's CPU), the <code>/sdr</code> page listening to the same antenna through
+          an SDRplay, and — in the repository, not yet in this image — a
+          NanoVNA-H antenna bench at <code>/Nano</code>. None of them are in
+          the section 8 table; all of them are in the operation guide.
+        </li>
+        <li>
+          <strong>The box can update itself.</strong> One card in
+          <code>/settings</code> checks, downloads, verifies, backs up, applies
+          and restarts — and rolls back by itself if the new version does not
+          answer within 90 seconds. It merged after this image was built, so
+          the next image carries it; the mechanism is already in the
+          repository.
+        </li>
+      </ul>
+      <p>
+        The conclusion of section 7 has not changed: the win is that the radio
+        is back where it belongs and the desk no longer needs a computer. What
+        changed is how little the person in front of it has to do — the seller
+        can hand over a flashed box, and the operator configures it from a
+        browser, or not at all.
+      </p>
 
       <p class="foot">
         Written 2026-10-11, the day this box went live — and the day receive,
@@ -971,12 +1026,15 @@ poweroff                # unplug the stick, power on: it boots from eMMC from no
         one-line test for each of the six defects.
         <em
           >Updated 2026-10-12: step ⑤ (install onto the box itself) and public
-          access were added the next day.</em
+          access were added the next day. Updated 2026-10-18: the downloadable
+          image is now the pre-configured ship-ready build (1.28.1), and
+          section 9 lists what the box grew into since.</em
         >
         The image is on the
-        <a href="downloads/MRRC-Modern-1.25.5-w103d.img.gz">download page</a>;
-        step-by-step operation is in the
-        <a href="w103d.html">W103D guide</a>.<br />
+        <a href="index.html#download">download page</a>
+        (<code>MRRC-Modern-1.28.1-w103d.img.gz</code>); step-by-step operation
+        is in the <a href="w103d.html">W103D guide</a>, and the pre-flashed
+        path is the <a href="w103d-user.html">user guide</a>.<br />
         中文版：<a href="zh/w103d-radio-box.html">125 元的盒子</a>
       </p>
     </main>

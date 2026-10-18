@@ -429,35 +429,34 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <span class="section-label">Remote Access</span>
 <h2 class="section-title">Cloud Hub — One Address, Anywhere</h2>
 <p class="section-subtitle">
-            Your station keeps running at home — the computer or the W103D box. No public IP,
-            no port forwarding, no router changes: the instance dials <em>out</em> to the hub,
-            and the same radio is reachable from a browser anywhere.
+            Your station stays at home, the computer or the W103D box. It dials <em>out</em> to the
+            hub and you work the same radio from a browser. Nothing on your router is touched.
           </p>
 </div>
 <div class="features-grid">
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-shield-halved"></i></div>
-<h3>Zero inbound on your side</h3>
-<p>One outbound connection. No public IP, no port forwarding, no UPnP — home
-            broadband, 4G/5G and office networks all work the same way.</p>
+<h3>Zero inbound</h3>
+<p>The box only dials out, never opens a port. Your router does not have to change.
+            Home broadband, 4G/5G, an office network: the same.</p>
 </div>
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-at"></i></div>
-<h3>One call sign, one entry</h3>
+<h3>One call sign, one door</h3>
 <p><code>&lt;call&gt;.mrrc.vlsc.net</code> is the entry point. The call sign is both the
             tenant and the account — there is no second username to maintain.</p>
 </div>
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-hand"></i></div>
-<h3>PTT release stays local</h3>
-<p>The hub is a pipe and never writes PTT. A dropped link is turned into RX by the machine
-            next to the radio, not by a cloud lease timeout.</p>
+<h3>PTT stays local</h3>
+<p>The hub carries traffic and never keys the radio. When the link dies, the machine beside
+            the radio puts it back on receive — not a timer in the cloud.</p>
 </div>
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-lock"></i></div>
-<h3>Certificate checked hop by hop</h3>
-<p>End-to-end TLS: a real certificate from browser to hub, and the hub verifies your own
-            instance certificate by name. No hop is paid for by disabling verification.</p>
+<h3>Verified hop by hop</h3>
+<p>A real certificate from browser to hub, and the hub checks yours by name.
+            No hop is paid for by switching verification off.</p>
 </div>
 </div>
 <div style="margin-top:2rem">
@@ -466,8 +465,8 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
                  style="width:100%;height:auto;border-radius:var(--scope-radius);border:1px solid var(--scope-border);"/>
 </div>
 <p class="section-subtitle" style="margin-top:1rem">
-            The router in this picture can equally be a Wi-Fi AP — the box just needs to be on
-            the same network as the phone. Radio chain stays local; only the tunnel leaves the house.
+            The router in this picture can be a Wi-Fi AP instead. The box only has to share a network
+            with the phone. <b>The tunnel leaves the house; the RF does not.</b>
             <a href="https://www.vlsc.net/mrrc_hub/" rel="noopener">Full Cloud Hub site →</a>
           </p>
 </div>

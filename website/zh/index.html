@@ -391,37 +391,32 @@
 <div class="container">
 <div class="section-header">
 <span class="section-label">远程接入</span>
-<h2 class="section-title">Cloud Hub —— 一个地址，人在哪都能用</h2>
+<h2 class="section-title">Cloud Hub：电台留守，人可远行</h2>
 <p class="section-subtitle">
-            你的台站继续留在家里（电脑或 W103D 盒子），电台和天线都不动。
-            不需要公网 IP、不需要端口映射、不用动路由器：实例<b>主动出站</b>连上 Hub，
-            你就能从任何地方用浏览器操作同一台电台。
+            电台和天线不动，盒子照旧留在家里。它自己往外拨一条连接，你在浏览器里就能开台。
+            公网 IP、端口映射、路由器设置，一样都不用碰。
           </p>
 </div>
 <div class="features-grid">
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-shield-halved"></i></div>
-<h3>客户侧零入站</h3>
-<p>只出一条常驻的主动连接。没有公网 IP、没有端口映射、不用 UPnP —— 家庭宽带、
-            4G/5G、公司网都能跑。</p>
+<h3>零入站</h3>
+<p>盒子只往外拨，不朝外开口子。路由器不用动。家庭宽带、4G、公司网，一样跑。</p>
 </div>
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-at"></i></div>
-<h3>一个呼号一个入口</h3>
-<p>入口就是 <code>&lt;呼号&gt;.mrrc.vlsc.net</code>。呼号既是租户名也是账号标识，
-            不用再维护另一套用户名体系。</p>
+<h3>一呼号一门</h3>
+<p>入口就是 <code>&lt;呼号&gt;.mrrc.vlsc.net</code>。呼号即账号，不必另起一套用户名。</p>
 </div>
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-hand"></i></div>
-<h3>PTT 释放永远在本地</h3>
-<p>Hub 只是一条通道，从不写 PTT。断线、掉网一律由电台所在的那台机器本地强制回 RX，
-            不依赖云端租约超时。</p>
+<h3>PTT 归本地</h3>
+<p>Hub 只传话，从不按发射。掉线那刻把电台扳回接收的，是它旁边那台机器，不是云上的计时器。</p>
 </div>
 <div class="feature-card animate">
 <div class="icon"><i class="fas fa-lock"></i></div>
-<h3>逐跳校验证书</h3>
-<p>整条链路端到端 TLS：浏览器到 Hub 用真证书，Hub 到你的实例按你自己的入口名逐台校验。
-            没有哪一跳是靠关掉校验换来的。</p>
+<h3>逐跳验签</h3>
+<p>浏览器到 Hub 用真证书，Hub 到你的盒子按入口名逐台校验证书。没有哪一跳，是靠关掉校验换来的。</p>
 </div>
 </div>
 <div style="margin-top:2rem">
@@ -430,8 +425,8 @@
                  style="width:100%;height:auto;border-radius:var(--scope-radius);border:1px solid var(--scope-border);"/>
 </div>
 <p class="section-subtitle" style="margin-top:1rem">
-            图里那个路由器同样可以是 <b>Wi-Fi AP</b> —— 只要盒子和手机在同一个网里。
-            射频链留在本地，出屋子的只有那条隧道。
+            图里那台路由器，换成 Wi-Fi AP 也一样。盒子与手机同网即可直连。<br/>
+            <b>隧道出屋，射频不出屋。</b>
             <a href="https://www.vlsc.net/mrrc_hub/" rel="noopener">Cloud Hub 完整站点 →</a>
           </p>
 </div>

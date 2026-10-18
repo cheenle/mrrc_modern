@@ -248,7 +248,7 @@
             <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
         </ul>
         <div class="nav-actions">
-            <a href="../guide.html" class="lang-btn">中文</a>
+            <a href="../guide.html" class="lang-btn">EN</a>
             <button class="mobile-menu-toggle" onclick="toggleMobileMenu()"><i class="fas fa-bars"></i></button>
         </div>
     </div>
@@ -1574,7 +1574,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 (URLError: &lt;urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
 certificate has expired (_ssl.c:1000)&gt;)</code></pre>
 <p><strong>这不是门户、也不是网络的问题</strong>：这句话本身就说明 DNS、TCP、TLS 握手都已打通 —— 是应用在 <strong>拿到证书之后自己拒绝</strong>的。原因是这台 Windows 的<strong>本机证书库</strong>里留着一份与被服务链条同名同密钥、 却已经过期的证书（Windows 会把见过的中间证书缓存进 CA 存储；Let’s Encrypt 的中间证书会换代重签， 缓存那份到期后正是这个形态）。应用走的那条 Python/OpenSSL 路径只认本机证书库，于是把库里那张 放进链里判它过期 —— 而<strong>浏览器用自己那套根与链构建，不吃本机 CA 缓存</strong>，所以照常能开。 「浏览器能上、应用不能」正是这个故障最好认的特征。</p>
-<p><strong>处理办法</strong>：下载 <a href="downloads/MRRC-CertDoctor.zip">MRRC-CertDoctor.zip</a>（约 4.6 MB，<strong>整个解压</strong>后 双击 <code>MRRC-CertDoctor.cmd</code>；源码在仓库 <code>tools/windows/MRRC-CertDoctor.ps1</code>）。它只做三件事：</p>
+<p><strong>处理办法</strong>：下载 <a href="../downloads/MRRC-CertDoctor.zip">MRRC-CertDoctor.zip</a>（约 4.6 MB，<strong>整个解压</strong>后 双击 <code>MRRC-CertDoctor.cmd</code>；源码在仓库 <code>tools/windows/MRRC-CertDoctor.ps1</code>）。它只做三件事：</p>
 <ol type="1">
 <li><strong>体检（默认只读，不改任何东西）</strong>：时钟/校时、代理设置、DNS 与 TCP、应用日志里那条报错原文、 门户实际下发的证书链、本机四张证书库里 Let’s Encrypt / ISRG 家族的清单；</li>
 <li><strong>判定</strong>：把本机证书库导出成 PEM，用随包自带的 openssl 对那条链做 <code>verify</code> —— 给出的判词与 应用那条路径一致（这就是它自带 openssl 的原因：换别处的 openssl，判词就不可比了）；</li>

@@ -437,6 +437,20 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | Operator | Full control, authenticated with `MRRC_WEB_PASSWORD` — every control in the tables above |
 | Listen-only | A **second, independent password** (`MRRC_LISTEN_PASSWORD`, empty = off) logs into `/listen`: frequency and mode tuning, memory recall, S-meter, waterfall and RX audio with browser-side volume. Enforced **server-side**, not by hiding buttons: the `/WSradio` role gate passes only `ping`/`get`/`memLoadAll`/`memRecall` and `set` on `freq`/`vfo_a_freq`/`vfo_b_freq`/`mode`, `/WSaudioTX` and `/WSatr1000` close with 4003, and non-GET `/api/*` returns 403 (except logout). Setting both passwords to the same value grants full control. `deploy_listen_proxy.sh` publishes it on a public host (idempotent nginx block, direct IPv6 reverse proxy) |
 
+### Antenna Bench (NanoVNA-H, AD-030)
+
+Rules out the antenna itself instead of inferring it from reflected power. A NanoVNA-H on the box's USB
+shows up at `/Nano` (logged in with the normal password; listen-only and SDR sessions are refused).
+
+| Feature | Implementation |
+| --------- | --------------- |
+| Hardware | NanoVNA-H / H4 (`0483:5740` ChibiOS CDC-ACM → `/dev/ttyACM0`), found by `MRRC_NANO_PORT` → `by-id` → `/dev/ttyACM*`, and never the radio's CAT port |
+| Speed | 401 points across 1–54 MHz in **1.0–1.3 s** (binary `scan_bin` frame, 4.8 KB); 101 points in 0.32 s |
+| Traces | SWR vs frequency (log axis), Smith chart, `\|Z\|`, `R+jX`; resonance plateaus marked, an isolated 1.00 flagged red as a reading glitch rather than a match |
+| Data | Raw complex S11 only (everything else is derived), saved as JSON with atomic writes; overlays for dry/wet comparison; CSV and Touchstone `s1p` export |
+| Safety | Refused while the radio transmits (the VNA sees the antenna), one operation at a time, device sweep restored after every scan, `tcxo`/destructive commands kept out of the page |
+| Knobs | `MRRC_NANO` (on/off), `MRRC_NANO_PORT`, `MRRC_NANO_DIR`; firmware flashing (`dfu-util` + `0483:df11`) is phase 2 and locked behind `MRRC_NANO_ALLOW_FLASH=1` |
+
 ### SDR Receiver (box only, AD-029)
 
 A public web receiver on the box, completely separate from radio control: its own password, its own

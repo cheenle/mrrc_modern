@@ -94,6 +94,7 @@
 | [docs/ft8-dl-technical-review-packet.md](docs/ft8-dl-technical-review-packet.md) | FT8 深度学习技术评审包 | 架构师 |
 | [docs/2026-10-03-two-model-retrospective.md](docs/2026-10-03-two-model-retrospective.md) | 两款机型接入的复盘 | 所有人 |
 | [docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md](docs/2026-10-11-cloud-hub-instance-lifecycle-findings.md) | Cloud Hub 实例生命周期实况发现 | 运维/架构师 |
+| [docs/ftx1-technical-analysis.md](docs/ftx1-technical-analysis.md) | **FTX-1 深度技术分析 + CAT 一致性对照**（依据 Yaesu 官方 CAT 手册 + 第三方真机实现）：六个 CPU 的拓扑、三条串口、AI 只推一半、双接收的通道位陷阱、`SS` 能设不能读、`EX` 是 5 段寻址的菜单寄存器表；**附录 C 把本仓发出的 38 条命令逐条对照手册（20 项不符，含 6 条命令 FTX-1 没有）**，第十二节按五类给出修法与“哪些只能上机确认” | 架构师/高级开发 |
 | [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) / [docs/DOCUMENT_UPDATE_COMPLETION.md](docs/DOCUMENT_UPDATE_COMPLETION.md) | **历史报告（2026-08-17，多电台后端那轮）** —— 不是当前状态，现状看 [PROJECT_MAP.md](PROJECT_MAP.md) | 文档维护者 |
 
 ### 📱 iOS App (FT710Mobile/)
@@ -127,6 +128,8 @@
 | [docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md](docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md) | **FT8 快路径 + 自适应级联**设计 spec（默认走 `ft8_lib` 快路径、按需补跑深路径并取并集；含 2026-10-13 A53 spike 回填） | 架构师 |
 | [docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md](docs/superpowers/plans/2026-10-13-ft8-fast-path-cascade.md) | 上述 spec 的实现计划（15 个 Task） | 开发者 |
 | [docs/superpowers/specs/2026-10-13-ft8-packaging-design.md](docs/superpowers/specs/2026-10-13-ft8-packaging-design.md) | **FT8 四平台打包**设计 spec（镜像内编译 DSP 并随 `mrrc-update` 重编、Boost 头文件 vendor 化、Windows MinGW 与 macOS dylib 依赖闭包进包） | 架构师/打包 |
+| [docs/superpowers/specs/2026-10-18-nano-vna-design.md](docs/superpowers/specs/2026-10-18-nano-vna-design.md) | **NanoVNA-H 天线诊断台**设计 spec（`/Nano`：`scan_bin` 二进制帧与帧长自校验、四道守卫（发射中拒绝/一次一件/不抢 CAT 口/角色隔离）、扫描后还原设备屏幕、设备管理与 U3 固件升级（ROM DFU + 版本回读 + 变体人选）） | 架构师/固件 |
+| [docs/superpowers/plans/2026-10-18-nano-vna.md](docs/superpowers/plans/2026-10-18-nano-vna.md) | **NanoVNA 第一期**实现计划（纯数学层 → 协议层 → 服务端接线 → 页面 → 文档同步，逐任务带测试） | 开发者 |
 | [docs/superpowers/specs/2026-10-17-w103d-preflash-design.md](docs/superpowers/specs/2026-10-17-w103d-preflash-design.md) | **W103D 发货版（预置）镜像**设计 spec（`--preflash` 开关：固定三条口令 + 时区/locale 预置 + 设置页手输 SSID 与明文密码 + 设置页填呼号向 portal 申请公网入口 + 首启探测改成“跑到定型为止”） | 架构师/打包 |
 | [docs/superpowers/plans/2026-10-17-w103d-preflash.md](docs/superpowers/plans/2026-10-17-w103d-preflash.md) | 上述 spec 的实现计划（9 个任务：预置脚本与开关 · 设置页两面板 · 探测自愈 · 文档与产物验证） | 开发者 |
 

@@ -64,7 +64,7 @@
             <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i></a></li>
         </ul>
         <div class="nav-actions">
-            <a href="zh/w103d.html" class="lang-btn">中文</a>
+            <a href="zh/w103d-user.html" class="lang-btn">中文</a>
         </div>
     </div>
 </nav>
@@ -91,7 +91,7 @@
 </figure>
 <h1 id="拿到盒子之后-发货版盒子用户指南-w102d-w105d">拿到盒子之后：发货版盒子用户指南（W102D / W105D）</h1>
 <p>这台盒子的系统已经写进 eMMC，口令、时区、Wi-Fi 卖家都替你设好了。插电、用浏览器登录，就能开始干活——不需要 U 盘，不需要显示器，也不需要键盘。</p>
-<blockquote>想自己从镜像刷，看 <a href="w103d.html">从零刷机的完整指南</a>。那是另一条路线，从这里上手不必读。</blockquote>
+<blockquote><p>想自己从镜像刷，看 <a href="w103d.html">从零刷机的完整指南</a>。那是另一条路线，从这里上手不必读。</p></blockquote>
 <p>---</p>
 <h2 id="1-你拿到的是什么">1. 你拿到的是什么</h2>
 <div class="table-scroll"><table>
@@ -103,7 +103,7 @@
 <tr><td>它能做的事</td><td>把电台的频率、模式、滤波、功率，收发音频和频谱瀑布搬到浏览器和手机上；局域网里直接用，也可以申请一个公网入口从外面用</td></tr>
 </tbody></table></div>
 <p>盒子里<strong>没有</strong>电台、天线、馈线和网线，也<strong>不带 USB 网卡</strong>；有这些需要的话自己备。机身自带 RJ45，一根普通网线就能连。随附的电源适配器直接用就行。</p>
-<blockquote><strong>关于型号</strong>：W102D、W103D、W105D 是同一个家族（同一颗 S905L3A、同一套板级补丁）， 固件通用，本机烧的是按 <strong>W103D 板型</strong>（<code>MODEL_ID=307</code> / <code>meson-g12a-w103d.dtb</code>）编的那一套。 所以你会在文档、日志、镜像文件名里反复看到 "W103D" —— 指固件家族，不是说外壳上那个型号。</blockquote>
+<blockquote><p><strong>关于型号</strong>：W102D、W103D、W105D 是同一个家族（同一颗 S905L3A、同一套板级补丁）， 固件通用，本机烧的是按 <strong>W103D 板型</strong>（<code>MODEL_ID=307</code> / <code>meson-g12a-w103d.dtb</code>）编的那一套。 所以你会在文档、日志、镜像文件名里反复看到 "W103D" —— 指固件家族，不是说外壳上那个型号。</p></blockquote>
 <p>---</p>
 <h2 id="2-出厂已经设好的东西">2. 出厂已经设好的东西</h2>
 <div class="table-scroll"><table>
@@ -162,7 +162,7 @@
 <tr><td>其它型号</td><td>见 §10.4，其中 8 个是实验性机型，默认只收不发</td></tr>
 </tbody></table></div>
 <p>插好后在界面 ☰ →「连接设置」里选<strong>电台型号</strong>和<strong>串口</strong>，保存。服务会自己重启一次。</p>
-<blockquote>这一步是<strong>真的往串口发包问电台</strong>，所以电台要开着、USB 要连着，否则问不出结果。</blockquote>
+<blockquote><p>这一步是<strong>真的往串口发包问电台</strong>，所以电台要开着、USB 要连着，否则问不出结果。</p></blockquote>
 <p>---</p>
 <h2 id="7-五分钟验收">7. 五分钟验收</h2>
 <div class="table-scroll"><table>
@@ -216,6 +216,22 @@ systemctl restart mrrc-modern</code></pre>
 <p>在没验证过的语义上按键，对电台和天线都不算友好，所以这条默认是关的。</p>
 <h3 id="9-8-把问题交出去">9.8 把问题交出去</h3>
 <p>界面右下角（☰ 菜单里）有一个 <strong>「🐞 遇到问题」</strong> 页面：填一句现象，点「生成诊断包」，它会自动收集日志、配置（口令已打码）和版本号，然后上传给维护者。不想上传也行，可以只保存到本地再自己发出去。</p>
+<h3 id="9-8b-升级到新版本-不用-ssh">9.8b 升级到新版本（不用 SSH）</h3>
+<blockquote><p><strong>镜像代差</strong>：这张卡片随 2026-10-18 之后的镜像；更早的 1.28.1 镜像里还没有它（源码已合并）， 那时升级走 SSH 的 <code>mrrc-update</code>。</p></blockquote>
+<p>☰ → <strong>设置</strong> → 「<strong>软件更新</strong>」：</p>
+<ol>
+<li>页面打开就会自动查一次；也可以点「<strong>检查更新</strong>」；</li>
+<li>有新版本时按钮变成「<strong>升级到 x.y.z</strong>」，点它，确认；</li>
+<li>下载、校验、覆盖、重启，全过程在卡片里显示进度；<strong>重启时页面会自动刷新</strong>，大约十几秒。</li>
+</ol>
+<p>几条约定（都是刻意的）：</p>
+<p>页面会显示失败原因——这时候照常使用旧版本即可，把诊断包（§9.8）发给维护者；</p>
+<ul>
+<li><strong>发射中不能升级</strong>（PTT / TUNE / CQ / FT8 都算）——页面会直接说「电台正在发射」，等这一轮结束再点；</li>
+<li>升级<strong>不会</strong>动你的配置：口令、Wi-Fi、呼号、录音、记忆频道都不碰；</li>
+<li>万一新版本起不来，盒子会<strong>自己回滚</strong>到上一个版本（90 秒内探不到服务就还原并重启），</li>
+<li>磁盘剩余不足 400 MB 时拒绝升级（先删一些旧录音，见 ☰ → 录音）。</li>
+</ul>
 <h3 id="9-9-回到出厂状态">9.9 回到出厂状态</h3>
 <p>两件事别混：</p>
 <ul>
@@ -231,7 +247,7 @@ systemctl restart mrrc-modern</code></pre>
 <tr><td>密码</td><td><code>abcd1234</code></td></tr>
 </tbody></table></div>
 <p><strong>做法</strong>：用手机开一个<strong>个人热点</strong>，把热点名改成 <code>rescue</code>、密码设成 <code>abcd1234</code>，然后让盒子断电重开。几十秒内它会自己连上你的手机（这条 profile 的优先级是 -10，只在你<strong>别的网都不通</strong>时才用）。然后在手机上看热点里的已连设备，找到盒子的地址，用浏览器打开 <code>https://&lt;那个地址&gt;:8888</code>；忘了网页口令就 SSH（<code>root</code> / <code>mrrc</code>）进去跑 <code>mrrc-show-password</code>。</p>
-<blockquote>热点名和密码必须<strong>一字不差</strong>，错了就连不上。手机热点一般只发 2.4 GHz，正好对上。</blockquote>
+<blockquote><p>热点名和密码必须<strong>一字不差</strong>，错了就连不上。手机热点一般只发 2.4 GHz，正好对上。</p></blockquote>
 <h3 id="9-11-改-root-mrrc-的口令">9.11 改 root / mrrc 的口令</h3>
 <p>设置页 →「系统账号口令」，选账号、输两遍、保存即可（不用 SSH）。改完立刻生效。改了又忘、连 SSH 也进不去，就只能重刷或寄回。</p>
 <h3 id="9-12-用蓝牙遥控器操作电台">9.12 用蓝牙遥控器操作电台</h3>

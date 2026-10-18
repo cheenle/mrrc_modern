@@ -57,3 +57,9 @@ g++
 cmake
 pkg-config
 libfftw3-dev
+
+# dfu-util is what writes NanoVNA-H firmware (`nano/flash.py`, AD-030). Without it the
+# upgrade path answers "dfu-util is not installed on this box" instead of flashing.
+# 134 KB installed, depends only on libusb-1.0-0. The udev rule that lets `mrrc` open
+# the ROM bootloader (0483:df11) is written by mrrc-service-layer.sh next to the FTDI one.
+dfu-util

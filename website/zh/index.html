@@ -278,11 +278,25 @@
 </ul>
 </div>
 <div class="feature-card animate">
+<div class="icon"><i class="fas fa-broadcast-tower"></i></div>
+<h3>NanoVNA 天线诊断台</h3>
+<p>
+              插在盒子 USB 上的 NanoVNA-H 变成一台矢量分析仪页面 <code>/Nano</code>：
+              量的是天线本身的复数 S11，而不是拿反射功率反推。
+            </p>
+<ul>
+<li>1–54 MHz、401 点约 1 秒</li>
+<li>SWR、阻抗、Smith 图、谐振平台</li>
+<li>扫描存成一个库文件，干/湿对比，可导出 CSV 与 s1p</li>
+<li>发射中拒绝操作——分析仪就接在天线上</li>
+</ul>
+</div>
+<div class="feature-card animate">
 <div class="icon"><i class="fas fa-bug"></i></div>
 <h3>遇到问题，拿到答复</h3>
 <p>
-              菜单里的 <strong>🐞 遇到问题</strong>由服务端生成脱敏诊断包（日志、配置快照、电台/音频状态与自动体检结论），上传到本项目自己的接收端；没有网络时可只保存到本地。结论发布在<a href="answers/">答复页</a>,可按编号或关键词搜索；结论背后的工程回路（bug/需求/环境自动分类、排期与无人值守修复）在
-              <a href="board/">FDE 看板</a>。
+              菜单里的 <strong>🐞 遇到问题</strong>由服务端生成脱敏诊断包（日志、配置快照、电台/音频状态与自动体检结论），上传到本项目自己的接收端；没有网络时可只保存到本地。结论发布在<a href="../answers/">答复页</a>，可按编号或关键词搜索；结论背后的工程回路（bug/需求/环境自动分类、排期与无人值守修复）在
+              <a href="../board/">FDE 看板</a>。
             </p>
 <ul>
 <li>包内绝不含密码、证书私钥、令牌、录音与记忆频道</li>
@@ -860,9 +874,9 @@
 </div>
 </div>
 <div class="perf-card">
-<div class="metric">1604</div>
+<div class="metric">2327</div>
 <div class="metric-label">
-              无硬件依赖测试<br/><small>v1.27.0 发布版实测：macOS 2070 项 / Windows 2067 项</small>
+              无硬件依赖测试<br/><small>v1.28.1 发布版：2327 项 / 121 个测试模块，不需要电台、串口或声卡</small>
 </div>
 </div>
 </div>
@@ -998,7 +1012,7 @@
 <h2 class="section-title">软件设计描述（SDD）</h2>
 <p class="section-subtitle">
             IBM TeamSD 方法论 · 15 章 ·
-            <strong>V3.00</strong> · 架构决策、组件模型、PTT 安全与
+            <strong>V3.02</strong> · 架构决策、组件模型、PTT 安全与
             完整版本历史。
           </p>
 </div>
@@ -1070,7 +1084,7 @@
 </div>
 </div>
 </footer><script defer="" src="../js/scope.js?v=3"></script><p style="color: var(--scope-text-muted); font-size: 0.85rem">升级后行为异常、或想从零开始：<a href="../downloads/MRRC-Modern-Cleanup.cmd">下载清理脚本</a>（说明与注意事项见<a href="../guide.html#clean-slate">指南 §6.2</a>），一键卸载并清掉历史残留（会先备份到桌面）。</p>
-<p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔：<a href="zh/muscle-and-mind.html">阳春白雪与下里巴人：论肌肉与思维</a>（48 小时、两个模型、六个版本之后的复盘）</p>
+<p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔：<a href="muscle-and-mind.html">阳春白雪与下里巴人：论肌肉与思维</a>（48 小时、两个模型、六个版本之后的复盘）</p>
 <p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔与技术：<a href="blog.html">博客</a>，电台怎么接上云端，以及上线首日学到了什么。</p>
 </body>
 </html>

@@ -75,7 +75,7 @@ def convert(md: str) -> str:
     para: list[str] = []
     table: list[str] = []
     items: list[tuple[str, str]] = []  # (kind, text) — kind is "ul" or "ol"
-    quote: list[str] = []
+    quote: list[tuple[str, str]] = []  # (kind, text) — "p" prose, "pre" ready HTML
 
     def flush_all() -> None:
         flush_paragraph(para)
@@ -93,7 +93,10 @@ def convert(md: str) -> str:
             out.append(f"</{kind}>")
             items.clear()
         if quote:
-            out.append("<blockquote>" + inline(" ".join(quote)) + "</blockquote>")
+            parts = []
+            for kind, text in quote:
+                parts.append(text if kind == "pre" else f"<p>{inline(text)}</p>")
+            out.append("<blockquote>" + "".join(parts) + "</blockquote>")
             quote.clear()
 
     while i < n:
@@ -166,7 +169,33 @@ def convert(md: str) -> str:
 
         if stripped.startswith(">"):
             flush_paragraph(para)
-            quote.append(stripped.lstrip("> ").strip())
+            rest = stripped.lstrip(">").strip()
+            if rest.startswith("```"):
+                # A fenced block inside a blockquote (the guide uses one for
+                # the cmp check). Treating it as prose shipped literal
+                # backticks and one very long line — seen on the live page
+                # 2026-10-18, fixed here rather than by de-quoting the source,
+                # because the blockquote is what tells a reader it is optional.
+                lang = rest[3:].strip()
+                i += 1
+                code: list[str] = []
+                while i < n:
+                    line = lines[i].strip()
+                    if not line.startswith(">"):
+                        break
+                    content = line.lstrip(">").strip()
+                    if content.startswith("```"):
+                        i += 1
+                        break
+                    code.append(content)
+                    i += 1
+                cls = f' class="lang-{lang}"' if lang else ""
+                quote.append(("pre", f"<pre><code{cls}>{html.escape(chr(10).join(code), quote=False)}</code></pre>"))
+                continue
+            if quote and quote[-1][0] == "p":
+                quote[-1] = ("p", quote[-1][1] + " " + rest)
+            else:
+                quote.append(("p", rest))
             i += 1
             continue
 
@@ -316,7 +345,7 @@ PAGES = (
         "lead": ("从拿到一台全新的 W103D 开始：认机器 → 下载校验 → 烧 U 盘 → 从 U 盘启动 → 接电台 → "
                  "选机型 → 验收。末尾附一张从零到干活的打勾清单。"),
         "actions": (
-            '<a class="btn btn-primary" href="{p}downloads/MRRC-Modern-1.25.5-w103d.img.gz">'
+            '<a class="btn btn-primary" href="{p}downloads/{img}">'
             '<i class="fas fa-download"></i> 下载 W103D 镜像</a>'
             '<a class="btn" href="{p}w103d-user.html"><i class="fas fa-box-open"></i> 盒子已刷好？看用户指南</a>'
             '<a class="btn" href="{p}w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a>'
@@ -391,6 +420,25 @@ SPEC_FIGURE = """<figure style="margin: 0 0 2.5rem">
 """
 
 
+IMAGE_RE = re.compile(r"(MRRC-Modern-\d+\.\d+\.\d+-w103d\.img\.gz)")
+
+
+def image_name(md: str) -> str:
+    """The W103D image filename, taken from the guide itself.
+
+    The hero button used to hard-code the version, so it kept advertising an
+    image the site no longer hosted (1.25.5, 404) long after the guide's own
+    download section had moved on. The markdown is the single source: the file
+    name appears there in the curl example.
+    """
+    match = IMAGE_RE.search(md)
+    if not match:
+        raise SystemExit(
+            "build_w103d_guide: no MRRC-Modern-<ver>-w103d.img.gz in the guide"
+        )
+    return match.group(1)
+
+
 def main() -> int:
     for spec in PAGES:
         source = REPO / spec["source"]
@@ -420,15 +468,14 @@ def main() -> int:
             print(f"build_w103d_guide: markdown survived conversion: {leftovers}", file=sys.stderr)
             return 1
 
-        for prefix, lang, label in (
-            ("", "zh/w103d.html", "中文"),
-            ("../", "../w103d.html", "EN"),
-        ):
+        for prefix, label in (("", "中文"), ("../", "EN")):
+            lang = f"zh/{spec['out']}" if prefix == "" else f"../{spec['out']}"
             out = REPO / "website" / ("" if prefix == "" else "zh/") / spec["out"]
             page_body = body.replace("@@ROOT@@", prefix)
             for md_name, page in spec["links"]:
                 page_body = page_body.replace(f'href="{md_name}"', f'href="{page}"')
-            hero_html = hero({**spec, "actions": spec["actions"].format(p=prefix)})
+            img = image_name(md) if "{img}" in spec["actions"] else ""
+            hero_html = hero({**spec, "actions": spec["actions"].format(p=prefix, img=img)})
             figure = SPEC_FIGURE.format(p=prefix) if spec.get("figure") else ""
             page_html = PAGE.format(
                 p=prefix, guide=("guide.html" if prefix == "" else "../guide.html"),

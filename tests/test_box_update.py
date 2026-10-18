@@ -181,6 +181,30 @@ class VersionTests(unittest.TestCase):
         self.assertEqual((home / "VERSION").read_text().strip(), "1.2.3")
 
 
+class DiscoverabilityTests(unittest.TestCase):
+    """用户找不到入口就等于没做。卡在 `/settings`，菜单里得有一步直达。"""
+
+    ROOT = Path(__file__).resolve().parents[1]
+
+    def test_the_menu_links_straight_to_the_card(self):
+        import re
+        index = (self.ROOT / "static" / "index.html").read_text(encoding="utf-8")
+        match = re.search(r'<li>\s*<a[^>]*href="settings\.html#card-update"[^>]*>',
+                          index, re.S)
+        self.assertIsNotNone(match, "☰ 菜单里没有「软件更新」这一步")
+        block = match.group(0)
+        self.assertIn('target="_blank"', block)
+        self.assertNotIn("data-action", block, "它必须是普通链接，不是 JS 菜单项")
+
+    def test_the_settings_page_has_the_card(self):
+        page = (self.ROOT / "static" / "settings.html").read_text(encoding="utf-8")
+        for hook in ('id="card-update"', 'id="up-check"', 'id="up-apply"',
+                     'id="up-pill"', 'id="up-info"'):
+            self.assertIn(hook, page)
+        self.assertIn("/api/update/apply", page)
+        self.assertIn("/api/update/state", page)
+
+
 class ApplyTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

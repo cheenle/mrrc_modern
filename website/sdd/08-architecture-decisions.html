@@ -778,6 +778,11 @@
 <td>Local control surface: a Bluetooth HID remote drives the radio on-box (<code class="scope-code">local_ctl.py</code> + <code class="scope-code">mrrc-localctl</code>), keyed on HID usages, speaking the browser protocol over loopback; <code class="scope-code">HandlePowerKey=ignore</code> returns the 电源 key to the operator</td>
 <td>Implemented (V2.97)</td>
 </tr>
+<tr>
+<td>AD-029</td>
+<td>Independent SDR receiver: the box’s SDRplay RSP1 published as its own public web receiver — own password/cookie/page, zero coupling to radio control; a device-exclusive subprocess (<code class="scope-code">sdr_pipe.py</code>) + a native two-stage channelizer (<code class="scope-code">sdr_dsp.c</code>, 0.086–0.151 core per demodulator measured) + a pure-logic sharing hub (30 s tuning hold, demodulator pool, 8 channels / 50 listeners)</td>
+<td>Implemented (V3.00)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1184,13 +1189,48 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-029-独立-sdr-接收机对外发布的-web-接收器">AD-029: 独立 SDR 接收机（对外发布的 Web 接收器）</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Product / Operability</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V3.00, 2026-10-18) — 盒子（Linux/aarch64）</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>把插在盒子上的 SDRplay RSP1 做成<strong>独立入口的公开接收机</strong>：自己的口令（<code class="scope-code">MRRC_SDR_PASSWORD</code>）、自己的 cookie（<code class="scope-code">mrrc_sdr</code>）、自己的页面（<code class="scope-code">/sdr</code>），与无线电控制面<strong>零耦合</strong>（没有 CAT/PTT 通路，也不返回任何电台状态）。四层：浏览器页面（瀑布/点选/解调/音频，复用既有 <code class="scope-code">opus_wasm</code> + <code class="scope-code">rx_worklet_processor</code>）→ <code class="scope-code">server.py</code> 的 <code class="scope-code">/WSsdr</code> 与独立口令角色 → <code class="scope-code">sdr_hub.py</code>（调谐仲裁 + 解调池 + 容量闸门 + 扇出，纯逻辑）→ <code class="scope-code">sdr_pipe.py</code>（独占设备的子进程，ctypes 调 <code class="scope-code">libsdrplay_api</code>，热路径调 <code class="scope-code">libsdr_dsp</code>）。<strong>设备侧不走 Python 结构体镜像</strong>：<code class="scope-code">sdr_api_shim.c</code> 用厂商头文件编译成扁平函数，IQ 落 C 的环形缓冲，回调不穿越语言边界。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong>跑 SDRconnect headless</strong>（官方 WebSocket API）：实测 ARM64 包能跑、服务正常应答，但 <code class="scope-code">valid_devices</code> 只有 <code class="scope-code">"IQ File"</code> —— <strong>SDRplay 官方明确 RSP1 不在 SDRconnect 支持列表</strong>（硬件原因），否决；②<strong>跑 SDR++ Server + 自写前端</strong>：它的客户端是 SDR++ 桌面 GUI 的私有二进制协议（TCP 5259），浏览器端要重写协议 + 加 TCP↔︎WS 桥，且前端工作量一分不少，否决；③<strong>OpenWebRX</strong>：能白送解调与多人，但那是另一套系统（认证/云入口/打包都不通），且无法与电台联动，否决；④<strong>Python 直接 ctypes 调厂商 API</strong>：<code class="scope-code">DeviceParamsT</code>/<code class="scope-code">RxChannelParamsT</code> 嵌套十几层，镜像布局就是给偏移写错留门，改为 60 行 C shim；⑤<strong>解调用 numpy</strong>：实测每通道 0.075 核且做不出边带选择性，改 C（0.025–0.15 核，见 Consequences ②）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>内核驱动必须先让路</strong>：RSP1 一插上就被内核 <code class="scope-code">msi2500</code> 认领，而那条路径实测<strong>是坏的</strong>（调谐钳在 15 MHz、采样 99.7% 为 0）；<code class="scope-code">blacklist msi2500/msi001</code> + udev <code class="scope-code">0666</code> + <code class="scope-code">sdrplay.service</code>（root）是三个硬前提。②<strong>单级滤波器做不到”既抗混叠又选边带”</strong>：抽头按抗混叠定就选不出边带，按边带定就上万抽头；改成两级（fs_in → 96 kHz 中等滤波 → 48 kHz 尖锐复数滤波）。实测每通道 <strong>0.086 核（AM）/ 0.151 核（USB）</strong>，据此把 <code class="scope-code">MRRC_SDR_MAX_CHANNELS</code> 默认定为 <strong>8</strong>（上限 16）—— 更多通道需要换共享 FFT 信道化器（V2 路径，见 R10）。③<strong>WFM 是第三条管线</strong>：200 kHz 信道装不进 96 kHz 中间速率，必须先在 480 kHz 上鉴频再抽音频。④<strong>调谐仲裁就是 I6 缺口的那个形状</strong>（single-controller lock），但只作用在这个面上：30 s 持有锁、改中心后按<strong>绝对频率</strong>重算每个人的 offset、持有者断开立刻释放。⑤<strong>平台范围收窄为盒子</strong>：桌面包 <code class="scope-code">MRRC_SDR=off</code>，页面显示”SDR 仅盒子版支持”，不引入 PyInstaller/DMG 新路径。⑥<strong>真机抓到的一个协议缺陷</strong>：A1 帧的 seq 曾按 u8 打包（<code class="scope-code">&lt;BBHH</code>），序号过 255 就把 pipe 打死、接收机变不可用——布局是 <code class="scope-code">chid u8 / seq u16 / level u8 / len u16</code>，编码/解析/服务端三处必须同一套 <code class="scope-code">&lt;BHBH</code>。⑦<strong>闭源二进制进镜像</strong>：<code class="scope-code">libsdrplay_api</code> 与 root 守护进程随镜像分发（许可证原文随包），<code class="scope-code">MRRC_SDR=off</code> 可整块关闭。</td>
+</tr>
+</tbody>
+</table>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V2.99 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.00 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

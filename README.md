@@ -437,6 +437,27 @@ Exact controls depend on the selected backend (`MRRC_RADIO_MODEL`).
 | Operator | Full control, authenticated with `MRRC_WEB_PASSWORD` — every control in the tables above |
 | Listen-only | A **second, independent password** (`MRRC_LISTEN_PASSWORD`, empty = off) logs into `/listen`: frequency and mode tuning, memory recall, S-meter, waterfall and RX audio with browser-side volume. Enforced **server-side**, not by hiding buttons: the `/WSradio` role gate passes only `ping`/`get`/`memLoadAll`/`memRecall` and `set` on `freq`/`vfo_a_freq`/`vfo_b_freq`/`mode`, `/WSaudioTX` and `/WSatr1000` close with 4003, and non-GET `/api/*` returns 403 (except logout). Setting both passwords to the same value grants full control. `deploy_listen_proxy.sh` publishes it on a public host (idempotent nginx block, direct IPv6 reverse proxy) |
 
+### SDR Receiver (box only, AD-029)
+
+A public web receiver on the box, completely separate from radio control: its own password, its own
+cookie, its own page. Nothing about the radio (frequency, mode, PTT) is visible from it, and it keeps
+running while you transmit.
+
+| Feature | Implementation |
+| --------- | --------------- |
+| Hardware | SDRplay **RSP1** on the box (`1df7:2500`), through the vendor Hardware API 3.15 — the ARM64 build that ships inside `Hardware API Linux`. SDRconnect is **not** an option: SDRplay confirmed the original RSP1 is unsupported there (measured: `valid_devices` = `"IQ File"` only) |
+| Range | 10 kHz – 2 GHz, one 2.4 MHz window at a time (tunable to 4.8 MHz), 1 Hz resolution |
+| Sharing | Anyone may retune the centre; a **30 s hold** makes the last tuner's choice stick, and everyone keeps their own demod offset. Listeners on the same `(offset, mode, bandwidth)` **share one demodulator** — ten people on 7.074 USB cost one |
+| Demodulation | AM / USB / LSB / CW / NFM / WFM, native two-stage channelizer (`sdr_dsp.c`, 0.086–0.151 core per channel measured on the W103D) |
+| Audio | 32 kbps Opus, played through the same `rx_worklet_processor.js` as the radio |
+| Capacity | 50 listeners / 8 demodulators by default; spectrum drops 1024 → 512 bins past 12 listeners |
+| Knobs | `MRRC_SDR` (on/off), `MRRC_SDR_PASSWORD`, `MRRC_SDR_MAX_CLIENTS`, `MRRC_SDR_MAX_CHANNELS`, `MRRC_SDR_SAMPLE_RATE`, `MRRC_SDR_GAIN_DB`, `MRRC_SDR_LNA` |
+
+Install prerequisites on the box (the image does this): `blacklist msi2500/msi001` (the kernel DVB
+driver otherwise claims the dongle and its SDR path is broken — tuning pinned at 15 MHz, samples ~all
+zero), the `66-sdrplay.rules` udev rule, and `sdrplay.service`. Operator manual:
+[`docs/sdr_receiver.md`](docs/sdr_receiver.md).
+
 ### Native Clients
 
 The browser is not the only surface — two native clients speak the same protocol and are bound by the

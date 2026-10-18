@@ -137,5 +137,10 @@ fi
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 echo "==> restarting"
 systemctl restart mrrc-modern
+# The remote daemon is its own process running its own copy of local_ctl.py, so
+# restarting the server alone leaves the old key map / volume scaling in memory
+# and a fix sits unused in /opt until the box is power-cycled.  try-restart is a
+# no-op on a box whose unit was never installed (the pre-2026-10-18 case).
+systemctl try-restart mrrc-localctl 2>/dev/null || true
 systemctl --no-pager --lines=5 status mrrc-modern || true
 echo "==> done; env file left untouched at $MRRC_HOME/env/mrrc.env"

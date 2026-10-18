@@ -448,6 +448,7 @@ ssh root@&lt;盒子IP&gt; 'bash /tmp/verify.sh'</code></pre>
 <tr><td><code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code></td><td>指定音频设备（多声卡时有用）</td></tr>
 <tr><td><code>MRRC_RECORDINGS_DIR</code></td><td>通联录音目录（服务端存 MP3）</td></tr>
 <tr><td><code>MRRC_RECORDINGS_MAX_SESSION_MIN</code> / <code>MRRC_RECORDINGS_BITRATE</code></td><td>单次录音时长上限 / 码率</td></tr>
+<tr><td><code>MRRC_RECORDINGS_MIN_FREE_MB</code></td><td>剩余空间低于此值（默认 200）<strong>拒绝开始</strong>录音；<code>0</code> 关闭。只拒绝、从不删除已有录音</td></tr>
 <tr><td><code>MRRC_ATR1000_HOST</code> / <code>MRRC_ATR1000_PORT</code></td><td>ATR-1000 天调的地址（§15）</td></tr>
 <tr><td><code>MRRC_SESSION_METRICS_INTERVAL_S</code></td><td>会话遥测上报间隔（默认 300 秒，<code>0</code>=关）</td></tr>
 </tbody></table></div>
@@ -488,7 +489,8 @@ systemctl restart mrrc-modern</code></pre>
 tail -f /opt/mrrc_modern/logs/server-stdout.log # 服务 stdout</code></pre>
 <p><strong>升级：</strong></p>
 <pre><code class="lang-bash">MRRC_UPDATE_SRC=&lt;git url 或本地目录&gt; mrrc-update</code></pre>
-<p>只做三件事：拉代码 → 装依赖 → 重启。<strong>配置不会被碰。没有自动回滚</strong>——升级前先备份（下面）。</p>
+<p>只做四件事：拉代码 → 装依赖 → 盖版本号（<code>version.txt</code>/<code>VERSION</code>）→ 重启。<strong>配置不会被碰。没有自动回滚</strong>——升级前先备份（下面）。</p>
+<blockquote><strong>热升级只换代码，不装 systemd 单元。</strong> 服务层（<code>mrrc-service-layer.sh</code>）里的单元和 系统集成只有镜像构建时装：<code>mrrc-box-helper</code>（设置页的 Wi-Fi/系统面板）、<code>mrrc-localctl</code> （蓝牙遥控器）、<code>mrrc-cpufreq</code>（锁频）、<code>mrrc-logrotate.timer</code>（日志轮转）。升级前就 没有它们的盒子，升级后仍然没有 —— 表现是 <code>/api/box/status</code> 报 <code>helper_available: false</code>、 设置页那几个按钮是灰的。要补就按 <code>packaging/common/mrrc-service-layer.sh</code> 里的单元原文 手装一次（并把 <code>RuntimeDirectory=mrrc</code> 加进 <code>mrrc-modern.service</code>，否则 <code>/run/mrrc</code> 建不出来）， 然后 <code>daemon-reload</code> + <code>enable --now</code>。</blockquote>
 <p><strong>备份（升级前做）：</strong></p>
 <pre><code class="lang-bash">tar czf /root/w103d-backup-$(date +%F).tgz \
   /opt/mrrc_modern/env/ /opt/mrrc_modern/mem_channels.json /var/lib/mrrc/</code></pre>

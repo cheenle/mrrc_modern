@@ -201,10 +201,30 @@ class TestController(unittest.TestCase):
         self.assertEqual(ctl.on_key(("u:0xc00eb",), True),
                          [{"type": "set", "field": "mode", "value": "FT8"}])
 
-    def test_volume_key_clamps(self):
-        ctl = self._ctl(volume=98)
+    def test_volume_keys_span_the_radios_whole_af_gain_register(self):
+        # ``af_gain`` is a 0-255 register (``radio_state.af_gain``, Yaesu
+        # ``AG0xxx``), while the remote's step is a percentage.  Sending the
+        # percentage raw capped the radio at 100/255 = 39 % of full scale
+        # (2026-10-18: "音量键按到底也不够大声").
+        ctl = self._ctl(volume=95)
         self.assertEqual(ctl.on_key(("u:0xffff", "k:115"), True),
-                         [{"type": "set", "field": "af_gain", "value": 100}])
+                         [{"type": "set", "field": "af_gain", "value": 255}])
+        self.assertEqual(ctl.volume, 100)
+        # already at the top: still a full-scale write, never a bare 100
+        self.assertEqual(ctl.on_key(("u:0xffff", "k:115"), True),
+                         [{"type": "set", "field": "af_gain", "value": 255}])
+
+    def test_volume_step_is_a_percentage_of_the_register(self):
+        ctl = self._ctl(volume=50)
+        self.assertEqual(ctl.on_key(("u:0xffff", "k:115"), True),
+                         [{"type": "set", "field": "af_gain", "value": 140}])
+        self.assertEqual(ctl.on_key(("u:0xc00ea", "k:114"), True),
+                         [{"type": "set", "field": "af_gain", "value": 128}])
+
+    def test_volume_bottom_is_silence(self):
+        ctl = self._ctl(volume=2)
+        self.assertEqual(ctl.on_key(("u:0xc00ea", "k:114"), True),
+                         [{"type": "set", "field": "af_gain", "value": 0}])
 
     def test_cancel_drops_half_typed_frequency(self):
         ctl = self._ctl(freq_hz=7_000_000)
@@ -271,6 +291,26 @@ class TestStateAbsorption(unittest.TestCase):
         lc.LocalCtl(ctl)._absorb({"type": "state", "freq": 14_074_000, "mode": "cw"})
         self.assertEqual(ctl.freq_hz, 14_074_000)
         self.assertEqual(ctl.mode, "CW")
+
+    def test_state_line_brings_the_volume_to_where_the_radio_is(self):
+        # The daemon's own default (50 %) used to overwrite whatever the
+        # operator had set on the radio on the first key press.
+        ctl = lc.Controller(volume=50)
+        io = lc.LocalCtl(ctl)
+        io._absorb({"type": "state", "freq": 14_074_000, "mode": "USB",
+                    "af_gain": 255})
+        self.assertEqual(ctl.volume, 100)
+        io._absorb({"type": "state", "af_gain": 0})
+        self.assertEqual(ctl.volume, 0)
+        io._absorb({"type": "state", "af_gain": 200})
+        self.assertEqual(ctl.volume, 78)          # round(200 / 255 * 100)
+
+    def test_state_line_ignores_a_junk_volume(self):
+        ctl = lc.Controller(volume=60)
+        io = lc.LocalCtl(ctl)
+        for gain in ("x", None, True, 1.5):
+            io._absorb({"type": "state", "af_gain": gain})
+        self.assertEqual(ctl.volume, 60)
 
     def test_junk_is_ignored(self):
         ctl = lc.Controller(freq_hz=7_000_000)
@@ -341,6 +381,28 @@ class TestControlSocket(unittest.TestCase):
             ctl = asyncio.run(run())
             self.assertEqual(ctl.freq_hz, 14_070_000)
             self.assertEqual(ctl.mode, "USB")
+
+    def test_a_reply_brings_the_gain_back(self):
+        # The operator can also turn the knob on the radio itself.  Every reply
+        # carries the AF gain, so the daemon re-syncs instead of stepping from
+        # a percentage that has since gone stale.
+        import asyncio
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "ctl.sock")
+            received: list = []
+
+            async def run():
+                serve = self._serve(path, received, reply=b'{"ok":true,"af_gain":255}\n')
+                server = await serve()
+                ctl = lc.Controller(volume=10)
+                io = lc.LocalCtl(ctl, socket_path=path)
+                await io.send([{"type": "set", "field": "af_gain", "value": 26}])
+                io._drop()
+                server.close()
+                await server.wait_closed()
+                return ctl
+
+            self.assertEqual(asyncio.run(run()).volume, 100)
 
     def test_missing_socket_is_not_fatal(self):
         import asyncio

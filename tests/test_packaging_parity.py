@@ -392,6 +392,16 @@ class ShellHygieneTests(unittest.TestCase):
         self.assertIn("for g in dialout audio input; do", box)
         self.assertIn("usermod -aG dialout,audio,input mrrc", pi)
 
+    def test_hot_update_restarts_the_remote_daemon(self):
+        """`mrrc-localctl` 跑的是自己进程里的 `local_ctl.py`：只重启服务端，
+        改好的键位/音量换算会一直躺在 /opt 里不生效（2026-10-18）。
+
+        `try-restart` 而不是 `restart`：没装这个 unit 的老盒子（热升级装不了单元）
+        不能让升级脚本在这里失败。
+        """
+        update = (REPO / "linux" / "mrrc_update.sh").read_text(encoding="utf-8")
+        self.assertIn("systemctl try-restart mrrc-localctl", update)
+
     def test_the_service_layer_still_reclaims_its_scratch(self):
         """Both directories hold build scratch; either one left behind ships."""
         text = (COMMON / "mrrc-service-layer.sh").read_text(encoding="utf-8")

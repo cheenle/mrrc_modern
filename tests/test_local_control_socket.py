@@ -61,10 +61,23 @@ class LocalControlSocketTests(unittest.TestCase):
         self.assertEqual(state.get("type"), "state")
         self.assertIn("freq", state)
 
+    def test_state_line_reports_the_af_gain(self):
+        # Without it the daemon starts from its own 50 % default and the first
+        # volume press steps *down* from whatever the radio was at.
+        state, _replies, _calls = self._roundtrip([])
+        self.assertEqual(state.get("af_gain"), srv.radio.af_gain)
+        self.assertTrue(0 <= state["af_gain"] <= 255)
+
     def test_allowed_field_reaches_one_command_path(self):
         _state, replies, calls = self._roundtrip(['{"field":"freq","value":7051000}'])
         self.assertEqual(calls, [("freq", 7051000)])
-        self.assertEqual(json.loads(replies[0].decode()), {"ok": True})
+        self.assertTrue(json.loads(replies[0].decode())["ok"])
+
+    def test_reply_carries_the_gain_back(self):
+        # So a knob turned on the radio itself does not make the daemon's next
+        # volume press jump from a stale percentage.
+        _state, replies, _calls = self._roundtrip(['{"field":"freq","value":7051000}'])
+        self.assertEqual(json.loads(replies[0].decode()).get("af_gain"), srv.radio.af_gain)
 
     def test_unknown_field_is_refused_without_reaching_the_radio(self):
         _state, replies, calls = self._roundtrip(['{"field":"reboot","value":1}'])

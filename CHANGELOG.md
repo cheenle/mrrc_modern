@@ -47,6 +47,25 @@ All notable changes to the MRRC Web Control project.
   两条镜像线把 `mrrc` 加进 `input` 组、配对走 pty+agent。四条都有测试钉住。
 - 测试 +3（配对脚本顺序与等待上限、镜像 `input` 组）。
 
+### 遥控器音量键只能推到 39 %：百分比当成了 0–255 的寄存器
+
+- 现象：按住「音量 +」到底，声音仍然不够大。
+- 根因是一个**单位错**，和配对无关：`local_ctl.Controller.volume` 是 **0–100 百分比**，
+  却被原样写进 `af_gain`，而电台的 AF 增益是 **0–255 寄存器**（`radio_state.af_gain`、
+  Yaesu `AG0xxx`、Icom `LVL_AF`；网页上同一个量就是 0–255，`ft710_ui.js` 用
+  `/255*100` 显示百分比）。满格只到 `100/255` ≈ **39 %**。
+- 现在按 `round(pct / 100 * 255)` 换算（`gain_from_volume` / `volume_from_gain`），
+  每次按键仍是 5 %（≈13 个寄存器台阶），第 20 下就是 255。
+- **同一个面上的第二个缺陷**：服务器的 `state` 首行只带 `freq`/`mode`，守护进程的音量
+  从自己的 50 起算——第一次按「音量 +」会把电台从 200 直接改成 55（往下走）。现在
+  `state` 带 `af_gain`，**每条命令的回复也带回当前增益**（操作员也可能直接拧电台旋钮），
+  `_absorb_gain` 回读成百分比，按键从电台当前值开始加减。
+- `linux/mrrc_update.sh` 现在还会 `systemctl try-restart mrrc-localctl`：那个守护进程
+  跑的是**自己进程里**的 `local_ctl.py`，只重启 `mrrc-modern` 会让改好的换算一直躺在
+  `/opt` 里不生效（`try-restart`：没装这个 unit 的老盒子不会让升级失败）。
+- 测试 2560 → 2568（满量程 / 步进百分比 / 到底静音 / `state` 回读 / 回复回读 /
+  脏值忽略 / 两边 `af_gain` 在场 / 热升级重启遥控守护进程）。
+
 ### 遥控器面板：发现就直接配，失败要说出原因
 
 - 现场（盒子 `.217`，00:10–00:16）：操作员连点三次「配对」，服务端三次

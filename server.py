@@ -2191,10 +2191,19 @@ class _LocalControlClient:
         self.sent.append(text)
 
 
+def _local_af_gain() -> int:
+    """The radio's AF gain in its own 0-255 domain (clamped for the wire)."""
+    return max(0, min(255, int(radio.af_gain or 0)))
+
+
 def _local_control_state() -> str:
     """One line the daemon uses to start from where the radio actually is."""
     name = {num: label for label, num in _mode_name_to_num().items()}.get(radio.mode, "")
-    return json.dumps({"type": "state", "freq": radio.vfo_a_freq, "mode": name}) + "\n"
+    # ``af_gain`` rides along in the radio's own 0-255 domain: without it the
+    # daemon starts at its 50 % default and the first 音量 press steps *down*
+    # from whatever the operator had set (2026-10-18).
+    return json.dumps({"type": "state", "freq": radio.vfo_a_freq, "mode": name,
+                       "af_gain": _local_af_gain()}) + "\n"
 
 
 async def _local_control_handle(reader: asyncio.StreamReader,
@@ -2230,6 +2239,10 @@ async def _local_control_handle(reader: asyncio.StreamReader,
             reply = {"ok": not errors}
             if errors:
                 reply["error"] = errors[-1]
+            # Every reply carries the gain: the operator can also turn the knob
+            # on the radio itself, and a daemon stepping from a stale percentage
+            # would jump instead of nudging.
+            reply["af_gain"] = _local_af_gain()
             writer.write(json.dumps(reply).encode() + b"\n")
             await writer.drain()
     except (asyncio.TimeoutError, ConnectionResetError, BrokenPipeError):

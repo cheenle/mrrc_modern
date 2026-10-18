@@ -112,6 +112,25 @@ MODE_CYCLE = ("LSB", "USB", "CW", "AM", "FM", "FT8")
 
 STEP_LADDER_HZ = (100, 1000, 5000, 10000, 100000)
 
+#: The radio's AF gain is a **0-255 register** (`radio_state.af_gain`; Yaesu
+#: `AG0xxx`, Icom `LVL_AF`), while a remote's volume key reads as a percentage.
+#: The percentage has to be scaled on the way out: sending it raw topped the
+#: radio out at 100/255 = 39 % of full scale, so "hold 音量 up" stopped short of
+#: the loudest the set could do (2026-10-18).  The web UI does the same
+#: conversion the other way for RF gain (`ft710_ui.js`, `/255*100`).
+AF_GAIN_MAX = 255
+VOLUME_STEP_PCT = 5
+
+
+def gain_from_volume(pct: float) -> int:
+    """Percentage of full volume → the radio's 0-255 AF gain register."""
+    return max(0, min(AF_GAIN_MAX, round(pct / 100 * AF_GAIN_MAX)))
+
+
+def volume_from_gain(gain: float) -> int:
+    """The radio's 0-255 AF gain → the percentage the keys step in."""
+    return max(0, min(100, round(gain / AF_GAIN_MAX * 100)))
+
 BAND_EDGES_HZ = (
     (1_800_000, 2_000_000),      # 160 m
     (3_500_000, 4_000_000),      # 80 m
@@ -281,6 +300,9 @@ class Controller:
     freq_hz: int = 7_050_000
     mode: str = "USB"
     step_index: int = 1
+    #: Percent of the radio's AF gain (0-100), *not* the 0-255 register: press
+    #: steps stay 5 % of travel either way.  Scaled by ``gain_from_volume`` on
+    #: the way out, and seeded from the radio by ``LocalCtl._absorb``.
     volume: int = 50
     numeric: NumericEntry = field(default_factory=NumericEntry)
     _repeat_at: dict = field(default_factory=dict, repr=False)
@@ -375,9 +397,10 @@ class Controller:
             return [{"type": "set", "field": "mode", "value": self.mode}]
 
         if action in ("vol_up", "vol_down"):
-            delta = 5 if action == "vol_up" else -5
+            delta = VOLUME_STEP_PCT if action == "vol_up" else -VOLUME_STEP_PCT
             self.volume = max(0, min(100, self.volume + delta))
-            return [{"type": "set", "field": "af_gain", "value": self.volume}]
+            return [{"type": "set", "field": "af_gain",
+                     "value": gain_from_volume(self.volume)}]
 
         return []
 
@@ -469,6 +492,14 @@ class LocalCtl:
             mode = msg.get("mode")
             if isinstance(mode, str) and mode:
                 self.controller.mode = mode.upper()
+        self._absorb_gain(msg)
+
+    def _absorb_gain(self, msg: dict) -> None:
+        """Adopt the radio's AF gain (the state line, or any command reply)."""
+        gain = msg.get("af_gain")
+        # bool is an int in Python; a stray ``true`` must not look like 1.
+        if isinstance(gain, int) and not isinstance(gain, bool):
+            self.controller.volume = volume_from_gain(gain)
 
     def _drop(self) -> None:
         writer, self._writer, self._reader = self._writer, None, None
@@ -498,6 +529,9 @@ class LocalCtl:
                     continue
                 if not answer.get("ok", True):
                     log.info("%s refused: %s", msg.get("field"), answer.get("error"))
+                # The reply carries the radio's AF gain: a knob turned by hand
+                # must not make the next 音量 press jump from a stale value.
+                self._absorb_gain(answer)
 
     # -- input -------------------------------------------------------------
     async def _pump(self) -> None:

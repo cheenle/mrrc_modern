@@ -339,9 +339,11 @@ async function refreshStatus(full) {
         state.device = st;
         renderDevice(st);
         if (st.settings) renderSettings(st.settings);
+        // 顺序是判据：忙 ≠ 掉线。旧版先看 !connected，扫描期间服务端如实报
+        // busy 时页面却喊"设备掉线"——自己吓自己。
         if (st.tx) banner('电台在发射，已锁定扫描', 'warn');
-        else if (!st.connected) banner('设备掉线 — 检查 USB 连接', 'warn');
         else if (st.busy) banner('设备忙（另一次操作正在进行）', 'warn');
+        else if (!st.connected) banner('设备掉线 — 检查 USB 连接', 'warn');
         else banner('');
     } catch (e) {
         banner('连不上服务器', 'warn');

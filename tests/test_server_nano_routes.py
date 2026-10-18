@@ -163,6 +163,35 @@ class ScanGuardTest(unittest.TestCase):
         self.assertTrue(payload["restored"])
         self.assertEqual(dev.restored, (50_000, 900_000_000, 101))
 
+    def test_busy_status_reports_connected_not_offline(self):
+        """忙 ≠ 掉线：扫描期间状态轮询走短路，绝不能把 connected 报成 False。"""
+        server._nano_device = FakeDevice()
+        try:
+            with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+                 mock.patch.object(server, "_nano_lock", BusyLock()):
+                r = asyncio.run(server.api_nano_status(self.req))
+        finally:
+            server._nano_device = None
+        self.assertEqual(r.status_code, 200)
+        payload = json.loads(r.body)
+        self.assertTrue(payload["busy"])
+        self.assertTrue(payload["connected"])
+
+    def test_stale_handle_is_dropped_and_reported_offline(self):
+        """USB 重新枚举后旧句柄必须被丢掉：装"在线"会把下一次扫描变成惊吓。"""
+        class StaleDevice(FakeDevice):
+            def vbat_mv(self):
+                raise OSError("device disconnected or multiple access on port?")
+        server._nano_device = StaleDevice()
+        try:
+            with mock.patch.object(server, "_nano_tx_active", return_value=False):
+                r = asyncio.run(server.api_nano_status(self.req))
+        finally:
+            server._nano_device = None
+        self.assertEqual(r.status_code, 200)
+        payload = json.loads(r.body)
+        self.assertFalse(payload["connected"])
+
     def test_device_failure_is_503_and_drops_the_handle(self):
         with mock.patch.object(server, "_nano_tx_active", return_value=False), \
              mock.patch.object(server, "_nano_require_device",

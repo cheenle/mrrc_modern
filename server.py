@@ -5639,7 +5639,10 @@ NANO_ENABLED = (_env("MRRC_NANO", "on") or "on").strip().lower() not in (
     "off", "0", "false", "no")
 NANO_ALLOW_FLASH = (_env("MRRC_NANO_ALLOW_FLASH", "0") or "0").strip().lower() in (
     "1", "true", "yes", "on")
-NANO_DIR = Path(_env("MRRC_NANO_DIR", str(_writable_runtime_dir() / "nano")))
+# nano-data 而不是 nano：`nano/` 是代码包目录。数据写进去会在更新时被整目录
+# 替换、混进源码、还会继承 rsync 的属主（现场 2026-10-18：state.json.tmp
+# Permission denied —— 目录被 sudo rsync 归了 root，而服务跑在 mrrc 下）。
+NANO_DIR = Path(_env("MRRC_NANO_DIR", str(_writable_runtime_dir() / "nano-data")))
 NANO_SWEEPS_DIR = NANO_DIR / "sweeps"
 NANO_STATE_FILE = NANO_DIR / "state.json"
 
@@ -5781,14 +5784,13 @@ def _nano_status_block(dev: NanoVna, with_settings: bool) -> dict:
         "cal": None,
         "device_sweep": _nano_read_state(),
     }
+    # 设备不应答 = 句柄已死（USB 重新枚举）。这里**必须**抛出去而不是吞掉：
+    # 吞掉会让状态一直说"在线"，下一次扫描才炸 —— 用户看到的就成了"刚才还好好的"。
     try:
         block["vbat_mv"] = dev.vbat_mv()
-    except Exception:                                              # noqa: BLE001
-        pass
-    try:
         block["cal"] = dev.cal_state()
-    except Exception:                                              # noqa: BLE001
-        pass
+    except Exception as exc:                                       # noqa: BLE001
+        raise NanoError("device stopped answering: %s" % exc)
     if with_settings:
         try:
             block["settings"] = dev.read_settings()
@@ -5864,15 +5866,21 @@ async def api_nano_status(request: Request, full: int = 0):
         "flash": {"enabled": NANO_ALLOW_FLASH, "variant": _nano_read_state().get("variant")},
     }
     if _nano_lock.locked():
+        # 忙时**不碰串口**：并发读写同一个 pyserial 句柄会抢走扫描的帧字节。
+        # connected 必须如实 —— 忙 ≠ 掉线，这个判断错了页面每扫一次就喊一次"掉线"。
+        payload["connected"] = _nano_device is not None
         return JSONResponse(payload)
-    try:
-        dev = await asyncio.to_thread(_nano_require_device)
-        payload.update(await asyncio.to_thread(_nano_status_block, dev, bool(full)))
-    except NanoError as exc:
-        payload["detail"] = str(exc)
-    except Exception as exc:                                       # noqa: BLE001
-        logger.warning("nano: status failed (%s)", exc)
-        payload["detail"] = str(exc)
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            payload.update(await asyncio.to_thread(_nano_status_block, dev, bool(full)))
+        except NanoError as exc:
+            payload["detail"] = str(exc)
+            if _nano_device is not None:
+                await asyncio.to_thread(_nano_forget, str(exc))   # 旧句柄，下次轮询重连
+        except Exception as exc:                                   # noqa: BLE001
+            logger.warning("nano: status failed (%s)", exc)
+            payload["detail"] = str(exc)
     return JSONResponse(payload)
 
 

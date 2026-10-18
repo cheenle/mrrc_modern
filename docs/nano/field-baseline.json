@@ -1,0 +1,47 @@
+{
+  "kind": "nanovna_field_baseline",
+  "captured": "2026-10-18T21:05:34+0800",
+  "why": "野外独立使用的基准配置：扫哪段、屏幕上画什么、标记在哪、标定状态。设备被改乱时用 `nano/vna.py` 的 compare 或页面上的『与基准对比』看差异。",
+  "device": {
+    "board": "NanoVNA-H 4",
+    "version": "1.2.50",
+    "build": "May 16 2026 - 13:06:26",
+    "platform": "STM32F303xC Analog & DSP",
+    "points_max": 401,
+    "vbat_mv": 4147,
+    "cal": "load Es Er cal'ed"
+  },
+  "sweep": {
+    "start_hz": 2000000,
+    "stop_hz": 7800000,
+    "points": 401
+  },
+  "traces": [
+    {
+      "id": 0,
+      "type": "SWR",
+      "channel": "S11",
+      "scale": 1.0,
+      "refpos": 0.0
+    }
+  ],
+  "markers": [
+    {
+      "id": 1,
+      "index": 400,
+      "freq_hz": 7800000
+    }
+  ],
+  "settings": {
+    "edelay_s11_ps": 0.0,
+    "edelay_s21_ps": 0.0,
+    "smooth": 0.0,
+    "power": 255.0,
+    "offset_hz": 12000.0,
+    "s21offset_db": 0.0,
+    "bandwidth": 3,
+    "bandwidth_hz": 1000
+  },
+  "save_slot": 4,
+  "note": "SAVE/RECALL 槽 4 = 野外配置；迹线格式只有 recall 能整套恢复"
+}

@@ -520,6 +520,31 @@ async function applyTraceParams() {
     if (res.ok) setTimeout(() => banner(''), 2000);
 }
 
+async function compareBaseline() {
+    const ul = document.getElementById('baseline-diff');
+    ul.textContent = '读取中…';
+    try {
+        const res = await api('baseline?compare=1');
+        const body = await readJson(res);
+        if (!res.ok) { ul.textContent = body.detail || '取不到基准'; return; }
+        const diff = body.diff || [];
+        ul.textContent = '';
+        if (!diff.length) {
+            ul.textContent = '✅ 与基准一致';
+            return;
+        }
+        diff.forEach(d => {
+            const li = document.createElement('li');
+            li.textContent = d.label + '：基准 ' + (d.baseline === null ? '—' : d.baseline)
+                + ' → 现在 ' + (d.live === null ? '—' : d.live);
+            li.style.padding = '4px 0';
+            ul.appendChild(li);
+        });
+    } catch (e) {
+        ul.textContent = '对比失败：' + e;
+    }
+}
+
 async function renderView() {
     const box = document.getElementById('view');
     let v;
@@ -755,6 +780,7 @@ function boot() {
     document.getElementById('field-preset').onclick = applyFieldPreset;
     document.getElementById('dev-apply').onclick = applyDeviceSweep;
     document.getElementById('trace-apply').onclick = applyTraceParams;
+    document.getElementById('baseline-compare').onclick = compareBaseline;
     document.getElementById('exportCsv').onclick = () => exportSweep('csv');
     document.getElementById('exportS1p').onclick = () => exportSweep('s1p');
     renderCal();

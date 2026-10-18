@@ -77,7 +77,7 @@ class FakeDevice:
     def set_config_flag(self, name, on):
         if name in ("connection", "tif"):
             raise ValueError("config flag not allowed: %r" % (name,))
-        self.sent.append((name, bool(on)))
+        self.sent.append(("cfg_flag", name, bool(on)))
 
     def save_config(self):
         self.sent.append(("saveconfig",))
@@ -93,6 +93,9 @@ class FakeDevice:
 
     def set_device_sweep(self, start, stop, points):
         self.sent.append(("device_sweep", start, stop, points))
+
+    def disable_all_traces(self):
+        self.sent.append(("all_traces_off",))
 
     def save_state(self, slot):
         self.sent.append(("save_state", slot))
@@ -273,7 +276,7 @@ class SettingsAndCalTest(unittest.TestCase):
             r = asyncio.run(server.api_nano_settings(
                 self._req({"name": "cfg_grid", "value": 1})))
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(dev.sent, [("grid", True)])
+        self.assertEqual(dev.sent, [("cfg_flag", "grid", True)])
         upd.assert_called_once()
 
     def test_connection_flag_is_refused(self):
@@ -562,9 +565,13 @@ class FieldPresetTest(unittest.TestCase):
         self.addCleanup(lambda: server._auth_tokens.discard(self.token))
         self.addCleanup(lambda: setattr(server, "_nano_lock", asyncio.Lock()))
         self.state = {}
+        # 三条都要打桩：真实 NANO_DIR 在源码树里，一次跑就会把运行期状态写进仓库
         self.addCleanup(lambda: setattr(server, "_nano_write_json", self._orig_write))
         self._orig_write = server._nano_write_json
+        self.addCleanup(lambda: setattr(server, "_nano_config", self._orig_config))
+        self._orig_config = server._nano_config
         server._nano_write_json = lambda path, payload: self.state.update(payload)
+        server._nano_config = lambda: {}
 
     def _req(self, body=None):
         return FakeRequest(cookies={"mrrc_auth": self.token}, body=body or {})
@@ -578,7 +585,9 @@ class FieldPresetTest(unittest.TestCase):
         self.assertEqual(
             dev.sent,
             [("device_sweep", 1_000_000, 54_000_000, 401),
+             ("all_traces_off",),
              ("trace", 0, "swr", 0),
+             ("cfg_flag", "grid", True),
              ("param", 0, "scale", 1.0),
              ("param", 0, "refpos", 0.0),
              ("marker", 0, 200),
@@ -607,6 +616,56 @@ class FieldPresetTest(unittest.TestCase):
         self.assertEqual(self.state["start_hz"], 3_500_000)
 
 
+class BaselineTest(unittest.TestCase):
+    """基准配置：倒出来是为了"设备被改乱了能看出差在哪"。"""
+
+    def setUp(self):
+        self.token = "nano-baseline-token"
+        server._auth_tokens.add(self.token)
+        self.addCleanup(lambda: server._auth_tokens.discard(self.token))
+        self.addCleanup(lambda: setattr(server, "_nano_lock", asyncio.Lock()))
+        self.req = FakeRequest(cookies={"mrrc_auth": self.token})
+
+    def test_repository_baseline_is_valid_and_matches_this_device(self):
+        import json as _json
+        from pathlib import Path as _Path
+        data = _json.loads((_Path(server.__file__).parent / "docs" / "nano"
+                            / "field-baseline.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["kind"], "nanovna_field_baseline")
+        self.assertEqual(data["device"]["board"], "NanoVNA-H 4")
+        self.assertIn("sweep", data)
+        self.assertEqual(data["traces"][0]["type"], "SWR")
+        self.assertEqual(data["save_slot"], 4)
+
+    def test_compare_reports_no_drift_when_live_equals_baseline(self):
+        import json as _json
+        from pathlib import Path as _Path
+        base = _json.loads((_Path(server.__file__).parent / "docs" / "nano"
+                            / "field-baseline.json").read_text(encoding="utf-8"))
+        live = {"sweep": base["sweep"], "traces": base["traces"],
+                "markers": base["markers"], "settings": base["settings"]}
+        self.assertEqual(server._nano_diff(base, live), [])
+
+    def test_compare_names_what_drifted(self):
+        import json as _json
+        from pathlib import Path as _Path
+        base = _json.loads((_Path(server.__file__).parent / "docs" / "nano"
+                            / "field-baseline.json").read_text(encoding="utf-8"))
+        live = {"sweep": dict(base["sweep"], stop_hz=30_000_000),
+                "traces": [{"id": 0, "type": "LOGMAG", "channel": "S21"}],
+                "markers": [], "settings": dict(base["settings"], smooth=4)}
+        diff = server._nano_diff(base, live)
+        fields = {d["field"] for d in diff}
+        self.assertIn("sweep.stop_hz", fields)
+        self.assertIn("traces.0", fields)
+        self.assertIn("settings.smooth", fields)
+
+    def test_endpoint_returns_the_baseline(self):
+        r = asyncio.run(server.api_nano_baseline(self.req))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(json.loads(r.body)["baseline"]["save_slot"], 4)
+
+
 class PageAssetsTest(unittest.TestCase):
     """前缀安全：接口地址只能从页面自己的 location 推出来（tests/test_path_prefix.py 的规矩）。"""
 
@@ -627,7 +686,8 @@ class PageAssetsTest(unittest.TestCase):
         js = (Path(server.__file__).parent / "static" / "nano.js").read_text(encoding="utf-8")
         for marker in ('id="tip"', 'id="center"', 'id="span"', 'id="flags"',
                        'id="view"', 'id="verdict"', 'id="field-preset"',
-                       'id="dev-start"', 'id="trace-scale"'):
+                       'id="dev-start"', 'id="trace-scale"',
+                       'id="baseline-compare"'):
             self.assertIn(marker, html)
         self.assertIn("showTip", js)
         self.assertIn("currentRange", js)

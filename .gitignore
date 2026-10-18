@@ -95,3 +95,6 @@ fleet/
 # 而且它是 1.2 MB 的厂商产物。构建前跑一次 tools/sdr/fetch_sdrplay_api.sh，
 # 服务层在 vendor/sdrplay 缺失时会直接让构建失败（不会静默出一个没有 API 的镜像）。
 /vendor/sdrplay/
+
+# NanoVNA 运行期数据（扫描库、state.json、下载的镜像）—— 不进版本控制
+nano-data/

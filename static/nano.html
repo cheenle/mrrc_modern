@@ -175,7 +175,10 @@ select,input[type=number],input[type=text]{
     <div class="row"><button class="ghost" id="field-preset">一键套用野外配置</button></div>
     <p class="hint">它会做四件事，然后把整套**存进槽 4**：<br>
       ① 设备自己扫 1–54 MHz / 401 点（HF+6m 一次覆盖）<br>
-      ② 迹线 0 切到 <b>SWR</b>，刻度 1.0/格、参考 0（屏幕从下到上 0→10）<br>
+      ② <b>关掉其它三条迹线</b>，只留 <b>S11 的 SWR</b>：刻度 1.0/格、参考 0
+      （屏幕从下到上就是 0→10 的驻波），并打开网格数值<br>
+      <span style="color:#6f695c">S21 / Smith / 相位在野外没有意义——只有 CH0 一根天线，
+      那些是噪声，四条线叠在 480×320 的屏上反而看不清。</span><br>
       ③ 标记 1 放到扫描中点（拔下来转旋钮就能拖到谐振点）<br>
       ④ `saveconfig` + `save 4`<br>
       <b>带出去独立用：开机 → 主菜单 RECALL → 4</b>。迹线格式不在 config 里，
@@ -188,6 +191,12 @@ select,input[type=number],input[type=text]{
         <option selected>401</option></select>
       <button class="ghost" id="dev-apply">设为设备范围</button>
     </div>
+
+    <h3>基准配置</h3>
+    <div class="row"><button class="ghost" id="baseline-compare">与基准对比</button></div>
+    <ul id="baseline-diff" style="list-style:none;padding:0;margin:0 0 10px;font-size:12px"></ul>
+    <p class="hint">基准是 <code>docs/nano/field-baseline.json</code>（2026-10-18 从这台设备倒出）。
+      只看能读回来的项：扫描范围、迹线格式、标记、测量设置。</p>
 
     <h3>设备屏幕</h3>
     <div id="view"><p class="hint">读取中…</p></div>

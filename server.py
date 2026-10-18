@@ -5935,6 +5935,87 @@ async def api_nano_scan(request: Request):
     return JSONResponse(payload)
 
 
+NANO_BASELINE_FILE = Path(__file__).parent / "docs" / "nano" / "field-baseline.json"
+
+
+def _nano_live_snapshot(dev) -> dict:
+    """设备当前状态里**可读**的那部分（与基准文件同形状）。"""
+    freqs = dev.frequencies()
+    return {
+        "sweep": {"start_hz": freqs[0], "stop_hz": freqs[-1], "points": len(freqs)},
+        "traces": dev.read_traces(),
+        "markers": dev.read_markers(),
+        "settings": dev.read_settings(),
+    }
+
+
+def _nano_diff(baseline: dict, live: dict) -> list:
+    """基准 ↔ 现场：只报"可读且不同"的项，一条一句话。"""
+    out = []
+    b_sweep = baseline.get("sweep") or {}
+    l_sweep = live.get("sweep") or {}
+    for key, label in (("start_hz", "扫描起点"), ("stop_hz", "扫描终点"),
+                       ("points", "点数")):
+        if b_sweep.get(key) != l_sweep.get(key):
+            out.append({"field": "sweep." + key, "label": label,
+                        "baseline": b_sweep.get(key), "live": l_sweep.get(key)})
+    b_traces = {t["id"]: t for t in baseline.get("traces") or []}
+    l_traces = {t["id"]: t for t in live.get("traces") or []}
+    for tid in sorted(set(b_traces) | set(l_traces)):
+        b, l = b_traces.get(tid), l_traces.get(tid)
+        if b is None:
+            out.append({"field": "traces.%d" % tid, "label": "迹线 %d" % tid,
+                        "baseline": None, "live": l.get("type")})
+        elif l is None:
+            out.append({"field": "traces.%d" % tid, "label": "迹线 %d" % tid,
+                        "baseline": b.get("type"), "live": None})
+        elif (b.get("type"), b.get("channel")) != (l.get("type"), l.get("channel")):
+            out.append({"field": "traces.%d" % tid, "label": "迹线 %d 格式" % tid,
+                        "baseline": "%s/%s" % (b.get("type"), b.get("channel")),
+                        "live": "%s/%s" % (l.get("type"), l.get("channel"))})
+    if (baseline.get("markers") or [{}])[0].get("freq_hz") != \
+            (live.get("markers") or [{}])[0].get("freq_hz"):
+        out.append({"field": "markers",
+                    "label": "标记频率",
+                    "baseline": (baseline.get("markers") or [{}])[0].get("freq_hz"),
+                    "live": (live.get("markers") or [{}])[0].get("freq_hz")})
+    b_set = baseline.get("settings") or {}
+    l_set = live.get("settings") or {}
+    for key, label in (("smooth", "平滑"), ("power", "功率"),
+                       ("bandwidth", "带宽档"), ("edelay_s11_ps", "电延迟")):
+        if b_set.get(key) != l_set.get(key):
+            out.append({"field": "settings." + key, "label": label,
+                        "baseline": b_set.get(key), "live": l_set.get(key)})
+    return out
+
+
+@app.get("/api/nano/baseline")
+async def api_nano_baseline(request: Request, compare: int = 0):
+    """基准配置（`docs/nano/field-baseline.json`）；`?compare=1` 时与现场对比。"""
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    try:
+        baseline = json.loads(NANO_BASELINE_FILE.read_text(encoding="utf-8"))
+    except Exception as exc:                                       # noqa: BLE001
+        return JSONResponse({"error": "baseline_missing", "detail": str(exc)},
+                            status_code=404)
+    if not compare:
+        return JSONResponse({"baseline": baseline})
+    if _nano_lock.locked():
+        return JSONResponse({"error": "busy", "baseline": baseline}, status_code=409)
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            live = await asyncio.to_thread(_nano_live_snapshot, dev)
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+    return JSONResponse({"baseline": baseline, "live": live,
+                         "diff": _nano_diff(baseline, live)})
+
+
 @app.post("/api/nano/marker")
 async def api_nano_marker(request: Request):
     """把 1 号标记挪到第 N 个扫描点 —— 图上点一下，设备屏幕上跟着动。"""
@@ -6132,8 +6213,17 @@ async def api_nano_field_preset(request: Request):
             dev = await asyncio.to_thread(_nano_require_device)
             await asyncio.to_thread(dev.set_device_sweep, start, stop, points)
             done.append("sweep")
+            # 现场只有 CH0 一根天线：S21 / Smith / 相位全是噪声，四条迹线叠在
+            # 那块 480×320 屏上反而看不清。先全关，再只开 trace 0 的 S11 SWR。
+            await asyncio.to_thread(dev.disable_all_traces)
+            done.append("traces: all off")
             await asyncio.to_thread(dev.set_trace_type, 0, "swr", 0)
-            done.append("trace=swr")
+            done.append("trace0=SWR(S11)")
+            try:
+                await asyncio.to_thread(dev.set_config_flag, "grid", 1)
+                done.append("grid values on")
+            except Exception:                                      # noqa: BLE001
+                pass
             await asyncio.to_thread(dev.set_trace_param, 0, "scale", 1.0)
             done.append("scale=1.0")
             await asyncio.to_thread(dev.set_trace_param, 0, "refpos", 0.0)

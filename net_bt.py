@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import time
 from typing import Callable, Optional
 
 Runner = Callable[[list], tuple]
@@ -314,61 +315,6 @@ def pair_script(address: str, seconds: int = 25) -> list[tuple[str, float]]:
     ]
 
 
-def _pty_advertising(address: str, timeout: float) -> bool:
-    """Is ``address`` **broadcasting right now**?
-
-    只有扫描结果里带 RSSI 才算：`bluetoothctl devices` 里那行是 bluez 的**缓存**，
-    遥控器早就退出配对模式了，拿它去 pair 只会得到 `Device ... not available`
-    （2026-10-18 现场：网页点「配对」失败三次，三次都是这个原因，而那一行错误对
-    操作员毫无用处——它没说要先把遥控器按回配对模式）。
-    """
-    import os
-    import pty
-    import select
-    import subprocess
-    import time
-
-    master, slave = pty.openpty()
-    proc = subprocess.Popen(["bluetoothctl", "--agent", "NoInputNoOutput"],
-                            stdin=slave, stdout=slave, stderr=slave, close_fds=True)
-    os.close(slave)
-    buf = ""
-    want = address.lower()
-    try:
-        os.write(master, b"scan on\n")
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            ready, _, _ = select.select([master], [], [], 0.2)
-            if master not in ready:
-                continue
-            try:
-                data = os.read(master, 4096)
-            except OSError:
-                break
-            if not data:
-                break
-            buf += data.decode(errors="replace")
-            for event in _clean(buf).splitlines():
-                low = event.lower()
-                if want in low and "rssi" in low:
-                    return True
-        return False
-    finally:
-        try:
-            os.write(master, b"scan off\nquit\n")
-        except OSError:
-            pass
-        for closer in (proc.terminate, proc.wait, proc.kill):
-            try:
-                closer()
-            except Exception:
-                pass
-        try:
-            os.close(master)
-        except OSError:
-            pass
-
-
 def _pty_session(lines: list[tuple[str, float]], argv: Optional[list] = None) -> str:
     """Run ``bluetoothctl`` on a real pty and type `lines` into it.
 
@@ -425,9 +371,9 @@ def _pty_session(lines: list[tuple[str, float]], argv: Optional[list] = None) ->
 
 
 def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
-         probe: Optional[Callable[[str, float], bool]] = None,
          keyboard: Optional[Callable[[str], bool]] = None,
-         cure: bool = True) -> dict:
+         cure: bool = True,
+         attempts: int = 6, retry_delay: float = 5.0) -> dict:
     """Pair + trust.  Returns the resulting ``info()``, plus ``error`` on failure.
 
     The error is surfaced on purpose: "没有配上" with no reason is the message an
@@ -445,39 +391,54 @@ def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
         state["error"] = "" if state.get("paired") else pair_error(out + "\n" + err)
         return state
 
-    probe = probe or _pty_advertising
-    keys = keyboard or keyboard_device_present
-    if not probe(address, 45.0):
-        state = info(address)
-        state["error"] = ("遥控器没有在广播：它没进配对模式，或者已经超时退出。"
-                          "按住「OK + 返回」约 5 秒（指示灯快闪）再点一次。")
-        return state
-
+    keys = keyboard or _keyboard_stable
     out = ""
-    try:
-        out = _pty_session(pair_script(address, seconds))
-    except (ImportError, OSError):
-        _rc, out, _err = _run(["bluetoothctl", "--timeout", str(seconds), "pair", address])
-        _run(["bluetoothctl", "trust", address])
-
     state = info(address)
+    # 不用"等广播"当前置条件：这台遥控器的广播里**没有 RSSI**（2026-10-19 实测：
+    # 它只出 `[NEW] Device … CMCC_Voice_Remote`，别的设备才有 `RSSI:` 行），所以
+    # 按 RSSI 判"在不在广播"会永远判成不在——操作员把键按烂也走不到配对。
+    # 改成"直接配，bluez 说不可用就隔几秒再试"：配对窗口由遥控器决定，重试把
+    # 时序问题变成概率问题，而且失败时拿到的是 bluez 的原话。
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            out += _pty_session(pair_script(address, seconds))
+        except (ImportError, OSError):
+            _rc, out2, _err = _run(["bluetoothctl", "--timeout", str(seconds),
+                                    "pair", address])
+            _run(["bluetoothctl", "trust", address])
+            out += out2
+        state = info(address)
+        if state.get("paired"):
+            break
+        if attempt < attempts:
+            time.sleep(max(0.0, retry_delay))
     if state.get("paired") and not keys(address) and cure:
         # 文档 §2 那条实测的陷阱：Paired/Bonded 都为真，链路却没加密，bluez 的
         # hog 拼不出键盘设备，按键一个都不来。解法只有一条：清掉陈旧 bond、
         # 控制器断电重启、再配一次。
         remove()
         power_cycle()
-        if probe(address, 30.0):
-            try:
-                out += _pty_session(pair_script(address, seconds))
-            except (ImportError, OSError):
-                pass
+        time.sleep(2)
+        try:
+            out += _pty_session(pair_script(address, seconds))
+        except (ImportError, OSError):
+            pass
         state = info(address)
 
     ok = bool(state.get("paired")) and keys(address)
-    state["error"] = "" if ok else (pair_error(out)
-                                    or ("已配对，但按键还没反应——点「重配」再试一次"
-                                        if state.get("paired") else "配对失败：设备没有响应"))
+    if ok:
+        state["error"] = ""
+    elif pair_error(out):
+        raw = pair_error(out)
+        if "not available" in raw.lower() or "not found" in raw.lower():
+            raw += " —— 遥控器没有进入配对模式：按住「OK + 返回」约 5 秒（指示灯快闪）再点一次"
+        state["error"] = raw
+    elif state.get("paired"):
+        why = "链路没加密（bluez 报 ATT 0x0E）" if _att_errors_recent() else "按键没有响应"
+        state["error"] = "已配对，但%s——点「重配」再试一次" % why
+    else:
+        state["error"] = ("配对失败：遥控器没有进入配对模式，或者已经超时退出。"
+                          "按住「OK + 返回」约 5 秒（指示灯快闪）再点一次。")
     return state
 
 
@@ -514,6 +475,39 @@ def keyboard_device_present(address: str,
         if "kbd" in low or "keyboard" in low:
             return True
     return False
+
+
+def _keyboard_stable(address: str, samples: int = 3, interval: float = 1.0) -> bool:
+    """键盘设备**连续存在**才算数。
+
+    单点采样骗过一次现场（2026-10-18 深夜）：链路没加密时 bluez 的 `hog` 会先把
+    键盘设备建出来、读属性失败（ATT 0x0E `unlikely error`）再拆掉，如此循环。
+    正好在"存在"的那一刻采样，页面就会写「已配对，按键可用 ✓」——而所有按键都是死的。
+    """
+    import time
+
+    for _ in range(max(1, samples)):
+        if not keyboard_device_present(address):
+            return False
+        time.sleep(interval)
+    return keyboard_device_present(address)
+
+
+def _att_errors_recent(seconds: int = 90) -> bool:
+    """最近 bluez 有没有报 ATT 0x0E —— 那是"链路没加密"的直接证据。
+
+    `hog-lib.c: … Request attribute has encountered an unlikely error` 只会在
+    GATT 读被设备拒绝时出现，而实测这种拒绝的唯一原因是链路处明文。
+    """
+    import subprocess
+
+    try:
+        out = subprocess.run(["journalctl", "-u", "bluetooth",
+                              "--since", "%d sec ago" % max(10, seconds), "--no-pager"],
+                             capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return "unlikely error" in out
 
 
 def state(address: str, runner: Optional[Runner] = None) -> dict:

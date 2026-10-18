@@ -350,23 +350,27 @@ class VerdictTests(unittest.TestCase):
 
 
 
-class PairWaitsForAdvertisingTests(unittest.TestCase):
-    """网页上「配对」失败三次的真因（2026-10-18）：没等遥控器开始广播就 pair。
+class PairRetryTests(unittest.TestCase):
+    """配对不再以「等广播」为前置条件。
 
-    bluez 对缓存里的名字也会列出来，于是页面让操作员点了一台**没有在广播**的设备，
-    pair 回一句 `Device ... not available`。对操作员来说那句话什么都不说明。
+    2026-10-19 实测：这台遥控器的广播**没有 RSSI**（只出 `[NEW] Device … CMCC_Voice_Remote`，
+    别的设备才有 `RSSI:` 行）。所以按 RSSI 判「在不在广播」会永远判成不在——操作员
+    把按键按烂也走不到配对。改成直接配、失败隔几秒重试。
     """
 
-    def _with_stubs(self, advertising, paired_after=True, keys_after=False, cure=True):
+    def _run(self, outcomes, paired_when=None, keys=False, cure=True, attempts=3):
+        """outcomes: 每次 `_pty_session` 的输出；paired_when: 第几次之后 info 报 paired。"""
         calls = {"pty": 0, "remove": 0, "cycle": 0}
+        seq = list(outcomes)
 
         def fake_pty(lines, argv=None):
             calls["pty"] += 1
-            return "Attempting to pair\nPairing successful\n"
+            return seq[min(calls["pty"] - 1, len(seq) - 1)]
 
         def fake_info(address, runner=None):
-            return {"paired": paired_after, "bonded": paired_after,
-                    "trusted": True, "connected": False, "name": "CMDB"}
+            done = paired_when if paired_when is not None else 10 ** 6
+            paired = calls["pty"] >= done
+            return {"paired": paired, "bonded": paired, "trusted": True}
 
         with mock.patch.object(net_bt, "_pty_session", fake_pty), \
              mock.patch.object(net_bt, "info", fake_info), \
@@ -374,32 +378,31 @@ class PairWaitsForAdvertisingTests(unittest.TestCase):
                                lambda runner=None: calls.__setitem__("remove", calls["remove"] + 1)), \
              mock.patch.object(net_bt, "power_cycle",
                                lambda runner=None: calls.__setitem__("cycle", calls["cycle"] + 1)):
-            state = net_bt.pair("0C:F3:CE:B0:88:75", probe=lambda a, t: advertising,
-                                keyboard=lambda a: keys_after, cure=cure)
+            state = net_bt.pair("0C:F3:CE:B0:88:75", keyboard=lambda a: keys,
+                                cure=cure, attempts=attempts, retry_delay=0)
         return state, calls
 
-    def test_refuses_when_the_remote_is_not_broadcasting(self):
-        state, calls = self._with_stubs(advertising=False)
-        self.assertEqual(calls["pty"], 0)          # 一次 pair 都没发
-        self.assertIn("没有在广播", state["error"])
-        self.assertIn("OK + 返回", state["error"])  # 告诉操作员该做什么
-
-    def test_pairs_once_advertising_is_seen(self):
-        state, calls = self._with_stubs(advertising=True, keys_after=True)
-        self.assertEqual(calls["pty"], 1)
+    def test_retries_while_the_remote_is_unavailable(self):
+        state, calls = self._run(["Device 0C:F3:CE:B0:88:75 not available"] * 2
+                                 + ["Pairing successful"], paired_when=3, keys=True)
+        self.assertEqual(calls["pty"], 3)          # 前两次失败后重试，第三次成功
         self.assertEqual(state["error"], "")
 
-    def test_paired_but_dead_keys_triggers_the_documented_cure(self):
-        state, calls = self._with_stubs(advertising=True, keys_after=False)
+    def test_gives_up_with_an_actionable_message(self):
+        state, calls = self._run(["Device 0C:F3:CE:B0:88:75 not available"] * 3, attempts=3)
+        self.assertEqual(calls["pty"], 3)
+        self.assertIn("OK + 返回", state["error"])
+
+    def test_paired_but_dead_keys_runs_the_cure(self):
+        _state, calls = self._run(["Pairing successful"] * 3, paired_when=1, keys=False)
         self.assertGreaterEqual(calls["remove"], 1)
         self.assertGreaterEqual(calls["cycle"], 1)
-        self.assertEqual(calls["pty"], 2)          # 补救后重配了一次
-        self.assertIn("重配", state["error"])
 
     def test_cure_can_be_disabled(self):
-        _state, calls = self._with_stubs(advertising=True, keys_after=False, cure=False)
+        _state, calls = self._run(["Pairing successful"] * 3, paired_when=1,
+                                  keys=False, cure=False)
         self.assertEqual(calls["remove"], 0)
-        self.assertEqual(calls["pty"], 1)
+
 
 class SettingsPageTests(unittest.TestCase):
     """The page is the whole point: no SSH for the customer."""
@@ -437,3 +440,39 @@ class SettingsPageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class KeyboardStabilityTests(unittest.TestCase):
+    """键盘设备必须**连续存在**才算配上。
+
+    现场（2026-10-18 深夜）：链路没加密时 bluez 把键盘设备建出来、读属性失败
+    （ATT 0x0E）再拆掉，如此循环；单点采样正好撞上"存在"那一刻，页面于是写
+    「已配对，按键可用 ✓」，而每个键都是死的。
+    """
+
+    def test_absent_at_any_sample_is_unstable(self):
+        seq = [True, False, True]
+        with mock.patch.object(net_bt, "keyboard_device_present",
+                               side_effect=lambda a: seq.pop(0)):
+            self.assertFalse(net_bt._keyboard_stable("X", samples=3, interval=0))
+
+    def test_present_throughout_is_stable(self):
+        with mock.patch.object(net_bt, "keyboard_device_present", return_value=True):
+            self.assertTrue(net_bt._keyboard_stable("X", samples=3, interval=0))
+
+    def test_att_evidence_is_read_from_the_bluetooth_journal(self):
+        fake = mock.Mock(stdout="hog-lib.c: Read Report Reference descriptor failed: "
+                                "Request attribute has encountered an unlikely error")
+        with mock.patch("subprocess.run", return_value=fake):
+            self.assertTrue(net_bt._att_errors_recent())
+        fake2 = mock.Mock(stdout="nothing to see here")
+        with mock.patch("subprocess.run", return_value=fake2):
+            self.assertFalse(net_bt._att_errors_recent())
+
+    def test_error_names_the_unencrypted_link(self):
+        with mock.patch.object(net_bt, "_pty_session", lambda *a, **k: "Pairing successful"), \
+             mock.patch.object(net_bt, "info",
+                               return_value={"paired": True, "bonded": True}), \
+             mock.patch.object(net_bt, "_att_errors_recent", return_value=True):
+            state = net_bt.pair("X", keyboard=lambda a: False, cure=False, attempts=1)
+        self.assertIn("ATT 0x0E", state["error"])
+

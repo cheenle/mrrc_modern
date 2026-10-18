@@ -785,8 +785,8 @@
 </tr>
 <tr>
 <td>AD-030</td>
-<td>Serial instrument (NanoVNA-H on the box’s USB): <code class="scope-code">/Nano</code> antenna bench — <code class="scope-code">nano/analysis.py</code> pure math, <code class="scope-code">nano/vna.py</code> the only serial touchpoint (<code class="scope-code">scan_bin</code> binary frame with exact-length validation), four guards (refuse while transmitting, one operation at a time, never the CAT port, no listen/SDR sessions), device sweep restored after every scan; firmware upgrade is a locked phase 2</td>
-<td>Implemented (V3.01)</td>
+<td>Serial instrument (NanoVNA-H on the box’s USB): <code class="scope-code">/Nano</code> antenna bench — <code class="scope-code">nano/analysis.py</code> pure math, <code class="scope-code">nano/vna.py</code> the only serial touchpoint (<code class="scope-code">scan_bin</code> binary frame with exact-length validation), four guards (refuse while transmitting, one operation at a time, never the CAT port, no listen/SDR sessions), device sweep restored after every scan; firmware upgrade via ROM DFU (U3, <code class="scope-code">MRRC_NANO_ALLOW_FLASH</code>), version read-back as the only success criterion</td>
+<td>Implemented (V3.02)</td>
 </tr>
 </tbody>
 </table>
@@ -1248,7 +1248,7 @@
 </tr>
 <tr>
 <td>Status</td>
-<td>Implemented (V3.01, 2026-10-18) — 第一期（测量 + 设备管理）；固件升级为第二期</td>
+<td>Implemented (V3.02, 2026-10-18) — 测量 + 设备管理 + 固件升级（U3，默认上锁）</td>
 </tr>
 <tr>
 <td>Decision</td>
@@ -1270,7 +1270,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.01 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.02 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

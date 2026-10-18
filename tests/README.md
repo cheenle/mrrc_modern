@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2655 tests across 138 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2691 tests across 139 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-18, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2655 above. Run it with:
+the 2691 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -790,6 +790,19 @@ SDD coverage: AD-030, spec §4.6 / §4.7
 （页面与接口各一次）、`save_cal` 必须输入 `SAVE`、存盘/列表/读取/CSV/s1p/删除的
 往返、扫描文件 id 的路径穿越拒绝，以及**前缀安全**（`nano.js` 里没有以 `/` 开头的
 接口字面量，页面不加载 `ft710_main.js`/`ft710_ui.js`）。
+
+### 69. test_nano_flash.py — 固件升级的状态机（27 tests）
+
+SDD coverage: AD-030, spec §4.10
+
+升级是**唯一能把设备弄到"回不来"的操作**，所以这里钉的都是失败路径：变体挑选（六个
+变体各对应一个资产，`.hex`/`.dfu` 不是 `dfu-util -D` 的候选）、SHA-256 不符时**删掉
+半截文件**而不是留在磁盘上等下一次误用、上游没给 digest 就拒绝刷（没有依据不写设备）、
+`0483:df11` 的 sysfs 等待（`lsusb` 要装 usbutils，sysfs 永远在）、`dfu-util` 的 argv 与
+"没装"这个失败。状态机里最重要的三条：**刷后版本不对就是 failure，不是 success**；设备
+没进 DFU 时**不去跑 dfu-util**；自检崩了不能让一次成功的升级变成失败（建议值只记录）。
+`test_server_nano_routes` 另有 7 项守 U3 的四道门：默认上锁、确认字必须真的是 `FLASH`、
+发射中拒、已有任务在跑拒。
 
 ## Test Coverage by SDD Requirement
 

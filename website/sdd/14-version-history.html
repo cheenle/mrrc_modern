@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.02</td>
+<td>2026-10-18</td>
+<td>pi</td>
+<td><strong>NanoVNA 第二期：固件升级（AD-030，U3 默认上锁）。</strong> ① <strong>为什么能安全做</strong>：<code class="scope-code">reset dfu</code> 走 <code class="scope-code">boardDFUEnter()</code> → <code class="scope-code">__set_MSP(STM32F303xC_SYSTEM_MEMORY)</code>，跳进芯片<strong>系统存储区</strong>的 ROM bootloader；那段代码不可擦写，所以最坏只是 App 区烧一半、重启停在 DFU，再刷即恢复——不存在变砖。 ② <strong>为什么需要人</strong>：H/H4 有 MS/SI/ZK 三个变体（MS5351 vs Si5351；ZK 是 2025 年 NE602A 换料板），那是<strong>编译期</strong>开关，<code class="scope-code">info</code> 只说 <code class="scope-code">Board: NanoVNA-H 4</code>，运行时读不出来。刷错不砖，但时钟/RF 不对，所以：首次显式选、记住在 <code class="scope-code">config.json</code>、刷后自检（仅在用户声明「CH0 开路」时才判</td>
+</tr>
+<tr>
 <td>SDD V3.01</td>
 <td>2026-10-18</td>
 <td>pi</td>
@@ -1013,7 +1019,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.01 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.02 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

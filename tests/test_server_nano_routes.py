@@ -279,6 +279,84 @@ class SweepStoreTest(unittest.TestCase):
         self.assertEqual(r.status_code, 409)
 
 
+class FlashGuardTest(unittest.TestCase):
+    """U3：默认上锁；确认字必须真的打出来；发射中与"已有一次在跑"都拒。"""
+
+    def setUp(self):
+        self.token = "nano-flash-token"
+        server._auth_tokens.add(self.token)
+        self.addCleanup(lambda: server._auth_tokens.discard(self.token))
+        self.addCleanup(lambda: setattr(server, "_nano_flash_task", None))
+        self.addCleanup(lambda: setattr(server, "NANO_ALLOW_FLASH",
+                                         server.NANO_ALLOW_FLASH))
+
+    def _req(self, body=None):
+        return FakeRequest(cookies={"mrrc_auth": self.token}, body=body or {})
+
+    def test_disabled_by_default(self):
+        with mock.patch.object(server, "NANO_ALLOW_FLASH", False):
+            r = asyncio.run(server.api_nano_flash(
+                self._req({"tag": "1.2.50", "variant": "h4-ms", "confirm": "FLASH"})))
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(json.loads(r.body)["error"], "flash_disabled")
+
+    def test_requires_typed_confirmation(self):
+        with mock.patch.object(server, "NANO_ALLOW_FLASH", True), \
+             mock.patch.object(server, "_nano_tx_active", return_value=False):
+            r = asyncio.run(server.api_nano_flash(
+                self._req({"tag": "1.2.50", "variant": "h4-ms", "confirm": "yes"})))
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(json.loads(r.body)["error"], "confirm_required")
+
+    def test_refused_while_transmitting(self):
+        with mock.patch.object(server, "NANO_ALLOW_FLASH", True), \
+             mock.patch.object(server, "_nano_tx_active", return_value=True):
+            r = asyncio.run(server.api_nano_flash(
+                self._req({"tag": "1.2.50", "variant": "h4-ms", "confirm": "FLASH"})))
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(json.loads(r.body)["error"], "tx_active")
+
+    def test_refused_while_another_job_runs(self):
+        running = mock.MagicMock()
+        running.done.return_value = False
+        with mock.patch.object(server, "NANO_ALLOW_FLASH", True), \
+             mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_flash_task", running):
+            r = asyncio.run(server.api_nano_flash(
+                self._req({"tag": "1.2.50", "variant": "h4-ms", "confirm": "FLASH"})))
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(json.loads(r.body)["error"], "busy")
+
+    def test_unknown_variant_is_rejected(self):
+        with mock.patch.object(server, "NANO_ALLOW_FLASH", True), \
+             mock.patch.object(server, "_nano_tx_active", return_value=False):
+            r = asyncio.run(server.api_nano_flash(
+                self._req({"tag": "1.2.50", "variant": "h9-zz", "confirm": "FLASH"})))
+        self.assertEqual(r.status_code, 400)
+
+    def test_status_is_readable_without_the_flag(self):
+        with mock.patch.object(server, "NANO_ALLOW_FLASH", False):
+            r = asyncio.run(server.api_nano_flash_status(self._req()))
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(json.loads(r.body)["enabled"])
+
+
+class FirmwareEndpointTest(unittest.TestCase):
+    def setUp(self):
+        self.token = "nano-fw-token"
+        server._auth_tokens.add(self.token)
+        self.addCleanup(lambda: server._auth_tokens.discard(self.token))
+
+    def test_lists_every_variant(self):
+        with mock.patch.object(server, "_nano_releases", return_value=[]):
+            r = asyncio.run(server.api_nano_firmware(
+                FakeRequest(cookies={"mrrc_auth": self.token})))
+        self.assertEqual(r.status_code, 200)
+        payload = json.loads(r.body)
+        self.assertEqual(set(payload["variants"]), set(server.nano_flash.VARIANTS))
+        self.assertIn("enabled", payload)
+
+
 class PageAssetsTest(unittest.TestCase):
     """前缀安全：接口地址只能从页面自己的 location 推出来（tests/test_path_prefix.py 的规矩）。"""
 

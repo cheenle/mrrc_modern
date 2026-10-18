@@ -133,6 +133,17 @@ def parse_frequencies(text: str) -> list[int]:
     return [int(tok) for tok in re.findall(r"^\s*(\d+)\s*$", text, re.M)]
 
 
+def drop_echo_line(raw: bytes) -> bytes:
+    """去掉命令回显那一行，保留其后的全部正文。
+
+    `data 0` 的回复是 101 行数字；把回显只去掉末尾的 CRLF 会让第一行变成
+    ``data 0`` 这种既不是数字也不是空行的东西 —— 现场调试时它被当成"数据"喂给了
+    float()。
+    """
+    nl = raw.find(b"\r\n")
+    return raw[nl + 2:] if nl >= 0 else raw
+
+
 def _strip_frame_wrapping(raw: bytes) -> bytes:
     """去掉命令回显行与提示符，留下正文。
 
@@ -198,8 +209,16 @@ class Transport(Protocol):
 class SerialTransport:
     """pyserial 之上的最小封装：一条命令一次往返。
 
-    CDC-ACM 忽略波特率，仍写 115200（pyserial 要求一个值）。读循环靠
-    ``timeout`` 空闲判断收尾：pyserial 在超时后返回 ``b""``，那就是"这一帧完了"。
+    CDC-ACM 忽略波特率，仍写 115200（pyserial 要求一个值）。
+
+    两条纪律（2026-10-18 真机上撞出来的，见下）：
+
+    * **发命令前先与提示符同步**。直接 `reset_input_buffer()` 就写，会在设备还在
+      吐上一条回复时把一个新命令行塞进去 —— 实测结果是 `scan_bin` 有时**一个字节
+      都不回**（不是回错，是不回），重试才成功。
+    * **二进制帧按长度读**，不按"静默多久"判断收尾。设备在 401 点时扫 1.26 s，
+      数据也是分段到的；用空闲判断会在段间截断，得到一个长度不对的帧 —— 而
+      长度不对的帧正是本模块**必须**整帧拒绝的东西。
     """
 
     def __init__(self, port: str, baudrate: int = 115200, io_timeout: float = 0.15):
@@ -208,31 +227,87 @@ class SerialTransport:
         self.port = port
         self._ser = serial.Serial(port, baudrate=baudrate, timeout=io_timeout)
 
-    def _drain_pending(self) -> None:
-        self._ser.reset_input_buffer()
+    def _sync_prompt(self, timeout: float = 0.6) -> None:
+        """等到设备空闲（提示符 `ch> ` 收尾）再发下一条命令。
 
-    def _read_all(self, timeout: float, idle: float) -> bytes:
+        `in_waiting` 先看一眼：**没人在说话就立刻走**。第一版无条件读到超时，
+        每条命令白等 0.6 s —— 一次扫描因此从 0.32 s 变成 1.05 s。
+        """
+        if not self._ser.in_waiting:
+            return
         deadline = time.monotonic() + timeout
         buf = bytearray()
+        empty = 0
+        while time.monotonic() < deadline:
+            chunk = self._ser.read(64)
+            if chunk:
+                empty = 0
+                buf += chunk
+                if buf.endswith(PROMPT):
+                    return
+                continue
+            empty += 1
+            if empty >= 2:
+                break
+        if buf:
+            log.debug("nano: prompt sync saw %r", bytes(buf[-16:]))
+
+    def _read_until_newline(self, deadline: float) -> bytes:
+        """吃掉命令回显：读到第一个 \r\n 为止。"""
+        buf = bytearray()
+        while b"\r\n" not in buf and time.monotonic() < deadline:
+            chunk = self._ser.read(64)
+            if chunk:
+                buf += chunk
+        return bytes(buf)
+
+    def _drain_quiet(self, seconds: float = 0.02) -> None:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            if not self._ser.read(256):
+                return
+
+    def request(self, cmd: str, timeout: float = 2.0) -> str:
+        deadline = time.monotonic() + timeout
+        self._sync_prompt()
+        self._ser.write(cmd.encode() + b"\r")
+        buf = bytearray(drop_echo_line(self._read_until_newline(deadline)))
         while time.monotonic() < deadline:
             chunk = self._ser.read(4096)
             if chunk:
                 buf += chunk
                 continue
-            if buf:                                       # 静默一轮 = 这一帧结束
+            if buf.endswith(PROMPT) or (len(buf) and time.monotonic() > deadline - 0.05):
                 break
-        return bytes(buf)
-
-    def request(self, cmd: str, timeout: float = 2.0) -> str:
-        self._drain_pending()
-        self._ser.write(cmd.encode() + b"\r")
-        raw = self._read_all(timeout, idle=0.05)
-        return _strip_frame_wrapping(raw).decode("utf-8", "replace")
+            if buf:
+                break                                     # 一拍静默即视为收尾
+        body = bytes(buf)
+        if body.endswith(PROMPT):
+            body = body[:-len(PROMPT)]
+        return body.decode("utf-8", "replace")
 
     def request_binary(self, cmd: str, timeout: float = 4.0) -> bytes:
-        self._drain_pending()
+        deadline = time.monotonic() + timeout
+        self._sync_prompt()
         self._ser.write(cmd.encode() + b"\r")
-        return self._read_all(timeout, idle=0.05)
+        self._read_until_newline(deadline)                # 回显行
+
+        buf = bytearray()
+        while time.monotonic() < deadline:
+            chunk = self._ser.read(4096)
+            if chunk:
+                buf += chunk
+            body = bytes(buf)
+            if body.startswith(PROMPT):
+                body = body[len(PROMPT):]
+            if len(body) >= 4:
+                mask, points = struct.unpack("<HH", body[:4])
+                if 0 < points <= 1024 and (mask & MASK_BINARY):
+                    need = frame_length(points, mask)
+                    if len(body) >= need:
+                        self._drain_quiet()
+                        return body[:need]
+        return bytes(buf)
 
     def close(self) -> None:
         try:
@@ -298,7 +373,8 @@ class NanoVna:
                 sweep = parse_scan_bin(raw)
             except FrameError as exc:
                 last = exc
-                log.warning("nano: bad frame (attempt %d): %s", attempt, exc)
+                log.warning("nano: bad frame (attempt %d, %d bytes, head=%s): %s",
+                            attempt, len(raw), raw[:24].hex(), exc)
                 continue
             sweep.elapsed_ms = int((time.monotonic() - t0) * 1000)
             return sweep

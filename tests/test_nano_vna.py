@@ -50,6 +50,17 @@ class FakeTransport:
         self.closed = True
 
 
+class EchoStripTest(unittest.TestCase):
+    """回显行必须整行去掉 —— 只去掉 CRLF 会把 `data 0` 变成一行"数据"。"""
+
+    def test_echo_line_is_dropped(self):
+        self.assertEqual(vna.drop_echo_line(b"data 0\r\n1.0 0.0\r\n2.0 0.0\r\n"),
+                         b"1.0 0.0\r\n2.0 0.0\r\n")
+
+    def test_reply_without_echo_is_kept(self):
+        self.assertEqual(vna.drop_echo_line(b"1.2.14"), b"1.2.14")
+
+
 class InfoParseTest(unittest.TestCase):
     def test_board_version_points_build_platform(self):
         d = vna.parse_info(INFO_TEXT)

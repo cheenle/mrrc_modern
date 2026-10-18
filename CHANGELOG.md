@@ -43,7 +43,7 @@ All notable changes to the MRRC Web Control project.
   两张下载卡都改成「**第一件事是改掉这三个口令**」并链到用户指南；`packaging/box/README.md`
   的发布说明同步改写（原来那句「发货版不该上传下载页」作废，理由与替代约束写在同一段）。
 - 产物（本机真构建 + 四步验证全绿）：`MRRC-Modern-1.28.1-w103d.img.gz`，
-  **1,221,443,860 B**，SHA-256 `ee1fba1e…`。验证含：代码身份逐字节、`bluez` 已装、
+  **1,205,308,280 B**，SHA-256 `83cd9df1…`。验证含：代码身份逐字节、`bluez` 已装、
   `input:x:102:mrrc`、五个 systemd 单元 + logrotate 配置、11 份 profile、frpc 是 aarch64 ELF、
   SDRplay API/`libsdr_dsp`/udev 规则在位、`/tmp` 零残留、D-11 双指向、chroot 真跑导入
   （含 `paramiko` 与 `sdr_frames/sdr_hub/net_bt`）。

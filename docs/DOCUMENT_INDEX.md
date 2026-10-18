@@ -78,6 +78,7 @@
 | 文档 | 说明 | 读者 |
 |------|------|------|
 | [docs/TX_LINK_ANALYSIS.md](docs/TX_LINK_ANALYSIS.md) | TX 音频链路深度分析 | 架构师/高级开发 |
+| [docs/ftx1-technical-analysis.md](docs/ftx1-technical-analysis.md) | **FTX-1 深度技术分析 + CAT 一致性对照**（依据 Yaesu 官方 CAT 手册 + 第三方真机实现）：六个 CPU 的拓扑、三条串口、AI 只推一半、双接收的通道位陷阱、`SS` 能设不能读、`EX` 是 5 段寻址的菜单寄存器表；**附录 C 把本仓发出的 38 条命令逐条对照手册（20 项不符，含 6 条命令 FTX-1 没有）**，第十二节按五类给出修法与“哪些只能上机确认” | 架构师/高级开发 |
 | [docs/DOCUMENT_UPDATE_SUMMARY.md](docs/DOCUMENT_UPDATE_SUMMARY.md) / [docs/DOCUMENT_UPDATE_COMPLETION.md](docs/DOCUMENT_UPDATE_COMPLETION.md) | **历史报告（2026-08-17，多电台后端那轮）** —— 不是当前状态，现状看 [PROJECT_MAP.md](PROJECT_MAP.md) | 文档维护者 |
 
 ### 📱 iOS App (FT710Mobile/)

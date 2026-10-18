@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.01</td>
+<td>2026-10-18</td>
+<td>pi</td>
+<td><strong>NanoVNA-H 接进盒子（AD-030）：一次扫描拿到复数 S11，天线画像从 20 分钟变成 1 秒。</strong> ① <strong>现场</strong>：<code class="scope-code">0483:5740</code> ChibiOS CDC-ACM → <code class="scope-code">/dev/ttyACM0</code>（CAT 是另一颗 CP2105，不抢口），<code class="scope-code">NanoVNA-H 4</code> / firmware <code class="scope-code">1.2.14</code> / 401 点 / 已带标定；<code class="scope-code">mrrc</code> 已在 <code class="scope-code">dialout</code>，无需改权限。 ② <strong>协议照固件源码核过</strong>：<code class="scope-code">scan_bin</code> 掩码位 1/2/4/8/16/32/128，二进制帧 <code class="scope-code">u16 mask + u16 points + 每点 u32 freq + f32×2</code>；<strong><code class="scope-code">data 0</code> 里没有频率</strong>（0=S11、1=S21、2..6=标定数组），频率只在 <code class="scope-code">frequencies</code>/<code class="scope-code">scan</code> 的输出里。 ③ <strong>实测速度</strong>：101 点 0.32 s / 201 点 0.63 s / 401 点 1.26 s（ASCII 体量 23.9 KB，二进制 4.8 KB）——所以它是仪器不是流，页面按「扫一次」设计。 ④ <strong>真机撞出的三个缺陷（都在传输层）</strong>：(a) 直接 <code class="scope-code">reset_input_buffer()</code> 就写命令，会在设备吐上一条回复时把新行塞进去，表现为<strong>一个字节都不回</strong>（401 点连续两次空帧）；(b) 用「静默多久」判断帧尾会在分段之间截断；(c) 只去掉回显行的 CRLF 会把 <code class="scope-code">data 0</code> 变成一行「数据」喂给 <code class="scope-code">float()</code>。修法：发命令前与 <code class="scope-code">ch&gt;</code> 同步（<code class="scope-code">in_waiting</code> 先看一眼，避免每条命令白等 0.6 s）、<strong>按帧长读满</strong>、回显整行丢弃。 ⑤ <strong>交叉校验</strong>：同一段扫频下 <code class="scope-code">scan_bin</code>（带标定）与 <code class="scope-code">data 0</code> 逐点一致（最差 Δ 2e-4），并顺带证实 <code class="scope-code">sweep</code> 之后立刻读 <code class="scope-code">data 0</code> 会拿到上一轮数组的竞态——这正是只用 <code class="scope-code">scan_bin</code> 的理由。 ⑥ <strong>页面与接口</strong>：<code class="scope-code">/Nano</code>（主站口令；listen/sdr 403）+ <code class="scope-code">status</code>/<code class="scope-code">scan</code>/<code class="scope-code">settings</code>/<code class="scope-code">cal</code>/<code class="scope-code">sweeps</code> 六条路径；SWR 主图 + Smith / |Z| / R+jX、谐振标线、孤立 1.00 标红（沿用 antenna-sweep 的掉读判据）、存盘/叠加/CSV/s1p；<code class="scope-code">tcxo</code> 与破坏性命令不进白名单。 ⑦ <strong>测试 2591 → 2655（138 模块）</strong>：<code class="scope-code">test_nano_analysis</code> 14、<code class="scope-code">test_nano_vna</code> 30、<code class="scope-code">test_server_nano_routes</code> 21（含四道守卫的顺序与前缀安全）。 ⑧ <strong>未做（第二期）</strong>：<code class="scope-code">nano/flash.py</code> + <code class="scope-code">dfu-util</code>/udev 进 <code class="scope-code">packaging/common/</code> + U3 门控（默认上锁）、刷后版本回读与自检、回退。设计与计划：<code class="scope-code">docs/superpowers/specs/2026-10-18-nano-vna-design.md</code>、<code class="scope-code">docs/superpowers/plans/2026-10-18-nano-vna.md</code>。</td>
+</tr>
+<tr>
 <td>SDD V3.00</td>
 <td>2026-10-18</td>
 <td>pi</td>
@@ -994,6 +1000,10 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <td>AD-029</td>
 <td>Independent SDR receiver (public web receiver): <code class="scope-code">sdr_pipe.py</code> owns the device, <code class="scope-code">sdr_dsp.c</code> is the two-stage channelizer, <code class="scope-code">sdr_hub.py</code> arbitrates the single tuner; own password role, 8 demodulators, 50 listeners</td>
 </tr>
+<tr>
+<td>AD-030</td>
+<td>Serial instrument (NanoVNA-H): <code class="scope-code">nano/vna.py</code> owns the port, <code class="scope-code">scan_bin</code> binary frames validated by exact length, <code class="scope-code">nano/analysis.py</code> derives SWR/Z/resonance; four guards and the device sweep restored after every scan; upgrade via ROM DFU, locked by <code class="scope-code">MRRC_NANO_ALLOW_FLASH</code></td>
+</tr>
 </tbody>
 </table>
 <p><em>This document follows IBM Team Solution Design (TeamSD) methodology v2.3.2.</em> <em>Document ID: SDD-MRRC-MODERN-2026-001</em></p>
@@ -1003,7 +1013,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.00 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.01 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

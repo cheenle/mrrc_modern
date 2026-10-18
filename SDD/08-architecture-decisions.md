@@ -285,6 +285,7 @@
 | AD-027 | Factory-preset (ship-ready) box image: `--preflash`, off by default; fixed credentials + system half; Wi-Fi and the public entry are configured from `/settings` | Implemented (V2.92) |
 | AD-028 | Local control surface: a Bluetooth HID remote drives the radio on-box (`local_ctl.py` + `mrrc-localctl`), keyed on HID usages, speaking the browser protocol over loopback; `HandlePowerKey=ignore` returns the 电源 key to the operator | Implemented (V2.97) |
 | AD-029 | Independent SDR receiver: the box's SDRplay RSP1 published as its own public web receiver — own password/cookie/page, zero coupling to radio control; a device-exclusive subprocess (`sdr_pipe.py`) + a native two-stage channelizer (`sdr_dsp.c`, 0.086–0.151 core per demodulator measured) + a pure-logic sharing hub (30 s tuning hold, demodulator pool, 8 channels / 50 listeners) | Implemented (V3.00) |
+| AD-030 | Serial instrument (NanoVNA-H on the box's USB): `/Nano` antenna bench — `nano/analysis.py` pure math, `nano/vna.py` the only serial touchpoint (`scan_bin` binary frame with exact-length validation), four guards (refuse while transmitting, one operation at a time, never the CAT port, no listen/SDR sessions), device sweep restored after every scan; firmware upgrade is a locked phase 2 | Implemented (V3.01) |
 
 ## AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）
 

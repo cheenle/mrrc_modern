@@ -783,6 +783,11 @@
 <td>Independent SDR receiver: the box’s SDRplay RSP1 published as its own public web receiver — own password/cookie/page, zero coupling to radio control; a device-exclusive subprocess (<code class="scope-code">sdr_pipe.py</code>) + a native two-stage channelizer (<code class="scope-code">sdr_dsp.c</code>, 0.086–0.151 core per demodulator measured) + a pure-logic sharing hub (30 s tuning hold, demodulator pool, 8 channels / 50 listeners)</td>
 <td>Implemented (V3.00)</td>
 </tr>
+<tr>
+<td>AD-030</td>
+<td>Serial instrument (NanoVNA-H on the box’s USB): <code class="scope-code">/Nano</code> antenna bench — <code class="scope-code">nano/analysis.py</code> pure math, <code class="scope-code">nano/vna.py</code> the only serial touchpoint (<code class="scope-code">scan_bin</code> binary frame with exact-length validation), four guards (refuse while transmitting, one operation at a time, never the CAT port, no listen/SDR sessions), device sweep restored after every scan; firmware upgrade is a locked phase 2</td>
+<td>Implemented (V3.01)</td>
+</tr>
 </tbody>
 </table>
 <h2 id="ad-018-yaesu-多机型走-profile-驱动的共享-ascii-cat-核心ft-710-验证路径保持独立">AD-018: Yaesu 多机型走 profile 驱动的共享 ASCII-CAT 核心（FT-710 验证路径保持独立）</h2>
@@ -1224,13 +1229,48 @@
 </tr>
 </tbody>
 </table>
+<h2 id="ad-030-串口仪器nanovna-h的接入边界-一次一件发射中闭嘴不抢-cat-口">AD-030: 串口仪器（NanoVNA-H）的接入边界 —— 一次一件、发射中闭嘴、不抢 CAT 口</h2>
+<table class="scope-table">
+<colgroup>
+<col style="width: 61%" />
+<col style="width: 38%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Architecture / Operability</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>Implemented (V3.01, 2026-10-18) — 第一期（测量 + 设备管理）；固件升级为第二期</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>把插在盒子 USB 上的 NanoVNA-H 当成<strong>一台独立的串口仪器</strong>接进来，页面是一个独立入口 <code class="scope-code">/Nano</code>：<code class="scope-code">nano/analysis.py</code> 是纯数学（Γ→SWR/Z/谐振/导出，无 I/O），<code class="scope-code">nano/vna.py</code> 是<strong>唯一</strong>碰串口的模块（端口发现 + <code class="scope-code">scan_bin</code> 二进制帧 + 帧长自校验），<code class="scope-code">server.py</code> 只做路由与四道守卫。数据只从 <code class="scope-code">scan_bin</code> 一条命令取（<code class="scope-code">u16 mask, u16 points</code>，随后每点 <code class="scope-code">u32 freq</code> + 每个启用数组各 <code class="scope-code">f32 re/im</code>），<strong>不用 <code class="scope-code">data 0</code> 拼</strong>。四道守卫：①发射中（PTT/TUNE/FT8/CQ）拒绝一切设备操作——VNA 的 CH0 就接在天线上，几十瓦射频进去是烧前端；②一次一件（<code class="scope-code">asyncio.Lock</code>，第二个人拿 409 而不是排队）；③端口不得是电台 CAT 口；④<code class="scope-code">listen</code>/<code class="scope-code">sdr</code> 会话 403。扫描后<strong>无条件</strong>把设备屏幕还原成进入时的扫频范围。</td>
+</tr>
+<tr>
+<td>Alternatives</td>
+<td>①<strong><code class="scope-code">data 0/1</code> + <code class="scope-code">frequencies</code> 的 ASCII 路径</strong>（nanovna-saver 的做法）：401 点要 23.9 KB、两次往返，且 <code class="scope-code">sweep</code> 之后 <code class="scope-code">data</code> 会读到<strong>上一轮</strong>的数组——真机实测索引越大偏得越多（<code class="scope-code">data 0</code> 在 54 MHz 与 <code class="scope-code">scan_bin</code> 差 1.0），否决；②<strong>在浏览器里算 SWR/阻抗</strong>：同一个公式在两处各漂一次只是时间问题，改为服务端算好下发；③<strong>裸 raw serial</strong>：仓库已有 pyserial 依赖，且提示符同步需要 <code class="scope-code">in_waiting</code>，否决；④<strong>让操作员拿电脑装 nanoVNA-QT</strong>：那正是要被替代的现状（全段扫描 20 分钟且只有标量 SWR，见 <code class="scope-code">docs/current/antenna/</code>）。</td>
+</tr>
+<tr>
+<td>Consequences</td>
+<td>①<strong>帧长必须精确匹配</strong>（<code class="scope-code">4 + points × (4 + 8×(1+s21))</code>），不匹配就整帧丢弃重扫——半截数据会画出一条<strong>看起来正常</strong>的假曲线；②<strong>发命令前必须与 <code class="scope-code">ch&gt;</code> 同步</strong>：直接 <code class="scope-code">reset_input_buffer()</code> 再写，会在设备还在吐上一条回复时把新行塞进去，实测表现是「<code class="scope-code">scan_bin</code> 一个字节都不回」；③<strong>扫描会改设备屏幕</strong>，所以每次扫描后要再发一次 <code class="scope-code">sweep</code>（+0.3 s / 101 点）——设备在用户进页面前后必须完全一致；④<strong>破坏性命令与频率基准不进页面</strong>（<code class="scope-code">tcxo</code> / <code class="scope-code">clearconfig</code> / <code class="scope-code">touchcal</code> / <code class="scope-code">sd_delete</code>），<code class="scope-code">tcxo</code> 一个手滑就是全段偏移且从网页看不出错在哪；⑤<strong>升级走 STM32 ROM DFU</strong>（<code class="scope-code">reset dfu</code> → <code class="scope-code">0483:df11</code> → <code class="scope-code">dfu-util -a 0 -s 0x08000000:leave</code>）：系统存储区不可擦写，所以刷坏只会停在 DFU、再刷即恢复，<strong>不存在变砖</strong>；但 MS/SI/ZK 是<strong>编译期</strong>开关、运行时任何命令都读不出来，所以变体必须人选 + 记忆，成功判据是<strong>刷后设备自己报的版本</strong>（不是 <code class="scope-code">dfu-util</code> 的返回码），并默认上锁（<code class="scope-code">MRRC_NANO_ALLOW_FLASH=1</code>）；⑥SDD 的 <code class="scope-code">cat-direct-serial-io</code> 约束管的是<strong>电台 CAT</strong>，<code class="scope-code">nano/vna.py</code> 是另一台仪器（不共享任何电台状态），但纪律照搬：<code class="scope-code">asyncio.Lock</code> 串行化 + <code class="scope-code">asyncio.to_thread</code> 卸载，从不阻塞事件循环。</td>
+</tr>
+</tbody>
+</table>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.00 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.01 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

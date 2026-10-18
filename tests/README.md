@@ -5,8 +5,8 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2591 tests across 135 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
+2655 tests across 138 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-18, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
 sections below itemise 93 of those 126 — the support-chain, Cloud Hub and
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2591 above. Run it with:
+the 2655 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -758,6 +758,38 @@ SDD coverage: §3.3 of `docs/superpowers/specs/2026-10-17-static-asset-delivery-
 | `MissingAssetTests` | 3 | 有扩展名的缺失路径 → 404；无扩展名仍回落 `index.html` 且带 `no-cache`；路径穿越先于回落规则被拒 |
 | `AuthOrderTests` | 1 | 不带令牌取静态件仍是跳登录页（缓存头没有改变鉴权顺序） |
 | `PageRouteTests` | 2 | `/listen` 与 `/settings` 不经 `serve_static`，各自也要发 `no-cache`；`/setup` 必须保持 `no-store`（它会显示自动生成的口令横幅） |
+
+### 66. test_nano_analysis.py — S11 分析层（14 tests）
+
+SDD coverage: AD-030, spec `2026-10-18-nano-vna-design.md` §4.5
+
+NanoVNA 只给出复数 S11，页面上每个数都是派生的：SWR、阻抗、谐振、导出。
+纯函数，无设备、无 I/O。钉住的是**量程与判据**而不是实现：`|Γ|→1` 封顶 99.9
+（开路不是无穷大，是"超出量程"）、Γ=0.5 → SWR 3.0、Z0=50 换算；谐振必须是一片
+**连续平台**的中心（两侧各一个点不算），而**孤立一个 1.00 标为 `suspect` 而不是
+谐振** —— 这条判据来自 `antenna-sweep` 现场付过学费的掉读规则；CSV/s1p 两种导出
+的头部与数值格式；点数不同的两条曲线对比按较细栅格插值。
+
+### 67. test_nano_vna.py — scan_bin 协议与设备对象（28 tests）
+
+SDD coverage: AD-030, spec §1.2 / §4.1–4.3 / §4.8
+
+往返用的是**真机 1.2.14 抓到的字节**（`info` 正文、`scan_bin` 头 `87 00 91 01`
+= mask 0x87 / 401 点），不是照文档编的。三类断言：**帧长自校验**（截断、多余字节、
+两种提示符位置都要么整帧接受、要么整帧拒绝 —— 半截数据会画出一条看起来正常的假
+曲线）；**端口发现**（`MRRC_NANO_PORT` 优先、`by-id` 的 ChibiOS 先于 `/dev/ttyACM*`、
+**CAT 口永不入选**）；**设备对象**（`version` 验身份、帧坏重试一次后仍坏就抛、
+还原失败只记日志不影响数据、设置白名单里 `tcxo` 永远进不去）。
+
+### 68. test_server_nano_routes.py — `/Nano` 的路由与四道守卫（21 tests）
+
+SDD coverage: AD-030, spec §4.6 / §4.7
+
+守卫**顺序**是被断言的东西：开关/角色 → 发射中 → 繁忙 → 参数。顺序错了会让
+"电台在发射"被 400 掩盖，而那正是最危险的输入路径。另有：`listen`/`sdr` 会话 403
+（页面与接口各一次）、`save_cal` 必须输入 `SAVE`、存盘/列表/读取/CSV/s1p/删除的
+往返、扫描文件 id 的路径穿越拒绝，以及**前缀安全**（`nano.js` 里没有以 `/` 开头的
+接口字面量，页面不加载 `ft710_main.js`/`ft710_ui.js`）。
 
 ## Test Coverage by SDD Requirement
 

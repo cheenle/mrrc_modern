@@ -19,6 +19,7 @@ import itertools
 import json
 import logging
 import os
+import re
 import secrets as _secrets
 import socket
 import struct
@@ -27,6 +28,7 @@ import subprocess
 import threading
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Callable, Optional, Protocol
@@ -90,6 +92,8 @@ from recorder import (
 )
 from cq_player import CQPlayer, CQUnavailable
 from session_metrics import SessionMetrics
+from nano import (NanoError, NanoVna, analyse, discover_port, scan_command,
+                  to_csv, to_s1p)
 from poll_scheduler import PollScheduler
 from scope_handler import ScopeHandler  # synthetic scope fallback
 from audio_handler import AudioHandler
@@ -102,6 +106,7 @@ from opus_rx import (
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import (
     HTMLResponse, JSONResponse, RedirectResponse, FileResponse, Response,
+    PlainTextResponse,
 )
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -5613,6 +5618,479 @@ def _not_modified(request: Request, headers) -> bool:
         except (TypeError, ValueError):
             return False
     return False
+
+
+
+# ── NanoVNA-H 天线诊断台（spec 2026-10-18 / AD-030）───────────────────
+#
+# 一台接在盒子 USB 上的串口仪器：不是电台，不共享任何 CAT 状态，也不产生
+# 需要广播的 radio state。串口只在 nano/vna.py 里出现；本文件负责四件事：
+#
+#   1. 一次一件（`_nano_lock`）—— 串口是有状态的，两次扫描交错就是两批烂数据；
+#   2. 发射中闭嘴（`_nano_tx_active`）—— VNA 的 CH0 接在天线上，几十瓦射频进去
+#      是**烧前端**，不是 UI 问题；
+#   3. 不抢 CAT 口（`discover_port(cat_port=…)`）；
+#   4. 角色隔离（listen / sdr 会话一律 403）。
+#
+# 扫描会改掉设备屏幕上的扫频范围，所以每次扫完都还原（spec §4.4）：设备在
+# 用户进页面之前和退出之后必须完全一致。
+NANO_ENABLED = (_env("MRRC_NANO", "on") or "on").strip().lower() not in (
+    "off", "0", "false", "no")
+NANO_ALLOW_FLASH = (_env("MRRC_NANO_ALLOW_FLASH", "0") or "0").strip().lower() in (
+    "1", "true", "yes", "on")
+NANO_DIR = Path(_env("MRRC_NANO_DIR", str(_writable_runtime_dir() / "nano")))
+NANO_SWEEPS_DIR = NANO_DIR / "sweeps"
+NANO_STATE_FILE = NANO_DIR / "state.json"
+
+_nano_device: Optional[NanoVna] = None
+_nano_lock = asyncio.Lock()          # 一次一件
+_nano_next_attempt = 0.0             # 打开失败后的退避（秒，monotonic）
+_nano_last_sweep: Optional[dict] = None
+_SWEEP_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
+
+
+def _nano_tx_active() -> bool:
+    """电台在发射（PTT / TUNE / FT8 / 一键 CQ）时，绝不能碰接在天线上的 VNA。"""
+    if radio is not None and radio.tx_status:
+        return True
+    try:
+        if _ft8_transmitting():
+            return True
+    except Exception:                                              # noqa: BLE001
+        pass
+    try:
+        if _cq_player.is_calling:
+            return True
+    except Exception:                                              # noqa: BLE001
+        pass
+    return False
+
+
+def _nano_forbidden(request: Request) -> Optional[tuple[int, str]]:
+    """页面与接口共用的前置门：主站会话可以，listen / sdr 会话不行。"""
+    if not NANO_ENABLED:
+        return (404, "nano disabled")
+    if _is_listen_request(request):
+        return (403, "listen-only session")
+    if _sdr_token_from_request(request) in _sdr_tokens:
+        return (403, "sdr session")
+    return None
+
+
+def _nano_gate(request: Request) -> Optional[JSONResponse]:
+    reason = _nano_forbidden(request)
+    if reason is None:
+        return None
+    return JSONResponse({"error": reason[1]}, status_code=reason[0])
+
+
+def _nano_connect() -> Optional[NanoVna]:
+    """按需连一次；失败后退避 2 s 再试，避免状态轮询把串口敲烂。"""
+    global _nano_device, _nano_next_attempt
+    if _nano_device is not None:
+        return _nano_device
+    now = time.monotonic()
+    if now < _nano_next_attempt:
+        return None
+    port = discover_port(os.environ, cat_port=os.environ.get("MRRC_SERIAL_PORT"))
+    if not port:
+        _nano_next_attempt = now + 2.0
+        log.info("nano: no device found")
+        return None
+    try:
+        dev = NanoVna(port)
+        dev.open()
+    except Exception as exc:                                       # noqa: BLE001
+        _nano_next_attempt = now + 2.0
+        log.info("nano: open failed on %s (%s)", port, exc)
+        return None
+    log.info("nano: connected on %s (%s)", port, dev.info_cache.version if dev.info_cache
+             else "?")
+    _nano_device = dev
+    return _nano_device
+
+
+def _nano_forget(reason: str) -> None:
+    global _nano_device
+    if _nano_device is not None:
+        log.info("nano: dropping device (%s)", reason)
+        try:
+            _nano_device.close()
+        except Exception:                                          # noqa: BLE001
+            pass
+    _nano_device = None
+
+
+def _nano_read_state() -> dict:
+    """进来时设备屏幕上的扫频原文 —— 每次扫描后要还原到它。"""
+    try:
+        return json.loads(NANO_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:                                              # noqa: BLE001
+        return {}
+
+
+def _nano_write_json(path: Path, payload: dict) -> None:
+    """原子写（照 atr1000_tuner.py 的写法：先写 .tmp 再 replace）。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _nano_capture_state(dev: NanoVna) -> dict:
+    """读设备当前扫频范围并落盘（只在还没有记录或记录失效时调用）。"""
+    state = _nano_read_state()
+    if state.get("start_hz") and state.get("stop_hz") and state.get("points"):
+        return state
+    try:
+        freqs = dev.frequencies()
+    except Exception as exc:                                       # noqa: BLE001
+        log.info("nano: cannot read device sweep (%s)", exc)
+        return {}
+    if len(freqs) < 2:
+        return {}
+    state = {"start_hz": freqs[0], "stop_hz": freqs[-1], "points": len(freqs)}
+    try:
+        _nano_write_json(NANO_STATE_FILE, state)
+    except OSError as exc:
+        log.info("nano: cannot persist device sweep (%s)", exc)
+    return state
+
+
+def _nano_status_block(dev: NanoVna, with_settings: bool) -> dict:
+    info = dev.info()
+    block: dict = {
+        "connected": True,
+        "port": dev.port,
+        "board": info.board,
+        "version": info.version,
+        "build": info.build,
+        "platform": info.platform,
+        "points_max": info.points_max,
+        "vbat_mv": None,
+        "cal": None,
+        "device_sweep": _nano_read_state(),
+    }
+    try:
+        block["vbat_mv"] = dev.vbat_mv()
+    except Exception:                                              # noqa: BLE001
+        pass
+    try:
+        block["cal"] = dev.cal_state()
+    except Exception:                                              # noqa: BLE001
+        pass
+    if with_settings:
+        try:
+            block["settings"] = dev.read_settings()
+        except Exception as exc:                                   # noqa: BLE001
+            block["settings_error"] = str(exc)
+    return block
+
+
+def _nano_require_device() -> NanoVna:
+    dev = _nano_connect()
+    if dev is None:
+        raise NanoError("device offline")
+    return dev
+
+
+def _nano_sweep_path(sid: str) -> Optional[Path]:
+    if not _SWEEP_ID_RE.match(sid or ""):
+        return None
+    path = NANO_SWEEPS_DIR / (sid + ".json")
+    return path if path.exists() else None
+
+
+def _nano_list_sweeps() -> list[dict]:
+    out: list[dict] = []
+    if not NANO_SWEEPS_DIR.is_dir():
+        return out
+    for path in sorted(NANO_SWEEPS_DIR.glob("sweep_*.json"), reverse=True):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:                                          # noqa: BLE001
+            continue
+        out.append({
+            "id": path.stem,
+            "created": data.get("created"),
+            "label": data.get("label") or "",
+            "note": data.get("note") or "",
+            "start_hz": data.get("start_hz"),
+            "stop_hz": data.get("stop_hz"),
+            "points": data.get("points"),
+        })
+    return out
+
+
+@app.get("/Nano", include_in_schema=False)
+async def nano_page(request: Request):
+    """NanoVNA 天线诊断台。主站会话即可（listen / sdr 会话被拒）。"""
+    reason = _nano_forbidden(request)
+    if reason is not None:
+        raise HTTPException(status_code=reason[0], detail=reason[1])
+    page = STATIC_DIR / "nano.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="nano.html missing")
+    return _html_page(page)
+
+
+@app.get("/api/nano/status")
+async def api_nano_status(request: Request, full: int = 0):
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    payload: dict = {
+        "enabled": True,
+        "connected": False,
+        "port": None,
+        "tx": _nano_tx_active(),
+        "busy": _nano_lock.locked(),
+        "device_sweep": _nano_read_state(),
+        "last_sweep": (None if _nano_last_sweep is None else {
+            "start_hz": _nano_last_sweep["start_hz"],
+            "stop_hz": _nano_last_sweep["stop_hz"],
+            "points": _nano_last_sweep["points"],
+        }),
+        "flash": {"enabled": NANO_ALLOW_FLASH, "variant": _nano_read_state().get("variant")},
+    }
+    if _nano_lock.locked():
+        return JSONResponse(payload)
+    try:
+        dev = await asyncio.to_thread(_nano_require_device)
+        payload.update(await asyncio.to_thread(_nano_status_block, dev, bool(full)))
+    except NanoError as exc:
+        payload["detail"] = str(exc)
+    except Exception as exc:                                       # noqa: BLE001
+        log.warning("nano: status failed (%s)", exc)
+        payload["detail"] = str(exc)
+    return JSONResponse(payload)
+
+
+@app.post("/api/nano/scan")
+async def api_nano_scan(request: Request):
+    """扫一次。守卫顺序：开关/角色 → 发射中 → 繁忙 → 参数。"""
+    global _nano_last_sweep
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_tx_active():
+        return JSONResponse({"error": "tx_active",
+                             "detail": "电台在发射，已锁定扫描"}, status_code=409)
+    if _nano_lock.locked():
+        return JSONResponse({"error": "busy",
+                             "detail": "另一次设备操作正在进行"}, status_code=409)
+    try:
+        body = await request.json()
+        start = int(body["start"])
+        stop = int(body["stop"])
+        points = int(body.get("points", 401))
+        scan_command(start, stop, points)                 # 参数在进锁之前就校验
+    except (KeyError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            await asyncio.to_thread(_nano_capture_state, dev)
+            sweep = await asyncio.to_thread(dev.scan, start, stop, points)
+            state = _nano_read_state()
+            restored = True
+            if state.get("start_hz"):
+                restored = await asyncio.to_thread(
+                    dev.restore_sweep, state["start_hz"], state["stop_hz"], state["points"])
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+        except Exception as exc:                                   # noqa: BLE001
+            log.exception("nano: scan failed")
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+
+    _nano_last_sweep = {"freqs": sweep.freqs, "s11": sweep.s11, "start_hz": start,
+                        "stop_hz": stop, "points": points}
+    payload = {"freqs": sweep.freqs, "s11": sweep.s11, "elapsed_ms": sweep.elapsed_ms,
+               "restored": restored}
+    payload.update(analyse(sweep.freqs, sweep.s11))
+    return JSONResponse(payload)
+
+
+@app.post("/api/nano/settings")
+async def api_nano_settings(request: Request):
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_tx_active():
+        return JSONResponse({"error": "tx_active"}, status_code=409)
+    if _nano_lock.locked():
+        return JSONResponse({"error": "busy"}, status_code=409)
+    try:
+        body = await request.json()
+        name = str(body["name"])
+        value = body["value"]
+    except (KeyError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            await asyncio.to_thread(dev.set_setting, name, value)
+            settings = await asyncio.to_thread(dev.read_settings)
+        except ValueError as exc:
+            return JSONResponse({"error": "bad_setting", "detail": str(exc)},
+                                status_code=400)
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+    return JSONResponse({"ok": True, "settings": settings})
+
+
+@app.post("/api/nano/cal")
+async def api_nano_cal(request: Request):
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_tx_active():
+        return JSONResponse({"error": "tx_active"}, status_code=409)
+    try:
+        body = await request.json()
+        action = str(body.get("action", "recall"))
+        slot = int(body["slot"])
+        confirm = body.get("confirm")
+    except (KeyError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+    if action == "save" and str(confirm or "") != "SAVE":
+        return JSONResponse({"error": "confirm_required",
+                             "detail": "写入标定槽会覆盖设备里已有的那一组，需要输入 SAVE"},
+                            status_code=400)
+    if action not in ("save", "recall"):
+        return JSONResponse({"error": "bad_request", "detail": "action must be save|recall"},
+                            status_code=400)
+    if _nano_lock.locked():
+        return JSONResponse({"error": "busy"}, status_code=409)
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            if action == "save":
+                await asyncio.to_thread(dev.save_cal, slot)
+            else:
+                await asyncio.to_thread(dev.recall_cal, slot)
+            cal = await asyncio.to_thread(dev.cal_state)
+        except ValueError as exc:
+            return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+    return JSONResponse({"ok": True, "cal": cal})
+
+
+@app.get("/api/nano/sweeps")
+async def api_nano_sweeps(request: Request):
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    return JSONResponse({"sweeps": await asyncio.to_thread(_nano_list_sweeps)})
+
+
+@app.post("/api/nano/sweeps")
+async def api_nano_save_sweep(request: Request):
+    """把最近一次扫描存盘。只存原始 S11 —— 能算出来的东西不存第二份。"""
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_last_sweep is None:
+        return JSONResponse({"error": "no_sweep", "detail": "还没有扫描过"}, status_code=409)
+    try:
+        body = await request.json()
+    except Exception:                                              # noqa: BLE001
+        body = {}
+    label = str(body.get("label") or "").strip()[:80]
+    note = str(body.get("note") or "").strip()[:400]
+    sweep = _nano_last_sweep
+    now = datetime.now(timezone.utc)
+    sid = "sweep_%d-%d_%d_%s" % (round(sweep["start_hz"] / 1e6),
+                                 round(sweep["stop_hz"] / 1e6),
+                                 sweep["points"], now.strftime("%Y%m%d-%H%M%S"))
+    payload = {
+        "version": 1,
+        "id": sid,
+        "created": now.isoformat(timespec="seconds"),
+        "label": label,
+        "note": note,
+        "start_hz": sweep["start_hz"],
+        "stop_hz": sweep["stop_hz"],
+        "points": sweep["points"],
+        "device": {
+            "board": (_nano_device.info().board if _nano_device else ""),
+            "version": (_nano_device.info().version if _nano_device else ""),
+            "port": (_nano_device.port if _nano_device else ""),
+        },
+        "s11": [[re, im] for re, im in sweep["s11"]],
+    }
+    await asyncio.to_thread(_nano_write_json, NANO_SWEEPS_DIR / (sid + ".json"), payload)
+    return JSONResponse({"ok": True, "id": sid})
+
+
+@app.get("/api/nano/sweeps/{sid}")
+async def api_nano_get_sweep(sid: str, request: Request, format: str = "json"):
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    path = _nano_sweep_path(sid)
+    if path is None:
+        raise HTTPException(status_code=404, detail="sweep not found")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:                                              # noqa: BLE001
+        raise HTTPException(status_code=500, detail="sweep unreadable")
+    freqs = _nano_sweep_freqs(data)
+    s11 = [(float(p[0]), float(p[1])) for p in data.get("s11", [])]
+    if format == "csv":
+        return PlainTextResponse(to_csv(freqs, s11), media_type="text/csv",
+                                 headers={"Content-Disposition":
+                                          'attachment; filename="%s.csv"' % sid})
+    if format == "s1p":
+        return PlainTextResponse(to_s1p(freqs, s11), media_type="application/octet-stream",
+                                 headers={"Content-Disposition":
+                                          'attachment; filename="%s.s1p"' % sid})
+    payload = dict(data)
+    payload.update(analyse(freqs, s11))
+    if data.get("freqs") is None:
+        payload["freqs"] = freqs
+    return JSONResponse(payload)
+
+
+@app.delete("/api/nano/sweeps/{sid}")
+async def api_nano_delete_sweep(sid: str, request: Request):
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    path = _nano_sweep_path(sid)
+    if path is None:
+        raise HTTPException(status_code=404, detail="sweep not found")
+    try:
+        path.unlink()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return JSONResponse({"ok": True})
+
+
+def _nano_sweep_freqs(data: dict) -> list[int]:
+    """扫描文件里没有存频率表时就按 (start, stop, points) 重建。
+
+    重建是**精确**的：设备的频率表是线性插值取整（固件 set_frequencies），
+    与这里同一个公式，所以不必为省 400 个整数去牺牲文件的独立性。
+    """
+    if isinstance(data.get("freqs"), list):
+        return [int(v) for v in data["freqs"]]
+    start = int(data.get("start_hz") or 0)
+    stop = int(data.get("stop_hz") or 0)
+    points = int(data.get("points") or 0)
+    if points < 2:
+        return []
+    return [start + int(round((stop - start) * i / (points - 1))) for i in range(points)]
 
 
 async def serve_static(path: str, request: Request):

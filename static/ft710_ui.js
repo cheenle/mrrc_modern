@@ -2250,8 +2250,12 @@ function showSettingsPanel() {
                   radioState.rf_power = v;   // optimistic; next poll corrects if needed
               });
 
+    // 标签就叫 NR Level：FT-710 这条 CAT 命令是 `RL`（NR 等级，1-15），而 Yaesu 的
+    // "DNR" 是 FTDX10/101 那代面板上的叫法 —— 在 FT-710 上 `DN` 根本不查降噪，
+    // 它是"当前 VFO 往下走一步"，发出去会把频率挪走（cat_controller 里明令禁止）。
     addSlider('slider-nrlevel', 'val-nrlevel', 'NR Level', 1, 15,
-              radioState.nr_level || 8, '数字降噪的强度（NR 打开后生效）',
+              radioState.nr_level || 8,
+              '数字降噪强度（NR 打开后生效）。有些 Yaesu 机型面板上叫 DNR，是同一个东西',
               function(v) { sendCommand('nr_level', v); radioState.nr_level = v; });
 
     addSlider('slider-nblevel', 'val-nblevel', 'NB Level', 0, 10,

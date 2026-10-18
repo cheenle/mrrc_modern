@@ -509,16 +509,19 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           <strong> MRRC-Modern-1.28.1-w103d.img.gz — ZTE W103D</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.22 GB (1,216,795,052 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 700b69977fc28fed9cd32840a4aaa102bceeb5f654f6a6a28b7710a4c4bf302c</code>
+              1.22 GB (1,221,443,860 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: ee1fba1e5e5057eed7603e636547299ae5cf82bd321d0202e72ad9a8e0cde473</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-              A ready-made server image for this specific TV box. Flash it to a USB
-              stick and boot the box from it (one u-boot boot-order write; Android's
-              partitions and data stay untouched), then open
-              <code>https://&lt;box-ip&gt;:8888</code> — same zero-config first boot as
-              the Pi image, including the auto-generated web password
-              (<code>sudo mrrc-show-password</code>). <code>mrrc-radio</code> switches
+              A ready-made server image for this specific TV box, pre-configured so
+              it needs no setup: web login and the <code>root</code> /
+              <code>mrrc</code> system accounts are already set to
+              <code>abcd!1234</code> and <code>abcd1234</code>, timezone is
+              Asia/Shanghai and locale is zh_CN.UTF-8. Flash it to a USB stick, boot
+              the box from it (one u-boot boot-order write; Android's partitions and
+              data stay untouched), and open <code>https://&lt;box-ip&gt;:8888</code>.
+              <strong>Change those three passwords first</strong> — the guide walks
+              through it (<code>/settings</code>). <code>mrrc-radio</code> switches
               between the eleven supported radio models. Once you are happy with it,
               install it onto the box's own 28.9 GB eMMC: what is left is a power
               cable and a network cable, with the USB stick kept as the rescue copy.

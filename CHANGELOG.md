@@ -8,6 +8,21 @@ All notable changes to the MRRC Web Control project.
 `docs/superpowers/specs/2026-10-17-w103d-preflash-design.md`、计划
 `docs/superpowers/plans/2026-10-17-w103d-preflash.md`、SDD V2.92 / AD-027 / NFR-069）。
 
+### 刷机镜像改为对外下载版：预置（`--preflash`）即发布
+
+- 操作员决策（2026-10-18）：老的公开镜像要先走一遍首启引导（生成 Web 口令、探测串口与声卡、
+  `/setup`），对大多数用户**太复杂**；而代刷发货用的预置版开机即可登录。于是**对外下载的
+  就是预置版**：Web `abcd!1234`、`root` `abcd1234`、`mrrc` `abcd1234`，时区 `Asia/Shanghai`、
+  区域 `zh_CN.UTF-8`，不需要任何初始化。
+- 代价写清楚：下载页上每一份都是同一组**公开口令**，且镜像的 `sshd` 默认允许 root 口令登录。
+  两张下载卡都改成「**第一件事是改掉这三个口令**」并链到用户指南；`packaging/box/README.md`
+  的发布说明同步改写（原来那句「发货版不该上传下载页」作废，理由与替代约束写在同一段）。
+- 产物（本机真构建 + 四步验证全绿）：`MRRC-Modern-1.28.1-w103d.img.gz`，
+  **1,221,443,860 B**，SHA-256 `ee1fba1e…`。验证含：代码身份逐字节、`bluez` 已装、
+  `input:x:102:mrrc`、五个 systemd 单元 + logrotate 配置、11 份 profile、frpc 是 aarch64 ELF、
+  SDRplay API/`libsdr_dsp`/udev 规则在位、`/tmp` 零残留、D-11 双指向、chroot 真跑导入
+  （含 `paramiko` 与 `sdr_frames/sdr_hub/net_bt`）。
+
 ### 遥控器配对必须在 pty 里跑：`No bonding` 是配不上的真正原因
 
 - 现场（盒子 `.217`，蓝牙遥控器 `CMCC_Voice_Remote`）：配对**看起来**成功过，`btmon` 却给出

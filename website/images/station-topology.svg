@@ -100,13 +100,13 @@
   <!-- ══════════ 天调 → 局域网 ══════════ -->
   <polyline class="net" points="445,488 445,665 700,665"/>
 
-  <!-- ══════════ 局域网 / 路由器 ══════════ -->
+  <!-- ══════════ 局域网 / 路由器 或 Wi-Fi AP ══════════ -->
   <rect x="700" y="580" width="300" height="170" rx="14" fill="#0f1a14" stroke="#2a4a38" stroke-width="1.5"/>
   <circle cx="850" cy="580" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
   <circle cx="700" cy="665" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
   <circle cx="850" cy="750" r="8" fill="#0d0d0d" stroke="#5fd08a" stroke-width="2.5"/>
-  <text x="850" y="650" text-anchor="middle" fill="#5fd08a" font-size="18" font-weight="600">局域网 / 路由器</text>
-  <text x="850" y="676" text-anchor="middle" fill="#6b8f7d" font-size="12">盒子与天调同网段</text>
+  <text x="850" y="650" text-anchor="middle" fill="#5fd08a" font-size="18" font-weight="600">局域网 / 路由器（也可以是 Wi-Fi AP）</text>
+  <text x="850" y="676" text-anchor="middle" fill="#6b8f7d" font-size="12">盒子与天调同网段 · 手机连同一个 AP 即可直连</text>
 
   <!-- ══════════ Cloud Hub ══════════ -->
   <rect x="1080" y="580" width="370" height="170" rx="14" fill="#151228" stroke="#3a3060" stroke-width="1.5"/>

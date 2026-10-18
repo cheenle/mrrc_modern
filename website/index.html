@@ -423,6 +423,55 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </div>
 </section>
 <!-- Download -->
+<section class="scope-section" id="hub" style="background: var(--scope-surface)">
+<div class="container">
+<div class="section-header">
+<span class="section-label">Remote Access</span>
+<h2 class="section-title">Cloud Hub — One Address, Anywhere</h2>
+<p class="section-subtitle">
+            Your station keeps running at home — the computer or the W103D box. No public IP,
+            no port forwarding, no router changes: the instance dials <em>out</em> to the hub,
+            and the same radio is reachable from a browser anywhere.
+          </p>
+</div>
+<div class="features-grid">
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-shield-halved"></i></div>
+<h3>Zero inbound on your side</h3>
+<p>One outbound connection. No public IP, no port forwarding, no UPnP — home
+            broadband, 4G/5G and office networks all work the same way.</p>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-at"></i></div>
+<h3>One call sign, one entry</h3>
+<p><code>&lt;call&gt;.mrrc.vlsc.net</code> is the entry point. The call sign is both the
+            tenant and the account — there is no second username to maintain.</p>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-hand"></i></div>
+<h3>PTT release stays local</h3>
+<p>The hub is a pipe and never writes PTT. A dropped link is turned into RX by the machine
+            next to the radio, not by a cloud lease timeout.</p>
+</div>
+<div class="feature-card animate">
+<div class="icon"><i class="fas fa-lock"></i></div>
+<h3>Certificate checked hop by hop</h3>
+<p>End-to-end TLS: a real certificate from browser to hub, and the hub verifies your own
+            instance certificate by name. No hop is paid for by disabling verification.</p>
+</div>
+</div>
+<div style="margin-top:2rem">
+<img alt="Station topology: antenna, tuner, radio, box, router or Wi-Fi AP, Cloud Hub"
+                 loading="lazy" src="images/station-topology.svg"
+                 style="width:100%;height:auto;border-radius:var(--scope-radius);border:1px solid var(--scope-border);"/>
+</div>
+<p class="section-subtitle" style="margin-top:1rem">
+            The router in this picture can equally be a Wi-Fi AP — the box just needs to be on
+            the same network as the phone. Radio chain stays local; only the tunnel leaves the house.
+            <a href="https://www.vlsc.net/mrrc_hub/" rel="noopener">Full Cloud Hub site →</a>
+          </p>
+</div>
+</section>
 <section class="scope-section" id="download" style="background: var(--scope-bg)">
 <div class="container">
 <div class="section-header">

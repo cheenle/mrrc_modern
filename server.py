@@ -7836,10 +7836,15 @@ async def api_box_bt_pair(request: Request):
         return JSONResponse({"ok": False, "error": "没有指定设备"}, status_code=400)
     result = await asyncio.to_thread(net_bt.pair, address)
     state = await asyncio.to_thread(net_bt.state, address)
-    logger.warning("box: paired remote %s (keys_work=%s)",
-                   address, state.get("keys_work"))
-    state["ok"] = bool(state.get("paired"))
-    return JSONResponse(state, status_code=200 if state["ok"] else 400)
+    # pair() 里那句 error 是操作员唯一能行动的东西（「没在广播 → 按住 OK+返回」）。
+    # 早先这里用 state() 重新取了一遍而把它丢了，页面于是只剩一句「配不上」。
+    if result.get("error"):
+        state["error"] = result["error"]
+    logger.warning("box: pair remote %s → paired=%s keys_work=%s (%s)",
+                   address, state.get("paired"), state.get("keys_work"),
+                   state.get("error") or "ok")
+    state["ok"] = bool(state.get("paired")) and bool(state.get("keys_work"))
+    return JSONResponse(state, status_code=200 if state.get("paired") else 400)
 
 
 @app.post("/api/box/bt/forget", include_in_schema=False)

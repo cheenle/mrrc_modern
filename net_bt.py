@@ -314,6 +314,61 @@ def pair_script(address: str, seconds: int = 25) -> list[tuple[str, float]]:
     ]
 
 
+def _pty_advertising(address: str, timeout: float) -> bool:
+    """Is ``address`` **broadcasting right now**?
+
+    只有扫描结果里带 RSSI 才算：`bluetoothctl devices` 里那行是 bluez 的**缓存**，
+    遥控器早就退出配对模式了，拿它去 pair 只会得到 `Device ... not available`
+    （2026-10-18 现场：网页点「配对」失败三次，三次都是这个原因，而那一行错误对
+    操作员毫无用处——它没说要先把遥控器按回配对模式）。
+    """
+    import os
+    import pty
+    import select
+    import subprocess
+    import time
+
+    master, slave = pty.openpty()
+    proc = subprocess.Popen(["bluetoothctl", "--agent", "NoInputNoOutput"],
+                            stdin=slave, stdout=slave, stderr=slave, close_fds=True)
+    os.close(slave)
+    buf = ""
+    want = address.lower()
+    try:
+        os.write(master, b"scan on\n")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.2)
+            if master not in ready:
+                continue
+            try:
+                data = os.read(master, 4096)
+            except OSError:
+                break
+            if not data:
+                break
+            buf += data.decode(errors="replace")
+            for event in _clean(buf).splitlines():
+                low = event.lower()
+                if want in low and "rssi" in low:
+                    return True
+        return False
+    finally:
+        try:
+            os.write(master, b"scan off\nquit\n")
+        except OSError:
+            pass
+        for closer in (proc.terminate, proc.wait, proc.kill):
+            try:
+                closer()
+            except Exception:
+                pass
+        try:
+            os.close(master)
+        except OSError:
+            pass
+
+
 def _pty_session(lines: list[tuple[str, float]], argv: Optional[list] = None) -> str:
     """Run ``bluetoothctl`` on a real pty and type `lines` into it.
 
@@ -369,7 +424,10 @@ def _pty_session(lines: list[tuple[str, float]], argv: Optional[list] = None) ->
     return "".join(chunks)
 
 
-def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None) -> dict:
+def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
+         probe: Optional[Callable[[str, float], bool]] = None,
+         keyboard: Optional[Callable[[str], bool]] = None,
+         cure: bool = True) -> dict:
     """Pair + trust.  Returns the resulting ``info()``, plus ``error`` on failure.
 
     The error is surfaced on purpose: "没有配上" with no reason is the message an
@@ -383,17 +441,43 @@ def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None) -> di
         _rc, out, err = _run(["bluetoothctl", "--timeout", str(seconds),
                               "pair", address], runner)
         _run(["bluetoothctl", "trust", address], runner)
-    else:
-        out, err = "", ""
-        try:
-            out = _pty_session(pair_script(address, seconds))
-        except (ImportError, OSError):
-            # 没有 pty 的平台退回一次性调用：配不上的概率更高，但至少有条路。
-            _rc, out, err = _run(["bluetoothctl", "--timeout", str(seconds),
-                                  "pair", address])
-            _run(["bluetoothctl", "trust", address])
-    state = info(address, runner)
-    state["error"] = "" if state.get("paired") else pair_error(out + "\n" + err)
+        state = info(address, runner)
+        state["error"] = "" if state.get("paired") else pair_error(out + "\n" + err)
+        return state
+
+    probe = probe or _pty_advertising
+    keys = keyboard or keyboard_device_present
+    if not probe(address, 45.0):
+        state = info(address)
+        state["error"] = ("遥控器没有在广播：它没进配对模式，或者已经超时退出。"
+                          "按住「OK + 返回」约 5 秒（指示灯快闪）再点一次。")
+        return state
+
+    out = ""
+    try:
+        out = _pty_session(pair_script(address, seconds))
+    except (ImportError, OSError):
+        _rc, out, _err = _run(["bluetoothctl", "--timeout", str(seconds), "pair", address])
+        _run(["bluetoothctl", "trust", address])
+
+    state = info(address)
+    if state.get("paired") and not keys(address) and cure:
+        # 文档 §2 那条实测的陷阱：Paired/Bonded 都为真，链路却没加密，bluez 的
+        # hog 拼不出键盘设备，按键一个都不来。解法只有一条：清掉陈旧 bond、
+        # 控制器断电重启、再配一次。
+        remove()
+        power_cycle()
+        if probe(address, 30.0):
+            try:
+                out += _pty_session(pair_script(address, seconds))
+            except (ImportError, OSError):
+                pass
+        state = info(address)
+
+    ok = bool(state.get("paired")) and keys(address)
+    state["error"] = "" if ok else (pair_error(out)
+                                    or ("已配对，但按键还没反应——点「重配」再试一次"
+                                        if state.get("paired") else "配对失败：设备没有响应"))
     return state
 
 

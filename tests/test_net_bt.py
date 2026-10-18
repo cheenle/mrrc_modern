@@ -12,6 +12,7 @@ it is honest:
 
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import net_bt
 
@@ -347,6 +348,58 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(set(state), {"address", "name", "paired", "bonded",
                                       "connected", "trusted", "keys_work"})
 
+
+
+class PairWaitsForAdvertisingTests(unittest.TestCase):
+    """网页上「配对」失败三次的真因（2026-10-18）：没等遥控器开始广播就 pair。
+
+    bluez 对缓存里的名字也会列出来，于是页面让操作员点了一台**没有在广播**的设备，
+    pair 回一句 `Device ... not available`。对操作员来说那句话什么都不说明。
+    """
+
+    def _with_stubs(self, advertising, paired_after=True, keys_after=False, cure=True):
+        calls = {"pty": 0, "remove": 0, "cycle": 0}
+
+        def fake_pty(lines, argv=None):
+            calls["pty"] += 1
+            return "Attempting to pair\nPairing successful\n"
+
+        def fake_info(address, runner=None):
+            return {"paired": paired_after, "bonded": paired_after,
+                    "trusted": True, "connected": False, "name": "CMDB"}
+
+        with mock.patch.object(net_bt, "_pty_session", fake_pty), \
+             mock.patch.object(net_bt, "info", fake_info), \
+             mock.patch.object(net_bt, "remove",
+                               lambda runner=None: calls.__setitem__("remove", calls["remove"] + 1)), \
+             mock.patch.object(net_bt, "power_cycle",
+                               lambda runner=None: calls.__setitem__("cycle", calls["cycle"] + 1)):
+            state = net_bt.pair("0C:F3:CE:B0:88:75", probe=lambda a, t: advertising,
+                                keyboard=lambda a: keys_after, cure=cure)
+        return state, calls
+
+    def test_refuses_when_the_remote_is_not_broadcasting(self):
+        state, calls = self._with_stubs(advertising=False)
+        self.assertEqual(calls["pty"], 0)          # 一次 pair 都没发
+        self.assertIn("没有在广播", state["error"])
+        self.assertIn("OK + 返回", state["error"])  # 告诉操作员该做什么
+
+    def test_pairs_once_advertising_is_seen(self):
+        state, calls = self._with_stubs(advertising=True, keys_after=True)
+        self.assertEqual(calls["pty"], 1)
+        self.assertEqual(state["error"], "")
+
+    def test_paired_but_dead_keys_triggers_the_documented_cure(self):
+        state, calls = self._with_stubs(advertising=True, keys_after=False)
+        self.assertGreaterEqual(calls["remove"], 1)
+        self.assertGreaterEqual(calls["cycle"], 1)
+        self.assertEqual(calls["pty"], 2)          # 补救后重配了一次
+        self.assertIn("重配", state["error"])
+
+    def test_cure_can_be_disabled(self):
+        _state, calls = self._with_stubs(advertising=True, keys_after=False, cure=False)
+        self.assertEqual(calls["remove"], 0)
+        self.assertEqual(calls["pty"], 1)
 
 class SettingsPageTests(unittest.TestCase):
     """The page is the whole point: no SSH for the customer."""

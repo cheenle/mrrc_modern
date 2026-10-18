@@ -260,3 +260,54 @@ class CloudPanelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class BtPairEndpointTests(unittest.TestCase):
+    """配对端点必须把原因交给操作员，并且把「按键可用」当作成功判据。
+
+    现场（2026-10-18）：网页点「配对」失败，页面只显示"配不上"；真正的原因
+    （遥控器没进配对模式 → bluez `Device ... not available`）被这里重新取的
+    `state()` 覆盖掉了。一个说不出下一步的失败提示等于没有提示。
+    """
+
+    def _post(self, pair_result, state_result):
+        import asyncio
+        from types import SimpleNamespace
+        from unittest import mock
+        import server
+
+        req = SimpleNamespace(headers={}, cookies={"mrrc_auth": "t"},
+                              client=SimpleNamespace(host="127.0.0.1"),
+                              url=SimpleNamespace(path="/api/box/bt/pair", query=""))
+
+        async def body():
+            return {"address": "0C:F3:CE:B0:88:75"}
+
+        req.json = body
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server.net_bt, "pair", return_value=pair_result), \
+             mock.patch.object(server.net_bt, "state", return_value=dict(state_result)):
+            return asyncio.run(server.api_box_bt_pair(req))
+
+    def test_error_from_pair_is_surfaced(self):
+        r = self._post({"error": "遥控器没有在广播：按住「OK + 返回」约 5 秒再点一次。"},
+                       {"paired": False, "keys_work": False})
+        import json
+        payload = json.loads(r.body)
+        self.assertIn("OK + 返回", payload["error"])
+        self.assertFalse(payload["ok"])
+        self.assertEqual(r.status_code, 400)
+
+    def test_paired_but_dead_keys_is_not_ok(self):
+        r = self._post({"error": "已配对，但按键还没反应——点「重配」再试一次"},
+                       {"paired": True, "keys_work": False})
+        import json
+        payload = json.loads(r.body)
+        self.assertFalse(payload["ok"])
+        self.assertIn("重配", payload["error"])
+
+    def test_working_remote_is_ok(self):
+        r = self._post({}, {"paired": True, "keys_work": True})
+        import json
+        self.assertTrue(json.loads(r.body)["ok"])
+        self.assertEqual(r.status_code, 200)
+

@@ -105,3 +105,32 @@ class FrameCodecTests(unittest.TestCase):
         frames = p.feed(b"\x00\xffjunk" + F.encode_spectrum(1, b"\x01\x02"))
         self.assertTrue(any(f[0] == "spectrum" for f in frames))
         self.assertGreater(p.errors, 0)
+
+
+class AudioFrameRegressionTests(unittest.TestCase):
+    """真机抓到的缺陷：A1 帧的 seq 曾经按 u8 打包（<BBHH），序号过 255 就抛
+    struct.error，整条 pipe 退出、接收机变成不可用。布局是 chid u8 / seq u16 /
+    level u8 / len u16 —— 三个地方（编码、解析、服务端 WS 帧）必须一致。"""
+
+    def test_sequence_numbers_above_255_round_trip(self):
+        blob = F.encode_audio(2, 65_000, b"x" * 10, 0.5)
+        frames = F.FrameParser().feed(blob)
+        self.assertEqual(len(frames), 1)
+        _, chid, seq, level, payload = frames[0]
+        self.assertEqual((chid, seq, len(payload)), (2, 65_000, 10))
+        self.assertAlmostEqual(level, 0.5, delta=0.01)
+
+    def test_level_is_clamped(self):
+        for rms, want in ((2.0, 255), (-1.0, 0), (0.0, 0)):
+            blob = F.encode_audio(0, 1, b"z", rms)
+            _, _, _, level, _ = F.FrameParser().feed(blob)[0]
+            self.assertAlmostEqual(level, want / 255.0, delta=0.01)
+
+    def test_server_ws_frame_matches_the_same_layout(self):
+        import server
+        kind, payload = server._sdr_ws_encode(("audio", 1, 40_000, 0.25, b"ab"))
+        self.assertEqual(kind, "bytes")
+        self.assertEqual(payload[0], 0x02)
+        chid, seq, level, ln = __import__("struct").unpack_from("<BHBH", payload, 1)
+        self.assertEqual((chid, seq, ln), (1, 40_000, 2))
+        self.assertEqual(payload[7:], b"ab")   # 0x02 + chid/seq/level/len = 7 字节头

@@ -41,7 +41,7 @@ def encode_audio(chid: int, seq: int, payload: bytes, rms: float = 0.0) -> bytes
     if len(payload) > 0xFFFF:
         raise ValueError("audio payload too large")
     level = max(0, min(255, int(round(float(rms) * 255.0))))
-    return TAG_AUDIO + struct.pack("<BBHH", chid, seq & 0xFFFF, level, len(payload)) + payload
+    return TAG_AUDIO + struct.pack("<BHBH", chid, seq & 0xFFFF, level, len(payload)) + payload
 
 
 def encode_command(obj: dict) -> bytes:
@@ -103,7 +103,7 @@ class FrameParser:
         if tag == TAG_AUDIO:
             if len(buf) < 8:
                 return None
-            chid, seq, level, ln = struct.unpack_from("<BBHH", buf, 2)
+            chid, seq, level, ln = struct.unpack_from("<BHBH", buf, 2)
             if len(buf) < 8 + ln:
                 return None
             payload = bytes(buf[8:8 + ln])

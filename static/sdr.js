@@ -207,12 +207,13 @@ function onBinary(dv) {
     return;
   }
   if (tag === 0x02) {
+    // 布局：0x02 | chid u8 | seq u16 | level u8 | len u16 | opus
     const chid = dv.getUint8(1);
-    const level = dv.getUint8(5);
-    const len = dv.getUint16(6, true);
-    if (dv.byteLength < 8 + len) return;
+    const level = dv.getUint8(4);
+    const len = dv.getUint16(5, true);
+    if (dv.byteLength < 7 + len) return;
     el.levelBar.style.width = Math.min(100, Math.round((level / 255) * 100 * 1.6)) + "%";
-    const payload = new Uint8Array(dv.buffer, dv.byteOffset + 8, len);
+    const payload = new Uint8Array(dv.buffer, dv.byteOffset + 7, len);
     playOpus(payload);
   }
 }

@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2541 tests across 133 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2544 tests across 133 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-17, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -883,7 +883,7 @@ python -m unittest tests.test_config.ModeTableTests.test_bidirectional_mode_mapp
 | `test_sdr_frontend.py` | 8 项：SDR 页面的契约——16 个控件 id 必须存在；复用既有音频栈（`opus_wasm.js` + `opus_codec.js` + `rx_worklet_processor.js`，`new OpusDecoder(48000, 1)`）；**不加载** `ft710_main.js`/`ft710_ui.js`（受保护文件）；说的是文档里那五个事件与两种二进制帧；**URL 里没有 `token=`**；所有资源相对路径（页面可能挂在 `/mrrc_modern/<call>/sdr`）；没有大段内联脚本；viewport + safe-area（移动优先） |
 | `test_server_sdr.py` | 12 项：**SDR 入口的接线段**——没有 `MRRC_SDR_PASSWORD` 或 `MRRC_SDR=off` 时整条入口不存在（页面 404）、口令错不下发 cookie、登录只发 `mrrc_sdr` 且该 token **不进 `_auth_tokens`**（拿着它也开不了电台控制面）、没有 cookie 时页面给的是它自己的登录表单、电台 token 连 `/WSsdr` 被 4001 拒、sdr token 收到 `hello`、超并发是 4003 + 原因而不是静默挂断、二进制帧的布局（`0x01` 频谱 / `0x02` 音频带 rms 字节）。**令牌存储必须指向临时文件**（`_AUTH_TOKENS_FILE`），否则这个文件的登录会写进真实的 `data/auth-tokens.json`，让下一个跑持久化断言的用例红 —— 第一版就是这么红的 |
 | `test_sdr_hub.py` | 18 项：**调谐仲裁与解调池的纯逻辑**（FakeClock/FakePipe，无 sleep、无硬件）——首个 tune 成功、别人在 30 s 内被拒且倒计时正确、持有者可连续改、持有者断开立刻释放；改中心频率后**绝对频率不变**（offset 重算）且越界被钳到窗边；同一 (offset,mode,bw) 复用同一路解调器且只向 pipe 下发一次 set_channel、最后一个订阅者走了才拆；带宽不同就算不同解调器；通道满抛 `SdrChannelFull`（**拒该请求而不是踢人**）；客户端上限抛 `SdrCapacityError`、断线让出席位；12→13 人时频谱自动从 1024 降到 512 bin；频谱广播到所有人、音频只到该通道的订阅者、静噪按 rms 过滤；状态帧带快照 |
-| `test_sdr_pipe.py` | 6 项：**进程边界**——离线模式跑完整条链路（IQ 文件 → 状态/频谱/音频帧，`--channels` 为空时不出音频）；频谱恒为 1024 bin 且不是全零；分帧器四种帧的往返、**逐字节喂入**（网络/管道会任意切片）、未知标签重对齐（丢一个字节后**同一轮**继续解析，而不是等下一次 feed —— 第一版就是那样，坏字节后的好帧要等到下一个数据块才出来） |
+| `test_sdr_pipe.py` | 9 项：**进程边界**——离线模式跑完整条链路（IQ 文件 → 状态/频谱/音频帧，`--channels` 为空时不出音频）；频谱恒为 1024 bin 且不是全零；分帧器四种帧的往返、**逐字节喂入**（网络/管道会任意切片）、未知标签重对齐（丢一个字节后**同一轮**继续解析，而不是等下一次 feed —— 第一版就是那样，坏字节后的好帧要等到下一个数据块才出来）；**A1 帧布局的回归**（真机抓到的：seq 曾被按 u8 打包，序号过 255 就 struct.error、整条 pipe 退出、接收机变不可用）——现在钉住 seq=65000 往返、level 钳位、以及服务端 WS 帧用的是同一套 `<BHBH` |
 | `test_sdr_dsp_binding.py` | 5 项：ctypes 绑定——库定位（`MRRC_SDR_DSP_LIB` 优先，缺失时 `locate()` 返回 None 而不是抛异常，桌面版 `MRRC_SDR=off` 走这条路）；`process()` 返回每通道 PCM 与 RMS，块长稳定在 48 kHz/2 ms；非法带宽被拒；非整数抽取率的构造直接抛 ValueError |
 | `test_spectrum_profile_docs.py` | 15 项：**把"文档说的是真的"变成断言**——NFR-003 不得再把回退态当常态（`~30fps ≈ 51KB/s`）、也不得保留从未为真的 `~851 bytes/frame fallback`；§9.2.4 必须写明 v1=851 B **从未上线**、caps 协商、以及全帧**不得改标 `0x02`** 的理由（iOS `guard version == 0x01`）；分频是比例而非绝对速率（`~10 Hz` 只在回退态成立，任何提及必须同行带 `fallback` 条件；`14-version-history.md` 作为不可变日志豁免）；AD-025 记下两轴的实测依据（`permessage-deflate` 3.9× / OkHttp 不提供该扩展）；AD-023 的 408 kbps 与 86% **就地加注而不删原文**（删掉等于掩盖当时的容量决策是从什么数字做出的）；`spectrum_profile` 进 PyInstaller `hiddenimports`（v1.24.0 漏 `cloud_hub` 的前车之鉴）；`AGENTS.md` 与 `PROJECT_MAP.md` 不再引用并不存在的 `tests/test_ws_protocol.py`；`setOpusBitrate` 的每处提及都必须在邻近行标明未实现（它只存在于注释与文档里）；`tests/README.md` 的总数与 `discover` 的实际输出一致 |
 

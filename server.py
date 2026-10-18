@@ -5102,6 +5102,7 @@ class SdrPipeRunner:
         if self.last_error:
             reason += f": {self.last_error}"
         self.hub.set_available(False, reason)
+        self.hub.broadcast_state()
         logger.warning("SDR pipe stopped: %s", reason)
         delay = self.BACKOFF[min(self._backoff_i, len(self.BACKOFF) - 1)]
         self._backoff_i += 1
@@ -5114,9 +5115,13 @@ class SdrPipeRunner:
         if kind == "status":
             obj = frame[1]
             if obj.get("error"):
-                self.hub.set_available(False, str(obj["error"]))
+                if self.hub.available:
+                    self.hub.set_available(False, str(obj["error"]))
+                    self.hub.broadcast_state()
                 return
-            self.hub.set_available(True)
+            if not self.hub.available:
+                self.hub.set_available(True)
+                self.hub.broadcast_state()
             self._backoff_i = 0
             if "center_hz" in obj:
                 self.hub.center_hz = int(obj["center_hz"])
@@ -5180,7 +5185,7 @@ def _sdr_ws_encode(frame: tuple) -> tuple[str, object]:
         return "bytes", b"\x01" + struct.pack("<HH", seq & 0xFFFF, len(bins)) + bins
     if kind == "audio":
         _, chid, seq, level, payload = frame
-        return "bytes", (b"\x02" + struct.pack("<BBHH", chid, seq & 0xFFFF,
+        return "bytes", (b"\x02" + struct.pack("<BHBH", chid, seq & 0xFFFF,
                                                max(0, min(255, int(level * 255))),
                                                len(payload)) + payload)
     return "text", json.dumps({"event_type": kind, "value": frame[1]})

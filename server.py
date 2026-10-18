@@ -6000,9 +6000,11 @@ async def api_nano_trace(request: Request):
         return JSONResponse({"error": "tx_active"}, status_code=409)
     try:
         body = await request.json()
-        type_name = str(body["type"])
+        type_name = str(body.get("type") or "")
         src = int(body.get("src", 0))
         trace_id = int(body.get("id", 0))
+        scale = body.get("scale")
+        refpos = body.get("refpos")
     except (KeyError, TypeError, ValueError) as exc:
         return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
     if _nano_lock.locked():
@@ -6010,7 +6012,12 @@ async def api_nano_trace(request: Request):
     async with _nano_lock:
         try:
             dev = await asyncio.to_thread(_nano_require_device)
-            await asyncio.to_thread(dev.set_trace_type, trace_id, type_name, src)
+            if type_name:
+                await asyncio.to_thread(dev.set_trace_type, trace_id, type_name, src)
+            if scale is not None:
+                await asyncio.to_thread(dev.set_trace_param, trace_id, "scale", float(scale))
+            if refpos is not None:
+                await asyncio.to_thread(dev.set_trace_param, trace_id, "refpos", float(refpos))
         except ValueError as exc:
             return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
         except NanoError as exc:
@@ -6059,6 +6066,98 @@ async def api_nano_settings(request: Request):
             return JSONResponse({"error": "device_error", "detail": str(exc)},
                                 status_code=503)
     return JSONResponse({"ok": True, "settings": settings})
+
+
+@app.post("/api/nano/device-sweep")
+async def api_nano_device_sweep(request: Request):
+    """设**设备自己**的扫描范围（独立带出去时它屏幕上扫的就是这一段）。"""
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_tx_active():
+        return JSONResponse({"error": "tx_active"}, status_code=409)
+    try:
+        body = await request.json()
+        start = int(body["start"]); stop = int(body["stop"]); points = int(body["points"])
+        scan_command(start, stop, points)
+    except (KeyError, TypeError, ValueError) as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+    if _nano_lock.locked():
+        return JSONResponse({"error": "busy"}, status_code=409)
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            await asyncio.to_thread(dev.set_device_sweep, start, stop, points)
+            await asyncio.to_thread(dev.save_config)
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc)},
+                                status_code=503)
+    _nano_write_json(NANO_STATE_FILE,
+                     {"start_hz": start, "stop_hz": stop, "points": points})
+    return JSONResponse({"ok": True, "start_hz": start, "stop_hz": stop, "points": points})
+
+
+@app.post("/api/nano/field-preset")
+async def api_nano_field_preset(request: Request):
+    """一键把设备配成"野外独立测天线"：扫哪段、屏幕上显示 SWR、标记在哪。
+
+    每一项都不是随便定的（页面上的说明文字与这里同源）：
+    * 范围 1–54 MHz / 401 点：HF 与 6m 一次覆盖，401 点是这台机器的上限；
+    * 迹线 0 = SWR + 刻度 1.0/格 + 参考 0：屏幕上直接读驻波，不用心算 dB；
+    * 标记放在扫描中点：拔下来以后转旋钮就能拖到谐振点；
+    * 然后 `saveconfig`，否则断电全回默认。
+    """
+    gate = _nano_gate(request)
+    if gate is not None:
+        return gate
+    if _nano_tx_active():
+        return JSONResponse({"error": "tx_active"}, status_code=409)
+    try:
+        body = await request.json()
+    except Exception:                                              # noqa: BLE001
+        body = {}
+    start = int(body.get("start", 1_000_000))
+    stop = int(body.get("stop", 54_000_000))
+    points = int(body.get("points", 401))
+    try:
+        scan_command(start, stop, points)
+    except ValueError as exc:
+        return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+    if _nano_lock.locked():
+        return JSONResponse({"error": "busy"}, status_code=409)
+    done: list = []
+    async with _nano_lock:
+        try:
+            dev = await asyncio.to_thread(_nano_require_device)
+            await asyncio.to_thread(dev.set_device_sweep, start, stop, points)
+            done.append("sweep")
+            await asyncio.to_thread(dev.set_trace_type, 0, "swr", 0)
+            done.append("trace=swr")
+            await asyncio.to_thread(dev.set_trace_param, 0, "scale", 1.0)
+            done.append("scale=1.0")
+            await asyncio.to_thread(dev.set_trace_param, 0, "refpos", 0.0)
+            done.append("refpos=0")
+            await asyncio.to_thread(dev.set_marker_index, 0, points // 2)
+            done.append("marker=mid")
+            await asyncio.to_thread(dev.save_config)
+            done.append("saveconfig")
+            # 迹线格式不在 config 里（真机实测：saveconfig 救不了它），必须存进
+            # SAVE/RECALL 槽；野外开机后 RECALL 这个槽就整套回来。
+            await asyncio.to_thread(dev.save_state, FIELD_SLOT)
+            done.append("save-%d" % FIELD_SLOT)
+        except ValueError as exc:
+            return JSONResponse({"error": "bad_request", "detail": str(exc)}, status_code=400)
+        except NanoError as exc:
+            await asyncio.to_thread(_nano_forget, str(exc))
+            return JSONResponse({"error": "device_error", "detail": str(exc),
+                                 "done": done}, status_code=503)
+    _nano_write_json(NANO_STATE_FILE,
+                     {"start_hz": start, "stop_hz": stop, "points": points,
+                      "field_slot": FIELD_SLOT})
+    _nano_config_update(field_slot=FIELD_SLOT)
+    return JSONResponse({"ok": True, "done": done, "slot": FIELD_SLOT,
+                         "start_hz": start, "stop_hz": stop, "points": points})
 
 
 @app.post("/api/nano/cal")
@@ -6219,6 +6318,9 @@ NANO_FIRMWARE_STATE = NANO_DIR / "firmware-state.json"
 NANO_CONFIG_FILE = NANO_DIR / "config.json"
 NANO_RELEASES_CACHE = NANO_DIR / "releases.json"
 NANO_RELEASES_TTL_S = 6 * 3600
+
+# 野外配置存进哪个 SAVE/RECALL 槽。选 4 是因为它是最后一个，用户自己的槽不会占到。
+FIELD_SLOT = 4
 
 _nano_flash_state: dict = {"state": "idle", "detail": ""}
 _nano_flash_task: Optional[asyncio.Task] = None

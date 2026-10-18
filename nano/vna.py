@@ -402,6 +402,15 @@ class NanoVna:
             return sweep
         raise FrameError("two bad frames in a row: %s" % last)
 
+    def set_device_sweep(self, start: int, stop: int, points: int) -> None:
+        """设设备自己的扫描范围（它就显示在自己屏幕上，独立使用时用的就是这个）。
+
+        与 :meth:`restore_sweep` 的区别：这里是**用户的意图**，要 `saveconfig`
+        才写进 flash；还原是"我来过又走了，别改人家东西"。
+        """
+        scan_command(start, stop, points, s21=False)     # 复用同一套参数校验
+        self._ask("sweep %d %d %d" % (start, stop, points), timeout=3.0 + points * 0.01)
+
     def restore_sweep(self, start: int, stop: int, points: int) -> bool:
         """把设备屏幕上的扫频范围还原成进来时的那一段。
 
@@ -513,23 +522,38 @@ class NanoVna:
         self._ask("marker %s" % ("on" if on else "off"))
 
     def set_marker_index(self, n: int, index: int) -> None:
-        """把第 n 个标记移到扫描点 ``index``（屏幕上立刻可见）。"""
-        self._ask("marker %d %d" % (int(n), int(index)))
+        """把第 n 个标记（0 基）移到扫描点 ``index``。
+
+        **固件的 marker 命令是 1 基的**（`marker 1 <index>`）；传 0 会被当成非法
+        编号直接吐 usage 而不报错 —— 现场表现为"命令成功但标记没动"（2026-10-18
+        真机）。所以这里 +1。
+        """
+        self._ask("marker %d %d" % (int(n) + 1, int(index)))
 
     def save_config(self) -> None:
         """把当前设置（含标定）写进设备 flash —— 不写就只是 RAM 里的临时状态。"""
         self._ask("saveconfig", timeout=6.0)
 
     # 标定槽 ------------------------------------------------------
-    def save_cal(self, slot: int) -> None:
-        if not 0 <= int(slot) <= 4:
-            raise ValueError("slot must be 0..4")
-        self._ask("save %d" % int(slot))
+    def save_state(self, slot: int) -> None:
+        """把**整套状态**存进槽 0..4：扫描范围、迹线格式/刻度、标记、标定。
 
-    def recall_cal(self, slot: int) -> None:
+        固件里 `saveconfig` 只写 config（标定在里面），**迹线不在 config 里** ——
+        实测：改完迹线 saveconfig + 重启，迹线回默认；`save <槽>` 再 `recall <槽>`
+        才能整套回来（2026-10-18 真机）。野外独立使用靠的就是这个。
+        """
         if not 0 <= int(slot) <= 4:
             raise ValueError("slot must be 0..4")
-        self._ask("recall %d" % int(slot))
+        self._ask("save %d" % int(slot), timeout=8.0)
+
+    def recall_state(self, slot: int) -> None:
+        if not 0 <= int(slot) <= 4:
+            raise ValueError("slot must be 0..4")
+        self._ask("recall %d" % int(slot), timeout=8.0)
+
+    # 旧名保留（服务端与测试仍在用）
+    save_cal = save_state
+    recall_cal = recall_state
 
     # 升级入口（第二期用）----------------------------------------
     def enter_dfu(self) -> None:

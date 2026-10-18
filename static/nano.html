@@ -169,15 +169,41 @@ select,input[type=number],input[type=text]{
     <dl class="kv" id="devinfo"><dt>状态</dt><dd>—</dd></dl>
     <h3>测量</h3>
     <div id="settings"><p class="hint">连上设备后可改。</p></div>
+    <h3>野外独立使用（拔下来只看设备屏幕）</h3>
+    <p class="hint">离开盒子时，设备自己那块屏上扫的是<b>它自己的扫描范围</b>、画的是
+      <b>迹线 0 的格式</b>。下面这组就是为"拿着它去剪天线"准备的。</p>
+    <div class="row"><button class="ghost" id="field-preset">一键套用野外配置</button></div>
+    <p class="hint">它会做四件事，然后把整套**存进槽 4**：<br>
+      ① 设备自己扫 1–54 MHz / 401 点（HF+6m 一次覆盖）<br>
+      ② 迹线 0 切到 <b>SWR</b>，刻度 1.0/格、参考 0（屏幕从下到上 0→10）<br>
+      ③ 标记 1 放到扫描中点（拔下来转旋钮就能拖到谐振点）<br>
+      ④ `saveconfig` + `save 4`<br>
+      <b>带出去独立用：开机 → 主菜单 RECALL → 4</b>。迹线格式不在 config 里，
+      只有 RECALL 槽能整套恢复（真机验证）。</p>
+    <div class="row">
+      <label>设备扫</label>
+      <input type="number" id="dev-start" step="0.01" placeholder="起 MHz" style="width:86px">
+      <input type="number" id="dev-stop" step="0.01" placeholder="止 MHz" style="width:86px">
+      <select id="dev-points"><option>101</option><option>201</option>
+        <option selected>401</option></select>
+      <button class="ghost" id="dev-apply">设为设备范围</button>
+    </div>
+
     <h3>设备屏幕</h3>
     <div id="view"><p class="hint">读取中…</p></div>
+    <div class="row">
+      <label>刻度/格</label><input type="number" id="trace-scale" step="0.1" style="width:80px">
+      <label>参考位置</label><input type="number" id="trace-refpos" step="0.1" style="width:80px">
+      <button class="ghost" id="trace-apply">应用</button>
+    </div>
+    <p class="hint">SWR 迹线常用：刻度 1.0、参考 0（屏幕从下到上 0→10）。</p>
     <div id="flags"><p class="hint">读取中…</p></div>
     <p class="hint">这些开关在固件里没有查询命令，显示的是本页记下的状态，实际以设备屏幕为准。</p>
     <div class="row"><button class="ghost" id="saveconfig">写入设备 flash</button></div>
     <p class="hint">设备上的设置只存在 RAM，断电回默认——改完点这里才真正保存（含标定）。</p>
-    <h3>标定</h3>
+    <h3>状态存档槽（含标定）</h3>
     <div class="row" id="cal"></div>
-    <p class="hint">recall 立即生效；save 会覆盖设备里那一组，需要确认。</p>
+    <p class="hint">槽里存的是整套状态（扫描范围 + 迹线 + 标记 + 标定）。recall 立即生效；save 会覆盖设备里那一组，需要确认。槽 4 留给野外配置。</p>
     <h3>固件升级</h3>
     <div id="firmware"><p class="hint">读取中…</p></div>
   </details>

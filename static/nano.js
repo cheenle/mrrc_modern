@@ -414,6 +414,12 @@ async function refreshStatus(full) {
                + (st.vbat_mv ? ' · ' + (st.vbat_mv / 1000).toFixed(2) + 'V' : ''))
             : '设备未连接';
         renderDevice(st);
+        if (st.device_sweep && st.device_sweep.start_hz) {
+            const ds = document.getElementById('dev-start');
+            const de = document.getElementById('dev-stop');
+            if (ds && !ds.value) ds.value = (st.device_sweep.start_hz / 1e6).toFixed(2);
+            if (de && !de.value) de.value = (st.device_sweep.stop_hz / 1e6).toFixed(2);
+        }
         if (st.settings) renderSettings(st.settings);
         if (st.flags !== undefined) renderFlags();
         // 顺序是判据：忙 ≠ 掉线
@@ -469,6 +475,51 @@ const TRACE_LABELS = {
     real: '实部', imag: '虚部', r: '电阻 R', x: '电抗 X', z: '阻抗 |Z|',
 };
 
+async function applyFieldPreset() {
+    const btn = document.getElementById('field-preset');
+    btn.disabled = true;
+    try {
+        const res = await api('field-preset', {method: 'POST', body: {}});
+        const body = await readJson(res);
+        if (!res.ok) { banner(body.detail || body.error || '配置失败', 'bad'); return; }
+        banner('野外配置已就位（槽 ' + (body.slot == null ? 4 : body.slot)
+               + '）：拔下来后开机 → RECALL → ' + (body.slot == null ? 4 : body.slot));
+        setTimeout(() => banner(''), 3500);
+        renderView();
+        refreshStatus(true);
+    } catch (e) {
+        banner('配置失败：' + e, 'bad');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function applyDeviceSweep() {
+    const start = parseFloat(document.getElementById('dev-start').value);
+    const stop = parseFloat(document.getElementById('dev-stop').value);
+    const points = parseInt(document.getElementById('dev-points').value, 10);
+    if (isNaN(start) || isNaN(stop) || stop <= start) { banner('起止频率不对', 'warn'); return; }
+    const res = await api('device-sweep', {method: 'POST', body: {
+        start: Math.round(start * 1e6), stop: Math.round(stop * 1e6), points: points}});
+    const body = await readJson(res);
+    if (!res.ok) { banner(body.detail || '设置失败', 'bad'); return; }
+    banner('设备扫描范围已设为 ' + start + '–' + stop + ' MHz / ' + points + ' 点（已写 flash）');
+    setTimeout(() => banner(''), 3000);
+    refreshStatus(true);
+}
+
+async function applyTraceParams() {
+    const scale = parseFloat(document.getElementById('trace-scale').value);
+    const refpos = parseFloat(document.getElementById('trace-refpos').value);
+    const body = {};
+    if (!isNaN(scale)) body.scale = scale;
+    if (!isNaN(refpos)) body.refpos = refpos;
+    const res = await api('trace', {method: 'POST', body: body});
+    const out = await readJson(res);
+    banner(res.ok ? '设备迹线刻度已更新' : (out.detail || '设置失败'), res.ok ? '' : 'bad');
+    if (res.ok) setTimeout(() => banner(''), 2000);
+}
+
 async function renderView() {
     const box = document.getElementById('view');
     let v;
@@ -486,6 +537,10 @@ async function renderView() {
         + '<div class="setting"><label>标记</label><span>'
         + ((v.markers || []).length ? fmtHz(v.markers[0].freq_hz) : '未开')
         + '（点曲线可移动）</span></div>';
+    if (tr) {
+        if (tr.scale != null) document.getElementById('trace-scale').value = tr.scale;
+        if (tr.refpos != null) document.getElementById('trace-refpos').value = tr.refpos;
+    }
     const sel = document.getElementById('view-trace');
     if (sel) {
         sel.onchange = async () => {
@@ -697,6 +752,9 @@ function boot() {
     };
     document.getElementById('save').onclick = saveSweep;
     document.getElementById('saveconfig').onclick = saveToDevice;
+    document.getElementById('field-preset').onclick = applyFieldPreset;
+    document.getElementById('dev-apply').onclick = applyDeviceSweep;
+    document.getElementById('trace-apply').onclick = applyTraceParams;
     document.getElementById('exportCsv').onclick = () => exportSweep('csv');
     document.getElementById('exportS1p').onclick = () => exportSweep('s1p');
     renderCal();

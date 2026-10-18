@@ -91,6 +91,18 @@ class FakeDevice:
     def read_markers(self):
         return [{"id": 1, "index": 50, "freq_hz": 7100000}]
 
+    def set_device_sweep(self, start, stop, points):
+        self.sent.append(("device_sweep", start, stop, points))
+
+    def save_state(self, slot):
+        self.sent.append(("save_state", slot))
+
+    def recall_state(self, slot):
+        self.sent.append(("recall_state", slot))
+
+    def set_trace_param(self, n, param, value):
+        self.sent.append(("param", n, param, value))
+
     def set_trace_type(self, n, type_name, src=0):
         if type_name not in server.nano_vna_types():
             raise ValueError("unknown trace type: %r" % (type_name,))
@@ -541,6 +553,60 @@ class ViewAndMarkerTest(unittest.TestCase):
         self.assertEqual(dev.sent, [("trace", 0, "smith", 0)])
 
 
+class FieldPresetTest(unittest.TestCase):
+    """野外独立使用的那一组设置：扫哪段、屏幕上画 SWR、标记在哪、写 flash。"""
+
+    def setUp(self):
+        self.token = "nano-field-token"
+        server._auth_tokens.add(self.token)
+        self.addCleanup(lambda: server._auth_tokens.discard(self.token))
+        self.addCleanup(lambda: setattr(server, "_nano_lock", asyncio.Lock()))
+        self.state = {}
+        self.addCleanup(lambda: setattr(server, "_nano_write_json", self._orig_write))
+        self._orig_write = server._nano_write_json
+        server._nano_write_json = lambda path, payload: self.state.update(payload)
+
+    def _req(self, body=None):
+        return FakeRequest(cookies={"mrrc_auth": self.token}, body=body or {})
+
+    def test_preset_runs_the_documented_sequence(self):
+        dev = FakeDevice()
+        with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_require_device", return_value=dev):
+            r = asyncio.run(server.api_nano_field_preset(self._req()))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            dev.sent,
+            [("device_sweep", 1_000_000, 54_000_000, 401),
+             ("trace", 0, "swr", 0),
+             ("param", 0, "scale", 1.0),
+             ("param", 0, "refpos", 0.0),
+             ("marker", 0, 200),
+             ("saveconfig",),
+             ("save_state", server.FIELD_SLOT)])
+        self.assertEqual(self.state, {"start_hz": 1_000_000, "stop_hz": 54_000_000,
+                                      "points": 401, "field_slot": server.FIELD_SLOT})
+
+    def test_preset_rejects_a_bad_range_before_touching_the_device(self):
+        with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_require_device") as ensure:
+            r = asyncio.run(server.api_nano_field_preset(
+                self._req({"start": 54_000_000, "stop": 1_000_000})))
+        self.assertEqual(r.status_code, 400)
+        ensure.assert_not_called()
+
+    def test_device_sweep_is_persisted(self):
+        dev = FakeDevice()
+        with mock.patch.object(server, "_nano_tx_active", return_value=False), \
+             mock.patch.object(server, "_nano_require_device", return_value=dev):
+            r = asyncio.run(server.api_nano_device_sweep(
+                self._req({"start": 3_500_000, "stop": 4_000_000, "points": 201})))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(dev.sent, [("device_sweep", 3_500_000, 4_000_000, 201),
+                                    ("saveconfig",)])
+        self.assertEqual(self.state["start_hz"], 3_500_000)
+
+
 class PageAssetsTest(unittest.TestCase):
     """前缀安全：接口地址只能从页面自己的 location 推出来（tests/test_path_prefix.py 的规矩）。"""
 
@@ -560,7 +626,8 @@ class PageAssetsTest(unittest.TestCase):
         html = (Path(server.__file__).parent / "static" / "nano.html").read_text(encoding="utf-8")
         js = (Path(server.__file__).parent / "static" / "nano.js").read_text(encoding="utf-8")
         for marker in ('id="tip"', 'id="center"', 'id="span"', 'id="flags"',
-                       'id="view"', 'id="verdict"'):
+                       'id="view"', 'id="verdict"', 'id="field-preset"',
+                       'id="dev-start"', 'id="trace-scale"'):
             self.assertIn(marker, html)
         self.assertIn("showTip", js)
         self.assertIn("currentRange", js)

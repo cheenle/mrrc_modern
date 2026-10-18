@@ -357,6 +357,62 @@ class FirmwareEndpointTest(unittest.TestCase):
         self.assertIn("enabled", payload)
 
 
+class ConnectPathTest(unittest.TestCase):
+    """`_nano_connect` 必须真的能跑通 —— 它在"连上了设备"那一刻才写日志。
+
+    现场教训（2026-10-18，部署到盒子后）：这个函数里写成了 `log.info`，而模块的
+    日志器叫 `logger`，于是**只有真连上设备时**才 `NameError`。此前所有用例都把
+    `_nano_require_device` 打了桩，这条路径一次都没执行过。
+    """
+
+    def setUp(self):
+        self.addCleanup(lambda: setattr(server, "_nano_device", None))
+        self.addCleanup(lambda: setattr(server, "_nano_next_attempt", 0.0))
+
+    def test_connect_returns_the_device_and_survives_logging(self):
+        class FakeVna:
+            port = "/dev/fake"
+
+            def __init__(self, port):
+                self.info_cache = SimpleNamespace(version="1.2.14")
+
+            def open(self):
+                pass
+
+            def close(self):
+                pass
+
+        with mock.patch.object(server, "_nano_device", None), \
+             mock.patch.object(server, "_nano_next_attempt", 0.0), \
+             mock.patch.object(server, "discover_port", return_value="/dev/fake"), \
+             mock.patch.object(server, "NanoVna", FakeVna):
+            got = server._nano_connect()
+        self.assertIsNotNone(got)
+        self.assertEqual(got.port, "/dev/fake")
+
+    def test_missing_port_returns_none_and_backs_off(self):
+        with mock.patch.object(server, "_nano_device", None), \
+             mock.patch.object(server, "_nano_next_attempt", 0.0), \
+             mock.patch.object(server, "discover_port", return_value=None):
+            self.assertIsNone(server._nano_connect())
+            self.assertGreater(server._nano_next_attempt, 0.0)
+
+    def test_open_failure_returns_none(self):
+        class Boom:
+            def __init__(self, port):
+                self.port = port
+                self.info_cache = None
+
+            def open(self):
+                raise OSError("ENXIO")
+
+        with mock.patch.object(server, "_nano_device", None), \
+             mock.patch.object(server, "_nano_next_attempt", 0.0), \
+             mock.patch.object(server, "discover_port", return_value="/dev/fake"), \
+             mock.patch.object(server, "NanoVna", Boom):
+            self.assertIsNone(server._nano_connect())
+
+
 class PageAssetsTest(unittest.TestCase):
     """前缀安全：接口地址只能从页面自己的 location 推出来（tests/test_path_prefix.py 的规矩）。"""
 

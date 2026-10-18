@@ -36,6 +36,18 @@ async function api(path, opts) {
     return res;
 }
 
+async function readJson(res) {
+    // 500 会返回纯文本 "Internal Server Error"，直接 res.json() 只会给用户一句
+    // "SyntaxError: Unexpected token 'I'" —— 那等于没说。这里退化成可读的详情。
+    const text = await res.text();
+    try {
+        return JSON.parse(text);
+    } catch (e) {
+        return {error: 'http_' + res.status,
+                detail: '服务器返回 ' + res.status + '：' + text.slice(0, 200)};
+    }
+}
+
 function banner(text, kind) {
     const el = document.getElementById('banner');
     if (!text) {
@@ -319,7 +331,7 @@ async function refreshStatus(full) {
     try {
         const res = await api('status' + (full ? '?full=1' : ''));
         if (!res.ok) return;
-        const st = await res.json();
+        const st = await readJson(res);
         state.device = st;
         renderDevice(st);
         if (st.settings) renderSettings(st.settings);
@@ -390,7 +402,7 @@ function renderSettings(s) {
 async function applySetting(name, value) {
     try {
         const res = await api('settings', { method: 'POST', body: { name: name, value: value } });
-        const body = await res.json();
+        const body = await readJson(res);
         if (!res.ok) { banner(body.detail || '设置失败', 'warn'); return; }
         renderSettings(body.settings);
     } catch (e) {
@@ -422,7 +434,7 @@ function renderCal() {
 async function calAction(action, slot, confirm) {
     try {
         const res = await api('cal', { method: 'POST', body: { action: action, slot: slot, confirm: confirm } });
-        const body = await res.json();
+        const body = await readJson(res);
         if (!res.ok) { banner(body.detail || '操作失败', 'warn'); return; }
         banner('');
         renderDevice(state.device || {});
@@ -452,7 +464,7 @@ async function scanOnce() {
     out.textContent = '扫描中…';
     try {
         const res = await api('scan', { method: 'POST', body: { start: start, stop: stop, points: points } });
-        const body = await res.json();
+        const body = await readJson(res);
         if (!res.ok) {
             out.textContent = body.detail || body.error || '扫描失败';
             if (body.error === 'tx_active') banner('电台在发射，已锁定扫描', 'warn');
@@ -496,7 +508,7 @@ async function saveSweep() {
     const label = document.getElementById('label').value.trim();
     try {
         const res = await api('sweeps', { method: 'POST', body: { label: label } });
-        const body = await res.json();
+        const body = await readJson(res);
         if (!res.ok) { banner(body.detail || '保存失败', 'warn'); return; }
         state.lastSavedId = body.id;
         banner('');
@@ -510,7 +522,7 @@ async function loadSweeps() {
     try {
         const res = await api('sweeps');
         if (!res.ok) return;
-        const items = (await res.json()).sweeps || [];
+        const items = (await readJson(res)).sweeps || [];
         const ul = document.getElementById('sweeps');
         if (!items.length) { ul.innerHTML = '<li>还没有存过扫描</li>'; return; }
         ul.innerHTML = '';
@@ -539,7 +551,7 @@ async function loadOverlay(id) {
     try {
         const res = await api('sweeps/' + id);
         if (!res.ok) return;
-        state.overlay = await res.json();
+        state.overlay = await readJson(res);
         state.overlay.id = id;
         draw();
         document.getElementById('readout').textContent = '叠加：' + id + '（橙色虚线）';
@@ -559,7 +571,7 @@ async function loadFirmware() {
     try {
         const res = await api('firmware');
         if (!res.ok) { box.innerHTML = '<p class="hint">读不到版本信息</p>'; return; }
-        fw = await res.json();
+        fw = await readJson(res);
     } catch (e) {
         box.innerHTML = '<p class="hint">读不到版本信息</p>';
         return;
@@ -601,7 +613,7 @@ async function startFlash() {
     try {
         const res = await api('flash', {method: 'POST',
             body: {tag: tag, variant: variant, confirm: confirm, ch0_open: ch0_open}});
-        const body = await res.json();
+        const body = await readJson(res);
         if (!res.ok) { status.textContent = body.detail || body.error || '启动失败'; return; }
         status.textContent = '开始了：' + tag + ' (' + variant + ')';
         waitFlash();
@@ -619,7 +631,7 @@ async function waitFlash() {
         try {
             const res = await api('flash/status');
             if (!res.ok) continue;
-            st = await res.json();
+            st = await readJson(res);
         } catch (e) { continue; }
         status.textContent = st.state + (st.detail ? ' — ' + st.detail : '')
             + (st.after_version ? '（' + st.before_version + ' → ' + st.after_version + '）' : '');

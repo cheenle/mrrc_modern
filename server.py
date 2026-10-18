@@ -5696,17 +5696,26 @@ def _nano_connect() -> Optional[NanoVna]:
     port = discover_port(os.environ, cat_port=os.environ.get("MRRC_SERIAL_PORT"))
     if not port:
         _nano_next_attempt = now + 2.0
-        log.info("nano: no device found")
+        logger.info("nano: no device found")
         return None
+    dev = None
     try:
         dev = NanoVna(port)
         dev.open()
+        logger.info("nano: connected on %s (%s)", port,
+                    dev.info_cache.version if dev.info_cache else "?")
     except Exception as exc:                                       # noqa: BLE001
         _nano_next_attempt = now + 2.0
-        log.info("nano: open failed on %s (%s)", port, exc)
+        logger.info("nano: open failed on %s (%s)", port, exc)
+        # 打开之后才失败的，必须把句柄关掉：泄漏的 tty 会让下一次连接报
+        # "device reports readiness to read but returned no data"（现场 2026-10-18，
+        # 旧版本在这里抛 NameError，端口被占了一整轮）。
+        if dev is not None:
+            try:
+                dev.close()
+            except Exception:                                      # noqa: BLE001
+                pass
         return None
-    log.info("nano: connected on %s (%s)", port, dev.info_cache.version if dev.info_cache
-             else "?")
     _nano_device = dev
     return _nano_device
 
@@ -5714,7 +5723,7 @@ def _nano_connect() -> Optional[NanoVna]:
 def _nano_forget(reason: str) -> None:
     global _nano_device
     if _nano_device is not None:
-        log.info("nano: dropping device (%s)", reason)
+        logger.info("nano: dropping device (%s)", reason)
         try:
             _nano_device.close()
         except Exception:                                          # noqa: BLE001
@@ -5746,7 +5755,7 @@ def _nano_capture_state(dev: NanoVna) -> dict:
     try:
         freqs = dev.frequencies()
     except Exception as exc:                                       # noqa: BLE001
-        log.info("nano: cannot read device sweep (%s)", exc)
+        logger.info("nano: cannot read device sweep (%s)", exc)
         return {}
     if len(freqs) < 2:
         return {}
@@ -5754,7 +5763,7 @@ def _nano_capture_state(dev: NanoVna) -> dict:
     try:
         _nano_write_json(NANO_STATE_FILE, state)
     except OSError as exc:
-        log.info("nano: cannot persist device sweep (%s)", exc)
+        logger.info("nano: cannot persist device sweep (%s)", exc)
     return state
 
 
@@ -5862,7 +5871,7 @@ async def api_nano_status(request: Request, full: int = 0):
     except NanoError as exc:
         payload["detail"] = str(exc)
     except Exception as exc:                                       # noqa: BLE001
-        log.warning("nano: status failed (%s)", exc)
+        logger.warning("nano: status failed (%s)", exc)
         payload["detail"] = str(exc)
     return JSONResponse(payload)
 
@@ -5904,7 +5913,7 @@ async def api_nano_scan(request: Request):
             return JSONResponse({"error": "device_error", "detail": str(exc)},
                                 status_code=503)
         except Exception as exc:                                   # noqa: BLE001
-            log.exception("nano: scan failed")
+            logger.exception("nano: scan failed")
             await asyncio.to_thread(_nano_forget, str(exc))
             return JSONResponse({"error": "device_error", "detail": str(exc)},
                                 status_code=503)
@@ -6123,7 +6132,7 @@ def _nano_config_update(**kw) -> dict:
     try:
         _nano_write_json(NANO_CONFIG_FILE, cfg)
     except OSError as exc:
-        log.info("nano: cannot persist config (%s)", exc)
+        logger.info("nano: cannot persist config (%s)", exc)
     return cfg
 
 
@@ -6152,7 +6161,7 @@ def _nano_releases(force: bool = False) -> list:
         with net_tls.urlopen(nano_flash.RELEASES_URL, timeout=20) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except Exception as exc:                                       # noqa: BLE001
-        log.info("nano: release list unavailable (%s)", exc)
+        logger.info("nano: release list unavailable (%s)", exc)
         try:
             cached = json.loads(NANO_RELEASES_CACHE.read_text(encoding="utf-8"))
             return nano_flash.parse_releases(cached.get("releases"))
@@ -6245,7 +6254,7 @@ def _nano_flash_blocking(spec: dict) -> None:
         nano_flash.record(NANO_FIRMWARE_STATE, snap, variant=variant,
                           tag=release.tag, sha256=asset.sha256)
     except OSError as exc:
-        log.info("nano: cannot write flash proof (%s)", exc)
+        logger.info("nano: cannot write flash proof (%s)", exc)
     _nano_forget("after flashing")                   # 下次按需重连，拿到新固件
 
 
@@ -6255,7 +6264,7 @@ async def _nano_flash_worker(spec: dict) -> None:
         async with _nano_lock:
             await asyncio.to_thread(_nano_flash_blocking, spec)
     except Exception as exc:                                       # noqa: BLE001
-        log.exception("nano flash: worker crashed")
+        logger.exception("nano flash: worker crashed")
         _nano_flash_state = {"state": "failed", "detail": str(exc)}
 
 

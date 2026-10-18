@@ -137,7 +137,7 @@ bluetoothctl power off ; sleep 2 ; bluetoothctl power on
 <tr><td><strong>语音</strong>（按住）</td><td><strong>发射</strong>，松开就停</td></tr>
 <tr><td><strong>▲ / ▼</strong></td><td>频率加上/减去当前步进</td></tr>
 <tr><td><strong>◀ / ▶</strong></td><td>换步进档位（100 Hz / 1 k / 5 k / 10 k / 100 k）</td></tr>
-<tr><td><strong>频道 + / −</strong></td><td>换波段（160 m → 80 m → … → 6 m）</td></tr>
+<tr><td><strong>频道 + / −</strong></td><td>逐个跳固定信道（下表），模式跟着一起换</td></tr>
 <tr><td><strong>数字 0–9</strong></td><td>直接输入频率，见下一节</td></tr>
 <tr><td><strong>确定</strong>（方向键中间）</td><td>提交输入的数字</td></tr>
 <tr><td><strong>设置</strong></td><td>模式循环（LSB / USB / CW / AM / FM / FT8）</td></tr>
@@ -148,6 +148,18 @@ bluetoothctl power off ; sleep 2 ; bluetoothctl power on
 <tr><td><strong>电视</strong></td><td>不发蓝牙。这类键只发红外去控电视，盒子收不到</td></tr>
 </tbody></table></div>
 <p>发射有三重保护，和网页上一样：松手就停、遥控器掉线也停、单次发射有上限。</p>
+<p><strong>频道 + / − 的七个固定落点</strong>（到底回绕；当前不在任何一个上时，先归到最近的那个）：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>频率</th><th>模式</th><th>波段</th></tr></thead><tbody>
+<tr><td>3.850 MHz</td><td>LSB</td><td>80 m</td></tr>
+<tr><td>7.050 MHz</td><td>LSB</td><td>40 m</td></tr>
+<tr><td>10.100 MHz</td><td>USB</td><td>30 m</td></tr>
+<tr><td>14.270 MHz</td><td>USB</td><td>20 m</td></tr>
+<tr><td>21.240 MHz</td><td>USB</td><td>15 m</td></tr>
+<tr><td>28.500 MHz</td><td>USB</td><td>10 m</td></tr>
+<tr><td>29.600 MHz</td><td>FM</td><td>10 m 呼叫频率</td></tr>
+</tbody></table></div>
+<p>这条表就是 <code>local_ctl.py</code> 里的 <code>PRESET_CHANNELS</code>：改频点或模式只改那一处， 频率和模式是成对发的（先频率后模式，免得电台换波段时自己把模式改回去）。 注意它是<strong>遥控器专用</strong>：网页上调频率不受影响，也不会被你上次按到哪儿影响。</p>
 <h2 id="4-直接输入频率">4. 直接输入频率</h2>
 <p>数字按 <strong>kHz</strong> 算，按「确定」生效。举例：</p>
 <div class="table-scroll"><table>

@@ -128,13 +128,28 @@ class TestTuning(unittest.TestCase):
     def test_step_outside_any_band_still_moves(self):
         self.assertEqual(lc.step_freq(60_000_000, 1000, False), 59_999_000)
 
-    def test_band_jump_keeps_relative_position(self):
-        # middle of 40 m (7.15 MHz) → middle of the next band up (30 m)
-        jumped = lc.next_band(7_150_000, True)
-        self.assertTrue(10_100_000 <= jumped <= 10_150_000)
+    def test_channel_keys_walk_the_fixed_presets(self):
+        # 频道 +/− 的落点是固定的（现场约定 2026-10-18）：遥控器没有显示屏，
+        # 同一个波段里“按相对位置跳”会落在哪儿取决于从哪儿来。
+        self.assertEqual(lc.next_channel(3_850_000, True), (7_050_000, "LSB"))
+        self.assertEqual(lc.next_channel(14_270_000, True), (21_240_000, "USB"))
+        self.assertEqual(lc.next_channel(29_600_000, True), (3_850_000, "LSB"))   # 到底回绕
+        self.assertEqual(lc.next_channel(3_850_000, False), (29_600_000, "FM"))
 
-    def test_band_wraps_around(self):
-        self.assertTrue(lc.next_band(50_500_000, True) < 2_000_000)
+    def test_channel_keys_start_from_the_nearest_preset(self):
+        # 当前不在任何一个信道频点上时，先归到最近的，再走一步
+        self.assertEqual(lc.next_channel(7_100_000, True), (10_100_000, "USB"))
+        self.assertEqual(lc.next_channel(14_074_000, False), (10_100_000, "USB"))
+        self.assertEqual(lc.next_channel(50_500_000, True), (3_850_000, "LSB"))
+
+    def test_channel_modes_follow_the_band_plan(self):
+        # 10 MHz 以下 LSB、以上 USB，29.600 用 FM
+        expected = {
+            3_850_000: "LSB", 7_050_000: "LSB", 10_100_000: "USB",
+            14_270_000: "USB", 21_240_000: "USB", 28_500_000: "USB",
+            29_600_000: "FM",
+        }
+        self.assertEqual({hz: mode for hz, mode in lc.PRESET_CHANNELS}, expected)
 
     def test_mode_cycle_wraps_and_handles_unknown(self):
         self.assertEqual(lc.next_mode("USB"), "CW")
@@ -188,11 +203,28 @@ class TestController(unittest.TestCase):
         ctl.on_key(("u:0x70050",), True)          # ◀ finer
         self.assertEqual(ctl.step_hz, lc.STEP_LADDER_HZ[-2])
 
-    def test_band_keys_jump_band(self):
-        ctl = self._ctl(freq_hz=7_100_000)
-        msgs = ctl.on_key(("u:0x7004b",), True)
-        self.assertEqual(len(msgs), 1)
-        self.assertTrue(10_100_000 <= msgs[0]["value"] <= 10_150_000)
+    def test_channel_key_sets_frequency_and_mode(self):
+        ctl = self._ctl(freq_hz=7_050_000, mode="USB")
+        self.assertEqual(ctl.on_key(("u:0x7004b",), True),
+                         [{"type": "set", "field": "freq", "value": 10_100_000},
+                          {"type": "set", "field": "mode", "value": "USB"}])
+        self.assertEqual(ctl.freq_hz, 10_100_000)
+        self.assertEqual(ctl.mode, "USB")
+
+    def test_channel_key_brings_its_own_mode(self):
+        ctl = self._ctl(freq_hz=28_500_000, mode="USB")
+        self.assertEqual(ctl.on_key(("u:0x7004b",), True)[-1],
+                         {"type": "set", "field": "mode", "value": "FM"})
+        self.assertEqual(ctl.mode, "FM")
+        ctl = self._ctl(freq_hz=3_850_000, mode="USB")
+        self.assertEqual(ctl.on_key(("u:0x7004b",), True)[-1],
+                         {"type": "set", "field": "mode", "value": "LSB"})
+
+    def test_channel_key_clears_a_half_typed_frequency(self):
+        ctl = self._ctl(freq_hz=7_050_000)
+        ctl.on_key(("u:0x7001e",), True, now=1.0)          # 1
+        ctl.on_key(("u:0x7004b",), True, now=1.1)          # 频道 +
+        self.assertFalse(ctl.numeric.pending)
 
     def test_mode_key_cycles_available_modes(self):
         ctl = self._ctl(mode="LSB", modes=("LSB", "USB", "FT8"))

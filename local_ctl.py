@@ -145,6 +145,21 @@ BAND_EDGES_HZ = (
     (50_000_000, 54_000_000),    # 6 m
 )
 
+#: Where 频道 +/− lands.  Fixed spots, not "the same relative offset in the next
+#: band": the remote has no display, so a landing point that depends on where
+#: the operator happened to be is not a landing point an operator can predict.
+#: Field plan (2026-10-18): 10 MHz and below → LSB, above → USB, 29.600 → FM.
+#: Edit this table to change the channels — the mode travels with the frequency.
+PRESET_CHANNELS = (
+    (3_850_000, "LSB"),      # 80 m
+    (7_050_000, "LSB"),      # 40 m
+    (10_100_000, "USB"),     # 30 m
+    (14_270_000, "USB"),     # 20 m
+    (21_240_000, "USB"),     # 15 m
+    (28_500_000, "USB"),     # 10 m
+    (29_600_000, "FM"),      # 10 m FM calling
+)
+
 
 # ── pure layer ──────────────────────────────────────────────────────────────
 @dataclass(frozen=True)
@@ -268,17 +283,24 @@ def step_freq(freq_hz: int, step_hz: int, up: bool) -> int:
     return max(30_000, min(60_000_000, target))
 
 
-def next_band(freq_hz: int, up: bool, edges=BAND_EDGES_HZ) -> int:
-    """Jump to the same relative offset in the neighbouring band."""
-    if not edges:
-        return freq_hz
-    for idx, (low, high) in enumerate(edges):
-        if low <= freq_hz <= high:
-            pos = (freq_hz - low) / max(1, high - low)
-            nxt = (idx + (1 if up else -1)) % len(edges)
-            nlow, nhigh = edges[nxt]
-            return int(nlow + pos * (nhigh - nlow))
-    return edges[0][0] if up else edges[-1][1]
+def next_channel(freq_hz: int, up: bool, presets=None):
+    """Step 频道 +/− along the preset table, wrapping at both ends.
+
+    Returns ``(frequency_hz, mode_name)``.  A bare frequency that sits on no
+    preset starts from the nearest one, so the first press always lands on a
+    known spot instead of somewhere between two.
+    """
+    table = PRESET_CHANNELS if presets is None else presets
+    if not table:
+        return freq_hz, ""
+    idx = nearest_preset(freq_hz, table)
+    return table[(idx + (1 if up else -1)) % len(table)]
+
+
+def nearest_preset(freq_hz: int, presets=None) -> int:
+    """Index of the preset a bare frequency belongs to (nearest by distance)."""
+    table = PRESET_CHANNELS if presets is None else presets
+    return min(range(len(table)), key=lambda i: abs(table[i][0] - freq_hz))
 
 
 def next_mode(current: str, cycle=MODE_CYCLE) -> str:
@@ -389,7 +411,13 @@ class Controller:
 
         if action in ("band_up", "band_down"):
             self.numeric.clear()
-            self.freq_hz = next_band(self.freq_hz, action == "band_up")
+            self.freq_hz, mode = next_channel(self.freq_hz, action == "band_up")
+            if mode:
+                self.mode = mode
+                # frequency first, then mode: the radio may re-pick a mode when
+                # it changes band, and the preset's mode must be the last word.
+                return [{"type": "set", "field": "freq", "value": self.freq_hz},
+                        {"type": "set", "field": "mode", "value": mode}]
             return [{"type": "set", "field": "freq", "value": self.freq_hz}]
 
         if action == "mode_next":

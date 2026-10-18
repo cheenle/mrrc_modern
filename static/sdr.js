@@ -59,6 +59,7 @@ const el = {
   banner: document.getElementById("banner"),
   toast: document.getElementById("toast"),
   cursorLabel: document.getElementById("cursorLabel"),
+  diag: document.getElementById("diag"),
 };
 
 const S = {
@@ -131,7 +132,11 @@ function connect() {
     el.cState.textContent = "已连接";
     el.cState.className = "chip on";
     setBanner("");
-    requestChannel();
+    send({ event_type: "state" });
+    // 收到第一份 state 之后再发 cursor/channel —— 否则会拿过期的本地 center
+    // 算出 offset，把听众自己调好的频率冲掉（重连时尤其明显）。
+    S.ready = false;
+    requestAnimationFrame(() => { drawRuler(); drawOverlay(); });
   };
   ws.onclose = (ev) => {
     S.connected = false;
@@ -175,6 +180,7 @@ function onText(msg) {
     el.cLock.className = "chip" + (hold > 0 ? " warn" : "");
     if (v.available === false) setBanner("接收机不可用：" + (v.reason || "未知原因"));
     else setBanner("");
+    if (!S.ready) { S.ready = true; requestChannel(); }
     renderReadout();
     drawRuler();
     drawOverlay();
@@ -212,6 +218,7 @@ function onBinary(dv) {
     const level = dv.getUint8(4);
     const len = dv.getUint16(5, true);
     if (dv.byteLength < 7 + len) return;
+    FPS.naudio++;
     el.levelBar.style.width = Math.min(100, Math.round((level / 255) * 100 * 1.6)) + "%";
     const payload = new Uint8Array(dv.buffer, dv.byteOffset + 7, len);
     playOpus(payload);
@@ -243,10 +250,31 @@ const rowCanvas = document.createElement("canvas");
 const rowCtx = rowCanvas.getContext("2d");
 const rowImage = rowCtx.createImageData(1024, 1);
 
+// 诊断：频谱/音频帧率与画布尺寸（"没画面"与"没数据"是两回事，现场要能一眼分开）
+const FPS = { spec: 0, audio: 0, t: performance.now(), nspec: 0, naudio: 0 };
+setInterval(() => {
+  const now = performance.now();
+  const dt = Math.max(1, now - FPS.t) / 1000;
+  FPS.spec = Math.round(FPS.nspec / dt);
+  FPS.audio = Math.round(FPS.naudio / dt);
+  FPS.nspec = 0; FPS.naudio = 0; FPS.t = now;
+  if (el.diag) {
+    el.diag.textContent = "频谱 " + FPS.spec + "/s · 音频 " + FPS.audio + "/s · 画布 "
+      + el.wf.width + "×" + el.wf.height;
+  }
+}, 1000);
+
 function drawRow(bins) {
+  FPS.nspec++;
+  let w = el.wf.width, h = el.wf.height;
+  if (!w || !h) {
+    // 首帧可能在布局完成前就到达（state 只广播一次），这里自愈一次：
+    // 否则画布永远停在 0x0，瀑布整页空白。
+    drawOverlay();
+    w = el.wf.width; h = el.wf.height;
+    if (!w || !h) return;
+  }
   const ctx = el.wf.getContext("2d");
-  const w = el.wf.width, h = el.wf.height;
-  if (!w || !h) return;
   // 自身下滚一行，再在上画新行（10 Hz，自 blit 很便宜）
   ctx.drawImage(el.wf, 0, 1);
   const n = bins.length;
@@ -426,13 +454,39 @@ function playOpus(u8) {
   if (!S.audio) { queueAudio(u8); return; }
   try {
     const f32 = S.audio.decoder.decode_float(u8);
-    S.audio.node.port.postMessage({ type: "push", payload: new Float32Array(f32) });
+    S.audio.sink.push(new Float32Array(f32));
   } catch (e) { /* 丢一帧 */ }
 }
 
 let pendingAudio = [];
 function queueAudio(u8) {
   if (pendingAudio.length < 40) pendingAudio.push(new Uint8Array(u8));
+}
+
+function scriptProcessorFallback(ctx, gain) {
+  // AudioWorklet 只在安全上下文（HTTPS / localhost）里存在；纯 HTTP 打开的
+  // 页面拿不到它（现场：http://<盒子>:18899 报 "浏览器不支持 AudioWorklet"）。
+  // 退回 ScriptProcessor：抖动缓冲放到这里，容量按 220 ms 预缓冲算。
+  const node = ctx.createScriptProcessor(2048, 0, 1);
+  const queue = [];
+  let queued = 0;
+  const target = 48000 * 0.22;
+  node.onaudioprocess = (ev) => {
+    const out = ev.outputBuffer.getChannelData(0);
+    for (let i = 0; i < out.length; i++) {
+      out[i] = queue.length ? queue.shift() : 0;
+    }
+    queued = queue.length;
+  };
+  node.connect(gain);
+  return {
+    push(f32) {
+      for (let i = 0; i < f32.length; i++) queue.push(f32[i]);
+      if (queue.length > 48000 * 0.8) queue.splice(0, queue.length - 48000 * 0.8);
+      queued = queue.length;
+    },
+    bufferedMs: () => Math.round((queued / 48000) * 1000),
+  };
 }
 
 async function initAudio() {
@@ -444,20 +498,32 @@ async function initAudio() {
     const ctx = new (window.AudioContext || window.webkitAudioContext)({
       latencyHint: "interactive", sampleRate: 48000,
     });
-    await ctx.audioWorklet.addModule("rx_worklet_processor.js?v=2");
-    const node = new AudioWorkletNode(ctx, "rx-player");
-    node.port.postMessage({ type: "config", prebufferMs: 220, recoveryMs: 120, maxMs: 600 });
     const gain = ctx.createGain();
     gain.gain.value = parseInt(el.volume.value, 10) / 100;
-    node.connect(gain);
     gain.connect(ctx.destination);
     const decoder = new OpusDecoder(48000, 1);
-    S.audio = { ctx, node, gain, decoder };
+
+    let sink;
+    if (ctx.audioWorklet && typeof AudioWorkletNode !== "undefined") {
+      await ctx.audioWorklet.addModule("rx_worklet_processor.js?v=2");
+      const node = new AudioWorkletNode(ctx, "rx-player");
+      node.port.postMessage({ type: "config", prebufferMs: 220, recoveryMs: 120, maxMs: 600 });
+      node.connect(gain);
+      sink = {
+        push(f32) { node.port.postMessage({ type: "push", payload: f32 }); },
+        bufferedMs: () => 0,
+      };
+    } else {
+      sink = scriptProcessorFallback(ctx, gain);
+      toast("纯 HTTP：音频走兼容路径（换成 HTTPS 可用 AudioWorklet）", 3200);
+    }
+    if (ctx.state === "suspended") { try { await ctx.resume(); } catch (e) {} }
+    S.audio = { ctx, gain, decoder, sink };
     pendingAudio.forEach((p) => playOpus(p));
     pendingAudio = [];
   } catch (e) {
     S.audioBlocked = true;
-    toast("浏览器不支持 AudioWorklet，音频不可用");
+    toast("音频初始化失败：" + (e && e.message ? e.message : e));
   }
 }
 
@@ -515,6 +581,10 @@ document.addEventListener("keydown", (ev) => {
 });
 
 window.addEventListener("resize", () => { drawRuler(); drawOverlay(); });
+if (typeof ResizeObserver !== "undefined") {
+  new ResizeObserver(() => { drawRuler(); drawOverlay(); }).observe(el.wf.parentElement);
+}
+requestAnimationFrame(() => { drawRuler(); drawOverlay(); });
 ["pointerdown", "keydown", "touchstart"].forEach((e) =>
   document.addEventListener(e, () => { initAudio(); }, { once: true }));
 

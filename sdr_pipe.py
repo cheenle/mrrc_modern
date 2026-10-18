@@ -251,6 +251,7 @@ def run_device(pipe: SdrPipe, shim_path: str, max_seconds: float = 0.0) -> int:
     applied = {"hz": pipe.center, "grdb": pipe.gain, "lna": pipe.lna}
     t0 = _now()
     last_status = t0
+    pending: list[np.ndarray] = []
     try:
         while True:
             if stdin_open and select.select([stdin], [], [], 0)[0]:
@@ -273,8 +274,13 @@ def run_device(pipe: SdrPipe, shim_path: str, max_seconds: float = 0.0) -> int:
                         lib.sdrshim_set_gain(pipe.gain, pipe.lna)
             n = lib.sdrshim_read(buf, pipe.block, 100)
             if n > 0:
-                iq = np.frombuffer(buf, dtype=np.int16, count=n * 2)
-                pipe.process_block(iq, lib.sdrshim_overloads())
+                pending.append(np.frombuffer(buf, dtype=np.int16, count=n * 2).copy())
+                have = sum(chunk.size for chunk in pending) // 2
+                if have >= pipe.block:
+                    block = np.concatenate(pending)[: pipe.block * 2]
+                    rest = np.concatenate(pending)[pipe.block * 2:]
+                    pending = [k for k in [rest] if k.size] if rest.size else []
+                    pipe.process_block(block, lib.sdrshim_overloads())
             if lib.sdrshim_removed():
                 pipe.emit_status({"error": "device removed"})
                 return 3

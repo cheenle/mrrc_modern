@@ -5321,6 +5321,8 @@ async def ws_sdr(ws: WebSocket):
             hub.dropped_frames += 1
 
     sub.send = _push
+    logger.info("SDR socket connected (%d listener(s), %d demod(s))",
+                hub.listener_count + 1, hub.channel_count)
     metrics.open("sdr", "sdr", token)
     await _sdr_runner.ensure_started()
     await ws.send_text(json.dumps({
@@ -5388,6 +5390,8 @@ async def ws_sdr(ws: WebSocket):
         pump_task.cancel()
         hub.detach(sub)
         metrics.close("sdr", "sdr", token)
+        logger.info("SDR socket disconnected (%d remain, %d demod(s), dropped=%d)",
+                    hub.listener_count, hub.channel_count, hub.dropped_frames)
         hub.broadcast_state()
 
 

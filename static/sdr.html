@@ -60,6 +60,7 @@
   .freq.cursor { font-size: 15px; color: var(--text); }
   .freq small { font-size: 10px; color: var(--muted); font-weight: 400; margin-right: 4px;
     letter-spacing: .1em; text-transform: uppercase; }
+  #diag { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
   #edit { background: #0d0d0a; border: 1px solid var(--amber-dim); color: var(--amber);
     font: 600 20px/1.2 ui-monospace, monospace; padding: 4px 8px; border-radius: 6px;
     width: 11ch; display: none; }
@@ -127,6 +128,7 @@
   <input id="edit" inputmode="decimal" autocomplete="off">
   <div class="freq cursor"><small>解调</small><span id="cursor">—</span></div>
   <div class="spacer"></div>
+  <div class="freq cursor" id="diag" title="频谱帧率 · 音频帧率 · 画布尺寸"></div>
   <div class="freq cursor" id="offset"></div>
 </div>
 
@@ -144,6 +146,6 @@
 
 <script src="modules/opus_wasm.js"></script>
 <script src="modules/opus_codec.js"></script>
-<script src="sdr.js?v=1"></script>
+<script src="sdr.js?v=5"></script>
 </body>
 </html>

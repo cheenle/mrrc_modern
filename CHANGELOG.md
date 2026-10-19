@@ -414,6 +414,39 @@ nmcli 会等它自己 90 s 的默认值，而 `perform_wifi_switch` 后面只有
 `--wifi-only` 是给单测**真跑**用的入口（配 `MRRC_PREFLASH_WIFI_DIR` 指到临时目录）：keyfile 内容、
 0600 权限、口令长度与换行的拒绝，都是真跑一次脚本验出来的，不是在源码上 grep。
 
+## [镜像线 v1.28.3] — 2026-10-19 — 蓝牙 HID 的两处真缺陷：残库要重启 daemon，helper 的 socket 被自己的 unit 删掉
+
+两个缺陷都是同一晚在现场被逼出来的，且都不是「配置问题」——是代码/打包的错误。
+
+### 蓝牙遥控器：配上、链路也通，键盘设备却建了又拆
+
+判据是 `/proc/bus/input/devices` 里键盘设备**连续几秒都在**，不是 bluez 的 `Paired: yes`。
+
+- **残库在内存里，不在磁盘上。** 现场抓到 bluez 自己那句
+  `No attribute found within the given range`：bond 文件里 `[LongTermKey]` /
+  `[PeripheralLongTermKey]` / `[SlaveLongTermKey]` 全在、加密也正常，但守护进程拿一份
+  残缺的 GATT 数据库去读，读不到就拆设备（`dmesg` 里 `…0300.0002 → …0004` 一路翻号）。
+  **清 bond + 控制器上下电 + 再配，连做三次都没用**；`systemctl restart bluetooth`
+  一次就成，bond 原样重读。
+- 所以 `net_bt.pair()` 的补救**改了顺序**：配上但按键不来 → **先**重启 bluetoothd
+  （无破坏性）→ 仍然不行才清 bond 重配。这条通道走 root helper 的新固定动词
+  `restart-bluetooth`（零参数，唯一 argv 是 `systemctl restart bluetooth`，
+  `SO_PEERCRED` 只认 `mrrc`），服务用户自己没有 root。
+- 残库是**操作造成的**：连接会话只能有一条。两个会话同时连 → `le-connection-abort-by-local`
+  → 服务发现做到一半被掐断 → 内存里留半份库，之后每次重连都拆设备。文档与 skill 都记了这条。
+- 订正：`ATT 0x0E` **不能**单独判成「链路没加密」——残库时它也刷，而重启后同一把密钥就正常。
+  分界线是 bluez 那句 `No attribute found`。
+
+### root helper 的 socket 会被服务端重启删掉（长期潜伏）
+
+`mrrc-box-helper` 与 `mrrc-modern` **都声明了 `RuntimeDirectory=mrrc`**，而 systemd 在带这个
+指令的 unit 停止时会**删掉整个目录**。于是一次服务端重启就把 `/run/mrrc/box-helper.sock`
+删了，而 helper 继续绑着一个已 unlink 的 socket：**主机名、时区、重启、avahi 全部静默失效**
+（页面只显示一句「不可用」），只有重启一次 helper 才能恢复。
+
+- 一个目录一个主人：helper 搬到 `/run/mrrc-box/`（0770 root:mrrc），`/run/mrrc` 归服务端独占。
+- 新增回归测试：没有任何两个 unit 声明同一个 `RuntimeDirectory`。
+
 ## [镜像线 v1.28.2] — 2026-10-19 — NanoVNA 天线诊断台进盒子；蓝牙遥控器配对的两个真缺陷
 
 > **这是盒子镜像线（W103D / 树莓派）的版本，与桌面安装包线分开编号。**

@@ -358,10 +358,12 @@ class PairRetryTests(unittest.TestCase):
     把按键按烂也走不到配对。改成直接配、失败隔几秒重试。
     """
 
-    def _run(self, outcomes, paired_when=None, keys=False, cure=True, attempts=3):
+    def _run(self, outcomes, paired_when=None, keys=False, cure=True, attempts=3,
+             restart_ok=True, keys_after_restart=False):
         """outcomes: 每次 `_pty_session` 的输出；paired_when: 第几次之后 info 报 paired。"""
-        calls = {"pty": 0, "remove": 0, "cycle": 0}
+        calls = {"pty": 0, "remove": 0, "cycle": 0, "restart": 0}
         seq = list(outcomes)
+        keys_now = {"value": keys}
 
         def fake_pty(lines, argv=None):
             calls["pty"] += 1
@@ -372,13 +374,20 @@ class PairRetryTests(unittest.TestCase):
             paired = calls["pty"] >= done
             return {"paired": paired, "bonded": paired, "trusted": True}
 
+        def fake_restart(runner=None):
+            calls["restart"] += 1
+            if restart_ok and keys_after_restart:
+                keys_now["value"] = True
+            return restart_ok
+
         with mock.patch.object(net_bt, "_pty_session", fake_pty), \
              mock.patch.object(net_bt, "info", fake_info), \
+             mock.patch.object(net_bt, "restart_bluetoothd", fake_restart), \
              mock.patch.object(net_bt, "remove",
                                lambda runner=None: calls.__setitem__("remove", calls["remove"] + 1)), \
              mock.patch.object(net_bt, "power_cycle",
                                lambda runner=None: calls.__setitem__("cycle", calls["cycle"] + 1)):
-            state = net_bt.pair("0C:F3:CE:B0:88:75", keyboard=lambda a: keys,
+            state = net_bt.pair("0C:F3:CE:B0:88:75", keyboard=lambda a: keys_now["value"],
                                 cure=cure, attempts=attempts, retry_delay=0)
         return state, calls
 
@@ -393,15 +402,49 @@ class PairRetryTests(unittest.TestCase):
         self.assertEqual(calls["pty"], 3)
         self.assertIn("OK + 返回", state["error"])
 
-    def test_paired_but_dead_keys_runs_the_cure(self):
-        _state, calls = self._run(["Pairing successful"] * 3, paired_when=1, keys=False)
+    def test_cure_restarts_bluetoothd_first_and_stops_when_keys_come_back(self):
+        """bluetoothd 里的残库是这条路上最常见的坏法，而它**不需要动 bond**。
+
+        2026-10-19 现场：清 bond + 控制器上下电 + 再配，连做三次都救不回来；
+        `systemctl restart bluetooth` 一次就成——因为坏的是守护进程内存里的 GATT
+        数据库，磁盘上的 bond 是好的。所以补救必须先走这条无破坏性的路。
+        """
+        state, calls = self._run(["Pairing successful"] * 3, paired_when=1,
+                                 keys=False, keys_after_restart=True)
+        self.assertEqual(calls["restart"], 1)
+        self.assertEqual(calls["remove"], 0, "重启能救回来时不该清 bond")
+        self.assertEqual(calls["cycle"], 0, "重启能救回来时不该动控制器")
+        self.assertEqual(state["error"], "")
+
+    def test_cure_falls_back_to_rebonding_when_restart_does_not_help(self):
+        (_state, calls) = self._run(["Pairing successful"] * 3, paired_when=1,
+                                    keys=False, keys_after_restart=False)
+        self.assertEqual(calls["restart"], 1)
         self.assertGreaterEqual(calls["remove"], 1)
         self.assertGreaterEqual(calls["cycle"], 1)
+
+    def test_cure_survives_a_missing_helper(self):
+        """桌面/源码树跑没有 root helper——补救不可用不等于抛异常。"""
+        (_state, calls) = self._run(["Pairing successful"] * 3, paired_when=1,
+                                    keys=False, restart_ok=False)
+        self.assertEqual(calls["restart"], 1)
+        self.assertGreaterEqual(calls["remove"], 1)
 
     def test_cure_can_be_disabled(self):
         _state, calls = self._run(["Pairing successful"] * 3, paired_when=1,
                                   keys=False, cure=False)
         self.assertEqual(calls["remove"], 0)
+
+
+class RestartBluetoothdTests(unittest.TestCase):
+    """补救通道本身：拿不到 root helper 也不能把这条链带崩。"""
+
+    def test_reports_failure_instead_of_raising(self):
+        def boom():
+            raise OSError("helper unavailable")
+        self.assertFalse(net_bt.restart_bluetoothd(runner=boom))
+        self.assertFalse(net_bt.restart_bluetoothd(runner=lambda: False))
+        self.assertTrue(net_bt.restart_bluetoothd(runner=lambda: True))
 
 
 class SettingsPageTests(unittest.TestCase):

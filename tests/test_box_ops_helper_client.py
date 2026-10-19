@@ -177,6 +177,13 @@ class VerbTests(unittest.TestCase):
                          ["reboot", "avahi-reload"])
         self.assertEqual([c["args"] for c in sender.calls], [[], []])
 
+    def test_restart_bluetooth_sends_the_bare_verb(self):
+        sender = answering()
+        box_ops.restart_bluetooth(sender=sender)
+        self.assertEqual([c["verb"] for c in sender.calls],
+                         ["restart-bluetooth"])
+        self.assertEqual([c["args"] for c in sender.calls], [[]])
+
 
 class PasswordValidationTests(unittest.TestCase):
     def test_a_short_password_is_refused(self):

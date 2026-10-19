@@ -81,6 +81,12 @@ def argv_for(verb: str, args: list) -> Optional[list]:
         return ["systemctl", "reboot"]
     if verb == "avahi-reload" and not args:
         return ["systemctl", "reload", "avahi-daemon"]
+    if verb == "restart-bluetooth" and not args:
+        # 蓝牙 HID 的补救：配对成功、链路也通，但 bluez 手里的 GATT 数据库是残缺的
+        # （2026-10-19 现场：`No attribute found within the given range`，键盘设备
+        # 0x0E 一路重试、dmesg 里实例号一路涨），重配 bond 治不了，重启 bluetoothd
+        # 治得了。服务用户没有 root，这是它唯一能走的路；参数列表为空即全部约束。
+        return ["systemctl", "restart", "bluetooth"]
     if verb == "set-hostname" and len(args) == 1 and HOSTNAME_RE.match(args[0]):
         return ["hostnamectl", "set-hostname", "--static", args[0]]
     if verb == "set-timezone" and len(args) == 1 and zone_ok(args[0]):

@@ -70,37 +70,40 @@ bluetoothctl trust <地址>
 bluetoothctl info <地址> | grep -E "Paired|Bonded|Connected"
 ```
 
-### 配好了但按键没反应？看这一条
+### 配好了但按键没反应？按这个顺序排
 
-蓝牙有个容易踩的坑：**报告「配对成功」不等于链路加密成功**。
+`Paired: yes` 不等于能用。**判据只有一个**：`/proc/bus/input/devices` 里出现
+`CMCC_Voice_Remote Keyboard`，并且**连续几秒都在**（bluez 建了又拆时，单点采样会骗人）。
+页面上的表现为「已配对，但按键没有响应」。
 
-第一版就是这么翻车的：`bluetoothctl` 说 `Paired: yes`，但按键一个都不来。抓空口报文
-才看见真相：
+两个不同的病，救法不一样：
+
+| 日志里的句子 | 谁在说 | 病 | 救法 |
+| --- | --- | --- | --- |
+| `No attribute found within the given range` | **bluez 自己** | 守护进程内存里的 GATT 数据库残缺。链路通着、密钥也在，但它拿这份坏库去读，读不到就拆设备（`dmesg` 里 `…0300.0002 → …0300.0004` 一路翻号） | **重启 bluetoothd**：`sudo systemctl restart bluetooth`。磁盘上的 bond 原样重读，一次就成 |
+| `unlikely error`（ATT 0x0E）刷屏，**且没有任何属性被读到** | 遥控器 | 链路没加密。它拒掉每一次属性读取 | 清 bond → 控制器上下电 → 让遥控器重新进配对模式 → 再配 |
+
+第二行的 0x0E **单独出现不足以判定没加密**——2026-10-19 现场它在 GATT 残库的情况下也刷，
+而 restart 之后同一把密钥就正常了。**决定性的是 bluez 自己那句 `No attribute found`**：
+那句话出来就是残库，别去动 bond。
+
+修复版 `net_bt.pair()` 已经按这个顺序做：配上但键盘设备不稳定 → **先通过 root helper
+重启 bluetoothd**（无破坏性，bond 不动）→ 仍然不行才清 bond 重配。
+
+手动排障时两条都能直接敲：
 
 ```
-LE Start Encryption
-Encryption Change ... Encryption: Disabled      ← 加密没建立起来
-```
-
-链路是明文，遥控器就把所有属性读取都拒掉（日志里 `unlikely error` 一串），
-系统因此拼不出键盘设备。**修法是重配一次：**
-
-```
-bluetoothctl remove 0C:F3:CE:B0:88:75
+sudo systemctl restart bluetooth              # 先试这条（最常见、最轻）
+bluetoothctl remove 0C:F3:CE:B0:88:75          # 再试这条（真·密钥对不上时）
 bluetoothctl power off ; sleep 2 ; bluetoothctl power on
-# 遥控器重新进配对模式，再 pair 一次
+# 遥控器重新进配对模式（取电池 10 秒，再按住 OK + 返回 5 秒），然后 pair 一次
 ```
 
-这次要看到这一行才算成：
+那条 `bluetoothctl power off/on` 单独打不要用 `remove` 连着打：**连接会话只能有一条**。
+两个会话同时连，bluez 会回 `le-connection-abort-by-local`（本地主动中止），而一次被中止的
+服务发现会在内存里留下半份数据库——也就是上面第二行的病。
 
-```
-Encryption: Enabled with AES-CCM
-```
-
-加密一通，`/proc/bus/input/devices` 里立刻出现 `CMCC_Voice_Remote Keyboard`，
-按键开始上报。
-
-## 3. 按键表
+## 3. 按键表## 3. 按键表
 
 | 按键 | 作用 |
 | --- | --- |

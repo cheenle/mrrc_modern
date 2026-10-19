@@ -39,6 +39,19 @@ class VerbTableTests(unittest.TestCase):
                          ["systemctl", "reload", "avahi-daemon"])
         self.assertIsNone(box_helper.argv_for("avahi-reload", ["x"]))
 
+    def test_restart_bluetooth_takes_no_arguments(self):
+        """蓝牙 HID 唯一的补救通道：固定 argv、零参数，别的什么都不许要。
+
+        2026-10-19 现场：配对成功、链路也通，但 bluez 手里的 GATT 数据库残缺，
+        键盘设备建了又拆；清 bond 重配三次都没用，重启 bluetoothd 一次就好。
+        服务用户没有 root，这条动词是它唯一能走的路。
+        """
+        self.assertEqual(box_helper.argv_for("restart-bluetooth", []),
+                         ["systemctl", "restart", "bluetooth"])
+        for args in (["now"], ["--force"], [""], [";"], ["&& reboot"]):
+            with self.subTest(args=args):
+                self.assertIsNone(box_helper.argv_for("restart-bluetooth", args))
+
     def test_set_hostname_accepts_the_shipped_default(self):
         """`MRRC-Modern` is the name in the image. A lowercase-only validator
         would leave the box unable to keep its own hostname."""
@@ -81,7 +94,7 @@ class VerbTableTests(unittest.TestCase):
         """The argv is a list, and its first element is a fixed absolute-looking
         program name. There is no `sh -c` in the table, so there is nothing for a
         metacharacter to be interpreted by."""
-        cases = [("reboot", []), ("avahi-reload", []),
+        cases = [("reboot", []), ("avahi-reload", []), ("restart-bluetooth", []),
                  ("set-hostname", ["box"]),
                  ("set-timezone", ["UTC"])]
         for verb, args in cases:

@@ -370,6 +370,27 @@ def _pty_session(lines: list[tuple[str, float]], argv: Optional[list] = None) ->
     return "".join(chunks)
 
 
+def restart_bluetoothd(runner: Optional[Callable] = None) -> bool:
+    """Restart bluetoothd through the root helper. True when the verb ran.
+
+    The cure for a half-built HOG session lives in the daemon's memory, so only a
+    restart clears it (see `pair()`). The service user has no root: the helper
+    socket is the one path, and it stays a closed verb table — this function can
+    ask for exactly `restart-bluetooth`, nothing else. No helper (a desktop or a
+    source-tree run) simply means the cure is unavailable, not an exception.
+    """
+    run = runner or _default_restart_bluetooth
+    try:
+        return bool(run())
+    except Exception:
+        return False
+
+
+def _default_restart_bluetooth() -> bool:
+    import box_ops                      # imported lazily: desktop runs lack it
+    return bool(box_ops.restart_bluetooth().get("ok"))
+
+
 def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
          keyboard: Optional[Callable[[str], bool]] = None,
          cure: bool = True,
@@ -413,17 +434,28 @@ def pair(address: str, seconds: int = 25, runner: Optional[Runner] = None, *,
         if attempt < attempts:
             time.sleep(max(0.0, retry_delay))
     if state.get("paired") and not keys(address) and cure:
-        # 文档 §2 那条实测的陷阱：Paired/Bonded 都为真，链路却没加密，bluez 的
-        # hog 拼不出键盘设备，按键一个都不来。解法只有一条：清掉陈旧 bond、
-        # 控制器断电重启、再配一次。
-        remove()
-        power_cycle()
-        time.sleep(2)
-        try:
-            out += _pty_session(pair_script(address, seconds))
-        except (ImportError, OSError):
-            pass
-        state = info(address)
+        # Paired/Bonded 都为真、链路也通，但 hog 拼不出键盘设备（`keys(address)`
+        # 为假），按键一个都不来。2026-10-19 现场抓到两种表现，原因不同：
+        #   ① bluez 手里的 GATT 数据库残缺 —— 它自己报
+        #      `No attribute found within the given range`，每次重连都拿这份坏库
+        #      去读，读不到就拆设备（dmesg 里实例号一路涨）。**重配 bond 治不了**
+        #      （试过三次），重启 bluetoothd 治得了：内存态扔掉，磁盘上的 bond
+        #      原样重读，一次就建成。
+        #   ② 陈旧的 bond 本身对不上 —— 清 bond + 控制器上下电 + 再配。
+        # 所以先走 ① 这条无破坏性的路，仍然不行才走 ②。
+        restarted = restart_bluetoothd()
+        time.sleep(max(2.0, retry_delay))
+        if restarted and keys(address):
+            state = info(address)
+        else:
+            remove()
+            power_cycle()
+            time.sleep(2)
+            try:
+                out += _pty_session(pair_script(address, seconds))
+            except (ImportError, OSError):
+                pass
+            state = info(address)
 
     ok = bool(state.get("paired")) and keys(address)
     if ok:

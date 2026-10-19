@@ -429,6 +429,18 @@ def reload_avahi(*, sender: Optional[Callable] = None) -> dict:
     return call_helper("avahi-reload", sender=sender)
 
 
+def restart_bluetooth(*, sender: Optional[Callable] = None) -> dict:
+    """Restart bluetoothd — the cure for a half-built HOG/GATT session.
+
+    A bonded remote that connects but never produces a keyboard device leaves
+    bluez holding a service database it cannot read (its own log line is
+    `No attribute found within the given range`). Re-pairing does not clear it
+    because it lives in the daemon's memory, not on disk; restarting the daemon
+    does, and the stored bond is re-read unchanged (2026-10-19, W103D).
+    """
+    return call_helper("restart-bluetooth", sender=sender)
+
+
 # ── the password ────────────────────────────────────────────────────
 #: The floor the existing POST /api/setup enforces. The onboarding page must not
 #: be the softer door into the same key.

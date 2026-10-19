@@ -236,7 +236,27 @@ def system_report(runner: Optional[Callable] = None) -> dict:
     }
 
 
-def identity_report(runner: Optional[Callable] = None) -> dict:
+def _read_text(path: str) -> str:
+    with open(path, "r", encoding="utf-8") as handle:
+        return handle.read()
+
+
+def _iface_mac(name: str, read: Optional[Callable[[str], str]] = None) -> str:
+    """`/sys/class/net/<if>/address`, or "" — never a placeholder.
+
+    盒子上的 MAC 只存在于这台机器上（hub 那边只有呼号与证书指纹），所以页面必须
+    能把它念出来，否则发货台账就只能靠回忆。桌面版没有这些接口，返回空串。
+    """
+    read = read or _read_text
+    try:
+        value = read(f"/sys/class/net/{name}/address").strip().lower()
+    except (OSError, TypeError):
+        return ""
+    return value if value and value != "00:00:00:00:00:00" else ""
+
+
+def identity_report(runner: Optional[Callable] = None,
+                    read: Optional[Callable[[str], str]] = None) -> dict:
     """The box's name, and both ways a client can reach it afterwards.
 
     `<name>.local` is perfect on iOS, needs Bonjour installed on Windows and is a
@@ -249,6 +269,11 @@ def identity_report(runner: Optional[Callable] = None) -> dict:
         "mdns": f"{name}.local" if name else "",
         "addresses": [value.split("/")[0]
                       for value in _values("IP4.ADDRESS", runner)],
+        # 无线网卡的 MAC：发货台账与售后认机器靠的就是这个号，而它只在这台机器上。
+        # 以前没记过，于是「发出去的那台是哪个 MAC」只能靠回忆（2026-10-19 现场）。
+        # 只读、来自 sysfs；读不到就是空字符串，不是占位符。
+        "wlan_mac": _iface_mac("wlan0", read),
+        "eth_mac": _iface_mac("eth0", read),
         "suggested_name": DEFAULT_HOSTNAME,
     }
 

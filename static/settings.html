@@ -154,6 +154,7 @@ select{
       <span class="k">名字</span><span class="v" id="id-name">—</span>
       <span class="k">mDNS 名字</span><span class="v" id="id-mdns">—</span>
       <span class="k">当前地址</span><span class="v" id="id-addr">—</span>
+      <span class="k">无线网卡 MAC</span><span class="v" id="id-mac">—</span>
       <span class="k">时区</span><span class="v" id="id-tz">—</span>
       <span class="k">已开机</span><span class="v" id="id-uptime">—</span>
     </div>
@@ -579,6 +580,9 @@ select{
       state.helper = !!data.helper_available;
       Box.setText('#id-name', data.identity.hostname || '—');
       Box.setText('#id-mdns', state.mdns || '（不可用）');
+      // MAC 是这台机器的唯一号码（hub 那边只有呼号与证书指纹）：发货台账、售后认机
+      // 器都靠它。读不到时显示短横线，不编一个。
+      Box.setText('#id-mac', data.identity.wlan_mac || '—');
       Box.setText('#id-addr', data.identity.addresses.join('、') || '（无）');
       var warn = document.querySelector('#warn-mdns');
       if (warn) warn.textContent = state.mdns || ('https://' + location.hostname + ':8888');

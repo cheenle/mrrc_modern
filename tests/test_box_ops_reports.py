@@ -257,3 +257,31 @@ class TimezoneTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class InterfaceMacTests(unittest.TestCase):
+    """无线网卡的 MAC：发货台账与售后认机器靠的就是这个号。
+
+    2026-10-19：客户要「那台盒子」的 MAC，结果发现从头到尾没有任何一处记过它 ——
+    hub 只有呼号与证书指纹，诊断包里也没有。所以这一页必须自己念得出来。
+    """
+
+    def test_it_reads_sysfs_and_normalises_case(self):
+        files = {"/sys/class/net/wlan0/address": "A8:43:A4:5E:DC:C0\n"}
+
+        def read(path):
+            if path not in files:
+                raise OSError(path)
+            return files[path]
+
+        self.assertEqual(box_ops._iface_mac("wlan0", read), "a8:43:a4:5e:dc:c0")
+
+    def test_a_missing_interface_is_an_empty_string(self):
+        def read(path):
+            raise OSError(path)
+
+        self.assertEqual(box_ops._iface_mac("wlan0", read), "")
+
+    def test_the_all_zero_address_is_not_a_serial_number(self):
+        """没烧 MAC 的板子会报全零；把它当号码记进台账比空着更糟。"""
+        self.assertEqual(
+            box_ops._iface_mac("wlan0", lambda p: "00:00:00:00:00:00\n"), "")

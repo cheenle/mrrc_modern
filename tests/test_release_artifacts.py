@@ -107,6 +107,35 @@ class RuleEngineTests(unittest.TestCase):
             results = rc.check_stale_tokens(registry, "9.9.9")
         self.assertTrue(any(r[0] == rc.FAIL for r in results))
 
+    def test_box_line_version_comes_from_its_own_artifact(self):
+        """镜像线（盒子/树莓派）比桌面安装包线走得快时，不能把别的东西判红。
+
+        真实现场 2026-10-19：Windows 构建机不存在，所以安装包线停在 1.28.1，而盒子镜像
+        已经是 1.28.2。两者共用一个版本号会逼出"给人 1.28.1 的包冒充 1.28.2"这种事，
+        所以 w103d 卡片比对的是 dist/w103d 里的产物，而不是桌面版本。
+        """
+        root = self._synthetic()
+        (root / "dist/w103d").mkdir(parents=True)
+        for name in ("MRRC-Modern-1.2.3-w103d.img.gz", "MRRC-Modern-1.10.0-w103d.img.gz"):
+            (root / "dist/w103d" / name).write_bytes(b"x")
+        registry = json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8"))
+        with mock.patch.object(rc, "ROOT", root):
+            self.assertEqual(rc.box_version(registry), "1.10.0")
+
+    def test_box_card_is_checked_against_the_box_artifact(self):
+        root = self._synthetic()
+        out = root / "dist/w103d"
+        out.mkdir(parents=True)
+        (out / "MRRC-Modern-9.9.9-w103d.img.gz").write_bytes(b"image")
+        registry = {"artifact_facts": [
+            {"id": "website-w103d-card", "page": "website/index.html",
+             "size_pattern": "(x)", "sha_prefix": "(x)",
+             "artifact": "dist/w103d/MRRC-Modern-{box}-w103d.img.gz"}]}
+        with mock.patch.object(rc, "ROOT", root):
+            results = rc.check_artifact_facts(registry, "1.0.0", "9.9.9")
+        self.assertEqual(results[0][0], rc.FAIL)      # 卡片里没有这串数字
+        self.assertIn("bytes 5 not on the card", results[0][2])
+
     def test_missing_optional_rule_is_skipped_not_failed(self):
         registry = json.loads(rc.REGISTRY_PATH.read_text(encoding="utf-8"))
         rule = {"id": "pi-guide", "path": "docs/RASPBERRY_PI_GUIDE.md",

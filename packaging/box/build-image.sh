@@ -44,8 +44,14 @@ IMG_URL="https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/$IMG_T
 # version, the same way packaging/rpi and packaging/macos do it, and the Pi
 # builder's comment says why it matters — the support bundle manifest and the
 # upgrade channel read it out of the installed tree.
-VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO/CHANGELOG.md" |
+# 镜像线优先：`## [镜像线 vX.Y.Z]` 是盒子/树莓派这条线的版本，桌面安装包线另有编号
+# （见 CHANGELOG 顶部说明）。没有镜像线标题时才退回桌面标题。
+VERSION="$(grep -m1 -oE '## \[镜像线 v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO/CHANGELOG.md" |
 	grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
+if [ -z "$VERSION" ]; then
+	VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO/CHANGELOG.md" |
+		grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
+fi
 : "${VERSION:?Could not read a version from CHANGELOG.md}"
 OUT_IMG="MRRC-Modern-${VERSION#v}-w103d.img"
 

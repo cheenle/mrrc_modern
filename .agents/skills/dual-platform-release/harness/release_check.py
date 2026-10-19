@@ -118,12 +118,33 @@ def check_rules(registry: dict, app: str, sdd: str) -> List[Tuple[str, str, str]
     return out
 
 
-def check_artifact_facts(registry: dict, app: str) -> List[Tuple[str, str, str]]:
+def box_version(registry: dict) -> str:
+    """The version of the box/Raspberry Pi image line, read from its artifact.
+
+    Empty when no image has been built locally: the line is independent of the
+    desktop installer, so a missing artifact must not invalidate anything else.
+    """
+    spec = registry.get("box_version_source")
+    if not spec:
+        return ""
+    out_dir = ROOT / spec["path"]
+    if not out_dir.is_dir():
+        return ""
+    found = []
+    for path in out_dir.iterdir():
+        m = re.match(spec["pattern"], path.name)
+        if m:
+            found.append((tuple(int(x) for x in m.group(1).split(".")), m.group(1)))
+    return max(found)[1] if found else ""
+
+
+def check_artifact_facts(registry: dict, app: str,
+                         box: str = "") -> List[Tuple[str, str, str]]:
     """Card bytes/SHA must describe the artifact that was actually built."""
     out: List[Tuple[str, str, str]] = []
     for fact in registry.get("artifact_facts", []):
         page = ROOT / fact["page"]
-        artifact = ROOT / fact["artifact"].format(app=app)
+        artifact = ROOT / fact["artifact"].format(app=app, box=box or app)
         if not page.exists():
             out.append((FAIL, fact["id"], f"{fact['page']} is missing"))
             continue
@@ -384,7 +405,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
 
     results = (check_rules(registry, app, sdd)
-               + check_artifact_facts(registry, app)
+               + check_artifact_facts(registry, app, box_version(registry))
                + check_stale_tokens(registry, app)
                + check_diagrams(registry, sdd))
     if args.online:

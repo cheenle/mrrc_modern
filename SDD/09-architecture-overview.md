@@ -177,3 +177,36 @@ browser ──REST /api/nano/*──> server.py（守卫 + 一把 asyncio.Lock�
   persist them; the field preset therefore also writes a SAVE/RECALL slot (slot 4), which is
   what makes the box usable standalone in the field.
 
+## 9.12 Performance & Load Page (`/Perf`, AD-031)
+
+```
+browser ──GET /api/perf (1 Hz)──> server.py
+   ├── host_perf.Sampler.tick()  ──> /proc/{stat,loadavg,meminfo,diskstats,net/dev,<pid>/*}, /sys (thermal, cpufreq)
+   └── in-process: event-loop lag, socket counts, audio queue, session metrics
+```
+
+The page answers one question — *the picture is slow: is the box out of CPU, out of IO, or is
+the server itself stuck?* — so the numbers must be attributable, and the three answers have
+different fixes.
+
+- **Everything is a delta.** `Sampler` keeps the previous raw reading and a clock; the first
+  `tick()` returns `available: false` rather than zeroes ("0 % CPU" and "no idea yet" must not
+  look the same). Rates: CPU busy/iowait/steal, per-core busy, disk bytes/s and busy %, network
+  bytes/s per interface, per-process CPU % over the interval.
+- **Event-loop lag is the one number no external tool can supply.** A 250 ms `sleep` that
+  returns after 900 ms means something held the loop (a blocking CAT write, an encoder on the
+  loop, a PTY call). It is measured in-process with a slow-decaying peak, and it outranks CPU
+  in the verdict: idle CPU with a 900 ms lag is *not* "the box needs a bigger CPU".
+- **Attribution, not totals**: top processes are named from `cmdline` because every one of our
+  processes is called `python` (`server.py`, `scope_pipe`, `sdr_pipe`, `ft8-worker`); partitions
+  are excluded from `/proc/diskstats` (their counters are already inside the whole device, which
+  is how a "disk busy 140 %" appears); loopback and tunnels are excluded from the network table
+  (the radio's own spectrum/audio would otherwise look like network load).
+- **Absent ≠ zero**: a missing thermal zone is omitted from the snapshot, never reported as
+  0 °C — on this box that reads as "cool, keep going", the opposite of the truth.
+- **Guards**: full session only — `listen` and `sdr` sessions get 403 (host internals are not
+  for strangers), plus the usual token check (401). Read-only; no new privilege surface.
+- **Verdict** (`host_perf.verdict`) is deliberately conservative and lives in one place: it names
+  a bottleneck only when the number is unambiguous, and says "看不出来" otherwise. Load 3.0 on
+  four cores is not reported as a problem.
+

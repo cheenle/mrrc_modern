@@ -92,6 +92,7 @@ from recorder import (
 )
 from cq_player import CQPlayer, CQUnavailable
 from session_metrics import SessionMetrics
+import host_perf
 import nano.flash as nano_flash
 from nano import (NanoError, NanoVna, analyse, discover_port, scan_command,
                   to_csv, to_s1p)
@@ -218,6 +219,15 @@ atr_clients: set[WebSocket] = set()
 # (mrrc_hub AD-H12 / open issue I-H1). Counts and bytes only — no identifiers.
 metrics = SessionMetrics(window_seconds=SESSION_METRICS_WINDOW_S)
 _session_metrics_task: asyncio.Task | None = None
+
+# Host/process load for the 「性能负载」 page (host_perf.py). One sampler for the
+# whole process: rates are deltas, so two callers must not each keep a baseline
+# (they would halve each other's intervals and report nonsense).
+perf_sampler = host_perf.Sampler()
+# Event-loop scheduling delay. This is the number that separates "the box is
+# doing work" from "the server is stuck": CPU can be idle while every await is
+# late, and then no amount of CPU headroom explains the operator's lag.
+perf_lag = {"last_ms": 0.0, "peak_ms": 0.0, "samples": 0}
 
 
 def _role_for_token(token: str) -> str:
@@ -3456,6 +3466,7 @@ async def lifespan(app: FastAPI):
         _opus_tx_decoder = None
 
     _local_ctl_task = asyncio.create_task(_local_control_server(), name="localctl")
+    _perf_lag_task = asyncio.create_task(_perf_lag_monitor(), name="perf_lag")
 
     # Local speaker (AD-028): the radio's audio on a device beside the box.
     global _local_speaker
@@ -3699,6 +3710,7 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown ──
     _local_ctl_task.cancel()
+    _perf_lag_task.cancel()
     if _local_speaker is not None:
         _local_speaker.stop()
     if _cq_player is not None and _cq_player.is_calling:
@@ -5832,6 +5844,108 @@ def _nano_list_sweeps() -> list[dict]:
             "points": data.get("points"),
         })
     return out
+
+
+async def _perf_lag_monitor() -> None:
+    """Measure how late the event loop is, once every 250 ms.
+
+    A `sleep(0.25)` that returns after 0.9 s means something held the loop for
+    650 ms — a blocking CAT write, an encoder on the loop, a PTY call. That is
+    exactly the operator's "卡一下" and it shows up here while CPU stays low, so
+    this number has to be measured in-process: no external tool can see it.
+    """
+    interval = 0.25
+    while True:
+        try:
+            started = time.perf_counter()
+            await asyncio.sleep(interval)
+            late_ms = max(0.0, (time.perf_counter() - started - interval) * 1000.0)
+            perf_lag["last_ms"] = round(late_ms, 1)
+            perf_lag["samples"] += 1
+            # Peak decays slowly instead of resetting: one 800 ms stall is the
+            # symptom worth keeping for a minute, not a blip to average away.
+            perf_lag["peak_ms"] = round(max(perf_lag["peak_ms"] * 0.995, late_ms), 1)
+        except asyncio.CancelledError:
+            raise
+        except Exception:                                          # noqa: BLE001
+            await asyncio.sleep(interval)
+
+
+def _perf_forbidden(request: Request) -> Optional[tuple[int, str]]:
+    """性能页与接口共用的前置门：主站会话可以，listen / sdr 会话不行。
+
+    这台盒子的内部数字（进程、温度、磁盘）不对外，而 listen 会话就是给陌生人的。
+    """
+    if _is_listen_request(request):
+        return (403, "listen-only session")
+    if _sdr_token_from_request(request) in _sdr_tokens:
+        return (403, "sdr session")
+    return None
+
+
+def _perf_service_block() -> dict:
+    """The in-process half: what this server is doing, not what Linux is."""
+    audio_stats = {}
+    if audio is not None:
+        try:
+            audio_stats = dict(audio.tx_stats())
+            audio_stats["rx_silent_s"] = round(audio.rx_silent_seconds(), 1)
+            audio_stats["device_rates"] = audio.device_rates()
+        except Exception:                                          # noqa: BLE001
+            audio_stats = {}
+    try:
+        sessions = metrics.snapshot()
+    except Exception:                                              # noqa: BLE001
+        sessions = {}
+    return {
+        "event_loop_lag_ms": perf_lag["last_ms"],
+        "event_loop_peak_ms": perf_lag["peak_ms"],
+        "lag_samples": perf_lag["samples"],
+        "uptime_s": round(time.time() - _PROCESS_STARTED_AT, 1)
+                    if "_PROCESS_STARTED_AT" in globals() else None,
+        "version": support_bundle.detect_version(_runtime_dir(), _resource_dir()),
+        "model": RADIO_MODEL,
+        "clients": {
+            "radio": len(ctrl_clients), "spectrum": len(spectrum_clients),
+            "audio_rx": len(audio_rx_clients), "audio_tx": len(audio_tx_clients),
+        },
+        "audio": audio_stats,
+        "sessions": sessions,
+        "radio_connected": bool(cat and cat.connected),
+        "tx": bool(radio.tx_status) if "radio" in globals() else None,
+    }
+
+
+@app.get("/Perf", include_in_schema=False)
+async def perf_page(request: Request):
+    """性能负载页：盒子与服务的 CPU / 内存 / IO / 网络一眼看完。"""
+    reason = _perf_forbidden(request)
+    if reason is not None:
+        raise HTTPException(status_code=reason[0], detail=reason[1])
+    page = STATIC_DIR / "perf.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="perf.html missing")
+    response = FileResponse(page, media_type="text/html")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/perf", include_in_schema=False)
+async def api_perf(request: Request):
+    """One snapshot: host load/IO/network plus this process's own symptoms.
+
+    Read-only and cheap (a handful of /proc reads), so the page can poll it
+    once a second without becoming the load it is trying to measure.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    reason = _perf_forbidden(request)
+    if reason is not None:
+        return JSONResponse({"error": reason[1]}, status_code=reason[0])
+    snapshot = await asyncio.to_thread(perf_sampler.tick)
+    service = _perf_service_block()
+    return JSONResponse({"host": snapshot, "service": service,
+                         "verdict": host_perf.verdict(snapshot, service)})
 
 
 @app.get("/Nano", include_in_schema=False)

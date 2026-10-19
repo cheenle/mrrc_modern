@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2705 tests across 139 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2769 tests across 141 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-18, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2705 above. Run it with:
+the 2769 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -1114,3 +1114,17 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   没有 `webServer` 段（入网早于 2026-10-12）时，「开启协助」拿到的是
   `admin API unreachable on 127.0.0.1:0`；实测盒子 `.217` 每次必失败。现在配置缺失时报一句能行动的
   话，并且启动隧道前会把管理段补上（幂等，已有则一字不动）。
+
+### 本轮新增（性能负载页 AD-031，2026-10-19）
+
+- **`test_host_perf.py`** — 主机采样的纯逻辑半边，喂的是字面 `/proc` 文本，不需要盒子。
+  钉住的性质而不是那一个实例：**速率来自差值而不是总量**（忙了一周的盒子不该读成 100%）；
+  **分区不重复计入**（`mmcblk2p1` 的扇区已在 `mmcblk2` 里，重复相加就是"磁盘忙 140%"）；
+  **`lo` 与隧道不算网络使用**（服务自己的频谱与音频走的就是 `lo`）；**缺失的温控区是缺失而不是
+  0 °C**（0 °C 在这台盒子上读作"很凉快，继续跑"）；**进程名取自 `cmdline`** 并且 `-c` 的内联代码
+  不会被当成名字；`comm` 含空格括号时从最后一个 `)` 之后切。判定部分各一条：循环卡住优先于 CPU、
+  CPU 高且有 iowait 时点名 IO、四核上 load 3.0 不算瓶颈、第一个采样拒绝下判断。
+- **`test_server_perf_routes.py`** — `/api/perf` 与 `/Perf` 的守卫与形状：listen 与 sdr 会话 403、
+  未认证 401、返回三段（`host`/`service`/`verdict`）、**音频引擎死掉时这一页仍然能看**（它正是
+  「为什么卡」的时候被打开的）。判定不许在路由里再造一套阈值——只认 `host_perf.verdict`。
+

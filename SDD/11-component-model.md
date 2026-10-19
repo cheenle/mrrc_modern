@@ -62,6 +62,7 @@
 
 | 组件 | 作用 | 备注 |
 |------|------|------|
+| `host_perf.py` | 主机与服务的负载 / IO / 网络采样（AD-031）：`/proc/{stat,loadavg,meminfo,diskstats,net/dev}` 与 `/sys` 的温控/主频，加上进程级 CPU（名字取自 `cmdline`，否则全是 `python`） | 由 `GET /api/perf` 与 `/Perf` 页读取；所有速率是两次采样的差值，第一拍返回 `available: false` 而不是 0 |
 | `session_metrics.py` | 会话遥测聚合与周期日志（AD-023） | 由 `GET /api/session_metrics` 读取 |
 | `config.py` → `FT710Settings.basePath` / `.url` | 路径前缀的唯一来源 | 供服务端与前端共用的 URL 组装 |
 | `static/modules/ptt_manager.js` | 增加发射**活性闸门**（`MRRC_REMOTE_SESSION_TX_HEARTBEAT_S`，默认 0=关） | 与 `MRRC_PTT_MAX_TX_SECONDS` 构成两条独立防线（SDD/15 §15.4） |

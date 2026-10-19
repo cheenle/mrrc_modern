@@ -81,8 +81,10 @@ def build_manifest(installer: tuple, previous: tuple | None = None, notes: str =
         # 盒子是源码树：它的更新包是一份 stage 过的 tar.gz。版本必须与 latest 一致
         # （网页上「最新」只有一个），大小与 SHA 同样来自真实文件。
         box_version, box_url, box_path = box
-        if up.compare_versions(box_version, version) != 0:
-            raise BuildError(f"box 版本 {box_version} 与 latest {version} 不一致")
+        # 不要求等于 latest：盒子镜像线与桌面安装包线各自编号，由不同构建机产出，
+        # 一台缺席不该把另一台拖着停版（2026-10-19 现场：Windows 机不存在）。
+        if re.fullmatch(r"\d+\.\d+\.\d+", box_version) is None:
+            raise BuildError(f"box 版本不是版本号：{box_version!r}")
         box_sha, box_size = digest_of(Path(box_path).expanduser())
         manifest["box"] = {"version": box_version, "url": box_url,
                            "sha256": box_sha, "size": box_size}

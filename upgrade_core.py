@@ -82,13 +82,23 @@ def parse_manifest(data) -> dict:
     size = installer.get("size")
     if not isinstance(size, int) or size <= 0:
         raise ManifestError(f"installer.size 不是正整数：{size!r}")
-    box = data.get("box")
+    # 盒子线用 `boxLine`，不用 `box`。原因是**已经在现场跑着的盒子**：1.28.1/1.28.2 的
+    # 解析器要求 `box.version == latest`，它们读到一个更靠前的 `box` 会直接抛错，页面
+    # 变成「检查失败」。未知键会被旧解析器忽略，所以镜像线比安装包线新这件事，用新键
+    # 表达才是向后兼容的（`box` 仍然认，供旧清单继续工作）。
+    box = data.get("boxLine") or data.get("box")
     if box is not None:
         # 盒子（源码树）的更新包：W103D 上没有安装器，只有一份 stage 过的 tar.gz。
         if not isinstance(box, dict):
             raise ManifestError("box 不是对象")
-        if _require_version(box, "version") != latest:
-            raise ManifestError("box.version 与 latest 不一致")
+        # **两条线各自编号，box.version 不要求等于 latest。** 桌面安装包与盒子镜像由
+        # 不同的构建机产出，一台缺席（2026-10-19：Windows 构建机不存在）就会把另一台
+        # 拖着一起停版——而盒子用户看到的「已是最新」会成为一句假话。原规则
+        # 「网页上「最新」只有一个」是 UI 简化，代价太高；现在 `latest` 是桌面线，
+        # `box.version` 是盒子线，页面各读各的。
+        _require_version(box, "version")
+        if box.get("notes") is not None and not isinstance(box["notes"], str):
+            raise ManifestError("box.notes 不是字符串")
         box_url = str(box.get("url", "") or "")
         if not box_url.startswith("https://"):
             raise ManifestError(f"box.url 必须是 https：{box_url!r}")
@@ -115,7 +125,8 @@ def parse_manifest(data) -> dict:
                       "sha256": str(previous.get("sha256", "")).lower(),
                       "size": previous.get("size")} if isinstance(previous, dict) else None),
         "box": ({"version": str(box["version"]), "url": str(box["url"]),
-                 "sha256": str(box["sha256"]).lower(), "size": int(box["size"])}
+                 "sha256": str(box["sha256"]).lower(), "size": int(box["size"]),
+                 "notes": str(box.get("notes", "") or "")}
                 if isinstance(box, dict) else None),
         "minSupported": str(data.get("minSupported", "") or ""),
         "mandatory": bool(data.get("mandatory", False)),
@@ -166,13 +177,15 @@ def check_box(current: str, manifest: dict) -> dict:
                 "reason": "清单里没有盒子的更新包", "url": "", "sha256": "", "size": 0,
                 "notes": manifest.get("notes", "")}
     latest = box["version"]
+    # 盒子线的说明优先：两条线各说各的，盒子上不该出现桌面版的更新说明。
+    notes = box.get("notes") or manifest.get("notes", "")
     return {
         "available": compare_versions(current, latest) < 0,
         "current": current,
         "latest": latest,
         "mandatory": bool(manifest.get("mandatory", False)),
         "releasedAt": manifest.get("releasedAt", ""),
-        "notes": manifest.get("notes", ""),
+        "notes": notes,
         "url": box["url"],
         "sha256": box["sha256"],
         "size": box["size"],

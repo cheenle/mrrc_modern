@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12120f">
+<title>性能负载</title>
+<style>
+:root{
+  --bg:#12120f; --bg2:#1c1b17; --card:#26241e;
+  --fg:#f2eee2; --dim:#a49c8a; --muted:#6f695c;
+  --accent:#f5a623; --ok:#2fbf5f; --warn:#e8b529; --bad:#e8563f;
+  --line:#3a382f; --r:14px;
+  --mono:'SF Mono',Menlo,Monaco,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:-apple-system,system-ui,'PingFang SC','Microsoft YaHei',sans-serif;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  -webkit-text-size-adjust:100%;
+}
+header{
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  background:var(--bg2); border-bottom:1px solid var(--line);
+  position:sticky; top:0; z-index:10;
+}
+header .t{font-weight:700; letter-spacing:.05em}
+header .meta{font-family:var(--mono); font-size:11px; color:var(--dim); margin-left:auto}
+main{padding:12px 14px 40px; max-width:900px; margin:0 auto}
+
+.verdict{
+  border-radius:var(--r); padding:14px 16px; margin-bottom:14px;
+  border:1px solid var(--line); background:var(--card);
+  font-size:15px; line-height:1.5;
+}
+.verdict .tag{
+  display:inline-block; font-family:var(--mono); font-size:11px;
+  padding:2px 8px; border-radius:999px; margin-right:8px; vertical-align:1px;
+}
+.verdict.ok{border-color:rgba(47,191,95,.45)}
+.verdict.ok .tag{background:rgba(47,191,95,.16); color:var(--ok)}
+.verdict.warn{border-color:rgba(232,181,41,.45)}
+.verdict.warn .tag{background:rgba(232,181,41,.16); color:var(--warn)}
+.verdict.bad{border-color:rgba(232,86,63,.5)}
+.verdict.bad .tag{background:rgba(232,86,63,.18); color:var(--bad)}
+.verdict.unknown .tag{background:rgba(164,156,138,.16); color:var(--dim)}
+
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px}
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+  padding:12px 14px; position:relative; overflow:hidden;
+}
+.card h3{
+  margin:0 0 6px; font-size:11px; font-weight:600; letter-spacing:.08em;
+  color:var(--dim); text-transform:uppercase;
+}
+.card .big{font-family:var(--mono); font-size:26px; line-height:1.15}
+.card .big small{font-size:12px; color:var(--dim); margin-left:4px}
+.card .sub{font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:4px}
+.spark{width:100%; height:34px; display:block; margin-top:6px}
+
+section{margin-top:18px}
+section > h2{
+  font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--dim); margin:0 0 8px; font-weight:600;
+}
+table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px}
+th,td{text-align:left; padding:6px 8px; border-bottom:1px solid var(--line)}
+th{color:var(--muted); font-weight:500}
+td.num{text-align:right}
+tr:last-child td{border-bottom:none}
+.bar{height:4px; border-radius:2px; background:var(--line); overflow:hidden; min-width:40px}
+.bar > i{display:block; height:100%; background:var(--accent)}
+.kv{display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:12px}
+.kv dt{color:var(--muted); font-family:var(--mono)}
+.kv dd{margin:0; font-family:var(--mono); text-align:right}
+.hint{color:var(--muted); font-size:11px; margin-top:6px; line-height:1.5}
+button{
+  font:inherit; color:var(--fg); background:var(--bg2);
+  border:1px solid var(--line); border-radius:8px; padding:5px 10px; cursor:pointer;
+}
+button.on{border-color:var(--accent); color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <span class="t">性能负载</span>
+  <span class="meta" id="head-meta">—</span>
+</header>
+
+<main>
+  <div class="verdict unknown" id="verdict">
+    <span class="tag">采样中</span><span id="verdict-text">读取中…</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>CPU</h3>
+      <div class="big" id="cpu-big">—</div>
+      <div class="sub" id="cpu-sub">—</div>
+      <canvas class="spark" id="spark-cpu"></canvas>
+    </div>
+    <div class="card">
+      <h3>负载 / 每核</h3>
+      <div class="big" id="load-big">—</div>
+      <div class="sub" id="load-sub">—</div>
+      <canvas class="spark" id="spark-load"></canvas>
+    </div>
+    <div class="card">
+      <h3>内存</h3>
+      <div class="big" id="mem-big">—</div>
+      <div class="sub" id="mem-sub">—</div>
+      <canvas class="spark" id="spark-mem"></canvas>
+    </div>
+    <div class="card">
+      <h3>磁盘</h3>
+      <div class="big" id="disk-big">—</div>
+      <div class="sub" id="disk-sub">—</div>
+      <canvas class="spark" id="spark-disk"></canvas>
+    </div>
+    <div class="card">
+      <h3>温度 / 主频</h3>
+      <div class="big" id="temp-big">—</div>
+      <div class="sub" id="temp-sub">—</div>
+    </div>
+    <div class="card">
+      <h3>事件循环延迟</h3>
+      <div class="big" id="lag-big">—</div>
+      <div class="sub" id="lag-sub">服务端自己被堵住时，CPU 往往不高</div>
+      <canvas class="spark" id="spark-lag"></canvas>
+    </div>
+  </div>
+
+  <section>
+    <h2>网络</h2>
+    <table id="net-table">
+      <thead><tr><th>接口</th><th class="num">收</th><th class="num">发</th></tr></thead>
+      <tbody><tr><td colspan="3" style="color:var(--muted)">采样中…</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>最吃 CPU 的进程</h2>
+    <table id="proc-table">
+      <thead><tr><th>进程</th><th class="num">PID</th><th class="num">CPU</th><th style="width:30%"></th></tr></thead>
+      <tbody><tr><td colspan="4" style="color:var(--muted)">采样中…</td></tr></tbody>
+    </table>
+    <div class="hint" id="proc-hint"></div>
+  </section>
+
+  <section>
+    <h2>服务</h2>
+    <dl class="kv" id="service-kv"></dl>
+  </section>
+
+  <section>
+    <h2>采样</h2>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+      <button id="btn-pause">暂停</button>
+      <span class="hint" style="margin:0" id="poll-note">每 2 秒一次</span>
+    </div>
+    <div class="hint">
+      这一页只读 <code>/proc</code> 与 <code>/sys</code>，加上服务进程自己的计数，一次快照就是几次文件读取。
+      速率类数字来自前后两次采样的差值，所以第一屏会显示「采样中」。
+    </div>
+  </section>
+</main>
+
+<script src="perf.js"></script>
+</body>
+</html>

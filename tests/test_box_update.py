@@ -56,11 +56,70 @@ class ManifestTests(unittest.TestCase):
     def test_a_manifest_without_one_still_parses(self):
         self.assertIsNone(upgrade_core.parse_manifest(self.BASE)["box"])
 
-    def test_a_box_version_that_disagrees_is_refused(self):
-        data = dict(self.BASE, box={"version": "1.28.1", "url": "https://x/t.sql.gz",
+    def test_a_box_version_may_be_ahead_of_the_installer(self):
+        """两条线各自编号：盒子镜像比桌面安装包新是**正常**状态。
+
+        2026-10-19：Windows 构建机不存在，桌面线停在 1.28.1，而盒子镜像已经到
+        1.28.3。旧规则要求 `box.version == latest`，于是盒子页面只能写「已是最新」
+        ——那句话对用户是假的。盒子线的版本由 `box.version` 说了算。
+        """
+        data = dict(self.BASE, box={"version": "1.28.3", "url": "https://x/t.sql.gz",
                                     "sha256": "b" * 64, "size": 1})
-        with self.assertRaises(upgrade_core.ManifestError):
-            upgrade_core.parse_manifest(data)
+        parsed = upgrade_core.parse_manifest(data)
+        self.assertEqual(parsed["latest"], "1.28.2")      # 桌面线不动（BASE 是 1.28.2）
+        self.assertEqual(parsed["box"]["version"], "1.28.3")
+        self.assertTrue(upgrade_core.check_box("1.28.1", parsed)["available"])
+        self.assertFalse(upgrade_core.check_box("1.28.3", parsed)["available"])
+
+    def test_a_box_version_that_is_not_a_version_is_refused(self):
+        # `v1.28.3` 是允许的（`parse_version` 接受前导 v），所以不放进来。
+        for bad in ("latest", "", "1.28", "1.28.x", "2026-10-19"):
+            with self.subTest(version=bad):
+                data = dict(self.BASE, box={"version": bad, "url": "https://x/t.sql.gz",
+                                            "sha256": "b" * 64, "size": 1})
+                with self.assertRaises(upgrade_core.ManifestError):
+                    upgrade_core.parse_manifest(data)
+
+    def test_box_notes_win_over_the_desktop_notes(self):
+        """盒子页面上不该贴桌面版的更新说明。"""
+        data = dict(self.BASE, notes="桌面版说明",
+                    box={"version": "1.28.3", "url": "https://x/t.gz",
+                         "sha256": "b" * 64, "size": 1, "notes": "盒子版说明"})
+        parsed = upgrade_core.parse_manifest(data)
+        self.assertEqual(upgrade_core.check_box("1.28.1", parsed)["notes"], "盒子版说明")
+
+    def test_box_line_is_read_from_the_new_key(self):
+        """`boxLine` 而不是 `box`：已经在现场的盒子必须能继续解析这份清单。
+
+        1.28.1/1.28.2 的解析器要求 `box.version == latest`，它们读到更靠前的 `box`
+        会抛错、页面变成「检查失败」；未知键则被安静忽略。所以镜像线走在 `boxLine`
+        上，旧盒子照旧读到"没有盒子的更新包"，至少不会炸。
+        """
+        data = dict(self.BASE, boxLine={"version": "1.28.3",
+                                        "url": "https://x/tree.tar.gz",
+                                        "sha256": "c" * 64, "size": 77})
+        parsed = upgrade_core.parse_manifest(data)
+        self.assertEqual(parsed["box"]["version"], "1.28.3")
+        self.assertEqual(parsed["box"]["size"], 77)
+        self.assertEqual(parsed["latest"], "1.28.2")
+
+    def test_an_old_manifest_with_a_box_section_still_parses(self):
+        """旧清单里的 `box` 继续认，不用两边同时改。"""
+        data = dict(self.BASE, box={"version": "1.28.2",
+                                    "url": "https://x/tree.tar.gz",
+                                    "sha256": "d" * 64, "size": 9})
+        parsed = upgrade_core.parse_manifest(data)
+        self.assertEqual(parsed["box"]["version"], "1.28.2")
+
+    def test_box_line_wins_over_the_old_key(self):
+        data = dict(self.BASE,
+                    box={"version": "1.0.0", "url": "https://x/old.gz",
+                         "sha256": "d" * 64, "size": 1},
+                    boxLine={"version": "1.28.3", "url": "https://x/new.gz",
+                             "sha256": "c" * 64, "size": 2})
+        parsed = upgrade_core.parse_manifest(data)
+        self.assertEqual(parsed["box"]["version"], "1.28.3")
+        self.assertEqual(parsed["box"]["url"], "https://x/new.gz")
 
     def test_a_plain_http_box_url_is_refused(self):
         data = dict(self.BASE, box={"version": "1.28.2", "url": "http://x/t.sql.gz",

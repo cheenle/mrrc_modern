@@ -28,11 +28,18 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def version_of(tree: Path) -> str:
+    """The **box** line's version: `## [镜像线 vX.Y.Z]`, else the desktop heading.
+
+    两条线各自编号（2026-10-19）：Windows 构建机缺席时桌面包线会停在旧版本，而盒子
+    源码包必须跟着盒子线走——否则盒子下载了一个自称旧版本的包，升级后又"发现新版本"。
+    """
     text = (tree / "CHANGELOG.md").read_text(encoding="utf-8")
-    match = re.search(r"##\s*\[v(\d+\.\d+\.\d+)\]", text)
-    if not match:
-        raise SystemExit("CHANGELOG.md 里找不到 ## [vX.Y.Z]")
-    return match.group(1)
+    for pattern in (r"##\s*\[镜像线 v(\d+\.\d+\.\d+)\]",
+                    r"##\s*\[v(\d+\.\d+\.\d+)\]"):
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+    raise SystemExit("CHANGELOG.md 里找不到 ## [镜像线 vX.Y.Z] 或 ## [vX.Y.Z]")
 
 
 def main() -> int:

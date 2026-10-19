@@ -207,7 +207,7 @@ ssh root@<盒子IP> 'bash /tmp/verify.sh'
 
 第 11 项查的是**盒子身份与提权通道**：NetworkManager 的 polkit 规则
 （`/etc/polkit-1/rules.d/49-mrrc-nm.rules`）在不在、`avahi-daemon` 活着没
-（`<主机名>.local` 能否解析）、以及 root 助手 socket `/run/mrrc/box-helper.sock`
+（`<主机名>.local` 能否解析）、以及 root 助手 socket `/run/mrrc-box/box-helper.sock`
 在不在。这套机器是新引导路径（LAN 网页）能用的前提，脚本查它而不查已退役的热点。
 引导流程本身见操作单 `docs/W103D_GUIDE.md`，脚本替不了它。
 

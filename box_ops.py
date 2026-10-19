@@ -46,7 +46,7 @@ DEFAULT_HOSTNAME = "MRRC-Modern"
 
 #: The root helper's socket. Its absence is a normal state, not an error: the
 #: desktop builds have no helper and the box's helper may be restarting.
-HELPER_SOCKET = "/run/mrrc/box-helper.sock"
+HELPER_SOCKET = "/run/mrrc-box/box-helper.sock"
 
 #: The units the settings page reports. `mrrc-modern` is this server; the other
 #: two are the ones a broken network is usually hiding behind.

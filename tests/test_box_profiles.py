@@ -382,7 +382,7 @@ class VerifyScriptTests(unittest.TestCase):
         helper socket for the four system verbs (design §7, §8)."""
         self.assertIn("49-mrrc-nm.rules", self.text)
         self.assertIn("avahi-daemon", self.text)
-        self.assertIn("/run/mrrc/box-helper.sock", self.text)
+        self.assertIn("/run/mrrc-box/box-helper.sock", self.text)
 
     def test_it_no_longer_checks_a_hotspot(self):
         """The feature failed its hardware test on 2026-10-11 (spec §1). A check
@@ -560,8 +560,36 @@ class BoxHelperPackagingTests(unittest.TestCase):
     def test_the_helper_unit_creates_the_runtime_directory(self):
         body = self.text.split(f"/etc/systemd/system/{self.UNIT}", 1)[1]
         body = body.split("UNIT\n", 1)[0]
-        self.assertIn("RuntimeDirectory=mrrc", body)
+        self.assertIn("RuntimeDirectory=mrrc-box", body)
         self.assertIn("RuntimeDirectoryMode=0770", body)
+
+    def test_no_two_units_share_a_runtime_directory(self):
+        """systemd deletes a RuntimeDirectory= when its unit stops.
+
+        2026-10-19, packing a box: the helper and the server both declared
+        `RuntimeDirectory=mrrc`, so restarting the server removed the helper's
+        socket while the helper kept a bound-but-unlinked one. Every root verb
+        then answered `helper unavailable (FileNotFoundError)` — 主机名、时区、
+        重启、蓝牙补救全都不动声色地坏掉，页面上只显示一句"不可用"。
+        """
+        units = {}
+        for name in ("mrrc-modern.service", "mrrc-box-helper.service",
+                     "mrrc-localctl.service"):
+            marker = f"/etc/systemd/system/{name}"
+            if marker not in self.text:
+                continue
+            body = self.text.split(marker, 1)[1].split("UNIT\n", 1)[0]
+            dirs = [line.split("=", 1)[1].strip() for line in body.splitlines()
+                    if line.strip().startswith("RuntimeDirectory=")]
+            units[name] = [d for d in dirs if d != "-"]
+        owned = {d for dirs in units.values() for d in dirs}
+        for name, dirs in units.items():
+            for directory in dirs:
+                with self.subTest(unit=name, directory=directory):
+                    owners = [u for u, ds in units.items() if directory in ds]
+                    self.assertEqual(len(owners), 1,
+                                     f"{directory} 被多个 unit 声明：{owners}")
+        self.assertEqual(len(owned), len({d for dirs in units.values() for d in dirs}))
 
     def test_the_helper_is_enabled(self):
         enabled = [line for line in self.text.splitlines()

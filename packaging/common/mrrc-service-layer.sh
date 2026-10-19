@@ -280,9 +280,13 @@ Wants=network-online.target
 User=$MRRC_USER
 Group=$MRRC_USER
 WorkingDirectory=$MRRC_HOME
-# /run/mrrc holds the local control socket (AD-028).  Shared with
-# mrrc-box-helper, whose unit also declares it — systemd creates it once,
-# owned by the first unit to start, and both run as the same user anyway.
+# /run/mrrc holds the local control socket (AD-028). This unit OWNS it: the root
+# helper used to declare the same directory, and systemd deletes a
+# RuntimeDirectory= when its unit stops — so restarting the server silently
+# removed /run/mrrc/box-helper.sock while the helper kept a bound-but-unlinked
+# socket, and every root verb answered "helper unavailable (FileNotFoundError)"
+# until the helper was restarted too (found 2026-10-19, packing box). One
+# directory, one owner: the helper now has /run/mrrc-box.
 RuntimeDirectory=mrrc
 RuntimeDirectoryMode=0770
 EnvironmentFile=$ENV_FILE
@@ -336,13 +340,17 @@ After=NetworkManager.service
 
 [Service]
 Type=simple
-# Root for hostnamectl / timedatectl / systemctl reboot. Group=mrrc is what makes
-# systemd create RuntimeDirectory=/run/mrrc owned by root:mrrc, so the socket
-# inside it can be 0660 root:mrrc without this script chowning anything — /run is
-# tmpfs, so the directory is recreated clean at every boot.
+# Root for hostnamectl / timedatectl / systemctl reboot / restart-bluetooth.
+# Group=mrrc is what makes systemd create the runtime directory owned by
+# root:mrrc, so the socket inside it can be 0660 root:mrrc without this script
+# chowning anything — /run is tmpfs, so it is recreated clean at every boot.
+#
+# Its OWN directory, not /run/mrrc: a RuntimeDirectory= is deleted when its unit
+# stops, so sharing it with the server meant a server restart unlinked this
+# socket underneath the running helper (2026-10-19).
 User=root
 Group=mrrc
-RuntimeDirectory=mrrc
+RuntimeDirectory=mrrc-box
 RuntimeDirectoryMode=0770
 ExecStart=/opt/mrrc_modern/venv/bin/python /opt/mrrc_modern/linux/box_helper.py
 Restart=always

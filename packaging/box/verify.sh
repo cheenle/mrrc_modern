@@ -150,11 +150,11 @@ else
 	bad "$(hostname).local does not resolve" \
 		"avahi-daemon is up but not answering; check for a name collision in journalctl -u avahi-daemon"
 fi
-if [ ! -S /run/mrrc/box-helper.sock ]; then
-	bad "/run/mrrc/box-helper.sock is missing or not a socket" \
+if [ ! -S /run/mrrc-box/box-helper.sock ]; then
+	bad "/run/mrrc-box/box-helper.sock is missing or not a socket" \
 		"reboot / change-name / change-timezone will be greyed out; journalctl -u mrrc-box-helper"
 else
-	mode="$(stat -c '%a %U %G' /run/mrrc/box-helper.sock 2>/dev/null)"
+	mode="$(stat -c '%a %U %G' /run/mrrc-box/box-helper.sock 2>/dev/null)"
 	ok "box helper socket ${mode:-present}"
 fi
 

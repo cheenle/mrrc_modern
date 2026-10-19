@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-SOCKET_PATH = "/run/mrrc/box-helper.sock"
+SOCKET_PATH = "/run/mrrc-box/box-helper.sock"
 SOCKET_MODE = 0o660
 #: The one uid that may ask. server.py runs as this user (User=mrrc in
 #: mrrc-modern.service); nothing else on the box has any business here.

@@ -583,6 +583,23 @@ aplay -l                            # 播放设备（TX）
 
 ⚠️ 这三样**一样都不能少**。少串口 = 没有 CAT 控制；少声卡 = 没有声音。
 
+**FT-710 面板上还要动四项**（都在 `FUNC` 里，设好再开页面）：
+
+| 菜单 | 设成 | 为什么 |
+| --- | --- | --- |
+| `RADIO SETTING` → 各模式 `MOD SOURCE` | `USB` | 不设，PTT 按下没有调制 |
+| `RADIO SETTING` → `RPTT SELECT` | `OFF` | PTT 走 CAT，不走 RTS/DTR |
+| `OPERATION SETTING` → `GENERAL` → `SCU-LAN10` | `ON` | 第三方远程软件靠这条通道取频谱；本服务端不用它，但开着不冲突 |
+| `OPERATION SETTING` → `GENERAL` → `CAT-1 RATE` | `38400` | 与本机 `MRRC_BAUD_RATE` 一致；第三方软件也读这个速率 |
+
+**再设一个发射兜底**：`OPERATION SETTING` → `GENERAL` → `TX TIME OUT TIMER`（TOT），
+连续发射到设定时间自动切回接收，**远程操作建议 3 分钟**；**FT8 / RTTY 长时间发射时设 `OFF`**，
+否则一个时隙序列会被切断。注意别和同页 `CAT-1/2/3` 的 `TIME OUT TIMER`（毫秒，CAT 指令超时）搞混。
+
+电台侧 TOT 管「物理上不许一直发」，服务端 `MRRC_PTT_MAX_TX_SECONDS`（本镜像默认 `120`）管
+「远端会话断了也要松键」——两个都开才完整。操作指南里那份带截图的步骤见
+`docs/OPERATION_GUIDE.md` §0.6.3。
+
 ![台面：盒子与电台各占一角](../website/images/W103D/web/w103d-desk.jpg)
 
 ## 11. 选机型

@@ -390,6 +390,16 @@ ss -ltn | grep 8888     # 现在应是 [::]:8888</code></pre>
 arecord -l                          # 电台的 USB 声卡（RX）
 aplay -l                            # 播放设备（TX）</code></pre>
 <p>⚠️ 这三样<strong>一样都不能少</strong>。少串口 = 没有 CAT 控制；少声卡 = 没有声音。</p>
+<p><strong>FT-710 面板上还要动四项</strong>（都在 <code>FUNC</code> 里，设好再开页面）：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>菜单</th><th>设成</th><th>为什么</th></tr></thead><tbody>
+<tr><td><code>RADIO SETTING</code> → 各模式 <code>MOD SOURCE</code></td><td><code>USB</code></td><td>不设，PTT 按下没有调制</td></tr>
+<tr><td><code>RADIO SETTING</code> → <code>RPTT SELECT</code></td><td><code>OFF</code></td><td>PTT 走 CAT，不走 RTS/DTR</td></tr>
+<tr><td><code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>SCU-LAN10</code></td><td><code>ON</code></td><td>第三方远程软件靠这条通道取频谱；本服务端不用它，但开着不冲突</td></tr>
+<tr><td><code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>CAT-1 RATE</code></td><td><code>38400</code></td><td>与本机 <code>MRRC_BAUD_RATE</code> 一致；第三方软件也读这个速率</td></tr>
+</tbody></table></div>
+<p><strong>再设一个发射兜底</strong>：<code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code>（TOT）， 连续发射到设定时间自动切回接收，<strong>远程操作建议 3 分钟</strong>；<strong>FT8 / RTTY 长时间发射时设 <code>OFF</code></strong>， 否则一个时隙序列会被切断。注意别和同页 <code>CAT-1/2/3</code> 的 <code>TIME OUT TIMER</code>（毫秒，CAT 指令超时）搞混。</p>
+<p>电台侧 TOT 管「物理上不许一直发」，服务端 <code>MRRC_PTT_MAX_TX_SECONDS</code>（本镜像默认 <code>120</code>）管 「远端会话断了也要松键」——两个都开才完整。操作指南里那份带截图的步骤见 <code>docs/OPERATION_GUIDE.md</code> §0.6.3。</p>
 <figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-desk.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-desk.jpg" alt="台面：盒子与电台各占一角" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">台面：盒子与电台各占一角</figcaption></figure>
 <h2 id="11-选机型">11. 选机型</h2>
 <pre><code class="lang-bash">mrrc-radio list        # 11 个型号，带 ✅已验证 / ⚠实验性</code></pre>

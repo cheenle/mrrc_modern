@@ -112,26 +112,30 @@
 <p><strong>配对为什么要这么久、为什么必须由浏览器点。</strong> 盒子上跑的是交互式 <code>bluetoothctl</code> （pty + <code>--agent NoInputNoOutput</code>）。这不是花活：一次性 <code>bluetoothctl pair</code> 不注册配对 agent，bluez 发出的 Pairing Request 里<strong>绑定位是 0</strong>，而 BLE HID 遥控器必须存一把密钥才能 重连，它会直接回 SMP <code>Invalid parameters</code>（<code>0x0a</code>）——链路建起来了，配对被一句话否掉。 进了 pty 之后请求变成 <code>Bonding (0x29)</code>，一次就成，bluez 随后建出 <code>CMCC_Voice_Remote Keyboard</code>。</p>
 <p><strong>只发现一台正在广播的遥控器时，页面会自己配对</strong>（不用再点「配对」）——扫描结束直接 开始配，配上就写「已配对，按键可用 ✓」。没配上时页面会把 bluez 的原话贴出来 （例如 <code>Device … not available</code> = 遥控器已经退出配对模式，<code>AuthenticationFailed</code> = 握手时它走了），照着那句话处理即可。</p>
 <p>看到页面写 <strong>「已配对，按键可用 ✓」</strong> 就成了，按一下方向键验证。</p>
-<blockquote><p>页面判断的是「键盘设备有没有真的建出来」，不是「蓝牙说配上了」。这两件事不一样， 原因见下面那节。</p></blockquote>
+<blockquote><p><strong>配对失败最常见的原因是它没进配对模式，而页面/命令不会告诉你这一点。</strong> 遥控器只在按下「OK + 返回」后的那几十秒里可以被配上；一旦超时，bluez 仍然会把它的 <strong>名字</strong>留在设备列表里（那是缓存），此时点「配对」只会得到 <code>Device … not available</code>。  现在页面与 <code>net_bt.pair()</code> 的做法是：<strong>直接配，bluez 说不可用就隔 5 秒重试，最多 6 轮</strong> （约三分钟）。不用"先等它广播"做前置判断——2026-10-19 实测，<strong>这台遥控器的广播里 没有 RSSI</strong>（<code>scan on</code> 只出 <code>[NEW] Device … CMCC_Voice_Remote</code>，别的设备才有 <code>RSSI:</code> 行），按 RSSI 判"在不在广播"会永远判成不在，操作员把键按烂也走不到配对。 重试把时序问题变成概率问题，而且失败时给出的是 bluez 的原话 + 该做什么。</p></blockquote>
 <h3 id="没有网页的时候-命令行">没有网页的时候（命令行）</h3>
 <p>SSH 进盒子（<code>root</code> 或 <code>mrrc</code>）后：</p>
 <pre><code>bluetoothctl --timeout 20 scan bredr          # 遥控器是经典蓝牙
 bluetoothctl --timeout 25 pair  &lt;地址&gt;
 bluetoothctl trust &lt;地址&gt;
 bluetoothctl info &lt;地址&gt; | grep -E "Paired|Bonded|Connected"</code></pre>
-<h3 id="配好了但按键没反应-看这一条">配好了但按键没反应？看这一条</h3>
-<p>蓝牙有个容易踩的坑：<strong>报告「配对成功」不等于链路加密成功</strong>。</p>
-<p>第一版就是这么翻车的：<code>bluetoothctl</code> 说 <code>Paired: yes</code>，但按键一个都不来。抓空口报文 才看见真相：</p>
-<pre><code>LE Start Encryption
-Encryption Change ... Encryption: Disabled      ← 加密没建立起来</code></pre>
-<p>链路是明文，遥控器就把所有属性读取都拒掉（日志里 <code>unlikely error</code> 一串）， 系统因此拼不出键盘设备。<strong>修法是重配一次：</strong></p>
-<pre><code>bluetoothctl remove 0C:F3:CE:B0:88:75
+<h3 id="配好了但按键没反应-按这个顺序排">配好了但按键没反应？按这个顺序排</h3>
+<p><code>Paired: yes</code> 不等于能用。<strong>判据只有一个</strong>：<code>/proc/bus/input/devices</code> 里出现 <code>CMCC_Voice_Remote Keyboard</code>，并且<strong>连续几秒都在</strong>（bluez 建了又拆时，单点采样会骗人）。 页面上的表现为「已配对，但按键没有响应」。</p>
+<p>两个不同的病，救法不一样：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>日志里的句子</th><th>谁在说</th><th>病</th><th>救法</th></tr></thead><tbody>
+<tr><td><code>No attribute found within the given range</code></td><td><strong>bluez 自己</strong></td><td>守护进程内存里的 GATT 数据库残缺。链路通着、密钥也在，但它拿这份坏库去读，读不到就拆设备（<code>dmesg</code> 里 <code>…0300.0002 → …0300.0004</code> 一路翻号）</td><td><strong>重启 bluetoothd</strong>：<code>sudo systemctl restart bluetooth</code>。磁盘上的 bond 原样重读，一次就成</td></tr>
+<tr><td><code>unlikely error</code>（ATT 0x0E）刷屏，<strong>且没有任何属性被读到</strong></td><td>遥控器</td><td>链路没加密。它拒掉每一次属性读取</td><td>清 bond → 控制器上下电 → 让遥控器重新进配对模式 → 再配</td></tr>
+</tbody></table></div>
+<p>第二行的 0x0E <strong>单独出现不足以判定没加密</strong>——2026-10-19 现场它在 GATT 残库的情况下也刷， 而 restart 之后同一把密钥就正常了。<strong>决定性的是 bluez 自己那句 <code>No attribute found</code></strong>： 那句话出来就是残库，别去动 bond。</p>
+<p>修复版 <code>net_bt.pair()</code> 已经按这个顺序做：配上但键盘设备不稳定 → <strong>先通过 root helper 重启 bluetoothd</strong>（无破坏性，bond 不动）→ 仍然不行才清 bond 重配。</p>
+<p>手动排障时两条都能直接敲：</p>
+<pre><code>sudo systemctl restart bluetooth              # 先试这条（最常见、最轻）
+bluetoothctl remove 0C:F3:CE:B0:88:75          # 再试这条（真·密钥对不上时）
 bluetoothctl power off ; sleep 2 ; bluetoothctl power on
-# 遥控器重新进配对模式，再 pair 一次</code></pre>
-<p>这次要看到这一行才算成：</p>
-<pre><code>Encryption: Enabled with AES-CCM</code></pre>
-<p>加密一通，<code>/proc/bus/input/devices</code> 里立刻出现 <code>CMCC_Voice_Remote Keyboard</code>， 按键开始上报。</p>
-<h2 id="3-按键表">3. 按键表</h2>
+# 遥控器重新进配对模式（取电池 10 秒，再按住 OK + 返回 5 秒），然后 pair 一次</code></pre>
+<p>那条 <code>bluetoothctl power off/on</code> 单独打不要用 <code>remove</code> 连着打：<strong>连接会话只能有一条</strong>。 两个会话同时连，bluez 会回 <code>le-connection-abort-by-local</code>（本地主动中止），而一次被中止的 服务发现会在内存里留下半份数据库——也就是上面第二行的病。</p>
+<h2 id="3-按键表-3-按键表">3. 按键表## 3. 按键表</h2>
 <div class="table-scroll"><table>
 <thead><tr><th>按键</th><th>作用</th></tr></thead><tbody>
 <tr><td><strong>语音</strong>（按住）</td><td><strong>发射</strong>，松开就停</td></tr>

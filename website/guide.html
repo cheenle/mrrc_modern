@@ -502,11 +502,19 @@ MRRC_AUDIO_RX_DEVICE=USB Audio
 MRRC_AUDIO_TX_DEVICE=USB Audio
 MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 #MRRC_SCOPE_PORT=              # 留空自动探测 FT4222 频谱口</code></pre>
-<p><strong>电台侧设置</strong>（FT-710 面板 <code>FUNC</code> → <code>RADIO SETTING</code>）：</p>
-<ul>
-<li>各模式的 <code>MOD SOURCE</code> 设为 <strong><code>USB</code></strong>（SSB 必设；AM / FM / PSK/DATA 若要用也设 USB），否则 PTT 按下没有调制。</li>
-<li><code>RPTT SELECT</code> 保持 <strong><code>OFF</code></strong>：PTT 由 CAT 命令控制，不走 RTS/DTR。</li>
-</ul>
+<p><strong>电台侧设置</strong>（FT-710 面板，四项都设好再开始）：</p>
+<ol type="1">
+<li><strong><code>FUNC</code> → <code>RADIO SETTING</code> → 各模式 <code>MOD SOURCE</code> = <code>USB</code></strong>。SSB 必设；AM / FM / PSK/DATA 若要用也设 USB，否则 PTT 按下没有调制。</li>
+<li><strong><code>FUNC</code> → <code>RADIO SETTING</code> → <code>RPTT SELECT</code> = <code>OFF</code></strong>。PTT 由 CAT 命令控制，不走 RTS/DTR。</li>
+<li><strong><code>FUNC</code> → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>SCU-LAN10</code> = <code>ON</code></strong>，并把同一页最底下那条 <strong><code>CAT-1 RATE</code> = <code>38400</code></strong>。本服务端走 USB CAT（<code>MRRC_BAUD_RATE=38400</code> 要与之相同）， 但<strong>很多第三方远程软件靠 SCU-LAN10 这条通道取频谱</strong>；把 CAT-1 速率固定成 38400， 两边（本项目与第三方）就都读得懂，不必来回改菜单。</li>
+<li><strong><code>FUNC</code> → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code>（TOT，发射超时定时器）</strong>： 连续发射到设定时间后<strong>自动切回接收</strong>，防止 PTT 卡住打出一条长时间的死载波。</li>
+</ol>
+<p><strong>TOT 怎么设</strong>：<code>FUNC</code> 旋钮 → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code> → 旋转 <code>FUNC</code> 或点数值两侧的 <code>&lt;</code> / <code>&gt;</code> 选值 → <strong>再按一下 <code>FUNC</code></strong>（或等约 3 秒自动保存）→ 多点几次 <code>BACK</code> 回到正常画面。可选 <code>OFF</code> 或 <strong>1–30 分钟</strong>；出厂默认 <code>OFF</code>（欧洲版默认 10 分钟）。</p>
+<p><strong>设好后的表现</strong>：只要开始发射就倒计时，快到点时<strong>提前约 10 秒「嘀」一声</strong>提醒，时间一到 强制回到接收状态。远程操作建议设 <strong>3 分钟</strong>做兜底；<strong>FT8 / RTTY 这类长时间连续发射的数字模式 建议设 <code>OFF</code></strong>，否则一个时隙序列会被中途切断。</p>
+<blockquote class="callout-info">
+<p><strong>别设错的那一项</strong>：同一页里还有 <code>CAT-1</code> / <code>CAT-2</code> / <code>CAT-3</code> 的 <code>TIME OUT TIMER</code>， 那是 <strong>CAT 指令超时</strong>（单位毫秒），与发射超时是两码事。名字很像，位置相邻。</p>
+</blockquote>
+<p><strong>两层兜底各管一段</strong>：电台侧 TOT 管「物理上不许一直发」，服务端 <code>MRRC_PTT_MAX_TX_SECONDS</code> （W103D 镜像默认 <code>120</code>）管「远端会话断了也要松键」。两个都开才是完整的——只开一个， 另一条路上仍然可能留下长发射。</p>
 <p><strong>音频</strong>：FT-710 的 USB 音频是 <strong>44.1 kHz 原生</strong>，服务端会把它重采样到 48 kHz 再走网络。Windows 下该声卡同样以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code> 形式枚举，<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 填 <code>USB Audio</code> 即可。</p>
 <p><strong>频谱</strong>：真频谱来自 <strong>FT4222 SPI</strong>（需要 <code>MRRC_FTDI_LIB_DIR</code> 指向含 <code>FT4222.dll</code> / <code>ftd2xx.dll</code> 的目录）；缺失时回退到 <strong>S-meter 合成频谱</strong>。发射期间频谱<strong>暂停</strong>并显示「频谱暂停」，属正常现象。</p>
 <p><strong>验证清单</strong>：</p>

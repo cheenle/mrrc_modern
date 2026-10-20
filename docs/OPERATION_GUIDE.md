@@ -139,10 +139,31 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 #MRRC_SCOPE_PORT=              # 留空自动探测 FT4222 频谱口
 ```
 
-**电台侧设置**（FT-710 面板 `FUNC` → `RADIO SETTING`）：
+**电台侧设置**（FT-710 面板，四项都设好再开始）：
 
-- 各模式的 `MOD SOURCE` 设为 **`USB`**（SSB 必设；AM / FM / PSK/DATA 若要用也设 USB），否则 PTT 按下没有调制。
-- `RPTT SELECT` 保持 **`OFF`**：PTT 由 CAT 命令控制，不走 RTS/DTR。
+1. **`FUNC` → `RADIO SETTING` → 各模式 `MOD SOURCE` = `USB`**。SSB 必设；AM / FM / PSK/DATA 若要用也设 USB，否则 PTT 按下没有调制。
+2. **`FUNC` → `RADIO SETTING` → `RPTT SELECT` = `OFF`**。PTT 由 CAT 命令控制，不走 RTS/DTR。
+3. **`FUNC` → `OPERATION SETTING` → `GENERAL` → `SCU-LAN10` = `ON`**，并把同一页最底下那条
+   **`CAT-1 RATE` = `38400`**。本服务端走 USB CAT（`MRRC_BAUD_RATE=38400` 要与之相同），
+   但**很多第三方远程软件靠 SCU-LAN10 这条通道取频谱**；把 CAT-1 速率固定成 38400，
+   两边（本项目与第三方）就都读得懂，不必来回改菜单。
+4. **`FUNC` → `OPERATION SETTING` → `GENERAL` → `TX TIME OUT TIMER`（TOT，发射超时定时器）**：
+   连续发射到设定时间后**自动切回接收**，防止 PTT 卡住打出一条长时间的死载波。
+
+**TOT 怎么设**：`FUNC` 旋钮 → `OPERATION SETTING` → `GENERAL` → `TX TIME OUT TIMER` →
+旋转 `FUNC` 或点数值两侧的 `<` / `>` 选值 → **再按一下 `FUNC`**（或等约 3 秒自动保存）→
+多点几次 `BACK` 回到正常画面。可选 `OFF` 或 **1–30 分钟**；出厂默认 `OFF`（欧洲版默认 10 分钟）。
+
+**设好后的表现**：只要开始发射就倒计时，快到点时**提前约 10 秒「嘀」一声**提醒，时间一到
+强制回到接收状态。远程操作建议设 **3 分钟**做兜底；**FT8 / RTTY 这类长时间连续发射的数字模式
+建议设 `OFF`**，否则一个时隙序列会被中途切断。
+
+> **别设错的那一项**：同一页里还有 `CAT-1` / `CAT-2` / `CAT-3` 的 `TIME OUT TIMER`，
+> 那是 **CAT 指令超时**（单位毫秒），与发射超时是两码事。名字很像，位置相邻。
+
+**两层兜底各管一段**：电台侧 TOT 管「物理上不许一直发」，服务端 `MRRC_PTT_MAX_TX_SECONDS`
+（W103D 镜像默认 `120`）管「远端会话断了也要松键」。两个都开才是完整的——只开一个，
+另一条路上仍然可能留下长发射。
 
 **音频**：FT-710 的 USB 音频是 **44.1 kHz 原生**，服务端会把它重采样到 48 kHz 再走网络。Windows 下该声卡同样以 `USB Audio CODEC` / `USB Audio Device` 形式枚举，`MRRC_AUDIO_RX_DEVICE` / `MRRC_AUDIO_TX_DEVICE` 填 `USB Audio` 即可。
 

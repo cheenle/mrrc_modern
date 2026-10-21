@@ -310,14 +310,29 @@
               "ok",
             );
           } else {
-            setStatus(
-              "上传失败：" +
-                (data.reason || "未知原因") +
-                "\n诊断包仍在：" +
-                (data.localPath || "") +
-                "\n可点「只保存到本地」再用邮件/微信发给我。",
-              "bad",
-            );
+            // 三种失败要分开说，因为它们要用户做的事完全不同：
+            // ① 服务器回了 5xx / 非 JSON（实例正在重启、隧道断了）—— 包还在本机，等十几秒重试一次；
+            // ② 服务器回了自己的理由（例如接收端不可达）—— 它给了 localPath，可以只保存到本地；
+            // ③ 没有 localPath 又没有具体理由（旧版后端）—— 只能请用户重试或手工保存。
+            //
+            // 2026-10-21 现场：实例重启时 hub 回 502（nginx 的 HTML 页，不是 JSON），页面把
+            // 空字符串拼在「诊断包仍在：」后面，用户看到一句没有下半句的话。
+            var reason = data.reason || "未知原因";
+            var lines = ["上传失败：" + reason];
+            if (data.localPath) {
+              lines.push("诊断包仍在：" + data.localPath);
+            } else {
+              lines.push("诊断包已在本机生成（编号 " + currentId + "），不会丢。");
+            }
+            if (/^HTTP 5\d\d/i.test(reason)) {
+              lines.push(
+                "服务器或隧道正忙（常见于实例重启 / 网络中断）—— 等十几秒再点一次③，" +
+                  "或先点「只保存到本地」。",
+              );
+            } else {
+              lines.push("可点「只保存到本地」再用邮件/微信发给我。");
+            }
+            setStatus(lines.join("\n"), "bad");
           }
         } catch (e) {
           setStatus("上传失败：" + e.message, "bad");

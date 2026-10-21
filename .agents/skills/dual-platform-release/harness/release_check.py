@@ -151,7 +151,7 @@ def check_artifact_facts(registry: dict, app: str,
         text = page.read_text(encoding="utf-8", errors="replace")
         if not artifact.exists():
             out.append((SKIP, fact["id"],
-                        f"{fact['artifact'].format(app=app)} not built locally — "
+                        f"{fact['artifact'].format(app=app, box=box or app)} not built locally — "
                         "cannot verify the card's bytes/SHA"))
             continue
         data = artifact.read_bytes()

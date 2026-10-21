@@ -153,8 +153,8 @@ class VersionConsistencyTests(unittest.TestCase):
         """
         top = [ln for ln in _read("CHANGELOG.md").splitlines()
                if ln.startswith("## [v")][0]
-        self.assertIn("v1.28.1", top)
-        self.assertIn('"1.28.1"', _read("packaging/windows/MRRC-Modern.iss"))
+        self.assertIn("v1.28.2", top)
+        self.assertIn('"1.28.2"', _read("packaging/windows/MRRC-Modern.iss"))
 
     def test_tests_readme_matches_the_actual_count(self):
         """The number below is the real `unittest discover` output."""

@@ -158,6 +158,12 @@ class RescueWifiTests(unittest.TestCase):
     反过来——盒子连手机。`--wifi-only` 存在的理由就是让这些断言真跑一次脚本。
     """
 
+    @classmethod
+    def setUpClass(cls):
+        # 同 PreflashEnvTests：脚本是 POSIX shell，而 Windows 构建门禁也会跑全量套件。
+        if shutil.which("bash") is None:
+            raise unittest.SkipTest("preflash.sh needs a POSIX shell (bash)")
+
     def run_wifi(self, *, extra=None, flag="1"):
         with tempfile.TemporaryDirectory() as tmp:
             env = {**os.environ, "MRRC_PREFLASH_WIFI_DIR": tmp, **(extra or {})}

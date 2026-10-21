@@ -2,7 +2,7 @@
 
 All notable changes to the MRRC Web Control project.
 
-## [Unreleased] — FT8 深路径每槽杀死 DSP worker：Fortran 要 4 MB 栈，Windows 只给 2 MB
+## [v1.28.2] — 2026-10-21 — 启动器不再把用户选的机型改回 ft710；FT-891 自己找 CAT 波特率；FT8 深路径不再每槽杀死 DSP worker
 
 ### 栈：`sync8var` 的工作数组放在**调用线程**的栈上
 
@@ -61,9 +61,7 @@ Fortran 用 `share_dir = '.'`（`prog_args.f90:4`）**相对当前工作目录**
 **边界**：`ft8/dsp/` 一个字节没动，所以四条 DSP 构建路径不需要重编；但**两个安装包必须重出**
 才会有正确行为（盒子镜像本来就带这个文件，chdir 对它是无操作的兼容）。
 
-## [Unreleased] — 启动器不再把用户选的机型改回 ft710；Yaesu 家族自己找 CAT 波特率
-
-### 启动器：机型白名单来自注册表，探测结果不再覆盖用户的选择
+### 启动器：机型白名单来自注册表（FT-891 / FTX-1 都是受害者），探测结果不再覆盖用户的选择
 
 一台 **FT-891** 上报「设备不工作」（包 `20261021-123324-81ab`，Windows 1.28.1），日志里三行说明一切：
 

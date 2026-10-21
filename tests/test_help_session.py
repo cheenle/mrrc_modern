@@ -505,6 +505,8 @@ class HeartbeatTests(unittest.TestCase):
         s.close("user")
 
 
+@unittest.skipUnless(os.name == "posix",
+                     "pty 是 POSIX 的：Windows 的 powershell pty 路仍是未验边界")
 class ConnectionCountingTests(unittest.TestCase):
     """「已连接」这一个数字：真开一次 shell 会话，它必须变成 1。
 

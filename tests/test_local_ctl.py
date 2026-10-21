@@ -6,12 +6,16 @@ the source: 24-byte ``input_event`` structs on 64-bit Linux.
 """
 
 import json
+import os
 import struct
 import tempfile
 import unittest
 from pathlib import Path
 
 import local_ctl as lc
+
+#: 控制 socket 用 AF_UNIX（Unix 域套接字）+ 路径权限，两者都只存在于 POSIX。
+_POSIX = os.name == "posix"
 
 
 def _ev(ev_type: int, code: int, value: int) -> bytes:
@@ -353,6 +357,7 @@ class TestStateAbsorption(unittest.TestCase):
         self.assertEqual(ctl.freq_hz, 7_000_000)
 
 
+@unittest.skipUnless(_POSIX, "控制 socket 是 AF_UNIX + 路径权限，Windows 上没有")
 class TestControlSocket(unittest.TestCase):
     """End-to-end over a real Unix socket: what the box actually does."""
 

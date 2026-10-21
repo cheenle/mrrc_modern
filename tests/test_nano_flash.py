@@ -1,5 +1,6 @@
 """固件升级的状态机、资产挑选与校验（spec §4.10）。无设备、无 dfu-util、无网络。"""
 import hashlib
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -131,6 +132,8 @@ class UsbTest(unittest.TestCase):
                                             probe=lambda: False, sleep=lambda s: None))
 
 
+@unittest.skipUnless(os.name == "posix",
+                     "dfu-util 的 argv 用 POSIX 路径（/tmp/fw.bin）；刷写本身只在盒子上做")
 class DfuArgsTest(unittest.TestCase):
     def test_exact_argv(self):
         args = flash.dfu_args(Path("/tmp/fw.bin"))

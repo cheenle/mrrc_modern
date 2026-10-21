@@ -14,13 +14,18 @@ path at all: the daemon runs as the same user as the server and talks over a
 
 import asyncio
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 import server as srv
 
+#: 服务端的本地控制 socket 走 AF_UNIX（`/run/mrrc/localctl.sock`），只存在于 POSIX。
+_POSIX = os.name == "posix"
 
+
+@unittest.skipUnless(_POSIX, "本地控制 socket 是 AF_UNIX，Windows 上没有")
 class LocalControlSocketTests(unittest.TestCase):
     def _roundtrip(self, lines):
         """Open the real handler on a temp socket, send lines, return replies."""

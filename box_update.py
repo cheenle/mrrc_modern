@@ -255,6 +255,13 @@ def watchdog_command(home: Path, rollback: Path, *, after: int = WATCHDOG_AFTER_
     "回滚了，原因见日志".
     """
     marker = update_dir(home) / "last.json"
+    # The command is a **POSIX shell** script for the box, so every path in it must
+    # be POSIX-spelled.  `str(Path("/tmp/x"))` is `\tmp\x` when this code is
+    # exercised on Windows (the suite runs there too) — the shell then gets a
+    # literal backslash path and the rollback silently does nothing.
+    home_posix = Path(home).as_posix()
+    rollback_posix = Path(rollback).as_posix()
+    marker_posix = Path(marker).as_posix()
     return (
         f"sleep {after}; "
         f"ok=0; for i in 1 2 3; do "
@@ -262,8 +269,8 @@ def watchdog_command(home: Path, rollback: Path, *, after: int = WATCHDOG_AFTER_
         f"  sleep {max(5, poll // 3)}; "
         f"done; "
         f"if [ \"$ok\" = 0 ]; then "
-        f"  tar -xzf {rollback} -C {home} && "
-        f"  printf '%s' '{{\"rolledBack\": true}}' > {marker}; "
+        f"  tar -xzf {rollback_posix} -C {home_posix} && "
+        f"  printf '%s' '{{\"rolledBack\": true}}' > {marker_posix}; "
         f"  {_restart_command(home)}; "
         f"fi"
     )

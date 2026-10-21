@@ -24,7 +24,10 @@ def _tree(root: Path, files: dict) -> Path:
     for rel, content in files.items():
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        # newline="\n": 这台机器可能是 Windows（构建门禁在 VM 上跑全量套件），
+        # 默认的文本模式会把 \n 翻成 \r\n，回滚包里的字节就与断言不符 ——
+        # 而盒子上是 Linux，它看到的永远是 LF。
+        path.write_text(content, encoding="utf-8", newline="\n")
     return root
 
 

@@ -1,4 +1,5 @@
 """NanoVNA 协议层测试：真机抓到的字节当 fixture，设备对象用假传输，不碰硬件。"""
+import os
 import struct
 import unittest
 from unittest.mock import patch
@@ -222,6 +223,8 @@ class DeviceTest(unittest.TestCase):
             dev.recall_cal(9)
 
 
+@unittest.skipUnless(os.name == "posix",
+                     "NanoVNA 的端口发现是 POSIX 路径语义（/dev/serial/by-id/…）")
 class PortDiscoveryTest(unittest.TestCase):
     def test_explicit_env_wins(self):
         got = vna.discover_port({"MRRC_NANO_PORT": "/dev/ttyACM7"})

@@ -1,20 +1,20 @@
 {
- "latest": "1.28.1",
- "installer": {
-  "version": "1.28.1",
-  "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.1-Windows-x64-Setup.exe",
-  "sha256": "cfbeacc75e899ed1ff04a6a9da5a9d37d3f0200d89b77440215266eddde33938",
-  "size": 79386940
- },
- "minSupported": "",
- "mandatory": false,
- "releasedAt": "2026-10-18T17:45:00",
- "notes": "1.28.1：云入口不会再把实例证书孤儿化——同名且可用的证书会被逐字节复用，重建入口页后点一次「连接」即可自愈（现场整夜 502 的根因）；FT8 深路径的 DSP worker 不再被原生 Fortran 的 stop 当场杀掉，worker 自己的日志落到 logs/ft8-worker.log 并被诊断包收集；静态资源实现条件 GET（304）与分层缓存，首屏不再每次重传 534 KB 的 WASM。修复：带扩展名的缺失静态文件回 404（此前会拿到 40 KB 的首页并被当成图标）。",
- "boxLine": {
-  "version": "1.28.4",
-  "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.4.tar.gz",
-  "sha256": "2429343d526230a6c79f4a8906804e6464636507525f41ba89b306687c28a640",
-  "size": 18640432,
-  "notes": "1.28.4：☰ 菜单新增「性能负载」——CPU/内存/磁盘 IO/网络/温度主频，加上服务端自己的事件循环延迟，顶上一句话判清是盒子不够快还是服务端自己卡住。另含 1.28.3 的蓝牙自愈（重启守护进程不动密钥）与 root 助手套接字被服务端重启删掉的修复。"
- }
+  "latest": "1.28.2",
+  "installer": {
+    "version": "1.28.2",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.2-Windows-x64-Setup.exe",
+    "sha256": "183b5c497abb4a0e9795e5bdf8b64eb097c921097aef17269718413918423ba3",
+    "size": 79703701
+  },
+  "minSupported": "",
+  "mandatory": false,
+  "releasedAt": "2026-10-21T13:28:16",
+  "notes": "1.28.2：启动器不再把用户选的机型改回 ft710——白名单改为从后端注册表派生，探测结果只填空、不覆盖（FT-891/FTX-1/FTDX10/IC-705/7610/7760 都受此影响，此前每次启动都会被改回 ft710 并用 FT-710 后端驱动）；FT-891 的 CAT 波特率默认改回手册出厂值 4800，配置速率沉默时控制器会自己试完 4800/9600/19200/38400 四档并给出可照做的告警；FT8 深路径不再每槽杀死 DSP worker（Fortran 要约 4 MB 栈，Windows 只给线程 2 MB，溢出即静默消失——请求循环现在跑在 64 MB 栈的线程上）；ALLCALL7.TXT 首次进包（此前安装版的深路径呼号库是空的）；🐞 页上传失败时不再输出半句「诊断包仍在：」。",
+  "boxLine": {
+    "version": "1.28.4",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.4.tar.gz",
+    "sha256": "2429343d526230a6c79f4a8906804e6464636507525f41ba89b306687c28a640",
+    "size": 18640432,
+    "notes": "1.28.4：☰ 菜单新增「性能负载」——CPU/内存/磁盘 IO/网络/温度主频，加上服务端自己的事件循环延迟，顶上一句话判清是盒子不够快还是服务端自己卡住。另含 1.28.3 的蓝牙自愈（重启守护进程不动密钥）与 root 助手套接字被服务端重启删掉的修复。"
+  }
 }

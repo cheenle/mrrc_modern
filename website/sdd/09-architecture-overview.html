@@ -255,13 +255,26 @@
 <li><strong>Four guards</strong>: refuse everything while transmitting (CH0 sits on the antenna — tens of watts is a burnt front end), one operation at a time, never steal the CAT port, and <code class="scope-code">listen</code>/<code class="scope-code">sdr</code> sessions are refused. Status polling shares the same lock as scans (concurrent readers on one pyserial handle steal frame bytes) and reports <code class="scope-code">busy</code> separately from <code class="scope-code">connected</code> — conflating them made the page report “device offline” during every scan.</li>
 <li><strong>Device state</strong>: every scan restores the device’s on-screen sweep. Display state (trace format, scale, marker) and the sweep live <strong>outside</strong> <code class="scope-code">config</code>, so <code class="scope-code">saveconfig</code> alone cannot persist them; the field preset therefore also writes a SAVE/RECALL slot (slot 4), which is what makes the box usable standalone in the field.</li>
 </ul>
+<h2 id="performance-load-page-perf-ad-031">9.12 Performance &amp; Load Page (<code class="scope-code">/Perf</code>, AD-031)</h2>
+<pre class="scope-code"><code>browser ──GET /api/perf (1 Hz)──&gt; server.py
+   ├── host_perf.Sampler.tick()  ──&gt; /proc/{stat,loadavg,meminfo,diskstats,net/dev,&lt;pid&gt;/*}, /sys (thermal, cpufreq)
+   └── in-process: event-loop lag, socket counts, audio queue, session metrics</code></pre>
+<p>The page answers one question — <em>the picture is slow: is the box out of CPU, out of IO, or is the server itself stuck?</em> — so the numbers must be attributable, and the three answers have different fixes.</p>
+<ul>
+<li><strong>Everything is a delta.</strong> <code class="scope-code">Sampler</code> keeps the previous raw reading and a clock; the first <code class="scope-code">tick()</code> returns <code class="scope-code">available: false</code> rather than zeroes (“0 % CPU” and “no idea yet” must not look the same). Rates: CPU busy/iowait/steal, per-core busy, disk bytes/s and busy %, network bytes/s per interface, per-process CPU % over the interval.</li>
+<li><strong>Event-loop lag is the one number no external tool can supply.</strong> A 250 ms <code class="scope-code">sleep</code> that returns after 900 ms means something held the loop (a blocking CAT write, an encoder on the loop, a PTY call). It is measured in-process with a slow-decaying peak, and it outranks CPU in the verdict: idle CPU with a 900 ms lag is <em>not</em> “the box needs a bigger CPU”.</li>
+<li><strong>Attribution, not totals</strong>: top processes are named from <code class="scope-code">cmdline</code> because every one of our processes is called <code class="scope-code">python</code> (<code class="scope-code">server.py</code>, <code class="scope-code">scope_pipe</code>, <code class="scope-code">sdr_pipe</code>, <code class="scope-code">ft8-worker</code>); partitions are excluded from <code class="scope-code">/proc/diskstats</code> (their counters are already inside the whole device, which is how a “disk busy 140 %” appears); loopback and tunnels are excluded from the network table (the radio’s own spectrum/audio would otherwise look like network load).</li>
+<li><strong>Absent ≠ zero</strong>: a missing thermal zone is omitted from the snapshot, never reported as 0 °C — on this box that reads as “cool, keep going”, the opposite of the truth.</li>
+<li><strong>Guards</strong>: full session only — <code class="scope-code">listen</code> and <code class="scope-code">sdr</code> sessions get 403 (host internals are not for strangers), plus the usual token check (401). Read-only; no new privilege surface.</li>
+<li><strong>Verdict</strong> (<code class="scope-code">host_perf.verdict</code>) is deliberately conservative and lives in one place: it names a bottleneck only when the number is unambiguous, and says “看不出来” otherwise. Load 3.0 on four cores is not reported as a problem.</li>
+</ul>
     </main>
 </div>
 
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.03 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.04 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

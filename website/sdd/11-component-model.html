@@ -459,6 +459,11 @@
 </thead>
 <tbody>
 <tr>
+<td><code class="scope-code">host_perf.py</code></td>
+<td>主机与服务的负载 / IO / 网络采样（AD-031）：<code class="scope-code">/proc/{stat,loadavg,meminfo,diskstats,net/dev}</code> 与 <code class="scope-code">/sys</code> 的温控/主频，加上进程级 CPU（名字取自 <code class="scope-code">cmdline</code>，否则全是 <code class="scope-code">python</code>）</td>
+<td>由 <code class="scope-code">GET /api/perf</code> 与 <code class="scope-code">/Perf</code> 页读取；所有速率是两次采样的差值，第一拍返回 <code class="scope-code">available: false</code> 而不是 0</td>
+</tr>
+<tr>
 <td><code class="scope-code">session_metrics.py</code></td>
 <td>会话遥测聚合与周期日志（AD-023）</td>
 <td>由 <code class="scope-code">GET /api/session_metrics</code> 读取</td>
@@ -542,7 +547,7 @@ PTT button touchend/mouseup:
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.03 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.04 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

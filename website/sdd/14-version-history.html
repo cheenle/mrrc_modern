@@ -123,6 +123,12 @@
 </thead>
 <tbody>
 <tr>
+<td>SDD V3.04</td>
+<td>2026-10-21</td>
+<td>pi</td>
+<td><strong>v1.28.2 发布：启动器不再把用户选的机型改回 ft710；FT-891 自己找 CAT 波特率；FT8 深路径不再每槽杀死 DSP worker。</strong> ① 本版内容见 CHANGELOG 的 v1.28.2 条目与 V3.03 之后的两次修复提交（<code class="scope-code">5c9fedf</code> 启动器/波特率、<code class="scope-code">48b4a41</code> FT8 栈与 ALLCALL7.TXT）。② <strong>产物</strong>（均出自发布提交 <code class="scope-code">8f10d80</code>）：macOS <code class="scope-code">MRRC-Modern-v1.28.2-arm64.dmg</code> <strong>85,666,868 bytes</strong> <code class="scope-code">7c0f08e4…</code>；Windows <code class="scope-code">MRRC-Modern-v1.28.2-Windows-x64-Setup.exe</code> <strong>79,703,701 bytes</strong> <code class="scope-code">183b5c49…</code>（VM 与 Mac 跨主机一致，整包下载复核一致）。③ <strong>Windows 四层验收</strong>：三证合一（mtime 2026-10-21 13:28:16、size/SHA 均≠上一版、<code class="scope-code">version.txt</code>=1.28.2）；结构（三 exe、<code class="scope-code">_internal\ALLCALL7.TXT</code> <strong>首次在包内</strong>、<code class="scope-code">cty.dat</code>、fleet 13、junk 0、无密钥形状文件）；第 3 层符号走查（<code class="scope-code">_run_with_large_stack</code>/<code class="scope-code">share_dir</code>/<code class="scope-code">WORKER_STACK_BYTES</code>/<code class="scope-code">registered_models</code>/<code class="scope-code">_adopt_cat_rate</code>/<code class="scope-code">CAT_RATE_LADDER</code>/<code class="scope-code">as_posix</code> 全部命中）；第 4 层洁净室（隔离 <code class="scope-code">LOCALAPPDATA</code> + <code class="scope-code">model=ft891</code>：机型未被改写、未重探、<code class="scope-code">https /login</code> 200、安装目录零写入）。套件：VM <strong>2761 OK（59 skip）</strong>、macOS <strong>2782 OK（1 skip）</strong>、<code class="scope-code">tests/ft8</code> <strong>1003 passed</strong>。④ <strong>发布门禁暴露并修掉的真缺陷</strong>：<code class="scope-code">box_update</code> 的看门狗命令是给 Linux 的 shell 却用 <code class="scope-code">str(Path)</code> 拼路径（Windows 上会得到 <code class="scope-code">\tmp\rollback.tar.gz</code>，回滚静默失效）→ 改 <code class="scope-code">as_posix()</code>；<code class="scope-code">release_check</code> 的 <code class="scope-code">{box}</code> 占位符在产物未构建时 <code class="scope-code">KeyError</code>；六组只在 POSIX 成立的测试补平台守卫（AF_UNIX 控制 socket / pty / bash / <code class="scope-code">/dev</code> 路径）——它们自 v1.28.1 后合并、<strong>从未在 Windows 上被跑到</strong>。⑤ <strong>文档纪律的一处自我纠正</strong>：机械替换版本号时曾把树莓派镜像指南写成「当前镜像是 v1.28.2」，而站上那张仍是上一版构建 → <code class="scope-code">ded8d30</code> 改回如实描述（通用下载名 + 真实 size/SHA + 注明来自上一版）。⑥ <strong>未做</strong>：树莓派镜像未重出；FTX-1 profile 的 20 项 CAT 不符（<code class="scope-code">docs/ftx1-technical-analysis.md</code> 附录 C）仍需真机，不在本版范围。</td>
+</tr>
+<tr>
 <td>SDD V3.03</td>
 <td>2026-10-18</td>
 <td>pi</td>
@@ -1025,7 +1031,7 @@ SDD V2.15 | 2026-07-31 | Codex | <strong>Windows TX end-to-end audit and diagnos
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.03 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.04 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

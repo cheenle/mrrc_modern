@@ -132,6 +132,17 @@ with tempfile.TemporaryDirectory() as tmp:
     - **先确认应答者是本次实例，再相信端点结果**：上一次跑留下的野实例还占着端口，于是新实例没绑上、日志只有 2 行，而 `/login` 依然 200（旧实例应的）。断言方式：**等本次实例自己写下 `starting on port <端口>`**，再往下检查。
     - **符号走查必须用子串匹配**：`print("Detecting the radio on %d …" % (...))` 在 `co_consts` 里是**整条格式化串**，用精确集合成员查会报假 MISS。`sym in consts` 之外还要 `any(sym in c for c in consts)`。
     - 一句话：**“检查通过”必须是可核对的事实，不是脚本自己说的。** 每次问一句：这条断言在坏输入上会不会也绿？
+22a. **全量套件也要在 Windows 上跑得通 —— POSIX-only 的测试必须自带平台守卫。**
+本仓的服务端有一批只在盒子/桌面上成立的功能（AF_UNIX 本地控制 socket、pty 远程协助、
+`bash` 驱动的 preflash、`/dev/serial/by-id` 的 NanoVNA），而构建门禁在 VM 上是 `python -m unittest
+discover -s tests` 全量跑。v1.28.2 第一次把这些合并后的代码送上 Windows 门禁，一次冒出 **27 红**
+（11 个控制 socket、10 个 preflash、2 个回滚包、1 个 pty、2 个 nano 路径）；它们**不是运行时缺陷**，
+但门禁红着就出不了包。规矩：这类测试用 `@unittest.skipUnless(os.name == "posix", 理由)` 或
+`shutil.which("bash")` 守卫，**理由要写清楚是哪种接口不存在**；反过来，任何一处"只在 Windows 红"
+都要先问它是不是真的跨平台缺陷（`WinError 32` 那条就是真的）——v1.28.2 就在这批红里抓到两个真缺陷：
+`box_update` 的看门狗命令是给 Linux 的 shell 却用 `str(Path)` 拼路径（Windows 上得到
+`\tmp\rollback.tar.gz`，回滚静默失效），以及测试用 `write_text` 让 `\n` 变 `\r\n`。
+
 22. **洁净室要跑冻结核的 *Launcher*，不只是 Server。** Server 免检不了首次运行探测那条路（它住在 `macos/first_run.py`，由启动器调用）—— 而 v1.25.0 的头号缺陷正好在那儿（探测永久卡死）。做法：给一个**隔离的 `LOCALAPPDATA`** + **预先放一份配置在空闲端口**（这道 VM 上的 8888 是常驻租户实例，不预置端口启动器会直接说"Already running"然后什么都不做）+ `$env:BROWSER='no-such-browser'`（webbrowser 静默失败，不弹窗）。然后断言三件事：**探测前那行打出来了**、配置最终settle（口令/`MRRC_FIRST_RUN_DONE=1`）、以及它真的把 server 起起来了（`https://127.0.0.1:<空闲端口>/login` = 200）。
 23. **PyInstaller 的 workpath 缓存会把“已修复”的源码留在旧字节码里 —— 门禁全绿、`version.txt` 对、size/SHA 也都变了，包里却是旧的。** 实测 v1.25.3：`server.py` 已改（修复 `ptt` 存活时钟），但它的 mtime（Oct 4 23:04）**早于** v1.25.2 那次构建的缓存（`build\pyinstaller\...\Analysis-00.toc`，Oct 5 07:46）—— tar 会原样保留构建 Mac 的 mtime，而 PyInstaller 只在 (size, mtime) 变化时重分析。结果只有 `COLLECT-00.toc` 被重写，`MRRC-Modern-Server.exe` 的 mtime 是新的、大小与 SHA 也都变了，**冻进去的却是修复前的 `server.py`**。判据（第 3 层符号走查）：拿 frozen 的 `_execute_set_command` 与源码编译出的逐字节比对 —— 当时差 10 条指令、内嵌 genexpr 的行号 2469 vs 2484（正好是本次修复加的 15 行）、`_tx_hb_capable`/`_tx_hb_last` 只在源码里。修法：`build.ps1` 在调用 PyInstaller **之前** `Remove-Item "build\pyinstaller" -Recurse -Force`（`build.sh` 早已清自己的 workpath），并加守卫测试（删掉该行即变红）。**纪律：看 mtime/size/SHA 不够 —— 新代码在不在包里只认第 3 层；而构建前先清 `build\pyinstaller`。**
 

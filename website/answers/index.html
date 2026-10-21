@@ -128,6 +128,50 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261021-123324-81ab">
+      <header>
+        <span class="id">20261021-123324-81ab</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">使用问题 · 2026-10-21 12:40</span>
+      </header>
+      <h3>FT-891设备不工作</h3>
+      <p class="verdict">服务端把电台型号选成了 FT-710，而实际接的是 FT-891：CAT 握手用错后端（No ID response）、频谱去开 FT-710 才有的 FT4222 器件（必失败）。改选 Yaesu FT-891（含实验性发信开关）即可。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>型号错配是根因：diagnostics/env.json 里 radio.model=&quot;ft710&quot;、display_name=&quot;Yaesu FT-710&quot;、scope_type=&quot;ft4222&quot;，而 problem.txt 写的是「FT-891设备不工作」。</li>
+        <li>CAT 侧证据：logs/stdout.log『Radio model: ft710, serial port: [已隐去] @ 38400 baud』→『Opening serial port [已隐去] at 38400 baud』→『No ID response from radio on [已隐去]. Check connection.』——FT-710 后端等自己的 ID 应答，串口物理上连上了（serial_connected=true）但对端不是 FT-710，所以没有应答。</li>
+        <li>频谱侧证据：logs/server.log 反复出现 scope_pipe: libs_loaded:ft4222=FT4222.dll:ftd2xx.dll → open_failed:attempt_1..5:error_2 → spi_init_failed:all_attempts → fatal:cannot_open_device，并每 1 s 重启子进程（10028 条）。FT4222 是 FT-710 内置的频谱芯片；FT-891 没有该芯片，也没有任何频谱协议（SDD/14-version-history.md:152『The Yaesu ASCII-CAT family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891) has no scope protocol at all, so it only ever shows the synthetic spectrum』），因此这串报错是选错型号的必然结果，不是硬件坏。</li>
+        <li>历史对账（不构成回归）：FT-891 于 v1.25.4 / SDD V2.72（2026-10-05）注册为第 11 个机型（CHANGELOG.md:1010-1012『MRRC_RADIO_MODEL=ft891 可选，无真机验证（AD-019），发信另需 MRRC_ALLOW_UNVERIFIED_TX=1，不出频谱流』，SDD/14-version-history.md:36）。当前包为 1.28.1，已含该后端（backends/__init__.py:33 &quot;ft891&quot; → YaesuBackend/FT891Backend），所以『支持不存在』这条可以排除，属设置项没切。</li>
+        <li>可达性证据：连接设置的下拉里已有该项（static/index.html:659 option value=&quot;ft891&quot; →『Yaesu FT-891（实验性，仅接收，需外接声卡）』），profile 默认速率 38400（backends/yaesu/yaesu_profiles.py:411 default_baud=38400），与日志里的 38400 一致，切换后不必改波特率。</li>
+        <li>音频先决条件：FT-891 没有 USB 声卡（yaesu_profiles.py:488-490『The FT-891 has no USB sound card (the USB port is CAT only)』、audio_name_hints=() 即自动匹配无提示），必须外接声卡/DATA 接口。env.json 里确有『麦克风 (USB Audio Device)』『扬声器 (USB Audio Device)』且 configured_rx 指向 USB Audio Device，说明外接声卡在，但 TX 统计 written=0（从未发射过）。</li>
+        <li>附带观察（与本次故障无因果关系，供后续跟进）：FT8 深路径 worker 反复退出『ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 3, restarts 2)』并回落到 fast 结果（logs/server.log:『deep decode path failed; keeping the fast results』），且 summary 记录 48 次启动；启动次数与 generation 递增说明这些退出现在多发生在进程重启期间，指向的是 FT8/重启行为而非 FT-891 连接。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>在应用内打开「连接设置」，把『电台型号』下拉从 Yaesu FT-710 改为 **Yaesu FT-891**（等价于设置 MRRC_RADIO_MODEL=ft891），保存并让服务重启。</li>
+        <li>串口保持日志里已能打开的 [已隐去]、38400 8N1（FT-891 profile 默认 38400）；同时核对电台菜单里的 CAT RATE 是否为 38400、CAT 是否使能，使两边一致。</li>
+        <li>接受 FT-891 的两个机型限制：它没有任何频谱流，瀑布图只会是合成的 S 表曲线（切过来后 scope_pipe/FT4222 那串报错会自动消失，也可以不管它）；发信默认被门禁拒绝，需要发射就设 MRRC_ALLOW_UNVERIFIED_TX=1（该机型无真机验证、且只有 HF+6m）。</li>
+        <li>音频必须走外接声卡：在设置里把接收/发射设备都指到『USB Audio Device』（当前 env 已如此，确认发射侧也选中它，或指向 DATA/ACC 接口的声卡），并确认电台菜单的 DATA/USB 调制输入源与之一致。</li>
+        <li>暂时不要在 FT-891 上打开 FT8 工作模式做验证——先确认调频/模式/接收音频正常（FT8 会额外触发上面那条 DSP worker 退出的噪声日志，混在一起不好判断）。</li>
+        <li>若切到 ft891 后仍然是『串口开了但没有 ID/频率不动』，请再报一次诊断包并注明：COM 口号、电台菜单 CAT RATE/CAT RTS 值、外接声卡型号——那时才是 FT-891 profile 的现场参数需要核对。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">diagnostics/env.json: &quot;radio&quot;: {&quot;model&quot;: &quot;ft710&quot;, &quot;display_name&quot;: &quot;Yaesu FT-710&quot;, &quot;scope_type&quot;: &quot;ft4222&quot;, &quot;tx_gated&quot;: false, &quot;serial_connected&quot;: true}</li>
+        <li class="ev">problem.txt: FT-891设备不工作</li>
+        <li class="ev">logs/stdout.log: 2026-10-21 12:30:00,954 [INFO] mrrc: Radio model: ft710, serial port: [已隐去] @ 38400 baud</li>
+        <li class="ev">logs/stdout.log: 2026-10-21 12:30:02,794 [WARNING] mrrc.backend.ft710.cat: No ID response from radio on [已隐去]. Check connection.</li>
+        <li class="ev">logs/server.log: scope_pipe: libs_loaded:ft4222=FT4222.dll:ftd2xx=ftd2xx.dll / scope_pipe: open_failed:attempt_1..5:error_2 / scope_pipe: spi_init_failed:all_attempts / scope_pipe: fatal:cannot_open_device</li>
+        <li class="ev">diagnostics/summary.txt: 频谱：出现 S 表合成回退 —— 真实频谱（FT4222 / CI-V 0x27）未工作；启动次数：48 次</li>
+        <li class="ev">CHANGELOG.md:1010-1012: FT-891（SDD V2.72）：第 11 个注册键、Yaesu 家族第 5 个 profile。实验性、仅接收 —— MRRC_RADIO_MODEL=ft891 可选，无真机验证（AD-019），发信另需 MRRC_ALLOW_UNVERIFIED_TX=1，不出频谱流。</li>
+        <li class="ev">SDD/14-version-history.md:152: The Yaesu ASCII-CAT family (FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891) has no scope protocol at all, so it only ever shows the synthetic spectrum.</li>
+        <li class="ev">backends/__init__.py:33: &quot;ft891&quot;: (&quot;backends.yaesu.backend&quot;, &quot;FT891Backend&quot;)</li>
+        <li class="ev">static/index.html:659: &lt;option value=&quot;ft891&quot;&gt;Yaesu FT-891（实验性，仅接收，需外接声卡）&lt;/option&gt;</li>
+        <li class="ev">backends/yaesu/yaesu_profiles.py:411 default_baud=38400 / :488 The FT-891 has no USB sound card (the USB port is CAT only)</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>backends/yaesu/yaesu_profiles.py:FT891（模型已存在，无需改代码；问题是 MRRC_RADIO_MODEL 选了 ft710）</code></p>
+    </article>
     <article class="card" id="20261017-225430-d996">
       <header>
         <span class="id">20261017-225430-d996</span>
@@ -737,7 +781,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-17 23:11（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-21 12:40（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

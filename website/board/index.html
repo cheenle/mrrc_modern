@@ -31,9 +31,14 @@ h1{font-size:21px;margin:0 0 4px}
 <h1>🐞 FDE 看板 — 上报 → 分类 → 排期 → 后台迭代</h1>
 <p class="muted">分类即决策：<b>noise</b> → 已答复闭环（无需代码）· <b>bug</b> → 自动排期进入无人值守实施（独立 <code>fde/</code> 分支 + 全量测试绿才提交，main 不受影响）· <b>feature</b> → 待决策（操作员排期）。
 用户侧结论在 <a href="../answers/">答复页</a>。
-共 23 条 · 待决 8 · 已排期 0 · 已答复 11 · 已提交 0 · 最后更新 2026-10-19 08:33（自动生成，勿手改）</p>
+共 25 条 · 待决 9 · 已排期 0 · 已答复 12 · 已提交 3 · 最后更新 2026-10-21 13:45（自动生成，勿手改）</p>
 <div class="board">
-<div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>8</span></h2><div class='card' id='20261018-153031-3df4'>
+<div class='col' id='backlog'><h2>待决策（新需求）<span class='n'>9</span></h2><div class='card' id='20261020-204928-9c3c'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261020-204928-9c3c</code><span class='t'>2026-10-20 20:50</span></div>
+<p class='title'>包内日志自证：自动体检的两条结论（S 表合成回退、按崩溃排查）都不成立 —— 真 FT4222 频谱在 19:23:30 已出首帧并连续跑了 84041 帧、音频停滞 9052 s 后当场自愈、Traceback 指向与电台无关的 Nano</p>
+<p class='hint'>support_bundle.py:summarize_log（S-meter fallback 判定应要求在整段日志中从未出现 `scope_pipe: first frame received` 才下结论；启动次数/时间跨度应取 min/max 时间戳并区分 `log.exception` 产生的 traceback）</p>
+</div>
+<div class='card' id='20261018-153031-3df4'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261018-153031-3df4</code><span class='t'>2026-10-18 15:42</span></div>
 <p class='title'>包内没有证据显示服务端把 RX 音频做小了（同一会话里 tap 抓到 peak 9065/32767 属正常电平），音量上限卡在「电台 AF 增益 + App 播放增益 min(10, vol/255×boost)」；另外发现 1.27.0</p>
 <p class='hint'>ft8/core/worker.py:handle_decode（shared_memory_unavailable 唯一来源）/ ft8/engine/dsp_decode.py:SupervisorDecoder._ensure_segment；音频设备解析见 audio_handler.py 设备名→索引路径</p>
@@ -74,7 +79,13 @@ h1{font-size:21px;margin:0 0 4px}
 </div></div>
 <div class='col' id='scheduled'><h2>已排期（bug 自动）<span class='n'>0</span></h2><p class='empty'>—</p></div>
 <div class='col' id='in_progress'><h2>实施中<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>11</span></h2><div class='card' id='20261007-083527-6536'>
+<div class='col' id='answered'><h2>已答复（无需代码）<span class='n'>12</span></h2><div class='card' id='20261021-123324-81ab'>
+<div class='tags'><span class='k k-noise'>noise</span><code>20261021-123324-81ab</code><span class='t'>2026-10-21 12:40</span></div>
+<p class='title'>服务端把电台型号选成了 FT-710，而实际接的是 FT-891：CAT 握手用错后端（No ID response）、频谱去开 FT-710 才有的 FT4222 器件（必失败）。改选 Yaesu FT-891（含实验性发信开关）即可。</p>
+<p class='hint'>backends/yaesu/yaesu_profiles.py:FT891（模型已存在，无需改代码；问题是 MRRC_RADIO_MODEL 选了 ft710）</p>
+<p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
+</div>
+<div class='card' id='20261007-083527-6536'>
 <div class='tags'><span class='k k-noise'>noise</span><code>20261007-083527-6536</code><span class='t'>2026-10-16 21:56</span></div>
 <p class='title'>本机服务与电台一切正常（启动完整、[已隐去] 已连、频谱/发射正常），502 出现在云端入口→本机隧道的链路；这与本仓记录过的『入口 502 而租户侧一切看起来正常』同签名，1.25.3 应已包含相关修复 → 按回归排查。</p>
 <p class='hint'>cloud_hub.py:TunnelProcess（隧道启动/注册）+ server.py:_cloud_start_tunnel（启动时自拉隧道、证书判据）</p>
@@ -133,28 +144,28 @@ h1{font-size:21px;margin:0 0 4px}
 <p class='title'>无在发产品缺陷：录音「dropped/queue full」签名与 V2.44/V2.45（v1.15.0 发布）修复的写入端生命周期缺陷同签名，但均为 2026-09-12 旧日志、当前 v1.18.1 已含修复（server.py:34</p>
 <p class='note'>决策备注：自动分类：环境/误报，答复页已回</p>
 </div></div>
-<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>0</span></h2><p class='empty'>—</p></div>
-<div class='col' id='failed'><h2>实施失败（已回滚）<span class='n'>3</span></h2><div class='card' id='20261017-225430-d996'>
-<div class='tags'><span class='k k-bug'>bug</span><code>20261017-225430-d996</code><span class='t'>2026-10-19 08:33</span></div>
-<p class='title'>Launcher 的首启探测白名单 `VALID_MODELS` 只含 ft710/ic7300/ic7300mk2，所选 ftx1 因此每次启动都被判为「未配置」，探测到 Yaesu 应答后把型号改写成 ft710 —— 于是续跑成 FT</p>
-<p class='hint'>macos/first_run.py:VALID_MODELS / needs_first_run / apply_first_run / probe_radio_model（应由 backends.known_models() 派生白名单，并让 probe 返回 &quot;ftx1&quot; 而非 &quot;ft710&quot;）</p>
-<p class='result'>git apply --check 失败：error: corrupt patch at line 118
-</p>
-</div>
-<div class='card' id='20261017-225416-0570'>
-<div class='tags'><span class='k k-bug'>bug</span><code>20261017-225416-0570</code><span class='t'>2026-10-19 08:21</span></div>
-<p class='title'>启动器首次自检不认 FTX-1：它把 ftx1 当作“机型未设置”，每次启动都重新探测串口、把机型改写成 ft710 存回配置 —— 不是用户选错，也不是电台的问题</p>
-<p class='hint'>macos/first_run.py:VALID_MODELS / needs_first_run() / apply_first_run() / probe_radio_model()（白名单应改为 backends.known_models()，探测需返回真实机型或保留用户已选机型，不得把 ftx1/ic705/ic7610/ic7760/ftdx10/ftdx101d/ftdx101mp/f</p>
-<p class='result'>git apply --check 失败：error: patch fragment without header at line 38: @@ -282,11 +301,21 @@
-</p>
-</div>
-<div class='card' id='20261017-225339-c737'>
-<div class='tags'><span class='k k-bug'>bug</span><code>20261017-225339-c737</code><span class='t'>2026-10-18 23:32</span></div>
+<div class='col' id='done'><h2>已提交（fde/ 分支）<span class='n'>3</span></h2><div class='card' id='20261017-225339-c737'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261017-225339-c737</code><span class='t'>2026-10-21 13:45</span></div>
 <p class='title'>1.28.1 的启动器首启探测仍用硬编码三机型白名单（ft710/ic7300/ic7300mk2）判定型号，FTX-1（ftx1）被视为「未设置」，于是每次启动都重新探测并回写成 ft710 —— 这是产品缺陷，不是用户操作问题。</p>
 <p class='hint'>macos/first_run.py:needs_first_run()/apply_first_run()（VALID_MODELS 硬编码三键 → 应由 backends.known_models() 派生，探测失败时保留用户已选的型号而不是回写 ft710）</p>
-<p class='result'>git apply --check 失败：error: corrupt patch at line 97
-</p>
+<p class='result'>v1.28.2 已修并发布（提交 5c9fedf，产物 2026-10-21）：VALID_MODELS 改为从 backends.known_models() 派生，探测结果只填空、不覆盖用户已选机型。升级到 v1.28.2 后 ftx1 不再被判「未配置」，也不会被改写成 ft710。</p>
+<p class='note'>决策备注：fixed in v1.28.2 (5c9fedf)</p>
+</div>
+<div class='card' id='20261017-225416-0570'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261017-225416-0570</code><span class='t'>2026-10-21 13:45</span></div>
+<p class='title'>启动器首次自检不认 FTX-1：它把 ftx1 当作“机型未设置”，每次启动都重新探测串口、把机型改写成 ft710 存回配置 —— 不是用户选错，也不是电台的问题</p>
+<p class='hint'>macos/first_run.py:VALID_MODELS / needs_first_run() / apply_first_run() / probe_radio_model()（白名单应改为 backends.known_models()，探测需返回真实机型或保留用户已选机型，不得把 ftx1/ic705/ic7610/ic7760/ftdx10/ftdx101d/ftdx101mp/f</p>
+<p class='result'>v1.28.2 已修并发布（提交 5c9fedf，产物 2026-10-21）：VALID_MODELS 改为从 backends.known_models() 派生，探测结果只填空、不覆盖用户已选机型。升级到 v1.28.2 后 ftx1 不再被判「未配置」，也不会被改写成 ft710。</p>
+<p class='note'>决策备注：fixed in v1.28.2 (5c9fedf)</p>
+</div>
+<div class='card' id='20261017-225430-d996'>
+<div class='tags'><span class='k k-bug'>bug</span><code>20261017-225430-d996</code><span class='t'>2026-10-21 13:45</span></div>
+<p class='title'>Launcher 的首启探测白名单 `VALID_MODELS` 只含 ft710/ic7300/ic7300mk2，所选 ftx1 因此每次启动都被判为「未配置」，探测到 Yaesu 应答后把型号改写成 ft710 —— 于是续跑成 FT</p>
+<p class='hint'>macos/first_run.py:VALID_MODELS / needs_first_run / apply_first_run / probe_radio_model（应由 backends.known_models() 派生白名单，并让 probe 返回 &quot;ftx1&quot; 而非 &quot;ft710&quot;）</p>
+<p class='result'>v1.28.2 已修并发布（提交 5c9fedf，产物 2026-10-21）：VALID_MODELS 改为从 backends.known_models() 派生，探测结果只填空、不覆盖用户已选机型。升级到 v1.28.2 后 ftx1 不再被判「未配置」，也不会被改写成 ft710。</p>
+<p class='note'>决策备注：fixed in v1.28.2 (5c9fedf)</p>
 </div></div>
+<div class='col' id='failed'><h2>实施失败（已回滚）<span class='n'>0</span></h2><p class='empty'>—</p></div>
 <div class='col' id='rejected'><h2>不处理<span class='n'>1</span></h2><div class='card' id='20261007-203517-f40d'>
 <div class='tags'><span class='k k-bug'>bug</span><code>20261007-203517-f40d</code><span class='t'>2026-10-18 21:50</span></div>
 <p class='title'>日志签名 `TX session: frames=0 … written=0 … peak=0%`（键控了却没有声音）与 v1.25.4 修复的「同一 30 天令牌下多条 /WSaudioTX 上行归属错误」同签名，而当前版本正是 1.25</p>

@@ -63,6 +63,16 @@ _ft8_data = [(str(_ft8_root), ".")] if _ft8_root.exists() else []
 # shipped that way, which is why it is written down instead of inferred.
 _ft8_assets = [(str(ROOT / "ft8" / "data"), "ft8/data")]
 
+# ALLCALL7.TXT (the Fortran callsign database) is opened as
+# `trim(share_dir)//'/ALLCALL7.TXT'` with `share_dir = '.'` (prog_args.f90:4) —
+# **relative to the process's cwd**, and there is no Fortran setter.  From a
+# checkout the cwd is the repo root, so a missing entry here is invisible in
+# development; installed, the cwd is wherever the launcher was started and the
+# database silently came up empty (2026-10-21 field bundle: "ALLCALL7.TXT is too
+# short or broken?").  ft8.core.worker.share_dir()/os.chdir() put the Worker in
+# this directory; the file therefore has to be next to the library in app_root.
+_ft8_assets.append((str(ROOT / "ALLCALL7.TXT"), "."))
+
 
 # default.env: the launcher seeds the user env from the platform-appropriate
 # template (windows/ for Win, macos/ for macOS). Do not ship the other

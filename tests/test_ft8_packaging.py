@@ -332,3 +332,41 @@ class FrozenWorkerSpawnTests(unittest.TestCase):
         )
         self.assertLess(calls.index("freeze_support"), calls.index("main"),
                         "freeze_support() has to run before main()")
+
+
+class CallSignDatabaseTests(unittest.TestCase):
+    """ALLCALL7.TXT 必须进包，否则深路径的呼号库是空的。
+
+    2026-10-21 现场（包 `20261021-123324-81ab`）：`ft8-worker.log` 第一行
+    `ALLCALL7.TXT is too short or broken?` —— Fortran 用 `share_dir = '.'`
+    （`prog_args.f90:4`）相对 cwd 打开它，而源码 checkout 的 cwd 正好是仓库根，
+    所以本地永远发现不了；装好之后 cwd 是启动器所在目录，库就静默变成空。
+    """
+
+    def test_the_repository_ships_the_database(self):
+        self.assertTrue((REPO_ROOT / "ALLCALL7.TXT").is_file(),
+                        "仓库根的 ALLCALL7.TXT 不见了 —— 深路径解码会退化")
+
+    def test_the_pyinstaller_spec_ships_it_to_the_app_root(self):
+        spec = (REPO_ROOT / "packaging" / "pyinstaller" / "mrrc_modern_server.spec")
+        text = spec.read_text(encoding="utf-8")
+        self.assertIn("ALLCALL7.TXT", text,
+                      "spec 没把 ALLCALL7.TXT 收进包：安装版会丢掉呼号库")
+        # 必须是 “-> '.'”，因为 Fortran 只看 cwd
+        self.assertRegex(text, r'ALLCALL7\.TXT"\), "\."')
+
+    def test_the_worker_moves_into_the_share_directory(self):
+        """worker 进程必须 chdir 到带 ALLCALL7.TXT 的目录（Fortran 没有 setter）。"""
+        import ast
+        from ft8.core import worker as w
+
+        self.assertTrue((w.share_dir() / w.ALLCALL_FILE).is_file(),
+                        f"share_dir() = {w.share_dir()} 里没有 {w.ALLCALL_FILE}")
+        source = Path(w.__file__).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        main = next(n for n in ast.walk(tree)
+                    if isinstance(n, ast.FunctionDef) and n.name == "worker_main")
+        calls = [n for n in ast.walk(main) if isinstance(n, ast.Call)]
+        chdirs = [c for c in calls
+                  if isinstance(c.func, ast.Attribute) and c.func.attr == "chdir"]
+        self.assertTrue(chdirs, "worker_main 没有 os.chdir(share_dir())")

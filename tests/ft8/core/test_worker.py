@@ -669,3 +669,122 @@ def test_protocol_corruption_makes_spawned_worker_exit_nonzero(
             process.terminate()
             process.join(5)
         connection.close()
+
+
+# ── stack size of the request loop (2026-10-21 field) ──────────────────────
+#
+# Bundle `20261021-123324-81ab` (Windows 10, 1.28.1): one
+# `WorkerFault: worker_exit: … status None` per deep decode, 35 worker
+# generations in 26 minutes, and the Worker's own log held no Fortran message
+# — a silent native death.  `sync8var` alone wants ≈2.7 MB of stack
+# (`real s(NH1,NHSYM)` = 1920×372×4) plus ~1.2 MB more for the dt window;
+# Windows gives a thread 2 MB.  These tests pin the fix, not the arithmetic:
+# the loop must run on a thread whose stack we sized, and `OMP_STACKSIZE`
+# must still be set before the DSP library is loaded.
+
+
+def test_run_with_large_stack_creates_a_big_stack_thread(monkeypatch):
+    import ft8.core.worker as worker
+
+    calls: list[int] = []
+
+    def fake_stack_size(size=None):
+        if size is not None:
+            calls.append(size)
+        return 0
+
+    monkeypatch.setattr(worker.threading, "stack_size", fake_stack_size)
+    ran: list[str] = []
+    worker._run_with_large_stack(lambda: ran.append(worker.threading.current_thread().name))
+
+    assert ran, "target did not run"
+    # 第一次是「给新线程设大栈」，后一次是「恢复默认」——两者都必须发生
+    assert calls[0] == worker.WORKER_STACK_BYTES
+    assert calls[0] >= 8 * 1024 * 1024, "Windows default is 2 MB; 8 MB is the floor"
+    assert calls[-1] == 0, "自己的线程用完必须把进程级设置还原"
+    assert ran[0] == "ft8-dsp-request-loop"
+
+
+def test_run_with_large_stack_reraises_on_the_calling_thread():
+    import ft8.core.worker as worker
+
+    def boom():
+        raise RuntimeError("native call failed")
+
+    with pytest.raises(RuntimeError, match="native call failed"):
+        worker._run_with_large_stack(boom)
+
+
+def test_worker_main_runs_the_request_loop_on_that_thread():
+    """Structural guard: the inline `while True:` must not come back.
+
+    Putting the loop back in `worker_main`'s body would put the Fortran decoder
+    back on the 2 MB main-thread stack — the failure is silent, so only a
+    source-level assertion catches it.
+    """
+    import ft8.core.worker as worker
+
+    source = Path(worker.__file__).read_text(encoding="utf-8")
+    assert "_run_with_large_stack(serve)" in source
+    tree = ast.parse(source)
+    main = next(n for n in ast.walk(tree)
+                if isinstance(n, ast.FunctionDef) and n.name == "worker_main")
+    # 只看 worker_main **自己**的语句体：serve() 是它的嵌套函数，while 在那一层里
+    # （ast.walk 会钻进嵌套函数，所以这里只扫直接子语句）
+    assert not [s for s in main.body if isinstance(s, ast.While)], \
+        "worker_main must not own the request loop any more"
+
+
+#: 一次深路径解码在给定栈大小下的结局：真跑子进程，因为结局是**进程死亡**，
+#: 没有 Python 异常可断言。实测（macOS，源码构建的库）：
+#:   1 MB / 2 MB / 3 MB → 退出码 138（SIGBUS，栈溢出）；4 MB / 8 MB → 存活。
+#: Windows 给线程的 PE 预留是 2 MB ⇒ 每一次深解码都杀一个 worker，这就是现场
+#: 「每槽一次 worker_exit、日志里没有 Fortran 提示」的形状。
+_STACK_PROBE = r'''
+import os, sys, threading
+os.environ.setdefault("OMP_STACKSIZE", "10M")
+sys.path.insert(0, {root!r})
+threading.stack_size({size})
+import numpy as np
+from ft8.core.binding import CoreBinding
+from ft8.core.models import DecodeConfig, DecodePath
+from ft8.core.worker import default_library_path
+binding = CoreBinding(default_library_path())
+cfg = DecodeConfig(path=DecodePath("improved"), sample_rate=12000,
+                   sample_count=180000, profile=3, threads=1, cycles=1,
+                   sensitivity=2, ap=False, low_threshold=False, wide_dx=False,
+                   hide_duplicates=False, qso_progress=0, rx_frequency=1500)
+samples = np.zeros(180000, dtype=np.int16)
+out = {{}}
+def run():
+    try:
+        binding.decode(samples, cfg, 1)
+        out["ok"] = True
+    except BaseException as exc:
+        out["err"] = type(exc).__name__
+t = threading.Thread(target=run)
+t.start(); t.join()
+print("alive", out)
+'''
+
+
+@pytest.mark.skipif(not default_library_path().exists(), reason="DSP 库未构建")
+def test_the_decoder_needs_more_stack_than_windows_gives(tmp_path):
+    """把「栈不够就静默死亡」变成可执行的事实，而不是注释里的一句话。"""
+    import ft8.core.worker as worker
+
+    def run(size: int) -> subprocess.CompletedProcess:
+        script = tmp_path / f"probe_{size}.py"
+        script.write_text(
+            _STACK_PROBE.format(root=str(ROOT), size=size), encoding="utf-8")
+        return subprocess.run([sys.executable, str(script)], capture_output=True,
+                              timeout=300)
+
+    small = run(2 * 1024 * 1024)                  # Windows 的线程栈预留
+    assert small.returncode != 0, (
+        "2 MB 栈上竟然活下来了 —— 那意味着这个缺陷的前提变了，"
+        "WORKER_STACK_BYTES 的注释与现场解释都要重写")
+
+    ours = run(worker.WORKER_STACK_BYTES)
+    assert ours.returncode == 0, ours.stderr.decode("utf-8", "replace")[-800:]
+    assert b"alive" in ours.stdout

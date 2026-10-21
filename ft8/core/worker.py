@@ -6,8 +6,9 @@ import os
 import mmap
 from pathlib import Path
 import sys
+import threading
 import time
-from typing import NoReturn
+from typing import Callable, NoReturn
 
 from ft8.core.protocol import MAX_CONTROL_FRAME, decode_frame, encode_frame
 
@@ -23,6 +24,51 @@ from ft8.core.protocol import MAX_CONTROL_FRAME, decode_frame, encode_frame
 #: file is where that line now lands; ``support_bundle`` collects it.
 WORKER_LOG_NAME = "ft8-worker.log"
 WORKER_LOG_MAX_BYTES = 2 * 1024 * 1024
+
+#: Stack the request loop runs on.  The Fortran decoder puts its work arrays on
+#: the *calling thread's* stack: `sync8var` alone declares
+#: `real s(NH1,NHSYM)` = 1920 × 372 real*4 ≈ **2.7 MB**, plus
+#: `sync2d`/`syncq` over the ±62 dt window (another ~1.2 MB) — ≈ 4 MB in one
+#: frame (`ft8/dsp/vendor/ft8/ft8_params.f90:9-11`,
+#: `patched/ft8_decodevar.f90:199-251`).
+#:
+#: Windows gives a thread the exe's PE stack reserve (**2 MB**), and a stack
+#: overflow there is an immediate process death with no traceback — which is
+#: exactly the 2026-10-21 field shape: one `worker_exit: … status None` per
+#: deep decode, Windows only, while macOS (8 MB main-thread stack) passes the
+#: same suite locally.  `OMP_STACKSIZE` does **not** cover this: it sizes
+#: OpenMP *worker* threads, and the decoder is entered from this loop.
+#: 64 MB is reserved address space, committed lazily — it costs nothing on the
+#: small boxes.
+WORKER_STACK_BYTES = 64 * 1024 * 1024
+
+
+def _run_with_large_stack(target: "Callable[[], None]") -> None:
+    """Run ``target`` on a thread whose stack is ``WORKER_STACK_BYTES``.
+
+    ``threading.stack_size`` is process-global and only affects threads created
+    afterwards, so it is set right before ``start()`` (which is where the OS
+    thread — and therefore the stack — is created) and restored immediately
+    after, leaving every other thread in this process with the default.
+    """
+    failure: dict[str, BaseException] = {}
+
+    def runner() -> None:
+        try:
+            target()
+        except BaseException as exc:          # noqa: BLE001 - re-raised in the caller
+            failure["error"] = exc
+
+    previous = threading.stack_size(WORKER_STACK_BYTES)
+    try:
+        thread = threading.Thread(target=runner, name="ft8-dsp-request-loop")
+        thread.start()
+    finally:
+        threading.stack_size(previous)
+    thread.join()
+    error = failure.get("error")
+    if error is not None:
+        raise error
 
 
 class _RequestError(Exception):
@@ -63,6 +109,31 @@ def _library_name() -> str:
     if sys.platform == "win32":
         return "wsjt_core.dll"
     return "libwsjt_core.so"
+
+
+#: The Fortran callsign database.  `prog_args.f90:4` is literally
+#: `share_dir = '.'`, and `cwfilter` opens `trim(share_dir)//'/ALLCALL7.TXT'` on
+#: the decoder's first call — i.e. **relative to the working directory**, with no
+#: setter.  From a source checkout the cwd *is* the repo root, which is why this
+#: never showed up locally; in a frozen app the cwd is wherever the launcher was
+#: started, so the callsign DB came up empty and the deep decoder downgraded to
+#: `ldbvalid = .false.` (`ALLCALL7.TXT is too short or broken?` in the 2026-10-21
+#: bundle — one line, then a whole night of weaker deep decodes).
+ALLCALL_FILE = "ALLCALL7.TXT"
+
+
+def share_dir() -> Path:
+    """The directory the decoder must treat as ``share_dir``.
+
+    ``app_root()`` when it holds the file (installers copy it next to the DSP
+    library, under PyInstaller's ``_internal``), otherwise the current cwd so a
+    source run behaves exactly as before.
+    """
+    from ft8.core.paths import app_root
+    root = app_root()
+    if (root / ALLCALL_FILE).is_file():
+        return root
+    return Path.cwd()
 
 
 def _worker_log_path() -> Path | None:
@@ -147,6 +218,14 @@ def worker_main(
 ) -> None:
     os.environ.setdefault("OMP_STACKSIZE", "10M")
     _redirect_worker_output()
+    # The Fortran resolves ALLCALL7.TXT relative to the cwd and offers no setter,
+    # so this process has to *be* in the share directory before the first decode.
+    # It does no other relative-path I/O (library path and worker log are
+    # absolute), so changing it here is safe.
+    try:
+        os.chdir(share_dir())
+    except OSError:
+        pass                     # keep the inherited cwd; decoding still works
     import numpy as np
     from ft8.core.binding import CoreBinding, DspStatusError
     from ft8.core.models import DecodeConfig, DecodePath
@@ -268,42 +347,46 @@ def worker_main(
                 del output
             shm.close()
 
-    while True:
-        raw = connection.recv_bytes(MAX_CONTROL_FRAME + 1)  # type: ignore[attr-defined]
-        frame = decode_frame(raw)
-        if frame["generation"] != generation:
-            send_error(frame, "stale_generation", "request generation is not current")
-            continue
+    def serve() -> None:
+        """The request loop — see WORKER_STACK_BYTES for why it is on its own thread."""
+        while True:
+            raw = connection.recv_bytes(MAX_CONTROL_FRAME + 1)  # type: ignore[attr-defined]
+            frame = decode_frame(raw)
+            if frame["generation"] != generation:
+                send_error(frame, "stale_generation", "request generation is not current")
+                continue
 
-        frame_type = frame["type"]
-        if frame_type == "ping":
-            connection.send_bytes(encode_frame(response_base(frame, "pong")))  # type: ignore[attr-defined]
-            continue
-        if frame_type == "shutdown":
-            connection.send_bytes(encode_frame(response_base(frame, "stopped")))  # type: ignore[attr-defined]
-            return
+            frame_type = frame["type"]
+            if frame_type == "ping":
+                connection.send_bytes(encode_frame(response_base(frame, "pong")))  # type: ignore[attr-defined]
+                continue
+            if frame_type == "shutdown":
+                connection.send_bytes(encode_frame(response_base(frame, "stopped")))  # type: ignore[attr-defined]
+                return
 
-        try:
-            if frame_type == "decode":
-                response = handle_decode(frame)
-            elif frame_type == "encode":
-                response = handle_encode(frame)
+            try:
+                if frame_type == "decode":
+                    response = handle_decode(frame)
+                elif frame_type == "encode":
+                    response = handle_encode(frame)
+                else:
+                    raise _RequestError(
+                        "unsupported_type", "frame type is not a Worker request"
+                    )
+            except _RequestError as error:
+                send_error(frame, error.code, error.detail)
+            except OSError:
+                send_error(frame, "shared_memory_unavailable", "shared memory is unavailable")
+            except ValueError:
+                send_error(frame, "invalid_request", "DSP request validation failed")
+            except DspStatusError as error:
+                # Sanitized, but not silent: the status is what says *which* native
+                # check failed (wsjt_improved.f90 now returns one instead of
+                # aborting the Worker), and it is the only reason the operator sees
+                # a DecodeError here rather than a vanished process.
+                send_error(frame, "dsp_error",
+                           f"DSP operation failed (status {error.status})")
             else:
-                raise _RequestError(
-                    "unsupported_type", "frame type is not a Worker request"
-                )
-        except _RequestError as error:
-            send_error(frame, error.code, error.detail)
-        except OSError:
-            send_error(frame, "shared_memory_unavailable", "shared memory is unavailable")
-        except ValueError:
-            send_error(frame, "invalid_request", "DSP request validation failed")
-        except DspStatusError as error:
-            # Sanitized, but not silent: the status is what says *which* native
-            # check failed (wsjt_improved.f90 now returns one instead of
-            # aborting the Worker), and it is the only reason the operator sees
-            # a DecodeError here rather than a vanished process.
-            send_error(frame, "dsp_error",
-                       f"DSP operation failed (status {error.status})")
-        else:
-            connection.send_bytes(encode_frame(response))  # type: ignore[attr-defined]
+                connection.send_bytes(encode_frame(response))  # type: ignore[attr-defined]
+
+    _run_with_large_stack(serve)

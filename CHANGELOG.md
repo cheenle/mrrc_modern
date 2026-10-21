@@ -2,6 +2,65 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — FT8 深路径每槽杀死 DSP worker：Fortran 要 4 MB 栈，Windows 只给 2 MB
+
+### 栈：`sync8var` 的工作数组放在**调用线程**的栈上
+
+同一份包（`20261021-123324-81ab`，Windows 10 + 1.28.1）里还有第二个独立缺陷：
+`ft8-worker.log` 之外，主日志里是 **50 条**
+
+```
+[WARNING] ft8.engine.cascade: deep decode path failed; keeping the fast results
+ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None
+                                （generation 35, restarts 34）
+```
+
+—— 每一次**深路径**解码都让 worker 进程消失，且没有任何 Fortran 提示（`stop` 会打印消息，
+静默死亡说明是硬崩溃）。macOS 上同一份代码、同一套 `tests/ft8` 全是绿的，所以这不是解码逻辑。
+
+**根因**：`sync8var` 把工作数组声明在**栈**上 ——
+`real s(NH1,NHSYM)` = 1920 × 372 × 4 B ≈ **2.7 MB**，加 `sync2d`/`syncq` 的 ±62 dt 窗口
+（`patched/ft8_decodevar.f90:199-251`）又是 ~1.2 MB，**单个栈帧 ≈ 4 MB**。
+Windows 给线程的是 exe 的 PE 预留（**2 MB**），溢出即进程当场消失；macOS 主线程 8 MB，
+所以本地永远复现不出来。`OMP_STACKSIZE` 管的是 OpenMP 的**工作线程**，而解码器是从
+请求循环所在的线程进入的 —— 它救不了。
+
+本机实测（源码构建的库，子进程）：
+
+```
+2 MB 栈 → 退出码 138（SIGBUS）   3 MB → 138   4 MB → 存活   8 MB → 存活   64 MB → 存活
+```
+
+- `ft8/core/worker.py` 新增 `WORKER_STACK_BYTES = 64 MB` 与 `_run_with_large_stack()`：
+  请求循环跑在一个显式设过大栈的线程上（`threading.stack_size` 只影响其后创建的线程，
+  所以设完 `start()` 立刻还原，进程里其他线程不受影响）。64 MB 是**保留**地址空间，
+  物理页按需提交，小盒子上不占内存。
+- 守卫：`tests/ft8/core/test_worker.py` 新增 4 项 —— 线程确实按 `WORKER_STACK_BYTES` 创建、
+  异常回到调用线程、`worker_main` 不再自己持有 `while` 循环（结构化断言，避免有人把它挪回去）、
+  以及一条**真跑子进程**的测试：2 MB 栈必须死、我们的栈必须活。
+
+### 呼号库：`ALLCALL7.TXT` 从来没进过安装包
+
+同一条 worker 日志的第一行是
+
+```
+ALLCALL7.TXT is too short or broken?             d
+```
+
+Fortran 用 `share_dir = '.'`（`prog_args.f90:4`）**相对当前工作目录**打开它，而且**没有 setter**。
+源码 checkout 的 cwd 正好是仓库根，所以本地一辈子看不见；装好之后 cwd 是启动器所在目录，
+呼号库于是静默变成空（`ldbvalid = .false.`，深路径的呼号搜索直接 bail out）。
+
+- `packaging/pyinstaller/mrrc_modern_server.spec`：把仓库根的 `ALLCALL7.TXT` 收到
+  PyInstaller 的 `_internal` 根（与 DSP 库同目录），Windows 与 macOS 共用这份 spec。
+- `ft8/core/worker.py`：新增 `share_dir()` 与 `worker_main` 里的 `os.chdir(share_dir())`
+  （在加载 DSP 库、第一次解码之前；该进程没有别的相对路径 I/O）。
+- 守卫：`tests/test_ft8_packaging.py::CallSignDatabaseTests` 3 项（仓库里有这个文件 /
+  spec 的落点是 `"."` / worker 会 chdir 到含该文件的目录）。
+
+**边界**：`ft8/dsp/` 一个字节没动，所以四条 DSP 构建路径不需要重编；但**两个安装包必须重出**
+才会有正确行为（盒子镜像本来就带这个文件，chdir 对它是无操作的兼容）。
+
 ## [Unreleased] — 启动器不再把用户选的机型改回 ft710；Yaesu 家族自己找 CAT 波特率
 
 ### 启动器：机型白名单来自注册表，探测结果不再覆盖用户的选择

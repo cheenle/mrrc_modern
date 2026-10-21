@@ -315,3 +315,57 @@ class EnvFileEncodingTests(unittest.TestCase):
             raw = path.read_bytes()
         self.assertIn("MRRC_WEB_PORT=8443", raw.decode("utf-8"))   # must decode
         self.assertIn("MRRC_RADIO_MODEL=ft710", raw.decode("utf-8"))
+
+
+class RegisteredModelWhitelistTests(unittest.TestCase):
+    """机型白名单必须来自注册表，不能手写。
+
+    2026-10-21 现场（包 20261021-123324-81ab，Windows 1.28.1，FT-891）：
+    用户在连接设置里保存 `model=ft891`（日志 `12:27:18 Saving connection settings:
+    model=ft891`），下一次启动（`12:30:00`）仍然是 `Radio model: ft710` ——
+    因为白名单只有 ft710/ic7300/ic7300mk2 三个，ft891 每次都判"未配置"，
+    于是每次重启都重新探测；而 `probe_ft710()` 只验应答前缀（`ID0680;` 也以
+    `ID` 开头），直接把任何 Yaesu 电台认成 ft710 并写回配置。
+
+    同一个缺陷已经让 FTX-1 报过三次（FDE 板 20261017-225339/225416/225430），
+    FT-891 是第二个受害者，下一个是 FTDX10/FTDX101/IC-705/7610/7760。
+    """
+
+    def _tmp_config(self, body):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "mrrc_modern.env"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def test_every_registered_model_counts_as_configured(self):
+        from backends import known_models
+        for model in known_models():
+            env = {"MRRC_WEB_PASSWORD": "S3cret!long",
+                   "MRRC_RADIO_MODEL": model, "MRRC_SERIAL_PORT": "COM6",
+                   "MRRC_PORT_CONFIRMED": "1"}
+            self.assertFalse(fr.needs_first_run(env),
+                             f"{model} 被判成未配置 ⇒ 每次启动都会重探并改写机型")
+
+    def test_probe_never_overwrites_a_saved_model_choice(self):
+        """端口还没确认时会探测，但**机型**已经由用户选定，探测结果不得覆盖它。"""
+        path = self._tmp_config("MRRC_WEB_PASSWORD=S3cret!long\n"
+                                "MRRC_SERIAL_PORT=\nMRRC_RADIO_MODEL=ft891\n")
+        env = {"MRRC_WEB_PASSWORD": "S3cret!long",
+               "MRRC_RADIO_MODEL": "ft891", "MRRC_SERIAL_PORT": ""}
+        with mock.patch.object(fr, "detect_serial_ports",
+                               return_value=["/dev/cu.SLAB_USBtoUART"]):
+            result = fr.apply_first_run(env, path, open_func=lambda **kw: _FakeSerialFT())
+        self.assertEqual(result["MRRC_SERIAL_PORT"], "/dev/cu.SLAB_USBtoUART",
+                         "端口仍应被探测填写")
+        self.assertEqual(result["MRRC_RADIO_MODEL"], "ft891",
+                         "用户选定的机型被探测结果覆盖了")
+
+    def test_unset_model_still_gets_detected(self):
+        """机型为空时，探测结果照旧采纳（首次安装的主路径不能坏）。"""
+        path = self._tmp_config("MRRC_WEB_PASSWORD=S3cret!long\n"
+                                "MRRC_SERIAL_PORT=\nMRRC_RADIO_MODEL=\n")
+        with mock.patch.object(fr, "detect_serial_ports",
+                               return_value=["/dev/cu.SLAB_USBtoUART"]):
+            result = fr.apply_first_run({}, path, open_func=lambda **kw: _FakeSerialFT())
+        self.assertEqual(result["MRRC_RADIO_MODEL"], "ft710")

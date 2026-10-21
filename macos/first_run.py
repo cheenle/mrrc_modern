@@ -31,7 +31,35 @@ elif os.name == "nt":
 else:
     DEFAULT_SERIAL_PORTS = ("/dev/ttyUSB0",)
 RADIO_MODEL_FALLBACK = "ft710"
-VALID_MODELS = frozenset({"ft710", "ic7300", "ic7300mk2"})
+
+
+def registered_models() -> frozenset[str]:
+    """Every radio model this build can actually drive (the backend registry).
+
+    这个白名单以前是手写的三个机型。后果不是“少识别一个型号”那么轻：
+    `needs_first_run()` 把白名单当成“已配置”的判据，于是任何后来加入的机型
+    （FT-891 / FTX-1 / FTDX10 / IC-705 / 7610 / 7760）每次启动都被当成“未配置”，
+    重新跑一次串口探测；而 `probe_ft710()` 只验应答前缀（`ID0680;` 也以 `ID` 开头），
+    于是任何 Yaesu 电台都被写成 ft710，用户自己选的机型被静默改掉。
+
+    2026-10-21 现场（包 20261021-123324-81ab）：一台 FT-891 在 12:27 保存了
+    `model=ft891`，12:30 启动又是 `Radio model: ft710`，一直用 FT-710 后端驱动。
+    FTX-1 早在 2026-10-17 就报过三次同一个缺陷。
+
+    注册表是唯一真相源；静态集合只在启动器被打包成“没有 backends 树”时兜底。
+    """
+    try:
+        from backends import known_models
+        models = {str(m).strip().lower() for m in known_models()}
+        models.discard("")
+        if models:
+            return frozenset(models)
+    except Exception:            # noqa: BLE001 - 启动器绝不因为注册表导入失败而不启动
+        pass
+    return frozenset({"ft710", "ic7300", "ic7300mk2"})
+
+
+VALID_MODELS = registered_models()
 
 
 def needs_first_run(env: dict[str, str]) -> bool:
@@ -282,9 +310,17 @@ def apply_first_run(
                 found = (candidate, found_model)
                 break
         if found is not None:
-            port, model = found
+            port, probed_model = found
             env["MRRC_PORT_CONFIRMED"] = "1"
             updates["MRRC_PORT_CONFIRMED"] = "1"
+            # 只有“用户还没选过机型”时才采纳探测结果。探测本身分不出机型：
+            # `probe_ft710()` 只看应答前缀，FT-891 回的 `ID0680;` 也匹配，
+            # 已选 ft891 的机器会被改回 ft710（2026-10-21 现场）。
+            if model_unset:
+                model = probed_model
+            else:
+                print("Radio answers like %s on %s — keeping the configured model %s"
+                      % (probed_model, port, model), flush=True)
         else:
             if port_unset:
                 port = ports[0] if ports else port

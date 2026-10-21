@@ -408,7 +408,11 @@ FTX1 = YaesuModelProfile(
 FT891 = YaesuModelProfile(
     model_key="ft891",
     display_name="Yaesu FT-891",
-    default_baud=38400,
+    # 菜单 05-06 CAT RATE: 4800/9600/19200/38400，**出厂 4800**（Yaesu FT-891 操作手册，
+    # 西语/俄语版同表）。2026-09-17 那份现场记录里的 38400 是用户自己改过的值
+    # （DigiRig 的 FT-891 指南也推荐 38400），不能当出厂默认；否则新开箱的电台连不上。
+    # 控制器还会在沉默时自动试完四个档位（cat_core._adopt_cat_rate），两者不冲突。
+    default_baud=4800,
     id_answer="",                        # D6: derivable as "0135", not recorded
     mode_numbers=dict(_FT891_MODE_NUMBERS),
     mode_codes=dict(_FAMILY_MODE_CODES),

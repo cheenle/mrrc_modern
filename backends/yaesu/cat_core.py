@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 COMMAND_SETTLE_SECONDS = 0.02
 DEFAULT_TIMEOUT = 1.0
 
+#: The rates a Yaesu CAT-rate menu holds.  The FT-891's menu 05-06 lists exactly
+#: these four (4800/9600/19200/38400 bps) and **defaults to 4800** per the manual.
+#: Only tried when the configured rate produces no answer at all — a wrong rate is
+#: *silence*, not garbage, which is what makes "ID; got nothing" a usable signal.
+CAT_RATE_LADDER: tuple = (4800, 9600, 19200, 38400)
+
 
 class YaesuCatController:
     """Serial CAT transport for the Yaesu ASCII protocol (`CMD;`)."""
@@ -270,22 +276,35 @@ class YaesuCatController:
         return self._profile.model_key
 
     async def connect(self) -> bool:
-        """Open the serial port.
+        """Open the serial port, adopting the radio's actual CAT rate if needed.
 
         The retry/error-classification rhythm is copied from the FT-710
         controller rather than reinvented because it is the version that
         survives USB re-enumeration on real hardware.
+
+        2026-10-21 field (FT-891, bundle `20261021-123324-81ab`): the radio's CAT
+        RATE menu sat at its factory 4800 while the config said 38400 and the link
+        stayed silent (`No ID response`).  A rate mismatch is the one configuration
+        error the operator cannot see from the UI — cable, port and radio all look
+        fine — so the controller now finds it itself.
         """
         if self._connected and self._ser is not None and self._ser.is_open:
             return True
+        if not await self._open_port(self.baudrate):
+            return False
+        await self._adopt_cat_rate()
+        return True
+
+    async def _open_port(self, baudrate: int) -> bool:
+        """Open the port at ``baudrate`` (one try, same error classification)."""
         try:
             self._ser = await asyncio.to_thread(
-                serial.Serial, self.port, self.baudrate,
+                serial.Serial, self.port, baudrate,
                 bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE, timeout=0.1)
             self._connected = True
             logger.info("%s: CAT port %s open at %d baud",
-                        self._profile.display_name, self.port, self.baudrate)
+                        self._profile.display_name, self.port, baudrate)
             return True
         except Exception as exc:
             self._connected = False
@@ -298,6 +317,48 @@ class YaesuCatController:
                 logger.error("%s: cannot open CAT port %s: %s",
                              self._profile.display_name, self.port, exc)
             return False
+
+    async def _radio_answers(self, timeout: float = 0.4) -> bool:
+        """True when the radio answers `ID;` — the cheapest liveness check."""
+        try:
+            return bool(await self.send_command("ID", timeout=timeout))
+        except Exception:                        # noqa: BLE001 - silence is the answer
+            return False
+
+    async def _adopt_cat_rate(self) -> None:
+        """Try the menu's other rates when the configured one is silent.
+
+        Deliberately does **not** persist: the env file belongs to the operator, and
+        a dialog that silently rewrites itself is worse than a warning.  The adopted
+        rate stays for the session (and for reconnects, because ``self.baudrate``
+        is updated).
+        """
+        if await self._radio_answers():
+            return
+        configured = self.baudrate
+        tried = [configured] + [r for r in CAT_RATE_LADDER if r != configured]
+        for candidate in tried[1:]:
+            await self.disconnect()
+            if not await self._open_port(candidate):
+                continue
+            if await self._radio_answers():
+                self.baudrate = candidate
+                logger.warning(
+                    "%s: no answer at %d baud, but the radio answers at %d — "
+                    "using %d for this session. Set the radio's CAT RATE menu "
+                    "(FT-891: menu 05-06, factory default 4800) and the "
+                    "connection dialog to %d to make it stick.",
+                    self._profile.display_name, configured, candidate,
+                    candidate, candidate)
+                return
+        # 四个档位都不应：端口按配置速率开着，把判断交给上层重连（电台可能没开机）。
+        await self.disconnect()
+        logger.error(
+            "%s: no answer to 'ID;' at any of %s — check the radio's CAT RATE "
+            "menu (FT-891 factory default 4800), the CAT cable and the port name.",
+            self._profile.display_name,
+            "/".join(str(r) for r in tried))
+        await self._open_port(configured)
 
     async def disconnect(self) -> None:
         self._connected = False

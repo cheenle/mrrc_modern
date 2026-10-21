@@ -119,11 +119,20 @@ class BackendToControllerSurfaceTests(unittest.TestCase):
                     f"{key}: initial_state_sync calls {name}, which does not exist")
 
 
+#: Yaesu 家族里唯一一个出厂速率不是 38400 的机型：FT-891 的菜单 05-06 CAT RATE
+#: 出厂是 **4800**（Yaesu FT-891 操作手册，西语/俄语版同表）。2026-09-17 的现场记录
+#: 之所以是 38400，是因为那台机器的用户把菜单改过（DigiRig 指南也建议 38400）。
+#: 2026-10-21 现场（包 20261021-123324-81ab）就是电台停在出厂 4800、配置写 38400，
+#: 日志里只有一句 "No ID response from radio"。
+YAESU_BAUD_EXCEPTIONS = {"ft891": 4800}
+
+
 class BaudTests(unittest.TestCase):
     def test_yaesu_models_default_to_38400(self):
         for key in YAESU_KEYS:
-            self.assertEqual(default_baud_for(key), 38400)
+            expected = YAESU_BAUD_EXCEPTIONS.get(key, 38400)
+            self.assertEqual(default_baud_for(key), expected, key)
 
     def test_every_registered_model_has_a_baud_entry(self):
         for key in known_models():
-            self.assertIn(default_baud_for(key), (38400, 115200))
+            self.assertIn(default_baud_for(key), (4800, 38400, 115200), key)

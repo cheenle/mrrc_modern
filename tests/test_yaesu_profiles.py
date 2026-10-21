@@ -259,7 +259,8 @@ class ModelSpecificDataTests(unittest.TestCase):
         """The offline-derived capability facts, each pinned to its source."""
         p = yp.get_profile("ft891")
         self.assertEqual(p.display_name, "Yaesu FT-891")
-        self.assertEqual(p.default_baud, 38400)
+        # 菜单 05-06 CAT RATE 出厂 4800（手册）；2026-09-17 的 38400 是用户改过的值。
+        self.assertEqual(p.default_baud, 4800)
         self.assertEqual(p.att_steps, (0, 12))                    # ft891.c:181
         self.assertEqual(p.preamp_labels, {0: "OFF", 1: "AMP1"})  # ft891.c:180
         self.assertEqual(p.power_format, "PC1")

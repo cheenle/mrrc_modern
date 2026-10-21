@@ -239,6 +239,12 @@ class DefaultBaudForTests(unittest.TestCase):
         self.assertEqual(default_baud_for("ic7300"), 115200)
         self.assertEqual(default_baud_for("ic7300mk2"), 115200)
 
+    def test_ft891_uses_the_manual_default_4800(self):
+        """FT-891 菜单 05-06 CAT RATE 出厂 4800（2026-10-21 现场：配置写 38400，
+        电台停在出厂值，日志只有一句 No ID response）。"""
+        from config import default_baud_for
+        self.assertEqual(default_baud_for("ft891"), 4800)
+
     def test_unknown_model_falls_back_to_38400(self):
         from config import default_baud_for
         self.assertEqual(default_baud_for("unknown"), 38400)

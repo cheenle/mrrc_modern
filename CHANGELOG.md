@@ -2,6 +2,55 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 启动器不再把用户选的机型改回 ft710；Yaesu 家族自己找 CAT 波特率
+
+### 启动器：机型白名单来自注册表，探测结果不再覆盖用户的选择
+
+一台 **FT-891** 上报「设备不工作」（包 `20261021-123324-81ab`，Windows 1.28.1），日志里三行说明一切：
+
+```
+12:27:18  Saving connection settings: model=ft891 port=COM6 baud=38400   ← 用户在界面上改成 ft891
+12:30:00  Radio model: ft710, serial port: COM6 @ 38400 baud             ← 重启后又变回 ft710
+12:30:02  No ID response from radio on COM6. Check connection.
+```
+
+根因在 `macos/first_run.py`，**两个缺陷叠加**：
+
+- `VALID_MODELS` 是手写的三个机型（ft710/ic7300/ic7300mk2）。凡是后来加入的机型
+  （FT-891、FTX-1、FTDX10/101、IC-705/7610/7760）都不在白名单里 ⇒ `needs_first_run()`
+  **每次启动**都判「未配置」⇒ 每次都重新探测。
+- `probe_ft710()` 只验应答前缀（`ser.read(64).startswith(b"ID")`），而 FT-891 回的是
+  `ID0680;` —— 以 `ID` 开头 ⇒ **任何 Yaesu ASCII-CAT 电台都会被认成 ft710**；就算电台
+  不应答（波特率不对），也会落到 `RADIO_MODEL_FALLBACK = "ft710"`。两条路都通向 ft710。
+
+于是 FT-710 后端（38400、要求 FT4222 频谱）去驱动 FT-891，界面自然「不工作」。
+这与 2026-10-17 那三条 FTX-1 上报（`20261017-225339/225416/225430`）是**同一个缺陷**，
+当时无人值守实施了三次都因补丁格式失败，而受害者已经排到第二个。
+
+- `VALID_MODELS` 改为从 `backends.known_models()` 派生（注册表是唯一真相源，静态集合只在
+  启动器打包时缺 `backends` 树的情况下兜底）。
+- `apply_first_run()`：只有「机型还没选过」时才采纳探测结果；已选机型只填端口，并打印
+  `Radio answers like … keeping the configured model …`。
+- 守卫测试：`tests/test_first_run.py::RegisteredModelWhitelistTests` —— 每个注册机型都必须
+  算「已配置」（否则重启就重探）；已选 `ft891` 时探测不得改写它；机型为空时探测照旧生效。
+
+### FT-891 的 CAT 波特率：默认按手册的 4800，并且能自己找到
+
+同一份现场：`MRRC_BAUD_RATE=38400`，而 FT-891 的菜单 **05-06 CAT RATE** 出厂值是
+**4800**（Yaesu FT-891 操作手册，西班牙语/俄语版同表：4800/9600/19200/38400）。电台对
+错误波特率是**完全沉默**，所以现场只看到一句 `No ID response` —— 这是界面上唯一看不出来的
+配置错误：线缆、端口、电台都「看起来正常」。
+
+- `config.py` 与 `backends/yaesu/yaesu_profiles.py` 的 FT-891 默认速率 38400 → **4800**。
+  此前那个 38400 的依据是 2026-09-17 的现场记录，而那台机器的用户**已经**把菜单改成 38400
+  （DigiRig 的 FT-891 数字模式指南也推荐 38400），不能当出厂值。
+- `YaesuCatController`：配置速率下 `ID;` 一个字节都不回时，按菜单的四个档位
+  （`CAT_RATE_LADDER`）依次试，命中后**本会话**采用它并留一条可照做的告警；四个都不应时
+  端口仍按原速率打开，日志给出「菜单 / 线缆 / 端口名」三件事。**不写配置文件** —— 环境文件
+  属于用户，静默改写比一条告警更糟。
+- 守卫测试：`tests/test_yaesu_baud_autodetect.py` —— 速率正常时不得多开一次端口；沉默时
+  采用真正应答的速率；全沉默时回到配置值交给重连。
+
 ## [Unreleased] — W103D 发货版（预置）镜像：固定口令、零初始化、Wi-Fi 与公网入口都在设置页
 
 卖家代刷一批 W103D 快递给用户，「开箱即用」这条链上的三处硬拦一次拆掉（设计

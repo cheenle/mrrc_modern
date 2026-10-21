@@ -236,11 +236,14 @@ _DEFAULT_BAUD_BY_MODEL = {
     "ftdx101d": 38400,
     "ftdx101mp": 38400,
     "ftx1": 38400,
-    # FT-891: field evidence, not Hamlib — the 2026-09-17 report ran this radio
-    # at 38400 8N1 (hub/mrrc/dist/support_answers/20260917-073700-14ef).
-    # Hamlib ft891.c:140 hints the manual's default rate may be 4800, so a
-    # failed connect starts at the radio's CAT RATE menu.
-    "ft891": 38400,
+    # FT-891: 出厂默认是 **4800**（菜单 05-06 CAT RATE: 4800/9600/19200/38400，
+    # Yaesu FT-891 操作手册；西语版、俄语版手册同表）。此前这里写的是 38400，
+    # 依据是 2026-09-17 的一份现场记录 —— 那台机器的用户**已经**把菜单改成了 38400
+    # （DigiRig 的 FT-891 数字模式指南也这么建议），不能当出厂值。
+    # 2026-10-21 现场（包 20261021-123324-81ab）：电台停在出厂 4800、配置是 38400，
+    # 日志只有一句 "No ID response from radio"，用户看不出是波特率不对。
+    # 现在两头都改了：默认值按手册，控制器在沉默时自动试完四个档位。
+    "ft891": 4800,
 }
 DEFAULT_BAUD_RATE = _DEFAULT_BAUD_BY_MODEL.get(RADIO_MODEL, 38400)
 

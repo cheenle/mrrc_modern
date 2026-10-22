@@ -128,6 +128,56 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261022-160619-cbda">
+      <header>
+        <span class="id">20261022-160619-cbda</span>
+        <span class="badge warn">已定位，待修复</span>
+        <span class="muted">音频 · 2026-10-22 16:12</span>
+      </header>
+      <h3>发射的功率很小啊</h3>
+      <p class="verdict">这次发射电台被键控了，但服务端一个麦克风帧都没收到、写进声卡 0 帧、音频峰值 0%（SSB 无调制＝射频功率接近零），所以“功率很小”首先是发射音频没送进电台；同时日志里 FT8 深路径每槽杀死 DSP worker 的签名与本仓 1.28.2 声称已修的缺陷完全一致，属回归，需按缺陷排查。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>这次发射没有任何调制，是本次上报最硬的证据：`2026-10-22 16:03:20,672 [INFO] mrrc: TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0` —— 浏览器侧 0 帧到达、后端 0 帧写入声卡、峰值 0%。SSB 无调制即无射频功率，这与“功率很小”完全吻合（ptt 之后到 release 之间的整段都是静音）。</li>
+        <li>同签名历史判定（之一）：`frames=0 fed=0 written=0 peak=0%` 与 SDD V2.71 记录的“键控了却没有声音”同形，但那次的判据是 `non_owner_drops=190/118/102/236`（上行所有权被半开 socket 占住），本例 `non_owner_drops=0` 且断开时 `owner=True`，故不是同一缺陷；V2.71 与 V2.78 的修复都已包含在 1.28.2 中，不能据此判回归。</li>
+        <li>同题历史（发射功率小）：SDD V2.78（包 `20261010-205200-6e3c`，v1.25.4，SSB 7.05 MHz，问题描述逐字相同“发射功率小/没有”）的结论是“软件链路是清的 → 根因在电台侧调制输入源”，当时日志是 `frames=351 … written=228 … peak=52%`。本例恰恰相反：软件链路不清（written=0），所以不能直接套 V2.78 的电台菜单结论，必须先解决“音频没发出去”。</li>
+        <li>FT-891 的音频路径本身就是环境约束：该 profile 无 USB 声卡（`backends/yaesu/yaesu_profiles.py` 的 ft891 段 `audio_name_hints=()`，注释 `# D3: nothing to auto-match`），CAT 走 [已隐去]@4800（`Radio model: ft891, serial port: [已隐去] @ 4800 baud`），发射音频必须由外接 USB 声卡送到电台的 DATA/ACC 口；日志里已自动落到正确的那块卡：`Using default audio output: [4] 扬声器 (USB PnP Sound Device)` + `TX audio started: [4] 扬声器 (USB PnP Sound Device) (host=MME, default=44100Hz, actual=48000Hz, channels=1)`，所以“选错设备”不是本次主因。</li>
+        <li>网页上的功率表不能作为判据：FT-891 profile 的 `unverified_meters=(&quot;s_meter&quot;, &quot;power&quot;, &quot;swr&quot;, &quot;alc&quot;, &quot;comp&quot;)`（`backends/yaesu/yaesu_profiles.py:436`），`power_format`/meter 曲线 provenance 均为 `TODO(hw-verify)` —— 这台机型的功率读数未校准，看到“小”可能是显示问题，必须用电台自己的表或外接功率表判断。</li>
+        <li>FT8 深路径回归（同签名，须按缺陷处理）：`[WARNING] ft8.engine.cascade: deep decode path failed; keeping the fast results` 紧接 `ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 19, restarts 18)`，每 15 s 一次、累计 restarts 到 18（server.log）/155（server-prev.log）。这正是 SDD V2.90 记录并在 v1.28.1/1.28.2（CHANGELOG 顶条“FT8 深路径不再每槽杀死 DSP worker”）修掉的缺陷，当前版本 1.28.2 仍复现 → 回归。快路径仍在解（`decodes=17 fast=17 escalations=0`），所以表现为“少量漏解”，不是完全不能解。</li>
+        <li>旁证（非本次主因）：`Configured audio device &#x27;麦克风 (USB Audio Device)&#x27; not found` 是保存的设备名与当前枚举名（`麦克风 (USB PnP Sound Device)`）不一致，属 V2.6/V2.37 记录过的 Windows 声卡改名条件，已自动回落到 mono 设备；`RX audio is near-silent (peak=0.1%)` 与之后 `RX tap level: rms=376 peak=1606` 说明 RX 侧时有时无，与“USB 声卡/接线”方向一致，但不解释 written=0。</li>
+        <li>TX 门禁：`Radio model ft891 is NOT hardware-verified — transmit is ENABLED by env override` —— 用户已自行设 `MRRC_ALLOW_UNVERIFIED_TX=1`，这是全部 TX 行为（含未校准的功率/ALC 读数）的前提，属预期行为，不是缺陷。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>先在客户端确认麦克风真的在采：用手机/PC 打开页面 → 点一次发射并说 3 秒，看浏览器是否弹麦克风授权；iOS/Android/浏览器任一处拒绝授权，就会一帧音频都不发（本次 frames=0 的形态）。换一个已知能录音的设备/浏览器（Chrome 直连 https://&lt;盒子或电脑 IP&gt;:8888）复测。</li>
+        <li>复测后看日志里的 `TX session: frames=`：仍是 0 说明音频根本没进服务端（客户端问题，继续查权限/静音键/输入设备）；如果 frames&gt;0 而 written=0，才是服务端写声卡的问题。可以在 ☰ 菜单里再打一次诊断包对比。</li>
+        <li>确认发射音频进了电台的调制口：FT-891 没有 USB 声卡（USB 只做 CAT），发射音频必须由那块外接 USB 声卡（日志中的 [4] 扬声器 (USB PnP Sound Device)）接到电台的 DATA/ACC 口，并在电台上把该口的调制输入/电平打开（DATA 输入电平约 50，不要为 0），否则就是“键控有、功率近零”。同一根因在本仓历史记录里出现过两次（SDD V2.78 / 包 20261010-205200-6e3c“发射功率小/没有”）。</li>
+        <li>在 Windows 上把该 USB 声卡的播放音量拉到 100%，并在“声音 → 通信”里选“不执行任何操作”（默认会在检测到通信时把音量降到 80%/50%，直接表现为功率小）。</li>
+        <li>功率用仪器判断，别用网页表：FT-891 的 power/swr/alc 读数在 profile 里标为未校准（`unverified_meters`），请以电台前面板的 PO 表或外接驻波功率表为准；若电台自己的表也小，再查电台的 RF POWER 菜单是否被调低（FT-891 出厂 100 W，SSB/CW/FM 5–100 W）。</li>
+        <li>FT8 侧：深路径每槽让 DSP worker 退出（现象已由日志确认），当前只有快路径在解；遇到漏解多的时隙时重开 FT8 页面/重启一次应用可临时缓解，根治需要代码侧修复（已在本次结论中作为回归上报）。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-22 16:03:20,672 [INFO] mrrc: TX session: frames=0 fed=0 decode_fail=0 written=0 write_err=0 queue_drops=0 peak=0% non_owner_drops=0</li>
+        <li class="ev">2026-10-22 16:03:17,897 [INFO] mrrc.audio: TX audio started: [4] 扬声器 (USB PnP Sound Device) (host=MME, default=44100Hz, actual=48000Hz, channels=1) (pre-buffer 60ms, cap 400ms)</li>
+        <li class="ev">2026-10-22 16:03:17,878 [INFO] mrrc.audio: Using default audio output: [4] 扬声器 (USB PnP Sound Device)</li>
+        <li class="ev">2026-10-22 15:20:15,034 [INFO] backends.yaesu.cat_core: Yaesu FT-891: CAT port [已隐去] open at 4800 baud</li>
+        <li class="ev">2026-10-22 15:20:16,493 [INFO] mrrc: Initial state: freq=7048000 mode=LSB s_meter=200</li>
+        <li class="ev">2026-10-22 16:03:27,261 [INFO] mrrc: Audio TX client disconnected (2 remain, owner=True)</li>
+        <li class="ev">2026-10-22 16:03:19,072 [WARNING] ft8.engine.cascade: deep decode path failed; keeping the fast results … ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None (generation 14, restarts 13)</li>
+        <li class="ev">2026-10-22 16:04:04,371 [INFO] mrrc.ft8.runtime: decode counters after 19 slot(s): decodes=17 fast=17 escalations=0 (0.0%) late=14 errors=0 skipped=2</li>
+        <li class="ev">2026-10-22 15:20:16,626 [WARNING] mrrc.audio: Configured audio device &#x27;麦克风 (USB Audio Device)&#x27; not found</li>
+        <li class="ev">2026-10-22 15:20:18,790 [WARNING] mrrc: RX audio is near-silent (peak=0.1%) — check radio AF gain / USB audio connection</li>
+        <li class="ev">2026-10-22 15:20:16,494 [WARNING] mrrc: Radio model ft891 is NOT hardware-verified — transmit is ENABLED by env override</li>
+        <li class="ev">backends/yaesu/yaesu_profiles.py:434  audio_name_hints=(),                 # D3: nothing to auto-match</li>
+        <li class="ev">backends/yaesu/yaesu_profiles.py:436  unverified_meters=(&quot;s_meter&quot;, &quot;power&quot;, &quot;swr&quot;, &quot;alc&quot;, &quot;comp&quot;),</li>
+        <li class="ev">SDD/14 V2.78：`20261010-205200-6e3c`（v1.25.4，「发射功率小/没有」，SSB 7.05 MHz）… 根因在电台侧调制输入源</li>
+        <li class="ev">SDD/14 V2.71：四次发射全是 `frames=0 fed=0 written=0 peak=0% non_owner_drops=190/118/102/236`</li>
+        <li class="ev">server.py:2952-2958  &quot;TX session: frames=%d fed=%d decode_fail=%d written=%d write_err=%d queue_drops=%d peak=%.0f%% non_owner_drops=%d&quot;</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>ft8/core/worker.py:_run_with_large_stack / ft8/core/supervisor.py:request（worker_exit status None 的捕获与 generation 细节）+ ft8/dsp 内仍会终止进程的两处 Fortran stop（patched/four2avar.f90、vendor/packjt.f90）；TX 音频零帧一侧先看 server.py:_handle_audio_tx 与前端 tx_capture_worklet.js 的麦克风授权失败路径，非本次直接缺陷</code></p>
+    </article>
     <article class="card" id="20261022-160540-51e7">
       <header>
         <span class="id">20261022-160540-51e7</span>
@@ -827,7 +877,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-22 16:11（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-22 16:12（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

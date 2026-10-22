@@ -87,6 +87,7 @@ def parse_manifest(data) -> dict:
     # 变成「检查失败」。未知键会被旧解析器忽略，所以镜像线比安装包线新这件事，用新键
     # 表达才是向后兼容的（`box` 仍然认，供旧清单继续工作）。
     box = data.get("boxLine") or data.get("box")
+    box_fixpack = ""
     if box is not None:
         # 盒子（源码树）的更新包：W103D 上没有安装器，只有一份 stage 过的 tar.gz。
         if not isinstance(box, dict):
@@ -99,6 +100,12 @@ def parse_manifest(data) -> dict:
         _require_version(box, "version")
         if box.get("notes") is not None and not isinstance(box["notes"], str):
             raise ManifestError("box.notes 不是字符串")
+        # 修复包编号（设计 2026-10-22）：它是**新键**，老解析器忽略它 —— 所以老盒子读到
+        # 带 FP 的新清单不会报错，只是不显示。拼错的编号宁可拒读：在页面上显示一个错编号
+        # 比不显示更误导。
+        box_fixpack = str(box.get("fixpack", "") or "").strip()
+        if box_fixpack and not re.fullmatch(r"FP\d+", box_fixpack):
+            raise ManifestError(f"box.fixpack 不是修复包编号：{box_fixpack!r}")
         box_url = str(box.get("url", "") or "")
         if not box_url.startswith("https://"):
             raise ManifestError(f"box.url 必须是 https：{box_url!r}")
@@ -126,6 +133,7 @@ def parse_manifest(data) -> dict:
                       "size": previous.get("size")} if isinstance(previous, dict) else None),
         "box": ({"version": str(box["version"]), "url": str(box["url"]),
                  "sha256": str(box["sha256"]).lower(), "size": int(box["size"]),
+                 "fixpack": box_fixpack,
                  "notes": str(box.get("notes", "") or "")}
                 if isinstance(box, dict) else None),
         "minSupported": str(data.get("minSupported", "") or ""),
@@ -164,17 +172,23 @@ def check(current: str, manifest: dict) -> dict:
     }
 
 
-def check_box(current: str, manifest: dict) -> dict:
+def check_box(current: str, manifest: dict, current_fixpack: str = "") -> dict:
     """Compare an installed **box** version against the manifest's `box` entry.
 
     The box runs a source tree, not an installer, so its update is a tarball
     (`box`) rather than the desktop `installer` entry. Returning the same shape
     as `check()` keeps the caller honest: one page, one meaning per field.
+
+    `current_fixpack` / `latest_fixpack` are **display only**: the fix-pack number
+    says which delivery this is, never which one is newer (2026-10-22 design §3 —
+    the field boxes' parser only understands a three-part version, so a fix pack
+    that participated in the comparison would simply be invisible to them).
     """
     box = manifest.get("box")
     if not box:
         return {"available": False, "current": current, "latest": manifest.get("latest", ""),
                 "reason": "清单里没有盒子的更新包", "url": "", "sha256": "", "size": 0,
+                "current_fixpack": current_fixpack, "latest_fixpack": "",
                 "notes": manifest.get("notes", "")}
     latest = box["version"]
     # 盒子线的说明优先：两条线各说各的，盒子上不该出现桌面版的更新说明。
@@ -183,6 +197,8 @@ def check_box(current: str, manifest: dict) -> dict:
         "available": compare_versions(current, latest) < 0,
         "current": current,
         "latest": latest,
+        "current_fixpack": current_fixpack,
+        "latest_fixpack": str(box.get("fixpack", "") or ""),
         "mandatory": bool(manifest.get("mandatory", False)),
         "releasedAt": manifest.get("releasedAt", ""),
         "notes": notes,

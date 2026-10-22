@@ -96,11 +96,18 @@ class MenuFooterFrontendTests(unittest.TestCase):
         """No version field (older server) must not print "undefined"."""
         branding = self.main.split("function _applyRadioBranding()")[1].split("\nfunction ")[0]
         self.assertNotIn('+ " v" + undefined', branding)
-        self.assertIn('serverVersion ? " v" + serverVersion : ""', branding)
+        self.assertIn('" v" + serverVersion', branding)
+        self.assertIn(': ""', branding)          # 没有版本就是空串，不是 "undefined"
+
+    def test_the_fix_pack_number_joins_the_version(self):
+        """盒子线的 FP 号与版本号并列显示（`v1.28.5 · FP1`）；桌面版没有它就只剩版本号。"""
+        self.assertIn('serverFixpack = msg.fixpack || "";', self.main)
+        branding = self.main.split("function _applyRadioBranding()")[1].split("\nfunction ")[0]
+        self.assertIn('serverFixpack ? " · " + serverFixpack : ""', branding)
 
     def test_the_page_cache_moved_with_the_edit(self):
         """index.html is cache-first: a stale sw.js means a stale footer."""
-        self.assertIn("const CACHE = 'mrrc-v54';", self.sw)
+        self.assertIn("const CACHE = 'mrrc-v55';", self.sw)
         self.assertIn("'/'", self.sw)
 
 

@@ -169,6 +169,20 @@ class UpdateCheckTests(unittest.TestCase):
         self.assertEqual(payload["url"], "https://example.invalid/tree.tar.gz")
         self.assertEqual(payload["size"], 1234)
 
+    def test_the_box_fix_pack_reaches_the_page(self):
+        """修复包编号必须能从接口读出来，否则页面只能显示版本号 —— 而用户引用的就是那个号。"""
+        manifest = upgrade_core.parse_manifest(dict(
+            self.MANIFEST,
+            boxLine={"version": "1.18.0", "url": "https://example.invalid/tree.tar.gz",
+                     "sha256": "b" * 64, "size": 1234, "fixpack": "FP1"}))
+        with mock.patch.object(server, "_verify_auth", return_value=True), \
+             mock.patch.object(server.support_bundle, "detect_version", return_value="1.17.0"), \
+             mock.patch.object(server.box_update, "read_fixpack", return_value=""), \
+             mock.patch.object(server.upgrade_core, "fetch_manifest", return_value=manifest):
+            payload = _payload(self._call())
+        self.assertEqual(payload["latest_fixpack"], "FP1")
+        self.assertEqual(payload["current_fixpack"], "")
+
     def test_unreachable_manifest_reports_a_reason_not_a_500(self):
         with mock.patch.object(server, "_verify_auth", return_value=True), \
              mock.patch.object(server.upgrade_core, "fetch_manifest",

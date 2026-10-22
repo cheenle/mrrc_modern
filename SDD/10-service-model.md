@@ -75,6 +75,13 @@ AuthService
 - `GET /api/session_metrics` —— 会话遥测（AD-023）：并发 Listener 数、上行占用、丢帧与解码失败计数。
   用途是给 Hub 侧容量决策提供真实数据（RX 扇出的触发器 AD-H12 依赖它）。
   经云端入口访问时，前缀由 `FT710Settings.basePath` 决定，调用方不得硬编码根路径。
+- `GET /api/cloud/state` —— 接入状态（盒子设置页与桌面对话框共用）。除呼号/入口/证书外，它**必须**
+  给出隧道本身的状态：`tunnel_running`（frpc 进程在不在跑）与 `tunnel_error`（`TunnelProcess.last_error`，
+  或者“隧道起不来”的确切原因——例如 `fleet/frpc` 缺失时的完整路径）。
+  理由是 2026-10-22：一台已发货的盒子公网入口 502 四天，而它的设置页写着“已接通”——那个绿标只看
+  配置里有没有入口字符串。缺文件那条路径（`_cloud_start_tunnel()`）曾静默 `return`，不写日志也不留
+  状态，于是“隧道没起来而错误为空”在界面上等于沉默。现在缺什么就点名什么，并按内容去重只警告一次
+  （该端点每 30 秒被轮询一次，重复警告会把日志刷满）。
 
 鉴权沿用既有会话机制，但**令牌不得出现在查询串**（AD-024）：改用 Cookie 或 `Authorization: Bearer`。
 

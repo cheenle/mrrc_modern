@@ -424,6 +424,9 @@ let radioDisplayName = null;
 // Installed server version from fullState, shown in the menu footer.
 // null = legacy server: the footer keeps whatever the markup shipped.
 let serverVersion = null;
+// 盒子线的修复包编号（FP1、FP2…）：与版本号并列显示成 `v1.28.5 · FP1`。
+// 空串 = 桌面版或老盒子，页脚就不留尾巴。它不参与任何版本比较。
+let serverFixpack = "";
 
 // ── Message Handler ─────────────────────────────────────────────────
 function handleMessage(msg) {
@@ -460,6 +463,7 @@ function handleMessage(msg) {
 			radioModel = msg.radioModel || null;
 			radioDisplayName = msg.radioDisplayName || null;
 			serverVersion = msg.version || null;
+			serverFixpack = msg.fixpack || "";
 			_applyRadioBranding();
 			// RX playback boost comes from capabilities when the server
 			// provides it (Icom USB audio is much hotter than the FT-710's);
@@ -606,7 +610,11 @@ function _applyRadioBranding() {
 	const menuTitle = document.getElementById("menu-title");
 	if (menuTitle) menuTitle.textContent = name + " Menu";
 	const version = document.getElementById("menu-version");
-	if (version) version.textContent = name + (serverVersion ? " v" + serverVersion : "");
+	if (version) {
+		version.textContent = name + (serverVersion
+			? " v" + serverVersion + (serverFixpack ? " · " + serverFixpack : "")
+			: "");
+	}
 	const appleMeta = document.querySelector(
 		'meta[name="apple-mobile-web-app-title"]',
 	);

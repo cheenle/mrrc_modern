@@ -430,11 +430,11 @@ class WebClientCapsTests(unittest.TestCase):
 
     def test_asset_versions_were_bumped(self):
         html = Path("static/index.html").read_text(encoding="utf-8")
-        self.assertIn("ft710_main.js?v=44", html)
+        self.assertIn("ft710_main.js?v=45", html)
         self.assertIn("ft710_ui.js?v=38", html)
         sw = Path("static/sw.js").read_text(encoding="utf-8")
-        self.assertIn("const CACHE = 'mrrc-v54';", sw)
-        self.assertIn("'/ft710_main.js?v=44'", sw)
+        self.assertIn("const CACHE = 'mrrc-v55';", sw)
+        self.assertIn("'/ft710_main.js?v=45'", sw)
         self.assertIn("'/ft710_ui.js?v=38'", sw)
 
     def test_no_stale_cache_pins_anywhere(self):

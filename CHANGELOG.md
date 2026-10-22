@@ -2,6 +2,36 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [镜像线 v1.28.5 · FP1] — 2026-10-22 — 隧道没起来时不再沉默：缺什么就点名什么
+
+**这是盒子线的第 1 个 Fix Pack。** 从这一版起，盒子线的每次修复交付在版本号之外多一个
+编号（`FP1`、`FP2`…），它出现在页脚、更新卡与诊断包里——为的是一句「你装的是哪个 FP」
+就能指认一次交付。编号**不参与版本比较**：现场盒子的解析器只认三段版本号，把 FP 拼成
+`1.28.5.1` 会让那一版在它眼里等于 `1.28.5`，等于没发
+（设计：`docs/superpowers/specs/2026-10-22-box-fixpack-design.md`）。
+
+**修复本体**（2026-10-22 现场，`bh7kyz.mrrc.vlsc.net`）：公网入口连续四天 502，而盒子
+自己的设置页写着「已接通」。hub 侧逐层无异常——路由、证书、信任包、端口都就位，
+nginx 只有一句 `connect() failed (111: Connection refused) … 127.0.0.1:18816`，
+frps 四天零登录记录——断点在盒子的 frpc 隧道上。
+
+- `_cloud_start_tunnel()` 在 `fleet/frpc` 或 `fleet/frpc-<label>.toml` 缺失时原本**静默
+  `return`**：不写日志、不留状态；而设置页只在 `tunnel_error` 非空时才提隧道。两处沉默
+  正好对齐 ⇒ 页面上只剩一个绿色的「已接通」。现在缺什么就点名什么，并按内容去重打一条
+  WARNING（该端点每 30 秒被轮询一次），隧道起来后自动清空。
+- 盒子设置页的「隧道」行改为**无条件显示**（运行中 / 错误原文 / 未运行），隧道不在跑时
+  连「已接通」那个绿标一起变红（`已接通 · 隧道中断`）。
+
+**配套**（这次一起到的）：盒子线修复包编号的整条链——清单 `boxLine.fixpack`（老解析器
+忽略这个新键）、tarball 里的 `fixpack.txt`、`/api/update/check` 的
+`current_fixpack`/`latest_fixpack`、更新卡与页脚的 `版本 · FPn` 显示、
+`make_box_source.py --fixpack` 与 `make_latest_json.py --box-fixpack`、
+`CHANGELOG` 的 `[镜像线 vX.Y.Z · FPn]` 标题（`version_of()` 一次读两个值）。
+
+**验收**：`unittest` 全套绿；`release_check.py` 离线 0 failing；
+`tests/test_release_artifacts.py` 新增守卫把「CHANGELOG 最新镜像线条目 ↔ 线上清单的
+`boxLine`」钉在一起（此前这条对齐全靠人）。
+
 ## [v1.28.2] — 2026-10-21 — 启动器不再把用户选的机型改回 ft710；FT-891 自己找 CAT 波特率；FT8 深路径不再每槽杀死 DSP worker
 
 ### 栈：`sync8var` 的工作数组放在**调用线程**的栈上

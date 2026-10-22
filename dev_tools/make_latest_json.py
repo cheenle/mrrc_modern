@@ -56,7 +56,7 @@ def digest_of(path: Path) -> tuple[str, int]:
 def build_manifest(installer: tuple, previous: tuple | None = None, notes: str = "",
                    mandatory: bool = False, min_supported: str = "",
                    released_at: str = "", expect_app: str = "",
-                   box: tuple | None = None) -> dict:
+                   box: tuple | None = None, box_fixpack: str = "") -> dict:
     """`installer`/`previous` are `(version, url, file_path)` triples."""
     version, url, path = installer
     if expect_app and up.compare_versions(version, expect_app) != 0:
@@ -88,6 +88,14 @@ def build_manifest(installer: tuple, previous: tuple | None = None, notes: str =
         box_sha, box_size = digest_of(Path(box_path).expanduser())
         manifest["box"] = {"version": box_version, "url": box_url,
                            "sha256": box_sha, "size": box_size}
+        # 修复包编号（2026-10-22）：与版本号并列、不拼进版本字符串。老的解析器忽略这个
+        # 新键，所以带上它不会让现场盒子读清单失败。
+        if box_fixpack:
+            if re.fullmatch(r"FP\d+", box_fixpack) is None:
+                raise BuildError(f"box 修复包编号不合法：{box_fixpack!r}")
+            manifest["box"]["fixpack"] = box_fixpack
+    elif box_fixpack:
+        raise BuildError("给了 --box-fixpack 却没有 --box：修复包编号没有宿主")
     # The same validation the clients run, so a bad manifest can never be published.
     up.parse_manifest(manifest)
     return manifest
@@ -103,6 +111,8 @@ def main(argv=None) -> int:
     parser.add_argument("--released-at", default="")
     parser.add_argument("--box", nargs=3, metavar=("VERSION", "URL", "FILE"),
                         help="盒子用的源码包（dev_tools/make_box_source.py 产出）")
+    parser.add_argument("--box-fixpack", default="", metavar="FPn",
+                        help="盒子线的修复包编号（FP1、FP2…）；可省略")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
@@ -112,7 +122,8 @@ def main(argv=None) -> int:
                                   notes=args.notes, mandatory=args.mandatory,
                                   min_supported=args.min_supported, released_at=args.released_at,
                                   expect_app=changelog_version(),
-                                  box=tuple(args.box) if args.box else None)
+                                  box=tuple(args.box) if args.box else None,
+                                  box_fixpack=args.box_fixpack)
     except BuildError as e:
         print(f"拒绝生成：{e}", file=sys.stderr)
         return 2

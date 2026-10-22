@@ -15,6 +15,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -144,6 +145,48 @@ class RuleEngineTests(unittest.TestCase):
         with mock.patch.object(rc, "ROOT", Path("/nonexistent")):
             results = rc.check_rules({"rules": [rule]}, "9.9.9", "V3.14")
         self.assertEqual(results[0][0], rc.SKIP)
+
+
+class BoxLineFixPackTests(unittest.TestCase):
+    """盒子线的「版本 + 修复包编号」在两处必须一致：CHANGELOG 与已发布的清单。
+
+    2026-10-22 之前，`latest.json` 的 `boxLine.version` 与 CHANGELOG 里最新的
+    `[镜像线 vX.Y.Z]` 是**靠人对齐**的：两边都手写，而且谁也没拿它们互相比过。
+    盒子线一旦落后或超前，症状是「盒子永远说已是最新」（或升级完又发现新版本）——
+    两者都不报错，所以只能靠一条守卫盯住。
+
+    修复包编号（FP1、FP2…）也是同一个道理：它是人引用交付的编号，清单里写错一个数字
+    就等于指错了交付。设计：`docs/superpowers/specs/2026-10-22-box-fixpack-design.md`。
+    """
+
+    HEADING = re.compile(r"^##\s*\[镜像线 v(\d+\.\d+\.\d+)(?:\s*·\s*(FP\d+))?\]", re.M)
+
+    def _changelog(self) -> tuple:
+        text = (REPO / "CHANGELOG.md").read_text(encoding="utf-8", errors="replace")
+        match = self.HEADING.search(text)
+        self.assertIsNotNone(match, "CHANGELOG 里没有 ## [镜像线 vX.Y.Z] 标题")
+        return match.group(1), (match.group(2) or "")
+
+    def _published(self) -> dict:
+        manifest = json.loads((REPO / "website/downloads/latest.json").read_text(encoding="utf-8"))
+        return manifest.get("boxLine") or manifest.get("box") or {}
+
+    def test_the_manifest_carries_the_newest_box_line_version(self):
+        version, _fixpack = self._changelog()
+        self.assertEqual(self._published().get("version"), version,
+                         "清单的 boxLine.version 与 CHANGELOG 最新镜像线不一致")
+
+    def test_the_manifest_carries_the_same_fix_pack_number(self):
+        _version, fixpack = self._changelog()
+        self.assertEqual(self._published().get("fixpack", ""), fixpack,
+                         "清单的 boxLine.fixpack 与 CHANGELOG 标题不一致")
+
+    def test_the_manifest_entry_survives_the_parsers_the_boxes_run(self):
+        """老盒子（只认三段、不认 fixpack）读这份清单必须**不报错**。"""
+        import upgrade_core as up
+        manifest = up.parse_manifest((REPO / "website/downloads/latest.json").read_bytes())
+        self.assertTrue(manifest["box"])
+        self.assertEqual(up.compare_versions("1.0.0", manifest["box"]["version"]), -1)
 
 
 class DiagramRuleTests(unittest.TestCase):

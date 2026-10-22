@@ -49,6 +49,10 @@ WATCHDOG_POLL_S = 30
 KEEP = ("venv", "logs", "recordings", ".local", "env", "fleet", "data",
         "ft8-slots", "__pycache__", "ft8/dsp/build/CMakeFiles")
 
+#: 修复包编号的文件名（盒子线，设计 2026-10-22）。它在树根，和 `version.txt` 并列 ——
+#: 不拼进版本号里，因为现场盒子的解析器只认三段版本号。
+FIXPACK_FILE = "fixpack.txt"
+
 STATE_IDLE, STATE_DOWNLOAD, STATE_VERIFY, STATE_APPLY, STATE_RESTART, \
     STATE_DONE, STATE_FAILED = ("idle", "downloading", "verifying", "applying",
                                 "restarting", "done", "failed")
@@ -219,6 +223,37 @@ def write_version(home: Path, version: str) -> None:
     (home / "VERSION").write_text(version + "\n", encoding="utf-8")
 
 
+def read_fixpack(tree: Path) -> str:
+    """本机（或包里）的修复包编号，形如 `FP1`；没有就是一个空串。
+
+    它不是版本号，**不参与比较**（设计 `docs/superpowers/specs/2026-10-22-box-fixpack-design.md`）：
+    版本号回答「谁比谁新」，这个编号回答「这是第几次修复」。乱值当没有 —— 一个拼错的
+    编号显示在页面上，比不显示更误导。
+    """
+    import re
+    try:
+        text = (Path(tree) / FIXPACK_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    return text if re.fullmatch(r"FP\d+", text) else ""
+
+
+def write_fixpack(home: Path, fixpack: str) -> None:
+    """盖上（或清掉）修复包编号。
+
+    **空值必须删文件**：换上一个没有 FP 的包之后，`fixpack.txt` 如果是上次留下的，
+    页面就会一直报上一代的编号 —— 那比不显示更糟（2026-10-22 设计 §5）。
+    """
+    path = Path(home) / FIXPACK_FILE
+    if fixpack:
+        path.write_text(fixpack + "\n", encoding="utf-8")
+        return
+    try:
+        path.unlink()
+    except OSError:
+        pass
+
+
 def backup(home: Path, version: str, *, keep: int = 2) -> Path:
     """Tar the current tree (code only) so the watchdog can put it back."""
     out_dir = update_dir(home)
@@ -335,6 +370,7 @@ def apply(plan: dict, home: Path, *, runner: Optional[Callable] = None,
     _set(STATE_APPLY, detail="覆盖代码")
     stage_over(tree, home)
     write_version(home, version_in(tree) or version)
+    write_fixpack(home, read_fixpack(tree) or str(plan.get("fixpack") or ""))
 
     _set(STATE_RESTART, detail="重启服务（约 10 秒；90 秒内没起来会自动回滚）")
     spawn = spawn or spawn_watchdog

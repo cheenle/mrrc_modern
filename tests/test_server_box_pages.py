@@ -257,6 +257,20 @@ class CloudPanelTests(unittest.TestCase):
     def test_the_callsign_field_says_what_changing_it_means(self):
         self.assertIn("旧入口不会自动迁移", self.text)
 
+    def test_the_panel_says_whether_the_tunnel_is_running(self):
+        """「已接通」只看配置里有没有入口字符串，不看隧道真的在跑。
+
+        2026-10-22 现场：公网入口连续四天 502，而盒子的这个面板写着「已接通」——
+        两条互相矛盾的信息摆在同一个屏幕上。服务端早就把 `tunnel_running` /
+        `tunnel_error` 发出来了（桌面端对话框 `modules/cloud_hub.js` 一直在渲染），
+        唯独盒子设置页只在 `tunnel_error` 非空时才提隧道，于是「隧道没起来而 error 为空」
+        （恰恰是 frpc 缺失那种）又变成沉默。
+        """
+        self.assertIn("cloud.tunnel_running", self.text)
+        self.assertNotIn("if (cloud.tunnel_error) kv(", self.text,
+                         "只在出错时才显示隧道 —— 那正是沉默的写法")
+        self.assertIn("未运行", self.text)
+
 
 if __name__ == "__main__":
     unittest.main()

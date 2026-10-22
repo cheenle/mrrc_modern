@@ -372,6 +372,95 @@ class CloudAutoconnectTests(unittest.TestCase):
         self.assertIn("autoconnect", payload)
         self.assertEqual(payload["autoconnect"]["status"], "applied")
 
+class CloudTunnelNotStartedTests(unittest.TestCase):
+    """隧道起不来时，状态端点必须说出**为什么**，而且日志里要留一条。
+
+    2026-10-22 现场：一台已发货的盒子，公网入口连续四天 502，而 hub 侧一切正常（路由、证书、
+    信任包、端口都就位，只有 frps 四天零登录记录）。根因在盒子：`_cloud_start_tunnel()` 发现
+    `fleet/frpc` 或 `fleet/frpc-<label>.toml` 缺失就**直接 return** —— 不写日志、不留状态，
+    于是盒子设置页的「公网入口」写着「已接通」，nginx 那边是 `Connection refused`。
+    判据只能在 hub 上从 502 反推，这正是本条要消掉的沉默。
+    """
+
+    LABEL = {"MRRC_CLOUD_LABEL": "bh7kyz"}
+
+    def setUp(self):
+        self._saved = (server._cloud_tunnel, server._cloud_tunnel_problem)
+        server._cloud_tunnel = None
+        server._cloud_tunnel_problem = ""
+
+    def tearDown(self):
+        server._cloud_tunnel, server._cloud_tunnel_problem = self._saved
+
+    def _config(self, tmp, **values):
+        env = Path(tmp) / "mrrc_modern.env"
+        env.write_text("".join(f"{k}={v}\n" for k, v in values.items()), encoding="utf-8")
+        return env
+
+    def _state(self, config, fleet, data):
+        """走真正的端点：它自己会调 _cloud_start_tunnel，那正是要验的那条路。"""
+        request = _Request()
+        with patch.object(server, "_verify_auth", return_value=True), \
+             patch.object(server, "_config_file_path", return_value=config), \
+             patch.object(server, "_cloud_fleet_dir", return_value=fleet), \
+             patch.object(server, "_cloud_data_dir", return_value=data):
+            reply = asyncio.run(server.api_cloud_state(request))
+        return json.loads(bytes(reply.body))
+
+    def test_a_missing_tunnel_client_is_named_rather_than_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fleet, data = Path(tmp) / "fleet", Path(tmp) / "data"
+            data.mkdir()
+            (data / "frpc-bh7kyz.toml").write_text('serverAddr = "x"\n', encoding="utf-8")
+            config = self._config(tmp, **self.LABEL)
+            with self.assertLogs(server.logger, "WARNING") as logs:
+                state = self._state(config, fleet, data)
+            self.assertFalse(state["tunnel_running"])
+            self.assertIn(str(fleet / "frpc"), state["tunnel_error"],
+                          "只说了“未运行”，没说缺的是哪个文件 —— 运维还得自己猜")
+            self.assertEqual(len(logs.records), 1, "起不来这件事一次也没进日志")
+
+    def test_a_missing_tunnel_config_is_named_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fleet, data = Path(tmp) / "fleet", Path(tmp) / "data"
+            fleet.mkdir()
+            data.mkdir()
+            (fleet / "frpc").write_text("", encoding="utf-8")
+            config = self._config(tmp, **self.LABEL)
+            with self.assertLogs(server.logger, "WARNING"):
+                state = self._state(config, fleet, data)
+            self.assertIn("frpc-bh7kyz.toml", state["tunnel_error"])
+
+    def test_repeated_polls_say_it_once(self):
+        """这一句不能变成噪声：设置页每 30 秒刷一次状态，警告过一次就够了。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            fleet, data = Path(tmp) / "fleet", Path(tmp) / "data"
+            data.mkdir()
+            (data / "frpc-bh7kyz.toml").write_text('serverAddr = "x"\n', encoding="utf-8")
+            config = self._config(tmp, **self.LABEL)
+            with self.assertLogs(server.logger, "WARNING") as logs:
+                for _ in range(3):
+                    self._state(config, fleet, data)
+            self.assertEqual(len(logs.records), 1, "每刷一次页面就警告一次")
+
+    def test_a_tunnel_that_starts_clears_the_recorded_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fleet, data = Path(tmp) / "fleet", Path(tmp) / "data"
+            fleet.mkdir()
+            data.mkdir()
+            (fleet / "frpc").write_text("", encoding="utf-8")
+            (data / "frpc-bh7kyz.toml").write_text('serverAddr = "x"\n', encoding="utf-8")
+            server._cloud_tunnel_problem = "找不到 /old/frpc"
+            with patch.object(server, "_cloud_fleet_dir", return_value=fleet), \
+                 patch.object(server, "_cloud_data_dir", return_value=data), \
+                 patch.object(cloud_hub, "ensure_admin_segment", return_value=0), \
+                 patch.object(cloud_hub, "TunnelProcess") as tunnel_cls:
+                server._cloud_start_tunnel(self.LABEL)
+            self.assertEqual(server._cloud_tunnel_problem, "",
+                             "隧道起来了，页面还在报上一次的问题")
+            tunnel_cls.return_value.start.assert_called_once()
+
+
 class CloudTunnelShutdownTests(unittest.TestCase):
     """frpc is this process's child, so it must not outlive it.
 

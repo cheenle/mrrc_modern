@@ -745,7 +745,7 @@
 </tr>
 <tr>
 <td>AD-022</td>
-<td>Update channel: generated <code class="scope-code">latest.json</code>, self-proving <code class="scope-code">state.json</code>, upgrade blocked while transmitting (support chain 3/4, slice 1)</td>
+<td>Update channel: generated <code class="scope-code">latest.json</code>, self-proving <code class="scope-code">state.json</code>, upgrade blocked while transmitting (support chain 3/4, slice 1); the box line carries an independent version <strong>and a display-only fix-pack number</strong> (<code class="scope-code">boxLine.fixpack</code>, 2026-10-22)</td>
 <td>Implemented (V2.53)</td>
 </tr>
 <tr>
@@ -973,6 +973,14 @@
 </tr>
 </tbody>
 </table>
+<p><strong>2026-10-22 补记 —— 盒子线的修复包编号（FP）</strong>：<code class="scope-code">boxLine</code> 从 2026-10-19 起独立编号 （<code class="scope-code">box.version</code> 不要求等于桌面 <code class="scope-code">latest</code>，两条线由不同构建机产出）。现在同一份清单里再加一个 <strong>只读标签</strong> <code class="scope-code">boxLine.fixpack</code>（<code class="scope-code">FP1</code>、<code class="scope-code">FP2</code>…，全局递增）：</p>
+<ul>
+<li><strong>它是标签，不是版本号的一部分。</strong> <code class="scope-code">compare_versions()</code> 不读它，<code class="scope-code">available</code> 的判定与有无 FP 完全无关（<code class="scope-code">tests/test_box_update.py::FixPackTests::test_the_comparison_ignores_it</code> 钉住）。 理由是一条实测约束：现场盒子的解析器是 <code class="scope-code">^v?(\d+)\.(\d+)\.(\d+)</code>，把 FP 拼成第四段 （<code class="scope-code">1.28.5.1</code>）在它眼里等于 <code class="scope-code">1.28.5</code> ⇒ 判定「已是最新」⇒ <strong>等于没发</strong>。</li>
+<li><strong>每发一次盒子修复包：版本号 +1（三段）且 FP 号 +1。</strong> 编号允许断号（被撤回的那次不复用）， 不允许复用 —— 复用一个编号等于让两份不同字节的包共用一个名字。</li>
+<li><strong>载体</strong>：<code class="scope-code">CHANGELOG</code> 的 <code class="scope-code">## [镜像线 vX.Y.Z · FPn]</code> 标题（<code class="scope-code">make_box_source.version_of()</code> 一次读两个值）、tarball 根的 <code class="scope-code">fixpack.txt</code>（<code class="scope-code">box_update.write_fixpack()</code>，空值删文件）、 <code class="scope-code">/api/update/check</code> 的 <code class="scope-code">current_fixpack</code> / <code class="scope-code">latest_fixpack</code>、更新卡与页脚的 <code class="scope-code">版本 · FPn</code>。</li>
+<li><strong>向后兼容</strong>：新键 → 老解析器忽略（<code class="scope-code">boxLine</code> 当初就是这么加进来的），所以老盒子读带 FP 的 清单不报错，只是不显示。</li>
+<li>设计 <code class="scope-code">docs/superpowers/specs/2026-10-22-box-fixpack-design.md</code>；守卫 <code class="scope-code">tests/test_release_artifacts.py::BoxLineFixPackTests</code>（CHANGELOG 最新镜像线条目 ↔︎ 清单， 此前这条对齐全靠人）。</li>
+</ul>
 <p><strong>Problem</strong>: 前两期把报障→结论打通了，但用户拿到修复仍要自己找下载页、对 SHA、重装。同时升级类功能最容易自欺：安装器退出码 0 不等于升级成功，已拉起安装器更不等于。</p>
 <p><strong>Rationale</strong>: 因此把成功定义成一个<strong>只能由新版本自己写下的事实</strong>（<code class="scope-code">lastResult.status == ok</code>），并把清单做成<strong>生成物</strong>（从产物本身算哈希）—— 这两条让升级成功与清单可信都不依赖任何人的自觉。发射门禁沿用第 15 章的既有分层：升级是维护动作，绝不与载波争资源。</p>
 <p><strong>Consequences</strong>: 维护者发版时多一步 <code class="scope-code">make_latest_json.py</code>，换来用户侧检查→下载→校验→安装→自证全程可判定；代价是两片交付期间只有检查可用 —— 这是有意的：半成品升级器会动用户的机器。</p>
@@ -1270,7 +1278,7 @@
 <footer class="scope-footer" style="margin-top: 0;">
     <div class="container">
         <div class="footer-bottom">
-            <p>&copy; 2026 MRRC Modern Project · V3.04 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
+            <p>&copy; 2026 MRRC Modern Project · V3.05 · <a href="https://github.com/cheenle/mrrc_modern">GitHub</a></p>
         </div>
     </div>
 </footer>

@@ -78,6 +78,24 @@ class ManifestBuildTests(unittest.TestCase):
         self.assertNotIn("previous", manifest)
         self.assertEqual(manifest["latest"], "1.18.0")
 
+    def test_a_box_fix_pack_is_carried_into_the_manifest(self):
+        """`fixpack` 是**新键**：老解析器忽略它，新页面才显示。"""
+        blob = self._artifact("src.tar.gz", b"\x1f\x8b" + b"z" * 4096)
+        manifest = self._build(box=("1.18.0", "https://example.invalid/src.tar.gz", blob),
+                               box_fixpack="FP3")
+        self.assertEqual(manifest["box"]["fixpack"], "FP3")
+
+    def test_a_box_without_a_fix_pack_says_nothing_about_one(self):
+        blob = self._artifact("src2.tar.gz", b"\x1f\x8b" + b"w" * 4096)
+        manifest = self._build(box=("1.18.0", "https://example.invalid/src2.tar.gz", blob))
+        self.assertEqual(manifest["box"].get("fixpack", ""), "")
+
+    def test_a_malformed_box_fix_pack_refuses_the_whole_manifest(self):
+        blob = self._artifact("src3.tar.gz", b"\x1f\x8b" + b"q" * 4096)
+        with self.assertRaises(maker.BuildError):
+            self._build(box=("1.18.0", "https://example.invalid/src3.tar.gz", blob),
+                        box_fixpack="fix3")
+
     def test_reads_the_changelog_version(self):
         changelog = self.root / "CHANGELOG.md"
         changelog.write_text("# Changelog\n\n## [v1.18.0] — 2026-10-01 — 说明\n", encoding="utf-8")

@@ -4562,10 +4562,16 @@ async def api_update_check(request: Request):
         except Exception:                                          # noqa: BLE001
             # 拿不到清单就交给 check_quietly：它把失败翻译成一句 reason，
             # 而不是让页面吃一个 500（2026-09-17 的教训）。
-            return upgrade_core.check_quietly(current, UPDATE_MANIFEST_URL)
-        if manifest.get("box"):
-            return upgrade_core.check_box(current, manifest)
-        return upgrade_core.check(current, manifest)
+            reply = upgrade_core.check_quietly(current, UPDATE_MANIFEST_URL)
+        else:
+            reply = (upgrade_core.check_box(current, manifest)
+                     if manifest.get("box") else upgrade_core.check(current, manifest))
+        # 修复包编号（设计 2026-10-22）：只显示、不参与「谁比谁新」。清单里没写就是空串，
+        # 页面据此不留尾巴；本机那个读 `fixpack.txt` —— 老盒子没有这个文件，也是空串。
+        reply = dict(reply)
+        reply.setdefault("latest_fixpack", "")
+        reply["current_fixpack"] = box_update.read_fixpack(_runtime_dir())
+        return reply
 
     result = await asyncio.to_thread(_check)
     return JSONResponse(result)
@@ -4749,6 +4755,9 @@ def _full_state_message(data: dict, channels: list) -> dict:
         # the UI is the number those two report — a hardcoded literal here
         # would be a fifth copy to keep in sync.
         "version": support_bundle.detect_version(_runtime_dir(), _resource_dir()),
+        # 盒子线的修复包编号（FP1、FP2…，2026-10-22 设计 §5）。只用于显示，页脚把两段拼成
+        # `v1.28.5 · FP1`；桌面版没有这个文件，读出空串，页脚就不留尾巴。
+        "fixpack": box_update.read_fixpack(_runtime_dir()),
         "memChannels": channels,
         # Server-authoritative filter tables so the frontend stops
         # hardcoding its own (drifting) copies.
@@ -7074,6 +7083,27 @@ def main():
 _cloud_tunnel: "cloud_hub.TunnelProcess | None" = None
 _cloud_lock = threading.Lock()
 
+#: 隧道没起来的原因，一句能直接摆在设置页上的话（空 = 没有已知问题：要么在跑，要么还没人试过）。
+#: 为什么不是直接用 ``TunnelProcess.last_error``：那一个只有在**进程起过**之后才存在，而这里要
+#: 说的是「进程根本没起来」—— ``fleet/frpc`` 或 ``fleet/frpc-<label>.toml`` 缺失。那一种此前
+#: 一句话都不留（见 CloudTunnelNotStartedTests 的现场记录）。
+_cloud_tunnel_problem = ""
+
+
+def _note_tunnel_problem(problem: str) -> None:
+    """记下隧道为什么没跑，并且**每种原因只在日志里说一次**。
+
+    调用点是 ``_cloud_start_tunnel()``，而 ``/api/cloud/state`` 每次轮询都会走它（设置页每 30 秒
+    刷一次状态），所以警告必须按内容去重：一次缺失说一遍，别把日志刷满。
+    """
+    global _cloud_tunnel_problem
+    if problem == _cloud_tunnel_problem:
+        return
+    _cloud_tunnel_problem = problem
+    if problem:
+        logger.warning("cloud hub: the tunnel is not running - %s "
+                       "(the public entry answers 502 until this is fixed)", problem)
+
 _CLOUD_KEYS = ("MRRC_CLOUD_CALLSIGN", "MRRC_CLOUD_TOKEN", "MRRC_CLOUD_LABEL",
                "MRRC_CLOUD_PORT", "MRRC_CLOUD_ENTRY", "MRRC_CLOUD_PORTAL")
 
@@ -7273,7 +7303,11 @@ def _cloud_start_tunnel(settings: dict) -> None:
     fleet = _cloud_fleet_dir()
     frpc = fleet / ("frpc.exe" if os.name == "nt" else "frpc")
     conf = _cloud_data_dir() / f"frpc-{label}.toml"
-    if not (frpc.exists() and conf.exists()):
+    # 缺东西时**说清楚缺哪个**。以前这里是静默 return：盒子自己的设置页写着「已接通」，
+    # hub 那边 502，服务端日志什么都没有（2026-10-22 现场，盒子 bh7kyz 断链四天）。
+    missing = [path for path in (frpc, conf) if not path.exists()]
+    if missing:
+        _note_tunnel_problem("隧道无法启动：找不到 " + "、".join(str(path) for path in missing))
         return
     with _cloud_lock:
         if _cloud_tunnel is None:
@@ -7282,6 +7316,7 @@ def _cloud_start_tunnel(settings: dict) -> None:
             cloud_hub.ensure_admin_segment(conf)
             _cloud_tunnel = cloud_hub.TunnelProcess(frpc, conf)
             _cloud_tunnel.start()
+            _note_tunnel_problem("")
 
 
 @app.get("/api/cloud/state", include_in_schema=False)
@@ -7301,7 +7336,8 @@ async def api_cloud_state(request: Request):
         "portal": _cloud_portal(settings),
         "autoconnect": dict(_cloud_autoconnect_state),
         "tunnel_running": bool(_cloud_tunnel and _cloud_tunnel.running),
-        "tunnel_error": (_cloud_tunnel.last_error if _cloud_tunnel else ""),
+        "tunnel_error": ((_cloud_tunnel.last_error if _cloud_tunnel else "")
+                         or _cloud_tunnel_problem),
         "cert_reload_required": _cert_reload_required(),
     })
 

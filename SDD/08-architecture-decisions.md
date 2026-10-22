@@ -277,7 +277,7 @@
 | AD-019 | Unverified models ship receive-only: transmit gate, read-only identity check, per-table provenance | Implemented (V2.46) |
 | AD-020 | One-touch CQ (server-side one-shot automated transmission) | Implemented |
 | AD-021 | Server-built, allow-list-redacted diagnostics bundle with a dedicated receiver (support chain 1/4) | Implemented (V2.51) |
-| AD-022 | Update channel: generated `latest.json`, self-proving `state.json`, upgrade blocked while transmitting (support chain 3/4, slice 1) | Implemented (V2.53) |
+| AD-022 | Update channel: generated `latest.json`, self-proving `state.json`, upgrade blocked while transmitting (support chain 3/4, slice 1); the box line carries an independent version **and a display-only fix-pack number** (`boxLine.fixpack`, 2026-10-22) | Implemented (V2.53) |
 | AD-023 | Remote-session telemetry (listener concurrency + uplink, counts without identifiers) | Implemented |
 | AD-024 | Session token transport (cookie → header for native clients; query deprecated) | Implemented |
 | AD-025 | Spectrum bandwidth tiers (shape × divider, gated by `spectrumCaps`) | Implemented |
@@ -376,6 +376,25 @@ git commit 并**单文件 rsync** 上线（全站部署仍是交互式的，不�
 | Alternatives | ①**应用内自动安装**（下载后直接替换自身文件）：跨平台权限/签名/回滚都不可控，且失败会把用户留在半个安装上；②**只做提示有新版本**（跳转下载页）：零风险但把升级退化成手工三步，正是本链路要消除的摩擦；③生成式清单 + 自证状态 + 两片交付（采纳）。 |
 | Consequences | ①**清单不可手写**：size/SHA 来自文件本身、installer 版本必须等于 CHANGELOG 顶版本、`previous` 必须更旧，任一不满足即拒绝生成，并由与客户端同一套 `parse_manifest` 复验；②**成功不可伪造**：只有新版本启动时看到 `pendingInstall.version == 自己` 才写 ok，`installing` 明确不等于成功（测试直接断言：旧版本无法宣称胜利）；③**发射优先**：升级请求在发射/录音期间返回 423，交接前复查（第 4 期热修沿用）；④离线检测**静默**；⑤**不自动安装**：始终由操作员按键触发。 |
 | Status detail | 规格 `docs/superpowers/specs/2026-09-17-upgrade-channel-design.md`；`version.txt`（AD-021 已铺到三平台）是本决策的版本权威 |
+
+**2026-10-22 补记 —— 盒子线的修复包编号（FP）**：`boxLine` 从 2026-10-19 起独立编号
+（`box.version` 不要求等于桌面 `latest`，两条线由不同构建机产出）。现在同一份清单里再加一个
+**只读标签** `boxLine.fixpack`（`FP1`、`FP2`…，全局递增）：
+
+- **它是标签，不是版本号的一部分。** `compare_versions()` 不读它，`available` 的判定与有无 FP
+  完全无关（`tests/test_box_update.py::FixPackTests::test_the_comparison_ignores_it` 钉住）。
+  理由是一条实测约束：现场盒子的解析器是 `^v?(\d+)\.(\d+)\.(\d+)`，把 FP 拼成第四段
+  （`1.28.5.1`）在它眼里等于 `1.28.5` ⇒ 判定「已是最新」⇒ **等于没发**。
+- **每发一次盒子修复包：版本号 +1（三段）且 FP 号 +1。** 编号允许断号（被撤回的那次不复用），
+  不允许复用 —— 复用一个编号等于让两份不同字节的包共用一个名字。
+- **载体**：`CHANGELOG` 的 `## [镜像线 vX.Y.Z · FPn]` 标题（`make_box_source.version_of()`
+  一次读两个值）、tarball 根的 `fixpack.txt`（`box_update.write_fixpack()`，空值删文件）、
+  `/api/update/check` 的 `current_fixpack` / `latest_fixpack`、更新卡与页脚的 `版本 · FPn`。
+- **向后兼容**：新键 → 老解析器忽略（`boxLine` 当初就是这么加进来的），所以老盒子读带 FP 的
+  清单不报错，只是不显示。
+- 设计 `docs/superpowers/specs/2026-10-22-box-fixpack-design.md`；守卫
+  `tests/test_release_artifacts.py::BoxLineFixPackTests`（CHANGELOG 最新镜像线条目 ↔ 清单，
+  此前这条对齐全靠人）。
 
 **Problem**: 前两期把报障→结论打通了，但用户拿到修复仍要自己找下载页、对 SHA、重装。同时升级类功能最容易自欺：安装器退出码 0 不等于升级成功，已拉起安装器更不等于。
 

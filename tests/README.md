@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2782 tests across 142 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2811 tests across 143 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-18, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -21,10 +21,10 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2782 |
-| Passed | 2368 (1 skipped) |
+| Total tests | 2811 |
+| Passed | 2810 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 (macOS, 2026-10-17) |
+| Failed | 0 (macOS, 2026-10-22) |
 | Execution time | ~1min (harness tests spawn CLI subprocesses) |
 
 The one failure this table carried through 2026-10-05 —
@@ -1127,4 +1127,3 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
 - **`test_server_perf_routes.py`** — `/api/perf` 与 `/Perf` 的守卫与形状：listen 与 sdr 会话 403、
   未认证 401、返回三段（`host`/`service`/`verdict`）、**音频引擎死掉时这一页仍然能看**（它正是
   「为什么卡」的时候被打开的）。判定不许在路由里再造一套阈值——只认 `host_perf.verdict`。
-

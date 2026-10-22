@@ -500,10 +500,20 @@ select{
     grid.replaceChildren();
     Box.setText('#cloud-portal', cloud.portal || '—');
     if (cloud.entry) {
-      pill.textContent = '已接通';
-      pill.className = 'pill good';
+      // 「已接通」只看配置里有没有入口字符串；隧道到底在不在跑是另一件事，
+      // 而 2026-10-22 就是这里骗了人：公网入口连着四天 502，本页写着「已接通」。
+      // 所以隧道断了连这个绿标一起变红——偶尔因为一次两秒的重启闪一下，
+      // 好过让同一屏上的两句话互相矛盾。
+      var tunnelUp = !!cloud.tunnel_running;
+      pill.textContent = tunnelUp ? '已接通' : '已接通 · 隧道中断';
+      pill.className = tunnelUp ? 'pill good' : 'pill bad';
       kv(grid, '呼号', cloud.callsign || '—');
       kv(grid, '入口', cloud.entry);
+      // 这一行无条件地显示（以前只在 tunnel_error 非空时才有）：
+      // 「没起来而且错误是空」恰恰是 frpc 缺失那种，也正是从前最安静的一种。
+      kv(grid, '隧道',
+         tunnelUp ? '运行中' : (cloud.tunnel_error || '未运行（稍候会自动重试）'),
+         tunnelUp ? 'good-text' : 'bad-text');
       if (cloud.cert_reload_required) {
         kv(grid, '提示', '证书刚换 —— 重启盒子后入口才生效', 'bad-text');
       }
@@ -516,7 +526,6 @@ select{
       pill.textContent = '未申请';
       pill.className = 'pill';
     }
-    if (cloud.tunnel_error) kv(grid, '隧道', cloud.tunnel_error, 'bad-text');
     var input = document.querySelector('#cloud-callsign');
     if (input && !input.value && cloud.callsign) input.value = cloud.callsign;
     Box.setText('#cloud-apply', cloud.has_token ? '查询状态' : '申请公网入口');
@@ -1026,20 +1035,31 @@ select{
       return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
     }
 
+    // 修复包编号（FP1、FP2…）与版本号并列显示，不拼进版本字符串里：版本号管「谁比谁新」，
+    // 这个编号管「这是第几次修复」。没有编号时不留尾巴（设计 2026-10-22 §5）。
+    function withFixpack(version, fixpack) {
+      if (!version) { return ""; }
+      return fixpack ? version + " · " + fixpack : version;
+    }
+
+    function localVersion(r) { return withFixpack(r.current, r.current_fixpack); }
+
+    function remoteVersion(r) { return withFixpack(r.latest, r.latest_fixpack); }
+
     function check() {
       checkBtn.disabled = true;
       show(info, "正在查询…");
       Box.api("/api/update/check").then(function (r) {
         if (r.available) {
-          show(info, "当前 " + r.current + " → 可升级到 " + r.latest, "");
+          show(info, "当前 " + localVersion(r) + " → 可升级到 " + remoteVersion(r), "");
           if (r.notes) { show(msg, r.notes, ""); }
           applyBtn.style.display = "";
           applyBtn.textContent = "升级到 " + r.latest;
           show(pill, "有新版本", "warn");
         } else {
           // 「点了没反应」= 没有可看的证据：把这次查询的时间和线上版本一起写出来。
-          show(info, "当前 " + r.current + " 已是最新" +
-            (r.latest ? "（线上 " + r.latest + "）" : "") +
+          show(info, "当前 " + localVersion(r) + " 已是最新" +
+            (r.latest ? "（线上 " + remoteVersion(r) + "）" : "") +
             " · 检查于 " + stamp());
           applyBtn.style.display = "none";
           show(pill, "最新", "good");

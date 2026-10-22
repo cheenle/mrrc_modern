@@ -220,6 +220,62 @@ class StageTests(unittest.TestCase):
         self.assertTrue((self.home / "legacy.py").is_file())
 
 
+class FixPackTests(unittest.TestCase):
+    """修复包编号（`boxLine.fixpack`）：它**不参与**版本比较，只负责被看见。
+
+    2026-10-22 现场：一台已发货盒子的公网入口 502 四天，而修复（`server.py` + 设置页）
+    只有盒子源码树这条通道能承载。给这次交付一个能被人引用的编号（FP1），但版本号仍必须按
+    **三段**前进——因为现场那台盒子的解析器是 `^v?(\d+)\.(\d+)\.(\d+)`，`1.28.2.1`
+    在它眼里等于 `1.28.2`，判定「已是最新」就等于没发。设计：
+    `docs/superpowers/specs/2026-10-22-box-fixpack-design.md`。
+    """
+
+    BOX = {"version": "1.28.5", "url": "https://example.invalid/tree.tar.gz",
+           "sha256": "b" * 64, "size": 1234}
+
+    def _manifest(self, **box):
+        return upgrade_core.parse_manifest({
+            "latest": "1.28.2",
+            "installer": {"version": "1.28.2", "url": "https://example.invalid/setup.exe",
+                          "sha256": "a" * 64, "size": 4242},
+            "boxLine": dict(self.BOX, **box),
+        })
+
+    def test_the_number_rides_along_in_the_manifest(self):
+        self.assertEqual(self._manifest(fixpack="FP1")["box"]["fixpack"], "FP1")
+
+    def test_a_manifest_without_one_reads_as_empty(self):
+        self.assertEqual(self._manifest()["box"]["fixpack"], "")
+
+    def test_a_malformed_number_is_refused(self):
+        """宁可拒读清单，也不在页面上显示一个错编号。"""
+        for bad in ("fix1", "FP", "FPx", "1"):
+            with self.assertRaises(upgrade_core.ManifestError, msg=bad):
+                self._manifest(fixpack=bad)
+
+    def test_the_comparison_ignores_it(self):
+        """整个设计的地基：FP 只被显示，绝不进入「谁比谁新」。"""
+        plain = upgrade_core.check_box("1.28.0", self._manifest())
+        tagged = upgrade_core.check_box("1.28.0", self._manifest(fixpack="FP7"))
+        self.assertEqual(plain["available"], tagged["available"])
+        self.assertEqual(plain["latest"], tagged["latest"])
+        self.assertEqual(tagged["latest_fixpack"], "FP7")
+        self.assertEqual(plain["latest_fixpack"], "")
+
+    def test_write_fixpack_stamps_and_clears(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = _tree(Path(tmp) / "home", {})
+            box_update.write_fixpack(home, "FP2")
+            self.assertEqual((home / "fixpack.txt").read_text(encoding="utf-8").strip(), "FP2")
+            box_update.write_fixpack(home, "")
+            self.assertFalse((home / "fixpack.txt").exists(),
+                             "换了一个没有 FP 的包，页面还在报上一代的编号")
+
+    def test_read_fixpack_is_empty_without_a_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(box_update.read_fixpack(Path(tmp)), "")
+
+
 class VersionTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -241,6 +297,7 @@ class VersionTests(unittest.TestCase):
         box_update.write_version(home, "1.2.3")
         self.assertEqual((home / "version.txt").read_text().strip(), "1.2.3")
         self.assertEqual((home / "VERSION").read_text().strip(), "1.2.3")
+
 
 
 class DiscoverabilityTests(unittest.TestCase):
@@ -270,6 +327,20 @@ class DiscoverabilityTests(unittest.TestCase):
         self.assertNotIn("$(", block, "settings.html 里没有 $ 助手")
         self.assertIn("document.getElementById", block)
 
+    def test_the_menu_footer_shows_the_fix_pack_number(self):
+        """页脚是用户天天看到的那一行；只在更新卡里显示，FP 号就没人会引用它。"""
+        root = Path(__file__).resolve().parents[1]
+        js = (root / "static" / "ft710_main.js").read_text(encoding="utf-8")
+        self.assertIn("msg.fixpack", js)
+        source = (root / "server.py").read_text(encoding="utf-8")
+        self.assertIn('"fixpack": box_update.read_fixpack(', source)
+
+    def test_the_update_card_shows_the_fix_pack_number(self):
+        """用户能引用的只有界面上那串东西；卡片不显示，FP 号就只活在清单里。"""
+        text = (Path(__file__).resolve().parents[1] / "static" / "settings.html").read_text(
+            encoding="utf-8")
+        self.assertIn("current_fixpack", text)
+        self.assertIn("latest_fixpack", text)
     def test_the_settings_page_has_the_card(self):
         page = (self.ROOT / "static" / "settings.html").read_text(encoding="utf-8")
         for hook in ('id="card-update"', 'id="up-check"', 'id="up-apply"',
@@ -295,12 +366,45 @@ class ApplyTests(unittest.TestCase):
         self.tmp.cleanup()
         box_update.reset()
 
+    def _opener_for(self, package: Path):
+        def opener(*_a, **_k):
+            response = mock.MagicMock()
+            response.__enter__.return_value = io.BytesIO(package.read_bytes())
+            response.__exit__.return_value = False
+            return response
+        return opener
+
     def _opener(self, *_a, **_k):
-        blob = self.package.read_bytes()
-        response = mock.MagicMock()
-        response.__enter__.return_value = io.BytesIO(blob)
-        response.__exit__.return_value = False
-        return response
+        """setUp 那个包的 opener（既有用例都用它）。"""
+        return self._opener_for(self.package)(*_a, **_k)
+
+    def _package_with(self, name: str, files: dict) -> tuple:
+        """另一个源码包 + 指向它的 plan（不动 setUp 那个）。"""
+        src = _tree(self.root / name, files)
+        package = _targz(src, self.root / f"{name}.tar.gz", prefix="tree")
+        plan = dict(self.plan, url=f"https://example/{name}.tar.gz",
+                    sha256=box_update.sha256_of(package),
+                    size=package.stat().st_size)
+        return package, plan
+
+    def test_the_packages_fix_pack_is_stamped_onto_the_installed_tree(self):
+        package, plan = self._package_with("src_fp", {
+            "server.py": "new\n", "version.txt": "1.1.0\n", "fixpack.txt": "FP1\n"})
+        with mock.patch.dict(os.environ, {"MRRC_UPDATE_DIR": str(self.root / "state_fp")}):
+            box_update.apply(plan, self.home, opener=self._opener_for(package),
+                             spawn=lambda *a: None, runner=lambda: None)
+        self.assertEqual((self.home / "fixpack.txt").read_text(encoding="utf-8").strip(), "FP1")
+
+    def test_a_package_without_one_clears_the_previous_number(self):
+        """否则换了没有 FP 的包，页面还在报上一代——那比不显示更糟。"""
+        home = _tree(self.root / "home_fp", {"server.py": "old\n", "version.txt": "1.0.0\n",
+                                               "fixpack.txt": "FP1\n"})
+        package, plan = self._package_with("src_plain", {
+            "server.py": "new\n", "version.txt": "1.1.0\n"})
+        with mock.patch.dict(os.environ, {"MRRC_UPDATE_DIR": str(self.root / "state_plain")}):
+            box_update.apply(plan, home, opener=self._opener_for(package),
+                             spawn=lambda *a: None, runner=lambda: None)
+        self.assertFalse((home / "fixpack.txt").exists())
 
     def test_the_whole_flow_stages_versions_and_restarts(self):
         restarted = []

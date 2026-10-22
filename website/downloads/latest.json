@@ -14,8 +14,8 @@
     "version": "1.28.5",
     "fixpack": "FP1",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.5.tar.gz",
-    "sha256": "f72c971880790799498d87725f4b5bd2bd245631904c4ba0bbe2632aea1fef77",
-    "size": 18647255,
+    "sha256": "fe8c07e5c6a6ae57f9e5727d5e8e5a56d84f77d5275903d499432597c1f492c4",
+    "size": 18647266,
     "notes": "FP1（1.28.5）：公网入口 502 时不再沉默——缺 fleet/frpc 或隧道配置就把缺的路径写在设置页与日志里（此前那一段静默 return），隧道没跑时「已接通」的绿标改成红色的「已接通 · 隧道中断」。另含盒子线修复包编号（页脚/更新卡显示 版本 · FPn）。"
   }
 }

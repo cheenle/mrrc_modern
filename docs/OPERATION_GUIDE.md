@@ -726,7 +726,7 @@ certificate has expired (_ssl.c:1000)>)
 记忆频道、天调学习值、云入口隧道配置。其中**证书尤其不能重签**：云入口钉住的就是这张证书，
 换一张那条入口会 502。
 
-用站上 `downloads/MRRC-Modern-Backup.cmd`（源码在仓库 `tools/windows/MRRC-Modern-Backup.ps1`）。
+用站上的 [MRRC-Modern-Backup.cmd](downloads/MRRC-Modern-Backup.cmd)（源码在仓库 `tools/windows/MRRC-Modern-Backup.ps1`）。
 **不需要管理员权限。**
 
 1. **旧电脑**：双击 `MRRC-Modern-Backup.cmd` → 选 `1`。桌面会多一个

@@ -1603,7 +1603,7 @@ certificate has expired (_ssl.c:1000)&gt;)</code></pre>
 <p>维护者那一侧的操作与排障见 <code>docs/remote_help.md</code>。</p>
 <h3 id="move-computer">6.5 换电脑：配置与证书一键备份/恢复（Windows）</h3>
 <p><strong>换机时不要把安装目录拷过去，也不要手抄配置</strong>：真正要带走的是用户数据目录 <code>%LOCALAPPDATA%\MRRC-Modern</code> —— 里面有电台机型/串口/声卡名/网页口令、HTTPS 证书与私钥、 记忆频道、天调学习值、云入口隧道配置。其中<strong>证书尤其不能重签</strong>：云入口钉住的就是这张证书， 换一张那条入口会 502。</p>
-<p>用站上 <code>downloads/MRRC-Modern-Backup.cmd</code>（源码在仓库 <code>tools/windows/MRRC-Modern-Backup.ps1</code>）。 <strong>不需要管理员权限。</strong></p>
+<p>用站上的 <a href="../downloads/MRRC-Modern-Backup.cmd">MRRC-Modern-Backup.cmd</a>（源码在仓库 <code>tools/windows/MRRC-Modern-Backup.ps1</code>）。 <strong>不需要管理员权限。</strong></p>
 <ol type="1">
 <li><strong>旧电脑</strong>：双击 <code>MRRC-Modern-Backup.cmd</code> → 选 <code>1</code>。桌面会多一个 <code>MRRC-Modern-backup-&lt;主机名&gt;-&lt;时间&gt;.zip</code>，包里附清单（每个文件的大小与 SHA-256）。 它<strong>不含</strong> <code>logs\</code> 与 <code>recordings\</code> —— 录音要留请自己拷走。</li>
 <li><strong>想加口令</strong>：用 <code>-Export -Encrypt</code>（会提示输两遍，口令不经过命令行、不落盘）。 加密后是一个 <code>.zip.enc</code>，<strong>丢了口令只能重新配置</strong>。</li>

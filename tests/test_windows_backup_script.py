@@ -50,10 +50,16 @@ class SourceFilesTests(unittest.TestCase):
                          "加/删一项必须两边同时改")
 
     def test_encryption_branch_really_deletes_the_plain_zip(self):
+        # 判的是**运行时顺序**，所以只看 Invoke-Export 的函数体：函数定义在文件里的
+        # 先后没有意义（PowerShell 调用时才解析）。
         text = (SOURCE_DIR / SCRIPT).read_text(encoding="utf-8-sig")
-        protect = text.find("function Protect-BackupFile")
-        delete = text.find("Remove-Item -LiteralPath $zipPath -Force")
-        self.assertGreater(protect, 0, "找不到加密函数 Protect-BackupFile")
+        start = text.find("function Invoke-Export")
+        self.assertGreater(start, 0, "找不到导出函数 Invoke-Export")
+        end = text.find("\nfunction ", start + 10)
+        body = text[start:end if end > 0 else len(text)]
+        protect = body.find("Protect-BackupFile $zipPath $encPath")
+        delete = body.find("Remove-Item -LiteralPath $zipPath -Force")
+        self.assertGreater(protect, 0, "导出流程里没有加密调用")
         self.assertGreater(delete, protect,
                            "加密之后必须删掉明文 zip（顺序：先加密、再删除）")
         for word in ("Aes", "Rfc2898DeriveBytes", "HMACSHA256"):

@@ -518,3 +518,105 @@ function Unprotect-BackupFile([string]$inPath, [string]$outPath, [string]$passwo
     if ([uint64]$plain.Length -ne $expected) { throw "解密后的长度与头部不符" }
     [System.IO.File]::WriteAllBytes($outPath, $plain)
 }
+
+# ---------------------------------------------------------------- export
+function Resolve-TokenDir($envLines, [string]$root) {
+    $memFile = Get-EnvValue $envLines "MRRC_MEM_FILE"
+    if (-not $memFile) { return $root }
+    if (-not [System.IO.Path]::IsPathRooted($memFile)) { $memFile = Join-Path $root $memFile }
+    return (Split-Path $memFile -Parent)
+}
+
+function Invoke-Export {
+    param([string]$Root, [string]$OutPath, [string]$Password, [bool]$Encrypted)
+
+    if (-not $Root -or -not (Test-Path -LiteralPath $Root)) {
+        Warn "这台机器上还没有 MRRC Modern 的用户数据：$Root"
+        Warn "（应用可能从未启动过 —— 先启动一次，再回来备份）"
+        return $Script:ExitNothing
+    }
+    $tmp = Get-TempRoot
+    try {
+        $stage = Join-Path $tmp "stage"
+        $payload = Join-Path $stage "payload"
+        New-Item -ItemType Directory -Force -Path $payload | Out-Null
+
+        $envPath = Join-Path $Root "mrrc_modern.env"
+        $envLines = Read-EnvLines $envPath
+        $tokenDir = Resolve-TokenDir $envLines $Root
+        $notes = New-Object System.Collections.Generic.List[string]
+
+        Step "收集"
+        foreach ($item in $Script:FixedItems) {
+            $source = if ($item.Path -eq "auth-tokens.json") {
+                Join-Path $tokenDir "auth-tokens.json"
+            } else { Join-Path $Root $item.Path }
+            if (-not (Test-Path -LiteralPath $source)) {
+                if ($item.Required) { $notes.Add("缺少必需项：$($item.Path)") }
+                continue
+            }
+            Copy-WithRetry -Source $source -Destination (Join-Path $payload $item.Path)
+            Ok ("{0,-22} {1}" -f $item.Path, $item.Kind)
+        }
+
+        # env 指向数据目录之外的证书对：收进来，恢复时改写到新路径。
+        $extCert = Get-EnvValue $envLines "MRRC_SSL_CERT"
+        $extKey = Get-EnvValue $envLines "MRRC_SSL_KEY"
+        if ($extCert -and $extKey -and (Test-Path -LiteralPath $extCert) -and (Test-Path -LiteralPath $extKey)) {
+            if (-not (Test-UnderRoot $extCert $Root)) {
+                $extDir = Join-Path $payload "external-certs"
+                New-Item -ItemType Directory -Force -Path $extDir | Out-Null
+                Copy-WithRetry $extCert (Join-Path $extDir "external-cert.pem")
+                Copy-WithRetry $extKey (Join-Path $extDir "external-key.pem")
+                $notes.Add("MRRC_SSL_CERT/KEY 指向数据目录之外：已收入 external-certs/")
+                Ok "external-certs          key"
+            }
+        }
+
+        Step "写清单"
+        $manifest = New-Manifest $payload @{
+            AppVersion = (Get-AppVersion)
+            AppDir     = (Get-AppDir)
+            DataDir    = $Root
+            Notes      = $notes.ToArray()
+        }
+        Write-Manifest $stage $manifest
+        $totalBytes = (Get-ChildItem -LiteralPath $payload -Recurse -File -Force |
+                       Measure-Object -Property Length -Sum).Sum
+        Ok ("{0} 个文件，{1}" -f @($manifest.items).Count, (Format-Size ([long]$totalBytes)))
+
+        Step "打包"
+        $zipPath = $OutPath
+        if (-not $zipPath) {
+            $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+            $zipPath = Join-Path (Get-DesktopDir) ("MRRC-Modern-backup-" + $env:COMPUTERNAME + "-" + $stamp + ".zip")
+        } elseif (Test-Path -LiteralPath $zipPath -PathType Container) {
+            $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+            $zipPath = Join-Path $zipPath ("MRRC-Modern-backup-" + $env:COMPUTERNAME + "-" + $stamp + ".zip")
+        }
+        New-BackupZip $stage $zipPath
+        Ok ("zip: {0}（{1}）" -f $zipPath, (Format-Size ((Get-Item -LiteralPath $zipPath).Length)))
+
+        if ($Encrypted) {
+            $Password = Get-PasswordValue $Password $true
+            $encPath = $zipPath + ".enc"
+            Protect-BackupFile $zipPath $encPath $Password
+            Remove-Item -LiteralPath $zipPath -Force
+            Ok ("加密包: {0}（{1}）" -f $encPath, (Format-Size ((Get-Item -LiteralPath $encPath).Length)))
+            Warn "明文 zip 已删除（普通删除，SSD 上不保证不可恢复）。"
+            Warn "口令不在文件里、也不会显示：请与这个包分开存放；丢了只能重新配置。"
+            $zipPath = $encPath
+        }
+
+        Step "完成"
+        Say "   备份包：$zipPath"
+        Say "   里面有网页口令、HTTPS 私钥和云隧道凭据 —— 请像对待钥匙一样对待它。"
+        Say "   不含 logs\ 与 recordings\（录音要留请自己拷走）。"
+        Say ""
+        Say "   在新电脑上（先装好 MRRC Modern）："
+        Say "       MRRC-Modern-Backup.cmd  →  选 2  →  选中这个包"
+        return $Script:ExitOk
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}

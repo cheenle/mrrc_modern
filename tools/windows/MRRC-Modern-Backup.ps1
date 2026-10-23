@@ -620,3 +620,210 @@ function Invoke-Export {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
+# ---------------------------------------------------------------- restore
+function Get-RunningApp {
+    $found = @()
+    foreach ($name in $Script:ProcessNames) {
+        $found += @(Get-Process -Name $name -ErrorAction SilentlyContinue)
+    }
+    return $found
+}
+
+function Close-RunningApp([bool]$AssumeYes, [bool]$AllowStop) {
+    $procs = @(Get-RunningApp)
+    if ($procs.Count -eq 0) { return $true }
+    foreach ($p in $procs) { Warn ("正在运行：{0} (pid {1})" -f $p.ProcessName, $p.Id) }
+    if (-not $AssumeYes -and -not $AllowStop) {
+        $answer = Read-Host "   恢复前需要关闭 MRRC Modern。现在关闭吗？(y/N)"
+        if ($answer -notmatch '^[Yy]') { return $false }
+    }
+    foreach ($p in $procs) {
+        try {
+            Stop-Process -Id $p.Id -Force -ErrorAction Stop
+            Ok ("已关闭 {0} (pid {1})" -f $p.ProcessName, $p.Id)
+        } catch {
+            Warn ("关不掉 {0}：{1}" -f $p.ProcessName, $_.Exception.Message)
+        }
+    }
+    Start-Sleep -Milliseconds 800
+    return (@(Get-RunningApp).Count -eq 0)
+}
+
+function Backup-TargetFiles([string]$Root, [string]$PreDir) {
+    $envLines = Read-EnvLines (Join-Path $Root "mrrc_modern.env")
+    $tokenDir = Resolve-TokenDir $envLines $Root
+    $count = 0
+    foreach ($item in $Script:FixedItems) {
+        $source = if ($item.Path -eq "auth-tokens.json") {
+            Join-Path $tokenDir "auth-tokens.json"
+        } else { Join-Path $Root $item.Path }
+        if (-not (Test-Path -LiteralPath $source)) { continue }
+        $target = Join-Path $PreDir $item.Path
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        try {
+            Copy-Item -LiteralPath $source -Destination $target -Recurse -Force -ErrorAction Stop
+            $count++
+        } catch {
+            Warn ("备份目标机文件失败（继续）：{0} — {1}" -f $item.Path, $_.Exception.Message)
+        }
+    }
+    return $count
+}
+
+function Open-BackupFileDialog {
+    Add-Type -AssemblyName System.Windows.Forms | Out-Null
+    $dialog = New-Object System.Windows.Forms.OpenFileDialog
+    $dialog.Title = "选择 MRRC Modern 备份包"
+    $dialog.Filter = "MRRC Modern 备份 (*.zip;*.enc)|*.zip;*.enc|所有文件 (*.*)|*.*"
+    if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return "" }
+    return $dialog.FileName
+}
+
+# 把若干键的值改成给定值（保留注释与其它行）。
+function Apply-EnvValues($lines, [hashtable]$values) {
+    $pattern = '^(\s*)([A-Za-z0-9_]+)(\s*=\s*)(.*)$'
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($raw in $lines) {
+        $m = [regex]::Match($raw, $pattern)
+        if ($m.Success -and $values.ContainsKey($m.Groups[2].Value)) {
+            $out.Add($m.Groups[1].Value + $m.Groups[2].Value + $m.Groups[3].Value +
+                     $values[$m.Groups[2].Value])
+        } else {
+            $out.Add($raw)
+        }
+    }
+    return $out.ToArray()
+}
+
+function Invoke-Import {
+    param(
+        [string]$File,
+        [string]$Password,
+        [string]$Root,
+        [bool]$AssumeYes,
+        [bool]$AllowStop,
+        # 仅测试用：预备份的落点。空 = 桌面。
+        [string]$PreBackupRoot = ""
+    )
+
+    if (-not $File) {
+        $File = Open-BackupFileDialog
+        if (-not $File) { Warn "没有选择文件。"; return $Script:ExitNothing }
+    }
+    if (-not (Test-Path -LiteralPath $File)) {
+        Bad "找不到备份包：$File"
+        return $Script:ExitInvalid
+    }
+
+    $tmp = Get-TempRoot
+    try {
+        Step "校验备份包"
+        $zipPath = $File
+        if (Test-IsEncrypted $File) {
+            $Password = Get-PasswordValue $Password $false
+            $zipPath = Join-Path $tmp "payload.zip"
+            Unprotect-BackupFile $File $zipPath $Password
+            Ok "已解密"
+        }
+        $stage = Join-Path $tmp "stage"
+        Expand-BackupZip $zipPath $stage
+        $manifestPath = Join-Path $stage "manifest.json"
+        if (-not (Test-Path -LiteralPath $manifestPath)) {
+            throw "包里没有 manifest.json —— 不是 MRRC Modern 的备份"
+        }
+        $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        Test-Manifest $stage $manifest
+        Ok ("{0} 个文件，摘要全部一致" -f @($manifest.items).Count)
+        Show-Manifest $manifest
+
+        Step "目标机"
+        Say "   数据目录：$Root"
+        $installed = Get-AppVersion
+        if ($installed -ne "unknown" -and $manifest.appVersion -ne $installed) {
+            Warn ("包来自 {0}，这台机器是 {1} —— 继续，但请留意版本差异" -f $manifest.appVersion, $installed)
+        }
+        if (-not $AssumeYes) {
+            $answer = Read-Host "   现在把这些文件写进这台机器吗？(y/N)"
+            if ($answer -notmatch '^[Yy]') { Warn "已取消，什么都没写。"; return $Script:ExitNothing }
+        }
+
+        Step "关闭应用"
+        if (-not (Close-RunningApp $AssumeYes $AllowStop)) {
+            Bad "MRRC Modern 还在运行，什么都没写。关掉它再跑一次。"
+            return $Script:ExitAppRunning
+        }
+
+        Step "备份目标机现有配置"
+        # 注意：PowerShell 变量名不区分大小写 —— 这里的局部变量**不能**叫 $root，
+        # 那会覆盖参数 $Root（数据目录）。
+        $preRoot = if ($PreBackupRoot) { $PreBackupRoot } else { Get-DesktopDir }
+        $preDir = Join-Path $preRoot ("MRRC-restore-pre-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+        $count = Backup-TargetFiles $Root $preDir
+        if ($count -gt 0) { Ok "已备份 $count 项到 $preDir" } else { Say "   目标机没有可备份的现有配置。" }
+
+        Step "写入"
+        $payload = Join-Path $stage "payload"
+        $newEnvPath = Join-Path $Root "mrrc_modern.env"
+        $newLines = $null
+        $rewrite = $null
+        if (Test-Path -LiteralPath (Join-Path $payload "mrrc_modern.env")) {
+            $oldLines = Read-EnvLines (Join-Path $payload "mrrc_modern.env")
+            $rewrite = Update-EnvPaths $oldLines $manifest.dataDir $Root
+            $newLines = $rewrite.Lines
+        }
+
+        foreach ($item in $Script:FixedItems) {
+            $source = Join-Path $payload $item.Path
+            if (-not (Test-Path -LiteralPath $source)) { continue }
+            if ($item.Path -eq "mrrc_modern.env") { continue }   # 最后写，见下
+            $target = if ($item.Path -eq "auth-tokens.json") {
+                Join-Path (Resolve-TokenDir $newLines $Root) "auth-tokens.json"
+            } else { Join-Path $Root $item.Path }
+            New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+            Copy-WithRetry -Source $source -Destination $target
+            Ok $item.Path
+        }
+
+        $extDir = Join-Path $payload "external-certs"
+        if (Test-Path -LiteralPath $extDir) {
+            $certTarget = Join-Path $Root "certs\external-cert.pem"
+            $keyTarget = Join-Path $Root "certs\external-key.pem"
+            New-Item -ItemType Directory -Force -Path (Join-Path $Root "certs") | Out-Null
+            Copy-WithRetry (Join-Path $extDir "external-cert.pem") $certTarget
+            Copy-WithRetry (Join-Path $extDir "external-key.pem") $keyTarget
+            Ok "external-certs -> certs\external-*.pem"
+            $replacements = @{
+                "MRRC_SSL_CERT" = $certTarget
+                "MRRC_SSL_KEY"  = $keyTarget
+                "FT710_SSL_CERT" = $certTarget
+                "FT710_SSL_KEY"  = $keyTarget
+            }
+            $newLines = Apply-EnvValues $newLines $replacements
+        }
+
+        if ($newLines) {
+            Write-EnvLines $newEnvPath $newLines
+            Ok "mrrc_modern.env"
+            if ($rewrite -and $rewrite.Changed.Count -gt 0) {
+                foreach ($c in $rewrite.Changed) { Say "     改写 $c" }
+            }
+            if ($rewrite -and $rewrite.Warnings.Count -gt 0) {
+                foreach ($w in $rewrite.Warnings) { Warn $w }
+            }
+        }
+
+        Step "完成"
+        Say "   配置、证书与学习库已恢复到：$Root"
+        Say "   目标机原有配置：$preDir"
+        Say ""
+        Say "   下一步：双击桌面上的 MRRC Modern 启动。"
+        Say "   * auth-tokens.json 是服务端那一半；浏览器里的 cookie 不会跟着走，"
+        Say "     所以这台电脑仍然要输一次登录口令（口令就是恢复过来的那个）。"
+        Say "   * 证书来自另一台机器：浏览器会照常对自签名证书告警一次。若云入口已接入，"
+        Say "     仍然用这张证书 —— 不要为了消警告重新签，否则那条入口会 502。"
+        return $Script:ExitOk
+    } finally {
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}

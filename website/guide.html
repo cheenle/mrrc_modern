@@ -797,6 +797,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <li><strong>真实版本号</strong>：安装目录里的 <code>version.txt</code>（Windows 默认 <code>C:\Program Files\MRRC Modern\</code>， macOS 在 <code>MRRC Modern.app/Contents/Resources/</code>）；诊断包里也带一份。 <strong>抽屉菜单底部那行</strong>（形如 <code>FT-710 v1.0</code>）里的 <code>v1.0</code> 是<strong>前端资源串</strong>，既不是发布版本也不是电台固件版本 —— 报版本时别拿它当依据。</li>
 <li><strong>应用能查新版，但还不能自己装</strong>：服务端有只读的 <code>GET /api/update/check</code>，拿运行版本与站点上的 <code>latest.json</code> 比对，只回答「有没有更新」，<strong>不下载、不写任何文件</strong>；<strong>界面上目前没有升级按钮</strong> —— 升级器会改动它运行的机器，所以要么完整要么不做，不做半成品。</li>
 <li><strong>升级怎么做</strong>：到 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> 下载对应平台的安装包<strong>覆盖安装</strong>一次即可。 配置、证书、录音都在<strong>用户数据目录</strong>（Windows <code>%LOCALAPPDATA%\MRRC-Modern</code>， macOS <code>~/Library/Application Support/MRRC-Modern</code>），不在安装目录里，所以覆盖安装不会动它们。 想彻底重来见 §6.2。</li>
+<li><strong>换电脑</strong>：不要重配。用下载页的 <code>MRRC-Modern-Backup.cmd</code> 把用户数据目录（配置 + 证书 + 记忆频道 + 天调学习值 + 云隧道配置）打成一个包，在新机器上装好应用后一次恢复。<strong>证书不能重签</strong> （云入口钉的是它），详见网站指南 §6.5。</li>
 </ul>
 <h2 id="分享一个只收听入口">0.11 分享一个「只收听」入口</h2>
 <p>想让别人听你这里的守听声、但不给发射与设备设置，就再设一个<strong>互不相同的口令</strong>：<code>MRRC_LISTEN_PASSWORD</code> （空 = 关闭）。用这个口令登录会直接进入 <code>/listen</code> 收听页（而不是主界面）：</p>
@@ -1600,6 +1601,20 @@ certificate has expired (_ssl.c:1000)&gt;)</code></pre>
 <li><strong>随时可以停</strong>：点「停止协助」即可（门户侧也能强制结束）；会话拿到的是 MRRC Modern 自己的权限 （盒子 / 树莓派上是 <code>mrrc</code> 用户，<strong>不会提权</strong>），连接与认证失败都写审计。</li>
 </ol>
 <p>维护者那一侧的操作与排障见 <code>docs/remote_help.md</code>。</p>
+<h3 id="move-computer">6.5 换电脑：配置与证书一键备份/恢复（Windows）</h3>
+<p><strong>换机时不要把安装目录拷过去，也不要手抄配置</strong>：真正要带走的是用户数据目录 <code>%LOCALAPPDATA%\MRRC-Modern</code> —— 里面有电台机型/串口/声卡名/网页口令、HTTPS 证书与私钥、 记忆频道、天调学习值、云入口隧道配置。其中<strong>证书尤其不能重签</strong>：云入口钉住的就是这张证书， 换一张那条入口会 502。</p>
+<p>用站上 <code>downloads/MRRC-Modern-Backup.cmd</code>（源码在仓库 <code>tools/windows/MRRC-Modern-Backup.ps1</code>）。 <strong>不需要管理员权限。</strong></p>
+<ol type="1">
+<li><strong>旧电脑</strong>：双击 <code>MRRC-Modern-Backup.cmd</code> → 选 <code>1</code>。桌面会多一个 <code>MRRC-Modern-backup-&lt;主机名&gt;-&lt;时间&gt;.zip</code>，包里附清单（每个文件的大小与 SHA-256）。 它<strong>不含</strong> <code>logs\</code> 与 <code>recordings\</code> —— 录音要留请自己拷走。</li>
+<li><strong>想加口令</strong>：用 <code>-Export -Encrypt</code>（会提示输两遍，口令不经过命令行、不落盘）。 加密后是一个 <code>.zip.enc</code>，<strong>丢了口令只能重新配置</strong>。</li>
+<li><strong>新电脑</strong>：先装好 MRRC Modern（先不要打开），把 <code>.cmd</code> 与 <code>.ps1</code> 放同一个文件夹， 双击 <code>.cmd</code> → 选 <code>2</code> → 选中那个包。脚本会先把新电脑现有的配置备份到桌面 <code>MRRC-restore-pre-&lt;时间&gt;\</code>，再逐项写入。</li>
+</ol>
+<p><strong>三件必须知道的事</strong>：</p>
+<ul>
+<li>包里同时有<strong>网页口令、TLS 私钥和云隧道凭据</strong> —— 像对待钥匙一样对待它，别放公共网盘、别发聊天群；</li>
+<li>恢复 <code>auth-tokens.json</code> 只是<strong>服务端那一半</strong>，浏览器里的 cookie 不会跟着走， 新电脑仍然要输一次登录口令（口令就是恢复过来的那个）；</li>
+<li>证书来自另一台机器，浏览器会照常对自签名证书告警一次；<strong>不要为了消警告重新签证书</strong>， 那会让已接入的云入口变成 502。</li>
+</ul>
 <hr />
 <h2 id="附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</h2>
 <blockquote class="callout-info">

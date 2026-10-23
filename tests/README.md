@@ -5,7 +5,7 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2811 tests across 143 test modules (20 skip on Windows, 1 on macOS; totals re-read
+2817 tests across 144 test modules (20 skip on Windows, 1 on macOS; totals re-read
 from `unittest discover` on 2026-10-18, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
@@ -21,7 +21,7 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2811 |
+| Total tests | 2817 |
 | Passed | 2810 (1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
 | Failed | 0 (macOS, 2026-10-22) |
@@ -63,7 +63,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2769 above. Run it with:
+the 2817 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q
@@ -1114,6 +1114,18 @@ MT7663S 起得来 AP 但不发 beacon），引导改走 LAN 网页，本文件�
   没有 `webServer` 段（入网早于 2026-10-12）时，「开启协助」拿到的是
   `admin API unreachable on 127.0.0.1:0`；实测盒子 `.217` 每次必失败。现在配置缺失时报一句能行动的
   话，并且启动隧道前会把管理段补上（幂等，已有则一字不动）。
+
+### 本轮新增（换电脑备份/恢复脚本，2026-10-22）
+
+- **`test_windows_backup_script.py`** — `tools/windows/MRRC-Modern-Backup.ps1/.cmd` 的静态守卫：
+  `.ps1` 必须带 UTF-8 BOM（PowerShell 5.1 会把无 BOM 的 UTF-8 当 ANSI，中文字符串会解析失败）、
+  `.cmd` 必须纯 ASCII 且块内 `echo` 不带括号（cmd.exe 在第一个 `)` 结束块）、`website/downloads/`
+  的发布副本与源逐字节一致、脚本里的固定备份清单与测试常量一致（加一项忘了改另一边 = 备份包
+  悄悄少一项，而恢复端不会报错）、加密分支必须**先加密再删明文**。
+  真正的行为（导出 → 恢复 → 逐字节比对、口令往返、篡改拒绝）由脚本自己的 `-SelfTest`
+  在 Windows 上验，见 `docs/superpowers/plans/2026-10-22-windows-backup-restore.md` 的验收清单。
+- **`ps_script_guards.py`** — 上面三条 PS/cmd 静态守卫的共享实现（`test_cert_doctor.py` 也用它；
+  复制来的 bug 不会自己变旧）。不是 `test_*.py`，不计入模块数。
 
 ### 本轮新增（性能负载页 AD-031，2026-10-19）
 

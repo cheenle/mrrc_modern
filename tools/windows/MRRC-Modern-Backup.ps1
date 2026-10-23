@@ -319,3 +319,63 @@ function Show-Manifest($manifest) {
         foreach ($n in $manifest.notes) { Warn $n }
     }
 }
+
+# ---------------------------------------------------------------- zip
+function New-BackupZip([string]$root, [string]$zipPath) {
+    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+    $zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -File -Force) {
+            $rel = $f.FullName.Substring($root.Length).TrimStart("\").Replace("\", "/")
+            [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $zip, $f.FullName, $rel, [System.IO.Compression.CompressionLevel]::Optimal)
+        }
+    } finally {
+        $zip.Dispose()
+    }
+}
+
+# 逐条校验后落盘：拒绝绝对路径、盘符与 `..`（zip-slip）。
+function Expand-BackupZip([string]$zipPath, [string]$root) {
+    $rootFull = (Get-FullPath $root).TrimEnd("\") + "\"
+    New-Item -ItemType Directory -Force -Path $root | Out-Null
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+    try {
+        foreach ($entry in $zip.Entries) {
+            $name = $entry.FullName
+            if ([string]::IsNullOrWhiteSpace($name)) { continue }
+            if ($name.EndsWith("/") -or $name.EndsWith("\")) { continue }
+            if ($name -match '^[A-Za-z]:' -or $name.StartsWith("/") -or $name.StartsWith("\") -or
+                ($name -split '[\\/]') -contains "..") {
+                throw "备份包含非法条目（拒绝解包）：$name"
+            }
+            $dest = Get-FullPath (Join-Path $root ($name -replace "/", "\"))
+            if (-not $dest.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "条目越界（拒绝解包）：$name"
+            }
+            $dir = Split-Path $dest -Parent
+            if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+                New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            }
+            [void][System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $dest, $true)
+        }
+    } finally {
+        $zip.Dispose()
+    }
+}
+
+function Test-Manifest([string]$stage, $manifest) {
+    if ($manifest.schema -ne $Script:Schema) {
+        throw "备份格式不认识：$($manifest.schema)（本工具支持 $($Script:Schema)）"
+    }
+    $payload = Join-Path $stage "payload"
+    if (-not (Test-Path -LiteralPath $payload)) { throw "包里没有 payload/ —— 不是本工具的备份" }
+    foreach ($item in $manifest.items) {
+        $file = Join-Path $payload ($item.path -replace "/", "\")
+        if (-not (Test-Path -LiteralPath $file)) { throw "清单里的文件缺失：$($item.path)" }
+        $actual = Get-Sha256 $file
+        if ($actual -ne $item.sha256) {
+            throw "校验失败：$($item.path)（清单 $($item.sha256.Substring(0, 8))…，实际 $($actual.Substring(0, 8))…）"
+        }
+    }
+}

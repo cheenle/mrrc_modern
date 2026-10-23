@@ -25,6 +25,9 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from tests.ps_script_guards import (
+    assert_ascii_cmd, assert_no_parens_in_blocks, assert_utf8_bom)
+
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "tools" / "windows"
 DOWNLOADS = ROOT / "website" / "downloads"
@@ -43,34 +46,13 @@ OPENSSL_RUNTIME = ("openssl.exe", "openssl.cnf", "libcrypto-3-x64.dll", "libssl-
 
 class SourceFilesTests(unittest.TestCase):
     def test_script_has_a_utf8_bom(self):
-        raw = (SOURCE_DIR / SCRIPT).read_bytes()
-        self.assertTrue(raw.startswith(b"\xef\xbb\xbf"),
-                        "PowerShell 5.1 reads a BOM-less UTF-8 file as ANSI: the Chinese text "
-                        "would be mojibake and string literals can fail to parse")
-        self.assertTrue(raw[3:].decode("utf-8").strip(), "the script must not be empty")
+        assert_utf8_bom(self, SOURCE_DIR / SCRIPT)
 
     def test_launcher_is_ascii_only(self):
-        raw = (SOURCE_DIR / CMD).read_bytes()
-        raw.decode("ascii")          # raises if any non-ASCII byte sneaked in
-        self.assertIn(b"-Fix", raw, "the .cmd must keep offering the repair switch")
+        assert_ascii_cmd(self, SOURCE_DIR / CMD, must_contain=("-Fix",))
 
     def test_launcher_does_not_put_parentheses_inside_blocks(self):
-        """cmd closes a `( ... )` block at the first unescaped `)`, even inside echo text.
-
-        Measured 2026-10-16: `echo ... (MRRC-CertDoctor.ps1)...` inside an `if (...)` block
-        made cmd.exe abort with "… was unexpected at this time" — the tool never started.
-        """
-        text = (SOURCE_DIR / CMD).read_text(encoding="ascii")
-        depth = 0
-        for lineno, line in enumerate(text.splitlines(), 1):
-            stripped = line.strip()
-            if stripped.lower().startswith(("echo", "rem")):
-                if depth > 0 and ("(" in line or ")" in line):
-                    self.fail(f"{CMD}:{lineno}: 括号出现在 ( ... ) 块内的 echo/rem 里，"
-                              f"cmd.exe 会提前结束这个块：{line!r}")
-                continue
-            depth += line.count("(") - line.count(")")
-            self.assertGreaterEqual(depth, 0, f"{CMD}:{lineno}: 右括号多于左括号")
+        assert_no_parens_in_blocks(self, SOURCE_DIR / CMD)
 
 
 class PackageTests(unittest.TestCase):

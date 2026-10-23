@@ -180,3 +180,142 @@ function Copy-WithRetry([string]$Source, [string]$Destination, [int]$Tries = 3) 
     }
     throw "复制失败（文件被占用？）：$Source -> $($last.Exception.Message)"
 }
+
+# ---------------------------------------------------------------- env file
+function Read-EnvLines([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return @() }
+    $text = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    return ,($text -split "`r?`n")
+}
+
+function Get-EnvValue($lines, [string]$name) {
+    $alt = ""
+    if ($name.StartsWith("MRRC_")) { $alt = "FT710_" + $name.Substring(5) }
+    $found = $null
+    foreach ($raw in $lines) {
+        $line = $raw.Trim()
+        if (-not $line -or $line.StartsWith("#") -or -not $line.Contains("=")) { continue }
+        $parts = $line.Split("=", 2)
+        $key = $parts[0].Trim()
+        $value = $parts[1].Trim()
+        if ($key -eq $name) { $found = $value }
+        elseif ($alt -and $key -eq $alt -and -not $found) { $found = $value }
+    }
+    return $found
+}
+
+# 把路径类键里的旧数据目录前缀换成新的；其余绝对路径不存在时只告警。
+function Update-EnvPaths($lines, [string]$oldRoot, [string]$newRoot) {
+    $out = New-Object System.Collections.Generic.List[string]
+    $changed = New-Object System.Collections.Generic.List[string]
+    $warnings = New-Object System.Collections.Generic.List[string]
+    $pattern = '^(\s*)([A-Za-z0-9_]+)(\s*=\s*)(.*)$'
+    foreach ($raw in $lines) {
+        if ($raw.Trim().StartsWith("#") -or -not $raw.Contains("=")) { $out.Add($raw); continue }
+        $m = [regex]::Match($raw, $pattern)
+        if (-not $m.Success) { $out.Add($raw); continue }
+        $key = $m.Groups[2].Value
+        $value = $m.Groups[4].Value
+        $bare = $key
+        if ($bare.StartsWith("FT710_")) { $bare = "MRRC_" + $bare.Substring(6) }
+        if ($Script:PathKeys -notcontains $bare) { $out.Add($raw); continue }
+
+        $newValue = $value
+        if ($value -and $oldRoot -and
+            $value.StartsWith($oldRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $newValue = $newRoot + $value.Substring($oldRoot.Length)
+        }
+        if ($newValue -ne $value) {
+            $changed.Add("$bare : $value -> $newValue")
+        } elseif ($value -and [System.IO.Path]::IsPathRooted($value) -and
+                  -not (Test-Path -LiteralPath $value)) {
+            $warnings.Add("$bare 指向的路径在这台机器上不存在，未改写：$value")
+        }
+        $out.Add($m.Groups[1].Value + $key + $m.Groups[3].Value + $newValue)
+    }
+    return @{ Lines = $out.ToArray(); Changed = $changed.ToArray(); Warnings = $warnings.ToArray() }
+}
+
+function Write-EnvLines([string]$path, $lines) {
+    # 不带 BOM：启动器的解析器按行 Key=Value 读取，BOM 会贴到第一个键上。
+    $text = ($lines -join "`r`n")
+    if (-not $text.EndsWith("`r`n")) { $text += "`r`n" }
+    [System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+# ---------------------------------------------------------------- manifest
+function Get-RestoreReadme {
+    @"
+MRRC Modern 换电脑备份
+
+这个文件里有：配置、HTTPS 证书与私钥、云入口隧道配置、登录会话库。
+**请像对待钥匙一样对待它**：不要放公共网盘、不要发到聊天群。
+
+怎么恢复
+--------
+1. 在新电脑上装好 MRRC Modern（先不要打开）；
+2. 把 MRRC-Modern-Backup.cmd 与 MRRC-Modern-Backup.ps1 放到同一个文件夹，双击 .cmd；
+3. 选 2（从备份恢复），选中这个包；脚本会先把新电脑现有的配置备份到桌面，再写入；
+4. 恢复完成后双击桌面上的 MRRC Modern 启动。
+
+不含：logs\（日志）与 recordings\（录音）。录音要留请自己拷走。
+"@
+}
+
+function New-Manifest([string]$payload, [hashtable]$meta) {
+    $items = New-Object System.Collections.Generic.List[object]
+    foreach ($f in Get-ChildItem -LiteralPath $payload -Recurse -File -Force) {
+        $rel = $f.FullName.Substring($payload.Length).TrimStart("\").Replace("\", "/")
+        $kind = "data"
+        foreach ($item in $Script:FixedItems) {
+            if ($rel -eq $item.Path -or $rel.StartsWith($item.Path + "/")) { $kind = $item.Kind; break }
+        }
+        if ($rel.StartsWith("external-certs/")) { $kind = "key" }
+        $items.Add([ordered]@{
+            path   = $rel
+            kind   = $kind
+            size   = $f.Length
+            sha256 = (Get-Sha256 $f.FullName)
+        })
+    }
+    return [ordered]@{
+        schema          = $Script:Schema
+        createdAt       = (Get-Date).ToString("o")
+        hostname        = $env:COMPUTERNAME
+        userName        = $env:USERNAME
+        appVersion      = $meta.AppVersion
+        appDir          = $meta.AppDir
+        dataDir         = $meta.DataDir
+        containsSecrets = $true
+        items           = @($items | Sort-Object { $_.path })
+        excluded        = $Script:Excluded
+        notes           = @($meta.Notes)
+    }
+}
+
+function Write-Manifest([string]$stage, $manifest) {
+    $json = $manifest | ConvertTo-Json -Depth 6
+    [System.IO.File]::WriteAllText(
+        (Join-Path $stage "manifest.json"), $json,
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText(
+        (Join-Path $stage "RESTORE-README.txt"), (Get-RestoreReadme),
+        (New-Object System.Text.UTF8Encoding($false)))
+}
+
+function Show-Manifest($manifest) {
+    Say ""
+    Say ("  来源主机 : {0}    应用版本 : {1}" -f $manifest.hostname, $manifest.appVersion)
+    Say ("  生成时间 : {0}" -f $manifest.createdAt)
+    Say ("  旧数据目录: {0}" -f $manifest.dataDir)
+    Say ""
+    Say ("  {0,-34} {1,-8} {2,10}  {3}" -f "文件", "类别", "大小", "SHA-256")
+    foreach ($it in $manifest.items) {
+        $sha = if ($it.sha256) { $it.sha256.Substring(0, 8) } else { "-" }
+        Say ("  {0,-34} {1,-8} {2,10}  {3}" -f $it.path, $it.kind, (Format-Size $it.size), $sha)
+    }
+    if ($manifest.notes -and $manifest.notes.Count -gt 0) {
+        Say ""
+        foreach ($n in $manifest.notes) { Warn $n }
+    }
+}

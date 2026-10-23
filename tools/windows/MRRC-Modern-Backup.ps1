@@ -827,3 +827,194 @@ function Invoke-Import {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
+# ---------------------------------------------------------------- self test
+function New-FakeDataDir([string]$root, [string]$tag) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $root "certs") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $root "fleet") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $root "logs") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $root "recordings") | Out-Null
+    $envText = @(
+        "# fake config for -SelfTest",
+        "MRRC_RADIO_MODEL=ft891",
+        "MRRC_WEB_PASSWORD=$tag-secret",
+        "MRRC_SSL_CERT=$root\certs\server.crt",
+        "MRRC_SSL_KEY=$root\certs\server.key"
+    ) -join "`r`n"
+    [System.IO.File]::WriteAllText((Join-Path $root "mrrc_modern.env"), $envText,
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $root "certs\server.crt"), "cert-$tag",
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $root "certs\server.key"), "key-$tag",
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $root "mem_channels.json"), "{`"tag`":`"$tag`"}",
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $root "atr1000_tuner.json"), "{`"tag`":`"$tag`"}",
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $root "fleet\frpc-test.toml"), "serverAddr = `"$tag`"",
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $root "auth-tokens.json"), "{`"tag`":`"$tag`"}",
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $root "logs\server.log"), "keep-me",
+        (New-Object System.Text.UTF8Encoding($false)))
+    [System.IO.File]::WriteAllText((Join-Path $root "recordings\qso.mp3"), "keep-me",
+        (New-Object System.Text.UTF8Encoding($false)))
+}
+
+function Invoke-SelfTest {
+    # 自测会写目录，但**绝不**替人关应用：应用在跑就直接拒绝。
+    $running = @(Get-RunningApp)
+    if ($running.Count -gt 0) {
+        Bad "自测需要先关掉 MRRC Modern（当前在运行），不替你杀进程。"
+        return $Script:ExitAppRunning
+    }
+    $failures = New-Object System.Collections.Generic.List[string]
+    $root = Get-TempRoot
+    try {
+        $a = Join-Path $root "A"
+        $b = Join-Path $root "B"
+        $c = Join-Path $root "C"
+        New-FakeDataDir $a "alpha"
+        New-FakeDataDir $b "bravo"
+
+        Step "1) 导出 A"
+        $zip = Join-Path $root "a.zip"
+        $rc = Invoke-Export -Root $a -OutPath $zip -Password "" -Encrypted $false
+        if ($rc -ne $Script:ExitOk) { $failures.Add("导出返回 $rc") }
+        if (-not (Test-Path -LiteralPath $zip)) { $failures.Add("没有生成 zip") }
+
+        Step "2) 恢复到 B（并检查 B 的旧文件被备份）"
+        $rc = Invoke-Import -File $zip -Password "" -Root $b -PreBackupRoot $root -AssumeYes $true -AllowStop $true
+        if ($rc -ne $Script:ExitOk) { $failures.Add("恢复返回 $rc") }
+        foreach ($rel in @("mrrc_modern.env", "certs\server.crt", "certs\server.key",
+                           "mem_channels.json", "atr1000_tuner.json",
+                           "fleet\frpc-test.toml", "auth-tokens.json")) {
+            $left = Join-Path $a $rel
+            $right = Join-Path $b $rel
+            if (-not (Test-Path -LiteralPath $right)) { $failures.Add("B 缺 $rel"); continue }
+            if ((Get-Sha256 $left) -ne (Get-Sha256 $right)) { $failures.Add("B 的 $rel 与 A 不同") }
+        }
+        foreach ($keep in @("logs\server.log", "recordings\qso.mp3")) {
+            $k = Join-Path $b $keep
+            if (-not (Test-Path -LiteralPath $k)) { $failures.Add("恢复动了 $keep") ; continue }
+            if ((Get-Content -LiteralPath $k -Raw) -ne "keep-me") { $failures.Add("恢复改了 $keep") }
+        }
+        $envB = Read-EnvLines (Join-Path $b "mrrc_modern.env")
+        $certB = Get-EnvValue $envB "MRRC_SSL_CERT"
+        if ($certB -ne (Join-Path $b "certs\server.crt")) {
+            $failures.Add("env 的 MRRC_SSL_CERT 没改写：$certB")
+        }
+        $preDirs = @(Get-ChildItem -LiteralPath $root -Directory -Filter "MRRC-restore-pre-*")
+        if ($preDirs.Count -lt 1) { $failures.Add("目标机现有配置没有预备份") }
+
+        Step "3) 口令往返"
+        $enc = Join-Path $root "a-enc.zip.enc"
+        $rc = Invoke-Export -Root $a -OutPath (Join-Path $root "a-enc.zip") -Password "test-1234" -Encrypted $true
+        if ($rc -ne $Script:ExitOk) { $failures.Add("加密导出返回 $rc") }
+        if (Test-Path -LiteralPath (Join-Path $root "a-enc.zip")) {
+            $failures.Add("加密后明文 zip 还在")
+        }
+        $rc = Invoke-Import -File $enc -Password "test-1234" -Root $c -PreBackupRoot $root -AssumeYes $true -AllowStop $true
+        if ($rc -ne $Script:ExitOk) { $failures.Add("加密恢复返回 $rc") }
+        if ((Get-Sha256 (Join-Path $a "mrrc_modern.env")) -ne (Get-Sha256 (Join-Path $c "mrrc_modern.env"))) {
+            $failures.Add("加密往返后 env 不同")
+        }
+
+        Step "4) 篡改必须被拒"
+        $bad = Join-Path $root "bad.zip"
+        Copy-Item -LiteralPath $zip -Destination $bad
+        $bytes = [System.IO.File]::ReadAllBytes($bad)
+        $bytes[$bytes.Length - 1] = $bytes[$bytes.Length - 1] -bxor 0xFF
+        [System.IO.File]::WriteAllBytes($bad, $bytes)
+        $d = Join-Path $root "D"
+        $rc = Invoke-Import -File $bad -Password "" -Root $d -PreBackupRoot $root -AssumeYes $true -AllowStop $true
+        if ($rc -eq $Script:ExitOk) { $failures.Add("坏包被当成成功") }
+        if (Test-Path -LiteralPath (Join-Path $d "mrrc_modern.env")) { $failures.Add("坏包写进了目标目录") }
+
+        Step "结果"
+        if ($failures.Count -eq 0) {
+            Ok "SELFTEST PASS"
+            return $Script:ExitOk
+        }
+        foreach ($f in $failures) { Bad "SELFTEST FAIL: $f" }
+        return $Script:ExitInvalid
+    } catch {
+        Bad ("SELFTEST FAIL: " + $_.Exception.Message)
+        return $Script:ExitInvalid
+    } finally {
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# ---------------------------------------------------------------- entry point
+function Show-Menu {
+    Say ""
+    Say "  MRRC Modern - 换电脑：配置与证书的备份 / 恢复"
+    Say ""
+    Say "   1  备份这台机器"
+    Say "   2  从备份恢复（这台机器上）"
+    Say "   Q  退出"
+    Say ""
+    $choice = Read-Host "  选择"
+    switch ($choice.Trim().ToUpperInvariant()) {
+        "1" { return "export" }
+        "2" { return "restore" }
+        default { return "quit" }
+    }
+}
+
+function Invoke-Main {
+    if ($SelfTest) { return (Invoke-SelfTest) }
+
+    if ($List) {
+        $tmp = Get-TempRoot
+        try {
+            $zipPath = $List
+            if (Test-IsEncrypted $List) {
+                $Password = Get-PasswordValue $Password $false
+                $zipPath = Join-Path $tmp "payload.zip"
+                Unprotect-BackupFile $List $zipPath $Password
+            }
+            $stage = Join-Path $tmp "stage"
+            Expand-BackupZip $zipPath $stage
+            $manifest = Get-Content -LiteralPath (Join-Path $stage "manifest.json") -Raw -Encoding UTF8 |
+                ConvertFrom-Json
+            Show-Manifest $manifest
+            return $Script:ExitOk
+        } catch {
+            Bad $_.Exception.Message
+            return $Script:ExitInvalid
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if ($Import) {
+        return (Invoke-Import -File $Import -Password $Password -Root (Get-UserDataDir) `
+                -AssumeYes ([bool]$Yes) -AllowStop ([bool]$StopApp))
+    }
+
+    $mode = "menu"
+    if ($Export) { $mode = "export" }
+    elseif ($Restore) { $mode = "restore" }
+    if ($mode -eq "menu") { $mode = Show-Menu }
+
+    if ($mode -eq "export") {
+        return (Invoke-Export -Root (Get-UserDataDir) -OutPath $Out -Password $Password `
+                -Encrypted ($Encrypt.IsPresent -or [bool]$Password))
+    }
+    if ($mode -eq "restore") {
+        return (Invoke-Import -File "" -Password $Password -Root (Get-UserDataDir) `
+                -AssumeYes ([bool]$Yes) -AllowStop ([bool]$StopApp))
+    }
+    return $Script:ExitNothing
+}
+
+try {
+    $code = Invoke-Main
+} catch {
+    Bad $_.Exception.Message
+    Bad "已停止。写入前就停下的部分没有动任何文件；已经写过的文件，在桌面 MRRC-restore-pre-* 里有原来的副本。"
+    $code = $Script:ExitInvalid
+}
+exit $code

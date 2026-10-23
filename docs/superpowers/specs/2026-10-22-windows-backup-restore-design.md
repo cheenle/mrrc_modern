@@ -139,8 +139,9 @@ MRRC-Modern-backup-<hostname>-<yyyyMMdd-HHmmss>.zip
 ```
 MRRC-Modern-Backup.cmd                          → 菜单：1 备份 / 2 恢复 / Q 退出
 MRRC-Modern-Backup.ps1                          → 同上（双击 .cmd 时传进来）
-MRRC-Modern-Backup.ps1 -Export [-Out <path>] [-Password <pwd>]
+MRRC-Modern-Backup.ps1 -Export [-Out <path>] [-Encrypt] [-Password <pwd>]
 MRRC-Modern-Backup.ps1 -Import <file> [-Password <pwd>] [-Yes] [-StopApp]
+MRRC-Modern-Backup.ps1 -Restore [-Password <pwd>] [-Yes] [-StopApp]
 MRRC-Modern-Backup.ps1 -List <file> [-Password <pwd>]
 MRRC-Modern-Backup.ps1 -SelfTest
 ```
@@ -149,8 +150,10 @@ MRRC-Modern-Backup.ps1 -SelfTest
 | --- | --- |
 | `-Export` | 输出默认 `桌面\MRRC-Modern-backup-<host>-<stamp>.zip` |
 | `-Out` | 指定输出路径（目录则自动拼文件名） |
-| `-Password` | 出 `.enc`；导出后把明文 zip **删除**并说明这是普通删除 |
-| `-Import` | 不带值时弹文件选择框；接受 `.zip` 与 `.enc` |
+| `-Password` | 非交互入口（给支持人员用）：**会留在 PowerShell 历史与进程命令行里**；本地一次性迁移优先用 `-Encrypt` |
+| `-Encrypt` | 导出后加密；口令用 `Read-Host -AsSecureString` 提示两遍，**不经过命令行** |
+| `-Import` | 接受 `.zip` 与 `.enc`；`-Import` 是 `[string]`，必须带路径 |
+| `-Restore` | 弹出文件选择框，选中后按 `-Import` 处理（双击菜单里的 `2` 走这条路） |
 | `-Yes` | 不逐项询问（恢复确认、关应用确认都用"是"） |
 | `-StopApp` | 允许脚本关闭 Launcher/Server/scope_pipe/frpc（默认只提示） |
 | `-List` | 只打印清单（含每项大小与 `kind`），不写任何文件 |
@@ -251,7 +254,7 @@ macOS 上没有 PowerShell，静态守卫在本地跑；`-SelfTest` 进 Windows 
 | --- | --- |
 | 源 | `tools/windows/MRRC-Modern-Backup.ps1`、`MRRC-Modern-Backup.cmd` |
 | 下载 | `website/downloads/MRRC-Modern-Backup.ps1`、`MRRC-Modern-Backup.cmd`（逐字节副本） |
-| 文档 | `website/guide.html` 与 `website/zh/guide.html` 新增 §6.3「换电脑：一键备份/恢复」；两处首页页脚在"清理脚本"旁加一行链接 |
+| 文档 | `website/guide.html` 与 `website/zh/guide.html` 新增 **§6.5**「换电脑：一键备份/恢复」（§6.3/§6.4 已被占用，改号会打断既有锚点）；两处首页页脚在"清理脚本"旁加一行链接 |
 | 答复页 | 不需要新卡；`docs/OPERATION_GUIDE.md` 的升级一节补一句交叉引用 |
 
 `.cmd` 行为：双击（无参数）→ 菜单；带参数 → 原样转给 `.ps1`；`.ps1` 不在同目录时按

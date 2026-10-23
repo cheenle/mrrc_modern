@@ -379,3 +379,142 @@ function Test-Manifest([string]$stage, $manifest) {
         }
     }
 }
+
+# ---------------------------------------------------------------- encryption
+function Get-PasswordValue([string]$given, [bool]$Confirm) {
+    if ($given) { return $given }
+    $bstr1 = [IntPtr]::Zero
+    $bstr2 = [IntPtr]::Zero
+    try {
+        $secure = Read-Host "  请输入备份口令（不回显）" -AsSecureString
+        $bstr1 = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+        $first = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr1)
+        if ($Confirm) {
+            $again = Read-Host "  再输一次" -AsSecureString
+            $bstr2 = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($again)
+            if ($first -ne [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr2)) {
+                throw "两次输入的口令不一致"
+            }
+        }
+        if (-not $first) { throw "口令不能为空" }
+        return $first
+    } finally {
+        if ($bstr1 -ne [IntPtr]::Zero) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr1) }
+        if ($bstr2 -ne [IntPtr]::Zero) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr2) }
+    }
+}
+
+function Get-Kdf([string]$password, [byte[]]$salt, [int]$iterations, [int]$length) {
+    # PBKDF2-SHA256 需要 .NET 4.7.2+（Win10 19045 自带 4.8）。
+    $ctor = [System.Security.Cryptography.Rfc2898DeriveBytes].GetConstructor(
+        [type[]]@([string], [byte[]], [int], [System.Security.Cryptography.HashAlgorithmName]))
+    if (-not $ctor) {
+        throw "这台机器缺 .NET 4.7.2+（PBKDF2-SHA256 不可用）：请改用不带 -Encrypt 的备份"
+    }
+    $kdf = New-Object System.Security.Cryptography.Rfc2898DeriveBytes(
+        $password, $salt, $iterations, [System.Security.Cryptography.HashAlgorithmName]::SHA256)
+    return $kdf.GetBytes($length)
+}
+
+function Protect-BackupFile([string]$inPath, [string]$outPath, [string]$password) {
+    $iterations = 200000
+    $salt = New-Object byte[] 16
+    $iv = New-Object byte[] 16
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($salt); $rng.GetBytes($iv) } finally { $rng.Dispose() }
+
+    $keys = Get-Kdf $password $salt $iterations 64
+    $encKey = $keys[0..31]
+    $macKey = $keys[32..63]
+
+    $plain = [System.IO.File]::ReadAllBytes($inPath)
+    $aes = [System.Security.Cryptography.Aes]::Create()
+    try {
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $aes.Key = $encKey
+        $aes.IV = $iv
+        $encryptor = $aes.CreateEncryptor()
+        $cipher = $encryptor.TransformFinalBlock($plain, 0, $plain.Length)
+    } finally { $aes.Dispose() }
+
+    $header = New-Object System.IO.MemoryStream
+    $writer = New-Object System.IO.BinaryWriter($header)
+    try {
+        $writer.Write([System.Text.Encoding]::ASCII.GetBytes($Script:EncMagic))
+        $writer.Write([uint16]1)
+        $writer.Write([uint32]$iterations)
+        $writer.Write($salt)
+        $writer.Write($iv)
+        $writer.Write([uint64]$plain.Length)
+        $writer.Flush()
+        $writer.Write($cipher)
+        $writer.Flush()
+        $all = $header.ToArray()
+    } finally { $writer.Dispose(); $header.Dispose() }
+
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256(, $macKey)
+    try { $tag = $hmac.ComputeHash($all) } finally { $hmac.Dispose() }
+
+    $outBytes = New-Object byte[] ($all.Length + 32)
+    [Array]::Copy($all, 0, $outBytes, 0, 54)
+    [Array]::Copy($tag, 0, $outBytes, 54, 32)
+    [Array]::Copy($all, 54, $outBytes, 86, $all.Length - 54)
+    [System.IO.File]::WriteAllBytes($outPath, $outBytes)
+}
+
+function Test-IsEncrypted([string]$path) {
+    $stream = [System.IO.File]::OpenRead($path)
+    try {
+        $buffer = New-Object byte[] 8
+        $read = $stream.Read($buffer, 0, 8)
+        return ($read -eq 8 -and
+                [System.Text.Encoding]::ASCII.GetString($buffer) -eq $Script:EncMagic)
+    } finally { $stream.Dispose() }
+}
+
+function Unprotect-BackupFile([string]$inPath, [string]$outPath, [string]$password) {
+    $raw = [System.IO.File]::ReadAllBytes($inPath)
+    if ($raw.Length -lt 87) { throw "加密备份不完整（只有 $($raw.Length) 字节）" }
+    if ([System.Text.Encoding]::ASCII.GetString($raw, 0, 8) -ne $Script:EncMagic) {
+        throw "不是 MRRC Modern 的加密备份"
+    }
+    $version = [BitConverter]::ToUInt16($raw, 8)
+    if ($version -ne 1) { throw "不认识的加密格式版本：$version" }
+    $iterations = [BitConverter]::ToUInt32($raw, 10)
+    if ($iterations -lt 1000 -or $iterations -gt 2000000) {
+        throw "加密参数不合理（迭代 $iterations）"
+    }
+    $salt = $raw[14..29]
+    $iv = $raw[30..45]
+    $expected = [BitConverter]::ToUInt64($raw, 46)
+    $tag = $raw[54..85]
+
+    $cipher = New-Object byte[] ($raw.Length - 86)
+    [Array]::Copy($raw, 86, $cipher, 0, $cipher.Length)
+
+    $keys = Get-Kdf $password $salt ([int]$iterations) 64
+    $encKey = $keys[0..31]
+    $macKey = $keys[32..63]
+
+    $signed = New-Object byte[] (54 + $cipher.Length)
+    [Array]::Copy($raw, 0, $signed, 0, 54)
+    [Array]::Copy($cipher, 0, $signed, 54, $cipher.Length)
+    $hmac = New-Object System.Security.Cryptography.HMACSHA256(, $macKey)
+    try { $actual = $hmac.ComputeHash($signed) } finally { $hmac.Dispose() }
+    $same = $true
+    for ($i = 0; $i -lt 32; $i++) { if ($actual[$i] -ne $tag[$i]) { $same = $false; break } }
+    if (-not $same) { throw "口令不对，或文件被改动过（HMAC 校验失败）" }
+
+    $aes = [System.Security.Cryptography.Aes]::Create()
+    try {
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+        $aes.Key = $encKey
+        $aes.IV = $iv
+        $decryptor = $aes.CreateDecryptor()
+        $plain = $decryptor.TransformFinalBlock($cipher, 0, $cipher.Length)
+    } finally { $aes.Dispose() }
+    if ([uint64]$plain.Length -ne $expected) { throw "解密后的长度与头部不符" }
+    [System.IO.File]::WriteAllBytes($outPath, $plain)
+}

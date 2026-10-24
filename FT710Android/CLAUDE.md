@@ -155,6 +155,26 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 - 分区都带 `testTag`（`secToolRow`/`secHeader`/`secSpectrum`/`secMeters`/`secControls`/`secTuning`/`secMemory`，Panel 走 `tag=` 参数），量高度靠它们；`OneScreenFitTest` 逐区打印到 `build/screenshots/one-screen-fit.txt`。
 - 想看设计不装 APK：`./gradlew :app:testDebugUnitTest --tests "*ScreenshotTest*"` → `app/build/screenshots/main-rx-*.png`、`main-tx-*.png`（Robolectric NATIVE 渲染）。
 
+### 横屏（2026-10-22 起，v1.1.33）
+
+- **方向锁已去掉**（跟随系统）。横屏 = `Data/ScreenFit.kt` 的 `isWide(w, h)`；竖屏公式**一行未改**，
+  新增的东西全部在 `isWide()` 分支之后（`ScreenFitTest` 里有一条"横屏不许改变竖屏取值"的守卫）。
+- **横屏不是多了一块屏，是换了个形状**：竖屏 344×620 ≈ 横屏 728×300。内容只能靠二维排布。
+- 布局：`工具行` → `主频显示屏 ｜ S 表 ｜ 瀑布`（同一行，三者等高 = `spectrumHeight`）→
+  `仪表 ｜ 控制 ｜ 调谐 ｜ 记忆`（一排，高度 = `landscapeCardsHeight`，取最高的调谐卡）。
+  整页仍是**一条** `mainScroll` 竖向滚动。
+- 手机横屏（可用高 300~450dp）与平板横屏（≥600dp）**共用一套**双列，尺寸按屏宽放大。
+  横屏紧凑上限 `LANDSCAPE_COMPACT_MAX_HEIGHT_DP = 560`——沿用竖屏的 900 会把平板横屏误判成紧凑。
+- 记忆格横屏 **3×2**；格宽用 `memoryCellWidthInCard(卡片宽, …)`，**不要**用按屏宽算的那个
+  （记忆卡只占屏宽一列，按整屏宽反推字号会大 ~2 倍 → 真溢出）。
+- 底栏四键在横屏**原样保留**（`PTT ｜ CQ · TUNE · REC` 横跨页宽），listen-only 隐藏逻辑不变。
+- **旋转时保持发射**：`MainActivity.onStop()` 用 `shouldReleaseOnStop(isChangingConfigurations)`
+  判定，配置变更不松手；真正的退后台仍无条件释放。松手实现只有这一处，别再复制。
+- 尺寸给**显式高度**（`landscapeCardsHeight` / `landscapeInstrumentHeight`），绝不 `IntrinsicSize`；
+  卡片里可能有 `BoxWithConstraints`（`UiLayoutSafetyTest` 盯这条）。
+- 实测（`OneScreenFitTest`，`build/screenshots/one-screen-fit.txt`）：728×360 滚 23dp（定案接受），
+  832×384 / 892×411 / 1200×800 一屏。横屏图：`main-landscape-phone-*.png`、`main-landscape-tablet-*.png`。
+
 ## 频谱/标尺不变量
 
 - **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**：它们是 `SubcomposeLayout`，不支持 intrinsic 测量，布局阶段抛 `IllegalStateException` → **启动即崩**（v1.1.16 事故：顶栏用 `height(IntrinsicSize.Min)` 让显示屏与 S 表等高）。要和固定尺寸的兄弟等高，就**显式给高度**（本仓：`Row(Modifier.height(meterH))`，`meterH` 由屏宽算出）。门槛：`UiLayoutSafetyTest`（静态扫描，命中即失败）。

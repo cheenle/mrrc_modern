@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
@@ -69,7 +71,8 @@ fun BandPickerDialog(bands: List<BandDto>, current: String, onDismiss: () -> Uni
         onDismissRequest = onDismiss,
         title = { Text("选择波段") },
         text = {
-            Column {
+            // 横屏可用高只有 300~400dp：波段列表（十几条）必须能滚，否则底部条目点不到
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 bands.forEach { b ->
                     val active = b.name == current
                     Text(
@@ -120,7 +123,8 @@ fun MemoryManagerDialog(mem: List<MemoryChannel?>, onDismiss: () -> Unit, onClea
         onDismissRequest = onDismiss,
         title = { Text("记忆频道") },
         text = {
-            Column {
+            // 6 行 × 34dp 在手机横屏上会顶到按钮区，加滚动兜底（竖屏行为不变，本来就不满）
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 for (i in 0 until 6) {
                     val ch = mem.getOrNull(i)
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {

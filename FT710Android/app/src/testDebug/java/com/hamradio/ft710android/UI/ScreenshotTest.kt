@@ -63,6 +63,27 @@ class ScreenshotTest {
         shot("main-rx") { MainScreen(vm = fixtureVm(scope), prefs = UiPrefs(), onOpenSettings = {}) }
     }
 
+    // ── 横屏（2026-10-22）：给人看的两张图 ──────────────────────────────
+    // 手机横屏（极扁）与平板横屏（又宽又高）共用一套双列布局，尺寸按屏宽放大。
+
+    @Test
+    @Config(qualifiers = "w892dp-h411dp-xhdpi")
+    fun `capture the main screen in landscape on a handset`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        shot("main-landscape-phone") {
+            MainScreen(vm = fixtureVm(scope), prefs = UiPrefs(), onOpenSettings = {})
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "w1200dp-h800dp-mdpi")
+    fun `capture the main screen in landscape on a tablet`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        shot("main-landscape-tablet") {
+            MainScreen(vm = fixtureVm(scope), prefs = UiPrefs(), onOpenSettings = {})
+        }
+    }
+
     @Test
     fun `capture the main screen while transmitting`() {
         val scope = CoroutineScope(Dispatchers.Unconfined)

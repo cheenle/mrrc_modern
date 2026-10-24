@@ -14,7 +14,13 @@ import com.hamradio.ft710android.Data.ScreenFit
  * 数值全部来自 [ScreenFit]（单一数据源，`ScreenFitTest` 用真机档位验证"一屏放得下"），
  * Composable 里不要就地写死 dp，否则预算测试会和真实布局脱节。
  */
-class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeightDp: Int) {
+class ScreenMetrics(
+    val compact: Boolean,
+    val screenWidthDp: Int,
+    val screenHeightDp: Int,
+    /** 横屏（宽 > 高）：主频/S 表/瀑布并排 + 下半四卡一排（2026-10-22）。 */
+    val wide: Boolean = false,
+) {
     val meterWidth: Dp get() = ScreenFit.meterWidth(screenWidthDp).dp
     /** 主频显示屏（= S 表）高度。 */
     val headerHeight: Dp get() = ScreenFit.headerHeight(compact, screenWidthDp).dp
@@ -28,10 +34,17 @@ class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeig
     val sliderRowHeight: Dp get() = ScreenFit.sliderRowHeight(compact).dp
     val pttHeight: Dp get() = ScreenFit.pttHeight(compact).dp
     val auxButtonSize: Dp get() = ScreenFit.auxButtonSize(compact).dp
-    val memoryColumns: Int get() = ScreenFit.memoryColumns(compact)
-    val memoryRowsCount: Int get() = ScreenFit.memoryRows(compact)
+    val memoryColumns: Int get() = if (wide) ScreenFit.WIDE_MEMORY_COLUMNS else ScreenFit.memoryColumns(compact)
+    val memoryRowsCount: Int get() = if (wide) ScreenFit.WIDE_MEMORY_ROWS else ScreenFit.memoryRows(compact)
     val memoryCellHeight: Dp get() = ScreenFit.memoryCellHeight(compact).dp
-    val memoryCellWidth: Float get() = ScreenFit.memoryCellWidth(screenWidthDp, compact)
+    val memoryCellWidth: Float
+        get() = if (wide) {
+            // 横屏：记忆卡只占屏宽的一列，格宽必须按**卡片**算（按整屏宽会高估一倍）
+            ScreenFit.memoryCellWidthInCard(
+                ScreenFit.landscapeMemoryCardWidth(screenWidthDp),
+                ScreenFit.WIDE_MEMORY_COLUMNS, compact,
+            )
+        } else ScreenFit.memoryCellWidth(screenWidthDp, compact)
     val memoryInnerGap: Dp get() = ScreenFit.innerGap(compact).dp
     val memoryManageWidth: Dp get() = ScreenFit.MEMORY_MANAGE_W.dp
 
@@ -49,6 +62,20 @@ class ScreenMetrics(val compact: Boolean, val screenWidthDp: Int, val screenHeig
     /** 用户设的频谱高度按档位缩放（紧凑档压一档，仍然尊重设置里的滑条）。 */
     fun spectrumHeight(fftH: Int, wfH: Int): Dp = ScreenFit.spectrumHeight(compact, fftH, wfH).dp
 
+    // ── 横屏专用（wide=true 时才被用到）─────────────────────────────
+
+    /** 横屏主频显示屏宽度（S 表与瀑布在它右边）。 */
+    val landscapeFreqWidth: Dp get() = ScreenFit.landscapeFreqWidth(screenWidthDp).dp
+
+    /** 横屏那一行的高度：主频显示屏 / S 表 / 瀑布 **三者等高** = 频谱高度。 */
+    fun landscapeInstrumentHeight(fftH: Int, wfH: Int): Dp = ScreenFit.spectrumHeight(compact, fftH, wfH).dp
+
+    /** 横屏四张卡片的相对宽度（仪表 / 控制 / 调谐 / 记忆）。 */
+    val landscapeCardWeights: List<Float> get() = ScreenFit.LANDSCAPE_CARD_WEIGHTS
+
+    /** 横屏一排卡片的显式高度（= 最高那张，通常是有音量滑块的调谐卡）。 */
+    fun landscapeCardsHeight(hasAtr: Boolean): Dp = ScreenFit.landscapeCardsHeight(compact, hasAtr).dp
+
 }
 
 val LocalScreenMetrics = staticCompositionLocalOf { ScreenMetrics(false, 412, 892) }
@@ -57,11 +84,13 @@ val LocalScreenMetrics = staticCompositionLocalOf { ScreenMetrics(false, 412, 89
 @Composable
 fun ProvideScreenMetrics(content: @Composable () -> Unit) {
     val cfg = LocalConfiguration.current
-    // screenHeightDp 已扣除状态栏/导航栏，正好是布局可用高度
+    // screenHeightDp 已扣除状态栏/导航栏，正好是布局可用高度。
+    // 旋转会重建 Activity 并重新取值，所以横竖屏切换不需要额外监听。
     val metrics = ScreenMetrics(
-        compact = ScreenFit.isCompact(cfg.screenHeightDp),
+        compact = ScreenFit.isCompactFor(cfg.screenWidthDp, cfg.screenHeightDp),
         screenWidthDp = cfg.screenWidthDp,
         screenHeightDp = cfg.screenHeightDp,
+        wide = ScreenFit.isWide(cfg.screenWidthDp, cfg.screenHeightDp),
     )
     CompositionLocalProvider(LocalScreenMetrics provides metrics, content = content)
 }

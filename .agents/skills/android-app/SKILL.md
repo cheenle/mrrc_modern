@@ -103,6 +103,15 @@ cd FT710Android
 13. **音频线程要设优先级**：`playLoop()` 第一行 `Process.setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO)`（必须在该线程内调用）。UI 卡顿时这是"声音出不来"的最后一道防线。draw 阶段不要分配（位图/LUT/文本 layout 全部 `remember`）。
 14. **尺寸单一数据源**：dp 只从 `Data/ScreenFit.kt` 出，经 `UI/ScreenMetrics.kt`（`LocalScreenMetrics`）下发；Composable 里不许就地写死。档位按 `Configuration.screenHeightDp ≤ 900` = 紧凑（大陆主流直板机），否则标准（平板/折叠屏）。卡片内节奏由 `Panel(spacing=…)` 统一给，卡内别再写 `padding(top=…)`。M3 的 48dp 最小交互尺寸已在根部关掉，否则音量行会吃掉预算。改任何高度/间距 → 跑 `ScreenFitTest`（真机档位断言"一屏放得下"）。
 - **适配下限 = 360×728**（`ScreenFit.SUPPORTED_MIN_HEIGHT_DP`，5.5" 直板机 + 三键导航）。**5" 及以下不适配**（用户 2026-10-06 明确"不用考虑"），滚动兜底即可；别再为它压尺寸。
+- **横屏（v1.1.33 起，2026-10-22）**：方向锁已去掉（跟随系统）。横屏走 `ScreenFit.isWide()` 分支——
+  `工具行 → 主频 ｜ S表 ｜ 瀑布（同一行，等高）→ 仪表 ｜ 控制 ｜ 调谐 ｜ 记忆（一排，等高）`，
+  整页仍是一条 `mainScroll`。**竖屏公式一行未改**，`ScreenFitTest` 有一条"横屏不许改变竖屏取值"的守卫。
+  三个坑：① 横屏档位**不能**沿用竖屏的 900dp 紧凑阈值（会把平板横屏压成手机尺寸，另有 `LANDSCAPE_COMPACT_MAX_HEIGHT_DP = 560`）；
+  ② 记忆格横屏 3×2，格宽必须用 `memoryCellWidthInCard(卡片宽, …)`（按整屏宽反推字号会大 ~2 倍 → 真溢出）；
+  ③ 四卡与仪表行都**显式给高度**（`landscapeCardsHeight` / `landscapeInstrumentHeight`），绝不 `IntrinsicSize`。
+  旋转**保持发射**：`MainActivity.onStop()` 用 `shouldReleaseOnStop(isChangingConfigurations)` 判定——
+  配置变更不松手（否则"说着一半转手机 = 断话"），真退后台仍无条件释放；松手实现只有这一处。
+  实测：728×360 滚 23dp（用户定案"尽量一屏、不够就滚"），832×384 及以上一屏；平板横屏富余很大。
 - **频谱高度是确定值，禁止"余量自动填充"**：`round((SpecH+WfH) × spectrumScale) + 16`，紧凑档 `spectrumScale = 0.78` → 默认 **133dp**，标准档 166dp。曾有 `spectrumBonus`（余量灌给频谱，封顶 80dp），2026-10-07 移除 —— 它会让"把瀑布调矮"直接失效（省下的空间立刻被填回，荣耀上砍基准后仍是 198dp）。要调频谱高度就改 `spectrumScale`。副作用是高屏机型底部留白（荣耀 131dp / 411×892 189dp），内容顶对齐不裁切。
 - 加新卡片/新行之前先看 `build/screenshots/one-screen-fit.txt` 的实测余量：小米三键 360×728 只剩 **36dp**，中档 384×816 剩 119dp，荣耀 400×832 剩 131dp —— **下限机型几乎没有余量**，再加东西就会开始滚动。
 - **`IntrinsicSize` 绝不能包住 `BoxWithConstraints` / `Lazy*` / `TabRow`**（都是 `SubcomposeLayout`，不支持 intrinsic 测量）→ 布局阶段抛 `IllegalStateException` = **装上打开就退出**（v1.1.16 事故）。要跟固定尺寸的兄弟等高就**显式给高度**。异常原文可在 `~/.gradle/caches` 的 `ui-release.aar` 里字节级搜到（`LayoutNodeSubcompositionsState`）——**查崩溃先拿证据，别猜**。门槛：`UiLayoutSafetyTest`。

@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -52,7 +54,9 @@ fun LoginScreen(vm: MainViewModel, settings: LoginCredentials, onLoggedIn: () ->
     }
 
     Column(
-        Modifier.fillMaxSize().background(MrrcColors.BgPrimary).padding(24.dp),
+        // 横屏可用高只有 300~400dp：登录卡片 + 版本信息会顶出屏幕，靠滚动兜底
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .background(MrrcColors.BgPrimary).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(80.dp))

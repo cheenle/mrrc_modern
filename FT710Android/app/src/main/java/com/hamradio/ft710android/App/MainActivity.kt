@@ -42,8 +42,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        holder.vm.onPttRelease()
-        holder.vm.onAppForeground(false)
+        // 旋转属于"配置变更"，不是用户离开：这时候松手会把正在说的话掐断（2026-10-22
+        // 放开方向锁时新加的闸）。判定见 RotationPolicy.kt，真正的退后台仍然无条件释放。
+        if (shouldReleaseOnStop(isChangingConfigurations)) {
+            holder.vm.onPttRelease()
+            holder.vm.onAppForeground(false)
+        }
         super.onStop()
     }
 }

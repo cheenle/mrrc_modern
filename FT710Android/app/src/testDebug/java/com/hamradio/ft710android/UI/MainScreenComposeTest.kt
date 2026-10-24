@@ -295,6 +295,77 @@ class MainScreenComposeTest {
     }
 
     /**
+     * 横屏（2026-10-22）结构 + 功能保全。
+     *
+     * 横屏不是"把竖屏压扁"，而是换了个摆法：主频显示屏 / S 表 / 瀑布 **同一行**，
+     * 仪表 / 控制 / 调谐 / 记忆 **同一排**。这里量真实布局，盯三件事：
+     *  ① 摆位真的是并排（不是回退成竖屏那一列）；
+     *  ② 记忆格在横屏是 3×2（6×1 每格只剩 14dp，字会被省略号吃掉）；
+     *  ③ 控件一个都不少（五键、五芯片、PTT/CQ/TUNE/REC、菜单/全屏/电源、⋯管理）。
+     */
+    @Test
+    @Config(qualifiers = "w728dp-h360dp-xxhdpi")
+    fun `landscape puts the instrument cluster in one row and the four cards side by side`() {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val vm = fixtureVm(scope)
+        rule.setContent {
+            AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
+        }
+        rule.waitForIdle()
+        val density = rule.density.density
+
+        // ① 仪表行：主频在 S 表左边、S 表在瀑布左边，三者等高（显式高度，不靠 intrinsic）
+        val freq = rule.onNodeWithTag("freqBezel", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val header = rule.onNodeWithTag("secHeader").fetchSemanticsNode().boundsInRoot
+        val spectrum = rule.onNodeWithTag("secSpectrum").fetchSemanticsNode().boundsInRoot
+        assertTrue("主频应贴在仪表行最左", kotlin.math.abs(freq.left - header.left) <= 1f)
+        assertTrue("主频应在瀑布左边", freq.right <= spectrum.left)
+        assertTrue("瀑布应占满仪表行右侧", kotlin.math.abs(spectrum.right - header.right) <= 1f)
+        assertEquals("主频与瀑布必须等高", header.height, freq.height, 1f)
+        assertEquals("瀑布与仪表行必须等高", header.height, spectrum.height, 1f)
+        // 竖屏那条"频谱在仪表行下面"的摆法不能出现在横屏
+        assertTrue("横屏不该再单独占一块频谱", spectrum.top >= header.top - 1f)
+
+        // ② 四卡一排
+        val cards = listOf("secMeters", "secControls", "secTuning", "secMemory")
+            .map { rule.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
+        cards.zipWithNext().forEach { (a, b) ->
+            assertEquals("卡片不在同一行", a.top, b.top, 1f)
+            assertTrue("卡片没有左右排开", b.left >= a.right - 1f)
+        }
+        assertEquals("四张卡片不等高", cards[0].height, cards[3].height, 1f)
+
+        // ③ 记忆格 3×2：前三格同一行，第四格落到下一行
+        val cells = (0 until 6).map {
+            rule.onNodeWithTag("memCell$it", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        }
+        (0..2).forEach { assertEquals("memCell$it 不在第一行", cells[0].top, cells[it].top, 1f) }
+        (3..5).forEach { assertEquals("memCell$it 不在第二行", cells[3].top, cells[it].top, 1f) }
+        assertTrue("第二行应在第一行下面", cells[3].top >= cells[0].bottom - 1f)
+        assertTrue("横屏记忆格太窄", cells[0].width / density >= 30f)
+
+        // ④ 功能保全（"功能不变"）：竖屏有的入口横屏一个都不能少
+        rule.onNodeWithText("40m · USB", useUnmergedTree = true).assertExists()
+        listOf("模式", "波段", "NR", "NB", "COMP").forEach {
+            rule.onNodeWithText(it, useUnmergedTree = true).assertExists()
+        }
+        rule.onAllNodesWithText("TUNE", useUnmergedTree = true).assertCountEquals(2)
+        rule.onNodeWithText("⋯", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("btnPtt", useUnmergedTree = true).assertExists()
+        rule.onNodeWithTag("btnRec", useUnmergedTree = true).assertExists()
+        listOf("设置", "全屏", "断开电台").forEach {
+            rule.onNodeWithContentDescription(it, useUnmergedTree = true).assertExists()
+        }
+        // 主频读数照旧（fmtMhz 不变）
+        rule.onNodeWithText("07.116.95", useUnmergedTree = true).assertExists()
+        // 底栏仍横跨全宽、PTT 仍是最宽的一块
+        val bar = rule.onNodeWithTag("secPtt").fetchSemanticsNode().boundsInRoot
+        val ptt = rule.onNodeWithTag("btnPtt", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue("PTT 应是底栏最宽的一块", ptt.width > cells[0].width * 3)
+        assertTrue("底栏应横跨页宽", bar.width >= rule.onRoot().fetchSemanticsNode().boundsInRoot.width - 1f)
+    }
+
+    /**
      * 主频必须在显示屏里**上下左右都居中**（用户 2026-10-07 要求）。
      *
      * 这是个真实的回归坑：`BoxWithConstraints` 的默认 `contentAlignment` 是 `TopStart`，

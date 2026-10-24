@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamradio.ft710android.Data.BandCycle
 import com.hamradio.ft710android.Data.MemoryChannel
+import com.hamradio.ft710android.Data.RadioCaps
+import com.hamradio.ft710android.Data.RadioState
+import com.hamradio.ft710android.Network.AtrStateDto
 import com.hamradio.ft710android.Data.SMeter
 import com.hamradio.ft710android.Spectrum.WaterfallCanvas
 import com.hamradio.ft710android.ViewModel.MainViewModel
@@ -126,7 +129,7 @@ fun MainScreen(
     var stepHz by remember { mutableStateOf(1_000L) }
     val spanHz = remember(stateVersion) { caps.spanHz(state.scopeSpan) }
     // 屏幕档位：紧凑（大陆主流手机）/ 标准（平板、折叠屏展开）
-    val m = LocalScreenMetrics.current
+        val m = LocalScreenMetrics.current
 
     Column(Modifier.fillMaxSize().background(MrrcColors.BgPrimary)) {
         Column(
@@ -225,30 +228,39 @@ fun MainScreen(
                 )
             }
 
-            // ── 主频显示屏 + S 表（等高，尺寸只看屏幕宽度）──────────────
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val meterH = m.headerHeight
-                // 等高靠**显式高度**，不能用 IntrinsicSize：子项里的 BoxWithConstraints 是
-                // SubcomposeLayout，问它 intrinsic 会抛异常 = 启动即崩（v1.1.16 事故）
-                Row(Modifier.fillMaxWidth().height(meterH).testTag("secHeader")) {
-                    DisplayBezel(
-                        modifier = Modifier.weight(1f).fillMaxHeight()
-                            .clickable { showFreqInput = true }
-                            .testTag("freqBezel"),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        // 显示屏里只有主频（工具/状态都在上面那一行），字号吃满宽高两个约束。
-                        // ⚠️ `BoxWithConstraints` 的默认 contentAlignment 是 **TopStart**：
-                        // 不显式给 Center，主频就会贴在左上角（v1.1.26~28 的实际状态，
-                        // 用户报"频率上下居中"）。外面再包一层 Box(Center) 也没用——
-                        // 子项 fillMaxSize 会把它填满，居中无从生效。
-                        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            val byWidth = (maxWidth.value - 8f) / 6.3f
-                            val byHeight = (maxHeight.value - 4f) / 1.32f
-                            val fit = minOf(byWidth, byHeight).coerceIn(16f, 62f)
-                            FreqText(hz = state.activeFrequency, fitSp = fit)
-                        }
+            // ── 主频显示屏 + S 表（竖屏上下排 ｜ 横屏与瀑布并排）──────────────
+            if (m.wide) {
+                // 横屏（2026-10-22）：主频显示屏 / S 表 / 瀑布 **挤进同一行**。三者等高，
+                // 省下竖屏里那 116dp 的显示屏高度——横握手机的唯一正当理由就是瀑布变宽，
+                // 只有并排才做到。竖屏分支一个像素都不动。
+                Row(
+                    Modifier.fillMaxWidth()
+                        .height(m.landscapeInstrumentHeight(prefs.fftHeight, prefs.wfHeight))
+                        .testTag("secHeader"),
+                ) {
+                    FreqBezel(state, Modifier.width(m.landscapeFreqWidth).fillMaxHeight()) {
+                        showFreqInput = true
                     }
+                    Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))
+                    SmeterArc(
+                        raw = state.sMeter, sUnit = state.sUnit, levelDb = state.sMeterDbm,
+                        modifier = Modifier.width(m.meterWidth).fillMaxHeight(),
+                    )
+                    Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))
+                    SpectrumPanel(
+                        vm, prefs, spanHz, state.activeFrequency,
+                        Modifier.weight(1f).fillMaxHeight(),
+                    )
+                }
+            } else {
+                // 高度取 `m.headerHeight`（显示屏 = S 表高）。这里**不要**用
+                // `Modifier.height(IntrinsicSize.Min)` 做等高：S 表内部是 BoxWithConstraints
+                // （SubcomposeLayout），问它 intrinsic 会启动即崩（v1.1.16 事故）。
+                // 原来外面还套了一层 `BoxWithConstraints`，它的 scope 从头到尾没被用过
+                // （lint: UnusedBoxWithConstraintsScope），2026-10-22 拆掉——纯死代码。
+                val meterH = m.headerHeight
+                Row(Modifier.fillMaxWidth().height(meterH).testTag("secHeader")) {
+                    FreqBezel(state, Modifier.weight(1f).fillMaxHeight()) { showFreqInput = true }
                     Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))
                     SmeterArc(
                         raw = state.sMeter, sUnit = state.sUnit, levelDb = state.sMeterDbm,
@@ -267,179 +279,62 @@ fun MainScreen(
             }
 
             // ── 频谱显示屏（独立子组件：只有它订阅 waterfall/fft）──────────
-            SpectrumPanel(vm, prefs, spanHz, state.activeFrequency)
-
-            Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMeters") {
-                // ── 仪表：PWR/ALC 两列，SWR/Id/Vd 三列 ───────────────────
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MeterCell("PWR", state.powerWatts, 100f, MrrcColors.TextPrimary, "%.1f W".format(Locale.US, state.powerWatts), Modifier.weight(1f))
-                    MeterCell("ALC", state.alcPct, 100f, MrrcColors.TextPrimary, "%.0f".format(Locale.US, state.alcPct), Modifier.weight(1f))
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MeterCell("SWR", state.swrRatio, 3f, MrrcColors.Success, "%.1f".format(Locale.US, state.swrRatio), Modifier.weight(1f))
-                    if (caps.hasVdIdMeters) {
-                        MeterCell("Id", state.idAmps, 25f, MrrcColors.Cyan, "%.1f A".format(Locale.US, state.idAmps), Modifier.weight(1f))
-                        MeterCell("Vd", state.vdVolts, 16f, MrrcColors.Purple, "%.1f V".format(Locale.US, state.vdVolts), Modifier.weight(1f))
-                    }
-                }
-
-                // ── ATR1000 行（web atr-row；未启用时整行隐藏；天调参数并进本行，不再单独一行）──
-                if (atrEnabled) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        MeterCell("ATR", atr?.power ?: 0.0, 120f, MrrcColors.Warning,
-                            "%.0f W".format(Locale.US, atr?.power ?: 0.0), Modifier.weight(1f))
-                        MeterCell("SWR", atr?.swr ?: 0.0, 5f, MrrcColors.Success,
-                            if ((atr?.swr ?: 0.0) > 0) "%.1f".format(Locale.US, atr!!.swr) else "-", Modifier.weight(1f))
-                        Box(Modifier.weight(1.1f).height(m.meterCellHeight), contentAlignment = Alignment.Center) {
-                            Text(
-                                if (atr == null || !atr!!.connected) "ATR 离线"
-                                else "${if (atr!!.sw == 1) "CL" else "LC"} L=${atr!!.ind} C=${atr!!.cap}${if (atr!!.tuning) " ⋯" else ""}",
-                                color = MrrcColors.TextSecondary, fontSize = 9.sp, fontFamily = MonoFont,
-                                textAlign = TextAlign.Center, maxLines = 2, lineHeight = 10.sp,
-                            )
-                        }
-                        Box(
-                            Modifier.weight(1f).height(m.meterCellHeight)
-                                .background(MrrcColors.BgSecondary, RoundedCornerShape(6.dp))
-                                .border(1.dp, MrrcColors.Border, RoundedCornerShape(6.dp))
-                                .clickable(enabled = !atrTuning) { vm.atrTune() },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(if (atrTuning) "···" else "TUNE", color = MrrcColors.Accent,
-                                fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
+            // 横屏时它已经在上面那一行里（与主频/S 表等高并排），只有竖屏才单独占一块
+            if (!m.wide) {
+                SpectrumPanel(
+                    vm, prefs, spanHz, state.activeFrequency,
+                    Modifier.fillMaxWidth()
+                        .height(m.spectrumHeight(prefs.fftHeight, prefs.wfHeight))
+                        .padding(top = ScreenFit.PAGE_PAD_V.dp),
+                )
             }
 
-            Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secControls") {
-                // ── 五键行：模式 / 波段 / 滤波 / ATT / PRE ────────────────
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    PadBtn("模式", Modifier.weight(1f), onLongClick = { showModePicker = true }) {
-                        if (modes.isNotEmpty()) {
-                            val idx = modes.indexOf(state.modeName)
-                            vm.setMode(modes[(idx + 1).mod(modes.size)])
-                        }
-                    }
-                    PadBtn("波段", Modifier.weight(1f), onLongClick = { showBandPicker = true }) {
-                        vm.setBand(BandCycle.next(state.bandName).defaultFreq)
-                    }
-                    PadBtn(fmtFilter(state.filterHz), Modifier.weight(1f)) { vm.cycleFilter() }
-                    PadBtn("ATT${state.attenuatorLabel}", Modifier.weight(1f)) { vm.sendSet("att", (state.attenuator + 1) % 4) }
-                    PadBtn("PRE${state.preampLabel}", Modifier.weight(1f)) { vm.sendSet("preamp", (state.preamp + 1) % 3) }
+            if (m.wide) {
+                // 横屏下半：四张卡片并排（仪表 ｜ 控制 ｜ 调谐 ｜ 记忆）。
+                // 高度给**显式值**（= 最高的那张，通常是调谐卡）：不能问 intrinsic（卡片里
+                // 可能有 SubcomposeLayout，问它会启动即崩），也不能让各卡各长各的——
+                // 一排参差的卡片很难看。
+                val weights = m.landscapeCardWeights
+                Row(
+                    Modifier.fillMaxWidth()
+                        .height(m.landscapeCardsHeight(atrEnabled))
+                        .testTag("secCardsRow"),
+                ) {
+                    MetersCard(
+                        vm, state, caps, atrEnabled, atr, atrTuning,
+                        Modifier.weight(weights[0]).fillMaxHeight(),
+                    )
+                    Spacer(Modifier.width(ScreenFit.LANDSCAPE_CARD_GAP.dp))
+                    ControlsCard(
+                        vm, state, caps, listenOnly, modes,
+                        onPickMode = { showModePicker = true },
+                        onPickBand = { showBandPicker = true },
+                        modifier = Modifier.weight(weights[1]).fillMaxHeight(),
+                    )
+                    Spacer(Modifier.width(ScreenFit.LANDSCAPE_CARD_GAP.dp))
+                    TuningCard(
+                        vm, state, prefs, stepHz,
+                        onStep = { stepHz = it }, onAfVol = onAfVol,
+                        modifier = Modifier.weight(weights[2]).fillMaxHeight(),
+                    )
+                    Spacer(Modifier.width(ScreenFit.LANDSCAPE_CARD_GAP.dp))
+                    MemoryCard(
+                        vm, mem,
+                        onManage = { showMemManager = true },
+                        modifier = Modifier.weight(weights[3]).fillMaxHeight(),
+                    )
                 }
-
-                // ── 芯片行：NR / NB / AN / COMP / ATU ────────────────────
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    SmallChip("NR", state.noiseReduction, Modifier.weight(1f)) { vm.sendSet("nr", !state.noiseReduction) }
-                    SmallChip("NB", state.noiseBlanker, Modifier.weight(1f)) { vm.sendSet("nb", !state.noiseBlanker) }
-                    if (caps.hasAutoNotch) {
-                        SmallChip("AN", state.autoNotch, Modifier.weight(1f)) { vm.sendSet("an", !state.autoNotch) }
-                    }
-                    SmallChip("COMP", state.compressor, Modifier.weight(1f)) { vm.sendSet("comp", !state.compressor) }
-                    if (!listenOnly && caps.hasAtu) {
-                        SmallChip("ATU", state.tunerStatus != 0, Modifier.weight(1f)) {
-                            vm.sendSet("tuner", if (state.tunerStatus == 0) 1 else 0)
-                        }
-                    }
-                }
+            } else {
+                MetersCard(vm, state, caps, atrEnabled, atr, atrTuning)
+                ControlsCard(
+                    vm, state, caps, listenOnly, modes,
+                    onPickMode = { showModePicker = true },
+                    onPickBand = { showBandPicker = true },
+                )
+                TuningCard(vm, state, prefs, stepHz, onStep = { stepHz = it }, onAfVol = onAfVol)
+                MemoryCard(vm, mem, onManage = { showMemManager = true })
             }
 
-            Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secTuning") {
-                // ── 音量 ─────────────────────────────────────────────────
-                // ── 音量（本机播放音量，web 🔊 Vol 语义）──────────────────
-                VolumeRow(prefs.afVol, onAfVol)
-
-                // ── 步进：◀◀ ◀ [100Hz] ▶ ▶▶ ──────────────────────────────
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    PadBtn("◀◀", Modifier.weight(1f)) { vm.setFrequencyStep(-stepHz * 10) }
-                    PadBtn("◀", Modifier.weight(1f)) { vm.setFrequencyStep(-stepHz) }
-                    PadBtn(fmtStep(stepHz), Modifier.weight(1.5f), active = true) {
-                        stepHz = when (stepHz) { 10L -> 100L; 100L -> 1_000L; 1_000L -> 10_000L; else -> 10L }
-                    }
-                    PadBtn("▶", Modifier.weight(1f)) { vm.setFrequencyStep(stepHz) }
-                    PadBtn("▶▶", Modifier.weight(1f)) { vm.setFrequencyStep(stepHz * 10) }
-                }
-
-                // ── VFO 行：VFO-A / VFO-B / A=B / SPLIT ──────────────────
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    PadBtn("VFO-A", Modifier.weight(1f), active = state.activeVfo == "A") { vm.sendSet("vfo", "A") }
-                    PadBtn("VFO-B", Modifier.weight(1f), active = state.activeVfo == "B") { vm.sendSet("vfo", "B") }
-                    PadBtn("A=B", Modifier.weight(1f)) { vm.sendSet("vfo_b_freq", state.activeFrequency) }
-                    PadBtn("SPLIT", Modifier.weight(1f), active = state.split, danger = state.split) { vm.sendSet("split", !state.split) }
-                }
-            }
-
-            // ── 记忆频道 3×2 ─────────────────────────────────────────
-            Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMemory") {
-                for (row in 0 until m.memoryRowsCount) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(m.memoryInnerGap)) {
-                        for (col in 0 until m.memoryColumns) {
-                            val index = row * m.memoryColumns + col
-                            val ch = mem.getOrNull(index)
-                            val memShape = RoundedCornerShape(10.dp)
-                            val memInteraction = remember(index) { MutableInteractionSource() }
-                            val memPressed by memInteraction.collectIsPressedAsState()
-                            Box(
-                                Modifier.weight(1f).height(m.memoryCellHeight).testTag("memCell$index")
-                                    .graphicsLayer {
-                                        val k = if (memPressed) 0.97f else 1f
-                                        scaleX = k; scaleY = k
-                                    }
-                                    .clip(memShape)
-                                    .background(if (ch != null) MrrcColors.AccentDim.copy(alpha = 0.10f) else MrrcSurfaces.Key)
-                                    .background(
-                                        Brush.verticalGradient(listOf(MrrcSurfaces.Hairline, Color.Transparent)),
-                                        memShape,
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (ch != null) MrrcColors.Accent.copy(alpha = 0.55f) else MrrcSurfaces.Stroke,
-                                        memShape,
-                                    )
-                                    .combinedClickable(
-                                        interactionSource = memInteraction,
-                                        indication = ripple(),
-                                        onClick = { vm.recallMemory(index) },
-                                        onLongClick = { vm.saveMemory(index) },
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                // 只显示频率（用户 2026-10-07 定：标签不要了，太挤会变形）。
-                                // 单行之后每格只剩一个字符串，字号可以放开到 11sp（原来两行只有 7.5sp）。
-                                // 仍然强制 maxLines=1 + softWrap=false + Ellipsis：
-                                // 格高固定，一换行整格就顶变形。
-                                val text = if (ch != null) "%.3f".format(Locale.US, ch.freq / 1e6)
-                                             else "M${index + 1}"
-                                Text(
-                                    text,
-                                    color = if (ch != null) MrrcColors.Accent else MrrcColors.TextMuted,
-                                    fontSize = m.memoryFreqFont(text).sp,
-                                    fontFamily = MonoFont,
-                                    fontWeight = if (ch != null) FontWeight.SemiBold else FontWeight.Normal,
-                                    maxLines = 1, softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                        // 记忆管理入口：图标，不占文字（原先藏在被删掉的分区标题里）
-                        if (row == 0) {
-                            Box(
-                                Modifier.width(m.memoryManageWidth).height(m.memoryCellHeight)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(MrrcSurfaces.Key)
-                                    .border(1.dp, MrrcSurfaces.Stroke, RoundedCornerShape(10.dp))
-                                    .clickable { showMemManager = true },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text("⋯", color = MrrcColors.Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            Spacer(Modifier.width(m.memoryManageWidth))
-                        }
-                    }
-                }
-            }
         }
 
         // ── 底部固定：PTT / CQ / TUNE / REC（listen-only 整栏隐藏）────
@@ -578,6 +473,262 @@ fun MainScreen(
     }
 }
 
+// ── 主屏分区（竖屏与横屏共用同一份内容，只换摆位）──────────────────────
+//
+// 竖屏：一列七个分区（工具行 → 主频+S表 → 频谱 → 仪表 → 控制 → 调谐 → 记忆）。
+// 横屏：工具行 →（主频 ｜ S表 ｜ 瀑布）一行 →（仪表 ｜ 控制 ｜ 调谐 ｜ 记忆）一排。
+//
+// 拆函数的唯一目的是**让两种摆位复用同一份内容**（不是重构）。卡片里的控件、尺寸、
+// 点击语义一行都没改——改的只是外面那层容器。
+
+/** 主频内凹显示屏（竖屏在 S 表左侧，横屏在瀑布左侧）。高度由调用方**显式**给。 */
+@Composable
+private fun FreqBezel(state: RadioState, modifier: Modifier, onClick: () -> Unit) {
+    DisplayBezel(
+        modifier = modifier.clickable { onClick() }.testTag("freqBezel"),
+        contentAlignment = Alignment.Center,
+    ) {
+        // 显示屏里只有主频（工具/状态都在上面那一行），字号吃满宽高两个约束。
+        // ⚠️ `BoxWithConstraints` 的默认 contentAlignment 是 **TopStart**：
+        // 不显式给 Center，主频就会贴在左上角（v1.1.26~28 的实际状态，
+        // 用户报"频率上下居中"）。外面再包一层 Box(Center) 也没用——
+        // 子项 fillMaxSize 会把它填满，居中无从生效。
+        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            val byWidth = (maxWidth.value - 8f) / 6.3f
+            val byHeight = (maxHeight.value - 4f) / 1.32f
+            val fit = minOf(byWidth, byHeight).coerceIn(16f, 62f)
+            FreqText(hz = state.activeFrequency, fitSp = fit)
+        }
+    }
+}
+
+/** 仪表卡：PWR/ALC + SWR/Id/Vd（+ ATR1000 行）。 */
+@Composable
+private fun MetersCard(
+    vm: MainViewModel,
+    state: RadioState,
+    caps: RadioCaps,
+    atrEnabled: Boolean,
+    atr: AtrStateDto?,
+    atrTuning: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    // 尺寸仍只从 ScreenFit/ScreenMetrics 出，函数内不写死 dp
+    val m = LocalScreenMetrics.current
+    Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMeters", modifier = modifier) {
+        // ── 仪表：PWR/ALC 两列，SWR/Id/Vd 三列 ───────────────────
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            MeterCell("PWR", state.powerWatts, 100f, MrrcColors.TextPrimary, "%.1f W".format(Locale.US, state.powerWatts), Modifier.weight(1f))
+            MeterCell("ALC", state.alcPct, 100f, MrrcColors.TextPrimary, "%.0f".format(Locale.US, state.alcPct), Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            MeterCell("SWR", state.swrRatio, 3f, MrrcColors.Success, "%.1f".format(Locale.US, state.swrRatio), Modifier.weight(1f))
+            if (caps.hasVdIdMeters) {
+                MeterCell("Id", state.idAmps, 25f, MrrcColors.Cyan, "%.1f A".format(Locale.US, state.idAmps), Modifier.weight(1f))
+                MeterCell("Vd", state.vdVolts, 16f, MrrcColors.Purple, "%.1f V".format(Locale.US, state.vdVolts), Modifier.weight(1f))
+            }
+        }
+
+        // ── ATR1000 行（web atr-row；未启用时整行隐藏；天调参数并进本行，不再单独一行）──
+        if (atrEnabled) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                MeterCell("ATR", atr?.power ?: 0.0, 120f, MrrcColors.Warning,
+                    "%.0f W".format(Locale.US, atr?.power ?: 0.0), Modifier.weight(1f))
+                MeterCell("SWR", atr?.swr ?: 0.0, 5f, MrrcColors.Success,
+                    if ((atr?.swr ?: 0.0) > 0) "%.1f".format(Locale.US, atr!!.swr) else "-", Modifier.weight(1f))
+                Box(Modifier.weight(1.1f).height(m.meterCellHeight), contentAlignment = Alignment.Center) {
+                    Text(
+                        if (atr == null || !atr!!.connected) "ATR 离线"
+                        else "${if (atr!!.sw == 1) "CL" else "LC"} L=${atr!!.ind} C=${atr!!.cap}${if (atr!!.tuning) " ⋯" else ""}",
+                        color = MrrcColors.TextSecondary, fontSize = 9.sp, fontFamily = MonoFont,
+                        textAlign = TextAlign.Center, maxLines = 2, lineHeight = 10.sp,
+                    )
+                }
+                Box(
+                    Modifier.weight(1f).height(m.meterCellHeight)
+                        .background(MrrcColors.BgSecondary, RoundedCornerShape(6.dp))
+                        .border(1.dp, MrrcColors.Border, RoundedCornerShape(6.dp))
+                        .clickable(enabled = !atrTuning) { vm.atrTune() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(if (atrTuning) "···" else "TUNE", color = MrrcColors.Accent,
+                        fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+/** 控制卡：五键行（模式/波段/滤波/ATT/PRE）+ 芯片行（NR/NB/AN/COMP/ATU）。 */
+@Composable
+private fun ControlsCard(
+    vm: MainViewModel,
+    state: RadioState,
+    caps: RadioCaps,
+    listenOnly: Boolean,
+    modes: List<String>,
+    onPickMode: () -> Unit,
+    onPickBand: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 尺寸仍只从 ScreenFit/ScreenMetrics 出，函数内不写死 dp
+    val m = LocalScreenMetrics.current
+    Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secControls", modifier = modifier) {
+        // ── 五键行：模式 / 波段 / 滤波 / ATT / PRE ────────────────
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            PadBtn("模式", Modifier.weight(1f), onLongClick = onPickMode) {
+                if (modes.isNotEmpty()) {
+                    val idx = modes.indexOf(state.modeName)
+                    vm.setMode(modes[(idx + 1).mod(modes.size)])
+                }
+            }
+            PadBtn("波段", Modifier.weight(1f), onLongClick = onPickBand) {
+                vm.setBand(BandCycle.next(state.bandName).defaultFreq)
+            }
+            PadBtn(fmtFilter(state.filterHz), Modifier.weight(1f)) { vm.cycleFilter() }
+            PadBtn("ATT${state.attenuatorLabel}", Modifier.weight(1f)) { vm.sendSet("att", (state.attenuator + 1) % 4) }
+            PadBtn("PRE${state.preampLabel}", Modifier.weight(1f)) { vm.sendSet("preamp", (state.preamp + 1) % 3) }
+        }
+
+        // ── 芯片行：NR / NB / AN / COMP / ATU ────────────────────
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            SmallChip("NR", state.noiseReduction, Modifier.weight(1f)) { vm.sendSet("nr", !state.noiseReduction) }
+            SmallChip("NB", state.noiseBlanker, Modifier.weight(1f)) { vm.sendSet("nb", !state.noiseBlanker) }
+            if (caps.hasAutoNotch) {
+                SmallChip("AN", state.autoNotch, Modifier.weight(1f)) { vm.sendSet("an", !state.autoNotch) }
+            }
+            SmallChip("COMP", state.compressor, Modifier.weight(1f)) { vm.sendSet("comp", !state.compressor) }
+            if (!listenOnly && caps.hasAtu) {
+                SmallChip("ATU", state.tunerStatus != 0, Modifier.weight(1f)) {
+                    vm.sendSet("tuner", if (state.tunerStatus == 0) 1 else 0)
+                }
+            }
+        }
+    }
+}
+
+/** 调谐卡：本机音量 + 步进 + VFO 行。 */
+@Composable
+private fun TuningCard(
+    vm: MainViewModel,
+    state: RadioState,
+    prefs: UiPrefs,
+    stepHz: Long,
+    onStep: (Long) -> Unit,
+    onAfVol: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 尺寸仍只从 ScreenFit/ScreenMetrics 出，函数内不写死 dp
+    val m = LocalScreenMetrics.current
+    Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secTuning", modifier = modifier) {
+        // ── 音量 ─────────────────────────────────────────────────
+        // ── 音量（本机播放音量，web 🔊 Vol 语义）──────────────────
+        VolumeRow(prefs.afVol, onAfVol)
+
+        // ── 步进：◀◀ ◀ [100Hz] ▶ ▶▶ ──────────────────────────────
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            PadBtn("◀◀", Modifier.weight(1f)) { vm.setFrequencyStep(-stepHz * 10) }
+            PadBtn("◀", Modifier.weight(1f)) { vm.setFrequencyStep(-stepHz) }
+            PadBtn(fmtStep(stepHz), Modifier.weight(1.5f), active = true) {
+                onStep(when (stepHz) { 10L -> 100L; 100L -> 1_000L; 1_000L -> 10_000L; else -> 10L })
+            }
+            PadBtn("▶", Modifier.weight(1f)) { vm.setFrequencyStep(stepHz) }
+            PadBtn("▶▶", Modifier.weight(1f)) { vm.setFrequencyStep(stepHz * 10) }
+        }
+
+        // ── VFO 行：VFO-A / VFO-B / A=B / SPLIT ──────────────────
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            PadBtn("VFO-A", Modifier.weight(1f), active = state.activeVfo == "A") { vm.sendSet("vfo", "A") }
+            PadBtn("VFO-B", Modifier.weight(1f), active = state.activeVfo == "B") { vm.sendSet("vfo", "B") }
+            PadBtn("A=B", Modifier.weight(1f)) { vm.sendSet("vfo_b_freq", state.activeFrequency) }
+            PadBtn("SPLIT", Modifier.weight(1f), active = state.split, danger = state.split) { vm.sendSet("split", !state.split) }
+        }
+    }
+}
+
+/** 记忆卡：6 个记忆格 + 行末管理入口（竖屏 1×6，横屏 3×2，列数由 ScreenMetrics 给）。 */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MemoryCard(
+    vm: MainViewModel,
+    mem: List<MemoryChannel?>,
+    onManage: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // 尺寸仍只从 ScreenFit/ScreenMetrics 出，函数内不写死 dp
+    val m = LocalScreenMetrics.current
+    Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMemory", modifier = modifier) {
+        // ── 记忆频道（竖屏 1×6，横屏 3×2）─────────────────────
+        for (row in 0 until m.memoryRowsCount) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(m.memoryInnerGap)) {
+                for (col in 0 until m.memoryColumns) {
+                    val index = row * m.memoryColumns + col
+                    val ch = mem.getOrNull(index)
+                    val memShape = RoundedCornerShape(10.dp)
+                    val memInteraction = remember(index) { MutableInteractionSource() }
+                    val memPressed by memInteraction.collectIsPressedAsState()
+                    Box(
+                        Modifier.weight(1f).height(m.memoryCellHeight).testTag("memCell$index")
+                            .graphicsLayer {
+                                val k = if (memPressed) 0.97f else 1f
+                                scaleX = k; scaleY = k
+                            }
+                            .clip(memShape)
+                            .background(if (ch != null) MrrcColors.AccentDim.copy(alpha = 0.10f) else MrrcSurfaces.Key)
+                            .background(
+                                Brush.verticalGradient(listOf(MrrcSurfaces.Hairline, Color.Transparent)),
+                                memShape,
+                            )
+                            .border(
+                                1.dp,
+                                if (ch != null) MrrcColors.Accent.copy(alpha = 0.55f) else MrrcSurfaces.Stroke,
+                                memShape,
+                            )
+                            .combinedClickable(
+                                interactionSource = memInteraction,
+                                indication = ripple(),
+                                onClick = { vm.recallMemory(index) },
+                                onLongClick = { vm.saveMemory(index) },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        // 只显示频率（用户 2026-10-07 定：标签不要了，太挤会变形）。
+                        // 单行之后每格只剩一个字符串，字号可以放开到 11sp（原来两行只有 7.5sp）。
+                        // 仍然强制 maxLines=1 + softWrap=false + Ellipsis：
+                        // 格高固定，一换行整格就顶变形。
+                        val text = if (ch != null) "%.3f".format(Locale.US, ch.freq / 1e6)
+                                     else "M${index + 1}"
+                        Text(
+                            text,
+                            color = if (ch != null) MrrcColors.Accent else MrrcColors.TextMuted,
+                            fontSize = m.memoryFreqFont(text).sp,
+                            fontFamily = MonoFont,
+                            fontWeight = if (ch != null) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1, softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                // 记忆管理入口：图标，不占文字（原先藏在被删掉的分区标题里）
+                if (row == 0) {
+                    Box(
+                        Modifier.width(m.memoryManageWidth).height(m.memoryCellHeight)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MrrcSurfaces.Key)
+                            .border(1.dp, MrrcSurfaces.Stroke, RoundedCornerShape(10.dp))
+                            .clickable { onManage() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("⋯", color = MrrcColors.Accent, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Spacer(Modifier.width(m.memoryManageWidth))
+                }
+            }
+        }
+    }
+}
+
 // ── 复用小组件（对齐 Web 的 .pad-btn / .chip / 仪表样式）────────────
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -672,16 +823,19 @@ private fun SmallChip(label: String, on: Boolean, modifier: Modifier = Modifier,
  * 中端机（荣耀）就是这么卡到把音频线程饿死的。收进子组件后每帧只重组这一块。
  */
 @Composable
-private fun SpectrumPanel(vm: MainViewModel, prefs: UiPrefs, spanHz: Long, vfoFreq: Long) {
+private fun SpectrumPanel(
+    vm: MainViewModel,
+    prefs: UiPrefs,
+    spanHz: Long,
+    vfoFreq: Long,
+    modifier: Modifier = Modifier,
+) {
     val waterfall by vm.waterfall.collectAsState()
     val fft by vm.fft.collectAsState()
-    val m = LocalScreenMetrics.current
-    DisplayBezel(
-        modifier = Modifier.fillMaxWidth()
-            .height(m.spectrumHeight(prefs.fftHeight, prefs.wfHeight))
-            .padding(top = ScreenFit.PAGE_PAD_V.dp)
-            .testTag("secSpectrum"),
-    ) {
+        val m = LocalScreenMetrics.current
+    // 尺寸由调用方给：竖屏 = 页宽 × 频谱高度，横屏 = 仪表行里的 `weight(1f) + 满高`。
+    // 两种摆位共用**同一份**内容，不存在第二条瀑布渲染路径。
+    DisplayBezel(modifier = modifier.testTag("secSpectrum")) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 WaterfallCanvas(
@@ -720,7 +874,7 @@ private fun HeaderIconButton(
     danger: Boolean = false,
     onClick: () -> Unit,
 ) {
-    val m = LocalScreenMetrics.current
+        val m = LocalScreenMetrics.current
     val color = when {
         danger -> MrrcColors.Danger
         active -> MrrcColors.Accent

@@ -58,6 +58,116 @@ object ScreenFit {
 
     fun isCompact(screenHeightDp: Int): Boolean = screenHeightDp <= COMPACT_MAX_HEIGHT_DP
 
+    // ── 横屏（2026-10-22）───────────────────────────────────────────────
+    //
+    // 横屏不是"多了一块屏幕"，而是**换了个形状**：竖屏 344×620 ≈ 横屏 728×300（面积几乎一样）。
+    // 所以横屏版只能靠**二维排布**（两行双列）把同样的内容摆进去，而不是把竖屏压扁。
+    //
+    // 下面这批 API 只在 `isWide()` 为真时被用到；**竖屏分支的常量与公式一行都没改**，
+    // `ScreenFitTest` 的七个竖屏档位是这条红线唯一的守卫。
+
+    /**
+     * 横屏判定：只看宽高关系。手机横屏（728×360）与平板横屏（1200×800）走**同一套**双列
+     * 布局（用户 2026-10-22 定案："一套双列，尺寸按屏宽放大"），不维护第二套结构。
+     */
+    fun isWide(screenWidthDp: Int, screenHeightDp: Int): Boolean = screenWidthDp > screenHeightDp
+
+    /**
+     * 横屏的紧凑上限。竖屏那条 900dp 的规则在横屏上会把**平板横屏**（高 800dp）误判成紧凑，
+     * 把平板压成手机尺寸；手机横屏可用高只有 300~450dp，平板横屏 ≥ 600dp，所以横屏另给一档。
+     */
+    const val LANDSCAPE_COMPACT_MAX_HEIGHT_DP = 560
+
+    /** 档位判定：竖屏与横屏分头走各自的规则。 */
+    fun isCompactFor(screenWidthDp: Int, screenHeightDp: Int): Boolean =
+        if (isWide(screenWidthDp, screenHeightDp)) screenHeightDp <= LANDSCAPE_COMPACT_MAX_HEIGHT_DP
+        else isCompact(screenHeightDp)
+
+    /**
+     * 横屏主频显示屏宽度：占屏宽 25%，夹在 150~260dp。
+     * 手机上拿到 ~182dp（字号仍比竖屏大），平板上停在 260dp —— 再宽就把瀑布挤没了。
+     */
+    fun landscapeFreqWidth(screenWidthDp: Int): Int =
+        (screenWidthDp * 0.25f).toInt().coerceIn(150, 260)
+
+    /** 横屏下半那一排卡片（仪表 / 控制 / 调谐 / 记忆）的相对宽度。 */
+    val LANDSCAPE_CARD_WEIGHTS = listOf(1.0f, 1.35f, 1.45f, 1.0f)
+
+    /** 横屏一排卡片之间的间隙。 */
+    const val LANDSCAPE_CARD_GAP = 5
+
+    /** 横屏四张卡片各自的宽度（dp，已扣掉卡片之间的间隙）。 */
+    fun landscapeCardWidths(screenWidthDp: Int): List<Float> {
+        val avail = contentWidth(screenWidthDp) - LANDSCAPE_CARD_GAP * (LANDSCAPE_CARD_WEIGHTS.size - 1)
+        val total = LANDSCAPE_CARD_WEIGHTS.sum()
+        return LANDSCAPE_CARD_WEIGHTS.map { avail * it / total }
+    }
+
+    /** 横屏记忆卡宽度 = 最后一列的宽度（格宽必须按**卡片**算，不能按整屏宽算）。 */
+    fun landscapeMemoryCardWidth(screenWidthDp: Int): Float = landscapeCardWidths(screenWidthDp).last()
+
+    /**
+     * 横屏记忆格排 3×2。**不能沿用 1×6**：记忆卡只占屏宽的一列（728dp 屏上约 147dp），
+     * 6 格并排每格只剩 ~14dp，"438.500" 会被省略号吃掉。
+     */
+    const val WIDE_MEMORY_COLUMNS = 3
+    const val WIDE_MEMORY_ROWS = 2
+
+    /**
+     * 横屏下半那一排卡片的高度 = **最高**那张卡（通常是有音量滑块的调谐卡）。
+     * 必须给显式高度：① 一排卡片等高才不难看；② 卡片里可能有 `BoxWithConstraints`
+     * （SubcomposeLayout），问 intrinsic 会直接崩（v1.1.16 事故）。
+     */
+    fun landscapeCardsHeight(compact: Boolean, hasAtr: Boolean): Int {
+        val padV2 = panelPadV(compact) * 2
+        val ig = innerGap(compact)
+        fun card(items: List<Int>): Int = padV2 + items.sum() + (items.size - 1) * ig
+        val meterRows = 2 + (if (hasAtr) 1 else 0)
+        return maxOf(
+            card(List(meterRows) { meterCellHeight(compact) }),
+            card(listOf(padBtnHeight(compact), chipHeight(compact))),
+            card(listOf(sliderRowHeight(compact), padBtnHeight(compact), padBtnHeight(compact))),
+            card(List(WIDE_MEMORY_ROWS) { memoryCellHeight(compact) }),
+        )
+    }
+
+    /**
+     * 横屏竖向预算：工具行 +（主频/S 表/瀑布）一行 + 四卡一行 + 底栏。
+     * 与竖屏 [budget] 一样只是**设计期算术**；真实布局由 `OneScreenFitTest` 量。
+     */
+    data class WideBudget(
+        val toolRow: Int,
+        val instrument: Int,
+        val cards: Int,
+        val gaps: Int,
+        val pagePad: Int,
+        val bottomBar: Int,
+    ) {
+        val scrollArea: Int get() = toolRow + instrument + cards + gaps + pagePad
+        val total: Int get() = scrollArea + bottomBar
+    }
+
+    fun wideBudget(
+        screenWidthDp: Int,
+        screenHeightDp: Int,
+        fftH: Int,
+        wfH: Int,
+        hasAtr: Boolean,
+        bottomBarVisible: Boolean,
+    ): WideBudget {
+        val c = isCompactFor(screenWidthDp, screenHeightDp)
+        return WideBudget(
+            toolRow = headerRowHeight(c),
+            // 三者等高：主频显示屏 / S 表 / 瀑布都吃这个高度
+            instrument = spectrumHeight(c, fftH, wfH),
+            cards = landscapeCardsHeight(c, hasAtr),
+            // 工具行→仪表行→四卡行 之间两个间隔（`Arrangement.spacedBy`）
+            gaps = gap(c) * 2,
+            pagePad = PAGE_PAD_V * 2,
+            bottomBar = bottomBarHeight(c, bottomBarVisible),
+        )
+    }
+
     /** 主屏可用内容宽度（去掉左右内边距）。 */
     fun contentWidth(screenWidthDp: Int): Int = screenWidthDp - PAGE_PAD_H * 2
 
@@ -127,11 +237,17 @@ object ScreenFit {
      * 紧凑档一行 6 格 + 一个 `⋯`，360dp 屏上只有约 47dp —— 标签字号必须按它反推，
      * 否则长标签（`40m SSB` / 中文 / 呼号）会被裁成半个字，看着就是"变形"。
      */
-    fun memoryCellWidth(screenWidthDp: Int, compact: Boolean): Float {
-        val content = contentWidth(screenWidthDp) - panelPadH(compact) * 2
-        val cols = memoryColumns(compact)
+    fun memoryCellWidth(screenWidthDp: Int, compact: Boolean): Float =
+        memoryCellWidthInCard(contentWidth(screenWidthDp).toFloat(), memoryColumns(compact), compact)
+
+    /**
+     * 卡片**内**的记忆格宽度 —— 横屏用它，因为记忆卡只占屏宽的一列，
+     * 按整屏宽反推会把字号估得大一倍（于是真的溢出）。
+     */
+    fun memoryCellWidthInCard(cardWidthDp: Float, cols: Int, compact: Boolean): Float {
+        val inner = cardWidthDp - panelPadH(compact) * 2
         val gaps = cols * innerGap(compact)          // cells + ⋯ 之间共 cols 个间隙
-        return (content - MEMORY_MANAGE_W - gaps).toFloat() / cols
+        return (inner - MEMORY_MANAGE_W - gaps) / cols
     }
 
     /** 记忆格字号下限：到下限还放不下就由 UI 的 `TextOverflow.Ellipsis` 收尾。 */

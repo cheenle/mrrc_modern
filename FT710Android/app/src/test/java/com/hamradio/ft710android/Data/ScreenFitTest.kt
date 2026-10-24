@@ -193,4 +193,125 @@ class ScreenFitTest {
             }
         }
     }
+
+    // ── 横屏（2026-10-22）───────────────────────────────────────────────
+    //
+    // 用户定案：「一套双列（手机横屏与平板横屏共用），尽量一屏，不够就滚」。
+    // 所以横屏的断言不是"必须一屏"，而是：
+    //   ① 首屏**一定**看得全 主频/S 表/瀑布 那一行；
+    //   ② 最紧的手机横屏超出量有上限（< 32dp，一眼能看到的滚动量）；
+    //   ③ 横屏的一切开关都**不能**改变竖屏档位的取值。
+
+    /** 名称, 宽 dp, 可用高 dp（横屏）。 */
+    private val landscape = listOf(
+        Triple("小米/红米 6.5\" 横屏", 728, 360),
+        Triple("荣耀 6.7\" 横屏", 832, 384),
+        Triple("Pixel 6.1\" 横屏", 892, 411),
+        Triple("平板 1200×800 横屏", 1200, 800),
+    )
+
+    /** 最紧的手机横屏允许滚一点（用户选的 B：不够就滚），但不能滚出一大截。 */
+    private val landscapeScrollAllowance = 32
+
+    private fun wideBudget(w: Int, h: Int, atr: Boolean = true) =
+        ScreenFit.wideBudget(w, h, fftH = 40, wfH = 110, hasAtr = atr, bottomBarVisible = true)
+
+    @Test fun `landscape has its own compact ceiling so a tablet does not get phone sizes`() {
+        assertTrue(ScreenFit.isWide(728, 360))
+        assertFalse(ScreenFit.isWide(360, 728))
+        // 手机横屏：高 360 → 紧凑档；平板竖屏仍走 900dp 那条老规则
+        assertTrue(ScreenFit.isCompactFor(728, 360))
+        assertTrue(ScreenFit.isCompactFor(360, 744))
+        assertFalse(ScreenFit.isCompactFor(800, 1200))
+        // 平板横屏高 800dp：**不能**被竖屏的 900dp 规则压成紧凑（否则平板上是手机尺寸）
+        assertFalse(ScreenFit.isCompactFor(1200, 800))
+        assertEquals(560, ScreenFit.LANDSCAPE_COMPACT_MAX_HEIGHT_DP)
+    }
+
+    @Test fun `the landscape axis leaves every portrait number alone`() {
+        // 竖屏常量与公式一个都没变（横屏是纯增量）—— 这是七台真机"一屏放得下"的前提
+        assertEquals(133, ScreenFit.spectrumHeight(compact = true, fftH = 40, wfH = 110))
+        assertEquals(166, ScreenFit.spectrumHeight(compact = false, fftH = 40, wfH = 110))
+        assertEquals(151, ScreenFit.meterWidth(360))
+        assertEquals(132, ScreenFit.meterWidth(300))
+        assertEquals(240, ScreenFit.meterWidth(900))
+        assertEquals(6, ScreenFit.memoryColumns(compact = true))
+        assertEquals(3, ScreenFit.memoryColumns(compact = false))
+        mainland.forEach { (name, w, h) ->
+            val b = ScreenFit.budget(w, h, 40, 110, hasAtr = true, hasVdId = true, bottomBarVisible = true)
+            assertTrue("$name 竖屏预算被横屏改动波及：${b.total} > $h", b.total <= h)
+        }
+        // 记忆格宽度的重构（拆出 memoryCellWidthInCard）必须逐值等价
+        listOf(360 to true, 411 to true, 800 to false).forEach { (w, c) ->
+            val old = (ScreenFit.contentWidth(w) - ScreenFit.panelPadH(c) * 2
+                - ScreenFit.MEMORY_MANAGE_W - ScreenFit.memoryColumns(c) * ScreenFit.innerGap(c)).toFloat() /
+                ScreenFit.memoryColumns(c)
+            assertEquals("${w}dp 记忆格宽度拼错了", old, ScreenFit.memoryCellWidth(w, c), 0.001f)
+        }
+    }
+
+    @Test fun `landscape always shows the whole instrument row on the first screen`() {
+        // 主频 / S 表 / 瀑布 必须在首屏可见：横屏的意义就是看瀑布，
+        // 一进去就只看到半条瀑布等于没做。
+        landscape.forEach { (name, w, h) ->
+            val b = wideBudget(w, h)
+            val viewport = h - b.bottomBar
+            assertTrue(
+                "$name：仪表行底 ${b.toolRow + b.instrument + b.pagePad}dp 超出首屏视口 ${viewport}dp",
+                b.toolRow + b.instrument + b.pagePad <= viewport,
+            )
+        }
+    }
+
+    @Test fun `landscape overflow stays small on the tightest handset`() {
+        landscape.forEach { (name, w, h) ->
+            val b = wideBudget(w, h)
+            val overflow = b.total - h
+            assertTrue("$name：超出 ${overflow}dp 超过允许的 ${landscapeScrollAllowance}dp", overflow <= landscapeScrollAllowance)
+        }
+        // 最紧的 728×360 是唯一真的需要滚的档位（约 23dp），其余都应一屏放得下
+        assertTrue(wideBudget(892, 411).total <= 411)
+        assertTrue(wideBudget(1200, 800).total <= 800)
+    }
+
+    @Test fun `landscape cards are equal height and the memory cells stay readable`() {
+        // 四卡等高（取最高的调谐卡）：手机上 120dp；平板上 136dp
+        assertEquals(120, ScreenFit.landscapeCardsHeight(compact = true, hasAtr = true))
+        assertEquals(136, ScreenFit.landscapeCardsHeight(compact = false, hasAtr = true))
+        // 记忆卡在横屏只占屏宽的一列，格宽必须按**卡片**算，否则字号会估大一倍
+        landscape.forEach { (name, w, h) ->
+            val cell = ScreenFit.memoryCellWidthInCard(
+                ScreenFit.landscapeMemoryCardWidth(w),
+                ScreenFit.WIDE_MEMORY_COLUMNS,
+                ScreenFit.isCompactFor(w, h),
+            )
+            assertTrue("$name：横屏记忆格只剩 ${"%.1f".format(cell)}dp，太窄", cell >= 30f)
+            // "438.500" 在横屏记忆格里仍然放得下（到下限就交给省略号，但这里还没到）
+            val fs = ScreenFit.memoryFreqFontSize("438.500", cell, true)
+            assertTrue("$name：横屏记忆格字号 ${fs}sp 已压到下限", fs > ScreenFit.MEMORY_LABEL_MIN_SP)
+        }
+        // 3×2：6 个格子分两行
+        assertEquals(3, ScreenFit.WIDE_MEMORY_COLUMNS)
+        assertEquals(2, ScreenFit.WIDE_MEMORY_ROWS)
+    }
+
+    @Test fun `landscape card widths fill the page width`() {
+        landscape.forEach { (name, w, _) ->
+            val widths = ScreenFit.landscapeCardWidths(w)
+            assertEquals("$name：卡片数量变了", 4, widths.size)
+            val sum = widths.sum() + ScreenFit.LANDSCAPE_CARD_GAP * 3
+            assertEquals(
+                "$name：四卡 + 间隙 应正好等于内容宽（${ScreenFit.contentWidth(w)}dp）",
+                ScreenFit.contentWidth(w).toFloat(), sum, 0.6f,
+            )
+            // 记忆卡最窄，但仍要放得下 3 列格子
+            assertTrue("$name：记忆卡 ${widths.last()}dp 太窄", widths.last() >= 120f)
+        }
+    }
+
+    @Test fun `landscape without the ATR row is shorter, never taller`() {
+        landscape.forEach { (name, w, h) ->
+            assertTrue(name, wideBudget(w, h, atr = false).total <= wideBudget(w, h).total)
+        }
+    }
 }

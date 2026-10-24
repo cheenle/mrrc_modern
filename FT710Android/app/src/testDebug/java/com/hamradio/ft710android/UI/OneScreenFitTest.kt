@@ -85,6 +85,51 @@ class OneScreenFitTest {
         assertTrue("$profile：主屏需要滚动 $maxScroll px 才能看全（应 ≤ 1px）", maxScroll <= 1f)
     }
 
+    /**
+     * 横屏量一次：`(超出 dp, 可视高 dp, 仪表行底相对可视区顶 dp)`。
+     *
+     * 横屏**允许**滚动（用户 2026-10-22 定案 B：尽量一屏，紧的档位滚动兜底），所以判据是
+     * "超出量小 + 首屏能看全主频/S 表/瀑布那一行"，而不是竖屏那条"必须一屏"。
+     */
+    private fun measureWide(profile: String): Triple<Float, Float, Float> {
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val vm = fixtureVm(scope)
+        rule.setContent {
+            AppTheme { ProvideScreenMetrics { MainScreen(vm = vm, prefs = UiPrefs(), onOpenSettings = {}) } }
+        }
+        rule.waitForIdle()
+        val scrollNode = rule.onNodeWithTag("mainScroll").fetchSemanticsNode()
+        val range = scrollNode.config[SemanticsProperties.VerticalScrollAxisRange]
+        val density = rule.density.density
+        val viewportDp = scrollNode.boundsInRoot.height / density
+        val overflowDp = range.maxValue() / density
+        val scrollTop = scrollNode.boundsInRoot.top
+        val instrumentBottom = rule.onNodeWithTag("secHeader").fetchSemanticsNode().boundsInRoot.bottom
+        // 四张卡片必须真的并排（不是折成两行）
+        val boxes = listOf("secMeters", "secControls", "secTuning", "secMemory")
+            .map { rule.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
+        boxes.zipWithNext().forEach { (a, b) ->
+            assertTrue("$profile：卡片没有左右排开（${a.right} vs ${b.left}）", b.left >= a.right - 1f)
+            assertTrue("$profile：卡片不在同一行", kotlin.math.abs(a.top - b.top) <= 1f)
+        }
+        val line = "%-26s 横屏 可视 %.0fdp  超出 %.1fdp  仪表行底 %.0fdp  %s".format(
+            profile, viewportDp, overflowDp, (instrumentBottom - scrollTop) / density,
+            if (overflowDp <= 0.5f) "✅ 一屏" else "↕ 可滚 %.1fdp".format(overflowDp),
+        )
+        println("FIT $line")
+        File(REPORT).let { f -> f.parentFile.mkdirs(); f.appendText(line + System.lineSeparator()) }
+        return Triple(overflowDp, viewportDp, (instrumentBottom - scrollTop) / density)
+    }
+
+    private fun assertWide(profile: String) {
+        val (overflow, viewport, instrumentBottom) = measureWide(profile)
+        assertTrue("$profile：横屏超出 ${"%.1f".format(overflow)}dp，超过允许的 32dp", overflow <= 32f)
+        assertTrue(
+            "$profile：主频/S 表/瀑布 那一行底 ${"%.0f".format(instrumentBottom)}dp 超出首屏 ${"%.0f".format(viewport)}dp",
+            instrumentBottom <= viewport + 0.5f,
+        )
+    }
+
     @Test
     @Config(qualifiers = "w360dp-h728dp-xxhdpi")
     fun `xiaomi 360x728 with three-button nav fits on one screen`() =
@@ -114,4 +159,23 @@ class OneScreenFitTest {
     @Test
     @Config(qualifiers = "w800dp-h1200dp-mdpi")
     fun `tablet 800x1200 uses the standard profile and fits`() = assertFits("平板 800×1200（标准档）")
+
+    // ── 横屏（2026-10-22）───────────────────────────────────────────────
+    // 手机横屏 = 高度 300~450dp 的极扁屏；平板横屏 = 又宽又高。两者共用一套双列布局。
+
+    @Test
+    @Config(qualifiers = "w728dp-h360dp-xxhdpi")
+    fun `landscape handset 728x360 lays out side by side`() = assertWide("小米/红米 横屏 728×360")
+
+    @Test
+    @Config(qualifiers = "w832dp-h384dp-xxhdpi")
+    fun `landscape honor 832x384 fits on one screen`() = assertWide("荣耀 横屏 832×384")
+
+    @Test
+    @Config(qualifiers = "w892dp-h411dp-xhdpi")
+    fun `landscape pixel 892x411 fits on one screen`() = assertWide("Pixel 横屏 892×411")
+
+    @Test
+    @Config(qualifiers = "w1200dp-h800dp-mdpi")
+    fun `landscape tablet 1200x800 uses the landscape standard profile`() = assertWide("平板横屏 1200×800")
 }

@@ -130,7 +130,8 @@
       <h1>公网入口连不上时，怎么把诊断包拿出来</h1>
       <p class="sub">
         适用：盒子在你家局域网里打得开网页，但
-        <code>你的呼号.mrrc.vlsc.net</code> 打不开，或者「🐞 遇到问题」里的诊断包传不上去。
+        <code>你的呼号.mrrc.vlsc.net</code> 打不开，或者「🐞
+        遇到问题」里的诊断包传不上去。
       </p>
 
       <h2>为什么会这样</h2>
@@ -163,8 +164,9 @@
       <ol>
         <li>
           <strong>先准备一个能 SSH 登录的账号</strong>（推荐，但非必需）。<br />
-          浏览器打开盒子 → <strong>设置</strong> →「<strong>系统账号口令（SSH / HDMI 登录用）</strong>」
-          → 账号选 <code>root</code> → 设一个新口令（至少 8 位）。<br />
+          浏览器打开盒子 → <strong>设置</strong> →「<strong
+            >系统账号口令（SSH / HDMI 登录用）</strong
+          >」 → 账号选 <code>root</code> → 设一个新口令（至少 8 位）。<br />
           <span style="color: var(--muted)">
             这里<strong>不校验旧口令</strong>，所以忘了也没关系，直接设新的就行。
             注意它和上面那张「登录口令」卡不是一回事：那张是网页登录，这张是
@@ -175,14 +177,17 @@
           <strong>双击 <code>MRRC-Diag.cmd</code></strong
           >，按提示输入两样东西：
           <ul>
-            <li>盒子的 IP —— 就是你浏览器地址栏里那个，例如 <code>192.168.1.50</code>（也可以试 <code>mrrc.local</code>）</li>
+            <li>
+              盒子的 IP —— 就是你浏览器地址栏里那个，例如
+              <code>192.168.1.50</code>（也可以试 <code>mrrc.local</code>）
+            </li>
             <li><strong>网页登录口令</strong> —— 你平时打开盒子页面用的那个</li>
           </ul>
           然后脚本会先把盒子的公网入口状态打在屏幕上（这一步不需要 SSH）。
         </li>
         <li>
-          <strong>看到 <code>SSH account [mrrc]:</code> 时</strong
-          >，输入第 1 步设过口令的账号名（例如 <code>root</code>），回车，
+          <strong>看到 <code>SSH account [mrrc]:</code> 时</strong>，输入第 1
+          步设过口令的账号名（例如 <code>root</code>），回车，
           再输入那个账号的口令。文件就开始拷回来了。
         </li>
       </ol>
@@ -233,7 +238,10 @@ tunnel_error  : 缺少 frpc：/opt/mrrc_modern/fleet/frpc</pre>
           </tr>
           <tr>
             <td><code>cert_reload</code></td>
-            <td><code>true</code> = 新证书已就位但进程还没重载（重启一次服务即可）。</td>
+            <td>
+              <code>true</code> =
+              新证书已就位但进程还没重载（重启一次服务即可）。
+            </td>
           </tr>
         </tbody>
       </table>
@@ -248,11 +256,13 @@ tunnel_error  : 缺少 frpc：/opt/mrrc_modern/fleet/frpc</pre>
 
       <h2>还是拿不到？</h2>
       <p>
-        直接在 <a href="answers/">答复页</a> 搜索你看到的现象，多数问题那里有现成答案；
+        直接在
+        <a href="answers/">答复页</a> 搜索你看到的现象，多数问题那里有现成答案；
         也可以把屏幕上 <code>cloud-state</code> 那几行截图发给我们。
       </p>
       <p style="color: var(--muted); font-size: 0.9rem; margin-top: 2.5rem">
-        脚本源码：仓库 <code>dev_tools/mrrc-diag.cmd</code>。它不是安装包的一部分，
+        脚本源码：仓库
+        <code>dev_tools/mrrc-diag.cmd</code>。它不是安装包的一部分，
         随时可以更新，改完在 <a href="answers/">答复页</a> 说明。
       </p>
     </main>

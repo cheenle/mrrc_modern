@@ -331,7 +331,7 @@ Write-Host "   3. 用回形针按住 AV 孔里的复位键不放，然后通电�
 Write-Host "   4. 接 HDMI 能看到滚动的内核日志 = 进了 U 盘系统。"
 Write-Host "   5. 起来后按 docs/W103D_USER_GUIDE.md 走（固化 eMMC 用 armbian-install）。"
 Write-Host ""
-Write-Host " 出厂口令（预置版镜像）：网页 abcd!1234   root/mrrc abcd1234" -ForegroundColor Yellow
+Write-Host " 出厂口令（预置版镜像）：网页 abcd!1234   root abcd1234   mrrc abcd!1234" -ForegroundColor Yellow
 Write-Host " 第一次开机后请立刻改掉这三个口令。" -ForegroundColor Yellow
 Write-Host ""
 exit 0

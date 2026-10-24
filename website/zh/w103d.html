@@ -180,7 +180,7 @@ diskutil unmountDisk /dev/diskN
 gzip -dc MRRC-Modern-1.28.1-w103d.img.gz | sudo dd of=/dev/rdiskN bs=4m
 sync                               # 等它真的写完</code></pre>
 <p>⚠️ 用 <code>/dev/rdiskN</code>（<strong>裸设备</strong>）不是 <code>/dev/diskN</code>——后者慢十倍以上。</p>
-<p><strong>Windows（一键）</strong>：下载 <a href="../downloads/MRRC-W103D-Flash.cmd"><code>MRRC-W103D-Flash.cmd</code></a>，双击运行（它会自己请求管理员权限）。它会自动下载镜像（可断点续传）、核对 SHA-256、列出可写的 U 盘、写入，再把整份镜像从盘上读回来比对。<strong>只认 USB / 可移动介质</strong> —— 系统盘和内置盘不会出现在可写列表里；选定后还要手输 <code>ERASE</code> 才动第一笔。需要 <strong>≥ 4 GB</strong> 的 U 盘（镜像解开后 3.43 GiB）。</p>
+<p><strong>Windows（一键）</strong>：下载 <a href="../downloads/MRRC-W103D-Flash.cmd"><code>MRRC-W103D-Flash.cmd</code></a>，双击运行（它会自己请求管理员权限）。它会自动下载镜像（可断点续传）、核对 SHA-256、列出可写的 U 盘、写入，再把整份镜像从盘上读回来比对。<strong>只认 USB / 可移动介质</strong> —— 系统盘和内置盘不会出现在可写列表里；选定后还要手输 <code>ERASE</code> 才动第一笔。需要 <strong>≥ 8 GB</strong> 的 U 盘（镜像解开后 3.43 GiB）。逐步图解与常见问题见 <a href="../flash.html"><strong>做刷机盘指南</strong></a>。</p>
 <p><strong>Windows（手工）</strong>：也可以用 <strong>Rufus</strong> 或 <strong>balenaEtcher</strong>，选那个 <code>.img.gz</code>（两者都能直接吃 gz）。 目标是"从镜像写入"模式，<strong>不是</strong>解压后复制文件。</p>
 <p><strong>Linux：</strong></p>
 <pre><code class="lang-bash">lsblk                              # 找盘

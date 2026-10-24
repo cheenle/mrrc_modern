@@ -363,7 +363,8 @@ class ListenEndpointGateTests(_ListenTestBase):
             return JSONResponse({"ok": True})
 
         writes = ["/api/setup", "/api/restart", "/api/mem_channels",
-                  "/api/support/bundle", "/api/support/upload"]
+                  "/api/support/bundle", "/api/support/upload",
+                  "/api/support/download"]
         for path in writes:
             with self.subTest(path=path):
                 req = _FakeRequest(path=path, method="POST",

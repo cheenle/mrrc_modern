@@ -4716,6 +4716,35 @@ async def api_support_save(request: Request):
     return JSONResponse({"ok": True, "path": str(target)})
 
 
+@app.post("/api/support/download", include_in_schema=False)
+async def api_support_download(request: Request):
+    """Send a built bundle to the caller as a zip.
+
+    Why this exists: upload is the only way a bundle leaves the machine, and it
+    needs the box to reach the internet. When the *network* is what broke — the
+    reported case is a box that answers on the LAN while its public entry and
+    the support upload both fail — the bundle is built, the page says "saved",
+    and nobody can ever get the file out (2026-10-24, BG7SB). This is that exit.
+
+    POST rather than GET on purpose: ``auth_middleware`` already refuses every
+    non-GET write for a listen-only session, and a diagnostics bundle (logs,
+    redacted config) must not be reachable by the listen role. The body carries
+    ``{"id": …}`` like the save endpoint, so one request shape serves both.
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    path = support_bundle.bundle_path(SUPPORT_OUT_DIR, str(body.get("id", "")))
+    if not path.is_file():
+        return JSONResponse({"ok": False, "reason": "unknown bundle"}, status_code=404)
+    logger.info("Support bundle downloaded: %s (%d KB)",
+                path.name, path.stat().st_size // 1024)
+    return FileResponse(str(path), media_type="application/zip", filename=path.name)
+
+
 @app.post("/api/mem_channels")
 async def api_post_mem_channels(request: Request):
     """Save memory channels."""

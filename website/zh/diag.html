@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="盒子在局域网里能打开、公网入口却打不开时，用 MRRC-Diag.cmd 在 Windows 上把诊断包取出来：三步操作、忘密码怎么办、最后一步失败怎么办。"
+    />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>公网入口连不上时，怎么把诊断包拿出来 — MRRC Modern</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../css/octen.css?v=5" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="../js/global-nav.js?v=6" defer data-gn="1"></script>
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .doc {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 130px 1.5rem 120px;
+        font-size: 1.02rem;
+        line-height: 1.85;
+      }
+      .doc h1 {
+        font-size: 1.9rem;
+        line-height: 1.35;
+        margin: 0 0 0.5rem;
+      }
+      .doc .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.4rem;
+      }
+      .doc h2 {
+        font-size: 1.22rem;
+        margin: 2.8rem 0 0.9rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .doc p,
+      .doc li {
+        margin: 0.7rem 0;
+      }
+      .doc ul,
+      .doc ol {
+        padding-left: 1.4rem;
+      }
+      .doc code {
+        background: #1a1a20;
+        border: 1px solid var(--line);
+        padding: 0.08em 0.35em;
+        border-radius: 4px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.9em;
+      }
+      .doc pre {
+        background: #131318;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.9rem 1rem;
+        overflow-x: auto;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.85rem;
+        line-height: 1.65;
+      }
+      .doc table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.92rem;
+      }
+      .doc th,
+      .doc td {
+        border: 1px solid var(--line);
+        padding: 0.55rem 0.7rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .doc th {
+        background: #16161c;
+      }
+      .callout {
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--amber);
+        background: #131318;
+        border-radius: 6px;
+        padding: 0.9rem 1.1rem;
+        margin: 1.4rem 0;
+        font-size: 0.95rem;
+      }
+      .dl {
+        display: inline-block;
+        background: var(--amber);
+        color: #101014;
+        font-weight: 600;
+        padding: 0.7rem 1.3rem;
+        border-radius: 8px;
+        text-decoration: none;
+        margin: 0.4rem 0 0.2rem;
+      }
+      .dl:hover {
+        filter: brightness(1.08);
+      }
+      a {
+        color: var(--amber);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="doc">
+      <h1>公网入口连不上时，怎么把诊断包拿出来</h1>
+      <p class="sub">
+        适用：盒子在你家局域网里打得开网页，但
+        <code>你的呼号.mrrc.vlsc.net</code> 打不开，或者「🐞 遇到问题」里的诊断包传不上去。
+      </p>
+
+      <h2>为什么会这样</h2>
+      <p>
+        诊断包原来只有一条出路：<strong>上传</strong>给我们。上传要盒子能上网。
+        当坏掉的偏偏就是网络那一环时，包在盒子里生成好了、也确实存住了，却谁也拿不到。
+      </p>
+      <p>
+        这个小工具补上第二条路 —— 在你自己的局域网里，把那个 zip 直接拷到你的
+        Windows 电脑上。<strong>它不需要盒子能上网，也不需要你懂 SSH。</strong>
+      </p>
+
+      <h2>下载</h2>
+      <p>
+        <a class="dl" href="../downloads/MRRC-Diag.cmd">
+          <i class="fas fa-download"></i>&nbsp; MRRC-Diag.cmd
+        </a>
+      </p>
+      <p>
+        约 10 KB，单个文件，不用安装。放在桌面或下载文件夹，
+        <strong>双击运行</strong>即可。它只读取盒子的状态并在本机保存一个 zip，
+        不上传任何东西，也不改盒子上的任何设置。
+      </p>
+      <div class="callout">
+        系统要求：Windows 10（1809 及以上）或 Windows 11。脚本用的是系统自带的
+        <code>curl.exe</code> 与 PowerShell，不需要额外装软件。
+      </div>
+
+      <h2>三步</h2>
+      <ol>
+        <li>
+          <strong>先准备一个能 SSH 登录的账号</strong>（推荐，但非必需）。<br />
+          浏览器打开盒子 → <strong>设置</strong> →「<strong>系统账号口令（SSH / HDMI 登录用）</strong>」
+          → 账号选 <code>root</code> → 设一个新口令（至少 8 位）。<br />
+          <span style="color: var(--muted)">
+            这里<strong>不校验旧口令</strong>，所以忘了也没关系，直接设新的就行。
+            注意它和上面那张「登录口令」卡不是一回事：那张是网页登录，这张是
+            SSH/HDMI 用的系统账号。
+          </span>
+        </li>
+        <li>
+          <strong>双击 <code>MRRC-Diag.cmd</code></strong
+          >，按提示输入两样东西：
+          <ul>
+            <li>盒子的 IP —— 就是你浏览器地址栏里那个，例如 <code>192.168.1.50</code>（也可以试 <code>mrrc.local</code>）</li>
+            <li><strong>网页登录口令</strong> —— 你平时打开盒子页面用的那个</li>
+          </ul>
+          然后脚本会先把盒子的公网入口状态打在屏幕上（这一步不需要 SSH）。
+        </li>
+        <li>
+          <strong>看到 <code>SSH account [mrrc]:</code> 时</strong
+          >，输入第 1 步设过口令的账号名（例如 <code>root</code>），回车，
+          再输入那个账号的口令。文件就开始拷回来了。
+        </li>
+      </ol>
+      <p>
+        结束后，脚本旁边会多出一个
+        <code>mrrc-diag-&lt;你的电脑名&gt;.zip</code> —— 把它发给我们即可。
+      </p>
+
+      <h2>最后一步失败了，也没关系</h2>
+      <p>
+        zip 里最要紧的那份 <code>cloud-state.json</code>
+        <strong>在 SSH 之前就已经写好了</strong>。它记着隧道到底为什么没起来。
+        把屏幕上这一段截图发来，通常就够定位：
+      </p>
+      <pre>
+entry         : https://bg7sb.mrrc.vlsc.net/
+tunnel_running: false
+tunnel_error  : 缺少 frpc：/opt/mrrc_modern/fleet/frpc</pre>
+      <p>
+        诊断包本体<strong>仍然留在盒子里，不会丢</strong>。等盒子的网络恢复，
+        在「🐞 遇到问题」里点一次「上传」，它还能补发出去。
+      </p>
+
+      <h2>屏幕上那几行是什么意思</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>字段</th>
+            <th>含义</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>entry</code></td>
+            <td>你的公网入口地址。空 = 还没有申请过入口。</td>
+          </tr>
+          <tr>
+            <td><code>tunnel_running</code></td>
+            <td><code>false</code> = 隧道进程没在跑，公网入口必然打不开。</td>
+          </tr>
+          <tr>
+            <td><code>tunnel_error</code></td>
+            <td>没跑起来的原因，一句话。这一行最有用。</td>
+          </tr>
+          <tr>
+            <td><code>cert</code></td>
+            <td>盒子当前出示的证书文件。空 = 还没接通入口。</td>
+          </tr>
+          <tr>
+            <td><code>cert_reload</code></td>
+            <td><code>true</code> = 新证书已就位但进程还没重载（重启一次服务即可）。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>这个工具不会做什么</h2>
+      <ul>
+        <li>不上传任何东西到外网 —— 所有流量都在你的局域网里</li>
+        <li>不重启盒子、不改配置、不碰电台</li>
+        <li>不把网页登录口令或会话令牌写进 zip（令牌只留在系统临时目录）</li>
+        <li>诊断包里凡是口令都已被打码（生成时就会处理）</li>
+      </ul>
+
+      <h2>还是拿不到？</h2>
+      <p>
+        直接在 <a href="../answers/">答复页</a> 搜索你看到的现象，多数问题那里有现成答案；
+        也可以把屏幕上 <code>cloud-state</code> 那几行截图发给我们。
+      </p>
+      <p style="color: var(--muted); font-size: 0.9rem; margin-top: 2.5rem">
+        脚本源码：仓库 <code>dev_tools/mrrc-diag.cmd</code>。它不是安装包的一部分，
+        随时可以更新，改完在 <a href="../answers/">答复页</a> 说明。
+      </p>
+    </main>
+  </body>
+</html>

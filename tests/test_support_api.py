@@ -126,9 +126,35 @@ class SupportApiTests(unittest.TestCase):
         self.assertTrue(Path(payload["path"]).exists())
         self.assertEqual(Path(payload["path"]).name, f"support-{built['id']}.zip")
 
+    def test_download_returns_the_zip_itself(self):
+        """The LAN exit: a box whose upload path is broken must still hand the file over.
+
+        Regression for 2026-10-24 (BG7SB): the bundle could only leave the box by
+        uploading it to the support receiver, so when the box lost its public
+        network the file stayed inside it forever.
+        """
+        built = _payload(self._build())
+        response = asyncio.run(server.api_support_download(_req({"id": built["id"]})))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.media_type, "application/zip")
+        self.assertIn(f"support-{built['id']}.zip", response.headers["content-disposition"])
+        body = Path(getattr(response, "path")).read_bytes()
+        self.assertTrue(body.startswith(b"PK"))          # a real zip, not an error page
+        self.assertEqual(len(body), built["size"])
+
+    def test_download_refuses_an_unknown_or_traversing_id(self):
+        for bad in ("../../etc/passwd", "", "20260101-000000-zzzz"):
+            with self.subTest(bad=bad):
+                response = asyncio.run(
+                    server.api_support_download(_req({"id": bad})))
+                self.assertEqual(response.status_code, 404)
+
     def test_endpoints_are_auth_gated(self):
         with mock.patch.object(server, "_verify_auth", return_value=False):
             response = asyncio.run(server.api_support_bundle(_req({})))
+        self.assertEqual(response.status_code, 401)
+        with mock.patch.object(server, "_verify_auth", return_value=False):
+            response = asyncio.run(server.api_support_download(_req({})))
         self.assertEqual(response.status_code, 401)
 
 

@@ -163,18 +163,15 @@
 <figure style="margin: 2rem 0"><a href="images/W103D/web/w103d-size.jpg" target="_blank" rel="noopener"><img src="images/W103D/web/w103d-size.jpg" alt="盒内的主机与合格证" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">盒内的主机与合格证</figcaption></figure>
 <h2 id="3-下载镜像并校验">3. 下载镜像并校验</h2>
 <pre><code class="lang-bash">mkdir -p ~/w103d &amp;&amp; cd ~/w103d
-curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.1-w103d.img.gz</code></pre>
+# 稳定别名：总是指向最新版；具体版本号见下载页
+curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-w103d.img.gz
+curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-w103d.img.gz.sha256</code></pre>
 <p><strong>校验</strong>（这一步别跳——1.22 GB 下坏了是能下坏的）：</p>
 <pre><code class="lang-bash"># macOS
-shasum -a 256 MRRC-Modern-1.28.1-w103d.img.gz
+shasum -a 256 -c MRRC-Modern-w103d.img.gz.sha256
 # Linux
-sha256sum MRRC-Modern-1.28.1-w103d.img.gz</code></pre>
-<div class="table-scroll"><table>
-<thead><tr><th></th><th></th></tr></thead><tbody>
-<tr><td>字节数</td><td><strong>1,221,443,860</strong></td></tr>
-<tr><td>SHA-256</td><td><strong>ee1fba1e5e5057eed7603e636547299ae5cf82bd321d0202e72ad9a8e0cde473</strong></td></tr>
-</tbody></table></div>
-<p>两者都对不上就别往下走。<strong>先确认字节数</strong>（<code>ls -l</code>）——大小不对说明下载被截断了。</p>
+sha256sum -c MRRC-Modern-w103d.img.gz.sha256</code></pre>
+<p>命令会打印 <code>MRRC-Modern-w103d.img.gz: OK</code>。<strong>不是 OK 就别往下走</strong> —— 1.2 GB 是会下坏的，而坏在中间不容易看出来。<code>.sha256</code> 随镜像一起发布更新，所以这份文档里不再写死某一版的哈希（那张表每发一版就过期一次）。</p>
 <h2 id="4-烧到-u-盘">4. 烧到 U 盘</h2>
 <p><strong>认准盘符，别烧错盘。</strong>（这一步会把目标盘整个擦掉。）</p>
 <p><strong>macOS：</strong></p>
@@ -183,7 +180,8 @@ diskutil unmountDisk /dev/diskN
 gzip -dc MRRC-Modern-1.28.1-w103d.img.gz | sudo dd of=/dev/rdiskN bs=4m
 sync                               # 等它真的写完</code></pre>
 <p>⚠️ 用 <code>/dev/rdiskN</code>（<strong>裸设备</strong>）不是 <code>/dev/diskN</code>——后者慢十倍以上。</p>
-<p><strong>Windows</strong>：用 <strong>Rufus</strong> 或 <strong>balenaEtcher</strong>，选那个 <code>.img.gz</code>（两者都能直接吃 gz）。 目标是"从镜像写入"模式，<strong>不是</strong>解压后复制文件。</p>
+<p><strong>Windows（一键）</strong>：下载 <a href="downloads/MRRC-W103D-Flash.cmd"><code>MRRC-W103D-Flash.cmd</code></a>，双击运行（它会自己请求管理员权限）。它会自动下载镜像（可断点续传）、核对 SHA-256、列出可写的 U 盘、写入，再把整份镜像从盘上读回来比对。<strong>只认 USB / 可移动介质</strong> —— 系统盘和内置盘不会出现在可写列表里；选定后还要手输 <code>ERASE</code> 才动第一笔。需要 <strong>≥ 4 GB</strong> 的 U 盘（镜像解开后 3.43 GiB）。</p>
+<p><strong>Windows（手工）</strong>：也可以用 <strong>Rufus</strong> 或 <strong>balenaEtcher</strong>，选那个 <code>.img.gz</code>（两者都能直接吃 gz）。 目标是"从镜像写入"模式，<strong>不是</strong>解压后复制文件。</p>
 <p><strong>Linux：</strong></p>
 <pre><code class="lang-bash">lsblk                              # 找盘
 gzip -dc MRRC-Modern-1.28.1-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync</code></pre>

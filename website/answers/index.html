@@ -128,6 +128,47 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261024-123405-c39a">
+      <header>
+        <span class="id">20261024-123405-c39a</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">升级 · 2026-10-24 12:40</span>
+      </header>
+      <h3>FT710更新安卓1.1.33后频率显示处不显示设置的频率，但是系统是已经切到了相应频率。就是说点击到14.270显示0000，但是频谱下的频率是到14.270</h3>
+      <p class="verdict">频率一直 00.000.00、微调无反应是安卓 App v1.1.33 的已知 Compose strong-skipping 缺陷（v1.1.34 已修）；服务端 CAT 频率正常，升级 App 即可</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>症状与服务端无关：同一条日志里 CAT 轮询读到的是正确频率 —— `2026-10-24 12:33:29,162 [INFO] mrrc.poll: IF poll: vfo_a=14270000 Hz (+700 Hz) (loop=51500)`，且 `problem.txt` 说「能听到通联」，说明电台真的在 14.270。</li>
+        <li>与 v1.1.33 的已记录事故完全同签名：`FT710Android/CHANGELOG.md` 的 `[1.1.34]` 条目写「现场反馈：连得上、有声音、有频谱、能控制电台，只有主频读数不动，一直 00.000.00；转一次屏、或者点一下别的地方，频率就出来了」，与用户「过一会频率会变显示出来」「微调没反应」逐条对应。</li>
+        <li>根因（不是服务端、不是解析）：Kotlin 2.0.21 起 Compose strong skipping 按实例比较不稳定参数，v1.1.33 抽出的 FreqBezel/MetersCard/ControlsCard/TuningCard 传的是同一个可变 `vm.state` 实例 → 整块被跳过 → `state.activeFrequency` 不再重读；`FT710Android/CLAUDE.md:239` 记的正是「v1.1.33 的真机事故就是它」，修法是让组件订阅 `vm.version`。</li>
+        <li>用户当前环境 `diagnostics/env.json` 是 `version 1.28.0`（服务端），App 为 1.1.33：仓库里修复版本是 `app/build.gradle.kts:23 versionName = &quot;1.1.34&quot;`，早于修复 ⇒ 属于「升版本即解决」，非回归。</li>
+        <li>次要问题 A（与频率无关）：`logs/server-prev.log` 里 `scope_pipe: open_failed:attempt_1..5:error_2` → `spi_init_failed:all_attempts` → `fatal:cannot_open_device` 每秒循环，`diagnostics/summary.txt` 因此判「S 表合成回退」；`CHANGELOG.md:2602` 有同签名历史（残留进程占住 FT4222 时 `FT_OpenEx` 报 FT_DEVICE_NOT_FOUND），属 FT-710 USB 频谱接口被占用/未枚举的环境面向。</li>
+        <li>次要问题 B：`logs/server.log` 每 ~15 s 一条 `ft8.engine.cascade: deep decode path failed; keeping the fast results` + `ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None`，前面紧跟 `mrrc: FT8 REST/WS routes mounted`，且 `slot N: 0 message(s)`；与 `CHANGELOG.md` `[v1.28.2]` 记录的「Windows 给线程 2 MB 栈、`sync8var` 单帧约 4 MB、静默死亡」完全同签名，1.28.0 不含该修复 ⇒ 升到 ≥1.28.2（盒子线 1.28.5·FP1）即可，不是新缺陷。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>卸载并安装安卓 App v1.1.34（未装过 1.1.32 之前版本的话可直接覆盖升级；1.1.32 起换过签名，若提示「应用未安装」就先卸载再装，卸载会清掉已保存的服务器地址与口令，需重新登录）。装好后点 14.270 应立刻显示，不必再转屏。</li>
+        <li>升级后若仍只在「转一下屏/点一下」才更新，请提供 App 版本号（☰ 关于页）与该次诊断包，按其作为回归处理。</li>
+        <li>频谱（S 表合成曲线）另作处理：关掉所有可能占用 FT-710 USB 频谱接口的程序（Yaesu PCC、WSJT-X、另一个还开着的 MRRC 服务端），把电台 USB 线拔插一次或换一个 USB 口，等 10 s 再启动服务端；`error_2` 消失后才会出现真实瀑布。</li>
+        <li>FT8 若在用：把服务端升级到 ≥ 1.28.2（盒子线 1.28.5·FP1）。1.28.0 在 Windows 上每次深路径解码都会让 DSP worker 静默死掉（`worker_exit … status None`），这次一并解决。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-24 12:33:29,162 [INFO] mrrc.poll: IF poll: vfo_a=14270000 Hz (+700 Hz) (loop=51500)</li>
+        <li class="ev">2026-10-24 12:33:54,696 [INFO] mrrc: Spectrum profile high for operator socket: full frame (1701 B), divider 1</li>
+        <li class="ev">2026-10-24 12:33:49,109 [WARNING] ft8.engine.cascade: deep decode path failed; keeping the fast results</li>
+        <li class="ev">ft8.core.supervisor.WorkerFault: worker_exit: worker process exited with status None</li>
+        <li class="ev">2026-10-24 12:33:49,074 [INFO] mrrc: FT8 REST/WS routes mounted (composition root binds at startup)</li>
+        <li class="ev">2026-10-24 00:55:20,829 [WARNING] mrrc.backend.ft710.scope: scope_pipe: spi_init_failed:all_attempts</li>
+        <li class="ev">2026-10-24 00:55:20,831 [WARNING] mrrc.backend.ft710.scope: scope_pipe: fatal:cannot_open_device</li>
+        <li class="ev">FT710Android/CHANGELOG.md [1.1.34]：「只有主频读数不动，一直 00.000.00；转一次屏、或者点一下别的地方，频率就出来了」</li>
+        <li class="ev">FT710Android/CLAUDE.md:239：「v1.1.33 的真机事故就是它：连得上、有声、有频谱、能控制电台，只有频率一直 00.000.00」</li>
+        <li class="ev">app/build.gradle.kts:23 versionName = &quot;1.1.34&quot;</li>
+        <li class="ev">env.json: {&quot;version&quot;: &quot;1.28.0&quot;, &quot;frozen&quot;: true, &quot;platform&quot;: &quot;Windows-10-10.0.19041-SP0&quot;}</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>修复已在 FT710Android/app/src/main/java/com/hamradio/ft710android/UI/MainScreen.kt（FreqBezel/MetersCard/ControlsCard/TuningCard 订阅 vm.version）；服务端 FT8 栈修复在 ft8/core/worker.py::_run_with_large_stack</code></p>
+    </article>
     <article class="card" id="20261022-160619-cbda">
       <header>
         <span class="id">20261022-160619-cbda</span>
@@ -877,7 +918,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-22 16:12（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-24 12:40（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

@@ -276,7 +276,7 @@ fun MainScreen(
                         .height(m.landscapeInstrumentHeight(prefs.fftHeight, prefs.wfHeight))
                         .testTag("secHeader"),
                 ) {
-                    FreqBezel(state, Modifier.width(m.landscapeFreqWidth).fillMaxHeight()) {
+                    FreqBezel(vm, Modifier.width(m.landscapeFreqWidth).fillMaxHeight()) {
                         showFreqInput = true
                     }
                     Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))
@@ -303,7 +303,7 @@ fun MainScreen(
                 // （lint: UnusedBoxWithConstraintsScope），2026-10-22 拆掉——纯死代码。
                 val meterH = m.headerHeight
                 Row(Modifier.fillMaxWidth().height(meterH).testTag("secHeader")) {
-                    FreqBezel(state, Modifier.weight(1f).fillMaxHeight()) { showFreqInput = true }
+                    FreqBezel(vm, Modifier.weight(1f).fillMaxHeight()) { showFreqInput = true }
                     Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))
                     SmeterArc(
                         raw = state.sMeter,
@@ -358,7 +358,6 @@ fun MainScreen(
                 ) {
                     MetersCard(
                         vm,
-                        state,
                         caps,
                         atrEnabled,
                         atr,
@@ -368,7 +367,6 @@ fun MainScreen(
                     Spacer(Modifier.width(ScreenFit.LANDSCAPE_CARD_GAP.dp))
                     ControlsCard(
                         vm,
-                        state,
                         caps,
                         listenOnly,
                         modes,
@@ -379,7 +377,6 @@ fun MainScreen(
                     Spacer(Modifier.width(ScreenFit.LANDSCAPE_CARD_GAP.dp))
                     TuningCard(
                         vm,
-                        state,
                         prefs,
                         stepHz,
                         onStep = { stepHz = it },
@@ -395,17 +392,16 @@ fun MainScreen(
                     )
                 }
             } else {
-                MetersCard(vm, state, caps, atrEnabled, atr, atrTuning)
+                MetersCard(vm, caps, atrEnabled, atr, atrTuning)
                 ControlsCard(
                     vm,
-                    state,
                     caps,
                     listenOnly,
                     modes,
                     onPickMode = { showModePicker = true },
                     onPickBand = { showBandPicker = true },
                 )
-                TuningCard(vm, state, prefs, stepHz, onStep = { stepHz = it }, onAfVol = onAfVol)
+                TuningCard(vm, prefs, stepHz, onStep = { stepHz = it }, onAfVol = onAfVol)
                 MemoryCard(vm, mem, onManage = { showMemManager = true })
             }
         }
@@ -588,10 +584,16 @@ fun MainScreen(
 /** 主频内凹显示屏（竖屏在 S 表左侧，横屏在瀑布左侧）。高度由调用方**显式**给。 */
 @Composable
 private fun FreqBezel(
-    state: RadioState,
+    vm: MainViewModel,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
+    // ⚠️ strong skipping（Kotlin 2.0.20+ 默认）把不稳定参数按**实例**比较：
+    // `vm.state` 永远是同一个对象，光传 `state` 进来会让整块被跳过，里面的
+    // `state.*` 再也不重读（v1.1.33 的真机事故：频率一直 00.000.00，转屏才对）。
+    // 这里用状态版本号重新取一次，把这个组件的重画绑到版本上。
+    val version by vm.version.collectAsState()
+    val state = remember(version) { vm.state }
     DisplayBezel(
         modifier = modifier.clickable { onClick() }.testTag("freqBezel"),
         contentAlignment = Alignment.Center,
@@ -614,13 +616,18 @@ private fun FreqBezel(
 @Composable
 private fun MetersCard(
     vm: MainViewModel,
-    state: RadioState,
     caps: RadioCaps,
     atrEnabled: Boolean,
     atr: AtrStateDto?,
     atrTuning: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    // ⚠️ strong skipping（Kotlin 2.0.20+ 默认）把不稳定参数按**实例**比较：
+    // `vm.state` 永远是同一个对象，光传 `state` 进来会让整块被跳过，里面的
+    // `state.*` 再也不重读（v1.1.33 的真机事故：频率一直 00.000.00，转屏才对）。
+    // 这里用状态版本号重新取一次，把这个组件的重画绑到版本上。
+    val version by vm.version.collectAsState()
+    val state = remember(version) { vm.state }
     // 尺寸仍只从 ScreenFit/ScreenMetrics 出，函数内不写死 dp
     val m = LocalScreenMetrics.current
     Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMeters", modifier = modifier) {
@@ -703,7 +710,6 @@ private fun MetersCard(
 @Composable
 private fun ControlsCard(
     vm: MainViewModel,
-    state: RadioState,
     caps: RadioCaps,
     listenOnly: Boolean,
     modes: List<String>,
@@ -711,6 +717,12 @@ private fun ControlsCard(
     onPickBand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // ⚠️ strong skipping（Kotlin 2.0.20+ 默认）把不稳定参数按**实例**比较：
+    // `vm.state` 永远是同一个对象，光传 `state` 进来会让整块被跳过，里面的
+    // `state.*` 再也不重读（v1.1.33 的真机事故：频率一直 00.000.00，转屏才对）。
+    // 这里用状态版本号重新取一次，把这个组件的重画绑到版本上。
+    val version by vm.version.collectAsState()
+    val state = remember(version) { vm.state }
     // 尺寸仍只从 ScreenFit/ScreenMetrics 出，函数内不写死 dp
     val m = LocalScreenMetrics.current
     Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secControls", modifier = modifier) {
@@ -751,13 +763,18 @@ private fun ControlsCard(
 @Composable
 private fun TuningCard(
     vm: MainViewModel,
-    state: RadioState,
     prefs: UiPrefs,
     stepHz: Long,
     onStep: (Long) -> Unit,
     onAfVol: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // ⚠️ strong skipping（Kotlin 2.0.20+ 默认）把不稳定参数按**实例**比较：
+    // `vm.state` 永远是同一个对象，光传 `state` 进来会让整块被跳过，里面的
+    // `state.*` 再也不重读（v1.1.33 的真机事故：频率一直 00.000.00，转屏才对）。
+    // 这里用状态版本号重新取一次，把这个组件的重画绑到版本上。
+    val version by vm.version.collectAsState()
+    val state = remember(version) { vm.state }
     // 尺寸仍只从 ScreenFit/ScreenMetrics 出，函数内不写死 dp
     val m = LocalScreenMetrics.current
     Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secTuning", modifier = modifier) {

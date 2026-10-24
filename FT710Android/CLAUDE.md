@@ -236,6 +236,8 @@ A:on F:1234 D:1184640 J:180 G:5.02 T:3 W:6200 E:0 Dr:0 Un:2 S:120 ch:R+ A+ T+ S+
 
 ## 音频/Compose 不变量（改这块必看）
 
+- **读了 `vm.state` 的 composable 必须自己订阅 `vm.version`**（`val version by vm.version.collectAsState()`，再 `val state = remember(version) { vm.state }`）。Kotlin 2.0.20 起 Compose 默认 **strong skipping**：所有 composable 可跳过，不稳定参数按**实例**比较；`RadioState` 是可变的普通类、`vm.state` 永远是同一个对象，只把 `state` 当参数传下去会被判「参数没变」而整块跳过，里面的 `state.*` 再也不重读。v1.1.33 的真机事故就是它：连得上、有声、有频谱、能控制电台，**只有频率一直 `00.000.00`**，转屏或点一下才对（`MainScreenRecomposeTest` 复现，`UiLayoutSafetyTest` 有源码级守卫，已做变异验证）。由 `StateFlow` 驱动的东西（`waterfall`/`fft`/`memChannels`）不适用这条——它们各自会重画。
+
 - **抖动缓冲是时间水位**：冷启动 220ms、欠载恢复 90ms、**硬上限 800ms 丢最旧帧**，进入 TX 时 `flush()`。逐字对齐 `static/rx_worklet_processor.js`；无上限队列会让延迟永久增长（真机"跑一段时间比 Web 慢几秒"）。
 - **RX 播放增益** = `min(10, afVol/255 × capabilities.audio_gain_boost)`，TX/TUNE 期间 0（web `AUDIO_TX_DIM_FACTOR`）；FT-710 需要 10× 提升。
 - **TX 采集源**：优先 `UNPROCESSED` → `MIC`（Web 明确关掉 AEC/NS/AGC）；**不要用 `VOICE_COMMUNICATION`**（强制降噪把话音压小 = "功率非常小"）。48k 优先、44.1k 走 882→960。每个候选先**探测 700ms**，没样本就换下一个（部分机型 `UNPROCESSED` 能初始化但不产数据）。

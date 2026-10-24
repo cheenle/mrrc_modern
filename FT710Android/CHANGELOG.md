@@ -2,6 +2,40 @@
 
 App 版本独立于服务端版本；全功能需服务端 ≥ v1.22（txhb 闸门），更低版本自动降级。
 
+## [1.1.34] — 2026-10-24
+
+### 🐞 修 v1.1.33 的「频率一直是 00.000.00，转一下屏才对」
+
+现场反馈：连得上、有声音、有频谱、能控制电台，**只有主频读数不动**，一直 `00.000.00`；
+转一次屏、或者点一下别的地方，频率就出来了。
+
+**根因（不是服务端，也不是解析）**：Kotlin 2.0.21 起 Compose 默认开启 **strong skipping**——
+所有 composable 都可跳过，不稳定参数按**实例相等**比较。v1.1.33 为了横屏把四个分区抽成了
+组件，参数里传的是 `vm.state` 这个**可变的普通类实例**（`RadioState`）。父组件因
+`vm.version` 变化而重组时，子组件看到的仍是「同一个 `state` 实例」→ 判定参数没变 →
+**整块跳过** → 里面的 `state.activeFrequency` 再也不重读，屏幕就冻在第一次组合时的 0。
+转屏会重建整个组合、点一下会改别的参数，所以「动一动就好」——正是它的指纹。
+
+顺带说明为什么其它东西都正常：频谱、音频、PTT 走各自的通道或由 `StateFlow` 直接驱动，
+不受这个跳过影响；只有放在被跳过组件里的读数被冻住（仪表卡同样受影响）。
+
+**修法**：吃 `vm.state` 的组件自己订阅状态版本，把重画绑到版本上——
+
+```kotlin
+val version by vm.version.collectAsState()
+val state = remember(version) { vm.state }
+```
+
+（`FreqBezel` / `MetersCard` / `ControlsCard` / `TuningCard` 四处；`MemoryCard`、`SpectrumPanel`
+不读 `vm.state`，各自由 `memChannels`/`waterfall` 流驱动，无需改。）
+
+**门槛**：
+- `MainScreenRecomposeTest`（新增，先红后绿）：推一条 `stateUpdate`，**不点、不转屏**，
+  频率与仪表必须跟着变。这条测试在修复前是红的，正是它把根因钉死的。
+- `UiLayoutSafetyTest` 新增源码级守卫：**凡是读了 `vm.state` 的 composable，必须订阅
+  `vm.version`**。已做变异验证——把订阅拿掉，守卫立刻红。
+- 全套 `test assembleDebug lintDebug` 绿。
+
 ## [1.1.33] — 2026-10-22
 
 ### 📱 横屏自适应（手机横握 / 平板横放，功能一个不少）

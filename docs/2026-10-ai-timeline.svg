@@ -1,0 +1,230 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="990" viewBox="0 0 1400 990" font-family="PingFang SC, Noto Sans CJK SC, Source Han Sans SC, Helvetica Neue, Arial, sans-serif">
+<defs>
+  <linearGradient id="bar" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="#8A5A12"/><stop offset="0.55" stop-color="#F5A623"/><stop offset="1" stop-color="#FFD08A"/>
+  </linearGradient>
+  <linearGradient id="bar2" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="#2A2E35"/><stop offset="1" stop-color="#6E7681"/>
+  </linearGradient>
+  <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#F5A623" stop-opacity="0.16"/><stop offset="1" stop-color="#F5A623" stop-opacity="0"/>
+  </linearGradient>
+</defs>
+<rect width="1400" height="990" fill="#0C0C0E"/>
+<rect x="16" y="16" width="1368" height="958" rx="14" fill="#121214" stroke="#25262B"/>
+<text x="48" y="66" fill="#F2F3F5" font-size="27" font-weight="700">一个月：Token 消耗 × 功能产出</text>
+<text x="48" y="94" fill="#8B8F98" font-size="13">MRRC Modern · 2026-09-24 → 10-24 · 数据源：pi 会话日志（逐条 usage）+ git --numstat</text>
+<rect x="820" y="40" width="100" height="66" rx="9" fill="#17181B" stroke="#26272C"/>
+<text x="830" y="60" fill="#8B8F98" font-size="10">处理总量</text>
+<text x="830" y="84" fill="#F5A623" font-size="19" font-weight="700">5.79B</text>
+<text x="830" y="98" fill="#6F747D" font-size="8.5">token（含 96% 缓存重读）</text>
+<rect x="928" y="40" width="100" height="66" rx="9" fill="#17181B" stroke="#26272C"/>
+<text x="938" y="60" fill="#8B8F98" font-size="10">模型输出</text>
+<text x="938" y="84" fill="#F5A623" font-size="19" font-weight="700">20.2M</text>
+<text x="938" y="98" fill="#6F747D" font-size="8.5">token（推理另 9.5M）</text>
+<rect x="1036" y="40" width="100" height="66" rx="9" fill="#17181B" stroke="#26272C"/>
+<text x="1046" y="60" fill="#8B8F98" font-size="10">提交</text>
+<text x="1046" y="84" fill="#F5A623" font-size="19" font-weight="700">795</text>
+<text x="1046" y="98" fill="#6F747D" font-size="8.5">个（不含 merge）</text>
+<rect x="1144" y="40" width="100" height="66" rx="9" fill="#17181B" stroke="#26272C"/>
+<text x="1154" y="60" fill="#8B8F98" font-size="10">可读新增</text>
+<text x="1154" y="84" fill="#F5A623" font-size="19" font-weight="700">215k</text>
+<text x="1154" y="98" fill="#6F747D" font-size="8.5">行（排除数据/vendor）</text>
+<rect x="1252" y="40" width="100" height="66" rx="9" fill="#17181B" stroke="#26272C"/>
+<text x="1262" y="60" fill="#8B8F98" font-size="10">账面成本</text>
+<text x="1262" y="84" fill="#F5A623" font-size="19" font-weight="700">$87</text>
+<text x="1262" y="98" fill="#6F747D" font-size="8.5">deepseek-flash 为主</text>
+<rect x="96.0" y="146" width="242.3" height="476" fill="#4C6EF5" opacity="0.045"/>
+<line x1="96.0" y1="146" x2="96.0" y2="646" stroke="#4C6EF5" stroke-opacity="0.22" stroke-width="1"/>
+<circle cx="105.0" cy="690" r="3.4" fill="#4C6EF5"/>
+<text x="114.0" y="694" fill="#4C6EF5" font-size="10.5" font-weight="600">收听页与发布收尾</text>
+<rect x="338.3" y="146" width="121.2" height="476" fill="#8E7BEF" opacity="0.045"/>
+<line x1="338.3" y1="146" x2="338.3" y2="646" stroke="#8E7BEF" stroke-opacity="0.22" stroke-width="1"/>
+<circle cx="347.3" cy="690" r="3.4" fill="#8E7BEF"/>
+<text x="356.3" y="694" fill="#8E7BEF" font-size="10.5" font-weight="600">云端入口 / 多实例</text>
+<rect x="459.5" y="146" width="121.2" height="476" fill="#F5A623" opacity="0.045"/>
+<line x1="459.5" y1="146" x2="459.5" y2="646" stroke="#F5A623" stroke-opacity="0.22" stroke-width="1"/>
+<circle cx="468.5" cy="690" r="3.4" fill="#F5A623"/>
+<text x="477.5" y="694" fill="#F5A623" font-size="10.5" font-weight="600">安卓立项 + 双平台发版</text>
+<rect x="580.6" y="146" width="242.3" height="476" fill="#35C0B0" opacity="0.045"/>
+<line x1="580.6" y1="146" x2="580.6" y2="646" stroke="#35C0B0" stroke-opacity="0.22" stroke-width="1"/>
+<circle cx="589.6" cy="690" r="3.4" fill="#35C0B0"/>
+<text x="598.6" y="694" fill="#35C0B0" font-size="10.5" font-weight="600">W103D 盒子镜像线</text>
+<rect x="823.0" y="146" width="121.2" height="476" fill="#E5484D" opacity="0.045"/>
+<line x1="823.0" y1="146" x2="823.0" y2="646" stroke="#E5484D" stroke-opacity="0.22" stroke-width="1"/>
+<circle cx="832.0" cy="690" r="3.4" fill="#E5484D"/>
+<text x="841.0" y="694" fill="#E5484D" font-size="10.5" font-weight="600">FT8 工作模式</text>
+<rect x="944.1" y="146" width="201.9" height="476" fill="#4DA3FF" opacity="0.045"/>
+<line x1="944.1" y1="146" x2="944.1" y2="646" stroke="#4DA3FF" stroke-opacity="0.22" stroke-width="1"/>
+<circle cx="953.1" cy="690" r="3.4" fill="#4DA3FF"/>
+<text x="962.1" y="694" fill="#4DA3FF" font-size="10.5" font-weight="600">支持链路 / 盒子功能 / 镜像线</text>
+<rect x="1146.1" y="146" width="201.9" height="476" fill="#F2A65A" opacity="0.045"/>
+<line x1="1146.1" y1="146" x2="1146.1" y2="646" stroke="#F2A65A" stroke-opacity="0.22" stroke-width="1"/>
+<circle cx="1155.1" cy="690" r="3.4" fill="#F2A65A"/>
+<text x="1164.1" y="694" fill="#F2A65A" font-size="10.5" font-weight="600">加固 + 安卓横屏发版</text>
+<text x="48" y="142" fill="#E6E7EB" font-size="13" font-weight="700">① 每日处理 token</text>
+<text x="48" y="159" fill="#6F747D" font-size="10">柱＝当日总量（B）　虚线＝累计（右轴）</text>
+<line x1="96" y1="430.0" x2="1348" y2="430.0" stroke="#24262B"/>
+<text x="86" y="434.0" fill="#6F747D" font-size="10" text-anchor="end">0.0B</text>
+<line x1="96" y1="343.3" x2="1348" y2="343.3" stroke="#24262B"/>
+<text x="86" y="347.3" fill="#6F747D" font-size="10" text-anchor="end">0.2B</text>
+<line x1="96" y1="256.7" x2="1348" y2="256.7" stroke="#24262B"/>
+<text x="86" y="260.7" fill="#6F747D" font-size="10" text-anchor="end">0.4B</text>
+<line x1="96" y1="170.0" x2="1348" y2="170.0" stroke="#24262B"/>
+<text x="86" y="174.0" fill="#6F747D" font-size="10" text-anchor="end">0.6B</text>
+<text x="1358" y="434.0" fill="#6F747D" font-size="10">0B</text>
+<text x="1358" y="347.3" fill="#6F747D" font-size="10">2B</text>
+<text x="1358" y="260.7" fill="#6F747D" font-size="10">4B</text>
+<text x="1358" y="174.0" fill="#6F747D" font-size="10">6B</text>
+<rect x="104.9" y="428.9" width="22.6" height="1.1" rx="2.5" fill="url(#bar)"/>
+<rect x="145.3" y="401.9" width="22.6" height="28.1" rx="2.5" fill="url(#bar)"/>
+<rect x="347.2" y="311.6" width="22.6" height="118.4" rx="2.5" fill="url(#bar)"/>
+<rect x="387.6" y="255.4" width="22.6" height="174.6" rx="2.5" fill="url(#bar)"/>
+<rect x="428.0" y="359.0" width="22.6" height="71.0" rx="2.5" fill="url(#bar)"/>
+<rect x="468.4" y="188.3" width="22.6" height="241.7" rx="2.5" fill="url(#bar)"/>
+<rect x="508.8" y="310.7" width="22.6" height="119.3" rx="2.5" fill="url(#bar)"/>
+<rect x="549.1" y="296.7" width="22.6" height="133.3" rx="2.5" fill="url(#bar)"/>
+<rect x="589.5" y="282.4" width="22.6" height="147.6" rx="2.5" fill="url(#bar)"/>
+<rect x="629.9" y="252.8" width="22.6" height="177.2" rx="2.5" fill="url(#bar)"/>
+<rect x="670.3" y="348.3" width="22.6" height="81.7" rx="2.5" fill="url(#bar)"/>
+<rect x="710.7" y="407.0" width="22.6" height="23.0" rx="2.5" fill="url(#bar)"/>
+<rect x="751.1" y="373.0" width="22.6" height="57.0" rx="2.5" fill="url(#bar)"/>
+<rect x="791.5" y="195.3" width="22.6" height="234.7" rx="2.5" fill="url(#bar)"/>
+<rect x="831.9" y="429.0" width="22.6" height="1.0" rx="2.5" fill="url(#bar)"/>
+<rect x="872.2" y="351.7" width="22.6" height="78.3" rx="2.5" fill="url(#bar)"/>
+<rect x="912.6" y="322.3" width="22.6" height="107.7" rx="2.5" fill="url(#bar)"/>
+<rect x="953.0" y="326.5" width="22.6" height="103.5" rx="2.5" fill="url(#bar)"/>
+<rect x="993.4" y="215.4" width="22.6" height="214.6" rx="2.5" fill="url(#bar)"/>
+<rect x="1033.8" y="365.9" width="22.6" height="64.1" rx="2.5" fill="url(#bar)"/>
+<rect x="1074.2" y="272.0" width="22.6" height="158.0" rx="2.5" fill="url(#bar)"/>
+<rect x="1114.6" y="405.3" width="22.6" height="24.7" rx="2.5" fill="url(#bar)"/>
+<rect x="1154.9" y="420.8" width="22.6" height="9.2" rx="2.5" fill="url(#bar)"/>
+<rect x="1195.3" y="346.9" width="22.6" height="83.1" rx="2.5" fill="url(#bar)"/>
+<rect x="1235.7" y="405.1" width="22.6" height="24.9" rx="2.5" fill="url(#bar)"/>
+<rect x="1276.1" y="406.3" width="22.6" height="23.7" rx="2.5" fill="url(#bar)"/>
+<rect x="1316.5" y="421.8" width="22.6" height="8.2" rx="2.5" fill="url(#bar)"/>
+<polyline points="116.2,429.9 156.6,427.1 197.0,427.1 237.4,427.1 277.7,427.1 318.1,427.1 358.5,415.2 398.9,397.8 439.3,390.7 479.7,366.5 520.1,354.6 560.5,341.2 600.8,326.5 641.2,308.8 681.6,300.6 722.0,298.3 762.4,292.6 802.8,269.1 843.2,269.0 883.5,261.2 923.9,250.4 964.3,240.1 1004.7,218.6 1045.1,212.2 1085.5,196.4 1125.9,193.9 1166.3,193.0 1206.6,184.7 1247.0,182.2 1287.4,179.8 1327.8,179.0" fill="none" stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="1.6" stroke-dasharray="5 4"/>
+<circle cx="1327.8" cy="179.0" r="3.2" fill="#FFF"/>
+<line x1="479.7" y1="182.3" x2="479.7" y2="154.3" stroke="#F5A623" stroke-width="1"/>
+<rect x="415.7" y="126.3" width="128" height="28" rx="6" fill="#1B1710" stroke="#5A431C"/>
+<text x="479.7" y="140.3" fill="#FFC46B" font-size="10.5" text-anchor="middle">峰值 0.56B · 安卓立项</text>
+<text x="479.7" y="151.3" fill="#8B8F98" font-size="9" text-anchor="middle">10-03</text>
+<rect x="176.8" y="170" width="161.5" height="260" fill="#0E0E10" opacity="0.55"/>
+<text x="257.5" y="422.0" fill="#5E636C" font-size="9.5" text-anchor="middle">无会话</text>
+<text x="48" y="482" fill="#E6E7EB" font-size="13" font-weight="700">② 每日产出</text>
+<text x="48" y="499" fill="#6F747D" font-size="10">柱＝提交数（左轴）　线＝新增行（右轴，排除数据/第三方）</text>
+<line x1="96" y1="650.0" x2="1348" y2="650.0" stroke="#24262B"/>
+<text x="86" y="654.0" fill="#6F747D" font-size="10" text-anchor="end">0</text>
+<line x1="96" y1="611.5" x2="1348" y2="611.5" stroke="#24262B"/>
+<text x="86" y="615.5" fill="#6F747D" font-size="10" text-anchor="end">20</text>
+<line x1="96" y1="573.0" x2="1348" y2="573.0" stroke="#24262B"/>
+<text x="86" y="577.0" fill="#6F747D" font-size="10" text-anchor="end">40</text>
+<line x1="96" y1="534.5" x2="1348" y2="534.5" stroke="#24262B"/>
+<text x="86" y="538.5" fill="#6F747D" font-size="10" text-anchor="end">60</text>
+<line x1="96" y1="496.0" x2="1348" y2="496.0" stroke="#24262B"/>
+<text x="86" y="500.0" fill="#6F747D" font-size="10" text-anchor="end">80</text>
+<text x="1358" y="654.0" fill="#6F747D" font-size="10">0k</text>
+<text x="1358" y="615.5" fill="#6F747D" font-size="10">10k</text>
+<text x="1358" y="577.0" fill="#6F747D" font-size="10">20k</text>
+<text x="1358" y="538.5" fill="#6F747D" font-size="10">30k</text>
+<text x="1358" y="500.0" fill="#6F747D" font-size="10">40k</text>
+<rect x="145.3" y="625.0" width="22.6" height="25.0" rx="2" fill="url(#bar2)"/>
+<rect x="347.2" y="626.9" width="22.6" height="23.1" rx="2" fill="url(#bar2)"/>
+<rect x="387.6" y="569.1" width="22.6" height="80.8" rx="2" fill="url(#bar2)"/>
+<rect x="428.0" y="578.8" width="22.6" height="71.2" rx="2" fill="url(#bar2)"/>
+<rect x="468.4" y="565.3" width="22.6" height="84.7" rx="2" fill="url(#bar2)"/>
+<rect x="508.8" y="623.0" width="22.6" height="26.9" rx="2" fill="url(#bar2)"/>
+<rect x="549.1" y="559.5" width="22.6" height="90.5" rx="2" fill="url(#bar2)"/>
+<rect x="589.5" y="573.0" width="22.6" height="77.0" rx="2" fill="url(#bar2)"/>
+<rect x="629.9" y="588.4" width="22.6" height="61.6" rx="2" fill="url(#bar2)"/>
+<rect x="670.3" y="578.8" width="22.6" height="71.2" rx="2" fill="url(#bar2)"/>
+<rect x="710.7" y="584.5" width="22.6" height="65.5" rx="2" fill="url(#bar2)"/>
+<rect x="751.1" y="636.5" width="22.6" height="13.5" rx="2" fill="url(#bar2)"/>
+<rect x="791.5" y="569.1" width="22.6" height="80.8" rx="2" fill="url(#bar2)"/>
+<rect x="831.9" y="521.0" width="22.6" height="129.0" rx="2" fill="url(#bar2)"/>
+<rect x="872.2" y="507.6" width="22.6" height="142.4" rx="2" fill="url(#bar2)"/>
+<rect x="912.6" y="574.9" width="22.6" height="75.1" rx="2" fill="url(#bar2)"/>
+<rect x="953.0" y="619.2" width="22.6" height="30.8" rx="2" fill="url(#bar2)"/>
+<rect x="993.4" y="588.4" width="22.6" height="61.6" rx="2" fill="url(#bar2)"/>
+<rect x="1033.8" y="526.8" width="22.6" height="123.2" rx="2" fill="url(#bar2)"/>
+<rect x="1074.2" y="534.5" width="22.6" height="115.5" rx="2" fill="url(#bar2)"/>
+<rect x="1114.6" y="630.8" width="22.6" height="19.2" rx="2" fill="url(#bar2)"/>
+<rect x="1154.9" y="648.1" width="22.6" height="1.9" rx="2" fill="url(#bar2)"/>
+<rect x="1195.3" y="630.8" width="22.6" height="19.2" rx="2" fill="url(#bar2)"/>
+<rect x="1235.7" y="640.4" width="22.6" height="9.6" rx="2" fill="url(#bar2)"/>
+<rect x="1276.1" y="625.0" width="22.6" height="25.0" rx="2" fill="url(#bar2)"/>
+<rect x="1316.5" y="644.2" width="22.6" height="5.8" rx="2" fill="url(#bar2)"/>
+<polyline points="116.2,650.0 156.6,634.8 197.0,650.0 237.4,650.0 277.7,650.0 318.1,650.0 358.5,641.5 398.9,637.5 439.3,626.4 479.7,584.3 520.1,639.1 560.5,616.0 600.8,616.9 641.2,619.9 681.6,606.7 722.0,619.0 762.4,645.1 802.8,590.0 843.2,505.9 883.5,580.8 923.9,622.9 964.3,628.5 1004.7,609.1 1045.1,603.3 1085.5,587.6 1125.9,640.5 1166.3,649.5 1206.6,644.3 1247.0,646.3 1287.4,633.4 1327.8,643.1" fill="none" stroke="#35C0B0" stroke-width="1.8" stroke-linejoin="round"/>
+<circle cx="843.2" cy="505.9" r="2.6" fill="#35C0B0"/>
+<text x="843.2" y="497.9" fill="#7FE3D6" font-size="9" text-anchor="middle">37k</text>
+<text x="116.2" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">09-24</text>
+<text x="197.0" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">09-26</text>
+<text x="277.7" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">09-28</text>
+<text x="358.5" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">09-30</text>
+<text x="439.3" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-02</text>
+<text x="520.1" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-04</text>
+<text x="600.8" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-06</text>
+<text x="681.6" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-08</text>
+<text x="762.4" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-10</text>
+<text x="843.2" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-12</text>
+<text x="923.9" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-14</text>
+<text x="1004.7" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-16</text>
+<text x="1085.5" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-18</text>
+<text x="1166.3" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-20</text>
+<text x="1247.0" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-22</text>
+<text x="1327.8" y="664.0" fill="#6F747D" font-size="9" text-anchor="middle">10-24</text>
+<line x1="48" y1="704" x2="1352" y2="704" stroke="#25262B"/>
+<text x="48" y="723" fill="#E6E7EB" font-size="13" font-weight="700">③ 这个月做了什么</text>
+<text x="150" y="723" fill="#6F747D" font-size="10">（16 个节点，颜色对应上面的阶段带；同一阶段可能跨多天）</text>
+<circle cx="53" cy="746" r="3" fill="#4C6EF5"/>
+<text x="64" y="750" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">09-25</text>
+<text x="106" y="750" fill="#DCDEE3" font-size="12">收听专用界面 /listen（v1.20–1.21）</text>
+<circle cx="53" cy="772" r="3" fill="#8E7BEF"/>
+<text x="64" y="776" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">09-30</text>
+<text x="106" y="776" fill="#DCDEE3" font-size="12">会话计量 AD-023 · 令牌不再进 URL（AD-024）</text>
+<circle cx="53" cy="798" r="3" fill="#8E7BEF"/>
+<text x="64" y="802" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-01</text>
+<text x="106" y="802" fill="#DCDEE3" font-size="12">云端入口 1.24.x：多实例、隧道、版本清单</text>
+<circle cx="53" cy="824" r="3" fill="#F5A623"/>
+<text x="64" y="828" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-03</text>
+<text x="106" y="828" fill="#DCDEE3" font-size="12">安卓客户端立项 · 当日 0.56B（峰值）</text>
+<circle cx="53" cy="850" r="3" fill="#F5A623"/>
+<text x="64" y="854" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-04</text>
+<text x="106" y="854" fill="#DCDEE3" font-size="12">自带 TLS 信任库 · FTDI 修复（1.25.1）</text>
+<circle cx="53" cy="876" r="3" fill="#35C0B0"/>
+<text x="64" y="880" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-06</text>
+<text x="106" y="880" fill="#DCDEE3" font-size="12">W103D 盒子镜像线开工（packaging/box）</text>
+<circle cx="53" cy="902" r="3" fill="#35C0B0"/>
+<text x="64" y="906" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-07</text>
+<text x="106" y="906" fill="#DCDEE3" font-size="12">频谱三档：/WSspectrum 按 socket 协商（AD-025）</text>
+<circle cx="53" cy="928" r="3" fill="#35C0B0"/>
+<text x="64" y="932" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-11</text>
+<text x="106" y="932" fill="#DCDEE3" font-size="12">盒子设置页 / Wi-Fi 统一 / 树莓派镜像</text>
+<circle cx="713" cy="746" r="3" fill="#E5484D"/>
+<text x="724" y="750" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-12</text>
+<text x="766" y="750" fill="#DCDEE3" font-size="12">FT8 工作模式开工（页面/设置/vendor 子集）</text>
+<circle cx="713" cy="772" r="3" fill="#E5484D"/>
+<text x="724" y="776" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-13</text>
+<text x="766" y="776" fill="#DCDEE3" font-size="12">FT8 四平台打包 + 快路径级联（v1.27.0）</text>
+<circle cx="713" cy="798" r="3" fill="#4DA3FF"/>
+<text x="724" y="802" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-16</text>
+<text x="766" y="802" fill="#DCDEE3" font-size="12">支持链路：诊断包 + 自动分诊（v1.28.0）</text>
+<circle cx="713" cy="824" r="3" fill="#4DA3FF"/>
+<text x="724" y="828" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-18</text>
+<text x="766" y="828" fill="#DCDEE3" font-size="12">NanoVNA 天线台 + 站点四张新卡</text>
+<circle cx="713" cy="850" r="3" fill="#4DA3FF"/>
+<text x="724" y="854" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-19</text>
+<text x="766" y="854" fill="#DCDEE3" font-size="12">镜像线独立编号 1.28.2–1.28.4 + 性能页</text>
+<circle cx="713" cy="876" r="3" fill="#F2A65A"/>
+<text x="724" y="880" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-21</text>
+<text x="766" y="880" fill="#DCDEE3" font-size="12">v1.28.2：启动器不再改模型、FT-891 自适配波特率</text>
+<circle cx="713" cy="902" r="3" fill="#F2A65A"/>
+<text x="724" y="906" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-22</text>
+<text x="766" y="906" fill="#DCDEE3" font-size="12">云隧道不再静默 + 盒子 FP1 + 安卓横屏开工</text>
+<circle cx="713" cy="928" r="3" fill="#F2A65A"/>
+<text x="724" y="932" fill="#9AA0AA" font-size="11.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">10-24</text>
+<text x="766" y="932" fill="#DCDEE3" font-size="12">安卓 v1.1.33 横屏自适应发版</text>
+<line x1="48" y1="936" x2="1352" y2="936" stroke="#25262B"/>
+<text x="48" y="956" fill="#5E636C" font-size="9.5">合计：处理 5.79B · 输出 20.2M · 795 提交 · 可读新增 214,941 行（另 146k 行为呼号库/WSJT-X 移植/证书）· $87</text>
+<text x="1352" y="956" fill="#5E636C" font-size="9.5" text-anchor="end">缓存重读占 96.3%；输出 token 21.4M（含站点仓库 1.2M）</text>
+</svg>

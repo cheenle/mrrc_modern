@@ -60,6 +60,46 @@ class UiLayoutSafetyTest {
     }
 
     /**
+     * **收了 `vm` 就必须订阅 `vm.version`**（strong skipping 守卫，2026-10-24 真机事故）。
+     *
+     * Kotlin 2.0.20 起 Compose 默认 strong skipping：**所有** composable 都可跳过，
+     * 不稳定参数按**实例相等**比较。`RadioState` 是可变的普通类、`vm.state` 永远是同一个
+     * 对象 —— 子组件只收 `state` 时会被判定「参数没变」而整块跳过，里面的 `state.*`
+     * 再也不重读。v1.1.33 表现为：连得上、有声、有频谱、能控制电台，只有频率一直
+     * `00.000.00`，转一次屏或点一下才对（`MainScreenRecomposeTest` 复现并盯着修好）。
+     *
+     * 判据是「**读了 `vm.state`**」：这类组件依赖一个不可观测的可变对象，必须自己订阅
+     * 版本号。只订阅 `StateFlow` 的组件（`SpectrumPanel` 读 `vm.waterfall/fft`）不受影响，
+     * 它们的重画由各自的流驱动。只扫 `MainScreen.kt`。
+     */
+    @Test
+    fun `every composable that takes the view model also observes its version`() {
+        val file = File("src/main/java/com/hamradio/ft710android/UI/MainScreen.kt")
+        assertTrue("找不到 MainScreen.kt（单元测试工作目录应为 app/）", file.isFile)
+        val src = stripComments(file.readText())
+        val offenders = mutableListOf<String>()
+        for (m in Regex("""fun\s+([A-Za-z_]\w*)\s*\(""").findAll(src)) {
+            val paramsEnd = matchParen(src, m.range.last) ?: continue
+            val params = src.substring(m.range.last, paramsEnd)
+            if ("vm: MainViewModel" !in params) continue
+            var i = paramsEnd + 1
+            while (i < src.length && src[i].isWhitespace()) i++
+            if (i >= src.length || src[i] != '{') continue
+            val bodyEnd = matchBrace(src, i) ?: continue
+            val body = src.substring(i, bodyEnd + 1)
+            if ("vm.state" in body && "vm.version.collectAsState()" !in body) {
+                offenders += m.groupValues[1] + "()"
+            }
+        }
+        assertTrue(
+            "这些 composable 收了 vm 却没订阅 vm.version —— strong skipping 会跳过整块，" +
+                "屏幕上的读数就冻在第一次组合时的值（v1.1.33「频率 00.000.00」事故）：\n  " +
+                offenders.joinToString("\n  "),
+            offenders.isEmpty(),
+        )
+    }
+
+    /**
      * 切出每个 `fun name(...)` 的花括号体（够静态检查用）。
      *
      * 必须先**配对跳过参数列表**再找函数体的 `{`：本仓不少组件的参数默认值就是 lambda

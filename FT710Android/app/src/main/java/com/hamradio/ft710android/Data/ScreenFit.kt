@@ -1,6 +1,5 @@
 package com.hamradio.ft710android.Data
 
-
 /**
  * 屏幕适配的**单一数据源**：尺寸档位 + 竖向空间预算（纯算术，JVM 可测）。
  *
@@ -44,8 +43,7 @@ object ScreenFit {
      * 页宽 344dp 减去 S 表与间隙后只剩 ~167dp —— 算主频字号、判断工具行能不能
      * 放进显示屏时都必须用**这个**，用页宽会严重高估。
      */
-    fun bezelContentWidth(screenWidthDp: Int): Int =
-        contentWidth(screenWidthDp) - meterWidth(screenWidthDp) - BEZEL_GAP - BEZEL_PAD_H * 2
+    fun bezelContentWidth(screenWidthDp: Int): Int = contentWidth(screenWidthDp) - meterWidth(screenWidthDp) - BEZEL_GAP - BEZEL_PAD_H * 2
 
     /** 只读/无声等条件芯片的追加宽度（含间距）。 */
     const val STATUS_EXTRA_CHIP_W = 30
@@ -70,7 +68,10 @@ object ScreenFit {
      * 横屏判定：只看宽高关系。手机横屏（728×360）与平板横屏（1200×800）走**同一套**双列
      * 布局（用户 2026-10-22 定案："一套双列，尺寸按屏宽放大"），不维护第二套结构。
      */
-    fun isWide(screenWidthDp: Int, screenHeightDp: Int): Boolean = screenWidthDp > screenHeightDp
+    fun isWide(
+        screenWidthDp: Int,
+        screenHeightDp: Int,
+    ): Boolean = screenWidthDp > screenHeightDp
 
     /**
      * 横屏的紧凑上限。竖屏那条 900dp 的规则在横屏上会把**平板横屏**（高 800dp）误判成紧凑，
@@ -79,16 +80,33 @@ object ScreenFit {
     const val LANDSCAPE_COMPACT_MAX_HEIGHT_DP = 560
 
     /** 档位判定：竖屏与横屏分头走各自的规则。 */
-    fun isCompactFor(screenWidthDp: Int, screenHeightDp: Int): Boolean =
-        if (isWide(screenWidthDp, screenHeightDp)) screenHeightDp <= LANDSCAPE_COMPACT_MAX_HEIGHT_DP
-        else isCompact(screenHeightDp)
+    fun isCompactFor(
+        screenWidthDp: Int,
+        screenHeightDp: Int,
+    ): Boolean =
+        if (isWide(screenWidthDp, screenHeightDp)) {
+            screenHeightDp <= LANDSCAPE_COMPACT_MAX_HEIGHT_DP
+        } else {
+            isCompact(screenHeightDp)
+        }
 
     /**
      * 横屏主频显示屏宽度：占屏宽 25%，夹在 150~260dp。
      * 手机上拿到 ~182dp（字号仍比竖屏大），平板上停在 260dp —— 再宽就把瀑布挤没了。
      */
-    fun landscapeFreqWidth(screenWidthDp: Int): Int =
-        (screenWidthDp * 0.25f).toInt().coerceIn(150, 260)
+    fun landscapeFreqWidth(screenWidthDp: Int): Int = (screenWidthDp * 0.25f).toInt().coerceIn(150, 260)
+
+    /**
+     * 横屏 S 表宽度。竖屏那套（屏宽 44%，夹 132~240）在**分屏/多窗口**的窄横屏
+     * （例如 480×360）里会和主频显示屏一起把瀑布挤成 0 宽，所以再夹一次：
+     * 不超过"扣掉主频与两个间隙后剩余宽度的一半"，保证瀑布永远还有一半空间。
+     */
+    fun landscapeMeterWidth(screenWidthDp: Int): Int {
+        val remaining = contentWidth(screenWidthDp) - landscapeFreqWidth(screenWidthDp) - BEZEL_GAP * 2
+        // 这里不能沿用 METER_MIN_W（132dp，那是竖屏的下限）：在 400dp 宽的分屏里
+        // 132 + 150 + 12 已经把 384dp 吃光，瀑布还是只剩 90dp。
+        return meterWidth(screenWidthDp).coerceAtMost((remaining * 0.5f).toInt().coerceAtLeast(0))
+    }
 
     /** 横屏下半那一排卡片（仪表 / 控制 / 调谐 / 记忆）的相对宽度。 */
     val LANDSCAPE_CARD_WEIGHTS = listOf(1.0f, 1.35f, 1.45f, 1.0f)
@@ -118,9 +136,13 @@ object ScreenFit {
      * 必须给显式高度：① 一排卡片等高才不难看；② 卡片里可能有 `BoxWithConstraints`
      * （SubcomposeLayout），问 intrinsic 会直接崩（v1.1.16 事故）。
      */
-    fun landscapeCardsHeight(compact: Boolean, hasAtr: Boolean): Int {
+    fun landscapeCardsHeight(
+        compact: Boolean,
+        hasAtr: Boolean,
+    ): Int {
         val padV2 = panelPadV(compact) * 2
         val ig = innerGap(compact)
+
         fun card(items: List<Int>): Int = padV2 + items.sum() + (items.size - 1) * ig
         val meterRows = 2 + (if (hasAtr) 1 else 0)
         return maxOf(
@@ -171,8 +193,7 @@ object ScreenFit {
     /** 主屏可用内容宽度（去掉左右内边距）。 */
     fun contentWidth(screenWidthDp: Int): Int = screenWidthDp - PAGE_PAD_H * 2
 
-    fun meterWidth(screenWidthDp: Int): Int =
-        (contentWidth(screenWidthDp) * METER_WIDTH_RATIO).toInt().coerceIn(METER_MIN_W, METER_MAX_W)
+    fun meterWidth(screenWidthDp: Int): Int = (contentWidth(screenWidthDp) * METER_WIDTH_RATIO).toInt().coerceIn(METER_MIN_W, METER_MAX_W)
 
     /**
      * 顶栏那一行（工具 + 全部状态）的高度：由图标点击区决定。
@@ -184,10 +205,16 @@ object ScreenFit {
      * 主频显示屏（= S 表）高度。显示屏里只有主频一行，所以回到 0.50 比例
      * （v1.1.27 曾为容纳工具行+状态行提到 0.58，v1.1.28 那两行搬出去了）。
      */
-    fun headerHeight(compact: Boolean, screenWidthDp: Int): Int {
+    fun headerHeight(
+        compact: Boolean,
+        screenWidthDp: Int,
+    ): Int {
         val w = meterWidth(screenWidthDp)
-        return if (compact) (w * 0.50f).toInt().coerceIn(74, 116)
-               else (w * 0.64f).toInt().coerceIn(96, 168)
+        return if (compact) {
+            (w * 0.50f).toInt().coerceIn(74, 116)
+        } else {
+            (w * 0.64f).toInt().coerceIn(96, 168)
+        }
     }
 
     /**
@@ -211,18 +238,27 @@ object ScreenFit {
      * 频谱显示屏高度 = 瀑布/FFT 高度（按档位缩放）+ 标尺等固定开销。
      * 这就是它在页面里的**实际占位**（UI 用 `.height(X).padding(top=6)`，padding 在 X 内部）。
      */
-    fun spectrumHeight(compact: Boolean, fftH: Int, wfH: Int): Int =
+    fun spectrumHeight(
+        compact: Boolean,
+        fftH: Int,
+        wfH: Int,
+    ): Int =
         // roundToInt 而非 toInt：`150 * 0.78f` 在 Float 下是 116.99999…，截断会白丢 1dp
         kotlin.math.round((fftH + wfH) * spectrumScale(compact)).toInt() + SPECTRUM_CHROME_DP
 
     fun meterCellHeight(compact: Boolean): Int = if (compact) 26 else 30
+
     fun padBtnHeight(compact: Boolean): Int = if (compact) 32 else 34
+
     fun chipHeight(compact: Boolean): Int = if (compact) 26 else 28
+
     fun sliderRowHeight(compact: Boolean): Int = if (compact) 34 else 40
 
     /** 记忆格：紧凑档 6 格排一行，标准档 3×2。 */
     fun memoryColumns(compact: Boolean): Int = if (compact) 6 else 3
+
     fun memoryRows(compact: Boolean): Int = 6 / memoryColumns(compact)
+
     /**
      * 记忆格高度。2026-10-07 起格内**只显示一行频率**，40dp 显得空 → 压到 34dp
      * （仍高于 PadBtn 的 32dp 点击下限，拇指好按）；标准档 46 → 40。
@@ -237,16 +273,22 @@ object ScreenFit {
      * 紧凑档一行 6 格 + 一个 `⋯`，360dp 屏上只有约 47dp —— 标签字号必须按它反推，
      * 否则长标签（`40m SSB` / 中文 / 呼号）会被裁成半个字，看着就是"变形"。
      */
-    fun memoryCellWidth(screenWidthDp: Int, compact: Boolean): Float =
-        memoryCellWidthInCard(contentWidth(screenWidthDp).toFloat(), memoryColumns(compact), compact)
+    fun memoryCellWidth(
+        screenWidthDp: Int,
+        compact: Boolean,
+    ): Float = memoryCellWidthInCard(contentWidth(screenWidthDp).toFloat(), memoryColumns(compact), compact)
 
     /**
      * 卡片**内**的记忆格宽度 —— 横屏用它，因为记忆卡只占屏宽的一列，
      * 按整屏宽反推会把字号估得大一倍（于是真的溢出）。
      */
-    fun memoryCellWidthInCard(cardWidthDp: Float, cols: Int, compact: Boolean): Float {
+    fun memoryCellWidthInCard(
+        cardWidthDp: Float,
+        cols: Int,
+        compact: Boolean,
+    ): Float {
         val inner = cardWidthDp - panelPadH(compact) * 2
-        val gaps = cols * innerGap(compact)          // cells + ⋯ 之间共 cols 个间隙
+        val gaps = cols * innerGap(compact) // cells + ⋯ 之间共 cols 个间隙
         return (inner - MEMORY_MANAGE_W - gaps) / cols
     }
 
@@ -258,17 +300,23 @@ object ScreenFit {
      * 按格宽反推后夹在 [MEMORY_LABEL_MIN_SP] 与档位上限之间。
      * 单行之后空间宽松，上限给到 11sp（紧凑）/13sp（标准），比原来两行时的 7.5sp 好读得多。
      */
-    fun memoryFreqFontSize(text: String, cellWidthDp: Float, compact: Boolean): Float {
+    fun memoryFreqFontSize(
+        text: String,
+        cellWidthDp: Float,
+        compact: Boolean,
+    ): Float {
         val max = if (compact) 11f else 13f
         if (text.isEmpty()) return max
-        val fit = cellWidthDp / (text.length * 0.62f)     // 等宽数字，恒半角
+        val fit = cellWidthDp / (text.length * 0.62f) // 等宽数字，恒半角
         return fit.coerceIn(MEMORY_LABEL_MIN_SP, max)
     }
 
     fun pttHeight(compact: Boolean): Int = if (compact) 74 else 96
+
     fun auxButtonSize(compact: Boolean): Int = if (compact) 58 else 66
 
     fun panelPadH(compact: Boolean): Int = if (compact) 8 else 10
+
     fun panelPadV(compact: Boolean): Int = if (compact) 7 else 9
 
     /**
@@ -294,10 +342,11 @@ object ScreenFit {
     // 它会让"把瀑布调矮"这个需求失效——省下来的空间立刻被填回去。
     // 现在频谱高度是确定值，剩余高度就是留白（滚动列内容顶对齐，视觉上是有余量而非被裁切）。
 
-
     /** 底部固定栏（PTT/CQ/TUNE）高度：竖直内边距 + 主按钮。 */
-    fun bottomBarHeight(compact: Boolean, visible: Boolean): Int =
-        if (!visible) 0 else pttHeight(compact) + bottomBarPadV(compact) * 2
+    fun bottomBarHeight(
+        compact: Boolean,
+        visible: Boolean,
+    ): Int = if (!visible) 0 else pttHeight(compact) + bottomBarPadV(compact) * 2
 
     /**
      * 竖向预算（dp）。`scrollArea` 是滚动列内容总高，`total` 含底部固定栏。
@@ -336,9 +385,12 @@ object ScreenFit {
         val ig = innerGap(c)
         val meterRows = 2 + (if (hasAtr) 1 else 0)
         val cell = meterCellHeight(c)
+
         // 卡片 = 上下内边距 + N 个子项 + (N-1) × 内间距（无标题）
-        fun card(items: Int, heightOf: (Int) -> Int): Int =
-            padV2 + (1..items).sumOf { heightOf(it) } + (items - 1) * ig
+        fun card(
+            items: Int,
+            heightOf: (Int) -> Int,
+        ): Int = padV2 + (1..items).sumOf { heightOf(it) } + (items - 1) * ig
         return Budget(
             toolRow = headerRowHeight(c),
             header = headerHeight(c, screenWidthDp),

@@ -309,6 +309,21 @@ class ScreenFitTest {
         }
     }
 
+    @Test fun `narrow landscape (split screen) still leaves room for the waterfall`() {
+        // 分屏/多窗口下横屏可能只有 400~480dp 宽：主频 182 + S 表 240 会把瀑布挤成 0 宽，
+        // 所以 S 表在横屏要再夹一次（不超过剩余宽度的一半）。
+        listOf(400 to 300, 480 to 320, 640 to 360, 728 to 360).forEach { (w, h) ->
+            val content = ScreenFit.contentWidth(w)
+            val used = ScreenFit.landscapeFreqWidth(w) + ScreenFit.landscapeMeterWidth(w) +
+                ScreenFit.BEZEL_GAP * 2
+            assertTrue("${w}dp 宽：主频+S表 用掉 ${used}dp ≥ 内容宽 ${content}dp", used <= content)
+            val waterfall = content - used
+            assertTrue("${w}dp 宽：瀑布只剩 ${waterfall}dp", waterfall >= 96)
+            // 正常手机上仍是竖屏那套 240dp 上限，视觉没有缩水
+            if (w >= 728) assertEquals(240, ScreenFit.landscapeMeterWidth(w))
+        }
+    }
+
     @Test fun `landscape without the ATR row is shorter, never taller`() {
         landscape.forEach { (name, w, h) ->
             assertTrue(name, wideBudget(w, h, atr = false).total <= wideBudget(w, h).total)

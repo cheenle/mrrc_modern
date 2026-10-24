@@ -6,12 +6,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,52 +39,47 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamradio.ft710android.Data.BandCycle
+import com.hamradio.ft710android.Data.FreqScale
 import com.hamradio.ft710android.Data.MemoryChannel
 import com.hamradio.ft710android.Data.RadioCaps
 import com.hamradio.ft710android.Data.RadioState
-import com.hamradio.ft710android.Network.AtrStateDto
 import com.hamradio.ft710android.Data.SMeter
+import com.hamradio.ft710android.Data.ScreenFit
+import com.hamradio.ft710android.Network.AtrStateDto
 import com.hamradio.ft710android.Spectrum.WaterfallCanvas
 import com.hamradio.ft710android.ViewModel.MainViewModel
 import kotlinx.coroutines.delay
 import java.util.Locale
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.drawText
-import com.hamradio.ft710android.Data.FreqScale
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.material3.ripple
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.unit.Dp
-import androidx.compose.foundation.layout.defaultMinSize
-import com.hamradio.ft710android.Data.ScreenFit
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.graphics.Path
 
 /**
  * 主屏 —— 布局/交互对齐**手机端 Web**（static/index.html + ft710_ui.js）：
@@ -129,11 +129,13 @@ fun MainScreen(
     var stepHz by remember { mutableStateOf(1_000L) }
     val spanHz = remember(stateVersion) { caps.spanHz(state.scopeSpan) }
     // 屏幕档位：紧凑（大陆主流手机）/ 标准（平板、折叠屏展开）
-        val m = LocalScreenMetrics.current
+    val m = LocalScreenMetrics.current
 
     Column(Modifier.fillMaxSize().background(MrrcColors.BgPrimary)) {
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState())
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
                 .testTag("mainScroll")
                 .padding(horizontal = ScreenFit.PAGE_PAD_H.dp, vertical = ScreenFit.PAGE_PAD_V.dp),
             verticalArrangement = Arrangement.spacedBy(m.gap),
@@ -160,48 +162,78 @@ fun MainScreen(
                 ) {
                     Text(
                         "${state.bandName.ifEmpty { "—" }} · ${state.modeName.ifEmpty { "—" }}",
-                        color = MrrcColors.TextMuted, fontSize = 9.sp, letterSpacing = 0.2.sp,
-                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+                        color = MrrcColors.TextMuted,
+                        fontSize = 9.sp,
+                        letterSpacing = 0.2.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     Text(
-                        when (state.txStatus) { 2 -> "TUNE"; 1 -> "TX"; else -> "RX" },
+                        when (state.txStatus) {
+                            2 -> "TUNE"
+                            1 -> "TX"
+                            else -> "RX"
+                        },
                         color = if (state.isTransmitting) MrrcColors.Danger else MrrcColors.TextSecondary,
-                        fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.3.sp,
                         maxLines = 1,
                     )
                     val pk = vm.txPeak()
                     Text(
-                        if (state.txStatus != 0) "TX pk:$pk" else "↓${rxKbps}↑${txKbps}",
+                        if (state.txStatus != 0) "TX pk:$pk" else "↓$rxKbps↑$txKbps",
                         color = if (state.txStatus != 0 && pk < 400) MrrcColors.Warning else MrrcColors.TextMuted,
-                        fontSize = 8.5.sp, fontFamily = MonoFont, maxLines = 1,
+                        fontSize = 8.5.sp,
+                        fontFamily = MonoFont,
+                        maxLines = 1,
                     )
                     if (rec.recording) {
                         Text(
                             fmtSeconds(rec.duration),
-                            color = Color(0xFFFF6B6B), fontSize = 9.sp, fontFamily = MonoFont,
-                            fontWeight = FontWeight.Bold, maxLines = 1,
+                            color = Color(0xFFFF6B6B),
+                            fontSize = 9.sp,
+                            fontFamily = MonoFont,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
                         )
                     }
                     if (listenOnly) {
-                        Text("只读", color = MrrcColors.Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                            maxLines = 1, modifier = Modifier.clickable {
-                                vm.showNotice("只读登录（listen-only）：发射与设备设置已被服务端禁用")
-                            })
+                        Text(
+                            "只读",
+                            color = MrrcColors.Accent,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            modifier =
+                                Modifier.clickable {
+                                    vm.showNotice("只读登录（listen-only）：发射与设备设置已被服务端禁用")
+                                },
+                        )
                     }
                     if (state.rxAudioSilent) {
-                        Text("无声", color = MrrcColors.Danger, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                            maxLines = 1, modifier = Modifier.clickable {
-                                vm.showNotice("RX 音频持续全零——电台 USB 音频可能卡死，请重启电台或重插 USB")
-                            })
+                        Text(
+                            "无声",
+                            color = MrrcColors.Danger,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            modifier =
+                                Modifier.clickable {
+                                    vm.showNotice("RX 音频持续全零——电台 USB 音频可能卡死，请重启电台或重插 USB")
+                                },
+                        )
                     }
                     // 串口状态点（点按出说明）
                     Box(
-                        Modifier.size(7.dp)
+                        Modifier
+                            .size(7.dp)
                             .background(if (connected) MrrcColors.Success else MrrcColors.TextMuted, CircleShape)
                             .clickable {
                                 vm.showNotice(
-                                    if (connected) "电台串口已连接" else "电台串口未连接（服务端与电台之间）"
+                                    if (connected) "电台串口已连接" else "电台串口未连接（服务端与电台之间）",
                                 )
                             },
                     )
@@ -219,12 +251,17 @@ fun MainScreen(
                 ) { if (userOff) vm.reconnect() else vm.disconnect() }
                 Text(
                     "VFO-${state.activeVfo}",
-                    color = MrrcColors.Accent, fontSize = 9.sp, fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.2.sp, maxLines = 1, softWrap = false,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { vm.sendSet("vfo", if (state.activeVfo == "A") "B" else "A") }
-                        .padding(horizontal = 2.dp),
+                    color = MrrcColors.Accent,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.2.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { vm.sendSet("vfo", if (state.activeVfo == "A") "B" else "A") }
+                            .padding(horizontal = 2.dp),
                 )
             }
 
@@ -234,7 +271,8 @@ fun MainScreen(
                 // 省下竖屏里那 116dp 的显示屏高度——横握手机的唯一正当理由就是瀑布变宽，
                 // 只有并排才做到。竖屏分支一个像素都不动。
                 Row(
-                    Modifier.fillMaxWidth()
+                    Modifier
+                        .fillMaxWidth()
                         .height(m.landscapeInstrumentHeight(prefs.fftHeight, prefs.wfHeight))
                         .testTag("secHeader"),
                 ) {
@@ -243,12 +281,17 @@ fun MainScreen(
                     }
                     Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))
                     SmeterArc(
-                        raw = state.sMeter, sUnit = state.sUnit, levelDb = state.sMeterDbm,
-                        modifier = Modifier.width(m.meterWidth).fillMaxHeight(),
+                        raw = state.sMeter,
+                        sUnit = state.sUnit,
+                        levelDb = state.sMeterDbm,
+                        modifier = Modifier.width(m.landscapeMeterWidth).fillMaxHeight(),
                     )
                     Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))
                     SpectrumPanel(
-                        vm, prefs, spanHz, state.activeFrequency,
+                        vm,
+                        prefs,
+                        spanHz,
+                        state.activeFrequency,
                         Modifier.weight(1f).fillMaxHeight(),
                     )
                 }
@@ -263,7 +306,9 @@ fun MainScreen(
                     FreqBezel(state, Modifier.weight(1f).fillMaxHeight()) { showFreqInput = true }
                     Spacer(Modifier.width(ScreenFit.BEZEL_GAP.dp))
                     SmeterArc(
-                        raw = state.sMeter, sUnit = state.sUnit, levelDb = state.sMeterDbm,
+                        raw = state.sMeter,
+                        sUnit = state.sUnit,
+                        levelDb = state.sMeterDbm,
                         modifier = Modifier.width(m.meterWidth).height(meterH).align(Alignment.CenterVertically),
                     )
                 }
@@ -271,19 +316,29 @@ fun MainScreen(
 
             error?.let { msg ->
                 Text(msg, color = MrrcColors.Danger, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-                LaunchedEffect(msg) { delay(4000); vm.clearError() }
+                LaunchedEffect(msg) {
+                    delay(4000)
+                    vm.clearError()
+                }
             }
             notice?.let { msg ->
                 Text(msg, color = MrrcColors.Accent, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
-                LaunchedEffect(msg) { delay(5000); vm.clearNotice() }
+                LaunchedEffect(msg) {
+                    delay(5000)
+                    vm.clearNotice()
+                }
             }
 
             // ── 频谱显示屏（独立子组件：只有它订阅 waterfall/fft）──────────
             // 横屏时它已经在上面那一行里（与主频/S 表等高并排），只有竖屏才单独占一块
             if (!m.wide) {
                 SpectrumPanel(
-                    vm, prefs, spanHz, state.activeFrequency,
-                    Modifier.fillMaxWidth()
+                    vm,
+                    prefs,
+                    spanHz,
+                    state.activeFrequency,
+                    Modifier
+                        .fillMaxWidth()
                         .height(m.spectrumHeight(prefs.fftHeight, prefs.wfHeight))
                         .padding(top = ScreenFit.PAGE_PAD_V.dp),
                 )
@@ -296,30 +351,45 @@ fun MainScreen(
                 // 一排参差的卡片很难看。
                 val weights = m.landscapeCardWeights
                 Row(
-                    Modifier.fillMaxWidth()
+                    Modifier
+                        .fillMaxWidth()
                         .height(m.landscapeCardsHeight(atrEnabled))
                         .testTag("secCardsRow"),
                 ) {
                     MetersCard(
-                        vm, state, caps, atrEnabled, atr, atrTuning,
+                        vm,
+                        state,
+                        caps,
+                        atrEnabled,
+                        atr,
+                        atrTuning,
                         Modifier.weight(weights[0]).fillMaxHeight(),
                     )
                     Spacer(Modifier.width(ScreenFit.LANDSCAPE_CARD_GAP.dp))
                     ControlsCard(
-                        vm, state, caps, listenOnly, modes,
+                        vm,
+                        state,
+                        caps,
+                        listenOnly,
+                        modes,
                         onPickMode = { showModePicker = true },
                         onPickBand = { showBandPicker = true },
                         modifier = Modifier.weight(weights[1]).fillMaxHeight(),
                     )
                     Spacer(Modifier.width(ScreenFit.LANDSCAPE_CARD_GAP.dp))
                     TuningCard(
-                        vm, state, prefs, stepHz,
-                        onStep = { stepHz = it }, onAfVol = onAfVol,
+                        vm,
+                        state,
+                        prefs,
+                        stepHz,
+                        onStep = { stepHz = it },
+                        onAfVol = onAfVol,
                         modifier = Modifier.weight(weights[2]).fillMaxHeight(),
                     )
                     Spacer(Modifier.width(ScreenFit.LANDSCAPE_CARD_GAP.dp))
                     MemoryCard(
-                        vm, mem,
+                        vm,
+                        mem,
                         onManage = { showMemManager = true },
                         modifier = Modifier.weight(weights[3]).fillMaxHeight(),
                     )
@@ -327,124 +397,154 @@ fun MainScreen(
             } else {
                 MetersCard(vm, state, caps, atrEnabled, atr, atrTuning)
                 ControlsCard(
-                    vm, state, caps, listenOnly, modes,
+                    vm,
+                    state,
+                    caps,
+                    listenOnly,
+                    modes,
                     onPickMode = { showModePicker = true },
                     onPickBand = { showBandPicker = true },
                 )
                 TuningCard(vm, state, prefs, stepHz, onStep = { stepHz = it }, onAfVol = onAfVol)
                 MemoryCard(vm, mem, onManage = { showMemManager = true })
             }
-
         }
 
         // ── 底部固定：PTT / CQ / TUNE / REC（listen-only 整栏隐藏）────
         if (!listenOnly) {
             Column(
-                Modifier.fillMaxWidth()
+                Modifier
+                    .fillMaxWidth()
                     .testTag("secPtt")
                     .background(Brush.verticalGradient(listOf(Color(0xFF232323), MrrcColors.BgSecondary)))
                     .drawWithContent {
                         drawContent()
                         drawLine(MrrcSurfaces.Hairline, Offset(0f, 0.5f), Offset(size.width, 0.5f), 1f)
-                    }
-                    .padding(horizontal = 10.dp, vertical = m.bottomBarPadV),
+                    }.padding(horizontal = 10.dp, vertical = m.bottomBarPadV),
             ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                vm.pttManager?.let { PTTButton(it, Modifier.weight(1f).height(m.pttHeight).testTag("btnPtt")) }
-                Spacer(Modifier.width(8.dp))
-                if (cqAvailable) {
-                    val calling = cq?.state == "calling"
-                    val cqShape = RoundedCornerShape(14.dp)
-                    val cqInteraction = remember { MutableInteractionSource() }
-                    val cqPressed by cqInteraction.collectIsPressedAsState()
-                    Box(
-                        Modifier.width(m.auxButtonSize).height(m.auxButtonSize)
-                            .graphicsLayer { val k = if (cqPressed) 0.95f else 1f; scaleX = k; scaleY = k }
-                            .clip(cqShape)
-                            .background(
-                                if (calling) Brush.verticalGradient(listOf(MrrcColors.Success.copy(alpha = 0.32f), MrrcColors.Success.copy(alpha = 0.12f)))
-                                else Brush.verticalGradient(listOf(MrrcSurfaces.Key, MrrcSurfaces.Panel)),
-                                cqShape,
-                            )
-                            .border(1.dp, MrrcColors.Success.copy(alpha = if (calling) 1f else 0.55f), cqShape)
-                            .clickable(interactionSource = cqInteraction, indication = ripple()) { if (calling) vm.abortCq() else vm.startCq() },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            if (calling) "%.0fs".format(Locale.US, cq?.elapsedS ?: 0.0) else "CQ",
-                            color = MrrcColors.Success, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                }
-                val tuneShape = RoundedCornerShape(14.dp)
-                val tuneInteraction = remember { MutableInteractionSource() }
-                val tunePressed by tuneInteraction.collectIsPressedAsState()
-                val tuning = state.tunerStatus != 0
-                Box(
-                    Modifier.width(m.auxButtonSize).height(m.auxButtonSize)
-                        .graphicsLayer { val k = if (tunePressed) 0.95f else 1f; scaleX = k; scaleY = k }
-                        .clip(tuneShape)
-                        .background(
-                            Brush.verticalGradient(
-                                if (tuning) listOf(MrrcColors.Warning, Color(0xFFB45309))
-                                else listOf(MrrcColors.Warning.copy(alpha = 0.85f), MrrcColors.Warning.copy(alpha = 0.55f))
-                            ),
-                            tuneShape,
-                        )
-                        .border(1.dp, MrrcColors.Warning, tuneShape)
-                        .clickable(interactionSource = tuneInteraction, indication = ripple()) { vm.sendSet("tune", !tuning) },
-                    contentAlignment = Alignment.Center,
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("TUNE", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-                // REC —— 摆位照抄手机网页版底栏（`PTT ｜ CQ · TUNE · REC`，见 ft710.css
-                // 的 `.record-button`）：单击**直通**开关录音，长按才开列表。
-                // 网页一侧是 `recordBtn.click → sendCommand('recording', !rec.recording)`，
-                // 列表在 ☰ 菜单 → 录音；这里用 App 既有的长按惯例承载列表入口（`⋯`/记忆格
-                // 长按删除同一套手势），于是顶栏不必再挂一个 ⏺。快捷键的语义描述仍由服务端
-                // 广播的 `recording` 快照驱动（两台设备看到的状态一致，不是本地计时器）。
-                if (recAvailable) {
+                    vm.pttManager?.let { PTTButton(it, Modifier.weight(1f).height(m.pttHeight).testTag("btnPtt")) }
                     Spacer(Modifier.width(8.dp))
-                    val recShape = RoundedCornerShape(14.dp)
-                    val recInteraction = remember { MutableInteractionSource() }
-                    val recPressed by recInteraction.collectIsPressedAsState()
-                    val recording = rec.recording
-                    Box(
-                        Modifier.width(m.auxButtonSize).height(m.auxButtonSize)
-                            .testTag("btnRec")
-                            .graphicsLayer {
-                                val k = if (recPressed) 0.95f else 1f
-                                scaleX = k; scaleY = k
-                            }
-                            .clip(recShape)
-                            .background(
-                                if (recording) Brush.verticalGradient(listOf(MrrcColors.Danger, Color(0xFFB91C1C)))
-                                else Brush.verticalGradient(listOf(MrrcSurfaces.Key, MrrcSurfaces.Panel)),
-                                recShape,
+                    if (cqAvailable) {
+                        val calling = cq?.state == "calling"
+                        val cqShape = RoundedCornerShape(14.dp)
+                        val cqInteraction = remember { MutableInteractionSource() }
+                        val cqPressed by cqInteraction.collectIsPressedAsState()
+                        Box(
+                            Modifier
+                                .width(m.auxButtonSize)
+                                .height(m.auxButtonSize)
+                                .graphicsLayer {
+                                    val k = if (cqPressed) 0.95f else 1f
+                                    scaleX = k
+                                    scaleY = k
+                                }.clip(cqShape)
+                                .background(
+                                    if (calling) {
+                                        Brush.verticalGradient(
+                                            listOf(MrrcColors.Success.copy(alpha = 0.32f), MrrcColors.Success.copy(alpha = 0.12f)),
+                                        )
+                                    } else {
+                                        Brush.verticalGradient(listOf(MrrcSurfaces.Key, MrrcSurfaces.Panel))
+                                    },
+                                    cqShape,
+                                ).border(1.dp, MrrcColors.Success.copy(alpha = if (calling) 1f else 0.55f), cqShape)
+                                .clickable(
+                                    interactionSource = cqInteraction,
+                                    indication = ripple(),
+                                ) { if (calling) vm.abortCq() else vm.startCq() },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (calling) "%.0fs".format(Locale.US, cq?.elapsedS ?: 0.0) else "CQ",
+                                color = MrrcColors.Success,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
                             )
-                            .border(1.dp, if (recording) MrrcColors.Danger else MrrcSurfaces.Hairline, recShape)
-                            .combinedClickable(
-                                interactionSource = recInteraction,
-                                indication = ripple(),
-                                onClick = { if (recording) vm.stopRecording() else vm.startRecording() },
-                                onLongClick = { showRecPanel = true },
-                            ),
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    val tuneShape = RoundedCornerShape(14.dp)
+                    val tuneInteraction = remember { MutableInteractionSource() }
+                    val tunePressed by tuneInteraction.collectIsPressedAsState()
+                    val tuning = state.tunerStatus != 0
+                    Box(
+                        Modifier
+                            .width(m.auxButtonSize)
+                            .height(m.auxButtonSize)
+                            .graphicsLayer {
+                                val k = if (tunePressed) 0.95f else 1f
+                                scaleX = k
+                                scaleY = k
+                            }.clip(tuneShape)
+                            .background(
+                                Brush.verticalGradient(
+                                    if (tuning) {
+                                        listOf(MrrcColors.Warning, Color(0xFFB45309))
+                                    } else {
+                                        listOf(MrrcColors.Warning.copy(alpha = 0.85f), MrrcColors.Warning.copy(alpha = 0.55f))
+                                    },
+                                ),
+                                tuneShape,
+                            ).border(1.dp, MrrcColors.Warning, tuneShape)
+                            .clickable(interactionSource = tuneInteraction, indication = ripple()) { vm.sendSet("tune", !tuning) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            if (recording) "STOP" else "REC",
-                            color = if (recording) Color.White else MrrcColors.TextPrimary,
-                            fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center, maxLines = 1,
-                        )
+                        Text("TUNE", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    // REC —— 摆位照抄手机网页版底栏（`PTT ｜ CQ · TUNE · REC`，见 ft710.css
+                    // 的 `.record-button`）：单击**直通**开关录音，长按才开列表。
+                    // 网页一侧是 `recordBtn.click → sendCommand('recording', !rec.recording)`，
+                    // 列表在 ☰ 菜单 → 录音；这里用 App 既有的长按惯例承载列表入口（`⋯`/记忆格
+                    // 长按删除同一套手势），于是顶栏不必再挂一个 ⏺。快捷键的语义描述仍由服务端
+                    // 广播的 `recording` 快照驱动（两台设备看到的状态一致，不是本地计时器）。
+                    if (recAvailable) {
+                        Spacer(Modifier.width(8.dp))
+                        val recShape = RoundedCornerShape(14.dp)
+                        val recInteraction = remember { MutableInteractionSource() }
+                        val recPressed by recInteraction.collectIsPressedAsState()
+                        val recording = rec.recording
+                        Box(
+                            Modifier
+                                .width(m.auxButtonSize)
+                                .height(m.auxButtonSize)
+                                .testTag("btnRec")
+                                .graphicsLayer {
+                                    val k = if (recPressed) 0.95f else 1f
+                                    scaleX = k
+                                    scaleY = k
+                                }.clip(recShape)
+                                .background(
+                                    if (recording) {
+                                        Brush.verticalGradient(listOf(MrrcColors.Danger, Color(0xFFB91C1C)))
+                                    } else {
+                                        Brush.verticalGradient(listOf(MrrcSurfaces.Key, MrrcSurfaces.Panel))
+                                    },
+                                    recShape,
+                                ).border(1.dp, if (recording) MrrcColors.Danger else MrrcSurfaces.Hairline, recShape)
+                                .combinedClickable(
+                                    interactionSource = recInteraction,
+                                    indication = ripple(),
+                                    onClick = { if (recording) vm.stopRecording() else vm.startRecording() },
+                                    onLongClick = { showRecPanel = true },
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                if (recording) "STOP" else "REC",
+                                color = if (recording) Color.White else MrrcColors.TextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
-            }
             }
         }
     }
@@ -454,7 +554,10 @@ fun MainScreen(
         FrequencyInputDialog(
             currentHz = state.activeFrequency,
             onDismiss = { showFreqInput = false },
-            onSubmit = { hz -> vm.sendFreqHz(hz); showFreqInput = false },
+            onSubmit = { hz ->
+                vm.sendFreqHz(hz)
+                showFreqInput = false
+            },
         )
     }
     if (showBandPicker) {
@@ -465,7 +568,8 @@ fun MainScreen(
     }
     if (showModePicker) {
         ModePickerDialog(modes, state.modeName, onDismiss = { showModePicker = false }) { m ->
-            vm.setMode(m); showModePicker = false
+            vm.setMode(m)
+            showModePicker = false
         }
     }
     if (showMemManager) {
@@ -483,7 +587,11 @@ fun MainScreen(
 
 /** 主频内凹显示屏（竖屏在 S 表左侧，横屏在瀑布左侧）。高度由调用方**显式**给。 */
 @Composable
-private fun FreqBezel(state: RadioState, modifier: Modifier, onClick: () -> Unit) {
+private fun FreqBezel(
+    state: RadioState,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
     DisplayBezel(
         modifier = modifier.clickable { onClick() }.testTag("freqBezel"),
         contentAlignment = Alignment.Center,
@@ -518,7 +626,14 @@ private fun MetersCard(
     Panel(m.panelPadH, m.panelPadV, m.innerGap, tag = "secMeters", modifier = modifier) {
         // ── 仪表：PWR/ALC 两列，SWR/Id/Vd 三列 ───────────────────
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            MeterCell("PWR", state.powerWatts, 100f, MrrcColors.TextPrimary, "%.1f W".format(Locale.US, state.powerWatts), Modifier.weight(1f))
+            MeterCell(
+                "PWR",
+                state.powerWatts,
+                100f,
+                MrrcColors.TextPrimary,
+                "%.1f W".format(Locale.US, state.powerWatts),
+                Modifier.weight(1f),
+            )
             MeterCell("ALC", state.alcPct, 100f, MrrcColors.TextPrimary, "%.0f".format(Locale.US, state.alcPct), Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -532,27 +647,52 @@ private fun MetersCard(
         // ── ATR1000 行（web atr-row；未启用时整行隐藏；天调参数并进本行，不再单独一行）──
         if (atrEnabled) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                MeterCell("ATR", atr?.power ?: 0.0, 120f, MrrcColors.Warning,
-                    "%.0f W".format(Locale.US, atr?.power ?: 0.0), Modifier.weight(1f))
-                MeterCell("SWR", atr?.swr ?: 0.0, 5f, MrrcColors.Success,
-                    if ((atr?.swr ?: 0.0) > 0) "%.1f".format(Locale.US, atr!!.swr) else "-", Modifier.weight(1f))
+                MeterCell(
+                    "ATR",
+                    atr?.power ?: 0.0,
+                    120f,
+                    MrrcColors.Warning,
+                    "%.0f W".format(Locale.US, atr?.power ?: 0.0),
+                    Modifier.weight(1f),
+                )
+                MeterCell(
+                    "SWR",
+                    atr?.swr ?: 0.0,
+                    5f,
+                    MrrcColors.Success,
+                    if ((atr?.swr ?: 0.0) > 0) "%.1f".format(Locale.US, atr!!.swr) else "-",
+                    Modifier.weight(1f),
+                )
                 Box(Modifier.weight(1.1f).height(m.meterCellHeight), contentAlignment = Alignment.Center) {
                     Text(
-                        if (atr == null || !atr!!.connected) "ATR 离线"
-                        else "${if (atr!!.sw == 1) "CL" else "LC"} L=${atr!!.ind} C=${atr!!.cap}${if (atr!!.tuning) " ⋯" else ""}",
-                        color = MrrcColors.TextSecondary, fontSize = 9.sp, fontFamily = MonoFont,
-                        textAlign = TextAlign.Center, maxLines = 2, lineHeight = 10.sp,
+                        if (atr == null || !atr!!.connected) {
+                            "ATR 离线"
+                        } else {
+                            "${if (atr!!.sw == 1) "CL" else "LC"} L=${atr!!.ind} C=${atr!!.cap}${if (atr!!.tuning) " ⋯" else ""}"
+                        },
+                        color = MrrcColors.TextSecondary,
+                        fontSize = 9.sp,
+                        fontFamily = MonoFont,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        lineHeight = 10.sp,
                     )
                 }
                 Box(
-                    Modifier.weight(1f).height(m.meterCellHeight)
+                    Modifier
+                        .weight(1f)
+                        .height(m.meterCellHeight)
                         .background(MrrcColors.BgSecondary, RoundedCornerShape(6.dp))
                         .border(1.dp, MrrcColors.Border, RoundedCornerShape(6.dp))
                         .clickable(enabled = !atrTuning) { vm.atrTune() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(if (atrTuning) "···" else "TUNE", color = MrrcColors.Accent,
-                        fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (atrTuning) "···" else "TUNE",
+                        color = MrrcColors.Accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
         }
@@ -630,7 +770,14 @@ private fun TuningCard(
             PadBtn("◀◀", Modifier.weight(1f)) { vm.setFrequencyStep(-stepHz * 10) }
             PadBtn("◀", Modifier.weight(1f)) { vm.setFrequencyStep(-stepHz) }
             PadBtn(fmtStep(stepHz), Modifier.weight(1.5f), active = true) {
-                onStep(when (stepHz) { 10L -> 100L; 100L -> 1_000L; 1_000L -> 10_000L; else -> 10L })
+                onStep(
+                    when (stepHz) {
+                        10L -> 100L
+                        100L -> 1_000L
+                        1_000L -> 10_000L
+                        else -> 10L
+                    },
+                )
             }
             PadBtn("▶", Modifier.weight(1f)) { vm.setFrequencyStep(stepHz) }
             PadBtn("▶▶", Modifier.weight(1f)) { vm.setFrequencyStep(stepHz * 10) }
@@ -668,23 +815,24 @@ private fun MemoryCard(
                     val memInteraction = remember(index) { MutableInteractionSource() }
                     val memPressed by memInteraction.collectIsPressedAsState()
                     Box(
-                        Modifier.weight(1f).height(m.memoryCellHeight).testTag("memCell$index")
+                        Modifier
+                            .weight(1f)
+                            .height(m.memoryCellHeight)
+                            .testTag("memCell$index")
                             .graphicsLayer {
                                 val k = if (memPressed) 0.97f else 1f
-                                scaleX = k; scaleY = k
-                            }
-                            .clip(memShape)
+                                scaleX = k
+                                scaleY = k
+                            }.clip(memShape)
                             .background(if (ch != null) MrrcColors.AccentDim.copy(alpha = 0.10f) else MrrcSurfaces.Key)
                             .background(
                                 Brush.verticalGradient(listOf(MrrcSurfaces.Hairline, Color.Transparent)),
                                 memShape,
-                            )
-                            .border(
+                            ).border(
                                 1.dp,
                                 if (ch != null) MrrcColors.Accent.copy(alpha = 0.55f) else MrrcSurfaces.Stroke,
                                 memShape,
-                            )
-                            .combinedClickable(
+                            ).combinedClickable(
                                 interactionSource = memInteraction,
                                 indication = ripple(),
                                 onClick = { vm.recallMemory(index) },
@@ -696,15 +844,20 @@ private fun MemoryCard(
                         // 单行之后每格只剩一个字符串，字号可以放开到 11sp（原来两行只有 7.5sp）。
                         // 仍然强制 maxLines=1 + softWrap=false + Ellipsis：
                         // 格高固定，一换行整格就顶变形。
-                        val text = if (ch != null) "%.3f".format(Locale.US, ch.freq / 1e6)
-                                     else "M${index + 1}"
+                        val text =
+                            if (ch != null) {
+                                "%.3f".format(Locale.US, ch.freq / 1e6)
+                            } else {
+                                "M${index + 1}"
+                            }
                         Text(
                             text,
                             color = if (ch != null) MrrcColors.Accent else MrrcColors.TextMuted,
                             fontSize = m.memoryFreqFont(text).sp,
                             fontFamily = MonoFont,
                             fontWeight = if (ch != null) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1, softWrap = false,
+                            maxLines = 1,
+                            softWrap = false,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
@@ -712,7 +865,9 @@ private fun MemoryCard(
                 // 记忆管理入口：图标，不占文字（原先藏在被删掉的分区标题里）
                 if (row == 0) {
                     Box(
-                        Modifier.width(m.memoryManageWidth).height(m.memoryCellHeight)
+                        Modifier
+                            .width(m.memoryManageWidth)
+                            .height(m.memoryCellHeight)
                             .clip(RoundedCornerShape(10.dp))
                             .background(MrrcSurfaces.Key)
                             .border(1.dp, MrrcSurfaces.Stroke, RoundedCornerShape(10.dp))
@@ -745,61 +900,81 @@ private fun PadBtn(
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val bg = when {
-        danger -> MrrcColors.Danger.copy(alpha = 0.16f)
-        active -> MrrcColors.AccentDim
-        else -> MrrcSurfaces.Key
-    }
-    val bd = when {
-        danger -> MrrcColors.Danger.copy(alpha = 0.85f)
-        active -> MrrcColors.Accent
-        else -> MrrcSurfaces.Stroke
-    }
-    val fg = when {
-        danger -> MrrcColors.Danger
-        active -> MrrcColors.Accent
-        else -> MrrcColors.TextPrimary
-    }
+    val bg =
+        when {
+            danger -> MrrcColors.Danger.copy(alpha = 0.16f)
+            active -> MrrcColors.AccentDim
+            else -> MrrcSurfaces.Key
+        }
+    val bd =
+        when {
+            danger -> MrrcColors.Danger.copy(alpha = 0.85f)
+            active -> MrrcColors.Accent
+            else -> MrrcSurfaces.Stroke
+        }
+    val fg =
+        when {
+            danger -> MrrcColors.Danger
+            active -> MrrcColors.Accent
+            else -> MrrcColors.TextPrimary
+        }
     Box(
-        modifier.height(btnHeight ?: LocalScreenMetrics.current.padBtnHeight).defaultMinSize(minWidth = 30.dp)
+        modifier
+            .height(btnHeight ?: LocalScreenMetrics.current.padBtnHeight)
+            .defaultMinSize(minWidth = 30.dp)
             // 按下去：轻微缩小 + 变暗，做出物理键的手感
             .graphicsLayer {
                 val k = if (pressed) 0.96f else 1f
-                scaleX = k; scaleY = k; alpha = if (pressed) 0.82f else 1f
-            }
-            .clip(MrrcSurfaces.KeyRadius)
+                scaleX = k
+                scaleY = k
+                alpha = if (pressed) 0.82f else 1f
+            }.clip(MrrcSurfaces.KeyRadius)
             .background(bg)
             .background(Brush.verticalGradient(listOf(MrrcSurfaces.Hairline, Color.Transparent)), MrrcSurfaces.KeyRadius)
             .border(1.dp, bd, MrrcSurfaces.KeyRadius)
             .then(
                 if (onLongClick != null) {
                     Modifier.combinedClickable(
-                        interactionSource = interaction, indication = ripple(),
-                        onClick = onClick, onLongClick = onLongClick,
+                        interactionSource = interaction,
+                        indication = ripple(),
+                        onClick = onClick,
+                        onLongClick = onLongClick,
                     )
                 } else {
                     Modifier.clickable(interactionSource = interaction, indication = ripple()) { onClick() }
-                }
+                },
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = fg, fontSize = fontSize, fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.4.sp, maxLines = 1)
+        Text(
+            label,
+            color = fg,
+            fontSize = fontSize,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.4.sp,
+            maxLines = 1,
+        )
     }
 }
 
 @Composable
-private fun SmallChip(label: String, on: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun SmallChip(
+    label: String,
+    on: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val pill = RoundedCornerShape(percent = 50)
     Box(
-        modifier.height(LocalScreenMetrics.current.chipHeight)
+        modifier
+            .height(LocalScreenMetrics.current.chipHeight)
             .graphicsLayer {
                 val k = if (pressed) 0.95f else 1f
-                scaleX = k; scaleY = k
-            }
-            .clip(pill)
+                scaleX = k
+                scaleY = k
+            }.clip(pill)
             .background(if (on) MrrcColors.AccentDim else MrrcSurfaces.Key)
             .border(1.dp, if (on) MrrcColors.Accent.copy(alpha = 0.9f) else MrrcSurfaces.Stroke, pill)
             .clickable(interactionSource = interaction, indication = ripple()) { onClick() },
@@ -832,15 +1007,18 @@ private fun SpectrumPanel(
 ) {
     val waterfall by vm.waterfall.collectAsState()
     val fft by vm.fft.collectAsState()
-        val m = LocalScreenMetrics.current
+    val m = LocalScreenMetrics.current
     // 尺寸由调用方给：竖屏 = 页宽 × 频谱高度，横屏 = 仪表行里的 `weight(1f) + 满高`。
     // 两种摆位共用**同一份**内容，不存在第二条瀑布渲染路径。
     DisplayBezel(modifier = modifier.testTag("secSpectrum")) {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) {
                 WaterfallCanvas(
-                    rows = waterfall, fft = fft,
-                    theme = prefs.scopeTheme, floor = prefs.scopeFloor, ceil = prefs.scopeCeil,
+                    rows = waterfall,
+                    fft = fft,
+                    theme = prefs.scopeTheme,
+                    floor = prefs.scopeFloor,
+                    ceil = prefs.scopeCeil,
                     fftFraction = prefs.fftHeight.toFloat() / (prefs.fftHeight + prefs.wfHeight).coerceAtLeast(1),
                     modifier = Modifier.fillMaxSize(),
                     onQsyFraction = { vm.qsy(it) },
@@ -874,16 +1052,18 @@ private fun HeaderIconButton(
     danger: Boolean = false,
     onClick: () -> Unit,
 ) {
-        val m = LocalScreenMetrics.current
-    val color = when {
-        danger -> MrrcColors.Danger
-        active -> MrrcColors.Accent
-        else -> MrrcColors.TextSecondary
-    }
+    val m = LocalScreenMetrics.current
+    val color =
+        when {
+            danger -> MrrcColors.Danger
+            active -> MrrcColors.Accent
+            else -> MrrcColors.TextSecondary
+        }
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     Box(
-        Modifier.size(m.headerIconTap)
+        Modifier
+            .size(m.headerIconTap)
             .clip(RoundedCornerShape(6.dp))
             .clickable(interactionSource = interaction, indication = ripple(), onClick = onClick)
             .semantics { contentDescription = description }
@@ -903,10 +1083,14 @@ private fun HeaderIconButton(
                         drawLine(color, Offset(i, y), Offset(g - i, y), strokeWidth = st, cap = StrokeCap.Round)
                     }
                 }
+
                 HeaderIconKind.FULLSCREEN -> {
                     // 四角括号（比"方框"更像全屏，且在 10dp 下不糊）
                     val arm = g * 0.34f
-                    val l = i; val r = g - i; val t = i; val b = g - i
+                    val l = i
+                    val r = g - i
+                    val t = i
+                    val b = g - i
                     drawLine(color, Offset(l, t), Offset(l + arm, t), st, cap = StrokeCap.Round)
                     drawLine(color, Offset(l, t), Offset(l, t + arm), st, cap = StrokeCap.Round)
                     drawLine(color, Offset(r, t), Offset(r - arm, t), st, cap = StrokeCap.Round)
@@ -916,16 +1100,26 @@ private fun HeaderIconButton(
                     drawLine(color, Offset(r, b), Offset(r - arm, b), st, cap = StrokeCap.Round)
                     drawLine(color, Offset(r, b), Offset(r, b - arm), st, cap = StrokeCap.Round)
                 }
+
                 HeaderIconKind.POWER -> {
                     // 标准电源符号：顶部留缺口的圆环 + 中间竖线
                     // 0° = 三点钟方向、顺时针；缺口开在正上方（-120°~-60°）
                     drawArc(
-                        color = color, startAngle = -60f, sweepAngle = 300f, useCenter = false,
-                        topLeft = Offset(i, i), size = Size(g - st, g - st),
+                        color = color,
+                        startAngle = -60f,
+                        sweepAngle = 300f,
+                        useCenter = false,
+                        topLeft = Offset(i, i),
+                        size = Size(g - st, g - st),
                         style = Stroke(width = st, cap = StrokeCap.Round),
                     )
-                    drawLine(color, Offset(g / 2f, i * 0.6f), Offset(g / 2f, g * 0.52f),
-                        strokeWidth = st, cap = StrokeCap.Round)
+                    drawLine(
+                        color,
+                        Offset(g / 2f, i * 0.6f),
+                        Offset(g / 2f, g * 0.52f),
+                        strokeWidth = st,
+                        cap = StrokeCap.Round,
+                    )
                 }
             }
         }
@@ -957,9 +1151,10 @@ private fun SmeterArc(
     modifier: Modifier = Modifier,
 ) {
     BoxWithConstraints(
-        modifier.background(MrrcSurfaces.Inset, RoundedCornerShape(6.dp))
+        modifier
+            .background(MrrcSurfaces.Inset, RoundedCornerShape(6.dp))
             .border(1.dp, MrrcSurfaces.Stroke, RoundedCornerShape(6.dp))
-            .padding(horizontal = 5.dp, vertical = 4.dp)
+            .padding(horizontal = 5.dp, vertical = 4.dp),
     ) {
         // 缩放基准取短边：手机与平板共用一份代码
         val base = minOf(maxWidth.value, maxHeight.value)
@@ -967,25 +1162,36 @@ private fun SmeterArc(
         val readFs = (base * 0.155f).coerceIn(11f, 20f)
         val measurer = rememberTextMeasurer(cacheSize = 16)
         // 数字近白（参考图是纯白）但压一档透明度，让 S 值读数当主角
-        val labelStyle = TextStyle(
-            color = Color.White.copy(alpha = 0.78f), fontSize = labelFs.sp, fontFamily = MonoFont,
-        )
+        val labelStyle =
+            TextStyle(
+                color = Color.White.copy(alpha = 0.78f),
+                fontSize = labelFs.sp,
+                fontFamily = MonoFont,
+            )
         val labels = SMeter.LABELS.map { if (it.startsWith("S")) it.drop(1) else it }
         val anchors = SMeter.MARKERS.indices.filter { it % 2 == 0 }
         val layouts = remember(labelFs) { labels.map { measurer.measure(AnnotatedString(it), labelStyle) } }
-        val valueStyle = TextStyle(
-            color = MrrcColors.Accent, fontSize = readFs.sp,
-            fontFamily = MonoFont, fontWeight = FontWeight.Bold,
-        )
-        val dbStyle = TextStyle(
-            color = MrrcColors.TextSecondary, fontSize = (readFs * 0.6f).sp, fontFamily = MonoFont,
-        )
-        val valueLayout = remember(readFs, sUnit) {
-            measurer.measure(AnnotatedString(if (sUnit.isEmpty()) "S0" else sUnit), valueStyle)
-        }
-        val dbLayout = remember(readFs, levelDb) {
-            measurer.measure(AnnotatedString("%.0f dB".format(Locale.US, levelDb)), dbStyle)
-        }
+        val valueStyle =
+            TextStyle(
+                color = MrrcColors.Accent,
+                fontSize = readFs.sp,
+                fontFamily = MonoFont,
+                fontWeight = FontWeight.Bold,
+            )
+        val dbStyle =
+            TextStyle(
+                color = MrrcColors.TextSecondary,
+                fontSize = (readFs * 0.6f).sp,
+                fontFamily = MonoFont,
+            )
+        val valueLayout =
+            remember(readFs, sUnit) {
+                measurer.measure(AnnotatedString(if (sUnit.isEmpty()) "S0" else sUnit), valueStyle)
+            }
+        val dbLayout =
+            remember(readFs, levelDb) {
+                measurer.measure(AnnotatedString("%.0f dB".format(Locale.US, levelDb)), dbStyle)
+            }
 
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
@@ -1000,25 +1206,36 @@ private fun SmeterArc(
             val needleRoom = h * 0.16f
             // 弧度比参考图（rise/width≈0.118）稍浅，小面板上更耐看，且不挤掉指针区
             val rise = minOf(w * 0.10f, (h - needleRoom - arcPeakY).coerceAtLeast(2f))
-            val baseY = arcPeakY + rise              // 弧两端的 y（最低点）
-            val ctrlY = 2f * arcPeakY - baseY        // 让贝塞尔顶点正好落在 arcPeakY
+            val baseY = arcPeakY + rise // 弧两端的 y（最低点）
+            val ctrlY = 2f * arcPeakY - baseY // 让贝塞尔顶点正好落在 arcPeakY
+
             fun pt(t: Float) = Offset(SMeter.arcX(t, w), SMeter.arcY(t, baseY, ctrlY))
 
             val strokeW = (h * 0.035f).coerceIn(2.2f, 6f)
             val splitT = SMeter.MARKERS[9] / SMeter.RAW_MAX.toFloat()
 
-            fun arc(from: Float, to: Float): Path = Path().apply {
-                val n = 36
-                for (k in 0..n) {
-                    val q = pt(from + (to - from) * k / n)
-                    if (k == 0) moveTo(q.x, q.y) else lineTo(q.x, q.y)
+            fun arc(
+                from: Float,
+                to: Float,
+            ): Path =
+                Path().apply {
+                    val n = 36
+                    for (k in 0..n) {
+                        val q = pt(from + (to - from) * k / n)
+                        if (k == 0) moveTo(q.x, q.y) else lineTo(q.x, q.y)
+                    }
                 }
-            }
             // 两段弧：S 区近白、dB 区红
-            drawPath(arc(0f, splitT), Color.White.copy(alpha = 0.85f),
-                style = Stroke(strokeW, cap = StrokeCap.Round))
-            drawPath(arc(splitT, 1f), MrrcColors.Danger,
-                style = Stroke(strokeW, cap = StrokeCap.Round))
+            drawPath(
+                arc(0f, splitT),
+                Color.White.copy(alpha = 0.85f),
+                style = Stroke(strokeW, cap = StrokeCap.Round),
+            )
+            drawPath(
+                arc(splitT, 1f),
+                MrrcColors.Danger,
+                style = Stroke(strokeW, cap = StrokeCap.Round),
+            )
 
             // 刻度：向外（向上）辐射，两端外倾；S 区近白 / dB 区红
             SMeter.MARKERS.forEachIndexed { i, m ->
@@ -1028,9 +1245,13 @@ private fun SmeterArc(
                 val len = tickH * (if (major) 1f else 0.55f)
                 val tilt = (t - 0.5f) * len * 0.4f
                 drawLine(
-                    if (i <= 8) Color.White.copy(alpha = if (major) 0.72f else 0.34f)
-                    else MrrcColors.Danger.copy(alpha = if (major) 0.95f else 0.5f),
-                    q, Offset(q.x + tilt, q.y - len),
+                    if (i <= 8) {
+                        Color.White.copy(alpha = if (major) 0.72f else 0.34f)
+                    } else {
+                        MrrcColors.Danger.copy(alpha = if (major) 0.95f else 0.5f)
+                    },
+                    q,
+                    Offset(q.x + tilt, q.y - len),
                     strokeWidth = if (major) 1.3f else 1f,
                     cap = StrokeCap.Round,
                 )
@@ -1041,17 +1262,22 @@ private fun SmeterArc(
                 val t = SMeter.MARKERS[markIdx] / SMeter.RAW_MAX.toFloat()
                 val q = pt(t)
                 val lay = layouts[i]
-                drawText(lay, topLeft = Offset(
-                    (q.x - lay.size.width / 2f).coerceIn(0f, (w - lay.size.width).coerceAtLeast(0f)),
-                    q.y - tickH - lay.size.height - 1f,
-                ))
+                drawText(
+                    lay,
+                    topLeft =
+                        Offset(
+                            (q.x - lay.size.width / 2f).coerceIn(0f, (w - lay.size.width).coerceAtLeast(0f)),
+                            q.y - tickH - lay.size.height - 1f,
+                        ),
+                )
             }
 
             // 指针：从弧上当前位置垂到底部，略外倾
             val frac = SMeter.fraction(raw)
             val np = pt(frac)
             drawLine(
-                MrrcColors.Accent, np,
+                MrrcColors.Accent,
+                np,
                 Offset(np.x + (frac - 0.5f) * h * 0.10f, h),
                 strokeWidth = (strokeW * 0.42f).coerceIn(1.2f, 2.2f),
                 cap = StrokeCap.Round,
@@ -1063,18 +1289,33 @@ private fun SmeterArc(
         }
     }
 }
+
 @Composable
-private fun MeterCell(label: String, value: Double, max: Float, color: Color, text: String, modifier: Modifier = Modifier) {
+private fun MeterCell(
+    label: String,
+    value: Double,
+    max: Float,
+    color: Color,
+    text: String,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier.height(LocalScreenMetrics.current.meterCellHeight)
+        modifier
+            .height(LocalScreenMetrics.current.meterCellHeight)
             .clip(MrrcSurfaces.KeyRadius)
             .background(MrrcSurfaces.Key)
             .border(1.dp, MrrcSurfaces.Stroke, MrrcSurfaces.KeyRadius)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = MrrcColors.TextSecondary, fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.8.sp, modifier = Modifier.width(30.dp))
+        Text(
+            label,
+            color = MrrcColors.TextSecondary,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.8.sp,
+            modifier = Modifier.width(30.dp),
+        )
         Canvas(Modifier.weight(1f).height(6.dp)) {
             val r = size.height / 2f
             val frac = (value.toFloat() / max).coerceIn(0f, 1f)
@@ -1088,13 +1329,22 @@ private fun MeterCell(label: String, value: Double, max: Float, color: Color, te
             }
         }
         Spacer(Modifier.width(7.dp))
-        Text(text, color = MrrcColors.TextPrimary, fontSize = 10.sp, fontFamily = MonoFont,
-            textAlign = TextAlign.End, modifier = Modifier.width(46.dp))
+        Text(
+            text,
+            color = MrrcColors.TextPrimary,
+            fontSize = 10.sp,
+            fontFamily = MonoFont,
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(46.dp),
+        )
     }
 }
 
 @Composable
-private fun VolumeRow(afGain: Int, onCommit: (Int) -> Unit) {
+private fun VolumeRow(
+    afGain: Int,
+    onCommit: (Int) -> Unit,
+) {
     var local by remember { mutableStateOf<Float?>(null) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1103,17 +1353,27 @@ private fun VolumeRow(afGain: Int, onCommit: (Int) -> Unit) {
         Slider(
             value = local ?: afGain.toFloat(),
             onValueChange = { local = it },
-            onValueChangeFinished = { local?.let { v -> onCommit(v.toInt()) }; local = null },
+            onValueChangeFinished = {
+                local?.let { v -> onCommit(v.toInt()) }
+                local = null
+            },
             valueRange = 0f..255f,
             modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp),
-            colors = SliderDefaults.colors(
-                thumbColor = MrrcColors.Accent,
-                activeTrackColor = MrrcColors.Accent,
-                inactiveTrackColor = MrrcColors.Border,
-            ),
+            colors =
+                SliderDefaults.colors(
+                    thumbColor = MrrcColors.Accent,
+                    activeTrackColor = MrrcColors.Accent,
+                    inactiveTrackColor = MrrcColors.Border,
+                ),
         )
-        Text("${(local ?: afGain.toFloat()).toInt()}", color = MrrcColors.Accent, fontSize = 11.sp,
-            fontFamily = MonoFont, textAlign = TextAlign.End, modifier = Modifier.width(32.dp))
+        Text(
+            "${(local ?: afGain.toFloat()).toInt()}",
+            color = MrrcColors.Accent,
+            fontSize = 11.sp,
+            fontFamily = MonoFont,
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(32.dp),
+        )
     }
 }
 
@@ -1122,7 +1382,11 @@ private fun VolumeRow(afGain: Int, onCommit: (Int) -> Unit) {
  * 末两位（10Hz）淡化缩小，模仿真机面板的读数层次；字号由调用方按可用宽度算好传进来。
  */
 @Composable
-private fun FreqText(hz: Long, fitSp: Float, modifier: Modifier = Modifier) {
+private fun FreqText(
+    hz: Long,
+    fitSp: Float,
+    modifier: Modifier = Modifier,
+) {
     val s = fmtMhz(hz)
     val cut = s.lastIndexOf('.') + 1
     Box(modifier) {
@@ -1130,15 +1394,19 @@ private fun FreqText(hz: Long, fitSp: Float, modifier: Modifier = Modifier) {
             buildAnnotatedString {
                 withStyle(
                     SpanStyle(
-                        color = MrrcColors.Accent, fontSize = fitSp.sp,
-                        fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp,
-                    )
+                        color = MrrcColors.Accent,
+                        fontSize = fitSp.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                    ),
                 ) { append(s.substring(0, cut)) }
                 withStyle(
                     SpanStyle(
-                        color = MrrcColors.Accent.copy(alpha = 0.5f), fontSize = (fitSp * 0.86f).sp,
-                        fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp,
-                    )
+                        color = MrrcColors.Accent.copy(alpha = 0.5f),
+                        fontSize = (fitSp * 0.86f).sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                    ),
                 ) { append(s.substring(cut)) }
             },
             fontFamily = MonoFont,
@@ -1152,22 +1420,22 @@ private fun FreqText(hz: Long, fitSp: Float, modifier: Modifier = Modifier) {
 // ── 纯函数格式化（Web 同款）─────────────────────────────────────────
 
 /** Web 主频显示：2 位 MHz . 3 位 kHz . 2 位十Hz（例 07.013.50）。 */
-internal fun fmtMhz(hz: Long): String =
-    "%02d.%03d.%02d".format(Locale.US, hz / 1_000_000, (hz / 1000) % 1000, (hz % 1000) / 10)
+internal fun fmtMhz(hz: Long): String = "%02d.%03d.%02d".format(Locale.US, hz / 1_000_000, (hz / 1000) % 1000, (hz % 1000) / 10)
 
+internal fun fmtFilter(hz: Int): String = if (hz >= 1000) "%.1fk".format(Locale.US, hz / 1000f) else "${hz}Hz"
 
-internal fun fmtFilter(hz: Int): String =
-    if (hz >= 1000) "%.1fk".format(Locale.US, hz / 1000f) else "${hz}Hz"
-
-internal fun fmtStep(hz: Long): String =
-    if (hz >= 1000) "${hz / 1000}k" else "${hz}Hz"
+internal fun fmtStep(hz: Long): String = if (hz >= 1000) "${hz / 1000}k" else "${hz}Hz"
 
 /**
  * 频谱标尺：刻度按**真实频率位置**画（Web `renderFreqScale`），范围恒为 VFO ± span/2。
  * 用 `scope_start_freq` 会滞后（服务端恒 CENTER 模式，该字段不跟手）。
  */
 @Composable
-internal fun FreqScaleCanvas(vfoFreq: Long, spanHz: Long, modifier: Modifier = Modifier) {
+internal fun FreqScaleCanvas(
+    vfoFreq: Long,
+    spanHz: Long,
+    modifier: Modifier = Modifier,
+) {
     if (spanHz <= 0) return
     val measurer = rememberTextMeasurer()
     val ticks = remember(vfoFreq, spanHz) { FreqScale.ticks(vfoFreq, spanHz) }
@@ -1179,7 +1447,10 @@ internal fun FreqScaleCanvas(vfoFreq: Long, spanHz: Long, modifier: Modifier = M
             val x = frac * w
             drawLine(MrrcColors.Border, Offset(x, 0f), Offset(x, 4.dp.toPx()), 1f)
             val layout = measurer.measure(AnnotatedString(FreqScale.label(f, step)), tickStyle)
-            drawText(layout, topLeft = Offset((x - layout.size.width / 2f).coerceIn(0f, (w - layout.size.width).coerceAtLeast(0f)), 4.dp.toPx()))
+            drawText(
+                layout,
+                topLeft = Offset((x - layout.size.width / 2f).coerceIn(0f, (w - layout.size.width).coerceAtLeast(0f)), 4.dp.toPx()),
+            )
         }
     }
 }

@@ -1,1192 +1,1969 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="robots" content="noindex,nofollow">
-<meta name="theme-color" content="#141414">
-<title>MRRC Modern 盒子设置</title>
-<style>
-:root{
-  --bg:#141414; --card:#1e1e1e; --line:#333; --amber:#f59e0b;
-  --text:#eee; --dim:#9ca3af; --bad:#ef4444; --good:#22c55e;
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0}
-body{
-  background:var(--bg); color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",
-              "Microsoft YaHei",sans-serif;
-  font-size:16px; line-height:1.6;
-  padding:16px 14px calc(28px + env(safe-area-inset-bottom));
-  -webkit-text-size-adjust:100%;
-}
-.wrap{max-width:520px;margin:0 auto}
-header{text-align:center;margin:6px 0 18px}
-h1{font-size:22px;margin:0;color:var(--amber);letter-spacing:.02em}
-.sub{margin:4px 0 0;color:var(--dim);font-size:13px}
-.card{
-  background:var(--card);border:1px solid var(--line);border-radius:14px;
-  padding:16px;margin:0 0 14px;
-}
-.card h2{
-  font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px;
-}
-.step-no{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:22px;height:22px;border-radius:50%;background:var(--amber);
-  color:#000;font-size:13px;font-weight:700;flex:0 0 auto;
-}
-.hint{color:var(--dim);font-size:13px;margin:0 0 12px}
-label{display:block;font-size:13px;color:var(--dim);margin:12px 0 4px}
-input[type=password],input[type=text]{
-  width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
-  background:#111;color:var(--text);font-size:16px;
-}
-input:focus{outline:none;border-color:var(--amber)}
-button{
-  width:100%;padding:13px;margin-top:14px;border:none;border-radius:10px;
-  background:var(--amber);color:#000;font-size:16px;font-weight:700;cursor:pointer;
-}
-button:disabled{background:#3a3a3a;color:#777;cursor:not-allowed}
-button.ghost{background:transparent;color:var(--amber);border:1px solid var(--amber);font-weight:600}
-.msg{font-size:13px;margin-top:10px;min-height:18px}
-.msg.bad{color:var(--bad)}
-.msg.good{color:var(--good)}
-.saved{list-style:none;margin:10px 0 0;padding:0;border-top:1px solid var(--line)}
-.saved li.saved-row{display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.saved .saved-name{flex:1 1 40%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
-.saved button{width:auto;margin:0;padding:8px 10px;font-size:13px}
-.saved button.on{color:var(--good);border-color:var(--good)}
-.rows{list-style:none;margin:10px 0 0;padding:0;border-top:1px solid var(--line)}
-.rows li{border-bottom:1px solid var(--line)}
-.rows button{
-  width:100%;background:transparent;color:var(--text);border:none;border-radius:0;
-  margin:0;padding:13px 4px;font-weight:400;font-size:15px;text-align:left;
-  display:flex;align-items:center;gap:10px;
-}
-.rows button:active{background:#2a2a2a}
-.row{display:flex;gap:8px;align-items:stretch}
-.row input{flex:1 1 auto;min-width:0}
-.row button{width:auto;flex:0 0 auto;margin-top:0;padding:12px 16px;background:transparent;
-  color:var(--amber);border:1px solid var(--amber);font-weight:600;font-size:14px}
-.ssid{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sig{color:var(--dim);font-size:12px;flex:0 0 auto;letter-spacing:1px}
-.lock{color:var(--dim);font-size:12px;flex:0 0 auto}
-.picked{background:#2a2410 !important}
-.kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:3px 0}
-.kv b{font-weight:600;color:var(--text);text-align:right;word-break:break-all}
-.kv span{color:var(--dim);flex:0 0 auto}
-.pill{
-  display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;
-  background:#2d2410;color:var(--amber);border:1px solid #6b4d0f;
-}
-.pill.good{background:#0f2d1a;color:var(--good);border-color:#166534}
-.pill.bad{background:#2d0f0f;color:var(--bad);border-color:#7f1d1d}
-.banner{
-  background:#2d2410;border:1px solid #6b4d0f;border-radius:12px;
-  padding:12px;margin:0 0 14px;font-size:13px;color:#fbbf24;
-}
-.note{font-size:12.5px;color:var(--dim)}
-.note b{color:var(--text);font-weight:600}
-.note ol{margin:6px 0 0;padding-left:20px}
-.note li{margin:4px 0}
-.locked{opacity:.55}
-.overlay{
-  position:fixed;inset:0;background:rgba(10,10,10,.97);z-index:10;
-  display:flex;align-items:center;justify-content:center;padding:24px;
-}
-.overlay.hidden{display:none}
-.overlay .box{max-width:460px;width:100%;text-align:left}
-.spinner{
-  width:34px;height:34px;margin:0 auto 18px;border-radius:50%;
-  border:3px solid #3a3a3a;border-top-color:var(--amber);
-  animation:spin 0.9s linear infinite;
-}
-@keyframes spin{to{transform:rotate(360deg)}}
-.overlay h2{text-align:center;color:var(--amber);font-size:19px;margin:0 0 10px}
-.big{font-size:15px;margin:0 0 14px}
-code{
-  background:#111;border:1px solid var(--line);border-radius:6px;
-  padding:1px 6px;font-size:13px;word-break:break-all;
-}
-.errbox{
-  background:#2d0f0f;border:1px solid #7f1d1d;border-radius:12px;
-  padding:12px;margin:0 0 14px;font-size:13.5px;color:#fca5a5;
-}
-.hidden{display:none}
-footer{text-align:center;color:#555;font-size:11.5px;margin-top:18px}
-.panel{margin:0 0 14px}
-.panel h2{margin-bottom:8px}
-.grid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
-.grid .k{color:var(--dim)}
-.grid .v{text-align:right;word-break:break-all}
-.bad-text{color:var(--bad)}
-.good-text{color:var(--good)}
-select{
-  width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;
-  background:#111;color:var(--text);font-size:16px;
-}
-.bt-row{display:flex;gap:10px;align-items:center;justify-content:space-between;
-  padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
-.bt-row>span:first-child{font-family:ui-monospace,Menlo,monospace;font-size:13px;
-  word-break:break-all}
-.bt-meta{color:var(--dim);font-size:13px;white-space:nowrap}
-/* 音频电平卡片（AD-032）：一行一个 dB 滑块，值右对齐等宽，拖的时候不跳字。 */
-.lvl{display:flex;gap:10px;align-items:center;margin:12px 0 2px}
-.lvl label{flex:0 0 66px;margin:0;font-size:13px;color:var(--dim)}
-.lvl input[type=range]{flex:1 1 auto;min-width:0;accent-color:var(--amber)}
-.lvl .val{flex:0 0 62px;text-align:right;font-size:13px;
-  font-variant-numeric:tabular-nums;color:var(--text)}
-.lvl-note{color:var(--dim);font-size:12.5px;margin:2px 0 6px}
-.lvl-note b{color:var(--text);font-weight:600}
-</style>
-</head>
-<body>
-<div class="wrap">
-
-  <header>
-    <h1>MRRC Modern</h1>
-    <p class="sub">盒子设置</p>
-  </header>
-
-  <div id="banner" class="banner hidden">
-    <b>这台盒子还没有人设过口令。</b>在你设置之前，和它同网段的设备都能打开
-    <code>/setup</code>。请先完成 <a href="setup">初始化</a>。
-  </div>
-  <div id="errbox" class="errbox hidden"></div>
-
-  <section class="card panel">
-    <h2>盒子身份</h2>
-    <div class="grid">
-      <span class="k">名字</span><span class="v" id="id-name">—</span>
-      <span class="k">mDNS 名字</span><span class="v" id="id-mdns">—</span>
-      <span class="k">当前地址</span><span class="v" id="id-addr">—</span>
-      <span class="k">无线网卡 MAC</span><span class="v" id="id-mac">—</span>
-      <span class="k">时区</span><span class="v" id="id-tz">—</span>
-      <span class="k">已开机</span><span class="v" id="id-uptime">—</span>
-    </div>
-    <label for="name-input">改名字（会影响 mDNS 地址，改完请用新名字重新打开本页）</label>
-    <input id="name-input" type="text" placeholder="MRRC-Modern" spellcheck="false">
-    <button id="name-btn" type="button">保存名字</button>
-    <div id="name-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel">
-    <h2>网络体检 <span class="pill" id="net-pill">读取中…</span></h2>
-    <div class="grid" id="net-grid"></div>
-  </section>
-
-  <section class="card panel">
-    <h2>Wi-Fi <span class="note">（这台盒子只支持 2.4 GHz）</span></h2>
-    <div class="grid" id="wifi-grid"></div>
-
-    <label for="ssid-input">网络名（SSID）</label>
-    <input id="ssid-input" type="text" spellcheck="false" autocomplete="off"
-           placeholder="点下面的扫描结果带入，或直接手输（隐藏网络只能手输）">
-    <label for="psk">密码</label>
-    <div class="row">
-      <input id="psk" type="password" autocomplete="off"
-             placeholder="Wi-Fi 密码（开放网络可留空）">
-      <button id="psk-toggle" type="button" class="ghost">显示</button>
-    </div>
-    <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
-    <button id="save-btn" type="button" class="ghost">仅保存（不切换）</button>
-    <p class="note">如果现在正是通过 Wi-Fi 访问这台盒子，<b>本页会断开</b>。
-      稍后用 <code id="warn-mdns"></code> 重新打开本页看结果。</p>
-
-    <label>已保存的网络</label>
-    <ul class="saved" id="saved-list"></ul>
-    <button id="scan-btn" type="button" class="ghost">扫描附近的 Wi-Fi</button>
-    <ul class="rows" id="net-list"></ul>
-    <div id="wifi-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel">
-    <h2>遥控器 <span class="note">（蓝牙；按键直接调电台）</span></h2>
-    <button id="bt-scan" type="button">搜索附近的遥控器</button>
-    <div id="bt-list" class="bt-list"></div>
-    <div id="bt-msg" class="msg"></div>
-    <p class="note">
-      遥控器先进入配对模式：<b>同时长按「OK + 返回」约 5 秒</b>，指示灯快闪。
-      配对后按任意键就能用；不用 SSH。
-    </p>
-  </section>
-
-  <section class="card panel">
-    <h2>有线口</h2>
-    <p class="hint">改的如果正是你现在走的这条路，本页同样会断开。</p>
-    <label for="link-profile">连接</label>
-    <select id="link-profile"></select>
-    <label for="link-method">方式</label>
-    <select id="link-method">
-      <option value="auto">自动获取（DHCP）</option>
-      <option value="manual">静态地址</option>
-    </select>
-    <div id="link-manual" class="hidden">
-      <label for="link-address">地址/前缀</label>
-      <input id="link-address" type="text" placeholder="192.168.16.217/24" spellcheck="false">
-      <label for="link-gateway">网关（可留空）</label>
-      <input id="link-gateway" type="text" placeholder="192.168.16.1" spellcheck="false">
-    </div>
-    <button id="link-btn" type="button">应用</button>
-    <div id="link-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel" id="card-system">
-    <h2>盒子系统</h2>
-    <div class="grid" id="sys-grid"></div>
-    <div id="helper-note" class="note hidden">
-      这台设备上没有 root helper（桌面版就是这样），所以重启与改时区不可用。
-      网络相关的操作不受影响。
-    </div>
-    <label for="tz-select">时区</label>
-    <select id="tz-select"></select>
-    <button id="tz-btn" type="button">保存时区</button>
-    <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
-    <button id="svc-btn" type="button" class="ghost">重启服务（MRRC Modern 自己）</button>
-    <button id="reboot-btn" type="button" class="ghost">重启盒子（整台机器）</button>
-    <div id="sys-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel" id="card-update">
-    <h2>软件更新 <span class="pill" id="up-pill">读取中…</span></h2>
-    <p class="muted">
-      这台盒子跑的就是它自己那份源码树，所以「更新」是把新版本下载下来、校验、
-      覆盖、重启——不需要重刷镜像，也不需要 SSH。升级中会短暂断线（约十几秒）。
-    </p>
-    <div id="up-info" class="muted"></div>
-    <button id="up-check" type="button" class="ghost">检查更新</button>
-    <button id="up-apply" type="button" style="display:none">立即升级</button>
-    <div id="up-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel">
-    <h2>登录口令</h2>
-    <label for="pw1">新口令</label>
-    <input id="pw1" type="password" autocomplete="new-password">
-    <label for="pw2">再输入一次</label>
-    <input id="pw2" type="password" autocomplete="new-password">
-    <button id="pw-btn" type="button">保存口令</button>
-    <div id="pw-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel">
-    <h2>系统账号口令 <span class="note">（SSH / HDMI 登录用）</span></h2>
-    <label for="sysuser">账号</label>
-    <select id="sysuser">
-      <option value="root">root（最高权限）</option>
-      <option value="mrrc">mrrc（服务账号）</option>
-    </select>
-    <label for="syspass">新口令</label>
-    <input id="syspass" type="password" autocomplete="new-password"
-           placeholder="至少 8 位">
-    <label for="syspass2">再输入一次</label>
-    <input id="syspass2" type="password" autocomplete="new-password">
-    <button id="syspass-btn" type="button">改这个账号的口令</button>
-    <p class="note">上一节是<b>网页</b>口令；这里是 SSH 或 HDMI 控制台用的系统账号，
-      改完立刻生效，页面上不会回显。</p>
-    <div id="syspass-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel">
-    <h2>公网入口 <span class="pill" id="cloud-pill">读取中…</span></h2>
-    <p class="hint">填上你的呼号，向门户申请一个公网入口（<code id="cloud-portal">—</code>）。
-      批准由运维在门户完成；<b>不用守着本页</b>，盒子会自己每 30 秒查一次。</p>
-    <div class="grid" id="cloud-grid"></div>
-    <label for="cloud-callsign">呼号</label>
-    <input id="cloud-callsign" type="text" spellcheck="false" autocomplete="off"
-           placeholder="例如 BG1SB（改呼号 = 重新申请，旧入口不会自动迁移）">
-    <button id="cloud-apply" type="button">申请公网入口</button>
-    <div id="cloud-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel" id="card-audio">
-    <h2>音频电平</h2>
-    <p class="hint">这是<b>盒子自己的</b>两个增益：跨设备共享、重启保留，不是这台手机上的设置。</p>
-
-    <div class="lvl">
-      <label for="aud-tx">TX MIC</label>
-      <input id="aud-tx" type="range" min="-20" max="25" step="1" value="0">
-      <span class="val" id="aud-tx-val">0 dB</span>
-    </div>
-    <p class="lvl-note">只作用于<b>浏览器麦克风</b>：CQ 播放与 FT8 波形不受影响。</p>
-
-    <div class="lvl">
-      <label for="aud-rx">RX</label>
-      <input id="aud-rx" type="range" min="-20" max="30" step="1" value="0">
-      <span class="val" id="aud-rx-val">0 dB</span>
-    </div>
-    <p class="lvl-note">只作用于<b>下发到浏览器 / App</b> 的声音：录音、FT8 解码、盒子本地扬声器保持原生电平。
-      它与浏览器的 🔊 音量是<b>相乘</b>关系 —— 这里加多少，浏览器那边就回调多少，否则会糊成一片。</p>
-
-    <button id="aud-reset" type="button" class="ghost">复位 0 dB</button>
-    <div id="aud-msg" class="msg"></div>
-  </section>
-
-  <section class="card panel">
-    <h2>电台</h2>
-    <p class="hint">机型与串口的配置在控制界面的设置里，本页不重复一套。</p>
-    <a href="."><button type="button" class="ghost">打开控制界面</button></a>
-  </section>
-
-  <section class="card panel">
-    <h2>安全门禁 <span class="tag">只读</span></h2>
-    <p class="hint">这里只显示、不修改。改它们要走配置层和它的两步确认。</p>
-    <div id="safety"></div>
-  </section>
-
-  <footer>MRRC Modern · 盒子设置</footer>
-</div>
-
-<script src="box_api.js?v=1"></script>
-<script>
-(function () {
-  'use strict';
-  var state = { mdns: '', picked: '', helper: false };
-
-  function kv(container, key, value, kind) {
-    var k = document.createElement('span');
-    k.className = 'k';
-    k.textContent = key;
-    var v = document.createElement('span');
-    v.className = 'v' + (kind ? ' ' + kind : '');
-    v.textContent = value === '' || value === null || value === undefined
-      ? '（无）' : String(value);
-    container.appendChild(k);
-    container.appendChild(v);
-  }
-
-  function renderNetwork(net) {
-    var grid = document.querySelector('#net-grid');
-    grid.replaceChildren();
-    var pill = document.querySelector('#net-pill');
-    if (!net.nm_running) {
-      pill.textContent = 'NetworkManager 没在跑';
-      pill.className = 'pill bad';
-    } else if (!net.addresses.length) {
-      pill.textContent = '没有地址';
-      pill.className = 'pill bad';
-    } else {
-      pill.textContent = '已联网';
-      pill.className = 'pill good';
-    }
-    kv(grid, '地址', net.addresses.join('、'));
-    kv(grid, '网关', net.gateways.join('、'));
-    kv(grid, 'DNS', net.dns.join('、'));
-    kv(grid, 'Wi-Fi', net.wifi.ssid
-      ? net.wifi.ssid + '  ' + Box.signalText(net.wifi.signal) : '未连接');
-    net.devices.forEach(function (device) {
-      kv(grid, '网卡 ' + device.device,
-         device.state + (device.connection ? '  →  ' + device.connection : ''),
-         device.state === 'connected' ? 'good-text' : '');
-    });
-  }
-
-  function renderWifi(net) {
-    var grid = document.querySelector('#wifi-grid');
-    grid.replaceChildren();
-    if (!net.wifi.ssid) {
-      kv(grid, '当前', '没有连接任何 Wi-Fi');
-    } else {
-      kv(grid, '当前', net.wifi.ssid + '  ' + Box.signalText(net.wifi.signal));
-    }
-    renderSaved(net);
-  }
-
-  // 已保存的 Wi-Fi：改密码（填回上面的表单）、忘记、开/关自动连接。
-  // 全部按 DOM 节点构造 —— 这个页面禁止把 HTML 拼成字符串（守卫测试盯着）。
-  function renderSaved(net) {
-    var list = document.querySelector('#saved-list');
-    list.replaceChildren();
-    var saved = net.connections.filter(function (c) {
-      return c.type === '802-11-wireless' || c.type === 'wifi';
-    });
-    if (!saved.length) {
-      var empty = document.createElement('li');
-      empty.className = 'note';
-      empty.textContent = '还没有保存的 Wi-Fi。可以扫描后点选，也可以直接填名称保存'
-        + '（客户家的网络就手输）。';
-      list.appendChild(empty);
-      return;
-    }
-    saved.forEach(function (c) {
-      var row = document.createElement('li');
-      row.className = 'saved-row';
-
-      var name = document.createElement('span');
-      name.className = 'saved-name';
-      name.title = c.name;
-      name.textContent = c.name;
-      row.appendChild(name);
-
-      var auto = document.createElement('button');
-      auto.type = 'button';
-      auto.className = 'ghost' + (c.autoconnect ? ' on' : '');
-      auto.textContent = c.autoconnect ? '自动连接：开' : '自动连接：关';
-      auto.addEventListener('click', function () {
-        postWifi('/api/box/wifi/autoconnect',
-                 { ssid: c.name, enabled: !c.autoconnect },
-                 (c.autoconnect ? '已关掉「' : '已打开「') + c.name + '」的自动连接');
-      });
-      row.appendChild(auto);
-
-      var edit = document.createElement('button');
-      edit.type = 'button';
-      edit.className = 'ghost';
-      edit.textContent = '改密码';
-      edit.addEventListener('click', function () {
-        document.querySelector('#ssid-input').value = c.name;
-        document.querySelector('#psk').value = '';
-        document.querySelector('#psk').focus();
-        Box.message('#wifi-msg', '改好密码后点「仅保存（不切换）」', '');
-      });
-      row.appendChild(edit);
-
-      var forget = document.createElement('button');
-      forget.type = 'button';
-      forget.className = 'ghost';
-      forget.textContent = '忘记';
-      forget.addEventListener('click', function () {
-        postWifi('/api/box/wifi/forget', { ssid: c.name }, '已忘记「' + c.name + '」');
-      });
-      row.appendChild(forget);
-
-      list.appendChild(row);
-    });
-  }
-
-  function postWifi(path, body, okText) {
-    Box.api(path, { method: 'POST', body: body })
-      .then(function () { Box.message('#wifi-msg', okText, 'good'); reload(); })
-      .catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
-  }
-
-  function renderLink(net) {
-    var select = document.querySelector('#link-profile');
-    var previous = select.value;
-    select.replaceChildren();
-    // Wired profiles only: `net.connections` also holds the Wi-Fi profiles
-    // (the Wi-Fi panel above lists those), and a Wi-Fi name in a dropdown
-    // labelled for the wired card is a trap — picking it here tries to rewire
-    // the wrong interface.
-    net.connections.filter(function (c) {
-      return c.type.indexOf('ethernet') >= 0;
-    }).forEach(function (c) {
-      var option = document.createElement('option');
-      option.value = c.name;
-      option.textContent = c.name + '（' + c.type + '）';
-      select.appendChild(option);
-    });
-    if (previous) select.value = previous;
-  }
-
-  function renderSystem(system, helper) {
-    var grid = document.querySelector('#sys-grid');
-    grid.replaceChildren();
-    system.services.forEach(function (service) {
-      kv(grid, service.unit, service.active ? '运行中' : '未运行',
-         service.active ? 'good-text' : 'bad-text');
-    });
-    Box.setText('#id-uptime', Box.secondsLabel(system.uptime_s));
-    Box.setText('#id-tz', system.timezone || '（未知）');
-    Box.show('#helper-note', !helper);
-    ['#name-btn', '#tz-btn', '#reboot-btn'].forEach(function (selector) {
-      Box.disabled(selector, !helper);
-    });
-  }
-
-  function renderSafety(fields) {
-    var box = document.querySelector('#safety');
-    box.replaceChildren();
-    fields.forEach(function (field) {
-      var row = document.createElement('div');
-      row.className = 'field';
-      var key = document.createElement('div');
-      key.className = 'k';
-      key.textContent = field.key;
-      var value = document.createElement('div');
-      value.className = 'v';
-      value.textContent = field.value === '' ? '（未设置）' : field.value;
-      var note = document.createElement('div');
-      note.className = 'note';
-      note.textContent = field.note;
-      row.appendChild(key); row.appendChild(value); row.appendChild(note);
-      box.appendChild(row);
-    });
-  }
-
-  // 401 只有一个出口：回登录、并带上回来的路。两处调用点共用它（多写一遍
-  // 就是多一个拼错路径的地方）。用 replace 而不是 href：登录往返不该在历史里
-  // 留两级，否则返回键会把人送回刚刚 401 的页面。
-  function bounceToLogin() {
-    location.replace('/login?next=/settings');
-  }
-
-  // 公网入口：最小闭环。三个端点都是既有的 —— 只读状态、提交申请、查一次。
-  // “批准后自己接通”是服务端的事（_cloud_start_autoconnect 每 30 s 轮一次），
-  // 所以本页不需要一直开着；页面在这只是让状态不用刷新就变绿。
-  function renderCloud(cloud) {
-    var grid = document.querySelector('#cloud-grid');
-    var pill = document.querySelector('#cloud-pill');
-    grid.replaceChildren();
-    Box.setText('#cloud-portal', cloud.portal || '—');
-    if (cloud.entry) {
-      // 「已接通」只看配置里有没有入口字符串；隧道到底在不在跑是另一件事，
-      // 而 2026-10-22 就是这里骗了人：公网入口连着四天 502，本页写着「已接通」。
-      // 所以隧道断了连这个绿标一起变红——偶尔因为一次两秒的重启闪一下，
-      // 好过让同一屏上的两句话互相矛盾。
-      var tunnelUp = !!cloud.tunnel_running;
-      pill.textContent = tunnelUp ? '已接通' : '已接通 · 隧道中断';
-      pill.className = tunnelUp ? 'pill good' : 'pill bad';
-      kv(grid, '呼号', cloud.callsign || '—');
-      kv(grid, '入口', cloud.entry);
-      // 这一行无条件地显示（以前只在 tunnel_error 非空时才有）：
-      // 「没起来而且错误是空」恰恰是 frpc 缺失那种，也正是从前最安静的一种。
-      kv(grid, '隧道',
-         tunnelUp ? '运行中' : (cloud.tunnel_error || '未运行（稍候会自动重试）'),
-         tunnelUp ? 'good-text' : 'bad-text');
-      if (cloud.cert_reload_required) {
-        kv(grid, '提示', '证书刚换 —— 重启盒子后入口才生效', 'bad-text');
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#141414" />
+    <title>MRRC Modern 盒子设置</title>
+    <style>
+      :root {
+        --bg: #141414;
+        --card: #1e1e1e;
+        --line: #333;
+        --amber: #f59e0b;
+        --text: #eee;
+        --dim: #9ca3af;
+        --bad: #ef4444;
+        --good: #22c55e;
       }
-    } else if (cloud.has_token) {
-      pill.textContent = '等待批准';
-      pill.className = 'pill';
-      kv(grid, '呼号', cloud.callsign || '—');
-      kv(grid, '状态', '已提交，等待运维在门户批准');
-    } else {
-      pill.textContent = '未申请';
-      pill.className = 'pill';
-    }
-    var input = document.querySelector('#cloud-callsign');
-    if (input && !input.value && cloud.callsign) input.value = cloud.callsign;
-    Box.setText('#cloud-apply', cloud.has_token ? '查询状态' : '申请公网入口');
-  }
-
-  function loadCloud() {
-    return Box.api('/api/cloud/state').then(function (cloud) {
-      renderCloud(cloud);
-      if (cloud.has_token && !cloud.entry) setTimeout(pollCloud, 30000);
-    }).catch(function (error) {
-      if (error.status === 401) { bounceToLogin(); return; }
-      Box.message('#cloud-msg', error.message, 'bad');
-    });
-  }
-
-  function refreshCloud() {
-    return Box.api('/api/cloud/refresh', { method: 'POST' }).then(function (state) {
-      if (state.connected) {
-        Box.message('#cloud-msg', '已接通：' + (state.entry || ''), 'good');
-      } else if (state.status === 'rejected') {
-        Box.message('#cloud-msg', '门户没有通过这条申请 —— 请联系运维（可以换一个呼号）。', 'bad');
-      } else {
-        Box.message('#cloud-msg', '还没批准（' + (state.status || 'applied') + '）。', '');
+      * {
+        box-sizing: border-box;
       }
-      return loadCloud();
-    });
-  }
-
-  function pollCloud() {
-    Box.api('/api/cloud/state').then(function (cloud) {
-      renderCloud(cloud);
-      if (cloud.has_token && !cloud.entry) setTimeout(pollCloud, 30000);
-    }).catch(function () {});
-  }
-
-  Box.on('#cloud-apply', 'click', function () {
-    var callsign = (document.querySelector('#cloud-callsign').value || '').trim().toUpperCase();
-    if (!callsign) {
-      Box.message('#cloud-msg', '请先填呼号', 'bad');
-      return;
-    }
-    Box.disabled('#cloud-apply', true);
-    Box.api('/api/cloud/state').then(function (cloud) {
-      // 已经有令牌就不再申请：门户对同一呼号的重复申请是查重拒绍的
-      // （portal 的 store.apply），重提只会把“已存在申请”糊到用户脸上。
-      if (cloud.has_token) return refreshCloud();
-      return Box.api('/api/cloud/apply', { method: 'POST', body: { callsign: callsign } })
-        .then(function (reply) {
-          Box.message('#cloud-msg', '已提交（' + (reply.status || 'applied')
-            + '）。等运维在门户批准，盒子会自己接通。', 'good');
-          return loadCloud();
-        });
-    }).catch(function (error) {
-      Box.message('#cloud-msg', error.message, 'bad');
-    }).then(function () { Box.disabled('#cloud-apply', false); });
-  });
-
-  function load() {
-    Box.api('/api/box/status').then(function (data) {
-      state.mdns = data.identity.mdns || '';
-      state.helper = !!data.helper_available;
-      Box.setText('#id-name', data.identity.hostname || '—');
-      Box.setText('#id-mdns', state.mdns || '（不可用）');
-      // MAC 是这台机器的唯一号码（hub 那边只有呼号与证书指纹）：发货台账、售后认机
-      // 器都靠它。读不到时显示短横线，不编一个。
-      Box.setText('#id-mac', data.identity.wlan_mac || '—');
-      Box.setText('#id-addr', data.identity.addresses.join('、') || '（无）');
-      var warn = document.querySelector('#warn-mdns');
-      if (warn) warn.textContent = state.mdns || ('https://' + location.hostname + ':8888');
-      var input = document.querySelector('#name-input');
-      if (input && !input.value) input.value = data.identity.hostname || '';
-      Box.show('#banner', !!data.first_window_open);
-      renderNetwork(data.network);
-      renderWifi(data.network);
-      renderLink(data.network);
-      renderSystem(data.system, state.helper);
-      renderSafety(data.safety);
-      loadCloud();
-    }).catch(function (error) {
-      if (error.status === 401) {
-        bounceToLogin();
-        return;
+      html,
+      body {
+        margin: 0;
+        padding: 0;
       }
-      document.querySelector('#errbox').textContent = error.message;
-      Box.show('#errbox', true);
-    });
-  }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        padding: 16px 14px calc(28px + env(safe-area-inset-bottom));
+        -webkit-text-size-adjust: 100%;
+      }
+      .wrap {
+        max-width: 520px;
+        margin: 0 auto;
+      }
+      header {
+        text-align: center;
+        margin: 6px 0 18px;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0;
+        color: var(--amber);
+        letter-spacing: 0.02em;
+      }
+      .sub {
+        margin: 4px 0 0;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px;
+        margin: 0 0 14px;
+      }
+      .card h2 {
+        font-size: 15px;
+        margin: 0 0 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .step-no {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--amber);
+        color: #000;
+        font-size: 13px;
+        font-weight: 700;
+        flex: 0 0 auto;
+      }
+      .hint {
+        color: var(--dim);
+        font-size: 13px;
+        margin: 0 0 12px;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: var(--dim);
+        margin: 12px 0 4px;
+      }
+      input[type="password"],
+      input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #111;
+        color: var(--text);
+        font-size: 16px;
+      }
+      input:focus {
+        outline: none;
+        border-color: var(--amber);
+      }
+      button {
+        width: 100%;
+        padding: 13px;
+        margin-top: 14px;
+        border: none;
+        border-radius: 10px;
+        background: var(--amber);
+        color: #000;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:disabled {
+        background: #3a3a3a;
+        color: #777;
+        cursor: not-allowed;
+      }
+      button.ghost {
+        background: transparent;
+        color: var(--amber);
+        border: 1px solid var(--amber);
+        font-weight: 600;
+      }
+      .msg {
+        font-size: 13px;
+        margin-top: 10px;
+        min-height: 18px;
+      }
+      .msg.bad {
+        color: var(--bad);
+      }
+      .msg.good {
+        color: var(--good);
+      }
+      .saved {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        border-top: 1px solid var(--line);
+      }
+      .saved li.saved-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .saved .saved-name {
+        flex: 1 1 40%;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text);
+      }
+      .saved button {
+        width: auto;
+        margin: 0;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      .saved button.on {
+        color: var(--good);
+        border-color: var(--good);
+      }
+      .rows {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        border-top: 1px solid var(--line);
+      }
+      .rows li {
+        border-bottom: 1px solid var(--line);
+      }
+      .rows button {
+        width: 100%;
+        background: transparent;
+        color: var(--text);
+        border: none;
+        border-radius: 0;
+        margin: 0;
+        padding: 13px 4px;
+        font-weight: 400;
+        font-size: 15px;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .rows button:active {
+        background: #2a2a2a;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+      }
+      .row input {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .row button {
+        width: auto;
+        flex: 0 0 auto;
+        margin-top: 0;
+        padding: 12px 16px;
+        background: transparent;
+        color: var(--amber);
+        border: 1px solid var(--amber);
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .ssid {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sig {
+        color: var(--dim);
+        font-size: 12px;
+        flex: 0 0 auto;
+        letter-spacing: 1px;
+      }
+      .lock {
+        color: var(--dim);
+        font-size: 12px;
+        flex: 0 0 auto;
+      }
+      .picked {
+        background: #2a2410 !important;
+      }
+      .kv {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 13px;
+        padding: 3px 0;
+      }
+      .kv b {
+        font-weight: 600;
+        color: var(--text);
+        text-align: right;
+        word-break: break-all;
+      }
+      .kv span {
+        color: var(--dim);
+        flex: 0 0 auto;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #2d2410;
+        color: var(--amber);
+        border: 1px solid #6b4d0f;
+      }
+      .pill.good {
+        background: #0f2d1a;
+        color: var(--good);
+        border-color: #166534;
+      }
+      .pill.bad {
+        background: #2d0f0f;
+        color: var(--bad);
+        border-color: #7f1d1d;
+      }
+      .banner {
+        background: #2d2410;
+        border: 1px solid #6b4d0f;
+        border-radius: 12px;
+        padding: 12px;
+        margin: 0 0 14px;
+        font-size: 13px;
+        color: #fbbf24;
+      }
+      .note {
+        font-size: 12.5px;
+        color: var(--dim);
+      }
+      .note b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .note ol {
+        margin: 6px 0 0;
+        padding-left: 20px;
+      }
+      .note li {
+        margin: 4px 0;
+      }
+      .locked {
+        opacity: 0.55;
+      }
+      .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 10, 10, 0.97);
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .overlay.hidden {
+        display: none;
+      }
+      .overlay .box {
+        max-width: 460px;
+        width: 100%;
+        text-align: left;
+      }
+      .spinner {
+        width: 34px;
+        height: 34px;
+        margin: 0 auto 18px;
+        border-radius: 50%;
+        border: 3px solid #3a3a3a;
+        border-top-color: var(--amber);
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .overlay h2 {
+        text-align: center;
+        color: var(--amber);
+        font-size: 19px;
+        margin: 0 0 10px;
+      }
+      .big {
+        font-size: 15px;
+        margin: 0 0 14px;
+      }
+      code {
+        background: #111;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 1px 6px;
+        font-size: 13px;
+        word-break: break-all;
+      }
+      .errbox {
+        background: #2d0f0f;
+        border: 1px solid #7f1d1d;
+        border-radius: 12px;
+        padding: 12px;
+        margin: 0 0 14px;
+        font-size: 13.5px;
+        color: #fca5a5;
+      }
+      .hidden {
+        display: none;
+      }
+      footer {
+        text-align: center;
+        color: #555;
+        font-size: 11.5px;
+        margin-top: 18px;
+      }
+      .panel {
+        margin: 0 0 14px;
+      }
+      .panel h2 {
+        margin-bottom: 8px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 14px;
+        font-size: 13px;
+      }
+      .grid .k {
+        color: var(--dim);
+      }
+      .grid .v {
+        text-align: right;
+        word-break: break-all;
+      }
+      .bad-text {
+        color: var(--bad);
+      }
+      .good-text {
+        color: var(--good);
+      }
+      select {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #111;
+        color: var(--text);
+        font-size: 16px;
+      }
+      .bt-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-top: 1px solid var(--line);
+        flex-wrap: wrap;
+      }
+      .bt-row > span:first-child {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 13px;
+        word-break: break-all;
+      }
+      .bt-meta {
+        color: var(--dim);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      /* 音频电平卡片（AD-032）：一行一个 dB 滑块，值右对齐等宽，拖的时候不跳字。 */
+      .lvl {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin: 12px 0 2px;
+      }
+      .lvl label {
+        flex: 0 0 66px;
+        margin: 0;
+        font-size: 13px;
+        color: var(--dim);
+      }
+      .lvl input[type="range"] {
+        flex: 1 1 auto;
+        min-width: 0;
+        accent-color: var(--amber);
+      }
+      .lvl .val {
+        flex: 0 0 62px;
+        text-align: right;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+      }
+      .lvl-note {
+        color: var(--dim);
+        font-size: 12.5px;
+        margin: 2px 0 6px;
+      }
+      .lvl-note b {
+        color: var(--text);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>MRRC Modern</h1>
+        <p class="sub">盒子设置</p>
+      </header>
 
-  function reload() { load(); }
+      <div id="banner" class="banner hidden">
+        <b>这台盒子还没有人设过口令。</b>在你设置之前，和它同网段的设备都能打开
+        <code>/setup</code>。请先完成 <a href="setup">初始化</a>。
+      </div>
+      <div id="errbox" class="errbox hidden"></div>
 
-  Box.on('#name-btn', 'click', function () {
-    var name = document.querySelector('#name-input').value;
-    Box.message('#name-msg', '正在改名…', '');
-    Box.api('/api/box/hostname', { method: 'POST', body: { hostname: name } })
-      .then(function () {
-        Box.message('#name-msg',
-          '已改名为 ' + name + '，mDNS 也重新广播了。请用新名字重新打开本页。', 'good');
-        reload();
-      })
-      .catch(function (error) { Box.message('#name-msg', error.message, 'bad'); });
-  });
+      <section class="card panel">
+        <h2>盒子身份</h2>
+        <div class="grid">
+          <span class="k">名字</span><span class="v" id="id-name">—</span>
+          <span class="k">mDNS 名字</span><span class="v" id="id-mdns">—</span>
+          <span class="k">当前地址</span><span class="v" id="id-addr">—</span>
+          <span class="k">无线网卡 MAC</span
+          ><span class="v" id="id-mac">—</span> <span class="k">时区</span
+          ><span class="v" id="id-tz">—</span> <span class="k">已开机</span
+          ><span class="v" id="id-uptime">—</span>
+        </div>
+        <label for="name-input"
+          >改名字（会影响 mDNS 地址，改完请用新名字重新打开本页）</label
+        >
+        <input
+          id="name-input"
+          type="text"
+          placeholder="MRRC-Modern"
+          spellcheck="false"
+        />
+        <button id="name-btn" type="button">保存名字</button>
+        <div id="name-msg" class="msg"></div>
+      </section>
 
-  Box.on('#tz-btn', 'click', function () {
-    Box.api('/api/box/timezone', {
-      method: 'POST', body: { timezone: document.querySelector('#tz-select').value }
-    }).then(function () { Box.message('#sys-msg', '时区已保存。', 'good'); reload(); })
-      .catch(function (error) { Box.message('#sys-msg', error.message, 'bad'); });
-  });
+      <section class="card panel">
+        <h2>网络体检 <span class="pill" id="net-pill">读取中…</span></h2>
+        <div class="grid" id="net-grid"></div>
+      </section>
 
-  Box.on('#psk-toggle', 'click', function () {
-    var field = document.querySelector('#psk');
-    var shown = field.type === 'text';
-    field.type = shown ? 'password' : 'text';
-    Box.setText('#psk-toggle', shown ? '显示' : '隐藏');
-  });
+      <section class="card panel">
+        <h2>Wi-Fi <span class="note">（这台盒子只支持 2.4 GHz）</span></h2>
+        <div class="grid" id="wifi-grid"></div>
 
-  Box.on('#scan-btn', 'click', function () {
-    Box.disabled('#scan-btn', true);
-    Box.api('/api/box/wifi').then(function (data) {
-      var list = document.querySelector('#net-list');
-      var networks = data.networks || [];
-      list.replaceChildren();
-      networks.forEach(function (net) {
-        var item = document.createElement('li');
-        var button = document.createElement('button');
-        button.type = 'button';
-        var ssid = document.createElement('span');
-        ssid.className = 'ssid';
-        ssid.textContent = net.ssid;
-        var lock = document.createElement('span');
-        lock.className = 'lock';
-        lock.textContent = net.protected ? '🔒' : '开放';
-        var sig = document.createElement('span');
-        sig.className = 'sig';
-        sig.textContent = Box.signalText(net.signal);
-        button.appendChild(ssid);
-        button.appendChild(lock);
-        button.appendChild(sig);
-        button.addEventListener('click', function () {
-          state.picked = net.ssid;
-          document.querySelector('#ssid-input').value = net.ssid;
-          Array.prototype.forEach.call(list.querySelectorAll('button'), function (other) {
-            other.classList.toggle('picked', other === button);
+        <label for="ssid-input">网络名（SSID）</label>
+        <input
+          id="ssid-input"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="点下面的扫描结果带入，或直接手输（隐藏网络只能手输）"
+        />
+        <label for="psk">密码</label>
+        <div class="row">
+          <input
+            id="psk"
+            type="password"
+            autocomplete="off"
+            placeholder="Wi-Fi 密码（开放网络可留空）"
+          />
+          <button id="psk-toggle" type="button" class="ghost">显示</button>
+        </div>
+        <button id="join-btn" type="button">连接并切换到这个 Wi-Fi</button>
+        <button id="save-btn" type="button" class="ghost">
+          仅保存（不切换）
+        </button>
+        <p class="note">
+          如果现在正是通过 Wi-Fi 访问这台盒子，<b>本页会断开</b>。 稍后用
+          <code id="warn-mdns"></code> 重新打开本页看结果。
+        </p>
+
+        <label>已保存的网络</label>
+        <ul class="saved" id="saved-list"></ul>
+        <button id="scan-btn" type="button" class="ghost">
+          扫描附近的 Wi-Fi
+        </button>
+        <ul class="rows" id="net-list"></ul>
+        <div id="wifi-msg" class="msg"></div>
+      </section>
+
+      <section class="card panel">
+        <h2>遥控器 <span class="note">（蓝牙；按键直接调电台）</span></h2>
+        <button id="bt-scan" type="button">搜索附近的遥控器</button>
+        <div id="bt-list" class="bt-list"></div>
+        <div id="bt-msg" class="msg"></div>
+        <p class="note">
+          遥控器先进入配对模式：<b>同时长按「OK + 返回」约 5 秒</b
+          >，指示灯快闪。 配对后按任意键就能用；不用 SSH。
+        </p>
+      </section>
+
+      <section class="card panel">
+        <h2>有线口</h2>
+        <p class="hint">改的如果正是你现在走的这条路，本页同样会断开。</p>
+        <label for="link-profile">连接</label>
+        <select id="link-profile"></select>
+        <label for="link-method">方式</label>
+        <select id="link-method">
+          <option value="auto">自动获取（DHCP）</option>
+          <option value="manual">静态地址</option>
+        </select>
+        <div id="link-manual" class="hidden">
+          <label for="link-address">地址/前缀</label>
+          <input
+            id="link-address"
+            type="text"
+            placeholder="192.168.16.217/24"
+            spellcheck="false"
+          />
+          <label for="link-gateway">网关（可留空）</label>
+          <input
+            id="link-gateway"
+            type="text"
+            placeholder="192.168.16.1"
+            spellcheck="false"
+          />
+        </div>
+        <button id="link-btn" type="button">应用</button>
+        <div id="link-msg" class="msg"></div>
+      </section>
+
+      <section class="card panel" id="card-system">
+        <h2>盒子系统</h2>
+        <div class="grid" id="sys-grid"></div>
+        <div id="helper-note" class="note hidden">
+          这台设备上没有 root helper（桌面版就是这样），所以重启与改时区不可用。
+          网络相关的操作不受影响。
+        </div>
+        <label for="tz-select">时区</label>
+        <select id="tz-select"></select>
+        <button id="tz-btn" type="button">保存时区</button>
+        <hr
+          style="
+            border: none;
+            border-top: 1px solid var(--line);
+            margin: 16px 0;
+          "
+        />
+        <button id="svc-btn" type="button" class="ghost">
+          重启服务（MRRC Modern 自己）
+        </button>
+        <button id="reboot-btn" type="button" class="ghost">
+          重启盒子（整台机器）
+        </button>
+        <div id="sys-msg" class="msg"></div>
+      </section>
+
+      <section class="card panel" id="card-update">
+        <h2>软件更新 <span class="pill" id="up-pill">读取中…</span></h2>
+        <p class="muted">
+          这台盒子跑的就是它自己那份源码树，所以「更新」是把新版本下载下来、校验、
+          覆盖、重启——不需要重刷镜像，也不需要
+          SSH。升级中会短暂断线（约十几秒）。
+        </p>
+        <div id="up-info" class="muted"></div>
+        <button id="up-check" type="button" class="ghost">检查更新</button>
+        <button id="up-apply" type="button" style="display: none">
+          立即升级
+        </button>
+        <div id="up-msg" class="msg"></div>
+      </section>
+
+      <section class="card panel">
+        <h2>登录口令</h2>
+        <label for="pw1">新口令</label>
+        <input id="pw1" type="password" autocomplete="new-password" />
+        <label for="pw2">再输入一次</label>
+        <input id="pw2" type="password" autocomplete="new-password" />
+        <button id="pw-btn" type="button">保存口令</button>
+        <div id="pw-msg" class="msg"></div>
+      </section>
+
+      <section class="card panel">
+        <h2>系统账号口令 <span class="note">（SSH / HDMI 登录用）</span></h2>
+        <label for="sysuser">账号</label>
+        <select id="sysuser">
+          <option value="root">root（最高权限）</option>
+          <option value="mrrc">mrrc（服务账号）</option>
+        </select>
+        <label for="syspass">新口令</label>
+        <input
+          id="syspass"
+          type="password"
+          autocomplete="new-password"
+          placeholder="至少 8 位"
+        />
+        <label for="syspass2">再输入一次</label>
+        <input id="syspass2" type="password" autocomplete="new-password" />
+        <button id="syspass-btn" type="button">改这个账号的口令</button>
+        <p class="note">
+          上一节是<b>网页</b>口令；这里是 SSH 或 HDMI 控制台用的系统账号，
+          改完立刻生效，页面上不会回显。
+        </p>
+        <div id="syspass-msg" class="msg"></div>
+      </section>
+
+      <section class="card panel">
+        <h2>公网入口 <span class="pill" id="cloud-pill">读取中…</span></h2>
+        <p class="hint">
+          填上你的呼号，向门户申请一个公网入口（<code id="cloud-portal">—</code
+          >）。 批准由运维在门户完成；<b>不用守着本页</b>，盒子会自己每 30
+          秒查一次。
+        </p>
+        <div class="grid" id="cloud-grid"></div>
+        <label for="cloud-callsign">呼号</label>
+        <input
+          id="cloud-callsign"
+          type="text"
+          spellcheck="false"
+          autocomplete="off"
+          placeholder="例如 BG1SB（改呼号 = 重新申请，旧入口不会自动迁移）"
+        />
+        <button id="cloud-apply" type="button">申请公网入口</button>
+        <div id="cloud-msg" class="msg"></div>
+      </section>
+
+      <section class="card panel" id="card-audio">
+        <h2>音频电平</h2>
+        <p class="hint">
+          这是<b>盒子自己的</b>两个增益：跨设备共享、重启保留，不是这台手机上的设置。
+        </p>
+
+        <div class="lvl">
+          <label for="aud-tx">TX MIC</label>
+          <input
+            id="aud-tx"
+            type="range"
+            min="-20"
+            max="25"
+            step="1"
+            value="0"
+          />
+          <span class="val" id="aud-tx-val">0 dB</span>
+        </div>
+        <p class="lvl-note">
+          只作用于<b>浏览器麦克风</b>：CQ 播放与 FT8 波形不受影响。
+        </p>
+
+        <div class="lvl">
+          <label for="aud-rx">RX</label>
+          <input
+            id="aud-rx"
+            type="range"
+            min="-20"
+            max="30"
+            step="1"
+            value="0"
+          />
+          <span class="val" id="aud-rx-val">0 dB</span>
+        </div>
+        <p class="lvl-note">
+          只作用于<b>下发到浏览器 / App</b> 的声音：录音、FT8
+          解码、盒子本地扬声器保持原生电平。 它与浏览器的 🔊
+          音量是<b>相乘</b>关系 ——
+          这里加多少，浏览器那边就回调多少，否则会糊成一片。
+        </p>
+
+        <button id="aud-reset" type="button" class="ghost">复位 0 dB</button>
+        <div id="aud-msg" class="msg"></div>
+      </section>
+
+      <section class="card panel">
+        <h2>电台</h2>
+        <p class="hint">机型与串口的配置在控制界面的设置里，本页不重复一套。</p>
+        <a href="."
+          ><button type="button" class="ghost">打开控制界面</button></a
+        >
+      </section>
+
+      <section class="card panel">
+        <h2>安全门禁 <span class="tag">只读</span></h2>
+        <p class="hint">这里只显示、不修改。改它们要走配置层和它的两步确认。</p>
+        <div id="safety"></div>
+      </section>
+
+      <footer>MRRC Modern · 盒子设置</footer>
+    </div>
+
+    <script src="box_api.js?v=1"></script>
+    <script>
+      (function () {
+        "use strict";
+        var state = { mdns: "", picked: "", helper: false };
+
+        function kv(container, key, value, kind) {
+          var k = document.createElement("span");
+          k.className = "k";
+          k.textContent = key;
+          var v = document.createElement("span");
+          v.className = "v" + (kind ? " " + kind : "");
+          v.textContent =
+            value === "" || value === null || value === undefined
+              ? "（无）"
+              : String(value);
+          container.appendChild(k);
+          container.appendChild(v);
+        }
+
+        function renderNetwork(net) {
+          var grid = document.querySelector("#net-grid");
+          grid.replaceChildren();
+          var pill = document.querySelector("#net-pill");
+          if (!net.nm_running) {
+            pill.textContent = "NetworkManager 没在跑";
+            pill.className = "pill bad";
+          } else if (!net.addresses.length) {
+            pill.textContent = "没有地址";
+            pill.className = "pill bad";
+          } else {
+            pill.textContent = "已联网";
+            pill.className = "pill good";
+          }
+          kv(grid, "地址", net.addresses.join("、"));
+          kv(grid, "网关", net.gateways.join("、"));
+          kv(grid, "DNS", net.dns.join("、"));
+          kv(
+            grid,
+            "Wi-Fi",
+            net.wifi.ssid
+              ? net.wifi.ssid + "  " + Box.signalText(net.wifi.signal)
+              : "未连接",
+          );
+          net.devices.forEach(function (device) {
+            kv(
+              grid,
+              "网卡 " + device.device,
+              device.state +
+                (device.connection ? "  →  " + device.connection : ""),
+              device.state === "connected" ? "good-text" : "",
+            );
           });
+        }
+
+        function renderWifi(net) {
+          var grid = document.querySelector("#wifi-grid");
+          grid.replaceChildren();
+          if (!net.wifi.ssid) {
+            kv(grid, "当前", "没有连接任何 Wi-Fi");
+          } else {
+            kv(
+              grid,
+              "当前",
+              net.wifi.ssid + "  " + Box.signalText(net.wifi.signal),
+            );
+          }
+          renderSaved(net);
+        }
+
+        // 已保存的 Wi-Fi：改密码（填回上面的表单）、忘记、开/关自动连接。
+        // 全部按 DOM 节点构造 —— 这个页面禁止把 HTML 拼成字符串（守卫测试盯着）。
+        function renderSaved(net) {
+          var list = document.querySelector("#saved-list");
+          list.replaceChildren();
+          var saved = net.connections.filter(function (c) {
+            return c.type === "802-11-wireless" || c.type === "wifi";
+          });
+          if (!saved.length) {
+            var empty = document.createElement("li");
+            empty.className = "note";
+            empty.textContent =
+              "还没有保存的 Wi-Fi。可以扫描后点选，也可以直接填名称保存" +
+              "（客户家的网络就手输）。";
+            list.appendChild(empty);
+            return;
+          }
+          saved.forEach(function (c) {
+            var row = document.createElement("li");
+            row.className = "saved-row";
+
+            var name = document.createElement("span");
+            name.className = "saved-name";
+            name.title = c.name;
+            name.textContent = c.name;
+            row.appendChild(name);
+
+            var auto = document.createElement("button");
+            auto.type = "button";
+            auto.className = "ghost" + (c.autoconnect ? " on" : "");
+            auto.textContent = c.autoconnect ? "自动连接：开" : "自动连接：关";
+            auto.addEventListener("click", function () {
+              postWifi(
+                "/api/box/wifi/autoconnect",
+                { ssid: c.name, enabled: !c.autoconnect },
+                (c.autoconnect ? "已关掉「" : "已打开「") +
+                  c.name +
+                  "」的自动连接",
+              );
+            });
+            row.appendChild(auto);
+
+            var edit = document.createElement("button");
+            edit.type = "button";
+            edit.className = "ghost";
+            edit.textContent = "改密码";
+            edit.addEventListener("click", function () {
+              document.querySelector("#ssid-input").value = c.name;
+              document.querySelector("#psk").value = "";
+              document.querySelector("#psk").focus();
+              Box.message("#wifi-msg", "改好密码后点「仅保存（不切换）」", "");
+            });
+            row.appendChild(edit);
+
+            var forget = document.createElement("button");
+            forget.type = "button";
+            forget.className = "ghost";
+            forget.textContent = "忘记";
+            forget.addEventListener("click", function () {
+              postWifi(
+                "/api/box/wifi/forget",
+                { ssid: c.name },
+                "已忘记「" + c.name + "」",
+              );
+            });
+            row.appendChild(forget);
+
+            list.appendChild(row);
+          });
+        }
+
+        function postWifi(path, body, okText) {
+          Box.api(path, { method: "POST", body: body })
+            .then(function () {
+              Box.message("#wifi-msg", okText, "good");
+              reload();
+            })
+            .catch(function (error) {
+              Box.message("#wifi-msg", error.message, "bad");
+            });
+        }
+
+        function renderLink(net) {
+          var select = document.querySelector("#link-profile");
+          var previous = select.value;
+          select.replaceChildren();
+          // Wired profiles only: `net.connections` also holds the Wi-Fi profiles
+          // (the Wi-Fi panel above lists those), and a Wi-Fi name in a dropdown
+          // labelled for the wired card is a trap — picking it here tries to rewire
+          // the wrong interface.
+          net.connections
+            .filter(function (c) {
+              return c.type.indexOf("ethernet") >= 0;
+            })
+            .forEach(function (c) {
+              var option = document.createElement("option");
+              option.value = c.name;
+              option.textContent = c.name + "（" + c.type + "）";
+              select.appendChild(option);
+            });
+          if (previous) select.value = previous;
+        }
+
+        function renderSystem(system, helper) {
+          var grid = document.querySelector("#sys-grid");
+          grid.replaceChildren();
+          system.services.forEach(function (service) {
+            kv(
+              grid,
+              service.unit,
+              service.active ? "运行中" : "未运行",
+              service.active ? "good-text" : "bad-text",
+            );
+          });
+          Box.setText("#id-uptime", Box.secondsLabel(system.uptime_s));
+          Box.setText("#id-tz", system.timezone || "（未知）");
+          Box.show("#helper-note", !helper);
+          ["#name-btn", "#tz-btn", "#reboot-btn"].forEach(function (selector) {
+            Box.disabled(selector, !helper);
+          });
+        }
+
+        function renderSafety(fields) {
+          var box = document.querySelector("#safety");
+          box.replaceChildren();
+          fields.forEach(function (field) {
+            var row = document.createElement("div");
+            row.className = "field";
+            var key = document.createElement("div");
+            key.className = "k";
+            key.textContent = field.key;
+            var value = document.createElement("div");
+            value.className = "v";
+            value.textContent = field.value === "" ? "（未设置）" : field.value;
+            var note = document.createElement("div");
+            note.className = "note";
+            note.textContent = field.note;
+            row.appendChild(key);
+            row.appendChild(value);
+            row.appendChild(note);
+            box.appendChild(row);
+          });
+        }
+
+        // 401 只有一个出口：回登录、并带上回来的路。两处调用点共用它（多写一遍
+        // 就是多一个拼错路径的地方）。用 replace 而不是 href：登录往返不该在历史里
+        // 留两级，否则返回键会把人送回刚刚 401 的页面。
+        function bounceToLogin() {
+          location.replace("/login?next=/settings");
+        }
+
+        // 公网入口：最小闭环。三个端点都是既有的 —— 只读状态、提交申请、查一次。
+        // “批准后自己接通”是服务端的事（_cloud_start_autoconnect 每 30 s 轮一次），
+        // 所以本页不需要一直开着；页面在这只是让状态不用刷新就变绿。
+        function renderCloud(cloud) {
+          var grid = document.querySelector("#cloud-grid");
+          var pill = document.querySelector("#cloud-pill");
+          grid.replaceChildren();
+          Box.setText("#cloud-portal", cloud.portal || "—");
+          if (cloud.entry) {
+            // 「已接通」只看配置里有没有入口字符串；隧道到底在不在跑是另一件事，
+            // 而 2026-10-22 就是这里骗了人：公网入口连着四天 502，本页写着「已接通」。
+            // 所以隧道断了连这个绿标一起变红——偶尔因为一次两秒的重启闪一下，
+            // 好过让同一屏上的两句话互相矛盾。
+            var tunnelUp = !!cloud.tunnel_running;
+            pill.textContent = tunnelUp ? "已接通" : "已接通 · 隧道中断";
+            pill.className = tunnelUp ? "pill good" : "pill bad";
+            kv(grid, "呼号", cloud.callsign || "—");
+            kv(grid, "入口", cloud.entry);
+            // 这一行无条件地显示（以前只在 tunnel_error 非空时才有）：
+            // 「没起来而且错误是空」恰恰是 frpc 缺失那种，也正是从前最安静的一种。
+            kv(
+              grid,
+              "隧道",
+              tunnelUp
+                ? "运行中"
+                : cloud.tunnel_error || "未运行（稍候会自动重试）",
+              tunnelUp ? "good-text" : "bad-text",
+            );
+            if (cloud.cert_reload_required) {
+              kv(grid, "提示", "证书刚换 —— 重启盒子后入口才生效", "bad-text");
+            }
+          } else if (cloud.has_token) {
+            pill.textContent = "等待批准";
+            pill.className = "pill";
+            kv(grid, "呼号", cloud.callsign || "—");
+            kv(grid, "状态", "已提交，等待运维在门户批准");
+          } else {
+            pill.textContent = "未申请";
+            pill.className = "pill";
+          }
+          var input = document.querySelector("#cloud-callsign");
+          if (input && !input.value && cloud.callsign)
+            input.value = cloud.callsign;
+          Box.setText(
+            "#cloud-apply",
+            cloud.has_token ? "查询状态" : "申请公网入口",
+          );
+        }
+
+        function loadCloud() {
+          return Box.api("/api/cloud/state")
+            .then(function (cloud) {
+              renderCloud(cloud);
+              if (cloud.has_token && !cloud.entry) setTimeout(pollCloud, 30000);
+            })
+            .catch(function (error) {
+              if (error.status === 401) {
+                bounceToLogin();
+                return;
+              }
+              Box.message("#cloud-msg", error.message, "bad");
+            });
+        }
+
+        function refreshCloud() {
+          return Box.api("/api/cloud/refresh", { method: "POST" }).then(
+            function (state) {
+              if (state.connected) {
+                Box.message(
+                  "#cloud-msg",
+                  "已接通：" + (state.entry || ""),
+                  "good",
+                );
+              } else if (state.status === "rejected") {
+                Box.message(
+                  "#cloud-msg",
+                  "门户没有通过这条申请 —— 请联系运维（可以换一个呼号）。",
+                  "bad",
+                );
+              } else {
+                Box.message(
+                  "#cloud-msg",
+                  "还没批准（" + (state.status || "applied") + "）。",
+                  "",
+                );
+              }
+              return loadCloud();
+            },
+          );
+        }
+
+        function pollCloud() {
+          Box.api("/api/cloud/state")
+            .then(function (cloud) {
+              renderCloud(cloud);
+              if (cloud.has_token && !cloud.entry) setTimeout(pollCloud, 30000);
+            })
+            .catch(function () {});
+        }
+
+        Box.on("#cloud-apply", "click", function () {
+          var callsign = (document.querySelector("#cloud-callsign").value || "")
+            .trim()
+            .toUpperCase();
+          if (!callsign) {
+            Box.message("#cloud-msg", "请先填呼号", "bad");
+            return;
+          }
+          Box.disabled("#cloud-apply", true);
+          Box.api("/api/cloud/state")
+            .then(function (cloud) {
+              // 已经有令牌就不再申请：门户对同一呼号的重复申请是查重拒绍的
+              // （portal 的 store.apply），重提只会把“已存在申请”糊到用户脸上。
+              if (cloud.has_token) return refreshCloud();
+              return Box.api("/api/cloud/apply", {
+                method: "POST",
+                body: { callsign: callsign },
+              }).then(function (reply) {
+                Box.message(
+                  "#cloud-msg",
+                  "已提交（" +
+                    (reply.status || "applied") +
+                    "）。等运维在门户批准，盒子会自己接通。",
+                  "good",
+                );
+                return loadCloud();
+              });
+            })
+            .catch(function (error) {
+              Box.message("#cloud-msg", error.message, "bad");
+            })
+            .then(function () {
+              Box.disabled("#cloud-apply", false);
+            });
         });
-        item.appendChild(button);
-        list.appendChild(item);
-      });
-      if (!networks.length) {
-        Box.message('#wifi-msg',
-          '没有扫到任何 Wi-Fi。隐藏网络（或芯片刚重启过）扫不到是正常的 —— '
-          + '直接把网络名手输到上面的框里再点连接。', '');
-      }
-    }).catch(function (error) {
-      Box.message('#wifi-msg', error.message, 'bad');
-    }).then(function () { Box.disabled('#scan-btn', false); });
-  });
 
-  Box.on('#join-btn', 'click', function () {
-    var ssid = (document.querySelector('#ssid-input').value || '').trim();
-    if (!ssid) {
-      Box.message('#wifi-msg', '请先填 Wi-Fi 名称（或点一次扫描，从结果里选一个）', 'bad');
-      return;
-    }
-    Box.message('#wifi-msg', '正在切换。如果本页断开，请用 ' +
-      (state.mdns || '盒子的新地址') + ' 重新打开。', '');
-    Box.api('/api/box/wifi', {
-      method: 'POST',
-      body: { ssid: ssid, password: document.querySelector('#psk').value }
-    }).then(function () { poll(); })
-      .catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
-  });
-
-  // 只写 profile、不切换：客户家的 AP 此刻不在范围内时，这是唯一正确的动作。
-  Box.on('#save-btn', 'click', function () {
-    var ssid = (document.querySelector('#ssid-input').value || '').trim();
-    if (!ssid) {
-      Box.message('#wifi-msg', '请先填 Wi-Fi 名称（或点一次扫描，从结果里选一个）', 'bad');
-      return;
-    }
-    Box.api('/api/box/wifi/save', {
-      method: 'POST',
-      body: { ssid: ssid, password: document.querySelector('#psk').value }
-    }).then(function () {
-      Box.message('#wifi-msg',
-        '已保存「' + ssid + '」，它出现在范围内时会自动连接', 'good');
-      document.querySelector('#psk').value = '';
-      reload();
-    }).catch(function (error) { Box.message('#wifi-msg', error.message, 'bad'); });
-  });
-
-  function poll() {
-    Box.api('/api/box/wifi/status').then(function (status) {
-      if (status.phase === 'switching') {
-        setTimeout(poll, 2000);
-        return;
-      }
-      if (status.phase === 'ok') {
-        Box.message('#wifi-msg', '已连上 ' + status.ssid +
-          '，地址 ' + status.address + '。', 'good');
-      } else if (status.phase === 'failed') {
-        // `saved` 为真：AP 不在范围内，配置已经存下并保持启用——那不是失败。
-        Box.message('#wifi-msg', status.reason, status.saved ? 'good' : 'bad');
-      }
-      reload();
-    }).catch(function () { setTimeout(poll, 3000); });
-  }
-
-  Box.on('#link-method', 'change', function (event) {
-    Box.show('#link-manual', event.target.value === 'manual');
-  });
-
-  Box.on('#link-btn', 'click', function () {
-    Box.api('/api/box/link', {
-      method: 'POST',
-      body: {
-        profile: document.querySelector('#link-profile').value,
-        method: document.querySelector('#link-method').value,
-        address: document.querySelector('#link-address').value,
-        gateway: document.querySelector('#link-gateway').value
-      }
-    }).then(function () { Box.message('#link-msg', '已提交，正在生效…', ''); poll(); })
-      .catch(function (error) { Box.message('#link-msg', error.message, 'bad'); });
-  });
-
-  Box.on('#svc-btn', 'click', function () {
-    Box.api('/api/restart', { method: 'POST' }).then(function () {
-      Box.message('#sys-msg', '服务正在重启，几秒后刷新本页。', 'good');
-    }).catch(function (error) { Box.message('#sys-msg', error.message, 'bad'); });
-  });
-
-  Box.on('#reboot-btn', 'click', function () {
-    if (!window.confirm('重启整台盒子？所有连接都会断开，大约一分钟后才回来。')) return;
-    Box.api('/api/box/system/reboot',
-            { method: 'POST', body: { confirm: 'reboot' } })
-      .then(function () { Box.message('#sys-msg', '盒子正在重启，约一分钟后回来。', 'good'); })
-      .catch(function (error) { Box.message('#sys-msg', error.message, 'bad'); });
-  });
-
-  Box.on('#pw-btn', 'click', function () {
-    Box.api('/api/box/password', {
-      method: 'POST',
-      body: { password: document.querySelector('#pw1').value,
-              confirm: document.querySelector('#pw2').value }
-    }).then(function () { Box.message('#pw-msg', '口令已保存。', 'good'); })
-      .catch(function (error) { Box.message('#pw-msg', error.message, 'bad'); });
-  });
-
-  Box.on('#syspass-btn', 'click', function () {
-    var user = document.querySelector('#sysuser').value;
-    var pass = document.querySelector('#syspass').value;
-    if (pass !== document.querySelector('#syspass2').value) {
-      Box.message('#syspass-msg', '两次输入不一致', 'bad');
-      return;
-    }
-    if (pass.length < 8) {
-      Box.message('#syspass-msg', '口令至少 8 位', 'bad');
-      return;
-    }
-    Box.api('/api/box/system-password', {
-      method: 'POST', body: { user: user, password: pass }
-    }).then(function () {
-      Box.message('#syspass-msg', '已改 ' + user + ' 的口令', 'good');
-      document.querySelector('#syspass').value = '';
-      document.querySelector('#syspass2').value = '';
-    }).catch(function (error) {
-      Box.message('#syspass-msg', error.message, 'bad');
-    });
-  });
-
-  // The timezone list is the browser's own: no endpoint needed, and it is the
-  // list of the device the operator is holding rather than of the box.
-  (function fillTimezones() {
-    var select = document.querySelector('#tz-select');
-    var zones = [];
-    try {
-      zones = Intl.supportedValuesOf('timeZone');
-    } catch (ignored) {
-      zones = ['Asia/Shanghai', 'Asia/Tokyo', 'UTC', 'Europe/London',
-               'America/New_York', 'America/Los_Angeles'];
-    }
-    zones.forEach(function (zone) {
-      var option = document.createElement('option');
-      option.value = zone;
-      option.textContent = zone;
-      select.appendChild(option);
-    });
-    select.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  })();
-
-  load();
-})();
-</script>
-
-<script>
-(function () {
-  var scanBtn = document.getElementById('bt-scan');
-  var list = document.getElementById('bt-list');
-  var msg = document.getElementById('bt-msg');
-  if (!scanBtn || !list || !msg) return;
-
-  function say(text, cls) {
-    msg.textContent = text;
-    msg.className = 'msg' + (cls ? ' ' + cls : '');
-  }
-
-  // 信号强弱：列表按它排序，也是唯一能让操作员在二十几个设备里认出
-  // 手里那台遥控器的东西（实测 2026-10-17：BR/EDR 扫出 23 个，页面只给地址和名字）。
-  function signalText(cand) {
-    if (typeof cand.rssi !== 'number') { return ''; }
-    var bars = cand.rssi >= -60 ? '▮▮▮▮'
-      : cand.rssi >= -70 ? '▮▮▮'
-      : cand.rssi >= -80 ? '▮▮' : '▮';
-    return bars + ' ' + cand.rssi + ' dBm';
-  }
-
-  function row(cand) {
-    var line = document.createElement('div');
-    line.className = 'bt-row';
-    var name = document.createElement('span');
-    name.textContent = (cand.name || '（无名字）') + ' · ' + cand.address;
-    line.appendChild(name);
-
-    var meta = document.createElement('span');
-    meta.className = 'bt-meta';
-    // 遥控器那一行直接写出来：bluez 知道它是个键盘（input-keyboard），
-    // 这比名字还硬 —— 名字可以是空的，列表里就只剩一串地址。
-    var kind = (cand.icon || '').indexOf('input-') === 0 ? '遥控器/键盘' : (cand.type || '');
-    meta.textContent = [kind, signalText(cand)].filter(Boolean).join(' · ');
-    if (meta.textContent) { line.appendChild(meta); }
-
-    var pair = document.createElement('button');
-    pair.type = 'button';
-    pair.textContent = '配对';
-    pair.addEventListener('click', function () { pairNow(cand, pair); });
-    line.appendChild(pair);
-    return line;
-  }
-
-  // 「当场在广播的遥控器」：bluez 认得出它是 HID 输入设备（input-*），而且这次扫描
-  // 有信号强度（说明它现在就在广播 —— 也就是在配对模式）。两个条件都满足才自动配对；
-  // 一台都没满足就退回手动，绝不替操作员猜。
-  function looksLikeRemote(cand) {
-    return (cand.icon || '').indexOf('input-') === 0 && typeof cand.rssi === 'number';
-  }
-
-  // 串行配对：bluez 同时只处理一个配对请求，并行会互相打断。
-  // 名字对上的都配（多配一台的代价远小于"这台不认"），最后给一句汇总。
-  function pairInTurn(list) {
-    var i = 0;
-    var paired = 0;
-    (function next() {
-      if (i >= list.length) {
-        say('自动配对完成：' + paired + '/' + list.length + ' 台成功。'
-          + (paired ? '按一下遥控器的方向键试试。'
-                    : '确认遥控器在配对模式（指示灯快闪）后再点一次搜索。'),
-          paired ? 'good' : 'bad');
-        return;
-      }
-      var cand = list[i++];
-      say('正在配对 ' + (cand.name || cand.address) + ' …（第 ' + i + '/' + list.length
-        + ' 台，每台约 30～45 秒）');
-      pairPromise(cand).then(function (res) {
-        if (res.body && res.body.paired) { paired++; }
-        return next();
-      }).catch(function () { return next(); });
-    })();
-  }
-
-  function pairPromise(cand) {
-    return fetch('/api/box/bt/pair', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: cand.address }),
-    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); });
-  }
-
-  function pairNow(cand, button) {
-    if (button) { button.disabled = true; }
-    say('正在配对 ' + (cand.name || cand.address)
-      + ' …（先扫 12 秒再配，全程约 30～45 秒，鼠标别急）');
-    pairPromise(cand)
-      .then(function (res) { verdict(cand, res.body); })
-      .catch(function () { say('配对请求失败', 'bad'); })
-      .finally(function () { if (button) { button.disabled = false; } });
-  }
-
-  function verdict(cand, state) {
-    if (state && state.paired && state.keys_work) {
-      say('已配对，按键可用 ✓ 现在就能用遥控器调频', 'good');
-      return;
-    }
-    if (state && state.paired) {
-      // The measured trap: paired and bonded while the link stayed
-      // unencrypted — bluez then builds no keyboard device and every key dies.
-      say('已配对，但按键还没反应。点「重配」再试一次（这一步会清掉旧配对并重启蓝牙）。', 'warn');
-      var again = document.createElement('button');
-      again.type = 'button';
-      again.textContent = '重配';
-      again.addEventListener('click', function () {
-        say('正在清除旧配对并重启蓝牙…');
-        fetch('/api/box/bt/forget', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ address: cand.address, power_cycle: true }),
-        }).then(function () {
-          say('已清除。请让遥控器重新进入配对模式，再点一次「配对」。', 'warn');
-        }).catch(function () { say('重配失败', 'bad'); });
-      });
-      msg.appendChild(document.createElement('br'));
-      msg.appendChild(again);
-      return;
-    }
-    // 把 bluez 的原话放出来：「没配上」本身没法行动（2026-10-17 现场，三次配对
-    // 失败，真正的原因——遥控器已经退出配对模式——只出现在终端里）。
-    say('没有配上' + (state && state.error ? '：' + state.error : '')
-      + '。确认遥控器在配对模式（指示灯快闪）后再试。', 'bad');
-  }
-
-  scanBtn.addEventListener('click', function () {
-    scanBtn.disabled = true;
-    list.replaceChildren();
-    say('正在搜索…（约 12 秒，遥控器保持配对模式）');
-    fetch('/api/box/bt/scan', { credentials: 'same-origin' })
-      .then(function (r) { return r.json(); })
-      .then(function (payload) {
-        var devices = (payload && payload.devices) || [];
-        if (!devices.length) { say('没找到设备。遥控器在配对模式吗？', 'bad'); return; }
-        devices.forEach(function (d) { list.appendChild(row(d)); });
-        // 先按**名字**找（不认 MAC：来料批次会换地址）；名字对上几台就配几台。
-        var names = (payload && payload.remoteNames) || ['CMCC_Voice_Remote'];
-        function nameMatches(d) {
-          if (!d.name) { return false; }
-          var n = d.name.toLowerCase();
-          return names.some(function (p) { return n.indexOf(String(p).toLowerCase()) >= 0; });
+        function load() {
+          Box.api("/api/box/status")
+            .then(function (data) {
+              state.mdns = data.identity.mdns || "";
+              state.helper = !!data.helper_available;
+              Box.setText("#id-name", data.identity.hostname || "—");
+              Box.setText("#id-mdns", state.mdns || "（不可用）");
+              // MAC 是这台机器的唯一号码（hub 那边只有呼号与证书指纹）：发货台账、售后认机
+              // 器都靠它。读不到时显示短横线，不编一个。
+              Box.setText("#id-mac", data.identity.wlan_mac || "—");
+              Box.setText(
+                "#id-addr",
+                data.identity.addresses.join("、") || "（无）",
+              );
+              var warn = document.querySelector("#warn-mdns");
+              if (warn)
+                warn.textContent =
+                  state.mdns || "https://" + location.hostname + ":8888";
+              var input = document.querySelector("#name-input");
+              if (input && !input.value)
+                input.value = data.identity.hostname || "";
+              Box.show("#banner", !!data.first_window_open);
+              renderNetwork(data.network);
+              renderWifi(data.network);
+              renderLink(data.network);
+              renderSystem(data.system, state.helper);
+              renderSafety(data.safety);
+              loadCloud();
+            })
+            .catch(function (error) {
+              if (error.status === 401) {
+                bounceToLogin();
+                return;
+              }
+              document.querySelector("#errbox").textContent = error.message;
+              Box.show("#errbox", true);
+            });
         }
-        var byName = devices.filter(nameMatches);
-        var candidates = byName.length ? byName : devices.filter(looksLikeRemote);
-        if (byName.length) {
-          say('找到遥控器「' + byName.map(function (d) { return d.name; }).join('、')
-            + '」，正在配对…（不用再点，配几台都行）');
-          pairInTurn(byName);
-          return;
+
+        function reload() {
+          load();
         }
-        if (candidates.length === 1) {
-          // 名字不认识、但刚好有一台正在广播的 HID 输入设备：也直接配。
-          say('找到一台正在广播的输入设备「' + (candidates[0].name || candidates[0].address)
-            + '」，正在配对…（不用再点）');
-          pairNow(candidates[0], null);
-          return;
+
+        Box.on("#name-btn", "click", function () {
+          var name = document.querySelector("#name-input").value;
+          Box.message("#name-msg", "正在改名…", "");
+          Box.api("/api/box/hostname", {
+            method: "POST",
+            body: { hostname: name },
+          })
+            .then(function () {
+              Box.message(
+                "#name-msg",
+                "已改名为 " +
+                  name +
+                  "，mDNS 也重新广播了。请用新名字重新打开本页。",
+                "good",
+              );
+              reload();
+            })
+            .catch(function (error) {
+              Box.message("#name-msg", error.message, "bad");
+            });
+        });
+
+        Box.on("#tz-btn", "click", function () {
+          Box.api("/api/box/timezone", {
+            method: "POST",
+            body: { timezone: document.querySelector("#tz-select").value },
+          })
+            .then(function () {
+              Box.message("#sys-msg", "时区已保存。", "good");
+              reload();
+            })
+            .catch(function (error) {
+              Box.message("#sys-msg", error.message, "bad");
+            });
+        });
+
+        Box.on("#psk-toggle", "click", function () {
+          var field = document.querySelector("#psk");
+          var shown = field.type === "text";
+          field.type = shown ? "password" : "text";
+          Box.setText("#psk-toggle", shown ? "显示" : "隐藏");
+        });
+
+        Box.on("#scan-btn", "click", function () {
+          Box.disabled("#scan-btn", true);
+          Box.api("/api/box/wifi")
+            .then(function (data) {
+              var list = document.querySelector("#net-list");
+              var networks = data.networks || [];
+              list.replaceChildren();
+              networks.forEach(function (net) {
+                var item = document.createElement("li");
+                var button = document.createElement("button");
+                button.type = "button";
+                var ssid = document.createElement("span");
+                ssid.className = "ssid";
+                ssid.textContent = net.ssid;
+                var lock = document.createElement("span");
+                lock.className = "lock";
+                lock.textContent = net.protected ? "🔒" : "开放";
+                var sig = document.createElement("span");
+                sig.className = "sig";
+                sig.textContent = Box.signalText(net.signal);
+                button.appendChild(ssid);
+                button.appendChild(lock);
+                button.appendChild(sig);
+                button.addEventListener("click", function () {
+                  state.picked = net.ssid;
+                  document.querySelector("#ssid-input").value = net.ssid;
+                  Array.prototype.forEach.call(
+                    list.querySelectorAll("button"),
+                    function (other) {
+                      other.classList.toggle("picked", other === button);
+                    },
+                  );
+                });
+                item.appendChild(button);
+                list.appendChild(item);
+              });
+              if (!networks.length) {
+                Box.message(
+                  "#wifi-msg",
+                  "没有扫到任何 Wi-Fi。隐藏网络（或芯片刚重启过）扫不到是正常的 —— " +
+                    "直接把网络名手输到上面的框里再点连接。",
+                  "",
+                );
+              }
+            })
+            .catch(function (error) {
+              Box.message("#wifi-msg", error.message, "bad");
+            })
+            .then(function () {
+              Box.disabled("#scan-btn", false);
+            });
+        });
+
+        Box.on("#join-btn", "click", function () {
+          var ssid = (document.querySelector("#ssid-input").value || "").trim();
+          if (!ssid) {
+            Box.message(
+              "#wifi-msg",
+              "请先填 Wi-Fi 名称（或点一次扫描，从结果里选一个）",
+              "bad",
+            );
+            return;
+          }
+          Box.message(
+            "#wifi-msg",
+            "正在切换。如果本页断开，请用 " +
+              (state.mdns || "盒子的新地址") +
+              " 重新打开。",
+            "",
+          );
+          Box.api("/api/box/wifi", {
+            method: "POST",
+            body: {
+              ssid: ssid,
+              password: document.querySelector("#psk").value,
+            },
+          })
+            .then(function () {
+              poll();
+            })
+            .catch(function (error) {
+              Box.message("#wifi-msg", error.message, "bad");
+            });
+        });
+
+        // 只写 profile、不切换：客户家的 AP 此刻不在范围内时，这是唯一正确的动作。
+        Box.on("#save-btn", "click", function () {
+          var ssid = (document.querySelector("#ssid-input").value || "").trim();
+          if (!ssid) {
+            Box.message(
+              "#wifi-msg",
+              "请先填 Wi-Fi 名称（或点一次扫描，从结果里选一个）",
+              "bad",
+            );
+            return;
+          }
+          Box.api("/api/box/wifi/save", {
+            method: "POST",
+            body: {
+              ssid: ssid,
+              password: document.querySelector("#psk").value,
+            },
+          })
+            .then(function () {
+              Box.message(
+                "#wifi-msg",
+                "已保存「" + ssid + "」，它出现在范围内时会自动连接",
+                "good",
+              );
+              document.querySelector("#psk").value = "";
+              reload();
+            })
+            .catch(function (error) {
+              Box.message("#wifi-msg", error.message, "bad");
+            });
+        });
+
+        function poll() {
+          Box.api("/api/box/wifi/status")
+            .then(function (status) {
+              if (status.phase === "switching") {
+                setTimeout(poll, 2000);
+                return;
+              }
+              if (status.phase === "ok") {
+                Box.message(
+                  "#wifi-msg",
+                  "已连上 " + status.ssid + "，地址 " + status.address + "。",
+                  "good",
+                );
+              } else if (status.phase === "failed") {
+                // `saved` 为真：AP 不在范围内，配置已经存下并保持启用——那不是失败。
+                Box.message(
+                  "#wifi-msg",
+                  status.reason,
+                  status.saved ? "good" : "bad",
+                );
+              }
+              reload();
+            })
+            .catch(function () {
+              setTimeout(poll, 3000);
+            });
         }
-        say('找到 ' + devices.length + ' 个设备，按信号强弱排（遥控器贴着盒子时通常在'
-          + ' -40 ~ -60 dBm）。没有自动配对：'
-          + (candidates.length ? '有 ' + candidates.length + ' 台像遥控器，请点一下要哪台。'
-                               : '没看到正在广播的遥控器 —— 先让它进配对模式（灯快闪）再扫。'));
-      })
-      .catch(function () { say('搜索失败', 'bad'); })
-      .finally(function () { scanBtn.disabled = false; });
-  });
-})();
 
-  // ── 软件更新 ──────────────────────────────────────────────────────────
-  (function () {
-    var info = document.getElementById("up-info"), pill = document.getElementById("up-pill"), msg = document.getElementById("up-msg");
-    var checkBtn = document.getElementById("up-check"), applyBtn = document.getElementById("up-apply");
-    if (!checkBtn) { return; }
+        Box.on("#link-method", "change", function (event) {
+          Box.show("#link-manual", event.target.value === "manual");
+        });
 
-    function show(node, text, cls) {
-      node.textContent = text;
-      if (node === pill) { node.className = "pill" + (cls ? " " + cls : ""); }
-      else { node.className = (node === msg ? "msg" : "") + (cls ? " " + cls : ""); }
-    }
+        Box.on("#link-btn", "click", function () {
+          Box.api("/api/box/link", {
+            method: "POST",
+            body: {
+              profile: document.querySelector("#link-profile").value,
+              method: document.querySelector("#link-method").value,
+              address: document.querySelector("#link-address").value,
+              gateway: document.querySelector("#link-gateway").value,
+            },
+          })
+            .then(function () {
+              Box.message("#link-msg", "已提交，正在生效…", "");
+              poll();
+            })
+            .catch(function (error) {
+              Box.message("#link-msg", error.message, "bad");
+            });
+        });
 
-    function label(state) {
-      var map = { idle: ["就绪", ""], downloading: ["下载中", "warn"],
-                  verifying: ["校验中", "warn"], applying: ["写入中", "warn"],
-                  restarting: ["重启中", "warn"], done: ["完成", "good"],
-                  failed: ["失败", "bad"] };
-      return map[state] || [state, ""];
-    }
+        Box.on("#svc-btn", "click", function () {
+          Box.api("/api/restart", { method: "POST" })
+            .then(function () {
+              Box.message("#sys-msg", "服务正在重启，几秒后刷新本页。", "good");
+            })
+            .catch(function (error) {
+              Box.message("#sys-msg", error.message, "bad");
+            });
+        });
 
-    function poll() {
-      Box.api("/api/update/state").then(function (s) {
-        var pair = label(s.state);
-        show(pill, pair[0], pair[1]);
-        if (s.detail) { show(msg, s.detail, s.state === "failed" ? "bad" : ""); }
-        if (s.state === "restarting") {
-          show(msg, "服务正在重启，10 秒后页面自动刷新…", "warn");
-          setTimeout(function () { location.reload(); }, 12000);
-          return;
-        }
-        if (s.state === "downloading" || s.state === "verifying" ||
-            s.state === "applying") {
-          setTimeout(poll, 1500);
-        } else {
-          checkBtn.disabled = false;
-          applyBtn.disabled = false;
-        }
-      }).catch(function () { setTimeout(poll, 2500); });
-    }
+        Box.on("#reboot-btn", "click", function () {
+          if (
+            !window.confirm(
+              "重启整台盒子？所有连接都会断开，大约一分钟后才回来。",
+            )
+          )
+            return;
+          Box.api("/api/box/system/reboot", {
+            method: "POST",
+            body: { confirm: "reboot" },
+          })
+            .then(function () {
+              Box.message("#sys-msg", "盒子正在重启，约一分钟后回来。", "good");
+            })
+            .catch(function (error) {
+              Box.message("#sys-msg", error.message, "bad");
+            });
+        });
 
-    function stamp() {
-      var d = new Date();
-      function pad(n) { return (n < 10 ? "0" : "") + n; }
-      return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
-    }
+        Box.on("#pw-btn", "click", function () {
+          Box.api("/api/box/password", {
+            method: "POST",
+            body: {
+              password: document.querySelector("#pw1").value,
+              confirm: document.querySelector("#pw2").value,
+            },
+          })
+            .then(function () {
+              Box.message("#pw-msg", "口令已保存。", "good");
+            })
+            .catch(function (error) {
+              Box.message("#pw-msg", error.message, "bad");
+            });
+        });
 
-    // 修复包编号（FP1、FP2…）与版本号并列显示，不拼进版本字符串里：版本号管「谁比谁新」，
-    // 这个编号管「这是第几次修复」。没有编号时不留尾巴（设计 2026-10-22 §5）。
-    function withFixpack(version, fixpack) {
-      if (!version) { return ""; }
-      return fixpack ? version + " · " + fixpack : version;
-    }
+        Box.on("#syspass-btn", "click", function () {
+          var user = document.querySelector("#sysuser").value;
+          var pass = document.querySelector("#syspass").value;
+          if (pass !== document.querySelector("#syspass2").value) {
+            Box.message("#syspass-msg", "两次输入不一致", "bad");
+            return;
+          }
+          if (pass.length < 8) {
+            Box.message("#syspass-msg", "口令至少 8 位", "bad");
+            return;
+          }
+          Box.api("/api/box/system-password", {
+            method: "POST",
+            body: { user: user, password: pass },
+          })
+            .then(function () {
+              Box.message("#syspass-msg", "已改 " + user + " 的口令", "good");
+              document.querySelector("#syspass").value = "";
+              document.querySelector("#syspass2").value = "";
+            })
+            .catch(function (error) {
+              Box.message("#syspass-msg", error.message, "bad");
+            });
+        });
 
-    function localVersion(r) { return withFixpack(r.current, r.current_fixpack); }
+        // The timezone list is the browser's own: no endpoint needed, and it is the
+        // list of the device the operator is holding rather than of the box.
+        (function fillTimezones() {
+          var select = document.querySelector("#tz-select");
+          var zones = [];
+          try {
+            zones = Intl.supportedValuesOf("timeZone");
+          } catch (ignored) {
+            zones = [
+              "Asia/Shanghai",
+              "Asia/Tokyo",
+              "UTC",
+              "Europe/London",
+              "America/New_York",
+              "America/Los_Angeles",
+            ];
+          }
+          zones.forEach(function (zone) {
+            var option = document.createElement("option");
+            option.value = zone;
+            option.textContent = zone;
+            select.appendChild(option);
+          });
+          select.value =
+            Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+        })();
 
-    function remoteVersion(r) { return withFixpack(r.latest, r.latest_fixpack); }
-
-    function check() {
-      checkBtn.disabled = true;
-      show(info, "正在查询…");
-      Box.api("/api/update/check").then(function (r) {
-        if (r.available) {
-          show(info, "当前 " + localVersion(r) + " → 可升级到 " + remoteVersion(r), "");
-          if (r.notes) { show(msg, r.notes, ""); }
-          applyBtn.style.display = "";
-          applyBtn.textContent = "升级到 " + r.latest;
-          show(pill, "有新版本", "warn");
-        } else {
-          // 「点了没反应」= 没有可看的证据：把这次查询的时间和线上版本一起写出来。
-          show(info, "当前 " + localVersion(r) + " 已是最新" +
-            (r.latest ? "（线上 " + remoteVersion(r) + "）" : "") +
-            " · 检查于 " + stamp());
-          applyBtn.style.display = "none";
-          show(pill, "最新", "good");
-        }
-      }).catch(function () {
-        show(info, "查询失败：网络不通或服务端没有清单");
-        show(pill, "未知", "bad");
-      }).finally(function () { checkBtn.disabled = false; });
-    }
-
-    Box.on("#up-check", "click", check);
-    Box.on("#up-apply", "click", function () {
-      if (!window.confirm("升级会重启服务，断线约十几秒。发射中会被拒绝。现在升级吗？")) {
-        return;
-      }
-      applyBtn.disabled = true;
-      Box.api("/api/update/apply", { method: "POST" }).then(function (r) {
-        if (!r.ok) {
-          show(msg, r.reason || "升级没有开始", "bad");
-          applyBtn.disabled = false;
-          return;
-        }
-        show(msg, "已开始，正在下载…");
-        poll();
-      }).catch(function () {
-        show(msg, "升级请求失败（接口不可用）", "bad");
-        applyBtn.disabled = false;
-      });
-    });
-
-    check();
-  })();
-</script>
-<script>
-/* 音频电平（AD-032）：两个盒子级增益。写法与上面的卡片一致 —— 请求走
-   Box.api（错误用服务端自己的原话），成功用响应回写滑块位置，不用本地猜测。 */
-(function () {
-  'use strict';
-  var levels = { tx_mic_db: 0, rx_db: 0 };
-
-  function fmt(value) {
-    var v = Math.round(Number(value) || 0);
-    return (v > 0 ? '+' : '') + v + ' dB';
-  }
-
-  function paint() {
-    var tx = document.querySelector('#aud-tx');
-    var rx = document.querySelector('#aud-rx');
-    if (tx) tx.value = levels.tx_mic_db;
-    if (rx) rx.value = levels.rx_db;
-    Box.setText('#aud-tx-val', fmt(levels.tx_mic_db));
-    Box.setText('#aud-rx-val', fmt(levels.rx_db));
-  }
-
-  function load() {
-    Box.api('/api/audio/levels').then(function (state) {
-      levels = state;
-      paint();
-    }).catch(function (error) {
-      Box.message('#aud-msg', error.message, 'bad');
-    });
-  }
-
-  function apply(patch) {
-    Box.api('/api/audio/levels', { method: 'POST', body: patch })
-      .then(function (state) {
-        levels = state;
-        paint();
-        Box.message('#aud-msg', '已保存');
-      })
-      .catch(function (error) {
-        // 服务端拒绕越界值并把区间写进 message：原样转给用户，不自己编。
-        Box.message('#aud-msg', error.message, 'bad');
         load();
-      });
-  }
+      })();
+    </script>
 
-  Box.on('#aud-tx', 'input', function () {
-    Box.setText('#aud-tx-val', fmt(this.value));
-  });
-  Box.on('#aud-tx', 'change', function () {
-    apply({ tx_mic_db: parseInt(this.value, 10) });
-  });
-  Box.on('#aud-rx', 'input', function () {
-    Box.setText('#aud-rx-val', fmt(this.value));
-  });
-  Box.on('#aud-rx', 'change', function () {
-    apply({ rx_db: parseInt(this.value, 10) });
-  });
-  Box.on('#aud-reset', 'click', function () {
-    apply({ tx_mic_db: 0, rx_db: 0 });
-  });
+    <script>
+      (function () {
+        var scanBtn = document.getElementById("bt-scan");
+        var list = document.getElementById("bt-list");
+        var msg = document.getElementById("bt-msg");
+        if (!scanBtn || !list || !msg) return;
 
-  load();
-})();
-</script>
-</body>
+        function say(text, cls) {
+          msg.textContent = text;
+          msg.className = "msg" + (cls ? " " + cls : "");
+        }
+
+        // 信号强弱：列表按它排序，也是唯一能让操作员在二十几个设备里认出
+        // 手里那台遥控器的东西（实测 2026-10-17：BR/EDR 扫出 23 个，页面只给地址和名字）。
+        function signalText(cand) {
+          if (typeof cand.rssi !== "number") {
+            return "";
+          }
+          var bars =
+            cand.rssi >= -60
+              ? "▮▮▮▮"
+              : cand.rssi >= -70
+                ? "▮▮▮"
+                : cand.rssi >= -80
+                  ? "▮▮"
+                  : "▮";
+          return bars + " " + cand.rssi + " dBm";
+        }
+
+        function row(cand) {
+          var line = document.createElement("div");
+          line.className = "bt-row";
+          var name = document.createElement("span");
+          name.textContent = (cand.name || "（无名字）") + " · " + cand.address;
+          line.appendChild(name);
+
+          var meta = document.createElement("span");
+          meta.className = "bt-meta";
+          // 遥控器那一行直接写出来：bluez 知道它是个键盘（input-keyboard），
+          // 这比名字还硬 —— 名字可以是空的，列表里就只剩一串地址。
+          var kind =
+            (cand.icon || "").indexOf("input-") === 0
+              ? "遥控器/键盘"
+              : cand.type || "";
+          meta.textContent = [kind, signalText(cand)]
+            .filter(Boolean)
+            .join(" · ");
+          if (meta.textContent) {
+            line.appendChild(meta);
+          }
+
+          var pair = document.createElement("button");
+          pair.type = "button";
+          pair.textContent = "配对";
+          pair.addEventListener("click", function () {
+            pairNow(cand, pair);
+          });
+          line.appendChild(pair);
+          return line;
+        }
+
+        // 「当场在广播的遥控器」：bluez 认得出它是 HID 输入设备（input-*），而且这次扫描
+        // 有信号强度（说明它现在就在广播 —— 也就是在配对模式）。两个条件都满足才自动配对；
+        // 一台都没满足就退回手动，绝不替操作员猜。
+        function looksLikeRemote(cand) {
+          return (
+            (cand.icon || "").indexOf("input-") === 0 &&
+            typeof cand.rssi === "number"
+          );
+        }
+
+        // 串行配对：bluez 同时只处理一个配对请求，并行会互相打断。
+        // 名字对上的都配（多配一台的代价远小于"这台不认"），最后给一句汇总。
+        function pairInTurn(list) {
+          var i = 0;
+          var paired = 0;
+          (function next() {
+            if (i >= list.length) {
+              say(
+                "自动配对完成：" +
+                  paired +
+                  "/" +
+                  list.length +
+                  " 台成功。" +
+                  (paired
+                    ? "按一下遥控器的方向键试试。"
+                    : "确认遥控器在配对模式（指示灯快闪）后再点一次搜索。"),
+                paired ? "good" : "bad",
+              );
+              return;
+            }
+            var cand = list[i++];
+            say(
+              "正在配对 " +
+                (cand.name || cand.address) +
+                " …（第 " +
+                i +
+                "/" +
+                list.length +
+                " 台，每台约 30～45 秒）",
+            );
+            pairPromise(cand)
+              .then(function (res) {
+                if (res.body && res.body.paired) {
+                  paired++;
+                }
+                return next();
+              })
+              .catch(function () {
+                return next();
+              });
+          })();
+        }
+
+        function pairPromise(cand) {
+          return fetch("/api/box/bt/pair", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ address: cand.address }),
+          }).then(function (r) {
+            return r.json().then(function (j) {
+              return { ok: r.ok, body: j };
+            });
+          });
+        }
+
+        function pairNow(cand, button) {
+          if (button) {
+            button.disabled = true;
+          }
+          say(
+            "正在配对 " +
+              (cand.name || cand.address) +
+              " …（先扫 12 秒再配，全程约 30～45 秒，鼠标别急）",
+          );
+          pairPromise(cand)
+            .then(function (res) {
+              verdict(cand, res.body);
+            })
+            .catch(function () {
+              say("配对请求失败", "bad");
+            })
+            .finally(function () {
+              if (button) {
+                button.disabled = false;
+              }
+            });
+        }
+
+        function verdict(cand, state) {
+          if (state && state.paired && state.keys_work) {
+            say("已配对，按键可用 ✓ 现在就能用遥控器调频", "good");
+            return;
+          }
+          if (state && state.paired) {
+            // The measured trap: paired and bonded while the link stayed
+            // unencrypted — bluez then builds no keyboard device and every key dies.
+            say(
+              "已配对，但按键还没反应。点「重配」再试一次（这一步会清掉旧配对并重启蓝牙）。",
+              "warn",
+            );
+            var again = document.createElement("button");
+            again.type = "button";
+            again.textContent = "重配";
+            again.addEventListener("click", function () {
+              say("正在清除旧配对并重启蓝牙…");
+              fetch("/api/box/bt/forget", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  address: cand.address,
+                  power_cycle: true,
+                }),
+              })
+                .then(function () {
+                  say(
+                    "已清除。请让遥控器重新进入配对模式，再点一次「配对」。",
+                    "warn",
+                  );
+                })
+                .catch(function () {
+                  say("重配失败", "bad");
+                });
+            });
+            msg.appendChild(document.createElement("br"));
+            msg.appendChild(again);
+            return;
+          }
+          // 把 bluez 的原话放出来：「没配上」本身没法行动（2026-10-17 现场，三次配对
+          // 失败，真正的原因——遥控器已经退出配对模式——只出现在终端里）。
+          say(
+            "没有配上" +
+              (state && state.error ? "：" + state.error : "") +
+              "。确认遥控器在配对模式（指示灯快闪）后再试。",
+            "bad",
+          );
+        }
+
+        scanBtn.addEventListener("click", function () {
+          scanBtn.disabled = true;
+          list.replaceChildren();
+          say("正在搜索…（约 12 秒，遥控器保持配对模式）");
+          fetch("/api/box/bt/scan", { credentials: "same-origin" })
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (payload) {
+              var devices = (payload && payload.devices) || [];
+              if (!devices.length) {
+                say("没找到设备。遥控器在配对模式吗？", "bad");
+                return;
+              }
+              devices.forEach(function (d) {
+                list.appendChild(row(d));
+              });
+              // 先按**名字**找（不认 MAC：来料批次会换地址）；名字对上几台就配几台。
+              var names = (payload && payload.remoteNames) || [
+                "CMCC_Voice_Remote",
+              ];
+              function nameMatches(d) {
+                if (!d.name) {
+                  return false;
+                }
+                var n = d.name.toLowerCase();
+                return names.some(function (p) {
+                  return n.indexOf(String(p).toLowerCase()) >= 0;
+                });
+              }
+              var byName = devices.filter(nameMatches);
+              var candidates = byName.length
+                ? byName
+                : devices.filter(looksLikeRemote);
+              if (byName.length) {
+                say(
+                  "找到遥控器「" +
+                    byName
+                      .map(function (d) {
+                        return d.name;
+                      })
+                      .join("、") +
+                    "」，正在配对…（不用再点，配几台都行）",
+                );
+                pairInTurn(byName);
+                return;
+              }
+              if (candidates.length === 1) {
+                // 名字不认识、但刚好有一台正在广播的 HID 输入设备：也直接配。
+                say(
+                  "找到一台正在广播的输入设备「" +
+                    (candidates[0].name || candidates[0].address) +
+                    "」，正在配对…（不用再点）",
+                );
+                pairNow(candidates[0], null);
+                return;
+              }
+              say(
+                "找到 " +
+                  devices.length +
+                  " 个设备，按信号强弱排（遥控器贴着盒子时通常在" +
+                  " -40 ~ -60 dBm）。没有自动配对：" +
+                  (candidates.length
+                    ? "有 " +
+                      candidates.length +
+                      " 台像遥控器，请点一下要哪台。"
+                    : "没看到正在广播的遥控器 —— 先让它进配对模式（灯快闪）再扫。"),
+              );
+            })
+            .catch(function () {
+              say("搜索失败", "bad");
+            })
+            .finally(function () {
+              scanBtn.disabled = false;
+            });
+        });
+      })();
+
+      // ── 软件更新 ──────────────────────────────────────────────────────────
+      (function () {
+        var info = document.getElementById("up-info"),
+          pill = document.getElementById("up-pill"),
+          msg = document.getElementById("up-msg");
+        var checkBtn = document.getElementById("up-check"),
+          applyBtn = document.getElementById("up-apply");
+        if (!checkBtn) {
+          return;
+        }
+
+        function show(node, text, cls) {
+          node.textContent = text;
+          if (node === pill) {
+            node.className = "pill" + (cls ? " " + cls : "");
+          } else {
+            node.className =
+              (node === msg ? "msg" : "") + (cls ? " " + cls : "");
+          }
+        }
+
+        function label(state) {
+          var map = {
+            idle: ["就绪", ""],
+            downloading: ["下载中", "warn"],
+            verifying: ["校验中", "warn"],
+            applying: ["写入中", "warn"],
+            restarting: ["重启中", "warn"],
+            done: ["完成", "good"],
+            failed: ["失败", "bad"],
+          };
+          return map[state] || [state, ""];
+        }
+
+        function poll() {
+          Box.api("/api/update/state")
+            .then(function (s) {
+              var pair = label(s.state);
+              show(pill, pair[0], pair[1]);
+              if (s.detail) {
+                show(msg, s.detail, s.state === "failed" ? "bad" : "");
+              }
+              if (s.state === "restarting") {
+                show(msg, "服务正在重启，10 秒后页面自动刷新…", "warn");
+                setTimeout(function () {
+                  location.reload();
+                }, 12000);
+                return;
+              }
+              if (
+                s.state === "downloading" ||
+                s.state === "verifying" ||
+                s.state === "applying"
+              ) {
+                setTimeout(poll, 1500);
+              } else {
+                checkBtn.disabled = false;
+                applyBtn.disabled = false;
+              }
+            })
+            .catch(function () {
+              setTimeout(poll, 2500);
+            });
+        }
+
+        function stamp() {
+          var d = new Date();
+          function pad(n) {
+            return (n < 10 ? "0" : "") + n;
+          }
+          return (
+            pad(d.getHours()) +
+            ":" +
+            pad(d.getMinutes()) +
+            ":" +
+            pad(d.getSeconds())
+          );
+        }
+
+        // 修复包编号（FP1、FP2…）与版本号并列显示，不拼进版本字符串里：版本号管「谁比谁新」，
+        // 这个编号管「这是第几次修复」。没有编号时不留尾巴（设计 2026-10-22 §5）。
+        function withFixpack(version, fixpack) {
+          if (!version) {
+            return "";
+          }
+          return fixpack ? version + " · " + fixpack : version;
+        }
+
+        function localVersion(r) {
+          return withFixpack(r.current, r.current_fixpack);
+        }
+
+        function remoteVersion(r) {
+          return withFixpack(r.latest, r.latest_fixpack);
+        }
+
+        function check() {
+          checkBtn.disabled = true;
+          show(info, "正在查询…");
+          Box.api("/api/update/check")
+            .then(function (r) {
+              if (r.available) {
+                show(
+                  info,
+                  "当前 " + localVersion(r) + " → 可升级到 " + remoteVersion(r),
+                  "",
+                );
+                if (r.notes) {
+                  show(msg, r.notes, "");
+                }
+                applyBtn.style.display = "";
+                applyBtn.textContent = "升级到 " + r.latest;
+                show(pill, "有新版本", "warn");
+              } else {
+                // 「点了没反应」= 没有可看的证据：把这次查询的时间和线上版本一起写出来。
+                show(
+                  info,
+                  "当前 " +
+                    localVersion(r) +
+                    " 已是最新" +
+                    (r.latest ? "（线上 " + remoteVersion(r) + "）" : "") +
+                    " · 检查于 " +
+                    stamp(),
+                );
+                applyBtn.style.display = "none";
+                show(pill, "最新", "good");
+              }
+            })
+            .catch(function () {
+              show(info, "查询失败：网络不通或服务端没有清单");
+              show(pill, "未知", "bad");
+            })
+            .finally(function () {
+              checkBtn.disabled = false;
+            });
+        }
+
+        Box.on("#up-check", "click", check);
+        Box.on("#up-apply", "click", function () {
+          if (
+            !window.confirm(
+              "升级会重启服务，断线约十几秒。发射中会被拒绝。现在升级吗？",
+            )
+          ) {
+            return;
+          }
+          applyBtn.disabled = true;
+          Box.api("/api/update/apply", { method: "POST" })
+            .then(function (r) {
+              if (!r.ok) {
+                show(msg, r.reason || "升级没有开始", "bad");
+                applyBtn.disabled = false;
+                return;
+              }
+              show(msg, "已开始，正在下载…");
+              poll();
+            })
+            .catch(function () {
+              show(msg, "升级请求失败（接口不可用）", "bad");
+              applyBtn.disabled = false;
+            });
+        });
+
+        check();
+      })();
+    </script>
+    <script>
+      /* 音频电平（AD-032）：两个盒子级增益。写法与上面的卡片一致 —— 请求走
+   Box.api（错误用服务端自己的原话），成功用响应回写滑块位置，不用本地猜测。 */
+      (function () {
+        "use strict";
+        var levels = { tx_mic_db: 0, rx_db: 0 };
+
+        function fmt(value) {
+          var v = Math.round(Number(value) || 0);
+          return (v > 0 ? "+" : "") + v + " dB";
+        }
+
+        function paint() {
+          var tx = document.querySelector("#aud-tx");
+          var rx = document.querySelector("#aud-rx");
+          if (tx) tx.value = levels.tx_mic_db;
+          if (rx) rx.value = levels.rx_db;
+          Box.setText("#aud-tx-val", fmt(levels.tx_mic_db));
+          Box.setText("#aud-rx-val", fmt(levels.rx_db));
+        }
+
+        function load() {
+          Box.api("/api/audio/levels")
+            .then(function (state) {
+              levels = state;
+              paint();
+            })
+            .catch(function (error) {
+              Box.message("#aud-msg", error.message, "bad");
+            });
+        }
+
+        function apply(patch) {
+          Box.api("/api/audio/levels", { method: "POST", body: patch })
+            .then(function (state) {
+              levels = state;
+              paint();
+              Box.message("#aud-msg", "已保存");
+            })
+            .catch(function (error) {
+              // 服务端拒绕越界值并把区间写进 message：原样转给用户，不自己编。
+              Box.message("#aud-msg", error.message, "bad");
+              load();
+            });
+        }
+
+        Box.on("#aud-tx", "input", function () {
+          Box.setText("#aud-tx-val", fmt(this.value));
+        });
+        Box.on("#aud-tx", "change", function () {
+          apply({ tx_mic_db: parseInt(this.value, 10) });
+        });
+        Box.on("#aud-rx", "input", function () {
+          Box.setText("#aud-rx-val", fmt(this.value));
+        });
+        Box.on("#aud-rx", "change", function () {
+          apply({ rx_db: parseInt(this.value, 10) });
+        });
+        Box.on("#aud-reset", "click", function () {
+          apply({ tx_mic_db: 0, rx_db: 0 });
+        });
+
+        load();
+      })();
+    </script>
+  </body>
 </html>

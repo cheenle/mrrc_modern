@@ -131,14 +131,13 @@
       <h1>公网入口连不上时，怎么把诊断包拿出来</h1>
       <p class="sub">
         适用：盒子在你家局域网里打得开网页，但
-        <code>你的呼号.mrrc.vlsc.net</code> 打不开，或者「🐞
+        <code>你的呼号.mrrc.vlsc.net</code>打不开，或者「🐞
         遇到问题」里的诊断包传不上去。
       </p>
 
       <h2>为什么会这样</h2>
       <p>
-        诊断包原来只有一条出路：<strong>上传</strong>给我们。上传要盒子能上网。
-        当坏掉的偏偏就是网络那一环时，包在盒子里生成好了、也确实存住了，却谁也拿不到。
+        诊断包原来只有一条出路：<strong>上传</strong>给我们。上传要盒子能上网。当坏掉的偏偏就是网络那一环时，包在盒子里生成好了、也确实存住了，却谁也拿不到。
       </p>
       <p>
         这个小工具补上第二条路 —— 在你自己的局域网里，把那个 zip 直接拷到你的
@@ -152,13 +151,11 @@
         </a>
       </p>
       <p>
-        约 10 KB，单个文件，不用安装。放在桌面或下载文件夹，
-        <strong>双击运行</strong>即可。它只读取盒子的状态并在本机保存一个 zip，
-        不上传任何东西，也不改盒子上的任何设置。
+        约 10 KB，单个文件，不用安装。放在桌面或下载文件夹，<strong>双击运行</strong>即可。它只读取盒子的状态并在本机保存一个 zip，不上传任何东西，也不改盒子上的任何设置。
       </p>
       <div class="callout">
         系统要求：Windows 10（1809 及以上）或 Windows 11。脚本用的是系统自带的
-        <code>curl.exe</code> 与 PowerShell，不需要额外装软件。
+        <code>curl.exe</code>与 PowerShell，不需要额外装软件。
       </div>
 
       <h2>三步</h2>
@@ -169,8 +166,7 @@
             >系统账号口令（SSH / HDMI 登录用）</strong
           >」 → 账号选 <code>root</code> → 设一个新口令（至少 8 位）。<br />
           <span style="color: var(--muted)">
-            这里<strong>不校验旧口令</strong>，所以忘了也没关系，直接设新的就行。
-            注意它和上面那张「登录口令」卡不是一回事：那张是网页登录，这张是
+            这里<strong>不校验旧口令</strong>，所以忘了也没关系，直接设新的就行。注意它和上面那张「登录口令」卡不是一回事：那张是网页登录，这张是
             SSH/HDMI 用的系统账号。
           </span>
         </li>
@@ -187,9 +183,8 @@
           然后脚本会先把盒子的公网入口状态打在屏幕上（这一步不需要 SSH）。
         </li>
         <li>
-          <strong>看到 <code>SSH account [mrrc]:</code> 时</strong>，输入第 1
-          步设过口令的账号名（例如 <code>root</code>），回车，
-          再输入那个账号的口令。文件就开始拷回来了。
+          <strong>看到 <code>SSH account [mrrc]:</code>时</strong>，输入第 1
+          步设过口令的账号名（例如 <code>root</code>），回车，再输入那个账号的口令。文件就开始拷回来了。
         </li>
       </ol>
       <p>
@@ -200,16 +195,14 @@
       <h2>最后一步失败了，也没关系</h2>
       <p>
         zip 里最要紧的那份 <code>cloud-state.json</code>
-        <strong>在 SSH 之前就已经写好了</strong>。它记着隧道到底为什么没起来。
-        把屏幕上这一段截图发来，通常就够定位：
+        <strong>在 SSH 之前就已经写好了</strong>。它记着隧道到底为什么没起来。把屏幕上这一段截图发来，通常就够定位：
       </p>
       <pre>
 entry         : https://bg7sb.mrrc.vlsc.net/
 tunnel_running: false
 tunnel_error  : 缺少 frpc：/opt/mrrc_modern/fleet/frpc</pre>
       <p>
-        诊断包本体<strong>仍然留在盒子里，不会丢</strong>。等盒子的网络恢复，
-        在「🐞 遇到问题」里点一次「上传」，它还能补发出去。
+        诊断包本体<strong>仍然留在盒子里，不会丢</strong>。等盒子的网络恢复，在「🐞 遇到问题」里点一次「上传」，它还能补发出去。
       </p>
 
       <h2>屏幕上那几行是什么意思</h2>
@@ -258,13 +251,11 @@ tunnel_error  : 缺少 frpc：/opt/mrrc_modern/fleet/frpc</pre>
       <h2>还是拿不到？</h2>
       <p>
         直接在
-        <a href="answers/">答复页</a> 搜索你看到的现象，多数问题那里有现成答案；
-        也可以把屏幕上 <code>cloud-state</code> 那几行截图发给我们。
+        <a href="answers/">答复页</a>搜索你看到的现象，多数问题那里有现成答案；也可以把屏幕上 <code>cloud-state</code>那几行截图发给我们。
       </p>
       <p style="color: var(--muted); font-size: 0.9rem; margin-top: 2.5rem">
         脚本源码：仓库
-        <code>dev_tools/mrrc-diag.cmd</code>。它不是安装包的一部分，
-        随时可以更新，改完在 <a href="answers/">答复页</a> 说明。
+        <code>dev_tools/mrrc-diag.cmd</code>。它不是安装包的一部分，随时可以更新，改完在 <a href="answers/">答复页</a>说明。
       </p>
     </main>
   </body>

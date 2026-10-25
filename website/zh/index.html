@@ -96,17 +96,13 @@
             <li>
               <strong>v1.28.6 —— 盒子（和桌面版）自己管两个音频电平：TX 麦克风与 RX 下发各一个 dB 旋钮</strong> ——
               决定「到底多响」的两个数从浏览器收归盒子。<b>TX MIC</b>（−20…+25 dB）只放大操作员的麦克风，CQ 播放与
-              FT8 波形不经过它；TX 录音 tap 在增益之后，所以录下来的是电台真正收到的信号。<b>RX</b>（−20…+30 dB）
-              只放大下发给听众的那一份：录音、FT8 解码、盒子本地扬声器保持原生电平——软件增益补不出信息，把解码
+              FT8 波形不经过它；TX 录音 tap 在增益之后，所以录下来的是电台真正收到的信号。<b>RX</b>（−20…+30 dB）只放大下发给听众的那一份：录音、FT8 解码、盒子本地扬声器保持原生电平——软件增益补不出信息，把解码
               链路顶到削顶只换来解不出的信号。两者默认 0 dB，升级后声音逐字节不变；网页端 🎙 Vol 的上限从 +6 dB
-              提到 +25 dB。同版还有：隧道停掉的状态终于看得见（此前一个入口 502 四天，设置页写着「已接通」）、
-              解析链修复（<code>fix-dns</code> 只要网页口令、不要 root）、以及更新卡与页脚上的盒子修复包编号
-              （<code>1.28.6 · FP2</code>）。
+              提到 +25 dB。同版还有：隧道停掉的状态终于看得见（此前一个入口 502 四天，设置页写着「已接通」）、解析链修复（<code>fix-dns</code>只要网页口令、不要 root）、以及更新卡与页脚上的盒子修复包编号（<code>1.28.6 · FP2</code>）。
             </li>
             <li>
               <strong>上一版（v1.28.2）—— hub 再也不会钉住一把实例已经换掉的证书；FT8 解码器不再杀掉自己的 worker</strong> ——
-              <code>sign_for()</code> 幂等，登记失败的实例点一次「连接」即自愈；解码器里的 Fortran <code>stop</code>
-              改为返回状态码，它的 stderr 现在落到 <code>logs/ft8-worker.log</code>。
+              <code>sign_for()</code>幂等，登记失败的实例点一次「连接」即自愈；解码器里的 Fortran <code>stop</code>改为返回状态码，它的 stderr 现在落到 <code>logs/ft8-worker.log</code>。
             </li>
             </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -279,8 +275,7 @@
 <div class="icon"><i class="fas fa-broadcast-tower"></i></div>
 <h3>NanoVNA 天线诊断台</h3>
 <p>
-              插在盒子 USB 上的 NanoVNA-H 变成一台矢量分析仪页面 <code>/Nano</code>：
-              量的是天线本身的复数 S11，而不是拿反射功率反推。
+              插在盒子 USB 上的 NanoVNA-H 变成一台矢量分析仪页面 <code>/Nano</code>：量的是天线本身的复数 S11，而不是拿反射功率反推。
             </p>
 <ul>
 <li>1–54 MHz、401 点约 1 秒</li>
@@ -310,7 +305,7 @@
               10 kHz – 2 GHz，自己的口令与页面，与电台控制面零耦合。
             </p>
 <ul>
-<li>AM / USB / LSB / CW / NFM / WFM，同 <code>(偏移, 模式, 带宽)</code> 的解调器共享</li>
+<li>AM / USB / LSB / CW / NFM / WFM，同 <code>(偏移, 模式, 带宽)</code>的解调器共享</li>
 <li>30 秒调谐持有锁，默认 50 位听众同时收听</li>
 <li>你发射的时候它照收不误</li>
 </ul>
@@ -319,8 +314,7 @@
 <div class="icon"><i class="fas fa-gamepad"></i></div>
 <h3>蓝牙遥控器（仅盒子）</h3>
 <p>
-              盒子配对一支蓝牙 HID 遥控器，直接驱动电台 —— 不用浏览器、不用登录：
-              操作员站在天线旁边，用手柄就能调。
+              盒子配对一支蓝牙 HID 遥控器，直接驱动电台 —— 不用浏览器、不用登录：操作员站在天线旁边，用手柄就能调。
             </p>
 <ul>
 <li>发射、调谐、记忆步进、kHz 直输，全用按键</li>
@@ -332,8 +326,7 @@
 <div class="icon"><i class="fas fa-headset"></i></div>
 <h3>远程协助窗口</h3>
 <p>
-              真需要第二双眼睛时，盒子可以临时对支持方开一扇限时 SSH 窗 —— 你不点，
-              它就一直不存在。
+              真需要第二双眼睛时，盒子可以临时对支持方开一扇限时 SSH 窗 —— 你不点，它就一直不存在。
             </p>
 <ul>
 <li>一次性口令显示在你的面板里，只在窗口打开期间有效</li>
@@ -391,8 +384,7 @@
 <span class="section-label">远程接入</span>
 <h2 class="section-title">Cloud Hub：电台留守，人可远行</h2>
 <p class="section-subtitle">
-            电台和天线不动，盒子照旧留在家里。它自己往外拨一条连接，你在浏览器里就能开台。
-            公网 IP、端口映射、路由器设置，一样都不用碰。
+            电台和天线不动，盒子照旧留在家里。它自己往外拨一条连接，你在浏览器里就能开台。公网 IP、端口映射、路由器设置，一样都不用碰。
           </p>
 </div>
 <div class="features-grid">
@@ -457,10 +449,8 @@
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             ☰ 菜单里现在有电台自己的电源开关（「重开」= 关机后按有界、可取消的循环持续唤醒；「关机」= 关掉就不
-            再上电），菜单最下边还会显示你正在跑的版本号。出站 HTTPS（门户、隧道、诊断包上传）只信安装包里随包的根证书，
-            不再采信本机的证书库。原生 DSP 库与它的运行期依赖依旧一起装进安装包，你机器上不需要编译任何东西。首次运行
-            仍然是零配置：自动生成网页密码并显示在登录页，自动识别电台（FT-710 ASCII CAT / Icom CI-V）与串口。网页「连接设置」
-            依旧可以改电台型号、串口、RX+TX 声卡与口令，保存后自动重启。
+            再上电），菜单最下边还会显示你正在跑的版本号。出站 HTTPS（门户、隧道、诊断包上传）只信安装包里随包的根证书，不再采信本机的证书库。原生 DSP 库与它的运行期依赖依旧一起装进安装包，你机器上不需要编译任何东西。首次运行
+            仍然是零配置：自动生成网页密码并显示在登录页，自动识别电台（FT-710 ASCII CAT / Icom CI-V）与串口。网页「连接设置」依旧可以改电台型号、串口、RX+TX 声卡与口令，保存后自动重启。
           </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
@@ -573,29 +563,28 @@
           <code style="font-size: 0.76rem">SHA-256: 1fabb7429982914a835651debb24a6c54a56078fd0cf59391ce548fe12f99d94</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
-              针对这款盒子预装好的服务端镜像，出厂即用、不需要任何初始化：网页口令与系统账号 <code>root</code>／<code>mrrc</code> 已分别是 <code>abcd!1234</code> 与 <code>abcd1234</code>，时区 <code>Asia/Shanghai</code>、区域 <code>zh_CN.UTF-8</code>。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，不碰原厂安卓的分区与数据），打开 <code>https://&lt;盒子IP&gt;:8888</code> 就能登录。<strong>第一件事是把这三个口令改掉</strong>，用户指南里有步骤。<code>mrrc-radio</code> 在 11 个支持的机型之间切换。验收通过后把系统固化进机身 eMMC，最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
+              针对这款盒子预装好的服务端镜像，出厂即用、不需要任何初始化：网页口令与系统账号 <code>root</code>／<code>mrrc</code>已分别是 <code>abcd!1234</code>与 <code>abcd1234</code>，时区 <code>Asia/Shanghai</code>、区域 <code>zh_CN.UTF-8</code>。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，不碰原厂安卓的分区与数据），打开 <code>https://&lt;盒子IP&gt;:8888</code>就能登录。<strong>第一件事是把这三个口令改掉</strong>，用户指南里有步骤。<code>mrrc-radio</code>在 11 个支持的机型之间切换。验收通过后把系统固化进机身 eMMC，最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
           <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-1.28.6-w103d.img.gz">
           <i class="fas fa-download"></i> 下载 W103D 镜像
               </a>
           <a class="btn btn-secondary btn-large" href="w103d-index.html">
-          <i class="fas fa-list"></i> 盒子指南总览
+          <i class="fas fa-list"></i>盒子指南总览
               </a>
           <a class="btn btn-secondary btn-large" href="flash.html">
-          <i class="fab fa-windows"></i> 一键做刷机盘（Windows）
-              </a>
+          <i class="fab fa-windows"></i>一键做刷机盘（Windows）</a>
           <a class="btn btn-secondary btn-large" href="w103d.html" rel="noopener" target="_blank">
           <i class="fas fa-book"></i> W103D 完整指南
               </a>
           <a class="btn btn-secondary btn-large" href="w103d-user.html">
-          <i class="fas fa-box-open"></i> 已刷好的盒子？用户指南
+          <i class="fas fa-box-open"></i>已刷好的盒子？用户指南
               </a>
           <a class="btn btn-secondary btn-large" href="w103d-remote.html">
-          <i class="fas fa-gamepad"></i> 遥控器指南
+          <i class="fas fa-gamepad"></i>遥控器指南
               </a>
           <a class="btn btn-secondary btn-large" href="fix-dns.html">
-          <i class="fas fa-stethoscope"></i> 盒子解析不了域名？修它的 DNS
+          <i class="fas fa-stethoscope"></i>盒子解析不了域名？修它的 DNS
               </a>
           <a class="btn btn-secondary btn-large" href="w103d-radio-box.html">
           <i class="fas fa-pen-nib"></i>它是怎么来的（博客）
@@ -1186,7 +1175,7 @@
 <p>© 2026 MRRC Modern 项目。基于 GPLv3 许可证开源。 · FT-710 与 Yaesu 是 <a href="https://www.yaesu.com/">八重洲株式会社</a>的商标；IC-7300 与 Icom 是 Icom Inc. 的商标。</p>
 </div>
 </div>
-</footer><script defer="" src="../js/scope.js?v=3"></script><p style="color: var(--scope-text-muted); font-size: 0.85rem">升级后行为异常、或想从零开始：<a href="../downloads/MRRC-Modern-Cleanup.cmd">下载清理脚本</a>（说明与注意事项见<a href="../guide.html#clean-slate">指南 §6.2</a>），一键卸载并清掉历史残留（会先备份到桌面）。 换电脑：<a href="../downloads/MRRC-Modern-Backup.cmd">配置与证书一键备份/恢复</a>（见<a href="../guide.html#move-computer">指南 §6.5</a>）。</p>
+</footer><script defer="" src="../js/scope.js?v=3"></script><p style="color: var(--scope-text-muted); font-size: 0.85rem">升级后行为异常、或想从零开始：<a href="../downloads/MRRC-Modern-Cleanup.cmd">下载清理脚本</a>（说明与注意事项见<a href="../guide.html#clean-slate">指南 §6.2</a>），一键卸载并清掉历史残留（会先备份到桌面）。换电脑：<a href="../downloads/MRRC-Modern-Backup.cmd">配置与证书一键备份/恢复</a>（见<a href="../guide.html#move-computer">指南 §6.5</a>）。</p>
 <p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔：<a href="muscle-and-mind.html">阳春白雪与下里巴人：论肌肉与思维</a>（48 小时、两个模型、六个版本之后的复盘）</p>
 <p style="color: var(--scope-text-muted); font-size: 0.85rem">随笔与技术：<a href="blog.html">博客</a>，电台怎么接上云端，以及上线首日学到了什么。</p>
 </body>

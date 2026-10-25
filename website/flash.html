@@ -168,8 +168,7 @@
 
       <h2>这条路是给谁的</h2>
       <p>
-        W103D（及同家族的 W102D / W105D）出厂时系统已经在 eMMC 里，插电就能用。
-        会走这一页的只有两种人：
+        W103D（及同家族的 W102D / W105D）出厂时系统已经在 eMMC 里，插电就能用。会走这一页的只有两种人：
       </p>
       <ul>
         <li>
@@ -192,8 +191,7 @@
             <td>U 盘</td>
             <td>
               <strong>≥ 8 GB</strong>（镜像解开 3.43 GiB；标称 4 GB
-              的盘实际常只有 3.6 GiB，别赌）。
-              <strong>盘上原有的东西会全部消失。</strong>
+              的盘实际常只有 3.6 GiB，别赌）。<strong>盘上原有的东西会全部消失。</strong>
             </td>
           </tr>
           <tr>
@@ -265,7 +263,7 @@
 确认请输入 ERASE（大小写均可，其它任何输入都会取消）：</pre>
 
       <p>
-        输 <code>ERASE</code> 回车，开始写。写入时显示进度与速度；写完还有一段
+        输 <code>ERASE</code>回车，开始写。写入时显示进度与速度；写完还有一段
         <strong>回读校验</strong> —— 它会把整份镜像从 U 盘读回来重新算一遍
         SHA-256。
       </p>
@@ -282,12 +280,12 @@
       <p>
         这个工具只认
         <strong>USB / 可移动介质</strong
-        >。系统盘和内置硬盘不会出现在可写列表里， 也没有「我确定」的覆盖开关 ——
+        >。系统盘和内置硬盘不会出现在可写列表里，也没有「我确定」的覆盖开关 ——
         那不是没做完，是刻意这么写的：弄错一次的代价是整台电脑。
       </p>
       <p>
         反过来也有代价：<strong>有些读卡器会把 SD 卡报成「固定盘」</strong
-        >，那就不会出现在列表里。 换一个读卡器，或走<a href="w103d.html"
+        >，那就不会出现在列表里。换一个读卡器，或走<a href="w103d.html"
           >手工路线</a
         >（Rufus / balenaEtcher）。
       </p>
@@ -341,7 +339,7 @@
       <p>
         这一步在盒子上做（SSH 或 HDMI+键盘都行）。<strong
           >盘上这套系统会被整份复制进 eMMC</strong
-        >， 之后拔掉 U 盘，盒子就从 eMMC 启动。
+        >，之后拔掉 U 盘，盒子就从 eMMC 启动。
       </p>
       <p>先确认三条前置，缺一条就别下笔：</p>
       <pre><code class="lang-bash">grep -E "^MODEL_ID|^DISK_TYPE" /etc/ophub-release     # 必须 307 / usb
@@ -351,7 +349,7 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
       <pre><code class="lang-bash">nohup sh -c 'printf "307\n1\n" | /usr/sbin/armbian-install' &gt; /root/emmc-install.log 2&gt;&amp;1 &amp;</code></pre>
       <p>
         两个答案是 <strong>307</strong>（本板型）和 <strong>1</strong>（装到
-        eMMC）。 <strong>永远不要加 <code>-m yes</code></strong> ——
+        eMMC）。<strong>永远不要加 <code>-m yes</code></strong> ——
         那会换掉本板的 <code>u-boot-w103d.bin</code>。
       </p>
 
@@ -360,21 +358,18 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
         <code
           >grep -c "Installation completed successfully"
           /root/emmc-install.log</code
-        >
-        等于 <code>1</code>。实测约 <strong>2 分 15 秒</strong>。<br /><br />
+        >等于 <code>1</code>。实测约 <strong>2 分 15 秒</strong>。<br /><br />
         <strong>别这样等</strong>：<code
           >while pgrep -f armbian-install; do sleep 10; done</code
         >
         ——
-        <code>pgrep -f</code>
-        会匹配到你自己这条命令行，循环永不退出；现场看起来像
-        「装了两个小时」，日志显示两分钟就完了。
+        <code>pgrep -f</code>会匹配到你自己这条命令行，循环永不退出；现场看起来像「装了两个小时」，日志显示两分钟就完了。
       </div>
 
       <h2>第四步：断电前四项，全绿才准拔盘</h2>
       <p>
         这四项把「能开机」和「开完还是好的」分开。逐条命令见
-        <code>docs</code> 里的 emmc 章节，这里给判据：
+        <code>docs</code>里的 emmc 章节，这里给判据：
       </p>
       <table>
         <thead>
@@ -397,29 +392,29 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
             <td>2</td>
             <td>原厂引导两段</td>
             <td>
-              与 <code>/usr/lib/u-boot/mybox-bootloader.img</code> 逐字节一致
+              与 <code>/usr/lib/u-boot/mybox-bootloader.img</code>逐字节一致
             </td>
           </tr>
           <tr>
             <td>3</td>
             <td>引导指向</td>
             <td>
-              <code>uEnv.txt</code> 里的 <code>root=UUID=</code> 等于新
-              <code>p2</code> 的 UUID
+              <code>uEnv.txt</code>里的 <code>root=UUID=</code>等于新
+              <code>p2</code>的 UUID
             </td>
           </tr>
           <tr>
             <td>4</td>
             <td>代码身份</td>
             <td>
-              挂上新 <code>p2</code> 后 <code>version.txt</code> 与镜像一致
+              挂上新 <code>p2</code>后 <code>version.txt</code>与镜像一致
             </td>
           </tr>
         </tbody>
       </table>
       <p>
         四项过了 → <code>poweroff</code>（<strong>别直接拔电</strong>）→ 拔掉 U
-        盘 → 再上电。 这次应当从 eMMC 启动：<code>findmnt -no SOURCE /</code> 是
+        盘 → 再上电。这次应当从 eMMC 启动：<code>findmnt -no SOURCE /</code>是
         <code>/dev/mmcblk2p2</code>。
       </p>
 
@@ -452,7 +447,7 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
       </table>
       <p>
         这三条是<strong>同一批镜像共用的公开值</strong>，而且镜像默认允许 root
-        用口令登录 SSH。 通电第一件事就是全部改掉。
+        用口令登录 SSH。通电第一件事就是全部改掉。
       </p>
 
       <h2>常见问题</h2>
@@ -468,8 +463,7 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
           <tr>
             <td>列表里没有我的 U 盘</td>
             <td>
-              它被报成「固定盘」（多见于读卡器 + SD 卡），或容量小于镜像。
-              换读卡器，或走<a href="w103d.html">手工路线</a>
+              它被报成「固定盘」（多见于读卡器 + SD 卡），或容量小于镜像。换读卡器，或走<a href="w103d.html">手工路线</a>
             </td>
           </tr>
           <tr>
@@ -524,14 +518,14 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
       <ul>
         <li>
           <strong>Windows</strong>：Rufus 或 balenaEtcher，选
-          <code>.img.gz</code> 本体 （两者都能直接吃
+          <code>.img.gz</code>本体（两者都能直接吃
           gz），模式是「从镜像写入」，<strong>不是</strong>解压后复制文件。
         </li>
         <li>
           <strong>macOS</strong>：<code
             >gzip -dc … | sudo dd of=/dev/rdiskN bs=4m</code
           >
-          —— 用 <code>rdiskN</code>（裸设备），<code>diskN</code> 慢十倍以上。
+          —— 用 <code>rdiskN</code>（裸设备），<code>diskN</code>慢十倍以上。
         </li>
         <li>
           <strong>Linux</strong>：<code
@@ -547,10 +541,8 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
       </p>
 
       <p style="color: var(--muted); font-size: 0.9rem; margin-top: 2.5rem">
-        脚本源码：仓库 <code>website/downloads/MRRC-W103D-Flash.ps1</code>。
-        刷机镜像的稳定地址是
-        <code>downloads/MRRC-Modern-w103d.img.gz</code>，校验值随镜像一起发布
-        （<code>.img.gz.sha256</code>）。
+        脚本源码：仓库 <code>website/downloads/MRRC-W103D-Flash.ps1</code>。刷机镜像的稳定地址是
+        <code>downloads/MRRC-Modern-w103d.img.gz</code>，校验值随镜像一起发布（<code>.img.gz.sha256</code>）。
       </p>
     </main>
   </body>

@@ -130,8 +130,7 @@
       <p style="margin: 0 0 1rem"><a href="../w103d-index.html" style="font-size: 0.9rem">← 全部盒子指南</a></p>
       <h1>盒子连不上外网？在你的 Windows 电脑上双击修好</h1>
       <p class="sub">
-        盒子在你家局域网里打得开网页，但<strong>上不了外网</strong>：软件更新一直转、
-        公网入口打不开、诊断包传不上去。用这一页的工具，五分钟内能在你自己的电脑上修好 ——
+        盒子在你家局域网里打得开网页，但<strong>上不了外网</strong>：软件更新一直转、公网入口打不开、诊断包传不上去。用这一页的工具，五分钟内能在你自己的电脑上修好 ——
         <strong>全程只用鼠标和键盘输入，不需要懂 Linux，也不需要密码之外的任何东西。</strong>
       </p>
 
@@ -154,8 +153,7 @@
           <code>192.168.1.50</code>。
         </li>
         <li>
-          <strong>盒子的网页登录口令</strong> —— 你平时打开盒子页面输入的那个。
-          <span style="color: var(--muted)">不是 SSH 的、也不是 Wi-Fi 的。</span>
+          <strong>盒子的网页登录口令</strong> —— 你平时打开盒子页面输入的那个。<span style="color: var(--muted)">不是 SSH 的、也不是 Wi-Fi 的。</span>
         </li>
       </ol>
 
@@ -166,24 +164,22 @@
         </a>
       </p>
       <p>
-        约 9 KB，单个文件，不用安装。放在桌面或下载文件夹，
-        <strong>双击运行</strong>即可。它不往任何地方上传东西，也不会改你的路由器。
+        约 9 KB，单个文件，不用安装。放在桌面或下载文件夹，<strong>双击运行</strong>即可。它不往任何地方上传东西，也不会改你的路由器。
       </p>
       <div class="callout">
         系统要求：Windows 10（1809 及以上）或 Windows 11。用的都是系统自带的
-        <code>curl.exe</code> 与 PowerShell，不需要额外装任何软件。
+        <code>curl.exe</code>与 PowerShell，不需要额外装任何软件。
       </div>
 
       <h2>三步</h2>
       <ol>
         <li>双击 <code>MRRC-FixDNS.cmd</code>。会弹出一个黑色的窗口，这是正常的。</li>
         <li>
-          提示 <code>Box IP address…</code> 时，输入盒子的 IP（例如
+          提示 <code>Box IP address…</code>时，输入盒子的 IP（例如
           <code>192.168.1.50</code>），回车。
         </li>
         <li>
-          提示 <code>Web password…</code> 时，输入<strong>网页登录口令</strong>，回车。
-          <span style="color: var(--muted)">输入时屏幕上不显示字符，这是正常的。</span>
+          提示 <code>Web password…</code>时，输入<strong>网页登录口令</strong>，回车。<span style="color: var(--muted)">输入时屏幕上不显示字符，这是正常的。</span>
         </li>
       </ol>
       <p>然后它会自己做完全部事情，并把过程打印出来。</p>
@@ -198,17 +194,15 @@
 fix_resolv_conf: /etc/resolv.conf is already a symlink — nothing to do
 fix_resolv_conf: done</pre>
       <p>
-        最后一行会显示 <code>DONE - the box now resolves through systemd-resolved.</code>。
-        按任意键关掉窗口，然后回浏览器：
+        最后一行会显示 <code>DONE - the box now resolves through systemd-resolved.</code>。按任意键关掉窗口，然后回浏览器：
       </p>
       <ul>
         <li>☰ →「软件更新」→「检查更新」应该几秒内有结果（不再转圈）；</li>
-        <li>公网入口 <code>你的呼号.mrrc.vlsc.net</code> 能打开了；</li>
+        <li>公网入口 <code>你的呼号.mrrc.vlsc.net</code>能打开了；</li>
         <li>「🐞 遇到问题」里的诊断包能传上去了。</li>
       </ul>
       <div class="callout">
-        这些都没好转？说明不是同一个问题。把那几行字截图，连同盒子的型号与版本
-        （页面 ☰ 菜单底部有）一起发给我们。
+        这些都没好转？说明不是同一个问题。把那几行字截图，连同盒子的型号与版本（页面 ☰ 菜单底部有）一起发给我们。
       </div>
 
       <h2>窗口里报错了怎么办</h2>
@@ -231,8 +225,7 @@ fix_resolv_conf: done</pre>
           <tr>
             <td><code>This box predates the repair</code>（或提示 <code>404</code>）</td>
             <td>
-              这台盒子的固件比这个工具早，工具还没法替它修。
-              <strong>把这一句截图发给卖家/维护者</strong>，他们那边有办法，你不需要自己做什么。
+              这台盒子的固件比这个工具早，工具还没法替它修。<strong>把这一句截图发给卖家/维护者</strong>，他们那边有办法，你不需要自己做什么。
             </td>
           </tr>
           <tr>
@@ -248,9 +241,7 @@ fix_resolv_conf: done</pre>
 
       <h2>它到底做了什么（不用看懂也能用）</h2>
       <p>
-        你的电脑只是<strong>通知</strong>盒子：让它把自己记错的那个"外网地址簿"换回正确的。
-        真正的修复是盒子自己做的，而且<strong>可以反悔</strong>：旧文件被备份保留，
-        卖家随时能还原。整个过程不传出你的口令、不上传任何文件、不改路由器设置。
+        你的电脑只是<strong>通知</strong>盒子：让它把自己记错的那个「外网地址簿」换回正确的。真正的修复是盒子自己做的，而且<strong>可以反悔</strong>：旧文件被备份保留，卖家随时能还原。整个过程不传出你的口令、不上传任何文件、不改路由器设置。
       </p>
 
     </main>

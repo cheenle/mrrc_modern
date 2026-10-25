@@ -74,7 +74,7 @@
         <span class="badge"><i class="fas fa-box-open"></i> W103D · 用户指南</span>
         <h1>拿到盒子之后：发货版 W103D 用户指南</h1>
         <p>系统已经写进 eMMC，口令、时区、Wi-Fi 卖家都设好了：插电、用浏览器登录就能干活。这页讲清楚出厂设了什么、电台怎么接、验收看哪几项，以及出了问题先自己查什么。</p>
-        <div class="actions"><a class="btn btn-primary" href="../w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a><a class="btn" href="../w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a><a class="btn" href="../w103d-faq.html"><i class="fas fa-circle-question"></i> 连不上门户？常见问题</a><a class="btn" href="../index.html#download"><i class="fas fa-download"></i> 下载页</a></div>
+        <div class="actions"><a class="btn btn-primary" href="../w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a><a class="btn" href="../w103d-remote.html"><i class="fas fa-gamepad"></i>遥控器指南</a><a class="btn" href="../w103d-faq.html"><i class="fas fa-circle-question"></i>连不上门户？常见问题</a><a class="btn" href="../index.html#download"><i class="fas fa-download"></i>下载页</a></div>
     </div>
 </header>
 
@@ -103,7 +103,7 @@
 <tr><td>它能做的事</td><td>把电台的频率、模式、滤波、功率，收发音频和频谱瀑布搬到浏览器和手机上；局域网里直接用，也可以申请一个公网入口从外面用</td></tr>
 </tbody></table></div>
 <p>盒子里<strong>没有</strong>电台、天线、馈线和网线，也<strong>不带 USB 网卡</strong>；有这些需要的话自己备。机身自带 RJ45，一根普通网线就能连。随附的电源适配器直接用就行。</p>
-<blockquote><p><strong>关于型号</strong>：W102D、W103D、W105D 是同一个家族（同一颗 S905L3A、同一套板级补丁）， 固件通用，本机烧的是按 <strong>W103D 板型</strong>（<code>MODEL_ID=307</code> / <code>meson-g12a-w103d.dtb</code>）编的那一套。 所以你会在文档、日志、镜像文件名里反复看到 "W103D" —— 指固件家族，不是说外壳上那个型号。</p></blockquote>
+<blockquote><p><strong>关于型号</strong>：W102D、W103D、W105D 是同一个家族（同一颗 S905L3A、同一套板级补丁），固件通用，本机烧的是按 <strong>W103D 板型</strong>（<code>MODEL_ID=307</code> / <code>meson-g12a-w103d.dtb</code>）编的那一套。所以你会在文档、日志、镜像文件名里反复看到 "W103D" —— 指固件家族，不是说外壳上那个型号。</p></blockquote>
 <p>---</p>
 <h2 id="2-出厂已经设好的东西">2. 出厂已经设好的东西</h2>
 <div class="table-scroll"><table>
@@ -120,19 +120,19 @@
 <tr><td>主机名</td><td><code>MRRC-Modern</code></td><td>设置页「盒子身份」</td></tr>
 <tr><td>HTTPS 证书</td><td>自签，首启动时在这台机器上生成</td><td>不用改，浏览器会警告一次</td></tr>
 </tbody></table></div>
-<p>⚠️ <strong>三条固定口令是同一批盒子共用的公开值。</strong> 拿到其中任意一台，就知道整批的口令。登录之后第一件事就是把三条都换掉——设置页里就能改：网页那条在「登录口令」，root 与 mrrc 在「系统账号口令」。</p>
+<p>⚠️ <strong>三条固定口令是同一批盒子共用的公开值。</strong>拿到其中任意一台，就知道整批的口令。登录之后第一件事就是把三条都换掉——设置页里就能改：网页那条在「登录口令」，root 与 mrrc 在「系统账号口令」。</p>
 <p>---</p>
 <h2 id="3-第一次通电">3. 第一次通电</h2>
 <p>- 路由器后台的 DHCP 客户端列表里找主机名 <code>MRRC-Modern</code>； - 接上 HDMI 和键盘，登录后敲 <code>ip -4 addr</code>； - 在同一个路由器的电脑上试 <code>https://MRRC-Modern:8888</code>（有的路由器不做这个名字解析，那就用前两个办法）。</p>
 <ol>
 <li><strong>接电。</strong> Wi-Fi 已经代配好了，网线可以不插；想更稳就插上——有线优先，音频延迟也更低。</li>
-<li><strong>等一分钟。</strong> 盒子自己连 Wi-Fi、起服务，全程不需要人管。</li>
-<li><strong>找到它的地址。</strong> 三个办法任选一个：</li>
+<li><strong>等一分钟。</strong>盒子自己连 Wi-Fi、起服务，全程不需要人管。</li>
+<li><strong>找到它的地址。</strong>三个办法任选一个：</li>
 </ol>
 <p>---</p>
 <h2 id="4-打开网页-改口令">4. 打开网页，改口令</h2>
 <p>浏览器访问 <code>https://&lt;盒子地址&gt;:8888</code>。</p>
-<p><strong>第一次会弹「证书不安全」。</strong> 这是自签证书的正常现象：盒子的证书是它自己签的，没有交给任何一家 CA。点「高级」→「继续前往」，以后就记住了。用 <code>abcd!1234</code> 登录，然后进 ☰ →「设置」→「登录口令」把它改掉。</p>
+<p><strong>第一次会弹「证书不安全」。</strong>这是自签证书的正常现象：盒子的证书是它自己签的，没有交给任何一家 CA。点「高级」→「继续前往」，以后就记住了。用 <code>abcd!1234</code>登录，然后进 ☰ →「设置」→「登录口令」把它改掉。</p>
 <p>---</p>
 <h2 id="5-管-wi-fi">5. 管 Wi-Fi</h2>
 <p>设置页的 Wi-Fi 区不只是一次性的「连一下」，它是一张网络清单：</p>
@@ -158,7 +158,7 @@
 <p>一根 USB 线就够：CAT 控制和收发音频都走它。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>电台</th><th>怎么插</th></tr></thead><tbody>
-<tr><td>Yaesu FT-710</td><td>机身<strong>上方那个 <code>Enhanced</code> 口</strong>。插 <code>Standard</code> 口可能只有控制、没有真频谱</td></tr>
+<tr><td>Yaesu FT-710</td><td>机身<strong>上方那个 <code>Enhanced</code>口</strong>。插 <code>Standard</code>口可能只有控制、没有真频谱</td></tr>
 <tr><td>Icom IC-7300 / IC-7300MK2</td><td>任意 USB 口（CI-V 与声卡同一条线）</td></tr>
 <tr><td>其它型号</td><td>见 §10.4，其中 8 个是实验性机型，默认只收不发</td></tr>
 </tbody></table></div>
@@ -179,8 +179,8 @@
 <p>手机连同一个路由器（或同一个 Wi-Fi），浏览器打开同一个地址即可。界面是按手机做的，横屏更舒服。 iPhone 和 Android 都能「添加到主屏幕」，用起来和 App 差不多。盒子功耗低、不发热，可以常年不关。要重启就用设置页的「重启」，别直接拔电。</p>
 <p>---</p>
 <h2 id="9-出问题怎么办">9. 出问题怎么办</h2>
-<p><strong>先换一个浏览器，或者换一台设备再试。</strong> 一半的「打不开」是浏览器缓存或代理造成的，不在盒子上。</p>
-<p><strong>如果是「公网入口连不上」「证书报错」「时间不对」这一类</strong>，它们的真因分属四个完全不同的层（网络 / 时钟 / DNS / 本机配置），报错却长得一样：先按 <a href="w103d-faq.html"><strong>常见问题：先看这一行</strong></a> 那张判据表定位到层，再回来查下面这张表。</p>
+<p><strong>先换一个浏览器，或者换一台设备再试。</strong>一半的「打不开」是浏览器缓存或代理造成的，不在盒子上。</p>
+<p><strong>如果是「公网入口连不上」「证书报错」「时间不对」这一类</strong>，它们的真因分属四个完全不同的层（网络 / 时钟 / DNS / 本机配置），报错却长得一样：先按 <a href="w103d-faq.html"><strong>常见问题：先看这一行</strong></a>那张判据表定位到层，再回来查下面这张表。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>现象</th><th>最可能的原因</th><th>怎么办</th></tr></thead><tbody>
 <tr><td>找不到盒子的地址</td><td>路由器换了网段，或 Wi-Fi 没连上</td><td>插网线（最省事）；或 §9.10 的手机热点；或接 HDMI 敲 <code>ip -4 addr</code></td></tr>
@@ -189,10 +189,10 @@
 <tr><td>证书警告</td><td>自签证书</td><td>「高级」→「继续前往」，一次即可</td></tr>
 <tr><td>登录说口令错</td><td>口令被改过</td><td>SSH 进去敲 <code>mrrc-show-password</code>，看当前网页口令</td></tr>
 <tr><td>电台没反应</td><td>线、电源、串口</td><td>见 §10.4</td></tr>
-<tr><td>有频谱，却是光滑的假曲线</td><td>FT-710 插错口</td><td>换到 <code>Enhanced</code> 口，见 §10.5</td></tr>
+<tr><td>有频谱，却是光滑的假曲线</td><td>FT-710 插错口</td><td>换到 <code>Enhanced</code>口，见 §10.5</td></tr>
 <tr><td>没有声音</td><td>音量、声卡，或浏览器拦了自动播放</td><td>见 §10.6</td></tr>
 <tr><td>PTT 按下去没反应</td><td>机型在 8 个实验性之列</td><td>见 §10.7</td></tr>
-<tr><td>时间不对</td><td>没联网，NTP 没同步</td><td>联网后一分钟内自愈，<code>timedatectl</code> 看 <code>synchronized: yes</code></td></tr>
+<tr><td>时间不对</td><td>没联网，NTP 没同步</td><td>联网后一分钟内自愈，<code>timedatectl</code>看 <code>synchronized: yes</code></td></tr>
 <tr><td>忘了 root 口令</td><td>—</td><td>只能重刷（找卖家），或者接 HDMI 进单用户模式改——所以第一件事就改掉并记住</td></tr>
 </tbody></table></div>
 <h3 id="9-4-电台没反应">9.4 电台没反应</h3>
@@ -200,16 +200,16 @@
 <pre><code class="lang-bash">ls /dev/ttyUSB* /dev/ttyACM*   # 控制串口
 arecord -l                     # 电台的 USB 声卡（RX）
 aplay -l                       # 播放设备（TX）</code></pre>
-<p>三样都没有：换一根 USB 线、确认电台是开着的、换一个 USB 口。只有串口没有声卡：多半是插错了口（FT-710 用 <code>Enhanced</code>），或者电台菜单里 USB 音频被关掉了。选完机型后如果串口还是空，<code>mrrc-radio show</code> 看一眼当前生效的配置，<code>mrrc-radio use &lt;型号&gt;</code> 可以重选。</p>
+<p>三样都没有：换一根 USB 线、确认电台是开着的、换一个 USB 口。只有串口没有声卡：多半是插错了口（FT-710 用 <code>Enhanced</code>），或者电台菜单里 USB 音频被关掉了。选完机型后如果串口还是空，<code>mrrc-radio show</code>看一眼当前生效的配置，<code>mrrc-radio use &lt;型号&gt;</code>可以重选。</p>
 <h3 id="9-5-频谱是一条光滑的假曲线">9.5 频谱是一条光滑的假曲线</h3>
-<p>那说明频谱走的是 S 表合成的回退路径，不是真数据。FT-710 最常见的原因是插在 <code>Standard</code> 口—— 换到上方的 <code>Enhanced</code> 口，它同时承载 CAT 和频谱。Icom 机型则由 CI-V 的 <code>0x27</code> 送频谱，不需要额外的线；如果仍是假曲线，看一眼设置页的「盒子系统」有没有报错。</p>
+<p>那说明频谱走的是 S 表合成的回退路径，不是真数据。FT-710 最常见的原因是插在 <code>Standard</code>口—— 换到上方的 <code>Enhanced</code>口，它同时承载 CAT 和频谱。Icom 机型则由 CI-V 的 <code>0x27</code>送频谱，不需要额外的线；如果仍是假曲线，看一眼设置页的「盒子系统」有没有报错。</p>
 <h3 id="9-6-没有声音">9.6 没有声音</h3>
 <p><code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code>，把它们清空让程序自己找。</p>
 <ol>
 <li>浏览器先拦住自动播放是常态：先在页面上点一下，再开音频；</li>
 <li>手机的话，检查是不是开了静音开关；</li>
-<li>盒子侧确认声卡选对了——<code>arecord -l</code> 里应该能看到电台的 USB 声卡；</li>
-<li>实在不行在 SSH 里看 <code>/opt/mrrc_modern/env/mrrc.env</code> 的两行设备名：</li>
+<li>盒子侧确认声卡选对了——<code>arecord -l</code>里应该能看到电台的 USB 声卡；</li>
+<li>实在不行在 SSH 里看 <code>/opt/mrrc_modern/env/mrrc.env</code>的两行设备名：</li>
 </ol>
 <h3 id="9-7-ptt-按下去没反应">9.7 PTT 按下去没反应</h3>
 <p>MRRC 支持十一个型号，但<strong>只有三个是逐条真机验证过的</strong>：<code>ft710</code>、<code>ic7300</code>、<code>ic7300mk2</code>。其余八个（<code>ic705</code> <code>ic7610</code> <code>ic7760</code> <code>ftdx10</code> <code>ftdx101d</code> <code>ftdx101mp</code> <code>ftx1</code> <code>ft891</code>）的指令来自 设备手册和 Hamlib，没有实测，<strong>默认只收不发</strong>。要在这八个上发射，得显式开门：</p>
@@ -217,10 +217,10 @@ aplay -l                       # 播放设备（TX）</code></pre>
 systemctl restart mrrc-modern</code></pre>
 <p>在没验证过的语义上按键，对电台和天线都不算友好，所以这条默认是关的。</p>
 <h3 id="9-8-把问题交出去">9.8 把问题交出去</h3>
-<p>界面右下角（☰ 菜单里）有一个 <strong>「🐞 遇到问题」</strong> 页面：填一句现象，点「生成诊断包」，它会自动收集日志、配置（口令已打码）和版本号，然后上传给维护者。不想上传也行，可以只保存到本地再自己发出去。</p>
+<p>界面右下角（☰ 菜单里）有一个 <strong>「🐞 遇到问题」</strong>页面：填一句现象，点「生成诊断包」，它会自动收集日志、配置（口令已打码）和版本号，然后上传给维护者。不想上传也行，可以只保存到本地再自己发出去。</p>
 <p><strong>公网入口打不开</strong>的时候（局域网里能打开、外面访问不到），诊断包就传不上去 —— 上传要盒子能上网，而坏掉的正是网络。这种情形用<a href="diag.html"><strong>局域网取包指南</strong></a>：下载 <code>MRRC-Diag.cmd</code>，在你的 Windows 电脑上双击运行，包会直接拷到本机（不需要盒子能上网，也不需要你会 SSH）。</p>
 <h3 id="9-8b-升级到新版本-不用-ssh">9.8b 升级到新版本（不用 SSH）</h3>
-<blockquote><p><strong>镜像代差</strong>：这张卡片随 2026-10-18 之后的镜像（盒子线 <strong>1.28.2</strong> 起）。<strong>1.27 及更早的镜像里没有它</strong> —— 包括 1.24.x：那些版本只能走 SSH 的 <code>mrrc-update</code>，或重刷镜像。  <strong>1.25.5 及更早的镜像别直接跑 <code>mrrc-update</code></strong>：那一版用 <code>rsync --delete</code> 同步， 会连带删掉 <code>env/</code>、<code>profiles/</code> 和<strong>录音</strong>。先把那份脚本换掉（或整目录备份）再跑； 拿不准就重刷镜像，那条路不碰数据。</p></blockquote>
+<blockquote><p><strong>镜像代差</strong>：这张卡片随 2026-10-18 之后的镜像（盒子线 <strong>1.28.2</strong>起）。<strong>1.27 及更早的镜像里没有它</strong> —— 包括 1.24.x：那些版本只能走 SSH 的 <code>mrrc-update</code>，或重刷镜像。<strong>1.25.5 及更早的镜像别直接跑 <code>mrrc-update</code></strong>：那一版用 <code>rsync --delete</code>同步，会连带删掉 <code>env/</code>、<code>profiles/</code>和<strong>录音</strong>。先把那份脚本换掉（或整目录备份）再跑；拿不准就重刷镜像，那条路不碰数据。</p></blockquote>
 <p>☰ → <strong>设置</strong> → 「<strong>软件更新</strong>」：</p>
 <ol>
 <li>页面打开就会自动查一次；也可以点「<strong>检查更新</strong>」；</li>
@@ -235,16 +235,16 @@ systemctl restart mrrc-modern</code></pre>
 <li>万一新版本起不来，盒子会<strong>自己回滚</strong>到上一个版本（90 秒内探不到服务就还原并重启），</li>
 <li>磁盘剩余不足 400 MB 时拒绝升级（先删一些旧录音，见 ☰ → 录音）。</li>
 </ul>
-<p><strong>不在盒子旁边、也不想教对方点页面？</strong> 用 <a href="../update.html"><strong>远程升级指南</strong></a>： 在你自己的 Windows 电脑上跑 <code>MRRC-Update.cmd</code>，输入盒子的 IP 和网页口令即可， 它会当场告诉你「升上去了」还是「被回滚了」。</p>
+<p><strong>不在盒子旁边、也不想教对方点页面？</strong>用 <a href="../update.html"><strong>远程升级指南</strong></a>：在你自己的 Windows 电脑上跑 <code>MRRC-Update.cmd</code>，输入盒子的 IP 和网页口令即可，它会当场告诉你「升上去了」还是「被回滚了」。</p>
 <h3 id="9-9-回到出厂状态">9.9 回到出厂状态</h3>
 <p>两件事别混：</p>
 <ul>
 <li><strong>只想清掉配错的网络/口令</strong>：在设置页里改回去就行，不用重刷。</li>
-<li><strong>想要一台干净的盒子</strong>：重刷镜像（找卖家，或者按 <a href="w103d.html">完整指南</a> 自己刷）。注意重刷会把盒子上的录音和配置一起清掉，先备份。</li>
+<li><strong>想要一台干净的盒子</strong>：重刷镜像（找卖家，或者按 <a href="w103d.html">完整指南</a>自己刷）。注意重刷会把盒子上的录音和配置一起清掉，先备份。</li>
 </ul>
 <p>---</p>
 <h3 id="9-10-盒子连不上任何网络了">9.10 盒子连不上任何网络了</h3>
-<p>这是唯一需要"在外面救"的情形。盒子出厂时预置了一条<strong>救急 Wi-Fi</strong>：</p>
+<p>这是唯一需要「在外面救」的情形。盒子出厂时预置了一条<strong>救急 Wi-Fi</strong>：</p>
 <div class="table-scroll"><table>
 <thead><tr><th></th><th></th></tr></thead><tbody>
 <tr><td>热点名（SSID）</td><td><code>rescue</code></td></tr>
@@ -256,16 +256,16 @@ systemctl restart mrrc-modern</code></pre>
 <p>设置页 →「系统账号口令」，选账号、输两遍、保存即可（不用 SSH）。改完立刻生效。改了又忘、连 SSH 也进不去，就只能重刷或寄回。</p>
 <h3 id="9-12-用蓝牙遥控器操作电台">9.12 用蓝牙遥控器操作电台</h3>
 <p>完整的按键表、配对失败的排查步骤和换遥控器的方法，见 <a href="w103d-remote.html">遥控器指南</a>。</p>
-<p>盒子接上一支蓝牙遥控器（实测：中国移动的语音遥控器 <code>CMCC_Voice_Remote</code>）， 人站在盒子旁边就能调频、切模式、按住语音键发射，不用开手机或电脑。</p>
+<p>盒子接上一支蓝牙遥控器（实测：中国移动的语音遥控器 <code>CMCC_Voice_Remote</code>），人站在盒子旁边就能调频、切模式、按住语音键发射，不用开手机或电脑。</p>
 <h3 id="配对-一次性-全在网页上">配对（一次性，全在网页上）</h3>
 <ol>
-<li>打开 <code>/settings</code> 页面，找到「<strong>遥控器</strong>」；</li>
+<li>打开 <code>/settings</code>页面，找到「<strong>遥控器</strong>」；</li>
 <li>让遥控器进入配对模式：<strong>同时长按「OK + 返回」约 5 秒</strong>，指示灯快闪；</li>
-<li>点「<strong>搜索附近的遥控器</strong>」（约 12 秒），列表里出现 <code>CMCC_Voice_Remote</code> 后点「配对」。</li>
+<li>点「<strong>搜索附近的遥控器</strong>」（约 12 秒），列表里出现 <code>CMCC_Voice_Remote</code>后点「配对」。</li>
 </ol>
 <p>配对成功时页面显示 <strong>「已配对，按键可用 ✓」</strong>。看到这一句就可以用了：按一下遥控器的 方向键，电台的频率会跟着动。</p>
-<p><strong>页面说「已配对，但按键还没反应」怎么办？</strong> 点旁边的「<strong>重配</strong>」按钮，它会清掉旧配对 并给蓝牙控制器上下电；等提示出来，让遥控器重新进入配对模式，再点一次「配对」。</p>
-<p>这一句判据不是随便写的：蓝牙这里有个坑，<strong>「配对成功」不等于「能用」</strong>——旧配对密钥会让 链路停在未加密状态，遥控器于是拒绝一切属性读写，系统建不出键盘设备，按什么键都没有反应。 页面判断的是「有没有真的建成键盘设备」，所以它说可用就是可用。</p>
+<p><strong>页面说「已配对，但按键还没反应」怎么办？</strong>点旁边的「<strong>重配</strong>」按钮，它会清掉旧配对 并给蓝牙控制器上下电；等提示出来，让遥控器重新进入配对模式，再点一次「配对」。</p>
+<p>这一句判据不是随便写的：蓝牙这里有个坑，<strong>「配对成功」不等于「能用」</strong>——旧配对密钥会让 链路停在未加密状态，遥控器于是拒绝一切属性读写，系统建不出键盘设备，按什么键都没有反应。页面判断的是「有没有真的建成键盘设备」，所以它说可用就是可用。</p>
 <p>（另一半：如果换了一支遥控器，它的按键对不上，见 <a href="w103d-remote.html">遥控器指南</a> §6。）</p>
 <h3 id="按键">按键</h3>
 <div class="table-scroll"><table>
@@ -280,15 +280,15 @@ systemctl restart mrrc-modern</code></pre>
 <tr><td>音量 + / −</td><td>电台 AF 增益，每次 5 %（20 下到满格）</td></tr>
 <tr><td>电源</td><td>留给本地控制（不再关盒子）</td></tr>
 </tbody></table></div>
-<p><code>电视</code> 键不发蓝牙 —— 那类按键只发红外去控电视，盒子收不到。</p>
+<p><code>电视</code>键不发蓝牙 —— 那类按键只发红外去控电视，盒子收不到。</p>
 <h3 id="看不到按键时">看不到按键时</h3>
-<p>按顺序查：<code>bluetoothctl info &lt;地址&gt;</code> 是否 <code>Paired: yes</code>；<code>journalctl -u bluetooth -n 40</code> 里有没有 <code>unlikely error</code>（有 ⇒ 回到配对那一节重配）； <code>systemctl status mrrc-localctl</code> 与 <code>journalctl -u mrrc-localctl</code> 是否在跑。 <code>power</code> 键如果仍然关机，说明服务层的 <code>HandlePowerKey=ignore</code> 没生效 （<code>grep HandlePowerKey /etc/systemd/logind.conf</code>）。</p>
+<p>按顺序查：<code>bluetoothctl info &lt;地址&gt;</code>是否 <code>Paired: yes</code>；<code>journalctl -u bluetooth -n 40</code>里有没有 <code>unlikely error</code>（有 ⇒ 回到配对那一节重配）；<code>systemctl status mrrc-localctl</code>与 <code>journalctl -u mrrc-localctl</code>是否在跑。<code>power</code>键如果仍然关机，说明服务层的 <code>HandlePowerKey=ignore</code>没生效（<code>grep HandlePowerKey /etc/systemd/logind.conf</code>）。</p>
 <h2 id="10-三条红线">10. 三条红线</h2>
 <p>的公网入口（☰ →「公网入口」），它是一条出站隧道，不开放任何入站端口。</p>
 <ol>
-<li><strong>只用 2.4 GHz。</strong> 这块无线网卡连 5 GHz 会「关联成功但数据不通」，一百秒后连扫描都失效，只能重启。路由器的双频合并（同一个名字）会踩这个坑，建议把 2.4 G 和 5 G 分开命名。</li>
-<li><strong>别把 8888 端口直接映射到公网。</strong> 那是一条明文暴露的控制入口。要在外面用，走 Cloud Hub</li>
-<li><strong>PTT 按下去是真发射。</strong> 天线或假负载接好再按；发射时长上限默认 120 秒，是保护不是限制。</li>
+<li><strong>只用 2.4 GHz。</strong>这块无线网卡连 5 GHz 会「关联成功但数据不通」，一百秒后连扫描都失效，只能重启。路由器的双频合并（同一个名字）会踩这个坑，建议把 2.4 G 和 5 G 分开命名。</li>
+<li><strong>别把 8888 端口直接映射到公网。</strong>那是一条明文暴露的控制入口。要在外面用，走 Cloud Hub</li>
+<li><strong>PTT 按下去是真发射。</strong>天线或假负载接好再按；发射时长上限默认 120 秒，是保护不是限制。</li>
 </ol>
 <p>---</p>
 <h2 id="11-想再往前一步">11. 想再往前一步</h2>

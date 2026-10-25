@@ -74,7 +74,7 @@
         <span class="badge"><i class="fas fa-circle-question"></i> W103D · 常见问题</span>
         <h1>「连不上门户」，先看这一行</h1>
         <p>网络、DNS、时钟、证书、隧道 —— 任何一环出问题，页面上都是同一句「连不上」。这一页给的是判据顺序：五条命令先定位到层，再按条目处理，不必猜。</p>
-        <div class="actions"><a class="btn btn-primary" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a><a class="btn" href="../diag.html"><i class="fas fa-stethoscope"></i> 入口打不开时取诊断包</a><a class="btn" href="../w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a></div>
+        <div class="actions"><a class="btn btn-primary" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a><a class="btn" href="../diag.html"><i class="fas fa-stethoscope"></i>入口打不开时取诊断包</a><a class="btn" href="../w103d.html"><i class="fas fa-book"></i>从零刷机的完整指南</a></div>
     </div>
 </header>
 
@@ -91,7 +91,7 @@
 </figure>
 <h1 id="w103d-常见问题-一句话-连不上门户">W103D 常见问题：一句话「连不上门户」</h1>
 <p>盒子报「连不上 <code>portal.mrrc.vlsc.net</code>」的时候，<strong>断点几乎从来不在 portal</strong>。</p>
-<p>2026-10-25 同一天的两台盒子说明了这件事：一台的网络、DNS、时钟、TLS 全部正常，断在<strong>本机配置 文件读不到</strong>；另一台的网络同样正常，断在<strong>本机时钟慢了 24 天</strong>。两台在页面上看到的都是同一句 「连不上」。所以这份文档按<strong>「先看哪一行」</strong>组织，不按原因分类 —— 原因有四类，报错却长得一模一样。</p>
+<p>2026-10-25 同一天的两台盒子说明了这件事：一台的网络、DNS、时钟、TLS 全部正常，断在<strong>本机配置 文件读不到</strong>；另一台的网络同样正常，断在<strong>本机时钟慢了 24 天</strong>。两台在页面上看到的都是同一句「连不上」。所以这份文档按<strong>「先看哪一行」</strong>组织，不按原因分类 —— 原因有四类，报错却长得一模一样。</p>
 <h2 id="一分钟判据">一分钟判据</h2>
 <div class="table-scroll"><table>
 <thead><tr><th>你看到的</th><th>先看这个</th><th>通常是</th></tr></thead><tbody>
@@ -125,12 +125,12 @@ sudo -u mrrc /opt/mrrc_modern/venv/bin/python -c \
    print('net_tls -&gt;', net_tls.urlopen('https://portal.mrrc.vlsc.net/', timeout=15).status)"</code></pre>
 <p>判读口诀：</p>
 <ul>
-<li><strong><code>synchronized: no</code> 且 <code>chronyc sources</code> 是空表</strong> → 先修时间，别去动门户配置。</li>
+<li><strong><code>synchronized: no</code>且 <code>chronyc sources</code>是空表</strong> → 先修时间，别去动门户配置。</li>
 <li><strong>第 4 条 200、界面却说失败</strong> → 不是网络，去看第 1、2 条（本机状态）。</li>
 <li><strong>门户回 409「已存在申请」</strong> → 这个呼号已被占用，走门户的登记口令（换机）流程，不要反复提交申请。</li>
 </ul>
 <h2 id="为什么会这样-tls-只是这条链的翻译器">为什么会这样：TLS 只是这条链的翻译器</h2>
-<p>上游四件事任何一件出错，最后都会变成一句 <code>CERTIFICATE_VERIFY_FAILED</code> 或者一个 502：</p>
+<p>上游四件事任何一件出错，最后都会变成一句 <code>CERTIFICATE_VERIFY_FAILED</code>或者一个 502：</p>
 <div class="table-scroll"><table>
 <thead><tr><th>上游故障</th><th>链路上的样子</th><th>应用最终吐出的话</th></tr></thead><tbody>
 <tr><td>DNS 不对 / 不解析</td><td>名字解不出来</td><td><code>Name or service not known</code></td></tr>
@@ -144,58 +144,58 @@ sudo -u mrrc /opt/mrrc_modern/venv/bin/python -c \
 <h2 id="常见问题">常见问题</h2>
 <h3 id="盒子能上网-但页面说-连不上门户-日志是-post-api-cloud-apply-502">盒子能上网，但页面说「连不上门户」，日志是 <code>POST /api/cloud/apply 502</code></h3>
 <p><strong>真相</strong>：网络没问题，是这台盒子<strong>没有云端身份</strong>。它只能走「申请」，而门户回的是 409 「已存在申请（状态 granted）」，服务端把门户的任何拒绝一律显示成 502 —— 看起来像网关故障。</p>
-<p><strong>怎么办</strong>：不要反复点申请。让卖家/运维在门户上给这个呼号做「换机」（用登记口令接管， 或重新下发身份），盒子这边再点一次连接即可。判断"是不是这类问题"只看一条： 第 1 条命令有没有输出。</p>
+<p><strong>怎么办</strong>：不要反复点申请。让卖家/运维在门户上给这个呼号做「换机」（用登记口令接管，或重新下发身份），盒子这边再点一次连接即可。判断「是不是这类问题」只看一条：第 1 条命令有没有输出。</p>
 <h3 id="报-certificate-is-not-yet-valid-证书尚未生效">报 <code>certificate is not yet valid</code>（证书尚未生效）</h3>
-<p><strong>真相</strong>：盒子以为现在是过去。门户的证书是近期签发的，在慢了的时钟看来"还没生效"。 2026-10-25 的现场：盒子显示 <code>2026-10-01 17:38</code>，慢了 24 天。</p>
+<p><strong>真相</strong>：盒子以为现在是过去。门户的证书是近期签发的，在慢了的时钟看来「还没生效」。 2026-10-25 的现场：盒子显示 <code>2026-10-01 17:38</code>，慢了 24 天。</p>
 <p><strong>怎么办</strong>：</p>
 <pre><code>systemctl restart chrony        # 立刻重新解析时间源
 sleep 8; chronyc sources        # 表里应该有 3 个以上来源
 timedatectl | grep synchronized # 应为 yes</code></pre>
-<p>如果 <code>chronyc sources</code> 仍是空表（开机时 Wi-Fi 比 chrony 起得晚，时间源域名解析不到）， 按下面那条加纯 IP 的时间源。</p>
-<h3 id="chronyc-sources-是空的-时间从来没同步过"><code>chronyc sources</code> 是空的 —— 时间从来没同步过</h3>
-<p><strong>真相</strong>：镜像是从"几号烧的盘"那一刻开始的，而盒子<strong>没有 RTC 电池</strong>，断电就丢时间。 如果 Wi-Fi 在 chrony 启动之后才连上，基于域名的时间源（<code>pool …</code>）解析失败，chrony 就一直空着 —— 重启一次 chrony 立刻就好，但下次断电还会重演。</p>
-<p><strong>怎么办</strong>（一次性）：写一份<strong>纯 IP</strong> 的时间源，不依赖 DNS：</p>
+<p>如果 <code>chronyc sources</code>仍是空表（开机时 Wi-Fi 比 chrony 起得晚，时间源域名解析不到），按下面那条加纯 IP 的时间源。</p>
+<h3 id="chronyc-sources-是空的-时间从来没同步过"><code>chronyc sources</code>是空的 —— 时间从来没同步过</h3>
+<p><strong>真相</strong>：镜像是从「几号烧的盘」那一刻开始的，而盒子<strong>没有 RTC 电池</strong>，断电就丢时间。如果 Wi-Fi 在 chrony 启动之后才连上，基于域名的时间源（<code>pool …</code>）解析失败，chrony 就一直空着 —— 重启一次 chrony 立刻就好，但下次断电还会重演。</p>
+<p><strong>怎么办</strong>（一次性）：写一份<strong>纯 IP</strong>的时间源，不依赖 DNS：</p>
 <pre><code>sudo tee /etc/chrony/sources.d/mrrc.sources &gt;/dev/null &lt;&lt;'EOF'
 server 203.107.6.88   iburst
 server 119.28.206.193 iburst
 server 162.159.200.1  iburst
 EOF
 sudo systemctl restart chrony</code></pre>
-<p>这三个是阿里 / 腾讯 / Cloudflare 的公共 NTP。写在 <code>/etc</code> 下，固化和升级都不会覆盖。</p>
+<p>这三个是阿里 / 腾讯 / Cloudflare 的公共 NTP。写在 <code>/etc</code>下，固化和升级都不会覆盖。</p>
 <h3 id="门户里显示-已批准-公网入口还是-503">门户里显示「已批准」，公网入口还是 503</h3>
 <p><strong>真相</strong>：批准 ≠ 这台盒子在用。入口要成立，需要<strong>四件事同时成立</strong>：盒子有身份 → 隧道连着 → 门户里有这台盒子的证书 → 盒子真的在出示那张证书。</p>
-<p><strong>怎么办</strong>：先把顺序理一遍，缺哪一步补哪一步：盒子 <code>ps -ef | grep frpc</code> 有没有进程 → 盒子 <code>curl -sk https://127.0.0.1:8888/login</code> 有没有应答 → 门户里这台盒子的证书指纹和 <code>server.crt</code> 是否一致。任何一步不一致都请卖家处理，不要自己删证书。</p>
+<p><strong>怎么办</strong>：先把顺序理一遍，缺哪一步补哪一步：盒子 <code>ps -ef | grep frpc</code>有没有进程 → 盒子 <code>curl -sk https://127.0.0.1:8888/login</code>有没有应答 → 门户里这台盒子的证书指纹和 <code>server.crt</code>是否一致。任何一步不一致都请卖家处理，不要自己删证书。</p>
 <h3 id="已存在申请-状态-granted-proxy-bg7xxx-already-exists">「已存在申请（状态 granted）」/ <code>proxy [bg7xxx] already exists</code></h3>
-<p><strong>真相</strong>：一个呼号只能有一条活隧道。原来的机器（通常是另一台电脑或旧盒子）还连着， 新机器顶上去会被拒绝。</p>
-<p><strong>怎么办</strong>：先让旧机器退出（关掉它的公网入口/退出应用），再在新盒子上接管呼号。 顺序反了会出现"两台都显示已连接、入口却指向旧机器"。</p>
+<p><strong>真相</strong>：一个呼号只能有一条活隧道。原来的机器（通常是另一台电脑或旧盒子）还连着，新机器顶上去会被拒绝。</p>
+<p><strong>怎么办</strong>：先让旧机器退出（关掉它的公网入口/退出应用），再在新盒子上接管呼号。顺序反了会出现「两台都显示已连接、入口却指向旧机器」。</p>
 <h3 id="入口的证书和盒子出示的不一致-入口一直-502">入口的证书和盒子出示的不一致，入口一直 502</h3>
-<p><strong>真相</strong>：接入时新证书写进了配置，但<strong>进程还持有启动时那张证书</strong>。盒子上的 <code>MRRC_SSL_CERT</code> 已经指向新文件，服务却要重启才会重新加载。</p>
+<p><strong>真相</strong>：接入时新证书写进了配置，但<strong>进程还持有启动时那张证书</strong>。盒子上的 <code>MRRC_SSL_CERT</code>已经指向新文件，服务却要重启才会重新加载。</p>
 <p><strong>怎么办</strong>：重启一次应用（页面里提示「还需重启应用」时就点它，或在盒子上 <code>sudo systemctl restart mrrc-modern</code>），再刷新入口。</p>
 <h3 id="页面说-还没提交过申请-可是明明申请过">页面说「还没提交过申请」，可是明明申请过</h3>
-<p><strong>真相</strong>：<code>/opt/mrrc_modern/env/mrrc.env</code> <strong>读不到</strong>。最常见是被改成 <code>root:root</code>， 而应用以 <code>mrrc</code> 运行 —— 应用读配置失败时不报错，只是当成"什么都没有"。</p>
+<p><strong>真相</strong>：<code>/opt/mrrc_modern/env/mrrc.env</code> <strong>读不到</strong>。最常见是被改成 <code>root:root</code>，而应用以 <code>mrrc</code>运行 —— 应用读配置失败时不报错，只是当成「什么都没有」。</p>
 <p><strong>怎么办</strong>：</p>
 <pre><code>sudo chown mrrc:mrrc /opt/mrrc_modern/env/mrrc.env
 sudo chmod 0640       /opt/mrrc_modern/env/mrrc.env
 sudo systemctl restart mrrc-modern</code></pre>
 <p>改完再看第 1 条命令，能列出呼号与令牌就对了。</p>
 <h3 id="盒子的-dns-是什么-路由器不发-dns-会怎样">盒子的 DNS 是什么？路由器不发 DNS 会怎样</h3>
-<p><strong>出厂默认</strong>：每条已保存的连接都带两个备用解析器 —— <code>114.114.114.114</code> 和 <code>8.8.8.8</code>， 追加在已有 DNS 的后面。<strong>你自己配的 DNS 不会被替换</strong>，路由器下发的那个也照旧可用 （<code>ipv4.ignore-auto-dns</code> 保持关闭）。</p>
-<p>为什么要有这条默认：盒子没有 RTC 电池，开机时间来自镜像；如果 Wi-Fi 比 DHCP 先起来， 解析器就是空的 —— 于是 <code>chronyc</code> 连 NTP 的域名都解析不到，时钟停在镜像日期，接着每个 HTTPS 都报 <code>certificate is not yet valid</code>。2026-10-25 的两台盒子就是这么坏的。</p>
+<p><strong>出厂默认</strong>：每条已保存的连接都带两个备用解析器 —— <code>114.114.114.114</code>和 <code>8.8.8.8</code>，追加在已有 DNS 的后面。<strong>你自己配的 DNS 不会被替换</strong>，路由器下发的那个也照旧可用（<code>ipv4.ignore-auto-dns</code>保持关闭）。</p>
+<p>为什么要有这条默认：盒子没有 RTC 电池，开机时间来自镜像；如果 Wi-Fi 比 DHCP 先起来，解析器就是空的 —— 于是 <code>chronyc</code>连 NTP 的域名都解析不到，时钟停在镜像日期，接着每个 HTTPS 都报 <code>certificate is not yet valid</code>。2026-10-25 的两台盒子就是这么坏的。</p>
 <p>看一眼现在生效的解析器：</p>
 <pre><code>cat /etc/resolv.conf | grep nameserver
 nmcli -g ipv4.dns connection show "$(nmcli -t -f NAME connection show --active | head -1)"</code></pre>
 <p>想换掉或再加一条（改完立刻生效，不用重启）：</p>
 <pre><code>nmcli connection modify "&lt;连接名&gt;" ipv4.dns "114.114.114.114 8.8.8.8 223.5.5.5"</code></pre>
-<p>只有一条 <code>dns=</code> 行、没有重复，就是对的：这个默认值是幂等的，每次启动只会补上缺的那几条。</p>
-<p><strong>更常见的一层</strong>：<code>/etc/resolv.conf</code> 本身就指向一个「外来」地址（2026-10-25 之前的镜像把它烤进了成品），这时连 NetworkManager 的 DNS 都没被用上 —— 见 <a href="fix-dns.html">盒子的 DNS 坏了：在 Windows 上一条命令修好</a>，那张页面给了一个只要网页口令的小工具。</p>
-<p><strong>如果 <code>nmcli</code> 里能看到这几条、<code>/etc/resolv.conf</code> 里却只有一条</strong>：那是 2026-10-25 之前的镜像（构建时把构建机的 <code>resolv.conf</code> 拷进了系统，<code>resolvectl status</code> 会显示 <code>resolv.conf mode: foreign</code>）。<strong>不用敲任何 Linux 命令</strong> —— 在 Windows 电脑上运行 <a href="fix-dns.html"><code>MRRC-FixDNS.cmd</code></a>，填一次盒子 IP 与网页口令就能修好；有 root 权限的运维也可以照 <a href="w103d.html">从零指南 §20</a> 那条手工三行修。</p>
+<p>只有一条 <code>dns=</code>行、没有重复，就是对的：这个默认值是幂等的，每次启动只会补上缺的那几条。</p>
+<p><strong>更常见的一层</strong>：<code>/etc/resolv.conf</code>本身就指向一个「外来」地址（2026-10-25 之前的镜像把它烤进了成品），这时连 NetworkManager 的 DNS 都没被用上 —— 见 <a href="fix-dns.html">盒子的 DNS 坏了：在 Windows 上一条命令修好</a>，那张页面给了一个只要网页口令的小工具。</p>
+<p><strong>如果 <code>nmcli</code>里能看到这几条、<code>/etc/resolv.conf</code>里却只有一条</strong>：那是 2026-10-25 之前的镜像（构建时把构建机的 <code>resolv.conf</code>拷进了系统，<code>resolvectl status</code>会显示 <code>resolv.conf mode: foreign</code>）。<strong>不用敲任何 Linux 命令</strong> —— 在 Windows 电脑上运行 <a href="fix-dns.html"><code>MRRC-FixDNS.cmd</code></a>，填一次盒子 IP 与网页口令就能修好；有 root 权限的运维也可以照 <a href="w103d.html">从零指南 §20</a>那条手工三行修。</p>
 <h3 id="时间不对还会影响什么">时间不对还会影响什么</h3>
 <p>不止门户。2026-10-25 的现场里，同一台盒子因为时钟错了 24 天，<strong>软件更新也一直失败</strong> （更新检查走的是同一个 HTTPS），时间修好后当次就升了一个版本。同理受影响的还有 诊断包上传、远程协助、以及所有需要校验证书的功能。</p>
 <h3 id="自查完还是不通-交什么给支持">自查完还是不通，交什么给支持</h3>
 <p>三样东西，缺一样都会多一轮往返：</p>
-<p><a href="diag.html">局域网取包与诊断</a> 那页拿下来手工发）。</p>
+<p><a href="diag.html">局域网取包与诊断</a>那页拿下来手工发）。</p>
 <ol>
-<li>上面「五条命令」的原样输出（<code>MRRC_CLOUD_TOKEN</code> 那行涂掉）。</li>
+<li>上面「五条命令」的原样输出（<code>MRRC_CLOUD_TOKEN</code>那行涂掉）。</li>
 <li>页面上的完整报错文字，以及出现的时间。</li>
 <li>菜单 → 「🐞 遇到问题」里的<strong>诊断包</strong>（传不上去就按</li>
 </ol>

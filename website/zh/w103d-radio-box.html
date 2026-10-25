@@ -830,31 +830,27 @@ poweroff                # 拔掉 U 盘、重新上电：从此从 eMMC 启动</c
       <ul>
         <li>
           <strong>对外下载的镜像，已经是刷好就能用的发货版。</strong>
-          <code>MRRC-Modern-1.28.1-w103d.img.gz</code>
-          里口令、时区、区域都预置好了，上电就能登录。第一件事是把那三个口令改掉——拿到同一份镜像的人都知道它们。
+          <code>MRRC-Modern-1.28.1-w103d.img.gz</code>里口令、时区、区域都预置好了，上电就能登录。第一件事是把那三个口令改掉——拿到同一份镜像的人都知道它们。
         </li>
         <li>
           <strong>盒子有了自己的设置页。</strong>
-          <code>/settings</code> 管
+          <code>/settings</code>管
           Wi-Fi（扫描，或手输 SSID）、有线口、主机名、网络体检、系统账号口令，以及公网入口的申请——最后这件事以前埋在电台界面的三层菜单下面。
         </li>
         <li>
-          <strong>蓝牙遥控器直接驱动电台。</strong> 在
-          <code>/settings</code>
-          里配对，然后调频率、换模式、调 AF 增益、按 PTT 都可以在沙发上完成。按键表和「配上了却像死了一样」那个坑，在
+          <strong>蓝牙遥控器直接驱动电台。</strong>在
+          <code>/settings</code>里配对，然后调频率、换模式、调 AF 增益、按 PTT 都可以在沙发上完成。按键表和「配上了却像死了一样」那个坑，在
           <a href="w103d-remote.html">遥控器指南</a>里。
         </li>
         <li>
           <strong>服务端又多接了几份活。</strong> FT8
-          工作模式（解码跑在盒子上，一槽一槽来，约占盒子 CPU 的两成）、<code>/sdr</code> 页面用 SDRplay
-          听同一根天线，还有——只在仓库里、还没进这份镜像——<code>/Nano</code>
-          的 NanoVNA-H 天线诊断台。它们不在第 8
+          工作模式（解码跑在盒子上，一槽一槽来，约占盒子 CPU 的两成）、<code>/sdr</code>页面用 SDRplay
+          听同一根天线，还有——只在仓库里、还没进这份镜像——<code>/Nano</code>的 NanoVNA-H 天线诊断台。它们不在第 8
           节那张表里，操作手册里都有。
         </li>
         <li>
           <strong>盒子能自己升级。</strong>
-          <code>/settings</code>
-          里一张卡片：检查、下载、校验、备份、覆盖、重启，新版本 90
+          <code>/settings</code>里一张卡片：检查、下载、校验、备份、覆盖、重启，新版本 90
           秒内不应答就自己回滚。它是在这份镜像构建之后合进来的，所以随下一份镜像；机制本身已经在仓库里。
         </li>
       </ul>

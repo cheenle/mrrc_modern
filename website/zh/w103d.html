@@ -74,7 +74,7 @@
         <span class="badge"><i class="fas fa-tv"></i> W103D · 盒子完整指南</span>
         <h1>ZTE W103D 电台盒子 — 从开箱到 MRRC 干活</h1>
         <p>从拿到一台全新的 W103D 开始：认机器 → 下载校验 → 烧 U 盘 → 从 U 盘启动 → 接电台 → 选机型 → 验收。末尾附一张从零到干活的打勾清单。</p>
-        <div class="actions"><a class="btn btn-primary" href="../downloads/MRRC-Modern-1.28.1-w103d.img.gz"><i class="fas fa-download"></i> 下载 W103D 镜像</a><a class="btn" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子已刷好？看用户指南</a><a class="btn" href="../w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a><a class="btn" href="../w103d-faq.html"><i class="fas fa-circle-question"></i> 常见问题</a><a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" target="_blank" rel="noopener"><i class="fas fa-bolt"></i> 速查操作单</a></div>
+        <div class="actions"><a class="btn btn-primary" href="../downloads/MRRC-Modern-1.28.1-w103d.img.gz"><i class="fas fa-download"></i> 下载 W103D 镜像</a><a class="btn" href="../w103d-user.html"><i class="fas fa-box-open"></i>盒子已刷好？看用户指南</a><a class="btn" href="../w103d-remote.html"><i class="fas fa-gamepad"></i>遥控器指南</a><a class="btn" href="../w103d-faq.html"><i class="fas fa-circle-question"></i>常见问题</a><a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" target="_blank" rel="noopener"><i class="fas fa-bolt"></i>速查操作单</a></div>
     </div>
 </header>
 
@@ -100,15 +100,15 @@
     </figcaption>
 </figure>
 <h1 id="w103d-盒子完整指南-从开箱到-mrrc-干活">W103D 盒子完整指南：从开箱到 MRRC 干活</h1>
-<p>面向<strong>手里刚拿到一台 W103D、什么都没做过</strong>的人。全程分两大段：<strong>先把系统刷进去</strong>（§1–§8）， <strong>再把 MRRC 配到能用</strong>（§9–§16）。最后一节是一张打勾清单。</p>
-<blockquote><p><strong>盒子是卖家刷好、直接交给你的？</strong> 那不用读本文，看 <a href="w103d-user.html"><code>W103D_USER_GUIDE.md</code></a>。 速查版（已熟悉流程时看）：<code>packaging/box/README.md</code> 要自己出镜像才看：<code>docs/w103d_pack.md</code></p></blockquote>
+<p>面向<strong>手里刚拿到一台 W103D、什么都没做过</strong>的人。全程分两大段：<strong>先把系统刷进去</strong>（§1–§8），<strong>再把 MRRC 配到能用</strong>（§9–§16）。最后一节是一张打勾清单。</p>
+<blockquote><p><strong>盒子是卖家刷好、直接交给你的？</strong>那不用读本文，看 <a href="w103d-user.html"><code>W103D_USER_GUIDE.md</code></a>。速查版（已熟悉流程时看）：<code>packaging/box/README.md</code>要自己出镜像才看：<code>docs/w103d_pack.md</code></p></blockquote>
 <p><strong>三条前置说明，先说清楚：</strong></p>
 <p>—— 那是推荐的最终形态：盒子 + 一根电源线 + 一根网线，不再需要 U 盘。</p>
-<p><strong>发货版</strong>：带的是一组<strong>公开的</strong>预置口令（§7），<strong>第一件事就是改掉它们</strong>；自己构建且 不传 <code>--preflash</code> 时，Web 口令才每台现生成。</p>
+<p><strong>发货版</strong>：带的是一组<strong>公开的</strong>预置口令（§7），<strong>第一件事就是改掉它们</strong>；自己构建且 不传 <code>--preflash</code>时，Web 口令才每台现生成。</p>
 <p>不一致。我把三种手段都写了，按你的机器试。</p>
 <ol>
 <li><strong>走 U 盘路线：Android 的分区与数据不动</strong>（只写一次 u-boot 环境，见 §5）。刷坏了拔掉 U 盘重新上电就回到原厂安卓。验收通过后把系统<strong>固化进 eMMC</strong>（§17）</li>
-<li><strong>镜像里没有任何私钥。</strong> 自签证书在<strong>盒子首启时</strong>现生成。对外下载的 1.28.1 镜像是</li>
+<li><strong>镜像里没有任何私钥。</strong>自签证书在<strong>盒子首启时</strong>现生成。对外下载的 1.28.1 镜像是</li>
 <li><strong>§5（让盒子从 U 盘启动）是最容易卡住的一步</strong>，因为那一段在<strong>原厂安卓</strong>里操作，各家固件的菜单路径</li>
 </ol>
 <p>---</p>
@@ -131,7 +131,7 @@
 <tr><td><strong>ophub 板级库 / 本文档</strong></td><td><strong><code>s905l3a</code></strong></td></tr>
 <tr><td><strong>设备树 / 平台</strong></td><td><code>meson-g12a</code>（G12A 家族）</td></tr>
 </tbody></table></div>
-<p><strong>三个说的是同一颗芯片的家族</strong>：<code>S905L3A</code> 属于 <strong>G12A</strong>，市面俗称 <strong>S905X2</strong>，ophub 钉的是具体变体名。 所以卖家说"S905X2"、而本文档说"S905L3A"，<strong>不矛盾</strong> ✅</p>
+<p><strong>三个说的是同一颗芯片的家族</strong>：<code>S905L3A</code>属于 <strong>G12A</strong>，市面俗称 <strong>S905X2</strong>，ophub 钉的是具体变体名。所以卖家说"S905X2"、而本文档说"S905L3A"，<strong>不矛盾</strong> ✅</p>
 <h4 id="同族的几个兄弟型号-固件通刷">同族的几个兄弟型号（<strong>固件通刷</strong>）</h4>
 <pre><code>中兴云电脑  W100D / W102D / W103D / W105D      ← 论坛实测：这几款固件通刷</code></pre>
 <div class="table-scroll"><table>
@@ -140,10 +140,10 @@
 <tr><td>内存 / 存储</td><td>2 G + <strong>8 G</strong></td><td>2 G + <strong>8 G</strong></td><td>2 G + <strong>32 G</strong></td><td>—</td></tr>
 <tr><td>系统</td><td>安卓 9</td><td>安卓 9</td><td>安卓 9</td><td>安卓 9</td></tr>
 </tbody></table></div>
-<p>（W100D 与 W105D 的公开配置<strong>完全一样</strong>，差别在形态与命名：W100D 属"太极"、W105D 属"玲珑"名片式。）</p>
-<p><strong>"通刷"说明硬件几乎同源</strong> ✅ 但<strong>存储差 4 倍</strong>（8 G vs 32 G）——本镜像装完约占 3 GB、载荷仅 145 MiB， 8 G 型号<strong>够用</strong> ✅</p>
-<p><strong>关于无线网卡</strong>：论坛资料<strong>没有一款写明</strong>（四款都没写）。但"<strong>固件通刷</strong>"是一条支持性证据 —— 一份线刷包能同时驱动四款的 WiFi，说明它们<strong>多半是同一颗或兼容网卡</strong> ✅（<strong>这是推断，不是确证</strong> ⚠️）。 真要买之前，<strong>以实物为准</strong>：<code>getprop</code> 或拆机看丝印。</p>
-<p>⚠️ <strong>但有一处本指南无法替你确认</strong>：<strong>W105D/W100D 用的是不是同一颗 MT7663S 无线网卡</strong>（论坛资料没写）。 本镜像最难的部分正是 MT7663S 的驱动适配，<strong>这块不一样的话，WiFi 就要重新适配</strong>。 另外 ophub 的板级库里<strong>只有 W103D（<code>s905l3a-w103d</code>）</strong>，没有 W105D 的条目——同族不等于配置可直接复用。</p>
+<p>（W100D 与 W105D 的公开配置<strong>完全一样</strong>，差别在形态与命名：W100D 属「太极」、W105D 属「玲珑」名片式。）</p>
+<p><strong>「通刷」说明硬件几乎同源</strong> ✅ 但<strong>存储差 4 倍</strong>（8 G vs 32 G）——本镜像装完约占 3 GB、载荷仅 145 MiB， 8 G 型号<strong>够用</strong> ✅</p>
+<p><strong>关于无线网卡</strong>：论坛资料<strong>没有一款写明</strong>（四款都没写）。但"<strong>固件通刷</strong>"是一条支持性证据 —— 一份线刷包能同时驱动四款的 WiFi，说明它们<strong>多半是同一颗或兼容网卡</strong> ✅（<strong>这是推断，不是确证</strong> ⚠️）。真要买之前，<strong>以实物为准</strong>：<code>getprop</code>或拆机看丝印。</p>
+<p>⚠️ <strong>但有一处本指南无法替你确认</strong>：<strong>W105D/W100D 用的是不是同一颗 MT7663S 无线网卡</strong>（论坛资料没写）。本镜像最难的部分正是 MT7663S 的驱动适配，<strong>这块不一样的话，WiFi 就要重新适配</strong>。另外 ophub 的板级库里<strong>只有 W103D（<code>s905l3a-w103d</code>）</strong>，没有 W105D 的条目——同族不等于配置可直接复用。</p>
 <p><strong>盒子上的口要认一遍</strong>（拍照存着，接线时省事）：</p>
 <ul>
 <li>网口、HDMI、电源</li>
@@ -155,7 +155,7 @@
 <li><input type="checkbox" disabled> W103D 盒子 + 原装电源</li>
 <li><input type="checkbox" disabled> <strong>≥8 GB U 盘</strong>（会被完全擦除）</li>
 <li><input type="checkbox" disabled> <strong>网线</strong>（必须——首启要联网）</li>
-<li><input type="checkbox" disabled> 电台 USB 线。<strong>FT-710 要插盒子/电台的上方 <code>Enhanced</code> 口</strong>（不是 Standard 口）</li>
+<li><input type="checkbox" disabled> 电台 USB 线。<strong>FT-710 要插盒子/电台的上方 <code>Enhanced</code>口</strong>（不是 Standard 口）</li>
 <li><input type="checkbox" disabled> 电脑（烧盘用）</li>
 <li><input type="checkbox" disabled> <strong>原厂线刷固件包</strong>（兜底；走 U 盘路线时用不到，但建议先下载好放在手边）</li>
 </ul>
@@ -171,7 +171,7 @@ curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-w103d.img.gz.sha
 shasum -a 256 -c MRRC-Modern-w103d.img.gz.sha256
 # Linux
 sha256sum -c MRRC-Modern-w103d.img.gz.sha256</code></pre>
-<p>命令会打印 <code>MRRC-Modern-w103d.img.gz: OK</code>。<strong>不是 OK 就别往下走</strong> —— 1.2 GB 是会下坏的，而坏在中间不容易看出来。<code>.sha256</code> 随镜像一起发布更新，所以这份文档里不再写死某一版的哈希（那张表每发一版就过期一次）。</p>
+<p>命令会打印 <code>MRRC-Modern-w103d.img.gz: OK</code>。<strong>不是 OK 就别往下走</strong> —— 1.2 GB 是会下坏的，而坏在中间不容易看出来。<code>.sha256</code>随镜像一起发布更新，所以这份文档里不再写死某一版的哈希（那张表每发一版就过期一次）。</p>
 <h2 id="4-烧到-u-盘">4. 烧到 U 盘</h2>
 <p><strong>认准盘符，别烧错盘。</strong>（这一步会把目标盘整个擦掉。）</p>
 <p><strong>macOS：</strong></p>
@@ -180,22 +180,22 @@ diskutil unmountDisk /dev/diskN
 gzip -dc MRRC-Modern-1.28.1-w103d.img.gz | sudo dd of=/dev/rdiskN bs=4m
 sync                               # 等它真的写完</code></pre>
 <p>⚠️ 用 <code>/dev/rdiskN</code>（<strong>裸设备</strong>）不是 <code>/dev/diskN</code>——后者慢十倍以上。</p>
-<p><strong>Windows（一键）</strong>：下载 <a href="../downloads/MRRC-W103D-Flash.cmd"><code>MRRC-W103D-Flash.cmd</code></a>，双击运行（它会自己请求管理员权限）。它会自动下载镜像（可断点续传）、核对 SHA-256、列出可写的 U 盘、写入，再把整份镜像从盘上读回来比对。<strong>只认 USB / 可移动介质</strong> —— 系统盘和内置盘不会出现在可写列表里；选定后还要手输 <code>ERASE</code> 才动第一笔。需要 <strong>≥ 8 GB</strong> 的 U 盘（镜像解开后 3.43 GiB）。逐步图解与常见问题见 <a href="../flash.html"><strong>做刷机盘指南</strong></a>。</p>
-<p><strong>Windows（手工）</strong>：也可以用 <strong>Rufus</strong> 或 <strong>balenaEtcher</strong>，选那个 <code>.img.gz</code>（两者都能直接吃 gz）。 目标是"从镜像写入"模式，<strong>不是</strong>解压后复制文件。</p>
+<p><strong>Windows（一键）</strong>：下载 <a href="../downloads/MRRC-W103D-Flash.cmd"><code>MRRC-W103D-Flash.cmd</code></a>，双击运行（它会自己请求管理员权限）。它会自动下载镜像（可断点续传）、核对 SHA-256、列出可写的 U 盘、写入，再把整份镜像从盘上读回来比对。<strong>只认 USB / 可移动介质</strong> —— 系统盘和内置盘不会出现在可写列表里；选定后还要手输 <code>ERASE</code>才动第一笔。需要 <strong>≥ 8 GB</strong>的 U 盘（镜像解开后 3.43 GiB）。逐步图解与常见问题见 <a href="../flash.html"><strong>做刷机盘指南</strong></a>。</p>
+<p><strong>Windows（手工）</strong>：也可以用 <strong>Rufus</strong>或 <strong>balenaEtcher</strong>，选那个 <code>.img.gz</code>（两者都能直接吃 gz）。目标是「从镜像写入」模式，<strong>不是</strong>解压后复制文件。</p>
 <p><strong>Linux：</strong></p>
 <pre><code class="lang-bash">lsblk                              # 找盘
 gzip -dc MRRC-Modern-1.28.1-w103d.img.gz | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync</code></pre>
-<p>烧完把 U 盘<strong>安全弹出</strong>（macOS：<code>diskutil eject /dev/diskN</code>）。系统可能提示"此磁盘无法读取"—— <strong>那是正常的</strong>，镜像是 Linux 分区，Windows/macOS 读不懂。</p>
+<p>烧完把 U 盘<strong>安全弹出</strong>（macOS：<code>diskutil eject /dev/diskN</code>）。系统可能提示「此磁盘无法读取」—— <strong>那是正常的</strong>，镜像是 Linux 分区，Windows/macOS 读不懂。</p>
 <h3 id="4-1-让系统用满整根-u-盘-推荐-一条命令">4.1 让系统用满整根 U 盘（推荐，一条命令）</h3>
-<p>镜像的根分区<strong>只有 2.9 GB</strong>，而且<strong>不会</strong>在首启自动长（里面带 <code>/root/.no_rootfs_resize</code>）—— 所以 U 盘剩下的大片空间默认是闲着的。系统跑起来后在盒子上补一句就行，ext4 支持<strong>在线</strong>扩容， 不用停机、不用拔盘：</p>
+<p>镜像的根分区<strong>只有 2.9 GB</strong>，而且<strong>不会</strong>在首启自动长（里面带 <code>/root/.no_rootfs_resize</code>）—— 所以 U 盘剩下的大片空间默认是闲着的。系统跑起来后在盒子上补一句就行，ext4 支持<strong>在线</strong>扩容，不用停机、不用拔盘：</p>
 <pre><code class="lang-bash">apt-get install -y cloud-guest-utils     # 提供 growpart（镜像里没有这个包）
 growpart /dev/sda 2                      # 只改分区表尾，不动起始扇区
 resize2fs /dev/sda2                      # 文件系统跟着长
 lsblk /dev/sda; df -h /                  # 2.9G → 整盘容量</code></pre>
-<p><strong>为什么要这一步</strong>：<code>/ddbr</code> 里的 eMMC 全盘备份约 <strong>2.3 GB</strong>（§17.1），根分区只有 2.9 GB 时 <strong>放不下</strong>；录音与日志也需要余地。实测（231 GB 的 U 盘）：<code>growpart</code> + <code>e2fsck -f</code> + <code>resize2fs</code> 之后 <code>df</code> 从 <code>2.9G / 剩 894M</code> 变成 <code>227G / 剩 226G</code>。</p>
-<p><strong>扩容不动 UUID</strong> —— <code>uEnv.txt</code> 与 <code>/etc/fstab</code> 里的 <code>root=UUID=…</code> 照旧有效。 （想先在电脑上扩也可以：Linux 上离线跑同一组命令；macOS/Windows 没有 ext4 工具，<strong>到盒子上做</strong>。）</p>
-<blockquote><p><strong>想在烧盘后立刻核对写入是否正确</strong>（Linux / 有 <code>cmp</code> 的环境）： </p><pre><code class="lang-bash">sync; echo 3 | sudo tee /proc/sys/vm/drop_caches &gt;/dev/null      # 让下面的读真的落到盘上
-sudo cmp &lt;(gzip -dc MRRC-Modern-&lt;ver&gt;-w103d.img.gz) /dev/sdX -n &lt;镜像解压后字节数&gt;</code></pre><p> 一致即"盘上这份 = 镜像那份"（1.26.0 实测 <code>IMAGE_MATCH_OK</code>）。<code>&lt;镜像解压后字节数&gt;</code> 用 <code>gzip -l MRRC-Modern-&lt;ver&gt;-w103d.img.gz</code> 看最后一行。</p></blockquote>
+<p><strong>为什么要这一步</strong>：<code>/ddbr</code>里的 eMMC 全盘备份约 <strong>2.3 GB</strong>（§17.1），根分区只有 2.9 GB 时 <strong>放不下</strong>；录音与日志也需要余地。实测（231 GB 的 U 盘）：<code>growpart</code> + <code>e2fsck -f</code> + <code>resize2fs</code>之后 <code>df</code>从 <code>2.9G / 剩 894M</code>变成 <code>227G / 剩 226G</code>。</p>
+<p><strong>扩容不动 UUID</strong> —— <code>uEnv.txt</code>与 <code>/etc/fstab</code>里的 <code>root=UUID=…</code>照旧有效。 （想先在电脑上扩也可以：Linux 上离线跑同一组命令；macOS/Windows 没有 ext4 工具，<strong>到盒子上做</strong>。）</p>
+<blockquote><p><strong>想在烧盘后立刻核对写入是否正确</strong>（Linux / 有 <code>cmp</code>的环境）： </p><pre><code class="lang-bash">sync; echo 3 | sudo tee /proc/sys/vm/drop_caches &gt;/dev/null      # 让下面的读真的落到盘上
+sudo cmp &lt;(gzip -dc MRRC-Modern-&lt;ver&gt;-w103d.img.gz) /dev/sdX -n &lt;镜像解压后字节数&gt;</code></pre><p> 一致即「盘上这份 = 镜像那份」（1.26.0 实测 <code>IMAGE_MATCH_OK</code>）。<code>&lt;镜像解压后字节数&gt;</code>用 <code>gzip -l MRRC-Modern-&lt;ver&gt;-w103d.img.gz</code>看最后一行。</p></blockquote>
 <h2 id="5-让盒子从-u-盘启动-新机器最容易卡的一步">5. 让盒子从 U 盘启动（新机器最容易卡的一步）</h2>
 <figure style="margin: 2rem 0"><a href="../images/W103D/web/w103d-usb.jpg" target="_blank" rel="noopener"><img src="../images/W103D/web/w103d-usb.jpg" alt="盒子侧面的 USB 口：U 盘和电台线都插这里" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">盒子侧面的 USB 口：U 盘和电台线都插这里</figcaption></figure>
 <h3 id="原理-已从镜像里核实-不是猜的">原理：已从镜像里核实，不是猜的</h3>
@@ -205,11 +205,11 @@ setenv start_autoscript '... SD 卡 → USB(0..3) → eMMC ...'
 setenv upgrade_step 2
 saveenv        # 写入 u-boot 环境
 reboot</code></pre>
-<p><strong>它做的就是把启动顺序改成「先 U 盘/SD、再 eMMC」，存进 u-boot 环境，然后重启。</strong> 重启后 u-boot 从 U 盘加载 <code>s905_autoscript</code> → 读 <code>uEnv.txt</code>（里面写着本板的 <code>FDT=/dtb/amlogic/meson-g12a-w103d.dtb</code>）→ 引导 Linux 内核。</p>
+<p><strong>它做的就是把启动顺序改成「先 U 盘/SD、再 eMMC」，存进 u-boot 环境，然后重启。</strong>重启后 u-boot 从 U 盘加载 <code>s905_autoscript</code> → 读 <code>uEnv.txt</code>（里面写着本板的 <code>FDT=/dtb/amlogic/meson-g12a-w103d.dtb</code>）→ 引导 Linux 内核。</p>
 <p>所以整件事的关键只有一条：<strong>让原厂 u-boot 进 update 模式。</strong></p>
 <h3 id="更正一处说法">⚠️ 更正一处说法</h3>
-<p>之前写「eMMC 一个字节不动」<strong>不准确</strong>——上面的 <code>saveenv</code> <strong>确实会写 eMMC</strong>（写的是 u-boot 环境变量， 不是 Android 的分区数据）。</p>
-<p>准确的说法：<strong>不碰 Android 的分区与数据，只改 u-boot 的启动顺序偏好。</strong> 回滚依然简单（见下）。</p>
+<p>之前写「eMMC 一个字节不动」<strong>不准确</strong>——上面的 <code>saveenv</code> <strong>确实会写 eMMC</strong>（写的是 u-boot 环境变量，不是 Android 的分区数据）。</p>
+<p>准确的说法：<strong>不碰 Android 的分区与数据，只改 u-boot 的启动顺序偏好。</strong>回滚依然简单（见下）。</p>
 <h3 id="三种触发方式-按独立性排">三种触发方式（按独立性排）</h3>
 <p><strong>① 复位孔（最不依赖原厂软件，第一次建议用它）</strong></p>
 <ol>
@@ -222,24 +222,24 @@ reboot</code></pre>
 adb shell reboot update</code></pre>
 <p><strong>③ 盒子上的终端 App</strong></p>
 <pre><code class="lang-bash">su -c 'reboot update'</code></pre>
-<p><code>reboot update</code> 就是让安卓把 u-boot 的 <code>upgrade_step</code> 置位——u-boot 下次启动看到它就运行 U 盘上的 <code>aml_autoscript</code> ✅</p>
+<p><code>reboot update</code>就是让安卓把 u-boot 的 <code>upgrade_step</code>置位——u-boot 下次启动看到它就运行 U 盘上的 <code>aml_autoscript</code> ✅</p>
 <h3 id="成功的样子">成功的样子</h3>
-<p><strong>HDMI 上是 Linux 内核日志</strong>（不再有安卓开机动画）。因为 <code>uEnv.txt</code> 里配的控制台是 <code>console=ttyAML0,115200n8 console=tty0</code>——<strong>串口和 HDMI 都能看</strong>，所以刷机失败时<strong>接上 HDMI 就能看到卡在哪</strong> ✅</p>
+<p><strong>HDMI 上是 Linux 内核日志</strong>（不再有安卓开机动画）。因为 <code>uEnv.txt</code>里配的控制台是 <code>console=ttyAML0,115200n8 console=tty0</code>——<strong>串口和 HDMI 都能看</strong>，所以刷机失败时<strong>接上 HDMI 就能看到卡在哪</strong> ✅</p>
 <p>第一次开机要几分钟：扩 rootfs、生成 SSH 密钥。</p>
 <blockquote><p><strong>回滚</strong>：断电 → 拔 U 盘 → 上电。u-boot 在 U 盘上找不到脚本，走 eMMC → 回安卓。 （u-boot 环境里那条“优先 U 盘”的偏好还在，但没有 U 盘时它是无害的。）</p></blockquote>
 <h2 id="6-首启会自动完成什么">6. 首启会自动完成什么</h2>
-<p>镜像里已经烘好了不需要硬件的全部东西（用户、代码、venv、依赖、frpc、FTDI 库、11 份机型配置、systemd 单元）。 首启只做<strong>必须碰硬件</strong>的几件事：</p>
+<p>镜像里已经烘好了不需要硬件的全部东西（用户、代码、venv、依赖、frpc、FTDI 库、11 份机型配置、systemd 单元）。首启只做<strong>必须碰硬件</strong>的几件事：</p>
 <figure style="margin: 2rem 0"><a href="../images/W103D/web/w103d-firstboot.jpg" target="_blank" rel="noopener"><img src="../images/W103D/web/w103d-firstboot.jpg" alt="HDMI 上的首启控制台：Armbian、本机 IP 与资源占用都在这一屏" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">HDMI 上的首启控制台：Armbian、本机 IP 与资源占用都在这一屏</figcaption></figure>
 <div class="table-scroll"><table>
 <thead><tr><th>首启做</th><th>为什么不能提前做</th></tr></thead><tbody>
-<tr><td><strong>Web 登录口令</strong></td><td>对外下载的镜像是发货版：构建期固定成一组公开口令（§7）。不传 <code>--preflash</code> 自建时才在首启现生成，每台不同</td></tr>
+<tr><td><strong>Web 登录口令</strong></td><td>对外下载的镜像是发货版：构建期固定成一组公开口令（§7）。不传 <code>--preflash</code>自建时才在首启现生成，每台不同</td></tr>
 <tr><td>生成<strong>自签证书</strong></td><td>证书要绑定本机名/IP，且私钥不该随镜像分发</td></tr>
 <tr><td>探测<strong>串口</strong>（<code>/dev/ttyUSB<em></code> / <code>ttyACM</em></code>）</td><td>端口号只有在真机上插了电台才知道</td></tr>
 <tr><td>探测<strong>声卡</strong>（电台的 USB 声卡）</td><td>同上</td></tr>
 </tbody></table></div>
-<p><strong>首启不需要联网</strong>：上面几件事全在本机完成（写入口令、生成自签证书、探测串口与声卡）， 不下载任何东西。开机后 <code>mrrc-firstboot.service</code> 跑完会把自己标记成"已做"，之后不再重复 （<strong>没定型时不会标记</strong>，见下）。</p>
-<blockquote><p><strong>2026-10-17 更正（对当时 1.28.1 产物的只读检查）</strong>：上表里<strong>两条探测在 2026-10-17 的 firstboot 修复之前构建的镜像上从未运行过</strong> —— 包装器在“env 文件存在”（即所有镜像）那条分支上带 <code>MRRC_PRESEED=1</code> 调 <code>first_run.py</code>，而那个键在第一行 就短路返回。<strong>当时的镜像也没有预置口令</strong>（口令由服务启动时 <code>server.py</code> 生成）。<strong>自那次修复起（对外下载的 1.28.1 就是修好的版本）</strong>，两条探测真的会跑，且完成 判据改成“配置已定型”（<code>needs_first_run</code> 为假、且记下的串口节点在场）：<strong>没插电台的盒子下次开机再探一次</strong>， 探到为止。顺带一个不在本次范围内的现状：<code>/setup</code> 的免密引导窗口（§9.8）同样因为“口令已存在”而 <strong>从未打开过</strong>；改它等于重新开一个免口令窗口，是安全决策，另开一次变更处理。</p></blockquote>
-<p><strong>首次上线有两条路</strong>：最省事是<strong>插网线</strong>（eth0 默认 DHCP，插上就拿地址，见 §9.2）；没有网线时， 刷盘前在 FAT 启动分区写一份 <strong><code>/boot/mrrc-wifi.txt</code></strong>（<code>SSID=</code>/<code>PSK=</code>），首启会用它把盒子连上 Wi-Fi 并删掉这个文件（见 §9.3）。两个都不可用时，接 HDMI + USB 键盘在盒子上用 <code>nmtui</code> 直接连 （§9.4）。⚠️ 曾经用于这一步的<strong>开放热点已在 W103D 上退役</strong>：MT7663S 起得来 AP 却不发信标， 手机扫不到，2026-10-11 真机验证失败（详见 §9.6）。</p>
+<p><strong>首启不需要联网</strong>：上面几件事全在本机完成（写入口令、生成自签证书、探测串口与声卡），不下载任何东西。开机后 <code>mrrc-firstboot.service</code>跑完会把自己标记成「已做」，之后不再重复（<strong>没定型时不会标记</strong>，见下）。</p>
+<blockquote><p><strong>2026-10-17 更正（对当时 1.28.1 产物的只读检查）</strong>：上表里<strong>两条探测在 2026-10-17 的 firstboot 修复之前构建的镜像上从未运行过</strong> —— 包装器在“env 文件存在”（即所有镜像）那条分支上带 <code>MRRC_PRESEED=1</code>调 <code>first_run.py</code>，而那个键在第一行 就短路返回。<strong>当时的镜像也没有预置口令</strong>（口令由服务启动时 <code>server.py</code>生成）。<strong>自那次修复起（对外下载的 1.28.1 就是修好的版本）</strong>，两条探测真的会跑，且完成 判据改成“配置已定型”（<code>needs_first_run</code>为假、且记下的串口节点在场）：<strong>没插电台的盒子下次开机再探一次</strong>，探到为止。顺带一个不在本次范围内的现状：<code>/setup</code>的免密引导窗口（§9.8）同样因为“口令已存在”而 <strong>从未打开过</strong>；改它等于重新开一个免口令窗口，是安全决策，另开一次变更处理。</p></blockquote>
+<p><strong>首次上线有两条路</strong>：最省事是<strong>插网线</strong>（eth0 默认 DHCP，插上就拿地址，见 §9.2）；没有网线时，刷盘前在 FAT 启动分区写一份 <strong><code>/boot/mrrc-wifi.txt</code></strong>（<code>SSID=</code>/<code>PSK=</code>），首启会用它把盒子连上 Wi-Fi 并删掉这个文件（见 §9.3）。两个都不可用时，接 HDMI + USB 键盘在盒子上用 <code>nmtui</code>直接连（§9.4）。⚠️ 曾经用于这一步的<strong>开放热点已在 W103D 上退役</strong>：MT7663S 起得来 AP 却不发信标，手机扫不到，2026-10-11 真机验证失败（详见 §9.6）。</p>
 <h2 id="7-进系统-第一件事改口令">7. 进系统，第一件事改口令</h2>
 <p>从路由器 DHCP 列表里找到盒子的 IP，然后：</p>
 <pre><code class="lang-bash">ssh root@&lt;盒子IP&gt;       # 对外下载的 1.28.1 镜像：root 口令 abcd1234</code></pre>
@@ -247,35 +247,35 @@ adb shell reboot update</code></pre>
 <pre><code class="lang-bash">passwd root</code></pre>
 <p>⚠️ 这组口令是公开知识，不改等于把盒子送人。</p>
 <h3 id="口令一览-初始值都在这里-别去别处找">口令一览（初始值都在这里，别去别处找）</h3>
-<p><strong>对外下载的 1.28.1 镜像就是发货版</strong>：三条口令固定、时区与区域已设，开箱不需要任何初始化。 只有自己构建、且<strong>不传</strong> <code>--preflash</code> 时，才是“每台现生成”的那一套。</p>
+<p><strong>对外下载的 1.28.1 镜像就是发货版</strong>：三条口令固定、时区与区域已设，开箱不需要任何初始化。只有自己构建、且<strong>不传</strong> <code>--preflash</code>时，才是“每台现生成”的那一套。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>用途</th><th>对外下载镜像（预置）</th><th>自己构建（不带 <code>--preflash</code>）</th><th>怎么改</th></tr></thead><tbody>
-<tr><td>SSH <code>root</code></td><td><strong><code>abcd1234</code></strong></td><td><code>1234</code>（ophub Armbian 出厂值）</td><td><code>passwd root</code>（SSH/HDMI），或 <code>/settings</code> 的「系统账号口令」</td></tr>
-<tr><td>系统用户 <code>mrrc</code></td><td><strong><code>abcd!1234</code></strong></td><td>无口令（锁定）</td><td><code>passwd mrrc</code>，或 <code>/settings</code> 的「系统账号口令」</td></tr>
-<tr><td><strong>Web 登录</strong></td><td><strong><code>abcd!1234</code></strong></td><td>首启当场生成，每台不同</td><td><code>/settings</code> 的「登录口令」；非预置镜像用 <code>mrrc-show-password</code> 取回</td></tr>
+<tr><td>SSH <code>root</code></td><td><strong><code>abcd1234</code></strong></td><td><code>1234</code>（ophub Armbian 出厂值）</td><td><code>passwd root</code>（SSH/HDMI），或 <code>/settings</code>的「系统账号口令」</td></tr>
+<tr><td>系统用户 <code>mrrc</code></td><td><strong><code>abcd!1234</code></strong></td><td>无口令（锁定）</td><td><code>passwd mrrc</code>，或 <code>/settings</code>的「系统账号口令」</td></tr>
+<tr><td><strong>Web 登录</strong></td><td><strong><code>abcd!1234</code></strong></td><td>首启当场生成，每台不同</td><td><code>/settings</code>的「登录口令」；非预置镜像用 <code>mrrc-show-password</code>取回</td></tr>
 <tr><td>收听专用</td><td>空＝未启用</td><td>同左</td><td>自己写 <code>MRRC_LISTEN_PASSWORD</code>（§13）</td></tr>
-<tr><td>Cloud Hub</td><td>无，要自己申请</td><td>同左</td><td><code>/settings</code> 的「公网入口」，或界面「设置 → Cloud Hub」（§14）</td></tr>
-<tr><td>Wi-Fi</td><td>卖家预置的 AP（若有）</td><td>无</td><td><code>/boot/mrrc-wifi.txt</code> 预置（§9.3）、<code>/settings</code> 页面（§9.8）、或 <code>nmcli</code>（§9.4）</td></tr>
+<tr><td>Cloud Hub</td><td>无，要自己申请</td><td>同左</td><td><code>/settings</code>的「公网入口」，或界面「设置 → Cloud Hub」（§14）</td></tr>
+<tr><td>Wi-Fi</td><td>卖家预置的 AP（若有）</td><td>无</td><td><code>/boot/mrrc-wifi.txt</code>预置（§9.3）、<code>/settings</code>页面（§9.8）、或 <code>nmcli</code>（§9.4）</td></tr>
 </tbody></table></div>
 <blockquote><p>镜像里<strong>不含任何私钥</strong>：自签证书仍是首启在盒子上现生成。预置的只有上面这组<strong>公开</strong>口令—— 拿过镜像或任意一台同批盒子的人都能进同批的所有盒子，所以第一件事就是改掉它们。</p></blockquote>
 <h3 id="发货版-preflash-的构建细节">发货版（<code>--preflash</code>）的构建细节</h3>
-<p><strong>对外下载的镜像和卖家代刷的盒子</strong>都走这条构建通道：<code>bash packaging/box/build-image.sh --preflash</code>。 它把下面三条固定下来，用户开箱<strong>不需要任何初始化</strong>（插上电、浏览器登录即可）：</p>
+<p><strong>对外下载的镜像和卖家代刷的盒子</strong>都走这条构建通道：<code>bash packaging/box/build-image.sh --preflash</code>。它把下面三条固定下来，用户开箱<strong>不需要任何初始化</strong>（插上电、浏览器登录即可）：</p>
 <div class="table-scroll"><table>
 <thead><tr><th>用途</th><th>发货版初始值</th><th>怎么改</th></tr></thead><tbody>
 <tr><td>SSH <code>root</code></td><td><code>abcd1234</code></td><td><code>passwd root</code>（SSH/HDMI），或构建时 <code>MRRC_PREFLASH_ROOT_PASSWORD=…</code></td></tr>
 <tr><td>系统用户 <code>mrrc</code></td><td><code>abcd!1234</code></td><td><code>passwd mrrc</code>，或构建时 <code>MRRC_PREFLASH_USER_PASSWORD=…</code></td></tr>
-<tr><td><strong>Web 登录</strong></td><td><code>abcd!1234</code></td><td><code>/settings</code> 页面的「登录口令」，或构建时 <code>MRRC_PREFLASH_WEB_PASSWORD=…</code></td></tr>
+<tr><td><strong>Web 登录</strong></td><td><code>abcd!1234</code></td><td><code>/settings</code>页面的「登录口令」，或构建时 <code>MRRC_PREFLASH_WEB_PASSWORD=…</code></td></tr>
 </tbody></table></div>
-<p>同一通道还会把时区定为 <code>Asia/Shanghai</code>、区域定为 <code>zh_CN.UTF-8</code>（可用 <code>MRRC_PREFLASH_TIMEZONE</code> / <code>MRRC_PREFLASH_LOCALE</code> 覆盖）。<strong>默认关</strong>：不传 <code>--preflash</code> 的镜像一字不改，口令照旧每台现生成。</p>
-<p>⚠️ <strong>固定口令就是公开知识</strong>：拿到镜像或任何一台同批盒子的人都能进同批的所有盒子。这是“先固定”的 已知代价；Web 口令在页面上能改，<code>root</code>/<code>mrrc</code> 要改得上 SSH 或 HDMI。</p>
+<p>同一通道还会把时区定为 <code>Asia/Shanghai</code>、区域定为 <code>zh_CN.UTF-8</code>（可用 <code>MRRC_PREFLASH_TIMEZONE</code> / <code>MRRC_PREFLASH_LOCALE</code>覆盖）。<strong>默认关</strong>：不传 <code>--preflash</code>的镜像一字不改，口令照旧每台现生成。</p>
+<p>⚠️ <strong>固定口令就是公开知识</strong>：拿到镜像或任何一台同批盒子的人都能进同批的所有盒子。这是“先固定”的 已知代价；Web 口令在页面上能改，<code>root</code>/<code>mrrc</code>要改得上 SSH 或 HDMI。</p>
 <h2 id="8-拿到-web-口令-打开界面">8. 拿到 Web 口令，打开界面</h2>
 <pre><code class="lang-bash">mrrc-show-password</code></pre>
-<p>这个命令必须用 <code>root</code> 跑——口令存在一个 <code>0640 root:root</code> 的文件里。 <strong>对外下载的预置镜像不需要这一步</strong>：口令就是 §7 表里的 <code>abcd!1234</code>；这句话适用于自己构建的镜像。</p>
+<p>这个命令必须用 <code>root</code>跑——口令存在一个 <code>0640 root:root</code>的文件里。<strong>对外下载的预置镜像不需要这一步</strong>：口令就是 §7 表里的 <code>abcd!1234</code>；这句话适用于自己构建的镜像。</p>
 <p>首启时 <strong>HDMI 控制台的横幅</strong>上也会印一次；之后想不起来就用这个命令取回。</p>
 <p>浏览器打开：</p>
 <pre><code>https://&lt;盒子IP&gt;:8888</code></pre>
 <p>自签证书会警告一次 → <strong>高级 → 继续前往</strong>。</p>
-<p>⚠️ <strong>必须走 HTTPS，不要关。</strong> 手机浏览器要调用麦克风发射（PTT），而在 HTTP 下浏览器不给麦克风权限—— <strong>这是浏览器安全策略，不是我们的设置问题。</strong></p>
+<p>⚠️ <strong>必须走 HTTPS，不要关。</strong>手机浏览器要调用麦克风发射（PTT），而在 HTTP 下浏览器不给麦克风权限—— <strong>这是浏览器安全策略，不是我们的设置问题。</strong></p>
 <p>登录后你应该看到主界面：频率、模式、S 表、瀑布图。<strong>这时候还没有电台——下一步接上。</strong></p>
 <figure style="margin: 2rem 0"><a href="../images/W103D/web/w103d-phone.jpg" target="_blank" rel="noopener"><img src="../images/W103D/web/w103d-phone.jpg" alt="手机打开界面：频率、瀑布与 PTT 在一个页面里" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">手机打开界面：频率、瀑布与 PTT 在一个页面里</figcaption></figure>
 <h2 id="9-接网络-有线-wi-fi">9. 接网络（有线 / Wi-Fi）</h2>
@@ -288,34 +288,34 @@ adb shell reboot update</code></pre>
 <tr><td>3</td><td><strong>HDMI + USB 键盘</strong></td><td><code>nmtui</code>：盒子上的全屏文字界面</td><td>✅ 能用 → §9.4</td></tr>
 <tr><td>4</td><td><strong>只有一台手机</strong></td><td>热点引导：盒子自己发热点</td><td>❌ <strong>已退役</strong>（2026-10-11 真机验证失败）；改用预置 Wi-Fi（§9.3）或网线（§9.2）</td></tr>
 </tbody></table></div>
-<p>⚠️ <strong>预置分两份文件、各写各的域</strong>：口令与电台设置走 <code>/boot/mrrc.env</code>（§9.3），Wi-Fi 凭据走 <code>/boot/mrrc-wifi.txt</code> —— Wi-Fi 归 NetworkManager 管，<strong>不写进 env 文件</strong>（设计 D-4：两个域各有 唯一写入者；env 文件会被复制进 <code>0640</code> 的配置层、可能进支持包，Wi-Fi 密码不能和配置键混在一起）。 两份都用得上时同时写即可。（第 4 条本板已退役，见 §9.6。）</p>
-<p><strong>接上网络之后</strong>，盒子的名字、时区、Wi-Fi 切换、有线口、重启都在<strong>局域网配网页</strong>上做（§9.8）， 不必回到 HDMI 控制台。</p>
+<p>⚠️ <strong>预置分两份文件、各写各的域</strong>：口令与电台设置走 <code>/boot/mrrc.env</code>（§9.3），Wi-Fi 凭据走 <code>/boot/mrrc-wifi.txt</code> —— Wi-Fi 归 NetworkManager 管，<strong>不写进 env 文件</strong>（设计 D-4：两个域各有 唯一写入者；env 文件会被复制进 <code>0640</code>的配置层、可能进支持包，Wi-Fi 密码不能和配置键混在一起）。两份都用得上时同时写即可。（第 4 条本板已退役，见 §9.6。）</p>
+<p><strong>接上网络之后</strong>，盒子的名字、时区、Wi-Fi 切换、有线口、重启都在<strong>局域网配网页</strong>上做（§9.8），不必回到 HDMI 控制台。</p>
 <h3 id="9-2-第-1-条-网线-推荐">9.2 第 1 条：网线（推荐）</h3>
 <p>插上就通，确认一下：</p>
 <pre><code class="lang-bash">ip a                    # 看有没有拿到地址
 nmcli device status     # eth0 应显示 connected</code></pre>
 <h3 id="9-3-第-2-条-预置-刷盘时就写进去-零键盘零网线">9.3 第 2 条：预置（刷盘时就写进去，零键盘零网线）</h3>
-<p>镜像的 <strong>FAT 启动分区</strong>会被挂到 <code>/boot</code>（在别的电脑上打开，macOS 上那个分区叫 <code>BOOT</code>， 直接拖文件进去也行）。这里可以放<strong>两份</strong>文件，各写各的域：</p>
-<p><strong>① 电台与口令 → <code>/boot/mrrc.env</code></strong>：首启会采纳它并改名成 <code>mrrc.env.applied</code>。支持任意 <code>MRRC_*</code> 键（就是 §13 那张表里的那些）✅</p>
+<p>镜像的 <strong>FAT 启动分区</strong>会被挂到 <code>/boot</code>（在别的电脑上打开，macOS 上那个分区叫 <code>BOOT</code>，直接拖文件进去也行）。这里可以放<strong>两份</strong>文件，各写各的域：</p>
+<p><strong>① 电台与口令 → <code>/boot/mrrc.env</code></strong>：首启会采纳它并改名成 <code>mrrc.env.applied</code>。支持任意 <code>MRRC_*</code>键（就是 §13 那张表里的那些）✅</p>
 <pre><code class="lang-bash">cat &gt; /Volumes/BOOT/mrrc.env &lt;&lt;'EOF'
 MRRC_WEB_PASSWORD=你自己定一个
 MRRC_RADIO_MODEL=ft710
 MRRC_PTT_MAX_TX_SECONDS=120
 EOF</code></pre>
-<p><strong>② Wi-Fi 凭据 → <code>/boot/mrrc-wifi.txt</code></strong>：让盒子<strong>没有网线也能自己连上 Wi-Fi</strong>。两行， 键名不分大小写，值两端的空格与 Windows 编辑器留下的 <code>\r</code> 会被去掉：</p>
+<p><strong>② Wi-Fi 凭据 → <code>/boot/mrrc-wifi.txt</code></strong>：让盒子<strong>没有网线也能自己连上 Wi-Fi</strong>。两行，键名不分大小写，值两端的空格与 Windows 编辑器留下的 <code>\r</code>会被去掉：</p>
 <pre><code class="lang-bash">cat &gt; /Volumes/BOOT/mrrc-wifi.txt &lt;&lt;'EOF'
 SSID=我的WiFi
 PSK=密码
 EOF</code></pre>
-<p>首启时 <code>mrrc-wifi-preseed.service</code> 会读这个文件、用 <code>nmcli</code> 连上那个 Wi-Fi，然后<strong>把文件删掉</strong> （FAT 没有权限位，明文 PSK 不能一直躺在卡上）。它<strong>刻意与 <code>mrrc.env</code> 分开</strong>：Wi-Fi 是 NetworkManager 的领域，不走 <code>MRRC_*</code> 配置层——env 文件会被复制进 <code>0640</code> 的配置层、可能进支持包， 一条 Wi-Fi 密码一旦落进那儿就和配置键混在一起了（设计 D-4）。这也是文件名用 <code>.txt</code> 而不是 <code>.env</code> 的原因：别把两份文件弄混。</p>
-<p><strong>Guided/发货流程不用预置这条路</strong>（2026-10-17 起）：实际流程是刷完 eMMC → 上电 → 插 LAN 线 → 在 <code>/settings</code> 页面里改 Wi-Fi（§9.8），那已经是零键盘的一条路；预置能力<strong>仍在镜像里</strong>， 将来想用随时可用，只是操作单不再要求它。</p>
-<p>⚠️ <strong>这条只在"镜像刷到 U 盘/SD 卡"时成立</strong>：把系统写进 eMMC 时没有用户能碰到的 FAT 分区 （§17 的 eMMC 路线不适用预置）。</p>
+<p>首启时 <code>mrrc-wifi-preseed.service</code>会读这个文件、用 <code>nmcli</code>连上那个 Wi-Fi，然后<strong>把文件删掉</strong> （FAT 没有权限位，明文 PSK 不能一直躺在卡上）。它<strong>刻意与 <code>mrrc.env</code>分开</strong>：Wi-Fi 是 NetworkManager 的领域，不走 <code>MRRC_*</code>配置层——env 文件会被复制进 <code>0640</code>的配置层、可能进支持包，一条 Wi-Fi 密码一旦落进那儿就和配置键混在一起了（设计 D-4）。这也是文件名用 <code>.txt</code>而不是 <code>.env</code>的原因：别把两份文件弄混。</p>
+<p><strong>Guided/发货流程不用预置这条路</strong>（2026-10-17 起）：实际流程是刷完 eMMC → 上电 → 插 LAN 线 → 在 <code>/settings</code>页面里改 Wi-Fi（§9.8），那已经是零键盘的一条路；预置能力<strong>仍在镜像里</strong>，将来想用随时可用，只是操作单不再要求它。</p>
+<p>⚠️ <strong>这条只在「镜像刷到 U 盘/SD 卡」时成立</strong>：把系统写进 eMMC 时没有用户能碰到的 FAT 分区（§17 的 eMMC 路线不适用预置）。</p>
 <p>连上以后想确认，接 HDMI 看控制台，或 SSH 进去看：</p>
 <pre><code class="lang-bash">journalctl -u mrrc-wifi-preseed -b     # 连上后该 unit 应显示文件已删、网络已就绪</code></pre>
 <h3 id="9-4-第-3-条-hdmi-nmtui-没有任何网络时最省事">9.4 第 3 条：HDMI + <code>nmtui</code>（没有任何网络时最省事）</h3>
 <p>盒子接 HDMI + 一个 USB 键盘，登录 <code>root</code> / <code>abcd1234</code>（对外下载的预置镜像；自建未预置时是 <code>1234</code>），然后：</p>
 <pre><code class="lang-bash">nmtui</code></pre>
-<p>方向键选「<strong>启用连接 / Activate a connection</strong>」→ 选你的 SSID → 输密码。 这是<strong>全屏文字界面</strong>，既不需要网络也不需要图形环境 ✅</p>
+<p>方向键选「<strong>启用连接 / Activate a connection</strong>」→ 选你的 SSID → 输密码。这是<strong>全屏文字界面</strong>，既不需要网络也不需要图形环境 ✅</p>
 <p><strong>已经在 SSH 里</strong>（有网线）就用 <code>nmcli</code>：</p>
 <pre><code class="lang-bash">nmcli device status                              # 先看 wlan0 在不在
 nmcli device wifi list                           # 扫（要等几秒）
@@ -328,76 +328,76 @@ ip a show wlan0                                  # 拿到 IP 没</code></pre>
 <div class="table-scroll"><table>
 <thead><tr><th>检查</th><th>命令</th><th>说明</th></tr></thead><tbody>
 <tr><td>硬件在不在</td><td><code>rfkill list</code></td><td>显示 <code>Soft blocked: yes</code> → <code>rfkill unblock wifi</code>；<strong>看不到 wlan0 才往下查</strong></td></tr>
-<tr><td>驱动加载没</td><td>`lsmod \</td><td>grep mt76`</td><td>应有 <code>mt7663s</code> 与 <code>mt76_sdio</code>；没有就 <code>modprobe mt7663s</code></td></tr>
-<tr><td>固件加载成功没</td><td>`dmesg \</td><td>grep -i mt76`</td><td>有 <code>firmware</code> 失败字样 = 固件没加载上（本镜像带 4 个 mt7663 固件）</td></tr>
+<tr><td>驱动加载没</td><td>`lsmod \</td><td>grep mt76`</td><td>应有 <code>mt7663s</code>与 <code>mt76_sdio</code>；没有就 <code>modprobe mt7663s</code></td></tr>
+<tr><td>固件加载成功没</td><td>`dmesg \</td><td>grep -i mt76`</td><td>有 <code>firmware</code>失败字样 = 固件没加载上（本镜像带 4 个 mt7663 固件）</td></tr>
 <tr><td>网卡认出来没</td><td><code>iw dev</code></td><td>应列出 <code>wlan0</code></td></tr>
-<tr><td>扫描有结果没</td><td><code>nmcli device wifi list</code></td><td>空列表且 <code>dmesg</code> 里有 <code>mailbox write … failed: -110</code> → <strong>芯片楔死了</strong>，按右列重启；空列表但无报错 → 天线或信道问题</td></tr>
+<tr><td>扫描有结果没</td><td><code>nmcli device wifi list</code></td><td>空列表且 <code>dmesg</code>里有 <code>mailbox write … failed: -110</code> → <strong>芯片楔死了</strong>，按右列重启；空列表但无报错 → 天线或信道问题</td></tr>
 <tr><td>芯片是否还活着</td><td>`dmesg \</td><td>grep -c "mailbox write"`</td><td>计数 &gt; 0 = 已楔死，<strong>重启</strong>（钉版固件实测软重启 47 秒即复位，见 §20.5）；连接期间别再选 5 GHz</td></tr>
-<tr><td>监管域</td><td><code>iw reg get</code></td><td>显示 <code>country 00</code> 时部分信道不可用；<code>iw reg set CN</code> 后重试</td></tr>
+<tr><td>监管域</td><td><code>iw reg get</code></td><td>显示 <code>country 00</code>时部分信道不可用；<code>iw reg set CN</code>后重试</td></tr>
 </tbody></table></div>
-<p><strong>背景（决定你该查什么）</strong>：W103D 的无线是 <strong>MT7663S</strong>，WiFi 与<strong>蓝牙同一颗芯片</strong>，走 <strong>SDIO</strong> 而不是 USB。这块板的驱动是 ophub 专门适配的（上游 <strong>PR #3658 / #3659</strong>），所以 <strong>内核绝不能换</strong>——换通用内核 = <strong>静默丢 WiFi</strong>（见 §19 红线③）。</p>
-<p><strong>固件状态（决定你该期待什么）</strong>：<strong>1.26.0 起</strong>对外下载的镜像带的就是出厂 2021 版 N9 固件 （<code>7663mp1827</code>，见 §20.5），1.28.1 同样。只有 <strong>1.25.5 及更早</strong>的镜像才是 linux-firmware 的 2020 版、会渐进式挂死（那些镜像已下架）。无论哪版，无线抖动都大，长时间听音频容易卡。 <strong>实时音频始终优先走有线。</strong> 2026-10-12 在 1.26.0 真机上实测：<strong>2.4 GHz 下关联、上网、拿 IPv6、NTP 全通，扫描正常且扫完芯片不挂</strong>； <strong>5 GHz（ch149）能关联、能拿到 DHCP 地址，但数据面是死的</strong>，约 100 秒后 MCU 开始超时（详证见 §20.5）。 结论：<strong>无线只用来配网，实时音频始终优先走有线。</strong></p>
+<p><strong>背景（决定你该查什么）</strong>：W103D 的无线是 <strong>MT7663S</strong>，WiFi 与<strong>蓝牙同一颗芯片</strong>，走 <strong>SDIO</strong>而不是 USB。这块板的驱动是 ophub 专门适配的（上游 <strong>PR #3658 / #3659</strong>），所以 <strong>内核绝不能换</strong>——换通用内核 = <strong>静默丢 WiFi</strong>（见 §19 红线③）。</p>
+<p><strong>固件状态（决定你该期待什么）</strong>：<strong>1.26.0 起</strong>对外下载的镜像带的就是出厂 2021 版 N9 固件（<code>7663mp1827</code>，见 §20.5），1.28.1 同样。只有 <strong>1.25.5 及更早</strong>的镜像才是 linux-firmware 的 2020 版、会渐进式挂死（那些镜像已下架）。无论哪版，无线抖动都大，长时间听音频容易卡。<strong>实时音频始终优先走有线。</strong> 2026-10-12 在 1.26.0 真机上实测：<strong>2.4 GHz 下关联、上网、拿 IPv6、NTP 全通，扫描正常且扫完芯片不挂</strong>；<strong>5 GHz（ch149）能关联、能拿到 DHCP 地址，但数据面是死的</strong>，约 100 秒后 MCU 开始超时（详证见 §20.5）。结论：<strong>无线只用来配网，实时音频始终优先走有线。</strong></p>
 <h3 id="9-6-第-4-条-热点引导-已退役">9.6 第 4 条：热点引导（<strong>已退役</strong>）</h3>
-<blockquote><p>⚠️ <strong>2026-10-11 真机结论：这条路在 W103D 上走不通，已退役。</strong> 原因是<strong>硬件边界</strong>，不是 软件没写完：MT7663S 的驱动与 NetworkManager 都报 AP 已激活（<code>COMPLETED</code>、<code>10.42.0.1/24</code> 就位、零报错），但<strong>信标不上空</strong>，手机与 Mac 都扫不到 <code>MRRC-Setup</code>（源码走查：<code>mt7615_ops</code> 没有 <code>start_ap</code>，mac80211 缺 op 时静默返回成功）；折腾 AP 还会把驱动楔死，只能断电复位。 换 <code>prefer_offload_fw=0</code> 会改载 <code>_rebb</code> 固件，芯片则<strong>根本不初始化</strong>： <code>MCU initialization failed: -110</code>。上游移植记录本身也只验证过 STA 模式。</p></blockquote>
-<p><strong>为什么改成局域网页面</strong>：一个谁也扫不到的热点，比没有引导更糟。现在「上线」这一步交给 <strong>你自己已经在用的网络</strong>——插网线（§9.2）或刷机时预置 Wi-Fi（§9.3），然后用任意设备打开 <code>https://&lt;盒子地址&gt;:8888/</code>：未配置的盒子会落到引导页 <strong><code>/setup</code></strong>，先设登录口令，再从页面 列出的 Wi-Fi 列表里选一个连上去；之后一切在 <strong><code>/settings</code></strong> 设置页。</p>
-<blockquote><p><strong>首次开机请在你信任的网络里完成设置。</strong> 引导页在"盒子从未被用户设过口令"期间，对<strong>同一个 子网</strong>内的请求免口令开放（网线/预置通常发生在家里私网）。宿舍网、公司网、咖啡馆这类共享 网络存在"被同网段的人抢先设口令、接管盒子"的风险——这是为了"买回来只有一台手机的人也能 开始"而接受的<strong>明知的弱化</strong>，不是缺陷。</p></blockquote>
-<p>被退役的实体：<code>MRRC-Setup</code> 热点、<code>10.42.0.1</code> 地址、30 分钟窗口与它的重试行为、 <code>mrrc-setup-ap.service</code> 与 <code>linux/setup_ap.py</code>、以及 <code>/run/mrrc/setup-ap/state.json</code> 和 <code>wizard.json</code> 两个跨用户信箱。设计见 <code>docs/superpowers/specs/2026-10-11-w103d-lan-box-settings-design.md</code>。</p>
+<blockquote><p>⚠️ <strong>2026-10-11 真机结论：这条路在 W103D 上走不通，已退役。</strong>原因是<strong>硬件边界</strong>，不是 软件没写完：MT7663S 的驱动与 NetworkManager 都报 AP 已激活（<code>COMPLETED</code>、<code>10.42.0.1/24</code>就位、零报错），但<strong>信标不上空</strong>，手机与 Mac 都扫不到 <code>MRRC-Setup</code>（源码走查：<code>mt7615_ops</code>没有 <code>start_ap</code>，mac80211 缺 op 时静默返回成功）；折腾 AP 还会把驱动楔死，只能断电复位。换 <code>prefer_offload_fw=0</code>会改载 <code>_rebb</code>固件，芯片则<strong>根本不初始化</strong>：<code>MCU initialization failed: -110</code>。上游移植记录本身也只验证过 STA 模式。</p></blockquote>
+<p><strong>为什么改成局域网页面</strong>：一个谁也扫不到的热点，比没有引导更糟。现在「上线」这一步交给 <strong>你自己已经在用的网络</strong>——插网线（§9.2）或刷机时预置 Wi-Fi（§9.3），然后用任意设备打开 <code>https://&lt;盒子地址&gt;:8888/</code>：未配置的盒子会落到引导页 <strong><code>/setup</code></strong>，先设登录口令，再从页面 列出的 Wi-Fi 列表里选一个连上去；之后一切在 <strong><code>/settings</code></strong>设置页。</p>
+<blockquote><p><strong>首次开机请在你信任的网络里完成设置。</strong>引导页在「盒子从未被用户设过口令」期间，对<strong>同一个 子网</strong>内的请求免口令开放（网线/预置通常发生在家里私网）。宿舍网、公司网、咖啡馆这类共享 网络存在「被同网段的人抢先设口令、接管盒子」的风险——这是为了「买回来只有一台手机的人也能 开始」而接受的<strong>明知的弱化</strong>，不是缺陷。</p></blockquote>
+<p>被退役的实体：<code>MRRC-Setup</code>热点、<code>10.42.0.1</code>地址、30 分钟窗口与它的重试行为、<code>mrrc-setup-ap.service</code>与 <code>linux/setup_ap.py</code>、以及 <code>/run/mrrc/setup-ap/state.json</code>和 <code>wizard.json</code>两个跨用户信箱。设计见 <code>docs/superpowers/specs/2026-10-11-w103d-lan-box-settings-design.md</code>。</p>
 <h3 id="9-7-盒子名字与-mdns">9.7 盒子名字与 mDNS</h3>
-<p>盒子在局域网里有一个<strong>名字</strong>，默认 <strong><code>MRRC-Modern</code></strong>（打包时用 <code>hostnamectl set-hostname</code> 落下， 否则镜像里还是 <code>armbian</code>）。于是你可以直接在浏览器里用 <strong><code>https://MRRC-Modern.local:8888</code></strong> 这样 的地址找到它，不必先去路由器后台翻 IP。</p>
-<p><strong>自称 <code>MRRC-Modern-2.local</code></strong>。设置页 <code>/settings</code> 显示<strong>当前实际可达的那个名字</strong>；同网段有 多台盒子时，建议在页面上给它们各改一个名字。</p>
+<p>盒子在局域网里有一个<strong>名字</strong>，默认 <strong><code>MRRC-Modern</code></strong>（打包时用 <code>hostnamectl set-hostname</code>落下，否则镜像里还是 <code>armbian</code>）。于是你可以直接在浏览器里用 <strong><code>https://MRRC-Modern.local:8888</code></strong>这样 的地址找到它，不必先去路由器后台翻 IP。</p>
+<p><strong>自称 <code>MRRC-Modern-2.local</code></strong>。设置页 <code>/settings</code>显示<strong>当前实际可达的那个名字</strong>；同网段有 多台盒子时，建议在页面上给它们各改一个名字。</p>
 <p><strong>Android 看机型</strong>。所以<strong>退路是 DHCP 主机名</strong>（NetworkManager 默认会把它报给路由器）：无论 什么客户端，去路由器后台的<strong>客户端列表</strong>里按主机名就能找到盒子的 IP。设置页<strong>两个都显示</strong>： mDNS 名字 + 当前 IPv4。</p>
 <p>同步 <code>/etc/hosts</code>）。</p>
 <ul>
-<li><strong>多台同网段会撞名</strong>：avahi（Linux 上的 mDNS 实现）发现 <code>MRRC-Modern.local</code> 已被占用时，会</li>
-<li><strong>大小写</strong>：<code>MRRC-Modern</code> 含大写，但 DNS 名字本身大小写不敏感——<code>mrrc-modern.local</code> 一样能解析。</li>
-<li><strong><code>&lt;名字&gt;.local</code> 不是万能的</strong>：<strong>iOS / macOS 完美</strong>，<strong>Windows 需要装 Bonjour</strong>（否则解析不了），</li>
+<li><strong>多台同网段会撞名</strong>：avahi（Linux 上的 mDNS 实现）发现 <code>MRRC-Modern.local</code>已被占用时，会</li>
+<li><strong>大小写</strong>：<code>MRRC-Modern</code>含大写，但 DNS 名字本身大小写不敏感——<code>mrrc-modern.local</code>一样能解析。</li>
+<li><strong><code>&lt;名字&gt;.local</code>不是万能的</strong>：<strong>iOS / macOS 完美</strong>，<strong>Windows 需要装 Bonjour</strong>（否则解析不了），</li>
 <li><strong>改名字</strong>：<code>/settings</code> → 盒子身份，填新名字提交（走 root helper 的 <code>set-hostname</code>，会一并</li>
 </ul>
-<h3 id="9-8-局域网配网页-setup-与-settings-1-26-0-新增">9.8 局域网配网页：<code>/setup</code> 与 <code>/settings</code>（1.26.0 新增）</h3>
-<p>盒子接入你的网之后，<strong>用任意设备的浏览器</strong>就能把盒子的系统配置完 —— 不用 HDMI、不用键盘。 地址就是平时那个，自己会被路由到对应页面：</p>
+<h3 id="9-8-局域网配网页-setup-与-settings-1-26-0-新增">9.8 局域网配网页：<code>/setup</code>与 <code>/settings</code>（1.26.0 新增）</h3>
+<p>盒子接入你的网之后，<strong>用任意设备的浏览器</strong>就能把盒子的系统配置完 —— 不用 HDMI、不用键盘。地址就是平时那个，自己会被路由到对应页面：</p>
 <div class="table-scroll"><table>
 <thead><tr><th>页面</th><th>地址</th><th>干什么</th></tr></thead><tbody>
 <tr><td><strong>引导页</strong></td><td><code>https://&lt;盒子IP&gt;:8888/setup</code></td><td>首次上线：设登录口令 + 从扫到的列表里选 Wi-Fi</td></tr>
 <tr><td><strong>设置页</strong></td><td><code>https://&lt;盒子IP&gt;:8888/settings</code></td><td><strong>盒子身份</strong>（名字 / mDNS / 当前地址 / 时区 / 重启）、<strong>网络体检</strong>、<strong>Wi-Fi</strong>（扫描 + 手输 SSID + 连）、<strong>有线口</strong>（DHCP / 静态）、<strong>公网入口</strong>（填呼号申请，见下）</td></tr>
 <tr><td>主界面</td><td><code>https://&lt;盒子IP&gt;:8888/</code></td><td>电台控制（平时用的那个）</td></tr>
 </tbody></table></div>
-<p><strong>引导窗口只在"盒子从未被用户设过口令"期间开放</strong>：首次开机它对你<strong>同一子网</strong>的请求免口令； 一旦设过一次口令（比如你在页面上改了，或者 <code>MRRC_WEB_PASSWORD</code> 已存在），<code>/setup</code> 就 <strong>302 跳到 <code>/settings</code></strong>，此后所有页面一律要登录。所以：</p>
-<blockquote><p><strong>首次开机请在你信任的网络里完成设置</strong>（家里私网）。宿舍网/公司网/咖啡馆这类共享网络存在 "被同网段的人抢先设口令接管盒子"的风险——这是为了"买回来只有一台手机的人也能开始"而 接受的<strong>明知的弱化</strong>（设计见 §9.6 引的那份 spec）。</p></blockquote>
+<p><strong>引导窗口只在「盒子从未被用户设过口令」期间开放</strong>：首次开机它对你<strong>同一子网</strong>的请求免口令；一旦设过一次口令（比如你在页面上改了，或者 <code>MRRC_WEB_PASSWORD</code>已存在），<code>/setup</code>就 <strong>302 跳到 <code>/settings</code></strong>，此后所有页面一律要登录。所以：</p>
+<blockquote><p><strong>首次开机请在你信任的网络里完成设置</strong>（家里私网）。宿舍网/公司网/咖啡馆这类共享网络存在「被同网段的人抢先设口令接管盒子」的风险——这是为了「买回来只有一台手机的人也能开始」而 接受的<strong>明知的弱化</strong>（设计见 §9.6 引的那份 spec）。</p></blockquote>
 <p><strong>Wi-Fi 面板的三条硬约束（2026-10-12 真机；第一、二条 2026-10-17 有更新）：</strong></p>
 <p>MCU mailbox 超时（<code>-110</code>），此后<strong>扫描返回空表</strong>、Wi-Fi 彻底没法用（详证见 §20.5）。</p>
-<p>它<strong>带入</strong>这个框。所以隐藏网络、以及“芯片刚重启、扫描返回空表”这两种情况都有出路了。 密码框旁的「显示/隐藏」只切换输入框的显示方式，不改变值。<strong>已保存的 Wi-Fi 密码不会回显</strong> —— 那需要向 NetworkManager 索要明文口令，而“Wi-Fi 密码只进 <code>nmcli</code> 的 argv”是这套系统的一条硬约束（NFR-068）。</p>
-<p>判断芯片状态的旁证仍是：<code>nmcli device wifi list</code> 与 <code>dmesg | grep -c "mailbox write"</code>。</p>
+<p>它<strong>带入</strong>这个框。所以隐藏网络、以及“芯片刚重启、扫描返回空表”这两种情况都有出路了。密码框旁的「显示/隐藏」只切换输入框的显示方式，不改变值。<strong>已保存的 Wi-Fi 密码不会回显</strong> —— 那需要向 NetworkManager 索要明文口令，而“Wi-Fi 密码只进 <code>nmcli</code>的 argv”是这套系统的一条硬约束（NFR-068）。</p>
+<p>判断芯片状态的旁证仍是：<code>nmcli device wifi list</code>与 <code>dmesg | grep -c "mailbox write"</code>。</p>
 <ol>
 <li><strong>只连 2.4 GHz。</strong> 5 GHz 能关联、能拿到地址，但<strong>数据面不通</strong>，而且会把 MT7663 拖到</li>
 <li><strong>可以直接手输 SSID</strong>（2026-10-17 起）：面板上那格「网络名（SSID）」就是输入框，点扫描结果会把</li>
 <li><strong>扫不到任何网络时页面会给一句提示</strong>（2026-10-17 起；以前是一片空白，看起来像“没点对”）。</li>
 </ol>
-<p><strong>「公网入口」面板（2026-10-17 新增）：</strong>填上呼号 → 点「申请公网入口」→ 状态行告诉你“已提交，等待批准”； 运维在门户批准后，<strong>盒子自己会接通</strong>（服务端每 30 s 轮一次），页面不用开着。接通后面板显示入口地址 （<code>https://&lt;label&gt;.mrrc.vlsc.net/</code>）。两条要记住的边界：<strong>改呼号 = 重新申请</strong>（旧入口不会自动迁移）； 已申请过的盒子按钮会变成「查询状态」—— 门户对同一呼号的重复申请是查重拒绝的（要换人或转移走申诉）。 联系人、批准码认领、隧道/证书细节仍在主界面 ☰ 菜单的「Cloud Hub」对话框里（§14）。</p>
+<p><strong>「公网入口」面板（2026-10-17 新增）：</strong>填上呼号 → 点「申请公网入口」→ 状态行告诉你“已提交，等待批准”；运维在门户批准后，<strong>盒子自己会接通</strong>（服务端每 30 s 轮一次），页面不用开着。接通后面板显示入口地址（<code>https://&lt;label&gt;.mrrc.vlsc.net/</code>）。两条要记住的边界：<strong>改呼号 = 重新申请</strong>（旧入口不会自动迁移）；已申请过的盒子按钮会变成「查询状态」—— 门户对同一呼号的重复申请是查重拒绝的（要换人或转移走申诉）。联系人、批准码认领、隧道/证书细节仍在主界面 ☰ 菜单的「Cloud Hub」对话框里（§14）。</p>
 <p><strong>网页只监听 IPv4（盒子线的设计取舍）：</strong></p>
 <pre><code class="lang-bash">ss -ltn | grep 8888     # 0.0.0.0:8888  → IPv4 通、IPv6 不通
                         # [::]:22       → SSH 两边都通</code></pre>
-<p>所以盒子就算拿到了全局 IPv6，<code>https://[&lt;它的IPv6&gt;]:8888</code> 也<strong>打不开</strong>（直连 IPv6 只能 SSH）。 想让它也听 IPv6，改一行就行（<code>::</code> 是 dual-stack，IPv4 照旧能连）：</p>
+<p>所以盒子就算拿到了全局 IPv6，<code>https://[&lt;它的IPv6&gt;]:8888</code>也<strong>打不开</strong>（直连 IPv6 只能 SSH）。想让它也听 IPv6，改一行就行（<code>::</code>是 dual-stack，IPv4 照旧能连）：</p>
 <pre><code class="lang-bash">sed -i 's/^MRRC_WEB_HOST=.*/MRRC_WEB_HOST=::/' /opt/mrrc_modern/env/mrrc.env
 systemctl restart mrrc-modern
 ss -ltn | grep 8888     # 现在应是 [::]:8888</code></pre>
-<blockquote><p><strong>不要反复点扫描</strong>：正常一次就够。如果列表是空的，先看 <code>dmesg</code> 判断是芯片挂了还是真没网， 而不是继续点（芯片挂的时候点也没用，只有重启能恢复）。</p></blockquote>
+<blockquote><p><strong>不要反复点扫描</strong>：正常一次就够。如果列表是空的，先看 <code>dmesg</code>判断是芯片挂了还是真没网，而不是继续点（芯片挂的时候点也没用，只有重启能恢复）。</p></blockquote>
 <h2 id="10-接电台">10. 接电台</h2>
-<p><strong>FT-710 的线插口别搞错</strong>：用<strong>上方 <code>Enhanced</code> 口</strong>，它同时承载 CAT 串口和 FT4222 scope。 插 Standard 口的话 CAT 可能通但<strong>没有真频谱</strong>。</p>
+<p><strong>FT-710 的线插口别搞错</strong>：用<strong>上方 <code>Enhanced</code>口</strong>，它同时承载 CAT 串口和 FT4222 scope。插 Standard 口的话 CAT 可能通但<strong>没有真频谱</strong>。</p>
 <p>接好后确认三样东西都出现了：</p>
 <pre><code class="lang-bash">ls -l /dev/ttyUSB* /dev/ttyACM*     # CAT 串口
 arecord -l                          # 电台的 USB 声卡（RX）
 aplay -l                            # 播放设备（TX）</code></pre>
 <p>⚠️ 这三样<strong>一样都不能少</strong>。少串口 = 没有 CAT 控制；少声卡 = 没有声音。</p>
-<p><strong>FT-710 面板上还要动四项</strong>（都在 <code>FUNC</code> 里，设好再开页面）：</p>
+<p><strong>FT-710 面板上还要动四项</strong>（都在 <code>FUNC</code>里，设好再开页面）：</p>
 <div class="table-scroll"><table>
 <thead><tr><th>菜单</th><th>设成</th><th>为什么</th></tr></thead><tbody>
 <tr><td><code>RADIO SETTING</code> → 各模式 <code>MOD SOURCE</code></td><td><code>USB</code></td><td>不设，PTT 按下没有调制</td></tr>
 <tr><td><code>RADIO SETTING</code> → <code>RPTT SELECT</code></td><td><code>OFF</code></td><td>PTT 走 CAT，不走 RTS/DTR</td></tr>
 <tr><td><code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>SCU-LAN10</code></td><td><code>ON</code></td><td>第三方远程软件靠这条通道取频谱；本服务端不用它，但开着不冲突</td></tr>
-<tr><td><code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>CAT-1 RATE</code></td><td><code>38400</code></td><td>与本机 <code>MRRC_BAUD_RATE</code> 一致；第三方软件也读这个速率</td></tr>
+<tr><td><code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>CAT-1 RATE</code></td><td><code>38400</code></td><td>与本机 <code>MRRC_BAUD_RATE</code>一致；第三方软件也读这个速率</td></tr>
 </tbody></table></div>
-<p><strong>再设一个发射兜底</strong>：<code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code>（TOT）， 连续发射到设定时间自动切回接收，<strong>远程操作建议 3 分钟</strong>；<strong>FT8 / RTTY 长时间发射时设 <code>OFF</code></strong>， 否则一个时隙序列会被切断。注意别和同页 <code>CAT-1/2/3</code> 的 <code>TIME OUT TIMER</code>（毫秒，CAT 指令超时）搞混。</p>
-<p>电台侧 TOT 管「物理上不许一直发」，服务端 <code>MRRC_PTT_MAX_TX_SECONDS</code>（本镜像默认 <code>120</code>）管 「远端会话断了也要松键」——两个都开才完整。操作指南里那份带截图的步骤见 <code>docs/OPERATION_GUIDE.md</code> §0.6.3。</p>
+<p><strong>再设一个发射兜底</strong>：<code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code>（TOT），连续发射到设定时间自动切回接收，<strong>远程操作建议 3 分钟</strong>；<strong>FT8 / RTTY 长时间发射时设 <code>OFF</code></strong>，否则一个时隙序列会被切断。注意别和同页 <code>CAT-1/2/3</code>的 <code>TIME OUT TIMER</code>（毫秒，CAT 指令超时）搞混。</p>
+<p>电台侧 TOT 管「物理上不许一直发」，服务端 <code>MRRC_PTT_MAX_TX_SECONDS</code>（本镜像默认 <code>120</code>）管「远端会话断了也要松键」——两个都开才完整。操作指南里那份带截图的步骤见 <code>docs/OPERATION_GUIDE.md</code> §0.6.3。</p>
 <figure style="margin: 2rem 0"><a href="../images/W103D/web/w103d-desk.jpg" target="_blank" rel="noopener"><img src="../images/W103D/web/w103d-desk.jpg" alt="台面：盒子与电台各占一角" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">台面：盒子与电台各占一角</figcaption></figure>
 <h2 id="11-选机型">11. 选机型</h2>
 <pre><code class="lang-bash">mrrc-radio list        # 11 个型号，带 ✅已验证 / ⚠实验性</code></pre>
@@ -406,17 +406,17 @@ aplay -l                            # 播放设备（TX）</code></pre>
 <pre><code class="lang-bash">mrrc-radio use ft710                          # 自动探测串口 → 写配置 → 重启服务
 mrrc-radio use ic7300 --port /dev/ttyACM0     # 或者你直接指定端口
 mrrc-radio show                               # 核对当前生效的配置</code></pre>
-<p><code>use</code> 做了四件事：<strong>停服务 → 探测串口（真发包问电台）→ 写配置 → 起服务</strong>。 所以它需要电台是开机状态。</p>
+<p><code>use</code>做了四件事：<strong>停服务 → 探测串口（真发包问电台）→ 写配置 → 起服务</strong>。所以它需要电台是开机状态。</p>
 <blockquote><p><strong>换机型时旧串口会被自动清掉。</strong> FT-710 是 <code>ttyUSB0/1</code>、IC-7300 是 <code>ttyACM0</code>—— 留着上一个型号的串口等于配了一条<strong>没有报错的死链路</strong>。</p></blockquote>
 <h3 id="关于-8-个实验性机型-重要">关于 8 个实验性机型（重要）</h3>
 <p><code>ic705</code> <code>ic7610</code> <code>ic7760</code> <code>ftdx10</code> <code>ftdx101d</code> <code>ftdx101mp</code> <code>ftx1</code> <code>ft891</code> —— 这些机型的指令表来自 Hamlib 与设备手册，<strong>不是真机实测</strong>。默认<strong>只收不发</strong>。</p>
-<p>（在镜像里看得出来：这三个已验证机型的 profile <strong>根本不写</strong> <code>MRRC_ALLOW_UNVERIFIED_TX</code> 这一行， 而那 8 个都显式写着 <code>=0</code>——默认是安全的，要发射得主动改。）</p>
+<p>（在镜像里看得出来：这三个已验证机型的 profile <strong>根本不写</strong> <code>MRRC_ALLOW_UNVERIFIED_TX</code>这一行，而那 8 个都显式写着 <code>=0</code>——默认是安全的，要发射得主动改。）</p>
 <p>理由（AD-019）：在没有实测过的频率/功率语义上发射，对电台和天线都不好。</p>
 <p>要发射必须显式开门：</p>
 <pre><code class="lang-bash">vi /opt/mrrc_modern/env/mrrc.env      # 加一行 MRRC_ALLOW_UNVERIFIED_TX=1
 systemctl restart mrrc-modern</code></pre>
 <p><strong>换回已验证机型时这个键会自动重置为 0</strong>，不会带着开着。</p>
-<h2 id="12-验收-确认-真的能工作">12. 验收：确认"真的能工作"</h2>
+<h2 id="12-验收-确认-真的能工作">12. 验收：确认「真的能工作」</h2>
 <pre><code class="lang-bash">scp packaging/box/verify.sh root@&lt;盒子IP&gt;:/tmp/
 ssh root@&lt;盒子IP&gt; 'bash /tmp/verify.sh'</code></pre>
 <p><strong>12 项，每项失败都会给出排查命令。先跑这个，再动手调别的。</strong></p>
@@ -427,28 +427,28 @@ ssh root@&lt;盒子IP&gt; 'bash /tmp/verify.sh'</code></pre>
 <tr><td>3/12</td><td><strong>电台 USB 声卡</strong>（<code>arecord -l</code>）</td></tr>
 <tr><td>4/12</td><td>Python 与依赖</td></tr>
 <tr><td>5/12</td><td>服务在跑</td></tr>
-<tr><td>6/12</td><td><strong>8888 上的 HTTPS</strong> 真的在应答（只看有没有应答，<strong>不看证书是否受信</strong>——自签证书本来就不受信）</td></tr>
-<tr><td>7/12</td><td><strong>配置一致性</strong>（设计 D-11：<code>EnvironmentFile</code> 与 <code>MRRC_CONFIG_FILE</code> 同一文件）</td></tr>
+<tr><td>6/12</td><td><strong>8888 上的 HTTPS</strong>真的在应答（只看有没有应答，<strong>不看证书是否受信</strong>——自签证书本来就不受信）</td></tr>
+<tr><td>7/12</td><td><strong>配置一致性</strong>（设计 D-11：<code>EnvironmentFile</code>与 <code>MRRC_CONFIG_FILE</code>同一文件）</td></tr>
 <tr><td>8/12</td><td>Cloud Hub 隧道客户端（<code>fleet/frpc</code>）</td></tr>
 <tr><td>9/12</td><td>Cloud Hub 公网入口（<strong>未接入时自动跳过</strong>）</td></tr>
-<tr><td>10/12</td><td><strong>PTT 安全上限</strong>（<code>MRRC_PTT_MAX_TX_SECONDS</code> 有值）</td></tr>
-<tr><td>11/12</td><td><strong>盒子身份与权限通道</strong>（NM polkit 规则、<code>avahi-daemon</code>/<code>hostname.local</code> 解析、<code>mrrc-box-helper</code> 套接字——LAN 引导页写网络全靠它们）</td></tr>
+<tr><td>10/12</td><td><strong>PTT 安全上限</strong>（<code>MRRC_PTT_MAX_TX_SECONDS</code>有值）</td></tr>
+<tr><td>11/12</td><td><strong>盒子身份与权限通道</strong>（NM polkit 规则、<code>avahi-daemon</code>/<code>hostname.local</code>解析、<code>mrrc-box-helper</code>套接字——LAN 引导页写网络全靠它们）</td></tr>
 <tr><td>12/12</td><td><strong>WiFi N9 固件</strong>（必须是出厂 2021 版，SHA <code>223f73f1…</code>——linux-firmware 的 2020 版会渐进式挂死 WiFi，见上面 MT7663 固件节）</td></tr>
 </tbody></table></div>
 <p>前 3 项就是硬件三件套。<strong>第 7 与第 10 项都是“没有报错也会出问题”的那类</strong>：第 7 项不合格时界面会显示 “已连接”而公网 TLS 校验失败；第 10 项没值时少一道防线①/② 中的第②道。</p>
-<p>第 11 项查的是"出问题时你还能不能<strong>找到这台盒子</strong>、网页还能不能<strong>写网络</strong>"—— <code>&lt;hostname&gt;.local</code> 解析、NM 授权规则、box-helper 套接字都在，LAN 引导页才玩得转； 因为出问题的时刻你正好连不上盒子、没法查。第 12 项<strong>只认出厂 2021 版 N9 固件</strong>： 对外下载的 1.28.1 镜像（<code>ee1fba1e…</code>）已带钉版，这一项<strong>应当绿</strong>；只有 1.25.5 及更早的 镜像会红，现场换法见 §20.5。</p>
-<blockquote><p><strong>软重启能不能救活芯片？2026-10-12 修正：钉版固件下能。</strong> 老结论（“必须断电”）来自 2020 版固件的年代，当时实测“软重启继承挂死态”；换成钉版 2021 后实测<strong>软重启 47 秒即完整复位</strong> （<code>N9 Firmware Version</code> 重新打印、mailbox 报错归零、扫描恢复）。拿不准时先软重启，不行再断电。</p></blockquote>
-<blockquote><p><strong>2026-10-11 固化到 eMMC 那一轮的实测判读</strong>（自建镜像，版本串同为 1.25.5）：第 12 项<strong>绿</strong> （<code>7663mp1827</code>，2021 版）；第 11 项<strong>红</strong> —— 该镜像构建于 10-11 中午，早于 <code>box_helper</code> / NM polkit 规则 / <code>avahi-daemon</code> 落地，三件都不在，<strong>不是盒子故障</strong>，要用上得重刷含它们的镜像；第 9 项<strong>红</strong>是判定偏严： 公网入口未登录时返回 302（跳 <code>/login</code>）<strong>就是正常应答</strong>，脚本目前只认 200/401。</p></blockquote>
+<p>第 11 项查的是"出问题时你还能不能<strong>找到这台盒子</strong>、网页还能不能<strong>写网络</strong>"—— <code>&lt;hostname&gt;.local</code>解析、NM 授权规则、box-helper 套接字都在，LAN 引导页才玩得转；因为出问题的时刻你正好连不上盒子、没法查。第 12 项<strong>只认出厂 2021 版 N9 固件</strong>：对外下载的 1.28.1 镜像（<code>ee1fba1e…</code>）已带钉版，这一项<strong>应当绿</strong>；只有 1.25.5 及更早的 镜像会红，现场换法见 §20.5。</p>
+<blockquote><p><strong>软重启能不能救活芯片？2026-10-12 修正：钉版固件下能。</strong>老结论（“必须断电”）来自 2020 版固件的年代，当时实测“软重启继承挂死态”；换成钉版 2021 后实测<strong>软重启 47 秒即完整复位</strong> （<code>N9 Firmware Version</code>重新打印、mailbox 报错归零、扫描恢复）。拿不准时先软重启，不行再断电。</p></blockquote>
+<blockquote><p><strong>2026-10-11 固化到 eMMC 那一轮的实测判读</strong>（自建镜像，版本串同为 1.25.5）：第 12 项<strong>绿</strong> （<code>7663mp1827</code>，2021 版）；第 11 项<strong>红</strong> —— 该镜像构建于 10-11 中午，早于 <code>box_helper</code> / NM polkit 规则 / <code>avahi-daemon</code>落地，三件都不在，<strong>不是盒子故障</strong>，要用上得重刷含它们的镜像；第 9 项<strong>红</strong>是判定偏严：公网入口未登录时返回 302（跳 <code>/login</code>）<strong>就是正常应答</strong>，脚本目前只认 200/401。</p></blockquote>
 <p>然后<strong>实际用一次</strong>——打开界面，调频率、看瀑布、按 PTT 说一句。这才是真的验收。</p>
 <h2 id="13-mrrc-的全部可调项">13. MRRC 的全部可调项</h2>
-<p>配置文件：<strong><code>/opt/mrrc_modern/env/mrrc.env</code></strong>。改完 <code>systemctl restart mrrc-modern</code> 生效。</p>
+<p>配置文件：<strong><code>/opt/mrrc_modern/env/mrrc.env</code></strong>。改完 <code>systemctl restart mrrc-modern</code>生效。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>变量</th><th>作用</th></tr></thead><tbody>
-<tr><td><code>MRRC_WEB_PASSWORD</code></td><td>Web 登录口令（预置镜像里是 <code>abcd!1234</code> 这组公开值，登录后改掉；不传 <code>--preflash</code> 的自建镜像则首启生成）</td></tr>
+<tr><td><code>MRRC_WEB_PASSWORD</code></td><td>Web 登录口令（预置镜像里是 <code>abcd!1234</code>这组公开值，登录后改掉；不传 <code>--preflash</code>的自建镜像则首启生成）</td></tr>
 <tr><td><code>MRRC_LISTEN_PASSWORD</code></td><td><strong>收听专用口令</strong>：用它登录是只读访客（能听、能改频率/模式，不能发射、不能改设备设置）。留空=不启用</td></tr>
 <tr><td><code>MRRC_WEB_PORT</code> / <code>MRRC_WEB_HOST</code></td><td>监听端口（默认 8888）/ 绑定地址</td></tr>
-<tr><td><code>MRRC_RADIO_MODEL</code></td><td>当前机型（<strong>用 <code>mrrc-radio use</code> 改，别手改</strong>）</td></tr>
-<tr><td><code>MRRC_SERIAL_PORT</code> / <code>MRRC_BAUD_RATE</code></td><td>CAT 串口与波特率（同上，让 <code>mrrc-radio</code> 管）</td></tr>
+<tr><td><code>MRRC_RADIO_MODEL</code></td><td>当前机型（<strong>用 <code>mrrc-radio use</code>改，别手改</strong>）</td></tr>
+<tr><td><code>MRRC_SERIAL_PORT</code> / <code>MRRC_BAUD_RATE</code></td><td>CAT 串口与波特率（同上，让 <code>mrrc-radio</code>管）</td></tr>
 <tr><td><code>MRRC_ALLOW_UNVERIFIED_TX</code></td><td>未验证机型的发射门禁（§11）</td></tr>
 <tr><td><code>MRRC_PTT_MAX_TX_SECONDS</code></td><td><strong>发射时长上限</strong>（镜像默认 <code>120</code>）——防线②</td></tr>
 <tr><td><code>MRRC_REMOTE_SESSION_TX_HEARTBEAT_S</code></td><td>会话活性闸门；Cloud Hub 接入后自动写 <code>5</code>——防线①</td></tr>
@@ -458,7 +458,7 @@ ssh root@&lt;盒子IP&gt; 'bash /tmp/verify.sh'</code></pre>
 <tr><td><code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code></td><td>指定音频设备（多声卡时有用）</td></tr>
 <tr><td><code>MRRC_RECORDINGS_DIR</code></td><td>通联录音目录（服务端存 MP3）</td></tr>
 <tr><td><code>MRRC_RECORDINGS_MAX_SESSION_MIN</code> / <code>MRRC_RECORDINGS_BITRATE</code></td><td>单次录音时长上限 / 码率</td></tr>
-<tr><td><code>MRRC_RECORDINGS_MIN_FREE_MB</code></td><td>剩余空间低于此值（默认 200）<strong>拒绝开始</strong>录音；<code>0</code> 关闭。只拒绝、从不删除已有录音</td></tr>
+<tr><td><code>MRRC_RECORDINGS_MIN_FREE_MB</code></td><td>剩余空间低于此值（默认 200）<strong>拒绝开始</strong>录音；<code>0</code>关闭。只拒绝、从不删除已有录音</td></tr>
 <tr><td><code>MRRC_ATR1000_HOST</code> / <code>MRRC_ATR1000_PORT</code></td><td>ATR-1000 天调的地址（§15）</td></tr>
 <tr><td><code>MRRC_SESSION_METRICS_INTERVAL_S</code></td><td>会话遥测上报间隔（默认 300 秒，<code>0</code>=关）</td></tr>
 </tbody></table></div>
@@ -482,9 +482,9 @@ systemctl restart mrrc-modern      # 判定：journalctl -u mrrc-modern | grep -
 <li>等批准。</li>
 <li><strong>connect</strong>：自动完成——签证书、enroll、写隧道配置、起 frpc，并自动写两个配置键：</li>
 </ol>
-<p>之后用 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 访问（例：<code>https://bg1sb.mrrc.vlsc.net/</code>）。</p>
+<p>之后用 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code>访问（例：<code>https://bg1sb.mrrc.vlsc.net/</code>）。</p>
 <figure style="margin: 2rem 0"><a href="../images/W103D/web/w103d-hub.jpg" target="_blank" rel="noopener"><img src="../images/W103D/web/w103d-hub.jpg" alt="公网入口：手机上用呼号域名打开" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">公网入口：手机上用呼号域名打开</figcaption></figure>
-<p><strong>两条 PTT 防线互相独立，都要在</strong>：防线①＝会话活性闸门（公网必经），防线②＝时长上限（<code>MRRC_PTT_MAX_TX_SECONDS</code>）。 公网路径下 NAT 掉表、换 Wi-Fi、静默丢包都不会产生"断线"，只有这两条能兜住。</p>
+<p><strong>两条 PTT 防线互相独立，都要在</strong>：防线①＝会话活性闸门（公网必经），防线②＝时长上限（<code>MRRC_PTT_MAX_TX_SECONDS</code>）。公网路径下 NAT 掉表、换 Wi-Fi、静默丢包都不会产生「断线」，只有这两条能兜住。</p>
 <h2 id="15-天调-atr-1000-可选">15. 天调 ATR-1000（可选）</h2>
 <p>盒子支持 ATR-1000 自动天调。配好地址就能用：</p>
 <pre><code class="lang-bash">cat &gt;&gt; /opt/mrrc_modern/env/mrrc.env &lt;&lt;'EOF'
@@ -492,7 +492,7 @@ MRRC_ATR1000_HOST=&lt;天调IP&gt;
 MRRC_ATR1000_PORT=&lt;端口&gt;
 EOF
 systemctl restart mrrc-modern</code></pre>
-<p>配好之后：<strong>发射中驻波超阈值会自己发一次完整调谐</strong>（一次，不是反复试），调谐有效才写回学习库。 它<strong>绝不自行键控电台</strong>——触发前提是操作者自己在发射。</p>
+<p>配好之后：<strong>发射中驻波超阈值会自己发一次完整调谐</strong>（一次，不是反复试），调谐有效才写回学习库。它<strong>绝不自行键控电台</strong>——触发前提是操作者自己在发射。</p>
 <h2 id="16-日常运维">16. 日常运维</h2>
 <p><strong>日志：</strong></p>
 <pre><code class="lang-bash">journalctl -u mrrc-modern -n 100 --no-pager     # 服务日志
@@ -500,21 +500,21 @@ tail -f /opt/mrrc_modern/logs/server-stdout.log # 服务 stdout</code></pre>
 <p><strong>升级：</strong></p>
 <pre><code class="lang-bash">MRRC_UPDATE_SRC=&lt;git url 或本地目录&gt; mrrc-update</code></pre>
 <p>只做四件事：拉代码 → 装依赖 → 盖版本号（<code>version.txt</code>/<code>VERSION</code>）→ 重启。<strong>配置不会被碰。没有自动回滚</strong>——升级前先备份（下面）。</p>
-<blockquote><p><strong>热升级只换代码，不装 systemd 单元。</strong> 服务层（<code>mrrc-service-layer.sh</code>）里的单元和 系统集成只有镜像构建时装：<code>mrrc-box-helper</code>（设置页的 Wi-Fi/系统面板）、<code>mrrc-localctl</code> （蓝牙遥控器）、<code>mrrc-cpufreq</code>（锁频）、<code>mrrc-logrotate.timer</code>（日志轮转）。升级前就 没有它们的盒子，升级后仍然没有 —— 表现是 <code>/api/box/status</code> 报 <code>helper_available: false</code>、 设置页那几个按钮是灰的。要补就按 <code>packaging/common/mrrc-service-layer.sh</code> 里的单元原文 手装一次（并把 <code>RuntimeDirectory=mrrc</code> 加进 <code>mrrc-modern.service</code>，否则 <code>/run/mrrc</code> 建不出来）， 然后 <code>daemon-reload</code> + <code>enable --now</code>。</p></blockquote>
+<blockquote><p><strong>热升级只换代码，不装 systemd 单元。</strong>服务层（<code>mrrc-service-layer.sh</code>）里的单元和 系统集成只有镜像构建时装：<code>mrrc-box-helper</code>（设置页的 Wi-Fi/系统面板）、<code>mrrc-localctl</code> （蓝牙遥控器）、<code>mrrc-cpufreq</code>（锁频）、<code>mrrc-logrotate.timer</code>（日志轮转）。升级前就 没有它们的盒子，升级后仍然没有 —— 表现是 <code>/api/box/status</code>报 <code>helper_available: false</code>、设置页那几个按钮是灰的。要补就按 <code>packaging/common/mrrc-service-layer.sh</code>里的单元原文 手装一次（并把 <code>RuntimeDirectory=mrrc</code>加进 <code>mrrc-modern.service</code>，否则 <code>/run/mrrc</code>建不出来），然后 <code>daemon-reload</code> + <code>enable --now</code>。</p></blockquote>
 <p><strong>备份（升级前做）：</strong></p>
 <pre><code class="lang-bash">tar czf /root/w103d-backup-$(date +%F).tgz \
   /opt/mrrc_modern/env/ /opt/mrrc_modern/mem_channels.json /var/lib/mrrc/</code></pre>
-<p>（<code>/opt/mrrc_modern/env/</code> 里有口令与 Cloud Hub 证书路径。这份备份<strong>含私钥</strong>，别乱放。）</p>
+<p>（<code>/opt/mrrc_modern/env/</code>里有口令与 Cloud Hub 证书路径。这份备份<strong>含私钥</strong>，别乱放。）</p>
 <p><strong>手动装机内容检查：</strong></p>
 <pre><code class="lang-bash">bash /tmp/verify.sh        # §12 那份，随时可重跑</code></pre>
 <h2 id="17-写进-emmc-推荐的最终形态">17. 写进 eMMC（推荐的最终形态）</h2>
-<p>U 盘路线跑通、验收过了就做这一步 —— <strong>它是推荐的最终形态</strong>：盒子 + 一根电源线 + 一根网线， 不再需要 U 盘，28.9 GB eMMC 全归它自己。<strong>这一步会覆盖 eMMC</strong>；做法是在跑着的 U 盘系统里执行 ophub 自带的安装器，它把当前系统<strong>克隆</strong>进 eMMC 并自动处理引导 —— 不需要线刷工具、不需要重打镜像。</p>
+<p>U 盘路线跑通、验收过了就做这一步 —— <strong>它是推荐的最终形态</strong>：盒子 + 一根电源线 + 一根网线，不再需要 U 盘，28.9 GB eMMC 全归它自己。<strong>这一步会覆盖 eMMC</strong>；做法是在跑着的 U 盘系统里执行 ophub 自带的安装器，它把当前系统<strong>克隆</strong>进 eMMC 并自动处理引导 —— 不需要线刷工具、不需要重打镜像。</p>
 <blockquote><p><strong>2026-10-11 在真机上完整走了一遍</strong>：盒子现在就从 eMMC 启动（<code>findmnt /</code> = <code>/dev/mmcblk2p2</code>， 28 GB 全用上），原厂引导逐字节保留。下面每一步都是那一次的实操记录。</p></blockquote>
 <h3 id="17-1-先备份-务必先做">17.1 先备份（务必先做）</h3>
 <pre><code class="lang-bash">armbian-ddbr        # 交互里选 b</code></pre>
 <p>全盘（29 GB，含原厂引导）压到 <code>/ddbr/BACKUP-arm-64-emmc.img.gz</code>（实测 2.2 GB），<strong>留在 U 盘上别删</strong>。</p>
-<p>单线程 gzip 在这块 SoC 上约 10 MiB/s（≈40 分钟）；先装 <code>pigz</code> 手动跑三线程只要 ≈9 分钟， 产物同样是标准 gzip 流，<code>armbian-ddbr</code> 的恢复路径不变：</p>
-<blockquote><p>⚠️ <strong>这份备份是唯一的回原厂路径，而它就在这根 U 盘上。</strong> 重刷镜像（<code>dd</code> 写整盘）会把 <code>/ddbr</code> 一起冲掉——2026-10-12 就遇到过：那根盘是当时全机唯一一份。<strong>重刷前先把 <code>/ddbr/BACKUP-arm-64-emmc.img.gz</code> 拷到别处</strong>（U 盘预留空间不够时先按 §4.1 扩容—— 根分区只有 2.9 G 时<strong>装不下</strong>这 2.3 G 的备份）。</p></blockquote>
+<p>单线程 gzip 在这块 SoC 上约 10 MiB/s（≈40 分钟）；先装 <code>pigz</code>手动跑三线程只要 ≈9 分钟，产物同样是标准 gzip 流，<code>armbian-ddbr</code>的恢复路径不变：</p>
+<blockquote><p>⚠️ <strong>这份备份是唯一的回原厂路径，而它就在这根 U 盘上。</strong>重刷镜像（<code>dd</code>写整盘）会把 <code>/ddbr</code>一起冲掉——2026-10-12 就遇到过：那根盘是当时全机唯一一份。<strong>重刷前先把 <code>/ddbr/BACKUP-arm-64-emmc.img.gz</code>拷到别处</strong>（U 盘预留空间不够时先按 §4.1 扩容—— 根分区只有 2.9 G 时<strong>装不下</strong>这 2.3 G 的备份）。</p></blockquote>
 <pre><code class="lang-bash">apt-get install -y pigz
 mkdir -p /ddbr
 nohup sh -c 'dd if=/dev/mmcblk2 bs=4M | pigz -c -p 3 &gt; /ddbr/BACKUP-arm-64-emmc.img.gz' &gt;/ddbr/backup.log 2&gt;&amp;1 &amp;
@@ -527,8 +527,8 @@ nohup sh -c 'dd if=/dev/mmcblk2 bs=4M | pigz -c -p 3 &gt; /ddbr/BACKUP-arm-64-em
 <tr><td><code>Please Input ID:</code></td><td><strong><code>307</code></strong>（设备表里的 <code>ZTE-W103D</code>）</td></tr>
 <tr><td><code>Please Input ID (1/2):</code></td><td><strong><code>1</code></strong>（ext4，与镜像一致）</td></tr>
 </tbody></table></div>
-<p>它会自动完成（输出可逐步核对）：备份并回写原厂引导 → <code>ampart</code> 重建 Amlogic 分区表 → 建 <code>p1</code>（512 MB FAT，引导）+ <code>p2</code>（其余全部，ext4）→ 拷 <code>/boot</code> 并改写 <code>boot.scr</code> / <code>uEnv.txt</code> 的 新 UUID → <code>tar</code> 克隆整个根文件系统（约 2.5 GB）→ 提示 <code>Installation completed successfully. Run [ poweroff ], remove the installation media…</code>。</p>
-<p>板级身份是钉死的（<code>/etc/ophub-release</code> 与 ophub <code>model_database.conf</code> 核对过）：<code>MODEL_ID=307</code>、 <code>FDTFILE=meson-g12a-w103d.dtb</code>、启动器 <code>u-boot-w103d.bin</code>、<code>BOARD=s905l3a-w103d</code>。 <strong><code>-m yes</code> 会换主线 u-boot，本板不行</strong>。安装器还会重新生成 machine-id（写进 eMMC 那份），副作用见 17.4。</p>
+<p>它会自动完成（输出可逐步核对）：备份并回写原厂引导 → <code>ampart</code>重建 Amlogic 分区表 → 建 <code>p1</code>（512 MB FAT，引导）+ <code>p2</code>（其余全部，ext4）→ 拷 <code>/boot</code>并改写 <code>boot.scr</code> / <code>uEnv.txt</code>的 新 UUID → <code>tar</code>克隆整个根文件系统（约 2.5 GB）→ 提示 <code>Installation completed successfully. Run [ poweroff ], remove the installation media…</code>。</p>
+<p>板级身份是钉死的（<code>/etc/ophub-release</code>与 ophub <code>model_database.conf</code>核对过）：<code>MODEL_ID=307</code>、<code>FDTFILE=meson-g12a-w103d.dtb</code>、启动器 <code>u-boot-w103d.bin</code>、<code>BOARD=s905l3a-w103d</code>。<strong><code>-m yes</code>会换主线 u-boot，本板不行</strong>。安装器还会重新生成 machine-id（写进 eMMC 那份），副作用见 17.4。</p>
 <h3 id="17-3-切换-关机-拔-u-盘-上电">17.3 切换：关机 → 拔 U 盘 → 上电</h3>
 <pre><code class="lang-bash">poweroff</code></pre>
 <p>断电，<strong>拔掉 U 盘</strong>，重新上电。启动顺序是 SD → USB → eMMC，没有 U 盘就落在 eMMC 上。</p>
@@ -537,25 +537,25 @@ nohup sh -c 'dd if=/dev/mmcblk2 bs=4M | pigz -c -p 3 &gt; /ddbr/BACKUP-arm-64-em
 df -h /                     # 约 28 GB
 systemctl is-active mrrc-modern
 bash /tmp/verify.sh         # §12 那份</code></pre>
-<p><strong>IPv6 地址会变</strong>：machine-id 重生成，SLAAC 的接口标识跟着变（<code>…c4c1:3f5e:173f:96d1</code> → <code>…e7c0:4b51:b64e:8b49</code>）。 域名解析 / Cloud Hub 入口几分钟内自愈（DDNS 类脚本与隧道都会自己跟上）；IPv4 由 DHCP 按 MAC 发放，一般不变。 口令、<code>env/mrrc.env</code>、证书、录音、<code>/opt</code> 下的附加件都随系统搬过去了。判读 verify.sh 的红项前先看 §12 的注。</p>
-<p><strong>最终形态</strong>：盒子、一根电源线、一根网线 —— 不再需要 U 盘；28.9 GB eMMC 全是它自己的。 那根 U 盘留着当<strong>救砖盘</strong>（整盘备份就在里面）。</p>
+<p><strong>IPv6 地址会变</strong>：machine-id 重生成，SLAAC 的接口标识跟着变（<code>…c4c1:3f5e:173f:96d1</code> → <code>…e7c0:4b51:b64e:8b49</code>）。域名解析 / Cloud Hub 入口几分钟内自愈（DDNS 类脚本与隧道都会自己跟上）；IPv4 由 DHCP 按 MAC 发放，一般不变。口令、<code>env/mrrc.env</code>、证书、录音、<code>/opt</code>下的附加件都随系统搬过去了。判读 verify.sh 的红项前先看 §12 的注。</p>
+<p><strong>最终形态</strong>：盒子、一根电源线、一根网线 —— 不再需要 U 盘；28.9 GB eMMC 全是它自己的。那根 U 盘留着当<strong>救砖盘</strong>（整盘备份就在里面）。</p>
 <figure style="margin: 2rem 0"><a href="../images/W103D/web/w103d-final.jpg" target="_blank" rel="noopener"><img src="../images/W103D/web/w103d-final.jpg" alt="最终形态：电源插上、电台的 USB 线插在口上，无 U 盘、无显示器" loading="lazy" style="max-width: 100%; max-height: 70vh; width: auto; height: auto; display: block; margin: 0 auto; border: 1px solid var(--border, #2a2a2a); border-radius: 12px"></a><figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">最终形态：电源插上、电台的 USB 线插在口上，无 U 盘、无显示器</figcaption></figure>
-<blockquote><p>⚠️ <strong>变砖兜底</strong>：Amlogic 的 <strong>MaskROM 在 SoC BootROM 里</strong>（短接可重新进刷写模式）， 加上你手上的<strong>原厂线刷固件包</strong>，就能恢复。这两样在手，这一步的风险才是可控的。</p></blockquote>
+<blockquote><p>⚠️ <strong>变砖兜底</strong>：Amlogic 的 <strong>MaskROM 在 SoC BootROM 里</strong>（短接可重新进刷写模式），加上你手上的<strong>原厂线刷固件包</strong>，就能恢复。这两样在手，这一步的风险才是可控的。</p></blockquote>
 <h2 id="18-退回去">18. 退回去</h2>
-<p>- 最省事：<strong>把 U 盘插回去</strong> —— u-boot 的启动偏好仍优先 U 盘，插上就从 U 盘跑（安装器回写的是原厂 u-boot，偏好没变）。 - 用备份恢复：从 U 盘启动后 <code>armbian-ddbr</code> 选 <code>r</code>，从 <code>/ddbr/BACKUP-arm-64-emmc.img.gz</code> 还原。 - 回原厂安卓：原厂线刷固件包 + MaskROM 短接重刷（§20.5）。</p>
+<p>- 最省事：<strong>把 U 盘插回去</strong> —— u-boot 的启动偏好仍优先 U 盘，插上就从 U 盘跑（安装器回写的是原厂 u-boot，偏好没变）。 - 用备份恢复：从 U 盘启动后 <code>armbian-ddbr</code>选 <code>r</code>，从 <code>/ddbr/BACKUP-arm-64-emmc.img.gz</code>还原。 - 回原厂安卓：原厂线刷固件包 + MaskROM 短接重刷（§20.5）。</p>
 <ul>
 <li><strong>U 盘路线（eMMC 没写）</strong>：断电 → 拔 U 盘 → 上电 = 原厂安卓。零痕迹。</li>
 <li><strong>已写 eMMC</strong>：</li>
 </ul>
-<h2 id="19-三条红线-会踩出-没有报错的故障">19. 三条红线（会踩出"没有报错的故障"）</h2>
-<p><strong>① 停服务只用 <code>systemctl</code>，不要 <code>kill</code> 进程。</strong></p>
-<p>Linux 上 frpc 的残留清理是 Windows-only 的。一个残留的 frpc 会占住 proxy 名，导致下次启动 <strong>隧道起不来而界面毫无提示</strong>。<code>systemctl stop</code> 会连带清掉 frpc，<code>kill</code> 不会。</p>
+<h2 id="19-三条红线-会踩出-没有报错的故障">19. 三条红线（会踩出「没有报错的故障」）</h2>
+<p><strong>① 停服务只用 <code>systemctl</code>，不要 <code>kill</code>进程。</strong></p>
+<p>Linux 上 frpc 的残留清理是 Windows-only 的。一个残留的 frpc 会占住 proxy 名，导致下次启动 <strong>隧道起不来而界面毫无提示</strong>。<code>systemctl stop</code>会连带清掉 frpc，<code>kill</code>不会。</p>
 <p><strong>② 登录限流是全局桶，误锁影响所有人。</strong></p>
-<p>经公网访问时所有登录共享同一个来源 IP，限流是 <code>5 次失败 / 300 秒</code>，而且<strong>全局</strong>。 不是你一个人被锁 5 分钟——是<strong>所有人</strong>。</p>
-<p><strong>③ 内核升级只走 <code>armbian-update</code>，保持 <code>w103d</code> 变体。</strong></p>
-<p>W103D 的 WiFi 完全依赖专属内核补丁 + MT7663S 固件 overlay。 换成通用内核 = <strong>静默丢 WiFi</strong>：没有报错，只是连不上。</p>
+<p>经公网访问时所有登录共享同一个来源 IP，限流是 <code>5 次失败 / 300 秒</code>，而且<strong>全局</strong>。不是你一个人被锁 5 分钟——是<strong>所有人</strong>。</p>
+<p><strong>③ 内核升级只走 <code>armbian-update</code>，保持 <code>w103d</code>变体。</strong></p>
+<p>W103D 的 WiFi 完全依赖专属内核补丁 + MT7663S 固件 overlay。换成通用内核 = <strong>静默丢 WiFi</strong>：没有报错，只是连不上。</p>
 <h2 id="20-排障">20. 排障</h2>
-<p><strong>先定性，再看表。</strong> 公网入口、证书、时间、隧道这一类的报错不要从表里猜：先跑 <a href="w103d-faq.html">常见问题：先看这一行</a> 里的五条命令，把问题按到某一层（本机身份 / 时钟 / DNS / 隧道 / 证书）。那页也解释了为什么「证书尚未生效」通常根本与证书无关。</p>
+<p><strong>先定性，再看表。</strong>公网入口、证书、时间、隧道这一类的报错不要从表里猜：先跑 <a href="w103d-faq.html">常见问题：先看这一行</a>里的五条命令，把问题按到某一层（本机身份 / 时钟 / DNS / 隧道 / 证书）。那页也解释了为什么「证书尚未生效」通常根本与证书无关。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>症状</th><th>先看</th><th>多半是</th></tr></thead><tbody>
 <tr><td>打不开网页</td><td><code>ip a</code>；<code>systemctl status mrrc-modern</code></td><td>网线/服务；<code>journalctl -u mrrc-modern -n 50</code></td></tr>
@@ -563,17 +563,17 @@ bash /tmp/verify.sh         # §12 那份</code></pre>
 <tr><td>手机按 PTT 没反应</td><td>地址栏是不是 <code>https://</code></td><td>HTTP 下浏览器不给麦克风权限</td></tr>
 <tr><td>没有网口地址</td><td><code>nmcli device status</code></td><td>换网线/换口；路由器 DHCP</td></tr>
 <tr><td><strong>扫描列表是空的 / 页面列不出 Wi-Fi</strong></td><td>`dmesg \</td><td>grep -c "mailbox write"`</td><td>计数 &gt; 0 = 无线芯片已楔死（多半是连过 5 GHz）→ 重启盒子</td></tr>
-<tr><td><strong>Wi-Fi 连上去了但没网</strong></td><td><code>ip route</code> 看默认路由走哪个口；<code>ping &lt;网关&gt;</code></td><td><strong>别用 5 GHz</strong>：能关联、能拿地址，但数据面不通（§20.5）；只连 2.4 GHz</td></tr>
-<tr><td><strong>IPv6 直连打不开网页</strong></td><td>`ss -ltn \</td><td>grep 8888`</td><td>盒子线的网页只绑 <code>0.0.0.0</code>（IPv4）；想听 IPv6 就把 <code>MRRC_WEB_HOST</code> 改成 <code>::</code>（§9.8）</td></tr>
-<tr><td><strong>公网 <code>w103d.vlsc.net</code> 指向的地址不对</strong></td><td><code>dig +short AAAA w103d.vlsc.net @223.5.5.5</code> 与盒子实际 IPv6 对比</td><td>镜像里<strong>没有</strong> DDNS 组件（<code>/opt/w103d-ddns</code>）；重刷后 machine-id 变 → IID 变，记录就陈旧了</td></tr>
+<tr><td><strong>Wi-Fi 连上去了但没网</strong></td><td><code>ip route</code>看默认路由走哪个口；<code>ping &lt;网关&gt;</code></td><td><strong>别用 5 GHz</strong>：能关联、能拿地址，但数据面不通（§20.5）；只连 2.4 GHz</td></tr>
+<tr><td><strong>IPv6 直连打不开网页</strong></td><td>`ss -ltn \</td><td>grep 8888`</td><td>盒子线的网页只绑 <code>0.0.0.0</code>（IPv4）；想听 IPv6 就把 <code>MRRC_WEB_HOST</code>改成 <code>::</code>（§9.8）</td></tr>
+<tr><td><strong>公网 <code>w103d.vlsc.net</code>指向的地址不对</strong></td><td><code>dig +short AAAA w103d.vlsc.net @223.5.5.5</code>与盒子实际 IPv6 对比</td><td>镜像里<strong>没有</strong> DDNS 组件（<code>/opt/w103d-ddns</code>）；重刷后 machine-id 变 → IID 变，记录就陈旧了</td></tr>
 <tr><td>没有串口</td><td><code>ls /dev/ttyUSB<em> /dev/ttyACM</em></code></td><td>USB 线；<strong>FT-710 要插上方 Enhanced 口</strong>；电台菜单 <code>MOD SOURCE = USB</code></td></tr>
-<tr><td>有串口但连不上</td><td><code>mrrc-radio show</code> 的串口对不对</td><td><code>mrrc-radio use &lt;model&gt; --port /dev/ttyXXX</code></td></tr>
-<tr><td>没声音</td><td><code>arecord -l</code> 有没有电台声卡</td><td>换线/换口；服务日志里的 PyAudio 设备列表</td></tr>
-<tr><td><strong>声音卡顿/断续、听一会儿就没了</strong></td><td><code>cat /proc/asound/card1/stream0</code>（看 Capture 是不是 <code>Status: Stop</code>）；`journalctl -u mrrc-modern \</td><td>grep -i "capture stalled"`</td><td>采集缓冲溢出后<strong>静默停摆</strong>（本机 ALSA 只给 1–2 个 20 ms 周期）。服务会自己重开并把原因写进日志；若反复出现，把 <code>MRRC_RX_BUFFER_MS</code> 调大（§13）</td></tr>
+<tr><td>有串口但连不上</td><td><code>mrrc-radio show</code>的串口对不对</td><td><code>mrrc-radio use &lt;model&gt; --port /dev/ttyXXX</code></td></tr>
+<tr><td>没声音</td><td><code>arecord -l</code>有没有电台声卡</td><td>换线/换口；服务日志里的 PyAudio 设备列表</td></tr>
+<tr><td><strong>声音卡顿/断续、听一会儿就没了</strong></td><td><code>cat /proc/asound/card1/stream0</code>（看 Capture 是不是 <code>Status: Stop</code>）；`journalctl -u mrrc-modern \</td><td>grep -i "capture stalled"`</td><td>采集缓冲溢出后<strong>静默停摆</strong>（本机 ALSA 只给 1–2 个 20 ms 周期）。服务会自己重开并把原因写进日志；若反复出现，把 <code>MRRC_RX_BUFFER_MS</code>调大（§13）</td></tr>
 <tr><td>瀑布图是合成谱（S 表）</td><td><code>ls -l /opt/mrrc_modern/vendor/ftdi/</code>；<code>ls -l /etc/udev/rules.d/99-mrrc-ftdi.rules</code></td><td>缺 FTDI 库，或没插 Enhanced 口（`cat /sys/bus/usb/devices/*/idProduct \</td><td>grep 601c<code>）；<strong>或 udev 规则缺失</strong> —— 真 FFT 要服务用户 </code>mrrc<code> 能写那个 USB 节点，判定：</code>sudo -u mrrc test -w /dev/bus/usb/001/00N &amp;&amp; echo ok`</td></tr>
-<tr><td><strong>能上网却解析不了域名</strong>（<code>ping IP</code> 通、<code>ping 域名</code> 卡 5 秒后失败；软件更新与公网入口一起坏）</td><td><code>ls -l /etc/resolv.conf</code> 应是 <code>-&gt; ../run/systemd/resolve/stub-resolv.conf</code>；`resolvectl status \</td><td>head -3<code> 不应出现 </code>resolv.conf mode: foreign`</td><td><strong>构建期把构建机的 <code>/etc/resolv.conf</code> 烤进了镜像</strong>（2026-10-25 MRRC-BG1SB：Docker Desktop 的 <code>192.168.65.7</code>）。2026-10-25 之后的镜像已修，升级也会自动修（<code>linux/fix_resolv_conf.sh</code> + <code>mrrc-update</code>）。<strong>手工三行</strong>（root）：<code>cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak</code> → <code>ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf</code> → <code>systemctl try-restart systemd-resolved</code>；然后 `resolvectl status \</td><td>head -3<code> 应为 </code>mode: stub`</td></tr>
-<tr><td><strong>Cloud Hub 显示"已连接"但公网 502</strong></td><td><code>verify.sh</code> 第 8、9 项</td><td>多半 <code>fleet/frpc</code> 缺失（<code>connect()</code> 会返回 <code>tunnel_started:false</code>）</td></tr>
-<tr><td>公网证书报错</td><td><code>verify.sh</code> 第 7 项</td><td><code>EnvironmentFile</code> 与 <code>MRRC_CONFIG_FILE</code> 必须指向<strong>同一个文件</strong>（设计 D-11）</td></tr>
+<tr><td><strong>能上网却解析不了域名</strong>（<code>ping IP</code>通、<code>ping 域名</code>卡 5 秒后失败；软件更新与公网入口一起坏）</td><td><code>ls -l /etc/resolv.conf</code>应是 <code>-&gt; ../run/systemd/resolve/stub-resolv.conf</code>；`resolvectl status \</td><td>head -3<code> 不应出现 </code>resolv.conf mode: foreign`</td><td><strong>构建期把构建机的 <code>/etc/resolv.conf</code>烤进了镜像</strong>（2026-10-25 MRRC-BG1SB：Docker Desktop 的 <code>192.168.65.7</code>）。2026-10-25 之后的镜像已修，升级也会自动修（<code>linux/fix_resolv_conf.sh</code> + <code>mrrc-update</code>）。<strong>手工三行</strong>（root）：<code>cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak</code> → <code>ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf</code> → <code>systemctl try-restart systemd-resolved</code>；然后 `resolvectl status \</td><td>head -3<code> 应为 </code>mode: stub`</td></tr>
+<tr><td><strong>Cloud Hub 显示「已连接」但公网 502</strong></td><td><code>verify.sh</code>第 8、9 项</td><td>多半 <code>fleet/frpc</code>缺失（<code>connect()</code>会返回 <code>tunnel_started:false</code>）</td></tr>
+<tr><td>公网证书报错</td><td><code>verify.sh</code>第 7 项</td><td><code>EnvironmentFile</code>与 <code>MRRC_CONFIG_FILE</code>必须指向<strong>同一个文件</strong>（设计 D-11）</td></tr>
 <tr><td>服务反复重启</td><td><code>journalctl -u mrrc-modern -n 100</code></td><td>Python traceback；核对机型与串口</td></tr>
 <tr><td>发射没功率</td><td>状态行的 <code>TX[... pk:...]</code></td><td>采集源/音量；FT-710 的 <code>mic_gain</code>；SSB 无话音即无功率</td></tr>
 <tr><td>延迟越来越大</td><td>状态行 <code>J:</code></td><td>正常 100–300 ms；长期 &gt;500 说明抖动缓冲在追，查网络</td></tr>
@@ -594,14 +594,14 @@ bash /tmp/verify.sh         # §12 那份</code></pre>
 <li><strong>USB 公对公线插「靠 HDMI 那个 USB 口」</strong></li>
 <li>工具识别到设备后开始刷写</li>
 </ol>
-<p><strong>工具里的擦除选项</strong>：选「擦除 flash / 普通擦除 / 擦除 bootloader」，<strong>不要选「强制全擦除」</strong>。 刷到 <strong>100% 再点停止</strong>。</p>
-<p><strong>首次启动</strong>：会建立 eMMC 启动入口并<strong>自动重启一次</strong>，然后扩容文件系统、建 swap。 <strong>给足 3–5 分钟</strong>，别以为死机了。</p>
+<p><strong>工具里的擦除选项</strong>：选「擦除 flash / 普通擦除 / 擦除 bootloader」，<strong>不要选「强制全擦除」</strong>。刷到 <strong>100% 再点停止</strong>。</p>
+<p><strong>首次启动</strong>：会建立 eMMC 启动入口并<strong>自动重启一次</strong>，然后扩容文件系统、建 swap。<strong>给足 3–5 分钟</strong>，别以为死机了。</p>
 <p><strong>首次登录</strong>：<code>root / abcd1234</code>（对外下载的预置镜像；自建未预置时是 <code>1234</code>）—— <strong>进去第一件事改口令</strong>（同 §7）。 SSH 主机密钥是首启新生成的，所以旧指纹会变（客户端会警告，正常）。</p>
 <h3 id="mt7663-固件-出厂-2021-版已钉进仓库-2026-10-11-真机定案">MT7663 固件：出厂 2021 版已钉进仓库（2026-10-11 真机定案）</h3>
-<p>W103D 的无线是 <strong>MT7663S</strong>（WiFi 与蓝牙同一颗芯片），开源驱动是这块板最麻烦的部分； 上游适配见 ophub 的 <strong>PR #3658 / #3659</strong>。</p>
-<p><strong>2026-10-11 真机定案</strong>：基底镜像自带的 linux-firmware 2020 版 N9 固件（<code>3.1.1 / 20200604</code>） 在这块板上会<strong>渐进式挂死</strong>（能连、每 ~30 秒掉线一次、扫描楔死、~16 分钟后 MCU 无响应、 软重启都不复位）。可用的是<strong>出厂 Android 里的 2021 版</strong>（<code>7663mp1827 / 20210308</code>）：</p>
+<p>W103D 的无线是 <strong>MT7663S</strong>（WiFi 与蓝牙同一颗芯片），开源驱动是这块板最麻烦的部分；上游适配见 ophub 的 <strong>PR #3658 / #3659</strong>。</p>
+<p><strong>2026-10-11 真机定案</strong>：基底镜像自带的 linux-firmware 2020 版 N9 固件（<code>3.1.1 / 20200604</code>）在这块板上会<strong>渐进式挂死</strong>（能连、每 ~30 秒掉线一次、扫描楔死、~16 分钟后 MCU 无响应、软重启都不复位）。可用的是<strong>出厂 Android 里的 2021 版</strong>（<code>7663mp1827 / 20210308</code>）：</p>
 <pre><code>SHA-256  223f73f17f0f986dc4e7167daa6eef14ffb41c713f22d70f9645eb049bdec80a</code></pre>
-<p><strong>这份固件已经钉进仓库、随构建装入镜像</strong>（<code>vendor/mediatek/</code> → <code>/lib/firmware/mediatek/</code>， 构建期校验 SHA，<code>dpkg-divert</code> 防包升级覆盖），<strong>1.26.0 起随对外镜像发布</strong>；当前下载的 1.28.1（SHA <code>ee1fba1e…</code>）里就是它。⚠️ 只有 <strong>1.25.5 及更早</strong>的镜像（SHA <code>5d74f737…</code>） 没有它、N9 还是 2020 版，WiFi 会渐进式挂死（症状见上）——那些镜像已下架。现场核实方法：</p>
+<p><strong>这份固件已经钉进仓库、随构建装入镜像</strong>（<code>vendor/mediatek/</code> → <code>/lib/firmware/mediatek/</code>，构建期校验 SHA，<code>dpkg-divert</code>防包升级覆盖），<strong>1.26.0 起随对外镜像发布</strong>；当前下载的 1.28.1（SHA <code>ee1fba1e…</code>）里就是它。⚠️ 只有 <strong>1.25.5 及更早</strong>的镜像（SHA <code>5d74f737…</code>）没有它、N9 还是 2020 版，WiFi 会渐进式挂死（症状见上）——那些镜像已下架。现场核实方法：</p>
 <pre><code class="lang-bash">sha256sum /lib/firmware/mediatek/mt7663_n9_v3.bin   # 必须是 223f73f1 开头
 dmesg | grep "N9 Firmware"   # 必须是 7663mp1827, Build Time: 20210308205639</code></pre>
 <p>修好后实测（2.4G）：200 包 0.5% 丢包、平均 6.3 ms、零掉线。<strong>两个仍然成立的边界</strong>： 5GHz 能连上但数据面严重丢包（别用）；<strong>AP 模式不发信标</strong>（初始化热点在这块板上 起不来，首次配置走网线、预置 Wi-Fi 或 HDMI）。</p>
@@ -611,50 +611,50 @@ dpkg-divert --add --no-rename /lib/firmware/mediatek/mt7663_n9_v3.bin
 # 钉版固件下**软重启就能重载**（2026-10-12 实测 47 秒复位）；拿不准就断电
 systemctl reboot</code></pre>
 <h3 id="2026-10-12-真机记录-2-4-ghz-能用-5-ghz-会拖死芯片-1-26-0-首次完整验收">2026-10-12 真机记录：2.4 GHz 能用、5 GHz 会拖死芯片（1.26.0 首次完整验收）</h3>
-<p>那一晚在一台刚刷好的 1.26.0 盒子上把无线这条路从头走到尾，结论如下 （<strong>局域网配网页的扫→选→连全链路真机跑通</strong>，每条都有可复现的命令）：</p>
+<p>那一晚在一台刚刷好的 1.26.0 盒子上把无线这条路从头走到尾，结论如下（<strong>局域网配网页的扫→选→连全链路真机跑通</strong>，每条都有可复现的命令）：</p>
 <div class="table-scroll"><table>
 <thead><tr><th>事实</th><th>证据</th></tr></thead><tbody>
-<tr><td><strong>钉版固件确实装上了</strong></td><td><code>dmesg</code> 打 <code>N9 Firmware Version: 7663mp1827, Build Time: 20210308205639</code>；`dpkg-divert --list \</td><td>grep mt7663<code> 有记录；</code>sha256sum<code> = </code>223f73f1…`</td></tr>
-<tr><td><strong>2.4 GHz 全绿</strong>（<code>CMCC-cnham</code>，ch11）</td><td>关联 → DHCP <code>192.168.1.217</code> → 网关 <code>192.168.1.1</code> 通 → 外网通 → 拿到全局 IPv6 → <code>NTPSynchronized=yes</code>；全程 <code>mailbox 报错 0 / MCU 超时 0</code></td></tr>
-<tr><td><strong>5 GHz（ch149）会拖死芯片</strong></td><td>关联成功、DHCP 地址也拿到了，但<strong>网关不通</strong>（数据面死）；约 100 秒后 <code>Message 000500c0 (seq 7) timeout</code> 开始，接着 <code>W103D mailbox write … failed: -110</code> 连续出现 → 扫描从此返回空表</td></tr>
-<tr><td><strong>扫描本身没问题</strong></td><td>芯片健康时一次 <code>nmcli … wifi list --rescan yes</code> 列出 11 个网络，扫完再查 <code>mailbox 报错</code> 仍然是 <code>0</code></td></tr>
-<tr><td><strong><code>/settings</code> 扫→选→连全链路跑通</strong></td><td>服务端日志：<code>box: switching to WiFi 'CMCC-cnham'</code> + <code>POST /api/box/wifi 200</code> + 两次 <code>GET /api/box/wifi/status 200</code>；NM 落地 <code>CMCC-cnham.nmconnection</code>（<strong>0600</strong>、<code>autoconnect=yes</code>）</td></tr>
-<tr><td><strong>软重启能复位</strong>（修订老结论）</td><td>老结论“必须断电”来自 2020 版固件时代；钉版 2021 下 <code>systemctl reboot</code> 后 <strong>47 秒</strong>回来，固件重新加载、报错归零、扫描恢复</td></tr>
+<tr><td><strong>钉版固件确实装上了</strong></td><td><code>dmesg</code>打 <code>N9 Firmware Version: 7663mp1827, Build Time: 20210308205639</code>；`dpkg-divert --list \</td><td>grep mt7663<code> 有记录；</code>sha256sum<code> = </code>223f73f1…`</td></tr>
+<tr><td><strong>2.4 GHz 全绿</strong>（<code>CMCC-cnham</code>，ch11）</td><td>关联 → DHCP <code>192.168.1.217</code> → 网关 <code>192.168.1.1</code>通 → 外网通 → 拿到全局 IPv6 → <code>NTPSynchronized=yes</code>；全程 <code>mailbox 报错 0 / MCU 超时 0</code></td></tr>
+<tr><td><strong>5 GHz（ch149）会拖死芯片</strong></td><td>关联成功、DHCP 地址也拿到了，但<strong>网关不通</strong>（数据面死）；约 100 秒后 <code>Message 000500c0 (seq 7) timeout</code>开始，接着 <code>W103D mailbox write … failed: -110</code>连续出现 → 扫描从此返回空表</td></tr>
+<tr><td><strong>扫描本身没问题</strong></td><td>芯片健康时一次 <code>nmcli … wifi list --rescan yes</code>列出 11 个网络，扫完再查 <code>mailbox 报错</code>仍然是 <code>0</code></td></tr>
+<tr><td><strong><code>/settings</code>扫→选→连全链路跑通</strong></td><td>服务端日志：<code>box: switching to WiFi 'CMCC-cnham'</code> + <code>POST /api/box/wifi 200</code> + 两次 <code>GET /api/box/wifi/status 200</code>；NM 落地 <code>CMCC-cnham.nmconnection</code>（<strong>0600</strong>、<code>autoconnect=yes</code>）</td></tr>
+<tr><td><strong>软重启能复位</strong>（修订老结论）</td><td>老结论“必须断电”来自 2020 版固件时代；钉版 2021 下 <code>systemctl reboot</code>后 <strong>47 秒</strong>回来，固件重新加载、报错归零、扫描恢复</td></tr>
 <tr><td><strong>网页只听 IPv4</strong></td><td>`ss -ltn \</td><td>grep 8888<code> = </code>0.0.0.0:8888<code>（无 </code>[::]:8888<code>）；</code>nc -6 &lt;盒子IPv6&gt; 8888<code> = CLOSED，而 </code>[::]:22` 的 SSH 通</td></tr>
-<tr><td><strong>镜像里没有 DDNS 组件</strong></td><td><code>ls /opt/w103d-ddns</code> 不存在、`systemctl list-timers \</td><td>grep ddns<code> 为空 → </code>w103d.vlsc.net<code> 的 AAAA 不会跟着新 IPv6 走（老盘那份是手工装的，实现计划见 </code>docs/superpowers/plans/2026-10-11-w103d-ddns.md`）</td></tr>
-<tr><td><strong>扫描空表时页面不给提示</strong></td><td><code>GET /api/box/wifi</code> 返回 200 + <code>{"networks":[]}</code>，页面渲染空白列表（无错误文案）——已知小缺陷</td></tr>
+<tr><td><strong>镜像里没有 DDNS 组件</strong></td><td><code>ls /opt/w103d-ddns</code>不存在、`systemctl list-timers \</td><td>grep ddns<code> 为空 → </code>w103d.vlsc.net<code> 的 AAAA 不会跟着新 IPv6 走（老盘那份是手工装的，实现计划见 </code>docs/superpowers/plans/2026-10-11-w103d-ddns.md`）</td></tr>
+<tr><td><strong>扫描空表时页面不给提示</strong></td><td><code>GET /api/box/wifi</code>返回 200 + <code>{"networks":[]}</code>，页面渲染空白列表（无错误文案）——已知小缺陷</td></tr>
 </tbody></table></div>
-<p><strong>一句排障口诀</strong>：扫描空 → 先看 <code>dmesg | grep -c "mailbox write"</code>；<strong>&gt; 0 就重启</strong>（软重启即可）， 并回想刚才是哪条 SSID（连过 5 GHz 就是这个下场）；<strong>列表正常但一条不连</strong> → 看是不是真没信号。</p>
+<p><strong>一句排障口诀</strong>：扫描空 → 先看 <code>dmesg | grep -c "mailbox write"</code>；<strong>&gt; 0 就重启</strong>（软重启即可），并回想刚才是哪条 SSID（连过 5 GHz 就是这个下场）；<strong>列表正常但一条不连</strong> → 看是不是真没信号。</p>
 <p>---</p>
-<h2 id="21-打勾清单-从零到-mrrc-能干活">21. 打勾清单：从零到 "MRRC 能干活"</h2>
+<h2 id="21-打勾清单-从零到-mrrc-能干活">21. 打勾清单：从零到「MRRC 能干活」</h2>
 <p><strong>刷机段</strong></p>
 <ul>
 <li><input type="checkbox" disabled> 认准芯片是 <strong>S905L3A</strong>（不是 GK6323/RK3566）</li>
 <li><input type="checkbox" disabled> 镜像 SHA-256 = <code>ee1fba1e…</code>，字节数 = <code>1,221,443,860</code></li>
 <li><input type="checkbox" disabled> U 盘烧好、安全弹出</li>
-<li><input type="checkbox" disabled> （可选，但推荐）按 §4.1 把根分区扩到整盘：<code>df -h /</code> 不再是 2.9 G</li>
+<li><input type="checkbox" disabled> （可选，但推荐）按 §4.1 把根分区扩到整盘：<code>df -h /</code>不再是 2.9 G</li>
 <li><input type="checkbox" disabled> 按复位孔（或 <code>reboot update</code>）从 U 盘启动，屏幕上是 Linux 日志不是安卓动画</li>
-<li><input type="checkbox" disabled> <code>ssh root@&lt;IP&gt;</code> 进得去，<strong>并且已经 <code>passwd root</code> 改掉 <code>abcd1234</code></strong></li>
-<li><input type="checkbox" disabled> <code>mrrc-show-password</code> 拿到 Web 口令</li>
-<li><input type="checkbox" disabled> Web 口令收好了（改过一次就会关掉 <code>/setup</code> 的免密窗口，之后只能靠这个口令进）</li>
-<li><input type="checkbox" disabled> <code>https://&lt;IP&gt;:8888</code> 打得开、登录成功</li>
+<li><input type="checkbox" disabled> <code>ssh root@&lt;IP&gt;</code>进得去，<strong>并且已经 <code>passwd root</code>改掉 <code>abcd1234</code></strong></li>
+<li><input type="checkbox" disabled> <code>mrrc-show-password</code>拿到 Web 口令</li>
+<li><input type="checkbox" disabled> Web 口令收好了（改过一次就会关掉 <code>/setup</code>的免密窗口，之后只能靠这个口令进）</li>
+<li><input type="checkbox" disabled> <code>https://&lt;IP&gt;:8888</code>打得开、登录成功</li>
 </ul>
 <p><strong>MRRC 配置段</strong></p>
 <ul>
-<li><input type="checkbox" disabled> 网线插好（<code>ip a</code> 有地址）</li>
+<li><input type="checkbox" disabled> 网线插好（<code>ip a</code>有地址）</li>
 <li><input type="checkbox" disabled> 电台 USB 线插在<strong>上方 Enhanced 口</strong></li>
-<li><input type="checkbox" disabled> <code>/dev/ttyUSB*</code> 出现、<code>arecord -l</code> 能看到电台声卡</li>
-<li><input type="checkbox" disabled> <code>mrrc-radio use ft710</code>（或你的机型）跑通、<code>mrrc-radio show</code> 对得上</li>
+<li><input type="checkbox" disabled> <code>/dev/ttyUSB*</code>出现、<code>arecord -l</code>能看到电台声卡</li>
+<li><input type="checkbox" disabled> <code>mrrc-radio use ft710</code>（或你的机型）跑通、<code>mrrc-radio show</code>对得上</li>
 <li><input type="checkbox" disabled> 界面上频率/模式跟着电台走（CAT 通）</li>
 <li><input type="checkbox" disabled> 瀑布图是<strong>真频谱</strong>（不是 S 表合成谱）</li>
 <li><input type="checkbox" disabled> 按下 PTT 能发射、松开能收到（<strong>这一步才算真的能用</strong>）</li>
-<li><input type="checkbox" disabled> （没有网线时）预置了 <code>/boot/mrrc-wifi.txt</code>（§9.3），或改用 HDMI + <code>nmtui</code>（§9.4）；原"只用手机走通 §9.6"的热点引导<strong>已退役</strong>（2026-10-11 真机验证失败）</li>
-<li><input type="checkbox" disabled> （用 Wi-Fi 时）连的是 <strong>2.4 GHz</strong>（<code>nmcli -f GENERAL.CONNECTION,GENERAL.STATE dev show wlan0</code>），<strong>没连带 <code>-5G</code> 的那个</strong>（5 GHz 能连上但没数据面，见 §20.5）</li>
-<li><input type="checkbox" disabled> （装了 1.26.0+）<code>https://&lt;IP&gt;:8888/settings</code> 打得开：盒子身份 / 网络体检 / Wi-Fi / 有线口都在这一页（§9.8）</li>
+<li><input type="checkbox" disabled> （没有网线时）预置了 <code>/boot/mrrc-wifi.txt</code>（§9.3），或改用 HDMI + <code>nmtui</code>（§9.4）；原「只用手机走通 §9.6」的热点引导<strong>已退役</strong>（2026-10-11 真机验证失败）</li>
+<li><input type="checkbox" disabled> （用 Wi-Fi 时）连的是 <strong>2.4 GHz</strong>（<code>nmcli -f GENERAL.CONNECTION,GENERAL.STATE dev show wlan0</code>），<strong>没连带 <code>-5G</code>的那个</strong>（5 GHz 能连上但没数据面，见 §20.5）</li>
+<li><input type="checkbox" disabled> （装了 1.26.0+）<code>https://&lt;IP&gt;:8888/settings</code>打得开：盒子身份 / 网络体检 / Wi-Fi / 有线口都在这一页（§9.8）</li>
 <li><input type="checkbox" disabled> <code>verify.sh</code> 12 项全过</li>
-<li><input type="checkbox" disabled> （可选）<code>MRRC_LISTEN_PASSWORD</code> 给朋友开了收听入口</li>
-<li><input type="checkbox" disabled> （可选）Cloud Hub 接入，公网 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code> 打得开</li>
-<li><input type="checkbox" disabled> 固化进 eMMC（<strong>推荐的最终形态</strong>；先 <code>armbian-ddbr</code> 备份原厂）：从此不插 U 盘，接线只剩电源 + 网线</li>
+<li><input type="checkbox" disabled> （可选）<code>MRRC_LISTEN_PASSWORD</code>给朋友开了收听入口</li>
+<li><input type="checkbox" disabled> （可选）Cloud Hub 接入，公网 <code>https://&lt;呼号&gt;.mrrc.vlsc.net/</code>打得开</li>
+<li><input type="checkbox" disabled> 固化进 eMMC（<strong>推荐的最终形态</strong>；先 <code>armbian-ddbr</code>备份原厂）：从此不插 U 盘，接线只剩电源 + 网线</li>
 </ul>
 </main>
 

@@ -130,23 +130,18 @@
       <p style="margin: 0 0 1rem"><a href="../w103d-index.html" style="font-size: 0.9rem">← 全部盒子指南</a></p>
       <h1>用 SSH 就地升级盒子（不刷机）</h1>
       <p class="sub">
-        适用：<strong>1.27 及更早</strong>的盒子 —— 那些版本的设置页里没有「软件更新」，
-        也没有远程升级接口。它们的程序就是 <code>/opt/mrrc_modern</code> 这一棵源码树，
-        换掉它、重启服务即可，<strong>不需要重刷镜像，也不会动你的配置和录音</strong>。
+        适用：<strong>1.27 及更早</strong>的盒子 —— 那些版本的设置页里没有「软件更新」，也没有远程升级接口。它们的程序就是 <code>/opt/mrrc_modern</code>这一棵源码树，换掉它、重启服务即可，<strong>不需要重刷镜像，也不会动你的配置和录音</strong>。
       </p>
 
       <h2>为什么不直接用盒子上那个 mrrc-update</h2>
       <p>
         盒子上确实自带一个 <code>mrrc-update</code>，它做的也是同一件事。但
-        <strong>1.25.5 及更早</strong>镜像里那份用 <code>rsync --delete</code> 同步 ——
-        会把 <code>env/</code>（配置）、<code>profiles/</code> 和<strong>录音</strong>
-        一起删掉。所以这个工具自带一份安装器（<code>mrrc-remote-update.sh</code>）：
-        先备份，再覆盖，<strong>一个文件都不删</strong>。
+        <strong>1.25.5 及更早</strong>镜像里那份用 <code>rsync --delete</code>同步 ——
+        会把 <code>env/</code>（配置）、<code>profiles/</code>和<strong>录音</strong>一起删掉。所以这个工具自带一份安装器（<code>mrrc-remote-update.sh</code>）：先备份，再覆盖，<strong>一个文件都不删</strong>。
       </p>
       <div class="callout">
         现在有两条升级路，别走错：<strong>1.28.2 及以后</strong>用页面上的
-        ☰ →「软件更新」，或者 <a href="update.html">远程升级指南</a>；
-        <strong>1.27 及更早</strong>用这一页。
+        ☰ →「软件更新」，或者 <a href="update.html">远程升级指南</a>；<strong>1.27 及更早</strong>用这一页。
       </div>
 
       <h2>下载</h2>
@@ -156,23 +151,19 @@
         </a>
       </p>
       <p>
-        约 10 KB，单个文件。它会在你的电脑上下载官方发布包（约 19 MB），核对 SHA-256，
-        再推给盒子 —— <strong>盒子本身不需要能出网去下载</strong>（但装完要能装 Python
+        约 10 KB，单个文件。它会在你的电脑上下载官方发布包（约 19 MB），核对 SHA-256，再推给盒子 —— <strong>盒子本身不需要能出网去下载</strong>（但装完要能装 Python
         依赖，所以盒子还是得能连软件源）。
       </p>
       <div class="callout">
         系统要求：Windows 10（1809 及以上）/ Windows 11，并且装了
-        <strong>OpenSSH 客户端</strong>（设置 → 应用 → 可选功能 → 添加功能 → OpenSSH 客户端）。
-        盒子上要能 SSH 登录：设置页「系统账号口令」可以给 <code>root</code> 设新口令，
-        <strong>不校验旧口令</strong>。
+        <strong>OpenSSH 客户端</strong>（设置 → 应用 → 可选功能 → 添加功能 → OpenSSH 客户端）。盒子上要能 SSH 登录：设置页「系统账号口令」可以给 <code>root</code>设新口令，<strong>不校验旧口令</strong>。
       </div>
 
       <h2>三步</h2>
       <ol>
         <li>双击，输入盒子的 IP（浏览器地址栏那个），确认屏幕上写的目标版本；</li>
-        <li>输入 <code>YES</code> 继续 —— 它开始下载并核对发布包；</li>
-        <li>输入 SSH 账号（<code>root</code> 或 <code>mrrc</code>），按提示输入该账号的口令。
-          接下来它会把两个文件拷到盒子、在盒子上执行安装器。</li>
+        <li>输入 <code>YES</code>继续 —— 它开始下载并核对发布包；</li>
+        <li>输入 SSH 账号（<code>root</code>或 <code>mrrc</code>），按提示输入该账号的口令。接下来它会把两个文件拷到盒子、在盒子上执行安装器。</li>
       </ol>
 
       <h2>屏幕上会看到什么</h2>
@@ -208,12 +199,9 @@ SSH account on the box [root]:
         <li><strong>备份当前代码</strong>到
           <code>/opt/mrrc_modern/.local/share/MRRC-Modern/update/rollback-manual-&lt;旧版本&gt;-&lt;时间&gt;.tar.gz</code>；</li>
         <li><strong>覆盖代码</strong>：只加和改，<strong>不删任何文件</strong>；下面这些目录一律不碰 ——
-          <code>venv</code>、<code>logs</code>、<code>recordings</code>、<code>.local</code>、
-          <code>env</code>、<code>fleet</code>、<code>data</code>、<code>ft8-slots</code>；</li>
-        <li><strong>装依赖</strong>：<code>venv/bin/pip install -r requirements.txt</code>。
-          这一步失败就<strong>不会重启</strong> —— 也就是说旧代码还在内存里照常跑；</li>
-        <li><strong>重启服务</strong>（root 用 <code>systemctl restart mrrc-modern</code>，
-          普通账号用 <code>pkill</code>，systemd 会把它拉起来）。</li>
+          <code>venv</code>、<code>logs</code>、<code>recordings</code>、<code>.local</code>、<code>env</code>、<code>fleet</code>、<code>data</code>、<code>ft8-slots</code>；</li>
+        <li><strong>装依赖</strong>：<code>venv/bin/pip install -r requirements.txt</code>。这一步失败就<strong>不会重启</strong> —— 也就是说旧代码还在内存里照常跑；</li>
+        <li><strong>重启服务</strong>（root 用 <code>systemctl restart mrrc-modern</code>，普通账号用 <code>pkill</code>，systemd 会把它拉起来）。</li>
       </ol>
 
       <h2>失败时怎么办</h2>
@@ -229,7 +217,7 @@ SSH account on the box [root]:
           <tr>
             <td><code>The release manifest has no box package</code></td>
             <td>线上清单里没有盒子包（很罕见）</td>
-            <td>把 <code>latest.json</code> 发给我们，先别升</td>
+            <td>把 <code>latest.json</code>发给我们，先别升</td>
           </tr>
           <tr>
             <td><code>Could not download …</code></td>
@@ -244,7 +232,7 @@ SSH account on the box [root]:
           <tr>
             <td><code>Copying to the box failed</code></td>
             <td>SSH 账号/口令不对，或盒子没开 SSH</td>
-            <td>用设置页给 <code>root</code> 设新口令，再跑一次</td>
+            <td>用设置页给 <code>root</code>设新口令，再跑一次</td>
           </tr>
           <tr>
             <td><code>pip failed. The service was NOT restarted</code></td>
@@ -283,16 +271,15 @@ ssh root@192.168.1.50 'bash /tmp/mrrc-remote-update.sh /tmp/mrrc-modern-src-*.ta
       <h2>这个工具不会做什么</h2>
       <ul>
         <li>不重刷镜像、不改引导、不碰 U 盘</li>
-        <li>不删除任何文件（这是它和盒子上那份老 <code>mrrc-update</code> 的唯一区别，也是它存在的理由）</li>
+        <li>不删除任何文件（这是它和盒子上那份老 <code>mrrc-update</code>的唯一区别，也是它存在的理由）</li>
         <li>不动配置、录音、记忆频道、隧道与证书</li>
         <li>不需要网页口令 —— 它压根不登盒子上的 API</li>
         <li>不会自己找盒子，也不会自动升级</li>
       </ul>
 
       <p style="color: var(--muted); font-size: 0.9rem; margin-top: 2.5rem">
-        脚本源码：仓库 <code>dev_tools/mrrc-update-ssh.cmd</code> 与
-        <code>dev_tools/mrrc-remote-update.sh</code>。两者都不是安装包的一部分，
-        随时可以更新，改完在 <a href="../answers/">答复页</a> 说明。
+        脚本源码：仓库 <code>dev_tools/mrrc-update-ssh.cmd</code>与
+        <code>dev_tools/mrrc-remote-update.sh</code>。两者都不是安装包的一部分，随时可以更新，改完在 <a href="../answers/">答复页</a>说明。
       </p>
     </main>
   </body>

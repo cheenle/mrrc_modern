@@ -173,7 +173,7 @@
             </td>
           </tr>
           <tr>
-            <td>想自己刷一台，手上是 <strong>Windows</strong> 电脑</td>
+            <td>想自己刷一台，手上是 <strong>Windows</strong>电脑</td>
             <td>
               <a href="flash.html"
                 ><strong>在 Windows 上做一张刷机盘</strong></a
@@ -218,12 +218,10 @@
       <div class="card">
         <h3><a href="w103d-user.html">盒子用户指南</a></h3>
         <p class="who">
-          <span class="tag">已刷好</span><span class="tag">30 分钟</span>
-          适合：拿到发货版盒子、插电就要用的人
+          <span class="tag">已刷好</span><span class="tag">30 分钟</span>适合：拿到发货版盒子、插电就要用的人
         </p>
         <p>
-          三个出厂口令、连 Wi-Fi（含预置一个工作台上扫不到的网络）、接电台、
-          五分钟验收、以及出问题时的分诊表。<strong
+          三个出厂口令、连 Wi-Fi（含预置一个工作台上扫不到的网络）、接电台、五分钟验收、以及出问题时的分诊表。<strong
             >不需要 U 盘、显示器和键盘。</strong
           >
         </p>
@@ -236,14 +234,13 @@
       <div class="card">
         <h3><a href="w103d-faq.html">「连不上门户」，先看这一行</a></h3>
         <p class="who">
-          <span class="tag">排障</span><span class="tag">2 分钟定性</span>
-          适合：页面报「连不上门户」「提交失败」，或报证书、时间、隧道错的人
+          <span class="tag">排障</span><span class="tag">2 分钟定性</span>适合：页面报「连不上门户」「提交失败」，或报证书、时间、隧道错的人
         </p>
         <p>
           网络、DNS、时钟、证书、隧道 ——
-          任何一环出问题，页面上都是同一句「连不上」。 这一页先给一张<strong
+          任何一环出问题，页面上都是同一句「连不上」。这一页先给一张<strong
             >「看到什么 → 先看哪一条」</strong
-          >的判据表，再给五条在盒子上就能跑的命令， 最后按条目解释真因与处置（含
+          >的判据表，再给五条在盒子上就能跑的命令，最后按条目解释真因与处置（含
           <strong>无 RTC 电池的盒子为什么开机就报证书未生效</strong>）。
         </p>
         <p style="color: var(--muted)">
@@ -255,41 +252,33 @@
       <div class="card">
         <h3><a href="fix-dns.html">盒子的 DNS 坏了：在 Windows 上一条命令修好</a></h3>
         <p class="who">
-          <span class="tag">排障</span><span class="tag">5 分钟</span>
-          适合：ping IP 通、ping 域名卡住；软件更新、公网入口、诊断包上传一起失灵的人
+          <span class="tag">排障</span><span class="tag">5 分钟</span>适合：ping IP 通、ping 域名卡住；软件更新、公网入口、诊断包上传一起失灵的人
         </p>
         <p>
           先给判据（<code>resolv.conf mode: foreign</code> + 一个不属于你的 DNS），再给
-          <strong>MRRC-FixDNS.cmd</strong>：只要<strong>网页登录口令</strong>，不需要 root、不需要 SSH，
-          它让盒子自己的 root 助手跑与升级同一个修复脚本。<strong>镜像里为什么会有别人家的 DNS</strong> 也写清了。
+          <strong>MRRC-FixDNS.cmd</strong>：只要<strong>网页登录口令</strong>，不需要 root、不需要 SSH，它让盒子自己的 root 助手跑与升级同一个修复脚本。<strong>镜像里为什么会有别人家的 DNS</strong>也写清了。
         </p>
       </div>
 
       <div class="card">
         <h3><a href="diag.html">公网入口连不上时，怎么把诊断包拿出来</a></h3>
         <p class="who">
-          <span class="tag">排障</span><span class="tag">10 分钟</span>
-          适合：局域网打得开、公网入口打不开的人
+          <span class="tag">排障</span><span class="tag">10 分钟</span>适合：局域网打得开、公网入口打不开的人
         </p>
         <p>
-          诊断包原本只能靠「上传」，而上传要盒子能出网 —— 网络坏掉时包就出不去。
-          这一页用一个 Windows 小工具，在你的局域网里把包直接拷回来。
-          最后一步失败也不要紧：屏幕上那几行
-          <code>tunnel_error</code> 通常已经够定位。
+          诊断包原本只能靠「上传」，而上传要盒子能出网 —— 网络坏掉时包就出不去。这一页用一个 Windows 小工具，在你的局域网里把包直接拷回来。最后一步失败也不要紧：屏幕上那几行
+          <code>tunnel_error</code>通常已经够定位。
         </p>
       </div>
 
       <div class="card">
         <h3><a href="update.html">从 Windows 电脑远程升级盒子</a></h3>
         <p class="who">
-          <span class="tag">升级</span><span class="tag">5 分钟</span>
-          适合：盒子能上网、页面里有「软件更新」的人（盒子线 1.28.2 起）
+          <span class="tag">升级</span><span class="tag">5 分钟</span>适合：盒子能上网、页面里有「软件更新」的人（盒子线 1.28.2 起）
         </p>
         <p>
-          用 <code>MRRC-Update.cmd</code> 在自己的电脑上把这件事做完： 登录 →
-          看「当前 → 线上」两个版本 → 输入 <code>YES</code> → 等它跑完。
-          中间盒子会重启一次（断线约 10 秒），脚本自己等它回来并重新读版本，
-          最后打出 <code>Before / After / Target</code>。
+          用 <code>MRRC-Update.cmd</code>在自己的电脑上把这件事做完：登录 →
+          看「当前 → 线上」两个版本 → 输入 <code>YES</code> → 等它跑完。中间盒子会重启一次（断线约 10 秒），脚本自己等它回来并重新读版本，最后打出 <code>Before / After / Target</code>。
         </p>
         <p style="color: var(--muted)">
           升级包是<strong>盒子自己</strong>去下载的，所以它要能出网 —— 这正好是
@@ -301,13 +290,11 @@
         <h3><a href="update-ssh.html">用 SSH 就地升级盒子（不刷机）</a></h3>
         <p class="who">
           <span class="tag">升级</span
-          ><span class="tag">10 分钟</span> 适合：<strong>1.27 及更早</strong
+          ><span class="tag">10 分钟</span>适合：<strong>1.27 及更早</strong
           >的盒子 —— 那些版本没有远程升级接口
         </p>
         <p>
-          <code>MRRC-Update-SSH.cmd</code> 在本机下载官方发布包、核对 SHA-256，
-          再推给盒子执行自带安装器：<strong>先备份、只覆盖、一个文件都不删</strong>。
-          不要直接跑那些老镜像里的 <code>mrrc-update</code> —— 1.25.5
+          <code>MRRC-Update-SSH.cmd</code>在本机下载官方发布包、核对 SHA-256，再推给盒子执行自带安装器：<strong>先备份、只覆盖、一个文件都不删</strong>。不要直接跑那些老镜像里的 <code>mrrc-update</code> —— 1.25.5
           及更早那份用 <code>rsync --delete</code>，会连带删掉配置和录音。
         </p>
       </div>
@@ -315,8 +302,7 @@
       <div class="card">
         <h3><a href="flash.html">在 Windows 上做一张 W103D 刷机盘</a></h3>
         <p class="who">
-          <span class="tag">刷机</span><span class="tag">20 分钟 + 下载</span>
-          适合：Windows 用户，只需要「把镜像写进 U 盘」
+          <span class="tag">刷机</span><span class="tag">20 分钟 + 下载</span>适合：Windows 用户，只需要「把镜像写进 U 盘」
         </p>
         <p>
           一个文件双击：下载镜像（断点续传）→ 校验 SHA-256 → 选盘 → 写入 →
@@ -328,13 +314,12 @@
       <div class="card">
         <h3><a href="w103d.html">W103D 从零指南</a></h3>
         <p class="who">
-          <span class="tag">刷机</span><span class="tag">1 小时</span>
-          适合：要把一台盒子从头刷到能用，或批量代刷的人
+          <span class="tag">刷机</span><span class="tag">1 小时</span>适合：要把一台盒子从头刷到能用，或批量代刷的人
         </p>
         <p>
           刷机盘之后的全部环节：<strong>复位孔进 update 模式</strong>（HDMI
-          三种画面各是什么）、 <code>armbian-install</code> 固化进
-          eMMC、断电前四项验收、扩容根分区、 预置客户
+          三种画面各是什么）、<code>armbian-install</code>固化进
+          eMMC、断电前四项验收、扩容根分区、预置客户
           Wi-Fi（工作台上扫不到的那种）。
         </p>
       </div>
@@ -342,8 +327,7 @@
       <div class="card">
         <h3><a href="w103d-remote.html">遥控器指南</a></h3>
         <p class="who">
-          <span class="tag">外设</span><span class="tag">15 分钟</span>
-          适合：买了蓝牙遥控器、想站在电台旁边操作的人
+          <span class="tag">外设</span><span class="tag">15 分钟</span>适合：买了蓝牙遥控器、想站在电台旁边操作的人
         </p>
         <p>
           配对、按键映射、以及那个最坑的失败模式 ——
@@ -355,7 +339,7 @@
       <div class="card">
         <h3><a href="w103d-radio-box.html">一台 ¥125 的盒子当电台服务器</a></h3>
         <p class="who">
-          <span class="tag">长篇</span> 适合：想知道「为什么是这台」的人
+          <span class="tag">长篇</span>适合：想知道「为什么是这台」的人
         </p>
         <p>从选板到踩坑的过程记录，不是操作手册。</p>
       </div>
@@ -368,7 +352,7 @@
         </li>
         <li>
           <strong>重刷一台</strong>：<a href="flash.html">做刷机盘</a> →
-          <a href="w103d.html">从零指南</a> 的「让盒子从 U 盘启动」与「固化
+          <a href="w103d.html">从零指南</a>的「让盒子从 U 盘启动」与「固化
           eMMC」两节
         </li>
         <li>
@@ -378,7 +362,7 @@
         </li>
         <li>
           <strong>入口打不开</strong>：<a href="diag.html">局域网取包</a> → 把
-          <code>cloud-state</code> 那几行发过来
+          <code>cloud-state</code>那几行发过来
         </li>
       </ol>
 
@@ -409,7 +393,7 @@
           <tr>
             <td>确实从 eMMC 启动</td>
             <td>
-              <code>findmnt -no SOURCE /</code> 是 <code>/dev/mmcblk2p2</code>
+              <code>findmnt -no SOURCE /</code>是 <code>/dev/mmcblk2p2</code>
             </td>
           </tr>
           <tr>
@@ -442,8 +426,8 @@
       <h2>通用前提</h2>
       <ul>
         <li>
-          型号：<strong>W103D / W102D / W105D</strong> 是同一家族（Amlogic
-          S905L3A）， 固件通用；文件名里的 "w103d"
+          型号：<strong>W103D / W102D / W105D</strong>是同一家族（Amlogic
+          S905L3A），固件通用；文件名里的 "w103d"
           指固件家族，不是外壳上的型号。
         </li>
         <li>无线只有 <strong>2.4 GHz</strong>；有线优先，音频延迟也更低。</li>

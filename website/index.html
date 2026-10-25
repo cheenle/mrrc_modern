@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.28.2 · Stable</span>
+<span>v1.28.6 · Stable</span>
 </div>
 <h1 class="hero-title">
           One USB Cable<br/>
@@ -58,10 +58,10 @@
           WebSocket channels — no $200 dongle required.
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.2-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.28.2
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.6-arm64.dmg"><i class="fab fa-apple"></i> Download macOS v1.28.6
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows Installer v1.28.2
+<i class="fab fa-windows"></i> Windows Installer v1.28.6
           </a>
 <a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i> Android APK v1.1.34
@@ -95,7 +95,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> What's new in v1.28.2</strong>
+<strong> What's new in v1.28.6</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">full changelog →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -107,21 +107,25 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-              <strong>v1.28.2 — the hub can no longer pin a certificate the instance has replaced, and the FT8 decoder stops killing its own worker</strong> —
-              <code>sign_for()</code> is idempotent now: a usable pair for the same name is reused byte-for-byte
-              instead of re-signed, so a failed enrolment cannot leave the hub pinning one certificate while the
-              instance serves another (the all-night 502 on a live entry). A broken instance heals by clicking
-              Connect once. And the FT8 deep path no longer takes the server's DSP worker down with it: a Fortran
-              <code>stop</code> in the native decoder terminated the child process on every slot — silently,
-              because the launcher's startup tee stops writing to a file once the server answers HTTP. The worker's
-              own stdout/stderr now lands in <code>logs/ft8-worker.log</code>, the diagnostic bundle collects it,
-              and the FFTW thread initialisation returns a status instead of aborting.
+              <strong>v1.28.6 — 盒子（和桌面版）自己管两个音频电平：TX 麦克风与 RX 下发各一个 dB 旋钮</strong> —
+              the two numbers that decide "how loud" now belong to the box instead of a browser.
+              <b>TX MIC</b> (−20…+25 dB) scales the operator's microphone only — CQ playback and the FT8
+              waveform never pass through it, and the TX recording tap sits after the gain, so a recording is
+              what the radio was actually given. <b>RX</b> (−20…+30 dB) scales only the copy encoded for
+              listeners: the recording, the FT8 decoder and a local speaker keep the capture untouched,
+              because a software gain cannot add information and clipping a decode just loses the signal.
+              Both default to 0 dB, so a box that upgrades sounds byte-for-byte the same; the browser mic
+              trim now reaches +25 dB instead of +6. Also in this release: the tunnel-stopped state is
+              finally visible (a 502 entry that looked "connected" for four days), the DNS chain repair
+              (<code>fix-dns</code> needs the web password, not root), and the box fix-pack number
+              (<code>1.28.6 · FP2</code>) on the update card and the menu footer.
             </li>
             <li>
-              <strong>Previous release (v1.28.0) — the radio's power switch is back in the ☰ menu with its two intents kept apart, outbound HTTPS trusts our own root bundle instead of the machine's store, and the FT8 cascade's deep path runs for the first time</strong> —
-              plus three defects that only the built artifacts showed (a missing <code>cty.dat</code> in the frozen
-              packages, a sibling virtualenv staged into the ARM image, three POSIX-only tests never collected on
-              Windows).
+              <strong>Previous (v1.28.2) — the hub can no longer pin a certificate an instance has replaced,
+              and the FT8 decoder stops killing its own worker</strong> —
+              <code>sign_for()</code> is idempotent, so a failed enrolment heals by clicking Connect once;
+              the decoder's Fortran <code>stop</code> now returns a status and its stderr reaches
+              <code>logs/ft8-worker.log</code>.
             </li>
             </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -491,11 +495,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.28.2 Stable</strong>
+<strong> MRRC-Modern-Setup.exe — v1.28.6 Stable</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            75.7 MB · x64 · 79,703,701 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 183b5c49…</code>
+            76.0 MB · x64 · 79,725,756 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: f3349a1e…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             The ☰ menu now carries the radio's own power switch (restart = off, then a bounded,
@@ -512,10 +516,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> Download for Windows
             </a>
-<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.28.2-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> Versioned v1.28.2
+<a class="btn btn-secondary btn-large" href="downloads/MRRC-Modern-v1.28.6-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> Versioned v1.28.6
             </a>
-<div class="dl-meta">79,703,701 bytes · SHA-256 183b5c49…</div>
+<div class="dl-meta">79,725,756 bytes · SHA-256 f3349a1e…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -531,11 +535,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.28.2-arm64.dmg — v1.28.2 Stable </strong>
+<strong> MRRC-Modern-v1.28.6-arm64.dmg — v1.28.6 Stable </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            81.7 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 85,666,868 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 7c0f08e4…</code>
+            81.7 MB · arm64 · Apple Silicon (M1/M2/M3/M4) · macOS 11+ · 85,623,497 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: ec927202…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             First run needs zero configuration: MRRC Modern auto-generates a
@@ -556,7 +560,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <a href="guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS install &amp; setup walkthrough →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.2-arm64.dmg">
+<a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-v1.28.6-arm64.dmg">
 <i class="fab fa-apple"></i> Download for macOS
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -621,11 +625,11 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
           ">
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
           <i class="fas fa-tv" style="color: var(--scope-primary)"></i>
-          <strong> MRRC-Modern-1.28.4-w103d.img.gz — ZTE W103D</strong>
+          <strong> MRRC-Modern-1.28.6-w103d.img.gz — ZTE W103D</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.22 GB (1,220,510,546 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 14dbf2dd8b8326db4457ab8a81b9182aaf8c4c9244b5ec41e967e15906125b51</code>
+              1.23 GB (1,232,393,683 bytes) · arm64 · ZTE W103D (Amlogic S905L3A, 2 GB RAM) · Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: 1fabb7429982914a835651debb24a6c54a56078fd0cf59391ce548fe12f99d94</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               A ready-made server image for this specific TV box, pre-configured so
@@ -642,7 +646,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
               cable and a network cable, with the USB stick kept as the rescue copy.
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-          <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-1.28.4-w103d.img.gz">
+          <a class="btn btn-primary btn-large" href="downloads/MRRC-Modern-1.28.6-w103d.img.gz">
           <i class="fas fa-download"></i> Download W103D Image
               </a>
           <a class="btn btn-secondary btn-large" href="w103d-index.html">
@@ -715,10 +719,10 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="step">
 <h4>2 · Run the Installer</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.28.2, 75.7 MB, x64. Start Menu + optional
+              MRRC-Modern-Setup.exe — v1.28.6, 75.7 MB, x64. Start Menu + optional
               desktop shortcut.
             </p>
-<code>SHA-256 183b5c497abb4a0e9795e5bdf8b64eb097c921097aef17269718413918423ba3</code>
+<code>SHA-256 f3349a1e3a8dc67deb5278a9e401fc64b61b06a70989a25dcd1033a1c2c849d7</code>
 </div>
 <div class="step">
 <h4>3 · Edit Configuration</h4>
@@ -1071,7 +1075,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="perf-card">
 <div class="metric">2327</div>
 <div class="metric-label">
-              Hardware-Free Tests<br/><small>2327 tests across 121 modules in the v1.28.2 release — no radio, serial port or sound card needed</small>
+              Hardware-Free Tests<br/><small>2952 tests across 152 modules in the v1.28.6 release — no radio, serial port or sound card needed</small>
 </div>
 </div>
 </div>
@@ -1273,7 +1277,7 @@ succeeded — get this version. Details: <a href="guide.html#macos-安装与初�
 <div class="footer-section">
 <h4>Resources</h4>
 <ul>
-<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.28.2</a></li>
+<li><a href="downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows Installer v1.28.6</a></li>
 <li><a href="downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> Raspberry Pi Image</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

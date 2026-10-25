@@ -261,8 +261,8 @@
         <p>界面每一个按钮、滑杆、下拉框的编号图解与精确说明。琥珀色序号与正文速查表一一对应，点下方任一图直接跳转。</p>
         <div class="actions">
             <a class="btn" href="#fig1"><i class="fas fa-mobile-screen"></i> 图 1 · 主界面</a>
-            <a class="btn" href="#fig2"><i class="fas fa-bars"></i> 图 2 · 抽屉菜单</a>
-            <a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/docs/OPERATION_GUIDE.md" target="_blank"><i class="fab fa-github"></i> 源文档<span class="btn-extra"> (md)</span></a>
+            <a class="btn" href="#fig2"><i class="fas fa-bars"></i>图 2 · 抽屉菜单</a>
+            <a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/docs/OPERATION_GUIDE.md" target="_blank"><i class="fab fa-github"></i>源文档<span class="btn-extra"> (md)</span></a>
         </div>
     </div>
 </header>
@@ -305,7 +305,7 @@
     </aside>
     <main class="guide-content">
 <blockquote class="callout-info">
-<p>适用于当前 MRRC Modern 界面（<strong>基线 v1.28.x</strong>；<strong>权威版本号是安装目录里的 <code>version.txt</code></strong> —— 菜单底部那个 <code>v1.0</code> 是前端资源串，见 §0.10）。支持 Yaesu FT-710、Icom IC-7300 / IC-7300MK2（另含 IC-705 / IC-7610 / IC-7760 预览配置）与 Yaesu SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891（实验性、默认只收不发，<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 解锁；这些机型无真机频谱源，界面用 S 表合成频谱。<strong>FT-891 另有两个例外</strong>：USB 口只做 CAT、不带 USB 声卡，音频须外接接口到 DATA/ACC 口并在设置里显式选设备；无内置天调，界面不显示 ATU 键，TUNE 发载波供外接天调调谐）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。云端接入见 §0.9，版本与更新见 §0.10。</p>
+<p>适用于当前 MRRC Modern 界面（<strong>基线 v1.28.x</strong>；<strong>权威版本号是安装目录里的 <code>version.txt</code></strong> —— 菜单底部那个 <code>v1.0</code>是前端资源串，见 §0.10）。支持 Yaesu FT-710、Icom IC-7300 / IC-7300MK2（另含 IC-705 / IC-7610 / IC-7760 预览配置）与 Yaesu SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F / FT-891（实验性、默认只收不发，<code>MRRC_ALLOW_UNVERIFIED_TX=1</code>解锁；这些机型无真机频谱源，界面用 S 表合成频谱。<strong>FT-891 另有两个例外</strong>：USB 口只做 CAT、不带 USB 声卡，音频须外接接口到 DATA/ACC 口并在设置里显式选设备；无内置天调，界面不显示 ATU 键，TUNE 发载波供外接天调调谐）。本文档逐项说明界面上每一个按钮、滑杆、下拉框的功能与用法，编号与文末插图（图 1 主界面、图 2 菜单）中的琥珀色序号一一对应。云端接入见 §0.9，版本与更新见 §0.10。</p>
 </blockquote>
 <hr />
 <h2 id="开始之前连接与登录">0. 开始之前：连接与登录</h2>
@@ -331,27 +331,27 @@
 </tr>
 <tr>
 <td>3. 登录</td>
-<td>输入共享密码（服务启动时由 <code>MRRC_WEB_PASSWORD</code> 或安装向导设置），点 <strong>Login</strong>。成功后在 <code>mrrc_auth</code> Cookie（30 天有效）；密码错误返回 401，5 分钟内连续 5 次失败会触发 429 限流，需等待后再试。</td>
+<td>输入共享密码（服务启动时由 <code>MRRC_WEB_PASSWORD</code>或安装向导设置），点 <strong>Login</strong>。成功后在 <code>mrrc_auth</code> Cookie（30 天有效）；密码错误返回 401，5 分钟内连续 5 次失败会触发 429 限流，需等待后再试。</td>
 </tr>
 <tr>
 <td>4. 建立连接</td>
-<td>手机端：点顶栏 <strong>⏻</strong> 开始连接（见控件 5）；桌面端打开页面后自动连接。状态栏 ●Serial 变绿表示与电台的 CAT 串口已连通。</td>
+<td>手机端：点顶栏 <strong>⏻</strong>开始连接（见控件 5）；桌面端打开页面后自动连接。状态栏 ●Serial 变绿表示与电台的 CAT 串口已连通。</td>
 </tr>
 </tbody>
 </table></div>
 <blockquote class="callout-warn">
-<p>⚠️ 顶栏 <strong>⏻</strong> 只控制浏览器与服务器的 Web 连接，<strong>不是</strong>电台电源开关。电台电源在 ☰ 菜单里， 分成「重开电台…」与「关机…」两项（见 §2.11 末尾）——为什么要分成两项、以及为什么开机不保证成功，那里写清楚了。 页头状态栏的 <code>PWR 开/关</code>（救援期间显示 <code>PWR 唤醒中 N</code>，点一下可取消）反映的是电台真实的电源状态。</p>
+<p>⚠️ 顶栏 <strong>⏻</strong>只控制浏览器与服务器的 Web 连接，<strong>不是</strong>电台电源开关。电台电源在 ☰ 菜单里，分成「重开电台…」与「关机…」两项（见 §2.11 末尾）——为什么要分成两项、以及为什么开机不保证成功，那里写清楚了。页头状态栏的 <code>PWR 开/关</code>（救援期间显示 <code>PWR 唤醒中 N</code>，点一下可取消）反映的是电台真实的电源状态。</p>
 </blockquote>
 <hr />
 <h2 id="电台型号差异">0.5 电台型号差异</h2>
-<p>服务器通过 <code>MRRC_RADIO_MODEL</code> 选择后端，前端会根据后端上报的 <code>capabilities</code> 自动调整可用控件。 已注册的型号键（连接设置对话框的下拉列表与之一致）：</p>
+<p>服务器通过 <code>MRRC_RADIO_MODEL</code>选择后端，前端会根据后端上报的 <code>capabilities</code>自动调整可用控件。已注册的型号键（连接设置对话框的下拉列表与之一致）：</p>
 <ul>
 <li><strong>完全支持</strong>：<code>ft710</code>（Yaesu FT-710）、<code>ic7300</code>（Icom IC-7300）、<code>ic7300mk2</code>（IC-7300MK2）</li>
-<li><strong>实验性（默认只收不发，<code>MRRC_ALLOW_UNVERIFIED_TX=1</code> 解锁）</strong>：Icom CI-V 族 <code>ic705</code> / <code>ic7610</code> / <code>ic7760</code>； Yaesu ASCII-CAT 族 <code>ftdx10</code> / <code>ftdx101d</code> / <code>ftdx101mp</code> / <code>ftx1</code>（FTX-1F）/ <code>ft891</code>（FT-891）</li>
+<li><strong>实验性（默认只收不发，<code>MRRC_ALLOW_UNVERIFIED_TX=1</code>解锁）</strong>：Icom CI-V 族 <code>ic705</code> / <code>ic7610</code> / <code>ic7760</code>； Yaesu ASCII-CAT 族 <code>ftdx10</code> / <code>ftdx101d</code> / <code>ftdx101mp</code> / <code>ftx1</code>（FTX-1F）/ <code>ft891</code>（FT-891）</li>
 </ul>
-<p><strong>选型只有一条硬规矩（v1.28.2 起）</strong>：连接设置里选中的机型会被<strong>保留</strong>，启动器的串口探测只填空、 不会覆盖它 —— 在此之前任何不在旧白名单里的机型（FT-891 / FTX-1 / FTDX10 / IC-705 / 7610 / 7760） 每次启动都会被改回 <code>ft710</code>，然后用 FT-710 的后端去驱动它（现场症状正是”选了 FT-891 但什么都对不上”）。</p>
-<p><strong>Yaesu 族的串口速率</strong>：FT-710/FTDX/FTX-1 出厂 38400；<strong>FT-891 的菜单 05-06 <code>CAT RATE</code> 出厂是 4800</strong> （Yaesu 手册；常见改法是 38400）。配置的速率下电台一个字节都不回时，控制器会自己按 4800 → 9600 → 19200 → 38400 试一遍，命中后<strong>本次会话</strong>就用它并在日志里留一条告警 —— 它不会改你的配置文件；要让下次启动也用对，把电台菜单和连接设置改成一致即可。</p>
-<p>下表以最常用的两台为例对比；<strong>CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列</strong> （细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同）， <strong>Yaesu ASCII-CAT 族行为大体对齐 FT-710 一列</strong>，但无 FT4222/CI-V 真频谱源，界面一律用 S-meter 合成频谱。</p>
+<p><strong>选型只有一条硬规矩（v1.28.6 起）</strong>：连接设置里选中的机型会被<strong>保留</strong>，启动器的串口探测只填空、不会覆盖它 —— 在此之前任何不在旧白名单里的机型（FT-891 / FTX-1 / FTDX10 / IC-705 / 7610 / 7760）每次启动都会被改回 <code>ft710</code>，然后用 FT-710 的后端去驱动它（现场症状正是”选了 FT-891 但什么都对不上”）。</p>
+<p><strong>Yaesu 族的串口速率</strong>：FT-710/FTDX/FTX-1 出厂 38400；<strong>FT-891 的菜单 05-06 <code>CAT RATE</code>出厂是 4800</strong> （Yaesu 手册；常见改法是 38400）。配置的速率下电台一个字节都不回时，控制器会自己按 4800 → 9600 → 19200 → 38400 试一遍，命中后<strong>本次会话</strong>就用它并在日志里留一条告警 —— 它不会改你的配置文件；要让下次启动也用对，把电台菜单和连接设置改成一致即可。</p>
+<p>下表以最常用的两台为例对比；<strong>CI-V 族（ic7300/mk2/705/7610/7760）行为对齐 IC-7300 一列</strong> （细节按型号配置档略有差异，如 IC-7610/7760 的 ATT 为 0–45 dB 每 3 dB 一档、频谱几何不同），<strong>Yaesu ASCII-CAT 族行为大体对齐 FT-710 一列</strong>，但无 FT4222/CI-V 真频谱源，界面一律用 S-meter 合成频谱。</p>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
 <colgroup>
 <col style="width: 17%" />
@@ -374,7 +374,7 @@
 <tr>
 <td>频谱来源</td>
 <td>FT4222 SPI（或 S-meter 回退）</td>
-<td>CI-V <code>0x27</code> 帧（或 S-meter 回退）</td>
+<td>CI-V <code>0x27</code>帧（或 S-meter 回退）</td>
 </tr>
 <tr>
 <td>USB 音频</td>
@@ -398,8 +398,8 @@
 </tr>
 <tr>
 <td>ATT</td>
-<td><code>OFF</code> / <code>6dB</code> / <code>12dB</code> / <code>18dB</code> 四档</td>
-<td><code>OFF</code> / <code>20dB</code> 两档（7610/7760 为 3 dB 步进 16 档）</td>
+<td><code>OFF</code> / <code>6dB</code> / <code>12dB</code> / <code>18dB</code>四档</td>
+<td><code>OFF</code> / <code>20dB</code>两档（7610/7760 为 3 dB 步进 16 档）</td>
 </tr>
 <tr>
 <td>VFO-B 直接选择</td>
@@ -425,29 +425,29 @@
 </table></div>
 <hr />
 <h2 id="windows-配置与运行">0.6 Windows 配置与运行</h2>
-<p>本章说明 IC-7300 与 FT-710 在 <strong>Windows 桌面版（MRRC-Modern-Setup.exe）</strong> 下分别如何配置并使其工作：装驱动 → 确认串口 → 编辑配置 → 电台侧设置 → 启动验证。</p>
+<p>本章说明 IC-7300 与 FT-710 在 <strong>Windows 桌面版（MRRC-Modern-Setup.exe）</strong>下分别如何配置并使其工作：装驱动 → 确认串口 → 编辑配置 → 电台侧设置 → 启动验证。</p>
 <blockquote class="callout-info">
-<p>配置统一写在 <code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>（开始菜单里的 <strong>Edit Configuration</strong> 快捷键会打开它）。变量名用新的 <code>MRRC_*</code> 前缀；旧的 <code>FT710_*</code> 前缀仍被兼容接受（<code>MRRC_*</code> 优先），升级用户可保留原配置。修改后需重启 MRRC Modern 生效。</p>
+<p>配置统一写在 <code>%LOCALAPPDATA%\MRRC-Modern\mrrc_modern.env</code>（开始菜单里的 <strong>Edit Configuration</strong>快捷键会打开它）。变量名用新的 <code>MRRC_*</code>前缀；旧的 <code>FT710_*</code>前缀仍被兼容接受（<code>MRRC_*</code>优先），升级用户可保留原配置。修改后需重启 MRRC Modern 生效。</p>
 </blockquote>
 <h3 id="通用步骤两台都适用">0.6.1 通用步骤（两台都适用）</h3>
 <ol type="1">
-<li>安装 <strong>MRRC-Modern-Setup.exe</strong>（开始菜单出现 <code>MRRC Modern</code> 与 <code>Edit Configuration</code> 两个快捷方式）。</li>
+<li>安装 <strong>MRRC-Modern-Setup.exe</strong>（开始菜单出现 <code>MRRC Modern</code>与 <code>Edit Configuration</code>两个快捷方式）。</li>
 <li>用 USB 线连接电台到电脑，并<strong>开机</strong>。</li>
 <li>打开 <strong>设备管理器</strong>，在「端口 (COM 和 LPT)」下确认电台的串口：
 <ul>
 <li><strong>IC-7300</strong>：一个 COM 口（USB CI-V）。</li>
 <li><strong>FT-710</strong>：两个 Silicon Labs CP210x COM 口（较低编号通常是 CAT 用的 Enhanced COM Port）。</li>
 </ul></li>
-<li>打开 <code>mrrc_modern.env</code>，设置 <code>MRRC_RADIO_MODEL</code>（<code>ic7300</code> / <code>ic7300mk2</code> / <code>ft710</code>，或 §0.5 列出的其它实验性型号键），并确保 <code>MRRC_SERIAL_PORT</code> 指向第 3 步确认的串口。</li>
-<li>启动 <code>MRRC Modern</code>，浏览器自动打开登录页。输入 <code>MRRC_WEB_PASSWORD</code> 后，状态栏 ●Serial 变绿即表示 CAT 已连通。</li>
+<li>打开 <code>mrrc_modern.env</code>，设置 <code>MRRC_RADIO_MODEL</code>（<code>ic7300</code> / <code>ic7300mk2</code> / <code>ft710</code>，或 §0.5 列出的其它实验性型号键），并确保 <code>MRRC_SERIAL_PORT</code>指向第 3 步确认的串口。</li>
+<li>启动 <code>MRRC Modern</code>，浏览器自动打开登录页。输入 <code>MRRC_WEB_PASSWORD</code>后，状态栏 ●Serial 变绿即表示 CAT 已连通。</li>
 </ol>
 <blockquote class="callout-info">
-<p>换电台时<strong>不需要重装</strong>：改 <code>MRRC_RADIO_MODEL</code> 和串口/波特率即可，其余步骤照对应小节核对。</p>
+<p>换电台时<strong>不需要重装</strong>：改 <code>MRRC_RADIO_MODEL</code>和串口/波特率即可，其余步骤照对应小节核对。</p>
 </blockquote>
 <h3 id="ic-7300-ic-7300mk2">0.6.2 IC-7300 / IC-7300MK2</h3>
 <p><strong>驱动</strong>：IC-7300 用标准 Windows USB-serial 驱动（通常自动安装），<strong>不需要</strong> FTDI 驱动。</p>
 <p><strong>设备管理器确认</strong>：「端口 (COM 和 LPT)」显示一个 COM 口，即 USB CI-V。</p>
-<p><strong><code>mrrc_modern.env</code> 完整示例</strong>：</p>
+<p><strong><code>mrrc_modern.env</code>完整示例</strong>：</p>
 <pre class="ini"><code>MRRC_RADIO_MODEL=ic7300        # 或 ic7300mk2
 MRRC_SERIAL_PORT=COM5          # 改成设备管理器里看到的 CI-V COM 口
 MRRC_BAUD_RATE=115200
@@ -464,27 +464,27 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
 <p><strong>电台侧设置</strong>（面板菜单，开机时设置一次）：</p>
 <ul>
 <li><code>CI-V USB Port</code> = <strong>Unlink from [REMOTE]</strong>。</li>
-<li><code>CI-V USB Baud Rate</code> = <strong>115200</strong>，必须明确选择 115200，不能保留 <code>Auto</code>；Icom 规定 <code>27 11</code> 波形输出仅在 Unlink + 115200 下可设置。选择 <code>ic7300</code>/<code>ic7300mk2</code> 后服务端默认即为 115200；显式设置 <code>MRRC_BAUD_RATE</code> 时必须一致。</li>
+<li><code>CI-V USB Baud Rate</code> = <strong>115200</strong>，必须明确选择 115200，不能保留 <code>Auto</code>；Icom 规定 <code>27 11</code>波形输出仅在 Unlink + 115200 下可设置。选择 <code>ic7300</code>/<code>ic7300mk2</code>后服务端默认即为 115200；显式设置 <code>MRRC_BAUD_RATE</code>时必须一致。</li>
 <li><code>CI-V Address</code>：IC-7300 默认 <strong>94h</strong>（<code>IC7300_CIV_ADDR</code>）；IC-7300MK2 默认 <strong>B6h</strong>（<code>IC7300MK2_CIV_ADDR</code>）。</li>
 <li>建议开启 <code>CI-V Transceive</code>（连接时服务端会按型号自动发送开启命令：IC-7300 项目 0071，MK2 项目 0089）。</li>
 <li><strong><code>SET</code> → <code>Connectors</code> → <code>MOD Input</code>（语音发射必查：这一组不对，PTT 按下只有载波、没有调制）</strong>：
 <ul>
-<li><code>DATA OFF MOD</code> = <strong><code>USB</code></strong> —— <strong>非 DATA 模式</strong>（SSB / AM / FM 语音）的调制输入源。停在 <code>MIC</code> 时对方听到的是「有发射、没声音」（FM 死载波），SSB 则表现为「功率很小或没有」（SSB 无调制＝无射频功率）。想同时保留手咪就选 <code>MIC, USB</code>。</li>
+<li><code>DATA OFF MOD</code> = <strong><code>USB</code></strong> —— <strong>非 DATA 模式</strong>（SSB / AM / FM 语音）的调制输入源。停在 <code>MIC</code>时对方听到的是「有发射、没声音」（FM 死载波），SSB 则表现为「功率很小或没有」（SSB 无调制＝无射频功率）。想同时保留手咪就选 <code>MIC, USB</code>。</li>
 <li><code>DATA MOD</code> = <strong><code>USB</code></strong> —— 数字 / DATA 模式的调制输入源。</li>
 <li><code>USB MOD Level</code> = <strong>50 左右</strong>（不要为 0）—— USB 调制输入电平。</li>
 </ul></li>
-<li><code>SET</code> → <code>Connectors</code> → <strong><code>USB SEND</code> 保持 <code>OFF</code></strong>（MK2 同组另有 <code>USB Keying (CW/RTTY)</code>）：它把 USB 口的 DTR/RTS 当作 PTT，一旦设为 <code>USB(A) DTR/RTS</code>，电脑打开串口就等于按下 PTT。</li>
-<li>接收侧：<code>SET</code> → <code>Connectors</code> 里的 USB 音频输出选择保持 <strong>AF</strong>（不是 IF）、输出电平不为 0，否则网页接收无声（日志出现 <code>RX audio is near-silent</code>）。</li>
+<li><code>SET</code> → <code>Connectors</code> → <strong><code>USB SEND</code>保持 <code>OFF</code></strong>（MK2 同组另有 <code>USB Keying (CW/RTTY)</code>）：它把 USB 口的 DTR/RTS 当作 PTT，一旦设为 <code>USB(A) DTR/RTS</code>，电脑打开串口就等于按下 PTT。</li>
+<li>接收侧：<code>SET</code> → <code>Connectors</code>里的 USB 音频输出选择保持 <strong>AF</strong>（不是 IF）、输出电平不为 0，否则网页接收无声（日志出现 <code>RX audio is near-silent</code>）。</li>
 </ul>
-<p><strong>音频</strong>：IC-7300 的 USB 音频是 <strong>48 kHz 原生</strong>，服务端直接透传，<strong>无需重采样</strong>。Windows 下该声卡以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code> 形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 填 <code>USB Audio</code> 即可同时匹配两种形式。启动及 RX/TX 打开日志会列出 <code>host</code>、<code>default</code>、<code>actual</code>、<code>channels</code>；IC 正常值应为 <code>actual=48000Hz</code>。</p>
-<p><strong>频谱</strong>：来自 CI-V <code>0x27</code> 帧，走 CAT 串口，<strong>不需要 FT4222</strong>。启动时依次发送 Scope Display ON（<code>27 10 01</code>）、Center、±100 kHz Span、Data Output ON（<code>27 11 01</code>）；两个 ON 开关缺一不可。分片队列最多保留 44 个片段，积压时丢弃最旧数据；WebSocket 以 30 Hz 调度且只发送新完成的真实帧。菜单 SPAN 可调跨度，SPD 对 IC 只提供 FAST/MID/SLOW。</p>
+<p><strong>音频</strong>：IC-7300 的 USB 音频是 <strong>48 kHz 原生</strong>，服务端直接透传，<strong>无需重采样</strong>。Windows 下该声卡以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code>形式枚举（本地化系统可能是「麦克风 (USB Audio Device)」）。<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code>填 <code>USB Audio</code>即可同时匹配两种形式。启动及 RX/TX 打开日志会列出 <code>host</code>、<code>default</code>、<code>actual</code>、<code>channels</code>；IC 正常值应为 <code>actual=48000Hz</code>。</p>
+<p><strong>频谱</strong>：来自 CI-V <code>0x27</code>帧，走 CAT 串口，<strong>不需要 FT4222</strong>。启动时依次发送 Scope Display ON（<code>27 10 01</code>）、Center、±100 kHz Span、Data Output ON（<code>27 11 01</code>）；两个 ON 开关缺一不可。分片队列最多保留 44 个片段，积压时丢弃最旧数据；WebSocket 以 30 Hz 调度且只发送新完成的真实帧。菜单 SPAN 可调跨度，SPD 对 IC 只提供 FAST/MID/SLOW。</p>
 <p><strong>验证清单</strong>：</p>
 <ol type="1">
 <li>状态栏 ●Serial 变绿。</li>
 <li>频率、模式、S 表跟随电台面板变化（面板改动也会回传——Transceive）。</li>
 <li>浏览器能听到接收声音（📶 音量滑杆、状态栏无「无声」告警）。</li>
 <li>瀑布图有信号（频谱来自 CI-V <code>0x27</code>；发射期间<strong>仍会刷新</strong>，这是与 FT-710 不同之处）。</li>
-<li>长按 PTT 说话，功率/ALC 表有反应（首次发射请用小功率确认）；<strong>ALC 表不动＝调制没进来</strong>，回去核对上面的 <code>MOD Input</code> 三项。</li>
+<li>长按 PTT 说话，功率/ALC 表有反应（首次发射请用小功率确认）；<strong>ALC 表不动＝调制没进来</strong>，回去核对上面的 <code>MOD Input</code>三项。</li>
 </ol>
 <h3 id="ft-710">0.6.3 FT-710</h3>
 <p><strong>驱动</strong>：</p>
@@ -493,7 +493,7 @@ MRRC_AUDIO_TX_DEVICE=USB Audio
 <li><strong>可选</strong>：FTDI D2XX 驱动 —— 仅当需要 <strong>FT4222 真频谱</strong>时。没装则自动回退到 S-meter 合成频谱（可用但不含真实 FFT 数据）。</li>
 </ul>
 <p><strong>设备管理器确认</strong>：「端口 (COM 和 LPT)」显示<strong>两个</strong> Silicon Labs CP210x COM 口。<strong>较低编号</strong>的那个通常是 CAT 用的 <strong>Enhanced COM Port</strong>；另一个是 FT4222 频谱口（<code>MRRC_SCOPE_PORT</code>，留空即自动探测）。</p>
-<p><strong><code>mrrc_modern.env</code> 完整示例</strong>：</p>
+<p><strong><code>mrrc_modern.env</code>完整示例</strong>：</p>
 <pre class="ini"><code>MRRC_RADIO_MODEL=ft710
 MRRC_SERIAL_PORT=COM3          # 改成 Enhanced COM Port（两个 CP210x 里较低编号）
 MRRC_BAUD_RATE=38400
@@ -508,17 +508,17 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <ol type="1">
 <li><strong><code>FUNC</code> → <code>RADIO SETTING</code> → 各模式 <code>MOD SOURCE</code> = <code>USB</code></strong>。SSB 必设；AM / FM / PSK/DATA 若要用也设 USB，否则 PTT 按下没有调制。</li>
 <li><strong><code>FUNC</code> → <code>RADIO SETTING</code> → <code>RPTT SELECT</code> = <code>OFF</code></strong>。PTT 由 CAT 命令控制，不走 RTS/DTR。</li>
-<li><strong><code>FUNC</code> → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>SCU-LAN10</code> = <code>ON</code></strong>，并把同一页最底下那条 <strong><code>CAT-1 RATE</code> = <code>38400</code></strong>。本服务端走 USB CAT（<code>MRRC_BAUD_RATE=38400</code> 要与之相同）， 但<strong>很多第三方远程软件靠 SCU-LAN10 这条通道取频谱</strong>；把 CAT-1 速率固定成 38400， 两边（本项目与第三方）就都读得懂，不必来回改菜单。</li>
-<li><strong><code>FUNC</code> → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code>（TOT，发射超时定时器）</strong>： 连续发射到设定时间后<strong>自动切回接收</strong>，防止 PTT 卡住打出一条长时间的死载波。</li>
+<li><strong><code>FUNC</code> → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>SCU-LAN10</code> = <code>ON</code></strong>，并把同一页最底下那条 <strong><code>CAT-1 RATE</code> = <code>38400</code></strong>。本服务端走 USB CAT（<code>MRRC_BAUD_RATE=38400</code>要与之相同），但<strong>很多第三方远程软件靠 SCU-LAN10 这条通道取频谱</strong>；把 CAT-1 速率固定成 38400，两边（本项目与第三方）就都读得懂，不必来回改菜单。</li>
+<li><strong><code>FUNC</code> → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code>（TOT，发射超时定时器）</strong>：连续发射到设定时间后<strong>自动切回接收</strong>，防止 PTT 卡住打出一条长时间的死载波。</li>
 </ol>
-<p><strong>TOT 怎么设</strong>：<code>FUNC</code> 旋钮 → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code> → 旋转 <code>FUNC</code> 或点数值两侧的 <code>&lt;</code> / <code>&gt;</code> 选值 → <strong>再按一下 <code>FUNC</code></strong>（或等约 3 秒自动保存）→ 多点几次 <code>BACK</code> 回到正常画面。可选 <code>OFF</code> 或 <strong>1–30 分钟</strong>；出厂默认 <code>OFF</code>（欧洲版默认 10 分钟）。</p>
+<p><strong>TOT 怎么设</strong>：<code>FUNC</code>旋钮 → <code>OPERATION SETTING</code> → <code>GENERAL</code> → <code>TX TIME OUT TIMER</code> → 旋转 <code>FUNC</code>或点数值两侧的 <code>&lt;</code> / <code>&gt;</code>选值 → <strong>再按一下 <code>FUNC</code></strong>（或等约 3 秒自动保存）→ 多点几次 <code>BACK</code>回到正常画面。可选 <code>OFF</code>或 <strong>1–30 分钟</strong>；出厂默认 <code>OFF</code>（欧洲版默认 10 分钟）。</p>
 <p><strong>设好后的表现</strong>：只要开始发射就倒计时，快到点时<strong>提前约 10 秒「嘀」一声</strong>提醒，时间一到 强制回到接收状态。远程操作建议设 <strong>3 分钟</strong>做兜底；<strong>FT8 / RTTY 这类长时间连续发射的数字模式 建议设 <code>OFF</code></strong>，否则一个时隙序列会被中途切断。</p>
 <blockquote class="callout-info">
-<p><strong>别设错的那一项</strong>：同一页里还有 <code>CAT-1</code> / <code>CAT-2</code> / <code>CAT-3</code> 的 <code>TIME OUT TIMER</code>， 那是 <strong>CAT 指令超时</strong>（单位毫秒），与发射超时是两码事。名字很像，位置相邻。</p>
+<p><strong>别设错的那一项</strong>：同一页里还有 <code>CAT-1</code> / <code>CAT-2</code> / <code>CAT-3</code>的 <code>TIME OUT TIMER</code>，那是 <strong>CAT 指令超时</strong>（单位毫秒），与发射超时是两码事。名字很像，位置相邻。</p>
 </blockquote>
-<p><strong>两层兜底各管一段</strong>：电台侧 TOT 管「物理上不许一直发」，服务端 <code>MRRC_PTT_MAX_TX_SECONDS</code> （W103D 镜像默认 <code>120</code>）管「远端会话断了也要松键」。两个都开才是完整的——只开一个， 另一条路上仍然可能留下长发射。</p>
-<p><strong>音频</strong>：FT-710 的 USB 音频是 <strong>44.1 kHz 原生</strong>，服务端会把它重采样到 48 kHz 再走网络。Windows 下该声卡同样以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code> 形式枚举，<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 填 <code>USB Audio</code> 即可。</p>
-<p><strong>频谱</strong>：真频谱来自 <strong>FT4222 SPI</strong>（需要 <code>MRRC_FTDI_LIB_DIR</code> 指向含 <code>FT4222.dll</code> / <code>ftd2xx.dll</code> 的目录）；缺失时回退到 <strong>S-meter 合成频谱</strong>。发射期间频谱<strong>暂停</strong>并显示「频谱暂停」，属正常现象。</p>
+<p><strong>两层兜底各管一段</strong>：电台侧 TOT 管「物理上不许一直发」，服务端 <code>MRRC_PTT_MAX_TX_SECONDS</code> （W103D 镜像默认 <code>120</code>）管「远端会话断了也要松键」。两个都开才是完整的——只开一个，另一条路上仍然可能留下长发射。</p>
+<p><strong>音频</strong>：FT-710 的 USB 音频是 <strong>44.1 kHz 原生</strong>，服务端会把它重采样到 48 kHz 再走网络。Windows 下该声卡同样以 <code>USB Audio CODEC</code> / <code>USB Audio Device</code>形式枚举，<code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code>填 <code>USB Audio</code>即可。</p>
+<p><strong>频谱</strong>：真频谱来自 <strong>FT4222 SPI</strong>（需要 <code>MRRC_FTDI_LIB_DIR</code>指向含 <code>FT4222.dll</code> / <code>ftd2xx.dll</code>的目录）；缺失时回退到 <strong>S-meter 合成频谱</strong>。发射期间频谱<strong>暂停</strong>并显示「频谱暂停」，属正常现象。</p>
 <p><strong>验证清单</strong>：</p>
 <ol type="1">
 <li>状态栏 ●Serial 变绿。</li>
@@ -541,16 +541,16 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </thead>
 <tbody>
 <tr>
-<td>我该选 <code>ft710</code>、<code>ic7300</code> 还是 <code>ic7300mk2</code>？</td>
+<td>我该选 <code>ft710</code>、<code>ic7300</code>还是 <code>ic7300mk2</code>？</td>
 <td>看你手头的电台：Yaesu FT-710 用 <code>ft710</code>；Icom IC-7300 用 <code>ic7300</code>；IC-7300MK2 用 <code>ic7300mk2</code>。MK2 默认地址为 0xB6，且 Transceive 菜单项与普通 7300 不同，不能混选。其它型号（IC-705/7610/7760、FTDX10/101D/101MP、FTX-1F、FT-891）见 §0.5 的实验性列表 —— 默认只收不发。</td>
 </tr>
 <tr>
 <td>换了一台电台，要重装软件吗？</td>
-<td>不用。改 <code>MRRC_RADIO_MODEL</code> 和串口/波特率，重启即可。</td>
+<td>不用。改 <code>MRRC_RADIO_MODEL</code>和串口/波特率，重启即可。</td>
 </tr>
 <tr>
 <td>Serial 一直是红点 / 灰点</td>
-<td>CAT 未连通。逐项检查：电台开机、USB 线、<code>MRRC_SERIAL_PORT</code> 是否指向设备管理器里的正确串口、波特率（IC-7300=115200、FT-710=38400）与电台菜单一致。</td>
+<td>CAT 未连通。逐项检查：电台开机、USB 线、<code>MRRC_SERIAL_PORT</code>是否指向设备管理器里的正确串口、波特率（IC-7300=115200、FT-710=38400）与电台菜单一致。</td>
 </tr>
 <tr>
 <td>IC-7300：设备管理器里没有 COM 口</td>
@@ -558,15 +558,15 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>FT-710：两个 COM 口，选哪个？</td>
-<td>选<strong>较低编号</strong>的 CP210x（Enhanced COM Port，CAT）。<code>MRRC_SCOPE_PORT</code> 留空自动探测另一个。</td>
+<td>选<strong>较低编号</strong>的 CP210x（Enhanced COM Port，CAT）。<code>MRRC_SCOPE_PORT</code>留空自动探测另一个。</td>
 </tr>
 <tr>
 <td>没声音 / 只听到电脑音箱声音</td>
-<td>音频设备没锁对。把 <code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code> 设为 <code>USB Audio</code>；若有多台同类 USB 声卡，用启动日志里 <code>PyAudio initialized. Available devices:</code> 列出的<strong>索引号</strong>锁定。</td>
+<td>音频设备没锁对。把 <code>MRRC_AUDIO_RX_DEVICE</code> / <code>MRRC_AUDIO_TX_DEVICE</code>设为 <code>USB Audio</code>；若有多台同类 USB 声卡，用启动日志里 <code>PyAudio initialized. Available devices:</code>列出的<strong>索引号</strong>锁定。</td>
 </tr>
 <tr>
 <td>FT-710：瀑布图有图形但不是真频谱</td>
-<td>这是 S-meter 合成频谱。确认 <code>MRRC_FTDI_LIB_DIR</code> 指向含 <code>FT4222.dll</code> / <code>ftd2xx.dll</code> 的目录，并已装 FTDI D2XX 驱动。</td>
+<td>这是 S-meter 合成频谱。确认 <code>MRRC_FTDI_LIB_DIR</code>指向含 <code>FT4222.dll</code> / <code>ftd2xx.dll</code>的目录，并已装 FTDI D2XX 驱动。</td>
 </tr>
 <tr>
 <td>IC-7300：瀑布图不动</td>
@@ -578,58 +578,58 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>改了配置没生效</td>
-<td>改完 <code>mrrc_modern.env</code> 必须<strong>重启 MRRC Modern</strong>（关掉窗口重新启动）。</td>
+<td>改完 <code>mrrc_modern.env</code>必须<strong>重启 MRRC Modern</strong>（关掉窗口重新启动）。</td>
 </tr>
 <tr>
 <td>双击没反应 / 黑窗口一闪就没了</td>
-<td>先看 <code>launcher.log</code> 与 <code>server.log</code>，再用开始菜单里的 <strong>MRRC Modern Server</strong> 绕开启动器判断是谁的问题 —— 见 §6.1。</td>
+<td>先看 <code>launcher.log</code>与 <code>server.log</code>，再用开始菜单里的 <strong>MRRC Modern Server</strong>绕开启动器判断是谁的问题 —— 见 §6.1。</td>
 </tr>
 <tr>
-<td>卡在 <code>Detecting the radio on N serial port(s)</code> 不动</td>
+<td>卡在 <code>Detecting the radio on N serial port(s)</code>不动</td>
 <td>有一个「不是电台的串口」占着号（最典型是 Intel AMT 的 Serial over LAN）。<strong>v1.25.0 起会跳过这类口、探测写入带 1 秒超时</strong>，不再卡死；老版本请先在设备管理器里禁用那个口。见 §6.1 第 4 条。</td>
 </tr>
 </tbody>
 </table></div>
 <hr />
 <h2 id="macos-安装与初始化">0.7 macOS 安装与初始化</h2>
-<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.28.2-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
+<p>本章面向 <strong>macOS 桌面版（<code>MRRC-Modern-v1.28.6-arm64.dmg</code>）</strong>：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。<strong>全程不需要打开终端、不需要编辑配置文件</strong>；安装包把最常用的设置都做成了图形化。</p>
 <blockquote class="callout-info">
 <p>适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是<strong>自包含</strong>的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。</p>
 </blockquote>
 <h3 id="安装5-步">0.7.1 安装（5 步）</h3>
 <ol type="1">
-<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong> 下载 <code>MRRC-Modern-v1.28.2-arm64.dmg</code>（约 81 MB）。</li>
-<li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong> 图标和一个 <strong>Applications</strong> 文件夹。</li>
-<li>把 <strong>MRRC Modern</strong> 图标<strong>拖进 Applications</strong> 文件夹（松手即完成安装）。</li>
+<li>打开官网 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> ，点 <strong>Download for macOS</strong>下载 <code>MRRC-Modern-v1.28.6-arm64.dmg</code>（约 81 MB）。</li>
+<li>双击刚下载的 <code>.dmg</code> → 弹出窗口里看到 <strong>MRRC Modern</strong>图标和一个 <strong>Applications</strong>文件夹。</li>
+<li>把 <strong>MRRC Modern</strong>图标<strong>拖进 Applications</strong>文件夹（松手即完成安装）。</li>
 <li><strong>第一次启动</strong>请右键点 Applications 里的 <strong>MRRC Modern</strong> → 选 <strong>打开</strong> → 弹窗里再点一次 <strong>打开</strong>（因为免费签名，系统会拦一次；只第一次需要）。</li>
 <li>以后双击即可直接打开。</li>
 </ol>
 <blockquote class="callout-info">
 <p><strong>两种弹窗必须分清</strong>（含义完全不同）：</p>
 <ul>
-<li>「<strong>无法验证开发者</strong>」/「无法检查是否包含恶意软件」= <strong>正常</strong>。本应用使用自签名（ad-hoc），系统”不认识”它 → 用第 4 步的 <strong>右键 → 打开 → 打开</strong> 放行一次即可，之后双击可用。</li>
+<li>「<strong>无法验证开发者</strong>」/「无法检查是否包含恶意软件」= <strong>正常</strong>。本应用使用自签名（ad-hoc），系统”不认识”它 → 用第 4 步的 <strong>右键 → 打开 → 打开</strong>放行一次即可，之后双击可用。</li>
 <li>「<strong>已损坏，无法打开。你应该将它移到废纸篓</strong>」= <strong>不正常</strong>：应用签名无效，<strong>这个提示右键也绕不过去</strong>。说明你拿到的是 <strong>v1.18.0 或更早</strong>的包 —— 请重新下载 <strong>v1.18.1 或更新</strong>版本。</li>
 </ul>
-<p>详见 <code>docs/MACOS_INSTALLER_GUIDE.md</code> 第 3 章（含 <code>xattr</code> 应急解封与签名自检命令）。</p>
+<p>详见 <code>docs/MACOS_INSTALLER_GUIDE.md</code>第 3 章（含 <code>xattr</code>应急解封与签名自检命令）。</p>
 </blockquote>
 <blockquote class="callout-info">
-<p><strong>FT-710 USB 驱动：macOS 11.3+ 免驱</strong>（2026-09-18 实测：macOS 15.3 从未装过任何第三方驱动，内核日志显示 CP2105 <code>0x10c4/ea70</code> 由系统直接枚举）。仅 <strong>macOS 10.11–11.2</strong> 需要先装 Silicon Labs CP210x VCP 驱动 v6.0.3：下载 <a href="https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg" class="uri">https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg</a> → 挂载 → 双击「Install CP210x VCP Driver」→ 系统设置里批准内核扩展；<strong>Apple Silicon 需先把启动安全性降到「允许用户管理内核扩展」</strong>（恢复模式 → 启动安全性实用工具）——所以能免驱就不要装。验证：插入电台后 <code>ls /dev/cu.usbserial-*</code> 应出现设备。FT4222 真频谱库已随应用打包，无需另装 D2XX。</p>
+<p><strong>FT-710 USB 驱动：macOS 11.3+ 免驱</strong>（2026-09-18 实测：macOS 15.3 从未装过任何第三方驱动，内核日志显示 CP2105 <code>0x10c4/ea70</code>由系统直接枚举）。仅 <strong>macOS 10.11–11.2</strong>需要先装 Silicon Labs CP210x VCP 驱动 v6.0.3：下载 <a href="https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg" class="uri">https://www.vlsc.net/mrrc_modern/downloads/SiLabsUSBDriverDisk.dmg</a> → 挂载 → 双击「Install CP210x VCP Driver」→ 系统设置里批准内核扩展；<strong>Apple Silicon 需先把启动安全性降到「允许用户管理内核扩展」</strong>（恢复模式 → 启动安全性实用工具）——所以能免驱就不要装。验证：插入电台后 <code>ls /dev/cu.usbserial-*</code>应出现设备。FT4222 真频谱库已随应用打包，无需另装 D2XX。</p>
 </blockquote>
 <h3 id="首次启动零配置-https">0.7.2 首次启动：零配置 + HTTPS</h3>
 <p>启动后<strong>什么都不用配</strong>，软件会自动完成：</p>
 <ol type="1">
-<li>屏幕<strong>右上角菜单栏</strong>出现 <code>MRRC Modern :8888</code> 图标。</li>
-<li><strong>浏览器自动打开</strong>登录页。首次访问是 HTTPS，浏览器会提示<strong>「连接不安全 / 您的连接不是私密连接」</strong>——这是<strong>正常的</strong>，因为用的是软件自动生成的<strong>自签名证书</strong>：点 <strong>高级 → 继续访问</strong> 即可（只需这一次）。</li>
-<li>登录页顶部显示<strong>自动生成的登录密码</strong>；忘记就点菜单栏 <strong>Show Password…</strong> 随时查看。</li>
+<li>屏幕<strong>右上角菜单栏</strong>出现 <code>MRRC Modern :8888</code>图标。</li>
+<li><strong>浏览器自动打开</strong>登录页。首次访问是 HTTPS，浏览器会提示<strong>「连接不安全 / 您的连接不是私密连接」</strong>——这是<strong>正常的</strong>，因为用的是软件自动生成的<strong>自签名证书</strong>：点 <strong>高级 → 继续访问</strong>即可（只需这一次）。</li>
+<li>登录页顶部显示<strong>自动生成的登录密码</strong>；忘记就点菜单栏 <strong>Show Password…</strong>随时查看。</li>
 <li>用这个密码登录，进入主界面。</li>
 <li><strong>插上电台</strong>（FT-710 或 IC-7300/MK2，USB 线 A→B 或 C→B）：首次运行自动探测电台型号、串口和音频设备，<strong>插上就能用</strong>。</li>
 <li><strong>首次启动会弹一次「麦克风」权限询问 → 点「允许」</strong>：这是<strong>接收</strong>电台声音所必需（macOS 把”音频输入”统一归入麦克风权限类，不是只有麦克风才需要）。</li>
 </ol>
 <blockquote class="callout-info">
-<p><strong>为什么需要麦克风权限？</strong> 应用要把电台 USB 声卡收到的声音送到浏览器播放，就必须读取”音频输入”。macOS 对”未授权”的回应<strong>不是报错，而是沉默</strong>：捕获流照样显示”已启动”，但数据全为 0 —— 于是<strong>控制、频谱、PTT 都正常，就是接收没有声音</strong>。当时点了「不允许」也可以补救：<strong>系统设置 → 隐私与安全性 → 麦克风</strong> → 打开 <strong>MRRC Modern</strong>。注意<strong>每次升级都会再问一次</strong>（自签名应用的授权绑定当次构建，属正常现象）。</p>
+<p><strong>为什么需要麦克风权限？</strong>应用要把电台 USB 声卡收到的声音送到浏览器播放，就必须读取”音频输入”。macOS 对”未授权”的回应<strong>不是报错，而是沉默</strong>：捕获流照样显示”已启动”，但数据全为 0 —— 于是<strong>控制、频谱、PTT 都正常，就是接收没有声音</strong>。当时点了「不允许」也可以补救：<strong>系统设置 → 隐私与安全性 → 麦克风</strong> → 打开 <strong>MRRC Modern</strong>。注意<strong>每次升级都会再问一次</strong>（自签名应用的授权绑定当次构建，属正常现象）。</p>
 </blockquote>
 <blockquote class="callout-info">
-<p><strong>为什么默认 HTTPS？</strong> 局域网里密码和遥控数据默认加密传输，避免被同网段的人抓包。自签名证书不代表”不安全”，只是浏览器不认识签名者；点一次「继续访问」即可。</p>
+<p><strong>为什么默认 HTTPS？</strong>局域网里密码和遥控数据默认加密传输，避免被同网段的人抓包。自签名证书不代表”不安全”，只是浏览器不认识签名者；点一次「继续访问」即可。</p>
 </blockquote>
 <h3 id="连接设置改电台-串口-音频-密码">0.7.3 连接设置（改电台 / 串口 / 音频 / 密码）</h3>
 <p>想换电台、换串口、换声卡或改密码，<strong>不用重装、不用碰配置文件</strong>：</p>
@@ -642,15 +642,15 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <li><strong>RX 音频设备</strong> / <strong>TX 音频设备</strong>（下拉列表列出本机音频设备，FT-710 一般是 <code>USB Audio Device</code>，IC-7300 一般是 <code>USB Audio Codec</code>）</li>
 <li><strong>登录密码</strong></li>
 </ul></li>
-<li>点 <strong>保存并重启</strong> —— 软件自动重启生效；只点 <strong>重启服务</strong> 则不改设置、仅重启。</li>
+<li>点 <strong>保存并重启</strong> —— 软件自动重启生效；只点 <strong>重启服务</strong>则不改设置、仅重启。</li>
 </ol>
 <h3 id="进阶edit-configuration可选">0.7.4 进阶：Edit Configuration（可选）</h3>
-<p>普通用户用不到。高级用户可在菜单栏 <strong>Edit Configuration…</strong> 用文本编辑器打开配置文件：</p>
+<p>普通用户用不到。高级用户可在菜单栏 <strong>Edit Configuration…</strong>用文本编辑器打开配置文件：</p>
 <pre><code>~/Library/Application Support/MRRC-Modern/mrrc_modern.env</code></pre>
 <ul>
-<li>变量用 <code>MRRC_*</code> 前缀（旧的 <code>FT710_*</code> 仍兼容）；改完在菜单栏 <strong>Restart Server</strong> 重启生效。</li>
+<li>变量用 <code>MRRC_*</code>前缀（旧的 <code>FT710_*</code>仍兼容）；改完在菜单栏 <strong>Restart Server</strong>重启生效。</li>
 <li><strong>HTTPS 默认开启</strong>（无需任何配置）；仅当想退回明文 HTTP 时才加一行 <code>MRRC_SSL=off</code>。</li>
-<li>配置、自签名证书、记忆频道都在这一个目录里；<strong>彻底卸载</strong>时把应用拖进废纸篓、再删掉 <code>~/Library/Application Support/MRRC-Modern/</code> 即可完全清除。</li>
+<li>配置、自签名证书、记忆频道都在这一个目录里；<strong>彻底卸载</strong>时把应用拖进废纸篓、再删掉 <code>~/Library/Application Support/MRRC-Modern/</code>即可完全清除。</li>
 </ul>
 <h3 id="手机-其他设备访问局域网">0.7.5 手机 / 其他设备访问（局域网）</h3>
 <ol type="1">
@@ -703,7 +703,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>怎么完全卸载？</td>
-<td>① 菜单栏 Quit；② 把 <code>MRRC-Modern.app</code> 拖进废纸篓；③ 如需连密码/证书/录音一起清掉，删 <code>~/Library/Application Support/MRRC-Modern/</code>；④ 可选：清掉系统里的麦克风授权 <code>tccutil reset Microphone net.vlsc.mrrc-modern</code>。</td>
+<td>① 菜单栏 Quit；② 把 <code>MRRC-Modern.app</code>拖进废纸篓；③ 如需连密码/证书/录音一起清掉，删 <code>~/Library/Application Support/MRRC-Modern/</code>；④ 可选：清掉系统里的麦克风授权 <code>tccutil reset Microphone net.vlsc.mrrc-modern</code>。</td>
 </tr>
 <tr>
 <td>提示「<strong>已损坏，无法打开</strong>」（右键也无效）</td>
@@ -723,15 +723,15 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>WSJT-X / FLDIGI 报 Port busy、打不开串口</td>
-<td>CAT 串口被独占了——退出菜单栏的 MRRC Modern 再开电台软件（反之 MRRC 启动失败也先关它们）。详见 §0.8；另确认用的是 <code>cu.</code> 开头而非 <code>tty.</code>。</td>
+<td>CAT 串口被独占了——退出菜单栏的 MRRC Modern 再开电台软件（反之 MRRC 启动失败也先关它们）。详见 §0.8；另确认用的是 <code>cu.</code>开头而非 <code>tty.</code>。</td>
 </tr>
 <tr>
 <td>浏览器打开是<strong>空白页</strong>、或报「网址协议不受支持 / 无法访问此网站」</td>
-<td>多半是<strong>浏览器被送到了服务器没在监听的那个协议</strong>上（启动器算的是 <code>https://</code>，而服务器退回了纯 HTTP）。<strong>v1.25.0 起启动器会先问服务器到底在哪个地址应答</strong>，再打开浏览器；若它提示「已切换到 <code>http://</code>」，说明证书没签出来 —— 界面能用，但请到日志（macOS <code>~/Library/Application Support/MRRC-Modern/logs/server.log</code>、Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs\server.log</code>）看 <code>could not create a certificate</code> 那一行的原因，别把警告当噪音忽略。</td>
+<td>多半是<strong>浏览器被送到了服务器没在监听的那个协议</strong>上（启动器算的是 <code>https://</code>，而服务器退回了纯 HTTP）。<strong>v1.25.0 起启动器会先问服务器到底在哪个地址应答</strong>，再打开浏览器；若它提示「已切换到 <code>http://</code>」，说明证书没签出来 —— 界面能用，但请到日志（macOS <code>~/Library/Application Support/MRRC-Modern/logs/server.log</code>、Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs\server.log</code>）看 <code>could not create a certificate</code>那一行的原因，别把警告当噪音忽略。</td>
 </tr>
 <tr>
 <td>端口 8888 被占用</td>
-<td><strong>v1.25.0 起第二个实例会明确报错并退出</strong>（Windows 上此前两个实例可以<strong>同时</strong>绑同一端口，浏览器可能落到没拿到电台那一个）。报错里会点名「另一个 MRRC Modern 还在跑」：先关掉已有窗口/菜单栏图标；确实要并行就高级用户在 <code>mrrc_modern.env</code> 里改 <code>MRRC_WEB_PORT</code>，重启生效。</td>
+<td><strong>v1.25.0 起第二个实例会明确报错并退出</strong>（Windows 上此前两个实例可以<strong>同时</strong>绑同一端口，浏览器可能落到没拿到电台那一个）。报错里会点名「另一个 MRRC Modern 还在跑」：先关掉已有窗口/菜单栏图标；确实要并行就高级用户在 <code>mrrc_modern.env</code>里改 <code>MRRC_WEB_PORT</code>，重启生效。</td>
 </tr>
 </tbody>
 </table></div>
@@ -755,7 +755,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>Serial Port</td>
 <td><strong><code>/dev/cu.usbserial-0121DB3A0</code></strong></td>
-<td>必须 <code>cu.</code> 开头——<code>tty.</code> 是等载波的调制解调器语义，极易报「Port busy」</td>
+<td>必须 <code>cu.</code>开头——<code>tty.</code>是等载波的调制解调器语义，极易报「Port busy」</td>
 </tr>
 <tr>
 <td>Baud Rate</td>
@@ -778,47 +778,47 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <p>⚠️ <strong>串口独占法则（最容易撞的坑）</strong>：同一时刻<strong>只能有一个程序</strong>打开 CAT 串口。要用 WSJT-X/JTDX/FLDIGI，先退出菜单栏的 MRRC Modern（它持有 CAT 口）；反过来 MRRC 启动时串口打不开，先关掉正在运行的其它电台软件。FT-710 的 CP2105 双口里只有 <strong>Enhanced</strong>（<code>…A0</code>）是 CAT，另一个 <code>…A1</code>（Standard）跑不了 CAT。占用排查：<code>lsof /dev/cu.usbserial-0121DB3A0</code>。</p>
 </blockquote>
 <h2 id="接入云端cloud-hub">0.9 接入云端（Cloud Hub）</h2>
-<p>给这台机器一个公网入口 <code>https://&lt;你的呼号&gt;.mrrc.vlsc.net/</code>：<strong>不需要</strong>自己有公网 IP，也<strong>不用</strong>在路由器上开端口。 应用<strong>出站</strong>连到中转（hub），入口的 TLS 在中转处终结，中转再回连本机。</p>
+<p>给这台机器一个公网入口 <code>https://&lt;你的呼号&gt;.mrrc.vlsc.net/</code>：<strong>不需要</strong>自己有公网 IP，也<strong>不用</strong>在路由器上开端口。应用<strong>出站</strong>连到中转（hub），入口的 TLS 在中转处终结，中转再回连本机。</p>
 <p><strong>准备</strong>：一个有效呼号。门户地址 <code>https://portal.mrrc.vlsc.net/</code>（对话框顶部「服务器」一行显示的就是它）。</p>
 <p><strong>申请</strong>（两条路，进的是同一个队列）：</p>
 <ol type="1">
-<li><strong>应用里申请</strong>（推荐；抽屉菜单 → <strong>接入云端（Cloud Hub）…</strong>）：填 <strong>呼号</strong>（大小写不敏感； <code>BG1SB/P</code>、<code>4X/BG1SB</code> 这类便携/前缀写法会被拒绝 —— 登记的是身份，而且标签要当 DNS 名用）， 可选的 <strong>联系方式</strong> 便于运维核对，点 <strong>申请入口 / 接入</strong>。</li>
-<li><strong>网页上申请</strong>：任何浏览器打开 <code>https://portal.mrrc.vlsc.net/</code> 提交呼号。批准后运维会给一串 <strong>登记口令</strong>；回到应用的同一个对话框，把它填进「登记口令」一栏点接入即可。为什么网页申请的 要这么绕一圈：应用只能看见<strong>它自己提交</strong>的那条申请，凭口令「认领」才能把网页上批准的那条接回来。</li>
+<li><strong>应用里申请</strong>（推荐；抽屉菜单 → <strong>接入云端（Cloud Hub）…</strong>）：填 <strong>呼号</strong>（大小写不敏感；<code>BG1SB/P</code>、<code>4X/BG1SB</code>这类便携/前缀写法会被拒绝 —— 登记的是身份，而且标签要当 DNS 名用），可选的 <strong>联系方式</strong>便于运维核对，点 <strong>申请入口 / 接入</strong>。</li>
+<li><strong>网页上申请</strong>：任何浏览器打开 <code>https://portal.mrrc.vlsc.net/</code>提交呼号。批准后运维会给一串 <strong>登记口令</strong>；回到应用的同一个对话框，把它填进「登记口令」一栏点接入即可。为什么网页申请的 要这么绕一圈：应用只能看见<strong>它自己提交</strong>的那条申请，凭口令「认领」才能把网页上批准的那条接回来。</li>
 </ol>
-<p><strong>核验与批准</strong>：呼号命中 <strong>Club Log</strong> 呼号库（27 万余条）会<strong>当场自动核验</strong>；查不到的转人工核验。 核验通过后才由运维<strong>分配入口</strong>（标签 + 端口）—— 这一步是人工的，通常在核验后很快完成。</p>
-<p><strong>等待时</strong>：对话框中部有一行 <strong>自动接入</strong> 状态，写着本机上次询问 hub 的时间与结果 （已提交 / 已核验 / 已批准 / 已接入 / 联系不上 hub…），<strong>不必守着这个窗口</strong>。 想立刻问一次就点 <strong>刷新状态</strong>（它一直可以点 —— 早先版本里它看着像禁用，其实不是）。</p>
-<p><strong>批准之后什么都不用做</strong>：服务端每 30 秒自查一次（v1.25.0 起），发现批准就自己签证书、登记入口、 把隧道拉起来。</p>
-<p><strong>首次接入</strong>会提示 <strong>重启应用以启用新证书</strong>：TLS 上下文是在进程启动时建立的，新证书要重启才生效 （不重启入口会一直 502）。接入完成后对话框显示入口链接、证书与隧道状态。</p>
-<p><strong>入口地址的规则</strong>：就是呼号本身，<strong>没有端口、没有路径、没有产品后缀</strong>（早期的 <code>:9988</code> 与 <code>/mrrc_modern/&lt;呼号&gt;/</code> 写法都已取消）。同一个呼号再次申请会<strong>复用原来的标签与端口</strong>，不会越排越多。</p>
-<p><strong>别把入口名当安全边界</strong>：呼号是公开标识、入口可枚举，所以防线在「核验通过才给访问」， 而不在「别人猜不到」；入口后面仍是本机的登录口令（§0 第 3 步）。</p>
+<p><strong>核验与批准</strong>：呼号命中 <strong>Club Log</strong>呼号库（27 万余条）会<strong>当场自动核验</strong>；查不到的转人工核验。核验通过后才由运维<strong>分配入口</strong>（标签 + 端口）—— 这一步是人工的，通常在核验后很快完成。</p>
+<p><strong>等待时</strong>：对话框中部有一行 <strong>自动接入</strong>状态，写着本机上次询问 hub 的时间与结果（已提交 / 已核验 / 已批准 / 已接入 / 联系不上 hub…），<strong>不必守着这个窗口</strong>。想立刻问一次就点 <strong>刷新状态</strong>（它一直可以点 —— 早先版本里它看着像禁用，其实不是）。</p>
+<p><strong>批准之后什么都不用做</strong>：服务端每 30 秒自查一次（v1.25.0 起），发现批准就自己签证书、登记入口、把隧道拉起来。</p>
+<p><strong>首次接入</strong>会提示 <strong>重启应用以启用新证书</strong>：TLS 上下文是在进程启动时建立的，新证书要重启才生效（不重启入口会一直 502）。接入完成后对话框显示入口链接、证书与隧道状态。</p>
+<p><strong>入口地址的规则</strong>：就是呼号本身，<strong>没有端口、没有路径、没有产品后缀</strong>（早期的 <code>:9988</code>与 <code>/mrrc_modern/&lt;呼号&gt;/</code>写法都已取消）。同一个呼号再次申请会<strong>复用原来的标签与端口</strong>，不会越排越多。</p>
+<p><strong>别把入口名当安全边界</strong>：呼号是公开标识、入口可枚举，所以防线在「核验通过才给访问」，而不在「别人猜不到」；入口后面仍是本机的登录口令（§0 第 3 步）。</p>
 <p><strong>出问题</strong>：抽屉菜单 → <strong>🐞 遇到问题</strong> → 生成并上传诊断包（§6），答复发布在 <code>https://www.vlsc.net/mrrc_modern/answers/</code>。</p>
 <h2 id="版本与更新">0.10 版本与更新</h2>
 <ul>
-<li><strong>真实版本号</strong>：安装目录里的 <code>version.txt</code>（Windows 默认 <code>C:\Program Files\MRRC Modern\</code>， macOS 在 <code>MRRC Modern.app/Contents/Resources/</code>）；诊断包里也带一份。 <strong>抽屉菜单底部那行</strong>（形如 <code>FT-710 v1.0</code>）里的 <code>v1.0</code> 是<strong>前端资源串</strong>，既不是发布版本也不是电台固件版本 —— 报版本时别拿它当依据。</li>
-<li><strong>应用能查新版，但还不能自己装</strong>：服务端有只读的 <code>GET /api/update/check</code>，拿运行版本与站点上的 <code>latest.json</code> 比对，只回答「有没有更新」，<strong>不下载、不写任何文件</strong>；<strong>界面上目前没有升级按钮</strong> —— 升级器会改动它运行的机器，所以要么完整要么不做，不做半成品。</li>
-<li><strong>升级怎么做</strong>：到 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a> 下载对应平台的安装包<strong>覆盖安装</strong>一次即可。 配置、证书、录音都在<strong>用户数据目录</strong>（Windows <code>%LOCALAPPDATA%\MRRC-Modern</code>， macOS <code>~/Library/Application Support/MRRC-Modern</code>），不在安装目录里，所以覆盖安装不会动它们。 想彻底重来见 §6.2。</li>
-<li><strong>换电脑</strong>：不要重配。用下载页的 <code>MRRC-Modern-Backup.cmd</code> 把用户数据目录（配置 + 证书 + 记忆频道 + 天调学习值 + 云隧道配置）打成一个包，在新机器上装好应用后一次恢复。<strong>证书不能重签</strong> （云入口钉的是它），详见网站指南 §6.5。</li>
+<li><strong>真实版本号</strong>：安装目录里的 <code>version.txt</code>（Windows 默认 <code>C:\Program Files\MRRC Modern\</code>， macOS 在 <code>MRRC Modern.app/Contents/Resources/</code>）；诊断包里也带一份。<strong>抽屉菜单底部那行</strong>（形如 <code>FT-710 v1.0</code>）里的 <code>v1.0</code>是<strong>前端资源串</strong>，既不是发布版本也不是电台固件版本 —— 报版本时别拿它当依据。</li>
+<li><strong>应用能查新版，但还不能自己装</strong>：服务端有只读的 <code>GET /api/update/check</code>，拿运行版本与站点上的 <code>latest.json</code>比对，只回答「有没有更新」，<strong>不下载、不写任何文件</strong>；<strong>界面上目前没有升级按钮</strong> —— 升级器会改动它运行的机器，所以要么完整要么不做，不做半成品。</li>
+<li><strong>升级怎么做</strong>：到 <a href="https://www.vlsc.net/mrrc_modern/" class="uri">https://www.vlsc.net/mrrc_modern/</a>下载对应平台的安装包<strong>覆盖安装</strong>一次即可。配置、证书、录音都在<strong>用户数据目录</strong>（Windows <code>%LOCALAPPDATA%\MRRC-Modern</code>， macOS <code>~/Library/Application Support/MRRC-Modern</code>），不在安装目录里，所以覆盖安装不会动它们。想彻底重来见 §6.2。</li>
+<li><strong>换电脑</strong>：不要重配。用下载页的 <code>MRRC-Modern-Backup.cmd</code>把用户数据目录（配置 + 证书 + 记忆频道 + 天调学习值 + 云隧道配置）打成一个包，在新机器上装好应用后一次恢复。<strong>证书不能重签</strong> （云入口钉的是它），详见网站指南 §6.5。</li>
 </ul>
 <h2 id="分享一个只收听入口">0.11 分享一个「只收听」入口</h2>
-<p>想让别人听你这里的守听声、但不给发射与设备设置，就再设一个<strong>互不相同的口令</strong>：<code>MRRC_LISTEN_PASSWORD</code> （空 = 关闭）。用这个口令登录会直接进入 <code>/listen</code> 收听页（而不是主界面）：</p>
+<p>想让别人听你这里的守听声、但不给发射与设备设置，就再设一个<strong>互不相同的口令</strong>：<code>MRRC_LISTEN_PASSWORD</code> （空 = 关闭）。用这个口令登录会直接进入 <code>/listen</code>收听页（而不是主界面）：</p>
 <ul>
-<li><strong>能做的</strong>：改频率 / 模式（含波段快捷与记忆频道调出）、S 表与瀑布、接收音频 + 浏览器侧音量， 外加一个「测试音」按钮；</li>
+<li><strong>能做的</strong>：改频率 / 模式（含波段快捷与记忆频道调出）、S 表与瀑布、接收音频 + 浏览器侧音量，外加一个「测试音」按钮；</li>
 <li><strong>不能做的</strong>：发射（PTT / TUNE / CQ / FT8）、天调、录音，也改不了任何设备设置。</li>
 </ul>
-<p>这是<strong>服务端</strong>限制，不是把按钮藏起来：<code>/WSradio</code> 只放过频率/模式/记忆类命令，<code>/WSaudioTX</code> 与 <code>/WSatr1000</code> 直接以 4003 关闭，非 GET 的 <code>/api/*</code> 返回 403。页面底部那行写着「收听模式仅允许调整频率与模式」。 <strong>两个口令设成同一个值 = 不再有只读角色</strong>，能看到主界面的全部能力。</p>
-<p>要把收听页开放到公网（<code>deploy_listen_proxy.sh</code> 默认发到 <code>https://www.vlsc.net/mrrc_modern/listen</code>）， 用仓库里的那个脚本即可（幂等，直接反代到本机服务，见 README 的 Listen-only 一行）。</p>
+<p>这是<strong>服务端</strong>限制，不是把按钮藏起来：<code>/WSradio</code>只放过频率/模式/记忆类命令，<code>/WSaudioTX</code>与 <code>/WSatr1000</code>直接以 4003 关闭，非 GET 的 <code>/api/*</code>返回 403。页面底部那行写着「收听模式仅允许调整频率与模式」。<strong>两个口令设成同一个值 = 不再有只读角色</strong>，能看到主界面的全部能力。</p>
+<p>要把收听页开放到公网（<code>deploy_listen_proxy.sh</code>默认发到 <code>https://www.vlsc.net/mrrc_modern/listen</code>），用仓库里的那个脚本即可（幂等，直接反代到本机服务，见 README 的 Listen-only 一行）。</p>
 <hr />
 <h2 id="主界面控件编号图">1. 主界面控件编号图</h2>
 <figure id="fig1">
 <img loading="lazy" decoding="async" src="images/ui-guide-main.svg" alt="主界面控件编号图" />
 <figcaption aria-hidden="true">主界面控件编号图</figcaption>
 </figure>
-<p><strong>图 1</strong> 为主界面（手机竖屏布局，桌面端宽度放大但控件一致）。琥珀色圆点为控件序号，与第 2 节速查表一一对应；<strong>图 2</strong> 的序号与 §2.11 一一对应。</p>
+<p><strong>图 1</strong>为主界面（手机竖屏布局，桌面端宽度放大但控件一致）。琥珀色圆点为控件序号，与第 2 节速查表一一对应；<strong>图 2</strong>的序号与 §2.11 一一对应。</p>
 <figure id="fig2">
 <img loading="lazy" decoding="async" src="images/ui-guide-menu.svg" alt="菜单控件编号图" />
 <figcaption aria-hidden="true">菜单控件编号图</figcaption>
 </figure>
-<p><strong>图 2</strong> 为点顶栏 ☰ 后滑出的左侧抽屉菜单。</p>
+<p><strong>图 2</strong>为点顶栏 ☰ 后滑出的左侧抽屉菜单。</p>
 <hr />
 <h2 id="控件速查表编号-名称-功能-操作">2. 控件速查表（编号 → 名称 → 功能 → 操作）</h2>
 <h3 id="顶栏图-1-序号-17">2.1 顶栏（图 1 序号 1–7）</h3>
@@ -848,7 +848,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>2</td>
 <td>频率显示</td>
 <td>显示当前 VFO 的频率（7 位：MHz.kHz.Hz 十位）</td>
-<td><strong>单击</strong>切换为输入框，直接键入 MHz（如 <code>14.270</code>）或 kHz（如 <code>14270</code>）后回车生效；<code>Esc</code> 取消</td>
+<td><strong>单击</strong>切换为输入框，直接键入 MHz（如 <code>14.270</code>）或 kHz（如 <code>14270</code>）后回车生效；<code>Esc</code>取消</td>
 </tr>
 <tr>
 <td>3</td>
@@ -877,13 +877,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>7</td>
 <td>状态栏</td>
-<td>一行显示：当前波段（如 <code>20m</code>）、模式（如 <code>USB</code>）、收/发状态（<code>RX</code>/<code>TX</code>/<code>TUNE</code>，发射时变红）、<strong>电台电源</strong>（<code>PWR 开</code> / <code>PWR 关</code>；「重开电台」的唤醒循环进行中变成 <code>PWR 唤醒中 N</code>）、串口连接点（绿=已连接）、⚠<code>无声</code>告警（RX 音频持续 20 秒全零，电台 USB 音频可能卡死）、实时码率 <code>↓↑</code>（下行/上行 kbps）、<code>RTT</code> 往返延迟与 <code>J</code> 抖动（ms）</td>
-<td>只读；<code>PWR 唤醒中 N</code> <strong>可单击取消</strong>（确认后电台保持关闭，不会自己上电）；<code>无声</code> 告警出现时应检查电台 USB 连接或重启电台</td>
+<td>一行显示：当前波段（如 <code>20m</code>）、模式（如 <code>USB</code>）、收/发状态（<code>RX</code>/<code>TX</code>/<code>TUNE</code>，发射时变红）、<strong>电台电源</strong>（<code>PWR 开</code> / <code>PWR 关</code>；「重开电台」的唤醒循环进行中变成 <code>PWR 唤醒中 N</code>）、串口连接点（绿=已连接）、⚠<code>无声</code>告警（RX 音频持续 20 秒全零，电台 USB 音频可能卡死）、实时码率 <code>↓↑</code>（下行/上行 kbps）、<code>RTT</code>往返延迟与 <code>J</code>抖动（ms）</td>
+<td>只读；<code>PWR 唤醒中 N</code> <strong>可单击取消</strong>（确认后电台保持关闭，不会自己上电）；<code>无声</code>告警出现时应检查电台 USB 连接或重启电台</td>
 </tr>
 </tbody>
 </table></div>
 <blockquote class="callout-info">
-<p><strong>首次运行的横幅</strong>：服务端还在用自动生成的口令时，第一次打开页面会在顶栏上方多出一条琥珀色横幅 「已自动配置：电台 <code>ft710</code> · 串口 <code>…</code>」，把首次探测的结果直接摆给你看；点右侧按钮关闭后记在浏览器 <code>localStorage</code>（<code>mrrc_welcome_dismissed</code>），此后不再出现。内容来自只读的 <code>GET /api/setup</code>。</p>
+<p><strong>首次运行的横幅</strong>：服务端还在用自动生成的口令时，第一次打开页面会在顶栏上方多出一条琥珀色横幅「已自动配置：电台 <code>ft710</code> · 串口 <code>…</code>」，把首次探测的结果直接摆给你看；点右侧按钮关闭后记在浏览器 <code>localStorage</code>（<code>mrrc_welcome_dismissed</code>），此后不再出现。内容来自只读的 <code>GET /api/setup</code>。</p>
 </blockquote>
 <h3 id="频谱区序号-810">2.2 频谱区（序号 8–10）</h3>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table style="width:100%;" class="ref-table">
@@ -945,8 +945,8 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>11</td>
 <td>S 表</td>
-<td>信号强度表：S1–S9+60 渐变刻度 + 数值（<code>S0</code> 起）+ 相对电平（<code>S9 = 0 dB</code> 参考）</td>
-<td>只读（CAT <code>SM0</code> 或频谱帧数据）</td>
+<td>信号强度表：S1–S9+60 渐变刻度 + 数值（<code>S0</code>起）+ 相对电平（<code>S9 = 0 dB</code>参考）</td>
+<td>只读（CAT <code>SM0</code>或频谱帧数据）</td>
 </tr>
 <tr>
 <td>12</td>
@@ -964,7 +964,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>14</td>
 <td>ATR 行（可选）</td>
 <td>外接 ATR1000 网络天调的功率/SWR/LC 显示 + TUNE 调谐按钮</td>
-<td>仅当服务端启用了 <code>MRRC_ATR1000_HOST</code> 且天调在线时显示；否则整行隐藏。TUNE 按钮点击触发服务端调谐辅助（SWR≤1.6 自动跳过，成功后记忆 LC 值）</td>
+<td>仅当服务端启用了 <code>MRRC_ATR1000_HOST</code>且天调在线时显示；否则整行隐藏。TUNE 按钮点击触发服务端调谐辅助（SWR≤1.6 自动跳过，成功后记忆 LC 值）</td>
 </tr>
 </tbody>
 </table></div>
@@ -1006,7 +1006,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>18</td>
 <td>ATT 衰减</td>
-<td>射频衰减器，显示当前档位（FT-710：<code>OFF</code> / <code>6dB</code> / <code>12dB</code> / <code>18dB</code>）。档位表来自机型配置档（IC-7300 为 <code>OFF</code> / <code>20dB</code> 两档；IC-7610/7760 为 3 dB 步进多档）</td>
+<td>射频衰减器，显示当前档位（FT-710：<code>OFF</code> / <code>6dB</code> / <code>12dB</code> / <code>18dB</code>）。档位表来自机型配置档（IC-7300 为 <code>OFF</code> / <code>20dB</code>两档；IC-7610/7760 为 3 dB 步进多档）</td>
 <td>单击循环</td>
 </tr>
 <tr>
@@ -1067,7 +1067,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tbody>
 </table></div>
 <blockquote class="callout-info">
-<p>NR/NB 的<strong>强度</strong>滑杆（NR Level 1–15、NB Level 0–10）保留在 DOM 中但默认隐藏（移动端空间不足）；如需调节可在浏览器开发者工具中显示或留待后续版本。 <code>RF PWR</code> 滑杆同理（默认隐藏）—— 发射功率请在电台面板上调；后台仍按 <code>PC</code> 轮询把电台的实际功率读回来，不会和电台脱节。</p>
+<p>NR/NB 的<strong>强度</strong>滑杆（NR Level 1–15、NB Level 0–10）保留在 DOM 中但默认隐藏（移动端空间不足）；如需调节可在浏览器开发者工具中显示或留待后续版本。<code>RF PWR</code>滑杆同理（默认隐藏）—— 发射功率请在电台面板上调；后台仍按 <code>PC</code>轮询把电台的实际功率读回来，不会和电台脱节。</p>
 </blockquote>
 <h3 id="音量滑杆序号-25">2.6 音量滑杆（序号 25）</h3>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table style="width:100%;" class="ref-table">
@@ -1181,7 +1181,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>33</td>
 <td>A=B</td>
-<td>把 VFO-B 的频率复制到 VFO-A（电台 <code>A=B</code> 语义：A 变 B）</td>
+<td>把 VFO-B 的频率复制到 VFO-A（电台 <code>A=B</code>语义：A 变 B）</td>
 <td>单击</td>
 </tr>
 <tr>
@@ -1213,12 +1213,12 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>35</td>
 <td>M1–M6</td>
 <td>6 个记忆槽，每格显示编号 + 频率（MHz）</td>
-<td><strong>单击</strong>：调出该频道（频率+模式，写入当前活动 VFO）；<strong>长按 0.8 秒</strong>：把当前活动 VFO 的频率+模式保存到该槽（带震动反馈），同时写入服务端 <code>mem_channels.json</code> 与本机 Cookie</td>
+<td><strong>单击</strong>：调出该频道（频率+模式，写入当前活动 VFO）；<strong>长按 0.8 秒</strong>：把当前活动 VFO 的频率+模式保存到该槽（带震动反馈），同时写入服务端 <code>mem_channels.json</code>与本机 Cookie</td>
 </tr>
 </tbody>
 </table></div>
 <blockquote class="callout-info">
-<p>频道编辑/清空：菜单 → Memory Manager（序号 42）里对每个槽点 <strong>Clear</strong> 清空。频道数据由服务端持久化，换浏览器也能读到（Cookie 只做首屏快速回显）。</p>
+<p>频道编辑/清空：菜单 → Memory Manager（序号 42）里对每个槽点 <strong>Clear</strong>清空。频道数据由服务端持久化，换浏览器也能读到（Cookie 只做首屏快速回显）。</p>
 </blockquote>
 <h3 id="底部-ptt-区序号-3639">2.10 底部 PTT 区（序号 36–39）</h3>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table style="width:100%;" class="ref-table">
@@ -1264,7 +1264,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tbody>
 </table></div>
 <blockquote class="callout-info">
-<p>PTT 键盘快捷键：桌面端按 <strong>空格键</strong> 切换发射（按一下开、再按一下关，<strong>不是</strong>按住式），详见第 3 节。</p>
+<p>PTT 键盘快捷键：桌面端按 <strong>空格键</strong>切换发射（按一下开、再按一下关，<strong>不是</strong>按住式），详见第 3 节。</p>
 </blockquote>
 <h3 id="抽屉菜单图-2-序号-4063">2.11 抽屉菜单（图 2 序号 40–63）</h3>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table style="width:100%;" class="ref-table">
@@ -1298,7 +1298,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>42</td>
 <td>Memory Manager</td>
-<td>弹窗列出 M1–M6 的当前内容，可逐个 <strong>Clear</strong> 清空</td>
+<td>弹窗列出 M1–M6 的当前内容，可逐个 <strong>Clear</strong>清空</td>
 <td>单击 Clear / Close</td>
 </tr>
 <tr>
@@ -1352,12 +1352,12 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>51</td>
 <td>Logout</td>
-<td>退出登录：调 <code>/api/auth/logout</code> 作废会话并跳回登录页</td>
+<td>退出登录：调 <code>/api/auth/logout</code>作废会话并跳回登录页</td>
 <td>单击</td>
 </tr>
 <tr>
 <td>52</td>
-<td>FT8 引擎开关（<code>Settings</code> 区第一行，<code>ON</code>/<code>OFF</code>）</td>
+<td>FT8 引擎开关（<code>Settings</code>区第一行，<code>ON</code>/<code>OFF</code>）</td>
 <td>FT8 解码引擎是否<strong>开机就常驻</strong>。<code>ON</code>：服务启动即开始解码、出瀑布（<strong>只收不发</strong>，发射仍需手动按键）；<code>OFF</code>：停掉 runtime、DSP worker 退出、RX tap 释放 —— 在小盒子上就是一个核的算力。它与 FT8 页设置抽屉里的「引擎常驻」是<strong>同一个设置</strong></td>
 <td>单击切换 <code>ON</code>/<code>OFF</code>，立即生效并落盘（<code>PUT /api/ft8/station</code>），重启后保持</td>
 </tr>
@@ -1370,7 +1370,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <tr>
 <td>54</td>
 <td>SPD 下拉</td>
-<td>频谱刷新速度。FT-710 为 1–5；IC-7300/MK2 按 CI-V <code>27 1A</code> 仅显示 FAST/MID/SLOW</td>
+<td>频谱刷新速度。FT-710 为 1–5；IC-7300/MK2 按 CI-V <code>27 1A</code>仅显示 FAST/MID/SLOW</td>
 <td>选择后立即下发</td>
 </tr>
 <tr>
@@ -1383,7 +1383,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <td>56</td>
 <td>NET 下拉</td>
 <td>频谱带宽档位（v1.26.0 起）：<strong>Full</strong> = 完整帧 30 Hz；<strong>Half</strong> = 半帧（去掉未渲染的第二路 waterfall）15 Hz；<strong>Quarter</strong> = 半帧 7.5 Hz。弱网/热点省带宽用</td>
-<td>选择后立即作为 <code>spectrumCaps</code> 上报服务端（无需重连），并存入 Cookie（<code>scopeProfile</code>）</td>
+<td>选择后立即作为 <code>spectrumCaps</code>上报服务端（无需重连），并存入 Cookie（<code>scopeProfile</code>）</td>
 </tr>
 <tr>
 <td>57</td>
@@ -1429,15 +1429,15 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 </tbody>
 </table></div>
-<p><strong>电台电源那两项</strong>（v1.27.x 起）刻意分成两种意图，因为「开机」在 FT-710 上<strong>不保证成功</strong>： 实测（2026-07-27/28）<code>PS1;</code> 唤醒在健康电台上也常常被忽略，而且 <code>PS0;</code> 若落在 <code>PS1;</code> 之后十几秒的启动窗口内 会把电台的 CAT 单片机卡死（要拔电才能救）——当年的做法是把整个电源键撤掉。现在的做法是把守卫做进服务端， 并让两种意图互不混淆：</p>
+<p><strong>电台电源那两项</strong>（v1.27.x 起）刻意分成两种意图，因为「开机」在 FT-710 上<strong>不保证成功</strong>：实测（2026-07-27/28）<code>PS1;</code>唤醒在健康电台上也常常被忽略，而且 <code>PS0;</code>若落在 <code>PS1;</code>之后十几秒的启动窗口内 会把电台的 CAT 单片机卡死（要拔电才能救）——当年的做法是把整个电源键撤掉。现在的做法是把守卫做进服务端，并让两种意图互不混淆：</p>
 <ul>
-<li><strong>重开电台</strong>：关机之后每 30 秒再试一次，直到电台回话（用 <code>FA;</code> / CI-V 回读确认，不是「我发过命令」）、 或 15 分钟用尽、或你点顶栏 PWR 取消。每轮都会重新武装那条 15 秒保护窗口，所以<strong>救援期间点「关机」会被拒</strong> （消息里带剩余秒数）——想停下来请用「取消」，它不发任何电台命令。</li>
+<li><strong>重开电台</strong>：关机之后每 30 秒再试一次，直到电台回话（用 <code>FA;</code> / CI-V 回读确认，不是「我发过命令」）、或 15 分钟用尽、或你点顶栏 PWR 取消。每轮都会重新武装那条 15 秒保护窗口，所以<strong>救援期间点「关机」会被拒</strong> （消息里带剩余秒数）——想停下来请用「取消」，它不发任何电台命令。</li>
 <li><strong>关机</strong>：先取消可能在跑的救援，然后只发关机命令，<strong>绝不</strong>自己上电。确认框里写明了「远程将不可用」。</li>
-<li>两种动作在<strong>发射中（含 FT8 正在发射）都会被拒绝</strong>；<code>PS0</code> 连发两次（第一次偶发丢失）；关机前会跳过一次电源轮询。</li>
+<li>两种动作在<strong>发射中（含 FT8 正在发射）都会被拒绝</strong>；<code>PS0</code>连发两次（第一次偶发丢失）；关机前会跳过一次电源轮询。</li>
 <li>如果 15 分钟没醒，界面会明说「需要到现场按面板开机」——这是诚实的结论，不是失败重试的提示。</li>
 </ul>
 <blockquote class="callout-info">
-<p>菜单底部那行里的型号来自当前后端；<code>v1.0</code> 是<strong>前端资源串</strong>，既不是发布版本也不是电台固件版本 —— 真实发布版本看安装目录的 <code>version.txt</code>（§0.10）。</p>
+<p>菜单底部那行里的型号来自当前后端；<code>v1.0</code>是<strong>前端资源串</strong>，既不是发布版本也不是电台固件版本 —— 真实发布版本看安装目录的 <code>version.txt</code>（§0.10）。</p>
 </blockquote>
 <hr />
 <h2 id="键盘快捷键桌面端">3. 键盘快捷键（桌面端）</h2>
@@ -1483,10 +1483,10 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <ol type="1">
 <li><strong>PTT 是「按住才发射」</strong>，没有任何自锁模式；松开即停。若页面或浏览器崩溃，服务端死手开关会在最后一个客户端断开时自动强制释放发射（<code>TX0</code>）。</li>
 <li><strong>TUNE 同理</strong>，长按出载波、松手即停——调谐时请确认天线已接好、SWR 正常，长时间发射前建议先用小功率。</li>
-<li>发射期间<strong>频谱暂停</strong>（FT-710 电台会干扰频谱数据流），瀑布图显示「TX 发射中 — 频谱暂停」是正常现象。IC-7300 使用 CI-V <code>0x27</code> 频谱，发射期间通常继续刷新。</li>
+<li>发射期间<strong>频谱暂停</strong>（FT-710 电台会干扰频谱数据流），瀑布图显示「TX 发射中 — 频谱暂停」是正常现象。IC-7300 使用 CI-V <code>0x27</code>频谱，发射期间通常继续刷新。</li>
 <li><strong>无声（🔇）告警</strong>：状态栏出现红色「无声」表示 RX 音频流 20 秒全零——电台 USB 音频接口可能卡死，请重启电台或重插 USB 线。</li>
-<li>多人共用时，PTT 所有权按 <strong>socket</strong> 仲裁，不按登录令牌：按下时服务端把上行音频交给这台浏览器<strong>最近连接</strong>的那条音频 socket；同一会话里另一条 socket 一旦真的开始送音频，会在一帧（约 20 ms）内接管 —— 这是给「一个登录开了两个标签页」用的。<strong>别人的会话</strong>既不能靠连接、也不能靠发流抢走你的发射；你在按键期间收到别人的 <code>ptt:false</code> 也不会松开，界面会收到 <code>ptt_keyed_by_other</code> 提示。别在别人发射时抢按。</li>
-<li>无线局域网内建议使用 HTTPS（自签名证书首次会有浏览器警告，属于预期行为）；<code>http://</code> 明文下浏览器会禁用麦克风与音频工作线程（AudioWorklet），iPhone 上尤其如此。</li>
+<li>多人共用时，PTT 所有权按 <strong>socket</strong>仲裁，不按登录令牌：按下时服务端把上行音频交给这台浏览器<strong>最近连接</strong>的那条音频 socket；同一会话里另一条 socket 一旦真的开始送音频，会在一帧（约 20 ms）内接管 —— 这是给「一个登录开了两个标签页」用的。<strong>别人的会话</strong>既不能靠连接、也不能靠发流抢走你的发射；你在按键期间收到别人的 <code>ptt:false</code>也不会松开，界面会收到 <code>ptt_keyed_by_other</code>提示。别在别人发射时抢按。</li>
+<li>无线局域网内建议使用 HTTPS（自签名证书首次会有浏览器警告，属于预期行为）；<code>http://</code>明文下浏览器会禁用麦克风与音频工作线程（AudioWorklet），iPhone 上尤其如此。</li>
 </ol>
 <hr />
 <h2 id="常见问题faq-2">5. 常见问题（FAQ）</h2>
@@ -1516,7 +1516,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>瀑布图不动</td>
-<td>发射期间属正常；接收时不动请检查 FT4222 驱动与 <code>MRRC_FTDI_LIB_DIR</code> 配置，或查看是否触发「无声」告警。</td>
+<td>发射期间属正常；接收时不动请检查 FT4222 驱动与 <code>MRRC_FTDI_LIB_DIR</code>配置，或查看是否触发「无声」告警。</td>
 </tr>
 <tr>
 <td>记忆频道丢了</td>
@@ -1524,7 +1524,7 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </tr>
 <tr>
 <td>录音文件在哪</td>
-<td>REC 是<strong>服务端</strong>录音（页面切后台或关掉也继续录）。停止后在 ☰ 菜单 → <strong>录音 Recordings</strong> 面板里播放 / 下载 / 删除；文件落在 <code>MRRC_RECORDINGS_DIR</code>（安装版默认在用户数据目录的 <code>recordings/</code>）。</td>
+<td>REC 是<strong>服务端</strong>录音（页面切后台或关掉也继续录）。停止后在 ☰ 菜单 → <strong>录音 Recordings</strong>面板里播放 / 下载 / 删除；文件落在 <code>MRRC_RECORDINGS_DIR</code>（安装版默认在用户数据目录的 <code>recordings/</code>）。</td>
 </tr>
 <tr>
 <td>发射时听到自己声音</td>
@@ -1534,42 +1534,42 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 </table></div>
 <hr />
 <h2 id="ft8-工作模式">5.5 FT8 工作模式</h2>
-<p>主菜单 → <strong>FT8 模式</strong> 打开独立的 FT8 界面（<code>/static/ft8.html</code>）：左侧是解码列表（呼号 / 网格 / SNR / 距离）， 中间是音频瀑布，右侧是 TX 面板（CQ / 呼号、Grid、射频模式设置）与 QSO 面板。</p>
+<p>主菜单 → <strong>FT8 模式</strong>打开独立的 FT8 界面（<code>/static/ft8.html</code>）：左侧是解码列表（呼号 / 网格 / SNR / 距离），中间是音频瀑布，右侧是 TX 面板（CQ / 呼号、Grid、射频模式设置）与 QSO 面板。</p>
 <ul>
-<li><strong>切换语义</strong>：进入 FT8 时电台切到 FT8 频点与 DATA-U，滤波 3 kHz；点右上「←」回到 SSB 时， 频率 / 模式 / 滤波 / 功率 / AGC / ATT / PREAMP <strong>逐字段恢复</strong>。两个模式共用同一条 TX 门控， <strong>结构上不可能同时键控</strong>——所以在 FT8 里发射时，SSB 页面的 PTT 不会（也不能）抢走发射。</li>
-<li><strong>解码</strong>：默认走快路径（C 解码器），命中判据（正在通联的 AP 上下文、疑似漏解、或按「深度解码本槽」） 才对<strong>同一时隙</strong>补跑 WSJT-X 深路径并取并集——解出的条数不会比纯深路径少。</li>
-<li><strong>引擎开关（v1.28.x 起）</strong>：菜单 <code>Settings</code> 区的 <code>FT8 ON/OFF</code>（§2.11 序号 52）与 FT8 页设置抽屉里的 「引擎常驻」写的是<strong>同一个</strong> <code>engine_always_on</code>。<code>ON</code> = 服务启动即开始解码、出瀑布（<strong>只收不发</strong>）； <code>OFF</code> = runtime 停、DSP worker 退出、RX tap 释放 —— 在小盒子上是<strong>一个核</strong>的差别， 不用 FT8 时关掉更划算。切换立即生效并落盘，重启后保持。</li>
-<li><strong>设置</strong>：呼号 / Grid / 射频模式（<code>DATA-U</code> / <code>USB</code>）/ 发射音频频率 / 引擎常驻，在 FT8 页面的设置抽屉里， 与 Cloud Hub 呼号无关。</li>
+<li><strong>切换语义</strong>：进入 FT8 时电台切到 FT8 频点与 DATA-U，滤波 3 kHz；点右上「←」回到 SSB 时，频率 / 模式 / 滤波 / 功率 / AGC / ATT / PREAMP <strong>逐字段恢复</strong>。两个模式共用同一条 TX 门控，<strong>结构上不可能同时键控</strong>——所以在 FT8 里发射时，SSB 页面的 PTT 不会（也不能）抢走发射。</li>
+<li><strong>解码</strong>：默认走快路径（C 解码器），命中判据（正在通联的 AP 上下文、疑似漏解、或按「深度解码本槽」）才对<strong>同一时隙</strong>补跑 WSJT-X 深路径并取并集——解出的条数不会比纯深路径少。</li>
+<li><strong>引擎开关（v1.28.x 起）</strong>：菜单 <code>Settings</code>区的 <code>FT8 ON/OFF</code>（§2.11 序号 52）与 FT8 页设置抽屉里的「引擎常驻」写的是<strong>同一个</strong> <code>engine_always_on</code>。<code>ON</code> = 服务启动即开始解码、出瀑布（<strong>只收不发</strong>）；<code>OFF</code> = runtime 停、DSP worker 退出、RX tap 释放 —— 在小盒子上是<strong>一个核</strong>的差别，不用 FT8 时关掉更划算。切换立即生效并落盘，重启后保持。</li>
+<li><strong>设置</strong>：呼号 / Grid / 射频模式（<code>DATA-U</code> / <code>USB</code>）/ 发射音频频率 / 引擎常驻，在 FT8 页面的设置抽屉里，与 Cloud Hub 呼号无关。</li>
 <li><strong>紧急停止</strong>：任意已认证会话都可以按 STOP，FT8 的发射立即中止并释放 PTT。</li>
-<li><strong>只读角色</strong>：<code>listen</code> 角色可以看解码与瀑布，不能切模式、不能发射。</li>
+<li><strong>只读角色</strong>：<code>listen</code>角色可以看解码与瀑布，不能切模式、不能发射。</li>
 </ul>
-<p>设计与验收：<code>docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md</code>、 <code>docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md</code>、<code>docs/ft8-m5-acceptance.md</code>。</p>
+<p>设计与验收：<code>docs/superpowers/specs/2026-10-12-ft8-work-mode-design.md</code>、<code>docs/superpowers/specs/2026-10-13-ft8-fast-path-cascade-design.md</code>、<code>docs/ft8-m5-acceptance.md</code>。</p>
 <hr />
 <h2 id="遇到问题怎么报诊断包">6. 遇到问题怎么报（诊断包）</h2>
 <p>菜单（图 2）→ <strong>🐞 遇到问题</strong>，会新开一个标签页（不打断当前的电台连接）：</p>
 <ol type="1">
 <li>写清现象：什么表现、什么时候开始、电台型号与频率（越具体越省一轮往返）；</li>
 <li>点 <strong>生成诊断包</strong> —— 服务端收集日志尾部、脱敏配置、环境/电台/音频状态快照与自动体检结论；</li>
-<li>点 <strong>上传给维护者</strong>（需要这台机器能访问互联网），界面会给出一个<strong>编号</strong>； 答复会发布在 <a href="https://www.vlsc.net/mrrc_modern/answers/" class="uri">https://www.vlsc.net/mrrc_modern/answers/</a>：自动分诊每 10 分钟看一次新包， 结论以卡片形式出现在该页（可用编号或关键词搜索；证据不足时会被标为「需要更多信息」）；</li>
-<li>没有网络时（例如脱网的树莓派）点 <strong>只保存到本地</strong>，把生成的 <code>support-&lt;编号&gt;.zip</code> 用邮件/微信发给我。</li>
+<li>点 <strong>上传给维护者</strong>（需要这台机器能访问互联网），界面会给出一个<strong>编号</strong>；答复会发布在 <a href="https://www.vlsc.net/mrrc_modern/answers/" class="uri">https://www.vlsc.net/mrrc_modern/answers/</a>：自动分诊每 10 分钟看一次新包，结论以卡片形式出现在该页（可用编号或关键词搜索；证据不足时会被标为「需要更多信息」）；</li>
+<li>没有网络时（例如脱网的树莓派）点 <strong>只保存到本地</strong>，把生成的 <code>support-&lt;编号&gt;.zip</code>用邮件/微信发给我。</li>
 </ol>
-<p>同一页下方还有一张 <strong>远程协助</strong> 卡片：不想先传包、想让维护者直接进来看时用它（§6.4）。</p>
-<p><strong>包里有什么</strong>：<code>logs/</code>（日志）、<code>state/config-redacted.env</code>（脱敏配置）、 <code>diagnostics/summary.txt</code>（<strong>先看这个</strong>：启动次数/崩溃痕迹/数据新鲜度/音频与串口事实）、 <code>diagnostics/env.json</code>（机型、串口、频谱模式、音频设备表与采样率）、<code>diagnostics/client.json</code>（浏览器侧上下文）。</p>
-<p><strong>包里绝不包含</strong>：登录密码、证书私钥、任何令牌，也不包含录音、记忆频道与天调学习值 —— 生成时按白名单裁剪 + 值替换，替换次数写在 <code>manifest.json</code> 里。</p>
-<p>日志位置：桌面安装版在用户数据目录（Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs</code>， macOS <code>~/Library/Application Support/MRRC-Modern/logs</code>）：<code>server.log</code>（轮转 2 MB × 2）与 <code>server-stdout.log</code>（启动窗口，每次启动重建）；源码与树莓派模式写在程序目录的 <code>logs/</code> 下。</p>
+<p>同一页下方还有一张 <strong>远程协助</strong>卡片：不想先传包、想让维护者直接进来看时用它（§6.4）。</p>
+<p><strong>包里有什么</strong>：<code>logs/</code>（日志）、<code>state/config-redacted.env</code>（脱敏配置）、<code>diagnostics/summary.txt</code>（<strong>先看这个</strong>：启动次数/崩溃痕迹/数据新鲜度/音频与串口事实）、<code>diagnostics/env.json</code>（机型、串口、频谱模式、音频设备表与采样率）、<code>diagnostics/client.json</code>（浏览器侧上下文）。</p>
+<p><strong>包里绝不包含</strong>：登录密码、证书私钥、任何令牌，也不包含录音、记忆频道与天调学习值 —— 生成时按白名单裁剪 + 值替换，替换次数写在 <code>manifest.json</code>里。</p>
+<p>日志位置：桌面安装版在用户数据目录（Windows <code>%LOCALAPPDATA%\MRRC-Modern\logs</code>， macOS <code>~/Library/Application Support/MRRC-Modern/logs</code>）：<code>server.log</code>（轮转 2 MB × 2）与 <code>server-stdout.log</code>（启动窗口，每次启动重建）；源码与树莓派模式写在程序目录的 <code>logs/</code>下。</p>
 <h3 id="launcher-trouble">6.1 启动器打不开（黑窗口、闪一下就没了）</h3>
 <p>按层排查，别急着重装：</p>
 <ol type="1">
-<li><strong>看日志</strong>：同目录下的 <code>launcher.log</code> 与 <code>server.log</code>。启动器会把服务器的输出也抄一份到那里 —— 黑窗口里来不及看清的东西，日志里通常在。</li>
-<li><strong>绕开启动器</strong>：开始菜单 → <strong>MRRC Modern Server</strong>（macOS：<code>MRRC Modern Server.app</code>）。 它直接把服务器跑起来、把地址与口令打印在窗口里，不碰浏览器 —— 用它区分”是启动器的问题”还是 “服务器起不来”。</li>
-<li><strong>端口被占</strong>：日志里若有 <code>Address already in use</code>（或启动器提示已自动换端口），把配置文件里的 <code>MRRC_WEB_PORT</code> 改成别的（如 8889），或先关掉占用它的进程。</li>
-<li><strong>首次探测看着像卡住</strong>：第一次启动会逐个试串口，日志里是 <code>Detecting the radio on N serial port(s): ...</code>。若停在这里，多半是有一个”不是电台的串口”占着号 （最典型的是 Intel AMT 的 Serial over LAN）。<strong>v1.25.0 起这类口会被跳过、探测写入带 1 秒超时</strong>， 不会再卡死；升级前的老版本则可能一直停住 —— 先把那个口在设备管理器里禁用即可。</li>
+<li><strong>看日志</strong>：同目录下的 <code>launcher.log</code>与 <code>server.log</code>。启动器会把服务器的输出也抄一份到那里 —— 黑窗口里来不及看清的东西，日志里通常在。</li>
+<li><strong>绕开启动器</strong>：开始菜单 → <strong>MRRC Modern Server</strong>（macOS：<code>MRRC Modern Server.app</code>）。它直接把服务器跑起来、把地址与口令打印在窗口里，不碰浏览器 —— 用它区分”是启动器的问题”还是 “服务器起不来”。</li>
+<li><strong>端口被占</strong>：日志里若有 <code>Address already in use</code>（或启动器提示已自动换端口），把配置文件里的 <code>MRRC_WEB_PORT</code>改成别的（如 8889），或先关掉占用它的进程。</li>
+<li><strong>首次探测看着像卡住</strong>：第一次启动会逐个试串口，日志里是 <code>Detecting the radio on N serial port(s): ...</code>。若停在这里，多半是有一个”不是电台的串口”占着号（最典型的是 Intel AMT 的 Serial over LAN）。<strong>v1.25.0 起这类口会被跳过、探测写入带 1 秒超时</strong>，不会再卡死；升级前的老版本则可能一直停住 —— 先把那个口在设备管理器里禁用即可。</li>
 <li>还是黑屏：按下面从零开始，或按上一节给我一份诊断包。</li>
 </ol>
 <h3 id="clean-slate">6.2 一键清理脚本（从零开始）</h3>
 <p>Windows 用站上 <strong>下载页 → 清理脚本</strong>：<code>downloads/MRRC-Modern-Cleanup.cmd</code> （源码在仓库 <code>tools/windows/MRRC-Modern-Cleanup.ps1</code>）。它会：</p>
 <ol type="1">
-<li><strong>先列出</strong>它找到的一切：程序目录、历代用户数据目录（<code>%LOCALAPPDATA%\MRRC</code> 与 <code>MRRC-Modern</code> 两代名字）、开始菜单/桌面快捷方式、注册表里的卸载项；</li>
+<li><strong>先列出</strong>它找到的一切：程序目录、历代用户数据目录（<code>%LOCALAPPDATA%\MRRC</code>与 <code>MRRC-Modern</code>两代名字）、开始菜单/桌面快捷方式、注册表里的卸载项；</li>
 <li><strong>把用户数据目录里的配置、证书、日志、fleet 复制到桌面</strong>的 <code>MRRC-backup-&lt;时间戳&gt;\</code>，<strong>再</strong>删除；</li>
 <li>让你确认后才动手（输入 <code>clean</code>），卸载项走静默卸载（<code>/VERYSILENT</code>）。</li>
 </ol>
@@ -1578,47 +1578,47 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 <li><strong>录音（<code>recordings/</code>）不进备份</strong>（可能上 GB），但<strong>会被一起删除</strong> —— 要留就先自己拷走；</li>
 <li>清完等于全新机器：首次启动会重新探测串口、重新生成自签名证书，密码回到你安装时设的那个。</li>
 </ul>
-<p>macOS 没有对应脚本，手动即可：先备份 <code>~/Library/Application Support/MRRC-Modern/mrrc_modern.env</code> 与其中的证书，再删 <code>~/Library/Application Support/MRRC-Modern</code> 与 <code>/Applications/MRRC Modern.app</code>。</p>
+<p>macOS 没有对应脚本，手动即可：先备份 <code>~/Library/Application Support/MRRC-Modern/mrrc_modern.env</code>与其中的证书，再删 <code>~/Library/Application Support/MRRC-Modern</code>与 <code>/Applications/MRRC Modern.app</code>。</p>
 <h3 id="cloud-cert">6.3 接入云端报 certificate has expired（Windows）</h3>
-<p><strong>现象</strong>：设置里点「申请入口 / 接入」，界面报这么一句，但<strong>同一个浏览器</strong>打开 <code>https://portal.mrrc.vlsc.net/</code> 却一切正常：</p>
+<p><strong>现象</strong>：设置里点「申请入口 / 接入」，界面报这么一句，但<strong>同一个浏览器</strong>打开 <code>https://portal.mrrc.vlsc.net/</code>却一切正常：</p>
 <pre><code>portal did not answer (https://portal.mrrc.vlsc.net): cannot reach the portal
 (URLError: &lt;urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed:
 certificate has expired (_ssl.c:1000)&gt;)</code></pre>
-<p><strong>这不是门户、也不是网络的问题</strong>：这句话本身就说明 DNS、TCP、TLS 握手都已打通 —— 是应用在 <strong>拿到证书之后自己拒绝</strong>的。原因是这台 Windows 的<strong>本机证书库</strong>里留着一份与被服务链条同名同密钥、 却已经过期的证书（Windows 会把见过的中间证书缓存进 CA 存储；Let’s Encrypt 的中间证书会换代重签， 缓存那份到期后正是这个形态）。应用走的那条 Python/OpenSSL 路径只认本机证书库，于是把库里那张 放进链里判它过期 —— 而<strong>浏览器用自己那套根与链构建，不吃本机 CA 缓存</strong>，所以照常能开。 「浏览器能上、应用不能」正是这个故障最好认的特征。</p>
+<p><strong>这不是门户、也不是网络的问题</strong>：这句话本身就说明 DNS、TCP、TLS 握手都已打通 —— 是应用在 <strong>拿到证书之后自己拒绝</strong>的。原因是这台 Windows 的<strong>本机证书库</strong>里留着一份与被服务链条同名同密钥、却已经过期的证书（Windows 会把见过的中间证书缓存进 CA 存储；Let’s Encrypt 的中间证书会换代重签，缓存那份到期后正是这个形态）。应用走的那条 Python/OpenSSL 路径只认本机证书库，于是把库里那张 放进链里判它过期 —— 而<strong>浏览器用自己那套根与链构建，不吃本机 CA 缓存</strong>，所以照常能开。 「浏览器能上、应用不能」正是这个故障最好认的特征。</p>
 <p><strong>处理办法</strong>：下载 <a href="downloads/MRRC-CertDoctor.zip">MRRC-CertDoctor.zip</a>（约 4.6 MB，<strong>整个解压</strong>后 双击 <code>MRRC-CertDoctor.cmd</code>；源码在仓库 <code>tools/windows/MRRC-CertDoctor.ps1</code>）。它只做三件事：</p>
 <ol type="1">
-<li><strong>体检（默认只读，不改任何东西）</strong>：时钟/校时、代理设置、DNS 与 TCP、应用日志里那条报错原文、 门户实际下发的证书链、本机四张证书库里 Let’s Encrypt / ISRG 家族的清单；</li>
+<li><strong>体检（默认只读，不改任何东西）</strong>：时钟/校时、代理设置、DNS 与 TCP、应用日志里那条报错原文、门户实际下发的证书链、本机四张证书库里 Let’s Encrypt / ISRG 家族的清单；</li>
 <li><strong>判定</strong>：把本机证书库导出成 PEM，用随包自带的 openssl 对那条链做 <code>verify</code> —— 给出的判词与 应用那条路径一致（这就是它自带 openssl 的原因：换别处的 openssl，判词就不可比了）；</li>
-<li><strong>修复（<code>MRRC-CertDoctor.cmd -Fix</code>）</strong>：把能证明是它的过期证书<strong>备份后</strong>删掉；删完若变成 「找不到签发者」，再问你是否导入当前的两张 Let’s Encrypt 根证书。每删一张都先备份， 报告里写着 <code>certutil</code> 恢复命令。</li>
+<li><strong>修复（<code>MRRC-CertDoctor.cmd -Fix</code>）</strong>：把能证明是它的过期证书<strong>备份后</strong>删掉；删完若变成「找不到签发者」，再问你是否导入当前的两张 Let’s Encrypt 根证书。每删一张都先备份，报告里写着 <code>certutil</code>恢复命令。</li>
 </ol>
-<p>结束后桌面会多出 <code>MRRC-CertDoctor-&lt;时间&gt;\report.txt</code> 与同名 <code>.zip</code>：修好了就退出应用、重启它， 再点一次接入；<strong>修不好就把那个 zip 发给我们</strong> —— 报告里已经包含继续判断所需的全部事实。 另外注意：<strong>诊断包上传与软件更新检查走的是同一条 HTTPS 路径</strong>，会一起坏，属同一个原因 （所以那时也没法自己升级，得手工装新包）。</p>
+<p>结束后桌面会多出 <code>MRRC-CertDoctor-&lt;时间&gt;\report.txt</code>与同名 <code>.zip</code>：修好了就退出应用、重启它，再点一次接入；<strong>修不好就把那个 zip 发给我们</strong> —— 报告里已经包含继续判断所需的全部事实。另外注意：<strong>诊断包上传与软件更新检查走的是同一条 HTTPS 路径</strong>，会一起坏，属同一个原因（所以那时也没法自己升级，得手工装新包）。</p>
 <h3 id="remote-help">6.4 远程协助（限时窗口，你自己开、自己关）</h3>
-<p>「🐞 遇到问题」页上的 <strong>远程协助</strong> 卡片（v1.26.0 起）：维护者不用先拿到诊断包，直接进来看。</p>
+<p>「🐞 遇到问题」页上的 <strong>远程协助</strong>卡片（v1.26.0 起）：维护者不用先拿到诊断包，直接进来看。</p>
 <ol type="1">
 <li><strong>选窗口</strong>：30 分钟 / 60 分钟 / 3 小时 —— 到点<strong>自动关</strong>，<strong>不自动续期</strong>；</li>
-<li><strong>点「开启协助」</strong>：页面给出 <strong>用户名 + 口令</strong>（口令只显示在这个页面上，请口头或短信告诉维护者）， 并显示剩余时间与「已连接」状态；</li>
-<li><strong>维护者从 hub 侧用原生 <code>ssh</code> 进来</strong>：SSH 只绑本机回环，公网上没有任何 SSH 端口， 窗口一关监听与口令一起消失；</li>
-<li><strong>随时可以停</strong>：点「停止协助」即可（门户侧也能强制结束）；会话拿到的是 MRRC Modern 自己的权限 （盒子 / 树莓派上是 <code>mrrc</code> 用户，<strong>不会提权</strong>），连接与认证失败都写审计。</li>
+<li><strong>点「开启协助」</strong>：页面给出 <strong>用户名 + 口令</strong>（口令只显示在这个页面上，请口头或短信告诉维护者），并显示剩余时间与「已连接」状态；</li>
+<li><strong>维护者从 hub 侧用原生 <code>ssh</code>进来</strong>：SSH 只绑本机回环，公网上没有任何 SSH 端口，窗口一关监听与口令一起消失；</li>
+<li><strong>随时可以停</strong>：点「停止协助」即可（门户侧也能强制结束）；会话拿到的是 MRRC Modern 自己的权限（盒子 / 树莓派上是 <code>mrrc</code>用户，<strong>不会提权</strong>），连接与认证失败都写审计。</li>
 </ol>
 <p>维护者那一侧的操作与排障见 <code>docs/remote_help.md</code>。</p>
 <h3 id="move-computer">6.5 换电脑：配置与证书一键备份/恢复（Windows）</h3>
-<p><strong>换机时不要把安装目录拷过去，也不要手抄配置</strong>：真正要带走的是用户数据目录 <code>%LOCALAPPDATA%\MRRC-Modern</code> —— 里面有电台机型/串口/声卡名/网页口令、HTTPS 证书与私钥、 记忆频道、天调学习值、云入口隧道配置。其中<strong>证书尤其不能重签</strong>：云入口钉住的就是这张证书， 换一张那条入口会 502。</p>
-<p>用站上的 <a href="downloads/MRRC-Modern-Backup.cmd">MRRC-Modern-Backup.cmd</a>（源码在仓库 <code>tools/windows/MRRC-Modern-Backup.ps1</code>）。 <strong>不需要管理员权限。</strong></p>
+<p><strong>换机时不要把安装目录拷过去，也不要手抄配置</strong>：真正要带走的是用户数据目录 <code>%LOCALAPPDATA%\MRRC-Modern</code> —— 里面有电台机型/串口/声卡名/网页口令、HTTPS 证书与私钥、记忆频道、天调学习值、云入口隧道配置。其中<strong>证书尤其不能重签</strong>：云入口钉住的就是这张证书，换一张那条入口会 502。</p>
+<p>用站上的 <a href="downloads/MRRC-Modern-Backup.cmd">MRRC-Modern-Backup.cmd</a>（源码在仓库 <code>tools/windows/MRRC-Modern-Backup.ps1</code>）。<strong>不需要管理员权限。</strong></p>
 <ol type="1">
-<li><strong>旧电脑</strong>：双击 <code>MRRC-Modern-Backup.cmd</code> → 选 <code>1</code>。桌面会多一个 <code>MRRC-Modern-backup-&lt;主机名&gt;-&lt;时间&gt;.zip</code>，包里附清单（每个文件的大小与 SHA-256）。 它<strong>不含</strong> <code>logs\</code> 与 <code>recordings\</code> —— 录音要留请自己拷走。</li>
-<li><strong>想加口令</strong>：用 <code>-Export -Encrypt</code>（会提示输两遍，口令不经过命令行、不落盘）。 加密后是一个 <code>.zip.enc</code>，<strong>丢了口令只能重新配置</strong>。</li>
-<li><strong>新电脑</strong>：先装好 MRRC Modern（先不要打开），把 <code>.cmd</code> 与 <code>.ps1</code> 放同一个文件夹， 双击 <code>.cmd</code> → 选 <code>2</code> → 选中那个包。脚本会先把新电脑现有的配置备份到桌面 <code>MRRC-restore-pre-&lt;时间&gt;\</code>，再逐项写入。</li>
+<li><strong>旧电脑</strong>：双击 <code>MRRC-Modern-Backup.cmd</code> → 选 <code>1</code>。桌面会多一个 <code>MRRC-Modern-backup-&lt;主机名&gt;-&lt;时间&gt;.zip</code>，包里附清单（每个文件的大小与 SHA-256）。它<strong>不含</strong> <code>logs\</code>与 <code>recordings\</code> —— 录音要留请自己拷走。</li>
+<li><strong>想加口令</strong>：用 <code>-Export -Encrypt</code>（会提示输两遍，口令不经过命令行、不落盘）。加密后是一个 <code>.zip.enc</code>，<strong>丢了口令只能重新配置</strong>。</li>
+<li><strong>新电脑</strong>：先装好 MRRC Modern（先不要打开），把 <code>.cmd</code>与 <code>.ps1</code>放同一个文件夹，双击 <code>.cmd</code> → 选 <code>2</code> → 选中那个包。脚本会先把新电脑现有的配置备份到桌面 <code>MRRC-restore-pre-&lt;时间&gt;\</code>，再逐项写入。</li>
 </ol>
 <p><strong>三件必须知道的事</strong>：</p>
 <ul>
 <li>包里同时有<strong>网页口令、TLS 私钥和云隧道凭据</strong> —— 像对待钥匙一样对待它，别放公共网盘、别发聊天群；</li>
-<li>恢复 <code>auth-tokens.json</code> 只是<strong>服务端那一半</strong>，浏览器里的 cookie 不会跟着走， 新电脑仍然要输一次登录口令（口令就是恢复过来的那个）；</li>
-<li>证书来自另一台机器，浏览器会照常对自签名证书告警一次；<strong>不要为了消警告重新签证书</strong>， 那会让已接入的云入口变成 502。</li>
+<li>恢复 <code>auth-tokens.json</code>只是<strong>服务端那一半</strong>，浏览器里的 cookie 不会跟着走，新电脑仍然要输一次登录口令（口令就是恢复过来的那个）；</li>
+<li>证书来自另一台机器，浏览器会照常对自签名证书告警一次；<strong>不要为了消警告重新签证书</strong>，那会让已接入的云入口变成 502。</li>
 </ul>
 <hr />
 <h2 id="附界面元素与后台命令对照供高级用户排障">附：界面元素与后台命令对照（供高级用户/排障）</h2>
 <blockquote class="callout-info">
-<p>下表的 CAT 命令是 <strong>FT-710（Yaesu ASCII-CAT）</strong> 写法；IC 机型走 CI-V 帧、Yaesu SDR 族走各自的 profile 命令，同一界面元素在不同后端下的报文不同（<code>capabilities</code> 是唯一权威）。</p>
+<p>下表的 CAT 命令是 <strong>FT-710（Yaesu ASCII-CAT）</strong>写法；IC 机型走 CI-V 帧、Yaesu SDR 族走各自的 profile 命令，同一界面元素在不同后端下的报文不同（<code>capabilities</code>是唯一权威）。</p>
 </blockquote>
 <div class="table-scroll" role="region" aria-label="数据表格" tabindex="0"><div class="table-hint"><i class="fas fa-arrows-left-right"></i> 左右滑动查看全部列</div><table>
 <colgroup>
@@ -1638,7 +1638,7 @@ certificate has expired (_ssl.c:1000)&gt;)</code></pre>
 </tr>
 <tr>
 <td>波段按钮</td>
-<td><code>BS</code>（波段选择，服务端 <code>band</code> 命令）</td>
+<td><code>BS</code>（波段选择，服务端 <code>band</code>命令）</td>
 </tr>
 <tr>
 <td>滤波按钮</td>
@@ -1690,11 +1690,11 @@ certificate has expired (_ssl.c:1000)&gt;)</code></pre>
 </tr>
 <tr>
 <td>CQ 按键</td>
-<td><code>{"type":"set","field":"cq","value":true | false}</code> → 状态由 <code>cqState</code>广播（<code>idle/calling/complete/aborted</code>）；录音默认<code>static/audio/cq.wav</code>，用<code>MRRC_CQ_FILE</code> 替换</td>
+<td><code>{"type":"set","field":"cq","value":true | false}</code> → 状态由 <code>cqState</code>广播（<code>idle/calling/complete/aborted</code>）；录音默认<code>static/audio/cq.wav</code>，用<code>MRRC_CQ_FILE</code>替换</td>
 </tr>
 <tr>
 <td>天调（可选）</td>
-<td><code>/WSatr1000</code>（JSON）+ <code>MRRC_ATR1000_HOST</code> 环境变量</td>
+<td><code>/WSatr1000</code>（JSON）+ <code>MRRC_ATR1000_HOST</code>环境变量</td>
 </tr>
 <tr>
 <td>FT8 引擎开关 / 「引擎常驻」</td>
@@ -1710,42 +1710,42 @@ certificate has expired (_ssl.c:1000)&gt;)</code></pre>
 </tr>
 <tr>
 <td>远程协助</td>
-<td><code>/api/help/enable</code>、<code>/api/help/disable</code>、<code>/api/help/status</code>（<code>static/support.html</code> 的卡片）</td>
+<td><code>/api/help/enable</code>、<code>/api/help/disable</code>、<code>/api/help/status</code>（<code>static/support.html</code>的卡片）</td>
 </tr>
 </tbody>
 </table></div>
 <hr />
-<p><em>文档维护：与 <code>static/index.html</code>、<code>static/ft710_main.js</code>、<code>static/ft710_ui.js</code> 保持一致；界面改动后请同步本指南与编号图。</em></p>
+<p><em>文档维护：与 <code>static/index.html</code>、<code>static/ft710_main.js</code>、<code>static/ft710_ui.js</code>保持一致；界面改动后请同步本指南与编号图。</em></p>
 <h3 id="升级到含录音的版本与旧安装旧镜像的差异">升级到含录音的版本（与旧安装/旧镜像的差异）</h3>
-<p><code>requirements.txt</code> 在 v2.42 增加了 <strong><code>lameenc</code></strong>（服务端 MP3 编码器）。升级代码后<strong>必须同步依赖</strong>，否则 REC 会拒绝并提示原因（不会影响 CAT/音频/频谱）：</p>
+<p><code>requirements.txt</code>在 v2.42 增加了 <strong><code>lameenc</code></strong>（服务端 MP3 编码器）。升级代码后<strong>必须同步依赖</strong>，否则 REC 会拒绝并提示原因（不会影响 CAT/音频/频谱）：</p>
 <pre class="bash"><code># 源码/脚本部署（start.sh 用的 venv/）
 venv/bin/pip install -r requirements.txt
 ./restart.sh</code></pre>
 <p>启动日志会出现二者之一，据此判断是否就绪：</p>
 <pre><code>[INFO] mrrc: Recording ready: /opt/mrrc_modern/recordings (16 kHz mono MP3)
 [WARNING] mrrc: Recording disabled: the MP3 encoder is missing — run `pip install -r requirements.txt` …</code></pre>
-<p><strong>已烧录的树莓派镜像</strong>里没有 <code>lameenc</code>（镜像构建时该依赖还不存在）：在设备上执行 <code>venv/bin/pip install lameenc &amp;&amp; sudo systemctl restart mrrc-modern</code> 即可；或重新烧录由 v2.42 之后源码构建的新镜像（其构建门禁已含该依赖）。</p>
+<p><strong>已烧录的树莓派镜像</strong>里没有 <code>lameenc</code>（镜像构建时该依赖还不存在）：在设备上执行 <code>venv/bin/pip install lameenc &amp;&amp; sudo systemctl restart mrrc-modern</code>即可；或重新烧录由 v2.42 之后源码构建的新镜像（其构建门禁已含该依赖）。</p>
 <h2 id="一键-cq-呼叫服务端v1.17-起">一键 CQ 呼叫（服务端，v1.17 起）</h2>
-<p>点按底部 <strong>CQ</strong> 键即可发起一次完整呼叫：<strong>服务端</strong>按下 PTT、播送内置的 CQ 录音、 播完自动松开。再点一次（按钮此时显示 <strong>STOP</strong>）可立即中止。</p>
+<p>点按底部 <strong>CQ</strong>键即可发起一次完整呼叫：<strong>服务端</strong>按下 PTT、播送内置的 CQ 录音、播完自动松开。再点一次（按钮此时显示 <strong>STOP</strong>）可立即中止。</p>
 <ul>
 <li>音频：<code>static/audio/cq.wav</code>（48 kHz 单声道，约 6.1 秒）。整段音频从服务器磁盘直接 送进声卡，<strong>不经过网络</strong>，因此网络抖动不会影响发出去的内容。</li>
 <li>状态：按钮与所有已连接客户端同步显示 <code>cqState</code>——<code>idle</code>（就绪）→ <code>calling</code>（呼叫中， 1 秒刷新进度）→ <code>complete</code>（已完成）/ <code>aborted</code>（已中止，鼠标悬停显示原因）。</li>
-<li>替换录音：把任意 16-bit WAV（单声道或立体声、任意采样率）放到服务器上，启动时用 <code>MRRC_CQ_FILE=/path/to/cq.wav</code> 指定即可；服务端启动日志会打印 <code>CQ ready: &lt;路径&gt; (…)</code>。文件缺失/损坏/超过 30 秒时日志打印 <code>CQ key disabled: &lt;原因&gt;</code>，按钮失效但<strong>不会静默失败</strong>。</li>
-<li>安全：一次呼叫只有一个音频来源——呼叫期间浏览器麦克风不上行、PTT 与 TUNE 会被拒绝。 发起呼叫的页面断开、最后一个客户端断开、外部松键（含 <code>MRRC_PTT_MAX_TX_SECONDS</code> 看门狗） 或服务端退出，都会立即切断载波。未验证机型（TX 门禁）下 CQ 与 PTT 一样被拒绝。</li>
-<li>常见现象：呼叫刚开始就有 <code>aborted</code>，先看悬停提示——<code>unkeyed</code> 表示载波被外部释放 （常见于开了最大发射时长看门狗），<code>client_gone</code> 表示发起端页面断开了。</li>
+<li>替换录音：把任意 16-bit WAV（单声道或立体声、任意采样率）放到服务器上，启动时用 <code>MRRC_CQ_FILE=/path/to/cq.wav</code>指定即可；服务端启动日志会打印 <code>CQ ready: &lt;路径&gt; (…)</code>。文件缺失/损坏/超过 30 秒时日志打印 <code>CQ key disabled: &lt;原因&gt;</code>，按钮失效但<strong>不会静默失败</strong>。</li>
+<li>安全：一次呼叫只有一个音频来源——呼叫期间浏览器麦克风不上行、PTT 与 TUNE 会被拒绝。发起呼叫的页面断开、最后一个客户端断开、外部松键（含 <code>MRRC_PTT_MAX_TX_SECONDS</code>看门狗）或服务端退出，都会立即切断载波。未验证机型（TX 门禁）下 CQ 与 PTT 一样被拒绝。</li>
+<li>常见现象：呼叫刚开始就有 <code>aborted</code>，先看悬停提示——<code>unkeyed</code>表示载波被外部释放（常见于开了最大发射时长看门狗），<code>client_gone</code>表示发起端页面断开了。</li>
 </ul>
 <h2 id="qso-录音服务端v2.42-起">QSO 录音（服务端，v2.42 起）</h2>
-<p>点按 <strong>REC</strong> 开始录制、再点按停止。录制在<strong>服务端</strong>进行（不是浏览器）， 因此：页面切到后台/关闭标签、甚至电台 CAT 断线都仍在录。</p>
+<p>点按 <strong>REC</strong>开始录制、再点按停止。录制在<strong>服务端</strong>进行（不是浏览器），因此：页面切到后台/关闭标签、甚至电台 CAT 断线都仍在录。</p>
 <ul>
-<li>内容：接收音频 + 你的麦克风（单声道 MP3，16 kHz，64 kbps ≈ 28.8 MB/小时）。 发射期间不录接收（避免录到电台自监听），电台暂停处补静音，时间轴与真实时间一致。</li>
-<li>位置：<code>MRRC_RECORDINGS_DIR</code>（打包安装默认在用户数据目录； 树莓派镜像为 <code>/opt/mrrc_modern/recordings</code>；源码运行默认 <code>recordings/</code>）。</li>
-<li>回放：菜单 →「录音 Recordings」，列表里点「播放」（可拖动进度）， 也可「下载」或「删除」。<strong>正在录制的那一份不能删除</strong>。</li>
-<li>保留：<strong>不自动删除</strong>。面板顶部显示条数与总占用；磁盘紧张时请手工清理 （或把 <code>MRRC_RECORDINGS_DIR</code> 指向更大的卷）。</li>
-<li>保护：单次录音超过 <code>MRRC_RECORDINGS_MAX_SESSION_MIN</code>（默认 240 分钟）会自动停止 （只停，不删），防止忘记停止把磁盘写满。</li>
+<li>内容：接收音频 + 你的麦克风（单声道 MP3，16 kHz，64 kbps ≈ 28.8 MB/小时）。发射期间不录接收（避免录到电台自监听），电台暂停处补静音，时间轴与真实时间一致。</li>
+<li>位置：<code>MRRC_RECORDINGS_DIR</code>（打包安装默认在用户数据目录；树莓派镜像为 <code>/opt/mrrc_modern/recordings</code>；源码运行默认 <code>recordings/</code>）。</li>
+<li>回放：菜单 →「录音 Recordings」，列表里点「播放」（可拖动进度），也可「下载」或「删除」。<strong>正在录制的那一份不能删除</strong>。</li>
+<li>保留：<strong>不自动删除</strong>。面板顶部显示条数与总占用；磁盘紧张时请手工清理（或把 <code>MRRC_RECORDINGS_DIR</code>指向更大的卷）。</li>
+<li>保护：单次录音超过 <code>MRRC_RECORDINGS_MAX_SESSION_MIN</code>（默认 240 分钟）会自动停止（只停，不删），防止忘记停止把磁盘写满。</li>
 </ul>
 <h3 id="录音出现丢失-n-块怎么办">录音出现”丢失 N 块”怎么办</h3>
-<p>录制按钮提示或面板行里出现 <code>⚠ 丢失 N 块</code>，表示<strong>写入端跟不上音频输入</strong>，该录音会有空洞。服务端日志会打印首条丢弃与原因。常见原因：磁盘/网络盘写入太慢（把 <code>MRRC_RECORDINGS_DIR</code> 换成本地盘）、CPU 长时间满载。编码本身极快（实测 80 ms 音频块约 0.04 ms，约 1900 倍实时），所以几乎不会是编码器的问题。</p>
-<p><strong>整段录音全哑（能播但没声音）</strong>：若日志里 <code>Recording started</code> 之后<strong>立刻</strong>出现「正在丢弃」、丢弃数一路涨，最后以 <code>Recording queue full on stop</code> 收尾 —— 或录音面板每次都显示 <code>⚠ 丢失 N 块</code>、文件明显是静音 —— 那是 v1.16.0 的录音写入端生命周期缺陷（同一进程里从第二次录音起没有消费者）。升级到含该修复的版本并<strong>重启服务</strong>即可；判定办法：<code>REC</code> → 停止 → 从菜单「录音」播放，听第一秒有没有声音。</p>
+<p>录制按钮提示或面板行里出现 <code>⚠ 丢失 N 块</code>，表示<strong>写入端跟不上音频输入</strong>，该录音会有空洞。服务端日志会打印首条丢弃与原因。常见原因：磁盘/网络盘写入太慢（把 <code>MRRC_RECORDINGS_DIR</code>换成本地盘）、CPU 长时间满载。编码本身极快（实测 80 ms 音频块约 0.04 ms，约 1900 倍实时），所以几乎不会是编码器的问题。</p>
+<p><strong>整段录音全哑（能播但没声音）</strong>：若日志里 <code>Recording started</code>之后<strong>立刻</strong>出现「正在丢弃」、丢弃数一路涨，最后以 <code>Recording queue full on stop</code>收尾 —— 或录音面板每次都显示 <code>⚠ 丢失 N 块</code>、文件明显是静音 —— 那是 v1.16.0 的录音写入端生命周期缺陷（同一进程里从第二次录音起没有消费者）。升级到含该修复的版本并<strong>重启服务</strong>即可；判定办法：<code>REC</code> → 停止 → 从菜单「录音」播放，听第一秒有没有声音。</p>
 <hr />
 <h2 id="相关手册本指南之外的部分">相关手册（本指南之外的部分）</h2>
 <p>本指南只讲<strong>浏览器里那个电台界面</strong>。装机、盒子、遥控器各有自己的手册：</p>

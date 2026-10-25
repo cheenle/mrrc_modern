@@ -305,6 +305,76 @@ class AccessPointAbsentTests(unittest.TestCase):
         self.assertFalse(net_wifi.access_point_absent(None))
 
 
+class FallbackDnsTests(unittest.TestCase):
+    """Every saved profile carries the two shipped fallback resolvers.
+
+    2026-10-25, a shipped box (BG8GGG): the Wi-Fi came up before DHCP finished, the
+    resolver was empty, `chronyc` could not resolve its NTP pool name, the clock
+    stayed 24 days behind the image date, and every outbound HTTPS call failed with
+    `certificate is not yet valid` while the page said only "连不上门户". A profile
+    that answers names on its own removes the root of that cascade.
+    """
+
+    WIFI_ROW = "Home:802-11-wireless\nlo:loopback\n"
+
+    def test_a_new_profile_is_born_with_the_fallback_resolvers(self):
+        """Written at profile creation, so a network joined today is covered without
+        waiting for the next restart."""
+        run = FakeNmcli()
+        net_wifi.write_profile("Home", "hunter2hunter2", run)
+        self.assertIn("ipv4.dns 114.114.114.114 8.8.8.8", run.joined())
+
+    def test_an_existing_profile_without_dns_gets_them(self):
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home": NmResult(0, "\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+        })
+        self.assertEqual(net_wifi.ensure_fallback_dns(run), ["Home"])
+        self.assertIn("connection modify Home ipv4.dns 114.114.114.114 8.8.8.8",
+                      run.joined())
+
+    def test_an_operators_own_dns_is_kept_and_the_fallback_appended(self):
+        """Replacing a hand-typed resolver would be a silent behaviour change on a
+        customer's box; appending is the only safe direction."""
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home": NmResult(0, "192.168.1.1\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+        })
+        net_wifi.ensure_fallback_dns(run)
+        self.assertIn("ipv4.dns 192.168.1.1 114.114.114.114 8.8.8.8", run.joined())
+
+    def test_a_profile_that_already_has_them_is_not_touched(self):
+        """Idempotence is what makes this safe to run at every start-up."""
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home": NmResult(0, "114.114.114.114,8.8.8.8\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+        })
+        self.assertEqual(net_wifi.ensure_fallback_dns(run), [])
+        self.assertEqual(run.count("connection modify"), 0)
+
+    def test_loopback_and_other_non_network_profiles_are_left_alone(self):
+        run = FakeNmcli({
+            "-g ipv4.dns connection show": NmResult(0, "\n"),
+            "-t -f NAME,TYPE connection show": NmResult(0, "lo:loopback\nbr0:bridge\n"),
+        })
+        self.assertEqual(net_wifi.ensure_fallback_dns(run), [])
+        self.assertEqual(run.count("connection modify"), 0)
+
+    def test_a_refused_modify_is_not_reported_as_changed(self):
+        """The caller logs the return value; a failure must not read as success."""
+        run = FakeNmcli({
+            "-g ipv4.dns connection show Home": NmResult(0, "\n"),
+            "connection modify": NmResult(1, "", "not authorized"),
+            "-t -f NAME,TYPE connection show": NmResult(0, self.WIFI_ROW),
+        })
+        self.assertEqual(net_wifi.ensure_fallback_dns(run), [])
+
+    def test_no_nmcli_at_all_is_an_empty_result(self):
+        """Windows/macOS builds freeze this module; there is no nmcli to ask."""
+        run = FakeNmcli({"connection show": NmResult(127, "", "nmcli not found")})
+        self.assertEqual(net_wifi.ensure_fallback_dns(run), [])
+
+
 class AddressTests(unittest.TestCase):
     def test_reads_the_interface_address_with_its_prefix(self):
         run = FakeNmcli({"IP4.ADDRESS": NmResult(0, "10.42.0.1/24\n")})

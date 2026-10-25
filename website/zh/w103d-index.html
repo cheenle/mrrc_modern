@@ -128,7 +128,7 @@
     <main class="doc">
       <h1>W103D 盒子指南总览</h1>
       <p class="sub">
-        同一个盒子，六份文档，按处境选一页就行 —— 不必从第一页读到最后。
+        同一个盒子，八份文档，按处境选一页就行 —— 不必从第一页读到最后。
       </p>
 
       <h2>我该看哪一页</h2>
@@ -165,6 +165,14 @@
             <td><a href="../w103d.html"><strong>W103D 从零指南</strong></a></td>
           </tr>
           <tr>
+            <td>盒子说「连不上门户」，或者报证书、时间、隧道相关的错</td>
+            <td><a href="../w103d-faq.html"><strong>常见问题：先看这一行</strong></a></td>
+          </tr>
+          <tr>
+            <td>盒子能上网，但<strong>域名解析不了</strong>（ping IP 通、ping 域名卡住），更新与入口一起坏</td>
+            <td><a href="../fix-dns.html"><strong>DNS 坏了：一条命令修好</strong></a></td>
+          </tr>
+          <tr>
             <td>遥控器配不上，或者配上了但按键全没反应</td>
             <td><a href="../w103d-remote.html"><strong>遥控器指南</strong></a></td>
           </tr>
@@ -175,7 +183,7 @@
         </tbody>
       </table>
 
-      <h2>八页各是什么</h2>
+      <h2>十页各是什么</h2>
 
       <div class="card">
         <h3><a href="../w103d-user.html">盒子用户指南</a></h3>
@@ -189,6 +197,31 @@
         </p>
         <p style="color: var(--muted)">
           第一件事：设成自己的口令 —— 网页在「登录口令」，root / mrrc 在「系统账号口令」。
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="../w103d-faq.html">「连不上门户」，先看这一行</a></h3>
+        <p class="who">
+          <span class="tag">排障</span><span class="tag">2 分钟定性</span>
+          适合：页面报「连不上门户」「提交失败」，或报证书、时间、隧道错的人
+        </p>
+        <p>
+          网络、DNS、时钟、证书、隧道 —— 任何一环出问题，页面上都是同一句「连不上」。
+          先按判据表定位到层，再按条目处理。<strong>含无 RTC 电池的盒子为什么开机就报证书未生效。</strong>
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="../fix-dns.html">盒子的 DNS 坏了：在 Windows 上一条命令修好</a></h3>
+        <p class="who">
+          <span class="tag">排障</span><span class="tag">5 分钟</span>
+          适合：ping IP 通、ping 域名卡住；软件更新、公网入口、诊断包上传一起失灵的人
+        </p>
+        <p>
+          先给判据（<code>resolv.conf mode: foreign</code> + 一个不属于你的 DNS），再给
+          <strong>MRRC-FixDNS.cmd</strong>：只要<strong>网页登录口令</strong>，不需要 root、不需要 SSH，
+          它让盒子自己的 root 助手跑与升级同一个修复脚本。<strong>镜像里为什么会有别人家的 DNS</strong> 也写清了。
         </p>
       </div>
 

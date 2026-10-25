@@ -156,7 +156,8 @@ class PublishedCopyTests(unittest.TestCase):
     """
 
     PAIRS = (("dev_tools/mrrc-update.cmd", "website/downloads/MRRC-Update.cmd"),
-             ("dev_tools/mrrc-diag.cmd", "website/downloads/MRRC-Diag.cmd"))
+             ("dev_tools/mrrc-diag.cmd", "website/downloads/MRRC-Diag.cmd"),
+             ("dev_tools/mrrc-fix-dns.cmd", "website/downloads/MRRC-FixDNS.cmd"))
 
     def test_the_published_scripts_are_byte_identical_to_the_repo_ones(self):
         for repo_rel, site_rel in self.PAIRS:

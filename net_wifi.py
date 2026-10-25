@@ -66,6 +66,21 @@ NM_CONNECT_WAIT_S = 25
 #: instead of a hope.
 WIFI_BAND = "bg"
 
+#: Fallback resolvers every saved profile carries, in this order.
+#:
+#: Not a preference — a repair. Measured 2026-10-25 on a shipped box (BG8GGG): the
+#: Wi-Fi came up before DHCP finished, the resolver was empty, `chronyc` could not
+#: resolve its NTP pool name, the clock stayed **24 days behind** the image date, and
+#: every outbound HTTPS call then failed with `certificate is not yet valid`. The
+#: page showed "cannot reach the portal" and the operator went looking for a network
+#: fault. A resolver that answers even when the router hands out none removes that
+#: whole class of silent failure.
+#:
+#: 114.114.114.114 is reachable from mainland consumer lines; 8.8.8.8 is the one that
+#: works when a local resolver is broken or poisoned. Both are appended to whatever
+#: the profile already has, so an operator's own DNS is never removed.
+FALLBACK_DNS = ("114.114.114.114", "8.8.8.8")
+
 
 # ── the nmcli transport ─────────────────────────────────────────────
 @dataclass(frozen=True)
@@ -305,6 +320,9 @@ def write_profile(ssid: str, password: str = "",
     args = ["connection", "modify", ssid,
             "802-11-wireless.hidden", "yes",
             "802-11-wireless.band", WIFI_BAND,
+            # The profile carries the fallback resolvers from birth, so a network that
+            # wakes up before DHCP can still resolve names (see FALLBACK_DNS).
+            "ipv4.dns", " ".join(FALLBACK_DNS),
             # Stated explicitly rather than left to the default: the retired
             # hotspot's profile defaulted to yes *by accident*, and "by default"
             # is not a design.
@@ -321,6 +339,54 @@ def write_profile(ssid: str, password: str = "",
 def forget(ssid: str, runner: Optional[Runner] = None) -> NmResult:
     """Delete a saved profile. Nothing else about the box changes."""
     return nmcli(["connection", "delete", ssid], runner)
+
+
+def _profile_dns(name: str, runner: Optional[Runner] = None) -> list:
+    """The ``ipv4.dns`` a saved profile carries, however nmcli spells the list."""
+    result = nmcli(["-g", "ipv4.dns", "connection", "show", name], runner)
+    if not result.ok:
+        return []
+    text = (result.stdout or "").replace("|", " ").replace(",", " ")
+    return [token for token in text.split() if token]
+
+
+#: Which saved profiles a resolver belongs on. ``loopback``/``bridge``/... are
+#: left alone: adding a public resolver to them changes nothing real and is noise
+#: in the operator's own `nmcli connection show`.
+_DNS_PROFILE_TYPES = ("802-3-ethernet", "802-11-wireless", "wifi", "ethernet",
+                      "gsm", "cdma", "wwan")
+
+
+def ensure_fallback_dns(runner: Optional[Runner] = None) -> list:
+    """Put the fallback resolvers on every saved profile that lacks them.
+
+    Returns the profile names it changed, so the caller can log a sentence instead
+    of the box silently reconfiguring itself. Idempotent: a second run finds
+    nothing missing and touches nothing — which is what makes it safe to call at
+    every start-up (the upgrade path for boxes flashed before FALLBACK_DNS
+    existed).
+
+    Existing servers are kept, in their order, and the fallback is appended: an
+    operator who typed their own DNS must not have it silently replaced. The
+    DHCP-provided server is a separate list (``ignore-auto-dns`` stays no), so it
+    keeps working too; NetworkManager lists the profile's own servers first.
+    """
+    result = nmcli(["-t", "-f", "NAME,TYPE", "connection", "show"], runner)
+    if not result.ok:
+        return []
+    changed = []
+    for row in parse_rows(result.stdout):
+        if len(row) < 2 or row[1] not in _DNS_PROFILE_TYPES:
+            continue
+        name = row[0]
+        have = _profile_dns(name, runner)
+        missing = [server for server in FALLBACK_DNS if server not in have]
+        if not missing:
+            continue
+        wanted = " ".join(dict.fromkeys(have + missing))
+        if nmcli(["connection", "modify", name, "ipv4.dns", wanted], runner).ok:
+            changed.append(name)
+    return changed
 
 
 def set_autoconnect(ssid: str, enabled: bool,

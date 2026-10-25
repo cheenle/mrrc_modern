@@ -336,7 +336,7 @@ def _send_over_helper_socket(payload: dict, timeout: float,
 
 def call_helper(verb: str, *args, sender: Optional[Callable] = None,
                 timeout: float = 10.0) -> dict:
-    """Ask the root helper to do one of its four verbs. Never raises.
+    """Ask the root helper to do one of its verbs. Never raises.
 
     Absent helper, refused connection, an unreadable reply: all of them are
     `{"ok": False, "error": ...}`. The settings page has to grey a panel out and
@@ -392,6 +392,16 @@ def timezone_problem(zone: str) -> str:
     if not os.path.isfile(os.path.join(ZONEINFO, text)):
         return f"没有这个时区：{text}"
     return ""
+
+
+def fix_dns(*, sender: Optional[Callable] = None) -> dict:
+    """Ask root to put /etc/resolv.conf back on the resolved stub symlink.
+
+    The repair itself lives in `linux/fix_resolv_conf.sh` (shared with
+    `mrrc-update`); this is only the way the page and the Windows tool reach it
+    without a root password. Idempotent, so pressing it twice is harmless.
+    """
+    return call_helper("fix-resolv-conf", sender=sender)
 
 
 def set_hostname(name: str, *, sender: Optional[Callable] = None) -> dict:

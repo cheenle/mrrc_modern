@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="盒子说「连不上门户」时先看哪一行：云端身份、时钟、DNS、隧道与证书的五条判据">
+    <title>W103D 常见问题 — MRRC Modern</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/octen.css?v=5">
+    <link rel="stylesheet" href="../css/sunsdrmobile.css?v=1">
+    <link rel="stylesheet" href="../css/ft710.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .w103d-wrap { max-width: 880px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+        .w103d-wrap h2 {
+            margin: 2.75rem 0 1rem; padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #2a2a2a);
+            color: var(--text-primary, #eee); font-size: 1.4rem;
+        }
+        .w103d-wrap h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+        .w103d-wrap h3 { margin: 2rem 0 0.75rem; color: var(--text-primary, #eee); font-size: 1.1rem; }
+        .w103d-wrap p, .w103d-wrap li { color: var(--text-secondary, #b8b8b8); line-height: 1.85; }
+        .w103d-wrap ul, .w103d-wrap ol { padding-left: 1.5rem; }
+        .w103d-wrap li { margin: 0.35rem 0; }
+        .w103d-wrap strong { color: var(--text-primary, #eee); }
+        .w103d-wrap code {
+            background: var(--bg-card, #1a1a1a); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.87em;
+        }
+        .w103d-wrap pre {
+            background: var(--bg-card, #141414); border: 1px solid var(--border, #2a2a2a);
+            border-radius: 10px; padding: 1rem 1.15rem; overflow-x: auto; margin: 1rem 0;
+        }
+        .w103d-wrap pre code { background: none; border: none; padding: 0; font-size: 0.84rem; line-height: 1.7; }
+        .w103d-wrap .table-scroll { overflow-x: auto; margin: 1.15rem 0; }
+        .w103d-wrap table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+        .w103d-wrap th, .w103d-wrap td {
+            border: 1px solid var(--border, #2a2a2a); padding: 0.55rem 0.75rem; text-align: left;
+            color: var(--text-secondary, #b8b8b8);
+        }
+        .w103d-wrap th { background: var(--bg-card, #1a1a1a); color: var(--text-primary, #eee); }
+        .w103d-wrap blockquote {
+            margin: 1.15rem 0; padding: 0.85rem 1.15rem; border-left: 3px solid var(--accent, #f0a020);
+            background: var(--bg-card, #171717); border-radius: 0 8px 8px 0;
+        }
+        .w103d-wrap blockquote p { margin: 0; }
+        .w103d-wrap input[type=checkbox] { margin-right: 0.4rem; }
+    </style>
+</head>
+<body data-site="mrrc_modern">
+<nav class="navbar">
+    <div class="container navbar-content">
+        <a href="../index.html" class="logo">
+            <span class="logo-icon"><i class="fas fa-microchip"></i></span>
+            <span>MRRC <span style="color: var(--accent)">Modern</span></span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="../index.html#features">Features</a></li>
+            <li><a href="../index.html#download">Download</a></li>
+            <li><a href="../guide.html">操作指南</a></li>
+            <li><a href="../sdd.html">SDD</a></li>
+            <li><a href="https://github.com/cheenle/mrrc_modern" target="_blank"><i class="fab fa-github"></i></a></li>
+        </ul>
+        <div class="nav-actions">
+            <a href="../w103d-faq.html" class="lang-btn">EN</a>
+        </div>
+    </div>
+</nav>
+
+<header class="guide-hero">
+    <div class="guide-hero-inner">
+        <span class="badge"><i class="fas fa-circle-question"></i> W103D · 常见问题</span>
+        <h1>「连不上门户」，先看这一行</h1>
+        <p>网络、DNS、时钟、证书、隧道 —— 任何一环出问题，页面上都是同一句「连不上」。这一页给的是判据顺序：五条命令先定位到层，再按条目处理，不必猜。</p>
+        <div class="actions"><a class="btn btn-primary" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a><a class="btn" href="../diag.html"><i class="fas fa-stethoscope"></i> 入口打不开时取诊断包</a><a class="btn" href="../w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a></div>
+    </div>
+</header>
+
+<main class="w103d-wrap">
+<figure style="margin: 0 0 2.5rem">
+    <a href="../images/w103d-spec-sheet.png" target="_blank" rel="noopener">
+        <img src="../images/w103d-spec-sheet.png"
+             alt="ZTE W103D 参数、性能与对比树莓派"
+             style="width: 100%; height: auto; display: block; border: 1px solid var(--border, #2a2a2a); border-radius: 12px">
+    </a>
+    <figcaption style="text-align: center; color: var(--text-muted, #888); font-size: 0.82rem; margin-top: 0.65rem">
+        参数、性能与对比树莓派 · 点图看原尺寸（1240 × 1754）
+    </figcaption>
+</figure>
+<h1 id="w103d-常见问题-一句话-连不上门户">W103D 常见问题：一句话「连不上门户」</h1>
+<p>盒子报「连不上 <code>portal.mrrc.vlsc.net</code>」的时候，<strong>断点几乎从来不在 portal</strong>。</p>
+<p>2026-10-25 同一天的两台盒子说明了这件事：一台的网络、DNS、时钟、TLS 全部正常，断在<strong>本机配置 文件读不到</strong>；另一台的网络同样正常，断在<strong>本机时钟慢了 24 天</strong>。两台在页面上看到的都是同一句 「连不上」。所以这份文档按<strong>「先看哪一行」</strong>组织，不按原因分类 —— 原因有四类，报错却长得一模一样。</p>
+<h2 id="一分钟判据">一分钟判据</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>你看到的</th><th>先看这个</th><th>通常是</th></tr></thead><tbody>
+<tr><td>界面「提交失败」，日志里 <code>POST /api/cloud/apply 502</code></td><td>本机有没有 <code>MRRC_CLOUD_*</code>（见下）</td><td>盒子没有云端身份，重新申请又被门户拒绝</td></tr>
+<tr><td><code>certificate is not yet valid</code> / <code>certificate has expired</code></td><td><code>date</code>、<code>timedatectl</code></td><td><strong>本机时钟错</strong>，不是证书错</td></tr>
+<tr><td><code>Name or service not known</code></td><td><code>getent hosts portal.mrrc.vlsc.net</code></td><td>DNS</td></tr>
+<tr><td><code>Hostname mismatch</code></td><td>解析出来的 IP</td><td>域名解析到了错的地方</td></tr>
+<tr><td>入口显示「这台实例当前离线」（503）</td><td>盒子上 <code>pgrep -a frpc</code></td><td>隧道没起（进程挂了或被顶掉）</td></tr>
+<tr><td>「已存在申请（状态 granted）」</td><td>门户里的申请记录</td><td>这个呼号已经在别处登记过</td></tr>
+<tr><td><code>proxy [bg7xxx] already exists</code></td><td>另一台机器是否还开着</td><td>一个呼号只能有一条活隧道</td></tr>
+</tbody></table></div>
+<h2 id="五条命令-两分钟">五条命令，两分钟</h2>
+<p>在盒子上（SSH 或本机终端）依次跑，哪一条先失败，问题就在那一层：</p>
+<pre><code># 1) 本机有没有云端身份（没这几行 = 从没接入过，或配置文件丢了）
+grep -E '^MRRC_CLOUD' /opt/mrrc_modern/env/mrrc.env
+
+# 2) 配置文件读得到吗 —— 属主必须是应用自己的用户（mrrc），不能是 root
+stat -c '%U:%G %a' /opt/mrrc_modern/env/mrrc.env
+
+# 3) 时钟（报证书问题时一律先看这一条）
+date; timedatectl | grep -E 'synchronized|NTP service'; chronyc sources
+
+# 4) DNS 与出网（resolv.conf 为空 = 解析器没配，见下面「盒子的 DNS」）
+cat /etc/resolv.conf | grep -v '^#'
+getent hosts portal.mrrc.vlsc.net
+curl -sS -o /dev/null -w '%{http_code} %{remote_ip}\n' --max-time 15 https://portal.mrrc.vlsc.net/
+
+# 5) 应用自己的信任库（和浏览器用的不是同一套）
+sudo -u mrrc /opt/mrrc_modern/venv/bin/python -c \
+  "import sys; sys.path.insert(0,'/opt/mrrc_modern'); import net_tls; \
+   print('net_tls -&gt;', net_tls.urlopen('https://portal.mrrc.vlsc.net/', timeout=15).status)"</code></pre>
+<p>判读口诀：</p>
+<ul>
+<li><strong><code>synchronized: no</code> 且 <code>chronyc sources</code> 是空表</strong> → 先修时间，别去动门户配置。</li>
+<li><strong>第 4 条 200、界面却说失败</strong> → 不是网络，去看第 1、2 条（本机状态）。</li>
+<li><strong>门户回 409「已存在申请」</strong> → 这个呼号已被占用，走门户的登记口令（换机）流程，不要反复提交申请。</li>
+</ul>
+<h2 id="为什么会这样-tls-只是这条链的翻译器">为什么会这样：TLS 只是这条链的翻译器</h2>
+<p>上游四件事任何一件出错，最后都会变成一句 <code>CERTIFICATE_VERIFY_FAILED</code> 或者一个 502：</p>
+<div class="table-scroll"><table>
+<thead><tr><th>上游故障</th><th>链路上的样子</th><th>应用最终吐出的话</th></tr></thead><tbody>
+<tr><td>DNS 不对 / 不解析</td><td>名字解不出来</td><td><code>Name or service not known</code></td></tr>
+<tr><td>域名解析到错地址</td><td>TCP 通，证书名不对</td><td><code>Hostname mismatch</code></td></tr>
+<tr><td>外部 NTP 不通</td><td>时钟停住不动</td><td><code>certificate is not yet valid</code> / <code>has expired</code></td></tr>
+<tr><td>本机时钟错（无 RTC 电池）</td><td>同上</td><td>同上</td></tr>
+<tr><td>随包 CA 与系统 CA 不一致</td><td>浏览器正常、应用失败</td><td><code>unable to get local issuer certificate</code></td></tr>
+<tr><td>本机配置读不到</td><td>应用以为自己没登记</td><td>界面「提交失败」+ 日志 502</td></tr>
+</tbody></table></div>
+<p><strong>一句话：看到 <code>certificate is not yet valid</code>，先敲 <code>date</code>，不要先怀疑证书。</strong></p>
+<h2 id="常见问题">常见问题</h2>
+<h3 id="盒子能上网-但页面说-连不上门户-日志是-post-api-cloud-apply-502">盒子能上网，但页面说「连不上门户」，日志是 <code>POST /api/cloud/apply 502</code></h3>
+<p><strong>真相</strong>：网络没问题，是这台盒子<strong>没有云端身份</strong>。它只能走「申请」，而门户回的是 409 「已存在申请（状态 granted）」，服务端把门户的任何拒绝一律显示成 502 —— 看起来像网关故障。</p>
+<p><strong>怎么办</strong>：不要反复点申请。让卖家/运维在门户上给这个呼号做「换机」（用登记口令接管， 或重新下发身份），盒子这边再点一次连接即可。判断"是不是这类问题"只看一条： 第 1 条命令有没有输出。</p>
+<h3 id="报-certificate-is-not-yet-valid-证书尚未生效">报 <code>certificate is not yet valid</code>（证书尚未生效）</h3>
+<p><strong>真相</strong>：盒子以为现在是过去。门户的证书是近期签发的，在慢了的时钟看来"还没生效"。 2026-10-25 的现场：盒子显示 <code>2026-10-01 17:38</code>，慢了 24 天。</p>
+<p><strong>怎么办</strong>：</p>
+<pre><code>systemctl restart chrony        # 立刻重新解析时间源
+sleep 8; chronyc sources        # 表里应该有 3 个以上来源
+timedatectl | grep synchronized # 应为 yes</code></pre>
+<p>如果 <code>chronyc sources</code> 仍是空表（开机时 Wi-Fi 比 chrony 起得晚，时间源域名解析不到）， 按下面那条加纯 IP 的时间源。</p>
+<h3 id="chronyc-sources-是空的-时间从来没同步过"><code>chronyc sources</code> 是空的 —— 时间从来没同步过</h3>
+<p><strong>真相</strong>：镜像是从"几号烧的盘"那一刻开始的，而盒子<strong>没有 RTC 电池</strong>，断电就丢时间。 如果 Wi-Fi 在 chrony 启动之后才连上，基于域名的时间源（<code>pool …</code>）解析失败，chrony 就一直空着 —— 重启一次 chrony 立刻就好，但下次断电还会重演。</p>
+<p><strong>怎么办</strong>（一次性）：写一份<strong>纯 IP</strong> 的时间源，不依赖 DNS：</p>
+<pre><code>sudo tee /etc/chrony/sources.d/mrrc.sources &gt;/dev/null &lt;&lt;'EOF'
+server 203.107.6.88   iburst
+server 119.28.206.193 iburst
+server 162.159.200.1  iburst
+EOF
+sudo systemctl restart chrony</code></pre>
+<p>这三个是阿里 / 腾讯 / Cloudflare 的公共 NTP。写在 <code>/etc</code> 下，固化和升级都不会覆盖。</p>
+<h3 id="门户里显示-已批准-公网入口还是-503">门户里显示「已批准」，公网入口还是 503</h3>
+<p><strong>真相</strong>：批准 ≠ 这台盒子在用。入口要成立，需要<strong>四件事同时成立</strong>：盒子有身份 → 隧道连着 → 门户里有这台盒子的证书 → 盒子真的在出示那张证书。</p>
+<p><strong>怎么办</strong>：先把顺序理一遍，缺哪一步补哪一步：盒子 <code>ps -ef | grep frpc</code> 有没有进程 → 盒子 <code>curl -sk https://127.0.0.1:8888/login</code> 有没有应答 → 门户里这台盒子的证书指纹和 <code>server.crt</code> 是否一致。任何一步不一致都请卖家处理，不要自己删证书。</p>
+<h3 id="已存在申请-状态-granted-proxy-bg7xxx-already-exists">「已存在申请（状态 granted）」/ <code>proxy [bg7xxx] already exists</code></h3>
+<p><strong>真相</strong>：一个呼号只能有一条活隧道。原来的机器（通常是另一台电脑或旧盒子）还连着， 新机器顶上去会被拒绝。</p>
+<p><strong>怎么办</strong>：先让旧机器退出（关掉它的公网入口/退出应用），再在新盒子上接管呼号。 顺序反了会出现"两台都显示已连接、入口却指向旧机器"。</p>
+<h3 id="入口的证书和盒子出示的不一致-入口一直-502">入口的证书和盒子出示的不一致，入口一直 502</h3>
+<p><strong>真相</strong>：接入时新证书写进了配置，但<strong>进程还持有启动时那张证书</strong>。盒子上的 <code>MRRC_SSL_CERT</code> 已经指向新文件，服务却要重启才会重新加载。</p>
+<p><strong>怎么办</strong>：重启一次应用（页面里提示「还需重启应用」时就点它，或在盒子上 <code>sudo systemctl restart mrrc-modern</code>），再刷新入口。</p>
+<h3 id="页面说-还没提交过申请-可是明明申请过">页面说「还没提交过申请」，可是明明申请过</h3>
+<p><strong>真相</strong>：<code>/opt/mrrc_modern/env/mrrc.env</code> <strong>读不到</strong>。最常见是被改成 <code>root:root</code>， 而应用以 <code>mrrc</code> 运行 —— 应用读配置失败时不报错，只是当成"什么都没有"。</p>
+<p><strong>怎么办</strong>：</p>
+<pre><code>sudo chown mrrc:mrrc /opt/mrrc_modern/env/mrrc.env
+sudo chmod 0640       /opt/mrrc_modern/env/mrrc.env
+sudo systemctl restart mrrc-modern</code></pre>
+<p>改完再看第 1 条命令，能列出呼号与令牌就对了。</p>
+<h3 id="盒子的-dns-是什么-路由器不发-dns-会怎样">盒子的 DNS 是什么？路由器不发 DNS 会怎样</h3>
+<p><strong>出厂默认</strong>：每条已保存的连接都带两个备用解析器 —— <code>114.114.114.114</code> 和 <code>8.8.8.8</code>， 追加在已有 DNS 的后面。<strong>你自己配的 DNS 不会被替换</strong>，路由器下发的那个也照旧可用 （<code>ipv4.ignore-auto-dns</code> 保持关闭）。</p>
+<p>为什么要有这条默认：盒子没有 RTC 电池，开机时间来自镜像；如果 Wi-Fi 比 DHCP 先起来， 解析器就是空的 —— 于是 <code>chronyc</code> 连 NTP 的域名都解析不到，时钟停在镜像日期，接着每个 HTTPS 都报 <code>certificate is not yet valid</code>。2026-10-25 的两台盒子就是这么坏的。</p>
+<p>看一眼现在生效的解析器：</p>
+<pre><code>cat /etc/resolv.conf | grep nameserver
+nmcli -g ipv4.dns connection show "$(nmcli -t -f NAME connection show --active | head -1)"</code></pre>
+<p>想换掉或再加一条（改完立刻生效，不用重启）：</p>
+<pre><code>nmcli connection modify "&lt;连接名&gt;" ipv4.dns "114.114.114.114 8.8.8.8 223.5.5.5"</code></pre>
+<p>只有一条 <code>dns=</code> 行、没有重复，就是对的：这个默认值是幂等的，每次启动只会补上缺的那几条。</p>
+<p><strong>更常见的一层</strong>：<code>/etc/resolv.conf</code> 本身就指向一个「外来」地址（2026-10-25 之前的镜像把它烤进了成品），这时连 NetworkManager 的 DNS 都没被用上 —— 见 <a href="fix-dns.html">盒子的 DNS 坏了：在 Windows 上一条命令修好</a>，那张页面给了一个只要网页口令的小工具。</p>
+<p><strong>如果 <code>nmcli</code> 里能看到这几条、<code>/etc/resolv.conf</code> 里却只有一条</strong>：那是 2026-10-25 之前的镜像 （构建时把容器的 <code>resolv.conf</code> 拷进了系统，<code>resolvectl status</code> 会显示 <code>resolv.conf mode: foreign</code>）， 等于系统解析根本没走 NetworkManager。在有 root 的前提下修一次即可（可回退）：</p>
+<pre><code>sudo cp -a /etc/resolv.conf /etc/resolv.conf.bak
+sudo ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+resolvectl status | head -3     # 应变成 "resolv.conf mode: stub"（或不再是 foreign）
+getent hosts portal.mrrc.vlsc.net</code></pre>
+<h3 id="时间不对还会影响什么">时间不对还会影响什么</h3>
+<p>不止门户。2026-10-25 的现场里，同一台盒子因为时钟错了 24 天，<strong>软件更新也一直失败</strong> （更新检查走的是同一个 HTTPS），时间修好后当次就升了一个版本。同理受影响的还有 诊断包上传、远程协助、以及所有需要校验证书的功能。</p>
+<h3 id="自查完还是不通-交什么给支持">自查完还是不通，交什么给支持</h3>
+<p>三样东西，缺一样都会多一轮往返：</p>
+<p><a href="diag.html">局域网取包与诊断</a> 那页拿下来手工发）。</p>
+<ol>
+<li>上面「五条命令」的原样输出（<code>MRRC_CLOUD_TOKEN</code> 那行涂掉）。</li>
+<li>页面上的完整报错文字，以及出现的时间。</li>
+<li>菜单 → 「🐞 遇到问题」里的<strong>诊断包</strong>（传不上去就按</li>
+</ol>
+<h2 id="两句能记住的话">两句能记住的话</h2>
+<ul>
+<li><strong>报证书问题时先看 <code>date</code>；说连不上时先看配置文件属主。</strong></li>
+<li><strong>一个呼号一条活隧道：换机先停旧机，再接管。</strong></li>
+</ul>
+</main>
+
+<footer style="border-top: 1px solid var(--border, #2a2a2a); padding: 2rem 1.5rem; text-align: center; color: var(--text-muted, #888); font-size: 0.85rem">
+    <p>MRRC Modern — W103D 电台盒子指南 ·
+       <a href="../index.html#download">下载页</a> ·
+       <a href="https://github.com/cheenle/mrrc_modern" target="_blank" rel="noopener">GitHub</a></p>
+</footer>
+</body>
+</html>

@@ -110,6 +110,46 @@ class SwitchStatusTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
 
+class FixDnsTests(unittest.TestCase):
+    """`POST /api/box/fix-dns` — the repair, reachable with the web password.
+
+    Boxes flashed before 2026-10-25 carry the build machine's /etc/resolv.conf
+    (2026-10-25 field: Docker Desktop's 192.168.65.7 on MRRC-BG1SB), so glibc waits
+    5 s per lookup and fails while `ping <ip>` works. The repair needs root; the
+    operator may not have a root password at all, so it goes through the helper.
+    """
+
+    def post(self):
+        return run(server.api_box_fix_dns(
+            FakeRequest(path="/api/box/fix-dns", method="POST", body={})))
+
+    def test_it_needs_a_session(self):
+        with mock.patch.object(server, "_verify_auth", return_value=False), \
+                mock.patch.object(box_ops, "fix_dns") as fix:
+            response = self.post()
+        self.assertEqual(response.status_code, 401)
+        fix.assert_not_called()
+
+    def test_it_hands_the_work_to_the_helper_and_returns_its_output(self):
+        """The script's own words are the evidence the operator acts on; a bare
+        `{ok: true}` cannot tell "repaired" from "already a symlink"."""
+        with authed(), mock.patch.object(
+                box_ops, "fix_dns",
+                return_value={"ok": True, "output": "fix_resolv_conf: done\n"}) as fix:
+            response = self.post()
+        self.assertEqual(response.status_code, 200)
+        fix.assert_called_once()
+        self.assertIn("fix_resolv_conf: done", json.loads(bytes(response.body))["output"])
+
+    def test_a_refusal_is_a_400_with_the_reason(self):
+        with authed(), mock.patch.object(
+                box_ops, "fix_dns",
+                return_value={"ok": False, "error": "helper unavailable (FileNotFoundError)"}):
+            response = self.post()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("helper unavailable", json.loads(bytes(response.body))["error"])
+
+
 class HostnameTests(unittest.TestCase):
     def post(self, body):
         return run(server.api_box_hostname(

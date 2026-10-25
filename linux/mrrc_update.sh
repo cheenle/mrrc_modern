@@ -134,6 +134,21 @@ if [ -f "$MRRC_HOME/sdr_dsp.c" ] && [ "${MRRC_SDR:-on}" != "off" ]; then
 	fi
 fi
 
+# Resolver layout. Boxes built before 2026-10-25 carry the *build container's*
+# /etc/resolv.conf inside the image (measured on MRRC-BG1SB: Docker Desktop's
+# 192.168.65.7), because the build lends the chroot that file so apt/pip can resolve
+# and the base image's stub symlink is never put back. glibc then sends every lookup
+# to an address that exists on no customer LAN: 5 s timeout, then failure - while
+# `ping <ip>` still works, which is what makes it look like "the network is fine".
+# This is the only place the repair reaches an already-shipped box: an update runs as
+# root. Idempotent, and a no-op wherever resolv.conf is already the stub symlink.
+if [ -f "$MRRC_HOME/linux/fix_resolv_conf.sh" ]; then
+	if ! bash "$MRRC_HOME/linux/fix_resolv_conf.sh"; then
+		echo "WARNING: /etc/resolv.conf still points at a static file (see above);" >&2
+		echo "         name lookups may stall for seconds and then fail." >&2
+	fi
+fi
+
 chown -R "$MRRC_USER:$MRRC_USER" "$MRRC_HOME"
 echo "==> restarting"
 systemctl restart mrrc-modern

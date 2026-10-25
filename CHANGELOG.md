@@ -2,6 +2,80 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 2026-10-25 — 已发货盒子的 DNS 修复：Windows 一条命令
+
+**触发**：现场两台盒子「连不上门户」，其中一台（MRRC-BG1SB）的真因是 `/etc/resolv.conf`
+指向**做镜像那台机器**的 DNS（Docker Desktop 的 `192.168.65.7`），在任何客户网络上都不存在：
+glibc 每次解析撞 5 秒超时后失败，而 `ping <IP>` 一切正常。修它要 root，可客户多半按指南改过
+root 口令 —— 所以修复不能靠 root 口令。
+
+**新增三条通路，共用一个脚本**（`linux/fix_resolv_conf.sh`，幂等、备份为
+`/etc/resolv.conf.mrrc-bak`、并重启 resolved 以清掉它从旧文件吸进全局列表的那条死地址）：
+
+- **root 助手新动词** `fix-resolv-conf` → `POST /api/box/fix-dns`（`box_ops.fix_dns`）：只要
+  **网页登录口令**，不需要 SSH / root；只认常量脚本路径、不收参数，`OUTPUT_VERBS` 把脚本输出
+  原样带回（"改了什么"是操作员唯一能核对的证据）。
+- **`dev_tools/mrrc-fix-dns.cmd`**（另有站上副本 `website/downloads/MRRC-FixDNS.cmd`）：
+  双击 → 输 IP 与网页口令 → 打印查到的旧内容与新链接 → **再跑一遍证明已幂等**
+  （第二遍必须出现 `already a symlink`）。比这个修复早的盒子没有该接口，脚本给两条出路
+  （先升级，升级自己会修；或有 root 口令手工三行）。
+- **指南页** `website/fix-dns.html` + `website/zh/fix-dns.html`，并进 W103D 指南索引的两个
+  页面（表格一行 + 一张卡片）；`docs/W103D_FAQ.md` 的 DNS 一节交叉链接过去。
+  顺手把 zh 索引里缺的那条「常见问题」也补上（它落后了上一版）。
+
+测试 2894（+17：`test_fix_dns_cmd.py` 10、`test_box_helper.py` 3、`test_server_box_actions.py` 3、
+`test_box_update_cmd.py` 的固定拷贝对 1 项），模块 150。
+
+## [Unreleased] — 2026-10-25 — 远程协助面板显示「端口」
+
+**触发**：现场开了一个协助窗口，面板上只有 用户名 / 口令 / 剩余 / 已连接 —— 支持者要先问
+「端口是多少」才能连（`ssh hub -W 127.0.0.1:<port>`），而这是唯一猜不到的字段。
+`/api/help/status` 一直就返回 `port`（`help_session.status()`），是面板没渲染。
+
+**改了什么**：`static/support.html` 的协助卡片加一行「端口」（未分配时显示 `—` 而不是 `0`），
+「复制口令」改成「复制连接信息」，一次复制 用户名 / 口令 / 端口 三行；接口未改动。
+测试 +4（`tests/test_support_frontend.py::HelpPanelTests`，含「`0` 不许当成端口」与
+「口令仍然只作为文本渲染、不拼进链接」）。
+
+## [Unreleased] — 2026-10-25 — 盒子出厂默认带两条备用 DNS（114.114.114.114 / 8.8.8.8）
+
+**触发**：同一天两台盒子报「连不上门户」，其中一台的真因是**系统时间慢了 24 天**
+（`certificate is not yet valid`）。往下追一层：开机时 Wi-Fi 比 DHCP 早，`/etc/resolv.conf`
+是空的 → chrony 解析不到 `pool 2.debian.pool.ntp.org` → 时钟停在镜像日期 → 之后所有 HTTPS
+都失败。DNS 是这条链的根，所以把它补成**出厂默认**。
+
+**改了什么**：
+
+- `net_wifi.FALLBACK_DNS`（`114.114.114.114`、`8.8.8.8`）：建 profile 时写入
+  （`write_profile`，新连的网一次到位）；已保存的 profile 由 `ensure_fallback_dns()` 在**每次
+  启动**补一次（幂等，只在真的改了什么时记一行 INFO）——这是**升级路径**，已经发出去的盒子
+  重启后自动获得。**操作员自己配的 DNS 不覆盖**，备用项追加在后面；`ipv4.ignore-auto-dns`
+  保持 `no`，路由器下发的 DNS 照旧可用。
+- `packaging/common/preflash.sh`：救急 Wi-Fi profile 与**基底自带**的每个 `.nmconnection`
+  在构建期补上（`MRRC_PREFLASH_FALLBACK_DNS` 可覆盖这两条）。
+- 测试 2852 → **2865**（`tests/test_net_wifi.py` +7、`tests/test_preflash.py` +3、新增
+  `tests/test_server_boot_dns.py` 3），模块 147 → **148**；`tests/README.md` 的总数与模块数
+  顺手对齐到实测值（原来写着 2819 / 145，已经漂了 33 个用例）。
+
+**顺带挖到的、更靠底的一层**（2026-10-25 现场复验，BG7SB）：镜像构建时为了让 chroot 里的
+apt/pip 能解析，`packaging/box/build-image.sh` 把**容器的 `/etc/resolv.conf`** 拷进了 rootfs，
+而基底原本是 `-> /run/systemd/resolve/stub-resolv.conf` 的符号链接 —— 这份拷贝留在了成品里。
+后果实测：盒子上 `resolvectl status` 报 **`resolv.conf mode: foreign`**，文件里只有一条
+`nameserver`，而 `resolvectl dns wlan0` 已经有 `114.114.114.114 8.8.8.8 192.168.31.1` 三条；
+glibc 读的是那个文件，所以**任何写进网络 profile 的 `ipv4.dns` 都是空转**。已在构建期还原符号
+链接（`--preflash` 与普通镜像都走这条）。
+
+**存量盒子怎么救**（新文件 `linux/fix_resolv_conf.sh`，由 `linux/mrrc_update.sh` 以 root 调用）：
+幂等、可单跑（`sudo bash /opt/mrrc_modern/linux/fix_resolv_conf.sh [--dry-run]`）、原文件备份为
+`/etc/resolv.conf.mrrc-bak`，没有 systemd-resolved 的机器一律不动。**它多做了一步**：换完符号
+链接还要重启 resolved —— 实测（MRRC-BG1SB，2026-10-25）换完之后 `resolvectl status` 的
+**Global 仍是 `192.168.65.7`**，因为 resolved 在 `foreign` 模式下把旧文件的服务器吸进了全局
+列表，只有重启才会重新读文件；全局条目会被链路口径不认领的查询用到，所以那条死地址必须清掉。
+测试 8 个（真跑脚本 + 临时目录，含"没有 resolved 时不动"、"stub 不存在时放弃"、"幂等"）。
+
+**验证**：`python -m unittest discover -s tests` → 2865 tests, OK（1 skip：macOS 上的
+fake-radio 可选用例）。
+
 ## [Unreleased] — 2026-10-25 — 从 Windows 电脑远控升级盒子；顺带修掉一个「每次升级都回滚」的看门狗缺陷
 
 **触发**：一台盒子只在局域网里够得着（客户没有 SSH、也没有桌面），要给它升级。

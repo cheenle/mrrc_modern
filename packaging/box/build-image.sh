@@ -17,10 +17,16 @@ CHECK_ONLY=0
 PREFLASH=0
 for arg in "$@"; do
 	case "$arg" in
-		--check) CHECK_ONLY=1 ;;
-		--preflash) PREFLASH=1 ;;
-		-*) echo "unknown option: $arg" >&2; exit 2 ;;
-		*) echo "unknown argument: $arg" >&2; exit 2 ;;
+	--check) CHECK_ONLY=1 ;;
+	--preflash) PREFLASH=1 ;;
+	-*)
+		echo "unknown option: $arg" >&2
+		exit 2
+		;;
+	*)
+		echo "unknown argument: $arg" >&2
+		exit 2
+		;;
 	esac
 done
 
@@ -253,6 +259,23 @@ docker run --rm --platform linux/arm64 --privileged \
     echo "==> preflash: $MRRC_PREFLASH"
 
     chroot /mnt /bin/bash -c "REPO_SRC=/src /src/packaging/box/box-overlay.sh"
+
+    # Put the resolver back before the image is shipped. The block above hands the
+    # chroot the resolv.conf of the build container so apt/pip can resolve; the base image ships
+    # `/etc/resolv.conf -> /run/systemd/resolve/stub-resolv.conf` instead, and that
+    # symlink is what makes systemd-resolved (which NM feeds) the resolver glibc
+    # actually talks to. Leaving the copy behind ships a *foreign* file: measured on a
+    # delivered box 2026-10-25, `resolvectl status` said `resolv.conf mode: foreign`,
+    # the file held one server while `resolvectl dns wlan0` already had three - so
+    # every `ipv4.dns` an operator or the product writes is inert, and a customer whose
+    # LAN is not the build LAN gets a dead nameserver and 5 s timeouts.
+    if [ -e /mnt/usr/lib/systemd/systemd-resolved ]; then
+      rm -f /mnt/etc/resolv.conf
+      ln -s ../run/systemd/resolve/stub-resolv.conf /mnt/etc/resolv.conf
+      echo "==> resolv.conf restored to the systemd-resolved stub symlink"
+    else
+      echo "==> no systemd-resolved in this base image — leaving resolv.conf alone" >&2
+    fi
 
     umount /mnt/src
     for d in dev proc sys; do umount /mnt/$d; done

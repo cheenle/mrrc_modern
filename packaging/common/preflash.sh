@@ -45,6 +45,51 @@ ENV_FILE="${POSITIONAL[0]:-/opt/mrrc_modern/env/mrrc.env}"
 
 log() { printf '\n=== preflash: %s ===\n' "$*"; }
 
+# ── 备用 DNS（出厂默认）─────────────────────────────────────────────
+# 每条已保存的连接都带两条公共 DNS，用作"路由器没发 DNS"或"DHCP 比首次解析还晚"
+# 时的兵底。2026-10-25 真机（BG8GGG）：开机时解析器为空 —> chrony 解析不到 NTP
+# pool —> 时钟停在镜像日期、慢 24 天 —> 每个 HTTPS 都报
+# `certificate is not yet valid`，而页面只说"连不上门户"。
+#
+# 既有的 DNS 一律保留，备用项追加在后面（NM 把 profile 自己的服务器排在 DHCP
+# 下发的前面，所以它不会盖掉路由器给的地址，只是把名字解析变成不再单点）。
+FALLBACK_DNS="${MRRC_PREFLASH_FALLBACK_DNS:-114.114.114.114 8.8.8.8}"
+
+write_fallback_dns() {
+	local dir="$1"
+	[ -d "$dir" ] || return 0
+	log "fallback dns: $FALLBACK_DNS"
+	python3 - "$dir" "$FALLBACK_DNS" <<'PY'
+import pathlib
+import sys
+
+folder = pathlib.Path(sys.argv[1])
+servers = sys.argv[2].split()
+changed = []
+for path in sorted(folder.glob("*.nmconnection")):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == "[ipv4]"), None)
+    if start is None:
+        lines += ["", "[ipv4]", "method=auto", "dns=" + "".join(s + ";" for s in servers)]
+    else:
+        end = next((j for j in range(start + 1, len(lines))
+                    if lines[j].startswith("[") and lines[j].strip().endswith("]")), len(lines))
+        at = next((j for j in range(start + 1, end)
+                   if lines[j].strip().startswith("dns=")), None)
+        if at is None:
+            lines.insert(start + 1, "dns=" + "".join(s + ";" for s in servers))
+        else:
+            have = [s for s in lines[at].split("=", 1)[1].split(";") if s]
+            missing = [s for s in servers if s not in have]
+            if not missing:
+                continue
+            lines[at] = "dns=" + "".join(f"{s};" for s in have + missing)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    changed.append(path.name)
+print("preflash: fallback dns written to " + (", ".join(changed) or "(nothing new)"))
+PY
+}
+
 # ── 救急 Wi-Fi（盒子当客户端，不是 AP）───────────────────────────────
 # 一个实现、两个调用点：`--wifi-only`（单测真跑用）与完整发货流程。
 write_rescue_wifi() {
@@ -89,11 +134,13 @@ write_rescue_wifi() {
 		'' \
 		'[ipv4]' \
 		'method=auto' \
+		'dns=114.114.114.114;8.8.8.8;' \
 		'' \
 		'[ipv6]' \
 		'method=auto' \
 		>"$RESCUE_DIR/mrrc-rescue.nmconnection"
 	chmod 600 "$RESCUE_DIR/mrrc-rescue.nmconnection"
+	write_fallback_dns "$RESCUE_DIR"
 
 	if [ "$WIFI_ONLY" = "1" ]; then
 		echo "preflash: wifi-only — 只写了救急 Wi-Fi profile"
@@ -106,7 +153,6 @@ if [ "$WIFI_ONLY" = "1" ]; then
 	echo "preflash: wifi-only — 只写了救急 Wi-Fi profile"
 	exit 0
 fi
-
 
 # ── env 文件：Web 口令（唯一的写者）────────────────────────────────────
 # 服务层的 sed 已经把 install.sh 在**构建主机**上猜出来的口令剥掉了，所以正常

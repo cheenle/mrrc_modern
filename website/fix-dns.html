@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="盒子的网页能打开、域名却解析不了时，用 MRRC-FixDNS.cmd 在 Windows 上一条命令修好：判据、三步操作、老盒子怎么办。"
+    />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>盒子的 DNS 坏了？在 Windows 上一条命令修好 — MRRC Modern</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="js/global-nav.js?v=6" defer data-gn="1"></script>
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .doc {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 130px 1.5rem 120px;
+        font-size: 1.02rem;
+        line-height: 1.85;
+      }
+      .doc h1 {
+        font-size: 1.9rem;
+        line-height: 1.35;
+        margin: 0 0 0.5rem;
+      }
+      .doc .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.4rem;
+      }
+      .doc h2 {
+        font-size: 1.22rem;
+        margin: 2.8rem 0 0.9rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .doc p,
+      .doc li {
+        margin: 0.7rem 0;
+      }
+      .doc ul,
+      .doc ol {
+        padding-left: 1.4rem;
+      }
+      .doc code {
+        background: #1a1a20;
+        border: 1px solid var(--line);
+        padding: 0.08em 0.35em;
+        border-radius: 4px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.9em;
+      }
+      .doc pre {
+        background: #131318;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.9rem 1rem;
+        overflow-x: auto;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.85rem;
+        line-height: 1.65;
+      }
+      .doc table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.92rem;
+      }
+      .doc th,
+      .doc td {
+        border: 1px solid var(--line);
+        padding: 0.55rem 0.7rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .doc th {
+        background: #16161c;
+      }
+      .callout {
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--amber);
+        background: #131318;
+        border-radius: 6px;
+        padding: 0.9rem 1.1rem;
+        margin: 1.4rem 0;
+        font-size: 0.95rem;
+      }
+      .dl {
+        display: inline-block;
+        background: var(--amber);
+        color: #101014;
+        font-weight: 600;
+        padding: 0.7rem 1.3rem;
+        border-radius: 8px;
+        text-decoration: none;
+        margin: 0.4rem 0 0.2rem;
+      }
+      .dl:hover {
+        filter: brightness(1.08);
+      }
+      a {
+        color: var(--amber);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="doc">
+      <p style="margin: 0 0 1rem"><a href="w103d-index.html" style="font-size: 0.9rem">← 全部盒子指南</a></p>
+      <h1>盒子的 DNS 坏了：在 Windows 上一条命令修好</h1>
+      <p class="sub">
+        适用：盒子的网页打得开、<code>ping 192.168.x.x</code> 也通，但
+        <code>ping portal.mrrc.vlsc.net</code> 要卡好几秒才失败；软件更新、公网入口、
+        诊断包上传一起失灵。
+      </p>
+
+      <h2>先确认是不是这个问题</h2>
+      <p>在盒子的 SSH 里看两样东西（两行就够）：</p>
+      <pre>
+ls -l /etc/resolv.conf          # 是普通文件，而不是 -> /run/systemd/resolve/stub-resolv.conf
+cat /etc/resolv.conf            # 里面有一个"不属于你"的地址</pre>
+      <p>
+        典型的样子长这样 —— 那个 <code>192.168.65.7</code> 是
+        <strong>做镜像那台 Docker Desktop 的内部 DNS</strong>，在任何客户网络上都不存在：
+      </p>
+      <pre>
+-rw-r--r-- 1 root root 97 10月11日 11:58 /etc/resolv.conf
+# DNS requests are forwarded to the host. DHCP DNS options are ignored.
+nameserver 192.168.65.7</pre>
+      <div class="callout">
+        判据一句话：<strong>能 ping 通 IP、ping 不通域名</strong>，而且
+        <code>resolvectl status</code> 第一行写着 <code>resolv.conf mode: foreign</code>。
+        这时系统里真正的 DNS（systemd-resolved，手里有路由器给的正确地址）根本没被用上。
+      </div>
+
+      <h2>为什么会这样</h2>
+      <p>
+        镜像构建时为了让安装程序能联网，构建脚本把<strong>构建机的</strong>
+        <code>/etc/resolv.conf</code> 借给了正在组装的系统，而基底原本的那条
+        <code>-&gt; ../run/systemd/resolve/stub-resolv.conf</code> 符号链接没有还原。
+        于是每台盒子出厂就带着一个"别人家的 DNS"。2026-10-11 之后、2026-10-25 之前
+        构建的镜像都有这个毛病。
+      </p>
+
+      <h2>下载修它的小工具</h2>
+      <p>
+        <a class="dl" href="downloads/MRRC-FixDNS.cmd">
+          <i class="fas fa-download"></i>&nbsp; MRRC-FixDNS.cmd
+        </a>
+      </p>
+      <p>
+        约 9 KB，单个文件，不用安装。<strong>只要网页登录口令，不需要 root 口令、不需要 SSH。</strong>
+        它做的事：登录盒子 → 让盒子自己的 root 助手跑
+        <code>linux/fix_resolv_conf.sh</code>（与软件升级跑的是同一个脚本）→ 把结果打给你 →
+        再跑一遍证明已经是幂等的。
+      </p>
+      <div class="callout">
+        系统要求：Windows 10（1809 及以上）或 Windows 11。用的都是系统自带的
+        <code>curl.exe</code> 与 PowerShell，不装任何东西。
+      </div>
+
+      <h2>三步</h2>
+      <ol>
+        <li>双击 <code>MRRC-FixDNS.cmd</code>（或 <code>mrrc-fix-dns.cmd 192.168.1.50</code>）。</li>
+        <li>输入盒子的 IP —— 就是浏览器地址栏里那个。</li>
+        <li>输入<strong>网页登录口令</strong>（不是 SSH 的）。脚本会打印它查到什么、改了什么。</li>
+      </ol>
+      <p>正常会看到这样两段：</p>
+      <pre>
+fix_resolv_conf: /etc/resolv.conf is a static file: # DNS requests are forwarded ... nameserver 192.168.65.7
+fix_resolv_conf: backup written to /etc/resolv.conf.mrrc-bak
+fix_resolv_conf: /etc/resolv.conf -> ../run/systemd/resolve/stub-resolv.conf
+fix_resolv_conf: restarting systemd-resolved so the old global server is dropped
+fix_resolv_conf: done
+
+--- running it once more: it must be a no-op now ---
+fix_resolv_conf: /etc/resolv.conf is already a symlink (../run/systemd/resolve/stub-resolv.conf) — nothing to do</pre>
+      <p>
+        <strong>第二段出现 "already a symlink" 就是修好了。</strong>
+        文件本身备份在盒子的 <code>/etc/resolv.conf.mrrc-bak</code>，随时可以还原。
+      </p>
+
+      <h2>修完怎么验</h2>
+      <p>在盒子上（SSH 或接显示器）：</p>
+      <pre>
+resolvectl status | head -3      # 应显示 resolv.conf mode: stub
+getent hosts portal.mrrc.vlsc.net   # 应立刻返回一个 IP</pre>
+      <p>
+        然后回到浏览器刷新页面：软件更新、公网入口、诊断包上传都应该恢复。
+        如果 <code>getent</code> 还是慢，那说明盒子连不到自己的路由器 —— 那是另一个问题
+        （网线 / Wi-Fi 信号 / DHCP），见 <a href="w103d-user.html">盒子用户指南</a> 的排障表。
+      </p>
+
+      <h2>脚本说 <code>404</code> / 提示"这台盒子还不认识这个接口"</h2>
+      <p>
+        说明盒子固件比这个修复早。两条路：
+      </p>
+      <ol>
+        <li>
+          先升级盒子（页面 ☰ →「软件更新」，或者 <a href="update.html">从 Windows 远程升级</a>），
+          再跑一次这个工具 —— 升级本身会顺手修掉它。
+        </li>
+        <li>
+          或者有 root 口令的话，SSH 进去手工三行：
+          <pre>
+cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak
+ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+systemctl try-restart systemd-resolved</pre>
+        </li>
+      </ol>
+
+      <h2>我们这边做了什么</h2>
+      <p>
+        三处，缺一不可：<strong>镜像</strong>（构建结束时还原符号链接，新盒子不再带这个毛病）、
+        <strong>升级</strong>（<code>mrrc-update</code> 每次都以 root 跑一遍同一个修复脚本，
+        已发货的盒子升级一次自动好）、<strong>页面与这个工具</strong>（没有 root 口令也能修）。
+        脚本自己也是幂等的：已经是对的机器上跑，它只说一句 "already a symlink" 就退出。
+      </p>
+
+    </main>
+  </body>
+</html>

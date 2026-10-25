@@ -151,14 +151,17 @@
       <h2>远程协助</h2>
       <p class="muted">
         需要维护者直接进来看看时，在这里开一个窗口。开启后他从 hub
-        连进来，用下面这对 用户名与口令 ——
+        连进来，用下面这四项 <b>用户名、口令、端口</b> ——
         <b>口令只显示在这里，请口头或短信告诉他</b>。窗口到期自动关闭，
         你随时可以按「停止协助」，维护者那一侧也能被强制结束。
       </p>
       <p class="muted">
         SSH
-        只开在本机回环上、公网上没有端口，而且<b>只在窗口开着时存在</b>；窗口一关，
-        口令与监听一起消失。会话拿到的是 MRRC Modern 自己的权限，不会提权。
+        只开在<b>本机回环</b>上、盒子上公网没有端口，而且<b>只在窗口开着时存在</b>；
+        窗口一关，口令与监听一起消失。维护者连的是
+        hub（`www.vlsc.net`）回环上的那个
+        端口，所以下面这一行要一并告诉他。会话拿到的是 MRRC Modern
+        自己的权限，不会提权。
       </p>
       <div id="help-off">
         <label class="muted"
@@ -182,6 +185,15 @@
             <td><code id="help-pw"></code></td>
           </tr>
           <tr>
+            <td class="muted" style="padding-right: 10px">端口</td>
+            <td>
+              <code id="help-port"></code>
+              <span class="muted"
+                >（hub <code>www.vlsc.net</code> 的回环端口）</span
+              >
+            </td>
+          </tr>
+          <tr>
             <td class="muted" style="padding-right: 10px">剩余</td>
             <td id="help-left"></td>
           </tr>
@@ -191,7 +203,7 @@
           </tr>
         </table>
         <div>
-          <button id="help-copy">复制口令</button>
+          <button id="help-copy">复制连接信息</button>
           <button id="help-stop" style="background: #7a2b2b">停止协助</button>
         </div>
       </div>
@@ -405,6 +417,9 @@
         }
         $("help-user").textContent = s.username || "";
         $("help-pw").textContent = s.password || "";
+        // 端口是维护者连 hub 时要用的那个：窗口开着而 portal 还没分配时写「—」
+        // 而不是 0 —— 面板上出现 0 会让人以为要连 0 号端口。
+        $("help-port").textContent = s.port ? String(s.port) : "—";
         $("help-left").textContent =
           Math.max(0, Math.round((s.expires_in_s || 0) / 60)) + " 分钟";
         $("help-conn").textContent = (s.connections || 0) + " 次";
@@ -457,12 +472,18 @@
       }
 
       async function copyHelpPassword() {
+        // 复制的是**整块连接信息**：维护者需要的三样（用户名/口令/端口）一起走，
+        // 而客户只需要把它粘进一条消息。之前只复制口令，端口每次都靠人翻页找
+        //（2026-10-25 现场：面板上没有端口，支持那边得先问一遍）。
+        var user = $("help-user").textContent || "";
         var pw = $("help-pw").textContent || "";
+        var port = $("help-port").textContent || "";
+        var text = "用户名 " + user + "\n口令 " + pw + "\n端口 " + port;
         try {
-          await navigator.clipboard.writeText(pw);
-          helpSay("口令已复制。");
+          await navigator.clipboard.writeText(text);
+          helpSay("连接信息已复制（用户名 / 口令 / 端口）。");
         } catch (e) {
-          helpSay("复制失败，请手动选中：" + pw, "bad");
+          helpSay("复制失败，请手动选中：" + text, "bad");
         }
       }
 

@@ -164,8 +164,22 @@ class RescueWifiTests(unittest.TestCase):
         if shutil.which("bash") is None:
             raise unittest.SkipTest("preflash.sh needs a POSIX shell (bash)")
 
-    def run_wifi(self, *, extra=None, flag="1"):
+    def run_wifi(self, *, extra=None, flag: "str | None" = "1"):
+        proc, text, mode, _ = self._run_wifi(extra=extra, flag=flag)
+        return proc, text, mode
+
+    def _run_wifi(self, *, extra=None, flag: "str | None" = "1", seed=None):
+        """The 4-tuple form: also returns the pre-seeded keyfiles after the run.
+
+        `seed` lets a test put a profile in the directory *before* preflash runs,
+        which is the case that matters for the image (the base image ships
+        connections of its own).
+        """
         with tempfile.TemporaryDirectory() as tmp:
+            for name, body in (seed or {}).items():
+                seeded = Path(tmp) / name
+                seeded.write_text(body, encoding="utf-8")
+                seeded.chmod(0o600)
             env = {**os.environ, "MRRC_PREFLASH_WIFI_DIR": tmp, **(extra or {})}
             env.pop("MRRC_PREFLASH", None)
             if flag is not None:
@@ -174,9 +188,11 @@ class RescueWifiTests(unittest.TestCase):
                                   capture_output=True, text=True, env=env)
             path = Path(tmp) / "mrrc-rescue.nmconnection"
             text = path.read_text(encoding="utf-8") if path.exists() else ""
+            seeded_after = {name: (Path(tmp) / name).read_text(encoding="utf-8")
+                            for name in (seed or {}) if (Path(tmp) / name).exists()}
             # 目录在 with 里就被删了，所以权限位要在这里读出来带回去。
             mode = (path.stat().st_mode & 0o777) if path.exists() else 0
-            return proc, text, mode
+            return proc, text, mode, seeded_after
 
     def test_it_writes_a_client_profile_not_an_access_point(self):
         proc, text, _ = self.run_wifi()
@@ -205,6 +221,36 @@ class RescueWifiTests(unittest.TestCase):
     def test_the_keyfile_is_not_world_readable(self):
         _, _, mode = self.run_wifi()
         self.assertEqual(mode, 0o600)
+
+    def test_the_rescue_profile_carries_the_fallback_resolvers(self):
+        """路由器不发 DNS（或 DHCP 比首次解析还晚）时，盒子仍然解得开名字。
+
+        2026-10-25 真机（BG8GGG）：解析器为空 → chrony 解析不到 NTP pool → 时钟停在
+        镜像日期、慢 24 天 → 每个 HTTPS 都报 `certificate is not yet valid`，
+        而页面只说「连不上门户」。出厂默认两条公共 DNS 把这条链的根断掉。
+        """
+        _, text, _ = self.run_wifi()
+        self.assertIn("dns=114.114.114.114;8.8.8.8;", text)
+
+    def test_an_existing_base_image_profile_gets_them_too(self):
+        """基底镜像自带连接（有线/Wi-Fi）不会经过 write_profile，所以镜像构建期
+        要把它们也补上 —— 否则出厂盒子的那一条连接仍然没有兜底解析器。"""
+        wired = ("[connection]\nid=Wired connection 1\ntype=ethernet\n\n"
+                 "[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\n")
+        proc, _, _, seeded = self._run_wifi(seed={"Wired.nmconnection": wired})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("dns=114.114.114.114;8.8.8.8;", seeded["Wired.nmconnection"])
+        # 其余内容原样保留（method 不能被顺手改掉）。
+        self.assertIn("method=auto", seeded["Wired.nmconnection"])
+
+    def test_the_fallback_dns_step_is_idempotent(self):
+        """重跑一次不能写出第二行 dns=，也不能把已有的服务器顶掉。"""
+        wired = ("[connection]\nid=Wired connection 1\ntype=ethernet\n\n"
+                 "[ipv4]\ndns=192.168.1.1;\nmethod=auto\n")
+        _, _, _, first = self._run_wifi(seed={"Wired.nmconnection": wired})
+        self.assertIn("dns=192.168.1.1;114.114.114.114;8.8.8.8;",
+                      first["Wired.nmconnection"])
+        self.assertEqual(first["Wired.nmconnection"].count("dns="), 1)
 
     def test_a_batch_can_change_the_name_and_the_password(self):
         _, text, _ = self.run_wifi(extra={

@@ -349,12 +349,14 @@ PAGES = (
             '<i class="fas fa-download"></i> 下载 W103D 镜像</a>'
             '<a class="btn" href="{p}w103d-user.html"><i class="fas fa-box-open"></i> 盒子已刷好？看用户指南</a>'
             '<a class="btn" href="{p}w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a>'
+            '<a class="btn" href="{p}w103d-faq.html"><i class="fas fa-circle-question"></i> 常见问题</a>'
             '<a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" '
             'target="_blank" rel="noopener"><i class="fas fa-bolt"></i> 速查操作单</a>'),
         # The markdown links the sibling document by file name; the site spells
         # it as a page, so the built HTML would otherwise point at a .md file.
         "links": (("W103D_USER_GUIDE.md", "w103d-user.html"),
-                  ("W103D_REMOTE_GUIDE.md", "w103d-remote.html")),
+                  ("W103D_REMOTE_GUIDE.md", "w103d-remote.html"),
+                  ("W103D_FAQ.md", "w103d-faq.html")),
         "figure": True,
     },
     {
@@ -370,9 +372,11 @@ PAGES = (
         "actions": (
             '<a class="btn btn-primary" href="{p}w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a>'
             '<a class="btn" href="{p}w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a>'
+            '<a class="btn" href="{p}w103d-faq.html"><i class="fas fa-circle-question"></i> 连不上门户？常见问题</a>'
             '<a class="btn" href="{p}index.html#download"><i class="fas fa-download"></i> 下载页</a>'),
         "links": (("W103D_GUIDE.md", "w103d.html"),
-                  ("W103D_REMOTE_GUIDE.md", "w103d-remote.html")),
+                  ("W103D_REMOTE_GUIDE.md", "w103d-remote.html"),
+                  ("W103D_FAQ.md", "w103d-faq.html")),
         "figure": False,
     },
     {
@@ -388,8 +392,29 @@ PAGES = (
                  "以及按键不灵时按顺序查哪几条。"),
         "actions": (
             '<a class="btn btn-primary" href="{p}w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a>'
+            '<a class="btn" href="{p}w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a>'
+            '<a class="btn" href="{p}w103d-faq.html"><i class="fas fa-circle-question"></i> 常见问题</a>'),
+        "links": (("W103D_USER_GUIDE.md", "w103d-user.html"),
+                  ("W103D_FAQ.md", "w103d-faq.html")),
+        "figure": False,
+    },
+    {
+        "source": "docs/W103D_FAQ.md",
+        "out": "w103d-faq.html",
+        "title": "W103D 常见问题 — MRRC Modern",
+        "description": "盒子说「连不上门户」时先看哪一行：云端身份、时钟、DNS、隧道与证书的五条判据",
+        "badge": "W103D · 常见问题",
+        "icon": "fa-circle-question",
+        "h1": "「连不上门户」，先看这一行",
+        "lead": ("网络、DNS、时钟、证书、隧道 —— 任何一环出问题，页面上都是同一句「连不上」。"
+                 "这一页给的是判据顺序：五条命令先定位到层，再按条目处理，不必猜。"),
+        "actions": (
+            '<a class="btn btn-primary" href="{p}w103d-user.html"><i class="fas fa-box-open"></i> 盒子用户指南</a>'
+            '<a class="btn" href="{p}diag.html"><i class="fas fa-stethoscope"></i> 入口打不开时取诊断包</a>'
             '<a class="btn" href="{p}w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a>'),
-        "links": (("W103D_USER_GUIDE.md", "w103d-user.html"),),
+        "links": (("W103D_GUIDE.md", "w103d.html"),
+                  ("W103D_USER_GUIDE.md", "w103d-user.html"),
+                  ("W103D_REMOTE_GUIDE.md", "w103d-remote.html")),
         "figure": False,
     },
 )

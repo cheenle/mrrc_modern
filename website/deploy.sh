@@ -87,6 +87,24 @@ tar -czf "$DEPLOY_PACKAGE" \
 	--exclude='build_sdd.py' --exclude='build_guide.py' --exclude='build_w103d_guide.py' \
 	--exclude='images/W103D/IMG_*' --exclude='images/W103D/._*' \
 	-C "$LOCAL_DIR" .
+# The published copies of the Windows tools. `downloads/` is excluded from the
+# package (it is the server-managed tree), so these travel separately - and they
+# used to travel only when a human remembered to `cp` them, which is how a page
+# can promise a file the site does not have (2026-10-25: MRRC-FixDNS.cmd).
+# tests/test_box_update_cmd.py pins dev_tools/<x>.cmd == website/downloads/<X>.cmd;
+# this step is what makes that true after a deploy instead of by hand.
+for pair in "mrrc-update.cmd:MRRC-Update.cmd" \
+			"mrrc-diag.cmd:MRRC-Diag.cmd" \
+			"mrrc-fix-dns.cmd:MRRC-FixDNS.cmd"; do
+	src="$LOCAL_DIR/../dev_tools/${pair%%:*}"
+	dst="$LOCAL_DIR/downloads/${pair##*:}"
+	[ -f "$src" ] || continue
+	if ! cmp -s "$src" "$dst"; then
+		echo "  syncing $(basename "$dst") from dev_tools/"
+		cp "$src" "$dst"
+	fi
+done
+
 echo -e "${GREEN}✓${NC} Package created: $DEPLOY_PACKAGE"
 echo ""
 
@@ -174,11 +192,25 @@ PYEOF
     sudo chmod -R 755 /var/www/vlsc.net/mrrc_modern
 EOF
 
+ssh "$REMOTE_USER@$REMOTE_HOST" 'mkdir -p /tmp/mrrc-tools && rm -f /tmp/mrrc-tools/*.cmd'
+scp -q "$LOCAL_DIR"/downloads/MRRC-Update.cmd "$LOCAL_DIR"/downloads/MRRC-Diag.cmd \
+	"$LOCAL_DIR"/downloads/MRRC-FixDNS.cmd "$REMOTE_USER@$REMOTE_HOST:/tmp/mrrc-tools/" 2>/dev/null || true
 scp "$DEPLOY_PACKAGE" "$REMOTE_USER@$REMOTE_HOST:/var/tmp/"
 
 ssh "$REMOTE_USER@$REMOTE_HOST" <<'EOF'
     set -e
     sudo tar -xzf "/var/tmp/mrrc_modern_website_"*.tar.gz -C /var/www/vlsc.net/mrrc_modern --overwrite
+    # The Windows tools are not in that package (downloads/ is excluded on
+    # purpose); they arrive on their own. Missing ones are skipped, so an older
+    # checkout still deploys.
+    for f in MRRC-Update.cmd MRRC-Diag.cmd MRRC-FixDNS.cmd; do
+        if [ -f "/tmp/mrrc-tools/$f" ]; then
+            sudo install -m 644 "/tmp/mrrc-tools/$f" \
+                "/var/www/vlsc.net/mrrc_modern/downloads/$f"
+            echo "downloads/$f updated"
+        fi
+    done
+    rm -rf /tmp/mrrc-tools
     # tar -x never deletes: the SDD/guide builders an earlier package published are
     # still served (measured 2026-09-13: /mrrc_modern/build_sdd.py and build_guide.py
     # both HTTP 200). Build-time tooling must not be in the DocumentRoot at all.

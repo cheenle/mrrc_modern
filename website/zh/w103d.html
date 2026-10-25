@@ -74,7 +74,7 @@
         <span class="badge"><i class="fas fa-tv"></i> W103D · 盒子完整指南</span>
         <h1>ZTE W103D 电台盒子 — 从开箱到 MRRC 干活</h1>
         <p>从拿到一台全新的 W103D 开始：认机器 → 下载校验 → 烧 U 盘 → 从 U 盘启动 → 接电台 → 选机型 → 验收。末尾附一张从零到干活的打勾清单。</p>
-        <div class="actions"><a class="btn" href="../w103d-index.html"><i class="fas fa-list"></i> 全部盒子指南</a><a class="btn btn-primary" href="../downloads/MRRC-Modern-w103d.img.gz"><i class="fas fa-download"></i> 下载 W103D 镜像</a><a class="btn" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子已刷好？看用户指南</a><a class="btn" href="../w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a><a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" target="_blank" rel="noopener"><i class="fas fa-bolt"></i> 速查操作单</a></div>
+        <div class="actions"><a class="btn btn-primary" href="../downloads/MRRC-Modern-1.28.1-w103d.img.gz"><i class="fas fa-download"></i> 下载 W103D 镜像</a><a class="btn" href="../w103d-user.html"><i class="fas fa-box-open"></i> 盒子已刷好？看用户指南</a><a class="btn" href="../w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a><a class="btn" href="../w103d-faq.html"><i class="fas fa-circle-question"></i> 常见问题</a><a class="btn" href="https://github.com/cheenle/mrrc_modern/blob/main/packaging/box/README.md" target="_blank" rel="noopener"><i class="fas fa-bolt"></i> 速查操作单</a></div>
     </div>
 </header>
 
@@ -555,6 +555,7 @@ bash /tmp/verify.sh         # §12 那份</code></pre>
 <p><strong>③ 内核升级只走 <code>armbian-update</code>，保持 <code>w103d</code> 变体。</strong></p>
 <p>W103D 的 WiFi 完全依赖专属内核补丁 + MT7663S 固件 overlay。 换成通用内核 = <strong>静默丢 WiFi</strong>：没有报错，只是连不上。</p>
 <h2 id="20-排障">20. 排障</h2>
+<p><strong>先定性，再看表。</strong> 公网入口、证书、时间、隧道这一类的报错不要从表里猜：先跑 <a href="w103d-faq.html">常见问题：先看这一行</a> 里的五条命令，把问题按到某一层（本机身份 / 时钟 / DNS / 隧道 / 证书）。那页也解释了为什么「证书尚未生效」通常根本与证书无关。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>症状</th><th>先看</th><th>多半是</th></tr></thead><tbody>
 <tr><td>打不开网页</td><td><code>ip a</code>；<code>systemctl status mrrc-modern</code></td><td>网线/服务；<code>journalctl -u mrrc-modern -n 50</code></td></tr>

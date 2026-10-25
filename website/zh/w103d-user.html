@@ -74,7 +74,7 @@
         <span class="badge"><i class="fas fa-box-open"></i> W103D · 用户指南</span>
         <h1>拿到盒子之后：发货版 W103D 用户指南</h1>
         <p>系统已经写进 eMMC，口令、时区、Wi-Fi 卖家都设好了：插电、用浏览器登录就能干活。这页讲清楚出厂设了什么、电台怎么接、验收看哪几项，以及出了问题先自己查什么。</p>
-        <div class="actions"><a class="btn" href="../w103d-index.html"><i class="fas fa-list"></i> 全部盒子指南</a><a class="btn btn-primary" href="../w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a><a class="btn" href="../w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a><a class="btn" href="../index.html#download"><i class="fas fa-download"></i> 下载页</a></div>
+        <div class="actions"><a class="btn btn-primary" href="../w103d.html"><i class="fas fa-book"></i> 从零刷机的完整指南</a><a class="btn" href="../w103d-remote.html"><i class="fas fa-gamepad"></i> 遥控器指南</a><a class="btn" href="../w103d-faq.html"><i class="fas fa-circle-question"></i> 连不上门户？常见问题</a><a class="btn" href="../index.html#download"><i class="fas fa-download"></i> 下载页</a></div>
     </div>
 </header>
 
@@ -116,6 +116,7 @@
 <tr><td>天调 ATR-1000</td><td>存了一条它的热点配置，但<strong>不会自动连</strong>（一块无线只能顾一头）</td><td>—</td></tr>
 <tr><td>电台型号 / 串口</td><td><strong>没有预置</strong>，插上电台再选一次</td><td>界面 ☰ →「连接设置」</td></tr>
 <tr><td>救急 Wi-Fi</td><td>预置了 <code>rescue</code> / <code>abcd1234</code>（见 §9.10）</td><td>设置页「Wi-Fi」里可以直接改</td></tr>
+<tr><td>DNS</td><td>每条网络都带备用解析器 <code>114.114.114.114</code> / <code>8.8.8.8</code>（追加在路由器给的那条后面，不覆盖它）</td><td>不用改；要自己加见 <a href="w103d-faq.html">常见问题</a>「盒子的 DNS 是什么」</td></tr>
 <tr><td>主机名</td><td><code>MRRC-Modern</code></td><td>设置页「盒子身份」</td></tr>
 <tr><td>HTTPS 证书</td><td>自签，首启动时在这台机器上生成</td><td>不用改，浏览器会警告一次</td></tr>
 </tbody></table></div>
@@ -179,6 +180,7 @@
 <p>---</p>
 <h2 id="9-出问题怎么办">9. 出问题怎么办</h2>
 <p><strong>先换一个浏览器，或者换一台设备再试。</strong> 一半的「打不开」是浏览器缓存或代理造成的，不在盒子上。</p>
+<p><strong>如果是「公网入口连不上」「证书报错」「时间不对」这一类</strong>，它们的真因分属四个完全不同的层（网络 / 时钟 / DNS / 本机配置），报错却长得一样：先按 <a href="w103d-faq.html"><strong>常见问题：先看这一行</strong></a> 那张判据表定位到层，再回来查下面这张表。</p>
 <div class="table-scroll"><table>
 <thead><tr><th>现象</th><th>最可能的原因</th><th>怎么办</th></tr></thead><tbody>
 <tr><td>找不到盒子的地址</td><td>路由器换了网段，或 Wi-Fi 没连上</td><td>插网线（最省事）；或 §9.10 的手机热点；或接 HDMI 敲 <code>ip -4 addr</code></td></tr>

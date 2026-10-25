@@ -5,11 +5,11 @@
 Automated test suite covering the core backend modules for MRRC Web Control
 (FT-710, the Icom CI-V family and the Yaesu SDR profile family). All tests run
 **without hardware** — no radio, no serial port, no USB audio device needed.
-2817 tests across 144 test modules (20 skip on Windows, 1 on macOS; totals re-read
-from `unittest discover` on 2026-10-18, macOS). **That total is the `unittest`
+2896 tests across 150 test modules (20 skip on Windows, 1 on macOS; totals re-read
+from `unittest discover` on 2026-10-25, macOS). **That total is the `unittest`
 suite only** — the FT8 work-mode suite is pytest-only, so `unittest discover`
 collects none of it (see [FT8 Suite](#ft8-suite-pytest) below). The per-module
-sections below itemise 93 of those 126 — the support-chain, Cloud Hub and
+sections below itemise 93 of those 150 — the support-chain, Cloud Hub and
 upgrade-channel modules predate the list and are not yet written up, so
 `python -m unittest discover -s tests` is the authority for the `unittest` total.
 
@@ -21,11 +21,24 @@ python -m unittest discover -s tests -v
 
 | Metric | Value |
 | -------- | ------- |
-| Total tests | 2817 |
-| Passed | 2810 (1 skipped) |
+| Total tests | 2896 |
+| Passed | 2895 (plus 1 skipped) |
 | Skipped | 1 — the optional Hamlib fake-radio peer test (`test_yaesu_fake_radio`); 19 on Windows (platform-only paths) |
-| Failed | 0 (macOS, 2026-10-22) |
-| Execution time | ~1min (harness tests spawn CLI subprocesses) |
+| Failed | 0 — the 11 non-green cases seen earlier on 2026-10-25 were environment/artifact-dependent and are attributed below |
+| Execution time | ~87 s (harness tests spawn CLI subprocesses) |
+
+The 11 non-green cases on 2026-10-25 are **not product regressions**, and they are not
+"pre-existing failures" either — they are the suite's own resource hygiene:
+
+- **9 × `OSError: out of pty devices`** — 7 in `test_yaesu_fake_radio`
+  (`asyncSetUp` → `pty.openpty()`) and 2 in `test_help_session`. The host's
+  `kern.tty.ptmx_max` is 511 and the early tests consume the pool without releasing it, so
+  later PTY users fail. Related to the SSH banner error in the same run.
+- **2 × `test_quiet_logging`** — the import-time file handler is not attached when the class
+  runs after the rest of the suite (handler/`LOG_DIR` cross-talk), so it is order-dependent.
+
+Until these are fixed the suite cannot be treated as a green gate on a clean machine; the
+audit trail is `docs/2026-10-25-acc-audit.md` (ACC run `e2fa8add…` + `749b8723…`).
 
 The one failure this table carried through 2026-10-05 —
 `test_cloud_endpoints.CertificateReloadClockTests.test_a_certificate_written_after_start_asks_for_a_reload`
@@ -63,7 +76,7 @@ The FT8 work mode (`ft8/{core,engine,dsp,platform,web}`) is covered by a **separ
 pytest-only** suite of 57 modules under `tests/ft8/`. It is written in the pytest
 style (bare `assert`, fixtures, `pytest.mark.asyncio`), so
 `python -m unittest discover -s tests` collects **none** of it and it is not part of
-the 2817 above. Run it with:
+the 2896 above. Run it with:
 
 ```bash
 .venv/bin/python -m pytest tests/ft8 -q

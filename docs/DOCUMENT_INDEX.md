@@ -56,6 +56,7 @@
 | [docs/MACOS_INSTALLER_GUIDE.md](docs/MACOS_INSTALLER_GUIDE.md) | macOS 安装与使用指南：两种 Gatekeeper 弹窗、麦克风权限（RX 无声）、数据位置、升级/卸载、故障排查表 | 用户 |
 | [docs/W103D_USER_GUIDE.md](docs/W103D_USER_GUIDE.md) | 发货版 W103D 用户指南：出厂口令、Wi-Fi、接电台、五分钟验收与排障 | 用户 |
 | [docs/W103D_REMOTE_GUIDE.md](docs/W103D_REMOTE_GUIDE.md) | 蓝牙遥控器指南：配对（pty + agent）、按键表、kHz 输入、排障 | 用户 |
+| [docs/W103D_FAQ.md](docs/W103D_FAQ.md) | **W103D 常见问题：一句话「连不上门户」**——「看到什么 → 先看哪一条」判据表 + 盒子本机五条定位命令 + 九个真因条目（无 RTC 电池导致 `certificate is not yet valid`、env 属主导致“你还没申请”、一个呼号一条活隧道的换机顺序）；站点页 `website/w103d-faq.html`（`website/w103d-index.html` 专题内第七份） | 用户/运维 |
 
 ### 🔧 技术细节
 

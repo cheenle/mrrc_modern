@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The five system verbs the web pages may ask for, and nothing else.
+"""The six system verbs the web pages may ask for, and nothing else.
 
 Why a separate root process (design §7.3): `mrrc` may *read* NetworkManager, but
 `hostnamectl`, `timedatectl` and `systemctl reboot` are root's. Shrinking that
@@ -45,6 +45,17 @@ COMMAND_TIMEOUT_S = 30
 HOSTNAME_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\Z")
 ZONEINFO = "/usr/share/zoneinfo"
 
+#: The resolver repair, as a script rather than an argv one-liner: it has real
+#: logic (symlink already? backup? resolved absent? stub missing?) and it is the
+#: same file `mrrc-update` runs, so a box repaired from the page and a box
+#: repaired by an upgrade cannot drift apart.
+FIX_RESOLV_CONF = "/opt/mrrc_modern/linux/fix_resolv_conf.sh"
+
+#: Verbs whose own output is worth shipping back to the caller. `systemctl
+#: reboot` prints nothing useful; the DNS repair prints what it found and what
+#: it changed, which is the whole point of pressing the button.
+OUTPUT_VERBS = ("fix-resolv-conf",)
+
 
 def log(message: str) -> None:
     """journald picks this up (`journalctl -u mrrc-box-helper`). No verb here
@@ -87,6 +98,12 @@ def argv_for(verb: str, args: list) -> Optional[list]:
         # 0x0E 一路重试、dmesg 里实例号一路涨），重配 bond 治不了，重启 bluetoothd
         # 治得了。服务用户没有 root，这是它唯一能走的路；参数列表为空即全部约束。
         return ["systemctl", "restart", "bluetooth"]
+    if verb == "fix-resolv-conf" and not args:
+        # 参数为空即全部约束：脚本自己的路径是常量，客户端不能改它、也不能给参数。
+        # 盒子的 /etc/resolv.conf 若指向镜像里带来的静态文件（构建机的 DNS），
+        # glibc 每次解析都撞 5 秒超时 —— 2026-10-25 现场（MRRC-BG1SB：Docker
+        # Desktop 的 192.168.65.7）。修它要 root，而服务用户不是 root。
+        return ["bash", FIX_RESOLV_CONF]
     if verb == "set-hostname" and len(args) == 1 and HOSTNAME_RE.match(args[0]):
         return ["hostnamectl", "set-hostname", "--static", args[0]]
     if verb == "set-timezone" and len(args) == 1 and zone_ok(args[0]):
@@ -210,11 +227,17 @@ def handle(request) -> dict:
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout or "").strip()
         log(f"{verb} failed ({completed.returncode}): {detail}")
-        return {"ok": False, "error": detail or f"{verb} failed"}
+        reply = {"ok": False, "error": detail or f"{verb} failed"}
+        if verb in OUTPUT_VERBS:
+            reply["output"] = (completed.stdout or "")[-4000:]
+        return reply
     if verb == "set-hostname":
         sync_hosts(args[0])
     log(f"{verb} ok")
-    return {"ok": True}
+    reply = {"ok": True}
+    if verb in OUTPUT_VERBS:
+        reply["output"] = (completed.stdout or "")[-4000:]
+    return reply
 
 
 # ── the socket ──────────────────────────────────────────────────────

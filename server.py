@@ -70,6 +70,7 @@ from backends.base import RadioBackend
 import box_ops
 import box_update
 import net_bt
+import net_wifi
 import cloud_hub
 import help_session
 import net_tls
@@ -7098,6 +7099,14 @@ def main():
     except Exception as exc:                                      # noqa: BLE001
         logger.warning("could not start the cloud auto-connect poller (%s)", exc)
 
+    # Every box ships with two fallback resolvers on each saved profile. A router that hands
+    # out no DNS - or a DHCP answer that arrives after the first lookups - otherwise leaves
+    # the box unable to resolve *anything*, and the symptom is never "no DNS": measured
+    # 2026-10-25, an empty resolver at boot kept chrony from resolving its NTP pool, the
+    # clock stayed 24 days behind the image date, and every HTTPS call failed with
+    # "certificate is not yet valid". Runs off the loop because it shells out to nmcli.
+    threading.Thread(target=_ensure_fallback_dns, name="dns-fallback", daemon=True).start()
+
     server = uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port,
                                            log_level="info", reload=False, **ssl_kwargs))
     server.run(sockets=[_bind_listener_socket(args.host, args.port)])
@@ -7631,6 +7640,28 @@ def _cloud_start_autoconnect(interval: float = _CLOUD_AUTOCONNECT_INTERVAL) -> b
     return True
 
 
+def _ensure_fallback_dns() -> list:
+    """Put the shipped fallback resolvers on every saved profile. Never raises.
+
+    Runs on a daemon thread at start-up, which is the upgrade path: a box flashed
+    before FALLBACK_DNS existed picks it up on its next restart (new boxes get it from
+    the image and from ``net_wifi.write_profile``). Logs one sentence when it changes
+    something - a box rewriting its own network profiles silently would be exactly the
+    kind of invisible state this repo keeps paying for.
+
+    Off the event loop because it shells out to nmcli once per saved profile.
+    """
+    try:
+        changed = net_wifi.ensure_fallback_dns()
+    except Exception as exc:                                      # noqa: BLE001
+        logger.warning("could not add the fallback resolvers (%s)", exc)
+        return []
+    if changed:
+        logger.info("added the fallback resolvers %s to: %s",
+                    ", ".join(net_wifi.FALLBACK_DNS), ", ".join(changed))
+    return changed
+
+
 
 
 def _relaunch_command() -> list:
@@ -8093,6 +8124,28 @@ async def api_box_hostname(request: Request):
         await asyncio.to_thread(box_ops.reload_avahi)
     return JSONResponse(result,
                         status_code=200 if result.get("ok") else 400)
+
+
+@app.post("/api/box/fix-dns", include_in_schema=False)
+async def api_box_fix_dns(request: Request):
+    """Repair ``/etc/resolv.conf`` with the web password, not root's.
+
+    Boxes flashed before 2026-10-25 carry the **build machine's** ``/etc/resolv.conf``
+    inside the image: the build lends the chroot that file so apt/pip can resolve and
+    the base image's ``-> ../run/systemd/resolve/stub-resolv.conf`` symlink is never put
+    back. Measured on a delivered box (MRRC-BG1SB, image built 2026-10-11): the file held
+    Docker Desktop's ``192.168.65.7``, an address that exists on no customer LAN, so glibc
+    waited 5 s per lookup and failed while ``ping <ip>`` kept working.
+
+    The repair is ``linux/fix_resolv_conf.sh`` — the same file ``mrrc-update`` runs — so
+    this endpoint cannot drift from the upgrade path. It is idempotent, backs the original
+    up, and is reachable only with a logged-in session (the listen role is refused by the
+    auth middleware, which allows GET only).
+    """
+    if not _verify_auth(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    result = await asyncio.to_thread(box_ops.fix_dns)
+    return JSONResponse(result, status_code=200 if result.get("ok") else 400)
 
 
 @app.post("/api/box/timezone", include_in_schema=False)

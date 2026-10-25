@@ -144,6 +144,27 @@ class HandleTests(unittest.TestCase):
                 self.assertIsInstance(reply, dict)
                 self.assertIn("ok", reply)
 
+    def test_fix_resolv_conf_takes_no_arguments_and_runs_the_shared_script(self):
+        """The resolver repair is one script, shared with `mrrc-update`.
+
+        2026-10-25: boxes built before that day carry the *build machine's*
+        /etc/resolv.conf (Docker Desktop's 192.168.65.7 on MRRC-BG1SB), so glibc
+        waits 5 s per lookup and fails. Fixing it needs root; the service user is
+        not root. The script path is a constant and takes no argument, so this verb
+        cannot be turned into "run something else as root".
+        """
+        self.assertEqual(box_helper.argv_for("fix-resolv-conf", []),
+                         ["bash", box_helper.FIX_RESOLV_CONF])
+        for args in (["/tmp/evil.sh"], ["--force"], [""]):
+            with self.subTest(args=args):
+                self.assertIsNone(box_helper.argv_for("fix-resolv-conf", args))
+
+    def test_the_repair_ships_its_output_back(self):
+        """The page and the Windows tool show what was found and changed, so the
+        reply carries the script's stdout — a bare {"ok": true} would leave the
+        operator unable to tell "repaired" from "nothing to do"."""
+        self.assertIn("fix-resolv-conf", box_helper.OUTPUT_VERBS)
+
     def test_a_reboot_runs_exactly_the_tables_argv(self):
         """A reboot must reach `subprocess.run` as the literal argv the verb
         table chose. Asserting the argv — not just `"ok" in reply` — is what

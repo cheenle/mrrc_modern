@@ -54,5 +54,37 @@ class SupportEntryTests(unittest.TestCase):
         self.assertIn("登录", self.page)
 
 
+class HelpPanelTests(unittest.TestCase):
+    """The maintainer needs three facts, not two: username, password **and port**.
+
+    2026-10-25 field: the panel showed 用户名 / 口令 / 剩余 / 已连接, so before he could
+    connect (`ssh hub -W 127.0.0.1:<port>`) the supporter had to ask which port it was —
+    the one number that cannot be guessed. `/api/help/status` has always carried `port`
+    (`help_session.status()`); the panel simply never rendered it.
+    """
+
+    def setUp(self):
+        self.page = PAGE.read_text(encoding="utf-8")
+
+    def test_the_panel_has_a_port_row(self):
+        self.assertIn('id="help-port"', self.page)
+        self.assertIn("s.port", self.page)
+
+    def test_an_unassigned_port_reads_as_a_dash_not_zero(self):
+        """A window that is open but has no tunnel port yet must not show `0`:
+        `0` is what a maintainer would paste, and it connects to nothing."""
+        self.assertIn('s.port ? String(s.port) : "—"', self.page)
+
+    def test_the_copy_button_carries_all_three_facts(self):
+        self.assertIn("复制连接信息", self.page)
+        for label in ('"用户名 "', '"\\n口令 "', '"\\n端口 "'):
+            self.assertIn(label, self.page)
+
+    def test_the_password_is_still_never_written_to_a_url_or_link(self):
+        """The panel renders the password as text; it must not turn it into a
+        `?token=` style link (AD-024 has the same rule for auth tokens)."""
+        self.assertNotIn("help-pw\"></a>" , self.page)
+
+
 if __name__ == "__main__":
     unittest.main()

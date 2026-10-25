@@ -41,7 +41,7 @@
 <div class="hero-content">
 <div class="hero-badge">
 <i class="fas fa-check-circle"></i>
-<span>v1.28.2 · 稳定版</span>
+<span>v1.28.6 · 稳定版</span>
 </div>
 <h1 class="hero-title">
           一根 USB 线<br/>
@@ -55,10 +55,10 @@
           CAT/CI-V 控制，无需 200 美元的硬件盒子。
         </p>
 <div class="hero-actions">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.2-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.28.2
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.6-arm64.dmg"><i class="fab fa-apple"></i> 下载 macOS v1.28.6
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
-<i class="fab fa-windows"></i> Windows 安装包 v1.28.2
+<i class="fab fa-windows"></i> Windows 安装包 v1.28.6
           </a>
 <a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-Android.apk">
 <i class="fab fa-android"></i>安卓 APK v1.1.34
@@ -85,7 +85,7 @@
           ">
 <p style="margin: 0 0 0.6rem; font-size: 1.05rem">
 <i class="fas fa-star" style="color: var(--scope-primary)"></i>
-<strong> v1.28.2 更新内容</strong>
+<strong> v1.28.6 更新内容</strong>
               <a href="https://github.com/cheenle/mrrc_modern/blob/main/CHANGELOG.md" rel="noopener" style="font-size: 0.8rem; color: var(--scope-primary)">完整更新日志 →</a>
 </p>
 <p style="margin: 0 0 0.6rem; font-size: 0.98rem">
@@ -94,17 +94,19 @@
 </p>
 <ul style="margin: 0; padding-left: 1.2rem; color: var(--scope-text-muted); line-height: 1.75">
             <li>
-              <strong>v1.28.2 — hub 再也不会钉住一把实例已经换掉的证书；FT8 解码器不再杀掉自己的 worker</strong> —
-              <code>sign_for()</code> 现在幂等：同名且证书可用就逐字节复用、不重签，于是「签了但登记没成功」不会再让
-              hub 钉住的与实例服务的成为两把（现场入口整夜 502 就是这个形态）；已经坏掉的实例点一次「连接」即自愈。
-              FT8 深路径也不再带走服务器进程的 DSP worker：原生解码器里的 Fortran <code>stop</code> 此前每个时隙都
-              终止子进程，而且是无声的 —— launcher 的启动 tee 在服务器答 HTTP 后就不再写盘。worker 自己的
-              stdout/stderr 现在落到 <code>logs/ft8-worker.log</code>（诊断包收集），FFTW 线程初始化改为返回状态码
-              而不再 abort。
+              <strong>v1.28.6 —— 盒子（和桌面版）自己管两个音频电平：TX 麦克风与 RX 下发各一个 dB 旋钮</strong> ——
+              决定「到底多响」的两个数从浏览器收归盒子。<b>TX MIC</b>（−20…+25 dB）只放大操作员的麦克风，CQ 播放与
+              FT8 波形不经过它；TX 录音 tap 在增益之后，所以录下来的是电台真正收到的信号。<b>RX</b>（−20…+30 dB）
+              只放大下发给听众的那一份：录音、FT8 解码、盒子本地扬声器保持原生电平——软件增益补不出信息，把解码
+              链路顶到削顶只换来解不出的信号。两者默认 0 dB，升级后声音逐字节不变；网页端 🎙 Vol 的上限从 +6 dB
+              提到 +25 dB。同版还有：隧道停掉的状态终于看得见（此前一个入口 502 四天，设置页写着「已接通」）、
+              解析链修复（<code>fix-dns</code> 只要网页口令、不要 root）、以及更新卡与页脚上的盒子修复包编号
+              （<code>1.28.6 · FP2</code>）。
             </li>
             <li>
-              <strong>上一版（v1.28.0）—— 电台电源回到 ☰ 菜单且两种意图分开；出站 HTTPS 只信随包的根证书而不是本机证书库；FT8 级联的深路径第一次真正跑起来</strong> —
-              外加三个只在产物里现形的缺陷（冻结包缺 <code>cty.dat</code>、兄弟 venv 被装进 ARM 镜像、三条 POSIX-only 测试在 Windows 上从未被收集）。
+              <strong>上一版（v1.28.2）—— hub 再也不会钉住一把实例已经换掉的证书；FT8 解码器不再杀掉自己的 worker</strong> ——
+              <code>sign_for()</code> 幂等，登记失败的实例点一次「连接」即自愈；解码器里的 Fortran <code>stop</code>
+              改为返回状态码，它的 stderr 现在落到 <code>logs/ft8-worker.log</code>。
             </li>
             </ul>
 <p style="margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--scope-text-muted)">
@@ -163,7 +165,7 @@
 <span class="section-label">功能特性</span>
 <h2 class="section-title">完整的多电台远程控制</h2>
 <p class="section-subtitle">
-            真实频谱（FT4222 SPI 或 CI-V）、双向 Opus 音频、服务端 QSO 录音、全功能 CAT/CI-V 控制与多层 PTT 安全<strong>十一款可插拔机型</strong>：
+            真实频谱（FT4222 SPI 或 CI-V）、双向 Opus 音频、服务端 QSO 录音、全功能 CAT/CI-V 控制与多层 PTT 安全。<strong>十一款可插拔机型</strong>：
             FT-710、IC-7300/IC-7300MK2，IC-705 / IC-7610 / IC-7760 预览配置，以及 Yaesu SDR 机型族 FTDX10 / FTDX101D / FTDX101MP / FTX-1F，全链路零中间件。
           </p>
 </div>
@@ -174,8 +176,7 @@
 <p>
               FT-710：约 21 fps 的 850 点 FFT 频谱，直接读自 DSP 芯片的
               FT4222 SPI 接口。IC-7300/MK2：CI-V <code>0x27</code> 475 点
-              频谱升采样到 850 点。发射感知暂停保持频谱干净，无硬件路径时
-              自动回退到 S 表合成频谱。
+              频谱升采样到 850 点。发射感知暂停保持频谱干净，无硬件路径时自动回退到 S 表合成频谱。合成不是常态，只是没装驱动时的兜底。
             </p>
 <ul>
 <li>FT4222 SPI 直读（libft4222 + libftd2xx）</li>
@@ -203,8 +204,7 @@
               端到端统一 48 kHz 编解码域：RX 采集 → Opus 64kbps → 浏览器
               AudioWorklet；浏览器麦克风 → Opus CBR → 服务器 → 电台。
               FT-710 后端桥接到固定 44.1 kHz USB 音频设备域（每 20 ms
-              960→882 采样）；IC-7300 后端使用 48 kHz 原生 USB 音频，无需
-              重采样。
+              960→882 采样）；IC-7300 后端使用 48 kHz 原生 USB 音频，无需重采样。整条链上只有 FT-710 那个 44.1 kHz 的固定设备域需要换算，别处一次都不做。
             </p>
 <ul>
 <li>64kbps Opus：比裸 PCM 小 12 倍</li>
@@ -229,8 +229,7 @@
 <div class="icon"><i class="fas fa-code-branch"></i></div>
 <h3>自适应轮询</h3>
 <p>
-              100ms→5s 智能间隔，0.25 秒单查询超时上限，优先级抢占保证 PTT
-              绝不等待轮询周期。用户命令后的在途过期读取一律丢弃。
+              100ms→5s 智能间隔，0.25 秒单查询超时上限，优先级抢占保证 PTT 绝不等待轮询周期。用户命令后的在途过期读取一律丢弃。过期读数不算读数。
             </p>
 <ul>
 <li>串口总占用约 296 字节/秒</li>
@@ -256,8 +255,7 @@
 <h3>服务端 QSO 录音</h3>
 <p>
               浏览器上点 REC，整段通联在<strong>服务端</strong>录制：刷新页面、关标签页、甚至 CAT 断线都不会中断。收发音落在同一条单调
-              16 kHz 时间轴上，边到边编码为 MP3；服务器中途崩溃，磁盘上
-              也留有可播放的前缀。
+              16 kHz 时间轴上，边到边编码为 MP3；服务器中途崩溃，磁盘上也留有可播放的前缀。录到的每一秒都已经落盘，不攒在内存里等收尾。
             </p>
 <ul>
 <li>「录音」面板：列表、可拖动进度播放、下载、删除</li>
@@ -361,7 +359,7 @@
 <h3>多层 PTT 安全</h3>
 <p>
               按住发射、松手即停。Fire-and-forget TX0 + 500ms 发射状态轮询 +
-              浏览器看门狗。最后一个客户端（或 TX 音频属主）断开时，服务端强制切回接收。
+              浏览器看门狗。最后一个客户端（或 TX 音频属主）断开时，服务端强制切回接收。七层里任何一层单独失效，都还有六层在收口。不靠单层兜底。
             </p>
 <ul>
 <li>7 层独立释放机制：无单点故障</li>
@@ -451,11 +449,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-windows" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-Setup.exe — v1.28.2 稳定版</strong>
+<strong> MRRC-Modern-Setup.exe — v1.28.6 稳定版</strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            75.7 MB · x64 · 79,703,701 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 183b5c49…</code>
+            76.0 MB · x64 · 79,725,756 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: f3349a1e…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             ☰ 菜单里现在有电台自己的电源开关（「重开」= 关机后按有界、可取消的循环持续唤醒；「关机」= 关掉就不
@@ -468,10 +466,10 @@
 <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-Setup.exe">
 <i class="fab fa-windows"></i> 下载 Windows 版
             </a>
-<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.28.2-Windows-x64-Setup.exe">
-<i class="fas fa-fingerprint"></i> v1.28.2 版本化安装包
+<a class="btn btn-secondary btn-large" href="../downloads/MRRC-Modern-v1.28.6-Windows-x64-Setup.exe">
+<i class="fas fa-fingerprint"></i> v1.28.6 版本化安装包
             </a>
-<div class="dl-meta">79,703,701 bytes · SHA-256 183b5c49…</div>
+<div class="dl-meta">79,725,756 bytes · SHA-256 f3349a1e…</div>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
 <i class="fab fa-github"></i> GitHub Releases
             </a>
@@ -487,11 +485,11 @@
           ">
 <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
 <i class="fab fa-apple" style="color: var(--scope-primary)"></i>
-<strong> MRRC-Modern-v1.28.2-arm64.dmg — v1.28.2 稳定版 </strong>
+<strong> MRRC-Modern-v1.28.6-arm64.dmg — v1.28.6 稳定版 </strong>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-            81.7 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 85,666,868 bytes<br/>
-<code style="font-size: 0.76rem">SHA-256: 7c0f08e4…</code>
+            81.7 MB · arm64 · Apple Silicon（M1/M2/M3/M4）· macOS 11+ · 85,623,497 bytes<br/>
+<code style="font-size: 0.76rem">SHA-256: ec927202…</code>
 </p>
 <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
             首次运行零配置：MRRC Modern 自动生成网页密码、自动识别电台（FT-710 ASCII CAT / Icom CI-V 0x19）与串口，并内置 FT4222 真频谱
@@ -506,7 +504,7 @@
 <a href="../guide.html#macos-安装与初始化" style="color: var(--scope-primary)">macOS 安装与设置指引 →</a>
 </p>
 <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.2-arm64.dmg">
+<a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-v1.28.6-arm64.dmg">
 <i class="fab fa-apple"></i> 下载 macOS 版
             </a>
 <a class="btn btn-secondary btn-large" href="https://github.com/cheenle/mrrc_modern/releases" rel="noopener" target="_blank">
@@ -568,17 +566,17 @@
           ">
           <p style="margin: 0 0 0.25rem; font-size: 1.15rem">
           <i class="fas fa-tv" style="color: var(--scope-primary)"></i>
-          <strong> MRRC-Modern-1.28.4-w103d.img.gz — 中兴 W103D 盒子</strong>
+          <strong> MRRC-Modern-1.28.6-w103d.img.gz — 中兴 W103D 盒子</strong>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1rem">
-              1.22 GB（1,220,510,546 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
-          <code style="font-size: 0.76rem">SHA-256: 14dbf2dd8b8326db4457ab8a81b9182aaf8c4c9244b5ec41e967e15906125b51</code>
+              1.23 GB（1,232,393,683 字节）· arm64 · 中兴 W103D（Amlogic S905L3A，2 GB 内存）· Armbian 26.11 bookworm<br/>
+          <code style="font-size: 0.76rem">SHA-256: 1fabb7429982914a835651debb24a6c54a56078fd0cf59391ce548fe12f99d94</code>
           </p>
           <p style="color: var(--scope-text-muted); margin: 0 0 1.25rem">
               针对这款盒子预装好的服务端镜像，出厂即用、不需要任何初始化：网页口令与系统账号 <code>root</code>／<code>mrrc</code> 已分别是 <code>abcd!1234</code> 与 <code>abcd1234</code>，时区 <code>Asia/Shanghai</code>、区域 <code>zh_CN.UTF-8</code>。烧到 U 盘、从 U 盘启动（只写一次 u-boot 启动顺序，不碰原厂安卓的分区与数据），打开 <code>https://&lt;盒子IP&gt;:8888</code> 就能登录。<strong>第一件事是把这三个口令改掉</strong>，用户指南里有步骤。<code>mrrc-radio</code> 在 11 个支持的机型之间切换。验收通过后把系统固化进机身 eMMC，最终只剩一根电源线和一根网线，而 U 盘上的整盘备份随时可以退回去。
             </p>
           <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center">
-          <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-1.28.4-w103d.img.gz">
+          <a class="btn btn-primary btn-large" href="../downloads/MRRC-Modern-1.28.6-w103d.img.gz">
           <i class="fas fa-download"></i> 下载 W103D 镜像
               </a>
           <a class="btn btn-secondary btn-large" href="w103d-index.html">
@@ -646,10 +644,10 @@
 <div class="step">
 <h4>2 · 运行安装包</h4>
 <p>
-              MRRC-Modern-Setup.exe — v1.28.2，75.7 MB，x64。开始菜单 +
+              MRRC-Modern-Setup.exe — v1.28.6，75.7 MB，x64。开始菜单 +
               可选桌面快捷方式。
             </p>
-<code>SHA-256 183b5c497abb4a0e9795e5bdf8b64eb097c921097aef17269718413918423ba3</code>
+<code>SHA-256 f3349a1e3a8dc67deb5278a9e401fc64b61b06a70989a25dcd1033a1c2c849d7</code>
 </div>
 <div class="step">
 <h4>3 · 编辑配置</h4>
@@ -981,7 +979,7 @@
 <div class="perf-card">
 <div class="metric">2327</div>
 <div class="metric-label">
-              无硬件依赖测试<br/><small>v1.28.2 发布版：2327 项 / 121 个测试模块，不需要电台、串口或声卡</small>
+              无硬件依赖测试<br/><small>v1.28.6 发布版：2952 项 / 152 个测试模块，不需要电台、串口或声卡</small>
 </div>
 </div>
 </div>
@@ -1172,7 +1170,7 @@
 <div class="footer-section">
 <h4>资源</h4>
 <ul>
-<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.28.2</a></li>
+<li><a href="../downloads/MRRC-Modern-Setup.exe"><i class="fab fa-windows"></i> Windows 安装包 v1.28.6</a></li>
 <li><a href="../downloads/MRRC-Modern-rpi64.img.xz"><i class="fab fa-raspberry-pi"></i> 树莓派镜像</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern" rel="noopener" target="_blank">GitHub</a></li>
 <li><a href="https://github.com/cheenle/mrrc_modern/blob/main/README.md" rel="noopener" target="_blank">README</a></li>

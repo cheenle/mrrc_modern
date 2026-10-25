@@ -55,6 +55,10 @@ cmd.exe 按**当前代码页**读批处理文件，不是按 UTF-8。中文注�
 
 - 文件本身只有 ASCII（有测试盯着）；控制台上的中文（盒子的 `reason` / `detail`）靠
   `chcp 65001` + PowerShell 的 `[Console]::OutputEncoding` 显示；
+- **`chcp 65001` 只能放在最后一个 `set /p` 之后**：它会把重定向进来的 stdin 弄空，
+  之后的提示一律读到空串（Win11 实测：喂两行、只吃掉第一行），而"远程/脚本化跑它"
+  正是这个工具存在的理由。`mrrc-diag.cmd` 有同样的形状（5 处 `set /p` 在 `chcp`
+  之后），它目前是双击用的，所以没动 —— 将来要脚本化喂输入，先改那一处。
 - 走 PowerShell 5.1 就够（`ConvertFrom-Json`），不引入新依赖 —— 客户机器上能指望的
   只有 curl.exe（Win10 1809+ 自带）与 PowerShell。这与 `mrrc-diag.cmd` 一致。
 

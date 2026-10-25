@@ -149,6 +149,7 @@
   </head>
   <body>
     <main class="doc">
+      <p style="margin: 0 0 1rem"><a href="w103d-index.html" style="font-size: 0.9rem">← 全部盒子指南</a></p>
       <h1>在 Windows 上做一张 W103D 刷机盘</h1>
       <p class="sub">
         从下载镜像到盒子能开机 —— 中间只有 4 个判据要盯，其余都是等待。
@@ -171,8 +172,13 @@
         会走这一页的只有两种人：
       </p>
       <ul>
-        <li>要把一台盒子<strong>从头刷一遍</strong>（换版本、救砖、批量代刷）；</li>
-        <li>想自己攒一张<strong>克隆盘</strong>，以后一台一台刷 —— 盘上是什么，盒子就是什么。</li>
+        <li>
+          要把一台盒子<strong>从头刷一遍</strong>（换版本、救砖、批量代刷）；
+        </li>
+        <li>
+          想自己攒一张<strong>克隆盘</strong>，以后一台一台刷 ——
+          盘上是什么，盒子就是什么。
+        </li>
       </ul>
       <p>
         盒子已经能用、只是想升级版本？<strong>不用刷盘</strong>：打开盒子页面 →
@@ -185,14 +191,16 @@
           <tr>
             <td>U 盘</td>
             <td>
-              <strong>≥ 8 GB</strong>（镜像解开 3.43 GiB；标称 4 GB 的盘实际常只有 3.6 GiB，别赌）。
+              <strong>≥ 8 GB</strong>（镜像解开 3.43 GiB；标称 4 GB
+              的盘实际常只有 3.6 GiB，别赌）。
               <strong>盘上原有的东西会全部消失。</strong>
             </td>
           </tr>
           <tr>
             <td>电脑</td>
             <td>
-              Windows 10（1809 及以上）或 Windows 11，<strong>管理员权限</strong>（写裸盘必须）。
+              Windows 10（1809 及以上）或 Windows
+              11，<strong>管理员权限</strong>（写裸盘必须）。
             </td>
           </tr>
           <tr>
@@ -201,11 +209,16 @@
           </tr>
           <tr>
             <td>回形针</td>
-            <td>按复位孔用 —— <strong>它在 AV 孔里面</strong>，不是外壳上的独立按钮。</td>
+            <td>
+              按复位孔用 ——
+              <strong>它在 AV 孔里面</strong>，不是外壳上的独立按钮。
+            </td>
           </tr>
           <tr>
             <td>HDMI + 显示器</td>
-            <td>不是必须，但没有它只能靠猜。有的话一眼看出进没进 update 模式。</td>
+            <td>
+              不是必须，但没有它只能靠猜。有的话一眼看出进没进 update 模式。
+            </td>
           </tr>
         </tbody>
       </table>
@@ -217,12 +230,14 @@
         </a>
       </p>
       <p>
-        放到桌面，双击。它会自己请求管理员权限（UAC 点「是」）。第一次运行会从本站下载
-        1.2 GB 的镜像 —— 网络断了重跑会<strong>接着下</strong>，不会从头来。
+        放到桌面，双击。它会自己请求管理员权限（UAC
+        点「是」）。第一次运行会从本站下载 1.2 GB 的镜像 ——
+        网络断了重跑会<strong>接着下</strong>，不会从头来。
       </p>
 
       <h3>屏幕上会依次出现这五段</h3>
-      <pre>== 镜像
+      <pre>
+== 镜像
    正在下载（约 1.2 GB，可断点续传；中断后重跑会接着下）…
    OK  下载完成：1.1 GB
 
@@ -241,40 +256,49 @@
 可写：#1
 输入要写入的磁盘编号（其余键退出）：</pre>
 
-      <p>这时<strong>输 1，回车</strong>。接着它要你亲手打 <code>ERASE</code>：</p>
-      <pre>即将抹掉这一块盘上的全部数据：
+      <p>
+        这时<strong>输 1，回车</strong>。接着它要你亲手打 <code>ERASE</code>：
+      </p>
+      <pre>
+即将抹掉这一块盘上的全部数据：
    #1  SanDisk Ultra USB 3.0  28.7 GB  (USB/Removable)
 确认请输入 ERASE（大小写均可，其它任何输入都会取消）：</pre>
 
       <p>
         输 <code>ERASE</code> 回车，开始写。写入时显示进度与速度；写完还有一段
-        <strong>回读校验</strong> —— 它会把整份镜像从 U 盘读回来重新算一遍 SHA-256。
+        <strong>回读校验</strong> —— 它会把整份镜像从 U 盘读回来重新算一遍
+        SHA-256。
       </p>
 
       <div class="callout">
         <strong>看到这一句才叫成功：</strong><br />
-        <code>OK  回读一致：盘上这份 == 镜像那份</code><br />
+        <code>OK 回读一致：盘上这份 == 镜像那份</code><br />
         看不到它就别拿去刷盒子。
       </div>
 
-      <p>
-        USB 3.0 的盘整个过程约 1–2 分钟；USB 2.0 要 5 分钟以上。
-      </p>
+      <p>USB 3.0 的盘整个过程约 1–2 分钟；USB 2.0 要 5 分钟以上。</p>
 
       <h3>为什么它不让你选 C: 盘</h3>
       <p>
-        这个工具只认 <strong>USB / 可移动介质</strong>。系统盘和内置硬盘不会出现在可写列表里，
-        也没有「我确定」的覆盖开关 —— 那不是没做完，是刻意这么写的：弄错一次的代价是整台电脑。
+        这个工具只认
+        <strong>USB / 可移动介质</strong
+        >。系统盘和内置硬盘不会出现在可写列表里， 也没有「我确定」的覆盖开关 ——
+        那不是没做完，是刻意这么写的：弄错一次的代价是整台电脑。
       </p>
       <p>
-        反过来也有代价：<strong>有些读卡器会把 SD 卡报成「固定盘」</strong>，那就不会出现在列表里。
-        换一个读卡器，或走<a href="w103d.html">手工路线</a>（Rufus / balenaEtcher）。
+        反过来也有代价：<strong>有些读卡器会把 SD 卡报成「固定盘」</strong
+        >，那就不会出现在列表里。 换一个读卡器，或走<a href="w103d.html"
+          >手工路线</a
+        >（Rufus / balenaEtcher）。
       </p>
 
       <h2>第二步：让盒子从这张盘启动</h2>
       <ol>
         <li><strong>盒子断电</strong>（拔电源）。</li>
-        <li><strong>先插 U 盘</strong>，再上电 —— 顺序反了没用，u-boot 那时已经扫过一圈。</li>
+        <li>
+          <strong>先插 U 盘</strong>，再上电 —— 顺序反了没用，u-boot
+          那时已经扫过一圈。
+        </li>
         <li>用回形针按住 <strong>AV 孔里面</strong>的复位键不放。</li>
         <li>通电，<strong>继续按住约 10 秒</strong>，再松手。</li>
       </ol>
@@ -308,15 +332,16 @@
         </tbody>
       </table>
       <p>
-        <strong>没有 HDMI 也能验证</strong>：上电两三分钟后，路由器 DHCP 列表里多了一台
-        <code>MRRC-Modern</code>；或在同一网络的电脑上打开
+        <strong>没有 HDMI 也能验证</strong>：上电两三分钟后，路由器 DHCP
+        列表里多了一台 <code>MRRC-Modern</code>；或在同一网络的电脑上打开
         <code>https://MRRC-Modern:8888</code>。
       </p>
 
       <h2>第三步：把系统固化进 eMMC</h2>
       <p>
-        这一步在盒子上做（SSH 或 HDMI+键盘都行）。<strong>盘上这套系统会被整份复制进 eMMC</strong>，
-        之后拔掉 U 盘，盒子就从 eMMC 启动。
+        这一步在盒子上做（SSH 或 HDMI+键盘都行）。<strong
+          >盘上这套系统会被整份复制进 eMMC</strong
+        >， 之后拔掉 U 盘，盒子就从 eMMC 启动。
       </p>
       <p>先确认三条前置，缺一条就别下笔：</p>
       <pre><code class="lang-bash">grep -E "^MODEL_ID|^DISK_TYPE" /etc/ophub-release     # 必须 307 / usb
@@ -325,22 +350,32 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
       <p>然后非交互安装：</p>
       <pre><code class="lang-bash">nohup sh -c 'printf "307\n1\n" | /usr/sbin/armbian-install' &gt; /root/emmc-install.log 2&gt;&amp;1 &amp;</code></pre>
       <p>
-        两个答案是 <strong>307</strong>（本板型）和 <strong>1</strong>（装到 eMMC）。
-        <strong>永远不要加 <code>-m yes</code></strong> —— 那会换掉本板的
-        <code>u-boot-w103d.bin</code>。
+        两个答案是 <strong>307</strong>（本板型）和 <strong>1</strong>（装到
+        eMMC）。 <strong>永远不要加 <code>-m yes</code></strong> ——
+        那会换掉本板的 <code>u-boot-w103d.bin</code>。
       </p>
 
       <div class="callout">
         <strong>完成判据只有一条：</strong><br />
-        <code>grep -c "Installation completed successfully" /root/emmc-install.log</code>
+        <code
+          >grep -c "Installation completed successfully"
+          /root/emmc-install.log</code
+        >
         等于 <code>1</code>。实测约 <strong>2 分 15 秒</strong>。<br /><br />
-        <strong>别这样等</strong>：<code>while pgrep -f armbian-install; do sleep 10; done</code>
-        —— <code>pgrep -f</code> 会匹配到你自己这条命令行，循环永不退出；现场看起来像
+        <strong>别这样等</strong>：<code
+          >while pgrep -f armbian-install; do sleep 10; done</code
+        >
+        ——
+        <code>pgrep -f</code>
+        会匹配到你自己这条命令行，循环永不退出；现场看起来像
         「装了两个小时」，日志显示两分钟就完了。
       </div>
 
       <h2>第四步：断电前四项，全绿才准拔盘</h2>
-      <p>这四项把「能开机」和「开完还是好的」分开。逐条命令见 <code>docs</code> 里的 emmc 章节，这里给判据：</p>
+      <p>
+        这四项把「能开机」和「开完还是好的」分开。逐条命令见
+        <code>docs</code> 里的 emmc 章节，这里给判据：
+      </p>
       <table>
         <thead>
           <tr>
@@ -353,28 +388,38 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
           <tr>
             <td>1</td>
             <td>新分区表</td>
-            <td><code>p1</code> = BOOT_EMMC（511 MB vfat）、<code>p2</code> = ROOTFS_EMMC（其余全部 ext4，新 UUID）</td>
+            <td>
+              <code>p1</code> = BOOT_EMMC（511 MB vfat）、<code>p2</code> =
+              ROOTFS_EMMC（其余全部 ext4，新 UUID）
+            </td>
           </tr>
           <tr>
             <td>2</td>
             <td>原厂引导两段</td>
-            <td>与 <code>/usr/lib/u-boot/mybox-bootloader.img</code> 逐字节一致</td>
+            <td>
+              与 <code>/usr/lib/u-boot/mybox-bootloader.img</code> 逐字节一致
+            </td>
           </tr>
           <tr>
             <td>3</td>
             <td>引导指向</td>
-            <td><code>uEnv.txt</code> 里的 <code>root=UUID=</code> 等于新 <code>p2</code> 的 UUID</td>
+            <td>
+              <code>uEnv.txt</code> 里的 <code>root=UUID=</code> 等于新
+              <code>p2</code> 的 UUID
+            </td>
           </tr>
           <tr>
             <td>4</td>
             <td>代码身份</td>
-            <td>挂上新 <code>p2</code> 后 <code>version.txt</code> 与镜像一致</td>
+            <td>
+              挂上新 <code>p2</code> 后 <code>version.txt</code> 与镜像一致
+            </td>
           </tr>
         </tbody>
       </table>
       <p>
-        四项过了 → <code>poweroff</code>（<strong>别直接拔电</strong>）→ 拔掉 U 盘 → 再上电。
-        这次应当从 eMMC 启动：<code>findmnt -no SOURCE /</code> 是
+        四项过了 → <code>poweroff</code>（<strong>别直接拔电</strong>）→ 拔掉 U
+        盘 → 再上电。 这次应当从 eMMC 启动：<code>findmnt -no SOURCE /</code> 是
         <code>/dev/mmcblk2p2</code>。
       </p>
 
@@ -406,8 +451,8 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
         </tbody>
       </table>
       <p>
-        这三条是<strong>同一批镜像共用的公开值</strong>，而且镜像默认允许 root 用口令登录 SSH。
-        通电第一件事就是全部改掉。
+        这三条是<strong>同一批镜像共用的公开值</strong>，而且镜像默认允许 root
+        用口令登录 SSH。 通电第一件事就是全部改掉。
       </p>
 
       <h2>常见问题</h2>
@@ -415,7 +460,10 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
         <tbody>
           <tr>
             <td>双击后说「已保护你的电脑」</td>
-            <td>浏览器给下载的文件打了「来自 Internet」标记。点「更多信息」→「仍要运行」</td>
+            <td>
+              浏览器给下载的文件打了「来自
+              Internet」标记。点「更多信息」→「仍要运行」
+            </td>
           </tr>
           <tr>
             <td>列表里没有我的 U 盘</td>
@@ -426,21 +474,30 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
           </tr>
           <tr>
             <td>清盘失败 / 盘被占用</td>
-            <td>关掉资源管理器窗口、杀毒软件的实时扫描、其它刷盘工具，再重跑</td>
+            <td>
+              关掉资源管理器窗口、杀毒软件的实时扫描、其它刷盘工具，再重跑
+            </td>
           </tr>
           <tr>
             <td><strong>回读不一致</strong></td>
             <td>
-              <strong>不要用这张盘刷盒子。</strong>最常见是扩容盘（标称容量是假的），其次是坏块。换一根盘
+              <strong>不要用这张盘刷盒子。</strong
+              >最常见是扩容盘（标称容量是假的），其次是坏块。换一根盘
             </td>
           </tr>
           <tr>
             <td>刷完 Windows 弹「需要格式化」</td>
-            <td>正常。盘里是 Linux 分区，Windows 读不懂，<strong>别点格式化</strong></td>
+            <td>
+              正常。盘里是 Linux 分区，Windows 读不懂，<strong
+                >别点格式化</strong
+              >
+            </td>
           </tr>
           <tr>
             <td>盒子还是进安卓</td>
-            <td>按住复位孔的时机不对：必须<strong>从通电那一刻起</strong>按住，且插盘要在上电之前</td>
+            <td>
+              按住复位孔的时机不对：必须<strong>从通电那一刻起</strong>按住，且插盘要在上电之前
+            </td>
           </tr>
           <tr>
             <td>黑屏 / 停在 u-boot</td>
@@ -450,8 +507,9 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
             <td>盘上根分区只有 2.9 GB</td>
             <td>
               镜像如此，不会自动长。系统跑起来后
-              <code>growpart /dev/sda 2</code> + <code>resize2fs /dev/sda2</code>
-              （先 <code>apt-get install -y cloud-guest-utils</code>）
+              <code>growpart /dev/sda 2</code> +
+              <code>resize2fs /dev/sda2</code> （先
+              <code>apt-get install -y cloud-guest-utils</code>）
             </td>
           </tr>
           <tr>
@@ -465,15 +523,21 @@ lsblk -dn -o NAME,SIZE,TRAN,MODEL                      # mmcblk2 = eMMC</code></
       <p>手工路线一样可行，只是别踩坑：</p>
       <ul>
         <li>
-          <strong>Windows</strong>：Rufus 或 balenaEtcher，选 <code>.img.gz</code> 本体
-          （两者都能直接吃 gz），模式是「从镜像写入」，<strong>不是</strong>解压后复制文件。
+          <strong>Windows</strong>：Rufus 或 balenaEtcher，选
+          <code>.img.gz</code> 本体 （两者都能直接吃
+          gz），模式是「从镜像写入」，<strong>不是</strong>解压后复制文件。
         </li>
         <li>
-          <strong>macOS</strong>：<code>gzip -dc … | sudo dd of=/dev/rdiskN bs=4m</code> ——
-          用 <code>rdiskN</code>（裸设备），<code>diskN</code> 慢十倍以上。
+          <strong>macOS</strong>：<code
+            >gzip -dc … | sudo dd of=/dev/rdiskN bs=4m</code
+          >
+          —— 用 <code>rdiskN</code>（裸设备），<code>diskN</code> 慢十倍以上。
         </li>
         <li>
-          <strong>Linux</strong>：<code>gzip -dc … | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync</code>
+          <strong>Linux</strong>：<code
+            >gzip -dc … | sudo dd of=/dev/sdX bs=4M status=progress
+            conv=fsync</code
+          >
         </li>
       </ul>
       <p>

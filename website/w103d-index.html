@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="W103D 盒子指南总览：已刷好的盒子、自己刷机、入口打不开、遥控器配不上——按处境选一页，附每页的关键判据。"
+    />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>W103D 盒子指南总览 — MRRC Modern</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="js/global-nav.js?v=6" defer data-gn="1"></script>
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .doc {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 130px 1.5rem 120px;
+        font-size: 1.02rem;
+        line-height: 1.85;
+      }
+      .doc h1 {
+        font-size: 1.9rem;
+        line-height: 1.35;
+        margin: 0 0 0.5rem;
+      }
+      .doc .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.4rem;
+      }
+      .doc h2 {
+        font-size: 1.22rem;
+        margin: 2.9rem 0 0.9rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .doc p,
+      .doc li {
+        margin: 0.7rem 0;
+      }
+      .doc ul,
+      .doc ol {
+        padding-left: 1.4rem;
+      }
+      .doc code {
+        background: #1a1a20;
+        border: 1px solid var(--line);
+        padding: 0.08em 0.35em;
+        border-radius: 4px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.9em;
+      }
+      .doc table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.92rem;
+      }
+      .doc th,
+      .doc td {
+        border: 1px solid var(--line);
+        padding: 0.6rem 0.75rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .doc th {
+        background: #16161c;
+      }
+      a {
+        color: var(--amber);
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #101015;
+        padding: 1rem 1.2rem;
+        margin: 0.9rem 0;
+      }
+      .card h3 {
+        margin: 0 0 0.4rem;
+        font-size: 1.05rem;
+      }
+      .card h3 a {
+        text-decoration: none;
+      }
+      .card .who {
+        color: var(--muted);
+        font-size: 0.88rem;
+        margin: 0.2rem 0 0.5rem;
+      }
+      .card p {
+        margin: 0.35rem 0;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 0.74rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.05rem 0.55rem;
+        color: var(--muted);
+        margin-right: 0.35rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="doc">
+      <h1>W103D 盒子指南总览</h1>
+      <p class="sub">
+        同一个盒子，六份文档，按处境选一页就行 —— 不必从第一页读到最后。
+      </p>
+
+      <h2>我该看哪一页</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>你的处境</th>
+            <th>看这一页</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>盒子已经刷好，刚拆箱</td>
+            <td><a href="w103d-user.html"><strong>盒子用户指南</strong></a></td>
+          </tr>
+          <tr>
+            <td>从外面打不开 <code>你的呼号.mrrc.vlsc.net</code>，诊断包也传不上去</td>
+            <td><a href="diag.html"><strong>局域网取包与诊断</strong></a></td>
+          </tr>
+          <tr>
+            <td>想自己刷一台，手上是 <strong>Windows</strong> 电脑</td>
+            <td><a href="flash.html"><strong>在 Windows 上做一张刷机盘</strong></a></td>
+          </tr>
+          <tr>
+            <td>要完整走一遍刷机（做盘 → 进 update → 固化 eMMC → 验收）</td>
+            <td><a href="w103d.html"><strong>W103D 从零指南</strong></a></td>
+          </tr>
+          <tr>
+            <td>遥控器配不上，或者配上了但按键全没反应</td>
+            <td><a href="w103d-remote.html"><strong>遥控器指南</strong></a></td>
+          </tr>
+          <tr>
+            <td>只是想知道这东西是怎么来的</td>
+            <td><a href="w103d-radio-box.html"><strong>一台 ¥125 的盒子当电台服务器</strong></a></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>六页各是什么</h2>
+
+      <div class="card">
+        <h3><a href="w103d-user.html">盒子用户指南</a></h3>
+        <p class="who">
+          <span class="tag">已刷好</span><span class="tag">30 分钟</span>
+          适合：拿到发货版盒子、插电就要用的人
+        </p>
+        <p>
+          三个出厂口令、连 Wi-Fi（含预置一个工作台上扫不到的网络）、接电台、
+          五分钟验收、以及出问题时的分诊表。<strong>不需要 U 盘、显示器和键盘。</strong>
+        </p>
+        <p style="color: var(--muted)">
+          第一件事：设成自己的口令 —— 网页在「登录口令」，root / mrrc 在「系统账号口令」。
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="diag.html">公网入口连不上时，怎么把诊断包拿出来</a></h3>
+        <p class="who">
+          <span class="tag">排障</span><span class="tag">10 分钟</span>
+          适合：局域网打得开、公网入口打不开的人
+        </p>
+        <p>
+          诊断包原本只能靠「上传」，而上传要盒子能出网 —— 网络坏掉时包就出不去。
+          这一页用一个 Windows 小工具，在你的局域网里把包直接拷回来。
+          最后一步失败也不要紧：屏幕上那几行 <code>tunnel_error</code> 通常已经够定位。
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="flash.html">在 Windows 上做一张 W103D 刷机盘</a></h3>
+        <p class="who">
+          <span class="tag">刷机</span><span class="tag">20 分钟 + 下载</span>
+          适合：Windows 用户，只需要「把镜像写进 U 盘」
+        </p>
+        <p>
+          一个文件双击：下载镜像（断点续传）→ 校验 SHA-256 → 选盘 → 写入 →
+          <strong>回读整份镜像比对</strong>。只认 USB / 可移动介质，系统盘与内置盘
+          没有覆盖选项。
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="w103d.html">W103D 从零指南</a></h3>
+        <p class="who">
+          <span class="tag">刷机</span><span class="tag">1 小时</span>
+          适合：要把一台盒子从头刷到能用，或批量代刷的人
+        </p>
+        <p>
+          刷机盘之后的全部环节：<strong>复位孔进 update 模式</strong>（HDMI 三种画面各是什么）、
+          <code>armbian-install</code> 固化进 eMMC、断电前四项验收、扩容根分区、
+          预置客户 Wi-Fi（工作台上扫不到的那种）。
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="w103d-remote.html">遥控器指南</a></h3>
+        <p class="who">
+          <span class="tag">外设</span><span class="tag">15 分钟</span>
+          适合：买了蓝牙遥控器、想站在电台旁边操作的人
+        </p>
+        <p>
+          配对、按键映射、以及那个最坑的失败模式 ——
+          <strong>「配上了」但按键全死</strong>：链路没加密，bluez 的 HID 设备建了就拆。
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="w103d-radio-box.html">一台 ¥125 的盒子当电台服务器</a></h3>
+        <p class="who"><span class="tag">长篇</span> 适合：想知道「为什么是这台」的人</p>
+        <p>从选板到踩坑的过程记录，不是操作手册。</p>
+      </div>
+
+      <h2>三条常走的路线</h2>
+      <ol>
+        <li>
+          <strong>新盒子 → 能用</strong>：<a href="w103d-user.html">用户指南</a> →
+          改三个口令 → 连 Wi-Fi → 接电台 → 五分钟验收
+        </li>
+        <li>
+          <strong>重刷一台</strong>：<a href="flash.html">做刷机盘</a> →
+          <a href="w103d.html">从零指南</a> 的「让盒子从 U 盘启动」与「固化 eMMC」两节
+        </li>
+        <li>
+          <strong>入口打不开</strong>：<a href="diag.html">局域网取包</a> →
+          把 <code>cloud-state</code> 那几行发过来
+        </li>
+      </ol>
+
+      <h2>一句话能记住的判据</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>环节</th>
+            <th>看到这个才算过</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>刷机盘做完了</td>
+            <td><code>OK  回读一致：盘上这份 == 镜像那份</code></td>
+          </tr>
+          <tr>
+            <td>盒子进了 update 模式</td>
+            <td>HDMI 上滚动的 Linux 内核日志</td>
+          </tr>
+          <tr>
+            <td>固化进 eMMC 完成</td>
+            <td><code>grep -c "Installation completed successfully"</code> = <code>1</code></td>
+          </tr>
+          <tr>
+            <td>确实从 eMMC 启动</td>
+            <td><code>findmnt -no SOURCE /</code> 是 <code>/dev/mmcblk2p2</code></td>
+          </tr>
+          <tr>
+            <td>公网入口通了</td>
+            <td><code>curl -o /dev/null -w '%{http_code}' https://&lt;呼号&gt;.mrrc.vlsc.net/login</code> = <code>200</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>通用前提</h2>
+      <ul>
+        <li>
+          型号：<strong>W103D / W102D / W105D</strong> 是同一家族（Amlogic S905L3A），
+          固件通用；文件名里的 "w103d" 指固件家族，不是外壳上的型号。
+        </li>
+        <li>无线只有 <strong>2.4 GHz</strong>；有线优先，音频延迟也更低。</li>
+        <li>
+          出厂口令是<strong>整批共用的公开值</strong>（网页 <code>abcd!1234</code>、
+          root <code>abcd1234</code>、mrrc <code>abcd!1234</code>）—— 通电第一件事全改掉。
+        </li>
+      </ul>
+    </main>
+  </body>
+</html>

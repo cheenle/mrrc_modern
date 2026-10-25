@@ -116,32 +116,21 @@ class OldBuildTests(unittest.TestCase):
 
 
 class InPlaceUpdateTests(unittest.TestCase):
-    """老盒子那条路：SSH 把发布包装进 /opt/mrrc_modern（不刷机、不删数据）。"""
+    """老盒子那条路已经独立成 `MRRC-Update-SSH.cmd` —— 这里只钉住"指得对"。
 
-    def test_it_gets_the_package_from_the_manifest_not_from_the_box(self):
-        """包地址必须取自清单本身。
+    分出去的理由：那条路要在客户机上开一个 SSH 会话、以 root 身份覆盖
+    `/opt/mrrc_modern`。它不该躺在一个双击就能跑工具里，也不该有两份实现
+    （两份 batch 一定漂）。所以主工具只负责**说清楚去用哪一个**。
+    """
 
-        老盒子的 `/api/update/check` 走的是回退分支（`check()`），拿回来的是**桌面版**
-        的 installer 字段 —— 照着它下载会把 Windows 安装包当成源码树。所以老这条路
-        自己读 latest.json 的 `box` / `boxLine`。
-        """
-        start = CMD.index("\n:old_prepare\n")
-        block = CMD[start:CMD.index("\n:old_no_manifest\n", start)]
-        self.assertIn("latest.json", block)
-        self.assertIn("$j.box", block)
-        self.assertIn("$j.boxLine", block, "清单从 2026-10-19 起用的是 boxLine")
-        self.assertIn("Get-FileHash", block, "下载完必须核对 SHA-256")
-        self.assertIn("mrrc-remote-update.sh", block, "安装器随工具一起发，避免两处逻辑")
-
-    def test_the_ssh_leg_has_a_host_to_copy_to(self):
-        """`%HOST%` 必须真的被赋值过。
-
-        这是 2026-10-25 在 VM 上撞出来的：它一度被当成"没人用"删掉，于是 scp 的
-        destination 变成 `user@:/tmp/`，ssh 只回一句 usage —— 而 batch 看不出这种错。
-        """
-        self.assertRegex(CMD, r'set "HOST=%%a"')
-        self.assertIn("%SSHUSER%@%HOST%:", CMD)
-
+    def test_the_old_build_branch_points_at_the_ssh_tool(self):
+        start = CMD.index("\n:old_build\n")
+        block = CMD[start:CMD.index("\n:confirm\n", start)]
+        self.assertIn("MRRC-Update-SSH.cmd", block)
+        self.assertIn("1.25.5", block, "必须点名那个会删数据的版本区间")
+        self.assertIn("--delete", block)
+        for action in ("scp ", "ssh ", "Get-FileHash"):
+            self.assertNotIn(action, block, f"主工具里不该再有 {action.strip()} —— 它已经搬走")
 
 class PromptAndCodePageTests(unittest.TestCase):
     def test_the_code_page_switch_comes_after_the_last_prompt(self):

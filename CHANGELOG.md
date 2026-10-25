@@ -29,14 +29,18 @@ All notable changes to the MRRC Web Control project.
 - 文件保持纯 ASCII：cmd.exe 按当前代码页读批处理，中文注释在 936 上有过吃掉下一行的
   历史；控制台上的中文靠 `chcp 65001` + PowerShell 的 `OutputEncoding`。
 
-**老盒子（1.24 ~ 1.27）也能"只换程序、不刷机"**：那些构建没有 `/api/update/apply`
-（`check` 是 v1.18.0 就有的，动作是 2026-10-18 才有的），设置页里连更新卡都没有；
-而它们自带的 `mrrc-update`（≤1.25.5）用 `rsync --delete`，会删掉 `env/`、`profiles/`
-和录音。所以脚本在确认前先探一次 `/api/update/state`，老构建**当场停下**并给出一条新路：
-输入 `SSH` → 在电脑上按清单下载 `mrrc-modern-src-*.tar.gz`、核对 SHA-256 →
-`scp` 到盒子 → 用随包发布的 `dev_tools/mrrc-remote-update.sh` 装进 `/opt/mrrc_modern`
-（先备份、只覆盖、不删除、重启），最后读回版本。它是 `box_update.apply()` 的 shell 双胞胎：
-同一个 keep 列表、同样的"绝不删除"。
+**老盒子（1.24 ~ 1.27）也能"只换程序、不刷机"** —— 但走**另一个工具**：
+`dev_tools/mrrc-update-ssh.cmd`（`MRRC-Update-SSH.cmd`）。分开的理由是职责与权限：
+那条路要在客户机上开 SSH、以 root 覆盖 `/opt/mrrc_modern`，它不该躺在一个双击就跑、
+只调盒子 API 的工具里；两份 batch 也一定会漂。
+
+- `mrrc-update.cmd` 只负责**指路**：确认前先探一次 `/api/update/state`，老构建当场停下，
+  说明它没有远程升级器、去用 `MRRC-Update-SSH.cmd`，并点名 ≤1.25.5 那个会删数据的 `mrrc-update`。
+- `mrrc-update-ssh.cmd`：按清单（`box` / `boxLine`）下载发布包 → 核对 SHA-256 → `scp` →
+  在盒子上跑随包发布的 `mrrc-remote-update.sh`（先备份、只覆盖不删除、pip、重启）→
+  等 `/api/health` 应答。**不需要网页口令**；不带 `-f` 判活（401 也算活着）。
+- `mrrc-remote-update.sh` 是 `box_update.apply()` 的 shell 双胞胎：同一个 keep 列表、
+  同样的"绝不删除"、`version.txt`/`fixpack.txt` 取自包里；pip 失败就不重启（旧代码继续跑）。
 
 **测试**：`tests/test_box_update_cmd.py`（15 条）把脚本与盒子的契约钉住——端点与 HTTP 方法
 对得上 `server.py`、等的状态名来自 `box_update` 的常量、确认在动手之前、口令不进 argv、

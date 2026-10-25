@@ -145,6 +145,14 @@
             <td><a href="w103d-user.html"><strong>盒子用户指南</strong></a></td>
           </tr>
           <tr>
+            <td>盒子要升级（页面里有 ☰ →「软件更新」，盒子线 <strong>1.28.2 及以后</strong>）</td>
+            <td><a href="update.html"><strong>从 Windows 远程升级</strong></a></td>
+          </tr>
+          <tr>
+            <td>盒子是老镜像（<strong>1.27 及更早</strong>，页面里没有「软件更新」）</td>
+            <td><a href="update-ssh.html"><strong>用 SSH 就地升级</strong></a></td>
+          </tr>
+          <tr>
             <td>从外面打不开 <code>你的呼号.mrrc.vlsc.net</code>，诊断包也传不上去</td>
             <td><a href="diag.html"><strong>局域网取包与诊断</strong></a></td>
           </tr>
@@ -167,7 +175,7 @@
         </tbody>
       </table>
 
-      <h2>六页各是什么</h2>
+      <h2>八页各是什么</h2>
 
       <div class="card">
         <h3><a href="w103d-user.html">盒子用户指南</a></h3>
@@ -194,6 +202,38 @@
           诊断包原本只能靠「上传」，而上传要盒子能出网 —— 网络坏掉时包就出不去。
           这一页用一个 Windows 小工具，在你的局域网里把包直接拷回来。
           最后一步失败也不要紧：屏幕上那几行 <code>tunnel_error</code> 通常已经够定位。
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="update.html">从 Windows 电脑远程升级盒子</a></h3>
+        <p class="who">
+          <span class="tag">升级</span><span class="tag">5 分钟</span>
+          适合：盒子能上网、页面里有「软件更新」的人（盒子线 1.28.2 起）
+        </p>
+        <p>
+          用 <code>MRRC-Update.cmd</code> 在自己的电脑上把这件事做完：
+          登录 → 看「当前 → 线上」两个版本 → 输入 <code>YES</code> → 等它跑完。
+          中间盒子会重启一次（断线约 10 秒），脚本自己等它回来并重新读版本，
+          最后打出 <code>Before / After / Target</code>。
+        </p>
+        <p style="color: var(--muted)">
+          升级包是<strong>盒子自己</strong>去下载的，所以它要能出网 —— 这正好是
+          <a href="diag.html">局域网取包</a>的反面。
+        </p>
+      </div>
+
+      <div class="card">
+        <h3><a href="update-ssh.html">用 SSH 就地升级盒子（不刷机）</a></h3>
+        <p class="who">
+          <span class="tag">升级</span><span class="tag">10 分钟</span>
+          适合：<strong>1.27 及更早</strong>的盒子 —— 那些版本没有远程升级接口
+        </p>
+        <p>
+          <code>MRRC-Update-SSH.cmd</code> 在本机下载官方发布包、核对 SHA-256，
+          再推给盒子执行自带安装器：<strong>先备份、只覆盖、一个文件都不删</strong>。
+          不要直接跑那些老镜像里的 <code>mrrc-update</code> —— 1.25.5 及更早那份用
+          <code>rsync --delete</code>，会连带删掉配置和录音。
         </p>
       </div>
 
@@ -252,6 +292,10 @@
           <a href="w103d.html">从零指南</a> 的「让盒子从 U 盘启动」与「固化 eMMC」两节
         </li>
         <li>
+          <strong>升级</strong>：页面里有「软件更新」→ <a href="update.html">远程升级</a>；
+          1.27 及更早 → <a href="update-ssh.html">SSH 就地升级</a>
+        </li>
+        <li>
           <strong>入口打不开</strong>：<a href="diag.html">局域网取包</a> →
           把 <code>cloud-state</code> 那几行发过来
         </li>
@@ -281,6 +325,14 @@
           <tr>
             <td>确实从 eMMC 启动</td>
             <td><code>findmnt -no SOURCE /</code> 是 <code>/dev/mmcblk2p2</code></td>
+          </tr>
+          <tr>
+            <td>升级升上去了</td>
+            <td><code>After == Target</code>，且盒子重新应答（脚本最后那句 <code>Updated</code>）</td>
+          </tr>
+          <tr>
+            <td>升级被回滚了</td>
+            <td><code>After == Before</code> —— 新版本 90 秒内没起来，盒子自己退回去了</td>
           </tr>
           <tr>
             <td>公网入口通了</td>

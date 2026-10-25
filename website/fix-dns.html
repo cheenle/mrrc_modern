@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="盒子的网页能打开、域名却解析不了时，用 MRRC-FixDNS.cmd 在 Windows 上一条命令修好：判据、三步操作、老盒子怎么办。"
+      content="盒子的网页能打开、却上不了网时，用 MRRC-FixDNS.cmd 在 Windows 上修好它：双击、填两个空、看两段字，不用懂 Linux。"
     />
     <meta name="theme-color" content="#0a0a0a" />
-    <title>盒子的 DNS 坏了？在 Windows 上一条命令修好 — MRRC Modern</title>
+    <title>盒子连不上外网？在 Windows 上双击修好 — MRRC Modern</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -128,120 +128,129 @@
   <body>
     <main class="doc">
       <p style="margin: 0 0 1rem"><a href="w103d-index.html" style="font-size: 0.9rem">← 全部盒子指南</a></p>
-      <h1>盒子的 DNS 坏了：在 Windows 上一条命令修好</h1>
+      <h1>盒子连不上外网？在你的 Windows 电脑上双击修好</h1>
       <p class="sub">
-        适用：盒子的网页打得开、<code>ping 192.168.x.x</code> 也通，但
-        <code>ping portal.mrrc.vlsc.net</code> 要卡好几秒才失败；软件更新、公网入口、
-        诊断包上传一起失灵。
+        盒子在你家局域网里打得开网页，但<strong>上不了外网</strong>：软件更新一直转、
+        公网入口打不开、诊断包传不上去。用这一页的工具，五分钟内能在你自己的电脑上修好 ——
+        <strong>全程只用鼠标和键盘输入，不需要懂 Linux，也不需要密码之外的任何东西。</strong>
       </p>
 
-      <h2>先确认是不是这个问题</h2>
-      <p>在盒子的 SSH 里看两样东西（两行就够）：</p>
-      <pre>
-ls -l /etc/resolv.conf          # 是普通文件，而不是 -> /run/systemd/resolve/stub-resolv.conf
-cat /etc/resolv.conf            # 里面有一个"不属于你"的地址</pre>
-      <p>
-        典型的样子长这样 —— 那个 <code>192.168.65.7</code> 是
-        <strong>做镜像那台 Docker Desktop 的内部 DNS</strong>，在任何客户网络上都不存在：
-      </p>
-      <pre>
--rw-r--r-- 1 root root 97 10月11日 11:58 /etc/resolv.conf
-# DNS requests are forwarded to the host. DHCP DNS options are ignored.
-nameserver 192.168.65.7</pre>
-      <div class="callout">
-        判据一句话：<strong>能 ping 通 IP、ping 不通域名</strong>，而且
-        <code>resolvectl status</code> 第一行写着 <code>resolv.conf mode: foreign</code>。
-        这时系统里真正的 DNS（systemd-resolved，手里有路由器给的正确地址）根本没被用上。
-      </div>
-
-      <h2>为什么会这样</h2>
-      <p>
-        镜像构建时为了让安装程序能联网，构建脚本把<strong>构建机的</strong>
-        <code>/etc/resolv.conf</code> 借给了正在组装的系统，而基底原本的那条
-        <code>-&gt; ../run/systemd/resolve/stub-resolv.conf</code> 符号链接没有还原。
-        于是每台盒子出厂就带着一个"别人家的 DNS"。2026-10-11 之后、2026-10-25 之前
-        构建的镜像都有这个毛病。
+      <h2>你怎么判断是这个问题</h2>
+      <p>不用敲任何命令，看这三条就够了（中一条就往下走）：</p>
+      <ul>
+        <li>用浏览器打开 <code>https://盒子IP:8888</code> —— 正常；</li>
+        <li>页面里 ☰ →「软件更新」点「检查更新」—— 一直转圈，最后报失败；</li>
+        <li>家里其它设备上网正常（手机、电脑都能看视频）。</li>
+      </ul>
+      <p class="sub" style="font-size: 0.95rem">
+        换句话说：<strong>盒子能连上你，却连不上外面。</strong>原因通常是它记着一个不属于你家的
+        DNS 地址 —— 你在页面上看不到它，也不用去找它。
       </p>
 
-      <h2>下载修它的小工具</h2>
+      <h2>先准备两样东西</h2>
+      <ol>
+        <li>
+          <strong>盒子的 IP 地址</strong> —— 就是你浏览器地址栏里那个，例如
+          <code>192.168.1.50</code>。
+        </li>
+        <li>
+          <strong>盒子的网页登录口令</strong> —— 你平时打开盒子页面输入的那个。
+          <span style="color: var(--muted)">不是 SSH 的、也不是 Wi-Fi 的。</span>
+        </li>
+      </ol>
+
+      <h2>下载</h2>
       <p>
         <a class="dl" href="downloads/MRRC-FixDNS.cmd">
           <i class="fas fa-download"></i>&nbsp; MRRC-FixDNS.cmd
         </a>
       </p>
       <p>
-        约 9 KB，单个文件，不用安装。<strong>只要网页登录口令，不需要 root 口令、不需要 SSH。</strong>
-        它做的事：登录盒子 → 让盒子自己的 root 助手跑
-        <code>linux/fix_resolv_conf.sh</code>（与软件升级跑的是同一个脚本）→ 把结果打给你 →
-        再跑一遍证明已经是幂等的。
+        约 9 KB，单个文件，不用安装。放在桌面或下载文件夹，
+        <strong>双击运行</strong>即可。它不往任何地方上传东西，也不会改你的路由器。
       </p>
       <div class="callout">
         系统要求：Windows 10（1809 及以上）或 Windows 11。用的都是系统自带的
-        <code>curl.exe</code> 与 PowerShell，不装任何东西。
+        <code>curl.exe</code> 与 PowerShell，不需要额外装任何软件。
       </div>
 
       <h2>三步</h2>
       <ol>
-        <li>双击 <code>MRRC-FixDNS.cmd</code>（或 <code>mrrc-fix-dns.cmd 192.168.1.50</code>）。</li>
-        <li>输入盒子的 IP —— 就是浏览器地址栏里那个。</li>
-        <li>输入<strong>网页登录口令</strong>（不是 SSH 的）。脚本会打印它查到什么、改了什么。</li>
+        <li>双击 <code>MRRC-FixDNS.cmd</code>。会弹出一个黑色的窗口，这是正常的。</li>
+        <li>
+          提示 <code>Box IP address…</code> 时，输入盒子的 IP（例如
+          <code>192.168.1.50</code>），回车。
+        </li>
+        <li>
+          提示 <code>Web password…</code> 时，输入<strong>网页登录口令</strong>，回车。
+          <span style="color: var(--muted)">输入时屏幕上不显示字符，这是正常的。</span>
+        </li>
       </ol>
-      <p>正常会看到这样两段：</p>
-      <pre>
-fix_resolv_conf: /etc/resolv.conf is a static file: # DNS requests are forwarded ... nameserver 192.168.65.7
-fix_resolv_conf: backup written to /etc/resolv.conf.mrrc-bak
-fix_resolv_conf: /etc/resolv.conf -> ../run/systemd/resolve/stub-resolv.conf
-fix_resolv_conf: restarting systemd-resolved so the old global server is dropped
-fix_resolv_conf: done
+      <p>然后它会自己做完全部事情，并把过程打印出来。</p>
 
+      <h2>怎么算修好了</h2>
+      <p>
+        窗口里会出现<strong>两段</strong>结果。第二段如果写着
+        <code>already a symlink</code>（意思：现在已经是正确状态了），就是修好了：
+      </p>
+      <pre>
 --- running it once more: it must be a no-op now ---
-fix_resolv_conf: /etc/resolv.conf is already a symlink (../run/systemd/resolve/stub-resolv.conf) — nothing to do</pre>
+fix_resolv_conf: /etc/resolv.conf is already a symlink — nothing to do
+fix_resolv_conf: done</pre>
       <p>
-        <strong>第二段出现 "already a symlink" 就是修好了。</strong>
-        文件本身备份在盒子的 <code>/etc/resolv.conf.mrrc-bak</code>，随时可以还原。
+        最后一行会显示 <code>DONE - the box now resolves through systemd-resolved.</code>。
+        按任意键关掉窗口，然后回浏览器：
       </p>
-
-      <h2>修完怎么验</h2>
-      <p>在盒子上（SSH 或接显示器）：</p>
-      <pre>
-resolvectl status | head -3      # 应显示 resolv.conf mode: stub
-getent hosts portal.mrrc.vlsc.net   # 应立刻返回一个 IP</pre>
-      <p>
-        然后回到浏览器刷新页面：软件更新、公网入口、诊断包上传都应该恢复。
-        如果 <code>getent</code> 还是慢，那说明盒子连不到自己的路由器 —— 那是另一个问题
-        （网线 / Wi-Fi 信号 / DHCP），见 <a href="w103d-user.html">盒子用户指南</a> 的排障表。
-      </p>
-
-            <h2>脚本说 <code>404</code> / 提示"这台盒子还不认识这个接口"</h2>
-      <p>
-        说明盒子固件比这个修复早。<strong>而且这时不能"先升级再说"</strong>：升级要访问
-        <code>www.vlsc.net</code>，而解析恰恰就是坏掉的那一环。所以顺序反过来 ——
-      </p>
-      <ol>
-        <li>
-          <strong>先用 root 口令 SSH 进去，手工三行</strong>（可回退，原文件留着）：
-          <pre>
-cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak
-ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-systemctl try-restart systemd-resolved</pre>
-        </li>
-        <li>
-          名字能解析了，再升级盒子（页面 ☰ →「软件更新」，或
-          <a href="update.html">从 Windows 远程升级</a>）—— 那之后这台盒子就自愈了：
-          升级会跑同一个修复脚本，并重启提供这个接口的 root 助手。
-        </li>
-      </ol>
+      <ul>
+        <li>☰ →「软件更新」→「检查更新」应该几秒内有结果（不再转圈）；</li>
+        <li>公网入口 <code>你的呼号.mrrc.vlsc.net</code> 能打开了；</li>
+        <li>「🐞 遇到问题」里的诊断包能传上去了。</li>
+      </ul>
       <div class="callout">
-        root 口令也改过、又不记得了？那就只能重刷镜像（新镜像已经修掉了这个毛病），
-        或者先把盒子接上网线让 DHCP 拿到可用 DNS 再说。
+        这些都没好转？说明不是同一个问题。把那几行字截图，连同盒子的型号与版本
+        （页面 ☰ 菜单底部有）一起发给我们。
       </div>
 
-<h2>我们这边做了什么</h2>
+      <h2>窗口里报错了怎么办</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>窗口上写着</th>
+            <th>意思 / 你该做什么</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>No answer from 192.168…</code></td>
+            <td>这个地址连不上盒子。回到浏览器确认地址栏里的 IP 是否一样，或换个浏览器再试。</td>
+          </tr>
+          <tr>
+            <td><code>Login refused</code> / <code>Invalid password</code></td>
+            <td>网页登录口令不对（区分大小写）。如果是「只读/旁听」口令，也不行 —— 要用管理口令。</td>
+          </tr>
+          <tr>
+            <td><code>This box predates the repair</code>（或提示 <code>404</code>）</td>
+            <td>
+              这台盒子的固件比这个工具早，工具还没法替它修。
+              <strong>把这一句截图发给卖家/维护者</strong>，他们那边有办法，你不需要自己做什么。
+            </td>
+          </tr>
+          <tr>
+            <td><code>could not ... systemd-resolved</code> / 提示没有 systemd-resolved</td>
+            <td>这台盒子的系统不是我们发的镜像（或被人改过），工具故意没有动它。把这句发给卖家。</td>
+          </tr>
+          <tr>
+            <td>窗口一闪就没了</td>
+            <td>右键这个文件 →「以管理员身份运行」再试一次。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>它到底做了什么（不用看懂也能用）</h2>
       <p>
-        三处，缺一不可：<strong>镜像</strong>（构建结束时还原符号链接，新盒子不再带这个毛病）、
-        <strong>升级</strong>（<code>mrrc-update</code> 每次都以 root 跑一遍同一个修复脚本，
-        已发货的盒子升级一次自动好）、<strong>页面与这个工具</strong>（没有 root 口令也能修）。
-        脚本自己也是幂等的：已经是对的机器上跑，它只说一句 "already a symlink" 就退出。
+        你的电脑只是<strong>通知</strong>盒子：让它把自己记错的那个"外网地址簿"换回正确的。
+        真正的修复是盒子自己做的，而且<strong>可以反悔</strong>：旧文件被备份保留，
+        卖家随时能还原。整个过程不传出你的口令、不上传任何文件、不改路由器设置。
       </p>
 
     </main>

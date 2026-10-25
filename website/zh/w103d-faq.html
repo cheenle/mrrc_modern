@@ -188,11 +188,7 @@ nmcli -g ipv4.dns connection show "$(nmcli -t -f NAME connection show --active |
 <pre><code>nmcli connection modify "&lt;连接名&gt;" ipv4.dns "114.114.114.114 8.8.8.8 223.5.5.5"</code></pre>
 <p>只有一条 <code>dns=</code> 行、没有重复，就是对的：这个默认值是幂等的，每次启动只会补上缺的那几条。</p>
 <p><strong>更常见的一层</strong>：<code>/etc/resolv.conf</code> 本身就指向一个「外来」地址（2026-10-25 之前的镜像把它烤进了成品），这时连 NetworkManager 的 DNS 都没被用上 —— 见 <a href="fix-dns.html">盒子的 DNS 坏了：在 Windows 上一条命令修好</a>，那张页面给了一个只要网页口令的小工具。</p>
-<p><strong>如果 <code>nmcli</code> 里能看到这几条、<code>/etc/resolv.conf</code> 里却只有一条</strong>：那是 2026-10-25 之前的镜像 （构建时把容器的 <code>resolv.conf</code> 拷进了系统，<code>resolvectl status</code> 会显示 <code>resolv.conf mode: foreign</code>）， 等于系统解析根本没走 NetworkManager。在有 root 的前提下修一次即可（可回退）：</p>
-<pre><code>sudo cp -a /etc/resolv.conf /etc/resolv.conf.bak
-sudo ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-resolvectl status | head -3     # 应变成 "resolv.conf mode: stub"（或不再是 foreign）
-getent hosts portal.mrrc.vlsc.net</code></pre>
+<p><strong>如果 <code>nmcli</code> 里能看到这几条、<code>/etc/resolv.conf</code> 里却只有一条</strong>：那是 2026-10-25 之前的镜像（构建时把构建机的 <code>resolv.conf</code> 拷进了系统，<code>resolvectl status</code> 会显示 <code>resolv.conf mode: foreign</code>）。<strong>不用敲任何 Linux 命令</strong> —— 在 Windows 电脑上运行 <a href="fix-dns.html"><code>MRRC-FixDNS.cmd</code></a>，填一次盒子 IP 与网页口令就能修好；有 root 权限的运维也可以照 <a href="w103d.html">从零指南 §20</a> 那条手工三行修。</p>
 <h3 id="时间不对还会影响什么">时间不对还会影响什么</h3>
 <p>不止门户。2026-10-25 的现场里，同一台盒子因为时钟错了 24 天，<strong>软件更新也一直失败</strong> （更新检查走的是同一个 HTTPS），时间修好后当次就升了一个版本。同理受影响的还有 诊断包上传、远程协助、以及所有需要校验证书的功能。</p>
 <h3 id="自查完还是不通-交什么给支持">自查完还是不通，交什么给支持</h3>

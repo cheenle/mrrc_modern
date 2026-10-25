@@ -931,6 +931,7 @@ W103D 的 WiFi 完全依赖专属内核补丁 + MT7663S 固件 overlay。
 | 没声音 | `arecord -l` 有没有电台声卡 | 换线/换口；服务日志里的 PyAudio 设备列表 |
 | **声音卡顿/断续、听一会儿就没了** | `cat /proc/asound/card1/stream0`（看 Capture 是不是 `Status: Stop`）；`journalctl -u mrrc-modern \| grep -i "capture stalled"` | 采集缓冲溢出后**静默停摆**（本机 ALSA 只给 1–2 个 20 ms 周期）。服务会自己重开并把原因写进日志；若反复出现，把 `MRRC_RX_BUFFER_MS` 调大（§13） |
 | 瀑布图是合成谱（S 表） | `ls -l /opt/mrrc_modern/vendor/ftdi/`；`ls -l /etc/udev/rules.d/99-mrrc-ftdi.rules` | 缺 FTDI 库，或没插 Enhanced 口（`cat /sys/bus/usb/devices/*/idProduct \| grep 601c`）；**或 udev 规则缺失** —— 真 FFT 要服务用户 `mrrc` 能写那个 USB 节点，判定：`sudo -u mrrc test -w /dev/bus/usb/001/00N && echo ok` |
+| **能上网却解析不了域名**（`ping IP` 通、`ping 域名` 卡 5 秒后失败；软件更新与公网入口一起坏） | `ls -l /etc/resolv.conf` 应是 `-> ../run/systemd/resolve/stub-resolv.conf`；`resolvectl status \| head -3` 不应出现 `resolv.conf mode: foreign` | **构建期把构建机的 `/etc/resolv.conf` 烤进了镜像**（2026-10-25 MRRC-BG1SB：Docker Desktop 的 `192.168.65.7`）。2026-10-25 之后的镜像已修，升级也会自动修（`linux/fix_resolv_conf.sh` + `mrrc-update`）。**手工三行**（root）：`cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak` → `ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf` → `systemctl try-restart systemd-resolved`；然后 `resolvectl status \| head -3` 应为 `mode: stub` |
 | **Cloud Hub 显示"已连接"但公网 502** | `verify.sh` 第 8、9 项 | 多半 `fleet/frpc` 缺失（`connect()` 会返回 `tunnel_started:false`） |
 | 公网证书报错 | `verify.sh` 第 7 项 | `EnvironmentFile` 与 `MRRC_CONFIG_FILE` 必须指向**同一个文件**（设计 D-11） |
 | 服务反复重启 | `journalctl -u mrrc-modern -n 100` | Python traceback；核对机型与串口 |

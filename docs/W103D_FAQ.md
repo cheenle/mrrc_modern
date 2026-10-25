@@ -177,16 +177,7 @@ nmcli connection modify "<连接名>" ipv4.dns "114.114.114.114 8.8.8.8 223.5.5.
 
 **更常见的一层**：`/etc/resolv.conf` 本身就指向一个「外来」地址（2026-10-25 之前的镜像把它烤进了成品），这时连 NetworkManager 的 DNS 都没被用上 —— 见 [盒子的 DNS 坏了：在 Windows 上一条命令修好](fix-dns.html)，那张页面给了一个只要网页口令的小工具。
 
-**如果 `nmcli` 里能看到这几条、`/etc/resolv.conf` 里却只有一条**：那是 2026-10-25 之前的镜像
-（构建时把容器的 `resolv.conf` 拷进了系统，`resolvectl status` 会显示 `resolv.conf mode: foreign`），
-等于系统解析根本没走 NetworkManager。在有 root 的前提下修一次即可（可回退）：
-
-```
-sudo cp -a /etc/resolv.conf /etc/resolv.conf.bak
-sudo ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-resolvectl status | head -3     # 应变成 "resolv.conf mode: stub"（或不再是 foreign）
-getent hosts portal.mrrc.vlsc.net
-```
+**如果 `nmcli` 里能看到这几条、`/etc/resolv.conf` 里却只有一条**：那是 2026-10-25 之前的镜像（构建时把构建机的 `resolv.conf` 拷进了系统，`resolvectl status` 会显示 `resolv.conf mode: foreign`）。**不用敲任何 Linux 命令** —— 在 Windows 电脑上运行 [`MRRC-FixDNS.cmd`](fix-dns.html)，填一次盒子 IP 与网页口令就能修好；有 root 权限的运维也可以照 [从零指南 §20](W103D_GUIDE.md) 那条手工三行修。
 
 ### 时间不对还会影响什么
 

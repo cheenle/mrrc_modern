@@ -64,17 +64,19 @@ class EndpointContractTests(unittest.TestCase):
 
 
 class OldBoxTests(unittest.TestCase):
-    def test_a_404_names_both_ways_out(self):
-        """比这个修复更早的盒子没有那个接口。两条出路都要给：先升级（升级自己会修），
-        或者有 root 口令就手工三行。只给一条会让另一半人卡住。"""
+    def test_a_404_sends_the_operator_to_the_seller_not_to_a_shell(self):
+        """比这个修复更早的盒子没有那个接口。
+
+        这里**刻意不印任何 Linux 命令**（2026-10-25 现场反馈）：跑这个工具的人往往
+        是客户，`ln -sfn` / `systemctl` 只会把他劝退。工具做的是"如实说这不支持、
+        把这句话发给卖家"；手工三行留在 `docs/W103D_GUIDE.md` §20 给会 SSH 的运维。
+        """
         self.assertIn("404", CMD)
-        self.assertIn("mrrc-update", CMD)
-        self.assertIn("ln -sfn ../run/systemd/resolve/stub-resolv.conf", CMD)
-        self.assertIn("systemctl try-restart systemd-resolved", CMD)
-        # 顺序：DNS 坏掉的盒子**升级不了**（升级要解析 www.vlsc.net），
-        # 所以手工三行必须排在"先升级"之前。
-        self.assertLess(CMD.index("ln -sfn ../run/systemd/resolve/stub-resolv.conf"),
-                        CMD.index("Settings ^> Software update"))
+        self.assertIn("predates the repair", CMD)
+        self.assertIn("Send this screen to the seller", CMD)
+        for shell in ("ln -sfn", "systemctl", "cp -a", "ssh "):
+            with self.subTest(shell=shell):
+                self.assertNotIn(shell, CMD)
 
 
 class SafetyTests(unittest.TestCase):
@@ -119,6 +121,27 @@ class GuidePageTests(unittest.TestCase):
         for rel in ("website/w103d-index.html", "website/zh/w103d-index.html"):
             text = (ROOT / rel).read_text(encoding="utf-8")
             self.assertIn("fix-dns.html", text, f"{rel} 没有把 DNS 修复页列进索引")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+class CustomerPageTests(unittest.TestCase):
+    def test_the_guide_stays_on_windows(self):
+        """客户不会 Linux。页面里一旦出现 `ls` / `ln` / `systemctl` / `ssh`，
+        他就要么照抄出错、要么直接放弃 —— 这两种都比"看一句截图发给卖家"差。"""
+        forbidden = ("ls -l", "cat /etc", "ln -sfn", "resolvectl", "systemctl", "ssh ")
+        for rel in ("website/fix-dns.html", "website/zh/fix-dns.html"):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            for shell in forbidden:
+                with self.subTest(page=rel, shell=shell):
+                    self.assertNotIn(shell, text)
+
+    def test_the_operator_route_lives_in_the_technical_guide(self):
+        """三行命令必须有个"会 SSH 的人才看"的家：从零指南的排障表。"""
+        text = (ROOT / "docs" / "W103D_GUIDE.md").read_text(encoding="utf-8")
+        self.assertIn("ln -sfn ../run/systemd/resolve/stub-resolv.conf", text)
+        self.assertIn("try-restart systemd-resolved", text)
 
 
 if __name__ == "__main__":

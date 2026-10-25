@@ -153,8 +153,8 @@ class VersionConsistencyTests(unittest.TestCase):
         """
         top = [ln for ln in _read("CHANGELOG.md").splitlines()
                if ln.startswith("## [v")][0]
-        self.assertIn("v1.28.2", top)
-        self.assertIn('"1.28.2"', _read("packaging/windows/MRRC-Modern.iss"))
+        self.assertIn("v1.28.6", top)
+        self.assertIn('"1.28.6"', _read("packaging/windows/MRRC-Modern.iss"))
 
     def test_tests_readme_matches_the_actual_count(self):
         """The number below is the real `unittest discover` output."""
@@ -163,7 +163,7 @@ class VersionConsistencyTests(unittest.TestCase):
         # produced a pair that contradicted itself — assertIn("96 test modules")
         # beside assertNotIn("97 test modules") — which is what a guard looks
         # like when it is updated by reflex instead of by reading it.
-        self.assertIn("2952", text)
+        self.assertIn("2953", text)
         # The module count is derived, not typed. It used to be a literal, and
         # the ritual that updates these numbers changed the test total and
         # missed the module total — so adding a test file turned this guard red

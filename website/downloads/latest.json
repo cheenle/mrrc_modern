@@ -1,15 +1,15 @@
 {
-  "latest": "1.28.2",
+  "latest": "1.28.6",
   "installer": {
-    "version": "1.28.2",
-    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.2-Windows-x64-Setup.exe",
-    "sha256": "183b5c497abb4a0e9795e5bdf8b64eb097c921097aef17269718413918423ba3",
-    "size": 79703701
+    "version": "1.28.6",
+    "url": "https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.6-Windows-x64-Setup.exe",
+    "sha256": "f3349a1e3a8dc67deb5278a9e401fc64b61b06a70989a25dcd1033a1c2c849d7",
+    "size": 79725756
   },
   "minSupported": "",
   "mandatory": false,
-  "releasedAt": "2026-10-21T13:28:16",
-  "notes": "1.28.2：启动器不再把用户选的机型改回 ft710——白名单改为从后端注册表派生，探测结果只填空、不覆盖（FT-891/FTX-1/FTDX10/IC-705/7610/7760 都受此影响，此前每次启动都会被改回 ft710 并用 FT-710 后端驱动）；FT-891 的 CAT 波特率默认改回手册出厂值 4800，配置速率沉默时控制器会自己试完 4800/9600/19200/38400 四档并给出可照做的告警；FT8 深路径不再每槽杀死 DSP worker（Fortran 要约 4 MB 栈，Windows 只给线程 2 MB，溢出即静默消失——请求循环现在跑在 64 MB 栈的线程上）；ALLCALL7.TXT 首次进包（此前安装版的深路径呼号库是空的）；🐞 页上传失败时不再输出半句「诊断包仍在：」。",
+  "releasedAt": "2026-10-26T01:15:00",
+  "notes": "1.28.6：盒子级音频电平 —— ☰ 菜单两条 dB 滑块（TX 麦克风 / RX 下发），TX 只管浏览器麦克风、RX 只管下发（录音 / FT8 / 本地喇叭保持原生），网页端麦克风上限 +6 → +25 dB，默认 0 dB 所以升级后声音不变；同版含公网入口隧道状态可见、解析链修复（fix-dns 只要网页口令）、远程协助面板显示端口，以及盒子修复包编号（1.28.6 · FP2）与更新清单的 boxLine 修正。",
   "boxLine": {
     "version": "1.28.6",
     "url": "https://www.vlsc.net/mrrc_modern/downloads/mrrc-modern-src-1.28.6.tar.gz",

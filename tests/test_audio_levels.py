@@ -14,6 +14,7 @@ can log into.
 """
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -191,8 +192,10 @@ class StoreTests(unittest.TestCase):
         leftovers = [p.name for p in Path(self._dir.name).iterdir()
                      if p.name != self.path.name]
         self.assertEqual(leftovers, [], "a .tmp file survived the save")
-        self.assertEqual(self.path.stat().st_mode & 0o077, 0,
-                         "the file must not be group/world readable")
+        if os.name == "posix":
+            # Windows has no POSIX mode bits to assert on (st_mode is a hint there).
+            self.assertEqual(self.path.stat().st_mode & 0o077, 0,
+                             "the file must not be group/world readable")
 
     def test_an_unwritable_path_is_reported_not_raised(self):
         store = al.AudioLevelsStore(Path(self._dir.name) / "nested" / "deep" / "x.json")

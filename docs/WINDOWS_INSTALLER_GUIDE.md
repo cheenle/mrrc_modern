@@ -7,17 +7,17 @@ The package is designed for Windows 11 and
 Windows 12-class x64 desktop systems. It installs a user-launched desktop app
 with an embedded Python runtime; users do not need to install Python manually.
 
-## Download (v1.28.2 Stable)
+## Download (v1.28.6 Stable)
 
 | File | Size | SHA-256 |
 |------|------|---------|
-| `MRRC-Modern-v1.28.2-Windows-x64-Setup.exe` | 75.7 MB (79,703,701 bytes) | `183b5c497abb4a0e9795e5bdf8b64eb097c921097aef17269718413918423ba3` |
+| `MRRC-Modern-v1.28.6-Windows-x64-Setup.exe` | 76.0 MB (79,725,756 bytes) | `f3349a1e3a8dc67deb5278a9e401fc64b61b06a70989a25dcd1033a1c2c849d7` |
 
 - Fast mirror (recommended in CN): <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-Setup.exe>
-- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.2-Windows-x64-Setup.exe>
+- Versioned mirror: <https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-v1.28.6-Windows-x64-Setup.exe>
 - GitHub repository: <https://github.com/cheenle/mrrc_modern>
 
-**v1.28.2 is the published Windows installer.** It was built from a source pack
+**v1.28.6 is the published Windows installer.** It was built from a source pack
 (`src1280.tgz`, 72 MB, made 2026-10-16 23:06) on Windows 11 (the KVM build VM)
 with Python 3.12.4, PyInstaller 6.21.0 and Inno Setup 6.7.3, extracted over the VM's tree with its
 venv kept and `tests\*.py` cleared first. The build gate ran **2271 tests OK (37 platform skips)**,
@@ -32,10 +32,10 @@ runtime DLL closure walked with `objdump -p`) and bundled at `_internal\`. **Thi
 `_internal\ALLCALL7.TXT`** — the Fortran callsign database is opened relative to the process's cwd
 (`prog_args.f90:4` is literally `share_dir = '.'`) and had never been packaged, so every installed
 build ran the deep decoder with an empty callsign DB (`ALLCALL7.TXT is too short or broken?`). It is
-also why v1.28.2's FT8 worker no longer dies on every deep decode: the decoder wants ≈4 MB of stack
-and Windows gives a thread 2 MB. Evidence taken from the artifact: `version.txt` = `1.28.2`,
-size **79,703,701 bytes** (v1.28.1 was 79,386,940), mtime **2026-10-21 13:28:16**, and the
-cross-host SHA-256 matched (build VM == build Mac) — **`183b5c49…`**.
+also why v1.28.6's FT8 worker no longer dies on every deep decode: the decoder wants ≈4 MB of stack
+and Windows gives a thread 2 MB. Evidence taken from the artifact: `version.txt` = `1.28.6`,
+size **79,725,756 bytes** (v1.28.2 was 79,703,701), mtime **2026-10-26 00:58**, and the
+cross-host SHA-256 matched (build VM == build Mac) — **`f3349a1e…`**.
 
 **Layer 3 — the frozen entry is the source tree** (a lesson that cost one discarded build in
 v1.25.3): that build passed every gate — 1612 tests OK, `version.txt` = 1.25.3, a new size and SHA —
@@ -198,7 +198,7 @@ unverified here. The field machine's own clean-install acceptance is recorded in
 this run (COM3/COM4 absent), so CAT/audio device behaviour is unverified here.
 
 The earlier v1.24.8 package (54,121,489 bytes, SHA-256 `616f8b55…`) and v1.24.7
-(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.28.2 supersedes them.
+(54,112,355 bytes, SHA-256 `4a83ab9b…`) remain downloadable as archives; v1.28.6 supersedes them.
 
 **What's new in v1.27.0** (**macOS only — Windows behaviour is unchanged**): **the macOS tunnel
 stopped leaking a process per start.** v1.25.2 fixed this leak here by changing how a leftover

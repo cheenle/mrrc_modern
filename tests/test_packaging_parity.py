@@ -513,6 +513,31 @@ class BootPathParameterTests(unittest.TestCase):
                          "启动分区路径写死了 —— Pi 上的这条能力会静默不生效")
 
 
+class BoxImageVersionTests(unittest.TestCase):
+    """盒子的版本号只从 CHANGELOG 的镜像线标题读，而那条标题自 2026-10-22 起带修复包编号。
+
+    实测（1.28.6 的树）：正则只认 `## [镜像线 vX.Y.Z]`，于是 `grep -m1` 跳过了
+    `## [镜像线 v1.28.6 · FP2]`，落回上一条没有 FP 的旧标题 —— 镜像打出来自称
+    **1.28.4**。版本号错了不会报错，盒子只是永远"看起来旧"（或升级完又发现新版本）。
+    """
+
+    def test_the_version_regex_accepts_a_fix_pack_suffix(self):
+        script = (REPO / "packaging" / "box" / "build-image.sh").read_text(encoding="utf-8")
+        line = next(ln for ln in script.splitlines() if "镜像线 v[0-9]" in ln)
+        # 用脚本里那条正则本身去匹配当前 CHANGELOG 的第一条镜像线标题。
+        import re
+        pattern = re.search(r"grep -m1 -oE '([^']+)'", line)
+        self.assertIsNotNone(pattern, "找不到 build-image.sh 的版本正则")
+        assert pattern is not None
+        changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")
+        first = re.search(r"^## \[镜像线 v[0-9]+\.[0-9]+\.[0-9]+(?: · FP[0-9]+)?\]",
+                          changelog, re.M)
+        self.assertIsNotNone(first, "CHANGELOG 里没有镜像线标题")
+        assert first is not None
+        self.assertRegex(first.group(0), pattern.group(1),
+                         "build-image.sh 的版本正则匹配不到这一条 —— 镜像会自称另一个版本")
+
+
 class PackageListTests(unittest.TestCase):
     def test_libopus_is_named(self):
         """Without it the server silently falls back to PCM instead of Opus."""

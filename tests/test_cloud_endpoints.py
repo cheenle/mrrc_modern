@@ -448,7 +448,10 @@ class CloudTunnelNotStartedTests(unittest.TestCase):
             fleet, data = Path(tmp) / "fleet", Path(tmp) / "data"
             fleet.mkdir()
             data.mkdir()
-            (fleet / "frpc").write_text("", encoding="utf-8")
+            # Windows 上产品找的是 frpc.exe（server.py 的 os.name 分支），fixture 得跟着走，
+            # 否则这条断言在构建 VM 上验的是"文件不在"，不是"隧道起来了"。
+            (fleet / ("frpc.exe" if os.name == "nt" else "frpc")).write_text(
+                "", encoding="utf-8")
             (data / "frpc-bh7kyz.toml").write_text('serverAddr = "x"\n', encoding="utf-8")
             server._cloud_tunnel_problem = "找不到 /old/frpc"
             with patch.object(server, "_cloud_fleet_dir", return_value=fleet), \

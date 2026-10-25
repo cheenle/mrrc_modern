@@ -52,8 +52,11 @@ IMG_URL="https://github.com/ophub/amlogic-s9xxx-armbian/releases/download/$IMG_T
 # upgrade channel read it out of the installed tree.
 # 镜像线优先：`## [镜像线 vX.Y.Z]` 是盒子/树莓派这条线的版本，桌面安装包线另有编号
 # （见 CHANGELOG 顶部说明）。没有镜像线标题时才退回桌面标题。
-VERSION="$(grep -m1 -oE '## \[镜像线 v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO/CHANGELOG.md" |
-	grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"
+# 修复包编号（2026-10-22 起）就挂在标题里：`## [镜像线 v1.28.5 · FP1]`。正则必须把
+# 可选后缀吃掉 —— 否则 `grep -m1` 会跳过带 FP 的条目，落回上一条**没有 FP 的旧标题**，
+# 打出来的镜像自称一个更早的版本（实测：1.28.6 的树，镜像写成 1.28.4）。
+VERSION="$(grep -m1 -oE '## \[镜像线 v[0-9]+\.[0-9]+\.[0-9]+( · FP[0-9]+)?\]' "$REPO/CHANGELOG.md" |
+	grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
 if [ -z "$VERSION" ]; then
 	VERSION="$(grep -m1 -oE '## \[v[0-9]+\.[0-9]+\.[0-9]+\]' "$REPO/CHANGELOG.md" |
 		grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')"

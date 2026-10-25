@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -52,6 +53,9 @@ def _tarball(dest: Path, version: str, *, fixpack: str = "", extra: dict | None 
     return dest
 
 
+@unittest.skipUnless(shutil.which("bash"),
+                     "needs bash: the installer is a POSIX shell script and the "
+                     "Windows build VM has no bash")
 class RemoteUpdateTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

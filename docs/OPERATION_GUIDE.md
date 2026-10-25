@@ -28,7 +28,7 @@
 - **实验性（默认只收不发，`MRRC_ALLOW_UNVERIFIED_TX=1` 解锁）**：Icom CI-V 族 `ic705` / `ic7610` / `ic7760`；
   Yaesu ASCII-CAT 族 `ftdx10` / `ftdx101d` / `ftdx101mp` / `ftx1`（FTX-1F）/ `ft891`（FT-891）
 
-**选型只有一条硬规矩（v1.28.2 起）**：连接设置里选中的机型会被**保留**，启动器的串口探测只填空、
+**选型只有一条硬规矩（v1.28.6 起）**：连接设置里选中的机型会被**保留**，启动器的串口探测只填空、
 不会覆盖它 —— 在此之前任何不在旧白名单里的机型（FT-891 / FTX-1 / FTDX10 / IC-705 / 7610 / 7760）
 每次启动都会被改回 `ft710`，然后用 FT-710 的后端去驱动它（现场症状正是"选了 FT-891 但什么都对不上"）。
 
@@ -207,13 +207,13 @@ MRRC_FTDI_LIB_DIR=vendor\ftdi\windows\bin\x64
 
 ## 0.7 macOS 安装与初始化
 
-本章面向 **macOS 桌面版（`MRRC-Modern-v1.28.2-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
+本章面向 **macOS 桌面版（`MRRC-Modern-v1.28.6-arm64.dmg`）**：安装 → 首次启动（零配置）→ 连接设置 → 局域网访问。**全程不需要打开终端、不需要编辑配置文件**；安装包把最常用的设置都做成了图形化。
 
 > 适用：Apple Silicon（M1/M2/M3/M4），macOS 11 及以上。应用是**自包含**的，拖到「应用程序」只是标准做法；从桌面/下载文件夹直接双击也能运行。
 
 ### 0.7.1 安装（5 步）
 
-1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.28.2-arm64.dmg`（约 81 MB）。
+1. 打开官网 <https://www.vlsc.net/mrrc_modern/> ，点 **Download for macOS** 下载 `MRRC-Modern-v1.28.6-arm64.dmg`（约 81 MB）。
 2. 双击刚下载的 `.dmg` → 弹出窗口里看到 **MRRC Modern** 图标和一个 **Applications** 文件夹。
 3. 把 **MRRC Modern** 图标**拖进 Applications** 文件夹（松手即完成安装）。
 4. **第一次启动**请右键点 Applications 里的 **MRRC Modern** → 选 **打开** → 弹窗里再点一次 **打开**（因为免费签名，系统会拦一次；只第一次需要）。

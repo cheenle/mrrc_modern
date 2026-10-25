@@ -115,6 +115,34 @@ class OldBuildTests(unittest.TestCase):
         self.assertIn("--delete", block, "必须说清旧版 mrrc-update 会删什么")
 
 
+class InPlaceUpdateTests(unittest.TestCase):
+    """老盒子那条路：SSH 把发布包装进 /opt/mrrc_modern（不刷机、不删数据）。"""
+
+    def test_it_gets_the_package_from_the_manifest_not_from_the_box(self):
+        """包地址必须取自清单本身。
+
+        老盒子的 `/api/update/check` 走的是回退分支（`check()`），拿回来的是**桌面版**
+        的 installer 字段 —— 照着它下载会把 Windows 安装包当成源码树。所以老这条路
+        自己读 latest.json 的 `box` / `boxLine`。
+        """
+        start = CMD.index("\n:old_prepare\n")
+        block = CMD[start:CMD.index("\n:old_no_manifest\n", start)]
+        self.assertIn("latest.json", block)
+        self.assertIn("$j.box", block)
+        self.assertIn("$j.boxLine", block, "清单从 2026-10-19 起用的是 boxLine")
+        self.assertIn("Get-FileHash", block, "下载完必须核对 SHA-256")
+        self.assertIn("mrrc-remote-update.sh", block, "安装器随工具一起发，避免两处逻辑")
+
+    def test_the_ssh_leg_has_a_host_to_copy_to(self):
+        """`%HOST%` 必须真的被赋值过。
+
+        这是 2026-10-25 在 VM 上撞出来的：它一度被当成"没人用"删掉，于是 scp 的
+        destination 变成 `user@:/tmp/`，ssh 只回一句 usage —— 而 batch 看不出这种错。
+        """
+        self.assertRegex(CMD, r'set "HOST=%%a"')
+        self.assertIn("%SSHUSER%@%HOST%:", CMD)
+
+
 class PromptAndCodePageTests(unittest.TestCase):
     def test_the_code_page_switch_comes_after_the_last_prompt(self):
         """`chcp 65001` 会让**后面**的 `set /p` 从重定向的 stdin 里读到空串（Win11 实测）。

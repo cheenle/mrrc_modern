@@ -143,14 +143,16 @@
       </p>
       <p>
         <strong>二、盒子的版本要够新。</strong>
-        远程升级接口是 <strong>2026-10-18</strong> 才进主线的（盒子线从 <strong>1.28.2</strong>
-        起的镜像才有）。<strong>1.27 及更早 —— 包括 1.24.x —— 没有它</strong>，
-        这个脚本会在确认之前就停下并告诉你。那种盒子怎么升，见下面
+        远程升级接口是 <strong>2026-10-18</strong> 才进主线的（盒子线从
+        <strong>1.28.2</strong> 起的镜像才有）。<strong
+          >1.27 及更早 —— 包括 1.24.x —— 没有它</strong
+        >， 这个脚本会在确认之前就停下并告诉你。那种盒子怎么升，见下面
         <a href="#old-box">1.24 或更早的盒子</a>。
       </p>
       <div class="callout">
         如果你就坐在盒子旁边、或者能打开它的页面：
-        <strong>☰ →「软件更新」点一下更简单</strong>。这个脚本只是把同一件事搬到你的电脑上做，
+        <strong>☰ →「软件更新」点一下更简单</strong
+        >。这个脚本只是把同一件事搬到你的电脑上做，
         它调用的就是那个按钮背后的接口。
       </div>
 
@@ -162,7 +164,8 @@
       </p>
       <p>
         约 14 KB，单个文件，不用安装。放在桌面，
-        <strong>双击运行</strong>即可。它只对盒子说四句话：登录、问版本、开始升级、看进度，
+        <strong>双击运行</strong
+        >即可。它只对盒子说四句话：登录、问版本、开始升级、看进度，
         不往任何地方上传东西。
       </p>
       <div class="callout">
@@ -176,7 +179,10 @@
           <strong>双击 <code>MRRC-Update.cmd</code></strong
           >，按提示输入两样东西：
           <ul>
-            <li>盒子的 IP —— 就是浏览器地址栏里那个，例如 <code>192.168.1.50</code>（也可以试 <code>mrrc.local</code>）</li>
+            <li>
+              盒子的 IP —— 就是浏览器地址栏里那个，例如
+              <code>192.168.1.50</code>（也可以试 <code>mrrc.local</code>）
+            </li>
             <li><strong>网页登录口令</strong> —— 你平时打开盒子页面用的那个</li>
           </ul>
           屏幕上随即打出盒子的版本、线上的版本、包多大、这一版改了什么。
@@ -186,7 +192,8 @@
           <code>YES</code> 回车。输入别的内容就等于放弃，什么都不会变。
         </li>
         <li>
-          <strong>等它跑完</strong>。脚本每 4 秒问一次进度，中间盒子会重启一次（断线约 10 秒），
+          <strong>等它跑完</strong>。脚本每 4
+          秒问一次进度，中间盒子会重启一次（断线约 10 秒），
           然后它会自己等盒子回来、重新读版本，最后告诉你结果。
         </li>
       </ol>
@@ -223,21 +230,29 @@ Type YES to update 1.28.5 -&gt; 1.28.6: YES
 
  Updated: 1.28.5 -&gt; 1.28.6. The box is serving again.</pre>
       <p>
-        <code>FP1</code> 是修复包编号，和版本号并排显示、<strong>不参与版本比较</strong> ——
+        <code>FP1</code> 是修复包编号，和版本号并排显示、<strong
+          >不参与版本比较</strong
+        >
+        ——
         它回答「这是第几次修复」，版本号回答「谁比谁新」。没有修复包的版本不显示这一段。
       </p>
 
       <h2>升级期间会发生什么</h2>
       <ul>
-        <li>盒子上的服务<strong>重启一次</strong>，页面断线约 10 秒，之后自动恢复（刷新一下即可）。</li>
         <li>
-          <strong>发射中不能升级</strong>：PTT、调谐、CQ 呼叫、FT8 发波都算。这不是脚本拦的，
-          是盒子自己拦的 —— 重启会掐断正在发的那一波。
+          盒子上的服务<strong>重启一次</strong>，页面断线约 10
+          秒，之后自动恢复（刷新一下即可）。
+        </li>
+        <li>
+          <strong>发射中不能升级</strong>：PTT、调谐、CQ 呼叫、FT8
+          发波都算。这不是脚本拦的， 是盒子自己拦的 ——
+          重启会掐断正在发的那一波。
         </li>
         <li>磁盘剩余不足 400 MB 时同样被拒绝（先删一些旧录音）。</li>
         <li>
-          <strong>失败了会自己退回去</strong>：新版本 90 秒内起不来，盒子把上一版翻回来并重启。
-          脚本会明确告诉你「它回到了 X，不是 Y」，而不是笼统的一句失败。
+          <strong>失败了会自己退回去</strong>：新版本 90
+          秒内起不来，盒子把上一版翻回来并重启。 脚本会明确告诉你「它回到了
+          X，不是 Y」，而不是笼统的一句失败。
         </li>
         <li>
           你的配置一个都不动：口令、Wi-Fi、呼号、录音、记忆频道、天调学习库都保留。
@@ -246,28 +261,32 @@ Type YES to update 1.28.5 -&gt; 1.28.6: YES
 
       <h2 id="old-box">1.24 或更早的盒子能升吗？</h2>
       <p>
-        <strong>不能用这个脚本，也不能在页面上点。</strong>
-        那些版本里没有升级接口：设置页里连「软件更新」这张卡都没有
-        （卡片和接口是同一天进来的）。它们只是能通过接口回答「线上有个新版本」，
-        但没有可以点、可以调用的升级动作。
+        <strong>能，但要换个装法。</strong>
+        那些版本里没有远程升级接口（设置页连「软件更新」这张卡都没有），
+        所以脚本问完版本会让你确认「改用 SSH 直接把新程序装进 <code>/opt/mrrc_modern</code>」。
+        那不是刷机：换的是目录里的程序，配置、录音、记忆频道、隧道都不动。
       </p>
-      <p>那类盒子只有两条路：</p>
-      <ul>
-        <li>
-          <strong>刷镜像</strong>（USB）—— 最稳，任何版本都能一次到最新，
-          也是唯一不用碰盒子命令行的办法。
-        </li>
-        <li>
-          <strong>SSH 里跑 <code>mrrc-update</code></strong> —— 不重刷也能升，
-          但有一个坑：<strong>1.25.5 及更早</strong>的镜像自带的那份
-          <code>mrrc-update</code> 用 <code>rsync --delete</code> 同步，
-          会把盒子上的 <code>env/</code>、<code>profiles/</code> 和<strong>录音</strong>一起删掉。
-          跑之前先把那份脚本换掉，或者把整个目录备份出来。
-        </li>
-      </ul>
       <p>
-        1.26 起的镜像带的是安全版（只覆盖、不删除），但它们同样没有自升级接口 ——
-        所以「1.26 / 1.27 能不能用这个脚本」的答案也是不能，只是那条 SSH 的路对它们没有删数据的风险。
+        为什么不能直接用盒子上自带的 <code>mrrc-update</code>：<strong>1.25.5 及更早</strong>
+        镜像里那份用 <code>rsync --delete</code> 同步，会把 <code>env/</code>、
+        <code>profiles/</code> 和<strong>录音</strong>一起删掉。所以这个脚本自带一份安装器
+        （<code>mrrc-remote-update.sh</code>）：先备份当前代码，再覆盖，<strong>一个文件都不删</strong>，
+        最后重启服务。
+      </p>
+      <p><strong>怎么走：</strong></p>
+      <ol>
+        <li>照常输入盒子 IP 和网页口令，它会告诉你「这台没有远程升级器」；</li>
+        <li>输入 <code>SSH</code> 继续 —— 它会在你的电脑上下载官方发布包并核对 SHA-256；</li>
+        <li>输入盒子的 SSH 账号（<code>root</code> 或 <code>mrrc</code>），按提示输入该账号的口令；</li>
+        <li>等它装完 —— 盒子的服务会重启一次，脚本随后读回版本告诉你结果。</li>
+      </ol>
+      <div class="callout">
+        SSH 账号要先能登录：盒子的「设置 → 系统账号口令」可以给 <code>root</code> 设新口令
+        （<strong>不校验旧口令</strong>）。它和网页登录口令是两回事。
+      </div>
+      <p>
+        不想用 SSH，或者那个账号进不去：<strong>刷镜像</strong>永远可行，而且不碰数据。
+        这也是唯一在盒子连网页都打不开时还有效的办法。
       </p>
 
       <h2>被拒绝或者失败时</h2>
@@ -298,7 +317,10 @@ Type YES to update 1.28.5 -&gt; 1.28.6: YES
           <tr>
             <td><code>came back on X, not Y</code></td>
             <td>升级过，但新版本没起来，<strong>已自动回滚</strong></td>
-            <td>盒子能用了；把 <code>mrrc-update-&lt;电脑名&gt;</code> 文件夹发给我们</td>
+            <td>
+              盒子能用了；把
+              <code>mrrc-update-&lt;电脑名&gt;</code> 文件夹发给我们
+            </td>
           </tr>
           <tr>
             <td><code>This box has no remote updater</code></td>
@@ -319,7 +341,8 @@ Type YES to update 1.28.5 -&gt; 1.28.6: YES
       </table>
       <p>
         每次运行都会在脚本旁边留下一个
-        <code>mrrc-update-&lt;你的电脑名&gt;\</code>，里面是版本、状态和盒子的原始应答。
+        <code>mrrc-update-&lt;你的电脑名&gt;\</code
+        >，里面是版本、状态和盒子的原始应答。
         出问题时把这个文件夹发给我们，比截图有用。
       </p>
 
@@ -339,7 +362,8 @@ Type YES to update 1.28.5 -&gt; 1.28.6: YES
         <a href="diag.html">局域网取包</a> 把诊断包拿出来，再发给我们。
       </p>
       <p style="color: var(--muted); font-size: 0.9rem; margin-top: 2.5rem">
-        脚本源码：仓库 <code>dev_tools/mrrc-update.cmd</code>。它不是安装包的一部分，
+        脚本源码：仓库
+        <code>dev_tools/mrrc-update.cmd</code>。它不是安装包的一部分，
         随时可以更新，改完在 <a href="../answers/">答复页</a> 说明。
       </p>
     </main>

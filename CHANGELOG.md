@@ -29,10 +29,21 @@ All notable changes to the MRRC Web Control project.
 - 文件保持纯 ASCII：cmd.exe 按当前代码页读批处理，中文注释在 936 上有过吃掉下一行的
   历史；控制台上的中文靠 `chcp 65001` + PowerShell 的 `OutputEncoding`。
 
-**测试**：`tests/test_box_update_cmd.py`（8 条）把脚本与盒子的契约钉住——端点与 HTTP 方法
+**老盒子（1.24 ~ 1.27）也能"只换程序、不刷机"**：那些构建没有 `/api/update/apply`
+（`check` 是 v1.18.0 就有的，动作是 2026-10-18 才有的），设置页里连更新卡都没有；
+而它们自带的 `mrrc-update`（≤1.25.5）用 `rsync --delete`，会删掉 `env/`、`profiles/`
+和录音。所以脚本在确认前先探一次 `/api/update/state`，老构建**当场停下**并给出一条新路：
+输入 `SSH` → 在电脑上按清单下载 `mrrc-modern-src-*.tar.gz`、核对 SHA-256 →
+`scp` 到盒子 → 用随包发布的 `dev_tools/mrrc-remote-update.sh` 装进 `/opt/mrrc_modern`
+（先备份、只覆盖、不删除、重启），最后读回版本。它是 `box_update.apply()` 的 shell 双胞胎：
+同一个 keep 列表、同样的"绝不删除"。
+
+**测试**：`tests/test_box_update_cmd.py`（15 条）把脚本与盒子的契约钉住——端点与 HTTP 方法
 对得上 `server.py`、等的状态名来自 `box_update` 的常量、确认在动手之前、口令不进 argv、
-探活用状态码而不是 `-f`、文件纯 ASCII；`tests/test_box_update.py` 新增一条，直接盯住
-「看门狗必须把 401 当成活着」。
+探活用状态码而不是 `-f`、文件纯 ASCII、老盒子那条路从**清单**取包（盒子的 `check` 在旧构建上
+给的是桌面版 installer）、`%HOST%` 真的被赋值；`tests/test_box_update.py` 新增一条盯住
+「看门狗必须把 401 当成活着」；`tests/test_remote_update_script.py`（7 条）在假树上跑安装器：
+运行期目录一个字节不动、包外文件不被删、先留回滚包、无 `version.txt` 的包直接拒绝。
 
 ## [镜像线 v1.28.5 · FP1] — 2026-10-22 — 隧道没起来时不再沉默：缺什么就点名什么
 

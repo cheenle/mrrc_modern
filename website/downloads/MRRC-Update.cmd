@@ -53,6 +53,8 @@ if "%BOX%"=="" goto :no_input
 
 echo %BOX% | find ":" >nul 2>&1
 if errorlevel 1 set "BOX=%BOX%:8888"
+rem Host without the web port: the SSH leg (old builds only) needs it.
+for /f "tokens=1 delims=:" %%a in ("%BOX%") do set "HOST=%%a"
 
 where curl >nul 2>&1
 if errorlevel 1 goto :no_curl
@@ -113,6 +115,98 @@ rem stops with an explanation instead of a half-run that ends in "refused".
 set "UPDAPI=000"
 for /f "usebackq delims=" %%c in (`curl -k -s -b "%TEMP%\mrrc-update-cookies.txt" -o "%OUT%\state-probe.json" -w "%%{http_code}" --max-time 20 "%BASE%/api/update/state"`) do set "UPDAPI=%%c"
 if not "%UPDAPI%"=="200" goto :old_build
+
+:old_build
+echo.
+echo  This box has no remote updater: its build is from before 2026-10-18,
+echo  which is when the settings card and this API arrived. Nothing was changed.
+echo.
+echo  It can still be updated WITHOUT reflashing: the new program is installed
+echo  over /opt/mrrc_modern. That is what the box's own mrrc-update does - but
+echo  builds up to 1.25.5 ship one that syncs with --delete and wipes env/,
+echo  profiles/ and the recordings. So this tool brings its own installer: it
+echo  copies the published release over the tree, backs the old one up first and
+echo  deletes nothing.
+echo.
+echo  It needs the box's SSH account (root, or mrrc). Nothing on this PC is
+echo  uploaded anywhere else.
+echo.
+set "GOSSH="
+set /p "GOSSH=Type SSH to install the release in place now, or Enter to stop: "
+if /i not "%GOSSH%"=="SSH" goto :cleanup_fail
+goto :old_prepare
+
+rem ------------------------------------------------- old box: in-place update --
+rem The box cannot update itself, so the release tarball is installed from here:
+rem manifest -> download -> verify -> scp -> the installer that ships next to
+rem this tool (mrrc-remote-update.sh, same file the site publishes).
+:old_prepare
+echo.
+echo  Reading the release manifest...
+set "MANIFEST=https://www.vlsc.net/mrrc_modern/downloads/latest.json"
+curl -s -o "%OUT%\latest.json" "%MANIFEST%" --max-time 60
+set "PKGVER="
+for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "try{$j=Get-Content -Raw -Encoding UTF8 '%OUT%\latest.json'|ConvertFrom-Json; $b=if($j.box){$j.box}elseif($j.boxLine){$j.boxLine}else{$null}; if($b){$b.version}else{''}}catch{''}"`) do set "PKGVER=%%v"
+set "PKGURL="
+for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "try{$j=Get-Content -Raw -Encoding UTF8 '%OUT%\latest.json'|ConvertFrom-Json; $b=if($j.box){$j.box}elseif($j.boxLine){$j.boxLine}else{$null}; if($b){$b.url}else{''}}catch{''}"`) do set "PKGURL=%%v"
+set "PKGSHA="
+for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "try{$j=Get-Content -Raw -Encoding UTF8 '%OUT%\latest.json'|ConvertFrom-Json; $b=if($j.box){$j.box}elseif($j.boxLine){$j.boxLine}else{$null}; if($b){$b.sha256}else{''}}catch{''}"`) do set "PKGSHA=%%v"
+if not defined PKGURL goto :old_no_manifest
+if not defined PKGVER goto :old_no_manifest
+echo  Package : %PKGVER%
+echo  Downloading it to this PC (about 19 MB, once)...
+curl -L -s -o "%TEMP%\mrrc-src.tgz" "%PKGURL%" --max-time 900
+set "GOTSHA="
+for /f "usebackq delims=" %%v in (`powershell -NoProfile -Command "try{(Get-FileHash -Algorithm SHA256 -LiteralPath '%TEMP%\mrrc-src.tgz').Hash.ToLower()}catch{''}"`) do set "GOTSHA=%%v"
+if not defined GOTSHA goto :old_download_failed
+if /i not "%GOTSHA%"=="%PKGSHA%" goto :old_hash_bad
+echo  SHA-256 OK.
+curl -s -o "%TEMP%\mrrc-remote-update.sh" "https://www.vlsc.net/mrrc_modern/downloads/mrrc-remote-update.sh" --max-time 60
+echo.
+set "SSHUSER="
+set /p "SSHUSER=SSH account on the box [root]: "
+if not defined SSHUSER set "SSHUSER=root"
+echo.
+echo  Copying to the box (it will ask for that account's password)...
+scp -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=NUL "%TEMP%\mrrc-src.tgz" "%TEMP%\mrrc-remote-update.sh" %SSHUSER%@%HOST%:/tmp/
+if errorlevel 1 goto :old_scp_failed
+echo.
+echo  Installing. The box restarts its service when this finishes.
+ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=NUL %SSHUSER%@%HOST% "bash /tmp/mrrc-remote-update.sh /tmp/mrrc-src.tgz /opt/mrrc_modern mrrc"
+if errorlevel 1 goto :old_ssh_failed
+rem The success criterion is still the same one: the version the box reports
+rem after it comes back. CURRENT still holds what it ran before we started.
+set "LATEST=%PKGVER%"
+goto :wait_back
+
+:old_no_manifest
+echo  The release manifest has no box package (%MANIFEST%).
+echo  Nothing was changed. Send us this file: %OUT%\latest.json
+goto :cleanup_fail
+
+:old_download_failed
+echo  Could not download the package, or it did not arrive.
+echo  Check this PC's connection to www.vlsc.net and run this again.
+goto :cleanup_fail
+
+:old_hash_bad
+echo  The downloaded package does not match the manifest's SHA-256.
+echo  Nothing was sent to the box. Try again on a different network if it repeats.
+goto :cleanup_fail
+
+:old_scp_failed
+echo.
+echo  Copying to the box failed. Nothing was changed on it.
+echo  Common causes: wrong account or password, SSH disabled on the box, or the
+echo  box is not reachable from this PC.
+goto :cleanup_fail
+
+:old_ssh_failed
+echo.
+echo  The installer reported an error - the box printed its reason above.
+echo  If it stopped at the dependency step, the old code is still running.
+echo  Nothing was deleted, and the backup path is in that output.
+goto :cleanup_fail
 
 :confirm
 echo  Updating restarts the box service (about 10 seconds offline).
@@ -269,20 +363,6 @@ echo    1. Is it still powered on and on the same network?
 echo    2. Open %BASE% in a browser.
 echo  If the new version cannot serve, the box restores the previous one by
 echo  itself within 90 seconds of the restart.
-goto :cleanup_fail
-
-:old_build
-echo.
-echo  This box has no remote updater: its build is from before 2026-10-18,
-echo  which is when the settings card and this API arrived. Nothing was changed.
-echo.
-echo  How such a box is updated instead:
-echo    - reflash the image (works from any version), or
-echo    - on the box over SSH:  mrrc-update
-echo.
-echo  Careful with the second one: builds up to 1.25.5 ship a mrrc-update that
-echo  syncs with --delete, and that wipes env/, profiles/ and the recordings.
-echo  Replace that script first, or copy the whole directory somewhere safe.
 goto :cleanup_fail
 
 :check_failed

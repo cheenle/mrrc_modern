@@ -71,6 +71,10 @@ class OldBoxTests(unittest.TestCase):
         self.assertIn("mrrc-update", CMD)
         self.assertIn("ln -sfn ../run/systemd/resolve/stub-resolv.conf", CMD)
         self.assertIn("systemctl try-restart systemd-resolved", CMD)
+        # 顺序：DNS 坏掉的盒子**升级不了**（升级要解析 www.vlsc.net），
+        # 所以手工三行必须排在"先升级"之前。
+        self.assertLess(CMD.index("ln -sfn ../run/systemd/resolve/stub-resolv.conf"),
+                        CMD.index("Settings ^> Software update"))
 
 
 class SafetyTests(unittest.TestCase):

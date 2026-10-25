@@ -128,14 +128,19 @@ endlocal & exit /b 0
 rem ------------------------------------------------------------------ exits --
 :too_old
 echo.
-echo  This box does not know /api/box/fix-dns yet - it predates the repair.
-echo  Either update it first (dev_tools\mrrc-update.cmd, or the page's
-echo  Settings ^> Software update), or do it by hand over SSH as root:
+echo  This box predates the repair (no /api/box/fix-dns yet), and it cannot be
+echo  updated while its DNS is broken - the update itself asks for
+echo  www.vlsc.net, which is exactly what cannot be resolved. Do it by hand over
+echo  SSH as root (three lines, reversible, backup kept):
 echo.
 echo      cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak
 echo      ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 echo      systemctl try-restart systemd-resolved
 echo.
+echo  Once names resolve again, update the box (dev_tools\mrrc-update.cmd or the
+echo  page's Settings ^> Software update) so this never has to be done by hand
+echo  again: the update repairs the file and restarts the helper that serves this
+echo  endpoint.
 goto :fail
 
 :not_admin

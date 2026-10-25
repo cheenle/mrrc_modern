@@ -126,6 +126,11 @@ class FixResolvConfTests(unittest.TestCase):
         # A failure there must not abort an upgrade: the box must still get its
         # new code even if this one file cannot be replaced.
         self.assertIn("if ! bash \"$MRRC_HOME/linux/fix_resolv_conf.sh\"", text)
+    def test_the_upgrade_also_restarts_the_helper_that_serves_the_verb(self):
+        """助手是常驻进程、动词表在启动时就定了：升级落地后不重启它，页面会一直
+        答 `refused: fix-resolv-conf`，直到盒子重启（2026-10-25 自查发现的）。"""
+        text = UPDATER.read_text(encoding="utf-8")
+        self.assertIn("try-restart mrrc-box-helper", text)
 
 
 if __name__ == "__main__":

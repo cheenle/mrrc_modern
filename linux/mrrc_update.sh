@@ -157,5 +157,12 @@ systemctl restart mrrc-modern
 # and a fix sits unused in /opt until the box is power-cycled.  try-restart is a
 # no-op on a box whose unit was never installed (the pre-2026-10-18 case).
 systemctl try-restart mrrc-localctl 2>/dev/null || true
+# The root helper is a **long-running process with a frozen verb table**: the new
+# `fix-resolv-conf` verb lands on disk with this update and in the process only
+# after this line. Without it the page answers `refused: fix-resolv-conf` until
+# the box is power-cycled - the same shape as a certificate written to disk and
+# never reloaded (2026-10-25, caught while answering "does the DNS repair need
+# the newest version?" - it does, and this is half of why).
+systemctl try-restart mrrc-box-helper 2>/dev/null || true
 systemctl --no-pager --lines=5 status mrrc-modern || true
 echo "==> done; env file left untouched at $MRRC_HOME/env/mrrc.env"

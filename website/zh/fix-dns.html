@@ -212,25 +212,31 @@ getent hosts portal.mrrc.vlsc.net   # 应立刻返回一个 IP</pre>
         （网线 / Wi-Fi 信号 / DHCP），见 <a href="../w103d-user.html">盒子用户指南</a> 的排障表。
       </p>
 
-      <h2>脚本说 <code>404</code> / 提示"这台盒子还不认识这个接口"</h2>
+            <h2>脚本说 <code>404</code> / 提示"这台盒子还不认识这个接口"</h2>
       <p>
-        说明盒子固件比这个修复早。两条路：
+        说明盒子固件比这个修复早。<strong>而且这时不能"先升级再说"</strong>：升级要访问
+        <code>www.vlsc.net</code>，而解析恰恰就是坏掉的那一环。所以顺序反过来 ——
       </p>
       <ol>
         <li>
-          先升级盒子（页面 ☰ →「软件更新」，或者 <a href="../update.html">从 Windows 远程升级</a>），
-          再跑一次这个工具 —— 升级本身会顺手修掉它。
-        </li>
-        <li>
-          或者有 root 口令的话，SSH 进去手工三行：
+          <strong>先用 root 口令 SSH 进去，手工三行</strong>（可回退，原文件留着）：
           <pre>
 cp -a /etc/resolv.conf /etc/resolv.conf.mrrc-bak
 ln -sfn ../run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 systemctl try-restart systemd-resolved</pre>
         </li>
+        <li>
+          名字能解析了，再升级盒子（页面 ☰ →「软件更新」，或
+          <a href="update.html">从 Windows 远程升级</a>）—— 那之后这台盒子就自愈了：
+          升级会跑同一个修复脚本，并重启提供这个接口的 root 助手。
+        </li>
       </ol>
+      <div class="callout">
+        root 口令也改过、又不记得了？那就只能重刷镜像（新镜像已经修掉了这个毛病），
+        或者先把盒子接上网线让 DHCP 拿到可用 DNS 再说。
+      </div>
 
-      <h2>我们这边做了什么</h2>
+<h2>我们这边做了什么</h2>
       <p>
         三处，缺一不可：<strong>镜像</strong>（构建结束时还原符号链接，新盒子不再带这个毛病）、
         <strong>升级</strong>（<code>mrrc-update</code> 每次都以 root 跑一遍同一个修复脚本，

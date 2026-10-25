@@ -31,10 +31,13 @@ RUN_USER="${3:-mrrc}"
 #: them — but this is the second guard, and it is the one that stays true if
 #: somebody ever publishes a hand-made tarball).
 EXCLUDES=(--exclude=./venv --exclude=./logs --exclude=./recordings --exclude=./.local
-          --exclude=./env --exclude=./fleet --exclude=./data --exclude=./ft8-slots)
+	--exclude=./env --exclude=./fleet --exclude=./data --exclude=./ft8-slots)
 
-say()  { printf '==> %s\n' "$*"; }
-die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+say() { printf '==> %s\n' "$*"; }
+die() {
+	printf 'ERROR: %s\n' "$*" >&2
+	exit 1
+}
 
 [ -f "$PKG" ] || die "no such package: $PKG"
 [ -f "$TARGET/server.py" ] || die "$TARGET does not look like an MRRC install (no server.py)"

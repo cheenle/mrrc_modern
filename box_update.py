@@ -288,6 +288,13 @@ def watchdog_command(home: Path, rollback: Path, *, after: int = WATCHDOG_AFTER_
     `/api/health` within `after + poll` seconds, the backup is unpacked and the
     service is restarted again. The marker file is what the page reads to say
     "回滚了，原因见日志".
+
+    **探活的判据是「有没有 HTTP 应答」，不是「2xx」**（2026-10-25）：
+    `/api/health` 不是公开路径（`PUBLIC_PATHS` 里只有 login/静态件），盒子从
+    回环问也一样要令牌 —— 所以它答的是 **401**。原来的 `curl -f` 把 401 当失败，
+    于是：新树已经起来、页面能用，看门狗却在 90 秒后把备份翻回来 —— **每次升级都
+    静默回滚**。同一个判据在 `launcher_net.answers()` 里已经写对过一次：任何状态码
+    都算这台机器在服务，000（连不上）才算没起来。
     """
     marker = update_dir(home) / "last.json"
     # The command is a **POSIX shell** script for the box, so every path in it must
@@ -300,7 +307,8 @@ def watchdog_command(home: Path, rollback: Path, *, after: int = WATCHDOG_AFTER_
     return (
         f"sleep {after}; "
         f"ok=0; for i in 1 2 3; do "
-        f"  if curl -skf --max-time 5 https://127.0.0.1:8888/api/health >/dev/null; then ok=1; break; fi; "
+        f"  if [ \"$(curl -sk -o /dev/null -w '%{{http_code}}' --max-time 5 "
+        f"https://127.0.0.1:8888/api/health)\" != \"000\" ]; then ok=1; break; fi; "
         f"  sleep {max(5, poll // 3)}; "
         f"done; "
         f"if [ \"$ok\" = 0 ]; then "
@@ -331,7 +339,7 @@ def spawn_watchdog(home: Path, rollback: Path) -> None:
 # ── the whole thing ───────────────────────────────────────────────────────
 def apply(plan: dict, home: Path, *, runner: Optional[Callable] = None,
           opener: Callable = net_tls.urlopen,
-          spawn: Callable = None) -> dict:
+          spawn: Optional[Callable] = None) -> dict:
     """Download → verify → unpack → back up → stage → stamp → restart.
 
     `runner` is the "ask the root helper to restart the service" call; it is

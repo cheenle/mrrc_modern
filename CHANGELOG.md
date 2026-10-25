@@ -2,6 +2,38 @@
 
 All notable changes to the MRRC Web Control project.
 
+## [Unreleased] — 2026-10-25 — 从 Windows 电脑远控升级盒子；顺带修掉一个「每次升级都回滚」的看门狗缺陷
+
+**触发**：一台盒子只在局域网里够得着（客户没有 SSH、也没有桌面），要给它升级。
+`dev_tools/mrrc-diag.cmd`（2026-10-24）已经证明「Windows 电脑 + curl + 盒子自己的 API」
+这条路可行，升级只是同一个形状的另一半。
+
+**顺带找到的缺陷**（写这个工具时撞上的）：`box_update.watchdog_command()` 用
+`curl -skf …/api/health` 判活，而 `/api/health` **不是公开路径**（`PUBLIC_PATHS` 里没有它），
+盒子从回环问也一样要令牌 —— 它答的是 **401**，而 `-f` 把 401 当失败（实测退出码 22）。
+后果是：新树已经起来、页面能用，看门狗 90 秒后照样把备份翻回来 —— **每次自升级都静默
+回滚**，页面上只看到「完成」和一句重启。判据改成「有没有 HTTP 应答」
+（`%{http_code}` != `000`），与 `launcher_net.answers()` 已经用过的那条一致。
+
+**新增** `dev_tools/mrrc-update.cmd`（不是安装包的一部分，与取包脚本一样由仓库提供）：
+问一次 IP 与口令 → 读 `/api/update/check` 并把「当前 / 线上 / 包大小 / 更新说明」摆出来
+→ 要一次 `YES` → `POST /api/update/apply` → 每 4 秒跟 `/api/update/state` → 等盒子回来 →
+再读一次版本，**并明确说出它是升上去了还是被回滚了**。升级本身仍然全在盒子上做
+（下载、校验、备份、覆盖、重启、失败自回滚），电脑只是替用户点那一下。
+
+- 发射门禁不绕过：PTT/TUNE/CQ/FT8 与磁盘不足都是盒子自己拒，脚本只把 `reason` 原文转给操作者。
+- 口令只进 `%TEMP%` 的一份 JSON（`--data-binary @file`），**不进命令行**（任务管理器与
+  `ps` 都看得见 argv），收尾时删掉；输出目录里只有版本、状态与原始应答。
+- 老构建（< 2026-10-18）没有升级接口：脚本把 404 与「请求本身失败」分开说，并指出那条
+  盒子走 USB / `mrrc-update` 的路。
+- 文件保持纯 ASCII：cmd.exe 按当前代码页读批处理，中文注释在 936 上有过吃掉下一行的
+  历史；控制台上的中文靠 `chcp 65001` + PowerShell 的 `OutputEncoding`。
+
+**测试**：`tests/test_box_update_cmd.py`（8 条）把脚本与盒子的契约钉住——端点与 HTTP 方法
+对得上 `server.py`、等的状态名来自 `box_update` 的常量、确认在动手之前、口令不进 argv、
+探活用状态码而不是 `-f`、文件纯 ASCII；`tests/test_box_update.py` 新增一条，直接盯住
+「看门狗必须把 401 当成活着」。
+
 ## [镜像线 v1.28.5 · FP1] — 2026-10-22 — 隧道没起来时不再沉默：缺什么就点名什么
 
 **这是盒子线的第 1 个 Fix Pack。** 从这一版起，盒子线的每次修复交付在版本号之外多一个

@@ -311,7 +311,7 @@ class DiscoverabilityTests(unittest.TestCase):
         match = re.search(r'<li>\s*<a[^>]*href="settings\.html#card-update"[^>]*>',
                           index, re.S)
         self.assertIsNotNone(match, "☰ 菜单里没有「软件更新」这一步")
-        block = match.group(0)
+        block = match.group(0) if match else ""      # 上一行已经断言过；这里只是给类型检查器一个形状
         self.assertIn('target="_blank"', block)
         self.assertNotIn("data-action", block, "它必须是普通链接，不是 JS 菜单项")
 
@@ -422,7 +422,8 @@ class ApplyTests(unittest.TestCase):
             # 回滚包里是**旧**代码
             with tarfile.open(rollback, "r:gz") as archive:
                 member = archive.extractfile("server.py")
-                self.assertEqual(member.read().decode(), "old\n")
+                self.assertIsNotNone(member, "回滚包里必须有 server.py")
+                self.assertEqual(member.read().decode() if member else "", "old\n")
 
     def test_a_bad_hash_fails_before_touching_anything(self):
         plan = dict(self.plan, sha256="0" * 64)
@@ -441,6 +442,21 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("api/health", command)
         self.assertIn("pkill -f 'venv/bin/python server.py'", command,
                       "回滚后的重启不能依赖 root helper")
+
+    def test_the_watchdog_accepts_a_server_that_answers_401(self):
+        """探活判据 = 「有没有 HTTP 应答」，不是 2xx（2026-10-25）。
+
+        `/api/health` 不是公开路径：盒子从回环问也要令牌，所以它答 401。
+        曾经用 `curl -skf`，而 `-f` 把 401 也算失败 —— 后果是新树已经起来在服务，
+        看门狗 90 秒后照样把备份翻回来，**每次升级静默回滚**（实测 `-f` 退出码 22）。
+        同一个判据在 `launcher_net.answers()` 里已经写对过一次：任何状态码都算在服务。
+        """
+        command = box_update.watchdog_command(Path("/opt/mrrc_modern"),
+                                              Path("/tmp/rollback.tar.gz"),
+                                              after=1, poll=1)
+        self.assertNotIn("-skf", command, "-f 会把 401 当失败 —— 升级后每次都回滚")
+        self.assertIn("%{http_code}", command, "判据必须是 HTTP 状态码")
+        self.assertIn('!= "000"', command, "只有连不上（000）才算没起来")
 
 
 if __name__ == "__main__":

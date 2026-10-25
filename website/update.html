@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="盒子在局域网里能打开时，用 MRRC-Update.cmd 从 Windows 电脑上远程升级：三步操作、升级期间会发生什么、被拒绝或回滚了怎么办。"
+    />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>从 Windows 电脑远程升级盒子 — MRRC Modern</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/octen.css?v=5" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="js/global-nav.js?v=6" defer data-gn="1"></script>
+    <style>
+      :root {
+        --ink: #e8e8ea;
+        --muted: #9a9aa2;
+        --amber: #f59e0b;
+        --line: #26262c;
+      }
+      body {
+        background: #0a0a0a;
+        color: var(--ink);
+      }
+      .doc {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 130px 1.5rem 120px;
+        font-size: 1.02rem;
+        line-height: 1.85;
+      }
+      .doc h1 {
+        font-size: 1.9rem;
+        line-height: 1.35;
+        margin: 0 0 0.5rem;
+      }
+      .doc .sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 2.4rem;
+      }
+      .doc h2 {
+        font-size: 1.22rem;
+        margin: 2.8rem 0 0.9rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid var(--amber);
+      }
+      .doc p,
+      .doc li {
+        margin: 0.7rem 0;
+      }
+      .doc ul,
+      .doc ol {
+        padding-left: 1.4rem;
+      }
+      .doc code {
+        background: #1a1a20;
+        border: 1px solid var(--line);
+        padding: 0.08em 0.35em;
+        border-radius: 4px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.9em;
+      }
+      .doc pre {
+        background: #131318;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.9rem 1rem;
+        overflow-x: auto;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.85rem;
+        line-height: 1.65;
+      }
+      .doc table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 0.92rem;
+      }
+      .doc th,
+      .doc td {
+        border: 1px solid var(--line);
+        padding: 0.55rem 0.7rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      .doc th {
+        background: #16161c;
+      }
+      .callout {
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--amber);
+        background: #131318;
+        border-radius: 6px;
+        padding: 0.9rem 1.1rem;
+        margin: 1.4rem 0;
+        font-size: 0.95rem;
+      }
+      .dl {
+        display: inline-block;
+        background: var(--amber);
+        color: #101014;
+        font-weight: 600;
+        padding: 0.7rem 1.3rem;
+        border-radius: 8px;
+        text-decoration: none;
+        margin: 0.4rem 0 0.2rem;
+      }
+      .dl:hover {
+        filter: brightness(1.08);
+      }
+      a {
+        color: var(--amber);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="doc">
+      <h1>从 Windows 电脑远程升级盒子</h1>
+      <p class="sub">
+        适用：盒子在局域网里打得开网页，但你想在自己电脑上一条命令升完，
+        并且当场看到结果是「升上去了」还是「被回滚了」——
+        而不是隔着电话教对方去点页面。
+      </p>
+
+      <h2>先确认两件事</h2>
+      <p>
+        <strong>一、盒子要能上网。</strong>
+        升级包是<strong>盒子自己</strong>去更新通道下载的，所以这一步的前提是盒子出得去。
+        这和<a href="diag.html">局域网取包</a>正好相反 ——
+        那个工具用在盒子<em>出不去</em>的时候，这个工具用在盒子能出去、只是你不想跑去现场的时候。
+      </p>
+      <p>
+        <strong>二、盒子的版本要够新。</strong>
+        远程升级接口是 <strong>2026-10-18</strong> 才进主线的（盒子线从 <strong>1.28.2</strong>
+        起的镜像才有）。<strong>1.27 及更早 —— 包括 1.24.x —— 没有它</strong>，
+        这个脚本会在确认之前就停下并告诉你。那种盒子怎么升，见下面
+        <a href="#old-box">1.24 或更早的盒子</a>。
+      </p>
+      <div class="callout">
+        如果你就坐在盒子旁边、或者能打开它的页面：
+        <strong>☰ →「软件更新」点一下更简单</strong>。这个脚本只是把同一件事搬到你的电脑上做，
+        它调用的就是那个按钮背后的接口。
+      </div>
+
+      <h2>下载</h2>
+      <p>
+        <a class="dl" href="downloads/MRRC-Update.cmd">
+          <i class="fas fa-download"></i>&nbsp; MRRC-Update.cmd
+        </a>
+      </p>
+      <p>
+        约 14 KB，单个文件，不用安装。放在桌面，
+        <strong>双击运行</strong>即可。它只对盒子说四句话：登录、问版本、开始升级、看进度，
+        不往任何地方上传东西。
+      </p>
+      <div class="callout">
+        系统要求：Windows 10（1809 及以上）或 Windows 11。脚本用的是系统自带的
+        <code>curl.exe</code> 与 PowerShell，不需要额外装软件。
+      </div>
+
+      <h2>三步</h2>
+      <ol>
+        <li>
+          <strong>双击 <code>MRRC-Update.cmd</code></strong
+          >，按提示输入两样东西：
+          <ul>
+            <li>盒子的 IP —— 就是浏览器地址栏里那个，例如 <code>192.168.1.50</code>（也可以试 <code>mrrc.local</code>）</li>
+            <li><strong>网页登录口令</strong> —— 你平时打开盒子页面用的那个</li>
+          </ul>
+          屏幕上随即打出盒子的版本、线上的版本、包多大、这一版改了什么。
+        </li>
+        <li>
+          <strong>看清「当前 → 线上」两个版本号</strong>，确认要升，输入
+          <code>YES</code> 回车。输入别的内容就等于放弃，什么都不会变。
+        </li>
+        <li>
+          <strong>等它跑完</strong>。脚本每 4 秒问一次进度，中间盒子会重启一次（断线约 10 秒），
+          然后它会自己等盒子回来、重新读版本，最后告诉你结果。
+        </li>
+      </ol>
+
+      <h2>屏幕上会看到什么</h2>
+      <pre>
+ Box   : https://192.168.1.50:8888
+
+Web password (the one you open the page with):  Logged in.
+
+ Asking the box which version it runs and what is published...
+  current : 1.28.5 / FP1
+  latest  : 1.28.6 / FP2
+  package : 23 MB
+  notes   : 盒子线：……
+
+Type YES to update 1.28.5 -&gt; 1.28.6: YES
+ Starting the update on the box...
+ Update started.
+
+ state: downloading
+ state: verifying
+ state: applying
+ state: restarting
+ state: done
+
+ Waiting for the box to come back...
+
+ ============================================================
+ Before : 1.28.5
+ After  : 1.28.6
+ Target : 1.28.6
+ ============================================================
+
+ Updated: 1.28.5 -&gt; 1.28.6. The box is serving again.</pre>
+      <p>
+        <code>FP1</code> 是修复包编号，和版本号并排显示、<strong>不参与版本比较</strong> ——
+        它回答「这是第几次修复」，版本号回答「谁比谁新」。没有修复包的版本不显示这一段。
+      </p>
+
+      <h2>升级期间会发生什么</h2>
+      <ul>
+        <li>盒子上的服务<strong>重启一次</strong>，页面断线约 10 秒，之后自动恢复（刷新一下即可）。</li>
+        <li>
+          <strong>发射中不能升级</strong>：PTT、调谐、CQ 呼叫、FT8 发波都算。这不是脚本拦的，
+          是盒子自己拦的 —— 重启会掐断正在发的那一波。
+        </li>
+        <li>磁盘剩余不足 400 MB 时同样被拒绝（先删一些旧录音）。</li>
+        <li>
+          <strong>失败了会自己退回去</strong>：新版本 90 秒内起不来，盒子把上一版翻回来并重启。
+          脚本会明确告诉你「它回到了 X，不是 Y」，而不是笼统的一句失败。
+        </li>
+        <li>
+          你的配置一个都不动：口令、Wi-Fi、呼号、录音、记忆频道、天调学习库都保留。
+        </li>
+      </ul>
+
+      <h2 id="old-box">1.24 或更早的盒子能升吗？</h2>
+      <p>
+        <strong>不能用这个脚本，也不能在页面上点。</strong>
+        那些版本里没有升级接口：设置页里连「软件更新」这张卡都没有
+        （卡片和接口是同一天进来的）。它们只是能通过接口回答「线上有个新版本」，
+        但没有可以点、可以调用的升级动作。
+      </p>
+      <p>那类盒子只有两条路：</p>
+      <ul>
+        <li>
+          <strong>刷镜像</strong>（USB）—— 最稳，任何版本都能一次到最新，
+          也是唯一不用碰盒子命令行的办法。
+        </li>
+        <li>
+          <strong>SSH 里跑 <code>mrrc-update</code></strong> —— 不重刷也能升，
+          但有一个坑：<strong>1.25.5 及更早</strong>的镜像自带的那份
+          <code>mrrc-update</code> 用 <code>rsync --delete</code> 同步，
+          会把盒子上的 <code>env/</code>、<code>profiles/</code> 和<strong>录音</strong>一起删掉。
+          跑之前先把那份脚本换掉，或者把整个目录备份出来。
+        </li>
+      </ul>
+      <p>
+        1.26 起的镜像带的是安全版（只覆盖、不删除），但它们同样没有自升级接口 ——
+        所以「1.26 / 1.27 能不能用这个脚本」的答案也是不能，只是那条 SSH 的路对它们没有删数据的风险。
+      </p>
+
+      <h2>被拒绝或者失败时</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>屏幕上的话</th>
+            <th>含义</th>
+            <th>怎么办</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>The box refused…电台正在发射</code></td>
+            <td>正在发波（含 TUNE、CQ、FT8）</td>
+            <td>等这一轮结束，再跑一次</td>
+          </tr>
+          <tr>
+            <td><code>The box refused…磁盘剩余不足</code></td>
+            <td>剩余空间不足 400 MB</td>
+            <td>删一些旧录音（☰ → 录音）后再跑</td>
+          </tr>
+          <tr>
+            <td><code>Already up to date</code></td>
+            <td>已经是最新版本</td>
+            <td>不用管</td>
+          </tr>
+          <tr>
+            <td><code>came back on X, not Y</code></td>
+            <td>升级过，但新版本没起来，<strong>已自动回滚</strong></td>
+            <td>盒子能用了；把 <code>mrrc-update-&lt;电脑名&gt;</code> 文件夹发给我们</td>
+          </tr>
+          <tr>
+            <td><code>This box has no remote updater</code></td>
+            <td>盒子版本太旧（2026-10-18 之前 / 1.27 及更早），没有这个接口</td>
+            <td>刷镜像，或按上面<a href="#old-box">老盒子那一节</a>走 SSH</td>
+          </tr>
+          <tr>
+            <td><code>did not answer within 4 minutes</code></td>
+            <td>重启后盒子没回来</td>
+            <td>看电源和网线；它自己会在 90 秒内回滚</td>
+          </tr>
+          <tr>
+            <td><code>Login failed</code></td>
+            <td>网页口令不对</td>
+            <td>就是你打开页面时输的那个口令，注意别和 SSH 的系统口令搞混</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        每次运行都会在脚本旁边留下一个
+        <code>mrrc-update-&lt;你的电脑名&gt;\</code>，里面是版本、状态和盒子的原始应答。
+        出问题时把这个文件夹发给我们，比截图有用。
+      </p>
+
+      <h2>这个工具不会做什么</h2>
+      <ul>
+        <li>不上传任何东西 —— 文件只落在你自己的电脑上，发不发由你决定</li>
+        <li>不绕过发射门禁 —— 发射中就是不能升，这是它有意保留的</li>
+        <li>不保存口令 —— 口令只进一份系统临时文件，跑完就删</li>
+        <li>不改盒子上的任何配置 —— 它只点那个「升级」按钮背后的接口</li>
+        <li>不会自己找盒子、也不会自动升级 —— 每次都要你输入 IP 和 YES</li>
+      </ul>
+
+      <h2>还是升不上去？</h2>
+      <p>
+        先在 <a href="answers/">答复页</a> 搜索屏幕上那句话；
+        如果盒子连网页都打不开了，那是另一类问题 —— 用
+        <a href="diag.html">局域网取包</a> 把诊断包拿出来，再发给我们。
+      </p>
+      <p style="color: var(--muted); font-size: 0.9rem; margin-top: 2.5rem">
+        脚本源码：仓库 <code>dev_tools/mrrc-update.cmd</code>。它不是安装包的一部分，
+        随时可以更新，改完在 <a href="answers/">答复页</a> 说明。
+      </p>
+    </main>
+  </body>
+</html>

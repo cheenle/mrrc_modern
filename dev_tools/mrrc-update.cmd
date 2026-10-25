@@ -106,6 +106,14 @@ if not defined LATEST goto :check_failed
 if /i "%AVAIL%"=="NO" goto :already_latest
 if /i not "%AVAIL%"=="YES" goto :check_failed
 
+rem "There is a newer version" is not the same question as "this box can update
+rem itself": /api/update/check has existed since 2026-09-17, the apply API only
+rem since 2026-10-18. Ask the newer endpoint before the YES prompt, so an old box
+rem stops with an explanation instead of a half-run that ends in "refused".
+set "UPDAPI=000"
+for /f "usebackq delims=" %%c in (`curl -k -s -b "%TEMP%\mrrc-update-cookies.txt" -o "%OUT%\state-probe.json" -w "%%{http_code}" --max-time 20 "%BASE%/api/update/state"`) do set "UPDAPI=%%c"
+if not "%UPDAPI%"=="200" goto :old_build
+
 :confirm
 echo  Updating restarts the box service (about 10 seconds offline).
 echo  Transmitting, tuning or a running CQ call makes the box refuse - it is
@@ -261,6 +269,20 @@ echo    1. Is it still powered on and on the same network?
 echo    2. Open %BASE% in a browser.
 echo  If the new version cannot serve, the box restores the previous one by
 echo  itself within 90 seconds of the restart.
+goto :cleanup_fail
+
+:old_build
+echo.
+echo  This box has no remote updater: its build is from before 2026-10-18,
+echo  which is when the settings card and this API arrived. Nothing was changed.
+echo.
+echo  How such a box is updated instead:
+echo    - reflash the image (works from any version), or
+echo    - on the box over SSH:  mrrc-update
+echo.
+echo  Careful with the second one: builds up to 1.25.5 ship a mrrc-update that
+echo  syncs with --delete, and that wipes env/, profiles/ and the recordings.
+echo  Replace that script first, or copy the whole directory somewhere safe.
 goto :cleanup_fail
 
 :check_failed

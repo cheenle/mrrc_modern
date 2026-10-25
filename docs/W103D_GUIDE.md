@@ -95,24 +95,21 @@
 
 ```bash
 mkdir -p ~/w103d && cd ~/w103d
-curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-1.28.1-w103d.img.gz
+# 稳定别名：总是指向最新版；具体版本号见下载页
+curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-w103d.img.gz
+curl -LO https://www.vlsc.net/mrrc_modern/downloads/MRRC-Modern-w103d.img.gz.sha256
 ```
 
 **校验**（这一步别跳——1.22 GB 下坏了是能下坏的）：
 
 ```bash
 # macOS
-shasum -a 256 MRRC-Modern-1.28.1-w103d.img.gz
+shasum -a 256 -c MRRC-Modern-w103d.img.gz.sha256
 # Linux
-sha256sum MRRC-Modern-1.28.1-w103d.img.gz
+sha256sum -c MRRC-Modern-w103d.img.gz.sha256
 ```
 
-| | |
-| --- | --- |
-| 字节数 | **1,221,443,860** |
-| SHA-256 | **ee1fba1e5e5057eed7603e636547299ae5cf82bd321d0202e72ad9a8e0cde473** |
-
-两者都对不上就别往下走。**先确认字节数**（`ls -l`）——大小不对说明下载被截断了。
+命令会打印 `MRRC-Modern-w103d.img.gz: OK`。**不是 OK 就别往下走** —— 1.2 GB 是会下坏的，而坏在中间不容易看出来。`.sha256` 随镜像一起发布更新，所以这份文档里不再写死某一版的哈希（那张表每发一版就过期一次）。
 
 ## 4. 烧到 U 盘
 
@@ -129,7 +126,9 @@ sync                               # 等它真的写完
 
 ⚠️ 用 `/dev/rdiskN`（**裸设备**）不是 `/dev/diskN`——后者慢十倍以上。
 
-**Windows**：用 **Rufus** 或 **balenaEtcher**，选那个 `.img.gz`（两者都能直接吃 gz）。
+**Windows（一键）**：下载 [`MRRC-W103D-Flash.cmd`](@@ROOT@@downloads/MRRC-W103D-Flash.cmd)，双击运行（它会自己请求管理员权限）。它会自动下载镜像（可断点续传）、核对 SHA-256、列出可写的 U 盘、写入，再把整份镜像从盘上读回来比对。**只认 USB / 可移动介质** —— 系统盘和内置盘不会出现在可写列表里；选定后还要手输 `ERASE` 才动第一笔。需要 **≥ 8 GB** 的 U 盘（镜像解开后 3.43 GiB）。逐步图解与常见问题见 [**做刷机盘指南**](@@ROOT@@flash.html)。
+
+**Windows（手工）**：也可以用 **Rufus** 或 **balenaEtcher**，选那个 `.img.gz`（两者都能直接吃 gz）。
 目标是"从镜像写入"模式，**不是**解压后复制文件。
 
 **Linux：**

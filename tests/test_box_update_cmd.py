@@ -85,6 +85,36 @@ class SafetyTests(unittest.TestCase):
         self.assertIn("check-before.json", CMD, "请求失败时要指出原始应答在哪")
 
 
+class OldBuildTests(unittest.TestCase):
+    def test_it_checks_for_the_updater_before_asking_yes(self):
+        """「有新版本」不等于「这台能自己升」。
+
+        `/api/update/check` 是 2026-09-17（v1.18.0）就有的；`apply` 与
+        `/api/update/state` 是 2026-10-18 才加的。所以 1.24~1.27 的盒子**会**答
+        「有新版本」，然后 `apply` 404 —— 用户看到的是一句莫名其妙的「被拒绝」。
+        探一次 `/api/update/state`，在问 YES 之前就把这类盒子挡住。
+        """
+        probe = CMD.index('"%BASE%/api/update/state"')
+        ask = CMD.index('set /p "GO=Type YES')
+        apply_at = CMD.index('"%BASE%/api/update/apply"')
+        self.assertLess(probe, ask, "必须在确认之前就问「这台能不能自己升」")
+        self.assertLess(ask, apply_at)
+
+    def test_the_old_build_message_names_the_real_way_out(self):
+        """老盒子怎么升级，得一句话说清，还包括那个会删数据的坑。
+
+        ≤1.25.5 镜像自带的 `mrrc-update` 用 `rsync --delete`，会把 `env/`、
+        `profiles/` 和录音一起删掉（CHANGELOG v1.27.0「升级注意」）。让人照着跑
+        而不提这一句，等于把一次升级变成一次数据事故。
+        """
+        start = CMD.index("\n:old_build\n")
+        block = CMD[start:CMD.index("\n:check_failed\n", start)]
+        self.assertIn("2026-10-18", block)
+        self.assertIn("mrrc-update", block)
+        self.assertIn("1.25.5", block, "必须点名那个版本区间")
+        self.assertIn("--delete", block, "必须说清旧版 mrrc-update 会删什么")
+
+
 class PromptAndCodePageTests(unittest.TestCase):
     def test_the_code_page_switch_comes_after_the_last_prompt(self):
         """`chcp 65001` 会让**后面**的 `set /p` 从重定向的 stdin 里读到空串（Win11 实测）。
@@ -98,6 +128,32 @@ class PromptAndCodePageTests(unittest.TestCase):
         self.assertTrue(prompts, "脚本至少要有口令/确认两处提示")
         self.assertGreater(chcp_at, max(prompts),
                            "chcp 在某个 set /p 之前 —— 那处提示会在重定向输入时读到空串")
+
+
+class PublishedCopyTests(unittest.TestCase):
+    """网站上下载到的，必须是这里测过的这一份。
+
+    `dev_tools/` 与 `website/downloads/` 是两份文件（一份给仓库、一份给访客），
+    它们之间没有任何自动同步 —— 改了仓库里那份忘了跟，访客拿到的就是旧脚本，
+    而"点下载 → 双击 → 行为不对"这种问题在支持工单里极难看出来。
+    """
+
+    PAIRS = (("dev_tools/mrrc-update.cmd", "website/downloads/MRRC-Update.cmd"),
+             ("dev_tools/mrrc-diag.cmd", "website/downloads/MRRC-Diag.cmd"))
+
+    def test_the_published_scripts_are_byte_identical_to_the_repo_ones(self):
+        for repo_rel, site_rel in self.PAIRS:
+            repo, site = ROOT / repo_rel, ROOT / site_rel
+            self.assertTrue(site.is_file(), f"网站上没有 {site_rel}")
+            self.assertEqual(
+                site.read_bytes(), repo.read_bytes(),
+                f"{site_rel} 与 {repo_rel} 不一致 —— 重新 copy 一次")
+
+    def test_the_guide_pages_link_to_the_published_file(self):
+        for rel in ("website/update.html", "website/zh/update.html"):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn('downloads/MRRC-Update.cmd', text,
+                          f"{rel} 的下载按钮没指向 MRRC-Update.cmd")
 
 
 class WindowsScriptTests(unittest.TestCase):

@@ -85,6 +85,21 @@ class SafetyTests(unittest.TestCase):
         self.assertIn("check-before.json", CMD, "请求失败时要指出原始应答在哪")
 
 
+class PromptAndCodePageTests(unittest.TestCase):
+    def test_the_code_page_switch_comes_after_the_last_prompt(self):
+        """`chcp 65001` 会让**后面**的 `set /p` 从重定向的 stdin 里读到空串（Win11 实测）。
+
+        症状很难看：脚本化/远程喂两行输入，它只吃掉第一行，第二行永远为空 ——
+        「Nothing was changed」，没有任何错误信息。而"远程跑它"正是这个工具存在的理由。
+        所以代码页只能在最后一个 `set /p` 之后切：提示语是 ASCII，中文只出现在之后。
+        """
+        chcp_at = CMD.index("chcp 65001")
+        prompts = [m.start() for m in re.finditer(r'set /p "', CMD)]
+        self.assertTrue(prompts, "脚本至少要有口令/确认两处提示")
+        self.assertGreater(chcp_at, max(prompts),
+                           "chcp 在某个 set /p 之前 —— 那处提示会在重定向输入时读到空串")
+
+
 class WindowsScriptTests(unittest.TestCase):
     def test_the_file_is_pure_ascii(self):
         """cmd.exe 按当前代码页读批处理：中文注释在 936 上有过吃掉下一行的记录。

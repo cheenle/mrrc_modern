@@ -27,7 +27,6 @@ rem
 rem  Exit codes: 0 updated (or already latest) - 1 refused/failed - 2 no answer
 rem ===========================================================================
 setlocal DisableDelayedExpansion
-chcp 65001 >nul 2>&1
 title MRRC Modern - remote update
 
 set "HERE=%~dp0"
@@ -80,6 +79,7 @@ rem end of every path. It is never written into this folder.
 set "MRRC_PW="
 set /p "MRRC_PW=Web password (the one you open the page with): "
 if not defined MRRC_PW goto :no_input
+
 powershell -NoProfile -Command "$e=[System.Text.UTF8Encoding]::new($false); $j=@{password=$env:MRRC_PW}|ConvertTo-Json -Compress; [IO.File]::WriteAllText($env:TEMP+'\mrrc-update-login.json',$j,$e)" >nul 2>&1
 curl -k -s -c "%TEMP%\mrrc-update-cookies.txt" -H "Content-Type: application/json" --data-binary "@%TEMP%\mrrc-update-login.json" "%BASE%/api/auth/login" -o "%TEMP%\mrrc-update-login-resp.json" --max-time 20
 set "LOGINOK=no"
@@ -114,6 +114,14 @@ echo.
 set "GO="
 set /p "GO=Type YES to update %CURRENT% -> %LATEST%: "
 if /i not "%GO%"=="YES" goto :aborted
+
+rem The code page is switched only here, after the last `set /p`, on purpose:
+rem `chcp 65001` invalidates a redirected stdin, so any prompt that follows it
+rem reads an empty string (measured on Win11 cmd: two `set /p` with a file
+rem redirected in, the second one empty). That is exactly the scripted/remote
+rem run this tool exists for. The prompts are ASCII; the console code page only
+rem matters from here on, where the box's own Chinese text gets printed.
+chcp 65001 >nul 2>&1
 
 rem ----------------------------------------------------------------- apply --
 echo.

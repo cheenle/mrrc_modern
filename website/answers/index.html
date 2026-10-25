@@ -128,6 +128,56 @@
       <p class="muted">相关代码：<code>macos/launcher.py:load_env（相对 FTDI 目录经 runtime_path 解析）</code></p>
     </article>
   <h2>按编号的答复</h2>
+    <article class="card" id="20261025-195703-af25">
+      <header>
+        <span class="id">20261025-195703-af25</span>
+        <span class="badge ok">已答复</span>
+        <span class="muted">电台 · 2026-10-25 20:00</span>
+      </header>
+      <h3>(未填写)</h3>
+      <p class="verdict">盒子此刻完全看不到 FT-710 的 USB 接口 —— FT4222 频谱、CAT 串口、USB 声卡三样同时缺失，是电台 USB 链路/供电/线缆问题，不是产品缺陷。</p>
+      <h4>诊断</h4>
+      <ul>
+        <li>频谱侧：FTDI 库加载成功（scope_pipe: libs_loaded:ft4222=libft4222.so:ftd2xx=libftd2xx.so），但紧接着 5 次 open_failed 全部 error_2（`FT_OpenEx` 的 FT_STATUS=2 = FT_DEVICE_NOT_FOUND，见 backends/ft710/scope_pipe.py:148-154），随后 spi_init_failed:all_attempts → fatal:cannot_open_device，并每 1 s 重启一次、连续约 20 轮、frames=0 —— 说明 USB 总线上没有这颗 FT4222，而不是库缺失或路径问题（CHANGELOG:1294 那条「真频谱从未启动」是 macOS 相对 vendor 路径缺陷，此处 libs_loaded 已成功，签名不符）。</li>
+        <li>同一台盒子 7 天前是好的：server-prev.log 有 `scope_pipe: spi_ready:attempt_1:clk_div_6` + `first frame received — spectrum active (span=7, s_meter=101, wf1_max=127)`，且 `IF poll: vfo_a=14270000 Hz`、FT8 rx_tap 在持续喂入 112800 blocks（rms≈3000）—— 镜像自带的 FTDI 库/udev 规则与整条链路当时可用，所以这是「这次设备不在」而非「规则/库坏了」。</li>
+        <li>另外两路同时缺失，指向同一根 USB 线：env.json `radio.serial_connected=false`、`audio.devices.rx=[]`，tx 只有 W103D-HDMI/sysdefault/hdmi/default/dmix，完全没有 FT-710 的 USB Audio CODEC 声卡 —— CAT 串口、USB 声卡、FT4222 是电台同一根 USB 电缆上的三个接口，同时消失只能是电缆/端口/电台电源。</li>
+        <li>更早的证据链一致：summary 里 2026-10-17 的 ERROR 组为 `Serial write error for &#x27;FA&#x27;: (5, &#x27;Input/output error&#x27;)` → `could not open [已隐去]: No such file or directory` → `Available serial ports: [已隐去]…ttyS0`（只有板载 UART），即 USB 串口桥当时就掉了；同夜的 14 条音频恢复记录（`RX audio restart failed — capture stays down`、`[Errno -9993] Illegal combination of I/O devices`）也是同一根 USB 反复重枚举的后果。</li>
+        <li>summary 自身有一处不可信：`启动次数：53 次，时间跨度 2026-10-18 00:51:15 → 2026-10-18 00:51:15` 两端相同（support_bundle.py:214-220 取首尾时间戳），别拿这个时间跨度当时间线；53 次重启实际分布在 10-17 11:17 → 10-18 00:51 这一夜，与 USB 掉线/重试吻合。</li>
+        <li>附带风险：env.json 显示 `recording.active=true` 而 rx 设备为空 —— 现在这条录音只会写出时长正确、内容全静音的 MP3（写入端本身没问题，是没音频可录），建议先停。</li>
+        <li>本仓历史检索（CHANGELOG.md、SDD/14-version-history.md）没有与 `open_failed:error_2`/`cannot_open_device` 同签名的产品缺陷记录，唯一的 FT4222 打不开是 Windows 僵尸进程残留（CHANGELOG:2649-2654，需杀掉旧 pipe、约 10–15 s 自愈）与 macOS vendor 路径缺陷（CHANGELOG:1294-1301），两者这里都不成立（Linux 盒子、库已加载、已连错 20 轮远超 15 s）→ 判为环境/接线问题。</li>
+      </ul>
+      <h4>你要做的</h4>
+      <ul>
+        <li>把 FT-710 后面那根 USB 线从盒子上拔下来等 5 秒再插回；换一根已知良好的数据线（很多 Type-B 线是纯充电线），直插盒子 USB 口，不要经过无源 HUB 或延长线。</li>
+        <li>确认电台是真的开着（面板亮、电源有电流指示），不是待机或断电 —— 电台关掉时这三样会同时消失。</li>
+        <li>在盒子上执行 `lsusb`，应能看到 `0403:601c FT4222`（或 FTDI）与 Yaesu 的 USB 声卡；再 `ls [已隐去]*` 应有 ttyUSB0。看不到 → 仍是线/口/供电问题，换一个 USB 口（优先带供电的口）重试。</li>
+        <li>设备出现后重启服务让它重连：`sudo systemctl restart mrrc`；随后日志里应重新出现 `scope_pipe: first frame received — spectrum active`、`serial_connected=True`，网页顶部频率能读到。</li>
+        <li>把正在进行的录音先停掉（☰ 里停止录音），等音频输入恢复再开 —— 现在开着的录音只会写静音文件。</li>
+        <li>若 `lsusb` 已能看到 FT4222 但日志仍是 `open_failed:…:error_2`：在盒子上 `dmesg | tail -30` 看 ftdi_sio 是否抢占了该接口，并确认服务以 mrrc 用户在自带 udev 规则下运行（镜像自带规则，正常不会出现），然后把 `dmesg` 结果重新上报一次。</li>
+      </ul>
+      <details><summary>原始证据</summary>
+      <ul>
+        <li class="ev">2026-10-25 19:56:31,439 [INFO] mrrc.backend.ft710.scope: scope_pipe: libs_loaded:ft4222=libft4222.so:ftd2xx=libftd2xx.so</li>
+        <li class="ev">2026-10-25 19:56:31,453 [INFO] mrrc.backend.ft710.scope: scope_pipe: open_failed:attempt_1:error_2 （attempt_2…attempt_5 同，共重复约 20 轮）</li>
+        <li class="ev">2026-10-25 19:56:32,952 [WARNING] mrrc.backend.ft710.scope: scope_pipe: spi_init_failed:all_attempts</li>
+        <li class="ev">2026-10-25 19:56:32,953 [WARNING] mrrc.backend.ft710.scope: scope_pipe: fatal:cannot_open_device</li>
+        <li class="ev">2026-10-25 19:56:33,159 [WARNING] mrrc.backend.ft710.scope: scope_pipe exited (frames=0, connected=False)</li>
+        <li class="ev">2026-10-25 19:56:38,168 [INFO] mrrc: WS fullState push: serial_connected=False clients=3</li>
+        <li class="ev">env.json: &quot;serial_connected&quot;: false / &quot;devices&quot;: {&quot;rx&quot;: [], &quot;tx&quot;: [W103D-HDMI: - (hw:0,0), sysdefault, hdmi, default, dmix]}</li>
+        <li class="ev">env.json: &quot;recording&quot;: {&quot;dir&quot;: &quot;/opt/mrrc_modern/recordings&quot;, &quot;active&quot;: true}</li>
+        <li class="ev">server-prev.log: 2026-10-18 00:28:50,078 [INFO] mrrc.backend.ft710.scope: scope_pipe: spi_ready:attempt_1:clk_div_6</li>
+        <li class="ev">server-prev.log: 2026-10-18 00:28:50,172 [INFO] mrrc.backend.ft710.scope: scope_pipe: first frame received — spectrum active (span=7, s_meter=101, wf1_max=127)</li>
+        <li class="ev">server-prev.log: 2026-10-18 00:48:29,712 [INFO] mrrc.poll: IF poll: vfo_a=14270000 Hz (+0 Hz) (loop=25500)</li>
+        <li class="ev">2026-10-17 13:35:49,471 [ERROR] mrrc.backend.ft710.cat: Serial write error for &#x27;FA&#x27;: (5, &#x27;Input/output error&#x27;)</li>
+        <li class="ev">2026-10-17 13:35:49,681 [ERROR] mrrc.backend.ft710.cat: Failed to connect to [已隐去]: [Errno 2] could not open port [已隐去]</li>
+        <li class="ev">2026-10-17 13:35:49,706 [ERROR] mrrc.backend.ft710.cat: Available serial ports: [已隐去] (n/a n/a); [已隐去] (n/a n/a); [已隐去] (n/a n/a); [已隐去] (n/a n/a); [已隐去] (n/a n/a)</li>
+        <li class="ev">summary.txt: 启动次数：53 次，时间跨度 2026-10-18 00:51:15 → 2026-10-18 00:51:15 —— 无崩溃痕迹</li>
+        <li class="ev">CHANGELOG.md:2649-2654 「Zombie scope_pipe held the FT4222 on Windows … FT_DEVICE_NOT_FOUND for ~10–15 s」（本次为 Linux 盒子、已连错 20 轮，不成立）</li>
+        <li class="ev">CHANGELOG.md:1294-1301 「修好：真 FT4222 频谱从未启动」根因是 macOS launcher 只放行绝对路径（本次 libs_loaded 成功，不成立）</li>
+      </ul>
+      </details>
+      <p class="muted">相关代码：<code>无代码缺陷可指；相关上报点 backends/ft710/scope_pipe.py:FT_OpenEx（scope_pipe.py:148-154，error_2 即 USB 上找不到设备）</code></p>
+    </article>
     <article class="card" id="20261024-123405-c39a">
       <header>
         <span class="id">20261024-123405-c39a</span>
@@ -918,7 +968,7 @@
     </article>
   <p class="muted">工作流看板：<a href="../board/">FDE 看板</a>（bug/需求分类 · 排期 · 后台实施结果）</p>
 
-  <p class="muted">最后更新：2026-10-24 12:40（自动生成，勿手改）</p>
+  <p class="muted">最后更新：2026-10-25 20:00（自动生成，勿手改）</p>
 
 <script>
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));

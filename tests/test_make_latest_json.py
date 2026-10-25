@@ -83,12 +83,12 @@ class ManifestBuildTests(unittest.TestCase):
         blob = self._artifact("src.tar.gz", b"\x1f\x8b" + b"z" * 4096)
         manifest = self._build(box=("1.18.0", "https://example.invalid/src.tar.gz", blob),
                                box_fixpack="FP3")
-        self.assertEqual(manifest["box"]["fixpack"], "FP3")
+        self.assertEqual(manifest["boxLine"]["fixpack"], "FP3")
 
     def test_a_box_without_a_fix_pack_says_nothing_about_one(self):
         blob = self._artifact("src2.tar.gz", b"\x1f\x8b" + b"w" * 4096)
         manifest = self._build(box=("1.18.0", "https://example.invalid/src2.tar.gz", blob))
-        self.assertEqual(manifest["box"].get("fixpack", ""), "")
+        self.assertEqual(manifest["boxLine"].get("fixpack", ""), "")
 
     def test_a_malformed_box_fix_pack_refuses_the_whole_manifest(self):
         blob = self._artifact("src3.tar.gz", b"\x1f\x8b" + b"q" * 4096)
@@ -103,6 +103,109 @@ class ManifestBuildTests(unittest.TestCase):
         changelog.write_text("# 没有版本\n", encoding="utf-8")
         with self.assertRaises(maker.BuildError):
             maker.changelog_version(changelog)
+
+
+    def test_the_box_line_uses_the_key_the_field_boxes_parse(self):
+        """`box` 是本模块曾经写出的键，而现场盒子的解析器要求 `box.version == latest`。
+
+        盒子线比安装包线新（这是常态：Windows 构建机常常缺席），写 `box` 会让那些盒子
+        的「检查更新」直接报错；`boxLine` 是新键，老解析器忽略未知键，所以只有它既能
+        表达"盒子线更靠前"，又不把老盒子弄崩。
+        """
+        blob = self._artifact("src4.tar.gz", b"\x1f\x8b" + b"n" * 4096)
+        manifest = self._build(box=("1.18.5", "https://example.invalid/src4.tar.gz", blob),
+                               box_fixpack="FP2")
+        self.assertIn("boxLine", manifest)
+        self.assertNotIn("box", manifest)
+
+    def test_box_notes_are_carried_into_the_box_line(self):
+        blob = self._artifact("src5.tar.gz", b"\x1f\x8b" + b"m" * 4096)
+        manifest = self._build(box=("1.18.5", "https://example.invalid/src5.tar.gz", blob),
+                               box_notes="FP2：说明")
+        self.assertEqual(manifest["boxLine"]["notes"], "FP2：说明")
+
+
+class BoxOnlyTests(unittest.TestCase):
+    """`--box-only`：换盒子段，安装包段一个字节都不动。
+
+    交付盒子修复包时，那台机器上通常没有 80 MB 的安装包；重新哈希一个不存在的文件
+    会让清单开始描述"别的东西"。所以这里只允许动盒子段，并且结果照样要过客户端的解析器。
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.base = {
+            "latest": "1.18.0",
+            "installer": {"version": "1.18.0", "url": "https://example.invalid/setup.exe",
+                          "sha256": "a" * 64, "size": 4096},
+            "minSupported": "", "mandatory": False,
+            "releasedAt": "2026-10-01T00:00:00",
+            "notes": "桌面线说明",
+            "previous": {"version": "1.17.0", "url": "https://example.invalid/old.exe",
+                         "sha256": "b" * 64, "size": 4096},
+        }
+        self.blob = self.root / "src.tar.gz"
+        self.blob.write_bytes(b"\x1f\x8b" + b"s" * 4096)
+
+    def _run(self, *extra, out=None):
+        out_path = out or (self.root / "latest.json")
+        if out is None:
+            out_path.write_text(json.dumps(self.base), encoding="utf-8")
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = maker.main(["--box-only", "--out", str(out_path), *extra])
+        return code, out_path
+
+    def test_it_replaces_only_the_box_line(self):
+        code, out_path = self._run(
+            "--box", "1.18.5", "https://example.invalid/src.tar.gz", str(self.blob),
+            "--box-fixpack", "FP2", "--box-notes", "FP2：说明")
+        self.assertEqual(code, 0)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertEqual(data["installer"], self.base["installer"])
+        self.assertEqual(data["previous"], self.base["previous"])
+        self.assertEqual(data["notes"], self.base["notes"])
+        self.assertEqual(data["boxLine"]["version"], "1.18.5")
+        self.assertEqual(data["boxLine"]["fixpack"], "FP2")
+        self.assertEqual(data["boxLine"]["notes"], "FP2：说明")
+        import hashlib
+        self.assertEqual(data["boxLine"]["sha256"],
+                         hashlib.sha256(self.blob.read_bytes()).hexdigest())
+
+    def test_it_drops_a_legacy_box_key(self):
+        self.base["box"] = {"version": "1.18.4", "url": "https://example.invalid/old.tar.gz",
+                            "sha256": "c" * 64, "size": 1024}
+        code, out_path = self._run(
+            "--box", "1.18.5", "https://example.invalid/src.tar.gz", str(self.blob))
+        self.assertEqual(code, 0)
+        data = json.loads(out_path.read_text(encoding="utf-8"))
+        self.assertNotIn("box", data)
+
+    def test_it_refuses_without_a_box_or_with_a_bad_fix_pack(self):
+        code, out_path = self._run("--box-fixpack", "FP2")
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(out_path.read_text(encoding="utf-8")), self.base,
+                         "一份被拒绝的清单不能落盘")
+        code, _ = self._run(
+            "--box", "1.18.5", "https://example.invalid/src.tar.gz", str(self.blob),
+            "--box-fixpack", "fix2")
+        self.assertEqual(code, 2)
+
+    def test_it_refuses_a_missing_base_manifest(self):
+        code, _ = self._run(
+            "--box", "1.18.5", "https://example.invalid/src.tar.gz", str(self.blob),
+            out=self.root / "nope.json")
+        self.assertEqual(code, 2)
+        self.assertFalse((self.root / "nope.json").exists())
+
+    def test_it_refuses_to_be_combined_with_an_installer(self):
+        code, _ = self._run(
+            "--box", "1.18.5", "https://example.invalid/src.tar.gz", str(self.blob),
+            "--installer", "1.18.0", "https://example.invalid/x.exe", str(self.blob))
+        self.assertEqual(code, 2)
 
 
 class CliTests(unittest.TestCase):
